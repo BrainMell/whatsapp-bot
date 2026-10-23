@@ -1,7 +1,7 @@
-# Guild War Overhaul — Implementation Plan
+# Guild War Overhaul - Implementation Plan
 
 Branch: `guild-war-ruins` (off `audit/fix-pass-1`). Written BEFORE any code, per owner brief.
-Author: Super Z (agent). Status: IN PROGRESS — see `docs/guild-war-progress.md` for live state.
+Author: Super Z (agent). Status: IN PROGRESS - see `docs/guild-war-progress.md` for live state.
 
 ## 0. Audit summary (full findings)
 
@@ -20,17 +20,17 @@ Existing system audited on-box + in repo. Verdicts:
 | Guild buildings/upgrades (`upgradeGuildBuilding`, spends bank) | **KEEP** | Bank as support system. Not a points path. |
 | PvP `pvpSystem.js` (chat duels, Zeni stakes) | **KEEP + EXTEND** | Chat duels untouched. Ruins duels = new mode inside pvpSystem reusing `buildDuelPlayer`/stat/buff/turn core, own entry/stakes/flee. |
 | PvE combat `guildAdventure.js` (`startCombat`, turn loop, renders) | **KEEP + HOOK** | Ruins combat rooms call `startCombat` with room encounters. Minimal hooks at flee/defeat/victory to enforce Ruins surrounding rules (flee→previous room + forfeit). |
-| `encounterFramework.js` + `worldAlignment.js` (built 2026-10-02) | **KEEP + EXTEND** | The plug-in interface the spec anticipates. `worldAlignment` repurposed to launch Alignment wars. DM routing (engine.js:8771) extended with a pre-router for event actions. |
+| `encounterFramework.js` + `worldAlignment.js` (built ) | **KEEP + EXTEND** | The plug-in interface the spec anticipates. `worldAlignment` repurposed to launch Alignment wars. DM routing (engine.js:8771) extended with a pre-router for event actions. |
 | `worldMapRenderer.js` Royal Decree kit (node-canvas, PAL, fonts) | **KEEP + CLONE** | Ruins map sheet = new renderer cloned from this pattern (see M8 mismatch). |
 | Go render service `/api/combat` | **KEEP** | Encounter/combat art unchanged; Ruins combat uses new ruins background basenames. |
 | Cosmology `triuneWindow` (96h period, 2h window) | **KEEP** | Alignment trigger source. |
 
 ### Spec-vs-code mismatches (owner asked to be told)
 
-1. **"Thud" does not exist in this repo.** Exhaustive case-insensitive sweep (code/docs/comments/git -S): only dictionary noise (`words.txt`) and base64 substring noise in `data/logoEmbeddings.json`. The encounter-card bottom area is drawn Go-side (separate repo, not present here). **Decision:** interpreted as "the attack/encounter visual area"; the Ruins map is its own Royal-Decree-style sheet rendered by node-canvas (below), which structurally contains no banner, no rank plate, and no bottom-right sprite block — the spec's three UI removals are satisfied by construction.
+1. **"Thud" does not exist in this repo.** Exhaustive case-insensitive sweep (code/docs/comments/git -S): only dictionary noise (`words.txt`) and base64 substring noise in `data/logoEmbeddings.json`. The encounter-card bottom area is drawn Go-side (separate repo, not present here). **Decision:** interpreted as "the attack/encounter visual area"; the Ruins map is its own Royal-Decree-style sheet rendered by node-canvas (below), which structurally contains no banner, no rank plate, and no bottom-right sprite block - the spec's three UI removals are satisfied by construction.
 2. **"Red section" not found** anywhere in this repo's render code (nothing is flagged red as a removable section). Same resolution as above.
 3. **"Box/grid style via the Go render service":** the actual map/atlas sheets in production (`worldMapRenderer.js` cosmology/abyss/atlas) are **node-canvas**, not the Go service. Code wins: the Ruins map clones that proven pipeline (fonts, palette, decree helpers). Combat *inside* rooms still uses the Go service as today.
-4. **Spec's `scripts/rpg_reset.js`** is actually `scripts/full_rpg_reset.js`; it never touched `guildwars` (fine — old docs are empty post-reset anyway).
+4. **Spec's `scripts/rpg_reset.js`** is actually `scripts/full_rpg_reset.js`; it never touched `guildwars` (fine - old docs are empty post-reset anyway).
 5. **Guild Points already exist** as guild XP (`addGuildPoints`, level curve). New system feeds it; no second points currency introduced. The old weekly `warPoints` is deleted (redundant parallel currency).
 
 ## 1. Hierarchy (as specced)
@@ -80,10 +80,10 @@ GuildWarEvent {
   scoreboard: [{guildId, points}], log: [{t, type, actor, payload}] (capped ring, full log streamed to EventLog doc)
 }
 GuildLoan { guildId, playerId, amount, status: requested|approved|active|repaid|rejected, approvedBy, requestedAt, repaidAt }
-EventLog (separate doc per event, capped writes) — acquisition/use/theft/handin audit trail.
+EventLog (separate doc per event, capped writes) - acquisition/use/theft/handin audit trail.
 ```
 
-Atomicity: room enter/clear/claim via `Event.findOneAndUpdate({_id, 'rooms.key': k, <state cond>}, {...})` — no read-modify-write races, multi-instance safe. Per-room in-process promise-mutex adds ordering; DB conditions are the real guard.
+Atomicity: room enter/clear/claim via `Event.findOneAndUpdate({_id, 'rooms.key': k, <state cond>}, {...})` - no read-modify-write races, multi-instance safe. Per-room in-process promise-mutex adds ordering; DB conditions are the real guard.
 
 ## 4. Lifecycle
 
@@ -99,7 +99,7 @@ INITIATED → REGISTRATION (default 10 min, mod may force-start) → ACTIVE (har
 ## 5. Map generation
 
 - Seeded mulberry32 from `seed = eventId + type`. Grid `side = ceil(sqrt(players * K))`, K=8 normal (clamp 8..40), alignment K=12 (clamp 24..60), regions: alignment splits grid into W=2..3 vertical region bands, each themed by a dead world from `WORLD_CATALOG`; dimensional paths (special edges) connect regions.
-- Topology: randomized DFS spanning tree over 4-neighbors + ~12% extra edges; some walls = missing edges. All rooms reachable by construction (tree) — verified by BFS in sims.
+- Topology: randomized DFS spanning tree over 4-neighbors + ~12% extra edges; some walls = missing edges. All rooms reachable by construction (tree) - verified by BFS in sims.
 - Room types by weight, distance-from-spawn modulates danger/reward tiers: empty ~40%, combat 18%, discovery 10%, reward 8%, puzzle 8%, hazard 6%, lore 4%, co-op 3%, secret 1.5%, anomaly 1%, landmark 0.5%, world-core: 1 at center (guarded by final guardian encounter).
 - Spawns: one player per room on outer ring, greedy farthest-point placement, min pairwise distance ≥ side/3, same-guild non-adjacency preferred.
 
@@ -112,7 +112,7 @@ INITIATED → REGISTRATION (default 10 min, mod may force-start) → ACTIVE (har
 
 ## 7. Encounters
 
-- Interface: `{ type, payload, onEnter(player), resolve(player, input) → {result, rewards, feedEvent} }` — every room type implements it; combat delegates to guildAdventure.
+- Interface: `{ type, payload, onEnter(player), resolve(player, input) → {result, rewards, feedEvent} }` - every room type implements it; combat delegates to guildAdventure.
 - **Combat rooms:** `startCombat(sock, groq, encounter, sessionKey='ruins:<eventId>:<jid>')` with world-themed enemies (per deadWorld pools + existing RPG enemies); hooks added in guildAdventure flee/death/victory paths (no-op when sessionKey isn't ruins-scoped). Flee → previous room, room stays ACTIVE, unclaimed reward stays with room, no points. Defeat → respawn at spawn corner with 60s protection, limited lives (3, config); room stays ACTIVE.
 - **PvP:** same room + different guilds → any side may `challenge @x`; 60s accept window (timeout = implicit flee by challenged). Duel runs pvpSystem core (new `ruinsDuel` mode). Winner: GP + may claim up to `RELIC_STEAL_CAP` (2) carried relics (rarity-weighted). Loser: previous room + protection. Anti-farm: same-victim GP diminishing (×0.5 each repeat, floor 0 after 3/day); zero GP vs same-guild (they co-op instead).
 - **Puzzles:** seeded templates (see puzzles.js), DM-answerable, 3 attempts, time limit 90s, graded reward; wrong answer → minor hazard or feed alert, never hard lock.
@@ -148,7 +148,7 @@ L1: own position + discovered map (default). L3: enemy-carrier quadrant ping (5 
 ## 13. Performance design (first-class)
 
 - Hot path (move): 1 atomic room update + 1 player update (single `findOneAndUpdate` on event doc with array filters, or per-room subdoc update) + fog diff (in-memory) + feed enqueue (memory). NO full-map writes on move. Map doc ≤ ~2.5k rooms (60² max); rooms stored as array of compact subdocs; indexed lookups by (eventId, key) via single-doc reads cached in memory (event-level cache invalidated by write).
-- Rendering: personal map sheets cached per (player, discoveredCount, occupantsHash) — re-render only when visible state changed; render queue reuses `goImageService._enqueue` pattern for Go-side art; node-canvas sheets capped at 2 concurrent (own semaphore), viewport-only for alignment maps.
+- Rendering: personal map sheets cached per (player, discoveredCount, occupantsHash) - re-render only when visible state changed; render queue reuses `goImageService._enqueue` pattern for Go-side art; node-canvas sheets capped at 2 concurrent (own semaphore), viewport-only for alignment maps.
 - Messaging: feed caps above; DM replies lean (≤ 400 chars + image when needed).
 - Memory/timers: one 60s sweeper for ALL events (no per-player timers); caches bounded (LRU per event); everything cleared at ARCHIVED.
 - Scale targets: Normal 20-40 players typical / 80 max; Alignment 100+ players target; 2 concurrent events; per-action p95 < 1.5s bot-side (excl. Go renders); event-loop lag stays < 500ms p99 (measured in load sim).
@@ -177,5 +177,5 @@ K=8, side clamp [8,40] (normal) / K=12 clamp [24,60] (alignment); empty 40%; mov
 
 ## 16. Simulation & verification plan
 
-- `scripts/gw_sim.js`: mock sock (records sends), real modules, real mongoose. Scenarios: S1 map gen invariants (connectivity BFS, spawn spacing, type distribution, size scaling) × seeds; S2 movement + fog; S3 room race (concurrent enter/clear same room — exactly-one-winner); S4 combat encounter E2E via real startCombat with mock sock; S5 flee rule; S6 PvP lifecycle (challenge/accept/timeout/flee/steal); S7 co-op split; S8 puzzle solve/fail/timeout; S9 relic lifecycle (acquire/use/charges/theft/handin/expiry); S10 GP caps + anti-farm; S11 loan flow (request/approve/repay/leave-guild); S12 permissions (non-mod rejected); S13 feed caps (assert send counts); S14 event end + rewards + archive + restart-mid-event recovery; S15 alignment scale; L1-L4 load (25/50/100/150 players + 2 concurrent events).
+- `scripts/gw_sim.js`: mock sock (records sends), real modules, real mongoose. Scenarios: S1 map gen invariants (connectivity BFS, spawn spacing, type distribution, size scaling) × seeds; S2 movement + fog; S3 room race (concurrent enter/clear same room - exactly-one-winner); S4 combat encounter E2E via real startCombat with mock sock; S5 flee rule; S6 PvP lifecycle (challenge/accept/timeout/flee/steal); S7 co-op split; S8 puzzle solve/fail/timeout; S9 relic lifecycle (acquire/use/charges/theft/handin/expiry); S10 GP caps + anti-farm; S11 loan flow (request/approve/repay/leave-guild); S12 permissions (non-mod rejected); S13 feed caps (assert send counts); S14 event end + rewards + archive + restart-mid-event recovery; S15 alignment scale; L1-L4 load (25/50/100/150 players + 2 concurrent events).
 - Every run seeded; failures recorded with seed; suite re-run after each fix; balance report from aggregate GP stats.

@@ -22,8 +22,8 @@ async function main() {
   const db = mongoose.connection.db;
   const usersColl = db.collection('users');
 
-  // Search case-insensitively by nickname (any of the target variants)
-  // Use a combined regex matching any of the target nicknames
+ // Search case-insensitively by nickname (any of the target variants)
+ // Use a combined regex matching any of the target nicknames
   const escaped = TARGET_NICKNAMES.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   const combinedRegex = escaped.join('|');
   const matches = await usersColl.find({
@@ -57,17 +57,17 @@ async function main() {
   console.log(`\n🔴 Applying +${POINTS_TO_GRANT} stat points to ${matches.length} user(s)...`);
 
   for (const user of matches) {
-    // Try progression.statPoints first (canonical location), fall back to top-level statPoints
+ // Try progression.statPoints first (canonical location), fall back to top-level statPoints
     const update = {
       $inc: {}
     };
-    // Always increment progression.statPoints if it exists, else top-level
+ // Always increment progression.statPoints if it exists, else top-level
     if (user.progression && typeof user.progression.statPoints === 'number') {
       update.$inc['progression.statPoints'] = POINTS_TO_GRANT;
     } else if (typeof user.statPoints === 'number') {
       update.$inc['statPoints'] = POINTS_TO_GRANT;
     } else {
-      // Neither exists - set both
+ // Neither exists - set both
       update.$set = {
         'progression.statPoints': POINTS_TO_GRANT,
         'statPoints': POINTS_TO_GRANT,

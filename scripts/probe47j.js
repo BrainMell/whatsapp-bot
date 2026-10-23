@@ -1,5 +1,5 @@
 'use strict';
-// probe47j.js — the pack's own mine (walkway-into-rocks) must show on every guild card
+// probe47j.js - the pack's own mine (walkway-into-rocks) must show on every guild card
 // and join the player-base mines plot from lv2. Audit + px projection.
 process.env.QA_MODE = '1';
 const K = require('../core/rpg/kingdom3d');
@@ -17,7 +17,7 @@ const count = (re) => log.filter((l) => re.test(l)).length;
 
 (async () => {
     let fail = 0;
-    // ── guild: every biome card carries mine + scaffold + ladder ──
+ // -- guild: every biome card carries mine + scaffold + ladder --
     for (const biome of ['isle', 'desert', 'tundra', 'highlands', 'volcanic']) {
         log.length = 0; W = null;
         const gs = { name: biome.toUpperCase() + ' Wardens', level: 6, archetype: 'ADVENTURER', buildings: { hall: 2, training: 1, treasury: 2 }, memberCount: 7, memberCap: 25, biome, continent: biome };
@@ -28,7 +28,7 @@ const count = (re) => log.filter((l) => re.test(l)).length;
         if (!ok) fail++;
         console.log(`${ok ? 'PASS' : 'FAIL'} guild ${biome}: mine=${mine} scaffold=${scf} ladder=${lad} ${minePx || ''}`);
     }
-    // ── base: mines lv1 = struct only; lv2/3 = pack mine second shaft + ladder ──
+ // -- base: mines lv1 = struct only; lv2/3 = pack mine second shaft + ladder --
     for (const lvl of [1, 2, 3]) {
         log.length = 0; W = null;
         const state = {
@@ -46,6 +46,6 @@ const count = (re) => log.filter((l) => re.test(l)).length;
         if (!ok) fail++;
         console.log(`${ok ? 'PASS' : 'FAIL'} base mines lv${lvl}: struct=${str} packMine=${mine} ladder=${lad}`);
     }
-    console.log(fail === 0 ? 'PROBE 8/8 GREEN' : `PROBE ${8 - fail}/8 — ${fail} FAIL`);
+    console.log(fail === 0 ? 'PROBE 8/8 GREEN' : `PROBE ${8 - fail}/8 - ${fail} FAIL`);
     process.exit(fail === 0 ? 0 : 1);
 })().catch((e) => { console.error(e); process.exit(1); });

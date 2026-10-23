@@ -1,13 +1,11 @@
 // ============================================
-// ⚔️ SUMMON TRIALS - solo evolution trials
+// SUMMON TRIALS - solo evolution trials
 // ============================================
 // One of the 6 original Summoner System mechanics.
 // Each summon species has a trial. The summon must solo-kill
 // the trial boss to evolve + unlock a permanent player passive.
-//
 // The passive is active whenever the player owns ANY summon of
 // that species (doesn't need to be deployed).
-//
 // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md (section 2.6)
 
 const Summon = require('../models/Summon');
@@ -16,16 +14,16 @@ const registry = require('./summonRegistry');
 const summonSystem = require('./summonSystem');
 const economy = require('./economy');
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // TRIAL DEFINITIONS - static data for all 14 species
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // In a full implementation, these would be in MongoDB (SummonTrial model).
 // For Phase 5, we define them statically here and seed them on first access.
 // Each trial defines: boss ID, boss level, required summon level,
 // reward passive ID, and evolution target.
 
 const TRIAL_DEFINITIONS = {
-  // Undead trials
+ // Undead trials
   skeleton: {
     trialId: 'trial_skeleton',
     species: 'skeleton',
@@ -63,7 +61,7 @@ const TRIAL_DEFINITIONS = {
     description: 'Your Lich Minion must solo-kill a Flesh Abomination to evolve.'
   },
 
-  // Demon trials
+ // Demon trials
   imp: {
     trialId: 'trial_imp',
     species: 'imp',
@@ -89,7 +87,7 @@ const TRIAL_DEFINITIONS = {
     description: 'Your Void Walker must solo-kill an Abyssal Horror to evolve.'
   },
 
-  // Elemental trials
+ // Elemental trials
   flame_elemental: {
     trialId: 'trial_flame',
     species: 'flame_elemental',
@@ -127,7 +125,7 @@ const TRIAL_DEFINITIONS = {
     description: 'Your Storm Elemental must solo-kill a Frost Flame Warden to evolve.'
   },
 
-  // Beast trials
+ // Beast trials
   wolf: {
     trialId: 'trial_wolf',
     species: 'wolf',
@@ -153,7 +151,7 @@ const TRIAL_DEFINITIONS = {
     description: 'Your Bear must solo-kill a Chimera Beast to evolve.'
   },
 
-  // Construct trials
+ // Construct trials
   turret_mk1: {
     trialId: 'trial_turret_mk1',
     species: 'turret_mk1',
@@ -179,7 +177,7 @@ const TRIAL_DEFINITIONS = {
     description: 'Your Cannon Turret must solo-kill a Golem King to evolve.'
   },
 
-  // Dragon trials
+ // Dragon trials
   wyrmling: {
     trialId: 'trial_wyrmling',
     species: 'wyrmling',
@@ -206,9 +204,9 @@ const TRIAL_DEFINITIONS = {
   }
 };
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // PLAYER PASSIVE DEFINITIONS
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // Unlocked when the player completes a summon trial.
 // Active whenever the player owns ANY summon of that species.
 
@@ -229,9 +227,9 @@ const PLAYER_PASSIVES = {
   dragonfear_passive: { name: 'Dragonfear', desc: '-5% enemy attack when you own a dragon summon', bonus: { enemyAtkReduction: 5 }, condition: { element: 'dragon' } }
 };
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // TRIAL ATTEMPT - check requirements + simulate solo combat
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 /**
  * Attempt a summon trial.
@@ -261,28 +259,26 @@ async function attemptTrial(ownerJid, summonId) {
     return { success: false, message: '❌ This summon has already completed its trial.' };
   }
 
-  // Get the trial definition
   const trial = TRIAL_DEFINITIONS[summon.species];
   if (!trial) {
     return { success: false, message: '❌ No trial defined for this summon species.' };
   }
 
-  // Check summon level requirement
+ // Check summon level requirement
   if (summon.level < trial.requiredSummonLevel) {
     return { success: false, message: `❌ Summon must be level ${trial.requiredSummonLevel} to attempt this trial (currently ${summon.level}).` };
   }
 
-  // Check tier requirement
+ // Check tier requirement
   if (summon.tier !== trial.requiredTier) {
     return { success: false, message: `❌ Summon must be ${trial.requiredTier} tier to attempt this trial (currently ${summon.tier}).` };
   }
 
-  // Check if player already has this passive unlocked
   if (user.unlockedSummonPassives && user.unlockedSummonPassives.includes(trial.rewardPassive)) {
     return { success: false, message: '❌ You have already unlocked this trial\'s passive. The summon can still evolve, but no new passive will be granted.' };
   }
 
-  // Simulate the trial combat
+ // Simulate the trial combat
   const result = await simulateTrialCombat(summon, trial);
 
   if (!result.victory) {
@@ -292,7 +288,7 @@ async function attemptTrial(ownerJid, summonId) {
     };
   }
 
-  // VICTORY - evolve the summon
+ // VICTORY - evolve the summon
   const evolvedSpeciesId = registry.getEvolvedSpeciesId(summon.species, trial.rewardEvolution);
   const evolvedSpecies = registry.getSpecies(evolvedSpeciesId);
   const oldName = summon.nickname || registry.getSpecies(summon.species)?.name || summon.species;
@@ -305,25 +301,25 @@ async function attemptTrial(ownerJid, summonId) {
   summon.trialCompleted = true;
   summon.rarity = evolvedSpecies.rarity;
 
-  // Apply evolution stat bonus (BASE→ASCENDED = 1.2×, handled by computeEffectiveStats tier mult)
-  // Also bump base stats to the evolved species base + level growth
+ // Apply evolution stat bonus (BASE→ASCENDED = 1.2×, handled by computeEffectiveStats tier mult)
+ // Also bump base stats to the evolved species base + level growth
   summonSystem.applyLevelGrowth(summon, summon.level);
 
   await summon.save();
 
-  // Unlock the player passive
+ // Unlock the player passive
   if (!user.unlockedSummonPassives) user.unlockedSummonPassives = [];
   if (!user.unlockedSummonPassives.includes(trial.rewardPassive)) {
     user.unlockedSummonPassives.push(trial.rewardPassive);
   }
 
-  // Update summon stats
+ // Update summon stats
   if (user.summonStats) {
     user.summonStats.evolved = (user.summonStats.evolved || 0) + 1;
     user.summonStats.trialsCompleted = (user.summonStats.trialsCompleted || 0) + 1;
   }
 
-  // Refresh resonances (species may have changed element)
+ // Refresh resonances (species may have changed element)
   try {
     await summonSystem.refreshUserResonances(user);
   } catch (e) {}
@@ -341,9 +337,9 @@ async function attemptTrial(ownerJid, summonId) {
   return { success: true, message: msg, evolved: true };
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // SIMULATE TRIAL COMBAT - simplified solo fight
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // This is a simplified auto-battle. The summon fights the trial boss
 // in a 1v1 with no player input. The outcome is deterministic based
 // on stats - higher-level summons with good stats will win.
@@ -352,8 +348,8 @@ async function simulateTrialCombat(summon, trial) {
   const summonStats = summonSystem.computeEffectiveStats(summon);
   const species = registry.getSpecies(summon.species);
 
-  // Build a simplified boss from the trial definition
-  // Boss stats scale from the trial's bossLevel
+ // Build a simplified boss from the trial definition
+ // Boss stats scale from the trial's bossLevel
   const bossLevel = trial.bossLevel;
   const bossStats = {
     hp: Math.floor(100 * (1 + (bossLevel - 1) * 0.5)),
@@ -371,14 +367,14 @@ async function simulateTrialCombat(summon, trial) {
   while (summonHp > 0 && bossHp > 0 && round < maxRounds) {
     round++;
 
-    // Summon attacks
+ // Summon attacks
     const summonDmg = Math.max(1, Math.floor(summonStats.atk * (1 + Math.random() * 0.3) - bossStats.def * 0.5));
     bossHp -= summonDmg;
     log.push(`Round ${round}: ${species?.name || 'Summon'} deals ${summonDmg} damage.`);
 
     if (bossHp <= 0) break;
 
-    // Boss attacks
+ // Boss attacks
     const bossDmg = Math.max(1, Math.floor(bossStats.atk * (1 + Math.random() * 0.3) - summonStats.def * 0.5));
     summonHp -= bossDmg;
     log.push(`Round ${round}: Boss deals ${bossDmg} damage.`);
@@ -395,9 +391,9 @@ async function simulateTrialCombat(summon, trial) {
   };
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // HELPER FUNCTIONS
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 function getTrial(speciesId) {
   return TRIAL_DEFINITIONS[speciesId] || null;
@@ -438,7 +434,6 @@ function computePassiveBonuses(user, ownedSummons) {
     return {};
   }
 
-  // Get the set of elements the player owns (loyalty > 0, not for sale)
   const ownedElements = new Set();
   for (const s of ownedSummons) {
     if (s.loyalty > 0 && !s.forSale) {
@@ -446,7 +441,7 @@ function computePassiveBonuses(user, ownedSummons) {
     }
   }
 
-  // Aggregate bonuses from all active passives whose condition is met
+ // Aggregate bonuses from all active passives whose condition is met
   const combined = {};
   for (const passive of passives) {
     if (passive.condition && passive.condition.element && !ownedElements.has(passive.condition.element)) {
@@ -460,9 +455,9 @@ function computePassiveBonuses(user, ownedSummons) {
   return combined;
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // MODULE EXPORTS
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 module.exports = {
   TRIAL_DEFINITIONS,

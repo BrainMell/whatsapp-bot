@@ -1,11 +1,10 @@
 // scripts/test_gif_endpoints.js
-// Verifies the 2026-09-01 reaction-GIF endpoint overhaul (Task 4):
-//   dead endpoint: api.waifu.pics (NXDOMAIN) + nekos.best (Cloudflare 403)
-//   new sources:   nekos.life v2 + PurrBot v2 with full category maps
+// dead endpoint: api.waifu.pics (NXDOMAIN) + nekos.best (Cloudflare 403)
+// new sources: nekos.life v2 + PurrBot v2 with full category maps
 // LIVE-NETWORK test - run where outbound HTTPS is allowed (sandbox + server).
-//  - Part A: every one of the 85 reaction types resolves to a GIF URL
-//  - Part B: full handleReaction pipeline (download + ffmpeg GIF→MP4 + send)
-//            against a mock sock, for kiss (targeted) + kill + wave (self)
+// - Part A: every one of the 85 reaction types resolves to a GIF URL
+// - Part B: full handleReaction pipeline (download + ffmpeg GIF→MP4 + send)
+// against a mock sock, for kiss (targeted) + kill + wave (self)
 
 const path = require('path');
 const REACTIONS = require('../reactions/config');
@@ -27,7 +26,7 @@ async function withRetry(fn, tries = 2, backoffMs = 1500) {
 }
 
 async function main() {
-  // ─── PART A: all 85 categories resolve ───
+ // --- PART A: all 85 categories resolve ---
   console.log('=== PART A: fetchGifUrl resolves every reaction type ===');
   const failures = [];
   for (const r of REACTIONS) {
@@ -42,12 +41,12 @@ async function main() {
       failures.push(r.type);
       console.error(`    [-] ${r.type} - no URL`);
     }
-    // small delay to be polite to the APIs
+ // small delay to be polite to the APIs
     await new Promise(res => setTimeout(res, 350));
   }
   console.log(`    resolved ${REACTIONS.length - failures.length}/${REACTIONS.length} categories`);
 
-  // Key regressions from the bug report
+ // Key regressions from the bug report
   console.log('\n=== PART A2: key categories (the reported broken ones) ===');
   for (const key of ['kill', 'kiss', 'slap', 'wave', 'cry', 'smile']) {
     try {
@@ -59,7 +58,7 @@ async function main() {
     await new Promise(res => setTimeout(res, 350));
   }
 
-  // ─── PART B: full pipeline with mock sock ───
+ // --- PART B: full pipeline with mock sock ---
   console.log('\n=== PART B: handleReaction end-to-end (mock sock) ===');
   const sent = [];
   const mockSock = {
@@ -76,7 +75,7 @@ async function main() {
     }
   });
 
-  // B1: targeted kiss
+ // B1: targeted kiss
   try {
     await handleReaction(mockSock, makeMsg('.j kiss', ['target1@s.whatsapp.net']),
       'kiss', '💋', true, 'chat1@g.us', 'user1@s.whatsapp.net', 'User One');
@@ -88,7 +87,7 @@ async function main() {
     check('kiss pipeline', false, e.message);
   }
 
-  // B2: .gif kill - THE reported broken command
+ // B2: .gif kill - THE reported broken command
   try {
     sent.length = 0;
     await handleReaction(mockSock, makeMsg('.j kill', ['target1@s.whatsapp.net']),
@@ -100,7 +99,7 @@ async function main() {
     check('kill pipeline', false, e.message);
   }
 
-  // B3: self reaction (wave) - no target needed
+ // B3: self reaction (wave) - no target needed
   try {
     sent.length = 0;
     await handleReaction(mockSock, makeMsg('.j wave', []),
@@ -111,11 +110,11 @@ async function main() {
     check('wave pipeline', false, e.message);
   }
 
-  // B4: no-target error path still friendly
+ // B4: no-target error path still friendly
   try {
     sent.length = 0;
-    // mock with NO mentions and NO quoted participant - the only way
-    // resolveTarget genuinely returns null in a group chat
+ // mock with NO mentions and NO quoted participant - the only way
+ // resolveTarget genuinely returns null in a group chat
     const msgNoTarget = {
       key: { remoteJid: '120363026316393285@g.us', participant: 'user1@s.whatsapp.net' },
       message: { extendedTextMessage: { text: '.j kill', contextInfo: {} } }

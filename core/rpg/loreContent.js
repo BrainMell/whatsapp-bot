@@ -1,7 +1,7 @@
 // loreContent.js - single source of truth for the bot's world lore.
 // Kept deliberately separate from .register (which stays short and general).
 // Surfaced through the .lore command family:
-//   <prefix> lore, <prefix>lore (e.g. .j lore / .jlore), and bare .lore.
+// <prefix> lore, <prefix>lore (e.g. .j lore / .jlore), and bare .lore.
 function loreMessage(prefix = ".") {
   let msg = `🌌 *THE CHRONICLES OF THE REALMS* 🌌\n\n`;
   msg += `📜 *The Era of Duality*\n`;

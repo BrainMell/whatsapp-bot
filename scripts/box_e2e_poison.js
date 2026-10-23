@@ -1,5 +1,5 @@
 // LIVE POISON E2E (runs ON Box 1): the exact inputs that SIGSEGV'd the bot
-// process on 2026-09-27 now must be REJECTED by the deployed imageGate
+// process on now must be REJECTED by the deployed imageGate
 // without killing THIS process (which stands in for the bot).
 process.chdir("/home/ubuntu/whatsapp-bot");
 const ig = require("/home/ubuntu/whatsapp-bot/core/utils/imageGate");
@@ -31,7 +31,7 @@ const cases = [
   }
   ok(process.pid === pid, "PROCESS SURVIVED (the 09-27 failure killed the whole bot here)");
 
-  // real webp sticker path (antinude op) still fine through the worker
+ // real webp sticker path (antinude op) still fine through the worker
   const nData = Buffer.alloc(120 * 120 * 3);
   let seed = 7;
   for (let i = 0; i < 120 * 120; i++) {

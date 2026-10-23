@@ -1,5 +1,5 @@
 // ============================================
-// 📈 STOCK MARKET SYSTEM (V2 - Trading)
+// STOCK MARKET SYSTEM (V2 - Trading)
 // ============================================
 
 const economy = require('./economy');
@@ -19,7 +19,7 @@ function getMarketCap() {
 function updatePrices() {
     for (const symbol in STOCKS) {
         const s = STOCKS[symbol];
-        // Dynamic trend shift (occasionally change direction)
+ // Dynamic trend shift (occasionally change direction)
         if (Math.random() < 0.1) s.trend *= -1;
         
         const variance = (Math.random() * 2 - 1) * s.volatility;
@@ -27,7 +27,7 @@ function updatePrices() {
         
         s.price = Math.max(10, Math.floor(s.price * (1 + change)));
         
-        // Cap price at 1M
+ // Cap price at 1M
         if (s.price > 1000000) s.price = 1000000;
     }
 }
@@ -37,7 +37,7 @@ function buyStock(userId, symbol, amount) {
     const stock = STOCKS[symbol.toUpperCase()];
 
     if (!stock) return { success: false, message: "❌ Invalid stock symbol!" };
-    // Reject non-positive, non-integer, or NaN amounts. Stocks are whole shares.
+ // Reject non-positive, non-integer, or NaN amounts. Stocks are whole shares.
     const amt = Math.floor(Number(amount));
     if (!Number.isFinite(amt) || amt <= 0) {
         return { success: false, message: "❌ Amount must be a positive whole number!" };
@@ -46,10 +46,10 @@ function buyStock(userId, symbol, amount) {
     const cost = stock.price * amt;
     if (user.wallet < cost) return { success: false, message: `❌ Insufficient funds! Need ${economy.getZENI()}${cost.toLocaleString()}` };
 
-    // Deduct money
+ // Deduct money
     economy.removeMoney(userId, cost, `Bought ${amt} ${symbol}`);
 
-    // Add to portfolio
+ // Add to portfolio
     if (!user.portfolio) user.portfolio = {};
     if (!user.portfolio[symbol]) user.portfolio[symbol] = 0;
     user.portfolio[symbol] += amt;
@@ -73,11 +73,11 @@ function sellStock(userId, symbol, amount) {
 
     const payout = stock.price * amt;
 
-    // Remove shares
+ // Remove shares
     user.portfolio[symbol] -= amt;
     if (user.portfolio[symbol] <= 0) delete user.portfolio[symbol];
 
-    // Add money
+ // Add money
     economy.addMoney(userId, payout, `Sold ${amt} ${symbol}`);
 
     economy.saveUser(userId);
@@ -89,9 +89,9 @@ function getPortfolio(userId) {
     if (!user || !user.portfolio) return [];
 
     return Object.entries(user.portfolio).map(([symbol, amount]) => {
-        // Defensive: a stock symbol in the user's portfolio may have been
-        // removed from STOCKS in an update. Skip missing stock metadata
-        // instead of crashing.
+ // Defensive: a stock symbol in the user's portfolio may have been
+ // removed from STOCKS in an update. Skip missing stock metadata
+ // instead of crashing.
         const stock = STOCKS[symbol];
         if (!stock) {
             return {

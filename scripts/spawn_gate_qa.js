@@ -1,16 +1,15 @@
 #!/usr/bin/env node
-// 🃏 SPAWN GATE QA (2026-10-22) — run ON-BOX inside the bot dir:
-//   node scripts/spawn_gate_qa.js [Joker|Jake|Subaru]
+// SPAWN GATE QA - run ON-BOX inside the bot dir:
+// node scripts/spawn_gate_qa.js [Joker|Jake|Subaru]
 // Owner ask: "Remove global mods ability to use .j spawn, it's for only the
 // owner me and cardmods, and make mahxee a card mod and global mod"
-//
 // Safety model:
-//   - mock sock: ZERO WhatsApp traffic
-//   - allowed-path probes use a BOGUS card name ("ZZZNOCARDQA") → doSpawn
-//     early-returns before ANY DB write (verified: `if (!card) return null;`
-//     precedes all writes)
-//   - spawn/espawn/cardmod are token-cmd-excluded → no token counter ticks
-//   - real card_roles_<botId> roster load proves the Mahxee grant end-to-end
+// - mock sock: ZERO WhatsApp traffic
+// - allowed-path probes use a BOGUS card name ("ZZZNOCARDQA") → doSpawn
+// early-returns before ANY DB write (verified: `if (!card) return null;`
+// precedes all writes)
+// - spawn/espawn/cardmod are token-cmd-excluded → no token counter ticks
+// - real card_roles_<botId> roster load proves the Mahxee grant end-to-end
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -18,12 +17,12 @@ const path = require('path');
 let PASS = 0, FAIL = 0;
 function check(name, cond, extra) {
     if (cond) { PASS++; console.log(`  ✅ ${name}`); }
-    else { FAIL++; console.log(`  ❌ ${name}${extra ? ' — ' + extra : ''}`); }
+    else { FAIL++; console.log(`  ❌ ${name}${extra ? ' - ' + extra : ''}`); }
 }
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 (async () => {
-    // .env → process.env
+ // .env → process.env
     const envPath = path.join(__dirname, '..', '.env');
     for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
         const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
@@ -42,8 +41,8 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     await economy.loadEconomy().catch(e => console.log(`[qa] economy warn: ${e.message}`));
 
     const OWNER = '2300000000owner@s.whatsapp.net';   // QA-only identity, isOwner flag simulates Mellow
-    const GLOBALMOD = '62733080870965@lid';           // real global mod (NOT a cardmod) — the loser of spawn
-    const CARDMOD = '264299486400613@lid';            // Mahxee — The Alchemist
+    const GLOBALMOD = '62733080870965@lid';           // real global mod (NOT a cardmod) - the loser of spawn
+    const CARDMOD = '264299486400613@lid';            // Mahxee - The Alchemist
     const RANDOM = '100000000000qa@lid';              // plain user
 
     const sent = [];
@@ -52,7 +51,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     const store = new botConfig.BotConfig(path.join(BOT, 'instances', INSTANCE));
     await botConfig.storage.run(store, async () => {
         console.log(`[qa] instance store botId=${botConfig.getBotId()} prefix=${botConfig.getPrefix()}`);
-        const P = botConfig.getPrefix(); // '.j' (Joker) vs '.jk' (Jake) — commands MUST use the instance prefix
+        const P = botConfig.getPrefix(); // '.j' (Joker) vs '.jk' (Jake) - commands MUST use the instance prefix
         await cardSystem.init(mockSock, [], [], null);
         const inst = cardSystem.instances.get(botConfig.getBotId());
         check('init loaded card DB', (inst.ALL_CARDS || []).length > 100, `got ${(inst.ALL_CARDS || []).length}`);
@@ -69,7 +68,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
             return sent.map(s => (s.content && s.content.text) || '').join('\n');
         }
 
-        // ── §1 .j spawn gate ─────────────────────────────────────────
+ // -- §1 .j spawn gate -----------------------------------------
         console.log('\n── §1 .j spawn gate ──');
         const DENY = 'Spawn is restricted to the owner and card moderators.';
         const NOTFOUND = 'Card not found matching "ZZZNOCARDQA"';
@@ -78,7 +77,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
         check('owner PASSES (bogus card → not-found reply, no spawn)', (await run(`${P} spawn ZZZNOCARDQA`, OWNER, { isOwner: true })).includes(NOTFOUND));
         check('cardmod Mahxee PASSES (roster path, isMod=false)', (await run(`${P} spawn ZZZNOCARDQA`, CARDMOD)).includes(NOTFOUND));
 
-        // ── §2 .j espawn gate (same force-spawn family) ──────────────
+ // -- §2 .j espawn gate (same force-spawn family) --------------
         console.log('\n── §2 .j espawn gate ──');
         const EDENY = 'Event spawn is restricted to the owner and card moderators.';
         const ENOTFOUND = 'Event card not found matching "ZZZNOCARDQA"';
@@ -87,7 +86,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
         check('owner PASSES (bogus card → not-found reply)', (await run(`${P} espawn ZZZNOCARDQA`, OWNER, { isOwner: true })).includes(ENOTFOUND));
         check('cardmod Mahxee PASSES', (await run(`${P} espawn ZZZNOCARDQA`, CARDMOD)).includes(ENOTFOUND));
 
-        // ── §3 regression — non-spawn mod powers unchanged ───────────
+ // -- §3 regression - non-spawn mod powers unchanged -----------
         console.log('\n── §3 regression (non-spawn powers) ──');
         check('global mod still manages cardmods (.j cardmod list)',
             (await run(`${P} cardmod list`, GLOBALMOD, { isMod: true })).includes('CARD MODERATORS'));

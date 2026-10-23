@@ -2,7 +2,7 @@
 'use strict';
 /**
  * ============================================================================
- *  SHOOB CARD MINER — supervisor loop (Box 1)
+ *  SHOOB CARD MINER - supervisor loop (Box 1)
  * ============================================================================
  *
  *  Wraps shoob-event-scraper.js in a repeating cycle and publishes every
@@ -33,7 +33,7 @@ const { spawn } = require('child_process');
 const MINER_DIR = __dirname;
 const REPO_ROOT = path.resolve(MINER_DIR, '..', '..');
 
-// repo-root .env (MONGO_URI) — same env the bots boot with
+// repo-root .env (MONGO_URI) - same env the bots boot with
 try { require(path.join(REPO_ROOT, 'node_modules', 'dotenv')).config({ path: path.join(REPO_ROOT, '.env') }); } catch {}
 
 const mongoose = require('mongoose'); // resolves via REPO_ROOT/node_modules
@@ -48,13 +48,13 @@ const OPTS = {
   diskFloorMb:   parseInt(process.env.MINER_DISK_FLOOR_MB || '5120', 10),
   publish:       process.env.MINER_PUBLISH !== '0',
   mediaMirror:   process.env.MINER_MEDIA !== '0',
-  regular:       process.env.MINER_REGULAR !== '0', // regular-catalog phase (owner 2026-10-08: "find all the regular cards we missed")
+  regular:       process.env.MINER_REGULAR !== '0', // regular-catalog phase ("find all the regular cards we missed")
 };
 
 const LOG = (m) => console.log(`[wa-miner ${new Date().toISOString()}] ${m}`);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// ── mongo (System key/value) ──────────────────────────────────────────────
+// -- mongo (System key/value) ----------------------------------------------
 let System = null;
 async function connectMongo() {
   if (!process.env.MONGO_URI) throw new Error('MONGO_URI missing (repo .env)');
@@ -75,7 +75,7 @@ async function publishKey(key, value) {
   );
 }
 
-// ── live DB event ids (id-preservation reference + "new" detection) ────────
+// -- live DB event ids (id-preservation reference + "new" detection) --------
 function liveEventIds() {
   const raw = JSON.parse(fs.readFileSync(OPTS.liveDb, 'utf8'));
   const cards = Array.isArray(raw.cards) ? raw.cards : Object.values(raw.cards);
@@ -93,7 +93,7 @@ function liveEventIds() {
   return { ids, total, maxE, eventCount: ids.size };
 }
 
-// live DB REGULAR ids (non-E-) — "new regular" detection for the reg phase
+// live DB REGULAR ids (non-E-) - "new regular" detection for the reg phase
 function liveRegularIds() {
   const raw = JSON.parse(fs.readFileSync(OPTS.liveDb, 'utf8'));
   const cards = Array.isArray(raw.cards) ? raw.cards : Object.values(raw.cards);
@@ -105,7 +105,7 @@ function liveRegularIds() {
   return ids;
 }
 
-// ── regular-catalog phase (missing non-event cards) ──────────────────────────
+// -- regular-catalog phase (missing non-event cards) --------------------------
 function runRegularScraper() {
   return new Promise((resolve, reject) => {
     const args = [
@@ -122,7 +122,7 @@ function runRegularScraper() {
   });
 }
 
-// Run the regular phase and compose its publish payload. Never throws —
+// Run the regular phase and compose its publish payload. Never throws -
 // a regular failure must not take down the (healthy) event cycle.
 async function regularPhase() {
   await runRegularScraper();
@@ -155,7 +155,7 @@ async function regularPhase() {
   };
 }
 
-// ── one mining cycle ───────────────────────────────────────────────────────
+// -- one mining cycle -------------------------------------------------------
 function runScraper() {
   return new Promise((resolve, reject) => {
     const args = [
@@ -186,7 +186,7 @@ async function cycle() {
   const reportPath = path.join(OPTS.outDir, 'event_cards.report.json');
   const report = fs.existsSync(reportPath) ? JSON.parse(fs.readFileSync(reportPath, 'utf8')) : {};
 
-  // media stats from the mirror manifest
+ // media stats from the mirror manifest
   let media = { totalFiles: 0, totalBytes: 0 };
   try {
     const man = JSON.parse(fs.readFileSync(path.join(OPTS.mediaDir, 'manifest.json'), 'utf8'));
@@ -198,7 +198,7 @@ async function cycle() {
   const liveIdsNow = liveEventIds(); // unchanged during cycle, but cheap + safe
   const pending = minedNew.filter(c => !liveIdsNow.ids.has(c.id));
 
-  // cumulative pending list (previous ∪ current, minus anything now live)
+ // cumulative pending list (previous ∪ current, minus anything now live)
   let cumulative = [];
   if (System) {
     try {
@@ -232,9 +232,9 @@ async function cycle() {
     nextRunAt: new Date(Date.now() + OPTS.intervalMin * 60000).toISOString(),
   };
 
-  // ── regular-catalog phase (missing non-event cards) ──
-  // Failure-isolated: the event block is already scraped and MUST publish
-  // even if the regular side has a bad day.
+ // -- regular-catalog phase (missing non-event cards) --
+ // Failure-isolated: the event block is already scraped and MUST publish
+ // even if the regular side has a bad day.
   let reg = null;
   if (OPTS.regular) {
     try {
@@ -269,25 +269,25 @@ async function cycle() {
     }
     LOG(`published: status + ${cumulative.length} pending-new + eventblock (${scraped.length})${reg && reg.block && reg.block.cards.length ? ` + regblock (${reg.block.cards.length})` : ''}`);
   } else {
-    LOG('publish disabled or mongo down — wrote outputs only');
+    LOG('publish disabled or mongo down - wrote outputs only');
   }
 
-  LOG(`cycle done in ${status.cycle.durationMin}min — scraped ${status.lastResult.scraped}, new ids ${status.lastResult.newIdsThisCycle}, pending-live ${pending.length}, media ${media.totalFiles} files / ${(media.totalBytes / 1048576).toFixed(0)}MB${reg ? `, regular ${reg.composed} (+${reg.newNotLive} not live)` : ''}`);
+  LOG(`cycle done in ${status.cycle.durationMin}min - scraped ${status.lastResult.scraped}, new ids ${status.lastResult.newIdsThisCycle}, pending-live ${pending.length}, media ${media.totalFiles} files / ${(media.totalBytes / 1048576).toFixed(0)}MB${reg ? `, regular ${reg.composed} (+${reg.newNotLive} not live)` : ''}`);
 }
 
-// ── main loop ───────────────────────────────────────────────────────────────
+// -- main loop ---------------------------------------------------------------
 (async () => {
   LOG(`boot: interval ${OPTS.intervalMin}min, media ${OPTS.mediaMirror ? OPTS.mediaDir : 'off'}, regular phase ${OPTS.regular ? 'on' : 'off'}, disk floor ${OPTS.diskFloorMb}MB, publish ${OPTS.publish}`);
   if (OPTS.publish) {
     try { await connectMongo(); LOG('mongo connected (shared DB)'); }
-    catch (e) { LOG(`mongo connect failed (${e.message}) — continuing WITHOUT publishing, will retry each cycle`); }
+    catch (e) { LOG(`mongo connect failed (${e.message}) - continuing WITHOUT publishing, will retry each cycle`); }
   }
 
   let shuttingDown = false;
   const stop = async (sig) => {
     if (shuttingDown) return;
     shuttingDown = true;
-    LOG(`${sig} — shutting down after current work`);
+    LOG(`${sig} - shutting down after current work`);
     try { if (mongoose.connection.readyState === 1) await mongoose.disconnect(); } catch {}
     process.exit(0);
   };
@@ -321,7 +321,7 @@ async function cycle() {
     }
     const waitMs = OPTS.intervalMin * 60000;
     LOG(`sleeping ${(waitMs / 60000).toFixed(0)}min -> ${new Date(Date.now() + waitMs).toISOString()}`);
-    // interruptible sleep
+ // interruptible sleep
     await sleep(waitMs);
   }
 })();

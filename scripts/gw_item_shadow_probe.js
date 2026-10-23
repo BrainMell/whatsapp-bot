@@ -1,15 +1,14 @@
 #!/usr/bin/env node
-// ─────────────────────────────────────────────────────────────────────────────
-// gw_item_shadow_probe.js — renders every ITEM scene (props that sit on the
+// -----------------------------------------------------------------------------
+// gw_item_shadow_probe.js - renders every ITEM scene (props that sit on the
 // floor) with a synthetic plan → 3x nearest-neighbour zoom crops of the item
 // + its shadow zone. BEFORE/AFTER evidence for the "items float on their own
-// shadows" fix (owner 2026-10-06 "the item shadows are literally making it
+// shadows" fix ("the item shadows are literally making it
 // look like the things are floating").
-//
 // Usage: node scripts/gw_item_shadow_probe.js <outDir>
-//   e.g. ... gw_item_shadow_before   (pre-fix)
-//        ... gw_item_shadow_after    (post-fix)
-// ─────────────────────────────────────────────────────────────────────────────
+// e.g. ... gw_item_shadow_before (pre-fix)
+// ... gw_item_shadow_after (post-fix)
+// -----------------------------------------------------------------------------
 const fs = require('fs');
 const path = require('path');
 
@@ -68,7 +67,7 @@ async function main() {
     const ev = started.event;
     const target = ev.rooms.find((r) => !['core', 'finale'].includes(r.type) && r.key !== ev.rooms.find((q) => q.type === 'core')?.key);
 
-    // seat the probe player in the target room (no router cooldowns)
+ // seat the probe player in the target room (no router cooldowns)
     await state.updatePlayer(eventId, JID, {}, { roomId: target.key, prevRoomId: target.key, lastMoveAt: 0 });
     await rooms.enterRoom(eventId, JID, null, target.key);
 
@@ -92,8 +91,8 @@ async function main() {
         const { createCanvas, loadImage } = require('canvas');
         const src = await loadImage(img);
         const cr = sc.crop || CROP;
-        // 3x nearest-neighbour zoom, with a 2px magenta tick marking the item
-        // BASE line (anchor y) in the crop margin so the geometry is readable
+ // 3x nearest-neighbour zoom, with a 2px magenta tick marking the item
+ // BASE line (anchor y) in the crop margin so the geometry is readable
         const c = createCanvas(cr.w * ZOOM, cr.h * ZOOM);
         const ctx = c.getContext('2d');
         ctx.imageSmoothingEnabled = false;

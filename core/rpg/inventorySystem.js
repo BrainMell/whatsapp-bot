@@ -1,5 +1,5 @@
 // ============================================
-// 🎒 COMPLETE INVENTORY & EQUIPMENT SYSTEM
+// COMPLETE INVENTORY & EQUIPMENT SYSTEM
 // ============================================
 // Handles inventory management, equipment, and item persistence
 
@@ -10,19 +10,19 @@ const classSystem = require('./classSystem');
 const botConfig = require('../../botConfig');
 
 // ==========================================
-// 📦 INVENTORY CONFIGURATION
+// INVENTORY CONFIGURATION
 // ==========================================
 
 const INVENTORY_CONFIG = {
     BASE_SLOTS: 20,          // Starting inventory size
     MAX_SLOTS: 100,          // Maximum inventory size
     SLOTS_PER_UPGRADE: 5,    // Slots gained per upgrade
-    UPGRADE_COST_BASE: 2000, // 💡 Rebalanced 2026-08-17: 1K was trivially cheap at new D-rank earnings (~30K/day). 2K base × 1.5^level scaling.
+    UPGRADE_COST_BASE: 2000, // Rebalanced 1K was trivially cheap at new D-rank earnings (~30K/day). 2K base × 1.5^level scaling.
     UPGRADE_COST_SCALING: 1.5 // Cost multiplier per upgrade
 };
 
 // ==========================================
-// 🎁 ITEM TYPES & RARITIES
+// ITEM TYPES & RARITIES
 // ==========================================
 
 const ITEM_RARITY = {
@@ -65,7 +65,7 @@ const ITEM_RARITY = {
 };
 
 // ==========================================
-// 🎒 INVENTORY MANAGEMENT
+// INVENTORY MANAGEMENT
 // ==========================================
 
 function getInventory(userId) {
@@ -95,7 +95,7 @@ function getInventoryCount(userId) {
     const inventory = getInventory(userId);
     if (!inventory) return 0;
     
-    // 💡 Count unique item stacks, excluding MATERIAL types
+ // Count unique item stacks, excluding MATERIAL types
     let count = 0;
     for (const key in inventory) {
         const item = inventory[key];
@@ -116,7 +116,7 @@ function hasInventorySpace(userId, amount = 1, itemId = null) {
     const inventory = getInventory(userId);
     const itemInfo = lootSystem.getItemInfo(itemId);
     
-    // If the item already exists, it stacks and doesn't take a new slot
+ // If the item already exists, it stacks and doesn't take a new slot
     if (itemId && inventory[itemId] && itemInfo.type !== 'MATERIAL') return true;
 
     const current = getInventoryCount(userId);
@@ -125,10 +125,10 @@ function hasInventorySpace(userId, amount = 1, itemId = null) {
 }
 
 async function addItem(userId, itemId, quantity = 1, itemData = {}) {
-    // 💡 SECURITY FIX 2026-08-31: reject non-positive/non-numeric quantities.
-    // Negative quantities were exploited via `.j sell <#> -N` to DUPLICATE items
-    // (removeItem subtracting a negative adds items). Same guard class as
-    // economy.js addItem/removeItem.
+ // SECURITY FIX reject non-positive/non-numeric quantities.
+ // Negative quantities were exploited via `.j sell <#> -N` to DUPLICATE items
+ // (removeItem subtracting a negative adds items). Same guard class as
+ // economy.js addItem/removeItem.
     const qAdd = Math.floor(Number(quantity));
     if (!Number.isFinite(qAdd) || qAdd <= 0) {
         return { success: false, message: '❌ Invalid quantity.' };
@@ -145,7 +145,6 @@ async function addItem(userId, itemId, quantity = 1, itemData = {}) {
         };
     }
     
-    // Ensure consistent object structure (migration)
     if (inventory[itemId]) {
         if (typeof inventory[itemId] === 'number') {
             inventory[itemId] = {
@@ -159,7 +158,7 @@ async function addItem(userId, itemId, quantity = 1, itemData = {}) {
         } else {
             inventory[itemId].quantity = (inventory[itemId].quantity || 0) + quantity;
             
-            // 💡 Robustness: Hydrate missing essential properties from database
+ // Robustness: Hydrate missing essential properties from database
             if (!inventory[itemId].name) inventory[itemId].name = itemInfo.name;
             if (!inventory[itemId].type) inventory[itemId].type = itemInfo.type || 'ITEM';
             if (!inventory[itemId].rarity) inventory[itemId].rarity = itemInfo.rarity || 'COMMON';
@@ -167,18 +166,18 @@ async function addItem(userId, itemId, quantity = 1, itemData = {}) {
             if (!inventory[itemId].stats && itemInfo.stats) inventory[itemId].stats = JSON.parse(JSON.stringify(itemInfo.stats));
             if (!inventory[itemId].slot && itemInfo.slot) inventory[itemId].slot = itemInfo.slot;
 
-            // 💡 BUG-05 fix: Update metadata if provided - but NEVER overwrite
-            // instance-specific fields (rarity/stats/name/value/enhancement*)
-            // that were set by a previous drop or by the hydrate block above.
-            // The old `Object.assign(inventory[itemId], itemData)` clobbered
-            // a previously-rolled Mythic rarity with the new drop's (often
-            // lower) rarity, and replaced enhanced stats with base stats -
-            // producing Akon's "Mythic weapon enhanced, no visible effect"
-            // symptom. Now we only set fields that aren't already populated.
-            // NOTE: equipment stacking is fundamentally broken (each instance
-            // is unique), but this fix at least preserves the best existing
-            // instance instead of overwriting it. Proper fix = non-stackable
-            // equipment (deferred - bigger architectural change).
+ // BUG-05 fix: Update metadata if provided - but NEVER overwrite
+ // instance-specific fields (rarity/stats/name/value/enhancement*)
+ // that were set by a previous drop or by the hydrate block above.
+ // The old `Object.assign(inventory[itemId], itemData)` clobbered
+ // a previously-rolled Mythic rarity with the new drop's (often
+ // lower) rarity, and replaced enhanced stats with base stats -
+ // producing Akon's "Mythic weapon enhanced, no visible effect"
+ // symptom. Now we only set fields that aren't already populated.
+ // NOTE: equipment stacking is fundamentally broken (each instance
+ // is unique), but this fix at least preserves the best existing
+ // instance instead of overwriting it. Proper fix = non-stackable
+ // equipment (deferred - bigger architectural change).
             for (const [k, v] of Object.entries(itemData)) {
                 if (k === 'quantity') continue; // already handled at line 150
                 if (inventory[itemId][k] === undefined || inventory[itemId][k] === null) {
@@ -204,11 +203,11 @@ async function addItem(userId, itemId, quantity = 1, itemData = {}) {
         };
     }
     
-    // 💡 FIX 2026-10-17: strip undefined-valued keys (slot: undefined from
-    // itemData spreads). Undefined keys defeat the save-layer baselines
-    // (JSON.stringify drops them) so leafDiff re-emitted them on EVERY save —
-    // the "inventory.strength_brew.slot" write churn (see economy.js
-    // flattenLeaves note). Clean keys = converging diffs.
+ // FIX strip undefined-valued keys (slot: undefined from
+ // itemData spreads). Undefined keys defeat the save-layer baselines
+ // (JSON.stringify drops them) so leafDiff re-emitted them on EVERY save -
+ // the "inventory.strength_brew.slot" write churn (see economy.js
+ // flattenLeaves note). Clean keys = converging diffs.
     for (const k of Object.keys(inventory[itemId] || {})) {
         if (inventory[itemId][k] === undefined) delete inventory[itemId][k];
     }
@@ -226,8 +225,8 @@ async function addItem(userId, itemId, quantity = 1, itemData = {}) {
 function removeItem(userId, itemId, quantity = 1) {
     const inventory = getInventory(userId);
 
-    // 💡 SECURITY FIX 2026-08-31: reject non-positive/non-numeric quantities.
-    // `quantity -= -N` ADDS items - this was the root of the negative-sell dupe.
+ // SECURITY FIX reject non-positive/non-numeric quantities.
+ // `quantity -= -N` ADDS items - this was the root of the negative-sell dupe.
     const qRem = Math.floor(Number(quantity));
     if (!Number.isFinite(qRem) || qRem <= 0) {
         return { success: false, message: '❌ Invalid quantity.' };
@@ -255,7 +254,7 @@ function removeItem(userId, itemId, quantity = 1) {
         };
     }
     
-    // Uniformly update quantity
+ // Uniformly update quantity
     if (typeof inventory[itemId] === 'number') {
         inventory[itemId] -= quantity;
         if (inventory[itemId] <= 0) {
@@ -312,7 +311,7 @@ function upgradeInventory(userId) {
         };
     }
     
-    // Calculate upgrade cost
+ // Calculate upgrade cost
     const upgradesApplied = (currentSlots - INVENTORY_CONFIG.BASE_SLOTS) / INVENTORY_CONFIG.SLOTS_PER_UPGRADE;
     const cost = Math.floor(INVENTORY_CONFIG.UPGRADE_COST_BASE * Math.pow(INVENTORY_CONFIG.UPGRADE_COST_SCALING, upgradesApplied));
     
@@ -323,7 +322,7 @@ function upgradeInventory(userId) {
         };
     }
     
-    // Apply upgrade
+ // Apply upgrade
     economy.removeMoney(userId, cost);
     user.inventorySlots = Math.min(currentSlots + INVENTORY_CONFIG.SLOTS_PER_UPGRADE, INVENTORY_CONFIG.MAX_SLOTS);
     economy.saveUser(userId);
@@ -338,7 +337,7 @@ function upgradeInventory(userId) {
 }
 
 // ==========================================
-// ⚔️ EQUIPMENT SYSTEM
+// EQUIPMENT SYSTEM
 // ==========================================
 
 const EQUIPMENT_SLOTS = {
@@ -372,14 +371,14 @@ function getEquipment(userId) {
         economy.saveUser(userId);
     }
     
-    // 💡 Migration Logic: If they have the old 'weapon' slot, move it to 'main_hand'
+ // Migration Logic: If they have the old 'weapon' slot, move it to 'main_hand'
     if (user.equipment.weapon !== undefined) {
         if (!user.equipment.main_hand) user.equipment.main_hand = user.equipment.weapon;
         delete user.equipment.weapon;
         economy.saveUser(userId);
     }
 
-    // 💡 Durability Migration: Initialize durability for already equipped gear
+ // Durability Migration: Initialize durability for already equipped gear
     let needsSave = false;
     for (const [slot, item] of Object.entries(user.equipment)) {
         if (item && item.durability === undefined) {
@@ -403,7 +402,7 @@ async function equipItem(userId, itemId, slot) {
     const equipment = getEquipment(userId);
     const progression = require('./progression');
     
-    // Loose matching for underscores and spaces
+ // Loose matching for underscores and spaces
     let targetItemId = itemId;
     const cleanItemId = (itemId || '').toLowerCase().replace(/_/g, '').replace(/ /g, '');
     const foundKey = Object.keys(inventory).find(k => k.toLowerCase().replace(/_/g, '').replace(/ /g, '') === cleanItemId);
@@ -422,7 +421,7 @@ async function equipItem(userId, itemId, slot) {
     const itemInfo = lootSystem.getItemInfo(targetItemId);
     const playerLevel = progression.getLevel(userId);
 
-    // 💡 LEVEL REQUIREMENT CHECK
+ // LEVEL REQUIREMENT CHECK
     const reqLevel = itemToEquip.reqLevel || itemInfo.reqLevel || 1;
     if (playerLevel < reqLevel) {
         return {
@@ -431,12 +430,12 @@ async function equipItem(userId, itemId, slot) {
         };
     }
 
-    // 💡 FIX 2026-08-01 (GAP #1): rank enforcement on equip.
-    // User quote: "Players should not be able to equip weapons above their
-    // required rank or level." The reqRank is derived from reqLevel using the
-    // rank thresholds in classSystem.ADVENTURER_RANKS (F=1, E=10, D=20, ...).
-    // A player may meet the level req but not hold the rank yet (rank also
-    // requires questsCompleted + GP) - in that case, block the equip.
+ // FIX (GAP #1): rank enforcement on equip.
+ // User quote: "Players should not be able to equip weapons above their
+ // required rank or level." The reqRank is derived from reqLevel using the
+ // rank thresholds in classSystem.ADVENTURER_RANKS (F=1, E=10, D=20, ...).
+ // A player may meet the level req but not hold the rank yet (rank also
+ // requires questsCompleted + GP) - in that case, block the equip.
     const reqRank = getRequiredRankForLevel(reqLevel);
     const user = economy.getUser(userId);
     const playerRank = user?.adventurerRank || 'F';
@@ -448,9 +447,9 @@ async function equipItem(userId, itemId, slot) {
         };
     }
     
-    // Auto-detect slot if not provided
+ // Auto-detect slot if not provided
     let targetSlot = slot;
-    // 💡 FIX 2026-08-03: normalize spaces/dashes to underscores for slot names
+ // FIX normalize spaces/dashes to underscores for slot names
     if (typeof targetSlot === 'string') {
         targetSlot = targetSlot.toLowerCase().replace(/[\s-]+/g, '_');
         if (targetSlot === 'weapon') targetSlot = 'main_hand';
@@ -460,7 +459,6 @@ async function equipItem(userId, itemId, slot) {
         if (targetSlot === 'weapon') targetSlot = 'main_hand';
     }
 
-    // Ensure the item type is strictly EQUIPMENT, and not a fish or other category
     const isFish = itemId.toLowerCase().includes('fish') || (itemInfo.category && itemInfo.category.toLowerCase() === 'fish');
     if (itemInfo.type !== 'EQUIPMENT' || isFish) {
         return {
@@ -469,7 +467,6 @@ async function equipItem(userId, itemId, slot) {
         };
     }
 
-    // Ensure targetSlot is a valid equipment slot
     if (!targetSlot || !EQUIPMENT_SLOTS[targetSlot.toUpperCase()]) {
         return {
             success: false,
@@ -477,7 +474,6 @@ async function equipItem(userId, itemId, slot) {
         };
     }
 
-    // Verify slot alignment compatibility to prevent cross-category slot leakage
     const itemSlot = (itemToEquip.slot || itemInfo.slot || '').toLowerCase();
     const cleanTargetSlot = targetSlot.toLowerCase();
 
@@ -511,24 +507,22 @@ async function equipItem(userId, itemId, slot) {
     
     const slotName = EQUIPMENT_SLOTS[targetSlot.toUpperCase()];
 
-    // 💡 TWO-HANDED / SHIELD LOGIC
+ // TWO-HANDED / SHIELD LOGIC
     const isTwoHanded = itemToEquip.isTwoHanded || itemInfo.isTwoHanded;
 
-    // PRE-CHECK: Verify we have enough inventory space for the worst-case
-    // number of items that will return to the bag during this swap.
-    //
-    // Worst case: equipping a two-hander to main_hand while a one-hander +
-    // shield are currently equipped. That swaps 1 new item OUT of the bag
-    // and pushes 2 old items (main_hand + off_hand) back IN - net +1 slot.
-    //
-    // Previously the code did removeItem() first, then awaited addItem()
-    // for the displaced items. If addItem() failed because the bag was full,
-    // the old item was silently lost. This pre-check prevents that.
+ // PRE-CHECK: Verify we have enough inventory space for the worst-case
+ // number of items that will return to the bag during this swap.
+ // Worst case: equipping a two-hander to main_hand while a one-hander +
+ // shield are currently equipped. That swaps 1 new item OUT of the bag
+ // and pushes 2 old items (main_hand + off_hand) back IN - net +1 slot.
+ // Previously the code did removeItem() first, then awaited addItem()
+ // for the displaced items. If addItem() failed because the bag was full,
+ // the old item was silently lost. This pre-check prevents that.
     const willReturnMainHand = !!equipment[slotName];
     const willReturnOffHand = isTwoHanded && slotName === 'main_hand' && !!equipment.off_hand;
     const willReturnMainHandForOffHandSwap = slotName === 'off_hand' && equipment.main_hand && lootSystem.getItemInfo(equipment.main_hand.id)?.isTwoHanded;
     const itemsReturning = (willReturnMainHand ? 1 : 0) + (willReturnOffHand ? 1 : 0) + (willReturnMainHandForOffHandSwap ? 1 : 0);
-    // The new item is removed first, freeing 1 slot - so net slots needed = itemsReturning - 1
+ // The new item is removed first, freeing 1 slot - so net slots needed = itemsReturning - 1
     const netSlotsNeeded = Math.max(0, itemsReturning - 1);
     if (netSlotsNeeded > 0 && !hasInventorySpace(userId, netSlotsNeeded)) {
         return {
@@ -537,32 +531,32 @@ async function equipItem(userId, itemId, slot) {
         };
     }
 
-    // 1. Remove new item from inventory first
-    // 💡 QA FIX: was using `itemId` (original input) instead of `targetItemId`
-    // (the matched inventory key). When loose matching converts e.g.
-    // "steel sabre" → "steel_sabre", removeItem received "steel sabre"
-    // which doesn't match any key → removeItem fails silently → item
-    // stays in inventory AND gets equipped = duplication exploit.
-    // Also: return value was never checked.
+ // 1. Remove new item from inventory first
+ // QA FIX: was using `itemId` (original input) instead of `targetItemId`
+ // (the matched inventory key). When loose matching converts e.g.
+ // "steel sabre" → "steel_sabre", removeItem received "steel sabre"
+ // which doesn't match any key → removeItem fails silently → item
+ // stays in inventory AND gets equipped = duplication exploit.
+ // Also: return value was never checked.
     const removeResult = removeItem(userId, targetItemId, 1);
     if (!removeResult || !removeResult.success) {
         return { success: false, message: `❌ Failed to remove item from inventory. Make sure you have the item.` };
     }
 
-    // 2. Handle Two-Hander logic (unequip Off-Hand if equipping to Main-Hand)
+ // 2. Handle Two-Hander logic (unequip Off-Hand if equipping to Main-Hand)
     if (isTwoHanded && slotName === 'main_hand' && equipment.off_hand) {
         const offHand = equipment.off_hand;
         equipment.off_hand = null;
         const addResult = await addItem(userId, offHand.id, 1, offHand);
         if (!addResult.success) {
-            // Rollback: re-equip the off-hand and put the new item back
+ // Rollback: re-equip the off-hand and put the new item back
             equipment.off_hand = offHand;
             await addItem(userId, targetItemId, 1, itemToEquip);
             return { success: false, message: `❌ Inventory full! Could not store ${offHand.name || offHand.id} when unequipping.` };
         }
     }
 
-    // 3. Ensure Main-Hand isn't a 2-Hander if equipping to Off-Hand
+ // 3. Ensure Main-Hand isn't a 2-Hander if equipping to Off-Hand
     if (slotName === 'off_hand' && equipment.main_hand) {
         const mainHandInfo = lootSystem.getItemInfo(equipment.main_hand.id);
         if (mainHandInfo.isTwoHanded) {
@@ -570,7 +564,7 @@ async function equipItem(userId, itemId, slot) {
             equipment.main_hand = null;
             const addResult = await addItem(userId, mainHand.id, 1, mainHand);
             if (!addResult.success) {
-                // Rollback
+ // Rollback
                 equipment.main_hand = mainHand;
                 await addItem(userId, targetItemId, 1, itemToEquip);
                 return { success: false, message: `❌ Inventory full! Could not store ${mainHand.name || mainHand.id} when unequipping.` };
@@ -582,7 +576,7 @@ async function equipItem(userId, itemId, slot) {
     if (oldItem) {
         const addResult = await addItem(userId, oldItem.id, 1, oldItem);
         if (!addResult.success) {
-            // Rollback: re-equip the old item and put the new item back
+ // Rollback: re-equip the old item and put the new item back
             equipment[slotName] = oldItem;
             await addItem(userId, targetItemId, 1, itemToEquip);
             return { success: false, message: `❌ Inventory full! Could not store ${oldItem.name || oldItem.id} when unequipping.` };
@@ -595,29 +589,28 @@ async function equipItem(userId, itemId, slot) {
     equipment[slotName] = { ...itemToEquip };
     delete equipment[slotName].quantity;
 
-    // 💡 FIX 2026-08-03 (bug report #1): ensure rarity is set on the equipped
-    // copy. If itemToEquip.rarity was missing (old item added before rarity
-    // was properly tracked), fall back to the DB rarity. This prevents the
-    // "Common" label showing on Mythic/Legendary gear in .char/.bag display.
+ // FIX (bug report #1): ensure rarity is set on the equipped
+ // copy. If itemToEquip.rarity was missing (old item added before rarity
+ // was properly tracked), fall back to the DB rarity. This prevents the
+ // "Common" label showing on Mythic/Legendary gear in .char/.bag display.
     if (!equipment[slotName].rarity) {
         equipment[slotName].rarity = itemInfo.rarity || 'COMMON';
     }
 
-    // Seed durability
+ // Seed durability
     equipment[slotName].maxDurability = durProfile.max;
     equipment[slotName].durability = durProfile.max;
     equipment[slotName].durabilityTraits = durProfile.traits;
     
     await economy.saveUser(userId);
     
-    // 💡 Track for rank missions
+ // Track for rank missions
     try {
         economy.trackMissionStat(userId, 'itemsEquipped', 1);
     } catch (e) {}
 
-    // 💡 FIX 2026-08-01 (BUG #11): include item name + slot + rank in the
-    // return so the command handler can show a useful success message
-    // instead of just "equipped <id>".
+ // FIX (BUG #11): include item name + slot + rank in the
+ // instead of just "equipped <id>".
     const equippedName = equipment[slotName]?.name || itemInfo.name || itemId;
     const equippedRarity = equipment[slotName]?.rarity || itemInfo.rarity || 'COMMON';
     const rarityIcon = ITEM_RARITY[equippedRarity]?.icon || '⚪';
@@ -635,9 +628,9 @@ async function equipItem(userId, itemId, slot) {
 async function unequipItem(userId, slot) {
     const equipment = getEquipment(userId);
 
-    // 💡 FIX 2026-08-03 (bug report #7): normalize spaces to underscores
-    // so '.jk unequip main hand' works the same as '.jk unequip main_hand'.
-    // Also strip dashes - some users type 'main-hand'.
+ // FIX (bug report #7): normalize spaces to underscores
+ // so '.jk unequip main hand' works the same as '.jk unequip main_hand'.
+ // Also strip dashes - some users type 'main-hand'.
     if (typeof slot === 'string') {
         slot = slot.toLowerCase().replace(/[\s-]+/g, '_');
     }
@@ -660,7 +653,6 @@ async function unequipItem(userId, slot) {
     
     const item = equipment[slotName];
     
-    // Check if there's space before unequipping
     if (!hasInventorySpace(userId, 1, item.id)) {
         return {
             success: false,
@@ -668,7 +660,7 @@ async function unequipItem(userId, slot) {
         };
     }
 
-    // Strip durability before merging back into bag stack
+ // Strip durability before merging back into bag stack
     const itemToBag = { ...item };
     delete itemToBag.durability;
     delete itemToBag.maxDurability;
@@ -707,9 +699,9 @@ function getEquipmentStats(userId) {
     for (const [slot, item] of Object.entries(equipment)) {
         if (!item) continue;
 
-        // Prefer stats on the item instance; fall back to the item database.
-        // Fixes: items equipped before stat-hydration had empty .stats = {}
-        // making all equipment bonuses silently show as 0 on the stats window.
+ // Prefer stats on the item instance; fall back to the item database.
+ // Fixes: items equipped before stat-hydration had empty .stats = {}
+ // making all equipment bonuses silently show as 0 on the stats window.
         let statsToApply = (item.stats && Object.keys(item.stats).length > 0)
             ? item.stats
             : lootSystem.getItemInfo(item.id)?.stats;
@@ -729,7 +721,7 @@ function getEquipmentStats(userId) {
 }
 
 // Enhancement stones: percentage each stone adds to the TOTAL bonus pool (not compounded).
-// 💡 FIX 2026-08-01 (BUG #1): mythic_enhancement_stone was MISSING from this map.
+// FIX (BUG #1): mythic_enhancement_stone was MISSING from this map.
 // It is defined in lootSystem.js:895 with description "Boosts gear stats by 60%."
 // but enhanceItem() fell through to the || 0.05 fallback (worst bonus in the game)
 // instead of giving the intended 60% per stone. This made Mythic stones - the
@@ -741,13 +733,12 @@ const ENHANCEMENT_BONUS_MAP = {
     'mythic_enhancement_stone': 0.60
 };
 
-// 💡 FIX 2026-08-01 (GAP #1): rank enforcement on equip.
+// FIX (GAP #1): rank enforcement on equip.
 // The rank thresholds mirror classSystem.ADVENTURER_RANKS - a player must
 // hold at least the rank whose level requirement is <= the item's reqLevel.
 // F=1, E=10, D=20, C=30, B=40, A=50, S=60, SS=75, SSS=90, GOD=100.
 const RANK_ORDER = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'GOD'];
 
-// Returns the minimum rank a player must hold to equip an item with the given
 // reqLevel. Walks RANK_ORDER and returns the highest rank whose level
 // threshold is <= reqLevel. Items with no reqLevel default to 'F'.
 function getRequiredRankForLevel(level) {
@@ -762,7 +753,6 @@ function getRequiredRankForLevel(level) {
     return requiredRank;
 }
 
-// Returns true if rankA is >= rankB (using RANK_ORDER indices, not string
 // comparison - 'S' > 'SS' is false in JS string compare but S < SS in rank).
 function rankGte(rankA, rankB) {
     const a = RANK_ORDER.indexOf(rankA);
@@ -790,22 +780,20 @@ const DEFAULT_MAX_ENHANCEMENT_LEVEL = 5;  // fallback for items with unknown/mis
 // references it. Internally, always use getMaxEnhancementLevel(item) instead.
 const MAX_ENHANCEMENT_LEVEL = 5;
 
-// 💡 POLISH 2026-07-17: rarity-aware bonus cap. Previously MAX_ENHANCEMENT_BONUS
+// POLISH rarity-aware bonus cap. Previously MAX_ENHANCEMENT_BONUS
 // was a flat 1.0 (= 2x base stats) regardless of rarity. This meant a Mythic
 // item enhanced to level 30 was still capped at 2x base - exactly the same as
 // a Common item at level 5. The rarity cap was meaningless for actual stat
 // output, only the LEVEL was bounded.
-//
 // Now each rarity has its own bonus cap = maxLevel × 0.35 (assuming legendary
 // stones used at every level). This restores the meaningful stat gap between
 // rarities that the original exponential system had:
-//   COMMON  max +1.75 (5 × 0.35)   → 2.75x base
-//   UNCOMMON max +3.50 (10 × 0.35)  → 4.50x base
-//   RARE    max +5.25 (15 × 0.35)   → 6.25x base
-//   EPIC    max +7.00 (20 × 0.35)   → 8.00x base
-//   LEGENDARY max +8.75 (25 × 0.35) → 9.75x base
-//   MYTHIC  max +10.50 (30 × 0.35)  → 11.50x base
-//
+// COMMON max +1.75 (5 × 0.35) → 2.75x base
+// UNCOMMON max +3.50 (10 × 0.35) → 4.50x base
+// RARE max +5.25 (15 × 0.35) → 6.25x base
+// EPIC max +7.00 (20 × 0.35) → 8.00x base
+// LEGENDARY max +8.75 (25 × 0.35) → 9.75x base
+// MYTHIC max +10.50 (30 × 0.35) → 11.50x base
 // This is more generous than the original exponential system at high levels
 // (intentional - players lost stats when the flat cap was added and we want
 // to make them whole), but bounded so a single Common trash item can't be
@@ -839,7 +827,7 @@ function getMaxEnhancementLevel(item, itemId) {
     return MAX_ENHANCEMENT_LEVEL_BY_RARITY[rarity] ?? DEFAULT_MAX_ENHANCEMENT_LEVEL;
 }
 
-// 💡 POLISH 2026-07-17: resolves the per-item enhancement BONUS cap based on
+// POLISH resolves the per-item enhancement BONUS cap based on
 // its rarity. Same rarity lookup as getMaxEnhancementLevel - used by
 // recalculateEnhancedStats, enhanceItem, and repairItemStats so a Mythic
 // item can actually reach 11.5x base stats, not just 2x.
@@ -854,17 +842,16 @@ function getMaxEnhancementBonus(item, itemId) {
     return MAX_ENHANCEMENT_BONUS_BY_RARITY[rarity] ?? DEFAULT_MAX_ENHANCEMENT_BONUS;
 }
 
-// Ensures item.baseStats exists (the pristine, never-enhanced stat block).
 // Stats are always recalculated FROM this each time, so repeated enhancement
 // can never compound on top of an already-boosted value.
 function hydrateBaseStats(item, itemId) {
     if (item.baseStats && Object.keys(item.baseStats).length > 0) return;
 
-    // 💡 AUDIT FIX 2026-08-01: ALWAYS prefer the ITEM_DATABASE stats over
-    // item.stats. The current item.stats may have been corrupted by the old
-    // exponential enhancement bug (which inflated stats to absurd values,
-    // then the "fix" introduced negative values). Using the DB stats as the
-    // base ensures enhancement always starts from the correct baseline.
+ // AUDIT FIX ALWAYS prefer the ITEM_DATABASE stats over
+ // item.stats. The current item.stats may have been corrupted by the old
+ // exponential enhancement bug (which inflated stats to absurd values,
+ // then the "fix" introduced negative values). Using the DB stats as the
+ // base ensures enhancement always starts from the correct baseline.
     const dbItem = lootSystem.getItemInfo(item.id || itemId);
     const source = (dbItem && dbItem.stats && Object.keys(dbItem.stats).length > 0)
         ? dbItem.stats
@@ -876,7 +863,7 @@ function hydrateBaseStats(item, itemId) {
 }
 
 // Recomputes item.stats = baseStats * (1 + cumulative bonus), rounded to integers.
-// 💡 POLISH 2026-07-17: uses rarity-aware bonus cap (getMaxEnhancementBonus)
+// POLISH uses rarity-aware bonus cap (getMaxEnhancementBonus)
 // instead of the flat MAX_ENHANCEMENT_BONUS = 1.0. This is the actual fix
 // for the "stats still haven't changed" complaint - items can now exceed
 // 2x base when their rarity allows it.
@@ -905,30 +892,30 @@ function enhanceItem(userId, itemId, stoneId) {
         return { success: false, message: `❌ *${item.name || itemId}* is already at max enhancement level (${maxLevel}) for its rarity!` };
     }
 
-    // 💡 FIX 2026-08-01 (BUG #1): ENHANCEMENT_BONUS_MAP now includes
-    // mythic_enhancement_stone (0.60). Previously it fell through to || 0.05
-    // (the Minor-stone fallback), making Mythic stones the worst in the game.
+ // FIX (BUG #1): ENHANCEMENT_BONUS_MAP now includes
+ // mythic_enhancement_stone (0.60). Previously it fell through to || 0.05
+ // (the Minor-stone fallback), making Mythic stones the worst in the game.
     const stoneBonus = ENHANCEMENT_BONUS_MAP[stoneId] || 0.05;
     const stoneInfo = lootSystem.getItemInfo(stoneId);
     const stoneName = stoneInfo?.name || stoneId;
 
     hydrateBaseStats(item, itemId);
 
-    // 💡 FIX 2026-08-01 (BUG #5): snapshot stats BEFORE enhancement so we can
-    // report per-stat deltas in the result message. Previously
-    // recalculateEnhancedStats() mutated item.stats in place and the old
-    // values were lost.
+ // FIX (BUG #5): snapshot stats BEFORE enhancement so we can
+ // report per-stat deltas in the result message. Previously
+ // recalculateEnhancedStats() mutated item.stats in place and the old
+ // values were lost.
     const statsBefore = JSON.parse(JSON.stringify(item.stats || {}));
     const bonusBefore = item.enhancementBonus || 0;
 
     item.enhancementLevel = (item.enhancementLevel || 0) + 1;
-    // 💡 POLISH 2026-07-17: cap bonus at rarity-aware max (not flat 1.0)
+ // POLISH cap bonus at rarity-aware max (not flat 1.0)
     const maxBonus = getMaxEnhancementBonus(item, itemId);
     item.enhancementBonus = Math.min((item.enhancementBonus || 0) + stoneBonus, maxBonus);
 
     recalculateEnhancedStats(item, itemId);
 
-    // Compute per-stat deltas for the result message
+ // Compute per-stat deltas for the result message
     const statDeltas = {};
     for (const stat of Object.keys(item.stats || {})) {
         const before = statsBefore[stat] || 0;
@@ -936,43 +923,41 @@ function enhanceItem(userId, itemId, stoneId) {
         if (after !== before) statDeltas[stat] = after - before;
     }
 
-    // Add prefix
+ // Add prefix
     const prefixes = ['Polished', 'Strengthened', 'Reinforced', 'Masterwork', 'God-forged'];
     const prefix = prefixes[Math.min(item.enhancementLevel - 1, prefixes.length - 1)];
 
-    // Ensure item has a name to avoid crash
     if (!item.name) item.name = itemId;
 
     if (!item.name.startsWith(prefix)) {
         item.name = `${prefix} ${item.name.replace(/^(Polished|Strengthened|Reinforced|Masterwork|God-forged) /, '')}`;
     }
 
-    // 💡 FIX (BUG 4b: "enhanced a mythic weapon, no effect"):
-    // equipItem() stores a SHALLOW COPY of the item in the equipment slot
-    // (line 530: `equipment[slotName] = { ...itemToEquip }`). So when we
-    // enhance the inventory copy here, the equipped copy is a SEPARATE
-    // object that never gets updated. getEquipmentStats() then reads the
-    // OLD pre-enhancement stats from the equipped copy - making the
-    // enhancement appear to have "no effect" in combat.
-    //
-    // Fix: after enhancing the inventory copy, check if this item is
-    // equipped in any slot. If so, sync the enhanced fields (stats,
-    // enhancementLevel, enhancementBonus, name, rarity) to the equipped copy.
-    // 💡 FIX 2026-08-03 (bug report #1): also sync `rarity` - the equipped
-    // copy could have a stale rarity label if the item was added before
-    // rarity was properly set, causing "Common" to show for Mythic items.
+ // FIX (BUG 4b: "enhanced a mythic weapon, no effect"):
+ // equipItem() stores a SHALLOW COPY of the item in the equipment slot
+ // (line 530: `equipment[slotName] = { ...itemToEquip }`). So when we
+ // enhance the inventory copy here, the equipped copy is a SEPARATE
+ // object that never gets updated. getEquipmentStats() then reads the
+ // OLD pre-enhancement stats from the equipped copy - making the
+ // enhancement appear to have "no effect" in combat.
+ // Fix: after enhancing the inventory copy, check if this item is
+ // equipped in any slot. If so, sync the enhanced fields (stats,
+ // enhancementLevel, enhancementBonus, name, rarity) to the equipped copy.
+ // FIX (bug report #1): also sync `rarity` - the equipped
+ // copy could have a stale rarity label if the item was added before
+ // rarity was properly set, causing "Common" to show for Mythic items.
     const equipment = getEquipment(userId);
     if (equipment) {
         for (const [slot, eqItem] of Object.entries(equipment)) {
             if (eqItem && eqItem.id === itemId) {
-                // Sync the enhanced fields to the equipped copy
+ // Sync the enhanced fields to the equipped copy
                 eqItem.stats = JSON.parse(JSON.stringify(item.stats));
                 eqItem.enhancementLevel = item.enhancementLevel;
                 eqItem.enhancementBonus = item.enhancementBonus;
                 eqItem.baseStats = item.baseStats ? JSON.parse(JSON.stringify(item.baseStats)) : undefined;
                 eqItem.name = item.name;
-                // 💡 FIX 2026-08-03: sync rarity too - prevents "Common" label
-                // on Mythic/Legendary items after enhancement.
+ // FIX sync rarity too - prevents "Common" label
+ // on Mythic/Legendary items after enhancement.
                 if (item.rarity) eqItem.rarity = item.rarity;
                 break; // an item can only be equipped in one slot
             }
@@ -982,10 +967,10 @@ function enhanceItem(userId, itemId, stoneId) {
     removeItem(userId, stoneId, 1);
     economy.saveUser(userId);
 
-    // 💡 FIX 2026-08-01 (BUG #4): include stone name + per-stat deltas in the
-    // result message. User quote: "Show exactly which stone is being consumed
-    // during enhancement. Display how much each enhancement increases the
-    // item's stats."
+ // FIX (BUG #4): include stone name + per-stat deltas in the
+ // result message. User quote: "Show exactly which stone is being consumed
+ // during enhancement. Display how much each enhancement increases the
+ // item's stats."
     const statLines = Object.entries(statDeltas)
         .map(([stat, delta]) => `   ${stat.toUpperCase()}: ${statsBefore[stat] || 0} → ${item.stats[stat]} (+${delta})`)
         .join('\n');
@@ -994,7 +979,7 @@ function enhanceItem(userId, itemId, stoneId) {
     return {
         success: true,
         message: `✨ *ENHANCEMENT SUCCESS!*\n\n💎 Stone used: *${stoneName}* (+${Math.round(stoneBonus * 100)}% bonus)\n⚔️ Item: *${item.name}* (${item.rarity || 'COMMON'})\n📊 Level: ${item.enhancementLevel}/${maxLevel}\n📈 Total bonus: ${Math.round(bonusBefore * 100)}% → ${Math.round(item.enhancementBonus * 100)}% (+${Math.round(bonusThisStone * 100)}%)\n${statLines ? `\n*Stat changes:*\n${statLines}` : ''}`,
-        // Structured return for callers that want to render their own UI
+ // Structured return for callers that want to render their own UI
         stoneUsed: stoneId,
         stoneName,
         stoneBonus,
@@ -1022,22 +1007,22 @@ function repairItemStats(item, itemId) {
     const baseStatsRef = baseItem?.stats;
     if (!baseStatsRef) return false;
 
-    // 💡 AUDIT FIX 2026-08-01: also repair items with enhancementLevel = 0
-    // if their stats are corrupted (negative values, or values that don't
-    // match the DB base stats). The old code skipped these, leaving
-    // corrupted items in the bag forever.
-    // 🧯 2026-10-17 (owner: "bag upgrade bug" / "equipment glitch"): items
-    // stored with stats === null (pre-c68dba4 undefined→BSON-null plant) were
-    // ALSO silently skipped — the `item.stats &&` guard below never fired —
-    // so the item showed zero stats forever AND every save that tried to
-    // write a leaf under its stats failed with "Cannot create field 'x' in
-    // element {stats: null}" (whole saveUser dies; live: 5 equipped items on
-    // 3 users). Null stats on a known item = corruption, same as wrong stats.
+ // AUDIT FIX also repair items with enhancementLevel = 0
+ // if their stats are corrupted (negative values, or values that don't
+ // match the DB base stats). The old code skipped these, leaving
+ // corrupted items in the bag forever.
+ // ("bag upgrade bug" / "equipment glitch"): items
+ // stored with stats === null (pre-c68dba4 undefined→BSON-null plant) were
+ // ALSO silently skipped - the `item.stats &&` guard below never fired -
+ // so the item showed zero stats forever AND every save that tried to
+ // write a leaf under its stats failed with "Cannot create field 'x' in
+ // element {stats: null}" (whole saveUser dies; live: 5 equipped items on
+ // 3 users). Null stats on a known item = corruption, same as wrong stats.
     let corrupted = false;
     if (item.stats === null || item.stats === undefined) corrupted = true;
 
     if (item.enhancementLevel > 0) {
-        // Enhanced items: check if stats exceed what's possible under the cap
+ // Enhanced items: check if stats exceed what's possible under the cap
         const maxBonus = getMaxEnhancementBonus(item, itemId);
         const maxPossibleMultiplier = 1 + maxBonus;
         for (const stat in item.stats || {}) {
@@ -1049,14 +1034,14 @@ function repairItemStats(item, itemId) {
         }
         if (!item.baseStats || Object.keys(item.baseStats).length === 0) corrupted = true;
     } else {
-        // Non-enhanced items: check if stats match the DB (should be identical)
+ // Non-enhanced items: check if stats match the DB (should be identical)
         for (const stat in baseStatsRef) {
             if (item.stats && item.stats[stat] !== undefined && item.stats[stat] !== baseStatsRef[stat]) {
                 corrupted = true;
                 break;
             }
         }
-        // Also check for negative values that shouldn't exist
+ // Also check for negative values that shouldn't exist
         for (const stat in item.stats || {}) {
             if (baseStatsRef[stat] !== undefined && baseStatsRef[stat] > 0 && item.stats[stat] < 0) {
                 corrupted = true;
@@ -1067,7 +1052,7 @@ function repairItemStats(item, itemId) {
 
     if (!corrupted) return false;
 
-    // Reset baseStats from DB + recalculate
+ // Reset baseStats from DB + recalculate
     item.baseStats = JSON.parse(JSON.stringify(baseStatsRef));
     const maxLevel = getMaxEnhancementLevel(item, itemId);
     item.enhancementLevel = Math.min(item.enhancementLevel || 0, maxLevel);
@@ -1097,22 +1082,22 @@ function repairUserEquipmentStats(userId) {
 }
 
 // ==========================================
-// 💰 ITEM SELLING
+// ITEM SELLING
 // ==========================================
 
 function sellItem(userId, itemId, quantity = 1) {
     const inventory = getInventory(userId);
 
-    // 💡 SECURITY FIX 2026-08-31: reject non-positive/non-numeric quantities.
-    // Negative qty passed the `currentQuantity < quantity` check and made
-    // removeItem ADD items to the stack (infinite duplication exploit).
+ // SECURITY FIX reject non-positive/non-numeric quantities.
+ // Negative qty passed the `currentQuantity < quantity` check and made
+ // removeItem ADD items to the stack (infinite duplication exploit).
     const qSell = Math.floor(Number(quantity));
     if (!Number.isFinite(qSell) || qSell <= 0) {
         return { success: false, message: '❌ Invalid quantity - must be a positive number.' };
     }
     quantity = qSell;
 
-    // Loose matching for underscores and spaces
+ // Loose matching for underscores and spaces
     let targetItemId = itemId;
     const cleanItemId = (itemId || '').toLowerCase().replace(/_/g, '').replace(/ /g, '');
     const foundKey = Object.keys(inventory).find(k => k.toLowerCase().replace(/_/g, '').replace(/ /g, '') === cleanItemId);
@@ -1137,27 +1122,27 @@ function sellItem(userId, itemId, quantity = 1) {
         };
     }
     
-    // Calculate sell value
+ // Calculate sell value
     const itemInfo = lootSystem.getItemInfo(targetItemId);
     const baseValue = item.value || itemInfo.value || 100;
     const rarity = item.rarity || itemInfo.rarity || 'COMMON';
     let sellMultiplier = ITEM_RARITY[rarity]?.sellMultiplier || 0.6;
     
-    // Special case for gold currency item: 1:15 exchange rate (15x base value of 1)
+ // Special case for gold currency item: 1:15 exchange rate (15x base value of 1)
     if (targetItemId === 'gold' || targetItemId === 'gold_pile') sellMultiplier = 15.0;
     
     const totalValue = Math.floor(baseValue * sellMultiplier * quantity);
-    // 💡 P4 Item 18 fix (2026-08-17): 10% economy tax evaporates FIRST (genuine sink,
-    // same as P2P transfer + market sales). Guild 5% then applies to the post-tax amount.
+ // P4 Item 18 fix: 10% economy tax evaporates FIRST (genuine sink,
+ // same as P2P transfer + market sales). Guild 5% then applies to the post-tax amount.
     const economyTax = Math.floor(totalValue * 0.10);
     let sellValue = totalValue - economyTax;
     let guildContribution = null;
 
-    // Remove item
+ // Remove item
     const removeResult = removeItem(userId, targetItemId, quantity);
     if (!removeResult.success) return removeResult;
 
-    // Guild House Contribution System (5% tax - applied to POST-economy-tax amount)
+ // Guild House Contribution System (5% tax - applied to POST-economy-tax amount)
     const guildName = guilds.getUserGuild(userId);
     if (guildName) {
         const guildTaxable = totalValue - economyTax;
@@ -1177,7 +1162,7 @@ function sellItem(userId, itemId, quantity = 1) {
                 guildName: guildName
             };
         }
-        // Merchant Tracking: Log Zeni earned to guild board (post-tax amount)
+ // Merchant Tracking: Log Zeni earned to guild board (post-tax amount)
         guilds.updateBoardProgress(guildName, 'EARN_ZENI', sellValue);
     }
     
@@ -1196,7 +1181,7 @@ function sellItem(userId, itemId, quantity = 1) {
 }
 
 // ==========================================
-// 🛠️ ITEM USAGE
+// ITEM USAGE
 // ==========================================
 
 function useItem(userId, rawItemId, targetSlot = null) {
@@ -1204,10 +1189,10 @@ function useItem(userId, rawItemId, targetSlot = null) {
     const progression = require('./progression');
     const sheet = progression.getCharacterSheet(userId);
     
-    // Normalize item ID (lowercase, trim, replace spaces with underscores)
+ // Normalize item ID (lowercase, trim, replace spaces with underscores)
     let itemId = (rawItemId || '').toLowerCase().trim().replace(/ /g, '_');
     
-    // Loose matching for underscores and spaces
+ // Loose matching for underscores and spaces
     const cleanItemId = itemId.replace(/_/g, '');
     const foundKey = Object.keys(inventory).find(k => k.toLowerCase().replace(/_/g, '').replace(/ /g, '') === cleanItemId);
     if (foundKey) {
@@ -1220,7 +1205,7 @@ function useItem(userId, rawItemId, targetSlot = null) {
 
     const itemInfo = lootSystem.getItemInfo(itemId);
     
-    // 🆕 Repair Kit Handling
+ // Repair Kit Handling
     if (itemId.startsWith('repair_kit')) {
         if (!targetSlot) {
             const prefix = require('../../botConfig').getPrefix();
@@ -1261,11 +1246,11 @@ function useItem(userId, rawItemId, targetSlot = null) {
     }
 
     if (itemInfo.usable === false) {
-        // Items flagged usable:false are consumed by their own dedicated
-        // systems (e.g. summon_healing_pill is swallowed mid-summon-duel
-        // via `combat item`), never through the generic bag-use flow.
-        // ⚠️ Must run BEFORE the CONSUMABLE/POTION type check - those items
-        // are exactly the ones the effect chain has no branch for.
+ // Items flagged usable:false are consumed by their own dedicated
+ // systems (e.g. summon_healing_pill is swallowed mid-summon-duel
+ // via `combat item`), never through the generic bag-use flow.
+ // Must run BEFORE the CONSUMABLE/POTION type check - those items
+ // are exactly the ones the effect chain has no branch for.
         return {
             success: false,
             message: `⚔️ *${itemInfo.name}* is used by its own dedicated system, not from the bag.${itemInfo.summonItem ? `\n\nIn a summon duel, use \`${botConfig.getPrefix()} combat item\` to have your summon swallow it mid-battle.` : ''}`
@@ -1273,19 +1258,18 @@ function useItem(userId, rawItemId, targetSlot = null) {
     }
 
     if (itemInfo.type !== 'CONSUMABLE' && itemInfo.type !== 'POTION') {
-        // 💡 SUMMON EGGS: hatchable items - use triggers the egg spin
+ // SUMMON EGGS: hatchable items - use triggers the egg spin
         if (itemId.endsWith('_summon_egg')) {
-            // Eggs are async (createSummon is async) but useItem is sync.
-            // Return a special marker so the caller (rpgCommands.useItem)
-            // can handle it async. We can't hatch here because createSummon
-            // is async.
+ // Eggs are async (createSummon is async) but useItem is sync.
+ // can handle it async. We can't hatch here because createSummon
+ // is async.
             return {
                 success: false,
                 isEgg: true,
                 message: `🥚 *${itemInfo.name}* - use \`${botConfig.getPrefix()} summon hatch\` to hatch it!`
             };
         }
-        // Give specific guidance based on item type
+ // Give specific guidance based on item type
         if (itemId === 'ascension_stone' || itemId === 'evolution_stone') {
             const stoneTier = itemId === 'ascension_stone' ? 'T3 Ascension' : 'T2 Evolution';
             return { success: false, message: `🔮 *${itemInfo.name}* is a ${stoneTier} catalyst, not a consumable!\n\nUse \`${botConfig.getPrefix()} evolve\` to trigger your class evolution/ascension. The stone will be consumed automatically.` };
@@ -1304,17 +1288,17 @@ function useItem(userId, rawItemId, targetSlot = null) {
         return { success: false, message: `❌ *${itemInfo.name}* (${itemInfo.type}) cannot be used this way.` };
     }
 
-    // Effect handling
+ // Effect handling
     let effectMsg = "";
-    let useItemLoreDrop = null; // 💡 2026-09-20: out-of-band lore drop (own message)
+    let useItemLoreDrop = null; // out-of-band lore drop (own message)
     let consumed = true;
 
-    // ── OUT-OF-BATTLE CONSUMABLE EFFECTS (2026-09-15) ─────────────────
-    // Wires heal-type consumables into the persistent HP system
-    // (economy.getPersistentHP / setPersistentHP - the same store quest
-    // combat already writes back to and the profile displays). Effect
-    // values come from the lootSystem item defs (effect/effectValue) and
-    // mirror the in-battle switch in pvpSystem's combat-item handler.
+ // -- OUT-OF-BATTLE CONSUMABLE EFFECTS -----------------
+ // Wires heal-type consumables into the persistent HP system
+ // (economy.getPersistentHP / setPersistentHP - the same store quest
+ // combat already writes back to and the profile displays). Effect
+ // values come from the lootSystem item defs (effect/effectValue) and
+ // mirror the in-battle switch in pvpSystem's combat-item handler.
     const COMBAT_ONLY_ITEM_EFFECTS = new Set([
         'revive', 'flee', 'damage_aoe', 'aoe_damage', 'aoe_debuff_damage',
         'aoe_slow_damage', 'percent_hp_damage', 'apply_poison', 'freeze_enemy'
@@ -1329,10 +1313,10 @@ function useItem(userId, rawItemId, targetSlot = null) {
         const maxHP = derivedStats.maxHp || derivedStats.hp || 100;
         const currentHP = economy.getPersistentHP(userId, maxHP);
 
-        // Instant potions use effectValue directly. Regen salves collapse
-        // their per-turn ticks (effectValue x duration) into one
-        // application - turns only exist inside battle, so out of combat
-        // the full effect lands immediately.
+ // Instant potions use effectValue directly. Regen salves collapse
+ // their per-turn ticks (effectValue x duration) into one
+ // application - turns only exist inside battle, so out of combat
+ // the full effect lands immediately.
         let frac = Number(itemInfo.effectValue);
         if (!Number.isFinite(frac) || frac <= 0) frac = 0.35;
         if (itemInfo.effect === 'regen') {
@@ -1341,9 +1325,9 @@ function useItem(userId, rawItemId, targetSlot = null) {
         }
 
         if (currentHP >= maxHP && itemId !== 'elixir') {
-            // Nothing to heal - never waste the player's item.
-            // (elixir bypasses this guard: at full HP it still grants its
-            // 60-minute Full Restore effect, so it's never a wasted use.)
+ // Nothing to heal - never waste the player's item.
+ // (elixir bypasses this guard: at full HP it still grants its
+ // 60-minute Full Restore effect, so it's never a wasted use.)
             return {
                 success: false,
                 message: `❤️ *${itemInfo.name}* - you're already at full HP (${currentHP}/${maxHP})! Item not consumed.\n\nPotions shine *during* battle: when hurt in a fight, use \`${botConfig.getPrefix()} combat item <#>\`.`
@@ -1357,9 +1341,9 @@ function useItem(userId, rawItemId, targetSlot = null) {
         let healMsg = `🧪 *${itemInfo.name}* used!`;
         healMsg += `\n❤️ Restored *${actualHeal} HP* (${Math.round(frac * 100)}% of Max HP).`;
         healMsg += `\n❤️ HP: *${currentHP + actualHeal}/${maxHP}*`;
-        // 💡 FIX 2026-10-03 (owner elixir report): Full Restore Elixir now
-        // grants a REAL timed effect with a clear lifecycle instead of being
-        // just an instant heal whose benefit silently ended with the quest.
+ // FIX (owner elixir report): Full Restore Elixir now
+ // grants a REAL timed effect with a clear lifecycle instead of being
+ // just an instant heal whose benefit silently ended with the quest.
         if (itemId === 'elixir') {
           const fxMsg = economy.grantFullRestore(userId);
           if (fxMsg) healMsg += `\n${fxMsg}`;
@@ -1370,9 +1354,9 @@ function useItem(userId, rawItemId, targetSlot = null) {
         if (itemInfo.cureStatus) {
             healMsg += `\n✨ Negative status effects clear automatically outside battle.`;
         }
-        // 💡 LORE DROP: healing voice on potion use (10%) - carried out of
-        // band on result.loreDrop; the handler sends it as its own message
-        // (owner ruling: a drop is a distinct lore event, not a tacked line).
+ // LORE DROP: healing voice on potion use (10%) - carried out of
+ // band on result.loreDrop; the handler sends it as its own message
+ // (owner ruling: a drop is a distinct lore event, not a tacked line).
         let __loreDrop = null;
         try {
             const loreDrops = require('./loreDrops');
@@ -1382,8 +1366,8 @@ function useItem(userId, rawItemId, targetSlot = null) {
         useItemLoreDrop = __loreDrop;
     }
     else if (itemInfo.effect === 'cure_status') {
-        // Status effects are battle-scoped; outside combat there is nothing
-        // to cure, so the item is NOT consumed.
+ // Status effects are battle-scoped; outside combat there is nothing
+ // to cure, so the item is NOT consumed.
         return {
             success: false,
             message: `🧪 *${itemInfo.name}* cures battle status effects (poison, burn, freeze...).\n\nYou have no active status effects outside battle - nothing to cure, item not consumed.`
@@ -1391,22 +1375,22 @@ function useItem(userId, rawItemId, targetSlot = null) {
     }
     else if (itemId === 'energy_drink') {
         const user = economy.getUser(userId);
-        // Use the progression system's derived maxEnergy instead of an
-        // uninitialized user.maxEnergy field - for a L50 mage with 100 MAG,
-        // actual maxEnergy is 1135, not the 100 default this code assumed.
+ // Use the progression system's derived maxEnergy instead of an
+ // uninitialized user.maxEnergy field - for a L50 mage with 100 MAG,
+ // actual maxEnergy is 1135, not the 100 default this code assumed.
         const derivedStats = progression.getBaseStats(userId, user.class);
         const maxEn = derivedStats.maxEnergy || 100;
-        // 💡 OWNER BRIEF 2026-10-09 §2: energy items must feed the CANONICAL
-        // persistent pool (the one mining/quests/abyss drain). They used to
-        // write the dead legacy `user.energy` field — an Ether restored a bar
-        // nobody reads, so mining still said "Not enough energy!".
+ // OWNER BRIEF §2: energy items must feed the CANONICAL
+ // persistent pool (the one mining/quests/abyss drain). They used to
+ // write the dead legacy `user.energy` field - an Ether restored a bar
+ // nobody reads, so mining still said "Not enough energy!".
         const currentEn = economy.getPersistentEnergy(userId, maxEn);
         if (currentEn >= maxEn) {
             return { success: false, message: `⚡ *${itemInfo.name}* - your Energy is already full (${currentEn}/${maxEn})! Item not consumed.` };
         }
-        // 💡 2026-09-15: use the item def's percentage (effectValue) instead
-        // of a hardcoded flat 30 - matches "Restores 30% Energy" and scales
-        // with the derived maxEnergy (same fix the maxEn read already got).
+ // use the item def's percentage (effectValue) instead
+ // of a hardcoded flat 30 - matches "Restores 30% Energy" and scales
+ // with the derived maxEnergy (same fix the maxEn read already got).
         const enPct = Number(itemInfo.effectValue) > 0 ? Number(itemInfo.effectValue) : 0.30;
         const enGain = Math.max(1, Math.floor(maxEn * enPct));
         economy.setPersistentEnergy(userId, Math.min(maxEn, currentEn + enGain), maxEn);
@@ -1414,10 +1398,10 @@ function useItem(userId, rawItemId, targetSlot = null) {
         effectMsg = `⚡ Restored **${enGain} Energy** (${Math.round(enPct * 100)}%)! (Now ${newEn}/${maxEn})`;
     }
     else if (itemId === 'silver_veil' || itemInfo.effect === 'toggle_level_veil') {
-        // 💡 NEW RUINS REWARD (2026-10-03): toggle the level veil. NOT consumed
-        // - the charm stays in the bag as long as the veil is on; using it
-        // again unveils. The state is a single flag on the user doc that
-        // every card/caption/image renderer respects.
+ // NEW RUINS REWARD: toggle the level veil. NOT consumed
+ // - the charm stays in the bag as long as the veil is on; using it
+ // again unveils. The state is a single flag on the user doc that
+ // every card/caption/image renderer respects.
         const veilUser = economy.getUser(userId);
         if (!veilUser) return { success: false, message: '❌ You are not registered.' };
         veilUser.levelVeil = !veilUser.levelVeil;
@@ -1431,12 +1415,12 @@ function useItem(userId, rawItemId, targetSlot = null) {
         const user = economy.getUser(userId);
         const currentClass = classSystem.getClassById(user.class);
 
-        // 1. Requirement: Must be a STARTER class
+ // 1. Requirement: Must be a STARTER class
         if (currentClass.tier !== 'STARTER') {
             return { success: false, message: '❌ This item only works for *Starter* classes! Evolved or Ascended heroes must use a Skill Reset Scroll.' };
         }
 
-        // 2. Cooldown Check: 5 hours after 5 uses
+ // 2. Cooldown Check: 5 hours after 5 uses
         const now = Date.now();
         const FIVE_HOURS = 5 * 60 * 60 * 1000;
 
@@ -1445,7 +1429,7 @@ function useItem(userId, rawItemId, targetSlot = null) {
             return { success: false, message: `❌ Exhausted! Your spirit needs to rest. You can reroll again in **${remaining} minutes**.` };
         }
 
-        // 3. Usage Increment
+ // 3. Usage Increment
         user.classChangeCount = (user.classChangeCount || 0) + 1;
 
         if (user.classChangeCount >= 5) {
@@ -1462,7 +1446,7 @@ function useItem(userId, rawItemId, targetSlot = null) {
         effectMsg += `\n\n${result.message.split('\n\n')[1]}`; // Append the new class info
     }
     else if (itemId === 'holy_water') {
-        // Same logic as HP potion - out-of-combat HP isn't a thing.
+ // Same logic as HP potion - out-of-combat HP isn't a thing.
         return {
             success: false,
             message: `💚 *${itemInfo.name}* can only be used during combat - your HP fully recovers between battles!\n\nIn a battle, use \`${botConfig.getPrefix()} combat item <#>\` to drink it.`
@@ -1472,7 +1456,7 @@ function useItem(userId, rawItemId, targetSlot = null) {
         const user = economy.getUser(userId);
         const derivedStats = progression.getBaseStats(userId, user.class);
         const maxEn = derivedStats.maxEnergy || 100;
-        // 💡 OWNER BRIEF 2026-10-09 §2: write the canonical persistent pool.
+ // OWNER BRIEF §2: write the canonical persistent pool.
         const currentEn = economy.getPersistentEnergy(userId, maxEn);
         economy.setPersistentEnergy(userId, Math.min(maxEn, currentEn + 50), maxEn);
         const newEn = economy.getPersistentEnergy(userId, maxEn);
@@ -1482,8 +1466,8 @@ function useItem(userId, rawItemId, targetSlot = null) {
         const user = economy.getUser(userId);
         const derivedStats = progression.getBaseStats(userId, user.class);
         const maxEn = derivedStats.maxEnergy || 100;
-        // 💡 OWNER BRIEF 2026-10-09 §2: Ether must refill the canonical
-        // persistent pool — the one MINING drains (see mineOre).
+ // OWNER BRIEF §2: Ether must refill the canonical
+ // persistent pool - the one MINING drains (see mineOre).
         economy.setPersistentEnergy(userId, maxEn, maxEn);
         effectMsg = `⚡ Restored **100% Energy**! (Now ${maxEn}/${maxEn})`;
     }
@@ -1494,7 +1478,7 @@ function useItem(userId, rawItemId, targetSlot = null) {
         effectMsg = `🍀 *LUCKY CHARM CONSUMED!* (+10 Luck permanently!)`;
     }
     else if (itemInfo.effect === 'restore_energy') {
-        // Generic energy restore driven by item defs (mana_potion 40%, etc.)
+ // Generic energy restore driven by item defs (mana_potion 40%, etc.)
         const user = economy.getUser(userId);
         const rawClass = user?.class;
         const classId = typeof rawClass === 'object'
@@ -1502,7 +1486,7 @@ function useItem(userId, rawItemId, targetSlot = null) {
             : (rawClass || 'FIGHTER');
         const derivedStats = progression.getBaseStats(userId, classId);
         const maxEn = derivedStats.maxEnergy || 100;
-        // 💡 OWNER BRIEF 2026-10-09 §2: write the canonical persistent pool.
+ // OWNER BRIEF §2: write the canonical persistent pool.
         const currentEn = economy.getPersistentEnergy(userId, maxEn);
         if (currentEn >= maxEn) {
             return { success: false, message: `⚡ *${itemInfo.name}* - your Energy is already full (${currentEn}/${maxEn})! Item not consumed.` };
@@ -1514,8 +1498,8 @@ function useItem(userId, rawItemId, targetSlot = null) {
         effectMsg = `⚡ Restored **${enGain} Energy** (${Math.round(enPct * 100)}%)! (Now ${newEn}/${maxEn})`;
     }
     else if (COMBAT_ONLY_ITEM_EFFECTS.has(itemInfo.effect)) {
-        // Battle-only consumables (bombs, smokes, revives...): keep them
-        // exclusive to combat - do NOT auto-generalise to out-of-battle use.
+ // Battle-only consumables (bombs, smokes, revives...): keep them
+ // exclusive to combat - do NOT auto-generalise to out-of-battle use.
         return {
             success: false,
             message: `🎒 *${itemInfo.name}* only works in the heat of battle!\n\nIn a battle, use \`${botConfig.getPrefix()} combat item <#>\` to activate it.`
@@ -1539,7 +1523,7 @@ function useItem(userId, rawItemId, targetSlot = null) {
 }
 
 // ==========================================
-// 📊 INVENTORY DISPLAY
+// INVENTORY DISPLAY
 // ==========================================
 
 function formatInventory(userId) {
@@ -1557,10 +1541,10 @@ function formatInventory(userId) {
     }
     
     const items = Object.entries(inventory).map(([key, val]) => {
-        // Look up item info for fallbacks
+ // Look up item info for fallbacks
         const itemInfo = lootSystem.getItemInfo(key);
         
-        // Handle legacy number format
+ // Handle legacy number format
         if (typeof val === 'number') {
             return {
                 id: key,
@@ -1581,8 +1565,8 @@ function formatInventory(userId) {
         };
     });
     
-    // Sort by Rarity first (MYTHIC → COMMON) to match the inventory display numbering
-    // This ensures item #3 in the display is the same as items[2] when selling/equipping by number
+ // Sort by Rarity first (MYTHIC → COMMON) to match the inventory display numbering
+ // This ensures item #3 in the display is the same as items[2] when selling/equipping by number
     const rarityOrder = ['MYTHIC', 'LEGENDARY', 'EPIC', 'RARE', 'UNCOMMON', 'COMMON'];
     const categoryOrder = ['EQUIPMENT', 'POTION', 'CONSUMABLE', 'MATERIAL', 'ITEM'];
 
@@ -1590,7 +1574,7 @@ function formatInventory(userId) {
         const rarA = rarityOrder.indexOf(a.rarity || 'COMMON');
         const rarB = rarityOrder.indexOf(b.rarity || 'COMMON');
         if (rarA !== rarB) return rarA - rarB;
-        // Within same rarity, sort by category
+ // Within same rarity, sort by category
         const catA = categoryOrder.indexOf(a.type || 'ITEM');
         const catB = categoryOrder.indexOf(b.type || 'ITEM');
         if (catA !== catB) return catA - catB;
@@ -1605,11 +1589,11 @@ function formatInventory(userId) {
 }
 
 // ==========================================
-// 📤 EXPORTS
+// EXPORTS
 // ==========================================
 
 module.exports = {
-    // Inventory
+ // Inventory
     getInventory,
     getInventorySlots,
     getInventoryCount,
@@ -1621,7 +1605,7 @@ module.exports = {
     upgradeInventory,
     formatInventory,
     
-    // Equipment
+ // Equipment
     getEquipment,
     equipItem,
     unequipItem,
@@ -1632,10 +1616,10 @@ module.exports = {
     repairUserEquipmentStats,
     getMaxEnhancementLevel,
     
-    // Selling
+ // Selling
     sellItem,
     
-    // Config
+ // Config
     INVENTORY_CONFIG,
     ITEM_RARITY,
     EQUIPMENT_SLOTS,

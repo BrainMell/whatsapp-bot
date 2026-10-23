@@ -1,4 +1,4 @@
-// promote_deep.js — splice the mined event block into the LIVE cards_data.json
+// promote_deep.js - splice the mined event block into the LIVE cards_data.json
 // on box2. Server-side replica of mentoringCommands.promote()'s event path
 // (owner-gated in chat; this script performs the identical file mutation).
 // SAFETY: aborts unless every currently-live E-id survives in the block.
@@ -24,13 +24,13 @@ const LOG = (m) => console.log(`[promote-deep ${new Date().toISOString()}] ${m}`
   const doc = await System.findOne({ key: 'shoob_miner_eventblock' });
   const block = doc && doc.value;
   const cards = block && Array.isArray(block.cards) ? block.cards : null;
-  if (!cards || !cards.length) { LOG('No mined event block published — aborting.'); process.exit(1); }
+  if (!cards || !cards.length) { LOG('No mined event block published - aborting.'); process.exit(1); }
 
-  // sanity: exact E-schema, unique ids (same checks as promote())
+ // sanity: exact E-schema, unique ids (same checks as promote())
   const badSchema = cards.filter(c => !c || !c.id || !String(c.id).startsWith('E-') || !c.cardName || !c.imageUrl);
   const ids = new Set(cards.map(c => c.id));
   if (badSchema.length || ids.size !== cards.length) {
-    LOG(`FATAL: block failed sanity (${badSchema.length} malformed, ${cards.length - ids.size} dup ids) — NOT promoting.`);
+    LOG(`FATAL: block failed sanity (${badSchema.length} malformed, ${cards.length - ids.size} dup ids) - NOT promoting.`);
     process.exit(1);
   }
 
@@ -40,11 +40,11 @@ const LOG = (m) => console.log(`[promote-deep ${new Date().toISOString()}] ${m}`
   const oldEvents = prodCards.filter(c => c.id && String(c.id).startsWith('E-'));
   const oldIds = new Set(oldEvents.map(c => c.id));
 
-  // SAFETY: no live event card may vanish
+ // SAFETY: no live event card may vanish
   const blockIds = new Set(cards.map(c => c.id));
   const wouldLose = [...oldIds].filter(id => !blockIds.has(id));
   if (wouldLose.length) {
-    LOG(`FATAL: block would drop ${wouldLose.length} live event ids (e.g. ${wouldLose.slice(0, 5).join(',')}) — NOT promoting.`);
+    LOG(`FATAL: block would drop ${wouldLose.length} live event ids (e.g. ${wouldLose.slice(0, 5).join(',')}) - NOT promoting.`);
     process.exit(1);
   }
 
@@ -75,7 +75,7 @@ const LOG = (m) => console.log(`[promote-deep ${new Date().toISOString()}] ${m}`
   fs.copyFileSync(CARDS_DB_PATH, backup);
   fs.renameSync(tmp, CARDS_DB_PATH);
 
-  LOG(`OK — event cards ${oldEvents.length} -> ${cards.length} (+${added.length} new, ids E-${String(Math.min(...addedNums)).padStart(5, '0')}..E-${String(Math.max(...addedNums)).padStart(5, '0')})`);
+  LOG(`OK - event cards ${oldEvents.length} -> ${cards.length} (+${added.length} new, ids E-${String(Math.min(...addedNums)).padStart(5, '0')}..E-${String(Math.max(...addedNums)).padStart(5, '0')})`);
   LOG(`per-event added: ${JSON.stringify(perEvent)}`);
   const nar = cards.filter(c => /naruto/i.test(c.cardName) && /halloween/i.test(c.eventName || ''));
   LOG(`naruto+halloween in new block: ${nar.map(c => `${c.id} ${c.cardName} (T${c.tier}, ${c.animeName})`).join('; ') || 'NONE'}`);

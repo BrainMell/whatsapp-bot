@@ -6,48 +6,48 @@ const GuildSchema = new mongoose.Schema({
     description: { type: String, default: '' },
     leader: { type: String, required: true }, // userId
 
-    // Stats
+ // Stats
     level: { type: Number, default: 1 },
     xp: { type: Number, default: 0 },
     balance: { type: Number, default: 0 }, // Guild Bank
     type: { type: String, default: 'ADVENTURER' }, // Archetype: ADVENTURER / MERCHANT / RESEARCH
 
-    // Members & Roles
+ // Members & Roles
     members: [{
         userId: { type: String, required: true },
         role: { type: String, default: 'member' }, // leader, officer, member, recruit
         joinedAt: { type: Date, default: Date.now },
         contribution: { type: Number, default: 0 },
-        title: { type: String, default: null } // 💡 Phase 2: custom member title (was lost on restart - schema drift fix)
+        title: { type: String, default: null } // Phase 2: custom member title (was lost on restart - schema drift fix)
     }],
 
-    // Board
+ // Board
     dailyBoard: {
         lastUpdate: { type: Date, default: Date.now },
         targets: { type: Array, default: [] }, // { type: 'monster_id', count: 5, current: 0 }
         rewards: { xp: Number, gold: Number }
     },
 
-    // Settings
+ // Settings
     icon: { type: String, default: null },
-    motto: { type: String, default: 'Adapt or be Infected.' }, // 💡 Phase 2: was lost on restart - schema drift fix
+    motto: { type: String, default: 'Adapt or be Infected.' }, // Phase 2: was lost on restart - schema drift fix
     requirements: {
         level: { type: Number, default: 1 },
         rank: { type: String, default: 'F' },
         fee: { type: Number, default: 0 }
     },
 
-    // 💡 Phase 2: Buildings as proper subdocuments (was Map<Number> causing data loss).
-    // Each building: { level: Number, name: String }
+ // Phase 2: Buildings as proper subdocuments (was Map<Number> causing data loss).
+ // Each building: { level: Number, name: String }
     buildings: {
         hall: { level: { type: Number, default: 1 }, name: { type: String, default: 'Guild Hall' } },
         training: { level: { type: Number, default: 0 }, name: { type: String, default: 'Training Grounds' } },
         treasury: { level: { type: Number, default: 0 }, name: { type: String, default: 'Treasury' } }
     },
 
-    // 🌍 realm (continent) the guild chose + the charter-stone marker on the Aldafold map (core/rpg/continents.js).
-    // Without these in the schema Mongoose strict mode stripped them on every syncGuild() write, so a guild's
-    // chosen realm reverted to the name-hash default after each restart.
+ // realm (continent) the guild chose + the charter-stone marker on the Aldafold map (core/rpg/continents.js).
+ // Without these in the schema Mongoose strict mode stripped them on every syncGuild() write, so a guild's
+ // chosen realm reverted to the name-hash default after each restart.
     continent: { type: String, default: null },
     marker: {
         x: { type: Number, default: null },
@@ -55,14 +55,14 @@ const GuildSchema = new mongoose.Schema({
         region: { type: String, default: null }
     },
 
-    // Keep legacy upgrades field for backward-compat reads
+ // Keep legacy upgrades field for backward-compat reads
     upgrades: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} },
 
-    // 💡 Phase 2: Guild emblem (cosmetic)
-    // 2026-09-17: `img` holds the UPLOADED crest (data:image/png;base64, ...,
-    // resized to <=512x512 / <=700KB by the .guild emblem upload path). Without
-    // declaring it here, Mongoose strict mode silently stripped it on every
-    // syncGuild() write - uploads "worked" then vanished on the next restart.
+ // Phase 2: Guild emblem (cosmetic)
+ // `img` holds the UPLOADED crest (data:image/png;base64, ...,
+ // resized to <=512x512 / <=700KB by the .guild emblem upload path). Without
+ // declaring it here, Mongoose strict mode silently stripped it on every
+ // syncGuild() write - uploads "worked" then vanished on the next restart.
     emblem: {
         icon: { type: String, default: null },     // emoji or short text
         color: { type: String, default: '#FFD700' }, // hex color for rendering
@@ -70,7 +70,7 @@ const GuildSchema = new mongoose.Schema({
         img: { type: String, default: null }          // uploaded crest (data URL); takes priority over icon on cards
     },
 
-    // 💡 Phase 2: Guild loans - members can borrow from guild bank
+ // Phase 2: Guild loans - members can borrow from guild bank
     loans: [{
         borrowerJid: { type: String, required: true },
         amount: { type: Number, required: true },
@@ -80,12 +80,12 @@ const GuildSchema = new mongoose.Schema({
         repaidAt: { type: Date, default: null }
     }],
 
-    // 💡 Phase 2: Last interest payout timestamp (for daily bank interest)
+ // Phase 2: Last interest payout timestamp (for daily bank interest)
     lastInterestPayout: { type: Date, default: null },
 
-    // 💡 Phase 2: Weekly war points (for Phase 7 guild wars)
+ // Phase 2: Weekly war points (for Phase 7 guild wars)
 
-    // Extras
+ // Extras
     logs: { type: Array, default: [] }
 
 }, { timestamps: true });

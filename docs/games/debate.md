@@ -53,7 +53,6 @@ User sends ".j judge" (Admin only - ending debate)
 
 ```javascript
 startDebate: async (sock, chatId, topic, debater1Jid, debater2Jid, groupMetadata, BOT_MARKER, smartGroqCall, MODELS) => {
-  // Checks if debate is already active
   if (activeDebates[chatId]) return { success: false, message: "❌ Active debate already exists!" };
   
   // Promotes debaters so they can speak when group is locked

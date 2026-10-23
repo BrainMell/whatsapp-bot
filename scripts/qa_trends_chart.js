@@ -102,7 +102,7 @@ function mockSock() {
     ok(many.message && /at most 5|max 5/i.test(many.message), "6 keywords -> capped error (no network call)");
     const bare = await trends.handleTrends(sock, chat, "u@s.whatsapp.net", MARK, { key: { id: "K8" } }, "");
     ok(bare.message && /Google Trends lookup/.test(bare.message), "bare -> usage card");
-    // parser units
+ // parser units
     const p1 = trends.parseTrendsArgs('"Dragon Ball" "Naruto" 90d');
     ok(p1.keywords.join("|") === "Dragon Ball|Naruto" && p1.range === "90d", "quoted kws + range");
     const p2 = trends.parseTrendsArgs("python java");

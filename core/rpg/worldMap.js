@@ -1,23 +1,19 @@
-// ═══════════════════════════════════════════════════════════════════════════
-//  WORLD MAP COMMAND LOGIC — `.j world` + three gated sub-maps
-// ═══════════════════════════════════════════════════════════════════════════
-//
-//  IMPLEMENTATION of implementation/world_map.md (pass 3):
-//
-//  | command              | sheet         | unlock                              |
-//  | `.j world`           | First World   | none (available from the beginning) |
-//  | `.j world beyond`    | World Beyond  | adventurer rank S                   |
-//  | `.j world afterlife` | Afterlife     | the dead-soul reading feature       |
-//  | `.j world abyss`     | Abyss         | ABYSS_MAP_UNLOCK (CONFIRMED lvl 20) |
-//
-//  LOCKED-BEHAVIOUR HARD CONTRACT (§1): a locked map request must NOT render
-//  the map at all - the bot replies with the requirement and nothing else.
-//  No partial previews, no fogged teaser renders.
-//
-//  Every render path keeps a TEXT answer (house rule: cards never dead-end).
-//  Orbital state comes from cosmology.js (in-memory, pure functions of wall
-//  time) - the four clocks stay four separate systems.
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// WORLD MAP COMMAND LOGIC - `.j world` + three gated sub-maps
+// ===========================================================================
+// IMPLEMENTATION of implementation/world_map.md (pass 3):
+// | command | sheet | unlock |
+// | `.j world` | First World | none (available from the beginning) |
+// | `.j world beyond` | World Beyond | adventurer rank S |
+// | `.j world afterlife` | Afterlife | the dead-soul reading feature |
+// | `.j world abyss` | Abyss | ABYSS_MAP_UNLOCK (CONFIRMED lvl 20) |
+// LOCKED-BEHAVIOUR HARD CONTRACT (§1): a locked map request must NOT render
+// the map at all - the bot replies with the requirement and nothing else.
+// No partial previews, no fogged teaser renders.
+// Every render path keeps a TEXT answer (house rule: cards never dead-end).
+// Orbital state comes from cosmology.js (in-memory, pure functions of wall
+// time) - the four clocks stay four separate systems.
+// ===========================================================================
 
 'use strict';
 
@@ -27,8 +23,8 @@ const botConfig = require('../../botConfig');
 
 const P = () => botConfig.getPrefix();
 
-// ─── GATE CONSTANTS ──────────────────────────────────────────────────────────
-// CONFIRMED by owner (2026-09-19): `.j world abyss` unlocks at level 20.
+// --- GATE CONSTANTS ----------------------------------------------------------
+// CONFIRMED by `.j world abyss` unlocks at level 20.
 // Single configurable constant so the owner can still retune it without
 // touching logic (world_map.md §1 / additional_ideas/ideas.md #15).
 const ABYSS_MAP_UNLOCK = 20;
@@ -50,7 +46,7 @@ async function _hasDeadSoulFeature(userId) {
     }
 }
 
-// 💡 TICKET #b4f71c (2026-09-21): STAFF AFTERLIFE ACCESS. Owners, global
+//: STAFF AFTERLIFE ACCESS. Owners, global
 // moderators and RPG moderators can consult the afterlife chart without the
 // (still unimplemented) dead-soul feature. Normal players are unaffected -
 // the locked = no-render hard contract still holds for them. The engine is
@@ -73,7 +69,7 @@ function _rankAtLeast(rank, min) {
     return i >= j;
 }
 
-// 💡 2026-09-21 OWNER FIX (Abyss alignment logic): the tier check used to
+// OWNER FIX (Abyss alignment logic): the tier check used to
 // compare the helper's return value DIRECTLY - a getLevel that returned
 // undefined or NaN evaluated `NaN < 20` == false and the Abyss sheet
 // RENDERED (runtime-probed fail-open). Every level read now goes through
@@ -84,7 +80,7 @@ function _levelSafe(v) {
     return Number.isFinite(n) ? n : 0;
 }
 
-// 💡 2026-09-21 OWNER FIX (Abyss alignment logic, part 2): the Abyss CHART
+// OWNER FIX (Abyss alignment logic, part 2): the Abyss CHART
 // ignored the world-alignment window entirely - a level-20 player could read
 // the descent sheet while the worlds were locked (runtime-probed). The
 // alignment now gates the chart exactly as it gates the descent: window
@@ -102,8 +98,8 @@ function _abyssWindowSafe() {
     }
 }
 
-// ─── PER-REALM INFO CARDS (fixed text — no randomized lore baked in) ─────────
-// Owner ruling (2026-09-20): captions are SHORT and subtle. One or two lines
+// --- PER-REALM INFO CARDS (fixed text - no randomized lore baked in) ---------
+// Owner ruling: captions are SHORT and subtle. One or two lines
 // that say what the chart is - nothing more. Mechanics and secrets are
 // discovered by playing; the lore drops reveal the rest. No guides, no
 // command lists, no lore dumps.
@@ -129,7 +125,7 @@ const INFO = {
     ],
 };
 
-// ─── TEXT FALLBACKS (§5 - every render path keeps a text answer) ─────────────
+// --- TEXT FALLBACKS (§5 - every render path keeps a text answer) -------------
 
 function _asciiAll(t) {
     const lines = [
@@ -174,7 +170,7 @@ function _asciiFirstWorld(t) {
 }
 
 function _asciiWorldBeyond(t) {
-    // 🔄 dynamic per-bot prefix (owner rule: never hardcode .j/.s/.jk)
+ // dynamic per-bot prefix (owner rule: never hardcode .j/.s/.jk)
     const seeLine = `  |      inside - see ${P()} world )  |`;
     const lines = [
         '*THE WORLD BEYOND*',
@@ -247,7 +243,7 @@ function _asciiAbyss(t) {
     return lines.join('\n');
 }
 
-// ─── GATE REFUSALS (requirement text ONLY — never render) ────────────────────
+// --- GATE REFUSALS (requirement text ONLY - never render) --------------------
 
 function _refuseBeyond(rank) {
     return [
@@ -271,7 +267,6 @@ function _refuseAfterlife() {
     ].join('\n');
 }
 
-
 function _refuseAbyss(level) {
     return [
         '*THE ABYSS IS NOT CHARTED FOR YOU YET.*',
@@ -283,7 +278,7 @@ function _refuseAbyss(level) {
     ].join('\n');
 }
 
-// ─── SHEET DELIVERY (image-first, text fallback) ─────────────────────────────
+// --- SHEET DELIVERY (image-first, text fallback) -----------------------------
 
 async function _sendSheet(sock, chatId, buffer, infoLines, asciiFn, t) {
     const info = infoLines.join('\n');
@@ -297,11 +292,11 @@ async function _sendSheet(sock, chatId, buffer, infoLines, asciiFn, t) {
             try { console.error('[worldMap] image send failed, falling back to text:', e.message); } catch (_) {}
         }
     }
-    // text fallback: sketch + fixed info + live status
+ // text fallback: sketch + fixed info + live status
     await sock.sendMessage(chatId, { text: `${asciiFn(t)}\n\n${info}` });
 }
 
-// ─── COMMAND ENTRY ───────────────────────────────────────────────────────────
+// --- COMMAND ENTRY -----------------------------------------------------------
 
 /**
  * `.j world [all|beyond|afterlife|abyss]`
@@ -316,7 +311,7 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
     const t = Date.now();
     const sub = String(subArg || '').toLowerCase().trim();
 
-    // aliases
+ // aliases
     const norm = sub === '' || sub === 'first' || sub === 'firstworld' || sub === 'first world'
         ? 'first_world'
         : (sub === 'beyond' || sub === 'worldbeyond' || sub === 'world beyond' ? 'world_beyond'
@@ -340,16 +335,16 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
         });
     }
 
-    // ── ALL: the gathered chart. Owner ruling (2026-09-20): mods see it
-    // regardless of progress; regular players earn it by unlocking every
-    // map they CAN unlock (First World is open from the start, Beyond needs
-    // rank S, Abyss needs level 20). The Afterlife joins the requirement
-    // automatically once the dead-soul reading exists - until then it is
-    // not holdable against the player, or the command would be dead content.
+ // -- ALL: the gathered chart. Owner ruling: mods see it
+ // regardless of progress; regular players earn it by unlocking every
+ // map they CAN unlock (First World is open from the start, Beyond needs
+ // rank S, Abyss needs level 20). The Afterlife joins the requirement
+ // automatically once the dead-soul reading exists - until then it is
+ // not holdable against the player, or the command would be dead content.
     if (norm === 'all') {
-        // 💡 TICKET #b4f5d2 (2026-09-21): staff bypass extended to ALL staff
-        // tiers (owner / global mod / RPG mod) via the same _isStaff resolver
-        // the afterlife sheet uses, in addition to the injected isMod helper.
+ //: staff bypass extended to ALL staff
+ // tiers (owner / global mod / RPG mod) via the same _isStaff resolver
+ // the afterlife sheet uses, in addition to the injected isMod helper.
         const isMod = (typeof helpers.isMod === 'function' ? !!helpers.isMod(userId) : false) || _isStaff(userId);
         if (!isMod) {
             const rank = typeof helpers.getRank === 'function' ? helpers.getRank(userId) : 'F';
@@ -363,10 +358,10 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
             const missing = [];
             if (!_rankAtLeast(rank, 'S')) missing.push(`rank *S* (yours: *${String(rank || 'F').toUpperCase()}*)`);
             if (level < ABYSS_MAP_UNLOCK) missing.push(`level *${ABYSS_MAP_UNLOCK}* (yours: *${Math.max(0, Math.floor(level))}*)`);
-            // 💡 OWNER RULING (pinned by qa_ticket_pass): the afterlife is NOT
-            // held against atlas seekers. The gathered chart lists only the
-            // gates a player can see and earn on their own sheets; the
-            // reading's own road (`.j kills`) introduces itself in play.
+ // OWNER RULING (pinned by qa_ticket_pass): the afterlife is NOT
+ // held against atlas seekers. The gathered chart lists only the
+ // gates a player can see and earn on their own sheets; the
+ // reading's own road (`.j kills`) introduces itself in play.
             if (missing.length > 0) {
                 return sock.sendMessage(chatId, {
                     text: [
@@ -384,18 +379,18 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
         return _sendSheet(sock, chatId, buf, INFO.all, _asciiAll, t);
     }
 
-    // ── PRESENCE OF ORDER: no gate (the center of the player's own world) ──
+ // -- PRESENCE OF ORDER: no gate (the center of the player's own world) --
     if (norm === 'order') {
         const buf = await renderer.renderPresenceOfOrderSheet(t);
         return _sendSheet(sock, chatId, buf, INFO.order, _asciiOrder, t);
     }
 
-    // ── GATES (hard contract: locked = requirement ONLY, the map never renders) ──
-    // 2026-09-21 owner ruling: the World Beyond is locked for EVERYONE except
-    // the owner until the required conditions are met (rank S). The owner (and
-    // staff) walk in regardless; everyone below S rank now receives the locked
-    // IMAGE CARD (the boundary as an empty gold circle, the rank road dying
-    // mid air) with the text requirement as caption + render-failure fallback.
+ // -- GATES (hard contract: locked = requirement ONLY, the map never renders) --
+ // owner ruling: the World Beyond is locked for EVERYONE except
+ // the owner until the required conditions are met (rank S). The owner (and
+ // staff) walk in regardless; everyone below S rank now receives the locked
+ // IMAGE CARD (the boundary as an empty gold circle, the rank road dying
+ // mid air) with the text requirement as caption + render-failure fallback.
     if (norm === 'world_beyond') {
         const rank = typeof helpers.getRank === 'function' ? helpers.getRank(userId) : 'F';
         if (!_rankAtLeast(rank, 'S') && !_isStaff(userId)) {
@@ -415,18 +410,18 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
     }
 
     if (norm === 'afterlife') {
-        // 💡 TICKET #b4f71c + 2026-09-21 owner report: STAFF (owner / global
-        // mod / RPG mod) and the OWNER may consult the afterlife chart without
-        // the dead-soul feature or any other requirement. Players who HAVE
-        // opened the reading (soulReader) now hold the designed key. Everyone
-        // else still gets the locked refusal - the map itself is never
-        // rendered.
-        // 💡 2026-09-21 owner: the locked refusal now also renders an IMAGE
-        // CARD that carries the refusal visually (the shore on its own
-        // circuit, the road missing its crossing, a LOCKED seal). The chart
-        // stays unrendered - the card is a refusal, not a preview. The text
-        // requirement stays as the caption and as the render-failure fallback
-        // (house rule: cards never dead-end).
+ // + owner report: STAFF (owner / global
+ // mod / RPG mod) and the OWNER may consult the afterlife chart without
+ // the dead-soul feature or any other requirement. Players who HAVE
+ // opened the reading (soulReader) now hold the designed key. Everyone
+ // else still gets the locked refusal - the map itself is never
+ // rendered.
+ // the locked refusal now also renders an IMAGE
+ // CARD that carries the refusal visually (the shore on its own
+ // circuit, the road missing its crossing, a LOCKED seal). The chart
+ // stays unrendered - the card is a refusal, not a preview. The text
+ // requirement stays as the caption and as the render-failure fallback
+ // (house rule: cards never dead-end).
         const reading = await _hasDeadSoulFeature(userId);
         if (!reading && !_isStaff(userId)) {
             const txt = _refuseAfterlife();
@@ -452,17 +447,17 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
                 : (require('./progression').getLevel(userId) || 1);
         } catch (e) {}
         const level = _levelSafe(levelRaw);
-        // 2026-09-21 owner ruling: a locked abyss request renders the IMAGE
-        // CARD that explains the worlds are not aligned (with the tier named
-        // in its plates), never a bare text answer. The text stays as the
-        // caption and as the render-failure fallback (cards never dead-end).
-        // 💡 2026-09-21 OWNER FIX (alignment logic): TWO gates now, both fail
-        // closed. (1) TIER - garbage/undefined levels resolve to 0 (locked);
-        // the old `NaN < 20` == false comparison let the sheet LEAK through.
-        // (2) ALIGNMENT - the window that gates the descent now gates the
-        // chart too: window closed = the worlds are not aligned = the sheet
-        // refuses with the alignment card. Owner/staff walk in regardless
-        // (the same staff bypass the World Beyond and Afterlife sheets carry).
+ // owner ruling: a locked abyss request renders the IMAGE
+ // CARD that explains the worlds are not aligned (with the tier named
+ // in its plates), never a bare text answer. The text stays as the
+ // caption and as the render-failure fallback (cards never dead-end).
+ // OWNER FIX (alignment logic): TWO gates now, both fail
+ // closed. (1) TIER - garbage/undefined levels resolve to 0 (locked);
+ // the old `NaN < 20` == false comparison let the sheet LEAK through.
+ // (2) ALIGNMENT - the window that gates the descent now gates the
+ // chart too: window closed = the worlds are not aligned = the sheet
+ // refuses with the alignment card. Owner/staff walk in regardless
+ // (the same staff bypass the World Beyond and Afterlife sheets carry).
         if (level < ABYSS_MAP_UNLOCK && !_isStaff(userId)) {
             const txt = _refuseAbyss(level);
             try {
@@ -506,17 +501,17 @@ async function showWorld(sock, chatId, userId, subArg, helpers = {}) {
         return _sendSheet(sock, chatId, buf, INFO.abyss, _asciiAbyss, t);
     }
 
-    // ── FIRST WORLD: no gate (documented; owner may add one later) ──
+ // -- FIRST WORLD: no gate (documented; owner may add one later) --
     const buf = await renderer.renderFirstWorldSheet(t);
     return _sendSheet(sock, chatId, buf, INFO.first_world, _asciiFirstWorld, t);
 }
 
 module.exports = {
     showWorld,
-    ABYSS_MAP_UNLOCK,          // CONFIRMED level 20 (owner, 2026-09-19; configurable)
-    INFO,                      // 💡 exported for QA caption checks
+    ABYSS_MAP_UNLOCK, // CONFIRMED level 20 (owner, ; configurable)
+    INFO, // exported for QA caption checks
     _rankAtLeast,
-    _levelSafe,                // 💡 fail-closed level resolver (QA pin)
+    _levelSafe, // fail-closed level resolver (QA pin)
     _refuseBeyond,
     _refuseAfterlife,
     _refuseAbyss,

@@ -1,5 +1,5 @@
 // ============================================
-// 🏛️ ENCOUNTER ENGINE — Guild War Overhaul 2026-10-03
+// ENCOUNTER ENGINE - Guild War Overhaul
 // Common encounter interface + per-room-type runners. Combat rooms delegate
 // to the REAL combat pipeline (guildAdventure.startRuinsCombat); puzzles,
 // discoveries, hazards, lore, co-op and the World Core live here.
@@ -29,7 +29,7 @@ const DEAD_WORLDS = [
 ];
 function worldTheme(worldKey) { return DEAD_WORLDS.find((w) => w.key === worldKey) || DEAD_WORLDS[0]; }
 
-// ── battle variants: weighted, deterministic pick per room seed ──
+// -- battle variants: weighted, deterministic pick per room seed --
 function pickVariant(rng) {
     const entries = Object.entries(CFG.COMBAT.VARIANTS || {});
     if (!entries.length) return null;
@@ -49,23 +49,23 @@ function variantOf(room) {
     return v ? { key, ...v } : null;
 }
 
-// ── seeding: server-side payload per room (called once at event start) ──
+// -- seeding: server-side payload per room (called once at event start) --
 function buildRoomPayload(eventDoc, room, map) {
     const rng = mapEngine.makeRng(`${eventDoc.seed}:${room.key}`);
     const theme = worldTheme(eventDoc.deadWorld || rng.pick(DEAD_WORLDS).key);
     const enemyLvl = Math.max(1, Math.round(CFG.COMBAT.BASE_ENEMY_LEVEL + room.ring * 10 * CFG.COMBAT.LEVEL_RING_SCALE));
     const payload = { theme: theme.key, flavor: theme.flavor };
-    // 🛡️ OWNER RULE 2026-10-05 (live playtest): a champion must NEVER wake up
-    // in a room with monsters — "players that are weaker than the monsters
-    // in a ruin should never spawn into a room with monsters." state.startEvent
-    // rebakes combat/coop spawn rooms as 'empty' (first belt); this guard is
-    // the second: whatever a spawn room's type, it seeds NO enemies and NO
-    // boss. Weak or strong, everyone lands somewhere calm.
+ // OWNER RULE (live playtest): a champion must NEVER wake up
+ // in a room with monsters - "players that are weaker than the monsters
+ // in a ruin should never spawn into a room with monsters." state.startEvent
+ // rebakes combat/coop spawn rooms as 'empty' (first belt); this guard is
+ // the second: whatever a spawn room's type, it seeds NO enemies and NO
+ // boss. Weak or strong, everyone lands somewhere calm.
     const isSpawnRoom = Array.isArray(map && map.spawns) && map.spawns.includes(room.key);
 
     switch (room.type) {
         case 'combat': {
-            if (isSpawnRoom) break; // safe landing hall — no pack
+            if (isSpawnRoom) break; // safe landing hall - no pack
             const variant = pickVariant(rng);
             const ringSafe = Number.isFinite(room.ring) ? room.ring : 0; // NaN ring -> empty enemies (fight bricked)
             let count = rng.int(1, Math.max(1, Math.min(3, 1 + Math.floor(ringSafe * 3))));
@@ -73,8 +73,8 @@ function buildRoomPayload(eventDoc, room, map) {
             if (variant) {
                 payload.variant = variant.key;
                 payload.gpMult = variant.gpMult || 1;
-                // OWNER RULE 2026-10-05: max THREE enemies in any given room —
-                // variant bumps can no longer push a pack past the cap.
+ // OWNER RULE max THREE enemies in any given room -
+ // variant bumps can no longer push a pack past the cap.
                 count = Math.max(1, Math.min(3, count + (variant.countDelta || 0)));
                 lvl = Math.max(1, enemyLvl + (variant.levelDelta || 0));
             }
@@ -86,10 +86,10 @@ function buildRoomPayload(eventDoc, room, map) {
             const p = puzzles.generate(rng, room, map);
             payload.puzzle = { kind: p.kind, prompt: p.prompt, answer: p.answer, altAnswers: p.altAnswers || [],
                 normalize: String(p.normalize ? p.normalize(p.answer) : p.answer), maxAttempts: CFG.PUZZLE.ATTEMPTS,
-                // 🖨️ owner 2026-10-06: symbol puzzles carry their glyph/shape
-                // list so `examine` can follow with the STANDALONE copy-paste
-                // line (the prompt embeds them in prose/markup — annoying to
-                // copy). Symbols are shown to the player anyway: no leak.
+ // symbol puzzles carry their glyph/shape
+ // list so `examine` can follow with the STANDALONE copy-paste
+ // line (the prompt embeds them in prose/markup - annoying to
+ // copy). Symbols are shown to the player anyway: no leak.
                 symbols: Array.isArray(p.symbols) ? p.symbols : null };
             payload.puzzleRaw = { meta: p.meta || null };
             break;
@@ -144,11 +144,11 @@ function buildRoomPayload(eventDoc, room, map) {
             break;
         }
         case 'coop': {
-            if (isSpawnRoom) break; // safe landing hall — no guardian pack
+            if (isSpawnRoom) break; // safe landing hall - no guardian pack
             const variant = pickVariant(rng);
             payload.variant = variant ? variant.key : undefined;
             payload.gpMult = variant ? (variant.gpMult || 1) : 1;
-            // OWNER RULE 2026-10-05: max THREE enemies in any given room.
+ // OWNER RULE max THREE enemies in any given room.
             const count = Math.max(1, Math.min(3, rng.int(2, 3) + (variant ? (variant.countDelta || 0) : 0)));
             payload.enemies = Array.from({ length: count }, () => ({ level: Math.max(1, enemyLvl + 2 + (variant ? (variant.levelDelta || 0) : 0)) }));
             payload.coopEncounter = true;
@@ -166,12 +166,12 @@ function buildRoomPayload(eventDoc, room, map) {
     return payload;
 }
 
-// ── enter: room intro + state transitions ──
+// -- enter: room intro + state transitions --
 async function onRoomEnter(eventDoc, player, room) {
     const lines = [];
     const flavor = payloadGet(room.payload, 'flavor') || worldTheme(eventDoc.deadWorld).flavor;
 
-    // residue for later visitors
+ // residue for later visitors
     const residue = mapToObj(room.residue);
     if (room.state === 'CLEARED') {
         lines.push(`🚶 This chamber has already been dealt with${room.clearedByGuild ? ` by *${room.clearedByGuild}*` : ''}.`);
@@ -186,7 +186,7 @@ async function onRoomEnter(eventDoc, player, room) {
     switch (room.type) {
         case 'empty':
             lines.push(`🌫️ An empty hall of ${flavor.toLowerCase()} stone. The silence is heavy, but the way onward is clear.`);
-            // exploring empty rooms still counts as discovery progress
+ // exploring empty rooms still counts as discovery progress
             await maybeDiscoveryMilestone(eventDoc, player);
             break;
         case 'combat':
@@ -196,15 +196,15 @@ async function onRoomEnter(eventDoc, player, room) {
             break;
         case 'puzzle':
             rooms.markActive(eventDoc.eventId, room.key);
-            // 🔄 owner ruins_fixes.txt #8: the encounter does NOT start on
-            // entry — the player must interact first (spawn → interact →
-            // encounter begins). The prompt itself rides the `examine`.
-            // 🔁 owner 2026-10-08 (ruins puzzle fixes #1): a STARTED seal must
-            // never re-print "type examine" — that read as a restart after a
-            // wrong answer. Mid-question the entry text points at the ANSWER,
-            // not the gate verb.
+ // owner ruins_fixes.txt #8: the encounter does NOT start on
+ // entry - the player must interact first (spawn → interact →
+ // encounter begins). The prompt itself rides the `examine`.
+ // (ruins puzzle fixes #1): a STARTED seal must
+ // never re-print "type examine" - that read as a restart after a
+ // wrong answer. Mid-question the entry text points at the ANSWER,
+ // not the gate verb.
             if (room.state !== 'CLEARED' && puzzleStarted(room)) {
-                lines.push(`🧩 The mechanism hums — mid-puzzle. The inscription still waits for your answer.`);
+                lines.push(`🧩 The mechanism hums - mid-puzzle. The inscription still waits for your answer.`);
                 lines.push(`_Reply with your answer, or \`examine\` to re-read the inscription._`);
             } else {
                 lines.push(`🧩 A sealed mechanism blocks the far door. Ancient grooves wait under a skin of dust.`);
@@ -222,10 +222,10 @@ async function onRoomEnter(eventDoc, player, room) {
             lines.push(`☠️ ${payloadGet(room.payload, 'hazardText') || 'Danger lurks here.'} Type \`cross\` to attempt passage.`);
             break;
         case 'lore':
-            // 🔄 owner 2026-10-08 (ruins puzzle fixes #3): the objective must
-            // be OBVIOUS from the entry caption alone — the stele halls used
-            // to ship pure flavor with zero action hint (the examine only
-            // revealed `read` afterwards).
+ // (ruins puzzle fixes #3): the objective must
+ // be OBVIOUS from the entry caption alone - the stele halls used
+ // to ship pure flavor with zero action hint (the examine only
+ // revealed `read` afterwards).
             lines.push(`📖 ${payloadGet(room.payload, 'lore') || 'Old words cover these walls.'}`);
             lines.push(`Type \`read\` to commit them to memory (+GP). \`examine\` takes a closer look.`);
             break;
@@ -238,8 +238,8 @@ async function onRoomEnter(eventDoc, player, room) {
             lines.push(`🌀 Reality thins here - the walls between worlds bleed through. Type \`touch\` to interact... or move on.`);
             break;
         case 'landmark':
-            // 🔄 owner 2026-10-08 (ruins puzzle fixes #3): same rule — the
-            // record action used to be discoverable only by guessing.
+ // (ruins puzzle fixes #3): same rule - the
+ // record action used to be discoverable only by guessing.
             lines.push(`🗿 *${payloadGet(room.payload, 'landmarkName') || 'A landmark'}* - ${payloadGet(room.payload, 'lore') || 'a marker of the old world.'}`);
             lines.push(`Type \`record\` to inscribe it for your guild (+GP). \`examine\` takes a closer look.`);
             break;
@@ -248,11 +248,11 @@ async function onRoomEnter(eventDoc, player, room) {
             lines.push(`🤝 A guardian pack blocks this hall. Allies in the room may fight it together (shared reward).`);
             break;
         case 'finale': {
-            // ⏳ THE FOUR WARDENS (owner 2026-10-07): the lairs are on the map
-            // from war start — entering one is the boss hunt, not a surprise
+ // ⏳ THE FOUR WARDENS: the lairs are on the map
+ // from war start - entering one is the boss hunt, not a surprise
             rooms.markActive(eventDoc.eventId, room.key);
             const wName = payloadGet(room.payload, 'wardenName') || 'the Warden';
-            lines.push(`☠️ *${wName.toUpperCase()}* holds this ${flavor.toLowerCase()} hall — one of the FOUR WARDENS of the Ruins.`);
+            lines.push(`☠️ *${wName.toUpperCase()}* holds this ${flavor.toLowerCase()} hall - one of the FOUR WARDENS of the Ruins.`);
             lines.push(`*It attacks!* Allies in the room fight it together. The war ends when all four wardens fall.`);
             break;
         }
@@ -270,14 +270,14 @@ async function onRoomEnter(eventDoc, player, room) {
 async function maybeDiscoveryMilestone(eventDoc, player) {
     const n = (player.discovered || []).length;
     if (n > 0 && n % CFG.POINTS.DISCOVERY_EVERY === 0) {
-        // ⚔️ CROSS-INSTANCE MILESTONE CLAIM (owner live-test report #9: "Lapis's
-        // 40-chamber progress appearing from both Subaru and Joker"): the old
-        // check read the player's discovered count from THIS instance's (often
-        // stale) doc snapshot — two instances processing the same player's
-        // burst of moves both saw "25 charted" and both queued the milestone.
-        // The claim is now an atomic first-writer-wins update on the player row
-        // (milestoneClaimed < n): exactly one instance across the fleet wins
-        // each milestone value and only the winner awards GP + queues the feed.
+ // CROSS-INSTANCE MILESTONE CLAIM (owner live-test report #9: "Lapis's
+ // 40-chamber progress appearing from both Subaru and Joker"): the old
+ // check read the player's discovered count from THIS instance's (often
+ // stale) doc snapshot - two instances processing the same player's
+ // burst of moves both saw "25 charted" and both queued the milestone.
+ // The claim is now an atomic first-writer-wins update on the player row
+ // (milestoneClaimed < n): exactly one instance across the fleet wins
+ // each milestone value and only the winner awards GP + queues the feed.
         const GuildWarEventM = require('../../models/GuildWarEvent');
         const claim = await GuildWarEventM.updateOne(
             {
@@ -289,7 +289,7 @@ async function maybeDiscoveryMilestone(eventDoc, player) {
         if (!claim || !claim.modifiedCount) return; // another instance already announced this milestone
         const res = await points.award(eventDoc.eventId, player.jid, CFG.POINTS.DISCOVERY_GP, 'discovery');
         if (res.awarded > 0) {
-            feed.queue(eventDoc.eventId, 'normal', `🗺️ *${player.name}* has charted ${n} chambers of the Ruins — the dead world keeps fewer secrets with every step.`);
+            feed.queue(eventDoc.eventId, 'normal', `🗺️ *${player.name}* has charted ${n} chambers of the Ruins - the dead world keeps fewer secrets with every step.`);
         }
     }
 }
@@ -316,10 +316,10 @@ function payloadGet(payload, key) {
     return v;
 }
 
-// ── real HP damage (§15 #5): hazards/puzzles/anomalies used to be PURE TEXT
-// — damage was displayed, never written anywhere. The Ruins draw on the
+// -- real HP damage (§15 #5): hazards/puzzles/anomalies used to be PURE TEXT
+// - damage was displayed, never written anywhere. The Ruins draw on the
 // player's PERSISTENT HP (same pool combat uses), so entering the next fight
-// wounded is now real. Never kills: floor of 1 HP — only combat takes lives.
+// wounded is now real. Never kills: floor of 1 HP - only combat takes lives.
 async function applyWarDamage(playerJid, dmg, maxHp) {
     try {
         const economy = require('../economy');
@@ -334,68 +334,67 @@ async function applyWarDamage(playerJid, dmg, maxHp) {
     }
 }
 
-// ── resolve DM input against the CURRENT room's encounter ──
-// returns { text, handled, sentCombat, afterImage? }
+// -- resolve DM input against the CURRENT room's encounter --
 // afterImage = the CHANGED room scene (owner directive: show what the room
 // looks like after the interaction resolves).
 async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq } = {}) {
     const norm = String(input || '').trim().toLowerCase();
     const P = room.payload || {};
 
-    // 🔎 UNIVERSAL EXAMINE (UX pass #8): `examine` answers in EVERY chamber
-    // type — never dead silence. Puzzle rooms keep their own gated flow
-    // (below): there the verb starts / re-reads the seal.
+ // UNIVERSAL EXAMINE (UX pass #8): `examine` answers in EVERY chamber
+ // type - never dead silence. Puzzle rooms keep their own gated flow
+ // (below): there the verb starts / re-reads the seal.
     if (room.type !== 'puzzle' && EXAMINE_VERBS.includes(norm)) {
         return { handled: true, text: examineFlavor(eventDoc, player, room) };
     }
 
-    // 🔄 IMMEDIATE OUTCOME SPRITE (owner ruins_fixes.txt #2/#4, 2026-10-05):
-    // clearRoom flips the room in the DB only — the in-memory room stayed
-    // ACTIVE, so the VERY NEXT render (the dig/take result image) still
-    // showed the rubble / closed chest. The outcome only appeared after the
-    // player LEFT the room — exactly when the sprite was supposed to
-    // despawn. Syncing the in-memory room to the won claim makes the
-    // outcome sprite generate IMMEDIATELY after the interaction.
+ // IMMEDIATE OUTCOME SPRITE (owner ruins_fixes.txt #2/#4, ):
+ // clearRoom flips the room in the DB only - the in-memory room stayed
+ // ACTIVE, so the VERY NEXT render (the dig/take result image) still
+ // showed the rubble / closed chest. The outcome only appeared after the
+ // player LEFT the room - exactly when the sprite was supposed to
+ // despawn. Syncing the in-memory room to the won claim makes the
+ // outcome sprite generate IMMEDIATELY after the interaction.
     const markClearedLocal = () => {
         try {
             room.state = 'CLEARED';
             room.clearedBy = player.jid;
             if (player.guildId) room.clearedByGuild = player.guildId;
             room.clearedAt = new Date();
-            room.lootFresh = true;   // 🪙 spoils still render for THIS presence; despawns when the looter leaves
+            room.lootFresh = true; // spoils still render for THIS presence; despawns when the looter leaves
         } catch (e) { /* read-only room objects just keep the old sprite */ }
     };
 
     switch (room.type) {
-        // ── puzzle ──
-        // ⚔️ MECHANISM OVERHAUL (owner brief §7 — full state/lifecycle fix):
-        //   • ONE authoritative evaluation per message — the attempt is an
-        //     ATOMIC $inc claim (rooms.claimPuzzleAttempt). Concurrent/rapid
-        //     answers can never share an attempt or evaluate stale state
-        //     (the old read-modify-write lost updates under bursts).
-        //   • Exhaustion = TRUE RESET: one shock, counter back to 0, the seal
-        //     restarts from the first inscription exactly as the message
-        //     promises. No treadmill where every further input shocks forever.
-        //   • NO autonomous loop anywhere: this handler runs strictly inside
-        //     the dmRouter's per-player serialization and only ever runs when
-        //     a player message arrives. Nothing here schedules, retries or
-        //     re-sends itself (verified by the silence check in the QA suite).
-        //   • Re-entry safe: claim() refuses CLEARED rooms, so re-entering a
-        //     solved/failing chamber can never fork a second instance.
+ // -- puzzle --
+ // MECHANISM OVERHAUL (owner brief §7 - full state/lifecycle fix):
+ // • ONE authoritative evaluation per message - the attempt is an
+ // ATOMIC $inc claim (rooms.claimPuzzleAttempt). Concurrent/rapid
+ // answers can never share an attempt or evaluate stale state
+ // (the old read-modify-write lost updates under bursts).
+ // • Exhaustion = TRUE RESET: one shock, counter back to 0, the seal
+ // restarts from the first inscription exactly as the message
+ // promises. No treadmill where every further input shocks forever.
+ // • NO autonomous loop anywhere: this handler runs strictly inside
+ // the dmRouter's per-player serialization and only ever runs when
+ // a player message arrives. Nothing here schedules, retries or
+ // re-sends itself (verified by the silence check in the QA suite).
+ // • Re-entry safe: claim() refuses CLEARED rooms, so re-entering a
+ // solved/failing chamber can never fork a second instance.
         case 'puzzle': {
             if (!norm) return { handled: false };
-            // 🔄 ENCOUNTER GATE (owner ruins_fixes.txt #8): spawn/appear →
-            // player interacts → encounter begins. The mechanism no longer
-            // wakes on entry: the board stays hidden and NO answer attempt
-            // is consumed until the player `examine`s it. Carved Verse and
-            // every other puzzle kind share this same gated flow.
+ // ENCOUNTER GATE (owner ruins_fixes.txt #8): spawn/appear →
+ // player interacts → encounter begins. The mechanism no longer
+ // wakes on entry: the board stays hidden and NO answer attempt
+ // is consumed until the player `examine`s it. Carved Verse and
+ // every other puzzle kind share this same gated flow.
             const pzLive = payloadGet(P, 'puzzle');
             const pzStarted = !!(pzLive && (pzLive.started || (pzLive.attemptsUsed || 0) > 0));
-            // 🔁 FREE RE-EXAMINE (UX pass #9, owner brief 2026-10-07): once a
-            // seal is awake, ANY stray text used to be graded as an answer —
-            // a "wait", a "lol", a second `examine` all burned attempts. The
-            // examine verbs now RE-SEND the prompt + rules + copy-paste line
-            // without touching the attempt counter; only real answers claim.
+ // FREE RE-EXAMINE (UX pass #9, owner brief ): once a
+ // seal is awake, ANY stray text used to be graded as an answer -
+ // a "wait", a "lol", a second `examine` all burned attempts. The
+ // examine verbs now RE-SEND the prompt + rules + copy-paste line
+ // without touching the attempt counter; only real answers claim.
             if (pzStarted && ['examine', 'inspect', 'study', 'check', 'interact'].includes(norm)) {
                 return {
                     handled: true,
@@ -411,10 +410,10 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
                 }
                 await rooms.startPuzzle(eventDoc.eventId, room.key);
                 try { if (pzLive && typeof pzLive === 'object') pzLive.started = true; } catch (e) { /* immutable payload */ }
-                // 🖨️ owner 2026-10-06: for the symbol games (rune lock, memory
-                // mosaic) the examine reply is FOLLOWED by a standalone
-                // message holding just the symbols — the player copies that
-                // line, reorders it, sends it back. No markup, no prose.
+ // for the symbol games (rune lock, memory
+ // mosaic) the examine reply is FOLLOWED by a standalone
+ // message holding just the symbols - the player copies that
+ // line, reorders it, sends it back. No markup, no prose.
                 const symLine = pzLive && Array.isArray(pzLive.symbols) && pzLive.symbols.length
                     ? pzLive.symbols.join(' ') : null;
                 return {
@@ -436,7 +435,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
                     const gp = CFG.PUZZLE.GP_SOLVE + (attempts - 1 === 0 ? CFG.PUZZLE.GP_GRADE_BONUS * maxAttempts : (maxAttempts - attempts + 1) * CFG.PUZZLE.GP_GRADE_BONUS);
                     await points.award(eventDoc.eventId, player.jid, gp, 'puzzle', { coopBonus: room.occupants?.length > 1 });
                     await awardRoomRelic(eventDoc, player, room);
-                    feed.queue(eventDoc.eventId, 'normal', `🧩 The seal shatters — ${player.name} has out-thought a ${roomFlavor(room)}.`);
+                    feed.queue(eventDoc.eventId, 'normal', `🧩 The seal shatters - ${player.name} has out-thought a ${roomFlavor(room)}.`);
                     return { handled: true, afterImage: await clearedScene(eventDoc, player, room), text: `🔓 *The mechanism clicks open!* (+GP) The way onward is clear.` };
                 }
                 return { handled: true, text: `Someone else solved this seal a heartbeat before you.` };
@@ -446,13 +445,13 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
                 const dmg = Math.round(maxHp * CFG.PUZZLE.FAIL_HAZARD_DAMAGE);
                 await applyWarDamage(player.jid, dmg, maxHp);
                 await rooms.resetPuzzleAttempts(eventDoc.eventId, room.key);
-                // 🔁 owner 2026-10-08 (ruins puzzle fixes #2): after the last
-                // failed attempt the mechanism EJECTS the player to the
-                // PREVIOUS chamber — the old in-place "seal resets, try
-                // again" loop read as a reload-spam treadmill. Flee-style
-                // retreat: shock lands, seal resets fresh for a return visit,
-                // and the player is moved back the way they came. Rooms with
-                // no previous chamber (spawn) keep the in-place reset.
+ // (ruins puzzle fixes #2): after the last
+ // failed attempt the mechanism EJECTS the player to the
+ // PREVIOUS chamber - the old in-place "seal resets, try
+ // again" loop read as a reload-spam treadmill. Flee-style
+ // retreat: shock lands, seal resets fresh for a return visit,
+ // and the player is moved back the way they came. Rooms with
+ // no previous chamber (spawn) keep the in-place reset.
                 const prevKey = player.prevRoomId || null;
                 let ejected = false;
                 if (prevKey && prevKey !== player.roomId) {
@@ -467,21 +466,21 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
                     await state.updatePlayer(eventDoc.eventId, player.jid, {}, { lastActionAt: Date.now() });
                 }
                 feed.queue(eventDoc.eventId, 'minor', `🧩 ${player.name} gambled on a seal and the mechanism drew blood.`);
-                // 🔁 owner 2026-10-07 (Carved Verse rage-quit): a fail must
-                // never strand the player on a bare text line — the verdict
-                // rides AFTER a full re-presentation (map card + encounter
-                // card) so they always know where they stand.
+ // (Carved Verse rage-quit): a fail must
+ // never strand the player on a bare text line - the verdict
+ // rides AFTER a full re-presentation (map card + encounter
+ // card) so they always know where they stand.
                 const failText = ejected
-                    ? `💥 The mechanism rejects you with a shock (-${dmg} HP — that was real) and flings you back to the previous chamber. The seal resets — ${maxAttempts} fresh attempts if you dare walk back.`
-                    : `💥 The mechanism rejects you with a shock (-${dmg} HP — that was real). The seal resets - the first inscription glows anew. ${maxAttempts} fresh attempts.`;
+                    ? `💥 The mechanism rejects you with a shock (-${dmg} HP - that was real) and flings you back to the previous chamber. The seal resets - ${maxAttempts} fresh attempts if you dare walk back.`
+                    : `💥 The mechanism rejects you with a shock (-${dmg} HP - that was real). The seal resets - the first inscription glows anew. ${maxAttempts} fresh attempts.`;
                 return { handled: true, eject: ejected, represent: !ejected, text: failText };
             }
-            // 🔁 owner 2026-10-08 (ruins puzzle fixes #1): a wrong answer while
-            // the question stage is LIVE re-sends the QUESTION CARD (the
-            // board) — not the map + navigation + "type examine" stack, which
-            // read exactly like the puzzle had restarted. The board + verdict
-            // (+ the copy-paste symbol line for rune/mosaic kinds) keep the
-            // player oriented on the puzzle itself.
+ // (ruins puzzle fixes #1): a wrong answer while
+ // the question stage is LIVE re-sends the QUESTION CARD (the
+ // board) - not the map + navigation + "type examine" stack, which
+ // read exactly like the puzzle had restarted. The board + verdict
+ // (+ the copy-paste symbol line for rune/mosaic kinds) keep the
+ // player oriented on the puzzle itself.
             return {
                 handled: true,
                 afterImage: await puzzleBoardScene(eventDoc, player, room),
@@ -490,7 +489,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             };
         }
 
-        // ── discovery / reward / secret claim ──
+ // -- discovery / reward / secret claim --
         case 'discovery': {
             if (norm !== 'dig') return { handled: false };
             const claim = await rooms.clearRoom(eventDoc.eventId, room.key, player);
@@ -498,7 +497,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             markClearedLocal();
             await awardRoomRelic(eventDoc, player, room);
             if (P.zeni) await points.award(eventDoc.eventId, player.jid, 5, 'discovery');
-            feed.queue(eventDoc.eventId, 'normal', `⛏️ Dust and bone give way — ${player.name} digs something old out of a ${roomFlavor(room)}.`);
+            feed.queue(eventDoc.eventId, 'normal', `⛏️ Dust and bone give way - ${player.name} digs something old out of a ${roomFlavor(room)}.`);
             return { handled: true, afterImage: await clearedScene(eventDoc, player, room), text: `⛏️ You unearth it! ${P.zeni ? 'A small cache of Zeni comes with it. ' : ''}Check \`relics\` - hand it in with \`handin\` when ready.` };
         }
         case 'reward': {
@@ -508,7 +507,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             markClearedLocal();
             await awardRoomRelic(eventDoc, player, room);
             await points.award(eventDoc.eventId, player.jid, CFG.POINTS.ROOM_CLEAR.reward, 'reward');
-            feed.queue(eventDoc.eventId, 'normal', `💠 ${player.name} cracked a pre-war vault — its wards still sputtering as the spoils see daylight.`);
+            feed.queue(eventDoc.eventId, 'normal', `💠 ${player.name} cracked a pre-war vault - its wards still sputtering as the spoils see daylight.`);
             return { handled: true, afterImage: await clearedScene(eventDoc, player, room), text: `💠 Claimed! The vault is yours. Hand the relic in with \`handin\` to secure its value.` };
         }
         case 'secret': {
@@ -522,11 +521,11 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             markClearedLocal();
             await awardRoomRelic(eventDoc, player, room);
             await points.award(eventDoc.eventId, player.jid, CFG.POINTS.ROOM_CLEAR.secret, 'secret');
-            feed.queue(eventDoc.eventId, 'major', `🌐 *WORLD EVENT* — ${player.name} has torn open a HIDDEN CHAMBER the Ruins swallowed whole!`);
+            feed.queue(eventDoc.eventId, 'major', `🌐 *WORLD EVENT* - ${player.name} has torn open a HIDDEN CHAMBER the Ruins swallowed whole!`);
             return { handled: true, afterImage: await clearedScene(eventDoc, player, room), text: `✨ A true find! This will be remembered.` };
         }
 
-        // ── hazard ──
+ // -- hazard --
         case 'hazard': {
             if (norm !== 'cross') return { handled: false };
             const dodge = Math.random() < 0.5 + (player.stats?.spd || 10) / 200;
@@ -541,11 +540,11 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             }
             const dmg = Math.round((player.stats?.maxHp || 100) * (payloadGet(P, 'hazardDamage') || 0.08));
             await applyWarDamage(player.jid, dmg, player.stats?.maxHp || 100);
-            feed.queue(eventDoc.eventId, 'minor', `🩸 A ${roomFlavor(room)} hazard caught ${player.name} — they limp onward, bleeding.`);
-            return { handled: true, text: `🩸 The hazard catches you (-${dmg} HP — that was real). Try crossing again.` };
+            feed.queue(eventDoc.eventId, 'minor', `🩸 A ${roomFlavor(room)} hazard caught ${player.name} - they limp onward, bleeding.`);
+            return { handled: true, text: `🩸 The hazard catches you (-${dmg} HP - that was real). Try crossing again.` };
         }
 
-        // ── anomaly ──
+ // -- anomaly --
         case 'anomaly': {
             if (norm !== 'touch') return { handled: false };
             const claim = await rooms.clearRoom(eventDoc.eventId, room.key, player);
@@ -563,12 +562,12 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             }
             if (kind === 'hp_drain') {
                 await applyWarDamage(player.jid, (player.stats?.maxHp || 100) * 0.15, player.stats?.maxHp || 100);
-                return { handled: true, afterImage, text: `🌀 The rift drinks deeply of you (-15% HP — that was real). You feel weaker...` };
+                return { handled: true, afterImage, text: `🌀 The rift drinks deeply of you (-15% HP - that was real). You feel weaker...` };
             }
             return { handled: true, afterImage, text: `🌀 The fog of war thins - distant paths flicker in your mind.` };
         }
 
-        // ── lore / landmark / empty ──
+ // -- lore / landmark / empty --
         case 'lore':
             if (!norm || norm === 'lore' || norm === 'read') {
                 await points.award(eventDoc.eventId, player.jid, CFG.POINTS.ROOM_CLEAR.lore, 'lore');
@@ -583,7 +582,7 @@ async function resolveInput(eventDoc, player, room, input, { sock, chatId, groq 
             if (claim.won) {
                 markClearedLocal();
                 await points.award(eventDoc.eventId, player.jid, CFG.POINTS.ROOM_CLEAR.landmark, 'landmark');
-                feed.queue(eventDoc.eventId, 'major', `🌐 *WORLD EVENT* — ${player.name} of ${player.guildName} inscribed *${P.landmarkName || 'a landmark'}* into the Association's maps for their guild!`);
+                feed.queue(eventDoc.eventId, 'major', `🌐 *WORLD EVENT* - ${player.name} of ${player.guildName} inscribed *${P.landmarkName || 'a landmark'}* into the Association's maps for their guild!`);
                 return { handled: true, afterImage: await clearedScene(eventDoc, player, room), text: `🗿 Recorded for ${player.guildName}. The Association takes note. (+GP)` };
             }
             return { handled: true, text: `This landmark was already recorded.` };
@@ -607,7 +606,7 @@ function roomFlavor(room) {
 }
 
 // the changed room: cleared-state scene (best-effort, never blocks)
-// 💡 OVERHAUL 2026-10-04: same roomScene renderer, cleared wash — the room
+// OVERHAUL same roomScene renderer, cleared wash - the room
 // stays visually consistent before/after (no engine swap mid-flow).
 async function clearedScene(eventDoc, player, room) {
     try {
@@ -625,25 +624,25 @@ async function awardRoomRelic(eventDoc, player, room) {
     const fresh = relics.makeRelic(rng, { category: rel.category, tier: rel.tier, meta: rel.meta || {} });
     fresh.name = rel.name || fresh.name;
     await GuildWarEventPushRelic(eventDoc.eventId, player.jid, fresh);
-    // 💬 tier-flavored pickup lines (owner copy overhaul 2026-10-05): a
-    // Mythic find should NOT read like a Common one.
+ // tier-flavored pickup lines (owner copy overhaul ): a
+ // Mythic find should NOT read like a Common one.
     const tierIdx = CFG.RELICS.TIERS.indexOf(fresh.tier);
     const carryLine = tierIdx >= 3
-        ? `💎 *${fresh.name}* (${fresh.tier}) — a treasure of the old world — now rides with ${player.name}!`
+        ? `💎 *${fresh.name}* (${fresh.tier}) - a treasure of the old world - now rides with ${player.name}!`
         : tierIdx === 0
             ? `💎 ${player.name} pried *${fresh.name}* (${fresh.tier}) loose from the Ruins.`
             : `💎 ${player.name} walks out of the dark carrying *${fresh.name}* (${fresh.tier}).`;
     feed.queue(eventDoc.eventId, relics.isStealable(fresh) ? 'normal' : 'minor', carryLine);
 
-    // 💡 NEW RUINS REWARD (2026-10-03, owner request): the Silver Veil Charm
-    // - a rare extra find in relic chambers (10%). Using it toggles the
-    // player's level veil; see inventorySystem.useItem + economy.displayLevel.
+ // NEW RUINS REWARD (owner request): the Silver Veil Charm
+ // - a rare extra find in relic chambers (10%). Using it toggles the
+ // player's level veil; see inventorySystem.useItem + economy.displayLevel.
     if (rng.next ? rng.next() < 0.10 : Math.random() < 0.10) {
         try {
             const inventorySystem = require('../inventorySystem');
             await inventorySystem.addItem(player.jid, 'silver_veil', 1);
             feed.queue(eventDoc.eventId, 'normal',
-                `🫥 Among the relics, ${player.name} finds a *Silver Veil Charm* — a whisper of silver that can veil their strength.`);
+                `🫥 Among the relics, ${player.name} finds a *Silver Veil Charm* - a whisper of silver that can veil their strength.`);
         } catch (e) {
             console.error('[Ruins] silver_veil drop failed (non-fatal):', e?.message);
         }
@@ -682,9 +681,9 @@ function describeDirection(eventDoc, fromKey, toKey) {
     return `${Math.abs(dx)} room${Math.abs(dx) === 1 ? '' : 's'} ${dx >= 0 ? 'east' : 'west'} and ${Math.abs(dy)} room${Math.abs(dy) === 1 ? '' : 's'} ${dy >= 0 ? 'south' : 'north'}`;
 }
 
-// ── combat integration ──
-// ⚔️ §15 #6 (ward relics): a `ward_active` relic now REALLY wraps the next
-// fight — its buff rides into startRuinsCombat via spec.ward, and the ward
+// -- combat integration --
+// §15 #6 (ward relics): a `ward_active` relic now REALLY wraps the next
+// fight - its buff rides into startRuinsCombat via spec.ward, and the ward
 // is consumed per CFG.RELICS.WARD_FIGHTS fights (removed at zero).
 async function consumeWard(eventId, playerJid, relicId) {
     const GuildWarEvent = require('../../models/GuildWarEvent');
@@ -707,23 +706,23 @@ async function consumeWard(eventId, playerJid, relicId) {
     }
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// 🎚️ PvE BAND LADDER — owner spec 2026-10-06 (ruins_pve_boss_scaling_prompt)
+// ======================================================================
+// PvE BAND LADDER - owner spec (ruins_pve_boss_scaling_prompt)
 // Regular encounters resolve at ENGAGE time against the ENGAGING player and
 // the guild's SHARED exploration progress; bosses anchor to the roster's
 // high range, capped so the strongest champion can solo them. The map's
-// spatial danger (room.ring 0..1) keeps pushing the mix hotter — deep rooms
+// spatial danger (room.ring 0..1) keeps pushing the mix hotter - deep rooms
 // are scary even in an unexplored ruin, outer halls stay calm late into a
 // well-explored one. Team co-op seating follows the ENGAGER's lane (the
 // player who opened the fight set its difficulty). Falls back to the seeded
 // payload levels (legacy ring curve) whenever bands can't be computed.
-// ══════════════════════════════════════════════════════════════════════
+// ======================================================================
 
 const _bandCache = new Map(); // eventId → bands (in-process fast path; doc copy is shared truth)
 
 // Roster percentiles → band anchors. Nearest-rank over the REAL progression
 // levels of every registered player. Cached on the event doc so both boxes
-// read one truth (each box computing independently yields the same values —
+// read one truth (each box computing independently yields the same values -
 // percentiles over the same roster are deterministic).
 async function getRosterBands(eventDoc) {
     if (!CFG.COMBAT.BANDS.ENABLED) return null;
@@ -733,13 +732,13 @@ async function getRosterBands(eventDoc) {
         const progression = require('../progression');
         const players = Array.isArray(eventDoc.players) ? eventDoc.players : [];
         const levels = players.map((p) => Math.max(1, Math.round(Number(progression.getLevel(p.jid)) || 1)));
-        // 🔧 SOLO FIX (owner 2026-10-06 20:01Z: solo-entered a war and met
-        // 4×-HP lvl-13 packs — the old `levels.length < 2 → null` guard meant
-        // EVERY beta solo run silently kept the legacy ring curve; bands=null
-        // on all 6 recent prod events). A solo entrant IS the roster: his own
-        // level anchors every band, exactly the spec's "determined by the
-        // stats of the people who enter".
-        if (!levels.length) return null; // empty roster only — nothing to anchor to
+ // SOLO FIX (20:01Z: solo-entered a war and met
+ // 4×-HP lvl-13 packs - the old `levels.length < 2 → null` guard meant
+ // EVERY beta solo run silently kept the legacy ring curve; bands=null
+ // on all 6 recent prod events). A solo entrant IS the roster: his own
+ // level anchors every band, exactly the spec's "determined by the
+ // stats of the people who enter".
+        if (!levels.length) return null; // empty roster only - nothing to anchor to
         levels.sort((a, b) => a - b);
         const q = (f) => levels[Math.min(levels.length - 1, Math.max(0, Math.ceil(f * levels.length) - 1))];
         const bands = { p50: q(0.5), p80: q(0.8), maxLvl: levels[levels.length - 1], n: levels.length, at: Date.now() };
@@ -756,7 +755,7 @@ async function getRosterBands(eventDoc) {
 }
 
 // Shared exploration progress 0..1: share of rooms no longer UNEXPLORED.
-// Rooms only ever move UNEXPLORED→ACTIVE→CLEARED, so this is monotonic —
+// Rooms only ever move UNEXPLORED→ACTIVE→CLEARED, so this is monotonic -
 // the map expanding never un-earns progress, no ratchet needed.
 function explorationProgress(eventDoc) {
     const roomsList = Array.isArray(eventDoc.rooms) ? eventDoc.rooms : [];
@@ -787,20 +786,20 @@ function pickBand(w, roll) {
 
 // Per-engage resolution → { level, band, boss } or null (→ legacy curve).
 // - Regular bands key to the ENGAGING player: LOW sits at/below them, MED
-//   is slightly above, HIGH is the roster's high lower-edge — but never a
-//   wall (MAX_PLAYER_GAP). A lvl-1 tester rolling HIGH meets a +5 fight,
-//   not the ace's tier; the ace rolling anything meets the roster ceiling.
+// is slightly above, HIGH is the roster's high lower-edge - but never a
+// wall (MAX_PLAYER_GAP). A lvl-1 tester rolling HIGH meets a +5 fight,
+// not the ace's tier; the ace rolling anything meets the roster ceiling.
 // - Bosses are ROSTER-anchored (same fight for every party that walks in)
-//   and capped at strongest+BOSS_CAP_ABOVE_TOP so the top champion can solo.
+// and capped at strongest+BOSS_CAP_ABOVE_TOP so the top champion can solo.
 async function resolveEngagement(eventDoc, room, player, { boss = false, bossKind = 'secret', coop = false, variantDelta = 0, rng = Math.random } = {}) {
     const B = CFG.COMBAT.BANDS;
     const bands = await getRosterBands(eventDoc);
     if (!bands) return null;
-    // 🔧 REAL LEVEL FIX (found in the same audit): event player docs have NO
-    // `level` field (PlayerSchema), so `player.level` was ALWAYS undefined →
-    // every engagement resolved as if the engager were level 1. Read the REAL
-    // progression level by jid — the same call buildRuinsPlayerEntity uses —
-    // and fall back to a manually-attached level, then 1.
+ // REAL LEVEL FIX (found in the same audit): event player docs have NO
+ // `level` field (PlayerSchema), so `player.level` was ALWAYS undefined →
+ // every engagement resolved as if the engager were level 1. Read the REAL
+ // progression level by jid - the same call buildRuinsPlayerEntity uses -
+ // and fall back to a manually-attached level, then 1.
     let progLvl = 0;
     try { progLvl = Number(require('../progression').getLevel(player && player.jid)) || 0; } catch (e) { progLvl = 0; }
     const pl = Math.max(1, Math.round(progLvl || Number(player && player.level) || 1));
@@ -809,12 +808,12 @@ async function resolveEngagement(eventDoc, room, player, { boss = false, bossKin
     const band = boss ? 'boss' : pickBand(bandWeights(t), rng());
     let level;
     if (boss) {
-        // 🔧 DEEP-PASS FIX (2026-10-07): the solo cap (strongest+4) used to
-        // bind BOTH boss tiers independently, so in cap-bound rosters the
-        // secret boss and the world-core guardian collapsed to the SAME
-        // level (e.g. roster [1,20,31] → both 35; high guild → both 84) —
-        // the apex fight lost its teeth. Resolve the CORE first, then keep
-        // the secret boss strictly BELOW it (core−1), still inside the cap.
+ // DEEP-PASS FIX: the solo cap (strongest+4) used to
+ // bind BOTH boss tiers independently, so in cap-bound rosters the
+ // secret boss and the world-core guardian collapsed to the SAME
+ // level (e.g. roster [1,20,31] → both 35; high guild → both 84) -
+ // the apex fight lost its teeth. Resolve the CORE first, then keep
+ // the secret boss strictly BELOW it (core−1), still inside the cap.
         const capTop = bands.maxLvl + B.BOSS_CAP_ABOVE_TOP;
         const coreLvl = Math.max(2, Math.min(bands.p80 + B.BOSS_LEVEL_ADD_CORE, capTop));
         level = (bossKind === 'core')
@@ -834,11 +833,11 @@ async function resolveEngagement(eventDoc, room, player, { boss = false, bossKin
 async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = {}) {
     const guildAdventure = require('../guildAdventure');
     const theme = worldTheme(payloadGet(room.payload, 'theme') || eventDoc.deadWorld);
-    // ⚔️ robustness: an empty enemies array (e.g. NaN-ring map build) must
-    // never brick a fight - always fall back to a ring-scaled default spec.
+ // robustness: an empty enemies array (e.g. NaN-ring map build) must
+ // never brick a fight - always fall back to a ring-scaled default spec.
     const rawSpecs = payloadGet(room.payload, 'enemies');
-    // OWNER RULE 2026-10-05: max THREE enemies in any given room. The slice
-    // also clamps ALREADY-SEEDED events whose stored payload still carries 4.
+ // OWNER RULE max THREE enemies in any given room. The slice
+ // also clamps ALREADY-SEEDED events whose stored payload still carries 4.
     const enemySpecs = ((Array.isArray(rawSpecs) && rawSpecs.length)
         ? rawSpecs
         : [{ level: 10 + Math.round((room.ring || 0) * 6) }]).slice(0, 3);
@@ -846,12 +845,12 @@ async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = 
     const isCore = !!payloadGet(room.payload, 'coreGuardian');
     const isFinale = !!payloadGet(room.payload, 'finaleBoss');
 
-    // 🎚️ BAND RESOLUTION (owner spec 2026-10-06): regular encounters key to
-    // the ENGAGING player's level + the guild's SHARED exploration progress;
-    // bosses (secret / warden / world core) key to the roster's high range,
-    // solo-capped. Falls back to the seeded payload levels (legacy ring
-    // curve) whenever bands are absent — already-seeded events and solo
-    // rosters behave exactly as before. Co-op seats follow the engager.
+ // BAND RESOLUTION (owner spec ): regular encounters key to
+ // the ENGAGING player's level + the guild's SHARED exploration progress;
+ // bosses (secret / warden / world core) key to the roster's high range,
+ // solo-capped. Falls back to the seeded payload levels (legacy ring
+ // curve) whenever bands are absent - already-seeded events and solo
+ // rosters behave exactly as before. Co-op seats follow the engager.
     const isBossRoom = isCore || isFinale || !!payloadGet(room.payload, 'boss');
     const engagement = await resolveEngagement(eventDoc, room, player, {
         boss: isBossRoom,
@@ -870,26 +869,26 @@ async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = 
         bandRank = isFinale ? 'B' : 'C'; // legacy path keeps the warden B badge
     }
 
-    // ⚔️ THE RUINS IS THE ARENA (owner spec §12/§14: no more beach): the
-    // battle background is THIS room's own door-plate — the exact image the
-    // player was just shown — shipped to the Go service's environment assets.
-    // Falls back to the world theme bg only if the plate name is unavailable.
+ // THE RUINS IS THE ARENA (owner spec §12/§14: no more beach): the
+ // battle background is THIS room's own door-plate - the exact image the
+ // player was just shown - shipped to the Go service's environment assets.
+ // Falls back to the world theme bg only if the plate name is unavailable.
     let background = theme.bg;
     try {
         const roomScene = require('./roomScene');
         const exits = roomScene.exitsFor(eventDoc, player);
-        // plateKey ∈ {0, L_a, L_b, R, F, LF, FR, LR, LFR} — all exist as
-        // ruins_door_<key>.png files in the Go service environment assets.
+ // plateKey ∈ {0, L_a, L_b, R, F, LF, FR, LR, LFR} - all exist as
+ // ruins_door_<key>.png files in the Go service environment assets.
         background = `ruins_door_${roomScene.plateKeyFor(exits, `${eventDoc.seed}:${room.key}`)}.png`;
     } catch (e) { /* keep theme bg */ }
 
-    // pull enemies from the level pools (real enemy templates) + world flavor names
+ // pull enemies from the level pools (real enemy templates) + world flavor names
     const enemies = engageSpecs.map((e) => {
         const template = classEncounters.selectRandomEnemy(e.level || 10, 'COMMON');
         return { type: template?.id, level: e.level || 10, name: template ? `${theme.flavor} ${template.name}` : undefined };
     });
 
-    // ward relic → real buff for THIS fight (atk/def percent or shield)
+ // ward relic → real buff for THIS fight (atk/def percent or shield)
     let ward = null;
     const wardRelic = (player.relics || []).find((r) => r.category === 'ward_active');
     if (wardRelic) {
@@ -897,10 +896,10 @@ async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = 
         if (buff) ward = { buff, relicId: wardRelic.id };
     }
 
-    // 🤝 TEAM CO-OP (owner 2026-10-05 23:09Z): every ACTIVE same-guild
-    // champion standing in this room is seated at ONE shared battle — the
-    // quest/raid party shape on the Ruins PvE engine. Rivals (other guilds)
-    // are NOT seated; the router handles them with the occupied-room rule.
+ // TEAM CO-OP (23:09Z): every ACTIVE same-guild
+ // champion standing in this room is seated at ONE shared battle - the
+ // quest/raid party shape on the Ruins PvE engine. Rivals (other guilds)
+ // are NOT seated; the router handles them with the occupied-room rule.
     const mates = (room.occupants || [])
         .filter((j) => j && j !== player.jid)
         .map((j) => (eventDoc.players || []).find((p) => p.jid === j))
@@ -913,19 +912,19 @@ async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = 
     const started = await guildAdventure.startRuinsCombat(sock, chatId, player.jid, {
         enemies: enemies.filter((e) => e.type),
         eventId: eventDoc.eventId, roomKey: room.key,
-        // 🎚️ rank badge keys to the resolved band (C outer → B mid → A deep,
-        // S bosses/wardens) — a difficulty read at a glance, per the owner's
-        // balance brief. Legacy C (wardens B) whenever bands didn't resolve.
+ // rank badge keys to the resolved band (C outer → B mid → A deep,
+ // S bosses/wardens) - a difficulty read at a glance, per the owner's
+ // balance brief. Legacy C (wardens B) whenever bands didn't resolve.
         rank: bandRank, background, groq,
         greeting: variant ? `${variant.line}` : null,
         name: isCore ? 'World Core Guardian'
-            : (isFinale ? `Warden — ${payloadGet(room.payload, 'wardenName') || 'the Warden'}`
+            : (isFinale ? `Warden - ${payloadGet(room.payload, 'wardenName') || 'the Warden'}`
                 : (variant ? `Ruins ${variant.name}` : 'Ruins Encounter')),
-        // ⚔️ owner directive 2026-10-05 23:39Z: the square map panel is GONE
-        // from ruins battles (the fight stays IN the room scene — see
-        // guildWar/battleScene.js); no map fragment rides to any renderer.
+ // owner directive 23:39Z: the square map panel is GONE
+ // from ruins battles (the fight stays IN the room scene - see
+ // guildWar/battleScene.js); no map fragment rides to any renderer.
         ward: ward ? ward.buff : null,
-        // 🤝 co-op: room-scoped shared session + every guildmate in the room
+ // co-op: room-scoped shared session + every guildmate in the room
         sessionKey: guildAdventure.ruinsRoomRawKey(eventDoc.eventId, room.key),
         participants,
     });
@@ -936,17 +935,17 @@ async function startRoomCombat(sock, chatId, player, eventDoc, room, { groq } = 
     return started;
 }
 
-// ── room intro WITH the environment scene: { text, image } ──
-// 💡 OVERHAUL 2026-10-04: the scene is rendered IN-PROCESS by roomScene.js
-// — the owner's own Ruins plates, door-variant selected from the room's
+// -- room intro WITH the environment scene: { text, image } --
+// OVERHAUL the scene is rendered IN-PROCESS by roomScene.js
+// - the owner's own Ruins plates, door-variant selected from the room's
 // REAL exits, the player's ASSIGNED sprite standing at a consistent spot,
 // yellow chevrons on every open arch, floor compass generated from
 // adjacency, per-type ambience. NO banner, NO rank, NO cosmetic corner
 // sprite, NO parchment type card. The Go microservice is out of the
-// exploration flow (it still renders actual battle scenes — §15: the
+// exploration flow (it still renders actual battle scenes - §15: the
 // existing combat engine stays).
 // Puzzle rooms: the game board OVERLAYS the scene panel (owner directive).
-// 🔄 ENCOUNTER GATE HELPERS (owner ruins_fixes.txt #8, 2026-10-05):
+// ENCOUNTER GATE HELPERS (owner ruins_fixes.txt #8, ):
 // "spawn/appear -> player interacts -> encounter begins". A puzzle's board
 // card is attached ONLY once the encounter has actually started (the player
 // typed `examine`, or an attempt was already burned in a pre-gate war).
@@ -962,7 +961,7 @@ async function puzzleBoardOpts(eventDoc, room) {
     try {
         const board = await require('./puzzleCards').renderPuzzleCard({
             kind: pz.kind, prompt: pz.prompt,
-            // 📋 UX pass #5: the kind's rule card is printed on the board
+ // UX pass #5: the kind's rule card is printed on the board
             rules: require('./puzzles').RULE_TEXT[pz.kind] || null,
             attemptsUsed: pz.attemptsUsed || 0,
             attemptsMax: pz.maxAttempts || CFG.PUZZLE.ATTEMPTS,
@@ -973,7 +972,7 @@ async function puzzleBoardOpts(eventDoc, room) {
     } catch (e) { return {}; }  // board overlay is best-effort
 }
 
-// the encounter-BEGIN scene: the room WITH the board card riding on it —
+// the encounter-BEGIN scene: the room WITH the board card riding on it -
 // sent as the afterImage of `examine` (the moment the encounter starts).
 async function puzzleBoardScene(eventDoc, player, room) {
     try {
@@ -986,14 +985,14 @@ async function puzzleBoardScene(eventDoc, player, room) {
     }
 }
 
-// ── 📋 puzzle examine text (UX pass #5/#9, owner brief 2026-10-07) ──
+// -- puzzle examine text (UX pass #5/#9, owner brief ) --
 // Pure assembly so the QA suite can assert every kind ships its rule card.
 // `again` = the FREE re-examine flavor (prompt re-read, no attempt burned).
 function puzzleExamineText(pz, again) {
     const rule = puzzles.RULE_TEXT[pz && pz.kind] || '';
     const attempts = (pz && pz.maxAttempts) || CFG.PUZZLE.ATTEMPTS;
     const head = again
-        ? '🧩 You study the mechanism again — the same inscription glows under the dust:'
+        ? '🧩 You study the mechanism again - the same inscription glows under the dust:'
         : '🧩 You study the mechanism - it hums awake under your fingers...';
     const prompt = (pz && pz.prompt) || 'The mechanism awaits an answer.';
     return [
@@ -1003,11 +1002,11 @@ function puzzleExamineText(pz, again) {
     ].join('\n');
 }
 
-// ── 🔎 UNIVERSAL EXAMINE flavor (UX pass #8, owner brief 2026-10-07) ──
+// -- UNIVERSAL EXAMINE flavor (UX pass #8, owner brief ) --
 // `examine` used to be a puzzle-only verb: typed anywhere else it fell
 // through every handler into dead silence (the exact "typing look or e does
 // nothing" complaint, new costume). Every chamber type now answers the
-// examine verbs with what a closer look yields — plus the verb that acts.
+// examine verbs with what a closer look yields - plus the verb that acts.
 const EXAMINE_VERBS = ['examine', 'inspect', 'study', 'check', 'interact'];
 function examineFlavor(eventDoc, player, room) {
     const P = room.payload || {};
@@ -1015,43 +1014,43 @@ function examineFlavor(eventDoc, player, room) {
     const cleared = room.state === 'CLEARED';
     if (cleared) {
         const residue = mapToObj(room.residue);
-        return `🔎 Nothing else stirs here — the chamber was already dealt with${room.clearedByGuild ? ` by *${room.clearedByGuild}*` : ''}.${residue?.note ? ` _${residue.note}_` : ''}`;
+        return `🔎 Nothing else stirs here - the chamber was already dealt with${room.clearedByGuild ? ` by *${room.clearedByGuild}*` : ''}.${residue?.note ? ` _${residue.note}_` : ''}`;
     }
     switch (room.type) {
         case 'empty':
-            return `🔎 A closer look: ${flavor.toLowerCase()} dust, collapsed shelving, and claw-marks too large to name. Nothing of value — the way onward is what matters.`;
+            return `🔎 A closer look: ${flavor.toLowerCase()} dust, collapsed shelving, and claw-marks too large to name. Nothing of value - the way onward is what matters.`;
         case 'combat':
-            return `🔎 Shapes shift between the pillars — more than one, moving low and quiet. \`fight\` meets them head-on; \`flee\` retreats the way you came.`;
+            return `🔎 Shapes shift between the pillars - more than one, moving low and quiet. \`fight\` meets them head-on; \`flee\` retreats the way you came.`;
         case 'discovery':
             return `🔎 ${payloadGet(P, 'text') || 'Something is hidden here.'} \`dig\` unearths it.`;
         case 'reward':
             return `🔎 An old-world vault, wards long dead but the seal intact. Whatever the dead world valued is inside. \`take\` claims it.`;
         case 'hazard':
-            return `🔎 ${payloadGet(P, 'hazardText') || 'Danger lurks here.'} A careful read of the trigger points helps — \`cross\` to attempt passage.`;
+            return `🔎 ${payloadGet(P, 'hazardText') || 'Danger lurks here.'} A careful read of the trigger points helps - \`cross\` to attempt passage.`;
         case 'lore':
             return `🔎 ${payloadGet(P, 'lore') || 'Old words cover these walls.'} \`read\` commits them to memory (+GP).`;
         case 'secret':
-            if (payloadGet(P, 'boss')) return `🔎 The thing guarding this chamber is OLD — older than the war above. It watches you back. \`fight\` when you are ready.`;
+            if (payloadGet(P, 'boss')) return `🔎 The thing guarding this chamber is OLD - older than the war above. It watches you back. \`fight\` when you are ready.`;
             return `🔎 A hidden cache, wrapped in shivering air. \`claim\` takes what it holds.`;
         case 'anomaly':
-            return `🔎 The walls here bleed light from somewhere that is not anywhere. \`touch\` interacts — or move on and let it hum.`;
+            return `🔎 The walls here bleed light from somewhere that is not anywhere. \`touch\` interacts - or move on and let it hum.`;
         case 'landmark':
-            return `🔎 *${payloadGet(P, 'landmarkName') || 'A landmark'}* — ${payloadGet(P, 'lore') || 'a marker of the old world.'} \`record\` inscribes it for your guild.`;
+            return `🔎 *${payloadGet(P, 'landmarkName') || 'A landmark'}* - ${payloadGet(P, 'lore') || 'a marker of the old world.'} \`record\` inscribes it for your guild.`;
         case 'coop':
-            return `🔎 A guardian pack denser than the usual scavengers. Allies standing here can fight it beside you — shared spoils.`;
+            return `🔎 A guardian pack denser than the usual scavengers. Allies standing here can fight it beside you - shared spoils.`;
         case 'finale':
-            return `🔎 *${payloadGet(P, 'wardenName') || 'The Warden'}* — one of the four holding the war open. The war ends when all four fall. \`fight\`.`;
+            return `🔎 *${payloadGet(P, 'wardenName') || 'The Warden'}* - one of the four holding the war open. The war ends when all four fall. \`fight\`.`;
         case 'core':
             return `🔎 The guardian of THE World Core itself. First guild to breach it earns lasting glory. \`fight\`.`;
         default:
-            return `🔎 Dust, stone and silence — the ${flavor.toLowerCase()} ruins keep this chamber's secrets for now.`;
+            return `🔎 Dust, stone and silence - the ${flavor.toLowerCase()} ruins keep this chamber's secrets for now.`;
     }
 }
 
-// ⚔️ MULTIPLAYER BRIEF §6 (waiter resume): players who waited out a live
-// fight are told the moment it resolves — normal room behavior resumes.
+// MULTIPLAYER BRIEF §6 (waiter resume): players who waited out a live
+// fight are told the moment it resolves - normal room behavior resumes.
 // kind 'victory': chamber cleared, way open. kind 'defeat': the fighter
-// fell — the encounter is still live, a waiter may take it up with `fight`.
+// fell - the encounter is still live, a waiter may take it up with `fight`.
 // Fire-and-forget from the victory/defeat branches; also a sim seam.
 async function notifyRoomResolved(eventId, roomKey, clearerJid, sock, { prefix = '.', kind = 'victory' } = {}) {
     try {
@@ -1063,8 +1062,8 @@ async function notifyRoomResolved(eventId, roomKey, clearerJid, sock, { prefix =
             ? ev.players.find((p) => p.jid === clearerJid[0])
             : ev.players.find((p) => p.jid === clearerJid);
         const clearerName = clearer ? clearer.name : 'a champion';
-        // 🤝 co-op merge: the clearer list may be the WHOLE seated party —
-        // every participant is excluded from the waiter pings
+ // co-op merge: the clearer list may be the WHOLE seated party -
+ // every participant is excluded from the waiter pings
         const exclude = new Set(Array.isArray(clearerJid) ? clearerJid : [clearerJid]);
         const waiters = (room.occupants || []).filter((j) => j && !exclude.has(j));
         let n = 0;
@@ -1073,8 +1072,8 @@ async function notifyRoomResolved(eventId, roomKey, clearerJid, sock, { prefix =
                 const wRow = ev.players.find((p) => p.jid === w);
                 if (!wRow || wRow.status !== 'active') continue;
                 const head = kind === 'defeat'
-                    ? `💀 *${clearerName}* fell in this chamber. The fight is up for grabs — \`fight\` to engage it yourself, or \`flee\` back the way you came.`
-                    : `🔁 The fight is over — *${clearerName}* cleared the chamber. Normal room behavior resumes; the way onward is open.`;
+                    ? `💀 *${clearerName}* fell in this chamber. The fight is up for grabs - \`fight\` to engage it yourself, or \`flee\` back the way you came.`
+                    : `🔁 The fight is over - *${clearerName}* cleared the chamber. Normal room behavior resumes; the way onward is open.`;
                 await sock.sendMessage(w, { text: head });
                 const ctxDoc = await state.getMoveContext(eventId, wRow.roomId);
                 if (ctxDoc && ctxDoc.room) {
@@ -1092,12 +1091,12 @@ async function roomIntro(eventDoc, player, room, opts = {}) {
     const text = await onRoomEnter(eventDoc, player, room);
     try {
         const roomScene = require('./roomScene');
-        // scene for EVERY room kind — combat kinds included (the scene is
-        // the "you walk in and see them" beat; the battle render follows it)
+ // scene for EVERY room kind - combat kinds included (the scene is
+ // the "you walk in and see them" beat; the battle render follows it)
         const sceneOpts = { prefix: opts.prefix || '.' };
-        // 🔄 owner ruins_fixes.txt #8: the encounter card only shows AFTER
-        // the player interacts — entry into a not-yet-examined puzzle room
-        // shows the room + a prompt to examine, never the board.
+ // owner ruins_fixes.txt #8: the encounter card only shows AFTER
+ // the player interacts - entry into a not-yet-examined puzzle room
+ // shows the room + a prompt to examine, never the board.
         if (room.type === 'puzzle' && room.state !== 'CLEARED' && puzzleStarted(room)) {
             Object.assign(sceneOpts, await puzzleBoardOpts(eventDoc, room));
         }
@@ -1114,10 +1113,10 @@ module.exports = {
     buildRoomPayload, onRoomEnter, roomIntro, resolveInput, startRoomCombat,
     nearestRelicRoom, describeDirection, awardRoomRelic, variantOf, pickVariant,
     payloadGet, puzzleStarted, roomFlavor, notifyRoomResolved,
-    // 🔎 UX pass (#5/#8/#9): pure helpers for QA + the rule-card flow
+ // UX pass (#5/#8/#9): pure helpers for QA + the rule-card flow
     puzzleExamineText, examineFlavor, EXAMINE_VERBS,
-    // 🎚️ band ladder (owner spec 2026-10-06) — exported for QA probes
+ // band ladder (owner spec ) - exported for QA probes
     getRosterBands, explorationProgress, bandWeights, pickBand, resolveEngagement,
-    // ⚔️ milestone (cross-instance claim) — exported for QA probes
+ // milestone (cross-instance claim) - exported for QA probes
     maybeDiscoveryMilestone,
 };

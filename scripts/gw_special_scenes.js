@@ -36,7 +36,7 @@ async function connectDB() {
     const outDir = path.join(ROOT, 'tmp_gw_qa', 'special');
     fs.mkdirSync(outDir, { recursive: true });
 
-    // 1) puzzle room WITH the board overlay riding the scene
+ // 1) puzzle room WITH the board overlay riding the scene
     const pzRoom = ev.rooms.find((r) => r.type === 'puzzle');
     if (pzRoom) {
         await require('../core/rpg/guildWar/rooms').markActive(ev.eventId, pzRoom.key);
@@ -49,7 +49,7 @@ async function connectDB() {
         fs.writeFileSync(path.join(outDir, 'puzzle_overlay.png'), buf);
         console.log('puzzle overlay rendered');
     }
-    // 2) World Core boss scene
+ // 2) World Core boss scene
     const coreRoom = ev.rooms.find((r) => r.type === 'core');
     if (coreRoom) {
         await require('../core/rpg/guildWar/rooms').markActive(ev.eventId, coreRoom.key);
@@ -57,7 +57,7 @@ async function connectDB() {
         fs.writeFileSync(path.join(outDir, 'core_boss.png'), buf);
         console.log('core boss rendered');
     }
-    // 3) secret boss
+ // 3) secret boss
     const secretRoom = ev.rooms.find((r) => r.type === 'secret' && encounters.payloadGet(r.payload, 'boss'));
     if (secretRoom) {
         await require('../core/rpg/guildWar/rooms').markActive(ev.eventId, secretRoom.key);
@@ -65,7 +65,7 @@ async function connectDB() {
         fs.writeFileSync(path.join(outDir, 'secret_boss.png'), buf);
         console.log('secret boss rendered');
     } else console.log('no secret-boss room on this map');
-    // 4) landmark
+ // 4) landmark
     const lmRoom = ev.rooms.find((r) => r.type === 'landmark');
     if (lmRoom) {
         const buf = await roomScene.renderRoomScene(ev, { ...me, roomId: lmRoom.key }, lmRoom, { prefix: '.j' });

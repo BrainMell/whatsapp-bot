@@ -3,7 +3,7 @@
 /* Task 46 seed: publish the pre-deploy validated scrape (run on the deploy
  * container 2026-10-07) into the shared Mongo System keys, so `.j mentoring`
  * has search/preview data before wa-miner's first server cycle publishes.
- * Status is NOT seeded — the miner's own first cycle report takes that slot.
+ * Status is NOT seeded - the miner's own first cycle report takes that slot.
  * Run on Box 1:  MONGO_URI from repo .env; mongoose from repo node_modules.
  */
 const path = require('path');
@@ -26,9 +26,9 @@ const rep = JSON.parse(fs.readFileSync(path.join(OUT, 'event_cards.report.json')
 
   const now = new Date().toISOString();
   const cards = ev.cards || [];
-  // newcards seed = cards the pre-deploy run assigned NEW ids (E-02503..E-03677),
-  // newest first, capped at 500 — all of them are already live after the deploy,
-  // so `pending` on any box will be 0; this is mined-batch history.
+ // newcards seed = cards the pre-deploy run assigned NEW ids (E-02503..E-03677),
+ // newest first, capped at 500 - all of them are already live after the deploy,
+ // so `pending` on any box will be 0; this is mined-batch history.
   const newSeed = cards
     .filter(c => parseInt(String(c.id).slice(2), 10) >= 2503)
     .sort((a, b) => String(b.id).localeCompare(String(a.id), 'en', { numeric: true }))

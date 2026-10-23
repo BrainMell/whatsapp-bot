@@ -1,6 +1,6 @@
 'use strict';
-// 47-k8c QA: renderWarmer replay paths, fully sandboxed (QA_MODE → /tmp cache).
-// node scripts/qa_render_warmer.js   (run with QA_MODE=1 CODE_VER=warmerqa1)
+// QA: renderWarmer replay paths, fully sandboxed (QA_MODE → /tmp cache).
+// node scripts/qa_render_warmer.js (run with QA_MODE=1 CODE_VER=warmerqa1)
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -28,7 +28,7 @@ const check = (name, cond) => { cond ? pass++ : fail++; console.log(`  ${cond ? 
         buildings: { hall: 2, training: 1, treasury: 0 }, memberCount: 5, memberCap: 30,
         emblemColor: '#aa3333', emblemIcon: 'boar', motto: 'qa' };
 
-    // seed: valid stale base journal + garbage journal + guild journal + FRESH entry (data exists)
+ // seed: valid stale base journal + garbage journal + guild journal + FRESH entry (data exists)
     const seed = (kind, file, obj) => {
         fs.mkdirSync(path.join(QA, kind), { recursive: true });
         fs.writeFileSync(path.join(QA, kind, file), JSON.stringify(obj));
@@ -39,19 +39,19 @@ const check = (name, cond) => { cond ? pass++ : fail++; console.log(`  ${cond ? 
     seed('base', `${CV}_4444.json`, { ct: 'image/jpeg', j: { state: baseState, opts: { hint: 'fresh-check' } } });
     fs.writeFileSync(path.join(QA, 'base', `${CV}_4444.data`), 'fresh-bytes');
 
-    console.log('— listJournal —');
+    console.log('- listJournal -');
     const mediaCache = require('../core/rpg/mediaCache');
     const lj = mediaCache.listJournal('base');
     check('listJournal finds 3 base journals (2 stale + 1 fresh)', lj.length === 3);
     check('fresh flag correct', lj.filter((e) => e.fresh).length === 1 && lj.filter((e) => !e.fresh).length === 2);
     check('newest-first ordering', lj[0].fresh === true);   // fresh entry seeded last → newest mtime
 
-    console.log('— warmOnce —');
+    console.log('- warmOnce -');
     const W = require('../core/rpg/renderWarmer');
     await W.warmOnce();
 
-    // replay re-hashes the journaled state, so new data lands under the REAL hash —
-    // detect it as: any current-CODE_VER .data except the seeded fresh-check one
+ // replay re-hashes the journaled state, so new data lands under the REAL hash -
+ // detect it as: any current-CODE_VER .data except the seeded fresh-check one
     const freshName = `${CV}_4444.data`;
     const baseNew = fs.readdirSync(path.join(QA, 'base')).filter((f) => f.startsWith(`${CV}_`) && f.endsWith('.data') && f !== freshName);
     check('stale base re-baked under current CODE_VER (real hash)', baseNew.length === 1);

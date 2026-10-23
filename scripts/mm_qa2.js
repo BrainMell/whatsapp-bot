@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 // ============================================
 // MURDER MYSTERY - QA SUITE 2
-// The manor's PRIZE purse (owner 2026-09-14: money prize, no entry fee)
+// The manor's PRIZE purse (money prize, no entry fee)
 // + the Hall of Shadows (all-time ledger)
 // + multiple randomized full game loops. Offline, mock sock, stub economy.
 // Run: node scripts/mm_qa2.js
 // Exits non-zero on any failed assertion.
 // ============================================
 
-// self-contained on-box runs (2026-10-13): fast intro cadence + scaled phase
-// clocks — without MM_QA_FAST the STARTING chain alone is 4s + n*30s and the
+// self-contained on-box runs: fast intro cadence + scaled phase
+// clocks - without MM_QA_FAST the STARTING chain alone is 4s + n*30s and the
 // driver polls through it while real-canvas renders stack behind it
 process.env.MM_QA_FAST = '1';
 process.env.MM_QA_CLOCK = '1';
@@ -158,8 +158,8 @@ function aliveIdxOf(g, target, excludeSelfJid = null, includeSelf = false) {
 }
 
 async function nightActions(sock, g, opts = {}) {
-  // 2026-10-12: the cast-introduction chain means start resolves into NIGHT
-  // asynchronously - callers wait for NIGHT before driving night actions
+ // the cast-introduction chain means start resolves into NIGHT
+ // asynchronously - callers wait for NIGHT before driving night actions
   const t0 = Date.now();
   while (Date.now() - t0 < 30000) {
     const cur = mm._internal.getGame(g.chatId);
@@ -190,7 +190,7 @@ async function nightActions(sock, g, opts = {}) {
     const gIdx = aliveIdxOf(g, ward, null, true);
     await mm.handleCommand(ctxOf(sock, guard.jid, { group: false, sub: 'protect', rest: String(gIdx), sender: guard.jid, name: guard.name }));
   }
-  await sleep(12000); // resolveNight pipeline: 2600 debounce + 800 + 1200 pacing + REAL-canvas card renders (~1-2s each, dawn draws several) — was 6200, sandbox-mock calibrated
+  await sleep(12000); // resolveNight pipeline: 2600 debounce + 800 + 1200 pacing + REAL-canvas card renders (~1-2s each, dawn draws several) - was 6200, sandbox-mock calibrated
   return mm._internal.getGame(g.chatId);
 }
 
@@ -206,15 +206,15 @@ async function voteAll(sock, g, choose) {
     const target = choose(p, g);
     await mm.handleCommand(ctxOf(sock, g.chatId, { sub: 'vote', rest: target, sender: p.jid, name: p.name }));
   }
-  await sleep(10000); // vote resolve: 1500 debounce + will/morning pacing + REAL-canvas card renders — was 5200, sandbox-mock calibrated
+  await sleep(10000); // vote resolve: 1500 debounce + will/morning pacing + REAL-canvas card renders - was 5200, sandbox-mock calibrated
   return mm._internal.getGame(g.chatId);
 }
 
 // play one game to the end. mode: 'smart' (vote killer), 'dumb' (vote innocents), 'random'
 async function playToEnd(sock, g, mode) {
   let guard = 0;
-  // guard raised 12 -> 60: the intro chain polls STARTING for a few ticks and
-  // real games run several phase cycles; 12 could exhaust before ENDED
+ // guard raised 12 -> 60: the intro chain polls STARTING for a few ticks and
+ // real games run several phase cycles; 12 could exhaust before ENDED
   while (g && g.phase !== 'ENDED' && guard++ < 60) {
     if (g.phase === 'STARTING') { await sleep(300); g = mm._internal.getGame(g.chatId); continue; }
     if (g.phase === 'NIGHT') {
@@ -249,14 +249,14 @@ async function playToEnd(sock, g, mode) {
 
 // ---------- main ----------
 async function main() {
-  // clean slate
+ // clean slate
   await system.set('murder_mm_games_v2_qa-bot', {});
   await system.set('murder_mm_stats_v1', {});
   await system.set('murder_mm_archive_v2_qa-bot', []);
   mm._internal.games.clear();
   mm._internal.ensureRehydrated();
 
-  // =========== 1. PRIZE: roll, display, free entry ===========
+ // =========== 1. PRIZE: roll, display, free entry ===========
   console.log("\n===== 1. THE MANOR'S PURSE =====");
   {
     const sock = makeSock(); QA_SOCK = sock;
@@ -270,7 +270,7 @@ async function main() {
     await mm.handleCommand(ctxOf(sock, CHATS[0], { sub: 'players' }));
     ok(groupText(sock, /Tonight's purse: \*[\d,]+ Zeni\*/), '1.5 guest list shows the purse');
 
-    // anyone can play - a BROKE host casts freely, nothing is ever charged
+ // anyone can play - a BROKE host casts freely, nothing is ever charged
     const host = roster[0];
     QA_BALANCES.set(host.jid, 0);
     const beforePlayers = g.players.length;
@@ -282,7 +282,7 @@ async function main() {
     ok(!QA_TX.some((t) => t.amt < 0 && /entry fee|manor/i.test(t.desc)), '1.9 no charge transaction at cast');
     ok(groupText(sock, /posts a purse of \*[\d,]+ Zeni\*/), '1.10 doors-locked message names the purse');
 
-    // close before any resolution: game torn down, still nobody paid anything
+ // close before any resolution: game torn down, still nobody paid anything
     const notesBefore = sock.out.filter((m) => /returns to the host's purse/.test(m.text)).length;
     await mm.handleCommand(ctxOf(sock, CHATS[0], { sub: 'end', sender: host.jid, name: host.name }));
     ok(!mm._internal.getGame(CHATS[0]), '1.11 game torn down');
@@ -290,7 +290,7 @@ async function main() {
     ok(sock.out.filter((m) => /returns to the host's purse/.test(m.text)).length === notesBefore, '1.13 no legacy refund note on a new game');
     ok(stats(host.jid) === null || stats(host.jid).games === 0, '1.14 aborted cast records NO ledger stats');
 
-    // a second lobby rolls its own purse
+ // a second lobby rolls its own purse
     const roster2 = players(5, 2);
     await openAndFill(sock, CHATS[1], roster2);
     const g3 = mm._internal.getGame(CHATS[1]);
@@ -298,7 +298,7 @@ async function main() {
     await mm.handleCommand(ctxOf(sock, CHATS[1], { sub: 'end', sender: roster2[0].jid, name: roster2[0].name }));
   }
 
-  // =========== 2. FULL LOOPS - smart civs (civ win) ===========
+ // =========== 2. FULL LOOPS - smart civs (civ win) ===========
   console.log('\n===== 2. GAME LOOP - the house gets it right =====');
   {
     const sock = makeSock(); QA_SOCK = sock;
@@ -314,7 +314,7 @@ async function main() {
     ok(!g || g.phase === 'ENDED', '2.1 game reaches ENDED');
     ok(groupText(sock, /MYSTERY SOLVED/), '2.2 civ win declared');
     ok(groupText(sock, /THE MANOR PAYS/), '2.10 prize announcement sent');
-    // every non-killer was paid an equal share; the killer got nothing
+ // every non-killer was paid an equal share; the killer got nothing
     const killerP2 = roster.find((p) => { const row = Object.values(system.get(STATS_KEY, {})).find((r) => r.name === p.name); return row && row.killerGames === 1; });
     const civs2 = roster.filter((p) => p.jid !== killerP2.jid);
     const shares2 = civs2.map((p) => QA_BALANCES.get(p.jid) - balBefore[p.jid]);
@@ -323,7 +323,7 @@ async function main() {
     ok(shares2.reduce((a, b) => a + b, 0) === purse, `2.12 total paid equals the purse (${purse})`);
     ok(QA_BALANCES.get(killerP2.jid) === balBefore[killerP2.jid], '2.13 caught killer paid nothing');
     const killer = (system.get('murder_mm_games_v2_qa-bot', {})[CHATS[2]] || null);
-    // ledger checks
+ // ledger checks
     const arch = system.get('murder_mm_archive_v2_qa-bot', [])[0];
     ok(arch && arch.winner === 'civ', '2.3 archive records the civ win');
     const killerName = arch.killer;
@@ -335,12 +335,12 @@ async function main() {
     ok(civRows.every((r) => r.wins === 1), '2.7 innocent team all credited the win (dead or alive)');
     ok(civRows.some((r) => r.correctVotes === 1), '2.8 sharp votes recorded for voters who named the killer');
     ok(ledgerTotal() === 5, `2.9 ledger counts 5 games-played entries (${ledgerTotal()})`);
-    // survivor credit: exactly the alive non-killers got survived=1
+ // survivor credit: exactly the alive non-killers got survived=1
     const survivorsInLedger = civRows.filter((r) => r.survived === 1).length;
     ok(survivorsInLedger === arch.survivors.length, `2.11 survivor credit matches (${survivorsInLedger}/${arch.survivors.length})`);
   }
 
-  // =========== 3. FULL LOOPS - dumb civs (killer win) ===========
+ // =========== 3. FULL LOOPS - dumb civs (killer win) ===========
   console.log('\n===== 3. GAME LOOP - the killer gets away =====');
   {
     const sock = makeSock(); QA_SOCK = sock;
@@ -358,7 +358,7 @@ async function main() {
     ok(arch && arch.winner === 'killer', '3.3 archive records the killer win');
     const killerRow = Object.values(system.get(STATS_KEY, {})).find((r) => r.name === arch.killer);
     ok(killerRow && killerRow.wins === 1, '3.4 killer credited the win');
-    // killer takes the whole purse
+ // killer takes the whole purse
     const killerP3 = roster.find((p) => p.name === arch.killer);
     ok(QA_BALANCES.get(killerP3.jid) === balBefore3[killerP3.jid] + purse3, `3.7 killer took the whole purse (${purse3})`);
     ok(roster.filter((p) => p.jid !== killerP3.jid).every((p) => QA_BALANCES.get(p.jid) === balBefore3[p.jid]), '3.8 losers paid nothing');
@@ -368,7 +368,7 @@ async function main() {
     ok(killerRow.score === expectedScore, `3.6 score formula exact (${killerRow.score})`);
   }
 
-  // =========== 4. GUARDIAN SAVE credited ===========
+ // =========== 4. GUARDIAN SAVE credited ===========
   console.log("\n===== 4. THE GUARDIAN'S CREDIT =====");
   {
     const sock = makeSock(); QA_SOCK = sock;
@@ -377,7 +377,7 @@ async function main() {
     await mm.handleCommand(ctxOf(sock, CHATS[4], { sub: 'start', sender: roster[0].jid, name: roster[0].name }));
     let g = mm._internal.getGame(CHATS[4]);
     const guardianJid = roleOf(g, 'GUARDIAN').jid;
-    // night 1: guardian protects the killer's target
+ // night 1: guardian protects the killer's target
     g.extendedTonight = true;
     g = await nightActions(sock, g, { protectVictim: true });
     ok(groupText(sock, /almost died|No one did|Dawn found them breathing|Someone almost died/i) || g.bodies.length === 0, '4.1 save morning (no body)');
@@ -387,7 +387,7 @@ async function main() {
     ok(guardRow && guardRow.score >= guardRow.wins * 5 + guardRow.survived * 2 + guardRow.saves * 4, '4.3 save points flow into the score');
   }
 
-  // =========== 5. RANDOMIZED MULTI-LOOP STRESS ===========
+ // =========== 5. RANDOMIZED MULTI-LOOP STRESS ===========
   console.log('\n===== 5. MULTIPLE RANDOM LOOPS =====');
   {
     const results = [];
@@ -407,7 +407,7 @@ async function main() {
       results.push({ i, n, ended, winner: arch && arch.winner, nights: arch && arch.nights });
       ok(ended, `5.${i + 1}a loop ${i + 1} (${n}p, ${mode}) reaches ENDED`);
       ok(winnerOk, `5.${i + 1}b loop ${i + 1} archives a winner`);
-      // ledger consistency: every roster jid gained exactly one games entry from this loop
+ // ledger consistency: every roster jid gained exactly one games entry from this loop
       let accounted = 0;
       for (const p of roster) { const r = stats(p.jid); if (r) accounted++; }
       ok(accounted >= n, `5.${i + 1}c loop ${i + 1}: all ${n} players in the ledger (${accounted})`);
@@ -415,11 +415,11 @@ async function main() {
     console.log('   loops:', JSON.stringify(results));
   }
 
-  // =========== 6. LEADERBOARD - card, sort, fallback, typos ===========
+ // =========== 6. LEADERBOARD - card, sort, fallback, typos ===========
   console.log('\n===== 6. HALL OF SHADOWS =====');
   {
     const sock = makeSock(); QA_SOCK = sock;
-    // seed a deep ledger to test sorting + "more names" line
+ // seed a deep ledger to test sorting + "more names" line
     const seeded = {};
     for (let i = 0; i < 13; i++) {
       seeded[`90000000000${String(i).padStart(2, '0')}`] = {
@@ -436,7 +436,6 @@ async function main() {
     ok(/You stand \*#\d+\*/.test(lbImg ? lbImg.text : ''), '6.2 caption shows the caller\'s rank');
     ok(/Closed cases only/.test(lbImg ? lbImg.text : ''), '6.3 caption explains the rule');
 
-    // save the card for visual QA
     try {
       const buf = await cards.renderLeaderboardCard({
         manorName: 'BLACKVALE MANOR',
@@ -451,12 +450,12 @@ async function main() {
       if (buf) fs.writeFileSync(path.join(OUT_DIR, 'leaderboard_card.png'), buf);
     } catch (e) { console.log('   (card render for visual QA failed:', e.message, ')'); }
 
-    // sorted by score desc - top row is the max score
+ // sorted by score desc - top row is the max score
     const seededScores = Object.values(seeded).map((r) => r.score);
     const topScore = Math.max(...seededScores);
     ok(lbImg && new RegExp(`\\*${topScore.toLocaleString('en-US')} pts\\*`).test(sock.out.filter((m) => m.isGroup && m.image).map((m) => m.text).join('\n')) === false || true, '6.4 (visual) top score in card'); // card content asserted visually via PNG
 
-    // text fallback - break the renderer once
+ // text fallback - break the renderer once
     const realRender = cards.renderLeaderboardCard;
     cards.renderLeaderboardCard = async () => { throw new Error('QA: renderer offline'); };
     try {
@@ -468,12 +467,12 @@ async function main() {
     ok(groupText(sock, /Wins \+5 · survival \+2 · kill \+3/), '6.6 scoring legend shown');
     ok(groupText(sock, /You: \*#\d+\*/), '6.7 off-board caller told their rank');
 
-    // typo routing
+ // typo routing
     await mm.handleCommand(ctxOf(sock, CHATS[0], { sub: 'leaderbored', sender: '999@s.whatsapp.net', name: 'Nobody' }));
     ok(groupText(sock, /HALL OF SHADOWS/) >= 2, '6.8 typo `leaderbored` routes to the ledger');
   }
 
-  // =========== 7. HELP + REGRESSION ===========
+ // =========== 7. HELP + REGRESSION ===========
   console.log('\n===== 7. HELP MENTIONS =====');
   {
     const sock = makeSock(); QA_SOCK = sock;

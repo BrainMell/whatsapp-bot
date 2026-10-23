@@ -1,9 +1,9 @@
-// test_cast_images.js — validates the 2026-09-30 character-native image
+// test_cast_images.js - validates the character-native image
 // rebuild on Box 1:
-//   1. cast path builds N image questions per franchise (fast, correct shape)
-//   2. host-session memo is keyed per media id (multi-franchise sessions)
-//   3. disk portrait cache makes the second run near-instant
-//   4. legacy fallback path still builds (non-AniList franchises)
+// 1. cast path builds N image questions per franchise (fast, correct shape)
+// 2. host-session memo is keyed per media id (multi-franchise sessions)
+// 3. disk portrait cache makes the second run near-instant
+// 4. legacy fallback path still builds (non-AniList franchises)
 // Usage: node scripts/test_cast_images.js
 const path = require("path");
 const quiz = require(path.join(__dirname, "..", "core", "games", "quiz"));
@@ -43,7 +43,7 @@ function validateQ(q, franchise) {
   const stats0 = quiz.portraitCache.stats();
   console.log(`portrait cache before: ${JSON.stringify(stats0)}`);
 
-  // 1+2: two franchises through ONE host session (memo must key per media id)
+ // 1+2: two franchises through ONE host session (memo must key per media id)
   const host = { _anilistCasts: new Map() };
   console.log("\n── rezero (media 21355), 4 image questions ──");
   const rz = await buildBatch("rezero", 21355, 4, host);
@@ -65,7 +65,7 @@ function validateQ(q, franchise) {
   ok(nt.length === 2, "naruto built 2 (memo did NOT leak rezero cast)");
   if (rz[0] && nt[0]) ok(rz[0].asset.url !== nt[0].asset.url, "different franchises -> different assets");
 
-  // 3: disk cache speed on a fresh batch
+ // 3: disk cache speed on a fresh batch
   console.log("\n── second rezero batch (disk-warm) ──");
   const t1 = Date.now();
   const rz2 = [];
@@ -83,7 +83,7 @@ function validateQ(q, franchise) {
   console.log(`portrait cache after: ${JSON.stringify(stats1)}`);
   ok(stats1.portraits >= stats0.portraits + 6, `portraits grew (${stats0.portraits} -> ${stats1.portraits})`);
 
-  // 4: legacy fallback (no anilistId) still works
+ // 4: legacy fallback (no anilistId) still works
   console.log("\n── legacy fallback path (sessionRef=null, wiki buckets) ──");
   const t2 = Date.now();
   const legacy = await quiz.buildImageQuestion("rezero", "Re:Zero", {

@@ -1,6 +1,6 @@
-// ============================================ 
-// 🏦 INVESTMENT PROGRAMS (Fixed Deposits)
-// ============================================ 
+// ============================================
+// INVESTMENT PROGRAMS (Fixed Deposits)
+// ============================================
 
 const economy = require('./economy');
 
@@ -8,7 +8,7 @@ const INVESTMENT_PLANS = {
     'BOND': { name: 'Low-Risk Bond', durationHours: 2, interest: 0.05, minDeposit: 1000, risk: 0 },
     'FUND': { name: 'Balanced Fund', durationHours: 6, interest: 0.15, minDeposit: 5000, risk: 0.02 },
     'GROWTH': { name: 'High-Growth', durationHours: 12, interest: 0.35, minDeposit: 10000, risk: 0.05 },
-    'VENTURE': { name: 'Venture Capital', durationHours: 24, interest: 0.50, minDeposit: 10000, risk: 0.12 } // 💡 Rebalanced 2026-08-17: 25K was above 1K-10K range; 1.8× was above 1.1-1.5× band. Was 12% loss chance, kept.
+    'VENTURE': { name: 'Venture Capital', durationHours: 24, interest: 0.50, minDeposit: 10000, risk: 0.12 } // Rebalanced 25K was above 1K-10K range; 1.8× was above 1.1-1.5× band. Was 12% loss chance, kept.
 };
 
 function startInvestment(userId, planId, amount) {
@@ -18,19 +18,18 @@ function startInvestment(userId, planId, amount) {
     if (!user) return { success: false, message: "❌ User not registered!" };
     if (!plan) return { success: false, message: "❌ Invalid investment plan!" };
 
-    // Validate amount up-front: must be a positive finite number. Previously
-    // passing a non-numeric string would slip past `amount < minDeposit` and
-    // `user.wallet < amount` (because string-vs-number comparisons in JS
-    // coerce to NaN, which is always false), then economy.removeMoney would
-    // silently fail, but the investment would still get pushed to the user's
-    // portfolio - letting them claim free payouts later.
+ // passing a non-numeric string would slip past `amount < minDeposit` and
+ // `user.wallet < amount` (because string-vs-number comparisons in JS
+ // coerce to NaN, which is always false), then economy.removeMoney would
+ // silently fail, but the investment would still get pushed to the user's
+ // portfolio - letting them claim free payouts later.
     const amt = Number(amount);
     if (!Number.isFinite(amt) || amt <= 0) {
         return { success: false, message: "❌ Amount must be a positive number!" };
     }
     const amtInt = Math.floor(amt);
 
-    // ANTI-EXPLOIT: Max 3 active investments
+ // ANTI-EXPLOIT: Max 3 active investments
     if (user.investments && user.investments.length >= 3) {
         return { success: false, message: "❌ You already have 3 active investments! Claim them first." };
     }
@@ -38,21 +37,20 @@ function startInvestment(userId, planId, amount) {
     if (amtInt < plan.minDeposit) return { success: false, message: `❌ Minimum deposit for this plan is ${economy.getZENI()}${plan.minDeposit.toLocaleString()}` };
     if (user.wallet < amtInt) return { success: false, message: "❌ Insufficient funds in wallet!" };
 
-    // ANTI-EXPLOIT: Max 50% of current Zeni
+ // ANTI-EXPLOIT: Max 50% of current Zeni
     const maxAllowed = Math.floor(user.wallet * 0.5);
     if (amtInt > maxAllowed) {
         return { success: false, message: `❌ Risk management: You can only invest up to 50% of your wallet (${economy.getZENI()}${maxAllowed.toLocaleString()}).` };
     }
 
-    // Deduct money
+ // Deduct money
     const deductOk = economy.removeMoney(userId, amtInt, `Invested in ${plan.name}`);
     if (!deductOk) {
-        // Defensive: removeMoney can fail if the wallet dropped between the
-        // check above and now. Don't push the investment if we didn't pay.
+ // Defensive: removeMoney can fail if the wallet dropped between the
+ // check above and now. Don't push the investment if we didn't pay.
         return { success: false, message: "❌ Failed to deduct funds - your wallet may have changed." };
     }
 
-    // Create investment
     if (!user.investments) user.investments = [];
 
     const investment = {
@@ -76,8 +74,8 @@ function startInvestment(userId, planId, amount) {
 function processMaturedInvestments() {
     const now = Date.now();
     const results = [];
-    // This logic usually runs in a cron/interval
-    // For now, let's provide a function that a user can call to 'claim'
+ // This logic usually runs in a cron/interval
+ // For now, let's provide a function that a user can call to 'claim'
 }
 
 function claimInvestment(userId) {
@@ -92,7 +90,7 @@ function claimInvestment(userId) {
     
     user.investments.forEach(inv => {
         if (now >= inv.endTime) {
-            // Check risk
+ // Check risk
             const roll = Math.random();
             if (roll < (inv.risk || 0)) {
                 totalLoss += inv.amount;
@@ -113,8 +111,8 @@ function claimInvestment(userId) {
     let msg = `📊 *CLAIM SUMMARY*\n\n`;
     
     if (totalPayout > 0) {
-        // 💡 P4 Item 18 fix (2026-08-17): 10% economy tax on investment payouts
-        // (genuine sink, same as P2P transfer + market sales).
+ // P4 Item 18 fix: 10% economy tax on investment payouts
+ // (genuine sink, same as P2P transfer + market sales).
         const tax = Math.floor(totalPayout * 0.10);
         const netPayout = totalPayout - tax;
         economy.addMoney(userId, netPayout, "Matured Investment Payout (after 10% tax)");

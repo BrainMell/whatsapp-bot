@@ -19,7 +19,7 @@ class AdaptiveProcessor {
         
         console.log(`📦 Adaptive Processor initialized (Batch: ${this.batchSize}, Timeout: ${this.timeoutSec}s)`);
 
-        // Start processing loop
+ // Start processing loop
         setInterval(() => this.checkBatch(), 5000); // Check every 5s
     }
 
@@ -54,16 +54,16 @@ class AdaptiveProcessor {
         this.lastProcessTime = Date.now();
 
         try {
-            // 1. Merge contexts into one conversation string
+ // 1. Merge contexts into one conversation string
             const mergedContext = this.mergeContexts(currentBatch);
 
-            // 2. Build prompt
+ // 2. Build prompt
             const prompt = promptBuilder.buildPrompt(mergedContext, currentBatch);
 
-            // 3. Call Groq
+ // 3. Call Groq
             const result = await groqClient.extract(prompt);
 
-            // 4. Send to storage
+ // 4. Send to storage
             if (result && this.apiCallback) {
                 await this.apiCallback(result, currentBatch);
             }

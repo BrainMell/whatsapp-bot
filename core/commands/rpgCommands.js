@@ -1,6 +1,6 @@
-// ============================================ 
-// 👤 CHARACTER & RPG COMMANDS 
-// ============================================ 
+// ============================================
+// CHARACTER & RPG COMMANDS
+// ============================================
 
 const progression = require('../rpg/progression');
 const inventorySystem = require('../rpg/inventorySystem');
@@ -9,16 +9,16 @@ const craftingSystem = require('../rpg/craftingSystem');
 const economy = require('../rpg/economy');
 const classSystem = require('../rpg/classSystem');
 const botConfig = require('../../botConfig');
-const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
+const goService = require('../utils/goImageService'); // singleton (PERF PATCH )
 const fs = require('fs');
 const profileHelper = require('../utils/profileHelper');
-const { fetchPfp: fetchPfpCached } = require('../utils/pfpCache'); // 💡 PERF PATCH 2026-07-27: cached + 8s-timeout PFP fetcher
-// 💡 Visual Overhaul: node-canvas profile card renderer
+const { fetchPfp: fetchPfpCached } = require('../utils/pfpCache'); // PERF PATCH cached + 8s-timeout PFP fetcher
+// Visual Overhaul: node-canvas profile card renderer
 const profileCardRenderer = require('../rpg/profileCardRenderer');
 
 const getPrefix = () => botConfig.getPrefix();
 
-// 💡 OWNER RULE 2026-09-11: cards show "[guild title] of [guild name]" -
+// OWNER RULE cards show "[guild title] of [guild name]" -
 // custom guild title, else the member's guild role; empty when no guild.
 function safeGuildInfo(jid) {
   try { return require('../rpg/guilds').getCardGuildInfo(jid) || { name: '', title: '' }; }
@@ -27,12 +27,12 @@ function safeGuildInfo(jid) {
 const getCurrency = () => botConfig.getCurrency();
 
 // ==========================================
-// 💀 KILL COUNT - .j kills
-//    Owner request (2026-09-20): the stat existed forever (user.stats.kills,
-//    incremented in recordEnemyKill on every dungeon/abyss/boss kill and
-//    required by DOOMSLAYER ascension at 500) but there was NO way to view
-//    it. This is the player-facing tally. Text-only by design: it is a
-//    ledger line, not an event card.
+// KILL COUNT - .j kills
+// Owner request: the stat existed forever (user.stats.kills,
+// incremented in recordEnemyKill on every dungeon/abyss/boss kill and
+// required by DOOMSLAYER ascension at 500) but there was NO way to view
+// it. This is the player-facing tally. Text-only by design: it is a
+// ledger line, not an event card.
 // ==========================================
 async function displayKills(sock, chatId, senderJid) {
     const user = economy.getUser(senderJid);
@@ -54,7 +54,7 @@ async function displayKills(sock, chatId, senderJid) {
     msg += `🦴 Undead Slain: *${undead.toLocaleString()}*\n`;
     msg += `🗡️ PvP Wins: *${pvpWins.toLocaleString()}*\n`;
     msg += `━━━━━━━━━━━━━━━\n`;
-    // Ascension context - the count is not just vanity, it gates classes.
+ // Ascension context - the count is not just vanity, it gates classes.
     if (totalKills < 500) {
         msg += `\n_${totalKills.toLocaleString()}/500 kills toward the next trial that demands blood._`;
     } else {
@@ -64,15 +64,15 @@ async function displayKills(sock, chatId, senderJid) {
 }
 
 // ==========================================
-// 📊 CHARACTER SHEET
+// CHARACTER SHEET
 // ==========================================
 
 async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     inventorySystem.repairUserEquipmentStats(senderJid);
-    // 💡 FIX 2026-10-03 (owner "Adventurer" class bug): custom classes live in
-    // the DB and are rehydrated async at boot - profile renders must wait for
-    // that load (memoized, instant after the first call) before resolving the
-    // player's class, or mod-created classes render as "Adventurer".
+ // FIX (owner "Adventurer" class bug): custom classes live in
+ // the DB and are rehydrated async at boot - profile renders must wait for
+ // that load (memoized, instant after the first call) before resolving the
+ // player's class, or mod-created classes render as "Adventurer".
     try { await classSystem.ensureCustomClassesLoaded(); } catch (e) { /* non-fatal */ }
     const sheet = progression.getCharacterSheet(senderJid);
     const economyUser = economy.getUser(senderJid);
@@ -83,9 +83,9 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
         });
         return;
     }
-    // Self-heal legacy documents: class stored as an object, or a classless
-    // account that never got its starter roll (initializeClass used to run
-    // only on shop/profile-card paths, so ".j char" kept showing Adventurer).
+ // Self-heal legacy documents: class stored as an object, or a classless
+ // account that never got its starter roll (initializeClass used to run
+ // only on shop/profile-card paths, so ".j char" kept showing Adventurer).
     if (economyUser.class && typeof economyUser.class === 'object') {
         economyUser.class = economyUser.class.id || economyUser.class.name || null;
         economy.saveUser(senderJid);
@@ -93,8 +93,8 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     if (!economyUser.class) {
         try { economy.initializeClass(senderJid); } catch (e) { /* non-fatal */ }
     }
-    // 💡 TUTORIAL: the sheet was opened - advance the tutorial's stats step
-    // (no-op unless a tutorial session is active).
+ // TUTORIAL: the sheet was opened - advance the tutorial's stats step
+ // (no-op unless a tutorial session is active).
     try { require('../rpg/tutorial').notify(senderJid, 'char', { sock, chatId }).catch(() => {}); } catch (e) { /* non-fatal */ }
     
     const classData = classSystem.getClassById(sheet.class);
@@ -102,11 +102,11 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     const equipment = inventorySystem.getEquipment(senderJid);
     const equipStats = inventorySystem.getEquipmentStats(senderJid);
     
-    // Handle PFP
-    // 💡 PERF PATCH 2026-07-27: replaced inline 8s timeout + raw
-    // sock.profilePictureUrl() call with the shared pfpCache helper.
-    // Behaviour preserved (8s timeout, returns null on failure) PLUS
-    // 5min positive cache + 60s negative cache + in-flight de-dup.
+ // Handle PFP
+ // PERF PATCH replaced inline 8s timeout + raw
+ // sock.profilePictureUrl() call with the shared pfpCache helper.
+ // Behaviour preserved (8s timeout, returns null on failure) PLUS
+ // 5min positive cache + 60s negative cache + in-flight de-dup.
     let pfpUrl;
     try {
         pfpUrl = await fetchPfpCached(sock, senderJid);
@@ -115,10 +115,10 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
         pfpUrl = null;
     }
 
-    // 💡 Visual Overhaul: Try node-canvas profile card FIRST (new design).
-    // Falls back to Go service → text if canvas isn't available.
+ // Visual Overhaul: Try node-canvas profile card FIRST (new design).
+ // Falls back to Go service → text if canvas isn't available.
     try {
-        // Fetch active summon(s) for the card
+ // Fetch active summon(s) for the card
         let activeSummon = null;
         try {
             const summonSystem = require('../rpg/summonSystem');
@@ -142,7 +142,7 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
             console.warn('[displayCharacterSheet] Failed to fetch active summon:', summonErr.message);
         }
 
-        // Fetch PFP as buffer (download if URL available)
+ // Fetch PFP as buffer (download if URL available)
         let pfpBuffer = null;
         if (pfpUrl) {
           try {
@@ -159,26 +159,26 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
           stats,
           equipStats,
           equipment,
-          // 💡 SILVER VEIL: level renders as "??" when the charm is active
+ // SILVER VEIL: level renders as "??" when the charm is active
           level: economy.displayLevel(senderJid, sheet?.level) ?? '??',
           rank: sheet?.adventurerRank || 'F',
           xpPercent: sheet?.progressPercent || 0,
-          // 💡 Owner rule 2026-09-14: cards show the XP requirement itself,
-          // not just a percentage ("42% · 12.4K/29.6K")
+ // Owner rule cards show the XP requirement itself,
+ // not just a percentage ("42% · 12.4K/29.6K")
           xpCurrent: sheet?.xpProgress || 0,
           xpNeeded: sheet?.xpForThisLevel || 0,
           activeSummon,
           pfpBuffer,
           prefix: getPrefix(),
-          // 💡 card styles: player-chosen design + guild title/name line (only if in a guild)
+ // card styles: player-chosen design + guild title/name line (only if in a guild)
           style: economyUser.cardStyle,
           guildName: _guildCard.name,
           guildTitle: _guildCard.title
         });
 
         if (cardBuffer && cardBuffer.length > 0) {
-          // 💡 2026-09-15: surface unallocated stat points on the primary
-          // (image) profile output so players discover `.allocate`.
+ // surface unallocated stat points on the primary
+ // (image) profile output so players discover `.allocate`.
           const unallocPts = Number(sheet?.statPoints) || 0;
           const allocHint = unallocPts > 0
             ? `\n\n⚡ *You have ${unallocPts} unallocated stat point${unallocPts === 1 ? '' : 's'}!*\n✨ Use \`${getPrefix()} allocate\` to distribute them.`
@@ -194,7 +194,7 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
         console.error('[displayCharacterSheet] node-canvas profile card failed:', err.message);
     }
 
-    // ── Fallback: Try Go Image Service ──
+ // -- Fallback: Try Go Image Service --
     try {
         const cardData = await profileHelper.buildCardData(senderJid, senderName, pfpUrl);
         if (cardData) {
@@ -205,8 +205,8 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
                 captionMsg += `⭐ *Level:* ${sheet?.level || 1}  |  🏆 *Rank:* ${cardData.rank}\n`;
                 captionMsg += `💰 *Zeni:* ${getCurrency().symbol}${(economyUser?.wallet || 0).toLocaleString()}\n\n`;
                 captionMsg += `*STATS:*\n`;
-                // 💡 PERSISTENT HP SYSTEM (2026-07-31): Show current/max HP.
-                // If currentHP < maxHP, show in red/warning format.
+ // PERSISTENT HP SYSTEM: Show current/max HP.
+ // If currentHP < maxHP, show in red/warning format.
                 const maxHP = stats?.hp || 100;
                 const currentHP = economy.getPersistentHP(senderJid, maxHP);
                 const hpDisplay = currentHP < maxHP
@@ -217,8 +217,8 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
                 captionMsg += `💨 SPD: ${stats?.spd || 10}${equipStats?.spd ? `+${equipStats.spd}` : ''}  |  🍀 LCK: ${stats?.luck || 10}${equipStats?.luck ? `+${equipStats.luck}` : ''}\n`;
                 captionMsg += `💥 CRIT: ${stats?.crit || 0}%  |  🕊️ EVA: ${(stats?.evasion || 0).toFixed(1)}%\n`;
                 
-                // Gear list - name + rarity mark + critical durability warning only
-                // (Full durability bar renders in the profile image card via durXxx fields in cardData)
+ // Gear list - name + rarity mark + critical durability warning only
+ // (Full durability bar renders in the profile image card via durXxx fields in cardData)
                 captionMsg += `\n*GEAR:*\n`;
                 const captionEquipped = [];
                 if (equipment) {
@@ -234,13 +234,13 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
                                     else if (pct < 50) condLabel = ` 🟠 ${pct}%`;
                                 }
                                 const RARITY_MARK = { UNCOMMON: ' ✦', RARE: ' ✦✦', EPIC: ' ✦✦✦', LEGENDARY: ' ★', MYTHIC: ' ★★' };
-                                // 💡 BUG-05 fix: read INSTANCE rarity (item.rarity) first, fall back to
-                                // DB rarity (itemInfo.rarity). The old code read only itemInfo.rarity,
-                                // so an instance-rolled Mythic weapon displayed as Uncommon (the DB default).
+ // BUG-05 fix: read INSTANCE rarity (item.rarity) first, fall back to
+ // DB rarity (itemInfo.rarity). The old code read only itemInfo.rarity,
+ // so an instance-rolled Mythic weapon displayed as Uncommon (the DB default).
                                 const itemRarity = (item.rarity || itemInfo.rarity || 'COMMON').toUpperCase();
                                 const rarityMark = RARITY_MARK[itemRarity] || '';
                                 const slotName = slot.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-                                // 💡 Also use item.name (preserves enhancement prefix like "+5 Iron Sword")
+ // Also use item.name (preserves enhancement prefix like "+5 Iron Sword")
                                 const displayName = item.name || itemInfo.name;
                                 captionEquipped.push(`${getSlotIcon(slot)} *${slotName}:* ${displayName}${rarityMark}${condLabel}`);
                             }
@@ -271,19 +271,19 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
 
     let msg = `👤 PROFILE\n\n`;
     
-    // Basic info
+ // Basic info
     msg += `🎭 *${senderName}*\n`;
     msg += `${classData?.icon || '🛡️'} ${classData?.name || 'Adventurer'} | 🏆 ${sheet?.adventurerRank || 'F'}-Rank\n`;
     msg += `⭐ Level ${sheet?.level || 1} | 💰 ${getCurrency().symbol}${(economyUser?.wallet || 0).toLocaleString()}\n\n`;
     
-    // XP Progress
+ // XP Progress
     const progressBar = createProgressBar(sheet?.progressPercent || 0);
     msg += `📈 ${progressBar} ${sheet?.progressPercent || 0}%\n`;
     msg += `${(sheet?.xpProgress || 0).toLocaleString()}/${(sheet?.xpForThisLevel || 100).toLocaleString()} XP\n\n`;
     
-    // Stats (compact 2-column)
+ // Stats (compact 2-column)
     msg += `*STATS:*\n`;
-    // 💡 PERSISTENT HP: show current/max HP
+ // PERSISTENT HP: show current/max HP
     const maxHP2 = stats?.hp || 100;
     const currentHP2 = economy.getPersistentHP(senderJid, maxHP2);
     const hpStr2 = currentHP2 < maxHP2
@@ -294,7 +294,7 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     msg += `💨 SPD:${stats?.spd || 10}${equipStats?.spd ? `+${equipStats.spd}` : ''} 🍀 LCK:${stats?.luck || 10}${equipStats?.luck ? `+${equipStats.luck}` : ''}\n`;
     msg += `💥 CRIT:${stats?.crit || 0}% | 🕊️ EVA:${(stats?.evasion || 0).toFixed(1)}%\n`;
     
-    // Stat points - always visible so players know the feature exists
+ // Stat points - always visible so players know the feature exists
     const statPts = sheet?.statPoints || 0;
     if (statPts > 0) {
         msg += `\n⚡ *You have ${statPts} unallocated stat point${statPts === 1 ? '' : 's'}!*\n`;
@@ -304,7 +304,7 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
         msg += `\n🔹 *Stat Points:* 0 _(earn more by leveling up)_\n`;
     }
     
-    // Equipment summary
+ // Equipment summary
     msg += `\n*GEAR:*\n`;
     const equipped = [];
     if (equipment) {
@@ -322,7 +322,7 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
                         durStr = ` (${block.repeat(filled)}${'⬜'.repeat(5 - filled)} ${pct}%)`;
                     }
                     const slotName = slot.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-                    // 💡 BUG-05 fix: use instance name (preserves enhancement prefix)
+ // BUG-05 fix: use instance name (preserves enhancement prefix)
                     const displayName = item.name || itemInfo.name;
                     equipped.push(`• ${getSlotIcon(slot)} *${slotName}:* ${displayName}${durStr}`);
                 }
@@ -365,9 +365,9 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     }
 }
 
-// ========================================== 
-// 📦 INVENTORY DISPLAY 
-// ========================================== 
+// ==========================================
+// INVENTORY DISPLAY
+// ==========================================
 
 async function displayInventory(sock, chatId, senderJid, page = 1) {
   inventorySystem.repairUserEquipmentStats(senderJid);
@@ -393,7 +393,7 @@ async function displayInventory(sock, chatId, senderJid, page = 1) {
     });
   }
 
-  // Build flat ordered list
+ // Build flat ordered list
   const orderedItems = [];
   const rarityGroups = {};
   for (const item of formatted.items) {
@@ -433,7 +433,7 @@ async function displayInventory(sock, chatId, senderJid, page = 1) {
     if (isEquipped) msg += ` ✅`;
     msg += `\n`;
 
-    // Stat delta (equipment only, compact)
+ // Stat delta (equipment only, compact)
     if (item.type === 'EQUIPMENT' && !isEquipped && item.stats) {
       const slot = item.slot;
       const equippedInSlot = equipment[slot];
@@ -446,12 +446,12 @@ async function displayInventory(sock, chatId, senderJid, page = 1) {
         }
         if (parts.length) statLine = `  📊 ${parts.join(' ')}\n`;
       } else {
-        // 💡 AUDIT FIX 2026-08-01: negative stats were displayed as "SPD+-10"
-        // (the literal string "+" followed by the negative number). The
-        // filter `[,v]) => v` correctly excludes 0 but the template
-        // `${s.toUpperCase()}+${v}` always prepends "+", producing ugly
-        // output like "SPD+-10". Now: filter on `v !== 0`, and only show
-        // "+" for positive values - negative values show "SPD-10" naturally.
+ // AUDIT FIX negative stats were displayed as "SPD+-10"
+ // (the literal string "+" followed by the negative number). The
+ // filter `[,v]) => v` correctly excludes 0 but the template
+ // `${s.toUpperCase()}+${v}` always prepends "+", producing ugly
+ // output like "SPD+-10". Now: filter on `v !== 0`, and only show
+ // "+" for positive values - negative values show "SPD-10" naturally.
         const parts = Object.entries(item.stats)
           .filter(([,v]) => v !== 0)
           .map(([s, v]) => `${s.toUpperCase()}${v > 0 ? '+' : ''}${v}`);
@@ -464,16 +464,16 @@ async function displayInventory(sock, chatId, senderJid, page = 1) {
   msg += `\n━━━━━━━━━━━━━━━\n`;
   msg += `💡 Page: \`${botConfig.getPrefix()} bag <p>\`  •  Equip: \`${botConfig.getPrefix()} equip <#>\`\n`;
   msg += `💰 Sell: \`${botConfig.getPrefix()} sell <#> [qty]\`  •  Use: \`${botConfig.getPrefix()} use <#>\`\n`;
-  // 🧳 2026-10-17: players didn't know the upgrade prompt ("what's the prompt
-  // to upgrade inventory") — surface it on every bag view.
+ // players didn't know the upgrade prompt ("what's the prompt
+ // to upgrade inventory") - surface it on every bag view.
   msg += `📦 Expand: \`${botConfig.getPrefix()} upgrade bag\` (+5 slots)`;
 
   await sock.sendMessage(chatId, { text: msg });
 }
 
-// ========================================== 
-// 💪 ALLOCATE STATS 
-// ========================================== 
+// ==========================================
+// ALLOCATE STATS
+// ==========================================
 
 async function allocateStats(sock, chatId, senderJid, stat, amount = 1) { 
     const result = progression.allocateStatPoint(senderJid, stat.toLowerCase(), amount);
@@ -495,9 +495,9 @@ async function allocateStats(sock, chatId, senderJid, stat, amount = 1) {
     await sock.sendMessage(chatId, { text: msg });
 }
 
-// ========================================== 
-// 🔄 RESET STATS 
-// ========================================== 
+// ==========================================
+// RESET STATS
+// ==========================================
 
 async function resetStats(sock, chatId, senderJid) { 
     const RESET_COST = 5000;
@@ -518,9 +518,9 @@ async function resetStats(sock, chatId, senderJid) {
     });
 }
 
-// ========================================== 
-// 🏆 LEADERBOARD 
-// ========================================== 
+// ==========================================
+// LEADERBOARD
+// ==========================================
 
 async function displayLeaderboard(sock, chatId, type = 'level') { 
     const leaderboard = progression.getLeaderboard(type, 10);
@@ -559,9 +559,9 @@ async function displayLeaderboard(sock, chatId, type = 'level') {
     await sock.sendMessage(chatId, { text: msg });
 }
 
-// ========================================== 
-// 📦 SELL ITEM 
-// ========================================== 
+// ==========================================
+// SELL ITEM
+// ==========================================
 
 async function sellItem(sock, chatId, senderJid, itemId, quantity = 1) { 
     let targetItemId = itemId;
@@ -594,14 +594,14 @@ async function sellItem(sock, chatId, senderJid, itemId, quantity = 1) {
     if (result.remaining > 0) msg += `📦 Remaining: ${result.remaining}`;
     
     await sock.sendMessage(chatId, { text: msg });
-    // 💡 Phase B TUTORIAL: selling lesson advances on a REAL sale
-    // (no-op unless a tutorial session is active).
+ // Phase B TUTORIAL: selling lesson advances on a REAL sale
+ // (no-op unless a tutorial session is active).
     try { require('../rpg/tutorial').notify(senderJid, 'sell', { sock, chatId }).catch(() => {}); } catch (e) {}
 }
 
-// ========================================== 
-// 🎁 UPGRADE INVENTORY 
-// ========================================== 
+// ==========================================
+// UPGRADE INVENTORY
+// ==========================================
 
 async function upgradeInventory(sock, chatId, senderJid) { 
     const result = inventorySystem.upgradeInventory(senderJid);
@@ -619,9 +619,9 @@ async function upgradeInventory(sock, chatId, senderJid) {
     await sock.sendMessage(chatId, { text: msg });
 }
 
-// ========================================== 
-// ⚔️ EQUIPMENT COMMANDS 
-// ========================================== 
+// ==========================================
+// EQUIPMENT COMMANDS
+// ==========================================
 
 async function equipItem(sock, chatId, senderJid, itemId, slot) { 
     const equipment = inventorySystem.getEquipment(senderJid);
@@ -642,7 +642,7 @@ async function equipItem(sock, chatId, senderJid, itemId, slot) {
                 const curDur = item.durability !== undefined ? item.durability : maxDur;
                 const durStr = `⚙️ ${Math.ceil(curDur)}/${maxDur}`;
                 const brokenStr = durabilitySystem.isBroken(item) ? " 💔 *[BROKEN]*" : "";
-                // 💡 BUG-05 fix: use instance name (preserves enhancement prefix)
+ // BUG-05 fix: use instance name (preserves enhancement prefix)
                 const displayName = item.name || itemInfo.name;
                 msg += `${icon} *${title}*: ${displayName}${brokenStr} · ${durStr} · \`${item.id}\`\n`;
             } else { 
@@ -678,8 +678,8 @@ async function equipItem(sock, chatId, senderJid, itemId, slot) {
         ? ` (⚙️ ${equippedInstance.durability}/${equippedInstance.maxDurability})`
         : "";
     await sock.sendMessage(chatId, { text: `✅ Equipped *${itemInfo.name}* to *${result.slot}* slot!${durStr}` });
-    // 💡 TUTORIAL: gear step done - the practice fight fires next
-    // (no-op unless a tutorial session is active).
+ // TUTORIAL: gear step done - the practice fight fires next
+ // (no-op unless a tutorial session is active).
     try { require('../rpg/tutorial').notify(senderJid, 'equip', { sock, chatId }).catch(() => {}); } catch (e) { /* non-fatal */ }
 }
 
@@ -699,12 +699,12 @@ async function unequipItem(sock, chatId, senderJid, slot) {
     await sock.sendMessage(chatId, { text: `✅ Unequipped ${itemInfo.name} from *${result.slot}* slot.` });
 }
 
-// ========================================== 
-// 🛠️ HELPER FUNCTIONS 
-// ========================================== 
+// ==========================================
+// HELPER FUNCTIONS
+// ==========================================
 
 function createProgressBar(percent, length = 10) {
-    // Safeguard against NaN or non-finite values
+ // Safeguard against NaN or non-finite values
     const validPercent = isFinite(percent) ? percent : 0;
     const safePercent = Math.max(0, Math.min(100, validPercent));
     const filled = Math.floor((safePercent / 100) * length);
@@ -721,19 +721,19 @@ function getSlotIcon(slot) {
     return icons[slot] || '📦';
 }
 
-// ========================================== 
-// 🛠️ CRAFTING & BREWING COMMANDS 
-// ========================================== 
+// ==========================================
+// CRAFTING & BREWING COMMANDS
+// ==========================================
 
-// ── CRAFT-MENU SHOP PARITY (owner side-note: ".jk craft should have the same
-// look and all the functionality of the regular shop for easy navigation") ──
+// -- CRAFT-MENU SHOP PARITY (owner side-note: ".jk craft should have the same
+// look and all the functionality of the regular shop for easy navigation") --
 // The crafting menu now behaves like displayShop:
-//   • numbered entries → `.craft <#>` crafts from the LIST YOU ARE LOOKING AT
-//     (remembered per chat, 10-min TTL — identical to the shop's `.buy <#>`)
-//   • category navigation + rank filter + search, same grammar as the shop
-//   • rarity icons match the shop's icon set
-//   • affordability marks (have/need) per ingredient — the craft equivalent
-//     of the shop's price line
+// • numbered entries → `.craft <#>` crafts from the LIST YOU ARE LOOKING AT
+// (remembered per chat, 10-min TTL - identical to the shop's `.buy <#>`)
+// • category navigation + rank filter + search, same grammar as the shop
+// • rarity icons match the shop's icon set
+// • affordability marks (have/need) per ingredient - the craft equivalent
+// of the shop's price line
 const RARITY_ICONS_CRAFT = { COMMON: '⚪', UNCOMMON: '🟢', RARE: '🔵', EPIC: '🟣', LEGENDARY: '🟠', MYTHIC: '🔴' };
 const RANK_ALIASES_CRAFT = {
     common: 'COMMON', commons: 'COMMON',
@@ -748,10 +748,10 @@ const CRAFT_LIST_TTL_MS = 10 * 60 * 1000;
 const STATION_KEYWORDS = new Set(['forge', 'brew', 'brewing', 'cook', 'cooking', 'craft', 'all']);
 
 function rememberCraftList(chatId, list, senderJid) {
-    // 2026-10-17: keyed per (chat, sender). The old chatId-only key let two
-    // players browsing different pages in the same group overwrite each
-    // other's menus for up to 10 minutes — `.craft 4` then crafted from
-    // someone else's page ("I have the item to craft but it doesn't work").
+ // keyed per (chat, sender). The old chatId-only key let two
+ // players browsing different pages in the same group overwrite each
+ // other's menus for up to 10 minutes - `.craft 4` then crafted from
+ // someone else's page ("I have the item to craft but it doesn't work").
     const key = senderJid ? `${chatId}|${senderJid}` : chatId;
     _lastCraftList.set(key, { list, expiresAt: Date.now() + CRAFT_LIST_TTL_MS });
     if (_lastCraftList.size > 500) {
@@ -813,8 +813,8 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
         });
     }
 
-    // 💡 FIX 2026-08-03 (bug report #8): Sort by RARITY first (Mythic → Common),
-    // then by reqLevel (lowest first), then alphabetically.
+ // FIX (bug report #8): Sort by RARITY first (Mythic → Common),
+ // then by reqLevel (lowest first), then alphabetically.
     const RARITY_ORDER = ['MYTHIC', 'LEGENDARY', 'EPIC', 'RARE', 'UNCOMMON', 'COMMON'];
     recipes.sort((a, b) => {
         const aInfo = lootSystem.getItemInfo(a.id) || {};
@@ -826,10 +826,10 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
         const aR = aRarityIdx === -1 ? RARITY_ORDER.length : aRarityIdx;
         const bR = bRarityIdx === -1 ? RARITY_ORDER.length : bRarityIdx;
 
-        // Primary: rarity (Mythic first)
+ // Primary: rarity (Mythic first)
         if (aR !== bR) return aR - bR;
 
-        // Secondary: reqLevel (lowest first)
+ // Secondary: reqLevel (lowest first)
         const aLvl = aInfo.reqLevel;
         const bLvl = bInfo.reqLevel;
         if (aLvl === undefined && bLvl === undefined) return a.name.localeCompare(b.name);
@@ -837,7 +837,7 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
         if (bLvl === undefined) return 1;
         if (aLvl !== bLvl) return aLvl - bLvl;
 
-        // Tertiary: alphabetical
+ // Tertiary: alphabetical
         return a.name.localeCompare(b.name);
     });
 
@@ -852,7 +852,7 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
     const p = getPrefix();
     const rankTag = rank ? ` • ${RARITY_ICONS_CRAFT[rank] || '⚪'} ${rank}` : '';
 
-    // player inventory for affordability marks (shop-parity: the price line)
+ // player inventory for affordability marks (shop-parity: the price line)
     let invCounts = null;
     try {
         const inv = inventorySystem.getInventory(senderJid || senderJidOf(chatId, sock) || chatId);
@@ -879,7 +879,7 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
         const rarityEmoji = RARITY_ICONS_CRAFT[(info.rarity || 'COMMON').toUpperCase()] || '⚪';
         const lvlStr = info.reqLevel !== undefined ? ` · Lvl ${info.reqLevel}` : '';
 
-        // affordability: ✔ when stocked, ✘ with have/need when short
+ // affordability: when stocked, with have/need when short
         const ingredients = Object.entries(r.ingredients).map(([id, qty]) => {
             const ingInfo = lootSystem.getItemInfo(id);
             const have = invCounts ? (invCounts.get(id) || 0) : null;
@@ -887,9 +887,9 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
             return `${have >= qty ? '✔' : '✘'} ${qty}x ${ingInfo?.name || id}${have >= qty ? '' : ` (${have}/${qty})`}`;
         }).join(', ');
 
-        // 2026-10-17: show the Zeni cost — it used to be invisible until the
-        // craft failed on it (EPIC=25k, LEGENDARY=100k, MYTHIC=250k), reading
-        // to players as "I have everything, why won't it craft?"
+ // show the Zeni cost - it used to be invisible until the
+ // craft failed on it (EPIC=25k, LEGENDARY=100k, MYTHIC=250k), reading
+ // to players as "I have everything, why won't it craft?"
         const zeniCost = craftingSystem.getRecipeGoldCost(r);
         const zeniStr = zeniCost > 0 ? `\n   💸 ${zeniCost.toLocaleString()} ${getCurrency().symbol || 'Z'}` : '';
 
@@ -897,15 +897,15 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
         msg += `   🛠️ ${ingredients}${zeniStr}\n`;
     });
 
-    // shop-parity: the menu powers `.craft <#>` — remember EXACTLY what was shown
+ // shop-parity: the menu powers `.craft <#>` - remember EXACTLY what was shown
     rememberCraftList(chatId, pageItems.map(r => ({ ...r, _station: categoryFilter })), senderJid);
 
     msg += `━━━━━━━━━━━━━━━\n`;
     msg += `💡 Craft: \`${p} ${cmdName} <#>\` (numbers from this list) or \`${p} ${cmdName} <id>\` (e.g. \`${p} ${cmdName} ${pageItems[0]?.id || 'refined_steel'}\`)\n`;
     msg += `📖 Page: \`${p} ${cmdName} page ${currentPage + 1 <= totalPages ? currentPage + 1 : 1}\`${searchQuery ? ` • \`${p} ${cmdName} search ${searchQuery} <page>\`` : ''}`;
-    // §9/§10 base-fusion: browsing a STATION opens at that station's building —
-    // BREWING at the alchemy bench, FORGE at the anvil. A menu view is NOT a
-    // craft: the banner says browsing, never a success. Text menu unchanged.
+ // §9/§10 base-fusion: browsing a STATION opens at that station's building -
+ // BREWING at the alchemy bench, FORGE at the anvil. A menu view is NOT a
+ // craft: the banner says browsing, never a success. Text menu unchanged.
     try {
         const _cardOk = (c) => c && c.buffer && c.buffer.length > 500;
         if (categoryFilter === 'BREWING') {
@@ -915,12 +915,12 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
             const c = await require('../rpg/baseBuilder').zoomForCommand({ senderJid, prefix: p }, 'blacksmith', { activity: 'browse', banner: { head: 'FORGE READY', lines: ['Recipes from the smithy ledger', `Forge with \`${p} forge <item>\``] } });
             if (_cardOk(c)) return void await sock.sendMessage(chatId, { image: c.buffer, caption: msg });
         }
-    } catch (e) { /* card is a garnish — the menu always ships */ }
+    } catch (e) { /* card is a garnish - the menu always ships */ }
     await sock.sendMessage(chatId, { text: msg });
 }
 
 // the menu's affordability marks need the VIEWER's jid; displayRecipes only
-// receives chatId — resolve the sender for DMs (chatId === jid), best-effort.
+// receives chatId - resolve the sender for DMs (chatId === jid), best-effort.
 function senderJidOf(chatId, sock) {
     if (chatId && chatId.endsWith('@s.whatsapp.net')) return chatId;
     return null;
@@ -933,15 +933,15 @@ async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CR
 
     const input = recipeId.trim();
 
-    // 🏪 SHOP PARITY: ".craft page <n>" pages (old bare-number behavior kept
-    // reachable), ".craft <rank>" filters, ".craft <#>" crafts from the list
-    // currently shown in this chat — exactly how ".shop"/".buy <#>" behave.
+ // SHOP PARITY: ".craft page <n>" pages (old bare-number behavior kept
+ // reachable), ".craft <rank>" filters, ".craft <#>" crafts from the list
+ // currently shown in this chat - exactly how ".shop"/".buy <#>" behave.
     const pageMatch = input.match(/^page\s+(\d+)$/i);
     if (pageMatch) {
         return displayRecipes(sock, chatId, parseInt(pageMatch[1]), categoryFilter, null, null, senderJid);
     }
 
-    // rank keyword anywhere in the args → filtered view (".craft forge epic")
+ // rank keyword anywhere in the args → filtered view (".craft forge epic")
     const { rank, rest } = parseCraftArgs(input);
     if (rank && (!rest || STATION_KEYWORDS.has(rest.toLowerCase()))) {
         const station = rest ? rest.toLowerCase() : categoryFilter;
@@ -952,8 +952,7 @@ async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CR
         return displayRecipes(sock, chatId, 1, categoryFilter, null, null, senderJid);
     }
 
-    // Check if input is pagination page number — ONLY when no remembered
-    // menu exists for this chat+sender (with a menu on screen, numbers craft).
+ // menu exists for this chat+sender (with a menu on screen, numbers craft).
     if (/^\d+$/.test(input)) {
         const remembered = getRememberedCraftList(chatId, senderJid);
         if (remembered) {
@@ -967,7 +966,6 @@ async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CR
         return displayRecipes(sock, chatId, parseInt(input), categoryFilter, null, null, senderJid);
     }
 
-    // Check if input is search
     const searchMatch = input.match(/^search\s+(.+)$/i);
     if (searchMatch) {
         const queryStr = searchMatch[1].trim();
@@ -983,13 +981,13 @@ async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CR
         return displayRecipes(sock, chatId, page, categoryFilter, searchQuery, null, senderJid);
     }
     
-    // Normal crafting execution
+ // Normal crafting execution
     const result = await craftingSystem.performCraft(senderJid, input.toLowerCase(), categoryFilter);
     if (result.success) {
         try {
             const recipe = result.recipe;
             const economyUser = economy.getUser(senderJid) || {};
-            // 💡 PERF PATCH 2026-07-27: cached + 8s timeout (was no timeout, could hit 90s global)
+ // PERF PATCH cached + 8s timeout (was no timeout, could hit 90s global)
             const pfpUrl = await fetchPfpCached(sock, senderJid);
             const nickname = economyUser.nickname || economy.getDisplayName(senderJid);
             const currency = getCurrency();
@@ -1019,8 +1017,8 @@ async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CR
             } else {
                 throw new Error("No image buffer returned");
             }
-            // 💡 2026-09-20: craft lore drops ride out-of-band on
-            // result.loreDrop and arrive as their own message box.
+ // craft lore drops ride out-of-band on
+ // result.loreDrop and arrive as their own message box.
             if (result.loreDrop) {
                 try {
                     const loreDrops = require('../rpg/loreDrops');
@@ -1029,7 +1027,7 @@ async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CR
             }
         } catch (e) {
             console.error("Failed to generate crafting image card:", e.message);
-            // Fallback to text message
+ // Fallback to text message
             await sock.sendMessage(chatId, { text: result.message });
             if (result.loreDrop) {
                 try {
@@ -1057,34 +1055,34 @@ async function dismantleItem(sock, chatId, senderJid, input) {
     const result = await craftingSystem.dismantleItem(senderJid, targetItemId);
     await sock.sendMessage(chatId, { text: result.message });
 }
-// ========================================== 
-// ⛏️ MINING SYSTEM 
-// ========================================== 
+// ==========================================
+// MINING SYSTEM
+// ==========================================
 
 async function mineOre(sock, chatId, senderJid, locationId) { 
     const sheet = progression.getCharacterSheet(senderJid);
     if (!sheet) return await sock.sendMessage(chatId, { text: `❌ Register first!` });
 
     const locations = craftingSystem.getMiningLocations();
-    // §12 (owner spec 2026-10-21): the Mines BUILDING level is the mining
-    // level — the separate mining profession is retired (stored data left
-    // untouched). No base = Mines Lv.1 (the fixed zone exists for everyone).
+ // §12 (owner spec ): the Mines BUILDING level is the mining
+ // level - the separate mining profession is retired (stored data left
+ // untouched). No base = Mines Lv.1 (the fixed zone exists for everyone).
     const _bb = require('../rpg/baseBuilder');
     const minesLvl = Math.max(1, await _bb.getStructureLevel(senderJid, 'mines'));
     const minesMult = [1, 1.25, 1.5][minesLvl - 1] || 1;
     const minesDisc = [0, 3, 6, 9][minesLvl] || 0; // percentage points off energy
-    // ⚔️ OWNER FIX (2026-10-05 "energy never gets finished"): the pool scales
-    // to 1000+ (100 + 15/level + 3×MAG) while costs were FLAT (15-60) with a
-    // mining-level discount flooring at 5 — and the 25% recovery roll (8-22)
-    // often EXCEEDED the discounted cost, so endgame mining could never run
-    // the bar dry. Costs (and the display) now stay PROPORTIONAL to the pool,
-    // preserving the original 15/25/40/60-per-100 balance at every level:
-    // a starting pool of 100 pays exactly the old flat 15.
+ // OWNER FIX ("energy never gets finished"): the pool scales
+ // to 1000+ (100 + 15/level + 3×MAG) while costs were FLAT (15-60) with a
+ // mining-level discount flooring at 5 - and the 25% recovery roll (8-22)
+ // often EXCEEDED the discounted cost, so endgame mining could never run
+ // the bar dry. Costs (and the display) now stay PROPORTIONAL to the pool,
+ // preserving the original 15/25/40/60-per-100 balance at every level:
+ // a starting pool of 100 pays exactly the old flat 15.
     const user = economy.getUser(senderJid);
     const derivedStats = progression.getBaseStats(senderJid, user && user.class);
     const maxEn = derivedStats.maxEnergy || 100;
-    // the discount shrinks the RATE, never below 5% of the pool — otherwise a
-    // maxed profession pays 5 flat energy (0.5% of an endgame pool) forever
+ // the discount shrinks the RATE, never below 5% of the pool - otherwise a
+ // maxed profession pays 5 flat energy (0.5% of an endgame pool) forever
     const pctCost = (loc) => Math.max(5, Math.round(maxEn * Math.max(5, loc.energyCost - minesDisc) / 100));
 
     if (!locationId) { 
@@ -1118,8 +1116,8 @@ async function mineOre(sock, chatId, senderJid, locationId) {
         return await sock.sendMessage(chatId, { text: `❌ *LOCATION LOCKED*\n\nYou need to be Lv.${loc.req.level}, ${loc.req.rank}-Rank, and a Mines Lv.${mineBuildingReq} (\`${getPrefix()} base upgrade mines\`) to enter the ${loc.name}.` });
     }
 
-    // PERSISTENT ENERGY SYSTEM (2026-09-17): mining drains the SAME
-    // canonical pool every other RPG system uses (see economy.getPersistentEnergy).
+ // PERSISTENT ENERGY SYSTEM: mining drains the SAME
+ // canonical pool every other RPG system uses (see economy.getPersistentEnergy).
     const energyCost = pctCost(loc);
     const currentEnergy = economy.getPersistentEnergy(senderJid, maxEn);
 
@@ -1127,12 +1125,12 @@ async function mineOre(sock, chatId, senderJid, locationId) {
 
     const leftAfterMine = Math.max(0, currentEnergy - energyCost);
     economy.setPersistentEnergy(senderJid, leftAfterMine, maxEn);
-    // §12: no more mining-profession XP writes — the Mines building level IS
-    // the progression. Legacy user.professions.mining data stays untouched.
+ // §12: no more mining-profession XP writes - the Mines building level IS
+ // the progression. Legacy user.professions.mining data stays untouched.
 
     if (Math.random() < 0.25) {
-        // ⚔️ recovery is a fraction of the SPEND now — it can never net-gain
-        // energy (the old flat 8-22 could exceed a discounted 5-cost mine).
+ // recovery is a fraction of the SPEND now - it can never net-gain
+ // energy (the old flat 8-22 could exceed a discounted 5-cost mine).
         const energyRecovered = Math.max(1, Math.round(energyCost * 0.25));
         economy.setPersistentEnergy(senderJid, leftAfterMine + energyRecovered, maxEn);
     }
@@ -1157,7 +1155,7 @@ async function mineOre(sock, chatId, senderJid, locationId) {
             roll -= ore.weight;
             if (roll <= 0) {
                 const qty0 = ore.quantity || (Math.floor(Math.random() * (ore.max - ore.min + 1)) + ore.min);
-                // §12: the deeper mine yields more — deterministic rounding
+ // §12: the deeper mine yields more - deterministic rounding
                 const qty = Math.max(1, Math.round(qty0 * minesMult));
                 await inventorySystem.addItem(senderJid, ore.id, qty);
                 found[ore.id] = (found[ore.id] || 0) + qty;
@@ -1170,8 +1168,8 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     if (luckyFinds > 0) msg += `\n💰 *LUCKY FIND!* You found a lost pouch containing ${economy.getZENI()}${luckyFinds.toLocaleString()}!\n`;
     const energyLeft = economy.getPersistentEnergy(senderJid, maxEn);
     msg += `\n⚡ Energy Left: ${energyLeft}/${maxEn} (-${energyCost})\n⛏️ Mines Lv.${minesLvl} · yield ×${minesMult}`;
-    // 🏔️ §12: the result plays on the zoomed-in MINES card with the miner
-    // swinging on the face, the haul as a ribbon — silent text fallback
+ // §12: the result plays on the zoomed-in MINES card with the miner
+ // swinging on the face, the haul as a ribbon - silent text fallback
     try {
         const lines = Object.entries(found).map(([id, qty]) => `${qty}× ${lootSystem.getItemInfo(id).name}`);
         if (luckyFinds > 0) lines.push(`+${luckyFinds.toLocaleString()} ZENI (lucky find)`);
@@ -1182,9 +1180,9 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     await sock.sendMessage(chatId, { text: msg });
 }
 
-// ========================================== 
-// 🔍 SOURCE FINDER 
-// ========================================== 
+// ==========================================
+// SOURCE FINDER
+// ==========================================
 
 async function showItemSource(sock, chatId, itemId) { 
     const miningLocs = craftingSystem.getMiningLocations();
@@ -1238,10 +1236,10 @@ async function useItem(sock, chatId, senderJid, target) {
         if (item) itemId = item.id;
     }
 
-    // 💡 FIX 2026-08-07: Redirect summon egg items to the hatch system.
-    // Previously, `.s use <egg>` tried to use the egg as a regular consumable
-    // → "❌ You don't have this item!" because useItem doesn't handle eggs.
-    // Now it detects egg items and calls summonEggSystem.hatchEgg instead.
+ // FIX Redirect summon egg items to the hatch system.
+ // Previously, `.s use <egg>` tried to use the egg as a regular consumable
+ // → " You don't have this item!" because useItem doesn't handle eggs.
+ // Now it detects egg items and calls summonEggSystem.hatchEgg instead.
     if (itemId.includes('summon_egg') || itemId.includes('_egg')) {
         const summonEggSystem = require('../rpg/summonEggSystem');
         const result = await summonEggSystem.hatchEgg(senderJid, itemId);
@@ -1259,8 +1257,8 @@ async function useItem(sock, chatId, senderJid, target) {
     const result = inventorySystem.useItem(senderJid, itemId, targetSlot);
     if (result.success) {
         await sock.sendMessage(chatId, { text: `✅ *ITEM USED!*\n━━━━━━━━━━━━━━━\n📦 *Item:* ${itemId}\n✨ *Effect:* ${result.message}\n━━━━━━━━━━━━━━━` });
-        // 💡 2026-09-20: lore drops travel out-of-band and arrive as their
-        // own message box (owner ruling).
+ // lore drops travel out-of-band and arrive as their
+ // own message box (owner ruling).
         if (result.loreDrop) {
             try {
                 const loreDrops = require('../rpg/loreDrops');
@@ -1271,11 +1269,11 @@ async function useItem(sock, chatId, senderJid, target) {
     else await sock.sendMessage(chatId, { text: `❌ ${result.message}` });
 }
 
-// 💡 FIX 2026-08-01 (BUG #2 + GAP #2): enhance command now:
-//   1. Accepts an optional stone-type arg: `.jk enhance <#> [mythic|legendary|rare|minor]`
-//   2. Defaults to best-available stone (mythic > legendary > rare > minor)
-//   3. Previously the priority list omitted mythic_enhancement_stone entirely,
-//      so even if a player had Mythic stones the command would skip them.
+// FIX (BUG #2 + GAP #2): enhance command now:
+// 1. Accepts an optional stone-type arg: `.jk enhance <#> [mythic|legendary|rare|minor]`
+// 2. Defaults to best-available stone (mythic > legendary > rare > minor)
+// 3. Previously the priority list omitted mythic_enhancement_stone entirely,
+// so even if a player had Mythic stones the command would skip them.
 // Stone priority - best first. Player can override with the 2nd arg.
 const ENHANCE_STONE_PRIORITY = [
     'mythic_enhancement_stone',
@@ -1292,7 +1290,6 @@ const STONE_KEYWORD_MAP = {
 };
 
 async function enhanceItem(sock, chatId, senderJid, input) {
-    // Parse input: `<#> [stoneKeyword]`
     const parts = (input || '').trim().split(/\s+/);
     const indexArg = parts[0];
     const stoneKeyword = parts[1] ? parts[1].toLowerCase() : null;
@@ -1305,9 +1302,9 @@ async function enhanceItem(sock, chatId, senderJid, input) {
     const targetItem = inventory.items[parseInt(indexArg) - 1];
     if (!targetItem) return await sock.sendMessage(chatId, { text: `❌ Item not found at index ${indexArg}!` });
 
-    // Resolve which stone to use:
-    //   - If player specified a keyword, try that stone first.
-    //   - Otherwise walk the priority list (best → worst).
+ // Resolve which stone to use:
+ // - If player specified a keyword, try that stone first.
+ // - Otherwise walk the priority list (best → worst).
     let stoneId = null;
     if (stoneKeyword) {
         const requestedId = STONE_KEYWORD_MAP[stoneKeyword];
@@ -1320,7 +1317,7 @@ async function enhanceItem(sock, chatId, senderJid, input) {
         }
         stoneId = requestedId;
     } else {
-        // Auto-pick best available
+ // Auto-pick best available
         for (const sid of ENHANCE_STONE_PRIORITY) {
             if (inventory.items.some(item => item.id === sid)) {
                 stoneId = sid;
@@ -1337,7 +1334,7 @@ async function enhanceItem(sock, chatId, senderJid, input) {
 }
 
 // ==========================================
-// 🛠️ CUSTOM CRAFTING & RECIPES SYSTEM (.g craft)
+// CUSTOM CRAFTING & RECIPES SYSTEM (.g craft)
 // ==========================================
 
 const CRAFTING_RECIPES = [
@@ -1437,7 +1434,7 @@ const CRAFTING_RECIPES = [
 async function handleCraftCommand(sock, chatId, senderJid, args) {
     const prefix = getPrefix();
     
-    // Check registration first
+ // Check registration first
     const economyUser = economy.getUser(senderJid);
     if (!economyUser) {
         await sock.sendMessage(chatId, {
@@ -1448,11 +1445,11 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
     
     const playerLevel = economyUser.progression?.level || 1;
     
-    // Get inventory
+ // Get inventory
     const inventoryData = inventorySystem.formatInventory(senderJid) || {};
     const inventoryItems = inventoryData.isEmpty ? [] : (inventoryData.items || []);
     
-    // Map of itemId to quantity
+ // Map of itemId to quantity
     const playerInventory = {};
     for (const item of inventoryItems) {
         if (item && item.id) {
@@ -1460,7 +1457,6 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
         }
     }
     
-    // Parse arguments
     let parsedArgs = [];
     if (Array.isArray(args)) {
         parsedArgs = args;
@@ -1469,14 +1465,14 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
     }
     
     if (parsedArgs.length === 0 || parsedArgs[0].trim() === "") {
-        // No args: get inventory, filter by both conditions (levelReq & ingredients), and render list
+ // No args: get inventory, filter by both conditions (levelReq & ingredients), and render list
         const craftableRecipes = CRAFTING_RECIPES.filter(recipe => {
-            // 1. Level Requirement
+ // 1. Level Requirement
             if (playerLevel < recipe.levelReq) {
                 return false;
             }
 
-            // 2. Ingredient Availability
+ // 2. Ingredient Availability
             for (const ing of recipe.ingredients) {
                 const hasQty = playerInventory[ing.itemId] || 0;
                 if (hasQty < ing.qty) {
@@ -1510,7 +1506,7 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
                 return `${ing.qty}x ${ingInfo.name || ing.itemId}`;
             }).join(', ');
 
-            // Unified 2-line entry - no flavor text (consistent with station recipe lists)
+ // Unified 2-line entry - no flavor text (consistent with station recipe lists)
             msg += `*${i + 1}.* ✨ ${rarityEmoji} *${recipe.name}* \`${recipe.id}\` · Lvl ${recipe.levelReq}${yieldStr}\n`;
             msg += `   🛠️ ${ingredientsStr}\n`;
         });
@@ -1522,7 +1518,7 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
         return;
     }
     
-    // args has recipe ID
+ // args has recipe ID
     const recipeId = parsedArgs[0].trim().toLowerCase();
     const recipe = CRAFTING_RECIPES.find(r => r.id.toLowerCase() === recipeId);
     
@@ -1533,7 +1529,7 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
         return;
     }
     
-    // Check level req
+ // Check level req
     if (playerLevel < recipe.levelReq) {
         await sock.sendMessage(chatId, {
             text: `❌ *CRAFT FAILED*\n━━━━━━━━━━━━━━━━\nLevel requirement not met.\nReq: Level *${recipe.levelReq}*\nYour Level: *${playerLevel}*`
@@ -1541,7 +1537,7 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
         return;
     }
     
-    // Check ingredients
+ // Check ingredients
     const missingIngredients = [];
     for (const ing of recipe.ingredients) {
         const hasQty = playerInventory[ing.itemId] || 0;
@@ -1558,7 +1554,7 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
         return;
     }
     
-    // Check space
+ // Check space
     if (!inventorySystem.hasInventorySpace(senderJid, 1, recipe.output.itemId)) {
         await sock.sendMessage(chatId, {
             text: `❌ *CRAFT FAILED*\n━━━━━━━━━━━━━━━━\nYour inventory is full! Sell some items or upgrade your bag size first.`
@@ -1566,10 +1562,10 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
         return;
     }
     
-    // Deduct ingredients
-    // 💡 FIX 2026-10-17: check removeItem results — a failed consumption used
-    // to be silently ignored and the output was added anyway (free item), or
-    // half-consumed stacks left the player short with no rollback.
+ // Deduct ingredients
+ // FIX check removeItem results - a failed consumption used
+ // to be silently ignored and the output was added anyway (free item), or
+ // half-consumed stacks left the player short with no rollback.
     const consumed = [];
     for (const ing of recipe.ingredients) {
         const removeResult = inventorySystem.removeItem(senderJid, ing.itemId, ing.qty);
@@ -1579,40 +1575,40 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
             }
             const ingInfo = lootSystem.getItemInfo(ing.itemId) || {};
             await sock.sendMessage(chatId, {
-                text: `❌ *CRAFT FAILED*\n━━━━━━━━━━━━━━━━\nCouldn't consume ${ingInfo.name || ing.itemId} — materials refunded. Try again.`
+                text: `❌ *CRAFT FAILED*\n━━━━━━━━━━━━━━━━\nCouldn't consume ${ingInfo.name || ing.itemId} - materials refunded. Try again.`
             });
             return;
         }
         consumed.push([ing.itemId, ing.qty]);
     }
     
-    // Add output
+ // Add output
     await inventorySystem.addItem(senderJid, recipe.output.itemId, recipe.output.qty);
 
-    // 💡 FIX: track itemsCrafted for rank missions. handleCraftCommand is a
-    // SEPARATE craft path from craftItem() - it does its own ingredient
-    // deduction and item add, but was missing the rank-mission tracking
-    // call. Players crafting the 8 legacy recipes (rusty_dagger, iron_sword,
-    // steel_sabre, mythril_staff, chainmail, iron_plate, reinforced_plate,
-    // dragon_scale_armor) were getting ZERO itemsCrafted credit toward
-    // the Trial of Mastery (15 items) and Trial of Divinity (50 items)
-    // rank missions. craftItem() already had this via craftingSystem.performCraft.
+ // FIX: track itemsCrafted for rank missions. handleCraftCommand is a
+ // SEPARATE craft path from craftItem() - it does its own ingredient
+ // deduction and item add, but was missing the rank-mission tracking
+ // call. Players crafting the 8 legacy recipes (rusty_dagger, iron_sword,
+ // steel_sabre, mythril_staff, chainmail, iron_plate, reinforced_plate,
+ // dragon_scale_armor) were getting ZERO itemsCrafted credit toward
+ // the Trial of Mastery (15 items) and Trial of Divinity (50 items)
+ // rank missions. craftItem() already had this via craftingSystem.performCraft.
     try {
         economy.trackMissionStat(senderJid, 'itemsCrafted', recipe.output.qty || 1);
     } catch (e) {}
 
-    // 💡 LORE DROP: legacy gear recipes are the forge family -> blacksmith
-    // voice (8%). Sent as its OWN message after whichever reply path
-    // succeeds (owner ruling: a drop is a distinct lore event).
+ // LORE DROP: legacy gear recipes are the forge family -> blacksmith
+ // voice (8%). Sent as its OWN message after whichever reply path
+ // succeeds (owner ruling: a drop is a distinct lore event).
     let __craftDrop = null;
     try {
         const loreDrops = require('../rpg/loreDrops');
         __craftDrop = loreDrops.maybeDrop('blacksmith', { userId: senderJid, chatId, chance: 0.08 });
     } catch (e) {}
 
-    // Generate transaction card image if possible
+ // Generate transaction card image if possible
     try {
-        // 💡 PERF PATCH 2026-07-27: cached + 8s timeout (was no timeout, could hit 90s global)
+ // PERF PATCH cached + 8s timeout (was no timeout, could hit 90s global)
         const pfpUrl = await fetchPfpCached(sock, senderJid);
         const nickname = economyUser.nickname || economy.getDisplayName(senderJid);
         const currency = getCurrency();
@@ -1632,7 +1628,7 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
             description: recipe.description || `Crafted ${recipe.name}`
         });
 
-        // Confirmation text message
+ // Confirmation text message
         const outputInfo = lootSystem.getItemInfo(recipe.output.itemId) || {};
         let confirmMsg = `✅ *CRAFT SUCCESSFUL!*\n`;
         confirmMsg += `━━━━━━━━━━━━━━━━\n`;
@@ -1657,7 +1653,7 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
         }
     } catch (e) {
         console.error("Failed to generate crafting image card:", e.message);
-        // Fallback to text message
+ // Fallback to text message
         const outputInfo = lootSystem.getItemInfo(recipe.output.itemId) || {};
         let confirmMsg = `✅ *CRAFT SUCCESSFUL!*\n`;
         confirmMsg += `━━━━━━━━━━━━━━━━\n`;
@@ -1675,7 +1671,7 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
     }
 }
 
-// 💡 helper: fire-and-forget own-box delivery for the craft lore drop
+// helper: fire-and-forget own-box delivery for the craft lore drop
 async function loreDropsSendOwn(sock, chatId, drop) {
     try {
         const loreDrops = require('../rpg/loreDrops');
@@ -1685,11 +1681,11 @@ async function loreDropsSendOwn(sock, chatId, drop) {
 
 
 // ==========================================
-// 🛡️ EQUIPMENT - .j equipment (.j gear)
-//    Image card of everything currently worn: slot, item name,
-//    tier (derived from rarity) + remaining durability. Own layout
-//    (Go kind EQUIP, 800x1100 armory board - distinct orientation).
-//    Falls back to the classic text list on any render failure.
+// EQUIPMENT - .j equipment (.j gear)
+// Image card of everything currently worn: slot, item name,
+// tier (derived from rarity) + remaining durability. Own layout
+// (Go kind EQUIP, 800x1100 armory board - distinct orientation).
+// Falls back to the classic text list on any render failure.
 // ==========================================
 const EQUIP_TIER_ORDER = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC'];
 const EQUIP_SLOT_META = {
@@ -1716,7 +1712,7 @@ async function displayEquipmentCard(sock, chatId, senderJid, senderName) {
     const nickname = economy.getDisplayName ? economy.getDisplayName(senderJid) : senderName;
     const rankLetter = String(econUser?.adventurerRank || 'F').toUpperCase();
 
-    // Build slot payloads (order: EQUIP_SLOT_META)
+ // Build slot payloads (order: EQUIP_SLOT_META)
     const slots = [];
     const worn = [];
     for (const [slotKey, meta] of Object.entries(EQUIP_SLOT_META)) {
@@ -1746,9 +1742,9 @@ async function displayEquipmentCard(sock, chatId, senderJid, senderName) {
     let buf = null;
     try {
         const goService = require('../utils/goImageService');
-        // r6 landscape armory: the card's hero panel draws the player's class
-        // sprite (same asset family as the quest-start card), so the payload
-        // now carries the class registry key + sprite index.
+ // r6 landscape armory: the card's hero panel draws the player's class
+ // sprite (same asset family as the quest-start card), so the payload
+ // now carries the class registry key + sprite index.
         const classInfo = economy.getUserClass ? economy.getUserClass(senderJid) : null;
         buf = await goService.generatePortraitCard({
             kind: 'EQUIP',
@@ -1783,7 +1779,7 @@ async function displayEquipmentCard(sock, chatId, senderJid, senderName) {
         return;
     }
 
-    // ── fallback: classic text list ──
+ // -- fallback: classic text list --
     let msg = `🛡️ *EQUIPPED GEAR - ${nickname}*\n\n`;
     for (const { meta, item, rarity, tier, dur, durMax } of worn) {
         const durTxt = typeof dur === 'number' && durMax ? ` · 🛠️ ${Math.round(dur * 10) / 10}/${durMax}` : '';
@@ -1795,9 +1791,9 @@ async function displayEquipmentCard(sock, chatId, senderJid, senderName) {
 }
 
 // ==========================================
-// 🎨 CARD STYLE - pick one of the 10 approved character-card designs
-//    .j cardstyle         -> style sheet + current pick
-//    .j cardstyle <1-10>  -> set + live preview of your card
+// CARD STYLE - pick one of the 10 approved character-card designs
+// .j cardstyle -> style sheet + current pick
+// .j cardstyle <1-10> -> set + live preview of your card
 // ==========================================
 const CARD_STYLE_NAMES = { 1: "Stonekeep", 2: "Golden Arcanum", 3: "Retro Court", 4: "Woodmere", 5: "Emblem Noir", 6: "Soul Forge", 7: "Royal Decree", 8: "Neon Arcade", 9: "Rune Monolith", 10: "Crimson Court" };
 const CARD_STYLE_ALIASES = { stonekeep: 1, arcanum: 2, golden: 2, retro: 3, court: 3, woodmere: 4, noir: 5, emblem: 5, gacha: 6, holo: 6, decree: 7, royal: 7, arcade: 8, neon: 8, rune: 9, monolith: 9, crimson: 10 };
@@ -1831,9 +1827,9 @@ async function handleCardStyle(sock, chatId, senderJid, args, senderName) {
 }
 
 // ==========================================
-// 🛡️ SET DEFAULT CARD - RPG MOD COMMAND
-//    .j setdefaultcard        -> current default + style list
-//    .j setdefaultcard <1-10> -> set the SERVER-WIDE default card
+// SET DEFAULT CARD - RPG MOD COMMAND
+// .j setdefaultcard -> current default + style list
+// .j setdefaultcard <1-10> -> set the SERVER-WIDE default card
 // Players who never picked a style (and every fresh registration) get the
 // default design. Stored under a shared system key so it survives restarts.
 // ==========================================

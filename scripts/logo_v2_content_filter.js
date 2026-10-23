@@ -1,17 +1,17 @@
 // ============================================
-// LOGO DATASET V2 CONTENT FILTER (2026-10-09)
+// LOGO DATASET V2 CONTENT FILTER
 // ============================================
 // The fame-ranked wikidata expansion pulls entities that are NOT brand-quiz
 // material even though they have a "current" P154 logo:
-//   - dissolved orgs (Hitler Youth — P154 just was never end-qualified)
-//   - cities / municipalities (Kyoto)
-//   - films & TV series with title wordmarks (Doctor Strange in the...)
-//   - courts, ministries, agencies, churches, universities, events
+// - dissolved orgs (Hitler Youth - P154 just was never end-qualified)
+// - cities / municipalities (Kyoto)
+// - films & TV series with title wordmarks (Doctor Strange in the...)
+// - courts, ministries, agencies, churches, universities, events
 // Owner spec: "only modern logos used today" + this is a BRAND quiz.
 // Filter pass: fetch P31 + P576 for every dataset qid (batched), then:
-//   drop if dissolved (P576)                -> not "used today" by definition
-//   drop if P31 in the class blocklist      -> not brand material
-//   drop if label matches the place/institution/event veto regex
+// drop if dissolved (P576) -> not "used today" by definition
+// drop if P31 in the class blocklist -> not brand material
+// drop if label matches the place/institution/event veto regex
 // Rewrites data/logoDataset.json + appends to the report.
 // ============================================
 const axios = require("axios");
@@ -27,7 +27,7 @@ const P31_DROP = new Set([
   "Q11424", "Q5398426", "Q506240", // film, TV series, film genre-ish entries
   "Q3918", "Q33506", "Q7075", "Q16917", // university, museum, library, hospital-ish
   "Q7278", "Q327333", "Q7187", "Q10498148", // political party, gov agency, government, international court? (safe side)
-  "Q43229", // organization (bare) — too generic to be a brand answer? no: keep; remove from set if harmful
+  "Q43229", // organization (bare) - too generic to be a brand answer? no: keep; remove from set if harmful
 ]);
 P31_DROP.delete("Q43229");
 

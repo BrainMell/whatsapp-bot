@@ -1,24 +1,22 @@
-// QA: guild loan system full-flow verification (2026-09-20 owner report).
-//
+// QA: guild loan system full-flow verification (owner report).
 // Owner's report:
-//   1. `.j guild loan` (no amount) did NOTHING - gate required a trailing space.
-//   2. `.j guild loan 20000` -> "Max loan is 10% of guild bank = 0 Zeni" while
-//      `.s guild loan 5000` passed the same check - the two bot instances
-//      disagree about the guild bank (stale per-process caches).
-//   3. `.s guild loan 5000` -> "Loan failed: could not credit your wallet
-//      (registration or JID issue)" - borrower resolution dead-end.
-//   4. Transaction was NOT safe: bank debited + loan persisted BEFORE the
-//      wallet credit; debt gate ran AFTER the payout.
-//
+// 1. `.j guild loan` (no amount) did NOTHING - gate required a trailing space.
+// 2. `.j guild loan 20000` -> "Max loan is 10% of guild bank = 0 Zeni" while
+// `.s guild loan 5000` passed the same check - the two bot instances
+// disagree about the guild bank (stale per-process caches).
+// 3. `.s guild loan 5000` -> "Loan failed: could not credit your wallet
+// (registration or JID issue)" - borrower resolution dead-end.
+// 4. Transaction was NOT safe: bank debited + loan persisted BEFORE the
+// wallet credit; debt gate ran AFTER the payout.
 // This suite drives the REAL guilds.js / economy.js modules against mocked
 // mongoose models (in-memory "DB"), simulating both bot instances' caches,
 // and pins the engine's transaction ORDER with static source assertions.
 
 process.env.GO_IMAGE_SERVICE_URL = process.env.GO_IMAGE_SERVICE_URL || 'http://127.0.0.1:7860';
 
-// ─────────────────────────────────────────────────────────────────────────
+// -------------------------------------------------------------------------
 // Mock mongoose models BEFORE the real modules load.
-// ─────────────────────────────────────────────────────────────────────────
+// -------------------------------------------------------------------------
 function inject(modPath, mock) {
   const abs = require.resolve(modPath);
   require.cache[abs] = { id: abs, filename: abs, loaded: true, exports: mock, children: [], paths: [] };
@@ -68,9 +66,8 @@ const UserMock = {
 };
 inject('../core/models/User', UserMock);
 
-// ─────────────────────────────────────────────────────────────────────────
-// Load the REAL modules against the mocks.
-// ─────────────────────────────────────────────────────────────────────────
+// -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
 const guilds = require('../core/rpg/guilds');
 const economy = require('../core/rpg/economy');
 const lidResolver = require('../core/utils/lidResolver');
@@ -84,9 +81,9 @@ function assert(cond, label) {
 }
 function section(t) { console.log('\n── ' + t + ' ──'); }
 
-// ─────────────────────────────────────────────────────────────────────────
+// -------------------------------------------------------------------------
 // Seed: the SHARED MongoDB state (what the DB truly holds).
-// ─────────────────────────────────────────────────────────────────────────
+// -------------------------------------------------------------------------
 const PHONE = '2348012345678@s.whatsapp.net';   // borrower's canonical DB key
 const LID = '105712667648066@lid';              // same player arriving as LID
 const DEBT_JID = '2348777777777@s.whatsapp.net';
@@ -130,7 +127,7 @@ function seedEconomyCache(jid) {
   return doc;
 }
 
-// ═════════════════════════════════════════════════════════════════════════
+// =========================================================================
 (async () => {
 section('1. stale guild bank healed from the shared DB (Bug 2: "max = 0")');
 assert(guilds.getGuild(GNAME).balance === 0, 'precondition: instance cache shows bank = 0 (stale)');
@@ -147,7 +144,7 @@ const refreshedErr = await guilds.refreshGuildMoney(GNAME);
 assert(refreshedErr && refreshedErr.balance === 80000, 'DB read failure falls back to cached money fields (no crash)');
 assert(guilds.getGuild(GNAME).balance === 80000, 'balance unchanged after failed refresh');
 
-// ═════════════════════════════════════════════════════════════════════════
+// =========================================================================
 section('2. getUserGuild JID tolerance (guild/JID lookup verification)');
 assert(guilds.getUserGuild(PHONE) === GNAME, 'exact key hit');
 assert(guilds.getUserGuild('2348012345678:1@s.whatsapp.net') === GNAME, 'device-suffix JID falls back to bare-number match');
@@ -155,7 +152,7 @@ economy.economyData.set(PHONE, seedEconomyCache(PHONE)); // resolver needs the a
 assert(guilds.getUserGuild(LID) === GNAME, 'LID JID resolved through economy canonical resolver');
 assert(guilds.getUserGuild('999000111@s.whatsapp.net') === undefined, 'stranger still resolves to no guild');
 
-// ═════════════════════════════════════════════════════════════════════════
+// =========================================================================
 section('3. cross-instance borrower heal (Bug 3: "could not credit your wallet")');
 // Subaru-shaped state: economy cache EMPTY for the borrower, incoming LID.
 economy.economyData.delete(PHONE);
@@ -178,7 +175,7 @@ assert(userWriteLog.length > 0, 'debounced save flushed');
 assert(userWriteLog.every(w => w.userId === PHONE), 'every user write targets the canonical PHONE key (no second account doc)');
 assert(!userDB.has(LID), 'no duplicate User document was created under the LID key');
 
-// ═════════════════════════════════════════════════════════════════════════
+// =========================================================================
 section('4. genuinely unregistered borrower -> clean refusal, nothing mutated');
 assert(economy.getUser(GHOST) === null, 'no account for ghost JID');
 await economy.syncUserFromDB(GHOST);
@@ -186,7 +183,7 @@ assert(economy.getUser(GHOST) === null, 'DB heal finds nothing either (correct)'
 assert(economy.addMoney(GHOST, 5000, 'qa') === false, 'addMoney refuses (correct terminal state)');
 assert(!userDB.has(GHOST), 'ghost account was not created by the heal');
 
-// ═════════════════════════════════════════════════════════════════════════
+// =========================================================================
 section('5. debt borrower: payout alone would vanish into debt (why the gate moved)');
 const debtDoc = seedEconomyCache(DEBT_JID);
 const rDebt = economy.addMoney(DEBT_JID, 3000, 'qa debt demo');
@@ -196,7 +193,7 @@ assert(debtDoc.debt.amount > 0, "handler gate (borrower.debt.amount > 0) WOULD r
 // restore for cleanliness
 debtDoc.debt.amount = 4000;
 
-// ═════════════════════════════════════════════════════════════════════════
+// =========================================================================
 section('6. borrow transaction happy path (handler order, real primitives)');
 economy.economyData.set(PHONE, seedEconomyCache(PHONE));
 economy.getUser(PHONE).wallet = 2000;
@@ -219,7 +216,7 @@ assert(dbG.balance === 75000 && Array.isArray(dbG.loans) && dbG.loans.length ===
 assert(economy.getGold(PHONE) === wallet0 + amount, 'borrower wallet holds the loan');
 assert((economy.getGold(PHONE) - wallet0) + (dbG.balance - bank0) === 0, 'money conserved: wallet gain == bank loss');
 
-// ═════════════════════════════════════════════════════════════════════════
+// =========================================================================
 section('7. borrow persist failure -> full claw-back (transaction safety)');
 const preWrites = guildWriteLog.length;
 failGuildWrites = 1;
@@ -240,7 +237,7 @@ assert(g.loans.length === 1, 'loan record removed');
 assert(economy.getGold(PHONE) === wallet0 + amount, 'wallet clawed back - net zero');
 assert((guildDB.get(GNAME)).balance === 75000, 'DB bank untouched by the failed transaction');
 
-// ═════════════════════════════════════════════════════════════════════════
+// =========================================================================
 section('8. repay flow: partial, overpay clamp, persist failure refund');
 // 8a. partial repayment 2000 of 5000
 let w = economy.getGold(PHONE);
@@ -299,7 +296,7 @@ assert(economy.getGold(PHONE) === 5000, 'wallet refunded in full');
 assert(gLoan.amount === 4000 && gLoan.repaid === false, 'loan record restored from snapshot');
 assert(g.balance === 80000 && guildDB.get(GNAME).balance === 80000, 'bank unchanged in memory and DB');
 
-// ═════════════════════════════════════════════════════════════════════════
+// =========================================================================
 section('9. command parsing (all branches, both prefixes)');
 // mirrors the handler's parse exactly (pinned to source by section 10)
 function parse(txt) {
@@ -332,7 +329,7 @@ assert(parse('.s guild loan repay 1500').amount === 1500, 'repay plain');
 assert(parse('.j guild loan repay').view === 'repay-usage', 'repay without amount -> usage');
 assert(parse('.j guild loan repay abc').view === 'repay-usage', 'repay non-numeric -> usage');
 
-// ═════════════════════════════════════════════════════════════════════════
+// =========================================================================
 section('10. static source pins: engine transaction order + gate');
 const engineSrc = fs.readFileSync(path.join(__dirname, '..', 'core', 'engine.js'), 'utf8');
 const blockStart = engineSrc.indexOf('`.p guild loan [list|repay <amt>|<amt>]`');
@@ -374,7 +371,7 @@ assert(!/['"`]\.s guild loan/.test(B), 'no hardcoded Subaru literal in the block
 assert(B.includes('const donated = economy.removeMoney') || engineSrc.includes('const donated = economy.removeMoney'),
   'donation block now checks removeMoney result');
 
-// ═════════════════════════════════════════════════════════════════════════
+// =========================================================================
 section('11. static source pins: guilds.js + economy.js support fixes');
 const guildsSrc = fs.readFileSync(path.join(__dirname, '..', 'core', 'rpg', 'guilds.js'), 'utf8');
 const syncFn = guildsSrc.slice(guildsSrc.indexOf('async function syncGuild('), guildsSrc.indexOf('function saveGuilds()'));
@@ -395,7 +392,7 @@ const syncHealFn = econSrc.slice(syncIdx, syncIdx + 2500);
 assert(syncHealFn.includes('jidLookupVariants(userId)'), 'syncUserFromDB uses the shared variant lookup (mapped-number root cause fixed)');
 assert(econSrc.includes('function jidLookupVariants('), 'jidLookupVariants helper exists');
 
-// ═════════════════════════════════════════════════════════════════════════
+// =========================================================================
 console.log('\n════════════════════════════════════════');
 if (failed) { console.error(`✗ ${failed} CHECK(S) FAILED`); process.exit(1); }
 console.log('✓ ALL GUILD-LOAN CHECKS PASSED');

@@ -36,8 +36,8 @@ async function cleanup() {
   console.log('\n=== Cleanup ===');
   try {
     if (User) {
-      // 💡 FIX: User schema uses 'userId' field (required, unique), not 'jid'.
-      // Prior version of this cleanup used `jid:` and matched 0 users.
+ // FIX: User schema uses 'userId' field (required, unique), not 'jid'.
+ // Prior version of this cleanup used `jid:` and matched 0 users.
       const r1 = await User.deleteMany({ userId: { $in: [USER_A, USER_B] } });
       console.log(`[+] Deleted ${r1.deletedCount} test users`);
     }
@@ -67,7 +67,7 @@ function makeReply() {
 }
 
 async function runTests() {
-  // ─── Phase 1: setup ───
+ // --- Phase 1: setup ---
   console.log('\n=== Phase 1: setup ===');
   for (const jid of [USER_A, USER_B]) {
     await User.create({
@@ -80,7 +80,6 @@ async function runTests() {
       registered: true  // economy.getUser returns null if registered !== true
     });
     console.log(`[+] Created ${jid}`);
-    // Load into economy's in-memory cache so addItem/getInventory work
     await economy.reloadUserFromDB(jid);
     console.log(`[+] Loaded ${jid} into economy cache`);
   }
@@ -98,7 +97,7 @@ async function runTests() {
   if (invA0[TEST_ITEM_ID].quantity !== 5) throw new Error('setup: A should have 5 of TEST_ITEM');
   if (balA0 !== 100000 || balB0 !== 100000) throw new Error(`setup: wrong balances A=${balA0} B=${balB0}`);
 
-  // ─── Phase 2: listitem ───
+ // --- Phase 2: listitem ---
   console.log('\n=== Phase 2: listitem ===');
   const slotsA = Object.keys(inventorySystem.getInventory(USER_A));
   const slotIdx = slotsA.indexOf(TEST_ITEM_ID) + 1;
@@ -122,14 +121,14 @@ async function runTests() {
   if (invA1[TEST_ITEM_ID].quantity !== 2) throw new Error(`listitem: A should have 2 left, got ${invA1[TEST_ITEM_ID].quantity}`);
   console.log(`[+] A qty now ${invA1[TEST_ITEM_ID].quantity} (was 5, listed 3, expected 2) ✅`);
 
-  // ─── Phase 3: itemmarket browse ───
+ // --- Phase 3: itemmarket browse ---
   console.log('\n=== Phase 3: itemmarket browse ===');
   const r2 = makeReply();
   await itemMarket.cmdItemMarket(USER_B, r2.reply, []);
   if (!/Test Potion/i.test(r2.log[0])) throw new Error(`browse: market doesn't show listing: ${r2.log[0]}`);
   console.log(`[+] Browse verified - market shows the listing ✅`);
 
-  // ─── Phase 4: buyitem (10% tax) ───
+ // --- Phase 4: buyitem (10% tax) ---
   console.log('\n=== Phase 4: buyitem ===');
   const r3 = makeReply();
   await itemMarket.cmdBuyItem(USER_B, r3.reply, ['1']);
@@ -157,9 +156,9 @@ async function runTests() {
   if (sold.buyerId !== USER_B) throw new Error(`buyitem: buyerId wrong: ${sold.buyerId}`);
   console.log(`[+] Listing status 'sold', buyerId set ✅`);
 
-  // ─── Phase 5: unlistitem ───
+ // --- Phase 5: unlistitem ---
   console.log('\n=== Phase 5: unlistitem ===');
-  // A has 2 of TEST_ITEM_ID left, list 1 more
+ // A has 2 of TEST_ITEM_ID left, list 1 more
   const slotsA2 = Object.keys(inventorySystem.getInventory(USER_A));
   const slotIdx2 = slotsA2.indexOf(TEST_ITEM_ID) + 1;
   const r4 = makeReply();
@@ -173,7 +172,7 @@ async function runTests() {
   if (invA3[TEST_ITEM_ID].quantity !== 1) throw new Error(`unlist step 1: A should have 1 left, got ${invA3[TEST_ITEM_ID].quantity}`);
   console.log(`[+] 2nd listing created. A has 1 ${TEST_ITEM_ID} left.`);
 
-  // Find l2's index in active market list
+ // Find l2's index in active market list
   const allActive = await ItemMarket.find({ status: 'active' }).sort({ listedAt: -1 });
   const l2Idx = allActive.findIndex(l => l._id.equals(l2._id)) + 1;
   const r5 = makeReply();
@@ -189,7 +188,7 @@ async function runTests() {
   if (unlisted.status !== 'cancelled') throw new Error(`unlistitem: status should be 'cancelled', got '${unlisted.status}'`);
   console.log(`[+] Listing status 'cancelled' ✅`);
 
-  // ─── Phase 6: Settlement records ───
+ // --- Phase 6: Settlement records ---
   console.log('\n=== Phase 6: Settlement records ===');
   const settlements = await Settlement.find({
     $or: [{ userId: USER_A }, { userId: USER_B }, { counterpartyId: USER_A }, { counterpartyId: USER_B }]

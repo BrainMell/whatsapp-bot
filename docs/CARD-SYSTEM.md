@@ -1,6 +1,6 @@
 # CARD SYSTEM - v5 (structure-first, visually verified per set and per style)
 
-> 2026-09-16 v2: the card-style system was REBUILT as nine genuine design
+> v2: the card-style system was REBUILT as nine genuine design
 > systems (the previous palette-swap pass was rejected by the owner).
 > Canonical spec + card inventory: docs/CARD-REDESIGN-PLAN.md
 > Style 6 is now SOUL FORGE (owner-provided Allocate card defines it).
@@ -11,7 +11,7 @@
 # RPG CARD SYSTEM - Design Specification & Developer Guide
 
 **Status:** canonical reference for all RPG image cards
-**Established:** 2026-09-16 overnight session (theme system, abilities codex, Ludo redesign)
+**Established:** overnight session (theme system, abilities codex, Ludo redesign)
 **Owner rule (never violates):** *A player's `.j cardstyle` is their whole RPG visual identity - not a single-card recolor.*
 
 ---
@@ -290,7 +290,7 @@ they intentionally keep the baked Royal Decree art for combat-legibility
 1. Replace hardcoded ink literals with `_th.<Role>` (decree values = byte-identical output).
 2. Route the kind through `drawPortraitShell` when `_useShell` (add kind to the guard in `GeneratePortraitCard`).
 3. If the kind has its own canvas (not 600×1000), mirror the shell logic for that canvas in `theme.go` (see how `renderAbilitiesCard` consumes roles directly).
-4. Visual QA the full style set (script: curl loop against `:7899` test port like `scripts/` QA flows; inspect with the pixel-probe technique - see worklog 2026-09-16 for the `alphaColor` lesson).
+4. Visual QA the full style set (script: curl loop against `:7899` test port like `scripts/` QA flows; inspect with the pixel-probe technique - see worklog for the `alphaColor` lesson).
 
 ### Pagination convention (established with `.j abilities`)
 
@@ -348,7 +348,7 @@ Whitelist (DejaVu-verified on the render hosts - do not add glyphs without probi
 
 Cap: 4 runes per ability, deduplicated, drawn on the cost/CD line in ACCENT color.
 Probing new glyphs: `gg.LoadFontFace(DejaVuSans, 40) + DrawString` render, then inspect
-for `.notdef` boxes (see worklog 2026-09-16 probe; ⌛ ⛨ ⛓ are known tofu).
+for `.notdef` boxes (see worklog probe; ⌛ ⛨ ⛓ are known tofu).
 
 ---
 
@@ -399,7 +399,7 @@ departure/kick (`handleParticipantLeave` hook), and the 30-min inactivity dissol
 
 ## 10. Change log (card system)
 
-- 2026-09-16 - theme engine (10 identities) for RANK/ALLOCATE/ABILITIES; abilities codex
+- - theme engine (10 identities) for RANK/ALLOCATE/ABILITIES; abilities codex
   identity + effect runes + pagination; Ludo board redesign + forfeit system; audio clip
   command (`.clip`); trivia fixes; powerscale rewritten on the MediaWiki API (Cloudflare).
 - Earlier - see `git log` and `docs/UI-INVENTORY.md` for the full UI census.

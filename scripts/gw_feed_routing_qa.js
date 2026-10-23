@@ -1,20 +1,19 @@
 #!/usr/bin/env node
-// ⚔️ GW FEED ROUTING QA — double-send + destination-pin + flush-mutex fixes
-// (owner 2026-10-06 20:01Z: "bot double-sending Ruins updates, sometimes
+// GW FEED ROUTING QA - double-send + destination-pin + flush-mutex fixes
+// (20:01Z: "bot double-sending Ruins updates, sometimes
 // responding in different group chats, and sometimes even different bots
-// responding — find the actual cause, not another symptom patch")
-//
-//   S1. Cross-instance mirror handoff: when instance B claims the doc queue,
-//       instance A's local mirror is ALREADY drained → no duplicate send.
-//   S2. DB-mirror failure keeps the item local-only → still sent exactly once.
-//   S3. Same-instance flush mutex: concurrent flushes (fast timer + sweeper)
-//       send each item once.
-//   S4. Hostless destination pin: first flusher pins feedDestinations on the
-//       event doc; a DIFFERENT bot's later flush routes to the SAME chats
-//       (never to its own list).
-//   S5. Retry semantics intact: failed sends requeue (tries+1), next flush
-//       delivers; drop-after-3 untouched.
-//   S6. Engine source pins: abortive GC ownership claim + msg-id dedup LRU.
+// responding - find the actual cause, not another symptom patch")
+// S1. Cross-instance mirror handoff: when instance B claims the doc queue,
+// instance A's local mirror is ALREADY drained → no duplicate send.
+// S2. DB-mirror failure keeps the item local-only → still sent exactly once.
+// S3. Same-instance flush mutex: concurrent flushes (fast timer + sweeper)
+// send each item once.
+// S4. Hostless destination pin: first flusher pins feedDestinations on the
+// event doc; a DIFFERENT bot's later flush routes to the SAME chats
+// (never to its own list).
+// S5. Retry semantics intact: failed sends requeue (tries+1), next flush
+// delivers; drop-after-3 untouched.
+// S6. Engine source pins: abortive GC ownership claim + msg-id dedup LRU.
 // Uses the gwtest DB + mock socks (same pattern as gw_isolation_qa.js).
 const fs = require('fs');
 const path = require('path');
@@ -22,7 +21,7 @@ const path = require('path');
 let PASS = 0, FAIL = 0;
 function check(name, cond, extra) {
     if (cond) { PASS++; console.log(`  ✅ ${name}`); }
-    else { FAIL++; console.log(`  ❌ ${name}${extra !== undefined ? ' — ' + extra : ''}`); }
+    else { FAIL++; console.log(`  ❌ ${name}${extra !== undefined ? ' - ' + extra : ''}`); }
 }
 
 async function connectDB() {
@@ -75,11 +74,11 @@ async function waitFor(fn, ms = 3000) {
     };
     const cleanup = async (ids) => { await GuildWarEvent.deleteMany({ eventId: { $in: ids } }); };
 
-    // ═══ S1: cross-instance mirror handoff — the double-send kill ═══
+ // === S1: cross-instance mirror handoff - the double-send kill ===
     console.log('\n══ S1. mirror handoff: claim by B ⇒ A cannot resend ══');
     process.env.BOT_INSTANCE = 'bota'; // product identity now resolves via BOT_INSTANCE (botInstance.js)
     const ev1 = await mkEvent({ hostGroupId: '120363feed1@g.us' });
-    feed.queue(ev1, 'normal', 'S1 dup probe — must send exactly once');
+    feed.queue(ev1, 'normal', 'S1 dup probe - must send exactly once');
     const mirrored = await waitFor(async () => {
         const d = await GuildWarEvent.findOne({ eventId: ev1 }, { feedQueue: 1 }).lean();
         return (d.feedQueue || []).length >= 1 && feed.st(ev1).queue.length === 0;
@@ -93,7 +92,7 @@ async function waitFor(fn, ms = 3000) {
     const d1 = await GuildWarEvent.findOne({ eventId: ev1 }, { feedQueue: 1 }).lean();
     check('S1: doc queue fully drained', (d1.feedQueue || []).length === 0);
 
-    // ═══ S2: mirror failure → local-only fallback, still exactly once ═══
+ // === S2: mirror failure → local-only fallback, still exactly once ===
     console.log('\n══ S2. DB-mirror failure keeps the item local-only ══');
     const realUpdateOne = GuildWarEvent.updateOne.bind(GuildWarEvent);
     GuildWarEvent.updateOne = () => Promise.reject(new Error('qa forced mirror failure'));
@@ -108,7 +107,7 @@ async function waitFor(fn, ms = 3000) {
     check('S2: local-only item still delivered exactly once', sent2.length === 1, JSON.stringify(sent2));
     GuildWarEvent.updateOne = realUpdateOne;
 
-    // ═══ S3: same-instance flush mutex ═══
+ // === S3: same-instance flush mutex ===
     console.log('\n══ S3. concurrent flushes on ONE instance send once ══');
     const ev3 = await mkEvent({ hostGroupId: '120363feed3@g.us' });
     feed.queue(ev3, 'normal', 'S3 mutex probe');
@@ -121,7 +120,7 @@ async function waitFor(fn, ms = 3000) {
     await Promise.all([feed.flush(ev3, slowSock, '\u200B'), feed.flush(ev3, slowSock, '\u200B')]);
     check('S3: overlapping flushes produced exactly ONE send', slowLog.length === 1, `sends=${slowLog.length}`);
 
-    // ═══ S4: hostless destination pin ═══
+ // === S4: hostless destination pin ===
     console.log('\n══ S4. hostless events pin ONE destination set on the doc ══');
     process.env.BOT_INSTANCE = 'bota'; // product identity now resolves via BOT_INSTANCE (botInstance.js)
     system.get = systemStub({ gw_rpg_gcs_bota: ['120363a1@g.us', '120363a2@g.us'], gw_rpg_gcs_botb: ['120363b1@g.us'] });
@@ -133,7 +132,7 @@ async function waitFor(fn, ms = 3000) {
     const d4 = await GuildWarEvent.findOne({ eventId: ev4 }, { feedDestinations: 1 }).lean();
     check('S4: first flusher pinned ITS list on the doc', JSON.stringify(d4.feedDestinations) === JSON.stringify(['120363a1@g.us', '120363a2@g.us']), JSON.stringify(d4.feedDestinations));
     check('S4: bot A delivered to the pinned chats', sentA4.length >= 1 && sentA4.every((s) => s.jid === '120363a1@g.us' || s.jid === '120363a2@g.us'), JSON.stringify(sentA4.map((s) => s.jid)));
-    // a DIFFERENT bot flushes next: same pinned destinations, never its own
+ // a DIFFERENT bot flushes next: same pinned destinations, never its own
     process.env.BOT_INSTANCE = 'botb';
     const sentB4 = [];
     await feed.queue(ev4, 'normal', 'S4 pinned wave 2 (from bot B)');
@@ -143,7 +142,7 @@ async function waitFor(fn, ms = 3000) {
     check('S4: bot B never touched its own rpg list', !sentB4.some((s) => s.jid === '120363b1@g.us'));
     system.get = realSystemGet;
 
-    // ═══ S5: retry semantics intact ═══
+ // === S5: retry semantics intact ===
     console.log('\n══ S5. failed sends requeue (tries+1), next flush delivers ══');
     const ev5 = await mkEvent({ hostGroupId: '120363feed5@g.us' });
     feed.queue(ev5, 'normal', 'S5 retry probe');
@@ -157,7 +156,7 @@ async function waitFor(fn, ms = 3000) {
     d5 = await GuildWarEvent.findOne({ eventId: ev5 }, { feedQueue: 1 }).lean();
     check('S5: next flush delivers the retried item + drains', sent5.length === 1 && (d5.feedQueue || []).length === 0);
 
-    // ═══ S6: engine source pins (abortive claim + msg-id dedup) ═══
+ // === S6: engine source pins (abortive claim + msg-id dedup) ===
     console.log('\n══ S6. engine.js routing pins ══');
     const eng = fs.readFileSync(path.join(__dirname, '..', 'core', 'engine.js'), 'utf8');
     check('S6: GC ownership claim is ABORTIVE (awaited, losers drop the message)', eng.includes('const _won = await claimGcOwnership(chatId);') && eng.includes('if (!_won) return;'));
@@ -168,7 +167,7 @@ async function waitFor(fn, ms = 3000) {
     check('S6: flush awaits the mirror-settled barrier', feedSrc.includes('await s.mirror'));
     check('S6: destination pin is atomic first-writer-wins', feedSrc.includes('feedDestinations: null }, { feedDestinations: { $size: 0 }'));
 
-    // ═══ cleanup ═══
+ // === cleanup ===
     delete process.env.BOT_INSTANCE;
     feed.dispose(ev1); feed.dispose(ev2); feed.dispose(ev3); feed.dispose(ev4); feed.dispose(ev5);
     await cleanup([ev1, ev2, ev3, ev4, ev5]);

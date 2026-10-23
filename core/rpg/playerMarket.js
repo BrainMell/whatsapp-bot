@@ -1,16 +1,14 @@
 // rpg/playerMarket.js
-// 🏪 UNIFIED PLAYER MARKET (2026-10-11) — one market for items, runes and summons.
-//
+// UNIFIED PLAYER MARKET - one market for items, runes and summons.
 // Commands (all legacy aliases keep working and land here):
-//   market [page]                       (alias: market)   - browse everything
-//   market items|runes|summons [page]   - browse by kind
-//   market sell item <bagSlot#> <price> [qty]             (legacy: listitem/li)
-//   market sell rune <runeId> <price>                     (legacy: rune sell)
-//   market sell summon <summon#|id> <price>               (legacy: summon market sell)
-//   market buy <listingId|#>                              (legacy: buyitem/bi, rune buy, summon market buy)
-//   market cancel <listingId|#>                           (legacy: unlistitem/uli, rune unsell, summon market cancel)
-//   market my                                             (legacy: summon market my)
-//
+// market [page] (alias: market) - browse everything
+// market items|runes|summons [page] - browse by kind
+// market sell item <bagSlot#> <price> [qty] (legacy: listitem/li)
+// market sell rune <runeId> <price> (legacy: rune sell)
+// market sell summon <summon#|id> <price> (legacy: summon market sell)
+// market buy <listingId|#> (legacy: buyitem/bi, rune buy, summon market buy)
+// market cancel <listingId|#> (legacy: unlistitem/uli, rune unsell, summon market cancel)
+// market my (legacy: summon market my)
 // Custody semantics per kind are preserved from the legacy markets (see
 // models/PlayerMarket.js header). Fee: 10% tax on sale for every kind.
 
@@ -33,16 +31,16 @@ function newListingId() {
   return 'M-' + crypto.randomBytes(4).toString('hex').toUpperCase();
 }
 
-// ───────────────────────────────────────────────────────────
+// -----------------------------------------------------------
 // Legacy migration: copy ACTIVE listings from the three legacy
 // collections into PlayerMarket, mark the originals 'migrated'
 // (invisible to every legacy status:'active' query). Idempotent.
-// ───────────────────────────────────────────────────────────
+// -----------------------------------------------------------
 async function ensureMigrated() {
   if (_migrated) return;
   _migrated = true;
   try {
-    // 1. items
+ // 1. items
     const items = await ItemMarket.find({ status: 'active' }).limit(500);
     for (const l of items) {
       await PlayerMarket.create({
@@ -53,7 +51,7 @@ async function ensureMigrated() {
       l.status = 'migrated';
       await l.save();
     }
-    // 2. runes (live in the CARD system's CardMarket collection with isRune:true)
+ // 2. runes (live in the CARD system's CardMarket collection with isRune:true)
     try {
       const CardMarket = require('../models/CardMarket');
       const Rune = require('../models/Rune');
@@ -68,12 +66,12 @@ async function ensureMigrated() {
         });
         l.status = 'migrated';
         await l.save();
-        // rune keeps onMarket=true - custody unchanged
+ // rune keeps onMarket=true - custody unchanged
       }
     } catch (e) {
       console.error('[PlayerMarket] rune migration skipped:', e.message);
     }
-    // 3. summons
+ // 3. summons
     try {
       const SummonMarket = require('../models/SummonMarket');
       const count = await SummonMarket.countDocuments({ status: 'active' });
@@ -97,9 +95,9 @@ async function ensureMigrated() {
   }
 }
 
-// ───────────────────────────────────────────────────────────
+// -----------------------------------------------------------
 // Browse: market [kind] [page]
-// ───────────────────────────────────────────────────────────
+// -----------------------------------------------------------
 async function cmdBrowse(senderJid, reply, args = []) {
   await ensureMigrated();
   let kind = null, page = 1;
@@ -139,9 +137,9 @@ async function cmdBrowse(senderJid, reply, args = []) {
   return reply(msg, { mentions }), true;
 }
 
-// ───────────────────────────────────────────────────────────
+// -----------------------------------------------------------
 // Sell: market sell item <slot> <price> [qty] | rune <id> <price> | summon <q> <price>
-// ───────────────────────────────────────────────────────────
+// -----------------------------------------------------------
 async function cmdSell(senderJid, reply, args = []) {
   await ensureMigrated();
   const what = String(args[0] || '').toLowerCase();
@@ -189,7 +187,7 @@ async function sellItem(senderJid, reply, args) {
   const price = parseInt(args[1]);
   const qty = args[2] !== undefined ? parseInt(args[2]) : 1;
   if (isNaN(slot) || slot < 1 || isNaN(price) || price < MIN_LISTING || isNaN(qty) || qty < 1 || price > MAX_LISTING) {
-    return reply(`❌ Usage: \`market sell item <bagSlot#> <price> [qty]\` — price ${MIN_LISTING.toLocaleString()}-${MAX_LISTING.toLocaleString()}. Look up slot numbers in your bag.`), true;
+    return reply(`❌ Usage: \`market sell item <bagSlot#> <price> [qty]\` - price ${MIN_LISTING.toLocaleString()}-${MAX_LISTING.toLocaleString()}. Look up slot numbers in your bag.`), true;
   }
   const items = getInventorySlotList(senderJid);
   if (items.length === 0) return reply('❌ Your inventory is empty.'), true;
@@ -197,7 +195,7 @@ async function sellItem(senderJid, reply, args) {
   if (!target) return reply(`❌ No item in bag slot #${slot}. You have ${items.length} item type(s).`), true;
   if (target.quantity < qty) return reply(`❌ You only have ${target.quantity} of ${target.name} (need ${qty}).`), true;
 
-  // Escrow: remove from bag FIRST (abort if that fails - no ghost listings)
+ // Escrow: remove from bag FIRST (abort if that fails - no ghost listings)
   const removed = inventorySystem.removeItem(senderJid, target.itemId, qty);
   if (!removed || !removed.success) {
     return reply(`❌ Failed to remove ${qty}× ${target.name} from your bag. Sale aborted.`), true;
@@ -261,14 +259,14 @@ async function sellSummon(senderJid, reply, args) {
   const query = String(args[0] || '').trim();
   const price = parseInt(args[1]) || 0;
   if (!query || price < 1000 || price > MAX_LISTING) {
-    return reply(`❌ Usage: \`market sell summon <summon#|id> <price>\` — minimum 1,000 Zeni.`), true;
+    return reply(`❌ Usage: \`market sell summon <summon#|id> <price>\` - minimum 1,000 Zeni.`), true;
   }
   const summonSystem = require('./summonSystem');
   const registry = require('./summonRegistry');
   const user = economy.getUser(senderJid);
   if (!user) return reply('❌ Not registered.'), true;
   const summons = await summonSystem.getUserSummons(senderJid);
-  // resolve by position number or id/nickname (same rules as summon commands)
+ // resolve by position number or id/nickname (same rules as summon commands)
   let target = null;
   const num = parseInt(query);
   if (!isNaN(num) && num >= 1 && num <= summons.length) target = summons[num - 1];
@@ -301,10 +299,10 @@ async function sellSummon(senderJid, reply, args) {
   }
 }
 
-// ───────────────────────────────────────────────────────────
-// Buy: market buy <listingId|#>   (id prefix match, or index in
+// -----------------------------------------------------------
+// Buy: market buy <listingId|#> (id prefix match, or index in
 // the default browse order = active, listedAt desc, all kinds)
-// ───────────────────────────────────────────────────────────
+// -----------------------------------------------------------
 async function resolveListing(query) {
   if (/^\d+$/.test(query)) {
     const num = parseInt(query);
@@ -312,7 +310,7 @@ async function resolveListing(query) {
     const active = await PlayerMarket.find({ status: 'active' }).sort({ listedAt: -1 });
     return active[num - 1] || null;
   }
-  // id prefix (case-insensitive)
+ // id prefix (case-insensitive)
   const byId = await PlayerMarket.findOne({ listingId: { $regex: query + '$', $options: 'i' }, status: 'active' });
   return byId;
 }
@@ -320,7 +318,7 @@ async function resolveListing(query) {
 async function cmdBuy(senderJid, reply, args = []) {
   await ensureMigrated();
   const query = String(args[0] || '').trim();
-  if (!query) return reply('❌ Usage: `market buy <listingId|#>` — find both in `market`.'), true;
+  if (!query) return reply('❌ Usage: `market buy <listingId|#>` - find both in `market`.'), true;
   const listing = await resolveListing(query);
   if (!listing) return reply(`❌ No active listing matching "${query}".`), true;
   if (listing.sellerId === senderJid) return reply('❌ You cannot buy your own listing. Use `market cancel <id>` to cancel it.'), true;
@@ -329,7 +327,7 @@ async function cmdBuy(senderJid, reply, args = []) {
   if (balance < listing.price) {
     return reply(`❌ Insufficient funds! Need ${ZENI()}${listing.price.toLocaleString()}, have ${ZENI()}${balance.toLocaleString()}.`), true;
   }
-  // Summon kind: extra checks preserved from the legacy summon market
+ // Summon kind: extra checks preserved from the legacy summon market
   if (listing.kind === 'summon') {
     const summonSystem = require('./summonSystem');
     const user = economy.getUser(senderJid);
@@ -348,19 +346,19 @@ async function cmdBuy(senderJid, reply, args = []) {
   const taxAmount = Math.floor(listing.price * TAX_RATE);
   const sellerGets = listing.price - taxAmount;
 
-  // Pay FIRST (abort if the wallet changed mid-transaction)
+ // Pay FIRST (abort if the wallet changed mid-transaction)
   const paid = economy.removeMoney(senderJid, listing.price, `Market purchase (${listing.kind}): ${listing.listingId}`);
   if (!paid) {
     return reply('❌ Purchase failed: wallet balance changed during transaction. Try again.'), true;
   }
-  // Credit seller (roll back buyer on failure)
+ // Credit seller (roll back buyer on failure)
   const credited = economy.addMoney(listing.sellerId, sellerGets, `Market sale (${listing.kind}): ${listing.listingId} (after 10% tax)`);
   if (!credited) {
     economy.addMoney(senderJid, listing.price, `Market purchase rollback (seller credit failed)`);
     return reply('❌ Purchase failed: seller could not be credited. Try again later.'), true;
   }
 
-  // Kind-specific transfer with rollback
+ // Kind-specific transfer with rollback
   try {
     if (listing.kind === 'item') {
       const transferred = await inventorySystem.addItem(senderJid, listing.itemId, listing.quantity, {
@@ -393,14 +391,14 @@ async function cmdBuy(senderJid, reply, args = []) {
       } catch (e) {}
     }
   } catch (e) {
-    // full rollback
+ // full rollback
     economy.addMoney(senderJid, listing.price, `Market purchase rollback (${e.message})`);
     economy.removeMoney(listing.sellerId, sellerGets, `Market sale rollback (${e.message})`);
     const why = e.message === 'INVENTORY_FULL' ? 'your inventory is full' : e.message === 'SUMMON_GONE' ? 'the summon no longer exists' : e.message === 'RUNE_GONE' ? 'the rune no longer exists' : 'the transfer failed';
-    return reply(`❌ Purchase failed: ${why}. No money was lost — everything rolled back.`), true;
+    return reply(`❌ Purchase failed: ${why}. No money was lost - everything rolled back.`), true;
   }
 
-  // Finalize
+ // Finalize
   listing.status = 'sold';
   listing.buyerId = senderJid;
   listing.completedAt = new Date();
@@ -417,13 +415,13 @@ async function cmdBuy(senderJid, reply, args = []) {
   ), true;
 }
 
-// ───────────────────────────────────────────────────────────
+// -----------------------------------------------------------
 // Cancel: market cancel <listingId|#>
-// ───────────────────────────────────────────────────────────
+// -----------------------------------------------------------
 async function cmdCancel(senderJid, reply, args = []) {
   await ensureMigrated();
   const query = String(args[0] || '').trim();
-  if (!query) return reply('❌ Usage: `market cancel <listingId|#>` — your listings: `market my`.'), true;
+  if (!query) return reply('❌ Usage: `market cancel <listingId|#>` - your listings: `market my`.'), true;
   let listing;
   if (/^\d+$/.test(query)) {
     const mine = await PlayerMarket.find({ status: 'active', sellerId: senderJid }).sort({ listedAt: -1 });
@@ -433,7 +431,6 @@ async function cmdCancel(senderJid, reply, args = []) {
   }
   if (!listing) return reply(`❌ No active listing matching "${query}" belonging to you.`), true;
 
-  // Return custody (inventory-full keeps the listing alive, same as legacy)
   if (listing.kind === 'item') {
     const restored = await inventorySystem.addItem(senderJid, listing.itemId, listing.quantity, {
       name: listing.itemName, rarity: listing.itemRarity,
@@ -456,12 +453,12 @@ async function cmdCancel(senderJid, reply, args = []) {
   listing.status = 'cancelled';
   listing.completedAt = new Date();
   await listing.save();
-  return reply('✅ Listing cancelled' + (listing.kind === 'item' ? ` — ${listing.quantity}× ${listing.itemName} returned to your bag.` : '.')), true;
+  return reply('✅ Listing cancelled' + (listing.kind === 'item' ? ` - ${listing.quantity}× ${listing.itemName} returned to your bag.` : '.')), true;
 }
 
-// ───────────────────────────────────────────────────────────
+// -----------------------------------------------------------
 // My listings
-// ───────────────────────────────────────────────────────────
+// -----------------------------------------------------------
 async function cmdMy(senderJid, reply) {
   await ensureMigrated();
   const mine = await PlayerMarket.find({ sellerId: senderJid, status: 'active' }).sort({ listedAt: -1 });
@@ -475,7 +472,7 @@ async function cmdMy(senderJid, reply) {
     if (l.kind === 'item') msg += `${l.itemName} ×${l.quantity}`;
     else if (l.kind === 'rune') msg += `Rune: ${l.runeLabel}`;
     else msg += `${l.summonLabel} (Lv.${l.summonLevel})`;
-    msg += ` — ${ZENI()}${l.price.toLocaleString()} · 🆔 \`${l.listingId}\`\n`;
+    msg += ` - ${ZENI()}${l.price.toLocaleString()} · 🆔 \`${l.listingId}\`\n`;
   });
   msg += `\n💡 Cancel: \`market cancel <id|#>\``;
   return reply(msg), true;
@@ -484,7 +481,7 @@ async function cmdMy(senderJid, reply) {
 // Legacy help text (surfaced by old command menus)
 function unifiedHelp() {
   const p = P();
-  return `🏪 *PLAYER MARKET* — one market for everything\n\n` +
+  return `🏪 *PLAYER MARKET* - one market for everything\n\n` +
     `• \`${p} market\` - browse all listings\n• \`${p} market items|runes|summons\` - browse by kind\n` +
     `• \`${p} market sell item <bag#> <price> [qty]\`\n• \`${p} market sell rune <runeId> <price>\`\n` +
     `• \`${p} market sell summon <#|id> <price>\`\n• \`${p} market buy <id|#>\` · \`${p} market cancel <id>\` · \`${p} market my\`\n\n_10% tax on sale. Old commands (listitem, rune sell, summon market ...) still work._`;

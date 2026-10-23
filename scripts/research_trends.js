@@ -1,10 +1,10 @@
 // research_trends.js - REAL experiments against Google Trends unofficial endpoints
 // Dance (pytrends-equivalent, in-house with axios):
-//   1) GET https://trends.google.com/trends/explore  (cookie jar: NID etc.)
-//   2) GET https://trends.google.com/trends/api/explore?hl=en-US&tz=0&req=<json>  (with cookies)
-//      -> ")]}'"-prefixed JSON, widgets[] -> timeseries widget {token, request}
-//   3) GET https://trends.google.com/trends/api/widgetdata/multiline?hl=en-US&tz=0&req=<widget.request json>&token=<token>
-//      -> ")]}'"-prefixed JSON, default.timelineData[] = {time, value[], hasData[], formattedTime}
+// 1) GET https://trends.google.com/trends/explore (cookie jar: NID etc.)
+// 2) GET https://trends.google.com/trends/api/explore?hl=en-US&tz=0&req=<json> (with cookies)
+// -> ")]}'"-prefixed JSON, widgets[] -> timeseries widget {token, request}
+// 3) GET https://trends.google.com/trends/api/widgetdata/multiline?hl=en-US&tz=0&req=<widget.request json>&token=<token>
+// -> ")]}'"-prefixed JSON, default.timelineData[] = {time, value[], hasData[], formattedTime}
 "use strict";
 const axios = require("axios");
 
@@ -18,7 +18,7 @@ function parseTrendsBody(body) {
 }
 
 async function newSession() {
-  // step 1: acquire cookies
+ // step 1: acquire cookies
   const pre = await axios.get(`${TRENDS}/trends/explore`, { headers: UA, timeout: 15000 });
   const setCookies = pre.headers["set-cookie"] || [];
   const cookie = setCookies.map((c) => c.split(";")[0]).join("; ");
@@ -63,7 +63,7 @@ async function runCase(label, keywords, time) {
     const kwNames = (ml.default.columnNames || []).slice(1);
     const vals = tl.map((p) => p.value);
     const last = tl[tl.length - 1];
-    // sample a few points
+ // sample a few points
     const sampleIdx = [0, Math.floor(tl.length / 4), Math.floor(tl.length / 2), tl.length - 1];
     const samples = sampleIdx.map((i) => `${tl[i].formattedTime}=[${(tl[i].value || []).join(",")}]`).join("  ");
     console.log(`  ${label}: OK ${tl.length} pts, cols=[${kwNames.join(" | ")}] (${Date.now() - t0}ms)`);

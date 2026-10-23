@@ -1,33 +1,31 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-//  AMBIENT LIFE LAYER — shared animated flourishes for the hex kingdom cards
-//  (homesteadBaseRenderer + guildBaseRenderer). Owner 2026-10-19
-//  (msg 1561537407189389343): "improve the animation of the water, i like the
-//  little sprinkling but its barely noticeable, also add more slight
-//  animations... moving little things shuffling trees maybe birds flying by
-//  tint ... just bring it to life".
-//
-//  Everything here is a PURE function of the loop phase t ∈ [0,1) so every
-//  14-frame bake loops seamlessly: all oscillators run at integer multiples
-//  of 2π per loop, and anything that travels enters/exits off-card.
-//
-//  Systems (cheapest first, all screen-space):
-//    - animateWater   boosted glint tiles ×2 pass, per-cell sparkle points
-//                     with cross rays, shore ripple rings, lava pulse
-//    - drawSway       tree sprites redrawn ±1-2px on a sine (the baked static
-//                     tree underneath peeks ≤1px at bake scale — reads as wind)
-//    - drawBirds      two flocks + two loners crossing the card, flapping
-//    - drawButterflies eight flutterers over the meadows
-//    - drawCloudShadows three soft dark blobs drifting/breathing (light drift)
-//    - drawTint       warm/cool global tint breathing (the "tint")
-//    - glints()       the old 64x32 water-art white masks (moved from the
-//                     homestead renderer so the guild card can use them too)
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// AMBIENT LIFE LAYER - shared animated flourishes for the hex kingdom cards
+// (homesteadBaseRenderer + guildBaseRenderer).
+// (msg 1561537407189389343): "improve the animation of the water, i like the
+// little sprinkling but its barely noticeable, also add more slight
+// animations... moving little things shuffling trees maybe birds flying by
+// tint ... just bring it to life".
+// Everything here is a PURE function of the loop phase t ∈ [0,1) so every
+// 14-frame bake loops seamlessly: all oscillators run at integer multiples
+// of 2π per loop, and anything that travels enters/exits off-card.
+// Systems (cheapest first, all screen-space):
+// - animateWater boosted glint tiles ×2 pass, per-cell sparkle points
+// with cross rays, shore ripple rings, lava pulse
+// - drawSway tree sprites redrawn ±1-2px on a sine (the baked static
+// tree underneath peeks ≤1px at bake scale - reads as wind)
+// - drawBirds two flocks + two loners crossing the card, flapping
+// - drawButterflies eight flutterers over the meadows
+// - drawCloudShadows three soft dark blobs drifting/breathing (light drift)
+// - drawTint warm/cool global tint breathing (the "tint")
+// - glints() the old 64x32 water-art white masks (moved from the
+// homestead renderer so the guild card can use them too)
+// ===========================================================================
 
 const path = require('path');
 const K = require('./kingdom3d');
 
-// ── old water art (two glint frames, 64x32) → white glint masks ──
+// -- old water art (two glint frames, 64x32) → white glint masks --
 let _glints = null;
 async function glints() {
     if (_glints) return _glints;
@@ -54,10 +52,10 @@ async function glints() {
     return out;
 }
 
-// ── water / lava: BOOSTED (was a 0.6-alpha glint tile per cell — barely
-//    noticeable at bake scale; now glints are near-opaque with an additive
-//    echo, plus per-cell sparkle points that flare with cross rays, plus
-//    ripple rings on shore cells) ──
+// -- water / lava: BOOSTED (was a 0.6-alpha glint tile per cell - barely
+// noticeable at bake scale; now glints are near-opaque with an additive
+// echo, plus per-cell sparkle points that flare with cross rays, plus
+// ripple rings on shore cells) --
 function animateWater(ctx, sc, t, G) {
     const lava = sc.realm === 'volcanic', ice = sc.realm === 'tundra';
     const cellW = 1.9 * 96 * sc.k;                                   // glint tile ≈ one cell wide
@@ -86,7 +84,7 @@ function animateWater(ctx, sc, t, G) {
                 ctx.drawImage(g, cell.cx - cellW * 0.56 + drift * 1.4 + 1.5, cell.cy - cellW * 0.28, cellW * 1.12, cellW * 0.56);
             }
         }
-        // ── the sprinkling, made visible: two flare points per cell ──
+ // -- the sprinkling, made visible: two flare points per cell --
         const pts = [
             { fx: 0.5 + (((cell.h % 89) / 89) - 0.5) * 0.62, fy: 0.42 + (((cell.h % 53) / 53) - 0.5) * 0.44, off: 0.00 },
             { fx: 0.5 + (((cell.h % 31) / 31) - 0.5) * 0.55, fy: 0.58 + (((cell.h % 17) / 17) - 0.5) * 0.40, off: 0.47 },
@@ -105,7 +103,7 @@ function animateWater(ctx, sc, t, G) {
             g.addColorStop(1, `rgba(${col},0)`);
             ctx.fillStyle = g;
             ctx.fillRect(sx - R * 2.4, sy - R * 2.4, R * 4.8, R * 4.8);
-            // cross rays — the classic map-sparkle read
+ // cross rays - the classic map-sparkle read
             ctx.strokeStyle = `rgba(${col},${(0.8 * a).toFixed(3)})`;
             ctx.lineWidth = Math.max(0.8, 1.1 * sc.k * 2.2);
             const L = (4.5 + (i % 2) * 2.5) * Math.max(0.8, sc.k * 2.2);
@@ -114,7 +112,7 @@ function animateWater(ctx, sc, t, G) {
             ctx.moveTo(sx, sy - L * 0.62); ctx.lineTo(sx, sy + L * 0.62);
             ctx.stroke();
         }
-        // ── shore ripple rings: expanding, fading ellipses on cells that touch land ──
+ // -- shore ripple rings: expanding, fading ellipses on cells that touch land --
         if (cell.shore && !lava) {
             const ph3 = (t + h01 * 0.618 + 0.13) % 1;
             const r = (3 + ph3 * 11) * Math.max(0.8, sc.k * 2.2);
@@ -130,11 +128,11 @@ function animateWater(ctx, sc, t, G) {
     ctx.restore();
 }
 
-// ── tree sway: clone-draw the tree sprites with a ±1-2px sine offset ──
-//    The static baked tree stays underneath; the clone (drawn over it) mostly
-//    covers it, and the ≤1px sliver at bake scale reads as wind. Draw order is
-//    preserved because clones draw after the objects layer at almost the same
-//    position — no re-sorting needed.
+// -- tree sway: clone-draw the tree sprites with a ±1-2px sine offset --
+// The static baked tree stays underneath; the clone (drawn over it) mostly
+// covers it, and the ≤1px sliver at bake scale reads as wind. Draw order is
+// preserved because clones draw after the objects layer at almost the same
+// position - no re-sorting needed.
 const TREE_RE = /^trees_[AB]_(large|medium)|^tree_single_[AB]$/;
 async function swayTrees(w, { max = 380 } = {}) {
     const vk = w.viewKey, k = w.scale;
@@ -171,9 +169,9 @@ function drawSway(ctx, list, t) {
     }
 }
 
-// ── birds: V-flocks + loners crossing the card, with soft ground shadows ──
-//    Loop-safe: every bird crosses the card exactly ONCE per loop (u = (t + phase) % 1), so frame 13 → frame 0 has no
-//    jump; wingbeats are an integer count per loop. Sized from the card width so they read in a WhatsApp preview.
+// -- birds: V-flocks + loners crossing the card, with soft ground shadows --
+// Loop-safe: every bird crosses the card exactly ONCE per loop (u = (t + phase) % 1), so frame 13 → frame 0 has no
+// jump; wingbeats are an integer count per loop. Sized from the card width so they read in a WhatsApp preview.
 function birdShape(ctx, x, y, s, flap, lw) {
     const lift = flap * s * 0.95;
     ctx.beginPath();
@@ -220,8 +218,8 @@ function drawBirds(ctx, W, H, t, seed) {
     ctx.restore();
 }
 
-// ── villagers: tiny figures strolling along the roads (ping-pong over 1-3 road cells, one stroll per loop) ──
-// owner call (2026-10-19): walkers off — remove the people, keep the birds (boats/smoke/sway untouched)
+// -- villagers: tiny figures strolling along the roads (ping-pong over 1-3 road cells, one stroll per loop) --
+// owner call: walkers off - remove the people, keep the birds (boats/smoke/sway untouched)
 function buildWalkers(w, seed, { n = 8, maxY = Infinity } = {}) {
     return [];                                                       // villagers disabled; drawWalkers no-ops on empty
     const rnd = K.mulberry32(seed + 5200);
@@ -294,7 +292,7 @@ function drawWalkers(ctx, list, t, k) {
     ctx.restore();
 }
 
-// ── boats: little sailboats drifting between open-water cells (ping-pong, bobbing, with a wake) ──
+// -- boats: little sailboats drifting between open-water cells (ping-pong, bobbing, with a wake) --
 function buildBoats(water, seed, k, { max = 2 } = {}) {
     if (!water || water.length < 5) return [];
     const cellW = 1.9 * 96 * k, rnd = K.mulberry32(seed + 5600);
@@ -342,7 +340,7 @@ function drawBoats(ctx, list, t, k) {
     ctx.restore();
 }
 
-// ── butterflies: eight flutterers over the meadows, 8 wingbeats per loop ──
+// -- butterflies: eight flutterers over the meadows, 8 wingbeats per loop --
 function drawButterflies(ctx, W, H, t, seed) {
     ctx.save();
     for (let i = 0; i < 8; i++) {
@@ -365,7 +363,7 @@ function drawButterflies(ctx, W, H, t, seed) {
     ctx.restore();
 }
 
-// ── cloud shadows: three soft blobs breathing/drifting (light changes over the land) ──
+// -- cloud shadows: three soft blobs breathing/drifting (light changes over the land) --
 function drawCloudShadows(ctx, W, H, t, seed) {
     ctx.save();
     for (let i = 0; i < 3; i++) {
@@ -384,7 +382,7 @@ function drawCloudShadows(ctx, W, H, t, seed) {
     ctx.restore();
 }
 
-// ── tint: a warm gold breath answered by a cool dusk breath — the "tint" ──
+// -- tint: a warm gold breath answered by a cool dusk breath - the "tint" --
 function drawTint(ctx, W, H, t) {
     const a = 0.5 - 0.5 * Math.cos(t * Math.PI * 2);                 // 0 → 1 → 0, seamless
     ctx.fillStyle = `rgba(255,208,140,${(0.030 * a).toFixed(4)})`;

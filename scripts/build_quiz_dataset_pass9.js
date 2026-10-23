@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* build_quiz_dataset_pass9.js — image backfill (owner 2026-10-10: "make sure
+/* build_quiz_dataset_pass9.js - image backfill (owner 2026-10-10: "make sure
  * the images check out" + "get more questions"): games had 24 images, movies
  * 70. Keyless sources bypassing Wikimedia rate limits:
  *   games  : SteamSpy top list -> cdn.cloudflare.steamstatic.com header
@@ -38,7 +38,7 @@ async function jget(url) {
   try { const r = await axios.get(url, { timeout: 25000, headers: { "User-Agent": UA } }); return r.data; } catch { return null; }
 }
 
-// ~300 famous films spanning decades — poster ID is fair typed gameplay
+// ~300 famous films spanning decades - poster ID is fair typed gameplay
 const FILMS = `The Godfather,The Dark Knight,Pulp Fiction,Forrest Gump,The Matrix,Jurassic Park,Titanic,Avatar,The Lion King,Toy Story,
 Star Wars,The Empire Strikes Back,Raiders of the Lost Ark,Back to the Future,E.T. the Extra-Terrestrial,The Silence of the Lambs,Schindler's List,Goodfellas,Se7en,The Usual Suspects,
 Fight Club,Gladiator,The Lord of the Rings,Inception,Interstellar,The Departed,Joker,Mad Max Fury Road,Whiplash,Django Unchained,

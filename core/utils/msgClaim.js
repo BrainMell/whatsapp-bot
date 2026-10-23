@@ -1,17 +1,15 @@
 // ============================================
-// 🤝 GC COEXISTENCE — cross-instance command claim (2026-10-07)
+// GC COEXISTENCE - cross-instance command claim
 // Owner directive: "scrape the one-group-per-bot concept … allow all the
 // bots to exist in any gc together." All instances share ONE MongoDB, so
 // every bot's WhatsApp socket receives EVERY group message. Without this
 // claim, a `.j rank` typed in a shared GC was answered by Joker AND anyone
 // else whose pipeline matched (and reconnect backfill could double-fire a
 // single instance too).
-//
 // Contract: the FIRST instance to insert the claim key handles the message;
 // every other instance (and the same instance's backfill copy) loses the
-// E11000 duplicate-key race and skips. Key = chat|sender|msgId — unique per
+// E11000 duplicate-key race and skips. Key = chat|sender|msgId - unique per
 // WhatsApp stanza. Claims expire via TTL (15 min) so the collection self-cleans.
-//
 // Fail-open policy: any NON-duplicate error (DB blip, collection missing on
 // a cold shard) returns true → the bot behaves like the legacy single-bot
 // world. A rare double reply beats a dead command pipeline.
@@ -45,8 +43,8 @@ async function claimGroupCommand(chatId, senderKey, msgId) {
         await model().create({ _id: key, bot: String(require('../../botConfig').getBotId() || 'bot') });
         return true;
     } catch (e) {
-        if (e && (e.code === 11000 || e.code === 11001)) return false; // lost the race — someone else is on it
-        // infra failure → fail-open (never freeze the pipeline on claim infra)
+        if (e && (e.code === 11000 || e.code === 11001)) return false; // lost the race - someone else is on it
+ // infra failure → fail-open (never freeze the pipeline on claim infra)
         return true;
     }
 }

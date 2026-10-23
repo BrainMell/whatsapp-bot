@@ -1,17 +1,17 @@
 // ============================================
-// 🧭 RUINS NAVIGATION CARDS — Guild War Overhaul 2026-10-03
+// RUINS NAVIGATION CARDS - Guild War Overhaul
 // Owner directive: "make the ruins navigation reactive and visual."
 // Two node-canvas cards in the Guild War parchment kit:
-//   renderRoomTypeCard - shown on EVERY room entry BEFORE the scene image:
-//     a bold "what kind of place is this" card (type seal + flavour + hint).
-//   renderNavCard - shown whenever an encounter resolves (and on `paths`):
-//     a compass layout with ARROWS for each direction, showing where the
-//     player can go next - no more walls of exit text.
+// renderRoomTypeCard - shown on EVERY room entry BEFORE the scene image:
+// a bold "what kind of place is this" card (type seal + flavour + hint).
+// renderNavCard - shown whenever an encounter resolves (and on `paths`):
+// a compass layout with ARROWS for each direction, showing where the
+// player can go next - no more walls of exit text.
 // ============================================
 
 const fs = require('fs');
 const path = require('path');
-const { fillTextMixed } = require('../emojiFont');   // 2026-10-20: fog glyph color bitmap (owner 'use colors not hex code')
+const { fillTextMixed } = require('../emojiFont'); // fog glyph color bitmap (owner 'use colors not hex code')
 
 const PAL = {
     parchment: '#EADDC4', parchmentDeep: '#E1D1AF',
@@ -101,7 +101,7 @@ function _parchmentBase(ctx, W, H) {
     ctx.strokeRect(42, 42, W - 84, H - 84);
 }
 
-// ── ROOM TYPE CARD ────────────────────────────────────────────────────────
+// -- ROOM TYPE CARD --------------------------------------------------------
 // opts: { roomType, world, ring, boss, variant, landmarkName, cleared, prefix }
 async function renderRoomTypeCard(opts = {}) {
     _ensureFonts();
@@ -114,7 +114,7 @@ async function renderRoomTypeCard(opts = {}) {
     const meta = typeMeta(opts.roomType);
     const label = opts.landmarkName ? String(opts.landmarkName).toUpperCase() : meta.label;
 
-    // accent type strip
+ // accent type strip
     ctx.fillStyle = meta.accent;
     ctx.fillRect(0, 96, W, 8);
 
@@ -124,11 +124,11 @@ async function renderRoomTypeCard(opts = {}) {
     const kicker = `${(opts.world || 'the ruins').toUpperCase()} - RING ${Math.max(1, Math.round((opts.ring || 0) * 4) + 1)}`;
     ctx.fillText(kicker, W / 2, 78);
 
-    // big glyph
+ // big glyph
     ctx.font = '96px serif';
     ctx.fillText(meta.glyph, W / 2, 220);
 
-    // type title
+ // type title
     ctx.fillStyle = PAL.ink;
     ctx.font = '44px "Cinzel Deco"';
     const title = label.length > 22 ? label.split('').join('\u2009') : label;
@@ -140,8 +140,8 @@ async function renderRoomTypeCard(opts = {}) {
         ctx.fillText(title, W / 2, 290);
     }
 
-    // flavour line(s) - only when there IS distinct body text (avoids
-    // duplicating the generic hint as both body and red strip)
+ // flavour line(s) - only when there IS distinct body text (avoids
+ // duplicating the generic hint as both body and red strip)
     ctx.font = '21px "IM Fell"';
     ctx.fillStyle = PAL.inkSoft;
     const body = opts.body || null;
@@ -153,7 +153,7 @@ async function renderRoomTypeCard(opts = {}) {
         }
     }
 
-    // status / action strip
+ // status / action strip
     if (opts.cleared) {
         ctx.fillStyle = PAL.open;
         ctx.font = '20px "Cinzel"';
@@ -171,7 +171,7 @@ async function renderRoomTypeCard(opts = {}) {
     return c.toBuffer('image/png');
 }
 
-// ── NAVIGATION CARD ───────────────────────────────────────────────────────
+// -- NAVIGATION CARD -------------------------------------------------------
 // opts: { exits: [{rel, arrow, edge, known, kind, cleared}], roomType, world, prefix }
 async function renderNavCard(opts = {}) {
     _ensureFonts();
@@ -198,7 +198,7 @@ async function renderNavCard(opts = {}) {
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(W / 2 - 170, 142); ctx.lineTo(W / 2 + 170, 142); ctx.stroke();
 
-    // compass layout: up / right / down / left panels around a center seal
+ // compass layout: up / right / down / left panels around a center seal
     const cx = W / 2, cy = 490;
     const off = 228;
     const slots = { forward: [cx, cy - off], right: [cx + off, cy], back: [cx, cy + off], left: [cx - off, cy] };
@@ -211,7 +211,7 @@ async function renderNavCard(opts = {}) {
     for (const rel of ['forward', 'right', 'back', 'left']) {
         const e = byRel[rel];
         const [px, py] = slots[rel];
-        // panel plate
+ // panel plate
         ctx.fillStyle = 'rgba(58,42,30,0.07)';
         ctx.strokeStyle = PAL.frame;
         ctx.lineWidth = 1.5;
@@ -219,15 +219,15 @@ async function renderNavCard(opts = {}) {
         ctx.roundRect ? ctx.roundRect(px - PW / 2, py - PH / 2, PW, PH, 14) : ctx.rect(px - PW / 2, py - PH / 2, PW, PH);
         ctx.fill(); ctx.stroke();
 
-        // direction name (with arrow) INSIDE the panel top - no outside
-        // labels, so nothing can collide with the card title.
+ // direction name (with arrow) INSIDE the panel top - no outside
+ // labels, so nothing can collide with the card title.
         const dirLabels = { forward: '▲ FORWARD (w)', right: '▶ RIGHT (d)', back: '▼ BACK (s)', left: '◀ LEFT (a)' };
         ctx.fillStyle = PAL.inkSoft;
         ctx.font = '16px "Cinzel"';
         ctx.fillText(dirLabels[rel], px, py - 48);
 
         if (!e || !e.edge) {
-            // sealed wall
+ // sealed wall
             ctx.fillStyle = PAL.sealed;
             ctx.font = '36px serif';
             ctx.fillText('✖', px, py + 2);
@@ -260,7 +260,7 @@ async function renderNavCard(opts = {}) {
         }
     }
 
-    // center medallion - you are here
+ // center medallion - you are here
     ctx.beginPath();
     ctx.arc(cx, cy, 74, 0, Math.PI * 2);
     ctx.fillStyle = PAL.you;

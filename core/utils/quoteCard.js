@@ -1,22 +1,21 @@
 // ============================================
-// 🖋️ QUOTE CARD RENDERER - .j quote <text>
+// QUOTE CARD RENDERER - .j quote <text>
 // ============================================
 // Turns text into an elegant quote card (1080x1350 PNG) over a photo
 // background. Used by the `.j quote <text>` command in engine.js.
-//
-// Design notes (2026-10-12, owner: "Make a .j qoute that takes the text
+// Design notes ("Make a .j qoute that takes the text
 // that follows and turns it into text over an appropriate image"):
 // - Background photo comes from the engine (Pinterest keyword search on
-//   the quote's own words). This module stays NETWORK-FREE so QA can run
-//   offline: engine downloads the photo and passes the raw buffer in.
+// the quote's own words). This module stays NETWORK-FREE so QA can run
+// offline: engine downloads the photo and passes the raw buffer in.
 // - No photo / broken photo → procedural gradient fallback seeded by a
-//   hash of the text (deterministic, never network-dependent).
-// - Fonts are bot-owned (core/rpgasset/fonts) with magic-byte guards —
-//   the worldMapRenderer pattern that survives LFS stubs.
+// hash of the text (deterministic, never network-dependent).
+// - Fonts are bot-owned (core/rpgasset/fonts) with magic-byte guards -
+// the worldMapRenderer pattern that survives LFS stubs.
 // - Emoji are stripped before measuring/wrapping: canvas system fonts
-//   render them as tofu boxes, which wreck the layout.
+// render them as tofu boxes, which wreck the layout.
 // - Long quotes auto-shrink (72px → 36px) with word-wrap; hard newlines
-//   in the original message are preserved as line breaks.
+// in the original message are preserved as line breaks.
 
 const fs = require("fs");
 const path = require("path");
@@ -30,7 +29,7 @@ const BOX_TOP = 260;
 const BOX_BOTTOM_AUTHOR = 1020; // leave room for the author line
 const BOX_BOTTOM_NOAUTHOR = 1140;
 
-// ─── FONT REGISTRATION (lazy; bot-owned fonts only) ─────────────────────────
+// --- FONT REGISTRATION (lazy; bot-owned fonts only) -------------------------
 // Same guard pattern as worldMapRenderer: per-file TTF/OTF magic checks so an
 // LFS pointer stub can never poison the canvas font table.
 let _fontsReady = false;
@@ -91,10 +90,10 @@ const SERIF_FAMILY = () => (_hasSerif ? "QuoteSerif" : "DejaVu Sans");
 const AUTHOR_FAMILY = () => (_hasCinzel ? "QuoteAuthor" : "DejaVu Sans");
 const MARK_FAMILY = () => (_hasDeco ? "QuoteMark" : "QuoteSerif");
 
-// ─── TEXT UTILITIES (exported for QA) ───────────────────────────────────────
+// --- TEXT UTILITIES (exported for QA) ---------------------------------------
 
 // Strip emoji / variation selectors / ZWJ that canvas fonts render as tofu.
-// Keeps arrows, math symbols, accents — DejaVu covers those.
+// Keeps arrows, math symbols, accents - DejaVu covers those.
 function stripEmoji(text) {
     return String(text || "")
         .replace(/[\u{1F000}-\u{1FAFF}]/gu, "") // emoji plane
@@ -104,7 +103,7 @@ function stripEmoji(text) {
         .replace(/\u{20E3}/gu, ""); // combining enclosing keycap
 }
 
-// Optional author attribution: `--by Name`, `—by Name`, `–by Name`.
+// Optional author attribution: `--by Name`, `-by Name`, `-by Name`.
 // Multiple separators: first one wins. Empty author → flag ignored.
 function parseQuoteInput(raw) {
     let text = String(raw || "").trim();
@@ -147,7 +146,7 @@ function pickBackgroundQuery(text) {
     return (q || "aesthetic landscape").slice(0, 60).trim();
 }
 
-// ─── RENDERER ───────────────────────────────────────────────────────────────
+// --- RENDERER ---------------------------------------------------------------
 
 function _djb2Hash(str) {
     let h = 5381;
@@ -212,7 +211,7 @@ async function renderQuoteCard({ text, author, bgBuffer } = {}) {
     const c = canvas.createCanvas(W, H);
     const ctx = c.getContext("2d");
 
-    // 1. Background: photo when we have one, seeded gradient otherwise.
+ // 1. Background: photo when we have one, seeded gradient otherwise.
     let usedPhoto = false;
     if (bgBuffer && bgBuffer.length > 1000) {
         try {
@@ -225,7 +224,7 @@ async function renderQuoteCard({ text, author, bgBuffer } = {}) {
     }
     if (!usedPhoto) _paintGradientBg(ctx, clean);
 
-    // 2. Legibility scrim (works over both photo and gradient).
+ // 2. Legibility scrim (works over both photo and gradient).
     const scrim = ctx.createLinearGradient(0, 0, 0, H);
     scrim.addColorStop(0, "rgba(0,0,0,0.28)");
     scrim.addColorStop(0.45, "rgba(0,0,0,0.42)");
@@ -233,7 +232,7 @@ async function renderQuoteCard({ text, author, bgBuffer } = {}) {
     ctx.fillStyle = scrim;
     ctx.fillRect(0, 0, W, H);
 
-    // 3. Big decorative opening mark.
+ // 3. Big decorative opening mark.
     const hasAuthor = Boolean(author && author.trim());
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
@@ -249,7 +248,7 @@ async function renderQuoteCard({ text, author, bgBuffer } = {}) {
         /* decorative mark is optional */
     }
 
-    // 4. Quote text: adaptive size, wrapped, centered.
+ // 4. Quote text: adaptive size, wrapped, centered.
     const maxWidth = W - MARGIN_X * 2;
     const boxBottom = hasAuthor ? BOX_BOTTOM_AUTHOR : BOX_BOTTOM_NOAUTHOR;
     const boxHeight = boxBottom - BOX_TOP;
@@ -286,7 +285,7 @@ async function renderQuoteCard({ text, author, bgBuffer } = {}) {
     ctx.shadowOffsetY = 0;
     ctx.shadowColor = "transparent";
 
-    // 5. Author line: right-aligned, gold, small rule above it.
+ // 5. Author line: right-aligned, gold, small rule above it.
     if (hasAuthor) {
         const aY = Math.min(y + 44, H - 150);
         ctx.font = `34px "${AUTHOR_FAMILY()}", serif`;
@@ -295,7 +294,7 @@ async function renderQuoteCard({ text, author, bgBuffer } = {}) {
         ctx.shadowColor = "rgba(0,0,0,0.8)";
         ctx.shadowBlur = 6;
         ctx.fillText(`\u2014  ${author.trim()}`, W - MARGIN_X, aY);
-        // thin gold underline accent
+ // thin gold underline accent
         ctx.shadowBlur = 0;
         ctx.shadowColor = "transparent";
         const ruleW = 110;

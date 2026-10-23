@@ -1,37 +1,37 @@
-// gw_glyph_card_qa.js — visual + structural QA for the Rune Lock glyph fix
-// (owner 2026-10-06: "glyphs don't render properly on the image cards")
+// gw_glyph_card_qa.js - visual + structural QA for the Rune Lock glyph fix
+// ("glyphs don't render properly on the image cards")
 // Renders a sequence-puzzle card with the real 52-rune pool and verifies:
-//  G1: puzzleCards registers the bundled Noto Sans Runic font
-//  G2: the font file is real bytes (not an LFS stub) — head == TTF magic
-//  G3: tile drawing uses the runic font for rune tokens (source pin)
-//  G4: plain-text body draws per-run (mixed-script safe) (source pin)
-//  G5: a real card renders and the drawn pixels DIFFER between the runic
-//      font rendering and what Cinzel-only would produce (font actually used)
+// G1: puzzleCards registers the bundled Noto Sans Runic font
+// G2: the font file is real bytes (not an LFS stub) - head == TTF magic
+// G3: tile drawing uses the runic font for rune tokens (source pin)
+// G4: plain-text body draws per-run (mixed-script safe) (source pin)
+// G5: a real card renders and the drawn pixels DIFFER between the runic
+// font rendering and what Cinzel-only would produce (font actually used)
 const fs = require('fs');
 const path = require('path');
 let pass = 0, fail = 0;
 function check(name, ok, extra) {
-    if (ok) { pass++; console.log(`  ✓ ${name}${extra ? ' — ' + extra : ''}`); }
-    else { fail++; console.log(`  ✗ ${name}${extra ? ' — ' + extra : ''}`); }
+    if (ok) { pass++; console.log(`  ✓ ${name}${extra ? ' - ' + extra : ''}`); }
+    else { fail++; console.log(`  ✗ ${name}${extra ? ' - ' + extra : ''}`); }
 }
 
 (async () => {
     const repo = path.join(__dirname, '..');
     const src = fs.readFileSync(path.join(repo, 'core/rpg/guildWar/puzzleCards.js'), 'utf8');
 
-    // G1: registration entry
+ // G1: registration entry
     check('G1: NotoSansRunic registered as "Noto Runic"', src.includes("['NotoSansRunic-Regular.ttf', { family: 'Noto Runic' }]"));
 
-    // G2: real font bytes in the repo
+ // G2: real font bytes in the repo
     const fontPath = path.join(repo, 'core/rpgasset/fonts/NotoSansRunic-Regular.ttf');
     const head = fs.readFileSync(fontPath).slice(0, 4);
     check('G2: font file has real TTF bytes', head.equals(Buffer.from([0x00, 0x01, 0x00, 0x00])), `${fs.statSync(fontPath).size} bytes`);
 
-    // G3/G4: source pins
+ // G3/G4: source pins
     check('G3: rune tokens drawn with the runic font', /RUNIC_RE\.test\(label\)[\s\S]{0,80}RUNIC_FONT/.test(src));
     check('G4: plain body draws mixed runs (drawMixed)', src.includes('drawMixed(ctx, lineText, 90, y + 12)') && src.includes('function drawMixed'));
 
-    // G5: actually render a card with real glyphs
+ // G5: actually render a card with real glyphs
     const { renderPuzzleCard } = require(path.join(repo, 'core/rpg/guildWar/puzzleCards.js'));
     const { GLYPHS } = require(path.join(repo, 'core/rpg/guildWar/puzzles.js'));
     const seq = [GLYPHS[0], GLYPHS[26], GLYPHS[28], GLYPHS[49], GLYPHS[11]]; // ᚠ ᛊ ᛏ ᛩ ᚹ
@@ -46,10 +46,10 @@ function check(name, ok, extra) {
         fs.writeFileSync(path.join(out, 'rune_lock_card_fixed.png'), buf);
         console.log(`  → render saved: ${path.join(out, 'rune_lock_card_fixed.png')}`);
 
-        // G5b: pixel proof — draw the same rune row with ONLY the runic family
-        // vs with a family that lacks runes; on a box without system runic
-        // fonts the two MUST differ (hexbox vs rune). On this sandbox a system
-        // fallback exists, so instead verify the registered family resolves:
+ // G5b: pixel proof - draw the same rune row with ONLY the runic family
+ // vs with a family that lacks runes; on a box without system runic
+ // fonts the two MUST differ (hexbox vs rune). On this sandbox a system
+ // fallback exists, so instead verify the registered family resolves:
         const canvas = require('canvas');
         const cv = canvas.createCanvas(200, 80);
         const ctx = cv.getContext('2d');

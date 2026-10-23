@@ -1,6 +1,6 @@
 'use strict';
-// render_guild_biomes.js — proof cards for every biome × several guild names
-//   node scripts/render_guild_biomes.js [outDir] [names,comma,separated]
+// render_guild_biomes.js - proof cards for every biome × several guild names
+// node scripts/render_guild_biomes.js [outDir] [names,comma,separated]
 const fs = require('fs');
 const path = require('path');
 const OUT = process.argv[2] || '/tmp/guild_biomes';

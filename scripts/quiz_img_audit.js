@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* quiz_img_audit.js — owner 2026-10-10: "make something to make sure the
+/* quiz_img_audit.js - owner 2026-10-10: "make something to make sure the
  * images check out". Standalone verifier for every image referenced by
  * data/quizDataset.json:
  *   Phase 1  HEAD every URL: 200 + content-type image/* + length >= 2500
@@ -91,7 +91,7 @@ async function getVerify(url) {
     else bad.push({ ...entries[i], why: v.why });
   });
 
-  // dedupe bad URLs (same poster can back multiple entries)
+ // dedupe bad URLs (same poster can back multiple entries)
   const badUrls = [...new Set(bad.map((b) => b.url))];
   const byCat = {};
   for (const b of bad) byCat[b.cat] = (byCat[b.cat] || 0) + 1;

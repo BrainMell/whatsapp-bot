@@ -6,7 +6,7 @@ const User = require('../core/models/User');
 (async () => {
   await connectDB();
   
-  // Find the user by nickname 'mell' or by LID from logs
+ // Find the user by nickname 'mell' or by LID from logs
   let user = await User.findOne({ nickname: /mell/i });
   if (!user) {
     user = await User.findOne({ userId: '251453323092189@lid' });

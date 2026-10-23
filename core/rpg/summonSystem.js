@@ -1,13 +1,11 @@
 // ============================================
-// 🐉 SUMMON SYSTEM - main logic
+// SUMMON SYSTEM - main logic
 // ============================================
 // Factory, persistence, stat computation, resonance computation,
 // deploy/dismiss, loyalty, personality tracking.
-//
 // Combat AI lives in core/rpg/summonAI.js (Phase 2).
 // Static data lives in core/rpg/summonRegistry.js.
 // Mongoose model: core/models/Summon.js.
-//
 // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md
 
 const crypto = require('crypto');
@@ -15,9 +13,9 @@ const Summon = require('../models/Summon');
 const registry = require('./summonRegistry');
 const economy = require('./economy');
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // FACTORY - create a new summon instance
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 /**
  * Create a new summon instance.
@@ -32,16 +30,16 @@ async function createSummon(ownerJid, speciesId, opts = {}) {
     throw new Error(`Unknown summon species: ${speciesId}`);
   }
 
-  // 💡 AUDIT FIX 2026-08-01: short readable IDs instead of long timestamp+hex.
-  // Old: "sum_1699999999999_a1b2c3d4" (30+ chars)
-  // New: "S-3F7A" (6 chars, 4 hex = 65K unique IDs, enough for this bot)
+ // AUDIT FIX short readable IDs instead of long timestamp+hex.
+ // Old: "sum_1699999999999_a1b2c3d4" (30+ chars)
+ // New: "S-3F7A" (6 chars, 4 hex = 65K unique IDs, enough for this bot)
   const shortId = crypto.randomBytes(2).toString('hex').toUpperCase();
   const summonId = `S-${shortId}`;
   const level = opts.level || 1;
   const rarity = species.rarity;
   const rarityConfig = registry.getRarityConfig(rarity);
 
-  // Cap level by rarity
+ // Cap level by rarity
   const effectiveLevel = Math.min(level, rarityConfig.maxLevel);
 
   const summon = new Summon({
@@ -84,16 +82,16 @@ async function createSummon(ownerJid, speciesId, opts = {}) {
     lastTrainedAt: null
   });
 
-  // Apply level-based stat growth (so a captured level-5 summon isn't weak)
+ // Apply level-based stat growth (so a captured level-5 summon isn't weak)
   applyLevelGrowth(summon, effectiveLevel);
 
   await summon.save();
   return summon;
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // STAT COMPUTATION
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 /**
  * Apply level-based stat growth to a summon.
@@ -109,10 +107,10 @@ function applyLevelGrowth(summon, targetLevel) {
   const rarityConfig = registry.getRarityConfig(summon.rarity);
   const growthMult = rarityConfig.statGrowthMult;
 
-  // Recompute baseStats from species + level + rarity
-  // Formula: baseStat × (1 + (level-1) × 0.08 × growthMult)
-  // At level 1: base stat unchanged. At level 50 with COMMON (1.0×): 1 + 49×0.08 = 4.92× base.
-  // At level 50 with MYTHIC (1.75×): 1 + 49×0.08×1.75 = 7.86× base.
+ // Recompute baseStats from species + level + rarity
+ // Formula: baseStat × (1 + (level-1) × 0.08 × growthMult)
+ // At level 1: base stat unchanged. At level 50 with COMMON (1.0×): 1 + 49×0.08 = 4.92× base.
+ // At level 50 with MYTHIC (1.75×): 1 + 49×0.08×1.75 = 7.86× base.
   const levelMult = 1 + (targetLevel - 1) * 0.08 * growthMult;
 
   summon.baseStats = {
@@ -137,10 +135,10 @@ function computeEffectiveStats(summon) {
     return { hp: 100, maxHp: 100, atk: 10, def: 5, mag: 5, spd: 10, energy: 100, maxEnergy: 100, crit: 5, evasion: 5, dmgReduction: 0 };
   }
 
-  // Tier bonus: BASE = 1.0, ASCENDED = 1.2, TRANSCENDENT = 1.4
+ // Tier bonus: BASE = 1.0, ASCENDED = 1.2, TRANSCENDENT = 1.4
   const tierMult = { BASE: 1.0, ASCENDED: 1.2, TRANSCENDENT: 1.4 }[summon.tier] || 1.0;
 
-  // Loyalty gate (mirrors durabilitySystem.getConditionMultiplier)
+ // Loyalty gate (mirrors durabilitySystem.getConditionMultiplier)
   let loyaltyMult = 1.0;
   if (summon.loyalty >= 75) loyaltyMult = 1.0;
   else if (summon.loyalty >= 50) loyaltyMult = 0.85;
@@ -148,7 +146,7 @@ function computeEffectiveStats(summon) {
   else if (summon.loyalty >= 1) loyaltyMult = 0.30;
   else loyaltyMult = 0;  // refuses to fight
 
-  // Allocated stats (with soft cap)
+ // Allocated stats (with soft cap)
   const softCap = registry.SUMMON_XP_CONFIG.SOFT_CAP_THRESHOLD;
   const softCapMult = registry.SUMMON_XP_CONFIG.SOFT_CAP_MULT;
   const alloc = summon.allocatedStats || { hp: 0, atk: 0, def: 0, mag: 0, spd: 0 };
@@ -158,19 +156,19 @@ function computeEffectiveStats(summon) {
     return softCap + (points - softCap) * softCapMult;
   }
 
-  // Stat value per point (mirrors progression.js stat value table)
+ // Stat value per point (mirrors progression.js stat value table)
   const statValues = { hp: 15, atk: 3, def: 2, mag: 3, spd: 2 };
 
-  // Compute final stats
+ // Compute final stats
   const baseAtk = (summon.baseStats.atk + applySoftCap(alloc.atk) * statValues.atk) * tierMult * loyaltyMult;
   const baseDef = (summon.baseStats.def + applySoftCap(alloc.def) * statValues.def) * tierMult * loyaltyMult;
   const baseMag = (summon.baseStats.mag + applySoftCap(alloc.mag) * statValues.mag) * tierMult * loyaltyMult;
   const baseSpd = (summon.baseStats.spd + applySoftCap(alloc.spd) * statValues.spd) * tierMult * loyaltyMult;
   const baseHp = (summon.baseStats.hp + applySoftCap(alloc.hp) * statValues.hp) * tierMult * loyaltyMult;
 
-  // 💡 PHASE 2 (2026-08-01): apply skill tree passive bonuses
-  // Skill tree passives add flat stat bonuses + special effects (dmgReduction,
-  // lifesteal, evasion, etc.) that are merged into the final stats.
+ // PHASE 2: apply skill tree passive bonuses
+ // Skill tree passives add flat stat bonuses + special effects (dmgReduction,
+ // lifesteal, evasion, etc.) that are merged into the final stats.
   let skillBonuses = {};
   try {
     const summonSkillTrees = require('./summonSkillTrees');
@@ -184,7 +182,7 @@ function computeEffectiveStats(summon) {
   const skillHp = skillBonuses.hp || 0;
   const skillCrit = skillBonuses.crit || 0;
 
-  // 💡 PHASE 4 (2026-08-01): apply bond + trait bonuses
+ // PHASE 4: apply bond + trait bonuses
   let bondMult = 0;
   let traitEffects = {};
   try {
@@ -193,17 +191,17 @@ function computeEffectiveStats(summon) {
     traitEffects = summonBondTraits.getTraitEffects(summon);
   } catch (e) {}
 
-  // Trait multipliers (applied to base stats)
+ // Trait multipliers (applied to base stats)
   const traitAtkMult = 1 + (traitEffects.atkMult || 0) + (traitEffects.allStatsMult || 0) + (traitEffects.damageMult || 0);
   const traitDefMult = 1 + (traitEffects.defMult || 0) + (traitEffects.allStatsMult || 0);
   const traitMagMult = 1 + (traitEffects.magMult || 0) + (traitEffects.allStatsMult || 0);
   const traitSpdMult = 1 + (traitEffects.spdMult || 0) + (traitEffects.allStatsMult || 0);
   const traitHpMult = 1 + (traitEffects.hpMult || 0) + (traitEffects.allStatsMult || 0);
-  // Bond multiplier (applied to final stats)
+ // Bond multiplier (applied to final stats)
   const bondMultFinal = 1 + bondMult;
 
-  // 💡 PHASE 5 (2026-08-01): apply summon equipment bonuses
-  // Summon equipment adds flat stats + special effects (allStatsMult, lifesteal, etc.)
+ // PHASE 5: apply summon equipment bonuses
+ // Summon equipment adds flat stats + special effects (allStatsMult, lifesteal, etc.)
   let gearAtk = 0, gearDef = 0, gearMag = 0, gearSpd = 0, gearHp = 0, gearCrit = 0;
   let gearAllStatsMult = 0, gearLifesteal = 0, gearEvasion = 0;
   if (summon.summonEquipment) {
@@ -223,12 +221,12 @@ function computeEffectiveStats(summon) {
   }
   const gearMultFinal = 1 + gearAllStatsMult;
 
-  // Derived stats with skill + trait + bond + equipment bonuses
-  // 💡 FIX P2 (2026-08-16): Wire the 12 dead trait effect keys.
-  // Previously only 7 keys were consumed (atkMult, defMult, magMult, spdMult,
-  // hpMult, allStatsMult, damageMult). The remaining 12 were defined in
-  // SUMMON_TRAITS but never read. Now stored on the stats object so combat
-  // code can read them.
+ // Derived stats with skill + trait + bond + equipment bonuses
+ // FIX P2: Wire the 12 dead trait effect keys.
+ // Previously only 7 keys were consumed (atkMult, defMult, magMult, spdMult,
+ // hpMult, allStatsMult, damageMult). The remaining 12 were defined in
+ // SUMMON_TRAITS but never read. Now stored on the stats object so combat
+ // code can read them.
   const traitCritBoost = traitEffects.critBoost || 0;
   const traitEvasionBoost = traitEffects.evasionBoost || 0;
   const traitLifestealPct = traitEffects.lifestealPct || 0;
@@ -254,7 +252,7 @@ function computeEffectiveStats(summon) {
     crit: 5 + Math.floor(summon.level * 0.2) + skillCrit + traitCritBoost,
     evasion: Math.min(60, Math.floor(baseSpd * 0.12) + (skillBonuses.evasion || 0) + traitEvasionBoost),
     dmgReduction: Math.min(75, Math.floor(baseDef * 0.55) + (skillBonuses.dmgReduction || 0)),
-    // 💡 P2: Store trait effects on stats for combat code to read
+ // P2: Store trait effects on stats for combat code to read
     skillEffects: skillBonuses,
     traitEffects: {
       lifestealPct: traitLifestealPct + gearLifesteal,
@@ -271,15 +269,14 @@ function computeEffectiveStats(summon) {
   };
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // COMBAT POWER (CP) - derived rating for matchmaking + flee penalty
-// ─────────────────────────────────────────────────────────────
-// 💡 NEW 2026-08-05: CP is a single-number rating that summarizes a summon's
+// -------------------------------------------------------------
+// NEW CP is a single-number rating that summarizes a summon's
 // overall combat strength. Used for:
-//   - Summon PvP flee penalty (fleeing reduces CP by a flat amount)
-//   - Future matchmaking (matching summon duels by CP)
-//   - Display in roster/detail cards
-//
+// - Summon PvP flee penalty (fleeing reduces CP by a flat amount)
+// - Future matchmaking (matching summon duels by CP)
+// - Display in roster/detail cards
 // Formula: weighted sum of effective stats + level + rarity multiplier.
 // Higher rarity = higher CP ceiling. CP is NOT persisted - it's derived
 // from current stats + level + loyalty + equipment, recomputed on demand.
@@ -290,7 +287,7 @@ function computeCP(summon) {
   const rarityConfig = registry.getRarityConfig(summon.rarity);
   const rarityMult = rarityConfig.statGrowthMult || 1.0;
 
-  // Weighted stat sum (atk/mag weighted higher than def/spd; hp scaled down)
+ // Weighted stat sum (atk/mag weighted higher than def/spd; hp scaled down)
   const statScore =
     (stats.hp || 0) * 0.3 +
     (stats.atk || 0) * 2.0 +
@@ -300,17 +297,17 @@ function computeCP(summon) {
     (stats.crit || 0) * 3.0 +
     (stats.evasion || 0) * 2.0;
 
-  // Level bonus: +2% per level above 1
+ // Level bonus: +2% per level above 1
   const levelBonus = 1 + ((summon.level || 1) - 1) * 0.02;
 
-  // Rarity multiplier applied last
+ // Rarity multiplier applied last
   const cp = Math.floor(statScore * levelBonus * rarityMult);
   return cp;
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // PERSISTENCE
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 /**
  * Get a single summon by summonId.
@@ -328,21 +325,21 @@ async function getSummon(summonId) {
  * @returns {Promise<array>}
  */
 async function getUserSummons(ownerJid, opts = {}) {
-  // 💡 MAIN DECK SYSTEM: by default, only return Main Deck summons (deployable).
-  // Use opts.includeBacklog=true to get ALL summons (Main Deck + Backlog).
-  // 💡 FIX 2026-08-04: Don't filter by inMainDeck in the MongoDB query -
-  // Mongoose strictQuery can strip it for old documents that don't have
-  // the field in their raw BSON. Instead, fetch all and filter in JS.
+ // MAIN DECK SYSTEM: by default, only return Main Deck summons (deployable).
+ // Use opts.includeBacklog=true to get ALL summons (Main Deck + Backlog).
+ // FIX Don't filter by inMainDeck in the MongoDB query -
+ // Mongoose strictQuery can strip it for old documents that don't have
+ // the field in their raw BSON. Instead, fetch all and filter in JS.
   const query = { ownerJid };
   if (opts.includeForSale === false) {
     query.forSale = false;
   }
   let results = await Summon.find(query).sort({ obtainedAt: 1 });
   if (!opts.includeBacklog) {
-    // 💡 FIX 2026-08-07: Changed from '!== false' to '=== true' for consistency
-    // with getMainDeck. Old summons with inMainDeck=undefined were appearing
-    // in getUserSummons (deck) AND getBacklog simultaneously, causing the
-    // "summons keep appearing/disappearing" bug.
+ // FIX Changed from '!== false' to '=== true' for consistency
+ // with getMainDeck. Old summons with inMainDeck=undefined were appearing
+ // in getUserSummons (deck) AND getBacklog simultaneously, causing the
+ // "summons keep appearing/disappearing" bug.
     results = results.filter(s => s.inMainDeck === true);
   }
   return results;
@@ -357,9 +354,9 @@ async function saveSummon(summon) {
   await summon.save();
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // DEPLOY / DISMISS - equip/unequip a summon for combat
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 /**
  * Deploy a summon (set as active for combat).
@@ -387,15 +384,15 @@ async function deploySummon(user, summonId) {
     return { success: false, message: '❌ This summon is locked and cannot be deployed.' };
   }
 
-  // 💡 RULE: Only one summon can be deployed at a time. If switching,
-  // the previous one is automatically dismissed.
+ // RULE: Only one summon can be deployed at a time. If switching,
+ // the previous one is automatically dismissed.
   if (user.activeSummonId && user.activeSummonId !== summonId) {
     user.activeSummonId = summonId;
     summon.lastUsedAt = new Date();
     await summon.save();
-    // 💡 FIX 2026-08-31: was passing the user OBJECT - saveUser(userId) does
-    // economyData.get(userId), so an object key never matched and the call
-    // silently no-op'd (deploy lost on restart). Pass the canonical key.
+ // FIX was passing the user OBJECT - saveUser(userId) does
+ // economyData.get(userId), so an object key never matched and the call
+ // silently no-op'd (deploy lost on restart). Pass the canonical key.
     economy.saveUser(user.userId);
     return {
       success: true,
@@ -406,7 +403,7 @@ async function deploySummon(user, summonId) {
   user.activeSummonId = summonId;
   summon.lastUsedAt = new Date();
   await summon.save();
-  // 💡 FIX 2026-08-31: same as above - pass user.userId, not the object.
+ // FIX same as above - pass user.userId, not the object.
   economy.saveUser(user.userId);
 
   return {
@@ -428,9 +425,9 @@ async function dismissSummon(user) {
 
   const summonId = user.activeSummonId;
   user.activeSummonId = null;
-  // 💡 FIX 2026-08-07: saveUser takes userId (string), not user object.
-  // Was passing the object - economy.saveUser(user) tried to use it as a
-  // string key, silently failing. Now passes user.userId.
+ // FIX saveUser takes userId (string), not user object.
+ // Was passing the object - economy.saveUser(user) tried to use it as a
+ // string key, silently failing. Now passes user.userId.
   if (user.userId) {
     await economy.saveUser(user.userId);
   } else if (user.jid) {
@@ -452,21 +449,21 @@ async function getActiveSummon(user) {
   if (!user || !user.activeSummonId) return null;
   const summon = await Summon.findOne({ summonId: user.activeSummonId, ownerJid: user.userId });
   if (!summon) {
-    // Active summon ID is stale - clear it
+ // Active summon ID is stale - clear it
     user.activeSummonId = null;
     return null;
   }
   if (summon.forSale || summon.loyalty <= 0 || summon.isLocked) {
-    // Summon became invalid for combat - clear it
+ // Summon became invalid for combat - clear it
     user.activeSummonId = null;
     return null;
   }
   return summon;
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // RELEASE - permanently release a summon (leaves no echo)
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 /**
  * Permanently release a summon (delete from collection).
@@ -497,9 +494,9 @@ async function releaseSummon(ownerJid, summonId) {
   };
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // RESONANCE COMPUTATION
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 /**
  * Compute active resonances for a set of summons.
@@ -512,7 +509,7 @@ async function releaseSummon(ownerJid, summonId) {
 function computeResonances(summons) {
   if (!summons || summons.length === 0) return [];
 
-  // Count summons by element (only eligible ones)
+ // Count summons by element (only eligible ones)
   const elementCounts = {};
   for (const summon of summons) {
     if (summon.loyalty <= 0) continue;
@@ -521,11 +518,11 @@ function computeResonances(summons) {
     elementCounts[el] = (elementCounts[el] || 0) + 1;
   }
 
-  // Check each resonance
-  // 💡 FIX P2 (2026-08-16): Was registry.RESONANCE_WEB (doesn't exist).
-  // Correct name is registry.RESONANCES. This caused every
-  // refreshUserResonances call to throw TypeError, silently swallowed
-  // by try/catch wrappers - user.activeResonances stayed empty forever.
+ // Check each resonance
+ // FIX P2: Was registry.RESONANCE_WEB (doesn't exist).
+ // Correct name is registry.RESONANCES. This caused every
+ // refreshUserResonances call to throw TypeError, silently swallowed
+ // by try/catch wrappers - user.activeResonances stayed empty forever.
   const activeResonances = [];
   const resonances = registry.RESONANCES || {};
   for (const [resonanceId, resonance] of Object.entries(resonances)) {
@@ -558,9 +555,9 @@ async function refreshUserResonances(user) {
   return user.activeResonances;
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // LOYALTY
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 const LOYALTY_TRAITS = {
   ETERNAL_BOND: { decayMult: 0, desc: 'No loyalty decay' },
@@ -600,9 +597,9 @@ function restoreLoyalty(summon, amount) {
   return summon.loyalty;
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // XP + LEVELING
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 /**
  * Add XP to a summon. Handles level-up (max 50).
@@ -619,7 +616,7 @@ function addSummonXP(summon, amount) {
   summon.xp += val;
   let leveledUp = false;
   let statPointsGained = 0;
-  const newlyUnlockedAbilities = []; // 💡 NEW: track abilities unlocked this level-up
+  const newlyUnlockedAbilities = []; // NEW: track abilities unlocked this level-up
   summon.statPoints = summon.statPoints || 0;  // defensive - prevent NaN on undefined
   const rarityConfig = registry.getRarityConfig(summon.rarity);
   const maxLevel = rarityConfig.maxLevel;
@@ -633,20 +630,20 @@ function addSummonXP(summon, amount) {
     summon.level += 1;
     summon.statPoints += registry.SUMMON_XP_CONFIG.STAT_POINTS_PER_LEVEL;
     statPointsGained += registry.SUMMON_XP_CONFIG.STAT_POINTS_PER_LEVEL;
-    // 💡 PHASE 2 (2026-08-01): grant 1 skill point per level
+ // PHASE 2: grant 1 skill point per level
     summon.skillPoints = (summon.skillPoints || 0) + 1;
     leveledUp = true;
 
-    // 💡 NEW 2026-08-05: Detect abilities that unlocked at the new level.
-    // Summon abilities auto-unlock at levelReq milestones (from monsterSkills.js).
-    // Check which abilities became available between oldLevel+1 and new level.
+ // NEW Detect abilities that unlocked at the new level.
+ // Summon abilities auto-unlock at levelReq milestones (from monsterSkills.js).
+ // Check which abilities became available between oldLevel+1 and new level.
     try {
       const monsterSkills = require('./monsterSkills');
       const arch = monsterSkills.MONSTER_ARCHETYPES[summon.archetype];
       if (arch) {
         for (const [skillId, skill] of Object.entries(arch.skills)) {
           if (skill.isFollowUp) continue;
-          // Ability unlocked if its levelReq is > oldLevel AND <= new level
+ // Ability unlocked if its levelReq is > oldLevel AND <= new level
           if (skill.levelReq > oldLevel && skill.levelReq <= summon.level) {
             newlyUnlockedAbilities.push({
               id: skillId,
@@ -659,10 +656,10 @@ function addSummonXP(summon, amount) {
         }
       }
     } catch (e) {
-      // monsterSkills not available - skip ability detection
+ // monsterSkills not available - skip ability detection
     }
 
-    // Re-grow base stats to new level
+ // Re-grow base stats to new level
     applyLevelGrowth(summon, summon.level);
   }
 
@@ -673,9 +670,9 @@ function addSummonXP(summon, amount) {
   return { leveledUp, newLevel: summon.level, statPointsGained, newlyUnlockedAbilities };
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // COMBAT ENTITY - convert a Summon document to a combat-ready entity
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 /**
  * Build a combat entity from a Summon document.
@@ -693,43 +690,43 @@ function buildCombatEntity(summon, summonerJid) {
   const species = registry.getSpecies(summon.species);
 
   const entity = {
-    // Identity
+ // Identity
     id: summon.summonId,
     name: summon.nickname || species?.name || summon.species,
     icon: species?.icon || '🐉',
     type: summon.species,
-    // 💡 FIX 2026-08-03: Go service's Summon struct expects `species` (not `type`).
-    // Without this, GetSummonSpritePath receives an empty string and the summon
-    // is silently skipped - root cause of "no summons appearing in combat".
+ // FIX Go service's Summon struct expects `species` (not `type`).
+ // Without this, GetSummonSpritePath receives an empty string and the summon
+ // is silently skipped - root cause of "no summons appearing in combat".
     species: summon.species,
     archetype: summon.archetype,
     element: summon.element,
 
-    // Owner reference
+ // Owner reference
     isSummon: true,
     isEnemy: false,
     summonerJid,
-    // 💡 FIX 2026-08-03: Go service expects `ownerIndex` (not `summonerIndex`).
-    // Set by deployPvPSummons / startCombat after the entity is created.
-    // Default to 0 (first player) so it always has a valid value.
+ // FIX Go service expects `ownerIndex` (not `summonerIndex`).
+ // Set by deployPvPSummons / startCombat after the entity is created.
+ // Default to 0 (first player) so it always has a valid value.
     ownerIndex: 0,
 
-    // Stats (transient - rebuilt each combat)
+ // Stats (transient - rebuilt each combat)
     stats: {
       ...stats,
       maxHp: stats.maxHp,
       hp: stats.maxHp  // start at full HP
     },
     currentHP: stats.maxHp,
-    // 💡 FIX 2026-08-03: Go service expects `maxHp` (lowercase p), not `maxHP`.
-    // Go's json unmarshaling is case-insensitive, but be explicit to avoid
-    // future regression if the Go struct tags change.
+ // FIX Go service expects `maxHp` (lowercase p), not `maxHP`.
+ // Go's json unmarshaling is case-insensitive, but be explicit to avoid
+ // future regression if the Go struct tags change.
     maxHp: stats.maxHp,
     maxHP: stats.maxHp,
     mana: 100,
     maxMana: 100,
 
-    // Combat state
+ // Combat state
     statusEffects: [],
     buffs: [],
     cooldowns: {},
@@ -737,32 +734,32 @@ function buildCombatEntity(summon, summonerJid) {
     isDead: false,
     justDied: false,
 
-    // Summon-specific
-    level: summon.level || 1, // 💡 NEW 2026-08-07: needed for skill scaling in evaluateAction
+ // Summon-specific
+    level: summon.level || 1, // NEW needed for skill scaling in evaluateAction
     personality: summon.personality,
     behaviorScore: { ...summon.behaviorScore },
     loyalty: summon.loyalty,
     isStationary: species?.isStationary || false,  // turrets can't move
     autoAttack: species?.autoAttack || false,
 
-    // 💡 TICKET #b4fc58 (2026-09-21): facing default - player-side summons
-    // stand on the left of the battle scene and face the enemy side ('right').
-    // summonAI.performSummonAction updates this every turn based on the
-    // action's target (enemy → 'right', ally → 'left'), and the combat
-    // renderer payload carries it so the sprite flips like player sprites do.
+ //: facing default - player-side summons
+ // stand on the left of the battle scene and face the enemy side ('right').
+ // summonAI.performSummonAction updates this every turn based on the
+ // action's target (enemy → 'right', ally → 'left'), and the combat
+ // renderer payload carries it so the sprite flips like player sprites do.
     facing: 'right',
 
-    // Echo to apply on death
+ // Echo to apply on death
     echoId: summon.echoId,
 
-    // Reference back to the DB document (for post-combat persistence)
+ // Reference back to the DB document (for post-combat persistence)
     _summonDoc: summon
   };
 
-  // 💡 Phase 3: Apply class-based summon bonuses (Necromancer +30% undead, Lich +40%).
-  // Looks up the owner's class via economy.getUser and applies the bonus
-  // to the combat entity's stats. This is the "player → summon" direction
-  // of Soul Resonance.
+ // Phase 3: Apply class-based summon bonuses (Necromancer +30% undead, Lich +40%).
+ // Looks up the owner's class via economy.getUser and applies the bonus
+ // to the combat entity's stats. This is the "player → summon" direction
+ // of Soul Resonance.
   try {
     const summonCapture = require('./summonCapture');
     const user = economy.getUser(summonerJid);
@@ -770,16 +767,16 @@ function buildCombatEntity(summon, summonerJid) {
       summonCapture.applyClassSummonBonus(entity, user.class);
     }
   } catch (e) {
-    // Non-fatal - bonus is optional
+ // Non-fatal - bonus is optional
     console.error('[Summon] applyClassSummonBonus failed:', e?.message || e);
   }
 
   return entity;
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // DAILY TRAINING (shared cooldown - 1/day per player, any 1 summon)
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 const DAILY_TRAINING_COOLDOWN_MS = 24 * 60 * 60 * 1000;  // 24h
 const DAILY_TRAINING_XP = 500;  // base XP per training session
@@ -828,9 +825,9 @@ async function trainSummon(user, summonId) {
   };
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // STAT ALLOCATION
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 /**
  * Allocate stat points to a summon.
@@ -865,66 +862,66 @@ function allocateStatPoint(summon, stat, points = 1) {
   };
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // MODULE EXPORTS
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 module.exports = {
-  // Factory
+ // Factory
   createSummon,
 
-  // Persistence
+ // Persistence
   getSummon,
   getUserSummons,
   saveSummon,
 
-  // Deploy/dismiss
+ // Deploy/dismiss
   deploySummon,
   dismissSummon,
   getActiveSummon,
   releaseSummon,
 
-  // Stats
+ // Stats
   computeEffectiveStats,
   applyLevelGrowth,
   computeCP,
 
-  // Resonances
+ // Resonances
   computeResonances,
   refreshUserResonances,
 
-  // Loyalty
+ // Loyalty
   applyLoyaltyDecay,
   restoreLoyalty,
   LOYALTY_TRAITS,
   BASE_LOYALTY_DECAY,
 
-  // XP
+ // XP
   addSummonXP,
 
-  // Combat
+ // Combat
   buildCombatEntity,
 
-  // Training
+ // Training
   trainSummon,
   DAILY_TRAINING_COOLDOWN_MS,
   DAILY_TRAINING_XP,
 
-  // Allocation
+ // Allocation
   allocateStatPoint,
 
-  // 💡 FIX 2026-08-05: Main Deck / Backlog functions were defined after
-  // module.exports but never added to the exports object - caused
-  // TypeError in cmdBacklog/cmdSwap (reported as "0.0s timeout").
+ // FIX Main Deck / Backlog functions were defined after
+ // module.exports but never added to the exports object - caused
+ // TypeError in cmdBacklog/cmdSwap (reported as "0.0s timeout").
   getMainDeck,
   getBacklog,
   swapToMainDeck,
   moveToBacklog
 };
 
-// ─────────────────────────────────────────────────────────────
-// 💡 MAIN DECK / BACKLOG SWAP SYSTEM (2026-08-04)
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
+// MAIN DECK / BACKLOG SWAP SYSTEM
+// -------------------------------------------------------------
 
 const MAX_DECK_SIZE = 5;
 
@@ -959,17 +956,17 @@ async function swapToMainDeck(ownerJid, backlogSummonId, deckSlot) {
     return { success: false, message: `❌ Invalid deck slot. Use 1-${MAX_DECK_SIZE}.` };
   }
 
-  // 💡 FIX 2026-08-07: Use !== true instead of === false for backlog lookup.
-  // Old summons without inMainDeck field should be in backlog.
+ // FIX Use !== true instead of === false for backlog lookup.
+ // Old summons without inMainDeck field should be in backlog.
   const backlogSummon = await Summon.findOne({ summonId: backlogSummonId, ownerJid });
   if (!backlogSummon || backlogSummon.inMainDeck === true) {
     return { success: false, message: '❌ That summon is not in your Backlog.' };
   }
 
-  // Find the summon currently in that deck slot
+ // Find the summon currently in that deck slot
   const oldDeckSummon = await Summon.findOne({ ownerJid, inMainDeck: true, deckPosition: deckSlot });
 
-  // Swap: backlog summon goes to Main Deck, old Main Deck summon goes to Backlog
+ // Swap: backlog summon goes to Main Deck, old Main Deck summon goes to Backlog
   backlogSummon.inMainDeck = true;
   backlogSummon.deckPosition = deckSlot;
   await backlogSummon.save();
@@ -980,7 +977,7 @@ async function swapToMainDeck(ownerJid, backlogSummonId, deckSlot) {
     await oldDeckSummon.save();
   }
 
-  // If the old deck summon was the active (deployed) one, clear it
+ // If the old deck summon was the active (deployed) one, clear it
   const user = economy.getUser(ownerJid);
   if (user && oldDeckSummon && user.activeSummonId === oldDeckSummon.summonId) {
     user.activeSummonId = null;
@@ -1009,7 +1006,7 @@ async function moveToBacklog(ownerJid, deckSlot) {
   summon.deckPosition = 0;
   await summon.save();
 
-  // Clear active if this was the deployed summon
+ // Clear active if this was the deployed summon
   const user = economy.getUser(ownerJid);
   if (user && user.activeSummonId === summon.summonId) {
     user.activeSummonId = null;

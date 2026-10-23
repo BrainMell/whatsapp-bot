@@ -1,4 +1,4 @@
-// debug_wiki_resolve.js — per-name resolution trace for one franchise
+// debug_wiki_resolve.js - per-name resolution trace for one franchise
 const w = require(path_join("../core/utils/wikiEntityImages"));
 function path_join(p) { return require("path").join(__dirname, p); }
 

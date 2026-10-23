@@ -1,5 +1,5 @@
 const REACTIONS = [
-  // Targeted reactions
+ // Targeted reactions
   { type: 'kiss', emoji: '💋', targeted: true },
   { type: 'hug', emoji: '🤗', targeted: true },
   { type: 'pat', emoji: '🫳', targeted: true },
@@ -39,7 +39,7 @@ const REACTIONS = [
   { type: 'peck', emoji: '😘', targeted: true },
   { type: 'shake', emoji: '🤝', targeted: true },
 
-  // Self reactions
+ // Self reactions
   { type: 'wink', emoji: '😉', targeted: false },
   { type: 'blush', emoji: '😊', targeted: false },
   { type: 'cry', emoji: '😭', targeted: false },
@@ -58,7 +58,7 @@ const REACTIONS = [
   { type: 'bored', emoji: '🥱', targeted: false },
   { type: 'angry', emoji: '😡', targeted: false },
   { type: 'confused', emoji: '😕', targeted: false },
-  { type: 'scream', emoji: '😨', targeted: false }, // 💡 FIX: was 😱 (same as panic)
+  { type: 'scream', emoji: '😨', targeted: false }, // FIX: was (same as panic)
   { type: 'run', emoji: '🏃', targeted: false },
   { type: 'hide', emoji: '🫣', targeted: false },
   { type: 'yes', emoji: '✅', targeted: false },
@@ -68,10 +68,10 @@ const REACTIONS = [
   { type: 'pout', emoji: '😤', targeted: false },
   { type: 'celebrate', emoji: '🎉', targeted: false },
   { type: 'faint', emoji: '😵', targeted: false },
-  { type: 'peek', emoji: '🫥', targeted: false }, // 💡 FIX: was 🫣 (same as hide)
+  { type: 'peek', emoji: '🫥', targeted: false }, // FIX: was (same as hide)
   { type: 'sad', emoji: '😔', targeted: false },
   { type: 'awoo', emoji: '🐺', targeted: false },
-  { type: 'nod', emoji: '🫡', targeted: false }, // 💡 FIX: was 👍 (same as thumbsup)
+  { type: 'nod', emoji: '🫡', targeted: false }, // FIX: was (same as thumbsup)
   { type: 'bleh', emoji: '👅', targeted: false },
   { type: 'lurk', emoji: '👀', targeted: false },
   { type: 'nope', emoji: '🙅', targeted: false },

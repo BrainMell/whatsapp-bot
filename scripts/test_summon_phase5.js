@@ -16,7 +16,7 @@ function test(name, fn) {
 
 console.log('=== PHASE 5 UNIT TESTS ===\n');
 
-// ─── Soul Forging ──────────────────────────────────────────────
+// --- Soul Forging ----------------------------------------------
 console.log('--- Soul Forging ---');
 
 const summonForging = require(path.join(REPO, 'core/rpg/summonForging.js'));
@@ -63,7 +63,7 @@ test('computeFusedStats averages parents and applies 10% bonus', () => {
   const s1 = { baseStats: { hp: 100, atk: 20, def: 10, mag: 5, spd: 8 } };
   const s2 = { baseStats: { hp: 120, atk: 30, def: 8, mag: 10, spd: 12 } };
   const fused = summonForging.computeFusedStats(s1, s2);
-  // hp: (100+120)/2 × 1.10 = 121
+ // hp: (100+120)/2 × 1.10 = 121
   assert.strictEqual(fused.hp, Math.floor(((100 + 120) / 2) * 1.10));
   assert.strictEqual(fused.atk, Math.floor(((20 + 30) / 2) * 1.10));
 });
@@ -151,7 +151,7 @@ test('validateForgeable rejects zero-loyalty summon', () => {
   assert.ok(!result.success);
 });
 
-// ─── Summon Trials ─────────────────────────────────────────────
+// --- Summon Trials ---------------------------------------------
 console.log('\n--- Summon Trials ---');
 
 const summonTrials = require(path.join(REPO, 'core/rpg/summonTrials.js'));
@@ -211,7 +211,7 @@ test('computePassiveBonuses aggregates matching passives', () => {
     { element: 'beast', loyalty: 100, forSale: false }
   ];
   const bonuses = summonTrials.computePassiveBonuses(user, summons);
-  // bone_armor gives +5 def, pack_leader gives +5 spd
+ // bone_armor gives +5 def, pack_leader gives +5 spd
   assert.strictEqual(bonuses.def, 5);
   assert.strictEqual(bonuses.spd, 5);
 });
@@ -223,7 +223,7 @@ test('computePassiveBonuses skips passives whose condition is not met', () => {
   assert.strictEqual(Object.keys(bonuses).length, 0);  // condition not met
 });
 
-// ─── Achievements ──────────────────────────────────────────────
+// --- Achievements ----------------------------------------------
 console.log('\n--- Achievements ---');
 
 const summonAchievements = require(path.join(REPO, 'core/rpg/summonAchievements.js'));
@@ -298,7 +298,7 @@ test('getAchievementDisplay returns all with unlocked flag', () => {
   assert.ok(!beastTamer.unlocked);
 });
 
-// ─── Loot egg drops ────────────────────────────────────────────
+// --- Loot egg drops --------------------------------------------
 console.log('\n--- Loot egg drops ---');
 
 const lootSystem = require(path.join(REPO, 'core/rpg/lootSystem.js'));
@@ -331,7 +331,7 @@ test('all egg drops have announcements', () => {
   }
 });
 
-// ─── Command wiring ────────────────────────────────────────────
+// --- Command wiring --------------------------------------------
 console.log('\n--- Command wiring ---');
 
 const cmdSource = fs.readFileSync(path.join(REPO, 'core/commands/summonCommands.js'), 'utf8');
@@ -357,7 +357,7 @@ test('help command includes forge + trial + passives', () => {
   assert.ok(cmdSource.includes('summon passives'));
 });
 
-// ─── User.js + economy.js ──────────────────────────────────────
+// --- User.js + economy.js --------------------------------------
 console.log('\n--- User.js + economy.js ---');
 
 const userSource = fs.readFileSync(path.join(REPO, 'core/models/User.js'), 'utf8');
@@ -376,6 +376,6 @@ test('economy.js lazy migration includes lastForgedAt + summonAchievements', () 
   assert.ok(econSource.includes('user.summonAchievements'));
 });
 
-// ─── Summary ──────────────────────────────────────────────────
+// --- Summary --------------------------------------------------
 console.log(`\n=== PHASE 5 SUMMARY: ${pass} passed, ${fail} failed ===`);
 process.exit(fail > 0 ? 1 : 0);

@@ -1,17 +1,16 @@
 #!/usr/bin/env node
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-//  BAKE THE POND DAY MASTER — run ONCE; the output is COMMITTED to the repo.
-//  (owner Task 21: "generated once and saved in the repo permanently, as a
-//  usable asset" — Task 22 keeps that model for the restored dock-POV master,
-//  no girl: "UNDO that fishing bullshit" — dock POV, moving water, swimming fish.)
-//
-//  Bakes the day-lit dock-POV master for each pond level (L1/L2/L3 —
-//  L2 adds the rowboat, L3 the gold edge trim) as 16-frame PNG containers,
-//  writes them to core/assets/scenes/pond_l{1,2,3}_v2.bin and drops a
-//  contact-sheet preview PNG next to them for eyeball QA. Deterministic:
-//  re-running produces byte-identical assets.
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// BAKE THE POND DAY MASTER - run ONCE; the output is COMMITTED to the repo.
+// (owner "generated once and saved in the repo permanently, as a
+// usable asset" - keeps that model for the restored dock-POV master,
+// no girl: "UNDO that fishing bullshit" - dock POV, moving water, swimming fish.)
+// Bakes the day-lit dock-POV master for each pond level (L1/L2/L3 -
+// L2 adds the rowboat, L3 the gold edge trim) as 16-frame PNG containers,
+// writes them to core/assets/scenes/pond_l{1,2,3}_v2.bin and drops a
+// contact-sheet preview PNG next to them for eyeball QA. Deterministic:
+// re-running produces byte-identical assets.
+// ===========================================================================
 const fs = require('fs');
 const path = require('path');
 const dockPov = require('../core/rpg/dockPov');
@@ -26,7 +25,7 @@ const dockPov = require('../core/rpg/dockPov');
         fs.writeFileSync(file, buf);
         const c = dockPov.unpackContainer(buf);
         if (!c || c.pngs.length !== dockPov.FRAMES) throw new Error(`bake L${lvl}: container broken`);
-        // contact sheet: 4×4 of the 16 frames, downscaled 50%
+ // contact sheet: 4×4 of the 16 frames, downscaled 50%
         const tw = c.gw / 2, th = c.gh / 2;
         const sheet = createCanvas(tw * 4, th * 4), s2 = sheet.getContext('2d');
         const imgs = [];
@@ -37,5 +36,5 @@ const dockPov = require('../core/rpg/dockPov');
         fs.writeFileSync(path.join(outDir, `pond_l${lvl}_preview.png`), sheet.toBuffer('image/png'));
         console.log(`L${lvl}: ${c.pngs.length} frames, container ${(buf.length / 1024).toFixed(0)}KB -> ${path.basename(file)}`);
     }
-    console.log('BAKE OK — assets ready to commit');
+    console.log('BAKE OK - assets ready to commit');
 })().catch((e) => { console.error('BAKE FAILED:', e); process.exit(1); });

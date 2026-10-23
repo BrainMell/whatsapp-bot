@@ -9,7 +9,7 @@
  * Failing rule: a thrown ReferenceError/TypeError/any exception.
  *
  * Run: BOT_ROOT=$(pwd) node scripts/test_useitem_catalog.js
- * (needs MONGO_URI — .env is parsed; gwtest redirect like gw_sim)
+ * (needs MONGO_URI - .env is parsed; gwtest redirect like gw_sim)
  */
 process.env.GW_TEST = '1';
 const path = require('path');
@@ -17,7 +17,7 @@ const fs = require('fs');
 
 const ROOT = process.env.BOT_ROOT || path.resolve(__dirname, '..');
 
-// ── DB connect: .env → gwtest redirect BEFORE modules load (gw_sim pattern)
+// -- DB connect: .env → gwtest redirect BEFORE modules load (gw_sim pattern)
 function loadEnv() {
     const envPath = path.join(ROOT, '.env');
     if (!fs.existsSync(envPath)) throw new Error('no .env at ' + envPath);
@@ -47,11 +47,11 @@ function loadEnv() {
     const U = `usecat${TS}@s.whatsapp.net`;
     await economy.registerUser(U, 'UseCat');
     if (!economy.getUser(U)) throw new Error('failed to register synthetic user');
-    // deep pockets so nothing blocks on affordability
+ // deep pockets so nothing blocks on affordability
     const wallet = economy.getUser(U);
     if (wallet && wallet.zeni !== undefined) { wallet.zeni = 100000000; economy.saveUser(U); }
-    // POSITIVE PATH SETUP: damage HP + drain energy so heal/energy items can
-    // actually succeed (fresh user is full-everything and bounces gracefully)
+ // POSITIVE PATH SETUP: damage HP + drain energy so heal/energy items can
+ // actually succeed (fresh user is full-everything and bounces gracefully)
     const progression = require(path.join(ROOT, 'core/rpg/progression'));
     const sheet = progression.getCharacterSheet(U);
     const classId = typeof (sheet && sheet.class) === 'object' ? (sheet.class?.id || 'FIGHTER') : (sheet?.class || 'FIGHTER');
@@ -65,8 +65,8 @@ function loadEnv() {
     const ids = Object.keys(db);
     console.log(`[catalog] walking ${ids.length} catalog items…`);
 
-    // Fresh users start with a small bag (slot limit). Reset it periodically
-    // so adds keep landing and useItem actually reaches the effect chains.
+ // Fresh users start with a small bag (slot limit). Reset it periodically
+ // so adds keep landing and useItem actually reaches the effect chains.
     const resetBag = async () => {
         const u = economy.getUser(U);
         if (u && u.inventory) { u.inventory = {}; await economy.saveUser(U); }
@@ -75,7 +75,7 @@ function loadEnv() {
         await resetBag();
         const addRes = await inventorySystem.addItem(U, id, 3);
         if (!addRes || !addRes.success) {
-            // second chance after another reset (should not happen, but log it)
+ // second chance after another reset (should not happen, but log it)
             await resetBag();
             const r2 = await inventorySystem.addItem(U, id, 3);
             if (!r2 || !r2.success) throw new Error(`addItem failed for ${id}: ${(r2 && r2.message) || 'unknown'}`);
@@ -88,7 +88,7 @@ function loadEnv() {
 
     for (const id of ids) {
         try {
-            // fresh bag slice per item so consumed/stacked items never run dry
+ // fresh bag slice per item so consumed/stacked items never run dry
             await ensureAdded(id);
             const r = inventorySystem.useItem(U, id, null);
             if (r && r.success) ok++;
@@ -99,7 +99,7 @@ function loadEnv() {
         }
     }
 
-    // EXPLICIT positive-path assertions (catch "rejected everything" bugs)
+ // EXPLICIT positive-path assertions (catch "rejected everything" bugs)
     const explicit = [];
     let explicitFail = 0;
     {
@@ -131,7 +131,7 @@ function loadEnv() {
         }
     }
 
-    // handler-level paths (async command layer with mock sock)
+ // handler-level paths (async command layer with mock sock)
     const rpgCommands = require(path.join(ROOT, 'core/commands/rpgCommands'));
     const sent = [];
     const mockSock = { async sendMessage(chatId, content) { sent.push(content); return {}; } };
@@ -146,14 +146,14 @@ function loadEnv() {
         try { await rpgCommands.useItem(...c.args); }
         catch (e) { handlerThrown++; handlerThrows.push(`${c.note}: ${e.constructor.name}: ${e.message}`); }
     }
-    // egg redirect path — any *_egg item must route to hatch system, not crash
+ // egg redirect path - any *_egg item must route to hatch system, not crash
     const eggId = ids.find(i => i.includes('summon_egg') || i.endsWith('_egg'));
     if (eggId) {
         try { inventorySystem.addItem(U, eggId, 1); await rpgCommands.useItem(mockSock, 'c', U, eggId); }
         catch (e) { handlerThrown++; handlerThrows.push(`egg redirect (${eggId}): ${e.constructor.name}: ${e.message}`); }
     }
 
-    console.log(`\n══════ USE CATALOG: ${ids.length + handlerCases.length + (eggId ? 1 : 0)} cases — ` +
+    console.log(`\n══════ USE CATALOG: ${ids.length + handlerCases.length + (eggId ? 1 : 0)} cases - ` +
         `${thrown + handlerThrown} thrown ══════`);
     console.log('(explicit positive paths)\n  ' + explicit.join('\n  '));
     if (graceNote.length) console.log('(sample graceful rejections)\n  ' + graceNote.join('\n  '));
@@ -163,6 +163,6 @@ function loadEnv() {
     if (thrown || handlerThrown || explicitFail) {
         console.log(`\nRESULT: FAIL (${thrown + handlerThrown} crashes, ${explicitFail} positive-path misses)`); process.exit(1);
     }
-    console.log(`\nRESULT: PASS — every catalog item handled gracefully (${ok} succeeded, ${gracefulFalse} rejected with guidance)`);
+    console.log(`\nRESULT: PASS - every catalog item handled gracefully (${ok} succeeded, ${gracefulFalse} rejected with guidance)`);
     process.exit(0);
 })().catch(e => { console.error('[catalog] fatal:', e); process.exit(1); });

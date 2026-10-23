@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 // Preplanned pack QA (run on-box where the real deps + Go service live).
-// Verifies: pack integrity, parse routing, plan shape, timers, answer
 // matching (typed + alts + typos + MC letters), theme question assembly.
 process.chdir(__dirname + "/.."); // quiz.js loads data/ via cwd (v8 QA lesson)
 
@@ -10,7 +9,7 @@ const pack = require("../core/games/quizPreplanned");
 const quiz = require("../core/games/quiz");
 const quizMedia = require("../core/games/quizMedia");
 
-// ── 1. pack integrity ──
+// -- 1. pack integrity --
 assert(pack.PACK.brands.length === 30, "30 brands");
 assert(new Set(pack.PACK.brands.map((b) => b.name)).size === 30, "brand names unique");
 for (const b of pack.PACK.brands) assert(b.wiki && b.cat, `brand anchor ${b.name}`);
@@ -38,14 +37,14 @@ assert(pack.PACK.themes.filter((t) => t.type === "game").length === 5, "5 game t
 assert(pack.PACK.themes.filter((t) => t.type === "anime").length === 5, "5 anime themes");
 assert(new Set(pack.PACK.themes.map((t) => t.show)).size === 10, "theme shows unique");
 
-// ── 2. brands all present in the baked verified logo dataset ──
+// -- 2. brands all present in the baked verified logo dataset --
 const fs = require("fs");
 const ds = JSON.parse(fs.readFileSync("data/logoDataset.json", "utf8"));
 const dsNames = new Set(ds.brands.map((b) => String(b.name).toLowerCase()));
 const missing = pack.PACK.brands.filter((b) => !dsNames.has(b.name.toLowerCase()));
 assert(missing.length === 0, `all 30 brands in verified dataset (missing: ${missing.join(",") || "none"})`);
 
-// ── 3. parse routing ──
+// -- 3. parse routing --
 for (const raw of ["-preplanned", "preplanned", "preplan", "-preplanned 10", "PREPLANNED"]) {
   const p = quiz.parseQuizArgs(raw);
   assert(p.mode === "preplanned" && p.title === "__preplanned__", `parse "${raw}" -> preplanned`);
@@ -53,7 +52,7 @@ for (const raw of ["-preplanned", "preplanned", "preplan", "-preplanned 10", "PR
 const pPlain = quiz.parseQuizArgs("10 hard");
 assert(pPlain.mode !== "preplanned", "plain args unaffected");
 
-// ── 4. toQuizQuestion shape + timers ──
+// -- 4. toQuizQuestion shape + timers --
 const typedQ = pack.toQuizQuestion(pack.PACK.trivia.find((t) => t.fmt === "typed"));
 assert(typedQ.typed === true && typedQ.hideOptions === true && typedQ.options.length === 1, "typed emit shape");
 assert(typedQ.timeLimit === 30, "typed timer 30s");
@@ -61,7 +60,7 @@ const mcQ = pack.toQuizQuestion(pack.PACK.trivia.find((t) => t.fmt === "mc"));
 assert(mcQ.hideOptions !== true && mcQ.options.length === 4 && mcQ.options[mcQ.correct], "mc emit shape");
 assert(mcQ.timeLimit === 30, "mc timer 30s");
 
-// ── 5. theme question assembly (game/anime labels + alts) ──
+// -- 5. theme question assembly (game/anime labels + alts) --
 const decoys = pack.PACK.themes.slice(1, 4);
 const gq = quizMedia._internal ? null : null; // _finishThemeSong not exported; assert via clip fields below
 const gameEntry = pack.PACK.themes.find((t) => t.type === "game");
@@ -71,8 +70,8 @@ const mediaSrc = require("fs").readFileSync("core/games/quizMedia.js", "utf8");
 assert(mediaSrc.includes("entry.type === \"game\" ? \"video game\""), "game label in theme question");
 assert(mediaSrc.includes("entry.alts.slice(0, 6), typed: true"), "alts+typed wiring present");
 
-// ── 6. answer matching (v8 matcher semantics, replicated assertions run
-// through the real matcher by simulating its normalize+pool logic) ──
+// -- 6. answer matching (v8 matcher semantics, replicated assertions run
+// through the real matcher by simulating its normalize+pool logic) --
 const norm = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").replace(/\b(the|a|an)\b/g, " ").trim();
 function lev(a, b) { const m = [], n = []; const M = a.length, N = b.length; let prev = Array.from({ length: N + 1 }, (_, j) => j); for (let i = 1; i <= M; i++) { const cur = [i]; for (let j = 1; j <= N; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = cur; } return prev[N]; }
 function matches(q, raw) {
@@ -124,8 +123,8 @@ assert(matches(T["gow-baldur"], "d"), "Baldur MC letter D");
 assert(matches(T["gow-mimir"], "mimir"), "Mimir");
 assert(!matches(T["gow-kratos"], "Deimos"), "wrong GoW answer rejected");
 
-// ── 7. logos: build ONE pinned logo question through the real pipeline ──
-// regression pin (2026-10-10 22:18Z live incident): quiz.js's pinned-brand
+// -- 7. logos: build ONE pinned logo question through the real pipeline --
+// regression pin (22:18Z live incident): quiz.js's pinned-brand
 // builder called quizMedia's module-private _norm() bare -> ReferenceError
 // crashed preplanned sections 1-3 (all 30 logos) at generation while QA was
 // green - this static pin makes the class un-shippable. _normText(/_sha( are
@@ -146,7 +145,7 @@ assert(bareHelpers === 0, `no bare quizMedia-private helpers in quiz.js (found $
     console.log("logo build SKIPPED (network down in QA sandbox) - verified on-box later");
   }
   console.log(process.exitCode ? "QA FAILED" : "QA ALL GREEN");
-  // quiz.js boots media-worker heartbeats + intervals that keep the event
-  // loop alive forever - three orphaned QA processes taught us this. Exit hard.
+ // quiz.js boots media-worker heartbeats + intervals that keep the event
+ // loop alive forever - three orphaned QA processes taught us this. Exit hard.
   process.exit(process.exitCode || 0);
 })();

@@ -1,23 +1,21 @@
 // ============================================
-// 🧑‍🏫 MENTORING — shoob.gg mining dashboard
+// MENTORING - shoob.gg mining dashboard
 // ============================================
-// Mellow (2026-10-07): Box 1 bots are parked and wa-miner mines shoob.gg
+// Mellow: Box 1 bots are parked and wa-miner mines shoob.gg
 // event cards on the freed box. This command is the window into that
 // operation, available from ANY box (data flows through the SHARED Mongo
 // `System` collection, so `.j mentoring` on Joker sees what Box 1 mined).
-//
-//   .j mentoring               dashboard — miner health + what this box has
-//   .j mentoring new [n]       newest mined cards NOT yet live here (w/ previews)
-//   .j mentoring preview <q>   send one card's actual media (mp4/gif/image,
-//                              WhatsApp-safe ffmpeg pipeline)
-//   .j mentoring find <q>      search the mined event block (id/name/event/maker)
-//   .j mentoring media         media archive stats
-//   .j mentoring ids reg       browse the mined REGULAR-catalog block too
-//   .j mentoring promote       OWNER ONLY — splice the mined event block AND
-//                              the regular-catalog block into this box's
-//                              cards_data.json (atomic, backed up, hot reload,
-//                              no restart)
-//
+// .j mentoring dashboard - miner health + what this box has
+// .j mentoring new [n] newest mined cards NOT yet live here (w/ previews)
+// .j mentoring preview <q> send one card's actual media (mp4/gif/image,
+// WhatsApp-safe ffmpeg pipeline)
+// .j mentoring find <q> search the mined event block (id/name/event/maker)
+// .j mentoring media media archive stats
+// .j mentoring ids reg browse the mined REGULAR-catalog block too
+// .j mentoring promote OWNER ONLY - splice the mined event block AND
+// the regular-catalog block into this box's
+// cards_data.json (atomic, backed up, hot reload,
+// no restart)
 // Read-only by default. promote is the only writer and it is owner-gated,
 // backs up the previous DB, writes atomically (tmp+rename) and hot-reloads
 // via cardSystem.loadCardsDB().
@@ -37,7 +35,7 @@ const CARDS_DB_PATH = path.join(__dirname, '..', 'data', 'cards_data.json');
 const ANIMATED_RE = /\.(gif|webp|webm)(\?|$)/i;
 const CANON = ['id', 'cardName', 'animeName', 'tier', 'creator', 'imageUrl', 'detailUrl', 'description', 'eventName'];
 
-// ── helpers ─────────────────────────────────────────────────────────────────
+// -- helpers -----------------------------------------------------------------
 function inst() {
   return cardSystem.instances.get(botConfig.getBotId()) || { ALL_CARDS: [], CARD_INDEX: {}, EVENT_CARDS: [] };
 }
@@ -92,21 +90,21 @@ function pendingHere(newcards) {
 
 function cardLine(c) {
   const scope = c.eventName || c.animeName || '\u2014';
-  return `\`${c.id}\` *${c.cardName}* — T${c.tier} · ${scope} · maker: ${c.creator || 'Anonymous'}`;
+  return `\`${c.id}\` *${c.cardName}* - T${c.tier} · ${scope} · maker: ${c.creator || 'Anonymous'}`;
 }
 
-// ── media pipeline (WhatsApp-safe) ──────────────────────────────────────────
-// Mellow bug report 2026-10-08: preview of a .webm event card (E-03004) came
+// -- media pipeline (WhatsApp-safe) ------------------------------------------
+// Mellow bug report preview of a .webm event card (E-03004) came
 // through as a WHITE SCREEN. Root cause: the Go convert service (10s timeout)
 // fails on cold 1-3MB shoob videos, and the old fallback then sent the raw
-// WEBM bytes as an { image } message — WhatsApp can't render video bytes as
+// WEBM bytes as an { image } message - WhatsApp can't render video bytes as
 // an image, hence the white box + "image not available". New pipeline:
-//   1. download once with browser headers, SNIFF magic bytes (never trust
-//      extensions — 35 mined cards have no extension and empty content-type)
-//   2. animated (webm/gif/mp4) -> local ffmpeg -> H.264 mp4 (yuv420p,
-//      faststart), cached per card id in /tmp/mentor-media
-//   3. webp -> Go convert (the proven regular-card path), fallback static
-//   4. png/jpg -> plain image message
+// 1. download once with browser headers, SNIFF magic bytes (never trust
+// extensions - 35 mined cards have no extension and empty content-type)
+// 2. animated (webm/gif/mp4) -> local ffmpeg -> H.264 mp4 (yuv420p,
+// faststart), cached per card id in /tmp/mentor-media
+// 3. webp -> Go convert (the proven regular-card path), fallback static
+// 4. png/jpg -> plain image message
 // It is now impossible to send video bytes as an image.
 const MEDIA_CACHE_DIR = '/tmp/mentor-media';
 const BROWSER_HEADERS = {
@@ -140,9 +138,9 @@ async function fetchMediaBuffer(url) {
 
 function ffmpegToMp4(inPath, outPath) {
   return new Promise((resolve, reject) => {
-    // -an: shoob cards carry no audio; libx264+yuv420p+faststart = plays everywhere
-    // -f mp4: ffmpeg infers the muxer from the file extension and our cache
-    // temp name ends in .tmp -> "Invalid argument" without the explicit format
+ // -an: shoob cards carry no audio; libx264+yuv420p+faststart = plays everywhere
+ // -f mp4: ffmpeg infers the muxer from the file extension and our cache
+ // temp name ends in .tmp -> "Invalid argument" without the explicit format
     execFile('ffmpeg',
       ['-y', '-i', inPath, '-f', 'mp4', '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', outPath],
       { timeout: 90000 },
@@ -187,14 +185,14 @@ const TIER_STARS = { '1': '✦', '2': '✦✦', '3': '✦✦✦', '4': '✦✦�
 const TIER_LABEL = { '1': 'TIER  I', '2': 'TIER  II', '3': 'TIER  III', '4': 'TIER  IV', '5': 'TIER  V', '6': 'TIER  VI', 'S': 'TIER  S', 'E': 'EVENT' };
 
 function buildPreviewCaption(card) {
-  // 🎴 UNIVERSAL CAPTION STYLE (owner spec 2026-10-08) — same block as
-  // cardSystem.buildCardDetailCaption: plain header, `emoji ⟢ *Label:* _value_`.
+ // UNIVERSAL CAPTION STYLE (owner spec ) - same block as
+ // cardSystem.buildCardDetailCaption: plain header, `emoji ⟢ *Label:* _value_`.
   const tier = String(card.tier);
   const label = String(TIER_LABEL[tier] || `TIER ${tier}`).replace(/\s+/g, ' ').trim();
   const series = card.animeName || 'Unknown';
-  // 💡 DATA MODEL (2026-10-08): event cards always carry an Event line —
-  // eventName if present (real events), falling back to animeName for the
-  // rare cards whose event IS their series (MHA CCG / SWORN).
+ // DATA MODEL: event cards always carry an Event line -
+ // eventName if present (real events), falling back to animeName for the
+ // rare cards whose event IS their series (MHA CCG / SWORN).
   const eventLine = (card.eventName || String(card.id).startsWith('E-')) ? `\n🎪 ⟢ *Event:* _${card.eventName || card.animeName}_` : '';
   const desc = card.description ? `\n📝 ⟢ *Description:* _${card.description}_` : '';
   const link = card.detailUrl ? `\n🔗 _${card.detailUrl}_` : '';
@@ -217,7 +215,7 @@ async function sendCardMedia(sock, chatId, card) {
       await sock.sendMessage(chatId, { text: `${caption}\n\n⚠️ no media url on file for this card.` });
       return false;
     }
-    // fast path: converted mp4 already cached for this card id — no network
+ // fast path: converted mp4 already cached for this card id - no network
     const cached = cachedMp4(card);
     if (cached) {
       await sock.sendMessage(chatId, { video: cached, gifPlayback: true, mimetype: 'video/mp4', caption });
@@ -226,7 +224,7 @@ async function sendCardMedia(sock, chatId, card) {
     const buf = await fetchMediaBuffer(card.imageUrl);
     const mime = sniffMime(buf);
     if (!mime || mime === 'text/html') {
-      await sock.sendMessage(chatId, { text: `${caption}\n\n⚠️ shoob served non-media bytes (${mime || 'unknown'}${buf.length ? ', ' + buf.length + 'B' : ''}) — the CDN may be blocking.\n🔗 ${card.detailUrl || ''}` });
+      await sock.sendMessage(chatId, { text: `${caption}\n\n⚠️ shoob served non-media bytes (${mime || 'unknown'}${buf.length ? ', ' + buf.length + 'B' : ''}) - the CDN may be blocking.\n🔗 ${card.detailUrl || ''}` });
       return false;
     }
     if (mime === 'video/webm' || mime === 'image/gif' || mime === 'video/mp4') {
@@ -248,7 +246,7 @@ async function sendCardMedia(sock, chatId, card) {
         await sock.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
         return true;
       }
-      await sock.sendMessage(chatId, { image: buf, caption }); // static webp fallback — visible, never white
+      await sock.sendMessage(chatId, { image: buf, caption }); // static webp fallback - visible, never white
       return true;
     }
     await sock.sendMessage(chatId, { image: buf, caption }); // png / jpeg
@@ -261,7 +259,7 @@ async function sendCardMedia(sock, chatId, card) {
   }
 }
 
-// ── subcommand: dashboard ───────────────────────────────────────────────────
+// -- subcommand: dashboard ---------------------------------------------------
 async function dashboard(sock, chatId) {
   const p = botConfig.getPrefix();
   const status = await getSystemValue('shoob_miner_status');
@@ -282,7 +280,7 @@ async function dashboard(sock, chatId) {
 
   L.push(`⛏️ *MINER (Box 1)*`);
   if (!status) {
-    L.push('   no report yet — miner hasn\u2019t published a cycle');
+    L.push('   no report yet - miner hasn\u2019t published a cycle');
   } else if (status.lastError) {
     L.push(`   ❌ last cycle FAILED ${timeAgo(status.lastError.at)}: ${String(status.lastError.message).slice(0, 120)}`);
     L.push(`   next attempt: ${status.nextRunAt || '?'}`);
@@ -308,15 +306,15 @@ async function dashboard(sock, chatId) {
   L.push(`   live DB: *${(i.ALL_CARDS || []).length}* cards · regular: *${liveRegCount}* · event: *${liveEvents.length}* · max id: \`E-${String(maxLiveEId()).padStart(5, '0')}\``);
   L.push(`   mined-but-not-live-here: event *${pending.length}* · regular *${regPending.length}*`);
   L.push('');
-  L.push(`   \`${p} mentoring new\` — preview fresh finds`);
-  L.push(`   \`${p} mentoring newids [reg] [filter] [n]\` — newest card ids (alias: ids)`);
-  L.push(`   \`${p} mentoring find <q>\` — search the mine`);
-  L.push(`   \`${p} mentoring promote\` — push mine → live (owner)`);
-  L.push(`   \`${p} mentoring media\` — archive stats`);
+  L.push(`   \`${p} mentoring new\` - preview fresh finds`);
+  L.push(`   \`${p} mentoring newids [reg] [filter] [n]\` - newest card ids (alias: ids)`);
+  L.push(`   \`${p} mentoring find <q>\` - search the mine`);
+  L.push(`   \`${p} mentoring promote\` - push mine → live (owner)`);
+  L.push(`   \`${p} mentoring media\` - archive stats`);
   await sock.sendMessage(chatId, { text: L.join('\n') });
 }
 
-// ── subcommand: new cards + previews ────────────────────────────────────────
+// -- subcommand: new cards + previews ----------------------------------------
 async function showNew(sock, chatId, argStr) {
   const newcards = await getSystemValue('shoob_miner_newcards');
   const regblock = await getSystemValue('shoob_miner_regblock');
@@ -337,17 +335,17 @@ async function showNew(sock, chatId, argStr) {
   const shown = sorted.slice(0, n);
   const L = [`🆕 *${all.length}* mined cards not live here yet (showing ${shown.length}):`, ''];
   L.push(...shown.map(cardLine));
-  if (all.length > shown.length) L.push('', `_...and ${all.length - shown.length} more — \`${botConfig.getPrefix()}mentoring new ${Math.min(all.length, 10)}\`_`);
+  if (all.length > shown.length) L.push('', `_...and ${all.length - shown.length} more - \`${botConfig.getPrefix()}mentoring new ${Math.min(all.length, 10)}\`_`);
   await sock.sendMessage(chatId, { text: L.join('\n') });
 
-  // media previews for the first few (animated cards get the real gif treatment)
+ // media previews for the first few (animated cards get the real gif treatment)
   const previews = shown.slice(0, 3);
   for (const c of previews) {
     await sendCardMedia(sock, chatId, c);
   }
 }
 
-// ── subcommand: find ────────────────────────────────────────────────────────
+// -- subcommand: find --------------------------------------------------------
 async function find(sock, chatId, q) {
   if (!q) { await sock.sendMessage(chatId, { text: 'Usage: `.j mentoring find <name|id|event|maker>`' }); return; }
   const eventblock = await getSystemValue('shoob_miner_eventblock');
@@ -355,7 +353,7 @@ async function find(sock, chatId, q) {
   const minedEvents = (eventblock && Array.isArray(eventblock.cards) && eventblock.cards.length) ? eventblock.cards : null;
   const minedRegs = (regblock && Array.isArray(regblock.cards) && regblock.cards.length) ? regblock.cards : [];
   const pool = minedEvents ? [...minedEvents, ...minedRegs] : [...liveEventCards(), ...minedRegs];
-  // every word must match somewhere (name/event/series/maker/id) — "halloween beira" finds Beira cards in Halloween
+ // every word must match somewhere (name/event/series/maker/id) - "halloween beira" finds Beira cards in Halloween
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   const hay = (c) => `${c.cardName || ''} ${c.eventName || ''} ${c.animeName || ''} ${c.creator || ''} ${c.id || ''}`.toLowerCase();
   const hits = pool.filter(c => words.every(w => hay(c).includes(w))).slice(0, 10);
@@ -368,7 +366,7 @@ async function find(sock, chatId, q) {
   await sock.sendMessage(chatId, { text: L.join('\n') });
 }
 
-// ── subcommand: preview one card ────────────────────────────────────────────
+// -- subcommand: preview one card --------------------------------------------
 async function preview(sock, chatId, q) {
   if (!q) { await sock.sendMessage(chatId, { text: 'Usage: `.j mentoring preview <E-id|tier-id|name>`' }); return; }
   const eventblock = await getSystemValue('shoob_miner_eventblock');
@@ -384,11 +382,11 @@ async function preview(sock, chatId, q) {
   await sendCardMedia(sock, chatId, card);
 }
 
-// ── subcommand: media stats ─────────────────────────────────────────────────
+// -- subcommand: media stats -------------------------------------------------
 async function mediaStats(sock, chatId) {
   const status = await getSystemValue('shoob_miner_status');
   if (!status || !status.media) {
-    await sock.sendMessage(chatId, { text: '📭 No media stats yet — the miner publishes them after the first mirror pass.' });
+    await sock.sendMessage(chatId, { text: '📭 No media stats yet - the miner publishes them after the first mirror pass.' });
     return;
   }
   const m = status.media;
@@ -406,12 +404,12 @@ async function mediaStats(sock, chatId) {
   await sock.sendMessage(chatId, { text: L.join('\n') });
 }
 
-// ── subcommand: ids — browse the newest mined card ids ──────────────────────
+// -- subcommand: ids - browse the newest mined card ids ----------------------
 async function listIds(sock, chatId, q) {
   const eventblock = await getSystemValue('shoob_miner_eventblock');
   const regblock = await getSystemValue('shoob_miner_regblock');
   const words0 = String(q || '').toLowerCase().split(/\s+/).filter(Boolean);
-  // scope keyword: "reg" / "regular" -> the regular-catalog block
+ // scope keyword: "reg" / "regular" -> the regular-catalog block
   let scope = 'event';
   const regTok = words0.findIndex(w => w === 'reg' || w === 'regular' || w === 'regulars');
   if (regTok !== -1) { scope = 'reg'; words0.splice(regTok, 1); }
@@ -434,7 +432,7 @@ async function listIds(sock, chatId, q) {
   const lo = byNewest.length ? byNewest[byNewest.length - 1].id : '?';
   const hi = byNewest.length ? byNewest[0].id : '?';
 
-  // args: [reg] [words...|event] [count] — a bare number = how many, words = filter
+ // args: [reg] [words...|event] [count] - a bare number = how many, words = filter
   let n = 20;
   const numTok = words.find(w => /^\d+$/.test(w));
   if (numTok) { n = Math.min(parseInt(numTok, 10), 50); words.splice(words.indexOf(numTok), 1); }
@@ -452,46 +450,45 @@ async function listIds(sock, chatId, q) {
 
   const shown = filtered.slice(0, n);
   const scopeTxt = (scope === 'reg' ? 'regular catalog' : 'event block') + (words.length ? ` matching *${words.join(' ')}*` : '');
-  const L = [`🆔 *newest card ids* — ${scopeTxt}: ${filtered.length} match${filtered.length === 1 ? '' : 'es'} (newest first, showing ${shown.length})`,
+  const L = [`🆔 *newest card ids* - ${scopeTxt}: ${filtered.length} match${filtered.length === 1 ? '' : 'es'} (newest first, showing ${shown.length})`,
     `   ${label}: ${pool.length} cards · id range \`${lo}\` → \`${hi}\``, ''];
   L.push(...shown.map(cardLine));
   if (filtered.length > shown.length) {
-    L.push('', `_…${filtered.length - shown.length} more — \`${botConfig.getPrefix()}mentoring ids${scope === 'reg' ? ' reg' : ''} ${words.join(' ')} ${Math.min(filtered.length, 50)}\` (max 50 per view)_`);
+    L.push('', `_…${filtered.length - shown.length} more - \`${botConfig.getPrefix()}mentoring ids${scope === 'reg' ? ' reg' : ''} ${words.join(' ')} ${Math.min(filtered.length, 50)}\` (max 50 per view)_`);
   }
   await sock.sendMessage(chatId, { text: L.join('\n') });
 }
 
-// ── subcommand: promote (OWNER ONLY) ────────────────────────────────────────
+// -- subcommand: promote (OWNER ONLY) ----------------------------------------
 async function promote(sock, chatId) {
   const eventblock = await getSystemValue('shoob_miner_eventblock');
   const regblock = await getSystemValue('shoob_miner_regblock');
   const hasEvents = eventblock && Array.isArray(eventblock.cards) && eventblock.cards.length > 0;
   const hasRegs = regblock && Array.isArray(regblock.cards) && regblock.cards.length > 0;
   if (!hasEvents && !hasRegs) {
-    await sock.sendMessage(chatId, { text: '📭 No mined blocks published yet — nothing to promote.' });
+    await sock.sendMessage(chatId, { text: '📭 No mined blocks published yet - nothing to promote.' });
     return;
   }
 
-  // ── event block sanity: exact E-schema, unique ids ──
+ // -- event block sanity: exact E-schema, unique ids --
   const cards = hasEvents ? eventblock.cards : [];
   const badSchema = cards.filter(c => !c || !c.id || !String(c.id).startsWith('E-') || !c.cardName || !c.imageUrl);
   const ids = new Set(cards.map(c => c.id));
   if (badSchema.length || ids.size !== cards.length) {
-    await sock.sendMessage(chatId, { text: `❌ Mined event block failed sanity check (${badSchema.length} malformed, ${cards.length - ids.size} dup ids) — NOT promoting. Check the miner output on Box 1.` });
+    await sock.sendMessage(chatId, { text: `❌ Mined event block failed sanity check (${badSchema.length} malformed, ${cards.length - ids.size} dup ids) - NOT promoting. Check the miner output on Box 1.` });
     return;
   }
 
-  // ── regular block sanity: tier-seq ids, unique ──
+ // -- regular block sanity: tier-seq ids, unique --
   const rCards = hasRegs ? regblock.cards : [];
   const REG_ID_RE = /^(S|\d{1,2})-\d{4,6}$/;
   const badReg = rCards.filter(c => !c || !c.id || !REG_ID_RE.test(String(c.id)) || !c.cardName || !c.imageUrl);
   const regIdSet0 = new Set(rCards.map(c => c.id));
   if (badReg.length || regIdSet0.size !== rCards.length) {
-    await sock.sendMessage(chatId, { text: `❌ Mined regular block failed sanity check (${badReg.length} malformed, ${rCards.length - regIdSet0.size} dup ids) — NOT promoting. Check the miner output on Box 1.` });
+    await sock.sendMessage(chatId, { text: `❌ Mined regular block failed sanity check (${badReg.length} malformed, ${rCards.length - regIdSet0.size} dup ids) - NOT promoting. Check the miner output on Box 1.` });
     return;
   }
 
-  // load current DB
   let prod;
   try { prod = JSON.parse(fs.readFileSync(CARDS_DB_PATH, 'utf8')); }
   catch (e) { await sock.sendMessage(chatId, { text: `❌ Cannot read local cards_data.json: ${e.message}` }); return; }
@@ -501,14 +498,14 @@ async function promote(sock, chatId) {
   const oldIds = new Set(oldEvents.map(c => c.id));
   const added = cards.filter(c => !oldIds.has(c.id));
 
-  // dedupe regulars: id OR mongoId already live (idempotent re-promotes)
+ // dedupe regulars: id OR mongoId already live (idempotent re-promotes)
   const regIdSet = new Set(regular.map(c => String(c.id)));
   const mongoOf = (c) => (String(c.detailUrl || '').match(/\/cards\/info\/([0-9a-f]{24})$/) || [])[1];
   const regMongoSet = new Set(regular.map(mongoOf).filter(Boolean));
   const newRegs = rCards.filter(c => !regIdSet.has(String(c.id)) && !(mongoOf(c) && regMongoSet.has(mongoOf(c))));
   const skippedRegs = rCards.length - newRegs.length;
 
-  // layout convention: regular cards first, then the event block
+ // layout convention: regular cards first, then the event block
   const merged = {
     ...prod,
     totalCards: regular.length + newRegs.length + cards.length,
@@ -524,7 +521,7 @@ async function promote(sock, chatId) {
     },
   };
 
-  // atomic swap: tmp -> validate -> backup -> rename
+ // atomic swap: tmp -> validate -> backup -> rename
   const tmp = CARDS_DB_PATH + '.promote.tmp';
   const backup = CARDS_DB_PATH + `.bak-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}`;
   try {
@@ -538,7 +535,7 @@ async function promote(sock, chatId) {
     return;
   }
 
-  // hot reload — no restart needed
+ // hot reload - no restart needed
   let loaded = '?';
   try {
     cardSystem.loadCardsDB();
@@ -549,21 +546,21 @@ async function promote(sock, chatId) {
   }
 
   const preservedCount = [...oldIds].filter(id => ids.has(id)).length;
-  const L = ['✅ *PROMOTED — mine is live on this box*', ''];
+  const L = ['✅ *PROMOTED - mine is live on this box*', ''];
   if (hasEvents) {
     L.push(`   event block: ${oldEvents.length} → *${cards.length}*`);
     L.push(`   newly added: *${added.length}*${added.length ? ` (new ceiling \`E-${String(maxLiveEId()).padStart(5, '0')}\`)` : ''}`);
     L.push(`   preserved ids: *${preservedCount}* (inventory references intact)`);
   }
   if (hasRegs) {
-    L.push(`   regular block: *${newRegs.length}* newly added${skippedRegs ? ` (${skippedRegs} already live, skipped)` : ''}${newRegs.length ? ` — pool now *${regular.length + newRegs.length}* regular cards` : ''}`);
+    L.push(`   regular block: *${newRegs.length}* newly added${skippedRegs ? ` (${skippedRegs} already live, skipped)` : ''}${newRegs.length ? ` - pool now *${regular.length + newRegs.length}* regular cards` : ''}`);
   }
   L.push(`   reloaded: ${loaded}`);
   L.push(`   backup: ${path.basename(backup)}`);
   await sock.sendMessage(chatId, { text: L.join('\n') });
 }
 
-// ── entry ───────────────────────────────────────────────────────────────────
+// -- entry -------------------------------------------------------------------
 async function handleMentoring(sock, chatId, argStr, opts = {}) {
   const p = botConfig.getPrefix();
   const arg = String(argStr || '').trim();
@@ -573,7 +570,7 @@ async function handleMentoring(sock, chatId, argStr, opts = {}) {
   try {
     if (!sub || sub === 'status' || sub === 'dashboard' || sub === '-info') return await dashboard(sock, chatId);
     if (sub === 'new' || sub === 'fresh') return await showNew(sock, chatId, q);
-    if (sub === 'ids' || sub === 'list' || sub === 'newids' || sub === 'newid') return await listIds(sock, chatId, q); // 💡 2026-10-08: owner asked for "newids" — alias the ids browser
+    if (sub === 'ids' || sub === 'list' || sub === 'newids' || sub === 'newid') return await listIds(sock, chatId, q); // owner asked for "newids" - alias the ids browser
     if (sub === 'find' || sub === 'search') return await find(sock, chatId, q);
     if (sub === 'preview' || sub === 'show') return await preview(sock, chatId, q);
     if (sub === 'media') return await mediaStats(sock, chatId);
@@ -584,7 +581,7 @@ async function handleMentoring(sock, chatId, argStr, opts = {}) {
       }
       return await promote(sock, chatId);
     }
-    await sock.sendMessage(chatId, { text: `🧑‍🏫 Unknown subcommand *${sub}*.\n\n\`${p} mentoring\` — dashboard\n\`${p} mentoring new [n]\` — fresh finds (w/ previews)\n\`${p} mentoring ids [reg] [filter] [n]\` — newest card ids\n\`${p} mentoring find <q>\` — search the mine (events + regulars)\n\`${p} mentoring preview <q>\` — one card\u2019s media\n\`${p} mentoring media\` — archive stats\n\`${p} mentoring promote\` — mine → live (owner, events + regulars)` });
+    await sock.sendMessage(chatId, { text: `🧑‍🏫 Unknown subcommand *${sub}*.\n\n\`${p} mentoring\` - dashboard\n\`${p} mentoring new [n]\` - fresh finds (w/ previews)\n\`${p} mentoring ids [reg] [filter] [n]\` - newest card ids\n\`${p} mentoring find <q>\` - search the mine (events + regulars)\n\`${p} mentoring preview <q>\` - one card\u2019s media\n\`${p} mentoring media\` - archive stats\n\`${p} mentoring promote\` - mine → live (owner, events + regulars)` });
   } catch (e) {
     console.error('[Mentoring] handler error:', e);
     await sock.sendMessage(chatId, { text: `❌ mentoring error: ${e.message}` });

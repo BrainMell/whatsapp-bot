@@ -1,14 +1,12 @@
-// PM2 ecosystem — wa-miner (shoob.gg card miner) — runs on BOX 1 ONLY
+// PM2 ecosystem - wa-miner (shoob.gg card miner) - runs on BOX 1 ONLY
 // ====================================================================
-// Mellow 2026-10-07: "turn off the other bots on box 1, keep Joker active,
+// Mellow "turn off the other bots on box 1, keep Joker active,
 // use the server to mine for shob.gg cards". wa-jake + wa-subaru are pm2
-// STOPPED (auths preserved, nothing removed — turn back on with
+// STOPPED (auths preserved, nothing removed - turn back on with
 // `pm2 start wa-jake wa-subaru`); the freed box runs this miner instead.
-//
-//   pm2 start ecosystem.miner.js && pm2 save
-//   pm2 logs wa-miner
-//   pm2 stop wa-miner        # pauses mining (keeps outputs/media)
-//
+// pm2 start ecosystem.miner.js && pm2 save
+// pm2 logs wa-miner
+// pm2 stop wa-miner # pauses mining (keeps outputs/media)
 // Knobs are env (MINER_*), defaults are sane: every 45 min, media mirror on,
 // 5GB disk floor. Outputs: output/ (JSON) + media/ (gif/webm archive).
 // Publishes to the shared Mongo System collection -> `.j mentoring` on Joker.

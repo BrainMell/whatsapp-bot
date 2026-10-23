@@ -1,4 +1,4 @@
-// hq_harness.js — standalone v12e de-risk: prove prepareWAMessageMedia with
+// hq_harness.js - standalone v12e de-risk: prove prepareWAMessageMedia with
 // mediaTypeOverride 'thumbnail-link' produces the full HQ field set the
 // linkPreview mapping needs (mock upload; real upload already proven in v12c).
 const path = require("path");

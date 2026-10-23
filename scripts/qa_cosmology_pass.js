@@ -4,7 +4,7 @@ process.env.NODE_ENV = 'test';
 
 const assert = require('assert');
 
-// ─── cosmology ──────────────────────────────────────────────────────────────
+// --- cosmology --------------------------------------------------------------
 const cosmology = require('../core/rpg/cosmology');
 const MS_H = 3600_000, MS_D = 24 * MS_H;
 
@@ -48,7 +48,7 @@ assert.strictEqual(typeof cosmology.isRoutineLink(cosmology.T0 + 5 * MS_H), 'boo
 {
     const off = cosmology.fwCenterOffset(t1, 400);
     assert.ok(Math.abs(Math.hypot(off.dx, off.dy) - 200) < 1e-9);
-    // movement indicator ends at the FW bottom as the orbit completes
+ // movement indicator ends at the FW bottom as the orbit completes
     const fwR = 200;
     const miEnd = cosmology.movementIndicator(cosmology.T0 + 4.999 * MS_H, fwR, 0, 0);
     assert.ok(miEnd.y > fwR * 0.5, 'indicator approaches bottom at orbit end');
@@ -58,7 +58,7 @@ assert.strictEqual(typeof cosmology.isRoutineLink(cosmology.T0 + 5 * MS_H), 'boo
 
 console.log('✓ cosmology: four clocks separate, phases stable, gates correct, geometry invariants hold');
 
-// ─── loreDrops ──────────────────────────────────────────────────────────────
+// --- loreDrops --------------------------------------------------------------
 const loreDrops = require('../core/rpg/loreDrops');
 
 // pool sizes (pools ship with 10+ lines each)
@@ -107,7 +107,7 @@ for (const [pool, lines] of Object.entries(loreDrops.POOLS)) {
 
 console.log('✓ loreDrops: format ╒ *line* ╛, cooldown, routing, pool sizes, canon discipline');
 
-// ─── enemyVariants ──────────────────────────────────────────────────────────
+// --- enemyVariants ----------------------------------------------------------
 const enemyVariants = require('../core/rpg/enemyVariants');
 
 // spawn policy: no variants below floor 31 on non-boss floors
@@ -167,19 +167,19 @@ for (let i = 0; i < 200; i++) {
 
 console.log('✓ enemyVariants: spawn policy by depth, MIRROR/DRIFTER rules, data-level swap, sprite mapping');
 
-// ─── worldMap gates (locked = requirement text, never a render) ─────────────
-// 💡 STUB ENGINE (#b4f71c staff bypass): worldMap._isStaff lazily requires
+// --- worldMap gates (locked = requirement text, never a render) -------------
+// STUB ENGINE (#b4f71c staff bypass): worldMap._isStaff lazily requires
 // ../engine - pre-seed the require cache so QA never loads the real engine.
 const __enginePath = require.resolve('../core/engine.js');
 require.cache[__enginePath] = { id: __enginePath, filename: __enginePath, loaded: true, exports: { isBotOwner: () => false, isGlobalMod: () => false, isRpgMod: () => false } };
 const worldMap = require('../core/rpg/worldMap');
-assert.strictEqual(worldMap.ABYSS_MAP_UNLOCK, 20); // CONFIRMED by owner (2026-09-19)
+assert.strictEqual(worldMap.ABYSS_MAP_UNLOCK, 20); // CONFIRMED by owner
 {
     const ref = worldMap._refuseBeyond('A');
     assert.ok(ref.includes('S'), 'rank requirement named');
     const refA = worldMap._refuseAbyss(12);
     assert.ok(refA.includes('20'), 'level requirement named');
-    // gate logic
+ // gate logic
     assert.strictEqual(worldMap._rankAtLeast('S', 'S'), true);
     assert.strictEqual(worldMap._rankAtLeast('A', 'S'), false);
     assert.strictEqual(worldMap._rankAtLeast('SSS', 'S'), true);

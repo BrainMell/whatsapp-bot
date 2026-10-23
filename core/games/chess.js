@@ -1,5 +1,5 @@
 // ============================================
-// ♟️ GOTEN-BOT CHESS SYSTEM
+// GOTEN-BOT CHESS SYSTEM
 // Features: PvP, Betting, Image Board, Elo logic
 // ============================================
 
@@ -7,7 +7,7 @@ const { Chess } = require('chess.js');
 const economy = require('../rpg/economy');
 const system = require('../utils/system');
 const botConfig = require('../../botConfig');
-const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
+const goService = require('../utils/goImageService'); // singleton (PERF PATCH )
 
 // ============================================
 // AI LOGIC (BASIC EVALUATION + MINIMAX)
@@ -142,7 +142,7 @@ function getBestMove(game) {
     let bestMove = null;
     let bestValue = -99999;
 
-    // Randomize equal moves a bit
+ // Randomize equal moves a bit
     possibleMoves.sort(() => Math.random() - 0.5);
 
     for (const move of possibleMoves) {
@@ -182,7 +182,6 @@ function getActiveGames() {
 // Key for storing active games in the system module (Instance-specific)
 const getChessKey = () => `active_chess_games_${botConfig.getBotId() || "global"}`;
 
-// Load active games from the system module on initialization
 function loadActiveGames() {
     try {
         const key = getChessKey();
@@ -299,7 +298,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
     const prefix = botConfig.getPrefix();
     const botJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
     
-    // Safety check: if first arg is 'chess', shift it (prevents parsing mismatch)
+ // Safety check: if first arg is 'chess', shift it (prevents parsing mismatch)
     if (args[0]?.toLowerCase() === 'chess') {
         args.shift();
     }
@@ -309,7 +308,6 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
     let mentionedJids = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
     const quotedParticipant = m.message?.extendedTextMessage?.contextInfo?.participant;
     
-    // Check if replying to the bot or tagging the bot
     const isReplyingToBot = quotedParticipant === botJid;
     const isTaggingBot = mentionedJids.includes(botJid);
 
@@ -319,7 +317,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
 
     const reserved = ['move', 'm', 'resign', 'board', 'show', 'moves', 'stats', 'top', 'help', 'guide', 'stop', 'end', 'reset', 'force-reset', 'fen', 'undo', 'draw'];
 
-    // 1. CHALLENGE: .j chess @user [bet] or .j chess challenge @user
+ // 1. CHALLENGE: .j chess @user [bet] or .j chess challenge @user
     if (!cmd || cmd === 'challenge' || (mentionedJids.length > 0 && !reserved.includes(cmd))) {
         if (getActiveGames().has(chatId)) {
             return sock.sendMessage(chatId, { text: botMarker + "❌ A game is already active in this chat! Finish it or use `" + prefix + " chess stop` to end it." });
@@ -335,12 +333,12 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         }
 
         if (cmd === 'guide') {
-            // Handled below
+ // Handled below
         } else {
             let opponentJid = mentionedJids[0];
             
-            // If tagging bot or no one tagged (and not guide), assume AI mode? 
-            // Actually user said "when u tag the bot ofcourse, or mention the bots number or reply to the bot"
+ // If tagging bot or no one tagged (and not guide), assume AI mode?
+ // Actually user said "when u tag the bot ofcourse, or mention the bots number or reply to the bot"
             if (isTaggingBot || isReplyingToBot) {
                 opponentJid = botJid;
             }
@@ -383,7 +381,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         }
     }
 
-    // 2. MOVE
+ // 2. MOVE
     if (cmd === 'move' || cmd === 'm') {
         const state = getGame(chatId);
         if (!state) return sock.sendMessage(chatId, { text: botMarker + "❌ No active game! Challenge someone with `" + prefix + " chess @user`" });
@@ -398,30 +396,30 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         let moveStr = args.slice(1).join('').trim();
         if (!moveStr) return sock.sendMessage(chatId, { text: botMarker + "❌ Specify your move! (e.g., `e4` or `Nf3`)" });
 
-        // Normalize move notation: 
-        // 1. Pawn moves (e.g., e4, E4 -> e4)
+ // Normalize move notation:
+ // 1. Pawn moves (e.g., e4, E4 -> e4)
         if (moveStr.length === 2) {
             moveStr = moveStr.toLowerCase();
         }
-        // 2. Piece moves (e.g., nf3 -> Nf3, qh5 -> Qh5)
+ // 2. Piece moves (e.g., nf3 -> Nf3, qh5 -> Qh5)
         else if (moveStr.length >= 3 && /^[rnkbq]/i.test(moveStr[0])) {
             moveStr = moveStr[0].toUpperCase() + moveStr.slice(1);
         }
-        // 3. Castling (e.g., o-o -> O-O)
+ // 3. Castling (e.g., o-o -> O-O)
         else if (moveStr.toLowerCase() === 'o-o' || moveStr.toLowerCase() === 'o-o-o') {
             moveStr = moveStr.toUpperCase().replace(/0/g, 'O');
         }
 
         try {
-            // Attempt the move
+ // Attempt the move
             let move = state.chess.move(moveStr);
             
-            // If failed, check if it's a missing promotion (e.g., e8 or a1 for pawn)
+ // If failed, check if it's a missing promotion (e.g., e8 or a1 for pawn)
             if (!move && moveStr.length >= 2) {
                 const targetSquare = moveStr.slice(-2);
                 const isPromotionRank = targetSquare[1] === '8' || targetSquare[1] === '1';
                 if (isPromotionRank) {
-                    // Try with promotion to Queen
+ // Try with promotion to Queen
                     const promoMove = moveStr.includes('=') ? moveStr : moveStr + '=Q';
                     move = state.chess.move(promoMove);
                     if (move) moveStr = promoMove;
@@ -450,9 +448,9 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
     const isWhiteTurn = state.chess.turn() === 'w';
     const currentPlayer = !isWhiteTurn ? state.playerW : state.playerB; // Turn already flipped in chess.js
 
-    // 💡 FIX: Clear stale draw offers whenever a move is made. Previously
-    // a draw offer would persist after the offering player moved, allowing
-    // the opponent to accept a stale offer on a changed position.
+ // FIX: Clear stale draw offers whenever a move is made. Previously
+ // a draw offer would persist after the offering player moved, allowing
+ // the opponent to accept a stale offer on a changed position.
     state.drawOfferedBy = null;
 
     state.fen = state.chess.fen(); 
@@ -506,7 +504,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         await sock.sendMessage(chatId, { text: caption + "\n\n" + asciiBoard, contextInfo: { mentionedJid: gameEnded ? [state.playerW, state.playerB] : [nextPlayer] } });
     }
 
-    // AI MOVE TRIGGER
+ // AI MOVE TRIGGER
     if (!gameEnded && nextPlayer === botJid) {
         setTimeout(async () => {
             const aiMove = getBestMove(state.chess);
@@ -538,7 +536,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         }
     }
 
-    // 4. LEGAL MOVES
+ // 4. LEGAL MOVES
     if (cmd === 'moves') {
         const state = getGame(chatId);
         if (!state) return;
@@ -546,7 +544,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         return sock.sendMessage(chatId, { text: botMarker + `📜 *LEGAL MOVES:*\n\n${moves.join(', ')}` });
     }
 
-    // 5. STATS
+ // 5. STATS
     if (cmd === 'stats') {
         const target = mentionedJids[0] || senderJid;
         const scores = system.get('chess_scores', {});
@@ -555,7 +553,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         return sock.sendMessage(chatId, { text: botMarker + `🏆 *${name} CHESS STATS:*\n\n🥇 Wins: ${s.wins}\n💀 Losses: ${s.losses}\n⚖️ Draws: ${s.draws}\n📈 Elo: ${s.elo}`, contextInfo: { mentionedJid: [target] } });
     }
 
-    // 6. LEADERBOARD
+ // 6. LEADERBOARD
     if (cmd === 'top') {
         const scores = system.get('chess_scores', {});
         const sorted = Object.entries(scores).sort(([, a], [, b]) => b.wins - a.wins).slice(0, 10);
@@ -566,7 +564,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         return sock.sendMessage(chatId, { text: msg, contextInfo: { mentionedJid: sorted.map(([jid]) => jid + '@s.whatsapp.net') } });
     }
 
-    // 7. RESIGN
+ // 7. RESIGN
     if (cmd === 'resign') {
         const state = getGame(chatId);
         if (!state) return;
@@ -594,17 +592,17 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         });
     }
 
-    // 8. STOP / END / RESET
+ // 8. STOP / END / RESET
     if (cmd === 'stop' || cmd === 'end' || cmd === 'reset' || cmd === 'force-reset') {
         const activeGames = getActiveGames();
         const state = activeGames.get(chatId);
 
-        // Normalize JIDs for permission check
+ // Normalize JIDs for permission check
         const isPlayer = state && (cleanJid(senderJid) === cleanJid(state.playerW) || cleanJid(senderJid) === cleanJid(state.playerB));
         const isAdmin = m.key.fromMe || mentionedJids.includes(sock.user.id);
-        // 💡 FIX: 'reset'/'force-reset' should also require admin - previously
-        // any user could grief ongoing games (including bet matches) by typing
-        // '.chess reset'. Now only players in the game or admins can clear it.
+ // FIX: 'reset'/'force-reset' should also require admin - previously
+ // any user could grief ongoing games (including bet matches) by typing
+ // '.chess reset'. Now only players in the game or admins can clear it.
         const isForce = (cmd === 'reset' || cmd === 'force-reset') && isAdmin;
 
         if (isPlayer || isForce || isAdmin) {
@@ -619,7 +617,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         }
     }
 
-    // 9. HELP
+ // 9. HELP
     if (cmd === 'help') {
         return sock.sendMessage(chatId, { text: botMarker + `♟️ *CHESS COMMANDS* ♟️\n\n` +
             `• \`${prefix} chess @user [bet]\` - Start a game\n` +
@@ -636,14 +634,14 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
             `• \`${prefix} chess top\` - Leaderboard` });
     }
 
-    // 10. FEN
+ // 10. FEN
     if (cmd === 'fen') {
         const state = getGame(chatId);
         if (!state) return;
         return sock.sendMessage(chatId, { text: botMarker + `🧩 *FEN:* \`${state.chess ? state.chess.fen() : state.fen}\`` });
     }
 
-    // 11. UNDO
+ // 11. UNDO
     if (cmd === 'undo') {
         const state = getGame(chatId);
         if (!state) return;
@@ -672,7 +670,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         }
     }
 
-    // 12. DRAW
+ // 12. DRAW
     if (cmd === 'draw') {
         const state = getGame(chatId);
         if (!state) return;
@@ -693,7 +691,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         }
     }
 
-    // 13. GUIDE
+ // 13. GUIDE
     if (cmd === 'guide') {
         const guideText = botMarker + `♟️ *THE ULTIMATE CHESS GUIDE* ♟️\n\n` +
             `*1. Making Moves* 📝\n` +

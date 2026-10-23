@@ -1,4 +1,4 @@
-// QA: v3 asset pack mapping integrity (no canvas needed — file/data checks)
+// QA: v3 asset pack mapping integrity (no canvas needed - file/data checks)
 const path = require('path');
 const fs = require('fs');
 const R = path.join(__dirname, '..', 'core', 'rpg');

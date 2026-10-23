@@ -15,7 +15,7 @@ function check(name, ok, detail = '') {
   console.log(`${ok ? 'PASS' : 'FAIL'} :: ${name}${detail ? ' :: ' + String(detail).slice(0, 120) : ''}`);
 }
 
-// ── timestamp parser matrix ──
+// -- timestamp parser matrix --
 const T = [
   ['15', 15], ['15.5', 15.5], ['90s', 90], ['0:15', 15], ['1:30', 90],
   ['1:30.5', 90.5], ['1:02:30', 3750], ['2m30s', 150], ['1h2m3.5s', 3723.5],
@@ -31,7 +31,7 @@ check('fmt 90.5', clip.fmtTimestamp(90.5) === '1:30.5', clip.fmtTimestamp(90.5))
 check('fmt 3750', clip.fmtTimestamp(3750) === '1:02:30', clip.fmtTimestamp(3750));
 check('fmt 15', clip.fmtTimestamp(15) === '0:15', clip.fmtTimestamp(15));
 
-// ── quoted media detection (synthetic message shapes) ──
+// -- quoted media detection (synthetic message shapes) --
 const audioQ = { message: { extendedTextMessage: { contextInfo: { quotedMessage: { audioMessage: { ptt: true, url: 'x' } } } } } };
 const vidQ = { message: { extendedTextMessage: { contextInfo: { quotedMessage: { videoMessage: { url: 'x' } } } } } };
 const docQ = { message: { extendedTextMessage: { contextInfo: { quotedMessage: { documentMessage: { mimetype: 'audio/mpeg' } } } } } };
@@ -41,7 +41,7 @@ check('quoted video rejected', clip.getQuotedAudio(vidQ) === null);
 check('quoted audio doc', clip.getQuotedAudio(docQ)?.type === 'document');
 check('quoted image doc rejected', clip.getQuotedAudio(docImg) === null);
 
-// ── real ffmpeg round-trip: generate 30s tone, cut 5..10 ──
+// -- real ffmpeg round-trip: generate 30s tone, cut 5..10 --
 (async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'clipE2E-'));
   const src = path.join(dir, 'tone.wav');

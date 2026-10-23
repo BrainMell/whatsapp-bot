@@ -38,7 +38,7 @@ for (let f = 0; f < 4; f++) {
     const b = Buffer.alloc(W2 * H2 * 4);
     for (let y = 0; y < H2; y++) for (let x = 0; x < W2; x++) {
         const i = (y * W2 + x) * 4;
-        // bands + a moving ellipse-ish blob: flat colors only
+ // bands + a moving ellipse-ish blob: flat colors only
         const band = Math.floor(y / 90) % 3;
         b[i] = band === 0 ? 18 : band === 1 ? 34 : 22;
         b[i+1] = band === 0 ? 14 : band === 1 ? 26 : 16;

@@ -1,5 +1,5 @@
 'use strict';
-// bake_landing.js — owner 2026-10-19: "the building should fall in and when it touches
+// bake_landing.js - "the building should fall in and when it touches
 // down it should be a confetti explosion from that source". Bakes landing-celebrate mp4s:
 // player house Lv3 falls onto its plot + guild hall (castle) falls onto the citadel.
 const fs = require('fs'); const path = require('path');

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* build_quiz_dataset_pass5.js — games covers + facts (Wikidata), comics boost
+/* build_quiz_dataset_pass5.js - games covers + facts (Wikidata), comics boost
  * (Kitsu + AniList manga extension). Merges into data/quizDataset.json (v5).
  * Keyless throughout; images verified at build time (download or imageinfo). */
 'use strict';
@@ -99,7 +99,7 @@ async function wdQuery(sparql) {
 const wdRows = (d) => (d && d.results && d.results.bindings) || [];
 const wdVal = (b, k) => (b[k] && (b[k].value || "")) || "";
 
-// ── 1. GAMES: covers/logos + release year + developer (Wikidata) ──
+// -- 1. GAMES: covers/logos + release year + developer (Wikidata) --
 async function gamesWikidata() {
   const rowsAll = [];
   for (const [prop, kind] of [["P18", "cover art"], ["P154", "logo"]]) {
@@ -143,7 +143,7 @@ async function gamesWikidata() {
   console.log(`[wd-games] +${im} cover/logo images, +${ty} year facts, +${td} developer facts`);
 }
 
-// ── 2. COMICS: Kitsu manga (covers + years) ──
+// -- 2. COMICS: Kitsu manga (covers + years) --
 async function comicsKitsu() {
   const manga = [];
   for (let off = 0; off < 600 && manga.length < 600; off += 20) {
@@ -174,7 +174,7 @@ async function comicsKitsu() {
   console.log(`[kitsu] +${im} covers, +${ty} year questions`);
 }
 
-// ── 3. COMICS: AniList manga extension (pages 5-10 popularity) ──
+// -- 3. COMICS: AniList manga extension (pages 5-10 popularity) --
 async function anilistPost(query, variables) {
   const r = await axios.post("https://graphql.anilist.co", { query, variables }, { timeout: 20000, headers: { "Content-Type": "application/json", "User-Agent": UA } });
   return r.data;
@@ -209,7 +209,7 @@ async function comicsAniListExt() {
   console.log(`[anilist-manga] +${im} covers, +${ty} year questions`);
 }
 
-// ── verify only NEW image entries by download (kitsu/anilist direct urls) ──
+// -- verify only NEW image entries by download (kitsu/anilist direct urls) --
 async function verifyNewImages() {
   let total = 0, dropped = 0;
   for (const cat of Object.keys(DS.categories)) {
@@ -254,7 +254,7 @@ async function verifyNewImages() {
   DS.version = 5;
   const json = JSON.stringify(DS);
   fs.writeFileSync(OUT, json);
-  let rep = `quizDataset v5 — ${DS.generatedAt}\n${Math.round(json.length / 1024)}KB, built in ${Math.round((Date.now() - t0) / 1000)}s\n`;
+  let rep = `quizDataset v5 - ${DS.generatedAt}\n${Math.round(json.length / 1024)}KB, built in ${Math.round((Date.now() - t0) / 1000)}s\n`;
   for (const [c, n] of Object.entries(DS.counts)) rep += `${c}: text=${n.text} images=${n.images}\n`;
   rep += `sources: opentdb, the-trivia-api, steamspy, tvmaze, anilist(+manga ext), kitsu, wikidata(p18+p154 games), enwiki lists+infobox scrape, enwiki pageimages\n`;
   fs.writeFileSync(REPORT, rep);

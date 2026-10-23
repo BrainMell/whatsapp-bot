@@ -1,5 +1,5 @@
 // ============================================
-// 🛒 SHOP SYSTEM - Commands for buying items
+// SHOP SYSTEM - Commands for buying items
 // ============================================
 
 const fs = require('fs');
@@ -10,14 +10,14 @@ const lootSystem = require('../rpg/lootSystem');
 const classSystem = require('../rpg/classSystem');
 const progression = require('../rpg/progression');
 const botConfig = require('../../botConfig');
-const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
+const goService = require('../utils/goImageService'); // singleton (PERF PATCH )
 const profileHelper = require('../utils/profileHelper');
-const { fetchPfp: fetchPfpCached } = require('../utils/pfpCache'); // 💡 PERF PATCH 2026-07-27: cached + 8s-timeout PFP fetcher
+const { fetchPfp: fetchPfpCached } = require('../utils/pfpCache'); // PERF PATCH cached + 8s-timeout PFP fetcher
 
 const getZENI = () => botConfig.getCurrency().symbol;
 const getPrefix = () => botConfig.getPrefix();
 
-// 💡 ECONOMY FIX 2026-08-31: MYTHIC shop pricing.
+// ECONOMY FIX MYTHIC shop pricing.
 // Shop-bought MYTHIC gear could be resold at 1.2× sellMultiplier (×0.9 after
 // tax = 1.08×) - a guaranteed 8% profit per buy/sell cycle (infinite money
 // printer). All other rarities have sellMultiplier ≤ 1.0 so resale is always
@@ -32,7 +32,7 @@ function shopPrice(item) {
     return base;
 }
 
-// ─── SHARED SHOP CATALOG (2026-09-14) ──────────────────────────────────────
+// --- SHARED SHOP CATALOG --------------------------------------
 // One builder for displayShop AND buyItem so item shaping/IDs can never
 // drift apart again (the two functions previously carried duplicated loops).
 // Split: mainItems → main shop views, summonItems → `.shop summon` view only.
@@ -44,8 +44,8 @@ function buildShopCatalog() {
     Object.entries(lootSystem.ITEM_DATABASE).forEach(([id, item]) => {
         if (item.value <= 1) return;
 
-        // Summon-specific items live in the dedicated summon shop
-        // 💡 Only basic_summon_egg is buyable - higher-tier eggs come from crafting fragments
+ // Summon-specific items live in the dedicated summon shop
+ // Only basic_summon_egg is buyable - higher-tier eggs come from crafting fragments
         const isSummonItem = item.type === 'SUMMON_GEAR' ||
                              id === 'basic_summon_egg' ||
                              id === 'summon_healing_pill' ||
@@ -75,7 +75,7 @@ function buildShopCatalog() {
             return;
         }
 
-        // Main shop items (equipment, potions, stones, keys, remedies)
+ // Main shop items (equipment, potions, stones, keys, remedies)
         if (item.type === 'EQUIPMENT' || item.type === 'POTION' || id.includes('stone') || id.includes('potion') || id.includes('key') || id.includes('remedy')) {
             mainItems[id] = {
                 id,
@@ -95,7 +95,7 @@ function buildShopCatalog() {
     return { classItems, mainItems, summonItems };
 }
 
-// 🔍 SHOP SEARCH (2026-09-14, owner: "add a search feature for the shop"):
+// SHOP SEARCH ("add a search feature for the shop"):
 // `.j shop <anything that isn't a category>` now searches name/ID/desc.
 // Every shop view remembers what it displayed per chat (10-min TTL) so the
 // numbers shown can be bought with `.buy <#>` - previously `.buy <#>` always
@@ -122,7 +122,7 @@ function getRememberedShopList(chatId) {
     return entry.list;
 }
 
-// 🏷️ RANK FILTER (2026-09-17, owner: "add rank filter to the shop"):
+// RANK FILTER ("add rank filter to the shop"):
 // `.j shop equipment legendary`, `.j shop mythic`, `.j shop epic sword`…
 // A rank token is stripped from the args and becomes a rarity filter that
 // composes with EVERY view (category, search, summon). Bare `.j shop <rank>`
@@ -157,7 +157,7 @@ function parseShopArgs(raw) {
 
 const matchRank = (item, rank) => !rank || (item.rarity || 'COMMON').toUpperCase() === rank;
 
-// §7 base-fusion helper — one zoomed market card for shop moments (open /
+// §7 base-fusion helper - one zoomed market card for shop moments (open /
 // purchase). Never creates a base, never touches the wallet; returns null on
 // any failure so the caller falls back to the plain text flow.
 async function marketCard(senderJid, banner, activity = 'shopping') {
@@ -168,20 +168,20 @@ async function marketCard(senderJid, banner, activity = 'shopping') {
 const _cardOk = (c) => c && c.buffer && c.buffer.length > 500;
 
 // ==========================================
-// 🏪 SHOP DISPLAY
+// SHOP DISPLAY
 // ==========================================
 
 async function displayShop(sock, chatId, category = 'all', senderJid = null) {
-    // 1. Shared catalog (single source of truth - see buildShopCatalog above)
+ // 1. Shared catalog (single source of truth - see buildShopCatalog above)
     const { classItems, mainItems, summonItems } = buildShopCatalog();
     const p = getPrefix();
     const Z = getZENI();
 
-    // 🏷️ Rank filter: ".j shop equipment legendary" / ".j shop mythic" etc.
+ // Rank filter: ".j shop equipment legendary" / ".j shop mythic" etc.
     const { rank, query } = parseShopArgs(category);
     const rankTag = rank ? ` • ${RARITY_ICONS[rank]} ${rank}` : '';
 
-    // 💡 DEDICATED SUMMON SHOP: if query is 'summon', show only summon items
+ // DEDICATED SUMMON SHOP: if query is 'summon', show only summon items
     if (query.toLowerCase() === 'summon') {
         const summonEntries = Object.entries(summonItems).filter(([, i]) => matchRank(i, rank));
         if (summonEntries.length === 0) {
@@ -215,9 +215,9 @@ async function displayShop(sock, chatId, category = 'all', senderJid = null) {
         return;
     }
 
-    // 🔍 SHOP SEARCH: any arg that isn't a known category is a query.
-    // Searches item name, ID and description across ALL buyable stock
-    // (class items + main shop + summon shop - summon hits get a 🥚 marker).
+ // SHOP SEARCH: any arg that isn't a known category is a query.
+ // Searches item name, ID and description across ALL buyable stock
+ // (class items + main shop + summon shop - summon hits get a marker).
     if (!KNOWN_CATEGORIES.has(query.toLowerCase())) {
         const q = query.toLowerCase().trim();
         const qFlat = q.replace(/\s+/g, '_'); // "health potion" also matches id "health_potion"
@@ -261,7 +261,7 @@ async function displayShop(sock, chatId, category = 'all', senderJid = null) {
         return;
     }
 
-    // 2. Known-category views (summon handled above, not shown in main shop)
+ // 2. Known-category views (summon handled above, not shown in main shop)
     const categoryInfo = {
         all: { name: 'All Items', icon: '🛍️' },
         class: { name: 'Class Items', icon: '🎭' },
@@ -277,7 +277,7 @@ async function displayShop(sock, chatId, category = 'all', senderJid = null) {
     msg += `━━━━━━━━━━━━━━━\n`;
     msg += `📂 \`${p} shop all · equipment · class · quest · permanent\` · 🏷️ \`${p} shop <category> <rank>\` · 🔍 \`${p} shop <name>\`\n\n`;
 
-    // Filter items by category
+ // Filter items by category
     const filteredItems = Object.entries(items).filter(([key, item]) => {
         if (query === 'all') return true;
         return item.category.toLowerCase() === query.toLowerCase();
@@ -286,7 +286,7 @@ async function displayShop(sock, chatId, category = 'all', senderJid = null) {
     if (filteredItems.length === 0) {
         msg += `❌ No items found${rank ? ` in ${RARITY_ICONS[rank]} ${rank} rank` : ' in this category'}.\n`;
     } else {
-        // 💡 RESTYLE 2026-09-11: unified compact entries (numbered, no flavor text).
+ // RESTYLE unified compact entries (numbered, no flavor text).
         rememberShopList(chatId, filteredItems.map(([, item]) => item));
         filteredItems.forEach(([key, item], index) => {
             const rarIcon = RARITY_ICONS[item.rarity] || '⚪';
@@ -311,15 +311,15 @@ async function displayShop(sock, chatId, category = 'all', senderJid = null) {
     msg += `━━━━━━━━━━━━━━━\n`;
     msg += `💡 Buy: \`${p} buy <id>\` or \`${p} buy <#>\` (e.g. \`${p} buy health_potion_shop\`) • 🏷️ \`${p} shop equipment legendary\``;
 
-    // §7: the market card leads (shopkeeper, stall, MARKET OPEN banner with
-    // the active view) — the full menu stays the authoritative text response.
+ // §7: the market card leads (shopkeeper, stall, MARKET OPEN banner with
+ // the active view) - the full menu stays the authoritative text response.
     try {
         const c = await marketCard(senderJid || senderJidOfChat(sock, chatId), {
             head: 'MARKET OPEN',
             lines: [`Browsing: ${activeCat.name}${rankTag}`, `Buy with \`${p} buy <#>\``],
         }, 'shopping');
         if (_cardOk(c)) return void await sock.sendMessage(chatId, { image: c.buffer, caption: msg });
-    } catch (e) { /* card is a garnish — text below always ships */ }
+    } catch (e) { /* card is a garnish - text below always ships */ }
     await sock.sendMessage(chatId, { text: msg });
 }
 
@@ -330,22 +330,21 @@ function senderJidOfChat(_sock, chatId) {
 }
 
 // ==========================================
-// 💳 BUY ITEM
+// BUY ITEM
 // ==========================================
 
 async function buyItem(sock, chatId, senderJid, input) {
-    // 💡 2026-09-14: shared catalog - one builder for display + buy (previously
-    // this function carried a second, drift-prone copy of the item loop).
+ // shared catalog - one builder for display + buy (previously
     const { classItems, mainItems, summonItems } = buildShopCatalog();
-    // Full buyable universe: main shop + summon shop + class items.
-    // (displayShop hides summon items from the main views but they stay buyable.)
+ // Full buyable universe: main shop + summon shop + class items.
+ // (displayShop hides summon items from the main views but they stay buyable.)
     const allItems = { ...classItems, ...mainItems, ...summonItems };
     const allItemsList = Object.values(allItems);
 
     const sanitizedInput = input.toLowerCase().trim().replace(/ /g, '_');
     let item = allItems[sanitizedInput];
 
-    // Fallback 1: Try stripping all underscores, hyphens, and spaces to match IDs (e.g. minor_hp_potion -> minorhppotion)
+ // Fallback 1: Try stripping all underscores, hyphens, and spaces to match IDs (e.g. minor_hp_potion -> minorhppotion)
     if (!item) {
         const flatInput = sanitizedInput.replace(/_/g, '').replace(/-/g, '');
         item = Object.values(allItems).find(itm =>
@@ -353,7 +352,7 @@ async function buyItem(sock, chatId, senderJid, input) {
         );
     }
 
-    // Fallback 2: Try matching against the item's name (case-insensitive, ignoring non-alphanumeric characters)
+ // Fallback 2: Try matching against the item's name (case-insensitive, ignoring non-alphanumeric characters)
     if (!item) {
         const flatNameInput = input.toLowerCase().replace(/[^a-z0-9]/g, '');
         item = Object.values(allItems).find(itm =>
@@ -361,13 +360,13 @@ async function buyItem(sock, chatId, senderJid, input) {
         );
     }
 
-    // Fallback 3: If not found by ID or Name, check if it's a number.
-    // 💡 2026-09-14 (shop search round): resolve against the LAST shop view
-    // shown in this chat (search / category / summon - see rememberShopList)
-    // so the numbers the user actually sees are the numbers that buy. The old
-    // code always indexed the FULL catalog, so numbers from `.shop equipment`
-    // or a search result silently pointed at the wrong items. If no fresh
-    // view exists, fall back to the raw catalog as before.
+ // Fallback 3: If not found by ID or Name, check if it's a number.
+ // (shop search round): resolve against the LAST shop view
+ // shown in this chat (search / category / summon - see rememberShopList)
+ // so the numbers the user actually sees are the numbers that buy. The old
+ // code always indexed the FULL catalog, so numbers from `.shop equipment`
+ // or a search result silently pointed at the wrong items. If no fresh
+ // view exists, fall back to the raw catalog as before.
     if (!item && !isNaN(parseInt(input))) {
         const index = parseInt(input) - 1;
         const recentList = getRememberedShopList(chatId);
@@ -387,7 +386,7 @@ async function buyItem(sock, chatId, senderJid, input) {
     
     const itemId = item.id;
     
-    // Lineage Restriction for Dragon Key
+ // Lineage Restriction for Dragon Key
     if (itemId === 'dragon_key') {
         const currentClass = economy.getUserClass(senderJid);
         if (!classSystem.isFighterLineage(currentClass?.id)) {
@@ -395,7 +394,7 @@ async function buyItem(sock, chatId, senderJid, input) {
         }
     }
 
-    // Check balance
+ // Check balance
     const balance = economy.getBalance(senderJid);
     if (balance < item.cost) {
         await sock.sendMessage(chatId, {
@@ -404,7 +403,7 @@ async function buyItem(sock, chatId, senderJid, input) {
         return;
     }
     
-    // Handle different item types
+ // Handle different item types
     let result;
     
     switch (item.type) {
@@ -428,7 +427,7 @@ async function buyItem(sock, chatId, senderJid, input) {
         case 'CONSUMABLE':
         case 'BOOSTER':
         case 'SPECIAL_KEY':
-        case 'ITEM':  // 💡 AUDIT FIX 2026-08-01: summon eggs are type 'ITEM'
+        case 'ITEM': // AUDIT FIX summon eggs are type 'ITEM'
             result = await handleConsumable(senderJid, item);
             break;
         default:
@@ -436,22 +435,22 @@ async function buyItem(sock, chatId, senderJid, input) {
     }
     
     if (result.success) {
-        // 💡 FIX: For non-rollbackable items (STAT_BOOST, CLASS_CHANGE, RESET,
-        // CONSUMABLE), deduct money FIRST, then apply the effect. Previously
-        // the effect was applied first and removeMoney was called after - if
-        // removeMoney failed (race condition), the user got the effect for free.
-        // For EQUIPMENT, the item can be rolled back, so the order doesn't
-        // matter as much - but we still verify payment.
+ // FIX: For non-rollbackable items (STAT_BOOST, CLASS_CHANGE, RESET,
+ // CONSUMABLE), deduct money FIRST, then apply the effect. Previously
+ // the effect was applied first and removeMoney was called after - if
+ // removeMoney failed (race condition), the user got the effect for free.
+ // For EQUIPMENT, the item can be rolled back, so the order doesn't
+ // matter as much - but we still verify payment.
         const nonRollbackable = ['STAT_BOOST', 'STAT_BOOST_PERM', 'CLASS_CHANGE', 'RESET', 'CONSUMABLE', 'BOOSTER', 'SPECIAL_KEY', 'EVOLUTION', 'ASCENSION'];
 
         if (nonRollbackable.includes(item.type)) {
-            // Deduct FIRST, then apply effect
+ // Deduct FIRST, then apply effect
             let paid = economy.removeMoney(senderJid, item.cost, `Bought ${item.id}`);
             if (!paid) {
-                // 💡 47-l1 (owner 2026-10-20 "wtf is this?"): multi-bot wallet
-                // contention can leave this process's cached balance seconds
-                // behind the DB — a valid buy died on a stale read. Re-pull
-                // the doc from MongoDB once and retry before failing.
+ // 47-l1 ("wtf is this?"): multi-bot wallet
+ // contention can leave this process's cached balance seconds
+ // behind the DB - a valid buy died on a stale read. Re-pull
+ // the doc from MongoDB once and retry before failing.
                 try {
                     await economy.reloadUserFromDB(senderJid);
                     paid = economy.removeMoney(senderJid, item.cost, `Bought ${item.id}`);
@@ -463,13 +462,13 @@ async function buyItem(sock, chatId, senderJid, input) {
                 });
                 return;
             }
-            // Effect was already applied above - if we reach here, payment succeeded.
+ // Effect was already applied above - if we reach here, payment succeeded.
         } else {
-            // EQUIPMENT: can be rolled back if payment fails
+ // EQUIPMENT: can be rolled back if payment fails
             let paid = economy.removeMoney(senderJid, item.cost, `Bought ${item.id}`);
             if (!paid) {
-                // 💡 47-l1: same stale-cache retry as above — one DB-fresh
-                // attempt before we roll the item back and fail the buy.
+ // 47-l1: same stale-cache retry as above - one DB-fresh
+ // attempt before we roll the item back and fail the buy.
                 try {
                     await economy.reloadUserFromDB(senderJid);
                     paid = economy.removeMoney(senderJid, item.cost, `Bought ${item.id}`);
@@ -486,15 +485,15 @@ async function buyItem(sock, chatId, senderJid, input) {
             }
         }
 
-        // 💡 LORE DROP: trading voice (8% on shop buy) - own message box
+ // LORE DROP: trading voice (8% on shop buy) - own message box
         let __shopDrop = null;
         try {
             const loreDrops = require('../rpg/loreDrops');
             __shopDrop = loreDrops.maybeDrop('trading', { userId: senderJid, chatId, chance: 0.08 });
         } catch (e) {}
         const buyTxt = `✅ *PURCHASE SUCCESSFUL!*\n\n${result.message}\n\n💸 Paid: ${getZENI()}${item.cost.toLocaleString()}`;
-        // §7: the counter where it happened — the bought item + the real price
-        // on the market card. Never claims a purchase that didn't happen.
+ // §7: the counter where it happened - the bought item + the real price
+ // on the market card. Never claims a purchase that didn't happen.
         try {
             const c = await marketCard(senderJid, {
                 head: 'PURCHASE COMPLETE',
@@ -503,8 +502,8 @@ async function buyItem(sock, chatId, senderJid, input) {
             if (_cardOk(c)) return void await sock.sendMessage(chatId, { image: c.buffer, caption: buyTxt });
         } catch (e) { /* text below */ }
         await sock.sendMessage(chatId, { text: buyTxt });
-        // 💡 Phase B TUTORIAL: buying lesson advances on a REAL purchase
-        // (no-op unless a tutorial session is active).
+ // Phase B TUTORIAL: buying lesson advances on a REAL purchase
+ // (no-op unless a tutorial session is active).
         try { require('../rpg/tutorial').notify(senderJid, 'buy', { sock, chatId }).catch(() => {}); } catch (e) {}
         try {
             const loreDrops = require('../rpg/loreDrops');
@@ -516,11 +515,10 @@ async function buyItem(sock, chatId, senderJid, input) {
 }
 
 // ==========================================
-// 🎯 ITEM HANDLERS
+// ITEM HANDLERS
 // ==========================================
 
 async function handleClassChange(senderJid) {
-    // Initialize class if needed (for old users)
     economy.initializeClass(senderJid);
     
     const result = economy.changeClass(senderJid);
@@ -533,7 +531,7 @@ async function handleReset(senderJid) {
 
 async function handleStatBoost(senderJid, item) {
     if (item.type === 'STAT_BOOST_PERM') {
-        // Boost all stats by 5
+ // Boost all stats by 5
         const stats = ['hp', 'atk', 'def', 'mag', 'spd', 'luck'];
         stats.forEach(s => {
             economy.addStatBonus(senderJid, s, 5);
@@ -576,31 +574,31 @@ This boost is permanent and applies to all your quests!`
 }
 
 async function handleEquipment(senderJid, item) {
-    // Add to inventory with its specific stats and slot
-    // 💡 FIX 2026-08-01 (BUG #3): item.rarity is now properly propagated
-    // from lootSystem.ITEM_DATABASE via the buyableDbItems construction in
-    // both displayShop and buyItem. Previously it was undefined here, so
-    // every shop-bought equipment defaulted to 'COMMON' rarity - wrong
-    // sell multiplier, wrong enhancement cap, wrong display.
+ // Add to inventory with its specific stats and slot
+ // FIX (BUG #3): item.rarity is now properly propagated
+ // from lootSystem.ITEM_DATABASE via the buyableDbItems construction in
+ // both displayShop and buyItem. Previously it was undefined here, so
+ // every shop-bought equipment defaulted to 'COMMON' rarity - wrong
+ // sell multiplier, wrong enhancement cap, wrong display.
     const result = await inventorySystem.addItem(senderJid, item.id, 1, {
         name: item.name,
         type: 'EQUIPMENT',
         rarity: item.rarity || 'COMMON',
         stats: item.stats,
         slot: item.slot,
-        // 💡 ECONOMY FIX 2026-08-31: store the DB BASE value, not item.cost.
-        // Storing cost made resale compound off the shop price (with the
-        // MYTHIC sellMultiplier this produced an infinite buy→sell profit loop).
-        // Base value keeps sell price anchored to the item's intrinsic worth.
+ // ECONOMY FIX store the DB BASE value, not item.cost.
+ // Storing cost made resale compound off the shop price (with the
+ // MYTHIC sellMultiplier this produced an infinite buy→sell profit loop).
+ // Base value keeps sell price anchored to the item's intrinsic worth.
         value: (lootSystem.getItemInfo(item.id) || {}).value || item.cost,
-        reqLevel: item.reqLevel  // 💡 FIX GAP #1: persist reqLevel so equipItem can check it
+        reqLevel: item.reqLevel // FIX GAP #1: persist reqLevel so equipItem can check it
     });
     
     if (result.success) {
-        // 💡 FIX §2.1: item.slot was undefined for some shop items, producing
-        // "Use .e equip abyssal_carapace undefined to wear it." Now omits
-        // the slot hint entirely if slot is missing - the player can just
-        // use .e equip <id> without a slot argument.
+ // FIX §2.1: item.slot was undefined for some shop items, producing
+ // "Use .e equip abyssal_carapace undefined to wear it." Now omits
+ // the slot hint entirely if slot is missing - the player can just
+ // use .e equip <id> without a slot argument.
         const slotHint = item.slot ? ` ${item.slot}` : '';
         return {
             success: true,
@@ -611,18 +609,18 @@ async function handleEquipment(senderJid, item) {
 }
 
 async function handleConsumable(senderJid, item) {
-    // Strip _shop suffix if it exists to match lootSystem base IDs
+ // Strip _shop suffix if it exists to match lootSystem base IDs
     const baseId = item.id.replace('_shop', '');
     const itemInfo = lootSystem.getItemInfo(baseId);
 
-    // 💡 FIX: Guard against undefined itemInfo - previously a misconfigured
-    // shop item with _shop suffix but no matching base item would crash
-    // on itemInfo.name with a TypeError.
+ // FIX: Guard against undefined itemInfo - previously a misconfigured
+ // shop item with _shop suffix but no matching base item would crash
+ // on itemInfo.name with a TypeError.
     if (!itemInfo || !itemInfo.name) {
         return { success: false, message: `❌ Item configuration error for "${item.id}". Please report this to the bot owner.` };
     }
 
-    // Add to inventory using the unified system
+ // Add to inventory using the unified system
     const result = await inventorySystem.addItem(senderJid, baseId, 1, {
         name: itemInfo.name,
         value: itemInfo.value,
@@ -648,14 +646,13 @@ async function handleConsumable(senderJid, item) {
 }
 
 // ==========================================
-// 📊 CHARACTER INFO
+// CHARACTER INFO
 // ==========================================
 
 async function displayCharacter(sock, chatId, senderJid, senderName, targetJid = null, targetName = null) {
     const finalJid = targetJid || senderJid;
     const finalName = targetName || senderName;
 
-    // Initialize class if needed
     economy.initializeClass(finalJid);
     
     const user = economy.getUser(finalJid);
@@ -666,24 +663,24 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
     
     const classData = economy.getUserClass(finalJid);
     const charSheet = progression.getCharacterSheet(finalJid);
-    // 💡 FIX 2026-09-12 (owner): whois/profile/me must show the player's
-    // CURRENT stats - progression.getBaseStats includes level growth,
-    // allocated points, admin bonuses, equipment and summon passives.
-    // economy.getUserStats was only class base + statBonuses (base stats).
+ // FIX (owner): whois/profile/me must show the player's
+ // CURRENT stats - progression.getBaseStats includes level growth,
+ // allocated points, admin bonuses, equipment and summon passives.
+ // economy.getUserStats was only class base + statBonuses (base stats).
     const stats = charSheet?.stats || economy.getUserStats(finalJid);
     const level = charSheet?.level || 1;
     const gp = charSheet?.gp || 0;
     
-    // Update rank
+ // Update rank
     economy.updateAdventurerRank(finalJid);
     const rank = user.adventurerRank || 'F';
     const rankData = classSystem.ADVENTURER_RANKS[rank];
     
-    // Handle PFP
-    // 💡 PERF PATCH 2026-07-27: replaced inline 8s timeout + raw
-    // sock.profilePictureUrl() call with the shared pfpCache helper.
-    // Behaviour preserved (8s timeout, returns null on failure) PLUS
-    // 5min positive cache + 60s negative cache + in-flight de-dup.
+ // Handle PFP
+ // PERF PATCH replaced inline 8s timeout + raw
+ // sock.profilePictureUrl() call with the shared pfpCache helper.
+ // Behaviour preserved (8s timeout, returns null on failure) PLUS
+ // 5min positive cache + 60s negative cache + in-flight de-dup.
     let pfpUrl;
     try {
         pfpUrl = await fetchPfpCached(sock, finalJid);
@@ -692,8 +689,8 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
         pfpUrl = null;
     }
 
-    // 💡 2026-09-11: styled profile card FIRST (10 owner-approved designs,
-    // player-picked via <prefix> cardstyle). Go service stays as fallback.
+ // styled profile card FIRST (10 owner-approved designs,
+ // player-picked via <prefix> cardstyle). Go service stays as fallback.
     try {
         const profileCardRenderer = require('../rpg/profileCardRenderer');
         let pfpBuffer = null;
@@ -703,7 +700,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
                 pfpBuffer = Buffer.from(resp.data);
             } catch (e) {}
         }
-        // 💡 OWNER RULE: "[guild title] of [guild name]" - title falls back to role; empty when no guild
+ // OWNER RULE: "[guild title] of [guild name]" - title falls back to role; empty when no guild
         let _guildCard = { name: '', title: '' };
         try { _guildCard = require('../rpg/guilds').getCardGuildInfo(finalJid) || _guildCard; } catch (e) {}
         const styledEquipStats = inventorySystem.getEquipmentStats(finalJid);
@@ -712,12 +709,12 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
             classData,
             stats,
             equipStats: styledEquipStats,
-            // 💡 SILVER VEIL: level renders as "??" when the charm is active
+ // SILVER VEIL: level renders as "??" when the charm is active
             level: require('../rpg/economy').displayLevel(finalJid, charSheet?.level) ?? '??',
             rank: rank,
             xpPercent: charSheet?.progressPercent || 0,
-            // 💡 Owner rule 2026-09-14: cards show the XP requirement itself,
-            // not just a percentage ("42% · 12.4K/29.6K")
+ // Owner rule cards show the XP requirement itself,
+ // not just a percentage ("42% · 12.4K/29.6K")
             xpCurrent: charSheet?.xpProgress || 0,
             xpNeeded: charSheet?.xpForThisLevel || 0,
             pfpBuffer,
@@ -739,7 +736,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
         console.error("[displayCharacter] styled profile card failed:", err.message);
     }
 
-    // Try Go Image Service first
+ // Try Go Image Service first
     try {
         const cardData = await profileHelper.buildCardData(finalJid, finalName, pfpUrl);
         if (cardData) {
@@ -759,14 +756,14 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
         console.error("Failed to generate Go profile card:", err.message);
     }
 
-    // Fallback to text message
+ // Fallback to text message
     let msg = ``;
     msg += `👤 CHARACTER\n`;
     msg += `\n`;
     
     msg += `*${finalName}*\n\n`;
     
-    // Class info
+ // Class info
     if (classData) {
         msg += `${classData.icon} *Class:* ${classData.name}\n`;
         msg += `📝 ${classData.desc}\n`;
@@ -782,7 +779,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
         msg += `\n`;
     }
     
-    // Adventurer Rank
+ // Adventurer Rank
     msg += `${rankData?.icon || '🔰'} *Rank:* ${rankData?.name || rank}\n`;
     msg += `📊 Level: ${level}\n`;
     msg += `⭐ GP: ${gp.toLocaleString()}\n`;
@@ -793,7 +790,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
     }
     msg += `\n`;
 
-    // Stats
+ // Stats
     if (stats) {
         msg += `📊 *STATS:*\n`;
         msg += `❤️ HP: ${stats.hp}\n`;
@@ -802,7 +799,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
         msg += `🍀 LUCK: ${stats.luck} | 💥 CRIT: ${stats.crit}%\n\n`;
     }
 
-    // Next rank
+ // Next rank
     const nextRank = classSystem.getNextRankRequirements(rank);
     if (nextRank) {
         msg += `━━━━━━━━━━━━━━━\n`;
@@ -817,7 +814,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
         msg += `✨ *MAX RANK ACHIEVED!* ✨\n`;
     }
 
-    // Evolution info
+ // Evolution info
     if (classData && classData.tier === 'STARTER') {
         msg += `\n━━━━━━━━━━━━━━━\n`;
         msg += `💡 *Can evolve at Level 15 with 15 quests + a trial boss kill!*\n`;
@@ -836,7 +833,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
                 mentions: [finalJid]
             });
         } else {
-            // Use placeholder from botConfig
+ // Use placeholder from botConfig
             const placeholderPath = botConfig.getAssetPath('placeholder.png');
             if (fs.existsSync(placeholderPath)) {
                 await sock.sendMessage(chatId, { 
@@ -853,7 +850,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
         }
     } catch (sendErr) {
         console.error("Failed to send character sheet:", sendErr.message);
-        // Last resort: simple text without mentions or attachments
+ // Last resort: simple text without mentions or attachments
         try {
             await sock.sendMessage(chatId, { text: "⚠️ Error displaying profile card, but you are registered!" });
         } catch (fatal) {}
@@ -861,7 +858,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
     }
 
 // ==========================================
-// 📤 EXPORTS
+// EXPORTS
 // ==========================================
 
 module.exports = {

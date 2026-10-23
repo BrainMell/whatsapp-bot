@@ -36,7 +36,7 @@ const FLAGGED = {
     let cands = [];
     try { cands = await wpSearch(`${wiki} logo`, 8); } catch (e) { console.log("  search fail:", e.message); }
     try { cands.push(...(await wpSearch(`${brand} logo`, 4))); } catch { }
-    // heuristic ordering: logo in name good; old years / junk words bad
+ // heuristic ordering: logo in name good; old years / junk words bad
     const scored = cands.map((t) => {
       const low = t.toLowerCase();
       let s = 0;

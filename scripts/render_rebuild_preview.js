@@ -1,7 +1,7 @@
 'use strict';
-// Render BEFORE/AFTER previews of the base-builder rebuild (owner 2026-10-16
+// Render BEFORE/AFTER previews of the base-builder rebuild (
 // 17:27Z commission). Run from repo root ON THE BOX (needs node canvas):
-//   node scripts/render_rebuild_preview.js
+// node scripts/render_rebuild_preview.js
 const fs = require('fs');
 const path = require('path');
 const OUT = '/tmp/rebuild_previews';
@@ -11,7 +11,7 @@ async function main() {
     const baseR = require('../core/rpg/homesteadBaseRenderer');
     const roomR = require('../core/rpg/homesteadRenderer');
 
-    // ── 1) NEW BASE VIEW — v2 layout, scaled structures, margin world ──
+ // -- 1) NEW BASE VIEW - v2 layout, scaled structures, margin world --
     const baseState = {
         owner: 'Mellow',
         structures: [
@@ -31,7 +31,7 @@ async function main() {
     fs.writeFileSync(path.join(OUT, 'base_v2.png'), f0);
     console.log('base_v2.png', f0.length);
 
-    // ── 2) INTERIOR with the v2 grid overlay (bold edge numbers) ──
+ // -- 2) INTERIOR with the v2 grid overlay (bold edge numbers) --
     const roomState = {
         owner: 'Mellow',
         theme: 'oakhaven',
@@ -51,7 +51,7 @@ async function main() {
     fs.writeFileSync(path.join(OUT, 'interior_grid_v2.png'), gframe);
     console.log('interior_grid_v2.png', gframe.length);
 
-    // ── 3) MOVE LOCOMOTION — mid-slide frame (pop.from) ──
+ // -- 3) MOVE LOCOMOTION - mid-slide frame (pop.from) --
     const slide = await roomR.renderFrame({
         ...roomState,
         placed: roomState.placed.map((p) => (p.uid === 'a4' ? { ...p, x: 8, y: 8 } : p)),

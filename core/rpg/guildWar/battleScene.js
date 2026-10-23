@@ -1,23 +1,23 @@
 // ============================================
-// ⚔️ RUINS BATTLE SCENE — the fight happens IN the room
-// Owner directive 2026-10-05 23:39Z: "DO NOT switch to a separate battle
+// RUINS BATTLE SCENE - the fight happens IN the room
+// Owner directive 23:39Z: "DO NOT switch to a separate battle
 // scene or use the old encounter presentation. Keep the exact same room,
 // doors, background, player sprite, enemy sprites, positioning, HP/mana
 // HUD, etc. The battle system should happen directly on top of that
 // existing room scene."
 // → every ruins combat image (START + every TURN) is the SAME roomScene
-//   render the player was just shown — same plate, same entry-door spawn
-//   spot and facing, same pack positions — with only the live battle state
-//   layered on: HP pills tick down, dead enemies leave the scene, a gold
-//   ground ring marks the active actor, and the default-encounter HUD
-//   panel carries the live HP/mana. NO banner, NO map panel, NO Go
-//   microservice, NO sprite swap after attacks.
+// render the player was just shown - same plate, same entry-door spawn
+// spot and facing, same pack positions - with only the live battle state
+// layered on: HP pills tick down, dead enemies leave the scene, a gold
+// ground ring marks the active actor, and the default-encounter HUD
+// panel carries the live HP/mana. NO banner, NO map panel, NO Go
+// microservice, NO sprite swap after attacks.
 // ============================================
 
 const roomScene = require('./roomScene');
 const combatIntegration = require('../combatIntegration');
 
-// lazy: models pull mongoose — keep this module require-light for workers
+// lazy: models pull mongoose - keep this module require-light for workers
 const GuildWarEventModel = () => require('../../models/GuildWarEvent');
 
 // The frozen layout per combat session: START computes the plan ONCE and
@@ -51,14 +51,12 @@ function startCaption(state, turnOrderStr) {
 }
 
 // Render the ruins battle image for the CURRENT combat state.
-//   state   — guildAdventure combat state (players/enemies/ruinsMeta/sessionKey)
-//   phase   - 'START' | 'TURN'
-//   turnInfo- the last turn payload (TURN renders; drives caption + ring)
-//   povJid  — render from THIS participant's perspective (co-op joiners who
-//             arrived after START; the frozen layout belongs to the starter)
-//   freshPlan — compute a NEW plan for the POV instead of the frozen one
-// Returns { success, buffer, caption } — same shape generateCombatScene
-// returns, so the existing send/timeout logic in guildAdventure applies.
+// state - guildAdventure combat state (players/enemies/ruinsMeta/sessionKey)
+// phase - 'START' | 'TURN'
+// turnInfo- the last turn payload (TURN renders; drives caption + ring)
+// povJid - render from THIS participant's perspective (co-op joiners who
+// arrived after START; the frozen layout belongs to the starter)
+// freshPlan - compute a NEW plan for the POV instead of the frozen one
 async function renderBattleImage(state, { phase = 'START', turnInfo = null, turnOrderStr = null, povJid = null, freshPlan = false } = {}) {
     try {
         const meta = state.ruinsMeta;
@@ -71,18 +69,18 @@ async function renderBattleImage(state, { phase = 'START', turnInfo = null, turn
         const room = doc && (doc.rooms || []).find((r) => r.key === meta.roomKey);
         if (!doc || !room) return { success: false };
 
-        // the event row carries roomId/prevRoomId → the battle render spawns
-        // at the SAME entry-door spot (and facing) the intro scene used
+ // the event row carries roomId/prevRoomId → the battle render spawns
+ // at the SAME entry-door spot (and facing) the intro scene used
         const prow = (doc.players || []).find((p) => p.jid === me.jid)
             || { jid: me.jid, roomId: meta.roomKey, prevRoomId: meta.roomKey, discovered: [] };
 
-        // frozen layout (plan + exits) — computed once per fight. A POV render
-        // (freshPlan) deliberately skips the cache: the joiner gets their OWN
-        // entry-spot composition incl. themselves, everyone else stays
-        // pixel-stable on the starter's frozen plan.
+ // frozen layout (plan + exits) - computed once per fight. A POV render
+ // (freshPlan) deliberately skips the cache: the joiner gets their OWN
+ // entry-spot composition incl. themselves, everyone else stays
+ // pixel-stable on the starter's frozen plan.
         let layout = freshPlan ? null : layoutFor(state.sessionKey);
         if (!layout) {
-            // POV render: fresh plan, never cached
+ // POV render: fresh plan, never cached
             layout = { exits: roomScene.exitsFor(doc, prow) };
             layout.plan = roomScene.planFor(doc, prow, room, layout.exits);
         } else if (!layout.plan) {

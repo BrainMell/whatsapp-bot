@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * qa_sticker_pack.js — 2026-10-12
+ * qa_sticker_pack.js - 2026-10-12
  * Regression QA for `.j s -p` (native WhatsApp sticker pack).
  * Run: NODE_PATH=<repo>/node_modules node qa_sticker_pack.js
  *
  * Sections:
- *  A. module integrity — HKDF label seeding, zip layout, tray collage
- *  B. blob encryption — matches Baileys' encryptedStream scheme (roundtrip)
- *  C. proto — stickerPackMessage assembles + encodes via WAProto
- *  D. engine wiring — `-p` matched BEFORE the flag handler, usage card,
+ *  A. module integrity - HKDF label seeding, zip layout, tray collage
+ *  B. blob encryption - matches Baileys' encryptedStream scheme (roundtrip)
+ *  C. proto - stickerPackMessage assembles + encodes via WAProto
+ *  D. engine wiring - `-p` matched BEFORE the flag handler, usage card,
  *     cooldown bypass covers `.j s -p`
  */
 process.env.GW_TEST = "";
@@ -18,7 +18,7 @@ const crypto = require("crypto");
 let pass = 0, fail = 0;
 function ok(name, cond, extra) {
   if (cond) { pass++; console.log(`  ✅ ${name}`); }
-  else { fail++; console.log(`  ❌ ${name}${extra ? " — " + extra : ""}`); }
+  else { fail++; console.log(`  ❌ ${name}${extra ? " - " + extra : ""}`); }
 }
 
 const HERE = __dirname;
@@ -29,7 +29,7 @@ const pack = require(path.join(HERE, "..", "core", "utils", "stickerPack.js"));
 const fs = require("fs");
 const engineSrc = fs.readFileSync(path.join(HERE, "..", "core", "engine.js"), "utf8");
 
-// ── A. module integrity ──────────────────────────────────────────────────────
+// -- A. module integrity ------------------------------------------------------
 console.log("\nA. module integrity");
 ok("HKDF label seeded into Baileys mapping",
   baileys.MEDIA_HKDF_KEY_MAPPING["sticker-pack"] === "Sticker Pack");
@@ -37,7 +37,7 @@ ok("limits: default 8, max 30",
   pack.DEFAULT_PACK_STICKERS === 8 && pack.MAX_PACK_STICKERS === 30);
 
 (async () => {
-  // tiny webp buffers via sharp (real webp bytes)
+ // tiny webp buffers via sharp (real webp bytes)
   const colors = [
     { r: 220, g: 60, b: 60 }, { r: 60, g: 180, b: 90 },
     { r: 60, g: 90, b: 220 }, { r: 230, g: 200, b: 60 },
@@ -68,7 +68,7 @@ ok("limits: default 8, max 30",
   ok("zip sticker bytes roundtrip",
     Buffer.compare(zip.readFile(zip.getEntry("2.webp")), webps[1]) === 0);
 
-  // ── B. encryption roundtrip (Baileys scheme) ───────────────────────────────
+ // -- B. encryption roundtrip (Baileys scheme) -------------------------------
   console.log("\nB. blob encryption");
   const plain = Buffer.concat([zipBuf, Buffer.from("padding-for-aes-final")]);
   const { mediaKey, enc, fileSha256, fileEncSha256, fileLength } =
@@ -89,9 +89,9 @@ ok("limits: default 8, max 30",
     .update(Buffer.from(keys.iv)).update(ct).digest().slice(0, 10);
   ok("mac = HMAC-SHA256(macKey, iv||ct)[0..10]", mac.equals(macExpect));
 
-  // ── C. proto assembly ──────────────────────────────────────────────────────
+ // -- C. proto assembly ------------------------------------------------------
   console.log("\nC. proto assembly");
-  // stub sock for upload step
+ // stub sock for upload step
   const uploads = [];
   const fakeSock = {
     waUploadToServer: async (filePath, opts) => {
@@ -128,7 +128,7 @@ ok("limits: default 8, max 30",
   ok("stickerPackId non-empty", typeof spm.stickerPackId === "string" && spm.stickerPackId.length === 32);
   ok("messageSecret present", !!msg.messageContextInfo?.messageSecret);
 
-  // proto encode/decode roundtrip
+ // proto encode/decode roundtrip
   const proto = baileys.proto;
   const encoded = proto.Message.encode(proto.Message.fromObject(msg)).finish();
   const decoded = proto.Message.decode(encoded);
@@ -138,12 +138,12 @@ ok("limits: default 8, max 30",
     decoded.stickerPackMessage.stickers.length === webps.length &&
     decoded.stickerPackMessage.stickerPackOrigin === 2);
 
-  // relay shape
+ // relay shape
   await pack.sendStickerPack(fakeSock, "123@g.us", msg);
   ok("relayMessage called with (jid, message)", !!fakeSock.lastRelay &&
     fakeSock.lastRelay.jid === "123@g.us" && !!fakeSock.lastRelay.msg.stickerPackMessage);
 
-  // ── D. engine wiring (source guards) ───────────────────────────────────────
+ // -- D. engine wiring (source guards) ---------------------------------------
   console.log("\nD. engine wiring");
   const pBlock = engineSrc.indexOf("NATIVE WhatsApp sticker pack");
   const mediaBlock = engineSrc.indexOf("reply to image/video → sticker");
@@ -158,13 +158,13 @@ ok("limits: default 8, max 30",
   ok("usage card advertises -p", engineSrc.includes("Send results as ONE sticker pack"));
   ok("top-level require of ./utils/stickerPack",
     engineSrc.includes('require("./utils/stickerPack")'));
-  // cooldown bypass from 0741c196 still covers `.j s -p` (startsWith `${p} s `)
+ // cooldown bypass from 0741c196 still covers `.j s -p` (startsWith `${p} s `)
   const bypassOk = /const _isStickerCmd =[\s\S]*?startsWith\(`\$\{_stickerPfx\} `\)/.test(engineSrc);
   ok("global-cooldown bypass still covers `.j s -p` forms", bypassOk);
   ok("pack fallback sends loose stickers on failure",
     engineSrc.includes("sending the stickers individually instead"));
 
-  console.log(`\n${"═".repeat(50)}\nRESULT: ${pass} pass, ${fail} fail ${fail === 0 ? "— ALL GREEN ✅" : "— FAILURES ❌"}`);
+  console.log(`\n${"═".repeat(50)}\nRESULT: ${pass} pass, ${fail} fail ${fail === 0 ? "- ALL GREEN ✅" : "- FAILURES ❌"}`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch((e) => {
   console.error("QA crashed:", e);

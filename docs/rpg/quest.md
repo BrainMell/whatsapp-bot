@@ -190,7 +190,6 @@ User command
 
     state.votes[jid] = choice;
 
-    // Check if all active players have voted
     const activePlayers = state.players.filter((p) => !p.isDead);
     const allVoted = activePlayers.every((p) => state.votes[p.jid] !== undefined);
 
@@ -294,7 +293,6 @@ const joinAdventure = (chatId, senderJid, senderName) => {
   const user = economy.getUser(senderJid);
   const adventurerRank = user?.adventurerRank || "F";
 
-  // Initialize player with default stats (class assigned later)
   state.players.push({
     jid: senderJid,
     name: senderName || "Unknown Hero",

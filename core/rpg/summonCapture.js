@@ -1,12 +1,10 @@
 // ============================================
-// 🎯 SUMMON CAPTURE - Necromancer kill-and-capture pipeline
+// SUMMON CAPTURE - Necromancer kill-and-capture pipeline
 // ============================================
 // Necromancer-exclusive mechanic. When army_of_dead ult is active,
 // killing enemies has a chance to capture them as permanent summons.
-//
 // Taming layer: killing 10 of the same enemy type permanently "tames"
 // that species - future captures get a +20% stat bonus ("Tamed" trait).
-//
 // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md (section 3.1)
 
 const summonSystem = require('./summonSystem');
@@ -14,32 +12,32 @@ const registry = require('./summonRegistry');
 const economy = require('./economy');
 const Summon = require('../models/Summon');
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // ENEMY → SUMMON SPECIES MAPPING
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // Maps enemy type IDs (from classEncounters.js) to summon species
 // (from summonRegistry.js). Not every enemy is captureable - only
 // those that map to a summon species. Bosses S-rank+ are immune.
 
-// 💡 FIX 2026-08-05: Remapped all enemy→species mappings to the current 17
+// FIX Remapped all enemy→species mappings to the current 17
 // live species. The old map pointed to stale species (skeleton, imp,
 // flame_elemental, wolf, wyrmling, turret_mk1, etc.) that no longer exist
 // in the registry - captures were silently failing because createSummon
 // couldn't find the species. Mappings chosen by thematic similarity.
 const ENEMY_TO_SPECIES_MAP = {
-  // Undead-themed enemies → ghost (undead, COMMON)
+ // Undead-themed enemies → ghost (undead, COMMON)
   FROST_GHOUL: 'ghost',
   GLACIAL_BEAST: 'ghost',
   BLIZZARD_WRAITH: 'ghost',
   FLESH_ABOMINATION: 'ghost',
 
-  // Demon-themed enemies → bat (shadow STALKER) / giant (earth TANK)
+ // Demon-themed enemies → bat (shadow STALKER) / giant (earth TANK)
   HELLFIRE_DEMON: 'bat',
   ABYSSAL_HORROR: 'giant',
   VOID_TIDE: 'giant',
   VOID_SEEKER: 'bat',
 
-  // Fire/elemental enemies → dragon (fire BRUTE)
+ // Fire/elemental enemies → dragon (fire BRUTE)
   FLAME: 'dragon',
   ELDER_FLAME: 'dragon',
   MAGMA_BRUTE: 'dragon',
@@ -47,28 +45,28 @@ const ENEMY_TO_SPECIES_MAP = {
   INFERNO_NEMESIS: 'dragon',
   PHOENIX_CORRUPTED: 'dragon',
 
-  // Ice/elemental enemies → yeti (ice BRUTE)
+ // Ice/elemental enemies → yeti (ice BRUTE)
   TIDE_LURKER: 'yeti',
   MIST_WALKER: 'yeti',
   RUNIC_BREAKER: 'yeti',
   FROST_PHALANX: 'yeti',
   PERMAFROST_TITAN: 'yeti',
 
-  // Lightning/storm enemies → reptile (fast STALKER)
+ // Lightning/storm enemies → reptile (fast STALKER)
   FROST_FLAME_WARDEN: 'reptile',
   TSUNAMI_WALKER: 'reptile',
 
-  // Beast enemies → snake / boar
+ // Beast enemies → snake / boar
   DRAKE_SCOUT: 'snake',
   SHADOW_STALKER_MUTANT: 'snake',
   CHIMERA_BEAST: 'boar',
   STONE_HULK: 'boar',
 
-  // Dragon enemies → dragon
+ // Dragon enemies → dragon
   FIRE_BREATHER: 'dragon',
   KRAKEN_SPAWN: 'dragon',
 
-  // Construct enemies → ship sprites (construct)
+ // Construct enemies → ship sprites (construct)
   CRYSTAL_CORRUPTED: 'ship_fighter',
   GOLEM_KING: 'ship_cruiser',
   OBSIDIAN_JUGGERNAUT: 'ship_cruiser',
@@ -77,9 +75,9 @@ const ENEMY_TO_SPECIES_MAP = {
   MOUNTAIN_COLOSSUS: 'ship_cruiser'
 };
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // CAPTURE CONFIG
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 const CAPTURE_CONFIG = {
   BASE_CAPTURE_CHANCE: 0.20,        // 20% base
@@ -91,9 +89,9 @@ const CAPTURE_CONFIG = {
   BOSS_CAPTURE_IMMUNE_RANKS: ['S', 'SS', 'SSS', 'GOD']  // these rank bosses are immune
 };
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // CAPTURE WINDOW - set when army_of_dead is cast
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 /**
  * Set the capture window for a Necromancer player.
@@ -141,9 +139,9 @@ function getCaptureWindow(state, playerJid) {
   return state.captureWindows[playerJid] || null;
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // CAPTURE ROLL - called when an enemy dies
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 /**
  * Attempt to capture a defeated enemy as a summon.
@@ -169,13 +167,13 @@ function getCaptureWindow(state, playerJid) {
 async function attemptCapture(state, entity, killerJid) {
   if (!state || !entity || !killerJid) return { captured: false };
 
-  // 1. Check if killer is a Necromancer/Lich
+ // 1. Check if killer is a Necromancer/Lich
   const user = economy.getUser(killerJid);
   if (!user) return { captured: false };
 
-  // 💡 FIX (2026-08-16): user.class is a STRING in the raw user object
-  // (e.g. 'NECROMANCER'), but can also be an object if passed from combat
-  // code that already resolved it. Handle both safely.
+ // FIX: user.class is a STRING in the raw user object
+ // (e.g. 'NECROMANCER'), but can also be an object if passed from combat
+ // code that already resolved it. Handle both safely.
   const rawUserClass = user.class;
   const userClass = String(
     (rawUserClass && typeof rawUserClass === 'object' && rawUserClass.id) ? rawUserClass.id :
@@ -185,11 +183,11 @@ async function attemptCapture(state, entity, killerJid) {
     return { captured: false };
   }
 
-  // 2. Check capture window
+ // 2. Check capture window
   const window = getCaptureWindow(state, killerJid);
   if (!window) return { captured: false };
 
-  // 3. Check boss immunity
+ // 3. Check boss immunity
   if (entity.isBoss) {
     const rank = state.dungeonRank || 'F';
     if (CAPTURE_CONFIG.BOSS_CAPTURE_IMMUNE_RANKS.includes(rank)) {
@@ -197,7 +195,7 @@ async function attemptCapture(state, entity, killerJid) {
     }
   }
 
-  // 4. Map enemy type to summon species
+ // 4. Map enemy type to summon species
   const enemyType = entity.type || entity.id || '';
   const speciesId = ENEMY_TO_SPECIES_MAP[enemyType];
   if (!speciesId) {
@@ -207,15 +205,15 @@ async function attemptCapture(state, entity, killerJid) {
   const species = registry.getSpecies(speciesId);
   if (!species) return { captured: false };
 
-  // 5. Roll capture chance
+ // 5. Roll capture chance
   if (Math.random() > window.captureChance) {
     return { captured: false, message: `💫 The ${entity.name}'s soul escapes capture...` };
   }
 
-  // 6. Create the summon
+ // 6. Create the summon
   const enemyLevel = entity.level || Math.max(1, Math.floor((entity.stats?.maxHp || 100) / 20));
 
-  // Check taming progress
+ // Check taming progress
   if (!user.tamingProgress) user.tamingProgress = {};
   const tamingCount = user.tamingProgress[enemyType] || 0;
   const newTamingCount = tamingCount + 1;
@@ -223,16 +221,15 @@ async function attemptCapture(state, entity, killerJid) {
 
   const isTamed = newTamingCount >= CAPTURE_CONFIG.TAMING_THRESHOLD;
 
-  // Create the summon
   const summon = await summonSystem.createSummon(killerJid, speciesId, {
     obtainedFrom: 'capture',
     level: Math.min(enemyLevel, registry.getRarityConfig(species.rarity).maxLevel),
     loyalty: isTamed ? 100 : 80  // tamed summons start at full loyalty
   });
 
-  // If tamed, apply the taming bonus
+ // If tamed, apply the taming bonus
   if (isTamed) {
-    // Apply +20% stat bonus by adjusting baseStats
+ // Apply +20% stat bonus by adjusting baseStats
     const bonusMult = 1 + CAPTURE_CONFIG.TAMING_STAT_BONUS;
     summon.baseStats = {
       hp: Math.floor(summon.baseStats.hp * bonusMult),
@@ -241,7 +238,7 @@ async function attemptCapture(state, entity, killerJid) {
       mag: Math.floor(summon.baseStats.mag * bonusMult),
       spd: Math.floor(summon.baseStats.spd * bonusMult)
     };
-    // Mark as tamed (we can use a flag on the document - adding to lineage as a marker)
+ // Mark as tamed (we can use a flag on the document - adding to lineage as a marker)
     summon.lineage = summon.lineage || [];
     summon.lineage.push({
       summonId: 'tamed_marker',
@@ -253,19 +250,19 @@ async function attemptCapture(state, entity, killerJid) {
     await summon.save();
   }
 
-  // Update user stats
+ // Update user stats
   if (user.summonStats) {
     user.summonStats.captured = (user.summonStats.captured || 0) + 1;
   }
 
-  // Refresh resonances (new summon may activate a resonance)
+ // Refresh resonances (new summon may activate a resonance)
   try {
     await summonSystem.refreshUserResonances(user);
   } catch (e) {
     console.error('[Capture] Failed to refresh resonances:', e?.message || e);
   }
 
-  // Build the capture message
+ // Build the capture message
   let message = `💀 *SOUL CAPTURED!* ${entity.name} has been bound as a ${species.name}!`;
   if (isTamed) {
     message += `\n✨ *TAMED!* (After ${newTamingCount} kills of this type, the species is permanently tamed - +20% stats!)`;
@@ -276,9 +273,9 @@ async function attemptCapture(state, entity, killerJid) {
   return { captured: true, summon, message };
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // NECROMANCER PASSIVE - +30% undead summon stats
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 /**
  * Check if a player should get the Necromancer summon bonus.
@@ -310,10 +307,10 @@ function applyClassSummonBonus(summonEntity, ownerClass) {
   const bonus = getNecromancerSummonBonus(ownerClass);
   if (!bonus) return;
 
-  // Only apply to matching element
+ // Only apply to matching element
   if (summonEntity.element !== bonus.element) return;
 
-  // Apply bonus to all stats
+ // Apply bonus to all stats
   const mult = 1 + bonus.bonus;
   if (summonEntity.stats) {
     summonEntity.stats.hp = Math.floor(summonEntity.stats.hp * mult);
@@ -331,9 +328,9 @@ function applyClassSummonBonus(summonEntity, ownerClass) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // TAMING PROGRESS - track kills per enemy type
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 /**
  * Get taming progress for a user + enemy type.
@@ -370,9 +367,9 @@ function getTamedSpecies(user) {
   return tamed;
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // MODULE EXPORTS
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 module.exports = {
   ENEMY_TO_SPECIES_MAP,

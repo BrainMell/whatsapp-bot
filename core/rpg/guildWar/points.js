@@ -1,5 +1,5 @@
 // ============================================
-// 🏛️ GUILD POINTS — Guild War Overhaul 2026-10-03
+// GUILD POINTS - Guild War Overhaul
 // GP earned (never bought). Awards feed the EXISTING guild level curve
 // (guilds.addGuildPoints) at event end + live per-player score during play.
 // Anti-farming: per-player event cap, no guildmate GP, diminishing returns
@@ -11,9 +11,8 @@ const state = require('./state');
 const feed = require('./feed');
 
 // live award during the event (respects caps; adds to player score)
-// returns { ok, awarded, capped } — awarded GP after cap/clamp
-// ⚔️ §15 #2 FIX (atomic GP): the old read-modify-write read a possibly stale
-// cached score and wrote the WHOLE value back — back-to-back awards (core
+// §15 #2 FIX (atomic GP): the old read-modify-write read a possibly stale
+// cached score and wrote the WHOLE value back - back-to-back awards (core
 // breach fires three) read the same snapshot and last-write-wins silently
 // ate GP. Now: ONE atomic $inc, then an atomic $min clamp against the cap.
 async function award(eventId, playerJid, baseGp, activity, { coopBonus = false, ignoreCap = false } = {}) {
@@ -41,7 +40,7 @@ async function award(eventId, playerJid, baseGp, activity, { coopBonus = false, 
     const newScore = res.players[0].score || 0;
     const cap = res.type === 'alignment' ? CFG.POINTS.PLAYER_CAP_ALIGNMENT : CFG.POINTS.PLAYER_CAP_NORMAL;
     if (!ignoreCap && newScore > cap) {
-        // atomic clamp (positional $min): score never exceeds the cap
+ // atomic clamp (positional $min): score never exceeds the cap
         await GuildWarEvent.updateOne(
             { eventId, players: { $elemMatch: { jid: playerJid } } },
             { $min: { 'players.$.score': cap } }
@@ -52,7 +51,7 @@ async function award(eventId, playerJid, baseGp, activity, { coopBonus = false, 
     return { ok: true, awarded: gp, capped: false };
 }
 
-// mongoose Maps forbid '.' in keys — jids contain dots → encode them
+// mongoose Maps forbid '.' in keys - jids contain dots → encode them
 function victimKey(jid) {
     return `victim:${String(jid).replace(/\./g, '_')}`;
 }
@@ -70,8 +69,8 @@ function pvpWinGp(attacker, victim) {
 }
 
 async function recordPvpWin(eventId, winner, loser) {
-    // decay ledger must be computed from FRESH state — the caller's player
-    // snapshot is stale across duels (measured: decay stuck at one step)
+ // decay ledger must be computed from FRESH state - the caller's player
+ // snapshot is stale across duels (measured: decay stuck at one step)
     const GuildWarEvent = require('../../models/GuildWarEvent');
     const fresh = await GuildWarEvent.findOne(
         { eventId, players: { $elemMatch: { jid: winner.jid } } },
@@ -90,18 +89,18 @@ async function recordPvpWin(eventId, winner, loser) {
     return gp;
 }
 
-// ── end-of-event distribution (state.endEvent calls this) ──
+// -- end-of-event distribution (state.endEvent calls this) --
 // Converts live scores into guild-level XP via the existing curve, applies
 // participation floor, returns the reward summary for the recap card.
 async function distribute(eventDoc, reason) {
     const guilds = require('../guilds');
     const summary = { reason, guilds: [], top: [], participation: [] };
 
-    // 1-5. participation GP — ⚔️ §22 FIX (inverted logic): the old check
-    // selected score === 0, i.e. it PAID the players who did NOTHING and
-    // skipped everyone who actually fought. "Participated" now means the
-    // player took at least one action after joining (lastActionAt moved
-    // past joinedAt) and didn't quit.
+ // 1-5. participation GP - §22 FIX (inverted logic): the old check
+ // selected score === 0, i.e. it PAID the players who did NOTHING and
+ // skipped everyone who actually fought. "Participated" now means the
+ // player took at least one action after joining (lastActionAt moved
+ // past joinedAt) and didn't quit.
     for (const p of eventDoc.players) {
         if (p.status === 'quit' || !p.joinedAt) continue;
         const acted = (p.lastActionAt || 0) > (new Date(p.joinedAt).getTime() || 0);
@@ -113,9 +112,9 @@ async function distribute(eventDoc, reason) {
         }
     }
 
-    // aggregate per guild
+ // aggregate per guild
     const byGuild = feed.computeScoreboard(eventDoc);
-    // push into the real guild level curve (earned, permanent)
+ // push into the real guild level curve (earned, permanent)
     for (const g of byGuild) {
         const total = eventDoc.players.filter((p) => p.guildId === g.guildId).reduce((s, p) => s + (p.score || 0), 0);
         try {
@@ -124,14 +123,14 @@ async function distribute(eventDoc, reason) {
         summary.guilds.push({ ...g, points: total });
     }
 
-    // individual honors
+ // individual honors
     summary.top = eventDoc.players
         .filter((p) => (p.score || 0) > 0)
         .sort((a, b) => b.score - a.score)
         .slice(0, 5)
         .map((p) => ({ name: p.name, guild: p.guildName, score: p.score }));
 
-    await state.pushLog(eventDoc.eventId, 'rewards', 'system', `distributed ${summary.guilds.reduce((s, g) => s + g.points, 0)} GP — ${reason}`);
+    await state.pushLog(eventDoc.eventId, 'rewards', 'system', `distributed ${summary.guilds.reduce((s, g) => s + g.points, 0)} GP - ${reason}`);
     return summary;
 }
 

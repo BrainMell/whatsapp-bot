@@ -32,45 +32,45 @@ async function main() {
     return text;
   };
 
-  // 1. category + rank
+ // 1. category + rank
   const t1 = await run('equipment+legendary', 'equipment legendary');
   const ok1 = /SHOP.*• Equipment/i.test(t1) && /🏷️ LEGENDARY/.test(t1);
   const bad1 = /Rarity.*(COMMON|UNCOMMON|RARE|EPIC)\b(?!.*LEGENDARY)/.test(t1);
   console.log(`\n[check] header shows Equipment + LEGENDARY: ${ok1}; stray lower ranks: ${bad1}`);
 
-  // 2. rank alone -> whole shop
+ // 2. rank alone -> whole shop
   const t2 = await run('legendary only', 'legendary');
   const ok2 = /🏷️ LEGENDARY/.test(t2);
   const allRar = [...t2.matchAll(/(COMMON|UNCOMMON|RARE|EPIC|LEGENDARY|MYTHIC)\b/g)].map((m) => m[1]);
   const onlyLeg = allRar.filter((r) => !['LEGENDARY', 'MYTHIC'].includes(r)).length === 0 || allRar.length === 0;
   console.log(`[check] rank-alone view filters to legendary: ${ok2 && (onlyLeg || allRar.length === 0)}; rarities seen: ${[...new Set(allRar)].join(',') || 'none'}`);
 
-  // 3. name search still works (multi-word, no category)
+ // 3. name search still works (multi-word, no category)
   const t3 = await run('name search', 'health potion');
   const ok3 = /SHOP SEARCH/i.test(t3) && !/Nothing matches/.test(t3);
   console.log(`[check] name search untouched: ${ok3}`);
 
-  // 4. "rare sword" -> name search, NOT rank filter (no known category)
+ // 4. "rare sword" -> name search, NOT rank filter (no known category)
   const t4 = await run('name search with rarity word', 'rare sword');
   const ok4 = /SHOP SEARCH/i.test(t4);
   console.log(`[check] 'rare sword' stays a name search: ${ok4}`);
 
-  // 5. category view unchanged
+ // 5. category view unchanged
   const t5 = await run('plain category', 'equipment');
   const ok5 = /SHOP.*• Equipment/i.test(t5) && !/🏷️/.test(t5.split('\n')[0]);
   console.log(`[check] plain equipment view has no rank tag: ${ok5}`);
 
-  // 6. prefix + short-rank handling
+ // 6. prefix + short-rank handling
   const t6 = await run('prefix rank', 'equipment leg');
   const ok6 = /🏷️ LEGENDARY/.test(t6);
   console.log(`[check] 'leg' prefix resolves to LEGENDARY: ${ok6}`);
 
-  // 7. rank with zero hits shows friendly empty message
+ // 7. rank with zero hits shows friendly empty message
   const t7 = await run('empty rank view', 'class mythic');
   const ok7 = /No mythic items/.test(t7) || /No items/.test(t7);
   console.log(`[check] empty rank view message: ${ok7}`);
 
-  // 8. summon shop with rank
+ // 8. summon shop with rank
   const t8 = await run('summon + rank', 'summon epic');
   const ok8 = /SUMMON SHOP/.test(t8);
   console.log(`[check] summon shop reachable with rank: ${ok8}`);

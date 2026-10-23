@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// QA — REALGUY v4: addressee awareness (owner: "the chatbot can't tell when
+// QA - REALGUY v4: addressee awareness ("the chatbot can't tell when
 // someone is talking to someone else"). Source pins on engine.js + personaEngine.js.
 const fs = require('fs');
 const path = require('path');
@@ -27,7 +27,7 @@ ok(/name-trigger suppressed \(aimed elsewhere:/.test(eng), 'suppressed name-trig
 
 console.log('── persona: prompt + plumbing');
 ok(/If the name in that prefix isn't you and nobody tagged you, they're talking to EACH OTHER/.test(per), 'READING MESSAGES teaches thread ownership');
-ok(/If the message was clearly aimed at someone else \(a reply to another person, or they tagged someone\), that thread isn't yours — \[SILENT\]/.test(per), 'AMBIENT MODE addressee rule + [SILENT]');
+ok(/If the message was clearly aimed at someone else \(a reply to another person, or they tagged someone\), that thread isn't yours - \[SILENT\]/.test(per), 'AMBIENT MODE addressee rule + [SILENT]');
 ok(/async function maybeAmbientChime\(\{ sock, chatId, isGroup, senderName, senderJid, text, addresseeHint \}\)/.test(per), 'chime accepts addresseeHint');
 ok(/buildTurn\(\{ chatId, senderName, senderJid, text, isAmbient: true, addresseeHint \}\)/.test(per), 'hint flows into buildTurn');
 ok(/addresseeHint \? `\\n\(context: \$\{addresseeHint\}\)` : ''/.test(per), 'hint rendered into ambient lead');

@@ -1,8 +1,8 @@
 'use strict';
-// qa_alchemy.js — alchemy centre dedicated-model proof (struct_alc_* wiring).
+// qa_alchemy.js - alchemy centre dedicated-model proof (struct_alc_* wiring).
 // Renders a real homestead base with the alchemy building at L1/L2/L3 through
 // homesteadBaseRenderer (the live code path) + 2x close-ups of each tier.
-//   node scripts/qa_alchemy.js [outDir]
+// node scripts/qa_alchemy.js [outDir]
 const fs = require('fs');
 const OUT = process.argv[2] || '/tmp/qa_alchemy';
 process.env.QA_MODE = '1';
@@ -42,7 +42,7 @@ const { createCanvas } = require('canvas');
         const cv = await r.renderFrame(state, 0, { returnCanvas: true });
         fs.writeFileSync(`${OUT}/base_alchemy_lv${lvl}_full.png`, cv.toBuffer('image/png'));
         if (alc.length) crop2x(cv, alc[0].x, alc[0].z, 190, 155, `alchemy_lv${lvl}_2x`);
-        else console.log('base lv' + lvl, 'NO ALCHEMY SPRITE PLACED — FAIL');
+        else console.log('base lv' + lvl, 'NO ALCHEMY SPRITE PLACED - FAIL');
     }
     console.log('DONE ->', OUT);
 })().catch((e) => { console.error(e); process.exit(1); });

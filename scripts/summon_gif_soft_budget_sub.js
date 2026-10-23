@@ -6,7 +6,7 @@ const { deliverSummonGif } = require(path.join(__dirname, '..', 'core', 'utils',
 
 (async () => {
   const sends = [];
-  // Real 1x1 GIF89a (ffmpeg-decodable) so the background ffmpeg conversion succeeds
+ // Real 1x1 GIF89a (ffmpeg-decodable) so the background ffmpeg conversion succeeds
   const gif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
   const sock = { sends, sendMessage: async (c, msg) => { sends.push(msg); } };
   let resolveGif; const gifP = new Promise(r => { resolveGif = r; });

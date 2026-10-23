@@ -1,34 +1,32 @@
 // ============================================
-// LOGO DATASET BUILDER V2 (2026-10-09, owner brief)
+// LOGO DATASET BUILDER V2 (owner brief)
 // ============================================
-// Owner: "build a json with over a thousand logos for the logo quiz.
-//  Wikipedia has only old logos, mostly literally just spelt out in the name.
-//  I want every single one of those logos to be NEW - after 2012, only modern
-//  logos used today."
-//
-// v2 changes vs build_logo_dataset.js (2026-09-28):
-//   1. SCALE: brand pool 627 -> ~2800+ via a Wikidata SPARQL expansion
-//      (every entity with a P154 logo, ranked by sitelinks = fame), merged
-//      with the curated quizLogosPool.
-//   2. MODERNITY GATE (the headline): every surviving entry must be the logo
-//      IN USE TODAY, with an explicit basis recorded per brand:
-//        - "dated-2012+"      filename carries a 2012+ year / open-ended range
-//        - "open-ended"       "(2012-)" / "2016-present" style filename
-//        - "current-p154"     undated file, but it is the CURRENT logo on the
-//                             brand's Wikidata item (P154, no end-time
-//                             qualifier, preferred rank) = "used today" by
-//                             community convention
-//      REJECTED: closed year ranges ending <= 2012 ("(1998-2012)"), single
-//      years <= 2011, old/former/historic/archived wording, stage-C search
-//      hits with no date signal (that stage was the old-logo leak).
-//   3. WORDMARK KILL v2: merges refine_logo_dataset.js lessons INTO the bake
-//      (photo/noise/jpeg-without-logo-word + symbol-variant upgrade attempt)
-//      so a separate refine pass is no longer needed.
-//   4. Every entry carries modern:<basis> + the report shows the modernity
-//      breakdown + a random eyeball sample for the owner.
-//
+// "build a json with over a thousand logos for the logo quiz.
+// Wikipedia has only old logos, mostly literally just spelt out in the name.
+// I want every single one of those logos to be NEW - after 2012, only modern
+// logos used today."
+// v2 changes vs build_logo_dataset.js:
+// 1. SCALE: brand pool 627 -> ~2800+ via a Wikidata SPARQL expansion
+// (every entity with a P154 logo, ranked by sitelinks = fame), merged
+// with the curated quizLogosPool.
+// 2. MODERNITY GATE (the headline): every surviving entry must be the logo
+// IN USE TODAY, with an explicit basis recorded per brand:
+// - "dated-2012+" filename carries a 2012+ year / open-ended range
+// - "open-ended" "(2012-)" / "2016-present" style filename
+// - "current-p154" undated file, but it is the CURRENT logo on the
+// brand's Wikidata item (P154, no end-time
+// qualifier, preferred rank) = "used today" by
+// community convention
+// REJECTED: closed year ranges ending <= 2012 ("(1998-2012)"), single
+// years <= 2011, old/former/historic/archived wording, stage-C search
+// hits with no date signal (that stage was the old-logo leak).
+// 3. WORDMARK KILL v2: merges refine_logo_dataset.js lessons INTO the bake
+// (photo/noise/jpeg-without-logo-word + symbol-variant upgrade attempt)
+// so a separate refine pass is no longer needed.
+// 4. Every entry carries modern:<basis> + the report shows the modernity
+// breakdown + a random eyeball sample for the owner.
 // Output: data/logoDataset.json (schema-compatible, + .modern field)
-//         data/logoDataset.report.txt
+// data/logoDataset.report.txt
 // Runtime: quizMedia.js consumes the dataset; buildLogosQuestions pool gets
 // expanded by the dataset brands (separate quizMedia.js patch).
 // ============================================
@@ -45,23 +43,22 @@ const OUTDATED_RE = /(old|former|previous|historic|historical|defunct|obsolete|d
 const PHOTO_RE = /(photograph|photo\b|picture|\.jpg$|\.jpeg$)/i;
 const NOISE_RE = /(trade mark|trademark|cover|poster|screenshot|advert|commercial\b|banner)/i;
 const ICON_RE = /(icon|symbol|emblem|monogram)/i;
-// 💡 FIX 2026-10-10 (stageC product leak): "Samsung Internet logo (2025).png"
+// FIX (stageC product leak): "Samsung Internet logo (2025).png"
 // starts with the anchor "samsung" and passes the date signal, but it is the
 // BROWSER's logo, not the company's. Kill search candidates whose first word
 // after the full anchor is a sub-product name. Words INSIDE the anchor are
 // unaffected ("Google Maps", "Apple Pay" as their own dataset brands stay).
 const PRODUCT_LEAK_RE = /^(internet|browser|mail|maps?|drive|photos?|pay|wallet|banking|cioccolato|chocolate|apps?|mobile|phone|store|cloud|play|music|video|news|kids|chat|meet|search|assistant|health|fitness|money|trade|markets?|cards?)\b/;
 
-// ── modernity classifier ─────────────────────────────────────────
-// Returns { ok, basis } or { ok:false, why }.
+// -- modernity classifier -----------------------------------------
 function modernity(file) {
   const years = [...file.matchAll(/\b(19\d\d|20\d\d)\b/g)].map((m) => parseInt(m[1], 10));
   const hasPresent = /present/i.test(file);
-  // open-ended year: "2012-", "2012–", "2012 to present" (a RANGE with an end
-  // year like "(1998-2012)" is NOT open-ended)
-  const openEnd = /(\b(19|20)\d\d\b)\s*(-|–|—|to)\s*(present)?\s*($|\)|,|\.)/i.test(file.replace(/(\b(19|20)\d\d\b)\s*(-|–|—)\s*(\b(19|20)\d\d\b)/g, "")) || hasPresent;
-  // closed range "(1998-2012)"
-  const ranges = [...file.matchAll(/\b(19\d\d|20\d\d)\s*[-–—]\s*(19\d\d|20\d\d)\b/g)].map((m) => [parseInt(m[1], 10), parseInt(m[2], 10)]);
+ // open-ended year: "2012-", "2012-", "2012 to present" (a RANGE with an end
+ // year like "(1998-2012)" is NOT open-ended)
+  const openEnd = /(\b(19|20)\d\d\b)\s*(-|-|-|to)\s*(present)?\s*($|\)|,|\.)/i.test(file.replace(/(\b(19|20)\d\d\b)\s*(-|-|-)\s*(\b(19|20)\d\d\b)/g, "")) || hasPresent;
+ // closed range "(1998-2012)"
+  const ranges = [...file.matchAll(/\b(19\d\d|20\d\d)\s*[---]\s*(19\d\d|20\d\d)\b/g)].map((m) => [parseInt(m[1], 10), parseInt(m[2], 10)]);
   if (OUTDATED_RE.test(file)) return { ok: false, why: "outdated-word" };
   if (ranges.length) {
     const endMax = Math.max(...ranges.map((r) => r[1]));
@@ -83,12 +80,12 @@ const get = (url, raw) => axios.get(url, { ...UA, ...(raw ? { responseType: "arr
 const norm = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
 
 function currentLogoFile(claims) {
-  // 💡 FIX 2026-10-10: P580 is the START-date qualifier ("in use since YYYY")
-  // - it does NOT end a statement. Treating it as "ended" killed the CURRENT
-  // preferred logos of Netflix (Netflix 2015 logo.svg), IKEA, Coca-Cola,
-  // McDonald's and ~dozens more world-famous brands (all their P154 stmts
-  // carry P580-only) -> they all fell out of the dataset as no-P154-logo.
-  // Only P582 (end time) / P2620 mark a statement as ended.
+ // FIX P580 is the START-date qualifier ("in use since YYYY")
+ // - it does NOT end a statement. Treating it as "ended" killed the CURRENT
+ // preferred logos of Netflix (Netflix 2015 logo.svg), IKEA, Coca-Cola,
+ // McDonald's and ~dozens more world-famous brands (all their P154 stmts
+ // carry P580-only) -> they all fell out of the dataset as no-P154-logo.
+ // Only P582 (end time) / P2620 mark a statement as ended.
   const stmts = (claims.P154 || []).filter((s) => s?.mainsnak?.snaktype === "value");
   const scored = stmts.map((s) => {
     const quals = s.qualifiers || {};
@@ -98,9 +95,8 @@ function currentLogoFile(claims) {
     return { file, ended, rank };
   }).filter((x) => x.file);
   const live = scored.filter((x) => !x.ended && x.rank > 0);
-  // return ALL live candidates in rank order - the caller render-gates each
-  // (Apple's P154 has black+white logo tied at normal rank; the white one
-  // renders blank-white and was the picked file, killing Apple entirely)
+ // (Apple's P154 has black+white logo tied at normal rank; the white one
+ // renders blank-white and was the picked file, killing Apple entirely)
   return live.sort((a, b) => b.rank - a.rank).map((x) => x.file);
 }
 
@@ -110,15 +106,15 @@ function officialDomain(claims) {
   try { return new URL(s.mainsnak.datavalue.value).hostname.replace(/^www\./, ""); } catch { return null; }
 }
 
-// ── SPARQL expansion: fame-ranked entities that HAVE a logo ─────────
+// -- SPARQL expansion: fame-ranked entities that HAVE a logo ---------
 async function sparqlCandidates(limit = 2800, minSitelinks = 8) {
   const q = `SELECT ?item ?sl WHERE {
     ?item wdt:P154 ?logo .
     ?item wikibase:sitelinks ?sl .
     FILTER(?sl >= ${minSitelinks})
   } ORDER BY DESC(?sl) LIMIT ${limit}`;
-  // 💡 the big LIMIT query runs 60-90s server-side; the shared get() is 30s.
-  // 120s + 3 tries with backoff (wikidata also throttles heavy clients).
+ // the big LIMIT query runs 60-90s server-side; the shared get() is 30s.
+ // 120s + 3 tries with backoff (wikidata also throttles heavy clients).
   let lastErr = null;
   for (let t = 0; t < 3; t++) {
     try {
@@ -138,7 +134,7 @@ async function sparqlCandidates(limit = 2800, minSitelinks = 8) {
 // unmapped so the keyword classifier gets its turn). null = explicit DROP
 // (places / people / institutions are not brand-quiz material).
 const P31_CAT = {
-  // confident industries
+ // confident industries
   Q46970: "Airlines & Travel", Q27686: "Airlines & Travel", Q1248784: "Airlines & Travel", Q334166: "Airlines & Travel",
   Q22687: "Retail & Banking", Q4114391: "Retail & Banking", Q210729: "Retail & Banking", Q7225794: "Retail & Banking",
   Q1347993: "Fintech & Crypto", Q19956532: "Fintech & Crypto",
@@ -152,19 +148,19 @@ const P31_CAT = {
   Q193474: "Telecom", Q181051: "Telecom",
   Q7397: "Tech", Q341: "Tech", Q1668024: "Tech", Q19963217: "Tech",
   Q62062965: "Apps & Social", Q3220391: "Apps & Social", Q191779: "Apps & Social",
-  // explicit drops: places, people, institutions
+ // explicit drops: places, people, institutions
   Q515: null, Q56061: null, Q6256: null, Q5: null, Q532: null, Q486972: null, Q15284: null, Q16970: null,
   Q3918: null, Q33506: null, Q7075: null, Q16917: null, Q22698: null, Q41487: null,
 };
 
 function classifyByClaims(claims, label, desc) {
   const p31 = (claims.P31 || []).map((s) => s?.mainsnak?.datavalue?.value?.id).filter(Boolean);
-  // tier 1a: confident specific classes win immediately
+ // tier 1a: confident specific classes win immediately
   for (const q of p31) if (q in P31_CAT && P31_CAT[q]) return P31_CAT[q];
-  // tier 1b: explicit drops (places / people / institutions) kill only if no
-  // specific class matched above
+ // tier 1b: explicit drops (places / people / institutions) kill only if no
+ // specific class matched above
   for (const q of p31) if (q in P31_CAT && !P31_CAT[q]) return null;
-  // tier 2: keyword scan over label + description (business/generic classes)
+ // tier 2: keyword scan over label + description (business/generic classes)
   const hay = `${label} ${desc}`.toLowerCase();
   const kw = [
     [/airline|airways|aviation|airport|airways|hotel|resort|cruise|railway|railroads?/, "Airlines & Travel"],
@@ -185,7 +181,7 @@ function classifyByClaims(claims, label, desc) {
   return "Brands";
 }
 
-// ── entity fetch (batched) ─────────────────────────────────────────
+// -- entity fetch (batched) -----------------------------------------
 async function entitiesBatch(ids) {
   const u = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${ids.join("|")}&props=labels|descriptions|sitelinks|claims&sitefilter=enwiki&format=json&formatversion=2`;
   const r = await get(u);
@@ -208,7 +204,7 @@ async function renderLogo(file) {
   return null;
 }
 
-// audited enwiki file search — STRICTER in v2: undated hits are rejected
+// audited enwiki file search - STRICTER in v2: undated hits are rejected
 // (this stage was the old-logo leak; P154 remains the "current logo" source)
 async function enwikiLogoSearch(brand, symbolBias = false) {
   const anchors = [...new Set([brand.wiki, brand.name].map(norm))].filter(Boolean);
@@ -278,14 +274,14 @@ async function auditOne(brand, idx = 0) {
     }
     out.qid = out.qid || brand.qid || null;
     out.domain = officialDomain(claims) || brand.domain || undefined;
-    // 💡 FIX 2026-10-10: try EVERY live P154 candidate in rank order -
-    // render+gate each; first survivor wins (fixes Apple: black+white logo
-    // tied, white renders blank-white and was the single pick -> rejected)
+ // FIX try EVERY live P154 candidate in rank order -
+ // render+gate each; first survivor wins (fixes Apple: black+white logo
+ // tied, white renders blank-white and was the single pick -> rejected)
     const liveFiles = currentLogoFile(claims);
     if (!liveFiles.length) { out.reason = "no-P154-logo"; return out; }
-    // 💡 inline content kills (owner: brand quiz + "used today" only):
-    // dissolved entities (P576) and place/institution classes are junk here —
-    // kill BEFORE the expensive render instead of in post-filters.
+ // inline content kills (brand quiz + "used today" only):
+ // dissolved entities (P576) and place/institution classes are junk here -
+ // kill BEFORE the expensive render instead of in post-filters.
     if ((claims.P576 || []).length) { out.reason = "dissolved-p576"; return out; }
     const p31v = (claims.P31 || []).map((s) => s?.mainsnak?.datavalue?.value?.id).filter(Boolean);
     let dropped31 = false, hasGood31 = false;
@@ -309,11 +305,11 @@ async function auditOne(brand, idx = 0) {
       const gate = await imageGate.inspectImageBuffer(rendered.buf, { minW: 64, minH: 40, label: `v2:${brand.name}` });
       if (!gate.ok) { firstKill = firstKill || `gate:${gate.reason}`; continue; }
       const ratio = gate.width / Math.max(1, gate.height);
-      // 💡 FIX 2026-10-10: 2.6 -> 3.75 on the P154 path only. Wikidata P154 is
-      // a community-curated CURRENT-logo statement, but famous symbol/wordmark
-      // logos (Nike swoosh 2.79:1, Netflix wordmark 3.68:1) breached the old
-      // cap and got killed. Junk text-strips still die at 3.75; the stageC
-      // search path (untrusted provenance) keeps 2.6.
+ // FIX 2.6 -> 3.75 on the P154 path only. Wikidata P154 is
+ // a community-curated CURRENT-logo statement, but famous symbol/wordmark
+ // logos (Nike swoosh 2.79:1, Netflix wordmark 3.68:1) breached the old
+ // cap and got killed. Junk text-strips still die at 3.75; the stageC
+ // search path (untrusted provenance) keeps 2.6.
       if (ratio > 3.75 || ratio < 0.25) { firstKill = firstKill || `aspect:${ratio.toFixed(2)}:${file}`; continue; }
       out.ok = true;
       out.reason = "ok";
@@ -336,10 +332,10 @@ async function auditOne(brand, idx = 0) {
 }
 
 async function runPool(items, worker, n = 4, label = "") {
-  // 💡 FIX 2026-10-10: Box2 has 952MB total RAM shared with wa-joker + the
-  // scraper - the 4-lane build got OOM-killed mid-audit (silent SIGKILL at
-  // audit 1450/3507). Concurrency is now env-tunable: LOGO_BUILD_LANES=2 on
-  // small boxes (halves peak sharp/axios buffers).
+ // FIX Box2 has 952MB total RAM shared with wa-joker + the
+ // scraper - the 4-lane build got OOM-killed mid-audit (silent SIGKILL at
+ // audit 1450/3507). Concurrency is now env-tunable: LOGO_BUILD_LANES=2 on
+ // small boxes (halves peak sharp/axios buffers).
   n = Math.max(1, parseInt(process.env.LOGO_BUILD_LANES, 10) || n);
   const results = new Array(items.length);
   let i = 0;
@@ -357,14 +353,14 @@ async function runPool(items, worker, n = 4, label = "") {
 
 (async () => {
   const t0 = Date.now();
-  // ── Stage 0: candidates ──
+ // -- Stage 0: candidates --
   const poolMod = require("../core/games/quizLogosPool");
   const pool = Object.values(poolMod).flat();
   console.log(`v2 builder: curated pool ${pool.length} + wikidata expansion...`);
 
-  // 💡 DELTA MODE (2026-10-09 round 2): the existing dataset entries already
-  // survived the full audit + both content filters — keep them verbatim and
-  // only audit NEW candidates beyond the old SPARQL cutoff.
+ // DELTA MODE (round 2): the existing dataset entries already
+ // survived the full audit + both content filters - keep them verbatim and
+ // only audit NEW candidates beyond the old SPARQL cutoff.
   let existing = [];
   try {
     const prev = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "logoDataset.json"), "utf8"));
@@ -388,9 +384,9 @@ async function runPool(items, worker, n = 4, label = "") {
   for (let i = 0; i < qids.length; i += BATCH) {
     const ids = qids.slice(i, i + BATCH);
     try {
-      // 💡 hard kill: wikidata can slow-drip a response forever and axios's
-      // timeout never fires on trickling bodies — race every batch with a
-      // 45s wall clock and just skip wedged batches.
+ // hard kill: wikidata can slow-drip a response forever and axios's
+ // timeout never fires on trickling bodies - race every batch with a
+ // 45s wall clock and just skip wedged batches.
       const ents = await Promise.race([
         entitiesBatch(ids),
         new Promise((_, rej) => setTimeout(() => rej(new Error("batch-hard-timeout-45s")), 45000)),
@@ -420,7 +416,7 @@ async function runPool(items, worker, n = 4, label = "") {
   }
   console.log(`total candidates: ${cand.length} (curated ${pool.length} + wikidata ${cand.length - pool.length})`);
 
-  // pre-filter by filename modernity BEFORE rendering (cheap kill, saves hours)
+ // pre-filter by filename modernity BEFORE rendering (cheap kill, saves hours)
   const pre = cand.filter((b) => {
     if (b.fileHint) {
       const m = modernity(b.fileHint);
@@ -433,13 +429,13 @@ async function runPool(items, worker, n = 4, label = "") {
   });
   console.log(`pre-filter (filename modernity + veto): ${pre.length} survive, ${cand.length - pre.length} killed pre-render`);
 
-  // ── audit ──
+ // -- audit --
   const results = await runPool(pre, auditOne, 4, "audit");
   let good = results.filter((r) => r.ok);
   let bad = results.filter((r) => !r.ok);
   console.log(`stage A (P154 current): ${good.length} verified, ${bad.length} rejected`);
 
-  // stage B/C: search fallback for curated pool brands that have no usable P154
+ // stage B/C: search fallback for curated pool brands that have no usable P154
   const noItem = bad.filter((b) => b.reason === "no-wikidata-item");
   bad = bad.filter((b) => b.reason !== "no-wikidata-item");
   if (noItem.length) {
@@ -456,7 +452,7 @@ async function runPool(items, worker, n = 4, label = "") {
     good = good.concat(retry.filter((r) => r.ok));
     bad = bad.concat(retry.filter((r) => !r.ok));
   }
-  // stage C: enwiki search for everything still missing (STRICT dating)
+ // stage C: enwiki search for everything still missing (STRICT dating)
   if (bad.length) {
     console.log(`stage C: strict enwiki search for ${bad.length} brands...`);
     const retry = await runPool(bad, async (b) => {
@@ -468,8 +464,8 @@ async function runPool(items, worker, n = 4, label = "") {
     bad = retry.filter((r) => !(r.ok && r.file));
   }
 
-  // file-level dedup: one artwork = one brand (carried-over entries first =
-  // fame-stable; new entries fill the rest)
+ // file-level dedup: one artwork = one brand (carried-over entries first =
+ // fame-stable; new entries fill the rest)
   const byFile = new Set();
   const finalBrands = [];
   const fileDups = new Set();
@@ -510,7 +506,7 @@ async function runPool(items, worker, n = 4, label = "") {
   const byCat = {};
   finalBrands.forEach((b) => { byCat[b.cat] = (byCat[b.cat] || 0) + 1; });
   const sample = finalBrands.filter((_, i) => i % Math.max(1, Math.floor(finalBrands.length / 25)) === 0).slice(0, 25)
-    .map((b) => `  ${b.name} — ${b.file} [${b.modern}]`);
+    .map((b) => `  ${b.name} - ${b.file} [${b.modern}]`);
   const report = [
     `LOGO DATASET V2 AUDIT - ${new Date().toISOString()}`,
     `candidates: ${cand.length} (curated ${pool.length} + wikidata ${cand.length - pool.length}) | pre-filter survivors: ${pre.length}`,

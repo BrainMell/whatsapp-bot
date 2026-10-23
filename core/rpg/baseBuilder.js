@@ -1,12 +1,12 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-//  BASE BUILDER — outdoor base hub (owner spec §6/7/8/9, 2026-10-15)
-//  `.j base` / `.j home` open the OUTDOOR base map (never straight into the
-//  house). `.j base house <#id>` / `.j house <#id>` opens a house interior.
-//  Fixed designated zones: House (free, Structure 1), Mines, Pond, Hunting
-//  Grounds (fenced, gated). Purchasable structures land on expansion plots.
-//  Everything upgradable to L3 with distinct sprites; all writes atomic.
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// BASE BUILDER - outdoor base hub (owner spec §6/7/8/9, )
+// `.j base` / `.j home` open the OUTDOOR base map (never straight into the
+// house). `.j base house <#id>` / `.j house <#id>` opens a house interior.
+// Fixed designated zones: House (free, Structure 1), Mines, Pond, Hunting
+// Grounds (fenced, gated). Purchasable structures land on expansion plots.
+// Everything upgradable to L3 with distinct sprites; all writes atomic.
+// ===========================================================================
 
 const Base = require('../models/Base');
 const renderer = require('./homesteadBaseRenderer');
@@ -20,8 +20,8 @@ function uid() { return `b${Date.now().toString(36)}${(_uidCounter++).toString(3
 
 // per-user mutation locks + purchase idempotency (same contract as homestead)
 const opLocks = new Set();
-// Task 24 (owner 06:30Z): "remove this '⏳ Your last base action is still
-// settling — one moment.' Just que the shi" — a second action from the same
+// (owner 06:30Z): "remove this '⏳ Your last base action is still
+// settling - one moment.' Just que the shi" - a second action from the same
 // user now WAITS silently for the running one instead of bouncing with a
 // settle message. Poll-wait with a hard cap so a wedged lock can never hang
 // a command forever (locks always free in finally; the cap is pure paranoia).
@@ -62,23 +62,23 @@ async function loadBase(userId) {
             { upsert: true, returnDocument: 'after' },
         ).lean();
     }
-    // guarantee the four fixed structures exist exactly once — ALWAYS (older
-    // bases predating a layout change must still get their missing zones;
-    // owner 2026-10-16: "the pond and mines and everything else? Doesn't exist")
+ // guarantee the four fixed structures exist exactly once - ALWAYS (older
+ // bases predating a layout change must still get their missing zones;
+ // "the pond and mines and everything else? Doesn't exist")
     const have = new Set((rec.structures || []).map((s) => s.type));
     const missing = fixedSeed().filter((f) => !have.has(f.type));
-    // layout v2/v3/v4 migration: the fixed anchors moved (v2 house 6,6→6,7;
-    // v3 house 6,7→10,6 MAIN STREET VILLAGE; v4 hunting gatehouse 3,8→7,14
-    // — THE GATEHOUSE NOW GUARDS THE SOUTH GATE, owner "orientation still
-    // weird") — relocate the FIXED structures so every base matches the new
-    // village plan. Safe: nothing else can legally occupy these cells.
+ // layout v2/v3/v4 migration: the fixed anchors moved (v2 house 6,6→6,7;
+ // v3 house 6,7→10,6 MAIN STREET VILLAGE; v4 hunting gatehouse 3,8→7,14
+ // - THE GATEHOUSE NOW GUARDS THE SOUTH GATE, owner "orientation still
+ // weird") - relocate the FIXED structures so every base matches the new
+ // village plan. Safe: nothing else can legally occupy these cells.
     const ANCHORS = { house: LAYOUT.house, mines: LAYOUT.mines, pond: LAYOUT.pond, hunting: LAYOUT.hunting, shop: LAYOUT.shop, barracks: LAYOUT.barracks };
-    // layout v3/v4 plot re-anchoring: built structures bought on the OLD plot
-    // anchors re-seat onto the new ones (else a v2 blacksmith at 11,6 would
-    // end up buried under the relocated house). Map chases every historical
-    // anchor straight to its v4 home in ONE pass. Only EXACT anchors move —
-    // admin-relocated structures keep their custom spot.
-    // v5 (2026-10-22): plots moved again — every historical anchor chases straight to its v5 home.
+ // layout v3/v4 plot re-anchoring: built structures bought on the OLD plot
+ // anchors re-seat onto the new ones (else a v2 blacksmith at 11,6 would
+ // end up buried under the relocated house). Map chases every historical
+ // anchor straight to its v4 home in ONE pass. Only EXACT anchors move -
+ // admin-relocated structures keep their custom spot.
+ // v5: plots moved again - every historical anchor chases straight to its v5 home.
     const NEW_PLOT = { 1: [12, 6], 2: [10, 11], 3: [5, 11], 4: [13, 11] };
     const newKeys = new Set(Object.values(NEW_PLOT).map((a) => a.join(',')));
     const OLD_PLOT_ANCHORS = {
@@ -102,12 +102,12 @@ async function loadBase(userId) {
             { $set: { structures: rec.structures, updatedAt: Date.now() } },
         );
     }
-    if (!rec) throw new Error('base record could not be created — try again');
+    if (!rec) throw new Error('base record could not be created - try again');
     rec.structures = (rec.structures || []).filter((s) => structDef(s.type));
     return rec;
 }
 
-/** Expansion plots (3x3 each) — free = no structure overlapping its cells. */
+/** Expansion plots (3x3 each) - free = no structure overlapping its cells. */
 function plotsFor(rec) {
     const occupied = new Set();
     for (const st of rec.structures) {
@@ -116,16 +116,16 @@ function plotsFor(rec) {
         for (let ix = 0; ix < d.fw; ix++)
             for (let iy = 0; iy < d.fh; iy++) occupied.add(`${st.x + ix},${st.y + iy}`);
     }
-    // LAYOUT v4 expansion plots (3x3 each) — re-anchored to the FRONTABLE
-    // sides of the lanes (owner: "leaving room for plots of land" + "the
-    // orientation still weird"): an iso building can only front a street
-    // from the street's north/west side, so every plot sits where a built
-    // structure's baked facade greets the street: #1 north terrace above
-    // the miners'/pond lane, #2 SE terrace above the extended south lane,
-    // #3 west plaza frontage — faces the village green across the ring (a
-    // building there mirrors its facade onto the square); v3's (5,11) spot
-    // is a visual trap now: it sits directly BEHIND the relocated gatehouse
-    // on the same screen diagonal, so a built structure rendered ~90% hidden
+ // LAYOUT v4 expansion plots (3x3 each) - re-anchored to the FRONTABLE
+ // sides of the lanes ("leaving room for plots of land" + "the
+ // orientation still weird"): an iso building can only front a street
+ // from the street's north/west side, so every plot sits where a built
+ // structure's baked facade greets the street: #1 north terrace above
+ // the miners'/pond lane, #2 SE terrace above the extended south lane,
+ // #3 west plaza frontage - faces the village green across the ring (a
+ // building there mirrors its facade onto the square); v3's (5,11) spot
+ // is a visual trap now: it sits directly BEHIND the relocated gatehouse
+ // on the same screen diagonal, so a built structure rendered ~90% hidden
     const PLOTS = [
         { id: 1, x: 12, y: 6 },
         { id: 2, x: 10, y: 11 },
@@ -145,16 +145,16 @@ async function saveState(rec) {
     await Base.updateOne({ userId: rec.userId }, { $set: { structures: rec.structures, updatedAt: Date.now() } }, { upsert: true });
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // VIEWS
-// ═══════════════════════════════════════════════════════════════════════════
-/** Owner 2026-10-22: "players that don't have a guild shouldn't be able to view bases" — guildless players get a nudge instead. Mods bypass. */
+// ===========================================================================
+/** Owner 2026-10-22: "players that don't have a guild shouldn't be able to view bases" - guildless players get a nudge instead. Mods bypass. */
 async function guildGate(ctx) {
     try {
         if (ctx.isMod) return false;
         const g = require('./guilds').getUserGuild(ctx.senderJid);
         if (g) return false;
-        await ctx.reply(`🏰 Bases belong to guild members. Join or found a guild first — \`${ctx.prefix} guild\` — then your base opens up.`);
+        await ctx.reply(`🏰 Bases belong to guild members. Join or found a guild first - \`${ctx.prefix} guild\` - then your base opens up.`);
         return true;
     } catch (e) { return false; }   // never lock a player out because the guild lookup failed
 }
@@ -209,7 +209,7 @@ async function viewBase(ctx, opts = {}) {
         .map((st, i) => {
             const d = structDef(st.type);
             const lv = d.levels.find((l) => l.level === st.level) || d.levels[0];
-            return `#${i + 1} ${d.name} — *${lv.name}* (Lv.${st.level})${st.type === 'house' ? '  🏠' : ''}`;
+            return `#${i + 1} ${d.name} - *${lv.name}* (Lv.${st.level})${st.type === 'house' ? '  🏠' : ''}`;
         })
         .join('\n');
     const _C = require('./continents');
@@ -217,8 +217,8 @@ async function viewBase(ctx, opts = {}) {
     const _near = state.guildName ? ` · near *${_C.placementOf(state.guildName, state.guild || {}).marker.region}*` : '';
     const cap = `🗺️ *${state.owner}'s Base*\n🌍 ${_realm.name}${_near}\n\n${list}\n` +
         `🪧 Free plots: ${plots.filter((p) => p.free).map((p) => p.id).join(', ') || 'none'}\n\n` +
-        `_${ctx.prefix} base <#id> — open a structure (zoomed)_\n` +
-        `_${ctx.prefix} base house 1 — enter your house_\n` +
+        `_${ctx.prefix} base <#id> - open a structure (zoomed)_\n` +
+        `_${ctx.prefix} base house 1 - enter your house_\n` +
         `_${ctx.prefix} base build <blacksmith|medbay|alchemy|market|barracks> [plot#]_\n` +
         `_${ctx.prefix} base upgrade <type|#id> • ${ctx.prefix} base info_`;
     try {
@@ -233,11 +233,11 @@ async function viewBase(ctx, opts = {}) {
     }
 }
 
-/** `.j base house 1` / `.j house` / `.j base 1` — open a structure. */
+/** `.j base house 1` / `.j house` / `.j base 1` - open a structure. */
 async function enterStructure(ctx, idArg) {
     if (await guildGate(ctx)) return;
     const rec = await loadBase(ctx.senderJid);
-    // number → structure #id in the listing order; 'house'/'home' → the house
+ // number → structure #id in the listing order; 'house'/'home' → the house
     let st = null;
     const homestead = require('./homestead');
     if (!idArg || idArg === 'house' || idArg === 'my' || idArg === 'view' || idArg === 'room' || idArg === 'homestead' || idArg === 'inside') {
@@ -251,23 +251,23 @@ async function enterStructure(ctx, idArg) {
     if (!st) return ctx.reply(`❌ No such structure. \`${ctx.prefix} base info\` lists them with their #ids.`);
     const d = structDef(st.type);
     if (st.type === 'house') {
-        // the house interior IS the existing isometric room (preserved 1:1)
+ // the house interior IS the existing isometric room (preserved 1:1)
         const hRec = await homestead.loadRec(ctx.senderJid);
         const lv = d.levels.find((l) => l.level === st.level) || d.levels[0];
-        return homestead.viewRoom(ctx, hRec, { hint: `Your ${lv.name} (Structure #1, Lv.${st.level}) — ${ctx.prefix} home select <item> to rearrange.` });
+        return homestead.viewRoom(ctx, hRec, { hint: `Your ${lv.name} (Structure #1, Lv.${st.level}) - ${ctx.prefix} home select <item> to rearrange.` });
     }
     return zoomIn(ctx, rec, st);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ZOOM CARDS — `.j base <#|name>` is a PURE VIEWER (owner spec §5, 2026-10-21):
+// ===========================================================================
+// ZOOM CARDS - `.j base <#|name>` is a PURE VIEWER (owner spec §5, ):
 // one clean zoomed structure card + a caption naming the command that works here.
-// The viewer NEVER executes gameplay — fishing/hunting live at `.j fish` / `.j hunt`
+// The viewer NEVER executes gameplay - fishing/hunting live at `.j fish` / `.j hunt`
 // (runActivity below), mining at `.j mine`, healing at `.j clinic`, brewing at
 // `.j brew`. Owner spec rule 1: gameplay rules/aliases stay intact otherwise.
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 const ALIASES = { mine: 'mines', mining: 'mines', cave: 'mines', fish: 'pond', fishing: 'pond', cast: 'pond', lake: 'pond', hunt: 'hunting', hunting: 'hunting', camp: 'hunting', market: 'shop', merchant: 'shop', store: 'shop', summons: 'barracks', summon: 'barracks', barrack: 'barracks', smith: 'blacksmith', forge: 'blacksmith', clinic: 'medbay', hospital: 'medbay', heal: 'medbay', alchemist: 'alchemy', brew: 'alchemy' };
-// §5: ONE command-hint map — what the player can DO at each place (prefix-aware,
+// §5: ONE command-hint map - what the player can DO at each place (prefix-aware,
 // real commands only). Drives the panel's action list and the viewer caption.
 const HINTS = {
     mines: (P) => [`${P} mine <spot>`, `${P} base upgrade mines`],
@@ -304,13 +304,13 @@ function specFor(ctx, rec, st, extra = {}) {
     const next = d.levels.find((l) => l.level === st.level + 1);
     const P = ctx.prefix || '.j';
     const idx = rec.structures.indexOf(st) + 1;
-    const rows = [['Level', `${st.level} / ${d.levels.length}`], ['Next upgrade', next ? `${next.price.toLocaleString()} ZENI` : (d.noUpgrade ? '—' : 'Maxed')]];
+    const rows = [['Level', `${st.level} / ${d.levels.length}`], ['Next upgrade', next ? `${next.price.toLocaleString()} ZENI` : (d.noUpgrade ? '-' : 'Maxed')]];
     const acts = (HINTS[st.type] ? HINTS[st.type](P) : [`${P} base upgrade #${idx}`]);
     try {
         if (st.type === 'mines') rows.push(['Mines yield', ['×1.00', '×1.25', '×1.50'][st.level - 1] || '×1.00']);
-        if (st.type === 'pond') rows.push(['Catch tier', ['Minnows', 'Trout', 'Koi'][st.level - 1] || '—']);
+        if (st.type === 'pond') rows.push(['Catch tier', ['Minnows', 'Trout', 'Koi'][st.level - 1] || '-']);
         if (st.type === 'hunting') { const br = (rec.structures.find((x) => x.type === 'barracks') || {}).level || 1; rows.push(['Party', `Barracks Lv ${br}`]); }
-        if (st.type === 'shop') rows.push(['Wares', ['Stall', 'Shop', 'Bazaar'][st.level - 1] || '—']);
+        if (st.type === 'shop') rows.push(['Wares', ['Stall', 'Shop', 'Bazaar'][st.level - 1] || '-']);
     } catch (e) { /* stats are decoration */ }
     return { title: d.name, subtitle: `${lv.name} · Lv ${st.level}`, note: FLAVOUR[st.type] || '', rows, actions: acts, footer: `${P} base ${idx} • ${P} base info`, ...extra };
 }
@@ -320,7 +320,7 @@ async function renderZoom(ctx, rec, st, extra = {}) {
     return scenes.renderStructureCard({ type: st.type, level: st.level, biome: biomeOf(rec), seed: rec.userId, spec: specFor(ctx, rec, st, extra) });
 }
 
-/** §12/§16 helper — a structure's level WITHOUT creating/migrating anything.
+/** §12/§16 helper - a structure's level WITHOUT creating/migrating anything.
  * Free fixed structures default to 1; purchasable ones default to 0 (not built). */
 const FREE_TYPES = new Set(['house', 'mines', 'pond', 'hunting', 'shop', 'barracks']);
 async function getStructureLevel(userId, type) {
@@ -332,9 +332,9 @@ async function getStructureLevel(userId, type) {
     return FREE_TYPES.has(type) ? 1 : 0;
 }
 
-// §16 — Med Bay passive potion production (owner-approved table, 2026-10-21).
+// §16 - Med Bay passive potion production (owner-approved table, ).
 // Stock DERIVES from elapsed time since cooldowns.potion (reuses the existing
-// Base.cooldowns Mixed map — no new collections); collecting advances that
+// Base.cooldowns Mixed map - no new collections); collecting advances that
 // timestamp by exactly the granted amount, so partial progress is preserved.
 const POTION_PLAN = {
     1: { id: 'minor_hp_potion', intervalMs: 12 * 60 * 60 * 1000, cap: 2 },
@@ -375,7 +375,7 @@ async function collectMedbayPotions(userId) {
     } catch (e) { console.error('[base] potion collect failed:', e.message); return { qty: 0 }; }
 }
 
-/** Zoom card for another command's result (e.g. `.j mine`): never creates a base — returns null if the user has none. */
+/** Zoom card for another command's result (e.g. `.j mine`): never creates a base - returns null if the user has none. */
 async function zoomForCommand(ctx, type, extra = {}) {
     try {
         const rec = await Base.findOne({ userId: ctx.senderJid }).lean();
@@ -393,8 +393,8 @@ async function zoomIn(ctx, rec, st) {
     const lv = d.levels.find((l) => l.level === st.level) || d.levels[0];
     const next = d.levels.find((l) => l.level === st.level + 1);
     const idx = rec.structures.indexOf(st) + 1;
-    const cap = `🏗️ *${d.name}* — ${lv.name} (Lv.${st.level}) · #${idx}\n` +
-        (next ? `⬆️ Next: *${next.name}* — ${next.price.toLocaleString()} ZENI → \`${ctx.prefix} base upgrade #${idx}\`` : (d.noUpgrade ? '' : '✨ Fully upgraded.')) +
+    const cap = `🏗️ *${d.name}* - ${lv.name} (Lv.${st.level}) · #${idx}\n` +
+        (next ? `⬆️ Next: *${next.name}* - ${next.price.toLocaleString()} ZENI → \`${ctx.prefix} base upgrade #${idx}\`` : (d.noUpgrade ? '' : '✨ Fully upgraded.')) +
         (st.type === 'pond' ? `\n🎣 Cast a line: \`${ctx.prefix} base fish\`` : '') +
         (st.type === 'hunting' ? `\n🏹 Ride out: \`${ctx.prefix} base hunt\` (a stronger Barracks means a stronger party)` : '');
     let media = null;
@@ -404,16 +404,16 @@ async function zoomIn(ctx, rec, st) {
     } else {
         await ctx.reply(cap);
     }
-    // §5 2026-10-21: the viewer is READ-ONLY — the old followUp() that ran the
-    // place's command from a mere VIEW is gone (zero gameplay side effects).
+ // §5 the viewer is READ-ONLY - the old followUp() that ran the
+ // place's command from a mere VIEW is gone (zero gameplay side effects).
     return;
 }
 
 /** GIF -> H.264 MP4 conversion now lives in core/utils/mediaConvert.js (Task 24)
- *  — shared with the fish overlay lane so both boxes use one ffmpeg pipeline. */
+ *  - shared with the fish overlay lane so both boxes use one ffmpeg pipeline. */
 const mediaConvert = require('../utils/mediaConvert');
 
-/** `.j base fish` / `.j base hunt` (+ top-level `.j fish` / `.j hunt`) — the pond
+/** `.j base fish` / `.j base hunt` (+ top-level `.j fish` / `.j hunt`) - the pond
  *  and the hunting grounds. Fish answers with the dock-POV catch GIF (Task 19);
  *  hunt answers with the hunting-grounds POV GIF from the animal sprite sheet
  *  (Task 20). Loot text rides the caption either way. Neither has a timer:
@@ -428,9 +428,9 @@ async function cmdActivity(ctx, kind) {
     await waitOpLock(ctx.senderJid);
     opLocks.add(ctx.senderJid);
     try {
-        // Task 19/20: NEITHER activity has a timer — run() reads huntDay/
-        // huntCount off the cooldowns map for the hunt daily limit; fish has no
-        // gating at all (owner removed the line rest, Task 20).
+ // /20: NEITHER activity has a timer - run() reads huntDay/
+ // huntCount off the cooldowns map for the hunt daily limit; fish has no
+ // gating at all (owner removed the line rest, ).
         const res = await act.run(kind, ctx.senderJid, tier, rec.cooldowns || {});
         if (!res.ok) return ctx.reply(res.text);
         try {
@@ -438,66 +438,66 @@ async function cmdActivity(ctx, kind) {
         } catch (e) { /* day counter best-effort */ }
         let media = null;
         if (kind === 'fish') {
-            // Task 19: the dock-POV catch GIF — base animation baked once per
-            // (biome, level) and kept on disk; THIS catch's overlay (bite /
-            // ripples / RARE-EPIC approach / splash) is composited on top. Loot
-            // text rides the caption. Failure falls through to the static zoom
-            // card, then text — the roll already happened exactly once.
+ // the dock-POV catch GIF - base animation baked once per
+ // (biome, level) and kept on disk; THIS catch's overlay (bite /
+ // ripples / RARE-EPIC approach / splash) is composited on top. Loot
+ // text rides the caption. Failure falls through to the static zoom
+ // card, then text - the roll already happened exactly once.
             try { media = await require('./dockPov').renderFishingGif({ biome: biomeOf(rec), lvl: st.level, band: act.bandOf(res.drops, 'fish'), drops: res.drops, banner: res.banner }); } catch (e) { console.error('[base] fish gif failed:', e.message); }
         }
-        // hunt: owner 2026-10-21 — ".j hunt" is a plain IMAGE (no GIF); falls straight to the zoomed forest card below
+ // hunt: - ".j hunt" is a plain IMAGE (no GIF); falls straight to the zoomed forest card below
         if (!media || !media.buffer) {
-            // §13/§14 static fallback: the scene plays the REAL result — hunting
-            // spotlights the animal whose loot actually dropped (top drop).
+ // §13/§14 static fallback: the scene plays the REAL result - hunting
+ // spotlights the animal whose loot actually dropped (top drop).
             const spot = res.drops && Object.values(res.drops).reduce((a, b) => Math.max(a, b), 0) > 0;
             const note = kind === 'hunt'
                 ? `Hunts today: ${res.dailyUsed}/${act.RULES.hunt.dailyLimit} · resets midnight UTC.`
-                : `No line rest — cast again whenever you like.`;
+                : `No line rest - cast again whenever you like.`;
             try { media = await renderZoom(ctx, rec, st, { banner: res.banner, note, activity: kind === 'fish' ? 'fishing' : 'hunting', spotlight: spot }); } catch (e) { console.error('[base] activity card failed:', e.message); }
         }
         if (media && media.buffer) {
-            // Task 24: the fish lane ships a REAL MP4 straight from dockPov —
-            // the cached pond GIF + the catch ribbon plastered in ONE ffmpeg
-            // pass. Send it as a video message as-is (already H.264/faststart).
+ // the fish lane ships a REAL MP4 straight from dockPov -
+ // the cached pond GIF + the catch ribbon plastered in ONE ffmpeg
+ // pass. Send it as a video message as-is (already H.264/faststart).
             if (media.contentType === 'video/mp4') {
                 const msg = { video: media.buffer, gifPlayback: true, caption: res.text };
                 if (media.thumb) msg.jpegThumbnail = media.thumb;
                 return ctx.sock.sendMessage(ctx.chatId, msg, { quoted: ctx.m });
             }
-            // ⚠ OWNER 2026-10-21 (fourth time he said it): "THE POND STILL SENDS
-            // AS AN IMAGE NOT A GIF." Root cause found in the Baileys proto:
-            // `gifPlayback` is a VIDEOmessage field — on imageMessage the flag
-            // is silently dropped, so { image, gifPlayback: true } lands as a
-            // STILL on the phone even though the bytes are a real GIF. Every
-            // animated lane that actually animates in this codebase (abyss
-            // cards, mentoring, burn/summon) sends { video, gifPlayback: true }.
+ // OWNER (fourth time he said it): "THE POND STILL SENDS
+ // AS AN IMAGE NOT A GIF." Root cause found in the Baileys proto:
+ // `gifPlayback` is a VIDEOmessage field - on imageMessage the flag
+ // is silently dropped, so { image, gifPlayback: true } lands as a
+ // STILL on the phone even though the bytes are a real GIF. Every
+ // animated lane that actually animates in this codebase (abyss
+ // cards, mentoring, burn/summon) sends { video, gifPlayback: true }.
             let isGif = false;
             try { isGif = require('../utils/gif89a').isGifBuffer(media.buffer); } catch (e) { /* plain image */ }
-            // ⚠ 2026-10-21 "the .j fish gif is broken": a raw GIF sent as `video` is not a valid
-            // WhatsApp video (it only plays MP4/H.264) — the summon lane converts with ffmpeg, so do the same.
+ // "the .j fish gif is broken": a raw GIF sent as `video` is not a valid
+ // WhatsApp video (it only plays MP4/H.264) - the summon lane converts with ffmpeg, so do the same.
             let vid = media.buffer;
             if (isGif) { try { vid = await mediaConvert.gifToMp4Even(media.buffer); } catch (e) { console.error('[base] gif->mp4 failed:', e.message); isGif = false; } }
             const msg = isGif
                 ? { video: vid, gifPlayback: true, caption: res.text }
                 : { image: media.buffer, caption: res.text };
-            if (isGif && !msg.jpegThumbnail) { try { msg.jpegThumbnail = require('../utils/gif89a').firstFrameJpeg(media.buffer); } catch (e) { /* engine stamps a thumb */ } }   // real frame-0 preview (renderers attach one; mediaCache warm hits don't carry it) — else the engine patch stamps gray on videos
+            if (isGif && !msg.jpegThumbnail) { try { msg.jpegThumbnail = require('../utils/gif89a').firstFrameJpeg(media.buffer); } catch (e) { /* engine stamps a thumb */ } }   // real frame-0 preview (renderers attach one; mediaCache warm hits don't carry it) - else the engine patch stamps gray on videos
             return ctx.sock.sendMessage(ctx.chatId, msg, { quoted: ctx.m });
         }
         return ctx.reply(res.text);
     } finally { opLocks.delete(ctx.senderJid); }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// §4/§13/§14: `.j fish` / `.j hunt` — the pond and hunting-ground actions now
+// ===========================================================================
+// §4/§13/§14: `.j fish` / `.j hunt` - the pond and hunting-ground actions now
 // answer to their own top-level commands (engine routes them here). Same loot
-// as the old `.j base fish|hunt`; NEITHER has a timer (Task 20: fish line rest
-// removed too), hunt is a daily count (Task 19) — nothing else rebalanced.
+// as the old `.j base fish|hunt`; NEITHER has a timer (fish line rest
+// removed too), hunt is a daily count - nothing else rebalanced.
 async function runActivity(ctx, kind) {
     return cmdActivity(ctx, kind === 'fish' || kind === 'cast' || kind === 'fishing' ? 'fish' : 'hunt');
 }
 
-// BUILD / UPGRADE (§7/8) — atomic purchase, identical compensation contract
-// ═══════════════════════════════════════════════════════════════════════════
+// BUILD / UPGRADE (§7/8) - atomic purchase, identical compensation contract
+// ===========================================================================
 const BUILDABLE = ['blacksmith', 'medbay', 'alchemy'];
 
 async function cmdBuild(ctx, rec, args) {
@@ -507,7 +507,7 @@ async function cmdBuild(ctx, rec, args) {
         return ctx.reply(`❌ Build what? Purchasable structures: ${BUILDABLE.map((b) => `*${b}*`).join(', ')}.\nUsage: \`${ctx.prefix} base build blacksmith [plot#]\``);
     }
     if (rec.structures.some((s) => s.type === type)) {
-        return ctx.reply(`🏗️ You already own a *${d.name}* — upgrade it instead: \`${ctx.prefix} base upgrade ${type}\``);
+        return ctx.reply(`🏗️ You already own a *${d.name}* - upgrade it instead: \`${ctx.prefix} base upgrade ${type}\``);
     }
     const plots = plotsFor(rec);
     let plot = null;
@@ -518,7 +518,7 @@ async function cmdBuild(ctx, rec, args) {
         if (!plot.free) return ctx.reply(`🚧 Plot #${pArg} is occupied by your *${structDef(plot.built.type)?.name || 'structure'}*.`);
     } else {
         plot = plots.find((p) => p.free);
-        if (!plot) return ctx.reply('🪧 No free plots remain — your base is at capacity.');
+        if (!plot) return ctx.reply('🪧 No free plots remain - your base is at capacity.');
     }
     const lv1 = d.levels[0];
     await waitOpLock(ctx.senderJid);
@@ -526,23 +526,23 @@ async function cmdBuild(ctx, rec, args) {
     try {
         const balance = economy.getBalance(ctx.senderJid);
         if (balance < lv1.price) {
-            return ctx.reply(`💰 Not enough ZENI — the *${lv1.name}* costs *${lv1.price.toLocaleString()}* and you have *${balance.toLocaleString()}*.`);
+            return ctx.reply(`💰 Not enough ZENI - the *${lv1.name}* costs *${lv1.price.toLocaleString()}* and you have *${balance.toLocaleString()}*.`);
         }
         if (!economy.removeMoney(ctx.senderJid, lv1.price, `Base: built ${lv1.name}`)) {
-            return ctx.reply(`💰 Not enough ZENI — the *${lv1.name}* costs *${lv1.price.toLocaleString()}* and you have *${balance.toLocaleString()}*.`);
+            return ctx.reply(`💰 Not enough ZENI - the *${lv1.name}* costs *${lv1.price.toLocaleString()}* and you have *${balance.toLocaleString()}*.`);
         }
         try {
             const st = { uid: uid(), type, level: 1, x: plot.x, y: plot.y };
             const r = await Base.updateOne({ userId: ctx.senderJid }, { $push: { structures: st }, $set: { updatedAt: Date.now() } }, { upsert: true });
             if (!r.acknowledged) throw new Error('write not acknowledged');
             rec.structures.push(st);
-            // §16: a freshly built Med Bay starts its potion clock NOW — no
-            // instant free potion (owner spec §16).
+ // §16: a freshly built Med Bay starts its potion clock NOW - no
+ // instant free potion (owner spec §16).
             if (type === 'medbay') { try { await Base.updateOne({ userId: ctx.senderJid }, { $set: { 'cooldowns.potion': Date.now() } }); } catch (e) { /* clock start is best-effort */ } }
         } catch (writeErr) {
-            console.error('[base] build delivery failed — refunding:', writeErr.message);
+            console.error('[base] build delivery failed - refunding:', writeErr.message);
             economy.addMoney(ctx.senderJid, lv1.price, `Base: refund ${lv1.name}`);
-            return ctx.reply('🔥 The builders returned your ZENI (ledger write failed). Nothing was lost — try again.');
+            return ctx.reply('🔥 The builders returned your ZENI (ledger write failed). Nothing was lost - try again.');
         }
         return viewBase(ctx, { celebrate: { type, x: plot.x, y: plot.y, level: 1, prev: 0 }, hint: `The *${lv1.name}* rises on plot #${plot.id}!` });
     } finally {
@@ -552,13 +552,13 @@ async function cmdBuild(ctx, rec, args) {
 
 async function cmdUpgrade(ctx, rec, args) {
     const q = String(args[0] || '').toLowerCase();
-    if (!q) return ctx.reply(`Usage: \`${ctx.prefix} base upgrade <type|#id>\` — e.g. \`${ctx.prefix} base upgrade blacksmith\``);
+    if (!q) return ctx.reply(`Usage: \`${ctx.prefix} base upgrade <type|#id>\` - e.g. \`${ctx.prefix} base upgrade blacksmith\``);
     let st = null;
     if (/^\d+$/.test(q)) st = rec.structures[parseInt(q, 10) - 1];
     else st = rec.structures.find((s) => s.type === q || structDef(s.type)?.name.toLowerCase().startsWith(q));
     if (!st) return ctx.reply(`❌ No such structure. \`${ctx.prefix} base info\` lists them with #ids.`);
     const d = structDef(st.type);
-    if (d.noUpgrade) return ctx.reply(`🏹 The *${d.name}* stands as it is — the wilds need no walls raised higher.`);
+    if (d.noUpgrade) return ctx.reply(`🏹 The *${d.name}* stands as it is - the wilds need no walls raised higher.`);
     const next = d.levels.find((l) => l.level === st.level + 1);
     if (!next) return ctx.reply(`✨ Your *${d.name}* is already fully upgraded (*${(d.levels.at(-1)).name}*).`);
     await waitOpLock(ctx.senderJid);
@@ -566,10 +566,10 @@ async function cmdUpgrade(ctx, rec, args) {
     try {
         const balance = economy.getBalance(ctx.senderJid);
         if (balance < next.price) {
-            return ctx.reply(`💰 Not enough ZENI — *${next.name}* costs *${next.price.toLocaleString()}* and you have *${balance.toLocaleString()}*.`);
+            return ctx.reply(`💰 Not enough ZENI - *${next.name}* costs *${next.price.toLocaleString()}* and you have *${balance.toLocaleString()}*.`);
         }
         if (!economy.removeMoney(ctx.senderJid, next.price, `Base: upgraded ${d.name} L${next.level}`)) {
-            return ctx.reply(`💰 Not enough ZENI — *${next.name}* costs *${next.price.toLocaleString()}* and you have *${balance.toLocaleString()}*.`);
+            return ctx.reply(`💰 Not enough ZENI - *${next.name}* costs *${next.price.toLocaleString()}* and you have *${balance.toLocaleString()}*.`);
         }
         try {
             const r = await Base.updateOne(
@@ -579,9 +579,9 @@ async function cmdUpgrade(ctx, rec, args) {
             if (!r.acknowledged) throw new Error('write not acknowledged');
             st.level = next.level;
         } catch (writeErr) {
-            console.error('[base] upgrade write failed — refunding:', writeErr.message);
+            console.error('[base] upgrade write failed - refunding:', writeErr.message);
             economy.addMoney(ctx.senderJid, next.price, `Base: refund upgrade ${d.name}`);
-            return ctx.reply('🔥 The ledger refused the deed — your ZENI was returned. Try again.');
+            return ctx.reply('🔥 The ledger refused the deed - your ZENI was returned. Try again.');
         }
         return viewBase(ctx, { celebrate: { type: st.type, x: st.x, y: st.y, level: next.level, prev: next.level - 1 }, hint: `The *${d.name}* is now *${next.name}* (Lv.${next.level})!` });
     } finally {
@@ -595,7 +595,7 @@ function cmdInfo(ctx, rec) {
         const d = structDef(st.type);
         const lv = d.levels.find((l) => l.level === st.level) || d.levels[0];
         const next = d.levels.find((l) => l.level === st.level + 1);
-        return `#${i + 1} *${d.name}* — ${lv.name} (Lv.${st.level}) @ (${st.x},${st.y})${next ? `\n    ⬆️ ${next.name}: ${next.price.toLocaleString()} ZENI → \`${ctx.prefix} base upgrade #${i + 1}\`` : ' ✨ max'}`;
+        return `#${i + 1} *${d.name}* - ${lv.name} (Lv.${st.level}) @ (${st.x},${st.y})${next ? `\n    ⬆️ ${next.name}: ${next.price.toLocaleString()} ZENI → \`${ctx.prefix} base upgrade #${i + 1}\`` : ' ✨ max'}`;
     });
     const buildable = BUILDABLE.filter((b) => !rec.structures.some((s) => s.type === b));
     return ctx.reply(
@@ -606,9 +606,9 @@ function cmdInfo(ctx, rec) {
     );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ADMIN (§9) — moderator-gated testing/management tools
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// ADMIN (§9) - moderator-gated testing/management tools
+// ===========================================================================
 async function cmdAdmin(ctx, rec, args) {
     const [action, ...rest] = args;
     const a = String(action || '').toLowerCase();
@@ -643,7 +643,7 @@ async function cmdAdmin(ctx, rec, args) {
             if (!idx) return ctx.reply(`Usage: ${ctx.prefix} baseadmin remove <#id>`);
             const st = rec.structures[idx - 1];
             if (!st) return ctx.reply('❌ No such #id.');
-            if (st.type === 'house') return ctx.reply('🚫 The house (Structure 1) cannot be removed — every adventurer needs a roof.');
+            if (st.type === 'house') return ctx.reply('🚫 The house (Structure 1) cannot be removed - every adventurer needs a roof.');
             await Base.updateOne({ userId: ctx.senderJid }, { $pull: { structures: { uid: st.uid } }, $set: { updatedAt: Date.now() } });
             return ctx.reply(`✅ Removed ${st.type} (uid ${st.uid}).`);
         }
@@ -685,13 +685,13 @@ async function cmdAdmin(ctx, rec, args) {
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ENTRY — homestead.handleCommand routes base/house views here; engine can
+// ===========================================================================
+// ENTRY - homestead.handleCommand routes base/house views here; engine can
 // also dispatch `.j base ...` straight here.
 // ctx gains isMod (set by engine) for the admin gate.
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 async function handleBaseCommand(ctx) {
-    // same normalizer as homestead.handleCommand — command word extraction
+ // same normalizer as homestead.handleCommand - command word extraction
     let tokens = String(ctx.text || '').trim().split(/\s+/).filter(Boolean);
     let cmdWord = '';
     if (tokens.length) {
@@ -710,7 +710,7 @@ async function handleBaseCommand(ctx) {
     if (cmdWord !== 'baseadmin' && await guildGate(ctx)) return;
     let sub = (tokens[0] || '').toLowerCase();
     let args = tokens.slice(1);
-    // `.j baseadmin <action> ...` — the word itself carries the admin intent
+ // `.j baseadmin <action> ...` - the word itself carries the admin intent
     if (cmdWord === 'baseadmin') {
         args = [sub, ...args];
         sub = 'baseadmin';
@@ -719,20 +719,20 @@ async function handleBaseCommand(ctx) {
     if (!economy.isRegistered(ctx.senderJid)) {
         return ctx.reply(`❌ You need to register first!\n\nType: \`${ctx.prefix} register <nickname>\``);
     }
-    // 🌍 A base grows from a guild's realm land (owner 2026-10-18: "if a player checks base
-    // tell um they have to join a guild") — the base, its biome and its plots all charter
-    // from the guild's realm, so land claims start at a guild.
+ // A base grows from a guild's realm land ("if a player checks base
+ // tell um they have to join a guild") - the base, its biome and its plots all charter
+ // from the guild's realm, so land claims start at a guild.
     if (sub !== 'help' && sub !== 'admin' && sub !== 'baseadmin') {
         try {
             const _guilds = require('./guilds');
             if (!_guilds.getUserGuild(ctx.senderJid)) {
                 return ctx.reply(
                     `🌍 *Your hands hold no charter.*\n` +
-                    `Land in Aldafold is claimed through a guild — found or join one and your base, its realm and every plot grow from its charter-stone.\n\n` +
-                    `• \`${ctx.prefix} guild create <name> | <type> | <realm>\` — found a guild (types: ADVENTURER, MERCHANT, RESEARCH)\n` +
-                    `• \`${ctx.prefix} guild list\` — guilds recruiting members\n` +
-                    `• \`${ctx.prefix} guild join <name>\` — pledge yourself to a banner\n` +
-                    `• \`${ctx.prefix} realms\` — see the map of Aldafold`
+                    `Land in Aldafold is claimed through a guild - found or join one and your base, its realm and every plot grow from its charter-stone.\n\n` +
+                    `• \`${ctx.prefix} guild create <name> | <type> | <realm>\` - found a guild (types: ADVENTURER, MERCHANT, RESEARCH)\n` +
+                    `• \`${ctx.prefix} guild list\` - guilds recruiting members\n` +
+                    `• \`${ctx.prefix} guild join <name>\` - pledge yourself to a banner\n` +
+                    `• \`${ctx.prefix} realms\` - see the map of Aldafold`
                 );
             }
         } catch (e) { /* fail-open: the realm lookup inside the renderer already falls back to the owner seed */ }
@@ -744,11 +744,11 @@ async function handleBaseCommand(ctx) {
             case 'house': case 'inside': {
                 return enterStructure(ctx, args[0] || 'house');
             }
-            // §5 2026-10-21: `.j base fish` / `.j base hunt` are VIEWERS now —
-            // they fall through to the name-viewer path below (ALIASES fish/fishing/
-            // cast → pond, hunt/hunting → hunting). The ACTIONS answer to the
-            // top-level `.j fish` / `.j hunt` (engine → runActivity). No loot roll,
-            // no counters, no writes from a view.
+ // §5 `.j base fish` / `.j base hunt` are VIEWERS now -
+ // they fall through to the name-viewer path below (ALIASES fish/fishing/
+ // cast → pond, hunt/hunting → hunting). The ACTIONS answer to the
+ // top-level `.j fish` / `.j hunt` (engine → runActivity). No loot roll,
+ // no counters, no writes from a view.
             case 'build': case 'construct':
                 return cmdBuild(ctx, await loadBase(ctx.senderJid), args);
             case 'upgrade': case 'up':
@@ -762,8 +762,8 @@ async function handleBaseCommand(ctx) {
                 if (/^\d+$/.test(sub)) return enterStructure(ctx, sub);
                 if (sub && sub !== 'help' && (ALIASES[sub] || structDef(sub))) return enterStructure(ctx, ALIASES[sub] || sub);
                 if (sub && sub !== 'help') {
-                    // owner 2026-10-20 "wire it all up": a structure NAME is a view request —
-                    // `.j base mines` ≡ `.j base <the mines' #id>`
+ // "wire it all up": a structure NAME is a view request -
+ // `.j base mines` ≡ `.j base <the mines' #id>`
                     try {
                         const rec2 = await loadBase(ctx.senderJid);
                         const named = rec2.structures.find((s) => s.type === sub || structDef(s.type)?.name.toLowerCase().startsWith(sub));
@@ -773,15 +773,15 @@ async function handleBaseCommand(ctx) {
                 }
                 return ctx.reply(
                     `🗺️ *THE BASE*\n` +
-                    `• \`${ctx.prefix} base\` — outdoor base map\n` +
-                    `• \`${ctx.prefix} base <#id | name>\` — open a structure (zoomed card)\n` +
-                    `• \`${ctx.prefix} base house [#id]\` — enter a structure\n` +
-                    `• \`${ctx.prefix} base <#|mines|pond|hunting|shop|barracks>\` — view a place (read-only close-up)\n` +
-                    `• \`${ctx.prefix} fish\` / \`${ctx.prefix} hunt\` — work the pond / hunting grounds\n` +
-                    `• \`${ctx.prefix} base build <type> [plot#]\` — construct\n` +
-                    `• \`${ctx.prefix} base upgrade <type|#id>\` — upgrade\n` +
-                    `• \`${ctx.prefix} base info\` — ledger + plots\n` +
-                    `• \`${ctx.prefix} home ...\` — furniture inside the house`,
+                    `• \`${ctx.prefix} base\` - outdoor base map\n` +
+                    `• \`${ctx.prefix} base <#id | name>\` - open a structure (zoomed card)\n` +
+                    `• \`${ctx.prefix} base house [#id]\` - enter a structure\n` +
+                    `• \`${ctx.prefix} base <#|mines|pond|hunting|shop|barracks>\` - view a place (read-only close-up)\n` +
+                    `• \`${ctx.prefix} fish\` / \`${ctx.prefix} hunt\` - work the pond / hunting grounds\n` +
+                    `• \`${ctx.prefix} base build <type> [plot#]\` - construct\n` +
+                    `• \`${ctx.prefix} base upgrade <type|#id>\` - upgrade\n` +
+                    `• \`${ctx.prefix} base info\` - ledger + plots\n` +
+                    `• \`${ctx.prefix} home ...\` - furniture inside the house`,
                 );
         }
     } catch (e) {

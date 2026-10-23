@@ -1,15 +1,15 @@
 // ============================================
 // MURDER MYSTERY - CASE GENERATOR (Blackvale Manor)
-// Owner 2026-10-12: "update with everything… we are expanding the
-// murder mystery game" — implements the uploaded improvement MD §4/§5/§6/§8:
-//   - the truth of the mystery exists BEFORE the first night:
-//     killer motive, relationship web between the drawn cast,
-//     per-character secrets, the evening timeline, alibis
-//   - evidence is bound to that truth (never contradicts it),
-//     tagged confirmed vs rumour, with public + finder-only layers
-//   - every character has a fixed public account + one observation;
-//     the killer's account is a lie (comparable against evidence)
-//   - replay memory: recent killer/motive/web combinations are avoided
+// "update with everything… we are expanding the
+// murder mystery game" - implements the uploaded improvement MD §4/§5/§6/§8:
+// - the truth of the mystery exists BEFORE the first night:
+// killer motive, relationship web between the drawn cast,
+// per-character secrets, the evening timeline, alibis
+// - evidence is bound to that truth (never contradicts it),
+// tagged confirmed vs rumour, with public + finder-only layers
+// - every character has a fixed public account + one observation;
+// the killer's account is a lie (comparable against evidence)
+// - replay memory: recent killer/motive/web combinations are avoided
 // Template-based (no LLM): every line is composed from curated fragment
 // pools, validated before the round starts; on any validation failure the
 // caller falls back to the legacy flavor-only round (case = null).
@@ -35,7 +35,7 @@ const MOTIVES = [
   { id: 'madness', title: 'the old promise', detail: 'The killer made a vow at a graveside long ago. The manor\u2019s gathering was the appointed hour.' },
   { id: 'jealousy', title: 'the green-eyed hour', detail: 'The killer loved, was refused, and watched the refusal toast and laugh at this very table.' },
   { id: 'crime', title: 'the cover-up', detail: 'The killer\u2019s fortune rests on one awful night years ago. A guest has begun asking the right questions.' },
-  // --- Wave 2c web expansion (owner 2026-10-13 16:34Z "expand the Web by alot") ---
+ // --- Wave 2c web expansion (16:34Z "expand the Web by alot") ---
   { id: 'vengeance', title: 'the turned-out family', detail: 'Twenty years ago the manor\u2019s gates closed on the killer\u2019s family for good. Tonight the house pays the toll - with interest.' },
   { id: 'will', title: 'the second will', detail: 'Two wills exist in this house and only one is real. The killer needs the other one read aloud before anyone thinks to check it.' },
   { id: 'policy', title: 'the insured life', detail: 'A policy signed last spring makes one death at Blackvale worth more than the killer has earned in a lifetime.' },
@@ -56,7 +56,7 @@ const RELATIONSHIPS = [
   { id: 'friends', label: 'former friends', frame: (a, b) => `${a} and ${b} were the closest of friends until one unforgivable autumn came between them.` },
   { id: 'secret', label: 'a shared secret', frame: (a, b) => `${a} and ${b} share a secret so heavy that they barely speak - and watch each other constantly.` },
   { id: 'accounts', label: 'conflicting accounts', frame: (a, b) => `${a} and ${b} tell irreconcilable versions of the same night years ago. Only one of them is lying.` },
-  // --- Wave 2c web expansion: each entry MUST have a matching REL_SHORT ---
+ // --- Wave 2c web expansion: each entry MUST have a matching REL_SHORT ---
   { id: 'masterservant', label: 'master and servant', frame: (a, b) => `${a} has kept ${b} in service for years - a kindness at first, then an arrangement, then a grudge with wages.` },
   { id: 'godparent', label: 'a christening bond', frame: (a, b) => `${a} stands godparent to ${b}, and holds ${b}\u2019s inheritance in trust - a trust nobody has audited.` },
   { id: 'creditor', label: 'creditor and debtor', frame: (a, b) => `${a} holds ${b}\u2019s paper - a debt old enough that the interest has outgrown the principal.` },
@@ -81,7 +81,7 @@ const SECRETS = [
   { id: 'theft', text: 'once stole from the very family whose portrait gallery lines this hallway' },
   { id: 'letters', text: 'keeps a bundle of love letters that would detonate two engagements' },
   { id: 'witness', text: 'saw something in the corridor on the first night and has told absolutely no one' },
-  // --- Wave 2c web expansion ---
+ // --- Wave 2c web expansion ---
   { id: 'closetmarriage', text: 'is hiding a marriage that was never legal, to a person nobody at this table has ever met' },
   { id: 'wrongman', text: 'served two years for a crime someone else confessed to, and the pardon was never properly signed' },
   { id: 'laudanum', text: 'keeps a bottle of laudanum in their luggage and lies about how quickly it empties' },
@@ -131,7 +131,7 @@ const TIMELINE_BEATS = [
   { hour: 'midnight', text: 'the candles were trimmed; the west wing was locked, supposedly' },
   { hour: '1 am', text: 'the dogs barked once in the yard and then went silent' },
   { hour: '2 am', text: 'the night staff made one last circuit and saw no one in the halls' },
-  // --- Wave 2c web expansion ---
+ // --- Wave 2c web expansion ---
   { hour: '7:30 pm', text: 'sherry was taken in the Morning Room before dinner; the rain kept everyone indoors' },
   { hour: '9:30 pm', text: 'the gun case in the Hall was checked and locked - the gamekeeper counts by habit' },
   { hour: '10:30 pm', text: 'one game of billiards was played alone, and badly, the marker says' },
@@ -179,12 +179,12 @@ function buildStatements({ cast, web, rooms, killerCharIds, victimsPool }) {
     const isKiller = killerCharIds.includes(c.id);
     let room = pick(roomNames);
     let tries = 0;
-    // killers avoid the truth by claiming a room far from their habits; innocents may collide
+ // killers avoid the truth by claiming a room far from their habits; innocents may collide
     while (usedRooms.has(room) && tries < 6) { room = pick(roomNames); tries++; }
     usedRooms.add(room);
     const hourPick = pick(TIMELINE_BEATS).hour;
 
-    // one observation about another cast member (movement / behaviour)
+ // one observation about another cast member (movement / behaviour)
     const others = cast.filter((o) => o.id !== c.id && !observed.has(`${c.id}->${o.id}`));
     const target = others.length ? pick(others) : null;
     if (target) observed.add(`${c.id}->${target.id}`);
@@ -250,7 +250,7 @@ function generateCase({ cast, killers, rooms, methodTitles }) {
   const history = loadHistory();
   const castIds = cast.map((c) => c.id);
 
-  // 1) motive - avoid repeating the exact recent signature (killer chars + motive)
+ // 1) motive - avoid repeating the exact recent signature (killer chars + motive)
   const recentSigs = new Set(history.map((h) => h.sig));
   let motive = null;
   let sig = '';
@@ -261,7 +261,7 @@ function generateCase({ cast, killers, rooms, methodTitles }) {
   }
   if (!motive) motive = motivePool[0]; // history exhausted - reuse least-recent
 
-  // 2) relationship web: 2-4 disjoint pairs among the cast
+ // 2) relationship web: 2-4 disjoint pairs among the cast
   const web = [];
   const pool = shuffle(castIds);
   const relTypes = shuffle(RELATIONSHIPS);
@@ -278,23 +278,23 @@ function generateCase({ cast, killers, rooms, methodTitles }) {
     });
   }
 
-  // 3) secrets - every character gets one (innocents especially; the killer's
-  //    secret must NOT be the motive - the motive is the reason to kill)
+ // 3) secrets - every character gets one (innocents especially; the killer's
+ // secret must NOT be the motive - the motive is the reason to kill)
   const secretPool = shuffle(SECRETS);
   const secrets = {};
   castIds.forEach((id, i) => { secrets[id] = secretPool[i % secretPool.length]; });
 
-  // 4) personal items - one distinct item per cast member
+ // 4) personal items - one distinct item per cast member
   const items = shuffle(PERSONAL_ITEMS);
   const personalItems = {};
   castIds.forEach((id, i) => { personalItems[id] = items[i % items.length]; });
 
-  // 5) timeline + statements (killer accounts are lies)
+ // 5) timeline + statements (killer accounts are lies)
   const timeline = shuffle(TIMELINE_BEATS).slice(0, 5).sort((x, y) => x.hour.localeCompare(y.hour));
   const killerCharIds = killers.map((k) => k.id);
   const statements = buildStatements({ cast, web, rooms, killerCharIds });
 
-  // 6) method plan - the murder will use one of the killer's planned methods
+ // 6) method plan - the murder will use one of the killer's planned methods
   const planned = (methodTitles || []).filter((t) => METHOD_EVIDENCE[t]);
   const methodPlan = shuffle(planned.length ? planned : Object.keys(METHOD_EVIDENCE)).slice(0, 3);
 
@@ -318,7 +318,7 @@ function generateCase({ cast, killers, rooms, methodTitles }) {
     sig,
   };
 
-  // 7) validation (MD §4: never start an incoherent chapter)
+ // 7) validation (MD §4: never start an incoherent chapter)
   const ok = validateCase(kase, cast, rooms);
   if (!ok) return null;
   return kase;
@@ -337,7 +337,7 @@ function validateCase(kase, cast, rooms) {
     if (!kase.timeline.length || !kase.timeline.every((t) => t.hour && t.text)) return false;
     if (!Object.keys(kase.statements).every((id) => castIds.has(id) && kase.statements[id].account)) return false;
     if (!kase.methodPlan.length || !kase.methodPlan.every((m) => METHOD_EVIDENCE[m])) return false;
-    // web pairs must not repeat a character
+ // web pairs must not repeat a character
     const seen = new Set();
     for (const w of kase.web) {
       if (seen.has(w.a) || seen.has(w.b)) return false;
@@ -365,7 +365,7 @@ function bindEvidence({ kase, cast, killerCharIds, livingCharIds, room, method, 
         line: methodEv.line,
       });
     }
-    // personal item of one living character: prefer the killer half the time
+ // personal item of one living character: prefer the killer half the time
     const living = livingCharIds.filter((id) => !killerCharIds.includes(id) || Math.random() < 0.5);
     const pool = (Math.random() < 0.5 && killerCharIds.some((id) => livingCharIds.includes(id)))
       ? killerCharIds.filter((id) => livingCharIds.includes(id))
@@ -406,15 +406,15 @@ function bindEvidence({ kase, cast, killerCharIds, livingCharIds, room, method, 
   return out;
 }
 
-// ---------- night traces (owner 2026-10-12 22:05Z) ----------
+// ---------- night traces (22:05Z) ----------
 // "Killers must still be able to leave clues even if a guardian saves their
 // target or they don't perform an action that turn... the search should still
 // lead to clues even if the killer or killers did nothing" + "Increase the
 // number of clues that spawn in rooms. Even if nothing happened the night
 // before." Every dawn seeds 2-3 case-tied traces across the rooms:
-//   saved   -> the interrupted scene lives in the killer's chosen room
-//   murder  -> the killer's passage + ambient movement elsewhere
-//   quiet   -> the house moved anyway (ambient movement of the living cast)
+// saved -> the interrupted scene lives in the killer's chosen room
+// murder -> the killer's passage + ambient movement elsewhere
+// quiet -> the house moved anyway (ambient movement of the living cast)
 // Public lines stay ambiguous (item + hint, never the owner's name); a
 // sharper finderLine is stored for the searcher's occasional private edge.
 const TRACE_LINES = {
@@ -453,9 +453,9 @@ function seedNightTraces({ kase, cast, livingCharIds, killerCharIds, rooms, outc
   const living = livingCharIds.slice();
   const killers = (killerCharIds || []).filter((id) => living.includes(id));
 
-  // pick a living guest's personal item not already spent tonight; the killer's
-  // item surfaces more often when their visit was interrupted (still never a
-  // guarantee - half the interrupted traces belong to innocents)
+ // pick a living guest's personal item not already spent tonight; the killer's
+ // item surfaces more often when their visit was interrupted (still never a
+ // guarantee - half the interrupted traces belong to innocents)
   const takeItem = (preferKiller) => {
     for (let tries = 0; tries < 14; tries++) {
       let pool;
@@ -501,8 +501,8 @@ function seedNightTraces({ kase, cast, livingCharIds, killerCharIds, rooms, outc
 
   const items = [];
   if (outcome === 'saved' && killerRoomIdx != null && killerRoomIdx >= 0) {
-    // the guardian turned the knife - the killer still walked those halls:
-    // their interrupted scene keeps two traces in the chosen room
+ // the guardian turned the knife - the killer still walked those halls:
+ // their interrupted scene keeps two traces in the chosen room
     const t1 = takeItem(true);
     const b1 = build('interrupted', takeRoom(killerRoomIdx), t1);
     if (b1) items.push(b1);
@@ -513,8 +513,8 @@ function seedNightTraces({ kase, cast, livingCharIds, killerCharIds, rooms, outc
     const b3 = build('ambient', takeRoom(null), t3);
     if (b3) items.push(b3);
   } else if (outcome === 'murder') {
-    // the body's room already carries its own evidence - the killer's passage
-    // and the house's movement seed the OTHER rooms
+ // the body's room already carries its own evidence - the killer's passage
+ // and the house's movement seed the OTHER rooms
     const t1 = takeItem(Math.random() < 0.35);
     const b1 = build('passage', takeRoom(null), t1);
     if (b1) items.push(b1);
@@ -522,7 +522,7 @@ function seedNightTraces({ kase, cast, livingCharIds, killerCharIds, rooms, outc
     const b2 = build('ambient', takeRoom(null), t2);
     if (b2) items.push(b2);
   } else {
-    // a quiet night - the killer stayed in bed, the house did not
+ // a quiet night - the killer stayed in bed, the house did not
     const count = Math.random() < 0.5 ? 3 : 2;
     for (let i = 0; i < count; i++) {
       const t = takeItem(false);
@@ -533,7 +533,7 @@ function seedNightTraces({ kase, cast, livingCharIds, killerCharIds, rooms, outc
   return items.filter(Boolean);
 }
 
-// ---------- the manor's letters (Wave 2b, owner 2026-10-13 09:59Z) ----------
+// ---------- the manor's letters (Wave 2b, 09:59Z) ----------
 // "during night time, everyone gets the chance to search different rooms for
 // rewards and letters that more or less explain the context of why everyone
 // is there that night" - a per-case thread of numbered fragments, woven from
@@ -550,15 +550,15 @@ function buildLetterPool({ kase, cast, rooms }) {
     const webPairs = Array.isArray(kase.web) ? kase.web.slice() : [];
     const secretTexts = (cast || []).map((c) => (kase.secrets && kase.secrets[c.id] || {}).text).filter(Boolean);
 
-    // 1 - the invitation
+ // 1 - the invitation
     out.push('You were invited. So was everyone else at this table. Funny thing - nobody remembers writing the reply.');
-    // 2 - the reason the manor gathers you (the case's own motive, no name attached)
+ // 2 - the reason the manor gathers you (the case's own motive, no name attached)
     if (kase.motive && kase.motive.detail) {
       out.push(`So the invitations said, in the host's own hand: "${kase.motive.detail}" Every word of it was true. That is the trouble with this house.`);
     }
-    // 3 - the host
+ // 3 - the host
     out.push('The host never came down. The staff swear the chair at the head of the table has stood empty for years. Then who poured the wine?');
-    // 4-5 - two drawn timeline beats, pinned to rooms
+ // 4-5 - two drawn timeline beats, pinned to rooms
     if (beats.length) {
       const b1 = beats[0];
       out.push(`${b1.hour} - ${b1.text}. Remember that hour. Somebody's story will need it.`);
@@ -567,19 +567,19 @@ function buildLetterPool({ kase, cast, rooms }) {
       const b2 = beats[1];
       out.push(`${b2.hour} - ${b2.text}. I watched from the landing. Two faces were missing from the room where they should have been.`);
     }
-    // 6 - one web pair (public texture, drawn from the case truth)
+ // 6 - one web pair (public texture, drawn from the case truth)
     if (webPairs.length) {
       const w = webPairs[Math.floor(Math.random() * webPairs.length)];
       out.push(`${w.frame || `${w.aName || nm(0)} and ${w.bName || nm(1)} are bound to each other somehow.`} The house has watched it strain for years.`);
     }
-    // 7 - a secret tease (never attributed)
+ // 7 - a secret tease (never attributed)
     if (secretTexts.length) {
       const s = secretTexts[Math.floor(Math.random() * secretTexts.length)];
       out.push(`Someone under this roof ${s}. Count the liars before you count the corpses.`);
     }
-    // 8 - the rooms keep the rest
+ // 8 - the rooms keep the rest
     out.push(`The ${room(1)} was locked from the inside for twenty years. Yesterday the key was found in the ${room(2)}. The manor is tidying up. So should you.`);
-    // 9 - the closer
+ // 9 - the closer
     out.push('Why are YOU here? Everyone at this table was chosen. Ask yourself what for - then ask who did the choosing.');
   } catch (e) { /* letters must never break a case */ }
   return out;

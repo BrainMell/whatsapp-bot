@@ -49,8 +49,8 @@ function resolveTarget(msg) {
  * has (see reactions/fallbacks.js maps).
  */
 async function fetchGifUrl(category) {
-  // Try 1: Nekos.best API (original primary - currently Cloudflare-blocked
-  // from datacenter IPs; fast-fails with 403 so staying in the chain is cheap)
+ // Try 1: Nekos.best API (original primary - currently Cloudflare-blocked
+ // from datacenter IPs; fast-fails with 403 so staying in the chain is cheap)
   try {
     const nekosCat = NEKOS_BEST_MAP[category] || category;
     const res = await axios.get(`https://nekos.best/api/v2/${nekosCat}`, { timeout: 4000 });
@@ -58,10 +58,10 @@ async function fetchGifUrl(category) {
       return res.data.results[0].url;
     }
   } catch (err) {
-    // expected while the Cloudflare challenge is active - fall through
+ // expected while the Cloudflare challenge is active - fall through
   }
 
-  // Try 2: nekos.life v2 (NEW 2026-09-01)
+ // Try 2: nekos.life v2 (NEW )
   const nlCat = NEKOS_LIFE_REDIRECT[category] ||
     (NEKOS_LIFE_CATS.includes(category) ? category : null);
   if (nlCat) {
@@ -73,7 +73,7 @@ async function fetchGifUrl(category) {
     }
   }
 
-  // Try 3: PurrBot v2 (NEW 2026-09-01)
+ // Try 3: PurrBot v2 (NEW )
   const pbCat = PURRBOT_REDIRECT[category] ||
     (PURRBOT_CATS.includes(category) ? category : null);
   if (pbCat) {
@@ -85,7 +85,7 @@ async function fetchGifUrl(category) {
     }
   }
 
-  // (waifu.pics REMOVED 2026-09-01 - api.waifu.pics returns NXDOMAIN, domain dead)
+ // (waifu.pics REMOVED - api.waifu.pics returns NXDOMAIN, domain dead)
 
   throw new Error('All SFW GIF endpoints failed (nekos.best is Cloudflare-blocked; nekos.life and PurrBot both failed).');
 }
@@ -96,7 +96,7 @@ async function fetchGifUrl(category) {
 async function handleReaction(sock, msg, type, emoji, targeted, chatId, senderJid, senderName) {
   const BOT_MARKER = '🃏 ';
   
-  // Resolve sender JID cleanly
+ // Resolve sender JID cleanly
   const rawSender = senderJid || msg.key.participant || msg.key.remoteJid;
   const resolvedSender = jidNormalizedUser(rawSender);
   const cleanSender = resolvedSender.split('@')[0];
@@ -119,8 +119,8 @@ async function handleReaction(sock, msg, type, emoji, targeted, chatId, senderJi
     cleanTarget = targetJid.split('@')[0];
   }
 
-  // Determine message quoting priority:
-  // Quote the target's/replied message if it exists, otherwise do not quote the sender.
+ // Determine message quoting priority:
+ // Quote the target's/replied message if it exists, otherwise do not quote the sender.
   let quoteOption = {};
   const contextInfo = msg.message?.extendedTextMessage?.contextInfo;
   if (contextInfo?.quotedMessage) {
@@ -137,21 +137,20 @@ async function handleReaction(sock, msg, type, emoji, targeted, chatId, senderJi
     };
   }
 
-  // Setup temporary files for GIF-to-MP4 conversion
   const uniqueId = `${Date.now()}_${Math.floor(Math.random() * 10000)}`;
   const tempGif = path.join(os.tmpdir(), `gif_${uniqueId}.gif`);
   const tempVideo = path.join(os.tmpdir(), `video_${uniqueId}.mp4`);
 
   try {
-    // Resolve URL using multi-stage fetch with original type
+ // Resolve URL using multi-stage fetch with original type
     const gifUrl = await fetchGifUrl(type);
     
-    // Download the GIF file
+ // Download the GIF file
     let bufferResponse;
     try {
       bufferResponse = await axios.get(gifUrl, { responseType: 'arraybuffer', timeout: 15000 });
     } catch (downloadErr) {
-      // Retry with browser headers if direct download fails
+ // Retry with browser headers if direct download fails
       bufferResponse = await axios.get(gifUrl, {
         responseType: 'arraybuffer',
         headers: {
@@ -163,7 +162,7 @@ async function handleReaction(sock, msg, type, emoji, targeted, chatId, senderJi
     const buffer = Buffer.from(bufferResponse.data);
     fs.writeFileSync(tempGif, buffer);
 
-    // Convert GIF to MP4 using FFmpeg (H.264 video encoding suitable for WhatsApp)
+ // Convert GIF to MP4 using FFmpeg (H.264 video encoding suitable for WhatsApp)
     const ffmpegPath = process.env.FFMPEG_PATH || 'ffmpeg';
     const toMp4 = `"${ffmpegPath}" -i "${tempGif}" -movflags faststart -pix_fmt yuv420p -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" -y "${tempVideo}"`;
     await execPromise(toMp4);
@@ -191,7 +190,7 @@ async function handleReaction(sock, msg, type, emoji, targeted, chatId, senderJi
     console.error(`Reaction GIF failed for ${type}:`, error);
     await sock.sendMessage(chatId, { text: BOT_MARKER + `⚠️ Couldn't load the gif: ${error.message}` });
   } finally {
-    // Clean up temporary files
+ // Clean up temporary files
     try {
       if (fs.existsSync(tempGif)) fs.unlinkSync(tempGif);
       if (fs.existsSync(tempVideo)) fs.unlinkSync(tempVideo);

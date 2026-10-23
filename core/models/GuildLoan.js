@@ -1,5 +1,5 @@
 // ============================================
-// 🏦 GUILD LOAN MODEL — Guild War Overhaul 2026-10-03
+// GUILD LOAN MODEL - Guild War Overhaul
 // Support-system loans: player requests → Guild Master approves → repayable.
 // No interest, no penalties (owner spec). Replaces Guild.loans subdoc.
 // ============================================

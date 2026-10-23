@@ -1,36 +1,36 @@
 // ============================================
-// ⚔️ COMBAT SCENE INTEGRATION
+// COMBAT SCENE INTEGRATION
 // ============================================
 
 const combatImageGen = require('./combatImageGenerator');
 const botConfig = require('../../botConfig');
 const fs = require('fs');
-// 💡 WAR LOG toggle storage (2026-10-20): per-chat preference in the shared
-// system KV — read is a pure in-memory cache hit (no DB on the hot path),
+// WAR LOG toggle storage: per-chat preference in the shared
+// system KV - read is a pure in-memory cache hit (no DB on the hot path),
 // writes persist to MongoDB. "log" toggles stay effective across restarts
 // and across sibling instances (jake/joker/subaru) via the _shared_ key.
 const system = require('../utils/system');
 
 // ==========================================
-// 🎨 COMBAT SCENE RENDERING
+// COMBAT SCENE RENDERING
 // ==========================================
 
 async function renderCombatStart(players, enemies, encounterInfo) {
     try {
-        // 💡 DUNGEON FAST-LANE (2026-10-20 owner: "dungeons are very inconsistent,
-        // make it fast and lightweight"): static combat renders are 1-3s jobs that
-        // must NOT wait behind slow GIF/roster renders in the shared _enqueue
-        // semaphore. Queued lane measured: busy queue -> up to 20s waitMs -> the
-        // caller's 10s race fires -> text-only fallback = the classic
-        // "sometimes image, sometimes text" dungeon roulette. PvP duels already
-        // bypass (see generateCombatImageDirect history); dungeons now do too.
+ // DUNGEON FAST-LANE ("dungeons are very inconsistent,
+ // make it fast and lightweight"): static combat renders are 1-3s jobs that
+ // must NOT wait behind slow GIF/roster renders in the shared _enqueue
+ // semaphore. Queued lane measured: busy queue -> up to 20s waitMs -> the
+ // caller's 10s race fires -> text-only fallback = the classic
+ // "sometimes image, sometimes text" dungeon roulette. PvP duels already
+ // bypass (see generateCombatImageDirect history); dungeons now do too.
         const result = await combatImageGen.generateCombatImage(players, enemies, {
             rank: encounterInfo.rank,
             floor: encounterInfo.floor || 0,
             backgroundPath: encounterInfo.backgroundPath,
-            // 💡 Phase 7: Pass summons through to the Go service
+ // Phase 7: Pass summons through to the Go service
             summons: encounterInfo.summons || [],
-            // ⚔️ ruins encounter scene: square map panel replaces Options_menu
+ // ruins encounter scene: square map panel replaces Options_menu
             encounter: encounterInfo.encounter || undefined,
             bypassQueue: true
         });
@@ -43,24 +43,24 @@ async function renderCombatStart(players, enemies, encounterInfo) {
 
 async function renderCombatTurn(players, enemies, turnInfo, options = {}) {
     try {
-        // 💀 FIX 2026-10-11 (owner fight-card audit): send the FULL ROSTER
-        // every turn — dead enemies included (they carry justDied + 0 HP and
-        // the Go renderer hides them itself). The old filter
-        // `e.currentHP > 0 || e.justDied` had two failure modes:
-        //   1. enemies built without a currentHP field (createEnemy sets only
-        //      stats.hp) were ALL dropped on TURN renders → the classic
-        //      "defend card shows no enemy at all" report;
-        //   2. compacting the array shifted every survivor into the dead
-        //      enemy's slot: positions repacked, sprites reshuffled and the
-        //      last slot went empty ("the dead one stays visible while an
-        //      enemy in another position disappears").
-        // The Go service keys positions/sprites off the original roster index,
-        // so the roster it receives must never be compacted mid-fight.
+ // FIX (owner fight-card audit): send the FULL ROSTER
+ // every turn - dead enemies included (they carry justDied + 0 HP and
+ // the Go renderer hides them itself). The old filter
+ // `e.currentHP > 0 || e.justDied` had two failure modes:
+ // 1. enemies built without a currentHP field (createEnemy sets only
+ // stats.hp) were ALL dropped on TURN renders → the classic
+ // "defend card shows no enemy at all" report;
+ // 2. compacting the array shifted every survivor into the dead
+ // enemy's slot: positions repacked, sprites reshuffled and the
+ // last slot went empty ("the dead one stays visible while an
+ // enemy in another position disappears").
+ // The Go service keys positions/sprites off the original roster index,
+ // so the roster it receives must never be compacted mid-fight.
         const playersToShow = players.filter(p => ((p.currentHP ?? p.stats?.hp) > 0) || p.justDied);
         const enemiesToShow = enemies;
 
-        // Build animation action payload from turnInfo (if actionable)
-        // The Go service uses this to render VFX, sprite reactions, and HP interpolation.
+ // Build animation action payload from turnInfo (if actionable)
+ // The Go service uses this to render VFX, sprite reactions, and HP interpolation.
         const animAction = buildAnimationAction(turnInfo, options);
 
         const result = await combatImageGen.updateCombatImage(
@@ -71,9 +71,9 @@ async function renderCombatTurn(players, enemies, turnInfo, options = {}) {
                 backgroundPath: options.backgroundPath,
                 summons: options.summons || [],
                 action: animAction,  // null if no actionable attack
-                // 💡 DUNGEON FAST-LANE (2026-10-20): turn renders take the direct
-                // express lane (1-3s) instead of queueing behind GIF renders —
-                // same rationale as renderCombatStart above.
+ // DUNGEON FAST-LANE: turn renders take the direct
+ // express lane (1-3s) instead of queueing behind GIF renders -
+ // same rationale as renderCombatStart above.
                 bypassQueue: true
             }
         );
@@ -95,30 +95,28 @@ async function renderCombatTurn(players, enemies, turnInfo, options = {}) {
  *   - Damage dealt, crit, miss, heal
  */
 function buildAnimationAction(turnInfo, options = {}) {
-    // 💡 FIX 2026-08-03: This function now BUILDS the action payload (instead
-    // of returning null) so the static renderer can use it for the turn
-    // indicator (golden ellipse under the active attacker).
-    //
-    // The ANIMATED MP4 path is still disabled - see updateCombatImage() below,
-    // which now always uses the static PNG path. The action payload is passed
-    // to the static renderer, which uses req.Action.AttackerSide + AttackerIndex
-    // to draw the turn indicator.
-    //
-    // To re-enable animated MP4 combat: re-add the early `return null` here,
-    // AND change updateCombatImage() to route to generateAnimatedCombatImage
-    // when options.action is set. The Go service's /api/combat/animated
-    // endpoint is unchanged and still works - it's just too slow for the
-    // 512MB Box 2 instance (6-27s per MP4 encode).
+ // FIX This function now BUILDS the action payload (instead
+ // of returning null) so the static renderer can use it for the turn
+ // indicator (golden ellipse under the active attacker).
+ // The ANIMATED MP4 path is still disabled - see updateCombatImage() below,
+ // which now always uses the static PNG path. The action payload is passed
+ // to the static renderer, which uses req.Action.AttackerSide + AttackerIndex
+ // to draw the turn indicator.
+ // To re-enable animated MP4 combat: re-add the early `return null` here,
+ // AND change updateCombatImage() to route to generateAnimatedCombatImage
+ // when options.action is set. The Go service's /api/combat/animated
+ // endpoint is unchanged and still works - it's just too slow for the
+ // 512MB Box 2 instance (6-27s per MP4 encode).
 
     if (!turnInfo || !turnInfo.action) return null;
     const actionName = String(turnInfo.action.name || '').toLowerCase();
 
-    // Skip non-actionable turns
+ // Skip non-actionable turns
     if (['rest', 'flee', 'defend', 'charging', 'charge'].some(s => actionName.includes(s))) {
         return null;
     }
 
-    // Resolve attacker side + index
+ // Resolve attacker side + index
     const actor = turnInfo.actor;
     if (!actor) return null;
     const summons = options.summons || [];
@@ -138,7 +136,7 @@ function buildAnimationAction(turnInfo, options = {}) {
     }
     if (attackerIndex < 0) attackerSide = null;
 
-    // Resolve target side + index
+ // Resolve target side + index
     const target = turnInfo.target;
     let targetSide = null, targetIndex = -1;
     if (target) {
@@ -155,10 +153,10 @@ function buildAnimationAction(turnInfo, options = {}) {
     }
     if (targetIndex < 0) targetSide = null;
 
-    // If we can't resolve sides, skip animation (fall back to static)
+ // If we can't resolve sides, skip animation (fall back to static)
     if (!attackerSide || !targetSide) return null;
 
-    // Determine element/VFX from action name + skill info
+ // Determine element/VFX from action name + skill info
     let element = 'physical';
     const nameLower = actionName;
     if (/fire|flame|burn|inferno|meteor|fireball/i.test(nameLower)) element = 'fire';
@@ -168,7 +166,7 @@ function buildAnimationAction(turnInfo, options = {}) {
     else if (/holy|light|smite|divine|sanctif/i.test(nameLower)) element = 'holy';
     else if (/heal|cure|mend|regen/i.test(nameLower)) element = 'none';
 
-    // Determine damage/heal
+ // Determine damage/heal
     const damage = Math.max(0, Math.floor(Number(turnInfo.damage) || 0));
     const heal = Math.max(0, Math.floor(Number(turnInfo.healing) || 0));
     const isCrit = Boolean(turnInfo.isCrit);
@@ -191,12 +189,12 @@ function buildAnimationAction(turnInfo, options = {}) {
 
 async function renderCombatEnd(players, enemies, victory, rewards = null, options = {}) {
     try {
-        // 💡 2026-09-14: extended payload for the redesigned lamoot-style
-        // victory/defeat portrait card (bg_VICTORY/bg_DEFEAT). All the new
-        // fields are optional - the Go side degrades gracefully when absent.
+ // extended payload for the redesigned lamoot-style
+ // victory/defeat portrait card (bg_VICTORY/bg_DEFEAT). All the new
+ // fields are optional - the Go side degrades gracefully when absent.
         const items = rewards?.items?.map(i => i.name).join(', ') || '';
         const p0 = (players || []).find(p => p && !p._isSummon) || (players || [])[0] || {};
-        // primary enemy = the beefiest one on the field (boss battles have one)
+ // primary enemy = the beefiest one on the field (boss battles have one)
         const e0 = (enemies || []).slice().sort((a, b) =>
             (Number(b?.stats?.maxHp || b?.maxHp) || 0) - (Number(a?.stats?.maxHp || a?.maxHp) || 0))[0] || {};
         return await combatImageGen.generateEndScreenImage(
@@ -214,17 +212,17 @@ async function renderCombatEnd(players, enemies, victory, rewards = null, option
                 enemyLevel: Math.floor(Number(e0.level || e0.stats?.level) || 0),
                 enemyIndex: Math.floor(Number(e0.spriteIndex) || 0),
                 enemyIsBoss: Boolean(e0.isBoss),
-                // 💡 FIX 2026-09-17: wild summons render their species sprite
-                // on the end card instead of a random monster.
+ // FIX wild summons render their species sprite
+ // on the end card instead of a random monster.
                 enemySpecies: String(e0.species || ((e0.isWildSummon || e0._isSummon) ? (e0.speciesId || e0.id) : '') || ''),
                 rank: String(options.rank || ''),
                 floor: Math.floor(Number(options.floor) || 0),
-                // 💡 OWNER BRIEF 2026-10-09 §2: deterministic new-style fallback
+ // OWNER BRIEF §2: deterministic new-style fallback
                 background: String(options.backgroundPath
                     ? options.backgroundPath.split(/[\\/]/).pop()
                     : 'env1.png'),
-                // 💡 DUNGEON FAST-LANE (2026-10-20): the victory/defeat card is the
-                // payoff moment — it must not wait behind GIF renders in the queue.
+ // DUNGEON FAST-LANE: the victory/defeat card is the
+ // payoff moment - it must not wait behind GIF renders in the queue.
                 bypassQueue: true
             }
         );
@@ -235,7 +233,7 @@ async function renderCombatEnd(players, enemies, victory, rewards = null, option
 }
 
 // ==========================================
-// 📝 CAPTION GENERATION
+// CAPTION GENERATION
 // ==========================================
 
 function generateStartCaption(players, enemies, encounterInfo) {
@@ -244,8 +242,8 @@ function generateStartCaption(players, enemies, encounterInfo) {
     };
     const rankBadge = rankColors[encounterInfo.rank] || '⬜';
     
-    // 💡 STYLE A (2026-10-20): WAR LOG family header; no `-----------` dividers
-    // anywhere in combat text.
+ // STYLE A: WAR LOG family header; no `-----------` dividers
+ // anywhere in combat text.
     let caption = `⚔️ *WAR LOG* · BATTLE COMMENCES\n`;
     
     if (encounterInfo.turnOrderStr) {
@@ -265,14 +263,14 @@ function generateStartCaption(players, enemies, encounterInfo) {
 }
 
 // ==========================================
-// 📈 WAR LOG GRID HELPERS (STYLE A, 2026-10-20)
+// WAR LOG GRID HELPERS (STYLE A, )
 // ==========================================
-// 💡 STYLE A "WAR LOG" (owner pick, 2026-10-20 — replaces the same-day
+// STYLE A "WAR LOG" (owner pick, - replaces the same-day
 // Style C VS-PANEL skin): all column-shaped data lives inside a WhatsApp
-// ``` monospace fence — the ONLY true fixed-width surface on every phone.
+// ``` monospace fence - the ONLY true fixed-width surface on every phone.
 // Grid: prefix(1) + name(12) + [█░ bar](10) + HP(13, right-aligned) =
 // 38 mono chars, comfortably inside phone code-block width. NO emoji inside
-// the aligned columns (emoji render double-width and shred the grid — dead
+// the aligned columns (emoji render double-width and shred the grid - dead
 // fighters get the single-width † mark instead). Flow data (energy,
 // narration) is free-form `» ` lines where wrapping costs nothing.
 
@@ -280,10 +278,10 @@ const WARLOG_NAME_W = 12;   // fighter-name column width
 const WARLOG_HP_W = 13;     // right-aligned "cur/max" field width
 const WARLOG_DIV = '─'.repeat(30);
 
-// ─── WAR LOG toggle (owner: "toggle rpg command that turns off logs and
-// make the battle as premium as possible") ───
+// --- WAR LOG toggle ("toggle rpg command that turns off logs and
+// make the battle as premium as possible") ---
 // OFF ⇒ battle image stays, caption collapses to the bare turn header.
-// Default is ON (full grid + narration) — veterans opt OUT per chat.
+// Default is ON (full grid + narration) - veterans opt OUT per chat.
 const WARLOG_OFF_KEY = '_shared_warlog_off';
 let _warlogOffCache = null;
 
@@ -316,7 +314,7 @@ function setWarLogOff(chatId, off) {
 }
 
 function warlogClean(text) {
-    // Never let a name/line break the ``` fence or smuggle markup asterisks.
+ // Never let a name/line break the ``` fence or smuggle markup asterisks.
     return String(text ?? '?').replace(/[`*]/g, '').trim() || '?';
 }
 
@@ -335,23 +333,23 @@ function warlogBar(cur, max, len = 8) {
 }
 
 function warlogRow(prefix, name, cur, max) {
-    // 💡 Owner tweak v2 (2026-10-20): health totals are OUT of the war log
-    // entirely — "no pink dildo 1000/10000, [just] pink dildo did corpse
-    // explosion". Rows are now prefix + name only ('>' marks the acting
-    // duelist in PvP). The cur/max args are accepted but IGNORED for
-    // call-site compatibility (pvpSystem duel grid + start card pass them).
+ // Owner tweak v2: health totals are OUT of the war log
+ // entirely - "no pink dildo 1000/10000, [just] pink dildo did corpse
+ // explosion". Rows are now prefix + name only ('>' marks the acting
+ // duelist in PvP). The cur/max args are accepted but IGNORED for
+ // call-site compatibility (pvpSystem duel grid + start card pass them).
     return `${prefix}${warlogClean(name).slice(0, WARLOG_NAME_W)}`;
 }
 
-// 💡 Owner tweak v2 (2026-10-20): premium log-OFF mode still shows the
-// DAMAGE done ("the combat log toggle should leave the damage done — total
+// Owner tweak v2: premium log-OFF mode still shows the
+// DAMAGE done ("the combat log toggle should leave the damage done - total
 // damage done from both enemies when they make an action"). Enemy action
 // texts collapse to damage numbers + effect lines; the prose goes away:
-//   "👾 *X* attacks Mellow-San for 💥 1,204 damage! (CRIT!)"
-//     → "👾 X → Mellow-San 💥 1,204 DMG 💢"
-//   "💥 👾 Mellow-San takes 2,331 damage! 💥 *CRITICAL HIT!*"
-//     → "💥 👾 Mellow-San 2,331 DMG 💢"
-// Kill / proc / warning / evade / heal lines pass through UNTOUCHED — they
+// " *X* attacks Mellow-San for 1,204 damage! (CRIT!)"
+// → " X → Mellow-San 1,204 DMG "
+// " Mellow-San takes 2,331 damage! *CRITICAL HIT!*"
+// → " Mellow-San 2,331 DMG "
+// Kill / proc / warning / evade / heal lines pass through UNTOUCHED - they
 // are the "effects" the owner wants the log reduced to. Unknown prose also
 // passes through (compression is best-effort, never lossy on effects).
 function compactCombatText(text) {
@@ -374,7 +372,7 @@ function compactCombatText(text) {
         m = line.match(/^(.+?)\s+takes\s+([\d][\d,]*)\s+(?:\w+\s+)?damage/i);
         if (m) {
             const crit = /CRIT/i.test(line);
-            const who = m[1].replace(/^💥\s*/, ''); // line may already lead with 💥
+            const who = m[1].replace(/^💥\s*/, ''); // line may already lead with
             out.push(`💥 ${who} ${fmt(m[2].replace(/,/g, ''))} DMG${crit ? ' 💢' : ''}`.replace(/[ *]+/g, ' ').trim());
             continue;
         }
@@ -387,10 +385,9 @@ function warlogBlock(lines) {
     return '```\n' + lines.filter(l => l !== undefined && l !== null).join('\n') + '\n```';
 }
 
-// 💡 Owner fix round 4 (2026-10-20): the ACTIONS command hints + BAG listing
+// Owner fix round 4: the ACTIONS command hints + BAG listing
 // that the Task-7 "veteran prompt" stripped UNCONDITIONALLY. Owner's model:
-// .j combat log IS the noob/veteran switch — log ON (noob mode, default)
-// KEEPS the hints so new players can learn the commands; log OFF (veteran)
+// .j combat log IS the noob/veteran switch - log ON (noob mode, default)
 // drops them. Pure string builder so the QA harness can pin the format.
 // usableItems = pre-resolved [{ name, quantity }] (caller merges
 // lootSystem.getItemInfo + CONSUMABLES, exactly like the pre-Task-7 block).
@@ -415,20 +412,20 @@ function buildTurnHints(prefix, usableItems) {
 }
 
 function generateTurnCaption(players, enemies, turnInfo) {
-    // 💡 STYLE A "WAR LOG" (owner pick, 2026-10-20): the per-turn narration
-    // that used to go out as a separate text bubble (guildAdventure
-    // performAction) rides INSIDE the battle-image caption — ONE message per
-    // turn. When the chat toggled logs OFF (.j combat log), the battle goes
-    // premium-minimal: image stays, caption collapses to the bare header.
+ // STYLE A "WAR LOG" (owner pick, ): the per-turn narration
+ // that used to go out as a separate text bubble (guildAdventure
+ // performAction) rides INSIDE the battle-image caption - ONE message per
+ // turn. When the chat toggled logs OFF (.j combat log), the battle goes
+ // premium-minimal: image stays, caption collapses to the bare header.
     if (turnInfo && turnInfo.warLog === false) {
-        // 💡 Owner tweak v3 (2026-10-20): premium log-OFF = the owner's exact
-        // sketch — what was used, the total damage, who died. NOTHING else:
-        //   ⚔️ *TURN 1*
-        //   🪓 Mellow-San used Rampage
-        //   -697 DAMAGE 💢
-        //   Crystal Corrupted defeated!
-        // Damage is summed across EVERY enemy hit (AoE incl.); heals show as
-        // +N HP; misses as 💨 MISS; defeat/fall lines ride under the damage.
+ // Owner tweak v3: premium log-OFF = the owner's exact
+ // sketch - what was used, the total damage, who died. NOTHING else:
+ // *TURN 1*
+ // Mellow-San used Rampage
+ // -697 DAMAGE
+ // Crystal Corrupted defeated!
+ // Damage is summed across EVERY enemy hit (AoE incl.); heals show as
+ // +N HP; misses as MISS; defeat/fall lines ride under the damage.
         const logs = Array.isArray(turnInfo.actionLog) ? turnInfo.actionLog.map(String) : [];
         let dmgTotal = 0;
         let healTotal = 0;
@@ -445,8 +442,8 @@ function generateTurnCaption(players, enemies, turnInfo) {
         if (!dmgTotal && Number(turnInfo.damage) > 0) dmgTotal = Math.floor(Number(turnInfo.damage));
         if (!healTotal && Number(turnInfo.healing) > 0) healTotal = Math.floor(Number(turnInfo.healing));
         const crit = turnInfo.isCrit || /CRIT/i.test(logs.join(' '));
-        // "Mellow used <skill>" — structured actor+action first (clean skill
-        // name, no animation emojis); fall back to the first narration line.
+ // "Mellow used <skill>" - structured actor+action first (clean skill
+ // name, no animation emojis); fall back to the first narration line.
         const actorName = warlogClean(turnInfo.actor?.name || '');
         const actionName = warlogClean(turnInfo?.action?.name || '');
         const actorIcon = turnInfo.actor?.class?.icon || '';
@@ -469,16 +466,16 @@ function generateTurnCaption(players, enemies, turnInfo) {
     let caption = `⚔️ *WAR LOG* · TURN ${turnInfo.turnNumber || '?'}\n`;
 
     const block = [];
-    // 💡 Owner tweak v2 (2026-10-20): HP totals are OUT of the war log —
-    // "no pink dildo 1000/10000, [just] pink dildo did corpse explosion".
-    // The party/enemy mono rows are GONE; fighter HP lives in the battle
-    // image (unchanged) and the YOUR TURN prompt. The fence now carries
-    // ONLY the effects: the » narration lines (actions, damage, procs,
-    // kills). The ⚡ EN readout line is already gone (v1 tweak).
+ // Owner tweak v2: HP totals are OUT of the war log -
+ // "no pink dildo 1000/10000, [just] pink dildo did corpse explosion".
+ // The party/enemy mono rows are GONE; fighter HP lives in the battle
+ // image (unchanged) and the YOUR TURN prompt. The fence now carries
+ // ONLY the effects: the » narration lines (actions, damage, procs,
+ // kills). The EN readout line is already gone (v1 tweak).
 
-    // » action log: narration lines captured from performAction via
-    // turnInfo.actionLog (full fidelity — procs, OVERKILL, kills all ride
-    // along), or the compact structured fallback when no log was attached.
+ // » action log: narration lines captured from performAction via
+ // turnInfo.actionLog (full fidelity - procs, OVERKILL, kills all ride
+ // along), or the compact structured fallback when no log was attached.
     let lines = (Array.isArray(turnInfo.actionLog) ? turnInfo.actionLog : []).map(l => warlogClean(l)).filter(l => l !== '?');
     if (lines.length === 0 && turnInfo.action) {
         const actor = turnInfo.actor;
@@ -501,13 +498,13 @@ function generateTurnCaption(players, enemies, turnInfo) {
         if (turnInfo.effects?.length > 0) lines.push(`✨ ${turnInfo.effects.map(e => warlogClean(e)).join(' · ')}`);
     }
     if (lines.length > 0) {
-        // Caption budget guard (WhatsApp media captions ~1024 chars precedent).
+ // Caption budget guard (WhatsApp media captions ~1024 chars precedent).
         const CAP = 8;
         const shown = lines.length > CAP ? [...lines.slice(0, CAP), `… +${lines.length - CAP} more`] : lines;
         block.push(...shown.map(l => `» ${l}`));
         caption += warlogBlock(block);
     }
-    // No narration at all → bare header, no empty fence.
+ // No narration at all → bare header, no empty fence.
     return caption;
 }
 
@@ -545,7 +542,7 @@ function generateEndCaption(players, enemies, victory, rewards) {
 }
 
 // ==========================================
-// 🛠️ HELPER FUNCTIONS
+// HELPER FUNCTIONS
 // ==========================================
 
 function createHPBar(percent, length = 8) {
@@ -587,7 +584,7 @@ function ensureTempDirectory() {
 }
 
 // ==========================================
-// 🎯 MAIN INTEGRATION FUNCTION
+// MAIN INTEGRATION FUNCTION
 // ==========================================
 
 async function generateCombatScene(players, enemies, phase, options = {}) {
@@ -601,7 +598,7 @@ async function generateCombatScene(players, enemies, phase, options = {}) {
         backgroundPath = null,
         rank = null,
         floor = 0,
-        summons = []  // 💡 Phase 7: summons passed from guildAdventure.js
+        summons = [] // Phase 7: summons passed from guildAdventure.js
     } = options;
 
     let imageResult;
@@ -616,7 +613,7 @@ async function generateCombatScene(players, enemies, phase, options = {}) {
         case 'TURN':
             imageResult = await renderCombatTurn(players, enemies, turnInfo, {
                 backgroundPath, rank, floor, summons,
-                // Pass full arrays so buildAnimationAction can resolve actor/target indices
+ // Pass full arrays so buildAnimationAction can resolve actor/target indices
                 _allPlayers: players,
                 _allEnemies: enemies
             });
@@ -643,7 +640,7 @@ async function generateCombatScene(players, enemies, phase, options = {}) {
         caption,
         width: imageResult.width,
         height: imageResult.height,
-        mimeType: imageResult.mimeType || 'image/png',  // 💡 NEW: 'image/png' or 'video/mp4'
+        mimeType: imageResult.mimeType || 'image/png', // NEW: 'image/png' or 'video/mp4'
         backgroundPath: options.backgroundPath
     };
 }
@@ -658,7 +655,7 @@ module.exports = {
     generateCombatScene,
     createMiniBar,
     createHPBar,
-    // 💡 STYLE A WAR LOG grid helpers (shared with pvpSystem duels)
+ // STYLE A WAR LOG grid helpers (shared with pvpSystem duels)
     warlogClean,
     warlogHP,
     warlogBar,
@@ -667,11 +664,11 @@ module.exports = {
     WARLOG_DIV,
     WARLOG_NAME_W,
     WARLOG_HP_W,
-    // 💡 WAR LOG toggle (.j combat log)
+ // WAR LOG toggle (.j combat log)
     isWarLogOff,
     setWarLogOff,
-    // 💡 Owner tweak v2: premium log-OFF damage-only compression
+ // Owner tweak v2: premium log-OFF damage-only compression
     compactCombatText,
-    // 💡 Owner fix round 4: YOUR TURN ACTIONS+BAG hints (log-ON noob mode)
+ // Owner fix round 4: YOUR TURN ACTIONS+BAG hints (log-ON noob mode)
     buildTurnHints,
 };

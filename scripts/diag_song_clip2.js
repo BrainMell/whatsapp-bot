@@ -6,7 +6,7 @@ const { loadUsage, saveUsage } = quizMedia._internal;
 
 (async () => {
   const orig = quizMedia._internal;
-  // wrap getAudioInfo to trace calls
+ // wrap getAudioInfo to trace calls
   const q = await quizMedia.buildSpotSongQuestions({ count: 2, usedKeys: new Set(), difficulty: "easy", goService, trimFn: null });
   console.log("built:", q.length);
   for (const item of q) {

@@ -1,5 +1,5 @@
 // ============================================
-// 📜 GUILD ASSOCIATION OFFICIAL NOTICE — Guild War Overhaul 2026-10-03
+// GUILD ASSOCIATION OFFICIAL NOTICE - Guild War Overhaul
 // Formal letter-style card for war announcements / Alignment notices /
 // major world events. Clones the Royal Decree kit (worldMapRenderer style).
 // ============================================
@@ -76,7 +76,7 @@ async function renderNotice(text, opts = {}) {
     }
     ctx.globalAlpha = 1;
 
-    // double frame + corner marks (decree style)
+ // double frame + corner marks (decree style)
     ctx.strokeStyle = PAL.frame;
     ctx.lineWidth = 2.5;
     ctx.strokeRect(30, 30, W - 60, H - 60);
@@ -96,7 +96,7 @@ async function renderNotice(text, opts = {}) {
     ctx.fillText(opts.kicker || 'BY DECREE OF THE GUILD ASSOCIATION', W / 2, 100);
     ctx.fillStyle = PAL.ink;
     ctx.font = '34px "Cinzel Deco"';
-    // Cinzel Deco swashes eat the word gap — spread the title manually
+ // Cinzel Deco swashes eat the word gap - spread the title manually
     const title = (opts.title || 'OFFICIAL NOTICE');
     if ('letterSpacing' in ctx) {
         ctx.letterSpacing = '3px';
@@ -111,7 +111,7 @@ async function renderNotice(text, opts = {}) {
     ctx.fillStyle = PAL.wax;
     ctx.fillRect(W / 2 - 5, 170, 10, 12);
 
-    // body (wrapped, IM Fell)
+ // body (wrapped, IM Fell)
     ctx.font = '20px "IM Fell"';
     ctx.fillStyle = PAL.ink;
     ctx.textAlign = 'left';
@@ -122,7 +122,7 @@ async function renderNotice(text, opts = {}) {
         ty += 32;
     }
 
-    // wax seal
+ // wax seal
     ctx.fillStyle = PAL.wax;
     ctx.beginPath(); ctx.arc(W - 130, H - 120, 42, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#F3ECD9';
@@ -139,7 +139,7 @@ async function renderNotice(text, opts = {}) {
 }
 
 // ============================================
-// ORGANIC WORLD-ALIGNMENT CARD — broadcast look for the alignment wars that
+// ORGANIC WORLD-ALIGNMENT CARD - broadcast look for the alignment wars that
 // open on their own when the worlds align. Posted (paced) to every GC marked
 // RPG-friendly (`gw rpg on`) by each bot instance.
 // Cosmic palette: night-ink header band, gold ⨀ seal, three-worlds flavour.
@@ -152,7 +152,7 @@ async function renderAlignmentCard(opts = {}) {
 
     ctx.fillStyle = PAL.parchment;
     ctx.fillRect(0, 0, W, H);
-    // night-ink header band
+ // night-ink header band
     ctx.fillStyle = '#241A2E';
     ctx.fillRect(0, 0, W, 210);
     ctx.fillStyle = '#2E2340';
@@ -172,8 +172,8 @@ async function renderAlignmentCard(opts = {}) {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#B9A44C';
     ctx.font = '15px "Cinzel"';
-    // ⚔️ 2026-10-09: kicker overridable — mod-called full-scale wars render
-    // 'CALLED BY HAND · FULL SCALE'; the organic look keeps its own line.
+ // kicker overridable - mod-called full-scale wars render
+ // 'CALLED BY HAND · FULL SCALE'; the organic look keeps its own line.
     ctx.fillText(opts.kicker || 'ON THEIR OWN ACCORD · NO HAND RAISED', W / 2, 52);
     ctx.fillStyle = '#F3ECD9';
     ctx.font = '36px "Cinzel Deco"';
@@ -188,14 +188,14 @@ async function renderAlignmentCard(opts = {}) {
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(W / 2 - 170, 140); ctx.lineTo(W / 2 + 170, 140); ctx.stroke();
 
-    // gold triple-world seal
+ // gold triple-world seal
     ctx.fillStyle = '#B9A44C';
     ctx.beginPath(); ctx.arc(W / 2, 175, 26, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#241A2E';
     ctx.font = '30px "Cinzel"';
     ctx.fillText('⨀', W / 2, 187);
 
-    // body
+ // body
     ctx.textAlign = 'left';
     ctx.font = '20px "IM Fell"';
     ctx.fillStyle = PAL.ink;
@@ -205,7 +205,7 @@ async function renderAlignmentCard(opts = {}) {
     let ty = 260;
     for (const line of lines) { ctx.fillText(line, 110, ty); ty += 32; }
 
-    // registration strip
+ // registration strip
     ctx.fillStyle = 'rgba(58,42,30,0.08)';
     ctx.fillRect(90, H - 170, W - 180, 66);
     ctx.strokeStyle = PAL.frame;
@@ -227,7 +227,7 @@ async function renderAlignmentCard(opts = {}) {
 }
 
 // ============================================
-// MOD-INITIATED WAR-CALL CARD — the single-GC variant when a mod opens a war
+// MOD-INITIATED WAR-CALL CARD - the single-GC variant when a mod opens a war
 // with `.j gw start`. Martial wax-red styling; shows who raised the call.
 // ============================================
 async function renderWarCalledCard(opts = {}) {
@@ -238,7 +238,7 @@ async function renderWarCalledCard(opts = {}) {
 
     ctx.fillStyle = PAL.parchment;
     ctx.fillRect(0, 0, W, H);
-    // martial red header band
+ // martial red header band
     ctx.fillStyle = PAL.wax;
     ctx.fillRect(0, 0, W, 210);
     ctx.fillStyle = 'rgba(0,0,0,0.12)';
@@ -269,14 +269,14 @@ async function renderWarCalledCard(opts = {}) {
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(W / 2 - 170, 140); ctx.lineTo(W / 2 + 170, 140); ctx.stroke();
 
-    // dark seal with crossed blades
+ // dark seal with crossed blades
     ctx.fillStyle = '#241A2E';
     ctx.beginPath(); ctx.arc(W / 2, 175, 26, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#F3ECD9';
     ctx.font = '28px "Cinzel"';
     ctx.fillText('⚔', W / 2, 186);
 
-    // body
+ // body
     ctx.textAlign = 'left';
     ctx.font = '20px "IM Fell"';
     ctx.fillStyle = PAL.ink;
@@ -286,7 +286,7 @@ async function renderWarCalledCard(opts = {}) {
     let ty = 260;
     for (const line of lines) { ctx.fillText(line, 110, ty); ty += 32; }
 
-    // registration strip
+ // registration strip
     ctx.fillStyle = 'rgba(58,42,30,0.08)';
     ctx.fillRect(90, H - 170, W - 180, 66);
     ctx.strokeStyle = PAL.frame;
@@ -308,7 +308,7 @@ async function renderWarCalledCard(opts = {}) {
 }
 
 // ============================================
-// FIELD MANUAL CARD — the `.j gw` / `.j war` / `.j wr` popup. A war-table
+// FIELD MANUAL CARD - the `.j gw` / `.j war` / `.j wr` popup. A war-table
 // board listing the full command surface, martial styling to match the
 // war-call card. Same parchment kit, command rows in two columns.
 // ============================================
@@ -320,7 +320,7 @@ async function renderWarHelpCard(opts = {}) {
 
     ctx.fillStyle = PAL.parchment;
     ctx.fillRect(0, 0, W, H);
-    // martial red header band (matches the war-call card family)
+ // martial red header band (matches the war-call card family)
     ctx.fillStyle = PAL.wax;
     ctx.fillRect(0, 0, W, 190);
     ctx.fillStyle = 'rgba(0,0,0,0.12)';
@@ -355,13 +355,13 @@ async function renderWarHelpCard(opts = {}) {
     const P = String(opts.prefix || '.');
     ctx.fillText(`open with  ${P} gw  ·  ${P} wr  ·  ${P} war`, W / 2, 168);
 
-    // command rows: command (Cinzel, ink) + description (IM Fell, soft)
-    // ⚔️ 2026-10-09 (code judge): rows must match the new command semantics —
-    // bare start IS the full-scale war; the organic 4-day alignment spawn is
-    // retired; rpg-marking is for full-scale calls.
+ // command rows: command (Cinzel, ink) + description (IM Fell, soft)
+ // (code judge): rows must match the new command semantics -
+ // bare start IS the full-scale war; the organic 4-day alignment spawn is
+ // retired; rpg-marking is for full-scale calls.
     const rows = [
         [`${P} war start`, 'Mods: FULL-SCALE war (~4x map), announced in every RPG-friendly GC.'],
-        [`${P} war start -test`, 'Mods: small test skirmish — this GC only.'],
+        [`${P} war start -test`, 'Mods: small test skirmish - this GC only.'],
         [`${P} war join`, 'Enter the registering war with your guild.'],
         [`${P} war forcestart`, 'Mods deploy the war now.'],
         [`${P} war status`, 'Live standings from the Ruins.'],
@@ -377,11 +377,11 @@ async function renderWarHelpCard(opts = {}) {
         ctx.fillText(cmd, 100, ry);
         ctx.fillStyle = PAL.inkSoft;
         ctx.font = '17px "IM Fell"';
-        // description column, wrapped to fit
+ // description column, wrapped to fit
         const dLines = _wrap(ctx, desc, W - 560);
         let dy = ry;
         for (const dl of dLines.slice(0, 2)) { ctx.fillText(dl, 400, dy); dy += 21; }
-        // faint row rule
+ // faint row rule
         ctx.strokeStyle = 'rgba(166,124,46,0.35)';
         ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(100, ry + 14); ctx.lineTo(W - 100, ry + 14); ctx.stroke();
@@ -389,7 +389,7 @@ async function renderWarHelpCard(opts = {}) {
         if (ry > H - 200) break;
     }
 
-    // DM verbs strip
+ // DM verbs strip
     ctx.fillStyle = 'rgba(58,42,30,0.08)';
     ctx.fillRect(90, H - 150, W - 180, 62);
     ctx.strokeStyle = PAL.frame;
@@ -413,7 +413,7 @@ async function renderWarHelpCard(opts = {}) {
 
 // ============================================
 // ============================================
-// STATUS / FINAL STANDINGS CARD — `.j gw status` live board and the final
+// STATUS / FINAL STANDINGS CARD - `.j gw status` live board and the final
 // standings board when a war ends. Night-ink band, ranked rows, right-aligned GP.
 // ============================================
 async function renderWarStatusCard(opts = {}) {
@@ -424,7 +424,7 @@ async function renderWarStatusCard(opts = {}) {
 
     ctx.fillStyle = PAL.parchment;
     ctx.fillRect(0, 0, W, H);
-    // night-ink band (war-desk look)
+ // night-ink band (war-desk look)
     ctx.fillStyle = '#241A2E';
     ctx.fillRect(0, 0, W, 200);
     ctx.fillStyle = '#2E2340';
@@ -458,7 +458,7 @@ async function renderWarStatusCard(opts = {}) {
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(W / 2 - 170, 134); ctx.lineTo(W / 2 + 170, 134); ctx.stroke();
 
-    // meta line: type · state · players · clock
+ // meta line: type · state · players · clock
     ctx.fillStyle = '#B9A44C';
     ctx.font = '17px "Cinzel"';
     const meta = [
@@ -469,7 +469,7 @@ async function renderWarStatusCard(opts = {}) {
     ].filter(Boolean).join('   ·   ');
     ctx.fillText(meta, W / 2, 168);
 
-    // standings rows
+ // standings rows
     const standings = Array.isArray(opts.standings) ? opts.standings.slice(0, 8) : [];
     ctx.textAlign = 'left';
     let sy = 250;
@@ -481,7 +481,7 @@ async function renderWarStatusCard(opts = {}) {
         for (let i = 0; i < standings.length; i++) {
             const g = standings[i];
             const rank = `${i + 1}.`;
-            // rank numeral in gold for top 3
+ // rank numeral in gold for top 3
             ctx.fillStyle = i < 3 ? '#8B1A2B' : PAL.inkSoft;
             ctx.font = '22px "Cinzel"';
             ctx.fillText(rank, 120, sy);
@@ -489,7 +489,7 @@ async function renderWarStatusCard(opts = {}) {
             ctx.font = '22px "Cinzel"';
             const name = String(g.name || '').slice(0, 24);
             ctx.fillText(name, 165, sy);
-            // dotted leader
+ // dotted leader
             const nameW = ctx.measureText(name).width;
             ctx.strokeStyle = 'rgba(58,42,30,0.4)';
             ctx.lineWidth = 1.5;
@@ -499,7 +499,7 @@ async function renderWarStatusCard(opts = {}) {
             ctx.lineTo(W - 220, sy - 6);
             ctx.stroke();
             ctx.setLineDash([]);
-            // GP right-aligned
+ // GP right-aligned
             ctx.fillStyle = i < 3 ? PAL.wax : PAL.ink;
             ctx.font = '22px "Cinzel"';
             const gp = `${g.points != null ? g.points : 0} GP`;
@@ -511,7 +511,7 @@ async function renderWarStatusCard(opts = {}) {
         }
     }
 
-    // footer strip
+ // footer strip
     ctx.fillStyle = 'rgba(58,42,30,0.08)';
     ctx.fillRect(90, H - 130, W - 180, 52);
     ctx.strokeStyle = PAL.frame;

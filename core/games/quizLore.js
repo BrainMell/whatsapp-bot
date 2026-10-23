@@ -1,19 +1,18 @@
 // ============================================
-// QUIZ LORE ENGINE (2026-09-25 overhaul)
+// QUIZ LORE ENGINE (overhaul)
 // Fandom/MediaWiki-powered lore retrieval for .j quiz.
-//
 // Design (per owner spec):
-//  - Questions test the SHOW/GAME/COMIC's story, characters, lore, events,
-//    abilities, cosmology and worldbuilding - NOT production trivia.
-//  - Primary source: the franchise's Fandom wiki via the MediaWiki API,
-//    targeted SECTION retrieval (never whole-page dumps).
-//  - Weighted domains: 45% plot, 35% characters, 15% cosmology/powerscaling,
-//    5% production. -s/--section forces 100% of one domain.
-//  - Images/audio are NOT separate categories: they spawn dynamically from
-//    whatever lore section was chosen, only when a REAL asset exists.
-//  - Character popularity bucketing (easy = famous, hard = obscure).
-//  - RAG: the model receives ONLY the retrieved section, hard-capped under
-//    800 input tokens. Answers must be supported by the source.
+// - Questions test the SHOW/GAME/COMIC's story, characters, lore, events,
+// abilities, cosmology and worldbuilding - NOT production trivia.
+// - Primary source: the franchise's Fandom wiki via the MediaWiki API,
+// targeted SECTION retrieval (never whole-page dumps).
+// - Weighted domains: 45% plot, 35% characters, 15% cosmology/powerscaling,
+// 5% production. -s/--section forces 100% of one domain.
+// - Images/audio are NOT separate categories: they spawn dynamically from
+// whatever lore section was chosen, only when a REAL asset exists.
+// - Character popularity bucketing (easy = famous, hard = obscure).
+// - RAG: the model receives ONLY the retrieved section, hard-capped under
+// 800 input tokens. Answers must be supported by the source.
 // ============================================
 
 const axios = require("axios");
@@ -26,12 +25,12 @@ const _http = axios.create({
   headers: { "User-Agent": UA, Accept: "application/json" },
 });
 
-// ── token budget (hard cap) ──
+// -- token budget (hard cap) --
 // ~4 chars per token for English wiki prose; context + instructions + system
 // must stay under 800. 2400 chars context ≈ 600 tok leaves ~200 for framing.
 const CTX_CHAR_LIMIT = 2400;
 
-// ── domain weights (spec: 45/35/15/5) ──
+// -- domain weights (spec: 45/35/15/5) --
 const DOMAIN_WEIGHTS = [
   { domain: "plot", weight: 45 },
   { domain: "characters", weight: 35 },
@@ -84,8 +83,8 @@ const KNOWN_WIKIS = {
   "neon genesis evangelion": "evangelion", "cowboy bebop": "cowboybebop", "cyberpunk": "cyberpunk",
   "the witcher": "witcher", witcher: "witcher", "cyberpunk 2077": "cyberpunk",
   "hajime no ippo": "hajimenoippo", "kaiju no 8": "kaiju-no-8", "dandadan": "dandadan",
-  // western cartoons / TV / movies (P22): multi-series continuities must
-  // resolve to ONE wiki so reboots don't blend (ben10 wiki covers all series)
+ // western cartoons / TV / movies (P22): multi-series continuities must
+ // resolve to ONE wiki so reboots don't blend (ben10 wiki covers all series)
   "ben 10": "ben10", ben10: "ben10", "ben ten": "ben10", "ben 10 alien force": "ben10", "ben 10 omniverse": "ben10",
   "spongebob": "spongebob", "spongebob squarepants": "spongebob",
   "avatar": "avatar", "avatar the last airbender": "avatar", "korra": "avatar",
@@ -103,16 +102,16 @@ const JUNK_SECTION_RE = /^(gallery|references?|notes?|external links?|navigation
 // lore-friendly section names, preferred for plot/characters
 const LORE_SECTION_HINTS = /^(history|plot|story|synopsis|biography|background|past|personality|abilities?|powers? and abilities|skills?|relationships?|backstory|character|overview|role|summary|profile|equipment|authorities?|magic|techniques?| feats?|conflicts?|battles?|wars?|events?|arc[sd]?|description|nature|characteristics?|physiology|anatomy|society|culture|government|military|economy|geography|religion|species|races?|factions?|organizations?|terminology|concept)$/i;
 
-// ════════════════════════════════════════════
+// ============================================
 // LOW-LEVEL MEDIAWIKI CLIENT (with per-wiki TTL cache)
-// ════════════════════════════════════════════
+// ============================================
 
 const _wikiCache = new Map(); // url -> { ts, data }
 let _wikiApiOverride = null; // test/QA hook
 const WIKI_CACHE_TTL = 10 * 60 * 1000;
 
 async function wikiApi(slug, params) {
-  // test hook: QA harnesses stub the network layer here (null = real path)
+ // test hook: QA harnesses stub the network layer here (null = real path)
   if (_wikiApiOverride) return _wikiApiOverride(slug, params);
   const qs = new URLSearchParams({ format: "json", ...params }).toString();
   const url = `https://${slug}.fandom.com/api.php?${qs}`;
@@ -129,7 +128,7 @@ async function wikiApi(slug, params) {
   return data;
 }
 
-// ── wiki resolution ──
+// -- wiki resolution --
 function slugify(t) {
   return String(t || "").toLowerCase().trim()
     .replace(/[’'`]/g, "")
@@ -149,12 +148,12 @@ async function wikiExists(slug) {
 async function resolveWiki(title) {
   const norm = slugify(title);
   if (!norm) return null;
-  // 1. curated map (exact + prefix)
+ // 1. curated map (exact + prefix)
   if (KNOWN_WIKIS[norm]) return KNOWN_WIKIS[norm];
   for (const [k, v] of Object.entries(KNOWN_WIKIS)) {
     if (norm.length >= 4 && (norm.startsWith(k) || k.startsWith(norm))) return v;
   }
-  // 2. slug guesses, longest first
+ // 2. slug guesses, longest first
   const guesses = [...new Set([
     norm.replace(/\s+/g, ""),
     norm.replace(/\s+/g, "-"),
@@ -168,23 +167,23 @@ async function resolveWiki(title) {
   return null;
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // WIKITEXT CLEANING (nested-template safe)
-// ════════════════════════════════════════════
+// ============================================
 
 function cleanWikitext(wt) {
   let s = String(wt || "");
   s = s.replace(/<!--[\s\S]*?-->/g, " ");
   s = s.replace(/<ref[^>]*\/>/gi, " ");
   s = s.replace(/<ref[^>]*>[\s\S]*?<\/ref>/gi, " ");
-  // tables (nested-safe: innermost first)
+ // tables (nested-safe: innermost first)
   let prev;
   do { prev = s; s = s.replace(/\{\{[^{}]*\}\}/g, " "); } while (s !== prev);
   do { prev = s; s = s.replace(/\{\|[^{}]*?\|\}/g, " "); } while (s !== prev);
   s = s.replace(/<[^>]+>/g, " ");
-  // wiki links [[a|b]] -> b, [[a]] -> a
+ // wiki links [[a|b]] -> b, [[a]] -> a
   s = s.replace(/\[\[(?:[^\]|]*\|)?([^\]]+)\]\]/g, "$1");
-  // external links [url text] -> text
+ // external links [url text] -> text
   s = s.replace(/\[https?:\/\/\S+\s+([^\]]+)\]/g, "$1").replace(/\[https?:\/\/\S+\]/g, " ");
   s = s.replace(/'''?/g, "");
   s = s.replace(/^=+\s*/gm, "").replace(/\s*=+$/gm, "");
@@ -207,12 +206,12 @@ function estTokens(s) {
   return Math.ceil(String(s || "").length / 4);
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // SECTION RETRIEVAL
-// ════════════════════════════════════════════
+// ============================================
 
 function filterSections(sections, domain) {
-  // production questions WANT development/production/release sections
+ // production questions WANT development/production/release sections
   const junkRe = domain === "production" ? JUNK_SECTION_RE : JUNK_SECTION_RE;
   void junkRe;
   return (sections || [])
@@ -221,7 +220,7 @@ function filterSections(sections, domain) {
     .filter((s) => {
       const t = s.title.toLowerCase();
       if (domain === "production") {
-        // keep production-ish, drop pure lore noise like huge subsections of plot
+ // keep production-ish, drop pure lore noise like huge subsections of plot
         return /^(development|production|creation|conception|release|reception|background|writing|design|production process|inspiration|publication|broadcast|distribution|voice cast|cast|music|development and production)/i.test(t);
       }
       if (domain === "characters") {
@@ -232,7 +231,7 @@ function filterSections(sections, domain) {
         if (JUNK_SECTION_RE.test(t)) return false;
         return true; // cosmology pages are nearly all lore - keep everything
       }
-      // plot: keep broad lore sections
+ // plot: keep broad lore sections
       if (JUNK_SECTION_RE.test(t)) return false;
       return true;
     });
@@ -240,8 +239,8 @@ function filterSections(sections, domain) {
 
 // pick a lore-rich page for a domain via wiki search
 async function findPageForDomain(slug, franchiseTitle, domain, difficulty) {
-  // plot easy/medium: the franchise's MAIN page synopsis/history is the right
-  // pool (search alone surfaces spin-offs like "Re:IF" - a hard-only deep cut)
+ // plot easy/medium: the franchise's MAIN page synopsis/history is the right
+ // pool (search alone surfaces spin-offs like "Re:IF" - a hard-only deep cut)
   if (domain === "plot" && difficulty !== "hard") {
     for (const main of [franchiseTitle]) {
       try {
@@ -267,11 +266,11 @@ async function findPageForDomain(slug, franchiseTitle, domain, difficulty) {
     }
     const hits = (res?.query?.search || []).map((h) => h.title);
     if (!hits.length) continue;
-    // drop obvious junk pages
+ // drop obvious junk pages
     const pageHits = hits.filter((t) => !/^(list of|category:|template:|forum:|user:|blog:|gallery of)/i.test(t) && !/(disambiguation|episode list|chapter list|image gallery)$/i.test(t));
     const pool = pageHits.length ? pageHits : hits;
-    // search order is relevance - bias toward the top, randomize a little.
-    // hard difficulty digs deeper into the result list (obscure pages).
+ // search order is relevance - bias toward the top, randomize a little.
+ // hard difficulty digs deeper into the result list (obscure pages).
     const depth = difficulty === "hard" ? Math.min(pool.length, 8) : difficulty === "medium" ? Math.min(pool.length, 5) : Math.min(pool.length, 3);
     const idx = Math.floor(Math.random() * depth);
     return pool[idx];
@@ -280,7 +279,6 @@ async function findPageForDomain(slug, franchiseTitle, domain, difficulty) {
 }
 
 // retrieve ONE cleaned lore chunk for a domain
-// returns { text, page, section, tok } or null
 async function retrieveLore(slug, franchiseTitle, domain, difficulty, usedKeys = new Set()) {
   const page = await findPageForDomain(slug, franchiseTitle, domain, difficulty);
   if (!page) return null;
@@ -292,7 +290,7 @@ async function retrieveLore(slug, franchiseTitle, domain, difficulty, usedKeys =
   }
   const secs = filterSections(sectionsData?.parse?.sections || [], domain);
   if (!secs.length && domain !== "production") {
-    // page has no usable sections - fall back to the intro (section 0)
+ // page has no usable sections - fall back to the intro (section 0)
     try {
       const intro = await wikiApi(slug, { action: "parse", prop: "wikitext", page, section: 0, format: "json" });
       const text = cleanWikitext(intro?.parse?.wikitext?.["*"] || "");
@@ -307,7 +305,7 @@ async function retrieveLore(slug, franchiseTitle, domain, difficulty, usedKeys =
     } catch { /* fallthrough */ }
     return null;
   }
-  // shuffle candidate sections, try up to 4 until we get a usable chunk
+ // shuffle candidate sections, try up to 4 until we get a usable chunk
   const shuffled = secs.sort(() => Math.random() - 0.5).slice(0, 4);
   for (const s of shuffled) {
     const key = `${slug}:${page}:${s.index}`;
@@ -324,13 +322,13 @@ async function retrieveLore(slug, franchiseTitle, domain, difficulty, usedKeys =
   return null;
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // CHARACTER POPULARITY INDEX (spec section 8)
 // easy = top 10% most popular, medium = 10-40%, hard = 40%+ / obscure.
 // Popularity sources, best first: AniList favourites (anime), then the wiki's
 // own page length as a proxy (major characters have long pages), then role
 // categories. The index is cached per wiki for the process lifetime.
-// ════════════════════════════════════════════
+// ============================================
 
 const _charIndexCache = new Map(); // slug -> { ts, buckets }
 const CHAR_INDEX_TTL = 60 * 60 * 1000;
@@ -352,20 +350,20 @@ async function buildCharacterIndex(slug, franchiseTitle, animeCharacters = []) {
   const cached = _charIndexCache.get(slug);
   if (cached && Date.now() - cached.ts < CHAR_INDEX_TTL) return cached.buckets;
 
-  // 1. AniList-ranked characters (anime only) - favourites are the strongest signal
+ // 1. AniList-ranked characters (anime only) - favourites are the strongest signal
   const anilist = animeCharacters
     .filter((c) => c && c.name)
     .map((c) => ({ page: c.name, fav: c.favourites || 0, role: c.role }));
 
-  // 2. wiki character pages (games/comics and everything else)
+ // 2. wiki character pages (games/comics and everything else)
   const wikiNames = new Set();
   for (const cat of ["Characters", "Protagonists", "Antagonists", "Supporting Characters"]) {
     for (const t of await listCategoryMembers(slug, cat, 100)) wikiNames.add(t);
   }
-  // also search results for "<franchise> characters" pages provide names
+ // also search results for "<franchise> characters" pages provide names
   let wikiList = [...wikiNames];
 
-  // fetch page length for the wiki names in batches (major = long pages)
+ // fetch page length for the wiki names in batches (major = long pages)
   const lengths = new Map();
   const batch = wikiList.slice(0, 60);
   for (let i = 0; i < batch.length; i += 20) {
@@ -381,7 +379,7 @@ async function buildCharacterIndex(slug, franchiseTitle, animeCharacters = []) {
     } catch { /* lengths optional */ }
   }
 
-  // rank: AniList entries by favourites desc first, then wiki entries by length desc
+ // rank: AniList entries by favourites desc first, then wiki entries by length desc
   const ranked = [];
   const alNames = new Set(anilist.map((c) => c.page.toLowerCase()));
   for (const c of anilist) ranked.push({ page: c.page, score: Math.log10(c.fav + 1) * 100 + (c.role === "main" ? 40 : 0), src: "anilist" });
@@ -392,7 +390,7 @@ async function buildCharacterIndex(slug, franchiseTitle, animeCharacters = []) {
   }
   ranked.sort((a, b) => b.score - a.score);
 
-  // buckets per spec: easy top 10%, medium 10-40%, hard 40%+ (min 1 per bucket)
+ // buckets per spec: easy top 10%, medium 10-40%, hard 40%+ (min 1 per bucket)
   const n = ranked.length;
   const eCut = Math.max(1, Math.floor(n * 0.10));
   const mCut = Math.max(eCut + 1, Math.floor(n * 0.40));
@@ -426,7 +424,7 @@ async function retrieveCharacterLore(slug, charPage, difficulty, usedKeys = new 
   }
   const secs = filterSections(sectionsData?.parse?.sections || [], "characters");
   if (!secs.length) return null;
-  // easy: bias to History/Personality (well-known); hard: Abilities/Equipment/specific subsections
+ // easy: bias to History/Personality (well-known); hard: Abilities/Equipment/specific subsections
   let pool = secs;
   if (difficulty === "easy") {
     const pref = secs.filter((s) => /^(history|plot|story|biography|personality|background|summary)/i.test(s.title));
@@ -455,7 +453,7 @@ async function retrieveCharacterLore(slug, charPage, difficulty, usedKeys = new 
 const COSMOLOGY_PAGE_RE = /(cosmology|world ?building|world building|terminology|dimensional tiering|tiering system|universe|multiverse|realms?|afterlife|power system|magic system|cosmic hierarchy|macrocosm|dimensions?)/i;
 
 async function retrieveCosmologyLore(slug, franchiseTitle, difficulty, usedKeys = new Set(), domain = "cosmology") {
-  // find cosmology pages by title search
+ // find cosmology pages by title search
   let candidates = [];
   try {
     const d = await wikiApi(slug, {
@@ -474,10 +472,10 @@ async function retrieveCosmologyLore(slug, franchiseTitle, difficulty, usedKeys 
       } catch { continue; }
     }
   }
-  // keep pages that look cosmology-ish (or any lore page when nothing matches)
+ // keep pages that look cosmology-ish (or any lore page when nothing matches)
   const good = candidates.filter((t) => COSMOLOGY_PAGE_RE.test(t) || !domain);
   const pool = (good.length ? good : candidates).filter((t) => !/disambiguation/i.test(t));
-  // for powerscaling on a home wiki with nothing, fall back to the generic lore search
+ // for powerscaling on a home wiki with nothing, fall back to the generic lore search
   if (!pool.length) return retrieveLore(slug, franchiseTitle, domain, difficulty, usedKeys);
   const shuffled = pool.sort(() => Math.random() - 0.5);
   for (const page of shuffled.slice(0, 3)) {
@@ -487,11 +485,11 @@ async function retrieveCosmologyLore(slug, franchiseTitle, difficulty, usedKeys 
   return null;
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // MEDIA EXTRACTION (spec sections 6 & 7)
 // Images and audio are NOT question categories: they attach to whatever lore
 // was chosen, ONLY when a real, verified asset exists. Otherwise text.
-// ════════════════════════════════════════════
+// ============================================
 
 async function resolveFileUrl(slug, fileTitle, thumbwidth = 800) {
   try {
@@ -514,21 +512,20 @@ async function resolveFileUrl(slug, fileTitle, thumbwidth = 800) {
   }
 }
 
-// ════════════════════════════════════════════
-// MEDIA TYPE DETECTION + MULTI-SOURCE POOL (2026-09-26 audit - P22)
+// ============================================
+// MEDIA TYPE DETECTION + MULTI-SOURCE POOL (audit - P22)
 // The anime pipeline used to assume anime-shaped sources for everything.
 // Movies, TV shows (incl. western cartoons like Ben 10) and games must go
 // through the SAME validation pipeline with sources appropriate to the
 // media type. Wikipedia is added to the source pool as a CROSS-CHECK
 // source (never blindly trusted - its facts pass the same fact checks).
-// ════════════════════════════════════════════
+// ============================================
 
 const _mediaTypeCache = new Map(); // query -> { ts, mediaType, meta }
 
 // Best-effort media classification for a user query.
 // Order of evidence: TMDb-free path -> TVMaze (TV, free) -> Wikipedia
 // (film/TV/comics disambiguation) -> wiki existence + AniList format.
-// Returns { mediaType, meta? } - mediaType in
 // anime | manga | movie | tv | game | comic | franchise.
 async function detectMediaType(query) {
   const q = String(query || "").trim();
@@ -537,7 +534,7 @@ async function detectMediaType(query) {
   if (hit && Date.now() - hit.ts < 60 * 60 * 1000) return { mediaType: hit.mediaType, meta: hit.meta };
 
   const result = { mediaType: "franchise", meta: null };
-  // 1) TVMaze singlesearch - strong signal for live-action/animated TV
+ // 1) TVMaze singlesearch - strong signal for live-action/animated TV
   try {
     const r = await _http.get("https://api.tvmaze.com/singlesearch/shows", { params: { q }, timeout: 8000 });
     if (r.data && r.data.name && String(r.data.name).toLowerCase().replace(/[^a-z0-9]/g, "").includes(q.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 6))) {
@@ -545,7 +542,7 @@ async function detectMediaType(query) {
       result.meta = { source: "tvmaze", id: r.data.id, title: r.data.name, premiered: r.data.premiered, genres: r.data.genres || [], summary: String(r.data.summary || "").replace(/<[^>]+>/g, "").slice(0, 500) };
     }
   } catch { /* not a TV show (or unreachable) */ }
-  // 2) Wikipedia REST summary - film / comic / game signal from the lead sentence
+ // 2) Wikipedia REST summary - film / comic / game signal from the lead sentence
   if (result.mediaType === "franchise") {
     const wiki = await wikipediaSummary(q).catch(() => null);
     if (wiki && wiki.extract) {
@@ -570,8 +567,8 @@ async function detectMediaType(query) {
 }
 
 // Wikipedia REST API (action=query JSON, browserless). Used for:
-//  - movie/TV lead facts when no Fandom wiki exists
-//  - cross-referencing a generated answer during fact validation (P12/P22)
+// - movie/TV lead facts when no Fandom wiki exists
+// - cross-referencing a generated answer during fact validation (P12/P22)
 const _wpCache = new Map();
 async function wikipediaSummary(title, lang = "en") {
   const key = `${lang}:${String(title || "").toLowerCase()}`;
@@ -615,7 +612,6 @@ async function tvmazeLookup(title) {
 
 // Theme/OP/ED song names for a media (P11). Anime: Jikan /anime/{id}/full
 // exposes theme.openings / theme.endings straight from MAL. Non-anime media
-// returns [] (theme-song questions then skip gracefully).
 // P27: song lists are STATIC per anime - cached 24h per id (Jikan allows
 // ~3 req/min per IP and the whole box shares it; uncached calls 429-storm and
 // silently yield no theme songs). One gentle retry covers transient 429s.
@@ -638,9 +634,9 @@ async function getThemeSongs(mediaType, animeId, opts = {}) {
         const hit = _themeCache.get(idMal);
         if (hit && Date.now() - hit.ts < THEME_CACHE_TTL) return hit.songs;
         let songs = { openings: [], endings: [] };
-        // P28: prefer the Go service (Node->Jikan is CDN-blocked on some
-        // networks: measured 504 x5 while curl/Go pass); direct axios is the
-        // fallback so the quiz still works without the Go service.
+ // P28: prefer the Go service (Node->Jikan is CDN-blocked on some
+ // networks: measured 504 x5 while curl/Go pass); direct axios is the
+ // fallback so the quiz still works without the Go service.
         if (opts.goService && typeof opts.goService.getThemeSongs === "function") {
           songs = await opts.goService.getThemeSongs(idMal).catch(() => null) || { openings: [], endings: [] };
         }
@@ -682,27 +678,25 @@ async function getPageImage(slug, page) {
   }
 }
 
-// ════════════════════════════════════════════
-// WIKIPEDIA IMAGE SOURCE (2026-09-27 image reliability pass)
+// ============================================
+// WIKIPEDIA IMAGE SOURCE (image reliability pass)
 // Fandom pageimages 403s/misses were leaving image questions without an
-// asset (owner: "images don't even spawn half the time"). Wikipedia is a
+// asset ("images don't even spawn half the time"). Wikipedia is a
 // second, independent, hotlink-friendly source for the SAME subject.
-//
 // TWO lookup modes:
-//   "article" - generator=search + prop=pageimages: best-matching article
-//               thumbnail. Clean and article-anchored (works for brands,
-//               franchises, games, movies; often absent for fictional
-//               characters because their key art is non-free).
-//   "files"   - File-namespace search + imageinfo: surfaces fair-use
-//               character art. Filtered hard: bitmaps only, junk filenames
-//               (cosplay/stat/chart/map/diagram/svg...) rejected.
-//
-// UA POLICY (measured 2026-09-27): Wikimedia 403s generic browser UAs and
+// "article" - generator=search + prop=pageimages: best-matching article
+// thumbnail. Clean and article-anchored (works for brands,
+// franchises, games, movies; often absent for fictional
+// characters because their key art is non-free).
+// "files" - File-namespace search + imageinfo: surfaces fair-use
+// character art. Filtered hard: bitmaps only, junk filenames
+// (cosplay/stat/chart/map/diagram/svg...) rejected.
+// UA POLICY (measured ): Wikimedia 403s generic browser UAs and
 // the bare "WhatsAppQuizBot" UA; it accepts the documented bot-UA format
 // "<Tool>/<version> (<what> ; contact)" - so these calls carry their own
 // header and the shared Fandom client stays untouched.
 // Every caller still verifies real bytes (magic numbers) before use (P13).
-// ════════════════════════════════════════════
+// ============================================
 const _WP_UA = { "User-Agent": "ZenithQuizBot/1.0 (WhatsApp trivia bot; contact: ops@zenithbot.dev) axios" };
 const _wpImgCache = new Map(); // key -> { ts, img }
 const WP_IMG_TTL = 30 * 60 * 1000;
@@ -716,7 +710,7 @@ async function _wpApi(params) {
   return r.data;
 }
 
-// 💡 RELEVANCE ANCHOR (2026-09-28): a Wikipedia file/article result must
+// RELEVANCE ANCHOR: a Wikipedia file/article result must
 // actually mention the subject in its TITLE - search matches descriptions
 // and associated article text ("Dogman" hits the KXM band collage via the
 // album name; "Aldo (The Crystal Trap)" hit a greyhound dog-show photo).
@@ -734,9 +728,9 @@ function _titleMentionsSubject(title, q, mode = "files") {
   const t = String(title || "").toLowerCase();
   const hits = toks.filter((tok) => t.includes(tok)).length;
   if (mode === "article") {
-    // article TITLES are the subject alone ("Goku" for "Goku Dragon Ball"),
-    // so anchor on the subject token, not 60% of the whole query. Still kills
-    // greyhound/band collisions (no token overlap at all).
+ // article TITLES are the subject alone ("Goku" for "Goku Dragon Ball"),
+ // so anchor on the subject token, not 60% of the whole query. Still kills
+ // greyhound/band collisions (no token overlap at all).
     return t.includes(toks[0]);
   }
   return hits >= Math.max(1, Math.ceil(toks.length * 0.6));
@@ -760,7 +754,7 @@ async function wikipediaImage(query, thumbwidth = 700, mode = "article") {
       const ok = pages
         .filter((p) => p.imageinfo && p.imageinfo[0])
         .map((p) => ({ p, ii: p.imageinfo[0] }))
-        // 2026-09-28: title must mention the subject (see _titleMentionsSubject)
+ // title must mention the subject (see _titleMentionsSubject)
         .filter(({ p }) => !_WP_FILE_JUNK.test(p.title || "")
           && !_WP_TITLE_JUNK.test(p.title || "")
           && _titleMentionsSubject(p.title, q))
@@ -775,19 +769,19 @@ async function wikipediaImage(query, thumbwidth = 700, mode = "article") {
       const d = await _wpApi({
         generator: "search", gsrsearch: q, gsrlimit: 3, gsrnamespace: 0,
         prop: "pageimages", piprop: "thumbnail", pithumbsize: thumbwidth,
-        // 💡 2026-09-28: default pilicense=free EXCLUDES fair-use character
-        // art - nearly every anime/game character page returned NO thumbnail
-        // at all, silently pushing every image question to the junky file
-        // search. "any" restores character art (same fair-use class Fandom
-        // already serves in production).
+ // default pilicense=free EXCLUDES fair-use character
+ // art - nearly every anime/game character page returned NO thumbnail
+ // at all, silently pushing every image question to the junky file
+ // search. "any" restores character art (same fair-use class Fandom
+ // already serves in production).
         pilicense: "any",
       });
       const pages = d?.query?.pages || [];
       const withThumb = pages
         .filter((p) => p.thumbnail && p.thumbnail.source)
-        // 2026-09-28: the ARTICLE ITSELF must be about the subject - a search
-        // hit for "<char> <franchise>" returning an unrelated article (dog
-        // breeding, a band) gets filtered here before its pageimage is used.
+ // the ARTICLE ITSELF must be about the subject - a search
+ // hit for "<char> <franchise>" returning an unrelated article (dog
+ // breeding, a band) gets filtered here before its pageimage is used.
         .filter((p) => _titleMentionsSubject(p.title, q, "article"))
         .sort((a, b) => (a.index || 99) - (b.index || 99));
       if (withThumb.length) {
@@ -801,25 +795,25 @@ async function wikipediaImage(query, thumbwidth = 700, mode = "article") {
   return img;
 }
 
-// LOGO lookup for the Logos quiz mode (2026-09-27). File-namespace search
+// LOGO lookup for the Logos quiz mode. File-namespace search
 // "<brand> logo" with strict anchoring:
-//   - file title must START with the brand name (kills "Ligue 1 McDonald's
-//     logo" style sponsored-entity collisions)
-//   - logo-ish word required in the title
-//   - vector/flat formats preferred (svg thumbs render as bitmaps via
-//     iiurlwidth; jpeg = usually a photo OF a logo, last resort only)
-//   - canonical-logo heuristic: fewest extra words in the title wins
-//     ("Nike logo" beats "Nike logo at Stamford Bridge 2026")
+// - file title must START with the brand name (kills "Ligue 1 McDonald's
+// logo" style sponsored-entity collisions)
+// - logo-ish word required in the title
+// - vector/flat formats preferred (svg thumbs render as bitmaps via
+// iiurlwidth; jpeg = usually a photo OF a logo, last resort only)
+// - canonical-logo heuristic: fewest extra words in the title wins
+// ("Nike logo" beats "Nike logo at Stamford Bridge 2026")
 // Bytes still verified by the caller (magic numbers, P13).
 async function wikipediaLogoImage(brand, thumbwidth = 480, altName = null) {
   const b = String(brand || "").trim();
   if (!b) return null;
   const norm0 = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
-  // 💡 2026-09-27: anchor on EITHER the wiki title ("Apple Inc.") OR the
-  // display name ("Apple") - logo files are named after the common brand
-  // wordmark far more often than the legal entity. Raises the hit rate for
-  // the 500-logo pool (~27% of brands' files don't start with the entity
-  // form).
+ // anchor on EITHER the wiki title ("Apple Inc.") OR the
+ // display name ("Apple") - logo files are named after the common brand
+ // wordmark far more often than the legal entity. Raises the hit rate for
+ // the 500-logo pool (~27% of brands' files don't start with the entity
+ // form).
   const anchors = [b];
   const alt = String(altName || "").trim();
   if (alt && norm0(alt) !== norm0(b)) anchors.push(alt);
@@ -830,17 +824,17 @@ async function wikipediaLogoImage(brand, thumbwidth = 480, altName = null) {
   try {
     const norm = (s) => String(s).toLowerCase().replace(/\s+/g, " ").trim();
     const bNs = anchors.map((a) => norm(a));
-    // 💡 2026-09-27: search BOTH the entity form and the display name -
-    // Wikimedia's file search chokes on corporate suffixes ("Nike, Inc.
-    // logo" returns unrelated files while "Nike logo" finds the wordmark).
-    // 💡 v3 (2026-09-27): WORDMARK FIX - the pool surfaced far too many
-    // spelled-out text logos. Candidates from the entity + display-name
-    // "logo" searches are MERGED, then ranked by:
-    //   - wordmark-ish title words  -> heavy penalty (the file IS spelled text)
-    //   - aspect ratio (imageinfo w/h): squarish = icon-like, very wide = text-like
-    //   - product/sub-brand demotion: extra non-generic words ("classroom",
-    //     "maps", "life", "academy"...) hurt; years/colors/generic words don't
-    //   - exact "<brand> logo" title gets a bonus; mime + length tiebreak
+ // search BOTH the entity form and the display name -
+ // Wikimedia's file search chokes on corporate suffixes ("Nike, Inc.
+ // logo" returns unrelated files while "Nike logo" finds the wordmark).
+ // v3: WORDMARK FIX - the pool surfaced far too many
+ // spelled-out text logos. Candidates from the entity + display-name
+ // "logo" searches are MERGED, then ranked by:
+ // - wordmark-ish title words -> heavy penalty (the file IS spelled text)
+ // - aspect ratio (imageinfo w/h): squarish = icon-like, very wide = text-like
+ // - product/sub-brand demotion: extra non-generic words ("classroom",
+ // "maps", "life", "academy"...) hurt; years/colors/generic words don't
+ // - exact "<brand> logo" title gets a bonus; mime + length tiebreak
     const queries = [`${b} logo`];
     if (alt && norm0(alt) !== norm0(b)) queries.push(`${alt} logo`);
     const seen = new Set();
@@ -873,8 +867,8 @@ async function wikipediaLogoImage(brand, thumbwidth = 480, altName = null) {
           else if (ratio > 2.8) aspectScore = -15;                  // wide -> wordmark-like
           else aspectScore = -10;                                   // very tall -> suspicious
           const mimeScore = /^image\/(svg\+xml|png|webp)$/.test(ii.mime || "") ? 2 : (/^image\/jpeg$/.test(ii.mime || "") ? 0 : 1);
-          // product/sub-brand demotion: words left over after the brand that are
-          // not years/colors/generic-file words are probably a product name
+ // product/sub-brand demotion: words left over after the brand that are
+ // not years/colors/generic-file words are probably a product name
           const genericWords = /^(logo|icon|symbol|emblem|mark|wordmark|text|without|old|new|alt|app|vertical|horizontal|stacked|print|svg|gray|grey|black|white|blue|red|green|gold|silver|orange|pink|purple|yellow|20\d\d|19\d\d)$/;
           const nonGeneric = Math.min(...bNs.map((bN) =>
             norm(title).replace(bN, "").trim().split(/\s+/).filter(Boolean).filter((wd) => !genericWords.test(wd.replace(/[^a-z0-9]/g, ""))).length
@@ -905,12 +899,12 @@ async function wikipediaLogoImage(brand, thumbwidth = 480, altName = null) {
 }
 
 // download + verify a media asset (magic-byte check, size cap)
-// 2026-09-27: Wikimedia hosts (wikipedia.org / wikimedia.org) enforce the
+// Wikimedia hosts (wikipedia.org / wikimedia.org) enforce the
 // bot-UA policy on FILE downloads too - the shared Fandom client's UA gets
 // 403'd there. Wikimedia URLs carry the compliant UA; every other host is
 // untouched.
 async function downloadMedia(url, kind = "image") {
-  // https required; plain http only for loopback (local dev/QA media server)
+ // https required; plain http only for loopback (local dev/QA media server)
   if (!url || (!/^https:\/\//.test(url) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(url))) return null;
   const _magicOk = (b) => {
     if (kind === "image") {
@@ -929,10 +923,10 @@ async function downloadMedia(url, kind = "image") {
     ? (b[0] === 0x89 ? "image/png" : (b.slice(8, 12).toString() === "WEBP" ? "image/webp" : "image/jpeg"))
     : (b.slice(0, 4).toString() === "OggS" ? "audio/ogg" : "audio/mpeg");
   let buf = null;
-  // 💡 2026-10-01: distinguish TRANSIENT failures (429/5xx/timeouts - network
-  // bursts, provider throttling) from DETERMINISTIC ones (404/403/bad magic).
-  // Callers use this to avoid poisoning the 24h disk negative-cache when a
-  // rate-limit burst made EVERY download fail for a few minutes.
+ // distinguish TRANSIENT failures (429/5xx/timeouts - network
+ // bursts, provider throttling) from DETERMINISTIC ones (404/403/bad magic).
+ // Callers use this to avoid poisoning the 24h disk negative-cache when a
+ // rate-limit burst made EVERY download fail for a few minutes.
   let transient = false;
   const _transientCode = (e) => ["ECONNABORTED", "ETIMEDOUT", "ECONNRESET", "ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED"].includes(String(e?.code || ""));
   const _transientStatus = (st) => st === 429 || (st >= 500 && st <= 599);
@@ -947,11 +941,11 @@ async function downloadMedia(url, kind = "image") {
     if (_transientCode(e)) transient = true;
     /* fall through to got-scraping */
   }
-  // 💡 2026-09-28: Fandom's CDN (static.wikia.nocookie.net) Cloudflare-challenges
-  // plain axios - EVERY Fandom pageimage download silently failed and every
-  // image question fell through to the junky Wikipedia file search. Retry with
-  // got-scraping (browser TLS fingerprint + header generator) and keep the
-  // magic-byte gate as the last line of defense.
+ // Fandom's CDN (static.wikia.nocookie.net) Cloudflare-challenges
+ // plain axios - EVERY Fandom pageimage download silently failed and every
+ // image question fell through to the junky Wikipedia file search. Retry with
+ // got-scraping (browser TLS fingerprint + header generator) and keep the
+ // magic-byte gate as the last line of defense.
   if (!buf) {
     try {
       const { gotScraping } = await import("got-scraping");
@@ -969,8 +963,8 @@ async function downloadMedia(url, kind = "image") {
       /* both failed - caller skips gracefully */
     }
   }
-  // failure return is an OBJECT (buf:null) on purpose - every caller tests
-  // `dl && dl.buf` / `dl?.buf`, so the extra `transient` field is safe to read
+ // failure return is an OBJECT (buf:null) on purpose - every caller tests
+ // `dl && dl.buf` / `dl?.buf`, so the extra `transient` field is safe to read
   if (!buf) return { buf: null, transient };
   return { buf, mime: _mimeOf(buf) };
 }
@@ -995,10 +989,10 @@ async function findAudioForPage(slug, page) {
   return null;
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // RAG QUESTION GENERATION (spec section 12)
 // Model receives ONLY the retrieved lore. Input hard-capped < 800 tokens.
-// ════════════════════════════════════════════
+// ============================================
 
 const DOMAIN_LABELS = {
   plot: "Plot Events / Story Lore",
@@ -1015,8 +1009,8 @@ const DIFF_INSTRUCTIONS = {
 };
 
 function normalizeLLMReply(reply) {
-  // engine's smartGroqCall returns the raw Groq response object; other clients
-  // may return text. Accept: string | {choices:[{message:{content}}]} | {content}
+ // engine's smartGroqCall returns the raw Groq response object; other clients
+ // may return text. Accept: string | {choices:[{message:{content}}]} | {content}
   if (reply == null) return null;
   if (typeof reply === "string") return reply;
   if (typeof reply === "object") {
@@ -1071,9 +1065,9 @@ async function generateLoreQuestion(callLLM, franchiseTitle, lore, domain, diffi
   if (typeof callLLM !== "function" || !lore || !lore.text) return null;
   const sourceLabel = `${franchiseTitle}${lore.page ? ` - wiki: ${lore.page}` : ""}${lore.section && lore.section !== "intro" ? ` / section: ${lore.section}` : ""}`;
   const system = "You write multiple-choice quiz questions from a SUPPLIED source. You output ONLY valid JSON. Never invent facts.";
-  // varied framing per retry: identical retries reproduce identical priors;
-  // rotating the angle (event -> place/object -> number/name) keeps retries
-  // diverse and steers the model back into the supplied source
+ // varied framing per retry: identical retries reproduce identical priors;
+ // rotating the angle (event -> place/object -> number/name) keeps retries
+ // diverse and steers the model back into the supplied source
   const ANGLES = [
     "Ask about an EVENT, action or outcome that is explicitly described in the SOURCE.",
     "Ask about a PLACE, object or concept that is named in the SOURCE.",
@@ -1110,22 +1104,22 @@ async function generateLoreQuestion(callLLM, franchiseTitle, lore, domain, diffi
           { role: "user", content: user },
         ],
         temperature: attempt === 0 ? 0.55 : 0.3,
-        // 2026-09-27 reliability: 420 tokens truncated valid JSON docs before
-        // the closing brace ("max completion tokens reached" 400s -> the whole
-        // slot failed deterministically). A single MC question never exceeds
-        // ~300 tokens; 700 covers the longest lore terms with margin while
-        // staying far below the model ceiling.
+ // reliability: 420 tokens truncated valid JSON docs before
+ // the closing brace ("max completion tokens reached" 400s -> the whole
+ // slot failed deterministically). A single MC question never exceeds
+ // ~300 tokens; 700 covers the longest lore terms with margin while
+ // staying far below the model ceiling.
         max_tokens: 700,
-        // 💡 2026-09-27: gpt-oss reasoning tokens count against max_tokens -
-        // medium effort burns 300+ tokens thinking about a multiple-choice
-        // question and triggers "max completion tokens reached" 400s. Low
-        // effort verified on the box: 21 completion tokens total, 7 reasoning.
+ // gpt-oss reasoning tokens count against max_tokens -
+ // medium effort burns 300+ tokens thinking about a multiple-choice
+ // question and triggers "max completion tokens reached" 400s. Low
+ // effort verified on the box: 21 completion tokens total, 7 reasoning.
         reasoning_effort: "low",
         response_format: { type: "json_object" },
       });
       const text = normalizeLLMReply(raw);
       const parsed = extractJson(text);
-      // model may honour the source-only instruction by skipping
+ // model may honour the source-only instruction by skipping
       if (parsed && parsed.skip) {
         console.log("[QuizLore] model skipped (source lacked a questionable fact)");
         return null;
@@ -1140,9 +1134,9 @@ async function generateLoreQuestion(callLLM, franchiseTitle, lore, domain, diffi
   return null;
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // QUESTION PLAN (spec section 4 weights)
-// ════════════════════════════════════════════
+// ============================================
 
 function buildQuestionPlan(count, difficulty, sectionOverride = null) {
   if (sectionOverride) return Array(count).fill(sectionOverride);
@@ -1155,11 +1149,11 @@ function buildQuestionPlan(count, difficulty, sectionOverride = null) {
       if (roll < w.weight) { picked = w.domain; break; }
       roll -= w.weight;
     }
-    // split the 15% cosmology bucket: powerscaling alternates in naturally
+ // split the 15% cosmology bucket: powerscaling alternates in naturally
     if (picked === "cosmology" && crypto.randomInt(0, 2) === 1) picked = "powerscaling";
     plan.push(picked);
   }
-  // guarantee genuine variety: no 3 identical domains in a row when avoidable
+ // guarantee genuine variety: no 3 identical domains in a row when avoidable
   for (let i = 2; i < plan.length; i++) {
     if (plan[i] === plan[i - 1] && plan[i] === plan[i - 2] && count >= 4) {
       const alt = plan[i] === "plot" ? "characters" : "plot";
@@ -1170,19 +1164,19 @@ function buildQuestionPlan(count, difficulty, sectionOverride = null) {
 }
 
 module.exports = {
-  // constants
+ // constants
   DOMAIN_WEIGHTS, SECTION_ALIASES, CTX_CHAR_LIMIT,
-  // wiki layer
+ // wiki layer
   resolveWiki, wikiExists, wikiApi, slugify,
-  // lore layer
+ // lore layer
   cleanWikitext, fitContext, estTokens, filterSections, retrieveLore, findPageForDomain,
-  // characters + media + generation
+ // characters + media + generation
   buildCharacterIndex, pickCharacterPage, retrieveCharacterLore, retrieveCosmologyLore,
   getPageImage, resolveFileUrl, downloadMedia, findAudioForPage, wikipediaImage, wikipediaLogoImage,
   generateLoreQuestion, buildQuestionPlan,
-  // media-type + multi-source pool (P22)
+ // media-type + multi-source pool (P22)
   detectMediaType, wikipediaSummary, tvmazeLookup, getThemeSongs,
-  // helpers exposed for tests
+ // helpers exposed for tests
   normalizeLLMReply, extractJson, coerceOne,
   _internal: { _wikiCache, KNOWN_WIKIS, JUNK_SECTION_RE, _charIndexCache, setWikiApiOverride(fn) { _wikiApiOverride = fn; }, },
 };

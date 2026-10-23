@@ -91,9 +91,6 @@ async function displayBlacksmith(sock, chatId, userId) {
 ```javascript
 async function repair(sock, chatId, userId, target) {
     // Matches target to 'all' or slot name or slot index
-    // Validates player wallet
-    // Invokes durabilitySystem.repairItem(item)
-    // Invokes economy.removeMoney(userId, cost) and saves profile
 ```
 
 ---

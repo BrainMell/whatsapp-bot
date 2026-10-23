@@ -1,5 +1,5 @@
 'use strict';
-// render_base_kingdom.js — bake player-base proof cards: node scripts/render_base_kingdom.js [outDir]
+// render_base_kingdom.js - bake player-base proof cards: node scripts/render_base_kingdom.js [outDir]
 const fs = require('fs'); const path = require('path');
 const OUT = process.argv[2] || '/tmp/base_kingdom';
 process.env.QA_MODE = process.env.QA_MODE || '1';

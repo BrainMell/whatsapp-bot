@@ -1,5 +1,5 @@
 // ============================================
-// 🎭 CLASS COMMANDS
+// CLASS COMMANDS
 // ============================================
 
 const classSystem = require('../rpg/classSystem');
@@ -20,7 +20,7 @@ const ROLE_ORDER = ['TANK', 'BRUTE', 'DPS', 'MAGIC_DPS', 'MAGE', 'SUPPORT', 'LEG
 async function displayClasses(sock, chatId) {
     const classes = classSystem.getAllClasses();
     
-    // Group by tier then role
+ // Group by tier then role
     const tiers = { STARTER: [], EVOLVED: [], ASCENDED: [] };
     
     Object.values(classes).forEach(c => {
@@ -42,7 +42,7 @@ async function displayClasses(sock, chatId) {
         msg += `${tierConf.icon} *${tierConf.label}*\n`;
         msg += `_${tierConf.desc}_\n\n`;
         
-        // Sort by role within tier
+ // Sort by role within tier
         const sorted = [...classList].sort((a, b) => {
             const roleA = ROLE_ORDER.indexOf(a.role || 'DPS');
             const roleB = ROLE_ORDER.indexOf(b.role || 'DPS');
@@ -53,7 +53,7 @@ async function displayClasses(sock, chatId) {
             msg += `${c.icon} *${c.name}*`;
             if (c.role) msg += ` _(${c.role})_`;
             msg += `\n`;
-            // Short desc (first sentence only)
+ // Short desc (first sentence only)
             const shortDesc = c.desc.split('.')[0] + '.';
             msg += `   ${shortDesc}\n`;
             
@@ -99,11 +99,11 @@ async function displayEvolutionTree(sock, chatId, classId) {
     msg += `┃ 🌳 *EVOLUTION*  ┃\n`;
     msg += `┗━━━━━━━━━━━━━━━┛\n\n`;
     
-    // Walk up the lineage to find the root
+ // Walk up the lineage to find the root
     const lineage = classSystem.getLineage(targetClass.id);
     const root = classSystem.getClassById(lineage[lineage.length - 1]);
     
-    // Build tree from root
+ // Build tree from root
     function buildTree(cls, depth = 0) {
         const indent = '  '.repeat(depth);
         const connector = depth > 0 ? '└─ ' : '';

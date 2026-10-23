@@ -89,7 +89,7 @@ async function startAuth() {
       console.log(`\n🎉🎉🎉 [SUCCESS] ${targetInstance} is officially authenticated and connected! 🎉🎉🎉`);
       console.log(`💾 Writing final session files to disk...`);
       await saveCreds();
-      // Allow 3 seconds for all keys to flush to disk
+ // Allow 3 seconds for all keys to flush to disk
       setTimeout(() => {
         console.log(`✅ Auth files completely saved in ${authDir}.`);
         console.log(`🏁 Exiting standalone authenticator cleanly.\n`);

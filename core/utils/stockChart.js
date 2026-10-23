@@ -23,7 +23,7 @@ const _http = axios.create({
   },
 });
 
-// Verified-working range/interval pairs (research script, 2026-09-25)
+// Verified-working range/interval pairs (research script, )
 const RANGES = {
   "1d": { range: "1d", interval: "5m" },
   "5d": { range: "5d", interval: "15m" },
@@ -34,7 +34,7 @@ const RANGES = {
 };
 const RANGE_ALIASES = { "1day": "1d", day: "1d", "1week": "5d", week: "5d", "1month": "1m", month: "1m", "6month": "6m", "1year": "1y", year: "1y", "5year": "5y", max: "5y" };
 
-// ── symbol resolution ──
+// -- symbol resolution --
 // Crypto pairs outrank ETFs/futures: "bitcoin" must hit BTC-USD (the actual
 // asset), not an ETF that tracks it. Exact symbol matches bypass ranking.
 const _TYPE_RANK = { CRYPTOCURRENCY: 0, EQUITY: 1, ETF: 2, CURRENCY: 3, INDEX: 4, FUTURE: 5, MUTUALFUND: 6 };
@@ -70,7 +70,7 @@ async function resolveSymbol(input) {
   }
 }
 
-// ── chart data ──
+// -- chart data --
 async function fetchChart(symbol, rangeKey) {
   const cfg = RANGES[rangeKey] || RANGES["1m"];
   const ck = `chart:${symbol.toUpperCase()}:${rangeKey}`;
@@ -117,7 +117,7 @@ async function fetchChart(symbol, rangeKey) {
   return out;
 }
 
-// ── formatting helpers ──
+// -- formatting helpers --
 function fmtPrice(v, currency) {
   const n = Number(v) || 0;
   if (n === 0) return (currency === "USD" ? "$" : `${currency} `) + "0.00";
@@ -135,9 +135,9 @@ function fmtVol(v) {
   return String(v);
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // CHART (node-canvas, TradingView-ish dark theme)
-// ════════════════════════════════════════════
+// ============================================
 
 const FONT_DIR = "/usr/share/fonts/truetype/dejavu";
 let _fontsRegistered = false;
@@ -225,17 +225,17 @@ async function renderStockChart(quote) {
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext("2d");
 
-  // background
+ // background
   ctx.fillStyle = C.bg;
   ctx.fillRect(0, 0, W, H);
-  // header panel
+ // header panel
   const grad = ctx.createLinearGradient(0, 0, 0, PAD.t + 20);
   grad.addColorStop(0, "#161b26");
   grad.addColorStop(1, C.bg);
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, PAD.t + 20);
 
-  // ── header text ──
+ // -- header text --
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = "#ffffff";
   ctx.font = "bold 30px 'DejaVu Sans'";
@@ -245,7 +245,7 @@ async function renderStockChart(quote) {
   const metaBits = [quote.symbol, quote.exchange, `${quote.series.length} x ${quote.interval} candles`].filter(Boolean).join("  •  ");
   ctx.fillText(metaBits, PAD.l, 68);
 
-  // price + change
+ // price + change
   ctx.fillStyle = "#ffffff";
   ctx.font = "bold 34px 'DejaVu Sans'";
   const priceStr = fmtPrice(last, quote.currency);
@@ -261,7 +261,7 @@ async function renderStockChart(quote) {
   const rangeNames = { "1d": "Past day", "5d": "Past 5 days", "1m": "Past month", "6m": "Past 6 months", "1y": "Past year", "5y": "Past 5 years" };
   ctx.fillText(`${rangeNames[quote.rangeKey] || quote.rangeKey} • prev close ${fmtPrice(prev, quote.currency)}`, PAD.l + pw + 16 + cw + 24, 102);
 
-  // ── grid + price axis (right) ──
+ // -- grid + price axis (right) --
   ctx.strokeStyle = C.grid;
   ctx.fillStyle = C.dim;
   ctx.font = "13px 'DejaVu Mono'";
@@ -274,7 +274,7 @@ async function renderStockChart(quote) {
     ctx.fillText(_axisLabel(tv, quote.currency, ticks.step), W - PAD.r + 8, ty + 4);
   }
 
-  // ── prev close dashed line ──
+ // -- prev close dashed line --
   const py = Math.round(y(prev)) + 0.5;
   ctx.save();
   ctx.strokeStyle = C.prevLine;
@@ -282,18 +282,18 @@ async function renderStockChart(quote) {
   ctx.beginPath(); ctx.moveTo(PAD.l, py); ctx.lineTo(W - PAD.r, py); ctx.stroke();
   ctx.restore();
 
-  // ── candles ──
+ // -- candles --
   const minBody = 1;
   for (let i = 0; i < series.length; i++) {
     const s = series[i];
     const cx = Math.round(x(i)) + 0.5;
     const isUp = s.c >= s.o;
     const col = isUp ? C.greenFill : C.redFill;
-    // wick
+ // wick
     ctx.strokeStyle = isUp ? C.green : C.red;
     ctx.lineWidth = Math.max(1, candleW * 0.18);
     ctx.beginPath(); ctx.moveTo(cx, y(s.h)); ctx.lineTo(cx, y(s.l)); ctx.stroke();
-    // body
+ // body
     const yO = y(s.o), yC = y(s.c);
     const top = Math.min(yO, yC);
     const hgt = Math.max(minBody, Math.abs(yC - yO));
@@ -301,7 +301,7 @@ async function renderStockChart(quote) {
     ctx.fillRect(cx - candleW / 2, top, candleW, hgt);
   }
 
-  // ── volume bars ──
+ // -- volume bars --
   const volTop = PAD.t + chartH + 14;
   const bw = chartW / series.length;
   for (let i = 0; i < series.length; i++) {
@@ -316,7 +316,7 @@ async function renderStockChart(quote) {
   ctx.textAlign = "left";
   ctx.fillText(`Volume (max ${fmtVol(volMax)})`, PAD.l + 4, volTop + 14);
 
-  // ── time axis ──
+ // -- time axis --
   ctx.fillStyle = C.dim;
   ctx.font = "12px 'DejaVu Mono'";
   ctx.textAlign = "center";
@@ -328,7 +328,7 @@ async function renderStockChart(quote) {
     const tx = x(i);
     const lbl = _timeTickLabel(series[i].t, quote.rangeKey);
     if (lbl !== prevLabel) {
-      // dedupe repeated labels (e.g. same year on adjacent weekly ticks)
+ // dedupe repeated labels (e.g. same year on adjacent weekly ticks)
       ctx.textAlign = "center";
       ctx.fillText(lbl, tx, volTop + volH + 18);
       prevLabel = lbl;
@@ -337,7 +337,7 @@ async function renderStockChart(quote) {
     ctx.beginPath(); ctx.moveTo(Math.round(tx) + 0.5, PAD.t); ctx.lineTo(Math.round(tx) + 0.5, volTop + volH); ctx.stroke();
   }
 
-  // ── last price tag ──
+ // -- last price tag --
   const ly = y(last);
   ctx.fillStyle = C.priceTag;
   ctx.fillRect(W - PAD.r + 2, ly - 11, PAD.r - 6, 22);
@@ -346,7 +346,7 @@ async function renderStockChart(quote) {
   ctx.textAlign = "left";
   ctx.fillText(fmtPrice(last, quote.currency), W - PAD.r + 8, ly + 4);
 
-  // ── footer ──
+ // -- footer --
   ctx.fillStyle = C.dim;
   ctx.font = "12px 'DejaVu Sans'";
   ctx.textAlign = "left";
@@ -379,12 +379,12 @@ function formatQuoteCaption(quote) {
   return out;
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // COMMAND SURFACE
-// ════════════════════════════════════════════
+// ============================================
 
 function parseStockArgs(raw) {
-  // ".j stock", ".j stock AAPL 6m", ".j stock apple", ".j stock btc-usd 1y"
+ // ".j stock", ".j stock AAPL 6m", ".j stock apple", ".j stock btc-usd 1y"
   const tokens = String(raw || "").trim().split(/\s+/).filter(Boolean);
   const out = { ticker: "", range: "1m", rangeExplicit: false };
   if (tokens.length && (RANGES[tokens[tokens.length - 1].toLowerCase()] || RANGE_ALIASES[tokens[tokens.length - 1].toLowerCase()])) {
@@ -416,16 +416,16 @@ _The in-game market is separate: \`${prefix} stocks\`_`,
     };
   }
 
-  // Resolution order: search FIRST (cheap + 6h-cached; handles names AND
-  // abbreviations), then raw-symbol fallback for symbol-shaped input that
-  // search doesn't know (new/OTC listings). Spaces => never a raw symbol.
+ // Resolution order: search FIRST (cheap + 6h-cached; handles names AND
+ // abbreviations), then raw-symbol fallback for symbol-shaped input that
+ // search doesn't know (new/OTC listings). Spaces => never a raw symbol.
   const resolved = await resolveSymbol(parsed.ticker);
   if (!resolved) {
     const symbolLike = /^[\w.\-=^]{1,12}$/.test(parsed.ticker);
     if (!symbolLike) {
       return { handled: true, message: botMarker + `❌ Couldn't resolve "${parsed.ticker}" to a ticker. Try the symbol directly, e.g. \`${prefix} stock AAPL\`.` };
     }
-    // fall through with the raw symbol; fetchChart will 404 cleanly if bogus
+ // fall through with the raw symbol; fetchChart will 404 cleanly if bogus
     return await postChart(sock, chatId, botMarker, m, { symbol: parsed.ticker.toUpperCase(), name: parsed.ticker.toUpperCase() }, parsed);
   }
   return await postChart(sock, chatId, botMarker, m, resolved, parsed);
@@ -457,8 +457,8 @@ module.exports = {
   parseStockArgs,
   resolveSymbol,
   fetchChart,
-  // OWNER QUEUE RULE (2026-10-08): serialized + 45s dedup — same quote
-  // inside the window renders ONCE (identical payloads share the result).
+ // OWNER QUEUE RULE: serialized + 45s dedup - same quote
+ // inside the window renders ONCE (identical payloads share the result).
   renderStockChart: (...args) => {
     const rq = require('./renderQueue');
     const key = rq.keyFor('stockchart:v1', args[0]);

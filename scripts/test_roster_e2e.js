@@ -14,7 +14,7 @@ const goService = require('../core/utils/goImageService');
   
   await connectDB();
   
-  // Get mell's data
+ // Get mell's data
   const userId = '251453323092189@lid';
   await economy.reloadUserFromDB(userId);
   const user = economy.getUser(userId);
@@ -27,7 +27,7 @@ const goService = require('../core/utils/goImageService');
   console.log('✅ Summons found:', summons.length);
   summons.forEach(s => console.log('   -', s.summonId, s.species, s.nickname, 'Lv.' + s.level));
   
-  // Build the payload (same as cmdPokedex)
+ // Build the payload (same as cmdPokedex)
   console.log('\n--- Building payload ---');
   const rosterSummons = summons.map(s => {
     const stats = summonSystem.computeEffectiveStats(s);
@@ -50,7 +50,6 @@ const goService = require('../core/utils/goImageService');
   });
   console.log('✅ Payload built:', rosterSummons.length, 'summons');
   
-  // Call the Go service
   console.log('\n--- Calling Go service ---');
   console.log('   GO_IMAGE_SERVICE_URL:', process.env.GO_IMAGE_SERVICE_URL);
   
@@ -68,7 +67,6 @@ const goService = require('../core/utils/goImageService');
     if (gifBuffer && gifBuffer.length > 0) {
       console.log(`✅ GIF generated: ${gifBuffer.length} bytes in ${elapsed}s`);
       
-      // Verify it's a valid GIF
       const header = gifBuffer.slice(0, 6).toString('ascii');
       if (header.startsWith('GIF')) {
         console.log('✅ Valid GIF header:', header);
@@ -76,7 +74,7 @@ const goService = require('../core/utils/goImageService');
         console.log('❌ Invalid header:', header);
       }
       
-      // Save to file for inspection
+ // Save to file for inspection
       const fs = require('fs');
       fs.writeFileSync('/tmp/roster_e2e_test.gif', gifBuffer);
       console.log('✅ Saved to /tmp/roster_e2e_test.gif');

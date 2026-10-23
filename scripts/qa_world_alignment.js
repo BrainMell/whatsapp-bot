@@ -11,7 +11,7 @@ process.env.ALIGNMENT_DM_PACE_MS = '5';
 }
 const assert = require('assert');
 
-// ── stub the shared KV system BEFORE modules load
+// -- stub the shared KV system BEFORE modules load
 const __sysPath = require.resolve('../core/utils/system');
 const store = {};
 require.cache[__sysPath] = {
@@ -21,13 +21,13 @@ require.cache[__sysPath] = {
         set: (k, v) => { store[k] = JSON.parse(JSON.stringify(v)); },
     },
 };
-// ── stub economy (display names)
+// -- stub economy (display names)
 const __ecoPath = require.resolve('../core/rpg/economy');
 require.cache[__ecoPath] = {
     id: __ecoPath, filename: __ecoPath, loaded: true,
     exports: { getDisplayName: (j) => String(j).split('@')[0] },
 };
-// ── stub System + User models for the event layer
+// -- stub System + User models for the event layer
 const __sysModelPath = require.resolve('../core/models/System');
 require.cache[__sysModelPath] = {
     id: __sysModelPath, filename: __sysModelPath, loaded: true,
@@ -63,12 +63,12 @@ function mockSock() {
 }
 
 (async () => {
-    // ── 1. cadence sanity: env-selected period, T0 aligned, exact bounds
+ // -- 1. cadence sanity: env-selected period, T0 aligned, exact bounds
     const cosmology = require('../core/rpg/cosmology');
     assert.strictEqual(cosmology.ALIGNMENT_PERIOD_MS, parseFloat(process.env.TRIUNE_ALIGNMENT_HOURS) * 3600000, 'period honors env');
     assert.strictEqual(cosmology.isTriuneAligned(cosmology.T0), true, 'T0 is an alignment start');
 
-    // ── 2. event tick: fires once, invites all registered players
+ // -- 2. event tick: fires once, invites all registered players
     let sock = mockSock();
     let r = await worldAlignment.tick(sock, '[BOT]');
     assert.strictEqual(r.fired, true, 'event fired');
@@ -81,11 +81,11 @@ function mockSock() {
     assert.ok(encounterFramework.hasActive('player2@lid'), 'LID player session active');
     assert.ok(store['_shared_world_alignment_last_event'] && String(store['_shared_world_alignment_last_event']).startsWith('align_'), 'claim key stored');
 
-    // ── 3. second tick in the same window: deduped
+ // -- 3. second tick in the same window: deduped
     r = await worldAlignment.tick(sock, '[BOT]');
     assert.strictEqual(r.fired, false, 'no double fire in same window');
 
-    // ── 4. full DM encounter flow for player1
+ // -- 4. full DM encounter flow for player1
     sock = mockSock();
     let consumed = await encounterFramework.handleDM(sock, 'player1@s.whatsapp.net', 'player1@s.whatsapp.net', 'Azeroth', '[BOT]');
     assert.strictEqual(consumed, true, 'step 1 consumed');
@@ -103,22 +103,22 @@ function mockSock() {
     assert.ok(outcome.includes('Azeroth'), 'world name in outcome');
     assert.ok(!encounterFramework.hasActive('player1@s.whatsapp.net'), 'session cleaned up after completion');
 
-    // ── 5. quit path for player2
+ // -- 5. quit path for player2
     sock = mockSock();
     consumed = await encounterFramework.handleDM(sock, 'player2@lid', 'player2@lid', 'quit', '[BOT]');
     assert.strictEqual(consumed, true, 'quit consumed');
     assert.ok(!encounterFramework.hasActive('player2@lid'), 'session removed on quit');
     assert.ok(sock.sent[sock.sent.length - 1].text.includes('slip away'), 'quit message');
 
-    // ── 6. cleanup sweep
+ // -- 6. cleanup sweep
     assert.strictEqual(encounterFramework.cleanupExpired(), 0, 'nothing to sweep yet');
 
-    // ── 7. prefix commands NOT consumed during an encounter (engine guard)
+ // -- 7. prefix commands NOT consumed during an encounter (engine guard)
     const s2 = encounterFramework.hasActive ? null : null;
     await encounterFramework.beginEncounter('player3@s.whatsapp.net', 'alignment_trial', { jid: 'player3@s.whatsapp.net' });
     assert.ok(encounterFramework.hasActive('player3@s.whatsapp.net'), 'player3 session for guard test');
-    // the engine guard checks prefix BEFORE calling handleDM - verify the
-    // framework does not auto-consume prefix commands (engine skips them):
+ // the engine guard checks prefix BEFORE calling handleDM - verify the
+ // framework does not auto-consume prefix commands (engine skips them):
     assert.strictEqual(store['_shared_encounter_sessions'] !== undefined, true, 'sessions persisted to shared KV');
 
     console.log('WORLD ALIGNMENT + ENCOUNTER QA: ALL PASS');

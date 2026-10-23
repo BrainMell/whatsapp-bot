@@ -1,11 +1,11 @@
 // ============================================
-// 🗺️ RUINS WAR MAP — landscape rewrite (presentation overhaul 2026-10-04)
-// Owner spec §3/§4: the map is the game's UI — LANDSCAPE, compact, legible
-// at a glance, themed to The Ruins (dark stone + moss + torch gold — NOT
+// RUINS WAR MAP - landscape rewrite (presentation overhaul )
+// Owner spec §3/§4: the map is the game's UI - LANDSCAPE, compact, legible
+// at a glance, themed to The Ruins (dark stone + moss + torch gold - NOT
 // the old portrait parchment ledger). Two visual states:
-//   style 'explore' (default) — cool stone frame, standard chart
-//   style 'return'  — post-encounter treatment: ember vignette + THE WAY
-//                     ONWARD ribbon (same world, its own visual mode)
+// style 'explore' (default) - cool stone frame, standard chart
+// style 'return' - post-encounter treatment: ember vignette + THE WAY
+// ONWARD ribbon (same world, its own visual mode)
 // Renders the PLAYER'S fog view only. Renders run in the child pool
 // (node-canvas blocks the loop); falls back in-process, never hard-fails.
 // ============================================
@@ -33,11 +33,11 @@ const PAL = {
     ember: 'rgba(224,120,64,0.55)',
 };
 
-// room glyphs — ONLY the DejaVu-verified whitelist (docs/CARD-SYSTEM.md §6)
-// 🔁 owner 2026-10-08 (ruins puzzle fixes #4): deconflicted the chart —
-//   • warden lairs used ☠ (identical to trapped halls — the hunt target was
-//     indistinguishable from a hazard) → ❖, unused on the map
-//   • landmark used ▲ (the legend's "▲ you" marker) → ▼, a pin at the spot
+// room glyphs - ONLY the DejaVu-verified whitelist (docs/CARD-SYSTEM.md §6)
+// (ruins puzzle fixes #4): deconflicted the chart -
+// • warden lairs used (identical to trapped halls - the hunt target was
+// indistinguishable from a hazard) → , unused on the map
+// • landmark used ▲ (the legend's "▲ you" marker) → ▼, a pin at the spot
 const TYPE_GLYPH = {
     empty: '', combat: '⚔', puzzle: '✥', discovery: '⚑', reward: '◈',
     hazard: '☠', lore: '✺', coop: '✚', secret: '✦', anomaly: '✷',
@@ -50,13 +50,13 @@ const TYPE_LABEL = {
     finale: 'Warden',
 };
 
-// ── compact legend (owner 2026-10-08 ruins puzzle fixes #4): the chart's
-// bottom-corner key must cover EVERY room-type symbol the map can draw — the
-// old line silently omitted ✺ inscribed halls, landmarks and warden lairs
-// entirely. One line, same visual language (no plate — the map is the UI).
+// -- compact legend (ruins puzzle fixes #4): the chart's
+// bottom-corner key must cover EVERY room-type symbol the map can draw - the
+// old line silently omitted inscribed halls, landmarks and warden lairs
+// entirely. One line, same visual language (no plate - the map is the UI).
 const LEGEND = '▲ you · ◯ guildmate · dashed = enemy ping · ⚔ guarded · ✥ sealed · ⚑ find · ◈ vault · ☠ trapped · ✺ inscribed · ✚ co-op · ✦ hidden · ✷ anomaly · ▼ landmark · ⨀ World Core · ❖ warden';
 
-// ─── font registration (same kit as the parchment cards) ─────────────────
+// --- font registration (same kit as the parchment cards) -----------------
 let _fontsReady = false;
 function _ensureFonts() {
     if (_fontsReady) return true;
@@ -108,7 +108,7 @@ function _bg(ctx, style) {
     g.addColorStop(1, PAL.bg1);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
-    // moss blotches (seeded — stable per render size)
+ // moss blotches (seeded - stable per render size)
     const rnd = _mulberry32(11);
     for (let i = 0; i < 26; i++) {
         const x = rnd() * W, y = rnd() * H, r = 40 + rnd() * 130;
@@ -121,14 +121,14 @@ function _bg(ctx, style) {
 
 function _frame(ctx, style) {
     const isReturn = style === 'return';
-    // outer stone edge
+ // outer stone edge
     ctx.strokeStyle = isReturn ? PAL.ember : 'rgba(200,190,150,0.35)';
     ctx.lineWidth = 4;
     ctx.strokeRect(18, 18, W - 36, H - 36);
     ctx.lineWidth = 1;
     ctx.strokeRect(26, 26, W - 52, H - 52);
     if (isReturn) {
-        // post-encounter treatment: warm ember glow washing inward
+ // post-encounter treatment: warm ember glow washing inward
         const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.32, W / 2, H / 2, H * 0.78);
         g.addColorStop(0, 'rgba(0,0,0,0)');
         g.addColorStop(1, 'rgba(224,120,64,0.16)');
@@ -138,7 +138,7 @@ function _frame(ctx, style) {
 }
 
 function _header(ctx, eventDoc, player, extras, style) {
-    // left: title block
+ // left: title block
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = PAL.inkDim;
     ctx.font = '13px "Cinzel"';
@@ -151,7 +151,7 @@ function _header(ctx, eventDoc, player, extras, style) {
     const world = eventDoc.type === 'alignment' ? 'Alignment of Worlds' : 'a dead world, half-remembered';
     ctx.fillText(`${world} · chamber ${player.roomId} · ring ${Math.max(1, Math.round((extras.ring || 0) * 4) + 1)}`, 44, 116);
 
-    // right: compact status
+ // right: compact status
     ctx.textAlign = 'right';
     ctx.font = '15px "Cinzel"';
     ctx.fillStyle = PAL.inkSoft;
@@ -160,7 +160,6 @@ function _header(ctx, eventDoc, player, extras, style) {
     ctx.font = '13px "IM Fell"';
     ctx.fillText(`discovered ${(player.discovered || []).length} of ${eventDoc.rooms.length} chambers`, W - 44, 88);
 
-    // return-style ribbon
     if (style === 'return') {
         ctx.textAlign = 'center';
         const rw = 330, rx = (W - rw) / 2;
@@ -176,7 +175,7 @@ function _header(ctx, eventDoc, player, extras, style) {
     }
 }
 
-// ── main render (in-process; the pool calls this in the worker) ──
+// -- main render (in-process; the pool calls this in the worker) --
 function _renderInProcess(eventDoc, player, extras = {}) {
     _ensureFonts();
     const canvas = require('canvas');
@@ -188,10 +187,10 @@ function _renderInProcess(eventDoc, player, extras = {}) {
     _frame(ctx, style);
     _header(ctx, eventDoc, player, extras, style);
 
-    // ── grid geometry (landscape, compact, SELF-ZOOMING) ──
-    // The chart frames the DISCOVERED region (±1 room), centered — the map
-    // stays legible at every stage of exploration and literally grows as
-    // the player pushes deeper (owner spec §3: "update as the player explores").
+ // -- grid geometry (landscape, compact, SELF-ZOOMING) --
+ // The chart frames the DISCOVERED region (±1 room), centered - the map
+ // stays legible at every stage of exploration and literally grows as
+ // the player pushes deeper (owner spec §3: "update as the player explores").
     const gx0 = 70, gy0 = 150;
     const gx1 = W - 70, gy1 = H - 96;
     const side = Math.max(1, eventDoc.side || 1);
@@ -199,7 +198,7 @@ function _renderInProcess(eventDoc, player, extras = {}) {
     const roomsMap = new Map();
     for (const r of eventDoc.rooms) roomsMap.set(r.key, r);
 
-    // viewport = bbox(discovered ∪ current) padded by 1, clamped to the world
+ // viewport = bbox(discovered ∪ current) padded by 1, clamped to the world
     let wx0 = side, wy0 = side, wx1 = -1, wy1 = -1;
     const consider = (key) => {
         if (!key || !key.includes(',')) return;
@@ -229,7 +228,7 @@ function _renderInProcess(eventDoc, player, extras = {}) {
 
     const openEdges = new Set(eventDoc.edges || []);
 
-    // ── corridors between discovered rooms (drawn under the chambers) ──
+ // -- corridors between discovered rooms (drawn under the chambers) --
     ctx.strokeStyle = PAL.corridor;
     ctx.lineWidth = Math.max(2, Math.min(7, cell * 0.14));
     ctx.lineCap = 'round';
@@ -250,14 +249,14 @@ function _renderInProcess(eventDoc, player, extras = {}) {
     }
     ctx.lineCap = 'butt';
 
-    // ── rooms ──
+ // -- rooms --
     for (const r of eventDoc.rooms) {
         const known = discovered.has(r.key);
         if (!known || !inWindow(r)) continue;
         const x = px(r), y = py(r);
         let color = r.state === 'CLEARED' ? PAL.cleared : r.state === 'ACTIVE' ? PAL.active : PAL.unexplored;
         if (r.type === 'core') color = PAL.core;
-        // ⏳ warden lairs burn red on every chart — the finale hunt targets
+ // ⏳ warden lairs burn red on every chart - the finale hunt targets
         if (r.type === 'finale' && r.state !== 'CLEARED') color = PAL.warden;
         const size = (chamberMode ? cell : cell * 0.5) - inset * 2;
         const rad = chamberMode ? Math.max(4, size * 0.22) : size;
@@ -286,7 +285,7 @@ function _renderInProcess(eventDoc, player, extras = {}) {
         }
     }
 
-    // ── occupants: mates / recent enemies / you ──
+ // -- occupants: mates / recent enemies / you --
     const dotR = Math.max(4, Math.min(16, (chamberMode ? cell : cell * 0.5) * 0.42));
     for (const m of extras.mates || []) {
         const r = roomsMap.get(m.roomId);
@@ -307,7 +306,7 @@ function _renderInProcess(eventDoc, player, extras = {}) {
     const me = roomsMap.get(player.roomId);
     if (me && discovered.has(player.roomId)) {
         const mx = px(me), myy = py(me);
-        // YOU marker: double pulse-ring + wax triangle + label
+ // YOU marker: double pulse-ring + wax triangle + label
         ctx.strokeStyle = PAL.you;
         ctx.lineWidth = 2.5;
         ctx.beginPath(); ctx.arc(mx, myy, dotR + 8, 0, Math.PI * 2); ctx.stroke();
@@ -327,7 +326,7 @@ function _renderInProcess(eventDoc, player, extras = {}) {
         ctx.fillText('YOU', mx, ty - 14);
     }
 
-    // ── compact legend line (not a plate — the map is the UI) ──
+ // -- compact legend line (not a plate - the map is the UI) --
     ctx.textAlign = 'left';
     ctx.font = '13px "DejaVu Sans"';
     ctx.fillStyle = PAL.inkSoft;
@@ -354,9 +353,9 @@ function roundRect(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
-// ── child-process pool (canvas blocks the loop — keep it off the bot) ──
-// ⚔️ POOL PARALLELISM FIX (2026-10-07, mirrors roomScene.js): the pool
-// capped inflight at 2 but always dispatched to children[0] — one child
+// -- child-process pool (canvas blocks the loop - keep it off the bot) --
+// POOL PARALLELISM FIX (mirrors roomScene.js): the pool
+// capped inflight at 2 but always dispatched to children[0] - one child
 // serialized every map render. Now spawns up to `max` children and routes
 // each task to the LEAST-LOADED child (true parallel canvas).
 const { fork } = require('child_process');
@@ -366,8 +365,8 @@ const _renderPool = { children: [], queue: [], inflight: 0, max: 4 };
 let _renderSeq = 0;
 
 function _spawnChild() {
-    // serialization 'advanced': structured-clone IPC (Buffers survive — JSON
-    // IPC silently degrades them to plain objects)
+ // serialization 'advanced': structured-clone IPC (Buffers survive - JSON
+ // IPC silently degrades them to plain objects)
     const child = fork(path.join(__dirname, 'renderWorker.js'), [], { stdio: 'ignore', serialization: 'advanced' });
     child._gwBusy = 0;
     child.on('exit', () => {
@@ -379,7 +378,7 @@ function _spawnChild() {
 }
 
 // least-loaded live child, spawning one while under the cap
-// OWNER QUEUE RULE (2026-10-08): no NEW canvas child spawn when box memory
+// OWNER QUEUE RULE: no NEW canvas child spawn when box memory
 // is critical (mirrors roomScene.js).
 function _pickChild() {
     let best = null;
@@ -428,8 +427,8 @@ async function renderRuinsMap(eventDoc, player, extras = {}) {
         const plainPlayer = typeof player.toObject === 'function' ? player.toObject({ depopulate: true }) : player;
         return await _renderViaChild(plainDoc, plainPlayer, extras);
     } catch (e) {
-        // OWNER QUEUE RULE (2026-10-08): memory/queue refusals are FINAL —
-        // no in-process retry on a box that just said "no" (mirrors roomScene.js).
+ // OWNER QUEUE RULE: memory/queue refusals are FINAL -
+ // no in-process retry on a box that just said "no" (mirrors roomScene.js).
         if (e && (e.code === 'EMEM' || e.code === 'EQUEUEFULL')) throw e;
         return _renderInProcess(eventDoc, player, extras);
     }

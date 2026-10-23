@@ -1,5 +1,5 @@
 // ============================================
-// 🌳 SKILL TREE SYSTEM - Complete Ability Trees
+// SKILL TREE SYSTEM - Complete Ability Trees
 // ============================================
 
 // Each class has a skill tree with multiple tiers
@@ -7,13 +7,13 @@
 // Can unlock and upgrade abilities
 
 // ==========================================
-// 🌟 STARTER CLASS SKILL TREES (4)
+// STARTER CLASS SKILL TREES (4)
 // ==========================================
 
 const SKILL_TREES = {
-    // ==========================================
-    // ⚔️ FIGHTER SKILL TREE
-    // ==========================================
+ // ==========================================
+ // FIGHTER SKILL TREE
+ // ==========================================
     FIGHTER: {
         name: 'Fighter',
         icon: '⚔️',
@@ -201,9 +201,9 @@ const SKILL_TREES = {
         }
     },
 
-    // ==========================================
-    // 🗡️ SCOUT SKILL TREE
-    // ==========================================
+ // ==========================================
+ // SCOUT SKILL TREE
+ // ==========================================
     SCOUT: {
         name: 'Scout',
         icon: '🗡️',
@@ -387,9 +387,9 @@ const SKILL_TREES = {
         }
     },
 
-    // ==========================================
-    // 🔮 APPRENTICE SKILL TREE
-    // ==========================================
+ // ==========================================
+ // APPRENTICE SKILL TREE
+ // ==========================================
     APPRENTICE: {
         name: 'Apprentice',
         icon: '🔮',
@@ -585,9 +585,9 @@ const SKILL_TREES = {
         }
     },
 
-    // ==========================================
-    // ✨ ACOLYTE SKILL TREE
-    // ==========================================
+ // ==========================================
+ // ACOLYTE SKILL TREE
+ // ==========================================
     ACOLYTE: {
         name: 'Acolyte',
         icon: '✨',
@@ -769,9 +769,9 @@ const SKILL_TREES = {
         }
     },
 
-    // ==========================================
-    // ⚔️ WARRIOR (Evolved)
-    // ==========================================
+ // ==========================================
+ // WARRIOR (Evolved)
+ // ==========================================
     WARRIOR: {
         name: 'Warrior',
         icon: '⚔️',
@@ -841,10 +841,10 @@ const SKILL_TREES = {
                         cooldown: 1,
                         targeting: 'TEAM',
                         effects: {
-                            // 💡 POLISH 2026-07-17: was atkBuff/defBuff (non-standard
-                            // effect IDs that no handler recognized). Changed to
-                            // buff_team with stat field so applyAbilityEffect can
-                            // process them. Applies BOTH ATK and DEF buffs to team.
+ // POLISH was atkBuff/defBuff (non-standard
+ // effect IDs that no handler recognized). Changed to
+ // buff_team with stat field so applyAbilityEffect can
+ // process them. Applies BOTH ATK and DEF buffs to team.
                             buff_team_atk: { stat: 'attack', value: [20, 25, 30, 35, 40], duration: 3 },
                             buff_team_def: { stat: 'defense', value: [10, 12, 15, 18, 20], duration: 3 }
                         },
@@ -1910,7 +1910,7 @@ const SKILL_TREES = {
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
                     },
-                    // 💡 PHASE 2 2026-07-17: 3 new Cleric skills (was 2 - only Heal + ult)
+ // PHASE 2 3 new Cleric skills (was 2 - only Heal + ult)
                     smite: {
                         id: 'smite',
                         name: 'Smite',
@@ -2004,7 +2004,7 @@ const SKILL_TREES = {
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
                     },
-                    // 💡 PHASE 2 2026-07-17: 3 new Ninja skills (was 2 - only Shuriken + ult)
+ // PHASE 2 3 new Ninja skills (was 2 - only Shuriken + ult)
                     shadow_clone_jutsu: {
                         id: 'shadow_clone_jutsu',
                         name: 'Shadow Clone Jutsu',
@@ -2098,7 +2098,7 @@ const SKILL_TREES = {
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
                     },
-                    // 💡 PHASE 2 2026-07-17: 3 new Monk skills (was 2 - only Palm Strike + ult)
+ // PHASE 2 3 new Monk skills (was 2 - only Palm Strike + ult)
                     ki_blast: {
                         id: 'ki_blast',
                         name: 'Ki Blast',
@@ -2390,7 +2390,7 @@ const SKILL_TREES = {
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
                     },
-                    // 💡 PHASE 2 2026-07-17: 3 new Elementalist skills (was 2 - only Elemental Bolt + ult)
+ // PHASE 2 3 new Elementalist skills (was 2 - only Elemental Bolt + ult)
                     flame_burst: {
                         id: 'flame_burst',
                         name: 'Flame Burst',
@@ -2529,7 +2529,7 @@ const SKILL_TREES = {
                         damageMultiplier: [7.0, 8.0, 9.0],
                         damageType: 'TRUE',
                         targeting: 'ALL_ENEMIES',
-                        // 💡 FIX-PASS-2: stale shorter description removed (dup key, last-wins kept the fuller text below)
+ // FIX-PASS-2: stale shorter description removed (dup key, last-wins kept the fuller text below)
                         description: 'Unleash total warfare upon all enemies. Party gains +50% ATK for 3 turns.',
                         effect: (level) => ({
                             type: 'aoe',
@@ -2542,7 +2542,7 @@ const SKILL_TREES = {
                         animation: '⚔️🎖️💥🔥✨',
                         skillPointCost: [8, 12, 15]
                     },
-                    // 💡 PHASE 2 2026-07-17: 3 new Warlord skills (class had only 2 damaging skills - Tactical Strike + Total War ult)
+ // PHASE 2 3 new Warlord skills (class had only 2 damaging skills - Tactical Strike + Total War ult)
                     wide_cleave: {
                         id: 'wide_cleave',
                         name: 'Wide Cleave',
@@ -2685,7 +2685,7 @@ const SKILL_TREES = {
                         damageMultiplier: [10.0, 12.0, 15.0],
                         damageType: 'TRUE',
                         targeting: 'ALL_ENEMIES',
-                        // 💡 FIX-PASS-2: stale shorter description removed (dup key, last-wins kept the fuller text below)
+ // FIX-PASS-2: stale shorter description removed (dup key, last-wins kept the fuller text below)
                         description: 'Ancient weapon of pure destruction. Self: +100% ATK for 2 turns (bloodlust).',
                         effect: (level) => ({
                             type: 'aoe',
@@ -2833,7 +2833,7 @@ const SKILL_TREES = {
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
                     },
-                    // 💡 PHASE 2 2026-07-17: 3 new Warlock skills (was 2 - only Shadow Bolt + ult)
+ // PHASE 2 3 new Warlock skills (was 2 - only Shadow Bolt + ult)
                     curse_of_agony: {
                         id: 'curse_of_agony',
                         name: 'Curse of Agony',
@@ -2926,7 +2926,7 @@ const SKILL_TREES = {
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
                     },
-                    // 💡 PHASE 2 2026-07-17: 3 new Druid skills (was 2 - only Nature's Wrath + ult)
+ // PHASE 2 3 new Druid skills (was 2 - only Nature's Wrath + ult)
                     entangle: {
                         id: 'entangle',
                         name: 'Entangle',
@@ -3257,7 +3257,7 @@ const SKILL_TREES = {
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
                     },
-                    // 💡 PHASE 2 2026-07-17: 3 new Samurai skills (was 2 - only Iaido + ult)
+ // PHASE 2 3 new Samurai skills (was 2 - only Iaido + ult)
                     frontal_cut: {
                         id: 'frontal_cut',
                         name: 'Frontal Cut',
@@ -3418,10 +3418,10 @@ const SKILL_TREES = {
                         maxLevel: 3,
                         energyCost: [171, 149, 125],
                         cooldown: 2,
-                        // 💡 FIX 2026-08-05: Rebalanced from [4,5,6] (underpowered - Lich ult
-                        // was weaker than inherited Apprentice Meteor Strike [6.5] despite
-                        // 4.5x energy cost). Now [8,10,12] - Lv.3 = 1200% MAG, ~1.85x Meteor
-                        // Strike, justifying the 125 energy + curse + summon bonuses.
+ // FIX Rebalanced from [4,5,6] (underpowered - Lich ult
+ // was weaker than inherited Apprentice Meteor Strike [6.5] despite
+ // 4.5x energy cost). Now [8,10,12] - Lv.3 = 1200% MAG, ~1.85x Meteor
+ // Strike, justifying the 125 energy + curse + summon bonuses.
                         damageMultiplier: [8.0, 10.0, 12.0],
                         damageType: 'MAGICAL',
                         targeting: 'ALL_ENEMIES',
@@ -3434,7 +3434,7 @@ const SKILL_TREES = {
                         isAscended: true,
                         effect: (level) => ({
                             type: 'aoe',
-                            // 💡 FIX 2026-08-05: Matches damageMultiplier [8,10,12].
+ // FIX Matches damageMultiplier [8,10,12].
                             multiplier: 6.50 + (level * 2.17),
                             damageType: 'magic',
                             targeting: 'ALL_ENEMIES',
@@ -4575,9 +4575,9 @@ const SKILL_TREES = {
                         description: 'Transform into full dragon form for 3-5 turns. +50% ATK/DEF/MAG. All attacks gain fire element.',
                         animation: '🐲✨🔥',
                         skillPointCost: [6, 8, 10],
-                        // 💡 FIX 2026-08-01: Added effect callback - previously had
-                        // unrecognized buffType/buffs fields that the engine couldn't read.
-                        // Now uses standard 'all' buff type with 50% value.
+ // FIX Added effect callback - previously had
+ // unrecognized buffType/buffs fields that the engine couldn't read.
+ // Now uses standard 'all' buff type with 50% value.
                         effect: (level) => ({
                             type: 'buff_self',
                             buffType: 'all',
@@ -4601,10 +4601,10 @@ const SKILL_TREES = {
                         isAscended: true,
                         description: 'UNLEASH the Leviathan\'s stored apocalypse. Hits ALL enemies for 9-11× MAG damage. Inflicts Burn, Stun, and Drown. The sky breaks.',
                         animation: '🌋🌊🐉🔥',
-                        // 💡 FIX 2026-08-01: Fixed multiplier (was 12/14/16, should be 9/10/11),
-                        // fixed CC2 (was 'fear', should be 'stun' per description),
-                        // added stun field that the engine actually reads,
-                        // added drown as a separate DoT effect.
+ // FIX Fixed multiplier (was 12/14/16, should be 9/10/11),
+ // fixed CC2 (was 'fear', should be 'stun' per description),
+ // added stun field that the engine actually reads,
+ // added drown as a separate DoT effect.
                         effect: (level) => ({
                             type: 'aoe',
                             multiplier: 8.0 + level,  // 9/10/11 - matches description
@@ -4615,16 +4615,16 @@ const SKILL_TREES = {
                             ccChance: 80,
                             ccDuration: 3,
                             ccValue: 50 + (level * 20),  // 70/90/110 burn damage per turn
-                            // Stun (was cc2:'fear' which was never read by engine)
+ // Stun (was cc2:'fear' which was never read by engine)
                             stun: true,
                             stunChance: 40 + (level * 10),  // 50/60/70%
                             stunDuration: 1,
-                            // 💡 AUDIT FIX 2026-08-01: added drown DoT.
-                            // Description says "Burn, Stun, and Drown" but
-                            // drown was missing - no effect.drown field and
-                            // no `drown` entry in STATUS_EFFECTS. Both are
-                            // now added; engine reads effect.drown + applies
-                            // via applyStatusEffect('drown', ...).
+ // AUDIT FIX added drown DoT.
+ // Description says "Burn, Stun, and Drown" but
+ // drown was missing - no effect.drown field and
+ // no `drown` entry in STATUS_EFFECTS. Both are
+ // now added; engine reads effect.drown + applies
+ // via applyStatusEffect('drown', ...).
                             drown: true,
                             drownChance: 60 + (level * 10),  // 70/80/90%
                             drownDuration: 2,
@@ -4682,19 +4682,19 @@ const SKILL_TREES = {
                         description: 'All enemies are silenced and pacified for 2-4 turns. Their buffs are stripped. "Kneel," you say. They kneel.',
                         animation: '🐲👑⚡',
                         skillPointCost: [7, 9, 11],
-                        // 💡 FIX 2026-08-01: Added effect callback - previously had
-                        // unrecognized debuffType:'SUPPRESS' that did nothing.
-                        // Now applies silence + strips buffs via standard engine fields.
+ // FIX Added effect callback - previously had
+ // unrecognized debuffType:'SUPPRESS' that did nothing.
+ // Now applies silence + strips buffs via standard engine fields.
                         effect: (level) => ({
                             type: 'aoe',
                             multiplier: 0,  // no damage - pure CC
                             damageType: 'magic',
                             targeting: 'ALL_ENEMIES',
-                            // Silence all enemies
+ // Silence all enemies
                             silence: true,
                             silenceChance: 100,
                             silenceDuration: 1 + level,  // 2/3/4 turns
-                            // Strip buffs
+ // Strip buffs
                             stripBuffs: true,
                         })
                     }
@@ -4703,13 +4703,13 @@ const SKILL_TREES = {
         }
     },
 
-    // ═══════════════════════════════════════════════════════════════════════
-    //  DRAGON LORD - successor class skill tree.
-    //  Distinct identity: where Dragon God channels the slain Leviathan's
-    //  oceanic apocalypse, Dragon Lord COMMANDS its surviving children.
-    //  Dragon God = solitary divine power. Dragon Lord = pack leader.
-    //  Mechanics: summons, pack buffs, more aggressive / less defensive.
-    // ═══════════════════════════════════════════════════════════════════════
+ // =======================================================================
+ // DRAGON LORD - successor class skill tree.
+ // Distinct identity: where Dragon God channels the slain Leviathan's
+ // oceanic apocalypse, Dragon Lord COMMANDS its surviving children.
+ // Dragon God = solitary divine power. Dragon Lord = pack leader.
+ // Mechanics: summons, pack buffs, more aggressive / less defensive.
+ // =======================================================================
     DRAGON_LORD: {
         name: 'Dragon Lord',
         icon: '🐉⚔️',
@@ -5293,7 +5293,7 @@ const SKILL_TREES = {
                         animation: '👊🌌💥',
                         skillPointCost: [4, 5, 6, 7, 8]
                     },
-                    // 💡 PHASE 2 2026-07-17: 3 new Divine Fist skills (was 1 - only Star Shatterer ult)
+ // PHASE 2 3 new Divine Fist skills (was 1 - only Star Shatterer ult)
                     iron_palm: {
                         id: 'iron_palm',
                         name: 'Iron Palm',
@@ -5529,7 +5529,7 @@ const SKILL_TREES = {
                         animation: '💀⌛🌑',
                         skillPointCost: [3, 4, 5, 6, 7]
                     },
-                    // 💡 PHASE 2 2026-07-17: 3 new Death Lord skills (was 1 - only Soul Reaping)
+ // PHASE 2 3 new Death Lord skills (was 1 - only Soul Reaping)
                     raise_dead: {
                         id: 'raise_dead',
                         name: 'Raise Dead',
@@ -5584,15 +5584,15 @@ const SKILL_TREES = {
 };
 
 // ==========================================
-// 🛡️ EVOLUTION HELPERS (Integrated)
+// EVOLUTION HELPERS (Integrated)
 // ==========================================
 
 // ==========================================
-// 🎯 ABILITY MECHANICS
+// ABILITY MECHANICS
 // ==========================================
 
 const ABILITY_MECHANICS = {
-    // DAMAGE TYPES
+ // DAMAGE TYPES
     PHYSICAL: {
         name: 'Physical',
         scaleStat: 'atk',
@@ -5613,14 +5613,14 @@ const ABILITY_MECHANICS = {
         effectiveness: 1.0
     },
     
-    // TARGETING
+ // TARGETING
     SINGLE: { name: 'Single Target', maxTargets: 1 },
     AOE_SMALL: { name: 'Small AOE', maxTargets: 3, damageReduction: 0.8 },
     AOE_LARGE: { name: 'Large AOE', maxTargets: 999, damageReduction: 0.6 },
     CHAIN: { name: 'Chain', maxTargets: 3, damageReduction: 0.7, chainReduction: 0.15 },
     CLEAVE: { name: 'Cleave', maxTargets: 2, damageReduction: 0.9 },
     
-    // EFFECTS
+ // EFFECTS
     BUFF: { type: 'positive', canStack: true },
     DEBUFF: { type: 'negative', canStack: true },
     DOT: { type: 'damage_over_time', tickRate: 'per_turn' },
@@ -5630,11 +5630,11 @@ const ABILITY_MECHANICS = {
 };
 
 // ==========================================
-// 📊 COMBO SYSTEM
+// COMBO SYSTEM
 // ==========================================
 
 const COMBO_ABILITIES = {
-    // WARRIOR + MAGE = Spell Blade
+ // WARRIOR + MAGE = Spell Blade
     spell_blade: {
         name: 'Spell Blade',
         requiredClasses: ['WARRIOR', 'MAGE'],
@@ -5649,7 +5649,7 @@ const COMBO_ABILITIES = {
         animation: '⚔️🔥✨'
     },
     
-    // ROGUE + MONK = Dual Strike
+ // ROGUE + MONK = Dual Strike
     dual_strike: {
         name: 'Dual Strike',
         requiredClasses: ['ROGUE', 'MONK'],
@@ -5665,7 +5665,7 @@ const COMBO_ABILITIES = {
         animation: '🗡️🥋💥'
     },
     
-    // PALADIN + CLERIC = Divine Intervention
+ // PALADIN + CLERIC = Divine Intervention
     divine_intervention: {
         name: 'Divine Intervention',
         requiredClasses: ['PALADIN', 'CLERIC'],
@@ -5683,7 +5683,7 @@ const COMBO_ABILITIES = {
 };
 
 // ==========================================
-// 🎯 SYNERGY BONUSES
+// SYNERGY BONUSES
 // ==========================================
 
 const CLASS_SYNERGIES = {
@@ -5710,13 +5710,12 @@ const CLASS_SYNERGIES = {
 };
 
 const EVOLUTION_SYSTEM = {
-    // Check if player can evolve
     canEvolve: (user, level, questsCompleted) => {
         const classSystem = require('./classSystem');
         const currentClass = classSystem.getClassById(user.class);
         if (!currentClass) return { canEvolve: false };
 
-        // Tier Check
+ // Tier Check
         if (currentClass.tier === 'STARTER' && level >= 20) {
             return { canEvolve: true, type: 'EVOLVED', requirements: currentClass.requirement };
         }
@@ -5726,16 +5725,16 @@ const EVOLUTION_SYSTEM = {
         return { canEvolve: false };
     },
 
-    // RPG Authentic Transition: Keep base skills, unlock new path
+ // RPG Authentic Transition: Keep base skills, unlock new path
     evolve: (user, newClassId) => {
         const classSystem = require('./classSystem');
         const newClass = classSystem.getClassById(newClassId);
         
-        // 1. Keep current skills (No reset)
-        // 2. Update Class
+ // 1. Keep current skills (No reset)
+ // 2. Update Class
         user.class = newClassId;
 
-        // 3. Mark the evolution level so we know when they shifted
+ // 3. Mark the evolution level so we know when they shifted
         user.evolvedAt = user.level || 10;
         
         return { success: true, newClassName: newClass.name };
@@ -5743,10 +5742,10 @@ const EVOLUTION_SYSTEM = {
 };
 
 function calculateSkillPoints(level) {
-    // 1 point per level, bonus points at milestones
+ // 1 point per level, bonus points at milestones
     let basePoints = level;
     
-    // Bonus points at levels 10, 20, 30, etc.
+ // Bonus points at levels 10, 20, 30, etc.
     const bonusLevels = Math.floor(level / 10);
     const bonusPoints = bonusLevels * 2;
     
@@ -5754,12 +5753,12 @@ function calculateSkillPoints(level) {
 }
 
 function getSkillCost(skillLevel) {
-    // Cost to upgrade: 1 point per level
+ // Cost to upgrade: 1 point per level
     return 1;
 }
 
 // ==========================================
-// 🔧 SKILL TREE HELPERS
+// SKILL TREE HELPERS
 // ==========================================
 
 function getAllSkills(classId) {
@@ -5838,12 +5837,12 @@ function getSkillEffect(skill, level) {
         return skill.effect(level);
     }
     
-    // Support for the new structured format (arrays for scaling)
+ // Support for the new structured format (arrays for scaling)
     if (skill.energyCost || skill.damageMultiplier) {
         const lvlIdx = Math.min(level - 1, (skill.maxLevel || 5) - 1);
         const getVal = (val) => Array.isArray(val) ? val[Math.min(lvlIdx, val.length - 1)] : val;
         
-        // Determine correct type for engine
+ // Determine correct type for engine
         let type = 'none';
         let targets = skill.targets;
 
@@ -5851,10 +5850,10 @@ function getSkillEffect(skill, level) {
             type = 'aoe';
             targets = skill.chainTargets;
         } else if (skill.targeting === 'CLEAVE') {
-            // 💡 QA FIX: was falling through to `targets = undefined` when the
-            // skill doesn't define targets/maxTargets (which WARRIOR cleave
-            // doesn't), causing getTargets to hit ALL enemies. Now defaults
-            // to the CLEAVE maxTargets from ABILITY_MECHANICS (which is 2).
+ // QA FIX: was falling through to `targets = undefined` when the
+ // skill doesn't define targets/maxTargets (which WARRIOR cleave
+ // doesn't), causing getTargets to hit ALL enemies. Now defaults
+ // to the CLEAVE maxTargets from ABILITY_MECHANICS (which is 2).
             type = 'aoe';
             if (typeof skill.targets === 'number') {
                 targets = skill.targets;
@@ -5865,7 +5864,7 @@ function getSkillEffect(skill, level) {
             }
         } else if (skill.targeting && (skill.targeting.includes('AOE') || skill.targeting === 'ALL_ENEMIES')) {
             type = 'aoe';
-            // Bug 4: do NOT set targets here so getTargets uses opponentSide.length (actual living enemies)
+ // Bug 4: do NOT set targets here so getTargets uses opponentSide.length (actual living enemies)
         } else if (skill.damageMultiplier) {
             type = 'damage';
         }
@@ -5883,7 +5882,7 @@ function getSkillEffect(skill, level) {
             description: skill.description
         };
 
-        // Flatten nested effects for the existing engine
+ // Flatten nested effects for the existing engine
         if (skill.effects) {
             effect.resolvedEffects = {};
             for (const [effId, effData] of Object.entries(skill.effects)) {
@@ -5898,7 +5897,7 @@ function getSkillEffect(skill, level) {
                     chance: chance
                 };
 
-                // Map common effects to existing engine properties
+ // Map common effects to existing engine properties
                 if (effId === 'stun' || effId === 'freeze' || effId === 'sleep' || effId === 'charm') {
                     effect.cc = effId;
                     effect.ccChance = chance || 100;
@@ -5920,12 +5919,12 @@ function getSkillEffect(skill, level) {
                     if (effect.type === 'none') effect.type = effId;
                     effect.healValue = val;
                 } else if (effId === 'evasion' || effId === 'critBuff') {
-                    // Specific handling for Mirror Image etc
+ // Specific handling for Mirror Image etc
                     if (effect.type === 'none') effect.type = 'buff_self';
                     effect[effId] = val;
                     effect[effId + 'Duration'] = dur || 2;
                 } else {
-                    // Generic fallback
+ // Generic fallback
                     effect[effId] = val;
                     if (dur) effect[effId + 'Duration'] = dur;
                 }
@@ -5935,7 +5934,7 @@ function getSkillEffect(skill, level) {
             }
         }
 
-        // Final fallback for SELF targeting
+ // Final fallback for SELF targeting
         if (skill.targeting === 'SELF' && effect.type === 'none') {
             effect.type = 'buff_self';
         }
@@ -5955,11 +5954,11 @@ function calculateSpentPoints(user, userClassId) {
     for (const [skillId, level] of Object.entries(user.skills)) {
         if (level <= 0) continue;
 
-        // 💡 FIX 2026-08-31: prefer the ACTUAL spend ledger. The heuristic
-        // below resolves the skill against the CURRENT lineage (evolved class
-        // first) - shared starter/evolved skills (cleave, fireball, smite...)
-        // defined WITHOUT skillPointCost in the starter tree but WITH
-        // escalating arrays in the evolved tree refunded MORE than was paid.
+ // FIX prefer the ACTUAL spend ledger. The heuristic
+ // below resolves the skill against the CURRENT lineage (evolved class
+ // first) - shared starter/evolved skills (cleave, fireball, smite...)
+ // defined WITHOUT skillPointCost in the starter tree but WITH
+ // escalating arrays in the evolved tree refunded MORE than was paid.
         if (user.skillSpend && typeof user.skillSpend === 'object' &&
             user.skillSpend[skillId] !== undefined &&
             Number.isFinite(Number(user.skillSpend[skillId]))) {
@@ -5967,7 +5966,7 @@ function calculateSpentPoints(user, userClassId) {
             continue;
         }
 
-        // Find skill definition in lineage
+ // Find skill definition in lineage
         let targetSkill = null;
         for (const classId of lineage) {
             const tree = SKILL_TREES[classId.toUpperCase()];
@@ -5981,7 +5980,7 @@ function calculateSpentPoints(user, userClassId) {
             if (targetSkill) break;
         }
 
-        // If not found in lineage, check all skill trees as fallback
+ // If not found in lineage, check all skill trees as fallback
         if (!targetSkill) {
             for (const [, tree] of Object.entries(SKILL_TREES)) {
                 for (const [, treeData] of Object.entries(tree.trees)) {
@@ -6020,10 +6019,10 @@ function ensureSkillPointsInitialized(user, userClassId, level) {
 }
 
 // ==========================================
-// 📤 EXPORTS
+// EXPORTS
 // ==========================================
 
-// ─── CUSTOM CLASS SKILL TREES (2026-09-14) ───
+// --- CUSTOM CLASS SKILL TREES ---
 // Persisted companion to classSystem's CUSTOM_CLASSES (the createclass mod
 // command): handleClassCreationReply adds an entry to SKILL_TREES in memory
 // AND saves it under System key custom_skilltrees_v1; this loader re-applies

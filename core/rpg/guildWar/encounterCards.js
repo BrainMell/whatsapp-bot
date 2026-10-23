@@ -1,10 +1,10 @@
 // ============================================
-// ⚔️ RUINS ENCOUNTER CARDS — Guild War Overhaul 2026-10-03
+// RUINS ENCOUNTER CARDS - Guild War Overhaul
 // One decree-style card per ruins encounter type (and per battle variant),
 // cloned from the Royal Decree kit (noticeCard/worldMapRenderer pattern).
-// DejaVu-verified glyph whitelist ONLY (CARD-SYSTEM §6 — emoji have zero
-// coverage in the box fonts): ⚔ ✥ ⚑ ◈ ☠ ✺ ✚ ✦ ✷ ▲ ⨀
-// Text fallbacks stay in the callers — a failed render must never block play.
+// DejaVu-verified glyph whitelist ONLY (CARD-SYSTEM §6 - emoji have zero
+// coverage in the box fonts): ◈ ▲ ⨀
+// Text fallbacks stay in the callers - a failed render must never block play.
 // ============================================
 
 const fs = require('fs');
@@ -77,7 +77,7 @@ function _wrap(ctx, text, maxWidth) {
 }
 
 // renderRoomCard({ type, variant, title, body, actionHint, world, ring, boss, danger })
-//   → PNG buffer (never throws into the caller on font/render trouble: returns null)
+// → PNG buffer (never throws into the caller on font/render trouble: returns null)
 async function renderRoomCard(opts = {}) {
     try {
         _ensureFonts();
@@ -88,7 +88,7 @@ async function renderRoomCard(opts = {}) {
         const c = canvas.createCanvas(W, H);
         const ctx = c.getContext('2d');
 
-        // parchment + blotches
+ // parchment + blotches
         ctx.fillStyle = PAL.parchment;
         ctx.fillRect(0, 0, W, H);
         ctx.fillStyle = PAL.parchmentDeep;
@@ -100,7 +100,7 @@ async function renderRoomCard(opts = {}) {
         }
         ctx.globalAlpha = 1;
 
-        // double frame + corner marks
+ // double frame + corner marks
         ctx.strokeStyle = PAL.frame;
         ctx.lineWidth = 2.5;
         ctx.strokeRect(30, 30, W - 60, H - 60);
@@ -114,13 +114,13 @@ async function renderRoomCard(opts = {}) {
             ctx.stroke();
         });
 
-        // kicker
+ // kicker
         ctx.textAlign = 'center';
         ctx.fillStyle = PAL.inkSoft;
         ctx.font = '15px "Cinzel"';
         ctx.fillText('THE RUINS OF THE DEAD WORLD', W / 2, 88);
 
-        // accent seal with glyph
+ // accent seal with glyph
         ctx.fillStyle = spec.accent;
         ctx.beginPath();
         ctx.arc(W / 2, 175, 52, 0, Math.PI * 2);
@@ -134,7 +134,7 @@ async function renderRoomCard(opts = {}) {
         ctx.font = '52px "Cinzel"';
         ctx.fillText(spec.glyph, W / 2, 195);
 
-        // title (type label, or explicit override e.g. landmark names)
+ // title (type label, or explicit override e.g. landmark names)
         const title = String(opts.title || spec.label).toUpperCase();
         ctx.fillStyle = PAL.ink;
         ctx.font = '30px "Cinzel Deco"';
@@ -146,7 +146,7 @@ async function renderRoomCard(opts = {}) {
             ctx.fillText(title.split('').join('\u2009'), W / 2, 275);
         }
 
-        // variant subtitle strip (battle adjustments) — wax red for dangerous ones
+ // variant subtitle strip (battle adjustments) - wax red for dangerous ones
         if (variant) {
             const sub = `${variant.name} · ${variant.note}`;
             ctx.font = '17px "IM Fell Italic"';
@@ -157,7 +157,7 @@ async function renderRoomCard(opts = {}) {
             ctx.fillText(sub, W / 2, 317);
         }
 
-        // body (wrapped IM Fell, max 4 lines)
+ // body (wrapped IM Fell, max 4 lines)
         ctx.textAlign = 'left';
         ctx.font = '21px "IM Fell"';
         ctx.fillStyle = PAL.ink;
@@ -165,7 +165,7 @@ async function renderRoomCard(opts = {}) {
         let ty = variant ? 386 : 360;
         for (const line of lines) { ctx.fillText(line, 110, ty); ty += 32; }
 
-        // action hint footer (what to type)
+ // action hint footer (what to type)
         if (opts.actionHint) {
             ctx.textAlign = 'center';
             ctx.font = '19px "IM Fell"';
@@ -175,7 +175,7 @@ async function renderRoomCard(opts = {}) {
             for (const line of hint) { ctx.fillText(line, W / 2, hy); hy += 26; }
         }
 
-        // room meta footer
+ // room meta footer
         ctx.textAlign = 'center';
         ctx.font = '14px "Cinzel"';
         ctx.fillStyle = PAL.inkSoft;

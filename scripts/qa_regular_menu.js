@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** qa_regular_menu.js — regular menu accuracy + tip hygiene + caption budget.
+/** qa_regular_menu.js - regular menu accuracy + tip hygiene + caption budget.
  *  Run: node scripts/qa_regular_menu.js  (exit 1 on failure)
  */
 const fs = require('fs');
@@ -18,7 +18,7 @@ const gamblingSrc = fs.readFileSync(path.join(ROOT, 'core/gambling.js'), 'utf8')
 const quizSrc = fs.readFileSync(path.join(ROOT, 'core/games/quiz.js'), 'utf8');
 const ALL = engine + cardSystem + gamblingSrc + quizSrc;
 
-// ── 1. DISPATCH CHECK: every regular entry must have a dispatch site ──
+// -- 1. DISPATCH CHECK: every regular entry must have a dispatch site --
 console.log('📋 DISPATCH CHECK (regular menu vs real code)');
 for (const [cat, cmds] of Object.entries(REG)) {
   for (const c of cmds) {
@@ -39,18 +39,18 @@ for (const [cat, cmds] of Object.entries(REG)) {
     }
     const hit = patterns.some(r => r.test(ALL));
     if (hit) pass(`${cat}/${key}`);
-    else fail(`${cat}/${key} — no dispatch site found`);
+    else fail(`${cat}/${key} - no dispatch site found`);
   }
 }
 
-// ── 2. TIP HYGIENE: regular tips must not teach mod-only commands ──
+// -- 2. TIP HYGIENE: regular tips must not teach mod-only commands --
 console.log('\n📋 TIP HYGIENE (regular menu)');
 const engineTips = engine.match(/const TIPS = \[([\s\S]*?)\n      \];/);
 if (!engineTips) { fail('TIPS array not found in engine.js'); }
 else {
   const tipsRaw = engineTips[1];
-  // A tip "teaches" a command when it contains `${prefix} <modcmd>` style
-  // command references. Prose mentions of the word "mod" are fine.
+ // A tip "teaches" a command when it contains `${prefix} <modcmd>` style
+ // command references. Prose mentions of the word "mod" are fine.
   const modOnly = ['resetwarn', 'glock', 'gunlock', 'cards on', 'cards off', 'espawn', 'event start', 'event stop', 'spawn', 'updateall', 'mod ', 'instances`, ', 'debug', 'opscheck'];
   const cmdRefs = [...tipsRaw.matchAll(/\`\$\{prefix\} ([a-z0-9 +_-]+)\`/g)].map(m => m[1]);
   const leaked = cmdRefs.filter((r) => modOnly.some((m) => (r + ' ').startsWith(m)) || r === 'menu -h');
@@ -71,7 +71,7 @@ for (const probe of ['resetwarn', 'glock rank', 'cards on']) {
   else fail(`moved tip missing from MOD_TIPS: ${probe}`);
 }
 
-// ── 3. CAPTION BUDGET: main view + every category view (paginated) ──
+// -- 3. CAPTION BUDGET: main view + every category view (paginated) --
 console.log('\n📋 CAPTION BUDGET (regular menu, limit 1024, paginated)');
 const BANNER = `┏━━━━━━━━━━━━━━━┓\n┃   X\n┗━━━━━━━━━━━━━━━┛\n\n`;
 const CAT_EMOJIS = { SUPPORT:'🛠️', STICKERS:'🎨', SEARCH:'🔍', 'PHANTOM THIEF':'🎭', 'USER INFO':'👤', ADMIN:'⚙️', GUILDS:'🏰', RPG:'⚔️', GROUP:'👥', PROGRESSION:'📈', CARDS:'🃏', ECONOMY:'💰', GAMBLING:'🎰', FUN:'🎡', GAMES:'🎮', PowerScaling:'⚖️', ANIME:'🎎', INFO:'ℹ️', INTERACTIONS:'💞', MODERATOR:'🛡️' };
@@ -107,7 +107,7 @@ for (const cat of Object.keys(REG)) {
   else fail(`category ${cat} page OVER LIMIT: ${worst}`);
 }
 
-// ── 4. MENU COMPLETENESS: new commands + alias coverage (2026-10-12 sweep) ──
+// -- 4. MENU COMPLETENESS: new commands + alias coverage (sweep) --
 console.log('\n📋 MENU COMPLETENESS (new commands + alias mentions)');
 const flat = Object.values(REG).flat();
 const have = (cmd) => flat.some((c) => c.cmd === cmd);

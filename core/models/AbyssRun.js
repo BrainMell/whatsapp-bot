@@ -1,52 +1,52 @@
 const mongoose = require('mongoose');
 
-// 💡 Phase 4: AbyssRun - tracks a single player's active Abyss run.
+// Phase 4: AbyssRun - tracks a single player's active Abyss run.
 // One active run per user at a time. Deleted on death or retreat.
 // Leaderboard entries (AbyssLeaderboard) persist after the run ends.
 const AbyssRunSchema = new mongoose.Schema({
-  // 💡 QA FIX: removed `unique: true` - it prevented players from starting
-  // new runs after their first run completed/died (E11000 duplicate key).
-  // Now multiple AbyssRun documents can exist per user (active + history).
+ // QA FIX: removed `unique: true` - it prevented players from starting
+ // new runs after their first run completed/died (E11000 duplicate key).
+ // Now multiple AbyssRun documents can exist per user (active + history).
   userId: { type: String, required: true, index: true },
-  // 💡 CROSS-BOT STATE LEAK FIX 2026-09-20: which bot instance (Joker /
-  // Subaru) owns this run. Runs live in SHARED MongoDB - without this, a
-  // run started on one bot was attackable from the other. Optional +
-  // defaulting to null so pre-existing in-flight runs stay reachable
-  // (activeRunFilter in abyssSystem matches null-botId runs for both bots).
+ // CROSS-BOT STATE LEAK FIX which bot instance (Joker /
+ // Subaru) owns this run. Runs live in SHARED MongoDB - without this, a
+ // run started on one bot was attackable from the other. Optional +
+ // defaulting to null so pre-existing in-flight runs stay reachable
+ // (activeRunFilter in abyssSystem matches null-botId runs for both bots).
   botId: { type: String, default: null },
   currentFloor: { type: Number, default: 1 },
   monstersKilled: { type: Number, default: 0 },
   bossesKilled: { type: Number, default: 0 },
-  // Loot accumulator - tracks XP + gold earned during the run.
-  // On death: player keeps 10%. On retreat: player keeps 100%.
+ // Loot accumulator - tracks XP + gold earned during the run.
+ // On death: player keeps 10%. On retreat: player keeps 100%.
   lootAccumulator: {
     xp: { type: Number, default: 0 },
     gold: { type: Number, default: 0 },
     runes: [{ type: String }], // runeIds dropped during the run
     items: [{ type: String }], // itemIds dropped during the run
   },
-  // Combat state - the current floor's enemy/boss
-  // 💡 FIX 2026-08-31: changed from a strict flat sub-schema to Mixed.
-  // Wild-summon encounters store their stats NESTED (enemy.stats.{hp,...})
-  // plus extra fields (isWildSummon, icon, abilities, xpReward, goldReward)
-  // - the strict sub-schema stripped all of them on save, feeding NaN-HP
-  // unkillable enemies into startAbyssCombat. Readers already handle both
-  // shapes (`enemy.stats?.hp ?? enemy.hp`), so Mixed is safe for regular
-  // flat enemies too.
+ // Combat state - the current floor's enemy/boss
+ // FIX changed from a strict flat sub-schema to Mixed.
+ // Wild-summon encounters store their stats NESTED (enemy.stats.{hp,...})
+ // plus extra fields (isWildSummon, icon, abilities, xpReward, goldReward)
+ // - the strict sub-schema stripped all of them on save, feeding NaN-HP
+ // unkillable enemies into startAbyssCombat. Readers already handle both
+ // shapes (`enemy.stats?.hp ?? enemy.hp`), so Mixed is safe for regular
+ // flat enemies too.
   currentEnemy: { type: mongoose.Schema.Types.Mixed, default: null },
-  // 💡 FIX 2026-07-31 Bug #1: These fields were referenced in code but NOT
-  // in the schema. Mongoose strict mode silently stripped them on save,
-  // causing treasure/event floors to be completely broken (the encounter
-  // type was lost between commands). Now properly defined.
+ // FIX Bug #1: These fields were referenced in code but NOT
+ // in the schema. Mongoose strict mode silently stripped them on save,
+ // causing treasure/event floors to be completely broken (the encounter
+ // type was lost between commands). Now properly defined.
   currentEncounterType: { type: String, default: 'combat' }, // 'combat' | 'treasure' | 'event' | 'wild_summon'
   currentEncounterData: { type: mongoose.Schema.Types.Mixed, default: null },
-  // 💡 2026-09-17: pack fights - weakened pack members queued for the
-  // current floor (empty on solo floors). Same shape as currentEnemy.
+ // pack fights - weakened pack members queued for the
+ // current floor (empty on solo floors). Same shape as currentEnemy.
   packQueue: { type: [mongoose.Schema.Types.Mixed], default: [] },
-  // Player state snapshot at run start (so we can restore on death)
-  // 💡 FIX 2026-08-31: added atk/def/spd - TRAP events roll against these
-  // stats (playerStats[choice.stat]), but only hp/energy were snapshotted,
-  // so def/spd checks always fell back to 10 and ALWAYS failed.
+ // Player state snapshot at run start (so we can restore on death)
+ // FIX added atk/def/spd - TRAP events roll against these
+ // stats (playerStats[choice.stat]), but only hp/energy were snapshotted,
+ // so def/spd checks always fell back to 10 and ALWAYS failed.
   playerSnapshot: {
     hp: { type: Number, default: 0 },
     maxHp: { type: Number, default: 0 },
@@ -56,15 +56,15 @@ const AbyssRunSchema = new mongoose.Schema({
     def: { type: Number, default: 5 },
     spd: { type: Number, default: 5 },
   },
-  // Current player HP/energy during the run (separate from playerSnapshot
-  // so we can track damage taken during the run)
+ // Current player HP/energy during the run (separate from playerSnapshot
+ // so we can track damage taken during the run)
   currentHp: { type: Number, default: 0 },
   currentEnergy: { type: Number, default: 0 },
-  // 💡 CO-OP ABYSS (2026-10-11, owner: "add a co-op mode for the abyss"):
-  // one SHARED run doc owned by the host; up to 4 players descend together.
-  // party[0] is always the host. Members join via `.j abyss join`.
-  // Co-op loot is paid PER FLOOR to every member immediately (the shared
-  // lootAccumulator stays zeroed so retreat/death can't double-pay).
+ // CO-OP ABYSS ("add a co-op mode for the abyss"):
+ // one SHARED run doc owned by the host; up to 4 players descend together.
+ // party[0] is always the host. Members join via `.j abyss join`.
+ // Co-op loot is paid PER FLOOR to every member immediately (the shared
+ // lootAccumulator stays zeroed so retreat/death can't double-pay).
   isCoop: { type: Boolean, default: false },
   hostJid: { type: String, default: null },
   party: [{
@@ -76,9 +76,9 @@ const AbyssRunSchema = new mongoose.Schema({
   }],
   startedAt: { type: Date, default: Date.now },
   lastActionAt: { type: Date, default: Date.now },
-  // Status: 'active', 'completed' (retreated), 'failed' (died)
+ // Status: 'active', 'completed' (retreated), 'failed' (died)
   status: { type: String, default: 'active' },
-  // Run score (computed on death/retreat)
+ // Run score (computed on death/retreat)
   finalScore: { type: Number, default: 0 },
   finalFloor: { type: Number, default: 0 },
 }, { timestamps: true });

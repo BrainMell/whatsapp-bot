@@ -21,19 +21,19 @@ function rows(n, startScore = 60) {
 }
 
 (async () => {
-  // full board, 10 rows, no overflow
+ // full board, 10 rows, no overflow
   const full = await cards.renderLeaderboardCard({ manorName: 'BLACKVALE MANOR', rows: rows(10), totalTracked: 10 });
   fs.writeFileSync(path.join(OUT, 'lb_full.png'), full);
 
-  // overflow: 9 rows + "…and N more" line
+ // overflow: 9 rows + "…and N more" line
   const over = await cards.renderLeaderboardCard({ manorName: 'BLACKVALE MANOR', rows: rows(9), totalTracked: 23 });
   fs.writeFileSync(path.join(OUT, 'lb_overflow.png'), over);
 
-  // empty ledger
+ // empty ledger
   const empty = await cards.renderLeaderboardCard({ manorName: 'BLACKVALE MANOR', rows: [], totalTracked: 0 });
   fs.writeFileSync(path.join(OUT, 'lb_empty.png'), empty);
 
-  // lobby card with the prize line
+ // lobby card with the prize line
   const lobby = await cards.renderLobbyCard({
     manorName: 'BLACKVALE MANOR',
     playerCount: 3, minPlayers: 4, maxPlayers: 11,

@@ -1,47 +1,42 @@
-// ══════════════════════════════════════════════════════════════════════════
-// CHARACTER RESOLVER (2026-09-30) - category-routed multi-source character
-// + image pipeline for quiz image questions. Owner spec 2026-09-30 v3.
-// ══════════════════════════════════════════════════════════════════════════
-//
+// ==========================================================================
+// CHARACTER RESOLVER - category-routed multi-source character
+// + image pipeline for quiz image questions. Owner spec v3.
+// ==========================================================================
 // WHY THIS EXISTS (audit of the previous system, all measured):
-//   1. SAME ORDER EVERY RUN: AniList cast arrives FAVOURITES_DESC (deterministic),
-//      the wiki registry is fame-ordered (deterministic), and every builder
-//      iterated those lists head-first. The only "randomness" was the biased
-//      sort(() => Math.random() - 0.5) comparator (see quiz.js line ~156:
-//      "measured: option A carried the correct answer far above 25%").
-//      -> replaced by per-quiz-instance Fisher-Yates over the whole verified pool.
-//   2. HOLLOW KNIGHT FAILED: not in the curated registry (33 franchises) ->
-//      dead Fandom CDN chain. -> generic Wikipedia pipeline below resolves ANY
-//      franchise: list-article discovery + link extraction + batched pageimages
-//      (pilicense=any) + identity gate. No curation required.
-//   3. CATEGORY BLINDNESS: routing was "AniList id present? cast : registry : legacy".
-//      -> category detection FIRST (anime/manga/game/movie/tv/comic/other),
-//      then the category's provider chain, in order, with fallbacks.
-//   4. ONE-SOURCE RELIANCE: Fandom CDN is Cloudflare-403 from this box (0/60).
-//      -> 7 adapters, category-routed: anilist / jikan / tvmaze / wikipedia /
-//      wikidata / tmdb (key-gated) / igdb (key-gated).
-//
+// 1. SAME ORDER EVERY RUN: AniList cast arrives FAVOURITES_DESC (deterministic),
+// the wiki registry is fame-ordered (deterministic), and every builder
+// sort(() => Math.random() - 0.5) comparator (see quiz.js line ~156:
+// "measured: option A carried the correct answer far above 25%").
+// -> replaced by per-quiz-instance Fisher-Yates over the whole verified pool.
+// 2. HOLLOW KNIGHT FAILED: not in the curated registry (33 franchises) ->
+// dead Fandom CDN chain. -> generic Wikipedia pipeline below resolves ANY
+// franchise: list-article discovery + link extraction + batched pageimages
+// (pilicense=any) + identity gate. No curation required.
+// 3. CATEGORY BLINDNESS: routing was "AniList id present? cast : registry : legacy".
+// -> category detection FIRST (anime/manga/game/movie/tv/comic/other),
+// then the category's provider chain, in order, with fallbacks.
+// 4. ONE-SOURCE RELIANCE: Fandom CDN is Cloudflare-403 from this box (0/60).
+// -> 7 adapters, category-routed: anilist / jikan / tvmaze / wikipedia /
+// wikidata / tmdb (key-gated) / igdb (key-gated).
 // UNIFIED CHARACTER RECORD (owner spec):
-//   { name, aliases, franchise, category, description,
-//     image_url, source, source_id, confidence }
-//
+// { name, aliases, franchise, category, description,
+// image_url, source, source_id, confidence }
 // RANDOMIZATION (owner spec):
-//   - pool of 10..500 metadata candidates per franchise (category sources)
-//   - image-verified subset (URL present; bytes gated at pick time)
-//   - crypto Fisher-Yates shuffle PER QUIZ INSTANCE (WeakMap on the session
-//     object -> two groups starting the same quiz get different sequences)
-//   - no repeats within a quiz (usedKeys + per-session bytes-hash dedup)
-//   - cross-quiz recency file (last N picks per franchise avoided when the
-//     pool is deep enough) so repeated quizzes stop recycling the same heads
-//   - final option order inside each question is also Fisher-Yates
-//
+// - pool of 10..500 metadata candidates per franchise (category sources)
+// - image-verified subset (URL present; bytes gated at pick time)
+// - crypto Fisher-Yates shuffle PER QUIZ INSTANCE (WeakMap on the session
+// object -> two groups starting the same quiz get different sequences)
+// - no repeats within a quiz (usedKeys + per-session bytes-hash dedup)
+// - cross-quiz recency file (last N picks per franchise avoided when the
+// pool is deep enough) so repeated quizzes stop recycling the same heads
+// - final option order inside each question is also Fisher-Yates
 // CACHING (hybrid, owner spec):
-//   - franchise POOL (metadata + image URLs) cached on disk 24h
-//     core/data/quiz_pools/<hash>.json  - pool rebuilds are paced API work
-//   - verified image BYTES cached by quizPortraitCache (30d, existing)
-//   - negative cache 24h (existing) - dead sources are not re-hammered
-//   - NOT pre-downloading every character: bytes download lazily per pick
-// ══════════════════════════════════════════════════════════════════════════
+// - franchise POOL (metadata + image URLs) cached on disk 24h
+// core/data/quiz_pools/<hash>.json - pool rebuilds are paced API work
+// - verified image BYTES cached by quizPortraitCache (30d, existing)
+// - negative cache 24h (existing) - dead sources are not re-hammered
+// - NOT pre-downloading every character: bytes download lazily per pick
+// ==========================================================================
 
 const crypto = require("crypto");
 const fs = require("fs");
@@ -53,7 +48,7 @@ const wikiEntityImages = require("./wikiEntityImages");
 const imgSources = require("./quizImageSources");
 const quizImagePipeline = require("./quizImagePipeline");
 
-// ── shared http ──
+// -- shared http --
 const _UA = { "User-Agent": "ZenithQuizBot/1.0 (WhatsApp trivia bot; contact: ops@zenithbot.dev) axios" };
 const _http = axios.create({ timeout: 12000, headers: _UA });
 
@@ -61,9 +56,9 @@ const _http = axios.create({ timeout: 12000, headers: _UA });
 const _deps = { fetchFranchiseCast: null, detectMediaType: null, resolveAnime: null };
 function setDeps(d) { Object.assign(_deps, d || {}); }
 
-// ══════════════════════════════════════════
+// ==========================================
 // RANDOM: crypto Fisher-Yates (unbiased, per-instance)
-// ══════════════════════════════════════════
+// ==========================================
 function fyShuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -79,11 +74,11 @@ function _norm(s) {
 }
 function recordKey(name) { return _norm(name).replace(/\s+/g, "-"); }
 
-// ══════════════════════════════════════════
+// ==========================================
 // UNIFIED RECORD FACTORY
 // confidence: 1.0 database-anchored cast/art | 0.9 curated article |
-//             0.8 list-article link | 0.7 search-anchored | 0.5 weak
-// ══════════════════════════════════════════
+// 0.8 list-article link | 0.7 search-anchored | 0.5 weak
+// ==========================================
 function rec(p) {
   return {
     name: String(p.name || "").trim(),
@@ -95,18 +90,18 @@ function rec(p) {
     source: p.source || "unknown",
     source_id: p.source_id || "",
     confidence: typeof p.confidence === "number" ? p.confidence : 0.5,
-    // resolver-internal fields (not in the owner-spec shape but needed):
+ // resolver-internal fields (not in the owner-spec shape but needed):
     article: p.article || null, // wikipedia article title (identity anchor)
     method: p.method || null,
   };
 }
 
-// ══════════════════════════════════════════
+// ==========================================
 // CATEGORY DETECTION (anime|manga|game|movie|tv|comic|other)
 // order of evidence: explicit mediaType -> AniList probe -> TVMaze ->
 // quizLore.detectMediaType (Wikipedia lead + TVMaze, already cached) ->
 // "other". Cached per title 6h in-memory + rides the pool disk cache.
-// ══════════════════════════════════════════
+// ==========================================
 const _catCache = new Map(); // title -> { ts, category }
 async function detectCategory(title, explicit) {
   const t = String(title || "").trim();
@@ -117,23 +112,23 @@ async function detectCategory(title, explicit) {
   const hit = _catCache.get(ck);
   if (hit && Date.now() - hit.ts < 6 * 3600e3) return hit.category;
   let category = "other";
-  // 1) AniList probe FIRST - the definitive anime/manga signal. TVMaze also
-  // lists broadcast anime ("Naruto" is a TV show there too), so TVMaze alone
-  // mis-routes anime franchises to the tv chain (measured regression).
+ // 1) AniList probe FIRST - the definitive anime/manga signal. TVMaze also
+ // lists broadcast anime ("Naruto" is a TV show there too), so TVMaze alone
+ // mis-routes anime franchises to the tv chain (measured regression).
   try {
     const q = `query($s:String){Page(perPage:5){media(search:$s,type:ANIME){id format title{romaji english}} } }`;
     const r = await _http.post("https://graphql.anilist.co", { query: q, variables: { s: t } }, { timeout: 8000 });
     const nt = _norm(t);
-    // filter AFTER normalization - a title that normalizes to "" would make
-    // nt.includes("") always-true and match an unrelated anime
+ // filter AFTER normalization - a title that normalizes to "" would make
+ // nt.includes("") always-true and match an unrelated anime
     const media = (r.data?.data?.Page?.media || []).filter((m) => {
       const titles = [m.title?.romaji, m.title?.english].filter(Boolean).map((x) => _norm(x)).filter((x) => x && x.length >= 2);
       return titles.some((x) => x.includes(nt) || (nt.length >= 5 && nt.includes(x)));
     });
     if (media.length) {
-      // 2026-10-02 format gate: the AniList ANIME-type search also returns
-      // MUSIC entries ("Casablanca" id 107907 format=MUSIC misrouted the 1942
-      // film to the anime chain). Only real media formats classify.
+ // format gate: the AniList ANIME-type search also returns
+ // MUSIC entries ("Casablanca" id 107907 format=MUSIC misrouted the 1942
+ // film to the anime chain). Only real media formats classify.
       const fmts = media.map((m) => m.format).filter((f) =>
         ["TV", "TV_SHORT", "MOVIE", "OVA", "ONA", "SPECIAL", "MANGA", "ONE_SHOT", "NOVEL"].includes(f));
       if (fmts.length) {
@@ -142,12 +137,12 @@ async function detectCategory(title, explicit) {
       }
     }
   } catch { /* anilist unreachable - continue */ }
-  // 2) TVMaze - type-aware: "Animation" routes to the cartoon chain (Ben 10
-  // fix - cartoons are NOT live-action tv), everything else that matches is tv.
-  // 2026-10-01: ONE retry on network failure - a flaky probe must not silently
-  // drop the cartoon signal and let the Steam exact-name probe misroute a
-  // cartoon franchise to the game chain (measured: Ben 10 -> game on a
-  // transient TVMaze timeout).
+ // 2) TVMaze - type-aware: "Animation" routes to the cartoon chain (Ben 10
+ // fix - cartoons are NOT live-action tv), everything else that matches is tv.
+ // ONE retry on network failure - a flaky probe must not silently
+ // drop the cartoon signal and let the Steam exact-name probe misroute a
+ // cartoon franchise to the game chain (measured: Ben 10 -> game on a
+ // transient TVMaze timeout).
   let tvmazeUnknown = false;
   if (category === "other") {
     for (let tryN = 0; tryN < 2; tryN++) {
@@ -163,9 +158,9 @@ async function detectCategory(title, explicit) {
       }
     }
   }
-  // 2b) Wikipedia lead classification - deterministic, independent of TVMaze
-  // reachability (TVMaze ETIMEDOUTs intermittently from datacenter IPs;
-  // measured Ben 10 -> game misroute when both TVMaze tries died).
+ // 2b) Wikipedia lead classification - deterministic, independent of TVMaze
+ // reachability (TVMaze ETIMEDOUTs intermittently from datacenter IPs;
+ // measured Ben 10 -> game misroute when both TVMaze tries died).
   if (category === "other") {
     try {
       const d = await wikiEntityImages.wikiApi({
@@ -178,13 +173,13 @@ async function detectCategory(title, explicit) {
       if (hint) category = hint;
     } catch { /* wiki unreachable - continue */ }
   }
-  // 2c) Steam storesearch - deterministic game signal (Elden Ring, Hollow
-  // Knight...). Exact-name hits only; fuzzy matching would route movies with
-  // game-adjacent names to the game chain. 2026-10-01 multi-source guard
-  // (owner spec §6): cross-media franchises share exact names with their game
-  // adaptations (Ben 10, SpongeBob...). If TVMaze was UNREACHABLE (not
-  // negative), retry it once before committing to the game chain - an
-  // Animation/TV signal outranks the Steam name collision.
+ // 2c) Steam storesearch - deterministic game signal (Elden Ring, Hollow
+ // Knight...). Exact-name hits only; fuzzy matching would route movies with
+ // game-adjacent names to the game chain. multi-source guard
+ // (owner spec §6): cross-media franchises share exact names with their game
+ // adaptations (Ben 10, SpongeBob...). If TVMaze was UNREACHABLE (not
+ // negative), retry it once before committing to the game chain - an
+ // Animation/TV signal outranks the Steam name collision.
   if (category === "other") {
     try {
       const probe = await imgSources.steamGameProbe(t);
@@ -201,7 +196,7 @@ async function detectCategory(title, explicit) {
       }
     } catch { /* not game */ }
   }
-  // 2c) iTunes media=movie probe - deterministic movie signal (Apollo 9 fix).
+ // 2c) iTunes media=movie probe - deterministic movie signal (Apollo 9 fix).
   if (category === "other") {
     try {
       const r = await _http.get("https://itunes.apple.com/search", { params: { term: t, media: "movie", limit: 3, country: "US" }, timeout: 7000 });
@@ -212,7 +207,7 @@ async function detectCategory(title, explicit) {
       }
     } catch { /* not movie */ }
   }
-  // 3) quizLore.detectMediaType (TVMaze + Wikipedia lead classification)
+ // 3) quizLore.detectMediaType (TVMaze + Wikipedia lead classification)
   if (category === "other" && typeof _deps.detectMediaType === "function") {
     try {
       const d = await _deps.detectMediaType(t);
@@ -224,15 +219,15 @@ async function detectCategory(title, explicit) {
   return category;
 }
 
-// ══════════════════════════════════════════
+// ==========================================
 // ADAPTER: AniList cast (anime primary; identity is database-guaranteed)
 // fetchFranchiseCast is injected by quiz.js (paced, single-flight, cached).
-// ══════════════════════════════════════════
+// ==========================================
 async function anilistPool(ctx) {
   let id = ctx.anilistId;
   if (!id && typeof _deps.resolveAnime === "function" && (ctx.category === "anime" || ctx.category === "manga")) {
-    // owner-spec routing: anime/manga -> AniList even when the quiz context
-    // arrived without a resolved media id (e.g. category detected late)
+ // owner-spec routing: anime/manga -> AniList even when the quiz context
+ // arrived without a resolved media id (e.g. category detected late)
     try {
       const r = await _deps.resolveAnime(ctx.title);
       id = r?.anime?.id || r?.id || null;
@@ -255,8 +250,8 @@ async function anilistPool(ctx) {
     _role: c.role || null,
   })).filter((r) => {
     if (!r.name) return false;
-    // AniList serves a shared grey PLACEHOLDER for cast members without art -
-    // N such records = N questions with the same picture = hash collisions
+ // AniList serves a shared grey PLACEHOLDER for cast members without art -
+ // N such records = N questions with the same picture = hash collisions
     if (!r.image_url) return true;
     if (/\/default\.|\/nostalgia\.|\/no_image/i.test(r.image_url)) { r.image_url = null; return true; }
     if (seen.has(r.image_url)) return false;
@@ -265,10 +260,10 @@ async function anilistPool(ctx) {
   });
 }
 
-// ══════════════════════════════════════════
+// ==========================================
 // ADAPTER: Jikan/MyAnimeList (anime/manga fallback). Free, no key.
-// Globally 504 during the 2026-09-30 audit - auto-skip with cooldown.
-// ══════════════════════════════════════════
+// Globally 504 during the audit - auto-skip with cooldown.
+// ==========================================
 let _jikanCooldownUntil = 0;
 async function jikanPool(ctx) {
   if (Date.now() < _jikanCooldownUntil) return [];
@@ -296,16 +291,16 @@ async function jikanPool(ctx) {
   }
 }
 
-// ══════════════════════════════════════════
+// ==========================================
 // ADAPTER: TVMaze (tv primary). Free, no key. show cast carries images.
-// ══════════════════════════════════════════
+// ==========================================
 async function tvmazePool(ctx) {
   try {
     const s = await _http.get("https://api.tvmaze.com/singlesearch/shows", { params: { q: ctx.title }, timeout: 8000 });
     const showId = s.data?.id;
     if (!showId) return [];
-    // 2026-09-30 FIX: /shows/{id}/characters is a 404 - the cast endpoint is
-    // /shows/{id}/cast (rows = { character: {name,image,url}, person: {...} })
+ // FIX: /shows/{id}/characters is a 404 - the cast endpoint is
+ // /shows/{id}/cast (rows = { character: {name,image,url}, person: {...} })
     const c = await _http.get(`https://api.tvmaze.com/shows/${showId}/cast`, { timeout: 9000 });
     const rows = c.data || [];
     return rows.map((row) => ({
@@ -325,11 +320,11 @@ async function tvmazePool(ctx) {
   } catch { return []; }
 }
 
-// ══════════════════════════════════════════
+// ==========================================
 // ADAPTER: TMDb (movie/tv) - REQUIRES TMDB_API_KEY in .env (free tier).
 // Key-gated: adapter is silent when the key is absent (owner spec: multiple
 // sources; the keyless chain must already be strong without it).
-// ══════════════════════════════════════════
+// ==========================================
 let _tmdbWarned = false;
 async function tmdbPool(ctx) {
   const key = process.env.TMDB_API_KEY;
@@ -356,10 +351,10 @@ async function tmdbPool(ctx) {
   } catch { return []; }
 }
 
-// ══════════════════════════════════════════
+// ==========================================
 // ADAPTER: IGDB (game) - REQUIRES TWITCH_CLIENT_ID + TWITCH_CLIENT_SECRET.
 // Key-gated, silent when absent.
-// ══════════════════════════════════════════
+// ==========================================
 let _igdb = { token: null, until: 0, warned: false };
 async function igdbPool(ctx) {
   const cid = process.env.TWITCH_CLIENT_ID;
@@ -398,52 +393,52 @@ async function igdbPool(ctx) {
   } catch { return []; }
 }
 
-// ══════════════════════════════════════════
+// ==========================================
 // ADAPTER: Wikipedia generic pipeline (games/movies/tv/comics + ANY franchise)
 // This is what makes Hollow Knight (and every uncurated franchise) work:
-//   1. registry names when the slug is curated (33 franchises, fame-ordered)
-//   2. list-article discovery: "List of <T> characters" / "<T> characters"
-//   3. link extraction from the list article AND the base franchise article
-//      (Hollow Knight keeps its cast as links inside the main article)
-//   4. batched pageimages (pilicense=any - fair-use character art included)
-//   5. identity: article-title anchoring + wikiEntityImages.identityOk gate
+// 1. registry names when the slug is curated (33 franchises, fame-ordered)
+// 2. list-article discovery: "List of <T> characters" / "<T> characters"
+// 3. link extraction from the list article AND the base franchise article
+// (Hollow Knight keeps its cast as links inside the main article)
+// 4. batched pageimages (pilicense=any - fair-use character art included)
+// 5. identity: article-title anchoring + wikiEntityImages.identityOk gate
 // All API/download discipline is inherited from wikiEntityImages.
-// ══════════════════════════════════════════
+// ==========================================
 const _JUNK_LINK = /(speedrun|gameplay|soundtrack|\bost\b|album|film series|category:|template:|portal:|development of|reception|expansion pack|downloadable content|season \d|episode list|video game series|novelization|comic book series)/i;
 
-// ══════════════════════════════════════════
-// CHARACTER CLASSIFIER (2026-09-30, measured fix)
+// ==========================================
+// CHARACTER CLASSIFIER (measured fix)
 // Raw article links are NOT characters: "Dragon Ball" article links its video
 // games, "The Matrix" links OTHER films (Batman & Robin, Alien), the Hollow
 // Knight article links the Unity engine and Team Cherry's staff. The old
 // identityOk gate cannot catch these - the article IS about the named subject;
 // the subject just is not a CHARACTER. Classification from the article LEAD:
-//   accept  = character-signal AND NOT media/person/website-signal
-//   fallback= title carries a franchise disambiguator "<Name> (<Franchise>)"
+// accept = character-signal AND NOT media/person/website-signal
+// fallback= title carries a franchise disambiguator "<Name> (<Franchise>)"
 // Measured examples that MUST reject: "Dragon Ball Legends is a 2018 video
 // game...", "$456,000 Squid Game in Real Life!", "Polygon (website)",
 // "Matthew Griffin is a video game marketer", "Unity (game engine)".
 // Measured examples that MUST pass: "Goku is a character and the main
 // protagonist of the Dragon Ball manga", "Batman is a superhero appearing in
 // American comic books", "Emilia is a fictional character in Re:Zero".
-// ══════════════════════════════════════════
+// ==========================================
 const _CHAR_PAT = /\bfictional\b|\bsuperhero\b|\bsupervillain\b|\bsuper villain\b|\btitle character\b|\bmain character\b|\bprotagonist\b|\bantagonist\b|\bdeuteragonist\b|\bplayable character\b|\bcharacter (in|from|of|created|and)|\bmecha\b|\bmascot\b|\bfictional (creature|being|entity|species|character|robot|android|monster|animal|deity)|\bboss (in|of)\b|\bvoice belongs\b|\bis voiced\b|\bportrayed by\b/i;
 const _JUNK_LEAD = /\bis a \d{4} (video game|film|movie)\b|\bvideo game (developed|published|based|in the|series)\b|\bplatform game\b|\baction-adventure game\b|\brole-playing (video )?game\b|\bfighting game\b|\bracing game\b|\bpuzzle (video )?game\b|\bstrategy (video )?game\b|\broguelike\b|\bshooter game\b|\bhorror game\b|\bindie game\b|\bgame engine\b|\btelevision (series|show|miniseries) (created|developed|that|premiered|which)\b|\bweb series\b|\bfilm (directed|series|adaptation|that|based)\b|\bsuperhero film\b|\banimated (science |martial arts |fantasy |action |short )?film\b|\bcomedy film\b|\baction film\b|\bhorror film\b|\bscience fiction film\b|\bshort film\b|\b\d{1,2}(st|nd|rd|th) (film|movie)\b|\bepisode of\b|\bsong (by|recorded|written)\b|\balbum (by|recorded)\b|\bsingle by\b|\bis a website\b|\bwebcomic\b|\bYouTube (channel|video)\b|\b(is|was) an? (American|Japanese|British|English|Canadian|Australian|South Korean|Chinese|French|German|Spanish|Italian|Swedish|Dutch) (voice )?(actor|actress|singer|musician|writer|director|producer|designer|marketer|developer|programmer|journalist|artist|comedian)\b|\b(is|was) an? (video game|game) (developer|director|designer|producer|journalist|marketer|programmer|studio|company)\b|\bvideo game studio\b|\bvideo game developer\b|\bmanga series\b|\banime series\b|\blight novel series\b|\bmanga written\b|\bcomic (strip|book series)\b|\bnovel (by|written|series)\b|\bnon-player character\b|\bboss (battle|fight|level|stage)\b|\bmetroidvania\b|\bupcoming (video )?game\b|\bsequel to (the )?(video )?game\b|\bvoice (actor|actress|artist)\b|\bknown for (voicing|his voice|her voice|providing voices)\b/i;
 // generic-concept articles that keep leaking into franchise link pools
 // ("Boss (video games)", "Crossover (fiction)", "Cameo appearance", ...)
 const _GENERIC_TITLE = /^(boss|crossover|cameo|villain|hero|sidekick|protagonist|antagonist|character|enemy|monster|species|non-player character)\b/i;
 const _GENERIC_DISAMBIG = /\((video games?|fiction|concept|gaming|mechanic|trope|media|franchise)\)\s*$/i;
-// ══════════════════════════════════════════
-// WIKIPEDIA LEAD CATEGORY (2026-10-01 owner bug report §6: deterministic
+// ==========================================
+// WIKIPEDIA LEAD CATEGORY (owner bug report §6: deterministic
 // classification first). Independent of TVMaze reachability: the en.wiki
 // intro of the franchise article states what the franchise IS.
-//   "animated ... television series" / network identity (Cartoon Network,
-//   Nickelodeon, Disney, PBS Kids - exclusively animated content) -> cartoon
-//   "television series" -> tv | "video game" family -> game | film -> movie
+// "animated ... television series" / network identity (Cartoon Network,
+// Nickelodeon, Disney, PBS Kids - exclusively animated content) -> cartoon
+// "television series" -> tv | "video game" family -> game | film -> movie
 // Measured: Ben 10 lead = "...media franchise... owned by The Cartoon
 // Network, Inc." -> cartoon BEFORE Steam's exact-name "Ben 10" game can
 // misroute it; Elden Ring lead = "action role-playing game" -> game.
-// ══════════════════════════════════════════
+// ==========================================
 function _wikiLeadCategory(lead) {
   const s = String(lead || "").toLowerCase();
   if (!s) return null;
@@ -458,9 +453,9 @@ function _classifyLead(lead, article, franchiseTitle) {
   const text = String(lead || "").slice(0, 600);
   if (!text) return false;
   if (_CHAR_PAT.test(text) && !_JUNK_LEAD.test(text)) return true;
-  // disambiguator fallback: "Emilia (Re:Zero)" / "Hornet (Hollow Knight)" -
-  // an article explicitly scoped to THIS franchise is a franchise entity;
-  // combined with the junk check this stays clean (games use "(video game)")
+ // disambiguator fallback: "Emilia (Re:Zero)" / "Hornet (Hollow Knight)" -
+ // an article explicitly scoped to THIS franchise is a franchise entity;
+ // combined with the junk check this stays clean (games use "(video game)")
   const m = /\(([^)]+)\)\s*$/.exec(article || "");
   if (m && !_JUNK_LEAD.test(text)) {
     const d = _norm(m[1]);
@@ -471,7 +466,7 @@ function _classifyLead(lead, article, franchiseTitle) {
 }
 
 async function _franchiseSearchTitle(title) {
-  // resolve the canonical en.wiki article for the franchise itself
+ // resolve the canonical en.wiki article for the franchise itself
   const data = await wikiEntityImages.wikiApi({
     action: "query", format: "json", formatversion: "2", redirects: "1",
     prop: "pageprops", ppprop: "disambiguation",
@@ -581,13 +576,13 @@ async function wikipediaPool(ctx) {
   const registry = ctx.slug ? wikiEntityImages.W[ctx.slug] : null;
   const registryNames = registry?.names || [];
   const qualifier = registry?.q || ctx.title;
-  // candidate names carry their tier: 0 = curated registry, 1 = list-article
-  // links (wikipedia's own character lists), 3 = base-article links (needs
-  // the lead classifier to strip games/films/staff)
+ // candidate names carry their tier: 0 = curated registry, 1 = list-article
+ // links (wikipedia's own character lists), 3 = base-article links (needs
+ // the lead classifier to strip games/films/staff)
   let named = registryNames.map((n) => ({ name: n, tier: 0 }));
   if (named.length < 40) {
     const baseArticle = await _franchiseSearchTitle(ctx.title).catch(() => null);
-    // list-article discovery: known title patterns + intitle search fallback
+ // list-article discovery: known title patterns + intitle search fallback
     const listTries = [
       `List of ${ctx.title} characters`,
       `List of ${ctx.title} franchise characters`,
@@ -609,7 +604,7 @@ async function wikipediaPool(ctx) {
       }
     }
     if (baseArticle) listArticles.add(baseArticle);
-    // extract links per source article, keeping the tier per origin
+ // extract links per source article, keeping the tier per origin
     const links = [];
     for (const art of [...listArticles].slice(0, 4)) {
       const tier = /^list of /i.test(art) ? 1 : 3;
@@ -620,15 +615,15 @@ async function wikipediaPool(ctx) {
       name: n,
       tier: (links.find((x) => x.name === n) || {}).tier || 3,
     })));
-    // section headings of the BASE article (games like Hollow Knight keep the
-    // cast there) - tier 2: names without articles; images via file-search
+ // section headings of the BASE article (games like Hollow Knight keep the
+ // cast there) - tier 2: names without articles; images via file-search
     if (baseArticle) {
       const heads = await _articleSections(baseArticle).catch(() => []);
       for (const h of heads) named.push({ name: h, tier: 2 });
     }
   }
   if (!named.length) return [];
-  // dedupe by normalized name, keep the BEST tier
+ // dedupe by normalized name, keep the BEST tier
   const byKey = new Map();
   for (const item of named) {
     const k = _norm(item.name);
@@ -638,7 +633,7 @@ async function wikipediaPool(ctx) {
   }
   const candidates = [...byKey.values()].sort((a, b) => a.tier - b.tier).slice(0, 120);
 
-  // combined batches: lead + image + disambig per title; classify each
+ // combined batches: lead + image + disambig per title; classify each
   const out = [];
   const seenUrls = new Set();
   for (let i = 0; i < candidates.length; i += 20) {
@@ -646,12 +641,12 @@ async function wikipediaPool(ctx) {
     const r = await _batchLeadsAndImages(batchTitles).catch(() => null);
     if (!r) continue;
     for (const c of candidates.slice(i, i + 20)) {
-      // generic-concept titles ("Boss (video games)", "Crossover (fiction)",
-      // "Cameo appearance") - reject BEFORE any page work
+ // generic-concept titles ("Boss (video games)", "Crossover (fiction)",
+ // "Cameo appearance") - reject BEFORE any page work
       if (_GENERIC_TITLE.test(c.name)) continue;
-      // section-heading names have NO article anchor (article is null) - they
-      // join the pool as metadata records; images come from the file-search
-      // fallback at pick time. No page-dependent gates apply to them.
+ // section-heading names have NO article anchor (article is null) - they
+ // join the pool as metadata records; images come from the file-search
+ // fallback at pick time. No page-dependent gates apply to them.
       const hasNoArticle = c.tier === 2;
       if (hasNoArticle) {
         out.push(rec({
@@ -671,18 +666,18 @@ async function wikipediaPool(ctx) {
       const page = r.pages.find((p) => p.title === direct || p.title === c.name);
       if (!page || page.disambig || !page.thumb) continue;
       if (_GENERIC_DISAMBIG.test(direct)) continue;
-      // identity anchoring by tier:
-      //   tier 0 (curated registry) + tier 1 (wikipedia's own "List of X
-      //   characters" membership) ARE the identity anchor - no extra gate
-      //   ("Monkey D. Luffy" carries no franchise word and that is FINE)
-      //   tier 3 (base-article links) needs the full identity gate
+ // identity anchoring by tier:
+ // tier 0 (curated registry) + tier 1 (wikipedia's own "List of X
+ // characters" membership) ARE the identity anchor - no extra gate
+ // ("Monkey D. Luffy" carries no franchise word and that is FINE)
+ // tier 3 (base-article links) needs the full identity gate
       const isRegistry = c.tier === 0;
       const isListTier = c.tier === 1;
       if (!isRegistry && !isListTier) {
         const ok = wikiEntityImages.identityOk(c.name.replace(/\s*\([^)]*\)\s*$/, ""), direct, page.thumb, qualifier);
         if (!ok) continue;
       }
-      // lead classifier applies to every non-registry candidate
+ // lead classifier applies to every non-registry candidate
       if (!isRegistry && !_classifyLead(page.lead, direct, ctx.title)) continue;
       const urlKey = page.thumb.split("?")[0];
       if (seenUrls.has(urlKey)) continue;
@@ -703,12 +698,12 @@ async function wikipediaPool(ctx) {
   return out;
 }
 
-// ══════════════════════════════════════════
+// ==========================================
 // ADAPTER: Wikidata - cross-media fallback. Two uses:
-//   pool(): thin (SPARQL fictional-character pools are sparse) - skipped
-//   imageForRecord(): P18 via en.wiki sitelink when other sources came up
-//   dry for a character we KNOW exists (article anchored) - free, no key
-// ══════════════════════════════════════════
+// pool(): thin (SPARQL fictional-character pools are sparse) - skipped
+// imageForRecord(): P18 via en.wiki sitelink when other sources came up
+// dry for a character we KNOW exists (article anchored) - free, no key
+// ==========================================
 async function wikidataImageForArticle(article, thumbWidth = 640) {
   if (!article) return null;
   try {
@@ -721,14 +716,14 @@ async function wikidataImageForArticle(article, thumbWidth = 640) {
     const ent = Object.values(d.data?.entities || {})[0];
     const p18 = ent?.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
     if (!p18) return null;
-    // Special:FilePath redirects to upload.wikimedia.org - reliable here
+ // Special:FilePath redirects to upload.wikimedia.org - reliable here
     return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(p18)}?width=${thumbWidth}`;
   } catch { return null; }
 }
 
-// ══════════════════════════════════════════
+// ==========================================
 // POOL BUILDER (category-routed, merged, deduped, disk-cached 24h)
-// ══════════════════════════════════════════
+// ==========================================
 const POOLS_DIR = path.join(__dirname, "..", "data", "quiz_pools");
 function _poolFile(title) {
   const h = crypto.createHash("sha1").update(_norm(title)).digest("hex").slice(0, 16);
@@ -763,7 +758,7 @@ function _mergeRecords(lists, ctx) {
       if (!k) continue;
       const prev = byKey.get(k);
       if (!prev) { byKey.set(k, r); continue; }
-      // merge: prefer the record WITH an image, then higher confidence
+ // merge: prefer the record WITH an image, then higher confidence
       if (!prev.image_url && r.image_url) { byKey.set(k, { ...r, aliases: [...new Set([...(prev.aliases || []), prev.name])] }); }
       else if (prev.image_url && !r.image_url) { prev.aliases = [...new Set([...(prev.aliases || []), r.name])]; }
       else if (r.confidence > prev.confidence) byKey.set(k, r);
@@ -773,10 +768,10 @@ function _mergeRecords(lists, ctx) {
 }
 
 const CATEGORY_SOURCES = {
-  // 2026-10-01 rewire (owner bug report §5): category chains rebuilt from
-  // measured per-source yields. DB-anchored art first, wiki tier second,
-  // entity-art for games/movies/tv, general search LAST (identity needs a
-  // vision gate there).
+ // rewire (owner bug report §5): category chains rebuilt from
+ // measured per-source yields. DB-anchored art first, wiki tier second,
+ // entity-art for games/movies/tv, general search LAST (identity needs a
+ // vision gate there).
   anime:   ["anilist", "jikan", "kitsu", "wikipedia", "fandomnames", "wikidata"],
   manga:   ["anilist", "jikan", "kitsu", "wikipedia", "fandomnames", "wikidata"],
   game:    ["steam", "anilist", "igdb", "speedrun", "wikipedia", "fandomnames", "wikidata"],
@@ -787,13 +782,13 @@ const CATEGORY_SOURCES = {
   other:   ["anilist", "wikipedia", "tvmaze", "fandomnames", "wikidata"],
 };
 
-// ══════════════════════════════════════════
+// ==========================================
 // ADAPTER: Fandom community-wiki NAME lists (owner spec: "wiki/community
 // sources can be used as additional fallbacks"). The Fandom API is reachable
 // from this box (only its image CDN is Cloudflare-403) - so Fandom supplies
 // CHARACTER NAMES (decoys + file-search subjects) while bytes come from
 // Wikipedia's file namespace. Kicks in when the pool is thin (<12 records).
-// ══════════════════════════════════════════
+// ==========================================
 const _FANDOM_CATS = ["Category:Characters", "Category:Playable Characters", "Category:NPCs", "Category:Bosses", "Category:Antagonists", "Category:Bosses (Hollow Knight)"];
 async function fandomNamesPool(ctx) {
   try {
@@ -829,7 +824,7 @@ async function fandomNamesPool(ctx) {
 
 const _adapterLog = new Set();
 async function buildPool(ctx) {
-  // 1) disk cache
+ // 1) disk cache
   const disk = _loadPoolDisk(ctx.title);
   if (disk) return { ...disk, cached: "disk" };
   const category = ctx.category || (await detectCategory(ctx.title));
@@ -864,15 +859,15 @@ async function buildPool(ctx) {
   return { title: ctx.title, category, records, cached: "fresh" };
 }
 
-// ══════════════════════════════════════════
+// ==========================================
 // IMAGE FALLBACK CHAIN (owner spec §retrieval) - for ONE record:
-//   1. the record's own source image (primary API)
-//   2. its wikipedia article's own file list (name-anchored hunt)
-//   3. Wikidata P18 via the article's sitelink (cross-media fallback)
-//   4. wikipedia search anchored on "name + franchise" + identityOk gate
+// 1. the record's own source image (primary API)
+// 2. its wikipedia article's own file list (name-anchored hunt)
+// 3. Wikidata P18 via the article's sitelink (cross-media fallback)
+// 4. wikipedia search anchored on "name + franchise" + identityOk gate
 // Every candidate: download (paced, retried) -> pixel gate -> bytes-hash
 // dedup -> accepted. Tiny/broken/blank/logo files never pass the gate.
-// ══════════════════════════════════════════
+// ==========================================
 const _bytesDl = { inflight: 0, waiters: [], last: 0 };
 async function _dlSlot() {
   if (_bytesDl.inflight < 2) { _bytesDl.inflight++; return; }
@@ -916,7 +911,7 @@ async function _fileNamespaceSearch(name, qualifier) {
   if (!files.length) return null;
   const toks = _norm(base).split(" ").filter((t) => t.length >= 3);
   if (!toks.length) return null;
-  // the file NAME must name the subject ("Hornet (Hollow Knight).png")
+ // the file NAME must name the subject ("Hornet (Hollow Knight).png")
   const match = files.find((f) => {
     const fn = _norm(f.replace(/^File:/, ""));
     return toks.every((t) => fn.includes(t));
@@ -946,10 +941,10 @@ async function resolveImageBytes(record, ctx) {
     const wd = await wikidataImageForArticle(record.article).catch(() => null);
     if (wd) attempts.push({ tag: "wikidata-P18", url: wd, anchored: true });
   }
-  // File-namespace search - rescues franchise characters kept as SECTION
-  // HEADINGS of the base article (Hollow Knight's The Knight / Hornet etc.):
-  // en.wiki hosts fair-use character renders as File:<Name>.png even when no
-  // character article exists. Strict junk filter (cosplay/sketch/screenshots).
+ // File-namespace search - rescues franchise characters kept as SECTION
+ // HEADINGS of the base article (Hollow Knight's The Knight / Hornet etc.):
+ // en.wiki hosts fair-use character renders as File:<Name>.png even when no
+ // character article exists. Strict junk filter (cosplay/sketch/screenshots).
   if (ctx?.qualifier) {
     const fs_ = await _fileNamespaceSearch(record.name, ctx.qualifier).catch(() => null);
     if (fs_) attempts.push({ tag: "wiki-file-search", url: fs_, anchored: true });
@@ -969,12 +964,12 @@ async function resolveImageBytes(record, ctx) {
     const out = await _dlGateNormalize(a.url, a.tag, record, ctx, ck);
     if (out) return out;
   }
-  // GENERAL IMAGE SEARCH TIER (2026-10-01 owner bug report §4A) - LAST
-  // fallback, after every anchored source. Identity is NOT database-guaranteed
-  // here: every candidate must pass the vision gate when a provider is
-  // configured (open/closed circuit handled inside visionVerify), otherwise
-  // it is skipped in strict mode / allowed with pixel gates only in lenient
-  // mode (VISION_UNANCHORED=1).
+ // GENERAL IMAGE SEARCH TIER (owner bug report §4A) - LAST
+ // fallback, after every anchored source. Identity is NOT database-guaranteed
+ // here: every candidate must pass the vision gate when a provider is
+ // configured (open/closed circuit handled inside visionVerify), otherwise
+ // it is skipped in strict mode / allowed with pixel gates only in lenient
+ // mode (VISION_UNANCHORED=1).
   const strictVision = !!process.env.VISION_ENDPOINT;
   const allowUnanchored = strictVision ? true : process.env.VISION_UNANCHORED === "1";
   if (allowUnanchored) {
@@ -996,18 +991,18 @@ async function resolveImageBytes(record, ctx) {
 // (unanchored only) -> NORMALIZE (white-bg flatten + uniform canvas) -> cache
 async function _dlGateNormalize(url, tag, record, ctx, cacheKey, { visionSubject = null, visionContext = "" } = {}) {
   if (!imgSources.hostAllowed(url)) {
-    // 2026-10-01: DENYLIST hits are deterministic -> negative-cache is right;
-    // a 10-minute HOST COOLDOWN after a rate-limit burst is TRANSIENT - never
-    // poison 24h of per-record negatives for it (measured: one wikipedia 429
-    // burst negative-cached a whole franchise's cast for a day).
+ // DENYLIST hits are deterministic -> negative-cache is right;
+ // a 10-minute HOST COOLDOWN after a rate-limit burst is TRANSIENT - never
+ // poison 24h of per-record negatives for it (measured: one wikipedia 429
+ // burst negative-cached a whole franchise's cast for a day).
     if (imgSources.isDenied(url)) portraitCache.putNegative(cacheKey);
     return null;
   }
   const dl = await _download(url);
   if (!dl || !dl.buf) {
     imgSources.noteHostFailure(url);
-    // deterministic failure (404/403/bad magic) -> negative-cache 24h;
-    // transient failure (429/5xx/timeout) -> retry later, no negative
+ // deterministic failure (404/403/bad magic) -> negative-cache 24h;
+ // transient failure (429/5xx/timeout) -> retry later, no negative
     if (!dl?.transient) portraitCache.putNegative(cacheKey);
     return null;
   }
@@ -1015,9 +1010,9 @@ async function _dlGateNormalize(url, tag, record, ctx, cacheKey, { visionSubject
   if (!gate) { imgSources.noteHostFailure(url); return null; }
   if (visionSubject) {
     const v = await imgSources.visionGate(dl.buf, dl.mime, visionSubject, visionContext);
-    // visionVerify vocabulary: "reject" = wrong subject / nsfw -> drop the
-    // candidate. "unknown" (no provider, breaker open, provider flake) keeps
-    // the pixel-gate-only lenient path.
+ // visionVerify vocabulary: "reject" = wrong subject / nsfw -> drop the
+ // candidate. "unknown" (no provider, breaker open, provider flake) keeps
+ // the pixel-gate-only lenient path.
     if (v.decision === "reject" || v.decision === "mismatch") return null;
   }
   const norm = await quizImagePipeline.normalize(dl.buf, { url, label: `${tag}:${record.name}` }).catch(() => ({ ok: false, reason: "norm-crash" }));
@@ -1026,11 +1021,11 @@ async function _dlGateNormalize(url, tag, record, ctx, cacheKey, { visionSubject
   return { buf: norm.buf, mime: norm.mime, url, w: norm.width, h: norm.height, hash: crypto.createHash("sha1").update(norm.buf).digest("hex") };
 }
 
-// ══════════════════════════════════════════
+// ==========================================
 // CROSS-QUIZ RECENCY (owner spec: "keep track of recently used character IDs
 // so repeated quizzes don't constantly recycle the same few characters")
 // JSON file: franchise -> [{ key, name, ts }]; 7-day window, cap 80.
-// ══════════════════════════════════════════
+// ==========================================
 const RECENT_FILE = path.join(__dirname, "..", "data", "quiz_recent_used.json");
 function _loadRecent() {
   try { return JSON.parse(fs.readFileSync(RECENT_FILE, "utf8")) || {}; } catch { return {}; }
@@ -1054,10 +1049,10 @@ function _recordRecent(frKey, record) {
   _saveRecent(all);
 }
 
-// ══════════════════════════════════════════
+// ==========================================
 // PER-SESSION STATE (WeakMap on the quiz session object -> two groups running
 // the same quiz NEVER share a sequence; GC is automatic when a session dies)
-// ══════════════════════════════════════════
+// ==========================================
 const _sessions = new WeakMap(); // session -> { frKey -> { order, hashes } }
 
 /**
@@ -1073,15 +1068,15 @@ async function pickImageQuestion(ctx) {
   if (!state) { state = new Map(); if (session) _sessions.set(session, state); }
   let s = state.get(frKey);
   if (!s) {
-    // build/load the pool ONCE per session per franchise, then shuffle ONCE
+ // build/load the pool ONCE per session per franchise, then shuffle ONCE
     const pool = await buildPool({ title: ctx.title, slug: ctx.slug, category: ctx.category, anilistId: ctx.anilistId, sessionRef: ctx.sessionRef });
     const verified = pool.records.filter((r) => r.image_url);
-    // DEAD-POOL RESCUE (2026-10-02): obscure/non-media entities ("Apollo 9")
-    // can end with 0 verified images while holding wiki metadata records.
-    // Run the per-record fallback chain (article named-file -> wikidata P18
-    // -> file-namespace search) on the closest-name records and adopt what
-    // passes the gate. Rescued images are franchise-level topics -> entity
-    // role, never "Who is this character?" clues.
+ // DEAD-POOL RESCUE: obscure/non-media entities ("Apollo 9")
+ // can end with 0 verified images while holding wiki metadata records.
+ // Run the per-record fallback chain (article named-file -> wikidata P18
+ // -> file-namespace search) on the closest-name records and adopt what
+ // passes the gate. Rescued images are franchise-level topics -> entity
+ // role, never "Who is this character?" clues.
     if (!verified.length) {
       const nt0 = _norm(ctx.title);
       const baseArticle = await _franchiseSearchTitle(ctx.title).catch(() => null);
@@ -1111,14 +1106,14 @@ async function pickImageQuestion(ctx) {
   }
   const qualifier = ctx.qualifier || (ctx.slug && wikiEntityImages.W[ctx.slug]?.q) || ctx.title;
   const charVerified = s.pool && s.pool.records ? s.pool.records.filter((r) => r.image_url && r.role !== "entity").length : 0;
-  // ENTITY-ART QUESTION (2026-10-01 owner bug report §5): movie/game/tv
-  // franchises whose pool is character-poor can still serve a GREAT question
-  // from their own artwork: "Which {movie|game|show} is this?" with same-
-  // category decoy titles. Tried FIRST when the character pool is thin (<4
-  // verified character images), and as the last resort when it exhausts.
-  // Entity records are database-anchored (Steam/TMDB/itunes/speedrun) -
-  // identity by construction. They are NEVER offered as "Who is this
-  // character?" clues (a poster is not a character).
+ // ENTITY-ART QUESTION (owner bug report §5): movie/game/tv
+ // franchises whose pool is character-poor can still serve a GREAT question
+ // from their own artwork: "Which {movie|game|show} is this?" with same-
+ // category decoy titles. Tried FIRST when the character pool is thin (<4
+ // verified character images), and as the last resort when it exhausts.
+ // Entity records are database-anchored (Steam/TMDB/itunes/speedrun) -
+ // identity by construction. They are NEVER offered as "Who is this
+ // character?" clues (a poster is not a character).
   const _entityQuestion = async (entityRecord) => {
     if (!entityRecord || !entityRecord.image_url) return null;
     if (ctx.usedKeys && (ctx.usedKeys.has(`img:${entityRecord.name}`) || ctx.usedKeys.has(`cr:${frKey}:${recordKey(entityRecord.name)}`))) return null;
@@ -1128,8 +1123,8 @@ async function pickImageQuestion(ctx) {
     const decoyCat = entityRecord.entityKind === "show" ? "tv" : entityRecord.entityKind;
     let decoyPool = (imgSources.ENTITY_DECOYS[decoyCat] || []).filter((n) => _norm(n) !== _norm(entityRecord.name));
     if (decoyPool.length < 3) {
-      // rescued/unknown-kind entities (dead-pool rescue): same-pool topic
-      // names as decoys so non-media topics can still serve a question
+ // rescued/unknown-kind entities (dead-pool rescue): same-pool topic
+ // names as decoys so non-media topics can still serve a question
       decoyPool = decoyPool.concat(
         ((s.pool && s.pool.records) || [])
           .map((r) => r.name)
@@ -1176,17 +1171,17 @@ async function pickImageQuestion(ctx) {
     if (!img) continue;
     if (s.usedHashes.has(img.hash)) continue; // same bytes via another URL = same question
     s.usedHashes.add(img.hash);
-    // decoys: same-franchise pool names (verified-image names preferred, then
-    // metadata-only names) - the subject itself is excluded, and so is any
-    // name that CONTAINS the subject's base name ("Hornet" must not decoy a
-    // "Hornet (Hollow Knight)" subject - it would be a second correct answer)
+ // decoys: same-franchise pool names (verified-image names preferred, then
+ // metadata-only names) - the subject itself is excluded, and so is any
+ // name that CONTAINS the subject's base name ("Hornet" must not decoy a
+ // "Hornet (Hollow Knight)" subject - it would be a second correct answer)
     const subjBase = _norm(record.name);
     const nameSafe = (n) => {
       const nn = _norm(n);
       if (!nn || nn === subjBase) return false;
-      // prefix-collision only when the shorter side is multi-token
-      // ("Hornet" vs "Hornet (Hollow Knight)" already share a recordKey and
-      // were merged; "The Knight" vs "Hollow Knight (character)" are distinct)
+ // prefix-collision only when the shorter side is multi-token
+ // ("Hornet" vs "Hornet (Hollow Knight)" already share a recordKey and
+ // were merged; "The Knight" vs "Hollow Knight (character)" are distinct)
       if (subjBase.startsWith(nn) && nn.split(" ").length >= 2) return false;
       if (nn.startsWith(subjBase) && subjBase.split(" ").length >= 2) return false;
       return true;
@@ -1217,7 +1212,7 @@ async function pickImageQuestion(ctx) {
     console.log(`[Quiz] image Q (resolver): ${record.name} via ${record.source}/${record.method} [${ctx.title}]`);
     return q;
   }
-  // character pool exhausted -> entity artwork as the last resort
+ // character pool exhausted -> entity artwork as the last resort
   const eqLate = await _entityQuestion(_firstEntity()).catch(() => null);
   if (eqLate) return eqLate;
   return null;

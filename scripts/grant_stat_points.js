@@ -1,13 +1,11 @@
 // scripts/grant_stat_points.js
-//
 // Finds a user by fuzzy nickname match and grants them a number of
 // unallocated stat points (the same `statPoints` field the .g stats
 // command spends from). Backs up the affected document first per
 // Critical Rule #8.
-//
 // Usage:
-//   node scripts/grant_stat_points.js "mah_xee" 45
-//   node scripts/grant_stat_points.js "mah_xee" 45 --apply   (writes for real; without --apply it's a dry run)
+// node scripts/grant_stat_points.js "mah_xee" 45
+// node scripts/grant_stat_points.js "mah_xee" 45 --apply (writes for real; without --apply it's a dry run)
 
 const mongoose = require('mongoose');
 require('dotenv').config();
@@ -27,8 +25,8 @@ async function main() {
   const db = mongoose.connection.db;
   const users = db.collection('users');
 
-  // Case-insensitive partial match against nickname, and against the
-  // raw userId (in case the JID/phone-derived fallback name was used).
+ // Case-insensitive partial match against nickname, and against the
+ // raw userId (in case the JID/phone-derived fallback name was used).
   const regex = new RegExp(nicknameQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
   const matches = await users.find({
     $or: [{ nickname: regex }, { userId: regex }]
@@ -57,7 +55,7 @@ async function main() {
     return;
   }
 
-  // Backup per Critical Rule #8
+ // Backup per Critical Rule #8
   const backupPath = `users.before_grant_${user.userId.replace(/[^a-zA-Z0-9]/g, '_')}.json`;
   fs.writeFileSync(backupPath, JSON.stringify(user, null, 2));
   console.log(`Backed up affected document to ${backupPath}`);

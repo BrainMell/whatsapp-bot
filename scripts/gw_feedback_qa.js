@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // ============================================
-// QA HARNESS — GW owner feedback pass 2026-10-05
+// QA HARNESS - GW owner feedback pass
 // Renders the scenarios behind the owner's seven feedback items:
-//   1. chest CLAIMED open sprite after `take`      (reward CLEARED scene)
-//   2. PvE pack spawns OPPOSITE the entry door     (w/e/n/s battle scenes)
-//   3/4. decree Ruins victory/defeat end cards     (endCard.js)
-//   5. floating blue crystal replaces the gold ring (battle scenes)
-//   7. natural contact shadow at the back wall     (n-entry scene)
+// 1. chest CLAIMED open sprite after `take` (reward CLEARED scene)
+// 2. PvE pack spawns OPPOSITE the entry door (w/e/n/s battle scenes)
+// 3/4. decree Ruins victory/defeat end cards (endCard.js)
+// 5. floating blue crystal replaces the gold ring (battle scenes)
+// 7. natural contact shadow at the back wall (n-entry scene)
 // Pure in-process renders (same code path the render worker runs), no DB.
 // ============================================
 
@@ -19,7 +19,7 @@ const OUT = '/home/z/my-project/download/gw_qa_1005';
 fs.mkdirSync(OUT, { recursive: true });
 
 function makeDoc(seed, roomsExtra = []) {
-    // small fixed world: 3x3 grid with a plus-shaped topology
+ // small fixed world: 3x3 grid with a plus-shaped topology
     const side = 3;
     const rooms = [];
     const types = { '0,0': 'empty', '1,0': 'combat', '2,0': 'empty', '0,1': 'empty', '1,1': 'core', '2,1': 'empty', '0,2': 'empty', '1,2': 'reward', '2,2': 'empty' };
@@ -27,7 +27,7 @@ function makeDoc(seed, roomsExtra = []) {
         const key = `${x},${y}`;
         rooms.push({ key, x, y, region: 0, type: types[key] || 'empty', state: 'UNEXPLORED', payload: {}, ring: 0.3, clearedBy: null, clearedByGuild: null, clearedAt: null, occupants: [], residue: null, ...roomsExtra.find((r) => r.key === key) });
     }
-    // full grid edges (every orthogonal neighbour open) — simple for QA
+ // full grid edges (every orthogonal neighbour open) - simple for QA
     const edges = [];
     for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) {
         if (x + 1 < side) edges.push(`${x},${y}|e`);
@@ -40,9 +40,9 @@ function makeDoc(seed, roomsExtra = []) {
 }
 
 function makePlayer(entryDir, overrides = {}) {
-    // entry door = the INVERSE of the move delta, same rule roomScene uses:
-    // dx=+1 → 'w', dx=-1 → 'e', dy=+1 → 'n', dy=-1 → 's'. Each entry needs
-    // a (prev → cur) pair exactly one grid step apart.
+ // entry door = the INVERSE of the move delta, same rule roomScene uses:
+ // dx=+1 → 'w', dx=-1 → 'e', dy=+1 → 'n', dy=-1 → 's'. Each entry needs
+ // a (prev → cur) pair exactly one grid step apart.
     const pos = {
         w: { cur: '1,0', prev: '0,0' },   // moved east → entered through west
         e: { cur: '1,0', prev: '2,0' },   // moved west → entered through east
@@ -74,7 +74,7 @@ const combatPayload = { enemies: [{ level: 12 }, { level: 12 }, { level: 12 }], 
 (async () => {
     const renders = [];
 
-    // ── 1) the four entry directions, live battle, crystal on the player ──
+ // -- 1) the four entry directions, live battle, crystal on the player --
     for (const dir of ['w', 'e', 'n', 's']) {
         const doc = makeDoc(`qa-battle-${dir}`);
         const player = makePlayer(dir);
@@ -88,7 +88,7 @@ const combatPayload = { enemies: [{ level: 12 }, { level: 12 }, { level: 12 }], 
         renders.push(`battle_entry_${dir}.png  entry=${player.prevRoomId}->${player.roomId} pack=${plan.enemies.map((e) => `${e.x},${e.y}`).join(' | ')}`);
     }
 
-    // ── 1b) crystal on an enemy (enemy turn) ──
+ // -- 1b) crystal on an enemy (enemy turn) --
     {
         const doc = makeDoc('qa-battle-w');
         const player = makePlayer('w');
@@ -102,7 +102,7 @@ const combatPayload = { enemies: [{ level: 12 }, { level: 12 }, { level: 12 }], 
         renders.push('battle_entry_w_enemy_turn.png  crystal on enemy 0');
     }
 
-    // ── 2) chest: intact vs CLAIMED ──
+ // -- 2) chest: intact vs CLAIMED --
     for (const [state, name] of [['UNEXPLORED', 'reward_intact'], ['CLEARED', 'reward_claimed']]) {
         const doc = makeDoc('qa-chest');
         const player = makePlayer('w');
@@ -117,7 +117,7 @@ const combatPayload = { enemies: [{ level: 12 }, { level: 12 }, { level: 12 }], 
         renders.push(`${name}.png  chest state=${state}`);
     }
 
-    // ── 3) decree end cards ──
+ // -- 3) decree end cards --
     const victoryCard = await endCard.renderRuinsEndCard({
         victory: true, playerName: 'Brainard', guildName: 'Ember Wardens',
         roomLabel: 'guarded hall', chamberKey: '3,4', gp: 1480,

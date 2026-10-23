@@ -2,7 +2,7 @@
 // accessible when the required alignment (6h window / level tier) is not met.
 'use strict';
 
-// ── stub the engine BEFORE requiring worldMap (it lazily requires engine) ──
+// -- stub the engine BEFORE requiring worldMap (it lazily requires engine) --
 const path = require('path');
 const Module = require('module');
 const enginePath = require.resolve(path.join(__dirname, '..', 'core', 'engine.js'));
@@ -35,7 +35,7 @@ function mkSock(log) {
     const lockedAt = t0 + 2 * 3600 * 1000;             // 2h into cycle -> locked
     const openAt = t0 + 5.5 * 3600 * 1000;             // into the open hour
 
-    // ── 1. MAP gate (.j world abyss): helper matrix ──
+ // -- 1. MAP gate (.j world abyss): helper matrix --
     const helpersMatrix = {
         'level undefined -> ': { getLevel: () => undefined },
         'level NaN       -> ': { getLevel: () => NaN },
@@ -53,7 +53,7 @@ function mkSock(log) {
         console.log(`MAP ${label} level-check => ${rendered ? 'SHEET RENDERED (LEAK!)' : lockedCard ? 'locked ok' : 'other: ' + JSON.stringify((m.caption || m.text || '').slice(0, 60))}`);
     }
 
-    // ── 2. MAP gate with a high level while the window is LOCKED ──
+ // -- 2. MAP gate with a high level while the window is LOCKED --
     {
         const realWindow = cosmology.abyssWindow;
         try {
@@ -64,7 +64,7 @@ function mkSock(log) {
             const rendered = m.caption && m.caption.includes('rings upon rings');
             const aligned = m.caption && (m.caption.includes('not aligned') || m.caption.includes('NOT ALIGNED'));
             console.log(`MAP level 25, window FORCED locked => ${rendered ? 'SHEET RENDERED (LEAK!)' : aligned ? 'alignment card ok' : 'other: ' + JSON.stringify((m.caption || m.text || '').slice(0, 60))}`);
-            // staff walk in while locked
+ // staff walk in while locked
             const log2 = [];
             await worldMap.showWorld(mkSock(log2), 'chat1', 'owner1', 'abyss', { getLevel: () => 25 });
             const m2 = log2[0] || {};
@@ -74,8 +74,8 @@ function mkSock(log) {
         }
     }
 
-    // ── 3. ENTRY gate logic (verbatim replay of the engine block) ──
-    // Mirrors engine.js `.g abyss enter` alignment block exactly.
+ // -- 3. ENTRY gate logic (verbatim replay of the engine block) --
+ // Mirrors engine.js `.g abyss enter` alignment block exactly.
     function entryGate(senderJid, tOverride) {
         let __w = null;
         let __gateAlive = true;
@@ -104,7 +104,7 @@ function mkSock(log) {
         } finally { /* restore not needed: fresh require cache per process */ }
     })());
 
-    // ── 4. every other `.j world` sub stays gated ──
+ // -- 4. every other `.j world` sub stays gated --
     for (const sub of ['beyond', 'afterlife', 'all']) {
         const log = [];
         await worldMap.showWorld(mkSock(log), 'chat1', 'player1', sub, { getLevel: () => 1, getRank: () => 'F' });

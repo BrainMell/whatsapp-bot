@@ -41,7 +41,7 @@ async function main() {
     fs.writeFileSync(path.join(OUT, 'map_explore.png'), explore);
     const ret = await renderer.renderRuinsMap(ev, player, { title: 'Charted Reaches', ring: 0.4, style: 'return' });
     fs.writeFileSync(path.join(OUT, 'map_return.png'), ret);
-    // big-map legibility (alignment scale)
+ // big-map legibility (alignment scale)
     const big = await renderer.renderRuinsMap(fakeEvent(30), { ...player, discovered: ev.rooms.filter((r) => r.x < 6 && r.y < 6).map((r) => r.key) }, { title: 'Alignment Reach', ring: 0.7, style: 'explore' });
     fs.writeFileSync(path.join(OUT, 'map_big.png'), big);
     console.log('done');

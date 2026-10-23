@@ -12,7 +12,7 @@ mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 8000 }).then
       console.log(String(d._id), v.slice(0, 400));
     }
   }
-  // specifically look for suspicious numeric values
+ // specifically look for suspicious numeric values
   for (const d of docs) {
     if (!String(d._id).startsWith("quiz_cfg:")) continue;
     const v = d.value || {};

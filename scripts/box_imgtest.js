@@ -6,9 +6,9 @@ const fs = require("fs");
   const q = require("/home/ubuntu/whatsapp-bot/core/games/quiz.js");
   const ql = require("/home/ubuntu/whatsapp-bot/core/games/quizLore.js");
 
-  // 1. AniList: media id 20 = Naruto. The module isn't exporting
-  // anilistCharacterImage, so replicate the call through the exported
-  // search instead? It IS reachable via require internals only - check export.
+ // 1. AniList: media id 20 = Naruto. The module isn't exporting
+ // anilistCharacterImage, so replicate the call through the exported
+ // search instead? It IS reachable via require internals only - check export.
   console.log("anilistCharacterImage exported:", typeof q.anilistCharacterImage);
   if (typeof q.anilistCharacterImage === "function") {
     const img = await q.anilistCharacterImage(20, "Naruto Uzumaki").catch((e) => { console.log("anilist ERR", e.message.slice(0, 90)); return null; });
@@ -20,7 +20,7 @@ const fs = require("fs");
     }
   }
 
-  // 2. Wikipedia article art (fixed pilicense=any)
+ // 2. Wikipedia article art (fixed pilicense=any)
   const wp = await ql.wikipediaImage("Naruto Uzumaki", 703, "article").catch(() => null);
   console.log("wikipedia article:", wp ? wp.page : "none");
   if (wp && wp.url) {

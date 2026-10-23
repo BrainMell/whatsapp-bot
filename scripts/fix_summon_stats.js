@@ -3,7 +3,6 @@
 // The migration script used {...summon} spread on a Mongoose document,
 // which doesn't extract field values properly - so applyLevelGrowth
 // returned early and baseStats stayed null.
-//
 // This script uses toObject() to get plain values, recomputes baseStats,
 // and saves.
 
@@ -21,12 +20,11 @@ async function main() {
   await mongoose.connect(mongoUri);
   console.log('✅ Connected.\n');
 
-  // Load models
   require('../core/models/Summon');
   const Summon = mongoose.connection.collection('summons');
   const registry = require('../core/rpg/summonRegistry');
 
-  // Find all summons
+ // Find all summons
   const all = await Summon.find({}).toArray();
   console.log(`Found ${all.length} total summons.\n`);
 

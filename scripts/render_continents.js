@@ -1,5 +1,5 @@
 'use strict';
-// node scripts/render_continents.js [outDir] — atlas + sample guild pins
+// node scripts/render_continents.js [outDir] - atlas + sample guild pins
 const fs = require('fs'); const out = process.argv[2] || '/tmp/continents'; fs.mkdirSync(out, { recursive: true });
 const R = require('../core/rpg/continentMapRenderer'); const C = require('../core/rpg/continents');
 (async () => {

@@ -8,7 +8,7 @@ function ok(cond, label) {
   else { fail++; console.error('  FAIL - ' + label); }
 }
 
-// ── 1. XP curve: exact +20% (200L^2 -> 240L^2) at the canonical source ──────
+// -- 1. XP curve: exact +20% (200L^2 -> 240L^2) at the canonical source ------
 const economy = require('../core/rpg/economy');
 const fakeUsers = {};
 economy.getUser = (jid) => fakeUsers[jid] || null;
@@ -19,14 +19,14 @@ for (const L of [2, 5, 10, 25, 50, 77, 100]) {
   ok(progression.getXPForLevel(L) === 240 * L * L, `getXPForLevel(${L}) === 240*L^2 (got ${progression.getXPForLevel(L)})`);
 }
 
-// ── 2. Stat points range grant (admin setlevel / milestones) ────────────────
+// -- 2. Stat points range grant (admin setlevel / milestones) ----------------
 ok(typeof progression.getStatPointsForRange === 'function', 'getStatPointsForRange exported');
 const pts = progression.getStatPointsForRange(1, 31);
 // 30 levels x 5 + milestone bonuses at 10/20/30 (real contract includes milestones)
 ok(pts === 30 * 5 + 30, `levels 1..30 grant 5/level + milestones (got ${pts})`);
 ok(progression.getStatPointsForRange(10, 10) === 0, 'empty range grants 0 (no double grants)');
 
-// ── 3. previewAllocation mirrors backend allocation (three-point sync) ──────
+// -- 3. previewAllocation mirrors backend allocation (three-point sync) ------
 const J = 'qa_probe@s.whatsapp.net';
 fakeUsers[J] = { jid: J, class: 'FIGHTER', nickname: 'Probe' };
 const progRec = progression.getUser(J);
@@ -39,7 +39,7 @@ ok(res.valueGained === pv.gainedValue, 'backend pays exactly the preview (three-
 const pv1 = progression.previewAllocation(J, 'atk', 1);
 ok(Number(pv1.gainedValue) > 0, 'single point preview pays base x tier (soft cap removed)');
 
-// ── 4. Cosmology gate seams (abyss window + triune + status lines) ──────────
+// -- 4. Cosmology gate seams (abyss window + triune + status lines) ----------
 const cosmology = require('../core/rpg/cosmology');
 console.log('[2] cosmology gate seams');
 const w = cosmology.abyssWindow();
@@ -56,13 +56,13 @@ ok(openAt && cosmology.abyssWindow(openAt).open === true, 'an open window exists
 ok(lockedAt && cosmology.abyssWindow(lockedAt).open === false, 'a locked window exists in the 6h cycle');
 ok(typeof cosmology.isTriuneAligned === 'function' && typeof cosmology.triuneWindow === 'function', 'triune state is checked, never auto-scheduled');
 
-// ── 5. combatTargetIcon resolver (undefined-name class of bugs) ─────────────
+// -- 5. combatTargetIcon resolver (undefined-name class of bugs) -------------
 const ga = require('../core/rpg/guildAdventure');
 console.log('[3] combat icon resolver');
 ok(ga.combatTargetIcon({ name: 'MellowDiHOfHeaven', class: { icon: '🧙' } }) === '🧙', 'player icon resolves from class');
 ok(ga.combatTargetIcon({ name: 'X', class: null }) === '👤', 'missing icon never renders undefined');
 
-// ── 6. Environment art for the new realm/dead-world cards is loadable ───────
+// -- 6. Environment art for the new realm/dead-world cards is loadable -------
 console.log('[4] card renderer asset prerequisites');
 const fs = require('fs');
 const fontDir = '/home/z/my-project/whatsapp-bot/core/rpgasset/fonts/';

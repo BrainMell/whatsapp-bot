@@ -61,9 +61,8 @@ class BotConfig {
   }
   getRPGAssetPath(subPath = '') { return path.join(__dirname, 'core', 'rpgasset', subPath); }
 
-  // 💡 PAIRING CODE: if set in botConfig.json as "pairingPhone": "2348086616347",
-  // the bot will use phone-number pairing instead of QR code on fresh login.
-  // Returns null if not set (falls back to QR).
+ // PAIRING CODE: if set in botConfig.json as "pairingPhone": "2348086616347",
+ // the bot will use phone-number pairing instead of QR code on fresh login.
   get pairingPhone() { return this.config.pairingPhone || null; }
 }
 
@@ -71,10 +70,10 @@ class BotConfig {
 module.exports = {
   BotConfig,
   storage,
-  // Helper to get active config
+ // Helper to get active config
   get: () => storage.getStore(),
   
-  // Proxy for legacy support (require('./botConfig').getBotName())
+ // Proxy for legacy support (require('./botConfig').getBotName())
   getBotId: () => (storage.getStore()?.getBotId() || "global"),
   getBotName: () => (storage.getStore()?.getBotName() || "Bot"),
   getPrefix: () => (storage.getStore()?.getPrefix() || ".j"),

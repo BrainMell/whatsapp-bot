@@ -1,21 +1,21 @@
 #!/usr/bin/env node
 /**
- * qa_anime_powerscale.js — 2026-10-11
+ * qa_anime_powerscale.js - 2026-10-11
  * Regression QA for the anime-suite AniList migration + powerscale
  * disambiguation guard. Run from repo root: node scripts/qa_anime_powerscale.js
  *
  * Sections:
- *  A. anilist.js live fetchers — normalized Jikan shape + watch links
- *  B. powerscale.js selection flow — pick -> view session, numeric switch,
+ *  A. anilist.js live fetchers - normalized Jikan shape + watch links
+ *  B. powerscale.js selection flow - pick -> view session, numeric switch,
  *     parse-failure / invalid / timeout paths (vsbFeats + goService mocked)
- *  D. powerscale LIST-FIRST rule — category/feats queries always show the
+ *  D. powerscale LIST-FIRST rule - category/feats queries always show the
  *     numbered pick list when several characters match; auto-pick ONLY on a
  *     single result; picked number with locked category -> category card
- *  E. powerscale stat markup variants — DCEU <p><br/> paragraphs (the
+ *  E. powerscale stat markup variants - DCEU <p><br/> paragraphs (the
  *     "No Attack Potency found" bug), Maki/Nightwing colon styles, Key line
- *  F. powerscale buffered pick — numbers typed while the search is still
+ *  F. powerscale buffered pick - numbers typed while the search is still
  *     running are held and auto-applied when the results land (race fix)
- *  C. drift guards — engine must not call dead sources (jikan/anikai URLs)
+ *  C. drift guards - engine must not call dead sources (jikan/anikai URLs)
  */
 process.env.GW_TEST = "";
 const path = require("path");
@@ -24,10 +24,10 @@ const ROOT = path.resolve(__dirname, "..");
 let pass = 0, fail = 0;
 function ok(name, cond, extra) {
   if (cond) { pass++; console.log(`  ✅ ${name}`); }
-  else { fail++; console.log(`  ❌ ${name}${extra ? " — " + extra : ""}`); }
+  else { fail++; console.log(`  ❌ ${name}${extra ? " - " + extra : ""}`); }
 }
 
-// ── mock goImageService BEFORE powerscale.js loads it ────────────────────────
+// -- mock goImageService BEFORE powerscale.js loads it ------------------------
 const goPath = require.resolve(path.join(ROOT, "core/utils/goImageService.js"));
 const calls = { fetchPage: [] };
 require.cache[goPath] = {
@@ -96,8 +96,8 @@ async function sectionA() {
 
 async function sectionB() {
   console.log("\n── B. powerscale selection flow (pick -> view, switch, timeout) ──");
-  // stub vsbFeats network fns IN PLACE (powerscale.js holds the same module
-  // object) so this section is fully deterministic — no live Fandom calls
+ // stub vsbFeats network fns IN PLACE (powerscale.js holds the same module
+ // object) so this section is fully deterministic - no live Fandom calls
   const vsbPath = require.resolve(path.join(ROOT, "core/utils/vsbFeats.js"));
   const vsb = require(vsbPath);
   const savedB = { searchCharacters: vsb.searchCharacters, parseCharacter: vsb.parseCharacter };
@@ -120,21 +120,21 @@ async function sectionB() {
     };
   };
   try {
-    // seed a pending pick session directly (deterministic)
+ // seed a pending pick session directly (deterministic)
     ps.pendingSelections.set("qa-chat-1", { phase: "pick", characters: CHARS, category: null, query: "goku", pickedId: 0, timestamp: Date.now() });
     ok("pending visible via hasPendingSelection", ps.hasPendingSelection("qa-chat-1"));
 
-    // 1. good pick -> success card, session flips to view (stays alive for switching)
+ // 1. good pick -> success card, session flips to view (stays alive for switching)
     const g = await ps.handlePowerscaleSelection("qa-chat-1", "1");
     ok("good pick succeeds", g && g.success === true && g.mode === "card", JSON.stringify(g).slice(0, 80));
     ok("good pick carries stats in message", g && g.message.includes("Multiverse level"));
     ok("session stays alive in view mode (for switching)", ps.hasPendingSelection("qa-chat-1"));
 
-    // 2. numeric switch while viewing -> card for the other character
+ // 2. numeric switch while viewing -> card for the other character
     const g2 = await ps.handlePowerscaleSelection("qa-chat-1", "2");
     ok("numeric switch works", g2 && g2.success === true && g2.mode === "card" && g2.name === "Goku Black", JSON.stringify(g2 || {}).slice(0, 80));
 
-    // 3. parse failure on the picked char -> failure, session survives for retry
+ // 3. parse failure on the picked char -> failure, session survives for retry
     const oldData = ps.pendingSelections.get("qa-chat-1").data;
     ps.pendingSelections.get("qa-chat-1").data = null; // force re-parse path
     vsb.parseCharacter = async () => { throw new Error("socket hang up"); };
@@ -146,12 +146,12 @@ async function sectionB() {
     ok("fetch throw -> failure", b && b.success === false, JSON.stringify(b).slice(0, 60));
     ok("session survives fetch error for retry", ps.hasPendingSelection("qa-chat-1"));
 
-    // 4. invalid pick
+ // 4. invalid pick
     ps.pendingSelections.get("qa-chat-1").data = oldData;
     const inv = await ps.handlePowerscaleSelection("qa-chat-1", "99");
     ok("invalid pick rejected", inv && inv.success === false && /between 1 and 3/.test(inv.error || ""));
 
-    // 5. timeout path
+ // 5. timeout path
     ps.pendingSelections.get("qa-chat-1").timestamp = Date.now() - (ps.SELECTION_TIMEOUT_MS + 1000);
     const t = await ps.handlePowerscaleSelection("qa-chat-1", "1");
     ok("timed-out pick rejected", t && t.success === false && /timed out/i.test(t.error || ""));
@@ -164,7 +164,7 @@ async function sectionB() {
 }
 
 /**
- * Section D — LIST-FIRST RULE (owner, 2026-10-18: "even if I attach speed it
+ * Section D - LIST-FIRST RULE (owner, 2026-10-18: "even if I attach speed it
  * should still pull up the list of possible options ... randomly selecting a
  * character won't work which is why we had that system in the first place").
  * Category/feats queries must NEVER auto-pick while several matches exist;
@@ -196,7 +196,7 @@ async function sectionD() {
   };
   vsb.fetchImageBuffer = async () => null;
   try {
-    // 1. multi-match + category -> LIST, never a card
+ // 1. multi-match + category -> LIST, never a card
     const r1 = await ps.resolveFlow("goku", "Speed", false);
     ok("multi-match + category stays a list", r1 && r1.mode === "list", JSON.stringify(r1 || {}).slice(0, 90));
     ok("list shows every match", r1 && r1.characters && r1.characters.length === 3);
@@ -204,20 +204,20 @@ async function sectionD() {
     ok("list shows the numeric pick prompt", r1 && /Reply with a \*number\*/.test(r1.message));
     ok("no stale auto-pick hint in list", r1 && !r1.message.includes("auto-pick"));
 
-    // 2. picking a number with the category locked -> SPEED card for THAT char
+ // 2. picking a number with the category locked -> SPEED card for THAT char
     ps.pendingSelections.set("qa-ps-1", { phase: "pick", characters: r1.characters, category: "Speed", query: "goku", pickedId: 0, timestamp: Date.now() });
     const p2 = await ps.handlePowerscaleSelection("qa-ps-1", "2");
     ok("pick#2 with category locked -> card", p2 && p2.success === true && p2.mode === "card", JSON.stringify(p2 || {}).slice(0, 90));
-    ok("card is the SPEED card of the picked char", p2 && p2.name === "Goku Black" && p2.message.includes("SPEED — GOKU BLACK"), p2 && p2.message.slice(0, 90));
+    ok("card is the SPEED card of the picked char", p2 && p2.name === "Goku Black" && p2.message.includes("SPEED - GOKU BLACK"), p2 && p2.message.slice(0, 90));
     ok("picked card carries the feats", p2 && p2.message.includes("blitzed Nappa"));
     ps.pendingSelections.delete("qa-ps-1");
 
-    // 3. single result + category -> auto-pick is fine (only one option)
+ // 3. single result + category -> auto-pick is fine (only one option)
     const r2 = await ps.resolveFlow("gohan", "Speed", false);
     ok("single result + category auto-picks", r2 && r2.mode === "card" && r2.name === "Son Gohan", JSON.stringify(r2 || {}).slice(0, 90));
-    ok("single-result card is the category card", r2 && r2.message.includes("SPEED — SON GOHAN"));
+    ok("single-result card is the category card", r2 && r2.message.includes("SPEED - SON GOHAN"));
 
-    // 4. feats overview + multi-match -> also stays a list
+ // 4. feats overview + multi-match -> also stays a list
     const r3 = await ps.resolveFlow("goku", null, true);
     ok("feats overview multi-match stays a list", r3 && r3.mode === "list");
   } finally {
@@ -229,9 +229,9 @@ async function sectionD() {
 }
 
 /**
- * Section E — STAT PARAGRAPH MARKUP VARIANTS (pure, no network).
+ * Section E - STAT PARAGRAPH MARKUP VARIANTS (pure, no network).
  * Owner incident 2026-10-18: ".j powerscale ap superman" → "No Attack Potency
- * stat found" — DCEU-style pages open the stat paragraph with <p><br /> and
+ * stat found" - DCEU-style pages open the stat paragraph with <p><br /> and
  * the old STAT_P_RE only allowed whitespace, silently skipping AP (and any
  * other stat with that prefix) on the whole page.
  */
@@ -240,7 +240,7 @@ async function sectionE() {
   const vsb = require(path.join(ROOT, "core/utils/vsbFeats.js"));
   const PSH = `<h2><span class="mw-headline" id="Powers_and_Stats">Powers and Stats</span></h2>`;
 
-  // DCEU Superman style: <p><br /> before EVERY stat + Key line with <br>
+ // DCEU Superman style: <p><br /> before EVERY stat + Key line with <br>
   const dceu = vsb.extractStatsFromHtml(`${PSH}
 <p><br />
 <b><a href="/wiki/Key" title="Key">Key</a>:</b> Pre-Resurrection | Post-Resurrection</p>
@@ -258,7 +258,7 @@ async function sectionE() {
   ok("DCEU: Key line parsed with <br> prefix", dceu.keyLine === "Pre-Resurrection | Post-Resurrection", JSON.stringify(dceu.keyLine));
   ok("DCEU: plain <p><b> Speed still parses", dceu.stats.has("Speed") && /Relativistic\+/.test(dceu.stats.get("Speed")[0].rating));
 
-  // Maki style: colon outside the anchor; Nightwing style: colon inside the anchor
+ // Maki style: colon outside the anchor; Nightwing style: colon inside the anchor
   const maki = vsb.extractStatsFromHtml(`${PSH}
 <p><b><a href="/wiki/Speed" title="Speed">Speed</a>:</b> Subsonic (Can cut and dodge rubber bullets)</p>`);
   ok("Maki style: colon-outside-anchor parses", maki.stats.has("Speed") && maki.stats.get("Speed")[0].rating.includes("Subsonic"));
@@ -266,20 +266,20 @@ async function sectionE() {
 <p><b><a href="/wiki/Tier" title="Tier">Tier:</a></b> 9-A</p>`);
   ok("Nightwing style: colon-inside-anchor parses", nightwing.stats.has("Tier") && nightwing.stats.get("Tier")[0].rating === "9-A");
 
-  // <br> without space + self-closing variants
+ // <br> without space + self-closing variants
   const tight = vsb.extractStatsFromHtml(`${PSH}
 <p><br/><b>Tier:</b> 2-B</p>`);
   ok("tight <br/> variant parses", tight.stats.has("Tier") && tight.stats.get("Tier")[0].rating === "2-B");
 
-  // verse pages still detected
+ // verse pages still detected
   const verse = vsb.extractStatsFromHtml(`<h2><span class="mw-headline" id="Summary">Summary</span></h2><p>A verse page.</p>`);
   ok("verse page detection intact", verse.isVerse === true && verse.stats.size === 0);
 }
 
 /**
- * Section F — BUFFERED PICK (race fix e2e).
+ * Section F - BUFFERED PICK (race fix e2e).
  * Owner incident 2026-10-18: Mellow typed "1" 2s BEFORE the 10-match list
- * landed (search ~15-19s) — the number died silently. Now the searching
+ * landed (search ~15-19s) - the number died silently. Now the searching
  * session holds it and auto-applies when the results arrive.
  */
 async function sectionF() {
@@ -310,19 +310,19 @@ async function sectionF() {
     const sends = [];
     const sock = { sendMessage: async (_c, content) => { sends.push(content); return {}; } };
 
-    // 1. number typed MID-SEARCH gets buffered, then auto-applies
+ // 1. number typed MID-SEARCH gets buffered, then auto-applies
     const cmdPromise = ps.runPowerscaleCommand({ sock, chatId: CHAT, msgKey: { id: "m1" }, raw: "speed goku", botMarker: "", prefix: "j" });
     await delay(30); // search still in flight
     const duringSearch = await ps.handlePowerscaleSelection(CHAT, "2");
     ok("mid-search number is accepted+buffered", duringSearch && duringSearch.success === true && duringSearch.mode === "buffered", JSON.stringify(duringSearch || {}).slice(0, 80));
     await cmdPromise;
     const texts = sends.map((s) => s.text || s.caption || "");
-    ok("card for the PICKED char arrives (no list)", texts.some((t) => t.includes("SPEED — GOKU BLACK")), texts.join("||").slice(0, 200));
+    ok("card for the PICKED char arrives (no list)", texts.some((t) => t.includes("SPEED - GOKU BLACK")), texts.join("||").slice(0, 200));
     ok("list is skipped when a pick was buffered", !texts.some((t) => t.includes("matches for")));
     ok("session survives in view mode (for switching)", ps.hasPendingSelection(CHAT));
     ps.pendingSelections.delete(CHAT);
 
-    // 2. out-of-range buffered number → list shown with a note
+ // 2. out-of-range buffered number → list shown with a note
     ps.pendingSelections.delete(CHAT);
     const sends2 = [];
     const sock2 = { sendMessage: async (_c, content) => { sends2.push(content); return {}; } };
@@ -336,7 +336,7 @@ async function sectionF() {
     ok("fallback explains the invalid pick", texts2.some((t) => t.includes("earlier reply *9*")));
     ps.pendingSelections.delete(CHAT);
 
-    // 3. search failure clears the session (numbers stop being swallowed)
+ // 3. search failure clears the session (numbers stop being swallowed)
     ps.pendingSelections.delete(CHAT);
     vsb.searchCharacters = async () => { await delay(20); throw new Error("network dead"); };
     const sends3 = [];

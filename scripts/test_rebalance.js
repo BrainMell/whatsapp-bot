@@ -1,7 +1,5 @@
 // scripts/test_rebalance.js
-// Verifies (1) the 3 tax fixes (bounty, investment, NPC vendor sell), and
 // (2) a few of the rebalanced constants.
-//
 // Test approach: real MongoDB execute-and-restore. Creates test users, runs
 // the actual functions, verifies tax math, then cleans up.
 
@@ -64,7 +62,7 @@ function makeReply() {
 }
 
 async function runTests() {
-  // ─── Setup: 3 test users with starting balances ───
+ // --- Setup: 3 test users with starting balances ---
   console.log('\n=== Setup ===');
   for (const jid of [USER_A, USER_B, USER_C]) {
     await User.create({
@@ -75,9 +73,9 @@ async function runTests() {
     console.log(`[+] Created ${jid} (wallet=50000)`);
   }
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // TEST 1: Bounty claim tax (10% evaporates + 5% guild fee on remainder)
-  // ═══════════════════════════════════════════════════════════════════════
+ // =======================================================================
+ // TEST 1: Bounty claim tax (10% evaporates + 5% guild fee on remainder)
+ // =======================================================================
   console.log('\n=== TEST 1: Bounty claim tax ===');
   await Bounty.create({
     bountyId: 'test_bnty_' + SUFFIX,
@@ -92,7 +90,7 @@ async function runTests() {
   if (!result.success) throw new Error(`claimBounty failed: ${result.message}`);
   console.log(`[i] Bounty claim message: ${result.message.replace(/\n/g, ' | ').slice(0, 120)}`);
 
-  // 10000 - 1000 (tax) - 450 (fee, evaporated since C is unguilded) = 8550
+ // 10000 - 1000 (tax) - 450 (fee, evaporated since C is unguilded) = 8550
   const balC_after = economy.getBalance(USER_C);
   const expected = 50000 + 8550;
   if (balC_after !== expected) {
@@ -103,9 +101,9 @@ async function runTests() {
   if (result.totalTax !== 1000) throw new Error(`Bounty: totalTax should be 1000, got ${result.totalTax}`);
   console.log(`[+] Bounty totalTax in result: ${result.totalTax} ✅`);
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // TEST 2: Investment payout tax (10% on matured payout)
-  // ═══════════════════════════════════════════════════════════════════════
+ // =======================================================================
+ // TEST 2: Investment payout tax (10% on matured payout)
+ // =======================================================================
   console.log('\n=== TEST 2: Investment payout tax ===');
   const balB_before = economy.getBalance(USER_B);
   console.log(`[i] B balance before investment test: ${balB_before}`);
@@ -114,24 +112,23 @@ async function runTests() {
   if (!startResult.success) throw new Error(`startInvestment failed: ${startResult.message}`);
   console.log(`[+] Investment started: 1000 zeni in BOND plan`);
 
-  // Manually fast-forward the investment's maturity time
+ // Manually fast-forward the investment's maturity time
   const userB = economy.getUser(USER_B);
   if (!userB.investments || userB.investments.length === 0) {
     throw new Error('Investment not stored on user');
   }
-  // Set endTime to 1 hour ago (past 2h maturity from start)
+ // Set endTime to 1 hour ago (past 2h maturity from start)
   userB.investments[0].endTime = Date.now() - (60 * 60 * 1000);
   await economy.saveUser(USER_B);
   await economy.reloadUserFromDB(USER_B);
   console.log(`[+] Manually matured investment (endTime set to 1h ago)`);
 
-  // Claim the matured investment
+ // Claim the matured investment
   const claimResult = investmentMod.claimInvestment(USER_B);
   if (!claimResult.success) throw new Error(`claimInvestment failed: ${claimResult.message}`);
   console.log(`[+] Investment claim result: ${claimResult.message.replace(/\n/g, ' | ').slice(0, 120)}`);
 
-  // Verify: B started 50000, deposited 1000 (→49000), got 945 back (1050 - 10% tax = 945).
-  // Final: 49000 + 945 = 49945.
+ // Final: 49000 + 945 = 49945.
   const balB_after = economy.getBalance(USER_B);
   const expectedNet = 50000 - 1000 + 945; // 49945
   if (balB_after !== expectedNet) {
@@ -139,35 +136,34 @@ async function runTests() {
   }
   console.log(`[+] Investment payout tax verified: B ${50000} →${50000 - 1000} (deposit) →${balB_after} (+945 = 90% of 1050 gross, 10% tax evaporated) ✅`);
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // TEST 3: NPC vendor sellItem tax (10% evaporates BEFORE guild 5%)
-  // ═══════════════════════════════════════════════════════════════════════
+ // =======================================================================
+ // TEST 3: NPC vendor sellItem tax (10% evaporates BEFORE guild 5%)
+ // =======================================================================
   console.log('\n=== TEST 3: NPC vendor sellItem tax ===');
-  // Use a REAL item that exists in lootSystem - 'health_potion' (UNCOMMON, value=700)
+ // Use a REAL item that exists in lootSystem - 'health_potion' (UNCOMMON, value=700)
   const TEST_ITEM = 'health_potion';
   const addResult = await inventorySystem.addItem(USER_A, TEST_ITEM, 5);
   if (!addResult.success) throw new Error(`addItem failed: ${addResult.message}`);
   console.log(`[+] Added 5× ${TEST_ITEM} to A's inventory (total: ${addResult.totalQuantity})`);
-  // Don't call reloadUserFromDB - addItem already calls saveUser, and reloading
-  // from DB can momentarily show a stale inventory due to Mongoose Map
-  // serialization timing. Trust the in-memory state.
+ // Don't call reloadUserFromDB - addItem already calls saveUser, and reloading
+ // from DB can momentarily show a stale inventory due to Mongoose Map
+ // serialization timing. Trust the in-memory state.
 
   const balA_before = economy.getBalance(USER_A);
   console.log(`[i] A balance before vendor sale: ${balA_before}`);
 
-  // Verify inventory has the item
   const invBefore = inventorySystem.getInventory(USER_A);
   if (!invBefore[TEST_ITEM] || (invBefore[TEST_ITEM]?.quantity || 0) < 1) {
     throw new Error(`Pre-sell check: ${TEST_ITEM} not in A's inventory after addItem`);
   }
   console.log(`[i] A's ${TEST_ITEM} qty before sell: ${invBefore[TEST_ITEM]?.quantity || 0}`);
 
-  // Sell 1 unit. Base value 700, UNCOMMON rarity → sellMultiplier 0.7
-  // totalValue = Math.floor(700 * 0.7 * 1) = Math.floor(489.9999...) = 489
-  // (floating-point quirk - 700*0.7 = 489.9999..., not 490)
-  // economyTax (10%) = Math.floor(489 * 0.10) = 48 (evaporates)
-  // guild fee: A is unguilded, so 0
-  // sellValue = 489 - 48 = 441
+ // Sell 1 unit. Base value 700, UNCOMMON rarity → sellMultiplier 0.7
+ // totalValue = Math.floor(700 * 0.7 * 1) = Math.floor(489.9999...) = 489
+ // (floating-point quirk - 700*0.7 = 489.9999..., not 490)
+ // economyTax (10%) = Math.floor(489 * 0.10) = 48 (evaporates)
+ // guild fee: A is unguilded, so 0
+ // sellValue = 489 - 48 = 441
   const sellResult = inventorySystem.sellItem(USER_A, TEST_ITEM, 1);
   if (!sellResult.success) throw new Error(`sellItem failed: ${sellResult.message}`);
 
@@ -191,17 +187,17 @@ async function runTests() {
   }
   console.log(`[+] A balance ${balA_before}→${balA_after} (+${expectedSell}) ✅`);
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // TEST 4: Rebalanced constants (verify the actual numeric values)
-  // ═══════════════════════════════════════════════════════════════════════
+ // =======================================================================
+ // TEST 4: Rebalanced constants (verify the actual numeric values)
+ // =======================================================================
   console.log('\n=== TEST 4: Rebalanced constants ===');
-  // Note: DAILY_REWARD, RESPEC_COST, MYTHIC craft cost, guild baseCosts, and
-  // guild interest cap aren't exported from their modules. They're verified
-  // by direct file grep at the end of this test. Only exported constants
-  // are checked here.
+ // Note: DAILY_REWARD, RESPEC_COST, MYTHIC craft cost, guild baseCosts, and
+ // guild interest cap aren't exported from their modules. They're verified
+ // by direct file grep at the end of this test. Only exported constants
+ // are checked here.
   const checks = [
-    ['economy.MAX_WALLET', economy.MAX_WALLET, Infinity], // 💡 2026-09-12: caps removed by owner
-    ['economy.MAX_BANK', economy.MAX_BANK, Infinity],     // 💡 2026-09-12: caps removed by owner
+    ['economy.MAX_WALLET', economy.MAX_WALLET, Infinity], // caps removed by owner
+    ['economy.MAX_BANK', economy.MAX_BANK, Infinity], // caps removed by owner
     ['inventorySystem.INVENTORY_CONFIG.UPGRADE_COST_BASE', inventorySystem.INVENTORY_CONFIG.UPGRADE_COST_BASE, 2000],
     ['bountySystem.MIN_BOUNTY', bountySystem.MIN_BOUNTY, 5000],
     ['bountySystem.MAX_BOUNTY', bountySystem.MAX_BOUNTY, 5000000],
@@ -215,14 +211,14 @@ async function runTests() {
     console.log(`[+] ${name} = ${actual} ✅`);
   }
 
-  // Note: pvpSystem.MIN_STAKE/MAX_STAKE, loans.MIN_LOAN/MAX_LOAN,
-  // itemMarket.MIN_LISTING/MAX_LISTING aren't exported from their modules.
-  // They're verified by file inspection (grep) on Box 1, not via require().
-  // The constants are in the source code at:
-  //   pvpSystem.js:  const MIN_STAKE = 10; const MAX_STAKE = 500;
-  //   loans.js:      const MIN_LOAN = 1000; const MAX_LOAN = 5000000;
-  //   itemMarket.js: const MIN_LISTING = 100; const MAX_LISTING = 5000000;
-  // (File-grep verification done out-of-band by the agent running this test.)
+ // Note: pvpSystem.MIN_STAKE/MAX_STAKE, loans.MIN_LOAN/MAX_LOAN,
+ // itemMarket.MIN_LISTING/MAX_LISTING aren't exported from their modules.
+ // They're verified by file inspection (grep) on Box 1, not via require().
+ // The constants are in the source code at:
+ // pvpSystem.js: const MIN_STAKE = 10; const MAX_STAKE = 500;
+ // loans.js: const MIN_LOAN = 1000; const MAX_LOAN = 5000000;
+ // itemMarket.js: const MIN_LISTING = 100; const MAX_LISTING = 5000000;
+ // (File-grep verification done out-of-band by the agent running this test.)
 
   console.log('\n========== ALL TESTS PASSED ==========');
   console.log('Tax fixes: bounty ✅ investment ✅ NPC vendor sell ✅');

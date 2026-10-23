@@ -174,7 +174,7 @@ function drawRooms(n = 6) {
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
   return pool.slice(0, Math.min(n, pool.length)).map((r) => {
-    // weighted concealment: 40% easy, 40% slow, 20% hard
+ // weighted concealment: 40% easy, 40% slow, 20% hard
     const roll = Math.random();
     const conceal = roll < 0.4 ? 1 : roll < 0.8 ? 2 : 3;
     return { ...r, conceal, concealLabel: concealLabel(conceal) };
@@ -187,7 +187,7 @@ function roomName(id) {
 }
 
 // ============================================
-// WAVE 2c - THE HOUSE'S SEALS (owner 2026-10-13 "Go" on the seals pitch)
+// WAVE 2c - THE HOUSE'S SEALS ("Go" on the seals pitch)
 // Every room in the house owns one seal - a stopped clock, a veiled mirror,
 // a music box wound too tight. Each case, 3 of the 6 drawn rooms carry an
 // ACTIVE seal (one per tier when the draw allows). Answers are HOUSE LORE and
@@ -197,7 +197,7 @@ function roomName(id) {
 const SEAL_PAY = { 1: 30, 2: 70, 3: 150 }; // tiered Zeni on solve (tunable)
 
 const SEALS = [
-  // ---- tier 1 (30 Zeni) ----
+ // ---- tier 1 (30 Zeni) ----
   {
     id: 'ballroom_clock', roomId: 'ballroom', tier: 1,
     name: 'the stopped clock',
@@ -238,7 +238,7 @@ const SEALS = [
     answer: 'door', aliases: ['a door', 'the door'],
     dawn: 'Somewhere in the west wing, a door that never was swung shut.',
   },
-  // ---- tier 2 (70 Zeni) ----
+ // ---- tier 2 (70 Zeni) ----
   {
     id: 'drawing_mirror', roomId: 'drawing', tier: 2,
     name: 'the veiled mirror',
@@ -279,7 +279,7 @@ const SEALS = [
     answer: 'nameplate', aliases: ['a nameplate', 'the nameplate', 'brass nameplate', 'plaque', 'the plaque'],
     dawn: 'Somewhere in the gallery, a nameless frame remembered its name.',
   },
-  // ---- tier 3 (150 Zeni) ----
+ // ---- tier 3 (150 Zeni) ----
   {
     id: 'music_box', roomId: 'music', tier: 3,
     name: 'the wound music box',
@@ -307,7 +307,7 @@ const SEALS = [
 ];
 
 // normalize a seal answer: lowercase, drop punctuation, drop leading articles,
-// collapse whitespace - "  The  Clock! " and "clock" are the same word.
+// collapse whitespace - " The Clock! " and "clock" are the same word.
 function normSealAnswer(s) {
   return String(s || '')
     .toLowerCase()
@@ -332,7 +332,7 @@ function sealsForRooms(rooms) {
   for (const t of [1, 2, 3]) buckets[t].sort(() => Math.random() - 0.5);
   const takeFrom = (tier) => {
     if (buckets[tier].length) return buckets[tier].shift();
-    // fallback: largest remaining bucket
+ // fallback: largest remaining bucket
     let best = null;
     for (const t of [1, 2, 3]) {
       if (buckets[t].length && (!best || buckets[t].length > buckets[best].length)) best = t;
@@ -384,7 +384,7 @@ module.exports = {
   concealLabel,
   drawRooms,
   roomName,
-  // Wave 2c - the house's seals
+ // Wave 2c - the house's seals
   SEAL_PAY,
   SEALS,
   normSealAnswer,

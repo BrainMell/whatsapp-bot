@@ -42,14 +42,13 @@ async function cleanup(chatId) {
 }
 
 async function answerAll(sock, chatId, senderJid, maxQ) {
-  // answer correctly for up to maxQ questions by reading the revealed card
+ // answer correctly for up to maxQ questions by reading the revealed card
   for (let i = 0; i < maxQ; i++) {
     const card = await waitFor(() => cards(sock).find((t) => t.includes(`QUESTION ${i + 1}/`)), 20000, `Q${i + 1}`);
     if (!card) return i;
-    // find the correct letter: reveal uses the same letter mapping; extract from options list A. B. C. D.
-    // we can't know the answer client-side - answer A and let the reveal flow run; scoring path is what we test
+ // find the correct letter: reveal uses the same letter mapping; extract from options list A. B. C. D.
     await quiz.handleAnswer(sock, chatId, senderJid, "A", MARK, { key: { id: `ans${i}` } }, "Tester");
-    // wait for reveal (correct/wrong message or next question)
+ // wait for reveal (correct/wrong message or next question)
     await waitFor(() => cards(sock).some((t) => t.includes(`QUESTION ${i + 2}/`)) || texts(sock).some((t) => t.includes("Correct") || t.includes("correct") || t.includes("⏱ Time")), 20000, "reveal");
   }
   return maxQ;
@@ -58,7 +57,7 @@ async function answerAll(sock, chatId, senderJid, maxQ) {
 async function main() {
   console.log("=== LIVE E2E on Box 1 ===");
 
-  // ── A. LOGO MODE full mini-game ──
+ // -- A. LOGO MODE full mini-game --
   console.log("-- A. logos 3 (real Wikipedia logos) --");
   {
     const CHAT = "120369999999@g.us";
@@ -77,20 +76,20 @@ async function main() {
     ok(!!q1, "logo Q1 posted");
     const img = images(sock)[0];
     ok(!!img && Buffer.isBuffer(img.content.image) && img.content.image.length > 1500, `real logo bytes attached (${img ? img.content.image.length : 0}B)`);
-    // play all 3 questions (any answer - scoring path matters)
+ // play all 3 questions (any answer - scoring path matters)
     let answered = 0;
     for (let i = 0; i < 3; i++) {
       const card = await waitFor(() => cards(sock).find((t) => t.includes(`QUESTION ${i + 1}/3`)), 25000, `Q${i + 1}`);
       if (!card) break;
-      // the deadline window arms at CARD DELIVERY (resilient-sends order) -
-      // wait for it or a programmatic answer can race in before the window
-      // exists and get silently dropped (deadline would only fire ~25s later)
+ // the deadline window arms at CARD DELIVERY (resilient-sends order) -
+ // wait for it or a programmatic answer can race in before the window
+ // exists and get silently dropped (deadline would only fire ~25s later)
       const win = await waitFor(() => { const s = quiz.getSession(CHAT); return s && s.qOpenUntil && s.qOpenUntil > Date.now() ? true : null; }, 8000, `window Q${i + 1}`);
       if (!win) break;
-      // answer CORRECTLY (read from session state): a blind "B" is usually
-      // wrong, wrong answers don't reveal early, and deadline+gap then
-      // overruns the Q2 waitFor - the flow must exercise the scoring path,
-      // not gamble on option letters
+ // answer CORRECTLY (read from session state): a blind "B" is usually
+ // wrong, wrong answers don't reveal early, and deadline+gap then
+ // overruns the Q2 waitFor - the flow must exercise the scoring path,
+ // not gamble on option letters
       const sess = quiz.getSession(CHAT);
       const cq = sess && sess.sections[sess.activeSection] && sess.sections[sess.activeSection].questions[sess.idx];
       const correctText = cq && Array.isArray(cq.options) ? cq.options[cq.correct] : "B";
@@ -99,12 +98,12 @@ async function main() {
       await waitFor(() => texts(sock).some((t) => t.toLowerCase().includes("correct") || t.includes("wrong") || t.includes("⏱ Time")) || cards(sock).some((t) => t.includes(`QUESTION ${i + 2}/3`)), 25000, "reveal");
     }
     ok(answered >= 2, `playable flow works (${answered} questions answered)`);
-    // finish via endQuiz (clean teardown)
+ // finish via endQuiz (clean teardown)
     await quiz.endQuiz(sock, CHAT, "alice@s.whatsapp.net", MARK, false);
     ok(!quiz.hasActive(CHAT), "quiz ended cleanly");
   }
 
-  // ── B. SONG MODE full mini-game (real Go audio service) ──
+ // -- B. SONG MODE full mini-game (real Go audio service) --
   console.log("-- B. song 2 (real Go audio clips) --");
   {
     const CHAT = "120369999998@g.us";
@@ -128,7 +127,7 @@ async function main() {
     }
   }
 
-  // ── C. media builders direct (image + theme song, real sources) ──
+ // -- C. media builders direct (image + theme song, real sources) --
   console.log("-- C. lore media builders (Fandom + Go) --");
   {
     const t0 = Date.now();

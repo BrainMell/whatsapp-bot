@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * menu_audit.js — extract REAL dispatch surface of engine.js and diff vs
+ * menu_audit.js - extract REAL dispatch surface of engine.js and diff vs
  * commandRegistry (regular menu) + modMenuData (mod menu).
  * Usage: node scripts/menu_audit.js
  */
@@ -10,13 +10,13 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const engine = fs.readFileSync(path.join(ROOT, 'core/engine.js'), 'utf8');
 
-// ── 1. Extract primaryCmd === "x" literals from CURRENT engine source ──
+// -- 1. Extract primaryCmd === "x" literals from CURRENT engine source --
 const primaryLiterals = new Set();
 const re1 = /primaryCmd\s*===\s*["']([a-z0-9 +_.!?-]+)["']/gi;
 let mm;
 while ((mm = re1.exec(engine))) primaryLiterals.add(mm[1].toLowerCase());
 
-// ── 2. Extract sub-command dispatch: primaryCmd === "p" && cmdArgs[1] === "s" ──
+// -- 2. Extract sub-command dispatch: primaryCmd === "p" && cmdArgs[1] === "s" --
 // Rough scan: find `cmdArgs[1] === "x"` and `sub === "x"` literals per primary block is
 // too fragile; instead collect cmdArgs[1] literals globally and join with known generic primaries.
 const subLiterals = new Set();
@@ -34,7 +34,7 @@ for (const g of GENERIC) {
   }
 }
 
-// ── 3. Load both menus ──
+// -- 3. Load both menus --
 const REG = require(path.join(ROOT, 'core/utils/commandRegistry'));
 const { MOD_MENU } = require(path.join(ROOT, 'core/utils/modMenuData'));
 
@@ -50,7 +50,7 @@ for (const [cat, v] of Object.entries(MOD_MENU)) for (const c of (v.commands||[]
   modCmds.get(name).push(cat);
 }
 
-// ── 4. Report ──
+// -- 4. Report --
 const allMenuCmds = new Set([...regCmds.keys(), ...modCmds.keys()]);
 const engineSet = new Set([...primaryLiterals, ...multiword]);
 

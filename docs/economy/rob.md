@@ -89,7 +89,6 @@ User A (Thief) sends ".j rob @UserB" or ".j steal @UserB"
                       return;
                     }
 
-                    // Check if target is the bot
                     const botJid =
                       sock.user.id.split(":")[0] + "@s.whatsapp.net";
                     const botLid = sock.authState.creds?.me?.lid;

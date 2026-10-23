@@ -1,21 +1,20 @@
 // ============================================
-// ⚰️ KILL THE CARVED VERSE QA (owner 2026-10-07)
+// KILL THE CARVED VERSE QA
 // "the cursed verse is still fucking broken… you type open relic it doesnt
-//  work and after you fail you don't go back to the previous room with a map
-//  and encounter card — get rid of this stupid annoying game"
-//
-//   T1 pool sweep   : generate() NEVER spawns 'mapriddle' again; the other
-//                     five kinds all still spawn (pool not broken)
-//   T2 grading      : legacy mapriddle seals accept "open relic"; riddle
-//                     accepts "a towel"; word-boundary holds ("age"≠"cabbage");
-//                     glyph/shape/cipher/lever grading untouched
-//   T3 fail flow    : wrong answer / exhaustion → map card + encounter card
-//                     re-send BEFORE the verdict text (represent pipeline);
-//                     shock really damages; seal really resets; solve still
-//                     works and never re-presents
-//   T4 live replay  : the EXACT screenshot sequence on a legacy mapriddle —
-//                     "Open Reli" ✗ → "Open Relic" ✓ (solves, no shock)
-// Run: node scripts/gw_kill_mapriddle_qa.js  (gwtest DB + mock socks)
+// work and after you fail you don't go back to the previous room with a map
+// and encounter card - get rid of this stupid annoying game"
+// T1 pool sweep : generate() NEVER spawns 'mapriddle' again; the other
+// five kinds all still spawn (pool not broken)
+// T2 grading : legacy mapriddle seals accept "open relic"; riddle
+// accepts "a towel"; word-boundary holds ("age"≠"cabbage");
+// glyph/shape/cipher/lever grading untouched
+// T3 fail flow : wrong answer / exhaustion → map card + encounter card
+// re-send BEFORE the verdict text (represent pipeline);
+// shock really damages; seal really resets; solve still
+// works and never re-presents
+// T4 live replay : the EXACT screenshot sequence on a legacy mapriddle -
+// "Open Reli" → "Open Relic" (solves, no shock)
+// Run: node scripts/gw_kill_mapriddle_qa.js (gwtest DB + mock socks)
 // ============================================
 process.env.GW_TEST = '1';
 
@@ -25,7 +24,7 @@ const path = require('path');
 let PASS = 0, FAIL = 0;
 function check(name, cond, extra) {
     if (cond) { PASS++; console.log(`  ✅ ${name}`); }
-    else { FAIL++; console.log(`  ❌ ${name}${extra ? ' — ' + extra : ''}`); }
+    else { FAIL++; console.log(`  ❌ ${name}${extra ? ' - ' + extra : ''}`); }
 }
 const mockSock = () => ({
     sent: [],
@@ -91,7 +90,7 @@ async function retype(eventId, roomKey, patch) {
 (async () => {
     await connectDB();
 
-    // ═══ T1: pool sweep — the Carved Verse is gone ═══
+ // === T1: pool sweep - the Carved Verse is gone ===
     console.log('\n── T1: generate() never spawns mapriddle again ──');
     {
         const seen = {};
@@ -112,8 +111,8 @@ async function retype(eventId, roomKey, patch) {
         }
     }
 
-    // ═══ T2: grading tolerance (legacy mapriddle + riddle) ═══
-    console.log('\n── T2: grading — legacy verse + riddle tolerance ──');
+ // === T2: grading tolerance (legacy mapriddle + riddle) ===
+    console.log('\n── T2: grading - legacy verse + riddle tolerance ──');
     {
         const verse = { kind: 'mapriddle', answer: 'relic', maxAttempts: 3 };
         check('T2: legacy verse "open relic" SOLVES (the screenshot bug)', puzzles.checkByKind('mapriddle', verse, 'open relic', 1).solved === true);
@@ -132,10 +131,10 @@ async function retype(eventId, roomKey, patch) {
         check('T2: riddle "TOWEL!!" SOLVES', puzzles.checkByKind('riddle', towel, 'TOWEL!!', 1).solved === true);
         check('T2: riddle "shadow" still WRONG', puzzles.checkByKind('riddle', towel, 'shadow', 1).solved === false);
         const age = { kind: 'riddle', answer: 'age', altAnswers: ['age'], maxAttempts: 3 };
-        check('T2: riddle word boundary — "age" SOLVES', puzzles.checkByKind('riddle', age, 'age', 1).solved === true);
-        check('T2: riddle word boundary — "cabbage" still WRONG', puzzles.checkByKind('riddle', age, 'cabbage', 1).solved === false);
+        check('T2: riddle word boundary - "age" SOLVES', puzzles.checkByKind('riddle', age, 'age', 1).solved === true);
+        check('T2: riddle word boundary - "cabbage" still WRONG', puzzles.checkByKind('riddle', age, 'cabbage', 1).solved === false);
 
-        // untouched kinds keep EXACT grading
+ // untouched kinds keep EXACT grading
         const seq = { kind: 'sequence', answer: 'ᚠ ᚢ ᚦ', altAnswer: 'ᚠᚢᚦ', maxAttempts: 3 };
         check('T2: sequence "ᚠ ᚢ ᚦ" SOLVES', puzzles.checkByKind('sequence', seq, 'ᚠ ᚢ ᚦ', 1).solved === true);
         check('T2: sequence "ᚠᚢᚦ" SOLVES (altAnswer)', puzzles.checkByKind('sequence', seq, 'ᚠᚢᚦ', 1).solved === true);
@@ -145,7 +144,7 @@ async function retype(eventId, roomKey, patch) {
         check('T2: cipher "ruins" still WRONG', puzzles.checkByKind('cipher', cipher, 'ruins', 1).solved === false);
     }
 
-    // ═══ T3: fail flow — map + encounter card ride the verdict ═══
+ // === T3: fail flow - map + encounter card ride the verdict ===
     console.log('\n── T3: fail flow re-presents map + encounter card ──');
     {
         const ev = await freshEvent('failflow');
@@ -155,15 +154,15 @@ async function retype(eventId, roomKey, patch) {
             payload: { puzzle: { kind: 'riddle', prompt: 'QA guardian: what is soft and dries you?', answer: 'towel', altAnswers: ['towel'], maxAttempts: 3, started: true, attemptsUsed: 0 } },
         });
         const JID = 'verse0@s.whatsapp.net';
-        // the shock writes through the ECONOMY persistent-HP store — the user
-        // must exist AND be registered there or applyWarDamage silently no-ops
+ // the shock writes through the ECONOMY persistent-HP store - the user
+ // must exist AND be registered there or applyWarDamage silently no-ops
         const econ = economy.registerUser(JID, 'VerseQA');
         if (!econ.success) economy.getOrCreateUser(JID, 'VerseQA');
         await seat(ev.eventId, JID, target.key);
         const dm = (txt, sock) => dmRouter.handleDM(sock || mockSock(), JID, JID, txt, '\u200B', { prefix: '.', prefixed: true });
 
-        // wrong answer #1 → represent: map image + scene image, verdict as the
-        // returned text (the bot body sends it after the images)
+ // wrong answer #1 → represent: map image + scene image, verdict as the
+ // returned text (the bot body sends it after the images)
         const s1 = mockSock();
         const r1 = await dm('zzz', s1);
         const imgs1 = s1.sent.filter((m) => m.hasImage);
@@ -172,7 +171,7 @@ async function retype(eventId, roomKey, patch) {
         check('T3: verdict text rides the reply ("Wrong")', !!r1 && /Wrong/.test(r1.text || ''), r1 && r1.text && r1.text.slice(0, 50));
         check('T3: attempts counted (2 left)', !!r1 && /2 attempts left/.test(r1.text || ''));
 
-        // exhaustion → shock + re-present + reset
+ // exhaustion → shock + re-present + reset
         const s2 = mockSock(); await dm('nope', s2);   // attempt 2
         check('T3: wrong answer #2 also re-presents (2 images)', s2.sent.filter((m) => m.hasImage).length === 2);
         const hpBefore = economy.getPersistentHP(JID, 100);
@@ -182,22 +181,22 @@ async function retype(eventId, roomKey, patch) {
         const hpAfter = economy.getPersistentHP(JID, 100);
         check('T3: shock damage was REAL (persistent HP dropped)', hpAfter < hpBefore, `before=${hpBefore} after=${hpAfter}`);
 
-        // seal reset is real: fresh 3 attempts after the shock
+ // seal reset is real: fresh 3 attempts after the shock
         const s4 = mockSock(); const r4 = await dm('zzz', s4);
         check('T3: seal reset → back to counting from 2 left', !!r4 && /2 attempts left/.test(r4.text || ''), r4 && r4.text && r4.text.slice(0, 50));
 
-        // solve → cleared scene + return map; the "clicks open" beat rides the
-        // cleared-scene CAPTION, the return value stays empty
+ // solve → cleared scene + return map; the "clicks open" beat rides the
+ // cleared-scene CAPTION, the return value stays empty
         const s5 = mockSock(); const r5 = await dm('a towel', s5);   // tolerance through the LIVE router
         check('T3: "a towel" SOLVES the seal via the live router', s5.sent.some((m) => /clicks open/.test(m.text)), JSON.stringify(s5.sent.map((m) => m.text.slice(0, 40))));
         const roomAfter = await roomOf(ev.eventId, target.key);
         check('T3: room CLEARED after the solve', roomAfter.state === 'CLEARED');
-        check('T3: solve path sends cleared scene + return map (2 images)', s5.sent.filter((m) => m.hasImage).length === 2, `got ${s5.sent.filter((m) => m.hasImage).length} — ${JSON.stringify(s5.sent.map((m) => ({ img: m.hasImage, t: m.text.slice(0, 40) })))}`);
+        check('T3: solve path sends cleared scene + return map (2 images)', s5.sent.filter((m) => m.hasImage).length === 2, `got ${s5.sent.filter((m) => m.hasImage).length} - ${JSON.stringify(s5.sent.map((m) => ({ img: m.hasImage, t: m.text.slice(0, 40) })))}`);
         check('T3: solve returns no bare verdict (caption carried it)', !r5 || !r5.text, r5 && r5.text);
     }
 
-    // ═══ T4: the EXACT screenshot replay on a legacy mapriddle seal ═══
-    console.log('\n── T4: screenshot replay — legacy carved verse, "Open Reli" ✗ then "Open Relic" ✓ ──');
+ // === T4: the EXACT screenshot replay on a legacy mapriddle seal ===
+    console.log('\n── T4: screenshot replay - legacy carved verse, "Open Reli" ✗ then "Open Relic" ✓ ──');
     {
         const ev = await freshEvent('replay');
         const target = ev.rooms.find((r) => !['core', 'finale'].includes(r.type));
@@ -217,7 +216,7 @@ async function retype(eventId, roomKey, patch) {
         check('T4: legacy verse room CLEARED', roomAfter.state === 'CLEARED');
     }
 
-    // ═══ T5: examine gate untouched — board still hidden until examine ═══
+ // === T5: examine gate untouched - board still hidden until examine ===
     console.log('\n── T5: examine gate intact for the remaining games ──');
     {
         const ev = await freshEvent('gate');

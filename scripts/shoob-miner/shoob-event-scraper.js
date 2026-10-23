@@ -2,7 +2,7 @@
 'use strict';
 /**
  * ============================================================================
- *  SHOOB EVENT-CARD SCRAPER — lightweight, zero-dependency, NO Chromium
+ *  SHOOB EVENT-CARD SCRAPER - lightweight, zero-dependency, NO Chromium
  * ============================================================================
  *
  *  Replaces the Puppeteer-based Shoob scraper for EVENT CARDS.
@@ -80,7 +80,7 @@
 const fs = require('fs');
 const path = require('path');
 
-// ── CLI ──────────────────────────────────────────────────────────────────────
+// -- CLI ----------------------------------------------------------------------
 const argv = process.argv.slice(2);
 function argOf(name, def) {
   const i = argv.indexOf(name);
@@ -116,7 +116,7 @@ const MAX_PAGES_PER_EVENT = 500;   // hard safety cap
 const REQUEST_TIMEOUT_MS = 25000;
 const RETRIES = 5;
 
-// ── tiny helpers ─────────────────────────────────────────────────────────────
+// -- tiny helpers -------------------------------------------------------------
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const jitter = (ms) => ms + Math.floor(Math.random() * Math.min(ms, 120));
 
@@ -151,7 +151,7 @@ async function fetchText(url) {
       if (res.status === 429 || res.status === 503) {
         const ra = parseInt(res.headers.get('retry-after') || '0', 10);
         const wait = ra > 0 ? ra * 1000 : 1500 * attempt;
-        console.log(`  [rate] ${res.status} on ${url} — waiting ${wait}ms`);
+        console.log(`  [rate] ${res.status} on ${url} - waiting ${wait}ms`);
         await sleep(wait);
         continue;
       }
@@ -162,10 +162,10 @@ async function fetchText(url) {
       lastErr = e;
       THROTTLE = Math.min(THROTTLE * 1.6, 12);
       if (attempt < RETRIES) {
-        // aborts (timeouts) get progressively longer cooling-off — the site
-        // occasionally stalls a connection; hammering makes it worse
+ // aborts (timeouts) get progressively longer cooling-off - the site
+ // occasionally stalls a connection; hammering makes it worse
         const wait = 800 * attempt * attempt;
-        console.log(`  [retry] ${url} attempt ${attempt} failed (${e.message}) — ${wait}ms (throttle x${THROTTLE.toFixed(1)})`);
+        console.log(`  [retry] ${url} attempt ${attempt} failed (${e.message}) - ${wait}ms (throttle x${THROTTLE.toFixed(1)})`);
         await sleep(wait);
       }
     }
@@ -173,7 +173,7 @@ async function fetchText(url) {
   throw new Error(`fetch failed after ${RETRIES} tries: ${url} (${lastErr.message})`);
 }
 
-// ── media mirror (gif/webm archive) ────────────────────────────────────────
+// -- media mirror (gif/webm archive) ----------------------------------------
 const { execSync } = require('child_process');
 const MEDIA_EXT_RE = /\.(gif|webm|mp4|jpg|jpeg|png|webp|apng)(\?|$)/i;
 const CT_TO_EXT = { 'image/gif': '.gif', 'video/webm': '.webm', 'image/webp': '.webp',
@@ -217,7 +217,7 @@ async function fetchBinary(url) {
 
 /**
  * Mirror every card's media into <dir>/<event>/<id>_<name>.<ext>.
- * Live cards first (they rotate back OFF the site — archive them while the
+ * Live cards first (they rotate back OFF the site - archive them while the
  * CDN still serves them), tombstones best-effort after. Id-keyed filenames
  * make re-runs idempotent. Returns {files,bytes,failures,skipped}.
  */
@@ -257,7 +257,7 @@ async function mirrorMedia(cards) {
       const ext = extM ? extM[1].toLowerCase() : null;
       const eventDir = path.join(dir, safePart(c.eventName));
       const base = `${c.id}_${safePart(c.cardName)}`;
-      // id-keyed prefix -> existing files are ALWAYS ours, skip without HEAD
+ // id-keyed prefix -> existing files are ALWAYS ours, skip without HEAD
       try {
         if (fs.existsSync(eventDir)) {
           const have = fs.readdirSync(eventDir).find(f => f.startsWith(base + '.'));
@@ -269,7 +269,7 @@ async function mirrorMedia(cards) {
       } catch {}
       try {
         if (freeDiskMb(dir) < OPTS.diskFloorMb) {
-          console.warn(`[media] disk floor ${OPTS.diskFloorMb}MB reached — stopping mirror (rest of run unaffected)`);
+          console.warn(`[media] disk floor ${OPTS.diskFloorMb}MB reached - stopping mirror (rest of run unaffected)`);
           diskStop = true; return;
         }
         const r = await fetchBinary(c.imageUrl);
@@ -294,11 +294,11 @@ async function mirrorMedia(cards) {
   await Promise.all(Array.from({ length: Math.max(1, OPTS.mediaConcurrency) }, lane));
   saveManifest();
   const stats = { files, bytes, failures, skipped, totalTracked: manifest.totalFiles, totalBytes: manifest.totalBytes, dir };
-  console.log(`[media] done in ${((Date.now() - t0) / 1000).toFixed(0)}s — ${files} downloaded, ${skipped} cached, ${failures} failed, archive ${manifest.totalFiles} files / ${(manifest.totalBytes / 1048576).toFixed(0)}MB`);
+  console.log(`[media] done in ${((Date.now() - t0) / 1000).toFixed(0)}s - ${files} downloaded, ${skipped} cached, ${failures} failed, archive ${manifest.totalFiles} files / ${(manifest.totalBytes / 1048576).toFixed(0)}MB`);
   return stats;
 }
 
-// ── SSR parsers ──────────────────────────────────────────────────────────────
+// -- SSR parsers --------------------------------------------------------------
 /** Parse the /card-events index -> [slug, ...] */
 function parseEventIndex(html) {
   const slugs = new Set();
@@ -316,7 +316,7 @@ function parseEventName(html, slug) {
   if (!t) return slug;
   let name = decodeEntities(t[1]).split('|')[0].trim();
   name = name.replace(/\s*cards?\s*$/i, '').trim();
-  // acronym fixes for names the site title-cases incorrectly
+ // acronym fixes for names the site title-cases incorrectly
   name = name.replace(/\bCcg\b/, 'CCG').replace(/\bMha\b/, 'MHA');
   return name || slug;
 }
@@ -327,16 +327,16 @@ function parseEventName(html, slug) {
  *
  * Handles BOTH static (<img>) and animated (<video>) card tiles.
  * Animated tiles point at a resized variant (eventcards/T/resized/100_sha.webm)
- * — normalized to the full-res asset (eventcards/T/sha.webm) which is what the
+ * - normalized to the full-res asset (eventcards/T/sha.webm) which is what the
  * production DB stores and what the bot's spawn renderer expects.
  */
 function parseListingPage(html, slug) {
-  // v2 (2026-10-23): NEVER drop a tile. shoob intermittently serves an
-  // alternate tile template (3D-tilt "cardContent cardLoaded" wrapper with
-  // no .cardData child); the old parser skipped those, shrinking the page's
-  // row count and tripping the short-page break mid-catalog. Tiles whose
-  // name/media cannot be read here are still returned (with __unparsed) and
-  // get filled from their detail page (og:title / og:image) later.
+ // v2: NEVER drop a tile. shoob intermittently serves an
+ // alternate tile template (3D-tilt "cardContent cardLoaded" wrapper with
+ // no .cardData child); the old parser skipped those, shrinking the page's
+ // row count and tripping the short-page break mid-catalog. Tiles whose
+ // name/media cannot be read here are still returned (with __unparsed) and
+ // get filled from their detail page (og:title / og:image) later.
   const rows = [];
   let anchors = 0;
   const anchorRe = /<a href="\/card-events\/([a-z0-9-]+)\/([0-9a-f]{24})">([\s\S]*?)<\/a>/g;
@@ -347,7 +347,7 @@ function parseListingPage(html, slug) {
     anchors++;
     let imageUrl = null;
     let cardName = null;
-    // primary template: <div class="cardData"><img|video src=... title=...>
+ // primary template: <div class="cardData"><img|video src=... title=...>
     const media = inner.match(/<div class="cardData"><(img|video)\s+src="([^"]+)"([\s\S]*?)>/);
     if (media) {
       const attrs = media[3];
@@ -357,7 +357,7 @@ function parseListingPage(html, slug) {
       if (rawName) cardName = decodeEntities(rawName).trim();
       imageUrl = decodeEntities(media[2]);
     } else {
-      // alternate template: any img/video with a src + a title/alt nearby
+ // alternate template: any img/video with a src + a title/alt nearby
       const anyMedia = inner.match(/<(?:img|video)\s+[^>]*?\ssrc="([^"]+)"[^>]*>/);
       if (anyMedia) {
         imageUrl = decodeEntities(anyMedia[1]);
@@ -368,7 +368,7 @@ function parseListingPage(html, slug) {
         if (rawName) cardName = decodeEntities(rawName).trim();
       }
     }
-    // normalize resized variants -> full-res asset (matches production DB)
+ // normalize resized variants -> full-res asset (matches production DB)
     if (imageUrl) imageUrl = imageUrl.replace(/\/resized\/\d+_/, '/');
     const tierFromCdn = imageUrl ? ((imageUrl.match(/\/images\/eventcards\/([^/]+)\//) || [])[1] || null) : null;
     rows.push({
@@ -408,8 +408,8 @@ function parseDetail(html) {
   const tierM = html.match(/Tier\s+([1-6S])\b/) || html.match(/\bT([1-6S])\b/);
   if (tierM) tier = tierM[1];
 
-  // v2: og:title + og:image let alternate-template tiles (no readable
-  // listing markup) get their cardName/imageUrl from the detail page.
+ // v2: og:title + og:image let alternate-template tiles (no readable
+ // listing markup) get their cardName/imageUrl from the detail page.
   const ogTitle =
     html.match(/property="og:title"\s+content="([\s\S]*?)"/) ||
     html.match(/content="([\s\S]*?)"\s+property="og:title"/) || null;
@@ -423,7 +423,7 @@ function parseDetail(html) {
   };
 }
 
-// ── DB reference (id preservation + canonical event names) ──────────────────
+// -- DB reference (id preservation + canonical event names) ------------------
 function loadDbReference(file) {
   if (!file || !fs.existsSync(file)) return null;
   console.log(`[db] loading reference: ${file}`);
@@ -447,7 +447,7 @@ function loadDbReference(file) {
   return { byMongoId, slugToEventName, maxE };
 }
 
-// ── concurrent worker pool ───────────────────────────────────────────────────
+// -- concurrent worker pool ---------------------------------------------------
 async function runPool(items, worker, concurrency, delay) {
   const results = new Array(items.length);
   let cursor = 0;
@@ -467,28 +467,28 @@ async function runPool(items, worker, concurrency, delay) {
   return results;
 }
 
-// ── main ─────────────────────────────────────────────────────────────────────
+// -- main ---------------------------------------------------------------------
 (async function main() {
   const t0 = Date.now();
   console.log('=== shoob-event-scraper (no Chromium, zero deps) ===');
   console.log(`ua: ${OPTS.ua}`);
   fs.mkdirSync(path.dirname(OPTS.out), { recursive: true });
 
-  // ── media-only fast path: mirror assets for an existing --out file ──
+ // -- media-only fast path: mirror assets for an existing --out file --
   if (OPTS.mediaOnly) {
     if (!fs.existsSync(OPTS.out)) { console.error(`--media-only needs an existing --out (${OPTS.out})`); process.exit(1); }
     const doc = JSON.parse(fs.readFileSync(OPTS.out, 'utf8'));
     const cards = (doc.cards || []).map(c => ({ ...c, __tombstone: false }));
     console.log(`[media-only] ${cards.length} cards from ${OPTS.out}`);
     const stats = await mirrorMedia(cards);
-    console.log(`DONE (media-only) — archive ${stats.totalTracked} files / ${(stats.totalBytes / 1048576).toFixed(0)}MB`);
+    console.log(`DONE (media-only) - archive ${stats.totalTracked} files / ${(stats.totalBytes / 1048576).toFixed(0)}MB`);
     return;
   }
 
-  // 0. reference DB
+ // 0. reference DB
   const ref = loadDbReference(OPTS.db);
 
-  // 2. discover events
+ // 2. discover events
   const indexHtml = await fetchText(`${BASE}/card-events`);
   let slugs = parseEventIndex(indexHtml);
   if (OPTS.events) {
@@ -496,9 +496,9 @@ async function runPool(items, worker, concurrency, delay) {
     slugs = slugs.filter(s => want.includes(s));
   }
   console.log(`[events] ${slugs.length} events: ${slugs.join(', ')}`);
-  if (!slugs.length) { console.error('No events discovered — aborting.'); process.exit(1); }
+  if (!slugs.length) { console.error('No events discovered - aborting.'); process.exit(1); }
 
-  // 3. crawl listing pages per event
+ // 3. crawl listing pages per event
   const processedPages = [];
   const listing = [];
   const eventNameBySlug = new Map();
@@ -510,16 +510,16 @@ async function runPool(items, worker, concurrency, delay) {
     eventNameBySlug.set(slug, eventName);
     console.log(`[event] ${slug} -> "${eventName}" (site title: "${siteName}")`);
 
-    // ANCHOR-COMPLETE CRAWL (2026-10-23): the old loop trusted
-    // "parsed rows < 15 = last page", but shoob's alternate tile template
-    // can shrink a full page's parsed rows (verified: page 23 once parsed
-    // 11 of 15 tiles) — that break stranded EVERY crawl at page 23 and the
-    // miner silently missed 805/1148 Halloween cards incl. every Naruto
-    // card. Now: pagination is decided by ANCHOR count (0 anchors = page
-    // end), unparsed tiles are still recorded (name/media recovered from
-    // their detail pages), and the whole pagination is walked repeatedly
-    // (--passes) until a pass adds no new mongoIds, so template flakiness
-    // cannot lose cards.
+ // ANCHOR-COMPLETE CRAWL: the old loop trusted
+ // "parsed rows < 15 = last page", but shoob's alternate tile template
+ // can shrink a full page's parsed rows (verified: page 23 once parsed
+ // 11 of 15 tiles) - that break stranded EVERY crawl at page 23 and the
+ // miner silently missed 805/1148 Halloween cards incl. every Naruto
+ // card. Now: pagination is decided by ANCHOR count (0 anchors = page
+ // end), unparsed tiles are still recorded (name/media recovered from
+ // their detail pages), and the whole pagination is walked repeatedly
+ // (--passes) until a pass adds no new mongoIds, so template flakiness
+ // cannot lose cards.
     const seen = new Set();
     let eventCount = 0;
     let pagesWithCards = 0;
@@ -532,12 +532,12 @@ async function runPool(items, worker, concurrency, delay) {
       for (let page = 1; page <= MAX_PAGES_PER_EVENT; page++) {
         let html;
         try {
-          // page 1 must be RE-fetched every pass: tile markup varies per
-          // request, so reusing firstHtml would pin pass 1's variants
+ // page 1 must be RE-fetched every pass: tile markup varies per
+ // request, so reusing firstHtml would pin pass 1's variants
           html = await fetchText(`${BASE}/card-events/${slug}${page === 1 ? '' : `?page=${page}`}`);
         } catch (e) {
-          // transient site stall — do NOT kill the whole run; end this pass
-          console.warn(`[warn] listing page failed for ${slug}?page=${page}: ${e.message} — ending this pass here`);
+ // transient site stall - do NOT kill the whole run; end this pass
+          console.warn(`[warn] listing page failed for ${slug}?page=${page}: ${e.message} - ending this pass here`);
           listingFailures++;
           break;
         }
@@ -555,14 +555,14 @@ async function runPool(items, worker, concurrency, delay) {
         await sleep(jitter(OPTS.delay * THROTTLE));
       }
       console.log(`[event] ${slug} pass ${pass}/${OPTS.passes}: +${freshInPass} new (total ${eventCount})`);
-      if (freshInPass === 0) break;       // converged — a full pass found nothing new
+      if (freshInPass === 0) break;       // converged - a full pass found nothing new
       if (pass < OPTS.passes) await sleep(jitter(OPTS.delay * THROTTLE));
     }
-    if (unparsedTiles) console.warn(`[warn] ${slug}: ${unparsedTiles} tile fetch(es) came back unparsed — names/media will be recovered from detail pages`);
+    if (unparsedTiles) console.warn(`[warn] ${slug}: ${unparsedTiles} tile fetch(es) came back unparsed - names/media will be recovered from detail pages`);
     console.log(`[event] ${slug}: ${eventCount} cards on ${pagesWithCards} page(s) over ${pass} pass(es)${listingFailures ? ` (${listingFailures} page fetch failure${listingFailures > 1 ? 's' : ''})` : ''}`);
   }
 
-  // 4. dedupe listings across events (same mongoId twice = safety)
+ // 4. dedupe listings across events (same mongoId twice = safety)
   const byMongo = new Map();
   for (const row of listing) {
     const prev = byMongo.get(row.mongoId);
@@ -572,9 +572,9 @@ async function runPool(items, worker, concurrency, delay) {
   const unique = [...byMongo.values()];
   console.log(`[listings] ${unique.length} unique cards across ${slugs.length} events`);
 
-  // 5. detail pass (creator + real series + tier confirm)
-  //    - persistent sidecar cache: output/.detail_cache.json (crash-safe,
-  //      saved every chunk — a re-run never re-fetches a completed card)
+ // 5. detail pass (creator + real series + tier confirm)
+ // - persistent sidecar cache: output/.detail_cache.json (crash-safe,
+ // saved every chunk - a re-run never re-fetches a completed card)
   const cachePath = path.join(path.dirname(OPTS.out), '.detail_cache.json');
   const detailByUrl = new Map();
   if (OPTS.resume && fs.existsSync(cachePath)) {
@@ -592,7 +592,7 @@ async function runPool(items, worker, concurrency, delay) {
     if (OPTS.refresh) return true;
     const d = detailByUrl.get(r.detailUrl);
     if (!d) return true;
-    // alternate-template tiles need (re)fetch until the cache holds og fields
+ // alternate-template tiles need (re)fetch until the cache holds og fields
     if (r.__unparsed && !(d.ogTitle && d.ogImage)) return true;
     return false;
   });
@@ -617,22 +617,22 @@ async function runPool(items, worker, concurrency, delay) {
     saveCache();
   }
 
-  // 6. compose exact-schema records
+ // 6. compose exact-schema records
   const nowIso = new Date().toISOString();
   const records = unique.map((row) => {
     const d = detailByUrl.get(row.detailUrl) || {};
     const eventName = row.eventName;
     const tier = d.tier || row.tierFromCdn || '1';
     const animeName = (OPTS.animeNameMode === 'series' && d.realSeries) ? d.realSeries : eventName;
-    // v2: alternate-template tiles fall back to the detail page's og fields
+ // v2: alternate-template tiles fall back to the detail page's og fields
     const cardName = row.cardName || d.ogTitle || '';
     const imageUrl = row.imageUrl || d.ogImage || '';
     return {
       cardName,
       animeName,
       tier,
-      // production DB convention: unknown makers are 'Anonymous' (legacy
-      // Puppeteer scrape wrote that; keep it so values stay consistent)
+ // production DB convention: unknown makers are 'Anonymous' (legacy
+ // Puppeteer scrape wrote that; keep it so values stay consistent)
       creator: (d.creator != null && d.creator !== '') ? d.creator : 'Anonymous',
       imageUrl,
       detailUrl: row.detailUrl,
@@ -643,14 +643,14 @@ async function runPool(items, worker, concurrency, delay) {
     };
   });
   {
-    // never emit nameless/medialess records: promote's block sanity rejects
-    // them; the next cycle re-fetches those tiles/details and retries
+ // never emit nameless/medialess records: promote's block sanity rejects
+ // them; the next cycle re-fetches those tiles/details and retries
     const incomplete = records.filter(r => !r.cardName || !r.imageUrl);
     for (const r of incomplete) records.splice(records.indexOf(r), 1);
-    if (incomplete.length) console.warn(`[warn] dropped ${incomplete.length} record(s) still missing cardName/imageUrl after detail fallback — retried next cycle`);
+    if (incomplete.length) console.warn(`[warn] dropped ${incomplete.length} record(s) still missing cardName/imageUrl after detail fallback - retried next cycle`);
   }
 
-  // 7. id assignment — preserve existing, append new (deterministic)
+ // 7. id assignment - preserve existing, append new (deterministic)
   let nextE = ref ? ref.maxE : 0;
   const unassigned = [];
   let preserved = 0;
@@ -670,16 +670,16 @@ async function runPool(items, worker, concurrency, delay) {
   }
   console.log(`[ids] preserved ${preserved} existing, assigned ${unassigned.length} new (up to E-${String(nextE).padStart(5, '0')})`);
 
-  // 8. tombstones: production cards whose mongoId was not found on the site
+ // 8. tombstones: production cards whose mongoId was not found on the site
   let keptRemoved = 0;
   if (ref && !OPTS.prune) {
     const scrapedMongo = new Set(records.map(r => r._mongoId));
     for (const [mongoId, oldCard] of ref.byMongoId) {
       if (!scrapedMongo.has(mongoId)) {
         const tCopy = Object.assign({}, oldCard, { _id: oldCard.id, _mongoId: mongoId, __tombstone: true });
-        // real-series backfill for rotated-out cards: detail pages stay live,
-        // sidecar cache resolves their og:description — animeName becomes the
-        // actual anime series instead of the event label
+ // real-series backfill for rotated-out cards: detail pages stay live,
+ // sidecar cache resolves their og:description - animeName becomes the
+ // actual anime series instead of the event label
         if (OPTS.animeNameMode === 'series') {
           const td = detailByUrl.get(oldCard.detailUrl);
           if (td && td.realSeries) tCopy.animeName = td.realSeries;
@@ -691,13 +691,13 @@ async function runPool(items, worker, concurrency, delay) {
     if (keptRemoved) console.log(`[tombstone] kept ${keptRemoved} cards missing from the site (references intact for inventories)`);
   }
 
-  // 9. final ordering: eventName, tier, id (production-style event block)
+ // 9. final ordering: eventName, tier, id (production-style event block)
   records.sort((a, b) =>
     a.eventName.localeCompare(b.eventName) ||
     (TIER_ORDER[a.tier] || 9) - (TIER_ORDER[b.tier] || 9) ||
     String(a._id).localeCompare(String(b._id), 'en', { numeric: true }));
 
-  // 10. emit event-cards file (EXACT schema)
+ // 10. emit event-cards file (EXACT schema)
   const outCards = records.map((r) => ({
     id: r._id,
     cardName: r.cardName,
@@ -735,11 +735,11 @@ async function runPool(items, worker, concurrency, delay) {
     },
   };
   fs.writeFileSync(OPTS.out, JSON.stringify(outDoc, null, 2));
-  console.log(`\n[write] ${OPTS.out} — ${outCards.length} event cards`);
+  console.log(`\n[write] ${OPTS.out} - ${outCards.length} event cards`);
   console.log(`[write] per-event: ${JSON.stringify(perEvent)}`);
   console.log(`[write] tiers: ${JSON.stringify(tierBreakdown)}`);
 
-  // 11. optional full merge against production layout
+ // 11. optional full merge against production layout
   if (OPTS.mergeOut && OPTS.db && fs.existsSync(OPTS.db)) {
     const prod = JSON.parse(fs.readFileSync(OPTS.db, 'utf8'));
     const regular = (prod.cards || []).filter(c => !(c.id && String(c.id).startsWith('E-')));
@@ -763,10 +763,10 @@ async function runPool(items, worker, concurrency, delay) {
       },
     };
     fs.writeFileSync(OPTS.mergeOut, JSON.stringify(merged, null, 2));
-    console.log(`[merge] ${OPTS.mergeOut} — ${merged.totalCards} cards (${regular.length} regular + ${outCards.length} event)`);
+    console.log(`[merge] ${OPTS.mergeOut} - ${merged.totalCards} cards (${regular.length} regular + ${outCards.length} event)`);
   }
 
-  // 12. sidecar report (not part of the schema — for humans/next steps)
+ // 12. sidecar report (not part of the schema - for humans/next steps)
   const reportPath = OPTS.out.replace(/\.json$/, '') + '.report.json';
   fs.writeFileSync(reportPath, JSON.stringify({
     generatedAt: nowIso,
@@ -784,7 +784,7 @@ async function runPool(items, worker, concurrency, delay) {
   }, null, 2));
   console.log(`[report] ${reportPath}`);
 
-  // 13. media mirror (gif/webm archive) — AFTER outputs are safely on disk
+ // 13. media mirror (gif/webm archive) - AFTER outputs are safely on disk
   let mediaStats = null;
   if (OPTS.mirrorMedia) {
     try { mediaStats = await mirrorMedia(outCards); }
@@ -792,5 +792,5 @@ async function runPool(items, worker, concurrency, delay) {
   }
 
   const secs = ((Date.now() - t0) / 1000).toFixed(1);
-  console.log(`\nDONE in ${secs}s — ${outCards.length} event cards, zero Chromium.`);
+  console.log(`\nDONE in ${secs}s - ${outCards.length} event cards, zero Chromium.`);
 })().catch((e) => { console.error('FATAL:', e); process.exit(1); });

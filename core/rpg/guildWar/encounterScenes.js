@@ -1,5 +1,5 @@
 // ============================================
-// ⚔️ RUINS ENCOUNTER SCENES — 2026-10-02 owner directive
+// RUINS ENCOUNTER SCENES - owner directive
 // Every ruins room renders as a battle-encounter-style scene: the player
 // standing in the room, a per-type prop in the enemy zone, and the SQUARE
 // live map in the bottom-right panel. No banner, no fight menu, no combat
@@ -23,7 +23,7 @@ function ringOf(room) {
     return Math.max(1, Math.round((room?.ring || 0) * 4) + 1);
 }
 
-// ── SQUARE map fragment for the bottom-right encounter panel ──
+// -- SQUARE map fragment for the bottom-right encounter panel --
 // Builds a WINDOW_COLS x WINDOW_ROWS view centered (clamped) on the player.
 // states: current | seen | fog. kinds ride along for seen/current cells.
 function buildMapFragment(eventDoc, player, room) {
@@ -34,7 +34,7 @@ function buildMapFragment(eventDoc, player, room) {
     const coreKey = eventDoc.coreKey || `${Math.floor(side / 2)},${Math.floor(side / 2)}`;
     const [cx, cy] = String(coreKey).split(',').map(Number);
 
-    // clamp window so it stays on the map
+ // clamp window so it stays on the map
     let x0 = Math.min(Math.max(0, px - Math.floor(WINDOW_COLS / 2)), Math.max(0, side - WINDOW_COLS));
     let y0 = Math.min(Math.max(0, py - Math.floor(WINDOW_ROWS / 2)), Math.max(0, side - WINDOW_ROWS));
 
@@ -57,7 +57,7 @@ function buildMapFragment(eventDoc, player, room) {
         }
     }
 
-    // open edges inside the window, drawn only when at least one side is seen
+ // open edges inside the window, drawn only when at least one side is seen
     const edges = new Set(eventDoc.edges || []);
     const out = [];
     for (let wy = 0; wy < WINDOW_ROWS; wy++) {
@@ -91,14 +91,14 @@ function buildMapFragment(eventDoc, player, room) {
     };
 }
 
-// ── scene renderer: { success, buffer } ──
+// -- scene renderer: { success, buffer } --
 // players: the requesting player as the lone scene actor.
 async function renderScene(eventDoc, player, room, { state = 'intact', labelOverride } = {}) {
     const combatImageGenerator = require('../combatImageGenerator');
     const P = room?.payload || {};
     const theme = themeOf(eventDoc, room);
 
-    // prop label: type label (or landmark name), overridden for cleared states
+ // prop label: type label (or landmark name), overridden for cleared states
     const TYPE_LABELS = {
         puzzle: 'SEALED MECHANISM', discovery: 'BURIED CACHE', reward: 'OLD-WORLD VAULT',
         hazard: 'TRAPPED PASSAGE', lore: 'INSCRIBED HALL', secret: 'HIDDEN CHAMBER',

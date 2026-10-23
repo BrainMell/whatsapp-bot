@@ -18,7 +18,7 @@ const goImageService = require("../core/utils/goImageService");
 (async () => {
   const pack = packMod.PACK;
   const THEMES_ONLY = process.env.THEMES_ONLY === "1";
-  // ── 30 logos ──
+ // -- 30 logos --
   const logoResults = [];
   if (!THEMES_ONLY) for (const brand of pack.brands) {
     const t0 = Date.now();
@@ -37,8 +37,8 @@ const goImageService = require("../core/utils/goImageService");
   fs.writeFileSync(OUT + "_logos.json", JSON.stringify(logoResults, null, 1));
   log(`logos done: ${logoResults.filter((r) => r.bytes).length}/30`);
 
-  // ── 10 themes (30s clips via real Go audio service) ──
-  // real trim fn (same as quiz.js _clipAudioBuffer: re-encode to 96k mp3)
+ // -- 10 themes (30s clips via real Go audio service) --
+ // real trim fn (same as quiz.js _clipAudioBuffer: re-encode to 96k mp3)
   const { execFile } = require("child_process");
   const crypto = require("crypto");
   const ffmpegPath = process.env.FFMPEG_PATH || "ffmpeg"; // system binary (same as quiz.js deps)

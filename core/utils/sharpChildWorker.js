@@ -1,24 +1,21 @@
 // ============================================
-// SHARP CHILD WORKER (2026-09-28) - crash isolation for native sharp/libvips
+// SHARP CHILD WORKER - crash isolation for native sharp/libvips
 // ============================================
 // WHY THIS EXISTS: sharp (libvips/librsvg) can SIGSEGV the whole Node process
 // on certain inputs - malformed webp/png, SVGs that slip past magic-byte
 // checks (BOM/comment-prefixed), exotic formats. On the box this killed the
-// bot mid-quiz-prep (pm2 log: SIGSEGV at 19:19/19:33/19:37 on 2026-09-27,
+// bot mid-quiz-prep (pm2 log: SIGSEGV at 19:19/19:33/19:37 on
 // each right after a media job) - "quiz says starting then nothing".
-//
 // All untrusted-image sharp work now runs HERE instead of in the bot
 // process. Worst case: THIS child dies, the parent's job fails gracefully
 // (quiz skips the image, antinude fails open), and the parent respawns a
 // fresh worker. Never a dead bot.
-//
 // Protocol (serialization:'advanced', Buffers survive IPC):
-//   parent -> { id, op, buf, opts?, timeoutMs? }
-//   child  -> { id, ok:true, result, ms } | { id, ok:false, error, ms }
-//
+// parent -> { id, op, buf, opts?, timeoutMs? }
+// child -> { id, ok:true, result, ms } | { id, ok:false, error, ms }
 // Ops:
-//   gate             - imageGate pixel checks (format/dims/alpha/luminance)
-//   asticker-frames  - animated sticker -> up to 5 PNG page buffers
+// gate - imageGate pixel checks (format/dims/alpha/luminance)
+// asticker-frames - animated sticker -> up to 5 PNG page buffers
 // ============================================
 'use strict';
 
@@ -68,12 +65,12 @@ async function opGate(buf, opts = {}) {
     return { ok: false, reason: `undecodable(${String(e.message).slice(0, 40)})` };
   }
 
-  // svgz / mis-typed formats that decode but must never go to WhatsApp
+ // svgz / mis-typed formats that decode but must never go to WhatsApp
   if (meta.format === 'svg' || !ALLOWED_FORMATS.has(meta.format)) {
     return { ok: false, reason: `format(${meta.format})` };
   }
 
-  // full-image transparency check
+ // full-image transparency check
   try {
     if (meta.hasAlpha) {
       const raw = await sharp(buf, { failOn: 'error', ...LIMITS }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -90,7 +87,7 @@ async function opGate(buf, opts = {}) {
     }
   } catch { /* alpha probe failed -> continue with flatten stats */ }
 
-  // luminance statistics on flattened RGB pixels
+ // luminance statistics on flattened RGB pixels
   const { data, info } = flat;
   const px = info.width * info.height;
   const ch = info.channels;
@@ -129,16 +126,15 @@ async function opShrink(buf, opts = {}) {
   return { buf: out, mime: 'image/jpeg' };
 }
 
-// normalize (2026-10-01 owner bug report §2/§3): uniform quiz image output.
-//   1. decode (gif/svg rejected like gate)
-//   2. extreme-aspect center-crop: when W:H > 3:1 or 1:3 the dead flanks get
-//      cropped at the 3:1 boundary around the center (wordmark banners keep
-//      their wordmark, padding waste is bounded)
-//   3. flatten onto WHITE (transparency + any alpha channel gone)
-//   4. contain-resize into CANVASxCANVAS without enlargement (no stretch,
-//      no distortion, small logos stay sharp, centered on white)
-//   5. JPEG q85 output (WhatsApp re-encodes anyway; universally sendable)
-// Returns { buf, mime, width, height, flattened, cropped }.
+// normalize (owner bug report §2/§3): uniform quiz image output.
+// 1. decode (gif/svg rejected like gate)
+// 2. extreme-aspect center-crop: when W:H > 3:1 or 1:3 the dead flanks get
+// cropped at the 3:1 boundary around the center (wordmark banners keep
+// their wordmark, padding waste is bounded)
+// 3. flatten onto WHITE (transparency + any alpha channel gone)
+// 4. contain-resize into CANVASxCANVAS without enlargement (no stretch,
+// no distortion, small logos stay sharp, centered on white)
+// 5. JPEG q85 output (WhatsApp re-encodes anyway; universally sendable)
 async function opNormalize(buf, opts = {}) {
   const CANVAS = Math.max(320, Math.min(1200, opts.canvas || 800));
   const ASPECT_LIMIT = 3;
@@ -157,7 +153,7 @@ async function opNormalize(buf, opts = {}) {
   let cropped = false;
   let w = meta.width, h = meta.height;
   if (aspect > ASPECT_LIMIT || aspect < 1 / ASPECT_LIMIT) {
-    // center-crop the long flank to the 3:1 boundary
+ // center-crop the long flank to the 3:1 boundary
     let cw = w, chh = h;
     if (aspect > ASPECT_LIMIT) cw = Math.round(h * ASPECT_LIMIT);
     else chh = Math.round(w * ASPECT_LIMIT);
@@ -167,7 +163,7 @@ async function opNormalize(buf, opts = {}) {
     cropped = true;
     w = Math.min(cw, w); h = Math.min(chh, h);
   }
-  // contain-fit WITHOUT enlargement, then symmetric white pad to CANVAS
+ // contain-fit WITHOUT enlargement, then symmetric white pad to CANVAS
   const scale = Math.min(CANVAS / w, CANVAS / h, 1);
   const rw = Math.max(1, Math.round(w * scale));
   const rh = Math.max(1, Math.round(h * scale));
@@ -201,7 +197,7 @@ async function opAstickerFrames(buf) {
   return frames;
 }
 
-// 2026-10-11 lifecycle fix (Box2 swap re-inflation 378MB -> 1170MB): this
+// lifecycle fix (Box2 swap re-inflation 378MB -> 1170MB): this
 // worker used to be IMMORTAL (`setInterval(() => {}, 1<<30)` - "the parent
 // kills us"). But a SIGKILLed parent (liveness canary / pm2 cap) can't kill
 // anything - each parent death orphaned one ~30-100MB worker to ppid=1, and
@@ -219,8 +215,8 @@ process.on('message', async (msg) => {
   if (!msg || typeof msg.id !== 'number' || typeof msg.op !== 'string') return;
   lastActivity = Date.now();
   const t0 = Date.now();
-  // per-op watchdog: a wedged op kills THIS child so the parent respawns a
-  // clean one - the parent's own timeout is the outer safety net.
+ // per-op watchdog: a wedged op kills THIS child so the parent respawns a
+ // clean one - the parent's own timeout is the outer safety net.
   const watchdog = setTimeout(() => process.exit(9), (msg.timeoutMs || 20000) + 5000);
   try {
     let result;
@@ -238,8 +234,8 @@ process.on('message', async (msg) => {
 });
 
 // self-recycling keepalive (see lifecycle note at top):
-//   - channel closed (orphaned by a SIGKILLed parent) -> exit within seconds
-//   - idle past IDLE_EXIT_MS -> notify the parent (id:-2) then exit 0
+// - channel closed (orphaned by a SIGKILLed parent) -> exit within seconds
+// - idle past IDLE_EXIT_MS -> notify the parent (id:-2) then exit 0
 setInterval(() => {
   if (!process.connected) {
     try { process.exit(0); } catch (e) {}
@@ -247,7 +243,7 @@ setInterval(() => {
   }
   if (Date.now() - lastActivity > IDLE_EXIT_MS) {
     try { process.send({ id: -2, op: 'idle-exit' }); } catch (e) {}
-    // small delay so the detach notice flushes over IPC before we vanish
+ // small delay so the detach notice flushes over IPC before we vanish
     setTimeout(() => { try { process.exit(0); } catch (e) {} }, 250);
   }
 }, 5000);

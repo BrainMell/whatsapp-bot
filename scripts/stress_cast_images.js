@@ -1,4 +1,4 @@
-// stress_cast_images.js — volume stress for the cast-native image builder.
+// stress_cast_images.js - volume stress for the cast-native image builder.
 // Builds 3 image questions (easy/medium/hard) for each of 12 anime media ids
 // (taken from the bake-off) and reports success rate + timing percentiles.
 // Success bar: >=95% builds, disk-warm median < 300ms, zero malformed.

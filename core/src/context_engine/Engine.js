@@ -13,7 +13,6 @@ class ContextEngine {
     constructor() {
         this.isRunning = false;
         
-        // Setup storage callback
         adaptiveProcessor.setStorageCallback(async (result, batch) => {
             await this.saveResults(result, batch);
         });
@@ -25,7 +24,7 @@ class ContextEngine {
      * Entry point for every message from index.js
      */
     async onMessage(rawMsg, body) {
-        // 1. Normalize message
+ // 1. Normalize message
         const msg = {
             id: rawMsg.key.id,
             chatId: rawMsg.key.remoteJid,
@@ -38,21 +37,21 @@ class ContextEngine {
 
         if (!msg.content) return;
 
-        // 2. Buffer message
+ // 2. Buffer message
         bufferManager.addMessage(msg);
 
-        // 3. Detect Triggers
+ // 3. Detect Triggers
         const triggers = triggerDetector.detect(msg.content);
 
         if (triggers.length > 0) {
-            // 4. Get Context
+ // 4. Get Context
             const context = bufferManager.getContext(msg.chatId, msg.id, 15, 3);
 
-            // 5. Segment Topics
+ // 5. Segment Topics
             const segments = topicSegmenter.segmentConversation(context);
             const relevant = topicSegmenter.findRelevantSegment(msg.id, segments);
 
-            // 6. Enqueue for batching
+ // 6. Enqueue for batching
             const task = {
                 timestamp: msg.timestamp,
                 message: msg,
@@ -70,26 +69,26 @@ class ContextEngine {
     async saveResults(data, batch) {
         if (!data) return;
 
-        // Save individual user details
+ // Save individual user details
         if (data.users) {
 
         for (const userData of data.users) {
             const jid = userData.userId;
 
-            // 🧩 FIX 2026-09-17 (QA): Groq extraction sometimes emits a user
-            // entry with a null/missing userId. `jid.includes` then threw
-            // "Cannot read properties of null (reading 'includes')" and the
-            // catch in processBatch dropped the ENTIRE batch ("Batch
-            // processing failed" spam in pm2 logs). Skip the bad entry so the
-            // rest of the batch still saves.
+ // FIX (QA): Groq extraction sometimes emits a user
+ // entry with a null/missing userId. `jid.includes` then threw
+ // "Cannot read properties of null (reading 'includes')" and the
+ // catch in processBatch dropped the ENTIRE batch ("Batch
+ // processing failed" spam in pm2 logs). Skip the bad entry so the
+ // rest of the batch still saves.
             if (!jid || typeof jid !== 'string') {
                 continue;
             }
 
-            // 1. Resolve JID (if AI returned a name instead of JID, which it shouldn`t but safety first)
+ // 1. Resolve JID (if AI returned a name instead of JID, which it shouldn`t but safety first)
             let finalJid = jid;
             if (!jid.includes('@')) {
-                // Fuzzy match name to JID from our economy cache
+ // Fuzzy match name to JID from our economy cache
                 const users = economy.economyData || new Map();
                 for (const [uJid, uData] of users.entries()) {
                     if (uData.nickname?.toLowerCase() === jid.toLowerCase()) {
@@ -99,9 +98,9 @@ class ContextEngine {
                 }
             }
 
-            // 2. Ensure user exists
+ // 2. Ensure user exists
             if (!economy.isRegistered(finalJid)) {
-                // economy.initializeClass(finalJid); // Only init if we actually have something to save
+ // economy.initializeClass(finalJid); // Only init if we actually have something to save
             }
             
             const user = economy.getUser(finalJid);
@@ -121,7 +120,7 @@ class ContextEngine {
 
             let changes = 0;
 
-            // Process Preferences
+ // Process Preferences
             if (userData.preferences) {
                 userData.preferences.forEach(p => {
                     const category = p.category === 'dislike' ? 'dislikes' : 'likes';
@@ -133,7 +132,7 @@ class ContextEngine {
                 });
             }
 
-            // Process Experiences
+ // Process Experiences
             if (userData.experiences) {
                 if (!user.profile.memories.personal) user.profile.memories.personal = [];
                 userData.experiences.forEach(e => {
@@ -145,7 +144,7 @@ class ContextEngine {
                 });
             }
 
-            // Process Interests
+ // Process Interests
             if (userData.interests) {
                 if (!user.profile.memories.hobbies) user.profile.memories.hobbies = [];
                 userData.interests.forEach(i => {
@@ -156,7 +155,7 @@ class ContextEngine {
                 });
             }
 
-            // Process Other Facts (Identity etc)
+ // Process Other Facts (Identity etc)
             if (userData.identity || userData.other) {
                 const others = [...(userData.identity || []), ...(userData.other || [])];
                 if (!user.profile.memories.other) user.profile.memories.other = [];
@@ -169,14 +168,14 @@ class ContextEngine {
                 });
             }
 
-            // Save back to DB
+ // Save back to DB
             if (changes > 0) {
                 economy.saveUser(finalJid);
             }
         }
         }
 
-        // Save group-wide context
+ // Save group-wide context
         const chatId = batch && batch.length > 0 ? batch[0].message.chatId : null;
         if (chatId && chatId.endsWith("@g.us") && data.group) {
             try {

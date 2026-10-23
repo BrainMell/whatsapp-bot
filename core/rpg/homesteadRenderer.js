@@ -1,32 +1,30 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-//  HOMESTEAD RENDERER — isometric house builder art pipeline
-// ═══════════════════════════════════════════════════════════════════════════
-//  Draws a 12x12 isometric room (2:1 pixel iso) with procedural brick walls,
-//  CC0 hand-pixelled furniture (OpenGameArt "Isometric Furniture and Walls",
-//  CC0 — segmented into individual sprites), torch/hearth/cauldron/well
-//  animation, dust motes, and a Homestead HUD plate.
-//
-//  Outputs:
-//    renderRoomFrames(state, opts) → [PNG Buffer]   (FRAMES animated frames)
-//    encodeFramesToMp4(frames)     → Buffer          (WhatsApp "GIF")
-//    renderRoomImage(state, opts)  → { buffer, contentType }  (mp4 w/ png fallback)
-//    renderCatalogPage(page, pages, opts) → PNG Buffer (outfitter cards)
-//
-//  All geometry lives in ART pixels (device = art × SS supersample).
-//  Item sprites are drawn at 2× source scale; floors at 1:1 (source tiles
-//  are authored for 64×32 diamonds). imageSmoothing stays OFF everywhere so
-//  the pixel art never mushes.
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// HOMESTEAD RENDERER - isometric house builder art pipeline
+// ===========================================================================
+// Draws a 12x12 isometric room (2:1 pixel iso) with procedural brick walls,
+// CC0 hand-pixelled furniture (OpenGameArt "Isometric Furniture and Walls",
+// CC0 - segmented into individual sprites), torch/hearth/cauldron/well
+// animation, dust motes, and a Homestead HUD plate.
+// Outputs:
+// renderRoomFrames(state, opts) → [PNG Buffer] (FRAMES animated frames)
+// encodeFramesToMp4(frames) → Buffer (WhatsApp "GIF")
+// renderRoomImage(state, opts) → { buffer, contentType } (mp4 w/ png fallback)
+// renderCatalogPage(page, pages, opts) → PNG Buffer (outfitter cards)
+// All geometry lives in ART pixels (device = art × SS supersample).
+// Item sprites are drawn at 2× source scale; floors at 1:1 (source tiles
+// are authored for 64×32 diamonds). imageSmoothing stays OFF everywhere so
+// the pixel art never mushes.
+// ===========================================================================
 
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const isoShadow = require('./isoShadow');
 const mediaCache = require('./mediaCache');
-const { fillTextMixed } = require('./emojiFont');   // 2026-10-20: astral emoji color bitmaps (owner 'use colors not hex code')
+const { fillTextMixed } = require('./emojiFont'); // astral emoji color bitmaps (owner 'use colors not hex code')
 
-// ── world constants ──
+// -- world constants --
 const SS = 2;               // supersample (device px per art px)
 const TW = 64, TH = 32;     // floor tile size (2:1)
 const N = 12;               // room tiles per side
@@ -37,8 +35,8 @@ const OY = 64 + WALL_H;     // top corner of the floor diamond
 
 const FRAMES = 14, FRAME_MS = 100;
 
-// ── themes: megakit floor tiles + plaster-and-timber wall palette ──
-// (interior restyle 2026-10-16: floors are MVM-rendered diamonds, walls
+// -- themes: megakit floor tiles + plaster-and-timber wall palette --
+// (interior restyle floors are MVM-rendered diamonds, walls
 // painted in the same plaster+timber law as the new village buildings;
 // palette = [plaster, plasterShade, timber, timberDark], frame = beam style)
 const THEMES = {
@@ -50,7 +48,7 @@ const THEMES = {
     blackvault:  { name: 'Blackvault',  floor: ['floor_mvm_unevenbrick'], wall: ['#c9c9c9', '#b0b0b0', '#3a3d42', '#232527'], mortar: '#232527', frame: 'post',  price: 26000 },
 };
 
-// ── rarity chrome for cards ──
+// -- rarity chrome for cards --
 const RARITY = {
     common:    { col: '#9aa5b1', glow: 'rgba(154,165,177,0.25)' },
     uncommon:  { col: '#58c06a', glow: 'rgba(88,192,106,0.30)' },
@@ -59,11 +57,11 @@ const RARITY = {
     legendary: { col: '#f0a83c', glow: 'rgba(240,168,60,0.45)' },
 };
 
-// ── asset paths ──
+// -- asset paths --
 const ASSETS = path.join(__dirname, '..', 'rpgasset', 'homestead');
 const FONTS = path.join(__dirname, '..', 'rpgasset', 'fonts');
 
-// ── fonts ──
+// -- fonts --
 let fontsReady = false;
 function ensureFonts() {
     if (fontsReady) return true;
@@ -85,7 +83,7 @@ function ensureFonts() {
     } catch (e) { return false; }
 }
 
-// ── rng ──
+// -- rng --
 function mulberry32(seed) {
     let a = seed >>> 0;
     return function () {
@@ -102,7 +100,7 @@ function hashStr(s) {
     return h >>> 0;
 }
 
-// ── asset caches ──
+// -- asset caches --
 const _img = new Map();
 async function img(file) {
     if (_img.has(file)) return _img.get(file);
@@ -127,7 +125,7 @@ function itemDef(id) {
     return _itemIdx.get(id);
 }
 
-// ── iso projection ──
+// -- iso projection --
 function isoX(x, y) { return OX + (x - y) * (TW / 2); }
 function isoY(x, y) { return OY + (x + y) * (TH / 2); }
 function footCenter(x, y, fw, fh) {
@@ -135,7 +133,7 @@ function footCenter(x, y, fw, fh) {
     return { x: isoX(cx, cy), y: isoY(cx, cy) };
 }
 
-// ── color helper ──
+// -- color helper --
 function shade(hex, f) {
     let n = NaN;
     try { n = parseInt(String(hex).slice(1), 16); } catch (e) {}
@@ -156,10 +154,10 @@ function roundRect(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-// WALLS — plaster + timber frame (matches the MVM village exterior);
+// ==========================================================================
+// WALLS - plaster + timber frame (matches the MVM village exterior);
 // same sloped-run geometry law as before (N segments along the iso edge)
-// ══════════════════════════════════════════════════════════════════════════
+// ==========================================================================
 function drawWallRun(ctx, x0, y0, x1, y1, theme, seedBase, frame) {
     const segs = N;
     const dx = (x1 - x0) / segs, dy = (y1 - y0) / segs;
@@ -168,7 +166,7 @@ function drawWallRun(ctx, x0, y0, x1, y1, theme, seedBase, frame) {
     const timber = theme.wall[2], timberD = theme.wall[3];
     const lightSide = x1 > x0 ? 1.06 : 0.86;
 
-    // plaster backing (per-segment tone variation)
+ // plaster backing (per-segment tone variation)
     for (let s = 0; s < segs; s++) {
         const bx0 = x0 + dx * s, by0 = y0 + dy * s;
         const bx1 = x0 + dx * (s + 1), by1 = y0 + dy * (s + 1);
@@ -179,7 +177,7 @@ function drawWallRun(ctx, x0, y0, x1, y1, theme, seedBase, frame) {
         ctx.fillStyle = shade(rng() < 0.5 ? plaster : plasterD, lightSide * (0.94 + rng() * 0.12));
         ctx.fill();
     }
-    // soft plaster shading (light above, AO below)
+ // soft plaster shading (light above, AO below)
     const gsh = ctx.createLinearGradient(0, y0 - WALL_H, 0, y0);
     gsh.addColorStop(0, 'rgba(255,240,210,0.10)');
     gsh.addColorStop(0.72, 'rgba(0,0,0,0)');
@@ -192,7 +190,7 @@ function drawWallRun(ctx, x0, y0, x1, y1, theme, seedBase, frame) {
     ctx.fillStyle = gsh; ctx.fill();
     ctx.restore();
 
-    // timber frame — horizontal beams
+ // timber frame - horizontal beams
     for (const [hh, col, lw] of [[0, timber, 7], [WALL_H - 7, timberD, 7], [WALL_H * 0.52, timber, 4]]) {
         ctx.strokeStyle = shade(col, lightSide);
         ctx.lineWidth = lw;
@@ -205,7 +203,7 @@ function drawWallRun(ctx, x0, y0, x1, y1, theme, seedBase, frame) {
         ctx.moveTo(x0, y0 - hh - lw / 2); ctx.lineTo(x1, y1 - hh - lw / 2);
         ctx.stroke();
     }
-    // vertical posts at every segment boundary
+ // vertical posts at every segment boundary
     for (let s = 0; s <= segs; s++) {
         const px = x0 + dx * s, py = y0 + dy * s;
         ctx.strokeStyle = shade(s % 2 ? timber : timberD, lightSide);
@@ -214,7 +212,7 @@ function drawWallRun(ctx, x0, y0, x1, y1, theme, seedBase, frame) {
         ctx.moveTo(px, py); ctx.lineTo(px, py - WALL_H);
         ctx.stroke();
     }
-    // braces between posts
+ // braces between posts
     if (theme.frame === 'grid') {
         ctx.strokeStyle = shade(timberD, lightSide);
         ctx.lineWidth = 3.5;
@@ -233,7 +231,7 @@ function drawWallRun(ctx, x0, y0, x1, y1, theme, seedBase, frame) {
             ctx.beginPath(); ctx.moveTo(ax + dx * 0.1, ay - WALL_H + 8); ctx.lineTo(bx - dx * 0.1, by - 10); ctx.stroke();
         }
     }
-    // top cap — extends "back" (away from viewer)
+ // top cap - extends "back" (away from viewer)
     let capdx, capdy;
     if (x1 < x0) { capdx = -TW / 2; capdy = -TH / 2; }   // left wall → up-left
     else { capdx = +TW / 2; capdy = -TH / 2; }           // right wall → up-right
@@ -249,7 +247,7 @@ function drawWallRun(ctx, x0, y0, x1, y1, theme, seedBase, frame) {
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // cut-end cross-section (open front ends of the cutaway room)
+ // cut-end cross-section (open front ends of the cutaway room)
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x1, y1 - WALL_H);
@@ -261,7 +259,7 @@ function drawWallRun(ctx, x0, y0, x1, y1, theme, seedBase, frame) {
     ctx.strokeStyle = 'rgba(0,0,0,0.35)';
     ctx.stroke();
 
-    // baseboard AO strip
+ // baseboard AO strip
     const grad = ctx.createLinearGradient(0, y1 - 8, 0, y1 + 26);
     grad.addColorStop(0, 'rgba(0,0,0,0.30)');
     grad.addColorStop(1, 'rgba(0,0,0,0)');
@@ -306,15 +304,15 @@ function drawTorch(ctx, wx, wy, frame, seed) {
     flame(5 + fl * 2, 2, 'rgba(255,245,200,0.95)');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // ONE FRAME
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 async function renderFrame(state, frame, opts = {}) {
     ensureFonts();
-    // SS OVERRIDE (Task 37 speed round, owner "increase processing speed for
-    // gif and card"): animated bakes render at ss=1 — the mp4 target was
-    // ALWAYS half-res (ART_W x ART_H), so an SS=2 raw frame was a 4x-more-
-    // pixels render whose pixels ffmpeg immediately threw half away.
+ // SS OVERRIDE (speed round, owner "increase processing speed for
+ // gif and card"): animated bakes render at ss=1 - the mp4 target was
+ // ALWAYS half-res (ART_W x ART_H), so an SS=2 raw frame was a 4x-more-
+ // pixels render whose pixels ffmpeg immediately threw half away.
     const ss = Math.max(0.5, Math.min(4, parseFloat(opts.ss) || SS));
     const canvas = require('canvas').createCanvas(ART_W * ss, ART_H * ss);
     const ctx = canvas.getContext('2d');
@@ -324,7 +322,7 @@ async function renderFrame(state, frame, opts = {}) {
     const theme = THEMES[state.theme] || THEMES.oakhaven;
     const seed = hashStr(state.owner + '|' + state.theme);
 
-    // backdrop
+ // backdrop
     ctx.fillStyle = '#14100c';
     ctx.fillRect(0, 0, ART_W, ART_H);
     const amb = ctx.createRadialGradient(OX, OY + 130, 60, OX, OY + 130, 560);
@@ -334,7 +332,7 @@ async function renderFrame(state, frame, opts = {}) {
     ctx.fillStyle = amb;
     ctx.fillRect(0, 0, ART_W, ART_H);
 
-    // walls + corner shading
+ // walls + corner shading
     const leftEnd = { x: isoX(0, N), y: isoY(0, N) };
     const rightEnd = { x: isoX(N, 0), y: isoY(N, 0) };
     drawWallRun(ctx, OX, OY, leftEnd.x, leftEnd.y, theme, seed + 1, frame);
@@ -346,13 +344,13 @@ async function renderFrame(state, frame, opts = {}) {
     ctx.fillStyle = cg;
     ctx.fillRect(OX - 10, OY - WALL_H - 8, 20, WALL_H + 10);
 
-    // torches
+ // torches
     drawTorch(ctx, isoX(0, 3.5), isoY(0, 3.5) - 40, frame, seed + 11);
     drawTorch(ctx, isoX(0, 8.5), isoY(0, 8.5) - 40, frame, seed + 12);
     drawTorch(ctx, isoX(3.5, 0), isoY(3.5, 0) - 40, frame, seed + 13);
     drawTorch(ctx, isoX(8.5, 0), isoY(8.5, 0) - 40, frame, seed + 14);
 
-    // wall banners
+ // wall banners
     const wallBanners = (state.placed || []).filter(p => (itemDef(p.item) || {}).layer === 'wall');
     for (const p of wallBanners) {
         const spr = await img(`${p.item}.png`);
@@ -366,7 +364,7 @@ async function renderFrame(state, frame, opts = {}) {
         ctx.drawImage(spr, wx - w / 2, wy - h - 18 + bob, w, h);
     }
 
-    // floor
+ // floor
     const floorImgs = [];
     for (const f of theme.floor) {
         const im = await img(`${f}.png`);
@@ -381,7 +379,7 @@ async function renderFrame(state, frame, opts = {}) {
             ctx.drawImage(timg, isoX(x, y) - TW / 2, isoY(x, y) - TH / 2);
         }
     }
-    // front edge rim
+ // front edge rim
     ctx.strokeStyle = 'rgba(0,0,0,0.35)';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -390,7 +388,7 @@ async function renderFrame(state, frame, opts = {}) {
     ctx.lineTo(isoX(N, 0), isoY(N, 0));
     ctx.stroke();
 
-    // wall base AO
+ // wall base AO
     const aoL = ctx.createLinearGradient(0, OY, 0, OY + 46);
     aoL.addColorStop(0, 'rgba(0,0,0,0.26)');
     aoL.addColorStop(1, 'rgba(0,0,0,0)');
@@ -415,7 +413,7 @@ async function renderFrame(state, frame, opts = {}) {
     ctx.fillRect(0, 0, ART_W, ART_H);
     ctx.restore();
 
-    // warm light pool
+ // warm light pool
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     const pool = ctx.createRadialGradient(OX, OY + N * TH / 2 + 20, 30, OX, OY + N * TH / 2 + 20, 430);
@@ -425,7 +423,7 @@ async function renderFrame(state, frame, opts = {}) {
     ctx.fillRect(0, 0, ART_W, ART_H);
     ctx.restore();
 
-    // rugs then depth-sorted items
+ // rugs then depth-sorted items
     const placed = (state.placed || []).map(p => ({ ...p, def: itemDef(p.item) })).filter(p => p.def);
     const rugs = placed.filter(p => p.def.layer === 'rug');
     const items = placed.filter(p => p.def.layer === 'item')
@@ -439,41 +437,41 @@ async function renderFrame(state, frame, opts = {}) {
         ctx.drawImage(spr, c.x - w / 2, c.y - h / 2, w, h);
     }
 
-    // ── grid preview overlay (Section 3): floor-pass — labelled axes + cells ──
+ // -- grid preview overlay (Section 3): floor-pass - labelled axes + cells --
     if (opts.grid) drawGridFloor(ctx, opts.grid, frame);
 
     const t = frame / FRAMES;
 
-    // preload sprites + compute anchors once for both passes
+ // preload sprites + compute anchors once for both passes
     const drawn = [];
     for (const p of items) {
         const spr = await img(`${p.item}.png`);
         if (!spr) continue;
         const c = footCenter(p.x, p.y, p.def.fw, p.def.fh);
-        // anchor: lowest painted floor vertex of the footprint (+2px settle) —
-        // a sprite's base line lands exactly on its own tiles' south edge.
+ // anchor: lowest painted floor vertex of the footprint (+2px settle) -
+ // a sprite's base line lands exactly on its own tiles' south edge.
         const anchorY = c.y + (p.def.fw + p.def.fh) * (TH / 4) - TH / 2 + 2;
         drawn.push({ p, spr, c, anchorY, w: spr.width * 2, h: spr.height * 2 });
     }
 
-    // ── move locomotion (owner 2026-10-16 "moving doesn't trigger an
-    // animation"): when pop carries a `from` cell, the piece SLIDES from the
-    // old tile to the new one with easeOutCubic + a dust kick at the origin.
+ // -- move locomotion ("moving doesn't trigger an
+ // animation"): when pop carries a `from` cell, the piece SLIDES from the
+ // old tile to the new one with easeOutCubic + a dust kick at the origin.
     if (opts.pop && opts.pop.from) {
         for (const d of drawn) {
             if (opts.pop.item !== d.p.item || opts.pop.x !== d.p.x || opts.pop.y !== d.p.y) continue;
             const fc = footCenter(opts.pop.from.x, opts.pop.from.y, d.p.def.fw, d.p.def.fh);
             const e = Math.min(1, t * 1.5);
             const k = 1 - Math.pow(1 - e, 3); // easeOutCubic
-            // owner 2026-10-16 21:23Z "if the destination is close ... it should
-            // just slide in from its last position": the lift mid-slide scales
-            // with distance — a close move is a FLAT glide, only long hauls hop
+ // 21:23Z "if the destination is close ... it should
+ // just slide in from its last position": the lift mid-slide scales
+ // with distance - a close move is a FLAT glide, only long hauls hop
             const slideDist = Math.hypot(d.c.x - fc.x, d.c.y - fc.y);
             const hop = Math.sin(k * Math.PI) * Math.min(9, slideDist * 0.12);
             d.c = { x: fc.x + (d.c.x - fc.x) * k, y: fc.y + (d.c.y - fc.y) * k };
             d.anchorY = d.c.y + (d.p.def.fw + d.p.def.fh) * (TH / 4) - TH / 2 + 2 - hop;
             if (k < 1) {
-                // dust kick at the origin cell, strongest right after the push-off
+ // dust kick at the origin cell, strongest right after the push-off
                 const pr = mulberry32(seed + 1234);
                 ctx.save();
                 ctx.globalAlpha = 0.5 * (1 - k);
@@ -489,17 +487,17 @@ async function renderFrame(state, frame, opts = {}) {
         }
     }
 
-    // ═══ SHADOWS — rebuilt from scratch (owner: "scrap it and redo") ═══
-    // isoShadow.js: sprite-SILHOUETTE cast shadows squashed onto the floor
-    // plane and marched along the key-light direction (upper-left key →
-    // lower-right cast, consistent with the sprite art's own shading), plus
-    // a tight contact-AO band under each base line. No more generic
-    // rhombi/ellipses that didn't fit the sprites.
+ // === SHADOWS - rebuilt from scratch ("scrap it and redo") ===
+ // isoShadow.js: sprite-SILHOUETTE cast shadows squashed onto the floor
+ // plane and marched along the key-light direction (upper-left key →
+ // lower-right cast, consistent with the sprite art's own shading), plus
+ // a tight contact-AO band under each base line. No more generic
+ // rhombi/ellipses that didn't fit the sprites.
     for (const d of drawn) {
         let sal = 1;
         if (opts.pop && !opts.pop.from && opts.pop.item === d.p.item && opts.pop.x === d.p.x && opts.pop.y === d.p.y) {
-            // placement fades its shadow in; a SLIDE keeps its shadow riding
-            // along under the piece for the whole glide
+ // placement fades its shadow in; a SLIDE keeps its shadow riding
+ // along under the piece for the whole glide
             sal = Math.min(1, t * 4);
         }
         isoShadow.drawItemShadow(ctx, {
@@ -508,12 +506,12 @@ async function renderFrame(state, frame, opts = {}) {
         });
     }
 
-    // ═══ SPRITES (depth-sorted back→front) ═══
+ // === SPRITES (depth-sorted back→front) ===
     for (const d of drawn) {
         const { p, spr, c, anchorY, w, h } = d;
-        // placement pop-in — ONLY for real placements (no `from`): a slide
-        // must never also drop from above (owner 2026-10-16 21:23Z close-move
-        // law). rotate passes pop without `from` and keeps its turn-bounce.
+ // placement pop-in - ONLY for real placements (no `from`): a slide
+ // must never also drop from above (21:23Z close-move
+ // law). rotate passes pop without `from` and keeps its turn-bounce.
         let drop = 0, alpha = 1;
         if (opts.pop && !opts.pop.from && opts.pop.item === p.item && opts.pop.x === p.x && opts.pop.y === p.y) {
             const pt = Math.min(1, t * 2.2);
@@ -538,8 +536,8 @@ async function renderFrame(state, frame, opts = {}) {
         ctx.save();
         ctx.globalAlpha = alpha;
         if (p.f) {
-            // flip = mirror around the item's own center axis (iso 90° fake,
-            // standard for sprites with a single authored facing)
+ // flip = mirror around the item's own center axis (iso 90° fake,
+ // standard for sprites with a single authored facing)
             ctx.translate(2 * c.x, 0);
             ctx.scale(-1, 1);
         }
@@ -550,10 +548,10 @@ async function renderFrame(state, frame, opts = {}) {
         ctx.restore();
     }
 
-    // ── grid preview overlay (above items): pulsing selection + chevron ──
+ // -- grid preview overlay (above items): pulsing selection + chevron --
     if (opts.grid) drawGridSelection(ctx, opts.grid, frame);
 
-    // dust motes
+ // dust motes
     const mr = mulberry32(seed + 777);
     ctx.save();
     for (let i = 0; i < 10; i++) {
@@ -568,7 +566,7 @@ async function renderFrame(state, frame, opts = {}) {
     }
     ctx.restore();
 
-    // vignette
+ // vignette
     const vg = ctx.createRadialGradient(OX, OY + 150, 320, OX, OY + 150, 760);
     vg.addColorStop(0, 'rgba(0,0,0,0)');
     vg.addColorStop(1, 'rgba(8,5,2,0.55)');
@@ -576,20 +574,19 @@ async function renderFrame(state, frame, opts = {}) {
     ctx.fillRect(0, 0, ART_W, ART_H);
 
     drawHud(ctx, state, theme, opts);
-    // RAW ENCODER — see homesteadBaseRenderer (owner 2026-10-17 '.j base
-    // shuts down'): animated room bakes render raw BGRA frames so the bake
-    // never sync-encodes 13 PNGs back to back.
+ // RAW ENCODER - see homesteadBaseRenderer ('.j base
+ // shuts down'): animated room bakes render raw BGRA frames so the bake
+ // never sync-encodes 13 PNGs back to back.
     if (opts.encoder === 'raw') {
         return { raw: canvas.toBuffer('raw'), w: canvas.width, h: canvas.height };
     }
-    // RETURN-CANVAS (Task 37 speed round) — internal callers encode the
-    // finished art themselves (downscale + JPEG) without a full-res PNG
-    // encode round-trip.
+ // finished art themselves (downscale + JPEG) without a full-res PNG
+ // encode round-trip.
     if (opts.returnCanvas) return canvas;
     return canvas.toBuffer('image/png');
 }
 
-// ── animated furniture specials ──
+// -- animated furniture specials --
 async function drawHearth(ctx, spr, c, anchorY, frame, seed, w, h, drop) {
     ctx.drawImage(spr, c.x - w / 2, anchorY - h + drop, w, h);
     const fl = (Math.sin(frame * 2.3 + seed) * 0.5 + 0.5) * 0.6 + (Math.sin(frame * 5.1 + seed * 2) * 0.5 + 0.5) * 0.4;
@@ -675,32 +672,32 @@ async function drawWell(ctx, spr, c, anchorY, frame, seed, w, h, drop) {
     }
 }
 
-// ── grid preview overlay (movement system, Section 3) ──
+// -- grid preview overlay (movement system, Section 3) --
 function drawDiamond(ctx, cx, cy, rx, ry) {
     ctx.beginPath();
     ctx.moveTo(cx, cy - ry); ctx.lineTo(cx + rx, cy); ctx.lineTo(cx, cy + ry); ctx.lineTo(cx - rx, cy);
     ctx.closePath();
 }
 function drawGridFloor(ctx, g, frame) {
-    // v2 (owner 2026-10-16 17:27Z "the grid isn't a very visible overlay… tiny"):
-    // full hairline grid across EVERY floor tile + BIG bold coordinate
-    // numbers sitting IN the front-edge tiles, dark-outlined gold so they
-    // read at WhatsApp thumbnail size. Front rims stroked gold.
+ // v2 (17:27Z "the grid isn't a very visible overlay… tiny"):
+ // full hairline grid across EVERY floor tile + BIG bold coordinate
+ // numbers sitting IN the front-edge tiles, dark-outlined gold so they
+ // read at WhatsApp thumbnail size. Front rims stroked gold.
     ctx.save();
-    // 1) full grid hairlines
+ // 1) full grid hairlines
     ctx.strokeStyle = 'rgba(250,240,210,0.30)';
     ctx.lineWidth = 1.2;
     for (let i = 1; i < N; i++) {
         ctx.beginPath(); ctx.moveTo(isoX(i, 0), isoY(i, 0)); ctx.lineTo(isoX(i, N), isoY(i, N)); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(isoX(0, i), isoY(0, i)); ctx.lineTo(isoX(N, i), isoY(N, i)); ctx.stroke();
     }
-    // 2) gold front rims (SW + SE edges of the floor)
+ // 2) gold front rims (SW + SE edges of the floor)
     ctx.strokeStyle = 'rgba(244,206,110,0.95)';
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(isoX(0, N), isoY(0, N)); ctx.lineTo(isoX(N, N), isoY(N, N)); ctx.lineTo(isoX(N, 0), isoY(N, 0));
     ctx.stroke();
-    // 3) bold coordinate numbers centred in the front-edge tiles
+ // 3) bold coordinate numbers centred in the front-edge tiles
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = 'bold 26px Cinzel, Medieval, sans-serif';
@@ -717,7 +714,7 @@ function drawGridFloor(ctx, g, frame) {
             ctx.fillText(String(i), tx, ty);
         }
     }
-    // axis captions, oversized
+ // axis captions, oversized
     ctx.font = 'bold 30px Cinzel, Medieval, sans-serif';
     ctx.lineWidth = 6;
     ctx.strokeStyle = 'rgba(28,17,6,0.9)';
@@ -727,7 +724,7 @@ function drawGridFloor(ctx, g, frame) {
     ctx.strokeText('↓ Y', isoX(N - 1, N) + 30, isoY(N - 1, N) + 24);
     ctx.fillStyle = '#ffe6a0';
     ctx.fillText('↓ Y', isoX(N - 1, N) + 30, isoY(N - 1, N) + 24);
-    // footprint cell highlight (kept from v1, brightened)
+ // footprint cell highlight (kept from v1, brightened)
     const pulse = 0.5 + 0.5 * Math.sin((frame / FRAMES) * Math.PI * 2);
     const valid = g.valid !== false;
     for (let ix = 0; ix < (g.fw || 1); ix++) {
@@ -744,7 +741,7 @@ function drawGridFloor(ctx, g, frame) {
     ctx.restore();
 }
 function drawGridSelection(ctx, g, frame) {
-    // bobbing chevron above the selected piece
+ // bobbing chevron above the selected piece
     const cx = isoX(g.x + (g.fw || 1) / 2, g.y + (g.fh || 1) / 2);
     const topY = isoY(g.x + (g.fw || 1) / 2, g.y + (g.fh || 1) / 2)
         - ((g.fw || 1) + (g.fh || 1)) * (TH / 4) - 78 + Math.sin((frame / FRAMES) * Math.PI * 2) * 4;
@@ -768,7 +765,7 @@ function drawGridSelection(ctx, g, frame) {
     ctx.restore();
 }
 
-// ── HUD plate ──
+// -- HUD plate --
 function drawHud(ctx, state, theme, opts) {
     const H = 132, Wp = ART_W - 60;
     const x0 = 30, y0 = ART_H - H - 22;
@@ -792,7 +789,7 @@ function drawHud(ctx, state, theme, opts) {
     ctx.fillText(String(state.owner || 'Adventurer').slice(0, 22), x0 + 26, y0 + 38);
     ctx.font = '16px Medieval';
     ctx.fillStyle = '#9c8455';
-    ctx.fillText(`Homestead of ${state.owner} — ${theme.name} style`, x0 + 26, y0 + 64);
+    ctx.fillText(`Homestead of ${state.owner} - ${theme.name} style`, x0 + 26, y0 + 64);
 
     const comfort = (state.placed || []).reduce((s, p) => s + ((itemDef(p.item) || {}).comfort || 0), 0);
     ctx.textAlign = 'center';
@@ -817,30 +814,30 @@ function drawHud(ctx, state, theme, opts) {
     ctx.restore();
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // PUBLIC: room animation (WhatsApp GIF = mp4) with PNG fallback
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 async function encodeFramesToMp4(frames) {
     const ffmpeg = require('fluent-ffmpeg');
     try { ffmpeg.setFfmpegPath(process.env.FFMPEG_PATH || 'ffmpeg'); } catch (e) { /* engine sets it too */ }
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'homestead-'));
     const out = path.join(tmp, 'room.mp4');
     try {
-        // RAW PATH — BGRA memcpy frames skip the PNG round-trip
+ // RAW PATH - BGRA memcpy frames skip the PNG round-trip
         if (frames.length && frames[0] && frames[0].raw) {
             const { w, h } = frames[0];
             const fbin = process.env.FFMPEG_PATH || 'ffmpeg';
-            // stdin-stream the BGRA frames (renders and encode run in
-            // parallel — v10d proved a 215MB frames.raw costs ~200s on the
-            // box's slow disk in write+read alone) and encode at HALF
-            // resolution (the mp4 plays thumbnail-sized; static PNGs stay
-            // full-res). fluent-ffmpeg hung on this input entirely.
+ // stdin-stream the BGRA frames (renders and encode run in
+ // parallel - v10d proved a 215MB frames.raw costs ~200s on the
+ // box's slow disk in write+read alone) and encode at HALF
+ // resolution (the mp4 plays thumbnail-sized; static PNGs stay
+ // full-res). fluent-ffmpeg hung on this input entirely.
             const args = [
                 '-f', 'rawvideo', '-pix_fmt', 'bgra', '-video_size', `${w}x${h}`,
                 '-framerate', `${1000 / FRAME_MS}`, '-i', 'pipe:0',
                 '-vf', `scale=${Math.round(w / 2)}:${Math.round(h / 2)}`,
                 '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
-                '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', String(process.env.RENDER_CRF || '25'),   // 47-k10: -20.7% bytes, zoom-verified identical
+                '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', String(process.env.RENDER_CRF || '25'), // -20.7% bytes, zoom-verified identical
                 '-movflags', '+faststart', '-an', '-y', out,
             ];
             await new Promise((resolve, reject) => {
@@ -858,9 +855,9 @@ async function encodeFramesToMp4(frames) {
             });
             return fs.readFileSync(out);
         }
-        // PNG PATH — plain buffers (QA smoke bakes / 3-frame renders)
+ // PNG PATH - plain buffers (QA smoke bakes / 3-frame renders)
         frames.forEach((b, i) => {
-            if (!Buffer.isBuffer(b)) throw new Error(`frame ${i} is ${(b && typeof b === 'object') ? 'a raw-frame object, not a Buffer' : typeof b} — mixed encoder paths`);
+            if (!Buffer.isBuffer(b)) throw new Error(`frame ${i} is ${(b && typeof b === 'object') ? 'a raw-frame object, not a Buffer' : typeof b} - mixed encoder paths`);
             fs.writeFileSync(path.join(tmp, `f${String(i).padStart(3, '0')}.png`), b);
         });
         await new Promise((resolve, reject) => {
@@ -869,7 +866,7 @@ async function encodeFramesToMp4(frames) {
                 .inputOptions(['-framerate', `${1000 / FRAME_MS}`])
                 .outputOptions([
                     '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
-                    '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', String(process.env.RENDER_CRF || '25'),   // 47-k10: -20.7% bytes, zoom-verified identical
+                    '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', String(process.env.RENDER_CRF || '25'), // -20.7% bytes, zoom-verified identical
                     '-movflags', '+faststart', '-an', '-y',
                 ])
                 .output(out)
@@ -884,11 +881,11 @@ async function encodeFramesToMp4(frames) {
     }
 }
 
-// state-hash render cache — same room state never re-renders
+// state-hash render cache - same room state never re-renders
 const _renderCache = new Map(); // key → { buffer, contentType, ts }
 const CACHE_TTL = 10 * 60 * 1000;
 
-// OUT ENCODER (Task 36/37) — cards ship downscaled JPEG instead of full-res
+// OUT ENCODER - cards ship downscaled JPEG instead of full-res
 // PNG; room cards are 1800x1800 at SS=2, JPEG q0.88 ≈ 250-400KB.
 const OUT_MAX_W = Math.max(640, parseInt(process.env.RENDER_OUT_MAX_W || '2560', 10) || 2560);
 const OUT_JPEG_Q = Math.min(0.95, Math.max(0.5, parseFloat(process.env.RENDER_OUT_JPEG_Q || '0.88') || 0.88));
@@ -902,7 +899,7 @@ function encodeOut(canvas) {
     return { buffer: c.toBuffer('image/jpeg', OUT_JPEG_Q), contentType: 'image/jpeg' };
 }
 
-// HOT CACHE BYTE CAP (Task 36) — bytes, not entries.
+// HOT CACHE BYTE CAP - bytes, not entries.
 const RENDER_CACHE_MAX_BYTES = 64 * 1048576;
 function cachePut(map, key, out) {
     let total = (out && out.buffer && out.buffer.length) || 0;
@@ -919,30 +916,30 @@ function stateHash(state, opts = {}) {
     return hashStr(JSON.stringify([state.owner, state.theme, state.placed, opts.pop || null, opts.hint || '', opts.grid || null, opts.static ? 1 : 0]));
 }
 
-// EVENT-LOOP BREATH — real timers between frames keep the canary heartbeat
+// EVENT-LOOP BREATH - real timers between frames keep the canary heartbeat
 // alive during an animated bake (microtask yields don't feed timers).
 const FRAME_BREATH_MS = 8;
 const breath = () => new Promise((r) => setTimeout(r, FRAME_BREATH_MS));
 
-// Media matrix (owner 2026-10-16 10:09Z "bring gifs back and make the
-// generation faster" — restores the agreed law, supersedes the 10-15 static
+// Media matrix (10:09Z "bring gifs back and make the
+// generation faster" - restores the agreed law, supersedes the 10-15 static
 // matrix): the ROOM VIEW is an ANIMATED GIF again (hearth/cauldron/torches
 // idle); select + placement-mode grids stay STATIC 1-frame cards for snappy
-// placement feedback; v2 locomotion (owner 2026-10-16 "moving doesn't
+// placement feedback; v2 locomotion ("moving doesn't
 // trigger an animation"): move/rotate now pass pop → ANIMATED render with
 // the grid overlay drawn (slide/turn plays under the labelled grid).
-// Speed: the bake is disk-cached per stateHash (mediaCache.js) — first view
+// Speed: the bake is disk-cached per stateHash (mediaCache.js) - first view
 // renders, every repeat is an instant disk read even across restarts.
 async function renderRoomImage(state, opts = {}) {
     const key = stateHash(state, opts);
     const hit = _renderCache.get(key);
     if (hit && (Date.now() - hit.ts) < CACHE_TTL) return hit;
     const out = await mediaCache.cached('room', key, async () => {
-        // static card: render once, JPEG (no full-res PNG encode)
+ // static card: render once, JPEG (no full-res PNG encode)
         if (opts.static) return encodeOut(await renderFrame(state, 0, { ...opts, returnCanvas: true }));
-        // STREAMING BAKE (Task 37): feed ffmpeg's stdin AS frames render at
-        // ss=1 (the old loop held all 14 SS=2 raw frames ~180MB before the
-        // encode started). Frame pixels land exactly on the mp4 target.
+ // STREAMING BAKE: feed ffmpeg's stdin AS frames render at
+ // ss=1 (the old loop held all 14 SS=2 raw frames ~180MB before the
+ // encode started). Frame pixels land exactly on the mp4 target.
         try {
             const fbin = process.env.FFMPEG_PATH || 'ffmpeg';
             const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'homestead-'));
@@ -954,11 +951,11 @@ async function renderRoomImage(state, opts = {}) {
                 const args = [
                     '-f', 'rawvideo', '-pix_fmt', 'bgra', '-video_size', `${w}x${h}`,
                     '-framerate', `${1000 / FRAME_MS}`, '-i', 'pipe:0',
-                    // even-dim guard (no-op on even input) — replaces the old
-                    // half-res scale: ss=1 frames ARE the mp4 target size now
+ // even-dim guard (no-op on even input) - replaces the old
+ // half-res scale: ss=1 frames ARE the mp4 target size now
                     '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
                     '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
-                    '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', String(process.env.RENDER_CRF || '25'),   // 47-k10: -20.7% bytes, zoom-verified identical
+                    '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', String(process.env.RENDER_CRF || '25'), // -20.7% bytes, zoom-verified identical
                     '-movflags', '+faststart', '-an', '-y', outFile,
                 ];
                 await new Promise((resolve, reject) => {
@@ -987,14 +984,14 @@ async function renderRoomImage(state, opts = {}) {
             console.error('[homesteadRenderer] mp4 encode failed, JPEG fallback:', e.message);
         }
         return encodeOut(await renderFrame(state, 0, { ...opts, returnCanvas: true }));  // fallback card
-    }, null, { label: 'bake:room', timeoutMs: 90000 });   // 47-k9: serialize through renderQueue — concurrent .j bakes pm2-killed the box (2026-10-20 03:11Z); no journal (room replays come from .j base house views)
+    }, null, { label: 'bake:room', timeoutMs: 90000 }); // serialize through renderQueue - concurrent .j bakes pm2-killed the box (03:11Z); no journal (room replays come from .j base house views)
     cachePut(_renderCache, key, out);
     return out;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // PUBLIC: catalog cards
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 async function renderCatalogPage(page, pages, opts = {}) {
     ensureFonts();
     const W = 1080, H = 1350;
@@ -1018,7 +1015,7 @@ async function renderCatalogPage(page, pages, opts = {}) {
     ctx.fillText('HOMESTEAD OUTFITTER', W / 2, 84);
     ctx.font = '20px Medieval';
     ctx.fillStyle = '#9c8455';
-    ctx.fillText(`— page ${page + 1} of ${pages} —`, W / 2, 128);
+    ctx.fillText(`- page ${page + 1} of ${pages} -`, W / 2, 128);
     ctx.strokeStyle = '#a67c2e';
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(120, 158); ctx.lineTo(W - 120, 158); ctx.stroke();
@@ -1110,17 +1107,17 @@ async function renderCatalogPage(page, pages, opts = {}) {
     return canvas.toBuffer('image/png');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// PUBLIC: owned-furniture names card ("rpg_base_building_redesign.md" §5 —
+// ===========================================================================
+// PUBLIC: owned-furniture names card ("rpg_base_building_redesign.md" §5 -
 // ".j home select shows an image card listing the NAMES of all furniture
-//  items available to them" + §5 inventory: placed vs storage at a glance)
-// ═══════════════════════════════════════════════════════════════════════════
+// items available to them" + §5 inventory: placed vs storage at a glance)
+// ===========================================================================
 const STAR = { common: '⚪', uncommon: '🟢', rare: '🔵', epic: '🟣', legendary: '🟠' };
 const ROWS_PER_PAGE = 14;
 
 async function renderInventoryCard(rec, opts = {}) {
     ensureFonts();
-    // rows: placed pieces first (room order), then storage
+ // rows: placed pieces first (room order), then storage
     const placedRows = (rec.placed || []).map((p) => {
         const d = itemDef(p.item) || {};
         return { d, status: d.layer === 'wall' ? `wall ${p.x}` : `(${p.x},${p.y})`, placed: true };
@@ -1153,7 +1150,7 @@ async function renderInventoryCard(rec, opts = {}) {
     ctx.fillText('YOUR FURNITURE', W / 2, 84);
     ctx.font = '20px Medieval';
     ctx.fillStyle = '#9c8455';
-    ctx.fillText(pages > 1 ? `— page ${page} of ${pages} —` : '— every piece you own —', W / 2, 128);
+    ctx.fillText(pages > 1 ? `- page ${page} of ${pages} -` : '- every piece you own -', W / 2, 128);
     ctx.strokeStyle = '#a67c2e';
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(120, 158); ctx.lineTo(W - 120, 158); ctx.stroke();
@@ -1170,16 +1167,16 @@ async function renderInventoryCard(rec, opts = {}) {
         const row = slice[i];
         const y = y0 + i * rh;
         const R = RARITY[row.d.rarity] || RARITY.common;
-        // section divider
+ // section divider
         if (row.placed !== lastPlaced) {
             lastPlaced = row.placed;
             ctx.font = '17px Medieval';
             ctx.fillStyle = '#c9a25e';
             ctx.textAlign = 'center';
-            fillTextMixed(ctx, row.placed ? '— 📍 PLACED IN YOUR ROOM —' : '— 📦 IN STORAGE —', W / 2, y + 10);
+            fillTextMixed(ctx, row.placed ? '- 📍 PLACED IN YOUR ROOM -' : '- 📦 IN STORAGE -', W / 2, y + 10);
         }
         const rowY = y + 34;
-        // row plate
+ // row plate
         ctx.fillStyle = 'rgba(32,24,14,0.72)';
         roundRect(ctx, 70, rowY - 21, W - 140, 44, 9);
         ctx.fill();
@@ -1187,14 +1184,14 @@ async function renderInventoryCard(rec, opts = {}) {
         ctx.lineWidth = 1;
         roundRect(ctx, 70, rowY - 21, W - 140, 44, 9);
         ctx.stroke();
-        // sprite thumbnail
+ // sprite thumbnail
         const spr = row.d.id ? await img(`${row.d.id}.png`) : null;
         if (spr) {
             const maxH = 36, maxW = 56;
             let s = Math.min(maxH / spr.height, maxW / spr.width, 2);
             ctx.drawImage(spr, 100 - (spr.width * s) / 2, rowY - (spr.height * s) / 2, spr.width * s, spr.height * s);
         }
-        // name + star
+ // name + star
         ctx.textAlign = 'left';
         ctx.font = '22px Medieval';
         ctx.fillStyle = R.col;
@@ -1203,13 +1200,13 @@ async function renderInventoryCard(rec, opts = {}) {
         while (ctx.measureText(nm).width > maxNm && nm.length > 4) nm = nm.slice(0, -2);
         if (nm !== `${STAR[row.d.rarity] || '⚪'} ${row.d.name || row.d.id}`) nm += '…';
         ctx.fillText(nm, 140, rowY);
-        // comfort chips
+ // comfort chips
         if (row.d.comfort > 0) {
             ctx.font = '15px Medieval';
             ctx.fillStyle = '#7ec8a0';
             ctx.fillText('♥'.repeat(Math.min(row.d.comfort, 5)), 140 + ctx.measureText(nm).width + 18, rowY + 1);
         }
-        // status (right-aligned)
+ // status (right-aligned)
         ctx.textAlign = 'right';
         ctx.font = '20px Medieval';
         ctx.fillStyle = row.placed ? '#e8d5a3' : '#9c8455';
@@ -1219,7 +1216,7 @@ async function renderInventoryCard(rec, opts = {}) {
         ctx.font = '24px Medieval';
         ctx.fillStyle = '#9c8455';
         ctx.textAlign = 'center';
-        ctx.fillText('An empty homestead — visit the outfitter!', W / 2, 400);
+        ctx.fillText('An empty homestead - visit the outfitter!', W / 2, 400);
     }
 
     ctx.textAlign = 'center';

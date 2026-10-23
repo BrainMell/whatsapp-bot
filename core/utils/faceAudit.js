@@ -1,21 +1,19 @@
 // ============================================
-// 🧪 TEMP — FACING AUDIT (47-l5) — REMOVE AFTER THE AUDIT CLOSES
-// Owner 2026-10-20 16:41Z (#card): "If you missed the lich what else could
+// TEMP - FACING AUDIT (47-l5) - REMOVE AFTER THE AUDIT CLOSES
+// 16:41Z (#card): "If you missed the lich what else could
 // you miss? Anyways. Add a temp test command that spams the gc with every
 // class sprite in an environment facing right, so that I can visually
 // inspect which ones aren't, add the class name as a caption and some info
 // so that ik which one to tell you".
-//
 // `.j facetest [filter]` (owner-only) renders EVERY unique class sprite
 // (profileCardRenderer.CLASS_SPRITE_SETS, deduped across class keys) inside
 // an abyss environment plate, transformed EXACTLY as the live scene pipeline
-// transforms it — abyssScene.playerArtFlipFor() decides the mirror, so
+// transforms it - abyssScene.playerArtFlipFor() decides the mirror, so
 // natively-LEFT art is flipped and EVERYTHING in these renders should end
 // up FACING RIGHT. Any sprite that still faces LEFT in its render is
 // mis-tabled in PLAYER_ART_FACES_LEFT / PLAYER_ART_FACES_NEVER
-// (core/rpg/abyssScene.js) — the owner replies with the file name and that
+// (core/rpg/abyssScene.js) - the owner replies with the file name and that
 // row gets fixed (Go table synced in the same pass).
-//
 // TEMPORARY TOOL: delete this file + the `facetest` block in engine.js once
 // the owner signs the orientation audit off. Nothing in gameplay requires
 // it; it never runs on its own; owner-gated like `.j fx`.
@@ -30,14 +28,14 @@ const BG_PLATE = path.join(RPGASSET, 'backgrounds', 'background1.png');
 
 const W = 810, H = 1080;
 const GROUND_Y = H - 150;          // sprite feet line (same grounded contract)
-const SPRITE_H = 640;              // drawn content height — big enough to judge head/eye direction
+const SPRITE_H = 640;              // drawn content height - big enough to judge head/eye direction
 const SEND_GAP_MS = 600;           // per-image pacing (WhatsApp flood safety)
 const BREATH_MS = 2500;            // longer pause every BATCH images
 const BATCH = 12;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// lazy requires — engine.js only touches this module when the owner fires
+// lazy requires - engine.js only touches this module when the owner fires
 // the command, so boot cost is zero and cycles (profileCardRenderer ↔ scene
 // modules) behave exactly like the lazy requires inside abyssScene itself.
 let _pr = null, _abyss = null, _room = null;
@@ -54,10 +52,10 @@ function room() {
     return _room;
 }
 
-// ── unique sprite list: CLASS_SPRITE_SETS flattened, deduped by exact file
+// -- unique sprite list: CLASS_SPRITE_SETS flattened, deduped by exact file
 // name, remembering every class key that shares the art (ninja files =
 // NINJA + KAGE, scout files = SCOUT + RANGER, …) so the caption can name
-// every class affected by a wrong row. ──
+// every class affected by a wrong row. --
 function buildAuditList() {
     const sets = spriteSets();
     const byFile = new Map();
@@ -72,11 +70,11 @@ function buildAuditList() {
     return [...byFile.values()];
 }
 
-// ── LFS-stub-proof resolver: real PNG bytes only. The scene loaders try
+// -- LFS-stub-proof resolver: real PNG bytes only. The scene loaders try
 // characters/clean first then characters/, and BOTH space and underscore
-// spellings exist on disk (abyssScene._spriteNameVariants) — same walk here,
+// spellings exist on disk (abyssScene._spriteNameVariants) - same walk here,
 // plus a size gate so git-LFS pointer stubs (tiny ASCII text) never reach
-// the image decoder (canvas throws "Unsupported image type" on those). ──
+// the image decoder (canvas throws "Unsupported image type" on those). --
 function nameVariants(f) {
     const out = [f];
     if (/ \(/.test(f)) out.push(f.replace(/ \(/g, '_('));
@@ -102,24 +100,24 @@ async function resolveSprite(file) {
     return null;
 }
 
-// ── the verdict, verbatim from the live pipeline (playerArtFlipFor) — the
+// -- the verdict, verbatim from the live pipeline (playerArtFlipFor) - the
 // caption tells the owner what the table currently believes so he can cite
-// the file when a verdict is wrong. ──
+// the file when a verdict is wrong. --
 function verdictFor(file) {
     const { playerArtFlipFor, PLAYER_ART_FACES_NEVER } = abyss();
     const center = PLAYER_ART_FACES_NEVER.has(String(file || '').toLowerCase());
     if (center) return {
         flip: false, color: '#53d7ff', short: 'CENTER verdict (never flipped)',
-        text: 'CENTER verdict — never flipped',
+        text: 'CENTER verdict - never flipped',
     };
     const flip = playerArtFlipFor(file);
     if (flip) return {
         flip: true, color: '#ffb84d', short: 'mirrored (native LEFT verdict)',
-        text: 'MIRRORED — native LEFT verdict',
+        text: 'MIRRORED - native LEFT verdict',
     };
     return {
         flip: false, color: '#7dff9a', short: 'native RIGHT (no flip)',
-        text: 'native RIGHT — no flip',
+        text: 'native RIGHT - no flip',
     };
 }
 
@@ -133,10 +131,10 @@ function roundRect(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
-// ── one audit card: environment plate + the sprite drawn through the SAME
+// -- one audit card: environment plate + the sprite drawn through the SAME
 // roomScene.drawGroundedSprite the scenes use (content-bbox grounding,
 // hugging contact shadow, mirror transform) + burned-in label plate so the
-// file is identifiable even when scrolling the spam fast. ──
+// file is identifiable even when scrolling the spam fast. --
 async function renderAuditCard(entry, n, total) {
     const res = await resolveSprite(entry.file);
     if (!res) return { error: 'NOT FOUND on disk (checked characters/clean + characters, space/underscore spellings)' };
@@ -146,8 +144,8 @@ async function renderAuditCard(entry, n, total) {
     const canvas = createCanvas(W, H);
     const ctx = canvas.getContext('2d');
 
-    // environment: an abyss family background plate, cover-fit, dimmed so
-    // sprite + plates read (fixed plate keeps orientation the ONLY variable)
+ // environment: an abyss family background plate, cover-fit, dimmed so
+ // sprite + plates read (fixed plate keeps orientation the ONLY variable)
     let bg = null;
     try { bg = await loadImage(BG_PLATE); } catch (e) { /* gradient fallback */ }
     if (bg) {
@@ -161,12 +159,12 @@ async function renderAuditCard(entry, n, total) {
     }
     ctx.fillStyle = 'rgba(8,6,14,0.30)'; ctx.fillRect(0, 0, W, H);
 
-    // the sprite — EXACTLY the scene draw: grounded on content bbox, foot
-    // contact shadow, and the pipeline's mirror (everything must face RIGHT)
+ // the sprite - EXACTLY the scene draw: grounded on content bbox, foot
+ // contact shadow, and the pipeline's mirror (everything must face RIGHT)
     await room().drawGroundedSprite(ctx, [res.dir], res.name, W / 2, GROUND_Y, SPRITE_H,
         { flip: v.flip, shadow: true });
 
-    // top plate: #n/total · class(es) / file / verdict
+ // top plate: #n/total · class(es) / file / verdict
     const classesLine = entry.classes.join(' · ');
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     ctx.font = 'bold 30px "Cinzel", serif';
@@ -190,7 +188,7 @@ async function renderAuditCard(entry, n, total) {
     ctx.font = 'bold 22px "Cinzel", serif';
     ctx.fillText(v.text, 48, 138);
 
-    // bottom reminder strip
+ // bottom reminder strip
     roundRect(ctx, 26, H - 92, W - 52, 56, 12);
     ctx.fillStyle = 'rgba(10,8,18,0.78)'; ctx.fill();
     ctx.textAlign = 'center';
@@ -203,7 +201,7 @@ async function renderAuditCard(entry, n, total) {
 
 let _running = false;
 async function handleCommand(sock, chatId, m, args, BOT_MARKER, reply) {
-    if (_running) return reply(BOT_MARKER + '⚠️ facing audit already running — wait for it to finish.');
+    if (_running) return reply(BOT_MARKER + '⚠️ facing audit already running - wait for it to finish.');
     _running = true;
     try {
         const q = String((args && args[0]) || '').toLowerCase().trim();
@@ -217,7 +215,7 @@ async function handleCommand(sock, chatId, m, args, BOT_MARKER, reply) {
         if (!list.length) return reply(BOT_MARKER + `❌ no class sprite matches "${q}".`);
         const t0 = Date.now();
         await reply(BOT_MARKER +
-            `🧪 FACING AUDIT — ${list.length} sprite renders incoming (of ${totalSets} unique files), one per message, transformed exactly as the live scene pipeline does. Every render should FACE RIGHT — reply the file name of any that doesn't. Filter: ${q || 'ALL'}`);
+            `🧪 FACING AUDIT - ${list.length} sprite renders incoming (of ${totalSets} unique files), one per message, transformed exactly as the live scene pipeline does. Every render should FACE RIGHT - reply the file name of any that doesn't. Filter: ${q || 'ALL'}`);
         let sent = 0;
         const missing = [];
         for (let i = 0; i < list.length; i++) {
@@ -228,7 +226,7 @@ async function handleCommand(sock, chatId, m, args, BOT_MARKER, reply) {
             catch (err) { r = { error: (err && err.message) || 'render failed' }; }
             if (r.error) {
                 missing.push(e.file);
-                try { await sock.sendMessage(chatId, { text: BOT_MARKER + `⚠️ ${i + 1}/${list.length} ${e.file} — ${r.error}` }); } catch (e2) {}
+                try { await sock.sendMessage(chatId, { text: BOT_MARKER + `⚠️ ${i + 1}/${list.length} ${e.file} - ${r.error}` }); } catch (e2) {}
             } else {
                 const caption =
                     `🧪 FACING AUDIT ${i + 1}/${list.length}\n` +
@@ -247,7 +245,7 @@ async function handleCommand(sock, chatId, m, args, BOT_MARKER, reply) {
             if ((i + 1) % BATCH === 0) await sleep(BREATH_MS);
         }
         const secs = Math.round((Date.now() - t0) / 1000);
-        let done = BOT_MARKER + `✅ facing audit done — ${sent}/${list.length} renders sent in ${secs}s. Reply with the file names that face the wrong way.`;
+        let done = BOT_MARKER + `✅ facing audit done - ${sent}/${list.length} renders sent in ${secs}s. Reply with the file names that face the wrong way.`;
         if (missing.length) done += `\n❌ missing on disk (${missing.length}): ${missing.join(', ')}`;
         await reply(done);
     } catch (err) {
@@ -257,5 +255,5 @@ async function handleCommand(sock, chatId, m, args, BOT_MARKER, reply) {
     }
 }
 
-// test surface (scripts/ QA + the 47-l5 render samples) — additive only
+// test surface (scripts/ QA + the 47-l5 render samples) - additive only
 module.exports = { handleCommand, buildAuditList, resolveSprite, renderAuditCard, verdictFor };

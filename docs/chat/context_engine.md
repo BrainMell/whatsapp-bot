@@ -7,7 +7,6 @@ The Context-Aware AI Engine is designed to process and store chat memories, joke
 
 **AI Group Summary Generation** - [engine.js L1131-L1185](https://github.com/BrainMell/whatsapp-bot/blob/main/core/engine.js#L1131-L1185)
 ```javascript
-    // Create AI-powered summary with user mentions
     async function createGroupSummary(messages) {
       try {
         let chatContext = "";

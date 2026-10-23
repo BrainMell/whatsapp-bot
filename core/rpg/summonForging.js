@@ -1,14 +1,12 @@
 // ============================================
-// ⚔️ SOUL FORGING - fuse 2 summons into 1
+// SOUL FORGING - fuse 2 summons into 1
 // ============================================
 // One of the 6 original Summoner System mechanics.
 // Two summons are fused into a new summon that inherits traits
 // from both, with random mutations. Originals are CONSUMED.
-//
 // Lineage tracking: up to 5 generations of ancestors.
 // Purebred bonus: 3+ generations of same species → +10% all stats.
 // Crossbred bonus: diverse lineage → +5% all stats + double mutation chance.
-//
 // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md (section 2.5)
 
 const crypto = require('crypto');
@@ -17,9 +15,9 @@ const registry = require('./summonRegistry');
 const summonSystem = require('./summonSystem');
 const economy = require('./economy');
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // FORGING CONFIG
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 const FORGE_CONFIG = {
   STAT_BONUS_MULT: 1.10,           // 10% stat bonus on fused summon
@@ -35,9 +33,9 @@ const FORGE_CONFIG = {
   GOLD_COST_PER_LEVEL: 1000        // +1K per total level of both parents
 };
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // MUTATION TABLE - random trait changes applied to fused summons
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 const MUTATIONS = [
   { id: 'brutal_strength', name: 'Brutal Strength', stat: 'atk', bonus: 0.10, desc: '+10% ATK' },
@@ -52,9 +50,9 @@ const MUTATIONS = [
   { id: 'ancient_bloodline', name: 'Ancient Bloodline', stat: 'hp', bonus: 0.15, desc: '+15% HP (no penalty)' }
 ];
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // FORGE - fuse two summons
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 /**
  * Fuse two summons into a new summon.
@@ -71,7 +69,7 @@ async function forgeSummons(ownerJid, summon1Id, summon2Id) {
     return { success: false, message: '❌ User not found.' };
   }
 
-  // 1. Check daily cooldown
+ // 1. Check daily cooldown
   const now = Date.now();
   if (user.lastForgedAt && (now - user.lastForgedAt) < FORGE_CONFIG.COOLDOWN_MS) {
     const remaining = FORGE_CONFIG.COOLDOWN_MS - (now - user.lastForgedAt);
@@ -79,12 +77,12 @@ async function forgeSummons(ownerJid, summon1Id, summon2Id) {
     return { success: false, message: `❌ Soul Forging on cooldown. Try again in ${hoursLeft}h.` };
   }
 
-  // 2. Validate inputs are different
+ // 2. Validate inputs are different
   if (summon1Id === summon2Id) {
     return { success: false, message: '❌ Cannot forge a summon with itself.' };
   }
 
-  // 3. Load both summons
+ // 3. Load both summons
   const summon1 = await Summon.findOne({ summonId: summon1Id, ownerJid });
   const summon2 = await Summon.findOne({ summonId: summon2Id, ownerJid });
 
@@ -92,42 +90,42 @@ async function forgeSummons(ownerJid, summon1Id, summon2Id) {
     return { success: false, message: '❌ One or both summons not found in your collection.' };
   }
 
-  // 4. Validate both summons are forgeable
+ // 4. Validate both summons are forgeable
   const validation = validateForgeable(summon1, summon2, user);
   if (!validation.success) {
     return validation;
   }
 
-  // 5. Check gold cost
+ // 5. Check gold cost
   const totalLevel = summon1.level + summon2.level;
   const goldCost = FORGE_CONFIG.GOLD_COST_BASE + (totalLevel * FORGE_CONFIG.GOLD_COST_PER_LEVEL);
   if (user.wallet < goldCost) {
     return { success: false, message: `❌ Insufficient Zeni. Soul Forging costs ${goldCost.toLocaleString()} Zeni (you have ${user.wallet.toLocaleString()}).` };
   }
 
-  // 6. Deduct gold
+ // 6. Deduct gold
   const removeResult = economy.removeMoney(ownerJid, goldCost, `Soul Forge: ${summon1.species} + ${summon2.species}`);
   if (!removeResult) {
     return { success: false, message: '❌ Failed to deduct Zeni. Please try again.' };
   }
 
-  // 7. Build the fused summon
+ // 7. Build the fused summon
   const fusedSpecies = determineFusedSpecies(summon1, summon2);
   const species = registry.getSpecies(fusedSpecies);
   if (!species) {
-    // Refund gold
+ // Refund gold
     economy.addMoney(ownerJid, goldCost, 'Soul Forge refund (species not found)');
     return { success: false, message: '❌ Forging failed: invalid species combination.' };
   }
 
-  // 8. Compute fused stats
+ // 8. Compute fused stats
   const fusedBaseStats = computeFusedStats(summon1, summon2);
 
-  // 9. Determine lineage + purebred/crossbred bonuses
+ // 9. Determine lineage + purebred/crossbred bonuses
   const lineage = buildLineage(summon1, summon2);
   const { isPurebred, isCrossbred } = analyzeLineage(lineage, fusedSpecies);
 
-  // 10. Apply lineage bonuses
+ // 10. Apply lineage bonuses
   let lineageBonusMult = 1.0;
   if (isPurebred) lineageBonusMult += FORGE_CONFIG.PUREBRED_BONUS;
   if (isCrossbred) lineageBonusMult += FORGE_CONFIG.CROSSBRED_BONUS;
@@ -136,31 +134,31 @@ async function forgeSummons(ownerJid, summon1Id, summon2Id) {
     fusedBaseStats[stat] = Math.floor(fusedBaseStats[stat] * lineageBonusMult);
   }
 
-  // 11. Roll mutations
+ // 11. Roll mutations
   const mutationCount = isCrossbred ? FORGE_CONFIG.MAX_MUTATIONS : Math.floor(FORGE_CONFIG.MAX_MUTATIONS / 2);
   const appliedMutations = rollMutations(mutationCount);
   applyMutations(fusedBaseStats, appliedMutations);
 
-  // 12. Determine personality (random pick from both parents)
+ // 12. Determine personality (random pick from both parents)
   const fusedPersonality = Math.random() < 0.5 ? summon1.personality : summon2.personality;
 
-  // 13. Determine level (floor of average)
+ // 13. Determine level (floor of average)
   const fusedLevel = Math.max(1, Math.floor((summon1.level + summon2.level) / 2));
   const rarityConfig = registry.getRarityConfig(species.rarity);
   const cappedLevel = Math.min(fusedLevel, rarityConfig.maxLevel);
 
-  // 14. DELETE both parents BEFORE creating the fused summon
-  // This prevents duplication if creation fails.
+ // 14. DELETE both parents BEFORE creating the fused summon
+ // This prevents duplication if creation fails.
   try {
     await Summon.deleteMany({ summonId: { $in: [summon1Id, summon2Id] } });
   } catch (e) {
-    // Refund gold
+ // Refund gold
     economy.addMoney(ownerJid, goldCost, 'Soul Forge refund (delete failed)');
     return { success: false, message: '❌ Forging failed: could not consume parent summons.' };
   }
 
-  // 15. Create the fused summon
-  // 💡 FIX: use short readable ID format (S-XXXX) consistent with createSummon
+ // 15. Create the fused summon
+ // FIX: use short readable ID format (S-XXXX) consistent with createSummon
   const shortId = crypto.randomBytes(2).toString('hex').toUpperCase();
   const fusedSummonId = `S-${shortId}`;
   const soulboundUntil = new Date(now + (FORGE_CONFIG.SOULBOUND_DURATION_DAYS * 24 * 60 * 60 * 1000));
@@ -197,10 +195,10 @@ async function forgeSummons(ownerJid, summon1Id, summon2Id) {
     lastTrainedAt: null
   });
 
-  // 16. Apply level growth (so stats match the fused level)
+ // 16. Apply level growth (so stats match the fused level)
   summonSystem.applyLevelGrowth(fused, cappedLevel);
 
-  // 17. Apply mutations as a special lineage marker
+ // 17. Apply mutations as a special lineage marker
   if (appliedMutations.length > 0) {
     for (const mut of appliedMutations) {
       fused.lineage.push({
@@ -216,25 +214,25 @@ async function forgeSummons(ownerJid, summon1Id, summon2Id) {
   try {
     await fused.save();
   } catch (e) {
-    // This is bad - parents are gone but fused didn't save.
-    // Log heavily. The gold is already spent. We can't recover the parents.
+ // This is bad - parents are gone but fused didn't save.
+ // Log heavily. The gold is already spent. We can't recover the parents.
     console.error('[Forge] CRITICAL: parents deleted but fused summon failed to save:', e?.message || e);
     return { success: false, message: '❌ CRITICAL ERROR: Parents were consumed but the fused summon failed to save. Contact an admin.' };
   }
 
-  // 18. Update user cooldown
+ // 18. Update user cooldown
   user.lastForgedAt = now;
   if (user.summonStats) {
     user.summonStats.forged = (user.summonStats.forged || 0) + 1;
   }
-  economy.saveUser(user);  // 💡 FIX: was missing - cooldown + stats didn't persist
+  economy.saveUser(user); // FIX: was missing - cooldown + stats didn't persist
 
-  // 19. Refresh resonances
+ // 19. Refresh resonances
   try {
     await summonSystem.refreshUserResonances(user);
   } catch (e) {}
 
-  // 20. Build success message
+ // 20. Build success message
   let msg = `⚔️ *SOUL FORGED!*\n\n`;
   msg += `${species.icon} A new *${species.name}* has been born from the fusion!\n\n`;
   msg += `📊 Level ${cappedLevel} | ${species.rarity} | ${species.element}\n`;
@@ -260,17 +258,17 @@ async function forgeSummons(ownerJid, summon1Id, summon2Id) {
   return { success: true, message: msg, summon: fused };
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // VALIDATION
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 function validateForgeable(summon1, summon2, user) {
-  // Check neither is for sale
+ // Check neither is for sale
   if (summon1.forSale || summon2.forSale) {
     return { success: false, message: '❌ Cannot forge a summon listed for sale. Cancel the listing first.' };
   }
 
-  // Check neither is soulbound
+ // Check neither is soulbound
   const now = new Date();
   if (summon1.soulboundUntil && summon1.soulboundUntil > now) {
     return { success: false, message: '❌ One summon is still soulbound from a previous forge.' };
@@ -279,17 +277,17 @@ function validateForgeable(summon1, summon2, user) {
     return { success: false, message: '❌ One summon is still soulbound from a previous forge.' };
   }
 
-  // Check neither is locked
+ // Check neither is locked
   if (summon1.isLocked || summon2.isLocked) {
     return { success: false, message: '❌ Cannot forge a locked summon.' };
   }
 
-  // Check neither is the active summon
+ // Check neither is the active summon
   if (user.activeSummonId === summon1.summonId || user.activeSummonId === summon2.summonId) {
     return { success: false, message: '❌ Cannot forge your active summon. Dismiss it first.' };
   }
 
-  // Check both have loyalty > 0
+ // Check both have loyalty > 0
   if (summon1.loyalty <= 0 || summon2.loyalty <= 0) {
     return { success: false, message: '❌ Cannot forge a summon with 0 loyalty.' };
   }
@@ -297,17 +295,17 @@ function validateForgeable(summon1, summon2, user) {
   return { success: true };
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // FUSED SPECIES DETERMINATION
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 function determineFusedSpecies(summon1, summon2) {
-  // If same species, use that species (purity path)
+ // If same species, use that species (purity path)
   if (summon1.species === summon2.species) {
     return summon1.species;
   }
 
-  // If same element, prefer the higher-rarity species
+ // If same element, prefer the higher-rarity species
   const species1 = registry.getSpecies(summon1.species);
   const species2 = registry.getSpecies(summon2.species);
   if (species1 && species2 && species1.element === species2.element) {
@@ -317,13 +315,13 @@ function determineFusedSpecies(summon1, summon2) {
     return r1 >= r2 ? summon1.species : summon2.species;
   }
 
-  // Different elements - use the higher-level parent's species
+ // Different elements - use the higher-level parent's species
   return summon1.level >= summon2.level ? summon1.species : summon2.species;
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // FUSED STATS - average of both parents × 1.10
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 function computeFusedStats(summon1, summon2) {
   const stats = {};
@@ -334,14 +332,14 @@ function computeFusedStats(summon1, summon2) {
   return stats;
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // LINEAGE - build ancestry tree from both parents
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 function buildLineage(summon1, summon2) {
   const lineage = [];
 
-  // Add both parents as ancestors
+ // Add both parents as ancestors
   lineage.push({
     summonId: summon1.summonId,
     species: summon1.species,
@@ -357,16 +355,16 @@ function buildLineage(summon1, summon2) {
     forgedAt: new Date()
   });
 
-  // Inherit parent lineage (up to MAX_LINEAGE_GENERATIONS total)
+ // Inherit parent lineage (up to MAX_LINEAGE_GENERATIONS total)
   const parentLineage = [
     ...(summon1.lineage || []).filter(l => l.personality !== 'MUTATION' && l.personality !== 'TAMED'),
     ...(summon2.lineage || []).filter(l => l.personality !== 'MUTATION' && l.personality !== 'TAMED')
   ];
 
-  // Add parent lineage, keeping only the most recent up to the cap
+ // Add parent lineage, keeping only the most recent up to the cap
   lineage.push(...parentLineage);
 
-  // Trim to max generations (keep the most recent)
+ // Trim to max generations (keep the most recent)
   if (lineage.length > FORGE_CONFIG.MAX_LINEAGE_GENERATIONS) {
     return lineage.slice(0, FORGE_CONFIG.MAX_LINEAGE_GENERATIONS);
   }
@@ -374,15 +372,15 @@ function buildLineage(summon1, summon2) {
   return lineage;
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // LINEAGE ANALYSIS - purebred vs crossbred
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 function analyzeLineage(lineage, fusedSpecies) {
-  // Count ancestors of the same species
+ // Count ancestors of the same species
   const sameSpeciesCount = lineage.filter(l => l.species === fusedSpecies).length;
 
-  // Count distinct species
+ // Count distinct species
   const distinctSpecies = new Set(lineage.map(l => l.species)).size;
 
   return {
@@ -391,9 +389,9 @@ function analyzeLineage(lineage, fusedSpecies) {
   };
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // MUTATIONS - random trait changes
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 function rollMutations(maxCount) {
   const applied = [];
@@ -412,20 +410,20 @@ function rollMutations(maxCount) {
 
 function applyMutations(stats, mutations) {
   for (const mut of mutations) {
-    // Apply bonus
+ // Apply bonus
     if (mut.stat && mut.bonus) {
       stats[mut.stat] = Math.floor((stats[mut.stat] || 0) * (1 + mut.bonus));
     }
-    // Apply penalty
+ // Apply penalty
     if (mut.penalty) {
       stats[mut.penalty.stat] = Math.floor((stats[mut.penalty.stat] || 0) * (1 - mut.penalty.mult));
     }
   }
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // MODULE EXPORTS
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 module.exports = {
   FORGE_CONFIG,

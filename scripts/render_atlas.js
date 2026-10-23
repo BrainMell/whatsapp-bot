@@ -1,5 +1,5 @@
 'use strict';
-// proof: node scripts/render_atlas.js [outDir] [nGuilds]   → world atlas with demo guilds on all five realms
+// proof: node scripts/render_atlas.js [outDir] [nGuilds] → world atlas with demo guilds on all five realms
 const fs = require('fs');
 const OUT = process.argv[2] || '/tmp/atlas', N = parseInt(process.argv[3] || '14', 10);
 (async () => {

@@ -1,7 +1,7 @@
-// qa_einfo_naruto.js — post-promote verification: drive the REAL deployed
+// qa_einfo_naruto.js - post-promote verification: drive the REAL deployed
 // cmdInfo (CARD_DIAG hook) with Mellow's exact query shape:
-//   ".j einfo halloween | naruto"  ->  cmdInfo(reply, chat, ['halloween | naruto', 'event'], perms)
-// Run on box2:  CARD_DIAG=1 node scripts/shoob-miner/qa_einfo_naruto.js
+// ".j einfo halloween | naruto" -> cmdInfo(reply, chat, ['halloween | naruto', 'event'], perms)
+// Run on box2: CARD_DIAG=1 node scripts/shoob-miner/qa_einfo_naruto.js
 'use strict';
 const REPO = '/home/ubuntu/whatsapp-bot';
 const cardSystem = require(REPO + '/core/rpg/cardSystem.js');

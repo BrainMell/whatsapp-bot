@@ -1,6 +1,6 @@
-// fx-tap — joker's button-press detector.
+// fx-tap - joker's button-press detector.
 // cta_url buttons point here; the HTTP GET is the tap signal.
-// WhatsApp protocol sends NOTHING on a cta_url tap — this closes the
+// WhatsApp protocol sends NOTHING on a cta_url tap - this closes the
 // detection gap through the web instead. Zero chat traffic.
 // Listens on 0.0.0.0:8787, logs taps to fx_captures/taps.log.
 const http = require("http");
@@ -33,6 +33,6 @@ const server = http.createServer((req, res) => {
         return;
     }
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-    res.end(`<!doctype html><html><head><title>joker fx-tap</title></head><body style="font-family:system-ui;background:#0d0d17;color:#e8e8f2">joker fx-tap listener alive — /c/&lt;tag&gt; to land a tap</body></html>`);
+    res.end(`<!doctype html><html><head><title>joker fx-tap</title></head><body style="font-family:system-ui;background:#0d0d17;color:#e8e8f2">joker fx-tap listener alive - /c/&lt;tag&gt; to land a tap</body></html>`);
 });
 server.listen(PORT, "0.0.0.0", () => console.log("fx-tap listening on " + PORT));

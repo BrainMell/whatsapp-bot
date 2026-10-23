@@ -1,4 +1,4 @@
-# CARD REDESIGN PLAN - 2026-09-16 (v2, full execution)
+# CARD REDESIGN PLAN - (v2, full execution)
 
 > Owner directive: the previous pass changed colors on one shared skeleton.
 > That is rejected. Every style must be a genuinely different DESIGN SYSTEM:
@@ -207,7 +207,7 @@ real generatePortraitCard call from Box1 returns the styled card for the
 picked style.
 
 
-## 7. IMPLEMENTATION STATUS (2026-09-16, same session)
+## 7. IMPLEMENTATION STATUS (same session)
 
 Shipped and live:
 - pkg/cardstyle (NEW): palettes + full primitive vocabulary (frames, chips,
@@ -233,7 +233,7 @@ Shipped and live:
 - Deploy: rebuilt bot-generation binary deployed to BOTH boxes; all pm2
   services online.
 
-## 8. V3 - FULL VISUAL INSPECTION PASS (2026-09-16, owner-triggered)
+## 8. V3 - FULL VISUAL INSPECTION PASS (owner-triggered)
 
 The owner rejected v2 ("still looks the same with other themes") and demanded
 a real per-set, per-style VISUAL inspection. All 126 QA renders (9 styles x
@@ -301,7 +301,7 @@ RENDER DEFECTS:
 - Repos: bot_generation 92569bc pushed to origin/main; Box1 mirror commit
   f369ac5; whatsapp-bot docs updated (this section).
 
-## 9. V4 PASS - BROKEN COMMANDS + COMPLETED THEME COVERAGE (2026-09-16)
+## 9. V4 PASS - BROKEN COMMANDS + COMPLETED THEME COVERAGE
 
 Owner report that started this pass: ".abilities and .equip are broken, the
 skill tree is still showing the default design." All three root-caused and
@@ -442,7 +442,7 @@ Monolith stele count money in four different structural ways.
   pass-throughs for DECREE/FISH/TRANSFER/DEPOSIT/WITHDRAW/BALANCE),
   core/commands/rpgCommands.js (single error prefix).
 - QA: qa/styleqa/main.go extended to 18 kinds x 9 styles (+BALANCE) = 162 renders.
-## 11. V5 PASS - COMPLETE INVENTORY AUDIT + LIVE ALLOCATE VERIFICATION (2026-09-17)
+## 11. V5 PASS - COMPLETE INVENTORY AUDIT + LIVE ALLOCATE VERIFICATION
 
 ### 11.1 The full inventory (owner asked: "those are the only cards??")
 
@@ -492,7 +492,7 @@ SEPARATE SURFACES (own design identity, outside the 10-style system):
   `go build ./...`; stashed (recoverable) - the primary profile card is
   the Node bake, and the Go profile path stays canonical-decree.
 
-### 11.2 ALLOCATE live verification (owner: "first couple of cardstyles
+### 11.2 ALLOCATE live verification ("first couple of cardstyles
 their allocate commands dont even look like the same theme")
 
 METHOD: e2e harness on Box1 calling the REAL handleAllocateCommand with a

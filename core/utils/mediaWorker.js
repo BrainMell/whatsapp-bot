@@ -1,16 +1,15 @@
 // ============================================
-// MEDIA WORKER (2026-09-27 quiz speed + reliability pass)
+// MEDIA WORKER (quiz speed + reliability pass)
 // ============================================
 // One shared, concurrency-capped FIFO runner for EVERY heavy media job the
 // quiz system needs: image fetch+verify, logo fetch, audio clip fetch,
 // ffmpeg trims. Goals (owner brief: "the planning system shouldn't hinder
 // the bot's other activities"):
-//   - a slow quiz can never flood the event loop / network with parallel
-//     media work (hard concurrency cap, FIFO, per-job timeout)
-//   - the main bot keeps handling normal commands while media jobs run
-//     (every job is async I/O or a child process - the loop never blocks)
-//   - observability: job stats + one-line heap telemetry every 5 minutes
-//
+// - a slow quiz can never flood the event loop / network with parallel
+// media work (hard concurrency cap, FIFO, per-job timeout)
+// - the main bot keeps handling normal commands while media jobs run
+// (every job is async I/O or a child process - the loop never blocks)
+// - observability: job stats + one-line heap telemetry every 5 minutes
 // Sized for the 1GB Box 1: no worker PROCESS (extra ~60-100MB RSS would
 // starve the bot); an in-process runner with strict caps achieves the same
 // isolation for I/O-bound media work, and ffmpeg already runs as a child.
@@ -69,8 +68,8 @@ function _pump() {
 
 // run(fn, opts) -> Promise<fn()>
 // fn must be an async function (or return a promise). opts:
-//   label     - for logs/stats (default "job")
-//   timeoutMs - per-job kill switch (default env or 90s)
+// label - for logs/stats (default "job")
+// timeoutMs - per-job kill switch (default env or 90s)
 function run(fn, opts = {}) {
   return new Promise((resolve, reject) => {
     if (typeof fn !== "function") { reject(new Error("mediaWorker.run needs a function")); return; }
@@ -101,7 +100,7 @@ function stats() {
   };
 }
 
-// ── heap telemetry (OOM forensics, mirrors the engine's 5-min tick) ──
+// -- heap telemetry (OOM forensics, mirrors the engine's 5-min tick) --
 const _telemetry = setInterval(() => {
   try {
     const m = process.memoryUsage();

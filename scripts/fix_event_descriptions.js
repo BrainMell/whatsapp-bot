@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * fix_event_descriptions.js — regenerate the `description` field for every
+ * fix_event_descriptions.js - regenerate the `description` field for every
  * E- event card to the house format: "<cardName> from <animeName>".
  *
  * WHY: descriptions were composed at mining time from the OLD (buggy) field
  * mapping, so they still say e.g. "Bulma from Summer" even though the
  * animeName/eventName fields were corrected in db6759a6. The owner flagged
- * this 2026-10-08: description must say "Bulma from Dragon Ball" — the
+ * this 2026-10-08: description must say "Bulma from Dragon Ball" - the
  * SERIES, never the event.
  *
  * SAFETY:

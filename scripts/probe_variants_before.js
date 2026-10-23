@@ -47,7 +47,7 @@ function exitsAll() {
         fs.writeFileSync(f, png);
         console.log('wrote', f);
     }
-    // hazard type tint demo (green full-screen wash — 'the other colors')
+ // hazard type tint demo (green full-screen wash - 'the other colors')
     for (const t of ['hazard', 'puzzle', 'core']) {
         const room = { key: '3,3', type: t, state: 'UNEXPLORED', ring: 1, variant: 'intact', payload: {} };
         const png = await roomScene._renderInProcess(ev, pl, room, { exits, prefix: '.' });

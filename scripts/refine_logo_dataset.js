@@ -1,14 +1,14 @@
 // ============================================
-// LOGO DATASET REFINEMENT PASS (2026-09-28)
+// LOGO DATASET REFINEMENT PASS
 // ============================================
 // Visual audit of the first bake surfaced four leak classes the bake-time
 // gates missed - each maps to an owner complaint:
-//   1. photos masquerading as logos (Peugeot: a 2021 car photo)   -> mismatch
-//   2. century-old trademark scans (Dr Pepper "trade mark 1910") -> outdated
-//   3. old-version logos with a year in the name (Gucci 1960s)   -> outdated
-//   4. wordmark-only artwork where a symbol variant exists       -> wordmark
-//        (some brands' canonical logo IS text - those stay, but only after
-//         a symbol alternative was searched for and not found)
+// 1. photos masquerading as logos (Peugeot: a 2021 car photo) -> mismatch
+// 2. century-old trademark scans (Dr Pepper "trade mark 1910") -> outdated
+// 3. old-version logos with a year in the name (Gucci 1960s) -> outdated
+// 4. wordmark-only artwork where a symbol variant exists -> wordmark
+// (some brands' canonical logo IS text - those stay, but only after
+// a symbol alternative was searched for and not found)
 // Re-audits EVERY entry of data/logoDataset.json and upgrades in place.
 // ============================================
 const axios = require("axios");
@@ -28,7 +28,7 @@ const CUR_YEAR = new Date().getFullYear();
 // years in the filename; an open-ended "(2021-)" / "2017-present" keeps it current
 function yearsInfo(file) {
   const years = [...file.matchAll(/\b(19\d\d|20\d\d)s?\b/g)].map((m) => parseInt(m[1], 10));
-  const openEnded = /(19\d\d|20\d\d)s?\s*(-|–|—|to\s*present|\/|,)\s*(present)?/i.test(file) || /present/i.test(file);
+  const openEnded = /(19\d\d|20\d\d)s?\s*(-|-|-|to\s*present|\/|,)\s*(present)?/i.test(file) || /present/i.test(file);
   if (!years.length) return { old: false, years };
   const maxY = Math.max(...years);
   return { old: !openEnded && maxY < CUR_YEAR - 3, years, maxY, openEnded };
@@ -114,15 +114,15 @@ async function enwikiLogoSearch(brand, symbolBias = false) {
 
   for (const b of ds.brands) {
     const t = norm(b.file);
-    // rule 1+2: photos / noise / jpeg-without-logo-word -> mismatch class
+ // rule 1+2: photos / noise / jpeg-without-logo-word -> mismatch class
     if (PHOTO_RE.test(t) || NOISE_RE.test(t) || (/image\/(jpe?g)/i.test(b.mime || "") && !/(logo|symbol|icon|emblem)/.test(t))) {
-      // try to REPLACE with a clean current logo before dropping the brand
+ // try to REPLACE with a clean current logo before dropping the brand
       const rep = await enwikiLogoSearch(b, false).catch(() => null);
       if (rep) { kept.push({ ...b, ...rep, source: "enwiki-file-search", note: `replaced:${b.file}` }); upgraded += 1; }
       else dropped.push({ ...b, why: "photo-or-noise" });
       continue;
     }
-    // rule 3: outdated by filename year (unless open-ended "2017-present")
+ // rule 3: outdated by filename year (unless open-ended "2017-present")
     const y = yearsInfo(b.file);
     if (y.old) {
       const rep = await enwikiLogoSearch(b, false).catch(() => null);
@@ -130,7 +130,7 @@ async function enwikiLogoSearch(brand, symbolBias = false) {
       else dropped.push({ ...b, why: `outdated-year(${y.maxY})` });
       continue;
     }
-    // rule 4: wordmark-ish -> search a symbol variant once; keep wordmark if none
+ // rule 4: wordmark-ish -> search a symbol variant once; keep wordmark if none
     if (!ICON_RE.test(t) && b.ratio > 1.4) {
       const alt = await enwikiLogoSearch(b, true).catch(() => null);
       if (alt) {

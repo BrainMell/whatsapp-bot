@@ -1,27 +1,25 @@
-// ═══════════════════════════════════════════════════════════════════════════
-//  DEAD WORLD SEQUENCES — 30 unique ten-thought variations
-// ═══════════════════════════════════════════════════════════════════════════
-//
-//  Data for the Dead World dungeon encounter (2026-09-21 owner ticket):
-//  when a regular dungeon encounter spawns nothing, the player's own thoughts
-//  carry the scene across TEN SEPARATE message boxes (owner 2026-09-21: "make
-//  it 10 messages now"). Each variation below is one encounter's arc; the
-//  sender wraps every line in  _*「 」*_  and posts them one message at a time.
-//
-//  House rules for this data (QA pins all of them):
-//    1. exactly 30 variations, exactly 10 thoughts each, all distinct
-//    2. NO em dashes, NO en dashes, NO hyphens anywhere (owner rule for the
-//       generated encounter text) - qa_dead_world.js scans every character
-//    3. lowercase, human, spontaneous; never narration, never exposition,
-//       never system speak; the player never names the phenomenon
-//    4. confusion develops across the ten lines; realization arrives through
-//       the situation, and every variation takes its own route there
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// DEAD WORLD SEQUENCES - 30 unique ten-thought variations
+// ===========================================================================
+// Data for the Dead World dungeon encounter (owner ticket):
+// when a regular dungeon encounter spawns nothing, the player's own thoughts
+// carry the scene across TEN SEPARATE message boxes ("make
+// it 10 messages now"). Each variation below is one encounter's arc; the
+// sender wraps every line in _*「 」*_ and posts them one message at a time.
+// House rules for this data (QA pins all of them):
+// 1. exactly 30 variations, exactly 10 thoughts each, all distinct
+// 2. NO em dashes, NO en dashes, NO hyphens anywhere (owner rule for the
+// generated encounter text) - qa_dead_world.js scans every character
+// 3. lowercase, human, spontaneous; never narration, never exposition,
+// never system speak; the player never names the phenomenon
+// 4. confusion develops across the ten lines; realization arrives through
+// the situation, and every variation takes its own route there
+// ===========================================================================
 
 'use strict';
 
 const DEAD_WORLD_SEQUENCES = [
-  // 1. plain noticing
+ // 1. plain noticing
   [
     'huh... where is everything',
     'spawn point is empty. completely empty',
@@ -34,7 +32,7 @@ const DEAD_WORLD_SEQUENCES = [
     'why does the air feel like that...',
     'something is very wrong with this floor',
   ],
-  // 2. calling out
+ // 2. calling out
   [
     'hello...? anyone home',
     'no ambush. no mob. nothing',
@@ -47,7 +45,7 @@ const DEAD_WORLD_SEQUENCES = [
     'the silence is doing that thing again',
     'floors do not just sit empty. floors do not do that',
   ],
-  // 3. cocky turns uneasy
+ // 3. cocky turns uneasy
   [
     'oh good. free loot floor',
     'wait. there is nothing to loot',
@@ -60,7 +58,7 @@ const DEAD_WORLD_SEQUENCES = [
     'my gut says walk. my feet agree',
     'whatever happened here happened to everything',
   ],
-  // 4. sensory
+ // 4. sensory
   [
     'it is too quiet in here',
     'not calm quiet. held breath quiet',
@@ -73,7 +71,7 @@ const DEAD_WORLD_SEQUENCES = [
     'nothing moved. nothing at all',
     'i want to leave. i want to know why i want to leave',
   ],
-  // 5. analytical
+ // 5. analytical
   [
     'encounter count says three. i count zero',
     'so either the count is broken or the floor is',
@@ -86,7 +84,7 @@ const DEAD_WORLD_SEQUENCES = [
     'or were taken. or never came back',
     'i am not sticking around to find out which',
   ],
-  // 6. gamer brain
+ // 6. gamer brain
   [
     'did i break it. did i speedrun too fast',
     'empty arena. no enemies. zero xp incoming',
@@ -99,7 +97,7 @@ const DEAD_WORLD_SEQUENCES = [
     'creepy empty floor achievement unlocked. hate it',
     'moving before something fills the void. metaphorically',
   ],
-  // 7. scared
+ // 7. scared
   [
     'they were supposed to be here',
     'hello...? that is not funny',
@@ -112,7 +110,7 @@ const DEAD_WORLD_SEQUENCES = [
     'i keep listening for breathing. any breathing',
     'i am leaving. i am leaving right now',
   ],
-  // 8. denial
+ // 8. denial
   [
     'nope. wrong turn. definitely the wrong turn',
     'i will just backtrack and find the real fight',
@@ -125,7 +123,7 @@ const DEAD_WORLD_SEQUENCES = [
     'laugh. laugh so you do not think',
     'okay universe. very funny. i get it',
   ],
-  // 9. superstitious
+ // 9. superstitious
   [
     'something ate this place before i got here',
     'not the mobs. the whole floor feels chewed',
@@ -138,7 +136,7 @@ const DEAD_WORLD_SEQUENCES = [
     'if i am being fed to something, tell me now',
     'walking. fast. eyes up',
   ],
-  // 10. time slips
+ // 10. time slips
   [
     'how long have i been standing here',
     'the light is not moving. is the light moving',
@@ -151,7 +149,7 @@ const DEAD_WORLD_SEQUENCES = [
     'like i walked into a memory nobody finished',
     'step. step. do not look back',
   ],
-  // 11. briefing memory
+ // 11. briefing memory
   [
     'the briefing said hostiles. plural',
     'plural means more than zero, right',
@@ -164,7 +162,7 @@ const DEAD_WORLD_SEQUENCES = [
     'nothing is late in a dungeon. nothing is late',
     'i miss being scared of the wrong things',
   ],
-  // 12. joking bravado
+ // 12. joking bravado
   [
     'great. i scared the monsters off',
     'me. scary. the rumors were true',
@@ -177,7 +175,7 @@ const DEAD_WORLD_SEQUENCES = [
     'i would hug a kobold right now. a kobold',
     'okay joke time is over. eyes forward',
   ],
-  // 13. procedure as a lifeline
+ // 13. procedure as a lifeline
   [
     'step one: look around. done',
     'step two: find the mob. can not',
@@ -190,7 +188,7 @@ const DEAD_WORLD_SEQUENCES = [
     'nothing here wants to fight me. that is the problem',
     'keep the torch up and keep moving',
   ],
-  // 14. body signals
+ // 14. body signals
   [
     'why are my ears ringing',
     'there is a taste in the air like old coins',
@@ -203,7 +201,7 @@ const DEAD_WORLD_SEQUENCES = [
     'i am not staying to meet it',
     'move. just move',
   ],
-  // 15. others
+ // 15. others
   [
     'did the others get a floor like this',
     'is this a solo thing. did it wait for me',
@@ -216,7 +214,7 @@ const DEAD_WORLD_SEQUENCES = [
     'you can fight absent... right',
     'one way to find out. forward',
   ],
-  // 16. reason hunting
+ // 16. reason hunting
   [
     'there is a reason. there is always a reason',
     'event? glitch? a maintenance break in reality',
@@ -229,7 +227,7 @@ const DEAD_WORLD_SEQUENCES = [
     'and the floor keeps being here',
     'bad math. the whole floor is bad math',
   ],
-  // 17. hollow win
+ // 17. hollow win
   [
     'so this counts as cleared... right',
     'survived a fight that never showed. easy',
@@ -242,7 +240,7 @@ const DEAD_WORLD_SEQUENCES = [
     'just a room where everything should be',
     'i will take the win. quietly. very quietly',
   ],
-  // 18. cold observation
+ // 18. cold observation
   [
     'no bodies. no blood. no battle',
     'a battlefield with no story left in it',
@@ -255,7 +253,7 @@ const DEAD_WORLD_SEQUENCES = [
     'or never started. worse. never started',
     'note to self: forget this floor existed',
   ],
-  // 19. paranoid
+ // 19. paranoid
   [
     'it is a trap. obviously a trap',
     'invisible enemy. phasing enemy. waiting enemy',
@@ -268,7 +266,7 @@ const DEAD_WORLD_SEQUENCES = [
     'if this is a trick, it is an expensive one',
     'backing out the way i came. watching everything',
   ],
-  // 20. misplaced calm
+ // 20. misplaced calm
   [
     'weird... it is kind of peaceful',
     'no. peaceful is not the word',
@@ -281,7 +279,7 @@ const DEAD_WORLD_SEQUENCES = [
     'stillness like this is a door held shut',
     'exactly. that is why i will not',
   ],
-  // 21. stubborn
+ // 21. stubborn
   [
     'fine. hide and seek it is',
     'i check every alcove. every shadow. twice',
@@ -294,7 +292,7 @@ const DEAD_WORLD_SEQUENCES = [
     'even stubborn runs out of floor eventually',
     'the nothing is starting to feel deliberate',
   ],
-  // 22. homesick
+ // 22. homesick
   [
     'the tavern noise would fix this. any noise',
     'i would trade my whole pouch for one goblin squeak',
@@ -307,7 +305,7 @@ const DEAD_WORLD_SEQUENCES = [
     'the fireplace in my head will not light',
     'nonsense. move along. move',
   ],
-  // 23. urgent exit
+ // 23. urgent exit
   [
     'nope. nope. absolutely not',
     'an empty dungeon is not my problem to solve',
@@ -320,7 +318,7 @@ const DEAD_WORLD_SEQUENCES = [
     'walk fast. apologize to my pride later',
     'pride can find its own way out',
   ],
-  // 24. detached
+ // 24. detached
   [
     'huh. i feel very far away right now',
     'like the dungeon is a memory i am watching',
@@ -333,7 +331,7 @@ const DEAD_WORLD_SEQUENCES = [
     'did i fall. is this falling',
     'keep moving. moving feels like proof',
   ],
-  // 25. log keeper
+ // 25. log keeper
   [
     'mob count: zero. chest count: zero',
     'xp forecast: bleak. mood: worse',
@@ -346,7 +344,7 @@ const DEAD_WORLD_SEQUENCES = [
     'a floor with no entry should not exist',
     'yet here i am, existing at it',
   ],
-  // 26. challenge refused
+ // 26. challenge refused
   [
     'so the dungeon wants to play mind games',
     'cute. i have survived worse than empty',
@@ -359,7 +357,7 @@ const DEAD_WORLD_SEQUENCES = [
     'the door better appreciate this',
     'note the exit. note it twice',
   ],
-  // 27. reverent fear
+ // 27. reverent fear
   [
     'places like this are not empty. they are kept',
     'kept like a room nobody is allowed in',
@@ -372,7 +370,7 @@ const DEAD_WORLD_SEQUENCES = [
     'hmm. that is enough philosophy for one dungeon',
     'bow to nothing. walk toward the door',
   ],
-  // 28. fragmented panic
+ // 28. fragmented panic
   [
     'empty. empty empty empty',
     'okay. breathe. in. out. in',
@@ -385,7 +383,7 @@ const DEAD_WORLD_SEQUENCES = [
     'say something else. say anything else',
     'exit. now. words later',
   ],
-  // 29. forced calm
+ // 29. forced calm
   [
     'deep breath. this is fine',
     'the floor is empty and i am fine',
@@ -398,7 +396,7 @@ const DEAD_WORLD_SEQUENCES = [
     'calm is a tool. i am using the tool. the tool is slipping',
     'last look back. do not. do not look back',
   ],
-  // 30. dawning
+ // 30. dawning
   [
     'first the mobs were missing',
     'then the noise was missing',
@@ -413,7 +411,7 @@ const DEAD_WORLD_SEQUENCES = [
   ],
 ];
 
-// ─── VICTORY CAPTIONS (the "different congratulations caption") ─────────────
+// --- VICTORY CAPTIONS (the "different congratulations caption") -------------
 // The victory card looks like the regular encounter victory card; only the
 // congratulation changes. No kills implied, no fight referenced, dash-free.
 const VICTORY_CAPTIONS = [

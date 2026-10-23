@@ -1,14 +1,14 @@
 // ============================================
-// ⚔️ GW DEFEAT-PATH QA — owner spec §23: "Win. **Lose.** Verify proper
+// GW DEFEAT-PATH QA - owner spec §23: "Win. **Lose.** Verify proper
 // Guild War-specific result. Return to the same world."
 // The ship gate only ever WINS fights; this script drives ruins PvE to a
 // LOSS (and then to FINAL DEATH) and asserts every consequence:
-//   1. life decremented, respawn at spawn corner, protection stamped
-//   2. room NOT cleared (monster stays for everyone else)
-//   3. war feed: standalone NAMED death event (§20), lives stated
-//   4. player can move again after respawn (return to the same world)
-//   5. final death at 0 lives: carried relics dropped where they fell,
-//      status = defeated, feed states where the relics lie
+// 1. life decremented, respawn at spawn corner, protection stamped
+// 2. room NOT cleared (monster stays for everyone else)
+// 3. war feed: standalone NAMED death event (§20), lives stated
+// 4. player can move again after respawn (return to the same world)
+// 5. final death at 0 lives: carried relics dropped where they fell,
+// status = defeated, feed states where the relics lie
 // Run: node scripts/gw_defeat_qa.js
 // ============================================
 process.env.GW_TEST = '1';
@@ -32,7 +32,7 @@ async function connectDB() {
 const results = [];
 function check(name, cond, detail = '') {
     results.push({ name, ok: !!cond, detail: String(detail).slice(0, 240) });
-    console.log(`${cond ? '✅' : '❌'} ${name}${detail ? ' — ' + String(detail).slice(0, 160) : ''}`);
+    console.log(`${cond ? '✅' : '❌'} ${name}${detail ? ' - ' + String(detail).slice(0, 160) : ''}`);
 }
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -83,7 +83,7 @@ async function main() {
     const P1 = 'moris@s.whatsapp.net';
     const gcSock = makeSock('gc');
     if (!economy.getUser(P1)) economy.registerUser(P1, 'Moris');
-    // deliberately WEAK: this champion exists to die
+ // deliberately WEAK: this champion exists to die
     const u = economy.getUser(P1);
     u.progression = u.progression || {};
     u.progression.level = 1;
@@ -114,7 +114,7 @@ async function main() {
     const sock1 = makeSock('p1');
     const sockTexts = () => sock1.texts().join('\n');
 
-    // give Moris a carried relic so the final-death drop has something to drop
+ // give Moris a carried relic so the final-death drop has something to drop
     const giveRelic = async () => {
         const ev = await evFresh();
         const me = ev.players.find((p) => p.jid === P1);
@@ -131,7 +131,7 @@ async function main() {
         return (me.carriedRelics || me.relics || []).length > 0;
     };
 
-    // ── lose one life ──
+ // -- lose one life --
     async function loseOneLife(label) {
         const ev = await evFresh();
         const me = ev.players.find((p) => p.jid === P1);
@@ -144,17 +144,17 @@ async function main() {
         const fresh = await evFresh();
         const me2 = fresh.players.find((p) => p.jid === P1);
         const room2 = fresh.rooms.find((r) => r.key === cRoom.key);
-        // enterRoom may have AUTO-started the fight (encounter-on-entry design) —
-        // only start explicitly if no session came up
+ // enterRoom may have AUTO-started the fight (encounter-on-entry design) -
+ // only start explicitly if no session came up
         let st0 = guildAdventure.getGameState(P1, P1);
         if (!st0 || !st0.active) {
             const started = await encounters.startRoomCombat(sock1, P1, me2, fresh, room2, {});
             if (!started.success) throw new Error(`combat start failed: ${started.msg}`);
         }
-        // attack until the session ends (weak champion dies fast).
-        // ⚠️ inCombat can flicker false DURING async turn processing — after
-        // the loop, wait for the war player doc to actually change (life lost)
-        // or a generous timeout, so the onEnd writes have settled.
+ // attack until the session ends (weak champion dies fast).
+ // inCombat can flicker false DURING async turn processing - after
+ // the loop, wait for the war player doc to actually change (life lost)
+ // or a generous timeout, so the onEnd writes have settled.
         const beforeLives = (await evFresh()).players.find((p) => p.jid === P1).lives;
         for (let i = 0; i < 40; i++) {
             const st = guildAdventure.getGameState(P1, P1);
@@ -176,7 +176,7 @@ async function main() {
         return { me: meA, room: after.rooms.find((r) => r.key === cRoom.key), ev: after };
     }
 
-    // ═══════════ LOSS #1 ═══════════
+ // =========== LOSS #1 ===========
     console.log('\n──── defeat #1 (3 → 2 lives) ────');
     const seeded = await giveRelic();
     console.log(`[setup] relic seeded: ${seeded}, carried: ${await hasRelic()}`);
@@ -186,7 +186,7 @@ async function main() {
     check('D1 respawn protection stamped', (r1.me.protectedUntil || 0) > Date.now() - 1000, `until=${r1.me.protectedUntil}`);
     check('D1 room NOT cleared by my death', r1.room && r1.room.state !== 'CLEARED', `state=${r1.room?.state}`);
     check('D1 combat session gone', (() => { const st = guildAdventure.getGameState(P1, P1); return !st || !st.active || !st.inCombat; })());
-    // feed: named standalone death event
+ // feed: named standalone death event
     const feedSock = makeSock('feed');
     let flushed = '';
     try {
@@ -199,7 +199,7 @@ async function main() {
     check('D1 war feed states lives remaining', /\*?2\*? lives remain/i.test(flushed), flushed.slice(-120));
     check('D1 player status still fighting (not defeated)', r1.me.status !== 'defeated', `status=${r1.me.status}`);
 
-    // ═══════════ return to the same world: move again ═══════════
+ // =========== return to the same world: move again ===========
     console.log('\n──── respawned champion explores again ────');
     sock1.sent.length = 0;
     await state.updatePlayer(EV, P1, {}, { protectedUntil: 0, lastMoveAt: Date.now() - 10000 });
@@ -209,7 +209,7 @@ async function main() {
     check('D1 respawned champion CAN move (same world)', /moved|YOU ARE HERE|chamber|No passage/i.test(String(mv && mv.text || sockTexts())) || meM.lastMoveAt > 0, String(mv && mv.text || '').slice(0, 80));
     check('D1 move actually relocated or was a legal wall-bump', true, `at ${meM.roomId}`);
 
-    // ═══════════ LOSS #2 + #3 → FINAL DEATH ═══════════
+ // =========== LOSS #2 + #3 → FINAL DEATH ===========
     console.log('\n──── defeat #2 (2 → 1) ────');
     const r2 = await loseOneLife('loss2');
     check('D2 life decremented 2→1', (r2.me.lives ?? 0) === 1, `lives=${r2.me.lives}`);
@@ -223,7 +223,7 @@ async function main() {
     if (carriedBefore) {
         check('D3 carried relics dropped', !(await hasRelic()), 'relics left the body');
     }
-    // final feed: relic location stated + final-death flavor
+ // final feed: relic location stated + final-death flavor
     let flushed2 = '';
     try {
         const feedSock2 = makeSock('feed2');
@@ -233,7 +233,7 @@ async function main() {
     check('D3 final death in war feed', /Moris/.test(flushed2), flushed2.slice(0, 160));
     if (carriedBefore) check('D3 feed states where the relics lie', /relic/i.test(flushed2), flushed2.slice(0, 160));
 
-    // ═══════════ war survives ═══════════
+ // =========== war survives ===========
     const evEnd = await evFresh();
     check('D4 war survived the whole death cycle', evEnd.state === 'ACTIVE', `state=${evEnd.state}`);
 
@@ -242,7 +242,7 @@ async function main() {
     const fails = results.filter((r) => !r.ok);
     if (fails.length) {
         console.log('FAILURES:');
-        for (const f of fails) console.log(`  ❌ ${f.name} — ${f.detail}`);
+        for (const f of fails) console.log(`  ❌ ${f.name} - ${f.detail}`);
     }
     await mongoose.connection.client.close().catch(() => {});
     process.exit(fails.length ? 1 : 0);

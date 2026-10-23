@@ -1,15 +1,15 @@
 // ============================================
-// QUIZ RACE + PACING QA (2026-09-28 owner audit)
+// QUIZ RACE + PACING QA (owner audit)
 // ============================================
 // Owner spec §2: "proper state locking so Q2 cannot start until Q1 has been
 // fully resolved", "debouncing / duplicate-send protection", "ensure only
 // one question can be active at a time", "randomized 10-30 second gap".
 // This battery hammers the exact races that produced the live breakage:
-//   A. deadline timer vs correct answer in the same tick  -> ONE reveal
-//   B. two players answering correctly in the same tick   -> ONE reveal
-//   C. two `.j quiz go` in the same tick                  -> ONE start
-//   D. postQuestion while a question is open              -> BLOCKED
-//   E. gap randomization bounds + quizmod gapmin/gapmax
+// A. deadline timer vs correct answer in the same tick -> ONE reveal
+// B. two players answering correctly in the same tick -> ONE reveal
+// C. two `.j quiz go` in the same tick -> ONE start
+// D. postQuestion while a question is open -> BLOCKED
+// E. gap randomization bounds + quizmod gapmin/gapmax
 // ============================================
 const quiz = require("../core/games/quiz");
 const quizConfigMod = require("../core/games/quizConfig");
@@ -51,11 +51,11 @@ async function waitParked(chatId, timeoutMs = 40000) {
   return null;
 }
 async function waitActive(chatId, timeoutMs = 40000) {
-  // 2026-09-28: also wait for qOpenUntil — the card is out AND the answer
-  // window armed. This mirrors the real-world invariant (a player can only
-  // answer after SEEING the card; safeSend's adoption chain now arms the
-  // window a few microtasks after the mock send resolves - mock answers
-  // fired earlier are pre-card and correctly ignored).
+ // also wait for qOpenUntil - the card is out AND the answer
+ // window armed. This mirrors the real-world invariant (a player can only
+ // answer after SEEING the card; safeSend's adoption chain now arms the
+ // window a few microtasks after the mock send resolves - mock answers
+ // fired earlier are pre-card and correctly ignored).
   const t0 = Date.now();
   while (Date.now() - t0 < timeoutMs) {
     const s = quiz.getSession(chatId);
@@ -73,7 +73,7 @@ function burst(fns) { return Promise.allSettled(fns.map((f) => f())); }
 (async () => {
   quiz.setDeps({ canStartQuiz: null, canManageQuiz: null, goService: null, ffmpegPath: "ffmpeg" });
 
-  // ═══ A. timer vs answer race ═══
+ // === A. timer vs answer race ===
   section("A. deadline timer vs correct answer (same tick)");
   {
     const chat = "raceA@g.us";
@@ -86,20 +86,20 @@ function burst(fns) { return Promise.allSettled(fns.map((f) => f())); }
     const live = await waitActive(chat);
     ok(!!live, "quiz ACTIVE");
 
-    // fire the deadline timeout body AND the correct answer in the same burst
+ // fire the deadline timeout body AND the correct answer in the same burst
     const q1 = live.sections[0].questions[live.idx];
     const timerBody = quiz._internal?.deadlineTickFor ? null : null; // no direct hook: emulate by awaiting the timer
-    // send correct answer immediately, then let the real timer fire while
-    // reveal is still awaiting its first send -> both chains entered
+ // send correct answer immediately, then let the real timer fire while
+ // reveal is still awaiting its first send -> both chains entered
     const reveals0 = live.revealed.length;
     await quiz.handleAnswer(sock, chat, "p1@x", "ABCD"[q1.correct], MARK, { key: { id: "a1" } }, "P1");
     await wait(300); // let the reveal chain start (lock held)
-    // emulate the deadline tick DURING the reveal: call the same path the
-    // timer would - a stale timer must find the lock held and bail
+ // emulate the deadline tick DURING the reveal: call the same path the
+ // timer would - a stale timer must find the lock held and bail
     const timerPromise = new Promise((resolve) => {
       setTimeout(async () => {
         try {
-          // direct reveal attempt (what an un-cancelled timer callback does)
+ // direct reveal attempt (what an un-cancelled timer callback does)
           await quiz.handleAnswer(sock, chat, "ghost@x", "ABCD"[q1.correct], MARK, { key: { id: "ghost" } }, "Ghost");
         } catch (e) { /* ignore */ }
         resolve();
@@ -115,7 +115,7 @@ function burst(fns) { return Promise.allSettled(fns.map((f) => f())); }
     await quiz.endQuiz(sock, chat, "u1@x", MARK, false);
   }
 
-  // ═══ B. two simultaneous correct answers ═══
+ // === B. two simultaneous correct answers ===
   section("B. two players correct in the same tick");
   {
     const chat = "raceB@g.us";
@@ -140,7 +140,7 @@ function burst(fns) { return Promise.allSettled(fns.map((f) => f())); }
     await quiz.endQuiz(sock, chat, "u1@x", MARK, false);
   }
 
-  // ═══ C. double `.j quiz go` ═══
+ // === C. double `.j quiz go` ===
   section("C. two confirmStart calls in the same tick");
   {
     const chat = "raceC@g.us";
@@ -162,7 +162,7 @@ function burst(fns) { return Promise.allSettled(fns.map((f) => f())); }
     await quiz.endQuiz(sock, chat, "u1@x", MARK, false);
   }
 
-  // ═══ D. postQuestion state guard ═══
+ // === D. postQuestion state guard ===
   section("D. postQuestion blocked while a question is open");
   {
     const chat = "raceD@g.us";
@@ -174,9 +174,9 @@ function burst(fns) { return Promise.allSettled(fns.map((f) => f())); }
     const live = await waitActive(chat);
     ok(!!live, "Q1 open (armed via waitActive)");
     const qNoBefore = live.questionNo;
-    // poke postQuestion through the session machinery: a second section start
-    // attempt must not double-post. Use the exported startSection-equivalent:
-    // confirmStart again is the realistic double-entry path.
+ // poke postQuestion through the session machinery: a second section start
+ // attempt must not double-post. Use the exported startSection-equivalent:
+ // confirmStart again is the realistic double-entry path.
     await quiz.confirmStart(sock, chat, s.askedBy, MARK, false);
     await wait(800);
     ok(live.questionNo === qNoBefore, `no extra question posted (questionNo ${qNoBefore} -> ${live.questionNo})`);
@@ -185,10 +185,10 @@ function burst(fns) { return Promise.allSettled(fns.map((f) => f())); }
     await quiz.endQuiz(sock, chat, "u1@x", MARK, false);
   }
 
-  // ═══ E. gap randomization ═══
+ // === E. gap randomization ===
   section("E. gap bounds + quizmod wiring");
   {
-    // defaults 10-30
+ // defaults 10-30
     const cfg = { questionGapMin: 10, questionGapMax: 30 };
     let inRange = true, sawDistinct = false;
     const vals = new Set();
@@ -199,10 +199,10 @@ function burst(fns) { return Promise.allSettled(fns.map((f) => f())); }
     }
     ok(inRange, "default gap always within 10-30s");
     ok(vals.size >= 8, `randomized (${vals.size} distinct values in 60 draws)`);
-    // degenerate config clamps
+ // degenerate config clamps
     ok(quizConfigMod.questionGapSeconds({ questionGapMin: 30, questionGapMax: 5 }) === 30, "gapmax<gapmin clamped to gapmin");
     ok(quizConfigMod.questionGapSeconds({}) >= 10 && quizConfigMod.questionGapSeconds({}) <= 30, "missing cfg falls back to defaults");
-    // quizmod flow
+ // quizmod flow
     const set1 = await quizConfigMod.handleQuizMod("gaptest@g.us", "gapmin 5", true, ".j");
     ok(/5/.test(set1.message || ""), "quizmod gapmin accepted");
     const set2 = await quizConfigMod.handleQuizMod("gaptest@g.us", "gapmax 12", true, ".j");

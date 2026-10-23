@@ -1,10 +1,10 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-// GEN — GUILD BASE structures (hall L1-5, training L1-5, treasury L1-5, cottage)
+// ===========================================================================
+// GEN - GUILD BASE structures (hall L1-5, training L1-5, treasury L1-5, cottage)
 // Same style DNA as gen_assets_base_structures.js (palette P, prism/roofX law,
 // 1px #241811 outline via source-in tint). Footprints: hall 4x4, training 3x3,
 // treasury 2x2. Run: node scripts/gen_assets_guildbase.js
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 const fs = require('fs');
 const path = require('path');
 const { createCanvas } = require('canvas');
@@ -169,7 +169,7 @@ function def(file, w, h, fn) {
     console.log(`[gen] ${file} (${w}x${h})`);
 }
 
-// ═══════════ GUILD HALL — 4x4 (EW=128, NS=64) ═══════════
+// =========== GUILD HALL - 4x4 (EW=128, NS=64) ===========
 def('gb_hall_l1.png', 300, 210, (s, cx, cy) => {
     const p = prism(s, cx, cy, 4, 38, P.woodL, P.woodD, P.wood);
     roofX(s, cx, cy, 4, 38, 30, P.thatchD, P.thatch, P.thatchL, 0.07);
@@ -177,7 +177,7 @@ def('gb_hall_l1.png', 300, 210, (s, cx, cy) => {
     winOn(s, p.S, p.W, 38, 0.35, 0.55, 14, 11, '#3a2b1c');
     winOn(s, p.S, p.E, 38, 0.72, 0.55, 13, 10, '#3a2b1c');
     flagPole(s, cx - 96, cy - 84, 52, P.crimson, P.crimsonD);
-    // bench + shield by the door
+ // bench + shield by the door
     s.px(cx + 84, cy - 8, 22, 5, P.woodDD); s.px(cx + 88, cy - 5, 3, 5, P.woodDD); s.px(cx + 99, cy - 5, 3, 5, P.woodDD);
 });
 def('gb_hall_l2.png', 306, 224, (s, cx, cy) => {
@@ -189,13 +189,13 @@ def('gb_hall_l2.png', 306, 224, (s, cx, cy) => {
     winOn(s, p.S, p.E, 46, 0.75, 0.55, 13, 11);
     flagPole(s, cx - 100, cy - 92, 58, P.crimson, P.crimsonD);
     bannerOn(s, cx + 66, cy - 108, '#2a6a4e', '#1e4a38');
-    // stone steps
+ // stone steps
     s.px(cx + 52, cy - 2, 30, 4, P.stoneD); s.px(cx + 56, cy + 2, 22, 3, P.stoneDD);
 });
 def('gb_hall_l3.png', 316, 244, (s, cx, cy) => {
     const p = prism(s, cx, cy, 4, 52, P.stoneL, P.stoneD, P.stone);
     const r = roofX(s, cx, cy, 4, 52, 34, P.roofRD, P.roofR, P.roofRL, 0.06);
-    // west watch tower
+ // west watch tower
     const tp = towerPrism(s, cx - 108, cy + 14, 1.3, 86, P.stoneL, P.stoneD, P.stone);
     coneRoof(s, tp.N[0], tp.N[1] - 34, 30, 34, tp.W[1] + 6, P.roofRD, P.roofPD);
     winOn(s, tp.S, tp.E, 86, 0.5, 0.72, 9, 11);
@@ -215,7 +215,7 @@ function chimneyAt(s, x, yTop, w, h) {
 def('gb_hall_l4.png', 330, 262, (s, cx, cy) => {
     const p = prism(s, cx, cy, 4, 58, P.plasterL, P.plasterD, P.plaster);
     const r = roofX(s, cx, cy, 4, 58, 38, P.roofTD, P.roofT, P.roofTL, 0.06);
-    // twin towers
+ // twin towers
     const t1 = towerPrism(s, cx - 112, cy + 16, 1.2, 92, P.stoneL, P.stoneD, P.stone);
     coneRoof(s, t1.N[0], t1.N[1] - 36, 28, 32, t1.W[1] + 6, P.roofTD, P.roofPD);
     const t2 = towerPrism(s, cx + 112, cy - 26, 1.2, 92, P.stoneL, P.stoneD, P.stone);
@@ -223,7 +223,7 @@ def('gb_hall_l4.png', 330, 262, (s, cx, cy) => {
     flagPole(s, t1.N[0] - 2, t1.N[1] - 32, 26, P.gold, P.goldD);
     winOn(s, t1.S, t1.E, 92, 0.5, 0.6, 8, 10);
     winOn(s, t2.S, t2.W, 92, 0.5, 0.6, 8, 10);
-    // gold ridge trim
+ // gold ridge trim
     s.ctx.strokeStyle = P.gold; s.ctx.lineWidth = 2.4;
     s.ctx.beginPath(); s.ctx.moveTo(r.rA[0], r.rA[1] - 1); s.ctx.lineTo(r.rB[0], r.rB[1] - 1); s.ctx.stroke();
     doorOn(s, p.S, p.E, 58, 26, 38, P.woodDD);
@@ -234,19 +234,19 @@ def('gb_hall_l4.png', 330, 262, (s, cx, cy) => {
 def('gb_hall_l5.png', 344, 282, (s, cx, cy) => {
     const p = prism(s, cx, cy, 4, 64, P.stoneL, P.stoneDD, P.stoneD);
     const r = roofX(s, cx, cy, 4, 64, 42, P.roofPD, P.roofP, P.roofPL, 0.06);
-    // central keep tower
+ // central keep tower
     const kt = towerPrism(s, cx + 6, cy - 96, 1.5, 104, P.stoneL, P.stoneD, P.stone);
     coneRoof(s, kt.N[0], kt.N[1] - 40, 34, 38, kt.W[1] + 7, P.roofPD, P.roofRD);
     flagPole(s, kt.N[0] - 2, kt.N[1] - 36, 30, P.gold, P.goldD);
     winOn(s, kt.S, kt.E, 104, 0.5, 0.62, 10, 12, P.crystal);
     winOn(s, kt.S, kt.E, 104, 0.5, 0.34, 10, 12, P.crystal);
-    // flanking towers
+ // flanking towers
     const t1 = towerPrism(s, cx - 116, cy + 18, 1.15, 96, P.stoneL, P.stoneD, P.stone);
     coneRoof(s, t1.N[0], t1.N[1] - 38, 28, 32, t1.W[1] + 6, P.roofPD, P.roofRD);
     flagPole(s, t1.N[0] - 2, t1.N[1] - 34, 26, P.gold, P.goldD);
     const t2 = towerPrism(s, cx + 118, cy - 22, 1.15, 96, P.stoneL, P.stoneD, P.stone);
     coneRoof(s, t2.N[0], t2.N[1] - 38, 28, 32, t2.W[1] + 6, P.roofPD, P.roofRD);
-    // gold gate arch
+ // gold gate arch
     doorOn(s, p.S, p.E, 64, 30, 44, P.woodDD);
     const m = mid(p.S, p.E);
     s.ctx.strokeStyle = P.gold; s.ctx.lineWidth = 3;
@@ -260,14 +260,14 @@ def('gb_hall_l5.png', 344, 282, (s, cx, cy) => {
     bannerOn(s, cx + 92, cy - 128, '#b8862e', '#8a6420');
 });
 
-// ═══════════ TRAINING GROUND — 3x3 open yard ═══════════
+// =========== TRAINING GROUND - 3x3 open yard ===========
 def('gb_training_l1.png', 230, 130, (s, cx, cy) => {
     dummy(s, cx - 40, cy - 12, 1.15);
     rackOn(s, cx + 44, cy - 4);
     s.px(cx - 78, cy + 2, 26, 3, P.sandD);
 });
 def('gb_training_l2.png', 238, 146, (s, cx, cy) => {
-    // wooden spar ring
+ // wooden spar ring
     s.ctx.strokeStyle = P.woodD; s.ctx.lineWidth = 3;
     s.ctx.beginPath(); s.ctx.ellipse(cx, cy - 14, 92, 34, 0, 0, Math.PI * 2); s.ctx.stroke();
     for (const a of [0.2, 0.65, 1.1, 1.55, 2.0, 2.45, 2.9, 3.35, 3.8, 4.25, 4.7, 5.15, 5.6, 6.05]) {
@@ -286,7 +286,7 @@ def('gb_training_l3.png', 244, 158, (s, cx, cy) => {
     }
     dummy(s, cx - 40, cy - 20, 1.2);
     dummy(s, cx + 30, cy - 6, 1.0);
-    // archery butt
+ // archery butt
     s.px(cx + 74, cy - 34, 3, 26, P.woodDD);
     s.ctx.fillStyle = P.thatch; s.ctx.beginPath(); s.ctx.arc(cx + 76, cy - 40, 11, 0, Math.PI * 2); s.ctx.fill();
     s.ctx.fillStyle = P.crimson; s.ctx.beginPath(); s.ctx.arc(cx + 76, cy - 40, 6, 0, Math.PI * 2); s.ctx.fill();
@@ -294,7 +294,7 @@ def('gb_training_l3.png', 244, 158, (s, cx, cy) => {
     rackOn(s, cx - 88, cy - 2);
 });
 def('gb_training_l4.png', 250, 172, (s, cx, cy) => {
-    // stone ring
+ // stone ring
     s.ctx.strokeStyle = P.stoneD; s.ctx.lineWidth = 5;
     s.ctx.beginPath(); s.ctx.ellipse(cx, cy - 16, 102, 39, 0, 0, Math.PI * 2); s.ctx.stroke();
     s.ctx.strokeStyle = P.stoneL; s.ctx.lineWidth = 1.6;
@@ -306,14 +306,14 @@ def('gb_training_l4.png', 250, 172, (s, cx, cy) => {
     rackOn(s, cx - 6, cy - 48);
 });
 def('gb_training_l5.png', 258, 186, (s, cx, cy) => {
-    // stone arena with inner sand floor
+ // stone arena with inner sand floor
     s.ctx.fillStyle = P.sand;
     s.ctx.beginPath(); s.ctx.ellipse(cx, cy - 16, 100, 38, 0, 0, Math.PI * 2); s.ctx.fill();
     s.ctx.strokeStyle = P.stoneD; s.ctx.lineWidth = 7;
     s.ctx.beginPath(); s.ctx.ellipse(cx, cy - 16, 106, 41, 0, 0, Math.PI * 2); s.ctx.stroke();
     s.ctx.strokeStyle = P.stoneL; s.ctx.lineWidth = 2;
     s.ctx.beginPath(); s.ctx.ellipse(cx, cy - 18, 106, 41, 0, 0, Math.PI * 2); s.ctx.stroke();
-    // tier seats hint (back arc)
+ // tier seats hint (back arc)
     s.ctx.strokeStyle = P.stone; s.ctx.lineWidth = 4;
     s.ctx.beginPath(); s.ctx.ellipse(cx, cy - 24, 112, 43, 0, Math.PI * 1.05, Math.PI * 1.95); s.ctx.stroke();
     dummy(s, cx - 46, cy - 24, 1.3);
@@ -324,9 +324,9 @@ def('gb_training_l5.png', 258, 186, (s, cx, cy) => {
     flagPole(s, cx - 132, cy - 8, 46, P.crimson, P.crimsonD);
 });
 
-// ═══════════ TREASURY — 2x2 (EW=64, NS=32) ═══════════
+// =========== TREASURY - 2x2 (EW=64, NS=32) ===========
 def('gb_treasury_l1.png', 150, 108, (s, cx, cy) => {
-    // great coin chest
+ // great coin chest
     s.px(cx - 30, cy - 26, 60, 26, P.woodD);
     s.px(cx - 32, cy - 34, 64, 10, P.wood);
     s.ctx.strokeStyle = P.gold; s.ctx.lineWidth = 2;
@@ -339,7 +339,7 @@ def('gb_treasury_l1.png', 150, 108, (s, cx, cy) => {
 def('gb_treasury_l2.png', 156, 124, (s, cx, cy) => {
     const p = prism(s, cx, cy, 2, 26, P.stoneL, P.stoneD, P.stone);
     roofX(s, cx, cy, 2, 26, 18, P.ironD, P.iron, P.ironL, 0.1);
-    // iron-banded door
+ // iron-banded door
     const m = mid(p.S, p.E);
     s.px(m[0] - 9, m[1] + 26, 18, 20, P.woodDD);
     s.px(m[0] - 9, m[1] + 30, 18, 2.4, P.ironL); s.px(m[0] - 9, m[1] + 38, 18, 2.4, P.ironL);
@@ -350,12 +350,12 @@ def('gb_treasury_l3.png', 162, 134, (s, cx, cy) => {
     const p = prism(s, cx, cy, 2, 32, P.stoneL, P.stoneD, P.stone);
     roofX(s, cx, cy, 2, 32, 20, P.roofRD, P.roofR, P.roofRL, 0.1);
     const m = mid(p.S, p.E);
-    // gold door
+ // gold door
     s.px(m[0] - 11, m[1] + 32, 22, 24, P.goldD);
     s.px(m[0] - 9, m[1] + 34, 18, 20, P.gold);
     s.px(m[0] - 2, m[1] + 42, 4, 4, P.woodDD);
     winOn(s, p.S, p.W, 32, 0.5, 0.55, 11, 9, '#3a2b1c');
-    // bars on window
+ // bars on window
     s.px(m[0] + 20, m[1] + 8, 1.6, 9, P.woodDD);
     goldPile(s, cx - 52, cy - 4, 0.8);
 });
@@ -369,13 +369,13 @@ def('gb_treasury_l4.png', 172, 146, (s, cx, cy) => {
     winOn(s, p.S, p.W, 38, 0.5, 0.55, 11, 10, '#3a2b1c');
     goldPile(s, cx - 56, cy - 4, 1.0);
     goldPile(s, cx + 58, cy - 8, 0.85);
-    // corner buttress
+ // corner buttress
     s.px(cx + 44, cy - 30, 5, 30, P.stone);
 });
 def('gb_treasury_l5.png', 184, 160, (s, cx, cy) => {
     const p = prism(s, cx, cy, 2, 44, P.stoneL, P.stoneDD, P.stoneD);
     roofX(s, cx, cy, 2, 44, 24, P.roofPD, P.roofP, P.roofPL, 0.1);
-    // gold dome finial
+ // gold dome finial
     s.ctx.fillStyle = P.gold;
     s.ctx.beginPath(); s.ctx.arc(cx, cy - 44 - 32 - 14, 6, 0, Math.PI * 2); s.ctx.fill();
     s.px(cx - 1.4, cy - 44 - 32 - 24, 2.8, 10, P.goldL);
@@ -391,7 +391,7 @@ def('gb_treasury_l5.png', 184, 160, (s, cx, cy) => {
     s.ctx.beginPath(); s.ctx.moveTo(cx + 40, cy - 18); s.ctx.lineTo(cx + 45, cy - 30); s.ctx.lineTo(cx + 50, cy - 18); s.ctx.closePath(); s.ctx.fill();
 });
 
-// ═══════════ MEMBER COTTAGE (small, 1-tile-ish) ═══════════
+// =========== MEMBER COTTAGE (small, 1-tile-ish) ===========
 def('gb_cottage.png', 104, 78, (s, cx, cy) => {
     const p = prism(s, cx, cy, 1.35, 16, P.plaster, P.plasterD, P.plaster);
     roofX(s, cx, cy, 1.35, 16, 13, P.thatchD, P.thatch, P.thatchL, 0.12);

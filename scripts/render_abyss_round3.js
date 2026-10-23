@@ -1,8 +1,8 @@
-// Render this round's abyss samples (owner 2026-10-09 08:43Z round):
-//  1) combat START — amalgamation enemy (MUTATED HOUND) + floor-number banner
-//  2) combat START — boss (INFECTED COLOSSUS) on a new hall, banner visible
-//  3) combat START — ELDER CHAOS on blood_chapel
-//  4) TURN variant — banner + turn pill coexist
+// Render this round's abyss samples (08:43Z round):
+// 1) combat START - amalgamation enemy (MUTATED HOUND) + floor-number banner
+// 2) combat START - boss (INFECTED COLOSSUS) on a new hall, banner visible
+// 3) combat START - ELDER CHAOS on blood_chapel
+// 4) TURN variant - banner + turn pill coexist
 // Run: node scripts/render_abyss_round3.js (writes scripts/render_out/abyss_r3/)
 const path = require('path');
 const fs = require('fs');
@@ -32,11 +32,11 @@ const mkState = (over) => Object.assign({
 }, over);
 
 (async () => {
-    // floors picked to land on specific halls via (floor % 15) C-locale order:
-    // pool sorted: blood_chapel, chained_cells, crystal_vault, dark_hall,
-    // drowned_crypt, drowned_vault, ember_depths, frost_reliquary,
-    // fungal_grotto, obsidian_throne, ossuary_hall, ruined_library,
-    // violet_sanctum, void_sanctum, web_lair
+ // floors picked to land on specific halls via (floor % 15) C-locale order:
+ // pool sorted: blood_chapel, chained_cells, crystal_vault, dark_hall,
+ // drowned_crypt, drowned_vault, ember_depths, frost_reliquary,
+ // fungal_grotto, obsidian_throne, ossuary_hall, ruined_library,
+ // violet_sanctum, void_sanctum, web_lair
     const samples = [
         { file: 'r3_combat_hound.png', floor: 10, enemy: ['MUTATED HOUND', 72], boss: false },
         { file: 'r3_boss_colossus.png', floor: 5, enemy: ['INFECTED COLOSSUS', 65], boss: true },
@@ -54,13 +54,13 @@ const mkState = (over) => Object.assign({
         if (r.success) fs.writeFileSync(path.join(OUT, s.file), r.buffer);
         console.log(s.file, r.success, r.success && r.buffer.length);
     }
-    // TURN phase on floor 3 (banner + TURN pill)
+ // TURN phase on floor 3 (banner + TURN pill)
     const st = mkState({ abyssFloor: 3, sessionKey: 'r3turn' });
     const start = await abyssScene.renderAbyssCombat(st, { phase: 'START', turnOrderStr: 'Mellow-San' });
     const rt = await abyssScene.renderAbyssCombat(st, { phase: 'TURN', turnInfo: { turnNumber: 2 }, turnOrderStr: 'Mellow-San' });
     if (rt.success) fs.writeFileSync(path.join(OUT, 'r3_turn.png'), rt.buffer);
     console.log('turn:', rt.success, rt.success && rt.buffer.length);
-    // floor card PNG (static fallback — quick sanity that §3 untouched)
+ // floor card PNG (static fallback - quick sanity that §3 untouched)
     const rf = await abyssScene.renderAbyssFloorCardPng({ floor: 7, tier: 'C', mult: 2.1, playerName: 'Mellow-San', playerClassId: 'ROGUE' });
     if (rf && rf.length) fs.writeFileSync(path.join(OUT, 'r3_floorcard.png'), rf);
     console.log('floorcard:', !!(rf && rf.length), rf && rf.length);

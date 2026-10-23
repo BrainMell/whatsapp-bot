@@ -1,26 +1,23 @@
 // ============================================
-// 🎨 UNIFIED SPRITE SYSTEM - single source of truth
+// UNIFIED SPRITE SYSTEM - single source of truth
 // ============================================
 // This is the ONE sprite pipeline for the entire RPG.
 // Every creature (summon, enemy, boss, companion, collectible)
 // resolves its sprite through this module.
-//
 // Pipeline:
-//   Creature Data → getSpritePath()/getOrFetchSprite() → UI Component → Displayed Sprite
-//
+// Creature Data → getSpritePath()/getOrFetchSprite() → UI Component → Displayed Sprite
 // Lookup priority:
-//   1. The game's OWN summon sprites (rpgasset/summons/sparklinlabs/) — one
-//      PNG per registry species (idle-export). Owner 2026-10-09: "WE
-//      LITERALLY HAVE OUR OWN SUMMON SPRITES" — these always win.
-//   2. Local Digimon cache (rpgasset/summons/digimon/) — legacy DB rows whose
-//      species id IS a Digimon name only
-//   3. Local Retromon (rpgasset/summons/retromon/) - case-insensitive
-//   4. Local SD summons (rpgasset/summons/) - case-insensitive
-//   5. Numeric species → retromon rotation
-//   6. On-demand fetch from digi-api.com (getOrFetchSprite only — and never
-//      for registry species: the 2026-10-09 species→Digimon map was REMOVED,
-//      summons render their own art again)
-//
+// 1. The game's OWN summon sprites (rpgasset/summons/sparklinlabs/) - one
+// PNG per registry species (idle-export). "WE
+// LITERALLY HAVE OUR OWN SUMMON SPRITES" - these always win.
+// 2. Local Digimon cache (rpgasset/summons/digimon/) - legacy DB rows whose
+// species id IS a Digimon name only
+// 3. Local Retromon (rpgasset/summons/retromon/) - case-insensitive
+// 4. Local SD summons (rpgasset/summons/) - case-insensitive
+// 5. Numeric species → retromon rotation
+// 6. On-demand fetch from digi-api.com (getOrFetchSprite only - and never
+// for registry species: the species→Digimon map was REMOVED,
+// summons render their own art again)
 // Case-insensitive matching means "Agumon.png", "agumon.png", "AGUMON.png"
 // all resolve correctly - fixes the retromon case-mismatch bug.
 
@@ -37,20 +34,19 @@ async function getJimp() {
 const CACHE_DIR = path.join(__dirname, '..', 'rpgasset', 'summons', 'digimon');
 const FALLBACK_DIR = path.join(__dirname, '..', 'rpgasset', 'summons');
 const RETROMON_DIR = path.join(__dirname, '..', 'rpgasset', 'summons', 'retromon');
-// the game's own summon art (one PNG per registry species — see lookup note)
+// the game's own summon art (one PNG per registry species - see lookup note)
 const SPARKLINLABS_DIR = path.join(__dirname, '..', 'rpgasset', 'summons', 'sparklinlabs');
 const IMG_BASE = 'https://digi-api.com/images/digimon/w';
 
-// Ensure cache directory exists
 fs.mkdirSync(CACHE_DIR, { recursive: true });
 
 // In-memory cache of loaded images (for node-canvas)
 const imageCache = new Map();
 
-// ─────────────────────────────────────────────
+// ---------------------------------------------
 // Case-insensitive directory index (built lazily, cached)
 // Fixes the bug where "Atrox.png" wouldn't match species id "atrox"
-// ─────────────────────────────────────────────
+// ---------------------------------------------
 const _dirIndexes = new Map(); // dir → Map(lowercaseFilename, actualFilename)
 
 function getDirIndex(dir) {
@@ -88,27 +84,26 @@ function findCaseInsensitive(dir, basename) {
   return null;
 }
 
-// ─────────────────────────────────────────────
+// ---------------------------------------------
 // Species name normalization
-// ─────────────────────────────────────────────
+// ---------------------------------------------
 // Common typos / spelling drift → canonical species id mapping
 const SPECIES_ALIASES = {
   charmordillo: 'charmadillo',  // registry typo (charmordillo) → file (Charmadillo.png)
   charmadillo: 'charmadillo',
 };
 
-// ─────────────────────────────────────────────
+// ---------------------------------------------
 // Digimon API name overrides
-// ─────────────────────────────────────────────
+// ---------------------------------------------
 // The digi-api.com image URLs follow specific rules:
-//   1. Spaces in names become underscores: "Metal Greymon" → "Metal_Greymon.png"
-//   2. Some Digimon use Japanese names: Gallantmon → Dukemon, Omnimon → Omegamon
-//   3. Some registry entries have typos that need correction
-//
+// 1. Spaces in names become underscores: "Metal Greymon" → "Metal_Greymon.png"
+// 2. Some Digimon use Japanese names: Gallantmon → Dukemon, Omnimon → Omegamon
+// 3. Some registry entries have typos that need correction
 // This map provides the EXACT API name to use for each species id.
 // All entries below have been VERIFIED via HTTP 200 from the API.
 const DIGIMON_API_NAME_OVERRIDES = {
-  // Japanese-name Digimon (English name → Japanese API name)
+ // Japanese-name Digimon (English name → Japanese API name)
   beelzemon: 'Beelzebumon',
   myotismon: 'Vamdemon',
   machinedramon: 'Mugendramon',
@@ -119,7 +114,7 @@ const DIGIMON_API_NAME_OVERRIDES = {
   susanoomon: 'Susanoomon',
   craniummon: 'Craniummon',            // confirmed via API
 
-  // Multi-word names: spaces → underscores (confirmed via API)
+ // Multi-word names: spaces → underscores (confirmed via API)
   ladydevimon: 'Lady_Devimon',
   skullgreymon: 'Skull_Greymon',
   wargreymon: 'War_Greymon',
@@ -131,7 +126,7 @@ const DIGIMON_API_NAME_OVERRIDES = {
   marinedevimon: 'Marine_Devimon',
   megakabuterimon: 'Mega_Kabuterimon',  // may not exist - will fall through
 
-  // Registry typo corrections (species id has typo, API name is correct)
+ // Registry typo corrections (species id has typo, API name is correct)
   cerberusmon: 'Cerberumon',           // registry: cerberusmon → API: Cerberumon
   ikakkumon: 'Ikkakumon',              // registry: ikakkumon (double K) → API: Ikkakumon
   magnaamon: 'Magnamon',               // registry: magnaamon (double A) → API: Magnamon
@@ -139,8 +134,8 @@ const DIGIMON_API_NAME_OVERRIDES = {
   sukuyomon: 'Sakuyamon',              // registry: sukuyomon → API: Sakuyamon
   wizardmon: 'Wizarmon',               // Japanese spelling
 
-  // Confirmed present on API (single-word names, no override needed but
-  // listed here so we skip the search step and fetch directly)
+ // Confirmed present on API (single-word names, no override needed but
+ // listed here so we skip the search step and fetch directly)
   bakemon: 'Bakemon',
   mummymon: 'Mummymon',
   leomon: 'Leomon',
@@ -157,13 +152,13 @@ const DIGIMON_API_NAME_OVERRIDES = {
   dukemon: 'Dukemon',
 };
 
-// ─────────────────────────────────────────────
-// (2026-10-09, owner: "NO DIGIMON — WE LITERALLY HAVE OUR OWN SUMMON
+// ---------------------------------------------
+// ("NO DIGIMON - WE LITERALLY HAVE OUR OWN SUMMON
 // SPRITES") The species→Digimon art map that briefly forced Digimon faces
 // onto every registry species is REMOVED. Registry species resolve their own
 // sparklinlabs PNG (priority 0 below); the digi-api fetch stays only for
 // legacy DB rows whose species id is itself a Digimon name.
-// ─────────────────────────────────────────────
+// ---------------------------------------------
 
 function getApiName(species) {
   const safeName = normalizeSpeciesName(species);
@@ -176,9 +171,9 @@ function normalizeSpeciesName(species) {
   return SPECIES_ALIASES[s] || s;
 }
 
-// ─────────────────────────────────────────────
+// ---------------------------------------------
 // Public API
-// ─────────────────────────────────────────────
+// ---------------------------------------------
 
 /**
  * Get the local file path for a summon sprite.
@@ -191,23 +186,23 @@ function getSpritePath(species) {
   if (!species) return null;
   const safeName = normalizeSpeciesName(species);
 
-  // 0. The game's OWN summon sprites — always win (owner directive)
+ // 0. The game's OWN summon sprites - always win (owner directive)
   let resolved = findCaseInsensitive(SPARKLINLABS_DIR, `${safeName}.png`);
   if (resolved) return resolved;
 
-  // 1. Check Digimon cache (legacy species ids only — case-insensitive)
+ // 1. Check Digimon cache (legacy species ids only - case-insensitive)
   resolved = findCaseInsensitive(CACHE_DIR, `${safeName}.png`);
   if (resolved) return resolved;
 
-  // 2. Check Retromon folder (case-insensitive)
+ // 2. Check Retromon folder (case-insensitive)
   resolved = findCaseInsensitive(RETROMON_DIR, `${safeName}.png`);
   if (resolved) return resolved;
 
-  // 3. Check SD summons folder (case-insensitive)
+ // 3. Check SD summons folder (case-insensitive)
   resolved = findCaseInsensitive(FALLBACK_DIR, `${safeName}.png`);
   if (resolved) return resolved;
 
-  // 4. Try Retromon by index (if species is numeric)
+ // 4. Try Retromon by index (if species is numeric)
   if (/^\d+$/.test(safeName)) {
     const retromonFiles = fs.existsSync(RETROMON_DIR) ? fs.readdirSync(RETROMON_DIR).filter(f => f.endsWith('.png')) : [];
     if (retromonFiles.length > 0) {
@@ -231,9 +226,9 @@ async function fetchAndCache(digimonName) {
   const safeName = normalizeSpeciesName(digimonName);
   const outPath = path.join(CACHE_DIR, `${safeName}.png`);
 
-  // Already cached (case-insensitive check) — and actually a PNG (an LFS
-  // pointer stub from a fresh clone decodes as text; treat as a miss so the
-  // fetch below heals it)
+ // Already cached (case-insensitive check) - and actually a PNG (an LFS
+ // pointer stub from a fresh clone decodes as text; treat as a miss so the
+ // fetch below heals it)
   const existing = findCaseInsensitive(CACHE_DIR, `${safeName}.png`);
   if (existing) {
     try {
@@ -245,12 +240,11 @@ async function fetchAndCache(digimonName) {
     } catch (e) {}
   }
 
-  // Try several name variants - the Digimon API image URLs follow these rules:
-  //   1. Spaces in names become UNDERSCORES: "Metal Greymon" → "Metal_Greymon.png"
-  //   2. Some Digimon use Japanese names: Gallantmon → Dukemon, Omnimon → Omegamon
-  //   3. Some names are concatenated (no separator): "Agumon" → "Agumon.png"
-  //
-  // We try in order: original, underscore-separated, concatenated, lowercase.
+ // Try several name variants - the Digimon API image URLs follow these rules:
+ // 1. Spaces in names become UNDERSCORES: "Metal Greymon" → "Metal_Greymon.png"
+ // 2. Some Digimon use Japanese names: Gallantmon → Dukemon, Omnimon → Omegamon
+ // 3. Some names are concatenated (no separator): "Agumon" → "Agumon.png"
+ // We try in order: original, underscore-separated, concatenated, lowercase.
   const variants = [
     digimonName,                             // "Metal Greymon" (original)
     digimonName.replace(/\s+/g, '_'),        // "Metal_Greymon" (underscore)
@@ -258,7 +252,7 @@ async function fetchAndCache(digimonName) {
     safeName,                                // "metal_greymon" (species id)
     safeName.replace(/_/g, ''),              // "metalgreymon" (concatenated id)
   ];
-  // Deduplicate
+ // Deduplicate
   const uniqueVariants = [...new Set(variants)];
 
   for (const variant of uniqueVariants) {
@@ -271,7 +265,7 @@ async function fetchAndCache(digimonName) {
       console.log(`[SummonSprites] Cached: ${digimonName} (as ${variant}) → ${safeName}.png`);
       return outPath;
     } catch (e) {
-      // Try next variant
+ // Try next variant
       continue;
     }
   }
@@ -293,17 +287,17 @@ function downloadImage(url) {
 
 async function removeWhiteBackground(imageBuffer) {
   const jimpModule = await getJimp();
-  // Jimp v1 API: require('jimp').Jimp is the class
+ // Jimp v1 API: require('jimp').Jimp is the class
   const Jimp = jimpModule.Jimp || jimpModule;
   const image = await Jimp.read(imageBuffer);
   const { width, height } = image.bitmap;
 
-  // Border flood-fill white removal (2026-10-09 upgrade): the old whole-image
-  // threshold nuked near-white pixels EVERYWHERE (claws, teeth, eye whites got
-  // holes) yet still left a 1px halo where anti-aliased edges met the old
-  // background. Now: near-white pixels CONNECTED to the image border become
-  // transparent (full for very white, partial for edge anti-aliasing), and
-  // interior whites are preserved.
+ // Border flood-fill white removal (upgrade): the old whole-image
+ // threshold nuked near-white pixels EVERYWHERE (claws, teeth, eye whites got
+ // holes) yet still left a 1px halo where anti-aliased edges met the old
+ // background. Now: near-white pixels CONNECTED to the image border become
+ // transparent (full for very white, partial for edge anti-aliasing), and
+ // interior whites are preserved.
   const data = image.bitmap.data; // Uint8ClampedArray [R,G,B,A, ...]
   const isNearWhite = (i) => data[i + 3] === 0 || (data[i] > 228 && data[i + 1] > 228 && data[i + 2] > 228);
   const visited = new Uint8Array(width * height);
@@ -325,7 +319,7 @@ async function removeWhiteBackground(imageBuffer) {
       if (data[i] > 240 && data[i + 1] > 240 && data[i + 2] > 240) {
         data[i + 3] = 0;                                    // very white → gone
       } else {
-        // edge anti-aliasing → partial transparency
+ // edge anti-aliasing → partial transparency
         const alpha = Math.floor(((255 - data[i]) + (255 - data[i + 1]) + (255 - data[i + 2])) / 3 * 2.55);
         data[i + 3] = Math.min(data[i + 3], alpha);
       }
@@ -334,7 +328,7 @@ async function removeWhiteBackground(imageBuffer) {
     pushIf(x + 1, y); pushIf(x - 1, y); pushIf(x, y + 1); pushIf(x, y - 1);
   }
 
-  // Jimp v1: getBuffer with MIME string
+ // Jimp v1: getBuffer with MIME string
   return await image.getBuffer('image/png');
 }
 
@@ -349,11 +343,11 @@ async function removeWhiteBackground(imageBuffer) {
  * @returns {Promise<string|null>}
  */
 async function getOrFetchSprite(species, digimonName) {
-  // Check local first
+ // Check local first
   const local = getSpritePath(species);
   if (local) {
-    // LFS-pointer guard: a tracked stub (repo-only condition) decodes as text,
-    // not pixels — treat it as a miss so the mapped fetch below heals it.
+ // LFS-pointer guard: a tracked stub (repo-only condition) decodes as text,
+ // not pixels - treat it as a miss so the mapped fetch below heals it.
     try {
       const fd = fs.openSync(local, 'r');
       const head = Buffer.alloc(4);
@@ -363,9 +357,9 @@ async function getOrFetchSprite(species, digimonName) {
     } catch (e) {}
   }
 
-  // Determine fetch name: explicit override > API-name map > species name.
-  // NO species→Digimon mapping (removed 2026-10-09 — registry species render
-  // their own sparklinlabs art and never reach this fetch).
+ // Determine fetch name: explicit override > API-name map > species name.
+ // NO species→Digimon mapping (removed - registry species render
+ // their own sparklinlabs art and never reach this fetch).
   const fetchName = digimonName || getApiName(species) || (species || '').replace(/_/g, ' ');
   if (fetchName) {
     const fetched = await fetchAndCache(fetchName);
@@ -410,32 +404,28 @@ async function batchFetch(list, opts = {}) {
   return { ok, failed };
 }
 
-// ─────────────────────────────────────────────
+// ---------------------------------------------
 // Startup warm-up: fetch all missing sprites in the background
-// ─────────────────────────────────────────────
+// ---------------------------------------------
 // Called once on bot boot. Iterates the summon registry, finds all species
 // with no local sprite, and fetches them from the Digimon API in parallel.
 // This ensures sprites are cached BEFORE any user views the codex/roster/
 // profile card, so the first render is instant.
-//
 // Runs with a 30s delay after boot (don't compete with MongoDB/card loads).
 // Logs progress but never throws - failures are silently skipped (the
 // emoji fallback handles missing sprites gracefully).
 let _warmupStarted = false;
 
-// 💡 KNOWN_MISSING: species that do NOT exist on the Digimon API (digi-api.com)
+// KNOWN_MISSING: species that do NOT exist on the Digimon API (digi-api.com)
 // under any name variant, AND have no local sprite. Fetching them is guaranteed
 // to fail every restart - pure log spam and wasted HTTP requests.
-//
 // These species use the emoji fallback at render time (summonSprites returns
 // null → renderer draws the species emoji icon from the registry).
-//
-// Updated 2026-08-03 after verifying all 27 against the API. If you add a new
+// Updated after verifying all 27 against the API. If you add a new
 // species and it doesn't have a sprite, either:
-//   (a) add a local PNG to core/rpgasset/summons/ and it'll be found by getSpritePath, OR
-//   (b) add the species ID to this set if no sprite exists anywhere.
-//
-// 💡 2026-08-15: Added 9 sparklinlabs custom species. These DO have sprites on
+// (a) add a local PNG to core/rpgasset/summons/ and it'll be found by getSpritePath, OR
+// (b) add the species ID to this set if no sprite exists anywhere.
+// Added 9 sparklinlabs custom species. These DO have sprites on
 // the Go image service (assets/rpgasset/summons/sparklinlabs/<species>_idle.gif)
 // and render correctly in combat via GetSummonSpritePath() in sprites.go. But
 // the JS-side renderers (profile card, roster, codex) use node-canvas which
@@ -445,8 +435,8 @@ let _warmupStarted = false;
 // fetch" log lines per boot). To enable JS-side rendering later, add PNG
 // exports to core/rpgasset/summons/sparklinlabs/ and remove from this set.
 const KNOWN_MISSING = new Set([
-  // Digimon that don't exist on digi-api.com under any name variant
-  // Custom RPG species - no Digimon API equivalent, no local sprite
+ // Digimon that don't exist on digi-api.com under any name variant
+ // Custom RPG species - no Digimon API equivalent, no local sprite
   'stoneguard',
   'emberdrake',
   'mistwisp',
@@ -459,16 +449,16 @@ const KNOWN_MISSING = new Set([
   'abyssal_phantom',
   'blossom_sylph',
   'world_tree_spirit',
-  // (2026-10-09) boglurk/emberwick/fireguard/frostpeep/lumenmoth/plaguefang/
-  // skitterswarm/starnail/tidalmaw REMOVED from this set — they ship as local
-  // sparklinlabs PNGs now and warm up from disk like any other species.
+ // boglurk/emberwick/fireguard/frostpeep/lumenmoth/plaguefang/
+ // skitterswarm/starnail/tidalmaw REMOVED from this set - they ship as local
+ // sparklinlabs PNGs now and warm up from disk like any other species.
 ]);
 
 async function warmupCache(registryModule) {
   if (_warmupStarted) return;
   _warmupStarted = true;
 
-  // Delay 30s to let MongoDB/card loads finish first
+ // Delay 30s to let MongoDB/card loads finish first
   await new Promise(r => setTimeout(r, 30000));
 
   try {
@@ -517,6 +507,6 @@ module.exports = {
   CACHE_DIR,
   SPARKLINLABS_DIR,
   imageCache,
-  // Exposed for testing / debugging
+ // Exposed for testing / debugging
   _internal: { normalizeSpeciesName, findCaseInsensitive, refreshDirIndex, SPECIES_ALIASES }
 };

@@ -1,7 +1,7 @@
-# Guild War Overhaul — Final Report
+# Guild War Overhaul - Final Report
 
-Overnight autonomous run, 2026-10-02 → 2026-10-03.
-Branch: **`guild-war-ruins`** (off `audit/fix-pass-1`). NOT deployed — production still runs `audit/fix-pass-1` @ `cfd2ca1cb`, verified online and healthy after all testing.
+Overnight autonomous run, → .
+Branch: **`guild-war-ruins`** (off `audit/fix-pass-1`). NOT deployed - production still runs `audit/fix-pass-1` @ `cfd2ca1cb`, verified online and healthy after all testing.
 
 ---
 
@@ -13,7 +13,7 @@ Branch: **`guild-war-ruins`** (off `audit/fix-pass-1`). NOT deployed — product
 | `Guild.warPoints`/`warPointsWeek` + `awardWarPoints` + 6 call sites (pvp/raid/abyss/bounty/boss/dungeon) | **REMOVED** | Redundant parallel scoring. Those sources keep their existing guild-XP calls. |
 | Donation→XP and item-sale→XP conversions | **REMOVED** | "Guild Points are earned, not bought." Donations/sales still fund the guild bank (support). |
 | Guild Bank interest + auto-loan-penalty jobs | **REMOVED** | Spec: no interest/penalty. |
-| Guild core (rosters/roles/invites/level curve `addGuildPoints`) | **KEPT** | Untouched — rosters, levels and perks are exactly as the reset left them. |
+| Guild core (rosters/roles/invites/level curve `addGuildPoints`) | **KEPT** | Untouched - rosters, levels and perks are exactly as the reset left them. |
 | PvE combat (`guildAdventure`), chat PvP (`pvpSystem`), Go render service, cosmology | **KEPT** | Reused verbatim; combat rooms run through the real engine (no parallel system). |
 | `encounterFramework` + `worldAlignment` (from yesterday) | **KEPT/EXTENDED** | Ruins DM actions ride the same DM entry; alignment window now launches real alignment wars; the `alignment_trial` placeholder was removed (no remnants). |
 | `.j guild loan` | **MODIFIED** | New flow: `request <amt>` → GuildLoan collection → GM/officer `approve|reject @player` → `repay <amt>`. One active loan per player, 10% bank cap, leaving with a loan = wallet deduct or `User.debt` conversion. |
@@ -31,40 +31,40 @@ Branch: **`guild-war-ruins`** (off `audit/fix-pass-1`). NOT deployed — product
 - **Feed**: tiered (minor digest / normal rate-capped / major image cards), hard 10-msg/5min cap, 10-min scoreboards, final summary.
 - **Visibility perks**: guild-level ladder L1→L10 (quadrant pings, mate positions, recent-enemy detection, radius-2 vision).
 - **Alignment**: auto-launch on the cosmology alignment window (96h cadence, KV-claimed once), official-notice cards + paced DM registration wave; manual `.j gw start alignment` gives a group the feed HQ.
-- **Renderers**: Royal Decree ruins map sheet (fog view, no banner/rank by construction — the "Thud"/red-section spec items are satisfied structurally; "Thud" does not exist in this repo — see decisions doc) + Guild Association notice cards.
+- **Renderers**: Royal Decree ruins map sheet (fog view, no banner/rank by construction - the "Thud"/red-section spec items are satisfied structurally; "Thud" does not exist in this repo - see decisions doc) + Guild Association notice cards.
 - **Commands**: `.j gw start|start alignment|join|forcestart|status|end|abort|help` (mod-gated start) + DM grammar (`move/look/map/relics/handin/use/challenge/accept/flee/share map/status/quit/rejoin`).
 
 ## 3. Simulation results
 
 **Correctness suite `scripts/gw_sim.js`: 558/558 checks green** (re-run green after every fix round; final run after all perf work):
-- S1 mapgen: connectivity (BFS from every spawn), spawn spacing, size scaling, single core, empty ratio 0.25–0.55 — 12 seeds × 4 sizes × …
+- S1 mapgen: connectivity (BFS from every spawn), spawn spacing, size scaling, single core, empty ratio 0.25-0.55 - 12 seeds × 4 sizes × …
 - S2 lifecycle: create→register(8)→start→move→fog growth→puzzle solve→hand-in→map render→hard-end→rewards→archive.
-- S3 race: 6 concurrent clears of one room → **exactly 1 winner** (this test FOUND a real atomicity bug — see §5).
+- S3 race: 6 concurrent clears of one room → **exactly 1 winner** (this test FOUND a real atomicity bug - see §5).
 - S4 pvp: steal cap honored (2), non-stealable kept, loser retreat, decay ledger 25/12/6/3/0.
 - S5 loans: request/cap-reject/non-GM-reject/GM-approve/partial+full repay.
 - S6 feed: hard cap respected (4 sent of 83 queued), minors digested.
 - S7 balance: 30 seeded events, avg guild spread 0.07 (map-locality only).
 - S8 recovery: memory-wipe recovery, registration auto-start, low-attendance abort.
-- Test DB: `gwtest` (same Atlas cluster, separate database) — **production collections never touched**.
+- Test DB: `gwtest` (same Atlas cluster, separate database) - **production collections never touched**.
 
-**Load suite `scripts/gw_load.js`** (mock-sock real modules, all-simultaneous flood — worst possible timing):
+**Load suite `scripts/gw_load.js`** (mock-sock real modules, all-simultaneous flood - worst possible timing):
 
 | Round | Players | Rooms | Moves | Failures | p50 | p95 | p99 | loop-lag max | RSS |
 |---|---|---|---|---|---|---|---|---|---|
 | L1 | 40 | 324 | 200 | **0** | 2.8s | 7.2s | 10.1s | 0.9s | 109MB |
 | L2 | 100 | 841 | 500 | **0** | 12.2s | 20.9s | 27.2s | 3.8s | 150MB |
 | L3 align | 150 | 1849 | 750 | **0** | 47.2s | 75.5s | 86.7s | ~18s | 186MB |
-| L4 dual | 2×50 | — | 100 | **0** | 46.7s first wave | — | — | — | 192MB |
+| L4 dual | 2×50 | - | 100 | **0** | 46.7s first wave | - | - | - | 192MB |
 
 Before/after (perf round): L2 move p95 **44.4s → 20.9s**, loop-stall **5.2s → sub-4s (GC residue)**, dbOps/action ~3.2.
-Note these are flood numbers — every player acting on the same second; real play is far sparser. Production bot verified healthy throughout (pm2 online, RAM 473/952MB).
+Note these are flood numbers - every player acting on the same second; real play is far sparser. Production bot verified healthy throughout (pm2 online, RAM 473/952MB).
 
 ## 4. Visual checks (rendered AND inspected with vision)
 
 Rendered via `scripts/gw_visual.js` (copies in `/tmp/gwtest/scripts/render_out/` on Box 1, downloaded to the workspace):
-- **Ruins map sheets** — small 9², medium 18², large 29², alignment 43²: Royal Decree parchment/frame/title, per-player fog (undiscovered = faint dots), type glyphs, mate/enemy markers, you-marker, legend, score line. **No banner, no rank plate** — spec satisfied.
-- **Guild Association notice cards** — normal + alignment: decree kicker, Cinzel Deco title with tracking fix, IM Fell body, wax seal, "Let all guilds take heed".
-- Fixes made after looking: glyph set replaced with the DejaVu-verified whitelist (emoji were tofu — the card-system §6 rule), font path depth (nested module resolved the wrong rpgasset dir), title tracking.
+- **Ruins map sheets** - small 9², medium 18², large 29², alignment 43²: Royal Decree parchment/frame/title, per-player fog (undiscovered = faint dots), type glyphs, mate/enemy markers, you-marker, legend, score line. **No banner, no rank plate** - spec satisfied.
+- **Guild Association notice cards** - normal + alignment: decree kicker, Cinzel Deco title with tracking fix, IM Fell body, wax seal, "Let all guilds take heed".
+- Fixes made after looking: glyph set replaced with the DejaVu-verified whitelist (emoji were tofu - the card-system §6 rule), font path depth (nested module resolved the wrong rpgasset dir), title tracking.
 
 ## 5. Failures found by the sims and fixed
 
@@ -85,33 +85,33 @@ Rendered via `scripts/gw_visual.js` (copies in `/tmp/gwtest/scripts/render_out/`
 
 ## 7. Known limitations / what I'd do next
 
-- **Alignment-extreme scale** (150 players all moving the same second, 1849 rooms): correct but slow (p95 ~75s, GC stalls ~10-20s) on the 2-core 1GB box. Normal scale (≤100) is comfortable. Structural fix if you want faster extremes: chunked room storage (one doc per region) — deliberately not rushed overnight.
+- **Alignment-extreme scale** (150 players all moving the same second, 1849 rooms): correct but slow (p95 ~75s, GC stalls ~10-20s) on the 2-core 1GB box. Normal scale (≤100) is comfortable. Structural fix if you want faster extremes: chunked room storage (one doc per region) - deliberately not rushed overnight.
 - Feed major-cards reuse the notice renderer; a dedicated WORLD-EVENT card layout could be nicer.
 - Ruins duels render with the standard combat card (Go side); a bespoke DUEL-RUINS card is a Go-repo change (out of scope overnight).
-- The sim/load suites ran against `gwtest` on the same Atlas cluster — drop that database whenever you like.
-- Sandbox JIDs (AdminSandbox `sandbox_`) were not wired into event joins — tester-mode integration is a small follow-up.
+- The sim/load suites ran against `gwtest` on the same Atlas cluster - drop that database whenever you like.
+- Sandbox JIDs (AdminSandbox `sandbox_`) were not wired into event joins - tester-mode integration is a small follow-up.
 
 ## 8. Morning decisions for you
 
 1. **Deploy?** The branch is push-tested and sim-green but has NEVER run in production. Suggested: merge `guild-war-ruins` → `audit/fix-pass-1` (relay deploys + pm2 restarts), then start a real war with `.j gw start` from a group.
-2. **Config pass**: all numbers live in `core/rpg/guildWar/config.js` — durations, GP values, caps, relic weights. Tell me anything to retune.
+2. **Config pass**: all numbers live in `core/rpg/guildWar/config.js` - durations, GP values, caps, relic weights. Tell me anything to retune.
 3. **Alignment cadence**: currently the 96h cosmology window auto-launches a registration phase. Want it quieter (manual-only) or keep auto?
-4. **"Thud"**: if it really is a Go-side element you want removed from OTHER encounter types, point me at which card — the Go repo isn't in this workspace.
+4. **"Thud"**: if it really is a Go-side element you want removed from OTHER encounter types, point me at which card - the Go repo isn't in this workspace.
 
 
-## 5. 2026-10-03 Experience Overhaul (phases 1-3 applied)
+## 5. Experience Overhaul (phases 1-3 applied)
 
-Owner directive: make the war feel ALIVE — "I am physically inside the
+Owner directive: make the war feel ALIVE - "I am physically inside the
 Ruins", not "the bot tells me a story about the Ruins" (see
 `guild-war-presentation-overhaul.md`). All three phases shipped in
 commit `guild-war overhaul: all 3 phases`.
 
-**Phase 1 — mechanics come alive (verified §15 defects, all fixed):**
+**Phase 1 - mechanics come alive (verified §15 defects, all fixed):**
 - Combat settlement hook un-shadowed (`state` → `session` in
   `guildWar/index.js`): room clears, GP, relics, lives, defeat respawn and
-  the victory nav card actually execute now — every victory/defeat used to
+  the victory nav card actually execute now - every victory/defeat used to
   throw `state.getEvent is not a function` and vanish into a catch.
-- GP awards are atomic (`$inc` + `$min` cap clamp) — back-to-back awards
+- GP awards are atomic (`$inc` + `$min` cap clamp) - back-to-back awards
   (core breach fires three) no longer lose GP to last-write-wins.
 - `ring` (RoomSchema) + `lastMoveAt` (PlayerSchema) persist: enemy/ring
   scaling, relic luck, puzzle size, RING UI and the 6s move cooldown work.
@@ -120,19 +120,19 @@ commit `guild-war overhaul: all 3 phases`.
   and consumes one fight per battle. Ward kinds restricted to what the
   engine reads (atk/def/shield).
 - Ruins damage is REAL: puzzle-fail shock, hazard hits and anomaly
-  hp_drain write the player's persistent HP (floor 1 — only combat takes
+  hp_drain write the player's persistent HP (floor 1 - only combat takes
   lives). Captions now say so.
 - PvP protection is two-way: a protected player cannot be challenged.
 - PvP challenge windows persist in the event doc (`pvpChallenges[]`):
   cross-instance accept via atomic claim, tick-pruned timeouts. The
   per-process Map is a legacy mirror only.
 
-**Phase 2 — the GC live feed actually works:**
+**Phase 2 - the GC live feed actually works:**
 - The feed queue lives in the event doc (`feedQueue[]`): atomic
-  claim-and-clear flush — any of the 3 instances can dispatch any queue,
+  claim-and-clear flush - any of the 3 instances can dispatch any queue,
   restarts lose nothing, duplicates are impossible per claim.
 - Hostless (organic alignment) wars route to each bot's RPG-friendly GCs
-  (`gw rpg on`) — previously `hostGroupId: null` wiped the queue every
+  (`gw rpg on`) - previously `hostGroupId: null` wiped the queue every
   flush and the entire organic-war feed was dead by construction.
 - Auto-start (registration expiry) now announces "the war has begun" and
   DMs the start cards; time-expiry end announces the result. Both were
@@ -143,10 +143,10 @@ commit `guild-war overhaul: all 3 phases`.
 - 20s fast flush cadence (in addition to the 60s sweeper) + dispose of
   feed state once a war ends.
 
-**Phase 3 — presentation (image discipline + auto-entry):**
+**Phase 3 - presentation (image discipline + auto-entry):**
 - Deployment DM = start card, then the champion's character standing in
   the spawn scene, then the map UNDERNEATH with YOU ARE HERE (§3 of the
-  MD). No forced `look` — the world opens by itself.
+  MD). No forced `look` - the world opens by itself.
 - Ordinary empty rooms = ONE message (the map, situation as its caption).
   The QUIET HALL parchment is retired; type cards render only when they
   carry payload-specific body/hints; puzzle boards still ride last.
@@ -154,9 +154,9 @@ commit `guild-war overhaul: all 3 phases`.
 - Map YOU-marker upgraded: double pulse-ring + labeled triangle that
   survives zoom-out on 60×60 alignment sheets.
 - Riddle bank: replaced the "map"-answer riddle (the answer collided with
-  the `map` command — its solve path was unreachable).
+  the `map` command - its solve path was unreachable).
 
 **QA:** `scripts/gw_sim.js` 558/558 green (three full runs; two earlier
-failures were a real find — the riddle/command collision — plus a test
+failures were a real find - the riddle/command collision - plus a test
 race from a duplicated sim process). `scripts/gw_visual.js` renders all
 maps incl. the new YOU-marker. Docs: this section + decisions log.

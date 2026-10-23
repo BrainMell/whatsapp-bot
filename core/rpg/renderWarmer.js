@@ -1,26 +1,23 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-//  renderWarmer — kills the post-deploy cold-bake stall on .j base / .j guild
-//
-//  Owner 2026-10-20 02:50Z, right after the 47-k8b revert deploy: "the .j base
-//  and .j guild is taking a while to load up". Measured on box hw (probe):
-//  cold = 12.7s (base) / 5.5s (guild) — 20-frame bake + ffmpeg; warm = instant.
-//  mediaCache CODE_VER deliberately changes on EVERY deploy (stale-art fix,
-//  2026-10-16 incident), which invalidates every cached render at once — so
-//  the first view of every base/guild after each deploy eats the full bake.
-//
-//  The fix: renderers journal the state+opts of every successful bake INSIDE
-//  the cache meta (mediaCache `j` field — lives/dies with its entry, so no
-//  unbounded growth). ~45s after boot this module replays the newest N
-//  journals through the normal render path: disk cache misses under the new
-//  CODE_VER, re-bakes into it, and by the time players view, they get instant
-//  disk hits. Nothing is sent to anyone — purely background cache seeding.
-//
-//  Bounds: newest-first, capped per kind (20 base / 30 guild — guild bakes are
-//  cheaper), 500ms gaps, 8-minute hard deadline, once per process. A journal
-//  that fails to replay (schema drift, missing assets) has its meta dropped so
-//  dead entries can't haunt every future deploy. Kill switch: RENDER_WARMER=off.
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// renderWarmer - kills the post-deploy cold-bake stall on .j base / .j guild
+// 02:50Z, right after the revert deploy: "the .j base
+// and .j guild is taking a while to load up". Measured on box hw (probe):
+// cold = 12.7s (base) / 5.5s (guild) - 20-frame bake + ffmpeg; warm = instant.
+// mediaCache CODE_VER deliberately changes on EVERY deploy (stale-art fix,
+// incident), which invalidates every cached render at once - so
+// the first view of every base/guild after each deploy eats the full bake.
+// The fix: renderers journal the state+opts of every successful bake INSIDE
+// the cache meta (mediaCache `j` field - lives/dies with its entry, so no
+// unbounded growth). ~45s after boot this module replays the newest N
+// journals through the normal render path: disk cache misses under the new
+// CODE_VER, re-bakes into it, and by the time players view, they get instant
+// disk hits. Nothing is sent to anyone - purely background cache seeding.
+// Bounds: newest-first, capped per kind (20 base / 30 guild - guild bakes are
+// cheaper), 500ms gaps, 8-minute hard deadline, once per process. A journal
+// that fails to replay (schema drift, missing assets) has its meta dropped so
+// dead entries can't haunt every future deploy. Kill switch: RENDER_WARMER=off.
+// ===========================================================================
 
 const fs = require('fs');
 const mediaCache = require('./mediaCache');
@@ -61,9 +58,9 @@ async function warmOnce() {
             try {
                 const out = await k.render(e.j);
                 n++; baked++;
-                // success → the journal now lives in the current-CODE_VER meta (mediaCache
-                // carries it forward on every bake), so the old meta is a dead duplicate
-                // that would otherwise be re-listed as stale on EVERY future boot. Drop it.
+ // success → the journal now lives in the current-CODE_VER meta (mediaCache
+ // carries it forward on every bake), so the old meta is a dead duplicate
+ // that would otherwise be re-listed as stale on EVERY future boot. Drop it.
                 dropOld(e);
             } catch (err) {
                 dead++;
@@ -80,7 +77,7 @@ async function warmOnce() {
 
 function schedule() {
     if (process.env.QA_MODE || process.env.RENDER_WARMER === 'off') return;
-    // 45s delay: let the bot finish booting + first message handling before any bake CPU
+ // 45s delay: let the bot finish booting + first message handling before any bake CPU
     setTimeout(() => warmOnce().catch((e) => console.log('[renderWarmer] failed: ' + e.message)), 45000).unref();
 }
 

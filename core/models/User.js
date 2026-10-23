@@ -2,15 +2,15 @@ const mongoose = require('mongoose');
 
 const UserSchema = new mongoose.Schema({
   userId: { type: String, required: true, unique: true },
-  phoneHash: { type: String, default: null, index: true }, // 💡 Phase 6: alt detection
+  phoneHash: { type: String, default: null, index: true }, // Phase 6: alt detection
   
-  // Basic Econ
+ // Basic Econ
   wallet: { type: Number, default: 1000 },
   bank: { type: Number, default: 0 },
   registered: { type: Boolean, default: false },
   nickname: { type: String, default: 'Adventurer' },
 
-  // Timers
+ // Timers
   lastDaily: { type: Number, default: 0 },
   lastRob: { type: Number, default: 0 },
   jailUntil: { type: Number, default: 0 },
@@ -19,44 +19,44 @@ const UserSchema = new mongoose.Schema({
   lastClassChange: { type: Number, default: 0 },
   lastFishReset: { type: Number, default: 0 },
   fishCount: { type: Number, default: 0 },
-  // 💡 FIX 2026-10-03: server-side hunting daily limit (owner exploit report).
-  // huntCount resets whenever lastHuntDay (UTC "YYYY-MM-DD") stops matching
-  // today - enforced against the persisted player/day state, not the UI.
+ // FIX server-side hunting daily limit (owner exploit report).
+ // huntCount resets whenever lastHuntDay (UTC "YYYY-MM-DD") stops matching
+ // today - enforced against the persisted player/day state, not the UI.
   huntCount: { type: Number, default: 0 },
   lastHuntDay: { type: String, default: '' },
-  // 💡 FIX 2026-10-03 (owner elixir report): persistent TEMP EFFECT state.
-  // shape: { [effectId]: expiresAt(ms) }. Before this, buffs had NO home on
-  // the player document - they only lived on in-memory combat entities and
-  // vanished when a quest ended, so "Full Restore Elixir" seemed to randomly
-  // stop working after a raid. Timed effects now have one clearly defined
-  // lifecycle: granted with an expiry, checked by timestamp, pruned on read,
-  // and NEVER tied to quest/raid lifecycle.
+ // FIX (owner elixir report): persistent TEMP EFFECT state.
+ // shape: { [effectId]: expiresAt(ms) }. Before this, buffs had NO home on
+ // the player document - they only lived on in-memory combat entities and
+ // vanished when a quest ended, so "Full Restore Elixir" seemed to randomly
+ // stop working after a raid. Timed effects now have one clearly defined
+ // lifecycle: granted with an expiry, checked by timestamp, pruned on read,
+ // and NEVER tied to quest/raid lifecycle.
   activeEffects: { type: Object, default: {} },
-  // Classes this player has already received a mod class-unlock for (so
-  // repeated `.j modclass` switches can't farm unlock/point grants).
+ // Classes this player has already received a mod class-unlock for (so
+ // repeated `.j modclass` switches can't farm unlock/point grants).
   modclassHistory: { type: Array, default: [] },
-  // 💡 Silver Veil Charm (2026-10-03): when true, every card/caption/chart
-  // shows the player's level as "??" instead of the number. Toggled by the
-  // silver_veil item - intentional, item-tied, not a hardcoded exception.
+ // Silver Veil Charm: when true, every card/caption/chart
+ // shows the player's level as "??" instead of the number. Toggled by the
+ // silver_veil item - intentional, item-tied, not a hardcoded exception.
   levelVeil: { type: Boolean, default: false },
-  // 💡 Interactive tutorial (2026-10-03): null = not offered/finished,
-  // 'active' = session running, 'done' = completed/skipped. tutorialLoadout
-  // records every item/skill/weapon granted during the lesson so it can be
-  // revoked exactly, even after a crash.
+ // Interactive tutorial: null = not offered/finished,
+ // 'active' = session running, 'done' = completed/skipped. tutorialLoadout
+ // records every item/skill/weapon granted during the lesson so it can be
+ // revoked exactly, even after a crash.
   tutorial: { type: String, default: null },
   tutorialLoadout: { type: Object, default: null },
   classChangeCount: { type: Number, default: 0 },
   lastClassChangeReset: { type: Number, default: 0 },
 
-  // RPG Stats
+ // RPG Stats
   class: { type: String, default: null },
   adventurerRank: { type: String, default: 'F' },
   spriteIndex: { type: Number, default: 0 },
-  // 💡 FIX 2026-09-14: cardStyle was NEVER in the schema - Mongoose strict
-  // mode silently stripped it from every saveUser() $set, so every
-  // `.cardstyle <n>` pick reset to the server default on the next read.
-  // (Same bug class as allocatedStatPoints / gamblingProfile - see notes
-  // below in this file.) 0 = "no personal pick → use server default".
+ // FIX cardStyle was NEVER in the schema - Mongoose strict
+ // mode silently stripped it from every saveUser() $set, so every
+ // `.cardstyle <n>` pick reset to the server default on the next read.
+ // (Same bug class as allocatedStatPoints / gamblingProfile - see notes
+ // below in this file.) 0 = "no personal pick → use server default".
   cardStyle: { type: Number, default: 0 },
   
   questGold: { type: Number, default: 0 },
@@ -66,7 +66,7 @@ const UserSchema = new mongoose.Schema({
   pvpWins: { type: Number, default: 0 },
   pvpLosses: { type: Number, default: 0 },
   
-  // Flexible Objects
+ // Flexible Objects
   inventory: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} },
   inventorySlots: { type: Number, default: 20 }, // Persistent inventory cap (was missing - caused reset-to-20 bug)
   
@@ -94,7 +94,7 @@ const UserSchema = new mongoose.Schema({
     questsCompleted: { type: Number, default: 0 },
     questsWon: { type: Number, default: 0 },       // Rank mission tracking
     bossesDefeated: { type: Number, default: 0 },   // Rank mission tracking
-    pvpWins: { type: Number, default: 0 },          // Rank mission tracking (mirror; pvpSystem writes the TOP-LEVEL counter — promotion reads the max of both shapes)
+    pvpWins: { type: Number, default: 0 },          // Rank mission tracking (mirror; pvpSystem writes the TOP-LEVEL counter - promotion reads the max of both shapes)
     dragonsKilled: { type: Number, default: 0 },
     itemsCrafted: { type: Number, default: 0 },     // Rank mission tracking
     itemsEquipped: { type: Number, default: 0 },    // Rank mission tracking
@@ -104,28 +104,28 @@ const UserSchema = new mongoose.Schema({
     maxHp: { type: Number, default: 100 },
     xp: { type: Number, default: 0 },
     level: { type: Number, default: 1 },
-    // 💡 PERSISTENT HP SYSTEM (2026-07-31): currentHP persists across combat.
-    // HP lost in any combat (dungeon, raid, PvP, abyss, boss) remains after
-    // combat ends. Players heal via .g hospital (free) or rest events.
-    // -1 = "not initialized" → first access sets it to maxHP.
+ // PERSISTENT HP SYSTEM: currentHP persists across combat.
+ // HP lost in any combat (dungeon, raid, PvP, abyss, boss) remains after
+ // combat ends. Players heal via .g hospital (free) or rest events.
+ // -1 = "not initialized" → first access sets it to maxHP.
     currentHP: { type: Number, default: -1 },
-    // PERSISTENT ENERGY SYSTEM (2026-09-17): ONE canonical energy pool for the
-    // whole RPG. Mining previously used `user.energy`, a field this schema
-    // never had, so Mongoose strict mode silently stripped it on every save
-    // (players always re-read the 100 sentinel) while the display denominator
-    // came from the progression formula - the "87/964" bug. Now energy works
-    // like persistent HP: stored here, lazily initialized, time-regenerated.
-    // -1 = "not initialized" -> first access sets it to maxEnergy.
+ // PERSISTENT ENERGY SYSTEM: ONE canonical energy pool for the
+ // whole RPG. Mining previously used `user.energy`, a field this schema
+ // never had, so Mongoose strict mode silently stripped it on every save
+ // (players always re-read the 100 sentinel) while the display denominator
+ // came from the progression formula - the "87/964" bug. Now energy works
+ // like persistent HP: stored here, lazily initialized, time-regenerated.
+ // -1 = "not initialized" -> first access sets it to maxEnergy.
     currentEnergy: { type: Number, default: -1 },
     energyTs: { type: Number, default: 0 },
-    // 💡 PASSIVE HP REGEN (2026-10-02, owner bug #fec95c): fractional regen
-    // anchor (like energyTs). Full bar recharges in 24h out of combat.
+ // PASSIVE HP REGEN (owner bug #fec95c): fractional regen
+ // anchor (like energyTs). Full bar recharges in 24h out of combat.
     hpTs: { type: Number, default: 0 },
   },
   
-  // 💡 AUDIT FIX 2026-08-01: hospital cooldown timestamp. Set by healToFull()
-  // when the player uses .g hospital. 12h cooldown prevents free-heal spam
-  // and gives the out-of-combat passive regen system room to matter.
+ // AUDIT FIX hospital cooldown timestamp. Set by healToFull()
+ // when the player uses .g hospital. 12h cooldown prevents free-heal spam
+ // and gives the out-of-combat passive regen system room to matter.
   lastHospitalUse: { type: Date, default: null },
   
   statBonuses: {
@@ -148,7 +148,7 @@ const UserSchema = new mongoose.Schema({
     expires: { type: Number, default: 0 }
   },
   
-  // Banking & Assets
+ // Banking & Assets
   frozenAssets: {
     wallet: { type: Number, default: 0 },
     bank: { type: Number, default: 0 },
@@ -157,14 +157,14 @@ const UserSchema = new mongoose.Schema({
   portfolio: { type: Map, of: Number, default: {} }, // Stocks
   investments: { type: Array, default: [] }, // Fixed Deposits
   
-  // Skills & History
+ // Skills & History
   skillPoints: { type: Number, default: 0 },
   skills: { type: Map, of: Number, default: {} }, // Skill levels
-  // 💡 FIX 2026-08-31: actual skill points spent per skill (skillId -> total
-  // spent). Respec refunds previously recomputed cost from the CURRENT
-  // (evolved) class schedule - skills learned cheaply as a starter class
-  // were refunded at the evolved class's escalating rates (up to +44 free
-  // points per respec). This ledger records what was actually paid.
+ // FIX actual skill points spent per skill (skillId -> total
+ // spent). Respec refunds previously recomputed cost from the CURRENT
+ // (evolved) class schedule - skills learned cheaply as a starter class
+ // were refunded at the evolved class's escalating rates (up to +44 free
+ // points per respec). This ledger records what was actually paid.
   skillSpend: { type: mongoose.Schema.Types.Mixed, default: {} },
   borrowedSkills: { type: Array, default: [] },
   completedTrials: { type: [String], default: [] },
@@ -172,7 +172,7 @@ const UserSchema = new mongoose.Schema({
   evolvedAt: { type: Number, default: 0 },
   history: { type: Array, default: [] }, // Transaction logs
 
-  // Merged Progression Data
+ // Merged Progression Data
   progression: {
     xp: { type: Number, default: 0 },
     level: { type: Number, default: 1 },
@@ -191,9 +191,9 @@ const UserSchema = new mongoose.Schema({
         luck: { type: Number, default: 0 },
         crit: { type: Number, default: 0 }
     },
-    // 💡 QA FIX: was missing from schema - Mongoose strict mode stripped it
-    // on save, causing the stat soft cap (20 points) to be disabled and
-    // resetStats to refund wrong amounts.
+ // QA FIX: was missing from schema - Mongoose strict mode stripped it
+ // on save, causing the stat soft cap (20 points) to be disabled and
+ // resetStats to refund wrong amounts.
     allocatedStatPoints: {
         hp: { type: Number, default: 0 },
         atk: { type: Number, default: 0 },
@@ -206,7 +206,7 @@ const UserSchema = new mongoose.Schema({
     achievements: { type: Array, default: [] }
   },
 
-  // Gambling Limits
+ // Gambling Limits
   gamblingLimits: {
     roulette: {
       count: { type: Number, default: 0 },
@@ -214,13 +214,13 @@ const UserSchema = new mongoose.Schema({
     }
   },
 
-  // 💡 CRITICAL FIX 2026-08-31: gamblingProfile / dailyQuests / debt were
-  // NEVER in the schema - Mongoose strict mode silently stripped them from
-  // every saveUser() $set, so on every restart the daily gambling anti-abuse
-  // (house edge ramp, forced-loss, 2M/day net cap, wallet cap), the 5/day
-  // quest cap, and auto-debt tracking all reset. Adding the paths makes them
-  // persist. Field set mirrors economy.js:449-453 / gambling.js:73-88 /
-  // economy.js:2313.
+ // CRITICAL FIX gamblingProfile / dailyQuests / debt were
+ // NEVER in the schema - Mongoose strict mode silently stripped them from
+ // every saveUser() $set, so on every restart the daily gambling anti-abuse
+ // (house edge ramp, forced-loss, 2M/day net cap, wallet cap), the 5/day
+ // quest cap, and auto-debt tracking all reset. Adding the paths makes them
+ // persist. Field set mirrors economy.js:449-453 / gambling.js:73-88 /
+ // economy.js:2313.
   gamblingProfile: {
     dayKey: { type: String, default: '' },
     roundsToday: { type: Number, default: 0 },
@@ -238,16 +238,16 @@ const UserSchema = new mongoose.Schema({
     setAt: { type: Number, default: 0 },
   },
 
-  // Event Tokens (for token events - earned by claiming cards, spent in eShop)
+ // Event Tokens (for token events - earned by claiming cards, spent in eShop)
   eventTokens: { type: Number, default: 0 },
 
-  // Rank Mission System
+ // Rank Mission System
   completedRankMissions: { type: [Number], default: [] }, // [1, 2, 3, 4]
 
-  // ── Summoner System ──────────────────────────────────────
-  // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md
-  // Summons are stored in a separate Mongoose collection (Summon model),
-  // referenced by summonId. This keeps the User document lean.
+ // -- Summoner System --------------------------------------
+ // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md
+ // Summons are stored in a separate Mongoose collection (Summon model),
+ // referenced by summonId. This keeps the User document lean.
   summonSlots: { type: Number, default: 3 },                // expandable to 5 via guild perks + rank
   activeSummonId: { type: String, default: null },          // currently deployed summon
   unlockedSummonPassives: { type: [String], default: [] },  // from completing summon trials
@@ -265,11 +265,11 @@ const UserSchema = new mongoose.Schema({
     arenaLosses: { type: Number, default: 0 }
   },
 
-  // Taming progress per enemy type (Necromancer capture pipeline).
-  // Keyed by enemyType ID, value = kill count. At 10 kills, species is "tamed".
+ // Taming progress per enemy type (Necromancer capture pipeline).
+ // Keyed by enemyType ID, value = kill count. At 10 kills, species is "tamed".
   tamingProgress: { type: Map, of: Number, default: {} },
 
-  // AI Memory & Profile Data
+ // AI Memory & Profile Data
   profile: {
     whatsappName: { type: String, default: null },
     nickname: { type: String, default: null },
@@ -287,8 +287,8 @@ const UserSchema = new mongoose.Schema({
         messageCount: { type: Number, default: 0 }
     },
     relationships: { type: Map, of: Number, default: {} },
-    // ⚡ 2026-09-17: tags/mentions/replies per pair (interactionTracker).
-    // Values are small {c,t} objects; Mixed keeps the tracker shape-agnostic.
+ // tags/mentions/replies per pair (interactionTracker).
+ // Values are small {c,t} objects; Mixed keeps the tracker shape-agnostic.
     interactions: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} }
   }
 

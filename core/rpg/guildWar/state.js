@@ -1,16 +1,16 @@
 // ============================================
-// ⚙️ GUILD WAR STATE MACHINE — 2026-10-03
+// GUILD WAR STATE MACHINE -
 // Lifecycle: INITIATED → REGISTRATION → ACTIVE → ENDED → REWARDS → ARCHIVED (+ABORTED)
 // Persistence: Mongo doc is the source of truth. In-memory cache is a read view;
 // ALL contested mutations are atomic findOneAndUpdate with state conditions
-// (3 bot instances share one Atlas DB — never trust memory across instances).
+// (3 bot instances share one Atlas DB - never trust memory across instances).
 // ============================================
 
 const crypto = require('crypto');
 const GuildWarEvent = require('../../models/GuildWarEvent');
 const mapEngine = require('./mapEngine');
 const CFG = require('./config');
-// ⚠️ rooms/feed/points require this module back — load them LAZILY inside
+// rooms/feed/points require this module back - load them LAZILY inside
 // functions to break the circular require (a top-level require here would
 // hand them this module's half-initialized exports object).
 const lazy = {};
@@ -18,7 +18,7 @@ function getRooms() { return lazy.rooms || (lazy.rooms = require('./rooms')); }
 function getPoints() { return lazy.points || (lazy.points = require('./points')); }
 function getFeed() { return lazy.feed || (lazy.feed = require('./feed')); }
 
-// ── in-memory read views (per instance) ──
+// -- in-memory read views (per instance) --
 const activeViews = new Map(); // eventId → { map topology view, doc snapshot }
 
 // adjacency derives ONLY from the immutable pruned edges → cache by
@@ -26,7 +26,7 @@ const activeViews = new Map(); // eventId → { map topology view, doc snapshot 
 const adjacencyCache = new Map(); // eventId → { edgesLen, adjacency }
 
 // room key→index is IMMUTABLE (rooms are baked once at startEvent and never
-// reordered — subdoc updates replace elements in place) → cache the index map
+// reordered - subdoc updates replace elements in place) → cache the index map
 // per event instead of rebuilding a Map over 1800+ rooms on every read
 const roomIndexCache = new Map(); // eventId → Map(key → index)
 
@@ -70,23 +70,23 @@ function viewOf(doc) {
 async function getEvent(eventId, { fresh = false } = {}) {
     const v = activeViews.get(eventId);
     if (v && !fresh) return v.doc;
-    // ⚔️ .lean(): skip mongoose casting of thousands of room subdocs on every
-    // read (measured: multi-second loop stalls without it at 100+ players).
-    // Lean POJOs are read-only views — ALL mutations go through atomic
-    // findOneAndUpdate helpers, so nothing here needs a full Document.
+ // .lean(): skip mongoose casting of thousands of room subdocs on every
+ // read (measured: multi-second loop stalls without it at 100+ players).
+ // Lean POJOs are read-only views - ALL mutations go through atomic
+ // findOneAndUpdate helpers, so nothing here needs a full Document.
     const doc = await GuildWarEvent.findOne({ eventId }).lean();
     if (!doc) { activeViews.delete(eventId); return null; }
     return viewOf(doc).doc;
 }
 
-// ⚔️ post-move context in ONE projected read (~1KB) instead of re-reading
+// post-move context in ONE projected read (~1KB) instead of re-reading
 // the entire map (measured: 1849-room full reads per move = GC storms at
 // alignment scale). Players return as light rows for mate/foe detection.
 async function getMoveContext(eventId, roomKey) {
-    // ⚔️ FIX (2026-10-04): `eventId: 1` was MISSING from this projection —
-    // callers read ctxDoc.eventId and got undefined, so every presentRoom
-    // fresh re-read returned null and the MAP + SCENE silently never sent
-    // on room entry (the "navigation overhaul" shipped half-blind).
+ // FIX: `eventId: 1` was MISSING from this projection -
+ // callers read ctxDoc.eventId and got undefined, so every presentRoom
+ // fresh re-read returned null and the MAP + SCENE silently never sent
+ // on room entry (the "navigation overhaul" shipped half-blind).
     const doc = await GuildWarEvent.findOne(
         { eventId },
         { eventId: 1, rooms: { $elemMatch: { key: roomKey } }, 'players.jid': 1, 'players.name': 1, 'players.guildId': 1, 'players.guildName': 1, 'players.roomId': 1, 'players.status': 1, side: 1, coreKey: 1, deadWorld: 1, type: 1, state: 1, seed: 1, edges: 1 }
@@ -102,10 +102,10 @@ async function getActiveEvents() {
     return docs.map((d) => viewOf(d).doc);
 }
 
-// ── atomic mutation helpers (DB condition = the real guard) ──
+// -- atomic mutation helpers (DB condition = the real guard) --
 async function updateRoom(eventId, roomKey, condition, update) {
-    // $elemMatch binds the room conditions to ONE element (claim-safe);
-    // extra `condition` entries are room-subdoc field conditions.
+ // $elemMatch binds the room conditions to ONE element (claim-safe);
+ // extra `condition` entries are room-subdoc field conditions.
     const elem = { key: roomKey, ...(condition || {}) };
     const setUpdate = {};
     for (const [k, val] of Object.entries(update)) setUpdate[`rooms.$.${k}`] = val;
@@ -117,12 +117,12 @@ async function updateRoom(eventId, roomKey, condition, update) {
 }
 
 async function updatePlayer(eventId, jid, condition, update) {
-    // positional + $elemMatch (same claim-safety rationale as updateRoom)
+ // positional + $elemMatch (same claim-safety rationale as updateRoom)
     const elem = { jid, ...(condition || {}) };
     const setUpdate = {};
     for (const [k, val] of Object.entries(update)) setUpdate[`players.$.${k}`] = val;
-    // new:false: callers use the result only as a match indicator — returning
-    // the updated doc forces mongoose to re-cast the entire map (measured stall)
+ // new:false: callers use the result only as a match indicator - returning
+ // the updated doc forces mongoose to re-cast the entire map (measured stall)
     return GuildWarEvent.findOneAndUpdate(
         { eventId, players: { $elemMatch: elem } },
         { $set: setUpdate },
@@ -140,7 +140,7 @@ async function pushLog(eventId, type, actor, payload) {
     } catch (e) { /* log tail is best-effort */ }
 }
 
-// ── lifecycle ──
+// -- lifecycle --
 async function createEvent({ type = 'normal', hostGroupId, initiatedBy, guilds = [], config = {} }) {
     const count = await GuildWarEvent.countDocuments({ state: { $in: ['INITIATED', 'REGISTRATION', 'ACTIVE'] } });
     if (count >= CFG.MAX_CONCURRENT_EVENTS && process.env.GW_TEST !== '1') {
@@ -187,11 +187,11 @@ async function startEvent(eventId, { deadWorld = null, worldIds = null } = {}) {
         worldIds,
     });
 
-    // bake map into the doc (compact rooms)
-    // 💡 VISUAL VARIANTS (owner spec §7 + 2026-10-06 directive): each room gets
-    // a persistent Ruins DESIGN variant at bake time — weighted by ring (deeper
-    // rooms trend darker/damaged/arcane), seeded so the SAME room ALWAYS renders
-    // the SAME look. Weights live in roomVariants.variantWeight (single source).
+ // bake map into the doc (compact rooms)
+ // VISUAL VARIANTS (owner spec §7 + directive): each room gets
+ // a persistent Ruins DESIGN variant at bake time - weighted by ring (deeper
+ // rooms trend darker/damaged/arcane), seeded so the SAME room ALWAYS renders
+ // the SAME look. Weights live in roomVariants.variantWeight (single source).
     const variantRng = mapEngine.makeRng(seed + ':variants');
     const roomScene = require('./roomScene');
     const VARIANT_BAG = roomScene.ROOM_VARIANTS;
@@ -208,18 +208,18 @@ async function startEvent(eventId, { deadWorld = null, worldIds = null } = {}) {
         };
     });
 
-    // spawn assignment: shuffle spawn keys (same-guild adjacency already minimized by farthest-point)
+ // spawn assignment: shuffle spawn keys (same-guild adjacency already minimized by farthest-point)
     const spawnKeys = mapEngine.makeRng(seed + ':spawns').shuffle(map.spawns);
 
-    // 🛡️ OWNER RULE 2026-10-05 (live playtest): "players that are weaker than
-    // the monsters in a ruin should never spawn into a room with monsters."
-    // A champion's landing hall is now ALWAYS monster-free: combat/coop
-    // spawn rooms are rebaked as safe 'empty' halls BEFORE payloads are
-    // seeded — so the intro text, the render and the encounter payload all
-    // agree. Defeat respawn reuses spawnRoomId, so this guards both paths.
-    // (The buildRoomPayload spawn-guard in encounters.js is the second belt:
-    // it strips any enemies/boss a spawn room could still roll, e.g. a
-    // secret chamber's boss.)
+ // OWNER RULE (live playtest): "players that are weaker than
+ // the monsters in a ruin should never spawn into a room with monsters."
+ // A champion's landing hall is now ALWAYS monster-free: combat/coop
+ // spawn rooms are rebaked as safe 'empty' halls BEFORE payloads are
+ // seeded - so the intro text, the render and the encounter payload all
+ // agree. Defeat respawn reuses spawnRoomId, so this guards both paths.
+ // (The buildRoomPayload spawn-guard in encounters.js is the second belt:
+ // it strips any enemies/boss a spawn room could still roll, e.g. a
+ // secret chamber's boss.)
     const HOSTILE_TYPES = new Set(['combat', 'coop']);
     for (const k of new Set(spawnKeys)) {
         const rd = roomDocs.find((r) => r.key === k);
@@ -236,17 +236,17 @@ async function startEvent(eventId, { deadWorld = null, worldIds = null } = {}) {
         discovered: [spawnKeys[i % spawnKeys.length]],
     }));
 
-    // persist the pruned topology (movement + rendering derive from this)
+ // persist the pruned topology (movement + rendering derive from this)
     const edgeDocs = [];
     for (const [k, dirs] of map.adjacency) {
         for (const [d, open] of Object.entries(dirs)) if (open) edgeDocs.push(`${k}|${d}`);
     }
 
     const now = Date.now();
-    // ⏳ THE FOUR WARDENS (owner 2026-10-07, Test Run 2 directive): the four
-    // bosses are ON THE MAP FROM WAR START — the finale ledger opens here and
-    // spawnFinaleBosses (below) fills it. The war timer no longer SPAWNS
-    // anything; passing endsAt only opens the hourglass grace.
+ // ⏳ THE FOUR WARDENS (, Test Run 2 directive): the four
+ // bosses are ON THE MAP FROM WAR START - the finale ledger opens here and
+ // spawnFinaleBosses (below) fills it. The war timer no longer SPAWNS
+ // anything; passing endsAt only opens the hourglass grace.
     const wardensFromStart = !!CFG.FINALE.FROM_START;
     const updated = await GuildWarEvent.findOneAndUpdate(
         { eventId, state: 'REGISTRATION' },
@@ -264,24 +264,24 @@ async function startEvent(eventId, { deadWorld = null, worldIds = null } = {}) {
     if (!updated) return { ok: false, reason: 'Event changed state concurrently.' };
     viewOf(updated);
 
-    // seed room encounters (server-side payloads) + reveal spawn fog
+ // seed room encounters (server-side payloads) + reveal spawn fog
     await getRooms().seedEncounters(updated, map);
     for (const p of updated.players) {
         await getRooms().applyFog(updated.eventId, p.jid, mapEngine.revealAround(map, p.roomId));
     }
-    // 🤝 CO-OP FOUNDATION (owner 2026-10-05 23:09Z): room occupancy must
-    // include DEPLOYED champions — `.j talk` listeners, co-op party-at-start
-    // seating (encounters.startRoomCombat reads room.occupants) and the
-    // shared-battle rules all key off it. Moves maintained the list; the
-    // deployment write above never did, so a champion who had not moved yet
-    // was invisible inside their own spawn chamber.
+ // CO-OP FOUNDATION (23:09Z): room occupancy must
+ // include DEPLOYED champions - `.j talk` listeners, co-op party-at-start
+ // seating (encounters.startRoomCombat reads room.occupants) and the
+ // shared-battle rules all key off it. Moves maintained the list; the
+ // deployment write above never did, so a champion who had not moved yet
+ // was invisible inside their own spawn chamber.
     for (const p of updated.players) {
         await getRooms().enterRoom(updated.eventId, p.jid, null, p.roomId).catch(() => {});
     }
 
-    // ⏳ WARDENS AT WAR START: scatter the four lairs, bake the ledger,
-    // reveal them on every champion's map. The ACTIVE flip above already ran
-    // atomically once — no other instance can double-run this block.
+ // ⏳ WARDENS AT WAR START: scatter the four lairs, bake the ledger,
+ // reveal them on every champion's map. The ACTIVE flip above already ran
+ // atomically once - no other instance can double-run this block.
     if (wardensFromStart) {
         const spawned = await getRooms().spawnFinaleBosses(updated).catch((e) => {
             console.error('[GW] warden spawn failed:', e?.message);
@@ -292,27 +292,27 @@ async function startEvent(eventId, { deadWorld = null, worldIds = null } = {}) {
             getFeed().queue(updated.eventId, 'major',
                 `☠️ *THE FOUR WARDENS HOLD THE RUINS:* *${names}*.
 ` +
-                `Their lairs burn red on every champion's map — scattered deep in the dead world. The war ends ONLY when all four fall. Gather your guild, sharpen your blades.`);
+                `Their lairs burn red on every champion's map - scattered deep in the dead world. The war ends ONLY when all four fall. Gather your guild, sharpen your blades.`);
         } else {
-            // no candidate rooms (degenerate map) → hunt disabled; war ends on the clock as before
+ // no candidate rooms (degenerate map) → hunt disabled; war ends on the clock as before
             await GuildWarEvent.updateOne({ eventId: updated.eventId }, { $set: { finale: null } });
         }
     }
     return { ok: true, event: updated, map };
 }
 
-// map topology view from a live doc (for movement/rendering) — edges come
+// map topology view from a live doc (for movement/rendering) - edges come
 // from the persisted pruned topology, NOT from coordinate-neighbor presence
 function topologyOf(doc) {
     const v = viewOf(doc);
     return { side: doc.side, rooms: v.roomsMap, adjacency: v.adjacency, coreKey: doc.coreKey, alignment: doc.type === 'alignment', seed: doc.seed };
 }
 
-// ── sweeper: hard end + inactivity (called from engine 60s interval) ──
+// -- sweeper: hard end + inactivity (called from engine 60s interval) --
 
-// ⚔️ CROSS-BOX FLOW LEASE (2026-10-05): all 3 instances tick every event on
-// one shared DB. Proactive flows — auto-start, the start-card DMs, hard end,
-// inactivity sweeps — used to fire on EVERY instance (Mellow's playtest got
+// CROSS-BOX FLOW LEASE: all 3 instances tick every event on
+// one shared DB. Proactive flows - auto-start, the start-card DMs, hard end,
+// inactivity sweeps - used to fire on EVERY instance (Mellow's playtest got
 // 4× start cards: the atomic state guard stops double-START, but nothing
 // stopped double-ANNOUNCE). The lease names the single instance allowed to
 // flow an event; refresh is free for the holder, takeover after 90s TTL.
@@ -341,25 +341,25 @@ async function tick(sock, BOT_MARKER) {
     const actives = await getActiveEvents();
     const out = [];
     for (const ev of actives) {
-        // 🤝 GC COEXISTENCE (2026-10-07): the old "one group per bot"
-        // spectator rule is SCRAPPED (owner directive: "allow all the bots
-        // to exist in any gc together"). Every instance may now lease and
-        // run the flows; the flow lease below still guarantees exactly ONE
-        // runner per event, and the feed's reachability gate routes group
-        // deliveries to a bot that can actually post them. A bot that wins
-        // the lease simply becomes this event's flow-runner — any bot can
-        // DM start cards and mutate state atomically.
-        // flow lease: exactly ONE instance runs the proactive blocks
+ // GC COEXISTENCE: the old "one group per bot"
+ // spectator rule is SCRAPPED (owner directive: "allow all the bots
+ // to exist in any gc together"). Every instance may now lease and
+ // run the flows; the flow lease below still guarantees exactly ONE
+ // runner per event, and the feed's reachability gate routes group
+ // deliveries to a bot that can actually post them. A bot that wins
+ // the lease simply becomes this event's flow-runner - any bot can
+ // DM start cards and mutate state atomically.
+ // flow lease: exactly ONE instance runs the proactive blocks
         if (!(await claimFlow(ev.eventId))) continue;
-        // registration expiry → force start
+ // registration expiry → force start
         if (ev.state === 'REGISTRATION' && ev.registrationEndsAt && Date.now() > ev.registrationEndsAt) {
             if (ev.players.length >= 2) {
                 const res = await startEvent(ev.eventId);
                 if (res.ok) {
                     out.push({ eventId: ev.eventId, auto: 'started' });
-                    // 💡 PHASE 2 (feed resurrection): auto-started wars were
-                    // SILENT — no GC announcement, no start-card DMs. Both now
-                    // fire on the auto path exactly like forcestart.
+ // PHASE 2 (feed resurrection): auto-started wars were
+ // SILENT - no GC announcement, no start-card DMs. Both now
+ // fire on the auto path exactly like forcestart.
                     getFeed().queue(ev.eventId, 'major',
                         `The war has begun! ${res.event.players.length} champions deploy into the Ruins of a dead world.`);
                     let prefix = '.';
@@ -370,34 +370,34 @@ async function tick(sock, BOT_MARKER) {
             } else {
                 await abortEvent(ev.eventId, 'Not enough players registered.');
                 out.push({ eventId: ev.eventId, auto: 'aborted-low-attendance' });
-                // 💬 UX (user-side judge 2026-10-09): the withdrawal used to be
-                // SILENT — a mod waiting for deployment (or a lone champion who
-                // answered the call) saw nothing. Tell the host GC the call died.
+ // UX (user-side judge ): the withdrawal used to be
+ // SILENT - a mod waiting for deployment (or a lone champion who
+ // answered the call) saw nothing. Tell the host GC the call died.
                 try {
                     let prefix = '.';
                     try { prefix = require('../../botConfig').getPrefix() || '.'; } catch (e) {}
                     if (ev.hostGroupId && sock) {
                         await sock.sendMessage(ev.hostGroupId, {
-                            text: `🕯️ *The call is withdrawn* — not enough champions answered the war (${ev.players.length} registered, 2 needed) before the 10 minutes ran out.\nMods raise it again anytime: \`${prefix} war start\` (full-scale) or \`${prefix} war start -test\` (skirmish).`,
+                            text: `🕯️ *The call is withdrawn* - not enough champions answered the war (${ev.players.length} registered, 2 needed) before the 10 minutes ran out.\nMods raise it again anytime: \`${prefix} war start\` (full-scale) or \`${prefix} war start -test\` (skirmish).`,
                         });
                     }
                 } catch (e) { console.error('[GW] abort notice:', e?.message); }
             }
             continue;
         }
-        // ⏳ THE FOUR WARDENS + THE HOURGLASS (owner 2026-10-05 23:09Z +
-        // 2026-10-07 Test Run 2 directive): the wardens rise AT WAR START and
-        // the war ends when all four fall. When the clock runs out with
-        // wardens still standing, the war does NOT end — it enters the
-        // hourglass grace (endsAt → endsAt + FINALE.TIMEOUT_MS) announced
-        // exactly once; the safety timeout still closes an abandoned hunt.
-        // Wars WITHOUT a warden ledger (fromStart disabled, or pre-dating the
-        // directive) keep the legacy timer-end spawn path below.
+ // ⏳ THE FOUR WARDENS + THE HOURGLASS (23:09Z +
+ // Test Run 2 directive): the wardens rise AT WAR START and
+ // the war ends when all four fall. When the clock runs out with
+ // wardens still standing, the war does NOT end - it enters the
+ // hourglass grace (endsAt → endsAt + FINALE.TIMEOUT_MS) announced
+ // exactly once; the safety timeout still closes an abandoned hunt.
+ // Wars WITHOUT a warden ledger (fromStart disabled, or pre-dating the
+ // directive) keep the legacy timer-end spawn path below.
         if (ev.state === 'ACTIVE' && ev.endsAt && Date.now() > ev.endsAt) {
             const ledger = (ev.finale && Array.isArray(ev.finale.bosses)) ? ev.finale.bosses : [];
             const hasLedger = ledger.length > 0;
             if (!hasLedger) {
-                // ── legacy timer-end spawn (wardens rise when the clock dies) ──
+ // -- legacy timer-end spawn (wardens rise when the clock dies) --
                 const alreadyFinale = ev.finale && ev.finale.started;
                 if (!alreadyFinale) {
                     const flipped = await GuildWarEvent.findOneAndUpdate(
@@ -414,21 +414,21 @@ async function tick(sock, BOT_MARKER) {
                             out.push({ eventId: ev.eventId, auto: 'finale-started' });
                             const names = (spawned.bosses || []).map((b) => b.name).join(', ');
                             getFeed().queue(ev.eventId, 'major',
-                                `⏳ *THE HOURGLASS IS EMPTY* — the war clock has run out, but the Ruins are NOT done with you. Four WARDENS rise around the dead world: *${names}*.\n` +
-                                `They are marked on every champion's map. The war ends ONLY when all four fall — slay them for the final glory.`);
-                            // DM every active champion: the game they were playing
-                            // just changed under their feet.
+                                `⏳ *THE HOURGLASS IS EMPTY* - the war clock has run out, but the Ruins are NOT done with you. Four WARDENS rise around the dead world: *${names}*.\n` +
+                                `They are marked on every champion's map. The war ends ONLY when all four fall - slay them for the final glory.`);
+ // DM every active champion: the game they were playing
+ // just changed under their feet.
                             try {
                                 for (const p of flipped.players || []) {
                                     if (p.status !== 'active') continue;
                                     await sock.sendMessage(p.jid, {
-                                        text: `${BOT_MARKER || ''}⏳ *THE WAR TIMER HAS RUN OUT, ${p.name}.*\nFour WARDENS now hold the Ruins — their chambers are marked on your map (\`map\`).\nThe war ends only when ALL FOUR are slain. Hunt them with your guild — champions who fight a warden together share the battle.`,
+                                        text: `${BOT_MARKER || ''}⏳ *THE WAR TIMER HAS RUN OUT, ${p.name}.*\nFour WARDENS now hold the Ruins - their chambers are marked on your map (\`map\`).\nThe war ends only when ALL FOUR are slain. Hunt them with your guild - champions who fight a warden together share the battle.`,
                                     }).catch(() => {});
                                     await new Promise((r) => setTimeout(r, 400));
                                 }
                             } catch (e) { /* best-effort */ }
                         } else {
-                            // spawn failed (no candidate rooms) → end the war the old way
+ // spawn failed (no candidate rooms) → end the war the old way
                             await endEvent(ev.eventId, 'Time expired.');
                             out.push({ eventId: ev.eventId, auto: 'ended-time' });
                         }
@@ -436,17 +436,17 @@ async function tick(sock, BOT_MARKER) {
                 }
                 continue;
             }
-            // ── warden hunt in progress across the clock line ──
+ // -- warden hunt in progress across the clock line --
             const allDead = ledger.every((b) => b.dead);
-            // grace is anchored to the CLOCK (endsAt), never to war start —
-            // the hunt gets the full duration plus the timeout, never less.
+ // grace is anchored to the CLOCK (endsAt), never to war start -
+ // the hunt gets the full duration plus the timeout, never less.
             const timedOut = CFG.FINALE.TIMEOUT_MS > 0 && Date.now() > ev.endsAt + CFG.FINALE.TIMEOUT_MS;
             if (allDead || timedOut) {
                 await endEvent(ev.eventId, allDead ? 'All four wardens have fallen. The Ruins fall silent.' : 'The hourglass burned out with the wardens still standing.');
                 out.push({ eventId: ev.eventId, auto: allDead ? 'ended-wardens-clear' : 'ended-wardens-timeout' });
                 continue;
             }
-            // one-time HOURGLASS announcement (atomic flip — one instance wins)
+ // one-time HOURGLASS announcement (atomic flip - one instance wins)
             if (!(ev.finale && ev.finale.hourglass)) {
                 const flipped = await GuildWarEvent.findOneAndUpdate(
                     { eventId: ev.eventId, state: 'ACTIVE', 'finale.hourglass': { $ne: true } },
@@ -455,13 +455,13 @@ async function tick(sock, BOT_MARKER) {
                 ).lean();
                 if (flipped) {
                     getFeed().queue(ev.eventId, 'major',
-                        `⏳ *THE HOURGLASS IS EMPTY* — the war clock has run out, but the FOUR WARDENS still hold the Ruins. The war ends ONLY when all four fall.`);
+                        `⏳ *THE HOURGLASS IS EMPTY* - the war clock has run out, but the FOUR WARDENS still hold the Ruins. The war ends ONLY when all four fall.`);
                     try {
                         for (const p of ev.players || []) {
                             if (p.status !== 'active') continue;
                             const down = ledger.filter((b) => b.dead).length;
                             await sock.sendMessage(p.jid, {
-                                text: `${BOT_MARKER || ''}⏳ *The war timer has run out, ${p.name}* — but the hunt is not done: wardens slain ${down}/${ledger.length}.\nTheir lairs burn red on your \`map\`. The war ends only when ALL FOUR are slain.`,
+                                text: `${BOT_MARKER || ''}⏳ *The war timer has run out, ${p.name}* - but the hunt is not done: wardens slain ${down}/${ledger.length}.\nTheir lairs burn red on your \`map\`. The war ends only when ALL FOUR are slain.`,
                             }).catch(() => {});
                             await new Promise((r) => setTimeout(r, 400));
                         }
@@ -470,7 +470,7 @@ async function tick(sock, BOT_MARKER) {
             }
             continue;
         }
-        // inactivity → drop carried relics in current room
+ // inactivity → drop carried relics in current room
         if (ev.state === 'ACTIVE') {
             const cutoff = Date.now() - CFG.INACTIVITY_MS;
             for (const p of ev.players) {
@@ -481,13 +481,13 @@ async function tick(sock, BOT_MARKER) {
                     getFeed().queue(ev.eventId, 'minor', `${p.name} has gone quiet in the Ruins…`);
                 }
             }
-            // §15 #8: expired PvP challenge windows resolve (concede) exactly
-            // once across instances via the atomic pull-claim in ruinsPvp.
+ // §15 #8: expired PvP challenge windows resolve (concede) exactly
+ // once across instances via the atomic pull-claim in ruinsPvp.
             try { await require('./ruinsPvp').pruneExpired(ev.eventId); } catch (e) {}
         }
     }
-    // 💡 PHASE 2: actives passed so tickAll flushes DB-queued items even when
-    // this instance never queued locally (cross-instance queue pickup).
+ // PHASE 2: actives passed so tickAll flushes DB-queued items even when
+ // this instance never queued locally (cross-instance queue pickup).
     getFeed().tickAll(sock, BOT_MARKER, actives);
     return out;
 }
@@ -499,9 +499,9 @@ async function endEvent(eventId, reason, { quietFeed = false } = {}) {
         { new: true }
     );
     if (!doc) return null;
-    // 💡 PHASE 2: time-expiry ends were invisible to the feed (mods calling
-    // `.gw end` announce in the GC, but nobody heard auto-expiry). Queue the
-    // major here; mods may pass quietFeed since they post a richer card.
+ // PHASE 2: time-expiry ends were invisible to the feed (mods calling
+ // `.gw end` announce in the GC, but nobody heard auto-expiry). Queue the
+ // major here; mods may pass quietFeed since they post a richer card.
     if (!quietFeed) getFeed().queue(eventId, 'major', `🏳️ THE WAR HAS ENDED. ${reason || ''}`.trim());
     const rewards = await getPoints().distribute(doc, reason);
     await GuildWarEvent.updateOne({ eventId }, { $set: { state: 'REWARDS' } });
@@ -528,7 +528,7 @@ async function abortEvent(eventId, reason) {
     return doc;
 }
 
-// restart recovery: called on boot — rebuild views, drop stale memory
+// restart recovery: called on boot - rebuild views, drop stale memory
 async function recoverOnBoot() {
     const docs = await GuildWarEvent.find({ state: { $in: ['REGISTRATION', 'ACTIVE', 'REWARDS'] } });
     for (const d of docs) viewOf(d);

@@ -1,21 +1,20 @@
 // ============================================
-// 🏆 SUMMON ACHIEVEMENTS - pilots the achievement system
+// SUMMON ACHIEVEMENTS - pilots the achievement system
 // ============================================
 // The achievement system in progression.js is currently a stub
 // (all check functions return []). Summons become the FIRST real
 // implementation of achievements, establishing patterns for the
 // whole game to follow.
-//
 // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md (section 6.7)
 
 const economy = require('./economy');
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // ACHIEVEMENT DEFINITIONS - 20 summon achievements
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 const SUMMON_ACHIEVEMENTS = {
-  // ── Capture achievements ───────────────────────────────────
+ // -- Capture achievements -----------------------------------
   first_capture: {
     id: 'first_capture',
     name: 'First Soul',
@@ -57,7 +56,7 @@ const SUMMON_ACHIEVEMENTS = {
     reward: { type: 'summon_slots', value: 1, desc: '+1 summon slot' }
   },
 
-  // ── Evolution achievements ─────────────────────────────────
+ // -- Evolution achievements ---------------------------------
   first_evolution: {
     id: 'first_evolution',
     name: 'First Evolution',
@@ -77,7 +76,7 @@ const SUMMON_ACHIEVEMENTS = {
     reward: { type: 'stat_bonus', stat: 'mag', value: 20, desc: '+20 MAG permanently' }
   },
 
-  // ── Combat achievements ────────────────────────────────────
+ // -- Combat achievements ------------------------------------
   first_blood: {
     id: 'first_blood',
     name: "Summon's First Blood",
@@ -97,7 +96,7 @@ const SUMMON_ACHIEVEMENTS = {
     reward: { type: 'stat_bonus', stat: 'def', value: 15, desc: '+15 DEF permanently' }
   },
 
-  // ── Trial achievements ─────────────────────────────────────
+ // -- Trial achievements -------------------------------------
   trial_novice: {
     id: 'trial_novice',
     name: 'Trial Novice',
@@ -117,7 +116,7 @@ const SUMMON_ACHIEVEMENTS = {
     reward: { type: 'stat_bonus', stat: 'crit', value: 10, desc: '+10 CRIT permanently' }
   },
 
-  // ── Forging achievements ───────────────────────────────────
+ // -- Forging achievements -----------------------------------
   first_forge: {
     id: 'first_forge',
     name: 'First Forge',
@@ -153,7 +152,7 @@ const SUMMON_ACHIEVEMENTS = {
     reward: { type: 'stat_bonus', stat: 'hp', value: 100, desc: '+100 HP permanently' }
   },
 
-  // ── Resonance achievements ─────────────────────────────────
+ // -- Resonance achievements ---------------------------------
   resonance_web: {
     id: 'resonance_web',
     name: 'Resonance Web',
@@ -173,7 +172,7 @@ const SUMMON_ACHIEVEMENTS = {
     reward: { type: 'stat_bonus', stat: 'mag', value: 10, desc: '+10 MAG permanently' }
   },
 
-  // ── Taming achievements (Necromancer) ──────────────────────
+ // -- Taming achievements (Necromancer) ----------------------
   first_tame: {
     id: 'first_tame',
     name: 'First Tame',
@@ -199,7 +198,7 @@ const SUMMON_ACHIEVEMENTS = {
     reward: { type: 'summon_slots', value: 1, desc: '+1 summon slot' }
   },
 
-  // ── Loyalty achievements ───────────────────────────────────
+ // -- Loyalty achievements -----------------------------------
   eternal_bond: {
     id: 'eternal_bond',
     name: 'Eternal Bond',
@@ -213,7 +212,7 @@ const SUMMON_ACHIEVEMENTS = {
     reward: { type: 'stat_bonus', stat: 'luck', value: 10, desc: '+10 LUCK permanently' }
   },
 
-  // ── Collection diversity achievements ──────────────────────
+ // -- Collection diversity achievements ----------------------
   elemental_master: {
     id: 'elemental_master',
     name: 'Elemental Master',
@@ -242,9 +241,9 @@ const SUMMON_ACHIEVEMENTS = {
   }
 };
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // CHECK + AWARD - called on key events
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 /**
  * Check all summon achievements for a user and award any newly-qualified ones.
@@ -261,10 +260,9 @@ async function checkAchievements(userId, summons = null, ctx = {}) {
   const newlyAwarded = [];
 
   for (const [id, achievement] of Object.entries(SUMMON_ACHIEVEMENTS)) {
-    // Skip if already awarded
+ // Skip if already awarded
     if (user.summonAchievements.includes(id)) continue;
 
-    // Check if qualified
     let qualified = false;
     try {
       qualified = achievement.check(user, summons, ctx);
@@ -277,7 +275,7 @@ async function checkAchievements(userId, summons = null, ctx = {}) {
       user.summonAchievements.push(id);
       newlyAwarded.push(achievement);
 
-      // Apply reward
+ // Apply reward
       applyReward(user, achievement.reward);
     }
   }
@@ -321,9 +319,9 @@ function getAchievementDisplay(user) {
   }));
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // MODULE EXPORTS
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 module.exports = {
   SUMMON_ACHIEVEMENTS,

@@ -1,13 +1,13 @@
-// Round-12 abyss samples (owner 2026-10-10 01:56Z round):
-//  1) CLEARED result card — the new per-floor victory card (old VICTORY
-//     portrait is banned from the abyss)
-//  2) FALLEN + EXTRACTED regression — same family, must be unchanged
-//  3) ELDER_CHAOS side layout — now FACES RIGHT (owner: "some enemies face
-//     the wrong direction"; F19 screenshot proof)
-//  4) PRIMORDIAL_CHAOS side layout — front-facing, never flipped
-//  5) regular pool rotation on F18/F19/F20 — mist_hollow GONE (owner: "REMOVE
-//     IT FROM THE FUCKING POOL"), 3 side stages rotate
-// Run: node scripts/render_abyss_round12.js  (writes scripts/render_out/abyss_r12/)
+// Round-12 abyss samples (01:56Z round):
+// 1) CLEARED result card - the new per-floor victory card (old VICTORY
+// portrait is banned from the abyss)
+// 2) FALLEN + EXTRACTED regression - same family, must be unchanged
+// 3) ELDER_CHAOS side layout - now FACES RIGHT ("some enemies face
+// the wrong direction"; F19 screenshot proof)
+// 4) PRIMORDIAL_CHAOS side layout - front-facing, never flipped
+// 5) regular pool rotation on F18/F19/F20 - mist_hollow GONE ("REMOVE
+// IT FROM THE FUCKING POOL"), 3 side stages rotate
+// Run: node scripts/render_abyss_round12.js (writes scripts/render_out/abyss_r12/)
 const path = require('path');
 const fs = require('fs');
 const REPO = path.join(__dirname, '..');
@@ -37,7 +37,7 @@ const mkState = (over) => Object.assign({
 
 const results = [];
 (async () => {
-    // 1) CLEARED — the abyss victory card (what endCombat now sends)
+ // 1) CLEARED - the abyss victory card (what endCombat now sends)
     const clr = await abyssScene.renderAbyssResultCard({
         outcome: 'CLEARED', floor: 20, score: 20 * 100 + 38 * 5,
         keptXp: 37795, keptGold: 25197, runes: 2, monstersKilled: 38, bossesKilled: 5,
@@ -47,7 +47,7 @@ const results = [];
     results.push(['r12_cleared_f20.png', clr && clr.length > 100]);
     console.log('r12_cleared_f20.png', clr && clr.length, clr && clr[0] === 0x89 ? 'PNG' : 'NOT-PNG');
 
-    // 2) FALLEN / EXTRACTED regression
+ // 2) FALLEN / EXTRACTED regression
     const fal = await abyssScene.renderAbyssResultCard({
         outcome: 'FALLEN', floor: 20, score: 2038, keptXp: 3779, keptGold: 2519, runes: 2,
         monstersKilled: 38, bossesKilled: 5, playerClassId: 'FIGHTER', playerSpriteIndex: 0,
@@ -63,9 +63,9 @@ const results = [];
     results.push(['r12_extracted_f20.png', ext && ext.length > 100]);
     console.log('r12_extracted_f20.png', ext && ext.length);
 
-    // 3) ELDER_CHAOS side — the facing fix (must face RIGHT toward the player).
-    // Real F19 regular mob: NO bossId/isBoss (either would pick the frozen
-    // boss tower) — id is the abyss run id, spriteIndex from ABYSS_SPRITE_MAP.
+ // 3) ELDER_CHAOS side - the facing fix (must face RIGHT toward the player).
+ // Real F19 regular mob: NO bossId/isBoss (either would pick the frozen
+ // boss tower) - id is the abyss run id, spriteIndex from ABYSS_SPRITE_MAP.
     const shoot = async (file, state, opts) => {
         const r = await abyssScene.renderAbyssCombat(state, opts || { phase: 'START', turnOrderStr: 'pink dildo' });
         if (r.success) fs.writeFileSync(path.join(OUT, file), r.buffer);
@@ -77,13 +77,13 @@ const results = [];
         enemies: [{ name: 'ELDER CHAOS', isEnemy: true, id: 'abyss_S_19_1', spriteIndex: 28, currentHP: 3000, stats: { hp: 3000, maxHp: 3759 } }],
     }));
 
-    // 4) PRIMORDIAL_CHAOS side — front-facing blob, never flipped
+ // 4) PRIMORDIAL_CHAOS side - front-facing blob, never flipped
     await shoot('r12_primordial_chaos_f16.png', mkState({
         abyssFloor: 16,
         enemies: [{ name: 'PRIMORDIAL CHAOS', isEnemy: true, id: 'abyss_S_16_1', spriteIndex: 29, currentHP: 6000, stats: { hp: 6000, maxHp: 8000 } }],
     }));
 
-    // 5) pool rotation F18/F19/F20 — 3 stages, no mist_hollow anywhere
+ // 5) pool rotation F18/F19/F20 - 3 stages, no mist_hollow anywhere
     const reg = abyssScene.bgListRegular();
     console.log('regular pool now:', reg.join(', '));
     results.push(['pool-has-no-mist_hollow', !reg.some((f) => /mist_hollow/i.test(f))]);

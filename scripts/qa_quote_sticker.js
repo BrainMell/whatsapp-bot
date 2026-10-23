@@ -56,7 +56,7 @@ const qs = require("../core/utils/quoteSticker");
   let allFit = true;
   for (const ln of wrapped) {
     const w = measure(ln.flat());
-    // trailing spaces are cosmetic-only; exclude them from the fit check
+ // trailing spaces are cosmetic-only; exclude them from the fit check
     const noTrailing = [...ln];
     while (noTrailing.length && /^\s+$/.test(noTrailing[noTrailing.length - 1].value)) noTrailing.pop();
     if (measure(noTrailing) > maxW + 1) allFit = false;
@@ -67,7 +67,7 @@ const qs = require("../core/utils/quoteSticker");
   ok(qs.wrapTokens([""], maxW, measure).length === 0, "empty line -> no lines");
 
   console.log("════ 4. pfp stub server ════");
-  // tiny JPEG served locally so fetchPfp+axios+loadImage path is exercised
+ // tiny JPEG served locally so fetchPfp+axios+loadImage path is exercised
   const sharp = require("sharp");
   const pfpJpg = await sharp({
     create: { width: 300, height: 300, channels: 3, background: { r: 155, g: 89, b: 182 } },

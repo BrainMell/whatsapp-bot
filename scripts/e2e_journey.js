@@ -40,7 +40,7 @@ async function step(name, fn) {
   }
 }
 
-// ── fake sock ──────────────────────────────────────────────
+// -- fake sock ----------------------------------------------
 const sock = {
   sendMessage: async (jid, content) => {
     sentLog.push({ jid, kind: content && content.image ? 'image' : (content && content.text ? 'text' : 'other'), preview: (content && content.text || content && content.caption || '').slice(0, 60).replace(/\n/g, ' ') });
@@ -64,7 +64,7 @@ async function waitState(chatId, timeoutMs = 20000) {
 }
 
 async function driveCombat(label, chatId, maxIters = 60) {
-  // attacks until not inCombat
+ // attacks until not inCombat
   let iters = 0;
   let state = ga.getGameState(chatId, P1);
   while (state && state.inCombat && iters < maxIters) {
@@ -81,7 +81,7 @@ async function driveCombat(label, chatId, maxIters = 60) {
 }
 
 async function main() {
-  // ═══ S-1: purge leftover test data from ANY previous run/probe (idempotency) ═══
+ // === S-1: purge leftover test data from ANY previous run/probe (idempotency) ===
   await step('S-1 purge leftovers', async () => {
     const connectDB = require('../db');
     await connectDB();
@@ -98,7 +98,7 @@ async function main() {
     return removed.join(', ') || 'clean already';
   });
 
-  // ═══ S0: DB + module loads ═══
+ // === S0: DB + module loads ===
   await step('S0 db+modules load', async () => {
     const connectDB = require('../db');
     await connectDB();
@@ -119,7 +119,7 @@ async function main() {
     return 'mongo connected, 12 modules required';
   });
 
-  // ═══ S1: register ═══
+ // === S1: register ===
   await step('S1 register P1+P2', async () => {
     const u1 = eco.registerUser(P1, 'E2EH chilling');
     const u2 = eco.registerUser(P2, 'E2EH squire');
@@ -128,7 +128,7 @@ async function main() {
     return `class=${got.class && (got.class.id || got.class)} zeni=${eco.getBalance(P1)}`;
   });
 
-  // ═══ S2: stats + XP curve regression ═══
+ // === S2: stats + XP curve regression ===
   await step('S2 XP curve 200*L^2', async () => {
     const xp10 = prog.getXPForLevel(10);
     const xp100 = prog.getXPForLevel(100);
@@ -143,13 +143,13 @@ async function main() {
     return `class=${cls.id || 'FIGHTER'} hp=${bs.hp} atk=${bs.atk}`;
   });
 
-  // ═══ S3: daily ═══
+ // === S3: daily ===
   await step('S3 claimDaily', async () => {
     const r = eco.claimDaily(P1);
     return typeof r === 'object' ? JSON.stringify(r).slice(0, 120) : String(r).slice(0, 120);
   });
 
-  // ═══ S4: wallet ═══
+ // === S4: wallet ===
   await step('S4 wallet add/remove', async () => {
     eco.addMoney(P1, 50000, 'E2E test funding');
     const bal1 = eco.getBalance(P1);
@@ -159,7 +159,7 @@ async function main() {
     return `bal ${bal1} -> ${bal2}`;
   });
 
-  // ═══ S5: item + equip ═══
+ // === S5: item + equip ===
   let equipTarget = null;
   await step('S5 addItem+equip', async () => {
     const info = loot.getItemInfo('wooden_sword') || loot.getItemInfo('rusty_sword') || null;
@@ -172,7 +172,7 @@ async function main() {
     return `equip ok; equipStats atk bonus present=${JSON.stringify(stats).length > 2}`;
   });
 
-  // ═══ S6: quest combat journey ═══
+ // === S6: quest combat journey ===
   await step('S6 initAdventure solo F-rank', async () => {
     try { await eco.healToFull(P1); } catch (e) {}
     const r = await ga.initAdventure(sock, CHAT, null, 'NORMAL', true, 'F', P1, null, null, { skipShop: true });
@@ -183,7 +183,7 @@ async function main() {
   });
 
   await step('S6b combat loop to victory', async () => {
-    // first encounter(s) may be non-combat - wait for the fight to actually start
+ // first encounter(s) may be non-combat - wait for the fight to actually start
     let st = null;
     const t0 = Date.now();
     while (Date.now() - t0 < 25000) {
@@ -197,7 +197,7 @@ async function main() {
     return `iters=${iters} inCombat=${st ? st.inCombat : 'no-state'}`;
   });
 
-  // ═══ S7: defend leak regression - deterministic calculateDamage A/B ═══
+ // === S7: defend leak regression - deterministic calculateDamage A/B ===
   await step('S7 def leak: defend-shield leaks ~2%, ability-shield full absorbs', async () => {
     const mkAttacker = () => ({ jid: 'e2e-enemy', isEnemy: true, name: 'E2E Brute', stats: { atk: 50, def: 10, mag: 0, spd: 10, luck: 0, hp: 9000, maxHp: 9000 }, statusEffects: [], equipment: {} });
     const mkTarget = (shields) => ({ jid: P1, isEnemy: false, name: 'E2E Hero', id: 'hero', stats: { atk: 10, def: 5, mag: 0, spd: 10, luck: 0, hp: 5000, maxHp: 5000, dmgReduction: 0, evasion: 0 }, statusEffects: shields, equipment: {} });
@@ -219,24 +219,24 @@ async function main() {
     if (rawMean <= 0) throw new Error('baseline raw damage 0 - test setup wrong');
     if (defSh.some(r => r.damage < 1)) throw new Error(`defend shield produced a 0-damage hit - no leak! defMean=${defMean}`);
     if (defMean > rawMean * 0.06 + 2) throw new Error(`defend leak too big: raw=${rawMean.toFixed(1)} def=${defMean.toFixed(1)}`);
-    // ability shields keep full absorb EXCEPT the engine's by-design
-    // Math.max(1, ...) minimum-damage floor on calculateDamage's return
-    // (verified: exactly 1 gets through every hit, raw ~478)
+ // ability shields keep full absorb EXCEPT the engine's by-design
+ // Math.max(1, ...) minimum-damage floor on calculateDamage's return
+ // (verified: exactly 1 gets through every hit, raw ~478)
     if (abMax > 1) throw new Error(`ability shield leaked ${abMax} - full absorb broken`);
     return `raw=${rawMean.toFixed(1)} defendLeak=${defMean.toFixed(1)} (~${(defMean / rawMean * 100).toFixed(1)}%) abilityAbsorb=100%`;
   });
 
-  // ═══ S8: abyss journey ═══
+ // === S8: abyss journey ===
   let abyssRunFloor = 0;
   await step('S8 abyss startRun (leveled hero)', async () => {
-    // abyss is endgame: level the hero up so floor 1-4 is survivable
-    // (startAbyssCombat rebuilds player stats from level, not from our snapshot)
+ // abyss is endgame: level the hero up so floor 1-4 is survivable
+ // (startAbyssCombat rebuilds player stats from level, not from our snapshot)
     prog.addXP(P1, prog.getXPForLevel(40) + 1, 'E2E levelup');
     try { await eco.healToFull(P1); } catch (e) {}
     const lvl = prog.getLevel(P1);
     const cls = eco.getUserClass(P1) || {};
     const bs = prog.getBaseStats(P1, cls.id || 'FIGHTER');
-    // buff the test hero so floors go fast
+ // buff the test hero so floors go fast
     const stats = { ...bs, hp: bs.hp * 5, maxHp: bs.hp * 5, atk: bs.atk * 5, def: bs.def * 5, mag: bs.mag * 5, spd: bs.spd + 50, luck: bs.luck, crit: bs.crit, dmgReduction: bs.dmgReduction || 0, evasion: bs.evasion || 0, energy: 200, maxEnergy: 200 };
     const r = await abyss.startRun(P1, stats);
     if (!r.success && !r.run) throw new Error(r.message || 'startRun failed');
@@ -267,7 +267,7 @@ async function main() {
           }
           await driveCombat('abyss', CHAT_AB, 40);
         } else {
-          // floor advanced, enemy not spawned yet
+ // floor advanced, enemy not spawned yet
           await sleep(800);
         }
       } else if (t === 'treasure') {
@@ -290,7 +290,7 @@ async function main() {
   });
 
   await step('S9 MID-COMBAT retreat (defuse contract)', async () => {
-    // advance floors until we are ON a combat floor with a live enemy
+ // advance floors until we are ON a combat floor with a live enemy
     let run = null;
     for (let i = 0; i < 40; i++) {
       run = await abyss.getRunStatus(P1);
@@ -314,7 +314,7 @@ async function main() {
     }
     const st2 = ga.getGameState(CHAT_AB, P1);
     if (!st2 || !st2.inCombat) throw new Error('could not enter abyss combat for retreat test');
-    // replicate the engine.js defuse sequence exactly
+ // replicate the engine.js defuse sequence exactly
     st2.inCombat = false; st2.active = false; st2.combatProcessing = false;
     if (st2.timers) for (const k of Object.keys(st2.timers)) { if (st2.timers[k]) { clearTimeout(st2.timers[k]); st2.timers[k] = null; } }
     const lootBefore = (run.lootAccumulator && run.lootAccumulator.xp) || 0;
@@ -325,10 +325,10 @@ async function main() {
     if (after) throw new Error(`run still queryable as active after retreat (status=${after.status})`);
     const st3 = ga.getGameState(CHAT_AB, P1);
     if (st3 && st3.inCombat) throw new Error('zombie combat after retreat');
-    // re-enter should work (fresh run) - clear any cooldown the extraction set
+ // re-enter should work (fresh run) - clear any cooldown the extraction set
     try { await abyss.adminResetCooldown(P1); } catch (e) {}
     try { await abyss.adminClearRun(P1); } catch (e) {}
-    // re-enter should work (fresh run)
+ // re-enter should work (fresh run)
     const cls = eco.getUserClass(P1) || {};
     const bs = prog.getBaseStats(P1, cls.id || 'FIGHTER');
     const stats = { ...bs, hp: bs.hp * 5, maxHp: bs.hp * 5, atk: bs.atk * 5, def: bs.def * 5, mag: bs.mag * 5, spd: bs.spd + 50, luck: bs.luck, crit: bs.crit, dmgReduction: 0, evasion: 0, energy: 200, maxEnergy: 200 };
@@ -355,7 +355,7 @@ async function main() {
     return 'FALLEN card ok, run closed, cooldown set+cleared';
   });
 
-  // ═══ S10: allocate ═══
+ // === S10: allocate ===
   await step('S10 allocateStatPoint', async () => {
     prog.awardXP(P1, 5000, 'E2E');
     const r = prog.allocateStatPoint(P1, 'atk', 2);
@@ -363,7 +363,7 @@ async function main() {
     return JSON.stringify(r).slice(0, 120);
   });
 
-  // ═══ S11: skills ═══
+ // === S11: skills ===
   await step('S11 skill tree', async () => {
     const clsId = (eco.getUserClass(P1) || {}).id || 'FIGHTER';
     const pts = skills.calculateSkillPoints(prog.getLevel(P1));
@@ -374,7 +374,7 @@ async function main() {
     return `class=${clsId} pts=${JSON.stringify(pts).slice(0, 40)} skills=${list.length} abilities=${Array.isArray(abs) ? abs.length : Object.keys(abs || {}).length}`;
   });
 
-  // ═══ S12: craft ═══
+ // === S12: craft ===
   await step('S12 craft leg', async () => {
     const recipes = craft.getRecipes();
     const list = Array.isArray(recipes) ? recipes : Object.values(recipes || {});
@@ -387,7 +387,7 @@ async function main() {
     return `recipes=${list.length} first=${id} canCraft=${JSON.stringify(can).slice(0, 60)} craft=${crafted ? 'OK' : 'refused'} ${err || ''}`;
   });
 
-  // ═══ S13: runes ═══
+ // === S13: runes ===
   await step('S13 rune leg', async () => {
     const rune = await runes.createRune(P1, 'POWER', 'LESSER', 'e2e-test');
     const invR = await runes.getRuneInventory(P1);
@@ -395,7 +395,7 @@ async function main() {
     return `created=${!!rune} inventoryCount=${n}`;
   });
 
-  // ═══ S14: summon ═══
+ // === S14: summon ===
   let summonId = null;
   await step('S14 summon create+deploy', async () => {
     let speciesId = null;
@@ -417,7 +417,7 @@ async function main() {
     return `species=${speciesId} id=${summonId} active=${!!active}`;
   });
 
-  // ═══ S15: pvp duel ═══
+ // === S15: pvp duel ===
   await step('S15 pvp challenge->accept->attack', async () => {
     eco.registerUser(P2, 'E2EH squire');
     const inv2 = await pvp.challengePlayer(CHAT, P1, P2, 0, {});
@@ -429,21 +429,21 @@ async function main() {
       await sleep(400);
       const duel = pvp.getDuel(CHAT) || pvp.getDuel(`${CHAT}_${P1}`);
       if (!duel || duel.status === 'ended' || duel.status === 'completed') { ended = true; break; }
-      // P2 attacks too
+ // P2 attacks too
       await pvp.handlePvPAction(sock, CHAT, P2, 'attack', null, null).catch(() => {});
       await sleep(300);
     }
     return `duel driven ${iters} actions ended=${ended}`;
   });
 
-  // ═══ S16: leaderboards read ═══
+ // === S16: leaderboards read ===
   await step('S16 leaderboards read-only', async () => {
     const lb = await abyss.getWeeklyLeaderboard();
     const plb = await prog.getLeaderboard();
     return `abyssLb=${JSON.stringify(lb).length}ch progLb=${JSON.stringify(plb).length}ch`;
   });
 
-  // ═══ S17: card pipeline through real Go service ═══
+ // === S17: card pipeline through real Go service ===
   await step('S17 ABYSS_RESULT card via Go svc', async () => {
     const go = require('../core/utils/goImageService');
     const buf = await go.generatePortraitCard({
@@ -456,7 +456,7 @@ async function main() {
     return `ABYSS_RESULT ${buf.length}B`;
   });
 
-  // ═══ report ═══
+ // === report ===
   const fails = results.filter(r => !r.ok);
   console.log(`\n===== E2E REPORT: ${results.length - fails.length}/${results.length} PASS =====`);
   for (const f of fails) console.log(`FAILED: ${f.name} :: ${f.detail}`);
@@ -466,7 +466,7 @@ async function main() {
 main()
   .catch(e => { console.error('HARNESS FATAL:', e.message); process.exitCode = 2; })
   .finally(async () => {
-    // ═══ cleanup: remove test data ═══
+ // === cleanup: remove test data ===
     try {
       const mongoose = require('mongoose');
       const conn = mongoose.connection;

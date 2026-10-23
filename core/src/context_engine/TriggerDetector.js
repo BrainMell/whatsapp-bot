@@ -111,21 +111,21 @@ class TriggerDetector {
     calculateConfidence(type, base, content) {
         let confidence = base;
 
-        // Length bonus (more context)
+ // Length bonus (more context)
         const words = content.split(/\s+/).length;
         confidence += Math.min(0.1, words / 200);
 
-        // Question penalty (less definitive)
+ // Question penalty (less definitive)
         if (content.includes('?')) confidence -= 0.2;
 
-        // Named Entity (Proper Nouns) bonus
+ // Named Entity (Proper Nouns) bonus
         if (/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/.test(content)) confidence += 0.05;
 
-        // Negation penalty
+ // Negation penalty
         const negations = ['not', "n't", 'never', 'neither', 'nor'];
         if (negations.some(n => content.toLowerCase().includes(n))) confidence -= 0.1;
 
-        // Intensity modifiers (Boost)
+ // Intensity modifiers (Boost)
         const intensity = ['really', 'absolutely', 'totally', 'completely', 'extremely'];
         if (intensity.some(i => content.toLowerCase().includes(i))) confidence += 0.08;
 

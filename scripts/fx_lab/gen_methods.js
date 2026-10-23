@@ -1,9 +1,9 @@
-// gen_methods.js — v18 METHOD LAB frames:
-//   SMEAR (24 directed): ball AT REST at the destination cell with the
-//     motion trail of the move it just made baked in (ghosts + streaks
-//     receding toward the origin). Single-edit animation, zero flash
-//     windows — the landing frame IS the animation.
-//   PULSE (9): impact ring + dust rays on the landed cell (juice beat).
+// gen_methods.js - v18 METHOD LAB frames:
+// SMEAR (24 directed): ball AT REST at the destination cell with the
+// motion trail of the move it just made baked in (ghosts + streaks
+// receding toward the origin). Single-edit animation, zero flash
+// windows - the landing frame IS the animation.
+// PULSE (9): impact ring + dust rays on the landed cell (juice beat).
 // 1280x720 + 800x450 thumbs each, same jimp pipeline as gen_ball/gen_motion.
 const { Jimp, loadFont } = require("jimp");
 const path = require("path");
@@ -164,7 +164,7 @@ async function save(img, base) {
 
 (async () => {
     let n = 0;
-    // SMEAR landings — ball at rest at destination, trail receding to origin
+ // SMEAR landings - ball at rest at destination, trail receding to origin
     for (let ax = 0; ax < 3; ax++) for (let ay = 0; ay < 3; ay++) {
         for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
             const bx = ax + dx, by = ay + dy;
@@ -195,7 +195,7 @@ async function save(img, base) {
             console.log("smear", ax + "," + ay, "->", bx + "," + by, sz);
         }
     }
-    // PULSE impacts — ring + dust on the landed cell
+ // PULSE impacts - ring + dust on the landed cell
     for (let gx = 0; gx < 3; gx++) for (let gy = 0; gy < 3; gy++) {
         const img = new Jimp({ width: W, height: H, color: 0x00000000 });
         gradient(img);

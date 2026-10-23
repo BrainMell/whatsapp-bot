@@ -1,10 +1,10 @@
-// 🖼️ Ruins render worker (child process) — keeps node-canvas drawing OFF
+// Ruins render worker (child process) - keeps node-canvas drawing OFF
 // the bot's event loop. Handles BOTH render kinds:
-//   {type:'map', id, doc, player, extras}      → landscape war map
-//   {type:'room', id, doc, player, room, opts} → door-variant room scene
+// {type:'map', id, doc, player, extras} → landscape war map
+// {type:'room', id, doc, player, room, opts} → door-variant room scene
 // Replies {id, kind, png|error}.
-// OWNER QUEUE RULE (2026-10-08): children obey the same memory rules as the
-// bot process — createCanvas in here is braked when box memory is critical
+// OWNER QUEUE RULE: children obey the same memory rules as the
+// bot process - createCanvas in here is braked when box memory is critical
 // (the error propagates to the parent as a failed render -> text fallback).
 require('../../utils/canvasAutoGate').install();
 process.on('message', async (msg) => {

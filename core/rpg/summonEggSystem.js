@@ -1,21 +1,18 @@
-// ═══════════════════════════════════════════════════════════════════════════
-//  SUMMON EGG SYSTEM - eggs, hatching, fragments, crafting
-// ═══════════════════════════════════════════════════════════════════════════
-//
+// ===========================================================================
+// SUMMON EGG SYSTEM - eggs, hatching, fragments, crafting
+// ===========================================================================
 // The Summon Progression Loop:
-//   1. Player buys Basic Summon Egg from shop → spins for 1 of 4 starters
-//   2. Player explores Abyss → 10% chance per floor to encounter a Wild Summon
-//   3. Defeat Wild Summon → drops Summon Fragments (tiered by floor depth)
-//   4. Craft higher-tier eggs from fragments → hatch into stronger summons
-//   5. Eggs have incubation time (1h-48h by tier) - speed up with Zeni
-//
+// 1. Player buys Basic Summon Egg from shop → spins for 1 of 4 starters
+// 2. Player explores Abyss → 10% chance per floor to encounter a Wild Summon
+// 3. Defeat Wild Summon → drops Summon Fragments (tiered by floor depth)
+// 4. Craft higher-tier eggs from fragments → hatch into stronger summons
+// 5. Eggs have incubation time (1h-48h by tier) - speed up with Zeni
 // Fragment tiers → egg tiers → summon rarities:
-//   Common Fragment   → (craft) → Rare Egg     → hatches RARE summon
-//   Rare Fragment     → (craft) → Epic Egg     → hatches EPIC summon
-//   Epic Fragment     → (craft) → Legendary Egg → hatches LEGENDARY summon
-//   Legendary Fragment→ (craft) → Mythic Egg   → hatches MYTHIC summon
-//   Mythic Fragment   → (endgame currency, future use)
-//
+// Common Fragment → (craft) → Rare Egg → hatches RARE summon
+// Rare Fragment → (craft) → Epic Egg → hatches EPIC summon
+// Epic Fragment → (craft) → Legendary Egg → hatches LEGENDARY summon
+// Legendary Fragment→ (craft) → Mythic Egg → hatches MYTHIC summon
+// Mythic Fragment → (endgame currency, future use)
 // Basic Egg is shop-buyable (5K Zeni) and only hatches the 4 starters.
 // All other eggs are crafted from fragments dropped in the Abyss.
 
@@ -28,13 +25,13 @@ const lootSystem = require('./lootSystem');
 const registry = require('./summonRegistry');
 const summonSystem = require('./summonSystem');
 
-// ─── 4 STARTER SUMMONS ────────────────────────────────────────────
-// 💡 FIX 2026-08-05: Use the live registry's starter species. The old
+// --- 4 STARTER SUMMONS --------------------------------------------
+// FIX Use the live registry's starter species. The old
 // hardcoded list (stoneguard, emberdrake, mistwisp, bloompixie) referenced
 // stale species that no longer exist - basic eggs would fail at createSummon.
 const STARTER_SPECIES = registry.STARTER_SPECIES || ['bat', 'slime', 'mushroom', 'snake'];
 
-// ─── EGG TIERS + INCUBATION ───────────────────────────────────────
+// --- EGG TIERS + INCUBATION ---------------------------------------
 const EGG_TIERS = {
   basic: {
     eggId: 'basic_summon_egg',
@@ -77,36 +74,35 @@ const EGG_TIERS = {
   },
 };
 
-// ─── HATCH AN EGG ─────────────────────────────────────────────────
+// --- HATCH AN EGG -------------------------------------------------
 // Spins for a random summon from the appropriate pool + creates it.
 // For basic eggs: 1 of 4 starters (guaranteed, equal chance).
 // For tiered eggs: random summon of that rarity from the registry.
-// Returns { success, message, summon? }
 async function hatchEgg(userId, eggId) {
   const tier = Object.values(EGG_TIERS).find(t => t.eggId === eggId);
   if (!tier) {
     return { success: false, message: '❌ Invalid egg type.' };
   }
 
-  // Check the player has the egg
+ // Check the player has the egg
   if (!inventorySystem.hasItem(userId, eggId, 1)) {
     return { success: false, message: `❌ You don't have a ${lootSystem.getItemInfo(eggId)?.name || eggId}.` };
   }
 
-  // Pick the species
+ // Pick the species
   let speciesId;
   if (tier.isStarter) {
-    // Basic egg: random 1 of 4 starters
+ // Basic egg: random 1 of 4 starters
     speciesId = STARTER_SPECIES[Math.floor(Math.random() * STARTER_SPECIES.length)];
   } else {
-    // Tiered egg: random summon from registry matching the rarity pool
-    // 💡 FIX 2026-08-03 (bug report #3): getAllSpecies() returns an ARRAY of
-    // ID strings, not an object. The old Object.entries() code treated it as
-    // {id: speciesObj}, so s.rarity was undefined, the filter rejected
-    // everything, pool was empty, and tiered eggs ALWAYS fell back to
-    // starters. Players could never hatch rare/epic/legendary/mythic summons
-    // from crafted eggs - they always got a starter.
-    // Fix: use registry.getSpecies(id) to resolve each ID.
+ // Tiered egg: random summon from registry matching the rarity pool
+ // FIX (bug report #3): getAllSpecies() returns an ARRAY of
+ // ID strings, not an object. The old Object.entries() code treated it as
+ // {id: speciesObj}, so s.rarity was undefined, the filter rejected
+ // everything, pool was empty, and tiered eggs ALWAYS fell back to
+ // starters. Players could never hatch rare/epic/legendary/mythic summons
+ // from crafted eggs - they always got a starter.
+ // Fix: use registry.getSpecies(id) to resolve each ID.
     const speciesIds = registry.getAllSpecies();
     const pool = [];
     for (const id of speciesIds) {
@@ -117,7 +113,7 @@ async function hatchEgg(userId, eggId) {
     }
 
     if (pool.length === 0) {
-      // Fallback: if no summons of that rarity exist yet, give a starter upgrade
+ // Fallback: if no summons of that rarity exist yet, give a starter upgrade
       speciesId = STARTER_SPECIES[Math.floor(Math.random() * STARTER_SPECIES.length)];
     } else {
       speciesId = pool[Math.floor(Math.random() * pool.length)];
@@ -129,7 +125,7 @@ async function hatchEgg(userId, eggId) {
     return { success: false, message: '❌ Invalid summon species. Please report this.' };
   }
 
-  // Check summon slot space
+ // Check summon slot space
   const user = economy.getUser(userId);
   const userSummons = await summonSystem.getUserSummons(userId);
   if (userSummons.length >= (user.summonSlots || 5)) {
@@ -139,10 +135,9 @@ async function hatchEgg(userId, eggId) {
     };
   }
 
-  // Consume the egg
+ // Consume the egg
   inventorySystem.removeItem(userId, eggId, 1);
 
-  // Create the summon
   try {
     const summon = await summonSystem.createSummon(userId, speciesId, {
       nickname: species.name,
@@ -166,9 +161,8 @@ async function hatchEgg(userId, eggId) {
   }
 }
 
-// ─── CRAFT AN EGG FROM FRAGMENTS ──────────────────────────────────
+// --- CRAFT AN EGG FROM FRAGMENTS ----------------------------------
 // Combines 10 fragments → 1 egg of the next tier up.
-// Returns { success, message }
 async function craftEgg(userId, targetTier) {
   const tier = EGG_TIERS[targetTier];
   if (!tier || tier.isStarter) {
@@ -178,7 +172,7 @@ async function craftEgg(userId, targetTier) {
   const fragId = tier.fragmentsRequired.id;
   const fragCount = tier.fragmentsRequired.count;
 
-  // Check fragments
+ // Check fragments
   if (!inventorySystem.hasItem(userId, fragId, fragCount)) {
     const have = inventorySystem.getItemCount(userId, fragId);
     const fragName = lootSystem.getItemInfo(fragId)?.name || fragId;
@@ -188,16 +182,16 @@ async function craftEgg(userId, targetTier) {
     };
   }
 
-  // Consume fragments + create egg
-  // 💡 FIX 2026-10-10: addItem is ASYNC and can FAIL (inventory full) - the old
-  // fire-and-forget call consumed the 10 fragments and then silently added NO
-  // egg while still returning the success message (players lost fragments and
-  // reported "can't use summons"). Now: await the add; on failure REFUND the
-  // fragments and return the honest error.
+ // Consume fragments + create egg
+ // FIX addItem is ASYNC and can FAIL (inventory full) - the old
+ // fire-and-forget call consumed the 10 fragments and then silently added NO
+ // egg while still returning the success message (players lost fragments and
+ // reported "can't use summons"). Now: await the add; on failure REFUND the
+ // fragments and return the honest error.
   inventorySystem.removeItem(userId, fragId, fragCount);
   const addRes = await inventorySystem.addItem(userId, tier.eggId, 1);
   if (!addRes || addRes.success === false) {
-    // Refund (the fragment stack slot existed before we consumed it)
+ // Refund (the fragment stack slot existed before we consumed it)
     try {
       await inventorySystem.addItem(userId, fragId, fragCount);
     } catch (e) {
@@ -217,30 +211,29 @@ async function craftEgg(userId, targetTier) {
   };
 }
 
-// ─── GET WILD SUMMON FOR ABYSS ENCOUNTER ──────────────────────────
+// --- GET WILD SUMMON FOR ABYSS ENCOUNTER --------------------------
 // Called by the Abyss system when a wild summon encounter triggers.
-// Returns a combat-ready enemy object scaled to the floor.
 function generateWildSummonEncounter(floor) {
-  // Pick a random species from the registry (weighted by floor depth)
-  // 💡 FIX 2026-08-03 (bug report #3): getAllSpecies() returns an ARRAY of
-  // species ID strings, not an object. The old code did Object.entries() on
-  // the array, which gave [[0, 'skeleton'], [1, 'skeleton_knight'], ...] -
-  // so 's' was a STRING, s.rarity was undefined, the filter rejected
-  // everything, pool.length was 0, and the function returned null.
-  // Result: Wild Summon encounters NEVER spawned, despite the 10% chance
-  // in generateFloorEncounter(). Players reached floor 75+ with zero
-  // encounters.
-  // Fix: use getSpecies(id) to resolve each ID to the species object.
+ // Pick a random species from the registry (weighted by floor depth)
+ // FIX (bug report #3): getAllSpecies() returns an ARRAY of
+ // species ID strings, not an object. The old code did Object.entries() on
+ // the array, which gave [[0, 'skeleton'], [1, 'skeleton_knight'], ...] -
+ // so 's' was a STRING, s.rarity was undefined, the filter rejected
+ // everything, pool.length was 0, and the function returned null.
+ // Result: Wild Summon encounters NEVER spawned, despite the 10% chance
+ // in generateFloorEncounter(). Players reached floor 75+ with zero
+ // encounters.
+ // Fix: use getSpecies(id) to resolve each ID to the species object.
   const speciesIds = registry.getAllSpecies();
 
-  // Determine which rarities can appear based on floor
+ // Determine which rarities can appear based on floor
   let allowedRarities;
   if (floor >= 50) allowedRarities = ['RARE', 'EPIC', 'LEGENDARY', 'MYTHIC'];
   else if (floor >= 21) allowedRarities = ['UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY'];
   else if (floor >= 11) allowedRarities = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC'];
   else allowedRarities = ['COMMON', 'UNCOMMON', 'RARE'];
 
-  // Build pool of {id, species} pairs filtered by allowed rarity
+ // Build pool of {id, species} pairs filtered by allowed rarity
   const pool = [];
   for (const id of speciesIds) {
     const species = registry.getSpecies(id);
@@ -250,7 +243,7 @@ function generateWildSummonEncounter(floor) {
   }
   if (pool.length === 0) return null;
 
-  // Weight: lower rarity = more common
+ // Weight: lower rarity = more common
   const RARITY_WEIGHT = { COMMON: 50, UNCOMMON: 30, RARE: 15, EPIC: 8, LEGENDARY: 3, MYTHIC: 1 };
   const weighted = [];
   for (const { id, species } of pool) {
@@ -262,7 +255,7 @@ function generateWildSummonEncounter(floor) {
   const species = registry.getSpecies(speciesId);
   if (!species) return null;
 
-  // Scale stats by floor
+ // Scale stats by floor
   const floorMult = 1.0 + (floor - 1) * 0.20; // 20% per floor
   const hp = Math.floor((species.baseStats.hp || 100) * floorMult);
   const atk = Math.floor((species.baseStats.atk || 10) * floorMult);
@@ -303,18 +296,18 @@ function generateWildSummonEncounter(floor) {
   };
 }
 
-// ─── GET FRAGMENT DROP FOR ABYSS FLOOR ────────────────────────────
+// --- GET FRAGMENT DROP FOR ABYSS FLOOR ----------------------------
 // Called when a wild summon is defeated. Returns the fragment item ID
 // + quantity based on floor depth + species rarity.
 function getFragmentDrop(floor, speciesRarity) {
-  // Determine fragment tier based on floor + species rarity
+ // Determine fragment tier based on floor + species rarity
   let fragmentTier;
   if (floor >= 50 || speciesRarity === 'MYTHIC') fragmentTier = 'legendary';
   else if (floor >= 21 || speciesRarity === 'LEGENDARY') fragmentTier = 'epic';
   else if (floor >= 11 || speciesRarity === 'EPIC') fragmentTier = 'rare';
   else fragmentTier = 'common';
 
-  // Rare chance to drop one tier higher
+ // Rare chance to drop one tier higher
   if (Math.random() < 0.10) {
     const tiers = ['common', 'rare', 'epic', 'legendary', 'mythic'];
     const idx = tiers.indexOf(fragmentTier);
@@ -323,13 +316,13 @@ function getFragmentDrop(floor, speciesRarity) {
 
   const fragmentId = `${fragmentTier}_fragment`;
 
-  // Quantity: 1-3 normally, 2-5 on boss floors
+ // Quantity: 1-3 normally, 2-5 on boss floors
   const quantity = Math.floor(Math.random() * 3) + 1;
 
   return { fragmentId, quantity };
 }
 
-// ─── EXPORTS ──────────────────────────────────────────────────────
+// --- EXPORTS ------------------------------------------------------
 module.exports = {
   EGG_TIERS,
   STARTER_SPECIES,

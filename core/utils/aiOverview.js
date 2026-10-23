@@ -1,14 +1,12 @@
-// aiOverview.js — web-grounded "AI overview" helpers for `.j google <question>`
-//
-// Owner 2026-10-12: "Add a .j Google where you can effectively Google any
+// aiOverview.js - web-grounded "AI overview" helpers for `.j google <question>`
+// "Add a .j Google where you can effectively Google any
 // question and get a response, like the AI overview but it isn't our AI
-// grok or anything like that." — i.e. answers must come from REAL search
+// grok or anything like that." - i.e. answers must come from REAL search
 // results (with visible sources), not free-form chat.
-//
 // Design: ZERO network calls here. The engine fetches the search pages and
 // calls Groq; every parser/formatter in this module is pure so QA can run
 // offline against fixture HTML. The ONLY state is the small result cache +
-// 429 breaker below — added after the 2026-10-12 13:49Z incident where Brave
+// 429 breaker below - added after the 13:49Z incident where Brave
 // rate-limited BOTH box IPs mid-burst and retries kept hammering the dead
 // backend (see cacheGet/noteBackend429).
 
@@ -33,8 +31,8 @@ const NAMED_ENTITIES = {
   apos: "'",
   nbsp: " ",
   hellip: "…",
-  mdash: "—",
-  ndash: "–",
+  mdash: "-",
+  ndash: "-",
   rsquo: "’",
   lsquo: "‘",
   ldquo: "“",
@@ -79,10 +77,10 @@ function decodeEntities(s) {
 }
 
 function stripTags(s) {
-  // ⚠️ decode BEFORE stripping: Bing snippets embed entity-encoded markup
-  // (e.g. &lt;span class=&#39;…&#39;&gt;) — stripping first would let the
-  // tags survive as literal text once entities decode. Final decode catches
-  // double-encoded fragments (&amp;lt; → &lt; → text).
+ // decode BEFORE stripping: Bing snippets embed entity-encoded markup
+ // (e.g. &lt;span class=&#39;…&#39;&gt;) - stripping first would let the
+ // tags survive as literal text once entities decode. Final decode catches
+ // double-encoded fragments (&amp;lt; → &lt; → text).
   const once = decodeEntities(String(s || ""));
   return decodeEntities(once.replace(/<[^>]*>/g, " "))
     .replace(/\s+/g, " ")
@@ -137,9 +135,9 @@ function findAnchors(html, classNeedle) {
 // ------------------------------------------------------------------ parsers
 // Every parser returns [{title, snippet, url, domain}] (possibly empty).
 
-// html.duckduckgo.com/html/ (POST q=...) — classic result cards.
-// ⚠️ Ad-safety: split into result-card chunks FIRST and test result--ad
-// WITHIN the card only — a naive fixed look-back window bleeds across card
+// html.duckduckgo.com/html/ (POST q=...) - classic result cards.
+// Ad-safety: split into result-card chunks FIRST and test result--ad
+// WITHIN the card only - a naive fixed look-back window bleeds across card
 // boundaries and eats the organic result that follows an ad.
 function parseDdgHtml(html) {
   const out = [];
@@ -166,7 +164,7 @@ function parseDdgHtml(html) {
   return out;
 }
 
-// lite.duckduckgo.com/lite/?q=... — table layout, `result-link` anchors.
+// lite.duckduckgo.com/lite/?q=... - table layout, `result-link` anchors.
 function parseDdgLite(html) {
   const out = [];
   if (!html) return out;
@@ -187,7 +185,7 @@ function parseDdgLite(html) {
   return out;
 }
 
-// bing.com/search?q=... — <li class="b_algo"> blocks.
+// bing.com/search?q=... - <li class="b_algo"> blocks.
 function parseBingHtml(html) {
   const out = [];
   if (!html) return out;
@@ -211,18 +209,18 @@ function parseBingHtml(html) {
   return out;
 }
 
-// search.brave.com/search?q=... — svelte-rendered organic results.
-// Verified live 2026-10-12 (Box2): Brave serves REAL organic results to the
-// box IP (unlike Bing's decoys / DDG's anomaly-202 / Google's JS wall) —
+// search.brave.com/search?q=... - svelte-rendered organic results.
+// Verified live (Box2): Brave serves REAL organic results to the
+// box IP (unlike Bing's decoys / DDG's anomaly-202 / Google's JS wall) -
 // anatomy per result:
-//   <a href="URL" ...> …favicon… <cite class="snippet-url">domain › path</cite>
-//     <div class="title search-snippet-title …" title="T">T</div></a>
-//   <div class="generic-snippet…"><div class="content…">SNIP</div></div>
+// <a href="URL" ...> …favicon… <cite class="snippet-url">domain › path</cite>
+// <div class="title search-snippet-title …" title="T">T</div></a>
+// <div class="generic-snippet…"><div class="content…">SNIP</div></div>
 function parseBraveHtml(html) {
   const out = [];
   if (!html) return out;
   let h = String(html);
-  // tail sections reuse result-like markup — cut them before parsing
+ // tail sections reuse result-like markup - cut them before parsing
   const cutAt = h.search(
     /<div class="snippet[^"]*" id="(related-queries|search-elsewhere)"/,
   );
@@ -235,8 +233,8 @@ function parseBraveHtml(html) {
   while ((m = titleRe.exec(h)) !== null) {
     const title = stripTags(m[1]);
     if (!title) continue;
-    // the title sits INSIDE the result's wrapping anchor — take the nearest
-    // preceding external <a href> (favicon/infobox anchors are brave-internal)
+ // the title sits INSIDE the result's wrapping anchor - take the nearest
+ // preceding external <a href> (favicon/infobox anchors are brave-internal)
     const before = h.slice(Math.max(0, m.index - 3000), m.index);
     const hrefs = [...before.matchAll(/<a\s[^>]*href="([^"]+)"/gi)];
     let url = "";
@@ -267,10 +265,10 @@ function parseBraveHtml(html) {
   return out;
 }
 
-// bing.com/search?q=...&format=rss — keyless structured RSS. Verified live
-// 2026-10-12 (Box2): serves REAL organic items (fandom/YouTube/etc.) and, at
+// bing.com/search?q=...&format=rss - keyless structured RSS. Verified live
+// (Box2): serves REAL organic items (fandom/YouTube/etc.) and, at
 // 13:49-13:53Z, kept working while the HTML SERP flipped to anti-bot decoys
-// and Brave 429'd — the RSS endpoint is a different code path at Bing's edge
+// and Brave 429'd - the RSS endpoint is a different code path at Bing's edge
 // and historically does not serve the decoy SERP treatment.
 function parseBingRss(xml) {
   const out = [];
@@ -281,7 +279,7 @@ function parseBingRss(xml) {
     const lM = item.match(/<link>([\s\S]*?)<\/link>/);
     if (!tM || !lM) continue;
     const url = stripTags(lM[1]).trim();
-    // channel-level / nav links point back at bing itself — not results
+ // channel-level / nav links point back at bing itself - not results
     if (!validUrl(url) || /(^|\.)bing\.com/i.test(domainOf(url))) continue;
     const title = stripTags(tM[1]);
     if (!title) continue;
@@ -292,11 +290,11 @@ function parseBingRss(xml) {
   return out;
 }
 
-// en.wikipedia.org/w/api.php?action=query&list=search — tier-2 reference
+// en.wikipedia.org/w/api.php?action=query&list=search - tier-2 reference
 // backend. Every full-web engine (brave/bing/ddg/mojeek/…) is hostile to
-// datacenter IPs at least sometimes (verified live 2026-10-12: brave 429s
+// datacenter IPs at least sometimes (verified live brave 429s
 // both box IPs, bing flips to fabricated decoys, ddg anomaly-202, mojeek
-// captcha) — the MediaWiki search API, by contrast, is policy-open and
+// captcha) - the MediaWiki search API, by contrast, is policy-open and
 // honest. Not full-web coverage, but real sourced content beats a hard
 // failure when everything else is rate-limiting. Accepts object (axios
 // auto-parse) or string.
@@ -338,16 +336,16 @@ function dedupeAndCap(results, cap = MAX_RESULTS) {
 }
 
 // ------------------------------------------- result cache + 429 breaker
-// Incident 2026-10-12 13:49-13:53Z (joker): Brave answered 429 to BOTH box
+// Incident 13:49-13:53Z (joker): Brave answered 429 to BOTH box
 // IPs mid-burst; DDG is anomaly-blocked on those IPs; Bing intermittently
 // serves decoy SERPs → the (correct) failure message fired 3× for retries of
 // the SAME query. Two cheap guards:
-//   • result cache — a query answered once is answered from memory for 10 min
-//     (retries cost zero backend hits, and re-asks of hot queries don't
-//     contribute to rate-limit pressure);
-//   • per-backend 429 breaker — a backend that just answered 429 is skipped
-//     for 8 min (half-open after) instead of being re-hit every attempt, so
-//     it can actually cool down. State is per-process (per bot), harmless.
+// • result cache - a query answered once is answered from memory for 10 min
+// (retries cost zero backend hits, and re-asks of hot queries don't
+// contribute to rate-limit pressure);
+// • per-backend 429 breaker - a backend that just answered 429 is skipped
+// for 8 min (half-open after) instead of being re-hit every attempt, so
+// it can actually cool down. State is per-process (per bot), harmless.
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const CACHE_MAX = 60;
 const BREAKER_MS = 8 * 60 * 1000;
@@ -371,7 +369,7 @@ function cacheGet(query, nowMs = Date.now()) {
 function cacheSet(query, results, backend, nowMs = Date.now()) {
   if (!results || !results.length) return;
   if (!_searchCache.has(cacheKeyOf(query)) && _searchCache.size >= CACHE_MAX) {
-    // evict oldest entry (insertion-ordered Map → first key is oldest)
+ // evict oldest entry (insertion-ordered Map → first key is oldest)
     const oldest = _searchCache.keys().next().value;
     if (oldest !== undefined) _searchCache.delete(oldest);
   }
@@ -403,8 +401,8 @@ function resetSearchState() {
 }
 
 // ------------------------------------------------------- relevance gate
-// Verified live 2026-10-12 (Box2): Bing intermittently serves an anti-bot
-// DECOY SERP — structurally perfect (10 b_algo blocks, h2>a, snippets) but
+// Verified live (Box2): Bing intermittently serves an anti-bot
+// DECOY SERP - structurally perfect (10 b_algo blocks, h2>a, snippets) but
 // about a completely different topic (emoji pages for a Harry Potter
 // question). A structural parser can't catch that; this cheap lexical gate
 // does: significant query words must appear across the result titles +
@@ -441,9 +439,9 @@ function relevantEnough(query, results, minFrac = 0.5) {
       hits++;
       continue;
     }
-    // morphological tolerance: 6+ char words may match by a 5-char stem,
-    // 5-char words by a 4-char stem ("cleaning"→"clean", "panels"→"panel";
-    // "wrote" vs "written" legitimately diverges — threshold absorbs it)
+ // morphological tolerance: 6+ char words may match by a 5-char stem,
+ // 5-char words by a 4-char stem ("cleaning"→"clean", "panels"→"panel";
+ // "wrote" vs "written" legitimately diverges - threshold absorbs it)
     if (w.length >= 5 && hay.includes(w.slice(0, w.length >= 6 ? 5 : 4))) {
       hits++;
     }
@@ -464,7 +462,7 @@ function buildSynthesisPrompt(question, results) {
     "2) Cite sources inline with their numbers, like [1] or [2][3]. " +
     "3) If the excerpts do not contain the answer, say so plainly and share the most relevant facts you do have, with citations. " +
     "4) Never invent facts, quotes, numbers or URLs. Never cite numbers that were not provided. " +
-    "5) Plain text only — no markdown headings, no bullet lists unless genuinely enumerating. " +
+    "5) Plain text only - no markdown headings, no bullet lists unless genuinely enumerating. " +
     "6) Reply in the same language as the question.";
   const user = `Question: ${question}\n\nSearch result excerpts:\n${lines.join("\n\n")}`;
   return { system, user };
@@ -474,7 +472,7 @@ function formatSourceList(results) {
   return results
     .map(
       (r, i) =>
-        `${i + 1}. ${r.domain || "web"}${r.title ? ` — ${r.title}` : ""}`,
+        `${i + 1}. ${r.domain || "web"}${r.title ? ` - ${r.title}` : ""}`,
     )
     .join("\n");
 }
@@ -494,7 +492,7 @@ function buildOverviewMessage(question, answer, results) {
   ].join("\n");
   let msg = `${body}\n\n_j google · answers grounded in web results_`;
   if (msg.length > MAX_MESSAGE_CHARS) {
-    // trim the answer, keep sources intact
+ // trim the answer, keep sources intact
     const overflow = msg.length - MAX_MESSAGE_CHARS;
     const trimmed = a.slice(0, Math.max(200, a.length - overflow - 1)) + "…";
     body = [
@@ -527,7 +525,7 @@ function buildResultsOnlyMessage(question, results) {
     "",
     src || "No result excerpts available.",
     "",
-    "_AI summary unavailable right now — showing the raw results._",
+    "_AI summary unavailable right now - showing the raw results._",
   ].join("\n");
 }
 

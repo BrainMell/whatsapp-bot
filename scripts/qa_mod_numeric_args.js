@@ -1,16 +1,15 @@
 // QA: mod numeric-arg parsing fix (owner issue 5 - "commands only work when
 // the number is clickable like a contact"). Exercises the REAL handleAdmin
 // with a mock sock and a seeded economy cache. No DB, no .env needed.
-//
 // Pins:
-//  1. bare phone target resolves to the PLAYER (was: silently self-paid)
-//  2. plain numeric values are never swallowed (10+ digit amounts work)
-//  3. unresolvable phone target fails LOUDLY and moves nothing
-//  4. @mention targeting unchanged
-//  5. reply-context targeting unchanged
-//  6. non-safe-integer amounts are rejected
-//  7. setlevel/setstat/setwallet/givepoints/setskillpoints/giveskillpoints
-//     share the same contract
+// 1. bare phone target resolves to the PLAYER (was: silently self-paid)
+// 2. plain numeric values are never swallowed (10+ digit amounts work)
+// 3. unresolvable phone target fails LOUDLY and moves nothing
+// 4. @mention targeting unchanged
+// 5. reply-context targeting unchanged
+// 6. non-safe-integer amounts are rejected
+// 7. setlevel/setstat/setwallet/givepoints/setskillpoints/giveskillpoints
+// share the same contract
 
 process.env.GO_IMAGE_SERVICE_URL = process.env.GO_IMAGE_SERVICE_URL || 'http://127.0.0.1:7860';
 
@@ -22,7 +21,7 @@ function assert(cond, label) {
     else console.log('✓', label);
 }
 
-// ── seed economy cache ────────────────────────────────────────────────────
+// -- seed economy cache ----------------------------------------------------
 const MOD = 'mod@s.whatsapp.net';
 const PLAYER = '251453323092189@s.whatsapp.net';   // bare-number target
 const PLAYER_LID = '251453323092189@lid';          // same player, LID spelling
@@ -42,7 +41,7 @@ seedUser(PLAYER);
 economy.economyData.set(PLAYER_LID, economy.economyData.get(PLAYER)); // alias
 seedUser(OTHER);
 
-// ── mock sock ─────────────────────────────────────────────────────────────
+// -- mock sock -------------------------------------------------------------
 const sent = [];
 const sock = {
     async sendMessage(chatId, content) {
@@ -106,7 +105,7 @@ async function runAdmin(args, m = null, getMentionOrReply = noMention) {
     t = await runAdmin(['givezeni', '150'], replyMsg);
     assert(t.includes('ZENI GRANTED'), 'reply + plain amount works');
     assert(economy.economyData.get(OTHER).wallet === 1150, 'replied-to player got the 150');
-    // reply + 10-digit amount: ctx wins, value stays a value
+ // reply + 10-digit amount: ctx wins, value stays a value
     t = await runAdmin(['givezeni', '10000000000'], replyMsg);
     assert(t.includes('ZENI GRANTED'), 'reply + 10-digit amount: amount is a value, not a target');
     assert(economy.economyData.get(OTHER).wallet === 10000001150, 'replied-to player got the 10B');
@@ -120,7 +119,7 @@ async function runAdmin(args, m = null, getMentionOrReply = noMention) {
     console.log('\n── 7. sibling commands share the contract ──');
     t = await runAdmin(['givepoints', '251453323092189', '25']);
     assert(t.includes('STAT POINTS GRANTED'), 'givepoints <phone> resolves target');
-    // setlevel 42 earlier granted (42-10)*2 = 64 points; +25 now = 89
+ // setlevel 42 earlier granted (42-10)*2 = 64 points; +25 now = 89
     assert(economy.economyData.get(PLAYER).progression.statPoints === 89, 'player got 25 stat points (64 from setlevel + 25)');
     t = await runAdmin(['setskillpoints', '251453323092189', '7']);
     assert(t.includes('SKILL POINTS SET'), 'setskillpoints <phone> resolves target');

@@ -1,44 +1,42 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-//  THE POND — dock-POV fishing GIF (Task 22 UNDO + REBUILD, owner 18:01Z:
-//  "I meant GIF, not girl… UNDO that fishing bullshit you just did. I keep
-//  saying ANIMATE it so that the thing in the pond is bobbing up and down,
-//  the water looks like it's moving, and the fish too.").
-//
-//  What changed in Task 22:
-//    • THE GIRL IS GONE — the Task 21 character scene is reverted to the
-//      Task 19/20 dock-POV composition (water fills the upper frame, dock
-//      planks in the lower foreground, rod + line + float on the water).
-//    • THE WATER MOVES — traveling wave crests on every band (nearer bands
-//      drift faster = parallax), two drifting ripple rings, the sun-glitter
-//      path and ambient sparkles from Task 20.
-//    • THE FISH SWIM — 2-4× the old speed with stronger tail wiggle, so the
-//      crossing is obvious inside the 1.92s loop.
-//    • THE FLOAT BOBS — Task 20 geometry verbatim: red/white body crossing
-//      the waterline every loop, contact ripple breathing with the bob.
-//    • RESULT OVERLAY = THE ESTABLISHED STYLE — the custom Task 21 plate is
-//      DELETED; loot rides the shared drawBanner() ribbon (structureScenes),
-//      the same top-centre gold banner every other base command uses.
-//    • DAY/NIGHT stays (owner asked for it across every render — never
-//      retracted): biome wash + per-phase celestial + grade + night lights.
-//
-//  Cache model ("generated once, saved permanently"):
-//    • DAY MASTER — 16 PNG frames per pond level, baked ONCE by
-//      scripts/bake_pond.js and COMMITTED to the repo at
-//      core/assets/scenes/pond_l{1,2,3}_v2.bin (replaces the girl assets).
-//      Runtime READS the committed asset; a bake only happens as fallback.
-//    • COMPOSE — master + biome wash + hour + lights, cached per
-//      (biome, level, phase, band). The catch overlay rides in here.
-//    • FINAL — Task 24: the ribbon is NOT fused into the frames anymore.
-//      'fishbase' caches the CASED GIF per (biome, level, phase, band); the
-//      loot ribbon is a transparent PNG ('fishribbon', cached per loot text)
-//      plastered over it in ONE ffmpeg pass per catch — generating the
-//      overlay is all a new catch pays for. Ribbon rides EVERY frame (the
-//      `.j base` view look), not a 0.6s end-window.
-//  Delivery: pure-JS gif89a → { video, gifPlayback: true } — WhatsApp ONLY
-//  animates GIFs carried on a videoMessage; on imageMessage the flag is
-//  dropped and the phone shows a still (owner hit this 4× on 2026-10-21).
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// THE POND - dock-POV fishing GIF (UNDO + REBUILD, owner 18:01Z:
+// "I meant GIF, not girl… UNDO that fishing bullshit you just did. I keep
+// saying ANIMATE it so that the thing in the pond is bobbing up and down,
+// the water looks like it's moving, and the fish too.").
+// What changed in
+// • THE GIRL IS GONE - the character scene is reverted to the
+// /20 dock-POV composition (water fills the upper frame, dock
+// planks in the lower foreground, rod + line + float on the water).
+// • THE WATER MOVES - traveling wave crests on every band (nearer bands
+// drift faster = parallax), two drifting ripple rings, the sun-glitter
+// path and ambient sparkles from .
+// • THE FISH SWIM - 2-4× the old speed with stronger tail wiggle, so the
+// crossing is obvious inside the 1.92s loop.
+// • THE FLOAT BOBS - geometry verbatim: red/white body crossing
+// the waterline every loop, contact ripple breathing with the bob.
+// • RESULT OVERLAY = THE ESTABLISHED STYLE - the custom plate is
+// DELETED; loot rides the shared drawBanner() ribbon (structureScenes),
+// the same top-centre gold banner every other base command uses.
+// • DAY/NIGHT stays (owner asked for it across every render - never
+// retracted): biome wash + per-phase celestial + grade + night lights.
+// Cache model ("generated once, saved permanently"):
+// • DAY MASTER - 16 PNG frames per pond level, baked ONCE by
+// scripts/bake_pond.js and COMMITTED to the repo at
+// core/assets/scenes/pond_l{1,2,3}_v2.bin (replaces the girl assets).
+// Runtime READS the committed asset; a bake only happens as fallback.
+// • COMPOSE - master + biome wash + hour + lights, cached per
+// (biome, level, phase, band). The catch overlay rides in here.
+// • FINAL - the ribbon is NOT fused into the frames anymore.
+// 'fishbase' caches the CASED GIF per (biome, level, phase, band); the
+// loot ribbon is a transparent PNG ('fishribbon', cached per loot text)
+// plastered over it in ONE ffmpeg pass per catch - generating the
+// overlay is all a new catch pays for. Ribbon rides EVERY frame (the
+// `.j base` view look), not a 0.6s end-window.
+// Delivery: pure-JS gif89a → { video, gifPlayback: true } - WhatsApp ONLY
+// animates GIFs carried on a videoMessage; on imageMessage the flag is
+// dropped and the phone shows a still (owner hit this 4× on ).
+// ===========================================================================
 const fs = require('fs');
 const path = require('path');
 const mediaCache = require('./mediaCache');
@@ -51,7 +49,7 @@ const CONTAINER_MAGIC = 'PONDPOV2';
 const ASSET_DIR = path.join(__dirname, '..', 'assets', 'scenes');
 const ASSET_VER = 'v2';
 
-// ── the float (Task 20 geometry verbatim — owner approved this bob) ────────
+// -- the float --------
 function floatGeom(w, h) {
     const hz = Math.round(HORIZON * h), edgeY = Math.round(DOCK_EDGE * h);
     const by = hz + (edgeY - hz) * 0.46;
@@ -60,8 +58,8 @@ function floatGeom(w, h) {
 }
 function floatBob(t, bs) { return Math.sin(t * Math.PI * 2) * bs * 0.45; }
 function floatY(t, h, dip = 0) { const g = floatGeom(480, h); return g.by + floatBob(t, g.bs) + dip; }
-/** Rod + line + float. Body drawn twice against a clipped waterline — dry
- *  colours above, wet-tinted below — so it visibly crosses the surface; the
+/** Rod + line + float. Body drawn twice against a clipped waterline - dry
+ *  colours above, wet-tinted below - so it visibly crosses the surface; the
  *  antenna tip rides highest and is the last thing a bite pulls under. */
 function paintFloat(ctx, w, h, t, P, { rod = true, line = true, dip = 0 } = {}) {
     const { bx, by, bs, wlY } = floatGeom(w, h);
@@ -87,7 +85,7 @@ function paintFloat(ctx, w, h, t, P, { rod = true, line = true, dip = 0 } = {}) 
     };
     ctx.save(); ctx.beginPath(); ctx.rect(bx - bs * 1.3, 0, bs * 2.6, wlY); ctx.clip(); drawAll(false); ctx.restore();
     ctx.save(); ctx.beginPath(); ctx.rect(bx - bs * 1.3, wlY, bs * 2.6, h - wlY); ctx.clip(); drawAll(true); ctx.restore();
-    // contact ripple at the waterline, breathing with the bob
+ // contact ripple at the waterline, breathing with the bob
     ctx.strokeStyle = P.glint; ctx.globalAlpha = 0.2 + 0.1 * Math.sin(t * Math.PI * 2);
     ctx.lineWidth = Math.max(1, h * 0.003);
     ctx.beginPath(); ctx.ellipse(bx, wlY, bs * (1.5 + 0.25 * Math.sin(t * Math.PI * 2)), bs * 0.42, 0, 0, Math.PI * 2); ctx.stroke();
@@ -95,7 +93,7 @@ function paintFloat(ctx, w, h, t, P, { rod = true, line = true, dip = 0 } = {}) 
     return { bx, byy, wlY, bs };
 }
 
-// ── base palette (isle master — other biomes arrive as washes at compose) ──
+// -- base palette (isle master - other biomes arrive as washes at compose) --
 const PALETTES = {
     isle: {
         sky: ['#b8d8e2', '#d8e8de', '#f2e4c0'], sun: '#f8f2d8',
@@ -129,7 +127,7 @@ const PALETTES = {
     },
 };
 
-// ── biome washes (Task 21 — master is isle; other realms wear their sky) ───
+// -- biome washes ---
 const WASHERS = {
     isle: null,
     desert: { sky: 'rgba(238,208,128,0.42)', water: 'rgba(58,150,104,0.30)', all: 'rgba(206,174,102,0.10)' },
@@ -138,7 +136,7 @@ const WASHERS = {
     volcanic: { sky: 'rgba(88,68,62,0.46)', water: 'rgba(28,30,38,0.44)', all: 'rgba(70,40,32,0.20)' },
 };
 
-// ── layout ──────────────────────────────────────────────────────────────────
+// -- layout ------------------------------------------------------------------
 const HORIZON = 0.16, DOCK_EDGE = 0.63;
 
 /** One base frame at loop position t∈[0,1). Deterministic per (biome,lvl). */
@@ -148,18 +146,18 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1, fish = true } = {})
     const hz = Math.round(HORIZON * h), edgeY = Math.round(DOCK_EDGE * h);
     const wh = edgeY - hz; // water height
 
-    // ── sky: three flat bands + distant ridge line (NO baked sun — the compose
-    // step paints the per-phase celestial: dawn/day/golden/dusk sun, night moon) ──
+ // -- sky: three flat bands + distant ridge line (NO baked sun - the compose
+ // step paints the per-phase celestial: dawn/day/golden/dusk sun, night moon) --
     ctx.fillStyle = P.sky[0]; ctx.fillRect(0, 0, w, Math.round(hz * 0.45));
     ctx.fillStyle = P.sky[1]; ctx.fillRect(0, Math.round(hz * 0.45), w, Math.round(hz * 0.3));
     ctx.fillStyle = P.sky[2]; ctx.fillRect(0, Math.round(hz * 0.75), w, hz - Math.round(hz * 0.75));
-    // far shoreline: low irregular ridge across the horizon (behind water)
+ // far shoreline: low irregular ridge across the horizon (behind water)
     ctx.fillStyle = P.ridge;
     ctx.beginPath(); ctx.moveTo(0, hz);
     for (let x = 0; x <= w; x += w / 24) ctx.lineTo(x, hz - (2 + Math.floor(rng() * 4)) * (h / 360) * (rng() < 0.28 ? 3 : 1));
     ctx.lineTo(w, hz + 1); ctx.lineTo(0, hz + 1); ctx.closePath(); ctx.fill();
 
-    // ── water: flat perspective bands, far (thin, dark) → near (tall, light) ──
+ // -- water: flat perspective bands, far (thin, dark) → near (tall, light) --
     let y = hz; const steps = P.water.length;
     let span = wh * 0.028;
     const bandYs = [hz];
@@ -169,9 +167,9 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1, fish = true } = {})
         y = y2 + 1; span *= 1.55;
         bandYs.push(Math.min(edgeY, y));
     }
-    // ── THE WATER MOVES (Task 22): traveling wave crests per band — light
-    // dashes drifting horizontally, nearer bands faster (parallax), directions
-    // alternating so the surface clearly flows in every frame of the loop. ──
+ // -- THE WATER MOVES: traveling wave crests per band - light
+ // dashes drifting horizontally, nearer bands faster (parallax), directions
+ // alternating so the surface clearly flows in every frame of the loop. --
     for (let b = 1; b < steps; b++) {
         const y0 = bandYs[b], y1 = (b + 1 <= steps - 1 ? bandYs[b + 1] : edgeY);
         if (y1 - y0 < 2) continue;
@@ -188,8 +186,8 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1, fish = true } = {})
             ctx.globalAlpha = 1;
         }
     }
-    // ── drifting ripple rings — two slow expanding circles, staggered so one
-    // is always alive; they swell, fade, and re-seed offscreen-ish. ──
+ // -- drifting ripple rings - two slow expanding circles, staggered so one
+ // is always alive; they swell, fade, and re-seed offscreen-ish. --
     for (let k = 0; k < 2; k++) {
         const ph = (t * 0.5 + k * 0.5) % 1;
         const rx = w * (0.28 + 0.36 * k), ry2 = hz + wh * (0.34 + 0.22 * k);
@@ -199,8 +197,8 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1, fish = true } = {})
         ctx.beginPath(); ctx.ellipse(rx, ry2, rr, rr * 0.36, 0, 0, Math.PI * 2); ctx.stroke();
         ctx.globalAlpha = 1;
     }
-    // sun glitter path: drifting dashes down the sun column (flat 2 tones)
-    // (the DAY column at x=0.68 — compose's phase celestial lines up with it)
+ // sun glitter path: drifting dashes down the sun column (flat 2 tones)
+ // (the DAY column at x=0.68 - compose's phase celestial lines up with it)
     const sgx = w * 0.68;
     for (let i = 0; i < 14; i++) {
         const ph = (t + rng()) % 1;
@@ -209,7 +207,7 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1, fish = true } = {})
         ctx.fillStyle = P.shimmer[i % 2];
         ctx.fillRect(sgx - gw2 / 2 + Math.sin(ph * 9 + i) * gw2 * 0.3, gy, gw2, Math.max(1, h * 0.006));
     }
-    // ambient sparkles across the whole surface
+ // ambient sparkles across the whole surface
     for (let i = 0; i < 10; i++) {
         const ph = (t * 0.7 + rng() * 3) % 1;
         const gx = rng() * w, gy = hz + wh * (0.1 + 0.85 * ((rng() + ph) % 1));
@@ -217,16 +215,16 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1, fish = true } = {})
         ctx.fillRect(gx, gy, w * 0.012 + 2, Math.max(1, h * 0.004)); ctx.globalAlpha = 1;
     }
 
-    // ── THE FISH SWIM (Task 22): ambient silhouettes crossing the frame at
-    // 2-4× the old speed with a strong tail beat — their motion reads in a
-    // single 1.92s loop instead of needing three. ──
+ // -- THE FISH SWIM: ambient silhouettes crossing the frame at
+ // 2-4× the old speed with a strong tail beat - their motion reads in a
+ // single 1.92s loop instead of needing three. --
     if (fish) {
         const nf = 6 + Math.max(0, lvl - 1);
         for (let i = 0; i < nf; i++) {
             const depth = 0.25 + 0.7 * rng();               // 0=horizon 1=dock edge
             const fy = hz + wh * depth;
             const fs = (h * 0.019) * (0.55 + depth);        // nearer = bigger
-            const speed = 0.05 + rng() * 0.06;              // Task 22: was 0.016-0.046
+            const speed = 0.05 + rng() * 0.06; // was 0.016-0.046
             const fx = ((rng() + t * speed * (rng() < 0.5 ? -1 : 1)) % 1 + 1) % 1 * w;
             const wig = Math.sin(t * Math.PI * 6 + i * 1.7);
             const yy = fy + Math.sin(t * Math.PI * 2 + i) * fs * 0.7;
@@ -240,7 +238,7 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1, fish = true } = {})
         }
     }
 
-    // ── lvl dressing: rowboat silhouette (L2+) bobbing on the left reach ──
+ // -- lvl dressing: rowboat silhouette (L2+) bobbing on the left reach --
     if (lvl >= 2) {
         const by2 = hz + wh * 0.34, bx2 = w * 0.16;
         const bob = Math.sin(t * Math.PI * 2) * h * 0.004;
@@ -254,7 +252,7 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1, fish = true } = {})
         ctx.restore();
     }
 
-    // ── the dock: planks in perspective, edge board at the water line ──
+ // -- the dock: planks in perspective, edge board at the water line --
     ctx.fillStyle = P.wood[1]; ctx.fillRect(0, edgeY, w, h - edgeY);
     const seams = [-0.5, -0.28, -0.06, 0.16, 0.38, 0.6];
     ctx.strokeStyle = P.wood[2]; ctx.lineWidth = Math.max(1.5, h * 0.008);
@@ -271,7 +269,7 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1, fish = true } = {})
     }
     ctx.fillStyle = P.wood[0]; ctx.fillRect(0, edgeY, w, Math.max(2, h * 0.012));
     ctx.fillStyle = P.wood[2]; ctx.fillRect(0, edgeY + Math.max(2, h * 0.012), w, Math.max(3, h * 0.02));
-    // mooring post (right) + rope running to the left edge
+ // mooring post (right) + rope running to the left edge
     const postX = w * 0.86, postW = w * 0.035;
     ctx.fillStyle = P.wood[0]; ctx.fillRect(postX, edgeY - h * 0.1, postW, h * 0.1 + (h - edgeY) * 0.35);
     ctx.fillStyle = P.wood[2]; ctx.fillRect(postX, edgeY - h * 0.1, postW * 0.35, h * 0.1 + (h - edgeY) * 0.35);
@@ -279,7 +277,7 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1, fish = true } = {})
     ctx.strokeStyle = P.rope; ctx.lineWidth = Math.max(1.5, h * 0.007);
     ctx.beginPath(); ctx.moveTo(postX, edgeY - h * 0.05);
     ctx.quadraticCurveTo(w * 0.4, edgeY + h * 0.06, w * 0.02, edgeY + h * 0.02); ctx.stroke();
-    // tackle box + (L2+) lantern glow pooled on the planks, left foreground
+ // tackle box + (L2+) lantern glow pooled on the planks, left foreground
     ctx.fillStyle = P.wood[2]; ctx.fillRect(w * 0.06, h * 0.86, w * 0.1, h * 0.09);
     ctx.fillStyle = P.wood[0]; ctx.fillRect(w * 0.06, h * 0.86, w * 0.1, h * 0.024);
     if (lvl >= 2) {
@@ -288,21 +286,21 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1, fish = true } = {})
         ctx.globalAlpha = 1;
         ctx.fillStyle = P.lantern; ctx.fillRect(w * 0.185, h * 0.8, w * 0.03, h * 0.06);
     }
-    if (lvl >= 3) { // gold trim on the edge board — a kept, well-funded pond
+    if (lvl >= 3) { // gold trim on the edge board - a kept, well-funded pond
         ctx.fillStyle = P.lantern; ctx.globalAlpha = 0.8;
         ctx.fillRect(0, edgeY, w, Math.max(1.5, h * 0.004)); ctx.globalAlpha = 1;
     }
 
-    // ── rod + line + float, ON the water and bobbing in and out of it ──
+ // -- rod + line + float, ON the water and bobbing in and out of it --
     paintFloat(ctx, w, h, t, P, { rod: true, line: true });
     const __g = floatGeom(w, h);
     return { bx: __g.bx, by: __g.by };
 }
 function i0(s) { return Math.abs(Math.round(s * 100)); }
 
-// ── catch overlays ("the new stuff" layered over the kept base frames) ──────
+// -- catch overlays ("the new stuff" layered over the kept base frames) ------
 // band: 'low' = subtle bite · 'mid' = medium fish closes in · 'epic' = big
-// approach + splash. Drawn AFTER the roll is known — never pre-signals rarity.
+// approach + splash. Drawn AFTER the roll is known - never pre-signals rarity.
 function paintCatchOverlay(ctx, w, h, t, band, _anchor, P = PALETTES.isle) {
     const G = floatGeom(w, h), bs = G.bs;
     const bite = t > 0.7 && t < 0.95 ? Math.sin(((t - 0.7) / 0.25) * Math.PI) : 0;
@@ -355,17 +353,17 @@ function paintCatchOverlay(ctx, w, h, t, band, _anchor, P = PALETTES.isle) {
             ctx.globalAlpha = 1;
         }
     }
-    // the line + float ride ON TOP of the overlay so the bite reads through
+ // the line + float ride ON TOP of the overlay so the bite reads through
     paintFloat(ctx, w, h, t, P, { rod: false, line: true, dip });
 }
 
-// ── far-shoreline silhouette — the MOUNTAINS the sun sets behind ───────────
-// ⚠⚠ MUST stay byte-identical with paintFrame's far-shoreline loop below
-// (same seed, same rng call order — the ridge is paintFrame's FIRST rng
+// -- far-shoreline silhouette - the MOUNTAINS the sun sets behind -----------
+// MUST stay byte-identical with paintFrame's far-shoreline loop below
+// (same seed, same rng call order - the ridge is paintFrame's FIRST rng
 // consumer, so a fresh generator seeded the same reproduces it exactly).
 // This shape is the occluder paintCelestial repaints OVER the sun so the disc
 // physically sinks behind the horizon instead of floating on the water
-// (owner 2026-10-21: "why is the sun not disappearing behind the horizon with
+// ("why is the sun not disappearing behind the horizon with
 // mountains? why is it overlaying the image???").
 function ridgeSilhouette(w, h, lvl = 1) {
     const rng = K.mulberry32(hashStr(`dockpov:isle:${Math.max(1, Math.min(3, lvl))}`));
@@ -377,13 +375,13 @@ function ridgeSilhouette(w, h, lvl = 1) {
     return { step: w / 24, pts, hz };
 }
 
-// ── hour dressing: celestial body + sun/moon glitter on the water ──────────
+// -- hour dressing: celestial body + sun/moon glitter on the water ----------
 // The glow + disc are clipped to the SKY and the far skyline is REPAINTED over
-// them, so dawn/golden/dusk discs are physically cut by the mountains — dusk
+// them, so dawn/golden/dusk discs are physically cut by the mountains - dusk
 // leaves only a sliver above the ridge. `sink` = fraction of the disc below
 // the skyline (0 = touching the peaks, 1 = fully set). `occluder` lets other
 // scenes (the hunt treeline) supply their own skyline:
-//   { lineAt(x) → y, repaint(ctx) }.
+// { lineAt(x) → y, repaint(ctx) }.
 function paintCelestial(ctx, w, h, t, phase, { glitter = true, lvl = 1, occluder = null } = {}) {
     const hz = Math.round(HORIZON * h);
     if (phase === 'night') return;                    // moonStars() owns the night sky
@@ -395,7 +393,7 @@ function paintCelestial(ctx, w, h, t, phase, { glitter = true, lvl = 1, occluder
     }[phase];
     if (!conf) return;
     const sx = w * conf.x, sr = h * conf.r;
-    // skyline the sun sinks behind: caller's occluder, else the pond ridge
+ // skyline the sun sinks behind: caller's occluder, else the pond ridge
     const occ = occluder || (() => {
         const yAt = (x) => {
             const sil = ridgeSilhouette(w, h, lvl);
@@ -405,10 +403,10 @@ function paintCelestial(ctx, w, h, t, phase, { glitter = true, lvl = 1, occluder
         return { lineAt: yAt, repaint: (c) => _repaintRidge(c, w, h, lvl) };
     })();
     const lineY = occ.lineAt(sx);
-    // sun centre: explicit y (day) or sunk against the skyline (rise/set)
+ // sun centre: explicit y (day) or sunk against the skyline (rise/set)
     const sy = conf.y != null ? h * conf.y : lineY - sr * (1 - 2 * conf.sink);
-    // glow + disc live in the SKY only — never wash over the water (the
-    // reflection lives in the glitter path below)
+ // glow + disc live in the SKY only - never wash over the water (the
+ // reflection lives in the glitter path below)
     ctx.save();
     ctx.beginPath(); ctx.rect(0, 0, w, Math.max(1, Math.min(h, lineY + 2))); ctx.clip();
     const g = ctx.createRadialGradient(sx, sy, sr * 0.4, sx, sy, sr * 3);
@@ -416,9 +414,9 @@ function paintCelestial(ctx, w, h, t, phase, { glitter = true, lvl = 1, occluder
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sx, sy, sr * 3, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = conf.col; ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
-    // the mountains EAT the disc — repaint the skyline over the sun
+ // the mountains EAT the disc - repaint the skyline over the sun
     if (occ.repaint) occ.repaint(ctx);
-    // glitter path down the sun column (skips the dock planks below the edge)
+ // glitter path down the sun column (skips the dock planks below the edge)
     if (glitter) {
         const edgeY = Math.round(DOCK_EDGE * h);
         const rng = K.mulberry32(hashStr(`glitter:${phase}`));
@@ -437,7 +435,7 @@ function paintCelestial(ctx, w, h, t, phase, { glitter = true, lvl = 1, occluder
     }
 }
 
-// the ridge re-draw (occluder) — ⚠ shapes identical to paintFrame's loop
+// the ridge re-draw (occluder) - shapes identical to paintFrame's loop
 function _repaintRidge(ctx, w, h, lvl = 1) {
     const sil = ridgeSilhouette(w, h, lvl);
     ctx.fillStyle = PALETTES.isle.ridge;
@@ -446,7 +444,7 @@ function _repaintRidge(ctx, w, h, lvl = 1) {
     ctx.lineTo(w, sil.hz + 1); ctx.lineTo(0, sil.hz + 1); ctx.closePath(); ctx.fill();
 }
 
-// ── base-frame container (PNG frames + tiny header) through mediaCache ─────
+// -- base-frame container (PNG frames + tiny header) through mediaCache -----
 function packContainer(gw, gh, delayMs, pngs, magic = CONTAINER_MAGIC) {
     const lens = pngs.map((p) => p.length);
     const meta = JSON.stringify({ v: 1, gw, gh, delayMs, lens });
@@ -484,7 +482,7 @@ function bakeLevelFrames(lvl = 1) {
     return packContainer(GW, GH, DELAY_MS, pngs);
 }
 
-/** The committed repo asset (generated once, saved permanently) — read, never
+/** The committed repo asset (generated once, saved permanently) - read, never
  *  re-baked. Falls back to an in-place bake only if the file is missing. */
 function loadCommitted(lvl = 1) {
     const p = path.join(ASSET_DIR, `pond_l${Math.max(1, Math.min(3, lvl))}_${ASSET_VER}.bin`);
@@ -496,7 +494,7 @@ function loadCommitted(lvl = 1) {
     return { buf: bakeLevelFrames(lvl), committed: false };
 }
 
-/** Day master frames for a pond level — every player shares the one asset. */
+/** Day master frames for a pond level - every player shares the one asset. */
 async function getBaseFrames({ lvl = 1 } = {}) {
     lvl = Math.max(1, Math.min(3, lvl));
     const ck = `pondpov:L${lvl}`;
@@ -520,7 +518,7 @@ function dockAnchors(w, h, lvl = 1) {
     };
 }
 
-/** `.j base pond` viewer still — the dock-POV scene at any size, wearing the hour. */
+/** `.j base pond` viewer still - the dock-POV scene at any size, wearing the hour. */
 function paintStill(ctx, w, h, { lvl = 1, biome = 'isle', phase = null, t = 0 } = {}) {
     phase = phase || dayNight.phaseAt();
     paintFrame(ctx, w, h, t, { lvl });
@@ -544,8 +542,8 @@ function paintStill(ctx, w, h, { lvl = 1, biome = 'isle', phase = null, t = 0 } 
     }
 }
 
-// ── compose: master + biome wash + hour + lights + catch overlay ───────────
-// Cached per (biome, level, phase, band) — the loot banner is drawn per catch
+// -- compose: master + biome wash + hour + lights + catch overlay -----------
+// Cached per (biome, level, phase, band) - the loot banner is drawn per catch
 // AFTER this, so the cache stays tiny while every catch still explains itself.
 async function composePond({ biome = 'isle', lvl = 1, phase = null, band = 'low' } = {}) {
     lvl = Math.max(1, Math.min(3, lvl));
@@ -583,7 +581,7 @@ async function composePond({ biome = 'isle', lvl = 1, phase = null, band = 'low'
     });
 }
 
-// ── loot lines for the banner when the caller has no res.banner (fallback) ──
+// -- loot lines for the banner when the caller has no res.banner (fallback) --
 const RARITY_COL = { COMMON: '#e8e8e0', UNCOMMON: '#8ee08e', RARE: '#7ab8f0', EPIC: '#c9a0ff', LEGENDARY: '#f0c060' };
 function plateLines(kind = 'fish', drops = {}) {
     const NAMES = {
@@ -596,29 +594,28 @@ function plateLines(kind = 'fish', drops = {}) {
         .map(([id, q]) => `${q}× ${(NAMES[id] || [id])[0]}`);
 }
 
-// ── Task 24 (owner 06:30Z): the catch ribbon is NO LONGER FUSED INTO THE
+// -- (owner 06:30Z): the catch ribbon is NO LONGER FUSED INTO THE
 // FRAMES. "Instead of the gif having the fish caught message at the end, it
 // should be an overlay like how it is when you use the .j base command to
 // view the pond, so the gif itself is cached, you just plaster that overlay
 // on it depending on what you catch, instead of fusing it into the
 // animation, so then you only have to generate the overlay and plaster it
 // on, making the generation wayyy faster."
-//
-//   • 'fishbase'   — the CASED GIF: master + wash + hour + catch-FX, NO
-//                    ribbon anywhere, cached per (biome, level, phase, band).
-//                    A warm hit skips every canvas draw AND the gif encode.
-//   • 'fishribbon' — the ribbon alone on a TRANSPARENT canvas, cached per
-//                    loot text: one small draw, reused by every catch.
-//   • final        — ONE ffmpeg pass plasters the ribbon over the cached base
-//                    GIF and ships H.264 (mediaConvert.gifToMp4Overlaid); if
-//                    ffmpeg is unavailable, a canvas-plaster + gif-encode
-//                    fallback keeps the old lane alive. 'fishbase' never
-//                    carries the ribbon either way, so loot text changes
-//                    never re-encode the animation.
-//   The ribbon rides EVERY frame now — the `.j base` view overlay look the
-//   owner asked for — not just the 0.6s end-window BANNER_FROM_FRAME gave it.
+// • 'fishbase' - the CASED GIF: master + wash + hour + catch-FX, NO
+// ribbon anywhere, cached per (biome, level, phase, band).
+// A warm hit skips every canvas draw AND the gif encode.
+// • 'fishribbon' - the ribbon alone on a TRANSPARENT canvas, cached per
+// loot text: one small draw, reused by every catch.
+// • final - ONE ffmpeg pass plasters the ribbon over the cached base
+// GIF and ships H.264 (mediaConvert.gifToMp4Overlaid); if
+// ffmpeg is unavailable, a canvas-plaster + gif-encode
+// fallback keeps the old lane alive. 'fishbase' never
+// carries the ribbon either way, so loot text changes
+// never re-encode the animation.
+// The ribbon rides EVERY frame now - the `.j base` view overlay look the
+// owner asked for - not just the 0.6s end-window BANNER_FROM_FRAME gave it.
 
-/** The cased pond GIF — no ribbon, cached per (biome, level, phase, band). */
+/** The cased pond GIF - no ribbon, cached per (biome, level, phase, band). */
 async function getBaseGif({ biome = 'isle', lvl = 1, phase = null, band = 'low' } = {}) {
     lvl = Math.max(1, Math.min(3, lvl));
     phase = phase || dayNight.phaseAt();
@@ -643,7 +640,7 @@ async function getBaseGif({ biome = 'isle', lvl = 1, phase = null, band = 'low' 
     });
 }
 
-/** The loot ribbon ALONE on a transparent GW×GH canvas — the plaster. */
+/** The loot ribbon ALONE on a transparent GW×GH canvas - the plaster. */
 async function renderRibbonOverlay(ribbon) {
     const plateKey = hashStr(JSON.stringify(ribbon));
     return mediaCache.cached('fishribbon', `fr:${plateKey}`, async () => {
@@ -671,7 +668,7 @@ async function renderFishingGif({ biome = 'isle', lvl = 1, band = 'low', drops =
         const base = await getBaseGif({ biome, lvl, phase, band });
         const overlay = await renderRibbonOverlay(ribbon);
         const { createCanvas, loadImage } = require('canvas');
-        // preview thumb = frame 0 + ribbon (what the phone shows in the bubble)
+ // preview thumb = frame 0 + ribbon (what the phone shows in the bubble)
         const makeThumb = async () => {
             try {
                 const f0 = require('../utils/gif89a').firstFrameJpeg(base.buffer);
@@ -687,7 +684,7 @@ async function renderFishingGif({ biome = 'isle', lvl = 1, band = 'low', drops =
             buffer = await require('../utils/mediaConvert').gifToMp4Overlaid(base.buffer, overlay.buffer);
             contentType = 'video/mp4';
         } catch (e) {
-            console.error('[fish-gif] ffmpeg overlay failed — canvas plaster fallback:', e.message);
+            console.error('[fish-gif] ffmpeg overlay failed - canvas plaster fallback:', e.message);
         }
         if (!buffer) {
             lane = 'canvas-plaster-gif';
@@ -711,8 +708,8 @@ async function renderFishingGif({ biome = 'isle', lvl = 1, band = 'low', drops =
         console.log(`[fish-gif] ${lane} total=${Date.now() - t0}ms base=${base.cached ? 'hit' : 'MISS'} ribbon=${overlay.cached ? 'hit' : 'MISS'} (Task 24 plaster)`);
         return { buffer, contentType, thumb };
     });
-    // Disk hits come back without `thumb` — rebuild it from the cached inputs
-    // (base GIF frame-0 + the cached ribbon PNG), never from the MP4.
+ // Disk hits come back without `thumb` - rebuild it from the cached inputs
+ // (base GIF frame-0 + the cached ribbon PNG), never from the MP4.
     if (out && out.buffer && !out.thumb) {
         try {
             const overlay = await renderRibbonOverlay(ribbon);

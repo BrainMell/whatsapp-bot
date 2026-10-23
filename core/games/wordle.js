@@ -15,7 +15,6 @@ const system = require('../utils/system'); // NEW: Database System Module
 
 const activeGames = new Map();
 
-// Load words from TXT file
 function loadWordsFromTXT() {
   const wordsPath = path.join(__dirname, '../Ldatabase/words.txt');
   
@@ -27,7 +26,7 @@ function loadWordsFromTXT() {
     
     const wordsData = fs.readFileSync(wordsPath, 'utf-8');
     
-    // Split by newlines, filter for 5-letter words, and convert to uppercase
+ // Split by newlines, filter for 5-letter words, and convert to uppercase
     const fiveLetterWords = wordsData
       .split('\n')
       .map(word => word.trim().toUpperCase())
@@ -41,7 +40,6 @@ function loadWordsFromTXT() {
   }
 }
 
-// Load word list
 const WORD_LIST = loadWordsFromTXT();
 
 // Fallback to hardcoded list if TXT loading fails
@@ -131,15 +129,15 @@ function classifyWordDifficulty(word, isCurated = false) {
   const doubleRepeats = uniqueLetters <= 3;
   const rareLetters = (word.match(/[QXZJ]/g) || []).length;
   
-  // If word is NOT in our common list, it's automatically HARD
+ // If word is NOT in our common list, it's automatically HARD
   if (!isCurated) return 'hard';
 
-  // HARD CRITERIA even for common words:
+ // HARD CRITERIA even for common words:
   if (vowels <= 1 || rareLetters >= 1 || doubleRepeats) {
     return 'hard';
   }
   
-  // EASY CRITERIA:
+ // EASY CRITERIA:
   if (vowels >= 3 && !hasRepeats) {
     return 'easy';
   }
@@ -223,7 +221,7 @@ function updateScoreboard(playerJid, playerName, won, attempts, difficulty = 'me
   system.set('wordle_scores', scores);
 }
 
-// 💡 OWNER 2026-10-07: staff (owner/mods) never appear on the competitive
+// OWNER staff (owner/mods) never appear on the competitive
 // wordle board. Lazy require of engine avoids the games<->engine load cycle.
 function _isStaffJid(jid) {
   try {
@@ -275,11 +273,11 @@ class WordleGame {
     this.difficulty = difficulty;
     this.chatId = chatId;
     
-    // Select word from appropriate difficulty pool
+ // Select word from appropriate difficulty pool
     const wordPool = WORDS_BY_DIFFICULTY[difficulty] || WORDS_BY_DIFFICULTY.medium;
     
     if (wordPool.length === 0) {
-      // Fallback to all words if category is empty
+ // Fallback to all words if category is empty
       this.targetWord = VALID_WORDS[Math.floor(Math.random() * VALID_WORDS.length)];
     } else {
       this.targetWord = wordPool[Math.floor(Math.random() * wordPool.length)];
@@ -291,7 +289,7 @@ class WordleGame {
     this.won = false;
     this.startTime = Date.now();
 
-    // Set timeout for 10 minutes
+ // Set timeout for 10 minutes
     this.timeout = setTimeout(async () => {
       const key = `${this.chatId}:${normalizeJid(this.playerJid)}`;
       if (activeGames.has(key)) {
@@ -479,7 +477,7 @@ class WordleGame {
 // GAME MANAGEMENT
 // ============================================
 
-// 💡 FIX: Key games by `${chatId}:${playerJid}` instead of just `playerJid`
+// FIX: Key games by `${chatId}:${playerJid}` instead of just `playerJid`
 // to prevent cross-chat game leakage. Previously a user could start a game
 // in chat A and make guesses in chat B, with responses going to chat B.
 function _gameKey(chatId, playerJid) {
@@ -493,8 +491,8 @@ function createGame(playerJid, playerName, difficulty = 'medium', chatId, sock, 
 }
 
 function getGame(playerJid, chatId) {
-  // Try chat-specific key first, then fall back to old playerJid-only key
-  // for backward compatibility with games started before this fix.
+ // Try chat-specific key first, then fall back to old playerJid-only key
+ // for backward compatibility with games started before this fix.
   return activeGames.get(_gameKey(chatId, playerJid)) || activeGames.get(normalizeJid(playerJid));
 }
 
@@ -503,7 +501,7 @@ function deleteGame(playerJid, chatId) {
   const game = activeGames.get(key);
   if (game && game.timeout) clearTimeout(game.timeout);
   activeGames.delete(key);
-  // Also clean up any old-style key
+ // Also clean up any old-style key
   activeGames.delete(normalizeJid(playerJid));
 }
 
@@ -521,14 +519,13 @@ module.exports = {
       };
     }
 
-    // Validate difficulty
     if (!['easy', 'medium', 'hard'].includes(difficulty)) {
       difficulty = 'medium';
     }
 
     const game = createGame(senderJid, playerName, difficulty, chatId, sock, botMarker);
     
-    // Difficulty display
+ // Difficulty display
     const difficultyEmoji = { easy: '🟢', medium: '🟡', hard: '🔴' };
     const difficultyName = difficulty.toUpperCase();
     const pointsEarned = { easy: '1pt', medium: '2pts', hard: '3pts' };
@@ -580,7 +577,7 @@ module.exports = {
 
     if (result.gameOver) {
       if (result.won) {
-        // Award Money
+ // Award Money
         const rewards = { easy: 100, medium: 200, hard: 300 };
         const amount = rewards[game.difficulty] || 200;
         economy.addMoney(senderJid, amount);
@@ -634,7 +631,7 @@ module.exports = {
 
     const word = game.targetWord;
     
-    // If not admin, count as a loss for quitting
+ // If not admin, count as a loss for quitting
     if (!isAdmin) {
       updateScoreboard(game.fullJid, game.playerName, false, game.guesses.length, game.difficulty);
     }
@@ -655,10 +652,10 @@ module.exports = {
   },
 
   showStats: async (sock, chatId, senderJid, botMarker, m) => {
-    // 💡 FIX: Don't create a full WordleGame instance just to read stats -
-    // the constructor selects a random word AND sets a 10-minute timeout
-    // that references undefined chatId/sock, causing memory leaks on every
-    // `.wordle s` call. Read stats directly from the system store instead.
+ // FIX: Don't create a full WordleGame instance just to read stats -
+ // the constructor selects a random word AND sets a 10-minute timeout
+ // that references undefined chatId/sock, causing memory leaks on every
+ // `.wordle s` call. Read stats directly from the system store instead.
     const scores = system.get('wordle_scores', {});
     const playerStats = scores[senderJid];
 

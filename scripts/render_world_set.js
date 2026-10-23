@@ -1,6 +1,6 @@
 // Render the full world card set to PNG for VISUAL inspection (owner demands
 // real rendered results, not "code looks right"). Usage:
-//   node scripts/render_world_set.js [outdir]
+// node scripts/render_world_set.js [outdir]
 'use strict';
 const path = require('path');
 const fs = require('fs');
@@ -34,7 +34,7 @@ const JOBS = [
             console.log('ERROR', name, e.message);
         }
     }
-    // live-phase sweep for the atlas (labels must never collide at any phase)
+ // live-phase sweep for the atlas (labels must never collide at any phase)
     for (const min of [0, 45, 90, 150, 200, 225, 275]) {
         try {
             const buf = await R.renderCosmologyAtlasSheet(Date.now() + min * 60 * 1000);

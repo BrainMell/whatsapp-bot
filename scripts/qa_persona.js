@@ -1,6 +1,6 @@
-// QA harness — PROJECT REALGUY persona engine (owner 2026-10-20).
+// QA harness - persona engine.
 // Pure stub-driven: no DB, no net, no engine require. Run:
-//   node scripts/qa_persona.js
+// node scripts/qa_persona.js
 const persona = require('../core/persona/personaEngine');
 
 let fails = 0;
@@ -9,7 +9,7 @@ const check = (label, cond) => {
   if (!cond) fails++;
 };
 
-// ─── stubs ───────────────────────────────────────────────────────────────────
+// --- stubs -------------------------------------------------------------------
 let kvStore = {};
 const systemStub = {
   get: (k, fb) => (k in kvStore ? kvStore[k] : fb),
@@ -25,13 +25,13 @@ const groqStub = async (opts) => {
   return { choices: [{ message: { content: groqScript.shift() || 'default casual reply' } }] };
 };
 
-// ─── 1. init ─────────────────────────────────────────────────────────────────
+// --- 1. init -----------------------------------------------------------------
 check('initPersona not ready without deps', persona.initPersona({}) === false);
 check('initPersona ready with groq+system',
   persona.initPersona({ botName: 'joker', system: systemStub, smartGroqCall: async () => ({}), modelFn: () => 'm' }) === true);
 persona.initPersona({ botName: 'joker', system: systemStub, smartGroqCall: groqStub, modelFn: () => 'FAST' });
 
-// ─── 2. observe buffer (L2) ──────────────────────────────────────────────────
+// --- 2. observe buffer (L2) --------------------------------------------------
 const CH = 'qa@g.us';
 for (let i = 0; i < 30; i++) persona.observe({ chatId: CH, who: 'u' + i, text: 'msg ' + i });
 const bufLen = persona._internals.transcriptBlock(CH).split('\n').length;
@@ -40,7 +40,7 @@ check('oldest entries evicted', !persona._internals.transcriptBlock(CH).includes
 persona.observe({ chatId: CH, who: 'x', text: '' }); // empty ignored silently
 check('empty observe ignored', persona._internals.transcriptBlock(CH).split('\n').length === 12);
 
-// ─── 3. ambient gate (L1) ────────────────────────────────────────────────────
+// --- 3. ambient gate (L1) ----------------------------------------------------
 Math.random = () => 0; // always passes the roll
 check('ambient blocked in DM', persona.shouldAmbient({ chatId: CH, text: 'hey guys what is up', isGroup: false }) === false);
 check('ambient blocked for commands', persona.shouldAmbient({ chatId: CH, text: '.j play something', isGroup: true }) === false);
@@ -49,7 +49,7 @@ check('ambient rolls + burns cooldown', persona.shouldAmbient({ chatId: CH, text
 check('ambient cooldown holds', persona.shouldAmbient({ chatId: CH, text: 'another perfectly eligible message here', isGroup: true }) === false);
 Math.random = realRandom;
 
-// ─── 4. chunking (L5) ────────────────────────────────────────────────────────
+// --- 4. chunking (L5) --------------------------------------------------------
 check('short text = 1 chunk', persona.chunkText('yo that fight was crazy lol').length === 1);
 const long = 'This is sentence one which is fairly long on purpose. Sentence two adds more words to push past the limit for sure. Sentence three keeps going and going and going like a real rambler would. Sentence four finally wraps it all up nicely here.';
 const chunks = persona.chunkText(long);
@@ -57,24 +57,24 @@ check('long text → 2-3 chunks', chunks.length >= 2 && chunks.length <= 3);
 check('chunks stay human-sized', chunks.every(c => c.length <= 260) && chunks.join(' ').includes('sentence'));
 check('chunkText safe on junk', JSON.stringify(persona.chunkText('')) === '[]' && JSON.stringify(persona.chunkText(null)) === '[]');
 
-// ─── 5. typing delay (L5) ────────────────────────────────────────────────────
+// --- 5. typing delay (L5) ----------------------------------------------------
 const d1 = persona.typingDelayMs('hi');
 const d2 = persona.typingDelayMs('x'.repeat(20000));
 check('delay clamped 1.2s-7s', d1 >= 1200 && d1 <= 7000 && d2 === 7000);
 
-// ─── 6. tool protocol (L4) ───────────────────────────────────────────────────
+// --- 6. tool protocol (L4) ---------------------------------------------------
 const mixed = 'hmm let me think\n[SEARCH: who won the 2022 world cup]\n[REMEMBER: Mellow | hates pineapple on pizza]';
 const parsed = persona.parseToolCalls(mixed);
 check('SEARCH tag parsed', parsed.search === 'who won the 2022 world cup');
 check('REMEMBER tag parsed (name|fact)', parsed.remember.length === 1 && parsed.remember[0].name.trim() === 'Mellow' && parsed.remember[0].fact.includes('pineapple'));
-// (REALGUY v2: emoji re-add is random — pin it OFF for exact-string checks)
+// (REALGUY v2: emoji re-add is random - pin it OFF for exact-string checks)
 Math.random = () => 0.99;
 const cleaned = persona.cleanReplyText(mixed);
 check('cleanReplyText strips all tags + markdown', !cleaned.includes('[SEARCH') && !cleaned.includes('[REMEMBER') && !cleaned.includes('**'));
 check('cleanReplyText strips bot: prefix', persona.cleanReplyText('**Bot:** yeah lol') === 'yeah lol');
 Math.random = realRandom;
 
-// ─── 7. facts KV (L2, Mongo-backed via shared system) ────────────────────────
+// --- 7. facts KV (L2, Mongo-backed via shared system) ------------------------
 persona.rememberFact(CH, 'Mellow', 'hates pineapple on pizza');
 check('fact persisted to shared KV', JSON.stringify(kvStore._shared_persona_facts[CH]).includes('pineapple'));
 check('factsBlock renders list', persona.factsBlock(CH).includes('- Mellow: hates pineapple'));
@@ -83,14 +83,14 @@ check('facts capped at 30 (FIFO)', kvStore._shared_persona_facts[CH].length === 
 check('rememberFact rejects junk', persona.rememberFact('', '', '') === false);
 
 (async () => {
-  // ─── 8. buildTurn: plain + REMEMBER ────────────────────────────────────────
+ // --- 8. buildTurn: plain + REMEMBER ----------------------------------------
   groqCalls = [];
   groqScript = ['fr though\n[REMEMBER: Mellow | mains the samurai class]'];
   const t1 = await persona.buildTurn({ chatId: CH, senderName: 'Mellow', text: 'sup dude', isAmbient: false });
   check('turn returns replies', t1 && t1.replies.length >= 1 && t1.replies.join(' ').includes('fr though'));
   check('REMEMBER executed during turn', JSON.stringify(kvStore._shared_persona_facts[CH]).includes('samurai'));
   check('system prompt carries persona rules', groqCalls[0].messages[0].content.includes('You are joker') && groqCalls[0].messages[0].content.includes('not an AI'));
-  // 💡 REALGUY v3 (owner: over-punctuating / robotic): voice layer checks
+ // REALGUY v3 (over-punctuating / robotic): voice layer checks
   const _src3 = require('fs').readFileSync(require('path').join(__dirname, '..', 'core', 'persona', 'personaEngine.js'), 'utf8');
   check('v3: HOW YOU TEXT teaches no trailing periods', groqCalls[0].messages[0].content.includes('never end a message with a period'));
   check('v3: HOW YOU TEXT bans semicolons/dashes/parens', groqCalls[0].messages[0].content.includes('no semicolons, no dashes, no parentheses'));
@@ -99,7 +99,7 @@ check('rememberFact rejects junk', persona.rememberFact('', '', '') === false);
   check('v3: honest-miss rule (admit you missed it or ask)', groqCalls[0].messages[0].content.includes('admit you missed it or ask'));
   check('v3: Baileys quoted rides as THIRD arg (v2.5 bug: raw sends)', _src3.includes('sendMessage(chatId, content, quoted ? { quoted } : undefined)'));
   check('v3: humanSend forwards opts.quoteM into silentSend', _src3.includes('silentSend(sock, chatId, content, opts.quoteM)'));
-  check('v3: em-dash/semicolon soften pass in cleanReplyText', _src3.includes('replace(/\\s*[—–]\\s*/g'));
+  check('v3: em-dash/semicolon soften pass in cleanReplyText', _src3.includes('replace(/\\s*[--]\\s*/g'));
   check('v3: per-bubble trailing-period strip in chunkText', _src3.includes("x.endsWith('.') && !x.endsWith('...')") && _src3.includes('stripTrailingDot(t)'));
   check('v3: trailing period stripped from a bubble', (() => {
     const out = persona.chunkText('hey there. this is fine.');
@@ -108,7 +108,7 @@ check('rememberFact rejects junk', persona.rememberFact('', '', '') === false);
   check('v3: ellipsis preserved by the strip', persona.chunkText('wait what...')[0] === 'wait what...');
   check('v3: em-dash softened to comma speech', (() => {
     const _mr = Math.random; Math.random = () => 0.99; // pin: no emoji re-add during this test
-    const out = persona.cleanReplyText('so sick — wait; no');
+    const out = persona.cleanReplyText('so sick - wait; no');
     Math.random = _mr;
     return out === 'so sick, wait, no';
   })());
@@ -119,7 +119,7 @@ check('rememberFact rejects junk', persona.rememberFact('', '', '') === false);
   })());
   check('transcript rides into prompt', groqCalls[0].messages[0].content.includes('GROUP CHAT RIGHT NOW'));
 
-  // ─── 9. buildTurn: SEARCH tool loop ────────────────────────────────────────
+ // --- 9. buildTurn: SEARCH tool loop ----------------------------------------
   groqCalls = [];
   groqScript = ['[SEARCH: who won the 2022 world cup]', 'answered with the tool result'];
   let searchQ = null;
@@ -132,18 +132,18 @@ check('rememberFact rejects junk', persona.rememberFact('', '', '') === false);
   check('final answer clean + flagged usedSearch', t2.usedSearch === true && !t2.replies.join(' ').includes('[SEARCH'));
   check('model id passed through', groqCalls[0].model === 'FAST');
 
-  // ─── 10. ambient [SILENT] escape ───────────────────────────────────────────
+ // --- 10. ambient [SILENT] escape -------------------------------------------
   groqScript = ['[SILENT]'];
   check('ambient [SILENT] → null turn', await persona.buildTurn({ chatId: CH, senderName: 'x', text: 'whatever guys', isAmbient: true }) === null);
 
-  // ─── 11. generation failure → null (never throws) ──────────────────────────
+ // --- 11. generation failure → null (never throws) --------------------------
   persona.initPersona({ botName: 'joker', system: systemStub,
     smartGroqCall: async () => { throw new Error('429 wall'); }, modelFn: () => 'FAST' });
   check('groq failure → null turn, no throw', await persona.buildTurn({ chatId: CH, senderName: 'x', text: 'hello there', isAmbient: false }) === null);
-  // restore script stub for the remaining suites
+ // restore script stub for the remaining suites
   persona.initPersona({ botName: 'joker', system: systemStub, smartGroqCall: groqStub, modelFn: () => 'FAST' });
 
-  // ─── 12. silentSend: 1 + 2 background retries (L6) ─────────────────────────
+ // --- 12. silentSend: 1 + 2 background retries (L6) -------------------------
   let attempts = 0;
   const flaky = { sendMessage: async () => { attempts++; if (attempts < 3) throw new Error('net drop'); return {}; } };
   check('send succeeds on 3rd attempt', await persona.silentSend(flaky, CH, { text: 'hi' }) === true && attempts === 3);
@@ -151,7 +151,7 @@ check('rememberFact rejects junk', persona.rememberFact('', '', '') === false);
   const dead = { sendMessage: async () => { attempts++; throw new Error('dead'); } };
   check('send fails SILENTLY after 3 attempts (no throw, no user msg)', await persona.silentSend(dead, CH, { text: 'hi' }) === false && attempts === 3);
 
-  // ─── 13. humanSend: presence cadence + marker + chunk break ────────────────
+ // --- 13. humanSend: presence cadence + marker + chunk break ----------------
   const events = [];
   const sock = {
     sendPresenceUpdate: async (state, chat) => { events.push(state + ':' + chat); },
@@ -170,7 +170,7 @@ check('rememberFact rejects junk', persona.rememberFact('', '', '') === false);
   check('chunks sent with invisible bot marker', sent.length === 2 && sent[0].text.startsWith('\u200B') && sent[1].text.includes('part two'));
   check('bot echoes own sends into its buffer (L2)', persona._internals.transcriptBlock(CH).includes('joker: part one'));
 
-  // ─── 14. silentRetryTurn (L6) ───────────────────────────────────────────────
+ // --- 14. silentRetryTurn (L6) -----------------------------------------------
   let tries = 0;
   const heal = async () => { tries++; if (tries < 3) throw new Error('boom'); return 'ok'; };
   check('turn retried 2x in background then succeeds', await persona.silentRetryTurn(heal) === 'ok' && tries === 3);
@@ -178,7 +178,7 @@ check('rememberFact rejects junk', persona.rememberFact('', '', '') === false);
   const cursed = async () => { tries++; throw new Error('boom'); };
   check('turn exhausted → null, never throws', await persona.silentRetryTurn(cursed) === null && tries === 3);
 
-  // ─── 15. maybeAmbientChime end-to-end (L1+L6) ──────────────────────────────
+ // --- 15. maybeAmbientChime end-to-end (L1+L6) ------------------------------
   groqScript = ['lmao same tho'];
   const sentChime = [];
   const sock3 = { sendPresenceUpdate: async () => {}, sendMessage: async (c, x) => { sentChime.push(x); return {}; } };
@@ -192,7 +192,7 @@ check('rememberFact rejects junk', persona.rememberFact('', '', '') === false);
   check('ambient roll rejection → silence', ch3 === null);
   Math.random = realRandom;
 
-  // ─── 16. REALGUY v2: persona prompt layers (owner round 2) ────────────────
+ // --- 16. REALGUY v2: persona prompt layers (owner round 2) ----------------
   groqCalls = [];
   groqScript = ['yo.'];
   await persona.buildTurn({ chatId: CH, senderName: 'Mellow', text: 'yo', isAmbient: false });
@@ -213,7 +213,7 @@ check('rememberFact rejects junk', persona.rememberFact('', '', '') === false);
   check('L5: few-shot exemplar block present (10 exchanges)',
     (sys2.match(/^you: /gm) || []).length === 10 && sys2.includes('EXAMPLES OF HOW YOUR TEXTS LOOK'));
   check('L5: bot-deflection exemplar pinned', sys2.includes('you: bold of you to ask'));
-  check('L5: honesty exemplar (missed clip — ask, never fake it)', sys2.includes('nah i missed it, send it again'));
+  check('L5: honesty exemplar (missed clip - ask, never fake it)', sys2.includes('nah i missed it, send it again'));
   check('L5: quote/card-context exemplar pinned', sys2.includes("[Replying to Joker's message") && sys2.includes('120 deer is a whole buffet'));
   check('L7: profileText layer rides into prompt when provided', (() => {
     groqCalls = []; groqScript = ['sup'];
@@ -221,7 +221,7 @@ check('rememberFact rejects junk', persona.rememberFact('', '', '') === false);
       .then(() => groqCalls[0].messages[0].content.includes("PERSON YOU'RE TALKING TO") && groqCalls[0].messages[0].content.includes('mains samurai'));
   })());
 
-  // ─── 17. REALGUY v2: deterministic emoji sanitizer ─────────────────────────
+ // --- 17. REALGUY v2: deterministic emoji sanitizer -------------------------
   const emojiRiddled = 'so sick 😎💥🤖 let\'s go 🔥✨🎉';
   Math.random = () => 0.99; // never re-add
   const stripped = persona.sanitizeEmoji(emojiRiddled);
@@ -235,8 +235,8 @@ check('rememberFact rejects junk', persona.rememberFact('', '', '') === false);
     persona._internals.EMOJI_ALLOW.includes(enriched.split(' ').pop()) &&
     (enriched.match(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu) || []).length === 1);
   Math.random = realRandom;
-  // statistical envelope: 300 real-random runs → emoji rate ≈ 12% (bounded),
-  // never more than one emoji, never a banned one
+ // statistical envelope: 300 real-random runs → emoji rate ≈ 12% (bounded),
+ // never more than one emoji, never a banned one
   let emojiCount = 0;
   const multiOrBanned = [];
   for (let i = 0; i < 300; i++) {
@@ -255,7 +255,7 @@ check('rememberFact rejects junk', persona.rememberFact('', '', '') === false);
     persona.cleanReplyText('heh 😎 nice 💀') === 'heh nice');
   Math.random = realRandom;
 
-  // ─── 18. REALGUY v2: engine.js source pins (intro restore + fast-path kill)
+ // --- 18. REALGUY v2: engine.js source pins (intro restore + fast-path kill)
   const engineSrc = require('fs').readFileSync(require('path').join(__dirname, '..', 'core', 'engine.js'), 'utf8');
   check('old .on intro restored verbatim',
     engineSrc.includes('AI is now *enabled* in this ${isDM ? "DM" : "chat"}!'));
@@ -270,7 +270,7 @@ check('rememberFact rejects junk', persona.rememberFact('', '', '') === false);
     engineSrc.includes('contentFn: () => botConfig.getContentDescription()'));
   check('profileText wired into persona buildTurn', engineSrc.includes('profileText: _profileText'));
 
-  // ─── 19. REALGUY v2.5: name roster (nicknames vs WhatsApp names) ──────────
+ // --- 19. REALGUY v2.5: name roster (nicknames vs WhatsApp names) ----------
   const NCH = 'names@g.us';
   persona.initPersona({ botName: 'joker', system: systemStub, smartGroqCall: groqStub, modelFn: () => 'FAST',
     nameResolver: (jid) => (jid === 'prof@s.whatsapp.net' ? 'Mel' : null) });
@@ -298,7 +298,7 @@ check('rememberFact rejects junk', persona.rememberFact('', '', '') === false);
   const rb = persona.rosterBlock(NCH, 'a@s.whatsapp.net');
   check('rosterBlock: lists others, skips speaker', rb.includes('Dave') && rb.includes('Ghost') && !rb.includes('Shadow'));
   check('rosterBlock: flags WhatsApp name when it differs', rb.includes('(WhatsApp name: John Doe)') === false && rb.includes('Dave'));
-  // transcript renders BEST names (observe with jid → roster + moniker learn)
+ // transcript renders BEST names (observe with jid → roster + moniker learn)
   persona.observe({ chatId: NCH, who: 'John Doe', jid: 'a@s.whatsapp.net', text: 'who is up for a raid' });
   check('transcript renders moniker, not raw WhatsApp name', persona._internals.transcriptBlock(NCH).includes('Shadow: who is up for a raid'));
   check('observe with jid learned pushname via transcript path', persona._internals.getPersonEntry(NCH, 'a@s.whatsapp.net').w === 'John Doe');
@@ -310,9 +310,9 @@ check('rememberFact rejects junk', persona.rememberFact('', '', '') === false);
   check('prompt: NAMES style rule present (whoBlock teaches it)', sys3.includes('never use their WhatsApp name when you know what they go by') && sys3.includes("don't invent a name"));
   check('prompt: REMEMBER name hint present', sys3.includes('goes by <what they said>'));
 
-  // ─── 20. REALGUY v2.5: engine.js source pins ───────────────────────────────
+ // --- 20. REALGUY v2.5: engine.js source pins -------------------------------
   check('trigger: ALWAYS quotes the triggering message', engineSrc.includes('{ quoteM: m },'));
-  // 💡 REALGUY v3 pins (owner round 4)
+ // REALGUY v3 pins (owner round 4)
   check('v3: cached replies quote too (quoteM on both send paths)', (engineSrc.match(/\{ quoteM: m \},/g) || []).length === 2);
   check('v3: quoted card/photo gets a label (no more zero context)', engineSrc.includes('(a card/photo, no caption)') && engineSrc.includes("(it's a card/image)"));
   check('old conditional quote REMOVED', !engineSrc.includes('quoteM: isReplyToBot ? m : null'));
@@ -322,11 +322,11 @@ check('rememberFact rejects junk', persona.rememberFact('', '', '') === false);
   check('trigger: @<digits> text-fragment fallback present', engineSrc.includes('_mentionFragmentRe'));
   check('trigger: observability log line present', engineSrc.includes('🎯 [AI] trigger='));
   check('trigger: nameResolver wired into initPersona', engineSrc.includes('nameResolver: (jid) =>'));
-  check('observe gets jid (roster learns every message)', engineSrc.includes('jid: senderJid, // 💡 REALGUY v2.5: identity for the name roster'));
-  check('ambient chime gets senderJid', engineSrc.includes('senderJid, // 💡 REALGUY v2.5: ambient turns get identity too'));
-  check('buildTurn gets senderJid (WHO IS WHO block)', engineSrc.includes('senderJid, // 💡 REALGUY v2.5: powers the WHO'));
+  check('observe gets jid (roster learns every message)', engineSrc.includes('jid: senderJid, // REALGUY v2.5: identity for the name roster'));
+  check('ambient chime gets senderJid', engineSrc.includes('senderJid, // REALGUY v2.5: ambient turns get identity too'));
+  check('buildTurn gets senderJid (WHO IS WHO block)', engineSrc.includes('senderJid, // REALGUY v2.5: powers the WHO'));
 
   console.log(fails === 0 ? '\nALL CHECKS PASSED' : `\n${fails} CHECK(S) FAILED`);
-  // let stdout drain (process.exit on a pipe truncates buffered console.log)
+ // let stdout drain (process.exit on a pipe truncates buffered console.log)
   process.exitCode = fails === 0 ? 0 : 1;
 })().catch((e) => { console.error('HARNESS CRASH:', e); process.exit(1); });

@@ -1,6 +1,6 @@
-// gen_confetti.js — v14 BALL ARENA celebration frames: 2 confetti-burst
+// gen_confetti.js - v14 BALL ARENA celebration frames: 2 confetti-burst
 // frames (1280x720 + 800x450 thumbs). The bot plays them back-to-back on
-// every 5th kick via the proven same-bubble HQ-morph edit — REAL confetti
+// every 5th kick via the proven same-bubble HQ-morph edit - REAL confetti
 // ON the card, not the dead react-pill gamble.
 const { Jimp, loadFont } = require("jimp");
 const path = require("path");

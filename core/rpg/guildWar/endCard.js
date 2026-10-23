@@ -1,12 +1,12 @@
 // ============================================
-// 📜 RUINS END CARDS — royal-decree parchment, themed to the Ruins
-// Owner directive 2026-10-05: the war's victory/defeat images were still
-// the default Go VICTORY/DEFEAT portraits — replace them with the ROYAL
+// RUINS END CARDS - royal-decree parchment, themed to the Ruins
+// Owner directive the war's victory/defeat images were still
+// the default Go VICTORY/DEFEAT portraits - replace them with the ROYAL
 // DECREE style (old-looking parchment paper, the same general text style
 // and presentation as the decree kit) specifically themed around the
 // Ruins. Same kit as noticeCard.js (parchment + Cinzel/IM Fell + double
 // frame + wax seal), with a carved-stone header band and the dead-world
-// flavour lines. Rendered fully in Node — the Go microservice is not
+// flavour lines. Rendered fully in Node - the Go microservice is not
 // involved, matching the rest of the war presentation.
 // ============================================
 
@@ -76,7 +76,7 @@ function _stoneBand(ctx, y0, y1, color) {
         ctx.ellipse(80 + i * 170, y0 + 40 + (i % 3) * 55, 90, 32, i * 0.7, 0, Math.PI * 2);
         ctx.fill();
     }
-    // faint moss creeps along the band's lower edge
+ // faint moss creeps along the band's lower edge
     ctx.fillStyle = 'rgba(90,110,60,0.28)';
     for (let i = 0; i < 8; i++) {
         ctx.beginPath();
@@ -86,7 +86,7 @@ function _stoneBand(ctx, y0, y1, color) {
     ctx.restore();
 }
 
-// the ruined arch motif — a broken stone arch etched beside the seal
+// the ruined arch motif - a broken stone arch etched beside the seal
 function _ruinedArch(ctx, cx, baseY, s, color) {
     ctx.strokeStyle = color;
     ctx.lineWidth = 5; ctx.lineCap = 'round';
@@ -112,21 +112,21 @@ function _ruinedArch(ctx, cx, baseY, s, color) {
     }
 }
 
-// ── main render: { victory, playerName, guildName, roomLabel, chamberKey,
-//    gp, relicNames, lives, worldName } → image buffer (JPEG from the Go
-//    service's ROYAL DECREE royal bake, PNG from the node fallback) ──
-// OWNER 2026-10-05: "by royal decree style, I mean the royal decree style on
-// the royal decree [card], but a landscape image" — i.e. THE in-game ROYAL
+// -- main render: { victory, playerName, guildName, roomLabel, chamberKey,
+// gp, relicNames, lives, worldName } → image buffer (JPEG from the Go
+// service's ROYAL DECREE royal bake, PNG from the node fallback) --
+// OWNER "by royal decree style, I mean the royal decree style on
+// the royal decree [card], but a landscape image" - i.e. THE in-game ROYAL
 // DECREE card itself (economy DECREE royal bake, bg_DECREE.png, landscape
 // 1000x600). We therefore call the same Go endpoint the rank-up decree uses,
 // feeding the war's fields into its fixed decree slots:
-//   name plate → champion, big centre → VICTORY/DEFEAT,
-//   arrow ledger → CHAMBER -> CLEARED/RETREAT, wax seal → V/D.
+// name plate → champion, big centre → VICTORY/DEFEAT,
+// arrow ledger → CHAMBER -> CLEARED/RETREAT, wax seal → V/D.
 // The baked banner, LET IT BE KNOWN rule and guild tagline come for free.
 async function renderRuinsEndCard(opts = {}) {
     const victory = !!opts.victory;
-    // 1) THE ROYAL DECREE (Go service royal bake) — pixel-identical to the
-    //    rank-up decree the owner signed off on.
+ // 1) THE ROYAL DECREE (Go service royal bake) - pixel-identical to the
+ // rank-up decree the owner signed off on.
     try {
         const goService = require('../../utils/goImageService');
         const buf = await goService.generateTransactionCard({
@@ -140,15 +140,15 @@ async function renderRuinsEndCard(opts = {}) {
         });
         if (buf && buf.length > 100) return buf;
     } catch (e) {
-        console.error('[endCard] royal-decree Go bake unavailable — node fallback:', e.message);
+        console.error('[endCard] royal-decree Go bake unavailable - node fallback:', e.message);
     }
-    // 2) fallback: node decree (service down) — kept close to the bake.
+ // 2) fallback: node decree (service down) - kept close to the bake.
     _ensureFonts();
     const canvas = require('canvas');
     const c = canvas.createCanvas(W, H);
     const ctx = c.getContext('2d');
 
-    // parchment + age stains (the decree kit's paper)
+ // parchment + age stains (the decree kit's paper)
     ctx.fillStyle = PAL.parchment;
     ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = PAL.parchmentDeep;
@@ -160,7 +160,7 @@ async function renderRuinsEndCard(opts = {}) {
     }
     ctx.globalAlpha = 1;
 
-    // ── carved-stone header band ──
+ // -- carved-stone header band --
     const BAND_H = 208;
     _stoneBand(ctx, 0, BAND_H, victory ? '#2F3527' : '#3B2428');
     ctx.textAlign = 'center';
@@ -186,18 +186,18 @@ async function renderRuinsEndCard(opts = {}) {
     ctx.fillStyle = PAL.wax;
     ctx.fillRect(W / 2 - 5, 166, 10, 12);
 
-    // etched arch motif in the band corners
+ // etched arch motif in the band corners
     _ruinedArch(ctx, 108, BAND_H - 34, 46, 'rgba(233,220,196,0.5)');
     _ruinedArch(ctx, W - 108, BAND_H - 34, 46, 'rgba(233,220,196,0.5)');
 
-    // ── decree frame below the band ──
+ // -- decree frame below the band --
     ctx.strokeStyle = PAL.frame;
     ctx.lineWidth = 2.5;
     ctx.strokeRect(30, BAND_H + 16, W - 60, H - BAND_H - 62);
     ctx.lineWidth = 1;
     ctx.strokeRect(42, BAND_H + 28, W - 84, H - BAND_H - 86);
 
-    // ── body (IM Fell, decree voice) ──
+ // -- body (IM Fell, decree voice) --
     ctx.textAlign = 'left';
     ctx.font = '20px "IM Fell"';
     ctx.fillStyle = PAL.ink;
@@ -211,7 +211,7 @@ async function renderRuinsEndCard(opts = {}) {
     let ty = BAND_H + 78;
     for (const line of lines) { ctx.fillText(line, 110, ty); ty += 31; }
 
-    // ── war-ledger strip (stat rows, same treatment as the decree strips) ──
+ // -- war-ledger strip (stat rows, same treatment as the decree strips) --
     const stripY = H - 226;
     ctx.fillStyle = 'rgba(58,42,30,0.08)';
     ctx.fillRect(90, stripY, W - 180, 96);
@@ -244,7 +244,7 @@ async function renderRuinsEndCard(opts = {}) {
         }
     }
 
-    // carried relic names (one italic line, truncated)
+ // carried relic names (one italic line, truncated)
     ctx.textAlign = 'left';
     const relicLine = (opts.relicNames || []).length
         ? `carried: ${opts.relicNames.slice(0, 3).join(', ')}${opts.relicNames.length > 3 ? `, and ${opts.relicNames.length - 3} more` : ''}`
@@ -253,7 +253,7 @@ async function renderRuinsEndCard(opts = {}) {
     ctx.fillStyle = PAL.inkSoft;
     ctx.fillText(relicLine, 110, H - 104);
 
-    // ── wax seal (cracked on defeat) ──
+ // -- wax seal (cracked on defeat) --
     const sx = W - 104, sy = H - 92;
     ctx.fillStyle = PAL.wax;
     ctx.beginPath(); ctx.arc(sx, sy, 42, 0, Math.PI * 2); ctx.fill();
@@ -262,7 +262,7 @@ async function renderRuinsEndCard(opts = {}) {
     ctx.textAlign = 'center';
     ctx.fillText('GA', sx, sy + 10);
     if (!victory) {
-        // the seal cracks when the champion falls
+ // the seal cracks when the champion falls
         ctx.strokeStyle = 'rgba(24,10,12,0.85)';
         ctx.lineWidth = 3;
         ctx.beginPath();

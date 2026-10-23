@@ -1,6 +1,6 @@
 'use strict';
-// render_base_realms.js — the same player base in each of the five realms:
-//   node scripts/render_base_realms.js [outDir]
+// render_base_realms.js - the same player base in each of the five realms:
+// node scripts/render_base_realms.js [outDir]
 const fs = require('fs'); const path = require('path');
 const OUT = process.argv[2] || '/tmp/base_realms';
 process.env.QA_MODE = process.env.QA_MODE || '1';

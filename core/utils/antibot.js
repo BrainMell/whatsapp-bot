@@ -69,12 +69,12 @@ function inspect(m, opts = {}) {
   const id = String(key.id || '');
   const text = extractText(m);
 
-  // Debug/Cloud-API style ids - real consumer clients never produce these.
+ // Debug/Cloud-API style ids - real consumer clients never produce these.
   if (id && RE_DEBUG_ID.test(id)) {
     score += STRONG_SCORE;
     signals.push('debug-id');
   }
-  // Message-ID shape fingerprints (weak - WA Web collisions exist).
+ // Message-ID shape fingerprints (weak - WA Web collisions exist).
   if (id && RE_BAILEYS_DEFAULT.test(id)) {
     score += WEAK_SCORE;
     signals.push('baileys-id');
@@ -93,26 +93,26 @@ function inspect(m, opts = {}) {
     }
   }
 
-  // Linked-device relay (self-bot pattern). Weak alone.
+ // Linked-device relay (self-bot pattern). Weak alone.
   if (m && m.message && m.message.deviceSentMessage) {
     score += WEAK_SCORE;
     signals.push('deviceSentMessage');
   }
 
-  // Interactive payloads (business/bot only). Medium.
+ // Interactive payloads (business/bot only). Medium.
   const inter = interactiveSignals(m);
   if (inter.length) {
     score += MEDIUM_SCORE;
     signals.push('interactive:' + inter[0]);
   }
 
-  // Messaged within seconds of joining the group. Medium.
+ // Messaged within seconds of joining the group. Medium.
   if (opts.joinedAt && Date.now() - opts.joinedAt < 20000 && Date.now() >= opts.joinedAt) {
     score += MEDIUM_SCORE;
     signals.push('instant-on-join');
   }
 
-  // Bot watermark text. Medium.
+ // Bot watermark text. Medium.
   if (text && RE_BOT_MARK.test(text)) {
     score += MEDIUM_SCORE;
     signals.push('bot-mark');
@@ -148,7 +148,6 @@ async function act(sock, chatId, m, senderJid, verdict, helpers) {
   const { settings, addWarning, getWarningCount, resetWarnings, displayName, isBotAdmin } = helpers;
   const action = settings.antibotAction || 'warn';
 
-  // Delete the offending message first (best-effort in every mode).
   let deleted = false;
   try {
     await sock.sendMessage(chatId, { delete: m.key });
@@ -168,7 +167,7 @@ async function act(sock, chatId, m, senderJid, verdict, helpers) {
     return true;
   }
 
-  // warn (default) - 3 strikes via the shared warning system, then kick.
+ // warn (default) - 3 strikes via the shared warning system, then kick.
   const count = addWarning ? addWarning(senderJid, chatId, `AntiBot: ${tag}`) : 1;
   const maxWarn = 3;
   if (count >= maxWarn) {
@@ -211,7 +210,7 @@ function noteJoin(groupJid, userJid) {
   if (!groupJid || !userJid) return;
   const key = `${groupJid}|${userJid}`;
   joinTimes.set(key, Date.now());
-  // opportunistic prune
+ // opportunistic prune
   if (joinTimes.size > 500) {
     const now = Date.now();
     for (const [k, t] of joinTimes) {

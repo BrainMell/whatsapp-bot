@@ -1,23 +1,21 @@
 // ============================================
-// QUIZ PORTRAIT CACHE (2026-09-30) - disk cache for character portraits
+// QUIZ PORTRAIT CACHE - disk cache for character portraits
 // ============================================
-// WHY: the image-question rebuild (2026-09-30) makes AniList's character-
+// WHY: the image-question rebuild makes AniList's character-
 // native portraits the PRIMARY source (empirical bake-off on Box 1:
 // AniList 60/60 ok @ 18ms/img vs Fandom 0/60 - downloads blocked). Identity
 // is guaranteed by the database (the portrait belongs to the character
 // entity), so what remains is QUALITY (pixel gate) and SPEED. Caching the
 // verified bytes on disk gives:
-//   - repeat quizzes serve portraits with ZERO network calls
-//   - AniList API budget is spent once per cast per day, not per candidate
-//     per quiz (the old per-candidate re-query pattern got Box 1 429'd)
-//
+// - repeat quizzes serve portraits with ZERO network calls
+// - AniList API budget is spent once per cast per day, not per candidate
+// per quiz (the old per-candidate re-query pattern got Box 1 429'd)
 // Layout (under data/quiz_cache/):
-//   portraits/<key>.img          raw image bytes (jpeg/png/webp)
-//   portraits/<key>.json         { mime, url, name, w, h, ts, ok }
-//   portraits/<key>.neg          negative mark (download/gate failed) - 24h
-//   casts/al-<mediaId>.json      AniList cast roster (TTL 24h)
-//   casts/al-<mediaId>.neg       negative mark for cast fetch - 6h
-//
+// portraits/<key>.img raw image bytes (jpeg/png/webp)
+// portraits/<key>.json { mime, url, name, w, h, ts, ok }
+// portraits/<key>.neg negative mark (download/gate failed) - 24h
+// casts/al-<mediaId>.json AniList cast roster (TTL 24h)
+// casts/al-<mediaId>.neg negative mark for cast fetch - 6h
 // Keying portraits by AniList CHARACTER id (not URL) is deliberate: the id
 // is the stable entity identity; URLs can rotate.
 // ============================================
@@ -46,7 +44,7 @@ function _ensureDirs() {
 
 function _safeUnlink(p) { try { fs.unlinkSync(p); } catch { } }
 
-// ── portrait bytes ──────────────────────────────────────────────────────
+// -- portrait bytes ------------------------------------------------------
 function getPortrait(key) {
   if (!key) return null;
   const base = path.join(PORTRAITS, _slug(key));
@@ -90,7 +88,7 @@ function putNegative(key) {
   try { fs.writeFileSync(path.join(PORTRAITS, `${_slug(key)}.neg`), String(Date.now())); } catch { }
 }
 
-// ── cast rosters ────────────────────────────────────────────────────────
+// -- cast rosters --------------------------------------------------------
 function getCast(mediaId) {
   if (!mediaId) return null;
   const p = path.join(CASTS, `al-${mediaId}.json`);
@@ -132,7 +130,7 @@ function putCastNegative(mediaId) {
   try { fs.writeFileSync(path.join(CASTS, `al-${mediaId}.neg`), String(Date.now())); } catch { }
 }
 
-// ── maintenance ─────────────────────────────────────────────────────────
+// -- maintenance ---------------------------------------------------------
 function _slug(key) { return String(key).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80); }
 
 function _schedulePrune() {

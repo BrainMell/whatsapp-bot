@@ -1,18 +1,16 @@
 // ===============================================
-// qa_audio_listfirst.js — on-box QA for the list-first audio feature
-// (owner 2026-10-19: ".j audio" searches must show a numbered
-//  title/author/length list; a numeric reply sends that exact song)
-//
+// qa_audio_listfirst.js - on-box QA for the list-first audio feature
+// (".j audio" searches must show a numbered
+// title/author/length list; a numeric reply sends that exact song)
 // Sections:
-//   A. Session mechanics (no network): store / resolve / range / TTL /
-//      searching-phase / session-alive-after-pick
-//   B. Live list render (yt-search): numbered lines, durations, hint,
-//      session armed, pick resolves to a watch?v= URL   [SKIP-tolerant]
-//   C. Legacy + URL-mode chains (live Go service, cached fast):
-//      pick URL downloads via getAudioInfo; plain query still works
-//   D. Engine hook presence (static asserts on engine.js source)
-//
-// Run on-box:  node scripts/qa_audio_listfirst.js
+// A. Session mechanics (no network): store / resolve / range / TTL /
+// searching-phase / session-alive-after-pick
+// B. Live list render (yt-search): numbered lines, durations, hint,
+// session armed, pick resolves to a watch?v= URL [SKIP-tolerant]
+// C. Legacy + URL-mode chains (live Go service, cached fast):
+// pick URL downloads via getAudioInfo; plain query still works
+// D. Engine hook presence (static asserts on engine.js source)
+// Run on-box: node scripts/qa_audio_listfirst.js
 // Exit code 0 = all green.
 "use strict";
 
@@ -23,7 +21,7 @@ let pass = 0, fail = 0, skip = 0;
 const t = (name, cond, extra) => {
   if (cond) { pass++; console.log(`  ✅ ${name}`); }
   else if (cond === null) { skip++; console.log(`  ⏭️  ${name} (skip: ${extra || "not verifiable"})`); }
-  else { fail++; console.log(`  ❌ ${name}${extra ? " — " + extra : ""}`); }
+  else { fail++; console.log(`  ❌ ${name}${extra ? " - " + extra : ""}`); }
 };
 const section = (s) => console.log(`\n── ${s} ${"─".repeat(Math.max(0, 60 - s.length))}`);
 
@@ -32,7 +30,7 @@ const picker = require(path.join(__dirname, "..", "core", "utils", "audioPicker"
 (async () => {
   const CHAT = "qa-audio-chat@s.whatsapp.net";
 
-  // ── A. Session mechanics ──────────────────────────────────────────────
+ // -- A. Session mechanics ----------------------------------------------
   section("A. Session mechanics (offline)");
   picker._pending.delete(CHAT);
   picker._pending.set(CHAT, {
@@ -64,7 +62,7 @@ const picker = require(path.join(__dirname, "..", "core", "utils", "audioPicker"
   const pExp = picker.resolveAudioPick(CHAT, "1");
   t("expired pick -> 'expired' + cleaned", !pExp.ok && pExp.reason === "expired" && !picker._pending.has(CHAT));
 
-  // ── B. Live list render ───────────────────────────────────────────────
+ // -- B. Live list render -----------------------------------------------
   section("B. Live list render (yt-search) [SKIP-tolerant]");
   const sent = [];
   const reacts = [];
@@ -80,24 +78,24 @@ const picker = require(path.join(__dirname, "..", "core", "utils", "audioPicker"
     console.log("  (yt-search threw:", e.message + ")");
   }
   if (!searchOk || !listed) {
-    t("live yt-search list", null, "youtube search unreachable from box — offline sections still cover mechanics");
+    t("live yt-search list", null, "youtube search unreachable from box - offline sections still cover mechanics");
   } else {
     const listMsg = [...sent].reverse().find((c) => c.text && c.text.includes("AUDIO SEARCH"));
     t("list message sent", !!listMsg);
     t("bot marker prefix", listMsg && listMsg.text.startsWith("🤖 🎧 *AUDIO SEARCH*"));
     t("numbered lines 1..N", listMsg && /\n1\. \*/.test(listMsg.text) && /\n2\. \*/.test(listMsg.text));
-    t("author line present", listMsg && /— _/.test(listMsg.text));
+    t("author line present", listMsg && /- _/.test(listMsg.text));
     t("duration present (m:ss)", listMsg && /\_\d+:\d\d\_/.test(listMsg.text));
     t("pick hint present", listMsg && listMsg.text.includes("Reply with a *number*"));
     t("3-min expiry hint", listMsg && listMsg.text.includes("3 min"));
     t("session armed in 'list' phase", picker._pending.get(CHAT) && picker._pending.get(CHAT).phase === "list");
     const livePick = picker.resolveAudioPick(CHAT, "1");
     t("live pick resolves to watch?v= URL", livePick.ok && /^https:\/\/www\.youtube\.com\/watch\?v=[\w-]{11}$/.test(livePick.videoUrl));
-    console.log(`      picked: ${livePick.title} — ${livePick.author}`);
+    console.log(`      picked: ${livePick.title} - ${livePick.author}`);
     var livePickUrl = livePick.ok ? livePick.videoUrl : null; // for section C
   }
 
-  // ── C. Go service chains (live, cached-when-possible) ─────────────────
+ // -- C. Go service chains (live, cached-when-possible) -----------------
   section("C. Go service: URL-mode pick download + legacy query [SKIP-tolerant]");
   const goService = require(path.join(__dirname, "..", "core", "utils", "goImageService"));
   const urlToTest = livePickUrl || "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
@@ -122,7 +120,7 @@ const picker = require(path.join(__dirname, "..", "core", "utils", "audioPicker"
     t("legacy single-shot query still works (fallback path)", null, "go service unreachable: " + e.message);
   }
 
-  // ── D. Engine hook presence (static) ──────────────────────────────────
+ // -- D. Engine hook presence (static) ----------------------------------
   section("D. Engine hook presence (static asserts)");
   const eng = fs.readFileSync(path.join(__dirname, "..", "core", "engine.js"), "utf8");
   t("engine requires audioPicker", eng.includes("require('./utils/audioPicker')"));
@@ -133,7 +131,7 @@ const picker = require(path.join(__dirname, "..", "core", "utils", "audioPicker"
   t("legacy fallback preserved when list fails", /if \(listed\) return;\s*\n\s*await handleAudioCommand\(sock, chatId, query, m\);/.test(eng));
   t("realm theme bare-.j-audio untouched", eng.includes("THE REALM'S THEME"));
 
-  // ── summary ───────────────────────────────────────────────────────────
+ // -- summary -----------------------------------------------------------
   console.log(`\n═══ RESULT: ${pass} passed / ${fail} failed / ${skip} skipped ═══`);
   process.exit(fail ? 1 : 0);
 })();

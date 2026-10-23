@@ -1,9 +1,9 @@
 // Render live Abyss samples on-box (real canvas, deployed assets @859adad):
-//  1) combat scene — forward-facing pool monster (ref style), stalactite hall
-//  2) CAVE BAT combat — winged front-facing single (was a broken sheet)
-//  3) wild summon duel — the game's OWN dragon sprite right, player left
-//  4) floor descent card GIF — ring stack descend/return loop
-// Run: node scripts/render_abyss_fix.js  (writes scripts/render_out/abyss_fix/)
+// 1) combat scene - forward-facing pool monster (ref style), stalactite hall
+// 2) CAVE BAT combat - winged front-facing single (was a broken sheet)
+// 3) wild summon duel - the game's OWN dragon sprite right, player left
+// 4) floor descent card GIF - ring stack descend/return loop
+// Run: node scripts/render_abyss_fix.js (writes scripts/render_out/abyss_fix/)
 const path = require('path');
 const fs = require('fs');
 const REPO = path.join(__dirname, '..');
@@ -33,12 +33,12 @@ const mkState = (over) => Object.assign({
 }, over);
 
 (async () => {
-    // 1) combat — forward-facing single like the reference
+ // 1) combat - forward-facing single like the reference
     const r1 = await abyssScene.renderAbyssCombat(mkState({ abyssFloor: 7 }), { phase: 'START', turnOrderStr: 'Mellow-San' });
     if (r1.success) fs.writeFileSync(path.join(OUT, 'abyss_fix_combat.png'), r1.buffer);
     console.log('combat:', r1.success, r1.success && r1.buffer.length);
 
-    // 2) CAVE BAT — winged front-facing single (was a scattered sheet render)
+ // 2) CAVE BAT - winged front-facing single (was a scattered sheet render)
     const r2 = await abyssScene.renderAbyssCombat(mkState({
         abyssFloor: 3,
         enemies: [{ name: 'CAVE BAT', isEnemy: true, spriteIndex: 42, currentHP: 260, stats: { hp: 260, maxHp: 420 } }],
@@ -46,7 +46,7 @@ const mkState = (over) => Object.assign({
     if (r2.success) fs.writeFileSync(path.join(OUT, 'abyss_fix_bat.png'), r2.buffer);
     console.log('bat:', r2.success, r2.success && r2.buffer.length);
 
-    // 3) wild summon duel — OWN dragon sprite (player LEFT, summon RIGHT)
+ // 3) wild summon duel - OWN dragon sprite (player LEFT, summon RIGHT)
     const r3 = await abyssScene.renderAbyssCombat(mkState({
         abyssFloor: 2,
         abyssRun: { currentEncounterType: 'wild_summon', currentEncounterData: { species: 'dragon', rarity: 'RARE' } },
@@ -56,7 +56,7 @@ const mkState = (over) => Object.assign({
     if (r3.success) fs.writeFileSync(path.join(OUT, 'abyss_fix_summon.png'), r3.buffer);
     console.log('summon:', r3.success, r3.success && r3.buffer.length);
 
-    // 4) floor descent card GIF (ring stack slowly descends, starts back up)
+ // 4) floor descent card GIF (ring stack slowly descends, starts back up)
     const gif = await abyssScene.renderAbyssFloorCard({
         floor: 7, tier: 'A', mult: 1.9, encounterType: 'combat', enemyName: 'Stone Hulk',
         playerName: 'Mellow-San', playerClassId: 'ROGUE', playerSpriteIndex: 1,

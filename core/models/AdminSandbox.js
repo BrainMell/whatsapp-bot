@@ -1,68 +1,62 @@
 const mongoose = require('mongoose');
 const economy = require('../rpg/economy');
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  ADMIN SANDBOX - Isolated Test Characters for RPG Mods (Item #11)
-// ═══════════════════════════════════════════════════════════════════════════
-//
-//  PROBLEM
-//  ───────
-//  RPG Mods need to test new skills, classes, boss balance, dungeon flow,
-//  evolution trials, and economy features before pushing them to players.
-//  Currently they have two bad options:
-//    (a) Test on their OWN main account - risks corrupting real progression,
-//        and can't test "fresh level 1" scenarios without nuking real stats.
-//    (b) Test on a real player's account via `.g admin setlevel` etc. -
-//        even worse, mutates a real player's data.
-//
-//  SOLUTION
-//  ────────
-//  Each mod (Owner / GlobalMod / RpgMod) gets ONE sandbox test character
-//  stored in a SEPARATE MongoDB collection (`adminsandboxes`). The sandbox
-//  has its own wallet, stats, class, skills, inventory, equipment, and
-//  rank - fully independent from the real User collection. Mods can:
-//    - Reset it to level 1 with starting gear
-//    - Bump it to any level/class/rank for testing
-//    - Run dungeons, combat, and trials against it
-//    - Wipe it clean and start over
-//
-//  ISOLATION GUARANTEES
-//  ────────────────────
-//  1. Separate collection (adminsandboxes) - never queried by economy.js,
-//     progression.js, guildAdventure.js, or any real-player code path.
-//  2. The sandbox ownerJid is the mod's real JID, but the sandbox is
-//     keyed separately - looking up a user by JID in the real User
-//     collection will NEVER return a sandbox doc.
-//  3. Sandbox data is never aggregated into leaderboards, guild member
-//     lists, economy totals, or wealth tax calculations.
-//  4. The sandbox has an `isSandbox: true` flag for defensive filtering.
-//
-//  SCHEMA
-//  ──────
-//  ownerJid    - the mod who owns this sandbox (unique, one per mod)
-//  name        - display name (default: "Sandbox (ModName)")
-//  isSandbox   - always true (defensive flag)
-//  createdAt   - when the sandbox was first created
-//  lastUsedAt  - last time the mod interacted with it
-//  resetCount  - how many times the sandbox has been wiped (audit)
-//
-//  The rest mirrors the User model's RPG-relevant fields so the sandbox
-//  can be passed to combat/dungeon/trial code paths with minimal adapter
-//  logic:
-//    wallet, bank, class, adventurerRank, spriteIndex,
-//    stats { hp, maxHp, level, xp, ... },
-//    statBonuses, skillPoints, skills, completedTrials, evolutionHistory,
-//    inventory, inventorySlots, equipment,
-//    progression { xp, level, gp, statPoints, allocatedStats, ... },
-//    questsCompleted, questsWon, bossesDefeated, dragonsKilled
-//
-//  NOTE: This is a SANDBOX. Fields like `lastDaily`, `lastRob`, `jailUntil`,
-//  `profile`, `membership`, `portfolio`, `investments`, `eventTokens` are
-//  intentionally OMITTED - they're economy/social features that don't make
-//  sense for a test character and would just bloat the schema.
+// ===========================================================================
+// ADMIN SANDBOX - Isolated Test Characters for RPG Mods (Item #11)
+// ===========================================================================
+// PROBLEM
+// -------
+// RPG Mods need to test new skills, classes, boss balance, dungeon flow,
+// evolution trials, and economy features before pushing them to players.
+// Currently they have two bad options:
+// (a) Test on their OWN main account - risks corrupting real progression,
+// and can't test "fresh level 1" scenarios without nuking real stats.
+// (b) Test on a real player's account via `.g admin setlevel` etc. -
+// even worse, mutates a real player's data.
+// SOLUTION
+// --------
+// Each mod (Owner / GlobalMod / RpgMod) gets ONE sandbox test character
+// stored in a SEPARATE MongoDB collection (`adminsandboxes`). The sandbox
+// has its own wallet, stats, class, skills, inventory, equipment, and
+// rank - fully independent from the real User collection. Mods can:
+// - Reset it to level 1 with starting gear
+// - Bump it to any level/class/rank for testing
+// - Run dungeons, combat, and trials against it
+// - Wipe it clean and start over
+// ISOLATION GUARANTEES
+// --------------------
+// 1. Separate collection (adminsandboxes) - never queried by economy.js,
+// progression.js, guildAdventure.js, or any real-player code path.
+// 2. The sandbox ownerJid is the mod's real JID, but the sandbox is
+// keyed separately - looking up a user by JID in the real User
+// collection will NEVER return a sandbox doc.
+// 3. Sandbox data is never aggregated into leaderboards, guild member
+// lists, economy totals, or wealth tax calculations.
+// 4. The sandbox has an `isSandbox: true` flag for defensive filtering.
+// SCHEMA
+// ------
+// ownerJid - the mod who owns this sandbox (unique, one per mod)
+// name - display name (default: "Sandbox (ModName)")
+// isSandbox - always true (defensive flag)
+// createdAt - when the sandbox was first created
+// lastUsedAt - last time the mod interacted with it
+// resetCount - how many times the sandbox has been wiped (audit)
+// The rest mirrors the User model's RPG-relevant fields so the sandbox
+// can be passed to combat/dungeon/trial code paths with minimal adapter
+// logic:
+// wallet, bank, class, adventurerRank, spriteIndex,
+// stats { hp, maxHp, level, xp, ... },
+// statBonuses, skillPoints, skills, completedTrials, evolutionHistory,
+// inventory, inventorySlots, equipment,
+// progression { xp, level, gp, statPoints, allocatedStats, ... },
+// questsCompleted, questsWon, bossesDefeated, dragonsKilled
+// NOTE: This is a SANDBOX. Fields like `lastDaily`, `lastRob`, `jailUntil`,
+// `profile`, `membership`, `portfolio`, `investments`, `eventTokens` are
+// intentionally OMITTED - they're economy/social features that don't make
+// sense for a test character and would just bloat the schema.
 
 const AdminSandboxSchema = new mongoose.Schema({
-  // ── Identity ──
+ // -- Identity --
   ownerJid: { type: String, required: true, unique: true, index: true },
   name: { type: String, default: 'Sandbox' },
   isSandbox: { type: Boolean, default: true, index: true },
@@ -70,16 +64,16 @@ const AdminSandboxSchema = new mongoose.Schema({
   lastUsedAt: { type: Date, default: Date.now },
   resetCount: { type: Number, default: 0 },
 
-  // ── Economy (sandbox-scoped, isolated from real economy) ──
+ // -- Economy (sandbox-scoped, isolated from real economy) --
   wallet: { type: Number, default: 100000 },   // generous starting cash for testing
   bank: { type: Number, default: 1000000 },     // generous bank for testing
 
-  // ── RPG Identity ──
+ // -- RPG Identity --
   class: { type: String, default: 'FIGHTER' },
   adventurerRank: { type: String, default: 'F' },
   spriteIndex: { type: Number, default: 0 },
 
-  // ── Quest / Combat Stats ──
+ // -- Quest / Combat Stats --
   questsCompleted: { type: Number, default: 0 },
   questsWon: { type: Number, default: 0 },
   questsFailed: { type: Number, default: 0 },
@@ -88,7 +82,7 @@ const AdminSandboxSchema = new mongoose.Schema({
   pvpWins: { type: Number, default: 0 },
   pvpLosses: { type: Number, default: 0 },
 
-  // ── Combat Stats (mirrors User.stats) ──
+ // -- Combat Stats (mirrors User.stats) --
   stats: {
     hp: { type: Number, default: 100 },
     maxHp: { type: Number, default: 100 },
@@ -100,7 +94,7 @@ const AdminSandboxSchema = new mongoose.Schema({
     undeadKills: { type: Number, default: 0 },
   },
 
-  // ── Stat Bonuses (mirrors User.statBonuses) ──
+ // -- Stat Bonuses (mirrors User.statBonuses) --
   statBonuses: {
     hp: { type: Number, default: 0 },
     atk: { type: Number, default: 0 },
@@ -111,14 +105,14 @@ const AdminSandboxSchema = new mongoose.Schema({
     crit: { type: Number, default: 0 },
   },
 
-  // ── Skills ──
+ // -- Skills --
   skillPoints: { type: Number, default: 0 },
   skills: { type: Map, of: Number, default: {} },
   completedTrials: { type: [String], default: [] },
   evolutionHistory: { type: Array, default: [] },
   evolvedAt: { type: Number, default: 0 },
 
-  // ── Inventory & Equipment ──
+ // -- Inventory & Equipment --
   inventory: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} },
   inventorySlots: { type: Number, default: 50 }, // generous for testing
   equipment: {
@@ -133,7 +127,7 @@ const AdminSandboxSchema = new mongoose.Schema({
     gloves: { type: Object, default: null },
   },
 
-  // ── Progression (mirrors User.progression) ──
+ // -- Progression (mirrors User.progression) --
   progression: {
     xp: { type: Number, default: 0 },
     level: { type: Number, default: 1 },
@@ -163,14 +157,14 @@ const AdminSandboxSchema = new mongoose.Schema({
     achievements: { type: Array, default: [] },
   },
 
-  // ── Sandbox Test Log (audit trail of admin actions on this sandbox) ──
+ // -- Sandbox Test Log (audit trail of admin actions on this sandbox) --
   testLog: { type: Array, default: [] },
 
 }, { timestamps: true, minimize: false });
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  STATIC HELPERS
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// STATIC HELPERS
+// ===========================================================================
 
 // Get or create a sandbox for a mod JID. Returns the sandbox doc (lean).
 AdminSandboxSchema.statics.getOrCreate = function(ownerJid, ownerName) {

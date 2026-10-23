@@ -1,5 +1,5 @@
 // ============================================
-// 🔍 PRODUCTION DB AUDIT (READ-ONLY) — find test guilds / test wars /
+// PRODUCTION DB AUDIT (READ-ONLY) - find test guilds / test wars /
 // test artifacts the owner flagged. Prints; deletes NOTHING.
 // Run on box1: node scripts/db_audit.js
 // ============================================
@@ -17,7 +17,7 @@ async function main() {
     const GuildWarEvent = require('../core/models/GuildWarEvent');
     const GuildLoan = require('../core/models/GuildLoan');
 
-    // 1. all guilds
+ // 1. all guilds
     const guilds = await Guild.find({}).lean();
     console.log(`\n=== GUILDS (${guilds.length}) ===`);
     for (const g of guilds) {
@@ -29,7 +29,7 @@ async function main() {
         }));
     }
 
-    // 2. system keys that reference guilds
+ // 2. system keys that reference guilds
     console.log(`\n=== SYSTEM KEYS (guild-related) ===`);
     const sysKeys = await System.find({
         key: { $in: ['guild_system', 'memberGuilds', 'guildOwners', 'guildInvites'] },
@@ -44,7 +44,7 @@ async function main() {
             else if (kind === 'object') size = Object.keys(v || {}).length;
         } catch (e) {}
         console.log(`key=${s.key} kind=${kind} size=${size}`);
-        // print entries that reference suspicious test guild names
+ // print entries that reference suspicious test guild names
         const TESTISH = /test|qa|sim|dummy|fake|temp|debug/i;
         const dump = kind === 'map' ? Array.from(v.entries()) : kind === 'object' ? Object.entries(v || {}) : (v || []);
         let shown = 0;
@@ -58,11 +58,11 @@ async function main() {
         }
     }
 
-    // 3. gw rpg gc marks (per-bot)
+ // 3. gw rpg gc marks (per-bot)
     const rpgKeys = await System.find({ key: /^gw_rpg_gcs_/ }).lean();
     for (const s of rpgKeys) console.log(`rpg-gc key=${s.key} value=${JSON.stringify(s.value)}`);
 
-    // 4. guild war events
+ // 4. guild war events
     const events = await GuildWarEvent.find({}).sort({ createdAt: -1 }).limit(30).lean();
     console.log(`\n=== GUILD WAR EVENTS (latest ${events.length}) ===`);
     for (const e of events) {
@@ -73,7 +73,7 @@ async function main() {
         }));
     }
 
-    // 5. guild loans
+ // 5. guild loans
     const loans = await GuildLoan.find({}).sort({ createdAt: -1 }).limit(20).lean();
     console.log(`\n=== GUILD LOANS (latest ${loans.length}) ===`);
     for (const l of loans) {

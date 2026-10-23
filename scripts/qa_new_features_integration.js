@@ -26,7 +26,7 @@ const registrySrc = fs.readFileSync(path.join(__dirname, "..", "core", "utils", 
   ok(engineSrc.includes("quizGame.hasActive(chatId)"), "answer gate checks hasActive (fall-through when idle)");
   ok(engineSrc.includes("stockChart.handleStock("), "stock -> handleStock");
   ok(engineSrc.includes("trendsChart.handleTrends("), "trends -> handleTrends");
-  // quiz start receives smartGroqCall + MODELS (AI injection like debate)
+ // quiz start receives smartGroqCall + MODELS (AI injection like debate)
   const quizStartIdx = engineSrc.indexOf("await quizGame.startQuiz(");
   ok(quizStartIdx > 0, "quiz start call found");
   {
@@ -45,11 +45,11 @@ const registrySrc = fs.readFileSync(path.join(__dirname, "..", "core", "utils", 
   const progBlock = engineSrc.indexOf("// PROGRESSION COMMANDS");
   ok(wordleGuess > 0 && wordleGuess < quizBlock, "quiz block after wordle");
   ok(quizBlock < marketBlock && marketBlock < progBlock, "quiz -> market -> progression order intact");
-  // `.j stock` must not collide with the RPG `.j stocks` block (which sits earlier)
+ // `.j stock` must not collide with the RPG `.j stocks` block (which sits earlier)
   const rpgStocks = engineSrc.indexOf("} stocks` ||");
   ok(rpgStocks > 0 && rpgStocks < marketBlock, "RPG stocks handled earlier; singular .j stock free");
-  // answer fall-through (2026-09-28 pin refresh): the letter/word routing
-  // gate + the free-text fallback must both sit behind hasActive(chatId)
+ // answer fall-through (pin refresh): the letter/word routing
+ // gate + the free-text fallback must both sit behind hasActive(chatId)
   const ansIdx = engineSrc.indexOf("const _isLetterAns");
   ok(ansIdx > 0, "answer routing block found");
   {
@@ -65,7 +65,7 @@ const registrySrc = fs.readFileSync(path.join(__dirname, "..", "core", "utils", 
   const allowIdx = engineSrc.indexOf('"quizboard",\n                      "stock",\n                      "trends",');
   ok(allowIdx > 0, "quizboard/stock/trends in unknown-command suppress allowlist");
   ok(engineSrc.includes('"quiz",\n                      "quiz pick",\n                      "quiz end",\n                      "quizboard",'), "suggestion list carries quiz family");
-  // "a"/"answer" deliberately NOT in the suppress allowlist (feedback when idle)
+ // "a"/"answer" deliberately NOT in the suppress allowlist (feedback when idle)
   const allowSeg = engineSrc.slice(engineSrc.lastIndexOf("validPrefixes.some"), engineSrc.lastIndexOf("validPrefixes.some") + 1400);
   ok(!/"answer",/.test(allowSeg), '"answer" NOT suppressed (idle .j answer still gives feedback)');
 
@@ -82,9 +82,9 @@ const registrySrc = fs.readFileSync(path.join(__dirname, "..", "core", "utils", 
   ok(typeof stock.handleStock === "function" && stock.RANGES && Object.keys(stock.RANGES).length === 6, "stock.handleStock + 6 ranges");
   const trends = require("../core/utils/trendsChart");
   ok(typeof trends.handleTrends === "function" && trends.RANGES && Object.keys(trends.RANGES).length === 8, "trends.handleTrends + 8 ranges");
-  // engine requires must not break boot (fresh require of all three)
-  // 2026-09-28 pin refresh: QUESTION_SECONDS is config-driven now (P2) and
-  // the pacing defaults live in quizConfig (owner spec: 10-30s gap)
+ // engine requires must not break boot (fresh require of all three)
+ // pin refresh: QUESTION_SECONDS is config-driven now (P2) and
+ // the pacing defaults live in quizConfig (owner spec: 10-30s gap)
   const quizConfigPin = require("../core/games/quizConfig");
   ok(quiz.POINTS.medium === 100
     && quiz.QUESTION_SECONDS === quizConfigPin.DEFAULTS.timePerQuestion

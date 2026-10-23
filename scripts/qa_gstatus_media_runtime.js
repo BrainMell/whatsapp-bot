@@ -1,12 +1,12 @@
 // qa_gstatus_media_runtime.js
 // RUNTIME exercise of the SHIPPED gstatus media helpers (engine.js __gsEnsureHelpers):
-//   - extracts the real function source from core/engine.js (no re-implementation)
-//   - builds REAL image / video / audio payloads from REAL bytes (jimp + ffmpeg run for real)
-//   - validates mimetype gating (HEIC image, AVI video must throw the typed GS_UNSUPPORTED error)
-//   - validates the media-relay wrap shape produced by gsPost against a MOCK socket
-//     (upload stubbed - that is Baileys library code, not ours; everything downstream
-//      of generateWAMessageContent that we own - messageSecret, single wrap, id, bookkeeping -
-//      is asserted against the real output)
+// - extracts the real function source from core/engine.js (no re-implementation)
+// - builds REAL image / video / audio payloads from REAL bytes (jimp + ffmpeg run for real)
+// - validates mimetype gating (HEIC image, AVI video must throw the typed GS_UNSUPPORTED error)
+// - validates the media-relay wrap shape produced by gsPost against a MOCK socket
+// (upload stubbed - that is Baileys library code, not ours; everything downstream
+// of generateWAMessageContent that we own - messageSecret, single wrap, id, bookkeeping -
+// is asserted against the real output)
 "use strict";
 const fs = require("fs");
 const path = require("path");
@@ -17,7 +17,7 @@ const engineSrc = fs.readFileSync(path.join(__dirname, "..", "core", "engine.js"
 let pass = 0, fail = 0;
 const ok = (cond, label) => { if (cond) { pass++; console.log("  ok -", label); } else { fail++; console.log("  FAIL -", label); } };
 
-// ── extract __gsEnsureHelpers source ──
+// -- extract __gsEnsureHelpers source --
 const startIdx = engineSrc.indexOf("const __gsEnsureHelpers = () => {");
 const endMarker = "globalThis.__gsHelpers = { gsBuildPayload, gsPost, gsMsgId };\n                    return globalThis.__gsHelpers;\n                  };";
 const endIdx = engineSrc.indexOf(endMarker, startIdx);
@@ -47,25 +47,25 @@ ok(typeof gsBuildPayload === "function", "helpers extracted: gsBuildPayload");
 ok(typeof gsPost === "function", "helpers extracted: gsPost");
 ok(typeof gsMsgId === "function", "helpers extracted: gsMsgId (baileys id generator reachable)");
 
-// ── real test media ──
+// -- real test media --
 (async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "gsrt-"));
   const { Jimp } = require("jimp");
 
-  // 1) real JPEG via jimp
+ // 1) real JPEG via jimp
   const img = new Jimp({ width: 320, height: 180, color: 0x1a6e35ff });
   const jpgBuf = await img.getBuffer("image/jpeg", { quality: 80 });
   fs.writeFileSync(path.join(tmp, "in.jpg"), jpgBuf);
   ok(jpgBuf.length > 500, `real JPEG bytes (${Math.round(jpgBuf.length / 1024)}KB)`);
 
-  // 2) real MP4 via ffmpeg (testsrc 0.8s, tiny)
+ // 2) real MP4 via ffmpeg (testsrc 0.8s, tiny)
   const { execFile } = require("child_process");
   const mp4Path = path.join(tmp, "in.mp4");
   await new Promise((res, rej) => execFile("ffmpeg", ["-f", "lavfi", "-i", "testsrc=duration=0.8:size=160x120:rate=15", "-pix_fmt", "yuv420p", "-y", mp4Path], (e) => e ? rej(e) : res()));
   const mp4Buf = fs.readFileSync(mp4Path);
   ok(mp4Buf.length > 1000, `real MP4 bytes (${Math.round(mp4Buf.length / 1024)}KB)`);
 
-  // 3) real WAV via ffmpeg (voice-note shape, ptt)
+ // 3) real WAV via ffmpeg (voice-note shape, ptt)
   const wavPath = path.join(tmp, "in.wav");
   await new Promise((res, rej) => execFile("ffmpeg", ["-f", "lavfi", "-i", "sine=frequency=440:duration=1.2", "-y", wavPath], (e) => e ? rej(e) : res()));
   const wavBuf = fs.readFileSync(wavPath);
@@ -124,15 +124,15 @@ ok(typeof gsMsgId === "function", "helpers extracted: gsMsgId (baileys id genera
       return {};
     },
     relayMessage: async (jid, msg, opts) => { relays.push({ jid, msg, opts }); return {}; },
-    // Baileys rc14 contract: upload(encFilePath, { fileEncSha256B64, mediaType, timeoutMs }) -> { mediaUrl, directPath }
+ // Baileys rc14 contract: upload(encFilePath, { fileEncSha256B64, mediaType, timeoutMs }) -> { mediaUrl, directPath }
     waUploadToServer: async (encFilePath, upOpts) => {
       ok(typeof encFilePath === "string" && require("fs").existsSync(encFilePath), `uploader receives a real encrypted file path (${String(encFilePath).slice(-12)})`);
       ok(upOpts && upOpts.timeoutMs === 60000, "engine's 60s mediaUploadTimeoutMs reaches the uploader");
       return { mediaUrl: "https://mmg.whatsapp.net/v/t62.7118-24/fake-uploaded", directPath: "/v/t62.7118-24/fake-uploaded" };
     },
   };
-  // NOTE: uploader is stubbed with Baileys rc14's REAL contract (encFilePath -> {mediaUrl,
-  // directPath}) so the full media relay path runs end to end; only the HTTP hop is mocked.
+ // NOTE: uploader is stubbed with Baileys rc14's REAL contract (encFilePath -> {mediaUrl,
+ // directPath}) so the full media relay path runs end to end; only the HTTP hop is mocked.
   let relayErr = null;
   try {
     await gsPost(mockSock, "222-333@g.us", { id: "CMDID1" }, pImg);
@@ -147,18 +147,18 @@ ok(typeof gsMsgId === "function", "helpers extracted: gsMsgId (baileys id genera
   if (relays.length === 1) {
     const r = relays[0];
     ok(r.jid === "222-333@g.us", "relay targets the group jid");
-    // 💡 FIX 2026-09-25 (root cause): media is relayed TOP-LEVEL so Baileys'
-    // getMediaType() can set the stanza `mediatype` attribute (a wrapped
-    // groupStatusMessageV2 hid the media node, mediatype never landed on the
-    // <enc> node, and the server silently dropped the status). The envelope is
-    // applied by the socket's patchMessageBeforeSending hook right before
-    // encoding (asserted below against the relayed object).
+ // FIX (root cause): media is relayed TOP-LEVEL so Baileys'
+ // getMediaType() can set the stanza `mediatype` attribute (a wrapped
+ // groupStatusMessageV2 hid the media node, mediatype never landed on the
+ // <enc> node, and the server silently dropped the status). The envelope is
+ // applied by the socket's patchMessageBeforeSending hook right before
+ // encoding (asserted below against the relayed object).
     ok(!r.msg.groupStatusMessageV2 && !r.msg.groupStatusMessage, "media relays TOP-LEVEL (no wrapper - mediatype must be derivable)");
     ok(!!r.msg.imageMessage, "top-level message is the image payload");
-    // the relayed object must be MARKED so the real socket hook wraps it
+ // the relayed object must be MARKED so the real socket hook wraps it
     const mark = globalThis.__gsWrapMark;
     ok(!!mark && mark.has(r.msg), "relayed media is marked for the groupStatusMessageV2 wrap hook");
-    // simulate the hook: consume the mark and assert the official envelope
+ // simulate the hook: consume the mark and assert the official envelope
     const secret = require("crypto").randomBytes(32);
     const envelope = {
       messageContextInfo: { messageSecret: secret },
@@ -176,8 +176,8 @@ ok(typeof gsMsgId === "function", "helpers extracted: gsMsgId (baileys id genera
   mockSock.relayMessage = async (jid, msg, opts) => { relays2.push({ jid, msg, opts }); };
   await gsPost(mockSock, "222-333@g.us", null, { text: "plain status" });
   const inner2 = relays2[0].msg.groupStatusMessageV2.message;
-  // Baileys rc14 adds messageSecret itself on non-reaction messages (reporting-token path);
-  // OUR engine injection is media-only. What must hold: text relays fine, wrap intact.
+ // Baileys rc14 adds messageSecret itself on non-reaction messages (reporting-token path);
+ // OUR engine injection is media-only. What must hold: text relays fine, wrap intact.
   ok(!!(inner2.conversation || inner2.extendedTextMessage), "text status relays as text");
   ok(!relays2[0].msg.groupStatusMessageV2.message.imageMessage, "text status carries no media node");
 
@@ -194,7 +194,7 @@ ok(typeof gsMsgId === "function", "helpers extracted: gsMsgId (baileys id genera
       const hookReturn = engineSrc.indexOf("return message;\n          }", hookStart);
       const hookSrc = engineSrc.slice(hookStart, hookReturn + "return message;\n          }".length)
         .replace("patchMessageBeforeSending: async (message) => {", "async (message) => {");
-      // eslint-disable-next-line no-new-func
+ // eslint-disable-next-line no-new-func
       const hook = new Function("require", "globalThis", "console", `"use strict"; return (${hookSrc});`)(require, globalThis, console);
       ok(typeof hook === "function", "hook present in engine socket config");
       const fakeInner = { imageMessage: { url: "https://mmg.whatsapp.net/x", mimetype: "image/jpeg" } };
@@ -207,7 +207,7 @@ ok(typeof gsMsgId === "function", "helpers extracted: gsMsgId (baileys id genera
       const untouched = { extendedTextMessage: { text: "hello" } };
       const passed = await hook(untouched);
       ok(passed === untouched, "unmarked messages pass through untouched (zero regression surface)");
-      // media paths that must keep working: video / audio / sticker all flow top-level too
+ // media paths that must keep working: video / audio / sticker all flow top-level too
       ok(engineSrc.includes("globalThis.__gsWrapMark"), "gsPost marks media for the hook");
     }
   }

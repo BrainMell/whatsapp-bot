@@ -22,10 +22,10 @@ const ITEMS = [
     fs.writeFileSync('/home/z/my-project/download/hs_after_room.png', buf);
     console.log('saved hs_after_room.png');
 
-    // crops (art coords -> device x2), from measured geometry:
-    // barrel@(5,5): c=(450,366) base 368 ; bed@(3,3): c=(466,310) base 320
-    // clock@(8,7): c=(482,446) base 448 ; table@(6,8): c=(402,438) base 448
-    // wardrobe@(4,7): c=(386,382) base 384 ; cauldron@(7,4): c=(482,366)
+ // crops (art coords -> device x2), from measured geometry:
+ // barrel@(5,5): c=(450,366) base 368 ; bed@(3,3): c=(466,310) base 320
+ // clock@(8,7): c=(482,446) base 448 ; table@(6,8): c=(402,438) base 448
+ // wardrobe@(4,7): c=(386,382) base 384 ; cauldron@(7,4): c=(482,366)
     const crops = {   // ART-space boxes [x0,y0,x1,y1] around each item (device = art*2)
         bed:    [380, 200, 560, 350],
         barrel: [390, 300, 510, 400],

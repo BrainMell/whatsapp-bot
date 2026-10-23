@@ -1,15 +1,15 @@
 // ============================================
-// LOGO DATASET V2 TOP-UP (2026-10-09, OOM-safe delta)
+// LOGO DATASET V2 TOP-UP (OOM-safe delta)
 // ============================================
 // The full builder got OOM-killed twice at the same spot: Box2 has 952MB
 // total RAM and the builder's entity fetch (4600+ entities of full claims)
 // crescendos past what wa-joker + the Go service leave behind. This top-up:
-//   - takes the NEXT fame band of SPARQL qids (rank 4600..5100, sl>=5)
-//   - fetches in SMALL batches (25), frees each batch, checkpoints after
-//     every batch to data/logoTopup.state.json (resume-safe)
-//   - hard wall-clock per batch (40s) + axios 20s
-//   - audits survivors with the SAME gates as the builder (inline kills)
-//   - merges into the existing dataset (existing entries verbatim, file-dedup)
+// - takes the NEXT fame band of SPARQL qids (rank 4600..5100, sl>=5)
+// - fetches in SMALL batches (25), frees each batch, checkpoints after
+// every batch to data/logoTopup.state.json (resume-safe)
+// - hard wall-clock per batch (40s) + axios 20s
+// - audits survivors with the SAME gates as the builder (inline kills)
+// - merges into the existing dataset (existing entries verbatim, file-dedup)
 // Then logo_v2_content_filter.js + _r2.js run over the merged set as usual.
 // ============================================
 const axios = require("axios");
@@ -33,8 +33,8 @@ const norm = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
 function modernity(file) {
   const years = [...file.matchAll(/\b(19\d\d|20\d\d)\b/g)].map((m) => parseInt(m[1], 10));
   const hasPresent = /present/i.test(file);
-  const openEnd = /(\b(19|20)\d\d\b)\s*(-|–|—|to)\s*(present)?\s*($|\)|,|\.)/i.test(file.replace(/(\b(19|20)\d\d\b)\s*(-|–|—)\s*(\b(19|20)\d\d\b)/g, "")) || hasPresent;
-  const ranges = [...file.matchAll(/\b(19\d\d|20\d\d)\s*[-–—]\s*(19\d\d|20\d\d)\b/g)].map((m) => [parseInt(m[1], 10), parseInt(m[2], 10)]);
+  const openEnd = /(\b(19|20)\d\d\b)\s*(-|-|-|to)\s*(present)?\s*($|\)|,|\.)/i.test(file.replace(/(\b(19|20)\d\d\b)\s*(-|-|-)\s*(\b(19|20)\d\d\b)/g, "")) || hasPresent;
+  const ranges = [...file.matchAll(/\b(19\d\d|20\d\d)\s*[---]\s*(19\d\d|20\d\d)\b/g)].map((m) => [parseInt(m[1], 10), parseInt(m[2], 10)]);
   if (OUTDATED_RE.test(file)) return { ok: false, why: "outdated-word" };
   if (ranges.length) {
     const endMax = Math.max(...ranges.map((r) => r[1]));
@@ -127,7 +127,7 @@ async function audit(brand) {
   const state = fs.existsSync(STATE_PATH) ? JSON.parse(fs.readFileSync(STATE_PATH, "utf8")) : { offset: 0, verified: [] };
   console.log(`resume state: offset=${state.offset}, verified so far=${state.verified.length}`);
 
-  // fame band: SPARQL with an OFFSET window (cheap, deterministic)
+ // fame band: SPARQL with an OFFSET window (cheap, deterministic)
   const sparql = async (offset, limit) => {
     const q = `SELECT ?item ?sl WHERE { ?item wdt:P154 ?logo . ?item wikibase:sitelinks ?sl . FILTER(?sl >= 5) } ORDER BY DESC(?sl) LIMIT ${limit} OFFSET ${offset}`;
     const r = await withHardTimeout(get(`https://query.wikidata.org/sparql?query=${encodeURIComponent(q)}&format=json`), 60000, "sparql-hard-60s");
@@ -179,7 +179,7 @@ async function audit(brand) {
         for (const [re, c] of kw) if (re.test(`${label} ${desc}`.toLowerCase())) { cat = c; break; }
         batchCand.push({ name: label, wiki, qid: id, cat, prio: 2 });
       }
-      // audit this batch immediately, then FREE the claims
+ // audit this batch immediately, then FREE the claims
       const results = [];
       for (const c of batchCand) {
         const res = await audit(c);
@@ -197,7 +197,7 @@ async function audit(brand) {
     if (global.gc && fresh % 100 === 0 && fresh > 0) try { global.gc(); } catch {}
   }
 
-  // merge: existing verbatim first, then fresh (file+name dedup)
+ // merge: existing verbatim first, then fresh (file+name dedup)
   const byFile = new Set(existing.map((b) => norm(b.file)));
   const byName2 = new Set(existing.map((b) => norm(b.name)));
   const merged = [...existing];

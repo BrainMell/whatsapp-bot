@@ -49,7 +49,7 @@ const fs = require('fs');
         fs.writeFileSync(path.join(outDir, `${name}.png`), buf);
         console.log(`rendered ${name} (${map.side}x${map.side}, ${buf.length} bytes)`);
     }
-    // official notice card
+ // official notice card
     const nbuf = await notice.renderNotice('The Guild Association declares a GUILD WAR. The Ruins of a dead world await: exploration, discovery, rival guilds, and relics of the old order. Players join now; the live feed follows here. Registration closes in 10 minutes.');
     fs.writeFileSync(path.join(outDir, 'gw_notice.png'), nbuf);
     console.log('rendered gw_notice');

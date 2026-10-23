@@ -1,13 +1,11 @@
-// QA: owner-order fixes 2026-09-22 (".j activity broken / gstatus still no media")
-//
-//  A. .j activity [day]: REAL runtime tests of core/utils/gcActivity.js
-//     (timezone math, day arg parsing, aggregation, card) + a REAL execution
-//     of the engine's detectActivityType (extracted from the shipped source)
-//     + source pins for every write path and the midnight-default rewire.
-//  B. gstatus: media posts detached from the 45s-raced message run,
-//     GS_UNSUPPORTED scoping fix, media messageSecret in the relay,
-//     text-only path untouched.
-//
+// QA: owner-order fixes (".j activity broken / gstatus still no media")
+// A. .j activity [day]: REAL runtime tests of core/utils/gcActivity.js
+// (timezone math, day arg parsing, aggregation, card) + a REAL execution
+// of the engine's detectActivityType (extracted from the shipped source)
+// + source pins for every write path and the midnight-default rewire.
+// B. gstatus: media posts detached from the 45s-raced message run,
+// GS_UNSUPPORTED scoping fix, media messageSecret in the relay,
+// text-only path untouched.
 // No real Mongo needed: the aggregation pipelines the module sends are
 // interpreted against an in-memory doc set (stages used: $match/$group/
 // $sort/$limit only - the interpreter is exact for those).
@@ -28,7 +26,7 @@ function assert(cond, label) {
 
 const gcActivity = require('../core/utils/gcActivity');
 
-// ── tiny aggregation interpreter (exact for the stages the module uses) ──
+// -- tiny aggregation interpreter (exact for the stages the module uses) --
 function runPipeline(docs, pipeline) {
     let rows = docs;
     for (const stage of pipeline) {
@@ -91,10 +89,10 @@ const U3 = '251111000003@s.whatsapp.net';
 
 (async () => {
     console.log('\n── 1. Timezone math (Africa/Accra, no server-TZ dependence) ──');
-    // 2026-09-21T23:30:00Z is 23:30 in Accra (GMT+0) -> still Sep 21 there.
+ // 2026-09-21T23:30:00Z is 23:30 in Accra (GMT+0) -> still Sep 21 there.
     const lateNight = new Date('2026-09-21T23:30:00.000Z');
     assert(gcActivity.dayKey(lateNight) === '2026-09-21', 'dayKey buckets by Accra calendar day');
-    // 2026-09-22T00:10:00Z is already Sep 22 in Accra.
+ // 2026-09-22T00:10:00Z is already Sep 22 in Accra.
     assert(gcActivity.dayKey(new Date('2026-09-22T00:10:00.000Z')) === '2026-09-22', 'midnight rollover lands on the new day');
 
     const range = gcActivity.dayRange('2026-09-21');
@@ -137,7 +135,7 @@ const U3 = '251111000003@s.whatsapp.net';
         { chatId: CHAT, userId: U3, type: 'join', timestamp: mid },
         { chatId: CHAT, userId: U2, type: 'left', timestamp: mid },
         { chatId: CHAT, userId: U2, type: 'kicked', timestamp: mid },
-        // noise: other chat + other day must NOT leak in
+ // noise: other chat + other day must NOT leak in
         { chatId: 'other@g.us', userId: U1, type: 'message', timestamp: mid },
         { chatId: CHAT, userId: U1, type: 'message', timestamp: new Date('2026-09-20T12:00:00.000Z') },
     ];
@@ -165,7 +163,7 @@ const U3 = '251111000003@s.whatsapp.net';
     console.log('\n── 4. detectActivityType: REAL execution of the shipped engine code ──');
     const fnMatch = engineSrc.match(/function detectActivityType\(message\) \{[\s\S]*?\n    \}/);
     assert(!!fnMatch, 'detectActivityType found in engine source');
-    // eslint-disable-next-line no-new-func
+ // eslint-disable-next-line no-new-func
     const detectActivityType = new Function(`return (${fnMatch[0]});`)();
     assert(detectActivityType({ message: { conversation: 'hi' } }) === 'message', 'text -> message');
     assert(detectActivityType({ message: { imageMessage: {} } }) === 'image', 'image -> image');
@@ -216,12 +214,12 @@ const U3 = '251111000003@s.whatsapp.net';
     assert(!engineSrc.includes('payload = await __gsBuildPayload('), 'no inline media build left in the command path');
     assert(!engineSrc.includes('const _gsPayload = await __gsBuildPayload('), 'no inline media build left in the pending path');
     assert(engineSrc.includes('let __gsMediaBuild = null;'), 'command path defers media via buildFn');
-    // the 45s race is intact and must not see any long media await anymore
+ // the 45s race is intact and must not see any long media await anymore
     assert(engineSrc.includes('Command timed out after'), '45s command timeout still in place');
 
     console.log('\n── 8. gstatus: media relays TOP-LEVEL + patch-hook envelope (2026-09-25 root-cause fix) ──');
-    // getMediaType() reads the TOP-LEVEL message; the old wrapped relay hid the
-    // media node so the stanza never got `mediatype` and the server dropped it.
+ // getMediaType() reads the TOP-LEVEL message; the old wrapped relay hid the
+ // media node so the stanza never got `mediatype` and the server dropped it.
     assert(engineSrc.includes('patchMessageBeforeSending: async (message) => {'), 'socket config carries the wrap hook');
     assert(engineSrc.includes('messageSecret: secret'), 'hook envelope carries messageSecret (official GStatusIn shape, outer+inner)');
     assert(engineSrc.includes('groupStatusMessageV2: {'), 'hook applies the groupStatusMessageV2 envelope');

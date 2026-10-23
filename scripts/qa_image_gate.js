@@ -1,4 +1,4 @@
-// QA: IMAGE GATE (2026-09-27) - pixel-level renderability checks
+// QA: IMAGE GATE - pixel-level renderability checks
 // Synthetic cases + REAL network images (AniList/Wikipedia) when reachable.
 // Run: node scripts/qa_image_gate.js
 const ig = require("../core/utils/imageGate");
@@ -51,7 +51,7 @@ function ok(cond, label) { if (cond) { pass++; console.log("  ok -", label); } e
   console.log("════ REAL network images ════");
   const _http = axios.create({ timeout: 15000, family: 4, headers: { "User-Agent": "Mozilla/5.0 WhatsAppQuizBot/1.0" } });
   const fetchB = async (url) => { const r = await _http.get(url, { responseType: "arraybuffer" }); return Buffer.from(r.data); };
-  // AniList canonical character art (anime case)
+ // AniList canonical character art (anime case)
   try {
     const sr = await _http.post("https://graphql.anilist.co", { query: 'query {Character(search:"Edward Elric"){name{full} image{large}}}' });
     const url = sr.data.data.Character.image.large;
@@ -59,7 +59,7 @@ function ok(cond, label) { if (cond) { pass++; console.log("  ok -", label); } e
     const r = await ig.inspectImageBuffer(buf, { label: "anilist" });
     ok(r.ok === true, `AniList canonical art accepted (${buf.length}B, ${r.width}x${r.height} ${r.format})`);
   } catch (e) { console.log("  SKIP - AniList unreachable:", e.message.slice(0, 50)); }
-  // Wikipedia article thumb
+ // Wikipedia article thumb
   try {
     const d = await _http.get("https://en.wikipedia.org/w/api.php", { params: { action: "query", format: "json", formatversion: 2, generator: "search", gsrsearch: "Zelda Twilight Princess", gsrlimit: 2, gsrnamespace: 0, prop: "pageimages", piprop: "thumbnail", pithumbsize: 700 }, headers: { "User-Agent": "ZenithQuizBot/1.0 (WhatsApp trivia bot; contact: ops@zenithbot.dev) axios" } });
     const p = (d.data?.query?.pages || []).find((p) => p.thumbnail?.source);

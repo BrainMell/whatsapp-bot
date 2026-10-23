@@ -16,7 +16,7 @@ const IssueSchema = new mongoose.Schema({
   attachments:  { type: [String], default: [] },                // optional list of context lines
   status:       { type: String, default: 'open', index: true }, // open/organized/resolved/wontfix
   submittedAt:  { type: Date, default: Date.now, index: true },
-  // After Groq organization: an organized summary may be attached
+ // After Groq organization: an organized summary may be attached
   organized:    { type: String, default: null },                // null until Groq processes
   organizedAt:   { type: Date, default: null },
   organizedBy:  { type: String, default: null }                 // JID of mod who ran organize

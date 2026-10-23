@@ -15,7 +15,7 @@ const R = require('../core/rpg/homesteadRenderer');
     const ED = ec.getContext('2d').getImageData(0, 0, E.width, E.height).data;
     const ID = ic.getContext('2d').getImageData(0, 0, I.width, I.height).data;
     const px = (D, x, y) => { const i = (y * E.width + x) * 4; return [D[i], D[i + 1], D[i + 2]]; };
-    // clock: c=(482,446) art. sample art points (dx,dy from c): (6,-6),(−10,−4),(12,−2),(0,+? below base)
+ // clock: c=(482,446) art. sample art points (dx,dy from c): (6,-6),(−10,−4),(12,−2),(0,+? below base)
     const pts = [[488, 440], [472, 442], [494, 444], [482, 452], [500, 436]];
     for (const [xa, ya] of pts) {
         const [r1, g1, b1] = px(ED, xa * 2, ya * 2), [r2, g2, b2] = px(ID, xa * 2, ya * 2);

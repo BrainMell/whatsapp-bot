@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * QA: base ⇄ command fusion — PART 2: RENDER SMOKE (needs node_modules: canvas).
+ * QA: base ⇄ command fusion - PART 2: RENDER SMOKE (needs node_modules: canvas).
  * Renders every structure type × level × key activity through the REAL
  * renderStructureCard and asserts real pixels come back. Run on-box:
  *   QA_MODE=1 node scripts/qa_fusion_render.js

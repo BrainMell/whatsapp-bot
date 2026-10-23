@@ -1,5 +1,5 @@
 // ============================================
-// 💎 RELICS — session-only rewards (Guild War Overhaul 2026-10-03)
+// RELICS - session-only rewards (Guild War Overhaul )
 // Relics exist ONLY inside an event: stored on EventPlayer.relics, vanish at
 // event end. Carried (not handed-in) relics can be stolen in Ruins PvP.
 // Pure helpers here; mutations live in encounters/ruinsPvp via atomic ops.
@@ -31,9 +31,9 @@ function makeRelic(rng, { category, tier, meta = {} } = {}) {
         acquiredAt: Date.now(),
     };
     if (cat === 'ward') {
-        // ⚔️ §15 #6: only ward kinds the combat engine actually READ can roll
-        // (atk/def buffs, shield status). flee/firststrike had no engine
-        // reader — they rolled into dead relics.
+ // §15 #6: only ward kinds the combat engine actually READ can roll
+ // (atk/def buffs, shield status). flee/firststrike had no engine
+ // reader - they rolled into dead relics.
         const kind = rng.weighted([['atk', 3], ['def', 3], ['shield', 2]]);
         base.meta = { ...base.meta, kind, fights: CFG.RELICS.WARD_FIGHTS };
     }

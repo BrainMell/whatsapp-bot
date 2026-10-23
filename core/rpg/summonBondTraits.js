@@ -1,30 +1,27 @@
-// ═══════════════════════════════════════════════════════════════════════════
-//  SUMMON BOND + TRAITS + AI MODES - Phase 4 of the Summon Progression System
-// ═══════════════════════════════════════════════════════════════════════════
-//
+// ===========================================================================
+// SUMMON BOND + TRAITS + AI MODES - Phase 4 of the Summon Progression System
+// ===========================================================================
 // BOND SYSTEM:
-//   Bond grows as the player fights alongside this summon. Each combat
-//   the summon participates in grants 1-3 bond XP. At certain thresholds,
-//   passive bonuses unlock:
-//     Bond 10:  +5% all stats
-//     Bond 25:  +10% all stats, loyalty decays 25% slower
-//     Bond 50:  +15% all stats, echo buff 25% stronger
-//     Bond 75:  +20% all stats, echo buff 50% stronger, unlock combo attack
-//     Bond 100: +25% all stats, echo buff 100% stronger, loyalty never decays
-//
+// Bond grows as the player fights alongside this summon. Each combat
+// the summon participates in grants 1-3 bond XP. At certain thresholds,
+// passive bonuses unlock:
+// Bond 10: +5% all stats
+// Bond 25: +10% all stats, loyalty decays 25% slower
+// Bond 50: +15% all stats, echo buff 25% stronger
+// Bond 75: +20% all stats, echo buff 50% stronger, unlock combo attack
+// Bond 100: +25% all stats, echo buff 100% stronger, loyalty never decays
 // TRAITS SYSTEM:
-//   Each summon spawns with 1-3 hidden traits (rolled at creation).
-//   Traits are permanent and define the summon's unique identity.
-//   20 traits available, each with a distinct gameplay effect.
-//
+// Each summon spawns with 1-3 hidden traits (rolled at creation).
+// Traits are permanent and define the summon's unique identity.
+// 20 traits available, each with a distinct gameplay effect.
 // AI MODES:
-//   Player-selectable. Determines how the summon AI prioritizes targets
-//   and abilities in combat. 5 modes: AGGRESSIVE, DEFENSIVE, PROTECT_OWNER,
-//   SUPPORT_ALLY, BALANCED.
+// Player-selectable. Determines how the summon AI prioritizes targets
+// and abilities in combat. 5 modes: AGGRESSIVE, DEFENSIVE, PROTECT_OWNER,
+// SUPPORT_ALLY, BALANCED.
 
 const botConfig = require('../../botConfig');
 
-// ─── BOND THRESHOLDS ──────────────────────────────────────────────
+// --- BOND THRESHOLDS ----------------------------------------------
 const BOND_THRESHOLDS = {
   10:  { statMult: 0.05, loyaltyDecayReduction: 0, echoBoost: 0,    label: 'Acquainted' },
   25:  { statMult: 0.10, loyaltyDecayReduction: 0.25, echoBoost: 0.25, label: 'Trusted' },
@@ -63,7 +60,7 @@ function getBondStatMult(bond) {
 function addBondXP(summon, amount = 1) {
   if (!summon) return;
   summon.bondXp = (summon.bondXp || 0) + amount;
-  // Every 10 bond XP = 1 bond level
+ // Every 10 bond XP = 1 bond level
   while (summon.bondXp >= 10 && summon.bond < 100) {
     summon.bondXp -= 10;
     summon.bond = Math.min(100, (summon.bond || 0) + 1);
@@ -93,7 +90,7 @@ function getBondDisplay(summon) {
   return msg;
 }
 
-// ─── TRAITS ───────────────────────────────────────────────────────
+// --- TRAITS -------------------------------------------------------
 const SUMMON_TRAITS = {
   aggressive:    { name: 'Aggressive',    icon: '😡', desc: '+15% damage dealt',           effect: { damageMult: 0.15 } },
   guardian:      { name: 'Guardian',      icon: '🛡️', desc: '+20% max HP',                effect: { hpMult: 0.20 } },
@@ -183,7 +180,7 @@ function getTraitEffects(summon) {
   return effects;
 }
 
-// ─── AI MODES ─────────────────────────────────────────────────────
+// --- AI MODES -----------------------------------------------------
 const AI_MODES = {
   AGGRESSIVE: {
     name: 'Aggressive',

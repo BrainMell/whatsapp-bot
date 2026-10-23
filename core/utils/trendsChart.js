@@ -17,7 +17,7 @@ let _gotScraping = null; // lazily imported (ESM)
 const TRENDS = "https://trends.google.com";
 const GEO_DEFAULT = "";
 
-// Verified time tokens (research 2026-09-25)
+// Verified time tokens (research )
 const RANGES = {
   "1h": { token: "now 1-H", label: "Past hour" },
   "4h": { token: "now 4-H", label: "Past 4 hours" },
@@ -93,10 +93,10 @@ async function newSession() {
   return jar;
 }
 
-// ── shared session + pacing (Google throttles rapid dances on one IP) ──
+// -- shared session + pacing (Google throttles rapid dances on one IP) --
 // The cookie jar is reused for 30 min (one preflight instead of one per
 // lookup) and explores are globally spaced >= 1.3s apart.
-// 💡 FIX 2026-09-25 (owner: ".j trends keeps saying try again in a couple of
+// FIX (".j trends keeps saying try again in a couple of
 // minutes"): datacenter IPs are 429-blocked by Google's TLS fingerprinting for
 // HOURS, so the old flow burned the command budget on tier-1 retries + cooldowns
 // before even starting the browser, and the browser fallback itself failed
@@ -124,7 +124,7 @@ async function _getJar() {
 }
 const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// ── TIER 2: real-browser fallback ──
+// -- TIER 2: real-browser fallback --
 // Google 429-blocks datacenter TLS fingerprints for hours. A real headless
 // Chromium navigates trends.google.com once, then the same explore/multiline
 // calls run INSIDE the page (same-origin fetch -> genuine browser TLS +
@@ -191,7 +191,7 @@ async function _resolveLaunchOpts() {
     if (gfs.existsSync(p)) optsList.push({ executablePath: p });
   }
   if (!optsList.length) {
-    // let playwright attempt anyway (its error message is actionable)
+ // let playwright attempt anyway (its error message is actionable)
     optsList.push({});
     if (bundledMissing) _scheduleBrowserSelfHeal("not downloaded on this host");
   }
@@ -232,8 +232,8 @@ async function _browserPage() {
   const page = await browser.newPage();
   await page.goto(`${TRENDS}/trends/explore?hl=en-US`, { waitUntil: "domcontentloaded", timeout: 45000 });
   await page.waitForTimeout(1800); // let consent/cookie bootstrapping settle
-  // EU hosts may land on consent.google.com - accept once so /trends/api/*
-  // same-origin fetches carry consent cookies (best-effort, no-op elsewhere)
+ // EU hosts may land on consent.google.com - accept once so /trends/api/*
+ // same-origin fetches carry consent cookies (best-effort, no-op elsewhere)
   try {
     if (/consent\./.test(page.url() || "")) {
       await page.click('button:has-text("Accept all"), button:has-text("I agree"), button[jsname="bWV0Yg"]', { timeout: 5000 });
@@ -265,13 +265,13 @@ async function _browserTrends(keywords, timeToken, geo) {
   try {
     ex = await _inPageJson(page, exploreUrl);
   } catch (e) {
-    // dead page (navigated away / crashed): rebuild once
+ // dead page (navigated away / crashed): rebuild once
     _bp = null;
     page = await _browserPage();
     ex = await _inPageJson(page, exploreUrl);
   }
   if (ex.status === 429 || ex.status === 403) {
-    // one gentle in-page retry (fresh page cookies, never hammer Google)
+ // one gentle in-page retry (fresh page cookies, never hammer Google)
     await page.waitForTimeout(2500);
     ex = await _inPageJson(page, exploreUrl);
   }
@@ -289,8 +289,7 @@ async function _browserTrends(keywords, timeToken, geo) {
   return parseTrendsBody(ml.body);
 }
 
-// ── public data API ──
-// returns { keywords, rangeKey, label, points: [{t, values[]}], max }
+// -- public data API --
 async function getTrends(keywords, rangeKey = "30d", geo = GEO_DEFAULT) {
   const ck = `trends:${geo || "W"}:${rangeKey}:${keywords.join("|").toLowerCase()}`;
   const hit = _cache.get(ck);
@@ -299,9 +298,9 @@ async function getTrends(keywords, rangeKey = "30d", geo = GEO_DEFAULT) {
   const timeToken = (RANGES[rangeKey] || RANGES["30d"]).token;
   let lastErr = null;
 
-  // TIER 1: got-scraping (cheap path) - ONE attempt, skipped entirely while
-  // this IP is in the adaptive cool-down. 429s no longer burn the command
-  // budget: the browser fallback is the production path for burned IPs.
+ // TIER 1: got-scraping (cheap path) - ONE attempt, skipped entirely while
+ // this IP is in the adaptive cool-down. 429s no longer burn the command
+ // budget: the browser fallback is the production path for burned IPs.
   if (Date.now() >= _tier1DisabledUntil) {
     try {
       const jar = await _getJar();
@@ -324,11 +323,11 @@ async function getTrends(keywords, rangeKey = "30d", geo = GEO_DEFAULT) {
           if (_tier1Fails >= 2) _tier1DisabledUntil = Date.now() + TIER1_SKIP_MS;
         }
       }
-      // other tier-1 errors fall through to the browser too
+ // other tier-1 errors fall through to the browser too
     }
   }
 
-  // TIER 2: real browser (survives IP-level TLS throttling)
+ // TIER 2: real browser (survives IP-level TLS throttling)
   for (let bAttempt = 0; bAttempt < 2; bAttempt++) {
     try {
       const ml = await _browserTrends(keywords, timeToken, geo);
@@ -348,9 +347,9 @@ async function getTrends(keywords, rangeKey = "30d", geo = GEO_DEFAULT) {
 }
 
 function _buildOut(ck, keywords, rangeKey, tl) {
-  // ⚠️ Google marks no-data points with value=100 + hasData=false (observed
-  // on zero-interest keywords) - those MUST read as 0, otherwise a garbage
-  // keyword renders a fake spike and dodges the all-zero guard.
+ // Google marks no-data points with value=100 + hasData=false (observed
+ // on zero-interest keywords) - those MUST read as 0, otherwise a garbage
+ // keyword renders a fake spike and dodges the all-zero guard.
   const points = tl.map((p) => ({
     t: (p.time || 0) * 1000,
     values: keywords.map((_, s) => {
@@ -359,12 +358,12 @@ function _buildOut(ck, keywords, rangeKey, tl) {
     }),
   }));
   const max = Math.max(...points.flatMap((p) => p.values));
-  // 💡 AUDIT FIX 2026-09-26 (quiz audit P5/trends): all-zero is not the only
-  // "no data" shape. Google Trends emits spurious isolated spikes (e.g. 3
-  // nonzero points out of 169) even for pure-garbage keywords, so a max==0
-  // check alone rendered "fake graphs" for nonsense queries. Treat a series
-  // as no-data when interest is effectively absent: <5% of points nonzero
-  // (real sustained interest clears this easily) or a near-zero mean.
+ // AUDIT FIX (quiz audit P5/trends): all-zero is not the only
+ // "no data" shape. Google Trends emits spurious isolated spikes (e.g. 3
+ // nonzero points out of 169) even for pure-garbage keywords, so a max==0
+ // check alone rendered "fake graphs" for nonsense queries. Treat a series
+ // as no-data when interest is effectively absent: <5% of points nonzero
+ // (real sustained interest clears this easily) or a near-zero mean.
   const allVals = points.flatMap((p) => p.values);
   const nonzero = allVals.filter((v) => v > 0).length;
   const mean = allVals.length ? allVals.reduce((a, b) => a + b, 0) / allVals.length : 0;
@@ -378,7 +377,7 @@ function _buildOut(ck, keywords, rangeKey, tl) {
     allZero: effectivelyEmpty,
   };
   if (out.allZero) {
-    // don't cache zero-results long - the keyword may just be too niche
+ // don't cache zero-results long - the keyword may just be too niche
     _cache.set(ck, out, 120);
   } else {
     _cache.set(ck, out);
@@ -386,14 +385,14 @@ function _buildOut(ck, keywords, rangeKey, tl) {
   return out;
 }
 
-// ── argument parsing ──
+// -- argument parsing --
 // supports: trends "one piece" "naruto" 12m | trends python java 90d | trends "dragon ball"
 function parseTrendsArgs(raw) {
   let rest = String(raw || "").trim();
   const out = { keywords: [], range: "30d", error: null };
   if (!rest) return out;
   const rangeNames = { ...RANGES, ...Object.fromEntries(Object.entries(RANGE_ALIASES).map(([a, r]) => [a, RANGES[r]])) };
-  // pop trailing range token (quoted or bare)
+ // pop trailing range token (quoted or bare)
   const rangeMatch = rest.match(/\s+("([^"]+)"|(\S+))\s*$/);
   if (rangeMatch) {
     const cand = (rangeMatch[2] || rangeMatch[3] || "").toLowerCase();
@@ -402,7 +401,7 @@ function parseTrendsArgs(raw) {
       rest = rest.slice(0, rangeMatch.index).trim();
     }
   }
-  // quoted keywords first
+ // quoted keywords first
   const quoted = [...rest.matchAll(/"([^"]{1,80})"/g)].map((mm) => mm[1].trim()).filter(Boolean);
   let bare = rest;
   for (const q of quoted) {
@@ -417,9 +416,9 @@ function parseTrendsArgs(raw) {
   return out;
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // CHART (node-canvas multi-line, Google palette)
-// ════════════════════════════════════════════
+// ============================================
 
 const FONT_DIR = "/usr/share/fonts/truetype/dejavu";
 let _fontsRegistered = false;
@@ -466,7 +465,7 @@ async function renderTrendsChart(data) {
   ctx.fillStyle = T.bg;
   ctx.fillRect(0, 0, W, H);
 
-  // header
+ // header
   const headGrad = ctx.createLinearGradient(0, 0, 0, PAD.t);
   headGrad.addColorStop(0, "#171c28");
   headGrad.addColorStop(1, T.bg);
@@ -483,7 +482,7 @@ async function renderTrendsChart(data) {
   ctx.font = "16px 'DejaVu Sans'";
   ctx.fillText(`${data.label}  •  ${n} data points  •  relative search interest (0-100)`, PAD.l - 26, 74);
 
-  // grid + y axis
+ // grid + y axis
   ctx.strokeStyle = T.grid;
   ctx.lineWidth = 1;
   ctx.font = "13px 'DejaVu Mono'";
@@ -495,7 +494,7 @@ async function renderTrendsChart(data) {
     ctx.fillText(String(v), PAD.l - 10, yv + 4);
   }
 
-  // x scale + vertical grid
+ // x scale + vertical grid
   const x = (i) => PAD.l + (n === 1 ? chartW / 2 : (i / (n - 1)) * chartW);
   ctx.textAlign = "center";
   const tickCount = Math.min(7, Math.max(3, Math.floor(chartW / 150)));
@@ -508,7 +507,7 @@ async function renderTrendsChart(data) {
     ctx.fillText(_timeLabel(pts[i].t, data.rangeKey), tx, PAD.t + chartH + 24);
   }
 
-  // series
+ // series
   for (let s = 0; s < kws.length; s++) {
     const color = SERIES_COLORS[s % SERIES_COLORS.length];
     ctx.strokeStyle = color;
@@ -523,7 +522,7 @@ async function renderTrendsChart(data) {
       else ctx.lineTo(x(i), yv);
     }
     ctx.stroke();
-    // soft fill under line
+ // soft fill under line
     ctx.globalAlpha = 0.08;
     ctx.lineTo(x(n - 1), PAD.t + chartH);
     ctx.lineTo(x(0), PAD.t + chartH);
@@ -533,7 +532,7 @@ async function renderTrendsChart(data) {
     ctx.globalAlpha = 1;
   }
 
-  // legend
+ // legend
   ctx.textAlign = "left";
   ctx.font = "15px 'DejaVu Sans'";
   let lx = PAD.l;
@@ -549,7 +548,7 @@ async function renderTrendsChart(data) {
     if (lx > W - 220) { lx = PAD.l; ly += 26; }
   }
 
-  // footer
+ // footer
   ctx.fillStyle = T.dim;
   ctx.font = "12.5px 'DejaVu Sans'";
   ctx.fillText("Values are relative search interest (0-100), normalized within this comparison - not absolute search counts.", PAD.l - 26, H - 26);
@@ -587,9 +586,9 @@ function formatTrendsCaption(data) {
   return out;
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // COMMAND SURFACE
-// ════════════════════════════════════════════
+// ============================================
 
 async function handleTrends(sock, chatId, senderJid, botMarker, m, rawArgs) {
   const prefix = botConfig.getPrefix();
@@ -612,7 +611,7 @@ _Google Trends values are RELATIVE search interest, not absolute search counts._
   }
   const parsed = parseTrendsArgs(rawArgs);
   if (parsed.error) {
-    // "no keywords" only happens when rawArgs was quotes/symbols only
+ // "no keywords" only happens when rawArgs was quotes/symbols only
     return { handled: true, message: botMarker + `❌ ${parsed.error === "no keywords" ? `Tell me what to look up, e.g. \`${prefix} trends "Dragon Ball"\`` : `Google Trends compares at most ${MAX_KEYWORDS} keywords at once.`}` };
   }
 
@@ -630,7 +629,7 @@ _Google Trends values are RELATIVE search interest, not absolute search counts._
     return { handled: true, silent: true };
   } catch (e) {
     console.log("[Trends] lookup failed:", e?.message);
-    // both real-world "no data" shapes: empty timeline AND all-zero values
+ // both real-world "no data" shapes: empty timeline AND all-zero values
     if (e.code === "TRENDS_EMPTY") {
       return { handled: true, message: botMarker + `🤷 No meaningful search interest found for ${parsed.keywords.map((k) => `"${k}"`).join(", ")} in the ${(RANGES[parsed.range] || RANGES["30d"]).label.toLowerCase()}. Try a broader spelling or a longer range.` };
     }
@@ -647,8 +646,8 @@ module.exports = {
   handleTrends,
   parseTrendsArgs,
   getTrends,
-  // OWNER QUEUE RULE (2026-10-08): serialized + 45s dedup — identical trend
-  // data inside the window renders ONCE (burst = 1 render + N cache hits).
+ // OWNER QUEUE RULE: serialized + 45s dedup - identical trend
+ // data inside the window renders ONCE (burst = 1 render + N cache hits).
   renderTrendsChart: (...args) => {
     const rq = require('./renderQueue');
     const key = rq.keyFor('trends:v1', args[0]);

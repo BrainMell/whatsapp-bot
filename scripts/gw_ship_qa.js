@@ -1,5 +1,5 @@
 // ============================================
-// 🎮 GUILD WAR FULL E2E QA v2 — plays the war like the owner does.
+// GUILD WAR FULL E2E QA v2 - plays the war like the owner does.
 // Drives REAL modules vs the isolated QA db (/qa_gw), mock sock.
 // Flow: boost the test fighter → deploy → explore (resolve encounters) →
 // puzzle lifecycle → win PvE → PvP → meeting → relics → feed → stress.
@@ -15,10 +15,10 @@ async function connectDB() {
         const m = /^\s*([A-Z0-9_]+)\s*=\s*"?([^"\n]*)"?/.exec(line);
         if (m) process.env[m[1]] = process.env[m[1]] || m[2];
     }
-    // ⚔️ EPHEMERAL NAMESPACE: each run gets its OWN db on the same cluster —
-    // nothing else (other agents' QA, zombies, crons) can wipe it mid-run.
-    // HOUSEKEEPING (post-connect): drop stale ephemeral dbs (>30 min old) —
-    // the shared Atlas instance is small and abandoned run-dbs add up.
+ // EPHEMERAL NAMESPACE: each run gets its OWN db on the same cluster -
+ // nothing else (other agents' QA, zombies, crons) can wipe it mid-run.
+ // HOUSEKEEPING (post-connect): drop stale ephemeral dbs (>30 min old) -
+ // the shared Atlas instance is small and abandoned run-dbs add up.
     const RUN_DB = `qa_gw_e2e_${Date.now().toString(36)}`;
     process.env.MONGO_URI = process.env.MONGO_URI.replace(/\/([a-z_0-9]+)\?/, `/${RUN_DB}?`);
     await require(path.join(ROOT, 'db'))();
@@ -41,7 +41,7 @@ async function connectDB() {
 const results = [];
 function check(name, cond, detail = '') {
     results.push({ name, ok: !!cond, detail: String(detail).slice(0, 240) });
-    console.log(`${cond ? '✅' : '❌'} ${name}${detail ? ' — ' + String(detail).slice(0, 160) : ''}`);
+    console.log(`${cond ? '✅' : '❌'} ${name}${detail ? ' - ' + String(detail).slice(0, 160) : ''}`);
 }
 function section(t) {
     try { assertQaDb(require(require('path').join(ROOT, 'node_modules', 'mongoose'))); } catch (e) { console.error('guard err', e.message); }
@@ -63,14 +63,14 @@ function makeSock(tag = '') {
 
 const PREFIX = '.j';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-// ⚔️ INCIDENT GUARD: every section asserts the connection is STILL qa_gw.
+// INCIDENT GUARD: every section asserts the connection is STILL qa_gw.
 // If anything ever re-points the shared connection (dotenv, engine boot,
 // future refactor), the suite dies instantly instead of writing QA junk to
 // the production namespace. Never disable this.
 function assertQaDb(mongoose) {
     const n = mongoose.connection.name;
     if (n !== 'qa_gw' && !/^qa_gw_e2e_/.test(n)) {
-        console.error(`🚨 FATAL: harness connection drifted to '${n}' — refusing to continue`);
+        console.error(`🚨 FATAL: harness connection drifted to '${n}' - refusing to continue`);
         process.exit(3);
     }
 }
@@ -90,16 +90,16 @@ function makeDM(sock) {
 async function main() {
     await connectDB();
     const mongoose = require(path.join(ROOT, 'node_modules', 'mongoose'));
-    // ⚔️ SANDBOX SEAM: no Go image service here (it lives on Box 2). Stub the
-    // singleton's render calls to return a tiny valid PNG so the WHOLE combat
-    // pipeline (session creation, hooks, end screens, PvP renders) runs
-    // headlessly. Throwing stubs made startRoomCombat abort session creation,
-    // which left spawn-in-combat players lawfully move-locked with no fight —
-    // a sandbox artifact, not a product bug. Visual QA runs on Box 2.
-    // ⚔️ SANDBOX SEAM (fixed): goImageService methods return RAW BUFFERS —
-    // combatImageGenerator wraps them into {success, buffer}. Stub each method
-    // with a tiny valid PNG buffer so the whole combat pipeline (session
-    // creation, hooks, end screens, PvP renders) runs headlessly.
+ // SANDBOX SEAM: no Go image service here (it lives on Box 2). Stub the
+ // singleton's render calls to return a tiny valid PNG so the WHOLE combat
+ // pipeline (session creation, hooks, end screens, PvP renders) runs
+ // headlessly. Throwing stubs made startRoomCombat abort session creation,
+ // which left spawn-in-combat players lawfully move-locked with no fight -
+ // a sandbox artifact, not a product bug. Visual QA runs on Box 2.
+ // SANDBOX SEAM (fixed): goImageService methods return RAW BUFFERS -
+ // combatImageGenerator wraps them into {success, buffer}. Stub each method
+ // with a tiny valid PNG buffer so the whole combat pipeline (session
+ // creation, hooks, end screens, PvP renders) runs headlessly.
     const goService = require(path.join(ROOT, 'core/utils/goImageService.js'));
     const _png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
     goService.isHealthy = async () => true;
@@ -131,7 +131,7 @@ async function main() {
     for (const [j, n] of [[P1, 'Alice'], [P2, 'Bob'], [P3, 'Carla']]) {
         if (!economy.getUser(j)) economy.registerUser(j, n);
     }
-    // ⚔️ QA seam: make Alice a war veteran so scripted battles WIN fast
+ // QA seam: make Alice a war veteran so scripted battles WIN fast
     const boost = (jid) => {
         const u = economy.getUser(jid);
         if (!u) return;
@@ -145,7 +145,7 @@ async function main() {
     };
     boost(P1); boost(P2); boost(P3);
 
-    // ═══════════ S1: DEPLOYMENT UX ═══════════
+ // =========== S1: DEPLOYMENT UX ===========
     section('S1: deployment UX');
     const engineMod = require(path.join(ROOT, 'core/engine.js'));
     engineMod.isBotOwner = () => true;
@@ -174,17 +174,17 @@ async function main() {
     check('S1 alice got spawn MAP image', aliceDm.some((s) => s.hasImage && /YOU ARE HERE/.test(s.text)));
     check('S1 alice got spawn SCENE image', aliceDm.some((s) => s.hasImage && !/YOU ARE HERE/.test(s.text)));
 
-    // ═══════════ harness helpers ═══════════
+ // =========== harness helpers ===========
     const dm1 = makeDM(makeSock('p1'));
     const dm2 = makeDM(makeSock('p2'));
     const dm3 = makeDM(makeSock('p3'));
     const dmSockReset = (dm) => { dm.sock.sent.length = 0; };
     const evFresh = async () => {
         let d = null;
-        // ⚔️ transient-read tolerance: the shared Atlas cluster can blip under
-        // parallel load — retry a null fresh read for ~3s before declaring the
-        // event dead (measured false-positive: total-collection-empty read
-        // during a failover, doc alive and well seconds later).
+ // transient-read tolerance: the shared Atlas cluster can blip under
+ // parallel load - retry a null fresh read for ~3s before declaring the
+ // event dead (measured false-positive: total-collection-empty read
+ // during a failover, doc alive and well seconds later).
         for (let i = 0; i < 10 && !d; i++) {
             d = await state.getEvent(EV, { fresh: true });
             if (!d && i > 2) {
@@ -207,10 +207,10 @@ async function main() {
     const topoOf = async () => state.topologyOf(await evFresh());
     const dirName = { n: 'forward', e: 'right', s: 'back', w: 'left' };
 
-    // resolve any active combat session for P1 by fighting (Alice is boosted)
+ // resolve any active combat session for P1 by fighting (Alice is boosted)
     async function winFight(dm = dm1, jid = P1, budget = 30) {
-        // the combat session comes up ASYNC (startCombat renders first — image
-        // attempts can take ~10s with the Go service absent) → poll for inCombat
+ // the combat session comes up ASYNC (startCombat renders first - image
+ // attempts can take ~10s with the Go service absent) → poll for inCombat
         for (let i = 0; i < 40; i++) {
             const st0 = guildAdventure.getGameState(jid, jid);
             if (!st0 || !st0.active) return true;
@@ -227,10 +227,10 @@ async function main() {
         return !st || !st.active || !st.inCombat;
     }
 
-    // resolve ANY unresolved chamber around P1 (fight, or flee puzzles).
-    // ⚔️ the World Core is deliberately NOT fought during roaming — beating
-    // the guardian ENDS the war and every later section would test a corpse.
-    // The core finale is exercised by the live visual QA on Box 2.
+ // resolve ANY unresolved chamber around P1 (fight, or flee puzzles).
+ // the World Core is deliberately NOT fought during roaming - beating
+ // the guardian ENDS the war and every later section would test a corpse.
+ // The core finale is exercised by the live visual QA on Box 2.
     async function resolveChamber() {
         const ev0 = await evFresh();
         const me0 = ev0.players.find((p) => p.jid === P1);
@@ -245,10 +245,10 @@ async function main() {
         }
     }
 
-    // ═══════════ S2: MOVEMENT ═══════════
+ // =========== S2: MOVEMENT ===========
     section('S2: movement grammar');
-    // if the champion spawned INTO an unresolved encounter chamber, resolve it
-    // (movement is lawfully blocked until the chamber is resolved or fled)
+ // if the champion spawned INTO an unresolved encounter chamber, resolve it
+ // (movement is lawfully blocked until the chamber is resolved or fled)
     {
         const evS0 = await evFresh();
         const meS0 = evS0.players.find((p) => p.jid === P1);
@@ -274,11 +274,11 @@ async function main() {
     check('S2 prefixed move relocates', nowAt === mapEngine.step(topo, startRoom, d0), `${startRoom} -> ${nowAt} reply=${String(mv1?.text || dm1.sock.last()?.text || '').slice(0, 70)}`);
     check('S2 move sent map+scene images', dm1.sock.images().length >= 2, `${dm1.sock.images().length} images`);
 
-    // resolve whatever chamber we just walked into (auto-combat)
+ // resolve whatever chamber we just walked into (auto-combat)
     await winFight();
     await dmSockReset(dm1);
 
-    // bare word move
+ // bare word move
     await resolveChamber();
     const before = await room1();
     const topo2 = await topoOf();
@@ -292,7 +292,7 @@ async function main() {
         await dmSockReset(dm1);
     } else check('S2 bare word moves', true, 'no open edge (skipped)');
 
-    // typo tolerance (owner's exact ".j move foward")
+ // typo tolerance (owner's exact ".j move foward")
     await resolveChamber(); // never test grammar from inside an unresolved chamber
     const beforeT = await room1();
     const topoT = await topoOf();
@@ -301,7 +301,7 @@ async function main() {
         await wait(6400);
         const typo = { n: 'foward', e: 'rght', s: 'bck', w: 'lft' }[dT];
         if (['rght', 'lft'].includes(typo)) {
-            // only foward/fwd/bck are tolerated typos; rght/lft SHOULD fall through
+ // only foward/fwd/bck are tolerated typos; rght/lft SHOULD fall through
             await dm1(P1, `${PREFIX} move ${typo}`);
             check('S2 non-listed typo falls through gracefully', true);
         } else {
@@ -312,13 +312,13 @@ async function main() {
         }
     }
 
-    // invalid direction: graceful, no move
+ // invalid direction: graceful, no move
     await wait(6400);
     const r0 = await room1();
     const resInvalid = await dm1(P1, `${PREFIX} move banana`);
     check('S2 invalid direction: no move + graceful', (await room1()) === r0 && (resInvalid === null || !/HARNESS-ERROR/.test(String(resInvalid?.text || ''))));
 
-    // wall bump: closed direction
+ // wall bump: closed direction
     await resolveChamber();
     const topoW = await topoOf();
     const rW = await room1();
@@ -329,9 +329,9 @@ async function main() {
         check('S2 wall bump → "No passage"', /No passage|unbroken/i.test(String(res?.text || '')), String(res?.text || '').slice(0, 60));
     } else check('S2 wall bump → "No passage"', true, 'no closed side here (skipped)');
 
-    // cooldown: move into a KNOWN-SAFE room (cleared / non-encounter dest),
-    // then IMMEDIATELY try again — the blocked-chamber gate fires BEFORE the
-    // cooldown gate, so an unresolved destination would mask the cooldown.
+ // cooldown: move into a KNOWN-SAFE room (cleared / non-encounter dest),
+ // then IMMEDIATELY try again - the blocked-chamber gate fires BEFORE the
+ // cooldown gate, so an unresolved destination would mask the cooldown.
     {
         const topoCd = await topoOf();
         const evCd = await evFresh();
@@ -346,11 +346,11 @@ async function main() {
             await wait(6400);
             await dm1(P1, `${PREFIX} move ${dirName[safeDir]}`);
             if ((await room1()) !== rCd) {
-                // ⚔️ PROBE FIX: head BACK to the room we just left — it is
-                // known-safe (we were standing in it). The old probe repeated
-                // the SAME direction from the NEW room, whose onward neighbour
-                // can be an unresolved encounter room — the blocked-chamber
-                // gate then fires BEFORE the cooldown gate and masks it.
+ // PROBE FIX: head BACK to the room we just left - it is
+ // known-safe (we were standing in it). The old probe repeated
+ // the SAME direction from the NEW room, whose onward neighbour
+ // can be an unresolved encounter room - the blocked-chamber
+ // gate then fires BEFORE the cooldown gate and masks it.
                 const REV = { n: 's', s: 'n', e: 'w', w: 'e' };
                 const cdRes = await dm1(P1, `${PREFIX} move ${dirName[REV[safeDir]]}`);
                 check('S2 move cooldown enforced', /catch your breath|seconds/i.test(String(cdRes?.text || '')), String(cdRes?.text || '').slice(0, 60));
@@ -358,7 +358,7 @@ async function main() {
         } else check('S2 move cooldown enforced', true, 'no safe destination (skipped)');
     }
 
-    // ═══════════ S4: ROOM-TYPE CONTENT WALK ═══════════
+ // =========== S4: ROOM-TYPE CONTENT WALK ===========
     section('S4: room-type content interactions');
     const seenTypes = new Set();
     const perType = {};
@@ -387,7 +387,7 @@ async function main() {
             else if (T === 'core') { await dm1(P1, `${PREFIX} flee`); } // never end the war mid-walk
             else if (['combat', 'coop'].includes(T)) { await winFight(); }
         }
-        // step onward — least-visited open neighbour (never oscillate)
+ // step onward - least-visited open neighbour (never oscillate)
         const ev2 = await evFresh();
         if (!ev2) {
             const all = await mongoose.connection.db.collection('guildwarevents').find({}).project({ eventId: 1, state: 1 }).toArray();
@@ -403,15 +403,15 @@ async function main() {
         for (const d of nextDirs) {
             const destKey = mapEngine.step(topoNow, me2.roomId, d);
             const dest = ev2.rooms.find((r) => r.key === destKey);
-            // score: uncleared non-puzzle rooms first, then by visit count.
-            // core rooms are near-forbidden (ending the war kills the suite).
+ // score: uncleared non-puzzle rooms first, then by visit count.
+ // core rooms are near-forbidden (ending the war kills the suite).
             const freshBonus = dest && dest.state !== 'CLEARED' && dest.type !== 'puzzle' ? -100 : 0;
             const corePenalty = dest && dest.type === 'core' ? +5000 : 0;
             const score = visitCount(destKey) + freshBonus + corePenalty;
             if (score < bestScore) { bestScore = score; picked = d; }
         }
         const pickedDest = mapEngine.step(topoNow, me2.roomId, picked);
-        if (ev2.rooms.find((r) => r.key === pickedDest)?.type === 'core' && nextDirs.length > 1) continue; // wait — pick again next loop from the same room
+        if (ev2.rooms.find((r) => r.key === pickedDest)?.type === 'core' && nextDirs.length > 1) continue; // wait - pick again next loop from the same room
         visits.set(pickedDest, visitCount(pickedDest) + 1);
         await wait(6400);
         dmSockReset(dm1);
@@ -419,7 +419,7 @@ async function main() {
         await wait(700);
         const after = (await evFresh()).players.find((p) => p.jid === P1);
         if (after.roomId === me2.roomId) {
-            // blocked (unresolved chamber) → resolve and retry once
+ // blocked (unresolved chamber) → resolve and retry once
             const stOk = await winFight();
             if (!stOk) break;
             await wait(6400);
@@ -429,8 +429,8 @@ async function main() {
         }
     }
     check('S4 walked through ≥4 distinct room types', seenTypes.size >= 4, `seen: ${[...seenTypes].join(',')}`);
-    // ⚔️ DETERMINISM: the natural walk is map-dependent — force-visit every
-    // interaction type the walk missed so each verb is tested EVERY run.
+ // DETERMINISM: the natural walk is map-dependent - force-visit every
+ // interaction type the walk missed so each verb is tested EVERY run.
     const WANT_TYPES = ['discovery', 'reward', 'hazard', 'lore', 'landmark', 'anomaly', 'secret'];
     for (const wantType of WANT_TYPES) {
         if (perType[wantType] && perType[wantType].ok) continue;
@@ -474,9 +474,9 @@ async function main() {
     }
     for (const [t, v] of Object.entries(perType)) check(`S4 ${t} interaction`, v.ok, v.d);
 
-    // ═══════════ S5: PUZZLE MECHANISM ═══════════
+ // =========== S5: PUZZLE MECHANISM ===========
     section('S5: puzzle/mechanism lifecycle');
-    // DETERMINISTIC: synthesize a puzzle room linked to P1's current room
+ // DETERMINISTIC: synthesize a puzzle room linked to P1's current room
     const evP = await evFresh();
     const meP = evP.players.find((p) => p.jid === P1);
     const fromKey = meP.roomId;
@@ -487,8 +487,8 @@ async function main() {
     const existing = evP.rooms.find((r) => r.key === pzKey);
     const stubMap = { rooms: new Map(), adjacency: new Map() };
     if (existing) {
-        // retype via the production pattern, then re-seed payloads with the
-        // game's OWN seeding path (seedEncounters bulkWrite)
+ // retype via the production pattern, then re-seed payloads with the
+ // game's OWN seeding path (seedEncounters bulkWrite)
         await GuildWarEvent.updateOne({ eventId: EV, rooms: { $elemMatch: { key: pzKey } } }, { $set: { 'rooms.$.type': 'puzzle', 'rooms.$.state': 'UNEXPLORED', 'rooms.$.clearedBy': null, 'rooms.$.clearedByGuild': null, 'rooms.$.clearedAt': null, 'rooms.$.occupants': [], 'rooms.$.residue': null } });
     } else {
         await GuildWarEvent.updateOne({ eventId: EV }, { $push: { rooms: synthetic } });
@@ -499,7 +499,7 @@ async function main() {
     await state.updatePlayer(EV, P1, {}, { roomId: pzKey, prevRoomId: fromKey, lastMoveAt: Date.now() - 10000 });
     let pzDoc = (await evFresh()).rooms.find((r) => r.key === pzKey);
     if (!pzDoc) {
-        // the slot may sit outside the pruned map: force-create the room + edge
+ // the slot may sit outside the pruned map: force-create the room + edge
         await GuildWarEvent.updateOne({ eventId: EV }, { $push: { rooms: { ...synthetic, payload } } });
         await GuildWarEvent.updateOne({ eventId: EV }, { $addToSet: { edges: { $each: [`${fromKey}|w`, `${pzKey}|e`] } } });
         pzDoc = (await evFresh()).rooms.find((r) => r.key === pzKey);
@@ -514,7 +514,7 @@ async function main() {
     }
     const maxA = (pz.maxAttempts || 3);
     const wrong = 'zzz-wrong';
-    // cycle: wrong × maxA → exactly ONE shock (on exhaustion) then reset
+ // cycle: wrong × maxA → exactly ONE shock (on exhaustion) then reset
     let shocks = 0, lastText = '';
     for (let i = 0; i < maxA; i++) {
         const r = await dm1(P1, wrong);
@@ -523,15 +523,15 @@ async function main() {
         await wait(120);
     }
     check('S5 exhaustion → exactly one shock then reset', shocks === 1, `${shocks} shocks; last="${lastText.slice(0, 60)}"`);
-    // silence check — no autonomous loop
+ // silence check - no autonomous loop
     const preQuiet = dm1.sock.sent.length;
     await wait(1500);
     check('S5 NO autonomous loop (silence)', dm1.sock.sent.length === preQuiet, `+${dm1.sock.sent.length - preQuiet} while silent`);
-    // reset confirms fresh attempts
+ // reset confirms fresh attempts
     const rAfter = await dm1(P1, wrong);
     check('S5 reset cycle grants fresh attempts', /attempt/i.test(String(rAfter?.text || '')) && !/shock/i.test(String(rAfter?.text || '')), String(rAfter?.text || '').slice(0, 60));
-    // rapid burst: 6 answers → every answer evaluated exactly once (atomic claim)
-    // (with maxA=3, six wrongs yield TWO exhaustion shocks + four plain wrongs)
+ // rapid burst: 6 answers → every answer evaluated exactly once (atomic claim)
+ // (with maxA=3, six wrongs yield TWO exhaustion shocks + four plain wrongs)
     pzDoc = (await evFresh()).rooms.find((r) => r.key === pzKey);
     const usedBefore = encounters.payloadGet(pzDoc.payload, 'puzzle').attemptsUsed || 0;
     const burstReplies = await Promise.allSettled(Array.from({ length: 6 }, () => dm1(P1, wrong)));
@@ -539,11 +539,11 @@ async function main() {
     const shockCount = burstReplies.filter((r) => /shock/i.test(String(r.value?.text || ''))).length;
     const wrongCount = burstReplies.filter((r) => /Wrong/i.test(String(r.value?.text || ''))).length;
     check('S5 rapid burst: all 6 answers evaluated (2 shocks + 4 wrongs)', shockCount === 2 && wrongCount === 4, `shocks=${shockCount} wrongs=${wrongCount} of 6`);
-    // attempts counter consistent with claims minus resets
+ // attempts counter consistent with claims minus resets
     pzDoc = (await evFresh()).rooms.find((r) => r.key === pzKey);
     const usedAfter = encounters.payloadGet(pzDoc.payload, 'puzzle').attemptsUsed || 0;
     check('S5 attempts counter consistent after burst+resets', usedAfter === (usedBefore + 6) % maxA, `used=${usedBefore}->${usedAfter} (mod ${maxA})`);
-    // exhaust to reset then SOLVE
+ // exhaust to reset then SOLVE
     for (let i = 0; i < maxA; i++) await dm1(P1, wrong);
     const pzNow2 = encounters.payloadGet((await evFresh()).rooms.find((r) => r.key === pzKey).payload, 'puzzle');
     dmSockReset(dm1);
@@ -552,7 +552,7 @@ async function main() {
     check('S5 correct answer clears the seal', /clicks open|solved/i.test(solveText), `answer=${String(pzNow2.answer).slice(0, 20)} reply=${solveText.slice(0, 60)}`);
     const again = await dm1(P1, String(pzNow2.answer));
     check('S5 cleared seal is inert', /inert|already/i.test(String(again?.text || '')) || again === null, String(again?.text || '').slice(0, 50));
-    // re-entry: a cleared puzzle room greets return visitors with "already dealt with"
+ // re-entry: a cleared puzzle room greets return visitors with "already dealt with"
     dmSockReset(dm1);
     await dm1(P1, `${PREFIX} look`);
     await wait(600);
@@ -563,7 +563,7 @@ async function main() {
     const reRoom = await room1();
     check('S5 flee exits the (cleared) puzzle room', reRoom !== pzKey, `${pzKey} -> ${reRoom}`);
 
-    // ═══════════ S6: PvE COMBAT (win + clear + return map) ═══════════
+ // =========== S6: PvE COMBAT (win + clear + return map) ===========
     section('S6: ruins-native PvE');
     const evC = await evFresh();
     const cRoom = evC.rooms.find((r) => ['combat'].includes(r.type) && r.state !== 'CLEARED');
@@ -573,7 +573,7 @@ async function main() {
         await rooms.enterRoom(EV, P1, meC.roomId, cRoom.key);
         await state.updatePlayer(EV, P1, {}, { roomId: cRoom.key, lastMoveAt: Date.now() - 10000 });
         dmSockReset(dm1);
-        // start the fight EXPLICITLY (auto-start rides the move flow; we teleported in)
+ // start the fight EXPLICITLY (auto-start rides the move flow; we teleported in)
         const freshC = await evFresh();
         const meC2 = freshC.players.find((p) => p.jid === P1);
         const roomC2 = freshC.rooms.find((r) => r.key === cRoom.key);
@@ -584,23 +584,22 @@ async function main() {
         const cRoomAfter = (await evFresh()).rooms.find((r) => r.key === cRoom.key);
         check('S6 victory cleared the room', cRoomAfter.state === 'CLEARED', `state=${cRoomAfter.state}`);
         check('S6 post-battle return map sent', dm1.sock.images().length >= 1, `${dm1.sock.images().length} images`);
-        // verify the battle background rode the RUINS plate
         const evCB = await evFresh();
         const meCB = evCB.players.find((p) => p.jid === P1);
-        // re-enter and read the combat state spec background
-        // (startRoomCombat resolves plate → gameStates encounter.background)
+ // re-enter and read the combat state spec background
+ // (startRoomCombat resolves plate → gameStates encounter.background)
         const exitsNow = require(path.join(ROOT, 'core/rpg/guildWar/roomScene.js')).exitsFor(evCB, meCB);
         const plateKey = require(path.join(ROOT, 'core/rpg/guildWar/roomScene.js')).plateKeyFor(exitsNow, `${evCB.seed}:${meCB.roomId}`);
         check('S6 plate key resolves to a shipped background file', ['0', 'L_a', 'L_b', 'R', 'F', 'LF', 'FR', 'LR', 'LFR'].includes(plateKey), plateKey);
     }
 
-    // ═══════════ S7: PvP ═══════════
+ // =========== S7: PvP ===========
     section('S7: ruins PvP');
-    // clear spawn protection on everyone
+ // clear spawn protection on everyone
     for (const j of [P1, P2, P3]) await state.updatePlayer(EV, j, {}, { protectedUntil: 0, lastMoveAt: Date.now() - 10000 });
     const evS = await evFresh();
     const meS = evS.players.find((p) => p.jid === P1);
-    // pull P3 into P1's room (rival guild)
+ // pull P3 into P1's room (rival guild)
     const meS3 = evS.players.find((p) => p.jid === P3);
     await rooms.enterRoom(EV, P3, meS3.roomId, meS.roomId);
     await state.updatePlayer(EV, P3, {}, { roomId: meS.roomId });
@@ -614,10 +613,10 @@ async function main() {
     const duelP3 = pvp.getRuinsDuelFor(P3);
     check('S7 duel state registered for both sides', !!duelP3 && !!pvp.getRuinsDuelFor(P1));
     check('S7 duel rides the ruins plate', !!duelP3?.ruinsBackground && /ruins_door_/.test(duelP3.ruinsBackground), duelP3?.ruinsBackground || 'none');
-    // settle the duel: production-equivalent path — the engine's `.j combat`
-    // branch (post intercept-fix) delegates exactly to handlePvPAction with
-    // the player's DM chatId; handlePvPAction resolves the ruins duel via
-    // ruinsByPlayer. Two boosted Lv40 duelists need ~10-20 rounds each.
+ // settle the duel: production-equivalent path - the engine's `.j combat`
+ // branch (post intercept-fix) delegates exactly to handlePvPAction with
+ // the player's DM chatId; handlePvPAction resolves the ruins duel via
+ // ruinsByPlayer. Two boosted Lv40 duelists need ~10-20 rounds each.
     let settled = false, lastPvpErr = '';
     for (let i = 0; i < 60 && !settled; i++) {
         try {
@@ -634,17 +633,17 @@ async function main() {
     const finishTxt = dm1.sock.texts().join(' ') + ' ' + dm3.sock.texts().join(' ');
     check('S7 duel settled', settled, lastPvpErr || finishTxt.slice(-80));
     check('S7 duel end declared in DMs', /victory|defeat|wins|falls/i.test(finishTxt), finishTxt.slice(-90));
-    // intercept-fix contract: the ruins duel is reachable PER-PLAYER even
-    // though getDuel(dmJid) can never see virtual-chat duels
+ // intercept-fix contract: the ruins duel is reachable PER-PLAYER even
+ // though getDuel(dmJid) can never see virtual-chat duels
     check('S7 duel mappings cleaned up after finish',
         !pvp.getDuel(P1) && !pvp.getRuinsDuelFor(P1) && !pvp.getRuinsDuelFor(P3),
         `p1=${!!pvp.getRuinsDuelFor(P1)} p3=${!!pvp.getRuinsDuelFor(P3)}`);
-    // ⚔️ GUILD WAR CONSEQUENCES: the duel outcome must touch the war — the
-    // winner banks GP via points (standings move) per CFG.PVP.WIN_GP.
+ // GUILD WAR CONSEQUENCES: the duel outcome must touch the war - the
+ // winner banks GP via points (standings move) per CFG.PVP.WIN_GP.
     const evPost = await evFresh();
     check('S7 war survived the duel', !!evPost && evPost.state === 'ACTIVE', evPost ? evPost.state : 'GONE');
 
-    // ═══════════ S8: GUILD MEETING ═══════════
+ // =========== S8: GUILD MEETING ===========
     section('S8: guild members meeting');
     const evM = await evFresh();
     const meM = evM.players.find((p) => p.jid === P1);
@@ -656,17 +655,17 @@ async function main() {
     await wait(500);
     const meetText = dm2.sock.texts().join('\n');
     check('S8 meeting text announces guildmate', /🤝/.test(meetText) && /Alice/.test(meetText), /🤝[^\n]*/.exec(meetText)?.[0]?.slice(0, 80) || 'missing');
-    // occupants visible in scene: assert the room scene was sent with the meeting
+ // occupants visible in scene: assert the room scene was sent with the meeting
     check('S8 meeting scene image sent', dm2.sock.images().length >= 1);
 
-    // ═══════════ S9: RELICS / MARK / TELEPORT ═══════════
+ // =========== S9: RELICS / MARK / TELEPORT ===========
     section('S9: relics, mark, teleport');
     dmSockReset(dm1);
-    // BARE (unprefixed) game-mode verbs — prefixed generics fall to the normal
-    // pipeline by design (GENERIC_PREFIXED_RE)
+ // BARE (unprefixed) game-mode verbs - prefixed generics fall to the normal
+ // pipeline by design (GENERIC_PREFIXED_RE)
     const relicRes = await dm1(P1, 'relics', { prefixed: false });
     check('S9 relics listing works', relicRes !== null && typeof relicRes.text === 'string', String(relicRes?.text || 'NULL').slice(0, 60));
-    // resolve whatever chamber P1 stands in before mark (anchor refuses live encounters)
+ // resolve whatever chamber P1 stands in before mark (anchor refuses live encounters)
     {
         const evMk = await evFresh();
         const meMk = evMk.players.find((p) => p.jid === P1);
@@ -681,23 +680,23 @@ async function main() {
     const tpRes = await dm1(P1, `${PREFIX} teleport`);
     check('S9 teleport to anchor is graceful', tpRes !== null && !/HARNESS-ERROR/.test(String(tpRes?.text || '')), String(tpRes?.text || '').slice(0, 60));
 
-    // ═══════════ S10: FEED ═══════════
+ // =========== S10: FEED ===========
     section('S10: group feed aliveness');
     const feedSock = makeSock('feed');
     await feed.flush(EV, feedSock, '');
     check('S10 feed flushed items to the host GC', feedSock.sent.length > 0, `${feedSock.sent.length} msgs`);
     check('S10 feed has war-event flavor', /⚔️|🚨|📜/.test(feedSock.texts().join('\n')));
 
-    // ═══════════ S11: STRESS ═══════════
-    section('S11: stress — rapid inputs + races');
+ // =========== S11: STRESS ===========
+    section('S11: stress - rapid inputs + races');
     const burstSock = makeSock('burst');
     const dmB = makeDM(burstSock);
-    const BURST_JID = P2; // fresh lock chain — isolates the stress from P1's history
-    // canary: a bare status on the burst player must reply in <5s
+    const BURST_JID = P2; // fresh lock chain - isolates the stress from P1's history
+ // canary: a bare status on the burst player must reply in <5s
     const canaryT0 = Date.now();
     await dmB(BURST_JID, 'status', { prefixed: false });
     console.log(`[s11] canary status replied in ${Date.now() - canaryT0}ms`);
-    // volley 1: SEQUENTIAL with timing — exposes any wedging op
+ // volley 1: SEQUENTIAL with timing - exposes any wedging op
     const seqInputs = [['relics', true], ['status', false], ['paths', true], ['map', true], ['relics', false]];
     let handledCount = 0;
     for (const [t, pre] of seqInputs) {
@@ -708,14 +707,14 @@ async function main() {
             console.log(`[s11] ${pre ? 'prefixed' : 'bare'} ${t}: ${Date.now() - t0}ms handled=${!!(r && (r.text || r.image))}`);
         } catch (e) { console.log(`[s11] ${t} THREW: ${e.message.slice(0, 60)}`); }
     }
-    // volley 2: TRUE parallel burst (the stress proper)
+ // volley 2: TRUE parallel burst (the stress proper)
     const t1 = Date.now();
     const par = await Promise.allSettled(seqInputs.map(([t, pre]) => dmB(BURST_JID, t, { prefixed: pre })));
     handledCount += par.filter((x) => x.status === 'fulfilled' && x.value && (x.value.text || x.value.image)).length;
     console.log(`[s11] parallel volley of 5 settled in ${Date.now() - t1}ms`);
     await wait(3000);
     check('S11 burst survived + inputs handled', handledCount >= 4, `${handledCount} handled of 10 (sock sends: ${burstSock.sent.length})`);
-    // simultaneous dig: P1+P2 same uncleared discovery room
+ // simultaneous dig: P1+P2 same uncleared discovery room
     const evR = await evFresh();
     const dRoom = evR.rooms.find((r) => r.type === 'discovery' && r.state !== 'CLEARED');
     if (dRoom) {
@@ -737,13 +736,13 @@ async function main() {
         check('S11 exactly one winner', wins === 1, `${wins} winners`);
     } else check('S11 simultaneous dig', true, 'no discovery room left (skipped)');
 
-    // ═══ SUMMARY ═══
+ // === SUMMARY ===
     const pass = results.filter((r) => r.ok).length;
     console.log(`\n════ E2E QA: ${pass}/${results.length} passed ════`);
     const fails = results.filter((r) => !r.ok);
     if (fails.length) {
         console.log('FAILURES:');
-        for (const f of fails) console.log(`  ❌ ${f.name} — ${f.detail}`);
+        for (const f of fails) console.log(`  ❌ ${f.name} - ${f.detail}`);
     }
     process.exit(fails.length ? 1 : 0);
 }

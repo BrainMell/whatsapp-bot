@@ -49,7 +49,7 @@ async function simulateDamageFormula() {
   const progression = require('../core/rpg/progression');
   const User = require('../core/models/User');
 
-  // Get a range of real users at different levels
+ // Get a range of real users at different levels
   const users = await User.find({}).sort({ 'progression.level': -1 }).limit(10);
   if (users.length === 0) {
     fail('test-users', 'no users in DB');
@@ -63,7 +63,7 @@ async function simulateDamageFormula() {
     const level = userDoc.progression?.level || 1;
     const className = userDoc.class || 'FIGHTER';
 
-    // Hydrate user into economy cache
+ // Hydrate user into economy cache
     await economy.reloadUserFromDB(jid);
     const user = economy.getUser(jid);
     if (!user) continue;
@@ -77,7 +77,7 @@ async function simulateDamageFormula() {
       continue;
     }
 
-    // Simulate damage: basePower + (stat * scaling) + (level * multiplier) - enemyDef
+ // Simulate damage: basePower + (stat * scaling) + (level * multiplier) - enemyDef
     const basePower = 50; // typical skill power
     const stat = baseStats.atk || baseStats.str || 10;
     const statScaling = 1.5;
@@ -85,14 +85,14 @@ async function simulateDamageFormula() {
     const enemyDef = 50;
     const expectedDamage = Math.max(1, Math.floor(basePower + (stat * statScaling) + (level * levelMult) - enemyDef));
 
-    // Check: damage should scale with level (higher level = more damage)
+ // Check: damage should scale with level (higher level = more damage)
     if (level >= 50 && expectedDamage < 100) {
       fail(`damage-scales:${jid}`, `level ${level} ${classId}: damage=${expectedDamage} (expected >100 for high level)`);
     } else if (level >= 50) {
       ok(`damage-scales:${jid}`, `level ${level} ${classId}: damage=${expectedDamage}, atk=${stat}, hp=${baseStats.hp}`);
     }
 
-    // Check: HP should NOT be 100 (the old bug)
+ // Check: HP should NOT be 100 (the old bug)
     if (baseStats.hp === 100) {
       fail(`hp-not-100:${jid}`, `level ${level} ${classId}: HP is exactly 100 - flat default bug`);
     } else if (baseStats.hp > 100) {
@@ -192,7 +192,7 @@ async function simulateMentionDisplay() {
   const connectDB = require('../db');
   await connectDB();
 
-  // Get real users
+ // Get real users
   const User = require('../core/models/User');
   const users = await User.find({}).limit(5);
 
@@ -203,7 +203,7 @@ async function simulateMentionDisplay() {
     const displayName = economy.getDisplayName(jid);
     const mentionJid = economy.getMentionJid(jid);
 
-    // Display name should NOT be an 18-digit LID number
+ // Display name should NOT be an 18-digit LID number
     const isLid = /^\d{15,20}$/.test(displayName);
     if (isLid) {
       fail(`mention:${jid}`, `display="${displayName}" looks like an LID number (should be nickname)`);
@@ -213,10 +213,10 @@ async function simulateMentionDisplay() {
       ok(`mention:${jid}`, `display="${displayName}" | mentionJid="${mentionJid}"`);
     }
 
-    // Mention JID should match the user's registered format (LID or phone)
-    // In LID-privacy groups, WhatsApp matches LID mentions - so LID is correct.
-    // In regular groups, WhatsApp matches phone mentions - so phone is correct.
-    // The key: getMentionJid should return the JID the user is registered as.
+ // Mention JID should match the user's registered format (LID or phone)
+ // In LID-privacy groups, WhatsApp matches LID mentions - so LID is correct.
+ // In regular groups, WhatsApp matches phone mentions - so phone is correct.
+ // The key: getMentionJid should return the JID the user is registered as.
     if (mentionJid && (mentionJid.endsWith('@lid') || mentionJid.endsWith('@s.whatsapp.net'))) {
       ok(`mention-jid:${jid}`, `mentionJid="${mentionJid}" (valid format)`);
     } else {
@@ -234,7 +234,7 @@ async function simulatePvPRecovery() {
 
   const pvpSystem = require('../core/rpg/pvpSystem');
 
-  // Test 1: cancelDuel with no active duel
+ // Test 1: cancelDuel with no active duel
   const r1 = pvpSystem.cancelDuel('sim-test-chat-empty-' + Date.now());
   if (r1 && r1.success === false && /no active duel/i.test(r1.message)) {
     ok('cancelDuel:empty', `returns "No active duel" when empty`);
@@ -242,7 +242,7 @@ async function simulatePvPRecovery() {
     fail('cancelDuel:empty', `unexpected: ${JSON.stringify(r1)}`);
   }
 
-  // Test 2: acceptChallenge with no invite
+ // Test 2: acceptChallenge with no invite
   try {
     const r2 = await pvpSystem.acceptChallenge(
       { sendMessage: async () => ({}) },
@@ -258,7 +258,7 @@ async function simulatePvPRecovery() {
     fail('accept:no-invite', `threw: ${e.message}`);
   }
 
-  // Test 3: declineChallenge with no invite (returns boolean, not object)
+ // Test 3: declineChallenge with no invite (returns boolean, not object)
   try {
     const r3 = pvpSystem.declineChallenge('sim-test-chat-nodecline-' + Date.now(), 'sim-test-user@s.whatsapp.net');
     if (r3 === false) {
@@ -283,7 +283,7 @@ async function simulateAbyssDisplay() {
   const fs = require('fs');
   const abyssSrc = fs.readFileSync(require('path').join(__dirname, '..', 'core', 'rpg', 'abyssSystem.js'), 'utf8');
 
-  // Check: no remaining un-floored HP display patterns
+ // Check: no remaining un-floored HP display patterns
   const unflooredHp = abyssSrc.match(/HP: \$\{[^}]*(?!Math\.floor)[^}]*\.hp\}/g);
   if (unflooredHp && unflooredHp.length > 0) {
     fail('abyss:hp-floored', `${unflooredHp.length} un-floored HP patterns remain`);
@@ -291,7 +291,7 @@ async function simulateAbyssDisplay() {
     ok('abyss:hp-floored', 'all HP display patterns use Math.floor()');
   }
 
-  // Check: no remaining un-floored maxHp patterns
+ // Check: no remaining un-floored maxHp patterns
   const unflooredMaxHp = abyssSrc.match(/\/\$\{[^}]*(?!Math\.floor)[^}]*\.maxHp\}/g);
   if (unflooredMaxHp && unflooredMaxHp.length > 0) {
     fail('abyss:maxhp-floored', `${unflooredMaxHp.length} un-floored maxHp patterns remain`);
@@ -299,22 +299,21 @@ async function simulateAbyssDisplay() {
     ok('abyss:maxhp-floored', 'all maxHp display patterns use Math.floor()');
   }
 
-  // Check: no literal /100 default (the old bug)
+ // Check: no literal /100 default (the old bug)
   if (abyssSrc.includes('/100 HP') || abyssSrc.includes('/100 EN')) {
     fail('abyss:no-100-default', 'found "/100 HP" or "/100 EN" - the old flat-default bug');
   } else {
     ok('abyss:no-100-default', 'no "/100 HP" or "/100 EN" flat-default patterns');
   }
 
-  // Check: no literal ${P()} leaks in single-quoted strings
+ // Check: no literal ${P()} leaks in single-quoted strings
   const lines = abyssSrc.split('\n');
   let leakCount = 0;
   for (const line of lines) {
     if (line.includes("'") && line.includes('${P()}')) {
-      // Check if it's inside a backtick template literal
       const before = line.split('${P()}')[0];
       if (before.split('`').length % 2 === 1) {
-        // Odd number of backticks = not in template literal
+ // Odd number of backticks = not in template literal
         leakCount++;
       }
     }
@@ -335,7 +334,7 @@ async function simulateSummonFields() {
 
   const summonSystem = require('../core/rpg/summonSystem');
 
-  // Test with multiple species
+ // Test with multiple species
   const testSpecies = ['skeleton', 'flame_elemental', 'wolf', 'wargreymon', 'beelzemon'];
   for (const species of testSpecies) {
     const mockSummon = {
@@ -358,7 +357,7 @@ async function simulateSummonFields() {
       continue;
     }
 
-    // Go service expects: name, species, currentHP, maxHp, justDied, ownerIndex, isStationary
+ // Go service expects: name, species, currentHP, maxHp, justDied, ownerIndex, isStationary
     const requiredFields = ['name', 'species', 'currentHP', 'maxHp', 'justDied', 'ownerIndex', 'isStationary'];
     const missing = requiredFields.filter(f => entity[f] === undefined || entity[f] === null);
     if (missing.length === 0) {
@@ -367,7 +366,6 @@ async function simulateSummonFields() {
       fail(`summon:${species}`, `missing fields: ${missing.join(', ')}`);
     }
 
-    // Verify species matches input
     if (entity.species !== species) {
       fail(`summon:${species}:species-match`, `entity.species="${entity.species}" != input "${species}"`);
     }
@@ -390,7 +388,7 @@ async function main() {
   try { await simulateAbyssDisplay(); } catch (e) { console.error('SIM5 error:', e.message); }
   try { await simulateSummonFields(); } catch (e) { console.error('SIM6 error:', e.message); }
 
-  // Final report
+ // Final report
   console.log(`\n${BOLD}${CYAN}═══════════════════════════════════════════════════════════════`);
   console.log(`  SIMULATION SUMMARY: ${passCount} passed, ${failCount} failed`);
   console.log(`═══════════════════════════════════════════════════════════════${RESET}\n`);

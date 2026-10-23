@@ -1,21 +1,19 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-//  MEDIA CONVERT — the ffmpeg shell-outs for animated media (Task 24).
-//
-//  ⚠ 2026-10-21: a raw GIF sent as `video` is not a valid WhatsApp video
-//  (the phone only plays MP4/H.264) — every animated lane must ship real
-//  MP4. The summon lane proved the ffmpeg pipeline; this module centralises
-//  it so baseBuilder/dockPov stop carrying their own copies.
-//
-//  Task 24 (owner 06:30Z): "the gif itself is cached, you just plaster that
-//  overlay on it depending on what you catch, instead of fusing it into the
-//  animation, so then you only have to generate the overlay and plaster it
-//  on, making the generation wayyy faster" — gifToMp4Overlaid() is that
-//  plaster: cached base GIF + cached transparent ribbon PNG → ONE ffmpeg
-//  pass → H.264 MP4. The expensive canvas work (compose + encode) happens
-//  once per (biome, level, phase, band); every catch after that only pays
-//  for this conversion.
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// MEDIA CONVERT - the ffmpeg shell-outs for animated media.
+// a raw GIF sent as `video` is not a valid WhatsApp video
+// (the phone only plays MP4/H.264) - every animated lane must ship real
+// MP4. The summon lane proved the ffmpeg pipeline; this module centralises
+// it so baseBuilder/dockPov stop carrying their own copies.
+// (owner 06:30Z): "the gif itself is cached, you just plaster that
+// overlay on it depending on what you catch, instead of fusing it into the
+// animation, so then you only have to generate the overlay and plaster it
+// on, making the generation wayyy faster" - gifToMp4Overlaid() is that
+// plaster: cached base GIF + cached transparent ribbon PNG → ONE ffmpeg
+// pass → H.264 MP4. The expensive canvas work (compose + encode) happens
+// once per (biome, level, phase, band); every catch after that only pays
+// for this conversion.
+// ===========================================================================
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -50,7 +48,7 @@ async function gifToMp4Even(gifBuf) {
  *  EVERY frame (like the `.j base` view card). The PNG rides as a single-
  *  frame input: overlay's default eof_action=repeat holds it for the whole
  *  clip, and shortest=1 INSIDE the filter ends the graph when the GIF ends.
- *  (⚠ do NOT use `-loop 1` + `-shortest` here — that combo buffers forever
+ *  (⚠ do NOT use `-loop 1` + `-shortest` here - that combo buffers forever
  *  under filter_complex on ffmpeg 6.x and hits the 30s exec timeout.) */
 async function gifToMp4Overlaid(gifBuf, pngBuf) {
     const gi = _tmp('.gif'), pi = _tmp('.png'), mo = _tmp('.mp4');

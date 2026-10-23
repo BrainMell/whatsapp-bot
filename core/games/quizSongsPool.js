@@ -1,5 +1,5 @@
 // ============================================
-// SPOT THE SONG POOL v2 (2026-09-27) - ~210 globally famous tracks
+// SPOT THE SONG POOL v2 - ~210 globally famous tracks
 // ============================================
 // Owner brief section 3: "a long list of songs that people are actually
 // likely to recognize: popular songs, relevant songs, old-school songs,
@@ -8,7 +8,7 @@
 // ============================================
 
 const SONGS = [
-  // 1960s
+ // 1960s
   { song: "Hey Jude", artist: "The Beatles", era: "1960s" },
   { song: "Let It Be", artist: "The Beatles", era: "1960s" },
   { song: "Yesterday", artist: "The Beatles", era: "1960s" },
@@ -29,7 +29,7 @@ const SONGS = [
   { song: "Ain't No Mountain High Enough", artist: "Marvin Gaye", era: "1960s" },
   { song: "The Sound of Silence", artist: "Simon & Garfunkel", era: "1960s" },
   { song: "House of the Rising Sun", artist: "The Animals", era: "1960s" },
-  // 1970s
+ // 1970s
   { song: "Bohemian Rhapsody", artist: "Queen", era: "1970s" },
   { song: "We Will Rock You", artist: "Queen", era: "1970s" },
   { song: "Don't Stop Me Now", artist: "Queen", era: "1970s" },
@@ -60,7 +60,7 @@ const SONGS = [
   { song: "Born to Run", artist: "Bruce Springsteen", era: "1970s" },
   { song: "Your Song", artist: "Elton John", era: "1970s" },
   { song: "Tiny Dancer", artist: "Elton John", era: "1970s" },
-  // 1980s
+ // 1980s
   { song: "Back In Black", artist: "AC/DC", era: "1980s" },
   { song: "Billie Jean", artist: "Michael Jackson", era: "1980s" },
   { song: "Thriller", artist: "Michael Jackson", era: "1980s" },
@@ -99,7 +99,7 @@ const SONGS = [
   { song: "Livin' Thing", artist: "Electric Light Orchestra", era: "1980s" },
   { song: "Take My Breath Away", artist: "Berlin", era: "1980s" },
   { song: "Walking on Sunshine", artist: "Katrina and the Waves", era: "1980s" },
-  // 1990s
+ // 1990s
   { song: "Enter Sandman", artist: "Metallica", era: "1990s" },
   { song: "Smells Like Teen Spirit", artist: "Nirvana", era: "1990s" },
   { song: "Come As You Are", artist: "Nirvana", era: "1990s" },
@@ -134,7 +134,7 @@ const SONGS = [
   { song: "Champagne Supernova", artist: "Oasis", era: "1990s" },
   { song: "Firestarter", artist: "The Prodigy", era: "1990s" },
   { song: "Around the World", artist: "Daft Punk", era: "1990s" },
-  // 2000s
+ // 2000s
   { song: "Lose Yourself", artist: "Eminem", era: "2000s" },
   { song: "Without Me", artist: "Eminem", era: "2000s" },
   { song: "In Da Club", artist: "50 Cent", era: "2000s" },
@@ -179,7 +179,7 @@ const SONGS = [
   { song: "Right Round", artist: "Flo Rida", era: "2000s" },
   { song: "Beautiful Day", artist: "U2", era: "2000s" },
   { song: "Chasing the Sun", artist: "The Wanted", era: "2000s" },
-  // 2010s
+ // 2010s
   { song: "Rolling in the Deep", artist: "Adele", era: "2010s" },
   { song: "Someone Like You", artist: "Adele", era: "2010s" },
   { song: "Set Fire to the Rain", artist: "Adele", era: "2010s" },
@@ -264,7 +264,7 @@ const SONGS = [
   { song: "Body Like a Back Road", artist: "Sam Hunt", era: "2010s" },
   { song: "Meant to Be", artist: "Bebe Rexha", era: "2010s" },
   { song: "Girls Like You", artist: "Maroon 5", era: "2010s" },
-  // 2020s
+ // 2020s
   { song: "Levitating", artist: "Dua Lipa", era: "2020s" },
   { song: "Blinding Lights", artist: "The Weeknd", era: "2020s" },
   { song: "Save Your Tears", artist: "The Weeknd", era: "2020s" },

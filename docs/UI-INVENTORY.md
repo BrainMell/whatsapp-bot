@@ -1,7 +1,7 @@
 # WhatsApp Bot - Complete UI Element Inventory
 
 **Repo:** `BrainMell/whatsapp-bot` · branch `audit/fix-pass-1` @ `454d259a` (latest origin, incl. `.fc` fix `507d2589` + dead-GIF-endpoint replacement `454d259a`)
-**Audit date:** 2026-09-02 · **Method:** full read of every renderer file, no sampling · **Evidence standard:** every Template below is copied verbatim from source with `file:line` locators; 12/12 randomized spot-checks by the lead auditor matched source exactly.
+**Audit date:** · **Method:** full read of every renderer file, no sampling · **Evidence standard:** every Template below is copied verbatim from source with `file:line` locators; 12/12 randomized spot-checks by the lead auditor matched source exactly.
 
 > **Live-state caveat:** this inventory reflects origin HEAD. The server's live tree could not be diffed this session (SSH key was lost in the sandbox reset - key re-paste needed). Origin's two newest commits postdate the last verified server sync, so server state may lack `454d259a` (reactions fallback chain). Everything else was content-identical as of the last live check.
 
@@ -74,7 +74,7 @@ Five distinct delivery mechanisms coexist (this is itself a consistency problem)
 
 These are the **only sanctioned** primitives - and the audit found the codebase uses them in a minority of screens. Sections below catalog the actual state.
 
-## 5. Reference-quality elements (candidates for the unified style - Task 1 step 2)
+## 5. Reference-quality elements (candidates for the unified style - step 2)
 
 Per the v3 spec ("the unified style should come from the bot's own best existing UI"), these existing elements are the strongest references:
 
@@ -99,7 +99,7 @@ Per the v3 spec ("the unified style should come from the bot's own best existing
 
 Even `GET_BANNER` itself is malformed (title row never closed). Divider width drifts *within single messages* (search list header 19 vs footer 15).
 
-### 6.2 Literal `\n` rendered to users (Task 4 family - CONFIRMED, exact registry)
+### 6.2 Literal `\n` rendered to users
 
 Double-escaped `\\n` in normal-quoted strings → users see literal backslash-n. **engine.js:12388, 12410, 12434, 12463-12467, 12509** (editissue / deleteissue / lookupban / pardon family - the exact bug the testers reported), plus the HISTORY/membership/portfolio templates in engine p6 and loan templates (`loans.js:163-171, 239-243` mix real newlines and `\n` escapes). rpg modules themselves are clean (0 artifacts in the 10 economy/social files) - the bug is engine-side.
 
@@ -133,13 +133,13 @@ engine.js **8503, 10099, 11813, 17934, 18050, 18055, 18062, 18071, 18639, 18652*
 - Wrong display text: PvP flee footer says "50% Wallet" (code: 10%, cap 5K); raid shows "Lv FIGHTER"; trivia advertises +50 XP, grants 45; respec error claims 100K×level, code is 1K×level; synergy tip claims 50% wear reduction, code ±15%; roulette shows fake "spin history"; top-3 all print 🥇🥈🥉
 - Emoji defects: `⚠️️` double selector; `🎟` vs `🎟️` mixed in one game; `NaNM members` when data missing
 
-### 6.6 Tester-issue evidence found in-code (Task 7)
+### 6.6 Tester-issue evidence found in-code
 
 - **569120 (abyss same sprite):** `combatImageGenerator.js:43` - `spriteIndex: Number(e.spriteIndex)||0` → always 0 for abyss enemies; `bossId` becomes a timestamp-garbage key that never matches the Go sprite map. Root cause confirmed.
 - **5690ff (Pyraxis no sprite):** species id `dragon` absent from `summonSprites.js` local PNGs, DIGIMON_API overrides, AND `KNOWN_MISSING` → failed digi-api fetch every render; roster grid tier draws blank portrait (no emoji fallback in that tier).
 - **5672a0 (animated cards):** T6/S/event video-vs-image ladder inlined 7× in cardSystem; roster MP4 title "SUMMON ROSTER" vs PNG/text "SUMMON CODEX" - same-screen naming drift.
 - **568c1e / 5691d3 / 56918d:** enemy types are string-IDs with tier-generic stats; bossMechanics registry never applied to abyss bosses (no archetype skills like "dragonfall"); abyss HP scaling visible in abyssSystem (plateau analysis still to be done).
-- **Reactions (Task 4):** config is 82 commands (not 85); current chain nekos.best (kept despite Cloudflare-403) → nekos.life v2 → PurrBot v2; waifu.pics removed; failure path leaks raw `error.message` to chat.
+- **Reactions:** config is 82 commands (not 85); current chain nekos.best (kept despite Cloudflare-403) → nekos.life v2 → PurrBot v2; waifu.pics removed; failure path leaks raw `error.message` to chat.
 
 ---
 
@@ -6346,7 +6346,7 @@ ${rankObj.icon} *${rankObj.name}* (Level ${level})
 ```
 ❌ You cannot unmute yourself. Ask another admin to unmute you.
 ```
-- **Notes:** anti-exploit guard (2026-07-17 fix comment).
+- **Notes:** anti-exploit guard (fix comment).
 
 ### UI-E4-86 - Muted elsewhere warning
 - **Loc:** `core/engine.js:14897-14901`
@@ -7465,7 +7465,7 @@ ${i + 1}. ${rankData.icon} *${rankData.name}* - @${memberName}
 
 
 🏰 *${name}*
-   👑 Owner: @${ownerNumber}
+   👑 @${ownerNumber}
    👥 Members: ${members.length}
    ⭐ Admins: ${admins.length}
 ━━━━━━━━━━━━
@@ -7478,7 +7478,7 @@ ${i + 1}. ${rankData.icon} *${rankData.name}* - @${memberName}
 
 
 🏰 *DragonSlayers*
-   👑 Owner: @254711122233
+   👑 @254711122233
    👥 Members: 12
    ⭐ Admins: 2
 ━━━━━━━━━━━━
@@ -7794,7 +7794,7 @@ _Building levels: Hall L2, Training L1, Treasury L0_
 - **Notes:** interest line only when rate>0; labelled-key style (`📊 *Guild Level:*`) differs from key-emoji style used in UI-E4-147.
 
 ### UI-E4-152 - Guild donate: usage + insufficient funds
-> 💡 REBUILT 2026-09-20 (owner: "donate is still old style"): bare form now
+> 💡 REBUILT ("donate is still old style"): bare form now
 > answers with a usage card (the old trailing-space gate swallowed it into
 > the unknown-command card), amounts strip thousands separators, and the
 > bank persist failure refunds the wallet. Locs: donate block in engine.js
@@ -7910,7 +7910,7 @@ _Repay with `.g guild loan repay <amount>`_
 Repay: `.g guild loan repay <amount>`
 _7-day term, then 10% of earnings auto-deducts._
 ```
-- **Notes:** overdue branch replaces `Xd left` with `⚠️ OVERDUE`. 2026-09-20 rework: the no-arg form now RESPONDS (old gate required a trailing space and silently ignored bare `.g guild loan`) and leads with the bank balance + max loan, healed from MongoDB.
+- **Notes:** overdue branch replaces `Xd left` with `⚠️ OVERDUE`. rework: the no-arg form now RESPONDS (old gate required a trailing space and silently ignored bare `.g guild loan`) and leads with the bank balance + max loan, healed from MongoDB.
 
 ### UI-E4-156 - Loan repay: usage / no loans
 - **Loc:** `core/engine.js:16938-16944`
@@ -7992,7 +7992,7 @@ recruit variant:
 - **Notes:** -
 
 ### UI-E4-160 - Guild loan: credit-failure / unresolvable account
-- **Loc:** `core/engine.js` (guild loan block, 2026-09-20 rework)
+- **Loc:** `core/engine.js` (guild loan block, rework)
 - **Trigger:** borrower account unresolvable BEFORE any money moves (pre-gate), or addMoney false
 - **Type:** error
 - **Banner:** none
@@ -8006,7 +8006,7 @@ addMoney-false variant:
 ❌ Loan failed: could not credit your wallet. Nothing was borrowed and nothing was deducted from the guild bank.
 _If this keeps happening, ask a mod to check your account registration._
 ```
-- **Notes:** 2026-09-20 rework - root cause was the DB-heal lookup never querying the LidMapping-resolved phone number (domain swap only). Borrower is now healed via all JID variants BEFORE any mutation, and a [GuildLoan] console diagnostic names the JID when refusal happens.
+- **Notes:** rework - root cause was the DB-heal lookup never querying the LidMapping-resolved phone number (domain swap only). Borrower is now healed via all JID variants BEFORE any mutation, and a [GuildLoan] console diagnostic names the JID when refusal happens.
 
 ### UI-E4-161 - Guild loan success
 - **Loc:** `core/engine.js:17024`
@@ -12473,7 +12473,7 @@ BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} item <num> [target]\``
 ```
 ❌ Usage: `.g item <num> [target]`
 ```
-- **Notes:** comment at L22451-54 documents this shortcut was 100% dead until a 2026-08-31 fix restored `target`.
+- **Notes:** comment at L22451-54 documents this shortcut was 100% dead until a fix restored `target`.
 
 ### UI-E5-152 - item use failure
 - **Loc:** `core/engine.js:22473-22477`
@@ -15973,7 +15973,7 @@ await sock.sendMessage(chatId, { text: result.message });
 ```
 🥚 *HATCH SUCCESS!* A Flame Wolfcub emerges from the egg!
 ```
-- **Notes:** Redirect added by FIX 2026-08-07 - `.s use <egg>` used to fall into the generic use path and error out. Success path also refreshes resonances silently.
+- **Notes:** Redirect added by FIX - `.s use <egg>` used to fall into the generic use path and error out. Success path also refreshes resonances silently.
 
 ### UI-C1-36 - ITEM USED! confirmation
 - **Loc:** `core/commands/rpgCommands.js:1014-1015`
@@ -16540,7 +16540,7 @@ _(Mage Heritage)_
 
 💚 Healing: 120 HP
 ```
-- **Notes:** Heritage note italic-in-parens only when skill came from parent class. Effect block picks ONE of damage/heal/buff lines. **Buff line here says `+${value}%` but the ABILITIES list (UI-C1-66) had this `%` removed as "misleading" (2026-08-18 fix comments) - the two screens still disagree on whether buffs are percent or flat.** `⭐ *FULLY MASTERED!*` only at max.
+- **Notes:** Heritage note italic-in-parens only when skill came from parent class. Effect block picks ONE of damage/heal/buff lines. **Buff line here says `+${value}%` but the ABILITIES list (UI-C1-66) had this `%` removed as "misleading" (fix comments) - the two screens still disagree on whether buffs are percent or flat.** `⭐ *FULLY MASTERED!*` only at max.
 
 ### UI-C1-62 - Skill reset: nothing to reset
 - **Loc:** `core/commands/skillCommands.js:324-332`
@@ -16679,7 +16679,7 @@ msg += `📊 \`${getPrefix()} skill tree\` to learn more skills`;
 💡 `.j combat ability <num>` in battle
 📊 `.j skill tree` to learn more skills
 ```
-- **Notes:** costDisplay: `⚡ N` / `✨ Passive` / `⚡ 0` (0-cost actives fixed 2026-08-18); cdDisplay appends ` | ⏱️ CD:N`. Heritage group label italic vs current bold. Buff effect lines show FLAT values (`+15 attack for 3t`) - deliberately de-percented per fix comment, still contradicted by UI-C1-61's `+%` render. 0-cost passives show `✨ Passive` with no number. `animation` defaults `🔮`. Counting is global (1..N) across groups - matches the `<num>` used by `.j combat ability <num>`.
+- **Notes:** costDisplay: `⚡ N` / `✨ Passive` / `⚡ 0` (0-cost actives fixed ); cdDisplay appends ` | ⏱️ CD:N`. Heritage group label italic vs current bold. Buff effect lines show FLAT values (`+15 attack for 3t`) - deliberately de-percented per fix comment, still contradicted by UI-C1-61's `+%` render. 0-cost passives show `✨ Passive` with no number. `animation` defaults `🔮`. Counting is global (1..N) across groups - matches the `<num>` used by `.j combat ability <num>`.
 
 ### UI-C1-67 - Learn skill: Essence Mirror required
 - **Loc:** `core/commands/skillCommands.js:509-514`
@@ -18153,7 +18153,7 @@ ${echo?.icon || '💫'} ${echo?.name || 'Unknown'} - ${echo?.desc || ''}
 
 📅 Obtained: 8/3/2026 via egg:hatch
 ```
-- **Notes:** `[...]` = conditional blocks (lineage L637-647, runes L650-656). Soul Echo line renders a dangling ` - ` when no echo (`${echo?.desc || ''}`). ID hidden per FIX 2026-08-05 (L658-659). Direct send.
+- **Notes:** `[...]` = conditional blocks (lineage L637-647, runes L650-656). Soul Echo line renders a dangling ` - ` when no echo (`${echo?.desc || ''}`). ID hidden per FIX (L658-659). Direct send.
 
 ### UI-C2-19 - Release usage error
 - **Loc:** `core/commands/summonCommands.js:677-679`
@@ -18472,7 +18472,7 @@ Usage: `.j summon hatch <egg_id>`
 
 _Buy a Basic Egg from the shop. Higher-tier eggs are crafted from fragments dropped by wild summons in the Abyss._
 ```
-- **Notes:** Egg IDs as literal code spans. Updated by AUDIT FIX 2026-08-01 (L978). Direct send.
+- **Notes:** Egg IDs as literal code spans. Updated by AUDIT FIX (L978). Direct send.
 
 ### UI-C2-33 - Hatch result relay
 - **Loc:** `core/commands/summonCommands.js:986-988`
@@ -18606,7 +18606,7 @@ Use `${getPrefix()} summon trial <id>` to attempt.
 
 Use `.j summon trial <id>` to attempt.
 ```
-- **Notes:** Shows full 8-char partial ID (contradicts UI-C2-12's "last 8 chars" for deploy - consistent, but hidden on the details card per FIX 2026-08-05). Direct send.
+- **Notes:** Shows full 8-char partial ID (contradicts UI-C2-12's "last 8 chars" for deploy - consistent, but hidden on the details card per FIX ). Direct send.
 
 ### UI-C2-39 - Trial attempt relay
 - **Loc:** `core/commands/summonCommands.js:1103-1104`
@@ -19273,7 +19273,7 @@ After challenging, the target uses `.j accept` to accept. Then both players take
 
 💡 You can also reply to a player's message and run `.j summon duel` to target them.
 ```
-- **Notes:** Indented `•` bullets with 2-space prefix (unique in file). Documents reply-to targeting (FIX 2026-08-05). Direct send.
+- **Notes:** Indented `•` bullets with 2-space prefix (unique in file). Documents reply-to targeting (FIX ). Direct send.
 
 ### UI-C2-72 - Duel: self-target
 - **Loc:** `core/commands/summonCommands.js:1555-1557`
@@ -19547,7 +19547,7 @@ const summon = resolveSummon(summons, summonNum);  // ← ReferenceError: summon
 ```
 (no user-facing message - handler throws; engine-level error handling shows its own message)
 ```
-- **Notes:** BUG: five handlers copy-pasted `summonNum` from cmdSkillTree (defined only there, L1626). With an id arg, `.summon evolve / equip-gear / bond / traits / ai` crash **before** their not-found errors (L1753 `❌ Summon not found. Use \`${getPrefix()} summon list\`…`, L1813/L1901-style `'❌ Summon not found.'` at 1813, 1943, 1974, 2083) and before every downstream render (UI-C2-84..86, 88..91, 99, 101, 106..108 - all flagged DEAD). cmdUnequip had the same bug and was fixed (L1897-1900 comment, FIX 2026-08-31) - the other five were not. No-arg help screens of these commands still work.
+- **Notes:** BUG: five handlers copy-pasted `summonNum` from cmdSkillTree (defined only there, L1626). With an id arg, `.summon evolve / equip-gear / bond / traits / ai` crash **before** their not-found errors (L1753 `❌ Summon not found. Use \`${getPrefix()} summon list\`…`, L1813/L1901-style `'❌ Summon not found.'` at 1813, 1943, 1974, 2083) and before every downstream render (UI-C2-84..86, 88..91, 99, 101, 106..108 - all flagged DEAD). cmdUnequip had the same bug and was fixed (L1897-1900 comment, FIX ) - the other five were not. No-arg help screens of these commands still work.
 
 ### UI-C2-84 - Evolve: canEvolve denial (DEAD)
 - **Loc:** `core/commands/summonCommands.js:1761-1763`
@@ -19787,7 +19787,7 @@ Stats: ATK +12, MAG +6
 ```
 ❌ Bag full - make space first.
 ```
-- **Notes:** Inline fallback string co-owned with **inventorySystem section** message. Guards gear destruction (FIX 2026-08-31). Direct send.
+- **Notes:** Inline fallback string co-owned with **inventorySystem section** message. Guards gear destruction (FIX ). Direct send.
 
 ### UI-C2-97 - Unequip success
 - **Loc:** `core/commands/summonCommands.js:1921`
@@ -24183,7 +24183,7 @@ Your Balance: 12,500
 
 _Respec cost scales with level: 100K × level._
 ```
-- **Notes:** Direct send, quoted. **STALE TEXT:** cost formula is actually `1000 × level` (L443, rebalanced 2026-08-17) but the message still advertises "100K × level" - a 100× lie; also no currency symbol on the numbers (engine's Zeni errors use 💰+symbol). Inconsistent with the comment block L415-419 and engine.js:11330 comment (also stale).
+- **Notes:** Direct send, quoted. **STALE TEXT:** cost formula is actually `1000 × level` (L443, rebalanced ) but the message still advertises "100K × level" - a 100× lie; also no currency symbol on the numbers (engine's Zeni errors use 💰+symbol). Inconsistent with the comment block L415-419 and engine.js:11330 comment (also stale).
 
 ### UI-C3-161 - respec: failed + refund
 - **Loc:** `core/commands/progressionCommands.js:456-463`
@@ -25209,7 +25209,7 @@ _Reference a copy by its Coll # (collection) or Card ID + Copy #._
 
 _Reference a copy by its Coll # (collection) or Card ID + Copy #._
 ```
-- **Notes:** The recent fix (issue 567139, 2026-09-01): `🆔` line now shows library cardId (e.g. `3-04217`) + ` · Copy #N` (copyNumber rendered ONLY when >1 match, 2167-2171; single-match renders omit the whole 🆔 line). Locations searched in order: Main Deck (Slot #N) → Deck: name (Slot #N) → Collection (Coll #N) - Coll # computed from coll-only numbering (matches `.coll`). Footer only when >1 match. `buildFcResultsMessage` is a pure exported function (unit-tested in scripts/test_fc_display.js). Error: `❌ Card *"${query}"* not found in your decks or collection.` (2139). Unknown-card variant: see UI-CD-41.
+- **Notes:** The recent fix (issue 567139, ): `🆔` line now shows library cardId (e.g. `3-04217`) + ` · Copy #N` (copyNumber rendered ONLY when >1 match, 2167-2171; single-match renders omit the whole 🆔 line). Locations searched in order: Main Deck (Slot #N) → Deck: name (Slot #N) → Collection (Coll #N) - Coll # computed from coll-only numbering (matches `.coll`). Footer only when >1 match. `buildFcResultsMessage` is a pure exported function (unit-tested in scripts/test_fc_display.js). Error: `❌ Card *"${query}"* not found in your decks or collection.` (2139). Unknown-card variant: see UI-CD-41.
 
 ### UI-CD-41 - fc unknown-card variant (not in DB)
 - **Loc:** `core/rpg/cardSystem.js:2157-2162`
@@ -26589,7 +26589,7 @@ Commands:
 ➥ `.t2edeck price <slot> <price>`
 ➥ `.t2edeck clear`
 ```
-- **Notes:** Image = same Go grid as `.eshop` (UI-CD-18). Send uses `chatId` param - fixed 2026-08-31 (was `reply._chatId`, always undefined → image was DEAD code; see comment 4512-4515). Text fallback:
+- **Notes:** Image = same Go grid as `.eshop` (UI-CD-18). Send uses `chatId` param - fixed (was `reply._chatId`, always undefined → image was DEAD code; see comment 4512-4515). Text fallback:
 ```
 🎨 *ESHOP DECK* (${filledSlots}/16 filled)
 
@@ -26783,7 +26783,7 @@ Look up your slot numbers with the bag command first.
 | 7 | "PURCHASE COMPLETE!" template | 3 variants (cardSystem 1075, 3239; itemMarket 206) with different tax/copy lines |
 | 8 | tier view render | TRIPlicated: cmdCardsTier (23), tcoll --tier (62) + maker (34) share the group loop with different footers/icons |
 | 9 | Search-result numeric-reply selection | **NONE EXISTS in these files** - search results (info/cs/fc) are resolved by Card ID or Coll # commands only; numeric selection exists solely in market flows: `.buycard <n>` (UI-CD-67/68), `.bid <n> <amt>` (UI-CD-80/81), `.eshop deck buy <n>` (UI-CD-56/57), `.buyitem <n>` (UI-CD-105/107). The "dead numeric search render" from the bug list therefore points at UI-CD-46 (info top-15, no pagination → results beyond 15 unreachable) and its duplicate UI-CD-47. |
-| 10 | t2edeck image send | WAS dead (`reply._chatId` undefined) - fixed 2026-08-31, now live (UI-CD-99) |
+| 10 | t2edeck image send | WAS dead (`reply._chatId` undefined) - fixed now live (UI-CD-99) |
 | 11 | engine.js `cardSystem.getInst()/saveRoles()/loadRoles()` (11862+ etc.) | Dead calls - functions NOT exported by module.exports (4754-4767); silently caught. Engine-side; noted for cross-reference. |
 
 ## Data tables (not dumped)
@@ -26945,7 +26945,7 @@ Data stats (verified by loading the module): 45 class keys, 56 branch trees, 272
 💡 `.j combat ability <num>` in battle
 📊 `.j skill tree` to learn more skills
 ```
-- **Notes:** `costDisplay` = `⚡ ${cost}` or `✨ Passive` (0-cost actives show `⚡ 0` - 2026-08-18 fix comment); `cdDisplay` = ` | ⏱️ CD:${cooldown}`; `animation` falls back through `ability.animation || ability.effect?.animation || '🔮'` - the animation emojis come straight from skillTree.js data (e.g. `⚔️💥`, `🛡️✨`). Group label: current class `${icon} *${name}*`, ancestors `${icon} _${name} Heritage_`. Empty state: `` `⚡ *No abilities learned yet!*\n\nUse \`${getPrefix()} skill tree\` to invest skill points into abilities.\n\n📊 You earn 1 point per level + bonus points every 10 levels.` `` (skillCommands.js:434). Combat-time skill feedback (cooldown/energy/passive errors) renders ability.name from this data in guildAdventure.js:8815/8859/8872.
+- **Notes:** `costDisplay` = `⚡ ${cost}` or `✨ Passive` (0-cost actives show `⚡ 0` - fix comment); `cdDisplay` = ` | ⏱️ CD:${cooldown}`; `animation` falls back through `ability.animation || ability.effect?.animation || '🔮'` - the animation emojis come straight from skillTree.js data (e.g. `⚔️💥`, `🛡️✨`). Group label: current class `${icon} *${name}*`, ancestors `${icon} _${name} Heritage_`. Empty state: `` `⚡ *No abilities learned yet!*\n\nUse \`${getPrefix()} skill tree\` to invest skill points into abilities.\n\n📊 You earn 1 point per level + bonus points every 10 levels.` `` (skillCommands.js:434). Combat-time skill feedback (cooldown/energy/passive errors) renders ability.name from this data in guildAdventure.js:8815/8859/8872.
 
 ### UI-SK-04 - Dead UI data: COMBO_ABILITIES / CLASS_SYNERGIES / ABILITY_MECHANICS display strings
 - **Loc:** `core/rpg/skillTree.js:5594-5710` (ABILITY_MECHANICS, COMBO_ABILITIES, CLASS_SYNERGIES)
@@ -28050,7 +28050,7 @@ stat row: 'HP' 'ATK' 'DEF' 'MAG' 'SPD' + values  (colored labels, 140px columns)
 [80×80 portrait; sprite miss → species emoji at 32px, e.g. '🐉']
 ```
 - **Example render:** (never rendered) opaque rarity-tinted card with emoji fallback portrait, full 5-stat block, big index numeral.
-- **Notes:** Kept as unexported dead code; richer than the live card (stats, personality, Tamed badge) - the live grid lost those fields in the 2026-08-03 sparklinlabs redesign. Duplicated render logic risk: any future edit must be mirrored in both functions.
+- **Notes:** Kept as unexported dead code; richer than the live card (stats, personality, Tamed badge) - the live grid lost those fields in the sparklinlabs redesign. Duplicated render logic risk: any future edit must be mirrored in both functions.
 
 ### UI-SM-21 - Detail card PNG - header + portrait
 - **Loc:** `core/rpg/summonRosterRenderer.js:573-661`
@@ -29451,7 +29451,7 @@ const imageBuffer = options.bypassQueue
     : await goService.generateCombatImage(payload);        // PvE (queued)
 return { success: true, buffer, mimeType: 'image/png' };
 ```
-- **Example render:** one composed PNG: background + player & enemy & summon sprites + HP bars + name labels + rank/floor badge + golden turn-indicator ellipse under the current attacker (per FIX 2026-08-03 comment).
+- **Example render:** one composed PNG: background + player & enemy & summon sprites + HP bars + name labels + rank/floor badge + golden turn-indicator ellipse under the current attacker (per FIX comment).
 - **Notes:** VFX overlays (rpgasset/vfx/attack, dark, holy, magic …) chosen by Go service from `element`; skill name/damage numbers are drawn into the image. Sent to the chat alongside the text caption (UI-CB-25/26) by guildAdventure.js. Error path returns `{success:false}` and the caption still goes out as text.
 
 ### UI-CB-21 - Animated MP4 combat video (disabled path)
@@ -29476,7 +29476,6 @@ const mimeType = (videoBuffer[0]===0x00 && videoBuffer[1]===0x00 && videoBuffer[
 ```
 // To re-enable animated combat: restore the old routing:
 //   if (turnInfo && turnInfo.action) {
-//       return await generateAnimatedCombatImage(players, enemies, { ...options, action: turnInfo.action });
 //   }
 return await generateCombatImage(players, enemies, options);
 ```
@@ -29574,7 +29573,7 @@ _Drips echo in the dark..._
 
 ⏳ _Next action loading..._
 ```
-- **Notes:** Weapon-verb mapping is regex over the equipped main-hand name (hammer|club|mace|maul → SMASHES etc.); deliberately suppressed for named skills (FIX 2026-07-17 "everything pierces"). `turnNumber` fallback `'?'`. Damage/heal/crit/miss lines use bold numerics with sign prefix.
+- **Notes:** Weapon-verb mapping is regex over the equipped main-hand name (hammer|club|mace|maul → SMASHES etc.); deliberately suppressed for named skills (FIX "everything pierces"). `turnNumber` fallback `'?'`. Damage/heal/crit/miss lines use bold numerics with sign prefix.
 
 ### UI-CB-27 - Combat end caption (victory / defeat)
 - **Loc:** `core/rpg/combatIntegration.js:254-285`
@@ -29985,7 +29984,7 @@ ${enemy.icon} *${enemy.name}* attacks ${target.name} but 💨 MISSES!
 ```
 ❌ Inventory full! Sell items or upgrade inventory size.
 ```
-- **Notes:** Security-guard messages (negative-qty dupe fix 2026-08-31). Success path returns structured data (no message) - callers render "You got X" themselves.
+- **Notes:** Security-guard messages (negative-qty dupe fix ). Success path returns structured data (no message) - callers render "You got X" themselves.
 
 ### UI-CB-50 - removeItem errors
 - **Loc:** `core/rpg/inventorySystem.js:217-247`
@@ -31521,7 +31520,7 @@ _${sorted.length - 10} other participants received 10K XP + 5K Zeni._
 
 _40 other participants received 10K XP + 5K Zeni._
 ```
-- **Notes:** `🥇🥈🥉 Top 1` prints ALL THREE medals regardless of placement (i=0,1,2 all render `🥇🥈🥉 Top ${i+1}` → "🥇🥈🥉 Top 2", "🥇🥈🥉 Top 3"). `${runeDrop ? ' | 💎 Rune' : ''}` is dead - runeDrop is always null (runes removed 2026-08-17, L534/L545). `_N other participants_` shows `${sorted.length - 10}` even when ≤10 attackers (negative number possible).
+- **Notes:** `🥇🥈🥉 Top 1` prints ALL THREE medals regardless of placement (i=0,1,2 all render `🥇🥈🥉 Top ${i+1}` → "🥇🥈🥉 Top 2", "🥇🥈🥉 Top 3"). `${runeDrop ? ' | 💎 Rune' : ''}` is dead - runeDrop is always null (runes removed L534/L545). `_N other participants_` shows `${sorted.length - 10}` even when ≤10 attackers (negative number possible).
 
 ### UI-GL-43 - raid admin messages
 - **Loc:** `core/rpg/raidSystem.js:667-817`
@@ -34351,7 +34350,6 @@ The police caught you!
 ```
 report.push(`  ${user.nickname || userId}: -${tax.toLocaleString()} (${bracketLabel})`)
 // bracketLabel = `${(bracket.rate * 100).toFixed(0)}% over ${bracket.threshold.toLocaleString()}`
-// returns { playersTaxed, totalTaxed, report: report.slice(0, 10) }
 ```
 - **Example render (would be, if any caller formatted it):**
 ```
@@ -37799,10 +37797,10 @@ Your game has been cancelled due to inactivity.
 Try 1: https://nekos.best/api/v2/${nekosCat}           → res.data.results[0].url   (4s timeout; 403 fast-fail)
 Try 2: https://nekos.life/api/v2/img/${nlCat}           → res.data.url              (8s)
 Try 3: https://api.purrbot.site/v2/img/sfw/${pbCat}/gif → res.data.link             (8s)
-(waifu.pics REMOVED 2026-09-01 - api.waifu.pics NXDOMAIN)
+(waifu.pics REMOVED - api.waifu.pics NXDOMAIN)
 ```
 - **Example render:** N/A (internal) - failure surfaces as UI-MS-89: `All SFW GIF endpoints failed (nekos.best is Cloudflare-blocked; nekos.life and PurrBot both failed).`
-- **Notes:** **Current config state (2026-09-01 "ENDPOINT OVERHAUL", Task 4):** nekos.best stays FIRST despite being Cloudflare-403-blocked (kept as cheap fast-fail that auto-recovers); waifu.pics REMOVED (NXDOMAIN - dead domain); nekos.life v2 and PurrBot v2 ADDED as sources 2 and 3. fallbacks.js exports: `WAIFU_PICS_MAP` (L1-62, now UNUSED by handler - dead export kept deliberately), `NEKOS_BEST_MAP` (L64-92, still used by Try 1), `NEKOS_LIFE_CATS` (8 cats: hug kiss pat cuddle tickle feed slap smug) + `NEKOS_LIFE_REDIRECT` (11 mappings), `PURRBOT_CATS` (16 cats: kiss hug pat slap bite cuddle feed lick poke tickle blush cry dance angry pout smile) + `PURRBOT_REDIRECT` (~70 mappings). Coverage gaps: with nekos.best blocked, many categories degrade to PurrBot approximations - e.g. `kill`→'slap' (L137 comment: "no live source has 'kill' anymore"), `hide`→nekos.life 'wink' vs PurrBot 'blush' (inconsistent approximations between sources). Handler also retries the GIF download once with a spoofed Chrome User-Agent (L153-161).
+- **Notes:** **Current config state ("ENDPOINT OVERHAUL", ):** nekos.best stays FIRST despite being Cloudflare-403-blocked (kept as cheap fast-fail that auto-recovers); waifu.pics REMOVED (NXDOMAIN - dead domain); nekos.life v2 and PurrBot v2 ADDED as sources 2 and 3. fallbacks.js exports: `WAIFU_PICS_MAP` (L1-62, now UNUSED by handler - dead export kept deliberately), `NEKOS_BEST_MAP` (L64-92, still used by Try 1), `NEKOS_LIFE_CATS` (8 cats: hug kiss pat cuddle tickle feed slap smug) + `NEKOS_LIFE_REDIRECT` (11 mappings), `PURRBOT_CATS` (16 cats: kiss hug pat slap bite cuddle feed lick poke tickle blush cry dance angry pout smile) + `PURRBOT_REDIRECT` (~70 mappings). Coverage gaps: with nekos.best blocked, many categories degrade to PurrBot approximations - e.g. `kill`→'slap' (L137 comment: "no live source has 'kill' anymore"), `hide`→nekos.life 'wink' vs PurrBot 'blush' (inconsistent approximations between sources). Handler also retries the GIF download once with a spoofed Chrome User-Agent (L153-161).
 
 ---
 

@@ -1,10 +1,10 @@
 // ============================================
-// 🏋️ GUILD WAR LOAD TEST — overnight requirement (owner brief §9d)
+// GUILD WAR LOAD TEST - overnight requirement (owner brief §9d)
 // Large-scale concurrent activity against the REAL modules + TEST db:
-//   L1: 40 players   normal-scale
-//   L2: 100 players  normal-max
-//   L3: 150 players  alignment-scale map
-//   L4: 2 concurrent events
+// L1: 40 players normal-scale
+// L2: 100 players normal-max
+// L3: 150 players alignment-scale map
+// L4: 2 concurrent events
 // Measures: per-action latency p50/p95/p99, DB ops per action (mongoose
 // debug counter), event-loop lag (monitorEventLoopDelay), memory growth,
 // map-render throughput. Run: node scripts/gw_load.js
@@ -42,15 +42,14 @@ async function runLoad(label, playerCount, opts = {}) {
     const rooms = require('../core/rpg/guildWar/rooms');
     const GuildWarEvent = require('../core/models/GuildWarEvent');
 
-    // DB op counter via mongoose debug
+ // DB op counter via mongoose debug
     let dbOps = 0, counting = false;
     require('mongoose').set('debug', (coll, method) => { if (counting) dbOps++; });
 
-    // event-loop lag monitor
+ // event-loop lag monitor
     const delay = monitorEventLoopDelay({ resolution: 20 });
     delay.enable();
 
-    // create + register + start
     const created = await state.createEvent({
         type: opts.alignment ? 'alignment' : 'normal',
         hostGroupId: `load-${label}@g.us`, initiatedBy: 'load',
@@ -67,11 +66,11 @@ async function runLoad(label, playerCount, opts = {}) {
     if (!started.ok) { console.log(`[${label}] start FAILED: ${started.reason}`); return; }
     const ev = started.event;
 
-    // mock sock (records sends, zero network)
+ // mock sock (records sends, zero network)
     const sent = [];
     const sock = { async sendMessage(chatId, content) { sent.push(1); } };
 
-    // ── movement wave: every player moves 5 times, all concurrent per wave ──
+ // -- movement wave: every player moves 5 times, all concurrent per wave --
     counting = true;
     const latencies = [];
     let failures = 0;
@@ -85,12 +84,12 @@ async function runLoad(label, playerCount, opts = {}) {
             } catch (e) { failures++; }
             latencies.push(performance.now() - a);
         }));
-        // cooldown is 6s per player; waves are spaced by cooldown for realism
+ // cooldown is 6s per player; waves are spaced by cooldown for realism
         await new Promise((r) => setTimeout(r, wave < 4 ? 6200 : 0));
     }
     counting = false;
 
-    // ── map renders: 12 players concurrently ──
+ // -- map renders: 12 players concurrently --
     const renderer = require('../core/rpg/guildWar/mapRenderer');
     const renderT0 = performance.now();
     const fresh = await state.getEvent(created.event.eventId, { fresh: true });
@@ -115,7 +114,7 @@ async function runLoad(label, playerCount, opts = {}) {
         sendsToHost: sent.length,
     };
     console.log(`[LOAD] ${JSON.stringify(result)}`);
-    // cleanup: abort the event so the next run starts clean
+ // cleanup: abort the event so the next run starts clean
     await state.abortEvent(created.event.eventId, 'load cleanup');
     return result;
 }
@@ -130,7 +129,7 @@ async function runLoad(label, playerCount, opts = {}) {
     results.push(await runLoad('L1-40', 40));
     results.push(await runLoad('L2-100', 100));
     results.push(await runLoad('L3-150-align', 150, { alignment: true }));
-    // L4: two events at once — run two halves concurrently on separate events
+ // L4: two events at once - run two halves concurrently on separate events
     const state = require('../core/rpg/guildWar/state');
     const dmRouter = require('../core/rpg/guildWar/dmRouter');
     const mk = async (tag, n) => {

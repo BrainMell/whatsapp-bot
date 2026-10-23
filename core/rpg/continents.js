@@ -1,20 +1,17 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-//  CONTINENTS — the five realms of the First World, each tied to ONE biome.
-//
-//  A guild picks a realm when it is founded; the realm decides the biome of its
-//  guild kingdom AND of every member's home base. The guild gets a marker at a
-//  seeded random spot of the realm's land (lore: where its charter-stone stands)
-//  and member home bases sit in a loose cluster around that marker.
-//
-//  Pure data + pure functions (no I/O). Map geometry is CANONICAL: every realm has a
-//  fixed shape (fixed seed) in a 0..1 × 0..1 map space, so markers are comparable
-//  across guilds and the continent map never changes between renders.
-//
-//  Cosmology fit (cosmology_orbits.md invariants): realms are lands *of the First
-//  World*; they scatter across all four quadrants; timelines never appear as regions.
-//  Names are the surveyor field-names already charted in worldMapRenderer's catalog.
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// CONTINENTS - the five realms of the First World, each tied to ONE biome.
+// A guild picks a realm when it is founded; the realm decides the biome of its
+// guild kingdom AND of every member's home base. The guild gets a marker at a
+// seeded random spot of the realm's land (lore: where its charter-stone stands)
+// and member home bases sit in a loose cluster around that marker.
+// Pure data + pure functions (no I/O). Map geometry is CANONICAL: every realm has a
+// fixed shape (fixed seed) in a 0..1 × 0..1 map space, so markers are comparable
+// across guilds and the continent map never changes between renders.
+// Cosmology fit (cosmology_orbits.md invariants): realms are lands *of the First
+// World*; they scatter across all four quadrants; timelines never appear as regions.
+// Names are the surveyor field-names already charted in worldMapRenderer's catalog.
+// ===========================================================================
 
 // Order matters: it is the same order as kingdomTerrain.BIOMES, so a guild with no
 // stored continent keeps exactly the biome it already had (hash % 5).
@@ -64,14 +61,14 @@ const BY_KEY = Object.fromEntries(CONTINENTS.map((c) => [c.key, c]));
 const BY_BIOME = Object.fromEntries(CONTINENTS.map((c) => [c.biome, c]));
 // the sea at the heart of the chart (existing charted world "the drowned sea")
 const CENTRE_SEA = { name: 'The Drowned Sea', at: [0.50, 0.43] };
-// the planet itself (owner 2026-10-18: "call it the name of this specific planet — give it a name")
+// the planet itself ("call it the name of this specific planet - give it a name")
 const PLANET = {
     name: 'Aldafold',
     kicker: 'THE COSMOLOGY - THE LANDS OF THE FIRST WORLD',
     subtitle: 'five lands, five guild kingdoms, one drowned sea between them',
 };
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+// -- helpers ------------------------------------------------------------------
 function mulberry32(seed) {
     let a = seed >>> 0;
     return function () { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = Math.imul(t ^ (t >>> 7), 61 | t); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -108,7 +105,7 @@ function continentOf(entity) {
 }
 const biomeOf = (entity) => continentOf(entity).biome;
 
-// ── canonical geometry: land masks traced from core/rpgasset/continents/five_realms.jpg ─────────
+// -- canonical geometry: land masks traced from core/rpgasset/continents/five_realms.jpg ---------
 // Map space is the chart image normalised to 0..1 (u = x/864, v = y/1210). The mask grid
 // (scripts/kingdom3d/make_realm_mask.py) marks which cells are land of which realm.
 const fs = require('fs');
@@ -120,7 +117,7 @@ function mask() {
     const j = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'rpgasset', 'continents', 'realm_mask.json'), 'utf8'));
     const byId = Object.fromEntries(Object.entries(j.ids).map(([k, v]) => [v, k]));
     const gh = j.rows.length, gw = j.rows[0].length;
-    // distance (in grid cells) from each land cell to the nearest non-land cell of its realm — chamfer pass
+ // distance (in grid cells) from each land cell to the nearest non-land cell of its realm - chamfer pass
     const dist = new Float32Array(gw * gh);
     const land = (x, y) => x >= 0 && y >= 0 && x < gw && y < gh && j.rows[y][x] !== '.';
     const same = (x, y, ch) => x >= 0 && y >= 0 && x < gw && y < gh && j.rows[y][x] === ch;
@@ -154,7 +151,7 @@ function regionAt(c, u, v) {
     return best;
 }
 
-/** a seeded RANDOM spot on the realm's land (kept off the coast) — the guild's charter-stone. */
+/** a seeded RANDOM spot on the realm's land (kept off the coast) - the guild's charter-stone. */
 function markerFor(guildName, continentKey) {
     const c = get(continentKey) || defaultFor(guildName);
     const m = mask();
@@ -203,7 +200,7 @@ function baseBiome({ owner, guildName, guild, continent }) {
 
 function list() { return CONTINENTS.map((c) => ({ key: c.key, name: c.name, biome: c.biome, epithet: c.epithet })); }
 function chooserText(prefix = '.j') {
-    return CONTINENTS.map((c, i) => `${i + 1}. *${c.name}* — ${c.epithet}\n   _${c.guide}_  (\`${prefix} guild create <name> | <type> | ${c.key}\`)`).join('\n');
+    return CONTINENTS.map((c, i) => `${i + 1}. *${c.name}* - ${c.epithet}\n   _${c.guide}_  (\`${prefix} guild create <name> | <type> | ${c.key}\`)`).join('\n');
 }
 
 module.exports = { CONTINENTS, BY_KEY, BY_BIOME, CENTRE_SEA, PLANET, get, find, defaultFor, continentOf, biomeOf, landAt, inside, edgeDist, regionAt, CHART, markerFor, placementFor, placementOf, baseSites, baseBiome, list, chooserText, hashStr, mulberry32 };

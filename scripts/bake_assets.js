@@ -1,6 +1,6 @@
 'use strict';
-// bake_assets.js — Task 47-i "utilise all the KayKit assets" proof: stills per biome
-//   node scripts/bake_assets.js [outDir]
+// bake_assets.js - i "utilise all the KayKit assets" proof: stills per biome
+// node scripts/bake_assets.js [outDir]
 const fs = require('fs');
 const OUT = process.argv[2] || '/tmp/assets47i';
 process.env.QA_MODE = '1';
@@ -9,8 +9,8 @@ process.env.QA_MODE = '1';
     const r = require('../core/rpg/homesteadBaseRenderer');
     const g = require('../core/rpg/guildBaseRenderer');
 
-    // LOW-level guild per biome: hall 2 / training 1 / treasury 2 — barracks, drill lawn,
-    // market square, postern and the wilderness windmill must all show at LOW level now
+ // LOW-level guild per biome: hall 2 / training 1 / treasury 2 - barracks, drill lawn,
+ // market square, postern and the wilderness windmill must all show at LOW level now
     const biomes = ['isle', 'desert', 'tundra', 'highlands', 'volcanic'];
     for (const biome of biomes) {
         const gs = {
@@ -23,7 +23,7 @@ process.env.QA_MODE = '1';
         fs.writeFileSync(`${OUT}/guild_${biome}_low.png`, cv.toBuffer('image/png'));
         console.log('guild', biome, 'low: ok');
     }
-    // MAXED highlands guild: castle + 2nd barracks + market + archeryrange + catapult tower
+ // MAXED highlands guild: castle + 2nd barracks + market + archeryrange + catapult tower
     {
         const gs = {
             name: 'Iron Wolves', level: 12, archetype: 'ADVENTURER',
@@ -35,7 +35,7 @@ process.env.QA_MODE = '1';
         fs.writeFileSync(`${OUT}/guild_highlands_max.png`, cv.toBuffer('image/png'));
         console.log('guild highlands max: ok');
     }
-    // homestead: coast biome (FARM) with blacksmith lvl3 — barn in the farm patch, fence gate on the walk
+ // homestead: coast biome (FARM) with blacksmith lvl3 - barn in the farm patch, fence gate on the walk
     const state = {
         owner: 'Mellow', biome: 'isle',
         structures: [

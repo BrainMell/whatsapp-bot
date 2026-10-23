@@ -1,18 +1,18 @@
 /**
- * anilist.js — AniList GraphQL client for all anime discovery commands.
+ * anilist.js - AniList GraphQL client for all anime discovery commands.
  *
  * 💡 FIX 2026-10-11: api.jikan.moe became TCP-unreachable from BOTH boxes AND
  * the wider internet (Hetzner edge blackholes; bot logs show the whole
  * `.j anime *` suite timing out). characterResolver already proved AniList is
  * reachable from both boxes (its adapter has been live for months), so the
  * entire anime suite now runs on AniList GraphQL (free, no key, POST-only,
- * 90 req/min — comfortably above our traffic).
+ * 90 req/min - comfortably above our traffic).
  *
  * Every fetcher NORMALIZES to the Jikan v4 item shape the handlers and the
  * two numeric-selection blocks already consume:
  *   { title, title_english, score, rank, synopsis, episodes, year, type,
  *     status, url, members, favorites, images: { jpg: { large_image_url } } }
- * — so rendering code stays byte-identical and only the fetch swaps.
+ * - so rendering code stays byte-identical and only the fetch swaps.
  */
 
 const axios = require("axios");
@@ -22,16 +22,16 @@ const ANILIST_URL = "https://graphql.anilist.co";
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 wa-jake-anime/1.0";
 
-// ── response cache (AniList rate limit is 90/min — cache keeps us far under) ──
+// -- response cache (AniList rate limit is 90/min - cache keeps us far under) --
 const cache = new LRUCache({ max: 300, ttl: 1000 * 60 * 10 });
 
-// ── GraphQL core ─────────────────────────────────────────────────────────────
+// -- GraphQL core -------------------------------------------------------------
 async function gql(query, variables = {}, timeoutMs = 15000) {
   const body = { query, variables };
   const { data } = await axios.post(ANILIST_URL, body, {
     timeout: timeoutMs,
     headers: { "Content-Type": "application/json", Accept: "application/json", "User-Agent": UA },
-    // AniList answers 200 even for GraphQL-level errors — validate below.
+ // AniList answers 200 even for GraphQL-level errors - validate below.
     validateStatus: (s) => s < 500,
   });
   if (data?.errors?.length) {
@@ -40,7 +40,7 @@ async function gql(query, variables = {}, timeoutMs = 15000) {
   return data?.data;
 }
 
-// ── Jikan-shape normalization ────────────────────────────────────────────────
+// -- Jikan-shape normalization ------------------------------------------------
 function stripHtml(s) {
   if (!s) return "";
   return String(s)
@@ -51,7 +51,7 @@ function stripHtml(s) {
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
-    .replace(/&mdash;/g, "—")
+    .replace(/&mdash;/g, "-")
     .replace(/&nbsp;/g, " ")
     .trim();
 }
@@ -67,7 +67,7 @@ function normMedia(m) {
   const title =
     m.title?.romaji || m.title?.english || m.title?.native || "Unknown";
   return {
-    // Jikan-compat fields (consumed by engine handlers + selection blocks)
+ // Jikan-compat fields (consumed by engine handlers + selection blocks)
     title,
     title_english: m.title?.english || null,
     score: normScore(m.averageScore),
@@ -82,7 +82,7 @@ function normMedia(m) {
     favorites: m.favourites,
     genres: m.genres || [],
     season: m.season ? String(m.season).toLowerCase() : null,
-    // raw escape hatch
+ // raw escape hatch
     _raw: m,
     images: {
       jpg: {
@@ -112,7 +112,7 @@ const MEDIA_FIELDS = `
   bannerImage
 `;
 
-// ── fetchers (each returns an array of normalized items unless noted) ────────
+// -- fetchers (each returns an array of normalized items unless noted) --------
 async function searchAnime(query, perPage = 15) {
   const key = `al:search:${query.toLowerCase()}:${perPage}`;
   if (cache.has(key)) return cache.get(key);
@@ -165,7 +165,7 @@ function nextSeason() {
 }
 
 async function airing(perPage = 20) {
-  // Jikan "seasons/now" ≈ this season, currently releasing, popular first.
+ // Jikan "seasons/now" ≈ this season, currently releasing, popular first.
   const { season, year } = currentSeason();
   const key = `al:airing:${season}${year}:${perPage}`;
   if (cache.has(key)) return cache.get(key);
@@ -179,7 +179,7 @@ async function airing(perPage = 20) {
   ).catch(() => null);
   let list = (data?.Page?.media || []).map(normMedia).filter(Boolean);
   if (!list.length) {
-    // season boundary safety net: anything releasing right now
+ // season boundary safety net: anything releasing right now
     data = await gql(
       `query ($n: Int) {
         Page(page: 1, perPage: $n) {
@@ -239,8 +239,8 @@ async function top(perPage = 25) {
 }
 
 async function randomAnime() {
-  // AniList has no server-side random — sample a random slice of the
-  // popularity-ordered catalog and pick one item from it.
+ // AniList has no server-side random - sample a random slice of the
+ // popularity-ordered catalog and pick one item from it.
   const page = 1 + Math.floor(Math.random() * 120);
   const data = await gql(
     `query ($p: Int) {
@@ -258,8 +258,8 @@ async function randomAnime() {
 async function studioAnime(name, perPage = 15) {
   const key = `al:studio:${name.toLowerCase()}:${perPage}`;
   if (cache.has(key)) return cache.get(key);
-  // 💡 UPDATE: real studio search — the old Jikan handler searched anime by
-  // the studio's NAME (wrong data). AniList has a first-class Studio entity.
+ // UPDATE: real studio search - the old Jikan handler searched anime by
+ // the studio's NAME (wrong data). AniList has a first-class Studio entity.
   const data = await gql(
     `query ($s: String, $n: Int) {
       Studio(search: $s) {
@@ -278,7 +278,7 @@ async function studioAnime(name, perPage = 15) {
   return list;
 }
 
-// ── watch-link resolver (replaces dead anikai.to) ────────────────────────────
+// -- watch-link resolver (replaces dead anikai.to) ----------------------------
 // anikai.to's DNS is gone (ERR_NAME_NOT_RESOLVED from both boxes, its domain
  // was parked) and the Node-side resolver also had a broken cheerio selector
 // ('aref*=...'). Watch links now come from AniList's own externalLinks, which
@@ -324,7 +324,7 @@ async function getWatchLink(title) {
   } catch (err) {
     console.error("[AniList] watch-link resolve failed:", err.message);
   }
-  // Last resort: AniList search page (always resolves)
+ // Last resort: AniList search page (always resolves)
   return `https://anilist.co/search/anime?search=${encodeURIComponent(title)}`;
 }
 
@@ -339,6 +339,6 @@ module.exports = {
   getWatchLink,
   normMedia,
   stripHtml,
-  // aliases for Jikan-era call sites
-  getAnikaiBestMatch: getWatchLink, // 💡 compat alias — old name, new engine
+ // aliases for Jikan-era call sites
+  getAnikaiBestMatch: getWatchLink, // compat alias - old name, new engine
 };

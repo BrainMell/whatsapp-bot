@@ -1,10 +1,10 @@
-// Focused tests for the 2026-09-28 fix pass:
-//   1. buildRandomMixedPlan: random mode mixes logos/songs/images/lore
-//   2. wikipediaImage relevance anchor (title-token overlap + collage reject)
-//   3. antinude exemption: functions are CALLED, not truthiness-checked;
-//      2026-09-28 owner directive (refined): group ADMINS are subject to
-//      antinude; General Mods, GC owner and the bot owner remain exempt
-//   4. visionVerify: breaker + shrink fail-open behavior (no provider in sandbox)
+// Focused tests for the fix pass:
+// 1. buildRandomMixedPlan: random mode mixes logos/songs/images/lore
+// 2. wikipediaImage relevance anchor (title-token overlap + collage reject)
+// 3. antinude exemption: functions are CALLED, not truthiness-checked;
+// owner directive (refined): group ADMINS are subject to
+// antinude; General Mods, GC owner and the bot owner remain exempt
+// 4. visionVerify: breaker + shrink fail-open behavior (no provider in sandbox)
 process.chdir(__dirname + "/..");
 
 let pass = 0, fail = 0;
@@ -14,7 +14,7 @@ function t(name, cond) {
 }
 
 (async () => {
-  // ── 1. random mixed plan ──
+ // -- 1. random mixed plan --
   console.log("\n[1] buildRandomMixedPlan");
   const quiz = require("../core/games/quiz.js");
   const plan = (cfg, avail) => quiz.buildSectionPlan(Object.assign({ questionCount: 20, sectionSize: 10, difficulty: "medium", imageQuestionCount: 0, audioQuestionCount: 0, randomMode: true }, cfg), avail || { characters: true, cosmology: true });
@@ -31,38 +31,38 @@ function t(name, cond) {
   t("first section is logos (fast start)", p[0].domain === "logos");
   t("picture round present when characters available", p.some((s) => s.domain === "images"));
   t("sections ordered logos -> lore -> song", p.findIndex((s) => s.domain === "song") > 0);
-  // no characters -> no picture round, still totals 20
+ // no characters -> no picture round, still totals 20
   p = plan({}, { characters: false, cosmology: true });
   t("no picture round without characters", !p.some((s) => s.domain === "images"));
   t("no-characters plan still totals 20", p.reduce((a, s) => a + s.perSection, 0) === 20);
-  // -images flag respected exactly
+ // -images flag respected exactly
   p = plan({ imageQuestionCount: 5 });
   t("-images 5 honored in mixed plan", p.find((s) => s.domain === "images")?.perSection === 5);
   t("flagged plan still totals 20", p.reduce((a, s) => a + s.perSection, 0) === 20);
-  // small random quiz: unchanged single-section behaviour
+ // small random quiz: unchanged single-section behaviour
   p = plan({ questionCount: 7 });
   t("random <9 questions stays simple (no logos section)", !p.some((s) => s.domain === "logos"));
-  // franchise mode unaffected
+ // franchise mode unaffected
   p = quiz.buildSectionPlan({ questionCount: 20, sectionSize: 10, difficulty: "medium", imageQuestionCount: 0, audioQuestionCount: 0, randomMode: false }, { characters: true });
   t("franchise mode plan has no media sections", !p.some((s) => s.domain === "logos" || s.domain === "song"));
   t("franchise mode plan totals 20", p.reduce((a, s) => a + s.perSection, 0) === 20);
 
-  // ── 2. wikipediaImage relevance anchor ──
+ // -- 2. wikipediaImage relevance anchor --
   console.log("\n[2] wikipediaImage relevance (LIVE network)");
   const quizLore = require("../core/games/quizLore.js");
-  // the two documented production failures must NOT come back
+ // the two documented production failures must NOT come back
   const dogman = await quizLore.wikipediaImage("Dogman Hunter x Hunter", 700, "files");
   t("Dogman no longer resolves to the KXM collage", !dogman || !/kxm/i.test(dogman.page || ""));
   if (dogman) console.log(`      -> files mode gave: ${dogman.page}`);
   const aldo = await quizLore.wikipediaImage("Aldo The Crystal Trap zelda", 700, "article");
   t("Aldo (Crystal Trap) no longer resolves to greyhound dog-show", !aldo || !/greyhound/i.test(aldo.page || ""));
   if (aldo) console.log(`      -> article mode gave: ${aldo.page}`);
-  // sanity: a REAL subject still resolves
+ // sanity: a REAL subject still resolves
   const goku = await quizLore.wikipediaImage("Goku Dragon Ball", 700, "article");
   t("Goku still resolves via wikipedia article", !!goku && !!goku.url);
   if (goku) console.log(`      -> article mode gave: ${goku.page}`);
 
-  // ── 3. antinude exemption semantics ──
+ // -- 3. antinude exemption semantics --
   console.log("\n[3] antinude exemption checks");
   const antinude = require("../core/utils/antinude.js");
   const fakeSock = { sendMessage: async () => ({}) };
@@ -74,8 +74,8 @@ function t(name, cond) {
     isGlobalMod: () => false, isGcOwner: () => false,
   }, over);
   const msgWithImage = { key: { fromMe: false, participant: "999999@s.whatsapp.net" }, message: { imageMessage: { mimetype: "image/jpeg", url: "x" } } };
-  // with download failing fast (fake url), the KEY assertion: we reach the
-  // download path (logged), never the exemption skip
+ // with download failing fast (fake url), the KEY assertion: we reach the
+ // download path (logged), never the exemption skip
   const origLog = console.log;
   const lines = [];
   console.log = (...a) => { lines.push(a.join(" ")); };
@@ -110,7 +110,7 @@ function t(name, cond) {
   console.log = origLog;
   t("functions returning false no longer exempt everyone", !lines.some((l) => l.includes("sender exempt")));
 
-  // ── 4. gif/webp videoMessage extraction ──
+ // -- 4. gif/webp videoMessage extraction --
   console.log("\n[4] extractImageMedia gif-as-videoMessage");
   const gifMsg = { message: { videoMessage: { mimetype: "image/gif", url: "x" } } };
   const ext = antinude.extractImageMedia(gifMsg);

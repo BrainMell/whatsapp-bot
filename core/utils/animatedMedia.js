@@ -1,24 +1,21 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-//  ANIMATED MEDIA UTIL — make shoob .webm event cards visible in WhatsApp
-//
-//  Owner bug 2026-10-21: ".j eshop some cards aren't showing, 9 and 4"
-//  Root cause: the only two T6 cards in the deck (E-03004 Sylphiette,
-//  E-03000 Kurisu) point at cdn.shoob.gg *.webm files. WhatsApp cannot
-//  render WebM at all — raw webm bytes sent as {video} surface as an
-//  invisible/broken bubble, so those cards "don't show".
-//
-//  Fix = the same pipeline mentoringCommands shipped 2026-10-08 for the
-//  IDENTICAL E-03004 white-screen report: local ffmpeg → H.264 mp4
-//  (yuv420p, +faststart, -an) sent as {video, gifPlayback:true} which
-//  WhatsApp plays like a GIF. Extracted here so every card path (eshop
-//  flex, coll view, spawns) can share it without a circular dependency
-//  (mentoringCommands requires cardSystem, so cardSystem can't require it).
-//
-//  Disk cache is keyed by sha1 of the SOURCE bytes — same file never
-//  converts twice, works with or without a card id, and is safe across
-//  multiple bot processes on one box (unique tmp name + atomic rename).
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// ANIMATED MEDIA UTIL - make shoob .webm event cards visible in WhatsApp
+// Owner bug ".j eshop some cards aren't showing, 9 and 4"
+// Root cause: the only two T6 cards in the deck (E-03004 Sylphiette,
+// E-03000 Kurisu) point at cdn.shoob.gg *.webm files. WhatsApp cannot
+// render WebM at all - raw webm bytes sent as {video} surface as an
+// invisible/broken bubble, so those cards "don't show".
+// Fix = the same pipeline mentoringCommands shipped for the
+// IDENTICAL E-03004 white-screen report: local ffmpeg → H.264 mp4
+// (yuv420p, +faststart, -an) sent as {video, gifPlayback:true} which
+// WhatsApp plays like a GIF. Extracted here so every card path (eshop
+// flex, coll view, spawns) can share it without a circular dependency
+// (mentoringCommands requires cardSystem, so cardSystem can't require it).
+// Disk cache is keyed by sha1 of the SOURCE bytes - same file never
+// converts twice, works with or without a card id, and is safe across
+// multiple bot processes on one box (unique tmp name + atomic rename).
+// ===========================================================================
 
 const fs = require('fs');
 const path = require('path');
@@ -28,7 +25,7 @@ const { execFile } = require('child_process');
 const FFMPEG_BIN = process.env.FFMPEG_PATH || 'ffmpeg';
 const CACHE_DIR = process.env.ANIMATED_MEDIA_CACHE_DIR || '/tmp/card-media';
 const FFMPEG_TIMEOUT_MS = 90000;   // matches mentoring's proven budget
-const POSTER_TIMEOUT_MS = 25000;   // single frame — much cheaper than a remux
+const POSTER_TIMEOUT_MS = 25000;   // single frame - much cheaper than a remux
 const MAX_OUTPUT_BYTES = 16 * 1024 * 1024; // WhatsApp media ceiling guard
 
 const stats = { conversions: 0, cacheHits: 0, posterHits: 0, failures: 0 };
@@ -54,7 +51,7 @@ function runFfmpeg(args, timeoutMs) {
     execFile(FFMPEG_BIN, args, { timeout: timeoutMs }, (err, _stdout, stderr) => {
       if (err) {
         const tail = String(stderr || '').split('\n').filter(Boolean).slice(-2).join(' | ');
-        return reject(new Error(`ffmpeg: ${err.message}${tail ? ' — ' + tail : ''}`));
+        return reject(new Error(`ffmpeg: ${err.message}${tail ? ' - ' + tail : ''}`));
       }
       resolve();
     });
@@ -75,16 +72,16 @@ async function webmToMp4(buf) {
     try { return fs.readFileSync(hit); } catch { stats.cacheHits--; }
   }
   fs.mkdirSync(CACHE_DIR, { recursive: true });
-  // unique tmp names + atomic rename: two bot processes converting the same
-  // card at once must never hand WhatsApp a half-written file
+ // unique tmp names + atomic rename: two bot processes converting the same
+ // card at once must never hand WhatsApp a half-written file
   const rnd = `${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
   const srcPath = path.join(CACHE_DIR, `${sha}.src-${rnd}`);
   const tmpPath = path.join(CACHE_DIR, `${sha}.mp4-${rnd}.tmp`);
   const outPath = path.join(CACHE_DIR, `${sha}.mp4`);
   fs.writeFileSync(srcPath, buf);
   try {
-    // -an: shoob cards carry no audio; libx264+yuv420p+faststart plays everywhere
-    // (same argument set as mentoringCommands.ffmpegToMp4 — proven in production)
+ // -an: shoob cards carry no audio; libx264+yuv420p+faststart plays everywhere
+ // (same argument set as mentoringCommands.ffmpegToMp4 - proven in production)
     await runFfmpeg(['-y', '-i', srcPath, '-f', 'mp4', '-c:v', 'libx264', '-preset', 'veryfast',
       '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', tmpPath], FFMPEG_TIMEOUT_MS);
     if (!fs.statSync(tmpPath).size) throw new Error('ffmpeg produced an empty file');

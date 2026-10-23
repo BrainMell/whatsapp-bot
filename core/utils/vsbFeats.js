@@ -1,17 +1,16 @@
 // ===============================================
 // VSBFEATS.JS - VS Battles Wiki direct integration
 // (MediaWiki API parse layer for powerscale)
-//
-// WHY THIS EXISTS (2026-10-18, owner brief):
+// WHY THIS EXISTS (owner brief):
 // 1. Character images: static.wikia.nocookie.net 403-blocks datacenter IPs
-//    (verified on both boxes - every UA/variant). The old engine fetch could
-//    NEVER work. Fix: relay through wsrv.nl (IPv4 forced - the boxes have no
-//    working v6 egress), which fetches server-side and re-serves as JPEG.
+// (verified on both boxes - every UA/variant). The old engine fetch could
+// NEVER work. Fix: relay through wsrv.nl (IPv4 forced - the boxes have no
+// working v6 egress), which fetches server-side and re-serves as JPEG.
 // 2. Feats: the Go service strips the parenthetical justifications from the
-//    stat values (Maki's real Speed value carries "(Can cut and dodge rubber
-//    bullets)" etc; Go returned the bare rating). The MediaWiki parse gives
-//    the FULL value incl. feats + User_blog calc links -> per-category
-//    deep-dives (.j powerscale speed goku) are now possible and reliable.
+// stat values (Maki's real Speed value carries "(Can cut and dodge rubber
+// bullets)" etc; Go returned the bare rating). The MediaWiki parse gives
+// the FULL value incl. feats + User_blog calc links -> per-category
+// deep-dives (.j powerscale speed goku) are now possible and reliable.
 // ===============================================
 
 const axios = require("axios");
@@ -21,7 +20,7 @@ const MW_API = "https://vsbattles.fandom.com/api.php";
 const UA = "WA-Bot/1.0 (powerscale; +https://vsbattles.fandom.com)";
 
 // IPv4-only agents: the boxes resolve AAAA but have no v6 egress (probed
-// 2026-10-18 - wsrv/weserv timed out until -4 was forced).
+// - wsrv/weserv timed out until -4 was forced).
 const V4_AGENT = new https.Agent({ family: 4, keepAlive: true });
 
 // ---------- tiny HTML utils ----------
@@ -131,14 +130,14 @@ function splitCategory(raw) {
     const text = String(raw || "").trim();
     if (!text) return { category: null, query: "" };
     const tokens = text.split(/\s+/);
-    // 1) "feats <name>" / "<name> feats" -> overview mode marker, not a category
+ // 1) "feats <name>" / "<name> feats" -> overview mode marker, not a category
     if (tokens.length > 1 && tokens[0].toLowerCase() === "feats") {
         return { category: null, featsOverview: true, query: tokens.slice(1).join(" ") };
     }
     if (tokens.length > 1 && tokens[tokens.length - 1].toLowerCase() === "feats") {
         return { category: null, featsOverview: true, query: tokens.slice(0, -1).join(" ") };
     }
-    // 2) multi-word category first ("attack potency goku")
+ // 2) multi-word category first ("attack potency goku")
     for (const take of [3, 2]) {
         if (tokens.length > take) {
             const head = tokens.slice(0, take).join(" ").toLowerCase();
@@ -151,7 +150,7 @@ function splitCategory(raw) {
             }
         }
     }
-    // 3) single-word category at either end (never eat the whole query)
+ // 3) single-word category at either end (never eat the whole query)
     if (tokens.length > 1) {
         const first = tokens[0].toLowerCase();
         if (CATEGORY_ALIASES[first]) {
@@ -226,9 +225,9 @@ function cachePut(url, data) {
 // universal stat paragraph: <p[any attrs]><b>[<a ...>]Label[:][</a>][:]</b> value</p>
 // colon may sit inside the anchor ("<a>Tier:</a></b>", Nightwing style) or
 // outside it ("<a>Speed</a>:</b>", Maki style)
-// 💡 FIX (2026-10-18, owner report ".j powerscale ap superman" -> "No Attack
+// FIX (owner report ".j powerscale ap superman" -> "No Attack
 // Potency stat found"): DCEU-style pages open the stat paragraph with a <br />
-// ("_<p><br />\n<b><a ...>Attack Potency</a>:</b> <b>Town level+</b>…</p>_") —
+// ("_<p><br />\n<b><a ...>Attack Potency</a>:</b> <b>Town level+</b>…</p>_") -
 // the old pattern only allowed whitespace between <p> and <b>, so EVERY stat
 // with that prefix was silently skipped (AP vanished from the whole page while
 // Tier/Speed parsed fine). Now <br> variants are accepted too.
@@ -276,7 +275,7 @@ async function parseCharacter(pageUrl) {
         isVerse: false,
     };
 
-    // -- summary: first <p> after the Summary heading --
+ // -- summary: first <p> after the Summary heading --
     const sumIdx = html.search(/<h2><span class="mw-headline" id="Summary">/);
     if (sumIdx > -1) {
         const after = html.slice(sumIdx, sumIdx + 6000);
@@ -286,22 +285,22 @@ async function parseCharacter(pageUrl) {
         }
     }
 
-    // character image: first file figure in the page (P&S tabs carry renders)
+ // character image: first file figure in the page (P&S tabs carry renders)
     const imgRe = /<figure[^>]*>[\s\S]*?<img[^>]*src="(https:\/\/static\.wikia\.nocookie\.net[^"]+)"[^>]*>/i;
     const imgMatch = html.match(imgRe);
     if (imgMatch) {
         out.imageUrl = imgMatch[1];
-        // also collect other renders from the first two tab contents for fallback
+ // also collect other renders from the first two tab contents for fallback
         const all = [...html.matchAll(/src="(https:\/\/static\.wikia\.nocookie\.net[^"]+\/scale-to-width-down\/\d+[^"]*)"/g)].map((m) => m[1]);
         out.imageUrls = [...new Set(all)].slice(0, 4);
     }
 
-    // 💡 REFACTOR (2026-10-18): stat-block extraction moved into the PURE
-    // extractStatsFromHtml() below — unit-testable without network (QA feeds
-    // synthetic markup variants: Maki/Nightwing colon styles, DCEU <p><br/>).
+ // REFACTOR: stat-block extraction moved into the PURE
+ // extractStatsFromHtml() below - unit-testable without network (QA feeds
+ // synthetic markup variants: Maki/Nightwing colon styles, DCEU <p><br/>).
     const extracted = extractStatsFromHtml(html);
     if (extracted.isVerse) {
-        // verse / item / disambiguation pages have no P&S section
+ // verse / item / disambiguation pages have no P&S section
         out.isVerse = true;
         cachePut(urlKey, out);
         return out;
@@ -315,42 +314,42 @@ async function parseCharacter(pageUrl) {
 
 /**
  * Pure extraction: page HTML -> { stats, categories, keyLine, isVerse }.
- * No network, no cache — QA can feed synthetic markup variants directly.
+ * No network, no cache - QA can feed synthetic markup variants directly.
  * @param {string} html full parsed page HTML (action=parse prop=text)
  */
 function extractStatsFromHtml(html) {
     const res = { stats: new Map(), categories: [], keyLine: "", isVerse: false };
 
-    // -- Powers and Stats block --
+ // -- Powers and Stats block --
     const psIdx = html.search(/<h2><span class="mw-headline" id="Powers_and_Stats">/);
     const psBlock = psIdx > -1 ? html.slice(psIdx, psIdx + 300000) : "";
     const nextH2 = psBlock.slice(20).search(/<h2><span class="mw-headline"/);
     const block = nextH2 > -1 ? psBlock.slice(0, nextH2 + 20) : psBlock;
 
     if (!block) {
-        // verse / item / disambiguation pages have no P&S section
+ // verse / item / disambiguation pages have no P&S section
         res.isVerse = true;
         return res;
     }
 
-    // -- tab labels in order (variant names) --
+ // -- tab labels in order (variant names) --
     const tabLabels = [...block.matchAll(TAB_LABEL_RE)].map((m) =>
         htmlToText(m[1]).replace(/▾|▸/g, "").trim()
     );
 
-    // canonical Key line - parsed FIRST so pipe-style per-key values can be
-    // split into named variants ("Incomplete HR | Complete HR" style pages)
+ // canonical Key line - parsed FIRST so pipe-style per-key values can be
+ // split into named variants ("Incomplete HR | Complete HR" style pages)
     const keyP = block.match(KEY_P_RE);
     if (keyP) res.keyLine = htmlToText(keyP[1]).slice(0, 160);
     const keyNames = res.keyLine
         ? res.keyLine.split(/\s*\|\s*/).map((k) => k.trim()).filter(Boolean)
         : [];
 
-    // -- walk stat paragraphs --
-    // variant attribution strategy:
-    //   multi-key pages (Key line lists N keys): the Nth occurrence of a stat
-    //   label maps to the Nth key (VSBW repeats the stat set per key block).
-    //   single-key pages: nearest preceding tab label (outfit tabs etc).
+ // -- walk stat paragraphs --
+ // variant attribution strategy:
+ // multi-key pages (Key line lists N keys): the Nth occurrence of a stat
+ // label maps to the Nth key (VSBW repeats the stat set per key block).
+ // single-key pages: nearest preceding tab label (outfit tabs etc).
     const stats = new Map(); // label -> [{variant, text, calcs}]
     const occurrence = new Map(); // label -> count seen so far
     let m;
@@ -363,7 +362,7 @@ function extractStatsFromHtml(html) {
 
         let tabVariant = "";
         if (keyNames.length <= 1) {
-            // nearest preceding tab label (single-key pages only)
+ // nearest preceding tab label (single-key pages only)
             let before = 0;
             let re = /<div class="wds-tabs__tab-label"/g;
             let mm;
@@ -374,18 +373,18 @@ function extractStatsFromHtml(html) {
             tabVariant = before > 0 && tabLabels[before - 1] ? tabLabels[before - 1] : "";
         }
 
-        // per-key pipe split (Maki-style compact pages)
+ // per-key pipe split (Maki-style compact pages)
         let segments = [rawHtml];
         let segVariants = [tabVariant];
         if (keyNames.length > 1 && labelCanon !== "Key") {
             const occ = occurrence.get(labelCanon) || 0;
             const parts = splitTopLevelPipes(rawHtml).map((p) => p.trim()).filter((p) => htmlToText(p).length > 0);
             if (parts.length === keyNames.length) {
-                // compact merged-value style: segments = keys
+ // compact merged-value style: segments = keys
                 segments = parts;
                 segVariants = keyNames;
             } else {
-                // separate paragraph per key block: occurrence-index mapping
+ // separate paragraph per key block: occurrence-index mapping
                 segVariants = [occ < keyNames.length ? keyNames[occ] : ""];
             }
             occurrence.set(labelCanon, occ + 1);
@@ -393,7 +392,7 @@ function extractStatsFromHtml(html) {
 
         for (let si = 0; si < segments.length; si++) {
             const segHtml = segments[si];
-            // calcs: User_blog links with anchor text
+ // calcs: User_blog links with anchor text
             const calcs = [];
             const calcRe = /<a[^>]*href="(\/wiki\/User_blog:[^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
             let cm;
@@ -409,7 +408,7 @@ function extractStatsFromHtml(html) {
         }
     }
 
-    // build rating/feats per entry + Notable Techniques from <h3> section
+ // build rating/feats per entry + Notable Techniques from <h3> section
     for (const [label, entries] of stats) {
         res.categories.push(label);
         for (const e of entries) {
@@ -419,7 +418,7 @@ function extractStatsFromHtml(html) {
         }
     }
 
-    // Notable Attacks/Techniques h3 section (category "Notable Techniques")
+ // Notable Attacks/Techniques h3 section (category "Notable Techniques")
     const natIdx = html.search(/<h3><span class="mw-headline" id="(?:Notable_Attacks.2FTechniques|Notable_Techniques)"/);
     if (natIdx > -1) {
         const seg = html.slice(natIdx, natIdx + 60000);
@@ -529,7 +528,7 @@ async function fetchImageBuffer(imageUrl, width = 640) {
             console.log(`[vsbFeats] relay miss (${url.slice(8, 24)}...): ${e.message}`);
         }
     }
-    // last resort: direct (dev machines / unblocked networks)
+ // last resort: direct (dev machines / unblocked networks)
     try {
         const res = await axios.get(imageUrl, {
             responseType: "arraybuffer",
@@ -564,7 +563,7 @@ module.exports = {
     fetchImageBuffer,
     splitRatingAndFeats,
     splitTopLevelPipes,
-    // pure HTML->stats extraction (QA feeds synthetic markup variants)
+ // pure HTML->stats extraction (QA feeds synthetic markup variants)
     extractStatsFromHtml,
     STAT_P_RE,
     CATEGORY_ALIASES,

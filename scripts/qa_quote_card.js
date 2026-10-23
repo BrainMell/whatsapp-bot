@@ -1,26 +1,26 @@
 #!/usr/bin/env node
 /**
- * qa_quote_card.js — 2026-10-12
+ * qa_quote_card.js - 2026-10-12
  * Regression QA for `.j quote <text>` (owner: "Make a .j qoute that takes
  * the text that follows and turns it into text over an appropriate image").
  * Run from repo root: node scripts/qa_quote_card.js
  *
  * Sections:
- *  A. Parsing — author attribution (--by / —by / –by), case + newline
+ *  A. Parsing - author attribution (--by / -by / -by), case + newline
  *     preservation, empty-author handling.
- *  B. Background keyword picker — stopwords, 4-word cap, 60-char cap,
+ *  B. Background keyword picker - stopwords, 4-word cap, 60-char cap,
  *     fallbacks.
- *  C. Renderer — real canvas renders (offline, gradient + supplied photo),
+ *  C. Renderer - real canvas renders (offline, gradient + supplied photo),
  *     PNG output sanity, length guards, emoji stripping (tofu protection).
- *  D. Engine wiring — require, handler, with-args dispatch ordered BEFORE
+ *  D. Engine wiring - require, handler, with-args dispatch ordered BEFORE
  *     the bare random-quote block, `qoute` alias, case-preserving text
  *     source (cleanTxt), senderJid passed explicitly (scope fix), registry
  *     entry, bare random-quote path intact.
- *  D2. Scope trap — the quote dispatch lives OUTSIDE the prefix-dispatch
+ *  D2. Scope trap - the quote dispatch lives OUTSIDE the prefix-dispatch
  *     block, so it must NEVER reference primaryCmd/cmdArgs/currentPrefix
  *     (owner screenshot 10:51Z: "primaryCmd is not defined" broke every
  *     command dispatched after the quote block).
- *  E. Scope guards — cooldown untouched for quote, sticker bypass matcher
+ *  E. Scope guards - cooldown untouched for quote, sticker bypass matcher
  *     unchanged.
  */
 const fs = require("fs");
@@ -30,7 +30,7 @@ const ROOT = path.resolve(__dirname, "..");
 let pass = 0, fail = 0;
 function ok(name, cond, extra) {
   if (cond) { pass++; console.log(`  ✅ ${name}`); }
-  else { fail++; console.log(`  ❌ ${name}${extra ? " — " + extra : ""}`); }
+  else { fail++; console.log(`  ❌ ${name}${extra ? " - " + extra : ""}`); }
 }
 
 const quoteCard = require(path.join(ROOT, "core/utils/quoteCard"));
@@ -38,7 +38,7 @@ const engineSrc = fs.readFileSync(path.join(ROOT, "core/engine.js"), "utf8");
 const regSrc = fs.readFileSync(path.join(ROOT, "core/utils/commandRegistry.js"), "utf8");
 
 (async () => {
-// ── A. Parsing ───────────────────────────────────────────────────────────────
+// -- A. Parsing ---------------------------------------------------------------
 console.log("\nA. parseQuoteInput");
 let r = quoteCard.parseQuoteInput("Be water my friend --by Bruce Lee");
 ok("--by attribution", r.text === "Be water my friend" && r.author === "Bruce Lee", JSON.stringify(r));
@@ -58,7 +58,7 @@ r = quoteCard.parseQuoteInput("line one\nline two");
 ok("hard newline preserved", r.text === "line one\nline two", JSON.stringify(r));
 ok("null input safe", quoteCard.parseQuoteInput(null).text === "");
 
-// ── B. Background keyword picker ─────────────────────────────────────────────
+// -- B. Background keyword picker ---------------------------------------------
 console.log("\nB. pickBackgroundQuery");
 let q = quoteCard.pickBackgroundQuery("The only thing we have to fear is fear itself");
 ok("stopwords dropped", q === "fear fear itself" || q === "thing fear fear itself", q);
@@ -73,7 +73,7 @@ ok("null input → fallback", quoteCard.pickBackgroundQuery(null) === "aesthetic
 q = quoteCard.pickBackgroundQuery("sunrise over the mountains and the valley below the clouds forever");
 ok("long input capped at 60 chars", q.length <= 60, q);
 
-// ── C. Renderer (real canvas, offline) ───────────────────────────────────────
+// -- C. Renderer (real canvas, offline) ---------------------------------------
 console.log("\nC. renderQuoteCard");
 const strip = quoteCard.stripEmoji("Hello \u{1F30D} world! \u{1F600} \u2192 \u2713 \uFE0F");
 ok("emoji stripped", !/\u{1F30D}|\u{1F600}|\uFE0F/u.test(strip), JSON.stringify(strip));
@@ -110,7 +110,7 @@ try { await quoteCard.renderQuoteCard({ text: "" }); } catch (e) { threw = true;
 ok("empty text throws", threw);
 ok("MAX_TEXT exported as 300", quoteCard.MAX_TEXT === 300);
 
-// ── D. Engine wiring ─────────────────────────────────────────────────────────
+// -- D. Engine wiring ---------------------------------------------------------
 console.log("\nD. Engine wiring (source guards)");
 ok("quoteCard required in engine", engineSrc.includes('require("./utils/quoteCard")'));
 ok("handler defined", engineSrc.includes("async function handleQuoteImageCommand(sock, chatId, rawText, m, senderJid)"));
@@ -121,7 +121,7 @@ ok("text source is cleanTxt (case/newlines preserved)", /const qRaw = cleanTxt\s
 ok("senderJid passed explicitly (storage.run scope fix)", /handleQuoteImageCommand\(\s*sock,\s*chatId,\s*qRaw,\s*m,\s*senderJid,?\s*\)/.test(engineSrc));
 
 // order: with-args dispatch must appear BEFORE the bare random-quote block
-const cardIdx = engineSrc.indexOf("Quote CARD — `.j quote <text>");
+const cardIdx = engineSrc.indexOf("Quote CARD - `.j quote <text>");
 const bareIdx = engineSrc.indexOf("// Quote Command (NEW)");
 ok("with-args dispatch sits before bare quote block", cardIdx > -1 && bareIdx > -1 && cardIdx < bareIdx, `card@${cardIdx} bare@${bareIdx}`);
 
@@ -130,7 +130,7 @@ ok("bare random-quote qoute alias added", engineSrc.includes("lowerTxt === `${bo
 ok("bare path still hits dummyjson API first", engineSrc.includes("https://dummyjson.com/quotes/random"));
 ok("bare path still awards progression", /Quote Command \(NEW\)[\s\S]{0,3000}awardProgression\(senderJid, chatId\);/.test(engineSrc));
 
-ok("registry: quote entry updated for card mode", /cmd: 'quote', desc: 'Random famous quote — or add your own text/.test(regSrc));
+ok("registry: quote entry updated for card mode", /cmd: 'quote', desc: 'Random famous quote - or add your own text/.test(regSrc));
 ok("registry: usage shows [text] and [--by author]", regSrc.includes("usage: 'quote [text] [--by author]'"));
 ok("engine sends PNG as image (not document)", /image: sendBuf,/.test(engineSrc));
 ok("JPEG conversion at send path (2.4MB PNG → ~340KB)", /require\("sharp"\)\(png\)\.jpeg\(\{ quality: 88 \}\)/.test(engineSrc));
@@ -139,10 +139,10 @@ ok("15s upload-hang guard on quote card send", engineSrc.includes("quote card up
 ok("background search uses quote's own words (appropriate image)", engineSrc.includes("quoteCard.pickBackgroundQuery(qText)"));
 ok("bg failure falls back to gradient (never dead)", /bg search failed, gradient fallback/.test(engineSrc));
 
-// ── D2. Scope trap (owner screenshot 2026-10-12 10:51Z) ────────────────────
+// -- D2. Scope trap (owner screenshot 10:51Z) --------------------
 console.log("\nD2. Scope trap: dispatch block must use ONLY storage.run-scope vars");
 {
-  const blockStart = engineSrc.indexOf("// 🖋️ Quote CARD —");
+  const blockStart = engineSrc.indexOf("// 🖋️ Quote CARD -");
   const blockEnd = engineSrc.indexOf("// Quote Command (NEW)");
   ok("quote dispatch block located", blockStart > -1 && blockEnd > blockStart);
   if (blockStart > -1 && blockEnd > blockStart) {
@@ -150,7 +150,7 @@ console.log("\nD2. Scope trap: dispatch block must use ONLY storage.run-scope va
     const code = block.replace(/^\s*\/\/.*$/gm, ""); // strip comments, keep code
     ok("NO primaryCmd in dispatch code", !/\bprimaryCmd\b/.test(code), "out of scope here → ReferenceError");
     ok("NO cmdArgs in dispatch code", !/\bcmdArgs\b/.test(code), "out of scope here → ReferenceError");
-    ok("NO currentPrefix in dispatch code", !/\bcurrentPrefix\b/.test(code), "not proven in scope — use botConfig.getPrefix()");
+    ok("NO currentPrefix in dispatch code", !/\bcurrentPrefix\b/.test(code), "not proven in scope - use botConfig.getPrefix()");
     ok("dispatch uses lowerTxt (proven in scope)", /\blowerTxt\b/.test(code));
     ok("dispatch uses cleanTxt (same scope as lowerTxt)", /\bcleanTxt\b/.test(code));
     ok("handler still takes senderJid as param (not outer-scope lookup)",
@@ -158,13 +158,13 @@ console.log("\nD2. Scope trap: dispatch block must use ONLY storage.run-scope va
   }
 }
 
-// ── E. Scope guards ──────────────────────────────────────────────────────────
+// -- E. Scope guards ----------------------------------------------------------
 console.log("\nE. Scope guards (cooldown / sticker bypass untouched)");
 ok("sticker bypass matcher unchanged (still ` s` prefix only)", engineSrc.includes("const _stickerPfx = `${botConfig.getPrefix().toLowerCase()} s`;"));
 ok("quote NOT added to cooldown bypass", !/_isStickerCmd[^;]*quote/.test(engineSrc) && !/quote[^;]*_isStickerCmd/.test(engineSrc));
 ok("global cooldown check intact", engineSrc.includes("if (commandCooldowns.has(senderJid)) {"));
 ok("gambling hard lock intact", engineSrc.includes("checkGamblingSpam(senderJid)"));
 
-console.log(`\n${"═".repeat(50)}\nRESULT: ${pass} pass, ${fail} fail ${fail === 0 ? "— ALL GREEN ✅" : "— FAILURES ❌"}`);
+console.log(`\n${"═".repeat(50)}\nRESULT: ${pass} pass, ${fail} fail ${fail === 0 ? "- ALL GREEN ✅" : "- FAILURES ❌"}`);
 process.exit(fail === 0 ? 0 : 1);
 })().catch((e) => { console.error("QA crashed:", e); process.exit(1); });

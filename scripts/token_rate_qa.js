@@ -1,19 +1,16 @@
 #!/usr/bin/env node
-// 🎫 TOKEN RATE QA (2026-10-21, 47-l2) — run ON-BOX inside the bot dir:
-//   CARD_DIAG=1 node scripts/token_rate_qa.js
-//
+// TOKEN RATE QA (47-l2) - run ON-BOX inside the bot dir:
+// CARD_DIAG=1 node scripts/token_rate_qa.js
 // Owner ask: "I haven't seen anyone get an event token even when they claimed alot of cards"
-//
 // Root causes under test:
-//   A) counter keys: load stores Mongo-safe keys ('...@g_us') but the spawn/
-//      cmd lookups used RAW jids ('...@g.us') -> every restart reset progress
-//   B) persist REPLACED the whole shared System value object -> jake/subaru
-//      spawns erased joker's group counters (and vice versa)
-//
+// A) counter keys: load stores Mongo-safe keys ('...@g_us') but the spawn/
+// cmd lookups used RAW jids ('...@g.us') -> every restart reset progress
+// B) persist REPLACED the whole shared System value object -> jake/subaru
+// spawns erased joker's group counters (and vice versa)
 // Safety model:
-//   - ALL writes go to a SCRATCH database (qa_token_47l2) — production only
-//     gets one READ per section for before/after comparison
-//   - ZERO WhatsApp traffic
+// - ALL writes go to a SCRATCH database (qa_token_47l2) - production only
+// gets one READ per section for before/after comparison
+// - ZERO WhatsApp traffic
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -21,7 +18,7 @@ const path = require('path');
 let PASS = 0, FAIL = 0;
 function check(name, cond, extra) {
     if (cond) { PASS++; console.log(`  ✅ ${name}`); }
-    else { FAIL++; console.log(`  ❌ ${name}${extra ? ' — ' + extra : ''}`); }
+    else { FAIL++; console.log(`  ❌ ${name}${extra ? ' - ' + extra : ''}`); }
 }
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -36,7 +33,7 @@ function prodUri() {
     return process.env.MONGO_URI || process.env.MONGODB_URI;
 }
 function scratchUri(uri) {
-    // swap the database path segment for the scratch db
+ // swap the database path segment for the scratch db
     const m = String(uri).match(/^(mongodb(?:\+srv)?:\/\/[^/?]+)(?:\/[^?]*)?(.*)$/);
     if (!m) throw new Error('cannot parse mongo uri');
     return `${m[1]}/qa_token_47l2${m[2] || ''}`;
@@ -47,17 +44,17 @@ const QA_USER_RAW  = '999000000000001@s.whatsapp.net';
 
 (async () => {
     const mongoose = require('mongoose');
-    // scratch world — FORCE every mongoose.connect (ours + db.js's internal
-    // retry inside loadEconomy) onto the scratch db: modules re-connect with
-    // the prod URI mid-run, which would otherwise flip the default connection
-    // to prod and contaminate both directions.
+ // scratch world - FORCE every mongoose.connect (ours + db.js's internal
+ // retry inside loadEconomy) onto the scratch db: modules re-connect with
+ // the prod URI mid-run, which would otherwise flip the default connection
+ // to prod and contaminate both directions.
     const PU = prodUri();
     if (!PU) { console.log('❌ no MONGO_URI'); process.exit(1); }
     const origConnect = mongoose.connect.bind(mongoose);
     mongoose.connect = (u, o) => origConnect(scratchUri(PU), o);
     await origConnect(scratchUri(PU), { serverSelectionTimeoutMS: 10000 });
 
-    // production snapshot BEFORE (read-only, separate connection, not stubbed)
+ // production snapshot BEFORE (read-only, separate connection, not stubbed)
     const prodConn = await mongoose.createConnection(PU, { serverSelectionTimeoutMS: 10000 }).asPromise();
     const prodSys = prodConn.db.collection('systems');
     const snapBefore = JSON.stringify((await prodSys.findOne({ key: 'card_token_spawn_counters_v1' }))?.value || {});
@@ -70,9 +67,9 @@ const QA_USER_RAW  = '999000000000001@s.whatsapp.net';
     const cardSystem = require(path.join(BOT, 'core', 'rpg', 'cardSystem'));
     const economy = require(path.join(BOT, 'core', 'rpg', 'economy'));
     const QA = cardSystem.__tokenQA;
-    if (!QA) { console.log('❌ __tokenQA missing — CARD_DIAG not loaded?'); process.exit(1); }
+    if (!QA) { console.log('❌ __tokenQA missing - CARD_DIAG not loaded?'); process.exit(1); }
 
-    // QA user must exist BEFORE loadEconomy so addTokens finds it in cache
+ // QA user must exist BEFORE loadEconomy so addTokens finds it in cache
     const User = mongoose.connection.db.collection('users');
     await User.deleteMany({ userId: QA_USER_RAW });
     await User.insertOne({ userId: QA_USER_RAW, wallet: 0, bank: 0, eventTokens: 0, nickname: 'QA Token 47l2', registered: true });
@@ -83,7 +80,7 @@ const QA_USER_RAW  = '999000000000001@s.whatsapp.net';
     const cmdDocKey = 'card_token_cmd_counters_v1';
     const getVal = async (key) => (await Sys.findOne({ key }))?.value || {};
 
-    // ── §1 restart survival: loaded keys must answer the spawn-time lookup ──
+ // -- §1 restart survival: loaded keys must answer the spawn-time lookup --
     console.log('\n── §1 counter key invariant (Bug A) ──');
     check('safeCounterKey strips dots', safeKey(QA_GROUP_RAW) === '120363050000000001@g_us');
     await Sys.updateOne({ key: spawnDocKey }, { $set: { value: { [safeKey(QA_GROUP_RAW)]: 7 } } }, { upsert: true });
@@ -94,7 +91,7 @@ const QA_USER_RAW  = '999000000000001@s.whatsapp.net';
     check('spawn-time lookup finds loaded progress', loaded[safeKey(QA_GROUP_RAW)] === 7 && safeKey(QA_GROUP_RAW) in loaded,
         'pre-fix: lookup used the RAW jid and missed the sanitized key -> silent reset');
 
-    // ── §2 real cmd path: wrap at 15 grants a token (Bug A, end-to-end) ──
+ // -- §2 real cmd path: wrap at 15 grants a token (Bug A, end-to-end) --
     console.log('\n── §2 cmd-token wrap on real code path ──');
     await Sys.updateOne({ key: cmdDocKey }, { $set: { value: { [safeKey(QA_USER_RAW)]: 14 } } }, { upsert: true });
     QA.clearCounters();
@@ -107,7 +104,7 @@ const QA_USER_RAW  = '999000000000001@s.whatsapp.net';
     await sleep(400);
     check('wrapped 0 persisted to doc', (await getVal(cmdDocKey))[safeKey(QA_USER_RAW)] === 0);
 
-    // ── §2b unregistered players: token sub-economy must not gate on RPG reg ──
+ // -- §2b unregistered players: token sub-economy must not gate on RPG reg --
     console.log('\n── §2b unregistered claimer grant (Bug C) ──');
     const QA_USER_UNREG = '999000000000002@s.whatsapp.net';
     await User.deleteMany({ userId: QA_USER_UNREG });
@@ -125,7 +122,7 @@ const QA_USER_RAW  = '999000000000001@s.whatsapp.net';
         economy.addTokens(QA_USER_UNREG, 5) === false && economy.getTokens(QA_USER_UNREG) === 0);
     QA.setEventActive(false);
 
-    // ── §3 cross-bot merge: foreign bot keys must survive persist (Bug B) ──
+ // -- §3 cross-bot merge: foreign bot keys must survive persist (Bug B) --
     console.log('\n── §3 merge persist (Bug B) ──');
     await Sys.updateOne({ key: spawnDocKey }, { $set: { value: { '999999999999999999@g_us': 9, [safeKey(QA_GROUP_RAW)]: 3 } } }, { upsert: true });
     QA.clearCounters();
@@ -135,14 +132,14 @@ const QA_USER_RAW  = '999000000000001@s.whatsapp.net';
     check('FOREIGN bot key survives (pre-fix: erased)', merged['999999999999999999@g_us'] === 9, JSON.stringify(merged));
     check('own key intact after merge', merged[safeKey(QA_GROUP_RAW)] === 3);
 
-    // ── §4 empty-map persist is a no-op (tokenreset needs the explicit wipe) ──
+ // -- §4 empty-map persist is a no-op (tokenreset needs the explicit wipe) --
     console.log('\n── §4 empty-map guard ──');
     QA.clearCounters();
     await Sys.updateOne({ key: spawnDocKey }, { $set: { value: { 'keep_me@g_us': 1 } } }, { upsert: true });
     await QA.persistTokenSpawnCounters();
     check('empty map does not wipe doc', (await getVal(spawnDocKey))['keep_me@g_us'] === 1);
 
-    // ── §5 production untouched ──
+ // -- §5 production untouched --
     console.log('\n── §5 production read-only ──');
     const snapAfter = JSON.stringify((await prodSys.findOne({ key: 'card_token_spawn_counters_v1' }))?.value || {});
     check('prod spawn counters byte-identical', snapBefore === snapAfter, `${snapBefore} -> ${snapAfter}`);
@@ -150,7 +147,7 @@ const QA_USER_RAW  = '999000000000001@s.whatsapp.net';
 
     await mongoose.disconnect().catch(() => {});
     await prodConn.close().catch(() => {});
-    // drop the scratch database — zero residue
+ // drop the scratch database - zero residue
     const tmp = await mongoose.createConnection(scratchUri(PU), { serverSelectionTimeoutMS: 10000 }).asPromise();
     await tmp.dropDatabase().catch(() => {});
     await tmp.close().catch(() => {});

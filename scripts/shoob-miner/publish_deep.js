@@ -1,4 +1,4 @@
-// publish_deep.js — publish the deep-rotcat event block to shared Mongo.
+// publish_deep.js - publish the deep-rotcat event block to shared Mongo.
 // Mirrors wa-miner's publish shapes exactly (System key/value, collection
 // via mongoose model 'System'). Run from scripts/shoob-miner on box1.
 'use strict';
@@ -44,7 +44,7 @@ function liveEventIds() {
   const live = liveEventIds();
   const pending = scraped.filter(c => !live.ids.has(c.id));
 
-  // cumulative pending (previous ∪ current, minus now-live, cap 500) — same as miner
+ // cumulative pending (previous ∪ current, minus now-live, cap 500) - same as miner
   let cumulative = [];
   try {
     const prev = await System.findOne({ key: 'shoob_miner_newcards' });

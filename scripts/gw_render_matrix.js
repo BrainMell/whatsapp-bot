@@ -34,7 +34,7 @@ function mkPlayer(prev, cur, extra = {}) {
 }
 
 function exitsForKeys(eventDoc, player, keys) {
-    // keys: array of ['w'|'e'|'n'|'s', known?] — hand-built exits
+ // keys: array of ['w'|'e'|'n'|'s', known?] - hand-built exits
     return ['n', 'e', 's', 'w'].map((dir) => {
         const hit = keys.find((k) => k[0] === dir);
         if (!hit) return { dir, edge: false };
@@ -65,8 +65,8 @@ const CASES = [
       room: { type: 'landmark', state: 'UNEXPLORED', payload: { landmarkName: 'The Pale Obelisk' } } },
     { name: 'variant_mossy', player: mkPlayer('3,2', '2,2'), exits: [['w'], ['e']],
       room: { type: 'empty', state: 'UNEXPLORED', variant: 'mossy', payload: {} } },
-    // ── Task 16: full POI-sprite coverage (discovery/reward/hazard/lore/
-    // anomaly/secret/puzzle) + smaller actor scale verification ──
+ // -- full POI-sprite coverage (discovery/reward/hazard/lore/
+ // anomaly/secret/puzzle) + smaller actor scale verification --
     { name: 'disc_intact', player: mkPlayer('1,2', '2,2'), exits: [['w'], ['e']],
       room: { type: 'discovery', state: 'UNEXPLORED', payload: {} } },
     { name: 'disc_dug', player: mkPlayer('1,2', '2,2'), exits: [['w'], ['e']],
@@ -91,9 +91,9 @@ const CASES = [
       room: { type: 'puzzle', state: 'UNEXPLORED', payload: {} }, board: true },
     { name: 'puzzle_board_e', player: mkPlayer('3,2', '2,2'), exits: [['w'], ['e']],
       room: { type: 'puzzle', state: 'UNEXPLORED', payload: {} }, board: true },
-    // ── Task 17: battle happens IN the room (owner directive 23:39Z) ──
-    // same plate/spawn/facing/pack as the intro; live pools layered on:
-    // enemy name+HP plates, gold turn ring, default HUD panel, no map.
+ // -- battle happens IN the room (owner directive 23:39Z) --
+ // same plate/spawn/facing/pack as the intro; live pools layered on:
+ // enemy name+HP plates, gold turn ring, default HUD panel, no map.
     { name: 'battle_start', player: mkPlayer('1,2', '2,2'), exits: [['w'], ['e']],
       room: { type: 'combat', state: 'ACTIVE', payload: { enemies: [{ level: 10 }, { level: 10 }, { level: 12 }] } },
       battle: { player: { hp: 84, maxHp: 120, energy: 62, maxEnergy: 100, state: 'BATTLE!' },
@@ -149,7 +149,7 @@ const CASES = [
         const opts = { exits: exitsForKeys(eventDoc, c.player, c.exits), prefix: '.jk' };
         if (c.battle) opts.battle = c.battle;
         if (c.board) {
-            // fake mechanism board (same IPC shape the real puzzle board uses)
+ // fake mechanism board (same IPC shape the real puzzle board uses)
             const { createCanvas } = require('canvas');
             const bc = createCanvas(520, 320);
             const bx = bc.getContext('2d');

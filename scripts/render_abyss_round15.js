@@ -1,12 +1,12 @@
 // Round-15 abyss samples (owner 09:15Z rebuke: arena/dunes stages don't fit,
 // generated enemies face the wrong way, formation arrangement trash):
-//  A) formations on the NEW stages: 1 / 2 / 3 enemies — ladder steps back
-//     toward the vanishing point (deeper = higher + leftward), no edge-hug
-//  B) facing solos for every REPAIRED id (bisector audit + regenerated art)
-//  C) all 8 regular stages in rotation F18..F25 (arena/dunes replaced)
-//  D) boss-floor regression (F12/F15) — frozen boss composition untouched
-//  E) CLEARED result card regression
-// Run on-box: node scripts/render_abyss_round15.js  → scripts/render_out/abyss_r15/
+// A) formations on the NEW stages: 1 / 2 / 3 enemies - ladder steps back
+// toward the vanishing point (deeper = higher + leftward), no edge-hug
+// B) facing solos for every REPAIRED id (bisector audit + regenerated art)
+// C) all 8 regular stages in rotation F18..F25 (arena/dunes replaced)
+// D) boss-floor regression (F12/F15) - frozen boss composition untouched
+// E) CLEARED result card regression
+// Run on-box: node scripts/render_abyss_round15.js → scripts/render_out/abyss_r15/
 const path = require('path');
 const fs = require('fs');
 const REPO = path.join(__dirname, '..');
@@ -53,7 +53,7 @@ const results = [];
         return r;
     };
 
-    // ═══ A) formations on the new stages ═══
+ // === A) formations on the new stages ===
     console.log('── A) formations ──');
     await shoot('r15_A1_single_brute_grove.png', mkState({
         abyssFloor: 25,
@@ -80,7 +80,7 @@ const results = [];
         ],
     }));
 
-    // ═══ B) repaired ids solo — facing registry ═══
+ // === B) repaired ids solo - facing registry ===
     console.log('── B) repaired facing solos ──');
     const REPAIRED = [
         ['ELEMENTAL ARCHON', 'A', 'R'], ['GLOOM BRUTE', 'B', 'R'], ['MUTATED OVERSEER', 'B', 'R'],
@@ -98,7 +98,7 @@ const results = [];
         }));
     }
 
-    // ═══ C) all 8 stages rotation F18..F25 ═══
+ // === C) all 8 stages rotation F18..F25 ===
     console.log('── C) background rotation ──');
     for (let f = 18; f <= 25; f++) {
         const bg = abyssScene.bgFileForFloor(f, 'regular');
@@ -109,7 +109,7 @@ const results = [];
         }));
     }
 
-    // ═══ D) boss floors regression — frozen composition ═══
+ // === D) boss floors regression - frozen composition ===
     console.log('── D) boss regression ──');
     await shoot('r15_D_boss_f12.png', mkState({
         abyssFloor: 12,
@@ -120,7 +120,7 @@ const results = [];
         enemies: [Object.assign(mkEnemy('VOID TITAN', 15, 'SS', 1, 8000, 11000), { isBoss: true, bossId: 'VOID_TITAN' })],
     }));
 
-    // ═══ E) CLEARED result regression ═══
+ // === E) CLEARED result regression ===
     console.log('── E) result card ──');
     const clr = await abyssScene.renderAbyssResultCard({
         outcome: 'CLEARED', floor: 20, score: 2038, keptXp: 37795, keptGold: 25197,

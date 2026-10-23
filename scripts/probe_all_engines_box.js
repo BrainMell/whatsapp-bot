@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// probe_all_engines_box.js — sweep candidate search engines from box egress
+// probe_all_engines_box.js - sweep candidate search engines from box egress
 const axios = require("axios");
 const fs = require("fs");
 const q = process.argv[2] || "who wrote the harry potter books";

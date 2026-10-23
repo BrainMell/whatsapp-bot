@@ -1,5 +1,5 @@
-// 🎨 GUILD WAR VISUAL QA — renders REAL room scenes for vision inspection.
-// Spec §12/§22: do not assume renders are correct — LOOK at them.
+// GUILD WAR VISUAL QA - renders REAL room scenes for vision inspection.
+// Spec §12/§22: do not assume renders are correct - LOOK at them.
 // Matrix: every room type × every Ruins variant × every exit-plate ×
 // meeting scene × cleared wash. Pure node-canvas (no Go service needed).
 process.env.GW_TEST = '1';
@@ -67,10 +67,10 @@ async function main() {
     console.log(`[vqa] rooms=${ev.rooms.length} players=${ev.players.length} spawn=${me() && me().roomId}`);
     if (!ev.rooms.length) { console.log('[vqa] FATAL: war never started'); process.exit(2); }
 
-    // ── 1. spawn room, as deployed (auto-present view) ──
+ // -- 1. spawn room, as deployed (auto-present view) --
     await snap('01_spawn_as_deployed', ev, me(), roomOf(me().roomId));
 
-    // ── 2. every room TYPE (real payload content) ──
+ // -- 2. every room TYPE (real payload content) --
     const seenTypes = new Set();
     for (const r of ev.rooms) {
         if (seenTypes.has(r.type)) continue;
@@ -78,14 +78,14 @@ async function main() {
         await snap(safeTag(['02_type', r.type, r.key]), ev, me(), r);
     }
 
-    // ── 3. every VARIANT (forced on a quiet plain room) ──
+ // -- 3. every VARIANT (forced on a quiet plain room) --
     const quiet = ev.rooms.find((r) => r.type === 'plain' && r.state === 'UNEXPLORED' && !(r.payload && r.payload.size)) || ev.rooms[3];
     for (const v of roomScene.ROOM_VARIANTS) {
         const r = { ...quiet, variant: v };
         await snap(`03_variant_${v}`, ev, me(), r);
     }
 
-    // ── 4. every EXIT-PLATE combo (backgrounds must match exits) ──
+ // -- 4. every EXIT-PLATE combo (backgrounds must match exits) --
     const seenPlates = new Map();
     for (const p of ev.players) {
         const exits = roomScene.exitsFor(ev, p);
@@ -96,7 +96,7 @@ async function main() {
         const pl = ev.players.find((x) => x.jid === p.jid);
         await snap(safeTag(['04_plate', key]), ev, pl, r);
     }
-    // left-only seeded pair (L_a/L_b) — distinct seeds so the hash picks BOTH
+ // left-only seeded pair (L_a/L_b) - distinct seeds so the hash picks BOTH
     const fakeEvL = JSON.parse(JSON.stringify({ ...ev }));
     for (const sub of ['a', 'b']) {
         fakeEvL.seed = ev.seed + sub;
@@ -113,7 +113,7 @@ async function main() {
         } catch (e) { console.log(`[vqa] ✗ L_${sub}: ${e.message}`); }
     }
 
-    // ── 5. MEETING scene: guildmate + rival in the room (§16) ──
+ // -- 5. MEETING scene: guildmate + rival in the room (§16) --
     const rooms = require(path.join(ROOT, 'core/rpg/guildWar/rooms'));
     const meM = me();
     await rooms.enterRoom(EV, P2, meM.roomId, meM.roomId);
@@ -123,15 +123,15 @@ async function main() {
     const occ = [...(roomM.occupants || []), P2, P3];
     await snap('05_meeting_mate_and_rival', ev, me(), { ...roomM, occupants: occ });
 
-    // ── 6. CLEARED wash ──
+ // -- 6. CLEARED wash --
     const rC = { ...roomOf(me().roomId), state: 'CLEARED', clearedBy: 'Alice', clearedByGuild: 'Alpha' };
     await snap('06_cleared_room', ev, me(), rC);
 
-    // ── 7. combat room with seeded pack (monster standing in the room, §12) ──
+ // -- 7. combat room with seeded pack (monster standing in the room, §12) --
     const rCombat = ev.rooms.find((r) => r.type === 'combat' && r.state !== 'CLEARED');
     if (rCombat) await snap('07_combat_pack_visible', ev, me(), rCombat);
 
-    console.log(`\n[vqa] DONE — ${shots.length} renders in ${OUT}`);
+    console.log(`\n[vqa] DONE - ${shots.length} renders in ${OUT}`);
     process.exit(0);
 }
 

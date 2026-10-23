@@ -8,15 +8,15 @@ const LoanSchema = new mongoose.Schema({
     interestRate: { type: Number, required: true },
     totalRepayment: { type: Number, required: true },
     
-    // Status
+ // Status
     status: { type: String, default: 'active' }, // active, paid, defaulted
     
-    // Dates
+ // Dates
     createdAt: { type: Number, default: Date.now },
     dueDate: { type: Number, required: true },
     paidAt: { type: Number, default: null },
     
-    // Defaults
+ // Defaults
     notifiedDue: { type: Boolean, default: false }
 
 }, { timestamps: true });

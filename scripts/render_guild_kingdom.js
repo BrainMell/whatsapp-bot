@@ -1,5 +1,5 @@
 'use strict';
-// render_guild_kingdom.js — bake guild kingdom proof cards: node scripts/render_guild_kingdom.js [outDir]
+// render_guild_kingdom.js - bake guild kingdom proof cards: node scripts/render_guild_kingdom.js [outDir]
 const fs = require('fs');
 const path = require('path');
 const OUT = process.argv[2] || '/tmp/guild_kingdom';

@@ -1,19 +1,19 @@
 // ============================================
-// THEME SONG POOL (2026-09-27, owner brief §2 & §3)
+// THEME SONG POOL (owner brief §2 & §3)
 // ============================================
 // ".audio mode" = theme songs ACROSS ALL OF FICTION: anime openings, TV
 // show themes, movie scores, game soundtracks. Each entry:
-//   { show }   - the display answer ("Which show is this theme from?")
-//   { search } - what the Go audio service searches (biased toward the
-//                canonical upload)
-//   { type }   - anime | tv | movie | game (distractor preference)
+// { show } - the display answer ("Which show is this theme from?")
+// { search } - what the Go audio service searches (biased toward the
+// canonical upload)
+// { type } - anime | tv | movie | game (distractor preference)
 // Verification is the same P14-style gate as Spot the Song: the returned
 // metadata must overlap the search terms and no cover/karaoke/nightcore
 // markers may be present.
 // ============================================
 
 const THEMES = [
-  // ---- anime ----
+ // ---- anime ----
   { show: "Attack on Titan", search: "Attack on Titan opening theme", type: "anime" },
   { show: "Demon Slayer", search: "Demon Slayer opening theme", type: "anime" },
   { show: "Jujutsu Kaisen", search: "Jujutsu Kaisen opening theme", type: "anime" },
@@ -50,7 +50,7 @@ const THEMES = [
   { show: "Fire Force", search: "Fire Force opening theme", type: "anime" },
   { show: "Made in Abyss", search: "Made in Abyss opening theme", type: "anime" },
   { show: "Konosuba", search: "Konosuba opening theme", type: "anime" },
-  // ---- TV ----
+ // ---- TV ----
   { show: "Friends", search: "Friends theme song I'll Be There For You", type: "tv" },
   { show: "Game of Thrones", search: "Game of Thrones theme song", type: "tv" },
   { show: "Breaking Bad", search: "Breaking Bad theme song", type: "tv" },
@@ -82,7 +82,7 @@ const THEMES = [
   { show: "The Witcher", search: "The Witcher Netflix theme song", type: "tv" },
   { show: "Arcane", search: "Arcane League of Legends theme song", type: "tv" },
   { show: "Better Call Saul", search: "Better Call Saul theme song", type: "tv" },
-  // ---- movies ----
+ // ---- movies ----
   { show: "Star Wars", search: "Star Wars main theme John Williams", type: "movie" },
   { show: "Harry Potter", search: "Harry Potter Hedwig's Theme", type: "movie" },
   { show: "The Lord of the Rings", search: "Lord of the Rings main theme", type: "movie" },
@@ -123,7 +123,7 @@ const THEMES = [
   { show: "Dune", search: "Dune theme Hans Zimmer", type: "movie" },
   { show: "Mad Max: Fury Road", search: "Mad Max Fury Road theme", type: "movie" },
   { show: "The Matrix", search: "The Matrix theme Spybreak", type: "movie" },
-  // ---- games ----
+ // ---- games ----
   { show: "Minecraft", search: "Minecraft Sweden C418 soundtrack", type: "game" },
   { show: "The Legend of Zelda", search: "Zelda main theme", type: "game" },
   { show: "Super Mario Bros.", search: "Super Mario Bros main theme", type: "game" },

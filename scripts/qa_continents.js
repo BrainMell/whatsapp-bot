@@ -1,5 +1,5 @@
 'use strict';
-// qa_continents.js — invariants for the realm layer:  node scripts/qa_continents.js
+// qa_continents.js - invariants for the realm layer: node scripts/qa_continents.js
 const C = require('../core/rpg/continents');
 let fail = 0; const ok = (c, m) => { if (!c) { fail++; console.log('FAIL', m); } };
 const names = Array.from({ length: 300 }, (_, i) => `Guild ${i} ${(i * 7919).toString(36)}`);
@@ -17,10 +17,10 @@ for (const n of names) for (const c of C.CONTINENTS) {
 }
 ok(seen.size > names.length * 5 * 0.98, `markers spread (${seen.size})`);
 for (const [q, k] of [['desert', 'sunscorch'], ['the frost reach', 'frostreach'], ['ember', 'emberfields'], ['wildwood', 'wildwood'], ['storm', 'stormreach'], ['lava', 'emberfields'],
-    // 2026-10-18 Norse rename: new names resolve…
+ // Norse rename: new names resolve…
     ['stormheim', 'stormreach'], ['solheim', 'sunscorch'], ['rimeheim', 'frostreach'], ['skogheim', 'wildwood'], ['eldheim', 'emberfields'],
     ['rime', 'frostreach'], ['skog', 'wildwood'], ['sol', 'sunscorch'], ['eld', 'emberfields'],
-    // …old surveyor names STILL resolve (stored guilds)
+ // …old surveyor names STILL resolve (stored guilds)
     ['the storm reach', 'stormreach'], ['sunscorch', 'sunscorch'], ['the ember fields', 'emberfields']]) ok((C.find(q) || {}).key === k, `find(${q})`);
 for (const t of ['ADVENTURER', 'MERCHANT', 'RESEARCH']) ok(C.find(t) === null, `archetype ${t} must not parse as a realm`);
 ok(C.biomeOf({ name: 'x', continent: 'wildwood' }) === 'highlands', 'continent → biome (old key)');

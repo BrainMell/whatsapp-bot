@@ -1,4 +1,4 @@
-// REPRO 2: full solo journey flow — does the first encounter actually spawn?
+// REPRO 2: full solo journey flow - does the first encounter actually spawn?
 // Watches state transitions + captured sock sends for 20s after start.
 process.env.GO_IMAGE_SERVICE_URL = process.env.GO_IMAGE_SERVICE_URL || 'http://127.0.0.1:7860';
 
@@ -44,7 +44,7 @@ const T0 = Date.now();
     );
     console.log('START success=', res.success);
 
-    // watch state for 20s
+ // watch state for 20s
     for (let i = 0; i < 10; i++) {
         await new Promise((r) => setTimeout(r, 2000));
         const st = botConfig.storage.run(cfgFor('Joker'), () => guildAdventure.getGameState(CHAT, P1));

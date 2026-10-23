@@ -1,24 +1,21 @@
-// ═══════════════════════════════════════════════════════════════════════════
-//  GUILD PERKS SYSTEM (Phase 2 - Guild Polish)
-// ═══════════════════════════════════════════════════════════════════════════
-//
+// ===========================================================================
+// GUILD PERKS SYSTEM (Phase 2 - Guild Polish)
+// ===========================================================================
 // Centralizes ALL guild perk calculations so they're applied consistently
 // across the codebase. Previously the guild system declared perks in flavor
 // text (GUILD_ARCHETYPES, GUILD_UPGRADES) but never wired them up - this
 // module is the wiring.
-//
 // Perk sources:
-//   1. Archetype perks (ADVENTURER / MERCHANT / RESEARCH)
-//   2. Building perks (hall = member cap, training = +XP%, treasury = +gold%)
-//   3. Guild level perks (unlocked at guild levels 2/3/5/7/10)
-//
+// 1. Archetype perks (ADVENTURER / MERCHANT / RESEARCH)
+// 2. Building perks (hall = member cap, training = +XP%, treasury = +gold%)
+// 3. Guild level perks (unlocked at guild levels 2/3/5/7/10)
 // Usage: call the getXpMultiplier / getGoldMultiplier / getSellMultiplier /
 // getCraftCostMultiplier functions with a userId, and they return a multiplier
 // (1.0 = no bonus, 1.15 = +15%, etc.) that you apply to the base value.
 
 const guilds = require('./guilds');
 
-// ─── ARCHETYPE PERKS ──────────────────────────────────────────────────────
+// --- ARCHETYPE PERKS ------------------------------------------------------
 // These are the declared perks from GUILD_ARCHETYPES in guilds.js, now
 // actually applied. Values are the bonus percentage (0.15 = +15%).
 const ARCHETYPE_PERKS = {
@@ -42,28 +39,28 @@ const ARCHETYPE_PERKS = {
   },
 };
 
-// ─── BUILDING PERKS ───────────────────────────────────────────────────────
+// --- BUILDING PERKS -------------------------------------------------------
 // Per-level bonuses from guild buildings. These stack with archetype perks.
 const BUILDING_PERKS = {
-  // Hall: +5 max members per level (base 20, +5/level, max 45 at L5)
+ // Hall: +5 max members per level (base 20, +5/level, max 45 at L5)
   hall: {
     memberCapBonus: (level) => level * 5,
   },
-  // Training: +5% XP per level (max +25% at L5)
+ // Training: +5% XP per level (max +25% at L5)
   training: {
     xpMultiplier: (level) => level * 0.05,
   },
-  // Treasury: +10% gold per level (max +50% at L5) + enables bank interest
+ // Treasury: +10% gold per level (max +50% at L5) + enables bank interest
   treasury: {
     goldMultiplier: (level) => level * 0.10,
     interestRate: (level) => level * 0.005, // 0.5% per level per day, max 2.5%
   },
-  // 💡 Summoner System (Phase 9): Summon Sanctuary
-  // L1: +1 summon slot for all members
-  // L2: +5% summon XP
-  // L3: +5% summon damage in guild adventures
-  // L4: +1 summon slot
-  // L5: +10% summon damage
+ // Summoner System (Phase 9): Summon Sanctuary
+ // L1: +1 summon slot for all members
+ // L2: +5% summon XP
+ // L3: +5% summon damage in guild adventures
+ // L4: +1 summon slot
+ // L5: +10% summon damage
   summonSanctum: {
     slotBonus: (level) => (level >= 1 ? 1 : 0) + (level >= 4 ? 1 : 0),
     xpMultiplier: (level) => level >= 2 ? 0.05 + (level - 2) * 0.02 : 0,
@@ -71,11 +68,10 @@ const BUILDING_PERKS = {
   },
 };
 
-// ─── GUILD LEVEL PERKS ────────────────────────────────────────────────────
+// --- GUILD LEVEL PERKS ----------------------------------------------------
 // Unlocked at specific guild levels. These are global perks that apply to
 // all members regardless of archetype.
-//
-// 💡 AUDIT FIX: descriptions now match the actual implemented behavior.
+// AUDIT FIX: descriptions now match the actual implemented behavior.
 // Previously L5 said "1% daily interest" but the real rate is 0.5% per
 // treasury level (max 2.5% at treasury L5). L10 said "Access to GUILD-rank
 // dungeon" but no such dungeon exists yet - desc now reflects that. L7 is
@@ -88,7 +84,7 @@ const GUILD_LEVEL_PERKS = {
   10: { guildDungeonAccess: true, desc: 'GUILD-rank dungeon access (coming soon)' },
 };
 
-// ─── HELPER: get user's guild object ──────────────────────────────────────
+// --- HELPER: get user's guild object --------------------------------------
 function getUserGuildData(userId) {
   if (!userId) return null;
   const guildName = guilds.getUserGuild(userId);
@@ -98,15 +94,14 @@ function getUserGuildData(userId) {
   return { name: guildName, guild };
 }
 
-// ─── HELPER: get building level safely ────────────────────────────────────
+// --- HELPER: get building level safely ------------------------------------
 function getBuildingLevel(guild, buildingId) {
   if (!guild || !guild.buildings) return 0;
   const b = guild.buildings[buildingId];
   return (b && typeof b.level === 'number') ? b.level : 0;
 }
 
-// ─── XP MULTIPLIER ─────────────────────────────────────────────────────────
-// Returns the total XP multiplier for a user from their guild.
+// --- XP MULTIPLIER ---------------------------------------------------------
 // 1.0 = no bonus. 1.20 = +20% XP.
 // Sources: archetype (ADVENTURER +15%) + training building (+5%/level) +
 // guild level perks (+5% at L2).
@@ -117,21 +112,21 @@ function getXpMultiplier(userId) {
   const { guild } = data;
   let bonus = 0;
 
-  // Archetype perk
+ // Archetype perk
   const arch = ARCHETYPE_PERKS[guild.type] || ARCHETYPE_PERKS.ADVENTURER;
   bonus += arch.xpMultiplier;
 
-  // Training building
+ // Training building
   const trainingLvl = getBuildingLevel(guild, 'training');
   bonus += BUILDING_PERKS.training.xpMultiplier(trainingLvl);
 
-  // Guild level perk (L2 = +5%)
+ // Guild level perk (L2 = +5%)
   if (guild.level >= 2) bonus += GUILD_LEVEL_PERKS[2].xpBonus;
 
   return 1.0 + bonus;
 }
 
-// ─── GOLD MULTIPLIER (dungeon rewards) ────────────────────────────────────
+// --- GOLD MULTIPLIER (dungeon rewards) ------------------------------------
 // Sources: archetype (MERCHANT +10%) + treasury building (+10%/level) +
 // guild level perks (+5% at L3).
 function getGoldMultiplier(userId) {
@@ -152,7 +147,7 @@ function getGoldMultiplier(userId) {
   return 1.0 + bonus;
 }
 
-// ─── SELL MULTIPLIER (item sell value) ────────────────────────────────────
+// --- SELL MULTIPLIER (item sell value) ------------------------------------
 // Sources: archetype (MERCHANT +10%).
 function getSellMultiplier(userId) {
   const data = getUserGuildData(userId);
@@ -163,8 +158,7 @@ function getSellMultiplier(userId) {
   return 1.0 + arch.sellMultiplier;
 }
 
-// ─── CRAFT COST REDUCTION ─────────────────────────────────────────────────
-// Returns a fraction (0.0 = no reduction, 0.10 = -10% materials needed).
+// --- CRAFT COST REDUCTION -------------------------------------------------
 // Sources: archetype (RESEARCH -10%).
 // Applied to material quantities in craftingSystem.js.
 function getCraftCostReduction(userId) {
@@ -176,8 +170,7 @@ function getCraftCostReduction(userId) {
   return arch.craftCostReduction;
 }
 
-// ─── SUMMON SANCTUARY PERKS (Phase 9) ─────────────────────────────────────
-// Returns summon-related bonuses from the Summon Sanctuary building.
+// --- SUMMON SANCTUARY PERKS (Phase 9) -------------------------------------
 // L1: +1 slot, L2: +5% XP, L3: +5% damage, L4: +1 slot, L5: +10% damage
 function getSummonSlotBonus(userId) {
   const data = getUserGuildData(userId);
@@ -203,7 +196,7 @@ function getSummonDamageMultiplier(userId) {
   return BUILDING_PERKS.summonSanctum.damageMultiplier(lvl);
 }
 
-// ─── MEMBER CAP ───────────────────────────────────────────────────────────
+// --- MEMBER CAP -----------------------------------------------------------
 // Base 20 + 5/level of hall building. Max 45 at hall L5.
 function getMemberCap(guild) {
   if (!guild) return 20;
@@ -211,18 +204,17 @@ function getMemberCap(guild) {
   return 20 + BUILDING_PERKS.hall.memberCapBonus(hallLvl);
 }
 
-// ─── BANK INTEREST RATE ───────────────────────────────────────────────────
-// Returns daily interest rate for guild bank. 0 = no interest.
+// --- BANK INTEREST RATE ---------------------------------------------------
 // Sources: treasury building (0.5%/level) + guild level 5 perk (enables it).
 function getBankInterestRate(guild) {
   if (!guild) return 0;
-  // Guild level 5 perk required to unlock interest
+ // Guild level 5 perk required to unlock interest
   if (guild.level < 5) return 0;
   const treasuryLvl = getBuildingLevel(guild, 'treasury');
   return BUILDING_PERKS.treasury.interestRate(treasuryLvl);
 }
 
-// ─── GUILD XP AWARD ───────────────────────────────────────────────────────
+// --- GUILD XP AWARD -------------------------------------------------------
 // Awards guild XP when a member does something noteworthy.
 // Called from: dungeon clear, boss kill, PvP win, raid participation.
 function awardGuildXp(userId, amount, reason) {
@@ -236,13 +228,12 @@ function awardGuildXp(userId, amount, reason) {
   }
 }
 
-
 function getWeekKey(date) {
-  // 💡 FIX 2026-08-31: was `Date.UTC(date.getFullYear(), ...)` - LOCAL Y/M/D
-  // interpreted as UTC. On any server with TZ >= UTC+2 the week key flipped
-  // ~1-2h BEFORE the UTC Sunday war deadline, leaving the expiring war
-  // unreachable by weekKey (rewards never paid, war stuck 'active') and
-  // spawning the next war with an instant expiry. Use true UTC components.
+ // FIX was `Date.UTC(date.getFullYear(), ...)` - LOCAL Y/M/D
+ // interpreted as UTC. On any server with TZ >= UTC+2 the week key flipped
+ // ~1-2h BEFORE the UTC Sunday war deadline, leaving the expiring war
+ // unreachable by weekKey (rewards never paid, war stuck 'active') and
+ // spawning the next war with an instant expiry. Use true UTC components.
   if (!date) date = new Date();
   const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
   const dayNum = (d.getUTCDay() + 6) % 7; // Monday = 0
@@ -252,8 +243,7 @@ function getWeekKey(date) {
   return `${d.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
 }
 
-// ─── GUILD PERK SUMMARY (for display) ─────────────────────────────────────
-// Returns a human-readable list of active perks for a user's guild.
+// --- GUILD PERK SUMMARY (for display) -------------------------------------
 function getPerkSummary(userId) {
   const data = getUserGuildData(userId);
   if (!data) return [];
@@ -261,7 +251,7 @@ function getPerkSummary(userId) {
   const { guild } = data;
   const perks = [];
 
-  // Archetype
+ // Archetype
   const arch = ARCHETYPE_PERKS[guild.type];
   if (arch) {
     if (arch.xpMultiplier > 0) perks.push(`${arch.xpMultiplier * 100}% XP bonus (archetype)`);
@@ -270,7 +260,7 @@ function getPerkSummary(userId) {
     if (arch.craftCostReduction > 0) perks.push(`${arch.craftCostReduction * 100}% craft cost reduction (archetype)`);
   }
 
-  // Buildings
+ // Buildings
   const hallLvl = getBuildingLevel(guild, 'hall');
   const trainingLvl = getBuildingLevel(guild, 'training');
   const treasuryLvl = getBuildingLevel(guild, 'treasury');
@@ -279,7 +269,7 @@ function getPerkSummary(userId) {
   if (trainingLvl > 0) perks.push(`${trainingLvl * 5}% XP bonus (Training L${trainingLvl})`);
   if (treasuryLvl > 0) perks.push(`${treasuryLvl * 10}% gold bonus (Treasury L${treasuryLvl})`);
 
-  // Guild level perks
+ // Guild level perks
   for (const [lvl, perk] of Object.entries(GUILD_LEVEL_PERKS)) {
     if (guild.level >= parseInt(lvl)) {
       perks.push(`${perk.desc} (Guild L${lvl})`);
@@ -289,16 +279,15 @@ function getPerkSummary(userId) {
   return perks;
 }
 
-// ─── DAILY BANK INTEREST ──────────────────────────────────────────────────
+// --- DAILY BANK INTEREST --------------------------------------------------
 // Runs daily (scheduled from index.js). Awards interest to guild banks
 // based on treasury building level + guild level 5 perk.
 // Interest rate: 0.5% per treasury level, max 2.5% at L5.
 // Only fires if guild level >= 5 (the perk unlock threshold).
 // Capped at 1M interest per day to prevent runaway growth.
-// (removed 2026-10-03, GW overhaul: runDailyInterest — no-interest loan system)
+// (removed GW overhaul: runDailyInterest - no-interest loan system)
 
-// ─── MEMBER CAP CHECK ─────────────────────────────────────────────────────
-// Returns { canRecruit, currentMembers, cap, message }
+// --- MEMBER CAP CHECK -----------------------------------------------------
 function canRecruitMember(guild) {
   if (!guild || !guild.members) return { canRecruit: false, message: 'Guild not found' };
   const current = guild.members.length;
@@ -334,19 +323,17 @@ module.exports = {
   getUserGuildData,
   getWeekKey,
   canRecruitMember,
-  // 💡 Phase 9: Summon Sanctuary perks
+ // Phase 9: Summon Sanctuary perks
   getSummonSlotBonus,
   getSummonXpMultiplier,
   getSummonDamageMultiplier,
 };
 
-// ─── DAILY LOAN PROCESSING ─────────────────────────────────────────────────
+// --- DAILY LOAN PROCESSING -------------------------------------------------
 // Runs daily alongside runDailyInterest. For each overdue loan:
-//   - Auto-deduct 10% from the borrower's wallet (forced repayment)
-//   - Apply the deducted amount to the loan principal
-//   - If wallet is empty, the loan stays overdue and accrues a 5% penalty
-//     added to the principal (compounding - encourages repayment)
+// - Auto-deduct 10% from the borrower's wallet (forced repayment)
+// - Apply the deducted amount to the loan principal
+// - If wallet is empty, the loan stays overdue and accrues a 5% penalty
+// added to the principal (compounding - encourages repayment)
 // Called from index.js scheduler (same as runDailyInterest).
-// (removed 2026-10-03, GW overhaul: runDailyLoanProcessing — no-interest loan system)
-
-
+// (removed GW overhaul: runDailyLoanProcessing - no-interest loan system)

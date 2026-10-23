@@ -39,12 +39,12 @@ async function main() {
   console.log(`  SUMMON FIELD MISMATCH TEST`);
   console.log(`═══════════════════════════════════════════════════════════════${RESET}\n`);
 
-  // 1. Verify buildCombatEntity returns the Go-expected fields
+ // 1. Verify buildCombatEntity returns the Go-expected fields
   console.log(`${CYAN}[Test 1]${RESET} buildCombatEntity returns Go-compatible fields...`);
   const summonSystem = require('../core/rpg/summonSystem');
   const registry = require('../core/rpg/summonRegistry');
 
-  // Find a valid species from the registry
+ // Find a valid species from the registry
   const allSpecies = registry.getAllSpecies ? registry.getAllSpecies() : Object.values(registry.SPECIES || {});
   let testSpecies = null;
   if (allSpecies && allSpecies.length > 0) {
@@ -54,7 +54,7 @@ async function main() {
   }
 
   if (!testSpecies) {
-    // Fallback: create a minimal mock summon
+ // Fallback: create a minimal mock summon
     const mockSummon = {
       summonId: 'test_summon_001',
       species: 'skeleton',
@@ -97,14 +97,14 @@ async function main() {
   }
 
   function verifyFields(entity) {
-    // Go Summon struct fields (from types.go):
-    // Name         string `json:"name"`
-    // Species      string `json:"species"`
-    // CurrentHP    int    `json:"currentHP"`
-    // MaxHP        int    `json:"maxHp"`
-    // JustDied     bool   `json:"justDied"`
-    // OwnerIndex   int    `json:"ownerIndex"`
-    // IsStationary bool   `json:"isStationary"`
+ // Go Summon struct fields (from types.go):
+ // Name string `json:"name"`
+ // Species string `json:"species"`
+ // CurrentHP int `json:"currentHP"`
+ // MaxHP int `json:"maxHp"`
+ // JustDied bool `json:"justDied"`
+ // OwnerIndex int `json:"ownerIndex"`
+ // IsStationary bool `json:"isStationary"`
     const checks = [
       ['name', entity.name !== undefined, `name=${entity.name}`],
       ['species', entity.species !== undefined && entity.species !== '', `species=${entity.species}`],
@@ -127,7 +127,7 @@ async function main() {
     console.log(`  ${PASS}✅ PASS${RESET} ${name}${detail ? ` - ${detail}` : ''}`);
   }
 
-  // 2. Verify the species field is NOT just an alias for type
+ // 2. Verify the species field is NOT just an alias for type
   console.log(`\n${CYAN}[Test 2]${RESET} Verify 'species' field is populated (not empty)...`);
   const mockSummon2 = {
     summonId: 'test_summon_002',
@@ -154,7 +154,7 @@ async function main() {
     fail('type:alias', `entity.type='${entity2?.type}' (should still be set for JS compatibility)`);
   }
 
-  // 3. Verify deployPvPSummons sets ownerIndex
+ // 3. Verify deployPvPSummons sets ownerIndex
   console.log(`\n${CYAN}[Test 3]${RESET} Verify deployPvPSummons sets ownerIndex...`);
   const fs = require('fs');
   const pvpSrc = fs.readFileSync(require('path').join(__dirname, '..', 'core', 'rpg', 'pvpSystem.js'), 'utf8');
@@ -164,7 +164,7 @@ async function main() {
     fail('deployPvPSummons:ownerIndex', 'deployPvPSummons does NOT set ownerIndex');
   }
 
-  // 4. Verify PvE summon deployment sets ownerIndex
+ // 4. Verify PvE summon deployment sets ownerIndex
   console.log(`\n${CYAN}[Test 4]${RESET} Verify PvE summon deployment sets ownerIndex...`);
   const gaSrc = fs.readFileSync(require('path').join(__dirname, '..', 'core', 'rpg', 'guildAdventure.js'), 'utf8');
   if (/summonEntity\.ownerIndex\s*=\s*pi/.test(gaSrc)) {
@@ -173,7 +173,7 @@ async function main() {
     fail('pveSummon:ownerIndex', 'PvE summon deployment does NOT set ownerIndex');
   }
 
-  // ── FINAL REPORT ──
+ // -- FINAL REPORT --
   console.log(`\n${CYAN}═══════════════════════════════════════════════════════════════`);
   console.log(`  SUMMARY: ${passCount} passed, ${failCount} failed`);
   console.log(`═══════════════════════════════════════════════════════════════${RESET}\n`);

@@ -1,4 +1,4 @@
-// QA: USAGE FAIRNESS + POOL v2 (2026-09-27, owner brief §1 & §3)
+// QA: USAGE FAIRNESS + POOL v2 (owner brief §1 & §3)
 // - pools: 500+ logos (curated, unique names), 200+ songs
 // - weighting: heavily-used items lose selection probability
 // - reset: >=50% benched -> counts zero, cycle restarts
@@ -24,7 +24,7 @@ function ok(cond, label) { if (cond) { pass++; console.log("  ok -", label); } e
   ok(songSet.size === SONGS_POOL.length, "song titles all unique");
   const cats = new Set(LOGOS_POOL.map((b) => b.cat));
   ok(cats.size >= 10, `>=10 logo categories (got ${cats.size})`);
-  // every logo entry has cat + wiki
+ // every logo entry has cat + wiki
   ok(LOGOS_POOL.every((b) => b.name && b.wiki && b.cat), "all logo entries complete (name/wiki/cat)");
   ok(SONGS_POOL.every((s) => s.song && s.artist && s.era), "all song entries complete (song/artist/era)");
 
@@ -35,8 +35,8 @@ function ok(cond, label) { if (cond) { pass++; console.log("  ok -", label); } e
 
   console.log("════ 3. weighted selection behaviour ════");
   const pool = LOGOS_POOL.slice(0, 100).map((b, i) => ({ ...b, name: `B${i}` }));
-  // 30% of the pool gets 5 uses (benched) - below the 50% reset trigger so
-  // the weighting itself is observable
+ // 30% of the pool gets 5 uses (benched) - below the 50% reset trigger so
+ // the weighting itself is observable
   const usage = { counts: {}, resets: 0 };
   pool.forEach((b, i) => { if (i % 3 === 0) usage.counts[_entryKey("logos", b)] = 5; });
   const counts = new Map();

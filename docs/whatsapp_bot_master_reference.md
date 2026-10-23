@@ -3,7 +3,7 @@
 
 Consolidated from: `economy_report.pdf`, `difficulty_curve.png`, `envis.txt`, `users_export.csv`, `caludechat.txt` (a prior Claude Code combat-audit + simulation session).
 
-Generated: 2026-08-08
+Generated: 
 
 
 ## Table of Contents

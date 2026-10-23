@@ -1,10 +1,10 @@
 // ============================================
-// LOGO DATASET V2 CONTENT FILTER ROUND 2 (2026-10-09)
+// LOGO DATASET V2 CONTENT FILTER ROUND 2
 // ============================================
 // Round 1 caught direct P31 hits; subclasses dodged it (municipality-of-the-
 // Netherlands != Q15284 directly). This round uses SPARQL with the transitive
-// class path (wdt:P31/wdt:P279*) over ALL remaining entries — one query per
-// 250 qids — plus cheap vetoes: TLD domains (.us), language-edition wikis,
+// class path (wdt:P31/wdt:P279*) over ALL remaining entries - one query per
+// 250 qids - plus cheap vetoes: TLD domains (.us), language-edition wikis,
 // sexual-content symbols.
 // ============================================
 const axios = require("axios");
@@ -45,7 +45,7 @@ async function sparqlBad(ids) {
   const brands = ds.brands;
   console.log(`round 2: ${brands.length} entries`);
 
-  // cheap vetoes first
+ // cheap vetoes first
   const kept1 = [];
   const dropped = [];
   for (const b of brands) {
@@ -58,7 +58,7 @@ async function sparqlBad(ids) {
   }
   console.log(`cheap vetoes: -${brands.length - kept1.length}`);
 
-  // transitive class check (batches of 250)
+ // transitive class check (batches of 250)
   const badSet = new Set();
   const withQid = kept1.filter((b) => b.qid);
   for (let i = 0; i < withQid.length; i += 250) {

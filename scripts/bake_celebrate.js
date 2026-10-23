@@ -1,6 +1,6 @@
 'use strict';
-// bake_celebrate.js — confetti proof: a mid-fall celebrate frame of the player base
-//   node scripts/bake_celebrate.js [outDir]
+// bake_celebrate.js - confetti proof: a mid-fall celebrate frame of the player base
+// node scripts/bake_celebrate.js [outDir]
 const fs = require('fs');
 const OUT = process.argv[2] || '/tmp/celebrate';
 process.env.QA_MODE = process.env.QA_MODE || '1';
@@ -15,10 +15,10 @@ process.env.QA_MODE = process.env.QA_MODE || '1';
         structures: ids.map((id, i) => ({ id, plot: i + 1, level: 2 })),
         freePlots: [],
     };
-    // player base: frame 12 of 30 → confetti mid-fall, water glinting
+ // player base: frame 12 of 30 → confetti mid-fall, water glinting
     const f = await r.renderFrame(state, 12, { celebrate: true, returnCanvas: true });
     fs.writeFileSync(OUT + '/base_celebrate.png', f.toBuffer('image/png'));
-    // guild kingdom celebrate frame
+ // guild kingdom celebrate frame
     const gs = {
         name: 'Iron Wolves', level: 12, archetype: 'ADVENTURER',
         buildings: { hall: 5, training: 5, treasury: 5 }, memberCount: 12, memberCap: 25,

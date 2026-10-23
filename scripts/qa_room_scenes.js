@@ -8,7 +8,7 @@ const OUT = path.join(__dirname, 'qa_out');
 fs.mkdirSync(OUT, { recursive: true });
 
 function fakeEvent() {
-    // 8-room 3x3-ish world with edges matching each variant we want to see
+ // 8-room 3x3-ish world with edges matching each variant we want to see
     const rooms = [
         { key: '1,1', x: 1, y: 1, type: 'empty', state: 'UNEXPLORED', payload: {}, ring: 0.3 },
         { key: '0,1', x: 0, y: 1, type: 'empty', state: 'UNEXPLORED', payload: {}, ring: 0.4 },
@@ -59,7 +59,7 @@ async function main() {
         console.log('✓ variant_' + name);
     }
 
-    // type treatments
+ // type treatments
     for (const t of ['combat', 'puzzle', 'reward', 'hazard', 'secret', 'core', 'cleared-empty']) {
         const doc = { ...ev };
         const room = { ...ev.rooms[0], type: t === 'cleared-empty' ? 'empty' : t, state: t === 'cleared-empty' ? 'CLEARED' : 'UNEXPLORED' };

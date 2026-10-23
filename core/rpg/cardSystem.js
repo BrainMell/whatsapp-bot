@@ -1,9 +1,9 @@
-// ╔══════════════════════════════════════════════════════════════════════════╗
-// ║                        CARD SYSTEM  -  cardSystem.js                    ║
-// ║                                                                          ║
-// ║  Drop this file in the same directory as engine.js.                     ║
-// ║  See README_CARDS.md for setup instructions.                            ║
-// ╚══════════════════════════════════════════════════════════════════════════╝
+// +==========================================================================+
+// | CARD SYSTEM - cardSystem.js |
+// | |
+// | Drop this file in the same directory as engine.js. |
+// | See README_CARDS.md for setup instructions. |
+// +==========================================================================+
 
 'use strict';
 
@@ -13,10 +13,10 @@ const playerMarket = require('./playerMarket');
 const path    = require('path');
 const axios   = require('axios');
 const animatedMedia = require('../utils/animatedMedia'); // webm→mp4 remux (WhatsApp can't render webm)
-const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
+const goService = require('../utils/goImageService'); // singleton (PERF PATCH )
 
-// BUILD MARKER (47-k5, 2026-10-19): proves which build the RUNNING process
-// loaded. Incident 47-k5: a pm2 restart fired inside a git-reset window
+// BUILD MARKER (, ): proves which build the RUNNING process
+// loaded. Incident a pm2 restart fired inside a git-reset window
 // (18:08:02-18:10:02) so the process served the pre-fix cardSystem all day
 // while the disk file was already fixed. If the file mtime printed below is
 // NEWER than the process start time in future logs -> stale-process incident.
@@ -25,37 +25,37 @@ try {
   console.log(`[cardSystem] BUILD einfo-v3 (8d806270a) loaded | pid=${process.pid} | file mtime=${__buildMtime} | loaded at ${new Date().toISOString()}`);
 } catch (e) { console.log('[cardSystem] BUILD marker stat failed: ' + e.message); }
 
-// 47-k8c: background cache warmer — after a deploy every .j base/guild render
+// background cache warmer - after a deploy every .j base/guild render
 // is invalidated (CODE_VER key change), so the first viewers eat the full
 // 13s/6s bake. renderWarmer journals each bake's state and replays them
 // ~45s after boot. Optional: failures here must never affect card loading.
 try { require('./renderWarmer').schedule(); } catch (e) { console.log('[cardSystem] renderWarmer not scheduled: ' + e.message); }
 
-// ── Mongoose Models ──────────────────────────────────────────────────────────
+// -- Mongoose Models ----------------------------------------------------------
 const CardStat   = require('../models/CardStat');
 const UserCard   = require('../models/UserCard');
 const CardMarket = require('../models/CardMarket');
 const CardDeck   = require('../models/CardDeck');
-// 💡 TASK 15C (owner 2026-10-21: "removes all of someone's cards and make a back
+// TASK 15C ("removes all of someone's cards and make a back
 // up of his so that you can place it back"): every Super RC wipe now snapshots
-// the full collection into cardBackups BEFORE deleting — restorable via .j unsrc.
+// the full collection into cardBackups BEFORE deleting - restorable via .j unsrc.
 const CardBackup = require('../models/CardBackup');
-// 💡 RESTART-SAFE SPAWNS (2026-10-08): persist unclaimed spawns so a bot
+// RESTART-SAFE SPAWNS: persist unclaimed spawns so a bot
 // restart/deploy no longer erases them ("cards randomly disappearing").
 const CardSpawn  = require('../models/CardSpawn');
 const User       = require('../models/User');
 const System     = require('../models/System');
 const economy    = require('./economy');
 
-// ── OWNER IDENTITY MERGE (Task 15, owner 2026-10-21: "lost most of their card
-// collection") ────────────────────────────────────────────────────────────────
+// -- OWNER IDENTITY MERGE ("lost most of their card
+// collection") ----------------------------------------------------------------
 // A player's messages arrive under DIFFERENT jid forms (phone @s.whatsapp.net
-// in some chats, @lid in LID groups) — card claims landed on whichever form the
+// in some chats, @lid in LID groups) - card claims landed on whichever form the
 // bot saw, so a collection can silently SPLIT across identities and the player
 // only sees one shard ("my collection is gone"). Every owner-keyed READ below
 // now goes through ownerOf(): the exact jid PLUS every other form mapped to the
 // same phone via LidMapping. Writes stay on the arrival form (no data moves,
-// no balance changes) — reads just show the WHOLE collection.
+// no balance changes) - reads just show the WHOLE collection.
 const _ownerVariantsCache = new Map(); // jid -> { v: [jid...], ts }
 const OWNER_VARIANTS_TTL_MS = 5 * 60 * 1000;
 
@@ -94,20 +94,20 @@ async function cardOwnerVariants(jid) {
   return v;
 }
 
-// The owner-keyed filter for reads/guards — spread it FIRST so extra fields win.
+// The owner-keyed filter for reads/guards - spread it FIRST so extra fields win.
 async function ownerOf(jid) {
   const v = await cardOwnerVariants(jid);
   return v.length === 1 ? { userId: jid } : { userId: { $in: v } };
 }
 
-// ── Config ───────────────────────────────────────────────────────────────────
+// -- Config -------------------------------------------------------------------
 const botConfig  = require('../../botConfig');
 const ZENI       = () => botConfig.getCurrency().symbol;
 const P          = () => botConfig.getPrefix().toLowerCase();
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  SECTION 1 - CONSTANTS & TABLES
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// SECTION 1 - CONSTANTS & TABLES
+// ===========================================================================
 
 const CARDS_DB_PATH = path.join(__dirname, '..', 'data', 'cards_data.json');
 const BASE_MAX   = { '1': 500, '2': 300, '3': 150, '4': 80, '5': 20, '6': 5, 'S': 1, 'E': 1000 };
@@ -123,7 +123,7 @@ const TIER_LABEL = {
   '4': 'TIER  IV', '5': 'TIER  V',   '6': 'TIER  VI',  'S': 'TIER  S', 'E': 'EVENT'
 };
 
-// 💡 Default tier spawn weights. Can be overridden per-bot via .g spawnset tier.
+// Default tier spawn weights. Can be overridden per-bot via .g spawnset tier.
 // Weights are relative (not percentages). The system normalizes them.
 // T5 and T6 have separate "per-interval chance" gates that fire BEFORE
 // the weighted pool - if the gate passes, that tier is selected directly.
@@ -147,9 +147,9 @@ const DEFAULT_E_CHANCE  = 0;        // disabled by default
 const CLAIM_WINDOW_MS = 30 * 60 * 1000; 
 const MAIN_DECK_SIZE = 12;
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  SECTION 2 - RUNTIME STATE (Multi-Tenant)
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// SECTION 2 - RUNTIME STATE (Multi-Tenant)
+// ===========================================================================
 
 const instances = new Map();
 
@@ -157,7 +157,7 @@ function getInst() {
   const id = botConfig.getBotId();
   if (!instances.has(id)) {
     instances.set(id, {
-      botId:         id, // 💡 2026-08-31: needed by rebuildSpawnTimersForInstance when rebuilding OTHER bots' timers
+      botId:         id, // needed by rebuildSpawnTimersForInstance when rebuilding OTHER bots' timers
       sock_ref:      null,
       activeGroups:  new Set(),
       spawnTimer:    null,
@@ -169,21 +169,21 @@ function getInst() {
       ALL_CARDS:     [],
       CARD_INDEX:    {},
       CARDS_BY_TIER: {},
-      // 💡 TOKEN EVENT STATE
+ // TOKEN EVENT STATE
       tokenEventActive: false,     // toggled via .g event start/stop
       tokenEventStart: 0,          // timestamp event started
-      // 💡 TOKEN RATES (2026-10-08 requirements doc):
-      //   - Spawn-based: 1 token per 10 cards spawned, PER GROUP (independent
-      //     counters - activity in one group never affects another group's
-      //     progression). Replaces the old every-3rd-spawn + 25% RNG mechanic.
-      //   - Command-based (hidden): 1 token per 15 eligible player commands
-      //     (claim excluded). Per-user counter.
+ // TOKEN RATES (requirements doc):
+ // - Spawn-based: 1 token per 10 cards spawned, PER GROUP (independent
+ // counters - activity in one group never affects another group's
+ // progression). Replaces the old every-3rd-spawn + 25% RNG mechanic.
+ // - Command-based (hidden): 1 token per 15 eligible player commands
+ // (claim excluded). Per-user counter.
       tokenSpawnCounters: new Map(),  // groupJid -> spawn count since last token
-      tokenCmdCounters:   new Map(),  // userJid  -> eligible command count since last token
-      // Legacy global counter (no longer used - kept so old snapshots don't crash)
+      tokenCmdCounters:   new Map(), // userJid -> eligible command count since last token
+ // Legacy global counter (no longer used - kept so old snapshots don't crash)
       spawnCounter: 0,
-      // 💡 TIER SPAWN CONFIG - per-bot configurable tier weights + chances.
-      // Loaded from DB on init, overridden via .g spawnset tier.
+ // TIER SPAWN CONFIG - per-bot configurable tier weights + chances.
+ // Loaded from DB on init, overridden via .g spawnset tier.
       tierWeights: { ...DEFAULT_SPAWN_WEIGHTS },
       tierChances: {
         '5': DEFAULT_T5_CHANCE,
@@ -191,21 +191,21 @@ function getInst() {
         'S': DEFAULT_S_CHANCE,
         'E': DEFAULT_E_CHANCE,
       },
-      // 💡 PHASE 7 FIX 2026-08-30: random spawn interval - pick a random delay
-      // in [min, max] for each fire instead of a fixed interval.
-      // Backward compat: spawnIntervalMs is still read in places that expect a single value;
-      // it's kept at the max value for legacy code paths.
-      // 💡 2026-10-08: beta spawn-rate reset to 30 min = 2 cards/hour (§6).
-      // 💡 2026-10-21: raised to 12 min = 5 cards/hour (Mellow's request).
-      // Persisted DB value overrides this on load.
+ // random spawn interval - pick a random delay
+ // in [min, max] for each fire instead of a fixed interval.
+ // Backward compat: spawnIntervalMs is still read in places that expect a single value;
+ // it's kept at the max value for legacy code paths.
+ // beta spawn-rate reset to 30 min = 2 cards/hour (§6).
+ // raised to 12 min = 5 cards/hour (Mellow's request).
+ // Persisted DB value overrides this on load.
       spawnIntervalMinMs: 12 * 60 * 1000,
       spawnIntervalMaxMs: 12 * 60 * 1000,
       spawnIntervalMs: 12 * 60 * 1000,  // legacy alias = max (for old code that reads this)
-      // 💡 ESHOP DECK STATE
+ // ESHOP DECK STATE
       eshopDeck: new Array(16).fill(null), // 16 slots, each null or { cardId, cardName, imageUrl, tier, anime, price }
-      // 💡 PERF 2026-07-27: per-user render mode cache (hybrid vs static).
-      // Avoids hitting MongoDB on every .jk coll / .jk deck invocation.
-      // Key: userId (normalized phone@... JID), Value: 'hybrid' | 'static'
+ // PERF per-user render mode cache (hybrid vs static).
+ // Avoids hitting MongoDB on every .jk coll / .jk deck invocation.
+ // Key: userId (normalized phone@... JID), Value: 'hybrid' | 'static'
       userRenderModes: new Map(),
     });
   }
@@ -216,7 +216,7 @@ const ALL_CARDS     = () => getInst().ALL_CARDS;
 const CARD_INDEX    = () => getInst().CARD_INDEX;
 const CARDS_BY_TIER = () => getInst().CARDS_BY_TIER;
 
-// 💡 Helper: identify event cards by ID prefix (E-XXXXX).
+// Helper: identify event cards by ID prefix (E-XXXXX).
 // Event cards now have real tiers (1-6, S) extracted from shoob.gg,
 // so we can't rely on tier === 'E' anymore. The ID prefix 'E-' is
 // the reliable way to identify event cards.
@@ -224,7 +224,7 @@ function isEventCard(card) {
   return card && card.id && String(card.id).startsWith('E-');
 }
 
-// 💡 FIX 2026-09-11: single source of truth for "is this card animated".
+// FIX single source of truth for "is this card animated".
 // Tier 6/S and event cards are animated by convention, but ANY card whose
 // imageUrl points at a .gif/.webp/.webm is animated too - new drops can
 // attach animated assets to lower tiers (owners report animated 5-star
@@ -237,16 +237,16 @@ function isAnimatedCard(card) {
     ANIMATED_URL_RE.test(String(card.imageUrl || ''));
 }
 
-// 💡 Helper: escape regex special characters in a deck name before using it
+// Helper: escape regex special characters in a deck name before using it
 // in `new RegExp(...)`. Without this, deck names like "Best (Girls)" or
 // "S+ Tiers" throw SyntaxError or silently fail to match.
 // Used by: cmdCDeck, cmdCDeckRemove, cmdEShopDeckTrading(sell),
-//          cmdRenameDeck, cmdDeleteDeck.
+// cmdRenameDeck, cmdDeleteDeck.
 function escapeRegex(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// 💡 FIX 2026-10-08 (vanishing cards / broken gifts): mentions were used RAW
+// FIX (vanishing cards / broken gifts): mentions were used RAW
 // as ownership identities. WhatsApp group mentions arrive as @lid JIDs while
 // some long-time players' economy accounts (and cards) live under
 // <phone>@s.whatsapp.net - and vice versa. A raw-mention transfer wrote the
@@ -266,12 +266,12 @@ function resolveMentionJid(jid) {
   return jid;
 }
 
-// 💡 FIX 2026-10-08 (owner report: "tagging is broken - you can @ but it's
+// FIX (owner report: "tagging is broken - you can @ but it's
 // also supposed to work when you mention/quote or reply to a message").
 // Target selection must accept BOTH tag shapes:
-//   * @mention            -> contextInfo.mentionedJid[0]
-//   * reply/quote         -> contextInfo.participant (the quoted msg's author,
-//                            often as a @lid - run through resolveMentionJid)
+// * @mention -> contextInfo.mentionedJid[0]
+// * reply/quote -> contextInfo.participant (the quoted msg's author,
+// often as a @lid - run through resolveMentionJid)
 // Mentions win when both are present. Replying to one of the BOT's own
 // messages must NOT target the bot - treated as "no tag" so the command
 // falls through to its usage error. Scans every common message shape, not
@@ -297,7 +297,7 @@ function getTaggedJid(m) {
   return participant;
 }
 
-// 💡 Helper: get all event cards (by ID prefix, not tier)
+// Helper: get all event cards (by ID prefix, not tier)
 function getEventCards() {
   return ALL_CARDS().filter(c => isEventCard(c));
 }
@@ -311,14 +311,14 @@ function loadCardsDB() {
     inst.ALL_CARDS     = cards;
     inst.CARD_INDEX    = {};
     inst.CARDS_BY_TIER = {};
-    inst.EVENT_CARDS   = []; // 💡 Event cards by ID prefix (E-XXXXX)
+    inst.EVENT_CARDS   = []; // Event cards by ID prefix (E-XXXXX)
     
     for (const card of inst.ALL_CARDS) {
       inst.CARD_INDEX[card.id] = card;
       const t = String(card.tier);
       if (!inst.CARDS_BY_TIER[t]) inst.CARDS_BY_TIER[t] = [];
       inst.CARDS_BY_TIER[t].push(card);
-      // 💡 Track event cards by ID prefix
+ // Track event cards by ID prefix
       if (isEventCard(card)) {
         inst.EVENT_CARDS.push(card);
       }
@@ -369,7 +369,7 @@ async function loadRoles() {
   }
 }
 
-// 💡 FIX 2026-08-31: shared per-instance timer (re)builder. Works for ANY
+// FIX shared per-instance timer (re)builder. Works for ANY
 // instance (not just the current getInst()) so cross-bot sync can rebuild
 // other bots' timers instead of clearing them and leaving them dead.
 function rebuildSpawnTimersForInstance(inst) {
@@ -388,9 +388,9 @@ function rebuildSpawnTimersForInstance(inst) {
   const minMs = inst.spawnIntervalMinMs || (12 * 60 * 1000);
   const maxMs = inst.spawnIntervalMaxMs || minMs;
 
-  // 💡 FIX 2026-08-31 (stale closure): read the interval LIVE from `inst` at
-  // every fire instead of closing over minMs/maxMs - a running timer chain
-  // now adopts new spawnset values on the next fire.
+ // FIX (stale closure): read the interval LIVE from `inst` at
+ // every fire instead of closing over minMs/maxMs - a running timer chain
+ // now adopts new spawnset values on the next fire.
   const randomDelay = () => {
     const lo = inst.spawnIntervalMinMs || (12 * 60 * 1000);
     const hi = inst.spawnIntervalMaxMs || lo;
@@ -401,7 +401,7 @@ function rebuildSpawnTimersForInstance(inst) {
   for (const gid of inst.activeGroups) {
     if (inst.perGroupTimers.has(gid)) continue; // already has a timer
 
-    // Random initial delay in [0, maxMs) so groups desync on first fire.
+ // Random initial delay in [0, maxMs) so groups desync on first fire.
     const initialDelay = Math.floor(Math.random() * maxMs);
 
     const scheduleNext = (delay) => {
@@ -410,14 +410,14 @@ function rebuildSpawnTimersForInstance(inst) {
           inst.perGroupTimers.delete(gid);
           return;
         }
-        // 💡 FIX 2026-08-31: catch async failures - doSpawn hits Mongo
-        // (getOrInitStat/stat.save); an unhandled rejection from a timer
-        // callback kills the process on Node >=15. The chain must ALSO
-        // continue scheduling on failure or the group goes spawn-dead.
+ // FIX catch async failures - doSpawn hits Mongo
+ // (getOrInitStat/stat.save); an unhandled rejection from a timer
+ // callback kills the process on Node >=15. The chain must ALSO
+ // continue scheduling on failure or the group goes spawn-dead.
         Promise.resolve(doSpawn(null, null, false, gid)).catch((spawnErr) => {
           console.error(`[CardSystem] timer doSpawn failed for ${gid}:`, spawnErr?.message || spawnErr);
         });
-        // Schedule the next fire at a fresh random delay
+ // Schedule the next fire at a fresh random delay
         scheduleNext(randomDelay());
       }, delay);
       inst.perGroupTimers.set(gid, timer);
@@ -425,62 +425,59 @@ function rebuildSpawnTimersForInstance(inst) {
     scheduleNext(initialDelay);
   }
 
-  // Keep a dummy spawnTimer reference so the old `if (inst.spawnTimer)` check works
+ // Keep a dummy spawnTimer reference so the old `if (inst.spawnTimer)` check works
   inst.spawnTimer = true;
   console.log(`[CardSystem][${inst.botId || botConfig.getBotId()}] Per-group spawn timers started: ${inst.perGroupTimers.size} groups, interval=random ${Math.round(minMs/60000)}-${Math.round(maxMs/60000)}min (staggered first-fire)`);
 }
 
 function ensureTimerRunning() {
   const inst = getInst();
-  // 💡 FIX 2026-08-31: NO early return on `inst.spawnTimer` - that boolean
-  // gate made ensureTimerRunning a one-shot: groups enabled AFTER the first
-  // call never received a per-group timer (one immediate spawn, then silence
-  // until restart). The per-group loop below is idempotent (line: `if
-  // (perGroupTimers.has(gid)) continue`), so calling this repeatedly is safe.
+ // FIX NO early return on `inst.spawnTimer` - that boolean
+ // gate made ensureTimerRunning a one-shot: groups enabled AFTER the first
+ // call never received a per-group timer (one immediate spawn, then silence
+ // until restart). The per-group loop below is idempotent (line: `if
+ // (perGroupTimers.has(gid)) continue`), so calling this repeatedly is safe.
   if (inst.activeGroups.size === 0) return;
   if (!inst.perGroupTimers) inst.perGroupTimers = new Map();
   if (inst.spawnTimer && inst.perGroupTimers.size >= inst.activeGroups.size) {
-    // Every active group already has a timer - nothing to do.
+ // Every active group already has a timer - nothing to do.
     return;
   }
 
-  // 💡 FIX §8: per-group spawn timers instead of a single shared timer.
-  // Previously, one timer rotated through groups, so each group only got
-  // a spawn every interval × numberOfGroups. Now each group gets its own
-  // independent timer at the configured interval.
-  //
-  // 💡 FIX (Item #13 - "card spawn hive mind"): stagger the first spawn
-  // for each group by a random offset within the interval, so groups
-  // don't all spawn at the same wall-clock minute.
-  // 💡 PHASE 7 FIX 2026-08-30: random spawn delay - pick a random delay
-  // in [spawnIntervalMinMs, spawnIntervalMaxMs] for each fire.
-  // NOTE: rebuild clears + recreates chains only when at least one group
-  // is missing a timer (checked above), so a fully-timered instance is
-  // left untouched and keeps its stagger clock.
+ // FIX §8: per-group spawn timers instead of a single shared timer.
+ // Previously, one timer rotated through groups, so each group only got
+ // a spawn every interval × numberOfGroups. Now each group gets its own
+ // independent timer at the configured interval.
+ // FIX (Item #13 - "card spawn hive mind"): stagger the first spawn
+ // for each group by a random offset within the interval, so groups
+ // don't all spawn at the same wall-clock minute.
+ // random spawn delay - pick a random delay
+ // in [spawnIntervalMinMs, spawnIntervalMaxMs] for each fire.
+ // NOTE: rebuild clears + recreates chains only when at least one group
+ // is missing a timer (checked above), so a fully-timered instance is
+ // left untouched and keeps its stagger clock.
   rebuildSpawnTimersForInstance(inst);
 }
 
-// 💡 Restart the spawn timer with a new interval. Called by .g spawnset.
+// Restart the spawn timer with a new interval. Called by .g spawnset.
 // Clears the existing timer and re-creates it with the new interval.
 function restartSpawnTimer() {
   const inst = getInst();
   rebuildSpawnTimersForInstance(inst);
 }
 
-// 💡 PHASE 7 FIX 2026-08-30: setSpawnInterval supports range syntax (min-max).
+// setSpawnInterval supports range syntax (min-max).
 // Three call modes:
-//   setSpawnInterval(20)              → sets both min=max=20 (backward compat)
-//   setSpawnInterval('15-30')        → random within 15-30 min (string with dash)
-//   setSpawnInterval(15, 30)          → random within 15-30 min (two args)
+// setSpawnInterval(20) → sets both min=max=20 (backward compat)
+// setSpawnInterval('15-30') → random within 15-30 min (string with dash)
+// setSpawnInterval(15, 30) → random within 15-30 min (two args)
 // Persists { min, max } to card_spawn_interval_global. Backward-compat: if old
 // single-number value exists in DB, loadSpawnInterval migrates it to { min: x, max: x }.
-// Returns { success, message }.
 async function setSpawnInterval(minutesOrRange, callerJid, isOwner, maxMinutes) {
   const inst = getInst();
   if (!isOwner) {
     return { success: false, message: '❌ Only moderators and above can change the spawn interval.' };
   }
-  // Parse the input: support "20", "15-30", 20 (number), or two args (15, 30)
   let minMins, maxMins;
   if (typeof minutesOrRange === 'string' && minutesOrRange.includes('-')) {
     const parts = minutesOrRange.split('-').map(s => Number(s.trim()));
@@ -497,35 +494,35 @@ async function setSpawnInterval(minutesOrRange, callerJid, isOwner, maxMinutes) 
     return { success: false, message: '❌ Invalid interval. Use a number between 1 and 1440 minutes (24 hours), or `<min>-<max>` for a random range.\nExample: `20` (fixed) or `15-30` (random range)' };
   }
   if (minMins > maxMins) {
-    // Swap so min <= max (don't reject - user may have typed them backwards)
+ // Swap so min <= max (don't reject - user may have typed them backwards)
     [minMins, maxMins] = [maxMins, minMins];
   }
   inst.spawnIntervalMinMs = minMins * 60 * 1000;
   inst.spawnIntervalMaxMs = maxMins * 60 * 1000;
   inst.spawnIntervalMs = inst.spawnIntervalMaxMs;  // legacy alias = max
-  // 💡 P3 (2026-08-16): Cross-bot sync - persist spawn interval GLOBALLY
-  // (not per-bot). All bot instances read the same key, so setting it on
-  // one bot applies to all. Was: card_spawn_interval_<botId>. Now: card_spawn_interval_global.
+ // P3: Cross-bot sync - persist spawn interval GLOBALLY
+ // (not per-bot). All bot instances read the same key, so setting it on
+ // one bot applies to all. Was: card_spawn_interval_<botId>. Now: card_spawn_interval_global.
   try {
-    // 💡 PHASE 7 FIX 2026-08-30: persist {min, max} object (was single number)
+ // persist {min, max} object (was single number)
     await System.findOneAndUpdate(
       { key: `card_spawn_interval_global` },
       { value: { min: inst.spawnIntervalMinMs, max: inst.spawnIntervalMaxMs } },
       { upsert: true }
     );
-    // 💡 Sync to ALL running bot instances in this process
+ // Sync to ALL running bot instances in this process
     for (const [botId, otherInst] of instances) {
       if (botId !== botConfig.getBotId()) {
         otherInst.spawnIntervalMs = inst.spawnIntervalMs;
         otherInst.spawnIntervalMinMs = inst.spawnIntervalMinMs;
         otherInst.spawnIntervalMaxMs = inst.spawnIntervalMaxMs;
-        // 💡 FIX 2026-08-31: previously this CLEARED the other bot's
-        // per-group timers but never re-created them ("can't switch botId"),
-        // and their `spawnTimer` stayed `true` so ensureTimerRunning
-        // early-returned forever - every other bot went spawn-dead until
-        // process restart. rebuildSpawnTimersForInstance() takes the inst
-        // directly (no getInst()/ALS dependency), so we can now properly
-        // rebuild their timers with the new interval.
+ // FIX previously this CLEARED the other bot's
+ // per-group timers but never re-created them ("can't switch botId"),
+ // and their `spawnTimer` stayed `true` so ensureTimerRunning
+ // early-returned forever - every other bot went spawn-dead until
+ // process restart. rebuildSpawnTimersForInstance() takes the inst
+ // directly (no getInst()/ALS dependency), so we can now properly
+ // rebuild their timers with the new interval.
         if (otherInst.activeGroups.size > 0) {
           rebuildSpawnTimersForInstance(otherInst);
         }
@@ -535,15 +532,15 @@ async function setSpawnInterval(minutesOrRange, callerJid, isOwner, maxMinutes) 
     console.error('[CardSystem] Failed to persist spawn interval:', e.message);
     return { success: false, message: `⚠️ Interval set in memory but failed to persist: ${e.message}` };
   }
-  // Restart timer if it's running
+ // Restart timer if it's running
   if (inst.activeGroups.size > 0) {
     restartSpawnTimer();
   }
-  // 💡 PHASE 7 FIX 2026-08-30: message uses min/max + isRandom
+ // message uses min/max + isRandom
   const intervalLabel = minMins === maxMins ? `${minMins} minutes` : `${minMins}-${maxMins} minutes (random)`;
   const avgMinutes = (minMins + maxMins) / 2;
   const spawnsPerHour = Math.round(60 / avgMinutes * 10) / 10;
-  // 💡 2026-10-08: token rate is a flat 1 per 10 spawns (per group) - no RNG bonus layer.
+ // token rate is a flat 1 per 10 spawns (per group) - no RNG bonus layer.
   const tokensPerHour = Math.round(spawnsPerHour / 10 * 10) / 10;
   return {
     success: true,
@@ -557,8 +554,8 @@ _Interval persists across bot restarts._`
   };
 }
 
-// 💡 Get current spawn interval info for display.
-// 💡 PHASE 7 FIX 2026-08-30: getSpawnIntervalInfo returns min/max + isRandom
+// Get current spawn interval info for display.
+// getSpawnIntervalInfo returns min/max + isRandom
 function getSpawnIntervalInfo() {
   const inst = getInst();
   const minMs = inst.spawnIntervalMinMs || (12 * 60 * 1000);
@@ -567,10 +564,10 @@ function getSpawnIntervalInfo() {
   const minMinutes = Math.round(minMs / 60000);
   const maxMinutes = Math.round(maxMs / 60000);
   const isRandom = minMs !== maxMs;
-  // Average rate based on midpoint of range
+ // Average rate based on midpoint of range
   const avgMinutes = (minMinutes + maxMinutes) / 2;
   const spawnsPerHour = Math.round(60 / avgMinutes * 10) / 10;
-  // 💡 2026-10-08: 1 token per 10 spawns (per group), no RNG bonus layer.
+ // 1 token per 10 spawns (per group), no RNG bonus layer.
   const tokensPerHour = Math.round(spawnsPerHour / 10 * 10) / 10;
   return {
     minutes: maxMinutes,  // legacy field (kept for backward compat)
@@ -587,20 +584,20 @@ function getSpawnIntervalInfo() {
   };
 }
 
-// 💡 Load persisted spawn interval from System collection on startup.
-// 💡 P3 (2026-08-16): Reads GLOBAL key (card_spawn_interval_global) so all
+// Load persisted spawn interval from System collection on startup.
+// P3: Reads GLOBAL key (card_spawn_interval_global) so all
 // bot instances share the same spawn interval. Falls back to per-bot key
 // for backward compatibility (if global doesn't exist yet).
 async function loadSpawnInterval() {
   const inst = getInst();
   try {
-    // Try global key first
+ // Try global key first
     let doc = await System.findOne({ key: `card_spawn_interval_global` });
     if (!doc) {
-      // Backward compat: fall back to per-bot key, then migrate to global
+ // Backward compat: fall back to per-bot key, then migrate to global
       doc = await System.findOne({ key: `card_spawn_interval_${botConfig.getBotId()}` });
       if (doc) {
-        // Migrate to global
+ // Migrate to global
         await System.findOneAndUpdate(
           { key: `card_spawn_interval_global` },
           { value: doc.value },
@@ -609,16 +606,16 @@ async function loadSpawnInterval() {
         console.log(`[CardSystem][${botConfig.getBotId()}] Migrated spawn interval to global key`);
       }
     }
-    // 💡 PHASE 7 FIX 2026-08-30: loadSpawnInterval handles both formats
+ // loadSpawnInterval handles both formats
     if (doc) {
       if (doc.value && typeof doc.value === 'object' && typeof doc.value.min === 'number' && typeof doc.value.max === 'number') {
-        // New format: { min, max }
+ // New format: { min, max }
         inst.spawnIntervalMinMs = doc.value.min;
         inst.spawnIntervalMaxMs = doc.value.max;
         inst.spawnIntervalMs = doc.value.max;  // legacy alias = max
         console.log(`[CardSystem][${botConfig.getBotId()}] Loaded spawn interval: random ${Math.round(doc.value.min/60000)}-${Math.round(doc.value.max/60000)}min (global)`);
       } else if (typeof doc.value === 'number' && doc.value > 0) {
-        // Old format: single number. Migrate to {min: x, max: x} so future saves use new format.
+ // Old format: single number. Migrate to {min: x, max: x} so future saves use new format.
         inst.spawnIntervalMinMs = doc.value;
         inst.spawnIntervalMaxMs = doc.value;
         inst.spawnIntervalMs = doc.value;
@@ -630,7 +627,7 @@ async function loadSpawnInterval() {
   }
 }
 
-// 💡 Load persisted tier spawn config from System collection on startup.
+// Load persisted tier spawn config from System collection on startup.
 async function loadTierConfig() {
   const inst = getInst();
   try {
@@ -645,7 +642,7 @@ async function loadTierConfig() {
   }
 }
 
-// 💡 Set a tier's spawn weight or chance. Persisted to DB.
+// Set a tier's spawn weight or chance. Persisted to DB.
 // For T1-T4: use weight (relative number, higher = more common)
 // For T5/T6/S/E: use chance (0.0-1.0 per-spawn probability) OR weight
 // Setting weight to 0 disables the tier from the weighted pool.
@@ -675,7 +672,7 @@ async function setTierConfig(tier, type, value) {
     return { success: false, message: `❌ Invalid type. Use 'weight' or 'chance'.` };
   }
 
-  // Persist
+ // Persist
   try {
     await System.findOneAndUpdate(
       { key: `card_tier_config_${botConfig.getBotId()}` },
@@ -707,7 +704,7 @@ function formatTierConfig(inst) {
   return lines.join('\n');
 }
 
-// 💡 Reset tier config to defaults.
+// Reset tier config to defaults.
 async function resetTierConfig() {
   const inst = getInst();
   inst.tierWeights = { ...DEFAULT_SPAWN_WEIGHTS };
@@ -722,9 +719,9 @@ async function resetTierConfig() {
   return { success: true, message: `✅ Tier config reset to defaults.\n\n${formatTierConfig(inst)}` };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  SECTION 3 - CORE ENGINE
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// SECTION 3 - CORE ENGINE
+// ===========================================================================
 
 function getRarityLabel(copyNumber, maxCopies) {
   const pct = copyNumber / maxCopies;
@@ -754,45 +751,45 @@ async function getUserName(jid) {
 
 function buildCardDetailCaption(card, uc, stat, location = 'Collection', index = null, ownerName = 'Player') {
   const tier  = String(card.tier);
-  // 🎴 UNIVERSAL CAPTION STYLE (owner spec 2026-10-08): every card caption in
-  // the system renders the same "CARD DETAIL" block — `emoji ⟢ *Label:* _value_`.
-  // Tier label single-spaced per spec ("TIER VI").
+ // UNIVERSAL CAPTION STYLE (owner spec ): every card caption in
+ // the system renders the same "CARD DETAIL" block - `emoji ⟢ *Label:* _value_`.
+ // Tier label single-spaced per spec ("TIER VI").
   const label = String(TIER_LABEL[tier] || `TIER ${tier}`).replace(/\s+/g, ' ').trim();
 
-  // 💡 FIX: Only show "Player's Coll" when there IS an owner (uc != null).
-  // For database lookups (info command, no owner), use the location
-  // parameter directly - defaults to 'Global Database' or 'Event Database'.
+ // FIX: Only show "Player's Coll" when there IS an owner (uc != null).
+ // For database lookups (info command, no owner), use the location
+ // parameter directly - defaults to 'Global Database' or 'Event Database'.
   let locStr;
   if (uc) {
-    // Player owns this card - show their collection/deck info
+ // Player owns this card - show their collection/deck info
     locStr = `${ownerName}'s Coll`;
     if (index !== null) locStr += ` (#${index})`;
     if (uc.inMainDeck) locStr = `${ownerName}'s Main Deck (Slot #${uc.mainDeckSlot})`;
     else if (uc.inCustomDeck) locStr = `Deck: ${uc.customDeckName} (Slot #${uc.customDeckSlot})`;
   } else {
-    // No owner - this is a database lookup, not a player's card
+ // No owner - this is a database lookup, not a player's card
     locStr = location;
   }
 
   const copyLine  = uc ? `\n📋 ⟢ *Copy:* _#${uc.copyNumber} / ${stat?.maxCopies || '?'}_` : '';
   const ownerLine = uc ? `\n👤 ⟢ *Owner:* _@${economy.getDisplayName(uc.userId)}_` : '';
 
-  // 💡 DATA MODEL (2026-10-08): animeName = the card's REAL anime/series,
-  // eventName = the event the card belongs to. Two separate concepts, two
-  // separate lines (owner rule: "the event should be separate from the
-  // series"). Series line = animeName; Event line = eventName.
+ // DATA MODEL: animeName = the card's REAL anime/series,
+ // eventName = the event the card belongs to. Two separate concepts, two
+ // separate lines (owner rule: "the event should be separate from the
+ // series"). Series line = animeName; Event line = eventName.
   const seriesDisplay = card.animeName || 'Unknown';
   let eventLine = '';
   if (isEventCard(card)) {
     eventLine = `\n🎪 ⟢ *Event:* _${card.eventName || card.animeName}_`;
   }
 
-  // 💡 Description follows the house format "<Name> from <Series>" (data
-  // regenerated 2026-10-08 for every event card).
+ // Description follows the house format "<Name> from <Series>" (data
+ // regenerated for every event card).
   const descLine = card.description ? `\n📝 ⟢ *Description:* _${card.description}_` : '';
 
-  // owned/tagged/database contexts ALWAYS carry the location line —
-  // only the spawn caption omits it (owner rule)
+ // owned/tagged/database contexts ALWAYS carry the location line -
+ // only the spawn caption omits it (owner rule)
   return (
 `🎴  *CARD DETAIL*
 
@@ -807,13 +804,13 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection', index =
 
 function buildSpawnCaption(card, copyNumber, maxCopies, price) {
   const tier  = String(card.tier);
-  // 🎴 UNIVERSAL CAPTION STYLE (owner spec 2026-10-08) — the same "CARD
-  // DETAIL" block as buildCardDetailCaption. Spawning cards show NO
-  // location line; the claim footer keeps the spawn actionable.
+ // UNIVERSAL CAPTION STYLE (owner spec ) - the same "CARD
+ // DETAIL" block as buildCardDetailCaption. Spawning cards show NO
+ // location line; the claim footer keeps the spawn actionable.
   const label = String(TIER_LABEL[tier]  || `TIER ${tier}`).replace(/\s+/g, ' ').trim();
 
-  // Same data model as buildCardDetailCaption (see 2026-10-08 note there):
-  // Series = animeName (real series), Event = eventName (separate line).
+ // Same data model as buildCardDetailCaption (see note there):
+ // Series = animeName (real series), Event = eventName (separate line).
   const seriesDisplay = card.animeName || 'Unknown';
   let eventLine = '';
   if (isEventCard(card)) {
@@ -822,8 +819,8 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price) {
 
   const descLine = card.description ? `\n📝 ⟢ *Description:* _${card.description}_` : '';
 
-  // 💡 2026-10-08 (owner): a card that spawns in the group says
-  // "CARD APPEARED" - "CARD DETAIL" stays for owned/database views.
+ // (owner): a card that spawns in the group says
+ // "CARD APPEARED" - "CARD DETAIL" stays for owned/database views.
   return (
 `🎴  *CARD APPEARED*
 
@@ -860,11 +857,11 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
     card = CARD_INDEX()[forceCardId];
     if (!card) {
       const q = forceCardId.toLowerCase();
-      // 💡 FIX 2026-08-31: 'E' is a VIRTUAL tier - event cards carry their
-      // real tier (1-6/S) with an 'E-' ID prefix, so `String(c.tier)==='E'`
-      // never matched and `.g espawn <name>` ALWAYS failed (only exact
-      // E-XXXXX IDs worked). When forceTier is 'E', match event cards by
-      // ID prefix instead of tier.
+ // FIX 'E' is a VIRTUAL tier - event cards carry their
+ // real tier (1-6/S) with an 'E-' ID prefix, so `String(c.tier)==='E'`
+ // never matched and `.g espawn <name>` ALWAYS failed (only exact
+ // E-XXXXX IDs worked). When forceTier is 'E', match event cards by
+ // ID prefix instead of tier.
       const tierOk = (c) => {
         if (!forceTier) return true;
         if (String(c.tier) === String(forceTier)) return true;
@@ -878,13 +875,13 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
     stat = await getOrInitStat(card.id, card.tier);
   } else {
     const tier = forceTier || (() => {
-      // 💡 Use per-bot configurable tier chances (T5/T6/S/E fire first)
+ // Use per-bot configurable tier chances (T5/T6/S/E fire first)
       const chances = inst.tierChances || { '5': DEFAULT_T5_CHANCE, '6': DEFAULT_T6_CHANCE, 'S': 0, 'E': 0 };
       if (chances['6'] > 0 && Math.random() < chances['6']) return '6';
       if (chances['5'] > 0 && Math.random() < chances['5']) return '5';
       if (chances['S'] > 0 && Math.random() < chances['S']) return 'S';
       if (chances['E'] > 0 && Math.random() < chances['E']) return 'E';
-      // Weighted pool for T1-T4 (+ any T5/T6/S/E with weight > 0)
+ // Weighted pool for T1-T4 (+ any T5/T6/S/E with weight > 0)
       const weights = inst.tierWeights || { ...DEFAULT_SPAWN_WEIGHTS };
       const entries = Object.entries(weights).filter(([t, w]) => w > 0);
       if (entries.length === 0) return '1'; // fallback
@@ -894,10 +891,10 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
       return entries[0][0];
     })();
 
-    // 💡 FIX 2026-08-31: 'E' is a virtual tier - there is no CARDS_BY_TIER['E']
-    // bucket (event cards live in their real-tier buckets), so a random 'E'
-    // roll produced an EMPTY pool and silently degraded to the T1 fallback.
-    // Use the EVENT_CARDS list instead.
+ // FIX 'E' is a virtual tier - there is no CARDS_BY_TIER['E']
+ // bucket (event cards live in their real-tier buckets), so a random 'E'
+ // roll produced an EMPTY pool and silently degraded to the T1 fallback.
+ // Use the EVENT_CARDS list instead.
     const pool = String(tier).toUpperCase() === 'E'
       ? [...(inst.EVENT_CARDS || [])]
       : [...(CARDS_BY_TIER()[tier] || [])].filter(c => !isEventCard(c));
@@ -912,7 +909,7 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
     }
     
     if (!card) {
-        // T1 Fallback - exclude event cards
+ // T1 Fallback - exclude event cards
         const t1 = [...(CARDS_BY_TIER()['1'] || [])].filter(c => !isEventCard(c));
         for (const c of t1) {
             const s = await getOrInitStat(c.id, '1');
@@ -936,9 +933,9 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
       if (gifBuffer) {
         await inst.sock_ref.sendMessage(targetGroup, { video: gifBuffer, gifPlayback: true, caption });
       } else {
-        // 💡 FIX 2026-10-08: sniff the buffer - a raw .webm/.gif sent as
-        // image/jpeg is unrenderable (blank card + "Mime type video/webm
-        // does not support decoding" in the logs).
+ // FIX sniff the buffer - a raw .webm/.gif sent as
+ // image/jpeg is unrenderable (blank card + "Mime type video/webm
+ // does not support decoding" in the logs).
         const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer', timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
         await sendCardMedia(inst.sock_ref, targetGroup, Buffer.from(res.data), caption);
       }
@@ -948,23 +945,23 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
     }
 
     const spawnKey = `${targetGroup}_${card.id}`;
-    // 💡 TOKEN RATES (2026-10-08 requirements doc §2 + §14):
-    //   1 token per 10 cards spawned, with PER-GROUP counters - each group's
-    //   progression is fully independent (activity in one group never
-    //   advances another group's token clock). Counters only advance while
-    //   a token event is ACTIVE, so the 1-in-10 ratio maps exactly to
-    //   event-window spawns. Replaces the old global every-3rd-spawn +
-    //   25% RNG mechanic.
+ // TOKEN RATES (requirements doc §2 + §14):
+ // 1 token per 10 cards spawned, with PER-GROUP counters - each group's
+ // progression is fully independent (activity in one group never
+ // advances another group's token clock). Counters only advance while
+ // a token event is ACTIVE, so the 1-in-10 ratio maps exactly to
+ // event-window spawns. Replaces the old global every-3rd-spawn +
+ // 25% RNG mechanic.
     let isTokenSpawn = false;
     const eventActiveNow = await isTokenEventActive();
     if (eventActiveNow) {
-      // 💡 47-l2 (owner 2026-10-21: "haven't seen anyone get an event token even
-      // when they claimed alot of cards"): the map key MUST be safeCounterKey
-      // here too. loadTokenRateCounters() stores sanitized keys (dots stripped
-      // for Mongo), but this lookup used the RAW group jid — so after every
-      // restart get('@g.us') missed the stored '@g_us' key and every group's
-      // counter silently restarted from 0. With the cmd layer OFF (47-l1) that
-      // made tokens essentially never drop.
+ // 47-l2 ("haven't seen anyone get an event token even
+ // when they claimed alot of cards"): the map key MUST be safeCounterKey
+ // here too. loadTokenRateCounters() stores sanitized keys (dots stripped
+ // for Mongo), but this lookup used the RAW group jid - so after every
+ // restart get('@g.us') missed the stored '@g_us' key and every group's
+ // counter silently restarted from 0. With the cmd layer OFF (47-l1) that
+ // made tokens essentially never drop.
       const gKey = safeCounterKey(targetGroup);
       const count = (inst.tokenSpawnCounters.get(gKey) || 0) + 1;
       if (count >= TOKEN_SPAWNS_PER_TOKEN) {
@@ -978,12 +975,12 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
     inst.activeSpawns.set(spawnKey, {
       card, copyNumber: stat.totalSpawned, stat, price,
       groupJid: targetGroup, spawnedAt: Date.now(), expiresAt: Date.now() + CLAIM_WINDOW_MS,
-      hasToken: isTokenSpawn, // 💡 marked for token drop on claim
+      hasToken: isTokenSpawn, // marked for token drop on claim
     });
-    // 💡 RESTART-SAFE SPAWNS (2026-10-08): persist so a deploy/restart no
-    // longer erases unclaimed cards (players read that as "cards randomly
-    // disappearing"). The claim path and the expiry sweeper keep this doc
-    // in sync; loadActiveSpawns() restores unexpired docs on boot.
+ // RESTART-SAFE SPAWNS: persist so a deploy/restart no
+ // longer erases unclaimed cards (players read that as "cards randomly
+ // disappearing"). The claim path and the expiry sweeper keep this doc
+ // in sync; loadActiveSpawns() restores unexpired docs on boot.
     CardSpawn.findOneAndUpdate(
       { key: spawnKey },
       {
@@ -1002,9 +999,9 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  SECTION 3.5 - TOKEN EVENT & ESHOP SYSTEM
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// SECTION 3.5 - TOKEN EVENT & ESHOP SYSTEM
+// ===========================================================================
 
 /**
  * Check if the token event is currently active.
@@ -1026,17 +1023,17 @@ async function startTokenEvent(ownerJid) {
   inst.tokenEventActive = true;
   inst.tokenEventStart = Date.now();
 
-  // 💡 P3 (2026-08-16): Cross-bot sync - persist token event GLOBALLY.
-  // All bot instances share the same token event state.
-  // Was: token_event_<botId>. Now: token_event_global.
-  // Also sync to all running bot instances in this process.
+ // P3: Cross-bot sync - persist token event GLOBALLY.
+ // All bot instances share the same token event state.
+ // Was: token_event_<botId>. Now: token_event_global.
+ // Also sync to all running bot instances in this process.
   try {
     await System.findOneAndUpdate(
       { key: `token_event_global` },
       { $set: { value: { active: true, startedAt: inst.tokenEventStart } } },
       { upsert: true }
     );
-    // Sync to all other bot instances
+ // Sync to all other bot instances
     for (const [botId, otherInst] of instances) {
       if (botId !== botConfig.getBotId()) {
         otherInst.tokenEventActive = true;
@@ -1065,13 +1062,13 @@ async function stopTokenEvent(ownerJid) {
   inst.tokenEventActive = false;
 
   try {
-    // 💡 P3: Global key for cross-bot sync
+ // P3: Global key for cross-bot sync
     await System.findOneAndUpdate(
       { key: `token_event_global` },
       { $set: { value: { active: false, startedAt: inst.tokenEventStart, stoppedAt: Date.now() } } },
       { upsert: true }
     );
-    // Sync to all other bot instances
+ // Sync to all other bot instances
     for (const [botId, otherInst] of instances) {
       if (botId !== botConfig.getBotId()) {
         otherInst.tokenEventActive = false;
@@ -1087,12 +1084,12 @@ async function stopTokenEvent(ownerJid) {
  */
 async function loadTokenEventState() {
   try {
-    // 💡 P3: Read global key first, fall back to per-bot for backward compat
+ // P3: Read global key first, fall back to per-bot for backward compat
     let doc = await System.findOne({ key: `token_event_global` }).lean();
     if (!doc) {
       doc = await System.findOne({ key: `token_event_${botConfig.getBotId()}` }).lean();
       if (doc) {
-        // Migrate to global
+ // Migrate to global
         await System.findOneAndUpdate(
           { key: `token_event_global` },
           { $set: { value: doc.value } },
@@ -1109,22 +1106,22 @@ async function loadTokenEventState() {
   } catch (e) { /* silent - may not exist yet */ }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  TOKEN RATE ENGINE (2026-10-08 requirements doc §2, §3, §14)
-//  - Spawn-based: 1 token / 10 spawns, PER GROUP (isolated progression)
-//  - Command-based (HIDDEN): 1 token / 15 eligible player commands,
-//    claim excluded. Per-user counter.
-//  Counters persist to the System collection so restarts don't reset
-//  progression. Event activity in one group NEVER affects another group.
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// TOKEN RATE ENGINE (requirements doc §2, §3, §14)
+// - Spawn-based: 1 token / 10 spawns, PER GROUP (isolated progression)
+// - Command-based (HIDDEN): 1 token / 15 eligible player commands,
+// claim excluded. Per-user counter.
+// Counters persist to the System collection so restarts don't reset
+// progression. Event activity in one group NEVER affects another group.
+// ===========================================================================
 
 const TOKEN_SPAWNS_PER_TOKEN  = 10;  // §2: 1 token per 10 cards
 const TOKEN_CMDS_PER_TOKEN    = 15;  // §3: 1 token per 15 eligible commands
-// 💡 47-l1 (owner 2026-10-20: "card tokens are spawning in even when people
+// 47-l1 ("card tokens are spawning in even when people
 // aren't claiming cards???? recently all received tokens"): the §3 hidden
-// layer pays every 15th eligible command — tokens with zero claims, which
+// layer pays every 15th eligible command - tokens with zero claims, which
 // reads as tokens spawning from nowhere. Owner wants tokens tied to
-// claiming, so the command layer ships OFF (§2 claim drops unaffected —
+// claiming, so the command layer ships OFF (§2 claim drops unaffected -
 // a claimed token-bearing spawn still pays). Flip to true to restore the
 // Oct-8 spec behavior.
 const TOKEN_CMD_LAYER_ENABLED = false;
@@ -1132,15 +1129,15 @@ const TOKEN_SPAWN_COUNTER_KEY = 'card_token_spawn_counters_v1';
 const TOKEN_CMD_COUNTER_KEY   = 'card_token_cmd_counters_v1';
 
 // Commands that NEVER count toward the hidden command-token mechanic:
-//  - claim (§3 explicitly excludes it - high-frequency)
-//  - all mod/owner management commands (prevents mod farming, keeps the
-//    mechanic a pure player-activity reward)
+// - claim (§3 explicitly excludes it - high-frequency)
+// - all mod/owner management commands (prevents mod farming, keeps the
+// mechanic a pure player-activity reward)
 const TOKEN_CMD_EXCLUDED = new Set([
   'claim', 'cardmod', 'cards', 'event', 'setprice', 'spawn', 'espawn',
   'reloadcards', 'einfo', 'spawnset', 'spawninfo', 'trc', 'ci', 'rc', 'erc',
   'info', 'endauction', 'setauctiongc', 't2edeck', 'tokenreset', 'src', 'tokenlb', 'tlb',
-  'unsrc', 'restorecards', // Task 15c: backup restore (mod management, never token-eligible)
-  'movecards', 'mc', // 💡 2026-10-23: mod-level card mover — never farms tokens
+  'unsrc', 'restorecards', // backup restore (mod management, never token-eligible)
+  'movecards', 'mc', // mod-level card mover - never farms tokens
 ]);
 
 // MongoDB field names can't contain '.' or '$' on old versions - sanitize JIDs
@@ -1152,9 +1149,9 @@ function safeCounterKey(jid) {
 async function persistTokenSpawnCounters() {
   const inst = getInst();
   try {
-    // 💡 47-l2: merge per-key instead of replacing the whole value object.
-    // All three bots share this System doc — the old wholesale $set let every
-    // jake/subaru spawn erase joker's group counters (and vice versa).
+ // 47-l2: merge per-key instead of replacing the whole value object.
+ // All three bots share this System doc - the old wholesale $set let every
+ // jake/subaru spawn erase joker's group counters (and vice versa).
     if (inst.tokenSpawnCounters.size === 0) return;
     const set = {};
     for (const [g, c] of inst.tokenSpawnCounters) set[`value.${safeCounterKey(g)}`] = c;
@@ -1169,8 +1166,8 @@ async function persistTokenSpawnCounters() {
 async function persistTokenCmdCounters() {
   const inst = getInst();
   try {
-    // 💡 47-l2: same merge fix as persistTokenSpawnCounters — shared doc,
-    // per-key $set so bots don't clobber each other's progress.
+ // 47-l2: same merge fix as persistTokenSpawnCounters - shared doc,
+ // per-key $set so bots don't clobber each other's progress.
     if (inst.tokenCmdCounters.size === 0) return;
     const set = {};
     for (const [u, c] of inst.tokenCmdCounters) set[`value.${safeCounterKey(u)}`] = c;
@@ -1212,23 +1209,23 @@ async function noteEligibleCommand(senderJid) {
   const inst = getInst();
   try {
     if (!(await isTokenEventActive())) return null;
-    // 💡 47-l2: same sanitized-key discipline as the spawn counters — the
-    // loaded keys are safeCounterKey form, the lookup must match or restarts
-    // reset per-user progression.
+ // 47-l2: same sanitized-key discipline as the spawn counters - the
+ // loaded keys are safeCounterKey form, the lookup must match or restarts
+ // reset per-user progression.
     const uKey = safeCounterKey(senderJid);
     const count = (inst.tokenCmdCounters.get(uKey) || 0) + 1;
     if (count >= TOKEN_CMDS_PER_TOKEN) {
       inst.tokenCmdCounters.set(uKey, 0);
       persistTokenCmdCounters(); // async fire-and-forget write, errors logged inside
-      economy.addEventTokens(senderJid, 1); // 💡 47-l2: registration-gate-free grant
+      economy.addEventTokens(senderJid, 1); // 47-l2: registration-gate-free grant
       const balance = economy.getEventTokens(senderJid);
       console.log(`[CardSystem][${botConfig.getBotId()}] 🎫 Hidden cmd-token granted to ${senderJid} (total ${balance})`);
-      // §4-compliant message: tells the player they got a token, reveals
-      // NOTHING about rates, probability or the mechanic.
+ // §4-compliant message: tells the player they got a token, reveals
+ // NOTHING about rates, probability or the mechanic.
       return `🎫 ${economy.getDisplayName(senderJid)} found an *Event Token!* (Total: ${balance})`;
     }
     inst.tokenCmdCounters.set(uKey, count);
-    // Persist lazily every 5 steps so restarts don't lose too much progress
+ // Persist lazily every 5 steps so restarts don't lose too much progress
     if (count % 5 === 0) persistTokenCmdCounters();
   } catch (e) {
     console.error('[TokenRate] noteEligibleCommand failed:', e.message);
@@ -1343,7 +1340,7 @@ async function eshopBuy(senderJid, slot) {
     return { success: false, message: `❌ Slot ${slot} is empty.` };
   }
 
-  const balance = economy.getEventTokens(senderJid); // 💡 47-l2: no registration gate
+  const balance = economy.getEventTokens(senderJid); // 47-l2: no registration gate
   if (balance < entry.price) {
     return {
       success: false,
@@ -1351,18 +1348,17 @@ async function eshopBuy(senderJid, slot) {
     };
   }
 
-  // Deduct tokens
-  const deducted = economy.removeEventTokens(senderJid, entry.price); // 💡 47-l2
+ // Deduct tokens
+  const deducted = economy.removeEventTokens(senderJid, entry.price); // 47-l2
   if (!deducted) {
     return { success: false, message: '❌ Failed to deduct tokens. Try again.' };
   }
 
-  // Grant the card to the user
+ // Grant the card to the user
   try {
-    // Get the card stat to find the next copy number
-    // 💡 FIX 2026-08-31 (duplicate copy numbers): read-modify-write across an
-    // await let two concurrent buyers compute the SAME copyNumber and rewound
-    // each other's counters. Use atomic $inc and read the post-increment value.
+ // FIX (duplicate copy numbers): read-modify-write across an
+ // await let two concurrent buyers compute the SAME copyNumber and rewound
+ // each other's counters. Use atomic $inc and read the post-increment value.
     const stat = await getOrInitStat(entry.cardId, entry.tier);
     const updatedStat = await CardStat.findOneAndUpdate(
       { _id: stat._id },
@@ -1372,7 +1368,7 @@ async function eshopBuy(senderJid, slot) {
     const copyNumber = (updatedStat && updatedStat.totalCirculation) || (stat.totalCirculation + 1);
     await UserCard.create({ userId: senderJid, cardId: entry.cardId, copyNumber });
 
-    const newBalance = economy.getEventTokens(senderJid); // 💡 47-l2
+    const newBalance = economy.getEventTokens(senderJid); // 47-l2
     return {
       success: true,
       message: `✅ *PURCHASE COMPLETE!*\n\n` +
@@ -1383,8 +1379,8 @@ async function eshopBuy(senderJid, slot) {
         `_Added to your collection!_`
     };
   } catch (err) {
-    // Roll back the token deduction if card grant failed
-    economy.addEventTokens(senderJid, entry.price); // 💡 47-l2: refund bypasses the gate too
+ // Roll back the token deduction if card grant failed
+    economy.addEventTokens(senderJid, entry.price); // 47-l2: refund bypasses the gate too
     console.error('[eShop Buy Error]', err);
     return { success: false, message: '❌ Purchase failed - tokens refunded.' };
   }
@@ -1415,13 +1411,13 @@ async function generateEShopDeckImage() {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  ESHOP FLEX VIEW — one WhatsApp message PER card, full art, big & visible
-//  (owner 2026-10-20: ".j eshop 1-16 should show the cards individually
-//   for ppl to see")
-//  Accepted inputs: `eshop 3` | `eshop 2-7` | `eshop 1 - 16` | `eshop all`
-//                   | `eshop flex` (all) | `eshop flex 1-16`
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// ESHOP FLEX VIEW - one WhatsApp message PER card, full art, big & visible
+// (".j eshop 1-16 should show the cards individually
+// for ppl to see")
+// Accepted inputs: `eshop 3` | `eshop 2-7` | `eshop 1 - 16` | `eshop all`
+// | `eshop flex` (all) | `eshop flex 1-16`
+// ===========================================================================
 
 /**
  * Pure range parser so QA can hammer it without touching a live instance.
@@ -1430,7 +1426,7 @@ async function generateEShopDeckImage() {
  */
 function parseEshopFlexToken(tok) {
   if (tok === undefined || tok === null) return null;
-  const m = /^\s*(\d{1,2})\s*(?:[-–—]\s*(\d{1,2}))?\s*$/.exec(String(tok));
+  const m = /^\s*(\d{1,2})\s*(?:[---]\s*(\d{1,2}))?\s*$/.exec(String(tok));
   if (!m) return null;
   const a = parseInt(m[1], 10);
   const b = m[2] ? parseInt(m[2], 10) : a;
@@ -1439,7 +1435,7 @@ function parseEshopFlexToken(tok) {
 }
 
 // Flood guard: a 1-16 flex bursts up to 17 messages, so keep a per-chat
-// cooldown. Single card views share it — cheap protection against
+// cooldown. Single card views share it - cheap protection against
 // `.j eshop 3` spam loops too. Only set when cards will actually send,
 // so an empty-range miss doesn't burn the cooldown.
 const ESHOP_FLEX_COOLDOWN_MS = 15000;
@@ -1450,9 +1446,9 @@ async function eshopFlexView(senderJid, reply, chatId, startSlot, endSlot) {
   const inst = getInst();
   const now = Date.now();
   const single = startSlot === endSlot;
-  // only the bulk burst gets throttled — a one-card peek is a normal 1-message view
+ // only the bulk burst gets throttled - a one-card peek is a normal 1-message view
   if (!single && now - (eshopFlexLastRun.get(chatId) || 0) < ESHOP_FLEX_COOLDOWN_MS) {
-    return reply(`⏳  _Flex view just ran here — give it a few seconds_`);
+    return reply(`⏳  _Flex view just ran here - give it a few seconds_`);
   }
 
   const entries = [];
@@ -1469,49 +1465,49 @@ async function eshopFlexView(senderJid, reply, chatId, startSlot, endSlot) {
 
   const sock = inst.sock_ref;
   if (!sock || typeof sock.sendMessage !== 'function') {
-    return reply('⚠️  _Bot is reconnecting — try again in a moment_');
+    return reply('⚠️  _Bot is reconnecting - try again in a moment_');
   }
 
-  // Header only for multi-card bursts (instant feedback while media streams out).
-  // A single-card view sends JUST the card with its caption — owner 2026-10-20:
-  // "it sends one message then another? It should only send the card with its caption"
+ // Header only for multi-card bursts (instant feedback while media streams out).
+ // A single-card view sends JUST the card with its caption -
+ // "it sends one message then another? It should only send the card with its caption"
   if (!single) {
-    const tokenBalance = economy.getEventTokens(senderJid); // 💡 47-l2
+    const tokenBalance = economy.getEventTokens(senderJid); // 47-l2
     const eventActive = await isTokenEventActive();
     const rangeLabel = `${startSlot}-${endSlot}`;
-    const header = `🎪 *EVENT SHOP — FLEX VIEW* 🎪\n` +
+    const header = `🎪 *EVENT SHOP - FLEX VIEW* 🎪\n` +
       `━━━━━━━━━━━━━━━\n` +
       `🎫 Your Tokens: *${tokenBalance}*\n` +
       `📊 Event Status: ${eventActive ? '🟢 ACTIVE' : '🔴 INACTIVE'}\n` +
       `🃏 Showing *${entries.length}* cards (slots ${rangeLabel})\n\n` +
       `🛒 Buy one: \`${p} eshop buy <slot>\``;
-    try { await reply(header); } catch (e) { /* header is cosmetic — cards matter more */ }
+    try { await reply(header); } catch (e) { /* header is cosmetic - cards matter more */ }
   }
 
   const failed = [];
   for (const entry of entries) {
     try {
-      // Same fetch contract as every other single-card path (spawn/summon/info)
+ // Same fetch contract as every other single-card path (spawn/summon/info)
       const res = await axios.get(entry.imageUrl, { responseType: 'arraybuffer', timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
       const buf = Buffer.from(res.data);
       if (!buf || buf.length < 100) throw new Error('empty media');
-      const caption = `🃏 *#${entry.slot}* — ${entry.cardName} (T${entry.tier})\n` +
-        `📺 ${entry.anime || '—'}\n` +
+      const caption = `🃏 *#${entry.slot}* - ${entry.cardName} (T${entry.tier})\n` +
+        `📺 ${entry.anime || '-'}\n` +
         `🎫 ${entry.price} tokens\n` +
         `🛒 Buy: \`${p} eshop buy ${entry.slot}\``;
-      // Universal magic-sniffing sender: PNG/JPEG → image, GIF → animated
-      // image, WebM/MP4 → gifPlayback video (same behavior everywhere)
+ // Universal magic-sniffing sender: PNG/JPEG → image, GIF → animated
+ // image, WebM/MP4 → gifPlayback video (same behavior everywhere)
       await sendCardMedia(sock, chatId, buf, caption);
     } catch (err) {
       console.error(`[eShop] flex slot ${entry.slot} failed:`, err.message);
       failed.push(entry.slot);
     }
-    // Gentle pacing — 16 media uploads in one burst trips WA rate limits
+ // Gentle pacing - 16 media uploads in one burst trips WA rate limits
     if (entries.length > 1) await new Promise(r => setTimeout(r, 1200));
   }
 
   if (failed.length) {
-    return reply(`⚠️  _Couldn't load slot${failed.length === 1 ? '' : 's'} ${failed.join(', ')} — try again in a moment_`);
+    return reply(`⚠️  _Couldn't load slot${failed.length === 1 ? '' : 's'} ${failed.join(', ')} - try again in a moment_`);
   }
 }
 
@@ -1525,10 +1521,10 @@ async function searchEventCards(nameQuery, animeQuery) {
 
   let results = eventCards;
 
-  // 💡 FIX (2026-10-08): a name query now matches the card name, the EVENT
-  // name, AND the anime/series name. Before, only cardName was searched, so
-  // `einfo summer` found nothing (the Summer cards are named after their
-  // characters, not the event) — the owner saw event search as "all gone".
+ // FIX: a name query now matches the card name, the EVENT
+ // name, AND the anime/series name. Before, only cardName was searched, so
+ // `einfo summer` found nothing (the Summer cards are named after their
+ // characters, not the event) - the owner saw event search as "all gone".
   if (nameQuery) {
     const nq = nameQuery.toLowerCase();
     results = results.filter(c =>
@@ -1547,17 +1543,17 @@ async function searchEventCards(nameQuery, animeQuery) {
   return results;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  SECTION 4 - COMMAND HANDLERS
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// SECTION 4 - COMMAND HANDLERS
+// ===========================================================================
 
 // GIF Cache
-// 💡 AUDIT FIX 2026-08-01 (Round 3): added TTL + timestamp to cache entries.
+// AUDIT FIX (Round 3): added TTL + timestamp to cache entries.
 // Previously entries never expired - every user who ran .coll/.deck added
 // a permanent buffer to the Map. On a 954MB box with 3000+ users, this is
 // a slow memory leak. Now entries expire after 60s (matches onboarding doc's
 // "Hybrid grid 60s cache" note) and a sweeper runs every 2 min.
-// 💡 FIX 2026-09-10: 60s → 600s. The deck hash already invalidates on ANY
+// FIX 60s → 600s. The deck hash already invalidates on ANY
 // collection/deck change, so TTL only bounds staleness - and hybrid renders
 // now take 15-60s on heavy decks, so re-rendering every call (old behavior)
 // was brutal. 10 minutes makes repeat views instant.
@@ -1587,13 +1583,13 @@ setInterval(() => {
         console.log(`🃏 [GifCache] Swept ${decksEvicted} deck + ${collsEvicted} collection entries (TTL ${GIF_CACHE_TTL_MS/1000}s).`);
     }
 
-    // 💡 FIX 2026-08-31: sweep EXPIRED card spawns + stale pendingBurns.
-    // activeSpawns entries were only removed when someone tried to CLAIM that
-    // exact card - unclaimed spawns (expired after 30 min) stayed in the Map
-    // forever, each pinning the full card object + a live CardStat Mongoose
-    // doc. On a 954MB box this is a slow unbounded leak (~3 spawns/hour per
-    // group, forever). pendingBurns entries likewise never expired if the
-    // owner never accepted/declined.
+ // FIX sweep EXPIRED card spawns + stale pendingBurns.
+ // activeSpawns entries were only removed when someone tried to CLAIM that
+ // exact card - unclaimed spawns (expired after 30 min) stayed in the Map
+ // forever, each pinning the full card object + a live CardStat Mongoose
+ // doc. On a 954MB box this is a slow unbounded leak (~3 spawns/hour per
+ // group, forever). pendingBurns entries likewise never expired if the
+ // owner never accepted/declined.
     let spawnsSwept = 0, burnsSwept = 0;
     for (const [, inst] of instances) {
         if (inst.activeSpawns) {
@@ -1601,9 +1597,9 @@ setInterval(() => {
                 if (!spawn || Date.now() > (spawn.expiresAt || 0)) {
                     inst.activeSpawns.delete(key);
                     spawnsSwept++;
-                    // 💡 FIX 2026-10-08 ("cards randomly disappearing"): say
-                    // WHY the card is gone instead of silently deleting it,
-                    // and drop the persisted doc so it can't resurrect.
+ // FIX ("cards randomly disappearing"): say
+ // WHY the card is gone instead of silently deleting it,
+ // and drop the persisted doc so it can't resurrect.
                     if (spawn && inst.sock_ref && spawn.groupJid) {
                         CardSpawn.deleteOne({ key }).catch(() => {});
                         Promise.resolve(
@@ -1634,7 +1630,7 @@ function getDeckHash(cards) {
     return cards.map(c => c.cardId + (c.isLocked ? 'L' : 'U')).join('|');
 }
 
-// ── 💡 OWNER BRIEF 2026-10-09 §1: resilient card-name matching ─────────────
+// -- OWNER BRIEF §1: resilient card-name matching -------------
 // "olivier armstrong" must hit "Olivier Mira Armstrong" (missing middle
 // names, word order, punctuation, quote chars). Tokens AND-match, results
 // ranked by relevance. Used by info / cs / ci / series.
@@ -1671,12 +1667,12 @@ async function cmdClaim(args, senderJid, reply, chatId) {
   const cardIdInput = args.join('').trim();
   if (!cardIdInput) return sendUsage(reply, `${P()} claim`, `${P()} claim <card-id>`, `${P()} claim 3-04521`);
 
-  // Try exact match with composite key
+ // Try exact match with composite key
   const exactKey = `${chatId}_${cardIdInput}`;
   let spawn = inst.activeSpawns.get(exactKey);
   
   if (!spawn) {
-      // Find case-insensitive match for this chat
+ // Find case-insensitive match for this chat
       const foundKey = Array.from(inst.activeSpawns.keys()).find(k => {
           return k.toLowerCase() === exactKey.toLowerCase() || (k.startsWith(chatId + '_') && k.split('_')[1].toLowerCase() === cardIdInput.toLowerCase());
       });
@@ -1688,32 +1684,31 @@ async function cmdClaim(args, senderJid, reply, chatId) {
     return reply(`❌  *CARD NOT FOUND*\n\n🆔⟢ *ID:* \`${cardIdInput}\`\n📍 ⟢ _No active card in this group_`);
   }
 
-  // 💡 FIX 2026-08-31 (claim race): remove the spawn from activeSpawns
-  // IMMEDIATELY - BEFORE any await. Previously the delete happened after
-  // 3 awaits (findOne/create/save); two players claiming in the same tick
-  // both passed the check and BOTH created a UserCard with the same
-  // copyNumber. Now the first claimer atomically "takes" the spawn; if the
-  // DB write then fails we restore it (rollback) so the spawn isn't lost.
+ // FIX (claim race): remove the spawn from activeSpawns
+ // IMMEDIATELY - BEFORE any await. Previously the delete happened after
+ // 3 awaits (findOne/create/save); two players claiming in the same tick
+ // both passed the check and BOTH created a UserCard with the same
+ // copyNumber. Now the first claimer atomically "takes" the spawn; if the
+ // DB write then fails we restore it (rollback) so the spawn isn't lost.
   const claimKey = `${chatId}_${spawn.card.id}`;
   inst.activeSpawns.delete(claimKey);
 
-  // 💡 RESTART-SAFE SPAWNS (2026-10-08): spawns restored from the CardSpawn
-  // collection after a restart carry no Mongoose stat doc - resolve it here
-  // so the atomic $inc below (and the rarity label) still work.
+ // RESTART-SAFE SPAWNS: spawns restored from the CardSpawn
+ // collection after a restart carry no Mongoose stat doc - resolve it here
+ // so the atomic $inc below (and the rarity label) still work.
   if (!spawn.stat) {
     spawn.stat = await CardStat.findOne({ cardId: spawn.card.id })
       || await getOrInitStat(spawn.card.id, spawn.card.tier);
   }
 
   try {
-    // Check if the user already owns at least one copy of this card.
     const alreadyOwned = await UserCard.findOne({ ...(await ownerOf(senderJid)), cardId: spawn.card.id }).lean();
 
     await UserCard.create({ userId: senderJid, cardId: spawn.card.id, copyNumber: spawn.copyNumber });
-    // 💡 FIX 2026-08-31 (stale stat write): spawn.stat is a Mongoose doc loaded
-    // at SPAWN time (up to 30 min stale). Full-document save() rewound
-    // totalSpawned/uniqueOwners when the same card spawned again meanwhile,
-    // causing duplicate copy numbers. Use atomic $inc instead.
+ // FIX (stale stat write): spawn.stat is a Mongoose doc loaded
+ // at SPAWN time (up to 30 min stale). Full-document save() rewound
+ // totalSpawned/uniqueOwners when the same card spawned again meanwhile,
+ // causing duplicate copy numbers. Use atomic $inc instead.
     await CardStat.updateOne(
       { _id: spawn.stat._id },
       {
@@ -1723,57 +1718,57 @@ async function cmdClaim(args, senderJid, reply, chatId) {
         },
       }
     );
-    // 💡 RESTART-SAFE SPAWNS (2026-10-08): claim fully succeeded - drop the
-    // persisted doc. On rollback below the doc stays, so a retried claim
-    // still works after a restart.
+ // RESTART-SAFE SPAWNS: claim fully succeeded - drop the
+ // persisted doc. On rollback below the doc stays, so a retried claim
+ // still works after a restart.
     await CardSpawn.deleteOne({ key: claimKey }).catch(() => {});
 
-    // 💡 TOKEN DROP (2026-10-08 requirements doc §2 + §4):
-    // Single deterministic layer - a spawn is marked hasToken at SPAWN time
-    // (1 in 10 spawns per group, see doSpawn). On claim, if the event is
-    // active AND the spawn is token-bearing, grant +1 token. No RNG layer.
-    // §4: the message simply tells the player they received an Event Token -
-    // it must NOT reveal the spawn rate, probability, or the mechanic.
+ // TOKEN DROP (requirements doc §2 + §4):
+ // Single deterministic layer - a spawn is marked hasToken at SPAWN time
+ // (1 in 10 spawns per group, see doSpawn). On claim, if the event is
+ // active AND the spawn is token-bearing, grant +1 token. No RNG layer.
+ // §4: the message simply tells the player they received an Event Token -
+ // it must NOT reveal the spawn rate, probability, or the mechanic.
     let tokenMsg = '';
     try {
       const eventActive = await isTokenEventActive();
       if (eventActive && spawn.hasToken) {
-        economy.addEventTokens(senderJid, 1); // 💡 47-l2: registration-gate-free grant
+        economy.addEventTokens(senderJid, 1); // 47-l2: registration-gate-free grant
         const balance = economy.getEventTokens(senderJid);
         tokenMsg = `\n\n🎫 +1 *Event Token!* (Total: ${balance})\n_Spend them with \`${P()} eshop\`._`;
       }
     } catch (tokenErr) {
-      // Don't fail the claim if token drop fails
+ // Don't fail the claim if token drop fails
       console.error('[Token Drop Error]', tokenErr.message);
     }
 
     const rarity = getRarityLabel(spawn.copyNumber, spawn.stat.maxCopies);
     const _claimTier = String(spawn.card.tier);
       const _claimLabel = TIER_LABEL[_claimTier] || `TIER ${_claimTier}`;
-      // 💡 STYLE 2026-10-08 (owner spec): universal claim card — same field
-      // emojis + ⟢ arrow as CARD DETAIL. rarity.emoji leads the header
-      // (💠 for a solo copy, matching the owner's sample). Tier label is
-      // single-spaced like the owner's "TIER III" sample (TIER_LABEL table
-      // carries double spaces - normalize).
+ // STYLE (owner spec): universal claim card - same field
+ // emojis + ⟢ arrow as CARD DETAIL. rarity.emoji leads the header
+ // ( for a solo copy, matching the owner's sample). Tier label is
+ // single-spaced like the owner's "TIER III" sample (TIER_LABEL table
+ // carries double spaces - normalize).
       const _claimTierLabel = String(_claimLabel).replace(/\s+/g, ' ').trim();
       return reply(`${rarity.emoji}  *CLAIMED*\n\n🏷️⟢ _${spawn.card.cardName}_\n📺 ⟢ _${spawn.card.animeName}_\n\n🏆 _${_claimTierLabel}_  ⟢  🔢 _#${spawn.copyNumber}_\n        \`${rarity.label}\`\n\n📦 _Added to collection_${tokenMsg}`);
   } catch (err) {
     console.error('[Claim Error]', err);
-    // 💡 FIX 2026-08-31 (rollback): restore the spawn so a transient DB
-    // failure doesn't destroy the card for everyone in the group.
-    // Only restore if nobody else has claimed it in the meantime.
+ // FIX (rollback): restore the spawn so a transient DB
+ // failure doesn't destroy the card for everyone in the group.
+ // Only restore if nobody else has claimed it in the meantime.
     if (!inst.activeSpawns.has(claimKey)) {
       inst.activeSpawns.set(claimKey, spawn);
     }
-    return reply(`❌  *CLAIM FAILED*\n\n📍 ⟢ _The card slipped away — it is back up for grabs_`);
+    return reply(`❌  *CLAIM FAILED*\n\n📍 ⟢ _The card slipped away - it is back up for grabs_`);
   }
 }
 
 function getTopCards(cards) {
-  // 💡 FIX: Added 'E' (Event) tier to the sort order. Event cards are
-  // special and should sort just below S-tier (rarity-wise they're
-  // unique event rewards). Previously they got tier 0 and sank to the
-  // bottom of collection highlights, making them invisible in the GIF.
+ // FIX: Added 'E' (Event) tier to the sort order. Event cards are
+ // special and should sort just below S-tier (rarity-wise they're
+ // unique event rewards). Previously they got tier 0 and sank to the
+ // bottom of collection highlights, making them invisible in the GIF.
   const tierOrder = { 'S': 8, 'E': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2, '1': 1 };
   return [...cards].sort((a, b) => {
     const cardA = CARD_INDEX()[a.cardId];
@@ -1782,7 +1777,7 @@ function getTopCards(cards) {
     const tB = tierOrder[cardB?.tier] || 0;
     if (tA !== tB) return tB - tA;
     return (b.copyNumber || 0) - (a.copyNumber || 0);
-    // 💡 Top 12 cards for the 4×3 grid (matches Go grid renderer)
+ // Top 12 cards for the 4×3 grid (matches Go grid renderer)
   }).slice(0, 12);
 }
 
@@ -1792,11 +1787,11 @@ function getTopImageUrls(topCards) {
     if (!card) return null;
     return {
       url: card.imageUrl,
-      // 💡 FIX 2026-09-11: delegate to the shared isAnimatedCard() predicate
-      // (tier 6/S/E convention + URL-extension detection) so grids and
-      // single-card views always agree on what animates.
+ // FIX delegate to the shared isAnimatedCard() predicate
+ // (tier 6/S/E convention + URL-extension detection) so grids and
+ // single-card views always agree on what animates.
       animated: isAnimatedCard(card),
-      // 💡 Pass card name + tier so the Go grid renderer can overlay them
+ // Pass card name + tier so the Go grid renderer can overlay them
       name: card.cardName || '',
       tier: String(card.tier || ''),
     };
@@ -1816,12 +1811,12 @@ function getTopImageUrls(topCards) {
  *   - PNG/JPEG            → { image }
  *   - GIF (GIF8 magic)    → { image, gifPlayback: true }   (animates)
  * 💡 FIX 2026-10-21 (owner: ".j eshop some cards aren't showing, 9 and 4"):
- * WebM was still shipped RAW as {video} — WhatsApp cannot decode WebM, so
+ * WebM was still shipped RAW as {video} - WhatsApp cannot decode WebM, so
  * the T6 shop cards (E-03004/E-03000) arrived as invisible bubbles. Now:
  *   - WebM (EBML)         → ffmpeg remux → { video, gifPlayback, video/mp4 }
  *                           (falls back to poster PNG, then an honest text)
  *   - MP4 (ftyp)          → { video, gifPlayback, mimetype video/mp4 }
- *   - anything else       → { image } (never raw video — always white-boxed)
+ *   - anything else       → { image } (never raw video - always white-boxed)
  * This is the single sender for every card fallback path so the render
  * behavior can never drift between spawn / coll / deck / info again.
  */
@@ -1836,14 +1831,14 @@ async function sendCardMedia(sock, chatId, buffer, caption, mentions) {
   if (isGif) {
     return await sock.sendMessage(chatId, { image: buffer, gifPlayback: true, caption, ...m });
   }
-  // 💡 FIX 2026-10-21 (owner: ".j eshop some cards aren't showing, 9 and 4"):
-  // the two T6 deck cards (E-03004 Sylphiette, E-03000 Kurisu) are shoob
-  // *.webm files and WhatsApp CANNOT render WebM — the old code shipped the
-  // raw webm bytes as {video} and they arrived as an invisible/broken bubble.
-  // Route WebM through the local-ffmpeg → H.264 mp4 pipeline (identical to
-  // the proven mentoringCommands fix for this exact card, 2026-10-08) so the
-  // card plays as an animated GIF-style video. Poster frame / honest text
-  // fallbacks guarantee the slot is never silently invisible again.
+ // FIX (".j eshop some cards aren't showing, 9 and 4"):
+ // the two T6 deck cards (E-03004 Sylphiette, E-03000 Kurisu) are shoob
+ // *.webm files and WhatsApp CANNOT render WebM - the old code shipped the
+ // raw webm bytes as {video} and they arrived as an invisible/broken bubble.
+ // Route WebM through the local-ffmpeg → H.264 mp4 pipeline (identical to
+ // the proven mentoringCommands fix for this exact card, ) so the
+ // card plays as an animated GIF-style video. Poster frame / honest text
+ // fallbacks guarantee the slot is never silently invisible again.
   const isWebm = buffer[0] === 0x1A && buffer[1] === 0x45 && buffer[2] === 0xDF && buffer[3] === 0xA3; // EBML
   const isMp4  = buffer[4] === 0x66 && buffer[5] === 0x74 && buffer[6] === 0x79 && buffer[7] === 0x70; // 'ftyp'
   if (isWebm || isMp4) {
@@ -1851,12 +1846,12 @@ async function sendCardMedia(sock, chatId, buffer, caption, mentions) {
     if (isWebm) {
       mp4 = await animatedMedia.webmToMp4(buffer);
       if (!mp4) {
-        // remux refused — show the static first frame instead of nothing
+ // remux refused - show the static first frame instead of nothing
         const poster = await animatedMedia.webmPoster(buffer);
         if (poster) {
           return await sock.sendMessage(chatId, { image: poster, caption, ...m });
         }
-        return await sock.sendMessage(chatId, { text: `${caption}\n\n⚠️  _Animated card art couldn't be processed right now — try again soon_` });
+        return await sock.sendMessage(chatId, { text: `${caption}\n\n⚠️  _Animated card art couldn't be processed right now - try again soon_` });
       }
     }
     return await sock.sendMessage(chatId, {
@@ -1867,9 +1862,9 @@ async function sendCardMedia(sock, chatId, buffer, caption, mentions) {
       ...m,
     });
   }
-  // Unknown bytes (webp/avif/html…) used to fall through as {video}, which
-  // always white-screened. An image message is the only remaining chance of
-  // a visible render, so that's the default now — never raw video.
+ // Unknown bytes (webp/avif/html…) used to fall through as {video}, which
+ // always white-screened. An image message is the only remaining chance of
+ // a visible render, so that's the default now - never raw video.
   return await sock.sendMessage(chatId, { image: buffer, caption, ...m });
 }
 
@@ -1879,10 +1874,10 @@ async function cmdCardsTier(senderJid, reply, chatId) {
   const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
   if (!owned.length) return reply(`📭  *COLLECTION EMPTY*\n\n💡 ⟢ _Claim cards from group spawns to start collecting_`);
 
-  // Group by Tier
-  // 💡 FIX: Added 'E' (Event) tier. Previously event cards were silently
-  // dropped from the tier view because `tiers[String(card.tier)]` was
-  // undefined for 'E', so the `if (tiers[t])` check skipped them.
+ // Group by Tier
+ // FIX: Added 'E' (Event) tier. Previously event cards were silently
+ // dropped from the tier view because `tiers[String(card.tier)]` was
+ // undefined for 'E', so the `if (tiers[t])` check skipped them.
   const tiers = { 'S': [], 'E': [], '6': [], '5': [], '4': [], '3': [], '2': [], '1': [] };
   const tierEmoji = { 'S': '👑', 'E': '🎁', '6': '💎', '5': '✨', '4': '🎗', '3': '🔮', '2': '🌈', '1': '🎴' };
   
@@ -1895,7 +1890,7 @@ async function cmdCardsTier(senderJid, reply, chatId) {
   });
 
   let finalMsg = `🃏 *Cards | Tier View*\n\n`;
-  // 💡 FIX: Added 'E' to the iteration order (right after S)
+ // FIX: Added 'E' to the iteration order (right after S)
   for (const t of ['S', 'E', '6', '5', '4', '3', '2', '1']) {
     if (tiers[t].length > 0) {
       const label = TIER_LABEL[t] || `TIER ${t}`;
@@ -1909,7 +1904,7 @@ async function cmdCardsTier(senderJid, reply, chatId) {
 
   finalMsg += `*[Use ${p} coll <card_index> to see more detail about this card]*`;
 
-  // GIF generation for Tier View (Top 6 Highlights)
+ // GIF generation for Tier View (Top 6 Highlights)
   const topCards = getTopCards(owned);
   const imageUrls = getTopImageUrls(topCards);
   if (imageUrls.length > 0) {
@@ -1932,14 +1927,13 @@ async function cmdCardsTier(senderJid, reply, chatId) {
   return reply(finalMsg);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  USER RENDER MODE PREFERENCE (hybrid vs static)
-// ═══════════════════════════════════════════════════════════════════════════
-// Added 2026-07-27 when hybrid became the default rendering mode.
+// ===========================================================================
+// USER RENDER MODE PREFERENCE (hybrid vs static)
+// ===========================================================================
+// Added when hybrid became the default rendering mode.
 // Persists per-user preference in MongoDB System collection so it survives
 // bot restarts. In-memory cache in inst.userRenderModes avoids DB hits on
 // every .jk coll / .jk deck invocation.
-//
 // Default = 'hybrid' (the new animated MP4 grid)
 // Toggle via: .jk anim on | .jk anim off | .jk anim (status)
 // One-shot override via: .jk coll --static | .jk coll --anim
@@ -1949,7 +1943,7 @@ async function getUserRenderMode(userId) {
   if (inst.userRenderModes.has(userId)) {
     return inst.userRenderModes.get(userId);
   }
-  // Lazy load from DB
+ // Lazy load from DB
   const id = botConfig.getBotId();
   try {
     const doc = await System.findOne({ key: `card_render_mode_${id}_${userId}` }).lean();
@@ -1957,7 +1951,7 @@ async function getUserRenderMode(userId) {
     inst.userRenderModes.set(userId, mode);
     return mode;
   } catch (e) {
-    // DB read failed - default to hybrid (best experience)
+ // DB read failed - default to hybrid (best experience)
     return 'hybrid';
   }
 }
@@ -2013,7 +2007,7 @@ async function cmdAnim(senderJid, reply, chatId, args = []) {
     );
   }
 
-  // No arg (or unknown arg) - show current status
+ // No arg (or unknown arg) - show current status
   const mode = await getUserRenderMode(senderJid);
   const isHybrid = mode === 'hybrid';
   return reply(
@@ -2032,14 +2026,14 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   const inst = getInst();
   const p = P();
 
-  // 💡 FEATURE 2026-07-27: hybrid is now the DEFAULT render mode.
-  // User can toggle globally via .jk anim on|off (persists in MongoDB).
-  // One-shot overrides:
-  //   .jk coll --anim     → force hybrid this once (regardless of preference)
-  //   .jk coll --static   → force static PNG this once
-  //   .jk coll -a         → shortcut for --anim
-  //   .jk coll -s         → shortcut for --static
-  // If no flag: use user's saved preference (default = hybrid).
+ // FEATURE hybrid is now the DEFAULT render mode.
+ // User can toggle globally via .jk anim on|off (persists in MongoDB).
+ // One-shot overrides:
+ // .jk coll --anim → force hybrid this once (regardless of preference)
+ // .jk coll --static → force static PNG this once
+ // .jk coll -a → shortcut for --anim
+ // .jk coll -s → shortcut for --static
+ // If no flag: use user's saved preference (default = hybrid).
   let useHybridAnim;
   const animFlagIdx = args.findIndex(a => a === '--anim' || a === '-a' || a === '--animated');
   const staticFlagIdx = args.findIndex(a => a === '--static' || a === '-s');
@@ -2052,7 +2046,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
     args.splice(staticFlagIdx, 1);
     console.log(`🃏 [cmdColl] --static flag (one-shot override) → static`);
   } else {
-    // No flag - use user's saved preference
+ // No flag - use user's saved preference
     const mode = await getUserRenderMode(senderJid);
     useHybridAnim = (mode === 'hybrid');
     console.log(`🃏 [cmdColl] user preference: ${mode}`);
@@ -2069,16 +2063,16 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
       const idx = parseInt(input);
       if (!isNaN(idx)) {
         const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
-        // 💡 FIX 2026-10-08: index against the SAME list the collection
-        // prints (orphans excluded in both places) so `.j coll <n>` always
-        // opens the card shown as #n.
+ // FIX index against the SAME list the collection
+ // prints (orphans excluded in both places) so `.j coll <n>` always
+ // opens the card shown as #n.
         uc = owned.filter(o => CARD_INDEX()[o.cardId])[idx - 1];
         collIndex = idx;
       }
     }
     if (uc && !CARD_INDEX()[uc.cardId]) {
-      // 💡 Orphaned card: its id vanished from the source catalog (e.g. the
-      // site deleted it). Keep it stored, but say so instead of crashing.
+ // Orphaned card: its id vanished from the source catalog (e.g. the
+ // site deleted it). Keep it stored, but say so instead of crashing.
       return reply(`⚠️ *${uc.cardId}* is no longer in the card database (the source catalog removed it).\nYour copy is still safely stored in your collection data.`);
     }
     if (uc) {
@@ -2093,8 +2087,8 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
             return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption, mentions: [uc.userId] });
           }
         }
-        // 💡 FIX 2026-10-08: magic-byte sniffed sender (GIF/WebM fallbacks
-        // used to go out as image/jpeg = blank card).
+ // FIX magic-byte sniffed sender (GIF/WebM fallbacks
+ // used to go out as image/jpeg = blank card).
         const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer', timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
         return await sendCardMedia(inst.sock_ref, chatId, Buffer.from(res.data), caption, [uc.userId]);
       } catch (e) { return reply(caption); }
@@ -2110,19 +2104,19 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
     return reply(`📭  *COLLECTION EMPTY*\n\n💡 ⟢ _Claim cards from group spawns to start collecting_`);
   }
 
-  // 💡 FIX 2026-10-08: orphan-consistent listing. Rows whose cardId is no
-  // longer in CARD_INDEX were silently skipped in the list while Total
-  // counted them - players compared the two and read the difference as
-  // "my cards are randomly disappearing". Filter once; Total, the printed
-  // rows and `.j coll <index>` now all agree. (getTopCards tolerates the
-  // filtered shape - it looks cards up by cardId the same way.)
+ // FIX orphan-consistent listing. Rows whose cardId is no
+ // longer in CARD_INDEX were silently skipped in the list while Total
+ // counted them - players compared the two and read the difference as
+ // "my cards are randomly disappearing". Filter once; Total, the printed
+ // rows and `.j coll <index>` now all agree. (getTopCards tolerates the
+ // filtered shape - it looks cards up by cardId the same way.)
   const listed = owned.filter(o => CARD_INDEX()[o.cardId]);
   const orphanCount = owned.length - listed.length;
   if (orphanCount > 0) {
     console.log(`🃏 [cmdColl] ${orphanCount} orphaned card(s) hidden from listing (cardId not in catalog)`);
   }
 
-  // Build flat list with simple style
+ // Build flat list with simple style
   let msg = `🎴 *Collection*\n`;
   msg += `━━━━━━━━━━━━━━━\n`;
   msg += `📦 *Total:* ${listed.length}\n\n`;
@@ -2133,7 +2127,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
     lines.push(`*#${i + 1}* ⟢ 🏷️ _${card.cardName}_`);
   }
 
-  // GIF generation for collection (Top 15 Highlights)
+ // GIF generation for collection (Top 15 Highlights)
   const topCards = getTopCards(listed);
   const imageUrls = getTopImageUrls(topCards);
   if (imageUrls.length > 0) {
@@ -2144,24 +2138,23 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
     let gifBuffer;
     let hybridContentType = null;
     if (cached && cached.hash === currentHash && cached.mode === modeKey && (Date.now() - (cached.ts || 0)) < GIF_CACHE_TTL_MS) {
-        // 💡 FIX 2026-09-10: cache BOTH modes - hybrid renders take 15-60s on
-        // heavy decks. Deck hash invalidates on change; mode key prevents
-        // anim/static cross-contamination (an MP4 sent as image would break).
+ // FIX cache BOTH modes - hybrid renders take 15-60s on
+ // heavy decks. Deck hash invalidates on change; mode key prevents
+ // anim/static cross-contamination (an MP4 sent as image would break).
         console.log(`🃏 [cmdColl] using cached ${modeKey} grid buffer`);
         gifBuffer = cached.buffer;
         hybridContentType = cached.contentType || null;
     } else if (useHybridAnim) {
-        // 💡 Hybrid animated grid - styled static grid + animated overlays.
-        // Returns video/mp4 (if ≥1 animated card) or image/png (if none animated).
+ // Hybrid animated grid - styled static grid + animated overlays.
         console.log(`🃏 [cmdColl] calling goService.generateHybridGrid | urls=${imageUrls.length}`);
         const hybridResult = await goService.generateHybridGrid(imageUrls, "COLLECTION (TOP 12)");
         if (hybridResult) {
           gifBuffer = hybridResult.buffer;
           hybridContentType = hybridResult.contentType;
           console.log(`🃏 [cmdColl] generateHybridGrid returned: ${gifBuffer.length} bytes (${hybridContentType})`);
-          // 💡 FIX 2026-09-11: surface silent animation loss. The Go endpoint
-          // falls back to the styled static PNG when ffmpeg fails; without
-          // this line the only symptom was "animated cards render as stills".
+ // FIX surface silent animation loss. The Go endpoint
+ // falls back to the styled static PNG when ffmpeg fails; without
+ // this line the only symptom was "animated cards render as stills".
           const animFlagCount = imageUrls.filter(u => u && u.animated).length;
           if (animFlagCount > 0 && hybridContentType && !hybridContentType.includes('video')) {
             console.log(`⚠️ [cmdColl] hybrid PNG fallback despite ${animFlagCount} animated card(s) - check go service [HybridGrid] logs`);
@@ -2180,9 +2173,9 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
     if (gifBuffer) {
       const fullText = msg + lines.join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`;
       if (useHybridAnim) {
-        // 💡 Send as single message. Hybrid may return MP4 or PNG.
-        // MP4 (animated cards): send as { video, gifPlayback, caption }
-        // PNG (no animated cards): send as { image, caption }
+ // Send as single message. Hybrid may return MP4 or PNG.
+ // MP4 (animated cards): send as { video, gifPlayback, caption }
+ // PNG (no animated cards): send as { image, caption }
         const isVideo = hybridContentType && hybridContentType.includes('video');
         console.log(`🃏 [cmdColl] sending ${isVideo ? 'video' : 'image'} (hybrid) with caption`);
         if (isVideo) {
@@ -2195,7 +2188,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
     }
   }
 
-  // Fallback text-only (Send as one message)
+ // Fallback text-only (Send as one message)
   console.log(`🃏 [cmdColl] sending text-only fallback`);
   return reply(msg + lines.join('\n') + `\n\n*[Use ${p} coll <card_index> to see more detail]*`);
 }
@@ -2204,8 +2197,8 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
   const inst = getInst();
   const p = P();
 
-  // 💡 FEATURE 2026-07-27: hybrid is now the DEFAULT render mode.
-  // Same flag/preference logic as cmdColl - see comment there for details.
+ // FEATURE hybrid is now the DEFAULT render mode.
+ // Same flag/preference logic as cmdColl - see comment there for details.
   let useHybridAnim;
   const animFlagIdx = args.findIndex(a => a === '--anim' || a === '-a' || a === '--animated');
   const staticFlagIdx = args.findIndex(a => a === '--static' || a === '-s');
@@ -2239,8 +2232,8 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
                         return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption, mentions: [uc.userId] });
                     }
                 }
-                // 💡 FIX 2026-10-08: magic-byte sniffed sender (GIF/WebM
-                // fallbacks used to go out as image/jpeg = blank card).
+ // FIX magic-byte sniffed sender (GIF/WebM
+ // fallbacks used to go out as image/jpeg = blank card).
                 const res = await axios.get(card.imageUrl, { responseType: 'arraybuffer', timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
                 return await sendCardMedia(inst.sock_ref, chatId, Buffer.from(res.data), caption, [uc.userId]);
             } catch (e) { return reply(caption); }
@@ -2252,7 +2245,7 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
   const deck = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: true }).sort({ mainDeckSlot: 1 });
   if (!deck.length) return reply(`📭  *MAIN DECK EMPTY*\n\n💡 ⟢ _Move cards in from your collection to build your deck_`);
 
-  // Build requested template
+ // Build requested template
   let msg = `🎴 *Main Deck* 🎴\n`;
   msg += `━━━━━━━━━━━━━━━\n`;
   msg += `📦 *Total:* ${deck.length}\n\n`;
@@ -2261,9 +2254,9 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
     const card = CARD_INDEX()[uc.cardId];
     const name = card ? card.cardName : 'Unknown';
     const tier = card ? String(card.tier) : '?';
-    // 💡 STYLE 2026-10-08 (owner spec): deck rows use the SAME field emojis
-    // as CARD DETAIL / claim — 🏷️ name, 📺 series, 🏆 tier, 🔢 slot — with
-    // the house ⟢ arrow. Was: 🃏 Name / ✨ Tier.
+ // STYLE (owner spec): deck rows use the SAME field emojis
+ // as CARD DETAIL / claim - name, series, tier, slot - with
+ // the house ⟢ arrow. Was: Name / Tier.
     const tierLabel = String(TIER_LABEL[tier] || `TIER ${tier}`).replace(/\s+/g, ' ').trim();
     const series = card ? (card.animeName || 'Unknown') : 'Unknown';
     return `🔢 ⟢ _#${uc.mainDeckSlot}_\n   🏷️⟢ _${name}_\n   📺 ⟢ _${series}_\n   🏆 ⟢ _${tierLabel}_\n━━━━━━━━━━━━━━━`;
@@ -2272,7 +2265,7 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
   msg += lines.join('\n');
   msg += `\n\n*[Use ${p} deck <card_index> to see more detail about this card]*`;
 
-  // GIF generation for deck (Top 15)
+ // GIF generation for deck (Top 15)
   const topCards = getTopCards(deck);
   const imageUrls = getTopImageUrls(topCards);
   if (imageUrls.length > 0) {
@@ -2283,8 +2276,8 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
     let gifBuffer;
     let hybridContentType = null;
     if (cached && cached.hash === currentHash && cached.mode === modeKey && (Date.now() - (cached.ts || 0)) < GIF_CACHE_TTL_MS) {
-        // 💡 FIX 2026-09-10: cache both modes (see cmdColl note - hybrid
-        // renders are expensive now that big GIFs actually render).
+ // FIX cache both modes (see cmdColl note - hybrid
+ // renders are expensive now that big GIFs actually render).
         gifBuffer = cached.buffer;
         hybridContentType = cached.contentType || null;
     } else if (useHybridAnim) {
@@ -2292,7 +2285,7 @@ async function cmdDeck(senderJid, reply, chatId, args = []) {
         if (hybridResult) {
           gifBuffer = hybridResult.buffer;
           hybridContentType = hybridResult.contentType;
-          // 💡 FIX 2026-09-11: surface silent animation loss (see cmdColl note).
+ // FIX surface silent animation loss (see cmdColl note).
           const animFlagCount = imageUrls.filter(u => u && u.animated).length;
           if (animFlagCount > 0 && hybridContentType && !hybridContentType.includes('video')) {
             console.log(`⚠️ [cmdDeck] hybrid PNG fallback despite ${animFlagCount} animated card(s) - check go service [HybridGrid] logs`);
@@ -2333,14 +2326,14 @@ async function cmdScc(senderJid, reply, chatId, args = []) {
   const animeQuery = args.join(' ').toLowerCase().trim();
   if (!animeQuery) return sendUsage(reply, `${p} scc`, `${p} scc <anime_name> [--page n]`, `${p} scc dragon ball`);
 
-  // 💡 BUG-03 fix: fetch ALL owned cards (for display) but build the coll-number
-  // map from COLL-ONLY cards (matching .g coll numbering). The old code built
-  // collNumberMap from ALL cards, so the numbers didn't match what .g coll
-  // showed - and the collNum was computed but never rendered in the output.
+ // BUG-03 fix: fetch ALL owned cards (for display) but build the coll-number
+ // map from COLL-ONLY cards (matching .g coll numbering). The old code built
+ // collNumberMap from ALL cards, so the numbers didn't match what .g coll
+ // showed - and the collNum was computed but never rendered in the output.
   const allOwned = await UserCard.find({ ...(await ownerOf(senderJid)) }).sort({ createdAt: 1 });
 
-  // Build coll-number map from COLL-ONLY cards (not in deck, not for sale).
-  // This matches the numbering used by .g coll, .g t2deck, .g burn, .g cg, etc.
+ // Build coll-number map from COLL-ONLY cards (not in deck, not for sale).
+ // This matches the numbering used by .g coll, .g t2deck, .g burn, .g cg, etc.
   const collOnly = await UserCard.find({
     ...(await ownerOf(senderJid)),
     inMainDeck: false,
@@ -2354,27 +2347,27 @@ async function cmdScc(senderJid, reply, chatId, args = []) {
 
   const filtered = [];
 
-  // 💡 FIX (BUG 3: "scc doesn't show coll numbers, gives random ones, needs
-  // redesign"). The old scc used a sequential `collIndex = i + 1` based on
-  // position in the OWNED array - but that index was only valid within the
-  // filtered chunk, not the actual collection. Now we compute the TRUE
-  // collection index by counting only non-deck, non-sale cards (matching
-  // the coll/coll display the user sees elsewhere). Also redesigned the
-  // output to match the user's requested format: grouped by tier with
-  // proper icons (👑 for S, 💎 for 6, ✨ for 5, etc.), tier S gets a crown,
-  // and it's a flex mechanism not a paginated list.
+ // FIX (BUG 3: "scc doesn't show coll numbers, gives random ones, needs
+ // redesign"). The old scc used a sequential `collIndex = i + 1` based on
+ // position in the OWNED array - but that index was only valid within the
+ // filtered chunk, not the actual collection. Now we compute the TRUE
+ // collection index by counting only non-deck, non-sale cards (matching
+ // the coll/coll display the user sees elsewhere). Also redesigned the
+ // output to match the user's requested format: grouped by tier with
+ // proper icons ( for S, for 6, for 5, etc.), tier S gets a crown,
+ // and it's a flex mechanism not a paginated list.
 
   allOwned.forEach((uc) => {
     const card = CARD_INDEX()[uc.cardId];
     if (card?.animeName.toLowerCase().includes(animeQuery)) {
-      // Determine location
+ // Determine location
       let location = '📜 Collection';
       if (uc.inMainDeck) location = '🎴 Main Deck';
       else if (uc.inCustomDeck) location = '📁 Custom Deck';
       else if (uc.forSale) location = '🏷️ Market';
 
-      // Coll number only exists for cards in the loose collection.
-      // Deck/market cards have no coll number (shown as -).
+ // Coll number only exists for cards in the loose collection.
+ // Deck/market cards have no coll number (shown as -).
       const collNum = collNumberMap.has(uc._id.toString())
         ? collNumberMap.get(uc._id.toString())
         : null;
@@ -2390,36 +2383,36 @@ async function cmdScc(senderJid, reply, chatId, args = []) {
 
   if (!filtered.length) return reply(`🔍  *NO RESULTS*\n\n🔎 ⟢ *Anime:* _${animeQuery}_\n📭 ⟢ _No cards found for this anime_`);
 
-  // Sort by tier descending (S > 6 > 5 > 4 > 3 > 2 > 1 > E), then by coll number
+ // Sort by tier descending (S > 6 > 5 > 4 > 3 > 2 > 1 > E), then by coll number
   const tierOrder = { 'S': 100, '6': 90, '5': 80, '4': 70, '3': 60, '2': 50, '1': 40, 'E': 30 };
-  // 💡 BUG-03 fix: sort uses collNum - null (deck/market cards) sort after
-  // numbered cards so they appear at the end of each tier group.
+ // BUG-03 fix: sort uses collNum - null (deck/market cards) sort after
+ // numbered cards so they appear at the end of each tier group.
   filtered.sort((a, b) => {
     const ta = tierOrder[String(a.card.tier)] || 0;
     const tb = tierOrder[String(b.card.tier)] || 0;
     if (tb !== ta) return tb - ta;
-    // Cards with coll numbers sort first (ascending), then nulls last
+ // Cards with coll numbers sort first (ascending), then nulls last
     if (a.collNum === null && b.collNum === null) return 0;
     if (a.collNum === null) return 1;
     if (b.collNum === null) return -1;
     return a.collNum - b.collNum;
   });
 
-  // Pagination
+ // Pagination
   const pageSize = 25;
   const totalPages = Math.ceil(filtered.length / pageSize);
   if (page > totalPages) page = totalPages;
   const start = (page - 1) * pageSize;
   const chunk = filtered.slice(start, start + pageSize);
 
-  // 💡 Flex-style format matching the user's example
+ // Flex-style format matching the user's example
   const tierIcons = { 'S': '👑', '6': '💎', '5': '✨', '4': '🎗', '3': '🔮', '2': '🌈', '1': '🎴', 'E': '🎁' };
 
   let msg = `🔍 *Found ${filtered.length} card(s)* with "${animeQuery}":\n\n`;
   for (const item of chunk) {
     const icon = tierIcons[String(item.card.tier)] || '🃏';
-    // 💡 BUG-03 fix: render the coll number (was computed but never shown).
-    // Deck/market cards show no coll number (just the location).
+ // BUG-03 fix: render the coll number (was computed but never shown).
+ // Deck/market cards show no coll number (just the location).
     const numStr = item.collNum ? ` [#${item.collNum}]` : '';
     msg += `${icon} *${item.card.cardName}* (Tier ${item.card.tier})${numStr} in ${item.location}\n`;
   }
@@ -2444,9 +2437,9 @@ async function cmdMaker(senderJid, reply, chatId, args = []) {
 
   if (!filtered.length) return reply(`🔍  *NO RESULTS*\n\n🔎 ⟢ *Maker:* _${makerQuery}_\n📭 ⟢ _No owned cards found for this maker_`);
 
-  // 💡 FIX: Added 'E' (Event) tier. Previously this code CRASHED with
-  // "TypeError: Cannot read property 'push' of undefined" if the user
-  // owned any event cards, because `tiers['E']` was undefined.
+ // FIX: Added 'E' (Event) tier. Previously this code CRASHED with
+ // "TypeError: Cannot read property 'push' of undefined" if the user
+ // owned any event cards, because `tiers['E']` was undefined.
   const tiers = { 'S': [], 'E': [], '6': [], '5': [], '4': [], '3': [], '2': [], '1': [] };
   const tierEmoji = { 'S': '👑', 'E': '🎁', '6': '💎', '5': '✨', '4': '🎗', '3': '🔮', '2': '🌈', '1': '🎴' };
 
@@ -2459,7 +2452,7 @@ async function cmdMaker(senderJid, reply, chatId, args = []) {
   });
 
   let msg = `🎨 *Cards | Made by ${makerQuery}*\n\n`;
-  // 💡 FIX: Added 'E' to the iteration order
+ // FIX: Added 'E' to the iteration order
   for (const t of ['S', 'E', '6', '5', '4', '3', '2', '1']) {
     if (tiers[t].length > 0) {
       const label = TIER_LABEL[t] || `TIER ${t}`;
@@ -2479,9 +2472,9 @@ async function cmdBurn(senderJid, reply, chatId, args = []) {
   const index = parseInt(args[0]);
   if (isNaN(index)) return sendUsage(reply, `${P()} burn`, `${P()} burn <coll_index>`, `${P()} burn 12`);
 
-  // 💡 FIX 2026-10-08: exclude inAuction too - burning an auction-committed
-  // card let the auction later "sell" a card that no longer existed (winner
-  // paid for nothing).
+ // FIX exclude inAuction too - burning an auction-committed
+ // card let the auction later "sell" a card that no longer existed (winner
+ // paid for nothing).
   const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false }).sort({ createdAt: 1 });
   const uc = owned[index - 1];
   if (!uc) return reply(`❌  *CARD NOT FOUND*\n\n📍 ⟢ _Not in your collection_`);
@@ -2489,10 +2482,10 @@ async function cmdBurn(senderJid, reply, chatId, args = []) {
   const card = CARD_INDEX()[uc.cardId];
   const p = P();
 
-  // 🔥 FIX 2026-10-08 (owner: "the card burn animation lol it never worked"):
-  // the Go service now renders a real fire-over-card animation (bundled fire
-  // overlay + additive screen blend — the old fire URLs were 404 so this was
-  // ALWAYS text-only). Caption also moved onto the universal ⟢ theme.
+ // FIX ("the card burn animation lol it never worked"):
+ // the Go service now renders a real fire-over-card animation (bundled fire
+ // overlay + additive screen blend - the old fire URLs were 404 so this was
+ // ALWAYS text-only). Caption also moved onto the universal ⟢ theme.
   const tierLabel = TIER_LABEL[String(card.tier)] || `TIER ${card.tier}`;
   const gifBuffer = card.imageUrl ? await goService.generateBurnGif(card.imageUrl) : null;
   const caption = `🔥  *BURN CONFIRMATION*\n\n` +
@@ -2508,7 +2501,6 @@ async function cmdBurn(senderJid, reply, chatId, args = []) {
     await reply(caption);
   }
 
-  // keep the card's imageUrl so the ACCEPT step can replay the burn animation
   inst.pendingBurns.set(`${chatId}_${senderJid}`, { ucId: uc._id, cardName: card.cardName, imageUrl: card.imageUrl || null });
 }
 
@@ -2519,11 +2511,11 @@ async function cmdAccept(senderJid, reply, chatId) {
   if (!pending) return false;
 
   try {
-    // 💡 FIX 2026-10-08 (vanishing cards): re-verify ownership at ACCEPT
-    // time. The card could have been sold / auctioned away / settled between
-    // the burn preview and the confirmation - the old code deleted by id
-    // blindly, destroying a card the user no longer owned (worst case: the
-    // buyer's freshly purchased card went up in smoke).
+ // FIX (vanishing cards): re-verify ownership at ACCEPT
+ // time. The card could have been sold / auctioned away / settled between
+ // the burn preview and the confirmation - the old code deleted by id
+ // blindly, destroying a card the user no longer owned (worst case: the
+ // buyer's freshly purchased card went up in smoke).
     const stillMine = await UserCard.findOne({ _id: pending.ucId, ...(await ownerOf(senderJid)) });
     if (!stillMine) {
       inst.pendingBurns.delete(key);
@@ -2532,10 +2524,10 @@ async function cmdAccept(senderJid, reply, chatId) {
     }
     await UserCard.findByIdAndDelete(pending.ucId);
     inst.pendingBurns.delete(key);
-    // 🔥 2026-10-08: replay the burn animation as the card actually goes up in
-    // flames (the Go service caches the render per card URL, so this is
-    // instant right after the preview). Falls back to text if rendering fails.
-    const burnCaption = `🔥  *BURNED TO ASHES*\n\n🃏 ⟢ *Card:* _${pending.cardName}_\n📍 ⟢ _Deleted from your collection — forever_`;
+ // replay the burn animation as the card actually goes up in
+ // flames (the Go service caches the render per card URL, so this is
+ // instant right after the preview). Falls back to text if rendering fails.
+    const burnCaption = `🔥  *BURNED TO ASHES*\n\n🃏 ⟢ *Card:* _${pending.cardName}_\n📍 ⟢ _Deleted from your collection - forever_`;
     try {
       const ashBuffer = pending.imageUrl ? await goService.generateBurnGif(pending.imageUrl) : null;
       if (ashBuffer) {
@@ -2548,7 +2540,7 @@ async function cmdAccept(senderJid, reply, chatId) {
     }
     return true;
   } catch (err) {
-    await reply(`❌  *BURN FAILED*\n\n📍 ⟢ _Could not delete the card — try again_`);
+    await reply(`❌  *BURN FAILED*\n\n📍 ⟢ _Could not delete the card - try again_`);
     return true;
   }
 }
@@ -2572,7 +2564,7 @@ async function cmdCltr(reply, chatId, args = []) {
   }
 
   try {
-    // 1. Find all cards in this series
+ // 1. Find all cards in this series
     const seriesCards = ALL_CARDS().filter(c => c.animeName.toLowerCase().includes(query));
     if (seriesCards.length === 0) {
       return reply(`🔍  *NO RESULTS*\n\n🔎 ⟢ *Series:* _"${query}"_\n📭 ⟢ _No cards found for this series_`);
@@ -2580,7 +2572,7 @@ async function cmdCltr(reply, chatId, args = []) {
 
     const cardIds = seriesCards.map(c => c.id);
 
-    // 2. Aggregate owners
+ // 2. Aggregate owners
     const collectors = await UserCard.aggregate([
       { $match: { cardId: { $in: cardIds } } },
       { $group: { _id: "$userId", count: { $sum: 1 } } },
@@ -2592,7 +2584,7 @@ async function cmdCltr(reply, chatId, args = []) {
       return reply(`📭  *NO COLLECTORS YET*\n\n🔎 ⟢ *Series:* _"${query}"_\n📍 ⟢ _No one owns cards from this series yet_`);
     }
 
-    // 3. Format Message
+ // 3. Format Message
     const topSeriesName = seriesCards[0].animeName;
     let msg = `👑 *Top ${topSeriesName} Collectors* 👑\n\n`;
     msg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
@@ -2613,7 +2605,7 @@ async function cmdCltr(reply, chatId, args = []) {
     return reply(msg, { mentions });
   } catch (err) {
     console.error('[Cltr] Error:', err);
-    return reply(`❌  *FETCH FAILED*\n\n📍 ⟢ _Could not load the top collectors — try again_`);
+    return reply(`❌  *FETCH FAILED*\n\n📍 ⟢ _Could not load the top collectors - try again_`);
   }
 }
 
@@ -2659,16 +2651,16 @@ async function cmdFc(senderJid, reply, args = []) {
   const query = args.join(' ').toLowerCase().trim();
   if (!query) return sendUsage(reply, `${p} fc`, `${p} fc <card_name or id>`, `${p} fc goku`);
 
-  // 💡 FIX (BUG 2: "fc command only shows one card if you have 2 of the same
-  // name, needs to show all and their coll number"):
-  // The old cmdFc used `return reply(...)` on the FIRST match in each
-  // location, so if you had 2 "Akatsuki" cards in your collection, only
-  // the first was shown. Now we collect ALL matches across all locations
-  // (main deck, custom decks, collection) and display them in a single
-  // message with their location + coll number.
+ // FIX (BUG 2: "fc command only shows one card if you have 2 of the same
+ // name, needs to show all and their coll number"):
+ // The old cmdFc used `return reply(...)` on the FIRST match in each
+ // location, so if you had 2 "Akatsuki" cards in your collection, only
+ // the first was shown. Now we collect ALL matches across all locations
+ // (main deck, custom decks, collection) and display them in a single
+ // message with their location + coll number.
   const matches = [];
 
-  // 1. Search Main Deck
+ // 1. Search Main Deck
   const deck = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: true }).sort({ mainDeckSlot: 1 });
   for (const uc of deck) {
     const card = CARD_INDEX()[uc.cardId];
@@ -2683,7 +2675,7 @@ async function cmdFc(senderJid, reply, args = []) {
     }
   }
 
-  // 2. Search Custom Decks
+ // 2. Search Custom Decks
   const customDecks = await CardDeck.find({ ...(await ownerOf(senderJid)) });
   for (const cd of customDecks) {
     for (let i = 0; i < cd.cards.length; i++) {
@@ -2704,7 +2696,7 @@ async function cmdFc(senderJid, reply, args = []) {
     }
   }
 
-  // 3. Search Collection (cards not in any deck, not for sale)
+ // 3. Search Collection (cards not in any deck, not for sale)
   const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
   for (let i = 0; i < owned.length; i++) {
     const uc = owned[i];
@@ -2727,9 +2719,9 @@ async function cmdFc(senderJid, reply, args = []) {
   return reply(buildFcResultsMessage(query, matches));
 }
 
-// 💡 FIX (issue 567139, 2026-09-01): the .fc result list used to show the raw
+// FIX (issue 567139, ): the .fc result list used to show the raw
 // MongoDB ObjectId (a 24-char hex string like 66f0a3b2c1d4e5f6a7b8c9d0) in the
-// 🆔 line. No command accepts that hex as input and it means nothing to users.
+// line. No command accepts that hex as input and it means nothing to users.
 // Now each match shows the card library ID (the cards_data.json .id field,
 // e.g. "3-04521") plus the global Copy #, which is how every other card
 // display (claim, trade, market) identifies a copy. Rendering extracted into
@@ -2739,7 +2731,7 @@ function buildFcResultsMessage(query, matches) {
   let msg = `🔍 *Found ${matches.length} card(s)* matching "${query}":\n\n`;
   for (let i = 0; i < matches.length; i++) {
     const m = matches[i];
-    // 💡 P3 (2026-08-16): Flag cards not in the database
+ // P3: Flag cards not in the database
     if (!m.card) {
       msg += `⚠️ *Unknown Card* (not in database)\n`;
       msg += `   📍 ${m.location}\n`;
@@ -2750,7 +2742,7 @@ function buildFcResultsMessage(query, matches) {
     msg += `${icon} *${m.card?.cardName}* (Tier ${m.card?.tier})\n`;
     msg += `   📍 ${m.location}\n`;
     if (matches.length > 1) {
-      // 💡 issue 567139: cardId + copyNumber instead of raw hex ucId
+ // issue 567139: cardId + copyNumber instead of raw hex ucId
       const copyLabel = (typeof m.copyNumber === 'number') ? ` · Copy #${m.copyNumber}` : '';
       msg += `   🆔 \`${m.cardId}\`${copyLabel}\n`;
     }
@@ -2763,9 +2755,9 @@ function buildFcResultsMessage(query, matches) {
 }
 
 async function cmdInfo(reply, chatId, args = [], perms = {}) {
-  // 💡 perms = { isOwner, isCardMod, p }
-  // Event card lookups require mod permissions. Regular card lookups
-  // are available to everyone.
+ // perms = { isOwner, isCardMod, p }
+ // Event card lookups require mod permissions. Regular card lookups
+ // are available to everyone.
   const isOwner = perms.isOwner || false;
   const isCardMod = perms.isCardMod || false;
   const canViewEvents = isOwner || isCardMod;
@@ -2773,8 +2765,8 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
   let query = args.join(' ').toLowerCase().trim();
   let animeFilter = null;
 
-  // Support both `|` separator and space-separated anime filter
-  // e.g. "info Roy event | fullmetal" or "info Roy event fullmetal"
+ // Support both `|` separator and space-separated anime filter
+ // e.g. "info Roy event | fullmetal" or "info Roy event fullmetal"
   let eventMode = false;
   if (query.includes('|')) {
     const parts = query.split('|');
@@ -2782,22 +2774,21 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
     animeFilter = parts[1].trim();
   }
 
-  // Check for "event" keyword - triggers event card search mode
-  // e.g. "roy event" or "roy event | fullmetal"
+ // e.g. "roy event" or "roy event | fullmetal"
   if (query.includes(' event')) {
     eventMode = true;
     query = query.replace(' event', '').trim();
   }
-  // Also handle "event" at the start: "event roy"
+ // Also handle "event" at the start: "event roy"
   if (query.startsWith('event ')) {
     eventMode = true;
     query = query.substring(6).trim();
   }
-  // FIX (2026-10-19): `einfo <query> | <anime>` delegates here as
-  // [query, anime, 'event'] - joined, the trailing 'event' lands AFTER the
-  // pipe and the block above never saw it, so eventMode stayed false and
-  // the search fell through to the generic card search. The keyword can
-  // ride on the anime side too - strip it there as well.
+ // FIX: `einfo <query> | <anime>` delegates here as
+ // [query, anime, 'event'] - joined, the trailing 'event' lands AFTER the
+ // pipe and the block above never saw it, so eventMode stayed false and
+ // the search fell through to the generic card search. The keyword can
+ // ride on the anime side too - strip it there as well.
   if (animeFilter) {
     if (animeFilter.includes(' event')) {
       eventMode = true;
@@ -2815,33 +2806,33 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
 
   if (!query && !eventMode) return sendUsage(reply, `${p} info`, `${p} info <card_name or id> | [anime]`, `${p} info Winry | fullmetal alchemist`);
 
-  // 💡 MOD-ONLY GATE: Event card search requires mod permissions.
-  // Non-mods get a friendly message instead of the event search results.
+ // MOD-ONLY GATE: Event card search requires mod permissions.
+ // Non-mods get a friendly message instead of the event search results.
   if (eventMode && !canViewEvents) {
-    return reply(`❌  *MOD ONLY*\n\n🎪 ⟢ _Event cards don't spawn naturally — they're managed by mods via the token event eShop_\n\n💡 ⟢ _Use_ \`${p} eshop\` _to buy them during active token events_`);
+    return reply(`❌  *MOD ONLY*\n\n🎪 ⟢ _Event cards don't spawn naturally - they're managed by mods via the token event eShop_\n\n💡 ⟢ _Use_ \`${p} eshop\` _to buy them during active token events_`);
   }
 
-  // 💡 MOD-ONLY GATE: Looking up an E-tier card by exact ID also requires
-  // mod permissions (prevents non-mods from viewing event card details).
+ // MOD-ONLY GATE: Looking up an E-tier card by exact ID also requires
+ // mod permissions (prevents non-mods from viewing event card details).
   if (query && !eventMode) {
     const exactCard = CARD_INDEX()[query];
     if (exactCard && isEventCard(exactCard) && !canViewEvents) {
-      return reply(`❌  *MOD ONLY*\n\n🎪 ⟢ _This is an event-tier card — use_ \`${p} eshop\` _to buy event cards during active token events_`);
+      return reply(`❌  *MOD ONLY*\n\n🎪 ⟢ _This is an event-tier card - use_ \`${p} eshop\` _to buy event cards during active token events_`);
     }
   }
 
-  // 💡 EVENT CARD SEARCH MODE
-  // `info <name> event | <anime>` → search event-tier cards by name and anime
-  // `info E-00001 event` → also check exact ID first
+ // EVENT CARD SEARCH MODE
+ // `info <name> event | <anime>` → search event-tier cards by name and anime
+ // `info E-00001 event` → also check exact ID first
   if (eventMode) {
-    // 💡 FIX: Check if query is an exact E-XXXXX ID first
+ // FIX: Check if query is an exact E-XXXXX ID first
     if (query) {
-      // 💡 FIX (2026-10-08): CARD_INDEX is keyed by the verbatim id ("E-03201")
-      // but cmdInfo lowercases its query — exact-id lookups for event cards
-      // always missed ("Card not found" even though the id exists).
+ // FIX: CARD_INDEX is keyed by the verbatim id ("E-03201")
+ // but cmdInfo lowercases its query - exact-id lookups for event cards
+ // always missed ("Card not found" even though the id exists).
       const exactEventCard = CARD_INDEX()[query] || CARD_INDEX()[query.toUpperCase()];
       if (exactEventCard && isEventCard(exactEventCard)) {
-        // Found by exact ID - show details directly
+ // Found by exact ID - show details directly
         const stat = await CardStat.findOne({ cardId: exactEventCard.id });
         const caption = buildCardDetailCaption(exactEventCard, null, stat, 'Event Database');
         try {
@@ -2851,8 +2842,8 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
               return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
             }
           }
-          // 💡 FIX 2026-10-08: sniffed sender (GIF/WebM fallbacks used to be
-          // sent as image/jpeg = blank card).
+ // FIX sniffed sender (GIF/WebM fallbacks used to be
+ // sent as image/jpeg = blank card).
           const res = await axios.get(exactEventCard.imageUrl, { responseType: 'arraybuffer', timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
           return await sendCardMedia(getInst().sock_ref, chatId, Buffer.from(res.data), caption);
         } catch (e) {
@@ -2863,18 +2854,18 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
 
     const results = await searchEventCards(query, animeFilter);
     if (results.length === 0) {
-      return reply(`🔍  *NO RESULTS*\n\n🎪 ⟢ _No event cards found${query ? ` matching _"${query}"_` : ''}${animeFilter ? ` in anime _"${animeFilter}"_` : ''}_\n\n💡 ⟢ _Event cards are special — they only drop via the eShop during token events_`);
+      return reply(`🔍  *NO RESULTS*\n\n🎪 ⟢ _No event cards found${query ? ` matching _"${query}"_` : ''}${animeFilter ? ` in anime _"${animeFilter}"_` : ''}_\n\n💡 ⟢ _Event cards are special - they only drop via the eShop during token events_`);
     }
 
     let msg = `🎁 *EVENT CARD SEARCH* 🎁\n`;
     msg += `📦 Found ${results.length} event card${results.length === 1 ? '' : 's'}${results.length > 40 ? ' (showing first 40)' : ''}:\n\n`;
-    // FIX (2026-10-19): uncapped listing - Summer/Valentines/Chinese New Year
-    // are 600+ cards each, a 35k+ char wall. Cap at 40 like the generic
-    // search caps at 15, and teach the `| <anime>` narrowing instead.
+ // FIX: uncapped listing - Summer/Valentines/Chinese New Year
+ // are 600+ cards each, a 35k+ char wall. Cap at 40 like the generic
+ // search caps at 15, and teach the `| <anime>` narrowing instead.
     results.slice(0, 40).forEach(c => {
-      // 💡 FIX (2026-10-08): this line printed animeName as the Event. That
-      // was only "correct" while the data bug held (animeName holding the
-      // event name); with real series data it must read eventName.
+ // FIX: this line printed animeName as the Event. That
+ // was only "correct" while the data bug held (animeName holding the
+ // event name); with real series data it must read eventName.
       msg += `▫️ *${c.cardName}* (T${c.tier})\n   ➥ ID: \`${c.id}\` | Event: _${c.eventName || c.animeName}_ \u2014 _${c.animeName || '?'}_\n`;
     });
     if (results.length > 40) {
@@ -2884,8 +2875,8 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
     return reply(msg);
   }
 
-  // Exact ID check first
-  // 💡 FIX (2026-10-08): case-insensitive id lookup (see eventMode note above)
+ // Exact ID check first
+ // FIX: case-insensitive id lookup (see eventMode note above)
   const exact = CARD_INDEX()[query] || CARD_INDEX()[query.toUpperCase()];
   if (exact) {
     const stat = await CardStat.findOne({ cardId: exact.id });
@@ -2897,23 +2888,23 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
           return await getInst().sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption });
         }
       }
-      // 💡 FIX 2026-10-08: sniffed sender (GIF/WebM fallbacks used to be
-      // sent as image/jpeg = blank card).
+ // FIX sniffed sender (GIF/WebM fallbacks used to be
+ // sent as image/jpeg = blank card).
       const res = await axios.get(exact.imageUrl, { responseType: 'arraybuffer', timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
       return await sendCardMedia(getInst().sock_ref, chatId, Buffer.from(res.data), caption);
     } catch (e) { return reply(caption); }
   }
 
-  // 💡 P3 (2026-08-16): If query looks like a card ID (N-NNNNN format) but
-  // wasn't found in CARD_INDEX, explicitly flag it as missing from the DB
-  // instead of falling through to a generic name search.
+ // P3: If query looks like a card ID (N-NNNNN format) but
+ // wasn't found in CARD_INDEX, explicitly flag it as missing from the DB
+ // instead of falling through to a generic name search.
   if (/^\d+-\d+$/.test(query) || /^E-\d+$/i.test(query) || /^S-\d+$/i.test(query)) {
     return reply(`⚠️  *ID NOT IN DATABASE*\n\n🆔 ⟢ *ID:* _"${query}"_\n📍 ⟢ _Standard format, but no card with this ID exists_\n\n💡 ⟢ _Use_ \`${p} info <card name>\` _to search by name instead_`);
   }
 
-  // Partial name search — 💡 OWNER BRIEF 2026-10-09 §1: token-AND matching +
-  // relevance ranking. The old whole-string includes() missed "olivier
-  // armstrong" vs the stored "Olivier Mira Armstrong" (missing middle name).
+ // Partial name search - OWNER BRIEF §1: token-AND matching +
+ // relevance ranking. The old whole-string includes() missed "olivier
+ // armstrong" vs the stored "Olivier Mira Armstrong" (missing middle name).
   const tokens = _nameTokens(query);
   const animeTokens = _nameTokens(animeFilter);
   let matches = ALL_CARDS().filter(c =>
@@ -2921,7 +2912,7 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
       (!animeTokens.length || animeTokens.every(t => String(c.animeName || '').toLowerCase().includes(t)))
   );
   if (!matches.length && tokens.length) {
-      // second chance: let series names satisfy the tokens before giving up
+ // second chance: let series names satisfy the tokens before giving up
       matches = ALL_CARDS().filter(c => _cardMatchesTokens(c, tokens, true));
   }
   matches.sort((a, b) =>
@@ -2947,7 +2938,7 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
     } catch (e) { return reply(caption); }
   }
 
-  // Multiple matches
+ // Multiple matches
   let msg = `🔍 *Search Results for "${query}"*\n`;
   msg += `📦 Found ${matches.length} matches. Showing top 15:\n\n`;
 
@@ -2963,20 +2954,19 @@ async function cmdT2Deck(senderJid, reply, args = []) {
   const p = P();
   if (!args.length) return sendUsage(reply, `${p} t2deck`, `${p} t2deck <coll_index> [index2] [index3]...`, `${p} t2deck 1\n${p} t2deck 10 21 3`);
 
-  // Parse all indices (skip non-numbers)
   const indices = [...new Set(args.map(a => parseInt(a)).filter(n => !isNaN(n) && n > 0))];
   if (!indices.length) return sendUsage(reply, `${p} t2deck`, `${p} t2deck <coll_index> [index2] [index3]...`, `${p} t2deck 10 21 3`);
 
-  // 💡 FIX 2026-10-08: exclude inAuction - moving an auction-committed card
-  // into the deck/custom-deck desyncs the auction settlement.
+ // FIX exclude inAuction - moving an auction-committed card
+ // into the deck/custom-deck desyncs the auction settlement.
   const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false }).sort({ createdAt: 1 });
   const deck  = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: true }).sort({ mainDeckSlot: 1 });
 
   const slotsAvailable = MAIN_DECK_SIZE - deck.length;
   if (slotsAvailable <= 0) return reply(`❌  *DECK FULL*\n\n🔢 ⟢ _Your main deck is full (${MAIN_DECK_SIZE}/12)_\n📍 ⟢ _Move a card back to your collection first_`);
-  if (indices.length > slotsAvailable) return reply(`⚠️  *NOT ENOUGH SLOTS*\n\n🔢 ⟢ _Only ${slotsAvailable} slot(s) left — you tried to add ${indices.length}_\n\n💡 ⟢ _Reduce the number of cards and try again_`);
+  if (indices.length > slotsAvailable) return reply(`⚠️  *NOT ENOUGH SLOTS*\n\n🔢 ⟢ _Only ${slotsAvailable} slot(s) left - you tried to add ${indices.length}_\n\n💡 ⟢ _Reduce the number of cards and try again_`);
 
-  // Find next available slots
+ // Find next available slots
   const usedSlots = new Set(deck.map(d => d.mainDeckSlot));
   const getNextSlot = () => { let s = 1; while (usedSlots.has(s)) s++; usedSlots.add(s); return s; };
 
@@ -2996,12 +2986,11 @@ async function cmdT2Deck(senderJid, reply, args = []) {
   return reply(`${header}\n\n${results.join('\n')}`);
 }
 
-
 async function cmdT2CDeck(senderJid, reply, args = []) {
   const p = P();
 
-  // 💡 UPDATED 2026-07-18: now supports multiple indices.
-  // Format: .g t2cdeck 1 5 10 Waifus   (moves cards #1, #5, #10 to "Waifus")
+ // UPDATED now supports multiple indices.
+ // Format: .g t2cdeck 1 5 10 Waifus (moves cards #1, #5, #10 to "Waifus")
   const indices = [];
   let deckNameParts = [];
   let foundNonNumeric = false;
@@ -3020,7 +3009,7 @@ async function cmdT2CDeck(senderJid, reply, args = []) {
     return sendUsage(reply, `${p} t2cdeck`, `${p} t2cdeck <coll_index> [index2] [index3]... <deck_name>`, `${p} t2cdeck 1 Waifus\n${p} t2cdeck 5 10 21 Best Cards`);
   }
 
-  // 💡 FIX 2026-10-08: exclude inAuction here as well (same desync as t2deck).
+ // FIX exclude inAuction here as well (same desync as t2deck).
   const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false }).sort({ createdAt: 1 });
   const decks = await CardDeck.find({ ...(await ownerOf(senderJid)) });
   if (decks.length === 0) return reply(`❌  *NO CUSTOM DECKS*\n\n💡 ⟢ _Create one first with_ _.create deck <name>_`);
@@ -3063,12 +3052,12 @@ async function cmdESummon(senderJid, reply) {
   if (!uc) {
      eventDeck.cards.splice(randomIndex, 1);
      await eventDeck.save();
-     return reply(`❌  *FETCH FAILED*\n\n📍 ⟢ _Could not fetch the card — please try again_`);
+     return reply(`❌  *FETCH FAILED*\n\n📍 ⟢ _Could not fetch the card - please try again_`);
   }
 
   uc.userId = senderJid;
-  // 💡 FIX 2026-10-08: same as gifts - a freshly fetched card must sort LAST
-  // in the owner's collection, not mid-list under its old claim date.
+ // FIX same as gifts - a freshly fetched card must sort LAST
+ // in the owner's collection, not mid-list under its old claim date.
   uc.createdAt = new Date();
   uc.claimedAt = new Date();
   uc.inCustomDeck = false;
@@ -3092,9 +3081,9 @@ async function cmdEShop(senderJid, reply, chatId, args = [], isMod = false) {
   const p = P();
   const sub = args[0]?.toLowerCase();
 
-  // ── TOKEN EVENT ESHOP ────────────────────────────
-  // `eshop` (no args) → show the 4x4 event card grid
-  // `eshop buy <slot>` → buy a card from the grid using tokens
+ // -- TOKEN EVENT ESHOP ----------------------------
+ // `eshop` (no args) → show the 4x4 event card grid
+ // `eshop buy <slot>` → buy a card from the grid using tokens
   if (sub === 'buy' && args[1] && !args[1].startsWith('deck')) {
     const slot = parseInt(args[1]);
     if (isNaN(slot) || slot < 1 || slot > 16) {
@@ -3104,21 +3093,21 @@ async function cmdEShop(senderJid, reply, chatId, args = [], isMod = false) {
     return reply(result.message);
   }
 
-  // ── DECK TRADING (old eshop, now under `eshop deck`) ──
+ // -- DECK TRADING (old eshop, now under `eshop deck`) --
   if (sub === 'deck') {
     return cmdEShopDeckTrading(senderJid, reply, chatId, args.slice(1), isMod);
   }
 
-  // ── FLEX VIEW (owner 2026-10-20: "eshop 1-16 should show the cards
-  //    individually for ppl to see") ──
-  // `eshop 3` | `eshop 2-7` | `eshop 1 - 16` | `eshop all` |
-  // `eshop flex` (= 1-16) | `eshop flex 4-8`
+ // -- FLEX VIEW ("eshop 1-16 should show the cards
+ // individually for ppl to see") --
+ // `eshop 3` | `eshop 2-7` | `eshop 1 - 16` | `eshop all` |
+ // `eshop flex` (= 1-16) | `eshop flex 4-8`
   let flexTok = null;
   if (sub === 'flex') {
     flexTok = args[1] || '1-16';
   } else if (sub === 'all') {
     flexTok = '1-16';
-  } else if (sub && (args[1] === '-' || args[1] === '–' || args[1] === '—')) {
+  } else if (sub && (args[1] === '-' || args[1] === '-' || args[1] === '-')) {
     flexTok = `${sub}-${args[2] || ''}`; // "1 - 16" arrived as three argv tokens
   } else if (sub && parseEshopFlexToken(sub)) {
     flexTok = sub;
@@ -3131,7 +3120,7 @@ async function cmdEShop(senderJid, reply, chatId, args = [], isMod = false) {
     return eshopFlexView(senderJid, reply, chatId, range.start, range.end);
   }
 
-  // ── DEFAULT: Show the token event eShop (4x4 grid image) ──
+ // -- DEFAULT: Show the token event eShop (4x4 grid image) --
   const inst = getInst();
   const filledSlots = inst.eshopDeck.filter(e => e !== null).length;
 
@@ -3139,10 +3128,10 @@ async function cmdEShop(senderJid, reply, chatId, args = [], isMod = false) {
     return reply(`📭  *EVENT SHOP EMPTY*\n\n🎪 ⟢ _The eShop has no cards right now_\n\n⌨️ ⟢ *Owner:* _add cards with_ _${p} t2edeck add <slot> <cardId> <price>_`);
   }
 
-  // Generate and send the 4x4 grid image
+ // Generate and send the 4x4 grid image
   const imageBuffer = await generateEShopDeckImage();
   if (imageBuffer) {
-    const tokenBalance = economy.getEventTokens(senderJid); // 💡 47-l2
+    const tokenBalance = economy.getEventTokens(senderJid); // 47-l2
     const eventActive = await isTokenEventActive();
     const caption = `🎁 *EVENT SHOP* 🎁\n` +
       `━━━━━━━━━━━━━━━\n` +
@@ -3157,9 +3146,9 @@ async function cmdEShop(senderJid, reply, chatId, args = [], isMod = false) {
     }
   }
 
-  // Fallback: text list if image generation failed
+ // Fallback: text list if image generation failed
   let msg = `🎁 *EVENT SHOP* 🎁\n`;
-  msg += `🎫 Your Tokens: *${economy.getEventTokens(senderJid)}*\n\n`; // 💡 47-l2
+  msg += `🎫 Your Tokens: *${economy.getEventTokens(senderJid)}*\n\n`; // 47-l2
   inst.eshopDeck.forEach((entry, i) => {
     if (entry) {
       msg += `*${i + 1}.* ${entry.cardName} (T${entry.tier})\n   🎫 Price: ${entry.price} tokens\n   📺 ${entry.anime}\n\n`;
@@ -3197,7 +3186,7 @@ async function cmdEShopDeckTrading(senderJid, reply, chatId, args = [], isMod = 
         approvalStatus: 'pending'
       });
       return reply(`📦  *LISTING SUBMITTED!*\n\n🃏 ⟢ *Deck:* _"${deck.name}"_\n💰 ⟢ *Price:* ${ZENI()}${price.toLocaleString()}\n⏳ ⟢ _A Card Moderator will review it soon_`);
-    } catch (err) { return reply(`❌  *LISTING FAILED*\n\n📍 ⟢ _Could not submit the listing — try again_`); }
+    } catch (err) { return reply(`❌  *LISTING FAILED*\n\n📍 ⟢ _Could not submit the listing - try again_`); }
   }
 
   if (sub === 'approve' || sub === 'reject') {
@@ -3220,7 +3209,7 @@ async function cmdEShopDeckTrading(senderJid, reply, chatId, args = [], isMod = 
         await listing.save();
         return reply(`❌  *LISTING REJECTED*\n\n🔢 ⟢ *Listing:* _#${id}_`);
       }
-    } catch (err) { return reply(`❌  *ACTION FAILED*\n\n📍 ⟢ _Something went wrong — try again_`); }
+    } catch (err) { return reply(`❌  *ACTION FAILED*\n\n📍 ⟢ _Something went wrong - try again_`); }
   }
 
   if (sub === 'pending') {
@@ -3254,11 +3243,11 @@ async function cmdEShopDeckTrading(senderJid, reply, chatId, args = [], isMod = 
     if (balance < listing.price) return reply(`❌  *INSUFFICIENT FUNDS*\n\n💰 ⟢ *Needed:* ${ZENI()}${listing.price.toLocaleString()}\n📉 ⟢ _Your balance is too low_`);
 
     try {
-      // Transfer Funds
+ // Transfer Funds
       economy.removeMoney(senderJid, listing.price);
       economy.addMoney(listing.sellerId, listing.price);
 
-      // Transfer Deck & Cards
+ // Transfer Deck & Cards
       const deck = await CardDeck.findById(listing.deckId);
       if (deck) {
         deck.userId = senderJid;
@@ -3271,10 +3260,10 @@ async function cmdEShopDeckTrading(senderJid, reply, chatId, args = [], isMod = 
       await listing.save();
 
       return reply(`🎉  *CONGRATULATIONS!*\n\n🃏 ⟢ *Deck:* _"${listing.deckName}"_\n💰 ⟢ *Paid:* ${ZENI()}${listing.price.toLocaleString()}\n\n📦 ⟢ _The deck is now yours!_`);
-    } catch (err) { return reply(`❌  *PURCHASE FAILED*\n\n📍 ⟢ _Could not complete the purchase — try again_`); }
+    } catch (err) { return reply(`❌  *PURCHASE FAILED*\n\n📍 ⟢ _Could not complete the purchase - try again_`); }
   }
 
-  // Default: List Deck Shop
+ // Default: List Deck Shop
   const active = await CardMarket.find({ status: 'active', isDeck: true }).sort({ listedAt: -1 });
   if (active.length === 0) return reply(`📭  *DECK SHOP EMPTY*\n\n🛒 ⟢ _No decks for sale right now_\n\n💡 ⟢ _Sell yours with_ _.eshop deck sell <name> <price>_`);
 
@@ -3292,7 +3281,7 @@ async function cmdT2Coll(senderJid, reply, args = []) {
   const p = P();
   if (!args.length) return sendUsage(reply, `${p} t2coll`, `${p} t2coll <deck_slot> [slot2]... | all`, `${p} t2coll 1\n${p} t2coll 1 3 5\n${p} t2coll all`);
 
-  // 💡 P3 (2026-08-16): "all" - empty entire main deck back to collection.
+ // P3: "all" - empty entire main deck back to collection.
   if (args[0]?.toLowerCase() === 'all') {
     const allDecked = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: true });
     if (!allDecked.length) return reply(`❌  *DECK ALREADY EMPTY*\n\n📭 ⟢ _Your main deck has no cards to move_`);
@@ -3306,7 +3295,6 @@ async function cmdT2Coll(senderJid, reply, args = []) {
     return reply(`📦  *CARDS RETURNED!*\n\n🔢 ⟢ *Moved:* _${count} card(s) back to collection_\n📭 ⟢ _Your main deck is now empty_`);
   }
 
-  // Parse all slot numbers (skip non-numbers), deduplicate
   const slots = [...new Set(args.map(a => parseInt(a)).filter(n => !isNaN(n) && n > 0))];
   if (!slots.length) return sendUsage(reply, `${p} t2coll`, `${p} t2coll <deck_slot> [slot2]... | all`, `${p} t2coll 1\n${p} t2coll 1 3 5\n${p} t2coll all`);
 
@@ -3325,20 +3313,18 @@ async function cmdT2Coll(senderJid, reply, args = []) {
   return reply(`${header}\n\n${results.join('\n')}`);
 }
 
-// 💡 FEATURE 7 (requested a year ago): t2ccoll - move a card FROM a custom
+// FEATURE 7 (requested a year ago): t2ccoll - move a card FROM a custom
 // deck BACK to the collection by collection number.
 // Format: .g t2ccoll <coll_index> <deck_name>
-//   <coll_index> = the slot number of the card within the custom deck
-//   <deck_name>  = the name of the custom deck
-// Example: .g t2ccoll 3 Waifus   (removes slot #3 from "Waifus" deck)
-//
+// <coll_index> = the slot number of the card within the custom deck
+// <deck_name> = the name of the custom deck
+// Example: .g t2ccoll 3 Waifus (removes slot #3 from "Waifus" deck)
 // This is the inverse of t2cdeck. Previously users had to use
 // `cdeck <name> remove <slot>` which used deck-relative slots, not coll
 // numbers. The user explicitly asked for the t2ccoll interface.
 async function cmdT2CColl(senderJid, reply, args = []) {
   const p = P();
 
-  // Parse: first arg(s) = slot numbers, last part = deck name
   const indices = [];
   let deckNameParts = [];
   let foundNonNumeric = false;
@@ -3364,8 +3350,8 @@ async function cmdT2CColl(senderJid, reply, args = []) {
   if (!targetDeck) targetDeck = decks.find(d => d.name.toLowerCase().includes(deckNameQuery.toLowerCase()));
   if (!targetDeck) return reply(`❌  *DECK NOT FOUND*\n\n🃏 ⟢ *Deck:* _"${deckNameQuery}"_`);
 
-  // Sort indices descending so we splice from the end first - this keeps
-  // the remaining slot numbers stable as we remove cards.
+ // Sort indices descending so we splice from the end first - this keeps
+ // the remaining slot numbers stable as we remove cards.
   const sortedIndices = uniqueIndices.sort((a, b) => b - a);
   const results = [];
 
@@ -3375,7 +3361,7 @@ async function cmdT2CColl(senderJid, reply, args = []) {
 
     const uc = await UserCard.findById(ucId);
     if (!uc) {
-      // Card doc missing - just remove from deck array
+ // Card doc missing - just remove from deck array
       targetDeck.cards.splice(slot - 1, 1);
       results.push(`⚠️ Slot #${slot} - card doc missing, removed from deck`);
       continue;
@@ -3393,7 +3379,7 @@ async function cmdT2CColl(senderJid, reply, args = []) {
 
   await targetDeck.save();
 
-  // Re-sort results ascending for display
+ // Re-sort results ascending for display
   results.sort((a, b) => {
     const aNum = parseInt(a.match(/#(\d+)/)?.[1] || '0');
     const bNum = parseInt(b.match(/#(\d+)/)?.[1] || '0');
@@ -3406,7 +3392,7 @@ async function cmdT2CColl(senderJid, reply, args = []) {
   return reply(`${header}\n\n${results.join('\n')}`);
 }
 
-// 💡 FEATURE 8: Rc - admin/mod tool to FORCIBLY delete a card from ANY
+// FEATURE 8: Rc - admin/mod tool to FORCIBLY delete a card from ANY
 // player's collection. Used for regulation, cloning bugs, event duplication.
 // Format: .g rc @user <card_name> [tier]
 // The command searches the target's collection (including decks) for the
@@ -3416,19 +3402,18 @@ async function cmdRc(senderJid, reply, args = [], isCardMod = false, m = {}) {
   const p = P();
   if (!isCardMod) return reply('❌ Rc (regulation card removal) is for moderators and above only.'), true;
 
-  // Parse: @mention or reply → target user, then card name (+ optional tier)
-  // 💡 FIX 2026-10-08: reply/quote now works too (getTaggedJid).
+ // FIX reply/quote now works too (getTaggedJid).
   const mentioned = getTaggedJid(m);
   if (!mentioned) return reply(`❌ Usage: \`${p} rc @user <card_name> [tier]\`\n\n_Tag the player whose card you want to delete._`), true;
-  // 💡 FIX 2026-10-08: resolve the mention - raw mention JIDs miss cards that
-  // live under the player's other identity format.
+ // FIX resolve the mention - raw mention JIDs miss cards that
+ // live under the player's other identity format.
   const targetJid = resolveMentionJid(mentioned);
 
-  // args after the mention
+ // args after the mention
   const parts = args.filter(a => !a.includes('@') && !/^\d{10,}/.test(a));
   if (parts.length === 0) return reply(`❌ Usage: \`${p} rc @user <card_name> [tier]\``), true;
 
-  // Last part might be a tier (S, 6, 5, 4, 3, 2, 1, E)
+ // Last part might be a tier (S, 6, 5, 4, 3, 2, 1, E)
   const validTiers = ['S', '6', '5', '4', '3', '2', '1', 'E'];
   let tierFilter = null;
   if (parts.length > 1 && validTiers.includes(parts[parts.length - 1].toUpperCase())) {
@@ -3437,7 +3422,7 @@ async function cmdRc(senderJid, reply, args = [], isCardMod = false, m = {}) {
   const cardNameQuery = parts.join(' ').toLowerCase().trim();
   if (!cardNameQuery) return reply(`❌ Usage: \`${p} rc @user <card_name> [tier]\``), true;
 
-  // Search target's entire collection (main deck + custom decks + collection + market)
+ // Search target's entire collection (main deck + custom decks + collection + market)
   const allCards = await UserCard.find({ userId: targetJid }).sort({ createdAt: 1 });
   let targetUc = null;
   for (const uc of allCards) {
@@ -3449,7 +3434,7 @@ async function cmdRc(senderJid, reply, args = [], isCardMod = false, m = {}) {
       break;
     }
   }
-  // Fallback: substring match
+ // Fallback: substring match
   if (!targetUc) {
     for (const uc of allCards) {
       const card = CARD_INDEX()[uc.cardId];
@@ -3469,7 +3454,7 @@ async function cmdRc(senderJid, reply, args = [], isCardMod = false, m = {}) {
   const card = CARD_INDEX()[targetUc.cardId];
   const location = targetUc.inMainDeck ? 'Main Deck' : (targetUc.inCustomDeck ? `Custom Deck: ${targetUc.customDeckName}` : (targetUc.forSale ? 'Market' : 'Collection'));
 
-  // If in a custom deck, remove from the deck's cards array
+ // If in a custom deck, remove from the deck's cards array
   if (targetUc.inCustomDeck && targetUc.customDeckName) {
     const deck = await CardDeck.findOne({ userId: targetJid, name: targetUc.customDeckName });
     if (deck) {
@@ -3483,16 +3468,16 @@ async function cmdRc(senderJid, reply, args = [], isCardMod = false, m = {}) {
   return reply(`🗑️  *REGULATION REMOVAL*\n\n👤 ⟢ *Target:* _@${economy.getDisplayName(targetJid)}_\n🃏 ⟢ *Card:* _${card.cardName}_ (Tier ${card.tier})\n📍 ⟢ *Was in:* _${location}_\n\n⚠️ ⟢ _Card has been permanently deleted._`, { mentions: [targetJid] }), true;
 }
 
-// 💡 FEATURE 9: Erc - same as Rc but for event cards. Searches by event
+// FEATURE 9: Erc - same as Rc but for event cards. Searches by event
 // card ID prefix (E-XXXXX) or event card name.
 // Format: .g erc @user <event_card_name_or_id>
 async function cmdErc(senderJid, reply, args = [], isCardMod = false, m = {}) {
   const p = P();
   if (!isCardMod) return reply('❌ Erc (event regulation card removal) is for moderators and above only.'), true;
 
-  const mentioned = getTaggedJid(m); // 💡 FIX 2026-10-08: reply/quote works too
+  const mentioned = getTaggedJid(m); // FIX reply/quote works too
   if (!mentioned) return reply(`❌ Usage: \`${p} erc @user <event_card_name_or_id>\``), true;
-  // 💡 FIX 2026-10-08: resolve the mention (same as .rc).
+ // FIX resolve the mention (same as .rc).
   const targetJid = resolveMentionJid(mentioned);
 
   const parts = args.filter(a => !a.includes('@') && !/^\d{10,}/.test(a));
@@ -3516,7 +3501,7 @@ async function cmdErc(senderJid, reply, args = [], isCardMod = false, m = {}) {
 
   const card = CARD_INDEX()[targetUc.cardId];
 
-  // Remove from custom deck if applicable
+ // Remove from custom deck if applicable
   if (targetUc.inCustomDeck && targetUc.customDeckName) {
     const deck = await CardDeck.findOne({ userId: targetJid, name: targetUc.customDeckName });
     if (deck) {
@@ -3530,21 +3515,21 @@ async function cmdErc(senderJid, reply, args = [], isCardMod = false, m = {}) {
   return reply(`🗑️  *EVENT REGULATION REMOVAL*\n\n👤 ⟢ *Target:* _@${economy.getDisplayName(targetJid)}_\n🃏 ⟢ *Card:* _${card.cardName}_ (${targetUc.cardId})\n\n⚠️ ⟢ _Event card has been permanently deleted._`, { mentions: [targetJid] }), true;
 }
 
-// 💡 FEATURE 10: Tcoll - TRUE collection. Shows ALL cards the user owns,
+// FEATURE 10: Tcoll - TRUE collection. Shows ALL cards the user owns,
 // including cards hidden in custom decks and event cards. The regular
 // `.g coll` only shows cards in the loose collection (not in any deck).
-// Format: .g tcoll  OR  .g tcoll --tier
+// Format: .g tcoll OR .g tcoll --tier
 async function cmdTcoll(senderJid, reply, chatId, args = []) {
   const inst = getInst();
   const p = P();
   const tierMode = args.includes('--tier');
 
-  // Fetch ALL cards regardless of deck/market status
+ // Fetch ALL cards regardless of deck/market status
   const allOwned = await UserCard.find({ ...(await ownerOf(senderJid)) }).sort({ createdAt: 1 });
   if (!allOwned.length) return reply(`📭  *TRUE COLLECTION EMPTY*\n\n💡 ⟢ _Every card you own, across all decks_`);
 
   if (tierMode) {
-    // Tier-grouped view
+ // Tier-grouped view
     const tiers = { 'S': [], 'E': [], '6': [], '5': [], '4': [], '3': [], '2': [], '1': [] };
     const tierEmoji = { 'S': '👑', 'E': '🎁', '6': '💎', '5': '✨', '4': '🎗', '3': '🔮', '2': '🌈', '1': '🎴' };
 
@@ -3578,7 +3563,7 @@ async function cmdTcoll(senderJid, reply, chatId, args = []) {
     return reply(msg);
   }
 
-  // Flat list view
+ // Flat list view
   let msg = `🃏 *TRUE COLLECTION*\n`;
   msg += `━━━━━━━━━━━━━━━\n`;
   msg += `📦 *Total:* ${allOwned.length} (including decks & market)\n\n`;
@@ -3599,13 +3584,13 @@ async function cmdTcoll(senderJid, reply, chatId, args = []) {
   return reply(msg);
 }
 
-// 💡 FEATURE 11: Ecoll - event collection. Shows ALL event cards the user
+// FEATURE 11: Ecoll - event collection. Shows ALL event cards the user
 // owns, separated by tier. For event flexing.
-// Format: .g ecoll  OR  .g ecoll --tier
+// Format: .g ecoll OR .g ecoll --tier
 async function cmdEcoll(senderJid, reply, chatId, args = []) {
   const p = P();
 
-  // Fetch ALL cards, filter to event cards only
+ // Fetch ALL cards, filter to event cards only
   const allOwned = await UserCard.find({ ...(await ownerOf(senderJid)) }).sort({ createdAt: 1 });
   const eventCards = [];
   allOwned.forEach((uc, i) => {
@@ -3617,7 +3602,7 @@ async function cmdEcoll(senderJid, reply, chatId, args = []) {
 
   if (!eventCards.length) return reply(`📭  *NO EVENT CARDS*\n\n🎪 ⟢ _You don't own any event cards yet_`);
 
-  // Group by tier
+ // Group by tier
   const tiers = { 'S': [], '6': [], '5': [], '4': [], '3': [], '2': [], '1': [], 'E': [] };
   const tierEmoji = { 'S': '👑', '6': '💎', '5': '✨', '4': '🎗', '3': '🔮', '2': '🌈', '1': '🎴', 'E': '🎁' };
 
@@ -3649,10 +3634,9 @@ async function cmdEcoll(senderJid, reply, chatId, args = []) {
   return reply(msg);
 }
 
-
 async function cmdSwapCard(senderJid, reply, args = []) {
   const p = P();
-  // Support ".j swap card 1 and 2" or ".j swap 1 2"
+ // Support ".j swap card 1 and 2" or ".j swap 1 2"
   let a, b;
   if (args[0] === 'card') {
     a = parseInt(args[1]);
@@ -3667,7 +3651,7 @@ async function cmdSwapCard(senderJid, reply, args = []) {
   const cardA = await UserCard.findOne({ ...(await ownerOf(senderJid)), inMainDeck: true, mainDeckSlot: a });
   const cardB = await UserCard.findOne({ ...(await ownerOf(senderJid)), inMainDeck: true, mainDeckSlot: b });
 
-  if (!cardA && !cardB) return reply(`❌  *EMPTY SLOTS*\n\n🔢 ⟢ _Both deck slots are empty — nothing to swap_`);
+  if (!cardA && !cardB) return reply(`❌  *EMPTY SLOTS*\n\n🔢 ⟢ _Both deck slots are empty - nothing to swap_`);
 
   if (cardA) cardA.mainDeckSlot = b;
   if (cardB) cardB.mainDeckSlot = a;
@@ -3680,18 +3664,18 @@ async function cmdSwapCard(senderJid, reply, args = []) {
 
 async function cmdCG(senderJid, reply, args = [], m) {
   const p = P();
-  // Usage: .cg @user <index> [-deck | -coll]
-  //   .cg @user 5        -> gifts collection card #5 (instant, same numbering as .coll)
-  //   .cg @user 5 -coll  -> same thing, explicit
-  //   .cg @user 5 -deck  -> gifts main-deck slot #5
-  // 💡 2026-10-08 (owner request): source flag accepts -deck/-coll with or
-  // without the dash, any case. Default source = collection ("gift from
-  // your coll instead of deck").
-  const mentionedJid = getTaggedJid(m); // 💡 FIX 2026-10-08: @mention OR reply/quote
+ // Usage: .cg @user <index> [-deck | -coll]
+ // .cg @user 5 -> gifts collection card #5 (instant, same numbering as .coll)
+ // .cg @user 5 -coll -> same thing, explicit
+ // .cg @user 5 -deck -> gifts main-deck slot #5
+ // (owner request): source flag accepts -deck/-coll with or
+ // without the dash, any case. Default source = collection ("gift from
+ // your coll instead of deck").
+  const mentionedJid = getTaggedJid(m); // FIX @mention OR reply/quote
   if (!mentionedJid) return sendUsage(reply, `${p} cg`, `${p} cg @user <index> [-deck | -coll]`, `${p} cg @user 5 -deck`);
 
-  // 💡 FIX 2026-10-08: resolve the mention to the identity the economy DB
-  // knows. Raw mentions created orphaned cards the recipient could never see.
+ // FIX resolve the mention to the identity the economy DB
+ // knows. Raw mentions created orphaned cards the recipient could never see.
   const targetJid = resolveMentionJid(mentionedJid);
 
   const flagArgs = args.map(a => String(a).toLowerCase());
@@ -3701,7 +3685,7 @@ async function cmdCG(senderJid, reply, args = [], m) {
   const index = parseInt(indexStr);
 
   if (isNaN(index)) return sendUsage(reply, `${p} cg`, `${p} cg @user <index> [-deck | -coll]`, `${p} cg @user 1`);
-  if (wantsDeck && wantsColl) return reply(`❌  *PICK ONE SOURCE*\n\n🧭 ⟢ _Use \`-deck\` or \`-coll\` — not both_`);
+  if (wantsDeck && wantsColl) return reply(`❌  *PICK ONE SOURCE*\n\n🧭 ⟢ _Use \`-deck\` or \`-coll\` - not both_`);
 
   if (targetJid === senderJid) return reply(`❌  *SELF GIFT*\n\n📍 ⟢ _You cannot gift a card to yourself_`);
 
@@ -3711,11 +3695,11 @@ async function cmdCG(senderJid, reply, args = [], m) {
     uc = await UserCard.findOne({ ...(await ownerOf(senderJid)), inMainDeck: true, mainDeckSlot: index });
     sourceLabel = `Main Deck (Slot #${index})`;
   } else {
-    // Numbering matches `.coll` EXACTLY: non-deck, non-custom, non-sale,
-    // orphans dropped - the identical filter chain the collection prints.
-    // In-auction cards STAY in the numbering (they show in .coll too), so
-    // indexes never shift; the inAuction guard below catches those with a
-    // friendly error instead of silently skipping and shifting numbers.
+ // Numbering matches `.coll` EXACTLY: non-deck, non-custom, non-sale,
+ // orphans dropped - the identical filter chain the collection prints.
+ // In-auction cards STAY in the numbering (they show in .coll too), so
+ // indexes never shift; the inAuction guard below catches those with a
+ // friendly error instead of silently skipping and shifting numbers.
     const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
     uc = owned.filter(o => CARD_INDEX()[o.cardId])[index - 1];
     sourceLabel = `Collection #${index}`;
@@ -3723,32 +3707,32 @@ async function cmdCG(senderJid, reply, args = [], m) {
 
   if (!uc) return reply(`❌  *CARD NOT FOUND*\n\n🃏 ⟢ _No card #${index} in your ${wantsDeck ? 'deck' : 'collection'}_`);
   if (uc.isLocked) return reply(`🔒  *CARD LOCKED*\n\n📍 ⟢ _Unlock this card before gifting it_`);
-  // 💡 FIX 2026-10-08 (gift-vs-market race): a deck card can simultaneously be
-  // listed for sale (.sc) or in an auction (.auction). Gifting it anyway let
-  // the later buyer/winner PAY and then yank the card away from the gift
-  // recipient - cards "randomly disappearing" right after arriving. Block
-  // committed cards like .sc/.auction already do.
-  if (uc.forSale) return reply(`🛒  *CARD IS LISTED*\n\n📍 ⟢ _Unlist it first — or gift a different card_`);
+ // FIX (gift-vs-market race): a deck card can simultaneously be
+ // listed for sale (.sc) or in an auction (.auction). Gifting it anyway let
+ // the later buyer/winner PAY and then yank the card away from the gift
+ // recipient - cards "randomly disappearing" right after arriving. Block
+ // committed cards like .sc/.auction already do.
+  if (uc.forSale) return reply(`🛒  *CARD IS LISTED*\n\n📍 ⟢ _Unlist it first - or gift a different card_`);
   if (uc.inAuction) return reply(`🔨  *CARD IN AUCTION*\n\n📍 ⟢ _Wait for the auction to end before gifting_`);
 
-  // 💡 FIX 2026-10-08 (owner report): check if the recipient already owns this
-  // card BEFORE the transfer, so the confirmation can say so - gift order
-  // numbers gave no clue whether the card was new to them or a duplicate.
+ // FIX (owner report): check if the recipient already owns this
+ // card BEFORE the transfer, so the confirmation can say so - gift order
+ // numbers gave no clue whether the card was new to them or a duplicate.
   const recipientCopies = await UserCard.countDocuments({ userId: targetJid, cardId: uc.cardId });
 
-  // 💡 FIX 2026-10-08: full state reset on transfer. The old code only cleared
-  // inMainDeck/mainDeckSlot - if the card carried ANY other committed flag
-  // (data drift), the recipient inherited the sender's market/auction/deck
-  // state (ghost listings, phantom deck slots).
-  // Also pull the card out of any custom-deck array it still lingers in.
+ // FIX full state reset on transfer. The old code only cleared
+ // inMainDeck/mainDeckSlot - if the card carried ANY other committed flag
+ // (data drift), the recipient inherited the sender's market/auction/deck
+ // state (ghost listings, phantom deck slots).
+ // Also pull the card out of any custom-deck array it still lingers in.
   if (uc.inCustomDeck && uc.customDeckName) {
     await CardDeck.updateMany({ ...(await ownerOf(senderJid)), name: uc.customDeckName }, { $pull: { cards: uc._id } }).catch(() => {});
   }
   uc.userId = targetJid;
-  // 💡 FIX 2026-10-08 (owner report): a received card kept its ORIGINAL claim
-  // date, so in the recipient's .coll it filed in mid-list by the SENDER's old
-  // claim order - impossible to tell what had just arrived. Refresh both
-  // timestamps so received cards sort last (newest) exactly like a fresh claim.
+ // FIX (owner report): a received card kept its ORIGINAL claim
+ // date, so in the recipient's .coll it filed in mid-list by the SENDER's old
+ // claim order - impossible to tell what had just arrived. Refresh both
+ // timestamps so received cards sort last (newest) exactly like a fresh claim.
   uc.createdAt = new Date();
   uc.claimedAt = new Date();
   uc.inMainDeck = false;
@@ -3761,20 +3745,20 @@ async function cmdCG(senderJid, reply, args = [], m) {
   uc.inAuction = false;
   await uc.save();
 
-  // 💡 FIX 2026-10-08: make sure the recipient actually HAS an economy
-  // account under the identity we just wrote - otherwise the gift sits in a
-  // userId with no user doc (43 such orphans in the audit) and is invisible
-  // until they happen to register under the exact same format.
+ // FIX make sure the recipient actually HAS an economy
+ // account under the identity we just wrote - otherwise the gift sits in a
+ // userId with no user doc (43 such orphans in the audit) and is invisible
+ // until they happen to register under the exact same format.
   try { economy.getOrCreateUser(targetJid); } catch (e) { /* non-fatal */ }
 
   const card = CARD_INDEX()[uc.cardId];
-  const dupLine = recipientCopies > 0 ? `\n💡 ⟢ _They already owned this card — this is copy #${recipientCopies + 1}_` : '';
+  const dupLine = recipientCopies > 0 ? `\n💡 ⟢ _They already owned this card - this is copy #${recipientCopies + 1}_` : '';
   return reply(`🎁  *GIFT SENT!*\n\n👤 ⟢ *From:* _@${economy.getDisplayName(senderJid)}_\n🎯 ⟢ *To:* _@${economy.getDisplayName(targetJid)}_\n🃏 ⟢ *Card:* _${card?.cardName || uc.cardId}_\n🆔 ⟢ *ID:* \`${uc.cardId}\`\n📦 ⟢ *Source:* _${sourceLabel}_${dupLine}`, { mentions: [senderJid, targetJid] });
 }
 
 async function cmdCS(reply, args = [], perms = {}) {
-  // 💡 perms = { isOwner, isCardMod }
-  // Non-mods cannot search event (E-tier) cards.
+ // perms = { isOwner, isCardMod }
+ // Non-mods cannot search event (E-tier) cards.
   const canViewEvents = perms.isOwner || perms.isCardMod;
   const p = P();
   if (args.length === 0) return sendUsage(reply, `${p} cs`, `${p} cs <name or series> [| tier] [--page n]`, `${p} cs olivier armstrong | 5`);
@@ -3786,9 +3770,9 @@ async function cmdCS(reply, args = [], perms = {}) {
     args.splice(pageIdx, 2);
   }
 
-  // 💡 OWNER BRIEF 2026-10-09 §1: ".j cs olivier armstrong | 5" — the pipe IS
-  // a tier separator. The old parser only knew the literal word "tier", so
-  // the pipe + number were swallowed into the query and valid names failed.
+ // OWNER BRIEF §1: ".j cs olivier armstrong | 5" - the pipe IS
+ // a tier separator. The old parser only knew the literal word "tier", so
+ // the pipe + number were swallowed into the query and valid names failed.
   let tierFilter = null;
   let work = args.slice();
   const pipeIdx = work.indexOf('|');
@@ -3803,8 +3787,8 @@ async function cmdCS(reply, args = [], perms = {}) {
   }
 
   const query = work.join(' ').toLowerCase().trim();
-  // 💡 OWNER BRIEF §1: token-AND matching across name AND series (the old
-  // whole-string includes() had the "Olivier Mira Armstrong" failure mode).
+ // OWNER BRIEF §1: token-AND matching across name AND series (the old
+ // whole-string includes() had the "Olivier Mira Armstrong" failure mode).
   const tokens = _nameTokens(query);
   let matches = ALL_CARDS().filter(c =>
     _cardMatchesTokens(c, tokens, true) ||
@@ -3812,12 +3796,12 @@ async function cmdCS(reply, args = [], perms = {}) {
   );
 
   if (tierFilter) {
-    // 💡 MOD-ONLY GATE: Non-mods cannot search for event cards.
+ // MOD-ONLY GATE: Non-mods cannot search for event cards.
     if (tierFilter === 'E' && !canViewEvents) {
       return reply(`❌ Event card search is for moderators and above only.`);
     }
-    // For event card filter, match by ID prefix since event cards now
-    // have real tiers (1-6, S) instead of tier 'E'
+ // For event card filter, match by ID prefix since event cards now
+ // have real tiers (1-6, S) instead of tier 'E'
     if (tierFilter === 'E') {
       matches = matches.filter(c => isEventCard(c));
     } else {
@@ -3825,15 +3809,15 @@ async function cmdCS(reply, args = [], perms = {}) {
     }
   }
 
-  // 💡 MOD-ONLY GATE: Filter out E-tier cards from non-mod search results
-  // entirely (even when no tier filter is specified).
+ // MOD-ONLY GATE: Filter out E-tier cards from non-mod search results
+ // entirely (even when no tier filter is specified).
   if (!canViewEvents) {
     matches = matches.filter(c => !isEventCard(c));  // Hide event cards from non-mods
   }
   
   if (matches.length === 0) return reply(`🔍 No cards found matching *"${query}"*${tierFilter ? ` in Tier ${tierFilter}` : ''}`);
 
-  // 💡 OWNER BRIEF §1: best matches first (exact-name > name-prefix > spread)
+ // OWNER BRIEF §1: best matches first (exact-name > name-prefix > spread)
   matches.sort((a, b) =>
     _cardRelevance(a, tokens) - _cardRelevance(b, tokens) ||
     String(a.tier).localeCompare(String(b.tier), undefined, { numeric: true }) ||
@@ -3879,10 +3863,10 @@ async function cmdBuyCard(senderJid, reply, args = []) {
         if (balance < listing.price) return reply(`❌  *INSUFFICIENT FUNDS*\n\n💰 ⟢ *Needed:* ${ZENI()}${listing.price.toLocaleString()}\n📉 ⟢ _Your balance is too low_`);
 
         try {
-            // 💡 FIX 2026-08-31 (double-sell race): ATOMICALLY claim the listing
-            // before moving any money. Previously two concurrent buyers both read
-            // status:'active', both paid, seller was credited twice, and the card
-            // went to whichever update landed last - one buyer paid for nothing.
+ // FIX (double-sell race): ATOMICALLY claim the listing
+ // before moving any money. Previously two concurrent buyers both read
+ // status:'active', both paid, seller was credited twice, and the card
+ // went to whichever update landed last - one buyer paid for nothing.
             const claimed = await CardMarket.findOneAndUpdate(
               { _id: listing._id, status: 'active' },
               { $set: { status: 'pending' } },
@@ -3892,8 +3876,8 @@ async function cmdBuyCard(senderJid, reply, args = []) {
               return reply(`❌  *SOLD OUT*\n\n🛒 ⟢ _This listing was just bought by someone else_`);
             }
 
-            // 💡 P4 Item 6: 10% tax on card sales - buyer pays full price,
-            // seller gets 90%, 10% evaporates (genuine sink).
+ // P4 Item 6: 10% tax on card sales - buyer pays full price,
+ // seller gets 90%, 10% evaporates (genuine sink).
             const taxAmount = Math.floor(listing.price * 0.10);
             const sellerGets = listing.price - taxAmount;
             const paid = economy.removeMoney(senderJid, listing.price, `Bought card ${listing.cardId}`);
@@ -3903,33 +3887,33 @@ async function cmdBuyCard(senderJid, reply, args = []) {
             }
             const credited = economy.addMoney(listing.sellerId, sellerGets, `Sold card ${listing.cardId} (after 10% tax)`);
             if (!credited) {
-              // Roll back the buyer's payment
+ // Roll back the buyer's payment
               economy.addMoney(senderJid, listing.price, `Card purchase rollback (seller credit failed)`);
               await CardMarket.updateOne({ _id: listing._id }, { $set: { status: 'active' } });
-              return reply(`❌  *PURCHASE FAILED*\n\n📍 ⟢ _Seller could not be credited — try again later_`);
+              return reply(`❌  *PURCHASE FAILED*\n\n📍 ⟢ _Seller could not be credited - try again later_`);
             }
 
-            // Transfer card ownership
-            // 💡 FIX 2026-08-31 (deck corruption): sc only lists DECK cards
-            // (inMainDeck:true), so the buyer inherited the seller's deck slot -
-            // decks could exceed 12 cards with slot collisions. Clear deck state
-            // like finalizeAuctions does.
-            // 💡 FIX 2026-10-08 (vanishing cards): also free the card from the
-            // seller's custom-deck arrays and clear custom-deck/sale leftovers,
-            // so the buyer never inherits ghost deck state.
+ // Transfer card ownership
+ // FIX (deck corruption): sc only lists DECK cards
+ // (inMainDeck:true), so the buyer inherited the seller's deck slot -
+ // decks could exceed 12 cards with slot collisions. Clear deck state
+ // like finalizeAuctions does.
+ // FIX (vanishing cards): also free the card from the
+ // seller's custom-deck arrays and clear custom-deck/sale leftovers,
+ // so the buyer never inherits ghost deck state.
             const prevCard = await UserCard.findById(listing.userCardId).select('userId inCustomDeck customDeckName').lean().catch(() => null);
             if (prevCard?.inCustomDeck && prevCard.customDeckName) {
               await CardDeck.updateMany({ userId: prevCard.userId, name: prevCard.customDeckName }, { $pull: { cards: listing.userCardId } }).catch(() => {});
             }
             const updated = await UserCard.findByIdAndUpdate(listing.userCardId, { userId: senderJid, forSale: false, salePrice: null, inAuction: false, inMainDeck: false, mainDeckSlot: null, inCustomDeck: false, customDeckName: null, customDeckSlot: null, createdAt: new Date(), claimedAt: new Date() });
             if (!updated) {
-              // Roll back the transaction - neither party should lose out.
-              // 💡 FIX 2026-08-31: refund the seller the 90% they actually
-              // received (was: full price removed from seller).
+ // Roll back the transaction - neither party should lose out.
+ // FIX refund the seller the 90% they actually
+ // received (was: full price removed from seller).
               economy.addMoney(senderJid, listing.price, `Card purchase rollback (card not found)`);
               economy.removeMoney(listing.sellerId, sellerGets, `Card sale rollback (card not found)`);
               await CardMarket.updateOne({ _id: listing._id }, { $set: { status: 'active' } });
-              return reply(`❌  *PURCHASE FAILED*\n\n📍 ⟢ _That listing just went stale — try the market listing again_`);
+              return reply(`❌  *PURCHASE FAILED*\n\n📍 ⟢ _That listing just went stale - try the market listing again_`);
             }
 
             listing.status = 'sold';
@@ -3939,7 +3923,7 @@ async function cmdBuyCard(senderJid, reply, args = []) {
             return reply(`✅  *PURCHASE COMPLETE!*\n\n🃏 ⟢ *Card:* _${card?.cardName || listing.cardId}_\n💰 ⟢ *Paid:* ${ZENI()}${listing.price.toLocaleString()}\n\n📦 ⟢ _Added to your collection_`);
         } catch (err) {
             console.error('[CardMarket] Purchase error:', err);
-            // Best-effort un-claim so the listing isn't stuck in 'pending'
+ // Best-effort un-claim so the listing isn't stuck in 'pending'
             try { await CardMarket.updateOne({ _id: listing._id, status: 'pending' }, { $set: { status: 'active' } }); } catch (_) {}
             return reply(`❌  *PURCHASE FAILED*\n\n📍 ⟢ _${err.message || 'unknown error'}_`);
         }
@@ -3971,10 +3955,10 @@ async function cmdSC(senderJid, reply, args = []) {
   const uc = await UserCard.findOne({ ...(await ownerOf(senderJid)), inMainDeck: true, mainDeckSlot: slot });
   if (!uc) return reply(`❌  *EMPTY SLOT*\n\n🔢 ⟢ _No card in deck slot #${slot}_`);
   if (uc.isLocked) return reply(`🔒  *CARD LOCKED*\n\n📍 ⟢ _Unlock it first_`);
-  // 💡 FIX 2026-08-31 (double-commit): a card already listed for sale or in an
-  // auction could be listed AGAIN - two buyers, one card, feeding the
-  // double-sell race. Block listing a committed card.
-  if (uc.forSale) return reply(`🛒  *ALREADY LISTED*\n\n📍 ⟢ _This card is up for sale — unlist it first_`);
+ // FIX (double-commit): a card already listed for sale or in an
+ // auction could be listed AGAIN - two buyers, one card, feeding the
+ // double-sell race. Block listing a committed card.
+  if (uc.forSale) return reply(`🛒  *ALREADY LISTED*\n\n📍 ⟢ _This card is up for sale - unlist it first_`);
   if (uc.inAuction) return reply(`🔨  *CARD IN AUCTION*\n\n📍 ⟢ _Wait for the auction to end_`);
 
   try {
@@ -3991,7 +3975,7 @@ async function cmdSC(senderJid, reply, args = []) {
     });
     const card = CARD_INDEX()[uc.cardId];
     return reply(`🛒  *LISTED FOR SALE!*\n\n🃏 ⟢ *Card:* _${card.cardName}_\n💰 ⟢ *Price:* ${ZENI()}${price.toLocaleString()}\n\n👁️ ⟢ _Waiting for a buyer_`);
-  } catch (err) { return reply(`❌  *LISTING FAILED*\n\n📍 ⟢ _Could not list the card — try again_`); }
+  } catch (err) { return reply(`❌  *LISTING FAILED*\n\n📍 ⟢ _Could not list the card - try again_`); }
 }
 
 async function cmdLock(senderJid, reply, args = []) {
@@ -4021,9 +4005,9 @@ async function cmdMerge(senderJid, reply, args = []) {
   const query = args.join('').trim();
   if (!query) return sendUsage(reply, `${p} merge`, `${p} merge <card_id>`, `${p} merge 3-04521`);
 
-  // 💡 FIX 2026-10-08 (vanishing cards): the filter missed inCustomDeck and
-  // inAuction, so "merging duplicates" silently DELETED custom-deck copies
-  // and cards committed to an auction. Both are now protected.
+ // FIX (vanishing cards): the filter missed inCustomDeck and
+ // inAuction, so "merging duplicates" silently DELETED custom-deck copies
+ // and cards committed to an auction. Both are now protected.
   const owned = await UserCard.find({ ...(await ownerOf(senderJid)), cardId: query, inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false, isLocked: false });
   if (owned.length < 2) return reply(`🧬  *NOT ENOUGH COPIES*\n\n🔢 ⟢ _You need at least 2 unlocked copies of_ _${query}_`);
 
@@ -4034,13 +4018,13 @@ async function cmdMerge(senderJid, reply, args = []) {
     economy.addMoney(senderJid, reward);
     const card = CARD_INDEX()[query];
     return reply(`🧬  *MERGE SUCCESSFUL!*\n\n🃏 ⟢ *Card:* _${card?.cardName || query}_\n🔢 ⟢ *Merged:* _2 copies → 1_\n\n💰 ⟢ *Reward:* ${ZENI()}${reward.toLocaleString()} Zeni`);
-  } catch (err) { return reply(`❌  *MERGE FAILED*\n\n📍 ⟢ _Could not merge the cards — try again_`); }
+  } catch (err) { return reply(`❌  *MERGE FAILED*\n\n📍 ⟢ _Could not merge the cards - try again_`); }
 }
 
 async function cmdMergeAll(senderJid, reply) {
   try {
-    // 💡 FIX 2026-10-08 (vanishing cards): same missing guards as .merge -
-    // mass-merge used to eat custom-deck copies and auction-committed cards.
+ // FIX (vanishing cards): same missing guards as .merge -
+ // mass-merge used to eat custom-deck copies and auction-committed cards.
     const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false, isLocked: false });
     const groups = {};
     owned.forEach(uc => {
@@ -4067,7 +4051,7 @@ async function cmdMergeAll(senderJid, reply) {
 
     economy.addMoney(senderJid, totalReward);
     return reply(`🧬  *MASS MERGE COMPLETE!*\n\n🔢 ⟢ *Merged:* _${totalMerged} duplicate cards_\n\n💰 ⟢ *Total Reward:* ${ZENI()}${totalReward.toLocaleString()} Zeni`);
-  } catch (err) { return reply(`❌  *MASS MERGE FAILED*\n\n📍 ⟢ _Something broke mid-merge — check your collection_`); }
+  } catch (err) { return reply(`❌  *MASS MERGE FAILED*\n\n📍 ⟢ _Something broke mid-merge - check your collection_`); }
 }
 
 async function cmdListDecks(senderJid, reply) {
@@ -4087,10 +4071,10 @@ async function cmdCreateDeck(senderJid, reply, args = [], isMod = false, m = {})
   let name = args.join(' ').trim();
   let targetJid = senderJid;
 
-  // Mod can create a deck for someone else by tagging them
-  const mentioned = getTaggedJid(m); // 💡 FIX 2026-10-08: reply/quote works too
+ // Mod can create a deck for someone else by tagging them
+  const mentioned = getTaggedJid(m); // FIX reply/quote works too
   if (isMod && mentioned) {
-      targetJid = resolveMentionJid(mentioned); // 💡 FIX 2026-10-08: LID-resolve
+      targetJid = resolveMentionJid(mentioned); // FIX LID-resolve
       name = args.filter(a => !a.includes('@')).join(' ').trim();
   }
 
@@ -4101,7 +4085,7 @@ async function cmdCreateDeck(senderJid, reply, args = [], isMod = false, m = {})
     return reply(`✅  *DECK CREATED!*\n\n🃏 ⟢ *Name:* _"${name}"_${targetJid !== senderJid ? `\n👤 ⟢ *For:* _@${economy.getDisplayName(targetJid)}_` : ''}`, { mentions: [targetJid] });
   } catch (err) {
     if (err.code === 11000) return reply(`❌  *NAME TAKEN*\n\n🃏 ⟢ *Deck:* _"${name}"_\n📍 ⟢ _Already exists for this user_`);
-    return reply(`❌  *CREATE FAILED*\n\n📍 ⟢ _Could not create the deck — try again_`);
+    return reply(`❌  *CREATE FAILED*\n\n📍 ⟢ _Could not create the deck - try again_`);
   }
 }
 
@@ -4110,8 +4094,7 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
   
   if (!args[0]) return sendUsage(reply, `${p} cdeck`, `${p} cdeck <name> [slot]`, `${p} cdeck <name> remove <slot>`);
 
-  // Check for 'remove' subcommand
-  // .j cdeck <name> remove <slot>
+ // .j cdeck <name> remove <slot>
   const removeIndex = args.findIndex(a => a.toLowerCase() === 'remove');
   if (removeIndex !== -1 && args.length > removeIndex + 1) {
     const deckName = args.slice(0, removeIndex).join(' ').trim();
@@ -4139,7 +4122,7 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
     return reply(`✅  *CARD REMOVED!*\n\n🃏 ⟢ *Deck:* _"${deck.name}"_\n🔢 ⟢ *Slot:* _#${slot}_\n\n📦 ⟢ _Returned to your collection_`);
   }
 
-  // Try to parse slot if last arg is a number
+ // Try to parse slot if last arg is a number
   let slot = null;
   let name = args.join(' ').trim();
 
@@ -4151,18 +4134,18 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
     }
   }
 
-  // 💡 FIX (BUG 1: "custom decks don't summon/show anymore, even if u type
-  // it properly"). The old code used `new RegExp(`^${name}$`, 'i')` which
-  // breaks if the deck name contains regex special characters (parentheses,
-  // brackets, asterisks, plus signs, etc.). For example, a deck named
-  // "Best (Girls)" would throw a SyntaxError or fail to match. Now we:
-  //   1. Escape regex special chars in the name
-  //   2. Try exact (case-insensitive) match first
-  //   3. Fall back to substring match if no exact match
-  // This mirrors the more lenient matching in cmdT2CDeck.
+ // FIX (BUG 1: "custom decks don't summon/show anymore, even if u type
+ // it properly"). The old code used `new RegExp(`^${name}$`, 'i')` which
+ // breaks if the deck name contains regex special characters (parentheses,
+ // brackets, asterisks, plus signs, etc.). For example, a deck named
+ // "Best (Girls)" would throw a SyntaxError or fail to match. Now we:
+ // 1. Escape regex special chars in the name
+ // 2. Try exact (case-insensitive) match first
+ // 3. Fall back to substring match if no exact match
+ // This mirrors the more lenient matching in cmdT2CDeck.
   let deck = await CardDeck.findOne({ ...(await ownerOf(senderJid)), name: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') } });
   if (!deck) {
-    // Fallback: substring match
+ // Fallback: substring match
     const allDecks = await CardDeck.find({ ...(await ownerOf(senderJid)) });
     deck = allDecks.find(d => d.name.toLowerCase() === name.toLowerCase())
        || allDecks.find(d => d.name.toLowerCase().includes(name.toLowerCase()));
@@ -4206,7 +4189,7 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
   }
   msg += `\n💡 Use \`${p} cdeck ${deck.name} <slot>\` for details.`;
 
-  // GIF generation for custom deck (Top 6)
+ // GIF generation for custom deck (Top 6)
   const topCards = getTopCards(ownedCards);
   const imageUrls = getTopImageUrls(topCards);
   if (imageUrls.length > 0) {
@@ -4244,7 +4227,7 @@ async function cmdRenameDeck(senderJid, reply, args = []) {
     return reply(`✅  *DECK RENAMED!*\n\n🃏 ⟢ *Was:* _"${oldName}"_\n🃏 ⟢ *Now:* _"${newName}"_`);
   } catch (err) {
     if (err.code === 11000) return reply(`❌  *NAME TAKEN*\n\n🃏 ⟢ *Deck:* _"${newName}"_\n📍 ⟢ _A deck with this name already exists_`);
-    return reply(`❌  *RENAME FAILED*\n\n📍 ⟢ _Could not rename the deck — try again_`);
+    return reply(`❌  *RENAME FAILED*\n\n📍 ⟢ _Could not rename the deck - try again_`);
   }
 }
 
@@ -4253,10 +4236,10 @@ async function cmdDeleteDeck(senderJid, reply, args = [], isMod = false, m = {})
   let name = args.join(' ').trim();
   let targetJid = senderJid;
 
-  // Mod can delete someone else's deck by tagging them
-  const mentioned = getTaggedJid(m); // 💡 FIX 2026-10-08: reply/quote works too
+ // Mod can delete someone else's deck by tagging them
+  const mentioned = getTaggedJid(m); // FIX reply/quote works too
   if (isMod && mentioned) {
-      targetJid = resolveMentionJid(mentioned); // 💡 FIX 2026-10-08: LID-resolve
+      targetJid = resolveMentionJid(mentioned); // FIX LID-resolve
       name = args.filter(a => !a.includes('@')).join(' ').trim();
   }
 
@@ -4269,7 +4252,7 @@ async function cmdDeleteDeck(senderJid, reply, args = [], isMod = false, m = {})
     await UserCard.updateMany({ _id: { $in: deck.cards } }, { inCustomDeck: false, customDeckName: null, customDeckSlot: null });
     await CardDeck.findByIdAndDelete(deck._id);
     return reply(`🗑️  *DECK DELETED!*\n\n🃏 ⟢ *Deck:* _"${name}"_${targetJid !== senderJid ? `\n👤 ⟢ *Owner:* _@${economy.getDisplayName(targetJid)}_` : ''}\n\n📦 ⟢ _Cards returned to collection_`, { mentions: [targetJid] });
-  } catch (err) { return reply(`❌  *DELETE FAILED*\n\n📍 ⟢ _Could not delete the deck — try again_`); }
+  } catch (err) { return reply(`❌  *DELETE FAILED*\n\n📍 ⟢ _Could not delete the deck - try again_`); }
 }
 
 function parseDuration(str) {
@@ -4303,8 +4286,8 @@ async function cmdAuction(senderJid, reply, args = []) {
   const uc = await UserCard.findOne({ ...(await ownerOf(senderJid)), inMainDeck: true, mainDeckSlot: slot });
   if (!uc) return reply(`❌  *EMPTY SLOT*\n\n🔢 ⟢ _No card in deck slot #${slot}_`);
   if (uc.isLocked) return reply(`🔒  *CARD LOCKED*\n\n📍 ⟢ _Unlock it first_`);
-  // 💡 FIX 2026-08-31 (double-commit): block auctioning a card that's already
-  // listed for sale or in another auction - same class of bug as sc.
+ // FIX (double-commit): block auctioning a card that's already
+ // listed for sale or in another auction - same class of bug as sc.
   if (uc.forSale) return reply(`🛒  *ALREADY LISTED*\n\n📍 ⟢ _Unlist it before auctioning_`);
   if (uc.inAuction) return reply(`🔨  *ALREADY IN AUCTION*\n\n📍 ⟢ _This card is on the block right now!_`);
 
@@ -4324,7 +4307,7 @@ async function cmdAuction(senderJid, reply, args = []) {
     });
     const card = CARD_INDEX()[uc.cardId];
     return reply(`🔨  *AUCTION STARTED!*\n\n🃏 ⟢ *Card:* _${card?.cardName || uc.cardId}_\n💰 ⟢ *Min Bid:* ${ZENI()}${minBid.toLocaleString()}\n⏳ ⟢ *Ends at:* _${endsAt.toLocaleString()}_\n\n🎙️ ⟢ _Place your bids!_`);
-  } catch (err) { return reply(`❌  *AUCTION FAILED*\n\n📍 ⟢ _Could not start the auction — try again_`); }
+  } catch (err) { return reply(`❌  *AUCTION FAILED*\n\n📍 ⟢ _Could not start the auction - try again_`); }
 }
 
 async function cmdBid(senderJid, reply, args = []) {
@@ -4363,10 +4346,10 @@ async function cmdBid(senderJid, reply, args = []) {
     auction.bids.push({ bidderId: senderJid, amount, placedAt: new Date() });
     await auction.save();
     return reply(`✅  *BID PLACED!*\n\n🃏 ⟢ *Card:* _${CARD_INDEX()[auction.cardId]?.cardName}_\n💰 ⟢ *Your Bid:* ${ZENI()}${amount.toLocaleString()}\n\n👑 ⟢ _You are now the high bidder_`);
-  } catch (err) { return reply(`❌  *BID FAILED*\n\n📍 ⟢ _Could not place the bid — try again_`); }
+  } catch (err) { return reply(`❌  *BID FAILED*\n\n📍 ⟢ _Could not place the bid - try again_`); }
 }
 
-// 💡 FIX 2026-08-31: shared auction settlement - moves money AND card, with
+// FIX shared auction settlement - moves money AND card, with
 // checked return values. Used by BOTH the automatic sweeper (finalizeAuctions)
 // and the manual `.g endauction` (which previously marked auctions 'sold' and
 // announced a winner WITHOUT transferring card or Zeni - a fake sale).
@@ -4374,12 +4357,12 @@ async function cmdBid(senderJid, reply, args = []) {
 async function settleAuction(a) {
   if (!a) return { outcome: 'error' };
   if (a.highBidderId) {
-    // Transfer Zeni - 💡 P4 Item 6: 10% tax on auction sales
-    // 💡 FIX 2026-08-31 (money minting): removeMoney() returns false when
-    // the bidder's wallet can't cover the bid (bids place no escrow - a
-    // bidder could spend their balance after winning). Previously the
-    // seller was paid regardless → Zeni created from thin air. Now a
-    // failed debit voids the sale (card returns to seller, no payout).
+ // Transfer Zeni - P4 Item 6: 10% tax on auction sales
+ // FIX (money minting): removeMoney() returns false when
+ // the bidder's wallet can't cover the bid (bids place no escrow - a
+ // bidder could spend their balance after winning). Previously the
+ // seller was paid regardless → Zeni created from thin air. Now a
+ // failed debit voids the sale (card returns to seller, no payout).
     const taxAmount = Math.floor(a.currentBid * 0.10);
     const sellerGets = a.currentBid - taxAmount;
     const bidderPaid = economy.removeMoney(a.highBidderId, a.currentBid);
@@ -4391,8 +4374,8 @@ async function settleAuction(a) {
       await a.save();
       return { outcome: 'payment_failed' };
     }
-    // 💡 FIX 2026-08-31: if crediting the seller fails (unregistered /
-    // market cap), refund the bidder instead of destroying the Zeni.
+ // FIX if crediting the seller fails (unregistered /
+ // market cap), refund the bidder instead of destroying the Zeni.
     const sellerCredited = economy.addMoney(a.sellerId, sellerGets, `Auction sale (after 10% tax)`);
     if (!sellerCredited) {
       economy.addMoney(a.highBidderId, a.currentBid, `Auction refund (seller credit failed)`);
@@ -4404,13 +4387,13 @@ async function settleAuction(a) {
       return { outcome: 'seller_credit_failed' };
     }
 
-    // Transfer Card
-    // 💡 FIX 2026-10-08 (vanishing cards): the old transfer left inCustomDeck
-    // / forSale flags AND the card's _id inside the seller's custom-deck
-    // array. Result: ghost entries in the seller's deck pointing at a card
-    // they no longer own, and the buyer's card invisible inside stale deck
-    // state. Free the card from the seller's decks + clear ALL committed
-    // flags, exactly like buycard/gift do.
+ // Transfer Card
+ // FIX (vanishing cards): the old transfer left inCustomDeck
+ // / forSale flags AND the card's _id inside the seller's custom-deck
+ // array. Result: ghost entries in the seller's deck pointing at a card
+ // they no longer own, and the buyer's card invisible inside stale deck
+ // state. Free the card from the seller's decks + clear ALL committed
+ // flags, exactly like buycard/gift do.
     const prevCard = await UserCard.findById(a.userCardId).select('userId inCustomDeck customDeckName').lean().catch(() => null);
     if (prevCard?.inCustomDeck && prevCard.customDeckName) {
       await CardDeck.updateMany({ userId: prevCard.userId, name: prevCard.customDeckName }, { $pull: { cards: a.userCardId } }).catch(() => {});
@@ -4418,7 +4401,7 @@ async function settleAuction(a) {
     await UserCard.findByIdAndUpdate(a.userCardId, { userId: a.highBidderId, inAuction: false, inMainDeck: false, mainDeckSlot: null, inCustomDeck: false, customDeckName: null, customDeckSlot: null, forSale: false, salePrice: null, createdAt: new Date(), claimedAt: new Date() });
     a.status = 'sold';
   } else {
-    // No bidders, return card
+ // No bidders, return card
     await UserCard.findByIdAndUpdate(a.userCardId, { inAuction: false });
     a.status = 'expired';
   }
@@ -4445,15 +4428,14 @@ setInterval(() => {
     if (inst?.sock_ref) finalizeAuctions(inst.sock_ref);
 }, 60000);
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  SECTION 5 - ROUTER & INIT
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// SECTION 5 - ROUTER & INIT
+// ===========================================================================
 
 async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isOwner, senderIsAdmin, isMod }) {
   const inst = getInst();
-  // 💡 DIAG 2026-07-26: log why handleCommand returns false for .jk coll
-  // The log showed cardSystem returning false for .jk coll when it should
-  // return true. This logging will reveal which early-return fires.
+ // DIAG log why handleCommand returns false for .jk coll
+ // The log showed cardSystem returning false for .jk coll when it should
   if (!inst.sock_ref) {
     console.warn(`🃏 [cardSystem] returning false: inst.sock_ref is null | botId=${botConfig.getBotId()} | inst has instances: ${instances.has(botConfig.getBotId())} | txt=${txt?.slice(0,40)}`);
     return false;
@@ -4469,7 +4451,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   const reply = (text, options = {}) => inst.sock_ref.sendMessage(chatId, { text, ...options });
   const p = P();
   
-  // STRICT PREFIX CHECK
+ // STRICT PREFIX CHECK
   if (!lowerTxt.startsWith(p)) {
     return false;
   }
@@ -4481,11 +4463,11 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
 
   if (!cmd) return false;
 
-  // 💡 HIDDEN COMMAND-TOKEN MECHANIC (§3): every ELIGIBLE player command
-  // ticks a per-user counter - 1 token per 15 commands, claim excluded,
-  // mod/management commands excluded. Fire-and-forget: never blocks or
-  // fails the command, and grants are announced with a mechanic-free
-  // one-liner (§4 compliant - no rates, no probability, no hints).
+ // HIDDEN COMMAND-TOKEN MECHANIC (§3): every ELIGIBLE player command
+ // ticks a per-user counter - 1 token per 15 commands, claim excluded,
+ // mod/management commands excluded. Fire-and-forget: never blocks or
+ // fails the command, and grants are announced with a mechanic-free
+ // one-liner (§4 compliant - no rates, no probability, no hints).
   if (TOKEN_CMD_LAYER_ENABLED && !TOKEN_CMD_EXCLUDED.has(cmd)) {
     noteEligibleCommand(senderJid)
       .then((notify) => {
@@ -4496,14 +4478,14 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       .catch(() => {});
   }
 
-  // 💡 DIAG: log what cmd we're about to handle
+ // DIAG: log what cmd we're about to handle
   console.log(`🃏 [cardSystem] dispatching cmd="${cmd}" | senderJid=${senderJid?.split('@')[0]} | chatId=${chatId?.split('@')[0]}`);
 
-  // Mod check helper
-  // 💡 POLISH 2026-07-17: now also checks isCardsMod() from the 3-tier mod
-  // system. Cards Mods can use espawn, einfo, eshop, esummon, etc. but NOT
-  // RPG admin commands. General Mods (isMod) and owner still have full access.
-  // isCardsMod is imported lazily to avoid circular dependency at load time.
+ // Mod check helper
+ // POLISH now also checks isCardsMod() from the 3-tier mod
+ // system. Cards Mods can use espawn, einfo, eshop, esummon, etc. but NOT
+ // RPG admin commands. General Mods (isMod) and owner still have full access.
+ // isCardsMod is imported lazily to avoid circular dependency at load time.
   let isCardsMod = false;
   try {
     const engine = require('../engine');
@@ -4513,27 +4495,27 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
 
   switch (cmd) {
     case 'cardmod':
-      // 💡 OWNER RULING 2026-09-22: the "immutable mod roles" policy is
-      // OVERRULED. cardmod add/del restored (owner/global mod only) -
-      // matching the engine's restored addmod/delmod/addrpgmod/delrpgmod/
-      // addcardsmod/delcardsmod. Roster writes still saveRoles() + sync
-      // the engine's cardsMods Set so both systems agree.
-      // 💡 OWNER RULING 2026-10-22: mod management is OWNER-ONLY across
-      // every system ("only owner can make someone any mod") - isMod no
-      // longer passes this gate.
+ // OWNER RULING the "immutable mod roles" policy is
+ // OVERRULED. cardmod add/del restored (owner/global mod only) -
+ // matching the engine's restored addmod/delmod/addrpgmod/delrpgmod/
+ // addcardsmod/delcardsmod. Roster writes still saveRoles() + sync
+ // the engine's cardsMods Set so both systems agree.
+ // OWNER RULING mod management is OWNER-ONLY across
+ // every system ("only owner can make someone any mod") - isMod no
+ // longer passes this gate.
       if (!isOwner) return reply('❌ Only the bot owner can manage card moderators.'), true;
       const sub = args[0]?.toLowerCase();
       if (sub === 'add') {
-        // 💡 FIX 2026-10-08: LID-resolve the mention so the roster key matches
-        // the identity handleCommand checks against (resolved senderJid).
-        const target = resolveMentionJid(getTaggedJid(m) || (args[1]?.includes('@') ? args[1] : null)); // 💡 FIX 2026-10-08: LID-resolve + reply/quote
+ // FIX LID-resolve the mention so the roster key matches
+ // the identity handleCommand checks against (resolved senderJid).
+        const target = resolveMentionJid(getTaggedJid(m) || (args[1]?.includes('@') ? args[1] : null)); // FIX LID-resolve + reply/quote
         if (!target) return reply(`❌ Tag someone to add as card mod.`), true;
         inst.modJids.add(target);
         await saveRoles();
-        // ALSO add to engine's cardsMods Set so the two systems stay in
-        // sync. Previously cardmod add only added to the card system's
-        // modJids - the engine's isCardsMod() didn't see them, causing
-        // inconsistent permission checks.
+ // ALSO add to engine's cardsMods Set so the two systems stay in
+ // sync. Previously cardmod add only added to the card system's
+ // modJids - the engine's isCardsMod() didn't see them, causing
+ // inconsistent permission checks.
         try {
           const engine = require('../engine');
           if (typeof engine.addCardsMod === 'function') engine.addCardsMod(target);
@@ -4541,14 +4523,14 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         return reply(`✅ @${economy.getDisplayName(target)} is now a Card Moderator.`, { mentions: [target] }), true;
       }
       if (sub === 'del' || sub === 'remove') {
-        const target = resolveMentionJid(getTaggedJid(m) || (args[1]?.includes('@') ? args[1] : null)); // 💡 FIX 2026-10-08: LID-resolve + reply/quote
+        const target = resolveMentionJid(getTaggedJid(m) || (args[1]?.includes('@') ? args[1] : null)); // FIX LID-resolve + reply/quote
         if (!target) return reply(`❌ Tag someone to remove.`), true;
         inst.modJids.delete(target);
         await saveRoles();
-        // ALSO remove from engine's cardsMods Set. Without this, the ban
-        // protection (isCardsMod check) still sees them as a mod even
-        // after cardmod del - causing "can't ban a mod" for someone who
-        // was already removed.
+ // ALSO remove from engine's cardsMods Set. Without this, the ban
+ // protection (isCardsMod check) still sees them as a mod even
+ // after cardmod del - causing "can't ban a mod" for someone who
+ // was already removed.
         try {
           const engine = require('../engine');
           if (typeof engine.delCardsMod === 'function') engine.delCardsMod(target);
@@ -4565,8 +4547,8 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       return reply(`🃏 *Card Moderator System*\n\n➥ \`${p} cardmod add @user\`\n➥ \`${p} cardmod del @user\`\n➥ \`${p} cardmod list\``), true;
 
     case 'cards':
-      // 💡 FIX 2026-08-08: Only card mods, global mods, and owner can toggle.
-      // NOT RPG mods, NOT WA group admins - card system is card-mod territory.
+ // FIX Only card mods, global mods, and owner can toggle.
+ // NOT RPG mods, NOT WA group admins - card system is card-mod territory.
       if (!isOwner && !isMod && !isCardMod) {
         return reply('❌ Only Card Mods, Global Mods, or the Owner can toggle the card system.'), true;
       }
@@ -4609,15 +4591,15 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       return true;
 
     case 'esummon':
-      // 💡 MOD-ONLY: Legacy event summon - only mods can use this.
+ // MOD-ONLY: Legacy event summon - only mods can use this.
       if (!isCardMod) return reply('❌ Event summon is for moderators and above only.'), true;
       await cmdESummon(senderJid, reply);
       return true;
 
     case 'info':
-      // 💡 2026-10-08 requirements doc §10: card-maintenance lookups
-      // (.j info / .j ci / .j rc) are CARD-MOD EXCLUSIVE. Regular users
-      // must not have access. (.j einfo was already mod-only.)
+ // requirements doc §10: card-maintenance lookups
+ // (.j info / .j ci / .j rc) are CARD-MOD EXCLUSIVE. Regular users
+ // must not have access. (.j einfo was already mod-only.)
       if (!isCardMod) return reply('❌ Card info lookup is for card moderators and above only.'), true;
       await cmdInfo(reply, chatId, args, { isOwner, isCardMod, p });
       return true;
@@ -4630,48 +4612,48 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       await cmdT2Coll(senderJid, reply, args);
       return true;
 
-    // 💡 FEATURE 7: t2ccoll - move card(s) FROM custom deck TO collection.
-    // Inverse of t2cdeck. Requested a year ago, finally added.
+ // FEATURE 7: t2ccoll - move card(s) FROM custom deck TO collection.
+ // Inverse of t2cdeck. Requested a year ago, finally added.
     case 't2ccoll':
       await cmdT2CColl(senderJid, reply, args);
       return true;
 
-    // 💡 FEATURE 8: Rc - mod-only regulation card removal from any player.
+ // FEATURE 8: Rc - mod-only regulation card removal from any player.
     case 'rc':
       await cmdRc(senderJid, reply, args, isCardMod, m);
       return true;
 
-    // 💡 FEATURE 9: Erc - mod-only event card regulation removal.
+ // FEATURE 9: Erc - mod-only event card regulation removal.
     case 'erc':
       await cmdErc(senderJid, reply, args, isCardMod, m);
       return true;
 
-    // 💡 FEATURE 10: Tcoll - true collection (all cards including decks/market).
+ // FEATURE 10: Tcoll - true collection (all cards including decks/market).
     case 'tcoll':
       await cmdTcoll(senderJid, reply, chatId, args);
       return true;
 
-    // 💡 FEATURE 11: Ecoll - event collection separated by tier.
+ // FEATURE 11: Ecoll - event collection separated by tier.
     case 'ecoll':
       await cmdEcoll(senderJid, reply, chatId, args);
       return true;
 
-    // ── TOKEN EVENT & ESHOP COMMANDS ──────────────────
+ // -- TOKEN EVENT & ESHOP COMMANDS ------------------
     case 't2edeck':
-      // 💡 FIX 2026-08-14: Card mods can also manage the eShop deck (add/remove/price/clear).
-      // Was passing isMod (global mod only) - card mods were blocked.
+ // FIX Card mods can also manage the eShop deck (add/remove/price/clear).
+ // Was passing isMod (global mod only) - card mods were blocked.
       await cmdT2EDeck(senderJid, reply, args, isOwner, isMod || isCardMod, chatId);
       return true;
 
     case 't2ecoll':
-      // 💡 MOD-ONLY: Event card collection database viewer.
-      // Shows all event cards in the database - mod tool for managing events.
+ // MOD-ONLY: Event card collection database viewer.
+ // Shows all event cards in the database - mod tool for managing events.
       if (!isCardMod) return reply('❌ Event card collection viewer is for moderators and above only.'), true;
       await cmdT2EColl(senderJid, reply, args);
       return true;
 
     case 'tokens':
-      const tokenBal = economy.getEventTokens(senderJid); // 💡 47-l2
+      const tokenBal = economy.getEventTokens(senderJid); // 47-l2
       const eventActive = await isTokenEventActive();
       return reply(
         `🎫 *EVENT TOKENS* 🎫\n` +
@@ -4683,7 +4665,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       ), true;
 
     case 'event':
-      // 💡 FIX 2026-08-14: Card mods can also control token events.
+ // FIX Card mods can also control token events.
       if (!isOwner && !isMod && !isCardMod) return reply('❌ Only Card Mods, Global Mods, or the Owner can control the token event.'), true;
       const eventSub = args[0]?.toLowerCase();
       if (eventSub === 'start') {
@@ -4701,8 +4683,8 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       return reply(`🎫 *Token Event Control*\n\n➥ \`${p} event start\` - Start the token event\n➥ \`${p} event stop\` - Stop the token event\n➥ \`${p} event status\` - Check current status`), true;
 
     case 'setprice':
-      // .j setprice edeck <slot> <price>
-      // 💡 FIX 2026-08-14: Card mods can also set eShop prices.
+ // .j setprice edeck <slot> <price>
+ // FIX Card mods can also set eShop prices.
       if (!isOwner && !isMod && !isCardMod) return reply('❌ Only Card Mods, Global Mods, or the Owner can set eShop prices.'), true;
       if (args[0]?.toLowerCase() === 'edeck') {
         const slot = parseInt(args[1]);
@@ -4727,8 +4709,8 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       await cmdCS(reply, args, { isOwner, isCardMod });
       return true;
 
-    // 💡 OWNER BRIEF 2026-10-09 §1: global series search (name + maker,
-    // grouped by tier, paginated)
+ // OWNER BRIEF §1: global series search (name + maker,
+ // grouped by tier, paginated)
     case 'series':
       await cmdSeries(reply, args, { isOwner, isCardMod });
       return true;
@@ -4745,10 +4727,10 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       await cmdAuction(senderJid, reply, args);
       return true;
 
-    // 💡 P4 Item Market (2026-08-17) → UNIFIED PLAYER MARKET (2026-10-11):
-    // all legacy aliases now route into core/rpg/playerMarket.js (items +
-    // runes + summons in one collection, one 10% tax rule). Old listings
-    // were migrated by ensureMigrated().
+ // P4 Item Market → UNIFIED PLAYER MARKET:
+ // all legacy aliases now route into core/rpg/playerMarket.js (items +
+ // runes + summons in one collection, one 10% tax rule). Old listings
+ // were migrated by ensureMigrated().
     case 'listitem':
     case 'li':
       await playerMarket.cmdSell(senderJid, reply, ['item', ...args]);
@@ -4769,7 +4751,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       await playerMarket.cmdBrowse(senderJid, reply, args);
       return true;
 
-    // 💡 UNIFIED PLAYER MARKET front door (2026-10-11)
+ // UNIFIED PLAYER MARKET front door
     case 'market': {
       const mSub = String(args[0] || '').toLowerCase();
       const mRest = args.slice(1);
@@ -4780,7 +4762,6 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       else await playerMarket.cmdBrowse(senderJid, reply, args); // bare/`items`/`runes`/`summons`/page
       return true;
     }
-
 
     case 'bid':
       await cmdBid(senderJid, reply, args);
@@ -4861,10 +4842,10 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       return await cmdDecline(senderJid, reply, chatId);
 
     case 'spawn': {
-      // 💡 OWNER RULING 2026-10-22 ("Remove global mods ability to use .j
-      // spawn, it's for only the owner me and cardmods"): forcing spawns is
-      // a card-moderator tool. isMod (global mods) no longer passes this
-      // gate — owner + cardmod roster + Cards-Mod tier only.
+ // OWNER RULING ("Remove global mods ability to use .j
+ // spawn, it's for only the owner me and cardmods"): forcing spawns is
+ // a card-moderator tool. isMod (global mods) no longer passes this
+ // gate - owner + cardmod roster + Cards-Mod tier only.
       const canSpawn = isOwner || inst.modJids.has(senderJid) || isCardsMod;
       if (!canSpawn) return reply('❌ Spawn is restricted to the owner and card moderators.'), true;
       let spawnQuery = args.join(' ').trim();
@@ -4881,24 +4862,24 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       return true;
     }
 
-    // 💡 .g espawn <name> - force-spawn an event (E-tier) card.
-    // Shortcut for `.g spawn <name> | E`. Card-mod only.
+ // .g espawn <name> - force-spawn an event (E-tier) card.
+ // Shortcut for `.g spawn <name> | E`. Card-mod only.
     case 'espawn': {
-      // 💡 OWNER RULING 2026-10-22: same policy as .j spawn — the whole
-      // force-spawn family is owner + card moderators; global mods (isMod)
-      // lose it too.
+ // OWNER RULING same policy as .j spawn - the whole
+ // force-spawn family is owner + card moderators; global mods (isMod)
+ // lose it too.
       const canEspawn = isOwner || inst.modJids.has(senderJid) || isCardsMod;
       if (!canEspawn) return reply('❌ Event spawn is restricted to the owner and card moderators.'), true;
       const espawnQuery = args.join(' ').trim();
       if (!espawnQuery) {
-        // No args → list all available event cards, grouped by event
+ // No args → list all available event cards, grouped by event
         const eventCards = getInst().EVENT_CARDS || [];
         if (eventCards.length === 0) {
           return reply(`📭 No event cards exist in the database.\n\nEvent cards have tier "E" in cards_data.json.`), true;
         }
         let listMsg = `🎁 *EVENT CARDS - ${eventCards.length} available*\n\n`;
         listMsg += `Usage: \`${p} espawn <name or id>\`\n\n`;
-        // Group by event name for readability
+ // Group by event name for readability
         const byEvent = {};
         eventCards.forEach(c => {
           const ev = c.eventName || c.animeName || 'Unknown Event';
@@ -4925,9 +4906,9 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       return true;
     }
 
-    // 💡 .g reloadcards - reload cards_data.json without restarting the bot.
-    // Mod-only. Use after updating cards_data.json (e.g. after merging new
-    // event cards) so the bot picks up the changes immediately.
+ // .g reloadcards - reload cards_data.json without restarting the bot.
+ // Mod-only. Use after updating cards_data.json (e.g. after merging new
+ // event cards) so the bot picks up the changes immediately.
     case 'reloadcards':
       if (!isCardMod) return reply('❌ Only moderators and above can reload the card database.'), true;
       try {
@@ -4946,18 +4927,18 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         return reply(`❌ Failed to reload: ${err.message}`), true;
       }
 
-    // 💡 .g einfo <name or id> - look up an event card's details.
-    // Mod-only shortcut for `.g info <name> event` or `.g info <E-XXXXX>`.
-    // Without args, lists all event cards (same as .g espawn with no args).
+ // .g einfo <name or id> - look up an event card's details.
+ // Mod-only shortcut for `.g info <name> event` or `.g info <E-XXXXX>`.
+ // Without args, lists all event cards (same as .g espawn with no args).
     case 'einfo':
       if (!isCardMod) return reply('❌ Event card lookup is for moderators and above only.'), true;
       const einfoQuery = args.join(' ').trim();
       if (!einfoQuery) {
-        // No args → category summary. FIX (2026-10-19): this used to list
-        // every event card line by line - at 3296 cards that is a ~160k
-        // char message and WhatsApp rejects texts over 65k, so the owner
-        // got NOTHING. Categories + counts fit in one screen; drill in
-        // with `einfo <category>`.
+ // No args → category summary. FIX: this used to list
+ // every event card line by line - at 3296 cards that is a ~160k
+ // char message and WhatsApp rejects texts over 65k, so the owner
+ // got NOTHING. Categories + counts fit in one screen; drill in
+ // with `einfo <category>`.
         const eventCards = getInst().EVENT_CARDS || [];
         if (eventCards.length === 0) {
           return reply(`📭 No event cards exist in the database.`), true;
@@ -4979,12 +4960,12 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         return reply(listMsg), true;
       }
 
-      // 💡 FIX: If the query is an E-XXXXX ID, look it up directly in
-      // CARD_INDEX instead of delegating to cmdInfo with the "event"
-      // keyword (which does a NAME search, not an ID lookup).
+ // FIX: If the query is an E-XXXXX ID, look it up directly in
+ // CARD_INDEX instead of delegating to cmdInfo with the "event"
+ // keyword (which does a NAME search, not an ID lookup).
       const directCard = CARD_INDEX()[einfoQuery];
       if (directCard) {
-        // Found by exact ID - show card details directly
+ // Found by exact ID - show card details directly
         const stat = await CardStat.findOne({ cardId: directCard.id });
         const caption = buildCardDetailCaption(directCard, null, stat, 'Event Database');
         try {
@@ -5001,21 +4982,21 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         }
       }
 
-      // Not an exact ID - delegate to cmdInfo with event mode for name search
+ // Not an exact ID - delegate to cmdInfo with event mode for name search
       await cmdInfo(reply, chatId, [einfoQuery, 'event'], { isOwner, isCardMod: true, p });
       return true;
 
-    // 💡 NEW: .g spawnset <minutes> - set per-bot spawn interval (owner-only)
-    // .g spawnset reset - restore default 12min (5 cards/hour)
-    // .g spawninfo - show current interval + calculated rates
+ // NEW: .g spawnset <minutes> - set per-bot spawn interval (owner-only)
+ // .g spawnset reset - restore default 12min (5 cards/hour)
+ // .g spawninfo - show current interval + calculated rates
     case 'spawnset': {
-      // 💡 QA: changed from owner-only to mod+ (owner OR global mod OR card mod)
+ // QA: changed from owner-only to mod+ (owner OR global mod OR card mod)
       if (!isCardMod) return reply('❌ Only moderators and above can change the spawn interval.'), true;
       const sub = args[0]?.toLowerCase();
 
-      // .g spawnset tier <tier> <weight|chance> <value>
-      // .g spawnset tier reset
-      // .g spawnset tier show
+ // .g spawnset tier <tier> <weight|chance> <value>
+ // .g spawnset tier reset
+ // .g spawnset tier show
       if (sub === 'tier') {
         const tierSub = args[1]?.toUpperCase();
         if (!tierSub) {
@@ -5050,7 +5031,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       }
 
       if (sub === 'reset' || sub === 'default') {
-        // 💡 2026-10-21: default is now 12 min = 5 cards/hour.
+ // default is now 12 min = 5 cards/hour.
         const res = await setSpawnInterval(12, senderJid, isOwner || isMod || isCardMod);
         return reply(res.message), true;
       }
@@ -5072,19 +5053,19 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
           `_Interval is shared across all bot instances and persists across restarts._`
         ), true;
       }
-      // Pass the raw sub string so setSpawnInterval can parse "15-30" as a range
-      // 💡 FIX 2026-08-31: same permission mismatch as 'reset' above.
+ // Pass the raw sub string so setSpawnInterval can parse "15-30" as a range
+ // FIX same permission mismatch as 'reset' above.
       const res = await setSpawnInterval(sub, senderJid, isOwner || isMod || isCardMod);
       return reply(res.message), true;
     }
 
     case 'spawninfo': {
-      // 💡 2026-10-08 §13: spawn configuration reveals internal rates -
-      // gate it to mods so players can't see spawn/token math (§3 hiding).
+ // §13: spawn configuration reveals internal rates -
+ // gate it to mods so players can't see spawn/token math (§3 hiding).
       if (!isCardMod) return reply('❌ Only moderators and above can view spawn configuration.'), true;
       const info = getSpawnIntervalInfo();
       const inst = getInst();
-      // 💡 PHASE 7 FIX 2026-08-30: spawninfo + spawnset help
+ // spawninfo + spawnset help
       const intervalLabel = info.isRandom
         ? `Random ${info.minMinutes}-${info.maxMinutes} minutes`
         : `Fixed ${info.minutes} minutes`;
@@ -5100,25 +5081,24 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       ), true;
     }
 
-    // 💡 P3 (2026-08-16): Trc - admin remove tokens from a player.
+ // P3: Trc - admin remove tokens from a player.
     case 'trc':
       if (!isCardMod) return reply('❌ Only moderators and above can remove tokens.'), true;
       await cmdTrc(senderJid, reply, args, m);
       return true;
 
-    // 💡 P3 (2026-08-16): Ci - admin lookup, count of players holding a card.
+ // P3: Ci - admin lookup, count of players holding a card.
     case 'ci':
       if (!isCardMod) return reply('❌ Only moderators and above can use card lookup.'), true;
       await cmdCi(senderJid, reply, args);
       return true;
 
-    // 💡 P3 (2026-08-16): EndAuction - owner manually closes an auction early.
-    // 💡 P4 Item 13 (2026-08-16): Restricted to owner-designated auction GC.
-    // Set the GC via: .g setauctiongc <gc_id>
+ // P3: EndAuction - owner manually closes an auction early.
+ // P4 Item 13: Restricted to owner-designated auction GC.
+ // Set the GC via: .g setauctiongc <gc_id>
     case 'endauction':
       if (!isOwner) return reply('❌ Only the owner can end auctions early.'), true;
       {
-        // Check if this is the designated auction GC
         const auctionGcDoc = await System.findOne({ key: 'auction_gc_id' }).lean();
         const auctionGcId = auctionGcDoc?.value;
         if (auctionGcId && chatId !== auctionGcId) {
@@ -5128,7 +5108,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       await cmdEndAuction(senderJid, reply, chatId, args);
       return true;
 
-    // 💡 P4 Item 13: Set the designated auction GC (owner-only)
+ // P4 Item 13: Set the designated auction GC (owner-only)
     case 'setauctiongc':
       if (!isOwner) return reply('❌ Only the owner can set the auction GC.'), true;
       {
@@ -5146,48 +5126,48 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         return reply(`✅ Auction GC set to: ${targetGc}`), true;
       }
 
-    // 💡 P3 (2026-08-16): CardLB - card leaderboard (overall + per-tier).
+ // P3: CardLB - card leaderboard (overall + per-tier).
     case 'cardlb':
     case 'clb':
       await cmdCardLB(senderJid, reply, args);
       return true;
 
-    // ── 2026-10-08 REQUIREMENTS DOC: token reset / super RC / token LB ──
-    // §1 + §11: global event-token wipe. Card-mod exclusive, two-step.
+ // -- REQUIREMENTS DOC: token reset / super RC / token LB --
+ // §1 + §11: global event-token wipe. Card-mod exclusive, two-step.
     case 'tokenreset':
       if (!isCardMod) return reply('❌ Only card moderators and above can reset event tokens.'), true;
       await cmdTokenReset(senderJid, reply, args);
       return true;
 
-    // §12: Super RC - wipe a user's entire collection. Card-mod exclusive,
-    // two-step (preview → confirm). Task 15c: auto-backups before every wipe.
+ // §12: Super RC - wipe a user's entire collection. Card-mod exclusive,
+ // two-step (preview → confirm). auto-backups before every wipe.
     case 'src':
       if (!isCardMod) return reply('❌ Only card moderators and above can run a Super RC.'), true;
       await cmdSuperRc(senderJid, reply, args, m);
       return true;
 
-    // 💡 TASK 15C: undo a Super RC — restore the latest backup for a user.
-    // Card-mod exclusive (same tier as the wipe it reverses).
+ // TASK 15C: undo a Super RC - restore the latest backup for a user.
+ // Card-mod exclusive (same tier as the wipe it reverses).
     case 'unsrc':
     case 'restorecards':
       if (!isCardMod) return reply('❌ Only card moderators and above can restore card backups.'), true;
       await cmdRestoreCards(senderJid, reply, args, m);
       return true;
 
-    // §5: event-token leaderboard. Public.
+ // §5: event-token leaderboard. Public.
     case 'tokenlb':
     case 'tlb':
       await cmdTokenLB(senderJid, reply, args);
       return true;
 
-    // ── 2026-10-23 OWNER REQUEST: mod-level account→account card mover ──
-    // Owner 2026-10-23: "There used to be a command that moves all of
-    // someone's cards from one account to another ... where the card mod,
-    // global mod or owner tags the 2 accounts with a mod command."
-    // No such command existed in repo history (pickaxe-swept) — built fresh
-    // on the cmdSuperRc two-step pattern. isCardMod (line ~4511) == owner ||
-    // global mod || card-system modJids || Cards-Mod tier — exactly the
-    // requested gate. Scope: CARDS ONLY (money/tokens/auctions stay).
+ // -- OWNER REQUEST: mod-level account→account card mover --
+ // "There used to be a command that moves all of
+ // someone's cards from one account to another ... where the card mod,
+ // global mod or owner tags the 2 accounts with a mod command."
+ // No such command existed in repo history (pickaxe-swept) - built fresh
+ // on the cmdSuperRc two-step pattern. isCardMod (line ~4511) == owner ||
+ // global mod || card-system modJids || Cards-Mod tier - exactly the
+ // requested gate. Scope: CARDS ONLY (money/tokens/auctions stay).
     case 'movecards':
     case 'mc':
       if (!isCardMod) return reply('❌ Only card moderators, global mods, or the owner can move cards between accounts.'), true;
@@ -5198,13 +5178,12 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
   return false;
 }
 
-// 💡 PERF PATCH 2026-07-27:
+// PERF PATCH
 // bindSocket() is the SYNCHRONOUS part of init(). It MUST be called before
 // any await in the connection.open handler - otherwise incoming messages
 // can hit handleCommand() before sock_ref is set, causing cardSystem to
 // bail with "inst.sock_ref is null" for every card command during the
 // post-connect DB-load window (which can take seconds on a cold start).
-//
 // init() is still async (awaits DB loads). Callers should call
 // bindSocket(sock) FIRST (sync), then fire init(sock, ...) for the DB loads.
 function bindSocket(sock) {
@@ -5217,25 +5196,25 @@ async function init(sock, admins = [], mods = [], owner = null) {
   inst.sock_ref  = sock;
   inst.ownerJid  = owner;
 
-  // 💡 SECURITY FIX: Removed hardcoded backdoor JID that was permanently
-  // granting card mod access to '251453323092189' on every bot restart.
-  // This was a debug leftover that couldn't be removed via normal commands
-  // - delcardsmod/cardmod del removed it from the in-memory Set, but init()
-  // re-added it on the next restart. Anyone with this JID had permanent
-  // unrevokable card mod access.
+ // SECURITY FIX: Removed hardcoded backdoor JID that was permanently
+ // granting card mod access to '251453323092189' on every bot restart.
+ // This was a debug leftover that couldn't be removed via normal commands
+ // - delcardsmod/cardmod del removed it from the in-memory Set, but init()
+ // re-added it on the next restart. Anyone with this JID had permanent
+ // unrevokable card mod access.
 
   admins.forEach(a => inst.adminJids.add(a));
   mods.forEach(m => inst.modJids.add(m));
   loadCardsDB();  // synchronous - reads local JSON file
-  // 💡 FIX: await all async loads so the card system is fully ready
-  // before any commands are processed. Previously these were fire-and-
-  // forget, causing a race condition where commands ran before tier
-  // config / eShop deck / token event state was loaded.
-  // 💡 FIX 2026-08-31 (load order): loadSpawnInterval() must complete
-  // BEFORE loadActiveGroups() - loadActiveGroups calls ensureTimerRunning
-  // as soon as its query resolves, and when it won the Promise.all race the
-  // per-group timer chains were built with the DEFAULT 20min interval
-  // instead of the persisted configured range.
+ // FIX: await all async loads so the card system is fully ready
+ // before any commands are processed. Previously these were fire-and-
+ // forget, causing a race condition where commands ran before tier
+ // config / eShop deck / token event state was loaded.
+ // FIX (load order): loadSpawnInterval() must complete
+ // BEFORE loadActiveGroups() - loadActiveGroups calls ensureTimerRunning
+ // as soon as its query resolves, and when it won the Promise.all race the
+ // per-group timer chains were built with the DEFAULT 20min interval
+ // instead of the persisted configured range.
   await loadSpawnInterval();
   await Promise.all([
     loadActiveGroups(),
@@ -5245,13 +5224,13 @@ async function init(sock, admins = [], mods = [], owner = null) {
     loadEShopDeck(),
     loadTierConfig(),
   ]);
-  // 💡 RESTART-SAFE SPAWNS (2026-10-08): restore unclaimed spawns after a
-  // restart so mid-window cards survive deploys.
+ // RESTART-SAFE SPAWNS: restore unclaimed spawns after a
+ // restart so mid-window cards survive deploys.
   await loadActiveSpawns();
   console.log(`[CardSystem][${botConfig.getBotId()}] Initialized.`);
 }
 
-// 💡 RESTART-SAFE SPAWNS (2026-10-08): rebuild in-memory activeSpawns from
+// RESTART-SAFE SPAWNS: rebuild in-memory activeSpawns from
 // MongoDB after a restart. Previously activeSpawns lived only in RAM, so
 // every deploy/restart silently erased every unclaimed card in every group.
 // Expired docs are cleaned up quietly here (the "slipped away" notice only
@@ -5285,9 +5264,9 @@ async function loadActiveSpawns() {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  SECTION 6 - ESHOP DECK MANAGEMENT COMMANDS (t2edeck, t2ecoll)
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// SECTION 6 - ESHOP DECK MANAGEMENT COMMANDS (t2edeck, t2ecoll)
+// ===========================================================================
 
 /**
  * cmdT2EDeck - Owner-only command to manage the eShop deck.
@@ -5344,14 +5323,14 @@ async function cmdT2EDeck(senderJid, reply, args, isOwner, isMod, chatId) {
     return reply('✅ eShop deck cleared. All slots are now empty.');
   }
 
-  // Default: show the current deck (4x4 image)
+ // Default: show the current deck (4x4 image)
   const inst = getInst();
   const filledSlots = inst.eshopDeck.filter(e => e !== null).length;
   if (filledSlots === 0) {
     return reply(`📭 *ESHOP DECK - EMPTY*\n\nNo cards in the deck. Add cards with:\n\`${p} t2edeck add <slot 1-16> <cardId> <price>\``);
   }
 
-  // Generate and show the image
+ // Generate and show the image
   const imageBuffer = await generateEShopDeckImage();
   if (imageBuffer) {
     let caption = `🎨 *ESHOP DECK EDITOR* 🎨\n`;
@@ -5363,18 +5342,18 @@ async function cmdT2EDeck(senderJid, reply, args, isOwner, isMod, chatId) {
     caption += `➥ \`${p} t2edeck price <slot> <price>\`\n`;
     caption += `➥ \`${p} t2edeck clear\``;
     try {
-      // 💡 FIX 2026-08-31: `reply` is a plain function - reply._chatId /
-      // reply.chatId were always undefined, so sendMessage(undefined)
-      // threw and the 4x4 deck editor image was unreachable dead code.
-      // Use the chatId passed in from handleCommand.
+ // FIX `reply` is a plain function - reply._chatId /
+ // reply.chatId were always undefined, so sendMessage(undefined)
+ // threw and the 4x4 deck editor image was unreachable dead code.
+ // Use the chatId passed in from handleCommand.
       return await getInst().sock_ref.sendMessage(chatId, { image: imageBuffer, caption });
     } catch (err) {
-      // Fall through to text list
+ // Fall through to text list
       console.error('[T2EDeck] image send failed:', err.message);
     }
   }
 
-  // Fallback: text list
+ // Fallback: text list
   let msg = `🎨 *ESHOP DECK* (${filledSlots}/16 filled)\n\n`;
   inst.eshopDeck.forEach((entry, i) => {
     if (entry) {
@@ -5400,7 +5379,7 @@ async function cmdT2EColl(senderJid, reply, args) {
     return reply(`📭 No event cards exist in the database yet.\n\nEvent cards are added to cards_data.json by the owner and have tier "E".`);
   }
 
-  // Group by anime
+ // Group by anime
   const byAnime = {};
   eventCards.forEach(c => {
     const anime = c.animeName || 'Unknown';
@@ -5423,20 +5402,20 @@ async function cmdT2EColl(senderJid, reply, args) {
   return reply(msg);
 }
 
-// 💡 P3 (2026-08-16): Trc - admin remove tokens from a player.
+// P3: Trc - admin remove tokens from a player.
 // Usage: .g trc @player <amount>
 async function cmdTrc(senderJid, reply, args, m) {
   const p = P();
-  const mentioned = getTaggedJid(m); // 💡 FIX 2026-10-08: @mention OR reply/quote
+  const mentioned = getTaggedJid(m); // FIX @mention OR reply/quote
   if (!mentioned) {
     return reply(`❌ Usage: \`${p} trc @player <amount>\`\n💡 Mention the player and specify the token amount to remove.`);
   }
-  const targetJid = resolveMentionJid(mentioned); // 💡 FIX 2026-10-08: LID-resolve
+  const targetJid = resolveMentionJid(mentioned); // FIX LID-resolve
   const amount = parseInt(args.find(a => /^\d+$/.test(a)));
   if (isNaN(amount) || amount < 1) {
     return reply(`❌ Invalid amount. Usage: \`${p} trc @player <amount>\``);
   }
-  const currentBal = economy.getEventTokens(targetJid); // 💡 47-l2: mod tools work on unregistered holders too
+  const currentBal = economy.getEventTokens(targetJid); // 47-l2: mod tools work on unregistered holders too
   const toRemove = Math.min(amount, currentBal);
   if (toRemove <= 0) return reply(`❌ That player has 0 tokens.`);
   economy.removeEventTokens(targetJid, toRemove);
@@ -5444,7 +5423,7 @@ async function cmdTrc(senderJid, reply, args, m) {
   return reply(`🎫 *TOKEN REMOVAL*\n\n👤 Player: ${displayName}\n💸 Removed: *${toRemove} tokens*\n💰 Remaining: *${currentBal - toRemove} tokens*`);
 }
 
-// 💡 P3 (2026-08-16): Ci - admin card lookup, count of players holding a card.
+// P3: Ci - admin card lookup, count of players holding a card.
 // Usage: .g Ci "Edward Elric" | 5
 async function cmdCi(senderJid, reply, args) {
   const p = P();
@@ -5453,9 +5432,9 @@ async function cmdCi(senderJid, reply, args) {
     return reply(`❌ Usage: \`${p} Ci "<card name>" | <tier>\`\n💡 Example: \`${p} Ci "Edward Elric" | 5\``);
   }
   const [namePart, tierPart] = fullQuery.split('|').map(s => s.trim());
-  // 💡 OWNER BRIEF 2026-10-09 §1: strip quote characters from the name part —
-  // `.j ci "Olivier Armstrong" | 5` used to search the LITERAL `"olivier
-  // armstrong"` (quotes included) and always miss.
+ // OWNER BRIEF §1: strip quote characters from the name part -
+ // `.j ci "Olivier Armstrong" | 5` used to search the LITERAL `"olivier
+ // armstrong"` (quotes included) and always miss.
   const nameClean = String(namePart || '').replace(/["'`\u2018\u2019\u201C\u201D]/g, ' ').trim();
   const tier = String(tierPart || '').trim().toUpperCase() === 'S'
       ? 'S'
@@ -5467,8 +5446,8 @@ async function cmdCi(senderJid, reply, args) {
   if (!nameClean) {
     return reply(`❌ No card name given. Usage: \`${p} Ci "<card name>" | <tier>\``);
   }
-  // Token-AND matching (owner brief §1) — same resilience as info/cs, plus
-  // the 2026-08-31 string-tier compare (see note below).
+ // Token-AND matching (owner brief §1) - same resilience as info/cs, plus
+ // the string-tier compare (see note below).
   const tokens = _nameTokens(nameClean);
   const cardIndex = CARD_INDEX();
   const matchingCards = Object.values(cardIndex).filter(c =>
@@ -5480,7 +5459,7 @@ async function cmdCi(senderJid, reply, args) {
     return reply(`❌ No card found matching "${nameClean}" in Tier ${tier}.`);
   }
   const card = matchingCards[0];
-  // Count how many players hold this card
+ // Count how many players hold this card
   const holders = await UserCard.find({ cardId: card.id }).distinct('userId');
   const totalCopies = await UserCard.countDocuments({ cardId: card.id });
   return reply(
@@ -5493,7 +5472,7 @@ async function cmdCi(senderJid, reply, args) {
   );
 }
 
-// 💡 OWNER BRIEF 2026-10-09 §1: `.j series` — search the GLOBAL card database
+// OWNER BRIEF §1: `.j series` - search the GLOBAL card database
 // for every card in a series (NOT user-owned), grouped by tier, each entry
 // showing the card name + maker (creator) instead of collection numbers.
 // Paginated: `.j series <name> [--page n]`.
@@ -5514,12 +5493,12 @@ async function cmdSeries(reply, args = [], perms = {}) {
   let cards = ALL_CARDS().filter(c =>
     tokens.every(t => String(c.animeName || '').toLowerCase().includes(t))
   );
-  // 💡 consistent with cs: event (E-tier) cards hidden from non-mods
+ // consistent with cs: event (E-tier) cards hidden from non-mods
   if (!canViewEvents) cards = cards.filter(c => !isEventCard(c));
   if (!cards.length) {
     return reply(`🔍 *NO SERIES FOUND*\n\n📚 ⟢ No cards whose series matches _"${rawName}"_\n\n💡 ⟢ Try a partial name, e.g. \`${p} series fullmetal\``);
   }
-  // most frequent series name is the display title
+ // most frequent series name is the display title
   const counts = {};
   cards.forEach(c => { const a = c.animeName || 'Unknown'; counts[a] = (counts[a] || 0) + 1; });
   const seriesName = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
@@ -5550,18 +5529,18 @@ async function cmdSeries(reply, args = [], perms = {}) {
   return reply(msg);
 }
 
-// 💡 P3 (2026-08-16): EndAuction - owner manually closes an auction early.
+// P3: EndAuction - owner manually closes an auction early.
 // Usage: .g endauction (closes the oldest active auction)
-//        .g endauction <cardId> (closes auction for a specific card)
-// 💡 FIX 2026-08-31: previously this marked the auction 'sold' + announced a
+// .g endauction <cardId> (closes auction for a specific card)
+// FIX previously this marked the auction 'sold' + announced a
 // winner but NEVER transferred the card or the Zeni (the suggested `.g
 // transfer` is a money-only command). Now it runs the SAME settlement path
 // as the automatic sweeper (settleAuction): bidder pays, seller gets 90%,
 // card transfers to the winner.
 async function cmdEndAuction(senderJid, reply, chatId, args = []) {
   const p = P();
-  // Auctions are stored in CardMarket with type: 'auction', status: 'active'
-  // (NOT a separate CardAuction model - that was a bug in the original impl)
+ // Auctions are stored in CardMarket with type: 'auction', status: 'active'
+ // (NOT a separate CardAuction model - that was a bug in the original impl)
   const query = { type: 'auction', status: 'active' };
   const cardIdArg = args[0];
   if (cardIdArg) query.cardId = cardIdArg;
@@ -5569,7 +5548,7 @@ async function cmdEndAuction(senderJid, reply, chatId, args = []) {
   const auction = await CardMarket.findOne(query).sort({ auctionEndsAt: 1 });
   if (!auction) return reply('❌ No active auction found.');
 
-  // Find highest bid
+ // Find highest bid
   const sortedBids = [...(auction.bids || [])].sort((a, b) => b.amount - a.amount);
   const winner = sortedBids[0];
   if (winner) {
@@ -5577,8 +5556,8 @@ async function cmdEndAuction(senderJid, reply, chatId, args = []) {
     auction.currentBid = winner.amount;
   }
 
-  // Atomically claim the auction so the sweeper can't double-settle it,
-  // then run the shared settlement (money + card transfer).
+ // Atomically claim the auction so the sweeper can't double-settle it,
+ // then run the shared settlement (money + card transfer).
   const claimed = await CardMarket.findOneAndUpdate(
     { _id: auction._id, status: 'active' },
     { $set: { status: 'pending' } },
@@ -5626,10 +5605,10 @@ async function cmdEndAuction(senderJid, reply, chatId, args = []) {
   return reply(`🔨 *AUCTION ENDED*\n\nNo bids were placed. The auction for *${cardName}* has been closed and the card returned to the seller.`);
 }
 
-// 💡 P3 (2026-08-16): CardLB - card leaderboard (overall + per-tier).
-// Usage: .g cardlb          (overall top 10)
-//        .g cardlb 5        (tier 5 top 10)
-//        .g cardlb --t3     (tier 3 top 10)
+// P3: CardLB - card leaderboard (overall + per-tier).
+// Usage: .g cardlb (overall top 10)
+// .g cardlb 5 (tier 5 top 10)
+// .g cardlb --t3 (tier 3 top 10)
 async function cmdCardLB(senderJid, reply, args) {
   const p = P();
   let tier = null;
@@ -5639,12 +5618,12 @@ async function cmdCardLB(senderJid, reply, args) {
     if (!isNaN(parsed) && parsed >= 1 && parsed <= 7) tier = parsed;
   }
 
-  // Aggregate: count cards per player, optionally filtered by tier
-  // 💡 FIX 2026-08-31: the old pipeline used $lookup from a 'cards' Mongo
-  // collection that DOESN'T EXIST (card data lives in cards_data.json) -
-  // $unwind dropped every doc and cardlb always returned empty. Now we
-  // aggregate per-(user,card) copy counts in Mongo and join tier data from
-  // the in-memory CARD_INDEX in JS.
+ // Aggregate: count cards per player, optionally filtered by tier
+ // FIX the old pipeline used $lookup from a 'cards' Mongo
+ // collection that DOESN'T EXIST (card data lives in cards_data.json) -
+ // $unwind dropped every doc and cardlb always returned empty. Now we
+ // aggregate per-(user,card) copy counts in Mongo and join tier data from
+ // the in-memory CARD_INDEX in JS.
   const pairs = await UserCard.aggregate([
     { $group: { _id: { userId: '$userId', cardId: '$cardId' }, copies: { $sum: 1 } } }
   ]);
@@ -5674,10 +5653,10 @@ async function cmdCardLB(senderJid, reply, args) {
   return reply(msg);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  SECTION 8 - MOD MAINTENANCE COMMANDS (2026-10-08 requirements doc
-//  §1/§11 global token reset, §12 super RC, §5 token leaderboard)
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// SECTION 8 - MOD MAINTENANCE COMMANDS (requirements doc
+// §1/§11 global token reset, §12 super RC, §5 token leaderboard)
+// ===========================================================================
 
 /**
  * cmdTokenReset - §1/§11: wipe ALL event tokens from ALL users at once.
@@ -5704,13 +5683,13 @@ async function cmdTokenReset(senderJid, reply, args = []) {
       `➡️ ⟢ _Run \`${p} tokenreset confirm\` to execute._`
     );
   }
-  // 💡 economy keeps users cached in memory with scheduled saves - a bare
-  // User.updateMany would be resurrected by the next pending save. Use the
-  // economy-level reset that clears BOTH the cache and the DB layer.
+ // economy keeps users cached in memory with scheduled saves - a bare
+ // User.updateMany would be resurrected by the next pending save. Use the
+ // economy-level reset that clears BOTH the cache and the DB layer.
   const memoryHolders = await economy.resetAllTokens();
-  // Reset the hidden per-user command counters too so progression restarts clean.
-  // 💡 47-l2: persist fns now MERGE per-key (cross-bot safety) and no-op on an
-  // empty map — so an explicit doc wipe is required to actually clear them.
+ // Reset the hidden per-user command counters too so progression restarts clean.
+ // 47-l2: persist fns now MERGE per-key (cross-bot safety) and no-op on an
+ // empty map - so an explicit doc wipe is required to actually clear them.
   getInst().tokenCmdCounters.clear();
   getInst().tokenSpawnCounters.clear();
   await System.updateOne({ key: TOKEN_CMD_COUNTER_KEY }, { $set: { value: {} } });
@@ -5733,7 +5712,7 @@ async function cmdTokenReset(senderJid, reply, args = []) {
  *
  * 💡 TASK 15C (owner 2026-10-21: "removes all of someone's cards and make a
  * back up of his so that you can place it back"): BEFORE deleting, the full
- * collection (across ALL owner identity forms — Task 15 ownerOf merge) is
+ * collection (across ALL owner identity forms - Task 15 ownerOf merge) is
  * snapshotted into the cardBackups collection with original _ids/userIds
  * preserved. Restore any wipe with `.j unsrc @user`. The chat reply stays
  * dramatic on purpose (owner's prank tooling); the backup id goes to the
@@ -5741,14 +5720,14 @@ async function cmdTokenReset(senderJid, reply, args = []) {
  */
 async function cmdSuperRc(senderJid, reply, args = [], m = {}) {
   const p = P();
-  const mentioned = resolveMentionJid(getTaggedJid(m)); // 💡 FIX 2026-10-08: @mention OR reply/quote + LID-resolve (destructive cmd must hit the DB identity)
+  const mentioned = resolveMentionJid(getTaggedJid(m)); // FIX @mention OR reply/quote + LID-resolve (destructive cmd must hit the DB identity)
   if (!mentioned) {
     return reply(`❌  *SUPER RC*\n\n⌨️ ⟢ *Usage:* _\`${p} src @user\` to preview_\n🧭 ⟢ _\`${p} src @user confirm\` to wipe their ENTIRE collection_`);
   }
   const confirm = args.map(a => a.toLowerCase()).includes('confirm');
 
-  // 💡 TASK 15: wipe across ALL identity forms so a split collection can't
-  // survive on a second jid form (phone vs @lid).
+ // TASK 15: wipe across ALL identity forms so a split collection can't
+ // survive on a second jid form (phone vs @lid).
   const ownerFilter = await ownerOf(mentioned);
   const variants = await cardOwnerVariants(mentioned);
   const totalCards = await UserCard.countDocuments(ownerFilter);
@@ -5772,8 +5751,8 @@ async function cmdSuperRc(senderJid, reply, args = [], m = {}) {
     );
   }
 
-  // 💡 TASK 15C: snapshot EVERYTHING before touching a single row — original
-  // _ids and per-row userIds preserved, so the restore is byte-identical.
+ // TASK 15C: snapshot EVERYTHING before touching a single row - original
+ // _ids and per-row userIds preserved, so the restore is byte-identical.
   const backupRows = totalCards > 0 ? await UserCard.find(ownerFilter).lean() : [];
   let backupId = null;
   try {
@@ -5787,22 +5766,22 @@ async function cmdSuperRc(senderJid, reply, args = [], m = {}) {
     });
     backupId = String(backupDoc._id);
   } catch (e) {
-    // A failed backup must NEVER let a wipe proceed blind — abort loudly.
+ // A failed backup must NEVER let a wipe proceed blind - abort loudly.
     console.log(`[CardSystem][${botConfig.getBotId()}] SUPER RC ABORT for ${mentioned}: backup failed: ${e.message}`);
-    return reply(`❌  *SUPER RC ABORTED*\n\n🛡️ ⟢ _Backup snapshot failed — refusing to wipe without a recovery path._`);
+    return reply(`❌  *SUPER RC ABORTED*\n\n🛡️ ⟢ _Backup snapshot failed - refusing to wipe without a recovery path._`);
   }
 
-  // Cancel the user's active market listings/auctions first so nothing
-  // sells a card that is about to be deleted.
+ // Cancel the user's active market listings/auctions first so nothing
+ // sells a card that is about to be deleted.
   await CardMarket.updateMany(
     { sellerId: { $in: variants }, status: 'active' },
     { $set: { status: 'cancelled', completedAt: new Date() } }
   );
-  // Delete all decks, then all cards (across every identity form).
+ // Delete all decks, then all cards (across every identity form).
   await CardDeck.deleteMany(ownerFilter);
   const deleted = await UserCard.deleteMany(ownerFilter);
 
-  console.log(`[CardSystem][${botConfig.getBotId()}] SUPER RC by ${senderJid}: wiped ${deleted.deletedCount} cards from ${mentioned} (variants: ${variants.join(', ')}) | BACKUP ${backupId} (${backupRows.length} rows) — restore with .j unsrc`);
+  console.log(`[CardSystem][${botConfig.getBotId()}] SUPER RC by ${senderJid}: wiped ${deleted.deletedCount} cards from ${mentioned} (variants: ${variants.join(', ')}) | BACKUP ${backupId} (${backupRows.length} rows) - restore with .j unsrc`);
   return reply(
     `🧹  *SUPER RC EXECUTED*\n\n` +
     `👤 ⟢ *Target:* _@${economy.getDisplayName(mentioned)}_\n` +
@@ -5825,7 +5804,7 @@ async function cmdRestoreCards(senderJid, reply, args = [], m = {}) {
   const p = P();
   const mentioned = resolveMentionJid(getTaggedJid(m));
   if (!mentioned) {
-    return reply(`♻️  *RESTORE CARDS*\n\n⌨️ ⟢ *Usage:* _\`${p} unsrc @user\` — puts back their last wiped collection_`);
+    return reply(`♻️  *RESTORE CARDS*\n\n⌨️ ⟢ *Usage:* _\`${p} unsrc @user\` - puts back their last wiped collection_`);
   }
 
   const variants = await cardOwnerVariants(mentioned);
@@ -5841,7 +5820,7 @@ async function cmdRestoreCards(senderJid, reply, args = [], m = {}) {
       const res = await UserCard.insertMany(backup.rows, { ordered: false });
       inserted = (res && res.length) || 0;
     } catch (e) {
-      // ordered:false — partial success lands in e.insertedDocs, dupes in e.writeErrors
+ // ordered:false - partial success lands in e.insertedDocs, dupes in e.writeErrors
       inserted = (e && e.insertedDocs && e.insertedDocs.length) || 0;
       skipped = (e && e.writeErrors && e.writeErrors.length) || 0;
     }
@@ -5882,30 +5861,30 @@ async function cmdTokenLB(senderJid, reply, args = []) {
     const u = top[i];
     const name = economy.getDisplayName(u.userId) || String(u.userId).split('@')[0];
     const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-    msg += `${medal} ⟢ _${name}_ — *${u.eventTokens} token${u.eventTokens === 1 ? '' : 's'}*\n`;
+    msg += `${medal} ⟢ _${name}_ - *${u.eventTokens} token${u.eventTokens === 1 ? '' : 's'}*\n`;
   }
   msg += `\n💡 ⟢ _Check your own balance:_ \`${p} tokens\``;
   return reply(msg);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-//  2026-10-23 OWNER REQUEST: .j movecards — mod-level account→account
-//  card mover. Owner: "There used to be a command that moves all of
-//  someone's cards from one account to another ... where the card mod,
-//  global mod or owner tags the 2 accounts with a mod command."
-//  No such command ever existed (repo history pickaxe-swept) — built on the
-//  cmdSuperRc two-step pattern (preview → confirm within 60s, per chat,
-//  single-fire). Scope: CARDS ONLY — wallet/bank/event-tokens and any active
-//  auction stay on the source account (a full account merge remains a
-//  manual DB operation).
-// ═══════════════════════════════════════════════════════════════════════
+// =======================================================================
+// OWNER REQUEST: .j movecards - mod-level account→account
+// card mover. "There used to be a command that moves all of
+// someone's cards from one account to another ... where the card mod,
+// global mod or owner tags the 2 accounts with a mod command."
+// No such command ever existed (repo history pickaxe-swept) - built on the
+// cmdSuperRc two-step pattern (preview → confirm within 60s, per chat,
+// single-fire). Scope: CARDS ONLY - wallet/bank/event-tokens and any active
+// auction stay on the source account (a full account merge remains a
+// manual DB operation).
+// =======================================================================
 
 // Armed previews per chat: chatId -> { src, dst, armedAt }
 const moveCardsArmed = new Map();
 const MOVECARDS_CONFIRM_WINDOW_MS = 60_000;
 
 // All-tagged-accounts extraction for two-target commands. getTaggedJid()
-// above returns only the FIRST mention — movecards needs BOTH tags, in tag
+// above returns only the FIRST mention - movecards needs BOTH tags, in tag
 // order. Order rule: 1st tag = SOURCE (loses its cards), 2nd = DESTINATION.
 // Accepts: multiple @mentions, one mention + reply/quote participant, or
 // raw JIDs as text args (the same fallback `cardmod add` accepts).
@@ -5920,7 +5899,7 @@ function getTaggedJids(m) {
   const raw = [];
   for (const j of (ctx?.mentionedJid || [])) if (j) raw.push(j);
   if (ctx?.participant) raw.push(ctx.participant);
-  // Never let the bot itself be a move endpoint.
+ // Never let the bot itself be a move endpoint.
   const botIds = [];
   try {
     const botUser = getInst()?.sock_ref?.user || {};
@@ -5929,7 +5908,7 @@ function getTaggedJids(m) {
   } catch (e) { /* bot identity unavailable */ }
   const out = [];
   for (const j of raw) {
-    const r = resolveMentionJid(j); // 💡 same LID-resolve the 2026-10-08 vanishing-cards fix mandates
+    const r = resolveMentionJid(j); // same LID-resolve the vanishing-cards fix mandates
     if (!r) continue;
     if (botIds.includes(String(r).split('@')[0].split(':')[0])) continue;
     if (!out.includes(r)) out.push(r);
@@ -5953,11 +5932,11 @@ async function cmdMoveCards(senderJid, reply, args = [], m = {}, chatId = '') {
   const p = P();
   const sub = (args[0] || '').toLowerCase();
 
-  // ── FIRE PATH ──
+ // -- FIRE PATH --
   if (sub === 'confirm') {
     const pending = chatId ? moveCardsArmed.get(chatId) : null;
     if (!pending) {
-      return reply(`❌  *NOTHING ARMED*\n\n⌨️ ⟢ _Use \`${p} movecards @oldAccount @newAccount\` first — it shows a preview._`);
+      return reply(`❌  *NOTHING ARMED*\n\n⌨️ ⟢ _Use \`${p} movecards @oldAccount @newAccount\` first - it shows a preview._`);
     }
     if (Date.now() - pending.armedAt > MOVECARDS_CONFIRM_WINDOW_MS) {
       moveCardsArmed.delete(chatId);
@@ -5966,24 +5945,24 @@ async function cmdMoveCards(senderJid, reply, args = [], m = {}, chatId = '') {
     moveCardsArmed.delete(chatId); // single-fire: the same confirm can never run twice
     const { src, dst } = pending;
 
-    // Re-verify at fire time — the source may have traded/merged since preview.
+ // Re-verify at fire time - the source may have traded/merged since preview.
     const movableNow = await UserCard.countDocuments({ userId: src, inAuction: { $ne: true } });
     if (movableNow === 0) {
       return reply(`📭  *NOTHING TO MOVE*\n\n👤 ⟢ _@${economy.getDisplayName(src)} no longer has any movable cards._`, { mentions: [src] });
     }
 
-    // Recipient economy account must exist (same as the gift path), so the
-    // incoming copies have a live owner doc with a save baseline.
+ // Recipient economy account must exist (same as the gift path), so the
+ // incoming copies have a live owner doc with a save baseline.
     try { economy.getOrCreateUser(dst); } catch (e) { /* non-fatal */ }
 
-    // Cards to move: everything not locked in an active auction.
+ // Cards to move: everything not locked in an active auction.
     const moving = await UserCard.find({ userId: src, inAuction: { $ne: true } }).select('_id').lean();
     const moveIds = moving.map(d => d._id);
 
-    // Clean transfer (same rules as buycard/gift/auction-win paths):
-    // pull the copies from the source's custom decks, reset per-user deck
-    // membership + sale flags. isLocked rides along (it protects the CARD,
-    // not the account). Copy numbers are untouched — they are global.
+ // Clean transfer (same rules as buycard/gift/auction-win paths):
+ // pull the copies from the source's custom decks, reset per-user deck
+ // membership + sale flags. isLocked rides along (it protects the CARD,
+ // not the account). Copy numbers are untouched - they are global.
     let pulledDecks = 0;
     if (moveIds.length) {
       const deckRes = await CardDeck.updateMany({ userId: src }, { $pull: { cards: { $in: moveIds } } });
@@ -5999,8 +5978,8 @@ async function cmdMoveCards(senderJid, reply, args = [], m = {}, chatId = '') {
       );
     }
 
-    // Cancel the source's active market listings so nothing sells a card
-    // that just changed owners.
+ // Cancel the source's active market listings so nothing sells a card
+ // that just changed owners.
     const cancelled = await CardMarket.updateMany(
       { sellerId: src, status: 'active' },
       { $set: { status: 'cancelled', completedAt: new Date() } }
@@ -6015,15 +5994,15 @@ async function cmdMoveCards(senderJid, reply, args = [], m = {}, chatId = '') {
       `🃏 ⟢ *Moved:* _${moveIds.length} card${moveIds.length === 1 ? '' : 's'}_\n` +
       `🏪 ⟢ *Listings cancelled:* _${cancelled.modifiedCount || 0}_\n` +
       `📚 ⟢ *Decks cleaned:* _${pulledDecks}_\n` +
-      (leftInAuction > 0 ? `🔨 ⟢ *Left in active auction:* _${leftInAuction} — stays on the old account until it settles_\n` : '') +
-      `💰 ⟢ _Wallet, bank and event tokens were NOT touched — cards only._`,
+      (leftInAuction > 0 ? `🔨 ⟢ *Left in active auction:* _${leftInAuction} - stays on the old account until it settles_\n` : '') +
+      `💰 ⟢ _Wallet, bank and event tokens were NOT touched - cards only._`,
       { mentions: [src, dst] }
     );
   }
 
-  // ── ARM PATH (preview) ──
-  // Tagged accounts in order: @mentions, then reply/quote participant, then
-  // raw JID text args. First candidate = source, second = destination.
+ // -- ARM PATH (preview) --
+ // Tagged accounts in order: @mentions, then reply/quote participant, then
+ // raw JID text args. First candidate = source, second = destination.
   const candidates = getTaggedJids(m);
   for (const a of args) {
     if (typeof a === 'string' && a.includes('@') && /\d{5,}/.test(a)) {
@@ -6041,7 +6020,7 @@ async function cmdMoveCards(senderJid, reply, args = [], m = {}, chatId = '') {
   }
   const [src, dst] = candidates;
   if (src === dst) {
-    return reply(`❌  *SAME ACCOUNT*\n\n🚫 ⟢ _Both tags resolved to the same account — nothing to move._`);
+    return reply(`❌  *SAME ACCOUNT*\n\n🚫 ⟢ _Both tags resolved to the same account - nothing to move._`);
   }
 
   const totalCards   = await UserCard.countDocuments({ userId: src });
@@ -6051,7 +6030,7 @@ async function cmdMoveCards(senderJid, reply, args = [], m = {}, chatId = '') {
 
   if (totalCards === 0) {
     return reply(
-      `📭  *NOTHING TO MOVE*\n\n👤 ⟢ _@${economy.getDisplayName(src)} has no cards — nothing to move._`,
+      `📭  *NOTHING TO MOVE*\n\n👤 ⟢ _@${economy.getDisplayName(src)} has no cards - nothing to move._`,
       { mentions: [src] }
     );
   }
@@ -6059,12 +6038,12 @@ async function cmdMoveCards(senderJid, reply, args = [], m = {}, chatId = '') {
   if (chatId) moveCardsArmed.set(chatId, { src, dst, armedAt: Date.now() });
 
   return reply(
-    `⚠️  *MOVE CARDS — PREVIEW*\n\n` +
-    `📤 ⟢ *From:* _@${economy.getDisplayName(src)}_ — *${totalCards}* card${totalCards === 1 ? '' : 's'}\n` +
-    `📥 ⟢ *To:* _@${economy.getDisplayName(dst)}_ — currently *${dstCards}* card${dstCards === 1 ? '' : 's'}\n` +
+    `⚠️  *MOVE CARDS - PREVIEW*\n\n` +
+    `📤 ⟢ *From:* _@${economy.getDisplayName(src)}_ - *${totalCards}* card${totalCards === 1 ? '' : 's'}\n` +
+    `📥 ⟢ *To:* _@${economy.getDisplayName(dst)}_ - currently *${dstCards}* card${dstCards === 1 ? '' : 's'}\n` +
     `🏪 ⟢ *Market listings to cancel:* _${listings}_\n` +
-    (auctionCards > 0 ? `🔨 ⟢ *In active auction:* _${auctionCards} — stays on the old account_\n` : '') +
-    `\n⚠️ ⟢ _Cards only — wallet, bank, tokens and auctions stay on the source account._\n` +
+    (auctionCards > 0 ? `🔨 ⟢ *In active auction:* _${auctionCards} - stays on the old account_\n` : '') +
+    `\n⚠️ ⟢ _Cards only - wallet, bank, tokens and auctions stay on the source account._\n` +
     `➡️ ⟢ _Reply \`${p} movecards confirm\` within 60 seconds to execute._`,
     { mentions: [src, dst] }
   );
@@ -6074,31 +6053,31 @@ module.exports = {
   init, handleCommand, doSpawn, CardStat, UserCard, CardMarket, CardDeck, instances,
   bindSocket,
   buildFcResultsMessage,
-  // 💡 2026-10-23 movecards export (QA harness + future admin tooling)
+ // movecards export (QA harness + future admin tooling)
   cmdMoveCards, moveCardsArmed,
-  // 💡 Token event & eShop exports
+ // Token event & eShop exports
   isTokenEventActive, startTokenEvent, stopTokenEvent,
   eshopAddCard, eshopRemoveCard, eshopSetPrice, eshopBuy,
   generateEShopDeckImage, searchEventCards,
-  parseEshopFlexToken, eshopFlexView, // eShop flex view (QA hooks, 2026-10-20)
-  cmdEShop, getInst, sendCardMedia, // QA hooks: routing + mock-sock injection + magic-sniff coverage (2026-10-20)
+  parseEshopFlexToken, eshopFlexView, // eShop flex view (QA hooks, )
+  cmdEShop, getInst, sendCardMedia, // QA hooks: routing + mock-sock injection + magic-sniff coverage
   loadTokenEventState, loadEShopDeck,
-  // 💡 Spawn interval configuration exports
+ // Spawn interval configuration exports
   setSpawnInterval, getSpawnIntervalInfo, loadSpawnInterval, restartSpawnTimer,
-  // 💡 Tier spawn configuration exports
+ // Tier spawn configuration exports
   setTierConfig, loadTierConfig, resetTierConfig, formatTierConfig,
-  // 💡 mentoring promote (2026-10-08): hot-reload the DB after an atomic
-  // file swap — same function `.g reloadcards` uses, now callable from code.
+ // mentoring promote: hot-reload the DB after an atomic
+ // file swap - same function `.g reloadcards` uses, now callable from code.
   loadCardsDB,
 };
 
-// 💡 OWNER BRIEF 2026-10-09 §1 diagnostics: env-guarded hook so QA harnesses
+// OWNER BRIEF §1 diagnostics: env-guarded hook so QA harnesses
 // can drive the card search internals without the full bot runtime.
 if (process.env.CARD_DIAG === '1') {
   module.exports.__diag = { cmdInfo, cmdCS, cmdCi, cmdSeries, _nameTokens, _cardMatchesTokens, _cardRelevance };
 }
 
-// 💡 47-l2: env-guarded QA surface for the token-rate counter machinery
+// 47-l2: env-guarded QA surface for the token-rate counter machinery
 // (restart-survival + cross-bot merge semantics). No behavior change in prod.
 if (process.env.CARD_DIAG === '1') {
   module.exports.__tokenQA = {
@@ -6113,4 +6092,3 @@ if (process.env.CARD_DIAG === '1') {
     setEventActive: (v) => { getInst().tokenEventActive = !!v; },
   };
 }
-

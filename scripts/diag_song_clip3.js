@@ -12,7 +12,7 @@ function makeSock() {
 }
 
 (async () => {
-  // cleanup fixture
+ // cleanup fixture
   const s0 = quiz.getSession(CHAT);
   if (s0) { s0.cancelled = true; quiz._internal.activeQuizzes.delete(CHAT); quiz.releaseLifecycle(CHAT); }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* build_quiz_dataset_pass4.js — final gentle movies image top-up.
+/* build_quiz_dataset_pass4.js - final gentle movies image top-up.
  * Wikimedia throttled us earlier; this pass runs SLOW (2.5s between API
  * calls) so it fits the polite window. Adds: film poster images (pageimages,
  * verified via enwiki imageinfo batches) + infobox directors.
@@ -94,9 +94,9 @@ async function imageinfoVerify(fileTitles) {
 }
 
 (async () => {
-  // 1. film lists (same sources as pass 3)
+ // 1. film lists (same sources as pass 3)
   const films = new Map();
-  for (const page of ["List of Academy Award–winning films", "List of highest-grossing films", "List of highest-grossing animated films"]) {
+  for (const page of ["List of Academy Award-winning films", "List of highest-grossing films", "List of highest-grossing animated films"]) {
     try {
       const d = await jget(`https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(page)}&prop=wikitext&format=json&formatversion=2`);
       const wt = (d && d.parse && d.parse.wikitext) || "";
@@ -116,7 +116,7 @@ async function imageinfoVerify(fileTitles) {
   console.log(`[films] ${films.size} titles`);
   const titles = [...films.keys()];
 
-  // 2. directors (paced 2.5s per batch of 10)
+ // 2. directors (paced 2.5s per batch of 10)
   const directors = new Map();
   for (const grp of chunk(titles.slice(0, 350), 10)) {
     const t10 = grp.map(([t]) => t);
@@ -158,7 +158,7 @@ async function imageinfoVerify(fileTitles) {
     console.log(`[films] +${n} fact questions (deduped)`);
   }
 
-  // 3. posters (paced)
+ // 3. posters (paced)
   const imgs = new Map();
   for (const grp of chunk(titles.slice(0, 500), 20)) {
     const params = new URLSearchParams({ action: "query", format: "json", prop: "pageimages", piprop: "original|thumbnail", pithumbsize: "640", pilicense: "any", titles: grp.join("|"), redirects: "1" });
@@ -189,7 +189,7 @@ async function imageinfoVerify(fileTitles) {
   }
   console.log(`[posters] +${added} movie poster images`);
 
-  // finalize
+ // finalize
   for (const cat of Object.keys(DS.categories)) {
     DS.categories[cat].questions.forEach((q, i2) => { q.id = i2 + 1; });
     DS.categories[cat].images.forEach((q, i2) => { q.id = i2 + 1; });

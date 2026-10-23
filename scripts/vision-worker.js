@@ -7,23 +7,20 @@
 // for the logo embeddings). Box 1's quiz pipeline calls this service only
 // when a candidate image came from a NON-canonical source and a canonical
 // reference exists (anime: the AniList official character art).
-//
 // MobileNetV2 embeddings + cosine: same character's official art vs a wrong
 // image sits FAR apart in this space (calibrated below), so "agreement"
 // verification catches the "asked for Zelda, got a man with his dog" class.
-//
 // Endpoints:
-//   GET  /health  -> { ok, model, uptimeS }
-//   POST /embed   { image_b64 }            -> { vector: number[1280] }
-//   POST /verify  { image_b64, reference_b64 } -> { similarity, decision, threshold }
-//   POST /nsfw    { image_b64 }            -> { nsfw: 0..1, decision, tookMs }
-//     (Falconsai ViT binary classifier, int8 ONNX - model loads LAZILY on
-//      first /nsfw call so the default footprint stays at ~120MB)
-//
+// GET /health -> { ok, model, uptimeS }
+// POST /embed { image_b64 } -> { vector: number[1280] }
+// POST /verify { image_b64, reference_b64 } -> { similarity, decision, threshold }
+// POST /nsfw { image_b64 } -> { nsfw: 0..1, decision, tookMs }
+// (Falconsai ViT binary classifier, int8 ONNX - model loads LAZILY on
+// first /nsfw call so the default footprint stays at ~120MB)
 // Deploy (Box 2): pm2 start vision-worker.js --name vision-worker
 // Env: VISION_PORT (default 7870), VISION_THRESHOLD (default 0.50),
-//      NSFW_DELETE_THRESHOLD (default 0.70 - calibrated: safe anime/memes/
-//      swimsuits/classical art all scored <= 0.03)
+// NSFW_DELETE_THRESHOLD (default 0.70 - calibrated: safe anime/memes/
+// swimsuits/classical art all scored <= 0.03)
 // ============================================
 
 const http = require("http");
@@ -78,7 +75,7 @@ async function getNudeSession() {
   return nudeSession;
 }
 
-// ── NudeNet (YOLOv8n @ 320) ─────────────────────────────────────────
+// -- NudeNet (YOLOv8n @ 320) -----------------------------------------
 // Preprocess (python-parity with nudenet.py): pad to square RIGHT/BOTTOM
 // with gray-114, then resize to 320x320 (no distortion), /255, RGB.
 // Postprocess: output [1, 4+18, 2100]; boxes are absolute 320-space xywh,
@@ -204,11 +201,11 @@ const server = http.createServer(async (req, res) => {
       if (imgBuf.length < 500) return send(400, { error: "image too small" });
       const t0 = Date.now();
       try {
-        // PRIMARY: NudeNet part detector (calibrated 2026-09-27: real public-nudity
-        // photos 0.44-0.9 exposed parts, safe/borderline matrix empty; the old
-        // Falconsai-only path scored real nudity 0.000-0.003 and was blind).
-        // SECONDARY: Falconsai whole-image classifier (catches pose/softcore
-        // signals the part detector may miss).
+ // PRIMARY: NudeNet part detector (calibrated real public-nudity
+ // photos 0.44-0.9 exposed parts, safe/borderline matrix empty; the old
+ // Falconsai-only path scored real nudity 0.000-0.003 and was blind).
+ // SECONDARY: Falconsai whole-image classifier (catches pose/softcore
+ // signals the part detector may miss).
         const [parts, falconsai] = await Promise.all([
           detectNudeParts(imgBuf).catch((e) => { console.error("[vision-worker] nudenet failed:", String(e.message).slice(0, 80)); return []; }),
           classifyNsfw(imgBuf).catch(() => 0),

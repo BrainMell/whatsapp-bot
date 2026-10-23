@@ -1,12 +1,12 @@
 // ===============================================
 // POWERSCALE.JS - VS Battles powerscale flow
-// 2026-10-18 REWRITE (owner brief: better output style, working character
+// REWRITE (owner brief: better output style, working character
 // image, reliable per-category feat lookups):
-//   .j powerscale <name>              -> fancy card + character image
-//   .j powerscale speed <name>        -> pick list first, then SPEED FEATS card
-//   .j powerscale goku speed          -> same, category after the name
-//   .j power scale <name>             -> spaced typo now routes here too
-//   reply a number                     -> pick character (or switch after card)
+// .j powerscale <name> -> fancy card + character image
+// .j powerscale speed <name> -> pick list first, then SPEED FEATS card
+// .j powerscale goku speed -> same, category after the name
+// .j power scale <name> -> spaced typo now routes here too
+// reply a number -> pick character (or switch after card)
 // Data: MediaWiki API direct parse (vsbFeats) - full justifications + calc
 // links; Go service kept only as search fallback. Images relayed via wsrv.nl
 // because static.wikia 403-blocks both boxes (see vsbFeats.js header).
@@ -77,7 +77,7 @@ function shortUrl(u) {
     return String(u || "").replace(/^https?:\/\/(www\.)?/, "");
 }
 
-// one stat line for the full card: "🏃 *Speed:* Massively FTL+ (+4 feats)"
+// one stat line for the full card: " *Speed:* Massively FTL+ (+4 feats)"
 function statLine(label, entries) {
     if (!entries || !entries.length) return null;
     const e = entries[0];
@@ -135,7 +135,7 @@ function formatFullCard(data) {
  */
 function formatFullDetail(data) {
     const lines = [];
-    lines.push(`📜 *${fmtName(data).toUpperCase()} — FULL STATS*`);
+    lines.push(`📜 *${fmtName(data).toUpperCase()} - FULL STATS*`);
     lines.push("");
     for (const label of FULL_CARD_ORDER) {
         const entries = data.stats.get(label);
@@ -148,7 +148,7 @@ function formatFullDetail(data) {
         for (const c of (e.calcs || []).slice(0, 2)) lines.push(`  📄 calc: ${clip(c.title, 90)}`);
         lines.push("");
         if (lines.join("\n").length > LINE_LIMIT) {
-            lines.push(`_…truncated — reply a category name like_ *speed* _for a focused dump_`);
+            lines.push(`_…truncated - reply a category name like_ *speed* _for a focused dump_`);
             break;
         }
     }
@@ -163,13 +163,13 @@ function formatCategoryCard(data, category) {
     const entries = data.stats.get(category) || [];
     const icon = vsb.CATEGORY_ICONS[category] || "🔎";
     const lines = [];
-    lines.push(`${icon} *${category.toUpperCase()} — ${fmtName(data).toUpperCase()}*`);
+    lines.push(`${icon} *${category.toUpperCase()} - ${fmtName(data).toUpperCase()}*`);
     lines.push(SEP);
     if (!entries.length) {
         lines.push(`_No *${category}* stat found on this page._`);
-        // 💡 no slice: with 13 possible categories, truncating at 8 hid real
-        // stats (owner saw "Available: Tier · Speed · …" while Intelligence
-        // existed but was cut). FULL_CARD_ORDER caps the list at 13 anyway.
+ // no slice: with 13 possible categories, truncating at 8 hid real
+ // stats (owner saw "Available: Tier · Speed · …" while Intelligence
+ // existed but was cut). FULL_CARD_ORDER caps the list at 13 anyway.
         const near = data.categories.filter((c) => FULL_CARD_ORDER.includes(c));
         if (near.length) {
             lines.push("");
@@ -196,7 +196,7 @@ function formatCategoryCard(data, category) {
         lines.push(`_+${entries.length - show.length} more variant(s) not shown._`);
     }
     lines.push(SEP);
-    // quick-menu of other categories present
+ // quick-menu of other categories present
     const others = FULL_CARD_ORDER.filter((c) => c !== category && data.stats.has(c));
     if (others.length) {
         lines.push(`_Other stats:_ ${others.map((c) => `*${CATEGORY_SHORT[c] || c.toLowerCase()}*`).join(" · ")}`);
@@ -211,7 +211,7 @@ function formatCategoryCard(data, category) {
 function formatListMessage(query, characters, category) {
     const lines = [];
     lines.push(`🔍 *${characters.length} match${characters.length > 1 ? "es" : ""} for "${clip(query, 40)}"*`);
-    if (category) lines.push(`_category locked: *${category}* — pick a character to see their ${category.toLowerCase()}_`);
+    if (category) lines.push(`_category locked: *${category}* - pick a character to see their ${category.toLowerCase()}_`);
     lines.push("");
     characters.slice(0, 10).forEach((c) => lines.push(`*${c.id}.* ${clip(c.name, 60)}`));
     lines.push("");
@@ -222,11 +222,11 @@ function formatListMessage(query, characters, category) {
 // ---------- data resolution (MW first, Go fallback) ----------
 
 async function searchWithFallback(query) {
-    // 💡 DISTINCTION (2026-10-18): "both sources THREW" (network down / infra
-    // broken) is NOT "zero matches" — the old code merged them, so a dead
-    // network told users "check the spelling". Both-throws now throws a tagged
-    // error → runPowerscaleCommand catch → "lookup failed, try again" (and the
-    // searching session is cleaned up there).
+ // DISTINCTION: "both sources THREW" (network down / infra
+ // broken) is NOT "zero matches" - the old code merged them, so a dead
+ // network told users "check the spelling". Both-throws now throws a tagged
+ // error → runPowerscaleCommand catch → "lookup failed, try again" (and the
+ // searching session is cleaned up there).
     const errors = [];
     try {
         const chars = await vsb.searchCharacters(query, 10);
@@ -251,7 +251,7 @@ async function searchWithFallback(query) {
 }
 
 async function parseWithFallback(character) {
-    // primary: direct MediaWiki parse (feats + reliable, no 60s hangs)
+ // primary: direct MediaWiki parse (feats + reliable, no 60s hangs)
     try {
         const data = await vsb.parseCharacter(character.url);
         if (data && data.stats && data.stats.size > 0) return data;
@@ -259,7 +259,7 @@ async function parseWithFallback(character) {
     } catch (e) {
         console.log(`[Powerscale] MW parse failed (${e.message}), trying Go service`);
     }
-    // fallback: Go service (no feats, but better than nothing)
+ // fallback: Go service (no feats, but better than nothing)
     try {
         const go = await goService.fetchPowerscalePage(character.url);
         if (go && go.stats) {
@@ -303,12 +303,12 @@ async function runPowerscaleCommand(ctx) {
         return sendUsageCard(sock, chatId, botMarker);
     }
 
-    // 💡 RACE FIX (2026-10-18, owner incident log): Mellow typed "1" 2s BEFORE
-    // the 10-match list even landed (search takes ~15-19s). The old flow only
-    // armed the pick session when the list was sent, so early numbers fell
-    // through to the legacy cached-search branch (or nowhere) — silent death.
-    // Arm a "searching" session NOW: numbers typed mid-search are BUFFERED in
-    // the session and auto-applied when the results arrive.
+ // RACE FIX (owner incident log): Mellow typed "1" 2s BEFORE
+ // the 10-match list even landed (search takes ~15-19s). The old flow only
+ // armed the pick session when the list was sent, so early numbers fell
+ // through to the legacy cached-search branch (or nowhere) - silent death.
+ // Arm a "searching" session NOW: numbers typed mid-search are BUFFERED in
+ // the session and auto-applied when the results arrive.
     pendingSelections.set(chatId, {
         phase: "searching",
         category: category || null,
@@ -319,7 +319,7 @@ async function runPowerscaleCommand(ctx) {
 
     await react("🔍");
     await sock.sendMessage(chatId, {
-        text: `${botMarker}🔍 *VS Battles* — searching _"${clip(query, 40)}"_${category ? ` · category *${category}*` : ""}…`,
+        text: `${botMarker}🔍 *VS Battles* - searching _"${clip(query, 40)}"_${category ? ` · category *${category}*` : ""}…`,
     });
 
     let result;
@@ -327,21 +327,21 @@ async function runPowerscaleCommand(ctx) {
         result = await resolveFlow(query, category, featsOverview);
     } catch (err) {
         console.error("[Powerscale] resolveFlow failed:", err.message);
-        pendingSelections.delete(chatId); // searching session gone — stop swallowing numbers
+        pendingSelections.delete(chatId); // searching session gone - stop swallowing numbers
         await react("❌");
-        return sock.sendMessage(chatId, { text: `${botMarker}❌ VS Battles lookup failed — try again in a moment.` });
+        return sock.sendMessage(chatId, { text: `${botMarker}❌ VS Battles lookup failed - try again in a moment.` });
     }
 
     if (!result.success) {
-        pendingSelections.delete(chatId); // searching session gone — stop swallowing numbers
+        pendingSelections.delete(chatId); // searching session gone - stop swallowing numbers
         await react("❌");
         return sock.sendMessage(chatId, { text: `${botMarker}❌ ${result.error}` });
     }
 
     if (result.mode === "list") {
-        // register pick session so numeric replies select a character
-        // (MUTATE the searching session in place — a bufferedPick may already
-        // be sitting on it; a fresh .set() would drop it)
+ // register pick session so numeric replies select a character
+ // (MUTATE the searching session in place - a bufferedPick may already
+ // be sitting on it; a fresh .set() would drop it)
         const session = pendingSelections.get(chatId);
         if (session && session.phase === "searching") {
             session.phase = "pick";
@@ -360,8 +360,8 @@ async function runPowerscaleCommand(ctx) {
             armAutoClear(chatId);
         }
 
-        // 💡 RACE FIX: a number typed while the search was running now applies
-        // instantly — the user already chose, skip the list entirely.
+ // RACE FIX: a number typed while the search was running now applies
+ // instantly - the user already chose, skip the list entirely.
         const sess = pendingSelections.get(chatId);
         const bp = sess && sess.bufferedPick;
         if (bp) {
@@ -374,8 +374,8 @@ async function runPowerscaleCommand(ctx) {
                 await react("✅");
                 return;
             }
-            // out-of-range/failed buffered pick → show the list + a note
-            console.log(`[Powerscale] buffered pick invalid: chat=${chatId} n=${bp} — falling back to list`);
+ // out-of-range/failed buffered pick → show the list + a note
+            console.log(`[Powerscale] buffered pick invalid: chat=${chatId} n=${bp} - falling back to list`);
             await react("📋");
             const note = pickResult && pickResult.error ? `\n\n_Your earlier reply *${bp}*: ${pickResult.error}_` : "";
             return sock.sendMessage(chatId, { text: `${botMarker}${result.message}${note}` });
@@ -385,8 +385,8 @@ async function runPowerscaleCommand(ctx) {
         return sock.sendMessage(chatId, { text: `${botMarker}${result.message}` });
     }
 
-    // mode === "card" — remember the search so numeric replies can switch
-    // characters while the session is fresh ("picked #1 — reply 2-9 ...")
+ // mode === "card" - remember the search so numeric replies can switch
+ // characters while the session is fresh ("picked #1 - reply 2-9 ...")
     if (result.characters && result.characters.length > 1) {
         pendingSelections.set(chatId, {
             phase: "view",
@@ -409,8 +409,8 @@ async function sendUsageCard(sock, chatId, botMarker) {
     const lines = [
         "⚖️ *POWERSCALE*",
         SEP,
-        `*powerscale <name>* — full stat card + image`,
-        `*powerscale speed <name>* — speed feats (pick from matches first)`,
+        `*powerscale <name>* - full stat card + image`,
+        `*powerscale speed <name>* - speed feats (pick from matches first)`,
         "",
         `*Categories:* tier · ap · speed · dur · strike · lift · stam · range · intel · gear · weakness · hax · techniques`,
         `_category can go before OR after the name_`,
@@ -430,17 +430,17 @@ async function resolveFlow(query, category, featsOverview) {
         return { success: false, error: `No VS Battles results for "${clip(query, 40)}". Check the spelling?` };
     }
 
-    // Mellow rule (2026-10-18): NEVER auto-pick when several characters match —
-    // category/feats queries included ("randomly selecting a character won't
-    // work, which is why we had that system in the first place"). Always show
-    // the numbered pick list; the ONLY auto-pick case is a single result.
+ // Mellow rule: NEVER auto-pick when several characters match -
+ // category/feats queries included ("randomly selecting a character won't
+ // work, which is why we had that system in the first place"). Always show
+ // the numbered pick list; the ONLY auto-pick case is a single result.
     const autoPick = characters.length === 1;
 
     if (!autoPick) {
         return { success: true, mode: "list", message: formatListMessage(query, characters, category), characters };
     }
 
-    const top = characters[0]; // single result — the only auto-pick case
+    const top = characters[0]; // single result - the only auto-pick case
     const data = await parseWithFallback(top);
     if (!data) {
         return { success: false, error: `Found *${top.name}* but the page parse failed. Try another result: reply 1-${characters.length}.` };
@@ -465,12 +465,12 @@ function buildCardResult({ characters, data, category, featsOverview, pickedId }
         category: category || null,
         autoPickHint:
             characters.length > 1
-                ? `_picked #${pickedId || 1} — reply *2-${Math.min(characters.length, 10)}* for another match_`
+                ? `_picked #${pickedId || 1} - reply *2-${Math.min(characters.length, 10)}* for another match_`
                 : null,
     };
     if (featsOverview || (data.isVerse && (!category || !data.stats.has(category)))) {
         const lines = [];
-        lines.push(`⚖️ *${fmtName(data).toUpperCase()}*${data.isVerse ? " _ (no standard stat block — verse/item page)_" : ""}`);
+        lines.push(`⚖️ *${fmtName(data).toUpperCase()}*${data.isVerse ? " _ (no standard stat block - verse/item page)_" : ""}`);
         lines.push(SEP);
         const cats = FULL_CARD_ORDER.filter((c) => data.stats.has(c));
         if (cats.length) {
@@ -517,7 +517,7 @@ async function sendCard(sock, chatId, botMarker, result) {
         }
     }
 
-    // WA caption cap is 1024 chars - compact the caption when the card is long
+ // WA caption cap is 1024 chars - compact the caption when the card is long
     let caption = `${botMarker}${result.message}`;
     if (imagePayload && caption.length > 1000) {
         caption = compactCaption(result, botMarker);
@@ -536,7 +536,7 @@ async function sendCard(sock, chatId, botMarker, result) {
             console.log(`[Powerscale] image send failed (${e.message}) - falling back to text`);
         }
     }
-    // text-only (image unavailable or send failed)
+ // text-only (image unavailable or send failed)
     const text = result.detail
         ? `${result.message}\n${SEP}\n${result.detail}`
         : result.message;
@@ -580,13 +580,13 @@ async function handlePowerscaleSelection(chatId, selection) {
 
     if (now() - session.timestamp > SELECTION_TIMEOUT_MS) {
         clearPending(chatId);
-        return { success: false, error: "Selection timed out — search again!" };
+        return { success: false, error: "Selection timed out - search again!" };
     }
     touch(session);
 
     const idx = parseInt(selection, 10);
     if (isNaN(idx) || idx < 1 || idx > Math.min(session.characters ? session.characters.length : 10, 10)) {
-        // searching session: characters not known yet — validate range 1-10 only
+ // searching session: characters not known yet - validate range 1-10 only
         if (session.phase === "searching") {
             const n = parseInt(selection, 10);
             if (!isNaN(n) && n >= 1 && n <= 10) {
@@ -602,9 +602,9 @@ async function handlePowerscaleSelection(chatId, selection) {
         };
     }
 
-    // 💡 RACE FIX: a number typed while the search was still running lands
-    // here when the results are NOT in yet — hold it on the session; the
-    // list branch of runPowerscaleCommand applies it the moment they land.
+ // RACE FIX: a number typed while the search was still running lands
+ // here when the results are NOT in yet - hold it on the session; the
+ // list branch of runPowerscaleCommand applies it the moment they land.
     if (session.phase === "searching") {
         session.bufferedPick = idx;
         session.timestamp = now();
@@ -616,7 +616,7 @@ async function handlePowerscaleSelection(chatId, selection) {
     session.pickedId = idx;
     console.log(`[Powerscale] numeric pick: chat=${chatId} n=${idx} phase=${session.phase} -> "${chosen.name}"`);
 
-    // already showing this exact character? just re-prompt category usage
+ // already showing this exact character? just re-prompt category usage
     if (session.phase === "view" && session.data && session.data.name === chosen.name) {
         return { success: true, mode: "card", ...buildCardResult(session) };
     }
@@ -650,10 +650,10 @@ module.exports = {
     buildCardResult,
     sendCard,
     resolveFlow,
-    // internals exposed for QA
+ // internals exposed for QA
     pendingSelections,
     SELECTION_TIMEOUT_MS,
-    // legacy stubs (other modules may require these)
+ // legacy stubs (other modules may require these)
     searchVSB,
     scrapeVSBPage,
     formatPowerScale,

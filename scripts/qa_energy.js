@@ -23,7 +23,7 @@ async function main() {
   const economy = require('../core/rpg/economy');
   const progression = require('../core/rpg/progression');
 
-  // 0. seed a minimal user (register path ensures schema-shaped doc)
+ // 0. seed a minimal user (register path ensures schema-shaped doc)
   economy.economyData.set(jid, {
     userId: jid, wallet: 1000, bank: 0, registered: true, nickname: 'QAEnergy',
     class: 'FIGHTER', adventurerRank: 'B', stats: { hp: 500, maxHp: 500, level: 24 },
@@ -37,28 +37,28 @@ async function main() {
   const maxEn = progression.getBaseStats(jid, 'FIGHTER').maxEnergy || 100;
   console.log('[qa] derived maxEnergy for test user:', maxEn);
 
-  // 1. lazy init -> FULL
+ // 1. lazy init -> FULL
   const e1 = economy.getPersistentEnergy(jid, maxEn);
   check('lazy init returns FULL max', e1 === maxEn);
 
-  // 2. deduct + clamp
+ // 2. deduct + clamp
   economy.setPersistentEnergy(jid, e1 - 40, maxEn);
   const e2 = economy.getPersistentEnergy(jid, maxEn);
   check('deduct persists', e2 === maxEn - 40);
 
-  // 3. set below zero clamps to 0
+ // 3. set below zero clamps to 0
   economy.setPersistentEnergy(jid, -99, maxEn);
   const e3 = economy.getPersistentEnergy(jid, maxEn);
   check('clamp floor 0', e3 === 0);
 
-  // 4. regen: backdate energyTs 1h -> expect +max/6
+ // 4. regen: backdate energyTs 1h -> expect +max/6
   const User = require('../core/models/User').User || require('../core/models/User');
   const doc = await (User.findOne ? User.findOne({ userId: jid }) : null);
   if (doc) {
     doc.stats.currentEnergy = 0;
     doc.stats.energyTs = Date.now() - 3600 * 1000; // 1h ago
     await doc.save();
-    // force cache reload so the helper reads the backdated doc
+ // force cache reload so the helper reads the backdated doc
     await economy.reloadUserFromDB(jid);
     const e4 = economy.getPersistentEnergy(jid, maxEn);
     const expected = Math.floor((3600 * 1000 / (6 * 3600 * 1000)) * maxEn);
@@ -67,7 +67,7 @@ async function main() {
     console.log('[check] regen via DB doc: SKIP (model shape differs)');
   }
 
-  // 5. real mineOre end-to-end: drain to just under the cheapest location cost
+ // 5. real mineOre end-to-end: drain to just under the cheapest location cost
   economy.setPersistentEnergy(jid, 10, maxEn);
   const { mineOre } = require('../core/commands/rpgCommands');
   await mineOre(mockSock, 'qa-energy-chat@s.whatsapp.net', jid, undefined); // list view, harmless
@@ -77,7 +77,7 @@ async function main() {
   check('blocked mine shows canonical pool + regen hint', /Not enough energy.*have 10\/\d+\./.test(blocked) && /recharges over time/.test(blocked));
   console.log('   [msg]', blocked.split('\n')[0]);
 
-  // 6. mine with enough energy -> display matches pool
+ // 6. mine with enough energy -> display matches pool
   economy.setPersistentEnergy(jid, maxEn, maxEn);
   sent.length = 0;
   await mineOre(mockSock, 'qa-energy-chat@s.whatsapp.net', jid, 'shimmering_caves');
@@ -88,11 +88,11 @@ async function main() {
     m && Number(m[1]) === after && Number(m[2]) === maxEn);
   console.log('   [msg]', (okMsg.match(/.*Energy Left.*/) || ['(none)'])[0].trim());
 
-  // 7. schema persists currentEnergy
+ // 7. schema persists currentEnergy
   const doc2 = await (User.findOne ? User.findOne({ userId: jid }) : null);
   check('currentEnergy persisted to Mongo', doc2 && doc2.stats && Number.isFinite(doc2.stats.currentEnergy));
 
-  // cleanup
+ // cleanup
   if (User.findOne) await User.deleteOne({ userId: jid });
   economy.economyData.delete(jid);
   console.log(`\n[qa] RESULT: ${fail === 0 ? 'ALL PASS' : `${fail} FAILURES`} (${pass} passed)`);

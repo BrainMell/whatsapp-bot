@@ -5,37 +5,37 @@
 const mongoose = require('mongoose');
 
 const UserCardSchema = new mongoose.Schema({
-  // Owner
+ // Owner
   userId: { type: String, required: true, index: true },
 
-  // Which card this is (matches cards_data.json .id field, e.g. "3-04521")
+ // Which card this is (matches cards_data.json .id field, e.g. "3-04521")
   cardId: { type: String, required: true, index: true },
 
-  // Which global copy number this is out of maxCopies
+ // Which global copy number this is out of maxCopies
   copyNumber: { type: Number, required: true },
 
-  // ISO timestamp when the user claimed it
+ // ISO timestamp when the user claimed it
   claimedAt: { type: Date, default: Date.now },
 
-  // ── Deck System ──────────────────────────────────────────
-  // Is this card currently loaded into the user's main 12-slot deck?
+ // -- Deck System ------------------------------------------
+ // Is this card currently loaded into the user's main 12-slot deck?
   inMainDeck: { type: Boolean, default: false },
   mainDeckSlot: { type: Number, default: null }, // 1-12
 
-  // Is this card in a custom deck?
+ // Is this card in a custom deck?
   inCustomDeck: { type: Boolean, default: false },
   customDeckName: { type: String, default: null },
   customDeckSlot: { type: Number, default: null },
 
-  // ── Market ───────────────────────────────────────────────
-  // Is this card listed for sale?
+ // -- Market -----------------------------------------------
+ // Is this card listed for sale?
   forSale: { type: Boolean, default: false },
   salePrice: { type: Number, default: null },
 
-  // Is this card currently in an auction?
+ // Is this card currently in an auction?
   inAuction: { type: Boolean, default: false },
 
-  // Is this card locked (cannot be sold/traded)?
+ // Is this card locked (cannot be sold/traded)?
   isLocked: { type: Boolean, default: false },
 
 }, { collection: 'userCards', timestamps: true });

@@ -1,9 +1,7 @@
 // scripts/test_expanded_lock.js
-// Verifies the expanded RPG maintenance lock catches commands that were
 // previously leaking through (rank, profile, me, evolve, trial, combat,
 // claim, coll, etc.). Also confirms registered commands (char, solo, quest)
 // are still caught.
-//
 // Approach: read engine.js source + verify the new RPG_COMMANDS list is
 // present + verify each of the user-reported commands is in the list.
 // We don't run a live test (would require a real WhatsApp message) -
@@ -31,12 +29,12 @@ console.log('[+] RPG_CMDS Set present ✅');
 
 // 3. Check each command the user reported as leaking through
 const mustContain = [
-  // User explicitly reported these were not blocked:
+ // User explicitly reported these were not blocked:
   'rank',           // .j rank
   'profile',        // .j profile
   'me',             // .j me (profile alias)
   'whois',          // .j whois (profile alias)
-  // Other unregistered RPG commands that should be locked:
+ // Other unregistered RPG commands that should be locked:
   'evolve',         // .j evolve
   'trial',          // .j trial
   'combat',         // .j combat
@@ -49,17 +47,17 @@ const mustContain = [
   'status',         // .j status (character status)
   'summons',        // .j summons (alias for summon)
   'adventure',      // .j adventure (alias for quest)
-  // Cards commands (intercepted by cardSystem BEFORE the lock - now caught earlier):
+ // Cards commands (intercepted by cardSystem BEFORE the lock - now caught earlier):
   'claim', 'coll', 'info', 'deck', 'sc', 'auction', 'bid', 'merge',
   'cg', 'cs', 'cltr', 'scc', 'maker', 'burn', 'cdeck', 'tokens',
   'eshop', 'buycard', 'fc', 'spawn',
-  // New item-market commands:
+ // New item-market commands:
   'listitem', 'unlistitem', 'buyitem', 'itemmarket',
-  // Economy commands:
+ // Economy commands:
   'balance', 'bal', 'daily', 'register', 'deposit', 'withdraw',
-  // Gambling commands:
+ // Gambling commands:
   'gamble', 'slots', 'dice', 'coinflip',
-  // Confirmed-registered commands (already locked - should still be in list):
+ // Confirmed-registered commands (already locked - should still be in list):
   'char', 'character', 'stats', 'abilities', 'inventory', 'bag',
   'quest', 'solo', 'duel', 'pvp', 'rune', 'summon', 'abyss', 'raid',
   'bounty', 'shop', 'craft', 'brew', 'forge', 'cook', 'mine',

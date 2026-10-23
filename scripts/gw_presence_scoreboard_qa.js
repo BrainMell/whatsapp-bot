@@ -1,17 +1,17 @@
 #!/usr/bin/env node
-// ⚔️ GW PRESENCE + SCOREBOARD QA — owner live-test bug report (2026-10-06
+// GW PRESENCE + SCOREBOARD QA - owner live-test bug report (
 // 22:52Z, multiplayer playtest 8:47 PM-onward):
-//   SC. Standings duplicated across bots (#10): the scoreboard cadence lived
-//       in PER-PROCESS memory → Subaru AND Joker both posted identical
-//       standings. Now claimed atomically on the event DOC — exactly one
-//       post per cadence window fleet-wide; failed sends release the claim.
-//   P1. Co-op joiner presentation (#2/#3): a joiner seated mid-fight got a
-//       TEXT-ONLY ack (no battle image, no turn state). presentRuinsBattleTo
-//       re-presents the CURRENT battle from THEIR POV.
-//   P2. Bare `challenge` auto-targets a lone rival (#11) and the rival's DM
-//       notification rides a POV scene (#1 sprite asymmetry).
-//   P3. Duel start: BOTH duelists receive their own POV scene (#1/#2).
-//   P4. Arrival presence: occupants see the newcomer's sprite (#1).
+// SC. Standings duplicated across bots (#10): the scoreboard cadence lived
+// in PER-PROCESS memory → Subaru AND Joker both posted identical
+// standings. Now claimed atomically on the event DOC - exactly one
+// post per cadence window fleet-wide; failed sends release the claim.
+// P1. Co-op joiner presentation (#2/#3): a joiner seated mid-fight got a
+// TEXT-ONLY ack (no battle image, no turn state). presentRuinsBattleTo
+// re-presents the CURRENT battle from THEIR POV.
+// P2. Bare `challenge` auto-targets a lone rival (#11) and the rival's DM
+// notification rides a POV scene (#1 sprite asymmetry).
+// P3. Duel start: BOTH duelists receive their own POV scene (#1/#2).
+// P4. Arrival presence: occupants see the newcomer's sprite (#1).
 // Same harness as gw_flee_typo_mining_qa.js (gwtest DB + mock socks).
 const fs = require('fs');
 const path = require('path');
@@ -19,7 +19,7 @@ const path = require('path');
 let PASS = 0, FAIL = 0;
 function check(name, cond, extra) {
     if (cond) { PASS++; console.log(`  ✅ ${name}`); }
-    else { FAIL++; console.log(`  ❌ ${name}${extra !== undefined ? ' — ' + extra : ''}`); }
+    else { FAIL++; console.log(`  ❌ ${name}${extra !== undefined ? ' - ' + extra : ''}`); }
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -74,7 +74,7 @@ async function freshEvent(host) {
     const botConfig = require('../botConfig');
     const economy = require('../core/rpg/economy');
 
-    // economy users so the duel pipeline resolves real players
+ // economy users so the duel pipeline resolves real players
     economy.economyData.set('pp0@s.whatsapp.net', {
         userId: 'pp0@s.whatsapp.net', wallet: 1000, bank: 0, registered: true,
         nickname: 'Alpha', stats: {}, progression: { level: 3 },
@@ -89,7 +89,7 @@ async function freshEvent(host) {
     const scope = (() => { try { return botConfig.getBotId() || 'global'; } catch (e) { return 'global'; } })();
     const standingsCount = (log) => log.filter((s) => /War standings/.test(s.text)).length;
 
-    // ═════════ SC: cross-instance scoreboard claim ═════════
+ // ========= SC: cross-instance scoreboard claim =========
     console.log('\n── SC: standings claim lives on the DOC (one post per cadence, fleet-wide) ──');
     const evS = await freshEvent('scbqa@g.us');
     await state.updatePlayer(evS.eventId, 'pp0@s.whatsapp.net', {}, { score: 120 });
@@ -114,7 +114,7 @@ async function freshEvent(host) {
     check('SC6 retry after release lands', standingsCount(logS) === 3);
     feed.dispose(evS.eventId);
 
-    // ═════════ P1: co-op joiner battle presentation ═════════
+ // ========= P1: co-op joiner battle presentation =========
     console.log('\n── P1: joinRuinsSession joiners get the CURRENT battle (their POV) ──');
     const evP = await freshEvent('presqa@g.us');
     const docP = await state.getEvent(evP.eventId, { fresh: true });
@@ -146,7 +146,7 @@ async function freshEvent(host) {
     check('P1b own turn reads "YOUR TURN"', pres2 && /YOUR TURN/.test(pres2.text));
     ga.gameStates.delete(sessKey);
 
-    // ═════════ P2: bare challenge + rival POV notification ═════════
+ // ========= P2: bare challenge + rival POV notification =========
     console.log('\n── P2: bare `challenge` targets a lone rival; rival DM rides a scene ──');
     ga.startRuinsCombat = async () => ({ success: true, sessionKey: 'sim' });
     const evC = await freshEvent('chalqa@g.us');
@@ -168,7 +168,7 @@ async function freshEvent(host) {
     const notified = logC.find((s) => s.chatId === 'pp1@s.whatsapp.net' && /calls you out/.test(s.text));
     check('P2 rival DM notified WITH a POV scene image', !!notified && notified.hasImage, JSON.stringify(logC).slice(0, 260));
 
-    // ═════════ P3: duel start POV scenes to BOTH duelists ═════════
+ // ========= P3: duel start POV scenes to BOTH duelists =========
     console.log('\n── P3: accept renders each duelist their own duel scene ──');
     const rAcc = await dm1('accept');
     check('P3 duel begins on accept', rAcc && /THE DUEL BEGINS/.test(rAcc.text || ''), JSON.stringify(rAcc || {}).slice(0, 120));
@@ -177,13 +177,13 @@ async function freshEvent(host) {
     const toAccepter = scenes.find((s) => s.chatId === 'pp1@s.whatsapp.net');
     check('P3 both duelists receive a POV duel scene', !!toChallenger && !!toAccepter, JSON.stringify(logC).slice(-400));
 
-    // ═════════ P4: arrival presence to occupants ═════════
+ // ========= P4: arrival presence to occupants =========
     console.log('\n── P4: occupants SEE the newcomer (scene from their perspective) ──');
     const evA = await freshEvent('arrqa@g.us');
     const docA = await state.getEvent(evA.eventId, { fresh: true });
     const roomA = docA.players.find((p) => p.jid === 'pp1@s.whatsapp.net').roomId;
     const rooms = require('../core/rpg/guildWar/rooms');
-    // seat pp1 in roomA via the REAL enterRoom (fromKey=null → pure push branch)
+ // seat pp1 in roomA via the REAL enterRoom (fromKey=null → pure push branch)
     await state.updatePlayer(evA.eventId, 'pp1@s.whatsapp.net', {}, { roomId: roomA, prevRoomId: docA.players.find((p) => p.jid === 'pp1@s.whatsapp.net').spawnRoomId || roomA, protectedUntil: 0 });
     await rooms.enterRoom(evA.eventId, 'pp1@s.whatsapp.net', null, roomA);
     const docA2 = await state.getEvent(evA.eventId, { fresh: true });

@@ -1,24 +1,21 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-//  WORLD ATLAS — "Aldafold" rebuilt in the game's own 3D hex art (owner 2026-10-20: "increase the quality
-//  of that map holy shit is it bad … each guild should be showing on the map at once when someone does
-//  .j world, all the guild emblems over the location they are assigned to").
-//
-//  The old chart was a blurry upscaled painting with smeared labels and room for ONE guild. This renders the
-//  five continents out of the same pre-baked KayKit hex sprites the guild kingdom and the player base use
-//  (crisp at any size, biome-recoloured per realm), with the land silhouettes taken from the realm mask
-//  (core/rpgasset/continents/realm_mask.json), and plants EVERY guild's castle — model by hall level, hamlet by
-//  member count — on its charter-stone, with the guild emblem floating over it and a name plate under it.
-//
-//    renderWorldAtlas({ guilds: [{name, continent, marker, emblem, type, buildings, members}], highlight })
-//        → Buffer (JPEG) | null          (never throws; caller falls back to text)
-//
-//  ~0.6-1.2 s cold, memoised per (guild set, highlight).
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// WORLD ATLAS - "Aldafold" rebuilt in the game's own 3D hex art ("increase the quality
+// of that map holy shit is it bad … each guild should be showing on the map at once when someone does
+// .j world, all the guild emblems over the location they are assigned to").
+// The old chart was a blurry upscaled painting with smeared labels and room for ONE guild. This renders the
+// five continents out of the same pre-baked KayKit hex sprites the guild kingdom and the player base use
+// (crisp at any size, biome-recoloured per realm), with the land silhouettes taken from the realm mask
+// (core/rpgasset/continents/realm_mask.json), and plants EVERY guild's castle - model by hall level, hamlet by
+// member count - on its charter-stone, with the guild emblem floating over it and a name plate under it.
+// renderWorldAtlas({ guilds: [{name, continent, marker, emblem, type, buildings, members}], highlight })
+// → Buffer (JPEG) | null (never throws; caller falls back to text)
+// ~0.6-1.2 s cold, memoised per (guild set, highlight).
+// ===========================================================================
 const K = require('./kingdom3d');
 const C = require('./continents');
-const renderQueue = require('../utils/renderQueue');   // 47-k9: atlas bakes join the one-at-a-time queue
-const { emojiFont, fillTextMixed } = require('./emojiFont');   // 2026-10-20: emblem emoji glyphs (owner 'number boxes' bug); color bitmaps (owner 'use colors not hex code')
+const renderQueue = require('../utils/renderQueue'); // atlas bakes join the one-at-a-time queue
+const { emojiFont, fillTextMixed } = require('./emojiFont'); // emblem emoji glyphs (owner 'number boxes' bug); color bitmaps (owner 'use colors not hex code')
 
 const CHART_W = 864, CHART_H = 1210;                          // map space ↔ chart pixels (masks are traced from the chart)
 const MX0 = 58, MX1 = 810, MY0 = 175, MY1 = 868;              // the chart's drawable ocean area
@@ -37,7 +34,7 @@ function fonts() {
     try { require('./worldMapRenderer')._ensureFonts(); } catch (e) { /* default fonts */ }
 }
 
-// ── noise ─────────────────────────────────────────────────────────────────────
+// -- noise ---------------------------------------------------------------------
 function hash2(seed, x, y) { let h = (seed ^ Math.imul(x, 374761393) ^ Math.imul(y, 668265263)) >>> 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
 function vnoise(seed, x, y) {
     const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
@@ -48,20 +45,20 @@ function vnoise(seed, x, y) {
 }
 const fbm = (seed, x, y) => vnoise(seed, x, y) * 0.6 + vnoise(seed + 7, x * 2.1, y * 2.1) * 0.28 + vnoise(seed + 13, x * 4.3, y * 4.3) * 0.12;
 
-// ── land lookup in chart pixels (the traced mask, hole-filled + slightly dilated so it matches the old silhouette) ──
+// -- land lookup in chart pixels (the traced mask, hole-filled + slightly dilated so it matches the old silhouette) --
 const PLAQUES = [[350, 275, 515, 312, 'frostreach'], [110, 440, 270, 478, 'wildwood'], [575, 440, 755, 480, 'stormreach'], [180, 665, 340, 705, 'sunscorch'], [545, 658, 715, 698, 'emberfields']];
 function realmAtChart(x, y) {
     const probe = (px, py) => C.landAt(px / CHART_W, py / CHART_H);
     let r = probe(x, y);
     if (r) return r;
     for (const [x0, y0, x1, y1, key] of PLAQUES) if (x >= x0 && x <= x1 && y >= y0 && y <= y1) return key;   // label holes in the mask are land
-    // dilation: the mask was eroded to keep pins off the coast; give the coast back ~7 chart px
+ // dilation: the mask was eroded to keep pins off the coast; give the coast back ~7 chart px
     let hit = 0, last = null;
     for (const [dx, dy] of [[7, 0], [-7, 0], [0, 7], [0, -7], [5, 5], [-5, -5], [5, -5], [-5, 5]]) { const q = probe(x + dx, y + dy); if (q) { hit++; last = q; } }
     return hit >= 4 ? last : null;
 }
 
-// ── guild normalisation ───────────────────────────────────────────────────────
+// -- guild normalisation -------------------------------------------------------
 function hallLevel(rec) {
     const b = rec && rec.buildings;
     const h = b && (typeof b.hall === 'object' ? b.hall && b.hall.level : b.hall);
@@ -80,9 +77,9 @@ function normGuild(g) {
     };
 }
 
-// ── terrain ───────────────────────────────────────────────────────────────────
+// -- terrain -------------------------------------------------------------------
 const PROPS = {
-    // per realm: [name list for mountains, hills, forest, scatter]
+ // per realm: [name list for mountains, hills, forest, scatter]
     frostreach: { mtn: ['mountain_A', 'mountain_B', 'mountain_C', 'mountain_A_grass'], hill: ['hills_A', 'hills_B', 'hills_A_trees'], tree: ['trees_A_large', 'trees_B_large', 'trees_A_medium'], rock: ['rock_single_A', 'rock_single_B', 'rock_single_C'] },
     wildwood: { mtn: ['mountain_A_grass_trees', 'mountain_B_grass_trees', 'mountain_C_grass'], hill: ['hills_A_trees', 'hills_B_trees', 'hills_C_trees', 'hills_A'], tree: ['trees_A_large', 'trees_B_large', 'trees_A_medium', 'trees_B_medium'], rock: ['rock_single_D', 'rock_single_E'] },
     stormreach: { mtn: ['mountain_A_grass_trees', 'mountain_B_grass'], hill: ['hills_A_trees', 'hills_C_trees', 'hills_B'], tree: ['trees_A_large', 'trees_B_large', 'trees_A_medium', 'tree_single_A', 'tree_single_B'], rock: ['rock_single_A', 'rock_single_C'] },
@@ -109,18 +106,18 @@ async function buildTerrain(guilds) {
         const [cx, cy] = toChart(px(c, r));
         realm[r][c] = realmAtChart(cx, cy);
     }
-    // markers in pixel space (clearings + castle placement)
+ // markers in pixel space (clearings + castle placement)
     const mk = guilds.map((g) => ({ g, x: ((g.marker.x * CHART_W) - MX0) / (MX1 - MX0) * MW, y: ((g.marker.y * CHART_H) - MY0) / (MY1 - MY0) * MH }));
     const nearMarker = (x, y, rad) => mk.some((m) => Math.hypot((m.x - x) * 0.9, (m.y - y) * 1.5) < rad);
     const seed = 9137;
-    // 1. land / sea, per-cell biome, lakes
+ // 1. land / sea, per-cell biome, lakes
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
         const k0 = w.cell[r][c], rk = realm[r][c];
         if (!rk) { k0.water = true; continue; }
         k0.biome = C.get(rk).biome === 'isle' ? null : C.get(rk).biome;
         k0.realmKey = rk;
     }
-    // inland lakes (never under a guild, never touching the coast)
+ // inland lakes (never under a guild, never touching the coast)
     const coastish = (c, r) => [0, 1, 2, 3, 4, 5].some((d) => { const n = K.neighbor(c, r, d); return !w.inb(n[0], n[1]) || !realm[n[1]][n[0]]; });
     for (let r = 1; r < rows - 1; r++) for (let c = 1; c < cols - 1; c++) {
         const rk = realm[r][c]; if (!rk || coastish(c, r)) continue;
@@ -129,13 +126,13 @@ async function buildTerrain(guilds) {
         if (fbm(seed + 31, p.x / 70, p.y / 70) > 0.80 && rk !== 'frostreach' || (rk === 'frostreach' && fbm(seed + 37, p.x / 60, p.y / 60) > 0.78)) w.cell[r][c].water = true;
     }
     w.resolve();
-    // shallows take the biome of the shore they touch (turquoise round the dunes, glassy round the ice, lava round Eldheim)
+ // shallows take the biome of the shore they touch (turquoise round the dunes, glassy round the ice, lava round Eldheim)
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
         const k0 = w.cell[r][c];
         if (!k0.water || k0.biome) continue;
         for (let d = 0; d < 6; d++) { const n = K.neighbor(c, r, d); const nk = w.at(n[0], n[1]); if (nk && !nk.water && nk.biome) { k0.biome = nk.biome; break; } }
     }
-    // 2. props
+ // 2. props
     const rngAt = (c, r, s) => hash2(seed + s, c, r);
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
         const k0 = w.cell[r][c], rk = realm[r][c];
@@ -154,7 +151,7 @@ async function buildTerrain(guilds) {
         else if (mst > R[2] && rngAt(c, r, 15) < R[3]) w.put(pick(P.tree, 16), c, r, { ...o });
         else if (rngAt(c, r, 17) < 0.2) w.put(pick(P.rock, 18), c, r, { ...o, sc: 0.9 });
     }
-    // 3. each guild: castle by hall level, hamlet by member count, towers + dirt pad
+ // 3. each guild: castle by hall level, hamlet by member count, towers + dirt pad
     const hamletRng = (name) => K.mulberry32(K.hashStr('atlas:' + name));
     const worldOf = (x, y) => { const V2 = w.view; return { x: (x - w.ox) / (V2.S * k), z: (y - w.oy) / (V2.sinP * V2.S * k) }; };
     const castles = [];
@@ -180,13 +177,13 @@ async function buildTerrain(guilds) {
         const meta = K.spriteMeta(B(model), 'top');
         castles.push({ g, x: m.x, y: m.y, topY: m.y - (meta ? meta.ay * k * sc : 40), hall: g.hall });
     }
-    // 4. paint
+ // 4. paint
     const canvas = createCanvas(MW, MH), ctx = canvas.getContext('2d');
     await w.draw(ctx, { drawBackdrop: (c2) => { c2.fillStyle = '#2f86c4'; c2.fillRect(0, 0, MW, MH); } });
     return { canvas, castles, realm, cols, rows, px, w };
 }
 
-// ── overlays ──────────────────────────────────────────────────────────────────
+// -- overlays ------------------------------------------------------------------
 function roundRect(ctx, x, y, w, h, r) { K.roundRect(ctx, x, y, w, h, r); }
 
 async function drawEmblem(ctx, g, x, y, R, crest) {
@@ -194,7 +191,7 @@ async function drawEmblem(ctx, g, x, y, R, crest) {
     const col = g.color || c1;
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 3;
-    // heater shield, same heraldry as the castle crest
+ // heater shield, same heraldry as the castle crest
     const sw = R * 1.75, sh = R * 2.15;
     const sp = () => { ctx.beginPath(); ctx.moveTo(x - sw / 2, y - sh / 2); ctx.lineTo(x + sw / 2, y - sh / 2); ctx.quadraticCurveTo(x + sw / 2, y + sh * 0.1, x, y + sh / 2); ctx.quadraticCurveTo(x - sw / 2, y + sh * 0.1, x - sw / 2, y - sh / 2); ctx.closePath(); };
     sp();
@@ -270,10 +267,10 @@ function realmLabelPos(t, key, markers) {
     return best;
 }
 
-// ── composition ───────────────────────────────────────────────────────────────
+// -- composition ---------------------------------------------------------------
 const _memo = new Map();
-// 47-k9: route the actual composition through the shared render queue —
-// 2026-10-20 03:11Z: `.j world` + `.j base` + `.j guild` landed together and
+// route the actual composition through the shared render queue -
+// 03:11Z: `.j world` + `.j base` + `.j guild` landed together and
 // three unqueued canvas jobs pushed RSS through the pm2 430M ceiling on a
 // 952MB box (memory kill mid-command, no JS stack). Memo hits pay only a
 // fast queue slot; a queue rejection → null → caller's legacy-chart fallback.
@@ -288,13 +285,13 @@ async function renderWorldAtlasUnqueued(o = {}) {
             .sort((a, b) => a.marker.y - b.marker.y);                                   // back-to-front
         const hi = o.highlight || null;
 const dayNight = require('./dayNight');
-        const dnPhase = o.phase || dayNight.phaseAt();   // Task 21: the mortal world chart wears the hour
+        const dnPhase = o.phase || dayNight.phaseAt(); // the mortal world chart wears the hour
         const key = K.hashStr(JSON.stringify([guilds.map((g) => [g.name, g.marker, g.hall, Math.min(g.members, 15), g.icon, g.color, g.type, g.img ? g.img.length : 0]), hi, dnPhase]));
         if (_memo.has(key)) return _memo.get(key);
 
         const { createCanvas } = require('canvas');
         const t = await buildTerrain(guilds);
-        // roster layout
+ // roster layout
         const byRealm = {}; for (const c of C.CONTINENTS) byRealm[c.key] = [];
         for (const g of guilds) byRealm[g.realm].push(g);
         for (const k2 of Object.keys(byRealm)) byRealm[k2].sort((a, b) => b.hall - a.hall || b.members - a.members || a.name.localeCompare(b.name));
@@ -304,19 +301,19 @@ const dayNight = require('./dayNight');
         const canvas = createCanvas(CARD_W, H), ctx = canvas.getContext('2d');
         ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
 
-        // parchment
+ // parchment
         ctx.fillStyle = PARCH; ctx.fillRect(0, 0, CARD_W, H);
         const rnd = K.mulberry32(77);
         for (let i = 0; i < 26; i++) { ctx.fillStyle = PARCH_DEEP; ctx.globalAlpha = 0.22; ctx.beginPath(); ctx.ellipse(rnd() * CARD_W, rnd() * H, 70 + rnd() * 190, 40 + rnd() * 120, rnd() * 3, 0, Math.PI * 2); ctx.fill(); }
         ctx.globalAlpha = 1;
-        // outer frame
+ // outer frame
         ctx.strokeStyle = INK_SOFT; ctx.lineWidth = 3; ctx.strokeRect(24, 24, CARD_W - 48, H - 48);
         ctx.lineWidth = 1.2; ctx.strokeRect(36, 36, CARD_W - 72, H - 72);
         for (const [x, y, sx, sy] of [[36, 36, 1, 1], [CARD_W - 36, 36, -1, 1], [36, H - 36, 1, -1], [CARD_W - 36, H - 36, -1, -1]]) {
             ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x + sx * 34, y); ctx.lineTo(x, y); ctx.lineTo(x, y + sy * 34); ctx.stroke();
             ctx.fillStyle = WAX; ctx.beginPath(); ctx.arc(x + sx * 12, y + sy * 12, 4, 0, Math.PI * 2); ctx.fill();
         }
-        // title
+ // title
         ctx.fillStyle = INK_SOFT; ctx.font = '22px "Cinzel", serif'; ctx.textBaseline = 'alphabetic';
         spacedText(ctx, 'THE MORTAL WORLD OF THE FIRST WORLD', CARD_W / 2, 98, 5);
         ctx.fillStyle = INK; ctx.font = '104px "Cinzel Deco", "Cinzel", serif'; ctx.textAlign = 'center';
@@ -326,12 +323,12 @@ const dayNight = require('./dayNight');
         ctx.fillStyle = INK_SOFT; ctx.font = 'italic 24px "IM Fell Italic", serif';
         ctx.fillText(guilds.length ? `${guilds.length} guild${guilds.length === 1 ? '' : 's'} hold charter-stones across five lands` : 'five lands, and not one charter-stone set yet', CARD_W / 2, 252);
 
-        // map: drop shadow + frame
+ // map: drop shadow + frame
         const mx = PAD, my = TITLE_H;
         ctx.save(); ctx.shadowColor = 'rgba(40,24,8,0.45)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8;
         ctx.fillStyle = '#2f86c4'; ctx.fillRect(mx - 6, my - 6, MW + 12, MH + 12); ctx.restore();
         ctx.drawImage(t.canvas, mx, my);
-        // sea vignette + a few soft wave strokes
+ // sea vignette + a few soft wave strokes
         const vg = ctx.createRadialGradient(mx + MW / 2, my + MH / 2, MH * 0.35, mx + MW / 2, my + MH / 2, MW * 0.78);
         vg.addColorStop(0, 'rgba(10,40,90,0)'); vg.addColorStop(1, 'rgba(10,30,70,0.38)');
         ctx.save(); ctx.beginPath(); ctx.rect(mx, my, MW, MH); ctx.clip(); ctx.fillStyle = vg; ctx.fillRect(mx, my, MW, MH);
@@ -343,9 +340,9 @@ const dayNight = require('./dayNight');
             if (t.realm[Math.min(t.rows - 1, rr2)] && t.realm[Math.min(t.rows - 1, rr2)][Math.min(t.cols - 1, cc)]) continue;
             ctx.beginPath(); ctx.moveTo(wx - 14, wy); ctx.quadraticCurveTo(wx - 7, wy - 5, wx, wy); ctx.quadraticCurveTo(wx + 7, wy + 5, wx + 14, wy); ctx.stroke();
         }
-        // Task 21: the SEA + LAND wear the hour (grade stays inside the map
-        // frame so the parchment, plates and rosters stay readable). At night
-        // the moon rises over Aldafold and the sea goes deep-blue moonlit.
+ // the SEA + LAND wear the hour (grade stays inside the map
+ // frame so the parchment, plates and rosters stay readable). At night
+ // the moon rises over Aldafold and the sea goes deep-blue moonlit.
         dayNight.grade(ctx, MW, MH, dnPhase, { x: mx, y: my, w: MW, h: MH });
         if (dnPhase === 'night' || dnPhase === 'dusk') {
             dayNight.moonStars(ctx, MW, MH, { seed: 41, moonX: 0.86, moonY: 0.1, stars: Math.round(18 * MW / 1000), mr: 13, starAlpha: 0.8, skyH: 0.45 });
@@ -356,11 +353,11 @@ const dayNight = require('./dayNight');
         ctx.restore();
         ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.strokeRect(mx, my, MW, MH);
         ctx.strokeStyle = GOLD; ctx.lineWidth = 1.5; ctx.strokeRect(mx + 7, my + 7, MW - 14, MH - 14);
-        // tick marks
+ // tick marks
         ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
         for (let i = 1; i < 16; i++) { const tx = mx + (MW / 16) * i; ctx.beginPath(); ctx.moveTo(tx, my); ctx.lineTo(tx, my + 10); ctx.moveTo(tx, my + MH); ctx.lineTo(tx, my + MH - 10); ctx.stroke(); }
 
-        // realm plates
+ // realm plates
         const gm = t.castles.map((c) => ({ x: c.x, y: c.y }));
         ctx.save(); ctx.translate(mx, my); ctx.beginPath(); ctx.rect(0, 0, MW, MH); ctx.clip();
         for (const c of C.CONTINENTS) {
@@ -376,13 +373,13 @@ const dayNight = require('./dayNight');
             ctx.font = 'italic 16px "IM Fell Italic", serif'; ctx.fillStyle = INK_SOFT; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
             ctx.fillText(c.epithet, p.x, p.y + 32);
         }
-        // the sea's name
+ // the sea's name
         ctx.font = 'italic 38px "IM Fell Italic", serif'; ctx.fillStyle = 'rgba(235,245,255,0.8)'; ctx.textAlign = 'center';
         const sx = ((C.CENTRE_SEA.at[0] * CHART_W) - MX0) / (MX1 - MX0) * MW, sy = ((C.CENTRE_SEA.at[1] * CHART_H) - MY0) / (MY1 - MY0) * MH;
         ctx.fillText('The Drowned Sea', sx, sy);
         compass(ctx, 118, MH - 118, 56);
 
-        // guilds: emblem over castle + nameplate (greedy collision avoidance on plates)
+ // guilds: emblem over castle + nameplate (greedy collision avoidance on plates)
         const used = [];
         const crests = await Promise.all(t.castles.map((c) => crestImage(c.g)));
         for (let i = 0; i < t.castles.length; i++) {
@@ -396,7 +393,7 @@ const dayNight = require('./dayNight');
             }
             ctx.strokeStyle = 'rgba(58,42,24,0.9)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(ex, ey + R); ctx.lineTo(ex, c.topY + 4); ctx.stroke();   // pole down to the keep
             await drawEmblem(ctx, g, ex, ey, R, crests[i]);
-            // nameplate under the castle
+ // nameplate under the castle
             let py = c.y + 14, rect;
             for (let tries = 0; tries < 6; tries++) {
                 ctx.font = '13px "Cinzel", serif';
@@ -409,7 +406,7 @@ const dayNight = require('./dayNight');
         }
         ctx.restore();
 
-        // roster
+ // roster
         const ry = my + MH + 44;
         const colW = (CARD_W - PAD * 2 - 4 * 18) / 5;
         C.CONTINENTS.forEach((c, i) => {
@@ -436,9 +433,9 @@ const dayNight = require('./dayNight');
             if (list.length > shown.length) { ctx.fillStyle = INK_SOFT; ctx.font = 'italic 15px "IM Fell Italic", serif'; ctx.textAlign = 'center'; ctx.fillText(`+ ${list.length - shown.length} more`, x + colW / 2, ry + 96 + shown.length * 30 + 4); }
             if (!list.length) { ctx.fillStyle = INK_SOFT; ctx.font = 'italic 16px "IM Fell Italic", serif'; ctx.textAlign = 'center'; ctx.fillText('unclaimed land', x + colW / 2, ry + 110); }
         });
-        // footer
+ // footer
         ctx.fillStyle = INK_SOFT; ctx.font = 'italic 17px "IM Fell Italic", serif'; ctx.textAlign = 'center';
-        ctx.fillText('A guild\'s castle grows with its Guild Hall — outpost keep to royal citadel. Found yours with a realm of your choice.', CARD_W / 2, H - 52);
+        ctx.fillText('A guild\'s castle grows with its Guild Hall - outpost keep to royal citadel. Found yours with a realm of your choice.', CARD_W / 2, H - 52);
 
         const buf = canvas.toBuffer('image/jpeg', { quality: 0.9 });
         _memo.set(key, buf);

@@ -1,22 +1,19 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-// bakeStream (47-k10) — shared "streaming bake" mp4 encoder for the .j
+// ===========================================================================
+// bakeStream () - shared "streaming bake" mp4 encoder for the .j
 // animated cards. Task-37 pattern (homesteadRenderer) extracted so every
 // card bake can adopt it:
-//
-//   OLD: render ALL N raw BGRA frames into an array (~90-150MB for a
-//        20-frame card), THEN spawn ffmpeg and feed the array.
-//   NEW: render frame 0, spawn ffmpeg immediately, and feed each frame as
-//        it renders. Only ONE frame canvas + one raw buffer is alive at a
-//        time, and the encode overlaps the render (wall-clock win).
-//
-// This is the memory half of the 2026-10-20 03:11Z crash story: three
+// OLD: render ALL N raw BGRA frames into an array (~90-150MB for a
+// 20-frame card), THEN spawn ffmpeg and feed the array.
+// NEW: render frame 0, spawn ffmpeg immediately, and feed each frame as
+// it renders. Only ONE frame canvas + one raw buffer is alive at a
+// time, and the encode overlaps the render (wall-clock win).
+// This is the memory half of the 03:11Z crash story: three
 // concurrent bakes × ~N held frames stacked straight into the pm2 cap.
-// The queue (47-k9) stops the stacking; this removes the per-bake bulk.
-//
-// Frames are BGRA rawvideo exactly like the array encoder — byte-identical
-// encode output for identical frame input (QA'd 47-k10).
-// ═══════════════════════════════════════════════════════════════════════════
+// The queue () stops the stacking; this removes the per-bake bulk.
+// Frames are BGRA rawvideo exactly like the array encoder - byte-identical
+// encode output for identical frame input (QA'd ).
+// ===========================================================================
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -40,13 +37,13 @@ async function encodeRawStreamMp4({ first, count, next, frameMs = 100, tmpPrefix
         const args = [
             '-f', 'rawvideo', '-pix_fmt', 'bgra', '-video_size', `${first.w}x${first.h}`,
             '-framerate', `${1000 / frameMs}`, '-i', 'pipe:0',
-            // even-dim guard (no-op on even input)
+ // even-dim guard (no-op on even input)
             '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
             '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
             '-pix_fmt', 'yuv420p', '-preset', 'veryfast',
-            // 47-k10 A/B on identical base-card pixels: crf25 = -20.7% bytes vs
-            // crf23, label text + sprite edges pixel-clean at 2x zoom (WhatsApp
-            // displays these well below source size). RENDER_CRF=23 reverts.
+ // A/B on identical base-card pixels: crf25 = -20.7% bytes vs
+ // crf23, label text + sprite edges pixel-clean at 2x zoom (WhatsApp
+ // displays these well below source size). RENDER_CRF=23 reverts.
             '-crf', String(process.env.RENDER_CRF || '25'),
             '-movflags', '+faststart', '-an', '-y', outFile,
         ];

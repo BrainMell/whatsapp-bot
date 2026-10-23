@@ -1,27 +1,25 @@
 // ============================================
-// WIKIPEDIA ENTITY IMAGE BAKEOFF (2026-09-30)
+// WIKIPEDIA ENTITY IMAGE BAKEOFF
 // ============================================
 // The image system must cover MOVIES + GAMES + TV, not just anime.
 // Fandom CDN is Cloudflare-403 from this box (proven again today), so the
 // candidate primary source for non-anime franchises is the WIKIPEDIA ENTITY
 // GRAPH: canonical article per character -> pageimages thumb ->
 // upload.wikimedia.org download -> production imageGate.
-//
 // This harness measures REAL coverage on Box 1: for every non-anime franchise
 // in the quiz RANDOM_POOL, resolve a curated battery of canonical character
 // articles, batch-fetch pageimages, download thumbs, pixel-gate with the
 // production gate, and report per-franchise verified counts.
-//
-// Run on Box 1:  node scripts/wiki_entity_bakeoff.js [--gate] [--min 200]
-//   --gate   run the production imageGate (default: magic bytes + sharp stats)
+// Run on Box 1: node scripts/wiki_entity_bakeoff.js [--gate] [--min 200]
+// --gate run the production imageGate (default: magic bytes + sharp stats)
 // ============================================
 
 const https = require("https");
 
-// ── curated canonical article titles per franchise ──
+// -- curated canonical article titles per franchise --
 // (exact titles; the API resolves redirects, so minor variants are fine)
 const BATTERY = {
-  // ── movies / tv / comics / cartoons ──
+ // -- movies / tv / comics / cartoons --
   batman: ["Batman", "Joker (character)", "Robin (character)", "Catwoman", "Batgirl", "Nightwing", "Penguin (character)", "Riddler", "Two-Face", "Bane (DC Comics)", "Harley Quinn", "Ra's al Ghul", "Poison Ivy (character)", "Mr. Freeze"],
   marvel: ["Iron Man", "Captain America", "Thor (Marvel Comics)", "Hulk", "Black Widow (Natasha Romanova)", "Spider-Man", "Doctor Strange", "Thanos", "Loki (Marvel Comics)", "Black Panther (character)", "Daredevil (Marvel Comics character)", "Ant-Man (Scott Lang)", "Wolverine"],
   dc: ["Superman", "Wonder Woman", "The Flash", "Green Lantern", "Aquaman", "Cyborg (comics)", "Lex Luthor", "Darkseid", "Green Arrow", "Supergirl", "Shazam (wizard)", "Black Adam"],
@@ -39,7 +37,7 @@ const BATTERY = {
   "steven-universe": ["Steven Universe (character)", "Garnet (Steven Universe)", "Amethyst (Steven Universe)", "Pearl (Steven Universe)", "Connie Maheswaran", "Peridot (Steven Universe)", "Lapis Lazuli (Steven Universe)", "Greg Universe"],
   teentitans: ["Robin (character)", "Starfire (Teen Titans)", "Raven (DC Comics)", "Cyborg (comics)", "Beast Boy", "Terra (comics)", "Deathstroke"],
   ben10: ["Ben Tennyson", "Gwen Tennyson", "Vilgax", "Kevin Levin"],
-  // ── games ──
+ // -- games --
   eldenring: ["Melina (Elden Ring)", "Ranni the Witch", "Malenia, Blade of Miquella", "Radahn", "Godrick the Grafted", "Rya (Elden Ring)", "Blaidd", "Iron Fist Alexander"],
   darksouls: ["Solaire of Astora", "Gwyn, Lord of Cinder", "Chosen Undead", "Artorias the Abysswalker", "Ornstein and Smough", "Gravelord Nito"],
   sekiro: ["Wolf (Sekiro)", "Genichiro Ashina", "Isshin Ashina", "Lady Butterfly"],
@@ -58,7 +56,7 @@ const BATTERY = {
   "among-us": ["Crewmate (Among Us)"],
 };
 
-// ── tiny fetch helpers (no bot deps; keep the harness standalone) ──
+// -- tiny fetch helpers (no bot deps; keep the harness standalone) --
 const UA = "WAQuizBot/1.0 (https://example.org; quiz image verification) axios-like";
 
 // search-fallback qualifier per franchise (only used when the exact article
@@ -161,7 +159,7 @@ async function dlImage(url) {
 }
 
 async function pageimagesBatch(titles) {
-  // pace the API itself: >=350ms between batch calls + 429 retry inside httpGet
+ // pace the API itself: >=350ms between batch calls + 429 retry inside httpGet
   const gap = Date.now() - _lastApi;
   if (gap < 350) await new Promise((r) => setTimeout(r, 350 - gap));
   _lastApi = Date.now();
@@ -169,7 +167,7 @@ async function pageimagesBatch(titles) {
     action: "query", format: "json", formatversion: "2", redirects: "1",
     prop: "pageimages|pageprops", ppprop: "disambiguation",
     piprop: "thumbnail", pithumbsize: "640",
-    pilicense: "any", // 💡 copyrighted character art (fair use) - default 'free' hides it
+    pilicense: "any", // copyrighted character art (fair use) - default 'free' hides it
     titles: titles.join("|"),
   });
   const data = await httpGet(`https://en.wikipedia.org/w/api.php?${params}`);
@@ -186,7 +184,6 @@ async function pageimagesBatch(titles) {
 
 // fallback: resolve ONE title via Wikipedia article search (entity-anchored:
 // name + optional franchise qualifier -> canonical article, still page-image)
-// returns { url, article } so callers can apply an identity-consistency check
 async function searchResolve(title, qualifier) {
   const q = [title, qualifier].filter(Boolean).join(" ");
   const gap = Date.now() - _lastApi;
@@ -243,7 +240,7 @@ async function main() {
   for (const [fr, titles] of Object.entries(BATTERY)) {
     totals.franchises++;
     const res = { fr, chars: titles.length, resolved: 0, downloaded: 0, gated: 0, fails: [] };
-    // batch in chunks of 20 titles (API limit 50; keep small)
+ // batch in chunks of 20 titles (API limit 50; keep small)
     const byTitle = new Map();
     const redirectMap = new Map();
     let disambig = new Set();
@@ -258,16 +255,16 @@ async function main() {
         res.fails.push(`api:${e.message}`);
       }
     }
-    // download + gate thumbs, limited concurrency. Search fallback only for
-    // misses (disambig pages / no image) - entity-anchored, not keyword hunt.
+ // download + gate thumbs, limited concurrency. Search fallback only for
+ // misses (disambig pages / no image) - entity-anchored, not keyword hunt.
     const qualifier = FRANCHISE_QUALIFIER[fr] || null;
     const dlQueue = [];
     for (const t of titles) {
       const resolved = redirectMap.get(t) || t;
       let src = byTitle.has(t) ? byTitle.get(t) : byTitle.get(resolved);
       if (!src) {
-        // article missing OR exists without a usable pageimage (incl. disambig
-        // collisions) -> one entity-anchored search fallback (name+franchise)
+ // article missing OR exists without a usable pageimage (incl. disambig
+ // collisions) -> one entity-anchored search fallback (name+franchise)
         const sr = await searchResolve(t.replace(/\s*\([^)]*\)\s*$/, ""), qualifier).catch(() => null);
         if (sr && identityOk(t, sr.article, sr.url)) {
           src = sr.url;

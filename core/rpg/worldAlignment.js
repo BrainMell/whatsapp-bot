@@ -1,20 +1,19 @@
 // ============================================
-// 🌍 WORLD ALIGNMENT → GUILD WAR LAUNCHER — GW overhaul 2026-10-03
+// WORLD ALIGNMENT → GUILD WAR LAUNCHER - GW overhaul
 // Alignment = the rare peak Guild War. When the triune alignment window
 // opens (cosmology: deterministic ~4-day cadence, 2h window), ONE instance
 // claims the window in shared KV and opens an alignment-scale event:
-//   - Guild Association official-notice cards DM'd to registered players
-//   - registration opens; players join by DM (`join`) or `${_botPrefix()} gw join`
+// - Guild Association official-notice cards DM'd to registered players
+// - registration opens; players join by DM (`join`) or `${_botPrefix()} gw join`
 // A mod can also manually host an alignment war from a group with
 // `.j gw start alignment` (that group becomes the feed HQ).
-//
-// ⚔️ 2026-10-09 OWNER DIRECTIVE (Guild War overhaul): the ~4-day natural
-// auto-spawn is DISABLED (CFG.ALIGNMENT_AUTOSPAWN = false) — "Disable the
+// OWNER DIRECTIVE (Guild War overhaul): the ~4-day natural
+// auto-spawn is DISABLED (CFG.ALIGNMENT_AUTOSPAWN = false) - "Disable the
 // 4-day timer for the Ruins Guild War only." Wars are now mod-initiated:
-//   `.j war start`       → full-scale (alignment-scale) event, announced in
-//                          every RPG-friendly GC via announceAlignmentWar
-//   `.j war start -test` → small (normal-scale) war, this GC only
-// The cosmology clocks themselves are untouched — only the war launcher is
+// `.j war start` → full-scale (alignment-scale) event, announced in
+// every RPG-friendly GC via announceAlignmentWar
+// `.j war start -test` → small (normal-scale) war, this GC only
+// The cosmology clocks themselves are untouched - only the war launcher is
 // silenced. The broadcast phase below now runs EVERY tick (not just inside
 // the alignment window) so a mod-called full-scale war announces wherever
 // the window is live or not; it self-guards on a REGISTRATION alignment
@@ -34,14 +33,14 @@ const DM_WAVE_CAP = 500;
 const GC_PACE_MS = parseInt(process.env.GW_GC_PACE_MS, 10) || 2500;
 
 function botIdSafe() {
-    // ⚔️ 2026-10-09: process-level identity (BOT_INSTANCE env) instead of the
-    // ALS-backed proxy — the 60s interval has no ALS store, so the old proxy
-    // collapsed every instance to 'global' here (shared GC list + shared
-    // announce stamp = only one bot ever announced). See utils/botInstance.js.
+ // process-level identity (BOT_INSTANCE env) instead of the
+ // ALS-backed proxy - the 60s interval has no ALS store, so the old proxy
+ // collapsed every instance to 'global' here (shared GC list + shared
+ // announce stamp = only one bot ever announced). See utils/botInstance.js.
     return resolveBotId();
 }
 function _botPrefix() {
-    // dynamic per-bot prefix (owner rule: never hardcode .j/.s in card text)
+ // dynamic per-bot prefix (owner rule: never hardcode .j/.s in card text)
     try { return require('../botConfig').getPrefix() || '.'; } catch (e) { return '.'; }
 }
 
@@ -82,7 +81,7 @@ async function _invitePlayer(sock, jid, eventId, aligned) {
             caption: `🌍 *WORLD ALIGNMENT - GUILD WAR*\n\nThe dead worlds overlap: greater dangers, greater glory, the largest Guild Points the system has ever offered.\n\nReply \`join\` to register. The war deploys once registration closes.`,
         });
     } catch (e) {
-        // card failed → plain text fallback
+ // card failed → plain text fallback
         try {
             await sock.sendMessage(jid, { text: `🌍 *WORLD ALIGNMENT - GUILD WAR*\n\nRegistration open - reply \`join\` to enter. (${eventId})` });
         } catch (e2) { /* player unreachable */ }
@@ -91,13 +90,13 @@ async function _invitePlayer(sock, jid, eventId, aligned) {
 
 // tick: called from the 60s engine interval (cheap no-ops off-window).
 // Three independent phases:
-//   1. _launchOnce     — ONE instance claims the window and opens the event
-//                        (⚙️ currently disabled: CFG.ALIGNMENT_AUTOSPAWN)
-//   2. _broadcastOnce  — EVERY instance announces the alignment call card to
-//                        its own RPG-friendly GCs (per-bot stamp, paced
-//                        sends). ⚔️ 2026-10-09: runs on EVERY tick now —
-//                        self-guards on a REGISTRATION alignment event —
-//                        so mod-called full-scale wars announce off-window.
+// 1. _launchOnce - ONE instance claims the window and opens the event
+// ( currently disabled: CFG.ALIGNMENT_AUTOSPAWN)
+// 2. _broadcastOnce - EVERY instance announces the alignment call card to
+// its own RPG-friendly GCs (per-bot stamp, paced
+// sends). runs on EVERY tick now -
+// self-guards on a REGISTRATION alignment event -
+// so mod-called full-scale wars announce off-window.
 async function tick(sock, BOT_MARKER) {
     const win = cosmology.triuneWindow(Date.now());
     const launch = (win && win.aligned)
@@ -108,9 +107,9 @@ async function tick(sock, BOT_MARKER) {
 }
 
 async function _launchOnce(sock, BOT_MARKER, win) {
-    // ⚔️ 2026-10-09 owner directive: the 4-day natural spawn is OFF. The
-    // window is not claimed or consumed — flipping GW_ALIGNMENT_AUTOSPAWN=1
-    // restores the organic behavior verbatim.
+ // owner directive: the 4-day natural spawn is OFF. The
+ // window is not claimed or consumed - flipping GW_ALIGNMENT_AUTOSPAWN=1
+ // restores the organic behavior verbatim.
     if (!CFG.ALIGNMENT_AUTOSPAWN) {
         return { fired: false, reason: 'autospawn-disabled' };
     }
@@ -120,8 +119,8 @@ async function _launchOnce(sock, BOT_MARKER, win) {
     if (!claimed) { _lastFiredKey = key; return { fired: false, dedup: 'kv' }; }
     _lastFiredKey = key;
 
-    // auto-launch: alignment event with no host group (DM-driven); a mod can
-    // still host one manually per group — MAX_CONCURRENT_EVENTS guards floods
+ // auto-launch: alignment event with no host group (DM-driven); a mod can
+ // still host one manually per group - MAX_CONCURRENT_EVENTS guards floods
     const guildWar = require('./guildWar');
     const created = await guildWar.state.createEvent({
         type: 'alignment',
@@ -134,7 +133,7 @@ async function _launchOnce(sock, BOT_MARKER, win) {
         return { fired: false, reason: created.reason };
     }
 
-    // paced DM notice wave to all registered players
+ // paced DM notice wave to all registered players
     try {
         const User = require('../models/User');
         const users = await User.find({ registered: true }, { jid: 1 }).lean();
@@ -154,24 +153,24 @@ async function _launchOnce(sock, BOT_MARKER, win) {
 
 // per-instance broadcast: the alignment call card goes to every GC
 // marked RPG-friendly on THIS bot (`gw rpg on`), paced GC_PACE_MS apart.
-// ⚔️ 2026-10-09 rework:
-//   - stamp is keyed by EVENT ID (was: 4-day window key) — every full-scale
-//     war announces exactly once per bot, however many wars share a window;
-//   - the stamp is written BEFORE the paced loop (synchronous cache write)
-//     so the command path and the 60s tick can never double-send on the
-//     same process (at-most-once per bot wins);
-//   - mod-called wars get their own kicker/caption ("CALLED BY HAND") —
-//     the organic "on its own accord" look only fits autospawned wars.
+// rework:
+// - stamp is keyed by EVENT ID (was: 4-day window key) - every full-scale
+// war announces exactly once per bot, however many wars share a window;
+// - the stamp is written BEFORE the paced loop (synchronous cache write)
+// so the command path and the 60s tick can never double-send on the
+// same process (at-most-once per bot wins);
+// - mod-called wars get their own kicker/caption ("CALLED BY HAND") -
+// the organic "on its own accord" look only fits autospawned wars.
 async function announceAlignmentWar(sock, BOT_MARKER, ev) {
     try {
         const botId = botIdSafe();
         const stampKey = `gw_align_announced_${botId}`;
         if (get(stampKey, null) === ev.eventId) return { skipped: 'already' };
         const gcs = get(`gw_rpg_gcs_${botId}`, []) || [];
-        // 💡 judge fix: only stamp once we actually HAVE targets — a bot with
-        // zero marked GCs stays un-stamped so GCs marked later in the 10-min
-        // registration window still receive the call (cheap 60s re-check).
-        // (The host GC is excluded below — it already carries the call card.)
+ // judge fix: only stamp once we actually HAVE targets - a bot with
+ // zero marked GCs stays un-stamped so GCs marked later in the 10-min
+ // registration window still receive the call (cheap 60s re-check).
+ // (The host GC is excluded below - it already carries the call card.)
         const targets = gcs.filter((gc) => gc && gc !== ev.hostGroupId);
         if (!targets.length) return { skipped: 'no-rpg-gcs', eventId: ev.eventId };
         set(stampKey, ev.eventId);
@@ -193,7 +192,7 @@ async function announceAlignmentWar(sock, BOT_MARKER, ev) {
 
         const prefix = _botPrefix();
         const caption = calledByHand
-            ? `${BOT_MARKER}⚔️ *FULL-SCALE GUILD WAR — CALLED BY HAND*
+            ? `${BOT_MARKER}⚔️ *FULL-SCALE GUILD WAR - CALLED BY HAND*
 
 A mod has raised the full-scale call. Every RPG group chat hears the horns: registration is OPEN - \`${prefix} gw join\` enters from any group, players deploy into bot DMs.
 _Test skirmishes (\`${prefix} gw start -test\`) stay in their own GC; full-scale calls announce everywhere._`
@@ -215,7 +214,7 @@ _Mark/unmark this GC: \`${prefix} gw rpg off\`_`;
                     });
                 }
                 sent++;
-            } catch (e) { /* dead group — skip */ }
+            } catch (e) { /* dead group - skip */ }
             await new Promise((r) => setTimeout(r, GC_PACE_MS));
         }
         console.log(`[WorldAlignment] full-scale call broadcast: ${sent}/${targets.length} RPG-friendly GCs on ${botId} (event ${ev.eventId}${calledByHand ? ', called by hand' : ', organic'})`);
@@ -227,7 +226,7 @@ _Mark/unmark this GC: \`${prefix} gw rpg off\`_`;
 }
 
 // tick-path wrapper: announce the newest REGISTRATION alignment event, if
-// any (organic autospawn OR mod-called — both announce to RPG GCs).
+// any (organic autospawn OR mod-called - both announce to RPG GCs).
 async function _broadcastOnce(sock, BOT_MARKER, win = null) {
     try {
         const GuildWarEvent = require('../models/GuildWarEvent');

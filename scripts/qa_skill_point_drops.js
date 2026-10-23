@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * qa_skill_point_drops.js — 2026-10-18
+ * qa_skill_point_drops.js - 2026-10-18
  * Owner order: "increase drop rates of skill points ... you used to get 3 to
  * 5 from high tier dungeons and you want that drop rate back".
  *
@@ -10,7 +10,7 @@
  * payout (S/SS/SSS = 3/4/5).
  *
  * Sections:
- *  A. drop ladder + rules (pure) — rank values, victory/alive/abyss/tutorial gates
+ *  A. drop ladder + rules (pure) - rank values, victory/alive/abyss/tutorial gates
  *  B. END-TO-END: seed a finished SSS run state and drive the REAL endAdventure
  *     reward loop with a mock sock (SP credited + visible on the summary line),
  *     then the negative paths (defeat pays 0, fallen player pays 0, abyss pays 0)
@@ -28,7 +28,7 @@ const guildAdventure = require('../core/rpg/guildAdventure');
 let pass = 0, fail = 0;
 function ok(name, cond, extra) {
   if (cond) { pass++; console.log(`  ✅ ${name}`); }
-  else { fail++; console.log(`  ❌ ${name}${extra ? " — " + extra : ""}`); }
+  else { fail++; console.log(`  ❌ ${name}${extra ? " - " + extra : ""}`); }
 }
 
 function cfgFor(botId) {
@@ -43,7 +43,7 @@ function cfgFor(botId) {
 }
 const asJoker = (fn) => botConfig.storage.run(cfgFor('Joker'), fn);
 
-// ── A. drop ladder + rules (pure) ────────────────────────────────────────────
+// -- A. drop ladder + rules (pure) --------------------------------------------
 function sectionA() {
   console.log("\n── A. drop ladder + rules ──");
   const drop = guildAdventure.getDungeonSkillPointDrop;
@@ -52,7 +52,7 @@ function sectionA() {
   ok("SSS-rank pays 10", drop("SSS", { victory: true }) === 10);
   ok("GOD pays 10", drop("GOD", { victory: true }) === 10);
   ok("DRAGON pays 2", drop("DRAGON", { victory: true }) === 2);
-  // 2026-10-22 rank-relative table (no playerRank → the dungeon's own base)
+ // rank-relative table (no playerRank → the dungeon's own base)
   ok("A dungeon base 5", drop("A", { victory: true }) === 5);
   ok("B dungeon base 4", drop("B", { victory: true }) === 4);
   ok("C dungeon base 3", drop("C", { victory: true }) === 3);
@@ -72,7 +72,7 @@ function sectionA() {
     JSON.stringify({ F: 0, E: 0, D: 1, C: 1, B: 2, A: 2, S: 5, SS: 7, SSS: 10, DRAGON: 2, GOD: 10 }));
 }
 
-// ── B. e2e through the REAL endAdventure ────────────────────────────────────
+// -- B. e2e through the REAL endAdventure ------------------------------------
 const CHAT = 'qa_sp_drops@g.us';
 const P1 = 'qa_sp_hero@s.whatsapp.net';
 
@@ -114,7 +114,7 @@ async function sectionB() {
   console.log("\n── B. e2e: real endAdventure payout ──");
   const G = guildAdventure;
 
-  // 1. SSS victory → +5 SP, line visible on the summary
+ // 1. SSS victory → +5 SP, line visible on the summary
   {
     seedUser(10);
     const key = 'Joker|qa-sp-1';
@@ -129,7 +129,7 @@ async function sectionB() {
     ok("state cleaned up", !G.gameStates.has(key));
   }
 
-  // 2. defeat (party wiped) → 0 SP
+ // 2. defeat (party wiped) → 0 SP
   {
     seedUser(10);
     const key = 'Joker|qa-sp-2';
@@ -140,7 +140,7 @@ async function sectionB() {
     ok("defeat pays 0 SP", u.skillPoints === 10, `got ${u.skillPoints}`);
   }
 
-  // 3. victory but player fallen (carried) → 0 SP
+ // 3. victory but player fallen (carried) → 0 SP
   {
     seedUser(10);
     const key = 'Joker|qa-sp-3';
@@ -151,7 +151,7 @@ async function sectionB() {
     ok("fallen player pays 0 SP", u.skillPoints === 10, `got ${u.skillPoints}`);
   }
 
-  // 4. abyss-tagged state (edge) → 0 SP even at SSS rank
+ // 4. abyss-tagged state (edge) → 0 SP even at SSS rank
   {
     seedUser(10);
     const key = 'Joker|qa-sp-4';
@@ -162,7 +162,7 @@ async function sectionB() {
     ok("abyss-tagged run pays 0 SP", u.skillPoints === 10, `got ${u.skillPoints}`);
   }
 
-  // 5. tutorial mode → 0 SP
+ // 5. tutorial mode → 0 SP
   {
     seedUser(10);
     const key = 'Joker|qa-sp-5';
@@ -173,7 +173,7 @@ async function sectionB() {
     ok("tutorial run pays 0 SP", u.skillPoints === 10, `got ${u.skillPoints}`);
   }
 
-  // 6. F-rank victory → 0 SP (no line, no write)
+ // 6. F-rank victory → 0 SP (no line, no write)
   {
     seedUser(10);
     const key = 'Joker|qa-sp-6';
@@ -186,7 +186,7 @@ async function sectionB() {
     ok("no SP line on 0 drops", !text.includes('Skill Points:'));
   }
 
-  // 7. S victory on a user WITHOUT a skillPoints field yet → drop initializes the wallet
+ // 7. S victory on a user WITHOUT a skillPoints field yet → drop initializes the wallet
   {
     economy.economyData.set(P1, {
       userId: P1, wallet: 100000, bank: 0, registered: true,

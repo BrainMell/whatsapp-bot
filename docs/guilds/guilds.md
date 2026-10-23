@@ -38,7 +38,7 @@ async function loadGuilds() {
 
         globalGuildData.guilds[g.guildId] = {
             members,
-            owner: g.leader,
+            g.leader,
             admins,
             titles,
             createdAt: g.createdAt,
@@ -105,7 +105,7 @@ Delete it first with: ${botConfig.getPrefix()} guild delete`
 
   info.guilds[guildName] = {
     members: [creatorJid],
-    owner: creatorJid,
+    creatorJid,
     admins: [],
     titles: {},
     createdAt: Date.now(),
@@ -147,7 +147,6 @@ function updateBoardProgress(guildName, targetType, amount) {
   const guild = globalGuildData.guilds[guildName];
   if (!guild || !guild.dailyBoard || !guild.dailyBoard.targets) return;
 
-  // Check if reset needed
   if (Date.now() - guild.dailyBoard.lastUpdate > 86400000) {
     generateDailyBoard(guildName);
     return;
@@ -354,7 +353,7 @@ console.log(person.name); // Outputs: John
 ```javascript
 const guild = {
   members: [creatorJid],
-  owner: creatorJid,
+  creatorJid,
   admins: [],
   titles: {},
   // ...
@@ -458,7 +457,7 @@ console.log(person['age']); // Outputs: 30
 ```javascript
 globalGuildData.guilds[guildName] = {
   members: [creatorJid],
-  owner: creatorJid,
+  creatorJid,
   // ...
 };
 ```
@@ -556,7 +555,7 @@ console.log(person); // Outputs: { name: 'John', age: 30 }
 ```javascript
 const guild = {
   members: [creatorJid],
-  owner: creatorJid,
+  creatorJid,
   // ...
 };
 ```

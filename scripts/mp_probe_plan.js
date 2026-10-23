@@ -16,7 +16,7 @@ function makeDoc() {
 (async () => {
     const doc = makeDoc();
     const room = doc.rooms.find(r => r.key === '2,2');
-    // exits for A who entered from west (1,2 → 2,2)
+ // exits for A who entered from west (1,2 → 2,2)
     const exits = roomScene.exitsFor(doc, A);
     console.log('exits:', JSON.stringify(exits.filter(e => e.edge)));
     const plan = roomScene.planFor(doc, A, room, exits);
@@ -24,7 +24,7 @@ function makeDoc() {
     console.log('mates:', plan.mates.length, 'rivals:', plan.rivals.length);
     console.log('rival[0]:', JSON.stringify(plan.rivals[0]));
     console.log('rival file:', plan.rivals[0] && plan.rivals[0].file);
-    // _renderInProcess is the internal full render; call it directly
+ // _renderInProcess is the internal full render; call it directly
     const buf = await roomScene._renderInProcess(doc, A, room, {});
     require('fs').writeFileSync('/home/z/my-project/download/mp_playtest/smoke/plan_isolate.png', buf);
     console.log('rendered plan_isolate.png');

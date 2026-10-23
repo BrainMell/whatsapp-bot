@@ -14,7 +14,7 @@ const m = require("/home/ubuntu/whatsapp-bot/core/games/quizMedia");
     if (!info) { console.log("getAudioInfo -> null/throw"); continue; }
     if (info.error) { console.log("getAudioInfo error:", info.error); continue; }
     console.log("meta.title:", info.metadata && info.metadata.title, "| audioURL:", !!info.audioURL, "| clipped:", info.clipped, "| fullBytes:", info.fullBytes);
-    // replicate the quizMedia gates
+ // replicate the quizMedia gates
     const _norm = (s) => String(s || "").toLowerCase().replace(/\(.*?\)|\[.*?\]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
     const _SONG_VARIANT_RE = m._internal ? m._internal._SONG_VARIANT_RE : null;
     const metaTitle = _norm(info.metadata && info.metadata.title);

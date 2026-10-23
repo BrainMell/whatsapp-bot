@@ -35,7 +35,7 @@
 
 const TTL_POSITIVE_MS = 5 * 60 * 1000;   // 5 min - PFPs rarely change
 const TTL_NEGATIVE_MS = 60 * 1000;        // 60s - backoff before retrying a failed lookup
-// 💡 2026-09-15 PERF (owner: "make images get sent faster"): 8s was far too
+// PERF ("make images get sent faster"): 8s was far too
 // generous - the PFP is purely decorative (cards fall back to a medallion),
 // yet a slow lookup stalled the WHOLE command for up to 8s once per cache
 // window (pm2 log showed repeated 8s timeouts). 3s is plenty for a normal
@@ -56,7 +56,7 @@ const _inflight = new Map();
 async function fetchPfp(sock, jid) {
   if (!sock || !jid) return null;
 
-  // Cache hit?
+ // Cache hit?
   const cached = _cache.get(jid);
   if (cached) {
     if (Date.now() < cached.expiresAt) {
@@ -65,8 +65,8 @@ async function fetchPfp(sock, jid) {
     _cache.delete(jid);
   }
 
-  // In-flight de-dup: if another caller already asked for the same JID,
-  // piggyback on its promise instead of firing a second network call.
+ // In-flight de-dup: if another caller already asked for the same JID,
+ // piggyback on its promise instead of firing a second network call.
   const existing = _inflight.get(jid);
   if (existing) return existing;
 
@@ -82,10 +82,10 @@ async function fetchPfp(sock, jid) {
       _cache.set(jid, { value: url || null, expiresAt: Date.now() + TTL_POSITIVE_MS });
       return url || null;
     } catch (e) {
-      // Negative cache - prevents hammering WhatsApp for unreachable LID jids
+ // Negative cache - prevents hammering WhatsApp for unreachable LID jids
       _cache.set(jid, { value: null, expiresAt: Date.now() + TTL_NEGATIVE_MS });
-      // Brief warning - keep volume low because this fires once per minute
-      // per unreachable JID, which on a busy bot is still a lot.
+ // Brief warning - keep volume low because this fires once per minute
+ // per unreachable JID, which on a busy bot is still a lot.
       console.warn(`[pfpCache] miss for ${jid}: ${e.message}`);
       return null;
     } finally {

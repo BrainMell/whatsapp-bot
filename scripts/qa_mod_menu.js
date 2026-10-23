@@ -1,24 +1,22 @@
 #!/usr/bin/env node
-// ═══════════════════════════════════════════════════════════════════════
-// 🛡️ QA: MOD MENU ACCURACY PASS (2026-09-19)
-// ═══════════════════════════════════════════════════════════════════════
-// The mod menu shipped 2026-09-10 listed commands that don't exist
+// =======================================================================
+// QA: MOD MENU ACCURACY PASS
+// =======================================================================
+// The mod menu shipped listed commands that don't exist
 // (`.j mod updateall` - real form is `.j updateall`) and missed whole
 // families (issues/testers, cards moderation, owner tools). This suite
 // pins the menu to reality:
-//
-//   1. DISPATCH CHECK  - every menu entry must correspond to a real
-//      dispatch site: console entries -> adminConsole.js `sub === 'x'`,
-//      standalone -> engine.js / cardSystem.js / opsCheckCommands.js
-//      (primaryCmd ===, case, or `${prefix} <cmd>` template literals).
-//   2. CONSISTENCY     - usage starts with cmd; console flag ⇔ usage
-//      begins with "mod "; no duplicate cmd keys.
-//   3. CAPTION BUDGET  - every renderable view (main grid, all category
-//      views, explain for every command) must stay under the WhatsApp
-//      1024-char caption limit, with banner + worst-case tip included.
-//
-// Run: node scripts/qa_mod_menu.js   (exit 1 on any failure)
-// ═══════════════════════════════════════════════════════════════════════
+// 1. DISPATCH CHECK - every menu entry must correspond to a real
+// dispatch site: console entries -> adminConsole.js `sub === 'x'`,
+// standalone -> engine.js / cardSystem.js / opsCheckCommands.js
+// (primaryCmd ===, case, or `${prefix} <cmd>` template literals).
+// 2. CONSISTENCY - usage starts with cmd; console flag ⇔ usage
+// begins with "mod "; no duplicate cmd keys.
+// 3. CAPTION BUDGET - every renderable view (main grid, all category
+// views, explain for every command) must stay under the WhatsApp
+// 1024-char caption limit, with banner + worst-case tip included.
+// Run: node scripts/qa_mod_menu.js (exit 1 on any failure)
+// =======================================================================
 
 const fs = require("fs");
 const path = require("path");
@@ -29,7 +27,7 @@ let failures = 0;
 const fail = (msg) => { failures++; console.log("  ❌ " + msg); };
 const pass = (msg) => console.log("  ✅ " + msg);
 
-// ── Load dispatch sources ──────────────────────────────────────────────
+// -- Load dispatch sources ----------------------------------------------
 const SRC = {
   engine: fs.readFileSync(path.join(ROOT, "core/engine.js"), "utf8"),
   adminConsole: fs.readFileSync(path.join(ROOT, "core/commands/adminConsole.js"), "utf8"),
@@ -64,13 +62,13 @@ function dispatchExists(cmd) {
   if (TOKENS.has(cmd.toLowerCase())) return "exact";
   if (cmd.includes(" ") && ALL_SRC.includes(cmd)) return "raw-multiword";
   if (TOKENS.has(base)) return "base-token";
-  // exact-form dispatches like `${prefix} welcome on` register the full
-  // phrase, not the bare word - accept a token that starts with "base "
+ // exact-form dispatches like `${prefix} welcome on` register the full
+ // phrase, not the bare word - accept a token that starts with "base "
   for (const t of TOKENS) if (t.startsWith(base + " ")) return "phrase-token";
   return null;
 }
 
-// ── 1. CONSISTENCY ─────────────────────────────────────────────────────
+// -- 1. CONSISTENCY -----------------------------------------------------
 console.log("\n📋 CONSISTENCY");
 const seen = new Set();
 let entryCount = 0;
@@ -79,8 +77,8 @@ for (const [catKey, cat] of Object.entries(MOD_MENU)) {
     entryCount++;
     if (seen.has(c.cmd)) fail(`duplicate cmd key: ${c.cmd}`);
     seen.add(c.cmd);
-    // For console entries the usage is "mod <cmd> ..." - strip the prefix
-    // before comparing with the lookup key.
+ // For console entries the usage is "mod <cmd> ..." - strip the prefix
+ // before comparing with the lookup key.
     const form = c.console ? c.usage.replace(/^mod\s+/, "") : c.usage;
     if (!form.startsWith(c.cmd))
       fail(`${c.cmd}: usage "${c.usage}" does not carry the command`, );
@@ -91,7 +89,7 @@ for (const [catKey, cat] of Object.entries(MOD_MENU)) {
 }
 if (failures === 0) pass(`${entryCount} entries, no dupes, usage forms consistent`);
 
-// ── 2. DISPATCH CHECK ──────────────────────────────────────────────────
+// -- 2. DISPATCH CHECK --------------------------------------------------
 console.log("\n📋 DISPATCH CHECK (menu vs real code)");
 let checked = 0;
 for (const [catKey, cat] of Object.entries(MOD_MENU)) {
@@ -109,7 +107,7 @@ for (const [catKey, cat] of Object.entries(MOD_MENU)) {
 }
 if (failures === 0) pass(`all ${checked} entries trace to a dispatch site`);
 
-// ── 3. REDIRECT HELPER ─────────────────────────────────────────────────
+// -- 3. REDIRECT HELPER -------------------------------------------------
 console.log("\n📋 REDIRECT HELPER (findStandalone)");
 const redirectCases = [
   [["spawn", "Mega"], true, "card tool redirects"],
@@ -129,7 +127,7 @@ for (const [args, expected, label] of redirectCases) {
   else fail(`${label}: expected ${expected}, got ${got}`);
 }
 
-// ── 4. CAPTION BUDGET (WhatsApp 1024) ──────────────────────────────────
+// -- 4. CAPTION BUDGET (WhatsApp 1024) ----------------------------------
 console.log("\n📋 CAPTION BUDGET (limit 1024, banner + worst-case tip included)");
 const PREFIX = ".j";
 const banner = (t) => `┏━━━━━━━━━━━━━━━┓\n┃   ${t}\n┗━━━━━━━━━━━━━━━┛`;
@@ -181,7 +179,7 @@ for (const [, cat] of Object.entries(MOD_MENU)) {
 }
 pass(`all explain views ok (worst: ${worstExplainCmd} at ${worstExplain} chars)`);
 
-// ── 5. NO GHOST FORMS ──────────────────────────────────────────────────
+// -- 5. NO GHOST FORMS --------------------------------------------------
 console.log("\n📋 NO GHOST FORMS");
 const ghost = ["modupdate", "mod updateall", "mod spawn", "mod warn", "mod ban", "mod eshop", "mod event", "testergc"];
 let ghostHits = [];
@@ -190,7 +188,7 @@ for (const g of ghost) if (menuText.includes(g)) ghostHits.push(g);
 if (ghostHits.length === 0) pass("no invented/ghost command forms in menu data");
 else fail(`ghost forms present: ${ghostHits.join(", ")}`);
 
-// ── Summary ────────────────────────────────────────────────────────────
+// -- Summary ------------------------------------------------------------
 console.log("\n" + "═".repeat(60));
 if (failures > 0) {
   console.log(`❌ MOD MENU QA: ${failures} failure(s)`);

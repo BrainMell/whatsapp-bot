@@ -16,7 +16,7 @@ function makeModel(name, docs = []) {
   const model = {
     docs, _name: name,
     async create(d) {
-      // apply the schema defaults the real mongoose would (status/listedAt)
+ // apply the schema defaults the real mongoose would (status/listedAt)
       const doc = { status: 'active', listedAt: new Date(), quantity: 1, ...d, _id: name + '_' + (docs.length + 1), save: async () => doc };
       docs.push(doc); return doc;
     },
@@ -121,7 +121,7 @@ const pm = require(path.join(CORE, 'rpg', 'playerMarket'));
 function mkReply() { const out = []; const fn = (text) => { out.push(text); return true; }; fn.out = out; return fn; }
 
 (async () => {
-  console.log('— M1: legacy migration (3 kinds, originals hidden) —');
+  console.log('- M1: legacy migration (3 kinds, originals hidden) -');
   {
     imDocs.push({ _id: 'im1', sellerId: 'a@x', itemId: 'minor_potion', itemName: 'Minor Potion', itemRarity: 'COMMON', quantity: 5, price: 500, status: 'active', save: async function () { this.saved = true; } });
     cardDocs.push({ _id: 'cm1', isRune: true, status: 'active', sellerId: 'b@x', runeId: 'R1', price: 2000, save: async function () { this.saved = true; } });
@@ -137,7 +137,7 @@ function mkReply() { const out = []; const fn = (text) => { out.push(text); retu
     ok(pmDocs.some(d => d.kind === 'summon' && d.summonId === 'SUM1' && d.price === 9000), 'summon kind');
   }
 
-  console.log('— M2: sell item (escrow) —');
+  console.log('- M2: sell item (escrow) -');
   {
     mkUser('a@x', { inventory: { minor_potion: { id: 'minor_potion', name: 'Minor Potion', rarity: 'COMMON', type: 'POTION', quantity: 10 } } });
     const r = mkReply();
@@ -146,38 +146,38 @@ function mkReply() { const out = []; const fn = (text) => { out.push(text); retu
     ok(invCalls.some(c => c[0] === 'rm' && c[2] === 'minor_potion' && c[3] === 3), 'escrowed out of bag');
     const listing = pmDocs.filter(d => d.kind === 'item' && d.sellerId === 'a@x' && d.quantity === 3).pop();
     ok(listing && listing.price === 500 && listing.status === 'active', 'listing fields (new listing)');
-    // sell validation: bad price
+ // sell validation: bad price
     const r2 = mkReply();
     await pm.cmdSell('a@x', r2, ['item', '1', '50']);
     ok(r2.out[0].includes('Usage'), 'price floor enforced');
   }
 
-  console.log('— M3: sell rune (validations + onMarket) —');
+  console.log('- M3: sell rune (validations + onMarket) -');
   {
     runeDocs.push({ _id: 'r2', runeId: 'R2', ownerJid: 'b@x', type: 'POWER', tier: 'LESSER', onMarket: false, socketedSkillId: null, save: async function () {} });
     const r = mkReply();
     await pm.cmdSell('b@x', r, ['rune', 'R2', '1200']);
     ok(r.out[0].includes('RUNE LISTED'), 'rune listed');
     ok(runeDocs.find(d => d.runeId === 'R2').onMarket === true, 'rune onMarket=true');
-    // socketed refusal
+ // socketed refusal
     runeDocs.push({ _id: 'r3', runeId: 'R3', ownerJid: 'b@x', type: 'POWER', tier: 'LESSER', onMarket: false, socketedSkillId: 'fireball', save: async function () {} });
     const r2 = mkReply();
     await pm.cmdSell('b@x', r2, ['rune', 'R3', '1200']);
     ok(r2.out[0].includes('socketed'), 'socketed rune refused');
-    // double-list refusal
+ // double-list refusal
     const r3 = mkReply();
     await pm.cmdSell('b@x', r3, ['rune', 'R2', '1300']);
     ok(r3.out[0].includes('already'), 'duplicate listing refused');
   }
 
-  console.log('— M4: sell summon (validations + forSale) —');
+  console.log('- M4: sell summon (validations + forSale) -');
   {
     mkUser('c@x', { summons: [{ summonId: 'SUM2', species: 'dragon', nickname: 'Rexy', level: 9, rarity: 'EPIC', element: 'fire', forSale: false, save: async function () {} }], activeSummonId: null });
     const r = mkReply();
     await pm.cmdSell('c@x', r, ['summon', '1', '15000']);
     ok(r.out[0].includes('SUMMON LISTED'), 'summon listed');
     ok((users.get('c@x').summons[0].forSale === true), 'summon forSale=true');
-    // active summon refusal
+ // active summon refusal
     users.get('c@x').activeSummonId = 'SUM2';
     users.get('c@x').summons.push({ summonId: 'SUM3', species: 'dragon', nickname: 'Side', level: 2, rarity: 'COMMON', forSale: false, save: async function () {} });
     const r2 = mkReply();
@@ -186,12 +186,12 @@ function mkReply() { const out = []; const fn = (text) => { out.push(text); retu
     users.get('c@x').activeSummonId = null;
   }
 
-  console.log('— M5: buy item (tax math + rollback) —');
+  console.log('- M5: buy item (tax math + rollback) -');
   {
     bal.set('b@x', 5000); // buyer
     const beforeSeller = bal.get('a@x') ?? 0;
     const r = mkReply();
-    // find the item listing id (newest active item listing = the M2 one)
+ // find the item listing id (newest active item listing = the M2 one)
     const listing = pmDocs.filter(d => d.kind === 'item' && d.sellerId === 'a@x' && d.status === 'active').pop();
     await pm.cmdBuy('b@x', r, [listing.listingId]);
     ok(r.out[0].includes('PURCHASE COMPLETE'), 'item purchased');
@@ -199,12 +199,12 @@ function mkReply() { const out = []; const fn = (text) => { out.push(text); retu
     ok(bal.get('a@x') === beforeSeller + 450, `seller netted 450 after 10% tax (got ${bal.get('a@x')})`);
     ok(invCalls.some(c => c[0] === 'add' && c[1] === 'b@x' && c[2] === 'minor_potion'), 'item delivered to buyer');
     ok(listing.status === 'sold', 'listing sold');
-    // self-buy refusal
+ // self-buy refusal
     const r2 = mkReply();
     const listing2 = pmDocs.find(d => d.kind === 'summon' && d.sellerId === 'c@x' && d.status === 'active');
     await pm.cmdBuy('c@x', r2, [listing2.listingId]);
     ok(r2.out[0].includes('cannot buy your own'), 'self-buy refused');
-    // inventory-full rollback
+ // inventory-full rollback
     mkUser('b@x');
     const r3 = mkReply();
     await pm.cmdSell('a@x', mkReply(), ['item', '1', '300', '1']);
@@ -218,7 +218,7 @@ function mkReply() { const out = []; const fn = (text) => { out.push(text); retu
     users.get('b@x').invFull = false;
   }
 
-  console.log('— M6: buy summon (slots + alt check + ownership) —');
+  console.log('- M6: buy summon (slots + alt check + ownership) -');
   {
     mkUser('d@x', { wallet: 50000, summons: [], summonSlots: 5 });
     bal.set('d@x', 50000);
@@ -235,7 +235,7 @@ function mkReply() { const out = []; const fn = (text) => { out.push(text); retu
     const sum = summonDocs.find(d => d.summonId === listing.summonId);
     ok(sum.ownerJid === 'd@x' && sum.forSale === false, 'ownership transferred + forSale cleared');
     ok(bal.get('c@x') > 0, 'seller credited');
-    // alt-blocked buyer
+ // alt-blocked buyer
     mkUser('e@x', { altBlocked: true, summons: [], summonSlots: 5 });
     bal.set('e@x', 100000);
     users.get('c@x').summons.push({ summonId: 'SUM9', species: 'dragon', nickname: 'Alt', level: 1, rarity: 'COMMON', forSale: false, save: async function () {} });
@@ -246,9 +246,9 @@ function mkReply() { const out = []; const fn = (text) => { out.push(text); retu
     ok(r2.out[0].includes('alt detected'), 'alt-blocked buyer refused');
   }
 
-  console.log('— M7: cancel (custody restore for all kinds) —');
+  console.log('- M7: cancel (custody restore for all kinds) -');
   {
-    // item cancel returns to bag
+ // item cancel returns to bag
     await pm.cmdSell('a@x', mkReply(), ['item', '1', '250', '2']);
     const lItem = pmDocs.filter(d => d.kind === 'item' && d.status === 'active').pop();
     const addsBefore = invCalls.filter(c => c[0] === 'add' && c[1] === 'a@x').length;
@@ -256,12 +256,12 @@ function mkReply() { const out = []; const fn = (text) => { out.push(text); retu
     await pm.cmdCancel('a@x', r, [lItem.listingId]);
     ok(r.out[0].includes('cancelled'), 'item listing cancelled');
     ok(invCalls.filter(c => c[0] === 'add' && c[1] === 'a@x').length === addsBefore + 1, 'items returned to bag');
-    // rune cancel clears onMarket (query by LISTING id of the R2 listing)
+ // rune cancel clears onMarket (query by LISTING id of the R2 listing)
     const r2Listing = pmDocs.find(d => d.kind === 'rune' && d.runeId === 'R2' && d.status === 'active');
     const r2 = mkReply();
     await pm.cmdCancel('b@x', r2, [r2Listing.listingId]);
     ok(runeDocs.find(d => d.runeId === 'R2').onMarket === false, 'rune onMarket cleared');
-    // summon cancel clears forSale (SUM9 must exist as a Summon doc too)
+ // summon cancel clears forSale (SUM9 must exist as a Summon doc too)
     summonDocs.push({ _id: 'su9', summonId: 'SUM9', ownerJid: 'c@x', forSale: true, save: async function () {} });
     const r3 = mkReply();
     const sumListing = pmDocs.find(d => d.kind === 'summon' && d.status === 'active' && d.summonId === 'SUM9');
@@ -269,7 +269,7 @@ function mkReply() { const out = []; const fn = (text) => { out.push(text); retu
     ok(summonDocs.find(d => d.summonId === 'SUM9').forSale === false, 'summon forSale cleared');
   }
 
-  console.log('— M8: browse + index buy + my —');
+  console.log('- M8: browse + index buy + my -');
   {
     const r = mkReply();
     await pm.cmdBrowse('b@x', r, []);
@@ -280,7 +280,7 @@ function mkReply() { const out = []; const fn = (text) => { out.push(text); retu
     const r3 = mkReply();
     await pm.cmdMy('a@x', r3);
     ok(r3.out[0].includes('YOUR MARKET LISTINGS'), 'my renders');
-    // buy by index
+ // buy by index
     bal.set('d@x', 50000);
     const r4 = mkReply();
     await pm.cmdBuy('d@x', r4, ['1']);

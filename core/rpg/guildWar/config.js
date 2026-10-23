@@ -1,13 +1,12 @@
 // ============================================
-// ⚔️ GUILD WAR — central configuration
-// Guild War Overhaul (Ruins + Alignment) 2026-10-03
-//
+// GUILD WAR - central configuration
+// Guild War Overhaul (Ruins + Alignment)
 // Every tunable in the system lives here. Balance by simulation,
 // not by editing engine code. Env overrides marked below.
 // ============================================
 
 const CFG = {
-    // ── lifecycle ──
+ // -- lifecycle --
     REGISTRATION_MS: 10 * 60 * 1000,        // registration window (mod can force-start)
     NORMAL_DURATION_MS: 90 * 60 * 1000,     // hard end time, normal war
     ALIGNMENT_DURATION_MS: 4 * 60 * 60 * 1000,
@@ -15,30 +14,30 @@ const CFG = {
     REJOIN_PROTECT_MS: 60 * 1000,
     MAX_CONCURRENT_EVENTS: 2,
 
-    // ── 🌍 NATURAL (4-DAY) AUTO-SPAWN — DISABLED ──
-    // owner 2026-10-09 (Guild War overhaul): "Disable the 4-day timer for the
-    // Ruins Guild War only." The triune alignment clock (cosmology.js,
-    // ~96h cadence) used to ORGANICALLY open a full alignment-scale war on
-    // its own — claiming the window in shared KV and DM-ing a 500-player
-    // notice wave. Wars are now MOD-INITIATED ONLY:
-    //   `.j war start -test`  → small war (normal scale, this GC = feed HQ)
-    //   `.j war start`        → full-scale event (~4x the test map, announced
-    //                           in every RPG-friendly GC)
-    // Other cosmology clocks (abyss gate, FW link, afterlife circuit) are
-    // NOT touched — this flag only silences the war launcher.
-    // Set GW_ALIGNMENT_AUTOSPAWN=1 in the env to restore organic spawns.
+ // -- NATURAL (4-DAY) AUTO-SPAWN - DISABLED --
+ // (Guild War overhaul): "Disable the 4-day timer for the
+ // Ruins Guild War only." The triune alignment clock (cosmology.js,
+ // ~96h cadence) used to ORGANICALLY open a full alignment-scale war on
+ // its own - claiming the window in shared KV and DM-ing a 500-player
+ // notice wave. Wars are now MOD-INITIATED ONLY:
+ // `.j war start -test` → small war (normal scale, this GC = feed HQ)
+ // `.j war start` → full-scale event (~4x the test map, announced
+ // in every RPG-friendly GC)
+ // Other cosmology clocks (abyss gate, FW link, afterlife circuit) are
+ // NOT touched - this flag only silences the war launcher.
+ // Set GW_ALIGNMENT_AUTOSPAWN=1 in the env to restore organic spawns.
     ALIGNMENT_AUTOSPAWN: process.env.GW_ALIGNMENT_AUTOSPAWN === '1',
 
-    // ── ⏳ FINALE / THE FOUR WARDENS ──
-    // owner 2026-10-05 23:09Z: "If a timer brings the Guild War to an end,
-    // place 4 bosses around the map. After all 4 bosses die, then the Guild
-    // War ends."
-    // owner 2026-10-07 (Test Run 2 directive): the four bosses are ON THE MAP
-    // FROM WAR START — randomly placed like the secret-room bosses — and the
-    // war ends when all four are defeated. The timer no longer SPAWNS them;
-    // when the clock runs out with wardens still standing the war enters the
-    // hourglass grace (endsAt → endsAt + TIMEOUT_MS) so the boss hunt can
-    // conclude, bounded by the safety timeout.
+ // -- ⏳ FINALE / THE FOUR WARDENS --
+ // 23:09Z: "If a timer brings the Guild War to an end,
+ // place 4 bosses around the map. After all 4 bosses die, then the Guild
+ // War ends."
+ // (Test Run 2 directive): the four bosses are ON THE MAP
+ // FROM WAR START - randomly placed like the secret-room bosses - and the
+ // war ends when all four are defeated. The timer no longer SPAWNS them;
+ // when the clock runs out with wardens still standing the war enters the
+ // hourglass grace (endsAt → endsAt + TIMEOUT_MS) so the boss hunt can
+ // conclude, bounded by the safety timeout.
     FINALE: {
         BOSS_COUNT: 4,
         FROM_START: true,                   // wardens rise at startEvent, not at timer end
@@ -47,39 +46,39 @@ const CFG = {
         TIMEOUT_MS: 60 * 60 * 1000,         // grace AFTER endsAt: if the wardens outlive every champion, the war still closes
     },
 
-    // ── map ──
+ // -- map --
     MAP: {
         K_NORMAL: 8,                        // rooms per player (side = ceil(sqrt(players*K)))
         K_ALIGNMENT: 12,
         SIDE_MIN: 8, SIDE_MAX: 40,
-        // owner 2026-10-09: the full-scale war should be "roughly 4x larger
-        // than the test version". A 9-champion test war lands on side 14
-        // (196 rooms, SIZE_RANGES above); alignment side = sqrt(players·12)
-        // clamped to [min,max] → min 24 gave 576 rooms ≈ 2.9x. min 28 →
-        // 784 rooms = 4.0x of the 9-player test map. Rosters past ~65
-        // players still grow past 28 toward SIDE_MAX_ALIGNMENT.
+ // the full-scale war should be "roughly 4x larger
+ // than the test version". A 9-champion test war lands on side 14
+ // (196 rooms, SIZE_RANGES above); alignment side = sqrt(players·12)
+ // clamped to [min,max] → min 24 gave 576 rooms ≈ 2.9x. min 28 →
+ // 784 rooms = 4.0x of the 9-player test map. Rosters past ~65
+ // players still grow past 28 toward SIDE_MAX_ALIGNMENT.
         SIDE_MIN_ALIGNMENT: 28, SIDE_MAX_ALIGNMENT: 60,
         EXTRA_EDGE_RATIO: 0.12,             // extra edges over spanning tree
         REGIONS_ALIGNMENT: 3,               // world bands in alignment maps
-        // ── MAP SIZE RANGES (owner 2026-10-07, Test Run 2: "Maybe I should do
-        // a ranges thing, number of players increases the size of the map") ──
-        // Beta maps were too small: 7 champions on a K_NORMAL=8 map got an
-        // 8×8 grid and had charted it end-to-end inside an hour ("there's no
-        // more passageway"). Side length is now looked up from explicit
-        // PLAYER-COUNT RANGES instead of the old sqrt(players·K) curve —
-        // legible, testable, and monotonic. Alignment maps keep their own
-        // (larger) sqrt sizing below.
+ // -- MAP SIZE RANGES (, Test Run 2: "Maybe I should do
+ // a ranges thing, number of players increases the size of the map") --
+ // Beta maps were too small: 7 champions on a K_NORMAL=8 map got an
+ // 8×8 grid and had charted it end-to-end inside an hour ("there's no
+ // more passageway"). Side length is now looked up from explicit
+ // PLAYER-COUNT RANGES instead of the old sqrt(players·K) curve -
+ // legible, testable, and monotonic. Alignment maps keep their own
+ // (larger) sqrt sizing below.
         SIZE_RANGES: [
-            { maxPlayers: 3,  side: 10 },   //  100 rooms — duos/trios still get a world
-            { maxPlayers: 6,  side: 12 },   //  144
-            { maxPlayers: 9,  side: 14 },   //  196 — the Test Run 2 cohort lands here (was 8×8)
-            { maxPlayers: 14, side: 16 },   //  256
-            { maxPlayers: 21, side: 19 },   //  361
-            { maxPlayers: 30, side: 22 },   //  484
-            { maxPlayers: 45, side: 26 },   //  676
-            { maxPlayers: Infinity, side: 30 }, // 900 — SIDE_MAX still clamps extreme rosters
+            { maxPlayers: 3,  side: 10 }, // 100 rooms - duos/trios still get a world
+            { maxPlayers: 6,  side: 12 }, // 144
+            { maxPlayers: 9,  side: 14 }, // 196 - the Test Run 2 cohort lands here (was 8×8)
+            { maxPlayers: 14, side: 16 }, // 256
+            { maxPlayers: 21, side: 19 }, // 361
+            { maxPlayers: 30, side: 22 }, // 484
+            { maxPlayers: 45, side: 26 }, // 676
+            { maxPlayers: Infinity, side: 30 }, // 900 - SIDE_MAX still clamps extreme rosters
         ],
-        // room type weights (normal) — 'empty' is the remainder
+ // room type weights (normal) - 'empty' is the remainder
         TYPES: {
             combat: 18, discovery: 10, reward: 8, puzzle: 8, hazard: 6,
             lore: 4, coop: 3, secret: 1.5, anomaly: 1, landmark: 0.5,
@@ -89,13 +88,13 @@ const CFG = {
             lore: 4, coop: 4, secret: 2.5, anomaly: 2, landmark: 0.75,
         },
         EMPTY_RATIO: 0.40,                  // approx share of empty rooms
-        // ── DEAD-END DENSITY (UX pass #6, owner brief 2026-10-07: "kept,
-        // reduced") — cul-de-sacs stay in the generator (they are where
-        // secrets and vaults feel earned), but the review flagged their
-        // density: after loop edges, roughly a tenth of rooms still end in
-        // a wall, and the worst seeds climb higher. A seeded relief pass
-        // connects surplus dead-ends to an adjacent room until the share
-        // sits at/below the cap — trimmed maps, never dead-end-free maps.
+ // -- DEAD-END DENSITY (UX pass #6, owner brief "kept,
+ // reduced") - cul-de-sacs stay in the generator (they are where
+ // secrets and vaults feel earned), but the review flagged their
+ // density: after loop edges, roughly a tenth of rooms still end in
+ // a wall, and the worst seeds climb higher. A seeded relief pass
+ // connects surplus dead-ends to an adjacent room until the share
+ // sits at/below the cap - trimmed maps, never dead-end-free maps.
         DEADEND_MAX_SHARE: 0.08,            // max share of rooms with 1 exit
         DEADEND_RELIEF_SHARE: 0.25,         // relief edges ≤ 25% of room count per map
         RESIDUE_CHANCE: 0.25,               // cleared room leaves residue
@@ -104,26 +103,26 @@ const CFG = {
         MOVE_COOLDOWN_MS: 6 * 1000,
     },
 
-    // ── combat rooms ──
+ // -- combat rooms --
     COMBAT: {
         BASE_ENEMY_LEVEL: 10,
         LEVEL_RING_SCALE: 0.6,              // +levels per ring distance from spawn ring
         BOSS_CHANCE_SECRET: 0.5,            // secret room boss
         CORE_GUARD_LEVEL_MULT: 2.5,         // world-core guardian level multiplier
-        // ── 🎚️ PvE BAND LADDER (owner spec 2026-10-06, ruins_pve_boss_scaling_prompt) ──
-        // Regular encounters resolve at ENGAGE time against the ENGAGING
-        // player + the guild's SHARED exploration progress. Enemy levels stay
-        // set-in-stone per band: LOW/MED/HIGH anchors are drawn from the
-        // ROSTER distribution (percentiles), never from one player's level.
-        //   LOW  ≈ at/below the player, capped by roster median
-        //   MED  ≈ slightly above the player, capped by roster p80
-        //   HIGH = the LOWER EDGE of the roster's high range (owner rule:
-        //          "high end enemies sit at the lower ends of the high range")
-        // Bosses (secret / warden / world core) anchor to the roster too,
-        // capped just above the strongest player so the top champion can
-        // still SOLO them (owner rule). With ENABLED, buildRoomPayload's
-        // seeded levels remain only as the fallback (solo rosters / compute
-        // failure) — legacy ring curve.
+ // -- PvE BAND LADDER (owner spec ruins_pve_boss_scaling_prompt) --
+ // Regular encounters resolve at ENGAGE time against the ENGAGING
+ // player + the guild's SHARED exploration progress. Enemy levels stay
+ // set-in-stone per band: LOW/MED/HIGH anchors are drawn from the
+ // ROSTER distribution (percentiles), never from one player's level.
+ // LOW ≈ at/below the player, capped by roster median
+ // MED ≈ slightly above the player, capped by roster p80
+ // HIGH = the LOWER EDGE of the roster's high range (owner rule:
+ // "high end enemies sit at the lower ends of the high range")
+ // Bosses (secret / warden / world core) anchor to the roster too,
+ // capped just above the strongest player so the top champion can
+ // still SOLO them (owner rule). With ENABLED, buildRoomPayload's
+ // seeded levels remain only as the fallback (solo rosters / compute
+ // failure) - legacy ring curve.
         BANDS: {
             ENABLED: true,
             MIX_EARLY: { low: 0.70, mid: 0.25, high: 0.05 },   // exploration 0.0
@@ -142,9 +141,9 @@ const CFG = {
         },
         LIVES: 3,                           // per player per event
         RESPAWN_PROTECT_MS: 60 * 1000,
-        // ── battle encounter variants ("the various adjustments") ──
-        // Each variant reshapes the fight: enemy count/level, clear-reward
-        // multiplier, and the card subtitle. Seeded per-room at event start.
+ // -- battle encounter variants ("the various adjustments") --
+ // Each variant reshapes the fight: enemy count/level, clear-reward
+ // multiplier, and the card subtitle. Seeded per-room at event start.
         VARIANTS: {
             SKIRMISH: { name: 'Skirmish', weight: 38, levelDelta: 0, countDelta: 0, gpMult: 1.0,
                         note: 'a fair fight', danger: false,
@@ -167,7 +166,7 @@ const CFG = {
         },
     },
 
-    // ── pvp ──
+ // -- pvp --
     PVP: {
         CHALLENGE_WINDOW_MS: 60 * 1000,
         RELIC_STEAL_CAP: 2,                 // max carried relics claimable by winner
@@ -177,7 +176,7 @@ const CFG = {
         PROTECT_AFTER_LOSS_MS: 90 * 1000,
     },
 
-    // ── puzzles ──
+ // -- puzzles --
     PUZZLE: {
         TIME_LIMIT_MS: 90 * 1000,
         ATTEMPTS: 3,
@@ -186,7 +185,7 @@ const CFG = {
         FAIL_HAZARD_DAMAGE: 0.08,           // fraction of maxHP on final failed attempt
     },
 
-    // ── relics (session-only) ──
+ // -- relics (session-only) --
     RELICS: {
         TIERS: ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'],
         TIER_WEIGHTS: [40, 25, 17, 10, 5, 3],
@@ -201,7 +200,7 @@ const CFG = {
         CARRY_EXPOSE_TIERS: ['Rare', 'Epic', 'Legendary', 'Mythic'],
     },
 
-    // ── guild points ──
+ // -- guild points --
     POINTS: {
         ROOM_CLEAR: { combat: 15, puzzle: 20, discovery: 12, reward: 10, hazard: 12,
                       lore: 8, secret: 40, anomaly: 25, landmark: 30, coop: 18 },
@@ -217,7 +216,7 @@ const CFG = {
         ALIGNMENT_MULT: 3,                  // global GP multiplier for alignment events
     },
 
-    // ── visibility perks (guild level ladder) ──
+ // -- visibility perks (guild level ladder) --
     VISIBILITY: {
         TIERS: [
             { level: 1, id: 'self', label: 'Own position + discovered map' },
@@ -231,7 +230,7 @@ const CFG = {
         RADIUS2: 2,
     },
 
-    // ── feed ──
+ // -- feed --
     FEED: {
         FLUSH_MS: 20 * 1000,                // digest flush cadence
         MINOR_MAX_LINES: 6,                 // minors merged into digest (max lines)
@@ -241,18 +240,18 @@ const CFG = {
         MAX_CAPTION: 380,
     },
 
-    // ── guild bank loans (support system; no interest, no penalties) ──
+ // -- guild bank loans (support system; no interest, no penalties) --
     LOANS: {
         MAX_FRACTION_OF_BANK: 0.10,         // single loan cap vs guild balance
         MIN_LOAN: 1000,
         ONE_ACTIVE_PER_PLAYER: true,
         TERM_MS: 7 * 24 * 60 * 60 * 1000,   // soft due date (reminder only)
         LEAVE_POLICY: 'wallet_deduct_or_debt', // leave guild with active loan:
-                                            // auto-deduct from wallet, else User.debt flag
-                                            // + block new guild loans until repaid
+ // auto-deduct from wallet, else User.debt flag
+ // + block new guild loans until repaid
     },
 
-    // ── alignment ──
+ // -- alignment --
     ALIGNMENT: {
         REGIONS: 3,
         CROSS_WORLD_RELIC_GP: 750,          // matching 2-piece cross-world relic hand-in

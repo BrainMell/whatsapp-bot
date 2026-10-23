@@ -1,5 +1,5 @@
 // ============================================
-// ⚔️ WEAPON ARCHETYPE & CLASS SYNERGY SYSTEM
+// WEAPON ARCHETYPE & CLASS SYNERGY SYSTEM
 // ============================================
 
 const ROLE_ARCHETYPE_AFFINITY = {
@@ -33,7 +33,7 @@ function inferArchetype(item, itemInfo) {
     
     const name = (item.name || itemInfo?.name || '').toLowerCase();
     
-    // Keyword matching
+ // Keyword matching
     if (name.includes('greatsword') || name.includes('claymore') || name.includes('colossus')) return 'GREATSWORD';
     if (name.includes('sword') || name.includes('sabre') || name.includes('blade') || name.includes('katana') || name.includes('scimitar')) return 'SWORD';
     if (name.includes('dagger') || name.includes('dirk') || name.includes('knife') || name.includes('stiletto')) return 'DAGGER';
@@ -45,7 +45,7 @@ function inferArchetype(item, itemInfo) {
     if (name.includes('bow') || name.includes('crossbow') || name.includes('longbow')) return 'BOW';
     if (name.includes('fist') || name.includes('claw') || name.includes('gauntlet')) return 'FIST';
     
-    // Stat fallback
+ // Stat fallback
     if (mag > 0) {
         return isTwoHanded ? 'STAFF' : 'WAND';
     }

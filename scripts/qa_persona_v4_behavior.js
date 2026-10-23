@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// QA — REALGUY v4 behavioral: extract the ACTUAL trigger block from engine.js
+// QA - REALGUY v4 behavioral: extract the ACTUAL trigger block from engine.js
 // and run scenario messages through it (reply-to-human suppression, name gating,
 // explicit-address preservation).
 const fs = require('fs');

@@ -1,41 +1,40 @@
 // ============================================
-// 🏛️ RUINS ROOM SCENE RENDERER — presentation overhaul 2026-10-04 (QA pass)
+// RUINS ROOM SCENE RENDERER - presentation overhaul (QA pass)
 // Owner spec (Final Polish brief §2-§6): the room image is the WORLD.
-// Rendered fully in Node (node-canvas) from the owner's own Ruins plates —
+// Rendered fully in Node (node-canvas) from the owner's own Ruins plates -
 // the Go microservice is NOT involved, so nothing here depends on the
 // Box-2 deploy path or the Bot_genaration divergence.
-//
-//   • background = the door-variant plate that matches the room's REAL
-//     exits (N/E/W arches; S faces the player — indicator only)
-//   • yellow chevrons at every open arch, none where there is no path
-//   • the champion STANDS IN FRONT OF THE DOOR THEY ENTERED THROUGH —
-//     just inside the arch, facing into the room (owner-annotated spots,
-//     2026-10-05); war start (no entry) = classic left-door entrance
-//   • the HUD is the DEFAULT ENCOUNTER's over-head presentation — name
-//     pill + segmented HP bar, state/turn pill above — with the banner
-//     and the bottom-left panel LEFT OUT (owner directive 2026-10-05);
-//     the separate floor YOU-compass widget is gone, chevrons mark doors
-//   • the player's ASSIGNED sprite (the SAME class+spriteIndex the default
-//     combat/profile system resolves) standing GROUNDED: sprites are placed
-//     by their alpha-content bounding box, so transparent padding inside the
-//     PNG can never make the actor levitate (the old full-canvas scaling did)
-//   • ROOM-TYPE CONTENT SPAWNS VISUALLY (§6): combat/coop rooms show the
-//     actual seeded enemy pack, core/secret-boss rooms show the guardian,
-//     discovery/reward/hazard/lore/anomaly/landmark rooms show their
-//     content. Backend payloads stay the single source of truth — this is
-//     their PRESENTATION, never a replacement.
-//   • small ambient props (crates, urns, bones, rubble, moss) seeded per
-//     room, wall-hugging, never blocking doors, the player or content
-//   • puzzle boards OVERLAY the scene as a panel — never a separate card
+// • background = the door-variant plate that matches the room's REAL
+// exits (N/E/W arches; S faces the player - indicator only)
+// • yellow chevrons at every open arch, none where there is no path
+// • the champion STANDS IN FRONT OF THE DOOR THEY ENTERED THROUGH -
+// just inside the arch, facing into the room (owner-annotated spots,
+// ); war start (no entry) = classic left-door entrance
+// • the HUD is the DEFAULT ENCOUNTER's over-head presentation - name
+// pill + segmented HP bar, state/turn pill above - with the banner
+// and the bottom-left panel LEFT OUT (owner directive );
+// the separate floor YOU-compass widget is gone, chevrons mark doors
+// • the player's ASSIGNED sprite (the SAME class+spriteIndex the default
+// combat/profile system resolves) standing GROUNDED: sprites are placed
+// by their alpha-content bounding box, so transparent padding inside the
+// PNG can never make the actor levitate (the old full-canvas scaling did)
+// • ROOM-TYPE CONTENT SPAWNS VISUALLY (§6): combat/coop rooms show the
+// actual seeded enemy pack, core/secret-boss rooms show the guardian,
+// discovery/reward/hazard/lore/anomaly/landmark rooms show their
+// content. Backend payloads stay the single source of truth - this is
+// their PRESENTATION, never a replacement.
+// • small ambient props (crates, urns, bones, rubble, moss) seeded per
+// room, wall-hugging, never blocking doors, the player or content
+// • puzzle boards OVERLAY the scene as a panel - never a separate card
 // ============================================
 
 const fs = require('fs');
 const path = require('path');
 const { createCanvas, loadImage } = require('canvas');
 
-// ── font registration (QA fix: fresh render workers fell back to sans-serif
-// because ONLY noticeCard/mapRenderer registered fonts in the PARENT — the
-// forked worker child needs its own registration before first draw) ──
+// -- font registration (QA fix: fresh render workers fell back to sans-serif
+// because ONLY noticeCard/mapRenderer registered fonts in the PARENT - the
+// forked worker child needs its own registration before first draw) --
 let _fontsReady = false;
 function ensureFonts() {
     if (_fontsReady) return true;
@@ -62,73 +61,71 @@ function ensureFonts() {
 const CFG = require('./config');
 const state = require('./state');
 const mapEngine = require('./mapEngine');
-// 🎨 ROOM DESIGN VARIANTS (owner directive 2026-10-06): pixel-level plate
-// re-texturing — variants are BAKED INTO the background art, never pasted on.
+// ROOM DESIGN VARIANTS (owner directive ): pixel-level plate
+// re-texturing - variants are BAKED INTO the background art, never pasted on.
 const roomVariants = require('./roomVariants');
 
 const W = 1200, H = 900;
 const ASSET_DIR = path.join(__dirname, '..', '..', 'rpgasset', 'guildwar', 'ruins');
 const CHAR_DIR = path.join(__dirname, '..', '..', 'rpgasset', 'characters');
 const ENEMY_DIR = path.join(__dirname, '..', '..', 'rpgasset', 'enemies');
-// ⚔️ ENCOUNTER-TYPE PROPS (owner directive 2026-10-05): every encounter kind
-// shows a real, style-matched sprite — discovery rooms show the RUBBLE the
+// ENCOUNTER-TYPE PROPS (owner directive ): every encounter kind
+// shows a real, style-matched sprite - discovery rooms show the RUBBLE the
 // caption talks about, and after `dig` the rubble is gone and the gold
 // coins are left in its place. Generated pixel-art, keyed + grounded.
 const GW_PROP_DIR = path.join(ASSET_DIR, 'props');
 
-// 🔄 ITEMS-BEHIND-THE-HUD (owner ruins_fixes.txt #3, 2026-10-05): the
+// ITEMS-BEHIND-THE-HUD (owner ruins_fixes.txt #3, ): the
 // default-encounter hub panel owns the bottom-left corner of the canvas
 // (panel spans x ≈ -26..505, y ≈ 644..900 at HUB_SCALE). Items must ALWAYS
-// render behind the HUD, no matter where they are positioned — so nothing
+// render behind the HUD, no matter where they are positioned - so nothing
 // (room content, ambient props, potion-style urns) parks inside this
 // footprint, and everything still draws BEFORE the panel in the pipeline
 // so the panel wins the z-order wherever depth stacks them anyway.
 const HUB_ZONE = { x1: 530, y0: 610 };
 
-// ── doorway geometry on the normalized plates (1200×900) ──
+// -- doorway geometry on the normalized plates (1200×900) --
 const DOORS = {
     w: { cx: 168, cy: 505 },   // left arch (player's left = west wall)
     e: { cx: 1032, cy: 505 },  // right arch
     n: { cx: 600, cy: 292 },   // back-wall arch (faces away from viewer)
-    s: { cx: 600, cy: 818 },   // behind the viewer — chevrons at frame bottom
+    s: { cx: 600, cy: 818 },   // behind the viewer - chevrons at frame bottom
 };
 
-// ⚔️ OWNER-CIRCLED SPAWN SPOTS (annotated screenshot 2026-10-05):
-// the champion stands IN FRONT OF the door they entered through — just
-// inside the arch. Facing rule (owner follow-up 2026-10-05 23:39Z: "the
-// player shouldn't be facing the door they just came out of — they should
+// OWNER-CIRCLED SPAWN SPOTS (annotated screenshot ):
+// the champion stands IN FRONT OF the door they entered through - just
+// inside the arch. Facing rule (owner follow-up 23:39Z: "the
+// player shouldn't be facing the door they just came out of - they should
 // be facing away from the door, toward the rest of the scene"): the
 // champion PNGs read slightly RIGHT natively (front-facing sprites with a
 // rightward lean), so flip=false faces right. w-entry keeps native (faces
 // EAST, into the room); e-entry mirrors (faces WEST).
-//
-// 🔄 SPAWN/FACING OVERHAUL (owner ruins_fixes.txt #1+#5, 2026-10-05):
-//   #1 — when a player SPAWNS IN (war start / defeat respawn — no door they
-//        walked through), they stand at the BACK position: the bottom-centre
-//        spot circled green on the owner's screenshot (≈ 624, 780), NOT the
-//        old classic left-door entrance.
-//   #5 — at the BACK position and at the FORWARD doorway the sprite FACES
-//        THE MORE OPEN SIDE of the room — away from the concentration of
-//        doorways (see facingForSpot below). Walk-in entries through w/e
-//        keep the face-away-from-the-entry-door rule.
+// SPAWN/FACING OVERHAUL (owner ruins_fixes.txt #1+#5, ):
+// #1 - when a player SPAWNS IN (war start / defeat respawn - no door they
+// walked through), they stand at the BACK position: the bottom-centre
+// spot circled green on the owner's screenshot (≈ 624, 780), NOT the
+// old classic left-door entrance.
+// #5 - at the BACK position and at the FORWARD doorway the sprite FACES
+// THE MORE OPEN SIDE of the room - away from the concentration of
+// doorways (see facingForSpot below). Walk-in entries through w/e
 const SPAWN_SPOTS = {
     w: { x: 258, y: 590 },   // just right of the left arch (owner circle 1)
     e: { x: 942, y: 612 },   // just left of the right arch (owner circle 2)
     n: { x: 596, y: 402 },   // in front of the back-wall arch (owner circle 3)
-    s: { x: 624, y: 780 },   // the BACK position — owner's green circle (ruins_fixes #1)
+    s: { x: 624, y: 780 },   // the BACK position - owner's green circle (ruins_fixes #1)
 };
 const DEFAULT_ENTRY = 's';
 const ENTRY_FLIP = { w: false, e: true, n: false, s: false };
 
-// 🔄 facing rule for the BACK position + FORWARD doorway (owner #5):
-// originally "face AWAY from the concentration of doorways" — REVERSED by
+// facing rule for the BACK position + FORWARD doorway (owner #5):
+// originally "face AWAY from the concentration of doorways" - REVERSED by
 // the owner's live playtest the same day: "bottom and left means it should
 // be facing left towards the door". The sprite now faces TOWARD an open
 // side arch (a door is something to look AT, not away from). If doorways
 // sit to the left (e.g. forward and left, none right) the player faces
 // LEFT; more to the right → faces RIGHT; tie or none → the spot's native
 // read. Walk-in entries through w/e keep the face-away-from-entry-door rule.
-// Implementation: count OPEN side arches in SCREEN space — west arch = left,
+// Implementation: count OPEN side arches in SCREEN space - west arch = left,
 // east arch = right (the centre arches n/s are neither side). Applies at
 // the back position (spawn-in + south walk-ins) and forward doorway (north).
 function facingForSpot(dir, exits) {
@@ -136,13 +133,13 @@ function facingForSpot(dir, exits) {
     const open = (d) => Array.isArray(exits) && exits.some((x) => x && x.dir === d && x.edge);
     const left = open('w') ? 1 : 0;
     const right = open('e') ? 1 : 0;
-    if (left > right) return true;    // face LEFT — toward the open west arch
-    if (right > left) return false;   // face RIGHT — toward the open east arch
+    if (left > right) return true;    // face LEFT - toward the open west arch
+    if (right > left) return false;   // face RIGHT - toward the open east arch
     return !!ENTRY_FLIP[dir];         // tie: either is fine → native read
 }
 
 // the guardian's spot follows the same opposite-side rule as the pack
-// (owner 2026-10-05): it waits across the room from the champion's entry
+//: it waits across the room from the champion's entry
 const BOSS_ANCHOR = {
     w: { x: 860, y: 730 },   // entered left → guardian right
     e: { x: 340, y: 730 },   // entered right → guardian left
@@ -169,17 +166,17 @@ function entryDirOf(player) {
     return null;
 }
 
-// perspective: the same floor-plane rule the enemy packs follow — the
+// perspective: the same floor-plane rule the enemy packs follow - the
 // farther back the feet, the smaller the actor. Owner calibration pass
-// 2026-10-05: the first cut (205+145t → 205-350px) made actors tower over
-// the door arches — everyone read as a giant in the hall. Now ~78% of
+// the first cut (205+145t → 205-350px) made actors tower over
+// the door arches - everyone read as a giant in the hall. Now ~78% of
 // that: characters stand clearly BELOW the arch mouths.
 function perspH(groundY) {
     const t = Math.max(0, Math.min(1, (groundY - 340) / (810 - 340)));
     return Math.round(160 + 113 * t);
 }
 
-// ── enemy sprite pool (VERIFIED single sprites — sheet files excluded) ──
+// -- enemy sprite pool (VERIFIED single sprites - sheet files excluded) --
 // Curated by visual inspection against the plates' palette/perspective:
 // pixel-art monsters read naturally in the torch-lit stone rooms.
 const ENEMY_POOL = [
@@ -203,7 +200,7 @@ const BOSS_POOL = [
     'highlevelbosses (13).png',
 ];
 
-// ── asset caches (plates + sprites decode once per worker lifetime) ──
+// -- asset caches (plates + sprites decode once per worker lifetime) --
 const plateCache = new Map();
 let plates = null;
 function getPlates() {
@@ -216,11 +213,11 @@ function getPlates() {
     plates = {
         '0': load('ruins_door_0.png'),
         L: [load('ruins_door_L_a.png'), load('ruins_door_L_b.png')],
-        // ⚔️ EXIT-CONSISTENCY FIX (owner spec §2/§6): plateKeyFor returns the
-        // SEEDED keys 'L_a'/'L_b' for left-only rooms, but this map only had
-        // the pair under 'L' — so P['L_b'] was undefined and EVERY left-only
-        // room silently fell back to the no-door plate: chevrons pointing at
-        // a solid wall while navigation said "go left".
+ // EXIT-CONSISTENCY FIX (owner spec §2/§6): plateKeyFor returns the
+ // SEEDED keys 'L_a'/'L_b' for left-only rooms, but this map only had
+ // the pair under 'L' - so P['L_b'] was undefined and EVERY left-only
+ // room silently fell back to the no-door plate: chevrons pointing at
+ // a solid wall while navigation said "go left".
         L_a: load('ruins_door_L_a.png'),
         L_b: load('ruins_door_L_b.png'),
         R: load('ruins_door_R.png'),
@@ -233,7 +230,7 @@ function getPlates() {
     return plates;
 }
 
-// ── background variant selection from REAL exits (owner spec) ──
+// -- background variant selection from REAL exits (owner spec) --
 function plateKeyFor(exits, seedStr) {
     const has = (d) => exits.some((x) => x.dir === d && x.edge);
     const n = has('n'), e = has('e'), w = has('w');
@@ -245,7 +242,7 @@ function plateKeyFor(exits, seedStr) {
     else if (n) key = 'F';
     else if (e) key = 'R';
     else if (w) {
-        // two ambient versions of the left-only plate — seeded pick
+ // two ambient versions of the left-only plate - seeded pick
         const h = mapEngine.hashSeed(String(seedStr || ''));
         key = (h % 2 === 0) ? 'L_a' : 'L_b';
     } else key = '0';
@@ -258,12 +255,12 @@ async function plateFor(exits, seedStr, variant) {
     const entry = P[key];
     const img = Array.isArray(entry) ? entry[mapEngine.hashSeed(String(seedStr || '')) % entry.length] : entry;
     const base = (await img) || (await P['0']);
-    // the room's design variant is baked INTO the plate pixels (arches,
-    // walkways, torches and chains stay pixel-identical — see roomVariants.js)
+ // the room's design variant is baked INTO the plate pixels (arches,
+ // walkways, torches and chains stay pixel-identical - see roomVariants.js)
     return roomVariants.applyVariant(base, variant, String(seedStr || ''));
 }
 
-// ── sprite helpers ─────────────────────────────────────────────────────────
+// -- sprite helpers ---------------------------------------------------------
 // alpha-content bounding box: transparent padding inside a sprite PNG must
 // never influence placement or scale (this is what made the actor levitate)
 const bboxCache = new Map(); // file → {x,y,w,h} in natural pixels
@@ -278,7 +275,7 @@ async function contentBox(file, dir) {
         ctx.drawImage(img, 0, 0);
         const data = ctx.getImageData(0, 0, img.width, img.height).data;
         let minX = img.width, minY = img.height, maxX = -1, maxY = -1;
-        // per-row opaque width — feeds the MASS-BOTTOM anchor (🫧 below)
+ // per-row opaque width - feeds the MASS-BOTTOM anchor ( below)
         const rowW = new Array(img.height).fill(0);
         for (let y = 0; y < img.height; y++) {
             for (let x = 0; x < img.width; x++) {
@@ -293,15 +290,15 @@ async function contentBox(file, dir) {
         }
         if (maxX >= 0) {
             box = { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
-            // 🫧 MASS-BOTTOM anchor (owner 2026-10-06 "the shadows should be
-            // touching the thing"): several props end in a thin dangly bit —
-            // the chest's lock hasp hangs 7px under the body, the gold pile
-            // tapers into a one-coin tip 10px under the mound. Anchoring the
-            // contact shadow to the CONTENT bottom parks it under that nub,
-            // a hairline gap away from the visible mass → the body reads as
-            // hovering above its own shadow. The MASS bottom (last row that
-            // still carries ≥22% of the sprite's widest row) is where the
-            // prop really meets the floor — anchor the shadow THERE.
+ // MASS-BOTTOM anchor ("the shadows should be
+ // touching the thing"): several props end in a thin dangly bit -
+ // the chest's lock hasp hangs 7px under the body, the gold pile
+ // tapers into a one-coin tip 10px under the mound. Anchoring the
+ // contact shadow to the CONTENT bottom parks it under that nub,
+ // a hairline gap away from the visible mass → the body reads as
+ // hovering above its own shadow. The MASS bottom (last row that
+ // still carries ≥22% of the sprite's widest row) is where the
+ // prop really meets the floor - anchor the shadow THERE.
             let maxRowW = 0;
             for (let y = minY; y <= maxY; y++) if (rowW[y] > maxRowW) maxRowW = rowW[y];
             box.massY = maxY;
@@ -311,13 +308,13 @@ async function contentBox(file, dir) {
                     if (rowW[y] >= massMin) { box.massY = y; break; }
                 }
             }
-            // 🔄 FOOT BAND (owner ruins_fixes.txt #6 — shadows must match the
-            // sprites): the shadow used to span the FULL content width, so
-            // sprites with sweeping cloaks / wings / weapons got a shadow
-            // far wider than the feet actually planted on the floor. Measure
-            // the opaque extent of the BOTTOM ~16% of the content — the part
-            // that really touches the ground — and let the contact shadow
-            // hug THAT instead.
+ // FOOT BAND (owner ruins_fixes.txt #6 - shadows must match the
+ // sprites): the shadow used to span the FULL content width, so
+ // sprites with sweeping cloaks / wings / weapons got a shadow
+ // far wider than the feet actually planted on the floor. Measure
+ // the opaque extent of the BOTTOM ~16% of the content - the part
+ // that really touches the ground - and let the contact shadow
+ // hug THAT instead.
             const bandTop = Math.max(minY, maxY - Math.max(4, Math.round(box.h * 0.16)));
             let fMinX = img.width, fMaxX = -1;
             for (let y = bandTop; y <= maxY; y++) {
@@ -338,9 +335,9 @@ async function contentBox(file, dir) {
     return box;
 }
 
-// ── contact shadow, depth-aware (owner note 2026-10-05: the old flat dark
-// ellipse read as a pasted blob — worst at the back wall, where it fought
-// the plate's own wall-base shading instead of melting into it) ──
+// -- contact shadow, depth-aware (owner note the old flat dark
+// ellipse read as a pasted blob - worst at the back wall, where it fought
+// the plate's own wall-base shading instead of melting into it) --
 // Two layers: a tight dark CONTACT ellipse hugging the feet + a broad soft
 // PENUMBRA. Depth (0 = back wall → 1 = front edge) drives size, softness and
 // strength the way the plate's torch light implies: actors deep at the back
@@ -351,49 +348,49 @@ function shadowDepthT(groundY) {
 }
 function drawContactShadow(ctx, cx, groundY, w, h, alpha = 1, opts = {}) {
     const t = shadowDepthT(groundY);
-    // ⚔️ ITEM BOOST (owner 2026-10-06 "the shadow of the encounter items"):
-    // solid props (chests, steles, rubble…) sit under their own baked glow
-    // and read as floating with the actor-calibrated shadow. Items opt into
-    // a stronger, taller contact via opts — characters keep the calibrated
-    // defaults (boost 1, ryMin 9) untouched.
+ // ITEM BOOST ("the shadow of the encounter items"):
+ // solid props (chests, steles, rubble…) sit under their own baked glow
+ // and read as floating with the actor-calibrated shadow. Items opt into
+ // a stronger, taller contact via opts - characters keep the calibrated
+ // defaults (boost 1, ryMin 9) untouched.
     const boost = opts.boost || 1;
     const ryMin = opts.ryMin || 9;
-    // 🫧 GROUND-HUG MODE (owner 2026-10-06: "the item shadows are literally
-    // making it look like the things are floating… it's deadass a floating
-    // hole in the ground"): the ACTOR shadow parks its dark core BELOW the
-    // base line — right for standing characters (the shadow peeks out in
-    // front of the feet) — but items drawn with that same offset levitate
-    // above their own shadow, and a recess painted with a drop shadow reads
-    // as a hole hovering over a blob. Hug mode centres the ellipses ON the
-    // base line so the sprite's own footprint overlaps the dark core and
-    // only a thin rim peeks out: the item sits IN its shadow, not above it.
-    // ry is capped flat — a shadow is a contact patch, not a pedestal.
+ // GROUND-HUG MODE ("the item shadows are literally
+ // making it look like the things are floating… it's deadass a floating
+ // hole in the ground"): the ACTOR shadow parks its dark core BELOW the
+ // base line - right for standing characters (the shadow peeks out in
+ // front of the feet) - but items drawn with that same offset levitate
+ // above their own shadow, and a recess painted with a drop shadow reads
+ // as a hole hovering over a blob. Hug mode centres the ellipses ON the
+ // base line so the sprite's own footprint overlaps the dark core and
+ // only a thin rim peeks out: the item sits IN its shadow, not above it.
+ // ry is capped flat - a shadow is a contact patch, not a pedestal.
     if (opts.hug) {
-        // 🔄 V2 (owner 2026-10-06 "the shadows should be touching the thing —
-        // specifically the 3rd version of the gold thing"): V1 centred a
-        // TIGHT ellipse (rx 0.62×footW) on the base line — correct contact
-        // geometry, but for a wide, dark-bodied prop (the reliquary chest is
-        // near-black on dark iron bands) the whole ellipse hides BEHIND the
-        // silhouette (0.62 × 0.72 = 0.45× content width < half-width) and
-        // the item reads as pasted on lit floor: nothing anchors it. V2
-        // anchors on the sprite's MASS bottom (contentBox.massY — the hasp /
-        // coin-tip nubs no longer push the shadow below the visible body)
-        // and splits the shadow into two VISIBLE, TOUCHING parts:
-        //   1. front spill pool — a soft ellipse spilling TOWARD the viewer
-        //      from under the base line (top edge tucks up behind the mass,
-        //      body crescents out in front) — the part the eye reads as
-        //      "this thing is sitting on the floor";
-        //   2. tight contact — centred on the mass line, wings wide enough
-        //      (0.86×footW ≈ 0.62× content width) to peek past BOTH sides
-        //      of the silhouette.
+ // V2 ("the shadows should be touching the thing -
+ // specifically the 3rd version of the gold thing"): V1 centred a
+ // TIGHT ellipse (rx 0.62×footW) on the base line - correct contact
+ // geometry, but for a wide, dark-bodied prop (the reliquary chest is
+ // near-black on dark iron bands) the whole ellipse hides BEHIND the
+ // silhouette (0.62 × 0.72 = 0.45× content width < half-width) and
+ // the item reads as pasted on lit floor: nothing anchors it. V2
+ // anchors on the sprite's MASS bottom (contentBox.massY - the hasp /
+ // coin-tip nubs no longer push the shadow below the visible body)
+ // and splits the shadow into two VISIBLE, TOUCHING parts:
+ // 1. front spill pool - a soft ellipse spilling TOWARD the viewer
+ // from under the base line (top edge tucks up behind the mass,
+ // body crescents out in front) - the part the eye reads as
+ // "this thing is sitting on the floor";
+ // 2. tight contact - centred on the mass line, wings wide enough
+ // (0.86×footW ≈ 0.62× content width) to peek past BOTH sides
+ // of the silhouette.
         const my = Math.min(groundY, opts.massY ?? groundY);
         const rxH = w * 0.95;
         const ryH = Math.max(4.5, Math.min(10, w * 0.075));
         const aH = Math.min(0.62, (0.28 + 0.18 * t) * alpha * boost);
-        // front spill pool — the readable shadow, touching the base. Centre
-        // sits 1·ry under the mass line so the pool's DARKEST ring lands in
-        // the first rows below the sprite's base (contact the eye can see),
-        // its upper half tucking up behind the mass (no gap, no hover).
+ // front spill pool - the readable shadow, touching the base. Centre
+ // sits 1·ry under the mass line so the pool's DARKEST ring lands in
+ // the first rows below the sprite's base (contact the eye can see),
+ // its upper half tucking up behind the mass (no gap, no hover).
         ctx.save();
         ctx.translate(cx, my + ryH * 1.0);
         ctx.scale(rxH * 0.95, ryH * 1.85);
@@ -404,9 +401,9 @@ function drawContactShadow(ctx, cx, groundY, w, h, alpha = 1, opts = {}) {
         ctx.fillStyle = gp;
         ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
-        // tight contact — centred ON the mass line, tucked a sixth of a ry
-        // UP behind it so the sprite's bottom edge lands inside the dark
-        // core (contact, never hover)
+ // tight contact - centred ON the mass line, tucked a sixth of a ry
+ // UP behind it so the sprite's bottom edge lands inside the dark
+ // core (contact, never hover)
         ctx.save();
         ctx.translate(cx, my - ryH * 0.15);
         ctx.scale(rxH, ryH);
@@ -419,21 +416,21 @@ function drawContactShadow(ctx, cx, groundY, w, h, alpha = 1, opts = {}) {
         ctx.restore();
         return;
     }
-    // 🔄 RECALIBRATED (owner playtest 2026-10-05: "the shadows are like tiny
-    // specs now"): these multipliers were originally tuned back when w was
-    // the FULL sprite content width — then ruins_fixes #6 swapped w down to
-    // the much narrower foot band WITHOUT retuning, so shadows collapsed to
-    // specks (~40×21px under a 210px-tall champion, with the gradient falloff
-    // hiding even that). Re-sized so the CONTACT ellipse actually spans the
-    // feet (≈0.9–1.1× foot width) and the penumbra breathes ≈1.5–1.9× beyond
-    // it — still depth-aware, still melting into the wall-base shading.
+ // RECALIBRATED (owner playtest "the shadows are like tiny
+ // specs now"): these multipliers were originally tuned back when w was
+ // the FULL sprite content width - then ruins_fixes #6 swapped w down to
+ // the much narrower foot band WITHOUT retuning, so shadows collapsed to
+ // specks (~40×21px under a 210px-tall champion, with the gradient falloff
+ // hiding even that). Re-sized so the CONTACT ellipse actually spans the
+ // feet (≈0.9-1.1× foot width) and the penumbra breathes ≈1.5-1.9× beyond
+ // it - still depth-aware, still melting into the wall-base shading.
     const rx = w * (0.55 + 0.15 * t);
     const ry = Math.max(ryMin, h * (0.055 + 0.030 * t));
-    // wall torches sit BEHIND the actors: the deeper the stance, the more
-    // the shadow spills toward the viewer instead of spreading sideways
+ // wall torches sit BEHIND the actors: the deeper the stance, the more
+ // the shadow spills toward the viewer instead of spreading sideways
     const fwd = 2 + 6 * (1 - t);
     const a = Math.min(0.85, (0.30 + 0.22 * t) * alpha * boost);
-    // penumbra — broad, faint
+ // penumbra - broad, faint
     ctx.save();
     ctx.translate(cx, groundY + fwd);
     ctx.scale(rx * 1.35, ry * 1.7);
@@ -444,8 +441,8 @@ function drawContactShadow(ctx, cx, groundY, w, h, alpha = 1, opts = {}) {
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
-    // contact — tight, darkest (gentler falloff so the dark core isn't a
-    // fraction of an already-tight ellipse)
+ // contact - tight, darkest (gentler falloff so the dark core isn't a
+ // fraction of an already-tight ellipse)
     ctx.save();
     ctx.translate(cx, groundY + 2);
     ctx.scale(rx * 0.78, ry * 0.95);
@@ -470,27 +467,27 @@ async function drawGroundedSprite(ctx, dirs, file, cx, groundY, ch, { shadow = t
     const box = (await contentBox(file, foundDir)) || { x: 0, y: 0, w: img.width, h: img.height };
     const scale = ch / box.h;
     const dw = img.width * scale, dh = img.height * scale;
-    // content anchors (natural px) → canvas px
+ // content anchors (natural px) → canvas px
     const drawX = cx - (box.x + box.w / 2) * scale;
     const drawY = groundY - (box.y + box.h) * scale;
     if (shadow) {
-        // 🔄 the shadow hugs the FEET, not the full sprite width (owner
-        // ruins_fixes.txt #6) — and its centre follows the foot band's
-        // centre (mirrored when the sprite flips), so it always sits under
-        // what actually touches the floor. FLOORED at half the content
-        // width (owner playtest 2026-10-05: shadows read as "tiny specs"):
-        // a wispy tail or a single claw tip at the bottom of a sprite must
-        // never collapse the contact shadow to nothing.
+ // the shadow hugs the FEET, not the full sprite width (owner
+ // ruins_fixes.txt #6) - and its centre follows the foot band's
+ // centre (mirrored when the sprite flips), so it always sits under
+ // what actually touches the floor. FLOORED at half the content
+ // width (owner playtest shadows read as "tiny specs"):
+ // a wispy tail or a single claw tip at the bottom of a sprite must
+ // never collapse the contact shadow to nothing.
         const feetW = box.feetW ?? box.w;
         const feetCx = (box.feetX ?? (box.x + (box.w - feetW) / 2)) + feetW / 2;
-        // 🫧 hug items ground on their FOOTPRINT (bottom-heavy props): the
-        // foot band alone can be a single coin's edge on a wide pile, which
-        // would leave the pile's edges floating over lit floor — widen the
-        // floor to most of the content width for hugs.
+ // hug items ground on their FOOTPRINT (bottom-heavy props): the
+ // foot band alone can be a single coin's edge on a wide pile, which
+ // would leave the pile's edges floating over lit floor - widen the
+ // floor to most of the content width for hugs.
         const footW = Math.max(feetW, box.w * (shadowHug ? 0.72 : 0.5)) * scale;
         const footOff = (feetCx - (box.x + box.w / 2)) * scale;
-        // 🫧 mass-bottom anchor in canvas px: the visible body meets the
-        // floor here (content bbox bottom − dangly nubs)
+ // mass-bottom anchor in canvas px: the visible body meets the
+ // floor here (content bbox bottom − dangly nubs)
         const massCanvasY = groundY - (box.y + box.h - 1 - (box.massY ?? (box.y + box.h - 1))) * scale;
         drawContactShadow(ctx, flip ? cx - footOff : cx + footOff, groundY, footW, ch, alpha,
             shadowHug ? { hug: true, boost: shadowBoost, massY: massCanvasY } : { boost: shadowBoost, ryMin: shadowRyMin });
@@ -508,8 +505,8 @@ async function drawGroundedSprite(ctx, dirs, file, cx, groundY, ch, { shadow = t
     return { w: box.w * scale, h: box.h * scale };
 }
 
-// ── PLAYER sprite (parent resolves the class file; worker just draws) ──
-// Go-parity resolution — the SAME file the profile card and every combat
+// -- PLAYER sprite (parent resolves the class file; worker just draws) --
+// Go-parity resolution - the SAME file the profile card and every combat
 // render use: CLASS_SPRITE_SETS[classId][spriteIndex % len]. The Guild War
 // event row does not carry class fields, so the parent resolves them from
 // the economy (identical to buildRuinsPlayerEntity).
@@ -528,7 +525,7 @@ function resolvePlayerSpriteFile(player) {
     }
 }
 
-// ── encounter-style HUD data (parent-side; REAL persistent pools) ──
+// -- encounter-style HUD data (parent-side; REAL persistent pools) --
 function hudFor(player, room) {
     const out = { name: player.name || 'Explorer', level: 1, classId: 'APPRENTICE', hp: 100, maxHp: 100, energy: 50, maxEnergy: 50, state: '' };
     try {
@@ -545,17 +542,17 @@ function hudFor(player, room) {
         const user = economy.getUser(player.jid);
         out.name = user?.nickname || user?.profile?.nickname || player.name || 'Explorer';
     } catch (e) { /* HUD degrades to defaults, never blocks the scene */ }
-    // turn/state indicator — whose beat it is right now (§5)
+ // turn/state indicator - whose beat it is right now (§5)
     const cleared = room.state === 'CLEARED';
     if (cleared) out.state = 'CHAMBER SECURED';
-    else if (room.type === 'puzzle') out.state = 'YOUR MOVE — ANSWER';
+    else if (room.type === 'puzzle') out.state = 'YOUR MOVE - ANSWER';
     else if (['combat', 'coop', 'core'].includes(room.type)) out.state = 'ENEMIES BAR THE WAY';
     else if (room.type === 'secret') out.state = 'SOMETHING STIRS';
     else out.state = 'EXPLORING';
     return out;
 }
 
-// ── room-type content plan (parent-side; payload is the source of truth) ──
+// -- room-type content plan (parent-side; payload is the source of truth) --
 // Places the seeded gameplay content INTO the scene. The champion anchors
 // at their ENTRY-DOOR spot; everything else anchors OPPOSITE/AROUND them:
 // content lives on the far side of the room, meetings stand beside the
@@ -568,11 +565,11 @@ function planFor(eventDoc, player, room, exits) {
     const P = room.payload || {};
     const cleared = room.state === 'CLEARED';
 
-    // ── the champion's entry-door spot (owner directive 2026-10-05) ──
-    // Spawn-in (war start / defeat respawn — no door walked through) lands
-    // at the BACK position (owner ruins_fixes.txt #1); facing at the back
-    // position + the forward doorway follows the doorway-distribution rule
-    // (owner #5) — see facingForSpot.
+ // -- the champion's entry-door spot (owner directive ) --
+ // Spawn-in (war start / defeat respawn - no door walked through) lands
+ // at the BACK position (owner ruins_fixes.txt #1); facing at the back
+ // position + the forward doorway follows the doorway-distribution rule
+ // (owner #5) - see facingForSpot.
     const dir = entryDirOf(player) || DEFAULT_ENTRY;
     const spot = SPAWN_SPOTS[dir] || SPAWN_SPOTS[DEFAULT_ENTRY];
     plan.playerSpot = {
@@ -581,9 +578,9 @@ function planFor(eventDoc, player, room, exits) {
         flip: facingForSpot(dir, exits),
     };
 
-    // 💡 §16 MEETINGS: other players IN this room are drawn in the world —
-    // guildmates stand beside the champion (toward the room's centre),
-    // rivals across from them, facing the champion.
+ // §16 MEETINGS: other players IN this room are drawn in the world -
+ // guildmates stand beside the champion (toward the room's centre),
+ // rivals across from them, facing the champion.
     const others = (room.occupants || []).filter((j) => j && j !== player.jid)
         .map((j) => (eventDoc.players || []).find((p) => p.jid === j)).filter(Boolean);
     const mateRows = others.filter((o) => o.guildId === player.guildId).slice(0, 2);
@@ -592,50 +589,50 @@ function planFor(eventDoc, player, room, exits) {
     const clampX = (x) => Math.max(90, Math.min(1110, x));
     const clampY = (y) => Math.max(560, Math.min(838, y));
     for (let i = 0; i < mateRows.length; i++) {
-        // spacing 130/110: humanoid sprites draw ~107px wide at mate depth,
-        // so the old 95px pitch made "beside" players overlap into a blob
+ // spacing 130/110: humanoid sprites draw ~107px wide at mate depth,
+ // so the old 95px pitch made "beside" players overlap into a blob
         const mx = clampX(spot.x + towardCentre * (130 + i * 110));
-        // "beside" = the champion's own depth (spot.y is a valid floor
-        // position by definition, so no clamp — the old clampY floor
-        // teleported a back-arch champion's mates 158px nearer the camera,
-        // which read as "some characters are larger than others")
+ // "beside" = the champion's own depth (spot.y is a valid floor
+ // position by definition, so no clamp - the old clampY floor
+ // teleported a back-arch champion's mates 158px nearer the camera,
+ // which read as "some characters are larger than others")
         const my = spot.y + (i === 0 ? 6 : -6);
-        // OWNER FIX 2026-10-05: every humanoid obeys ONE size law — the
-        // perspective height at their own ground line (same as the
-        // champion). The old ×0.92/×0.82 fudges stacked on top of the
-        // perspective curve and made same-depth players look mis-sized.
+ // OWNER FIX every humanoid obeys ONE size law - the
+ // perspective height at their own ground line (same as the
+ // champion). The old ×0.92/×0.82 fudges stacked on top of the
+ // perspective curve and made same-depth players look mis-sized.
         plan.mates.push({ file: resolvePlayerSpriteFile(mateRows[i]), x: mx, y: my, h: Math.round(perspH(my)), name: mateRows[i].name, flip: plan.playerSpot.flip });
     }
     for (let i = 0; i < rivalRows.length; i++) {
         let rx = clampX(1200 - spot.x + (i === 0 ? 0 : (towardCentre * 80)));
-        // a champion entering from the back arch (n) or the front (s) sits
-        // near x=600, so the mirrored "across" lane lands within 8-48px of
-        // their own lane and everyone stacks vertically. Enforce a minimum
-        // lane gap: shove the rival clear to the opposite side of the
-        // champion from the mates → champion centre, mate right, rival left.
+ // a champion entering from the back arch (n) or the front (s) sits
+ // near x=600, so the mirrored "across" lane lands within 8-48px of
+ // their own lane and everyone stacks vertically. Enforce a minimum
+ // lane gap: shove the rival clear to the opposite side of the
+ // champion from the mates → champion centre, mate right, rival left.
         if (Math.abs(rx - spot.x) < 140) rx = clampX(spot.x - towardCentre * 160);
         const ry = clampY(spot.y - 92 - i * 34);
         plan.rivals.push({
             file: resolvePlayerSpriteFile(rivalRows[i]), x: rx, y: ry,
             h: Math.round(perspH(ry)), name: rivalRows[i].name,
-            // champion PNGs read slightly RIGHT natively → a rival standing
-            // RIGHT of the champion mirrors to face LEFT toward them
+ // champion PNGs read slightly RIGHT natively → a rival standing
+ // RIGHT of the champion mirrors to face LEFT toward them
             flip: rx > spot.x,
         });
     }
 
-    // enemy zone anchors (ground y, depth-ordered): far → near. OWNER RULE
-    // (2026-10-05): the pack always spawns on the OPPOSITE side of wherever
-    // the champion moved into the room from — left entry → pack blocks the
-    // right, right entry → pack blocks the left, back-wall entry (n) → pack
-    // blocks the FRONT floor, front walk-in (s) → pack holds the BACK wall.
-    // Anchors too close to the champion are dropped. (Spread: with the
-    // bigger-enemy scale the old anchors merged pack members into a blob.)
+ // enemy zone anchors (ground y, depth-ordered): far → near. OWNER RULE
+ //: the pack always spawns on the OPPOSITE side of wherever
+ // the champion moved into the room from - left entry → pack blocks the
+ // right, right entry → pack blocks the left, back-wall entry (n) → pack
+ // blocks the FRONT floor, front walk-in (s) → pack holds the BACK wall.
+ // Anchors too close to the champion are dropped. (Spread: with the
+ // bigger-enemy scale the old anchors merged pack members into a blob.)
     const ZONE_TABLE = {
         w: [{ x: 795, y: 640 }, { x: 1010, y: 705 }, { x: 610, y: 700 }, { x: 880, y: 755 }, { x: 1075, y: 760 }],
         e: [{ x: 405, y: 640 }, { x: 190, y: 705 }, { x: 590, y: 700 }, { x: 320, y: 755 }, { x: 125, y: 760 }],
-        // front pack stays at y ≤ 760 so the bottom S-chevrons stay visible
-        // below the pack's feet line
+ // front pack stays at y ≤ 760 so the bottom S-chevrons stay visible
+ // below the pack's feet line
         n: [{ x: 430, y: 752 }, { x: 648, y: 758 }, { x: 855, y: 746 }, { x: 520, y: 700 }, { x: 760, y: 712 }],
         s: [{ x: 470, y: 545 }, { x: 640, y: 520 }, { x: 830, y: 560 }, { x: 545, y: 595 }, { x: 745, y: 605 }],
     };
@@ -645,22 +642,22 @@ function planFor(eventDoc, player, room, exits) {
     if (!cleared) {
         if (['combat', 'coop'].includes(room.type)) {
             const raw = payloadGet(P, 'enemies');
-            // OWNER RULE 2026-10-05: max THREE enemies in any given room —
-            // also caps the DRAWN pack for already-seeded 4-enemy payloads.
+ // OWNER RULE max THREE enemies in any given room -
+ // also caps the DRAWN pack for already-seeded 4-enemy payloads.
             const n = Math.max(1, Math.min(3, Array.isArray(raw) ? raw.length : 1));
             const lvl = (Array.isArray(raw) && raw[0]?.level) || 10;
             for (let i = 0; i < n; i++) {
                 const zone = ZONE[i % ZONE.length];
                 if (!zone) break;
                 const file = ENEMY_POOL[rng.int(0, ENEMY_POOL.length - 1)];
-                // owner 2026-10-05 23:39Z: "make the enemies a little bigger
-                // than the characters" — the shrink pass had caught the pack
-                // too. Pack members now stand ~1.18× the plate's perspective
-                // height at their OWN ground line (so nearer rows read
-                // naturally bigger), always over the champion's height.
+ // 23:39Z: "make the enemies a little bigger
+ // than the characters" - the shrink pass had caught the pack
+ // too. Pack members now stand ~1.18× the plate's perspective
+ // height at their OWN ground line (so nearer rows read
+ // naturally bigger), always over the champion's height.
                 const h = Math.round(perspH(zone.y) * 1.18 + (lvl >= 15 ? 18 : 0));
-                // monsters face the champion: native sprites look LEFT, so
-                // a monster standing LEFT of the champion flips to face right
+ // monsters face the champion: native sprites look LEFT, so
+ // a monster standing LEFT of the champion flips to face right
                 plan.enemies.push({ file, x: zone.x + rng.int(-24, 24), y: zone.y, h, flip: zone.x < spot.x });
             }
         } else if (room.type === 'core') {
@@ -672,7 +669,7 @@ function planFor(eventDoc, player, room, exits) {
         }
     }
 
-    // ambient props (subtle, wall-hugging) — 0-3 by seed, never blocking
+ // ambient props (subtle, wall-hugging) - 0-3 by seed, never blocking
     const PROPS = ['crate', 'urn', 'bones', 'rocks', 'rubble', 'moss'];
     const occupied = (x, y) =>
         plan.enemies.some((e) => Math.hypot(e.x - x, e.y - y) < 120) ||
@@ -686,10 +683,10 @@ function planFor(eventDoc, player, room, exits) {
     for (const s of rng.shuffle(propSpots)) {
         if (plan.props.length >= rng.int(1, 3)) break;
         if (occupied(s.x, s.y)) continue;
-        // 🔄 never park a prop (crate/urn/potion-looking bits) inside the hub
-        // panel's corner — items always render behind the HUD (owner #3)
+ // never park a prop (crate/urn/potion-looking bits) inside the hub
+ // panel's corner - items always render behind the HUD (owner #3)
         if (s.x < HUB_ZONE.x1 && s.y > HUB_ZONE.y0) continue;
-        // keep door approaches clear
+ // keep door approaches clear
         if (Math.hypot(s.x - DOORS.w.cx, s.y - DOORS.w.cy) < 130) continue;
         if (Math.hypot(s.x - DOORS.e.cx, s.y - DOORS.e.cy) < 130) continue;
         plan.props.push({ kind: rng.pick(PROPS), x: s.x + rng.int(-14, 14), y: s.y, s: 0.8 + rng.next() * 0.6 });
@@ -697,7 +694,7 @@ function planFor(eventDoc, player, room, exits) {
     return plan;
 }
 
-// ── per-type ambience (tint + floor glow, nothing banner-like) ──
+// -- per-type ambience (tint + floor glow, nothing banner-like) --
 const TYPE_TINT = {
     empty: null,
     combat: ['rgba(140,26,26,0.15)', 'rgba(255,90,40,0.10)'],
@@ -716,16 +713,16 @@ const TYPE_TINT = {
 function drawTint(ctx, room) {
     const t = TYPE_TINT[room.type];
     if (!t) return;
-    // 🎨 owner 2026-10-06: no more full-screen flat washes (read as "colored
-    // squares layered on the art"). The ambience is now a corner vignette +
-    // the pooled glow where the point of interest sits — same hue language,
-    // nothing that reads as a pasted rectangle.
+ // no more full-screen flat washes (read as "colored
+ // squares layered on the art"). The ambience is now a corner vignette +
+ // the pooled glow where the point of interest sits - same hue language,
+ // nothing that reads as a pasted rectangle.
     const g = ctx.createRadialGradient(W / 2, H * 0.42, 180, W / 2, H * 0.42, 940);
     g.addColorStop(0, 'rgba(0,0,0,0)');
     g.addColorStop(1, t[0]);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
-    // pooled glow on the floor where the "point of interest" sits
+ // pooled glow on the floor where the "point of interest" sits
     const g2 = ctx.createRadialGradient(820, 660, 10, 820, 660, 260);
     g2.addColorStop(0, t[1]);
     g2.addColorStop(1, 'rgba(0,0,0,0)');
@@ -738,7 +735,7 @@ function drawClearedWash(ctx) {
     ctx.fillRect(0, 0, W, H);
 }
 
-// ── exit chevrons (§9): triple fading arrows INSIDE the world ──
+// -- exit chevrons (§9): triple fading arrows INSIDE the world --
 function chevron(ctx, x, y, dx, dy, size, alpha, color) {
     const px = -dy, py = dx; // perpendicular
     ctx.beginPath();
@@ -763,7 +760,7 @@ function drawExitArrows(ctx, exits) {
         if (!d) continue;
         const [ax, ay] = ex.dir === 'n' ? [0, -1] : ex.dir === 's' ? [0, 1] : ex.dir === 'e' ? [1, 0] : [-1, 0];
         for (let i = 0; i < 3; i++) {
-            // S chevrons stack UPWARD so they never drown under the bottom strip
+ // S chevrons stack UPWARD so they never drown under the bottom strip
             const off = ex.dir === 's' ? i * 24 : i * 26;
             const x = d.cx + ax * off;
             const y = d.cy + ay * off;
@@ -773,11 +770,10 @@ function drawExitArrows(ctx, exits) {
     }
 }
 
-// ── DEFAULT-ENCOUNTER OVER-HEAD HUD (owner directive 2026-10-05) ─────────
-// The default encounter's character presentation — name pill + segmented
-// HP bar floating over the actor's head — ported 1:1 from the Go renderer
+// -- DEFAULT-ENCOUNTER OVER-HEAD HUD (owner directive ) ---------
+// The default encounter's character presentation - name pill + segmented
+// HP bar floating over the actor's head - ported 1:1 from the Go renderer
 // (dark pill, white bold text, red→orange gradient HP segments on a dark
-// track). The state/turn pill rides on top; energy rides under the HP bar
 // in the default panel's cyan. The banner and bottom-left panel are LEFT
 // OUT per the owner's instruction.
 function pill(ctx, cx, cy, text, font, padX, bg, border, textColor) {
@@ -809,7 +805,7 @@ function segBar(ctx, cx, cy, w, h, pct, fillFrom, fillTo) {
         ctx.fillRect(x, y, fw, h);
         ctx.restore();
     }
-    // segment notches (3 segments, default-encounter style)
+ // segment notches (3 segments, default-encounter style)
     ctx.fillStyle = 'rgba(10,8,6,0.85)';
     for (let i = 1; i <= 2; i++) ctx.fillRect(x + (w * i) / 3 - 1, y, 2, h);
     ctx.strokeStyle = 'rgba(245,240,225,0.85)'; ctx.lineWidth = 1.2;
@@ -821,41 +817,41 @@ function drawOverheadHud(ctx, plan) {
     if (!hud) return;
     const spot = plan.playerSpot;
     if (!spot) return;
-    // stack ABOVE the head, mirroring the default encounter's over-head
-    // order (nameplate nearest the actor, bars under it) with the GW
-    // state/turn pill floating at the top:
-    //   [state pill] / [name pill] / [HP bar] / [EN bar] / (head)
+ // stack ABOVE the head, mirroring the default encounter's over-head
+ // order (nameplate nearest the actor, bars under it) with the GW
+ // state/turn pill floating at the top:
+ // [state pill] / [name pill] / [HP bar] / [EN bar] / (head)
     const headTop = spot.y - spot.h;
     const enY = headTop - 13;                       // EN bar centre
     const hpY = enY - 5.5 - 3 - 4.5;                // HP bar centre (h11, gap)
-    // name pill just above the HP bar
+ // name pill just above the HP bar
     pill(ctx, spot.x, hpY - 5.5 - 4 - 11, String(hud.name).slice(0, 16),
         'bold 13px sans-serif', 10,
         'rgba(26,21,13,0.95)', 'rgba(61,48,19,0.95)', '#FFFFFF');
-    // state / turn pill at the very top
+ // state / turn pill at the very top
     const stateText = hud.state || 'EXPLORING';
     pill(ctx, spot.x, hpY - 5.5 - 4 - 22 - 10, stateText, 'bold 10px sans-serif', 8,
         'rgba(139,26,43,0.94)', 'rgba(245,240,225,0.85)', '#F5F0E1');
-    // segmented HP bar (red→orange — the default over-head bar)
+ // segmented HP bar (red→orange - the default over-head bar)
     const hpPct = (hud.hp || 0) / (hud.maxHp || 1);
     segBar(ctx, spot.x, hpY, 112, 11, hpPct, '#d63c14', '#f59d2a');
-    // segmented EN bar (the default panel's cyan, thinner)
+ // segmented EN bar (the default panel's cyan, thinner)
     const enPct = (hud.energy || 0) / (hud.maxEnergy || 1);
     segBar(ctx, spot.x, enY, 92, 8, enPct, '#12d7f5', '#0a86c8');
 }
 
-// ── battle-in-the-room overlay bits (owner directive 2026-10-05 23:39Z) ───
+// -- battle-in-the-room overlay bits (owner directive 23:39Z) ---
 // The fight happens ON the room scene: enemies carry the default-encounter
 // name+HP plates, and the DEFAULT HUD panel rides bottom-left on EVERY room
 // scene, fed live combat pools during battle. The old gold ground ring is
-// RETIRED — the turn indicator is now the main game's floating blue crystal
-// (owner 2026-10-05: "instead of the golden circle turn indicator, scrap
+// RETIRED - the turn indicator is now the main game's floating blue crystal
+// ("instead of the golden circle turn indicator, scrap
 // that. The main game already uses that floating blue crystal, so use that
 // here too.")
 
-// ── the DEFAULT turn indicator: the main game's floating blue crystal ────
+// -- the DEFAULT turn indicator: the main game's floating blue crystal ----
 // Same owner-supplied asset the Go combat renderer floats above the active
-// unit's head (Bot_genaration assets/rpgasset/ui/crystal.png — mirrored into
+// unit's head (Bot_genaration assets/rpgasset/ui/crystal.png - mirrored into
 // core/rpgasset/ui/), same geometry recipe as renderer.go's crystal pass:
 // h = clamp(spriteH·0.30, 24, 90), twin glow halos, painted LAST so it
 // hovers over name pills and HP bars.
@@ -864,7 +860,7 @@ function crystalImg() {
     if (_crystalImg !== undefined) return Promise.resolve(_crystalImg);
     const p = path.join(UI_DIR, 'crystal.png');
     try {
-        // PNG-signature fast-fail (LFS-pointer environments skip to null)
+ // PNG-signature fast-fail (LFS-pointer environments skip to null)
         const fd = fs.openSync(p, 'r');
         const head = Buffer.alloc(8);
         fs.readSync(fd, head, 0, 8, 0);
@@ -885,7 +881,7 @@ async function drawTurnCrystal(ctx, cx, headTopY, spriteH, clearance) {
     const bottom = headTopY - clearance - 6;
     const cy = bottom - ch / 2;
     ctx.save();
-    // twin glow halos (straight alpha, renderer.go recipe)
+ // twin glow halos (straight alpha, renderer.go recipe)
     ctx.fillStyle = 'rgba(160,210,255,0.14)';
     ctx.beginPath(); ctx.arc(cx, cy, cw * 1.05, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = 'rgba(110,170,255,0.24)';
@@ -946,19 +942,19 @@ function segRow(ctx, x, y, w, h, pct, from, to) {
     }
 }
 
-// ═══ THE DEFAULT ENCOUNTER HUB — the codebase's own, from its own assets ═══
-// Owner directive 2026-10-05 01:48Z: "YOU STILL AREN'T USING THE DEFAULT
+// === THE DEFAULT ENCOUNTER HUB - the codebase's own, from its own assets ===
+// Owner directive 01:48Z: "YOU STILL AREN'T USING THE DEFAULT
 // ENCOUNTER HUB... THE ASSETS AND CODE IS RIGHT THERE, JUST TAKE IT. IT'S
-// THE DEFAULT FOR ENCOUNTERS — FIND AND ISOLATE THAT PART." Isolated: this
+// THE DEFAULT FOR ENCOUNTERS - FIND AND ISOLATE THAT PART." Isolated: this
 // is the Go combat renderer's bottom-left player_state panel, rebuilt 1:1
 // from the SAME REAL ASSETS it draws (core/rpgasset/ui/: player_state.png
-// panel, heart.png, mana.png icons, hp1-5.png / mana1-5.png bar sprites —
+// panel, heart.png, mana.png icons, hp1-5.png / mana1-5.png bar sprites -
 // the exact files renderer.go loads via uiPath()). Geometry mirrors
-// renderer.go on its 1024x687 canvas — panel normX(-716) normY(113)
+// renderer.go on its 1024x687 canvas - panel normX(-716) normY(113)
 // 453x244 (22px cropped off-canvas left, 26px bottom), heart (16,565)
 // 38x47, mana icon (21,612) 29x44, HP segments x 54/144/235 (121x47) @
 // y565, EN segments x 50/139/229 (119x42) @ y612, name centered at panel
-// centre y=519 — scaled x1.171875 onto this 1200x900 room canvas and
+// centre y=519 - scaled x1.171875 onto this 1200x900 room canvas and
 // anchored bottom-left with the same crops. Segment fill follows
 // renderer.go's drawBar exactly: each 1/3-of-max segment picks sprite
 // clamp(round(pct*4)+1, 1, 5).
@@ -968,11 +964,11 @@ const _hubAssets = { state: 0, imgs: null };       // 0=untried 1=ready -1=faile
 function hubAssets() {
     if (_hubAssets.state !== 0) return _hubAssets.state === 1 ? _hubAssets.imgs : null;
     try {
-        // ⚡ fast-fail: this repo stores most art as Git-LFS pointers (the
-        // real pixels only exist where git-lfs smudged the checkout — i.e.
-        // the game boxes). Probe the 8-byte PNG signature FIRST so pointer
-        // environments fall back after a few header reads instead of 13
-        // failed image decodes on the render hot path.
+ // fast-fail: this repo stores most art as Git-LFS pointers (the
+ // real pixels only exist where git-lfs smudged the checkout - i.e.
+ // the game boxes). Probe the 8-byte PNG signature FIRST so pointer
+ // environments fall back after a few header reads instead of 13
+ // failed image decodes on the render hot path.
         const isRealPng = (p) => {
             try {
                 const fd = fs.openSync(p, 'r');
@@ -1004,10 +1000,10 @@ function hubAssets() {
             })
             .catch((e) => {
                 _hubAssets.state = -1;
-                console.error('[roomScene] default hub assets unavailable — vector fallback panel in use:', e.message);
+                console.error('[roomScene] default hub assets unavailable - vector fallback panel in use:', e.message);
                 return null;
             });
-        // first caller awaits the promise; later callers get the cached verdict
+ // first caller awaits the promise; later callers get the cached verdict
         _hubAssets.imgs = _hubAssets.imgs.then((r) => r);
         return _hubAssets.imgs;
     } catch (e) {
@@ -1055,9 +1051,9 @@ async function drawHudPanel(ctx, hud) {
             if (imgs[hs]) ctx.drawImage(imgs[hs], G.hpXs[i], G.hpY, G.hpW, G.hpH);
             if (imgs[es]) ctx.drawImage(imgs[es], G.enXs[i], G.enY, G.enW, G.enH);
         }
-        // name — white bold with black shadow, shrink-to-fit (renderer.go
-        // uses ui/Inter-Bold.ttf; the bot repo ships without it, so the
-        // registered Cinzel kit stands in, same placement/colour treatment)
+ // name - white bold with black shadow, shrink-to-fit (renderer.go
+ // uses ui/Inter-Bold.ttf; the bot repo ships without it, so the
+ // registered Cinzel kit stands in, same placement/colour treatment)
         const name = String(hud.name || 'Explorer').slice(0, 16);
         for (let size = G.nameSize; size >= 14; size -= 2) {
             ctx.font = `bold ${size}px "Cinzel", sans-serif`;
@@ -1073,8 +1069,8 @@ async function drawHudPanel(ctx, hud) {
         ctx.restore();
         return;
     }
-    // ── vector fallback (assets missing in this environment): dark panel
-    // approximation of player_state.png — never the rejected parchment.
+ // -- vector fallback (assets missing in this environment): dark panel
+ // approximation of player_state.png - never the rejected parchment.
     const G = _hubGeom();
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 4;
@@ -1098,18 +1094,18 @@ async function drawHudPanel(ctx, hud) {
     ctx.restore();
 }
 
-// ── ambient props (vector, palette-matched, subtle) ─────────────────────
-// QA pass 2026-10-04: the first drafts rendered too pale and too tall — they
+// -- ambient props (vector, palette-matched, subtle) ---------------------
+// QA pass the first drafts rendered too pale and too tall - they
 // read as shields nailed to the wall. Now: dark floor-hugging silhouettes
 // (stone/terracotta tones sampled from the plates) with a soft contact
 // shadow, drawn low so they always sit ON the floor plane.
 const STONE = ['#453f33', '#3a3529', '#514a3b'];
 const STONE_DARK = 'rgba(22,20,15,0.6)';
 function drawProp(ctx, kind, x, groundY, s) {
-    // 🔄 SHADOW UNIFICATION (owner ruins_fixes.txt #6): props drew their own
-    // flat dark ellipse — a different shadow language than the actors'
-    // two-layer depth-aware contact shadow. Same contact shadow now, scaled
-    // to the prop, so crates/urns/bones ground exactly like everyone else.
+ // SHADOW UNIFICATION (owner ruins_fixes.txt #6): props drew their own
+ // flat dark ellipse - a different shadow language than the actors'
+ // two-layer depth-aware contact shadow. Same contact shadow now, scaled
+ // to the prop, so crates/urns/bones ground exactly like everyone else.
     drawContactShadow(ctx, x, groundY, 46 * s, 32 * s, 1, { hug: true });
     ctx.save();
     ctx.globalAlpha = 0.92;
@@ -1122,7 +1118,7 @@ function drawProp(ctx, kind, x, groundY, s) {
         ctx.strokeRect(-19, -32, 38, 32);
         ctx.beginPath(); ctx.moveTo(-19, -32); ctx.lineTo(19, 0); ctx.moveTo(19, -32); ctx.lineTo(-19, 0); ctx.stroke();
     } else if (kind === 'urn') {
-        // dark terracotta amphora silhouette
+ // dark terracotta amphora silhouette
         ctx.fillStyle = '#4e3b2c';
         ctx.beginPath();
         ctx.moveTo(-4, -34);                      // neck top L
@@ -1134,7 +1130,7 @@ function drawProp(ctx, kind, x, groundY, s) {
         ctx.strokeStyle = 'rgba(24,18,12,0.8)'; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(-6, -34); ctx.lineTo(6, -34); ctx.stroke();
     } else if (kind === 'bones') {
-        // pixel-coherent bone scatter — same language as the skulls variant
+ // pixel-coherent bone scatter - same language as the skulls variant
         const r2 = mapEngine.makeRng(`prop:bones:${Math.round(x)}:${Math.round(groundY)}`);
         roomVariants.drawBoneCluster(ctx, 0, 0, 0.42, () => r2.next());
     } else if (kind === 'rocks') {
@@ -1152,7 +1148,7 @@ function drawProp(ctx, kind, x, groundY, s) {
         ctx.fillStyle = STONE_DARK;
         ctx.beginPath(); ctx.ellipse(0, -1, 18, 3, 0, 0, Math.PI * 2); ctx.fill();
     } else if (kind === 'moss') {
-        // dithered pixel speck patch — no more flat green ellipse
+ // dithered pixel speck patch - no more flat green ellipse
         const r2 = mapEngine.makeRng(`prop:moss:${Math.round(x)}:${Math.round(groundY)}`);
         for (let k = 0; k < 30; k++) {
             const a = r2.next() * Math.PI * 2;
@@ -1167,7 +1163,7 @@ function drawProp(ctx, kind, x, groundY, s) {
     ctx.restore();
 }
 
-// ── room-type CONTENT (the gameplay payload made visible — §6) ─────────────
+// -- room-type CONTENT (the gameplay payload made visible - §6) -------------
 function glowSpot(ctx, x, y, r, color) {
     const g = ctx.createRadialGradient(x, y, 2, x, y, r);
     g.addColorStop(0, color);
@@ -1179,38 +1175,38 @@ function glowSpot(ctx, x, y, r, color) {
 async function drawRoomContent(ctx, room, plan) {
     const rng = mapEngine.makeRng(`content:${room.key}:${room.state}`);
     const t = room.type;
-    // content anchor: the point-of-interest zone sits OPPOSITE the champion
-    // (mirrored to the left half when they entered from the right door)
-    // 🔄 ITEMS-BEHIND-THE-HUD (owner ruins_fixes.txt #3): when the mirrored
-    // anchor would park the item inside the hub panel's corner, lift it to
-    // the floor strip just ABOVE the panel so it always reads as behind the
-    // HUD (the panel also draws later and wins z-order regardless).
+ // content anchor: the point-of-interest zone sits OPPOSITE the champion
+ // (mirrored to the left half when they entered from the right door)
+ // ITEMS-BEHIND-THE-HUD (owner ruins_fixes.txt #3): when the mirrored
+ // anchor would park the item inside the hub panel's corner, lift it to
+ // the floor strip just ABOVE the panel so it always reads as behind the
+ // HUD (the panel also draws later and wins z-order regardless).
     const spot = plan.playerSpot || SPAWN_SPOTS[DEFAULT_ENTRY];
     let ax = spot.x > 700 ? 380 : 820, ay = 700;
     if (ax < HUB_ZONE.x1 && ay > HUB_ZONE.y0) ay = 588;
     if (room.state === 'CLEARED') {
-        // cleared rooms keep a faint scar of what was here (never empty-identical).
-        // discovery/reward/secret fall through to the switch — their CLEARED
-        // branches draw the aftermath (dig scar / emptied vault / torn-out idol).
+ // cleared rooms keep a faint scar of what was here (never empty-identical).
+ // discovery/reward/secret fall through to the switch - their CLEARED
+ // branches draw the aftermath (dig scar / emptied vault / torn-out idol).
         if (t === 'combat' || t === 'coop' || t === 'core') glowSpot(ctx, ax, ay - 20, 70, 'rgba(120,140,90,0.10)');
         if (!['discovery', 'reward', 'secret'].includes(t)) return;
     }
     switch (t) {
         case 'discovery': {
-            // buried cache: the RUBBLE the caption promises (real sprite),
-            // with a faint gold glint breathing through the stones. After
-            // `dig` the rubble is GONE and the gold coins lie in its place —
-            // but ONLY while the digger stays in the room (owner 2026-10-06:
-            // "the gold is supposed to despawn after you leave the room").
-            // Once they walk away the coins despawn with their presence and
-            // the room keeps a permanent LOOTED marker: the excavated pit.
+ // buried cache: the RUBBLE the caption promises (real sprite),
+ // with a faint gold glint breathing through the stones. After
+ // `dig` the rubble is GONE and the gold coins lie in its place -
+ // but ONLY while the digger stays in the room (
+ // "the gold is supposed to despawn after you leave the room").
+ // Once they walk away the coins despawn with their presence and
+ // the room keeps a permanent LOOTED marker: the excavated pit.
             const looted = room.state === 'CLEARED' && !room.lootFresh;
             if (looted) {
-                // 🕳️ a RECESS casts no drop shadow (owner 2026-10-06: the old
-                // actor shadow under the pit read as "a floating hole in the
-                // ground") — the pit is grounded by a disturbed-earth AO wash
-                // drawn BEFORE the sprite, so the floor darkens AROUND the rim
-                // and the baked interior does the depth. No ellipse below it.
+ // a RECESS casts no drop shadow (the old
+ // actor shadow under the pit read as "a floating hole in the
+ // ground") - the pit is grounded by a disturbed-earth AO wash
+ // drawn BEFORE the sprite, so the floor darkens AROUND the rim
+ // and the baked interior does the depth. No ellipse below it.
                 glowSpot(ctx, ax, ay - 30, 84, 'rgba(28,22,14,0.20)');
                 await drawGroundedSprite(ctx, [GW_PROP_DIR], 'cache_dug.png', ax, ay, 96, { shadow: false });
                 pill(ctx, ax, ay - 122, 'LOOTED', 'bold 12px "Cinzel", sans-serif', 10,
@@ -1223,19 +1219,19 @@ async function drawRoomContent(ctx, room, plan) {
             break;
         }
         case 'reward': {
-            // old-world vault: the reliquary chest as a real sprite. After
-            // `take` the chest stands OPEN (lid up, gold glow in the cavity)
-            // with the CLAIMED marker (owner directive 2026-10-05: "the
-            // chest is supposed to be open in the next sprite that says
-            // Claimed"). Owner 2026-10-06: the COINS in the cavity despawn
-            // with the taker's presence — returns show the same open chest,
-            // cavity empty (cache_chest_empty), still CLAIMED.
+ // old-world vault: the reliquary chest as a real sprite. After
+ // `take` the chest stands OPEN (lid up, gold glow in the cavity)
+ // with the CLAIMED marker (owner directive "the
+ // chest is supposed to be open in the next sprite that says
+ // Claimed"). the COINS in the cavity despawn
+ // with the taker's presence - returns show the same open chest,
+ // cavity empty (cache_chest_empty), still CLAIMED.
             const open = room.state === 'CLEARED';
             const fresh = open && !!room.lootFresh;   // taker still in the room → coins still gleam
             glowSpot(ctx, ax, ay - 30, 100, 'rgba(255,215,90,0.20)');
-            // 🧰 open sprite carries the raised lid on top (210 vs 195 content
-            // rows, identical 126-row body) — render height 162 keeps the BOX
-            // the same visual size so the closed→open swap doesn't shrink it.
+ // open sprite carries the raised lid on top (210 vs 195 content
+ // rows, identical 126-row body) - render height 162 keeps the BOX
+ // the same visual size so the closed→open swap doesn't shrink it.
             await drawGroundedSprite(ctx, [GW_PROP_DIR], open ? (fresh ? 'cache_chest_open.png' : 'cache_chest_empty.png') : 'cache_chest.png', ax, ay, open ? 162 : 150, { shadow: true, shadowHug: true, shadowBoost: 1.35 });
             if (open) {
                 glowSpot(ctx, ax, ay - 64, 46, fresh ? 'rgba(255,215,90,0.16)' : 'rgba(255,215,90,0.05)');
@@ -1245,8 +1241,8 @@ async function drawRoomContent(ctx, room, plan) {
             break;
         }
         case 'hazard': {
-            // trapped passage: the SPIKE TRAP as a real sprite (rusty iron
-            // row on a stone base) + acid-green sheen on the floor
+ // trapped passage: the SPIKE TRAP as a real sprite (rusty iron
+ // row on a stone base) + acid-green sheen on the floor
             glowSpot(ctx, ax, ay - 10, 90, 'rgba(140,255,80,0.12)');
             await drawGroundedSprite(ctx, [GW_PROP_DIR], 'hazard_spikes.png', ax, ay, 110, { shadow: true, shadowHug: true, shadowBoost: 1.35 });
             ctx.fillStyle = 'rgba(140,255,80,0.10)';
@@ -1254,8 +1250,8 @@ async function drawRoomContent(ctx, room, plan) {
             break;
         }
         case 'lore': {
-            // inscribed hall: the RUNE STELE as a real sprite (weathered
-            // stone tablet, teal glyphs), warm glow band + motes kept
+ // inscribed hall: the RUNE STELE as a real sprite (weathered
+ // stone tablet, teal glyphs), warm glow band + motes kept
             glowSpot(ctx, ax, 360, 150, 'rgba(120,220,240,0.14)');
             await drawGroundedSprite(ctx, [GW_PROP_DIR], 'lore_stele.png', ax, ay, 175, { shadow: true, shadowHug: true, shadowBoost: 1.35 });
             ctx.fillStyle = 'rgba(255,220,140,0.55)';
@@ -1269,14 +1265,14 @@ async function drawRoomContent(ctx, room, plan) {
             break;
         }
         case 'anomaly': {
-            // world-thin hall: the shimmering RIFT as a real sprite standing
-            // on the floor, cool glow pooling under it
+ // world-thin hall: the shimmering RIFT as a real sprite standing
+ // on the floor, cool glow pooling under it
             glowSpot(ctx, ax, ay - 60, 120, 'rgba(90,120,255,0.20)');
             await drawGroundedSprite(ctx, [GW_PROP_DIR], 'anomaly_rift.png', ax, ay, 230, { shadow: true, shadowHug: true, shadowBoost: 1.35 });
             break;
         }
         case 'landmark': {
-            // the landmark itself: the etched OBELISK as a real sprite
+ // the landmark itself: the etched OBELISK as a real sprite
             const name = (typeof room.payload?.get === 'function' ? room.payload.get('landmarkName') : room.payload?.landmarkName) || '';
             glowSpot(ctx, ax, ay - 90, 110, 'rgba(200,210,255,0.10)');
             await drawGroundedSprite(ctx, [GW_PROP_DIR], 'landmark_obelisk.png', ax, ay, 260, { shadow: true, shadowHug: true, shadowBoost: 1.35 });
@@ -1291,10 +1287,9 @@ async function drawRoomContent(ctx, room, plan) {
         }
         case 'secret': {
             if (!plan.enemies.length) {
-                // hidden chamber: the RELIC PEDESTAL as a real sprite — the
-                // prize stone with its glowing idol. Owner 2026-10-06: after
-                // `claim` the idol despawns with the taker's presence —
-                // returns see the torn-out setting gape empty + CLAIMED.
+ // hidden chamber: the RELIC PEDESTAL as a real sprite - the
+ // prize stone with its glowing idol. after
+ // `claim` the idol despawns with the taker's presence -
                 const looted = room.state === 'CLEARED' && !room.lootFresh;
                 glowSpot(ctx, ax, ay - 40, 110, looted ? 'rgba(150,130,160,0.07)' : 'rgba(240,110,230,0.18)');
                 await drawGroundedSprite(ctx, [GW_PROP_DIR], looted ? 'secret_pedestal_empty.png' : 'secret_relic.png', ax, ay, 150, { shadow: true, shadowHug: true, shadowBoost: 1.35 });
@@ -1306,11 +1301,11 @@ async function drawRoomContent(ctx, room, plan) {
             break;
         }
         case 'puzzle': {
-            // carved RUNE STONES flanking the mechanism (the board overlays
-            // centre) — real sprites, mirrored for symmetry. Anchored just
-            // OUTSIDE the encounter card's footprint (drawPuzzleOverlay now
-            // centres a ~70% board: x 180-1020, y 135-765) so the stones read
-            // as the mechanism's flanking pillars, never swallowed by it.
+ // carved RUNE STONES flanking the mechanism (the board overlays
+ // centre) - real sprites, mirrored for symmetry. Anchored just
+ // OUTSIDE the encounter card's footprint (drawPuzzleOverlay now
+ // centres a ~70% board: x 180-1020, y 135-765) so the stones read
+ // as the mechanism's flanking pillars, never swallowed by it.
             for (const [gx, flip] of [[140, true], [1060, false]]) {
                 await drawGroundedSprite(ctx, [GW_PROP_DIR], 'puzzle_rune.png', gx, 726, 118, { shadow: true, flip, shadowHug: true, shadowBoost: 1.35 });
             }
@@ -1321,7 +1316,7 @@ async function drawRoomContent(ctx, room, plan) {
     }
 }
 
-// ── room-type label (caption-level; the on-image banner is GONE) ──
+// -- room-type label (caption-level; the on-image banner is GONE) --
 const TYPE_LABEL = {
     empty: 'QUIET HALL', combat: 'ENEMY PATROL', puzzle: 'SEALED MECHANISM',
     discovery: 'BURIED CACHE', reward: 'OLD-WORLD VAULT', hazard: 'TRAPPED PASSAGE',
@@ -1330,22 +1325,22 @@ const TYPE_LABEL = {
     finale: 'THE WARDEN',
 };
 
-// ── ENCOUNTER CARD OVERLAY (owner ruins_fixes.txt #7, 2026-10-05) ──────
+// -- ENCOUNTER CARD OVERLAY (owner ruins_fixes.txt #7, ) ------
 // The overlay used to ride UNDER the HUD panel (and behind the turn
-// crystal) — the bottom-left panel visibly clipped the card. New rules:
-//   • LAYERING: painted LAST — in front of the HUD, the pills, everything.
-//   • SIZE: ~70% of the screen (840×630 on the 1200×900 canvas), centred.
-//   • FOCUS: the whole scene dims behind the card (the room stays legible
-//     underneath, but the card is unmistakably the focus).
+// crystal) - the bottom-left panel visibly clipped the card. New rules:
+// • LAYERING: painted LAST - in front of the HUD, the pills, everything.
+// • SIZE: ~70% of the screen (840×630 on the 1200×900 canvas), centred.
+// • FOCUS: the whole scene dims behind the card (the room stays legible
+// underneath, but the card is unmistakably the focus).
 async function drawPuzzleOverlay(ctx, boardBuf) {
     if (!boardBuf) return;
-    // tolerate every IPC shape a Buffer can arrive in
+ // tolerate every IPC shape a Buffer can arrive in
     let buf = boardBuf;
     if (!Buffer.isBuffer(buf) && buf && buf.type === 'Buffer' && Array.isArray(buf.data)) buf = Buffer.from(buf.data);
     if (!Buffer.isBuffer(buf)) return;
     let img = null;
     try { img = await loadImage(buf); } catch (e) { return; }
-    // dim backdrop — everything behind the card steps back
+ // dim backdrop - everything behind the card steps back
     ctx.save();
     ctx.fillStyle = 'rgba(6,5,10,0.55)';
     ctx.fillRect(0, 0, W, H);
@@ -1374,7 +1369,7 @@ function roundRect(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
-// ── exits from the live doc (adjacency is the ONLY source — no hardcode) ──
+// -- exits from the live doc (adjacency is the ONLY source - no hardcode) --
 function exitsFor(eventDoc, player) {
     const topo = state.topologyOf(eventDoc);
     const DIRS = ['n', 'e', 's', 'w'];
@@ -1387,16 +1382,15 @@ function exitsFor(eventDoc, player) {
     });
 }
 
-// ── ROOM DESIGN VARIANTS (owner directive 2026-10-06) ──────────────────────
+// -- ROOM DESIGN VARIANTS (owner directive ) ----------------------
 // The roster lives in roomVariants.js: `intact` (the untouched plate) + 10
-// designs — mossy / sandy / flooded / cracked / skulls / overgrown / dim /
-// skill / crystal / emberfall — each BAKED into the plate pixels per room
+// designs - mossy / sandy / flooded / cracked / skulls / overgrown / dim /
+// skill / crystal / emberfall - each BAKED into the plate pixels per room
 // (state.js assigns the variant at event start; a room always renders the
 // SAME design). Doorway mouths, walkways, torch flames and chains are never
 // repainted, so navigation imagery stays pixel-identical across variants.
-//
-// 🔁 The interim layer-triple designs (mossfloor/frost/ember/blight/gilded/
-// hallowed/arcane/crimson — plain PNG sheets blended over the art, the ones
+// The interim layer-triple designs (mossfloor/frost/ember/blight/gilded/
+// hallowed/arcane/crimson - plain PNG sheets blended over the art, the ones
 // the owner rejected as "a white square layered poorly on the floor") map
 // onto their baked equivalents, so rooms baked in live events keep a design.
 const VARIANT_ALIASES = {
@@ -1417,7 +1411,7 @@ function variantOfRoom(room) {
     return ROOM_VARIANTS.includes(v) ? v : 'intact';
 }
 
-// ── main render (in worker; plan is computed by the parent) ──
+// -- main render (in worker; plan is computed by the parent) --
 
 // opts: { exits?, prefix, puzzleBoard?(Buffer), labelOverride?, style?, plan? }
 async function _renderInProcess(eventDoc, player, room, opts = {}) {
@@ -1426,11 +1420,11 @@ async function _renderInProcess(eventDoc, player, room, opts = {}) {
     const plan = opts.plan || planFor(eventDoc, player, room, exits);
     const battle = opts.battle || null;
 
-    // ⚔️ BATTLE-IN-THE-ROOM (owner directive 2026-10-05 23:39Z: "the battle
-    // system should happen directly on top of that existing room scene"):
-    // the fight re-uses THIS EXACT scene — only live state layers on. The
-    // champion's pools feed the HUD, dead enemies simply leave the scene
-    // (no pose swap, no corpse sprite), and the active actor is ringed.
+ // BATTLE-IN-THE-ROOM (owner directive 23:39Z: "the battle
+ // system should happen directly on top of that existing room scene"):
+ // the fight re-uses THIS EXACT scene - only live state layers on. The
+ // champion's pools feed the HUD, dead enemies simply leave the scene
+ // (no pose swap, no corpse sprite), and the active actor is ringed.
     if (battle) {
         if (battle.player) {
             plan.hud.hp = Math.max(0, Math.floor(battle.player.hp ?? plan.hud.hp));
@@ -1453,28 +1447,28 @@ async function _renderInProcess(eventDoc, player, room, opts = {}) {
     const c = createCanvas(W, H);
     const ctx = c.getContext('2d');
 
-    // 1) the world — with the room's design variant baked into the plate
+ // 1) the world - with the room's design variant baked into the plate
     const bg = await plateFor(exits, `${eventDoc.seed}:${room.key}`, variantOfRoom(room));
     ctx.drawImage(bg, 0, 0, W, H);
     drawTint(ctx, room);
     if (room.state === 'CLEARED') drawClearedWash(ctx);
 
-    // 2) ambient props (under everything alive)
+ // 2) ambient props (under everything alive)
     for (const prop of plan.props || []) drawProp(ctx, prop.kind, prop.x, prop.y, prop.s);
 
-    // 2b) exit chevrons at the arches (yellow — §9). GROUND LAYER — painted
-    // UNDER room content, enemies and the champion so the pointers read as
-    // floor markings, never cover a sprite (owner 2026-10-06: "they render
-    // over player sprites and such — they should render behind things").
+ // 2b) exit chevrons at the arches (yellow - §9). GROUND LAYER - painted
+ // UNDER room content, enemies and the champion so the pointers read as
+ // floor markings, never cover a sprite ("they render
+ // over player sprites and such - they should render behind things").
     drawExitArrows(ctx, exits);
 
-    // 3) room-type content (payload presentation — enemies drawn below)
+ // 3) room-type content (payload presentation - enemies drawn below)
     await drawRoomContent(ctx, room, plan);
 
-    // 4) the SEEDED enemy pack (combat/coop/core/boss) + other players —
-    // depth-ordered so nearer packs overlap farther ones naturally. The
-    // active actor collects a crystal job instead of an inline marker — the
-    // crystal pass paints LAST so it hovers over pills and bars.
+ // 4) the SEEDED enemy pack (combat/coop/core/boss) + other players -
+ // depth-ordered so nearer packs overlap farther ones naturally. The
+ // active actor collects a crystal job instead of an inline marker - the
+ // crystal pass paints LAST so it hovers over pills and bars.
     const SEARCH_DIRS = [ENEMY_DIR, path.join(CHAR_DIR, 'clean'), CHAR_DIR];
     const crystalJobs = [];
     const actors = [...(plan.enemies || []), ...(plan.mates || []), ...(plan.rivals || [])].sort((a, b) => a.y - b.y);
@@ -1483,21 +1477,21 @@ async function _renderInProcess(eventDoc, player, room, opts = {}) {
         if (e.active && drawn) crystalJobs.push({ cx: e.x, headTop: e.y - e.h, spriteH: e.h, clearance: 40 });
     }
 
-    // 5) the champion — ASSIGNED sprite, grounded at their ENTRY-DOOR spot,
-    // facing AWAY from that door into the room (owner directive
-    // 2026-10-05 23:39Z) + the crystal when it's their beat
+ // 5) the champion - ASSIGNED sprite, grounded at their ENTRY-DOOR spot,
+ // facing AWAY from that door into the room (owner directive
+ // 23:39Z) + the crystal when it's their beat
     const spot = plan.playerSpot;
     const drawnMe = await drawGroundedSprite(ctx, [path.join(CHAR_DIR, 'clean'), CHAR_DIR], plan.spriteFile, spot.x, spot.y, spot.h, { shadow: true, flip: !!spot.flip });
     if (battle && battle.active === 'player' && drawnMe) crystalJobs.push({ cx: spot.x, headTop: spot.y - spot.h, spriteH: spot.h, clearance: 78 });
 
-    // 7) DEFAULT-ENCOUNTER over-head HUD (name pill + segmented bars +
-    // state/turn pill) — the owner LIKES this ("keep that", 23:39Z); in
-    // battle it carries the live combat pools and the turn counter.
+ // 7) DEFAULT-ENCOUNTER over-head HUD (name pill + segmented bars +
+ // state/turn pill) - the owner LIKES this ("keep that", 23:39Z); in
+ // battle it carries the live combat pools and the turn counter.
     drawOverheadHud(ctx, plan);
 
-    // 7b) enemy over-head plates — the default-encounter language: name
-    // pill (battle only) + segmented HP bar over every LIVING enemy. On
-    // the pre-fight intro they show full bars (the pack at full strength).
+ // 7b) enemy over-head plates - the default-encounter language: name
+ // pill (battle only) + segmented HP bar over every LIVING enemy. On
+ // the pre-fight intro they show full bars (the pack at full strength).
     for (const e of plan.enemies || []) {
         const st = e.st || null;
         const hpMax = Math.max(1, Math.floor(st?.maxHp || 100));
@@ -1509,35 +1503,35 @@ async function _renderInProcess(eventDoc, player, room, opts = {}) {
         segBar(ctx, e.x, showName ? headTop - 11 : headTop - 14, e.boss ? 126 : 94, 9, hp / hpMax, '#d63c14', '#f59d2a');
     }
 
-    // 8) THE DEFAULT ENCOUNTER HUB — the codebase's own player_state panel
-    // (real ui assets, renderer.go geometry), topmost layer like the
-    // default encounter's; battle renders feed it live pools.
+ // 8) THE DEFAULT ENCOUNTER HUB - the codebase's own player_state panel
+ // (real ui assets, renderer.go geometry), topmost layer like the
+ // default encounter's; battle renders feed it live pools.
     await drawHudPanel(ctx, plan.hud);
 
-    // 9) THE FLOATING BLUE CRYSTAL — the DEFAULT turn indicator — painted
-    // above the active actor's whole HUD stack
+ // 9) THE FLOATING BLUE CRYSTAL - the DEFAULT turn indicator - painted
+ // above the active actor's whole HUD stack
     for (const j of crystalJobs) await drawTurnCrystal(ctx, j.cx, j.headTop, j.spriteH, j.clearance);
 
-    // 10) ENCOUNTER CARD OVERLAY — LAST (owner ruins_fixes.txt #7): in
-    // front of the HUD and everything else, ~70% of the screen, centred,
-    // scene dimmed behind it.
+ // 10) ENCOUNTER CARD OVERLAY - LAST (owner ruins_fixes.txt #7): in
+ // front of the HUD and everything else, ~70% of the screen, centred,
+ // scene dimmed behind it.
     if (opts.puzzleBoard) await drawPuzzleOverlay(ctx, opts.puzzleBoard);
 
     return c.toBuffer('image/png');
 }
 
-// ── parent entry: resolve the plan (economy/class reads stay OUT of the
+// -- parent entry: resolve the plan (economy/class reads stay OUT of the
 // worker), then render via the shared child pool (canvas work must never
-// stall the bot's event loop at war scale) ──
-// ⚔️ POOL PARALLELISM FIX (owner live-test report #2, 2026-10-07: "Mine is
+// stall the bot's event loop at war scale) --
+// POOL PARALLELISM FIX (owner live-test report #2, "Mine is
 // bring message slow ASF" + text-only encounter cards): the old pool capped
-// inflight at 2 but sent EVERY task to children[0] — one child process
+// inflight at 2 but sent EVERY task to children[0] - one child process
 // serialized ALL room renders (the second "worker" only queued inside that
 // same child). A 7-champion war's move burst then stacked 12s timeouts →
 // in-process fallback renders ON the bot loop → every later DM stalled past
 // the 20s serialization deadline and fell through to the generic pipeline
 // ("No active game in this chat"). The pool now spawns up to `max` children
-// and routes each task to the LEAST-LOADED child — true parallel canvas.
+// and routes each task to the LEAST-LOADED child - true parallel canvas.
 const { fork } = require('child_process');
 // lazy (keeps this module worker-safe): memory probe for the child pool
 const _renderQ = () => require('../../utils/renderQueue');
@@ -1545,10 +1539,10 @@ const _pool = { children: [], queue: [], inflight: 0, max: 6 };
 let _seq = 0;
 
 function _spawnChild() {
-    // ⚔️ QA FIX (§8): default fork() IPC serialization is JSON — Buffers (the
-    // puzzle board) arrive as plain {type:'Buffer'} objects and loadImage
-    // silently failed, so LIVE players never saw the puzzle overlay. 'advanced'
-    // (structured clone) preserves Buffers across the IPC boundary.
+ // QA FIX (§8): default fork() IPC serialization is JSON - Buffers (the
+ // puzzle board) arrive as plain {type:'Buffer'} objects and loadImage
+ // silently failed, so LIVE players never saw the puzzle overlay. 'advanced'
+ // (structured clone) preserves Buffers across the IPC boundary.
     const child = fork(path.join(__dirname, 'renderWorker.js'), [], { stdio: 'ignore', serialization: 'advanced' });
     child._gwBusy = 0;
     child.on('exit', () => {
@@ -1560,8 +1554,8 @@ function _spawnChild() {
 }
 
 // least-loaded live child, spawning one while under the cap
-// OWNER QUEUE RULE (2026-10-08): never spawn a NEW canvas child when box
-// memory is critical — reuse the loaded ones instead; a fresh child's first
+// OWNER QUEUE RULE: never spawn a NEW canvas child when box
+// memory is critical - reuse the loaded ones instead; a fresh child's first
 // render under memory pressure is exactly the spike that got us SIGKILLed.
 function _pickChild() {
     let best = null;
@@ -1606,18 +1600,18 @@ async function renderRoomScene(eventDoc, player, room, opts = {}) {
         const plain = (x) => (x && typeof x.toObject === 'function') ? x.toObject({ depopulate: true }) : x;
         const roomPlain = plain(room) || room;
         const exits = exitsFor(eventDoc, player);
-        // the plan (HUD data + sprite file + content placement) is computed
-        // PARENT-side — the worker stays free of economy/progression requires
+ // the plan (HUD data + sprite file + content placement) is computed
+ // PARENT-side - the worker stays free of economy/progression requires
         const plan = opts.plan || planFor(eventDoc, player, roomPlain, exits);
         const childOpts = { ...opts, exits, plan };
         return await _renderViaChild(plain(eventDoc), plain(player), roomPlain, childOpts);
     } catch (e) {
-        // OWNER QUEUE RULE (2026-10-08): a memory-brake or queue-full refusal
-        // is FINAL — re-rendering in-process would pile canvas memory onto
-        // the same box that just said "no". Fail through to the caller's
-        // text path instead.
+ // OWNER QUEUE RULE: a memory-brake or queue-full refusal
+ // is FINAL - re-rendering in-process would pile canvas memory onto
+ // the same box that just said "no". Fail through to the caller's
+ // text path instead.
         if (e && (e.code === 'EMEM' || e.code === 'EQUEUEFULL')) throw e;
-        // fallback: block briefly rather than fail the player's room
+ // fallback: block briefly rather than fail the player's room
         return _renderInProcess(eventDoc, player, room, opts);
     }
 }
@@ -1627,11 +1621,11 @@ module.exports = {
     DOORS, SPAWN_SPOTS, DEFAULT_ENTRY, ENTRY_FLIP, entryDirOf, perspH, TYPE_LABEL,
     planFor, hudFor, resolvePlayerSpriteFile, ENEMY_POOL, BOSS_POOL,
     ROOM_VARIANTS, variantOfRoom, ensureFonts, facingForSpot, HUB_ZONE,
-    // test surface: sprite-shadow isolation probes (owner item-shadow fix)
+ // test surface: sprite-shadow isolation probes (owner item-shadow fix)
     drawGroundedSprite, drawContactShadow, contentBox,
     roomVariants,
-    // 🕳️ abyss overhaul (2026-10-09): the abyss scene renderer reuses the
-    // SAME HUD toolkit so both modes speak one visual language — additive
-    // exports only, zero behavior change
+ // abyss overhaul: the abyss scene renderer reuses the
+ // SAME HUD toolkit so both modes speak one visual language - additive
+ // exports only, zero behavior change
     pill, segBar, drawTurnCrystal, drawHudPanel,
 };

@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 // Comprehensive rune test - verifies every rune type's modifiers are
 // correctly applied by applyRuneModifiers to the skill effect.
-//
 // Usage: node scripts/test_all_runes.js
 
 const mongoose = require('mongoose');
@@ -21,7 +20,7 @@ async function main() {
   const RUNE_TYPES = runeSystem.RUNE_TYPES;
   const RUNE_TIERS = runeSystem.RUNE_TIERS;
 
-  // Base effect template (a typical single-target physical attack)
+ // Base effect template (a typical single-target physical attack)
   const baseEffect = {
     multiplier: 2.0,
     damageType: 'physical',
@@ -38,7 +37,7 @@ async function main() {
   console.log('═'.repeat(80));
 
   for (const [typeId, runeType] of Object.entries(RUNE_TYPES)) {
-    // Test with LESSER tier (index 0)
+ // Test with LESSER tier (index 0)
     const tierId = 'LESSER';
     const fakeRune = { type: typeId, tier: tierId };
     const tierIdx = RUNE_TIERS[tierId]?.multIndex ?? 0;
@@ -53,11 +52,10 @@ async function main() {
       continue;
     }
 
-    // Verify expected fields are set based on rune properties
     const checks = [];
     const r = runeType;
 
-    // damageMult - should modify multiplier
+ // damageMult - should modify multiplier
     if (r.damageMult) {
       const expectedMult = baseEffect.multiplier * r.damageMult[tierIdx];
       if (Math.abs(modified.multiplier - expectedMult) > 0.01) {
@@ -65,7 +63,7 @@ async function main() {
       }
     }
 
-    // energyCostMult - should modify cost
+ // energyCostMult - should modify cost
     if (r.energyCostMult) {
       const expectedCost = Math.ceil(baseEffect.cost * r.energyCostMult[tierIdx]);
       if (modified.cost !== expectedCost) {
@@ -73,14 +71,14 @@ async function main() {
       }
     }
 
-    // critBonus
+ // critBonus
     if (r.critBonus) {
       if (!modified.critBonus || modified.critBonus < r.critBonus[tierIdx]) {
         checks.push(`critBonus: expected >= ${r.critBonus[tierIdx]}, got ${modified.critBonus || 0}`);
       }
     }
 
-    // targetBonus
+ // targetBonus
     if (r.targetBonus) {
       const expectedTargets = baseEffect.targets + r.targetBonus[tierIdx];
       if (modified.targets !== expectedTargets) {
@@ -88,131 +86,130 @@ async function main() {
       }
     }
 
-    // defIgnorePct
+ // defIgnorePct
     if (r.defIgnorePct) {
       if (!modified.ignoreDefense || modified.ignoreDefense < r.defIgnorePct[tierIdx]) {
         checks.push(`ignoreDefense: expected >= ${r.defIgnorePct[tierIdx]}, got ${modified.ignoreDefense || 0}`);
       }
     }
 
-    // cannotEvade
+ // cannotEvade
     if (r.cannotEvade) {
       if (!modified.cannotEvade) {
         checks.push('cannotEvade: expected true, got false/undefined');
       }
     }
 
-    // convertElement
+ // convertElement
     if (r.convertElement) {
       if (modified.element !== r.convertElement) {
         checks.push(`element: expected ${r.convertElement}, got ${modified.element || 'undefined'}`);
       }
     }
 
-    // convertDamageType
+ // convertDamageType
     if (r.convertDamageType) {
       if (modified.damageType !== r.convertDamageType) {
         checks.push(`damageType: expected ${r.convertDamageType}, got ${modified.damageType}`);
       }
     }
 
-    // convertTargeting
+ // convertTargeting
     if (r.convertTargeting) {
       if (modified.targeting !== r.convertTargeting) {
         checks.push(`targeting: expected ${r.convertTargeting}, got ${modified.targeting}`);
       }
     }
 
-    // convertSingleToAOE
+ // convertSingleToAOE
     if (r.convertSingleToAOE) {
       if (!modified.targeting || modified.targeting === 'SINGLE') {
         checks.push('convertSingleToAOE: targeting still SINGLE');
       }
     }
 
-    // chainBounces
+ // chainBounces
     if (r.chainBounces) {
       if (!modified.chainBounces || modified.chainBounces < 1) {
         checks.push('chainBounces: expected >= 1, got ' + modified.chainBounces);
       }
     }
 
-    // splitIntoHits
+ // splitIntoHits
     if (r.splitIntoHits) {
       if (!modified.splitIntoHits || modified.splitIntoHits < 1) {
         checks.push('splitIntoHits: expected >= 1, got ' + modified.splitIntoHits);
       }
     }
 
-    // bypassShield
+ // bypassShield
     if (r.bypassShield) {
       if (!modified.bypassShield) {
         checks.push('bypassShield: expected true');
       }
     }
 
-    // guaranteedCrit
+ // guaranteedCrit
     if (r.guaranteedCrit) {
       if (!modified.guaranteedCrit) {
         checks.push('guaranteedCrit: expected true');
       }
     }
 
-    // groundEffect
+ // groundEffect
     if (r.groundEffect) {
       if (!modified.groundEffect) {
         checks.push('groundEffect: expected to be set');
       }
     }
 
-    // lifestealPercent
+ // lifestealPercent
     if (r.lifestealPercent) {
       if (!modified.lifestealPercent || modified.lifestealPercent < 1) {
         checks.push('lifestealPercent: expected >= 1, got ' + modified.lifestealPercent);
       }
     }
 
-    // energyRestore
+ // energyRestore
     if (r.energyRestore) {
       if (!modified.energyRestore || modified.energyRestore < 1) {
         checks.push('energyRestore: expected >= 1, got ' + modified.energyRestore);
       }
     }
 
-    // executeThreshold
+ // executeThreshold
     if (r.executeThreshold) {
       if (!modified.executeThreshold) {
         checks.push('executeThreshold: expected to be set');
       }
     }
 
-    // cooldownMult
+ // cooldownMult
     if (r.cooldownMult) {
       if (!modified.cooldownMult || Math.abs(modified.cooldownMult - r.cooldownMult[tierIdx]) > 0.01) {
         checks.push(`cooldownMult: expected ${r.cooldownMult[tierIdx]}, got ${modified.cooldownMult || 'undefined'}`);
       }
     }
 
-    // cooldownFlatReduction
+ // cooldownFlatReduction
     if (r.cooldownFlatReduction) {
       if (!modified.cooldownFlatReduction) {
         checks.push('cooldownFlatReduction: expected to be set');
       }
     }
 
-    // ignoreDefense (flat, from VOID_CONVERSION)
+ // ignoreDefense (flat, from VOID_CONVERSION)
     if (r.ignoreDefense && !r.defIgnorePct) {
       if (!modified.ignoreDefense || modified.ignoreDefense < r.ignoreDefense) {
         checks.push(`ignoreDefense (flat): expected >= ${r.ignoreDefense}, got ${modified.ignoreDefense || 0}`);
       }
     }
 
-    // addStatus
+ // addStatus
     if (r.addStatus) {
       if (!modified.addStatuses || modified.addStatuses.length === 0) {
         checks.push('addStatuses: expected to be populated');
       } else {
-        // Verify the status type matches
         const statuses = Array.isArray(r.addStatus) ? r.addStatus : [r.addStatus];
         for (const s of statuses) {
           const found = modified.addStatuses.some(as => as.type === s.type);
@@ -223,19 +220,19 @@ async function main() {
       }
     }
 
-    // VOID_CONVERSION special case: if base skill already ignores DEF,
-    // the damageMult should be skipped (our recent fix)
+ // VOID_CONVERSION special case: if base skill already ignores DEF,
+ // the damageMult should be skipped (our recent fix)
     if (typeId === 'VOID_CONVERSION') {
-      // Test with a skill that already ignores DEF
+ // Test with a skill that already ignores DEF
       const ignoreDefEffect = { ...baseEffect, ignoreDefense: 100 };
       const modIgnoreDef = runeSystem.applyRuneModifiers({ ...ignoreDefEffect }, [fakeRune]);
-      // damageMult should NOT be applied (redundant rune)
+ // damageMult should NOT be applied (redundant rune)
       if (modIgnoreDef.multiplier !== baseEffect.multiplier) {
         checks.push(`VOID_CONVERSION on DEF-ignoring skill: multiplier should be ${baseEffect.multiplier} (no penalty), got ${modIgnoreDef.multiplier}`);
       }
     }
 
-    // Report
+ // Report
     if (checks.length === 0) {
       console.log(`✅ ${typeId.padEnd(22)} (${runeType.name}) - all checks passed`);
       passCount++;

@@ -37,19 +37,18 @@ function incrementRelationship(user1Jid, user2Jid, delta) {
     const user2 = economy.getUser(user2Jid) || (economy.economyData && economy.economyData.get(user2Jid));
     if (!user1 || !user2) return;
 
-    // Load relationships for user1 -> user2
     const rels1 = getRelationshipsMap(user1);
     const score1 = getScore(rels1, user2Jid);
     const newScore1 = Math.max(-100, Math.min(100, score1 + delta));
     setScore(rels1, user2Jid, newScore1);
 
-    // Relationships are reciprocal! user2 -> user1
+ // Relationships are reciprocal! user2 -> user1
     const rels2 = getRelationshipsMap(user2);
     const score2 = getScore(rels2, user1Jid);
     const newScore2 = Math.max(-100, Math.min(100, score2 + delta));
     setScore(rels2, user1Jid, newScore2);
 
-    // Schedule saves to database
+ // Schedule saves to database
     economy.scheduleSave(user1Jid);
     economy.scheduleSave(user2Jid);
     
@@ -79,7 +78,7 @@ function getRelationshipsText(activeJids, senderJid) {
 
         const otherName = otherUser.nickname || economy.getDisplayName(jid);
         
-        // Convert relationship score into a descriptive relationship label
+ // Convert relationship score into a descriptive relationship label
         let relationshipLabel = "Neutral Acquaintance";
         if (score >= 80) relationshipLabel = "Best Friend / Loyal Companion";
         else if (score >= 50) relationshipLabel = "Close Friend";

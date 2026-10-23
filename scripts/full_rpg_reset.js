@@ -2,43 +2,40 @@
 // WIPES ALL RPG progression for ALL users in production.
 // Goal: every player starts from zero - no skills, no equipment, no inventory
 // RPG items, no summons, no progression. Non-RPG side of the bot untouched.
-//
 // WHAT GETS WIPED:
-//   Inventory:      user.inventory → {} (all RPG items gone)
-//   Equipment:      user.equipment → all slots null
-//   Skills:         user.skills → {} (no abilities unlocked)
-//   Class:          user.class → null (back to starter state)
-//   Progression:    user.progression.{level, xp, statPoints, allocatedPoints} → 1/0/0/0
-//   Stats:          user.allocatedStats → {}, user.statBonuses → {} (stat fields zeroed)
-//   Rank:           user.adventurerRank → 'F'
-//   Summons:        DELETE every Summon doc where ownerJid matches a user
-//                   (wipes Main Deck + Backlog + active)
-//                   user.activeSummonId → null
-//   Runes:          DELETE every Rune doc where ownerJid matches a user
-//                   (wipes socketed + inventory runes)
-//   Quest/PvP:      user.questGold, questsCompleted, questsWon, questsFailed, pvpWins, pvpLosses → 0
-//   Timers:         user.lastDaily, user.lastRob → 0
-//   Money:          user.wallet → 1000 (STARTING_BALANCE), user.bank → 0
-//   Alt-detect:     user.phoneHash preserved (anti-multibox)
-//   Bonds/CP:       user.bondXp, user.unlockedSummonPassives preserved? NO - these are
-//                   summon-related progression, so wipe unlockedSummonPassives too.
-//
+// Inventory: user.inventory → {} (all RPG items gone)
+// Equipment: user.equipment → all slots null
+// Skills: user.skills → {} (no abilities unlocked)
+// Class: user.class → null (back to starter state)
+// Progression: user.progression.{level, xp, statPoints, allocatedPoints} → 1/0/0/0
+// Stats: user.allocatedStats → {}, user.statBonuses → {} (stat fields zeroed)
+// Rank: user.adventurerRank → 'F'
+// Summons: DELETE every Summon doc where ownerJid matches a user
+// (wipes Main Deck + Backlog + active)
+// user.activeSummonId → null
+// Runes: DELETE every Rune doc where ownerJid matches a user
+// (wipes socketed + inventory runes)
+// Quest/PvP: user.questGold, questsCompleted, questsWon, questsFailed, pvpWins, pvpLosses → 0
+// Timers: user.lastDaily, user.lastRob → 0
+// Money: user.wallet → 1000 (STARTING_BALANCE), user.bank → 0
+// Alt-detect: user.phoneHash preserved (anti-multibox)
+// Bonds/CP: user.bondXp, user.unlockedSummonPassives preserved? NO - these are
+// summon-related progression, so wipe unlockedSummonPassives too.
 // WHAT IS PRESERVED (non-RPG):
-//   userId, nickname, registered, displayName, spriteIndex (cosmetic)
-//   classChangeCount (history field)
-//   eventTokens (separate economy - could be RPG-related but per spec keep)
-//   guild memberships (Guild model not touched)
-//   card collection (UserCard not touched - separate system)
-//   chat profile, warnings, mutes, bans
-//   alt-detection state (phoneHash)
-//   message history
-//
+// userId, nickname, registered, displayName, spriteIndex (cosmetic)
+// classChangeCount (history field)
+// eventTokens (separate economy - could be RPG-related but per spec keep)
+// guild memberships (Guild model not touched)
+// card collection (UserCard not touched - separate system)
+// chat profile, warnings, mutes, bans
+// alt-detection state (phoneHash)
+// message history
 // SAFETY:
-//   1. Backs up entire users + summons + runes collections
-//   2. Prints BEFORE state (counts + sample user)
-//   3. Applies the reset in this order: Summons → Runes → Users
-//   4. Prints AFTER state for verification
-//   5. Rollback: restore from backup JSON
+// 1. Backs up entire users + summons + runes collections
+// 2. Prints BEFORE state (counts + sample user)
+// 3. Applies the reset in this order: Summons → Runes → Users
+// 4. Prints AFTER state for verification
+// 5. Rollback: restore from backup JSON
 
 const mongoose = require('mongoose');
 const path = require('path');
@@ -57,14 +54,14 @@ let User, Summon, Rune;
 
 async function main() {
   console.log('[+] Connecting to MongoDB...');
-  // Don't override dbName - production uses URI default ('test')
+ // Don't override dbName - production uses URI default ('test')
   conn = await mongoose.connect(MONGO_URI);
   console.log(`[+] Connected to database: ${conn.connection.db.databaseName}`);
   User = require('../core/models/User');
   Summon = require('../core/models/Summon');
   Rune = require('../core/models/Rune');
 
-  // ── 1. BEFORE state ─────────────────────────────────────────────────────
+ // -- 1. BEFORE state -----------------------------------------------------
   console.log('\n=== BEFORE RESET ===');
   const userCount = await User.countDocuments({});
   const summonCount = await Summon.countDocuments({});
@@ -93,7 +90,7 @@ async function main() {
     console.log(`    activeSummonId: ${sample.activeSummonId || 'null'}`);
   }
 
-  // ── 2. Backup ───────────────────────────────────────────────────────────
+ // -- 2. Backup -----------------------------------------------------------
   console.log('\n=== BACKUP ===');
   const ts = Date.now();
   const userBackupFile = path.join(BACKUP_DIR, `users_backup_full_rpg_${ts}.json`);
@@ -127,20 +124,20 @@ async function main() {
   }, null, 2));
   console.log(`    ✓ ${allRunes.length} runes (${(fs.statSync(runeBackupFile).size / 1024 / 1024).toFixed(2)} MB)`);
 
-  // ── 3. Apply reset (order: Summons → Runes → Users) ──────────────────────
+ // -- 3. Apply reset (order: Summons → Runes → Users) ----------------------
   console.log('\n=== APPLYING RESET ===');
 
-  // 3a. Delete all Summon docs (Main Deck + Backlog)
+ // 3a. Delete all Summon docs (Main Deck + Backlog)
   console.log('[+] Deleting all Summon documents...');
   const summonDel = await Summon.deleteMany({});
   console.log(`    ✓ Deleted ${summonDel.deletedCount} summons`);
 
-  // 3b. Delete all Rune docs (socketed + inventory)
+ // 3b. Delete all Rune docs (socketed + inventory)
   console.log('[+] Deleting all Rune documents...');
   const runeDel = await Rune.deleteMany({});
   console.log(`    ✓ Deleted ${runeDel.deletedCount} runes`);
 
-  // 3c. Reset all User fields
+ // 3c. Reset all User fields
   console.log('[+] Resetting all User RPG fields...');
   const userReset = {
     wallet: STARTING_BALANCE,
@@ -173,7 +170,7 @@ async function main() {
   const userUpdate = await User.updateMany({}, { $set: userReset });
   console.log(`    ✓ Matched: ${userUpdate.matchedCount}, Modified: ${userUpdate.modifiedCount}`);
 
-  // ── 4. AFTER state ──────────────────────────────────────────────────────
+ // -- 4. AFTER state ------------------------------------------------------
   console.log('\n=== AFTER RESET ===');
   const userCountAfter = await User.countDocuments({});
   const summonCountAfter = await Summon.countDocuments({});
@@ -189,7 +186,7 @@ async function main() {
   console.log(`[i] Total bank: ${totalBankAfter.toLocaleString()} (was ${totalBank.toLocaleString()})`);
   console.log(`[i] Wiped: ${(totalWallet + totalBank - totalWalletAfter - totalBankAfter).toLocaleString()} zeni evaporated`);
 
-  // Sample user after
+ // Sample user after
   if (sample) {
     const sampleAfter = await User.findOne({ userId: sample.userId });
     if (sampleAfter) {
@@ -206,7 +203,7 @@ async function main() {
     }
   }
 
-  // ── 5. Integrity spot check ─────────────────────────────────────────────
+ // -- 5. Integrity spot check ---------------------------------------------
   console.log('\n=== INTEGRITY SPOT CHECK ===');
   const userAgg = await User.aggregate([{
     $group: {
@@ -226,14 +223,13 @@ async function main() {
       console.log('⚠️ Integrity check WARNING - wallets not uniform');
     }
   }
-  // Verify all summons/runes deleted
   if (summonCountAfter === 0 && runeCountAfter === 0) {
     console.log('✅ All summons and runes wiped');
   } else {
     console.log(`⚠️ Some summons (${summonCountAfter}) or runes (${runeCountAfter}) remain`);
   }
 
-  // ── 6. Final report ─────────────────────────────────────────────────────
+ // -- 6. Final report -----------------------------------------------------
   console.log('\n=== DONE ===');
   console.log(`Backup files:`);
   console.log(`  Users:   ${userBackupFile}`);

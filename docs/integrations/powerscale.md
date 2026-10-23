@@ -1,13 +1,13 @@
 # Integrations Subsystem: Power Scaling & Stats Lookup
 
-> **2026-10-18 REWRITE** (owner brief: better style, working character image, per-category feats):
-> - **New module `core/utils/vsbFeats.js`** — talks to the VS Battles MediaWiki API directly (`action=parse`), extracts the full stat block **including the parenthetical justifications (feats)** and `User_blog:` calc links. The Go service strips justifications, so it is now only a fallback (search fallback + stats fallback if the MW parse fails).
-> - **Character image fix** — `static.wikia.nocookie.net` 403-blocks both box IPs (verified: every UA/variant returns an Akamai deny page), so the old raw `axios.get(imageUrl)` could never work. `fetchImageBuffer()` relays through `wsrv.nl` / `images.weserv.nl` with **IPv4 forced** (boxes have no v6 egress) and returns a sendable JPEG; direct fetch remains the last resort for unblocked networks.
+> **REWRITE** (owner brief: better style, working character image, per-category feats):
+> - **New module `core/utils/vsbFeats.js`** - talks to the VS Battles MediaWiki API directly (`action=parse`), extracts the full stat block **including the parenthetical justifications (feats)** and `User_blog:` calc links. The Go service strips justifications, so it is now only a fallback (search fallback + stats fallback if the MW parse fails).
+> - **Character image fix** - `static.wikia.nocookie.net` 403-blocks both box IPs (verified: every UA/variant returns an Akamai deny page), so the old raw `axios.get(imageUrl)` could never work. `fetchImageBuffer()` relays through `wsrv.nl` / `images.weserv.nl` with **IPv4 forced** (boxes have no v6 egress) and returns a sendable JPEG; direct fetch remains the last resort for unblocked networks.
 > - **Command surface** (`core/utils/powerscale.js` handles the whole flow, engine sites are thin wrappers):
 >   - `.j powerscale <name>` → styled card (caption) + full-stat follow-up + character image
 >   - `.j powerscale speed <name>` (or `<name> speed`) → **SPEED FEATS deep-dive**: rating per key/variant + feat bullets + calc links. Category aliases: `tier · ap · speed · dur · strike · lift · stam · range · intel · gear · weak · hax · techniques`
 >   - `.j power scale <name>` (spaced form seen in the wild) now routes here too
->   - numeric replies pick a character; after a card they switch characters (`picked #1 — reply 2-9…`). **List-first rule (owner, 2026-10-18):** any query with multiple matches — category/feats queries included — always shows the numbered pick list; auto-pick happens ONLY when search returns a single result
+>   - numeric replies pick a character; after a card they switch characters (`picked #1 - reply 2-9…`). **List-first rule (owner, ):** any query with multiple matches - category/feats queries included - always shows the numbered pick list; auto-pick happens ONLY when search returns a single result
 >   - verse/item pages (no stat block) get a graceful overview card instead of a 60s timeout (old behavior on e.g. "High School DxD")
 > - Pages cache 30 min in `vsbFeats.PAGE_CACHE` (max 60 entries).
 > - QA: `58/58` on both boxes (`scripts/ps_qa.js` on-box; needs Fandom + wsrv reachability).
@@ -37,7 +37,6 @@ async function getPowerScale(characterName, chatId) {
         });
         message += `\n_Reply with a number (1-${data.characters.length}) within 5 minutes to get their powerscale._`;
 
-        // Store pending selection for this chat
         pendingSelections.set(chatId, {
             characters: data.characters,
             timestamp: Date.now()

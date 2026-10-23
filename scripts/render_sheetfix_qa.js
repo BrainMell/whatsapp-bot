@@ -1,4 +1,4 @@
-// QA: sheet-single-frame fix — render the exact owner-reported encounters
+// QA: sheet-single-frame fix - render the exact owner-reported encounters
 // (F40 MIRROR boss / F38 WANDERER side) + sheet-pool regression set on-box.
 const path = require('path');
 const fs = require('fs');
@@ -38,10 +38,10 @@ function mkPoolEnemy(id, name, floor, isBoss) {
 }
 
 const CASES = [
-    // the two owner-reported renders
+ // the two owner-reported renders
     ['mirror_f40', mkState(ev.buildVariantEnemy('MIRROR', { floor: 40, isBoss: true, playerClassId: 'FIGHTER' }), 40)],
     ['wanderer_f38', mkState(ev.buildVariantEnemy('WANDERER', { floor: 38, playerClassId: 'FIGHTER' }), 38)],
-    // sheet-pool + single-pool regressions
+ // sheet-pool + single-pool regressions
     ['slime_side', mkState(mkPoolEnemy('SLIME', 'Slime', 7, false), 7)],
     ['venom_spider_side', mkState(mkPoolEnemy('VENOM_SPIDER', 'Venom Spider', 3, false), 3)],
     ['void_titan_boss', mkState(mkPoolEnemy('VOID_TITAN', 'Void Titan', 40, true), 40)],

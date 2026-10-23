@@ -1,5 +1,5 @@
 // ============================================
-// 🗺️ MAP ENGINE — Guild War Overhaul 2026-10-03
+// MAP ENGINE - Guild War Overhaul
 // Seeded procedural generation: grid → spanning tree + extra edges → room
 // types → spawns. Pure module: generate(seed, playerCount, opts) → map.
 // The backend state is the source of truth; images are only representations.
@@ -7,7 +7,7 @@
 
 const CFG = require('./config');
 
-// ── seeded PRNG (mulberry32) + string hash ──
+// -- seeded PRNG (mulberry32) + string hash --
 function hashSeed(str) {
     let h = 2166136261 >>> 0;
     for (let i = 0; i < str.length; i++) {
@@ -57,9 +57,8 @@ const DIRS = { n: [0, -1], s: [0, 1], e: [1, 0], w: [-1, 0] };
 const DIR_OPS = { n: 's', s: 'n', e: 'w', w: 'e' };
 const key = (x, y) => `${x},${y}`;
 
-// ── generation ──
-// Returns { side, rooms: Map(key→room), adjacency: Map(key→{n,s,e,w:bool}),
-//           spawns: [key], coreKey, regions: [{x0,x1,worldId}] }
+// -- generation --
+// spawns: [key], coreKey, regions: [{x0,x1,worldId}] }
 function generate(seed, playerCount, opts = {}) {
     const alignment = !!opts.alignment;
     const cfg = alignment ? {
@@ -75,19 +74,19 @@ function generate(seed, playerCount, opts = {}) {
         types: CFG.MAP.TYPES,
         regions: 1,
     };
-    // ── MAP SIZE (owner 2026-10-07 "a ranges thing: number of players
-    // increases the size of the map") ──
-    // Normal maps look the side up from CFG.MAP.SIZE_RANGES (explicit
-    // player-count bands — legible + testable). The legacy sqrt(players·K)
-    // curve stays as the fallback for deployments without the table, and as
-    // a FLOOR so a huge roster can never roll a small band by accident.
-    // Alignment maps keep their own (larger) sqrt sizing untouched.
+ // -- MAP SIZE ("a ranges thing: number of players
+ // increases the size of the map") --
+ // Normal maps look the side up from CFG.MAP.SIZE_RANGES (explicit
+ // player-count bands - legible + testable). The legacy sqrt(players·K)
+ // curve stays as the fallback for deployments without the table, and as
+ // a FLOOR so a huge roster can never roll a small band by accident.
+ // Alignment maps keep their own (larger) sqrt sizing untouched.
     let side;
     if (!alignment && Array.isArray(CFG.MAP.SIZE_RANGES) && CFG.MAP.SIZE_RANGES.length) {
         const band = CFG.MAP.SIZE_RANGES.find((r) => Math.max(1, playerCount) <= r.maxPlayers)
             || CFG.MAP.SIZE_RANGES[CFG.MAP.SIZE_RANGES.length - 1];
-        // band decides; the legacy sqrt curve only ever RAISES the side (a
-        // huge roster must never roll a small band), then SIDE_MAX clamps.
+ // band decides; the legacy sqrt curve only ever RAISES the side (a
+ // huge roster must never roll a small band), then SIDE_MAX clamps.
         const legacySide = Math.ceil(Math.sqrt(Math.max(1, playerCount) * cfg.k));
         side = Math.max(cfg.min, Math.min(cfg.max, Math.max(band.side, Math.min(legacySide, cfg.max))));
     } else {
@@ -95,7 +94,7 @@ function generate(seed, playerCount, opts = {}) {
     }
     const rng = makeRng(seed);
 
-    // region bands (vertical slices) — alignment themes each band by a world
+ // region bands (vertical slices) - alignment themes each band by a world
     const bandWidth = Math.floor(side / cfg.regions);
     const regions = [];
     for (let r = 0; r < cfg.regions; r++) {
@@ -108,7 +107,7 @@ function generate(seed, playerCount, opts = {}) {
     }
     const regionOf = (x) => regions.find((r) => x >= r.x0 && x <= r.x1) || regions[regions.length - 1];
 
-    // ── topology: randomized DFS spanning tree over 4-neighbors ──
+ // -- topology: randomized DFS spanning tree over 4-neighbors --
     const adj = new Map();
     for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) adj.set(key(x, y), { n: false, s: false, e: false, w: false });
     const visited = new Set([key(0, 0)]);
@@ -128,7 +127,7 @@ function generate(seed, playerCount, opts = {}) {
         stack.push([nx, ny]);
     }
 
-    // ── extra edges (loops) ──
+ // -- extra edges (loops) --
     const extraEdges = Math.floor(side * side * CFG.MAP.EXTRA_EDGE_RATIO);
     for (let i = 0; i < extraEdges; i++) {
         const x = rng.int(0, side - 1), y = rng.int(0, side - 1);
@@ -136,23 +135,23 @@ function generate(seed, playerCount, opts = {}) {
         const [dx, dy] = DIRS[d];
         const nx = x + dx, ny = y + dy;
         if (nx < 0 || ny < 0 || nx >= side || ny >= side) continue;
-        // cross-region edges are rarer: dimensional paths added later instead
+ // cross-region edges are rarer: dimensional paths added later instead
         if (cfg.regions > 1 && regionOf(x).index !== regionOf(nx).index && rng.next() < 0.7) continue;
         adj.get(key(x, y))[d] = true;
         adj.get(key(nx, ny))[DIR_OPS[d]] = true;
     }
 
-    // ── dead-end relief (UX pass #6, owner 2026-10-07: "kept, reduced") ──
-    // A DFS spanning tree over a 40×40 grid routinely dead-ends a third of
-    // the map — every one is a walk to a wall. Cul-de-sacs still EARN their
-    // keep (vaults/secrets tucked out of the through-lines), so we only cap
-    // the share: while more than DEADEND_MAX_SHARE of rooms have exactly one
-    // open edge, connect a dead-end to an ADJACENT not-yet-linked room (grid
-    // neighbors only — the door plates render real adjacency, so every relief
-    // edge is a drawable corridor). Same-region neighbors are preferred on
-    // alignment maps, mirroring the loop-edge rule. Seeded, deterministic.
-    // The budget SCALES with map size (a 24-edge cap that works for a 9×9
-    // beta map could never dent a 24×24 alignment map's ~170 dead ends).
+ // -- dead-end relief (UX pass #6, "kept, reduced") --
+ // A DFS spanning tree over a 40×40 grid routinely dead-ends a third of
+ // the map - every one is a walk to a wall. Cul-de-sacs still EARN their
+ // keep (vaults/secrets tucked out of the through-lines), so we only cap
+ // the share: while more than DEADEND_MAX_SHARE of rooms have exactly one
+ // open edge, connect a dead-end to an ADJACENT not-yet-linked room (grid
+ // neighbors only - the door plates render real adjacency, so every relief
+ // edge is a drawable corridor). Same-region neighbors are preferred on
+ // alignment maps, mirroring the loop-edge rule. Seeded, deterministic.
+ // The budget SCALES with map size (a 24-edge cap that works for a 9×9
+ // beta map could never dent a 24×24 alignment map's ~170 dead ends).
     const reliefCap = Math.max(8, Math.ceil(side * side * (CFG.MAP.DEADEND_RELIEF_SHARE ?? 0.25)));
     const maxShare = CFG.MAP.DEADEND_MAX_SHARE ?? 0.08;
     const openCount = (k) => Object.values(adj.get(k)).filter(Boolean).length;
@@ -162,12 +161,12 @@ function generate(seed, playerCount, opts = {}) {
         let deadEnds = [];
         for (const [k, edges] of adj) if (openCount(k) === 1) deadEnds.push(k);
         if (deadEnds.length / roomsN <= maxShare || !deadEnds.length) break;
-        // fix the worst offenders first: shuffled so ties don't bias corners
+ // fix the worst offenders first: shuffled so ties don't bias corners
         deadEnds = rng.shuffle(deadEnds);
         let remaining = deadEnds.length, fixed = 0;
         for (const k of deadEnds) {
             if (reliefUsed >= reliefCap) break;
-            if (remaining / roomsN <= maxShare) break; // stop AT the cap — cul-de-sacs are kept, not erased
+            if (remaining / roomsN <= maxShare) break; // stop AT the cap - cul-de-sacs are kept, not erased
             if (openCount(k) !== 1) continue; // a prior relief edge adopted it
             const [x, y] = k.split(',').map(Number);
             const cands = [];
@@ -175,7 +174,7 @@ function generate(seed, playerCount, opts = {}) {
                 const nx = x + dx, ny = y + dy;
                 if (nx < 0 || ny < 0 || nx >= side || ny >= side) continue;
                 if (adj.get(k)[d]) continue; // already linked this way
-                // prefer same-region links on alignment maps (70% skip, as loops)
+ // prefer same-region links on alignment maps (70% skip, as loops)
                 if (cfg.regions > 1 && regionOf(x).index !== regionOf(nx).index && rng.next() < 0.7) continue;
                 cands.push([d, key(nx, ny)]);
             }
@@ -188,10 +187,10 @@ function generate(seed, playerCount, opts = {}) {
             fixed++;
             remaining -= neighborWasDead ? 2 : 1; // the new edge can adopt a second dead-end
         }
-        if (!fixed) break; // nothing connectable — walls everywhere we looked
+        if (!fixed) break; // nothing connectable - walls everywhere we looked
     }
 
-    // ── room types (distance-from-center modulates danger/reward tier) ──
+ // -- room types (distance-from-center modulates danger/reward tier) --
     const c = (side - 1) / 2;
     const maxDist = Math.hypot(c, c) || 1;
     const typeEntries = Object.entries(cfg.types).map(([t, w]) => [t, w]);
@@ -217,14 +216,14 @@ function generate(seed, playerCount, opts = {}) {
         }
     }
 
-    // ── World Core at center (overwrite) ──
+ // -- World Core at center (overwrite) --
     const coreX = Math.floor(side / 2), coreY = Math.floor(side / 2);
     const coreKey = key(coreX, coreY);
     const core = rooms.get(coreKey);
     core.type = 'core';
     core.ring = 1;
 
-    // landmarks: a few named points spread out (lore anchors)
+ // landmarks: a few named points spread out (lore anchors)
     const landmarkCandidates = rng.shuffle([...rooms.values()].filter((r) => r.type !== 'core'));
     const landmarkCount = Math.max(1, Math.floor(side / 8));
     for (let i = 0; i < landmarkCount && i < landmarkCandidates.length; i++) {
@@ -233,10 +232,10 @@ function generate(seed, playerCount, opts = {}) {
         r.ring = Math.max(r.ring, 0.5);
     }
 
-    // ── spawns: even ring walk (guaranteed min spacing = perimeter/count),
-    // then players are SHUFFLED onto spawn slots at event start so same-guild
-    // players are not adjacent. Min pairwise Manhattan distance is capped by
-    // what the ring can physically fit at high player counts.
+ // -- spawns: even ring walk (guaranteed min spacing = perimeter/count),
+ // then players are SHUFFLED onto spawn slots at event start so same-guild
+ // players are not adjacent. Min pairwise Manhattan distance is capped by
+ // what the ring can physically fit at high player counts.
     const baseDist = Math.max(2, Math.floor(side * CFG.MAP.SPAWN_MIN_DIST_FRAC));
     const targetCount = Math.min(playerCount, 150);
     const feasible = Math.max(1, Math.floor((4 * (side - 1)) / Math.max(1, targetCount - 1)));
@@ -268,7 +267,7 @@ function generate(seed, playerCount, opts = {}) {
     };
 }
 
-// ── BFS connectivity check (sim/QA) ──
+// -- BFS connectivity check (sim/QA) --
 function reachable(map, from) {
     const seen = new Set([from]);
     const q = [from];

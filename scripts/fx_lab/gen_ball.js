@@ -1,4 +1,4 @@
-// gen_ball.js — v13 BALL ARENA frames: 9 cells (3x3 grid), 1280x720 + 800x450
+// gen_ball.js - v13 BALL ARENA frames: 9 cells (3x3 grid), 1280x720 + 800x450
 // thumbs. Teal pitch, white ball + ring at the cell center. The bot GLIDES
 // the ball between cells via rapid same-bubble HQ-morph edits (flipbook).
 const { Jimp, loadFont } = require("jimp");
@@ -23,7 +23,7 @@ function gradient(img) {
 }
 
 function gridLines(img) {
-    // vertical + horizontal pitch lines through cell boundaries
+ // vertical + horizontal pitch lines through cell boundaries
     const lines = [[W / 6, "v"], [W / 2, "v"], [5 * W / 6, "v"], [H / 6, "h"], [H / 2, "h"], [5 * H / 6, "h"]];
     for (const [p, o] of lines) {
         const x0 = o === "v" ? Math.round(p) : 0, y0 = o === "v" ? 0 : Math.round(p);
@@ -33,7 +33,7 @@ function gridLines(img) {
             d[idx] = TEAL[0]; d[idx + 1] = TEAL[1]; d[idx + 2] = TEAL[2]; d[idx + 3] = 46;
         });
     }
-    // border
+ // border
     for (const [x0, y0, w, h] of [[0, 0, W, 4], [0, H - 4, W, 4], [0, 0, 4, H], [W - 4, 0, 4, H]]) {
         img.scan(x0, y0, w, h, function (x, y, idx) {
             const d = img.bitmap.data;
@@ -43,7 +43,7 @@ function gridLines(img) {
 }
 
 function cellGlow(img, cx, cy) {
-    // subtle highlight rect on the ball's cell
+ // subtle highlight rect on the ball's cell
     const hw = W / 3, hh = H / 3;
     img.scan(Math.round(cx - hw / 2), Math.round(cy - hh / 2), Math.round(hw), Math.round(hh), function (x, y, idx) {
         if (x < 4 || y < 4 || x >= W - 4 || y >= H - 4) return;
@@ -54,7 +54,7 @@ function cellGlow(img, cx, cy) {
 
 function ball(img, cx, cy) {
     const R = 56;
-    // shadow
+ // shadow
     for (let dy = -R - 8; dy <= R + 8; dy++) for (let dx = -R - 8; dx <= R + 8; dx++) {
         const x = cx + dx, y = cy + dy + 10;
         if (x < 0 || y < 0 || x >= W || y >= H) continue;
@@ -65,7 +65,7 @@ function ball(img, cx, cy) {
             d[idx] = 0; d[idx + 1] = 0; d[idx + 2] = 0; d[idx + 3] = 120;
         }
     }
-    // white disc + teal ring
+ // white disc + teal ring
     for (let dy = -R - 6; dy <= R + 6; dy++) for (let dx = -R - 6; dx <= R + 6; dx++) {
         const x = cx + dx, y = cy + dy;
         if (x < 0 || y < 0 || x >= W || y >= H) continue;

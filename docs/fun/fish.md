@@ -90,7 +90,6 @@ User sends ".j fish"
                       const COOLDOWN_MS = 1 * 60 * 60 * 1000; // 1 hour
                       const MAX_FISH = 25;
 
-                      // Check if 1-hour cooldown is active
                       if (user.fishCount >= MAX_FISH) {
                         const timePassed = now - (user.lastFishReset || 0);
                         if (timePassed < COOLDOWN_MS) {

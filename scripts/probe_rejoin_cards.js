@@ -1,5 +1,5 @@
-// REJOIN PRESENTATION QA (owner 2026-10-06: "when they come back, map and
-// encounter card per usual") — verifies the rejoin verb sends the standard
+// REJOIN PRESENTATION QA ("when they come back, map and
+// encounter card per usual") - verifies the rejoin verb sends the standard
 // room presentation (map card + encounter card) + the welcome text, instead
 // of the old text-only reply.
 process.env.GW_TEST = '1';
@@ -18,7 +18,7 @@ async function connectDB() {
 let pass = 0, fail = 0;
 function check(name, cond, extra) {
     if (cond) { pass++; console.log(`  PASS ${name}`); }
-    else { fail++; console.log(`  FAIL ${name}${extra ? ' — ' + extra : ''}`); }
+    else { fail++; console.log(`  FAIL ${name}${extra ? ' - ' + extra : ''}`); }
 }
 (async () => {
     await connectDB();
@@ -32,19 +32,19 @@ function check(name, cond, extra) {
     const me0 = (await state.getEvent(eventId, { fresh: true })).players.find(p => p.jid === 'rj@s.whatsapp.net');
     console.log('deployed: roomId', me0.roomId, '| status', me0.status);
 
-    // force the chamber into an ACTIVE combat encounter so card #2 is the
-    // encounter-scene card, the exact "per usual" shape after a move
+ // force the chamber into an ACTIVE combat encounter so card #2 is the
+ // encounter-scene card, the exact "per usual" shape after a move
     await GWE.updateOne({ eventId, 'rooms.key': me0.roomId }, { $set: { 'rooms.$.type': 'combat', 'rooms.$.state': 'ACTIVE' } });
 
-    // go inactive (what the inactivity sweeper does)
+ // go inactive (what the inactivity sweeper does)
     await state.updatePlayer(eventId, me0.jid, {}, { status: 'inactive', lastActionAt: 0 });
 
-    // ── 1) inactive player asking something else still gets the nudge ──
+ // -- 1) inactive player asking something else still gets the nudge --
     const sock1 = { sent: [], async sendMessage(c, p) { this.sent.push(p); } };
     const r1 = await dmRouter.handleDM(sock1, me0.jid, me0.jid, '.j look', '\u200B', { prefix: '.j', prefixed: true });
     check('inactive gate: nudge text mentions rejoin', !!r1 && /rejoin/.test(r1.text || ''), JSON.stringify(r1 && r1.text || '').slice(0, 80));
 
-    // ── 2) the rejoin itself ──
+ // -- 2) the rejoin itself --
     const sock = { sent: [], async sendMessage(c, p) { this.sent.push(p); } };
     const res = await dmRouter.handleDM(sock, me0.jid, me0.jid, '.j rejoin', '\u200B', { prefix: '.j', prefixed: true });
     const texts = sock.sent.map(s => (s.text || '').toString());
@@ -60,13 +60,13 @@ function check(name, cond, extra) {
     check('status restored to active', me.status === 'active', 'status=' + me.status);
     check('spawn protection set in DB', (me.protectedUntil || 0) > Date.now());
 
-    // ── 3) `return` alias works the same ──
+ // -- 3) `return` alias works the same --
     await state.updatePlayer(eventId, me0.jid, {}, { status: 'inactive' });
     const sock3 = { sent: [], async sendMessage(c, p) { this.sent.push(p); } };
     await dmRouter.handleDM(sock3, me0.jid, me0.jid, '.j return', '\u200B', { prefix: '.j', prefixed: true });
     check('alias `return` also presents cards', sock3.sent.filter(s => s.image).length >= 2);
 
-    // ── 4) presentation failure still answers (fallback text) ──
+ // -- 4) presentation failure still answers (fallback text) --
     await state.updatePlayer(eventId, me0.jid, {}, { status: 'inactive', roomId: '9,9' }); // nonexistent chamber
     const sock4 = { sent: [], async sendMessage(c, p) { this.sent.push(p); } };
     const r4 = await dmRouter.handleDM(sock4, me0.jid, me0.jid, '.j rejoin', '\u200B', { prefix: '.j', prefixed: true });

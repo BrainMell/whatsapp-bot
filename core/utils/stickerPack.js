@@ -1,9 +1,9 @@
 /**
- * stickerPack.js — 2026-10-12
+ * stickerPack.js - 2026-10-12
  * Native WhatsApp sticker-pack sender for `.j s -p`.
  *
  * Builds a sticker pack ZIP (N webp stickers + tray.png), encrypts it with
- * the WhatsApp media scheme (HKDF appInfo "WhatsApp Sticker Pack Keys" —
+ * the WhatsApp media scheme (HKDF appInfo "WhatsApp Sticker Pack Keys" -
  * seeded into Baileys' MEDIA_HKDF_KEY_MAPPING so we reuse Baileys' own
  * rust-backed HKDF), uploads the blob + an unencrypted 2×2 tray collage,
  * and relays a `stickerPackMessage` (stickerPackOrigin USER_CREATED).
@@ -24,7 +24,7 @@ const AdmZip = require("adm-zip");
 const baileys = require("@whiskeysockets/baileys");
 const sharp = require("sharp");
 
-// ── HKDF appInfo seeding ─────────────────────────────────────────────────────
+// -- HKDF appInfo seeding -----------------------------------------------------
 // getMediaKeys(buffer, mediaType) derives keys with
 // `WhatsApp ${MEDIA_HKDF_KEY_MAPPING[mediaType]} Keys`. The map is exported
 // and mutable, so a one-time seed gives us Baileys' own HKDF path for the
@@ -41,7 +41,7 @@ if (
 const MAX_PACK_STICKERS = 30; // WhatsApp pack limit
 const DEFAULT_PACK_STICKERS = 8;
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+// -- helpers ------------------------------------------------------------------
 /** true if a webp buffer contains animation frames (ANMF chunks) */
 function isAnimatedWebp(buf) {
   try {

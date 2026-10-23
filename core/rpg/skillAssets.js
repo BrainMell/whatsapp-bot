@@ -1,19 +1,18 @@
 // ============================================
-// 💎 SKILL & RUNE ASSET LOADER (2026-10-11, v3 2026-10-12)
+// SKILL & RUNE ASSET LOADER (v3 )
 // ============================================
 // Resolves ability/rune/summon/kit artwork:
-//   v3 pack  core/rpgasset/v3/{hires,true_res}/...  (manifest.json + skill_index.json)
-//     - hires/  (~512px nearest-neighbour upscales — default for card renders)
-//     - true_res/ (native pixel-art size)
-//     - skills/<class>/<skill>.png      (272 skills / 45 classes)
-//     - runes/<category>/<rune>.png     (39 types) + <rune>_<tier>.png tier art (all 39)
-//     - summons/<arch>/<path>_n<1-5>.png (15 paths x 5 nodes) + archetype icons
-//     - monsters/kits/kit_<arch>.png    (12 monster kits) + extras/
-//   legacy flat pack  core/rpgasset/{skills,runes}/*.png (fallback)
+// v3 pack core/rpgasset/v3/{hires,true_res}/... (manifest.json + skill_index.json)
+// - hires/ (~512px nearest-neighbour upscales - default for card renders)
+// - true_res/ (native pixel-art size)
+// - skills/<class>/<skill>.png (272 skills / 45 classes)
+// - runes/<category>/<rune>.png (39 types) + <rune>_<tier>.png tier art (all 39)
+// - summons/<arch>/<path>_n<1-5>.png (15 paths x 5 nodes) + archetype icons
+// - monsters/kits/kit_<arch>.png (12 monster kits) + extras/
+// legacy flat pack core/rpgasset/{skills,runes}/*.png (fallback)
 // Loaders return preloaded `Image` objects (node-canvas) with a process-lifetime
 // cache; everything degrades gracefully: missing file / unreadable PNG -> null
 // -> caller draws its fallback.
-//
 // Matching rules (v3/ASSIGNMENTS source): pack slugs come from DISPLAY names;
 // the game's skillTree ids may differ. skill_index.json (generated at pack
 // build) maps '<CLASS>:<skillId>' and bare '<skillId>' -> pack sprite path.
@@ -94,7 +93,7 @@ function loadImageCached(relPath) {
   return img;
 }
 
-// ── v3 rune tier resolution ────────────────────────────────────────────────
+// -- v3 rune tier resolution ------------------------------------------------
 const RUNE_TIERS_LC = ['lesser', 'normal', 'greater', 'abyssal'];
 function v3RuneSprite(type, tier) {
   const man = v3Manifest();
@@ -107,11 +106,11 @@ function v3RuneSprite(type, tier) {
     const p = row.tier_sprites && row.tier_sprites[tl];
     if (p) return 'v3/hires/' + p;
   }
-  // tier requested but no tier art (or none requested) -> base sprite
+ // tier requested but no tier art (or none requested) -> base sprite
   return row.sprite ? 'v3/hires/' + row.sprite : null;
 }
 
-// ── v3 skill resolution ────────────────────────────────────────────────────
+// -- v3 skill resolution ----------------------------------------------------
 function v3SkillSprite(skillOrId, classId) {
   const idx = v3SkillIndex();
   if (!idx || !Object.keys(idx).length) return null;
@@ -213,7 +212,7 @@ async function getKitArt(archetype) {
   }
 }
 
-/** Skill icon filename (Go service asset name) or null — used for SKILLUP/SKILLTREE payloads. */
+/** Skill icon filename (Go service asset name) or null - used for SKILLUP/SKILLTREE payloads. */
 function skillArtFile(skillOrId) {
   const id = typeof skillOrId === 'object' ? String(skillOrId?.id || '') : String(skillOrId || '');
   if (!id) return null;

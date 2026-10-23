@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// gw_level_census.js — read-only census of player power (level + gear score)
+// gw_level_census.js - read-only census of player power (level + gear score)
 // among ALL users and among live GuildWar participants. Grounds the
 // fixed-vs-adaptive balance discussion in real numbers.
 const fs = require('fs');
@@ -38,7 +38,7 @@ async function main() {
   console.log('users with progression.level>1:', withProg.length, '/', n);
   console.log('top levels:', all.map(u => ({ n: (u.nickname || '').slice(0, 12), l: (u.progression?.level ?? u.level) || 1 })).sort((a, b) => b.l - a.l).slice(0, 10).map(u => `${u.n}:${u.l}`).join(', '));
 
-  // live guild war events: participants' levels
+ // live guild war events: participants' levels
   const events = db.collection('guildwarevents');
   const evs = await events.find({ state: { $in: ['ACTIVE', 'INITIATED', 'REGISTRATION'] } }).toArray();
   for (const ev of evs.slice(0, 3)) {
@@ -46,12 +46,12 @@ async function main() {
     if (!pl.length) { console.log(`EVENT ${ev.eventId} (${ev.state}): no players`); continue; }
     console.log(`EVENT ${ev.eventId} (${ev.state}) players=${pl.length}:`,
       JSON.stringify({ min: pl[0], p25: pct(pl, 25), median: pct(pl, 50), p75: pct(pl, 75), max: pl[pl.length - 1] }));
-    // spread inside ONE event = the real balance problem
+ // spread inside ONE event = the real balance problem
     const spread = pl[pl.length - 1] / Math.max(1, pl[0]);
     console.log(`  → strongest/weakest ratio inside this event: ${spread.toFixed(1)}x`);
   }
 
-  // recent finished events too (last 5)
+ // recent finished events too (last 5)
   const done = await events.find({ state: 'COMPLETED' }, { sort: { updatedAt: -1 }, limit: 5, projection: { eventId: 1, players: 1, state: 1 } }).toArray();
   for (const ev of done) {
     const pl = (ev.players || []).map(p => (p.level ?? p.progression?.level) || 1).sort((a, b) => a - b);

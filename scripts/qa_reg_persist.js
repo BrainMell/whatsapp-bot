@@ -1,18 +1,16 @@
 #!/usr/bin/env node
-// 🧪 REGISTRATION PERSISTENCE QA (2026-10-22) — run ON-BOX inside the bot dir:
-//   node scripts/qa_reg_persist.js
-// Owner ask: "players keep having to double register — their registration just
+// REGISTRATION PERSISTENCE QA - run ON-BOX inside the bot dir:
+// node scripts/qa_reg_persist.js
+// Owner ask: "players keep having to double register - their registration just
 // got botched, fix that"
-//
 // Root cause this guards: registerUser() stamped the sync baseline with the
 // fresh doc itself → debounced saveUser() emitted an EMPTY leafDiff → only
 // {updatedAt} reached Mongo → registered:true lived in RAM and died on every
 // restart (zero registered:true docs created since the Oct-15 leaf-diff commit).
-//
 // Safety model:
-//   - QA-only identity qa_regpersist_<ts>@lid, deleted from `users` at the end
-//   - exercises the REAL economy module + REAL MongoDB (write path is the thing
-//     under test) but ZERO WhatsApp traffic
+// - QA-only identity qa_regpersist_<ts>@lid, deleted from `users` at the end
+// - exercises the REAL economy module + REAL MongoDB (write path is the thing
+// under test) but ZERO WhatsApp traffic
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -20,7 +18,7 @@ const path = require('path');
 let PASS = 0, FAIL = 0;
 function check(name, cond, extra) {
     if (cond) { PASS++; console.log(`  ✅ ${name}`); }
-    else { FAIL++; console.log(`  ❌ ${name}${extra ? ' — ' + extra : ''}`); }
+    else { FAIL++; console.log(`  ❌ ${name}${extra ? ' - ' + extra : ''}`); }
 }
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -50,7 +48,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     const NICK = 'QA RegPersist';
     let created = false;
     try {
-        // ── §1 register → PERSISTED ──────────────────────────────────────
+ // -- §1 register → PERSISTED --------------------------------------
         console.log('\n── §1 register → whole account reaches MongoDB ──');
         const reg = economy.registerUser(QA_JID, NICK);
         mark('registerUser returned');
@@ -69,7 +67,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
         check('adventurerRank F persisted', doc && doc.adventurerRank === 'F', `got ${doc && doc.adventurerRank}`);
         check('Registration Bonus in history', doc && Array.isArray(doc.history) && doc.history.some(h => h.desc === 'Registration Bonus'));
 
-        // ── §2 gameplay delta still composes ($inc path) ─────────────────
+ // -- §2 gameplay delta still composes ($inc path) -----------------
         console.log('\n── §2 post-register wallet delta still $inc-composes ──');
         const u = economy.getUser(QA_JID);
         check('getUser finds the new player', !!u && u.registered === true);
@@ -82,12 +80,12 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
             check('registered still true after delta save', doc2 && doc2.registered === true);
         }
 
-        // ── §3 double-register guard (cache path) ────────────────────────
+ // -- §3 double-register guard (cache path) ------------------------
         console.log('\n── §3 ALREADY REGISTERED guard ──');
         const again = economy.registerUser(QA_JID, 'Again');
         check('second register refused', again && again.success === false, (again && again.message || '').slice(0, 60));
 
-        // ── §4 restart-survival semantics (cache drop → DB is the truth) ─
+ // -- §4 restart-survival semantics (cache drop → DB is the truth) -
         console.log('\n── §4 fresh-cache read (restart simulation) ──');
         const freshDoc = await User.findOne({ userId: QA_JID }).lean();
         check('a restarting process would load registered:true', freshDoc && freshDoc.registered === true);

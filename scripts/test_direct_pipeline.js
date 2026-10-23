@@ -47,14 +47,14 @@ async function main() {
   console.log(`  DIRECT PIPELINE TEST v2 - every call has 10s timeout`);
   console.log(`═══════════════════════════════════════════════════════════════${RESET}\n`);
 
-  // ── 1. Environment ─────────────────────────────────────────────
+ // -- 1. Environment ---------------------------------------------
   log('ENV', 'Environment check', CYAN);
   console.log(`  GO_IMAGE_SERVICE_URL: ${process.env.GO_IMAGE_SERVICE_URL || '(unset - default http://127.0.0.1:7860)'}`);
   console.log(`  MONGO_URI: ${process.env.MONGO_URI ? 'set' : '(unset)'}`);
   console.log(`  Node: ${process.version}, CWD: ${process.cwd()}`);
   console.log('');
 
-  // ── 2. Load goImageService ─────────────────────────────────────
+ // -- 2. Load goImageService -------------------------------------
   log('LOAD', 'Requiring goImageService.js...', CYAN);
   let GoImageService;
   try {
@@ -65,14 +65,13 @@ async function main() {
     process.exit(1);
   }
 
-  // Create instance - this.client is now set BEFORE healthCheck (fixed in dc7ea3ac)
   log('LOAD', 'Creating GoImageService instance...', CYAN);
   const goService = new GoImageService();
   console.log(`  baseUrl: ${goService.baseUrl}`);
   console.log(`  client defined: ${!!goService.client}`);
   console.log('');
 
-  // ── 3. healthCheck ─────────────────────────────────────────────
+ // -- 3. healthCheck ---------------------------------------------
   log('HEALTH', 'goService.healthCheck()...', CYAN);
   try {
     const health = await withTimeout(goService.healthCheck(), 10000, 'healthCheck');
@@ -86,7 +85,7 @@ async function main() {
   }
   console.log('');
 
-  // ── 4. generateProfileCard ─────────────────────────────────────
+ // -- 4. generateProfileCard -------------------------------------
   log('PROFILE', 'goService.generateProfileCard()...', CYAN);
   const profileData = {
     nickname: 'TEST', level: 50, rank: 'S', class: 'Adventurer', classIcon: '🛡️',
@@ -110,7 +109,7 @@ async function main() {
   }
   console.log('');
 
-  // ── 5. generateCardGrid ────────────────────────────────────────
+ // -- 5. generateCardGrid ----------------------------------------
   log('GRID', 'goService.generateCardGrid()...', CYAN);
   const testUrls = [
     { url: 'https://cdn.shoob.gg/images/cards/1/1.png', name: 'Card 1', tier: '1', animated: false },
@@ -131,7 +130,7 @@ async function main() {
   }
   console.log('');
 
-  // ── 6. generateTransactionCard ─────────────────────────────────
+ // -- 6. generateTransactionCard ---------------------------------
   log('TX', 'goService.generateTransactionCard()...', CYAN);
   try {
     const t0 = Date.now();
@@ -152,7 +151,7 @@ async function main() {
   }
   console.log('');
 
-  // ── 7. generateCombatImage ─────────────────────────────────────
+ // -- 7. generateCombatImage -------------------------------------
   log('COMBAT', 'goService.generateCombatImage()...', CYAN);
   try {
     const t0 = Date.now();
@@ -175,7 +174,7 @@ async function main() {
   }
   console.log('');
 
-  // ── 8. generateEconomyCard ─────────────────────────────────────
+ // -- 8. generateEconomyCard -------------------------------------
   log('ECON', 'goService.generateEconomyCard()...', CYAN);
   try {
     const t0 = Date.now();
@@ -196,7 +195,7 @@ async function main() {
   }
   console.log('');
 
-  // ── 9. Raw axios test (same as deploy test) ────────────────────
+ // -- 9. Raw axios test (same as deploy test) --------------------
   log('RAW', 'Raw axios.get(/health) test...', CYAN);
   try {
     const axios = require('axios');
@@ -212,7 +211,7 @@ async function main() {
   }
   console.log('');
 
-  // ── 10. Raw POST test (render endpoint) ────────────────────────
+ // -- 10. Raw POST test (render endpoint) ------------------------
   log('RAW', 'Raw axios.post(/api/cards/profile) test...', CYAN);
   try {
     const axios = require('axios');
@@ -239,7 +238,7 @@ async function main() {
   console.log(`  If raw axios also fails, the Go service itself is the problem.`);
   console.log(`${CYAN}═══════════════════════════════════════════════════════════════${RESET}\n`);
 
-  // Force exit - don't let hanging promises keep the process alive
+ // Force exit - don't let hanging promises keep the process alive
   process.exit(0);
 }
 

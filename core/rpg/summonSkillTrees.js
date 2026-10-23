@@ -1,33 +1,29 @@
-// ═══════════════════════════════════════════════════════════════════════════
-//  SUMMON SKILL TREES - Phase 2 of the Summon Progression System
-// ═══════════════════════════════════════════════════════════════════════════
-//
+// ===========================================================================
+// SUMMON SKILL TREES - Phase 2 of the Summon Progression System
+// ===========================================================================
 // Each summon archetype gets a 3-path skill tree. Players pick ONE path
 // and unlock nodes sequentially. Each path has 5 nodes:
-//   Node 1 (L5):  Passive stat boost
-//   Node 2 (L10): Passive utility
-//   Node 3 (L15): Active ability (used by summon AI in combat)
-//   Node 4 (L25): Passive stat boost (stronger)
-//   Node 5 (L35): Ultimate ability (powerful active)
-//
+// Node 1 (L5): Passive stat boost
+// Node 2 (L10): Passive utility
+// Node 3 (L15): Active ability (used by summon AI in combat)
+// Node 4 (L25): Passive stat boost (stronger)
+// Node 5 (L35): Ultimate ability (powerful active)
 // Skill points: 1 per level (starting L1, max 50 = 50 points).
 // Unlocking a node costs 1 skill point + meeting the level requirement.
 // A full path (5 nodes) costs 5 points, unlockable by L35.
 // Remaining 15 points go to stat allocation (the existing system).
-//
 // Path choices are permanent without a Skill Respec Scroll.
-//
 // Archetype → Path mapping:
-//   TANK:     A) Iron Wall  B) Guardian    C) Counter
-//   BRUTE:    A) Berserker  B) Executioner C) Whirlwind
-//   MAGE:     A) Elemental  B) Arcane      C) Temporal
-//   STALKER:  A) Shadow     B) Venom       C) Evasion
-//   SUPPORT:  A) Healing    B) Blessing    C) Nature
+// TANK: A) Iron Wall B) Guardian C) Counter
+// BRUTE: A) Berserker B) Executioner C) Whirlwind
+// MAGE: A) Elemental B) Arcane C) Temporal
+// STALKER: A) Shadow B) Venom C) Evasion
+// SUPPORT: A) Healing B) Blessing C) Nature
 
 const SUMMON_SKILL_TREES = {
-  // ═══════════════════════════════════════════════════════════
-  // TANK - StoneGuard and other tanks
-  // ═══════════════════════════════════════════════════════════
+ // ===========================================================
+ // TANK - StoneGuard and other tanks
+ // ===========================================================
   TANK: {
     A: {
       name: 'Iron Wall',
@@ -67,9 +63,9 @@ const SUMMON_SKILL_TREES = {
     }
   },
 
-  // ═══════════════════════════════════════════════════════════
-  // BRUTE - EmberDrake and other physical DPS
-  // ═══════════════════════════════════════════════════════════
+ // ===========================================================
+ // BRUTE - EmberDrake and other physical DPS
+ // ===========================================================
   BRUTE: {
     A: {
       name: 'Berserker',
@@ -109,9 +105,9 @@ const SUMMON_SKILL_TREES = {
     }
   },
 
-  // ═══════════════════════════════════════════════════════════
-  // MAGE - MistWisp and other magic users
-  // ═══════════════════════════════════════════════════════════
+ // ===========================================================
+ // MAGE - MistWisp and other magic users
+ // ===========================================================
   MAGE: {
     A: {
       name: 'Elemental',
@@ -151,9 +147,9 @@ const SUMMON_SKILL_TREES = {
     }
   },
 
-  // ═══════════════════════════════════════════════════════════
-  // STALKER - fast attackers
-  // ═══════════════════════════════════════════════════════════
+ // ===========================================================
+ // STALKER - fast attackers
+ // ===========================================================
   STALKER: {
     A: {
       name: 'Shadow',
@@ -193,9 +189,9 @@ const SUMMON_SKILL_TREES = {
     }
   },
 
-  // ═══════════════════════════════════════════════════════════
-  // SUPPORT - BloomPixie and other healers/buffers
-  // ═══════════════════════════════════════════════════════════
+ // ===========================================================
+ // SUPPORT - BloomPixie and other healers/buffers
+ // ===========================================================
   SUPPORT: {
     A: {
       name: 'Healing',
@@ -236,7 +232,7 @@ const SUMMON_SKILL_TREES = {
   },
 };
 
-// ─── HELPER FUNCTIONS ─────────────────────────────────────────────
+// --- HELPER FUNCTIONS ---------------------------------------------
 
 /**
  * Get the skill tree for a summon's archetype.
@@ -269,17 +265,17 @@ function canUnlockNode(summon, nodeKey) {
   const node = getSkillNode(summon.archetype, nodeKey);
   if (!node) return { canUnlock: false, reason: 'Invalid skill node.' };
 
-  // Check skill points
+ // Check skill points
   if ((summon.skillPoints || 0) < 1) {
     return { canUnlock: false, reason: `Need 1 skill point (have ${summon.skillPoints || 0}).` };
   }
 
-  // Check level requirement
+ // Check level requirement
   if (summon.level < node.levelReq) {
     return { canUnlock: false, reason: `Requires level ${node.levelReq} (you are L${summon.level}).` };
   }
 
-  // Check path - must have chosen a path, and node must be on that path
+ // Check path - must have chosen a path, and node must be on that path
   if (!summon.chosenSkillPath) {
     return { canUnlock: false, reason: 'Choose a skill path first. Use `.summon skill choose <A|B|C>`.' };
   }
@@ -287,7 +283,7 @@ function canUnlockNode(summon, nodeKey) {
     return { canUnlock: false, reason: `You chose path ${summon.chosenSkillPath}. Can only unlock ${summon.chosenSkillPath}-branch skills.` };
   }
 
-  // Check sequential unlock - must unlock node N before N+1
+ // Check sequential unlock - must unlock node N before N+1
   const tier = parseInt(nodeKey.slice(1));
   if (tier > 1) {
     const prevNode = `${summon.chosenSkillPath}${tier - 1}`;
@@ -296,7 +292,7 @@ function canUnlockNode(summon, nodeKey) {
     }
   }
 
-  // Check not already unlocked
+ // Check not already unlocked
   if ((summon.unlockedSkillNodes || []).includes(nodeKey)) {
     return { canUnlock: false, reason: 'Already unlocked.' };
   }
@@ -363,10 +359,10 @@ function getPassiveEffects(summon) {
     const node = getSkillNode(summon.archetype, nodeKey);
     if (!node || node.type !== 'passive') continue;
     const e = node.effect || {};
-    // Merge stat bonuses
+ // Merge stat bonuses
     if (e.stat && e.value) effects[e.stat] = (effects[e.stat] || 0) + e.value;
     if (e.stat2 && e.value2) effects[e.stat2] = (effects[e.stat2] || 0) + e.value2;
-    // Merge other passive effects (later values win for non-stat effects)
+ // Merge other passive effects (later values win for non-stat effects)
     for (const [k, v] of Object.entries(e)) {
       if (['stat', 'value', 'stat2', 'value2'].includes(k)) continue;
       effects[k] = v;
@@ -395,7 +391,7 @@ function getActiveAbility(summon) {
   return bestActive;
 }
 
-// ── v3 node icons (2026-10-12 asset pack): every node gets its dedicated
+// -- v3 node icons (asset pack): every node gets its dedicated
 // sprite path from the v3 pack (owner sheets 2-4). N1 shares the path icon
 // (alias <path>_n1.png), N2-N5 have dedicated art. Consumed by renderers via
 // skillAssets.getSummonNodeArt(archetype, pathKey, nodeNumber).

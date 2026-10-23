@@ -136,7 +136,7 @@ async function waitPhase(pred, ms = 25000) {
   const R = roster(6); // 6 players: killer + investigator + guardian (5+) + 3 civilians
   mm.init();
 
-  // open + fill + start
+ // open + fill + start
   await mm.handleCommand(ctxOf(sock, { sub: 'create', sender: R[0].jid, name: R[0].name }));
   for (let i = 1; i < R.length; i++) {
     await mm.handleCommand(ctxOf(sock, { sub: 'join', sender: R[i].jid, name: R[i].name }));
@@ -155,30 +155,30 @@ async function waitPhase(pred, ms = 25000) {
   const civ3 = g.players.filter((p) => p.role === 'CIVILIAN')[2];
   ok(!!killer && !!civ && !!civ2 && !!civ3, 'S4 killer + three civilians found');
 
-  // ---- NIGHT WINDOW: batch every night-1 action IMMEDIATELY (QA_CLOCK night = 5s).
-  // All assertions run afterwards from the recorded DM log + persisted state. ----
-  // R1: first visit -> room narrative + letter fragment 1
+ // ---- NIGHT WINDOW: batch every night-1 action IMMEDIATELY (QA_CLOCK night = 5s).
+ // All assertions run afterwards from the recorded DM log + persisted state. ----
+ // R1: first visit -> room narrative + letter fragment 1
   await mm.handleCommand(ctxOf(sock, { group: false, sub: 'visit', rest: '1', sender: civ.jid, name: civ.name }));
-  // R2: second visitor, SAME room -> collision both ways
+ // R2: second visitor, SAME room -> collision both ways
   await mm.handleCommand(ctxOf(sock, { group: false, sub: 'visit', rest: '1', sender: civ2.jid, name: civ2.name }));
-  // R3: candle reveal - the NEWCOMER holds the candle; its light names the faces
+ // R3: candle reveal - the NEWCOMER holds the candle; its light names the faces
   civ3.items.push('candle');
   await mm.handleCommand(ctxOf(sock, { group: false, sub: 'visit', rest: '1', sender: civ3.jid, name: civ3.name }));
-  // R4: duplicate visit same night -> rejected
+ // R4: duplicate visit same night -> rejected
   await mm.handleCommand(ctxOf(sock, { group: false, sub: 'visit', rest: '2', sender: civ.jid, name: civ.name }));
-  // R5: letters re-read (works in any phase)
+ // R5: letters re-read (works in any phase)
   await mm.handleCommand(ctxOf(sock, { group: false, sub: 'letters', sender: civ.jid, name: civ.name }));
-  // R6: talisman save - the mark holds the iron
+ // R6: talisman save - the mark holds the iron
   const victims = g.players.filter((p) => p.alive && p.role !== 'KILLER');
   const mark = victims[victims.length - 1];
   mark.items.push('talisman');
-  // killer wanders too (feeds the ghost movement line in the second night)
+ // killer wanders too (feeds the ghost movement line in the second night)
   await mm.handleCommand(ctxOf(sock, { group: false, sub: 'visit', rest: '2', sender: killer.jid, name: killer.name }));
   const mIdx = actIdx(g, killer, mark);
   await mm.handleCommand(ctxOf(sock, { group: false, sub: 'kill', rest: String(mIdx), sender: killer.jid, name: killer.name }));
   await mm.handleCommand(ctxOf(sock, { group: false, sub: 'room', rest: '3', sender: killer.jid, name: killer.name }));
 
-  // ---- dawn: assert everything from the recorded log ----
+ // ---- dawn: assert everything from the recorded log ----
   g = await waitPhase((x) => x.phase === 'DISCUSSION', 35000);
   ok(!!g && g.phase === 'DISCUSSION', 'R0 dawn reached after the visit night');
 
@@ -203,12 +203,12 @@ async function waitPhase(pred, ms = 25000) {
   ok((g.bodies || []).length === 0, 'R6 no body was planted (kill turned)');
   ok(dm(sock, mark.jid, /broke against the old iron/), 'R6 victim DM: iron turned the knife');
   ok(dm(sock, killer.jid, /The blade turned/), 'R6 killer DM: the deed failed');
-  // AFK-random placement: every living guest now has a room on the map
+ // AFK-random placement: every living guest now has a room on the map
   const allPlaced = g.players.filter((p) => p.alive).every((p) => g.visits.picks[norm(p.jid)] != null);
   ok(allPlaced, 'R6b AFK guests placed randomly at dawn (alibi map complete)');
 
-  // ---- night 2: real murder + ghost movement line ----
-  // skip the vote so night 2 begins
+ // ---- night 2: real murder + ghost movement line ----
+ // skip the vote so night 2 begins
   sock = makeSock(); QA_SOCK = sock;
   g = mm._internal.getGame(CHAT);
   for (const p of g.players.filter((x) => x.alive)) {
@@ -221,11 +221,11 @@ async function waitPhase(pred, ms = 25000) {
   sock = makeSock(); QA_SOCK = sock;
   g = mm._internal.getGame(CHAT);
   const killer2 = roleOf(g, 'KILLER');
-  // strip any keepsake talismans the loot rolls dealt - this night must murder
+ // strip any keepsake talismans the loot rolls dealt - this night must murder
   for (const p of g.players) p.items = (p.items || []).filter((it) => it !== 'talisman');
   const targets = g.players.filter((p) => p.alive && p.role !== 'KILLER');
   const prey = targets[0];
-  // killer visits room 1; body goes to room 2 -> ghost movement names room 1
+ // killer visits room 1; body goes to room 2 -> ghost movement names room 1
   await mm.handleCommand(ctxOf(sock, { group: false, sub: 'visit', rest: '1', sender: killer2.jid, name: killer2.name }));
   const preyIdx = actIdx(g, killer2, prey);
   await mm.handleCommand(ctxOf(sock, { group: false, sub: 'kill', rest: String(preyIdx), sender: killer2.jid, name: killer2.name }));
@@ -236,7 +236,7 @@ async function waitPhase(pred, ms = 25000) {
   ok(g.bodies[0].killerVisitIdx === 0, `N2 killer's wander recorded on the body (idx=${g.bodies[0].killerVisitIdx})`);
   ok(!prey.alive, 'N2 prey is dead (no talisman this time)');
 
-  // finder searches the body room -> ghost clue DM carries the movement line
+ // finder searches the body room -> ghost clue DM carries the movement line
   sock = makeSock(); QA_SOCK = sock;
   g = mm._internal.getGame(CHAT);
   const finder = g.players.find((p) => p.alive && norm(p.jid) !== norm(killer2.jid));
@@ -246,7 +246,7 @@ async function waitPhase(pred, ms = 25000) {
   const mvName = g.rooms[0].name;
   ok(dm(sock, finder.jid, new RegExp(`slipped through the ${mvName}`)) || bodyRoomIdx === 0, `N3 ghost movement line names the killer's room (${mvName})`);
 
-  // cleanup: close the case
+ // cleanup: close the case
   await mm.handleCommand(ctxOf(sock, { sub: 'end', sender: R[0].jid, name: R[0].name }));
 
   console.log(`\n===== mm_qa5: ${pass} passed, ${fail} failed =====`);

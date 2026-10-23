@@ -15,7 +15,7 @@ function test(name, fn) {
 
 console.log('=== PHASE 3 UNIT TESTS ===\n');
 
-// ─── summonCapture module ──────────────────────────────────────
+// --- summonCapture module --------------------------------------
 console.log('--- summonCapture module ---');
 
 const summonCapture = require(path.join(REPO, 'core/rpg/summonCapture.js'));
@@ -48,7 +48,7 @@ test('CAPTURE_CONFIG has correct values', () => {
   assert.ok(cfg.BOSS_CAPTURE_IMMUNE_RANKS.includes('SSS'));
 });
 
-// ─── Capture window management ─────────────────────────────────
+// --- Capture window management ---------------------------------
 console.log('\n--- Capture window ---');
 
 test('setCaptureWindow creates a window with correct values', () => {
@@ -57,7 +57,7 @@ test('setCaptureWindow creates a window with correct values', () => {
   assert.ok(state.captureWindows);
   assert.ok(state.captureWindows['user1@jid']);
   assert.strictEqual(state.captureWindows['user1@jid'].turnsRemaining, 3);
-  // Base 20% + 5 × 5% = 45%
+ // Base 20% + 5 × 5% = 45%
   assert.strictEqual(state.captureWindows['user1@jid'].captureChance, 0.45);
 });
 
@@ -97,7 +97,7 @@ test('tickCaptureWindows handles empty state', () => {
   assert.doesNotThrow(() => summonCapture.tickCaptureWindows(null));
 });
 
-// ─── Necromancer bonus ─────────────────────────────────────────
+// --- Necromancer bonus -----------------------------------------
 console.log('\n--- Necromancer bonus ---');
 
 test('getNecromancerSummonBonus returns +30% for NECROMANCER', () => {
@@ -128,7 +128,7 @@ test('applyClassSummonBonus boosts undead summon for Necromancer', () => {
     maxHP: 100
   };
   summonCapture.applyClassSummonBonus(entity, 'NECROMANCER');
-  // +30% = 1.3× multiplier
+ // +30% = 1.3× multiplier
   assert.strictEqual(entity.stats.hp, Math.floor(100 * 1.3));  // 130
   assert.strictEqual(entity.stats.atk, Math.floor(20 * 1.3));  // 26
   assert.strictEqual(entity.currentHP, entity.stats.hp);
@@ -161,7 +161,7 @@ test('applyClassSummonBonus handles null entity', () => {
   assert.doesNotThrow(() => summonCapture.applyClassSummonBonus(null, 'NECROMANCER'));
 });
 
-// ─── Taming progress ───────────────────────────────────────────
+// --- Taming progress -------------------------------------------
 console.log('\n--- Taming progress ---');
 
 test('getTamingProgress returns 0 for new user', () => {
@@ -202,7 +202,7 @@ test('getTamedSpecies handles empty progress', () => {
   assert.strictEqual(summonCapture.getTamedSpecies(null).length, 0);
 });
 
-// ─── Enemy → species mapping ───────────────────────────────────
+// --- Enemy → species mapping -----------------------------------
 console.log('\n--- Enemy → species mapping ---');
 
 test('undead enemies map to undead summon species', () => {
@@ -232,15 +232,15 @@ test('all mapped species exist in registry', () => {
   }
 });
 
-// ─── classSystem.js verification ───────────────────────────────
+// --- classSystem.js verification -------------------------------
 console.log('\n--- classSystem.js Necromancer passive ---');
 
 const fs = require('fs');
 const classSource = fs.readFileSync(path.join(REPO, 'core/rpg/classSystem.js'), 'utf8');
 
 test('Necromancer passive effect changed to summon_buff', () => {
-  // Find the NECROMANCER block - use a larger window because the comment
-  // I added pushed the passive line further down.
+ // Find the NECROMANCER block - use a larger window because the comment
+ // I added pushed the passive line further down.
   const necroIdx = classSource.indexOf("NECROMANCER: {");
   assert.ok(necroIdx > 0);
   const necroBlock = classSource.slice(necroIdx, necroIdx + 1200);
@@ -260,7 +260,7 @@ test('Necromancer passive description mentions Army of the Dead', () => {
   assert.ok(necroBlock.includes("Army of the Dead"), 'description should mention the capture ult');
 });
 
-// ─── guildAdventure.js verification ─────────────────────────────
+// --- guildAdventure.js verification -----------------------------
 console.log('\n--- guildAdventure.js capture integration ---');
 
 const gaSource = fs.readFileSync(path.join(REPO, 'core/rpg/guildAdventure.js'), 'utf8');
@@ -288,7 +288,7 @@ test('capture windows ticked in processCombatTurn', () => {
   assert.ok(gaSource.includes('summonCapture.tickCaptureWindows(state)'));
 });
 
-// ─── User.js verification ──────────────────────────────────────
+// --- User.js verification --------------------------------------
 console.log('\n--- User.js tamingProgress ---');
 
 const userSource = fs.readFileSync(path.join(REPO, 'core/models/User.js'), 'utf8');
@@ -300,11 +300,11 @@ test('tamingProgress field added to User schema', () => {
 
 test('economy.js lazy migration includes tamingProgress', () => {
   const econSource = fs.readFileSync(path.join(REPO, 'core/rpg/economy.js'), 'utf8');
-  // Should appear in both getUser and getOrCreateUser
+ // Should appear in both getUser and getOrCreateUser
   const count = (econSource.match(/if \(!user\.tamingProgress\) user\.tamingProgress = \{\};/g) || []).length;
   assert.ok(count >= 2, `expected ≥2 lazy migration sites, got ${count}`);
 });
 
-// ─── Summary ──────────────────────────────────────────────────
+// --- Summary --------------------------------------------------
 console.log(`\n=== PHASE 3 SUMMARY: ${pass} passed, ${fail} failed ===`);
 process.exit(fail > 0 ? 1 : 0);

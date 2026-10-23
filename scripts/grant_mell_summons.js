@@ -9,7 +9,7 @@ const crypto = require('crypto');
 
   const userId = '251453323092189@lid';
 
-  // Find the user
+ // Find the user
   const user = await User.findOne({ userId });
   if (!user) {
     console.log('User not found');
@@ -17,18 +17,18 @@ const crypto = require('crypto');
   }
   console.log('Found user:', user.userId, '| nickname:', user.nickname);
 
-  // 1. Delete all existing summons for this user
+ // 1. Delete all existing summons for this user
   const deleteResult = await Summon.deleteMany({ ownerJid: userId });
   console.log(`Deleted ${deleteResult.deletedCount} existing summons`);
 
-  // 2. Clear activeSummonId
+ // 2. Clear activeSummonId
   user.activeSummonId = null;
-  // 3. Set summonSlots to 4 so they can hold all 4 starters
+ // 3. Set summonSlots to 4 so they can hold all 4 starters
   user.summonSlots = 4;
   await user.save();
   console.log('Cleared activeSummonId, set summonSlots to 4');
 
-  // 4. Create the 4 new sparklinlabs starter summons
+ // 4. Create the 4 new sparklinlabs starter summons
   const STARTER_SPECIES = [
     {
       species: 'stoneguard',
@@ -99,7 +99,7 @@ const crypto = require('crypto');
     console.log(`Created: ${summonId} | ${starter.species} | ${starter.nickname} | ${species.rarity} | ${species.archetype}`);
   }
 
-  // 5. Verify
+ // 5. Verify
   const finalSummons = await Summon.find({ ownerJid: userId });
   console.log(`\n=== FINAL SUMMONS (${finalSummons.length}) ===`);
   for (const s of finalSummons) {

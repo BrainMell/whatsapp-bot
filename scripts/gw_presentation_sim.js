@@ -1,9 +1,8 @@
 // ============================================
-// 🎮 GW PRESENTATION SIM — end-to-end battery for the 2026-10-04
+// GW PRESENTATION SIM - end-to-end battery for the
 // presentation & gameplay overhaul (owner spec §23 checklist).
 // Drives the REAL guildWar modules against the TEST database, with a mock
 // sock that records every payload so the presentation ORDER can be asserted.
-//
 // Covers: deployment flow (map-first, no parchment), prefixed grammar
 // (.j move forward/left/back/right), auto-encounters, combat-hook victory/
 // defeat/flee (§22 shadowing verification), teleport anchor (+ combat
@@ -21,7 +20,7 @@ const path = require('path');
 const results = [];
 function check(name, cond, detail = '') {
     results.push({ name, ok: !!cond, detail: String(detail).slice(0, 160) });
-    console.log(`${cond ? '✅' : '❌'} ${name}${cond ? '' : ` — ${detail}`}`);
+    console.log(`${cond ? '✅' : '❌'} ${name}${cond ? '' : ` - ${detail}`}`);
 }
 
 const mockSock = () => ({
@@ -32,8 +31,7 @@ const mockSock = () => ({
 });
 
 async function connectDB() {
-    // parse .env FIRST and redirect MONGO_URI to the TEST database BEFORE any
-    // module that caches the connection loads (same pattern as gw_sim.js)
+ // module that caches the connection loads (same pattern as gw_sim.js)
     try {
         const envPath = path.join(__dirname, '..', '.env');
         if (fs.existsSync(envPath)) {
@@ -57,7 +55,7 @@ async function makeGuild(guilds, name) {
     return name;
 }
 
-// ── helpers ──
+// -- helpers --
 async function freshEvent({ players = 2, host = 'pres@g.us' } = {}) {
     const state = require('../core/rpg/guildWar/state');
     const created = await state.createEvent({ type: 'normal', hostGroupId: host, initiatedBy: 'owner' });
@@ -74,7 +72,7 @@ async function freshEvent({ players = 2, host = 'pres@g.us' } = {}) {
 
 function playerOf(doc, jid) { return doc.players.find((p) => p.jid === jid); }
 
-// ═════════ S1: DEPLOYMENT FLOW (§1/§2) ═════════
+// ========= S1: DEPLOYMENT FLOW (§1/§2) =========
 async function s1_deploy() {
     const gw = require('../core/rpg/guildWar');
     const ev = await freshEvent({ players: 2 });
@@ -88,7 +86,7 @@ async function s1_deploy() {
     check('deploy: SCENE (character in room) arrives second', mine[2] && mine[2].hasImage && mine[1].hasImage, JSON.stringify(mine[2] || {}));
 }
 
-// ═════════ S2: PREFIXED GRAMMAR (§11 — the ".j left unknown" fix) ═════════
+// ========= S2: PREFIXED GRAMMAR (§11 - the ".j left unknown" fix) =========
 async function s2_prefixed() {
     const state = require('../core/rpg/guildWar/state');
     const dmRouter = require('../core/rpg/guildWar/dmRouter');
@@ -96,7 +94,7 @@ async function s2_prefixed() {
     const ev = await freshEvent({ players: 1 });
     const sock = mockSock();
 
-    // stub the combat pipeline: auto-encounters must not explode the sim
+ // stub the combat pipeline: auto-encounters must not explode the sim
     let combatStarts = 0, lastSpec = null;
     const origStart = ga.startRuinsCombat;
     ga.startRuinsCombat = async (s, c, j, spec) => { combatStarts++; lastSpec = spec; return { success: true, sessionKey: 'sim' }; };
@@ -112,22 +110,22 @@ async function s2_prefixed() {
     const res4 = await dm('.j move right');
     check('prefixed .j move right consumed', res4 !== null, JSON.stringify(res4 || 'null').slice(0, 60));
 
-    // generic prefixed commands must fall through untouched
+ // generic prefixed commands must fall through untouched
     check('.j use … falls through to normal pipeline', await dm('.j use elixir') === null);
     check('.j bag falls through to normal pipeline', await dm('.j bag') === null);
     check('.j status falls through to normal pipeline', await dm('.j status') === null);
 
-    // position actually moved
+ // position actually moved
     const fresh = await state.getEvent(ev.eventId, { fresh: true });
     const p0 = playerOf(fresh, 'pp0@s.whatsapp.net');
     check('position changed by prefixed moves', p0.roomId !== p0.spawnRoomId, `${p0.spawnRoomId} → ${p0.roomId}`);
 
-    // §22: lastMoveAt survived the schema (move cooldown clock)
+ // §22: lastMoveAt survived the schema (move cooldown clock)
     check('§22 lastMoveAt persisted (cooldown clock works)', (p0.lastMoveAt || 0) > 0);
     ga.startRuinsCombat = origStart;
 }
 
-// ═════════ S3: AUTO-ENCOUNTER (§14) ═════════
+// ========= S3: AUTO-ENCOUNTER (§14) =========
 async function s3_auto_encounter() {
     const state = require('../core/rpg/guildWar/state');
     const dmRouter = require('../core/rpg/guildWar/dmRouter');
@@ -139,17 +137,17 @@ async function s3_auto_encounter() {
     const origStart = ga.startRuinsCombat;
     ga.startRuinsCombat = async (s, c, j, spec) => { combatStarts++; lastSpec = spec; return { success: true, sessionKey: 'sim' }; };
 
-    // force the player next to a combat room, then move in
+ // force the player next to a combat room, then move in
     let doc = await state.getEvent(ev.eventId, { fresh: true });
     const combat = doc.rooms.find((r) => r.type === 'combat' && r.state === 'UNEXPLORED');
     const me = playerOf(doc, 'pp0@s.whatsapp.net');
-    // find a neighbour of the combat room reachable via an edge
+ // find a neighbour of the combat room reachable via an edge
     const neigh = doc.rooms.find((r) => doc.edges.includes(`${r.key}|e`) && doc.edges.includes(`${combat.key}|w`) && r.x + 1 === combat.x)
         || doc.rooms.find((r) => r.key !== combat.key);
     await state.updatePlayer(doc.eventId, me.jid, {}, { roomId: neigh.key, prevRoomId: neigh.key, lastMoveAt: 0 });
     const sock = mockSock();
     await dmRouter.handleDM(sock, me.jid, me.jid, '.j move right', '\u200B', { prefix: '.', prefixed: true });
-    // if the right move did not land on the combat room (topology), walk until it does
+ // if the right move did not land on the combat room (topology), walk until it does
     let guard = 0;
     while (combatStarts === 0 && guard++ < 10) {
         doc = await state.getEvent(ev.eventId, { fresh: true });
@@ -159,13 +157,13 @@ async function s3_auto_encounter() {
         await dmRouter.handleDM(sock, me.jid, me.jid, ['forward', 'right', 'back', 'left'][guard % 4], '\u200B', { prefix: '.', prefixed: true });
     }
     check('combat room auto-started the fight (no "fight" typed)', combatStarts >= 1, `starts=${combatStarts}`);
-    // ⚔️ owner directive 2026-10-05 23:39Z: the square map panel is GONE from
-    // ruins battles — the spec must carry the room key and must NOT carry any
-    // map fragment (the fight stays IN the room scene, guildWar/battleScene.js).
+ // owner directive 23:39Z: the square map panel is GONE from
+ // ruins battles - the spec must carry the room key and must NOT carry any
+ // map fragment (the fight stays IN the room scene, guildWar/battleScene.js).
     check('combat spec carries room key, NO map fragment (owner 23:39Z)', lastSpec && lastSpec.roomKey && !lastSpec.mapFragment, JSON.stringify(lastSpec ? Object.keys(lastSpec) : 'none'));
     check('no manual fight prompt needed', !sock.sent.some((s) => /type .fight./i.test(s.text)));
 
-    // puzzle rooms must NOT auto-combat
+ // puzzle rooms must NOT auto-combat
     doc = await state.getEvent(ev.eventId, { fresh: true });
     const puzzle = doc.rooms.find((r) => r.type === 'puzzle');
     if (puzzle) {
@@ -178,13 +176,13 @@ async function s3_auto_encounter() {
     ga.startRuinsCombat = origStart;
 }
 
-// ═════════ S4: COMBAT HOOKS (§22 shadowing fix verification) ═════════
+// ========= S4: COMBAT HOOKS (§22 shadowing fix verification) =========
 async function s4_hooks() {
     const state = require('../core/rpg/guildWar/state');
     const gw = require('../core/rpg/guildWar');
     const ga = require('../core/rpg/guildAdventure');
 
-    // capture the hooks the same way the combat engine does
+ // capture the hooks the same way the combat engine does
     let captured = null;
     const orig = ga.setRuinsHooks;
     ga.setRuinsHooks = (h) => { captured = h; };
@@ -195,16 +193,16 @@ async function s4_hooks() {
     const ev = await freshEvent({ players: 1 });
     let doc = await state.getEvent(ev.eventId, { fresh: true });
     const me = playerOf(doc, 'pp0@s.whatsapp.net');
-    // put the player IN a combat room with a previous room
+ // put the player IN a combat room with a previous room
     const combat = doc.rooms.find((r) => r.type === 'combat') || doc.rooms.find((r) => r.type !== 'empty');
     await state.updatePlayer(doc.eventId, me.jid, {}, { roomId: combat.key, prevRoomId: me.roomId });
 
-    // ── VICTORY: room clears, GP paid, decree-then-map order ──
+ // -- VICTORY: room clears, GP paid, decree-then-map order --
     const sock = mockSock();
     const session = { ruinsMeta: { eventId: doc.eventId, roomKey: combat.key }, players: [{ jid: me.jid, name: me.name, lives: 3, spawnRoomId: me.spawnRoomId, roomId: combat.key }] };
-    // 🔄 ORDERING (owner 2026-10-05 11:48Z): onEnd must be SILENT (the decree
-    // end card is sent by endCombat before presentAfterBattle replays the
-    // map/encounter) and must return a presentation descriptor.
+ // ORDERING (11:48Z): onEnd must be SILENT (the decree
+ // end card is sent by endCombat before presentAfterBattle replays the
+ // map/encounter) and must return a presentation descriptor.
     const vdesc = await captured.onEnd(session, true, 'sim-key', sock);
     check('victory: onEnd sends NOTHING (decree card goes first)', sock.sent.length === 0, JSON.stringify(sock.sent.map((s) => s.text)));
     check('victory: onEnd returns victory descriptor', vdesc && vdesc.kind === 'victory' && vdesc.claimed === true, JSON.stringify(vdesc));
@@ -216,18 +214,18 @@ async function s4_hooks() {
     await captured.presentAfterBattle(session, true, 'sim-key', sock, vdesc);
     check('victory: RETURN map image sent AFTER the card slot (§4)', sock.sent.some((s) => s.hasImage && /chamber is yours/i.test(s.text)), JSON.stringify(sock.sent.map((s) => s.text)));
 
-    // ── DEFEAT: life lost, respawn at spawn corner, silent onEnd ──
+ // -- DEFEAT: life lost, respawn at spawn corner, silent onEnd --
     const sock2 = mockSock();
     const dsession = { ruinsMeta: { eventId: doc.eventId, roomKey: combat.key }, players: [{ jid: me.jid, name: me.name, lives: 2, spawnRoomId: me.spawnRoomId, roomId: combat.key }] };
-    // §23: the hook reads the AUTHORITATIVE event player's lives (the session
-    // entity's lives field is ignored), so derive expectations from the DB.
+ // §23: the hook reads the AUTHORITATIVE event player's lives (the session
+ // entity's lives field is ignored), so derive expectations from the DB.
     const preDoc = await state.getEvent(doc.eventId, { fresh: true });
     const preLives = playerOf(preDoc, me.jid).lives ?? 3;
     const ddesc = await captured.onEnd(dsession, false, 'sim-key', sock2);
     check('defeat: onEnd sends NOTHING (decree card goes first)', sock2.sent.length === 0, JSON.stringify(sock2.sent.map((s) => s.text)));
-    // 🤝 co-op (2026-10-05): the descriptor is MULTI-PLAYER —
-    // { kind:'defeat-multi', players:[{jid,kind:'respawn',name,lives,spawnRoom}] }.
-    // The legacy single-player shape ({kind:'respawn',…}) is still accepted.
+ // co-op: the descriptor is MULTI-PLAYER -
+ // { kind:'defeat-multi', players:[{jid,kind:'respawn',name,lives,spawnRoom}] }.
+ // The legacy single-player shape ({kind:'respawn',…}) is still accepted.
     const leg = ddesc && ddesc.kind === 'respawn' ? ddesc : null;
     const multi = ddesc && Array.isArray(ddesc.players) ? (ddesc.players.find((x) => x.kind === 'respawn') || null) : null;
     const row = leg || multi;
@@ -236,25 +234,25 @@ async function s4_hooks() {
     const defeated = playerOf(doc, me.jid);
     check('defeat: life decremented (authoritative, §23)', (defeated.lives || 0) === Math.max(0, preLives - 1), `lives=${defeated.lives} expected=${Math.max(0, preLives - 1)}`);
     check('defeat: respawned at spawn corner with protection', defeated.roomId === me.spawnRoomId && (defeated.protectedUntil || 0) > Date.now() - 1000);
-    // 🔄 presentation replay: fall text FIRST, then the map/encounter images
+ // presentation replay: fall text FIRST, then the map/encounter images
     await captured.presentAfterBattle(dsession, false, 'sim-key', sock2, ddesc);
     const textIdx = sock2.sent.findIndex((s) => /You have fallen/i.test(s.text));
     const imgIdx = sock2.sent.findIndex((s) => s.hasImage);
     check('defeat: fall text sent', textIdx >= 0, JSON.stringify(sock2.sent.map((s) => s.text)));
     check('defeat: respawn map/encounter images sent after the fall text', imgIdx > textIdx, `text@${textIdx} img@${imgIdx}: ${JSON.stringify(sock2.sent.map((s) => s.text))}`);
 
-    // ── FLEE: retreats to previous room ──
+ // -- FLEE: retreats to previous room --
     await state.updatePlayer(doc.eventId, me.jid, {}, { roomId: combat.key, prevRoomId: me.spawnRoomId });
     await captured.onFlee({ ruinsMeta: { eventId: doc.eventId, roomKey: combat.key }, players: [{ jid: me.jid }], session: true });
-    // the onFlee hook is fire-and-forget by design (the combat engine calls it
-    // synchronously mid-teardown) — give the async retreat a beat to land
+ // the onFlee hook is fire-and-forget by design (the combat engine calls it
+ // synchronously mid-teardown) - give the async retreat a beat to land
     await new Promise((r) => setTimeout(r, 200));
     doc = await state.getEvent(doc.eventId, { fresh: true });
     const fled = playerOf(doc, me.jid);
     check('flee: retreated to previous room', fled.roomId === me.spawnRoomId, `roomId=${fled.roomId}`);
 }
 
-// ═════════ S5: TELEPORT ANCHOR (§16) ═════════
+// ========= S5: TELEPORT ANCHOR (§16) =========
 async function s5_teleport() {
     const state = require('../core/rpg/guildWar/state');
     const dmRouter = require('../core/rpg/guildWar/dmRouter');
@@ -265,17 +263,17 @@ async function s5_teleport() {
     let doc = await state.getEvent(ev.eventId, { fresh: true });
     const me = playerOf(doc, 'pp0@s.whatsapp.net');
 
-    // teleport with no anchor → guidance
+ // teleport with no anchor → guidance
     await state.updatePlayer(doc.eventId, me.jid, {}, { lastMoveAt: 0 });
     let sock = mockSock();
     let res = await dm('teleport', sock);
     check('teleport without anchor → guidance', res && /anchor/i.test(res.text || ''), (res?.text || '').slice(0, 60));
 
-    // mark here, walk away, teleport back
+ // mark here, walk away, teleport back
     await dm('mark', sock);
     doc = await state.getEvent(doc.eventId, { fresh: true });
     check('§16 anchor persisted on player', !!playerOf(doc, me.jid).markedRoom);
-    // walk somewhere else (any open edge)
+ // walk somewhere else (any open edge)
     const topo = doc.edges;
     const cur0 = playerOf(doc, me.jid).roomId;
     const stepEdge = topo.find((e) => e.startsWith(`${cur0}|`));
@@ -288,19 +286,19 @@ async function s5_teleport() {
     const moved = playerOf(doc, me.jid);
     check('moved away from anchor', moved.roomId !== moved.markedRoom, `${moved.roomId} vs ${moved.markedRoom}`);
     await state.updatePlayer(doc.eventId, me.jid, {}, { lastMoveAt: 0 });
-    // 🤝 co-op era (2026-10-05): the walk may have auto-started a REAL room
-    // fight (flee sessions are cleaned properly now, so nothing blocks the
-    // start). §16 teleport must refuse a live fight — that's separately
-    // checked below — so settle any live session before testing the anchor.
+ // co-op era: the walk may have auto-started a REAL room
+ // fight (flee sessions are cleaned properly now, so nothing blocks the
+ // start). §16 teleport must refuse a live fight - that's separately
+ // checked below - so settle any live session before testing the anchor.
     require('../core/rpg/guildAdventure').abortRuinsSession('pp0@s.whatsapp.net');
     sock = mockSock();
     res = await dm('teleport', sock);
     doc = await state.getEvent(doc.eventId, { fresh: true });
     const returned = playerOf(doc, me.jid);
-    check('teleport returns to the anchored chamber', returned.roomId === returned.markedRoom, `${returned.roomId} vs ${returned.markedRoom} — res=${JSON.stringify(res || null).slice(0, 90)}`);
+    check('teleport returns to the anchored chamber', returned.roomId === returned.markedRoom, `${returned.roomId} vs ${returned.markedRoom} - res=${JSON.stringify(res || null).slice(0, 90)}`);
     check('teleport presented the room visuals', sock.sent.filter((s) => s.hasImage).length >= 2, `images=${sock.sent.filter((s) => s.hasImage).length}`);
 
-    // COMBAT BLOCK (§16: teleport must never skip a live fight)
+ // COMBAT BLOCK (§16: teleport must never skip a live fight)
     doc = await state.getEvent(doc.eventId, { fresh: true });
     const combat = doc.rooms.find((r) => r.type === 'combat' && r.state === 'UNEXPLORED');
     if (combat) {
@@ -317,7 +315,7 @@ async function s5_teleport() {
     }
 }
 
-// ═════════ S6: PLATE VARIANT SELECTION (§8) ═════════
+// ========= S6: PLATE VARIANT SELECTION (§8) =========
 async function s6_plates() {
     const roomScene = require('../core/rpg/guildWar/roomScene');
     const ex = (dirs) => dirs.map((d) => ({ dir: d, edge: true }));
@@ -330,13 +328,13 @@ async function s6_plates() {
         const got = roomScene.plateKeyFor(ex(dirs), 'seed-x');
         check(`plate ${dirs.join('+') || 'none'} → ${expected}`, expected.split('|').includes(got), `got ${got}`);
     }
-    // S never forces a side arch; render smoke for the S-only + full exits
+ // S never forces a side arch; render smoke for the S-only + full exits
     const fakeEv = { eventId: 'x', seed: 'x', side: 2, rooms: [{ key: '0,0', x: 0, y: 0, type: 'empty', state: 'UNEXPLORED', payload: {}, ring: 0.2 }], edges: [], deadWorld: 'ember', type: 'normal', state: 'ACTIVE' };
     const buf = await roomScene.renderRoomScene(fakeEv, { roomId: '0,0', classId: 'SAMURAI', spriteIndex: 0, discovered: ['0,0'] }, fakeEv.rooms[0], { exits: ex(['s']), prefix: '.' });
     check('S-only room renders (back indicator, no fake arches)', Buffer.isBuffer(buf) && buf.length > 10000, `${buf && buf.length}`);
 }
 
-// ═════════ S7: RETURN MAP + EXPLORE MAP (§3/§4) ═════════
+// ========= S7: RETURN MAP + EXPLORE MAP (§3/§4) =========
 async function s7_maps() {
     const state = require('../core/rpg/guildWar/state');
     const dmRouter = require('../core/rpg/guildWar/dmRouter');
@@ -351,7 +349,7 @@ async function s7_maps() {
     check('.j paths returns the RETURN map image', res && Buffer.isBuffer(res.image) && res.image.length > 10000);
 }
 
-// ═════════ S8: FEED MAJORS (§17) ═════════
+// ========= S8: FEED MAJORS (§17) =========
 async function s8_feed() {
     const state = require('../core/rpg/guildWar/state');
     const gw = require('../core/rpg/guildWar');
@@ -375,8 +373,8 @@ async function s8_feed() {
     const sock = mockSock();
     await captured.onEnd({ ruinsMeta: { eventId: doc.eventId, roomKey: core.key }, players: [{ jid: me.jid, name: me.name, lives: 3, spawnRoomId: me.spawnRoomId, roomId: core.key }] }, true, 'k', sock);
     const feed = require('../core/rpg/guildWar/feed');
-    // ⚔️ mirror-ack aware (2026-10-06 feed dedup): the queued item may have
-    // drained from the local mirror into the doc — check both, briefly.
+ // mirror-ack aware (feed dedup): the queued item may have
+ // drained from the local mirror into the doc - check both, briefly.
     let queued = feed.st(doc.eventId).queue;
     for (let i = 0; i < 20 && !queued.some((q) => q.tier === 'major'); i++) {
         await new Promise((r) => setTimeout(r, 50));
@@ -387,7 +385,7 @@ async function s8_feed() {
     check('core breach granted the first-guild GP', (await state.getEvent(doc.eventId, { fresh: true })).coreClaimedBy === 'GwTestA');
 }
 
-// ═════════ S9: PARTICIPATION GP (§22 inversion) ═════════
+// ========= S9: PARTICIPATION GP (§22 inversion) =========
 async function s9_participation() {
     const state = require('../core/rpg/guildWar/state');
     const points = require('../core/rpg/guildWar/points');
@@ -395,13 +393,13 @@ async function s9_participation() {
     const ev = await freshEvent({ players: 4 });
     let doc = await state.getEvent(ev.eventId, { fresh: true });
     const GuildWarEvent = require('../core/models/GuildWarEvent');
-    // P0: scored; P1: acted only (lastActionAt > joinedAt, score 0); P2: idle; P3: quit
+ // P0: scored; P1: acted only (lastActionAt > joinedAt, score 0); P2: idle; P3: quit
     const jids = ['pp0', 'pp1', 'pp2', 'pp3'].map((j) => `${j}@s.whatsapp.net`);
     await points.award(doc.eventId, jids[0], 40, 'room-clear');
     await GuildWarEvent.updateOne({ eventId: doc.eventId, 'players.jid': jids[1] }, { $set: { 'players.$.lastActionAt': Date.now() } });
     await state.updatePlayer(doc.eventId, jids[3], {}, { status: 'quit' });
     doc = await state.getEvent(doc.eventId, { fresh: true });
-    // simulate natural joinedAt (set at registration) — idle player keeps score 0 + no action
+ // simulate natural joinedAt (set at registration) - idle player keeps score 0 + no action
     const before = guilds.getGuild('GwTestA')?.points || 0;
     const summary = await points.distribute(doc, 'sim');
     check('§22 participation: scorer counted', summary.participation.includes('PP0'), JSON.stringify(summary.participation));
@@ -412,7 +410,7 @@ async function s9_participation() {
     check('§22 participation paid into guild curve (2 participants × 10)', after - before >= 20, `Δ=${after - before}`);
 }
 
-// ═════════ S10: §22 FIELD SURVIVAL (ring / lastMoveAt / ward) ═════════
+// ========= S10: §22 FIELD SURVIVAL (ring / lastMoveAt / ward) =========
 async function s22_fields() {
     const state = require('../core/rpg/guildWar/state');
     const encounters = require('../core/rpg/guildWar/encounters');
@@ -422,7 +420,7 @@ async function s22_fields() {
     check('§22 ring survived the schema (no NaN)', doc.rooms.every((r) => Number.isFinite(r.ring)), doc.rooms.find((r) => !Number.isFinite(r.ring))?.key || 'all finite');
     check('§22 ring varies across the map (scaling input alive)', new Set(doc.rooms.map((r) => Math.round(r.ring * 10))).size > 2);
 
-    // ward relic rides into combat spec (§22 #8)
+ // ward relic rides into combat spec (§22 #8)
     const GuildWarEvent = require('../core/models/GuildWarEvent');
     const me = playerOf(doc, 'pp0@s.whatsapp.net');
     await GuildWarEvent.updateOne({ eventId: doc.eventId, 'players.jid': me.jid }, {
@@ -476,7 +474,7 @@ async function s22_fields() {
     const fails = results.filter((r) => !r.ok);
     if (fails.length) {
         console.log('FAILURES:');
-        for (const f of fails) console.log(`  ❌ ${f.name} — ${f.detail}`);
+        for (const f of fails) console.log(`  ❌ ${f.name} - ${f.detail}`);
         process.exit(1);
     }
     process.exit(0);

@@ -1,26 +1,24 @@
-// gcActivity.js - DAILY GC ACTIVITY (2026-09-22, owner's ".j activity" order)
-//
+// gcActivity.js - DAILY GC ACTIVITY (owner's ".j activity" order)
 // Owner's findings that drove this module:
-//   1. "the .j activity is broken, counts seem wrong" - the old bare command
-//      summed the ALL-TIME ChatActivity counters and labeled it "this session".
-//      Nothing was wrong with the writes; the label and the semantics were.
-//   2. "the default today shouldn't be the last 24 hours, but since midnight" -
-//      day windows now start at MIDNIGHT in the bot's day timezone, not at
-//      now-24h.
-//   3. "the .j activity for that day says 600k all the time" - there was no
-//      per-day command at all; date questions fell through to the AI chat,
-//      which simply made numbers up. This module gives the command REAL data:
-//      messages / images / videos / stickers / audio / documents / contacts /
-//      locations / polls / links deleted / joined / left / kicked / promote /
-//      demote, plus the top posters of the day.
-//
+// 1. "the .j activity is broken, counts seem wrong" - the old bare command
+// summed the ALL-TIME ChatActivity counters and labeled it "this session".
+// Nothing was wrong with the writes; the label and the semantics were.
+// 2. "the default today shouldn't be the last 24 hours, but since midnight" -
+// day windows now start at MIDNIGHT in the bot's day timezone, not at
+// now-24h.
+// 3. "the .j activity for that day says 600k all the time" - there was no
+// per-day command at all; date questions fell through to the AI chat,
+// which simply made numbers up. This module gives the command REAL data:
+// messages / images / videos / stickers / audio / documents / contacts /
+// locations / polls / links deleted / joined / left / kicked / promote /
+// demote, plus the top posters of the day.
 // Own-module design (gcOwners.js pattern): QA can runtime-test the real
 // logic without booting the engine. The engine command handler is a thin
 // wrapper over accraDayRangeFromArg() + getDailyBreakdown() + formatCard().
 
 const ACTIVITY_TZ = 'Africa/Accra'; // owner's timezone - the "day" the GC lives in
 
-// ── Timezone helpers (Intl-based, no deps, no server-TZ dependence) ─────────
+// -- Timezone helpers (Intl-based, no deps, no server-TZ dependence) ---------
 
 // Offset (ms) a zone is AHEAD of UTC at the given instant.
 function tzOffsetMs(tz, date) {
@@ -58,11 +56,10 @@ function dayRange(key, tz) {
   return { start, end };
 }
 
-// ── Argument parsing ─────────────────────────────────────────────────────────
+// -- Argument parsing ---------------------------------------------------------
 
 // Accepts: (nothing) | today | yesterday | YYYY-MM-DD | DD-MM-YYYY |
 // DD/MM/YYYY | DD-MM | DD/MM | a bare day-of-month number.
-// Returns { start, end, label } or { error } (usage text lives in engine).
 function dayRangeFromArg(arg) {
   const now = new Date();
   const todayKey = dayKey(now);
@@ -92,21 +89,21 @@ function dayRangeFromArg(arg) {
     return fromKey(key);
   }
 
-  // DD/MM/YYYY or DD-MM-YYYY (day-first - the owner writes it that way)
+ // DD/MM/YYYY or DD-MM-YYYY (day-first - the owner writes it that way)
   m = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/.exec(raw);
   if (m) {
     const key = `${m[3]}-${String(+m[2]).padStart(2, '0')}-${String(+m[1]).padStart(2, '0')}`;
     return fromKey(key);
   }
 
-  // DD/MM or DD-MM (current year)
+ // DD/MM or DD-MM (current year)
   m = /^(\d{1,2})[\/\-](\d{1,2})$/.exec(raw);
   if (m) {
     const key = `${todayKey.slice(0, 4)}-${String(+m[2]).padStart(2, '0')}-${String(+m[1]).padStart(2, '0')}`;
     return fromKey(key);
   }
 
-  // Bare number = day of the current month
+ // Bare number = day of the current month
   m = /^(\d{1,2})$/.exec(raw);
   if (m) {
     const key = `${todayKey.slice(0, 7)}-${String(+m[1]).padStart(2, '0')}`;
@@ -116,7 +113,7 @@ function dayRangeFromArg(arg) {
   return { error: true };
 }
 
-// ── Aggregation ───────────────────────────────────────────────────────────────
+// -- Aggregation ---------------------------------------------------------------
 
 // One pass over ActivityLog for a chat between [start, end). Returns counts
 // per type, top posters (message type), and the join/left/kicked rosters.
@@ -158,7 +155,7 @@ async function getDailyBreakdown(ActivityLogModel, chatId, start, end) {
   };
 }
 
-// ── Card formatting ──────────────────────────────────────────────────────────
+// -- Card formatting ----------------------------------------------------------
 
 // displayName(jid) -> "@mentionable" is injected by the engine (keeps this
 // module free of the economy import); mentionResolver collects the JIDs.
@@ -169,7 +166,7 @@ function formatCard(bd, label, displayName) {
   const c = (t) => bd.counts[t] || 0;
 
   const lines = [];
-  lines.push(`📊 *GC ACTIVITY* — ${label}`);
+  lines.push(`📊 *GC ACTIVITY* - ${label}`);
   lines.push('');
   lines.push(`💬 Messages: *${c('message')}*`);
   lines.push(`🖼️ Images: *${c('image')}*`);
@@ -200,7 +197,7 @@ function formatCard(bd, label, displayName) {
     lines.push('🏆 *Top posters:*');
     const medals = ['🥇', '🥈', '🥉'];
     bd.top.forEach((u, i) => {
-      lines.push(`${medals[i] || `${i + 1}.`} @${name(u.userId)} — *${u.count}* msg${u.count !== 1 ? 's' : ''}`);
+      lines.push(`${medals[i] || `${i + 1}.`} @${name(u.userId)} - *${u.count}* msg${u.count !== 1 ? 's' : ''}`);
     });
   }
 

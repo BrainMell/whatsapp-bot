@@ -1,10 +1,10 @@
 'use strict';
-// probe47k.js — hall-tier city evolution + cave-in-base + emblem crest audit.
-//   guild: exactly one mine INSIDE the walls (cdist <= 5) dressed, outer curtain wall on
-//   ring 8 only from hall 4 (+ its gatehouse), none beyond ring 6 below hall 4; every
-//   hall 1/3/5 x 5 biomes renders clean.
-//   base: the pack cave IS the mine at every level now (struct_mine family retired),
-//   worksite dressing grows (ladder lv2+, ore-hoist scaffold lv3).
+// probe47k.js - hall-tier city evolution + cave-in-base + emblem crest audit.
+// guild: exactly one mine INSIDE the walls (cdist <= 5) dressed, outer curtain wall on
+// ring 8 only from hall 4 (+ its gatehouse), none beyond ring 6 below hall 4; every
+// hall 1/3/5 x 5 biomes renders clean.
+// base: the pack cave IS the mine at every level now (struct_mine family retired),
+// worksite dressing grows (ladder lv2+, ore-hoist scaffold lv3).
 process.env.QA_MODE = '1';
 const K = require('../core/rpg/kingdom3d');
 const g = require('../core/rpg/guildBaseRenderer');
@@ -23,7 +23,7 @@ const cdist = (c, rr) => K.hexDist(CC, CR, c, rr);
 
 (async () => {
     let fail = 0, total = 0;
-    // ── guild: cave inside + hall-tier walls ──
+ // -- guild: cave inside + hall-tier walls --
     for (const biome of ['isle', 'desert', 'tundra', 'highlands', 'volcanic']) {
         for (const hall of [1, 3, 5]) {
             total++;
@@ -43,7 +43,7 @@ const cdist = (c, rr) => K.hexDist(CC, CR, c, rr);
             console.log(`${ok ? 'PASS' : 'FAIL'} guild ${biome} hall${hall}: ${pos} inside=${inside} dressed=${dressed} outerWall=${outerCurtain.length} outerGate=${outerGate.length} wallsFar=${wallsFar.length}`);
         }
     }
-    // ── base: the pack cave is THE mine at every level; dressing grows ──
+ // -- base: the pack cave is THE mine at every level; dressing grows --
     for (const lvl of [1, 2, 3]) {
         total++;
         log.length = 0; hexes.length = 0; W = null;
@@ -54,6 +54,6 @@ const cdist = (c, rr) => K.hexDist(CC, CR, c, rr);
         if (!ok) fail++;
         console.log(`${ok ? 'PASS' : 'FAIL'} base mines lv${lvl}: packMine=${mine} struct=${str} ladder=${lad} scaffold=${scf}`);
     }
-    console.log(fail === 0 ? `PROBE ${total}/${total} GREEN` : `PROBE ${total - fail}/${total} — ${fail} FAIL`);
+    console.log(fail === 0 ? `PROBE ${total}/${total} GREEN` : `PROBE ${total - fail}/${total} - ${fail} FAIL`);
     process.exit(fail === 0 ? 0 : 1);
 })().catch((e) => { console.error(e); process.exit(1); });

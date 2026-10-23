@@ -1,26 +1,22 @@
-// ═══════════════════════════════════════════════════════════════════════════
-//  RUNE SYSTEM (Phase 3 - Skill Augments)
-// ═══════════════════════════════════════════════════════════════════════════
-//
+// ===========================================================================
+// RUNE SYSTEM (Phase 3 - Skill Augments)
+// ===========================================================================
 // Runes are socketable augments that modify skill behavior. Each rune has:
-//   - type: which modifier it applies (POWER, EFFICIENCY, SPREAD, etc.)
-//   - tier: power level (LESSER, NORMAL, GREATER)
-//
+// - type: which modifier it applies (POWER, EFFICIENCY, SPREAD, etc.)
+// - tier: power level (LESSER, NORMAL, GREATER)
 // Socket rules:
-//   - Each skill has 0-3 rune slots (depending on skill tier)
-//   - Starter skills: 0 slots, Evolved skills: 1 slot, Ascended: 2, Ultimates: 3
-//   - Runes are consumable on socket - removal requires a Rune Removal Scroll
-//
+// - Each skill has 0-3 rune slots (depending on skill tier)
+// - Starter skills: 0 slots, Evolved skills: 1 slot, Ascended: 2, Ultimates: 3
+// - Runes are consumable on socket - removal requires a Rune Removal Scroll
 // Drop sources:
-//   - S+ bosses: 10% chance, SS+: 15%, SSS: 25%
-//   - Weekly raid: guaranteed for top 10
-//   - Abyss Floor 21+: chance per floor
-//
+// - S+ bosses: 10% chance, SS+: 15%, SSS: 25%
+// - Weekly raid: guaranteed for top 10
+// - Abyss Floor 21+: chance per floor
 // Runes are tradeable on the card market (reuses market infrastructure).
 
 const Rune = require('../models/Rune');
 
-// ─── RUNE TYPE DEFINITIONS ────────────────────────────────────────────────
+// --- RUNE TYPE DEFINITIONS ------------------------------------------------
 // Each type modifies a skill's effect in a specific way.
 // Values are per-tier: [LESSER, NORMAL, GREATER]
 const RUNE_TYPES = {
@@ -73,27 +69,26 @@ const RUNE_TYPES = {
     damageMult: [0.95, 0.90, 0.85, 0.80],   // -5/10/15/20% damage (P2 Fix #10f: extended to 4 entries - was 3, caused NaN at ABYSSAL tier)
   },
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // 🎨 BEHAVIOR-MODIFYING RUNES (Phase 4 - Skill Customization System)
-  // ═══════════════════════════════════════════════════════════════════════════
-  // These runes don't just tweak numbers - they fundamentally alter how a
-  // skill behaves. Each adds one or more fields to modifiedEffect that the
-  // combat resolution code (applyAbilityEffect / calculateDamage) reads and
-  // honors. Post-compute patching architecture: skills expose editable
-  // properties, runes mutate them, no skill rewrites required.
-  //
-  // Categories:
-  //   1. Element Conversion (3)
-  //   2. Targeting (4)
-  //   3. Hit Splitting (2)
-  //   4. Ground Effects (3)
-  //   5. Status Addition (10)
-  //   6. Lifesteal / Drain (3)
-  //   7. Knockback / Control (3)
-  //   8. Casting / Cost (2)
-  // ═══════════════════════════════════════════════════════════════════════════
+ // ===========================================================================
+ // BEHAVIOR-MODIFYING RUNES (Phase 4 - Skill Customization System)
+ // ===========================================================================
+ // These runes don't just tweak numbers - they fundamentally alter how a
+ // skill behaves. Each adds one or more fields to modifiedEffect that the
+ // combat resolution code (applyAbilityEffect / calculateDamage) reads and
+ // honors. Post-compute patching architecture: skills expose editable
+ // properties, runes mutate them, no skill rewrites required.
+ // Categories:
+ // 1. Element Conversion (3)
+ // 2. Targeting (4)
+ // 3. Hit Splitting (2)
+ // 4. Ground Effects (3)
+ // 5. Status Addition (10)
+ // 6. Lifesteal / Drain (3)
+ // 7. Knockback / Control (3)
+ // 8. Casting / Cost (2)
+ // ===========================================================================
 
-  // ─── 1. ELEMENT CONVERSION ────────────────────────────────────────────────
+ // --- 1. ELEMENT CONVERSION ------------------------------------------------
   FROST_CONVERSION: {
     id: 'FROST_CONVERSION',
     name: 'Frost Conversion Rune',
@@ -122,7 +117,7 @@ const RUNE_TYPES = {
     damageMult: [0.80, 0.85, 0.90, 0.95],
   },
 
-  // ─── 2. TARGETING ─────────────────────────────────────────────────────────
+ // --- 2. TARGETING ---------------------------------------------------------
   MULTI_SHOT: {
     id: 'MULTI_SHOT',
     name: 'Multi-Shot Rune',
@@ -159,7 +154,7 @@ const RUNE_TYPES = {
     guaranteedCrit: true,
   },
 
-  // ─── 3. HIT SPLITTING ─────────────────────────────────────────────────────
+ // --- 3. HIT SPLITTING -----------------------------------------------------
   FRAGMENT: {
     id: 'FRAGMENT',
     name: 'Fragment Rune',
@@ -181,7 +176,7 @@ const RUNE_TYPES = {
     damageMult: [1.0, 1.0, 1.0, 1.0],
   },
 
-  // ─── 4. GROUND EFFECTS ────────────────────────────────────────────────────
+ // --- 4. GROUND EFFECTS ----------------------------------------------------
   GROUND_FIRE: {
     id: 'GROUND_FIRE',
     name: 'Ground Fire Rune',
@@ -207,7 +202,7 @@ const RUNE_TYPES = {
     damageMult: [0.95, 0.96, 0.97, 0.98],
   },
 
-  // ─── 5. STATUS ADDITION ───────────────────────────────────────────────────
+ // --- 5. STATUS ADDITION ---------------------------------------------------
   POISON_INFUSION: {
     id: 'POISON_INFUSION',
     name: 'Poison Infusion Rune',
@@ -292,7 +287,7 @@ const RUNE_TYPES = {
     damageMult: [0.92, 0.94, 0.96, 0.98],
   },
 
-  // ─── 6. LIFESTEAL / DRAIN ─────────────────────────────────────────────────
+ // --- 6. LIFESTEAL / DRAIN -------------------------------------------------
   LIFESTEAL: {
     id: 'LIFESTEAL',
     name: 'Lifesteal Rune',
@@ -320,7 +315,7 @@ const RUNE_TYPES = {
     damageMult: [0.95, 0.96, 0.97, 0.98],
   },
 
-  // ─── 7. KNOCKBACK / CONTROL ───────────────────────────────────────────────
+ // --- 7. KNOCKBACK / CONTROL -----------------------------------------------
   KNOCKBACK: {
     id: 'KNOCKBACK',
     name: 'Knockback Rune',
@@ -346,7 +341,7 @@ const RUNE_TYPES = {
     damageMult: [0.95, 0.96, 0.97, 0.98],
   },
 
-  // ─── 8. CASTING / COST ────────────────────────────────────────────────────
+ // --- 8. CASTING / COST ----------------------------------------------------
   QUICK_CAST: {
     id: 'QUICK_CAST',
     name: 'Quick Cast Rune',
@@ -370,24 +365,24 @@ const RUNE_TYPES = {
     name: 'Cooldown Rune',
     icon: '⏱️',
     desc: 'Reduces skill cooldown. Higher tiers can halve or remove it entirely.',
-    // Per-tier cooldown multiplier: LESSER 0.75, NORMAL 0.50, GREATER 0.25, ABYSSAL 0.00
-    // (ABYSSAL = no cooldown at all - skill usable every turn)
+ // Per-tier cooldown multiplier: LESSER 0.75, NORMAL 0.50, GREATER 0.25, ABYSSAL 0.00
+ // (ABYSSAL = no cooldown at all - skill usable every turn)
     cooldownMult: [0.75, 0.50, 0.40, 0.40],  // P2 Fix #10e: was [0.75,0.50,0.25,0.00], floored at 0.40 (ABYSSAL no longer removes cooldown entirely)
-    // Small energy cost penalty so cooldown runes aren't strictly free
+ // Small energy cost penalty so cooldown runes aren't strictly free
     energyCostMult: [1.15, 1.20, 1.25, 1.30],
   },
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // 💡 PHASE 5 STAGE 1 (2026-08-16): New runes from Rune_System_and_Synergy_Mechanics.docx
-  // ═══════════════════════════════════════════════════════════════════════════
+ // ===========================================================================
+ // PHASE 5 STAGE 1: New runes from Rune_System_and_Synergy_Mechanics.docx
+ // ===========================================================================
 
-  // ─── STATUS PRIMING RUNES ────────────────────────────────────────────────
+ // --- STATUS PRIMING RUNES ------------------------------------------------
   WET: {
     id: 'WET',
     name: 'Wet Rune',
     icon: '💧',
     desc: 'Applies WET to affected targets. Reduces movement stability, enables Shock/Frost/Burn synergies.',
-    // WET is a status priming rune - it doesn't modify damage/cost, it adds a status
+ // WET is a status priming rune - it doesn't modify damage/cost, it adds a status
     statusApplied: 'wet',
     statusDuration: [2, 2, 3, 3],
     statusChance: [80, 90, 100, 100],
@@ -401,7 +396,7 @@ const RUNE_TYPES = {
     statusApplied: 'stellar',
     statusDuration: [2, 2, 3, 3],
     statusChance: [60, 70, 80, 90],
-    // Also has a chance to apply burn
+ // Also has a chance to apply burn
     secondaryStatus: 'burn',
     secondaryChance: [10, 15, 20, 25],
     critDamageBonus: [0.1, 0.15, 0.2, 0.25], // +crit damage multiplier
@@ -409,7 +404,7 @@ const RUNE_TYPES = {
   },
 };
 
-// ─── TIER DEFINITIONS ─────────────────────────────────────────────────────
+// --- TIER DEFINITIONS -----------------------------------------------------
 const RUNE_TIERS = {
   LESSER: { id: 'LESSER', name: 'Lesser', multIndex: 0, dropWeight: 60 },
   NORMAL: { id: 'NORMAL', name: 'Normal', multIndex: 1, dropWeight: 30 },
@@ -417,15 +412,15 @@ const RUNE_TIERS = {
   ABYSSAL: { id: 'ABYSSAL', name: 'Abyssal', multIndex: 3, dropWeight: 0 },
 };
 
-// ─── SKILL SLOT CAPACITY ──────────────────────────────────────────────────
+// --- SKILL SLOT CAPACITY --------------------------------------------------
 // How many rune slots a skill has, based on its tier.
 // Starter skills: 0, Evolved: 1, Ascended: 2, Ultimate: 3
 function getSkillSlotCount(skill) {
   if (!skill) return 0;
-  // 💡 UPDATED 2026-07-17: rune slots now scale with skill tier directly.
-  // T1 = 1 slot, T2 = 2 slots, T3 = 3 slots, T4 (ultimate) = 3 slots.
-  // Previously: starter=0, evolved=1, ascended=2, ultimate=3 - which meant
-  // T1 starter skills had ZERO slots, making them un-runeable.
+ // UPDATED rune slots now scale with skill tier directly.
+ // T1 = 1 slot, T2 = 2 slots, T3 = 3 slots, T4 (ultimate) = 3 slots.
+ // Previously: starter=0, evolved=1, ascended=2, ultimate=3 - which meant
+ // T1 starter skills had ZERO slots, making them un-runeable.
   if (skill.isUltimate || skill.tier >= 4) return 3;
   if (skill.tier >= 3) return 3;   // T3 skills
   if (skill.tier >= 2) return 2;   // T2 skills
@@ -433,9 +428,9 @@ function getSkillSlotCount(skill) {
   return 1;                        // fallback: at least 1 slot
 }
 
-// ─── GENERATE RUNE ID ─────────────────────────────────────────────────────
-// 💡 FIX: Short sequential IDs (R-0001 through R-999999).
-// 💡 CRITICAL FIX 2026-07-18: was initializing _runeCounter from
+// --- GENERATE RUNE ID -----------------------------------------------------
+// FIX: Short sequential IDs (R-0001 through R-999999).
+// CRITICAL FIX was initializing _runeCounter from
 // Rune.countDocuments(), which DECREASES when runes are deleted (fusion,
 // sell, destroy). After a restart, the counter would be lower than the
 // max existing R-XXXX ID, causing E11000 duplicate key errors.
@@ -446,7 +441,7 @@ let _runeCounter = null;
 async function generateRuneId() {
   if (_runeCounter === null) {
     try {
-      // Find the highest R-XXXX ID in the database
+ // Find the highest R-XXXX ID in the database
       const allRunes = await Rune.find({}, { runeId: 1 }).lean();
       let maxNum = 0;
       for (const r of allRunes) {
@@ -462,8 +457,8 @@ async function generateRuneId() {
     }
   }
   _runeCounter++;
-  // 💡 Collision retry: if this ID already exists (race condition with
-  // another bot instance in the same process), keep incrementing.
+ // Collision retry: if this ID already exists (race condition with
+ // another bot instance in the same process), keep incrementing.
   let attempts = 0;
   while (attempts < 100) {
     const candidate = `R-${String(_runeCounter).padStart(4, '0')}`;
@@ -472,11 +467,11 @@ async function generateRuneId() {
     _runeCounter++;
     attempts++;
   }
-  // Fallback: use timestamp-based ID if we somehow exhausted 100 attempts
+ // Fallback: use timestamp-based ID if we somehow exhausted 100 attempts
   return `R-${Date.now()}`;
 }
 
-// ─── CREATE A RUNE INSTANCE ───────────────────────────────────────────────
+// --- CREATE A RUNE INSTANCE -----------------------------------------------
 async function createRune(ownerJid, type, tier, obtainedFrom = null) {
   if (!RUNE_TYPES[type]) throw new Error(`Invalid rune type: ${type}`);
   if (!RUNE_TIERS[tier]) throw new Error(`Invalid rune tier: ${tier}`);
@@ -492,7 +487,7 @@ async function createRune(ownerJid, type, tier, obtainedFrom = null) {
   return rune;
 }
 
-// ─── GET USER'S RUNE INVENTORY ────────────────────────────────────────────
+// --- GET USER'S RUNE INVENTORY --------------------------------------------
 async function getRuneInventory(userJid) {
   return await Rune.find({
     ownerJid: userJid,
@@ -501,31 +496,28 @@ async function getRuneInventory(userJid) {
   }).sort({ type: 1, tier: 1, obtainedAt: -1 });
 }
 
-// ─── RESOLVE RUNE BY NAME ─────────────────────────────────────────────────
-// 💡 Allows players to reference runes by type name instead of ugly IDs.
+// --- RESOLVE RUNE BY NAME -------------------------------------------------
+// Allows players to reference runes by type name instead of ugly IDs.
 // Accepts:
-//   "POWER"          → first available POWER rune (any tier)
-//   "POWER-LESSER"   → first available POWER rune of LESSER tier
-//   "power"          → case-insensitive
-//   "R-0001"         → old-style ID (backwards compat)
-//   "rune_1783..."   → legacy ID (backwards compat)
-//
-// Returns the Rune document, or null if not found.
+// "POWER" → first available POWER rune (any tier)
+// "POWER-LESSER" → first available POWER rune of LESSER tier
+// "power" → case-insensitive
+// "R-0001" → old-style ID (backwards compat)
+// "rune_1783..." → legacy ID (backwards compat)
 async function resolveRune(userJid, query) {
   if (!query) return null;
   const q = query.toUpperCase().trim();
 
-  // 1. Old-style ID (R-XXXX or rune_XXXX)
+ // 1. Old-style ID (R-XXXX or rune_XXXX)
   if (q.startsWith('R-') || q.startsWith('RUNE_')) {
     return await Rune.findOne({ ownerJid: userJid, runeId: query, onMarket: false, socketedSkillId: null });
   }
 
-  // 2. Type-Tier format (e.g. "POWER-LESSER")
+ // 2. Type-Tier format (e.g. "POWER-LESSER")
   if (q.includes('-')) {
     const [typePart, tierPart] = q.split('-');
     const type = typePart.trim();
     const tier = tierPart.trim();
-    // Validate type exists
     const matchedType = Object.keys(RUNE_TYPES).find(t => t === type || t.replace('_', '') === type);
     if (matchedType && RUNE_TIERS[tier]) {
       return await Rune.findOne({
@@ -535,7 +527,7 @@ async function resolveRune(userJid, query) {
     }
   }
 
-  // 3. Just type name (e.g. "POWER" or "COOLDOWN")
+ // 3. Just type name (e.g. "POWER" or "COOLDOWN")
   const matchedType = Object.keys(RUNE_TYPES).find(t => t === q || t.replace('_', '') === q);
   if (matchedType) {
     return await Rune.findOne({
@@ -544,11 +536,11 @@ async function resolveRune(userJid, query) {
     }).sort({ tier: 1, obtainedAt: 1 }); // lowest tier first, oldest first
   }
 
-  // 4. Try matching by rune type NAME (display name, e.g. "Power Rune" → POWER)
-  // 💡 FIX 2026-08-05: Use strict equality (full name OR name without " Rune" suffix).
-  // Previous .includes(q) substring match caused ambiguous lookups - e.g. typing
-  // "shock" silently matched SHOCK_CONVERSION (first declared) instead of
-  // SHOCK_INFUSION, blocking fusion. Now requires the full name or ID.
+ // 4. Try matching by rune type NAME (display name, e.g. "Power Rune" → POWER)
+ // FIX Use strict equality (full name OR name without " Rune" suffix).
+ // Previous .includes(q) substring match caused ambiguous lookups - e.g. typing
+ // "shock" silently matched SHOCK_CONVERSION (first declared) instead of
+ // SHOCK_INFUSION, blocking fusion. Now requires the full name or ID.
   for (const [id, rt] of Object.entries(RUNE_TYPES)) {
     const upperName = rt.name.toUpperCase();              // e.g. "SHOCK INFUSION RUNE"
     const shortName = upperName.replace(/ RUNE$/, '');    // e.g. "SHOCK INFUSION"
@@ -563,25 +555,24 @@ async function resolveRune(userJid, query) {
   return null;
 }
 
-// ─── FUSE RUNES BY NAME + COUNT ───────────────────────────────────────────
-// 💡 Fuses N runes of the same type + same tier into fewer higher-tier runes.
+// --- FUSE RUNES BY NAME + COUNT -------------------------------------------
+// Fuses N runes of the same type + same tier into fewer higher-tier runes.
 // Each pair of same-type same-tier runes → 1 rune of the next tier up.
-//
 // @param userJid
-// @param typeQuery  - e.g. "POWER", "power", "Power Rune"
+// @param typeQuery - e.g. "POWER", "power", "Power Rune"
 // @param countQuery - number (2, 4, 6...) or "all"
 // @returns { success, message, fusedCount }
 async function fuseRunesByName(userJid, typeQuery, countQuery) {
   if (!typeQuery) return { success: false, message: '❌ Specify a rune type to fuse.' };
   const q = typeQuery.toUpperCase().trim();
 
-  // Resolve type
+ // Resolve type
   let matchedType = Object.keys(RUNE_TYPES).find(t => t === q || t.replace('_', '') === q);
   if (!matchedType) {
-    // 💡 FIX 2026-08-05: Use strict equality (full name OR name without " Rune" suffix).
-    // Previous .includes(q) substring match caused ambiguous lookups - e.g. typing
-    // "shock" silently matched SHOCK_CONVERSION (first declared) instead of
-    // SHOCK_INFUSION, blocking fusion. Now requires the full name or ID.
+ // FIX Use strict equality (full name OR name without " Rune" suffix).
+ // Previous .includes(q) substring match caused ambiguous lookups - e.g. typing
+ // "shock" silently matched SHOCK_CONVERSION (first declared) instead of
+ // SHOCK_INFUSION, blocking fusion. Now requires the full name or ID.
     for (const [id, rt] of Object.entries(RUNE_TYPES)) {
       const upperName = rt.name.toUpperCase();              // e.g. "SHOCK INFUSION RUNE"
       const shortName = upperName.replace(/ RUNE$/, '');    // e.g. "SHOCK INFUSION"
@@ -593,7 +584,7 @@ async function fuseRunesByName(userJid, typeQuery, countQuery) {
   }
   if (!matchedType) return { success: false, message: `❌ Unknown rune type: "${typeQuery}"` };
 
-  // Get all unsocketed, off-market runes of this type
+ // Get all unsocketed, off-market runes of this type
   const allRunes = await Rune.find({
     ownerJid: userJid, type: matchedType,
     onMarket: false, socketedSkillId: null,
@@ -603,7 +594,7 @@ async function fuseRunesByName(userJid, typeQuery, countQuery) {
     return { success: false, message: `❌ Need at least 2 ${RUNE_TYPES[matchedType].name} runes to fuse. You have ${allRunes.length}.` };
   }
 
-  // Group by tier
+ // Group by tier
   const tierOrder = ['LESSER', 'NORMAL', 'GREATER', 'ABYSSAL'];
   const byTier = {};
   for (const r of allRunes) {
@@ -611,7 +602,7 @@ async function fuseRunesByName(userJid, typeQuery, countQuery) {
     byTier[r.tier].push(r);
   }
 
-  // Determine how many to fuse
+ // Determine how many to fuse
   let maxPairs = 0;
   for (const tier of tierOrder) {
     if (tier === 'ABYSSAL') continue; // can't fuse ABYSSAL
@@ -633,7 +624,7 @@ async function fuseRunesByName(userJid, typeQuery, countQuery) {
     }
   }
 
-  // Execute fusion
+ // Execute fusion
   let fusedCount = 0;
   const results = [];
   for (const tier of tierOrder) {
@@ -646,21 +637,21 @@ async function fuseRunesByName(userJid, typeQuery, countQuery) {
     while (pairsToFuse > 0 && runes.length >= 2) {
       const r1 = runes.shift();
       const r2 = runes.shift();
-      // 💡 CRITICAL FIX: create the new rune FIRST, then delete the old ones.
-      // Was deleting first then creating - if createRune threw (e.g. duplicate
-      // key error), the deleted runes were lost permanently with no rollback.
-      // Now: if createRune fails, the old runes are still in the DB and the
-      // error propagates up to the caller. Nothing is consumed on failure.
+ // CRITICAL FIX: create the new rune FIRST, then delete the old ones.
+ // Was deleting first then creating - if createRune threw (e.g. duplicate
+ // key error), the deleted runes were lost permanently with no rollback.
+ // Now: if createRune fails, the old runes are still in the DB and the
+ // error propagates up to the caller. Nothing is consumed on failure.
       let fused;
       try {
         fused = await createRune(userJid, matchedType, newTier, `fusion_${tier}`);
       } catch (createErr) {
-        // Creation failed - don't delete the originals. Put them back.
+ // Creation failed - don't delete the originals. Put them back.
         runes.unshift(r2);
         runes.unshift(r1);
         throw createErr;
       }
-      // Creation succeeded - now safe to delete the consumed runes.
+ // Creation succeeded - now safe to delete the consumed runes.
       await Rune.deleteOne({ _id: r1._id });
       await Rune.deleteOne({ _id: r2._id });
       fusedCount++;
@@ -672,7 +663,7 @@ async function fuseRunesByName(userJid, typeQuery, countQuery) {
   let msg = `🔮 *FUSION COMPLETE!*\n\nFused ${fusedCount} pair(s) of ${RUNE_TYPES[matchedType].name}:\n`;
   for (const r of results) msg += `  ✅ ${r}\n`;
   msg += `\nUse \`${require('../../botConfig').getPrefix()} rune inv\` to see your upgraded runes.`;
-  // 💡 LORE DROP: enchanting voice (10%) - out-of-band, own message box
+ // LORE DROP: enchanting voice (10%) - out-of-band, own message box
   let __loreDrop = null;
   try {
     const loreDrops = require('./loreDrops');
@@ -681,7 +672,7 @@ async function fuseRunesByName(userJid, typeQuery, countQuery) {
   return { success: true, message: msg, fusedCount, loreDrop: __loreDrop };
 }
 
-// ─── GET RUNES SOCKETED IN A SKILL ────────────────────────────────────────
+// --- GET RUNES SOCKETED IN A SKILL ----------------------------------------
 async function getSocketedRunes(userJid, skillId) {
   return await Rune.find({
     ownerJid: userJid,
@@ -689,19 +680,18 @@ async function getSocketedRunes(userJid, skillId) {
   });
 }
 
-// ─── SOCKET A RUNE INTO A SKILL ───────────────────────────────────────────
+// --- SOCKET A RUNE INTO A SKILL -------------------------------------------
 async function socketRune(userJid, runeId, skillId) {
   const rune = await Rune.findOne({ runeId, ownerJid: userJid });
   if (!rune) return { success: false, message: '❌ Rune not found in your inventory.' };
   if (rune.socketedSkillId) return { success: false, message: `❌ This rune is already socketed in ${rune.socketedSkillId}.` };
   if (rune.onMarket) return { success: false, message: '❌ This rune is on the market. Remove it first.' };
 
-  // Count existing socketed runes for this skill
+ // Count existing socketed runes for this skill
   const existing = await getSocketedRunes(userJid, skillId);
-  // 💡 QA FIX: actually check the skill's slot count. Previously the comment
-  // said "the caller validates that" but the caller (engine.js) did NOT
-  // validate - players could socket into 0-slot starter skills.
-  // Look up the skill definition across all class trees.
+ // QA FIX: actually check the skill's slot count. Previously the comment
+ // said "the caller validates that" but the caller (engine.js) did NOT
+ // Look up the skill definition across all class trees.
   const skillTree = require('./skillTree');
   let skillDef = null;
   const allClasses = skillTree.SKILL_TREES || {};
@@ -727,7 +717,7 @@ async function socketRune(userJid, runeId, skillId) {
     return { success: false, message: `❌ This skill already has ${existing.length}/${maxSlots} runes socketed (maximum).` };
   }
 
-  // 💡 QA FIX: SPREAD rune is useless on single-target skills - reject to prevent traps
+ // QA FIX: SPREAD rune is useless on single-target skills - reject to prevent traps
   if (rune.type === 'SPREAD') {
     const targeting = skillDef.targeting || '';
     const isAOE = targeting.includes('AOE') || targeting === 'ALL_ENEMIES' || targeting === 'CLEAVE' || targeting === 'CHAIN' || skillDef.damageMultiplier;
@@ -741,7 +731,7 @@ async function socketRune(userJid, runeId, skillId) {
   await rune.save();
 
   let __socketMsg = `✅ Socketed ${RUNE_TYPES[rune.type].name} (${RUNE_TIERS[rune.tier].name}) into ${skillId}.`;
-  // 💡 LORE DROP: enchanting voice (10%) - out-of-band, own message box
+ // LORE DROP: enchanting voice (10%) - out-of-band, own message box
   let __socketLoreDrop = null;
   try {
     const loreDrops = require('./loreDrops');
@@ -755,8 +745,8 @@ async function socketRune(userJid, runeId, skillId) {
   };
 }
 
-// ─── RESOLVE A SOCKETED RUNE (for remove/destroy) ─────────────────────────
-// 💡 NEW 2026-08-06: Mirrors resolveRune but filters for SOCKETED runes
+// --- RESOLVE A SOCKETED RUNE (for remove/destroy) -------------------------
+// NEW Mirrors resolveRune but filters for SOCKETED runes
 // (socketedSkillId: { $ne: null }). resolveRune only finds unsocketed runes,
 // so remove/destroy can't use it. This resolves friendly names like
 // "void_conversion-greater" or "void_conversion" to actual socketed runes.
@@ -764,12 +754,12 @@ async function resolveSocketedRune(userJid, query) {
   if (!query) return null;
   const q = query.toUpperCase().trim();
 
-  // 1. Old-style ID (R-XXXX or rune_XXXX)
+ // 1. Old-style ID (R-XXXX or rune_XXXX)
   if (q.startsWith('R-') || q.startsWith('RUNE_')) {
     return await Rune.findOne({ ownerJid: userJid, runeId: query, socketedSkillId: { $ne: null } });
   }
 
-  // 2. Type-Tier format (e.g. "VOID_CONVERSION-GREATER")
+ // 2. Type-Tier format (e.g. "VOID_CONVERSION-GREATER")
   if (q.includes('-')) {
     const [typePart, tierPart] = q.split('-');
     const type = typePart.trim();
@@ -783,7 +773,7 @@ async function resolveSocketedRune(userJid, query) {
     }
   }
 
-  // 3. Just type name (e.g. "VOID_CONVERSION" or "VOIDCONVERSION")
+ // 3. Just type name (e.g. "VOID_CONVERSION" or "VOIDCONVERSION")
   const matchedType = Object.keys(RUNE_TYPES).find(t => t === q || t.replace('_', '') === q);
   if (matchedType) {
     return await Rune.findOne({
@@ -792,7 +782,7 @@ async function resolveSocketedRune(userJid, query) {
     }).sort({ tier: 1, socketedAt: 1 });
   }
 
-  // 4. Try matching by display name (e.g. "Void Conversion Rune" → VOID_CONVERSION)
+ // 4. Try matching by display name (e.g. "Void Conversion Rune" → VOID_CONVERSION)
   for (const [id, rt] of Object.entries(RUNE_TYPES)) {
     const upperName = rt.name.toUpperCase();
     const shortName = upperName.replace(/ RUNE$/, '');
@@ -807,8 +797,8 @@ async function resolveSocketedRune(userJid, query) {
   return null;
 }
 
-// ─── GET ALL SOCKETED RUNES (for .s rune sockets command) ─────────────────
-// 💡 NEW 2026-08-06: Returns all runes socketed across all skills.
+// --- GET ALL SOCKETED RUNES (for .s rune sockets command) -----------------
+// NEW Returns all runes socketed across all skills.
 async function getAllSocketedRunes(userJid) {
   return await Rune.find({
     ownerJid: userJid,
@@ -816,15 +806,15 @@ async function getAllSocketedRunes(userJid) {
   }).sort({ socketedSkillId: 1, socketedAt: -1 });
 }
 
-// ─── REMOVE A RUNE FROM A SKILL ───────────────────────────────────────────
+// --- REMOVE A RUNE FROM A SKILL -------------------------------------------
 // Requires a Rune Removal Scroll (passed as hasScroll=true from the command
 // handler, which checks the user's inventory).
-// 💡 FIX 2026-08-06: Now accepts friendly names (void_conversion-greater,
+// FIX Now accepts friendly names (void_conversion-greater,
 // void_conversion) via resolveSocketedRune, not just raw R-XXXX IDs.
 async function removeRune(userJid, runeQuery, hasScroll = false) {
-  // Try direct runeId lookup first (R-XXXX format)
+ // Try direct runeId lookup first (R-XXXX format)
   let rune = await Rune.findOne({ runeId: runeQuery, ownerJid: userJid });
-  // Fall back to name-based resolution (socketed runes only)
+ // Fall back to name-based resolution (socketed runes only)
   if (!rune) rune = await resolveSocketedRune(userJid, runeQuery);
   if (!rune) return { success: false, message: '❌ Rune not found. Use `' + require('../../botConfig').getPrefix() + ' rune sockets` to see your socketed runes.' };
   if (!rune.socketedSkillId) return { success: false, message: '❌ This rune is not socketed.' };
@@ -841,7 +831,7 @@ async function removeRune(userJid, runeQuery, hasScroll = false) {
   await rune.save();
 
   let __removeMsg = `✅ Removed ${RUNE_TYPES[rune.type].name} (${RUNE_TIERS[rune.tier].name}) from skill. The rune is back in your inventory.`;
-  // 💡 LORE DROP: enchanting voice (10%) - out-of-band, own message box
+ // LORE DROP: enchanting voice (10%) - out-of-band, own message box
   let __removeLoreDrop = null;
   try {
     const loreDrops = require('./loreDrops');
@@ -855,8 +845,8 @@ async function removeRune(userJid, runeQuery, hasScroll = false) {
   };
 }
 
-// ─── DESTROY A SOCKETED RUNE (no scroll needed) ───────────────────────────
-// 💡 FIX 2026-08-06: Now accepts friendly names via resolveSocketedRune.
+// --- DESTROY A SOCKETED RUNE (no scroll needed) ---------------------------
+// FIX Now accepts friendly names via resolveSocketedRune.
 async function destroyRune(userJid, runeQuery) {
   let rune = await Rune.findOne({ runeId: runeQuery, ownerJid: userJid });
   if (!rune) rune = await resolveSocketedRune(userJid, runeQuery);
@@ -866,7 +856,7 @@ async function destroyRune(userJid, runeQuery) {
 
   await Rune.deleteOne({ runeId: rune.runeId });
   let __destroyMsg = `💀 Destroyed ${RUNE_TYPES[rune.type].name} (${RUNE_TIERS[rune.tier].name}). It's gone forever.`;
-  // 💡 LORE DROP: enchanting voice (10%) - out-of-band, own message box
+ // LORE DROP: enchanting voice (10%) - out-of-band, own message box
   let __destroyLoreDrop = null;
   try {
     const loreDrops = require('./loreDrops');
@@ -879,17 +869,16 @@ async function destroyRune(userJid, runeQuery) {
   };
 }
 
-// ─── APPLY RUNE MODIFIERS TO A SKILL EFFECT ───────────────────────────────
+// --- APPLY RUNE MODIFIERS TO A SKILL EFFECT -------------------------------
 // This is the core integration point - called from skillTree.getSkillEffect
 // AFTER the base effect is computed, to apply socketed rune modifiers.
-//
 // Input: the computed effect object + the user's socketed runes for this skill
 // Output: modified effect object
 function applyRuneModifiers(effect, socketedRunes) {
   if (!effect || !socketedRunes || socketedRunes.length === 0) return effect;
 
   let modifiedEffect = { ...effect };
-  // Classic numeric modifiers (from original 7 runes)
+ // Classic numeric modifiers (from original 7 runes)
   let damageMult = 1.0;
   let energyCostMult = 1.0;
   let targetBonus = 0;
@@ -898,7 +887,7 @@ function applyRuneModifiers(effect, socketedRunes) {
   let cannotEvade = false;
   let cooldownMult = 1.0;
 
-  // Phase 4 behavior-modifying accumulators
+ // Phase 4 behavior-modifying accumulators
   let convertElement = null;
   let convertDamageType = null;
   let convertTargeting = null;
@@ -924,7 +913,7 @@ function applyRuneModifiers(effect, socketedRunes) {
     if (!runeType) continue;
     const tierIdx = RUNE_TIERS[rune.tier]?.multIndex ?? 0;
 
-    // Classic modifiers
+ // Classic modifiers
     if (runeType.damageMult) damageMult *= runeType.damageMult[tierIdx];
     if (runeType.energyCostMult) energyCostMult *= runeType.energyCostMult[tierIdx];
     if (runeType.targetBonus) targetBonus += runeType.targetBonus[tierIdx];
@@ -933,7 +922,7 @@ function applyRuneModifiers(effect, socketedRunes) {
     if (runeType.cannotEvade) cannotEvade = true;
     if (runeType.cooldownMult) cooldownMult *= runeType.cooldownMult[tierIdx];
 
-    // Phase 4 modifiers
+ // Phase 4 modifiers
     if (runeType.convertElement) convertElement = runeType.convertElement;
     if (runeType.convertDamageType) convertDamageType = runeType.convertDamageType;
     if (runeType.convertTargeting) convertTargeting = runeType.convertTargeting;
@@ -950,7 +939,7 @@ function applyRuneModifiers(effect, socketedRunes) {
     if (runeType.ignoreDefense) defIgnorePct = Math.max(defIgnorePct, runeType.ignoreDefense);
 
     if (runeType.groundEffect) {
-      // Latest ground effect wins (don't stack multiple ground types)
+ // Latest ground effect wins (don't stack multiple ground types)
       groundEffect = {
         type: runeType.groundEffect.type,
         value: Array.isArray(runeType.groundEffect.value)
@@ -964,11 +953,11 @@ function applyRuneModifiers(effect, socketedRunes) {
     if (runeType.executeThreshold) executeThreshold = runeType.executeThreshold;
     if (runeType.executeBonus) executeBonus = Math.max(executeBonus, runeType.executeBonus[tierIdx]);
 
-    // Collect addStatus entries (may be single object or array)
+ // Collect addStatus entries (may be single object or array)
     if (runeType.addStatus) {
       const statuses = Array.isArray(runeType.addStatus) ? runeType.addStatus : [runeType.addStatus];
       for (const s of statuses) {
-        // Resolve tier-indexed values
+ // Resolve tier-indexed values
         const resolved = { type: s.type, duration: s.duration || 1 };
         if (s.value !== undefined) {
           resolved.value = Array.isArray(s.value) ? s.value[tierIdx] : s.value;
@@ -981,20 +970,20 @@ function applyRuneModifiers(effect, socketedRunes) {
     }
   }
 
-  // Apply damage multiplier
-  // 💡 FIX 2026-08-06: Skip the damageMult penalty if the base skill already
-  // ignores DEF (ignoreDefense >= 100) or deals TRUE damage. VOID_CONVERSION
-  // rune's benefit is "ignore DEF" - if the skill already does that, the rune
-  // provides zero benefit and the damageMult penalty would be pure harm.
-  // This was the root cause of "Void Conversion breaks Def-ignoring skills".
+ // Apply damage multiplier
+ // FIX Skip the damageMult penalty if the base skill already
+ // ignores DEF (ignoreDefense >= 100) or deals TRUE damage. VOID_CONVERSION
+ // rune's benefit is "ignore DEF" - if the skill already does that, the rune
+ // provides zero benefit and the damageMult penalty would be pure harm.
+ // This was the root cause of "Void Conversion breaks Def-ignoring skills".
   const baseSkillIgnoresDef =
     (effect.ignoreDefense !== undefined && effect.ignoreDefense >= 100) ||
     String(effect.damageType).toUpperCase() === 'TRUE';
   const hasVoidConversion = socketedRunes.some(r => r.type === 'VOID_CONVERSION');
   if (hasVoidConversion && baseSkillIgnoresDef) {
-    // VOID_CONVERSION is redundant - don't apply any damageMult from it.
-    // Other runes' damageMult still applies (they're not redundant).
-    // Recalculate damageMult excluding VOID_CONVERSION's contribution.
+ // VOID_CONVERSION is redundant - don't apply any damageMult from it.
+ // Other runes' damageMult still applies (they're not redundant).
+ // Recalculate damageMult excluding VOID_CONVERSION's contribution.
     let recalculatedMult = 1.0;
     for (const rune of socketedRunes) {
       if (rune.type === 'VOID_CONVERSION') continue; // skip redundant rune
@@ -1008,37 +997,37 @@ function applyRuneModifiers(effect, socketedRunes) {
   if (damageMult !== 1.0) {
     modifiedEffect.multiplier = (Number(modifiedEffect.multiplier) || 1) * damageMult;
   }
-  // Apply energy cost multiplier
+ // Apply energy cost multiplier
   if (modifiedEffect.cost && energyCostMult !== 1.0) {
     modifiedEffect.cost = Math.ceil(modifiedEffect.cost * energyCostMult);
   }
-  // Apply target bonus
+ // Apply target bonus
   if (targetBonus > 0) {
     const currentTargets = modifiedEffect.targets || 1;
     modifiedEffect.targets = currentTargets + targetBonus;
   }
-  // Apply crit bonus
+ // Apply crit bonus
   if (critBonus > 0) {
     modifiedEffect.critBonus = (modifiedEffect.critBonus || 0) + critBonus;
   }
-  // Apply DEF ignore
+ // Apply DEF ignore
   if (defIgnorePct > 0) {
     modifiedEffect.ignoreDefense = (modifiedEffect.ignoreDefense || 0) + Math.min(100, defIgnorePct);
   }
-  // Apply cannot-evade flag
+ // Apply cannot-evade flag
   if (cannotEvade) {
     modifiedEffect.cannotEvade = true;
   }
-  // Apply cooldown multiplier
+ // Apply cooldown multiplier
   if (cooldownMult !== 1.0) {
     modifiedEffect.cooldownMult = (modifiedEffect.cooldownMult ?? 1) * cooldownMult;
   }
-  // Apply flat cooldown reduction (QUICK_CAST) - applied IN ADDITION to mult
+ // Apply flat cooldown reduction (QUICK_CAST) - applied IN ADDITION to mult
   if (cooldownFlatReduction > 0) {
     modifiedEffect.cooldownFlatReduction = (modifiedEffect.cooldownFlatReduction || 0) + cooldownFlatReduction;
   }
 
-  // Phase 4 behavior patches
+ // Phase 4 behavior patches
   if (convertElement) modifiedEffect.element = convertElement;
   if (convertDamageType) modifiedEffect.damageType = convertDamageType;
   if (convertTargeting) modifiedEffect.targeting = convertTargeting;
@@ -1069,17 +1058,16 @@ function applyRuneModifiers(effect, socketedRunes) {
     modifiedEffect.addStatuses = (modifiedEffect.addStatuses || []).concat(addStatuses);
   }
 
-  // 💡 PHASE 5 STAGE 2 (2026-08-17): Rune Synergy Engine
-  // After all individual rune effects are applied, check for synergies
-  // between the statuses being applied + statuses already on target.
+ // PHASE 5 STAGE 2: Rune Synergy Engine
+ // After all individual rune effects are applied, check for synergies
+ // between the statuses being applied + statuses already on target.
   try {
     const runeSynergies = require('./runeSynergies');
     const runeTypes = socketedRunes.map(r => r.type);
     const synergyResult = runeSynergies.applySynergyEffects(modifiedEffect, null, runeTypes);
     if (synergyResult.synergies.length > 0) {
-      // Merge synergy modifications into the modified effect
+ // Merge synergy modifications into the modified effect
       Object.assign(modifiedEffect, synergyResult.modifiedEffect);
-      // Store synergy info for the combat log
       modifiedEffect.synergies = synergyResult.synergies.map(s => `${s.icon} ${s.name}`);
       modifiedEffect.consumeStatuses = synergyResult.consumeStatuses;
     }
@@ -1090,14 +1078,13 @@ function applyRuneModifiers(effect, socketedRunes) {
   return modifiedEffect;
 }
 
-// ─── ROLL A RUNE DROP ─────────────────────────────────────────────────────
+// --- ROLL A RUNE DROP -----------------------------------------------------
 // Called from boss kill / raid reward / abyss drop.
 // dropChance is the probability of dropping a rune (0.0-1.0).
-// Returns a random type + tier, or null if no drop.
 function rollRuneDrop(dropChance) {
   if (typeof dropChance !== 'number' || !Number.isFinite(dropChance) || dropChance <= 0 || Math.random() > dropChance) return null;
 
-  // Roll tier based on drop weights
+ // Roll tier based on drop weights
   const tierEntries = Object.values(RUNE_TIERS);
   const totalWeight = tierEntries.reduce((s, t) => s + t.dropWeight, 0);
   let roll = Math.random() * totalWeight;
@@ -1107,14 +1094,14 @@ function rollRuneDrop(dropChance) {
     if (roll <= 0) { tier = t; break; }
   }
 
-  // Roll type uniformly
+ // Roll type uniformly
   const typeKeys = Object.keys(RUNE_TYPES);
   const type = typeKeys[Math.floor(Math.random() * typeKeys.length)];
 
   return { type, tier: tier.id };
 }
 
-// ─── AWARD RUNE TO USER ───────────────────────────────────────────────────
+// --- AWARD RUNE TO USER ---------------------------------------------------
 async function awardRune(userJid, type, tier, obtainedFrom = null) {
   try {
     const rune = await createRune(userJid, type, tier, obtainedFrom);
@@ -1128,7 +1115,6 @@ async function awardRune(userJid, type, tier, obtainedFrom = null) {
     return { success: false, message: 'Failed to award rune: ' + e.message };
   }
 }
-
 
 function rollAbyssalRuneDrop(floor) {
   let tier = RUNE_TIERS.GREATER;

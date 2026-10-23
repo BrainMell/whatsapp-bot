@@ -1,18 +1,17 @@
 #!/usr/bin/env node
-// 🃏 CARD REQUIREMENTS QA (2026-10-08 doc) — run on a box inside the bot dir.
-// Verifies every section of card_system_changes_requirements.md:
-//   §1/§11 global token reset (card-mod, two-step, memory+DB consistent)
-//   §2     token spawn rate 1/10 PER GROUP (isolated progression)
-//   §3     hidden command tokens 1/15 eligible cmds (claim excluded)
-//   §4     claim message tells "got token" WITHOUT mechanic leak
-//   §5     event token leaderboard
-//   §6     default spawn interval 30min = 2 cards/hour
-//   §8     auction smoke (start → bid → end → settle transfers)
-//   §9     spin event absent (static grep assertion lives in deploy notes)
-//   §10    .j info / .j ci / .j rc card-mod exclusive
-//   §12    super RC collection wipe (cards + decks + market cleanup)
-//   §13    maintenance commands permission-gated
-//   §14    per-group isolation
+// CARD REQUIREMENTS QA (doc) - run on a box inside the bot dir.
+// §1/§11 global token reset (card-mod, two-step, memory+DB consistent)
+// §2 token spawn rate 1/10 PER GROUP (isolated progression)
+// §3 hidden command tokens 1/15 eligible cmds (claim excluded)
+// §4 claim message tells "got token" WITHOUT mechanic leak
+// §5 event token leaderboard
+// §6 default spawn interval 30min = 2 cards/hour
+// §8 auction smoke (start → bid → end → settle transfers)
+// §9 spin event absent (static grep assertion lives in deploy notes)
+// §10 .j info / .j ci / .j rc card-mod exclusive
+// §12 super RC collection wipe (cards + decks + market cleanup)
+// §13 maintenance commands permission-gated
+// §14 per-group isolation
 // Runs against the THROWAWAY "cardqa" DB - never touches production data.
 'use strict';
 const fs = require('fs');
@@ -21,7 +20,7 @@ const path = require('path');
 let PASS = 0, FAIL = 0;
 function check(name, cond, extra) {
     if (cond) { PASS++; console.log(`  ✅ ${name}`); }
-    else { FAIL++; console.log(`  ❌ ${name}${extra ? ' — ' + extra : ''}`); }
+    else { FAIL++; console.log(`  ❌ ${name}${extra ? ' - ' + extra : ''}`); }
 }
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -44,7 +43,7 @@ async function connectDB() {
     await connectDB();
     const mongoose = require('mongoose');
 
-    // ── patch axios BEFORE any spawn: fake image bytes, zero network ──
+ // -- patch axios BEFORE any spawn: fake image bytes, zero network --
     const axios = require('axios');
     axios.get = async () => ({ data: Buffer.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]) });
 
@@ -56,8 +55,8 @@ async function connectDB() {
     const CardSpawn = require('../core/models/CardSpawn');
     const System = require('../core/models/System');
 
-    // wipe throwaway collections (CardSpawn too - stale spawns from an
-    // earlier run would pollute the per-group token counts)
+ // wipe throwaway collections (CardSpawn too - stale spawns from an
+ // earlier run would pollute the per-group token counts)
     for (const M of [User, CardStat, UserCard, CardDeck, CardMarket, CardSpawn, System]) await M.deleteMany({}).catch(() => {});
 
     const economy = require('../core/rpg/economy');
@@ -70,7 +69,7 @@ async function connectDB() {
     for (const [j, n] of [[owner, 'QAOwner'], [mod, 'QAMod'], [player, 'QAPlayer'], [other1, 'QAOther1'], [other2, 'QAOther2'], [victim, 'QAVictim'], [buyer, 'QABuyer'], [seller, 'QASeller']]) {
         economy.registerUser(j, n);
     }
-    // flush registration saves so User docs exist for reset assertions
+ // flush registration saves so User docs exist for reset assertions
     await economy.saveUser(owner).catch(() => {});
     for (const j of [mod, player, other1, other2, victim, buyer, seller]) await economy.saveUser(j).catch(() => {});
 
@@ -82,7 +81,7 @@ async function connectDB() {
 
     const inst = cardSystem.instances.get('global');
     const P = '.j';
-    // run-unique group ids so restored spawns from other runs can never leak in
+ // run-unique group ids so restored spawns from other runs can never leak in
     const ts = Date.now() % 100000000;
     const chatA = `${ts}1@g.us`, chatB = `${ts}2@g.us`;
 
@@ -104,7 +103,7 @@ async function connectDB() {
     const plainCards = allCards.filter(c => c.id && !c.id.startsWith('E-') && ['1', '2'].includes(String(c.tier)));
     check('28+ distinct plain cards available', plainCards.length >= 28, `got ${plainCards.length}`);
 
-    // ═══ §6 — default spawn interval = 30 min = 2 cards/hour ═══
+ // === §6 - default spawn interval = 30 min = 2 cards/hour ===
     console.log('\n== §6 spawn interval default ==');
     {
         const info = cardSystem.getSpawnIntervalInfo();
@@ -112,7 +111,7 @@ async function connectDB() {
         check('default rate 2 spawns/hour', info.spawnsPerHour === 2, `${info.spawnsPerHour}`);
     }
 
-    // ═══ §10/§13 — permission gates ═══
+ // === §10/§13 - permission gates ===
     console.log('\n== §10/§13 permission gates ==');
     {
         let r = await run(`${P} info winry`, player);
@@ -129,7 +128,7 @@ async function connectDB() {
         check('§10 .j info works for mod', r.texts.some(t => t.length > 20), JSON.stringify((r.texts[0] || '').slice(0, 60)));
     }
 
-    // ═══ §2/§14 — per-group 1/10 token spawns + isolation ═══
+ // === §2/§14 - per-group 1/10 token spawns + isolation ===
     console.log('\n== §2/§14 per-group token spawn rate ==');
     {
         let r = await run(`${P} event start`, player);
@@ -137,7 +136,7 @@ async function connectDB() {
         r = await run(`${P} event start`, mod);
         check('§3 setup: event started by mod', r.texts.some(t => /TOKEN EVENT STARTED/i.test(t)), JSON.stringify(r.texts[0] || ''));
 
-        // spawn 20 cards strictly interleaved A,B,A,B... → exactly 10 per group
+ // spawn 20 cards strictly interleaved A,B,A,B... → exactly 10 per group
         const order = [];
         for (let i = 0; i < 20; i++) {
             const g = (i % 2 === 0) ? chatA : chatB;
@@ -153,13 +152,13 @@ async function connectDB() {
         }
         check('group A: exactly 1 token-bearing in 10', byGroup[chatA].filter(s => s.hasToken).length === 1, `${byGroup[chatA].filter(s => s.hasToken).length}`);
         check('group B: exactly 1 token-bearing in 10', byGroup[chatB].filter(s => s.hasToken).length === 1, `${byGroup[chatB].filter(s => s.hasToken).length}`);
-        // token-bearing spawn must be the 10th spawned IN THAT GROUP (independence proof)
+ // token-bearing spawn must be the 10th spawned IN THAT GROUP (independence proof)
         const tenthA = order.filter(o => o.g === chatA)[9];
         check('group A token = 10th spawn of group A (isolated counter)', byGroup[chatA].find(s => s.hasToken && s.card.id === tenthA.id) !== undefined);
         const bOrder = order.filter(o => o.g === chatB);
         check('group B token = 10th spawn of group B', byGroup[chatB].find(s => s.hasToken && s.card.id === bOrder[9].id) !== undefined);
 
-        // §4 — claim the token-bearing spawn: message must be mechanic-free
+ // §4 - claim the token-bearing spawn: message must be mechanic-free
         console.log('\n== §4 claim message ==');
         const tokenSpawnA = byGroup[chatA].find(s => s.hasToken);
         r = await run(`${P} claim ${tokenSpawnA.card.id}`, player, chatA);
@@ -169,20 +168,20 @@ async function connectDB() {
         check('§4 NO mechanic leak (rate/probability/labels)', !/GUARANTEED|token-bearing|25%|every 3rd|1 token per|RNG/i.test(tokenText), JSON.stringify(tokenText));
         check('§4 balance reflected', economy.getTokens(player) === 1, `${economy.getTokens(player)}`);
 
-        // non-token-bearing claim → NO token message (RNG layer removed)
+ // non-token-bearing claim → NO token message (RNG layer removed)
         const plainSpawnA = byGroup[chatA].find(s => !s.hasToken);
         r = await run(`${P} claim ${plainSpawnA.card.id}`, other1, chatA);
         check('non-token claim grants NOTHING (no RNG layer)', !r.texts.some(t => /Event Token/i.test(t)), JSON.stringify(r.texts.join(' | ')));
         check('non-token claim still claims the card', r.texts.some(t => /CLAIMED/i.test(t)));
 
-        // 5 more spawns in A (event active) → counter 5, no new token yet
+ // 5 more spawns in A (event active) → counter 5, no new token yet
         for (let i = 20; i < 25; i++) await cardSystem.doSpawn(plainCards[i].id, null, true, chatA);
         await sleep(400); // fire-and-forget counter persist needs a beat to land
         let persisted = await System.findOne({ key: 'card_token_spawn_counters_v1' }).lean();
         const keyA = Object.keys(persisted?.value || {}).find(k => k.startsWith(String(ts)));
         check('per-group counter persisted (A=5)', persisted?.value && persisted.value[keyA] === 5, JSON.stringify(persisted?.value));
 
-        // stop event → spawns never advance counters while inactive
+ // stop event → spawns never advance counters while inactive
         r = await run(`${P} event stop`, mod);
         check('event stopped', r.texts.some(t => /Token event stopped/i.test(t)));
         for (let i = 25; i < 28; i++) await cardSystem.doSpawn(plainCards[i].id, null, true, chatA);
@@ -191,7 +190,7 @@ async function connectDB() {
         check('§14 counters frozen while event inactive (A stays 5, no token marks)', persisted.value[keyA] === 5 && ![...inst.activeSpawns.values()].filter(s => s.groupJid === chatA).some(s => s.hasToken), JSON.stringify(persisted.value));
     }
 
-    // ═══ §3 — hidden command tokens (event restarted: active) ═══
+ // === §3 - hidden command tokens (event restarted: active) ===
     console.log('\n== §3 hidden command tokens ==');
     {
         await run(`${P} event start`, mod); // re-activate
@@ -206,7 +205,7 @@ async function connectDB() {
         check('15th eligible cmd grants +1 token', economy.getTokens(player) === 2, `${economy.getTokens(player)}`);
         check('§3/§4 grant notify is mechanic-free', r.texts.some(t => /found an \*Event Token!\*/.test(t) && !/15|rate|every|chance/i.test(t)), JSON.stringify(r.texts.join(' | ')));
 
-        // mod-only commands excluded from the counter
+ // mod-only commands excluded from the counter
         for (let i = 0; i < 20; i++) await run(`${P} ci "winry" | 1`, mod);
         check('mod/management commands excluded (mod at 0 after 20 ci)', economy.getTokens(mod) === 0, `${economy.getTokens(mod)}`);
         r = await run(`${P} spawninfo`, mod); // excluded cmd too
@@ -214,12 +213,12 @@ async function connectDB() {
         check('mod cmd counter untouched by excluded cmds (13 eligible → no grant)', economy.getTokens(mod) === 0, `${economy.getTokens(mod)}`);
     }
 
-    // ═══ §5 — token leaderboard ═══
+ // === §5 - token leaderboard ===
     console.log('\n== §5 token leaderboard ==');
     {
         economy.addTokens(other2, 9);
         economy.addTokens(other1, 5);
-        // leaderboard reads the DB - force the scheduled saves out first
+ // leaderboard reads the DB - force the scheduled saves out first
         await economy.saveUser(other2).catch(() => {});
         await economy.saveUser(other1).catch(() => {});
         await economy.saveUser(player).catch(() => {});
@@ -232,7 +231,7 @@ async function connectDB() {
         check('tlb alias works', r2.texts.some(t => /EVENT TOKEN LEADERBOARD/i.test(t)));
     }
 
-    // ═══ §1/§11 — global token reset ═══
+ // === §1/§11 - global token reset ===
     console.log('\n== §1/§11 global token reset ==');
     {
         let r = await run(`${P} tokenreset`, player);
@@ -242,8 +241,8 @@ async function connectDB() {
         r = await run(`${P} tokenreset confirm`, mod);
         check('confirm wipes', r.texts.some(t => /GLOBAL TOKEN RESET DONE/.test(t)), JSON.stringify(r.texts[0] || ''));
         check('memory balances all zero', [player, other1, other2].every(j => economy.getTokens(j) === 0), [player, other1, other2].map(j => economy.getTokens(j)).join(','));
-        // flush any pending scheduled saves (they now persist the ZEROED
-        // memory state) before checking the DB layer
+ // flush any pending scheduled saves (they now persist the ZEROED
+ // memory state) before checking the DB layer
         for (const j of [owner, mod, player, other1, other2, victim, buyer, seller]) await economy.saveUser(j).catch(() => {});
         const dbHolders = await User.countDocuments({ eventTokens: { $gt: 0 } });
         check('DB holders all zero', dbHolders === 0, `${dbHolders}`);
@@ -251,7 +250,7 @@ async function connectDB() {
         check('hidden cmd counters wiped too', !persisted?.value || Object.keys(persisted.value).length === 0, JSON.stringify(persisted?.value));
     }
 
-    // ═══ §12 — super RC ═══
+ // === §12 - super RC ===
     console.log('\n== §12 super RC (collection wipe) ==');
     {
         const card = plainCards[0];
@@ -273,7 +272,7 @@ async function connectDB() {
         check('market listings cancelled (not sellable ghosts)', (await CardMarket.countDocuments({ sellerId: victim, status: 'active' })) === 0 && (await CardMarket.countDocuments({ sellerId: victim, status: 'cancelled' })) === 1);
     }
 
-    // ═══ §8 — auction smoke ═══
+ // === §8 - auction smoke ===
     console.log('\n== §8 auction smoke ==');
     {
         const card = plainCards[3];
@@ -297,19 +296,19 @@ async function connectDB() {
         check('seller credited 90% (180)', economy.getBalance(seller) === sellerBefore + 180, `${economy.getBalance(seller)} vs ${sellerBefore + 180}`);
     }
 
-    // ═══ §7/§9 — event deck unchanged / spin absent (structural asserts) ═══
+ // === §7/§9 - event deck unchanged / spin absent (structural asserts) ===
     console.log('\n== §7/§9 structural ==');
     {
-        // §7: event deck handling kept — t2edeck/t2ecoll routes still present (no replacement)
+ // §7: event deck handling kept - t2edeck/t2ecoll routes still present (no replacement)
         check('§7 eShop deck command path untouched (router case exists)', typeof cardSystem.eshopAddCard === 'function' && typeof cardSystem.eshopRemoveCard === 'function');
-        // §9: no spin event code paths exist in the card system (dynamic
-        // regex so the QA's own source can't self-match)
+ // §9: no spin event code paths exist in the card system (dynamic
+ // regex so the QA's own source can't self-match)
         const spinPat = new RegExp('startSpin|spin' + 'Event|spin_event');
         const sys = fs.readFileSync(path.join(__dirname, '..', 'core', 'rpg', 'cardSystem.js'), 'utf8');
         check('§9 no spin event feature in cardSystem', !spinPat.test(sys));
     }
 
-    // cleanup: kill timers, drop throwaway DB, exit
+ // cleanup: kill timers, drop throwaway DB, exit
     try { for (const t of (inst.perGroupTimers || new Map()).values()) clearTimeout(t); } catch (e) {}
     try { await mongoose.connection.dropDatabase(); } catch (e) {}
     try { await mongoose.connection.close(); } catch (e) {}

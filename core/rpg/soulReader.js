@@ -1,26 +1,24 @@
-// ═══════════════════════════════════════════════════════════════════════════
-//  SOUL READER — the Fortune Teller behind `.j kills`
-// ═══════════════════════════════════════════════════════════════════════════
-//  Restores the owner-designed Fortune Teller system from the lore update
-//  (design package: lore_drops/fortune_teller.md + image_cards/fortune_teller/).
-//  The kill count is not a ledger line - it is a READING:
-//
-//    · THE SIGHT (3 doors): reach level 40 · face the deep floors (abyss
-//      floor 31+, where the deep bands begin) · pay the reader's fee
-//      ("three coins" - 3,000 Zeni, once, forever).
-//    · Unmet doors → the LOCKED card (THE VEILWARD READING) with the live
-//      checklist. A locked reading is never rendered as a ledger.
-//    · All doors open → the LEDGER card (SOULS BEYOND THE VEIL), the count
-//      rendered as souls. The FIRST unlocked reading plays the soul-sight
-//      ceremony line (pool B) before the card; every reading after shows
-//      one of the teller's everyday lines (pool A/C) in the card.
-//    · `.j kills pay` → hand over the three coins.
-//
-//  Fee/ceremony state lives in the System KV collection (key
-//  veil_reading_<userId>) - ZERO Mongoose schema changes.
-//  Lore lines are verbatim from the approved pool; PROPOSED lines excluded
-//  (same discipline as loreDrops.js). Format contract: `╒ *line* ╛`.
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// SOUL READER - the Fortune Teller behind `.j kills`
+// ===========================================================================
+// Restores the owner-designed Fortune Teller system from the lore update
+// (design package: lore_drops/fortune_teller.md + image_cards/fortune_teller/).
+// The kill count is not a ledger line - it is a READING:
+// · THE SIGHT (3 doors): reach level 40 · face the deep floors (abyss
+// floor 31+, where the deep bands begin) · pay the reader's fee
+// ("three coins" - 3,000 Zeni, once, forever).
+// · Unmet doors → the LOCKED card (THE VEILWARD READING) with the live
+// checklist. A locked reading is never rendered as a ledger.
+// · All doors open → the LEDGER card (SOULS BEYOND THE VEIL), the count
+// rendered as souls. The FIRST unlocked reading plays the soul-sight
+// ceremony line (pool B) before the card; every reading after shows
+// one of the teller's everyday lines (pool A/C) in the card.
+// · `.j kills pay` → hand over the three coins.
+// Fee/ceremony state lives in the System KV collection (key
+// veil_reading_<userId>) - ZERO Mongoose schema changes.
+// Lore lines are verbatim from the approved pool; PROPOSED lines excluded
+// (same discipline as loreDrops.js). Format contract: `╒ *line* ╛`.
+// ===========================================================================
 
 'use strict';
 
@@ -28,14 +26,14 @@ const economy = require('./economy');
 const botConfig = require('../../botConfig');
 const renderer = require('./soulReaderRenderer');
 
-// ─── THE SIGHT — gate constants (from the designed card) ────────────────────
+// --- THE SIGHT - gate constants (from the designed card) --------------------
 const SIGHT_LEVEL = 40;        // "REACH LEVEL 40"
 const SIGHT_DEEP_FLOOR = 31;   // "FACE THE DEEP FLOORS" - deep bands begin at 31
 const READER_FEE = 3000;       // "PAY THE READER'S FEE" - three coins
 
 const P = () => botConfig.getPrefix();
 
-// ─── THE TELLER'S VOICE (verbatim pools from the approved spec) ─────────────
+// --- THE TELLER'S VOICE (verbatim pools from the approved spec) -------------
 const POOL_A = [
     'Cross my palm... no. Not that one. The other. That hand has thrown dice at fate too recently.',
     'Your cards came up the Tower, the Road, and the Mirror. Relax. Half my decks are just furniture.',
@@ -84,7 +82,7 @@ function todayLine(userId) {
     return all[h % all.length];
 }
 
-// ─── STATE (System KV - zero schema changes) ────────────────────────────────
+// --- STATE (System KV - zero schema changes) --------------------------------
 const stateKey = (userId) => `veil_reading_${userId}`;
 
 async function getReadingState(userId) {
@@ -106,12 +104,12 @@ async function setReadingState(userId, value) {
     );
 }
 
-// ─── PRIVILEGE (2026-09-21 owner report: ".j kills keeps returning the
-//  requirement message") ──────────────────────────────────────────────────
-//  The OWNER reads the ledger without the three doors. Same lazy-require
-//  pattern as worldMap._isStaff (avoids the circular import trap, fail
-//  closed on any error). Global mods and RPG mods do NOT get this - the
-//  Fortune Teller's doors are a player journey, the owner stands outside it.
+// --- PRIVILEGE (owner report: ".j kills keeps returning the
+// requirement message") --------------------------------------------------
+// The OWNER reads the ledger without the three doors. Same lazy-require
+// pattern as worldMap._isStaff (avoids the circular import trap, fail
+// closed on any error). Global mods and RPG mods do NOT get this - the
+// Fortune Teller's doors are a player journey, the owner stands outside it.
 function _isOwner(userId) {
     try {
         const engine = require('../engine');
@@ -122,7 +120,7 @@ function _isOwner(userId) {
     }
 }
 
-// ─── GATES ──────────────────────────────────────────────────────────────────
+// --- GATES ------------------------------------------------------------------
 
 function getLevel(userId) {
     try { return require('./progression').getLevel(userId) || 1; } catch (e) { return 1; }
@@ -144,7 +142,7 @@ async function getSight(userId) {
     return { state, level, levelOk, bestFloor, floorOk, feeOk, open: levelOk && floorOk && feeOk };
 }
 
-// ─── LEDGER ROWS (real tracked stats only - nothing fabricated) ─────────────
+// --- LEDGER ROWS (real tracked stats only - nothing fabricated) -------------
 
 function ledgerRows(user, bestFloor) {
     const stats = user.stats || {};
@@ -163,7 +161,7 @@ function ledgerRows(user, bestFloor) {
     };
 }
 
-// ─── TEXT FALLBACK (same ladder as the maps: image first, text under it) ────
+// --- TEXT FALLBACK (same ladder as the maps: image first, text under it) ----
 
 function lockedText(s) {
     const P_ = P();
@@ -181,7 +179,7 @@ function lockedText(s) {
     return t;
 }
 
-// 💡 2026-09-21 owner ruling: the card image already carries the ledger
+// owner ruling: the card image already carries the ledger
 // (every row, the accent and the reading). The caption must NOT repeat what
 // the picture shows - it only states what the picture is. The full text
 // ladder below remains the render-failure fallback (cards never dead-end).
@@ -195,7 +193,7 @@ function ledgerText(rows, accent) {
     return t;
 }
 
-// ─── INTERACTIONS ───────────────────────────────────────────────────────────
+// --- INTERACTIONS -----------------------------------------------------------
 
 async function payFee(sock, chatId, userId) {
     const sight = await getSight(userId);
@@ -224,9 +222,9 @@ async function payFee(sock, chatId, userId) {
     try {
         await setReadingState(userId, state);
     } catch (e) {
-        // 💡 ATOMIC DISCIPLINE (same as the guild-loan rework): never take
-        // money without recording it. If the state write fails, the coins
-        // go back - the player must never pay for a reading that won't open.
+ // ATOMIC DISCIPLINE (same as the guild-loan rework): never take
+ // money without recording it. If the state write fails, the coins
+ // go back - the player must never pay for a reading that won't open.
         try { economy.addMoney(userId, READER_FEE, "Reader's fee refund (recording failed)"); } catch (e2) {}
         try { console.error('[soulReader] fee state write failed, refunded:', e.message); } catch (_) {}
         return sock.sendMessage(chatId, {
@@ -234,7 +232,7 @@ async function payFee(sock, chatId, userId) {
         });
     }
 
-    // If this was the last door, the ceremony line answers the payment.
+ // If this was the last door, the ceremony line answers the payment.
     if (sight.levelOk && sight.floorOk) {
         if (!state.ceremonyDone) {
             state.ceremonyDone = true;
@@ -250,7 +248,7 @@ async function payFee(sock, chatId, userId) {
     }
 }
 
-// ─── MAIN VIEW ──────────────────────────────────────────────────────────────
+// --- MAIN VIEW --------------------------------------------------------------
 
 async function viewKills(sock, chatId, userId, args = []) {
     const sub = String(args[0] || '').toLowerCase();
@@ -265,15 +263,15 @@ async function viewKills(sock, chatId, userId, args = []) {
 
     const sight = await getSight(userId);
 
-    // ── LOCKED: never render the ledger (same discipline as locked maps) ──
-    // 💡 the OWNER bypasses the three doors entirely (2026-09-21 owner
-    // report): no level door, no deep-floor door, no fee door. The reading
-    // opens straight to the ledger; nothing is recorded as paid.
+ // -- LOCKED: never render the ledger (same discipline as locked maps) --
+ // the OWNER bypasses the three doors entirely (owner
+ // report): no level door, no deep-floor door, no fee door. The reading
+ // opens straight to the ledger; nothing is recorded as paid.
     if (!sight.open && !_isOwner(userId)) {
-        // 💡 2026-09-21 owner ruling: the locked card image already shows the
-        // whole checklist, so the image caption is ONE identifying line (no
-        // eye icon, no repeated requirements). The full requirement ladder
-        // stays as the text fallback when the card cannot render.
+ // owner ruling: the locked card image already shows the
+ // whole checklist, so the image caption is ONE identifying line (no
+ // eye icon, no repeated requirements). The full requirement ladder
+ // stays as the text fallback when the card cannot render.
         const imgCaption = `🕯️ *The Veilward Reading* · the sight has three doors`;
         const txtFallback = `🕯️ *THE VEILWARD READING*\n\n${lockedText(sight)}\n\n${framed(todayLine(userId))}`;
         try {
@@ -295,7 +293,7 @@ async function viewKills(sock, chatId, userId, args = []) {
         return await sock.sendMessage(chatId, { text: txtFallback });
     }
 
-    // ── OPEN: the ledger, with the ceremony on the first reading ──
+ // -- OPEN: the ledger, with the ceremony on the first reading --
     const { rows, accent } = ledgerRows(user, sight.bestFloor);
     const firstReading = !sight.state.ceremonyDone;
     if (firstReading) {
@@ -303,9 +301,9 @@ async function viewKills(sock, chatId, userId, args = []) {
         try { await setReadingState(userId, sight.state); } catch (e) {}
     }
     const tellerLine = firstReading ? CEREMONY_LINE : todayLine(userId);
-    // 💡 2026-09-21 owner ruling: the ledger image already carries every
-    // count, the accent and the reading - the caption must not repeat them.
-    // One line, no eye icon. The full ledger text stays as the fallback.
+ // owner ruling: the ledger image already carries every
+ // count, the accent and the reading - the caption must not repeat them.
+ // One line, no eye icon. The full ledger text stays as the fallback.
     const imgCaption = `🕯️ *Souls Beyond the Veil* · the count is on the card`;
     const txtFallback = firstReading
         ? `${framed(tellerLine)}\n\n${ledgerText(rows, accent)}`

@@ -1,26 +1,24 @@
-// ═══════════════════════════════════════════════════════════════════════════
-// ENCOUNTER FRAMEWORK (2026-10-02, owner brief #fec956)
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// ENCOUNTER FRAMEWORK (owner brief #fec956)
+// ===========================================================================
 // DM-based encounter sessions with proper state tracking, progression,
 // outcomes, and cleanup - the STRUCTURE the owner asked for so the new
 // encounter's actual mechanics can be mapped out separately instead of
 // being hard-coded around assumptions.
-//
 // DESIGN
-//   - An encounter TYPE is a registered spec: { id, title, intro, steps,
-//     onComplete } - a linear DM conversation the player walks through.
-//     New mechanics = new/edited specs, zero changes to the engine.
-//   - Sessions are per-player (one active encounter per player), persisted
-//     in the shared system KV (survives restarts, shared by all instances),
-//     and expire on inactivity (cleanup sweep + lazy check).
-//   - The engine only needs two hooks: handleDM() (DM message routing) and
-//     the worldAlignment monitor for scheduled encounters.
-//
-// GW OVERHAUL 2026-10-03: the placeholder trial was removed. Alignment now
+// - An encounter TYPE is a registered spec: { id, title, intro, steps,
+// onComplete } - a linear DM conversation the player walks through.
+// New mechanics = new/edited specs, zero changes to the engine.
+// - Sessions are per-player (one active encounter per player), persisted
+// in the shared system KV (survives restarts, shared by all instances),
+// and expire on inactivity (cleanup sweep + lazy check).
+// - The engine only needs two hooks: handleDM() (DM message routing) and
+// the worldAlignment monitor for scheduled encounters.
+// GW OVERHAUL the placeholder trial was removed. Alignment now
 // launches a real alignment-scale Guild War (worldAlignment.js). The
 // framework remains the generic step-based DM encounter host for future
 // encounter types; Ruins event actions route through guildWar/dmRouter.
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 
 'use strict';
 
@@ -30,7 +28,7 @@ const economy = require('./economy');
 const SESSIONS_KEY = '_shared_encounter_sessions';
 const SESSION_TTL_MS = 30 * 60 * 1000; // 30 min inactivity -> abandon
 
-// ── spec registry ──────────────────────────────────────────────────────────
+// -- spec registry ----------------------------------------------------------
 const specs = new Map(); // typeId -> spec
 
 function registerEncounterType(spec) {
@@ -38,14 +36,14 @@ function registerEncounterType(spec) {
     specs.set(spec.id, spec);
 }
 
-// ── session store (memory + shared KV) ─────────────────────────────────────
+// -- session store (memory + shared KV) -------------------------------------
 let sessions = null; // jid -> session
 let _loaded = false;
 
 function _load() {
     if (_loaded) return;
     sessions = new Map(Object.entries(system.get(SESSIONS_KEY, {}) || {}));
-    // drop expired on load
+ // drop expired on load
     const now = Date.now();
     for (const [jid, s] of sessions) {
         if (!s || now - (s.lastTouch || 0) > SESSION_TTL_MS) sessions.delete(jid);
@@ -59,7 +57,7 @@ function _persist() {
     system.set(SESSIONS_KEY, Object.fromEntries(sessions));
 }
 
-// ── public API ──────────────────────────────────────────────────────────────
+// -- public API --------------------------------------------------------------
 function hasActive(jid) {
     _load();
     const s = sessions.get(jid);
@@ -109,7 +107,7 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER) {
     const step = (spec.steps || [])[session.stepIndex];
     const input = String(txt || '').trim();
 
-    // allow exit at any step
+ // allow exit at any step
     if (/^(quit|leave|exit|abandon|stop)$/i.test(input)) {
         return _finish(sock, senderJid, chatId, BOT_MARKER, `${BOT_MARKER}🌫️ You slip away from the encounter. It will remember.`);
     }
@@ -131,7 +129,7 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER) {
         }
     }
 
-    // out of steps -> complete
+ // out of steps -> complete
     let outcome = { summaryText: 'The encounter fades. Nothing changes - yet.', rewards: null };
     try {
         if (spec.onComplete) outcome = (await spec.onComplete(session, { sock, chatId })) || outcome;
@@ -146,8 +144,8 @@ function _finish(sock, senderJid, chatId, BOT_MARKER, text, outcome = null) {
     _persist();
     sock.sendMessage(chatId, { text }).catch(() => {});
     if (outcome && outcome.rewards) {
-        // Reward application is a hook the owner maps with the mechanics.
-        // Kept deliberately inert until then (no silent economy changes).
+ // Reward application is a hook the owner maps with the mechanics.
+ // Kept deliberately inert until then (no silent economy changes).
         console.log(`[Encounter] rewards pending owner mapping:`, JSON.stringify(outcome.rewards));
     }
     return true;
@@ -172,7 +170,7 @@ function cleanupExpired() {
     return swept;
 }
 
-// (alignment_trial placeholder REMOVED 2026-10-03 — alignment now launches the
+// (alignment_trial placeholder REMOVED - alignment now launches the
 // real alignment-scale Guild War via worldAlignment.js / guildWar module.);
 
 // QA/testing seam

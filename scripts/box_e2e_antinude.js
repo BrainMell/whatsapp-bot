@@ -1,4 +1,4 @@
-// LIVE ANTINUDE E2E (runs ON Box 1, 2026-09-28): re-verifies the deployed
+// LIVE ANTINUDE E2E (runs ON Box 1, ): re-verifies the deployed
 // analyzeMediaBuffer path (download -> sharpChild worker -> Box 2 facade ->
 // verdict) after the crash-isolation changes. Uses real Wikimedia images:
 // safe matrix must stay low, classical nude must clear the 0.45 bar.
@@ -27,7 +27,7 @@ async function dl(url) {
     ok(r && r.nsfw <= 0.2, `SAFE ${name} -> nsfw=${r ? r.nsfw.toFixed(3) : "null"} (${buf.length}B)`);
   }
 
-  // classical nude - the proven violation signal (Task 9 calibration: 0.46-0.74)
+ // classical nude - the proven violation signal
   const nude = await dl("https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0b/Sandro_Botticelli_-_La_nascita_di_Venere_-_Google_Art_Project_-_edited.jpg/960px-Sandro_Botticelli_-_La_nascita_di_Venere_-_Google_Art_Project_-_edited.jpg");
   const rN = await antinude.analyzeMediaBuffer("image", nude, "manet-nude ");
   ok(rN && rN.nsfw >= 0.45, `NUDE (Manet) -> nsfw=${rN ? rN.nsfw.toFixed(3) : "null"} clears 0.45 delete bar (${nude.length}B)`);

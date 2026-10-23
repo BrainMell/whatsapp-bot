@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** ctx.js — print dispatch context for given primaryCmd literals in engine.js */
+/** ctx.js - print dispatch context for given primaryCmd literals in engine.js */
 const fs = require('fs');
 const lines = fs.readFileSync('/home/z/my-project/repo/core/engine.js', 'utf8').split('\n');
 const targets = process.argv.slice(2);

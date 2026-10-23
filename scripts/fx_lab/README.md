@@ -1,4 +1,4 @@
-# fx_lab — WhatsApp link-preview animation lab (joker)
+# fx_lab - WhatsApp link-preview animation lab (joker)
 
 Standalone generators + harnesses behind the ball-arena animation work
 (v12 wide cards → v14 confetti → v17 MOTION flight frames → v18 method lab:
@@ -23,8 +23,8 @@ smear / pulse / hold variants). Output feeds `fx_captures/assets/`, which
 ## Usage notes
 
 - Most scripts hardcode `ASSETS = /home/ubuntu/whatsapp-bot/fx_captures/assets`
-  (absolute — box-only). Run them on Box 2, any cwd.
-- The two `make_*` scripts resolve output via `process.cwd()` — run them from
+  (absolute - box-only). Run them on Box 2, any cwd.
+- The two `make_*` scripts resolve output via `process.cwd()` - run them from
   the REPO ROOT.
 - `fx_tap_server.js` deliberately stays at the repo ROOT: it is the running
   pm2 service `fx-tap` (poll/tap state receiver, port 8787). Moving it would

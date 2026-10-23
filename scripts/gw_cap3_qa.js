@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// QA — OWNER RULE 2026-10-05: max THREE enemies in any given room.
+// QA - OWNER RULE max THREE enemies in any given room.
 // Renders a combat room whose SEEDED payload still carries 4 enemies
-// (already-seeded events) — the drawn pack must cap at 3.
+// (already-seeded events) - the drawn pack must cap at 3.
 const fs = require('fs');
 const path = require('path');
 const roomScene = require('../core/rpg/guildWar/roomScene');

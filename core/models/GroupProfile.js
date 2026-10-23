@@ -10,14 +10,14 @@ const GroupProfileSchema = new mongoose.Schema({
     pinnedRules: [{ type: String }]
   },
 
-  // Persistent group-wide inside jokes
+ // Persistent group-wide inside jokes
   insideJokes: [{
     joke: { type: String, required: true },
     establishedBy: { type: String, default: 'Unknown' },
     timestamp: { type: Date, default: Date.now }
   }],
   
-  // Group facts and community details
+ // Group facts and community details
   groupFacts: [{
     fact: { type: String, required: true },
     confidence: { type: Number, default: 1.0 },

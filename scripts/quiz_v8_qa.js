@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* quiz_v8_qa.js — v8 QA on-box:
+/* quiz_v8_qa.js - v8 QA on-box:
  *   1. matcher unit tests: typed answers accept exact/case/alts/typo,
  *      reject wrong + single letters, bare chatter passes through
  *   2. dataset smoke: buildDatasetQuestions for each mode, verify shape
@@ -15,7 +15,7 @@ function check(name, cond) {
   if (!cond) fails++;
 }
 
-// ── 1. matcher tests ──
+// -- 1. matcher tests --
 const quiz = require(`${BOT}/core/games/quiz.js`);
 const activeQuizzes = quiz._internal.activeQuizzes;
 const CHAT = "qa:v8:test";
@@ -45,44 +45,44 @@ const mcQ = {
 };
 
 async function matcherTests() {
-  // typed: exact
+ // typed: exact
   let s = sessionWith(typedQ); activeQuizzes.set(CHAT, s);
   await quiz.handleAnswer(sock, CHAT, "u1", "Breaking Bad", null, m, "U", { bareText: true });
   check("typed exact answer accepted", s.answeredBy.get("u1") && s.answeredBy.get("u1").correct === true);
-  // typed: case/punct + alt
+ // typed: case/punct + alt
   s = sessionWith(typedQ); activeQuizzes.set(CHAT, s);
   await quiz.handleAnswer(sock, CHAT, "u2", "breaking bad", null, m, "U", { bareText: true });
   check("typed case-insensitive accepted", s.answeredBy.get("u2") && s.answeredBy.get("u2").correct === true);
   s = sessionWith(typedQ); activeQuizzes.set(CHAT, s);
   await quiz.handleAnswer(sock, CHAT, "u3", "BB", null, m, "U", { bareText: true });
   check("typed alias (alts) accepted", s.answeredBy.get("u3") && s.answeredBy.get("u3").correct === true);
-  // typed: 1-char typo tolerance (len>=5 -> tol 1)
+ // typed: 1-char typo tolerance (len>=5 -> tol 1)
   s = sessionWith(typedQ); activeQuizzes.set(CHAT, s);
   await quiz.handleAnswer(sock, CHAT, "u4", "Breaking Bard", null, m, "U", { bareText: true });
   check("typed typo (lev 1) accepted", s.answeredBy.get("u4") && s.answeredBy.get("u4").correct === true);
-  // typed: single letter must NOT match hidden-options question
+ // typed: single letter must NOT match hidden-options question
   s = sessionWith(typedQ); activeQuizzes.set(CHAT, s);
   await quiz.handleAnswer(sock, CHAT, "u5", "a", null, m, "U", { bareText: true });
   check("typed single letter rejected", !s.answeredBy.has("u5"));
-  // typed: bare chatter passes through untouched
+ // typed: bare chatter passes through untouched
   s = sessionWith(typedQ); activeQuizzes.set(CHAT, s);
   const r = await quiz.handleAnswer(sock, CHAT, "u6", "lol nice one", null, m, "U", { bareText: true });
   check("typed bare chatter not consumed", r && r.handled === false && !s.answeredBy.has("u6"));
-  // MC: letter match still works (regression)
+ // MC: letter match still works (regression)
   s = sessionWith(mcQ); activeQuizzes.set(CHAT, s);
   await quiz.handleAnswer(sock, CHAT, "u7", "a", null, m, "U", { bareText: true });
   check("MC letter answer still accepted", s.answeredBy.get("u7") && s.answeredBy.get("u7").correct === true);
-  // MC: option text match (regression)
+ // MC: option text match (regression)
   s = sessionWith(mcQ); activeQuizzes.set(CHAT, s);
   await quiz.handleAnswer(sock, CHAT, "u8", "Blizzard", null, m, "U", { bareText: true });
   check("MC option-text still accepted", s.answeredBy.get("u8") && s.answeredBy.get("u8").correct === true);
-  // _lev sanity
+ // _lev sanity
   check("_lev same = 0", quiz._lev("abc", "abc") === 0);
   check("_lev distance 1", quiz._lev("kitten", "sitten") === 1);
   activeQuizzes.delete(CHAT);
 }
 
-// ── 2 + 3. dataset smoke + sanity ──
+// -- 2 + 3. dataset smoke + sanity --
 function datasetTests() {
   const DS = require(`${BOT}/data/quizDataset.json`);
   const qd = require(`${BOT}/core/games/quizDataset.js`);
@@ -102,7 +102,7 @@ function datasetTests() {
       }
       if (!q.q || !Array.isArray(q.options) || !Number.isInteger(q.correct)) { check(`${mode}: bad shape ${JSON.stringify(q).slice(0, 80)}`, false); break; }
     }
-    // dataset-level counts
+ // dataset-level counts
     const cat = DS.categories[mode];
     for (const x of (cat.questions || [])) {
       const k = String(x.q).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();

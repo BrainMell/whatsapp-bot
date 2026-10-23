@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* build_quiz_lore_intake.js — pass7a: keyless LORE intake for quiz overhaul.
+/* build_quiz_lore_intake.js - pass7a: keyless LORE intake for quiz overhaul.
  * Owner directive: >=90% story/world/lore, <=10% production. This pulls
  * OpenTDB (full media categories) + the-trivia-api (film&tv, video games),
  * filters out production-style questions with an in-universe classifier,
@@ -18,7 +18,7 @@ function decodeHtml(s) {
     .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => { try { return String.fromCodePoint(parseInt(n, 16)); } catch { return " "; } })
     .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ")
-    .replace(/&hellip;/g, "...").replace(/&mdash;/g, "—").replace(/&ndash;/g, "–")
+    .replace(/&hellip;/g, "...").replace(/&mdash;/g, "-").replace(/&ndash;/g, "-")
     .replace(/&rsquo;/g, "'").replace(/&lsquo;/g, "'").replace(/&ldquo;/g, '"').replace(/&rdquo;/g, '"')
     .replace(/&eacute;/g, "é").replace(/&Eacute;/g, "É");
 }
@@ -65,7 +65,7 @@ async function jget(url, tries = 3) {
   }
 }
 
-// ── existing stems to dedupe against ──
+// -- existing stems to dedupe against --
 const DS = JSON.parse(fs.readFileSync("/home/ubuntu/whatsapp-bot/data/quizDataset.json", "utf8"));
 const seenStems = new Set();
 for (const c of Object.values(DS.categories)) {
@@ -91,7 +91,7 @@ function addText(cat, topic, q, options, correct, difficulty, source) {
 }
 
 async function opentdb() {
-  // category -> [dataset cat, topic]
+ // category -> [dataset cat, topic]
   const CATS = { 15: ["games", "Video Games"], 11: ["movies", "Movies"], 14: ["series", "TV Series"], 31: ["comics", "Manga"], 32: ["series", "Cartoons"], 29: ["comics", "Comics"], 13: ["movies", "Musicals"] };
   let token = null;
   try { token = (await jget("https://opentdb.com/api_token.php?command=request")).token; } catch {}
@@ -107,7 +107,7 @@ async function opentdb() {
       empty = 0;
       for (const r of data.results) {
         const opts = [...r.incorrect_answers.map(String), String(r.correct_answer)];
-        // shuffle deterministically-ish
+ // shuffle deterministically-ish
         for (let i = opts.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [opts[i], opts[j]] = [opts[j], opts[i]]; }
         const correct = opts.findIndex((o) => normKey(o) === normKey(r.correct_answer));
         if (addText(cat, topic, r.question, opts, correct, r.difficulty, "opentdb")) n++;

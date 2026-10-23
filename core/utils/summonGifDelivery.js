@@ -1,30 +1,28 @@
 // ============================================
-// 🎞️ SUMMON GIF DELIVERY - resilient animated card pipeline
+// SUMMON GIF DELIVERY - resilient animated card pipeline
 // ============================================
 // Shared by .summon (roster), .summon <#> (detail) and .summon codex.
-//
-// Incident this fixes (2026-10-10, live joker):
-//   Go roster GIF renders measured 9-39s (base ~7s + ~0.7s/species on Box2).
-//   The old pipeline stacked THREE timeouts on top of each other:
-//     axios 30s → intermittent fail on big rosters (Go logged 38.9s renders)
-//     ffmpeg execFileSync 15s → "spawnSync ffmpeg ETIMEDOUT" even on success
-//     command watchdog 45s → killed the command → user saw NOTHING (not even
-//     the text fallback) → "can't use summons at all" / "codex no longer
-//     renders animations".
-//
-// Design (keeps the same look & feel — identical payloads, captions, MP4 flags):
-//   1. MP4 LRU cache keyed by sha256(kind + JSON payload). Codex pages are
-//      deterministic → instant repeat views. Rosters re-render only when the
-//      player's summon data changes (payload hash changes).
-//   2. In-flight dedupe: concurrent identical requests share one render.
-//   3. Soft-budget race (default 20s): GIF arrives in time → ffmpeg (30s,
-//      unique tmpfiles) → send single MP4. Not in time → text fallback sent
-//      IMMEDIATELY (user always gets a fast reply), render continues in the
-//      background and the finished MP4 is delivered as a follow-up message
-//      with the SAME caption.
-//   4. Unique tmp file names — the old fixed /tmp/summon_codex.gif names were
-//      clobbered by concurrent commands of the same kind.
-//   5. Never throws. Worst case: text fallback was already delivered.
+// Incident this fixes (live joker):
+// Go roster GIF renders measured 9-39s (base ~7s + ~0.7s/species on Box2).
+// The old pipeline stacked THREE timeouts on top of each other:
+// axios 30s → intermittent fail on big rosters (Go logged 38.9s renders)
+// ffmpeg execFileSync 15s → "spawnSync ffmpeg ETIMEDOUT" even on success
+// command watchdog 45s → killed the command → user saw NOTHING (not even
+// the text fallback) → "can't use summons at all" / "codex no longer
+// renders animations".
+// Design (keeps the same look & feel - identical payloads, captions, MP4 flags):
+// 1. MP4 LRU cache keyed by sha256(kind + JSON payload). Codex pages are
+// deterministic → instant repeat views. Rosters re-render only when the
+// player's summon data changes (payload hash changes).
+// 2. In-flight dedupe: concurrent identical requests share one render.
+// 3. Soft-budget race (default 20s): GIF arrives in time → ffmpeg (30s,
+// unique tmpfiles) → send single MP4. Not in time → text fallback sent
+// IMMEDIATELY (user always gets a fast reply), render continues in the
+// background and the finished MP4 is delivered as a follow-up message
+// with the SAME caption.
+// 4. Unique tmp file names - the old fixed /tmp/summon_codex.gif names were
+// clobbered by concurrent commands of the same kind.
+// 5. Never throws. Worst case: text fallback was already delivered.
 
 const crypto = require('crypto');
 const path = require('path');
@@ -46,7 +44,7 @@ function cacheGet(key) {
     _mp4Cache.delete(key);
     return null;
   }
-  // LRU refresh
+ // LRU refresh
   _mp4Cache.delete(key);
   _mp4Cache.set(key, hit);
   return hit.mp4;
@@ -54,7 +52,7 @@ function cacheGet(key) {
 
 function cachePut(key, mp4) {
   if (_mp4Cache.size >= CACHE_MAX) {
-    // evict oldest
+ // evict oldest
     const oldestKey = _mp4Cache.keys().next().value;
     _mp4Cache.delete(oldestKey);
   }
@@ -134,7 +132,7 @@ async function deliverSummonGif(opts) {
 
   const key = payloadKey(kind, payload);
 
-  // 1. Cache hit → instant single message (the common case after first view)
+ // 1. Cache hit → instant single message (the common case after first view)
   const cached = cacheGet(key);
   if (cached) {
     try {
@@ -143,11 +141,11 @@ async function deliverSummonGif(opts) {
       return;
     } catch (e) {
       console.error(`${logTag} cached MP4 send failed:`, e.message);
-      // fall through to the fresh-render path
+ // fall through to the fresh-render path
     }
   }
 
-  // 2. Kick off (or join) the render
+ // 2. Kick off (or join) the render
   let renderPromise = _inFlight.get(key);
   const joined = !!renderPromise;
   if (!renderPromise) {
@@ -161,20 +159,20 @@ async function deliverSummonGif(opts) {
       }
     })();
     _inFlight.set(key, renderPromise);
-    // drop the entry when settled (keep the map small); cache handles reuse
+ // drop the entry when settled (keep the map small); cache handles reuse
     renderPromise.finally(() => { if (_inFlight.get(key) === renderPromise) _inFlight.delete(key); }).catch(() => {});
   } else {
     console.log(`${logTag} joining in-flight render ${key.slice(0, 10)}`);
   }
 
-  // 3. Soft-budget race
+ // 3. Soft-budget race
   let timer;
   const budget = new Promise((resolve) => { timer = setTimeout(() => resolve('timeout'), SOFT_BUDGET_MS); });
   const outcome = await Promise.race([renderPromise.then((b) => (b ? 'gif' : 'fail')), budget]);
   clearTimeout(timer);
 
   if (outcome === 'gif') {
-    // GIF landed in time → convert + send (single message, old UX)
+ // GIF landed in time → convert + send (single message, old UX)
     try {
       const gifBuffer = await renderPromise;
       const mp4 = await gifToMp4(gifBuffer, kind);
@@ -183,10 +181,10 @@ async function deliverSummonGif(opts) {
       return;
     } catch (e) {
       console.error(`${logTag} foreground convert/send failed:`, e.message);
-      // fall through to fallbacks below
+ // fall through to fallbacks below
     }
   } else if (outcome === 'fail' && !joined) {
-    // Fast failure in the foreground → PNG fallback → text (old behavior)
+ // Fast failure in the foreground → PNG fallback → text (old behavior)
     if (pngFallback) {
       try {
         const png = await pngFallback();
@@ -209,8 +207,8 @@ async function deliverSummonGif(opts) {
     return;
   }
 
-  // 4. Soft budget exceeded (or joined a slow render) → text NOW,
-  //    background-deliver the MP4 when it lands.
+ // 4. Soft budget exceeded (or joined a slow render) → text NOW,
+ // background-deliver the MP4 when it lands.
   try {
     if (typeof textFallback === 'function') await textFallback();
     else if (textFallback) await sock.sendMessage(chatId, { text: textFallback });
@@ -218,7 +216,7 @@ async function deliverSummonGif(opts) {
     console.error(`${logTag} text fallback failed:`, e.message);
   }
 
-  // Background continuation - do NOT await (command context may already be over)
+ // Background continuation - do NOT await (command context may already be over)
   (async () => {
     try {
       const gifBuffer = await renderPromise;
@@ -229,7 +227,7 @@ async function deliverSummonGif(opts) {
       console.log(`${logTag} background MP4 delivered (${mp4.length} bytes, key ${key.slice(0, 10)})`);
     } catch (e) {
       console.error(`${logTag} background delivery failed:`, e.message);
-      // last resort: static PNG follow-up (still better than nothing)
+ // last resort: static PNG follow-up (still better than nothing)
       if (pngFallback) {
         try {
           const png = await pngFallback();

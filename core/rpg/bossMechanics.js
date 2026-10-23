@@ -1,5 +1,5 @@
 // ============================================
-// 👑 BOSS MECHANICS SYSTEM
+// BOSS MECHANICS SYSTEM
 // ============================================
 // Advanced boss fight system featuring:
 // - Multi-phase bosses with transitions
@@ -11,7 +11,7 @@
 // - Soft/hard enrage
 
 // ==========================================
-// 🎯 BOSS PHASE SYSTEM
+// BOSS PHASE SYSTEM
 // ==========================================
 
 class BossPhaseManager {
@@ -31,7 +31,7 @@ class BossPhaseManager {
         const maxHP = this.boss.stats.maxHp || this.boss.stats.hp;
         const hpPercent = (currentHP / maxHP) * 100;
         
-        // 💡 Check all future phases, starting from the latest
+ // Check all future phases, starting from the latest
         for (let i = this.boss.phases.length - 1; i > this.currentPhaseIndex; i--) {
             if (hpPercent <= this.boss.phases[i].threshold) {
                 return this.transitionToPhase(i);
@@ -53,10 +53,10 @@ class BossPhaseManager {
             hpAtTransition: this.boss.stats.hp
         });
         
-        // Update boss abilities for this phase
+ // Update boss abilities for this phase
         this.boss.abilities = phase.abilities || [];
         
-        // Apply phase-specific effects
+ // Apply phase-specific effects
         if (phase.effects) {
             phase.effects.forEach(effect => {
                 this.applyPhaseEffect(effect);
@@ -73,7 +73,7 @@ class BossPhaseManager {
     
     applyPhaseEffect(effect) {
         if (effect.type === 'stat_boost') {
-            // 💡 BUG FIX: Use additive stacking rather than compounded multiplication
+ // BUG FIX: Use additive stacking rather than compounded multiplication
             const baseStat = this.boss.stats[effect.stat] || 10;
             const boostAmount = Math.floor(baseStat * (effect.value / 100));
             this.boss.stats[effect.stat] += boostAmount;
@@ -88,7 +88,7 @@ class BossPhaseManager {
 }
 
 // ==========================================
-// 🦟 HIVE COMMANDER - Swarm Boss
+// HIVE COMMANDER - Swarm Boss
 // ==========================================
 
 const HIVE_COMMANDER_BOSS = {
@@ -110,7 +110,7 @@ const HIVE_COMMANDER_BOSS = {
         crit: 15
     },
     
-    // PHASE 1: 100% - 66% HP
+ // PHASE 1: 100% - 66% HP
     phases: [
         {
             name: 'Swarm Directive',
@@ -129,7 +129,7 @@ const HIVE_COMMANDER_BOSS = {
             message: '🦟👑 "The Hive commands - you will be consumed!"'
         },
         
-        // PHASE 2: 66% - 33% HP
+ // PHASE 2: 66% - 33% HP
         {
             name: 'Infestation Frenzy',
             threshold: 66,
@@ -164,7 +164,7 @@ const HIVE_COMMANDER_BOSS = {
             message: '🦟👑 "You wounded the Hive?! The swarm RAGES!"'
         },
         
-        // PHASE 3: 33% - 0% HP
+ // PHASE 3: 33% - 0% HP
         {
             name: 'Last Throes of the Hive',
             threshold: 33,
@@ -223,7 +223,7 @@ const HIVE_COMMANDER_BOSS = {
 };
 
 // ==========================================
-// ☣️ PLAGUE PRIEST - Multi-Mechanic Boss
+// PLAGUE PRIEST - Multi-Mechanic Boss
 // ==========================================
 
 const PLAGUE_PRIEST_BOSS = {
@@ -246,7 +246,7 @@ const PLAGUE_PRIEST_BOSS = {
     },
     
     phases: [
-        // PHASE 1: Plague Caster Phase
+ // PHASE 1: Plague Caster Phase
         {
             name: 'The Undying Plague Caster',
             threshold: 100,
@@ -288,7 +288,7 @@ const PLAGUE_PRIEST_BOSS = {
             message: '☣️ "Foolish mortals. The Infection claims all."'
         },
         
-        // PHASE 2: Plague Harvester
+ // PHASE 2: Plague Harvester
         {
             name: 'Plague Harvester',
             threshold: 66,
@@ -331,7 +331,7 @@ const PLAGUE_PRIEST_BOSS = {
             message: '☣️ "Your bodies will fuel the Plague\'s spread!"'
         },
         
-        // PHASE 3: Ascended Plague Form
+ // PHASE 3: Ascended Plague Form
         {
             name: 'Ascended Plague Form',
             threshold: 33,
@@ -395,7 +395,7 @@ const PLAGUE_PRIEST_BOSS = {
 };
 
 // ==========================================
-// 🦠 CORRUPTED OVERLORD
+// CORRUPTED OVERLORD
 // ==========================================
 
 const CORRUPTED_OVERLORD_BOSS = {
@@ -418,7 +418,7 @@ const CORRUPTED_OVERLORD_BOSS = {
     },
     
     phases: [
-        // PHASE 1: Corrupted Form
+ // PHASE 1: Corrupted Form
         {
             name: 'Herald of Mutation',
             threshold: 100,
@@ -455,7 +455,7 @@ const CORRUPTED_OVERLORD_BOSS = {
             message: '🦠👑 "You dare oppose the Corruption?!"'
         },
         
-        // PHASE 2: True Corrupted Form
+ // PHASE 2: True Corrupted Form
         {
             name: 'Mutation Unleashed',
             threshold: 66,
@@ -508,7 +508,7 @@ const CORRUPTED_OVERLORD_BOSS = {
             message: '🦠👑 "NOW WITNESS TRUE CORRUPTION!"'
         },
         
-        // PHASE 3: Void-Infused Corruption
+ // PHASE 3: Void-Infused Corruption
         {
             name: 'Overlord of Ruin',
             threshold: 33,
@@ -580,7 +580,7 @@ const CORRUPTED_OVERLORD_BOSS = {
 };
 
 // ==========================================
-// 🌑 VOID CORRUPTED - Corruption Entity Boss
+// VOID CORRUPTED - Corruption Entity Boss
 // ==========================================
 
 const VOID_CORRUPTED_BOSS = {
@@ -727,7 +727,7 @@ const VOID_CORRUPTED_BOSS = {
 };
 
 // ==========================================
-// 🐲 ANCIENT DRAGON - Elemental Predator
+// ANCIENT DRAGON - Elemental Predator
 // ==========================================
 
 const ANCIENT_DRAGON_BOSS = {
@@ -770,11 +770,11 @@ const ANCIENT_DRAGON_BOSS = {
     
     enrageTimer: 25,
 
-    // 💡 FIX: add top-level xpReward/goldReward so endCombat reads them.
-    // Previously only `loot.xp`/`loot.gold` were defined, which endCombat
-    // ignores - the dragon boss fell back to the default 1000 XP / [100,200]
-    // gold, less than a D-rank common mob. Now S-rank-appropriate.
-    // 💡 ECONOMY REBALANCE: cut gold by 50% (was [20000, 40000]).
+ // FIX: add top-level xpReward/goldReward so endCombat reads them.
+ // Previously only `loot.xp`/`loot.gold` were defined, which endCombat
+ // ignores - the dragon boss fell back to the default 1000 XP / [100,200]
+ // gold, less than a D-rank common mob. Now S-rank-appropriate.
+ // ECONOMY REBALANCE: cut gold by 50% (was [20000, 40000]).
     xpReward: 50000,
     goldReward: [10000, 20000],
 
@@ -787,7 +787,7 @@ const ANCIENT_DRAGON_BOSS = {
 };
 
 // ==========================================
-// 🌟 PRIMORDIAL CHAOS - Final Boss
+// PRIMORDIAL CHAOS - Final Boss
 // ==========================================
 
 const PRIMORDIAL_CHAOS_BOSS = {
@@ -810,7 +810,7 @@ const PRIMORDIAL_CHAOS_BOSS = {
     },
     
     phases: [
-        // Phase 1: Creation
+ // Phase 1: Creation
         {
             name: 'The Beginning',
             threshold: 100,
@@ -834,7 +834,7 @@ const PRIMORDIAL_CHAOS_BOSS = {
             message: '🌟 "In the beginning, there was Chaos."'
         },
         
-        // Phase 2: Order vs Chaos
+ // Phase 2: Order vs Chaos
         {
             name: 'Duality',
             threshold: 80,
@@ -858,7 +858,7 @@ const PRIMORDIAL_CHAOS_BOSS = {
             message: '⚖️ "All things exist in balance."'
         },
         
-        // Phase 3: Elemental Fury
+ // Phase 3: Elemental Fury
         {
             name: 'The Four Pillars',
             threshold: 60,
@@ -886,7 +886,7 @@ const PRIMORDIAL_CHAOS_BOSS = {
             message: '🌊🔥 "Feel the raw power of the elements!"'
         },
         
-        // Phase 4: Void Corruption
+ // Phase 4: Void Corruption
         {
             name: 'Entropy',
             threshold: 40,
@@ -913,7 +913,7 @@ const PRIMORDIAL_CHAOS_BOSS = {
             message: '🌑 "Return to nothingness!"'
         },
         
-        // Phase 5: Big Bang
+ // Phase 5: Big Bang
         {
             name: 'Cosmic Rebirth',
             threshold: 20,
@@ -952,7 +952,7 @@ const PRIMORDIAL_CHAOS_BOSS = {
             message: '💥 "WITNESS THE END AND BEGINNING AS ONE!"'
         },
         
-        // Final Phase: Singularity
+ // Final Phase: Singularity
         {
             name: 'The Singularity',
             threshold: 5,
@@ -1007,11 +1007,11 @@ const PRIMORDIAL_CHAOS_BOSS = {
 };
 
 // ==========================================
-// 🎯 BOSS ABILITY CATALOG
+// BOSS ABILITY CATALOG
 // ==========================================
 
 const BOSS_ABILITIES = {
-    // ── HIVE COMMANDER (was: Goblin King) Abilities ──
+ // -- HIVE COMMANDER (was: Goblin King) Abilities --
     mandible_strike: {
         name: 'Mandible Strike',
         damage: 1.5,
@@ -1039,7 +1039,7 @@ const BOSS_ABILITIES = {
         effects: [{ type: 'stun', chance: 100, duration: 1 }]
     },
 
-    // ── PLAGUE PRIEST (was: Lich) Abilities ──
+ // -- PLAGUE PRIEST (was: Lich) Abilities --
     plague_bolt: {
         name: 'Plague Bolt',
         damage: 2.0,
@@ -1081,7 +1081,7 @@ const BOSS_ABILITIES = {
         ]
     },
 
-    // ── CORRUPTED OVERLORD (was: Demon Lord) Abilities ──
+ // -- CORRUPTED OVERLORD (was: Demon Lord) Abilities --
     mutation_slash: {
         name: 'Mutation Slash',
         damage: 2.0,
@@ -1103,7 +1103,7 @@ const BOSS_ABILITIES = {
         effects: [{ type: 'debuff', stat: 'def', value: 20, duration: 2 }]
     },
 
-    // ── Dragon Abilities (unchanged) ──
+ // -- Dragon Abilities (unchanged) --
     dragon_claw: {
         name: 'Draconic Claw',
         damage: 2.5,
@@ -1132,11 +1132,11 @@ const BOSS_ABILITIES = {
         telegraphMessage: ' Igneel calls upon the heavens... a massive fire rock descends! ⚠️ *DEFEND NOW!*'
     },
     
-    // Add more abilities as needed...
+ // Add more abilities as needed...
 };
 
 // ==========================================
-// 🎮 BOSS MANAGER CLASS
+// BOSS MANAGER CLASS
 // ==========================================
 
 class BossFightManager {
@@ -1152,7 +1152,7 @@ class BossFightManager {
     processTurn() {
         this.currentTurn++;
         
-        // Check phase transition
+ // Check phase transition
         const transition = this.phaseManager.checkPhaseTransition();
         if (transition) {
             return {
@@ -1161,35 +1161,35 @@ class BossFightManager {
             };
         }
         
-        // Check enrage
+ // Check enrage
         if (this.boss.enrageTimer && this.currentTurn >= this.boss.enrageTimer) {
             return this.triggerEnrage();
         }
         
-        // Process soft enrage stacks
+ // Process soft enrage stacks
         if (this.boss.softEnrage && this.currentTurn >= this.boss.softEnrage.turnThreshold) {
             this.phaseManager.softEnrageStacks++;
             const effect = this.boss.softEnrage.effectPerStack;
             this.boss.stats[effect.stat] += effect.value;
         }
         
-        // Process active channels
+ // Process active channels
         const channelResults = this.processChannels();
         if (channelResults.length > 0) {
             return { type: 'channel_complete', data: channelResults };
         }
         
-        // Process summons AI
+ // Process summons AI
         this.processSummons();
         
-        // Boss action
+ // Boss action
         return this.selectBossAction();
     }
     
     triggerEnrage() {
-        // Hard enrage: instant kill / wipe effect past the turn limit.
-        // If a boss has `enrageTimer` set but no `hardEnrage` effect, fall
-        // back to a generic enrage message so the turn doesn't end with null.
+ // Hard enrage: instant kill / wipe effect past the turn limit.
+ // If a boss has `enrageTimer` set but no `hardEnrage` effect, fall
+ // back to a generic enrage message so the turn doesn't end with null.
         if (this.boss.hardEnrage) {
             return {
                 type: 'hard_enrage',
@@ -1220,17 +1220,17 @@ class BossFightManager {
     
     processSummons() {
         const results = [];
-        // AI for summoned units
+ // AI for summoned units
         this.summons.forEach(summon => {
             if (summon.stats.hp > 0) {
-                // Simple AI: attack random target
+ // Simple AI: attack random target
                 const aliveParty = this.party.filter(p => !p.isDead && (p.currentHP || p.stats.hp) > 0);
                 if (aliveParty.length === 0) return;
 
                 const target = aliveParty[Math.floor(Math.random() * aliveParty.length)];
                 const damage = Math.floor((summon.stats.atk || 10) * (0.8 + Math.random() * 0.4));
                 
-                // Note: Damage application handled by the main engine to ensure consistent logic
+ // Note: Damage application handled by the main engine to ensure consistent logic
                 results.push({
                     attacker: summon.name,
                     target: target.name,
@@ -1250,11 +1250,11 @@ class BossFightManager {
             return { type: 'boss_action', ability: null, data: null };
         }
 
-        // Select ability weighted by priority (if declared on the ability
-        // entry). Ability entries can be either a string (uniform weight) or
-        // an object `{ id, priority }`. Higher priority = more frequent.
-        // Previously the comment claimed "weighted by priority" but the code
-        // did uniform random - that's now fixed.
+ // Select ability weighted by priority (if declared on the ability
+ // entry). Ability entries can be either a string (uniform weight) or
+ // an object `{ id, priority }`. Higher priority = more frequent.
+ // Previously the comment claimed "weighted by priority" but the code
+ // did uniform random - that's now fixed.
         const expanded = [];
         for (const ability of abilities) {
             if (typeof ability === 'string') {
@@ -1287,7 +1287,7 @@ class BossFightManager {
 }
 
 // ==========================================
-// 📤 EXPORTS
+// EXPORTS
 // ==========================================
 
 // Boss registry - maps boss ID strings used in DUNGEON_RANKS to the boss data objects
@@ -1301,24 +1301,24 @@ const BOSS_REGISTRY = {
 };
 
 module.exports = {
-    // Retextured legacy bosses (infection/mutation theme)
+ // Retextured legacy bosses (infection/mutation theme)
     HIVE_COMMANDER_BOSS,
     PLAGUE_PRIEST_BOSS,
     CORRUPTED_OVERLORD_BOSS,
     VOID_CORRUPTED_BOSS,
-    // Active dungeon bosses
+ // Active dungeon bosses
     PRIMORDIAL_CHAOS_BOSS,
     ANCIENT_DRAGON_BOSS,
-    // Lookups
+ // Lookups
     BOSS_REGISTRY,
     BOSS_ABILITIES,
     BossPhaseManager,
     BossFightManager,
     
-    // Helper - look up by registry key or fall back to Hive Commander
+ // Helper - look up by registry key or fall back to Hive Commander
     getBossById: (id) => BOSS_REGISTRY[id] || HIVE_COMMANDER_BOSS,
 
-    // Helper function to get boss by act (updated to new IDs)
+ // Helper function to get boss by act (updated to new IDs)
     getBossForAct: (act) => {
         const bossMap = {
             1: HIVE_COMMANDER_BOSS,

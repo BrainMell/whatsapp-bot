@@ -1,5 +1,5 @@
 const WAIFU_PICS_MAP = {
-  // Targeted categories mapped to closest Waifu.pics SFW categories
+ // Targeted categories mapped to closest Waifu.pics SFW categories
   nuzzle: 'cuddle',
   punch: 'slap',
   shoot: 'yeet',
@@ -22,7 +22,7 @@ const WAIFU_PICS_MAP = {
   peck: 'kiss',
   shake: 'wave',
 
-  // Self categories mapped to closest Waifu.pics SFW categories
+ // Self categories mapped to closest Waifu.pics SFW categories
   facepalm: 'sad',
   shrug: 'smile',
   sip: 'smug',
@@ -62,7 +62,7 @@ const WAIFU_PICS_MAP = {
 };
 
 const NEKOS_BEST_MAP = {
-  // Targeted categories mapped to closest Nekos.best SFW categories
+ // Targeted categories mapped to closest Nekos.best SFW categories
   kill: 'shoot', // Nekos.best supports shoot
   stab: 'shoot',
   arrest: 'slap',
@@ -78,7 +78,7 @@ const NEKOS_BEST_MAP = {
   eat: 'nom',
   animekick: 'kick',
 
-  // Self categories mapped to closest Nekos.best SFW categories
+ // Self categories mapped to closest Nekos.best SFW categories
   panic: 'cry',
   scream: 'cry',
   hide: 'wink',
@@ -91,26 +91,26 @@ const NEKOS_BEST_MAP = {
   backflip: 'spin'
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 💡 2026-09-01 GIF ENDPOINT OVERHAUL (Task 4 - dead endpoint + .gif kill):
+// ===========================================================================
+// GIF ENDPOINT OVERHAUL:
 // Diagnosed from the production host (Box1):
-//   - api.waifu.pics  → NXDOMAIN - domain decommissioned (confirmed via 8.8.8.8)
-//   - nekos.best      → Cloudflare JS challenge (403) on all datacenter requests
-//   - api.waifu.it    → JS "Loading..." interstitial (blocked for bots)
-//   - nekos.life v2   → WORKS: { url }  - cats: hug kiss pat cuddle tickle feed slap smug
-//   - PurrBot v2.3    → WORKS: { link } - sfw gif cats below (16)
+// - api.waifu.pics → NXDOMAIN - domain decommissioned (confirmed via 8.8.8.8)
+// - nekos.best → Cloudflare JS challenge (403) on all datacenter requests
+// - api.waifu.it → JS "Loading..." interstitial (blocked for bots)
+// - nekos.life v2 → WORKS: { url } - cats: hug kiss pat cuddle tickle feed slap smug
+// - PurrBot v2.3 → WORKS: { link } - sfw gif cats below (16)
 // WAIFU_PICS_MAP / NEKOS_BEST_MAP kept: NEKOS_BEST_MAP is still used (source is
 // first in the chain - cheap fast-fail, auto-recovers if protection lifts).
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 
-// ── NEW: nekos.life v2 (second source in the chain) ──
+// -- NEW: nekos.life v2 (second source in the chain) --
 const NEKOS_LIFE_CATS = ['hug', 'kiss', 'pat', 'cuddle', 'tickle', 'feed', 'slap', 'smug'];
 const NEKOS_LIFE_REDIRECT = {
-  // targeted
+ // targeted
   headpat: 'pat',
   nuzzle: 'cuddle',
   trap: 'cuddle',
-  // self
+ // self
   sip: 'smug',
   shrug: 'smug',
   think: 'smug',
@@ -120,13 +120,13 @@ const NEKOS_LIFE_REDIRECT = {
   awoo: 'smug',
 };
 
-// ── NEW: PurrBot v2 (third source in the chain) ──
+// -- NEW: PurrBot v2 (third source in the chain) --
 const PURRBOT_CATS = [
   'kiss', 'hug', 'pat', 'slap', 'bite', 'cuddle', 'feed', 'lick', 'poke',
   'tickle', 'blush', 'cry', 'dance', 'angry', 'pout', 'smile'
 ];
 const PURRBOT_REDIRECT = {
-  // targeted
+ // targeted
   bonk: 'slap',
   highfive: 'pat',
   nom: 'bite',
@@ -155,7 +155,7 @@ const PURRBOT_REDIRECT = {
   lappillow: 'cuddle',
   peck: 'kiss',
   shake: 'hug',
-  // self
+ // self
   wink: 'smile',
   facepalm: 'pout',
   happy: 'smile',

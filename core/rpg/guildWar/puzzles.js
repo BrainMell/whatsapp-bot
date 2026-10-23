@@ -1,20 +1,20 @@
 // ============================================
-// 🧩 PUZZLE GENERATORS — Guild War Overhaul 2026-10-03
+// PUZZLE GENERATORS - Guild War Overhaul
 // Seeded templates → server-side answers stored in room payload. Cheap to
 // generate, answerable via WhatsApp DMs (short text). Wrong answers cost,
 // never hard-lock. The solution NEVER leaves the server.
-// ⚔️ POOL OVERHAUL (owner 2026-10-06: "expand all the pools DRASTICALLY… the
+// POOL OVERHAUL ("expand all the pools DRASTICALLY… the
 // same each time" complaint): the old banks were tiny (10 runes / 5 shapes /
 // 5 riddles / 6 cipher words) so every chamber felt identical. Now: 52 runes,
-// 30 shapes, 40 riddles, 60 cipher words, wider levers — and symbol puzzles
+// 30 shapes, 40 riddles, 60 cipher words, wider levers - and symbol puzzles
 // carry a `symbols` array so the router can send the copy-paste line the
 // owner asked for (standalone, right after the prompt).
 // ============================================
 
 const mapEngine = require('./mapEngine');
 
-// ── 52-rune pool (Elder Futhark + Anglo-Saxon/Viking additions, all in
-// U+16A0–U+16E1, visually distinct, text-presentation everywhere) ──
+// -- 52-rune pool (Elder Futhark + Anglo-Saxon/Viking additions, all in
+// U+16A0-U+16E1, visually distinct, text-presentation everywhere) --
 const GLYPHS = [
     'ᚠ', 'ᚢ', 'ᚦ', 'ᚨ', 'ᚩ', 'ᚱ', 'ᚲ', 'ᚳ', 'ᚴ', 'ᚷ',
     'ᚸ', 'ᚹ', 'ᚺ', 'ᚻ', 'ᚼ', 'ᚽ', 'ᚾ', 'ᛀ', 'ᛁ', 'ᛃ',
@@ -23,12 +23,12 @@ const GLYPHS = [
     'ᛟ', 'ᛠ', 'ᛡ', 'ᛣ', 'ᛤ', 'ᛥ', 'ᛦ', 'ᛧ', 'ᛨ', 'ᛩ',
     'ᛪ', 'ᛯ',
 ];
-// regex classes built FROM the pools — never hand-synced again
+// regex classes built FROM the pools - never hand-synced again
 const GLYPH_CLASS = GLYPHS.join('');
 const GLYPH_STRIP_RE = new RegExp(`[^${GLYPH_CLASS}]`, 'g');
 
-// ── 30-shape pool for the memory mosaic (geometric/star/bloom, all
-// text-presentation — the old five ◆●▲■✦ made every mosaic feel identical) ──
+// -- 30-shape pool for the memory mosaic (geometric/star/bloom, all
+// text-presentation - the old five ◆●▲■ made every mosaic feel identical) --
 const SHAPES = [
     '◆', '◇', '●', '○', '▲', '△', '▼', '▽', '■', '□',
     '✦', '✧', '✱', '✲', '✳', '✴', '✶', '✷', '✸', '✹',
@@ -37,8 +37,8 @@ const SHAPES = [
 const SHAPE_CLASS = SHAPES.join('');
 const SHAPE_STRIP_RE = new RegExp(`[^${SHAPE_CLASS}]`, 'g');
 
-// 1. rune sequence lock — enter glyphs in the hinted order
-// 🔄 2026-10-06: 52-glyph pool (was 10) + ring-scaled length 4-6 + the raw
+// 1. rune sequence lock - enter glyphs in the hinted order
+// 52-glyph pool (was 10) + ring-scaled length 4-6 + the raw
 // sequence rides `symbols` so the router can send the copy-paste line.
 function genSequence(rng, room) {
     const n = Math.min(6, 4 + Math.floor((room.ring || 0) * 2));
@@ -59,7 +59,7 @@ function genSequence(rng, room) {
 }
 
 // 2. guardian riddle (offline bank; LLM variant optional later)
-// ⚔️ collision guard: answers must never match DM command verbs — the old
+// collision guard: answers must never match DM command verbs - the old
 // first riddle bank had exactly that trap ('map'), and a riddle whose answer
 // normalizes to move/look/flee/accept/talk/dig/take/fight/return/etc. would
 // be forever unreachable. Every answer below is verb-checked.
@@ -107,7 +107,7 @@ const RIDDLES = [
     { q: 'A box without hinges, key, or lid, yet golden treasure inside is hid. What is it?', a: ['egg'] },
     { q: 'What building has the most stories?', a: ['library'] },
     { q: 'I shave several times a day, yet my beard stays the same length. Who am I?', a: ['barber'] },
-    { q: 'What has roots that nobody sees, is taller than trees, up, up it goes — and yet never grows?', a: ['mountain'] },
+    { q: 'What has roots that nobody sees, is taller than trees, up, up it goes - and yet never grows?', a: ['mountain'] },
     { q: 'Voiceless it cries, wingless it flutters, toothless it bites, mouthless it mutters. What is it?', a: ['wind'] },
 ];
 function genRiddle(rng, room) {
@@ -122,8 +122,8 @@ function genRiddle(rng, room) {
     };
 }
 
-// 3. cipher — key found in Discovery rooms (encounters place it there)
-// 🔄 2026-10-06: 60-word bank (was 6 — "CORE" every third vault).
+// 3. cipher - key found in Discovery rooms (encounters place it there)
+// 60-word bank (was 6 - "CORE" every third vault).
 const CIPHER_WORDS = [
     'RUIN', 'CORE', 'ECHO', 'ASH', 'VEIL', 'OMEN', 'RELIC', 'GUARD', 'SILENT', 'DUST',
     'BONE', 'EMBER', 'FROST', 'STORM', 'THORN', 'CROWN', 'BLADE', 'ARROW', 'SHIELD', 'TEMPLE',
@@ -146,8 +146,8 @@ function genCipher(rng, room, map) {
     };
 }
 
-// 4. memory pattern — flash glyphs, reproduce
-// 🔄 2026-10-06: 30-shape pool (was 5) + ring-scaled length 4-6 + `symbols`.
+// 4. memory pattern - flash glyphs, reproduce
+// 30-shape pool (was 5) + ring-scaled length 4-6 + `symbols`.
 function genMemory(rng, room) {
     const n = Math.min(6, 4 + Math.floor((room.ring || 0) * 2));
     const pat = Array.from({ length: n }, () => rng.pick(SHAPES));
@@ -162,9 +162,9 @@ function genMemory(rng, room) {
     };
 }
 
-// 5. levers — pick N of M to hit a target value
-// 🔄 2026-10-06: 5-7 levers (A-G), pull 3-4, values 2-19 (was fixed 5 levers,
-// values 2-9 — one glance and every hall solved the same way).
+// 5. levers - pick N of M to hit a target value
+// 5-7 levers (A-G), pull 3-4, values 2-19 (was fixed 5 levers,
+// values 2-9 - one glance and every hall solved the same way).
 function genLevers(rng, room) {
     const m = 5 + ((room.ring || 0) > 0.35 ? rng.int(0, 2) : 0);
     const n = 3 + (m >= 6 ? rng.int(0, 1) : 0);
@@ -181,12 +181,12 @@ function genLevers(rng, room) {
     };
 }
 
-// 6. map riddle — REMOVED 2026-10-07 (owner verdict after the beta playtest:
+// 6. map riddle - REMOVED (owner verdict after the beta playtest:
 // "the cursed verse is still fucking broken… get rid of this stupid annoying
-// game"). The verse TOLD players to "speak 'open' and name what you seek" —
+// game"). The verse TOLD players to "speak 'open' and name what you seek" -
 // the stored answer was the bare seek word, so the instructed "open relic"
 // graded WRONG, burned attempts, shocked and reset. The revealsRoom meta was
-// never read anywhere either — even a correct solve revealed nothing. The
+// never read anywhere either - even a correct solve revealed nothing. The
 // generator is gone from the pool and the exports; the mapriddle NORMALIZER
 // and its card label stay so seals already seeded in live Mongo rooms remain
 // renderable and solvable (see checkByKind legacy branch).
@@ -196,20 +196,20 @@ function ordinal(n) {
     return words[n - 1] || `${n}th`;
 }
 
-// ── 📋 PER-PUZZLE RULE CARDS (UX pass #5, owner brief 2026-10-07) ──
+// -- PER-PUZZLE RULE CARDS (UX pass #5, owner brief ) --
 // Every puzzle kind answers ONE question the beta kept tripping on: "how do
-// I answer this?" — the rule rides the `examine` reply AND the board card,
+// I answer this?" - the rule rides the `examine` reply AND the board card,
 // so the answer format is never a guess. One line each, DM-friendly.
 const RULE_TEXT = {
-    sequence: '📜 *Rules — Rune Lock:* the inscription names the glyph carved FIRST. Reply with ALL the glyphs in their carved order, spaces optional (e.g. `ᚠ ᚢ ᚦ`).',
-    riddle: '📜 *Rules — Guardian Riddle:* just reply with the answer word or phrase — extra words like "a" or "it is a…" are forgiven.',
-    cipher: '📜 *Rules — Shifted Cipher:* shift each letter BACK through the alphabet by the named number of steps, then reply with the decoded word.',
-    memory: '📜 *Rules — Memory Mosaic:* the shapes flash ONCE. Reply with the exact pattern in the same order (copy the tile line below).',
-    levers: '📜 *Rules — Lever Mechanism:* reply with the LETTERS of the levers whose values add up to the target (e.g. `A C F`), nothing else.',
-    mapriddle: '📜 *Rules — Carved Verse:* speak the seek-word the verse asks for.',
+    sequence: '📜 *Rules - Rune Lock:* the inscription names the glyph carved FIRST. Reply with ALL the glyphs in their carved order, spaces optional (e.g. `ᚠ ᚢ ᚦ`).',
+    riddle: '📜 *Rules - Guardian Riddle:* just reply with the answer word or phrase - extra words like "a" or "it is a…" are forgiven.',
+    cipher: '📜 *Rules - Shifted Cipher:* shift each letter BACK through the alphabet by the named number of steps, then reply with the decoded word.',
+    memory: '📜 *Rules - Memory Mosaic:* the shapes flash ONCE. Reply with the exact pattern in the same order (copy the tile line below).',
+    levers: '📜 *Rules - Lever Mechanism:* reply with the LETTERS of the levers whose values add up to the target (e.g. `A C F`), nothing else.',
+    mapriddle: '📜 *Rules - Carved Verse:* speak the seek-word the verse asks for.',
 };
 
-// ── shared normalizers (must match the generators) ──
+// -- shared normalizers (must match the generators) --
 const NORMALIZERS = {
     sequence: (s) => String(s).replace(GLYPH_STRIP_RE, ''),
     riddle: (s) => String(s).toLowerCase().replace(/[^a-z]/g, ''),
@@ -224,28 +224,28 @@ function normalizeByKind(kind, input) {
 
 // pick a puzzle kind by room ring; returns generator output
 function generate(rng, room, map) {
-    // 🔄 2026-10-07: genMapRiddle (Carved Verse) REMOVED from the pool — deep
-    // rooms now weight cipher heavier instead. Five kinds remain.
+ // genMapRiddle (Carved Verse) REMOVED from the pool - deep
+ // rooms now weight cipher heavier instead. Five kinds remain.
     const pool = [genSequence, genRiddle, genMemory, genLevers];
     if (room.ring > 0.4) pool.push(genCipher);
     return rng.pick(pool)(rng, room, map);
 }
 
-// graded check: returns {solved, attemptsLeft} — kind-based normalization so
+// graded check: returns {solved, attemptsLeft} - kind-based normalization so
 // the server-side stored answer (a string in Mongo) is comparable to input.
-// ⚔️ 2026-10-07 tolerance rules (born from the Carved Verse rage-quit: the
+// tolerance rules (born from the Carved Verse rage-quit: the
 // player answered EXACTLY as instructed and still graded wrong):
-//   • mapriddle (legacy, no longer spawns): the verse says "speak 'open' and
-//     name what you seek" — accept the seek word ANYWHERE in the reply
-//     ("open relic", "relic", "the relic" all pass).
-//   • riddle: natural-language answers — a leading article must never eat an
-//     attempt ("a towel", "it is a towel", "towel!" all pass). Word-boundary
-//     match, so 'age' can't ride inside 'cabbage'.
+// • mapriddle (legacy, no longer spawns): the verse says "speak 'open' and
+// name what you seek" - accept the seek word ANYWHERE in the reply
+// ("open relic", "relic", "the relic" all pass).
+// • riddle: natural-language answers - a leading article must never eat an
+// attempt ("a towel", "it is a towel", "towel!" all pass). Word-boundary
+// match, so 'age' can't ride inside 'cabbage'.
 function checkByKind(kind, puzzle, input, attempt) {
     const norm = normalizeByKind(kind, input);
     const answers = [puzzle.answer, ...(puzzle.altAnswers || [])].map((a) => normalizeByKind(kind, a)).filter(Boolean);
-    // riddle words come from the RAW input — the normalizer strips spaces, so
-    // splitting the normalized string could never recover word boundaries.
+ // riddle words come from the RAW input - the normalizer strips spaces, so
+ // splitting the normalized string could never recover word boundaries.
     const rawWords = String(input || '').toLowerCase().split(/[^a-z]+/).filter(Boolean);
     let correct;
     if (kind === 'mapriddle') {

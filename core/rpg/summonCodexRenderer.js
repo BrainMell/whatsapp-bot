@@ -1,17 +1,16 @@
 // ============================================
-// 🎨 SUMMON CODEX RENDERER - image cards with sprites
+// SUMMON CODEX RENDERER - image cards with sprites
 // ============================================
 // Renders all summon species as an image card grid with sprite previews.
 // Supports pagination (12 species per page).
-//
 // Sprite handling:
-//   1. Try local sprite via summonSprites.getSpritePath (case-insensitive)
-//   2. On miss, auto-fetch from digi-api.com via getOrFetchSprite (async)
-//   3. On fetch failure, fall back to species emoji icon (consistent with roster renderer)
+// 1. Try local sprite via summonSprites.getSpritePath (case-insensitive)
+// 2. On miss, auto-fetch from digi-api.com via getOrFetchSprite (async)
+// 3. On fetch failure, fall back to species emoji icon (consistent with roster renderer)
 
 const path = require('path');
 const fs = require('fs');
-const { emojiFont, fillTextMixed } = require('./emojiFont');   // 2026-10-20: emoji glyphs; color bitmaps (owner 'use colors not hex code')
+const { emojiFont, fillTextMixed } = require('./emojiFont'); // emoji glyphs; color bitmaps (owner 'use colors not hex code')
 
 let _canvas = null;
 function getCanvas() { if (!_canvas) _canvas = require('canvas'); return _canvas; }
@@ -79,7 +78,7 @@ async function renderCodexPage(registry, page = 1, filter = 'all') {
   const { createCanvas, loadImage } = getCanvas();
   const summonSprites = require('./summonSprites');
 
-  // Get all species, optionally filtered
+ // Get all species, optionally filtered
   let allSpecies = registry.getAllSpecies();
   if (filter && filter !== 'all') {
     allSpecies = allSpecies.filter(id => {
@@ -99,14 +98,14 @@ async function renderCodexPage(registry, page = 1, filter = 'all') {
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
 
-  // Background
+ // Background
   const bgGradient = ctx.createLinearGradient(0, 0, 0, H);
   bgGradient.addColorStop(0, '#1a1a2e'); bgGradient.addColorStop(0.5, '#16213e'); bgGradient.addColorStop(1, '#0f3460');
   ctx.fillStyle = bgGradient; ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = 'rgba(255,255,255,0.02)';
   for (let i = 0; i < W; i += 40) for (let j = 0; j < H; j += 40) ctx.fillRect(i, j, 1, 1);
 
-  // Header
+ // Header
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   roundRect(ctx, 20, 15, W - 40, 50, 8); ctx.fill();
   ctx.strokeStyle = 'rgba(255,215,0,0.3)'; ctx.lineWidth = 2;
@@ -121,24 +120,24 @@ async function renderCodexPage(registry, page = 1, filter = 'all') {
   ctx.textAlign = 'right';
   ctx.fillText(`${allSpecies.length} species | Page ${page}/${totalPages}`, W - 35, 40);
 
-  // Species grid
+ // Species grid
   const cols = 4, cardW = 230, cardH = 180, gapX = 12, gapY = 12;
   const gridW = cols * cardW + (cols - 1) * gapX;
   const gridStartX = (W - gridW) / 2;
   const gridStartY = 80;
 
-  // Pre-resolve all sprites in parallel (auto-fetch enabled)
-  // This dramatically improves perceived performance vs sequential awaits per card.
+ // Pre-resolve all sprites in parallel (auto-fetch enabled)
+ // This dramatically improves perceived performance vs sequential awaits per card.
   const spritePaths = await Promise.all(pageSpecies.map(async (speciesId) => {
-    // First check local cache (sync, fast)
+ // First check local cache (sync, fast)
     let p = summonSprites.getSpritePath(speciesId);
     if (p) return p;
-    // Avoid re-attempting fetches for species we've already tried this session
+ // Avoid re-attempting fetches for species we've already tried this session
     if (_fetchAttempted.has(speciesId)) return null;
     _fetchAttempted.add(speciesId);
-    // Auto-fetch from API (best-effort, don't block the whole page if it fails)
-    // Note: don't pass explicit digimonName - let getOrFetchSprite use the
-    // DIGIMON_API_NAME_OVERRIDES map (handles Japanese names + underscore variants).
+ // Auto-fetch from API (best-effort, don't block the whole page if it fails)
+ // Note: don't pass explicit digimonName - let getOrFetchSprite use the
+ // DIGIMON_API_NAME_OVERRIDES map (handles Japanese names + underscore variants).
     try {
       return await summonSprites.getOrFetchSprite(speciesId);
     } catch (e) {
@@ -159,19 +158,19 @@ async function renderCodexPage(registry, page = 1, filter = 'all') {
     const rarityColor = RARITY_COLORS[species.rarity] || RARITY_COLORS.COMMON;
     const rarityTint = RARITY_TINT[species.rarity] || RARITY_TINT.COMMON;
 
-    // Card background
+ // Card background
     ctx.fillStyle = rarityTint;
     roundRect(ctx, x, y, cardW, cardH, 8); ctx.fill();
 
-    // Element-colored left border
+ // Element-colored left border
     ctx.fillStyle = elementColor;
     roundRect(ctx, x, y, 4, cardH, 2); ctx.fill();
 
-    // Card border (rarity-colored)
+ // Card border (rarity-colored)
     ctx.strokeStyle = rarityColor; ctx.lineWidth = 1.5;
     roundRect(ctx, x, y, cardW, cardH, 8); ctx.stroke();
 
-    // Sprite portrait (80×80)
+ // Sprite portrait (80×80)
     const portraitSize = 80;
     const portraitX = x + (cardW - portraitSize) / 2;
     const portraitY = y + 12;
@@ -191,33 +190,33 @@ async function renderCodexPage(registry, page = 1, filter = 'all') {
       } catch (e) {}
     }
     if (!spriteDrawn) {
-      // Fallback: species emoji icon (consistent with roster renderer)
-      // Use 40px font for emoji to fit nicely in 80×80 portrait
+ // Fallback: species emoji icon (consistent with roster renderer)
+ // Use 40px font for emoji to fit nicely in 80×80 portrait
       ctx.fillStyle = elementColor;
       ctx.font = emojiFont(species.icon || '🐉', 40, `"${FONT_REG}", sans-serif`);
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       fillTextMixed(ctx, species.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2);
     }
 
-    // Name
+ // Name
     ctx.textBaseline = 'top'; ctx.textAlign = 'center';
     ctx.fillStyle = '#FFFFFF'; ctx.font = `bold 14px "${FONT_BOLD}", monospace`;
     ctx.fillText(species.name.slice(0, 16), x + cardW / 2, y + 100);
 
-    // Element + rarity
+ // Element + rarity
     ctx.fillStyle = elementColor; ctx.font = `11px "${FONT_REG}", monospace`;
     ctx.fillText(`${species.element.toUpperCase()} | ${species.rarity}`, x + cardW / 2, y + 118);
 
-    // Archetype
+ // Archetype
     ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = `10px "${FONT_REG}", monospace`;
     ctx.fillText(species.archetype, x + cardW / 2, y + 134);
 
-    // Level cap + rune slots
+ // Level cap + rune slots
     const rarityCfg = registry.getRarityConfig(species.rarity);
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
     ctx.fillText(`Lv cap ${rarityCfg.maxLevel} | ${rarityCfg.runeSlots} runes`, x + cardW / 2, y + 148);
 
-    // Rarity letter badge
+ // Rarity letter badge
     if (species.rarity !== 'COMMON') {
       ctx.fillStyle = rarityColor;
       ctx.font = `bold 12px "${FONT_BOLD}", monospace`;
@@ -229,7 +228,7 @@ async function renderCodexPage(registry, page = 1, filter = 'all') {
 
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
 
-  // Footer
+ // Footer
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   roundRect(ctx, 20, H - 35, W - 40, 25, 6); ctx.fill();
   ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = `12px "${FONT_REG}", monospace`;

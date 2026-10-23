@@ -1,5 +1,5 @@
 // ============================================
-// 🏦 GUILD BANK LOANS — Guild War Overhaul 2026-10-03
+// GUILD BANK LOANS - Guild War Overhaul
 // Support-system loans ONLY: player requests → Guild Master approves →
 // repayable to the bank. No interest, no penalties (owner spec).
 // Replaces the old Guild.loans subdoc + interest/penalty jobs (REMOVED).
@@ -36,7 +36,7 @@ async function requestLoan(playerJid, playerName, guildId, amount, opts = {}) {
         }
     }
 
-    // funds reserved check happens at approval; requests are free
+ // funds reserved check happens at approval; requests are free
     await GuildLoan.create({ guildId, playerId: playerJid, playerName, amount, status: 'requested' });
     return {
         ok: true,
@@ -53,14 +53,14 @@ async function approveLoan(guildMasterJid, guildId, targetJid, opts = {}) {
     const req = await GuildLoan.findOne({ guildId, playerId: targetJid, status: 'requested' }).sort({ requestedAt: -1 });
     if (!req) return { ok: false, text: '❌ No pending loan request from that player.' };
 
-    // fresh balance check (refreshGuildMoney re-reads DB for money-critical ops)
+ // fresh balance check (refreshGuildMoney re-reads DB for money-critical ops)
     const fresh = await guilds.refreshGuildMoney(guildId);
     const cap = maxLoan(fresh?.balance ?? 0);
     if (req.amount > cap) {
         return { ok: false, text: `❌ The bank can no longer cover this loan (cap ${cap.toLocaleString()}).` };
     }
 
-    // checked debit: bank → wallet
+ // checked debit: bank → wallet
     const guild = guilds.getGuild(guildId);
     if ((guild?.balance || 0) < req.amount) return { ok: false, text: '❌ Guild balance changed - insufficient funds.' };
     guild.balance -= req.amount;
@@ -144,7 +144,7 @@ async function handleGuildLeave(playerJid, guildId) {
         await loan.save();
         return { action: 'deducted', amount: remaining };
     }
-    // cannot pay: convert to personal debt (existing User.debt system)
+ // cannot pay: convert to personal debt (existing User.debt system)
     try {
         const User = require('../../models/User');
         await User.updateOne({ jid: playerJid }, { $inc: { debt: remaining } });

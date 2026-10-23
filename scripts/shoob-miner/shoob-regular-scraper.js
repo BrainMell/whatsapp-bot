@@ -2,11 +2,11 @@
 'use strict';
 /**
  * ============================================================================
- *  SHOOB REGULAR-CARD SCRAPER — the missing non-event cards, no Chromium
+ *  SHOOB REGULAR-CARD SCRAPER - the missing non-event cards, no Chromium
  * ============================================================================
  *
  *  Owner request (2026-10-08): "let's find all the regular cards, as in the
- *  non-event cards — we missed some". The Feb 2026 regular scrape (34370
+ *  non-event cards - we missed some". The Feb 2026 regular scrape (34370
  *  cards) predates a lot of the catalog; shoob.gg's own sitemap indexes
  *  36149 /cards/info pages. This miner closes that gap.
  *
@@ -20,7 +20,7 @@
  *           description, page, scrapedAt }
  *      imageUrl follows the production convention:
  *         https://api.shoob.gg/site/api/cardr/{mongoId}?size=400
- *      (301s to the cdn resized asset — the same URL shape all 34370
+ *      (301s to the cdn resized asset - the same URL shape all 34370
  *      existing regular cards carry, so the bot's renderer just works)
  *
  *  ID STABILITY (critical, mirrors the event scraper contract):
@@ -54,7 +54,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-// ── CLI ──────────────────────────────────────────────────────────────────────
+// -- CLI ----------------------------------------------------------------------
 const argv = process.argv.slice(2);
 function argOf(name, def) {
   const i = argv.indexOf(name);
@@ -85,7 +85,7 @@ const REQUEST_TIMEOUT_MS = 25000;
 const RETRIES = 5;
 let THROTTLE = 1;
 
-// ── tiny helpers (same contract as the event scraper) ───────────────────────
+// -- tiny helpers (same contract as the event scraper) -----------------------
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const jitter = (ms) => ms + Math.floor(Math.random() * Math.min(ms, 120));
 
@@ -116,7 +116,7 @@ async function fetchText(url) {
       if (res.status === 429 || res.status === 503) {
         const ra = parseInt(res.headers.get('retry-after') || '0', 10);
         const wait = ra > 0 ? ra * 1000 : 1500 * attempt;
-        console.log(`  [rate] ${res.status} on ${url} — waiting ${wait}ms`);
+        console.log(`  [rate] ${res.status} on ${url} - waiting ${wait}ms`);
         await sleep(wait);
         continue;
       }
@@ -129,7 +129,7 @@ async function fetchText(url) {
       THROTTLE = Math.min(THROTTLE * 1.6, 12);
       if (attempt < RETRIES) {
         const wait = 800 * attempt * attempt;
-        console.log(`  [retry] ${url} attempt ${attempt} failed (${e.message}) — ${wait}ms (throttle x${THROTTLE.toFixed(1)})`);
+        console.log(`  [retry] ${url} attempt ${attempt} failed (${e.message}) - ${wait}ms (throttle x${THROTTLE.toFixed(1)})`);
         await sleep(wait);
       }
     }
@@ -138,8 +138,8 @@ async function fetchText(url) {
 }
 
 const MEDIA_HEADERS = {
-  // api.shoob.gg/site/api/cardr 401s crawler UAs (browser UA + referer = 200);
-  // cdn.shoob.gg is UA-agnostic. Mimic the bot's own display fetch.
+ // api.shoob.gg/site/api/cardr 401s crawler UAs (browser UA + referer = 200);
+ // cdn.shoob.gg is UA-agnostic. Mimic the bot's own display fetch.
   'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
   'Referer': 'https://shoob.gg/',
   'Accept': 'image/*,video/*,*/*',
@@ -182,7 +182,7 @@ const safePart = (s) => String(s || 'x').toLowerCase()
 const MEDIA_CT_TO_EXT = { 'image/gif': 'gif', 'video/webm': 'webm', 'image/webp': 'webp',
   'image/jpeg': 'jpg', 'image/png': 'png', 'video/mp4': 'mp4', 'image/apng': 'apng' };
 
-// ── parsers ─────────────────────────────────────────────────────────────────
+// -- parsers -----------------------------------------------------------------
 /** Parse a /cards/info/{mongoId} SSR page. og:description is
  *  "Card Name from Real Series\nCreators:\n- Card Maker: someone". */
 function parseRegularDetail(html) {
@@ -200,7 +200,7 @@ function parseRegularDetail(html) {
       cardName = fromM[1].trim() || null;
       realSeries = fromM[2].split('\n')[0].trim() || null;
     }
-    // capture to end of line (maker names may contain dashes)
+ // capture to end of line (maker names may contain dashes)
     const maker = desc.match(/Card Maker:\s*([^\n]+)/);
     if (maker) creator = maker[1].replace(/\s*$/, '').trim() || null;
   }
@@ -215,7 +215,7 @@ function parseRegularDetail(html) {
   return { cardName, realSeries, creator, tier, ogImage, desc };
 }
 
-// ── DB reference: known regular mongoIds + per-tier max seq ─────────────────
+// -- DB reference: known regular mongoIds + per-tier max seq -----------------
 function loadDbReference(file) {
   if (!file || !fs.existsSync(file)) throw new Error(`--db reference required (${file || 'none'})`);
   console.log(`[db] loading reference: ${file}`);
@@ -239,7 +239,7 @@ function loadDbReference(file) {
   return { byMongoId, tierSeqMax, total };
 }
 
-// ── concurrent worker pool ───────────────────────────────────────────────────
+// -- concurrent worker pool ---------------------------------------------------
 async function runPool(items, worker, concurrency, delay) {
   const results = new Array(items.length);
   let cursor = 0;
@@ -256,7 +256,7 @@ async function runPool(items, worker, concurrency, delay) {
   return results;
 }
 
-// ── media mirror (idempotent, id-keyed, tier subdirs) ───────────────────────
+// -- media mirror (idempotent, id-keyed, tier subdirs) -----------------------
 async function mirrorMedia(cards) {
   const dir = OPTS.mirrorMedia;
   fs.mkdirSync(dir, { recursive: true });
@@ -295,7 +295,7 @@ async function mirrorMedia(cards) {
       } catch {}
       try {
         if (freeDiskMb(dir) < OPTS.diskFloorMb) {
-          console.warn(`edia] disk floor ${OPTS.diskFloorMb}MB reached — stopping mirror (rest of run unaffected)`);
+          console.warn(`edia] disk floor ${OPTS.diskFloorMb}MB reached - stopping mirror (rest of run unaffected)`);
           diskStop = true; return;
         }
         const r = await fetchBinary(c.imageUrl);
@@ -323,18 +323,18 @@ async function mirrorMedia(cards) {
   await Promise.all(Array.from({ length: Math.max(1, OPTS.mediaConcurrency) }, lane));
   saveManifest();
   const stats = { files, bytes, failures, skipped, totalTracked: manifest.totalFiles, totalBytes: manifest.totalBytes, dir };
-  console.log(`edia] done in ${((Date.now() - t0) / 1000).toFixed(0)}s — ${files} downloaded, ${skipped} cached, ${failures} failed, archive ${manifest.totalFiles} files / ${(manifest.totalBytes / 1048576).toFixed(0)}MB`);
+  console.log(`edia] done in ${((Date.now() - t0) / 1000).toFixed(0)}s - ${files} downloaded, ${skipped} cached, ${failures} failed, archive ${manifest.totalFiles} files / ${(manifest.totalBytes / 1048576).toFixed(0)}MB`);
   return stats;
 }
 
-// ── main ─────────────────────────────────────────────────────────────────────
+// -- main ---------------------------------------------------------------------
 (async function main() {
   const t0 = Date.now();
   console.log('=== shoob-regular-scraper (no Chromium, zero deps) ===');
   console.log(`ua: ${OPTS.ua}`);
   fs.mkdirSync(path.dirname(OPTS.out), { recursive: true });
 
-  // media-only fast path
+ // media-only fast path
   if (OPTS.mediaOnly) {
     if (!fs.existsSync(OPTS.out)) { console.error(`--media-only needs an existing --out (${OPTS.out})`); process.exit(1); }
     const doc = JSON.parse(fs.readFileSync(OPTS.out, 'utf8'));
@@ -345,10 +345,10 @@ async function mirrorMedia(cards) {
     return;
   }
 
-  // 0. reference DB
+ // 0. reference DB
   const ref = loadDbReference(OPTS.db);
 
-  // 1. discovery: sitemap (whole regular catalog) or --ids-file
+ // 1. discovery: sitemap (whole regular catalog) or --ids-file
   let missing;
   if (OPTS.idsFile && fs.existsSync(OPTS.idsFile)) {
     const parsed = JSON.parse(fs.readFileSync(OPTS.idsFile, 'utf8'));
@@ -363,13 +363,13 @@ async function mirrorMedia(cards) {
     const siteSet = new Set(siteIds);
     console.log(`[sitemap] ${siteSet.size} unique card pages`);
     missing = siteIds.filter(id => !ref.byMongoId.has(id));
-    // site cards that vanished (report only — never delete production rows)
+ // site cards that vanished (report only - never delete production rows)
     const vanished = [...ref.byMongoId.keys()].filter(id => !siteSet.has(id));
     console.log(`[diff] on site, missing from DB: ${missing.length} · in DB, gone from site: ${vanished.length} (kept untouched)`);
     var vanishedCount = vanished.length;
   }
 
-  // 2. detail pass with sidecar cache (crash-safe, saved per chunk)
+ // 2. detail pass with sidecar cache (crash-safe, saved per chunk)
   const cachePath = path.join(path.dirname(OPTS.out), '.regdetail_cache.json');
   const detailById = new Map();
   if (OPTS.resume && fs.existsSync(cachePath)) {
@@ -412,12 +412,12 @@ async function mirrorMedia(cards) {
     saveCache();
   }
 
-  // 3. compose exact production-schema records
+ // 3. compose exact production-schema records
   const nowIso = new Date().toISOString();
   const records = [];
   for (const mongoId of missing) {
     const d = detailById.get(mongoId);
-    if (!d || !d.cardName) continue; // failed/gone — reported, retried next cycle
+    if (!d || !d.cardName) continue; // failed/gone - reported, retried next cycle
     const series = d.realSeries || 'Unknown';
     const tier = d.tier || '1';
     records.push({
@@ -435,7 +435,7 @@ async function mirrorMedia(cards) {
     });
   }
 
-  // 4. id assignment — deterministic append per tier
+ // 4. id assignment - deterministic append per tier
   const nextSeq = { ...ref.tierSeqMax };
   records.sort((a, b) =>
     (TIER_ORDER[a.tier] || 9) - (TIER_ORDER[b.tier] || 9) ||
@@ -449,7 +449,7 @@ async function mirrorMedia(cards) {
   for (const r of records) perTier[r.tier] = (perTier[r.tier] || 0) + 1;
   console.log(`[ids] assigned ${records.length} new regular ids: ${JSON.stringify(perTier)} (ceilings ${JSON.stringify(nextSeq)})`);
 
-  // 5. emit (EXACT production card schema on every record)
+ // 5. emit (EXACT production card schema on every record)
   const outCards = records.map((r) => ({
     id: r.id,
     cardName: r.cardName,
@@ -477,9 +477,9 @@ async function mirrorMedia(cards) {
     },
   };
   fs.writeFileSync(OPTS.out, JSON.stringify(outDoc, null, 2));
-  console.log(`\n[write] ${OPTS.out} — ${outCards.length} new regular cards`);
+  console.log(`\n[write] ${OPTS.out} - ${outCards.length} new regular cards`);
 
-  // 6. sidecar report
+ // 6. sidecar report
   const reportPath = OPTS.out.replace(/\.json$/, '') + '.report.json';
   fs.writeFileSync(reportPath, JSON.stringify({
     generatedAt: nowIso,
@@ -495,7 +495,7 @@ async function mirrorMedia(cards) {
   }, null, 2));
   console.log(`[report] ${reportPath}`);
 
-  // 7. media mirror AFTER outputs are safe
+ // 7. media mirror AFTER outputs are safe
   let mediaStats = null;
   if (OPTS.mirrorMedia) {
     try { mediaStats = await mirrorMedia(outCards); }
@@ -503,5 +503,5 @@ async function mirrorMedia(cards) {
   }
 
   const secs = ((Date.now() - t0) / 1000).toFixed(1);
-  console.log(`\nDONE in ${secs}s — ${outCards.length} new regular cards${mediaStats ? `, media ${mediaStats.files} new / ${mediaStats.skipped} cached / ${mediaStats.failures} failed` : ''}, zero Chromium.`);
+  console.log(`\nDONE in ${secs}s - ${outCards.length} new regular cards${mediaStats ? `, media ${mediaStats.files} new / ${mediaStats.skipped} cached / ${mediaStats.failures} failed` : ''}, zero Chromium.`);
 })().catch((e) => { console.error('FATAL:', e); process.exit(1); });

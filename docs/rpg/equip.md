@@ -200,7 +200,6 @@ async function equipItem(userId, itemId, slot) {
         return { success: false, message: `❌ Level too low! Need Level ${reqLevel} to use this.` };
     }
     
-    // verify category compatibility
     if (itemInfo.type !== 'EQUIPMENT') {
         return { success: false, message: `❌ Not equipment!` };
     }

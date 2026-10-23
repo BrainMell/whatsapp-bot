@@ -14,7 +14,7 @@ const mockSock = {
 };
 
 async function main() {
-  // explicit DB connection (the bot's db.js connects at boot; standalone script must too)
+ // explicit DB connection (the bot's db.js connects at boot; standalone script must too)
   const mongoose = require('mongoose');
   const env = require('fs').readFileSync(require('path').join(__dirname, '..', '.env'), 'utf8');
   const uri = (env.match(/MONGO_URI=(.+)/) || [])[1]?.trim();
@@ -22,7 +22,7 @@ async function main() {
   await mongoose.connect(uri, { serverSelectionTimeoutMS: 20000 });
   console.log('[qa] mongoose connected');
 
-  // ── 1) SHOP SEARCH / VIEWS (pure rendering - reads static catalogs) ──
+ // -- 1) SHOP SEARCH / VIEWS (pure rendering - reads static catalogs) --
   const shopCommands = require('../core/commands/shopCommands');
   const chatId = 'qa-test-chat@s.whatsapp.net';
 
@@ -46,7 +46,7 @@ async function main() {
   await shopCommands.displayShop(mockSock, chatId, 'zzzznothing');
   console.log(sent.at(-1));
 
-  // ── 2) CLASS CREATION pipeline (register → visible → cleanup) ──
+ // -- 2) CLASS CREATION pipeline (register → visible → cleanup) --
   const System = require('../core/models/System');
   const TEST_ID = 'TEST_CLASS_QA';
   console.log('\n═══ registerCustomClass ═══');
@@ -67,11 +67,11 @@ async function main() {
   const doc = await System.findOne({ key: 'custom_classes_v1' }).lean();
   console.log('System persistence doc:', doc && doc.value && doc.value[TEST_ID] ? 'OK (saved to DB)' : 'MISSING!');
 
-  // modclass-style resolution through the public API
+ // modclass-style resolution through the public API
   const modclassList = Object.keys(classSystem.getAllClasses());
   console.log('modclass would list', modclassList.length, 'classes incl. custom:', modclassList.includes(TEST_ID));
 
-  // ── 3) CLEANUP (leave prod DB exactly as it was) ──
+ // -- 3) CLEANUP (leave prod DB exactly as it was) --
   await System.updateOne({ key: 'custom_classes_v1' }, { $unset: { [`value.${TEST_ID}`]: '' } });
   await System.updateOne({ key: 'custom_skilltrees_v1' }, { $unset: { [`value.${TEST_ID}`]: '' } });
   const afterDoc = await System.findOne({ key: 'custom_classes_v1' }).lean();

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// gw_band_audit_probe.js — READ-ONLY prod probe (owner 2026-10-06 20:01Z:
-// "first monsters had 4x my HP and could 2-shot me — is the band ladder live?")
+// gw_band_audit_probe.js - READ-ONLY prod probe (20:01Z:
+// "first monsters had 4x my HP and could 2-shot me - is the band ladder live?")
 // Dumps: recent events (bands field, players, hostGroupId) + per-player REAL
 // progression levels + seeded spawn levels in combat rooms. NO WRITES.
 const fs = require('fs');
@@ -44,7 +44,7 @@ async function main() {
       const real = await findUserLevel(db, p.jid);
       console.log(`  player ${p.name || '?'} jid=…${String(p.jid || '').slice(-8)} room=${p.roomId || '?'} status=${p.status || '?'} PROG_LVL=${real.level}${real.nick ? ' (' + String(real.nick).slice(0, 14) + ')' : ''}`);
     }
-    // seeded spawns in combat-ish rooms
+ // seeded spawns in combat-ish rooms
     const rooms = ev.rooms || [];
     const combatRooms = rooms.filter((r) => r && ['combat', 'secret', 'core', 'coop'].includes(r.type));
     for (const r of combatRooms.slice(0, 10)) {
@@ -55,7 +55,7 @@ async function main() {
     }
   }
 
-  // owner's solo-enter check: any event created in the last 24h?
+ // owner's solo-enter check: any event created in the last 24h?
   const dayAgo = Date.now() - 24 * 3600 * 1000;
   const recent = evs.filter((e) => (e.startedAt || 0) > dayAgo || (e.registrationEndsAt || 0) > dayAgo);
   console.log(`\n== events with activity in last 24h: ${recent.length} ==`);

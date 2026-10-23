@@ -1,10 +1,9 @@
 const mongoose = require('mongoose');
 
-// 💡 Phase 6: Bounty - Zeni bounty placed on a player. Claimed via PvP.
+// Phase 6: Bounty - Zeni bounty placed on a player. Claimed via PvP.
 // Max 3 active bounties per target. 7-day expiry with Zeni refund.
 // Targets with bounties cannot use the bank (forces wallet carry = risk).
-//
-// 💡 AUDIT FIX 2026-08-01: added `defendersWon` counter + `defended` status.
+// AUDIT FIX added `defendersWon` counter + `defended` status.
 // If the target defeats 3 challengers (hunters who try to claim but lose),
 // the bounty is auto-terminated as a reward for successful defense.
 // Placer gets NO refund in this case - they placed the bounty, the target
@@ -17,14 +16,14 @@ const BountySchema = new mongoose.Schema({
   placedAt: { type: Date, default: Date.now },
   expiresAt: { type: Date, required: true }, // 7 days from placedAt
   status: { type: String, enum: ['active', 'claimed', 'expired', 'cancelled', 'defended'], default: 'active' },
-  // Claim info (when status = 'claimed')
+ // Claim info (when status = 'claimed')
   claimedByJid: { type: String, default: null },
   claimedAt: { type: Date, default: null },
-  // Penalty info (when a hunter lost the duel - 10% of bounty paid as penalty)
+ // Penalty info (when a hunter lost the duel - 10% of bounty paid as penalty)
   penaltyPaid: { type: Number, default: 0 },
-  // 💡 AUDIT FIX 2026-08-01: defender-win counter for bounty termination.
-  // Incremented in failedHuntPenalty() when a hunter loses. At 3, bounty
-  // status flips to 'defended' (auto-terminated, no refund to placer).
+ // AUDIT FIX defender-win counter for bounty termination.
+ // Incremented in failedHuntPenalty() when a hunter loses. At 3, bounty
+ // status flips to 'defended' (auto-terminated, no refund to placer).
   defendersWon: { type: Number, default: 0 },
   defendedAt: { type: Date, default: null },
 }, { timestamps: true });

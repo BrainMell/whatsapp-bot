@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-/* build_quiz_dataset_topup.js — pass 2: fills the gaps pass 1 left.
+/* build_quiz_dataset_topup.js - pass 2: fills the gaps pass 1 left.
  *  A) OpenTDB with FIXED pagination (token reset only on exhaustion) -> thousands more
  *  B) the-trivia-api re-pulls (deduped vs existing file)
  *  C) Films via leaner Wikidata SPARQL (director/year facts + titles)
  *  D) Movie posters via enwiki pageimages (pilicense=any)
- *  E) Game covers re-pull (enwiki pageimages) — HEAD-verified (cheap)
- *  F) Comic characters P18 re-pull — verified via Commons/enwiki imageinfo API (no renders)
+ *  E) Game covers re-pull (enwiki pageimages) - HEAD-verified (cheap)
+ *  F) Comic characters P18 re-pull - verified via Commons/enwiki imageinfo API (no renders)
  *  Merges into the EXISTING data/quizDataset.json (dedupe by stem/url). */
 'use strict';
 const fs = require("fs");
@@ -72,7 +72,7 @@ async function jget(url, opts = {}, tries = 2) {
   }
 }
 
-// A) OpenTDB — proper pagination
+// A) OpenTDB - proper pagination
 async function topOpenTDB() {
   const CATS = { 15: "games", 11: "movies", 14: "series", 29: "comics", 31: "series", 32: "series" };
   const TOPIC = { 15: "Video Games", 11: "Movies", 14: "TV Series", 29: "Comics", 31: "Anime & Manga", 32: "Cartoons" };
@@ -103,7 +103,7 @@ async function topOpenTDB() {
   console.log(`[opentdb-topup] +${n}`);
 }
 
-// B) the-trivia-api — more pulls (random sets, dedupe via seenStems)
+// B) the-trivia-api - more pulls (random sets, dedupe via seenStems)
 async function topTrivia() {
   let n = 0;
   for (const c of ["video_games", "film_and_tv"]) {
@@ -125,7 +125,7 @@ async function topTrivia() {
   console.log(`[trivia-topup] +${n}`);
 }
 
-// C) Films — leaner SPARQL (director/year + titles for posters)
+// C) Films - leaner SPARQL (director/year + titles for posters)
 async function wdQuery(sparql) {
   const r = await axios.post("https://query.wikidata.org/sparql?format=json", new URLSearchParams({ query: sparql }).toString(),
     { timeout: 90000, headers: { "User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded", Accept: "application/sparql-results+json" }, maxContentLength: 80 * 1024 * 1024 });
@@ -192,7 +192,7 @@ async function headOk(url) {
   } catch { return false; }
 }
 
-// D) movie posters + E) game covers — HEAD-verified this time (cheap, no render storm)
+// D) movie posters + E) game covers - HEAD-verified this time (cheap, no render storm)
 async function topPosters() {
   const steam = [];
   for (let page = 0; page < 3; page++) {
@@ -234,7 +234,7 @@ async function topPosters() {
 
 // F) comic characters re-pull with API-imageinfo verification (no renders)
 async function fileOk(fileTitle) {
-  // try commons then enwiki via imageinfo API (batched inside caller; single fallback here)
+ // try commons then enwiki via imageinfo API (batched inside caller; single fallback here)
   for (const host of ["https://commons.wikimedia.org", "https://en.wikipedia.org"]) {
     const params = new URLSearchParams({ action: "query", format: "json", prop: "imageinfo", iiprop: "url|mime|size", iiurlwidth: "640", titles: "File:" + fileTitle, redirects: "1" });
     try {
@@ -259,7 +259,7 @@ async function topComics() {
   const names = entries.map((e) => e.name);
   let n = 0, i = 0;
   for (const e of entries) {
-    // img looks like http://commons.wikimedia.org/wiki/Special:FilePath/<file>
+ // img looks like http://commons.wikimedia.org/wiki/Special:FilePath/<file>
     const m0 = /Special:FilePath\/(.+)$/.exec(e.img);
     if (!m0) continue;
     const fileTitle = decodeURIComponent(m0[1]);
@@ -287,7 +287,7 @@ async function topComics() {
   DS.version = 2;
   const json = JSON.stringify(DS);
   fs.writeFileSync(OUT, json);
-  let rep = `quizDataset v2 — ${DS.generatedAt}\n${Math.round(json.length / 1024)}KB\n`;
+  let rep = `quizDataset v2 - ${DS.generatedAt}\n${Math.round(json.length / 1024)}KB\n`;
   for (const [c, n] of Object.entries(DS.counts)) rep += `${c}: text=${n.text} images=${n.images}\n`;
   fs.writeFileSync(REPORT, rep);
   console.log(rep);

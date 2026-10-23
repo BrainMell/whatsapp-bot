@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * QA: base ⇄ command fusion (owner spec 2026-10-21) — PART 1: source pins.
+ * QA: base ⇄ command fusion (owner spec 2026-10-21) - PART 1: source pins.
  * PART 2 (render smoke): scripts/qa_fusion_render.js
  * Run: node scripts/qa_base_fusion.js
  */
@@ -32,7 +32,7 @@ check('HINTS uses real commands (.j fish / .j hunt)', /pond: \(P\) => \[\`\$\{P\
 
 console.log('\n--- §4 fish/hunt actions still exist (moved, not removed) ---');
 check('runActivity exported from baseBuilder', /module.exports = \{[\s\S]*runActivity[\s\S]*\};/.test(bb));
-check('cmdActivity still runs the loot roll (cooldowns map — Task 19)', /await act\.run\(kind, ctx\.senderJid, tier, rec\.cooldowns \|\| \{\}\)/.test(bb));
+check('cmdActivity still runs the loot roll (cooldowns map - Task 19)', /await act\.run\(kind, ctx\.senderJid, tier, rec\.cooldowns \|\| \{\}\)/.test(bb));
 check('engine routes fish/hunt/fishing/cast/hunting', /primaryCmd === "fish" \|\| primaryCmd === "fishing" \|\| primaryCmd === "cast" \|\| primaryCmd === "hunt" \|\| primaryCmd === "hunting"/.test(en));
 check("engine RPG_CMDS includes 'fish','hunt'", /'fish', 'fishing', 'cast', 'hunt', 'hunting'/.test(en));
 check('engine dispatch calls bb.runActivity', /bb\.runActivity\(actCtx/.test(en));
@@ -82,7 +82,7 @@ check('new Med Bay starts its potion clock', /type === 'medbay'\) \{ try \{ awai
 check('potionStock math: 12h/cap2', potionStockMath());
 
 function potionStockMath() {
-    // mirror the pure function: 1 potion per 12h, capped at 2
+ // mirror the pure function: 1 potion per 12h, capped at 2
     const plan = { intervalMs: 12 * 3600000, cap: 2 };
     const qty = (last, now) => Math.min(plan.cap, Math.floor((now - last) / plan.intervalMs));
     const H = 3600000;
@@ -114,7 +114,7 @@ check('baseBuilder.js in CODE_VER hash inputs', /'structureScenes\.js', 'baseBui
 check('no new DB collection introduced', !/mongoose\.model\('(?!CardBackup|Base|UserCard|CardDeck|CardMarket|CardSpawn|CardStat|System|User|GuildWarEvent|RaidBoss)[A-Za-z]+'/g.test(bb) && !/new mongoose\.Schema/.test(bb));
 
 console.log('\n--- gameplay rules intact ---');
-// Task 19/20 (owner 2026-10-21): NO timers at all — hunt = 25/day count, fish = open.
+// /20: NO timers at all - hunt = 25/day count, fish = open.
 check('fish AND hunt have no cooldown timers; hunt keeps the 25/day limit', !/cooldownMs/.test(R('core/rpg/baseActivities.js')) && /dailyLimit: 25/.test(R('core/rpg/baseActivities.js')));
 check('claim window untouched in cardSystem', /const CLAIM_WINDOW_MS = 30 \* 60 \* 1000;/.test(R('core/rpg/cardSystem.js')));
 check('healToFull 12h cooldown flow untouched', /healToFull\(senderJid, maxHP\)/.test(en));

@@ -1,4 +1,4 @@
-// class_skill_audit2.js — v2: normalize BOTH skill schemas through
+// class_skill_audit2.js - v2: normalize BOTH skill schemas through
 // getSkillEffect (the function combat actually uses), cap aoe targets at 4
 // (99 = "all enemies" semantics), and audit every live class.
 const st = require('/home/ubuntu/whatsapp-bot/core/rpg/skillTree.js');

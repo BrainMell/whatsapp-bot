@@ -25,7 +25,7 @@ process.chdir('/home/z/my-project/whatsapp-bot');
   const soloPlan = await scene.planCombatLayout(soloState, {});
   console.log('SOLO side plan: allies=%d (expect 0)', soloPlan.allies.length);
 
-  // boss path
+ // boss path
   const bossState = { ...coopState, sessionKey: 'QA|coopboss', abyssFloor: 15,
     enemies: [{ ...enemies[0], isBoss: true, name: 'Abyssal Detonator' }] };
   const bossPlan = await scene.planCombatLayout(bossState, {});

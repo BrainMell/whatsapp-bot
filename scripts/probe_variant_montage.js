@@ -10,16 +10,16 @@ const OUT = '/home/z/my-project/download/gw_room_designs_montage.png';
 
 const DESIGN_TITLES = {
     intact: 'INTACT (base plate)',
-    mossy: 'MOSSY — moss baked into the bricks',
-    sandy: 'SANDY — sandstone ground',
-    flooded: 'FLOODED — murky shallow water',
-    cracked: 'CRACKED — fractured floor',
-    skulls: 'SKULLS — bone chambers',
-    overgrown: 'OVERGROWN — vines + ivy',
-    dim: 'DIM — torch-lit dark grade',
-    skill: 'SKILL — training rune circle',
-    crystal: 'CRYSTAL — luminous shards',
-    emberfall: 'EMBERFALL — ember mortar + ash',
+    mossy: 'MOSSY - moss baked into the bricks',
+    sandy: 'SANDY - sandstone ground',
+    flooded: 'FLOODED - murky shallow water',
+    cracked: 'CRACKED - fractured floor',
+    skulls: 'SKULLS - bone chambers',
+    overgrown: 'OVERGROWN - vines + ivy',
+    dim: 'DIM - torch-lit dark grade',
+    skill: 'SKILL - training rune circle',
+    crystal: 'CRYSTAL - luminous shards',
+    emberfall: 'EMBERFALL - ember mortar + ash',
 };
 const ORDER = ['intact', 'mossy', 'sandy', 'flooded', 'cracked', 'skulls', 'overgrown', 'dim', 'skill', 'crystal', 'emberfall'];
 
@@ -38,7 +38,7 @@ const ORDER = ['intact', 'mossy', 'sandy', 'flooded', 'cracked', 'skulls', 'over
         const cx = PAD + (i % COLS) * (CELL_W + PAD);
         const cy = PAD + Math.floor(i / COLS) * (CELL_H + PAD);
         ctx.drawImage(img, cx, cy, CELL_W, CELL_H - 42);
-        // label strip
+ // label strip
         ctx.fillStyle = '#171320';
         ctx.fillRect(cx, cy + CELL_H - 42, CELL_W, 42);
         ctx.strokeStyle = 'rgba(255,210,74,0.25)';

@@ -1,10 +1,10 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-// GEN — outdoor base terrain tiles + props (Section 6/10: base hub assets)
+// ===========================================================================
+// GEN - outdoor base terrain tiles + props (Section 6/10: base hub assets)
 // 64x32 iso diamonds 1:1 (same floor scale as the room renderer), CC0-style
 // hand-pixelled look, dark outline, light from upper-left.
 // Run: node scripts/gen_assets_base_terrain.js
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 const fs = require('fs');
 const path = require('path');
 const { createCanvas } = require('canvas');
@@ -44,7 +44,7 @@ function finish(s, file) {
     octx.drawImage(s.cv, 1, 1);
     fs.writeFileSync(path.join(OUT, file), out.toBuffer('image/png'));
 }
-// full-tile diamond (64x32) centered at (cx,cy) — tiles are NOT auto-outlined
+// full-tile diamond (64x32) centered at (cx,cy) - tiles are NOT auto-outlined
 // (adjacent tiles must tile seamlessly); edge shading is baked instead.
 function tileDiamond(ctx, cx, cy, fill) {
     ctx.fillStyle = fill;
@@ -53,12 +53,12 @@ function tileDiamond(ctx, cx, cy, fill) {
     ctx.closePath(); ctx.fill();
 }
 
-// ── grass tiles (3 variants + flower) ──
+// -- grass tiles (3 variants + flower) --
 function grassTile(file, seedFn, flowers) {
     const s = sprite(64, 32);
     tileDiamond(s.ctx, 32, 16, P.grass[0]);
     const rnd = (i) => { const x = Math.sin(i * 127.1 + file.length * 13.7) * 43758.5453; return x - Math.floor(x); };
-    // mottling + tufts clipped to the diamond
+ // mottling + tufts clipped to the diamond
     s.ctx.save();
     s.ctx.beginPath();
     s.ctx.moveTo(32, 0); s.ctx.lineTo(64, 16); s.ctx.lineTo(32, 32); s.ctx.lineTo(0, 16);
@@ -79,7 +79,7 @@ function grassTile(file, seedFn, flowers) {
         }
     }
     s.ctx.restore();
-    // subtle north-lit + south-shaded edges
+ // subtle north-lit + south-shaded edges
     s.px(32, 0, 0.01, 0.01, P.grass[2]);
     fs.writeFileSync(path.join(OUT, file), s.cv.toBuffer('image/png'));
 }
@@ -88,7 +88,7 @@ grassTile('base_grass_b.png');
 grassTile('base_grass_c.png');
 grassTile('base_grass_flowers.png', null, true);
 
-// ── dirt path tile ──
+// -- dirt path tile --
 {
     const s = sprite(64, 32);
     tileDiamond(s.ctx, 32, 16, P.path[0]);
@@ -105,7 +105,7 @@ grassTile('base_grass_flowers.png', null, true);
     fs.writeFileSync(path.join(OUT, 'base_path.png'), s.cv.toBuffer('image/png'));
 }
 
-// ── water tiles (2 frames: shimmer) ──
+// -- water tiles (2 frames: shimmer) --
 for (let f = 0; f < 2; f++) {
     const s = sprite(64, 32);
     tileDiamond(s.ctx, 32, 16, P.water[0]);
@@ -113,10 +113,10 @@ for (let f = 0; f < 2; f++) {
     s.ctx.beginPath();
     s.ctx.moveTo(32, 0); s.ctx.lineTo(64, 16); s.ctx.lineTo(32, 32); s.ctx.lineTo(0, 16);
     s.ctx.closePath(); s.ctx.clip();
-    // depth bands
+ // depth bands
     s.px(10, 8, 44, 3, P.water[1]);
     s.px(16, 20, 32, 3, P.water[2]);
-    // shimmer lines (offset per frame)
+ // shimmer lines (offset per frame)
     for (let i = 0; i < 6; i++) {
         const x = (8 + i * 9 + f * 5) % 56, y = 5 + ((i * 7 + f * 3) % 22);
         s.px(x, y, 5 + (i % 3) * 2, 1, i % 2 ? P.waterL : P.water[1]);
@@ -126,7 +126,7 @@ for (let f = 0; f < 2; f++) {
     fs.writeFileSync(path.join(OUT, `base_water_${f}.png`), s.cv.toBuffer('image/png'));
 }
 
-// ── rocky tile (mines ground) ──
+// -- rocky tile (mines ground) --
 {
     const s = sprite(64, 32);
     tileDiamond(s.ctx, 32, 16, P.rock[1]);
@@ -142,26 +142,26 @@ for (let f = 0; f < 2; f++) {
     fs.writeFileSync(path.join(OUT, 'base_rock.png'), s.cv.toBuffer('image/png'));
 }
 
-// ── oak tree prop (2 tiles tall) ──
+// -- oak tree prop (2 tiles tall) --
 {
     const s = sprite(44, 62);
     const cx = 22, base = 58;
     s.px(cx - 3, base - 26, 6, 26, P.trunk);
     s.px(cx - 3, base - 26, 2, 26, '#7d5030');
     s.px(cx - 10, base - 4, 8, 3, P.trunk); s.px(cx + 3, base - 6, 8, 3, P.trunk);
-    // canopy blobs
+ // canopy blobs
     for (const [ox, oy, r, col] of [[0, -38, 15, P.leaf], [-9, -32, 10, P.leaf], [9, -33, 10, P.leaf], [0, -30, 12, P.leaf], [-4, -40, 9, P.leafL], [6, -40, 7, P.leafL]]) {
         s.ctx.fillStyle = col;
         s.ctx.beginPath(); s.ctx.arc(cx + ox, base + oy, r, 0, Math.PI * 2); s.ctx.fill();
     }
-    // dithered highlights
+ // dithered highlights
     for (let i = 0; i < 10; i++) {
         const a = i * 0.63;
         s.px(cx + Math.cos(a) * 9 - 2, base - 42 + Math.sin(a) * 5, 2, 1, P.leafL);
     }
     finish(s, 'base_tree_oak.png');
 }
-// ── pine ──
+// -- pine --
 {
     const s = sprite(36, 66);
     const cx = 18, base = 62;
@@ -179,7 +179,7 @@ for (let f = 0; f < 2; f++) {
     }
     finish(s, 'base_tree_pine.png');
 }
-// ── bush ──
+// -- bush --
 {
     const s = sprite(24, 18);
     for (const [ox, oy, r, col] of [[7, 9, 6, P.leaf], [15, 10, 5.5, P.leafD], [11, 7, 6.5, P.leafL]]) {
@@ -189,7 +189,7 @@ for (let f = 0; f < 2; f++) {
     s.px(9, 5, 2, 1, '#e8b84a'); s.px(15, 8, 2, 1, '#c86a8a');
     finish(s, 'base_bush.png');
 }
-// ── boulder ──
+// -- boulder --
 {
     const s = sprite(30, 22);
     s.ctx.fillStyle = P.rock[1];
@@ -206,10 +206,10 @@ for (let f = 0; f < 2; f++) {
     s.px(20, 12, 4, 2, P.rock[2]);
     finish(s, 'base_boulder.png');
 }
-// ── fence segment (runs along the NE-SW tile edge, i.e. x-axis edge) ──
+// -- fence segment (runs along the NE-SW tile edge, i.e. x-axis edge) --
 {
     const s = sprite(66, 30);
-    // two posts + two rails following iso slope (down 16 over 32 right)
+ // two posts + two rails following iso slope (down 16 over 32 right)
     for (const [x, y] of [[4, 8], [32, 16], [60, 24]]) {
         s.px(x - 1.5, y - 14, 3, 15, P.woodD);
         s.px(x - 1.5, y - 14, 1.2, 15, P.woodL);
@@ -222,7 +222,7 @@ for (let f = 0; f < 2; f++) {
     }
     fs.writeFileSync(path.join(OUT, 'base_fence.png'), s.cv.toBuffer('image/png'));
 }
-// ── plot marker (corner stakes + rope outline of a 3x3 plot, flat) ──
+// -- plot marker (corner stakes + rope outline of a 3x3 plot, flat) --
 {
     const s = sprite(200, 104);
     const cx = 100, cy = 52;
@@ -231,15 +231,15 @@ for (let f = 0; f < 2; f++) {
         s.px(cx + dx - 1, cy + dy - 12, 1, 12, P.woodL);
         s.px(cx + dx - 2, cy + dy - 14, 4, 2, P.woodDD);
     };
-    // 3x3 tile diamond corners: half-diagonal rx=48, ry=24
+ // 3x3 tile diamond corners: half-diagonal rx=48, ry=24
     corner(-48, 0); corner(48, 0); corner(0, -24); corner(0, 24);
-    // rope between stakes (dashed)
+ // rope between stakes (dashed)
     s.ctx.strokeStyle = '#d9c9a0'; s.ctx.lineWidth = 1.2; s.ctx.setLineDash([3, 3]);
     s.ctx.beginPath();
     s.ctx.moveTo(cx - 48, cy); s.ctx.lineTo(cx, cy - 24); s.ctx.lineTo(cx + 48, cy);
     s.ctx.lineTo(cx, cy + 24); s.ctx.closePath(); s.ctx.stroke();
     s.ctx.setLineDash([]);
-    // faint plot glyph
+ // faint plot glyph
     s.ctx.fillStyle = 'rgba(240,220,160,0.85)';
     s.ctx.font = 'bold 11px sans-serif'; s.ctx.textAlign = 'center';
     fs.writeFileSync(path.join(OUT, 'base_plot_marker.png'), s.cv.toBuffer('image/png'));

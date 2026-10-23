@@ -1,31 +1,31 @@
 // ============================================
-// QUIZ GAME - LORE EDITION (.j quiz)  [2026-09-26 audit rework]
+// QUIZ GAME - LORE EDITION (.j quiz) [audit rework]
 // ============================================
-// Fandom/MediaWiki lore RAG pipeline (2026-09-25) retained; this pass adds
+// Fandom/MediaWiki lore RAG pipeline retained; this pass adds
 // the audit fixes:
-//   P1  one attempt per player per question (.j a/b/c/d kept, scoped parser)
-//   P2  timer = config value (quizmod), default 15s
-//   P3  atomic per-group lifecycle lock - two quizzes can never interleave,
-//       lock releases on every exit path (success/failure/timeout/restart)
-//   P4  quiz answers exempt from the engine's global cooldown (engine side)
-//   P5  generation runs in BACKGROUND with a loading message - the 45s
-//       generic command timeout can no longer kill long generation
-//   P6  categories ride the QuizConfig object through the whole pipeline;
-//       fallback questions are domain-aware (no more VA/studio drift)
-//   P7  quizzes up to 50 questions; 40+ split into named sections
-//   P8  image questions via -images N (image IS the clue, verified asset)
-//   P9  quiz intro card carries the franchise's verified main image
-//   P10 voice-actor questions hard-capped (QuizConfig.voiceActorQuestionLimit)
-//   P11 theme-song audio reuses goService.getAudioInfo (the .j audio infra)
-//       + ffmpeg 30s clip; missing audio skips gracefully
-//   P12 media-contamination validation (franchise relevance + fact check)
-//   P13/14 image/audio question validation before banking
-//   P15 stable-identity dedup + validated bank reuse (quizBank.js)
-//   P16 centralized QuizConfig (quizConfig.js) at every stage
-//   P19 streaming sections: next section generates while current plays
-//       (states GENERATING/READY/ACTIVE/COMPLETED/FAILED, one job/section)
-//   P21 speed: bank reuse first, cached wiki calls, parallel media fetch
-//   P22 media-type detection + Wikipedia/TVMaze sources (quizLore.js)
+// P1 one attempt per player per question (.j a/b/c/d kept, scoped parser)
+// P2 timer = config value (quizmod), default 15s
+// P3 atomic per-group lifecycle lock - two quizzes can never interleave,
+// lock releases on every exit path (success/failure/timeout/restart)
+// P4 quiz answers exempt from the engine's global cooldown (engine side)
+// P5 generation runs in BACKGROUND with a loading message - the 45s
+// generic command timeout can no longer kill long generation
+// P6 categories ride the QuizConfig object through the whole pipeline;
+// fallback questions are domain-aware (no more VA/studio drift)
+// P7 quizzes up to 50 questions; 40+ split into named sections
+// P8 image questions via -images N (image IS the clue, verified asset)
+// P9 quiz intro card carries the franchise's verified main image
+// P10 voice-actor questions hard-capped (QuizConfig.voiceActorQuestionLimit)
+// P11 theme-song audio reuses goService.getAudioInfo (the .j audio infra)
+// + ffmpeg 30s clip; missing audio skips gracefully
+// P12 media-contamination validation (franchise relevance + fact check)
+// P13/14 image/audio question validation before banking
+// P15 stable-identity dedup + validated bank reuse (quizBank.js)
+// P16 centralized QuizConfig (quizConfig.js) at every stage
+// P19 streaming sections: next section generates while current plays
+// (states GENERATING/READY/ACTIVE/COMPLETED/FAILED, one job/section)
+// P21 speed: bank reuse first, cached wiki calls, parallel media fetch
+// P22 media-type detection + Wikipedia/TVMaze sources (quizLore.js)
 // Sessions, answers, rewards, dedup and the per-chat leaderboard remain.
 // ============================================
 
@@ -38,18 +38,18 @@ const system = require("../utils/system");
 const quizLore = require("./quizLore");
 const quizConfigMod = require("./quizConfig"); // P16 central config + quizmod
 const quizBank = require("./quizBank");        // P15 stable-identity bank
-const quizMediaMod = require("./quizMedia");   // 2026-09-27 logos + spot-the-song modes
-const quizPreplannedMod = require("./quizPreplanned"); // 2026-10-10 owner: .j quiz -preplanned fixed pack
-const quizDatasetMod = require("./quizDataset"); // 2026-10-10 dataset categories (games/comics/movies/series)
-const mediaWorker = require("../utils/mediaWorker"); // 2026-09-27 shared media job runner
-const imageGate = require("../utils/imageGate");         // 2026-09-27 pixel-level gates
-const visionVerify = require("../utils/visionVerify");   // 2026-09-27 subject-match verify (Box 2 provider)
-const audioCache = require("../utils/quizAudioCache");   // 2026-09-28 owner spec §3: disk-cached audio clips
-const portraitCache = require("../utils/quizPortraitCache"); // 2026-09-30 image rebuild: disk-cached verified portraits
-const characterResolver = require("../utils/characterResolver"); // 2026-09-30 v3: category-routed multi-source character pipeline
-const wikiEntityImages = require("../utils/wikiEntityImages"); // 2026-09-30 rebuild v2: games/movies/TV entity portraits (Wikipedia graph)
+const quizMediaMod = require("./quizMedia"); // logos + spot-the-song modes
+const quizPreplannedMod = require("./quizPreplanned"); // .j quiz -preplanned fixed pack
+const quizDatasetMod = require("./quizDataset"); // dataset categories (games/comics/movies/series)
+const mediaWorker = require("../utils/mediaWorker"); // shared media job runner
+const imageGate = require("../utils/imageGate"); // pixel-level gates
+const visionVerify = require("../utils/visionVerify"); // subject-match verify (Box 2 provider)
+const audioCache = require("../utils/quizAudioCache"); // owner spec §3: disk-cached audio clips
+const portraitCache = require("../utils/quizPortraitCache"); // image rebuild: disk-cached verified portraits
+const characterResolver = require("../utils/characterResolver"); // v3: category-routed multi-source character pipeline
+const wikiEntityImages = require("../utils/wikiEntityImages"); // rebuild v2: games/movies/TV entity portraits (Wikipedia graph)
 
-// ── state ──
+// -- state --
 const activeQuizzes = new Map(); // chatId -> session (one live quiz per chat)
 const pendingPicks = new Map();  // chatId -> { choices, ts, opts }
 // chatId -> { cancelled, session, reassureTimerId, lockSince, askedBy } for a
@@ -65,7 +65,7 @@ const pendingPrep = new Map();
 const lifecycle = new Map();
 const GENERATING_LOCK_TTL_MS = 8 * 60 * 1000; // crashed generation can't lock forever
 
-// ── constants ──
+// -- constants --
 // (between-questions pacing moved to quizConfig.questionGapSeconds - the
 // owner spec is a randomized 10-30s pause, quizmod-tunable per group)
 const PICK_TTL_MS = 5 * 60 * 1000;
@@ -90,17 +90,17 @@ const LONG_SECTION_TEMPLATES = [
 // P11/P19 random mode: diverse curated pool (anime/game/comic/cartoon/movie).
 // Each random SECTION draws one franchise from here (validated before use).
 const RANDOM_POOL = [
-  // anime
+ // anime
   "rezero", "naruto", "onepiece", "attackontitan", "jujutsu-kaisen", "dragonball",
   "fma", "deathnote", "onepunchman", "kimetsu-no-yaiba", "hunterxhunter", "bleach",
   "myheroacademia", "spyxfamily", "chainsawman", "swordartonline", "steins-gate",
   "codegeass", "tokyoghoul", "vinlandsaga", "solo-leveling", "blackclover",
   "dandadan", "fairytail", "berserk", "evangelion", "cowboybebop", "konosuba",
-  // games
+ // games
   "eldenring", "darksouls", "sekiro", "bloodborne", "zelda", "minecraft", "gta",
   "godofwar", "witcher", "finalfantasy", "pokemon", "gensin-impact", "leagueoflegends",
   "cyberpunk", "fortnite", "among-us",
-  // tv / movies / comics / cartoons
+ // tv / movies / comics / cartoons
   "batman", "marvel", "dc", "starwars", "startrek", "harrypotter", "lotr",
   "avatar", "ben10", "spongebob", "strangerthings", "breakingbad", "gameofthrones",
   "gravityfalls", "adventuretime", "steven-universe", "teentitans",
@@ -131,7 +131,7 @@ const RANDOM_TITLES = {
 // injected shared infra (P11): engine calls quizGame.setDeps once at boot
 const deps = { goService: null, ffmpegPath: process.env.FFMPEG_PATH || "ffmpeg", canStartQuiz: null, canManageQuiz: null };
 
-// 💡 START PERMISSION GATE (2026-09-27 owner spec): only Quiz Mods, Global
+// START PERMISSION GATE (owner spec): only Quiz Mods, Global
 // Mods and the bot owner may START quizzes. The engine injects the check via
 // setDeps (module-level fns there - no circular require). When the hook is
 // absent (sandbox tests, direct requires) the gate stays OPEN so the QA
@@ -140,7 +140,7 @@ function _canStartQuiz(senderJid) {
   try { if (typeof deps.canStartQuiz === "function") return !!deps.canStartQuiz(senderJid); } catch { /* fail open */ }
   return true;
 }
-// 2026-09-28: denial bounces owners/mods confusingly (seen live: added on
+// denial bounces owners/mods confusingly (seen live: added on
 // Joker, denied on Subaru 20s later, inside the 45s Set-refresh window).
 // Before denying, refresh the shared mod Sets from MongoDB once and recheck.
 async function _canStartQuizFresh(senderJid) {
@@ -156,7 +156,7 @@ function _canManageQuiz(senderJid) {
   return false;
 }
 
-// 2026-09-27 fairness fix: `arr.sort(() => Math.random() - 0.5)` is a biased
+// fairness fix: `arr.sort(() => Math.random() - 0.5)` is a biased
 // shuffle (measured: option A carried the correct answer far above 25%).
 // Every OPTION-ORDER shuffle in the media builders uses a real Fisher-Yates
 // now; the correct index is still derived from the shuffled order.
@@ -170,8 +170,8 @@ function _fyShuffle(arr) {
 }
 function setDeps(d) {
   Object.assign(deps, d || {});
-  // characterResolver gets the paced AniList cast + media-type detection via
-  // injection (no circular require: resolver is required by quiz.js)
+ // characterResolver gets the paced AniList cast + media-type detection via
+ // injection (no circular require: resolver is required by quiz.js)
   characterResolver.setDeps({ fetchFranchiseCast, detectMediaType: quizLore.detectMediaType, resolveAnime });
 }
 
@@ -180,8 +180,8 @@ function setDeps(d) {
 const MARKER = "\u200B";
 function BOT_SAFE(text) { return MARKER + text; }
 
-// ── 2026-09-28 OWNER AUDIT §2/§9: RESILIENT CRITICAL SENDS ──
-// Live evidence (2026-09-28 05:22, Joker, chat 120363408369953090): a routine
+// -- OWNER AUDIT §2/§9: RESILIENT CRITICAL SENDS --
+// Live evidence (05:22, Joker, chat 120363408369953090): a routine
 // WhatsApp connection churn turned an entire quiz INVISIBLE - the planning
 // card, the ready card AND the response to `.j quiz go` all died behind
 // `.catch(() => {})` while the state machine kept running: no question ever
@@ -214,11 +214,11 @@ async function safeSend(sock, chatId, content, opts = {}) {
   return null;
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // ANIME DATA (AniList GraphQL primary, Jikan v4 fallback)
 // family:4 everywhere - this box resolves AAAA first and Node aborts the
 // IPv4 attempt at 250ms while some hosts need ~280ms (see research notes).
-// ════════════════════════════════════════════
+// ============================================
 
 const ANILIST_SEARCH_Q = `
 query ($search: String, $limit: Int) {
@@ -245,7 +245,7 @@ query ($id: Int) {
   }
 }`;
 
-// 💡 IMAGE RELIABILITY (2026-09-27 owner brief §4): media-SCOPED character
+// IMAGE RELIABILITY (owner brief §4): media-SCOPED character
 // image lookup. Searching AniList globally by name would return same-named
 // characters from OTHER shows; scoping by Media id pins the result to THIS
 // franchise, so the returned image is the official art of exactly that
@@ -261,11 +261,11 @@ query ($id: Int) {
   }
 }`;
 
-// 💡 IMAGE SYSTEM REBUILD (2026-09-30): character-native cast fetch.
+// IMAGE SYSTEM REBUILD: character-native cast fetch.
 // Empirical bake-off on Box 1 (scripts/img_bakeoff.js, results in worklog):
-//   AniList character portraits  60/60 ok, median 18ms/image, cast query ~300ms
-//   Fandom pageimage (old #1)     0/60 ok (46 blocked downloads, 14 none)
-//   Jikan                          504 globally down
+// AniList character portraits 60/60 ok, median 18ms/image, cast query ~300ms
+// Fandom pageimage (old #1) 0/60 ok (46 blocked downloads, 14 none)
+// Jikan 504 globally down
 // So the whole flow INVERTS: for AniList-anchored franchises the cast (name +
 // canonical portrait + favourites + role) IS the question bank. ONE query per
 // quiz (disk-cached 24h) replaces the old per-candidate source hunt, and the
@@ -313,7 +313,7 @@ async function fetchFranchiseCast(anilistId, sessionRef = null) {
   if (!anilistId) return null;
   const host = (sessionRef && sessionRef._hostSession) || sessionRef; // memo across a quiz, not per-call
   if (host) {
-    // keyed by media id - one random-mode session spans MANY franchises
+ // keyed by media id - one random-mode session spans MANY franchises
     if (!host._anilistCasts) host._anilistCasts = new Map();
     const memo = host._anilistCasts.get(String(anilistId));
     if (memo && memo.length) return memo;
@@ -349,8 +349,8 @@ async function fetchFranchiseCast(anilistId, sessionRef = null) {
 function _bandCast(cast, difficulty) {
   const withFav = [...cast].sort((a, b) => (b.favourites || 0) - (a.favourites || 0));
   const n = withFav.length;
-  // (shuffled variant below - _bandCastShuffled - keeps band preference while
-  // removing the deterministic head-first order inside each band)
+ // (shuffled variant below - _bandCastShuffled - keeps band preference while
+ // removing the deterministic head-first order inside each band)
   const bandOf = (idx) => {
     if (idx < Math.max(3, Math.ceil(n * 0.25))) return "easy";
     if (idx < Math.ceil(n * 0.6) || (withFav[idx].favourites || 0) < 30) return "medium";
@@ -363,7 +363,7 @@ function _bandCast(cast, difficulty) {
     .sort((a, b) => Math.abs(bandRank[a.band] - want) - Math.abs(bandRank[b.band] - want));
 }
 
-// 2026-09-30: per-session unbiased variant - keeps the difficulty-band
+// per-session unbiased variant - keeps the difficulty-band
 // PREFERENCE (wanted band first) but Fisher-Yates-shuffles INSIDE each band,
 // so the same franchise+difficulty no longer serves the same character
 // sequence on every run.
@@ -381,10 +381,10 @@ function _bandCastShuffled(cast, difficulty) {
 
 async function anilistCharacterImage(anilistId, charName) {
   if (!anilistId || !charName) return null;
-  // 2026-09-28 FIX: the old query used Media.characters(search:) which is NOT
-  // a valid GraphQL argument - every call 400'd and AniList art (source 2,
-  // the strongest canonical anchor for anime) silently NEVER rendered. Fetch
-  // the media's main characters once and match the name client-side.
+ // FIX: the old query used Media.characters(search:) which is NOT
+ // a valid GraphQL argument - every call 400'd and AniList art (source 2,
+ // the strongest canonical anchor for anime) silently NEVER rendered. Fetch
+ // the media's main characters once and match the name client-side.
   const r = await anilistPost(ANILIST_CHAR_IMG_Q, { id: anilistId });
   const edges = r.data?.data?.Media?.characters?.edges || [];
   const nodes = edges.map((e) => e.node).filter((n) => n && n.image && n.image.large);
@@ -399,18 +399,18 @@ async function anilistCharacterImage(anilistId, charName) {
 
 const _http = axios.create({ timeout: 15000, family: 4, headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", Accept: "application/json" } });
 
-// 💡 OWNER SPEC §5/§6 (2026-09-28): Jikan (MyAnimeList) character-page image.
+// OWNER SPEC §5/§6: Jikan (MyAnimeList) character-page image.
 // Database-anchored EXACT entity lookup: search MAL's character index, accept
 // only a confident name match, return the character's own portrait. Free,
 // stable, keyless (fair-use rate limit ~3 req/s; callers run through
 // mediaWorker at concurrency 3 and this is one call per candidate).
-// Empirically evaluated 2026-09-28 (see worklog): exact-character hit rate
+// Empirically evaluated (see worklog): exact-character hit rate
 // and portrait quality are high for known characters; miss = null (never a
 // vaguely-related image).
 let _jikanLastCall = 0;
 async function jikanCharacterImage(charName) {
   if (!charName) return null;
-  // client-side rate-limit guard: >=450ms between calls
+ // client-side rate-limit guard: >=450ms between calls
   const now = Date.now();
   if (now - _jikanLastCall < 450) {
     await new Promise((r) => setTimeout(r, 450 - (now - _jikanLastCall)));
@@ -423,7 +423,7 @@ async function jikanCharacterImage(charName) {
   if (!rows.length) return null;
   const norm = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
   const want = norm(charName);
-  // exact-name acceptance only - a wrong character's portrait is worse than none
+ // exact-name acceptance only - a wrong character's portrait is worse than none
   const hit = rows.find((c) => norm(c.name.full || c.name) === want)
     || rows.find((c) => {
       const n = norm(c.name.full || c.name);
@@ -447,8 +447,8 @@ async function anilistSearch(q) {
     variables: { search: q, limit: 6 },
   });
   const media = (r.data?.data?.Page?.media || []).filter((m) => m && m.title);
-  // Re-rank: SEARCH_MATCH sometimes surfaces unreleased/obscure entries first.
-  // Canonical = strong popularity + released + TV/MOVIE + title-ish match.
+ // Re-rank: SEARCH_MATCH sometimes surfaces unreleased/obscure entries first.
+ // Canonical = strong popularity + released + TV/MOVIE + title-ish match.
   const needle = q.toLowerCase().replace(/[^a-z0-9]/g, "");
   const titleNames = (m) =>
     [m.title.romaji, m.title.english, m.title.native, ...(m.synonyms || [])]
@@ -569,9 +569,9 @@ async function fetchCharacters(anime) {
   }
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // QUESTION GENERATION (shared helpers)
-// ════════════════════════════════════════════
+// ============================================
 
 function qhash(stem) {
   return crypto.createHash("sha1").update(String(stem).toLowerCase().replace(/\s+/g, " ").trim()).digest("hex").slice(0, 16);
@@ -639,7 +639,7 @@ function coerceQuestions(raw, difficulty) {
   return out;
 }
 
-// ── P6: DOMAIN-AWARE deterministic fallback ──
+// -- P6: DOMAIN-AWARE deterministic fallback --
 // The old generator was VA/studio/episode-heavy, which is exactly the
 // "category drift" the audit caught: every failed lore retrieval got topped
 // up with production trivia. Now each candidate question carries its domain
@@ -671,7 +671,7 @@ function buildFallbackQuestions(anime, characters, difficulty, count) {
 
   const franchise = anime?.title || "this series";
   if (characters.length >= 4) {
-    // CHARACTER domain (lore-shape: who is in the cast - never VA)
+ // CHARACTER domain (lore-shape: who is in the cast - never VA)
     const names = characters.map((c) => c.name);
     for (const c of characters.slice(0, 4)) {
       push(
@@ -682,8 +682,8 @@ function buildFallbackQuestions(anime, characters, difficulty, count) {
         "characters",
       );
     }
-    // per-character role questions - unique stems, ground-truth answers, and
-    // they rebuild the fallback pool depth the VA cap removed (P10)
+ // per-character role questions - unique stems, ground-truth answers, and
+ // they rebuild the fallback pool depth the VA cap removed (P10)
     for (const c of characters.slice(0, 3)) {
       push(
         `In ${franchise}, ${c.name} is best described as…`,
@@ -703,8 +703,8 @@ function buildFallbackQuestions(anime, characters, difficulty, count) {
         "characters",
       );
     }
-    // PRODUCTION domain only (respect the VA cap at build time; the plan
-    // filters production down to the configured cap anyway)
+ // PRODUCTION domain only (respect the VA cap at build time; the plan
+ // filters production down to the configured cap anyway)
     const withVA = characters.filter((c) => c.va);
     if (withVA.length) {
       push(
@@ -752,16 +752,16 @@ function buildFallbackQuestions(anime, characters, difficulty, count) {
       "production",
     );
   }
-  // P10 (structural): the production domain is HARD-CAPPED at ONE question
-  // whenever lore questions exist - metadata fallbacks must never out-produce
-  // lore. Exception: an anime with NO character data has nothing but metadata
-  // (wiki-less metadata-only quiz) - the cap would leave it unplayable.
+ // P10 (structural): the production domain is HARD-CAPPED at ONE question
+ // whenever lore questions exist - metadata fallbacks must never out-produce
+ // lore. Exception: an anime with NO character data has nothing but metadata
+ // (wiki-less metadata-only quiz) - the cap would leave it unplayable.
   const production = qs.filter((q) => q.domain === "production");
   const loreOnly = qs.filter((q) => q.domain !== "production");
   const prodCap = loreOnly.length > 0 ? 1 : count;
   const keptProduction = production.sort(() => Math.random() - 0.5).slice(0, prodCap);
   const finalQs = [...loreOnly, ...keptProduction];
-  // dedupe by stem, cap at count
+ // dedupe by stem, cap at count
   const seen = new Set();
   return finalQs.filter((q) => {
     const k = qhash(q.q);
@@ -771,7 +771,7 @@ function buildFallbackQuestions(anime, characters, difficulty, count) {
   }).slice(0, count);
 }
 
-// ── LLM adapter: engine's smartGroqCall returns the RAW Groq response object
+// -- LLM adapter: engine's smartGroqCall returns the RAW Groq response object
 // normalizeSmartGroq accepts a response object, a string, or {content}.
 function normalizeSmartGroq(smartGroqCall) {
   if (typeof smartGroqCall !== "function") return null;
@@ -781,21 +781,21 @@ function normalizeSmartGroq(smartGroqCall) {
   };
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // P12: MEDIA-CONTAMINATION / FACT VALIDATION
 // "Valid JSON from the AI is not itself validation." Every generated question
 // must pass ALL of these before it can enter a quiz or the bank:
-//   1. schema (done by coerceOne upstream)
-//   2. FACT CHECK - the correct answer must be supported by the retrieved
-//      source text (normalized containment). Hallucinated answers die here.
-//   3. MEDIA RELEVANCE - the stem must reference THIS franchise (its title,
-//      its wiki page, one of its characters/places) - or be a structural
-//      media question (image/audio clue).
-//   4. FOREIGN-FRANCHISE blocklist - stems mentioning another known franchise
-//      from the cross-contamination list are rejected.
-//   5. NUMBER GUARD - "how many chapters/volumes/episodes" questions need the
-//      number present in the source (kills the "Sword Demon Love Song
-//      chapter count" class of hallucination).
+// 1. schema (done by coerceOne upstream)
+// 2. FACT CHECK - the correct answer must be supported by the retrieved
+// source text (normalized containment). Hallucinated answers die here.
+// 3. MEDIA RELEVANCE - the stem must reference THIS franchise (its title,
+// its wiki page, one of its characters/places) - or be a structural
+// media question (image/audio clue).
+// 4. FOREIGN-FRANCHISE blocklist - stems mentioning another known franchise
+// from the cross-contamination list are rejected.
+// 5. NUMBER GUARD - "how many chapters/volumes/episodes" questions need the
+// number present in the source (kills the "Sword Demon Love Song
+// chapter count" class of hallucination).
 function _normText(s) {
   return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -821,17 +821,17 @@ const FOREIGN_MEDIA_BLOCKLIST = [
 ];
 
 function validateGeneratedQuestion(q, ctx) {
-  // ctx: { franchiseTitle, wiki, loreText, domain, mediaType, structural }
+ // ctx: { franchiseTitle, wiki, loreText, domain, mediaType, structural }
   if (!q || !Array.isArray(q.options)) return "malformed";
   const stemL = _normText(q.q);
   const correctText = _normText(q.options[q.correct]);
 
-  // 2. fact check against the source that produced the question
-  //    (skipped for structural media questions - their source is the
-  //    verified image/audio asset itself, validated in its own pipeline)
-  //    Pass = full-phrase containment OR every content token of the answer
-  //    exists in the source (number-word normalized, order-free) - tolerant
-  //    to paraphrase ("a hundred years" vs "100 years"), still source-bound.
+ // 2. fact check against the source that produced the question
+ // (skipped for structural media questions - their source is the
+ // verified image/audio asset itself, validated in its own pipeline)
+ // Pass = full-phrase containment OR every content token of the answer
+ // exists in the source (number-word normalized, order-free) - tolerant
+ // to paraphrase ("a hundred years" vs "100 years"), still source-bound.
   if (!ctx.structural && ctx.loreText && correctText.length >= 3) {
     const loreN = _normText(ctx.loreText);
     const supported = loreN.includes(correctText);
@@ -845,8 +845,8 @@ function validateGeneratedQuestion(q, ctx) {
     }
   }
 
-  // 4. foreign-franchise leakage (skip for structural media questions whose
-  // OPTIONS are intentionally other titles, e.g. "which anime is this OP from")
+ // 4. foreign-franchise leakage (skip for structural media questions whose
+ // OPTIONS are intentionally other titles, e.g. "which anime is this OP from")
   if (!ctx.structural) {
     const hit = FOREIGN_MEDIA_BLOCKLIST.find((f) => stemL.includes(_normText(f)));
     const ownL = _normText(ctx.franchiseTitle || "");
@@ -856,10 +856,10 @@ function validateGeneratedQuestion(q, ctx) {
     }
   }
 
-  // 3. media relevance: the stem must anchor to THIS franchise somehow -
-  // franchise title, the wiki subject it came from, or ANY content word
-  // shared with the retrieved lore (the lore itself is franchise-sourced,
-  // so stem↔lore overlap proves on-topic generation, not a memory dump)
+ // 3. media relevance: the stem must anchor to THIS franchise somehow -
+ // franchise title, the wiki subject it came from, or ANY content word
+ // shared with the retrieved lore (the lore itself is franchise-sourced,
+ // so stem↔lore overlap proves on-topic generation, not a memory dump)
   if (!ctx.structural && ctx.franchiseTitle) {
     const loreN = ctx.loreText ? _normText(ctx.loreText) : "";
     const loreWords = new Set(loreN.split(" ").filter((w) => w.length >= 5));
@@ -875,7 +875,7 @@ function validateGeneratedQuestion(q, ctx) {
     }
   }
 
-  // 5. number guard for adaptation-count questions
+ // 5. number guard for adaptation-count questions
   if (/\bhow many\b/.test(stemL) && /\b(chapters?|volumes?|episodes?|seasons?)\b/.test(stemL) && ctx.loreText) {
     const m = q.q.match(/\b(\d{1,4})\b/g);
     const loreN = _normText(ctx.loreText);
@@ -886,17 +886,17 @@ function validateGeneratedQuestion(q, ctx) {
   return null; // passed
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // LORE QUESTION PIPELINE (per-section worker)
 // plan domain -> [bank reuse first] -> retrieve Fandom section -> RAG (Groq)
 // -> strict JSON -> P12 validation -> bank store. Media attaches at post
 // time for structural image/audio questions only.
-// ════════════════════════════════════════════
+// ============================================
 
 async function generateLoreQuestions(wiki, franchiseTitle, difficulty, count, sectionOverride, animeCharacters, callLLM, opts = {}) {
   const vaCap = Number.isInteger(opts.vaCap) ? opts.vaCap : 1; // P10 hard cap
   const plan = quizLore.buildQuestionPlan(count, difficulty, sectionOverride);
-  // P10: enforce the voice-actor/production cap across the whole batch
+ // P10: enforce the voice-actor/production cap across the whole batch
   let productionLeft = vaCap;
   const adjustedPlan = plan.map((d) => {
     if (d === "production") {
@@ -906,24 +906,24 @@ async function generateLoreQuestions(wiki, franchiseTitle, difficulty, count, se
     return d;
   });
 
-  // P21: callers (section workers) share their session-level usedKeys so
-  // later sections never re-research the same lore or replay a question
+ // P21: callers (section workers) share their session-level usedKeys so
+ // later sections never re-research the same lore or replay a question
   const usedKeys = opts.usedKeys || new Set();
   let buckets = null;
   if (adjustedPlan.includes("characters")) {
     try { buckets = await quizLore.buildCharacterIndex(wiki, franchiseTitle, animeCharacters || []); } catch { buckets = null; }
   }
 
-  // P24b: PARALLEL ROUNDS. The sequential pipeline spent sum(N x LLM-latency)
-  // wall clock: each slot's retrieve -> LLM -> validate ran strictly after the
-  // previous slot finished. Same guarantees, new schedule:
-  //   - lore RETRIEVAL stays serial (usedKeys claims must keep their order ->
-  //     P15 no-chunk-twice invariant is decided here, exactly as before)
-  //   - every LLM call + P12 validation of one round fires CONCURRENTLY
-  //   - rejected/failed slots retry in later rounds: same lastReject feedback,
-  //     same attempt index passed to the prompt, same 4-attempt cap
-  // Acceptance criteria, retire-on-reject, plan order and final numbering are
-  // byte-identical to the sequential pipeline.
+ // P24b: PARALLEL ROUNDS. The sequential pipeline spent sum(N x LLM-latency)
+ // wall clock: each slot's retrieve -> LLM -> validate ran strictly after the
+ // previous slot finished. Same guarantees, new schedule:
+ // - lore RETRIEVAL stays serial (usedKeys claims must keep their order ->
+ // P15 no-chunk-twice invariant is decided here, exactly as before)
+ // - every LLM call + P12 validation of one round fires CONCURRENTLY
+ // - rejected/failed slots retry in later rounds: same lastReject feedback,
+ // same attempt index passed to the prompt, same 4-attempt cap
+ // Acceptance criteria, retire-on-reject, plan order and final numbering are
+ // byte-identical to the sequential pipeline.
   const slots = adjustedPlan.map((domain) => ({ domain, question: null, lastReject: null }));
 
   const retrieveForSlot = async (slot) => {
@@ -947,16 +947,15 @@ async function generateLoreQuestions(wiki, franchiseTitle, difficulty, count, se
   };
 
   const MAX_ATTEMPTS = 4; // unchanged sequential attempt cap
-  // P24b: LLM burst cap - firing all N round calls at once trips Groq org
-  // rate limits (measured: 429 storms + lost yield). A small worker pool
-  // keeps the parallel win while pacing the request stream.
+ // P24b: LLM burst cap - firing all N round calls at once trips Groq org
+ // rate limits (measured: 429 storms + lost yield). A small worker pool
   const LLM_BURST = Math.max(1, parseInt(process.env.QUIZ_LLM_BURST, 10) || 3);
 
   const handleSlot = async ({ slot, lore }, attempt) => {
     try {
       const out = await quizLore.generateLoreQuestion(callLLM, franchiseTitle, lore, slot.domain, difficulty, slot.lastReject, attempt);
       if (!out) return;
-      // P12 validation before acceptance
+ // P12 validation before acceptance
       const err = validateGeneratedQuestion(out.question, {
         franchiseTitle, wiki,
         loreText: lore.text || "",
@@ -966,8 +965,8 @@ async function generateLoreQuestions(wiki, franchiseTitle, difficulty, count, se
       if (err) {
         console.log(`[Quiz] Q rejected (${slot.domain}): ${err}`);
         slot.lastReject = err;
-        // retire this lore chunk so the retry sources DIFFERENT lore
-        // (same-source retries just re-roll the same broken question)
+ // retire this lore chunk so the retry sources DIFFERENT lore
+ // (same-source retries just re-roll the same broken question)
         usedKeys.add(`${wiki}:${lore.page}:${lore.section}`);
         return;
       }
@@ -982,7 +981,7 @@ async function generateLoreQuestions(wiki, franchiseTitle, difficulty, count, se
     const pending = slots.filter((s) => !s.question);
     if (!pending.length) break;
 
-    // serial retrieval round - ordered usedKeys claims, wiki cache does the rest
+ // serial retrieval round - ordered usedKeys claims, wiki cache does the rest
     const withLore = [];
     for (const slot of pending) {
       const lore = await retrieveForSlot(slot);
@@ -990,7 +989,7 @@ async function generateLoreQuestions(wiki, franchiseTitle, difficulty, count, se
     }
     if (!withLore.length) continue;
 
-    // bounded-parallel LLM + validation for the whole round
+ // bounded-parallel LLM + validation for the whole round
     const queue = [...withLore];
     await Promise.all(Array.from({ length: Math.min(LLM_BURST, queue.length) }, async () => {
       while (queue.length) {
@@ -1009,31 +1008,30 @@ async function generateLoreQuestions(wiki, franchiseTitle, difficulty, count, se
   return questions;
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // P8/P13: IMAGE QUESTIONS (character identification)
 // The image IS the clue. Asset verification pipeline:
-//   intended subject (character from THIS wiki's index) -> page image via
-//   pageimages (page-anchored, cannot cross subjects) -> real download with
-//   magic-byte verification -> question whose options are characters FROM
-//   THE SAME franchise -> stable-identity dedup via the image URL.
-// Returns the question with {type:"image", asset:{url,...}} or null.
+// intended subject (character from THIS wiki's index) -> page image via
+// pageimages (page-anchored, cannot cross subjects) -> real download with
+// magic-byte verification -> question whose options are characters FROM
+// THE SAME franchise -> stable-identity dedup via the image URL.
 // Bytes are fetched lazily at post time (bank stores the verified URL).
-// ════════════════════════════════════════════
+// ============================================
 
-// ══════════════════════════════════════════
+// ==========================================
 // P8/P13: IMAGE QUESTIONS (character identification)
-// 2026-09-30 REBUILD - the flow is now CHARACTER-NATIVE for AniList-anchored
+// REBUILD - the flow is now CHARACTER-NATIVE for AniList-anchored
 // franchises. Empirical bake-off (scripts/img_bakeoff.js on Box 1):
-//   AniList cast portraits 60/60 ok @ 18ms/img | Fandom 0/60 | Jikan 504
-//   CAST PATH (primary): fetchFranchiseCast (ONE paced graphql call, cached
-//   session+disk 24h) -> pick subject by difficulty band -> portrait from
-//   disk cache or AniList CDN (18ms) -> pixel gate -> disk cache. Identity is
-//   database-guaranteed (the portrait belongs to the character entity), so
-//   no vision verify is needed on this path.
-//   LEGACY PATH (fallback, non-AniList franchises only - games/TV/comics):
-//   the old per-candidate source hunt (fandom -> anilist -> jikan -> wiki).
+// AniList cast portraits 60/60 ok @ 18ms/img | Fandom 0/60 | Jikan 504
+// CAST PATH (primary): fetchFranchiseCast (ONE paced graphql call, cached
+// session+disk 24h) -> pick subject by difficulty band -> portrait from
+// disk cache or AniList CDN (18ms) -> pixel gate -> disk cache. Identity is
+// database-guaranteed (the portrait belongs to the character entity), so
+// no vision verify is needed on this path.
+// LEGACY PATH (fallback, non-AniList franchises only - games/TV/comics):
+// the old per-candidate source hunt (fandom -> anilist -> jikan -> wiki).
 // The image IS the clue. Returns {type:"image"} question or null.
-// ══════════════════════════════════════════
+// ==========================================
 
 async function buildCastImageQuestion(wiki, franchiseTitle, usedKeys, difficulty = "easy", anilistId = null, sessionRef = null) {
   if (!anilistId) return null;
@@ -1043,7 +1041,7 @@ async function buildCastImageQuestion(wiki, franchiseTitle, usedKeys, difficulty
   for (const ch of ordered) {
     const ckey = `alchar-${ch.id}`;
     if (usedKeys && (usedKeys.has(ckey) || usedKeys.has(`img:${ch.name}`))) continue;
-    // portrait: disk cache -> (AniList CDN download + pixel gate -> disk)
+ // portrait: disk cache -> (AniList CDN download + pixel gate -> disk)
     let bytes = portraitCache.getPortrait(ch.id);
     if (!bytes && !portraitCache.hasNegative(ch.id)) {
       const dl = await quizLore.downloadMedia(ch.img, "image").catch(() => null);
@@ -1056,13 +1054,13 @@ async function buildCastImageQuestion(wiki, franchiseTitle, usedKeys, difficulty
           portraitCache.putNegative(ch.id);
         }
       } else {
-        // 2026-10-01: transient download failures (429/5xx/timeout) must not
-        // poison the 24h negative cache - only deterministic ones do
+ // transient download failures (429/5xx/timeout) must not
+ // poison the 24h negative cache - only deterministic ones do
         if (!dl?.transient) portraitCache.putNegative(ch.id);
       }
     }
     if (!bytes) continue;
-    // decoys: same-franchise cast members (MAIN roles preferred)
+ // decoys: same-franchise cast members (MAIN roles preferred)
     const othersPool = cast.filter((c) => c.id !== ch.id && c.name !== ch.name);
     if (othersPool.length < 3) continue;
     const mains = othersPool.filter((c) => c.role === "MAIN");
@@ -1070,7 +1068,7 @@ async function buildCastImageQuestion(wiki, franchiseTitle, usedKeys, difficulty
     const others = _fyShuffle(pickFrom).slice(0, 3);
     const optionsPool = [ch.name, ...others.map((o) => o.name)];
     const optOrder = _fyShuffle(optionsPool.map((_, i) => i));
-    // seed the shared asset cache so the post-time send reuses these bytes
+ // seed the shared asset cache so the post-time send reuses these bytes
     quizBank.putCachedAsset(ch.img, { buf: bytes.buf, mime: bytes.mime, kind: "image" });
     const q = {
       q: `Who is this character from ${franchiseTitle}?`,
@@ -1092,8 +1090,8 @@ async function buildCastImageQuestion(wiki, franchiseTitle, usedKeys, difficulty
   return null;
 }
 
-// ══════════════════════════════════════════
-// 2026-09-30 REBUILD v2 - WIKI ENTITY PATH for games/movies/TV.
+// ==========================================
+// REBUILD v2 - WIKI ENTITY PATH for games/movies/TV.
 // The AniList cast path only covers anime. Measured on Box 1
 // (scripts/wiki_entity_bakeoff.js, 286 chars x 33 RANDOM_POOL franchises):
 // Fandom CDN is Cloudflare-403 from this box (0/60 downloads) while the
@@ -1104,13 +1102,13 @@ async function buildCastImageQuestion(wiki, franchiseTitle, usedKeys, difficulty
 // identity gate (rejects box art / wrong-subject hits) -> paced downloads ->
 // production pixel gate -> disk cache. Owner spec §7 unchanged: the picture
 // IS the question (options hidden, answer typed in chat).
-// ══════════════════════════════════════════
+// ==========================================
 async function buildWikiImageQuestion(frSlug, franchiseTitle, wiki, charBuckets, usedKeys, difficulty = "easy", sessionRef = null) {
   const reg = frSlug ? wikiEntityImages.W[frSlug] : null;
   const qualifier = reg?.q || franchiseTitle || null;
   let names = reg?.names || null;
   if (!names && charBuckets) {
-    // no curated registry: derive candidates from the franchise wiki index
+ // no curated registry: derive candidates from the franchise wiki index
     const uniq = [];
     const seen = new Set();
     const push = (arr) => (arr || []).forEach((n) => { const k = String(n).toLowerCase(); if (n && !seen.has(k) && !usedKeys?.has(`img:${n}`)) { seen.add(k); uniq.push(n); } });
@@ -1120,17 +1118,17 @@ async function buildWikiImageQuestion(frSlug, franchiseTitle, wiki, charBuckets,
   if (!names || !names.length) return null;
   const portraits = await wikiEntityImages.resolveFranchisePortraits(frSlug, qualifier, names, { difficulty, host: sessionRef?._hostSession }).catch(() => null);
   if (!portraits || !portraits.length) return null;
-  // decoys do NOT need verified images - they are text options. Verified
-  // portraits go first, then same-franchise registry/wiki names fill up.
+ // decoys do NOT need verified images - they are text options. Verified
+ // portraits go first, then same-franchise registry/wiki names fill up.
   const decoyNames = names.filter((n) => !portraits.some((p) => p.name === n));
-  // 2026-09-30: per-call unbiased shuffle (the registry/memo order is
-  // fame-deterministic - iterating it head-first replayed the same sequence)
+ // per-call unbiased shuffle (the registry/memo order is
+ // fame-deterministic - iterating it head-first replayed the same sequence)
   const ordered = _fyShuffle(portraits);
   for (const p of ordered) {
     const ckey = `wentity-${frSlug || "fr"}-${p.name}`;
     if (usedKeys && (usedKeys.has(ckey) || usedKeys.has(`img:${p.name}`) || usedKeys.has(`wimg:${p.name}`))) continue;
-    // decoys come from the FULL portrait pool (previously-used subjects may
-    // still be wrong answers) - only the SUBJECT rotates through usedKeys
+ // decoys come from the FULL portrait pool (previously-used subjects may
+ // still be wrong answers) - only the SUBJECT rotates through usedKeys
     let othersPool = portraits.filter((o) => o.name !== p.name);
     if (othersPool.length < 3) {
       const need = 3 - othersPool.length;
@@ -1144,7 +1142,7 @@ async function buildWikiImageQuestion(frSlug, franchiseTitle, wiki, charBuckets,
     const others = _fyShuffle(othersPool).slice(0, 3);
     const optionsPool = [p.name, ...others.map((o) => o.name)];
     const optOrder = _fyShuffle(optionsPool.map((_, i) => i));
-    // seed the shared asset cache so the post-time send reuses these bytes
+ // seed the shared asset cache so the post-time send reuses these bytes
     quizBank.putCachedAsset(p.url, { buf: p.buf, mime: p.mime, kind: "image" });
     const q = {
       q: `Who is this character from ${franchiseTitle}?`,
@@ -1166,13 +1164,13 @@ async function buildWikiImageQuestion(frSlug, franchiseTitle, wiki, charBuckets,
   return null;
 }
 
-// 2026-09-30 v3: category-routed multi-source selection. Order:
-//   1. characterResolver (category detection -> provider chain -> per-session
-//      Fisher-Yates pool -> image fallback chain) - covers anime via AniList
-//      cast, tv via TVMaze, games/movies/comics via Wikipedia generic
-//      pipeline (Hollow Knight etc.), wikidata fallback, tmdb/igdb keyed
-//   2. legacy: cast path -> curated wiki-entity path -> legacy source hunt
-//      (kept as a safety net for anything the resolver cannot resolve)
+// v3: category-routed multi-source selection. Order:
+// 1. characterResolver (category detection -> provider chain -> per-session
+// Fisher-Yates pool -> image fallback chain) - covers anime via AniList
+// cast, tv via TVMaze, games/movies/comics via Wikipedia generic
+// pipeline (Hollow Knight etc.), wikidata fallback, tmdb/igdb keyed
+// 2. legacy: cast path -> curated wiki-entity path -> legacy source hunt
+// (kept as a safety net for anything the resolver cannot resolve)
 async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, difficulty = "easy", sessionRef = null) {
   const frCtx = sessionRef?.franchise || null;
   if (frCtx && franchiseTitle) {
@@ -1192,25 +1190,25 @@ async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, d
       console.log(`[Quiz] resolver image path failed (${String(e?.message || e).slice(0, 60)}) - falling back to legacy`);
     }
   }
-  // CAST PATH (2026-09-30 rebuild): AniList-anchored franchises never touch
-  // the wiki hunt unless the cast yields nothing.
+ // CAST PATH (rebuild): AniList-anchored franchises never touch
+ // the wiki hunt unless the cast yields nothing.
   const anilistIdEarly = sessionRef?.franchise?.anime?.id || null;
   if (anilistIdEarly) {
     const castQ = await buildCastImageQuestion(wiki, franchiseTitle, usedKeys, difficulty, anilistIdEarly, sessionRef).catch(() => null);
     if (castQ) return castQ;
   }
-  // WIKI ENTITY PATH (2026-09-30 rebuild v2): games/movies/TV franchises get
-  // Wikipedia entity-native portraits (page-anchored identity, identity-gated
-  // search fallback). Tried BEFORE the legacy hunt - the bake-off measured the
-  // old Fandom-first chain at 0/60 downloads from this box.
+ // WIKI ENTITY PATH (rebuild v2): games/movies/TV franchises get
+ // Wikipedia entity-native portraits (page-anchored identity, identity-gated
+ // search fallback). Tried BEFORE the legacy hunt - the bake-off measured the
+ // old Fandom-first chain at 0/60 downloads from this box.
   const frSlug = sessionRef?.franchise?.slug || null;
   if (frSlug || charBuckets) {
     const wikiQ = await buildWikiImageQuestion(frSlug, franchiseTitle, wiki, charBuckets, usedKeys, difficulty, sessionRef).catch(() => null);
     if (wikiQ) return wikiQ;
   }
   if (!wiki || !charBuckets) return null;
-  // flatten the popularity buckets (easy=top10% famous ... hard=obscure) and
-  // prefer the band matching the quiz difficulty, falling back outwards
+ // flatten the popularity buckets (easy=top10% famous ... hard=obscure) and
+ // prefer the band matching the quiz difficulty, falling back outwards
   const uniq = [];
   const seen = new Set();
   const push = (name, band) => { if (name && !seen.has(String(name).toLowerCase())) { seen.add(String(name).toLowerCase()); uniq.push({ name, band }); } };
@@ -1220,11 +1218,11 @@ async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, d
   if (uniq.length < 4) return null;
   const order = difficulty === "hard" ? ["hard", "medium", "easy"] : difficulty === "easy" ? ["easy", "medium", "hard"] : ["medium", "easy", "hard"];
   const bandRank = (band) => order.indexOf(band);
-  // 2026-09-27: candidate pool 8 -> 14. Fandom thumbnails are missing/403 for
-  // many subjects ("images don't even spawn half the time"); each extra
-  // candidate is one more chance to land a verified asset.
-  // 2026-09-30: band-preferred but UNBIASED selection - group by band,
-  // Fisher-Yates inside each group, then walk bands outward from the wanted one
+ // candidate pool 8 -> 14. Fandom thumbnails are missing/403 for
+ // many subjects ("images don't even spawn half the time"); each extra
+ // candidate is one more chance to land a verified asset.
+ // band-preferred but UNBIASED selection - group by band,
+ // Fisher-Yates inside each group, then walk bands outward from the wanted one
   const byBand = new Map();
   for (const u of uniq) { if (!byBand.has(u.band)) byBand.set(u.band, []); byBand.get(u.band).push(u); }
   const candidates = [];
@@ -1236,21 +1234,21 @@ async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, d
   const candidatesUniq = candidates.filter((c) => (uniqSeen.has(c.name) ? false : (uniqSeen.add(c.name), true)));
   candidates.length = 0; candidates.push(...candidatesUniq.slice(0, 14));
 
-  // fetch + VERIFY an image for one candidate. 2026-09-27 owner brief §4:
-  // every byte passes FOUR checks before it may enter a question:
-  //   1. download succeeded (magic bytes, P13 - unchanged)
-  //   2. pixel gate: decodes via sharp, big enough, not black/blank/flat/
-  //      transparent-dominant, jpeg/png/webp only (imageGate)
-  //   3. subject verification via the vision provider when one is configured
-  //      (Box 2 CLIP verifier through VISION_ENDPOINT; absent -> skip)
-  //   4. WhatsApp sendability = (1)+(2)+format whitelist
-  // SOURCES, in order (canonical/anchored first - "Don't just search the web
-  // and grab the first vaguely related image"):
-  //   1. the franchise wiki's own pageimage (page-anchored)
-  //   2. AniList MEDIA-SCOPED character art (anime/manga - database-anchored
-  //      to this exact show, the strongest anchor there is)
-  //   3. Wikipedia article image for "<character> <franchise>"
-  //   4. Wikipedia File-namespace search (junk-filtered) - last resort
+ // fetch + VERIFY an image for one candidate. owner brief §4:
+ // every byte passes FOUR checks before it may enter a question:
+ // 1. download succeeded (magic bytes, P13 - unchanged)
+ // 2. pixel gate: decodes via sharp, big enough, not black/blank/flat/
+ // transparent-dominant, jpeg/png/webp only (imageGate)
+ // 3. subject verification via the vision provider when one is configured
+ // (Box 2 CLIP verifier through VISION_ENDPOINT; absent -> skip)
+ // 4. WhatsApp sendability = (1)+(2)+format whitelist
+ // SOURCES, in order (canonical/anchored first - "Don't just search the web
+ // and grab the first vaguely related image"):
+ // 1. the franchise wiki's own pageimage (page-anchored)
+ // 2. AniList MEDIA-SCOPED character art (anime/manga - database-anchored
+ // to this exact show, the strongest anchor there is)
+ // 3. Wikipedia article image for "<character> <franchise>"
+ // 4. Wikipedia File-namespace search (junk-filtered) - last resort
   const anilistId = anilistIdEarly; // cast path already tried; legacy sources below
   const fetchVerifiedImage = async (subject) => {
     return mediaWorker.run(async () => {
@@ -1262,12 +1260,12 @@ async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, d
         if (!gate.ok) return null; // black/blank/corrupt/tiny -> next source
         return { ...dl, url, source: tag };
       };
-      // 1. Fandom pageimage (page-anchored, cannot cross subjects)
+ // 1. Fandom pageimage (page-anchored, cannot cross subjects)
       let img = null;
       try { img = await quizLore.getPageImage(wiki, subject); } catch { img = null; }
       let hit = img && img.url ? await trySource("fandom", img.url) : null;
       if (hit) return hit;
-      // 2. AniList media-scoped official character art (franchise-anchored)
+ // 2. AniList media-scoped official character art (franchise-anchored)
       if (anilistId) {
         const al = await anilistCharacterImage(anilistId, subject).catch(() => null);
         if (al && al.url) {
@@ -1275,9 +1273,9 @@ async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, d
           if (hit) return hit;
         }
       }
-      // 2b. 💡 OWNER SPEC §5/§6: Jikan (MyAnimeList) character-page portrait -
-      // database-anchored EXACT entity (character index entry, not a search
-      // result). Free/keyless; exact-name acceptance only.
+ // 2b. OWNER SPEC §5/§6: Jikan (MyAnimeList) character-page portrait -
+ // database-anchored EXACT entity (character index entry, not a search
+ // result). Free/keyless; exact-name acceptance only.
       {
         const jk = await jikanCharacterImage(subject).catch(() => null);
         if (jk && jk.url) {
@@ -1285,7 +1283,7 @@ async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, d
           if (hit) return hit;
         }
       }
-      // 3+4. Wikipedia (search-anchored, independent)
+ // 3+4. Wikipedia (search-anchored, independent)
       for (const mode of ["article", "files"]) {
         const wp = await quizLore.wikipediaImage(`${subject} ${franchiseTitle}`, 700, mode).catch(() => null);
         if (wp && wp.url) {
@@ -1301,11 +1299,11 @@ async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, d
     const page = ch.name;
     if (usedKeys && usedKeys.has(`img:${page}`)) continue;
     let hit = await fetchVerifiedImage(page);
-    // 💡 VISION VERIFY (owner brief §4): when a vision provider is configured
-    // the accepted image must actually depict the requested subject; a
-    // mismatch/NSFW verdict discards it and the loop moves to the next
-    // candidate. "unknown" (no provider / flake) NEVER rejects - canonical
-    // anchoring above remains the primary correctness lever.
+ // VISION VERIFY (owner brief §4): when a vision provider is configured
+ // the accepted image must actually depict the requested subject; a
+ // mismatch/NSFW verdict discards it and the loop moves to the next
+ // candidate. "unknown" (no provider / flake) NEVER rejects - canonical
+ // anchoring above remains the primary correctness lever.
     if (hit && visionVerify.providerConfigured()) {
       const v = await visionVerify.verifySubject(hit.buf, hit.mime, page, franchiseTitle).catch(() => ({ decision: "unknown" }));
       if (v.decision === "reject") {
@@ -1315,11 +1313,11 @@ async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, d
       }
     }
     if (!hit) continue;
-    // P26: seed the shared asset cache with these verified bytes so the
-    // post-time send reuses them - fresh image questions download their
-    // image exactly ONCE (was: once at generation, again at post time).
+ // P26: seed the shared asset cache with these verified bytes so the
+ // post-time send reuses them - fresh image questions download their
+ // image exactly ONCE (was: once at generation, again at post time).
     quizBank.putCachedAsset(hit.url, { buf: hit.buf, mime: hit.mime, kind: "image" });
-    // options: correct + 3 same-franchise names (no cross-franchise options)
+ // options: correct + 3 same-franchise names (no cross-franchise options)
     const others = uniq
       .filter((x) => String(x.name).toLowerCase() !== String(ch.name).toLowerCase())
       .sort(() => Math.random() - 0.5).slice(0, 3);
@@ -1345,13 +1343,13 @@ async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, d
   return null;
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // P11/P14: THEME-SONG AUDIO QUESTION (reuses .j audio infra)
 // Chain: MEDIA -> theme song name (Jikan/MAL) -> goService.getAudioInfo
 // (the SAME retrieval .j audio uses) -> verify the hit actually matches the
 // song/media -> download -> ffmpeg 30s clip -> verify bytes -> question.
 // Any failure returns null and the quiz simply continues without it.
-// ════════════════════════════════════════════
+// ============================================
 
 function _clipAudioBuffer(buf, ffmpegPath, seconds = 30) {
   return new Promise((resolve) => {
@@ -1361,7 +1359,7 @@ function _clipAudioBuffer(buf, ffmpegPath, seconds = 30) {
     const outPath = `${inPath}.mp3`;
     try {
       fs.writeFileSync(inPath, buf);
-      // re-encode (not -c copy) so every codec lands as a clean mp3
+ // re-encode (not -c copy) so every codec lands as a clean mp3
       execFile(ffmpegPath, ["-y", "-hide_banner", "-loglevel", "error", "-i", inPath, "-t", String(seconds), "-b:a", "96k", outPath], { timeout: 60000 }, (err) => {
         try {
           if (err) { fs.unlink(inPath, () => {}); return resolve(null); }
@@ -1384,10 +1382,10 @@ async function buildThemeSongQuestion(franchise, otherTitles, usedKeys) {
   const pool = [...songs.openings, ...songs.endings].filter((s) => s && s.length >= 3);
   if (!pool.length) return null;
 
-  // P29: options = correct media + 3 other well-known titles. Franchises
-  // resolved wiki-first have empty otherTitles (candidates only populate on
-  // the anime-pick path), which silently killed EVERY theme-song question -
-  // fill the shortfall from the well-known franchise pool (P11 spec intent).
+ // P29: options = correct media + 3 other well-known titles. Franchises
+ // resolved wiki-first have empty otherTitles (candidates only populate on
+ // the anime-pick path), which silently killed EVERY theme-song question -
+ // fill the shortfall from the well-known franchise pool (P11 spec intent).
   const franchiseLower = String(franchise.title).toLowerCase();
   let others = (otherTitles || [])
     .filter((t) => String(t).toLowerCase() !== franchiseLower)
@@ -1407,22 +1405,22 @@ async function buildThemeSongQuestion(franchise, otherTitles, usedKeys) {
   const optionsPool = [franchise.title, ...others];
   const order = _fyShuffle(optionsPool.map((_, i) => i)); // fair option order
 
-  // P29: try up to 3 candidate songs - audio retrieval hits that fail P14
-  // verification used to kill the whole question; every candidate still goes
-  // through the exact same verification gates, only the pick is retried.
+ // P29: try up to 3 candidate songs - audio retrieval hits that fail P14
+ // verification used to kill the whole question; every candidate still goes
+ // through the exact same verification gates, only the pick is retried.
   const candidates = pool.sort(() => Math.random() - 0.5).slice(0, 3);
   for (const song of candidates) {
     if (usedKeys && usedKeys.has(`song:${_normText(song)}`)) continue;
 
-    // retrieval through the EXISTING audio infra (P11: no parallel fetch system).
-    // P25: ask the service to hand back the clipped 30s/96k bytes directly - it
-    // already downloaded + converted the track, so this kills the full-file
-    // re-download AND the local ffmpeg spawn on this box. Same ffmpeg binary +
-    // same args = same clip bytes/audio as the old local trim (1-byte LAME
-    // metadata difference, zero effect: audio clips are never content-hashed).
-    // 💡 OWNER SPEC §3 (2026-09-28): disk cache first (keyed like the media
-    // modes: song:<song>:<franchise>) - repeat quizzes skip the Go chain
-    // entirely; fresh failures are marked for 24h.
+ // retrieval through the EXISTING audio infra (P11: no parallel fetch system).
+ // P25: ask the service to hand back the clipped 30s/96k bytes directly - it
+ // already downloaded + converted the track, so this kills the full-file
+ // re-download AND the local ffmpeg spawn on this box. Same ffmpeg binary +
+ // same args = same clip bytes/audio as the old local trim (1-byte LAME
+ // metadata difference, zero effect: audio clips are never content-hashed).
+ // OWNER SPEC §3: disk cache first (keyed like the media
+ // modes: song:<song>:<franchise>) - repeat quizzes skip the Go chain
+ // entirely; fresh failures are marked for 24h.
     const cacheKey = `song:${_normText(song)}:${_normText(franchise.title)}`;
     const cachedClip = audioCache.get(cacheKey);
     let clip = cachedClip || null;
@@ -1430,9 +1428,9 @@ async function buildThemeSongQuestion(franchise, otherTitles, usedKeys) {
     if (!clip) {
       const info = await deps.goService.getAudioInfo(`${song} ${franchise.title} opening`, { clipSeconds: 30, clipBitrate: "96k", timeoutMs: 120000, noRetry: true }).catch(() => null);
       if (!info || info.error || !info.audioURL || !info.metadata) { audioCache.markFail(cacheKey); continue; }
-      // P14 verification: the hit must actually belong to this media. A search
-      // API hit alone is NOT verification - require title overlap with the song
-      // name or the franchise title.
+ // P14 verification: the hit must actually belong to this media. A search
+ // API hit alone is NOT verification - require title overlap with the song
+ // name or the franchise title.
       const metaTitle = _normText(info.metadata.title);
       const songN = _normText(song);
       const franN = _normText(franchise.title || "");
@@ -1440,12 +1438,12 @@ async function buildThemeSongQuestion(franchise, otherTitles, usedKeys) {
         || (franN.length >= 5 && metaTitle.includes(franN.split(" ")[0]));
       if (!overlap) { audioCache.markFail(cacheKey); continue; }
 
-      // download + byte verification BEFORE the question is playable.
-      // Acceptance gates match the legacy pipeline exactly: full file >= 50KB,
-      // final clip > 20KB.
+ // download + byte verification BEFORE the question is playable.
+ // Acceptance gates match the legacy pipeline exactly: full file >= 50KB,
+ // final clip > 20KB.
       if (info.clipped) {
-        // P25 fast path: the service already trimmed (fullBytes gate mirrors the
-        // old >=50KB check on the full file we used to download)
+ // P25 fast path: the service already trimmed (fullBytes gate mirrors the
+ // old >=50KB check on the full file we used to download)
         const fullOk = !Number.isFinite(info.fullBytes) || info.fullBytes >= 50 * 1024;
         const dl = await mediaWorker.run(
           () => axios.get(info.audioURL, { responseType: "arraybuffer", timeout: 60000, maxContentLength: 20 * 1024 * 1024 }).catch(() => null),
@@ -1454,8 +1452,8 @@ async function buildThemeSongQuestion(franchise, otherTitles, usedKeys) {
         if (fullOk && dl && dl.data && dl.data.length > 20 * 1024) clip = Buffer.from(dl.data);
       }
       if (!clip) {
-        // legacy path: full file download + local ffmpeg trim (older Go build or
-        // server-side clip failed) - unchanged behavior
+ // legacy path: full file download + local ffmpeg trim (older Go build or
+ // server-side clip failed) - unchanged behavior
         const dl = await axios.get(info.audioURL, { responseType: "arraybuffer", timeout: 60000, maxContentLength: 20 * 1024 * 1024 }).catch(() => null);
         if (!dl || !dl.data || dl.data.length < 50 * 1024) { audioCache.markFail(cacheKey); continue; }
         clip = await _clipAudioBuffer(Buffer.from(dl.data), deps.ffmpegPath, 30);
@@ -1484,19 +1482,19 @@ async function buildThemeSongQuestion(franchise, otherTitles, usedKeys) {
   return null;
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // P3: LIFECYCLE LOCK (atomic, always released)
 // acquire is SYNCHRONOUS - the generation-vs-generation race and the
 // generation-vs-active-session race both die here. Released on: success,
 // generation failure, API failure, AI failure, image failure, DB failure,
 // timeout, cancellation, restart (in-memory) - plus a TTL safety net.
-// ════════════════════════════════════════════
+// ============================================
 
 function acquireLifecycle(chatId) {
   const cur = lifecycle.get(chatId);
   if (cur) {
-    // TTL safety net: a 'generating' lock older than the TTL is stale
-    // (crashed worker / orphaned promise) - reclaim it.
+ // TTL safety net: a 'generating' lock older than the TTL is stale
+ // (crashed worker / orphaned promise) - reclaim it.
     if (cur.state === "generating" && Date.now() - cur.since > GENERATING_LOCK_TTL_MS) {
       console.log("[Quiz] stale generating lock reclaimed (TTL)");
     } else {
@@ -1516,7 +1514,7 @@ function releaseLifecycle(chatId) {
   lifecycle.delete(chatId);
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // P20: BOT-WIDE GENERATION GATE (prep-phase concurrency cap)
 // Caps how many quizzes GENERATE at the same time across the whole bot
 // (all instances share this one node process). Playing is never gated -
@@ -1524,23 +1522,23 @@ function releaseLifecycle(chatId) {
 // Over the cap, launches WAIT in FIFO order (never dropped); if the wait
 // exceeds GEN_QUEUE_TIMEOUT_MS they are deferred with a clear message.
 // Normal traffic (1 group generating) never touches the queue.
-// ════════════════════════════════════════════
+// ============================================
 
 const GEN_SLOTS = Math.max(1, parseInt(process.env.QUIZ_GEN_SLOTS, 10) || 1);
-// 💡 OWNER SPEC §4 (2026-09-28): ONE quiz active bot-wide. The slot is now
+// OWNER SPEC §4: ONE quiz active bot-wide. The slot is now
 // held for the FULL lifecycle (planning + ready-park + playing), not just
 // prep - released when the quiz finishes, is ended, expires un-started, or
 // fails. The default queue wait is 45min so a queued group realistically
 // survives a full running quiz ahead of it (env still overrides).
 const GEN_QUEUE_TIMEOUT_MS = Math.max(30000, parseInt(process.env.QUIZ_GEN_QUEUE_TIMEOUT_MS, 10) || 45 * 60 * 1000);
-// 💡 OWNER SPEC §4: a running quiz must never block the queue forever -
+// OWNER SPEC §4: a running quiz must never block the queue forever -
 // hard session cap (zombie safety net on top of .j quiz end).
 const SESSION_MAX_MS = Math.max(10 * 60 * 1000, parseInt(process.env.QUIZ_SESSION_MAX_MS, 10) || 90 * 60 * 1000);
 const genGate = { active: 0, waiters: [] };
 
 function acquireGenSlot(prep, onQueued = null) {
   return new Promise((resolve) => {
-    // duplicate-entry guard: one queued launch per chat (owner spec §4)
+ // duplicate-entry guard: one queued launch per chat (owner spec §4)
     if (prep && prep.chatId && genGate.waiters.some((w) => w.prep && w.prep.chatId === prep.chatId)) {
       resolve(false);
       return;
@@ -1567,8 +1565,8 @@ function acquireGenSlot(prep, onQueued = null) {
 }
 
 function pumpGenGate() {
-  // P20: purge cancelled waiters FIRST - they need no slot and must not sit
-  // until their timeout ticks (endQuiz cancels can happen at zero free slots)
+ // P20: purge cancelled waiters FIRST - they need no slot and must not sit
+ // until their timeout ticks (endQuiz cancels can happen at zero free slots)
   for (let i = genGate.waiters.length - 1; i >= 0; i--) {
     const w = genGate.waiters[i];
     if (w.prep && w.prep.cancelled) {
@@ -1591,7 +1589,7 @@ function releaseGenSlot() {
   pumpGenGate();
 }
 
-// 💡 OWNER SPEC §4: the gen slot travels WITH the session once it parks
+// OWNER SPEC §4: the gen slot travels WITH the session once it parks
 // (planning -> ready -> playing). Every end path must call this exactly
 // once; the flag makes double-calls harmless.
 function releaseSessionSlot(session) {
@@ -1601,9 +1599,9 @@ function releaseSessionSlot(session) {
   }
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // P15: SEEN + BANK GLUE
-// ════════════════════════════════════════════
+// ============================================
 
 const _seenKey = (animeKey) => `quiz_seen:${animeKey}`;
 
@@ -1625,9 +1623,9 @@ function partitionFresh(questions, animeKey) {
   return { fresh, repeat };
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // PERSISTENT SCOREBOARD (unchanged)
-// ════════════════════════════════════════════
+// ============================================
 
 const _scoreKey = (chatId) => `quiz_scores:${chatId}`;
 
@@ -1661,15 +1659,15 @@ function topOf(chatScores, field, n) {
     .slice(0, n);
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // P7: SECTION PLAN (long quizzes split by available data)
-// count <= sectionSize  -> single implicit section (no ceremony)
-// count >  sectionSize  -> named sections; specialized sections are only
+// count <= sectionSize -> single implicit section (no ceremony)
+// count > sectionSize -> named sections; specialized sections are only
 // included when the franchise actually has data for them (redistribution,
 // not filler). The last section is always the Mixed Challenge.
-// ════════════════════════════════════════════
+// ============================================
 
-// 💡 RANDOM MODE = MIXED PLAYLIST (owner brief 2026-09-28): "random mode
+// RANDOM MODE = MIXED PLAYLIST (owner brief ): "random mode
 // mixing different things" - a random quiz no longer draws ONLY lore
 // sections. It now interleaves question TYPES: a Logo Round, a Spot the
 // Song section, a Picture section (when the franchise has characters) and
@@ -1679,14 +1677,14 @@ function topOf(chatScores, field, n) {
 function buildRandomMixedPlan(cfg, availability = {}) {
   const count = cfg.questionCount;
   const size = Math.max(3, cfg.sectionSize);
-  // media share of the quiz (logos ~20%, songs ~15%, images ~10%)
+ // media share of the quiz (logos ~20%, songs ~15%, images ~10%)
   let logosN = Math.min(6, Math.max(3, Math.round(count * 0.2)));
   let songN = Math.min(5, Math.max(3, Math.round(count * 0.15)));
   let imgN = cfg.imageQuestionCount > 0
     ? cfg.imageQuestionCount
     : Math.min(3, Math.max(2, Math.round(count * 0.1)));
   if (!availability.characters) imgN = 0; // no character art source - skip pictures
-  // lore keeps at least 40% and never drops below 6 questions
+ // lore keeps at least 40% and never drops below 6 questions
   const loreMin = Math.max(6, Math.ceil(count * 0.4));
   while (count - (logosN + songN + imgN) < loreMin) {
     if (logosN > 3) logosN--;
@@ -1697,11 +1695,11 @@ function buildRandomMixedPlan(cfg, availability = {}) {
   const loreN = count - (logosN + songN + imgN);
   if (loreN < 6) return null; // too small for a real mix - caller falls back
 
-  // lore blocks split into section-size chunks
+ // lore blocks split into section-size chunks
   const loreChunks = [];
   let left = loreN;
   while (left > 0) { const give = Math.min(size, left); loreChunks.push(give); left -= give; }
-  // no orphan mini-sections: fold a <3-question tail into the previous chunk
+ // no orphan mini-sections: fold a <3-question tail into the previous chunk
   if (loreChunks.length > 1 && loreChunks[loreChunks.length - 1] < 3) {
     const last = loreChunks.pop();
     loreChunks[loreChunks.length - 1] += last;
@@ -1709,12 +1707,12 @@ function buildRandomMixedPlan(cfg, availability = {}) {
 
   const plan = [];
   plan.push({ name: "Logo Round", domain: "logos", perSection: logosN, fixed: true });
-  // first lore chunk right after logos (fast start: logos build in seconds)
+ // first lore chunk right after logos (fast start: logos build in seconds)
   const loreDomains = () => ["plot", "characters", "cosmology", "mixed"];
   let li = 0;
   const pushLore = (n) => {
-    // chunks are pre-sized (and folded away from tiny tails) - one section
-    // per chunk, even if it slightly exceeds sectionSize
+ // chunks are pre-sized (and folded away from tiny tails) - one section
+ // per chunk, even if it slightly exceeds sectionSize
     if (n <= 0) return;
     const dom = loreDomains()[li % loreDomains().length];
     const tpl = LONG_SECTION_TEMPLATES.find((t) => t.domain === dom);
@@ -1722,8 +1720,8 @@ function buildRandomMixedPlan(cfg, availability = {}) {
     li++;
   };
   pushLore(loreChunks.shift() || 0);
-  // Spot the Song in the middle (audio retrieval is slow - it streams while
-  // earlier sections play), then pictures, then the remaining lore.
+ // Spot the Song in the middle (audio retrieval is slow - it streams while
+ // earlier sections play), then pictures, then the remaining lore.
   plan.push({ name: "Spot the Song", domain: "song", perSection: songN, fixed: true });
   if (imgN > 0) plan.push({ name: "Picture Round", domain: "images", perSection: imgN, fixed: true });
   pushLore(loreChunks.shift() || 0);
@@ -1734,20 +1732,20 @@ function buildRandomMixedPlan(cfg, availability = {}) {
 function buildSectionPlan(cfg, availability = {}) {
   const count = cfg.questionCount;
   const size = Math.max(3, cfg.sectionSize);
-  // 2026-09-28: random mode mixes question types (see buildRandomMixedPlan)
+ // random mode mixes question types (see buildRandomMixedPlan)
   if (cfg.randomMode && count >= 9) {
     const mixed = buildRandomMixedPlan(cfg, availability);
     if (mixed) return mixed;
   }
   if (count <= size) {
-    // 💡 2026-09-28 OWNER AUDIT §4 (image-system fix): "-images N" was
-    // SILENTLY DROPPED on short quizzes. The single-section plan only ever
-    // produced a lore/mixed section, and generateSectionQuestions builds
-    // image questions ONLY for domain==="images" sections - so
-    // ".j quiz X 10 -images 5" promised pictures in the planning card and
-    // shipped zero (seen live: Dragon Ball 10q, random 10 -images 5).
-    // Fix: when characters are available, split the quiz into a Picture
-    // Round + a text section (or a single Picture Round when -images >= count).
+ // OWNER AUDIT §4 (image-system fix): "-images N" was
+ // SILENTLY DROPPED on short quizzes. The single-section plan only ever
+ // produced a lore/mixed section, and generateSectionQuestions builds
+ // image questions ONLY for domain==="images" sections - so
+ // ".j quiz X 10 -images 5" promised pictures in the planning card and
+ // shipped zero (seen live: Dragon Ball 10q, random 10 -images 5).
+ // Fix: when characters are available, split the quiz into a Picture
+ // Round + a text section (or a single Picture Round when -images >= count).
     const imgN = cfg.imageQuestionCount > 0 && availability.characters
       ? Math.min(cfg.imageQuestionCount, count)
       : 0;
@@ -1768,7 +1766,7 @@ function buildSectionPlan(cfg, availability = {}) {
   if (forced) {
     for (let i = 0; i < nSections; i++) plan.push({ name: `${forced[0].toUpperCase()}${forced.slice(1)} Part ${i + 1}`, domain: forced, perSection: 0 });
   } else {
-    // ordered candidates filtered by real availability
+ // ordered candidates filtered by real availability
     const wanted = [];
     if (cfg.imageQuestionCount > 0 && availability.characters) wanted.push("images");
     wanted.push("plot");
@@ -1780,7 +1778,7 @@ function buildSectionPlan(cfg, availability = {}) {
       const tpl = LONG_SECTION_TEMPLATES.find((t) => t.domain === domain) || LONG_SECTION_TEMPLATES[5];
       plan.push({ name: i === nSections - 1 ? "Mixed Challenge" : tpl.name, domain, perSection: 0 });
     }
-    // avoid two identical non-mixed sections back to back when variety exists
+ // avoid two identical non-mixed sections back to back when variety exists
     for (let i = 1; i < plan.length - 1; i++) {
       if (plan[i].domain === plan[i - 1].domain && wanted.length > 2) {
         const alt = wanted.find((d) => d !== plan[i].domain && d !== plan[i - 1].domain) || "mixed";
@@ -1789,8 +1787,8 @@ function buildSectionPlan(cfg, availability = {}) {
       }
     }
   }
-  // distribute the real count: first sections get full size, last absorbs remainder
-  // (mixed random plans set exact perSection sizes - never redistributed)
+ // distribute the real count: first sections get full size, last absorbs remainder
+ // (mixed random plans set exact perSection sizes - never redistributed)
   if (!plan.some((p) => p.fixed)) {
     let left = count;
     for (let i = 0; i < plan.length; i++) {
@@ -1817,22 +1815,22 @@ async function probeAvailability(wiki, franchiseTitle, animeCharacters) {
   return availability;
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // P19: SECTION GENERATION WORKERS (streaming)
 // Exactly ONE generation job per section (session.sectionJobs guard).
 // Full pipeline per question: source data -> AI -> schema -> P12 validation
 // -> dedup -> media prep where needed -> bank store -> READY.
-// ════════════════════════════════════════════
+// ============================================
 
 function mediaKeyFor(session) {
-  // 2026-09-27: standalone media modes bank under their own key so logo and
-  // song questions reuse across sessions like lore questions do.
+ // standalone media modes bank under their own key so logo and
+ // song questions reuse across sessions like lore questions do.
   if (session.mode === "logos") return "mode:logos";
   if (session.mode === "song") return "mode:songs";
-  // 2026-10-10: preplanned pack never banks (fixed questions, pinned media)
+ // preplanned pack never banks (fixed questions, pinned media)
   if (session.mode === "preplanned") return "mode:preplanned";
-  // 2026-10-10: random-ds mixes dataset rounds + one Logo Round - the only
-  // banked domain in the mix is logos, so share that bank bucket.
+ // random-ds mixes dataset rounds + one Logo Round - the only
+ // banked domain in the mix is logos, so share that bank bucket.
   if (session.mode === "random-ds") return "mode:logos";
   return session.wiki
     ? `wiki:${session.wiki}`
@@ -1858,10 +1856,10 @@ async function generateSectionQuestions(session, section, sock, chatId) {
   const usedKeys = session.usedKeys;
   const mk = mediaKeyFor(session);
 
-  // ── 2026-10-10 OWNER OVERHAUL: dataset modes (games/comics/movies/series) ──
-  // Fully synchronous + offline: entries come from data/quizDataset.json
-  // (images verified at build time). No LLM, no network, no bank writes -
-  // usage-fairness + the session usedKeys set handle variety/dedup.
+ // -- OWNER OVERHAUL: dataset modes (games/comics/movies/series) --
+ // Fully synchronous + offline: entries come from data/quizDataset.json
+ // (images verified at build time). No LLM, no network, no bank writes -
+ // usage-fairness + the session usedKeys set handle variety/dedup.
   if (["games", "comics", "movies", "series"].includes(section.domain)) {
     const fresh = quizDatasetMod.buildDatasetQuestions({ mode: section.domain, count: sectionCount, usedKeys, difficulty: cfg.difficulty });
     for (const q of fresh || []) questions.push(q);
@@ -1869,7 +1867,7 @@ async function generateSectionQuestions(session, section, sock, chatId) {
     section.questions = questions.slice(0, sectionCount);
     return section.questions;
   }
-  // ── 2026-10-10 OWNER: preplanned pinned trivia (fixed pack, zero LLM) ──
+ // -- OWNER: preplanned pinned trivia (fixed pack, zero LLM) --
   if (section.domain === "preplanned" && Array.isArray(section.pinnedTrivia)) {
     for (const t of section.pinnedTrivia) {
       if (questions.length >= sectionCount) break;
@@ -1881,13 +1879,13 @@ async function generateSectionQuestions(session, section, sock, chatId) {
     section.questions = questions.slice(0, sectionCount);
     return section.questions;
   }
-  // ── 2026-09-27: standalone media modes (logos / song) ──
-  // LLM-free deterministic generation with real verified assets. Everything
-  // downstream (READY state, banking, postQuestion) is shared with lore.
+ // -- standalone media modes (logos / song) --
+ // LLM-free deterministic generation with real verified assets. Everything
+ // downstream (READY state, banking, postQuestion) is shared with lore.
   if (section.domain === "logos") {
-    // 💡 2026-10-10 OWNER: pinned brands for the preplanned pack - build each
-    // pinned brand deterministically (dataset-primary path, no fairness draw,
-    // no bank writes). Same verified pipeline, just curated inputs.
+ // OWNER: pinned brands for the preplanned pack - build each
+ // pinned brand deterministically (dataset-primary path, no fairness draw,
+ // no bank writes). Same verified pipeline, just curated inputs.
     if (Array.isArray(section.pinnedBrands)) {
       for (const brand of section.pinnedBrands) {
         if (questions.length >= sectionCount) break;
@@ -1922,9 +1920,9 @@ async function generateSectionQuestions(session, section, sock, chatId) {
     return section.questions;
   }
   if (section.domain === "song" || section.domain === "audio") {
-    // 💡 2026-10-10 OWNER: pinned theme entries for the preplanned pack -
-    // fixed 10 songs (5 games / 5 anime), SPECIFIC song-name searches, first
-    // 30 SECONDS clips, 45s answer timer (owner timer spec).
+ // OWNER: pinned theme entries for the preplanned pack -
+ // fixed 10 songs (5 games / 5 anime), SPECIFIC song-name searches, first
+ // 30 SECONDS clips, 45s answer timer (owner timer spec).
     if (Array.isArray(section.pinnedThemes)) {
       const clipSecs = section.clipSeconds || 25;
       const built = await mediaWorker.run(
@@ -1955,10 +1953,10 @@ async function generateSectionQuestions(session, section, sock, chatId) {
       return section.questions;
     }
     const isTheme = section.domain === "audio";
-    // 💡 OWNER SPEC §3 (2026-09-28): the audio build gets an 8-minute media
-    // budget (was 5min - the direct cause of the "~5 audio questions then
-    // stall/break" ceiling) and passes a deadline into the builders so they
-    // stop STARTING retrievals they cannot finish inside the budget.
+ // OWNER SPEC §3: the audio build gets an 8-minute media
+ // budget (was 5min - the direct cause of the "~5 audio questions then
+ // stall/break" ceiling) and passes a deadline into the builders so they
+ // stop STARTING retrievals they cannot finish inside the budget.
     const audioDeadline = Date.now() + 7 * 60 * 1000; // 7min builder deadline (2min slack under the 10min worker cap)
     const fresh = await mediaWorker.run(
       () => isTheme
@@ -1985,9 +1983,9 @@ async function generateSectionQuestions(session, section, sock, chatId) {
     return section.questions;
   }
 
-  // 💡 RANDOM ACROSS FICTION (owner brief §2): in random mode every lore
-  // section draws its OWN franchise. First section's context came from the
-  // launch; sections 2+ resolve a fresh world here (network, cached per wiki).
+ // RANDOM ACROSS FICTION (owner brief §2): in random mode every lore
+ // section draws its OWN franchise. First section's context came from the
+ // launch; sections 2+ resolve a fresh world here (network, cached per wiki).
   if (session.mode === "random" && !section.franchise) {
     const drawn = await drawSectionFranchise(session).catch(() => null);
     if (drawn) {
@@ -2005,7 +2003,7 @@ async function generateSectionQuestions(session, section, sock, chatId) {
   const fOther = F?.otherTitles || session.otherTitles || [];
   const fMediaType = F?.mediaType || cfg.mediaType;
 
-  // lazy character index (per franchise wiki, cached once per session - P21)
+ // lazy character index (per franchise wiki, cached once per session - P21)
   session.charIndexByWiki = session.charIndexByWiki || new Map();
   let charIdx = fWiki ? (session.charIndexByWiki.get(fWiki) || null) : null;
   if (fWiki && !charIdx) {
@@ -2015,17 +2013,17 @@ async function generateSectionQuestions(session, section, sock, chatId) {
     } catch { charIdx = null; }
   }
 
-  // 💡 random-mode Picture Round: an "images" section ALWAYS wants image
-  // questions (cfg.imageQuestionCount is only set by the -images flag; the
-  // auto-mixed plan adds picture sections without it)
+ // random-mode Picture Round: an "images" section ALWAYS wants image
+ // questions (cfg.imageQuestionCount is only set by the -images flag; the
+ // auto-mixed plan adds picture sections without it)
   const wantsImages = section.domain === "images"
     ? (cfg.imageQuestionCount > 0 || session.mode === "random")
     : false;
   const needImages = wantsImages ? Math.min(cfg.imageQuestionCount > 0 ? cfg.imageQuestionCount : sectionCount, sectionCount) : 0;
   const needText = sectionCount - needImages;
 
-  // P21: no wiki -> straight to domain-aware metadata fallbacks (no wasted
-  // network retries against a nonexistent wiki)
+ // P21: no wiki -> straight to domain-aware metadata fallbacks (no wasted
+ // network retries against a nonexistent wiki)
   if (!fWiki) {
     const fbAll = buildFallbackQuestions(fAnime, fChars, cfg.difficulty, sectionCount + 6);
     const allowedDomains = cfg.categories ? new Set(cfg.categories) : null;
@@ -2047,18 +2045,18 @@ async function generateSectionQuestions(session, section, sock, chatId) {
 
   if (needImages > 0) {
     let served = 0;
-    // bank-served image questions (asset re-verified at post time)
+ // bank-served image questions (asset re-verified at post time)
     const banked = quizBank.bankLookup(fMk, loadSeen(fMk).map((h) => h), needImages, { type: "image" });
     for (const b of banked) { questions.push(b); served++; }
     while (served < needImages) {
       const q = await buildImageQuestion(fWiki, fTitle, charIdx, usedKeys, cfg.difficulty, { franchise: fFranchise, mediaType: fMediaType, _hostSession: session }).catch(() => null);
       if (!q) break; // no verified images - graceful (text takes over below)
-      // P15 dedup: skip if this asset already in bank
+ // P15 dedup: skip if this asset already in bank
       if (quizBank.bankPut(fMk, q)) questions.push(q);
       else if (!questions.some((x) => x.assetKey === q.assetKey)) questions.push(q);
       served++;
     }
-    // fill any image shortfall with text lore (never fake an image)
+ // fill any image shortfall with text lore (never fake an image)
     while (questions.length < sectionCount) {
       const extra = await generateLoreQuestions(fWiki, fTitle, cfg.difficulty, sectionCount - questions.length, "characters", fChars, session.callLLM, { vaCap: 0, mediaType: fMediaType });
       if (!extra.length) break;
@@ -2069,29 +2067,29 @@ async function generateSectionQuestions(session, section, sock, chatId) {
     return section.questions;
   }
 
-  // P24: theme-song retrieval starts IN PARALLEL with text generation (the
-  // audio-service chain can take seconds-to-minutes; the text LLM path does
-  // not depend on it). The result is still INSERTED at the same position
-  // (after text questions), so ordering and content are unchanged.
+ // P24: theme-song retrieval starts IN PARALLEL with text generation (the
+ // audio-service chain can take seconds-to-minutes; the text LLM path does
+ // not depend on it). The result is still INSERTED at the same position
+ // (after text questions), so ordering and content are unchanged.
   const tsPromise = (cfg.audioQuestionCount > 0 && section.canCarryAudio && cfg.themeSongQuestionCount > 0 && fFranchise)
     ? buildThemeSongQuestion(fFranchise, fOther, usedKeys).catch(() => null)
     : null;
 
-  // text lore questions (with P12 validation inside generateLoreQuestions)
+ // text lore questions (with P12 validation inside generateLoreQuestions)
   let textQs = [];
   try {
-    // forced section domain (non-mixed) -> 100% that domain inside the section
+ // forced section domain (non-mixed) -> 100% that domain inside the section
     const forcedDomain = cfg.categories ? cfg.categories[0] : (section.domain && section.domain !== "mixed" && section.domain !== "images" ? section.domain : null);
     textQs = await generateLoreQuestions(fWiki, fTitle, cfg.difficulty, needText, forcedDomain, fChars, session.callLLM, { vaCap: cfg.voiceActorQuestionLimit, mediaType: fMediaType, usedKeys: session.usedKeys });
   } catch (e) {
     console.log("[Quiz] section generation error:", e?.message);
   }
-  // P6: keep only domains that belong to this quiz's category mix
+ // P6: keep only domains that belong to this quiz's category mix
   const allowedDomains = cfg.categories ? new Set(cfg.categories) : null;
   const filtered = textQs.filter((q) => !allowedDomains || allowedDomains.has(q.domain) || q.domain === "mixed");
   questions.push(...filtered);
 
-  // audio questions (theme song / voice) when this section should carry them
+ // audio questions (theme song / voice) when this section should carry them
   if (cfg.audioQuestionCount > 0 && section.canCarryAudio) {
     let audioLeft = cfg.audioQuestionCount;
     if (cfg.themeSongQuestionCount > 0 && fFranchise) {
@@ -2099,12 +2097,12 @@ async function generateSectionQuestions(session, section, sock, chatId) {
       if (ts) { questions.push(ts); audioLeft--; }
     }
     if (audioLeft > 0 && charIdx && questions.length) {
-      // character voice audio: hunt on one of the section's character subjects
+ // character voice audio: hunt on one of the section's character subjects
       const subj = questions.find((q) => q.loreRef && q.loreRef.page && q.domain === "characters");
       if (subj) {
         const audio = await quizLore.findAudioForPage(fWiki, subj.loreRef.page).catch(() => null);
         if (audio && audio.buf) {
-          // attach to the EXISTING lore question (audio cue plays, then card)
+ // attach to the EXISTING lore question (audio cue plays, then card)
           subj.type = "audio";
           subj.asset = { kind: "audio", buf: audio.buf, mime: audio.mime, subject: subj.loreRef.page };
         }
@@ -2112,14 +2110,14 @@ async function generateSectionQuestions(session, section, sock, chatId) {
     }
   }
 
-  // P6/P10: if the section still falls short and a forced category failed,
-  // top up with lore from the ALLOWED domains only (never production filler)
+ // P6/P10: if the section still falls short and a forced category failed,
+ // top up with lore from the ALLOWED domains only (never production filler)
   if (questions.length < sectionCount) {
     const shortfall = sectionCount - questions.length;
     const altDomain = cfg.categories ? cfg.categories[0] : (section.domain && section.domain !== "mixed" ? section.domain : null);
     const fb = buildFallbackQuestions(fAnime, fChars, cfg.difficulty, shortfall + 4)
       .filter((q) => !allowedDomains || allowedDomains.has(q.domain));
-    // production fallback respects the VA cap
+ // production fallback respects the VA cap
     const prodCount = questions.filter((q) => q.domain === "production").length;
     let prodBudget = Math.max(0, cfg.voiceActorQuestionLimit - prodCount);
     for (const f of fb) {
@@ -2138,10 +2136,10 @@ async function generateSectionQuestions(session, section, sock, chatId) {
 
   section.state = SECTION_STATES.READY;
   section.questions = questions.slice(0, sectionCount);
-  // bank every validated TEXT question (P15: reuse before regen next time).
-  // 2026-09-27 fix: audio questions (theme/song/voice) carry LIVE BYTES in
-  // asset.buf and are no longer banked - the old loop stored the full clip
-  // into MongoDB per question (hundreds of KB per doc, pure bloat).
+ // bank every validated TEXT question (P15: reuse before regen next time).
+ // fix: audio questions (theme/song/voice) carry LIVE BYTES in
+ // asset.buf and are no longer banked - the old loop stored the full clip
+ // into MongoDB per question (hundreds of KB per doc, pure bloat).
   for (const q of section.questions) {
     if (q && q.q && !q.fromBank && q.type !== "theme" && q.type !== "audio") {
       try { quizBank.bankPut(fMk, q); } catch { /* non-fatal */ }
@@ -2177,9 +2175,9 @@ function ensureSectionGenerating(session, i, sock, chatId) {
   return null;
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // LIVE SESSION RUNTIME
-// ════════════════════════════════════════════
+// ============================================
 
 function getSession(chatId) {
   return activeQuizzes.get(chatId) || null;
@@ -2205,10 +2203,10 @@ function formatQuestionCard(session, idx, q) {
   const sectionLabel = session.sections.length > 1 && section && section.name ? `${section.name} • ` : "";
   let s = `🎯 *QUESTION ${session.questionNo}/${total}*  •  ${sectionLabel}${q.topic}  •  ${q.difficulty.toUpperCase()}\n\n`;
   s += `*${q.q}*\n\n`;
-  // 💡 OWNER SPEC §2/§7 (2026-09-28): logo / audio / image questions hide
-  // their options - identifying the answer IS the challenge. The options
-  // still exist internally (answer matching + reveal text), only the card
-  // omits them. Regular anime search / trivia quizzes keep their options.
+ // OWNER SPEC §2/§7: logo / audio / image questions hide
+ // their options - identifying the answer IS the challenge. The options
+ // still exist internally (answer matching + reveal text), only the card
+ // omits them. Regular anime search / trivia quizzes keep their options.
   if (!q.hideOptions) {
     q.options.forEach((o, i) => { s += `${LETTERS[i]}. ${o}\n`; });
     s += `\n⏱ ${secs}s  •  ${POINTS[q.difficulty]} Zeni (+20 speed bonus)  •  one answer each\n`;
@@ -2223,13 +2221,13 @@ function formatQuestionCard(session, idx, q) {
 // resolve a lazy media asset for structural image/audio questions
 async function resolveQuestionMedia(session, q) {
   if (!q || !q.type || q.type === "text" || !q.asset) return null;
-  // theme-song clips carry live bytes (never banked to disk)
+ // theme-song clips carry live bytes (never banked to disk)
   if (q.asset.buf) return { kind: q.asset.kind === "audio" ? "audio" : "image", buf: q.asset.buf, mime: q.asset.mime };
   if (q.asset.kind === "image" && q.asset.url) {
     const dl = await quizBank.getCachedAsset(q.asset.url, async (u) => {
-      // 2026-09-27: post-time re-fetch goes through the shared media worker
-      // (capped concurrency + hard timeout) and retries once on a transient
-      // failure before the question is skipped.
+ // post-time re-fetch goes through the shared media worker
+ // (capped concurrency + hard timeout) and retries once on a transient
+ // failure before the question is skipped.
       const fetchOnce = () => mediaWorker.run(
         () => quizLore.downloadMedia(u, "image").catch(() => null),
         { label: `resolve:${String(u).slice(0, 48)}`, timeoutMs: 30000 },
@@ -2238,10 +2236,10 @@ async function resolveQuestionMedia(session, q) {
       return d ? { buf: d.buf, mime: d.mime, kind: "image" } : null;
     }).catch(() => null);
     if (dl) {
-      // 💡 2026-09-28 OWNER AUDIT §4/§12: LAST-LINE pixel gate before any
-      // quiz image reaches a group - banked/cached bytes, re-downloads and
-      // dataset entries all pass the same blank/black/corrupt check here
-      // (the live audit found black SVG renders that slipped bake gates).
+ // OWNER AUDIT §4/§12: LAST-LINE pixel gate before any
+ // quiz image reaches a group - banked/cached bytes, re-downloads and
+ // dataset entries all pass the same blank/black/corrupt check here
+ // (the live audit found black SVG renders that slipped bake gates).
       const gate = await imageGate.inspectImageBuffer(dl.buf, { minW: 64, minH: 40, label: `qimg:${String(q.asset.subject || q.assetKey || "x").slice(0, 40)}` }).catch(() => ({ ok: false, reason: "gate-crash" }));
       if (gate.ok) return { kind: "image", buf: dl.buf, mime: dl.mime };
       console.log(`[Quiz] post-time image gate rejected asset (${gate.reason}) - question will be skipped`);
@@ -2251,42 +2249,42 @@ async function resolveQuestionMedia(session, q) {
   return null; // missing media -> graceful text fallback (never fake)
 }
 
-// ── 2026-09-28 OWNER AUDIT: question state machine hardening ──
+// -- OWNER AUDIT: question state machine hardening --
 // Every question now has a strict open->resolve lifecycle:
-//   postQuestion     resolves media BEFORE the question opens (early
-//                    answers can no longer register against an unposted
-//                    card), then arms a deadline timer stamped with
-//                    session.qEpoch.
-//   revealAndAdvance takes a process-wide-per-session reveal lock: the
-//                    deadline timer and a correct-answer handler CAN fire
-//                    in the same tick (clearTimeout cannot stop a callback
-//                    that is already running) - without the lock both
-//                    chains completed, revealing the question twice,
-//                    advancing idx twice (silently skipping a question)
-//                    and racing two postQuestion calls into duplicate
-//                    next-question cards. This was the root cause of the
-//                    "same question twice / instant time's up / answers
-//                    counted wrong" cluster in the live group.
-//   qEpoch           monotonic per-session counter; every timer captures
-//                    the epoch it was armed for and a stale timer is a
-//                    no-op. Token alone was too coarse (it only changes
-//                    when the whole quiz ends).
+// postQuestion resolves media BEFORE the question opens (early
+// answers can no longer register against an unposted
+// card), then arms a deadline timer stamped with
+// session.qEpoch.
+// revealAndAdvance takes a process-wide-per-session reveal lock: the
+// deadline timer and a correct-answer handler CAN fire
+// in the same tick (clearTimeout cannot stop a callback
+// that is already running) - without the lock both
+// chains completed, revealing the question twice,
+// advancing idx twice (silently skipping a question)
+// and racing two postQuestion calls into duplicate
+// next-question cards. This was the root cause of the
+// "same question twice / instant time's up / answers
+// counted wrong" cluster in the live group.
+// qEpoch monotonic per-session counter; every timer captures
+// the epoch it was armed for and a stale timer is a
+// no-op. Token alone was too coarse (it only changes
+// when the whole quiz ends).
 async function postQuestion(sock, chatId, session) {
   const section = session.sections[session.activeSection];
   if (!section) { await finishQuiz(sock, chatId, session); return; }
   if (session.cancelled) return;
-  // STATE LOCK: only one question may ever be open. If any path reaches
-  // postQuestion while a question is still open, that is a bug elsewhere -
-  // refuse to double-post instead of corrupting the session.
+ // STATE LOCK: only one question may ever be open. If any path reaches
+ // postQuestion while a question is still open, that is a bug elsewhere -
+ // refuse to double-post instead of corrupting the session.
   if (session.qOpenUntil && session.qOpenUntil > Date.now()) {
     console.log("[Quiz] postQuestion blocked - a question is still open (state guard)");
     return;
   }
 
-  // card sender (image = clue in caption; audio cue before card; text else)
-  // 2026-09-28: critical send -> safeSend (retrying); a connection blip must
-  // never eat a question card (the question only opens once delivery
-  // succeeded or is permanently impossible).
+ // card sender (image = clue in caption; audio cue before card; text else)
+ // critical send -> safeSend (retrying); a connection blip must
+ // never eat a question card (the question only opens once delivery
+ // succeeded or is permanently impossible).
   const postCard = async (qq) => {
     const card = formatQuestionCard(session, session.idx, qq);
     if (qq.media && qq.media.kind === "image" && qq.type === "image") {
@@ -2306,25 +2304,25 @@ async function postQuestion(sock, chatId, session) {
     return safeSend(sock, chatId, { text: BOT_SAFE(card) }, { label: `qcard:${session.questionNo}` });
   };
 
-  // media resolution + delivery happen BEFORE the question opens. A fatal
-  // image failure (unfetchable after the built-in retry, or undeliverable
-  // after one same-bytes resend) SKIPS the question here - the old code
-  // recursed into postQuestion while the outer frame went on to arm its own
-  // deadline timer, overwriting session.timerId and leaving an ORPHANED
-  // timer that fired revealAndAdvance in the middle of the NEXT question
-  // (instant "time's up" + skipped question, seen live).
-  // 💡 2026-09-28 OWNER AUDIT: questionNo now increments only when a card is
-  // actually DELIVERED (it used to increment once pre-loop while the loop
-  // could skip N unfetchable image questions -> "QUESTION 4/10" numbering
-  // drifted from reality).
+ // media resolution + delivery happen BEFORE the question opens. A fatal
+ // image failure (unfetchable after the built-in retry, or undeliverable
+ // after one same-bytes resend) SKIPS the question here - the old code
+ // recursed into postQuestion while the outer frame went on to arm its own
+ // deadline timer, overwriting session.timerId and leaving an ORPHANED
+ // timer that fired revealAndAdvance in the middle of the NEXT question
+ // (instant "time's up" + skipped question, seen live).
+ // OWNER AUDIT: questionNo now increments only when a card is
+ // actually DELIVERED (it used to increment once pre-loop while the loop
+ // could skip N unfetchable image questions -> "QUESTION 4/10" numbering
+ // drifted from reality).
   session.qStartedAt = Date.now();
   let q = section.questions[session.idx];
   while (q) {
-    // 💡 2026-09-28 OWNER AUDIT FIX: media resolution ran ONLY for image
-    // questions - song / theme-song questions (type "theme") and character
-    // voice cues (type "audio") carried live bytes in q.asset that were never
-    // copied to q.media, so postCard's audio branch was UNREACHABLE and every
-    // "Which song is this clip from?" posted as an unanswerable text-only card.
+ // OWNER AUDIT FIX: media resolution ran ONLY for image
+ // questions - song / theme-song questions (type "theme") and character
+ // voice cues (type "audio") carried live bytes in q.asset that were never
+ // copied to q.media, so postCard's audio branch was UNREACHABLE and every
+ // "Which song is this clip from?" posted as an unanswerable text-only card.
     const needsMedia = q.type === "image" || q.type === "theme" || q.type === "audio";
     if (needsMedia && !q.mediaTried) {
       q.mediaTried = true;
@@ -2336,9 +2334,9 @@ async function postQuestion(sock, chatId, session) {
       q = section.questions[session.idx];
       continue;
     }
-    // theme/song questions ARE the audio - without the clip they cannot be
-    // answered, so skip them like undeliverable images. Audio-CUE lore
-    // questions (character voice) degrade to plain text instead.
+ // theme/song questions ARE the audio - without the clip they cannot be
+ // answered, so skip them like undeliverable images. Audio-CUE lore
+ // questions (character voice) degrade to plain text instead.
     const cueRequired = q.type === "theme" || q.domain === "song";
     if (cueRequired && !(q.media && q.media.buf)) {
       console.log("[Quiz] audio cue unavailable pre-post - skipping unanswerable audio question");
@@ -2350,10 +2348,10 @@ async function postQuestion(sock, chatId, session) {
       session.questionNo += 1;
       session.qStartedAt = Date.now();
       const delivered = await postCard(q);
-      // safeSend exhausts retries -> null. An image-clue question that could
-      // not be delivered (image + caption) is unanswerable - skip it rather
-      // than open a blind question. Text questions still open (the reveal at
-      // least reaches the group; never stall the quiz silently).
+ // safeSend exhausts retries -> null. An image-clue question that could
+ // not be delivered (image + caption) is unanswerable - skip it rather
+ // than open a blind question. Text questions still open (the reveal at
+ // least reaches the group; never stall the quiz silently).
       if (!delivered && q.type === "image") {
         console.log("[Quiz] image card undeliverable after safeSend retries - skipping question");
         session.questionNo -= 1;
@@ -2365,8 +2363,8 @@ async function postQuestion(sock, chatId, session) {
       break; // delivered (or text-only fallback: open anyway)
     } catch {
       if (q.type === "image") {
-        // one resend of the same verified bytes; then skip (an image-clue
-        // question without the image is unanswerable - never fake it)
+ // one resend of the same verified bytes; then skip (an image-clue
+ // question without the image is unanswerable - never fake it)
         try { await postCard(q); break; } catch {
           console.log("[Quiz] image undeliverable after resend - skipping question");
           q.media = null;
@@ -2376,8 +2374,8 @@ async function postQuestion(sock, chatId, session) {
           continue;
         }
       }
-      // text card failed too - open the question anyway so the quiz can
-      // never stall silently (players will see the reveal at least)
+ // text card failed too - open the question anyway so the quiz can
+ // never stall silently (players will see the reveal at least)
       console.log("[Quiz] text card send failed - opening question regardless");
       break;
     }
@@ -2388,15 +2386,15 @@ async function postQuestion(sock, chatId, session) {
     return;
   }
 
-  // the question opens NOW - card is out (or every channel failed)
+ // the question opens NOW - card is out (or every channel failed)
   session.answeredBy = new Map(); // P1: fresh attempt map per question
   const qSecs = (q && q.timeLimit) || session.cfg.timePerQuestion; // per-question override (preplanned 30s/45s)
   session.qOpenUntil = Date.now() + qSecs * 1000;
   session.qEpoch = (session.qEpoch || 0) + 1;
   const myEpoch = session.qEpoch;
-  // P2: deadline timer driven by config; invalidated by session.token AND
-  // by the per-question epoch (a timer from a previous question must never
-  // resolve the current one).
+ // P2: deadline timer driven by config; invalidated by session.token AND
+ // by the per-question epoch (a timer from a previous question must never
+ // resolve the current one).
   session.timerId = setTimeout(async () => {
     try {
       const cur = activeQuizzes.get(chatId);
@@ -2423,13 +2421,13 @@ async function safeAddMoney(jid, amount, reason) {
 }
 
 async function revealAndAdvance(sock, chatId, session, winner, timedOut) {
-  // 💡 SINGLE-RESOLVER LOCK (2026-09-28 owner audit): the deadline timer and
-  // a correct-answer handler can fire for the SAME question in the same tick
-  // (clearTimeout cannot stop an already-running callback). Both chains used
-  // to run to completion: the question revealed twice, idx advanced twice
-  // (a question silently skipped), two postQuestion calls raced for the next
-  // question -> duplicate cards + "time's up" right after a question. One
-  // synchronous gate closes the whole class.
+ // SINGLE-RESOLVER LOCK (owner audit): the deadline timer and
+ // a correct-answer handler can fire for the SAME question in the same tick
+ // (clearTimeout cannot stop an already-running callback). Both chains used
+ // to run to completion: the question revealed twice, idx advanced twice
+ // (a question silently skipped), two postQuestion calls raced for the next
+ // question -> duplicate cards + "time's up" right after a question. One
+ // synchronous gate closes the whole class.
   if (session.revealLock) return;
   session.revealLock = true;
   try {
@@ -2450,9 +2448,9 @@ async function revealAndAdvance(sock, chatId, session, winner, timedOut) {
       sc.correct += 1;
       session.scores.set(winner.jid, sc);
       session.revealed.push({ q: q.q, correct: correctText, winner: winner.name, timedOut: false });
-      // 💡 critical send: reveals go through safeSend - a dropped reveal is
-      // exactly the "answers counted wrong / where did my point go" class.
-      // 💡 v8: typed questions have no meaningful letter - drop it from the reveal
+ // critical send: reveals go through safeSend - a dropped reveal is
+ // exactly the "answers counted wrong / where did my point go" class.
+ // v8: typed questions have no meaningful letter - drop it from the reveal
       const ansPart = q.hideOptions ? "answered it" : `answered ${LETTERS[q.correct]}`;
       await safeSend(sock, chatId, {
         text: BOT_SAFE(`✅ *Correct!* ${winner.name} ${ansPart} (+${pts} Zeni)\nThe answer was: *${correctText}*`),
@@ -2465,7 +2463,7 @@ async function revealAndAdvance(sock, chatId, session, winner, timedOut) {
       }, { label: `reveal:${session.questionNo}` });
     }
 
-    // persist seen hashes (dedup across sessions) + idx advance
+ // persist seen hashes (dedup across sessions) + idx advance
     const mk = mediaKeyFor(session);
     saveSeen(mk, [qhash(q.q)]);
 
@@ -2475,10 +2473,10 @@ async function revealAndAdvance(sock, chatId, session, winner, timedOut) {
       await advanceToNextSection(sock, chatId, session);
       return;
     }
-    // 💡 PACING (owner spec): randomized 10-30s pause between questions
-    // (quizmod-tunable via gapmin/gapmax) instead of the old flat 4.5s that
-    // made active groups unable to keep up. The timer re-checks the session
-    // identity + token; postQuestion's own state guard backstops it.
+ // PACING (owner spec): randomized 10-30s pause between questions
+ // (quizmod-tunable via gapmin/gapmax) instead of the old flat 4.5s that
+ // made active groups unable to keep up. The timer re-checks the session
+ // identity + token; postQuestion's own state guard backstops it.
     const gapS = quizConfigMod.questionGapSeconds(session.cfg);
     session.nextTimerId = setTimeout(async () => {
       try {
@@ -2507,7 +2505,7 @@ async function advanceToNextSection(sock, chatId, session) {
   let hadToWait = false; // players already waited on loading - skip the break then
 
   if (next.state === SECTION_STATES.FAILED) {
-    // one recovery attempt
+ // one recovery attempt
     await safeSend(sock, chatId, { text: BOT_SAFE(`⚠️ I'm having trouble preparing the next section. Give me a moment...`) }, { label: "section-recover" }).catch(() => {});
     next.state = SECTION_STATES.GENERATING;
     delete session.sectionJobs[nextIdx];
@@ -2532,7 +2530,7 @@ async function advanceToNextSection(sock, chatId, session) {
       return;
     }
   }
-  // section break (configurable; skipped when players just waited on loading)
+ // section break (configurable; skipped when players just waited on loading)
   if (multiSection && !hadToWait && session.cfg.sectionBreakDuration > 0 && next.state === SECTION_STATES.READY) {
     await safeSend(sock, chatId, { text: BOT_SAFE(`📚 Section break - next section starts in ${session.cfg.sectionBreakDuration}s!` +
       `${next.name ? `\nUp next: *${next.name}*` : ""}`) }, { label: "section-break" }).catch(() => {});
@@ -2550,7 +2548,7 @@ function startSection(sock, chatId, session, idx) {
   if (session.sections.length > 1) {
     safeSend(sock, chatId, { text: BOT_SAFE(`📖 *Section ${idx + 1}/${session.sections.length}${section.name ? `: ${section.name}` : ""}*`) }, { label: `section:${idx + 1}` }).catch(() => {});
   }
-  // kick the NEXT section's generation while this one plays (P19 buffer)
+ // kick the NEXT section's generation while this one plays (P19 buffer)
   if (session.cfg.streamingGeneration) {
     const nIdx = idx + 1;
     if (nIdx < session.sections.length && session.sections[nIdx].state === SECTION_STATES.PENDING) {
@@ -2562,11 +2560,11 @@ function startSection(sock, chatId, session, idx) {
 }
 
 async function finishQuiz(sock, chatId, session, opts = {}) {
-  // 💡 RACE GUARD (found by E2E repro 2026-09-30): the reveal chain runs
-  // DETACHED - after awaits it reaches finishQuiz. If the group already
-  // started a NEW quiz in that window, an unconditional map/lock delete
-  // would vanish the NEW session (zombie quiz: no answers processed, no
-  // clean end). Only tear down state that still belongs to THIS session.
+ // RACE GUARD (found by E2E repro ): the reveal chain runs
+ // DETACHED - after awaits it reaches finishQuiz. If the group already
+ // started a NEW quiz in that window, an unconditional map/lock delete
+ // would vanish the NEW session (zombie quiz: no answers processed, no
+ // clean end). Only tear down state that still belongs to THIS session.
   if (activeQuizzes.get(chatId) === session) activeQuizzes.delete(chatId);
   releaseSessionSlot(session); // OWNER SPEC §4: end path frees the bot-wide slot (harmless if never held)
   const _lc = lifecycle.get(chatId);
@@ -2607,14 +2605,14 @@ async function finishQuiz(sock, chatId, session, opts = {}) {
   await safeSend(sock, chatId, { text: BOT_SAFE(out) }, { label: "final-scoreboard" }).catch(() => {});
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // P1: ANSWER HANDLING
 // - parser scoped: only fires for the ACTIVE quiz + OPEN question
 // - ONE attempt per player per question: the first answer locks (wrong =
-//   out for this question); other players answer normally
+// out for this question); other players answer normally
 // - accepts .j a/b/c/d + ".j answer" (engine routes all five here)
 // - no answers accepted after the question closes (claim or timer)
-// ════════════════════════════════════════════
+// ============================================
 
 // shared with the engine cooldown block (P4): is this text a quiz answer?
 function isQuizAnswerText(lowerTxt) {
@@ -2626,19 +2624,19 @@ function isQuizAnswerText(lowerTxt) {
   return t === `${pfx} ${first}` || t.startsWith(`${pfx} ${first} `);
 }
 
-// 💡 2026-09-28 OWNER AUDIT §2/§7: true while a question is LIVE (posted +
+// OWNER AUDIT §2/§7: true while a question is LIVE (posted +
 // inside its timer window). The engine uses this to bypass the 5s global
 // command cooldown for the chat while a question is open: word answers
 // (".j <answer text>" - the format the question cards ADVERTISE) are
 // indistinguishable from commands at cooldown time, so the old exemption
-// (letters only) let "⚠️ SLOW DOWN!" EAT answers in busy chats - the message
+// (letters only) let " SLOW DOWN!" EAT answers in busy chats - the message
 // was dropped before it ever reached the quiz receiver.
 function isQuestionOpen(chatId) {
   const s = activeQuizzes.get(chatId);
   return !!(s && !s.cancelled && s.qOpenUntil && Date.now() <= s.qOpenUntil);
 }
 
-// 💡 v8 typed-answer support (owner 2026-10-10: "make most of the questions
+// v8 typed-answer support ("make most of the questions
 // type the answer instead of the ABCD ... allow multiple answers, not just
 // the one"): typed questions (dataset fmt:"typed", flagged q.typed) accept
 // ANY listed alternative answer (q.alts) plus a small typo tolerance so
@@ -2660,34 +2658,34 @@ function _lev(a, b) {
 }
 
 async function handleAnswer(sock, chatId, senderJid, answerText, botMarker, m, senderName, opts = {}) {
-  // 💡 DIRECT ANSWER FORMAT (2026-09-28 owner spec §1): while a question is
-  // open, the engine routes PLAIN chat text here with { bareText: true } -
-  // players answer by simply typing the answer. Prefixed forms still work
-  // as explicit attempts.
+ // DIRECT ANSWER FORMAT (owner spec §1): while a question is
+ // open, the engine routes PLAIN chat text here with { bareText: true } -
+ // players answer by simply typing the answer. Prefixed forms still work
+ // as explicit attempts.
   const bareText = !!opts.bareText;
   const session = activeQuizzes.get(chatId);
   if (!session || session.cancelled) return { handled: false }; // no quiz -> let other handlers run
   const section = session.sections[session.activeSection];
   const q = section && section.questions[session.idx];
   if (!q) return { handled: true, silent: true };
-  // question must be OPEN (posted and inside its timer window). During the
-  // between-questions window (qOpenUntil === 0) answers are ignored - a
-  // premature answer must never register against the upcoming question.
+ // question must be OPEN (posted and inside its timer window). During the
+ // between-questions window (qOpenUntil === 0) answers are ignored - a
+ // premature answer must never register against the upcoming question.
   if (!session.qOpenUntil || Date.now() > session.qOpenUntil) return { handled: true, silent: true };
   if (!session.answeredBy) session.answeredBy = new Map();
 
   const raw = String(answerText || "").trim();
   if (!raw) return { handled: true, silent: true };
-  // 💡 SIMPLIFIED ANSWER FORMAT (2026-09-27): ".j b" (single letter) OR the
-  // option TEXT (".j Subaru Natsuki"). The legacy ".j a b" form still works
-  // because the engine strips the leading trigger letter before this runs.
-  // 2026-09-28: bare chat text follows the same matcher, but ONLY a MATCHING
-  // guess is consumed - chatter that matches nothing passes through untouched
-  // (no react, no lock-out, other features still see it). Explicit prefixed
-  // attempts always register: that is the "one answer each" contract.
-  // 💡 hideOptions questions (logo/audio/image - owner spec §2/§7): the
-  // player never saw letter labels, so a single letter must NOT match -
-  // only the answer TEXT identifies the option.
+ // SIMPLIFIED ANSWER FORMAT: ".j b" (single letter) OR the
+ // option TEXT (".j Subaru Natsuki"). The legacy ".j a b" form still works
+ // because the engine strips the leading trigger letter before this runs.
+ // bare chat text follows the same matcher, but ONLY a MATCHING
+ // guess is consumed - chatter that matches nothing passes through untouched
+ // (no react, no lock-out, other features still see it). Explicit prefixed
+ // attempts always register: that is the "one answer each" contract.
+ // hideOptions questions (logo/audio/image - owner spec §2/§7): the
+ // player never saw letter labels, so a single letter must NOT match -
+ // only the answer TEXT identifies the option.
   let idx = -1;
   if (!q.hideOptions && /^[abcd]$/i.test(raw)) {
     idx = LETTERS.indexOf(raw.toUpperCase());
@@ -2697,18 +2695,18 @@ async function handleAnswer(sock, chatId, senderJid, answerText, botMarker, m, s
     if (guess) {
       idx = q.options.findIndex((o) => norm(o) === guess);
       if (idx < 0 && guess.length >= 4) {
-        // tolerant full-text: exact words only, never a bare prefix -
-        // "subaru natsuki" matches, "sub" does not
+ // tolerant full-text: exact words only, never a bare prefix -
+ // "subaru natsuki" matches, "sub" does not
         idx = q.options.findIndex((o) => {
           const on = norm(o);
           return on.length && (on === guess || on.split(" ").join("") === guess.split(" ").join(""));
         });
       }
-      // 💡 v8 typed questions: multiple accepted answers (owner directive).
-      // Any alias in q.alts counts as correct, plus a small levenshtein
-      // tolerance (1 char, 2 for long answers) forgives typos on long
-      // titles. Only fires on q.typed - logo/audio/image-MC matching is
-      // untouched.
+ // v8 typed questions: multiple accepted answers (owner directive).
+ // Any alias in q.alts counts as correct, plus a small levenshtein
+ // tolerance (1 char, 2 for long answers) forgives typos on long
+ // titles. Only fires on q.typed - logo/audio/image-MC matching is
+ // untouched.
       if (idx < 0 && q.typed) {
         const pool = [String((q.options && q.options[q.correct]) || ""), ...(Array.isArray(q.alts) ? q.alts : [])]
           .map(norm).filter(Boolean);
@@ -2726,71 +2724,71 @@ async function handleAnswer(sock, chatId, senderJid, answerText, botMarker, m, s
     return { handled: true, silent: true };
   }
 
-  // P1: one attempt per player - first answer locks, later replies ignored
+ // P1: one attempt per player - first answer locks, later replies ignored
   if (session.answeredBy.has(senderJid)) {
     return { handled: true, silent: true };
   }
   session.answeredBy.set(senderJid, { letter: idx, correct: idx === q.correct, at: Date.now() });
 
   if (idx === q.correct) {
-    // 💡 single-resolver gate: if the deadline timer already claimed the
-    // reveal (revealLock) or the question just closed, the answer arrived
-    // at the wire - it counts as registered but must NOT fire a second
-    // reveal chain (that used to double-advance the session).
+ // single-resolver gate: if the deadline timer already claimed the
+ // reveal (revealLock) or the question just closed, the answer arrived
+ // at the wire - it counts as registered but must NOT fire a second
+ // reveal chain (that used to double-advance the session).
     if (session.revealLock || !session.qOpenUntil || Date.now() > session.qOpenUntil) {
       return { handled: true, silent: true };
     }
     await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } }).catch(() => {});
-    // 💡 45s COMMAND TIMEOUT FIX (2026-09-27): reveal -> next question ->
-    // section transition can LEGALLY take minutes (streaming section waits,
-    // section breaks). Awaiting it inside the answer command used to hit the
-    // engine's 45s generic command timeout (logged live: cmd="a" blocked
-    // through a section change). The chain is fully self-contained - run it
-    // detached so the command returns instantly.
+ // 45s COMMAND TIMEOUT FIX: reveal -> next question ->
+ // section transition can LEGALLY take minutes (streaming section waits,
+ // section breaks). Awaiting it inside the answer command used to hit the
+ // engine's 45s generic command timeout (logged live: cmd="a" blocked
+ // through a section change). The chain is fully self-contained - run it
+ // detached so the command returns instantly.
     revealAndAdvance(sock, chatId, session, { jid: senderJid, name: senderName || "Player" }, false)
       .catch((e) => console.log("[Quiz] reveal chain failed:", e?.message));
   } else {
-    // wrong first answer = out for this question; others keep playing
+ // wrong first answer = out for this question; others keep playing
     await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } }).catch(() => {});
   }
   return { handled: true, silent: true };
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // HANDLERS
-// ════════════════════════════════════════════
+// ============================================
 
 function parseQuizArgs(raw) {
-  // Supports:
-  //   quiz "Fullmetal Alchemist Brotherhood" 10 hard
-  //   quiz fmab 5 easy
-  //   quiz "One Piece"
-  //   quiz "Dragon Ball" 3 hard -s cosmology
-  //   quiz "Re:Zero" 20 hard -images 5
-  //   quiz random 20 -images 5 -audio 3
-  //   quiz logos 15            (2026-09-27: standalone media modes)
-  //   quiz song 10             ("spot the song" alias)
+ // Supports:
+ // quiz "Fullmetal Alchemist Brotherhood" 10 hard
+ // quiz fmab 5 easy
+ // quiz "One Piece"
+ // quiz "Dragon Ball" 3 hard -s cosmology
+ // quiz "Re:Zero" 20 hard -images 5
+ // quiz random 20 -images 5 -audio 3
+ // quiz logos 15 (standalone media modes)
+ // quiz song 10 ("spot the song" alias)
   const out = { title: "", count: 10, difficulty: "medium", section: null, images: null, audio: null, randomMode: false, mode: null, preplanned: false, notes: [] };
   let rest = String(raw || "").trim();
   if (!rest) return out;
-  // 💡 2026-10-10 OWNER: ".j quiz -preplanned" - the fixed 60-round mega pack
-  // (30 brand logos + 20 anime/games trivia + 10 theme songs, 30s/45s timers).
-  // Bare word or flag both work: ".j quiz -preplanned" / ".j quiz preplanned".
+ // OWNER: ".j quiz -preplanned" - the fixed 60-round mega pack
+ // (30 brand logos + 20 anime/games trivia + 10 theme songs, 30s/45s timers).
+ // Bare word or flag both work: ".j quiz -preplanned" / ".j quiz preplanned".
   if (/^(preplanned|preplan|megapack)\b/i.test(rest) || /^-+preplanned\b/i.test(rest)) {
     out.mode = "preplanned";
     out.title = "__preplanned__";
     rest = rest.replace(/^(preplanned|preplan|megapack|-+preplanned)\b/i, "").trim();
   }
-  // standalone media modes (before random/quoted handling; "spot the song" is multi-word)
+ // standalone media modes (before random/quoted handling; "spot the song" is multi-word)
   const MODE_ALIASES = { logos: "logos", logo: "logos", brands: "logos", brand: "logos", company: "logos", companies: "logos" };
-  // 💡 2026-10-10 OWNER OVERHAUL: dataset-backed categories (pre-built data,
-  // zero live search). anime folds into series, manga into comics.
+ // OWNER OVERHAUL: dataset-backed categories (pre-built data,
+ // zero live search). anime folds into series, manga into comics.
   const DATASET_ALIASES = { games: "games", game: "games", gaming: "games", videogames: "games", videogame: "games", comics: "comics", comic: "comics", manga: "comics", movies: "movies", movie: "movies", films: "movies", film: "movies", series: "series", tv: "series", television: "series", shows: "series", show: "series" };
   const SONG_ALIASES = { song: "song", songs: "song", music: "song" };
-  // 💡 FIX (owner brief §2): ".j quiz audio N" was never a registered alias -
-  // "audio" fell through as a franchise TITLE and the mode errored out. Now:
-  // audio = theme songs across shows / movies / games (different from
-  // "song" = spot-the-song pop tracks).
+ // FIX (owner brief §2): ".j quiz audio N" was never a registered alias -
+ // "audio" fell through as a franchise TITLE and the mode errored out. Now:
+ // audio = theme songs across shows / movies / games (different from
+ // "song" = spot-the-song pop tracks).
   const AUDIO_ALIASES = { audio: "audio", audios: "audio", sound: "audio", sounds: "audio", themes: "audio" };
   const spotSong = rest.match(/^spot\s+the\s+song\b/i);
   const themeSong = rest.match(/^theme\s+songs?\b/i);
@@ -2820,7 +2818,7 @@ function parseQuizArgs(raw) {
     out.title = `__${out.mode}__`;
     rest = rest.slice(firstWord.length).trim();
   }
-  // random mode?
+ // random mode?
   if (/^random\b/i.test(rest)) {
     out.randomMode = true;
     out.title = "__random__";
@@ -2828,18 +2826,18 @@ function parseQuizArgs(raw) {
   }
   const quoted = rest.match(/"([^"]{2,})"/);
   if (quoted && !out.mode && !out.randomMode) {
-    // 💡 2026-10-10 OWNER OVERHAUL: free-form franchise search RETIRED (the
-    // live AniList/wiki hunt was unreliable). Capture the title so startQuiz
-    // can guide the user to the dataset categories instead.
+ // OWNER OVERHAUL: free-form franchise search RETIRED (the
+ // live AniList/wiki hunt was unreliable). Capture the title so startQuiz
+ // can guide the user to the dataset categories instead.
     out.retiredTitle = quoted[1].trim();
     rest = (rest.slice(0, quoted.index) + " " + rest.slice(quoted.index + quoted[0].length)).trim();
   }
   const tokens = rest.split(/\s+/).filter(Boolean);
   const diffTokens = { easy: "easy", e: "easy", medium: "medium", m: "medium", normal: "medium", hard: "hard", h: "hard", insane: "hard" };
-  // 💡 2026-10-10 OWNER OVERHAUL: -s/-images/-audio flags retired together
-  // with the live-search pipeline (dataset quizzes pick their own media
-  // mix; `.j quiz audio` stays as a standalone mode). Absorb silently so
-  // old muscle-memory commands still start a quiz.
+ // OWNER OVERHAUL: -s/-images/-audio flags retired together
+ // with the live-search pipeline (dataset quizzes pick their own media
+ // mix; `.j quiz audio` stays as a standalone mode). Absorb silently so
+ // old muscle-memory commands still start a quiz.
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i].toLowerCase();
     if (t.startsWith("-")) {
@@ -2849,7 +2847,7 @@ function parseQuizArgs(raw) {
       i--;
     }
   }
-  // pop trailing difficulty/count tokens
+ // pop trailing difficulty/count tokens
   while (tokens.length) {
     const last = tokens[tokens.length - 1].toLowerCase();
     if (tokens.length && /^\d{1,3}$/.test(last)) {
@@ -2867,7 +2865,7 @@ function parseQuizArgs(raw) {
     break;
   }
   if (!out.title && tokens.length && !out.randomMode && !out.mode) {
-    // leftover bare words = a typed franchise name - search retired, guide instead
+ // leftover bare words = a typed franchise name - search retired, guide instead
     out.retiredTitle = tokens.join(" ").trim();
   }
   if (out.randomMode) out.title = "__random__";
@@ -2901,7 +2899,7 @@ async function resolveFranchise(query) {
   if (wiki) {
     return { wiki };
   }
-  // no wiki: fall back to the anime pick flow (resolves + disambiguates)
+ // no wiki: fall back to the anime pick flow (resolves + disambiguates)
   const res = await resolveAnime(query);
   if (res.error) return res;
   const top = res.anime;
@@ -2934,12 +2932,12 @@ async function getFranchiseIntroImage(wiki, title) {
 // 45s generic timeout can never kill a quiz again, and users get an
 // immediate "gathering questions" message instead of silence.
 async function startQuiz(sock, chatId, senderJid, botMarker, m, rawArgs, senderName, smartGroqCall, MODELS) {
-  // P3: atomic lock check - covers live session AND in-flight generation
+ // P3: atomic lock check - covers live session AND in-flight generation
   const lifecycleNow = lifecycle.get(chatId);
   if (activeQuizzes.has(chatId) || (lifecycleNow && lifecycleNow.state === "generating")) {
     const s = activeQuizzes.get(chatId);
     if (s) {
-      // 2026-09-27: a parked (ready) quiz gets its own bounce text
+ // a parked (ready) quiz gets its own bounce text
       if (s.awaitingGo) {
         return {
           handled: true,
@@ -2959,11 +2957,11 @@ async function startQuiz(sock, chatId, senderJid, botMarker, m, rawArgs, senderN
   }
 
   const parsed = parseQuizArgs(rawArgs);
-  // 💡 FIX (qa_quiz dataset-era run 2026-10-11): the dedicated retirement
-  // guidance was DEAD CODE — free-form titles parse to retiredTitle with an
-  // empty title, so the `!parsed.title` usage card always fired first and
-  // users got the generic category menu with no explanation. Check the
-  // retirement FIRST so ".j quiz "Naruto"" explains WHY it can't search.
+ // FIX (qa_quiz dataset-era run ): the dedicated retirement
+ // guidance was DEAD CODE - free-form titles parse to retiredTitle with an
+ // empty title, so the `!parsed.title` usage card always fired first and
+ // users got the generic category menu with no explanation. Check the
+ // retirement FIRST so ".j quiz "Naruto"" explains WHY it can't search.
   if (parsed.retiredTitle) {
     const prefix = botConfig.getPrefix();
     return {
@@ -2981,7 +2979,7 @@ Special rounds: \`logos\` • \`song\` • \`audio\` • \`random\``,
       handled: true,
       message: botMarker + `🎯 *Quiz*
 
-Pick a category — every quiz is dataset-backed: instant prep, real images, no searching.
+Pick a category - every quiz is dataset-backed: instant prep, real images, no searching.
 
 Categories (trivia + picture rounds):
 \`${prefix} quiz games 15\` - 🎮 video games: covers, studios, trivia
@@ -3001,7 +2999,7 @@ Leaderboard: \`${prefix} quizboard\` • Cancel: \`${prefix} quiz end\` • Mods
     };
   }
 
-  // 💡 START GATE (2026-09-27): only Quiz Mods / Global Mods / bot owner.
+ // START GATE: only Quiz Mods / Global Mods / bot owner.
   if (!(await _canStartQuizFresh(senderJid))) {
     return {
       handled: true,
@@ -3009,7 +3007,7 @@ Leaderboard: \`${prefix} quizboard\` • Cancel: \`${prefix} quiz end\` • Mods
     };
   }
 
-  // P3: acquire BEFORE any await - the two-users-at-once race dies here
+ // P3: acquire BEFORE any await - the two-users-at-once race dies here
   if (!acquireLifecycle(chatId)) {
     return {
       handled: true,
@@ -3017,15 +3015,15 @@ Leaderboard: \`${prefix} quizboard\` • Cancel: \`${prefix} quiz end\` • Mods
     };
   }
 
-  // P3b: prep handle registered in the SAME synchronous frame as the lock -
-  // from this instant `.quiz end` can abort the launch (no unkillable window)
+ // P3b: prep handle registered in the SAME synchronous frame as the lock -
+ // from this instant `.quiz end` can abort the launch (no unkillable window)
   const prep = createPrepHandle(chatId, senderJid);
 
-  // P5: immediate feedback = the tagged "QUIZ PLANNING" announce (sent at
-  // the top of launchQuizAsync). The old untagged "Gathering questions..."
-  // card was removed - it arrived alongside the announce and said less.
+ // P5: immediate feedback = the tagged "QUIZ PLANNING" announce (sent at
+ // the top of launchQuizAsync). The old untagged "Gathering questions..."
+ // card was removed - it arrived alongside the announce and said less.
 
-  // background launch - never block the command promise (45s timeout bypass)
+ // background launch - never block the command promise (45s timeout bypass)
   launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, senderName, smartGroqCall, prep).catch((e) => {
     console.log("[Quiz] launch crashed:", e?.message);
     pendingPrep.delete(chatId);
@@ -3043,7 +3041,7 @@ function createPrepHandle(chatId, senderJid) {
     cancelled: false,
     session: null,
     reassureTimerId: null,
-    heartbeatId: null, // 2026-09-27 planning mode: 60s "still preparing" pulse
+    heartbeatId: null, // planning mode: 60s "still preparing" pulse
     lockSince: lifecycle.get(chatId)?.since ?? null,
     askedBy: senderJid,
   };
@@ -3051,7 +3049,7 @@ function createPrepHandle(chatId, senderJid) {
   return prep;
 }
 
-// ── 2026-09-27 PLANNING MODE (owner spec) ──
+// -- PLANNING MODE (owner spec) --
 // "When I start a quiz with images, audio, logos, etc. and it's going to
 // take a while to prepare everything, make that known instead of just
 // silently taking forever. Send a message every minute to remind them that
@@ -3065,7 +3063,7 @@ function mentionOf(jid) { return jid ? `@${String(jid).split("@")[0]}` : ""; }
 // heartbeat = one 25s nudge (prep feels instant-failed without it)
 // then a 60s pulse until prep resolves. Every pulse re-checks live state so
 // a finished/cancelled prep never emits a ghost heartbeat.
-// 💡 2026-09-28 OWNER AUDIT §8: the nudge no longer says "researching the
+// OWNER AUDIT §8: the nudge no longer says "researching the
 // lore" (not every quiz is a lore quiz) and the label is MODE-AWARE - the
 // old code printed the raw internal title for media modes, so a logo quiz
 // nudged with "Still researching the lore for *__logos__*".
@@ -3107,7 +3105,7 @@ function stopPrepTimers(prep) {
   if (prep.heartbeatId) { clearInterval(prep.heartbeatId); prep.heartbeatId = null; }
 }
 
-// ── 2026-09-27 READY GATE ──
+// -- READY GATE --
 // A fully prepared media quiz parks here: the group sees "ready" + a tagged
 // initiator, and the quiz only actually starts when the initiator (or a
 // mod/admin) fires `.j quiz go`. Unclaimed preps expire after 10 minutes so
@@ -3168,20 +3166,20 @@ async function confirmStart(sock, chatId, senderJid, botMarker, canUseAdminComma
     }
     return { handled: true, message: botMarker + `❌ No quiz is waiting to start here. Prepare one with \`${prefix} quiz ...\`` };
   }
-  // 💡 SYNC START CLAIM (2026-09-28 owner audit): awaitingGo is cleared
-  // SYNCHRONOUSLY before the permission await. Previously two people firing
-  // `.j quiz go` in the same second could both pass the awaitingGo check
-  // (the mod permission check awaited in between) and both reach
-  // startSection -> the first section's questions posted TWICE.
+ // SYNC START CLAIM (owner audit): awaitingGo is cleared
+ // SYNCHRONOUSLY before the permission await. Previously two people firing
+ // `.j quiz go` in the same second could both pass the awaitingGo check
+ // (the mod permission check awaited in between) and both reach
+ // startSection -> the first section's questions posted TWICE.
   session.awaitingGo = false;
   if (session.askedBy !== senderJid && !(await _canStartQuizFresh(senderJid))) {
     session.awaitingGo = true; // not allowed - give the gate back
     return { handled: true, message: botMarker + `🛑 Only ${mentionOf(session.askedBy)} - or a Quiz Mod / Global Mod - can start this quiz.`, mentions: [session.askedBy] };
   }
   if (session.readyTimerId) { clearTimeout(session.readyTimerId); session.readyTimerId = null; }
-  // 💡 OWNER SPEC §4: hard session cap - a running quiz must never block the
-  // bot-wide queue forever. 90min (env QUIZ_SESSION_MAX_MS) after the go,
-  // the quiz is force-finished with a note. finishQuiz clears this timer.
+ // OWNER SPEC §4: hard session cap - a running quiz must never block the
+ // bot-wide queue forever. 90min (env QUIZ_SESSION_MAX_MS) after the go,
+ // the quiz is force-finished with a note. finishQuiz clears this timer.
   session.hardCapTimerId = setTimeout(() => {
     try {
       const cur = activeQuizzes.get(chatId);
@@ -3208,31 +3206,31 @@ async function confirmStart(sock, chatId, senderJid, botMarker, canUseAdminComma
 
 async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, senderName, smartGroqCall, prepArg = null) {
   const prefix = botConfig.getPrefix();
-  // P3b: cancellable prep handle. `.quiz end` during prep must ABORT the
-  // background worker, not just drop the lock - otherwise generation finishes
-  // later and posts QUIZ STARTED into a group that was told it was cleaned up.
-  // startQuiz/pickCandidate pass theirs in (created with the lock); a direct
-  // call (tests) creates one here as a fallback.
+ // P3b: cancellable prep handle. `.quiz end` during prep must ABORT the
+ // background worker, not just drop the lock - otherwise generation finishes
+ // later and posts QUIZ STARTED into a group that was told it was cleaned up.
+ // startQuiz/pickCandidate pass theirs in (created with the lock); a direct
+ // call (tests) creates one here as a fallback.
   const prep = prepArg || createPrepHandle(chatId, senderJid);
-  // this launch still owns the chat lock (endQuiz/TTL-reclaim may have freed it)
+ // this launch still owns the chat lock (endQuiz/TTL-reclaim may have freed it)
   const ownsLock = () => !prep.lockSince || lifecycle.get(chatId)?.since === prep.lockSince;
   const abortPrep = () => {
-    stopPrepTimers(prep); // 2026-09-27: clears the 25s nudge AND the 60s heartbeat
+    stopPrepTimers(prep); // clears the 25s nudge AND the 60s heartbeat
     pendingPrep.delete(chatId);
     if (ownsLock()) releaseLifecycle(chatId); // never kill a NEWER launch's lock
   };
-  // planning-mode pulse: one nudge at 25s, then every 60s until resolved
+ // planning-mode pulse: one nudge at 25s, then every 60s until resolved
   startPrepHeartbeat(prep, sock, chatId, botMarker, planningLabel(parsed));
   prep.session = null;
   let ownsSlot = false; // P20: true only while this launch holds a generation slot
 
   try {
-    // P20 + OWNER SPEC §4: bot-wide ONE-quiz queue. FIFO wait when a quiz
-    // (anywhere in its lifecycle) holds the slot; the group is told its
-    // position at enqueue time and again the moment the slot is granted.
-    // Released on EVERY exit below - but ONLY if this launch actually
-    // received a slot (queued launches that time out or are cancelled must
-    // not decrement someone else's slot).
+ // P20 + OWNER SPEC §4: bot-wide ONE-quiz queue. FIFO wait when a quiz
+ // (anywhere in its lifecycle) holds the slot; the group is told its
+ // position at enqueue time and again the moment the slot is granted.
+ // Released on EVERY exit below - but ONLY if this launch actually
+ // received a slot (queued launches that time out or are cancelled must
+ // not decrement someone else's slot).
     const gotSlot = await acquireGenSlot(prep, (position) => {
       console.log(`[Quiz] ${chatId} queued bot-wide at position ${position}`);
       sock.sendMessage(chatId, {
@@ -3265,16 +3263,16 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       randomMode: parsed.randomMode,
       requestedBy: senderJid,
     });
-    // checkpoint 1: cancelled while building config
+ // checkpoint 1: cancelled while building config
     if (prep.cancelled) { abortPrep(); return; }
 
-    // 💡 2026-09-28 OWNER SPEC §1 - UNIFORM PLANNING PHASE: every quiz type
-    // (lore, images, audio, logos, songs, random) now announces itself up
-    // front with the same "QUIZ PLANNING" card tagged at the initiator, and
-    // parks behind the same `.j quiz go` ready-gate once prepared. Media
-    // quizzes list their media mix; lore quizzes name the franchise.
-    // 💡 2026-10-10 OWNER: -preplanned is a FIXED 60-round pack - it ignores
-    // the count argument and the 50-question ceiling (owner directive).
+ // OWNER SPEC §1 - UNIFORM PLANNING PHASE: every quiz type
+ // (lore, images, audio, logos, songs, random) now announces itself up
+ // front with the same "QUIZ PLANNING" card tagged at the initiator, and
+ // parks behind the same `.j quiz go` ready-gate once prepared. Media
+ // quizzes list their media mix; lore quizzes name the franchise.
+ // OWNER: -preplanned is a FIXED 60-round pack - it ignores
+ // the count argument and the 50-question ceiling (owner directive).
     if (parsed.mode === "preplanned") {
       cfg.questionCount = 60;
       cfg.maxQuestions = Math.max(cfg.maxQuestions, 60);
@@ -3283,9 +3281,9 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     {
       const bits = [];
       if (mixedRandom) {
-        // 💡 2026-10-10 OWNER OVERHAUL: random is now a deterministic dataset
-        // playlist (Logo Round + round-robin games/movies/series/comics).
-        // No lore, no song clips, no franchise resolution.
+ // OWNER OVERHAUL: random is now a deterministic dataset
+ // playlist (Logo Round + round-robin games/movies/series/comics).
+ // No lore, no song clips, no franchise resolution.
         let logosN = Math.min(6, Math.max(3, Math.round(cfg.questionCount * 0.2)));
         bits.push(`🏢 ${logosN} logos`, `🎲 mixed dataset rounds`);
       } else {
@@ -3303,9 +3301,9 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
         mentions: [senderJid],
       }, { label: "planning-card", sendOpts: { quoted: m } }).catch(() => {});
     }
-    // ── 2026-09-27: standalone media modes (logos / song / audio) ──
-    // No franchise resolution, no LLM: one media section is generated and
-    // the normal READY/STARTED flow takes over.
+ // -- standalone media modes (logos / song / audio) --
+ // No franchise resolution, no LLM: one media section is generated and
+ // the normal READY/STARTED flow takes over.
     if (parsed.mode === "logos" || parsed.mode === "song" || parsed.mode === "audio") {
       const modeTitle = parsed.mode === "logos" ? "Logo Challenge" : parsed.mode === "song" ? "Spot the Song" : "Theme Song Challenge";
       const session = {
@@ -3344,8 +3342,8 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
         reassureTimerId: null,
         qStartedAt: Date.now(),
         qOpenUntil: 0,
-        qEpoch: 0,        // 2026-09-28: per-question timer epoch (stale-timer guard)
-        revealLock: false, // 2026-09-28: single-resolver gate (timer vs answer race)
+        qEpoch: 0, // per-question timer epoch (stale-timer guard)
+        revealLock: false, // single-resolver gate (timer vs answer race)
         callLLM: null,
         animeCharacters: [],
         charIndex: null,
@@ -3378,20 +3376,20 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       head += `🛑 Cancel: \`${prefix} quiz end\`\n\n`;
       head += `Let's go! 🚀`;
 
-      // 2026-09-27 planning mode: media modes ALWAYS park for the go command
+ // planning mode: media modes ALWAYS park for the go command
       await parkReadySession(sock, chatId, session, { head, introImage: null, botMarker, m, senderJid, prefix });
       ownsSlot = false; // OWNER SPEC §4: the slot now rides with the parked session
       return;
     }
 
-    // ── 2026-10-10 OWNER: -preplanned fixed mega pack ──
-    // 9 sections / 60 rounds: 3×10 brand logos (verified 2026 Wikipedia
-    // dataset) → 4×5 franchise trivia (Dragon Ball / Solo Leveling / Devil
-    // May Cry / God of War, hand-verified answers) → 2×5 theme songs (5 games
-    // + 5 anime, first 30 seconds via the Go audio pipeline). Owner timers:
-    // 30s per logo/trivia question, 45s per music question. Everything rides
-    // the regular live-session machinery (answers, scoring, sections,
-    // ready-gate, cancel) - it must look, feel and act like a regular quiz.
+ // -- OWNER: -preplanned fixed mega pack --
+ // 9 sections / 60 rounds: 3×10 brand logos (verified 2026 Wikipedia
+ // dataset) → 4×5 franchise trivia (Dragon Ball / Solo Leveling / Devil
+ // May Cry / God of War, hand-verified answers) → 2×5 theme songs (5 games
+ // + 5 anime, first 30 seconds via the Go audio pipeline). Owner timers:
+ // 30s per logo/trivia question, 45s per music question. Everything rides
+ // the regular live-session machinery (answers, scoring, sections,
+ // ready-gate, cancel) - it must look, feel and act like a regular quiz.
     if (parsed.mode === "preplanned") {
       const PACK = quizPreplannedMod.PACK;
       const byFranchise = (f) => PACK.trivia.filter((t) => t.franchise === f);
@@ -3452,8 +3450,8 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       };
       prep.session = session;
       if (prep.cancelled) { session.cancelled = true; abortPrep(); return; }
-      // build every section up front (logos fetch verified images; themes pull
-      // 30s clips through the Go audio service) so the ready card is real.
+ // build every section up front (logos fetch verified images; themes pull
+ // 30s clips through the Go audio service) so the ready card is real.
       for (let i = 0; i < session.sections.length; i++) {
         await ensureSectionGenerating(session, i, sock, chatId);
         if (prep.cancelled || session.cancelled) { abortPrep(); return; }
@@ -3484,12 +3482,12 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       return;
     }
 
-    // ── 2026-10-10 OWNER OVERHAUL: dataset modes + random mix ──
-    // games/comics/movies/series (+ random as a mixed dataset playlist with a
-    // Logo Round opener). LLM-free, search-free: sections build from
-    // data/quizDataset.json (pre-verified at build time) and the existing
-    // verified logo dataset. Prep is instant - the whole ready-gate flow is
-    // shared with the media modes above.
+ // -- OWNER OVERHAUL: dataset modes + random mix --
+ // games/comics/movies/series (+ random as a mixed dataset playlist with a
+ // Logo Round opener). LLM-free, search-free: sections build from
+ // data/quizDataset.json (pre-verified at build time) and the existing
+ // verified logo dataset. Prep is instant - the whole ready-gate flow is
+ // shared with the media modes above.
     const DS_MODES = ["games", "comics", "movies", "series"];
     if (DS_MODES.includes(parsed.mode) || parsed.randomMode) {
       const DS_TITLES = { games: "Games Quiz", comics: "Comics Quiz", movies: "Movies Quiz", series: "Series Quiz" };
@@ -3504,8 +3502,8 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
           left -= give;
         }
       } else {
-        // random = mixed playlist: Logo Round first (fastest to verify), then
-        // round-robin dataset categories. No lore search anywhere.
+ // random = mixed playlist: Logo Round first (fastest to verify), then
+ // round-robin dataset categories. No lore search anywhere.
         let left = cfg.questionCount;
         if (cfg.questionCount >= 9) {
           const logosN = Math.min(6, Math.max(3, Math.round(cfg.questionCount * 0.2)));
@@ -3563,8 +3561,8 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       };
       prep.session = session;
       if (prep.cancelled) { session.cancelled = true; abortPrep(); return; }
-      // dataset sections build instantly; the logos round fetches a handful of
-      // verified images - build EVERY section now so the ready card is real.
+ // dataset sections build instantly; the logos round fetches a handful of
+ // verified images - build EVERY section now so the ready card is real.
       for (let i = 0; i < session.sections.length; i++) {
         await ensureSectionGenerating(session, i, sock, chatId);
         if (prep.cancelled || session.cancelled) { abortPrep(); return; }
@@ -3594,7 +3592,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
 
     const callLLM = normalizeSmartGroq(smartGroqCall);
     const franchise = await buildFranchiseContext(sock, chatId, botMarker, m, parsed, senderJid);
-    // checkpoint 2: cancelled during wiki/anime resolution (the slow network phase)
+ // checkpoint 2: cancelled during wiki/anime resolution (the slow network phase)
     if (prep.cancelled) { abortPrep(); return; }
     if (!franchise) {
       stopPrepTimers(prep);
@@ -3605,8 +3603,8 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
 
     cfg.mediaType = franchise.mediaType || cfg.mediaType;
     cfg.imageQuestionCount = Math.max(0, Math.min(cfg.imageQuestionCount, franchise.hasImages ? cfg.imageQuestionCount : 0));
-    // P24: intro-image fetch starts NOW (in parallel with section-1 generation)
-    // instead of blocking the start card after generation completes.
+ // P24: intro-image fetch starts NOW (in parallel with section-1 generation)
+ // instead of blocking the start card after generation completes.
     const introImagePromise = getFranchiseIntroImage(franchise.wiki, franchise.title).catch(() => null);
     const totalQuestions = cfg.questionCount;
     await safeSend(sock, chatId, {
@@ -3642,18 +3640,18 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       reassureTimerId: null,
       qStartedAt: Date.now(),
       qOpenUntil: 0,
-      qEpoch: 0,        // 2026-09-28: per-question timer epoch (stale-timer guard)
-      revealLock: false, // 2026-09-28: single-resolver gate (timer vs answer race)
+      qEpoch: 0, // per-question timer epoch (stale-timer guard)
+      revealLock: false, // single-resolver gate (timer vs answer race)
       callLLM,
       animeCharacters: franchise.characters || [],
       charIndex: franchise.charIndex || null,
       otherTitles: franchise.otherTitles || [],
     };
     prep.session = session; // cancellation now reaches the session too
-    // if endQuiz fired while the session object was being built, honour it now
+ // if endQuiz fired while the session object was being built, honour it now
     if (prep.cancelled) { session.cancelled = true; abortPrep(); return; }
 
-    // P7: section plan from real availability
+ // P7: section plan from real availability
     const availability = franchise.availability || await probeAvailability(franchise.wiki, franchise.title, franchise.characters || []);
     const plan = buildSectionPlan(cfg, availability);
     session.sections = plan.map((p, i) => ({
@@ -3664,10 +3662,10 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       questions: [],
       canCarryAudio: i === 0 || parsed.randomMode, // audio spawns early in the quiz
     }));
-    // 💡 RANDOM ACROSS FICTION: the announced franchise plays the FIRST
-    // LORE section (2026-09-28 mixed plans put the Logo Round first, and
-    // logo/song sections never consume a franchise). Sections 2+ each draw
-    // their own world inside generateSectionQuestions.
+ // RANDOM ACROSS FICTION: the announced franchise plays the FIRST
+ // LORE section (mixed plans put the Logo Round first, and
+ // logo/song sections never consume a franchise). Sections 2+ each draw
+ // their own world inside generateSectionQuestions.
     if (parsed.randomMode) {
       const LORE_DOMAINS = new Set(["plot", "characters", "cosmology", "mixed", "production"]);
       const firstLore = session.sections.find((s) => LORE_DOMAINS.has(s.domain)) || session.sections[0];
@@ -3679,19 +3677,19 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       if (franchise.slug && session.randomUsed) session.randomUsed.add(franchise.slug);
     }
 
-    // P19: generate section 1 synchronously in the background worker (this
-    // whole function IS the background), then stream the rest during play.
+ // P19: generate section 1 synchronously in the background worker (this
+ // whole function IS the background), then stream the rest during play.
     const first = session.sections[0];
     first.state = SECTION_STATES.GENERATING;
     const job = ensureSectionGenerating(session, 0, sock, chatId);
     await job;
 
     stopPrepTimers(prep);
-    // checkpoint 3: cancelled while section 1 was generating (the minutes-long phase)
+ // checkpoint 3: cancelled while section 1 was generating (the minutes-long phase)
     if (prep.cancelled || session.cancelled) { abortPrep(); return; }
 
     if (first.state !== SECTION_STATES.READY || first.questions.length < Math.min(3, first.perSection)) {
-      // generation failed - release the lock, tell the group, never leave a zombie
+ // generation failed - release the lock, tell the group, never leave a zombie
       pendingPrep.delete(chatId);
       releaseLifecycle(chatId);
       await sock.sendMessage(chatId, {
@@ -3700,12 +3698,12 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       return;
     }
 
-    // P9: intro card with verified franchise image (graceful without).
-    // P24: image was already downloading in parallel - just collect it.
+ // P9: intro card with verified franchise image (graceful without).
+ // P24: image was already downloading in parallel - just collect it.
     const introImage = await introImagePromise;
-    // checkpoint 4 / FINAL GATE: cancelled while fetching the intro image, or
-    // the chat was re-locked by a newer launch while this worker was paused -
-    // a stale worker must NEVER post QUIZ STARTED over a newer prep.
+ // checkpoint 4 / FINAL GATE: cancelled while fetching the intro image, or
+ // the chat was re-locked by a newer launch while this worker was paused -
+ // a stale worker must NEVER post QUIZ STARTED over a newer prep.
     if (prep.cancelled || session.cancelled || !ownsLock()) { abortPrep(); return; }
     const totalQs = plannedTotal(session);
     let head = botMarker + `🎯 *QUIZ STARTED - ${parsed.randomMode ? "RANDOM • ACROSS FICTION" : String(franchise.title).toUpperCase()}* 🎯\n\n`;
@@ -3717,11 +3715,11 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     head += `🛑 Cancel: \`${prefix} quiz end\`\n\n`;
     head += `Let's go! 🚀`;
 
-    // 💡 2026-09-28 OWNER SPEC §1 - UNIFORM READY GATE: every quiz parks
-    // here instead of auto-starting. The tagged initiator fires the starting
-    // gun with `.j quiz go` when the group is actually ready - same flow for
-    // lore quizzes and media quizzes alike. (Fixes "regular quizzes do not
-    // follow the planning phase".)
+ // OWNER SPEC §1 - UNIFORM READY GATE: every quiz parks
+ // here instead of auto-starting. The tagged initiator fires the starting
+ // gun with `.j quiz go` when the group is actually ready - same flow for
+ // lore quizzes and media quizzes alike. (Fixes "regular quizzes do not
+ // follow the planning phase".)
     await parkReadySession(sock, chatId, session, { head, introImage, botMarker, m, senderJid, prefix });
     ownsSlot = false; // OWNER SPEC §4: the slot now rides with the parked session
     return;
@@ -3739,7 +3737,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
 }
 
 // resolve the quiz's franchise context (title/wiki/anime/mediaType/characters)
-// 💡 RANDOM ACROSS FICTION (owner brief §2): resolve ONE slug from the
+// RANDOM ACROSS FICTION (owner brief §2): resolve ONE slug from the
 // random pool into a full franchise context. Used for the quiz's first
 // section AND for every further random section, so a multi-section random
 // quiz spans many different worlds instead of one.
@@ -3774,10 +3772,10 @@ async function drawSectionFranchise(session) {
 }
 
 async function buildFranchiseContext(sock, chatId, botMarker, m, parsed, senderJid = "") {
-  // random mode: the FIRST section's franchise is drawn here; further sections
-  // each draw their own via drawSectionFranchise (owner brief §2: "random
-  // questions across all of fiction, not pick a random world and stay inside
-  // it")
+ // random mode: the FIRST section's franchise is drawn here; further sections
+ // each draw their own via drawSectionFranchise (owner brief §2: "random
+ // questions across all of fiction, not pick a random world and stay inside
+ // it")
   if (parsed.randomMode) {
     const fctx = await drawSectionFranchise({ randomPool: _fyShuffle(RANDOM_POOL), randomUsed: new Set() }).catch(() => null);
     if (!fctx) return null;
@@ -3794,7 +3792,7 @@ async function buildFranchiseContext(sock, chatId, botMarker, m, parsed, senderJ
     return null;
   }
 
-  // ambiguous anime pick flow (wiki could not resolve directly)
+ // ambiguous anime pick flow (wiki could not resolve directly)
   if (res.candidates && res.candidates.length > 1 && !res.wiki) {
     const top = res.anime;
     const second = res.candidates[1];
@@ -3805,7 +3803,6 @@ async function buildFranchiseContext(sock, chatId, botMarker, m, parsed, senderJ
       (top.title || "").toLowerCase() === parsed.title.toLowerCase() ||
       (top.titleRomaji || "").toLowerCase() === parsed.title.toLowerCase();
     if (!strongAuto) {
-      // store the pick and ask - the user replies ".j quiz pick <n>"
       pendingPicks.set(chatId, { choices: res.candidates, ts: Date.now(), askedBy: senderJid, opts: { count: parsed.count, difficulty: parsed.difficulty, section: parsed.section, images: parsed.images, audio: parsed.audio, randomMode: false } });
       let msg = botMarker + `🤔 *"${parsed.title}"* is ambiguous. Which one?\n\n`;
       res.candidates.forEach((c, i) => {
@@ -3835,9 +3832,9 @@ async function buildFranchiseContext(sock, chatId, botMarker, m, parsed, senderJ
     }
   }
 
-  // P22: media type detection ONCE, stored in the config context.
-  // P24: media-type detection and character metadata are INDEPENDENT lookups -
-  // run them concurrently (saves one serial API round-trip per quiz start).
+ // P22: media type detection ONCE, stored in the config context.
+ // P24: media-type detection and character metadata are INDEPENDENT lookups -
+ // run them concurrently (saves one serial API round-trip per quiz start).
   let mediaDetect, characters;
   if (anime) {
     const mdP = quizLore.detectMediaType(parsed.title).catch(() => ({ mediaType: "franchise" }));
@@ -3885,21 +3882,21 @@ async function pickCandidate(sock, chatId, senderJid, botMarker, m, numStr, send
   if (!Number.isInteger(n) || n < 1 || n > pending.choices.length) {
     return { handled: true, message: botMarker + `❌ Pick a number between 1 and ${pending.choices.length}.` };
   }
-  // 💡 START GATE (2026-09-27): the pick resolves into a quiz START - the
-  // initiator or an authorized quiz starter must fire it.
+ // START GATE: the pick resolves into a quiz START - the
+ // initiator or an authorized quiz starter must fire it.
   if (pending.askedBy && pending.askedBy !== senderJid && !(await _canStartQuizFresh(senderJid))) {
     return { handled: true, message: botMarker + `🛑 Only ${mentionOf(pending.askedBy)} - or a Quiz Mod / Global Mod - can pick and start this quiz.`, mentions: [pending.askedBy] };
   }
   const chosen = pending.choices[n - 1];
   pendingPicks.delete(chatId);
-  // P3: pick now follows the same background/locked path as startQuiz
+ // P3: pick now follows the same background/locked path as startQuiz
   if (!acquireLifecycle(chatId)) {
     return { handled: true, message: botMarker + `⏳ A quiz is already being prepared here - hang on a few seconds! 🎯` };
   }
   const prep = createPrepHandle(chatId, senderJid);
   await sock.sendMessage(chatId, { text: botMarker + `🎯 Gathering questions for your quiz... Please hold on.` }, { quoted: m }).catch(() => {});
   const parsed = { title: chosen.title, count: pending.opts.count, difficulty: pending.opts.difficulty, section: pending.opts.section || null, images: pending.opts.images || null, audio: pending.opts.audio || null, randomMode: false, notes: [] };
-  // shortcut: we already know the anime - seed the resolution
+ // shortcut: we already know the anime - seed the resolution
   launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, senderName, smartGroqCall, prep).catch((e) => {
     console.log("[Quiz] pick launch crashed:", e?.message);
     pendingPrep.delete(chatId);
@@ -3911,10 +3908,10 @@ async function pickCandidate(sock, chatId, senderJid, botMarker, m, numStr, send
 async function endQuiz(sock, chatId, senderJid, botMarker, canUseAdminCommands) {
   const session = activeQuizzes.get(chatId);
   if (!session) {
-    // P3b: a launch may still be generating in the background (no session yet,
-    // only the lifecycle lock). Mark its prep handle cancelled so the worker
-    // aborts at its next checkpoint - previously this branch only dropped the
-    // lock and the worker went on to post QUIZ STARTED minutes later.
+ // P3b: a launch may still be generating in the background (no session yet,
+ // only the lifecycle lock). Mark its prep handle cancelled so the worker
+ // aborts at its next checkpoint - previously this branch only dropped the
+ // lock and the worker went on to post QUIZ STARTED minutes later.
     const prep = pendingPrep.get(chatId);
     if (prep && !prep.cancelled) {
       if (prep.askedBy !== senderJid && !canUseAdminCommands && !_canManageQuiz(senderJid)) {
@@ -3929,7 +3926,7 @@ async function endQuiz(sock, chatId, senderJid, botMarker, canUseAdminCommands) 
       console.log("[Quiz] prep cancelled via .quiz end");
       return { handled: true, message: botMarker + `🧹 Quiz preparation cancelled - nothing will start. You can begin a new one now.` };
     }
-    // also release a stale "generating" lock so the group is never stuck
+ // also release a stale "generating" lock so the group is never stuck
     if (lifecycle.has(chatId)) {
       releaseLifecycle(chatId);
       return { handled: true, message: botMarker + `🧹 A quiz was being prepared but got stuck - cleaned up. You can start a new one now.` };
@@ -3939,8 +3936,8 @@ async function endQuiz(sock, chatId, senderJid, botMarker, canUseAdminCommands) 
   if (session.askedBy !== senderJid && !canUseAdminCommands && !_canManageQuiz(senderJid)) {
     return { handled: true, message: botMarker + `🛑 Only the quiz starter, admins or Quiz Mods can end it early.` };
   }
-  // 2026-09-27: a parked (ready-gate) quiz ends quietly - no finish card, no
-  // scores, it never actually started.
+ // a parked (ready-gate) quiz ends quietly - no finish card, no
+ // scores, it never actually started.
   if (session.awaitingGo) {
     session.cancelled = true;
     if (session.readyTimerId) { clearTimeout(session.readyTimerId); session.readyTimerId = null; }
@@ -3974,14 +3971,14 @@ async function showLeaderboard(sock, chatId, senderJid, botMarker, m) {
   return { handled: true, message: out };
 }
 
-// P17: quizmod passthrough. Permission (2026-09-27): admins (legacy) OR
+// P17: quizmod passthrough. Permission: admins (legacy) OR
 // Quiz Mods / Global Mods / owner via the engine-injected manage hook.
 async function handleQuizMod(sock, chatId, senderJid, botMarker, args, canUseAdminCommands) {
   const allowed = canUseAdminCommands || _canManageQuiz(senderJid);
   return quizConfigMod.handleQuizMod(chatId, args, allowed, botConfig.getPrefix());
 }
 
-// ── back-compat exports (old QA harnesses / external pinning) ──
+// -- back-compat exports (old QA harnesses / external pinning) --
 const QUESTION_SECONDS = quizConfigMod.DEFAULTS.timePerQuestion; // P2: now config-driven
 const MAX_QUESTIONS = quizConfigMod.DEFAULTS.maxQuestions;       // P7: now 50
 
@@ -4012,7 +4009,7 @@ module.exports = {
   isQuizAnswerText,
   isQuestionOpen,
   setDeps,
-  // test surface:
+ // test surface:
   parseQuizArgs,
   coerceQuestions,
   extractJsonObject,

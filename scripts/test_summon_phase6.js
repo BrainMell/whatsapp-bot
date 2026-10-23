@@ -16,7 +16,7 @@ function test(name, fn) {
 
 console.log('=== PHASE 6 UNIT TESTS ===\n');
 
-// ─── altDetection module ───────────────────────────────────────
+// --- altDetection module ---------------------------------------
 console.log('--- altDetection module ---');
 
 const altDetection = require(path.join(REPO, 'core/rpg/altDetection.js'));
@@ -57,7 +57,7 @@ test('computePhoneHash strips non-digits', () => {
 });
 
 test('computePhoneHash handles LID JIDs', () => {
-  // LIDs like 118683049455766@lid - extract the number before @
+ // LIDs like 118683049455766@lid - extract the number before @
   const hash = altDetection.computePhoneHash('118683049455766@lid');
   assert.ok(hash);
   assert.strictEqual(hash.length, 64);  // SHA-256 hex = 64 chars
@@ -93,15 +93,14 @@ test('ensurePhoneHash handles null user', () => {
   assert.doesNotThrow(() => altDetection.ensurePhoneHash(null));
 });
 
-// ─── checkTransfer ─────────────────────────────────────────────
+// --- checkTransfer ---------------------------------------------
 console.log('\n--- checkTransfer ---');
 
 test('checkTransfer returns blocked=false for different phones', () => {
-  // We can't easily test with real economy users without DB, but we can
-  // test the logic: checkTransfer calls isAltAccount which calls getUser.
-  // If either user is not found, isAltAccount returns false (fail open).
+ // test the logic: checkTransfer calls isAltAccount which calls getUser.
+ // If either user is not found, isAltAccount returns false (fail open).
   const result = altDetection.checkTransfer('unknown1@s.whatsapp.net', 'unknown2@s.whatsapp.net');
-  // Both users don't exist in economy cache → isAltAccount returns false → not blocked
+ // Both users don't exist in economy cache → isAltAccount returns false → not blocked
   assert.ok(!result.blocked);
 });
 
@@ -111,7 +110,7 @@ test('checkTransfer returns blocked=true for same JID', () => {
   assert.ok(result.reason.includes('Alt-account farming'));
 });
 
-// ─── User.js + economy.js verification ─────────────────────────
+// --- User.js + economy.js verification -------------------------
 console.log('\n--- User.js + economy.js verification ---');
 
 const userSource = fs.readFileSync(path.join(REPO, 'core/models/User.js'), 'utf8');
@@ -134,10 +133,10 @@ test('transferMoney has alt detection check', () => {
 });
 
 test('transferMoney fails open on alt detection error', () => {
-  // The code should have a try/catch that logs but allows transfer on error
+ // The code should have a try/catch that logs but allows transfer on error
   assert.ok(econSource.includes('Fail open'));
 });
 
-// ─── Summary ──────────────────────────────────────────────────
+// --- Summary --------------------------------------------------
 console.log(`\n=== PHASE 6 SUMMARY: ${pass} passed, ${fail} failed ===`);
 process.exit(fail > 0 ? 1 : 0);

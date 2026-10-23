@@ -7,8 +7,8 @@ const path = require('path');
 const botConfig = require('../../botConfig');
 const axios = require('axios');
 const economy = require('../rpg/economy');
-const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
-const { fetchPfp: fetchPfpCached } = require('../utils/pfpCache'); // 💡 PERF PATCH 2026-07-27: cached + 8s-timeout PFP fetcher
+const goService = require('../utils/goImageService'); // singleton (PERF PATCH )
+const { fetchPfp: fetchPfpCached } = require('../utils/pfpCache'); // PERF PATCH cached + 8s-timeout PFP fetcher
 
 let globalSock = null;
 
@@ -68,13 +68,13 @@ async function fetchProfilePicture(sock, jid) {
       return pfpPath; // Use cached if available
     }
 
-    // Clean cache before adding new ones
+ // Clean cache before adding new ones
     await cleanPfpCache();
 
     try {
-      // 💡 PERF PATCH 2026-07-27: was sock.profilePictureUrl(jid, 'image')
-      // with NO timeout - could hang for 90s on LID jids. Now uses the
-      // shared pfpCache helper: 8s timeout + 5min positive / 60s negative cache.
+ // PERF PATCH was sock.profilePictureUrl(jid, 'image')
+ // with NO timeout - could hang for 90s on LID jids. Now uses the
+ // shared pfpCache helper: 8s timeout + 5min positive / 60s negative cache.
       const pfpUrl = await fetchPfpCached(sock, jid);
       if (pfpUrl) {
         return pfpUrl; // Return URL for Go service
@@ -100,7 +100,6 @@ const COLORS = {
   GREEN: 'green'
 };
 
-// Tracks and paths logic
 const MAIN_TRACK = [
   [6,1], [6,2], [6,3], [6,4], [6,5],
   [5,6], [4,6], [3,6], [2,6], [1,6], [0,6],
@@ -164,8 +163,8 @@ class LudoGame {
     this.lastRoll = 0;
     this.consecutiveSixes = 0;
     this.hasExtraTurn = false;
-    // FIX 2026-09-16: forfeit system - every abandonment path marks the
-    // leaver here; their pieces stop existing for turns/captures/walls.
+ // FIX forfeit system - every abandonment path marks the
+ // leaver here; their pieces stop existing for turns/captures/walls.
     this.forfeited = new Set();
     this.diceHistory = [];
     this.walls = [];
@@ -209,7 +208,7 @@ class LudoGame {
     return this.players[this.currentTurnIndex];
   }
 
-  // FIX 2026-09-16: forfeit support ─────────────────────────────────
+ // FIX forfeit support ---------------------------------
   isForfeited(player) {
     return this.forfeited.has(normalizeJid(player.jid));
   }
@@ -218,7 +217,7 @@ class LudoGame {
     return this.players.filter((p) => !this.isForfeited(p));
   }
 
-  // Advance to the next non-forfeited player. Returns true if the turn moved.
+ // Advance to the next non-forfeited player. Returns true if the turn moved.
   nextTurnSkipForfeited() {
     for (let i = 0; i < this.players.length; i++) {
       this.currentTurnIndex = (this.currentTurnIndex + 1) % this.players.length;
@@ -227,9 +226,8 @@ class LudoGame {
     return false;
   }
 
-  // Mark a player as forfeited: pieces removed from play, turn advanced if
-  // needed, and the game resolved if fewer than 2 active players remain.
-  // Returns { ended, winner, player } for the caller's message.
+ // Mark a player as forfeited: pieces removed from play, turn advanced if
+ // needed, and the game resolved if fewer than 2 active players remain.
   forfeitPlayer(jid) {
     const target = normalizeJid(jid);
     const player = this.players.find(
@@ -238,7 +236,7 @@ class LudoGame {
     if (!player || this.isForfeited(player)) return null;
 
     this.forfeited.add(normalizeJid(player.jid));
-    // remove pieces from the board entirely (no wall/capture/blocking traces)
+ // remove pieces from the board entirely (no wall/capture/blocking traces)
     player.pieces.forEach((piece) => {
       piece.position = -1;
       piece.inBase = false;
@@ -257,11 +255,11 @@ class LudoGame {
       this.gameOver = true;
       this.winner = winner.fullJid;
     } else if (ended && active.length === 0) {
-      // everyone forfeited - no contest, mark dead so exports can clean up
+ // everyone forfeited - no contest, mark dead so exports can clean up
       this.gameOver = true;
       this.winner = null;
     }
-    // if it was the forfeiter's turn, move on
+ // if it was the forfeiter's turn, move on
     if (!ended && this.isForfeited(this.getCurrentPlayer())) {
       this.hasExtraTurn = false;
       this.consecutiveSixes = 0;
@@ -505,7 +503,7 @@ async function renderBoard(game, sock = null) {
 }
 
 // ============================================
-// WIN REWARD (shared by natural win + forfeit win) - FIX 2026-09-16
+// WIN REWARD (shared by natural win + forfeit win) - FIX
 // ============================================
 function awardWin(winnerJid, game) {
   try {
@@ -549,8 +547,8 @@ module.exports = {
       return { success: false, message: BOT_MARKER + "❌ Ludo needs 2-4 players!" };
     }
 
-    // FIX 2026-09-16: every player must be registered - otherwise the win
-    // reward could silently no-op (economy.getUser nulls unregistered users).
+ // FIX every player must be registered - otherwise the win
+ // reward could silently no-op (economy.getUser nulls unregistered users).
     const unregistered = [];
     for (const jid of allPlayers) {
       let ok = false;
@@ -632,10 +630,10 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
 
     if (rollResult.burned) {
       message += `⚡ *BURNED!* ⚡\n3 consecutive 6s! Turn skipped!\n\n`;
-      // 💡 FIX: Force-clear extra turn before calling nextTurn - previously
-      // if hasExtraTurn was true from a previous six, nextTurn() would
-      // just clear the flag without advancing the turn, giving the player
-      // another roll despite being burned.
+ // FIX: Force-clear extra turn before calling nextTurn - previously
+ // if hasExtraTurn was true from a previous six, nextTurn() would
+ // just clear the flag without advancing the turn, giving the player
+ // another roll despite being burned.
       game.hasExtraTurn = false;
       game.nextTurn();
       message += `Next turn: @${economy.getDisplayName(game.getCurrentPlayer().fullJid)}`;
@@ -652,8 +650,8 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
       const pieceToMove = movablePieces[0];
       message += `✅ Only piece ${pieceToMove} can move - Auto-moving!\n\n`;
       const moveResult = game.movePiece(player, pieceToMove);
-      // 💡 FIX: Check if auto-move actually succeeded - previously if the
-      // move failed (e.g., wall block), the turn advanced anyway.
+ // FIX: Check if auto-move actually succeeded - previously if the
+ // move failed (e.g., wall block), the turn advanced anyway.
       if (!moveResult.success) {
         message += `❌ Move blocked! ${moveResult.error || 'Cannot move there.'}\n\n`;
         game.hasExtraTurn = false;
@@ -775,8 +773,8 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
     return { success: true };
   },
 
-  // FIX 2026-09-16: ending is a FORFEIT, not a neutral cancel - quitting
-  // mid-game abandons the match. Last active player wins by forfeit.
+ // FIX ending is a FORFEIT, not a neutral cancel - quitting
+ // mid-game abandons the match. Last active player wins by forfeit.
   endGame: async (sock, chatId, senderJid, BOT_MARKER, m) => {
     globalSock = sock;
     const game = activeGames.get(chatId);
@@ -817,7 +815,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
     return { success: true };
   },
 
-  // FIX 2026-09-16: explicit voluntary forfeit (game continues if 2+ remain).
+ // FIX explicit voluntary forfeit (game continues if 2+ remain).
   leaveGame: async (sock, chatId, senderJid, BOT_MARKER, m) => {
     globalSock = sock;
     const game = activeGames.get(chatId);
@@ -853,8 +851,8 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
     return { success: true };
   },
 
-  // FIX 2026-09-16: engine hook - group departure (leave OR kick) forfeits
-  // the departing player. Called from group-participants.update.
+ // FIX engine hook - group departure (leave OR kick) forfeits
+ // the departing player. Called from group-participants.update.
   handleParticipantLeave: async (sock, chatId, leaverJid) => {
     const game = activeGames.get(chatId);
     if (!game) return null;
@@ -888,6 +886,6 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
   }
 };
 
-// FIX 2026-09-16: test hook - lets the harness drive real game state without
+// FIX test hook - lets the harness drive real game state without
 // going through WhatsApp. Not used by production code paths.
 module.exports._internals = { activeGames, LudoGame, renderBoard, normalizeJid };

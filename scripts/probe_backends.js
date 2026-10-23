@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// probe_backends.js — save raw backend responses for parser verification
+// probe_backends.js - save raw backend responses for parser verification
 const fs = require("fs");
 const axios = require("axios");
 const UA =

@@ -1,9 +1,8 @@
-// stress_wiki_images.js — volume stress for the WIKI ENTITY image path
-// (2026-09-30 rebuild v2: games/movies/TV via Wikipedia entity graph).
+// stress_wiki_images.js - volume stress for the WIKI ENTITY image path
+// (rebuild v2: games/movies/TV via Wikipedia entity graph).
 // Runs the REAL quiz.buildImageQuestion with franchise slugs (no anilist id)
 // and asserts the production question shape. Success bar mirrors the cast
 // stress: high build rate, correct shape, sane timings, warm-cache speedup.
-//
 // Run on Box 1: node scripts/stress_wiki_images.js
 const path = require("path");
 const quiz = require(path.join(__dirname, "..", "core", "games", "quiz"));

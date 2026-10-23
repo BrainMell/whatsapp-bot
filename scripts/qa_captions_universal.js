@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-/* qa_captions_universal.js — QA for the universal CARD DETAIL caption unification
+/* qa_captions_universal.js - QA for the universal CARD DETAIL caption unification
  * Part A: render-extract + eval buildCardDetailCaption/buildSpawnCaption from
  *         cardSystem.js and buildPreviewCaption from mentoringCommands.js,
  *         assert Mellow's universal style line-by-line.
@@ -14,7 +14,7 @@ const REPO = '/home/ubuntu/whatsapp-bot';
 let pass = 0, fail = 0;
 const ok = (cond, name) => { if (cond) { pass++; console.log(`  ✓ ${name}`); } else { fail++; console.log(`  ✗ ${name}`); } };
 
-// ── extract top-level function source by brace depth ────────────────────────
+// -- extract top-level function source by brace depth ------------------------
 function grabFn(src, name) {
   const i = src.indexOf(`function ${name}(`);
   if (i < 0) throw new Error(`fn not found: ${name}`);
@@ -32,7 +32,7 @@ function grabConst(src, name) {
   return m[0];
 }
 
-// ════════ Part A: cardSystem captions ════════
+// ======== Part A: cardSystem captions ========
 console.log('\n═══ A1. cardSystem.buildCardDetailCaption ═══');
 {
   const src = fs.readFileSync(path.join(REPO, 'core/rpg/cardSystem.js'), 'utf8');
@@ -83,7 +83,7 @@ console.log('\n═══ A1. cardSystem.buildCardDetailCaption ═══');
   ok(spawnEvent.includes('🎪 ⟢ *Event:* _Summer_'), 'event spawn shows Event');
 }
 
-// ════════ A2: mentoring preview caption ════════
+// ======== A2: mentoring preview caption ========
 console.log('\n═══ A2. mentoringCommands.buildPreviewCaption ═══');
 {
   const src = fs.readFileSync(path.join(REPO, 'core/commands/mentoringCommands.js'), 'utf8');
@@ -108,7 +108,7 @@ console.log('\n═══ A2. mentoringCommands.buildPreviewCaption ═══');
   ok(capE.includes('📺 ⟢ *Series:* _Mato Seihei no Slave_'), 'preview series = real anime');
 }
 
-// ════════ Part B: live handler E2E (read-only) ════════
+// ======== Part B: live handler E2E (read-only) ========
 (async () => {
   console.log('\n═══ B. live handler E2E (read-only) ═══');
   process.env.qa_marker = '1';
@@ -116,7 +116,7 @@ console.log('\n═══ A2. mentoringCommands.buildPreviewCaption ═══');
   const mongoose = require(path.join(REPO, 'node_modules/mongoose'));
   if (process.env.MONGO_URI) {
     try { await mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 15000 }); console.log('  mongo connected'); }
-    catch (e) { console.log('  mongo connect FAILED — Part B limited:', e.message); }
+    catch (e) { console.log('  mongo connect FAILED - Part B limited:', e.message); }
   }
   const sent = [];
   const sock = { sendMessage: async (chat, m) => { sent.push(m); return { key: 'k' }; } };
@@ -128,7 +128,7 @@ console.log('\n═══ A2. mentoringCommands.buildPreviewCaption ═══');
   const dash = sent[0] && sent[0].text || '';
   ok(dash.includes('MINING DASHBOARD'), 'dashboard renders');
   if (dash.includes('regular catalog:')) ok(true, 'dashboard shows regular phase stats');
-  else console.log('  · (regular stats not published yet — shown after miner cycle completes)');
+  else console.log('  · (regular stats not published yet - shown after miner cycle completes)');
 
   sent.length = 0;
   await handleMentoring(sock, 'qa', 'find itachi', { isOwner: false });

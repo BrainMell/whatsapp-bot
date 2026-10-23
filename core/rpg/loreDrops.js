@@ -1,45 +1,41 @@
-// ═══════════════════════════════════════════════════════════════════════════
-//  LORE DROPS — occasional plain-text worldbuilding lines
-// ═══════════════════════════════════════════════════════════════════════════
-//
-//  IMPLEMENTATION of the owner-approved lore drop system (design package:
-//  implementation/lore_drop_system.md + lore_drops/*.md, pass 2/3 rulings).
-//
-//  OWNER CONTRACT (do not break):
-//    - Drops are PLAIN CHAT TEXT: `╒ *line* ╛` — framing glyphs are NOT
-//      italicized, the text inside is (WhatsApp single-asterisk italics).
-//    - NEVER baked into card images or card captions.
-//    - NEVER attached to failure/error paths. Success paths only.
-//    - NEVER two drops in one reply. One call site per flow.
-//    - Never mechanical tells; never bot-persona voice; the word "Kosmion"
-//      never appears in drops (map/doc-level name only).
-//    - `.j lore` stays untouched — drops link to it, never duplicate it.
-//
-//  All state is IN-MEMORY (a Map of small strings, lazily pruned) — zero
-//  Mongo writes, zero schema change, zero risk to the 450 MB RAM line.
-//
-//  Pool lines, subtlety pass (owner ruling 2026-09-19): real-RPG voice.
-//    - short lines, implication over explanation, no mechanical tells
-//    - no em-dashes in player-facing lines, every line <= MAX_LINE_LEN
-//    - pool keys and weighting structure unchanged from the approved design
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// LORE DROPS - occasional plain-text worldbuilding lines
+// ===========================================================================
+// IMPLEMENTATION of the owner-approved lore drop system (design package:
+// implementation/lore_drop_system.md + lore_drops/*.md, pass 2/3 rulings).
+// OWNER CONTRACT (do not break):
+// - Drops are PLAIN CHAT TEXT: `╒ *line* ╛` - framing glyphs are NOT
+// italicized, the text inside is (WhatsApp single-asterisk italics).
+// - NEVER baked into card images or card captions.
+// - NEVER attached to failure/error paths. Success paths only.
+// - NEVER two drops in one reply. One call site per flow.
+// - Never mechanical tells; never bot-persona voice; the word "Kosmion"
+// never appears in drops (map/doc-level name only).
+// - `.j lore` stays untouched - drops link to it, never duplicate it.
+// All state is IN-MEMORY (a Map of small strings, lazily pruned) - zero
+// Mongo writes, zero schema change, zero risk to the 450 MB RAM line.
+// Pool lines, subtlety pass (owner ruling ): real-RPG voice.
+// - short lines, implication over explanation, no mechanical tells
+// - no em-dashes in player-facing lines, every line <= MAX_LINE_LEN
+// - pool keys and weighting structure unchanged from the approved design
+// ===========================================================================
 
 'use strict';
 
-// ─── CONFIG (owner tuning knobs — see implementation/lore_drop_system.md §2) ──
+// --- CONFIG (owner tuning knobs - see implementation/lore_drop_system.md §2) --
 const CONFIG = {
     BASE_CHANCE: 0.10,          // baseline 10% per qualifying interaction
-    COOLDOWN_MS: 30 * 60 * 1000, // 30 min per user+chat — the anti-noise gate
+    COOLDOWN_MS: 30 * 60 * 1000, // 30 min per user+chat - the anti-noise gate
     RECENT_RING: 10,            // per-chat ring of recently shown lines
     IMPORTANT_WEIGHT: 0.4,      // "occasionally important" lines land ~2.5x rarer
     MAX_LINE_LEN: 160,          // safety valve (pool lines are kept under this)
 };
 
-// ─── POOLS ────────────────────────────────────────────────────────────────────
+// --- POOLS --------------------------------------------------------------------
 // Strings = weight 1. { t: 'line', w: 0.4 } = occasionally-important line.
 const POOLS = {
 
-    // ── BLACKSMITH (repairCommands, forge-family crafts) ────────────────────
+ // -- BLACKSMITH (repairCommands, forge-family crafts) --------------------
     blacksmith: [
         'Mind the edge. That one bites back. I keep a bandage behind the counter for a reason.',
         'You adventurers bring me more work than a rockslide brings a quarry. Don\'t stop.',
@@ -62,7 +58,7 @@ const POOLS = {
         { t: 'They say the Divine Spark burns brightest in the hand that works. That\'s why adventurers always find a forge. Some part of you knows.', w: 0.4 },
     ],
 
-    // ── BREWING / COOKING (.j brew, .j cook) ─────────────────────────────────
+ // -- BREWING / COOKING (.j brew, .j cook) ---------------------------------
     brewing: [
         'Stir it widdershins for courage, deosil for sleep. You looked like you needed the sleep.',
         'Don\'t sniff it before you drink it. You\'ll talk yourself out of a cure.',
@@ -84,7 +80,7 @@ const POOLS = {
         { t: 'Time behaves strangely in the deep kitchens of the world. That\'s all I\'ll say about the honey. Drink your tea.', w: 0.4 },
     ],
 
-    // ── CRAFTING (.j craft, non-forge families) ──────────────────────────────
+ // -- CRAFTING (.j craft, non-forge families) ------------------------------
     crafting: [
         'Careful with the straps the first week. Leather remembers your shoulders. Not kindly.',
         'Made a hundred of these. Still hold my breath on the last stitch.',
@@ -105,7 +101,7 @@ const POOLS = {
         { t: 'A crafter I knew made one perfect thing and quit the same day. Said his hands knew something the rest of him shouldn\'t.', w: 0.4 },
     ],
 
-    // ── ENCHANTING / RUNES (.j rune socket/fuse/remove/destroy) ──────────────
+ // -- ENCHANTING / RUNES (.j rune socket/fuse/remove/destroy) --------------
     enchanting: [
         'Hold still. Runes settle easier on the brave. Fidget and it costs you a week of luck.',
         'Nice clean socket. Whoever drilled this cared. Rare, that.',
@@ -124,7 +120,7 @@ const POOLS = {
         { t: 'They say the old powers broke into pieces, and the pieces still hold their shapes. I don\'t carve sets. Never carve a set.', w: 0.4 },
     ],
 
-    // ── HEALING (.j heal / hospital / potion use) ────────────────────────────
+ // -- HEALING (.j heal / hospital / potion use) ----------------------------
     healing: [
         'Breathe in. Hold. Out. …Good. Whatever you fought, you outlived it. That\'s the whole treatment today.',
         'Third time this month. I\'m starting to recognize your boots in the hall.',
@@ -145,7 +141,7 @@ const POOLS = {
         { t: 'Sometimes the dead are brought in breathing. Cold, quiet, breathing. We keep them warm and we don\'t ask.', w: 0.4 },
     ],
 
-    // ── TRADING / MONEY (balance/transfer/deposit/withdraw/buy/sell) ─────────
+ // -- TRADING / MONEY (balance/transfer/deposit/withdraw/buy/sell) ---------
     trading: [
         'The vault doesn\'t sleep, but the clerks do. Your Zeni kept better watch than we would anyway.',
         'Spend a little on bread, adventurer. Heroes have collapsed in my shop more than bandits have robbed it.',
@@ -165,7 +161,7 @@ const POOLS = {
         { t: 'If anyone ever pays you exactly thirteen coins, count them again. I count everything.', w: 0.4 },
     ],
 
-    // ── GENERAL WORLD (menus tips slot, treasure/event floors) ───────────────
+ // -- GENERAL WORLD (menus tips slot, treasure/event floors) ---------------
     general_world: [
         'Mind the east road after dusk. The lanterns there gutter in pairs now. Used to be one at a time.',
         'A child drew a map of everywhere today. Nice thing about children\'s maps, the unknown parts look friendly.',
@@ -191,9 +187,9 @@ const POOLS = {
         { t: 'The wardens count the dungeons every solstice. The count came back one higher this year. Nobody built one.', w: 0.4 },
     ],
 
-    // ── ABYSS ENCOUNTER POOLS (victory / encounter text, keyed by category) ──
-    // Voice rule: the line is spoken by a party-member/fellow adventurer who
-    // SAW the encounter. Never the bot persona, never the monster.
+ // -- ABYSS ENCOUNTER POOLS (victory / encounter text, keyed by category) --
+ // Voice rule: the line is spoken by a party-member/fellow adventurer who
+ // SAW the encounter. Never the bot persona, never the monster.
     abyss_unknown_creature: [
         'I\'ve never seen a creature like this before. And I\'ve seen the deep bestiaries. Twice.',
         'That\'s not from any world I\'ve walked. Look at the joints. They bend like it\'s apologizing to a different sky.',
@@ -257,8 +253,8 @@ const POOLS = {
         'I checked my own hands after. Left, right, left. All mine. For now.',
     ],
 
-    // ── ENCOUNTER BEATS (pass 3 pool: lore_drops/encounters.md) ──────────────
-    // Pool A — fight-openers ("the fight is about to begin" beat)
+ // -- ENCOUNTER BEATS (pass 3 pool: lore_drops/encounters.md) --------------
+ // Pool A - fight-openers ("the fight is about to begin" beat)
     encounters_opener: [
         'the fight is about to begin. you can feel it in the floor',
         'something on the other side is done waiting',
@@ -275,7 +271,7 @@ const POOLS = {
         'no warning. no roar. just intent',
         'the shadows give it up reluctantly',
     ],
-    // Pool B — enemy barks (humanoid variants only; deniable, never confirming)
+ // Pool B - enemy barks (humanoid variants only; deniable, never confirming)
     encounters_bark: [
         '"you again? …no. no, you\'re someone else."',
         '"wrong world. you\'re from the wrong world."',
@@ -290,7 +286,7 @@ const POOLS = {
         '"your banner\'s shade is wrong for this season."',
         '"fight well. someone is probably watching. there usually is."',
     ],
-    // Pool C — environmental observations (floor-cleared attach point)
+ // Pool C - environmental observations (floor-cleared attach point)
     encounters_env: [
         'the walls here are scarred by something wider than a blade',
         'someone scratched a tally into the stone. it stops mid-stroke',
@@ -307,7 +303,7 @@ const POOLS = {
         'someone planted a garden down here once. the rows are still straight',
         'the corridor agrees to be a corridor. that feels temporary',
     ],
-    // Pool D — NPC-at-peace lines (friendly random NPCs using player sprites)
+ // Pool D - NPC-at-peace lines (friendly random NPCs using player sprites)
     encounters_npc: [
         '"mind the third step. it lies."',
         '"i trade in stories. yours isn\'t ripe yet."',
@@ -322,9 +318,9 @@ const POOLS = {
     ],
 };
 
-// ─── RUNTIME STATE (in-memory only) ──────────────────────────────────────────
+// --- RUNTIME STATE (in-memory only) ------------------------------------------
 // cooldowns: Map<"${chatId}:${userId}", lastDropTs>
-// recentRing: Map<chatId, string[]> — last RECENT_RING lines shown in that chat
+// recentRing: Map<chatId, string[]> - last RECENT_RING lines shown in that chat
 const _cooldowns = new Map();
 const _recentRing = new Map();
 
@@ -338,7 +334,7 @@ function _pruneCooldowns(now) {
 }
 
 function _pickWeighted(candidates) {
-    // candidates: array of {t, w}
+ // candidates: array of {t, w}
     let total = 0;
     for (const c of candidates) total += (c.w || 1);
     let roll = Math.random() * total;
@@ -350,7 +346,7 @@ function _pickWeighted(candidates) {
 }
 
 function formatDrop(line) {
-    // Framing glyphs are NOT italicized; the text inside is (WhatsApp italics).
+ // Framing glyphs are NOT italicized; the text inside is (WhatsApp italics).
     return `╒ *${line}* ╛`;
 }
 
@@ -378,15 +374,15 @@ function maybeDrop(category, opts = {}) {
         const key = `${chatId}:${userId}`;
         const now = Date.now();
 
-        // 1. Cooldown gate (per user+chat)
+ // 1. Cooldown gate (per user+chat)
         const last = _cooldowns.get(key) || 0;
         if (now - last < CONFIG.COOLDOWN_MS) return null;
 
-        // 2. Chance gate
+ // 2. Chance gate
         const chance = Number.isFinite(opts.chance) ? opts.chance : CONFIG.BASE_CHANCE;
         if (!opts.force && Math.random() >= chance) return null;
 
-        // 3. Build candidates: pool minus recent ring for this chat
+ // 3. Build candidates: pool minus recent ring for this chat
         const ring = _recentRing.get(chatId) || [];
         let candidates = [];
         for (const entry of pool) {
@@ -394,12 +390,12 @@ function maybeDrop(category, opts = {}) {
             if (!item || typeof item.t !== 'string') continue;
             if (item.t.length > CONFIG.MAX_LINE_LEN) continue;
             if (ring.includes(item.t)) continue;
-            // "occasionally important" lines keep their reduced weight
+ // "occasionally important" lines keep their reduced weight
             candidates.push({ t: item.t, w: item.w || 1 });
         }
         if (candidates.length === 0) {
-            // Ring exhausted the pool (tiny pool + bad luck): fall back to the
-            // full pool so the surface never silently starves.
+ // Ring exhausted the pool (tiny pool + bad luck): fall back to the
+ // full pool so the surface never silently starves.
             for (const entry of pool) {
                 const item = typeof entry === 'string' ? { t: entry, w: 1 } : entry;
                 if (item && typeof item.t === 'string' && item.t.length <= CONFIG.MAX_LINE_LEN) {
@@ -409,10 +405,10 @@ function maybeDrop(category, opts = {}) {
             if (candidates.length === 0) return null;
         }
 
-        // 4. Weighted pick (important lines w=0.4 land rarer)
+ // 4. Weighted pick (important lines w=0.4 land rarer)
         const picked = _pickWeighted(candidates);
 
-        // 5. Stamp cooldown + ring, return formatted
+ // 5. Stamp cooldown + ring, return formatted
         _cooldowns.set(key, now);
         _pruneCooldowns(now);
         ring.push(picked.t);
@@ -421,7 +417,7 @@ function maybeDrop(category, opts = {}) {
 
         return formatDrop(picked.t);
     } catch (e) {
-        // Never let flavor break a command.
+ // Never let flavor break a command.
         try { console.error('[loreDrop] error:', e.message); } catch (_) {}
         return null;
     }
@@ -480,7 +476,7 @@ async function dropOwn(sock, chatId, category, opts = {}) {
  *       floors 31-89  → creature (70%) or abyss_timeline_person (30%)
  *       floors 90+/GOD→ creature (55%) / timeline (30%) / self_variant (15%)
  *
- * @returns {string} pool category name (never null — creature pool always legal)
+ * @returns {string} pool category name (never null - creature pool always legal)
  */
 function routeAbyssCategory(enemy, floor) {
     const tag = enemy && enemy.variantTag;

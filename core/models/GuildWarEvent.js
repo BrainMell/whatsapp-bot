@@ -1,5 +1,5 @@
 // ============================================
-// ⚔️ GUILD WAR EVENT MODEL — Guild War Overhaul 2026-10-03
+// GUILD WAR EVENT MODEL - Guild War Overhaul
 // Replaces the old weekly simulated tournament (GuildWar model, REMOVED).
 // One document per event: map topology + room states + players embedded.
 // ALL mutations during ACTIVE use atomic findOneAndUpdate (multi-instance safe).
@@ -18,10 +18,10 @@ const RoomSchema = new mongoose.Schema({
     clearedBy: String,      // player jid
     clearedByGuild: String,
     clearedAt: Date,
-    lootFresh: Boolean,     // 🪙 consumable spoils still on the floor (owner 2026-10-06): true while the clearer is present; the enterRoom/leaveRoom pipelines flip it to false the moment they leave — renders then show the permanent LOOTED marker. Undefined on legacy rooms = already-looted (falsy on purpose)
+    lootFresh: Boolean, // consumable spoils still on the floor: true while the clearer is present; the enterRoom/leaveRoom pipelines flip it to false the moment they leave - renders then show the permanent LOOTED marker. Undefined on legacy rooms = already-looted (falsy on purpose)
     occupants: [String],    // jids currently inside
     residue: { type: Map, of: mongoose.Schema.Types.Mixed, default: null },
-    variant: { type: String, default: 'intact' }, // Ruins visual variant (baked at startEvent — a room never changes look between renders)
+    variant: { type: String, default: 'intact' }, // Ruins visual variant (baked at startEvent - a room never changes look between renders)
 }, { _id: false });
 
 const RelicSchema = new mongoose.Schema({
@@ -52,9 +52,9 @@ const PlayerSchema = new mongoose.Schema({
     protectedUntil: { type: Number, default: 0 },
     lastActionAt: { type: Number, default: 0 },
     lastMoveAt: { type: Number, default: 0 },   // §15 #4: move cooldown clock (was stripped by strict mode)
-    // ⚔️ CROSS-INSTANCE MILESTONE CLAIM (2026-10-07): highest discovery
-    // milestone already announced for this player (mongoose strict subdoc —
-    // the field MUST be declared or the $set in encounters.js is stripped).
+ // CROSS-INSTANCE MILESTONE CLAIM: highest discovery
+ // milestone already announced for this player (mongoose strict subdoc -
+ // the field MUST be declared or the $set in encounters.js is stripped).
     milestoneClaimed: { type: Number, default: 0 },
     pvpMeta: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} }, // victim decay ledger
     joinedAt: Date,
@@ -73,7 +73,7 @@ const GuildWarEventSchema = new mongoose.Schema({
     rooms: [RoomSchema],
     players: [PlayerSchema],
     coreKey: String,                            // "x,y" of World Core
-    edges: [String],                            // open edges "x,y|dir" (pruned topology — source of truth)
+    edges: [String],                            // open edges "x,y|dir" (pruned topology - source of truth)
     coreClaimedBy: String,                      // first guild to breach
     scoreboard: [{ guildId: String, name: String, points: Number }],
     config: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} }, // config snapshot
@@ -82,49 +82,49 @@ const GuildWarEventSchema = new mongoose.Schema({
     endsAt: Number,                             // hard end
     archivedAt: Number,
     logTail: [{ t: Number, type: String, actor: String, payload: String }], // ring, newest last
-    // Phase 2 (feed resurrection): the live feed queue lives in the DOC so
-    // every instance can flush it and a restart loses nothing.
+ // Phase 2 (feed resurrection): the live feed queue lives in the DOC so
+ // every instance can flush it and a restart loses nothing.
     feedQueue: [{ id: String, tier: String, text: String, t: Number, tries: { type: Number, default: 0 } }],
-    // 🎯 FEED DESTINATION PIN (owner 2026-10-06: "sometimes responding in
-    // different group chats, and sometimes even different bots responding"):
-    // hostless events used to route each flush wave to the flushing bot's OWN
-    // rpg-GC list — 3 instances = 3 different destination sets. The first
-    // flusher pins ONE set here (atomic first-writer-wins, guildWar/feed.js
-    // destinationsFor) and every instance routes identical waves identically.
+ // FEED DESTINATION PIN ("sometimes responding in
+ // different group chats, and sometimes even different bots responding"):
+ // hostless events used to route each flush wave to the flushing bot's OWN
+ // rpg-GC list - 3 instances = 3 different destination sets. The first
+ // flusher pins ONE set here (atomic first-writer-wins, guildWar/feed.js
+ // destinationsFor) and every instance routes identical waves identically.
     feedDestinations: { type: [String], default: null },
-    // ⚔️ SCOREBOARD LEASE (owner live-test bug report #10, 2026-10-06:
-    // "standings emitted repeatedly by both Subaru and Joker, identical text
-    // more than once"): the standings cadence timer lived in PER-PROCESS
-    // memory (feed.js feedStates), so all 3 bot processes posted the
-    // standings on their OWN cadence — 3 instances × identical numbers =
-    // routine duplicate standings. The cadence is now claimed ON THE DOC
-    // (atomic first-writer-wins in feed.js postScoreboard): exactly one
-    // post per SCOREBOARD_EVERY_MS across the whole fleet.
+ // SCOREBOARD LEASE (owner live-test bug report #10,
+ // "standings emitted repeatedly by both Subaru and Joker, identical text
+ // more than once"): the standings cadence timer lived in PER-PROCESS
+ // memory (feed.js feedStates), so all 3 bot processes posted the
+ // standings on their OWN cadence - 3 instances × identical numbers =
+ // routine duplicate standings. The cadence is now claimed ON THE DOC
+ // (atomic first-writer-wins in feed.js postScoreboard): exactly one
+ // post per SCOREBOARD_EVERY_MS across the whole fleet.
     scoreboardAt: { type: Number, default: null },
-    // Phase 1 #8: PvP challenge windows are shared state (was per-process Map)
-    // ⚔️ eventId rides each challenge record (2026-10-05): resolveTimeout —
-    // the sweeper that concedes/voids expired windows — reads c.eventId.
-    // The old schema stripped it (mongoose strict subdoc), so every DB-pulled
-    // resolution got eventId=undefined → getEvent(null) → silent no-op:
-    // expired challenges NEVER resolved (measured in the multiplayer sim).
+ // Phase 1 #8: PvP challenge windows are shared state (was per-process Map)
+ // eventId rides each challenge record: resolveTimeout -
+ // the sweeper that concedes/voids expired windows - reads c.eventId.
+ // The old schema stripped it (mongoose strict subdoc), so every DB-pulled
+ // resolution got eventId=undefined → getEvent(null) → silent no-op:
+ // expired challenges NEVER resolved (measured in the multiplayer sim).
     pvpChallenges: [{ key: String, eventId: String, challengerJid: String, challengedJid: String, roomKey: String, expiresAt: Number }],
-    // ⚔️ Cross-box flow lease (2026-10-05): both servers share this MongoDB,
-    // so every instance ticks every war. {owner, at} names the ONE instance
-    // allowed to run proactive flows (auto-start + start-card DMs, hard end,
-    // inactivity sweep). Stale after 90s → any member instance takes over.
-    // Mixed + default null (NOT a subdoc): mongoose instantiates subdoc
-    // fields as {} on create, which breaks the {flow: null} lease claim.
+ // Cross-box flow lease: both servers share this MongoDB,
+ // so every instance ticks every war. {owner, at} names the ONE instance
+ // allowed to run proactive flows (auto-start + start-card DMs, hard end,
+ // inactivity sweep). Stale after 90s → any member instance takes over.
+ // Mixed + default null (NOT a subdoc): mongoose instantiates subdoc
+ // fields as {} on create, which breaks the {flow: null} lease claim.
     flow: { type: mongoose.Schema.Types.Mixed, default: null },
-    // 🎚️ PvE band ladder (owner spec 2026-10-06): roster-derived anchors
-    // {p50, p80, maxLvl, n, at} computed once at first engage and cached here
-    // so every instance reads one truth (guildWar/encounters.js getRosterBands).
-    // Mixed + default null: absent = not computed yet → legacy ring curve.
+ // PvE band ladder (owner spec ): roster-derived anchors
+ // {p50, p80, maxLvl, n, at} computed once at first engage and cached here
+ // so every instance reads one truth (guildWar/encounters.js getRosterBands).
+ // Mixed + default null: absent = not computed yet → legacy ring curve.
     bands: { type: mongoose.Schema.Types.Mixed, default: null },
-    // ⏳ FINALE (owner 2026-10-05 23:09Z: "If a timer brings the Guild War to
-    // an end, place 4 bosses around the map. After all 4 bosses die, then the
-    // Guild War ends."): set when endsAt passes. { started, startedAt,
-    // bosses: [{ key, name, index, dead }] }. Mixed + default null — the
-    // atomic flip condition ({finale: null}) must match fresh docs exactly.
+ // ⏳ FINALE (23:09Z: "If a timer brings the Guild War to
+ // an end, place 4 bosses around the map. After all 4 bosses die, then the
+ // Guild War ends."): set when endsAt passes. { started, startedAt,
+ // bosses: [{ key, name, index, dead }] }. Mixed + default null - the
+ // atomic flip condition ({finale: null}) must match fresh docs exactly.
     finale: { type: mongoose.Schema.Types.Mixed, default: null },
     createdAt: { type: Date, default: Date.now },
 }, { collection: 'guildwarevents', minimize: false });

@@ -2,14 +2,13 @@
 // MURDER MYSTERY - VISUAL CARD SYSTEM
 // Victorian-noir image cards rendered locally
 // with node-canvas. No external services.
-//
 // Card language:
-//   candlelit ivory on ink, blood crimson for
-//   death, brass amber for the law, spectral
-//   pale jade for the ghost, wax seals,
-//   film grain, hairline frames, Playfair
-//   Display display type, EB Garamond body,
-//   Special Elite for stamps and secrets.
+// candlelit ivory on ink, blood crimson for
+// death, brass amber for the law, spectral
+// pale jade for the ghost, wax seals,
+// film grain, hairline frames, Playfair
+// Display display type, EB Garamond body,
+// Special Elite for stamps and secrets.
 // ============================================
 
 const path = require('path');
@@ -171,7 +170,7 @@ function drawCover(ctx, img, x, y, w, h) {
 // background + darkness + vignette + grain + frame
 function atmosphere(ctx, W, H, opts = {}) {
   const dark = opts.dark != null ? opts.dark : 0.62;
-  // darkness gradient (heavier at bottom & edges)
+ // darkness gradient (heavier at bottom & edges)
   const g = ctx.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, `rgba(10,8,14,${(dark - 0.08).toFixed(3)})`);
   g.addColorStop(0.5, `rgba(9,7,12,${dark.toFixed(3)})`);
@@ -179,7 +178,7 @@ function atmosphere(ctx, W, H, opts = {}) {
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
 
-  // vignette
+ // vignette
   const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.28, W / 2, H / 2, Math.max(W, H) * 0.72);
   v.addColorStop(0, 'rgba(0,0,0,0)');
   v.addColorStop(1, 'rgba(0,0,0,0.55)');
@@ -222,7 +221,7 @@ function frame(ctx, W, H, color) {
   ctx.strokeRect(20.5, 20.5, W - 41, H - 41);
   ctx.lineWidth = 3;
   ctx.strokeRect(34.5, 34.5, W - 69, H - 69);
-  // corner diamonds on the inner frame
+ // corner diamonds on the inner frame
   ctx.fillStyle = color;
   const d = 7;
   for (const [cx, cy] of [[34.5, 34.5], [W - 34.5, 34.5], [34.5, H - 34.5], [W - 34.5, H - 34.5]]) {
@@ -264,7 +263,7 @@ function footer(ctx, W, H, manorName) {
 // wax seal with icon
 function seal(ctx, cx, cy, r, color, iconFn) {
   ctx.save();
-  // irregular blob
+ // irregular blob
   ctx.beginPath();
   const bumps = 9;
   for (let i = 0; i <= bumps; i++) {
@@ -286,13 +285,13 @@ function seal(ctx, cx, cy, r, color, iconFn) {
   ctx.shadowOffsetY = 4;
   ctx.fill();
   ctx.shadowColor = 'transparent';
-  // inner ring
+ // inner ring
   ctx.beginPath();
   ctx.arc(cx, cy, r * 0.8, 0, Math.PI * 2);
   ctx.strokeStyle = 'rgba(0,0,0,0.35)';
   ctx.lineWidth = 2.5;
   ctx.stroke();
-  // highlight
+ // highlight
   ctx.beginPath();
   ctx.arc(cx - r * 0.25, cy - r * 0.3, r * 0.55, Math.PI * 1.05, Math.PI * 1.6);
   ctx.strokeStyle = 'rgba(255,255,255,0.22)';
@@ -308,7 +307,7 @@ const Icons = {
     ctx.save();
     ctx.translate(cx, cy);
     ctx.fillStyle = 'rgba(236,226,200,0.95)';
-    // blade
+ // blade
     ctx.beginPath();
     ctx.moveTo(0, -s);
     ctx.lineTo(s * 0.18, -s * 0.15);
@@ -316,11 +315,11 @@ const Icons = {
     ctx.lineTo(-s * 0.18, -s * 0.15);
     ctx.closePath();
     ctx.fill();
-    // guard
+ // guard
     ctx.fillRect(-s * 0.5, s * 0.28, s, s * 0.12);
-    // grip
+ // grip
     ctx.fillRect(-s * 0.09, s * 0.4, s * 0.18, s * 0.42);
-    // pommel
+ // pommel
     ctx.beginPath();
     ctx.arc(0, s * 0.88, s * 0.12, 0, Math.PI * 2);
     ctx.fill();
@@ -339,7 +338,7 @@ const Icons = {
     ctx.moveTo(s * 0.2, s * 0.2);
     ctx.lineTo(s * 0.62, s * 0.62);
     ctx.stroke();
-    // glint
+ // glint
     ctx.lineWidth = s * 0.07;
     ctx.beginPath();
     ctx.arc(-s * 0.12, -s * 0.15, s * 0.28, Math.PI * 1.1, Math.PI * 1.45);
@@ -347,7 +346,7 @@ const Icons = {
     ctx.restore();
   },
   halo(ctx, cx, cy, s) {
-    // angelic ring with rays
+ // angelic ring with rays
     ctx.save();
     ctx.translate(cx, cy);
     ctx.strokeStyle = 'rgba(236,226,200,0.95)';
@@ -355,7 +354,7 @@ const Icons = {
     ctx.beginPath();
     ctx.ellipse(0, -s * 0.15, s * 0.72, s * 0.3, 0, 0, Math.PI * 2);
     ctx.stroke();
-    // rays
+ // rays
     ctx.lineWidth = s * 0.09;
     for (const ang of [-2.35, -1.9, -1.25, -0.8]) {
       const x1 = Math.cos(ang) * s * 0.85;
@@ -414,7 +413,7 @@ const Icons = {
     ctx.restore();
   },
   moon(ctx, cx, cy, s) {
-    // crescent via two arcs (path subtraction with even-odd not needed: outline shape)
+ // crescent via two arcs (path subtraction with even-odd not needed: outline shape)
     ctx.save();
     ctx.translate(cx, cy);
     ctx.fillStyle = 'rgba(236,226,200,0.95)';
@@ -425,34 +424,34 @@ const Icons = {
     ctx.fill();
     ctx.restore();
   },
-  // Wave 2a role icons (owner 2026-10-13)
+ // Wave 2a role icons
   candle(ctx, cx, cy, s) {
-    // veiled candle: wax column + flame + halo of smoke
+ // veiled candle: wax column + flame + halo of smoke
     ctx.save();
     ctx.translate(cx, cy);
     ctx.strokeStyle = 'rgba(236,226,200,0.95)';
     ctx.fillStyle = 'rgba(236,226,200,0.95)';
-    // wax column
+ // wax column
     ctx.fillRect(-s * 0.28, -s * 0.1, s * 0.56, s * 0.95);
-    // drips
+ // drips
     ctx.beginPath();
     ctx.moveTo(-s * 0.28, -s * 0.1);
     ctx.quadraticCurveTo(-s * 0.44, s * 0.15, -s * 0.34, s * 0.3);
     ctx.quadraticCurveTo(-s * 0.24, s * 0.12, -s * 0.28, -s * 0.1);
     ctx.fill();
-    // wick
+ // wick
     ctx.lineWidth = s * 0.07;
     ctx.beginPath();
     ctx.moveTo(0, -s * 0.1);
     ctx.lineTo(0, -s * 0.3);
     ctx.stroke();
-    // flame
+ // flame
     ctx.beginPath();
     ctx.moveTo(0, -s * 0.75);
     ctx.quadraticCurveTo(s * 0.28, -s * 0.42, 0, -s * 0.26);
     ctx.quadraticCurveTo(-s * 0.28, -s * 0.42, 0, -s * 0.75);
     ctx.fill();
-    // smoke wisps
+ // smoke wisps
     ctx.lineWidth = s * 0.06;
     ctx.beginPath();
     ctx.moveTo(s * 0.5, s * 0.7);
@@ -461,20 +460,20 @@ const Icons = {
     ctx.restore();
   },
   tray(ctx, cx, cy, s) {
-    // silver salver: ellipse + pedestal + key resting on top
+ // silver salver: ellipse + pedestal + key resting on top
     ctx.save();
     ctx.translate(cx, cy);
     ctx.strokeStyle = 'rgba(236,226,200,0.95)';
     ctx.fillStyle = 'rgba(236,226,200,0.95)';
     ctx.lineWidth = s * 0.1;
-    // salver
+ // salver
     ctx.beginPath();
     ctx.ellipse(0, s * 0.25, s * 0.95, s * 0.34, 0, 0, Math.PI * 2);
     ctx.stroke();
     ctx.beginPath();
     ctx.ellipse(0, s * 0.2, s * 0.95, s * 0.34, 0, Math.PI, Math.PI * 2);
     ctx.fill();
-    // pedestal
+ // pedestal
     ctx.beginPath();
     ctx.moveTo(-s * 0.3, s * 0.6);
     ctx.lineTo(s * 0.3, s * 0.6);
@@ -483,7 +482,7 @@ const Icons = {
     ctx.moveTo(0, s * 0.55);
     ctx.lineTo(0, s * 0.9);
     ctx.stroke();
-    // key across the tray
+ // key across the tray
     ctx.lineWidth = s * 0.14;
     ctx.beginPath();
     ctx.arc(-s * 0.42, -s * 0.05, s * 0.16, 0, Math.PI * 2);
@@ -499,7 +498,7 @@ const Icons = {
     ctx.restore();
   },
   masks(ctx, cx, cy, s) {
-    // twin theatre masks: one smiling, one grieving, overlapping
+ // twin theatre masks: one smiling, one grieving, overlapping
     ctx.save();
     ctx.translate(cx, cy);
     ctx.strokeStyle = 'rgba(236,226,200,0.95)';
@@ -516,7 +515,7 @@ const Icons = {
       ctx.quadraticCurveTo(-s * 0.46, -s * 0.56, -s * 0.42, -s * 0.5);
       ctx.closePath();
       ctx.stroke();
-      // eyes
+ // eyes
       ctx.fillStyle = 'rgba(236,226,200,0.95)';
       ctx.beginPath();
       ctx.arc(-s * 0.18, -s * 0.14, s * 0.08, 0, Math.PI * 2);
@@ -524,7 +523,7 @@ const Icons = {
       ctx.beginPath();
       ctx.arc(s * 0.18, -s * 0.14, s * 0.08, 0, Math.PI * 2);
       ctx.fill();
-      // mouth (arc flips between smile and grief)
+ // mouth (arc flips between smile and grief)
       ctx.lineWidth = s * 0.09;
       ctx.beginPath();
       ctx.arc(0, s * 0.3, s * 0.2, flip ? Math.PI * 1.15 : Math.PI * 0.85, flip ? Math.PI * 1.85 : Math.PI * 0.15);
@@ -606,7 +605,7 @@ async function drawSpriteGray(ctx, charId, cx, bottomY, maxH, opts = {}) {
   for (let i = 0; i < d.length; i += 4) {
     if (d[i + 3] === 0) continue;
     const lum = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) | 0;
-    // slight cool tint for the dead
+ // slight cool tint for the dead
     d[i] = Math.max(0, lum - 6);
     d[i + 1] = Math.max(0, lum - 2);
     d[i + 2] = Math.min(255, lum + 8);
@@ -638,14 +637,14 @@ async function drawAvatar(ctx, charId, cx, cy, r, ringColor = C.amber) {
   ctx.shadowColor = 'transparent';
   ctx.clip();
   ctx.drawImage(img, sx, 0, srcW, srcH, cx - r, cy - r, r * 2, r * 2);
-  // darken lower half for depth
+ // darken lower half for depth
   const g = ctx.createLinearGradient(0, cy, 0, cy + r);
   g.addColorStop(0, 'rgba(0,0,0,0)');
   g.addColorStop(1, 'rgba(0,0,0,0.45)');
   ctx.fillStyle = g;
   ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
   ctx.restore();
-  // rings
+ // rings
   ctx.save();
   ctx.strokeStyle = ringColor;
   ctx.lineWidth = 3;
@@ -678,7 +677,7 @@ function splatter(ctx, cx, cy, spread, n = 12) {
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fill();
   }
-  // two drips
+ // two drips
   for (let i = 0; i < 2; i++) {
     const x = cx + (Math.random() - 0.5) * spread * 0.8;
     const y0 = cy + Math.random() * 40;
@@ -813,7 +812,7 @@ async function renderRoleCard({ character, playerName, role, manorName }) {
 
     const style = ROLE_STYLE[role] || ROLE_STYLE.CIVILIAN;
 
-    // character sprite, right anchored
+ // character sprite, right anchored
     await drawSprite(ctx, character.id, 620, 1240, 860);
 
     ctx.textAlign = 'left';
@@ -829,7 +828,7 @@ async function renderRoleCard({ character, playerName, role, manorName }) {
     ctx.lineTo(560, 152);
     ctx.stroke();
 
-    // player name
+ // player name
     fitFont(ctx, playerName.toUpperCase(), 'PF-Black', 62, 500);
     ctx.fillStyle = C.ivory;
     ctx.shadowColor = 'rgba(0,0,0,0.8)';
@@ -847,7 +846,7 @@ async function renderRoleCard({ character, playerName, role, manorName }) {
     ctx.fillStyle = C.ivoryDim;
     ctx.fillText(character.title, 70, 388);
 
-    // role block
+ // role block
     ctx.font = '28px EB-Semi';
     ctx.fillStyle = C.amber;
     spaced(ctx, 'YOU ARE', 70, 500, 8, 'left');
@@ -871,15 +870,15 @@ async function renderRoleCard({ character, playerName, role, manorName }) {
     ctx.lineTo(70 + 300, 656);
     ctx.stroke();
 
-    // instructions
+ // instructions
     ctx.font = '31px EB-Reg';
     ctx.fillStyle = C.ivory;
     wrap(ctx, ROLE_INSTRUCTIONS[role] || ROLE_INSTRUCTIONS.CIVILIAN, 70, 716, 480, 46, 6);
 
-    // seal
+ // seal
     seal(ctx, 150, 1180, 78, style.sealColor, Icons[style.icon]);
 
-    // secret strip
+ // secret strip
     ctx.font = '26px Type';
     ctx.fillStyle = role === 'KILLER' ? C.crimsonHi : 'rgba(236,226,200,0.75)';
     ctx.textAlign = 'center';
@@ -889,14 +888,14 @@ async function renderRoleCard({ character, playerName, role, manorName }) {
   });
 }
 
-// Butler's third-night confidence (Wave 2a, owner 2026-10-13) - private DM card
+// Butler's third-night confidence (Wave 2a, ) - private DM card
 async function renderButlerRevealCard({ butlerChar, killerChar, killerName, night, manorName }) {
   return renderCard(PORT_W, PORT_H, async (ctx) => {
     const bg = await loadBg('library');
     drawCover(ctx, bg, 0, 0, PORT_W, PORT_H);
     atmosphere(ctx, PORT_W, PORT_H, { dark: 0.74 });
 
-    // killer sprite, right anchored (the name behind the knife)
+ // killer sprite, right anchored (the name behind the knife)
     await drawSprite(ctx, killerChar.id, 620, 1240, 860);
 
     ctx.textAlign = 'left';
@@ -958,7 +957,7 @@ async function renderNightCard({ night, line, manorName }) {
     drawCover(ctx, bg, 0, 0, LAND_W, LAND_H);
     atmosphere(ctx, LAND_W, LAND_H, { dark: 0.8 });
 
-    // moon with glow (offscreen to cut crescent cleanly)
+ // moon with glow (offscreen to cut crescent cleanly)
     const { createCanvas } = cv();
     const moonC = createCanvas(420, 420);
     const mctx = moonC.getContext('2d');
@@ -1043,7 +1042,7 @@ async function renderMorningCard({ night, outcome, line, rooms, manorName }) {
       ctx.fillText('No one died last night. The manor searches all the same.', 110, 492);
     }
 
-    // room board (right column)
+ // room board (right column)
     if (rooms && rooms.length) {
       ctx.font = '26px EB-Semi';
       ctx.fillStyle = C.ivoryDim;
@@ -1133,7 +1132,7 @@ async function renderGhostClueCard({ clue, tier, victimName, room, night, manorN
     atmosphere(ctx, PORT_W, PORT_H, { dark: 0.86 });
     fogField(ctx, PORT_W, PORT_H, '159,216,200', 0.2);
 
-    // spectral aura ring
+ // spectral aura ring
     const g = ctx.createRadialGradient(PORT_W / 2, 560, 40, PORT_W / 2, 560, 330);
     g.addColorStop(0, 'rgba(159,216,200,0.22)');
     g.addColorStop(1, 'rgba(159,216,200,0)');
@@ -1149,7 +1148,7 @@ async function renderGhostClueCard({ clue, tier, victimName, room, night, manorN
     ctx.fillStyle = C.ivory;
     ctx.fillText(`CLUE ${roman(tier + 1)}`, PORT_W / 2, 250);
 
-    // ghost eye motif
+ // ghost eye motif
     ctx.save();
     ctx.globalAlpha = 0.85;
     Icons.eye(ctx, PORT_W / 2, 380, 60);
@@ -1174,7 +1173,7 @@ async function renderGhostClueCard({ clue, tier, victimName, room, night, manorN
 }
 
 // ============================================
-// WAVE 2c - THE HOUSE'S SEALS (owner 2026-10-13 "Go" on the seals pitch)
+// WAVE 2c - THE HOUSE'S SEALS ("Go" on the seals pitch)
 // Private find-card for a seal met on a night visit. The strongbox is drawn
 // with primitives (no sprite art exists for seals); the wax seal carries the
 // tier numeral. The riddle is ON the card so a screenshot alone can carry the
@@ -1196,7 +1195,7 @@ function rrectPath(ctx, x, y, w, h, r) {
 // padlock on a hasp, and the tier's wax seal
 function drawLockedSafe(ctx, cx, cy, w, h, tier) {
   ctx.save();
-  // ambient glow behind the box
+ // ambient glow behind the box
   const glow = ctx.createRadialGradient(cx, cy, 20, cx, cy, w * 0.95);
   glow.addColorStop(0, 'rgba(201,161,59,0.15)');
   glow.addColorStop(1, 'rgba(201,161,59,0)');
@@ -1205,7 +1204,7 @@ function drawLockedSafe(ctx, cx, cy, w, h, tier) {
 
   const x = cx - w / 2, y = cy - h / 2;
 
-  // body - iron gradient
+ // body - iron gradient
   const body = ctx.createLinearGradient(x, y, x + w, y + h);
   body.addColorStop(0, '#2a2433');
   body.addColorStop(0.5, '#171320');
@@ -1217,7 +1216,7 @@ function drawLockedSafe(ctx, cx, cy, w, h, tier) {
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // inner door plate
+ // inner door plate
   const dx = x + 24, dy = y + 24, dw = w - 48, dh = h - 48;
   const door = ctx.createLinearGradient(dx, dy, dx + dw, dy + dh);
   door.addColorStop(0, '#1d1826');
@@ -1229,7 +1228,7 @@ function drawLockedSafe(ctx, cx, cy, w, h, tier) {
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  // corner rivets
+ // corner rivets
   ctx.fillStyle = 'rgba(201,161,59,0.55)';
   for (const [rx, ry] of [[x + 12, y + 12], [x + w - 12, y + 12], [x + 12, y + h - 12], [x + w - 12, y + h - 12]]) {
     ctx.beginPath();
@@ -1237,14 +1236,14 @@ function drawLockedSafe(ctx, cx, cy, w, h, tier) {
     ctx.fill();
   }
 
-  // hinges (left edge)
+ // hinges (left edge)
   ctx.fillStyle = 'rgba(201,161,59,0.4)';
   for (const hy of [y + h * 0.26, y + h * 0.74]) {
     rrectPath(ctx, x - 5, hy - 14, 14, 28, 4);
     ctx.fill();
   }
 
-  // dial (right of centre)
+ // dial (right of centre)
   const dxc = x + w * 0.68, dyc = y + h * 0.42, dr = h * 0.19;
   ctx.beginPath();
   ctx.arc(dxc, dyc, dr, 0, Math.PI * 2);
@@ -1253,7 +1252,7 @@ function drawLockedSafe(ctx, cx, cy, w, h, tier) {
   ctx.strokeStyle = 'rgba(201,161,59,0.75)';
   ctx.lineWidth = 3;
   ctx.stroke();
-  // tick marks
+ // tick marks
   ctx.lineWidth = 2;
   for (let i = 0; i < 8; i++) {
     const ang = (i / 8) * Math.PI * 2;
@@ -1262,7 +1261,7 @@ function drawLockedSafe(ctx, cx, cy, w, h, tier) {
     ctx.lineTo(dxc + Math.cos(ang) * (dr - 2), dyc + Math.sin(ang) * (dr - 2));
     ctx.stroke();
   }
-  // three spokes + hub
+ // three spokes + hub
   for (let i = 0; i < 3; i++) {
     const ang = (i / 3) * Math.PI * 2 + 0.5;
     ctx.beginPath();
@@ -1275,7 +1274,7 @@ function drawLockedSafe(ctx, cx, cy, w, h, tier) {
   ctx.fillStyle = 'rgba(224,189,92,0.9)';
   ctx.fill();
 
-  // keyhole plate (below dial)
+ // keyhole plate (below dial)
   const kx = dxc, ky = y + h * 0.74;
   rrectPath(ctx, kx - 20, ky - 22, 40, 44, 6);
   ctx.fillStyle = 'rgba(201,161,59,0.25)';
@@ -1294,7 +1293,7 @@ function drawLockedSafe(ctx, cx, cy, w, h, tier) {
   ctx.closePath();
   ctx.fill();
 
-  // tier numeral engraved, top-left of the door
+ // tier numeral engraved, top-left of the door
   ctx.font = '30px EB-Semi';
   ctx.fillStyle = 'rgba(201,161,59,0.6)';
   ctx.textAlign = 'center';
@@ -1305,7 +1304,7 @@ function drawLockedSafe(ctx, cx, cy, w, h, tier) {
   ctx.fillText('SEAL', x + w * 0.24, y + h * 0.3 - 30);
   ctx.textBaseline = 'alphabetic';
 
-  // padlock hanging off a hasp, bottom-centre of the door
+ // padlock hanging off a hasp, bottom-centre of the door
   const px = cx, py = y + h - 6;
   ctx.strokeStyle = 'rgba(201,161,59,0.65)';
   ctx.lineWidth = 5;
@@ -1333,7 +1332,7 @@ function drawLockedSafe(ctx, cx, cy, w, h, tier) {
   ctx.closePath();
   ctx.fill();
 
-  // the house's wax seal, bottom-right corner of the door
+ // the house's wax seal, bottom-right corner of the door
   seal(ctx, x + w - 52, y + h - 46, 30, 'rgba(160,31,49,0.95)', (c2, x2, y2, s2) => {
     c2.fillStyle = 'rgba(236,226,200,0.92)';
     c2.font = `bold ${Math.round(s2 * 1.15)}px EB-Semi`;
@@ -1369,10 +1368,10 @@ async function renderSealCard({ seal, room, night, manorName }) {
 
     ornament(ctx, PORT_W / 2, 318, 300);
 
-    // the locked strongbox
+ // the locked strongbox
     drawLockedSafe(ctx, PORT_W / 2, 560, 430, 330, seal.tier);
 
-    // the riddle
+ // the riddle
     ctx.textAlign = 'left';
     ctx.font = 'italic 37px PF-MedIt';
     ctx.fillStyle = C.ivory;
@@ -1399,7 +1398,7 @@ async function renderSearchCard({ playerChar, playerName, room, found, flavor, n
     drawCover(ctx, bg, 0, 0, LAND_W, LAND_H);
     atmosphere(ctx, LAND_W, LAND_H, { dark: 0.72 });
 
-    // searcher sprite, left, alive (colour) - same character across all cards
+ // searcher sprite, left, alive (colour) - same character across all cards
     await drawSprite(ctx, playerChar.id, 380, 830, 600);
     stamp(ctx, 'THE SEARCH', 380, 175, 300, 78, 'rgba(201,161,59,0.92)', -0.08, 40);
 
@@ -1424,7 +1423,7 @@ async function renderSearchCard({ playerChar, playerName, room, found, flavor, n
     wrap(ctx, room.hint, 760, 515, 700, 34, 2);
     concealDots(ctx, 766, 578, room.conceal, C.amber, 20, 7);
 
-    // outcome strip
+ // outcome strip
     ctx.strokeStyle = found ? 'rgba(200,50,74,0.65)' : 'rgba(236,226,200,0.28)';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -1498,7 +1497,7 @@ async function renderGuardianSavedCard({ savedName, dreamLine, night, manorName 
 
     ctx.textAlign = 'center';
 
-    // halo above the bed
+ // halo above the bed
     ctx.save();
     ctx.strokeStyle = C.ghostHi;
     ctx.lineWidth = 5;
@@ -1557,7 +1556,7 @@ async function renderRoomChoiceCard({ rooms, victimName, night, manorName }) {
     ctx.fillStyle = C.amber;
     ctx.fillText('Where does the body lie until morning?', PORT_W / 2, 330);
 
-    // room rows
+ // room rows
     const rowH = Math.min(120, 700 / Math.max(1, rooms.length));
     let y = 430;
     ctx.textAlign = 'left';
@@ -1595,7 +1594,7 @@ async function renderInvestigationCard({ subjectChar, subjectName, isKiller, fla
     drawCover(ctx, bg, 0, 0, PORT_W, PORT_H);
     atmosphere(ctx, PORT_W, PORT_H, { dark: 0.8 });
 
-    // dossier corner brackets
+ // dossier corner brackets
     ctx.save();
     ctx.strokeStyle = 'rgba(200,50,74,0.55)';
     ctx.lineWidth = 3;
@@ -1637,7 +1636,7 @@ async function renderInvestigationCard({ subjectChar, subjectName, isKiller, fla
     ctx.fillStyle = C.ivoryDim;
     ctx.fillText(`${subjectChar.name}, ${subjectChar.title}`, PORT_W / 2, 845);
 
-    // verdict stamp
+ // verdict stamp
     stamp(ctx, isKiller ? 'THE KILLER' : 'NOT THE KILLER', PORT_W / 2, 990, 560, 120,
       isKiller ? 'rgba(200,50,74,0.95)' : 'rgba(224,189,92,0.95)', -0.06, 56);
 
@@ -1674,7 +1673,7 @@ async function renderVoteCard({ tally, skipVotes, eliminated, manorName }) {
 
     ornament(ctx, LAND_W / 2, 345, 560);
 
-    // tally bars (left)
+ // tally bars (left)
     const maxVotes = Math.max(1, ...tally.map((t) => t.votes));
     const rows = tally.length + (skipVotes > 0 ? 1 : 0);
     const rowH = Math.min(92, 470 / Math.max(1, rows));
@@ -1707,7 +1706,7 @@ async function renderVoteCard({ tally, skipVotes, eliminated, manorName }) {
       ctx.fillText(String(skipVotes), 120 + 90 + 500 + 24, y + 18);
     }
 
-    // right zone
+ // right zone
     if (eliminated) {
       await drawSpriteGray(ctx, eliminated.charId, 1180, 770, 440);
       stamp(ctx, 'BANISHED', 1180, 330, 300, 80, 'rgba(200,50,74,0.95)', -0.09, 44);
@@ -1735,7 +1734,7 @@ async function renderFinalCard({ winner, killerChar, killerName, manorName, nigh
     const bg = await loadBg(winner === 'killer' ? 'drawing' : 'manor');
     drawCover(ctx, bg, 0, 0, LAND_W, LAND_H);
     if (winner === 'killer') {
-      // blood-wash the room
+ // blood-wash the room
       const g = ctx.createLinearGradient(0, 0, 0, LAND_H);
       g.addColorStop(0, 'rgba(60,8,16,0.35)');
       g.addColorStop(1, 'rgba(20,4,8,0.7)');
@@ -1762,11 +1761,11 @@ async function renderFinalCard({ winner, killerChar, killerName, manorName, nigh
 
     ornament(ctx, LAND_W / 2, 352, 620, civWin ? C.amber : C.crimson);
 
-    // killer reveal center-left
+ // killer reveal center-left
     await drawSprite(ctx, killerChar.id, 375, 848, 470);
     stamp(ctx, 'THE KILLER', 375, 585, 300, 82, 'rgba(200,50,74,0.95)', -0.08, 44);
 
-    // right text
+ // right text
     ctx.textAlign = 'left';
     fitFont(ctx, killerName.toUpperCase(), 'PF-Black', 84, 700, 36);
     ctx.fillStyle = C.ivory;
@@ -1825,7 +1824,7 @@ async function renderLobbyCard({ manorName, playerCount, minPlayers, maxPlayers,
     ctx.fillStyle = C.ivoryDim;
     ctx.fillText(`${playerCount} guest${playerCount === 1 ? '' : 's'} waiting · ${minPlayers}-${maxPlayers} seats at the table`, LAND_W / 2, 578);
 
-    // invitation block
+ // invitation block
     ctx.font = '27px Type';
     ctx.fillStyle = C.amberHi;
     ctx.fillText(`${prefix} mm join  -  accept the invitation`, LAND_W / 2, 672);
@@ -1833,7 +1832,7 @@ async function renderLobbyCard({ manorName, playerCount, minPlayers, maxPlayers,
     ctx.fillStyle = C.ivoryDim;
     ctx.fillText(`${prefix} mm start  -  begin once everyone is here`, LAND_W / 2, 722);
 
-    // the manor's purse - the winning side claims it (no entry fee)
+ // the manor's purse - the winning side claims it (no entry fee)
     if (prize != null) {
       ctx.font = '27px Type';
       ctx.fillStyle = C.amber;
@@ -1940,7 +1939,7 @@ async function renderTauntCard({ text, night, manorName }) {
     const bg = await loadBg('drawing');
     drawCover(ctx, bg, 0, 0, LAND_W, LAND_H);
     atmosphere(ctx, LAND_W, LAND_H, { dark: 0.82 });
-    // blood-wash
+ // blood-wash
     const g = ctx.createLinearGradient(0, 0, 0, LAND_H);
     g.addColorStop(0, 'rgba(60,8,16,0.3)');
     g.addColorStop(1, 'rgba(20,4,8,0.62)');
@@ -1952,7 +1951,7 @@ async function renderTauntCard({ text, night, manorName }) {
     ctx.fillStyle = C.crimsonHi;
     spaced(ctx, 'AN UNSIGNED NOTE CIRCULATES', LAND_W / 2, 220, 7);
 
-    // torn-note plate
+ // torn-note plate
     ctx.save();
     ctx.translate(LAND_W / 2, 470);
     ctx.rotate(-0.012);
@@ -2017,9 +2016,9 @@ async function renderWillCard({ playerChar, playerName, will, cause, night, mano
 }
 
 // ============================================
-// EXPANDED-CASE RENDERERS (2026-10-12 owner expansion: case generator,
+// EXPANDED-CASE RENDERERS (owner expansion: case generator,
 // evidence assets, dossier, case report). Clue item art lives in
-// assets/clues/*.jpg — real bytes, NOT LFS (jpg is outside the *.png rule).
+// assets/clues/*.jpg - real bytes, NOT LFS (jpg is outside the *.png rule).
 // ============================================
 const CLUE_DIR = path.join(ASSETS, 'clues');
 
@@ -2089,7 +2088,7 @@ async function renderEvidenceCard({ itemName, art, tag, line, roomName, night, m
     ctx.fillText(label, LAND_W / 2, 240);
     ctx.shadowColor = 'transparent';
 
-    // framed item art
+ // framed item art
     const img = await loadClue(art);
     const boxW = 560, boxH = 320, boxX = (LAND_W - boxW) / 2, boxY = 270;
     if (img) {
@@ -2116,8 +2115,8 @@ async function renderEvidenceCard({ itemName, art, tag, line, roomName, night, m
     ctx.font = 'italic 36px PF-MedIt';
     ctx.fillStyle = C.ivory;
     ctx.textAlign = 'center';
-    // wrap() centers each line on x (textAlign is 'center' here) - x must be
-    // the CARD CENTER, not a left margin, or lines spill off the left edge
+ // wrap() centers each line on x (textAlign is 'center' here) - x must be
+ // the CARD CENTER, not a left margin, or lines spill off the left edge
     wrap(ctx, `\u201C${String(line || '')}\u201D`, LAND_W / 2, boxY + boxH + 122, 1120, 44, 3);
 
     ctx.font = '26px EB-Reg';

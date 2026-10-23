@@ -39,7 +39,7 @@ function measure(img, name) {
     const at = (x, y) => (y * W + x) * 4;
     const warm = (x, y) => x >= 0 && x < W && y >= 0 && y < H && isWarm(px, at(x, y));
 
-    // center-anchored contiguous run with small gap tolerance (mortar/moss seams)
+ // center-anchored contiguous run with small gap tolerance (mortar/moss seams)
     const spans = [];
     let floorTop = -1;
     for (let y = 150; y < H; y++) {
@@ -54,7 +54,7 @@ function measure(img, name) {
         spans.push(wSpan > 90 ? [x0, x1] : null);
         if (floorTop < 0 && wSpan > 120 && y > 200) floorTop = y;
     }
-    // torch flames: bright warm clusters in upper half
+ // torch flames: bright warm clusters in upper half
     const torch = [];
     for (let y = 40; y < 520; y += 2) {
         for (let x = 20; x < W - 20; x += 2) {
@@ -63,7 +63,7 @@ function measure(img, name) {
             if (h >= 0.06 && h <= 0.13 && s > 0.55 && v > 0.78) torch.push([x, y]);
         }
     }
-    // cluster torch points (greedy merge within 60px)
+ // cluster torch points (greedy merge within 60px)
     const flames = [];
     for (const [x, y] of torch) {
         let hit = flames.find((f) => Math.hypot(f.x - x, f.y - y) < 70);
@@ -72,7 +72,7 @@ function measure(img, name) {
     }
     for (const f of flames) { f.x = Math.round(f.x / f.n); f.y = Math.round(f.y / f.n); }
 
-    // mask overlay for visual verification
+ // mask overlay for visual verification
     const mc = createCanvas(W, H);
     const mctx = mc.getContext('2d');
     mctx.drawImage(img, 0, 0);
@@ -93,14 +93,14 @@ function measure(img, name) {
     }
     if (floorTop > 0) { mctx.strokeStyle = '#00ff88'; mctx.beginPath(); mctx.moveTo(0, floorTop); mctx.lineTo(W, floorTop); mctx.stroke(); }
     mctx.putImageData(md, 0, 0);
-    // flames+line drawn after putImageData would be wiped — draw markers on a second pass
+ // flames+line drawn after putImageData would be wiped - draw markers on a second pass
     mctx.putImageData(md, 0, 0);
     for (const f of flames) { mctx.strokeStyle = '#00e5ff'; mctx.lineWidth = 2; mctx.strokeRect(f.x - 16, f.y - 16, 32, 32); }
     if (floorTop > 0) { mctx.strokeStyle = '#00ff88'; mctx.beginPath(); mctx.moveTo(0, floorTop); mctx.lineTo(W, floorTop); mctx.stroke(); }
 
     const outPng = path.join(OUT, `mask_${name}.png`);
     fs.writeFileSync(outPng, mc.toBuffer('image/png'));
-    // compact spans: sample every 12 rows
+ // compact spans: sample every 12 rows
     const compact = {};
     for (let y = 0; y < H; y += 12) if (spans[y]) compact[y] = spans[y];
     return { name, W, H, floorTop, flames, spansCompact: compact };

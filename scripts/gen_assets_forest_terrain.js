@@ -1,13 +1,13 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-// GEN — mossy FOREST terrain tiles (owner 2026-10-16 11:57Z "make the entire
+// ===========================================================================
+// GEN - mossy FOREST terrain tiles (11:57Z "make the entire
 // thing a forest" + "maybe even redesign the tiles an terrain").
 // Same 64x32 iso diamond law as gen_assets_base_terrain.js but the palette
 // shifts to deep mossy forest floor: dark moss greens, leaf litter, roots,
 // dirt trails, mushrooms instead of meadow flowers. Tiles stay seamless
 // (no auto-outline) so adjacent diamonds still merge.
 // Run: node scripts/gen_assets_forest_terrain.js
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 const fs = require('fs');
 const path = require('path');
 const { createCanvas } = require('/home/z/my-project/repo/node_modules/canvas');
@@ -50,30 +50,30 @@ function rngFor(file) {
     return (i) => { const x = Math.sin(i * 127.1 + s % 1000 * 0.137) * 43758.5453; return x - Math.floor(x); };
 }
 
-// ── mossy forest floor (3 variants) ──
+// -- mossy forest floor (3 variants) --
 function mossTile(file, opts = {}) {
     const s = sprite(64, 32);
     tileDiamond(s.ctx, 32, 16, P.moss[0]);
     const rnd = rngFor(file);
     s.ctx.save();
     clipDiamond(s.ctx);
-    // moss mottling
+ // moss mottling
     for (let i = 0; i < 30; i++) {
         const x = rnd(i) * 64, y = rnd(i + 50) * 32;
         s.px(x, y, 2 + Math.floor(rnd(i + 99) * 3), 1, [P.moss[1], P.moss[2], P.moss[3], P.mossHi][i % 4]);
     }
-    // moss clumps
+ // moss clumps
     for (let i = 0; i < 5; i++) {
         const x = 4 + rnd(i + 150) * 54, y = 5 + rnd(i + 250) * 22;
         s.px(x, y, 4, 2, P.mossD); s.px(x + 1, y - 1, 2, 1, P.mossHi);
     }
-    // leaf litter
+ // leaf litter
     for (let i = 0; i < 7; i++) {
         const x = 3 + rnd(i + 300) * 56, y = 4 + rnd(i + 400) * 24;
         s.px(x, y, 2, 1, P.litter[i % 4]);
         s.px(x + 1, y + 1, 1, 1, P.litter[(i + 1) % 4]);
     }
-    // tiny twigs
+ // tiny twigs
     for (let i = 0; i < 3; i++) {
         const x = 6 + rnd(i + 500) * 50, y = 6 + rnd(i + 600) * 20;
         s.px(x, y, 3, 1, P.twig); s.px(x + 2, y + 1, 2, 1, P.twig);
@@ -92,7 +92,7 @@ mossTile('forest_moss_b.png');
 mossTile('forest_moss_c.png');
 mossTile('forest_moss_shrooms.png', { mushrooms: true });
 
-// ── dirt trail through the forest (worn earth + leaves) ──
+// -- dirt trail through the forest (worn earth + leaves) --
 {
     const s = sprite(64, 32);
     tileDiamond(s.ctx, 32, 16, P.dirt[0]);
@@ -103,7 +103,7 @@ mossTile('forest_moss_shrooms.png', { mushrooms: true });
         const x = rnd(i) * 64, y = rnd(i + 40) * 32;
         s.px(x, y, 2, 1, [P.dirt[1], P.dirt[2], P.litter[1]][i % 3]);
     }
-    // pressed leaf litter along the edges
+ // pressed leaf litter along the edges
     for (let i = 0; i < 6; i++) {
         const x = rnd(i + 100) < 0.5 ? 2 + rnd(i + 130) * 8 : 54 + rnd(i + 130) * 8;
         const y = 4 + rnd(i + 160) * 24;
@@ -113,7 +113,7 @@ mossTile('forest_moss_shrooms.png', { mushrooms: true });
         const x = 4 + rnd(i + 200) * 54, y = 5 + rnd(i + 260) * 22;
         s.px(x, y, 2, 1, P.litter[i % 4]);
     }
-    // pebbles
+ // pebbles
     for (let i = 0; i < 3; i++) {
         const x = 6 + rnd(i + 300) * 50, y = 6 + rnd(i + 340) * 20;
         s.px(x, y, 2, 2, P.rock[i % 3]);
@@ -122,7 +122,7 @@ mossTile('forest_moss_shrooms.png', { mushrooms: true });
     fs.writeFileSync(path.join(OUT, 'forest_trail.png'), s.cv.toBuffer('image/png'));
 }
 
-// ── mossy rock tile (mines ground) ──
+// -- mossy rock tile (mines ground) --
 {
     const s = sprite(64, 32);
     tileDiamond(s.ctx, 32, 16, P.rock[1]);
@@ -133,7 +133,7 @@ mossTile('forest_moss_shrooms.png', { mushrooms: true });
         const x = rnd(i) * 60, y = rnd(i + 30) * 28;
         s.px(x, y, 3 + (i % 3) * 2, 2, [P.rock[0], P.rock[2], P.rock[3]][i % 3]);
     }
-    // moss creeping over the stone
+ // moss creeping over the stone
     for (let i = 0; i < 8; i++) {
         const x = 4 + rnd(i + 80) * 54, y = 4 + rnd(i + 110) * 24;
         s.px(x, y, 3, 1, P.moss[0]); s.px(x + 2, y - 1, 1, 1, P.mossHi);
@@ -142,7 +142,7 @@ mossTile('forest_moss_shrooms.png', { mushrooms: true });
     fs.writeFileSync(path.join(OUT, 'forest_rock_tile.png'), s.cv.toBuffer('image/png'));
 }
 
-// ── dark forest pond (2 frames shimmer) ──
+// -- dark forest pond (2 frames shimmer) --
 for (let f = 0; f < 2; f++) {
     const s = sprite(64, 32);
     tileDiamond(s.ctx, 32, 16, P.water[0]);
@@ -155,7 +155,7 @@ for (let f = 0; f < 2; f++) {
         const x = (8 + i * 9 + f * 5) % 56, y = 5 + ((i * 7 + f * 3) % 22);
         s.px(x, y, 5 + (i % 3) * 2, 1, i % 2 ? P.waterL : P.water[1]);
     }
-    // lily pads (static both frames, offset ripple)
+ // lily pads (static both frames, offset ripple)
     for (let i = 0; i < 3; i++) {
         const x = 8 + rnd(i) * 46, y = 5 + rnd(i + 20) * 20;
         s.px(x, y, 3, 2, P.mossHi); s.px(x + 3, y, 1, 1, P.mossD);

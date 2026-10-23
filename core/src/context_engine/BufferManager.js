@@ -12,7 +12,7 @@ class BufferManager {
 
         console.log('🧠 Context Buffer Manager initialized (Size: 50, TTL: 30m)');
 
-        // Start periodic cleanup
+ // Start periodic cleanup
         setInterval(() => this.cleanupStaleWindows(), 60000);
     }
 
@@ -22,7 +22,7 @@ class BufferManager {
     addMessage(msg) {
         if (!msg.chatId) return;
 
-        // Use Bot ID + Chat ID to isolate contexts in multi-tenant mode
+ // Use Bot ID + Chat ID to isolate contexts in multi-tenant mode
         const contextKey = `${botConfig.getBotId()}_${msg.chatId}`;
 
         if (!this.windows.has(contextKey)) {
@@ -38,7 +38,7 @@ class BufferManager {
         window.messages.push(msg);
         window.lastUpdate = new Date();
 
-        // Maintain circular buffer size
+ // Maintain circular buffer size
         if (window.messages.length > this.maxSize) {
             window.messages.shift();
         }
@@ -56,7 +56,7 @@ class BufferManager {
         const idx = messages.findIndex(m => m.id === aroundMsgId);
 
         if (idx === -1) {
-            // Fallback to most recent messages if ID not found
+ // Fallback to most recent messages if ID not found
             return messages.slice(-before);
         }
 
@@ -80,7 +80,7 @@ class BufferManager {
         }
 
         if (deleted > 0) {
-            // console.log(`🧹 Buffer Manager: Cleaned up ${deleted} stale windows.`);
+ // console.log(` Buffer Manager: Cleaned up ${deleted} stale windows.`);
         }
     }
 

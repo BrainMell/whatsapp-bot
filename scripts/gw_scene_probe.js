@@ -32,7 +32,7 @@ async function connectDB() {
     const outDir = path.join(ROOT, 'tmp_gw_qa', 'exits');
     fs.mkdirSync(outDir, { recursive: true });
 
-    // find rooms for each exit pattern (n/e/w combos), any type
+ // find rooms for each exit pattern (n/e/w combos), any type
     const wanted = ['0', 'F', 'FR', 'LF', 'LFR', 'LR', 'L_a', 'R'];
     const found = {};
     for (const room of ev.rooms) {

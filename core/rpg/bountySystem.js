@@ -1,45 +1,43 @@
-// ═══════════════════════════════════════════════════════════════════════════
-//  BOUNTY SYSTEM (Phase 6 - PvP Bounty)
-// ═══════════════════════════════════════════════════════════════════════════
-//
+// ===========================================================================
+// BOUNTY SYSTEM (Phase 6 - PvP Bounty)
+// ===========================================================================
 // Players place Zeni bounties on other players. Bounty hunters track via PvP.
 // Adds risk to hoarding wealth - wealthy players become targets.
-//
 // Rules:
-//   - Min bounty: 100K Zeni, Max: 50M Zeni
-//   - Target must be level 20+
-//   - Max 3 active bounties per target (prevents pile-on)
-//   - 24h cooldown between placements by same user
-//   - 7-day expiry with Zeni refund to placer
-//   - Hunter fee: 5% of bounty goes to hunter's guild treasury
-//   - Failed hunt: hunter pays 10% of bounty as penalty
-//   - Targets with bounties cannot use the bank (forces wallet carry = risk)
-//   - Anti-abuse: can't bounty yourself, can't bounty alt accounts
-//     (alt detection by phone number - same as multi-account detection)
+// - Min bounty: 100K Zeni, Max: 50M Zeni
+// - Target must be level 20+
+// - Max 3 active bounties per target (prevents pile-on)
+// - 24h cooldown between placements by same user
+// - 7-day expiry with Zeni refund to placer
+// - Hunter fee: 5% of bounty goes to hunter's guild treasury
+// - Failed hunt: hunter pays 10% of bounty as penalty
+// - Targets with bounties cannot use the bank (forces wallet carry = risk)
+// - Anti-abuse: can't bounty yourself, can't bounty alt accounts
+// (alt detection by phone number - same as multi-account detection)
 
 const Bounty = require('../models/Bounty');
 const botConfig = require('../../botConfig');
 const P = () => botConfig.getPrefix();
 const mongoose = require('mongoose');
 
-// ─── CONSTANTS ────────────────────────────────────────────────────────────
-const MIN_BOUNTY = 5000; // 💡 Rebalanced 2026-08-17: 100K excluded most players; 5K is ~1 D-rank day.
-const MAX_BOUNTY = 5000000; // 💡 Rebalanced 2026-08-17: 50M = 10% of community cap per single bounty. 5M cap.
+// --- CONSTANTS ------------------------------------------------------------
+const MIN_BOUNTY = 5000; // Rebalanced 100K excluded most players; 5K is ~1 D-rank day.
+const MAX_BOUNTY = 5000000; // Rebalanced 50M = 10% of community cap per single bounty. 5M cap.
 const MAX_ACTIVE_PER_TARGET = 3;
 const PLACER_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24h
 const BOUNTY_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const HUNTER_FEE_PCT = 0.05; // 5% to hunter's guild treasury
 const FAILED_HUNT_PENALTY_PCT = 0.10; // 10% of bounty
 
-// ─── GENERATE BOUNTY ID ───────────────────────────────────────────────────
+// --- GENERATE BOUNTY ID ---------------------------------------------------
 function generateBountyId() {
-  // 💡 Short readable ID: "B-3F7A" instead of "bounty_1699999999999_a1b2c3d4"
+ // Short readable ID: "B-3F7A" instead of "bounty_1699999999999_a1b2c3d4"
   return 'B-' + Math.random().toString(36).slice(2, 6).toUpperCase();
 }
 
-// ─── PLACE BOUNTY ─────────────────────────────────────────────────────────
+// --- PLACE BOUNTY ---------------------------------------------------------
 async function placeBounty(placerJid, targetJid, amount, placerLevel, targetLevel, placerPhone) {
-  // Validation
+ // Validation
   if (placerJid === targetJid) {
     return { success: false, message: '❌ You cannot place a bounty on yourself.' };
   }
@@ -53,7 +51,7 @@ async function placeBounty(placerJid, targetJid, amount, placerLevel, targetLeve
     return { success: false, message: `❌ Target must be at least level 20. (They are L${targetLevel})` };
   }
 
-  // Check placer cooldown - any bounty placed in last 24h
+ // Check placer cooldown - any bounty placed in last 24h
   const recentBounty = await Bounty.findOne({
     placerJid,
     placedAt: { $gte: new Date(Date.now() - PLACER_COOLDOWN_MS) },
@@ -63,23 +61,22 @@ async function placeBounty(placerJid, targetJid, amount, placerLevel, targetLeve
     return { success: false, message: `❌ You placed a bounty recently. Try again in ${remaining}h.` };
   }
 
-  // Check max active bounties on target
+ // Check max active bounties on target
   const activeOnTarget = await Bounty.countDocuments({ targetJid, status: 'active' });
   if (activeOnTarget >= MAX_ACTIVE_PER_TARGET) {
     return { success: false, message: `❌ That target already has ${MAX_ACTIVE_PER_TARGET} active bounties. Wait for one to be claimed or expire.` };
   }
 
-  // Check placer has funds
+ // Check placer has funds
   const economy = require('./economy');
   const placerWallet = economy.getGold(placerJid);
   if (placerWallet < amount) {
     return { success: false, message: `❌ You need ${amount.toLocaleString()} Zeni in your wallet (have ${placerWallet.toLocaleString()}).` };
   }
 
-  // Deduct from placer
+ // Deduct from placer
   economy.removeMoney(placerJid, amount, `Bounty placed on ${targetJid}`);
 
-  // Create bounty
   const bounty = new Bounty({
     bountyId: generateBountyId(),
     targetJid,
@@ -98,14 +95,14 @@ async function placeBounty(placerJid, targetJid, amount, placerLevel, targetLeve
   };
 }
 
-// ─── GET ACTIVE BOUNTIES ON A TARGET ──────────────────────────────────────
+// --- GET ACTIVE BOUNTIES ON A TARGET --------------------------------------
 async function getBountiesOnTarget(targetJid) {
   return await Bounty.find({ targetJid, status: 'active' }).sort({ amount: -1 });
 }
 
-// ─── GET TOP BOUNTIES (leaderboard) ───────────────────────────────────────
+// --- GET TOP BOUNTIES (leaderboard) ---------------------------------------
 async function getTopBounties(limit = 10) {
-  // Aggregate active bounties by target, sum amounts
+ // Aggregate active bounties by target, sum amounts
   const pipeline = [
     { $match: { status: 'active' } },
     { $group: {
@@ -119,7 +116,7 @@ async function getTopBounties(limit = 10) {
   return await Bounty.aggregate(pipeline);
 }
 
-// ─── CLAIM BOUNTY (called after PvP win) ──────────────────────────────────
+// --- CLAIM BOUNTY (called after PvP win) ----------------------------------
 // Awards the bounty to the hunter, deducts hunter fee to guild treasury.
 async function claimBounty(hunterJid, targetJid) {
   const bounties = await Bounty.find({ targetJid, status: 'active' }).sort({ amount: -1 });
@@ -136,15 +133,15 @@ async function claimBounty(hunterJid, targetJid) {
   const claimedBounties = [];
 
   for (const bounty of bounties) {
-    // 💡 P4 Item 18 fix (2026-08-17): 10% economy tax evaporates FIRST (genuine sink,
-    // same as P2P transfer + card/item market). THEN 5% hunter fee to guild treasury
-    // is computed on the post-tax amount.
+ // P4 Item 18 fix: 10% economy tax evaporates FIRST (genuine sink,
+ // same as P2P transfer + card/item market). THEN 5% hunter fee to guild treasury
+ // is computed on the post-tax amount.
     const economyTax = Math.floor(bounty.amount * 0.10);
     const afterTax = bounty.amount - economyTax;
     const fee = Math.floor(afterTax * HUNTER_FEE_PCT);
     const hunterPayout = afterTax - fee;
     economy.addMoney(hunterJid, hunterPayout, `Bounty claim (10% tax + ${HUNTER_FEE_PCT*100}% fee): ${bounty.bountyId}`);
-    // Fee to hunter's guild treasury if they have one
+ // Fee to hunter's guild treasury if they have one
     const hunterGuild = guilds.getUserGuild(hunterJid);
     if (hunterGuild && fee > 0) {
       guilds.addGuildBalance(hunterGuild, fee);
@@ -160,7 +157,7 @@ async function claimBounty(hunterJid, targetJid) {
     claimedBounties.push(bounty);
   }
 
-  // Award guild XP + war points for the claim
+ // Award guild XP + war points for the claim
   try {
     guildPerks.awardGuildXp(hunterJid, 20, `Bounty claim: ${targetJid}`);
   } catch (e) {}
@@ -176,9 +173,9 @@ async function claimBounty(hunterJid, targetJid) {
   };
 }
 
-// ─── FAILED HUNT PENALTY (called after PvP loss when hunting) ─────────────
+// --- FAILED HUNT PENALTY (called after PvP loss when hunting) -------------
 // Hunter pays 10% of total active bounty as penalty.
-// 💡 AUDIT FIX 2026-08-01: also increment `defendersWon` on each active
+// AUDIT FIX also increment `defendersWon` on each active
 // bounty. If the target defeats 3 challengers, the bounty is auto-
 // terminated (status='defended', no refund to placer). This gives the
 // target a path to clear the bounty by winning duels, not just waiting
@@ -196,17 +193,16 @@ async function failedHuntPenalty(hunterJid, targetJid) {
   }
   const economy = require('./economy');
   const hunterWallet = economy.getGold(hunterJid);
-  // Hunter pays min(penalty, wallet) - can't go negative
+ // Hunter pays min(penalty, wallet) - can't go negative
   const actualPenalty = Math.min(penalty, hunterWallet);
   if (actualPenalty > 0) {
     economy.removeMoney(hunterJid, actualPenalty, `Failed bounty hunt penalty: ${targetJid}`);
-    // Penalty goes to the target (consolation for being attacked)
+ // Penalty goes to the target (consolation for being attacked)
     economy.addMoney(targetJid, actualPenalty, `Failed bounty hunt consolation from ${hunterJid}`);
   }
 
-  // 💡 AUDIT FIX 2026-08-01: increment defendersWon + auto-terminate at threshold.
-  // Track this on each active bounty on the target. If any reaches the
-  // threshold, flip it to 'defended' (terminated, no refund).
+ // AUDIT FIX increment defendersWon + auto-terminate at threshold.
+ // threshold, flip it to 'defended' (terminated, no refund).
   const defendedBounties = [];
   for (const bounty of bounties) {
     bounty.defendersWon = (bounty.defendersWon || 0) + 1;
@@ -232,7 +228,7 @@ async function failedHuntPenalty(hunterJid, targetJid) {
   };
 }
 
-// ─── EXPIRE OLD BOUNTIES (scheduler) ──────────────────────────────────────
+// --- EXPIRE OLD BOUNTIES (scheduler) --------------------------------------
 // Called daily. Refunds placers for unclaimed expired bounties.
 async function expireOldBounties() {
   console.log('[BountySystem] Expiring old bounties...');
@@ -247,7 +243,7 @@ async function expireOldBounties() {
     for (const bounty of expired) {
       bounty.status = 'expired';
       await bounty.save();
-      // Refund placer
+ // Refund placer
       economy.addMoney(bounty.placerJid, bounty.amount, `Bounty expired (refund): ${bounty.bountyId}`);
       expiredCount++;
       refundedTotal += bounty.amount;
@@ -259,18 +255,18 @@ async function expireOldBounties() {
   return { expiredCount, refundedTotal };
 }
 
-// ─── CHECK IF USER HAS ACTIVE BOUNTY (for bank block) ─────────────────────
+// --- CHECK IF USER HAS ACTIVE BOUNTY (for bank block) ---------------------
 async function hasActiveBounty(userJid) {
   const count = await Bounty.countDocuments({ targetJid: userJid, status: 'active' });
   return count > 0;
 }
 
-// ─── GET USER'S PLACED BOUNTIES ───────────────────────────────────────────
+// --- GET USER'S PLACED BOUNTIES -------------------------------------------
 async function getPlacedBounties(placerJid) {
   return await Bounty.find({ placerJid, status: 'active' }).sort({ placedAt: -1 });
 }
 
-// ─── CANCEL BOUNTY (placer can cancel early, 10% cancellation fee) ────────
+// --- CANCEL BOUNTY (placer can cancel early, 10% cancellation fee) --------
 async function cancelBounty(placerJid, bountyId) {
   const bounty = await Bounty.findOne({ bountyId, placerJid, status: 'active' });
   if (!bounty) {
@@ -305,12 +301,12 @@ module.exports = {
   hasActiveBounty,
   getPlacedBounties,
   cancelBounty,
-  // Admin functions
+ // Admin functions
   adminPurgeAllBounties,
   adminCancelBounty,
 };
 
-// ─── ADMIN: PURGE ALL BOUNTIES ────────────────────────────────────────────
+// --- ADMIN: PURGE ALL BOUNTIES --------------------------------------------
 async function adminPurgeAllBounties() {
   try {
     const result = await Bounty.deleteMany({});
@@ -323,7 +319,7 @@ async function adminPurgeAllBounties() {
   }
 }
 
-// ─── ADMIN: CANCEL BOUNTY (full refund, no fee) ───────────────────────────
+// --- ADMIN: CANCEL BOUNTY (full refund, no fee) ---------------------------
 async function adminCancelBounty(bountyId) {
   try {
     const bounty = await Bounty.findOne({ bountyId });

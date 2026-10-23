@@ -47,7 +47,7 @@ function exitsAll() {
         fs.writeFileSync(f, png);
         console.log(`wrote ${f} (${Date.now() - ts}ms)`);
     }
-    // cross-plate sanity: mossy + flooded on different door plates, no actor clutter
+ // cross-plate sanity: mossy + flooded on different door plates, no actor clutter
     for (const [variant, exKey] of [['mossy', 'LR'], ['flooded', 'F'], ['skill', '0'], ['crystal', 'F'], ['emberfall', 'LR']]) {
         const exits2 = exKey === 'LR' ? ['n', 'e', 's', 'w'].map((d) => ({ dir: d, edge: d === 'e' || d === 'w', known: true, kind: 'empty', cleared: false, key: '3,3' }))
             : exKey === 'F' ? ['n', 'e', 's', 'w'].map((d) => ({ dir: d, edge: d === 'n', known: true, kind: 'empty', cleared: false, key: '3,3' }))

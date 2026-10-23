@@ -1,18 +1,16 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-//  KINGDOM TERRAIN — seeded per-guild map generator for the 3D hex kingdom
-//
-//  Five biomes: `isle` (the original ocean island — the ONLY one with a sea) and four
-//  land biomes (`desert`, `tundra`, `highlands`, `volcanic`).  The land biomes reuse the
-//  same KayKit sprites recoloured by scripts/kingdom3d/recolor_biomes.py.
-//
-//  Two phases so the renderer can lay walls/roads/buildings in between:
-//    shape(w, o)      silhouette (ragged edge → `void`, no sea), lakes/lava pools, one river
-//    populate(S, w, o) noise-driven wilds: forest, hills, mountains, dunes, rocks, fields,
-//                      mine / mill / camps / ruins / watch-tower
-//  Everything is a pure function of (guild name seed, biome): same guild → same land,
-//  different guild → different land.
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// KINGDOM TERRAIN - seeded per-guild map generator for the 3D hex kingdom
+// Five biomes: `isle` (the original ocean island - the ONLY one with a sea) and four
+// land biomes (`desert`, `tundra`, `highlands`, `volcanic`). The land biomes reuse the
+// same KayKit sprites recoloured by scripts/kingdom3d/recolor_biomes.py.
+// Two phases so the renderer can lay walls/roads/buildings in between:
+// shape(w, o) silhouette (ragged edge → `void`, no sea), lakes/lava pools, one river
+// populate(S, w, o) noise-driven wilds: forest, hills, mountains, dunes, rocks, fields,
+// mine / mill / camps / ruins / watch-tower
+// Everything is a pure function of (guild name seed, biome): same guild → same land,
+// different guild → different land.
+// ===========================================================================
 const K = require('./kingdom3d');
 
 const BIOMES = ['isle', 'desert', 'tundra', 'highlands', 'volcanic'];
@@ -23,7 +21,7 @@ function pickBiome(state) {
     return require('./continents').biomeOf(state || {});     // realm (state.continent) → biome; legacy = name hash
 }
 
-// ── smooth value noise (deterministic from seed) ─────────────────────────────
+// -- smooth value noise (deterministic from seed) -----------------------------
 function hash2(seed, x, y) {
     let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(seed | 0, 2246822519)) | 0;
     h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16;
@@ -38,9 +36,9 @@ function vnoise(seed, x, y) {
 }
 function fbm(seed, x, y) { return (vnoise(seed, x, y) * 0.55 + vnoise(seed + 71, x * 2.1, y * 2.1) * 0.3 + vnoise(seed + 133, x * 4.3, y * 4.3) * 0.15); }
 
-// ── per-biome tuning ─────────────────────────────────────────────────────────
+// -- per-biome tuning ---------------------------------------------------------
 const P = {
-    isle: {   // 'isle' key kept for compatibility: now a COASTAL realm — sea on one side only
+    isle: {   // 'isle' key kept for compatibility: now a COASTAL realm - sea on one side only
         river: true, lakes: 1, lakeBig: 0, rim: 0.30, coastal: true,
         mountainE: 0.76, mountains: ['mountain_A_grass_trees', 'mountain_B_grass_trees', 'mountain_C_grass_trees', 'mountain_A_grass'],
         hillE: 0.52, hillP: 0.8, hills: ['hills_A_trees', 'hills_B_trees', 'hills_C_trees', 'hills_A'],
@@ -77,7 +75,7 @@ const P = {
     },
 };
 
-/** Phase 1 — silhouette, lakes, river.  o: {seed, biome, CC, CR, keepR, wallRing, angleDeg, cdist} */
+/** Phase 1 - silhouette, lakes, river.  o: {seed, biome, CC, CR, keepR, wallRing, angleDeg, cdist} */
 function shape(w, o) {
     const { seed, biome, CC, CR } = o;
     const par = P[biome];
@@ -85,11 +83,11 @@ function shape(w, o) {
     const E = (c, r) => { const p = K.hexWorld(c, r); return fbm(seed + 11, p.x * 0.21, p.z * 0.21); };
     const M = (c, r) => { const p = K.hexWorld(c, r); return fbm(seed + 97, p.x * 0.19 + 40, p.z * 0.19 - 20); };
 
-    // ragged silhouette: bigger than the island, NO sea — the edge fades into the biome haze
+ // ragged silhouette: bigger than the island, NO sea - the edge fades into the biome haze
     const p1 = rng() * 6.28, p2 = rng() * 6.28, p3 = rng() * 6.28;
     const radius = (deg) => { const t = deg * Math.PI / 180; return 7.5 + 0.7 * Math.sin(3 * t + p1) + 0.5 * Math.sin(5 * t + p2) + 0.35 * Math.sin(2 * t + p3); };
     const R = (c, r) => radius(o.angleDeg(c, r));
-    // coastal realm: the sea lies beyond a wavy shoreline on ONE side (seeded direction)
+ // coastal realm: the sea lies beyond a wavy shoreline on ONE side (seeded direction)
     const seaDeg = par.coastal ? [0, 45, 90, 135, 180, 225, 315][Math.floor(rng() * 7)] : null;
     const sdx = par.coastal ? Math.cos(seaDeg * Math.PI / 180) : 0, sdz = par.coastal ? Math.sin(seaDeg * Math.PI / 180) : 0;
     const coastT = (c, r) => { const p = K.hexWorld(c, r), q = K.hexWorld(CC, CR); const lat = ((p.x - q.x) * -sdz + (p.z - q.z) * sdx) / 2; return 5.7 + 0.9 * Math.sin(lat * 0.8 + p2) + 0.5 * Math.sin(lat * 1.7 + p3); };
@@ -104,7 +102,7 @@ function shape(w, o) {
     }
     const edgeGap = (c, r) => R(c, r) - o.cdist(c, r);         // >0 inside the silhouette
 
-    // lakes / oasis / lava pools: wettest inland spots, well away from the keep and the rim
+ // lakes / oasis / lava pools: wettest inland spots, well away from the keep and the rim
     const lakeCells = [], centres = [];
     const cand = [];
     for (let r = 1; r < w.rows - 1; r++) for (let c = 1; c < w.cols - 1; c++) {
@@ -124,8 +122,8 @@ function shape(w, o) {
         for (const [c, r] of blob) if (w.inb(c, r) && !w.cell[r][c].keepLand && !w.cell[r][c].void && edgeGap(c, r) > 1.2) { w.cell[r][c].water = true; lakeCells.push([c, r]); }
     }
 
-    // one river (lava river in the volcanic biome, frozen in the tundra) hugging ring 6;
-    // 60% of guilds get it across the south road so the road needs a bridge
+ // one river (lava river in the volcanic biome, frozen in the tundra) hugging ring 6;
+ // 60% of guilds get it across the south road so the road needs a bridge
     const riverCells = [];
     if (par.river) {
         const south = rng() < 0.6;
@@ -139,7 +137,7 @@ function shape(w, o) {
             k.river = true; riverCells.push([c, r]); return true;
         };
         for (const [c, r] of arc) take(c, r);
-        // run both ends outward to the rim along the radial line
+ // run both ends outward to the rim along the radial line
         const out = (cell) => {
             const wc = K.hexWorld(cell[0], cell[1]), wo = K.hexWorld(CC, CR);
             const to = [Math.round((wo.x + (wc.x - wo.x) * 3) / 2), Math.round((wo.z + (wc.z - wo.z) * 3) / K.SQ3)];
@@ -150,7 +148,7 @@ function shape(w, o) {
     return { E, M, R, edgeGap, lakeCells, riverCells, par, biome, rng, seed, seaDeg };
 }
 
-/** Phase 2 — fill the wilds.  o: {used, claim, B, team, key, cdist, wallRing, TREE_FALLBACK} */
+/** Phase 2 - fill the wilds.  o: {used, claim, B, team, key, cdist, wallRing, TREE_FALLBACK} */
 function populate(S, w, o) {
     const { E, M, edgeGap, par, biome } = S;
     const rng = K.mulberry32(S.seed ^ 0x7f4a7c15);
@@ -168,7 +166,7 @@ function populate(S, w, o) {
         const d = o.cdist(c, r), gap = edgeGap(c, r);
         const far = gap < 0.5;                                                  // beyond the near field: open country that runs off the frame
         const farT = far ? Math.min(1, (0.5 - gap) / 4) : 0;                    // 0 at the near-field edge → 1 well out
-        // broad ridge/valley noise so the far field reads as real landscape (mountain ranges, wooded valleys, plains)
+ // broad ridge/valley noise so the far field reads as real landscape (mountain ranges, wooded valleys, plains)
         const ridge = far ? (fbm(S.seed + 313, K.hexWorld(c, r).x * 0.11, K.hexWorld(c, r).z * 0.11) - 0.5) * 0.5 : 0;
         const e = Math.min(1, E(c, r) + ridge + 0.06 * farT + (d >= 6 ? 0.04 : -0.12)), m = M(c, r) + (far ? 0.1 : 0), x = rng();
         if (e > par.mountainE - (far ? 0.03 : 0) && d >= 6) {
@@ -182,9 +180,9 @@ function populate(S, w, o) {
         } else if (par.fields && fields < 5 && d <= 7 && e < 0.5 && m > 0.3 && x < 0.5) {
             w.put('building_grain', c, r, { layer: 'flat' }); o.claim(c, r); fields++; stats.field.push([c, r]);
         } else if (!windmill && d <= 9 && e < 0.52 && x < 0.62) {
-            // owner 2026-10-19 "utilise all the 3d assets": every realm gets its mill —
-            // the windmill is a landmark of the realm, not a farm-belt-only piece.
-            // (populate only sees ring >= wallRing, so the band must reach past ring 7)
+ // "utilise all the 3d assets": every realm gets its mill -
+ // the windmill is a landmark of the realm, not a farm-belt-only piece.
+ // (populate only sees ring >= wallRing, so the band must reach past ring 7)
             windmill = [c, r]; w.put(o.B('windmill'), c, r); o.claim(c, r);
         } else if (par.fields && !farmHome && d <= 7 && e < 0.5 && x < 0.75) {
             farmHome = true; w.put(o.B('home_A'), c, r, { flip: true }); o.claim(c, r);
@@ -198,15 +196,15 @@ function populate(S, w, o) {
     const freeNear = (c, r, maxD) => [0, 1, 2, 3, 4, 5].map((dd) => K.neighbor(c, r, dd)).filter(([a, b]) => w.inb(a, b) && !o.used.has(o.key(a, b)) && !w.cell[b][a].water && !w.cell[b][a].river && !w.cell[b][a].void && o.cdist(a, b) <= maxD);
     const placed = {};
 
-    // the pack mine (walkway-into-rocks) moved INSIDE the walled district as the guild
-    // quarry yard — owner 2026-10-19: "Move the cave inside the base, it should replace
-    // the existing mines". populate only sees ring >= wallRing cells, so the renderer's
-    // interior pass owns that placement now (guildBaseRenderer.js).
-    // lumber mill beside a forest
+ // the pack mine (walkway-into-rocks) moved INSIDE the walled district as the guild
+ // quarry yard - "Move the cave inside the base, it should replace
+ // the existing mines". populate only sees ring >= wallRing cells, so the renderer's
+ // interior pass owns that placement now (guildBaseRenderer.js).
+ // lumber mill beside a forest
     if (par.lumber && stats.forest.length) for (const [c, r] of stats.forest) { const f = freeNear(c, r, 7)[0]; if (f) { w.put(o.B('lumbermill'), f[0], f[1]); o.claim(f[0], f[1]); placed.lumber = f; break; } }
-    // watermill on the river
+ // watermill on the river
     if (par.mill && S.riverCells.length) { for (const [c, r] of S.riverCells) { const f = freeNear(c, r, 9)[0]; if (f) { w.put(o.B('watermill'), f[0], f[1]); o.claim(f[0], f[1]); placed.mill = f; break; } } }
-    // war camps (tent + weapon rack + barrel), ruins, one watch-tower on the highest hill
+ // war camps (tent + weapon rack + barrel), ruins, one watch-tower on the highest hill
     for (let i = 0; i < par.camps; i++) {
         const f = free((c, r) => o.cdist(c, r) >= 5 && o.cdist(c, r) <= 7 && !w.cell[r][c].keepLand);
         if (!f) break; w.put('tent', f[0], f[1], { dx: -0.3 }); w.put('weaponrack', f[0], f[1], { dx: 0.4, dz: 0.4 }); w.put('barrel', f[0], f[1], { dx: 0.5, dz: -0.3 }); o.claim(f[0], f[1]);

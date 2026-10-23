@@ -1,4 +1,4 @@
-// gw_zoom_item_base.js — 3x zoom crops of the item base contact zone.
+// gw_zoom_item_base.js - 3x zoom crops of the item base contact zone.
 // Auto-detects the gold/gold-trimmed item per render (anchor drifts per seed).
 const fs = require('fs');
 const path = require('path');
@@ -15,7 +15,7 @@ fs.mkdirSync(OUT, { recursive: true });
     const c = createCanvas(img.width, img.height), x = c.getContext('2d');
     x.drawImage(img, 0, 0);
     const d = x.getImageData(0, 0, img.width, img.height).data;
-    // gold pixels (bright gold trim) — the reliquary family + coins are all gold-trimmed
+ // gold pixels (bright gold trim) - the reliquary family + coins are all gold-trimmed
     let minX = 1e9, maxX = -1, minY = 1e9, maxY = -1;
     for (let j = 0; j < img.height; j++) for (let i = 0; i < img.width; i++) {
       const k = (j * img.width + i) * 4, r = d[k], g = d[k + 1], b = d[k + 2], a = d[k + 3];

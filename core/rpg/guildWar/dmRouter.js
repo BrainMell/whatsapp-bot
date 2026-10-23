@@ -1,8 +1,8 @@
 // ============================================
-// 🎮 RUINS DM ROUTER — Guild War Overhaul 2026-10-03
+// RUINS DM ROUTER - Guild War Overhaul
 // Player action grammar for active events, driven through bot DMs (the
 // host group only receives the feed). Plugged as a pre-router into the
-// encounterFramework DM entry — one DM entry point for the whole bot.
+// encounterFramework DM entry - one DM entry point for the whole bot.
 // ============================================
 
 const state = require('./state');
@@ -18,8 +18,8 @@ const navCard = require('./navCard');
 const CFG = require('./config');
 const GuildWarEvent = require('../../models/GuildWarEvent');
 
-// ⚔️ QA FIX (owner brief 2026-10-04 "movement still does not work"): the old
-// query used 'players.status': { $ne: 'quit' } — MongoDB applies $ne across
+// QA FIX (owner brief "movement still does not work"): the old
+// query used 'players.status': { $ne: 'quit' } - MongoDB applies $ne across
 // the WHOLE array, so the moment ANY single player typed `quit`, the event
 // doc stopped matching for EVERY player. All war verbs then fell through to
 // the generic command pipeline and surfaced as "unknown command". The exact
@@ -32,10 +32,10 @@ async function getEventForPlayer(jid) {
     }).lean(); // skip casting the full map on every DM action
 }
 
-// ── per-player serialization (§11 state/session safety) ──
+// -- per-player serialization (§11 state/session safety) --
 // Rapid DMs (double-tap move, answer + answer, answer while moving) used to
 // interleave reads/writes on the same player row. Every handleDM for a jid
-// now waits for the previous one to settle — one authoritative execution per
+// now waits for the previous one to settle - one authoritative execution per
 // player at a time, no dropped inputs, no duplicate evaluations. A watchdog
 // releases a wedged chain so a crashed handler can never deadlock the player.
 const _dmLocks = new Map(); // jid → Promise (tail of the chain)
@@ -43,28 +43,28 @@ const DM_LOCK_TIMEOUT_MS = 20 * 1000;
 function serializeForPlayer(jid, fn) {
     const prev = _dmLocks.get(jid) || Promise.resolve();
     const run = prev.catch(() => {}).then(() => fn());
-    // watchdog: forget the chain regardless of outcome so memory cannot grow
-    // and a hung handler cannot wedge the player forever
+ // watchdog: forget the chain regardless of outcome so memory cannot grow
+ // and a hung handler cannot wedge the player forever
     const release = () => {
         if (_dmLocks.get(jid) === tail) _dmLocks.delete(jid);
     };
     const tail = run.then(release, release);
     _dmLocks.set(jid, tail);
-    // hard deadline: if fn() hangs (e.g. render pool stall), stop blocking
-    // newer inputs after DM_LOCK_TIMEOUT_MS (silently — the underlying run
-    // still completes and sends its own payloads; returning null keeps the
-    // engine from double-handling the input)
+ // hard deadline: if fn() hangs (e.g. render pool stall), stop blocking
+ // newer inputs after DM_LOCK_TIMEOUT_MS (silently - the underlying run
+ // still completes and sends its own payloads; returning null keeps the
+ // engine from double-handling the input)
     const timeout = new Promise((resolve) => setTimeout(() => resolve(null), DM_LOCK_TIMEOUT_MS));
     return Promise.race([run, timeout]);
 }
 
-// ── movement typo matching (owner playtest 2026-10-05: "move lwft") ──
+// -- movement typo matching (owner playtest "move lwft") --
 // The hand-picked alias list (foward/bck/bak…) can never cover every typo.
 // "lwft" slipped past it, never reached this router, and the generic game
-// pipeline answered tictactoe's "No active game in this chat" — the war
+// pipeline answered tictactoe's "No active game in this chat" - the war
 // LOOKED dead to the owner. Near-direction words now resolve by edit
 // distance; ambiguous words (tie between two directions) resolve to nothing.
-// Damerau-Levenshtein (OSA): transpositions cost 1 — "bakc" is THE classic
+// Damerau-Levenshtein (OSA): transpositions cost 1 - "bakc" is THE classic
 // typo shape and plain Levenshtein would score it 2 (over the cap)
 function editDistance(a, b) {
     const m = a.length, n = b.length;
@@ -83,12 +83,11 @@ function editDistance(a, b) {
     return d[m][n];
 }
 function fuzzyMoveToken(word) {
-    // returns the matched ALIAS KEY ('left'), never the direction value —
-    // the caller runs it through MOVE_WORDS itself (double-mapping 'w'→'n'
-    // turned "move lwft" into FORWARD once; caught by the QA battery)
-    // tie-break on the RESOLVED direction: 'bakc' hits both 'bak' and 'back'
-    // at distance 1 — same direction 's', so that is NOT a tie. 'wast' hits
-    // west('w') and east('e') — a real tie → unresolved → null.
+ // the caller runs it through MOVE_WORDS itself (double-mapping 'w'→'n'
+ // turned "move lwft" into FORWARD once; caught by the QA battery)
+ // tie-break on the RESOLVED direction: 'bakc' hits both 'bak' and 'back'
+ // at distance 1 - same direction 's', so that is NOT a tie. 'wast' hits
+ // west('w') and east('e') - a real tie → unresolved → null.
     let best = null, bestVal = null, bestDist = Infinity, tie = false;
     for (const key of Object.keys(MOVE_WORDS)) {
         if (key.length < 3) continue; // single letters never fuzzy
@@ -111,12 +110,12 @@ function roomOf(eventDoc, player) {
     return eventDoc.rooms.find((r) => r.key === player.roomId);
 }
 
-// 💡 NAVIGATION OVERHAUL (owner): W = forward, A = left, S = back,
+// NAVIGATION OVERHAUL (owner): W = forward, A = left, S = back,
 // D = right - game-style controls. "w" now means FORWARD (it no longer
 // means west; west is still reachable via "west" / "left" / "a").
 // Full compass words (north/south/east/west) keep working.
-// ⚔️ TYPO TOLERANCE (owner brief §3: normalize "foward"): the owner's own
-// test literally typed `.j move foward` — typos must reach the same movement
+// TYPO TOLERANCE (owner brief §3: normalize "foward"): the owner's own
+// test literally typed `.j move foward` - typos must reach the same movement
 // system, never fall through to the generic pipeline.
 const MOVE_WORDS = {
     n: 'n', north: 'n', s: 's', south: 's', e: 'e', east: 'e',
@@ -126,7 +125,7 @@ const MOVE_WORDS = {
 };
 const MOVE_TOKEN_RE = 'n|north|s|south|e|east|w|west|a|d|forward|back|left|right|foward|forwrd|faword|fwd|bck|bak';
 
-// ── exits of the current room, for the visual navigation card ──
+// -- exits of the current room, for the visual navigation card --
 async function computeExits(eventDoc, player) {
     const topo = state.topologyOf(eventDoc);
     const DIRS = [
@@ -156,8 +155,8 @@ async function navCardFor(eventDoc, player, room, prefix) {
     });
 }
 
-// ── RETURN map (§4): the same world map in its post-encounter visual
-// state — ember frame + THE WAY ONWARD ribbon. Replaces the old parchment
+// -- RETURN map (§4): the same world map in its post-encounter visual
+// state - ember frame + THE WAY ONWARD ribbon. Replaces the old parchment
 // compass card as the post-battle / post-resolve visual.
 async function returnMapFor(eventDoc, player, room) {
     const renderer = require('./mapRenderer');
@@ -169,9 +168,9 @@ async function returnMapFor(eventDoc, player, room) {
     });
 }
 
-// ── movement instructions that ride EVERY map card caption (owner brief §1:
+// -- movement instructions that ride EVERY map card caption (owner brief §1:
 // "the movement instructions should be included directly in the map card's
-// text/caption — make it immediately clear what movement commands are available")
+// text/caption - make it immediately clear what movement commands are available")
 function mapCaption(head, prefix) {
     const p = prefix || '.';
     return `${head}\n\n` +
@@ -183,7 +182,7 @@ function roomsMapHas(eventDoc, key) {
     return (eventDoc.rooms || []).some((r) => r.key === key);
 }
 
-// ── 📖 FIELD MANUAL (UX pass #4/#7, owner brief 2026-10-07) ──
+// -- FIELD MANUAL (UX pass #4/#7, owner brief ) --
 // The beta's recurring onboarding gap: deployment drops champions into the
 // ruins knowing only that "my DMs are the game screen". The goal, the verb
 // grammar, the relic economy and the lives rule were all learned by dying.
@@ -192,22 +191,22 @@ function roomsMapHas(eventDoc, key) {
 function fieldManualText(prefix) {
     const p = prefix || '.';
     return [
-        '📖 *FIELD MANUAL — the Ruins of the dead world*',
-        '🎯 *The goal:* chart chambers, survive what guards them, and carry relics home. `handin` banks relics for GP and guild glory. FOUR *wardens* hold the Ruins — their lairs burn red on your `map` — and the war ends ONLY when all four are slain. First guild to breach the *World Core* earns lasting fame.',
-        '🚶 *Move:* `' + p + ' move forward` · `left` · `right` · `back` — bare `forward`/`left`… also works. Typos are forgiven.',
-        '🔎 *Look:* every chamber answers `examine` — mechanisms, murals, vaults, hazards. It always tells you the verb that acts.',
+        '📖 *FIELD MANUAL - the Ruins of the dead world*',
+        '🎯 *The goal:* chart chambers, survive what guards them, and carry relics home. `handin` banks relics for GP and guild glory. FOUR *wardens* hold the Ruins - their lairs burn red on your `map` - and the war ends ONLY when all four are slain. First guild to breach the *World Core* earns lasting fame.',
+        '🚶 *Move:* `' + p + ' move forward` · `left` · `right` · `back` - bare `forward`/`left`… also works. Typos are forgiven.',
+        '🔎 *Look:* every chamber answers `examine` - mechanisms, murals, vaults, hazards. It always tells you the verb that acts.',
         '⚔️ *Fights:* guarded chambers start on their own; guildmates in the room join automatically. `flee` retreats you (spoils forfeited).',
-        '🧩 *Seals:* `examine` starts a puzzle, then reply with your answer. `examine` again re-reads the rules FREE — only real answers burn attempts.',
+        '🧩 *Seals:* `examine` starts a puzzle, then reply with your answer. `examine` again re-reads the rules FREE - only real answers burn attempts.',
         '💎 *Relics:* `relics` lists your pack, `handin <name>` or `handin all` banks them. Carried Rare+ can be stolen by rivals.',
         '🗺️ *Tools:* `map` · `paths` · `mark` + `teleport` · `talk <msg>` (chamber chat) · `challenge <name>` (rival in your chamber) · `status` · `quit`.',
-        '💀 *Lives:* you have 3. Fall a fourth time and your run ends. Going quiet 20 minutes drops your carried relics where you stand — `rejoin` picks the war back up.',
+        '💀 *Lives:* you have 3. Fall a fourth time and your run ends. Going quiet 20 minutes drops your carried relics where you stand - `rejoin` picks the war back up.',
     ].join('\n');
 }
 
 
-// ⚔️ PRESENCE SYMMETRY (owner live-test bug report #1, 2026-10-06: "Player A
+// PRESENCE SYMMETRY (owner live-test bug report #1, "Player A
 // sees Player B's sprite; Player B does not see Player A's"): the room scene
-// only rendered for whoever MOVED — the players ALREADY in the chamber were
+// only rendered for whoever MOVED - the players ALREADY in the chamber were
 // never told anyone arrived (no scene, no sprite, no warning before a rival
 // challenge window opened on them). Every arrival now pushes the OTHER
 // occupants a scene from THEIR OWN perspective (newcomer drawn as mate or
@@ -228,14 +227,14 @@ async function announceArrival(sock, eventDoc, mover, room, { prefix }) {
     } catch (e) { /* presence sync is best-effort */ }
 }
 
-// ── ROOM ENTRY PRESENTATION (owner overhaul 2026-10-04: "a game rendered
-// through WhatsApp") — the order is LAW (spec §2):
-//   1. the LANDSCAPE map (where am I — self-zooming, fog-aware)
-//   2. the ROOM SCENE (what this place looks like — the player's ASSIGNED
-//      sprite standing in the exit-correct Ruins plate, yellow chevrons on
-//      every open arch, floor compass, per-type ambience)
-//   3. interaction info as captions (no parchment cards in the flow)
-// Puzzles: the board OVERLAYS the scene panel — never a separate card.
+// -- ROOM ENTRY PRESENTATION (owner overhaul "a game rendered
+// through WhatsApp") - the order is LAW (spec §2):
+// 1. the LANDSCAPE map (where am I - self-zooming, fog-aware)
+// 2. the ROOM SCENE (what this place looks like - the player's ASSIGNED
+// sprite standing in the exit-correct Ruins plate, yellow chevrons on
+// every open arch, floor compass, per-type ambience)
+// 3. interaction info as captions (no parchment cards in the flow)
+// Puzzles: the board OVERLAYS the scene panel - never a separate card.
 async function presentRoom(sock, chatId, BOT_MARKER, ctxDoc, me, newRoom, opts = {}) {
     const prefix = opts.prefix || '.';
     const withMap = opts.withMap !== false;
@@ -243,7 +242,7 @@ async function presentRoom(sock, chatId, BOT_MARKER, ctxDoc, me, newRoom, opts =
         try { await sock.sendMessage(chatId, payload); } catch (e) { /* best-effort */ }
     };
 
-    // meeting lines (kept short - they are gameplay-critical)
+ // meeting lines (kept short - they are gameplay-critical)
     const meta = navCard.typeMeta(newRoom.type);
     const others = (newRoom.occupants || []).filter((j) => j !== me.jid)
         .map((j) => (ctxDoc.players || []).find((p) => p.jid === j)).filter(Boolean);
@@ -253,9 +252,9 @@ async function presentRoom(sock, chatId, BOT_MARKER, ctxDoc, me, newRoom, opts =
     if (mates.length) social += `\n\n🤝 ${mates.map((m) => m.name).join(', ')} of your guild ${mates.length > 1 ? 'are' : 'is'} here - fight together for a shared reward.`;
     if (foes.length) social += `\n\n⚠️ ${foes.map((f) => f.name).join(', ')} (${foes[0].guildName}) ${foes.length > 1 ? 'are' : 'is'} here - rival guild. \`challenge @name\` or move carefully.`;
 
-    // ONE fresh full read serves BOTH the map and the scene: the projected
-    // ctxDoc carries no rooms array, so the room scene (exit arrows, door
-    // variants) must derive from the complete doc.
+ // ONE fresh full read serves BOTH the map and the scene: the projected
+ // ctxDoc carries no rooms array, so the room scene (exit arrows, door
+ // variants) must derive from the complete doc.
     let full = ctxDoc;
     let freshMe = me;
     try {
@@ -263,8 +262,8 @@ async function presentRoom(sock, chatId, BOT_MARKER, ctxDoc, me, newRoom, opts =
         freshMe = (full.players || []).find((p) => p.jid === me.jid) || me;
     } catch (e) { /* fall back to the projected context */ }
 
-    // 1) MAP FIRST — "where am I" (§2) + the move grammar rides the caption
-    // (owner brief §1: movement instructions live on the map card itself)
+ // 1) MAP FIRST - "where am I" (§2) + the move grammar rides the caption
+ // (owner brief §1: movement instructions live on the map card itself)
     if (withMap) {
         try {
             const renderer = require('./mapRenderer');
@@ -278,7 +277,7 @@ async function presentRoom(sock, chatId, BOT_MARKER, ctxDoc, me, newRoom, opts =
         }
     }
 
-    // 2) THE ROOM ITSELF — environment image with the player in it (§2)
+ // 2) THE ROOM ITSELF - environment image with the player in it (§2)
     try {
         const intro = await encounters.roomIntro(full, freshMe, newRoom, { prefix });
         const sceneCaption = BOT_MARKER + ((intro.text || '') + social).trim();
@@ -295,12 +294,11 @@ async function presentRoom(sock, chatId, BOT_MARKER, ctxDoc, me, newRoom, opts =
 }
 
 // main entry (serialized): rapid inputs from one player queue behind each
-// other instead of interleaving — see serializeForPlayer above.
+// other instead of interleaving - see serializeForPlayer above.
 // opts.prefixed: the text arrived WITH the bot prefix (e.g. ".j move left").
-// Prefixed input only consumes WAR-SPECIFIC verbs — generic bot commands
+// Prefixed input only consumes WAR-SPECIFIC verbs - generic bot commands
 // (use/bag/relics/status) fall through to the normal command pipeline so
 // ".j use elixir" still hits the inventory mid-war. Bare DM text (game-mode)
-// keeps the full grammar.
 const GENERIC_PREFIXED_RE = /^(?:use|bag|relics|status|score|gw status|gw map|help)\b/;
 
 function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
@@ -311,31 +309,31 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
     const prefix = String(opts.prefix || '.'); // dynamic per-bot prefix (owner rule)
     const raw = String(txt || '').trim();
     if (!raw) return null;
-    // tolerate own prefix or not - strip the ACTUAL per-bot prefix dynamically
-    // (owner rule: never hardcode .j/.s). Legacy bare ".j" still tolerated.
+ // tolerate own prefix or not - strip the ACTUAL per-bot prefix dynamically
+ // (owner rule: never hardcode .j/.s). Legacy bare ".j" still tolerated.
     const lower = raw.toLowerCase();
     const prefixed = lower.startsWith(prefix.toLowerCase())
         || /^\.j\s/.test(lower);
     let norm = lower.startsWith(prefix.toLowerCase())
         ? lower.slice(prefix.length).trim()
         : lower.replace(/^\.j\s*/, '');
-    // legacy tolerance: bots whose prefix is "." still receive ".j <verb>" —
-    // the prefix strip above leaves a leading "j " in that case. Strip it so
-    // the grammar never depends on which prefix style the deployment uses.
+ // legacy tolerance: bots whose prefix is "." still receive ".j <verb>" -
+ // the prefix strip above leaves a leading "j " in that case. Strip it so
+ // the grammar never depends on which prefix style the deployment uses.
     if (prefixed && !lower.startsWith(prefix.toLowerCase())) norm = norm.replace(/^j\s+/, '');
     else if (prefixed && /^j\s+[a-z]/.test(norm) && !/^(join|j)$/.test(norm)) norm = norm.replace(/^j\s+/, '');
 
-    // prefixed generic commands are NEVER war verbs — hand them back early
+ // prefixed generic commands are NEVER war verbs - hand them back early
     if (opts.prefixed && GENERIC_PREFIXED_RE.test(norm)) return null;
 
-    // ── ruins action grammar: any DM verb this router understands ──
+ // -- ruins action grammar: any DM verb this router understands --
     const QUIET_ACTION_RE = new RegExp(`^(?:look|l|where(?:\\s?am\\s?i)?|map|gw map|paths|relics|bag|status|score|rejoin|return|quit|leave|exit|accept|flee|mark|teleport|tp|recall|handin(?:\\s\\S.*)?|use(?:\\s\\S.*)?|challenge(?:\\s\\S.*)?|share map(?:\\s\\S.*)?|talk(?:\\s\\S.*)?|say(?:\\s\\S.*)?|move\\s+(?:${MOVE_TOKEN_RE})|(?:${MOVE_TOKEN_RE}))$`);
 
     const eventDoc = await getEventForPlayer(senderJid);
     if (!eventDoc) {
-        // not in an event: "join" matters (during registration); recognized
-        // ruins verbs get a guidance reply instead of dead silence (owner:
-        // "typing look or e does nothing" - never leave a DM unanswered)
+ // not in an event: "join" matters (during registration); recognized
+ // ruins verbs get a guidance reply instead of dead silence (
+ // "typing look or e does nothing" - never leave a DM unanswered)
         if (/^(join|gw join)$/.test(norm)) {
             const pending = await GuildWarEvent.findOne({ state: 'REGISTRATION', 'players.jid': { $ne: senderJid } }).sort({ createdAt: -1 });
             if (pending) {
@@ -349,10 +347,10 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
             }
             return { text: `🕊️ *No war is registering right now.*\nMods raise the call in the GC: \`${prefix} gw start\`. Once a war opens, \`${prefix} gw join\` (or DM me \`join\`) gets you in.` };
         }
-        // ⚔️ 2026-10-05: "move …" always answers here — never falls through to
-        // the games pipeline (tictactoe's "No active game in this chat").
+ // "move …" always answers here - never falls through to
+ // the games pipeline (tictactoe's "No active game in this chat").
         if (QUIET_ACTION_RE.test(norm) || /^move\b/.test(norm)) {
-            return { text: `🕯️ *The Ruins stand quiet.* No war is running right now.\n\nWhen one deploys, my DMs become your game screen — your room will show itself the moment the war begins.\nMods start it with \`${prefix} gw start\` - players join with \`${prefix} gw join\`.` };
+            return { text: `🕯️ *The Ruins stand quiet.* No war is running right now.\n\nWhen one deploys, my DMs become your game screen - your room will show itself the moment the war begins.\nMods start it with \`${prefix} gw start\` - players join with \`${prefix} gw join\`.` };
         }
         return null;
     }
@@ -360,7 +358,7 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
     const player = playerOf(eventDoc, senderJid);
     if (!player) return null;
 
-    // ── registration-phase actions ──
+ // -- registration-phase actions --
     if (eventDoc.state === 'REGISTRATION') {
         if (/^(join|gw join)$/.test(norm)) {
             const res = await state.registerPlayer(eventDoc.eventId, { jid: senderJid, name: displayName(senderJid), guildId: player.guildId, guildName: player.guildName });
@@ -372,7 +370,7 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
     if (player.status === 'defeated') return { text: '💀 You have no lives left this war. Watch the feed for the outcome.' };
     if (player.status === 'quit') return null;
 
-    // rejoin after inactivity
+ // rejoin after inactivity
     if (player.status === 'inactive') {
         if (/^(rejoin|return)$/.test(norm)) {
             const protectedUntil = Date.now() + CFG.REJOIN_PROTECT_MS;
@@ -380,9 +378,9 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
                 status: 'active', lastActionAt: Date.now(), protectedUntil,
             });
             const welcome = `🛡️ Welcome back. Spawn protection for ${CFG.REJOIN_PROTECT_MS / 1000}s. Your carried relics dropped where you fell - your position is unchanged.`;
-            // 🖼️ owner 2026-10-06: a returning champion gets the standard
-            // presentation — the map card ("YOU ARE HERE") + the chamber's
-            // encounter card — exactly like any room entry, never bare text.
+ // a returning champion gets the standard
+ // presentation - the map card ("YOU ARE HERE") + the chamber's
+ // encounter card - exactly like any room entry, never bare text.
             try {
                 const ctxDoc = await state.getMoveContext(eventDoc.eventId, player.roomId);
                 if (ctxDoc && ctxDoc.room) {
@@ -397,46 +395,46 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         return { text: '💤 You went inactive. Type `rejoin` to return to the war.' };
     }
 
-    // touch lastAction for any recognized command from here on
+ // touch lastAction for any recognized command from here on
     const touch = () => state.updatePlayer(eventDoc.eventId, senderJid, {}, { lastActionAt: Date.now() });
 
-    // ── 📖 field manual on demand (UX pass #4/#7): the primer rides the
-    // deployment DM once; this is the always-available reference copy ──
+ // -- field manual on demand (UX pass #4/#7): the primer rides the
+ // deployment DM once; this is the always-available reference copy --
     if (/^(help|howto|how to play|primer|manual|field manual)$/.test(norm)) {
         return { text: fieldManualText(prefix) };
     }
 
-    // ── movement ──
+ // -- movement --
     let moveToken = null;
     const moveMatch = new RegExp(`^(?:move\\s+)?(${MOVE_TOKEN_RE})$`).exec(norm);
     if (moveMatch) moveToken = moveMatch[1];
-    // ⚔️ TYPO TOLERANCE v2: fuzzy path fires ONLY after an explicit "move "
-    // intent ("move lwft" → left) so random bare English words (rest/last/
-    // best are one substitution from west/east) can never hijack a DM.
+ // TYPO TOLERANCE v2: fuzzy path fires ONLY after an explicit "move "
+ // intent ("move lwft" → left) so random bare English words (rest/last/
+ // best are one substitution from west/east) can never hijack a DM.
     if (!moveToken) {
         const fuzzy = /^move\s+([a-z]{3,})$/.exec(norm);
         if (fuzzy) moveToken = fuzzyMoveToken(fuzzy[1]);
     }
-    // "move <garbage>" dies HERE with a real answer — never again falls
-    // through to the generic pipeline and its tictactoe error.
+ // "move <garbage>" dies HERE with a real answer - never again falls
+ // through to the generic pipeline and its tictactoe error.
     if (!moveToken && /^move\b/.test(norm)) {
         return { text: `🧭 Unknown direction. The Ruins obey:\n🚶 *Move:* \`${prefix} move forward\` · \`${prefix} left\` · \`${prefix} right\` · \`${prefix} back\` (bare \`forward\`/\`left\`… also works)` };
     }
     if (moveToken) {
         const topo = state.topologyOf(eventDoc);
         const dir = MOVE_WORDS[moveToken];
-        // ⚔️ PvE/PvP OVERLAP GUARD (owner live-test report #6: "I am literally
-        // fighting monsters while dueling"): an ACTIVE duel is the player's
-        // one authoritative encounter — no wandering off mid-duel. (The
-        // mirror guard lives in ruinsPvp: no challenge/accept while a PvE
-        // fight holds either blade.)
+ // PvE/PvP OVERLAP GUARD (owner live-test report #6: "I am literally
+ // fighting monsters while dueling"): an ACTIVE duel is the player's
+ // one authoritative encounter - no wandering off mid-duel. (The
+ // mirror guard lives in ruinsPvp: no challenge/accept while a PvE
+ // fight holds either blade.)
         try {
             const activeDuel = require('../pvpSystem').getRuinsDuelFor(senderJid);
             if (activeDuel) {
-                return { text: '⚔️ *The duel demands your attention.* Finish it — `combat attack` / `combat ability <n>` / `combat flee` — before you move.' };
+                return { text: '⚔️ *The duel demands your attention.* Finish it - `combat attack` / `combat ability <n>` / `combat flee` - before you move.' };
             }
         } catch (e) { /* pvpSystem unavailable → legacy behavior */ }
-        // Ruins rule: cannot move while the room's encounter is unresolved
+ // Ruins rule: cannot move while the room's encounter is unresolved
         const room = roomOf(eventDoc, player);
         if (room && room.state === 'ACTIVE' && ['combat', 'puzzle', 'coop', 'core', 'finale'].includes(room.type)) {
             return { text: '🚪 The way onward is blocked until this chamber is resolved (or you `flee`).' };
@@ -456,18 +454,18 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         });
         await touch();
 
-        // ⚔️ projected context (room + light players) — no full-map re-read
+ // projected context (room + light players) - no full-map re-read
         const ctxDoc = await state.getMoveContext(eventDoc.eventId, dest);
         if (!ctxDoc || !ctxDoc.room) {
-            // the war ENDED between the move check and this read (4th-warden
-            // race, found by the full-game sims) — never crash the input
-            return { text: '🌫️ The chamber is gone before you arrive — the Ruins have moved on.' };
+ // the war ENDED between the move check and this read (4th-warden
+ // race, found by the full-game sims) - never crash the input
+            return { text: '🌫️ The chamber is gone before you arrive - the Ruins have moved on.' };
         }
         const me = { ...player, roomId: dest, prevRoomId: player.roomId };
         const newRoom = ctxDoc.room;
-        // 💡 OVERHAUL 2026-10-04: map → scene → (auto) encounter. Combat
-        // kinds START THEMSELVES — the world reacts to the player; nobody
-        // has to poke the bot (owner spec §14).
+ // OVERHAUL map → scene → (auto) encounter. Combat
+ // kinds START THEMSELVES - the world reacts to the player; nobody
+ // has to poke the bot (owner spec §14).
         try {
             await presentRoom(sock, chatId, BOT_MARKER, ctxDoc, me, newRoom, { prefix });
         } catch (e) {
@@ -479,10 +477,10 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
                 await sock.sendMessage(chatId, payload).catch(() => {});
             }
         }
-        // ⚔️ presence sync: the occupants SEE the newcomer (report #1)
+ // presence sync: the occupants SEE the newcomer (report #1)
         await announceArrival(sock, ctxDoc, me, newRoom, { prefix });
-        // AUTO-ENCOUNTER (§14): unresolved combat kinds (and boss-sealed
-        // secret chambers) engage the REAL combat pipeline immediately.
+ // AUTO-ENCOUNTER (§14): unresolved combat kinds (and boss-sealed
+ // secret chambers) engage the REAL combat pipeline immediately.
         const freshAfterPresent = await state.getEvent(eventDoc.eventId, { fresh: true });
         const meNow = playerOf(freshAfterPresent, senderJid) || me;
         const roomNow = roomOf(freshAfterPresent, meNow);
@@ -491,14 +489,14 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
             || (roomNow.type === 'secret' && encounters.payloadGet(roomNow.payload, 'boss'))
         );
         if (autoCombat) {
-            // 🤝 TEAM CO-OP + OCCUPIED-ROOM RULE (owner 2026-10-05 23:09Z):
-            // the fight in an ACTIVE room is ONE shared battle.
-            //   • same guild      → you are SEATED at it (quest-style co-op)
-            //   • different guild → the chamber is OCCUPIED: wait (stay put) or
-            //     `flee` back the way you came — never a second fight on the
-            //     same pack (the old double-fight bug the playtest caught).
-            // A NOT-inCombat session object (victory cleanup window) is stale —
-            // ignore it and start fresh (startRuinsCombat reaps stale states).
+ // TEAM CO-OP + OCCUPIED-ROOM RULE (23:09Z):
+ // the fight in an ACTIVE room is ONE shared battle.
+ // • same guild → you are SEATED at it (quest-style co-op)
+ // • different guild → the chamber is OCCUPIED: wait (stay put) or
+ // `flee` back the way you came - never a second fight on the
+ // same pack (the old double-fight bug the playtest caught).
+ // A NOT-inCombat session object (victory cleanup window) is stale -
+ // ignore it and start fresh (startRuinsCombat reaps stale states).
             const live = require('../guildAdventure').ruinsRoomSession(eventDoc.eventId, roomNow.key);
             if (live && live.inCombat && !live.players.some((p) => p.jid === senderJid)) {
                 const anySameGuild = (live.players || []).some((p) => p.jid
@@ -508,20 +506,20 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
                     if (joined.ok) {
                         const mateNames = (live.players || []).map((p) => p.name).filter(Boolean).join(', ');
                         await touch();
-                        // ⚔️ CO-OP JOINER PRESENTATION (owner live-test report #2/#3,
-                        // 2026-10-06: "combat UI sometimes fails to spawn for some
-                        // players" — the joiner got a TEXT-ONLY ack: no battle image,
-                        // no turn state, so they had to ask "tell me when it's my turn
-                        // 😭"). The multicast sock only covers sends AFTER the seat.
-                        // Re-present the CURRENT battle to the joiner from THEIR POV.
+ // CO-OP JOINER PRESENTATION (owner live-test report #2/#3,
+ // "combat UI sometimes fails to spawn for some
+ // players" - the joiner got a TEXT-ONLY ack: no battle image,
+ // no turn state, so they had to ask "tell me when it's my turn
+ // "). The multicast sock only covers sends AFTER the seat.
+ // Re-present the CURRENT battle to the joiner from THEIR POV.
                         try {
                             const pres = await require('../guildAdventure').presentRuinsBattleTo(eventDoc.eventId, roomNow.key, senderJid);
                             if (pres) return { text: pres.text, image: pres.image || undefined };
                         } catch (e) { /* fall through to the plain ack */ }
-                        return { text: `🤝 You draw steel beside your guildmates — *${mateNames}* are already locked in battle here, and now the fight is yours too!\n\`${prefix} combat atk\` on your turn.` };
+                        return { text: `🤝 You draw steel beside your guildmates - *${mateNames}* are already locked in battle here, and now the fight is yours too!\n\`${prefix} combat atk\` on your turn.` };
                     }
                 } else {
-                    return { text: `⚔️ *This chamber is OCCUPIED.* A battle is already being fought here by ${live.players.map((p) => p.name).filter(Boolean).join(', ')} of a rival guild.\nStay put and wait for it to finish — or \`flee\` back the way you came.` };
+                    return { text: `⚔️ *This chamber is OCCUPIED.* A battle is already being fought here by ${live.players.map((p) => p.name).filter(Boolean).join(', ')} of a rival guild.\nStay put and wait for it to finish - or \`flee\` back the way you came.` };
                 }
             }
             if (!live || !live.inCombat || !live.players.some((p) => p.jid === senderJid)) {
@@ -532,14 +530,14 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         return {};
     }
 
-    // ── visual navigation: the RETURN map (post-encounter visual state §4) ──
+ // -- visual navigation: the RETURN map (post-encounter visual state §4) --
     if (/^paths$/.test(norm)) {
         const room = roomOf(eventDoc, player);
         const buf = await returnMapFor(eventDoc, player, room);
         return { text: mapCaption(`🧭 The way onward from chamber ${player.roomId}. The compass marks your exits.`, prefix), image: buf };
     }
 
-    // ── TELEPORT ANCHOR (owner spec §16): mark ONE room as a return point ──
+ // -- TELEPORT ANCHOR (owner spec §16): mark ONE room as a return point --
     if (/^(mark|mark room|anchor)$/.test(norm)) {
         const room = roomOf(eventDoc, player);
         if (!room) return { text: '❌ Nowhere to anchor.' };
@@ -554,7 +552,7 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
     }
     if (/^(teleport|tp|recall)$/.test(norm)) {
         const room = roomOf(eventDoc, player);
-        // 1) never out of a live fight — unresolved encounter OR pending duel
+ // 1) never out of a live fight - unresolved encounter OR pending duel
         if (room && room.state === 'ACTIVE' && ['combat', 'puzzle', 'coop', 'core', 'finale'].includes(room.type)) {
             return { text: '🚫 *The way is shut.* Resolve this chamber first - teleporting out of a live fight is not granted.' };
         }
@@ -579,8 +577,8 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         await touch();
         const ctxDoc = await state.getMoveContext(eventDoc.eventId, dest);
         if (!ctxDoc || !ctxDoc.room) {
-            // same war-ended race as the main move path — guard, don't crash
-            return { text: '🌫️ The chamber is gone before you arrive — the Ruins have moved on.' };
+ // same war-ended race as the main move path - guard, don't crash
+            return { text: '🌫️ The chamber is gone before you arrive - the Ruins have moved on.' };
         }
         const me = { ...player, roomId: dest, prevRoomId: player.roomId };
         try {
@@ -588,12 +586,12 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         } catch (e) {
             return { text: `✨ The anchor pulls you back to chamber ${dest}.` };
         }
-        // ⚔️ presence sync (report #1): teleport arrivals are arrivals too
+ // presence sync (report #1): teleport arrivals are arrivals too
         await announceArrival(sock, ctxDoc, me, ctxDoc.room, { prefix });
         return {};
     }
 
-    // ── personal map ──
+ // -- personal map --
     if (/^(map|gw map)$/.test(norm)) {
         const fresh = await state.getEvent(eventDoc.eventId, { fresh: true });
         const me = playerOf(fresh, senderJid);
@@ -603,13 +601,13 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         return { text: mapCaption(`🗺️ Your chart of the Ruins.`, prefix), image: buf };
     }
 
-    // ── look ──
+ // -- look --
     if (/^(look|l|where|whereami)$/.test(norm)) {
         const ctxDoc = await state.getMoveContext(eventDoc.eventId, player.roomId);
         if (!ctxDoc || !ctxDoc.room) return { text: 'You are between chambers...' };
         const me = player;
-        // 💡 NAVIGATION OVERHAUL: same visual flow as a move - map with
-        // "you are here" first, room-type card, then the scene.
+ // NAVIGATION OVERHAUL: same visual flow as a move - map with
+ // "you are here" first, room-type card, then the scene.
         try {
             return await presentRoom(sock, chatId, BOT_MARKER, ctxDoc, me, ctxDoc.room, { prefix, withMap: true });
         } catch (e) {
@@ -619,13 +617,13 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         }
     }
 
-    // ── relics ──
+ // -- relics --
     if (/^(relics|bag)$/.test(norm)) {
         const carried = (player.relics || []).map((r) => `💎 ${r.name} (${r.tier}${r.charges ? `, ${r.charges} charges` : ''})`);
         return { text: carried.length ? `You carry:\n${carried.join('\n')}\n\nHand in with \`handin <name>\` or \`handin all\`. Carried Rare+ relics can be stolen.` : 'You carry no relics. Find them in discoveries, vaults and hidden chambers.' };
     }
 
-    // ── hand in (relic → guild points; leaves play) ──
+ // -- hand in (relic → guild points; leaves play) --
     if (/^handin/.test(norm)) {
         const arg = norm.replace(/^handin\s*/, '').trim();
         const carried = player.relics || [];
@@ -644,22 +642,22 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         );
         await points.award(eventDoc.eventId, senderJid, gpTotal, 'relic-handin', { ignoreCap: false });
         await state.pushLog(eventDoc.eventId, 'relic-handin', senderJid, `${toHand.map((r) => r.name).join(', ')} → ${gpTotal} GP`);
-        feed.queue(eventDoc.eventId, 'normal', `🏛️ ${player.name} delivers ${toHand.length === 1 ? `*${toHand[0].name}*` : `${toHand.length} relics`} to the guild vault — +${gpTotal} GP of glory secured.`);
+        feed.queue(eventDoc.eventId, 'normal', `🏛️ ${player.name} delivers ${toHand.length === 1 ? `*${toHand[0].name}*` : `${toHand.length} relics`} to the guild vault - +${gpTotal} GP of glory secured.`);
         return { text: `🏛️ Handed in: ${toHand.map((r) => `${r.name} (${r.tier})`).join(', ')} - *+${gpTotal} GP* to you and your guild. Secured.` };
     }
 
-    // ── use relic ──
+ // -- use relic --
     if (/^use\b/.test(norm)) {
         return useRelic(eventDoc, player, norm.replace(/^use\s*/, ''), { sock, chatId, BOT_MARKER });
     }
 
-    // ── pvp ──
+ // -- pvp --
     if (/^challenge\b/.test(norm)) {
         const room = roomOf(eventDoc, player);
-        // ⚔️ DM-FRIENDLY TARGETING (owner live-test report #11: ruins PvP still
-        // leaned on group-tag habits): `challenge` with NO name auto-targets a
-        // lone rival in the chamber; with several, it lists them. Named targets
-        // match exact → prefix → unique-contains. Never a WhatsApp @tag parse.
+ // DM-FRIENDLY TARGETING (owner live-test report #11: ruins PvP still
+ // leaned on group-tag habits): `challenge` with NO name auto-targets a
+ // lone rival in the chamber; with several, it lists them. Named targets
+ // match exact → prefix → unique-contains. Never a WhatsApp @tag parse.
         const here = (eventDoc.players || []).filter((p) => p.jid !== senderJid
             && p.status === 'active' && p.roomId === player.roomId);
         const rivals = here.filter((p) => p.guildId !== player.guildId);
@@ -672,22 +670,22 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
                 const contains = rivals.filter((p) => p.name.toLowerCase().includes(arg));
                 if (contains.length === 1) target = contains[0];
             }
-            if (!target) return { text: '❌ No such rival in this chamber. Bare `challenge` targets a lone rival — or type their name.' };
+            if (!target) return { text: '❌ No such rival in this chamber. Bare `challenge` targets a lone rival - or type their name.' };
         } else {
             if (!rivals.length) return { text: '⚔️ No rival stands in this chamber. Rivals are champions of OTHER guilds.' };
             if (rivals.length === 1) target = rivals[0];
             else return { text: `⚔️ Several rivals stand here: *${rivals.map((r) => r.name).join('*, *')}*.\n\`challenge <name>\` picks one.` };
         }
         const res = await ruinsPvp.challenge(eventDoc, player, target.jid);
-        // ⚔️ MULTIPLAYER BRIEF §5: the challenged player learns of the duel
-        // IN THEIR DMs the moment it's issued (the GC feed line alone left
-        // them fighting the window blind).
-        // ⚔️ PRESENCE SYMMETRY (owner report #1): the challenger already saw
-        // the target's sprite in their own scene — the notification now rides
-        // a scene rendered from the TARGET's perspective, rival across.
+ // MULTIPLAYER BRIEF §5: the challenged player learns of the duel
+ // IN THEIR DMs the moment it's issued (the GC feed line alone left
+ // them fighting the window blind).
+ // PRESENCE SYMMETRY (owner report #1): the challenger already saw
+ // the target's sprite in their own scene - the notification now rides
+ // a scene rendered from the TARGET's perspective, rival across.
         if (res.ok) {
             const windowS = Math.max(1, Math.round((CFG.PVP.CHALLENGE_WINDOW_MS || 60000) / 1000));
-            const notifyText = `⚔️ *${player.name}* calls you out in chamber ${player.roomId}!\nYou have ${windowS}s: \`accept\` the duel, \`flee\` to concede — or move out of the chamber to slip away before it begins.`;
+            const notifyText = `⚔️ *${player.name}* calls you out in chamber ${player.roomId}!\nYou have ${windowS}s: \`accept\` the duel, \`flee\` to concede - or move out of the chamber to slip away before it begins.`;
             try {
                 let scene = null;
                 try {
@@ -696,11 +694,11 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
                 } catch (e) { scene = null; }
                 await sock.sendMessage(target.jid, scene ? { text: BOT_MARKER + notifyText, image: scene } : { text: BOT_MARKER + notifyText });
             } catch (e) { /* notification is best-effort */ }
-            // 🖼️ ENCOUNTER CARD FOR THE ISSUER TOO (owner 2026-10-07: "instead
-            // of image cards of the active encounter with these messages as
-            // captions, text won't cut it"): the challenge confirmation rides
-            // the challenger's OWN POV scene — the duel hanging in the dust
-            // should be visible, not narrated.
+ // ENCOUNTER CARD FOR THE ISSUER TOO ("instead
+ // of image cards of the active encounter with these messages as
+ // captions, text won't cut it"): the challenge confirmation rides
+ // the challenger's OWN POV scene - the duel hanging in the dust
+ // should be visible, not narrated.
             try {
                 const myScene = await require('./roomScene').renderRoomScene(eventDoc, player, room, { prefix });
                 if (myScene) return { text: res.text, image: myScene };
@@ -713,7 +711,7 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         if (!res.ok) return { text: res.text };
         const pvp = require('../pvpSystem');
         const virtualId = `ruins:${eventDoc.eventId}:${player.roomId}:${Date.now()}`;
-        // ⚔️ RUINS DUELS: the duel renders in THIS room's plate (no arena swap)
+ // RUINS DUELS: the duel renders in THIS room's plate (no arena swap)
         let ruinsBackground = null;
         try {
             const roomScene = require('./roomScene');
@@ -724,13 +722,13 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         if (begun.success && begun.duel && ruinsBackground) begun.duel.ruinsBackground = ruinsBackground;
         if (!begun.success) return { text: begun.message };
         await touch();
-        // ⚔️ DUEL START PRESENTATION (owner report #1/#2): the accept used to
-        // send a TEXT line only — neither duelist ever saw the other's sprite
-        // or a battle scene at duel start. Each duelist now gets their OWN
-        // POV scene (them as champion, the rival across).
+ // DUEL START PRESENTATION (owner report #1/#2): the accept used to
+ // send a TEXT line only - neither duelist ever saw the other's sprite
+ // or a battle scene at duel start. Each duelist now gets their OWN
+ // POV scene (them as champion, the rival across).
         try {
             const roomScene = require('./roomScene');
-            // ⚠️ scope: `room` is declared LATER in this function (TDZ) — resolve fresh here
+ // scope: `room` is declared LATER in this function (TDZ) - resolve fresh here
             const duelRoom = roomOf(eventDoc, player) || eventDoc.rooms?.find((r) => r.key === player.roomId);
             const firstMover = begun.duel.players[begun.duel.turn]?.name || '?';
             for (const jid of [res.challenger.jid, senderJid]) {
@@ -740,23 +738,23 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
                 const cap = `⚔️ *THE DUEL BEGINS!* ${begun.duel.players[0].name} vs ${begun.duel.players[1].name}.\n*First move: ${firstMover}* (speed decides).\n_Stakes: ${CFG.PVP.WIN_GP} GP + carried relics (max ${CFG.PVP.RELIC_STEAL_CAP})._`;
                 await sock.sendMessage(jid, scene ? { text: BOT_MARKER + cap, image: scene } : { text: BOT_MARKER + cap }).catch(() => {});
             }
-        } catch (e) { /* duel scene is best-effort — the turn engine takes over */ }
+        } catch (e) { /* duel scene is best-effort - the turn engine takes over */ }
         return { text: `⚔️ *THE DUEL BEGINS!* ${begun.duel.players[0].name} vs ${begun.duel.players[1].name}.\nUse your standard combat commands: \`${prefix} combat attack\`, \`${prefix} combat ability <n>\`, \`${prefix} combat flee\`.\n_Stakes: ${CFG.PVP.WIN_GP} GP + carried relics (max ${CFG.PVP.RELIC_STEAL_CAP})._` };
     }
     if (/^flee$/.test(norm)) {
         const room = roomOf(eventDoc, player);
         const pending = await ruinsPvp.openChallengeFor(eventDoc, senderJid)
             || [...ruinsPvp._openChallenges.values()].find((c) => c.challengedJid === senderJid && Date.now() < c.expiresAt) || null;
-        // ⚔️ RE-ENTRY SAFETY (owner brief §7 "leave during puzzle"): puzzle
-        // chambers MUST be escapable — a champion who cannot crack the seal
-        // retreats (room stays ACTIVE, spoils forfeited) instead of being
-        // trapped forever. The blocked-move message promises exactly this.
+ // RE-ENTRY SAFETY (owner brief §7 "leave during puzzle"): puzzle
+ // chambers MUST be escapable - a champion who cannot crack the seal
+ // retreats (room stays ACTIVE, spoils forfeited) instead of being
+ // trapped forever. The blocked-move message promises exactly this.
         if (pending || ['combat', 'puzzle', 'coop', 'core', 'finale'].includes(room?.type)) {
-            // ⚔️ QA FIX: abandoning a live Ruins fight must also END the combat
-            // session — otherwise the orphaned session answers every later
-            // auto-start with "already in combat" until the 30-min reaper.
-            // 🤝 co-op (owner 2026-10-05): a shared room battle keeps going for
-            // whoever stays — retreat only unseats YOU.
+ // QA FIX: abandoning a live Ruins fight must also END the combat
+ // session - otherwise the orphaned session answers every later
+ // auto-start with "already in combat" until the 30-min reaper.
+ // co-op: a shared room battle keeps going for
+ // whoever stays - retreat only unseats YOU.
             try { require('../guildAdventure').leaveRuinsSession(senderJid) || require('../guildAdventure').abortRuinsSession(senderJid); } catch (e) {}
             await state.updatePlayer(eventDoc.eventId, senderJid, {}, {
                 roomId: player.prevRoomId,
@@ -764,14 +762,14 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
                 lastActionAt: Date.now(),
             });
             await rooms.leaveRoom(eventDoc.eventId, senderJid, player.roomId);
-            feed.queue(eventDoc.eventId, 'normal', `🏃 ${player.name} withdrew from a ${room ? require('./encounters').roomFlavor(room) : 'contest'} — the spoils stay with the Ruins.`);
-            // ⚔️ OWNER FIX (playtest 2026-10-05: "after you fail no generated
-            // encounter image of you in the last room with the map, no
-            // nothing"): retreating used to send TEXT ONLY — no scene of the
-            // room you fall back into, no return map — so every forced-room
-            // type (combat/puzzle/coop/core) felt like the game died on flee.
-            // Replay the standard room entry (map → scene → captions) after
-            // the retreat line, exactly like a move does.
+            feed.queue(eventDoc.eventId, 'normal', `🏃 ${player.name} withdrew from a ${room ? require('./encounters').roomFlavor(room) : 'contest'} - the spoils stay with the Ruins.`);
+ // OWNER FIX (playtest "after you fail no generated
+ // encounter image of you in the last room with the map, no
+ // nothing"): retreating used to send TEXT ONLY - no scene of the
+ // room you fall back into, no return map - so every forced-room
+ // type (combat/puzzle/coop/core) felt like the game died on flee.
+ // Replay the standard room entry (map → scene → captions) after
+ // the retreat line, exactly like a move does.
             try {
                 await sock.sendMessage(chatId, { text: BOT_MARKER + '🏃 You retreat to your previous room. What was here stays here, unclaimed.' });
             } catch (e) { /* best-effort */ }
@@ -791,7 +789,7 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         return { text: 'There is nothing here to flee from.' };
     }
 
-    // ── share map with a guildmate (fog cooperation) ──
+ // -- share map with a guildmate (fog cooperation) --
     if (/^share map/.test(norm)) {
         const mateName = norm.replace(/^share map\s*@?/, '').trim();
         const mate = eventDoc.players.find((p) => p.name.toLowerCase() === mateName && p.guildId === player.guildId && p.jid !== senderJid);
@@ -803,11 +801,11 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         return { text: `🗺️ Your chart has been copied to ${mate.name}.` };
     }
 
-    // ── talk: relay speech to co-located players' DMs (multiplayer brief §2;
-    // merged 2026-10-06: keeps the bot marker + named-heard-by list) ──
+ // -- talk: relay speech to co-located players' DMs (multiplayer brief §2;
+ // merged keeps the bot marker + named-heard-by list) --
     if (/^(talk|say)\b/.test(norm)) {
         const msg = norm.replace(/^(?:talk|say)\s*/, '').trim();
-        if (!msg) return { text: '💬 Say what? `talk <message>` — everyone standing in this chamber hears it in their DMs.' };
+        if (!msg) return { text: '💬 Say what? `talk <message>` - everyone standing in this chamber hears it in their DMs.' };
         const here = roomOf(eventDoc, player);
         const others = ((here && here.occupants) || [])
             .filter((j) => j && j !== senderJid)
@@ -820,22 +818,22 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         }
         return { text: others.length
             ? `💬 You say: "${spoken}"\n_Heard by ${others.map((o) => o.name).join(', ')}._`
-            : `💬 You say: "${spoken}"\n_The empty chamber swallows your words — no one else is here._` };
+            : `💬 You say: "${spoken}"\n_The empty chamber swallows your words - no one else is here._` };
     }
 
-    // ── room encounter interactions (dig/take/cross/touch/record/claim/fight/answers) ──
+ // -- room encounter interactions (dig/take/cross/touch/record/claim/fight/answers) --
     const room = roomOf(eventDoc, player);
     if (room) {
-        // ⚔️ GRAMMAR FIX: pass the PREFIX-STRIPPED verb (norm), not the raw
-        // input — resolveInput matches bare verbs ('dig'/'take'/'cross'…), so
-        // '.j dig' (the documented grammar!) fell through every comparison and
-        // every room interaction silently no-op'd under prefixed play.
+ // GRAMMAR FIX: pass the PREFIX-STRIPPED verb (norm), not the raw
+ // input - resolveInput matches bare verbs ('dig'/'take'/'cross'…), so
+ // '.j dig' (the documented grammar!) fell through every comparison and
+ // every room interaction silently no-op'd under prefixed play.
         const res = await encounters.resolveInput(eventDoc, player, room, norm, { sock, chatId, BOT_MARKER });
         if (res.handled) {
             await touch();
             if (res.sentCombat) {
-                // 🤝 same occupied/co-op rule as the auto-encounter: one shared
-                // battle per room — guildmates get seated, rivals wait.
+ // same occupied/co-op rule as the auto-encounter: one shared
+ // battle per room - guildmates get seated, rivals wait.
                 const live = require('../guildAdventure').ruinsRoomSession(eventDoc.eventId, room.key);
                 if (live && live.inCombat && !live.players.some((p) => p.jid === senderJid)) {
                     const anySameGuild = (live.players || []).some((p) => p.jid
@@ -844,20 +842,20 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
                         const joined = require('../guildAdventure').joinRuinsSession(eventDoc.eventId, room.key, senderJid);
                         if (joined.ok) {
                             const mateNames = (live.players || []).map((p) => p.name).filter(Boolean).join(', ');
-                            return { text: `🤝 You draw steel beside your guildmates — *${mateNames}* are already locked in battle here!\n\`${prefix} combat atk\` on your turn.` };
+                            return { text: `🤝 You draw steel beside your guildmates - *${mateNames}* are already locked in battle here!\n\`${prefix} combat atk\` on your turn.` };
                         }
                     }
-                    return { text: `⚔️ *This chamber is OCCUPIED.* A battle is already being fought here — stay and wait, or \`flee\` the way you came.` };
+                    return { text: `⚔️ *This chamber is OCCUPIED.* A battle is already being fought here - stay and wait, or \`flee\` the way you came.` };
                 }
                 const started = await encounters.startRoomCombat(sock, chatId, player, eventDoc, room, { groq: null });
                 return { text: started.success ? null : started.msg };
             }
-            // 🔁 owner 2026-10-07 ("after you fail you don't go back to the
-            // previous room with a map and encounter card"): a failed puzzle
-            // answer re-anchors the player — the map card ("YOU ARE HERE" +
-            // move grammar) and the chamber's encounter card re-send FIRST,
-            // then the verdict text. Never a bare "Wrong." floating in the
-            // void after the board stole the screen.
+ // ("after you fail you don't go back to the
+ // previous room with a map and encounter card"): a failed puzzle
+ // answer re-anchors the player - the map card ("YOU ARE HERE" +
+ // move grammar) and the chamber's encounter card re-send FIRST,
+ // then the verdict text. Never a bare "Wrong." floating in the
+ // void after the board stole the screen.
             if (res.represent) {
                 try {
                     const ctxDoc = await state.getMoveContext(eventDoc.eventId, player.roomId);
@@ -867,11 +865,11 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
                 } catch (e) { /* re-presentation is best-effort; the verdict still lands */ }
                 return { text: res.text };
             }
-            // 🔁 owner 2026-10-08 (ruins puzzle fixes #2): an exhausted seal
-            // EJECTS the player to the previous chamber. Same contract as
-            // `flee`: the verdict text lands first, then the fallback room
-            // re-presents itself (map → scene) from a FRESH read — the stale
-            // in-memory player row still points at the puzzle room.
+ // (ruins puzzle fixes #2): an exhausted seal
+ // EJECTS the player to the previous chamber. Same contract as
+ // `flee`: the verdict text lands first, then the fallback room
+ // re-presents itself (map → scene) from a FRESH read - the stale
+ // in-memory player row still points at the puzzle room.
             if (res.eject) {
                 try { await sock.sendMessage(chatId, { text: BOT_MARKER + res.text }); } catch (e) { /* best-effort */ }
                 try {
@@ -887,23 +885,23 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
                 }
                 return {};
             }
-            // ⚔️ changed room: the cleared-state scene rides the result text...
+ // changed room: the cleared-state scene rides the result text...
             if (res.afterImage) {
                 try {
                     await sock.sendMessage(chatId, { image: res.afterImage, caption: BOT_MARKER + (res.text || '') });
                 } catch (e) {
                     return { text: res.text };
                 }
-                // 🖨️ owner 2026-10-06: symbol puzzles (rune lock, memory
-                // mosaic) follow the board with a STANDALONE copy-paste line —
-                // nothing on it but the symbols, so the player can copy,
-                // reorder and send without retyping glyphs.
+ // symbol puzzles (rune lock, memory
+ // mosaic) follow the board with a STANDALONE copy-paste line -
+ // nothing on it but the symbols, so the player can copy,
+ // reorder and send without retyping glyphs.
                 if (res.afterText) {
                     try { await sock.sendMessage(chatId, { text: BOT_MARKER + res.afterText }); } catch (e) { /* best-effort */ }
                 }
-                // 💡 OVERHAUL §4/§15: the moment an encounter resolves, the
-                // player gets the RETURN map — same chart, post-encounter
-                // visual state — instead of a parchment compass card.
+ // OVERHAUL §4/§15: the moment an encounter resolves, the
+ // player gets the RETURN map - same chart, post-encounter
+ // visual state - instead of a parchment compass card.
                 try {
                     const freshRoomDoc = await GuildWarEvent.findOne(
                         { eventId: eventDoc.eventId, 'rooms.key': player.roomId },
@@ -925,19 +923,19 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
         }
     }
 
-    // ── status ──
+ // -- status --
     if (/^(status|gw status|score)$/.test(norm)) {
         const byGuild = feed.computeScoreboard(eventDoc);
         const standings = byGuild.slice(0, 8).map((g, i) => `${['🥇', '🥈', '🥉'][i] || '▫️'} ${g.name}: ${g.points}`).join('\n');
-        // ⏳ warden hunt: the tally rides the clock line from war START —
-        // the four bosses are the war's victory condition now
+ // ⏳ warden hunt: the tally rides the clock line from war START -
+ // the four bosses are the war's victory condition now
         let clockLine;
         const fin = eventDoc.finale;
         const finBosses = (fin && Array.isArray(fin.bosses)) ? fin.bosses : [];
         if (finBosses.length) {
             const down = finBosses.filter((b) => b.dead).length;
             const hourglass = fin.hourglass || (eventDoc.endsAt && Date.now() > eventDoc.endsAt);
-            clockLine = `☠️ *wardens slain ${down}/${finBosses.length || CFG.FINALE.BOSS_COUNT}* — the war ends when all four fall` +
+            clockLine = `☠️ *wardens slain ${down}/${finBosses.length || CFG.FINALE.BOSS_COUNT}* - the war ends when all four fall` +
                 (hourglass ? ' · ⏳ the clock has run out' : ` · clock ends <t:${Math.floor((eventDoc.endsAt || 0) / 1000)}:R>`);
         } else {
             clockLine = `ends <t:${Math.floor((eventDoc.endsAt || 0) / 1000)}:R>`;
@@ -955,7 +953,7 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
     return null; // not a ruins action → let other handlers see the DM
 }
 
-// ── relic usage ──
+// -- relic usage --
 async function useRelic(eventDoc, player, arg, { sock, chatId, BOT_MARKER }) {
     const carried = player.relics || [];
     if (!carried.length) return { text: 'You carry no relics.' };
@@ -973,7 +971,7 @@ async function useRelic(eventDoc, player, arg, { sock, chatId, BOT_MARKER }) {
     }
     if (match.category === 'blink' && match.charges > 0) {
         const topo = state.topologyOf(eventDoc);
-        // blink toward the World Core along discovered path, or any far discovered room
+ // blink toward the World Core along discovered path, or any far discovered room
         const discoveredSet = new Set(player.discovered || []);
         let target = null;
         if (discoveredSet.has(eventDoc.coreKey) && eventDoc.coreKey !== player.roomId) target = eventDoc.coreKey;
@@ -1001,14 +999,14 @@ async function useRelic(eventDoc, player, arg, { sock, chatId, BOT_MARKER }) {
         return { text: `✨ You blink through the stones... skipped rooms yield nothing.\n\n${intro.text}`, image: intro.image || undefined };
     }
     if (match.category === 'ward') {
-        // ward applies to the next combat: attach buff to the room combat via player pvpMeta
+ // ward applies to the next combat: attach buff to the room combat via player pvpMeta
         const buff = relics.wardBuff(match);
         if (!buff) return { text: 'This ward is inert.' };
         const GuildWarEventModel = require('../../models/GuildWarEvent');
-        // ⚔️ §15 #6 FIX: the old activation OVERWROTE meta with { buff },
-        // losing the ward's `fights` counter — and nothing downstream read
-        // `ward_active` anyway. meta now carries kind+fights+buff, and
-        // encounters.startRoomCombat applies + consumes the ward per fight.
+ // §15 #6 FIX: the old activation OVERWROTE meta with { buff },
+ // losing the ward's `fights` counter - and nothing downstream read
+ // `ward_active` anyway. meta now carries kind+fights+buff, and
+ // encounters.startRoomCombat applies + consumes the ward per fight.
         const oldMeta = typeof match.meta?.get === 'function' ? Object.fromEntries(match.meta.entries()) : (match.meta || {});
         await GuildWarEventModel.updateOne(
             { eventId: eventDoc.eventId, 'players.jid': player.jid },
@@ -1054,8 +1052,8 @@ function displayName(jid) {
     } catch (e) { return String(jid).split('@')[0]; }
 }
 
-// ── GROUP war-verb nudge (§11/§17): a player typed `.j move left` (etc.)
-// in the FEED group. The war is played in DMs — so answer the group with a
+// -- GROUP war-verb nudge (§11/§17): a player typed `.j move left` (etc.)
+// in the FEED group. The war is played in DMs - so answer the group with a
 // one-line war-feed line and DM the sender their actual room view. Never an
 // "unknown command" error; never a group spam item.
 async function handleGroupWarVerb(sock, chatId, senderJid, senderName, norm, prefix = '.') {
@@ -1066,7 +1064,7 @@ async function handleGroupWarVerb(sock, chatId, senderJid, senderName, norm, pre
         if (!player || player.status !== 'active') return false;
         const room = roomOf(eventDoc, player);
         await sock.sendMessage(chatId, {
-            text: `⚔️ *${senderName}* stirs in the Ruins (chamber ${player.roomId}${room ? `, ${room.type}` : ''}) — the war is fought in my DMs.`,
+            text: `⚔️ *${senderName}* stirs in the Ruins (chamber ${player.roomId}${room ? `, ${room.type}` : ''}) - the war is fought in my DMs.`,
         });
         const ctxDoc = await state.getMoveContext(eventDoc.eventId, player.roomId);
         if (ctxDoc && ctxDoc.room) {

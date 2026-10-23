@@ -1,4 +1,4 @@
-LOGO TIER REPORT — 2026-10-10T22:36:27.863Z
+LOGO TIER REPORT - 2026-10-10T22:36:27.863Z
 brands: 2152 | easy 862 (40.1%) | medium 879 (40.8%) | hard 411 (19.1%)
 method: pv90 = sum of the last 3 available MONTHS of enwiki pageviews (REST per-article, monthly, all-access/user, paced ~1 req/s after burst-429 diagnosis; canonical titles pre-resolved via Wikidata sitelinks); score=0.65*norm(log10(pv90+1))+0.35*norm(log10(sitelinks+1)); top35% easy / mid40% medium / bottom25% hard; overrides: MEGA list -> easy, (pv90<300 && sl<8) -> hard, zero-signal -> hard
 

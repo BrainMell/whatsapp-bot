@@ -1,25 +1,22 @@
-// ═══════════════════════════════════════════════════════════════════════════
-//  SUMMON EVOLUTION SYSTEM - Phase 3 of the Summon Progression System
-// ═══════════════════════════════════════════════════════════════════════════
-//
+// ===========================================================================
+// SUMMON EVOLUTION SYSTEM - Phase 3 of the Summon Progression System
+// ===========================================================================
 // Each summon species has an evolutionStages array (defined in summonRegistry).
 // Evolution advances the summon to the next stage:
-//   Stage 1 (BASE) → Stage 2 (ASCENDED) → Stage 3 (TRANSCENDENT)
-//
+// Stage 1 (BASE) → Stage 2 (ASCENDED) → Stage 3 (TRANSCENDENT)
 // Requirements per stage:
-//   Stage 2: Level 15 + 1x summon_essence_t2 + 10,000 Zeni
-//   Stage 3: Level 30 + 1x summon_essence_t3 + 50,000 Zeni
-//
+// Stage 2: Level 15 + 1x summon_essence_t2 + 10,000 Zeni
+// Stage 3: Level 30 + 1x summon_essence_t3 + 50,000 Zeni
 // On evolution:
-//   - species changes to the next stage
-//   - baseStats update to the new species
-//   - tier upgrades (BASE → ASCENDED → TRANSCENDENT)
-//   - rarity upgrades to match the new species
-//   - level is preserved
-//   - allocatedStats are preserved
-//   - skill tree is preserved (chosen path + unlocked nodes)
-//   - loyalty resets to 100 (fresh bond with the new form)
-//   - a global announcement is sent if it's a final-stage evolution
+// - species changes to the next stage
+// - baseStats update to the new species
+// - tier upgrades (BASE → ASCENDED → TRANSCENDENT)
+// - rarity upgrades to match the new species
+// - level is preserved
+// - allocatedStats are preserved
+// - skill tree is preserved (chosen path + unlocked nodes)
+// - loyalty resets to 100 (fresh bond with the new form)
+// - a global announcement is sent if it's a final-stage evolution
 
 const registry = require('./summonRegistry');
 const economy = require('./economy');
@@ -58,12 +55,11 @@ function canEvolve(summon) {
   const stages = species.evolutionStages || [];
   const currentStageIdx = stages.indexOf(summon.species);
 
-  // If the species isn't in its own evolutionStages (edge case), check evolvedFrom
+ // If the species isn't in its own evolutionStages (edge case), check evolvedFrom
   if (currentStageIdx === -1) {
     return { canEvolve: false, reason: 'This summon cannot evolve.' };
   }
 
-  // Check if already at max stage
   if (currentStageIdx >= stages.length - 1) {
     return { canEvolve: false, reason: 'This summon is already at its final evolution stage.' };
   }
@@ -103,31 +99,31 @@ async function evolveSummon(summon) {
   const { nextSpecies, nextSpeciesData, reqs } = check;
   const ownerJid = summon.ownerJid;
 
-  // Check level
+ // Check level
   if (summon.level < reqs.levelReq) {
     return { success: false, message: `❌ Need level ${reqs.levelReq} to evolve (currently L${summon.level}).` };
   }
 
-  // Check essence
+ // Check essence
   if (!inventorySystem.hasItem(ownerJid, reqs.essenceId, 1)) {
     return { success: false, message: `❌ Need 1x ${reqs.essenceName}. Drop it from Abyss bosses.` };
   }
 
-  // Check Zeni
+ // Check Zeni
   const balance = economy.getGold(ownerJid);
   if (balance < reqs.zeniCost) {
     return { success: false, message: `❌ Need ${reqs.zeniCost.toLocaleString()} Zeni (have ${balance.toLocaleString()}).` };
   }
 
-  // Consume resources
+ // Consume resources
   inventorySystem.removeItem(ownerJid, reqs.essenceId, 1);
   economy.removeMoney(ownerJid, reqs.zeniCost, `Summon evolution: ${summon.species} → ${nextSpecies}`);
 
-  // Save old species name for the message
+ // Save old species name for the message
   const oldSpecies = registry.getSpecies(summon.species);
   const oldName = oldSpecies?.name || summon.species;
 
-  // Evolve the summon
+ // Evolve the summon
   summon.species = nextSpecies;
   summon.archetype = nextSpeciesData.archetype;
   summon.element = nextSpeciesData.element;
@@ -143,7 +139,7 @@ async function evolveSummon(summon) {
   summon.loyalty = 100; // fresh bond
   await summon.save();
 
-  // Build success message
+ // Build success message
   const ZENI = botConfig.getCurrency().symbol;
   let msg = `✨ *SUMMON EVOLUTION!*\n\n`;
   msg += `${oldSpecies?.icon || '🐉'} ${oldName} → ${nextSpeciesData.icon} *${nextSpeciesData.name}*\n\n`;
@@ -158,7 +154,6 @@ async function evolveSummon(summon) {
   msg += `_${nextSpeciesData.desc}_\n\n`;
   msg += `_Cost: 1x ${reqs.essenceName} + ${ZENI}${reqs.zeniCost.toLocaleString()}_`;
 
-  // Check if this was the final evolution
   const stages = nextSpeciesData.evolutionStages || [];
   const newStageIdx = stages.indexOf(nextSpecies);
   if (newStageIdx === stages.length - 1) {

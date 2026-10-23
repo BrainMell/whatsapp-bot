@@ -1,13 +1,12 @@
 #!/usr/bin/env node
-// QA — SHADOW RECALIBRATION 2026-10-05 (owner playtest: "the shadows are like
+// QA - SHADOW RECALIBRATION (owner playtest: "the shadows are like
 // tiny specs now"). Root cause: ruins_fixes #6 swapped the shadow's width
 // source from FULL sprite content down to the foot band without retuning the
-// ellipse multipliers — a double shrink. Fix:
-//   1. drawContactShadow multipliers retuned: rx (0.30+0.10t → 0.55+0.15t),
-//      ry (max(6, 0.034+0.020t) → max(9, 0.055+0.030t)), alpha up, gentler
-//      gradient falloff so the dark core isn't a fraction of a tight ellipse
-//   2. footW floored at 50% of content width (wispy tails can't collapse it)
-// Verifies: source retune present + measured shadow dims + render proofs.
+// ellipse multipliers - a double shrink. Fix:
+// 1. drawContactShadow multipliers retuned: rx (0.30+0.10t → 0.55+0.15t),
+// ry (max(6, 0.034+0.020t) → max(9, 0.055+0.030t)), alpha up, gentler
+// gradient falloff so the dark core isn't a fraction of a tight ellipse
+// 2. footW floored at 50% of content width (wispy tails can't collapse it)
 const fs = require('fs');
 const path = require('path');
 const { createCanvas, loadImage } = require('canvas');
@@ -17,13 +16,13 @@ const OUT = process.env.GW_QA_OUT || '/home/z/my-project/download/gw_qa_1005d';
 fs.mkdirSync(OUT, { recursive: true });
 
 const results = [];
-const check = (name, ok, detail) => { results.push({ name, ok, detail }); console.log(`${ok ? 'PASS ✓' : 'FAIL ✗'}  ${name}${detail ? '  — ' + detail : ''}`); };
+const check = (name, ok, detail) => { results.push({ name, ok, detail }); console.log(`${ok ? 'PASS ✓' : 'FAIL ✗'}  ${name}${detail ? '  - ' + detail : ''}`); };
 
 // repo-relative so the suite runs on the boxes too (owner-rule: QA is portable)
 const REPO = path.join(__dirname, '..');
 const SRC = fs.readFileSync(path.join(REPO, 'core/rpg/guildWar/roomScene.js'), 'utf8');
 
-// ── replicate contentBox foot-band measurement on a real sprite ──
+// -- replicate contentBox foot-band measurement on a real sprite --
 const CHAR_DIR = path.join(REPO, 'core/rpgasset/characters/clean');
 const PROP_DIR = path.join(REPO, 'core/rpgasset/guildwar/ruins/props');
 
@@ -72,13 +71,13 @@ function makeDoc(seed, layout, players) {
 const base = { name: 'Brainard', classId: 'FIGHTER', spriteIndex: 0, discovered: [], guildId: 'ember', guildName: 'Ember', level: 9, stats: { hp: 84, maxHp: 110, energy: 60, maxEnergy: 142 } };
 
 (async () => {
-    // ── 1. source retune present ──
+ // -- 1. source retune present --
     check('src: rx multiplier retuned (0.55+0.15t)', SRC.includes('0.55 + 0.15 * t'));
     check('src: ry retuned + min raised (max(ryMin||9, 0.055+0.030t))', SRC.includes('0.055 + 0.030 * t') && SRC.includes('Math.max(ryMin') && SRC.includes("opts.ryMin || 9"));
     check('src: footW floored at half content width (0.72 for hugs)', SRC.includes('Math.max(feetW, box.w * (shadowHug ? 0.72 : 0.5))'));
     check('src: old spec multipliers gone', !SRC.includes('0.30 + 0.10 * t') && !SRC.includes('0.034 + 0.020 * t'));
 
-    // ── 2. measured dims on real sprites ──
+ // -- 2. measured dims on real sprites --
     const fighter = await measure(CHAR_DIR, 'Fighter1.png');
     const dFront = dims(fighter, 210, 780);   // spawn spot depth
     const dBack = dims(fighter, 460);         // deep-at-back-wall depth
@@ -94,10 +93,10 @@ const base = { name: 'Brainard', classId: 'FIGHTER', spriteIndex: 0, discovered:
     const dRub = dims(rubble, 118, 700);
     check('prop shadows scaled up too (rubble contact ≥ 300px wide)', dRub.contactW >= 300, `${Math.round(dRub.contactW)}px (was 216)`);
 
-    // ── 3. render proofs (real local assets) ──
+ // -- 3. render proofs (real local assets) --
     const exitsWN = [{ dir: 'n', edge: true }, { dir: 'w', edge: true }, { dir: 'e', edge: false }, { dir: 's', edge: false }];
 
-    // 3a. spawn scene — IDENTICAL framing to the fc37622e proof for 1:1 compare
+ // 3a. spawn scene - IDENTICAL framing to the fc37622e proof for 1:1 compare
     const docA = makeDoc(20261005, { rooms: { '0,0': { type: 'empty' } }, edges: ['0,0|n', '0,0|w'] });
     const pA = { ...base, jid: 'qa@s.whatsapp.net', roomId: '0,0', prevRoomId: null };
     const roomA = docA.rooms[0];
@@ -106,7 +105,7 @@ const base = { name: 'Brainard', classId: 'FIGHTER', spriteIndex: 0, discovered:
     fs.writeFileSync(path.join(OUT, 'shadows_spawn.png'), pngA);
     check('render: spawn scene with recalibrated shadows', !!pngA && pngA.length > 30000, `${Math.round((pngA || []).length / 1024)}KB`);
 
-    // 3b. three champions (narrow-footed archmage + rogue mates) — shadow language on actors
+ // 3b. three champions (narrow-footed archmage + rogue mates) - shadow language on actors
     const mates = [
         { ...base, jid: 'm1@s.whatsapp.net', name: 'Ilyene', classId: 'ARCHMAGE', guildId: 'ember' },
         { ...base, jid: 'm2@s.whatsapp.net', name: 'Corvin', classId: 'ROGUE', guildId: 'ember' },
@@ -116,7 +115,7 @@ const base = { name: 'Brainard', classId: 'FIGHTER', spriteIndex: 0, discovered:
     fs.writeFileSync(path.join(OUT, 'shadows_gang.png'), pngB);
     check('render: 3 champions with foot-hugging shadows', !!pngB && pngB.length > 30000, `${Math.round(pngB.length / 1024)}KB`);
 
-    // 3c. discovery rubble — widest prop, biggest before/after delta
+ // 3c. discovery rubble - widest prop, biggest before/after delta
     const docC = makeDoc(777001, { rooms: { '2,0': { type: 'discovery' } }, edges: ['2,0|n', '2,0|w'] });
     const pC = { ...base, jid: 'qa@s.whatsapp.net', roomId: '2,0', prevRoomId: null };
     const exC = roomScene.exitsFor(docC, pC);
@@ -124,7 +123,7 @@ const base = { name: 'Brainard', classId: 'FIGHTER', spriteIndex: 0, discovered:
     fs.writeFileSync(path.join(OUT, 'shadows_rubble.png'), pngC);
     check('render: rubble discovery scene', !!pngC && pngC.length > 30000, `${Math.round(pngC.length / 1024)}KB`);
 
-    // ── 4. BEFORE/AFTER montage for the owner (old fc37622e render vs new) ──
+ // -- 4. BEFORE/AFTER montage for the owner (old fc37622e render vs new) --
     const beforeP = '/home/z/my-project/download/gw_qa_1005c/spawn_facing_left.png';
     if (fs.existsSync(beforeP)) {
         const [imB, imA] = await Promise.all([loadImage(beforeP), loadImage(path.join(OUT, 'shadows_spawn.png'))]);
@@ -132,8 +131,8 @@ const base = { name: 'Brainard', classId: 'FIGHTER', spriteIndex: 0, discovered:
         const c = createCanvas(W, H); const ctx = c.getContext('2d');
         ctx.fillStyle = '#0b0a10'; ctx.fillRect(0, 0, W, H);
         ctx.fillStyle = '#e8dfc8'; ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText('BEFORE (fc37622e) — "tiny specs"', imB.width / 2, 30);
-        ctx.fillText('AFTER — recalibrated', imB.width + 30 + imA.width / 2, 30);
+        ctx.fillText('BEFORE (fc37622e) - "tiny specs"', imB.width / 2, 30);
+        ctx.fillText('AFTER - recalibrated', imB.width + 30 + imA.width / 2, 30);
         ctx.drawImage(imB, 0, 44); ctx.drawImage(imA, imB.width + 30, 44);
         fs.writeFileSync(path.join(OUT, 'shadows_before_after.png'), c.toBuffer('image/png'));
         check('montage: before/after composite written', true);

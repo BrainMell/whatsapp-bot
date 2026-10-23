@@ -1,5 +1,5 @@
 // ============================================
-// ⚙️ ITEM DURABILITY & REPAIR SYSTEM
+// ITEM DURABILITY & REPAIR SYSTEM
 // ============================================
 
 /**
@@ -17,7 +17,7 @@ function getDurabilityProfile(itemId, itemInstance, itemInfo) {
         baseDur = 80;
     }
     
-    // Rarity Multiplier
+ // Rarity Multiplier
     const rarity = (itemInstance.rarity || itemInfo.rarity || 'COMMON').toUpperCase();
     const rarityMults = {
         COMMON: 0.8,
@@ -30,7 +30,7 @@ function getDurabilityProfile(itemId, itemInstance, itemInfo) {
     const mult = rarityMults[rarity] || 1.0;
     let max = Math.round(baseDur * mult);
     
-    // Material override
+ // Material override
     const cleanId = itemId.toLowerCase();
     if (cleanId.includes('steel') || cleanId.includes('iron') || cleanId.includes('plate')) {
         max += 20;
@@ -38,16 +38,15 @@ function getDurabilityProfile(itemId, itemInstance, itemInfo) {
         max -= 15;
     }
     
-    // Ensure sane bounds
     max = Math.max(10, max);
     
-    // Seed durability traits
+ // Seed durability traits
     const traits = [];
     if (rarity === 'MYTHIC') {
         traits.push('MYTHIC_MATERIAL'); // lossRate x0.25
     }
     
-    // Carry over any existing traits on the instance
+ // Carry over any existing traits on the instance
     if (itemInstance.durabilityTraits) {
         itemInstance.durabilityTraits.forEach(t => {
             if (!traits.includes(t)) traits.push(t);
@@ -101,8 +100,8 @@ function getRepairCost(item) {
         MYTHIC: 4.0
     };
     const rarityMult = rarityMults[rarity] || 1.0;
-    // 💡 FIX 2026-08-01: reqLevel was never propagated to item instances.
-    // Look it up from the item database if missing.
+ // FIX reqLevel was never propagated to item instances.
+ // Look it up from the item database if missing.
     let reqLevel = item.reqLevel;
     if (!reqLevel) {
         try {
@@ -116,7 +115,7 @@ function getRepairCost(item) {
     const levelMult = 1 + (reqLevel / 25);
     const missingPct = missing / item.maxDurability;
     
-    // Base rate: ~2% of item value per 1% missing durability
+ // Base rate: ~2% of item value per 1% missing durability
     const baseValue = item.value || 100;
     const cost = baseValue * 0.02 * (missingPct * 100) * rarityMult * levelMult;
     
@@ -174,23 +173,23 @@ function applyWear(entity, slotOrAll, opts = {}) {
         if (traits.includes('REINFORCED')) lossRate *= 0.5;
         if (traits.includes('FRAGILE_POWER')) lossRate *= 2.0;
         
-        // Add class/weapon affinity modifier
+ // Add class/weapon affinity modifier
         try {
             const weaponSynergy = require('./weaponSynergy');
             const affinityMod = weaponSynergy.getDurabilityAffinityModifier(entity, item);
             lossRate *= affinityMod;
         } catch (e) {
-            // Decoupled / fallback
+ // Decoupled / fallback
         }
         
         const amount = opts.amount !== undefined ? opts.amount : 1;
         const finalLoss = amount * lossRate;
         
         item.durability = Math.max(0, item.durability - finalLoss);
-        // Keep to 1 decimal place to prevent JS float precision drift
+ // Keep to 1 decimal place to prevent JS float precision drift
         item.durability = Math.round(item.durability * 10) / 10;
         
-        // Check low durability warning (15%)
+ // Check low durability warning (15%)
         if (item.durability > 0 && item.durability <= (item.maxDurability * 0.15) && !item.warnedLow) {
             item.warnedLow = true;
             if (opts.combatHistory) {

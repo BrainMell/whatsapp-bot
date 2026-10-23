@@ -1,10 +1,10 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-// GEN v2 — outdoor base structures, 3 upgrade levels each (Sections 6/7/10)
+// ===========================================================================
+// GEN v2 - outdoor base structures, 3 upgrade levels each (Sections 6/7/10)
 // Correct iso math: square footprint wT tiles → base diamond half-extents
 // EW = wT*32 (screen x), NS = wT*16 (screen y). Ridge runs along grid +x.
-// Run: node scripts/gen_assets_base_structures.js  (writes structures.json too)
-// ═══════════════════════════════════════════════════════════════════════════
+// Run: node scripts/gen_assets_base_structures.js (writes structures.json too)
+// ===========================================================================
 const fs = require('fs');
 const path = require('path');
 const { createCanvas } = require('canvas');
@@ -94,7 +94,7 @@ function doorOn(s, S, E, hPx, wW, hH, col) {
     s.px(m[0] + wW / 2 - 3.2, by - hH * 0.45, 1.6, 1.6, P.gold);
 }
 function winOn(s, S, E, hPx, u, v, w, h, glass) {
-    // u along S→E (0..1), v = height fraction of wall (0 bottom..1 top)
+ // u along S→E (0..1), v = height fraction of wall (0 bottom..1 top)
     const m = mid(S, E);
     const x = m[0] + (E[0] - m[0]) * (u - 0.5) * 2;
     const y = m[1] + hPx * (1 - v);
@@ -129,11 +129,11 @@ function def(id, file, w, h, fn, meta) {
     DEF.push({ id, file: `rpgasset/homestead/${file}`, ...meta });
 }
 
-// ═══════════ HOUSE (3x3) ═══════════
+// =========== HOUSE (3x3) ===========
 def('house', 'base_house_l1.png', 200, 128, (s, cx, cy) => {
     const p = prism(s, cx, cy, 3, 26, P.thatch, P.plasterD, P.plaster);
     roofX(s, cx, cy, 3, 26, 22, P.thatchD, P.thatch, P.thatchL, 0.1);
-    // thatch comb lines on the SW slope
+ // thatch comb lines on the SW slope
     s.ctx.strokeStyle = 'rgba(120,90,40,0.55)'; s.ctx.lineWidth = 1;
     for (let i = 1; i < 6; i++) {
         s.ctx.beginPath();
@@ -147,7 +147,7 @@ def('house', 'base_house_l1.png', 200, 128, (s, cx, cy) => {
 
 def('house', 'base_house_l2.png', 210, 150, (s, cx, cy) => {
     const p = prism(s, cx, cy, 3, 34, P.plasterL, P.plasterD, P.plaster);
-    // timber framing on left wall
+ // timber framing on left wall
     s.ctx.strokeStyle = P.woodDD; s.ctx.lineWidth = 2;
     s.ctx.beginPath();
     s.ctx.moveTo(p.W[0] + 6, p.W[1] + 4); s.ctx.lineTo(p.W[0] + 6, p.W[1] + 34);
@@ -164,7 +164,7 @@ def('house', 'base_house_l2.png', 210, 150, (s, cx, cy) => {
 def('house', 'base_house_l3.png', 230, 176, (s, cx, cy) => {
     const p = prism(s, cx, cy, 3, 44, P.plasterL, P.plasterD, P.plaster);
     const r = roofX(s, cx, cy, 3, 44, 32, P.roofRD, P.roofR, P.roofRL, 0.07);
-    // tower on the west side
+ // tower on the west side
     const tp = prism(s, cx - 86, cy + 12, 1.1, 74, P.stoneL, P.stoneD, P.stone);
     poly(s, [[tp.N[0], tp.N[1] - 26], [tp.N[0] + 26, tp.E[1] + 4], [tp.W[0] + 2, tp.W[1] + 4]], P.roofPD);
     winOn(s, tp.S, tp.E, 74, 0.5, 0.75, 9, 10);
@@ -176,11 +176,11 @@ def('house', 'base_house_l3.png', 230, 176, (s, cx, cy) => {
     chimneyAt(s, cx - 6, r.rA[1] + 10, 10, cy - 16 - (r.rA[1] + 10));
 }, { name: 'Manor', fw: 3, fh: 3 });
 
-// ═══════════ BLACKSMITH (3x3) ═══════════
+// =========== BLACKSMITH (3x3) ===========
 def('blacksmith', 'base_smithy_l1.png', 200, 118, (s, cx, cy) => {
     const p = prism(s, cx, cy, 3, 24, P.stoneD, P.stoneD, P.brickD);
     roofX(s, cx, cy, 3, 24, 18, P.iron, P.ironL, P.ironL, 0.1);
-    // open forge mouth on right wall + glow
+ // open forge mouth on right wall + glow
     const m = mid(p.S, p.E);
     s.ctx.fillStyle = '#1a0e08';
     s.ctx.beginPath();
@@ -189,7 +189,7 @@ def('blacksmith', 'base_smithy_l1.png', 200, 118, (s, cx, cy) => {
     s.ctx.lineTo(m[0] + 22, m[1] + 24); s.ctx.closePath(); s.ctx.fill();
     s.px(m[0] - 14, m[1] + 18, 22, 6, '#d95f2b'); s.px(m[0] - 6, m[1] + 16, 8, 3, '#f4a24a');
     chimneyAt(s, cx + 52, cy - 74, 12, 22);
-    // anvil
+ // anvil
     s.px(cx - 66, cy - 12, 13, 5, P.ironL); s.px(cx - 61, cy - 7, 4, 5, P.woodDD);
 }, { name: 'Forge Shed', fw: 3, fh: 3 });
 
@@ -206,14 +206,14 @@ def('blacksmith', 'base_smithy_l2.png', 210, 138, (s, cx, cy) => {
     s.ctx.lineTo(m[0] + 26, m[1] + 30); s.ctx.closePath(); s.ctx.fill();
     s.px(m[0] - 17, m[1] + 22, 26, 8, '#d95f2b'); s.px(m[0] - 7, m[1] + 20, 9, 4, '#ffd24a');
     doorOn(s, p.S, p.W, 30, 15, 20, P.woodDD);
-    // quench trough
+ // quench trough
     s.px(cx - 78, cy - 10, 18, 7, P.woodDD); s.px(cx - 76, cy - 12, 14, 3, P.water);
 }, { name: 'Stone Forge', fw: 3, fh: 3 });
 
 def('blacksmith', 'base_smithy_l3.png', 220, 160, (s, cx, cy) => {
     const p = prism(s, cx, cy, 3, 38, P.stoneD, P.brickD, P.brick);
     const r = roofX(s, cx, cy, 3, 38, 26, P.ironD, P.ironD, P.iron, 0.07);
-    // great chimney stack
+ // great chimney stack
     chimneyAt(s, cx + 34, r.rB[1] - 26, 18, cy - 20 - (r.rB[1] - 26));
     const m = mid(p.S, p.E);
     s.ctx.fillStyle = '#1a0e08';
@@ -222,67 +222,67 @@ def('blacksmith', 'base_smithy_l3.png', 220, 160, (s, cx, cy) => {
     s.ctx.quadraticCurveTo(m[0], m[1] - 6, m[0] + 30, m[1] + 12);
     s.ctx.lineTo(m[0] + 30, m[1] + 38); s.ctx.closePath(); s.ctx.fill();
     s.px(m[0] - 19, m[1] + 28, 30, 10, '#e06a2b'); s.px(m[0] - 8, m[1] + 25, 10, 5, '#ffd24a');
-    // power hammer post
+ // power hammer post
     s.px(cx - 84, cy - 52, 5, 44, P.woodDD);
     s.px(cx - 84, cy - 54, 30, 5, P.ironL);
     s.px(cx - 58, cy - 50, 8, 8, P.iron);
     doorOn(s, p.S, p.W, 38, 16, 24, P.woodDD);
-    // anvil on block
+ // anvil on block
     s.px(cx + 78, cy - 14, 14, 6, P.ironL); s.px(cx + 82, cy - 8, 5, 6, P.woodDD);
 }, { name: 'Great Forge', fw: 3, fh: 3 });
 
-// ═══════════ MED BAY (3x3) ═══════════
+// =========== MED BAY (3x3) ===========
 def('medbay', 'base_medbay_l1.png', 200, 112, (s, cx, cy) => {
     const p = prism(s, cx, cy, 3, 20, P.white, P.whiteD, P.white);
     roofX(s, cx, cy, 3, 20, 17, P.roofTD, P.roofT, P.roofTL, 0.1);
-    // red cross on left wall
+ // red cross on left wall
     const m = mid(p.S, p.W);
     s.px(m[0] - 3, m[1] + 2, 6, 15, '#c8443a'); s.px(m[0] - 9, m[1] + 6, 18, 7, '#c8443a');
-    // open flap on right wall
+ // open flap on right wall
     const m2 = mid(p.S, p.E);
     s.ctx.fillStyle = '#b8ac94';
     s.ctx.beginPath();
     s.ctx.moveTo(m2[0] - 16, m2[1] + 20); s.ctx.lineTo(m2[0] - 16, m2[1] + 6);
     s.ctx.quadraticCurveTo(m2[0], m2[1] - 2, m2[0] + 16, m2[1] + 6);
     s.ctx.lineTo(m2[0] + 16, m2[1] + 20); s.ctx.closePath(); s.ctx.fill();
-    // stretcher
+ // stretcher
     s.px(cx + 74, cy - 10, 18, 3, P.whiteD); s.px(cx + 76, cy - 7, 2, 5, P.woodD); s.px(cx + 88, cy - 7, 2, 5, P.woodD);
 }, { name: 'Medic Tent', fw: 3, fh: 3 });
 
 def('medbay', 'base_medbay_l2.png', 210, 132, (s, cx, cy) => {
     const p = prism(s, cx, cy, 3, 28, P.white, P.whiteD, P.white);
     roofX(s, cx, cy, 3, 28, 22, P.roofTD, P.roofT, P.roofTL, 0.08);
-    // hanging cross sign
+ // hanging cross sign
     s.px(cx + 48, cy - 52, 2, 13, P.woodDD);
     s.px(cx + 40, cy - 46, 18, 5, '#c8443a'); s.px(cx + 46, cy - 52, 6, 17, '#c8443a');
     doorOn(s, p.S, p.E, 28, 16, 22, P.woodD);
     winOn(s, p.S, p.W, 28, 0.35, 0.5, 13, 11);
     winOn(s, p.S, p.E, 28, 0.75, 0.5, 12, 10);
-    // herb planter
+ // herb planter
     s.px(cx - 80, cy - 8, 16, 5, P.woodD); s.px(cx - 76, cy - 12, 3, 5, P.leaf); s.px(cx - 70, cy - 13, 3, 6, P.leafL);
 }, { name: 'Infirmary', fw: 3, fh: 3 });
 
 def('medbay', 'base_medbay_l3.png', 230, 168, (s, cx, cy) => {
     const p = prism(s, cx, cy, 3, 34, P.white, P.whiteD, P.white);
     roofX(s, cx, cy, 3, 34, 26, P.roofTD, P.roofT, P.roofTL, 0.07);
-    // white tower east
+ // white tower east
     const tp = prism(s, cx + 86, cy + 10, 1.1, 82, P.white, P.whiteD, P.white);
     poly(s, [[tp.N[0], tp.N[1] - 28], [tp.E[0] + 2, tp.E[1] + 6], [tp.S[0] - 2, tp.S[1] + 2]], P.roofTD);
     winOn(s, tp.S, tp.E, 82, 0.5, 0.7, 9, 10);
     winOn(s, tp.S, tp.E, 82, 0.5, 0.4, 9, 10);
-    // glowing cross on tower
+ // glowing cross on tower
     s.px(tp.S[0] - 3, tp.S[1] - 96, 6, 15, '#ffd24a'); s.px(tp.S[0] - 9, tp.S[1] - 92, 18, 6, '#ffd24a');
     doorOn(s, p.S, p.W, 34, 16, 22, P.woodD);
     winOn(s, p.S, p.E, 34, 0.5, 0.55, 13, 11);
     bannerOn(s, cx - 78, cy - 70, '#c8443a', '#9c3028');
 }, { name: 'Sanatorium', fw: 3, fh: 3 });
 
-// ═══════════ ALCHEMY (3x3) ═══════════
+// =========== ALCHEMY (3x3) ===========
 def('alchemy', 'base_alchemy_l1.png', 190, 120, (s, cx, cy) => {
     const p = prism(s, cx, cy, 3, 22, P.woodL, P.woodD, P.wood);
     roofX(s, cx, cy, 3, 22, 20, P.roofPD, P.roofP, P.roofPL, 0.1);
     doorOn(s, p.S, p.E, 22, 14, 18, P.woodDD);
-    // bubbling cauldron out front
+ // bubbling cauldron out front
     s.ctx.fillStyle = P.iron;
     s.ctx.beginPath(); s.ctx.ellipse(cx - 62, cy - 10, 11, 6, 0, 0, Math.PI * 2); s.ctx.fill();
     s.ctx.fillStyle = P.glass;
@@ -292,13 +292,13 @@ def('alchemy', 'base_alchemy_l1.png', 190, 120, (s, cx, cy) => {
 
 def('alchemy', 'base_alchemy_l2.png', 200, 140, (s, cx, cy) => {
     const p = prism(s, cx, cy, 3, 30, P.stoneL, P.stoneD, P.stone);
-    // glass dome roof
+ // glass dome roof
     s.ctx.fillStyle = P.glassD;
     s.ctx.beginPath(); s.ctx.ellipse(cx, cy - 30 - 20, 104, 26, 0, Math.PI, 0); s.ctx.fill();
     s.ctx.fillStyle = P.glass;
     s.ctx.beginPath(); s.ctx.ellipse(cx - 12, cy - 30 - 20, 62, 19, 0, Math.PI, 0); s.ctx.fill();
     s.px(cx - 26, cy - 62, 4, 3, P.glassL);
-    // bulb windows
+ // bulb windows
     for (const [ox, oy, r] of [[-48, -16, 7], [44, -18, 8]]) {
         s.ctx.fillStyle = P.glassD;
         s.ctx.beginPath(); s.ctx.arc(cx + ox, cy + oy, r, 0, Math.PI * 2); s.ctx.fill();
@@ -306,13 +306,13 @@ def('alchemy', 'base_alchemy_l2.png', 200, 140, (s, cx, cy) => {
         s.ctx.beginPath(); s.ctx.arc(cx + ox - 2, cy + oy - 2, r * 0.4, 0, Math.PI * 2); s.ctx.fill();
     }
     doorOn(s, p.S, p.E, 30, 15, 20, P.woodDD);
-    // pipe vents
+ // pipe vents
     s.px(cx + 62, cy - 40, 4, 24, P.iron); s.px(cx + 66, cy - 36, 9, 4, P.iron);
 }, { name: 'Glasshouse', fw: 3, fh: 3 });
 
 def('alchemy', 'base_alchemy_l3.png', 220, 168, (s, cx, cy) => {
     const p = prism(s, cx, cy, 3, 46, P.stoneL, P.stoneD, P.stone);
-    // observatory dome
+ // observatory dome
     s.ctx.fillStyle = P.roofPD;
     s.ctx.beginPath(); s.ctx.ellipse(cx, cy - 46 - 22, 100, 28, 0, Math.PI, 0); s.ctx.fill();
     s.ctx.fillStyle = P.roofPL;
@@ -320,18 +320,18 @@ def('alchemy', 'base_alchemy_l3.png', 220, 168, (s, cx, cy) => {
     s.px(cx + 8, cy - 78, 4, 14, '#241811');
     s.ctx.fillStyle = P.gold;
     s.ctx.beginPath(); s.ctx.arc(cx, cy - 76, 4, 0, Math.PI * 2); s.ctx.fill();
-    // side lab west
+ // side lab west
     const lp = prism(s, cx - 88, cy + 8, 1.2, 26, P.stoneL, P.stoneD, P.stone);
     roofX(s, cx - 88, cy + 8, 1.2, 26, 14, P.roofPD, P.roofP, P.roofPL, 0.08);
     winOn(s, lp.S, lp.E, 26, 0.5, 0.55, 9, 9, P.glass);
     doorOn(s, p.S, p.E, 46, 16, 24, P.woodDD);
-    // arcane circle
+ // arcane circle
     s.ctx.strokeStyle = 'rgba(140,220,150,0.95)'; s.ctx.lineWidth = 1.6;
     s.ctx.beginPath(); s.ctx.ellipse(cx + 72, cy - 4, 18, 9, 0, 0, Math.PI * 2); s.ctx.stroke();
     s.ctx.beginPath(); s.ctx.ellipse(cx + 72, cy - 4, 10, 5, 0, 0, Math.PI * 2); s.ctx.stroke();
 }, { name: 'Observatory', fw: 3, fh: 3 });
 
-// ═══════════ MINES (2x2) ═══════════
+// =========== MINES (2x2) ===========
 def('mines', 'base_mines_l1.png', 140, 84, (s, cx, cy) => {
     s.ctx.fillStyle = P.stoneD;
     s.ctx.beginPath();
@@ -357,16 +357,16 @@ def('mines', 'base_mines_l2.png', 150, 92, (s, cx, cy) => {
     s.ctx.quadraticCurveTo(cx + 14, cy - 60, cx + 44, cy - 38);
     s.ctx.quadraticCurveTo(cx + 62, cy - 22, cx + 60, cy + 2);
     s.ctx.closePath(); s.ctx.fill();
-    // timber portal
+ // timber portal
     s.px(cx - 28, cy - 38, 7, 40, P.woodD); s.px(cx + 22, cy - 38, 7, 40, P.woodD);
     s.px(cx - 32, cy - 46, 68, 8, P.wood); s.px(cx - 32, cy - 46, 68, 2.4, P.woodL);
     s.ctx.fillStyle = '#14100c';
     s.ctx.beginPath();
     s.ctx.moveTo(cx - 21, cy + 2); s.ctx.quadraticCurveTo(cx, cy - 32, cx + 21, cy + 2);
     s.ctx.closePath(); s.ctx.fill();
-    // lantern
+ // lantern
     s.px(cx + 28, cy - 34, 5, 7, '#f4d47a'); s.px(cx + 27, cy - 36, 7, 2, P.iron);
-    // rail
+ // rail
     s.px(cx - 46, cy + 3, 92, 2, P.woodDD); s.px(cx - 46, cy + 7, 92, 2, P.woodDD);
     s.px(cx - 14, cy + 2, 3, 7, P.iron); s.px(cx + 16, cy + 2, 3, 7, P.iron);
 }, { name: 'Timber Mine', fw: 2, fh: 2 });
@@ -382,7 +382,7 @@ def('mines', 'base_mines_l3.png', 160, 108, (s, cx, cy) => {
     s.ctx.beginPath();
     s.ctx.moveTo(cx - 48, cy - 34); s.ctx.quadraticCurveTo(cx - 26, cy - 54, cx + 8, cy - 52);
     s.ctx.quadraticCurveTo(cx - 8, cy - 36, cx - 14, cy - 26); s.ctx.closePath(); s.ctx.fill();
-    // headframe + wheel
+ // headframe + wheel
     s.px(cx - 26, cy - 50, 8, 54, P.woodD); s.px(cx + 22, cy - 50, 8, 54, P.woodD);
     s.px(cx - 30, cy - 58, 64, 9, P.wood); s.px(cx - 30, cy - 58, 64, 2.6, P.woodL);
     s.ctx.strokeStyle = P.woodDD; s.ctx.lineWidth = 3;
@@ -391,13 +391,13 @@ def('mines', 'base_mines_l3.png', 160, 108, (s, cx, cy) => {
     s.ctx.beginPath(); s.ctx.arc(cx - 22, cy - 64, 9, 0, Math.PI * 2); s.ctx.stroke();
     s.ctx.beginPath(); s.ctx.moveTo(cx - 31, cy - 64); s.ctx.lineTo(cx - 13, cy - 64);
     s.ctx.moveTo(cx - 22, cy - 73); s.ctx.lineTo(cx - 22, cy - 55); s.ctx.stroke();
-    // adit + glow
+ // adit + glow
     s.ctx.fillStyle = '#14100c';
     s.ctx.beginPath();
     s.ctx.moveTo(cx - 16, cy + 2); s.ctx.quadraticCurveTo(cx - 16, cy - 24, cx + 2, cy - 24);
     s.ctx.quadraticCurveTo(cx + 20, cy - 24, cx + 20, cy + 2); s.ctx.closePath(); s.ctx.fill();
     s.px(cx - 4, cy - 8, 6, 3, '#f4a24a');
-    // ore cart
+ // ore cart
     s.px(cx + 34, cy - 2, 20, 9, P.woodDD); s.px(cx + 36, cy - 4, 16, 3, P.woodD);
     s.ctx.fillStyle = P.iron;
     s.ctx.beginPath(); s.ctx.arc(cx + 39, cy + 8, 3, 0, Math.PI * 2); s.ctx.fill();
@@ -405,7 +405,7 @@ def('mines', 'base_mines_l3.png', 160, 108, (s, cx, cy) => {
     s.px(cx + 37, cy - 6, 5, 2, P.gold);
 }, { name: 'Deep Mine', fw: 2, fh: 2 });
 
-// ═══════════ POND (2x2) ═══════════
+// =========== POND (2x2) ===========
 def('pond', 'base_pond_l1.png', 120, 46, (s, cx, cy) => {
     for (const [ox, oy, r] of [[-30, -2, 12], [10, -8, 15], [34, 2, 10]]) {
         s.ctx.fillStyle = P.leaf;
@@ -462,7 +462,7 @@ def('pond', 'base_pond_l3.png', 120, 74, (s, cx, cy) => {
     s.px(cx - 20, cy - 2, 12, 1.6, P.waterL);
 }, { name: 'Crystal Spring', fw: 2, fh: 2 });
 
-// ═══════════ HUNTING GATE (2x2) ═══════════
+// =========== HUNTING GATE (2x2) ===========
 def('hunting', 'base_hunting_gate.png', 150, 96, (s, cx, cy) => {
     s.px(cx - 66, cy - 20, 4, 22, P.woodD); s.px(cx - 46, cy - 12, 4, 22, P.woodD);
     s.ctx.strokeStyle = P.wood; s.ctx.lineWidth = 2.4;
@@ -470,19 +470,19 @@ def('hunting', 'base_hunting_gate.png', 150, 96, (s, cx, cy) => {
     s.ctx.beginPath(); s.ctx.moveTo(cx - 66, cy - 8); s.ctx.lineTo(cx - 46, cy); s.ctx.stroke();
     s.px(cx + 42, cy - 14, 4, 22, P.woodD); s.px(cx + 62, cy - 6, 4, 22, P.woodD);
     s.ctx.beginPath(); s.ctx.moveTo(cx + 42, cy - 8); s.ctx.lineTo(cx + 62, cy); s.ctx.stroke();
-    // arch
+ // arch
     s.px(cx - 15, cy - 52, 6, 52, P.woodD); s.px(cx + 12, cy - 52, 6, 52, P.woodD);
     s.px(cx - 22, cy - 58, 46, 8, P.wood); s.px(cx - 22, cy - 58, 46, 2.4, P.woodL);
-    // sign
+ // sign
     s.px(cx + 3, cy - 50, 1.6, 6, P.woodDD);
     s.px(cx - 4, cy - 44, 15, 10, P.wood); s.px(cx - 4, cy - 44, 15, 2, P.woodL);
     s.px(cx - 1, cy - 41, 9, 4, P.leafD);
-    // torch
+ // torch
     s.px(cx + 13, cy - 60, 3, 5, P.woodDD);
     s.px(cx + 12.4, cy - 66, 4, 5, '#f4a24a'); s.px(cx + 13.2, cy - 68, 2.4, 3, '#ffe08a');
 }, { name: 'Hunting Gate', fw: 2, fh: 2 });
 
-// ── structures.json manifest ──
+// -- structures.json manifest --
 const STRUCTURES = {
     structures: [
         { id: 'house', name: 'House', fixed: true, free: true, fw: 3, fh: 3, interior: true,

@@ -1,10 +1,10 @@
-// img_bakeoff.js v2 — rate-limit-aware empirical bake-off for the quiz image
+// img_bakeoff.js v2 - rate-limit-aware empirical bake-off for the quiz image
 // system replacement. ONE AniList cast query per franchise (shared by both
 // candidate sources), 429 backoff, error bodies logged, spacing between
 // franchises. Sources compared:
-//   A) AniList character-native portraits (image.large / extraLarge)
-//   B) Fandom wiki pageimage thumbnail (current prod primary) — baseline
-//   C) Jikan probe (2 calls total, known 504)
+// A) AniList character-native portraits (image.large / extraLarge)
+// B) Fandom wiki pageimage thumbnail (current prod primary) - baseline
+// C) Jikan probe (2 calls total, known 504)
 // Usage: node scripts/img_bakeoff.js [sleepBetweenFranchiseMs]
 const axios = require("axios");
 const path = require("path");
@@ -96,14 +96,14 @@ async function gateOne(label, url) {
 
     for (const p of picks) {
       const node = p.node;
-      // A: AniList CDN portraits (CharacterImage only exposes `large`)
+ // A: AniList CDN portraits (CharacterImage only exposes `large`)
       for (const kind of ["large"]) {
         const url = node.image?.[kind];
         if (!url) { entry.anilist.push({ name: node.name.full, kind, ok: false, why: "no-url" }); continue; }
         const r = await gateOne(`al:${f.slug}:${node.name.full}`.slice(0, 60), url);
         entry.anilist.push({ name: node.name.full, kind, ...r });
       }
-      // B: Fandom thumbnail for the same subject
+ // B: Fandom thumbnail for the same subject
       try {
         const api = await http.get(`https://${f.fandom}.fandom.com/api.php`, {
           params: { action: "query", titles: node.name.full, prop: "pageimages", piprop: "thumbnail", pithumbsize: 650, format: "json", redirects: 1 },
@@ -121,13 +121,13 @@ async function gateOne(label, url) {
     await sleep(SLEEP);
   }
 
-  // Jikan single probe
+ // Jikan single probe
   console.log("\n▶ jikan probe");
   let jikan = { status: "?" };
   try { const r = await http.get("https://api.jikan.moe/v4/characters", { params: { q: "naruto", limit: 1 } }); jikan = { status: r.status, rows: (r.data?.data || []).length }; }
   catch (e) { jikan = { status: e.response?.status || "ERR", why: String(e.message).slice(0, 60) }; }
 
-  // summary
+ // summary
   const stats = (rows) => {
     const ok = rows.filter((r) => r.ok);
     const px = ok.map((r) => (r.w || 0) * (r.h || 0)).sort((a, b) => a - b);

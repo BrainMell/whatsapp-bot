@@ -31,11 +31,11 @@ const GUILD_ARCHETYPES = {
     name: 'Merchants Guild',
     icon: '💰',
     description: 'Focuses on commerce and wealth.',
-    // 💡 AUDIT FIX: was "Increases item sell value by 10%" - only mentioned
-    // half the perk. ARCHETYPE_PERKS.MERCHANT in guildPerks.js gives BOTH
-    // +10% dungeon gold AND +10% sell value. Flavor text now matches the
-    // actual implementation so `.g guild info` doesn't contradict the
-    // multipliers shown by `.g guild perks`.
+ // AUDIT FIX: was "Increases item sell value by 10%" - only mentioned
+ // half the perk. ARCHETYPE_PERKS.MERCHANT in guildPerks.js gives BOTH
+ // +10% dungeon gold AND +10% sell value. Flavor text now matches the
+ // actual implementation so `.g guild info` doesn't contradict the
+ // multipliers shown by `.g guild perks`.
     perks: 'Increases item sell value by 10% and dungeon gold by 10%.',
     questType: 'EARN'
   },
@@ -52,19 +52,19 @@ const GUILD_UPGRADES = {
   hall: {
     name: 'Guild Hall',
     maxLevel: 5,
-    baseCost: 25000, // 💡 Rebalanced 2026-08-17
+    baseCost: 25000, // Rebalanced
     benefit: 'Increases max member capacity by +5 per level.'
   },
   training: {
     name: 'Training Ground',
     maxLevel: 5,
-    baseCost: 50000, // 💡 Rebalanced 2026-08-17
+    baseCost: 50000, // Rebalanced
     benefit: 'Gives all members +5% XP bonus per level.'
   },
   treasury: {
     name: 'Treasury',
     maxLevel: 5,
-    baseCost: 100000, // 💡 Rebalanced 2026-08-17
+    baseCost: 100000, // Rebalanced
     benefit: 'Gives all members +10% Zeni bonus from quests per level.'
   }
 };
@@ -74,7 +74,7 @@ async function loadGuilds() {
   try {
     await connectDB();
     
-    // 1. Load System Mappings
+ // 1. Load System Mappings
     const sys = await System.findOne({ key: 'guild_system' }).lean();
     if (sys && sys.value) {
       globalGuildData.memberGuilds = sys.value.memberGuilds || {};
@@ -82,7 +82,7 @@ async function loadGuilds() {
       globalGuildData.guildInvites = sys.value.guildInvites || {};
     }
 
-    // 2. Load Individual Guilds
+ // 2. Load Individual Guilds
     const guilds = await GuildModel.find({}).lean();
     for (const g of guilds) {
         const titles = {};
@@ -99,15 +99,15 @@ async function loadGuilds() {
             });
         }
 
-        // 💡 QA FIX: load ALL new fields from the schema. Previously only
-        // be missing from the in-memory cache - which broke guild loans,
-        // war points, emblems, and the 4-tier role system after restart.
-        // Also handle legacy buildings stored as `upgrades` (Map<Number>).
+ // QA FIX: load ALL new fields from the schema. Previously only
+ // be missing from the in-memory cache - which broke guild loans,
+ // war points, emblems, and the 4-tier role system after restart.
+ // Also handle legacy buildings stored as `upgrades` (Map<Number>).
         let buildings = { hall: { level: 1 }, training: { level: 0 }, treasury: { level: 0 } };
         if (g.buildings) {
           buildings = g.buildings;
         } else if (g.upgrades) {
-          // Legacy format: upgrades was a Map of { buildingId: level }
+ // Legacy format: upgrades was a Map of { buildingId: level }
           const ug = g.upgrades instanceof Map ? Object.fromEntries(g.upgrades) : g.upgrades;
           if (ug.hall) buildings.hall.level = typeof ug.hall === 'number' ? ug.hall : (ug.hall.level || 1);
           if (ug.training) buildings.training.level = typeof ug.training === 'number' ? ug.training : (ug.training.level || 0);
@@ -129,24 +129,24 @@ async function loadGuilds() {
             pointsHistory: g.logs || [],
             motto: g.motto || "Adapt or be Infected.",
             buildings,
-            // 💡 QA FIX: load new fields that were missing
+ // QA FIX: load new fields that were missing
             loans: g.loans || [],
             lastInterestPayout: g.lastInterestPayout || null,
             emblem: g.emblem || { icon: null, color: '#FFD700' },
-            // 🌍 realm + charter-stone marker (persisted since 2026-10-20; legacy docs fall back to the name-hash realm)
+ // realm + charter-stone marker (persisted since ; legacy docs fall back to the name-hash realm)
             ...(g.continent ? { continent: g.continent } : {}),
             ...(g.marker && typeof g.marker.x === 'number' && typeof g.marker.y === 'number' ? { marker: { x: g.marker.x, y: g.marker.y, region: g.marker.region || null } } : {}),
         };
 
-        // FIX (2026-10-19): rebuild the guildOwners index from each guild
-        // doc's leader field. The System.guild_system copy can go stale (QA
-        // wipes, partial saves, the @lid migration) and isGuildOwner() keys
-        // off it - a missing entry made the REAL leader hit "Only the guild
-        // leader can set the emblem" after every restart. g.leader is the
-        // source of truth; syncGuildSystem() below persists the rebuild.
+ // FIX: rebuild the guildOwners index from each guild
+ // doc's leader field. The System.guild_system copy can go stale (QA
+ // wipes, partial saves, the @lid migration) and isGuildOwner() keys
+ // off it - a missing entry made the REAL leader hit "Only the guild
+ // leader can set the emblem" after every restart. g.leader is the
+ // source of truth; syncGuildSystem() below persists the rebuild.
         if (g.leader) globalGuildData.guildOwners[g.leader] = g.guildId;
 
-        // Clean up memberGuilds - make sure every member is mapped
+ // Clean up memberGuilds - make sure every member is mapped
         for (const m of members) {
           if (!globalGuildData.memberGuilds[m]) {
             globalGuildData.memberGuilds[m] = g.guildId;
@@ -154,22 +154,22 @@ async function loadGuilds() {
         }
     }
     
-    // 💡 QA FIX: Clean up orphaned memberGuilds entries (pointing to deleted guilds)
+ // QA FIX: Clean up orphaned memberGuilds entries (pointing to deleted guilds)
     for (const [jid, guildName] of Object.entries(globalGuildData.memberGuilds)) {
       if (!globalGuildData.guilds[guildName]) {
         delete globalGuildData.memberGuilds[jid];
       }
     }
-    // Clean up orphaned guildOwners entries
+ // Clean up orphaned guildOwners entries
     for (const [jid, guildName] of Object.entries(globalGuildData.guildOwners)) {
       if (!globalGuildData.guilds[guildName]) {
         delete globalGuildData.guildOwners[jid];
       }
     }
 
-    // 💡 QA FIX: normalize guild XP on load - process any pending level-ups
-    // that weren't consumed (e.g. from the old single-if level-up bug or
-    // from large donations that the old code couldn't handle).
+ // QA FIX: normalize guild XP on load - process any pending level-ups
+ // that weren't consumed (e.g. from the old single-if level-up bug or
+ // from large donations that the old code couldn't handle).
     for (const [guildName, guild] of Object.entries(globalGuildData.guilds)) {
       if (guild.points && guild.level) {
         let xpNeeded = guild.level * 1000;
@@ -216,7 +216,7 @@ async function syncGuildSystem() {
 }
 
 // NEW: Sync specific guild
-// 💡 LOAN-BUG FIX 2026-09-20: now returns true/false so money-critical
+// LOAN-BUG FIX now returns true/false so money-critical
 // callers (guild loan borrow/repay) can detect a FAILED persist and claw
 // the transaction back instead of silently desyncing memory vs MongoDB.
 async function syncGuild(guildName) {
@@ -239,16 +239,16 @@ async function syncGuild(guildName) {
                 type: g.type || 'ADVENTURER',
                 dailyBoard: g.dailyBoard || { targets: [] },
                 motto: g.motto || "Adapt or be Infected.",
-                // 💡 QA FIX: write to BOTH `buildings` (new schema field) AND
-                // `upgrades` (legacy field). Previously only wrote to `upgrades`,
-                // but loadGuilds reads `buildings` first - which has schema
-                // defaults (L1/L0/L0), so building levels reset every restart.
+ // QA FIX: write to BOTH `buildings` (new schema field) AND
+ // `upgrades` (legacy field). Previously only wrote to `upgrades`,
+ // but loadGuilds reads `buildings` first - which has schema
+ // defaults (L1/L0/L0), so building levels reset every restart.
                 buildings: g.buildings || { hall: { level: 1 }, training: { level: 0 }, treasury: { level: 0 } },
                 upgrades: g.buildings || {},
                 logs: g.pointsHistory || [],
-                // 💡 QA FIX: these fields were missing from syncGuild, causing
-                // loans to vanish on restart (borrower keeps Zeni, guild bank
-                // drained) and war points to reset to 0 every restart.
+ // QA FIX: these fields were missing from syncGuild, causing
+ // loans to vanish on restart (borrower keeps Zeni, guild bank
+ // drained) and war points to reset to 0 every restart.
                 loans: g.loans || [],
                 lastInterestPayout: g.lastInterestPayout || null,
                 emblem: g.emblem || { icon: null, color: '#FFD700' },
@@ -266,10 +266,10 @@ async function syncGuild(guildName) {
 }
 
 function saveGuilds() {
-  // No-op: We now use syncGuildSystem and syncGuild
+ // No-op: We now use syncGuildSystem and syncGuild
 }
 
-// 💡 REMOVED 2026-09-12 (audit): loadChallenges/saveChallenges + the dead
+// REMOVED (audit): loadChallenges/saveChallenges + the dead
 // guild-vs-guild challenge system (CHALLENGE_TYPES was an empty placeholder,
 // createChallenge had zero callers, and the "accept challenge" command it
 // advertised never existed). Guild-vs-guild competition is served by the
@@ -285,7 +285,7 @@ function getGuildInfo() {
 function createGuild(guildName, creatorJid, archetype = 'ADVENTURER', continentKey = null) {
   const info = globalGuildData;
 
-  // Cleanup orphaned ownership if guild doesn't exist anymore
+ // Cleanup orphaned ownership if guild doesn't exist anymore
   if (info.guildOwners[creatorJid] && !info.guilds[info.guildOwners[creatorJid]]) {
     console.log(`[Guild] Cleaning up orphaned ownership for ${creatorJid}`);
     delete info.guildOwners[creatorJid];
@@ -300,7 +300,7 @@ Delete it first with: ${botConfig.getPrefix()} guild delete`
     };
   }
 
-  // Also check if they are in a guild they don't own
+ // Also check if they are in a guild they don't own
   if (info.memberGuilds[creatorJid] && !info.guilds[info.memberGuilds[creatorJid]]) {
     console.log(`[Guild] Cleaning up orphaned membership for ${creatorJid}`);
     delete info.memberGuilds[creatorJid];
@@ -329,12 +329,12 @@ Delete it first with: ${botConfig.getPrefix()} guild delete`
     points: 0,
     level: 1,
     type: type,
-    // 🌍 realm (continent) the guild chose + the charter-stone marker seeded on it (see continents.js)
+ // realm (continent) the guild chose + the charter-stone marker seeded on it (see continents.js)
     ...require('./continents').placementFor(guildName, continentKey),
     dailyBoard: { lastUpdate: Date.now(), targets: [] },
     pointsHistory: [],
     motto: "Adapt or be Infected.",
-    // 💡 GUILD BUILDINGS
+ // GUILD BUILDINGS
     buildings: {
       hall: { level: 1, name: 'Guild Hall' },
       training: { level: 0, name: 'Training Ground' },
@@ -443,7 +443,7 @@ function deleteGuild(userJid) {
   delete info.guildOwners[userJid];
   delete info.guilds[guildName];
 
-  // Sync delete to MongoDB
+ // Sync delete to MongoDB
   GuildModel.deleteOne({ guildId: guildName }).catch(e => console.error(e));
   syncGuildSystem();
 
@@ -477,7 +477,7 @@ Leave first with: ${botConfig.getPrefix()} guild leave`
 
   const [realGuildName, guildData] = guild;
 
-  // 💡 Phase 2: Enforce member cap (base 20 + 5/level of Hall building)
+ // Phase 2: Enforce member cap (base 20 + 5/level of Hall building)
   try {
     const guildPerks = require('./guildPerks');
     const capCheck = guildPerks.canRecruitMember(guildData);
@@ -485,7 +485,7 @@ Leave first with: ${botConfig.getPrefix()} guild leave`
       return { success: false, message: capCheck.message };
     }
   } catch (e) {
-    // If guildPerks fails to load, fall through to old behavior (no cap)
+ // If guildPerks fails to load, fall through to old behavior (no cap)
   }
 
   guildData.members.push(userJid);
@@ -522,7 +522,7 @@ function leaveGuild(userJid) {
 
   const guild = info.guilds[guildName];
   if (guild) {
-    // 💡 QA FIX: loose JID matching for member removal
+ // QA FIX: loose JID matching for member removal
     const memberJid = (guild.members || []).find(m =>
       m === userJid || economy.getDisplayName(m) === userJid.split('@')[0] ||
       m.includes(userJid.split('@')[0]) ||
@@ -531,7 +531,7 @@ function leaveGuild(userJid) {
     const removeJid = memberJid || userJid; // fallback to raw if not found
     guild.members = guild.members.filter(m => m !== removeJid);
     guild.admins = (guild.admins || []).filter(a => a !== removeJid);
-    // 💡 QA FIX: also clean up recruits
+ // QA FIX: also clean up recruits
     if (guild.recruits) guild.recruits = guild.recruits.filter(r => r !== removeJid);
     delete guild.titles[removeJid];
     syncGuild(guildName);
@@ -595,8 +595,8 @@ function acceptGuildInvite(userJid) {
     return { success: false, message: "❌ You don't have any pending invites!" };
   }
 
-  // 💡 QA FIX: was 120000 (120s / 2 min) but invite message says 1 hour.
-  // Users couldn't accept because the invite expired before they read it.
+ // QA FIX: was 120000 (120s / 2 min) but invite message says 1 hour.
+ // Users couldn't accept because the invite expired before they read it.
   const INVITE_TTL_MS = 60 * 60 * 1000; // 1 hour
   if (Date.now() - invite.timestamp > INVITE_TTL_MS) {
     delete info.guildInvites[userJid];
@@ -622,7 +622,7 @@ function acceptGuildInvite(userJid) {
     return { success: false, message: "❌ That guild no longer exists!" };
   }
 
-  // 💡 Phase 2: Enforce member cap (base 20 + 5/level of Hall building)
+ // Phase 2: Enforce member cap (base 20 + 5/level of Hall building)
   try {
     const guildPerks = require('./guildPerks');
     const capCheck = guildPerks.canRecruitMember(guild);
@@ -664,7 +664,7 @@ function declineGuildInvite(userJid) {
     return { success: false, message: "❌ You don't have any pending invites!" };
   }
 
-  if (Date.now() - invite.timestamp > 60 * 60 * 1000) { // 💡 QA FIX: was 120000 (2 min), now 1 hour
+  if (Date.now() - invite.timestamp > 60 * 60 * 1000) { // QA FIX: was 120000 (2 min), now 1 hour
       delete info.guildInvites[userJid];
       syncGuildSystem();
       return { success: false, message: "❌ Invite already expired." };
@@ -689,7 +689,7 @@ function checkGuildInvite(userJid) {
     return null;
   }
 
-  if (Date.now() - invite.timestamp > 60 * 60 * 1000) { // 💡 QA FIX: was 120000 (2 min), now 1 hour
+  if (Date.now() - invite.timestamp > 60 * 60 * 1000) { // QA FIX: was 120000 (2 min), now 1 hour
     delete info.guildInvites[userJid];
     syncGuildSystem();
     return null;
@@ -713,8 +713,8 @@ async function promoteToAdmin(ownerJid, targetJid) {
     return { success: false, message: "❌ Guild data not found!" };
   }
 
-  // 💡 QA FIX: try to match targetJid against members using loose matching
-  // (LID vs phone format may differ)
+ // QA FIX: try to match targetJid against members using loose matching
+ // (LID vs phone format may differ)
   const memberJid = guild.members.find(m =>
     m === targetJid || economy.getDisplayName(m) === targetJid.split('@')[0] ||
     m.includes(targetJid.split('@')[0]) ||
@@ -755,7 +755,7 @@ async function demoteAdmin(ownerJid, targetJid) {
     return { success: false, message: "❌ Guild data not found!" };
   }
 
-  // 💡 QA FIX: loose JID matching (same as promoteToAdmin)
+ // QA FIX: loose JID matching (same as promoteToAdmin)
   const adminJid = guild.admins.find(a =>
     a === targetJid || economy.getDisplayName(a) === targetJid.split('@')[0] ||
     a.includes(targetJid.split('@')[0]) ||
@@ -797,7 +797,7 @@ async function kickFromGuild(ownerOrAdminJid, targetJid) {
     return { success: false, message: "❌ Only guild owner or officers can kick members!" };
   }
 
-  // 💡 QA FIX: loose JID matching
+ // QA FIX: loose JID matching
   const memberJid = guild.members.find(m =>
     m === targetJid || economy.getDisplayName(m) === targetJid.split('@')[0] ||
     m.includes(targetJid.split('@')[0]) ||
@@ -814,7 +814,7 @@ async function kickFromGuild(ownerOrAdminJid, targetJid) {
 
   guild.members = guild.members.filter(m => m !== memberJid);
   guild.admins = (guild.admins || []).filter(a => a !== memberJid);
-  // 💡 QA FIX: also clean up recruits
+ // QA FIX: also clean up recruits
   if (guild.recruits) guild.recruits = guild.recruits.filter(r => r !== memberJid);
   delete guild.titles[memberJid];
   delete info.memberGuilds[memberJid];
@@ -872,7 +872,7 @@ function getGuildMember(guildName, userJid) {
   const guild = globalGuildData.guilds[guildName];
   if (!guild) return null;
 
-  // 💡 QA FIX: loose JID matching for member lookup
+ // QA FIX: loose JID matching for member lookup
   const memberJid = (guild.members || []).find(m =>
     m === userJid || economy.getDisplayName(m) === userJid.split('@')[0] ||
     m.includes(userJid.split('@')[0]) ||
@@ -897,7 +897,7 @@ function getGuildMember(guildName, userJid) {
   };
 }
 
-// 💡 Phase 2: Set a member's role (leader-only).
+// Phase 2: Set a member's role (leader-only).
 // Supported roles: 'recruit', 'member', 'officer'. (Leader can't be changed here.)
 async function setMemberRole(ownerJid, targetJid, newRole) {
   const info = globalGuildData;
@@ -907,7 +907,7 @@ async function setMemberRole(ownerJid, targetJid, newRole) {
   const guild = info.guilds[guildName];
   if (!guild) return { success: false, message: '❌ Guild not found.' };
 
-  // 💡 QA FIX: loose JID matching
+ // QA FIX: loose JID matching
   const memberJid = (guild.members || []).find(m =>
     m === targetJid || economy.getDisplayName(m) === targetJid.split('@')[0] ||
     m.includes(targetJid.split('@')[0]) ||
@@ -921,17 +921,17 @@ async function setMemberRole(ownerJid, targetJid, newRole) {
   if (!guild.recruits) guild.recruits = [];
   if (!guild.admins) guild.admins = [];
 
-  // Remove from all role arrays first
+ // Remove from all role arrays first
   guild.admins = guild.admins.filter(j => j !== memberJid);
   guild.recruits = guild.recruits.filter(j => j !== memberJid);
 
-  // Apply new role
+ // Apply new role
   if (newRole === 'officer') {
     guild.admins.push(memberJid);
   } else if (newRole === 'recruit') {
     guild.recruits.push(memberJid);
   }
-  // 'member' = neither array
+ // 'member' = neither array
 
   await syncGuild(guildName);
   return {
@@ -943,7 +943,7 @@ async function setMemberRole(ownerJid, targetJid, newRole) {
 function isGuildOwner(userJid) {
   if (!userJid) return false;
   const info = globalGuildData;
-  // 💡 QA FIX: check direct + loose match for LID/phone format tolerance
+ // QA FIX: check direct + loose match for LID/phone format tolerance
   if (info.guildOwners[userJid]) return true;
   const phone = userJid.split('@')[0];
   for (const jid of Object.keys(info.guildOwners)) {
@@ -951,10 +951,10 @@ function isGuildOwner(userJid) {
   }
   let resolver = null;
   try { resolver = require('../utils/lidResolver'); } catch (e) { resolver = null; }
-  // FIX (2026-10-19): the guildOwners index can go stale between loads -
-  // compare every indexed owner against the sender through canonicalRankKey
-  // so an @lid stored leader still matches an @s.whatsapp.net sender and
-  // vice versa. The index itself is rebuilt in loadGuilds().
+ // FIX: the guildOwners index can go stale between loads -
+ // compare every indexed owner against the sender through canonicalRankKey
+ // so an @lid stored leader still matches an @s.whatsapp.net sender and
+ // vice versa. The index itself is rebuilt in loadGuilds().
   if (resolver) {
     try {
       const canon = resolver.canonicalRankKey(userJid);
@@ -965,10 +965,10 @@ function isGuildOwner(userJid) {
       }
     } catch (e) { /* fall through to the per-guild check below */ }
   }
-  // Final authority: the stored leader of the user's OWN guild. Probe
-  // memberGuilds with every JID form we can derive for the sender (@lid,
-  // phone, canonical, resolved) so a leader whose messages arrive in the
-  // other format still resolves to their membership.
+ // Final authority: the stored leader of the user's OWN guild. Probe
+ // memberGuilds with every JID form we can derive for the sender (@lid,
+ // phone, canonical, resolved) so a leader whose messages arrive in the
+ // other format still resolves to their membership.
   const memberKeys = [userJid];
   if (resolver) {
     try {
@@ -1092,7 +1092,7 @@ ${message || 'Guild members, gather!'}
 👥 Members: ${members.length}`;
 
   try {
-    // 💡 QA FIX: resolve LID → phone format for mentions, filter out invalid JIDs
+ // QA FIX: resolve LID → phone format for mentions, filter out invalid JIDs
     const { resolveToPhone } = require('../utils/lidResolver');
     const authPath = sock.authState?.creds?.me
       ? (sock.user?.id?.split('@')[0] ? null : null) // can't easily get authPath here
@@ -1114,7 +1114,7 @@ ${message || 'Guild members, gather!'}
 //========================================
 
 //==================this part handles guild points and activity rewards==================
-// 💡 LOAN-BUG FIX 2026-09-20: this was a RAW exact-key lookup - the only
+// LOAN-BUG FIX this was a RAW exact-key lookup - the only
 // member lookup in the guild system with zero JID tolerance (getGuildMember
 // and isGuildOwner both loose-match). A user whose membership is keyed by
 // phone JID but whose incoming messages arrive as LID (or with a device
@@ -1125,7 +1125,7 @@ function getUserGuild(userJid) {
   if (!userJid) return undefined;
   let guildName = globalGuildData.memberGuilds[userJid];
   if (guildName) return guildName;
-  // 1. economy's canonical resolver (lidCache/phoneCache + format swap)
+ // 1. economy's canonical resolver (lidCache/phoneCache + format swap)
   try {
     const resolved = economy.resolveJid(userJid);
     if (resolved && resolved !== userJid) {
@@ -1133,7 +1133,7 @@ function getUserGuild(userJid) {
       if (guildName) return guildName;
     }
   } catch (e) { /* resolver unavailable - fall through */ }
-  // 2. bare-number loose match (device-suffix / format tolerance)
+ // 2. bare-number loose match (device-suffix / format tolerance)
   const bare = String(userJid).split('@')[0].split(':')[0];
   if (bare) {
     for (const [jid, gName] of Object.entries(globalGuildData.memberGuilds)) {
@@ -1143,7 +1143,7 @@ function getUserGuild(userJid) {
   return undefined;
 }
 
-// 💡 LOAN-BUG FIX 2026-09-20: Joker and Subaru are separate processes, each
+// LOAN-BUG FIX Joker and Subaru are separate processes, each
 // with its own guild cache loaded at boot - and every syncGuild writes the
 // FULL document, so the instances clobber each other's bank balance. A loan
 // computed from stale memory either refuses ("max loan = 0") against money
@@ -1166,7 +1166,7 @@ async function refreshGuildMoney(guildName) {
   return guild;
 }
 
-// 💡 OWNER RULE 2026-09-11: character cards show "[guild title] of [guild name]".
+// OWNER RULE character cards show "[guild title] of [guild name]".
 // Resolves the player's guild name + display title in one call - custom title
 // wins; when the player has no custom title, their guild ROLE is used
 // (Leader / Officer / Recruit / Member). Returns { name:'', title:'' } when
@@ -1201,7 +1201,6 @@ function updateBoardProgress(guildName, targetType, amount) {
   const guild = globalGuildData.guilds[guildName];
   if (!guild || !guild.dailyBoard || !guild.dailyBoard.targets) return;
 
-  // Check if reset needed
   if (Date.now() - guild.dailyBoard.lastUpdate > 86400000) {
     generateDailyBoard(guildName);
     return;
@@ -1209,7 +1208,7 @@ function updateBoardProgress(guildName, targetType, amount) {
 
   let boardUpdated = false;
   guild.dailyBoard.targets.forEach(t => {
-    // Exact match for targetType (EARN_ZENI, CRAFT_ITEMS, or monster IDs)
+ // Exact match for targetType (EARN_ZENI, CRAFT_ITEMS, or monster IDs)
     if (t.type === targetType && t.current < t.count) {
       t.current = Math.min(t.count, t.current + amount);
       boardUpdated = true;
@@ -1297,19 +1296,19 @@ function addGuildPoints(guildName, points, reason) {
   if (!guild.level) guild.level = 1;
   if (!guild.pointsHistory) guild.pointsHistory = [];
 
-  // Use the coerced numeric `val` instead of the raw `points` parameter.
-  // Previously `points` was validated as numeric but then the raw value
-  // (potentially a string like "50") was added to guild.points, producing
-  // string concatenation: 0 + "50" = "050". The guild points would then
-  // grow as a string until the next level-up subtraction restored numeric
-  // type. Functional but fragile.
+ // Use the coerced numeric `val` instead of the raw `points` parameter.
+ // Previously `points` was validated as numeric but then the raw value
+ // (potentially a string like "50") was added to guild.points, producing
+ // string concatenation: 0 + "50" = "050". The guild points would then
+ // grow as a string until the next level-up subtraction restored numeric
+ // type. Functional but fragile.
   guild.points += val;
 
-  // 💡 LEVEL UP LOGIC - must loop in case a large XP grant covers multiple levels.
-  // Previously was a single `if` - depositing 500M Zeni (500K XP) at L1 would
-  // only trigger ONE level-up (L1→L2, spending 1000 XP), leaving 499K XP stuck
-  // at L2. The leaderboard then showed "Lv 2 | XP 499000/2000" which looked
-  // broken. Now loops until all level-ups are consumed.
+ // LEVEL UP LOGIC - must loop in case a large XP grant covers multiple levels.
+ // Previously was a single `if` - depositing 500M Zeni (500K XP) at L1 would
+ // only trigger ONE level-up (L1→L2, spending 1000 XP), leaving 499K XP stuck
+ // at L2. The leaderboard then showed "Lv 2 | XP 499000/2000" which looked
+ // broken. Now loops until all level-ups are consumed.
   let xpNeeded = guild.level * 1000;
   while (guild.points >= xpNeeded && guild.level < 100) {
     guild.points -= xpNeeded;
@@ -1359,7 +1358,7 @@ function getGuildPointsLeaderboard(limit = 10) {
       type: guild.type || 'ADVENTURER',
     }))
     .sort((a, b) => {
-      // Sort by level first, then by XP within same level
+ // Sort by level first, then by XP within same level
       if (b.level !== a.level) return b.level - a.level;
       return b.points - a.points;
     })
@@ -1367,7 +1366,7 @@ function getGuildPointsLeaderboard(limit = 10) {
 }
 
 function awardPointsForActivity(userJid, activity) {
-  // 💡 QA FIX: was an empty stub - daily claims never awarded guild XP
+ // QA FIX: was an empty stub - daily claims never awarded guild XP
   const info = globalGuildData;
   const guildName = info.memberGuilds[userJid];
   if (!guildName) return;
@@ -1379,7 +1378,7 @@ function upgradeGuildBuilding(userJid, buildingId) {
   const guildName = info.memberGuilds[userJid];
   const guild = info.guilds[guildName];
   
-  // 💡 QA FIX: allow officers to upgrade buildings too (was owner-only)
+ // QA FIX: allow officers to upgrade buildings too (was owner-only)
   if (!guild || (guild.owner !== userJid && !(guild.admins || []).includes(userJid))) {
     return { success: false, message: "❌ Only the Guild Master or officers can upgrade buildings!" };
   }
@@ -1396,14 +1395,14 @@ function upgradeGuildBuilding(userJid, buildingId) {
   }
 
   const cost = upgrade.baseCost * (currentLevel + 1);
-  // 💡 FIX #45: Building upgrades were consuming guild POINTS (XP) instead
-  // of guild BALANCE (gold/Zeni). Guild XP is for leveling the guild itself;
-  // building upgrades should use the guild bank balance.
+ // FIX #45: Building upgrades were consuming guild POINTS (XP) instead
+ // of guild BALANCE (gold/Zeni). Guild XP is for leveling the guild itself;
+ // building upgrades should use the guild bank balance.
   if ((guild.balance || 0) < cost) {
     return { success: false, message: `❌ Not enough guild funds! Need: ${cost.toLocaleString()} Zeni, Have: ${(guild.balance || 0).toLocaleString()} Zeni` };
   }
 
-  // Deduct from guild BALANCE (not points/XP) and level up
+ // Deduct from guild BALANCE (not points/XP) and level up
   guild.balance = (guild.balance || 0) - cost;
   if (!guild.buildings[buildingId]) {
       guild.buildings[buildingId] = { level: 0, name: upgrade.name };
@@ -1420,27 +1419,25 @@ function upgradeGuildBuilding(userJid, buildingId) {
 }
 //========================================
 
-// 💡 REMOVED 2026-09-12 (audit): getChallengeTypes / createChallenge / getChallenges -
+// REMOVED (audit): getChallengeTypes / createChallenge / getChallenges -
 // half-built stub (empty CHALLENGE_TYPES, no accept/resolve mechanic). See note above.
 
-// setup - now explicitly called during boot in engine.js
 // loadGuilds();
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  GUILD PURGE + GUILD GUIDE (QA - fix legacy conflicts)
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// GUILD PURGE + GUILD GUIDE (QA - fix legacy conflicts)
+// ===========================================================================
 
-// 💡 Purges ALL guild data - both MongoDB GuildModel documents AND the
+// Purges ALL guild data - both MongoDB GuildModel documents AND the
 // System collection mappings (memberGuilds, guildOwners, guildInvites).
 // Also clears the in-memory cache. Used to fix legacy guild conflicts.
 async function purgeAllGuilds() {
   try {
     await connectDB();
-    // Delete all guild documents
+ // Delete all guild documents
     const guildResult = await GuildModel.deleteMany({});
-    // Delete the system mappings
     const sysResult = await System.deleteOne({ key: 'guild_system' });
-    // Clear in-memory cache
+ // Clear in-memory cache
     globalGuildData.guilds = {};
     globalGuildData.memberGuilds = {};
     globalGuildData.guildOwners = {};
@@ -1454,7 +1451,7 @@ async function purgeAllGuilds() {
   }
 }
 
-// 💡 Returns a comprehensive guild guide string for the .g guild guide command.
+// Returns a comprehensive guild guide string for the .g guild guide command.
 function getGuildGuide(prefix) {
   let msg = `┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
   msg += `┃  🏰 GUILD SYSTEM GUIDE  ┃\n`;

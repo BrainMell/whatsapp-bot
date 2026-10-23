@@ -1,4 +1,4 @@
-// SMOKE: harness end-to-end — 2 rival players path into one room, concurrent
+// SMOKE: harness end-to-end - 2 rival players path into one room, concurrent
 // final moves, occupants assert + scene images captured.
 const L = require('./mp_lib');
 const fs = require('fs');
@@ -35,7 +35,7 @@ function log(...a) { console.log(...a); }
         return Math.abs(ax - bx) + Math.abs(ay - by);
     })(), ' side:', doc.side);
 
-    // BFS over the real persisted topology
+ // BFS over the real persisted topology
     function bfs(from, to) {
         const topo = state.topologyOf(doc);
         const prev = new Map([[from, null]]);
@@ -54,23 +54,22 @@ function log(...a) { console.log(...a); }
         return path; // [[roomKey, dir], ...]
     }
 
-    // meeting room: neighbour of B's spawn that is NOT A's path start — B moves 1 step,
-    // A paths all the way; different doors guaranteed when adjacency allows.
+ // meeting room: neighbour of B's spawn that is NOT A's path start - B moves 1 step,
+ // A paths all the way; different doors guaranteed when adjacency allows.
     const bNbrs = ['n', 'e', 's', 'w'].map((d) => mapEngine.step(state.topologyOf(doc), b.roomId, d)).filter(Boolean);
     const meet = bNbrs[0];
     const pathA = bfs(a.roomId, meet);
     const dirB = ['n', 'e', 's', 'w'].find((d) => mapEngine.step(state.topologyOf(doc), b.roomId, d) === meet);
     log('meeting room:', meet, '| pathA:', pathA.map((s) => s[0] + '→' + s[1]).join(' '), '| B step:', dirB);
 
-    // world prep: clear every room on A's path EXCEPT the meeting room (like veterans passed before)
+ // world prep: clear every room on A's path EXCEPT the meeting room (like veterans passed before)
     for (const [roomKey] of pathA.slice(0, -1)) {
         await GWE.updateOne({ eventId: ev.eventId, 'rooms.key': roomKey }, { $set: { 'rooms.$.state': 'CLEARED', 'rooms.$.clearedBy': 'war-veteran', 'rooms.$.clearedAt': new Date() } });
     }
-    // make sure the meeting room itself is walkable-into (empty hall, UNEXPLORED)
     await GWE.updateOne({ eventId: ev.eventId, 'rooms.key': meet }, { $set: { 'rooms.$.type': 'empty' } });
 
-    // ⚠️ token map: bare 'w' means FORWARD in the war grammar (WASD controls) —
-    // always send full compass words for unambiguous movement.
+ // token map: bare 'w' means FORWARD in the war grammar (WASD controls) -
+ // always send full compass words for unambiguous movement.
     const DIR_TOKEN = { n: 'north', e: 'east', s: 'south', w: 'west' };
     const drive = async (sock, jid, path) => {
         for (const [roomKey, dir] of path) {
@@ -95,7 +94,7 @@ function log(...a) { console.log(...a); }
     const preFinal = await fresh();
     log('occupants BEFORE A final step:', JSON.stringify(preFinal.rooms.find(r => r.key === meet).occupants));
     await L.sleep(50);
-    // hmm: B moved fully. For SIMULTANEOUS test use a second pair of players later; here just meet.
+ // hmm: B moved fully. For SIMULTANEOUS test use a second pair of players later; here just meet.
     await drive(sockA, roster[0].jid, pathA.slice(-1)); // A final step
     log('A received (last 4):');
     console.log(L.summarizeSent(sockA, roster[0].jid, 4).join('\n'));
@@ -105,7 +104,7 @@ function log(...a) { console.log(...a); }
     const a2 = pOf(doc, roster[0].jid), b2 = pOf(doc, roster[1].jid);
     log('RESULT roomId A:', a2.roomId, 'B:', b2.roomId, '| occupants:', JSON.stringify(room.occupants), '| room.type:', room.type, 'state:', room.state);
 
-    // save last images each player got
+ // save last images each player got
     for (const [sock, tag] of [[sockA, 'aria'], [sockB, 'brutus']]) {
         const imgs = sock.sent.filter((s) => s.payload && s.payload.image);
         const last = imgs.slice(-2);

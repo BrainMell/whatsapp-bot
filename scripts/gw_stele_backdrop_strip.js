@@ -1,29 +1,29 @@
 #!/usr/bin/env node
-// ─────────────────────────────────────────────────────────────────────────────
-// gw_stele_backdrop_strip.js — lore_stele.png shipped with a baked OPAQUE
+// -----------------------------------------------------------------------------
+// gw_stele_backdrop_strip.js - lore_stele.png shipped with a baked OPAQUE
 // backdrop: dark navy/plum fill + a dirt-brown ground band hugging the plinth
 // (sides/top are transparent). In-scene it renders as a hard rectangle pasted
 // on the floor. Fix: flood-fill from the sprite borders over pixels classified
 // as background (dirt browns / navy-plums, tight per-channel tolerance so the
 // plinth's own dark navy STONE (34,34,73) survives), then despeckle orphans.
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 const path = require('path');
 const fs = require('fs');
 const { createCanvas, loadImage } = require('canvas');
 
 const P = path.join(__dirname, '..', 'core', 'rpgasset', 'guildwar', 'ruins', 'props', 'lore_stele.png');
 
-// [r, g, b, tol] — per-seed tolerance; the plinth's own navy stone (34,34,73)
+// [r, g, b, tol] - per-seed tolerance; the plinth's own navy stone (34,34,73)
 // / (51,54,82) must NOT match the teal side backdrop (45,81,93): the green
 // channel is the discriminator (g 54 vs g 81) → teal tol stays ≤12.
 const SEEDS = [
-    // dirt browns sampled from the band (124,79,59) (114,68,52) (102,69,57)
+ // dirt browns sampled from the band (124,79,59) (114,68,52) (102,69,57)
     [124, 79, 59, 24], [114, 68, 52, 24], [102, 69, 57, 24], [88, 60, 48, 22],
-    // dirt highlights (187,127,63) — stone tans (201,175,141) stay far away
+ // dirt highlights (187,127,63) - stone tans (201,175,141) stay far away
     [187, 127, 63, 26], [160, 110, 60, 22], [140, 95, 55, 20],
-    // navy/plum backdrop corners (0,17,56) (43,29,50)
+ // navy/plum backdrop corners (0,17,56) (43,29,50)
     [0, 17, 56, 22], [43, 29, 50, 22], [20, 24, 58, 22], [30, 22, 46, 20],
-    // teal-navy side backdrop (45,81,93) — plinth navy differs on green
+ // teal-navy side backdrop (45,81,93) - plinth navy differs on green
     [48, 80, 92, 12], [40, 70, 84, 10], [55, 88, 100, 10], [45, 81, 93, 12],
 ];
 
@@ -60,8 +60,8 @@ function isBg(r, g, b) {
         bg[i] = 1; erased++;
         push(x + 1, y); push(x - 1, y); push(x, y + 1); push(x, y - 1);
     }
-    // despeckle: opaque pixels with ≤1 opaque 4-neighbour → gone (dirt crumbs,
-    // navy islands cut off from the border flood)
+ // despeckle: opaque pixels with ≤1 opaque 4-neighbour → gone (dirt crumbs,
+ // navy islands cut off from the border flood)
     let speck = 0;
     const alphaAt = (x, y) => (x < 0 || y < 0 || x >= W || y >= H) ? 0 : d[(y * W + x) * 4 + 3] > 0;
     const kill = [];
@@ -74,9 +74,9 @@ function isBg(r, g, b) {
         const y = kill.pop(), x = kill.pop();
         d[(y * W + x) * 4 + 3] = 0; speck++;
     }
-    // keep only the LARGEST opaque connected component (the stele + its moss
-    // + the plinth grass, which all touch it) — every disconnected fleck
-    // (edge grass crumbs, dirt bits, stray coloured dots) goes
+ // keep only the LARGEST opaque connected component (the stele + its moss
+ // + the plinth grass, which all touch it) - every disconnected fleck
+ // (edge grass crumbs, dirt bits, stray coloured dots) goes
     const comp = new Int32Array(W * H).fill(-1);
     const comps = [];
     for (let y0 = 0; y0 < H; y0++) for (let x0 = 0; x0 < W; x0++) {

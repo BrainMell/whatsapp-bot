@@ -10,7 +10,7 @@ When pairing a bot for the first time or re-pairing an expired session:
 
 1. **The Normal 515 Handshake**:
    - When a phone number enters the pairing code on WhatsApp, WhatsApp's servers immediately terminate the initial socket with status code `515 (Stream Errored / restart required)`.
-   - This status `515` is **normal and expected Baileys behavior** — WhatsApp requires the client to reconnect immediately to exchange and store the permanent encryption keys.
+   - This status `515` is **normal and expected Baileys behavior** - WhatsApp requires the client to reconnect immediately to exchange and store the permanent encryption keys.
 
 2. **The `index.js` Trap (401 Logged Out)**:
    - When `engine.js` restarts after code `515`, it kicks off its full boot sequence:
@@ -18,7 +18,7 @@ When pairing a bot for the first time or re-pairing an expired session:
      - Loading 7,000+ LID mappings.
      - Rehydrating active games (Murder Mystery watchdogs, Chess, RPG).
      - Running guild, loan, news scraping, and economy checks.
-   - This massive workload blocks Node's event loop for 30–60+ seconds.
+   - This massive workload blocks Node's event loop for 30-60+ seconds.
    - WhatsApp's server handshake deadline expires while Node is busy with MongoDB queries.
    - WhatsApp aborts the session with **`401 Logged Out`**, corrupting the newly paired auth.
 

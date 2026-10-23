@@ -6,11 +6,10 @@ const progression = require('../rpg/progression');
 const botConfig = require('../../botConfig');
 
 async function buildCardData(userId, userName, pfpUrl = "") {
-    // Initialize class if needed
     economy.initializeClass(userId);
-    // 💡 FIX 2026-10-03 (owner "Adventurer" class bug): wait for the async
-    // custom-class rehydration before resolving - Go profile cards used to
-    // render "Adventurer" for custom-class players after a fresh boot.
+ // FIX (owner "Adventurer" class bug): wait for the async
+ // custom-class rehydration before resolving - Go profile cards used to
+ // render "Adventurer" for custom-class players after a fresh boot.
     try { await classSystem.ensureCustomClassesLoaded(); } catch (e) { /* non-fatal */ }
 
     const sheet = progression.getCharacterSheet(userId);
@@ -24,7 +23,7 @@ async function buildCardData(userId, userName, pfpUrl = "") {
     const equipment = inventorySystem.getEquipment(userId);
     const equipStats = inventorySystem.getEquipmentStats(userId);
 
-    // Update rank
+ // Update rank
     economy.updateAdventurerRank(userId);
     const rank = economyUser.adventurerRank || 'F';
 
@@ -32,7 +31,7 @@ async function buildCardData(userId, userName, pfpUrl = "") {
         nickname: economyUser.nickname || userName,
         whatsappName: economyUser.profile?.whatsappName || userName,
         level: sheet.level || 1,
-        // 💡 SILVER VEIL (2026-10-03): Go renders "??" when levelHidden is set.
+ // SILVER VEIL: Go renders "??" when levelHidden is set.
         levelHidden: !!economyUser.levelVeil,
         xp: sheet.xpProgress || 0,
         xpNeeded: sheet.xpForThisLevel || 100,
@@ -40,8 +39,8 @@ async function buildCardData(userId, userName, pfpUrl = "") {
         rank: rank,
         class: classData?.name || "Adventurer",
         classIcon: classData?.icon || "🛡️",
-        // 🧩 SPRITE CONSISTENCY 2026-09-17: carry the assigned sprite index so
-        // any sprite-drawing consumer resolves the same variant as combat.
+ // SPRITE CONSISTENCY carry the assigned sprite index so
+ // any sprite-drawing consumer resolves the same variant as combat.
         playerClass: String(classData?.id || classData?.name || '').toUpperCase(),
         playerIndex: Math.max(0, Math.floor(Number(economyUser && economyUser.spriteIndex) || 0)),
         guildName: require('../rpg/guilds').getUserGuild(userId) || "",
@@ -55,7 +54,7 @@ async function buildCardData(userId, userName, pfpUrl = "") {
         title: economyUser.title || "",
         statPoints: sheet.statPoints || 0,
 
-        // RPG Stats
+ // RPG Stats
         hp: stats?.hp || 100,
         atk: stats?.atk || 10,
         def: stats?.def || 10,
@@ -65,7 +64,7 @@ async function buildCardData(userId, userName, pfpUrl = "") {
         crit: stats?.crit || 0,
         evasion: stats?.evasion || 0,
 
-        // Gear Stats
+ // Gear Stats
         equipHp: equipStats?.hp || 0,
         equipAtk: equipStats?.atk || 0,
         equipDef: equipStats?.def || 0,
@@ -73,7 +72,7 @@ async function buildCardData(userId, userName, pfpUrl = "") {
         equipSpd: equipStats?.spd || 0,
         equipLuck: equipStats?.luck || 0,
 
-        // Gear Item Names
+ // Gear Item Names
         gearMainHand: equipment?.main_hand ? (lootSystem.getItemInfo(equipment.main_hand.id)?.name || "None") : "None",
         gearOffHand: equipment?.off_hand ? (lootSystem.getItemInfo(equipment.off_hand.id)?.name || "None") : "None",
         gearArmor: equipment?.armor ? (lootSystem.getItemInfo(equipment.armor.id)?.name || "None") : "None",
@@ -84,8 +83,8 @@ async function buildCardData(userId, userName, pfpUrl = "") {
         gearCloak: equipment?.cloak ? (lootSystem.getItemInfo(equipment.cloak.id)?.name || "None") : "None",
         gearGloves: equipment?.gloves ? (lootSystem.getItemInfo(equipment.gloves.id)?.name || "None") : "None",
 
-        // Durability percent per slot (0-100), -1 = slot empty/no item
-        // Go renderer uses these to draw a vertical fill bar behind each gear slot box.
+ // Durability percent per slot (0-100), -1 = slot empty/no item
+ // Go renderer uses these to draw a vertical fill bar behind each gear slot box.
         durMainHand:  equipment?.main_hand?.maxDurability ? Math.round((equipment.main_hand.durability  / equipment.main_hand.maxDurability)  * 100) : -1,
         durOffHand:   equipment?.off_hand?.maxDurability  ? Math.round((equipment.off_hand.durability   / equipment.off_hand.maxDurability)   * 100) : -1,
         durArmor:     equipment?.armor?.maxDurability     ? Math.round((equipment.armor.durability      / equipment.armor.maxDurability)      * 100) : -1,

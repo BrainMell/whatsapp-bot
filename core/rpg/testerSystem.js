@@ -1,22 +1,20 @@
 // core/rpg/testerSystem.js
 // Game Tester permission + tester GC list + issue/bug command + Groq organize.
-//
 // SYSTEM KEYS (stored in MongoDB `systems` collection):
-//   _shared_game_testers        - Set of tester JIDs (shared across all 3 bot instances)
-//   _shared_tester_gcs           - Array of tester GC JIDs
-//   _shared_rpg_test_mode        - boolean: true = maintenance lock active for non-testers
-//
+// _shared_game_testers - Set of tester JIDs (shared across all 3 bot instances)
+// _shared_tester_gcs - Array of tester GC JIDs
+// _shared_rpg_test_mode - boolean: true = maintenance lock active for non-testers
 // COMMANDS:
-//   .j addgtester @user   - Owner/Global Mod/RPG Mod only: promote to Game Tester
-//   .j delgtester @user   - Owner/Global Mod/RPG Mod only: demote
-//   .j listtesters         - anyone can list current testers
-//   .j testgc add @gid    - Owner/Global Mod/RPG Mod only
-//   .j testgc remove @gid
-//   .j testgc list
-//   .j testmode on|off|status - Owner/Global Mod/RPG Mod only
-//   .j bug <text>          - tester submits an issue (must be in tester GC or be a tester)
-//   .j issues [n]          - view last N issues (default 10, max 30)
-//   .j organizeissues      - Owner/RPG Mod only: send all open issues to Groq for organization
+// .j addgtester @user - Owner/Global Mod/RPG Mod only: promote to Game Tester
+// .j delgtester @user - Owner/Global Mod/RPG Mod only: demote
+// .j listtesters - anyone can list current testers
+// .j testgc add @gid - Owner/Global Mod/RPG Mod only
+// .j testgc remove @gid
+// .j testgc list
+// .j testmode on|off|status - Owner/Global Mod/RPG Mod only
+// .j bug <text> - tester submits an issue (must be in tester GC or be a tester)
+// .j issues [n] - view last N issues (default 10, max 30)
+// .j organizeissues - Owner/RPG Mod only: send all open issues to Groq for organization
 
 const mongoose = require('mongoose');
 const System = require('../models/System');
@@ -76,9 +74,8 @@ function isGameTester(userId) {
   }
 }
 
-// ── Tester GC list ─────────────────────────────────────────────────────
+// -- Tester GC list -----------------------------------------------------
 async function loadTesterGcs() {
-  // Returns array of GC JIDs
   try {
     const data = await System.findOne({ key: TESTER_GC_KEY });
     return (data && Array.isArray(data.value)) ? data.value : [];
@@ -114,7 +111,7 @@ async function isTesterGc(gcJid) {
   return arr.includes(gcJid);
 }
 
-// ── RPG maintenance/test mode ──────────────────────────────────────────
+// -- RPG maintenance/test mode ------------------------------------------
 async function getTestMode() {
   try {
     const data = await System.findOne({ key: TEST_MODE_KEY });
@@ -132,23 +129,22 @@ async function setTestMode(on) {
   );
 }
 
-// ── Permission helper for the maintenance lock ─────────────────────────
-// Returns true if the user can use RPG commands during test mode.
+// -- Permission helper for the maintenance lock -------------------------
 // Bypasses the lock if user is: Owner, Global Mod, RPG Mod, or Game Tester.
 // Also bypasses if the chat is a registered tester GC.
 async function canBypassRpgLock(userId, chatId) {
-  // Late-require engine to avoid circular dependency at module load time
+ // Late-require engine to avoid circular dependency at module load time
   const engine = require('../engine');
   if (engine.isBotOwner(userId)) return true;
   if (engine.isGlobalMod(userId)) return true;
   if (engine.isRpgMod(userId)) return true;
   if (isGameTester(userId)) return true;
-  // Also bypass if this chat is a registered tester GC
+ // Also bypass if this chat is a registered tester GC
   if (chatId && await isTesterGc(chatId)) return true;
   return false;
 }
 
-// ── Issue submission ───────────────────────────────────────────────────
+// -- Issue submission ---------------------------------------------------
 async function submitIssue({ reporterId, reporterName, chatId, chatName, body, category, severity, attachments }) {
   const doc = await Issue.create({
     reporterId,
@@ -173,22 +169,21 @@ async function countOpenIssues() {
   return await Issue.countDocuments({ status: 'open' });
 }
 
-// ── Groq organization ──────────────────────────────────────────────────
+// -- Groq organization --------------------------------------------------
 // Sends all open issues to Groq for cleanup + point-by-point organization.
 // Reuses the existing GroqClient singleton at core/src/context_engine/GroqClient.js.
 async function organizeIssuesWithGroq(organizerJid) {
-  // Load all open issues
   const issues = await Issue.find({ status: 'open' }).sort({ submittedAt: 1 }).lean();
   if (issues.length === 0) {
     return { success: false, message: 'No open issues to organize.' };
   }
 
-  // Build the raw issues text for Groq
+ // Build the raw issues text for Groq
   const rawIssues = issues.map((iss, i) => {
     return `Issue #${iss._id.toString().slice(-6)} [${iss.category}/${iss.severity}] by ${iss.reporterName} on ${new Date(iss.submittedAt).toISOString()}:\n${iss.body}${iss.attachments && iss.attachments.length > 0 ? '\nAttachments:\n' + iss.attachments.map(a => '  - ' + a).join('\n') : ''}`;
   }).join('\n\n---\n\n');
 
-  // System prompt: organize but never invent or remove
+ // System prompt: organize but never invent or remove
   const systemPrompt = `You are a precise issue-organization assistant for an RPG bot's testing team.
 Your job: take a messy collection of tester-reported bugs/issues and produce a clean, organized development list.
 
@@ -216,9 +211,9 @@ A single Markdown document, organized by category, every issue accounted for, no
   try {
     const GroqClient = require('../src/context_engine/GroqClient');
     const client = GroqClient;
-    // Use chat.completions directly - not extract (we want markdown, not JSON)
+ // Use chat.completions directly - not extract (we want markdown, not JSON)
     const Groq = require('groq-sdk');
-    // Reuse the GroqClient's API key rotation
+ // Reuse the GroqClient's API key rotation
     const apiKey = client.getApiKey ? client.getApiKey() : process.env.GROQ_API_KEYS?.split(',')[0];
     const tempClient = new Groq({ apiKey });
     const completion = await tempClient.chat.completions.create({
@@ -240,13 +235,12 @@ A single Markdown document, organized by category, every issue accounted for, no
     return { success: false, message: 'Groq returned empty response.' };
   }
 
-  // Mark all the organized issues as 'organized' and store the summary on the most recent one
+ // Mark all the organized issues as 'organized' and store the summary on the most recent one
   const ids = issues.map(i => i._id);
   await Issue.updateMany(
     { _id: { $in: ids } },
     { $set: { status: 'organized', organizedAt: new Date(), organizedBy: organizerJid } }
   );
-  // Store the organized summary on the FIRST issue (oldest) for retrieval
   await Issue.findByIdAndUpdate(issues[0]._id, { $set: { organized: organized } });
 
   return {
@@ -257,25 +251,25 @@ A single Markdown document, organized by category, every issue accounted for, no
 }
 
 module.exports = {
-  // testers
+ // testers
   loadGameTesters,
   addGameTester,
   delGameTester,
   isGameTester,
-  // tester GCs
+ // tester GCs
   loadTesterGcs,
   addTesterGc,
   removeTesterGc,
   isTesterGc,
-  // test mode
+ // test mode
   getTestMode,
   setTestMode,
   canBypassRpgLock,
-  // issues
+ // issues
   submitIssue,
   listIssues,
   countOpenIssues,
   organizeIssuesWithGroq,
-  // model re-export
+ // model re-export
   Issue
 };

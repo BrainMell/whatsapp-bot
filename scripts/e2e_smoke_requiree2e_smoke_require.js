@@ -4,7 +4,6 @@
 const fs = require('fs');
 const path = require('path');
 
-// load .env like the bot does
 try { require('dotenv').config(); } catch (e) {}
 
 const DIRS = ['core/rpg', 'core/commands', 'core/utils', 'core/src/context_engine'];

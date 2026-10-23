@@ -1,5 +1,5 @@
 'use strict';
-// Task 43 v2 probe v2: per-item ISOLATED renders (no cross-contamination).
+// v2 probe v2: per-item ISOLATED renders (no cross-contamination).
 // Measures: sprite TOP edge (robust: sprite tops are against dark backdrop) and
 // shadow BOTTOM edge (lowest weak-diff pixel). Derives empirical anchorY from
 // sprite top: anchor = top + spr.height*2 - topPad - 1 (canvas top row = anchorY-h).
@@ -47,7 +47,7 @@ function footC(p) {
         const vertex = c.y + (p.fw + p.fh) * (TH / 4) - TH / 2;
 
         const spr = await loadImage(path.join('core/rpgasset/homestead', p.item + '.png'));
-        // sprite top pad (first row with alpha>128) — via temp canvas
+ // sprite top pad (first row with alpha>128) - via temp canvas
         let topPad = 0;
         {
             const tc = createCanvas(spr.width, spr.height);
@@ -62,13 +62,13 @@ function footC(p) {
         const h = spr.height * 2; // drawn height (2x)
 
         const xd = Math.round(c.x * SS0());
-        // sprite TOP: first strong-diff pixel scanning DOWN the center column from well above
+ // sprite TOP: first strong-diff pixel scanning DOWN the center column from well above
         let top = -1;
         for (let yd = Math.round((c.y - h - 40) * 2); yd < Math.round(c.y * 2); yd++) {
             const [r1, g1, b1] = px(E, xd, yd); const [r2, g2, b2] = px(I, xd, yd);
             if (Math.abs(r1 - r2) + Math.abs(g1 - g2) + Math.abs(b1 - b2) > 60) { top = yd; break; }
         }
-        // shadow BOTTOM: last weak-diff pixel scanning UP from well below
+ // shadow BOTTOM: last weak-diff pixel scanning UP from well below
         let shadBot = -1;
         for (let yd = Math.round((curA + 60) * 2); yd > Math.round(c.y * 2); yd--) {
             const [r1, g1, b1] = px(E, xd, yd); const [r2, g2, b2] = px(I, xd, yd);

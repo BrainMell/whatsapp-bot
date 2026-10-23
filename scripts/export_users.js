@@ -28,14 +28,14 @@ async function exportUsers() {
     const users = await User.find({}).lean();
     console.log(`Fetched ${users.length} users.`);
 
-    // 1. Save full JSON export
+ // 1. Save full JSON export
     const jsonPath = path.join(__dirname, '..', 'users_export.json');
     fs.writeFileSync(jsonPath, JSON.stringify(users, null, 2), 'utf-8');
     const jsonStats = fs.statSync(jsonPath);
     console.log(`✅ Exported JSON to ${jsonPath} (${(jsonStats.size / (1024 * 1024)).toFixed(2)} MB)`);
 
-    // 2. Prepare CSV Export
-    // Gather all possible flat key paths across documents or standard header list
+ // 2. Prepare CSV Export
+ // Gather all possible flat key paths across documents or standard header list
     const headers = [
       'userId',
       'registered',

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// compose BEFORE/AFTER proof sheet #2 — V1 ground-hug (user rejected: shadow
+// compose BEFORE/AFTER proof sheet #2 - V1 ground-hug (user rejected: shadow
 // hides behind the body, item reads floating) vs V2 mass-anchor + spill pool
 const fs = require('fs');
 const path = require('path');
@@ -26,11 +26,11 @@ const W = PAD + CW * 2 + PAD * 3, H = HEAD + LABEL * ROWS.length + CH * ROWS.len
     const ctx = c.getContext('2d');
     ctx.fillStyle = '#14100c'; ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = '#e8d9b0'; ctx.font = 'bold 22px "DejaVu Sans", sans-serif';
-    ctx.fillText('ITEM SHADOWS — previous hug vs NOW (mass-anchored + spill pool)', PAD + 4, 28);
+    ctx.fillText('ITEM SHADOWS - previous hug vs NOW (mass-anchored + spill pool)', PAD + 4, 28);
     ctx.font = 'bold 17px "DejaVu Sans", sans-serif';
     const bx = PAD + CW / 2, ax = PAD * 3 + CW + CW / 2;
-    ctx.fillStyle = '#ff8f8f'; ctx.fillText('BEFORE — shadow hides behind the body', bx, HEAD + 4);
-    ctx.fillStyle = '#9fe89f'; ctx.fillText('NOW — pool spills out, touching the base', ax, HEAD + 4);
+    ctx.fillStyle = '#ff8f8f'; ctx.fillText('BEFORE - shadow hides behind the body', bx, HEAD + 4);
+    ctx.fillStyle = '#9fe89f'; ctx.fillText('NOW - pool spills out, touching the base', ax, HEAD + 4);
     for (let i = 0; i < ROWS.length; i++) {
         const [tag, label] = ROWS[i];
         const y = HEAD + PAD + i * (LABEL + CH + PAD);

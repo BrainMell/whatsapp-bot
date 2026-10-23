@@ -1,7 +1,7 @@
 /**
- * QUOTE STICKER RENDERER — `.j s` on a text message
+ * QUOTE STICKER RENDERER - `.j s` on a text message
  * (2026-10-13, owner request: "turn a message into a sticker like the
- * WhatsApp quote-sticker style — username + pfp")
+ * WhatsApp quote-sticker style - username + pfp")
  *
  * Renders a replied-to TEXT message as a fake chat bubble sticker:
  *
@@ -20,7 +20,7 @@
  *    Boxes have fontconfig + DejaVu today, but bundling makes rendering
  *    deterministic even on a font-less base image.
  *  - node-canvas 3.2.3 CANNOT rasterize color emoji (verified 2026-10-13:
- *    Noto Color Emoji present, 0 colored pixels drawn — no CBDT support).
+ *    Noto Color Emoji present, 0 colored pixels drawn - no CBDT support).
  *    So emoji are overlaid as twemoji PNGs from jsDelivr with a two-tier
  *    disk+memory cache and a graceful "skip the glyph" fallback if the CDN
  *    is unreachable. No font on any box can change this outcome.
@@ -40,7 +40,7 @@ const axios = require("axios");
 const canvasMod = require("canvas"); // resolved from the bot's node_modules
 const { createCanvas, registerFont, loadImage } = canvasMod;
 
-// ── Fonts (bundled — deterministic on any box) ──────────────────────────────
+// -- Fonts (bundled - deterministic on any box) ------------------------------
 const FONT_DIR = path.join(__dirname, "..", "assets", "fonts");
 const FONT_FAMILY = "QuoteSans";
 let _fontsRegistered = false;
@@ -56,7 +56,7 @@ function ensureFonts() {
 }
 const fontStr = (px, bold) => `${bold ? "bold " : ""}${px}px "${FONT_FAMILY}", "DejaVu Sans", sans-serif`;
 
-// ── Layout constants (512×512 sticker canvas) ───────────────────────────────
+// -- Layout constants (512×512 sticker canvas) -------------------------------
 const CANVAS = 512;
 const MARGIN = 34;            // outer padding
 const AVATAR_D = 88;          // profile picture diameter
@@ -102,7 +102,7 @@ function fallbackAvatarColor(seed) {
   return AVATAR_FALLBACK_BG[h % AVATAR_FALLBACK_BG.length];
 }
 
-// ── Emoji tokenizer ──────────────────────────────────────────────────────────
+// -- Emoji tokenizer ----------------------------------------------------------
 // Pragmatic sequence matcher: flags, keycaps, ZWJ chains, skin tones, VS16.
 const EMOJI_RE =
   /(?:\p{RI}\p{RI}|[#*0-9]\uFE0F?\u20E3|\p{Extended_Pictographic}(?:\u200D\p{Extended_Pictographic}|\p{Emoji_Modifier}|\uFE0F|\uFE0E)*)/gu;
@@ -121,7 +121,7 @@ function parseEmojiRuns(line) {
   return tokens;
 }
 
-// ── twemoji fetch + cache ────────────────────────────────────────────────────
+// -- twemoji fetch + cache ----------------------------------------------------
 const TWEMOJI_SOURCES = [
   (cp) => `https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/72x72/${cp}.png`,
   (cp) => `https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/${cp}.png`,
@@ -146,7 +146,7 @@ async function fetchEmojiImage(seq) {
     if (typeof hit === "object") return hit;
     if (typeof hit === "number" && Date.now() < hit) return null; // negative TTL
   }
-  // disk cache (both codepoint variants)
+ // disk cache (both codepoint variants)
   if (!fs.existsSync(EMOJI_DISK_DIR)) fs.mkdirSync(EMOJI_DISK_DIR, { recursive: true });
   for (const cp of [stripped, full]) {
     const p = path.join(EMOJI_DISK_DIR, `${cp}.png`);
@@ -158,7 +158,7 @@ async function fetchEmojiImage(seq) {
       } catch {}
     }
   }
-  // network (jdecked 15.1.0 first, then twitter 14.0.2; fe0f-stripped variant too)
+ // network (jdecked 15.1.0 first, then twitter 14.0.2; fe0f-stripped variant too)
   for (const src of TWEMOJI_SOURCES) {
     for (const cp of [stripped, full]) {
       try {
@@ -176,12 +176,12 @@ async function fetchEmojiImage(seq) {
       } catch {}
     }
   }
-  // negative-cache in memory only
+ // negative-cache in memory only
   _emojiMem.set(memKey, Date.now() + NEG_TTL_MS);
   return null;
 }
 
-// ── measuring / wrapping ─────────────────────────────────────────────────────
+// -- measuring / wrapping -----------------------------------------------------
 function makeMeasurer(ctx, fontSize, bold) {
   ctx.font = fontStr(fontSize, bold);
   const emojiW = fontSize * EMOJI_SCALE;
@@ -208,13 +208,13 @@ function wrapTokens(rawLines, maxW, measure) {
   };
   for (const raw of rawLines) {
     const tokens = parseEmojiRuns(raw);
-    // explode tokens into word-ish atoms: text tokens split on spaces,
-    // emoji stand alone.
+ // explode tokens into word-ish atoms: text tokens split on spaces,
+ // emoji stand alone.
     const atoms = [];
     for (const t of tokens) {
       if (t.type === "emoji") atoms.push(t);
       else {
-        // split preserving spaces: word, space, word, space...
+ // split preserving spaces: word, space, word, space...
         const parts = t.value.split(/(\s+)/).filter((p) => p !== "");
         for (const p of parts) atoms.push({ type: "text", value: p });
       }
@@ -225,7 +225,7 @@ function wrapTokens(rawLines, maxW, measure) {
       const w = measure([atom]);
       const isSpace = atom.type === "text" && /^\s+$/.test(atom.value);
       if (isSpace) {
-        // keep as a joiner only when something is already on the line
+ // keep as a joiner only when something is already on the line
         if (line.length) {
           line.push(atom);
           lineW += w;
@@ -238,7 +238,7 @@ function wrapTokens(rawLines, maxW, measure) {
         lineW = 0;
       }
       if (w > maxW) {
-        // single atom wider than the bubble → hard-split by graphemes
+ // single atom wider than the bubble → hard-split by graphemes
         for (const ch of Array.from(atom.value)) {
           const cw = measure([{ type: "text", value: ch }]);
           if (line.length && lineW + cw > maxW) {
@@ -264,7 +264,7 @@ function collapseSpaces(value) {
   return value.replace(/\s+/g, " ");
 }
 
-// ── avatar ───────────────────────────────────────────────────────────────────
+// -- avatar -------------------------------------------------------------------
 async function loadAvatarImage(sock, jid) {
   try {
     const { fetchPfp } = require("./pfpCache");
@@ -293,7 +293,7 @@ function drawCoverCircle(ctx, img, cx, cy, d) {
   ctx.restore();
 }
 
-// ── line painter (used for the name row AND body lines) ─────────────────────
+// -- line painter (used for the name row AND body lines) ---------------------
 async function paintLine(ctx, tokens, x, yBaseline, fontSize, bold, color) {
   ctx.font = fontStr(fontSize, bold);
   ctx.fillStyle = color;
@@ -303,11 +303,11 @@ async function paintLine(ctx, tokens, x, yBaseline, fontSize, bold, color) {
     if (t.type === "emoji") {
       const img = await fetchEmojiImage(t.value);
       if (img) {
-        // emoji square vertically centered on the text's visual middle
+ // emoji square vertically centered on the text's visual middle
         const dy = yBaseline - fontSize * 0.92;
         ctx.drawImage(img, Math.round(cx), Math.round(dy), emojiS, emojiS);
       }
-      // failed fetch → draw nothing (glyph silently skipped)
+ // failed fetch → draw nothing (glyph silently skipped)
       cx += emojiS;
     } else {
       const v = collapseSpaces(t.value);
@@ -318,7 +318,7 @@ async function paintLine(ctx, tokens, x, yBaseline, fontSize, bold, color) {
   return cx;
 }
 
-// ── main render ──────────────────────────────────────────────────────────────
+// -- main render --------------------------------------------------------------
 /**
  * @param {object} opts
  * @param {string} opts.text    quoted message text (already extracted)
@@ -340,7 +340,7 @@ async function renderQuoteSticker(opts) {
   const bodyColor = dark ? TEXT_DARK : TEXT_LIGHT;
   const nColor = nameColor(jid || name, dark);
 
-  // ── size the text: shrink until it fits the height budget ────────────────
+ // -- size the text: shrink until it fits the height budget ----------------
   const H_BUDGET = CANVAS - MARGIN * 2 - BUBBLE_PAD_Y * 2 - NAME_H - NAME_GAP; // body rows budget
   const STEPS = [28, 24, 21, 18];
   let fontSize = STEPS[STEPS.length - 1];
@@ -362,14 +362,14 @@ async function renderQuoteSticker(opts) {
     lines = wrapped.slice(0, maxLines);
     truncated = true; // try a smaller size first; keep the cut as fallback
   }
-  // final: if still truncated at the smallest step, mark last line with …
+ // final: if still truncated at the smallest step, mark last line with …
   const lh = Math.round(fontSize * 1.36);
   if (truncated) {
     const last = lines[lines.length - 1];
     if (last) last.push({ type: "text", value: "…" });
   }
 
-  // name row (single line, ellipsized by width)
+ // name row (single line, ellipsized by width)
   const nameSize = Math.max(20, fontSize);
   const nameText = String(name || "User").trim() || "User";
   const nameTokens = parseEmojiRuns(nameText);
@@ -383,7 +383,7 @@ async function renderQuoteSticker(opts) {
   const maxNameW = BUBBLE_MAX_W - BUBBLE_PAD_X * 2;
   let nameDisplay = nameTokens;
   if (nameW > maxNameW) {
-    // char-truncate with ellipsis
+ // char-truncate with ellipsis
     let w = 0;
     const disp = [];
     const chars = Array.from(nameText);
@@ -402,7 +402,7 @@ async function renderQuoteSticker(opts) {
   ctx.font = fontStr(nameSize, true);
   for (const t of nameDisplay) nameRowW += t.type === "emoji" ? nameSize * EMOJI_SCALE : ctx.measureText(collapseSpaces(t.value)).width;
 
-  // ── bubble geometry ──────────────────────────────────────────────────────
+ // -- bubble geometry ------------------------------------------------------
   let contentW = 0;
   ctx.font = fontStr(fontSize, false);
   for (const ln of lines) {
@@ -419,7 +419,7 @@ async function renderQuoteSticker(opts) {
   const bubbleX = MARGIN + AVATAR_D + AVATAR_GAP;
   const bubbleY = top;
 
-  // ── avatar ───────────────────────────────────────────────────────────────
+ // -- avatar ---------------------------------------------------------------
   const avCx = MARGIN + AVATAR_D / 2;
   const avCy = top + 8 + AVATAR_D / 2;
   const avatarImg = jid ? await loadAvatarImage(sock, jid) : null;
@@ -442,7 +442,7 @@ async function renderQuoteSticker(opts) {
     ctx.textBaseline = "alphabetic";
   }
 
-  // ── bubble ───────────────────────────────────────────────────────────────
+ // -- bubble ---------------------------------------------------------------
   ctx.save();
   ctx.beginPath();
   ctx.moveTo(bubbleX + RADIUS, bubbleY);
@@ -452,7 +452,7 @@ async function renderQuoteSticker(opts) {
   ctx.arcTo(bubbleX, bubbleY, bubbleX + bubbleW, bubbleY, RADIUS);
   ctx.closePath();
   ctx.fillStyle = bubbleBg;
-  // subtle shadow for the light theme (WhatsApp sticker look)
+ // subtle shadow for the light theme (WhatsApp sticker look)
   if (!dark) {
     ctx.shadowColor = "rgba(0,0,0,0.18)";
     ctx.shadowBlur = 10;
@@ -461,11 +461,11 @@ async function renderQuoteSticker(opts) {
   ctx.fill();
   ctx.restore();
 
-  // ── name row ─────────────────────────────────────────────────────────────
+ // -- name row -------------------------------------------------------------
   const nameBaseline = bubbleY + BUBBLE_PAD_Y + nameSize * 0.86;
   await paintLine(ctx, nameDisplay, bubbleX + BUBBLE_PAD_X, nameBaseline, nameSize, true, nColor);
 
-  // ── body lines ───────────────────────────────────────────────────────────
+ // -- body lines -----------------------------------------------------------
   let y = bubbleY + BUBBLE_PAD_Y + NAME_H + NAME_GAP + fontSize * 0.86;
   for (const ln of lines) {
     await paintLine(ctx, ln, bubbleX + BUBBLE_PAD_X, y, fontSize, false, bodyColor);

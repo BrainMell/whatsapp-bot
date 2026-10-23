@@ -1,4 +1,4 @@
-// qa_trends_live.js — REAL command-path tests for .j trends after the 2026-09-25 fix.
+// qa_trends_live.js - REAL command-path tests for .j trends after the fix.
 // Runs the ACTUAL handleTrends (same function the engine calls) against Google,
 // capturing sendMessage calls through a mock socket like the real bot would.
 "use strict";
@@ -67,7 +67,7 @@ function runCmd(sock, args) {
     if (img) {
       ok((img.content.caption || "").includes("RELATIVE search interest") || (img.content.caption || "").includes("Relative search interest"), `${c.label}: caption explains relative interest`);
       ok(img.content.caption.startsWith(MARK), `${c.label}: caption carries bot marker`);
-      // PNG signature
+ // PNG signature
       const b = img.content.image;
       ok(b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47, `${c.label}: payload is a real PNG`);
     } else {

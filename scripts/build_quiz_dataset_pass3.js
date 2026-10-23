@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-/* build_quiz_dataset_pass3.js — movies scraper + imageinfo-based image rescue.
+/* build_quiz_dataset_pass3.js - movies scraper + imageinfo-based image rescue.
  * MOVIES (real scraping, keyless, no Wikidata):
  *   1. enwiki "List of Academy Award-winning films" + "List of highest-grossing films"
  *      -> wikitext via API -> parse title+year pairs
  *   2. infobox scrape (action=query&prop=revisions&rvprop=content) for directors
  *   3. posters via pageimages (pilicense=any)
- *   4. ALL images verified via enwiki imageinfo API (batch 50) — no downloads
+ *   4. ALL images verified via enwiki imageinfo API (batch 50) - no downloads
  * GAMES: re-pull SteamSpy top names -> pageimages -> imageinfo verify (rescues pass-1/2 throttling losses)
  * Merges into data/quizDataset.json. */
 'use strict';
@@ -65,10 +65,10 @@ async function jget(url, opts = {}, tries = 2) {
   }
 }
 
-// ── 1. film lists from enwiki wikitext ──
+// -- 1. film lists from enwiki wikitext --
 function parseWikitextTitles(wikitext, re) {
   const found = new Map(); // title -> year
-  // match [[Film (year)|...]] or [[Film|Title (year)]] patterns inside table rows / links
+ // match [[Film (year)|...]] or [[Film|Title (year)]] patterns inside table rows / links
   const linkRe = /\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g;
   let m;
   while ((m = linkRe.exec(wikitext))) {
@@ -85,7 +85,7 @@ function parseWikitextTitles(wikitext, re) {
 async function scrapeFilmLists() {
   const out = new Map();
   const pages = [
-    "List of Academy Award–winning films",
+    "List of Academy Award-winning films",
     "List of highest-grossing films",
     "List of highest-grossing animated films",
   ];
@@ -102,9 +102,9 @@ async function scrapeFilmLists() {
   return out;
 }
 
-// ── 2. infobox director scrape ──
+// -- 2. infobox director scrape --
 async function scrapeDirectors(films) {
-  // films: Map title->year. Returns Map title->director (single-name only)
+ // films: Map title->year. Returns Map title->director (single-name only)
   const out = new Map();
   const entries = [...films.entries()].slice(0, 400);
   for (const grp of chunk(entries, 10)) {
@@ -136,7 +136,7 @@ async function scrapeDirectors(films) {
   return out;
 }
 
-// ── 3+4. posters + imageinfo verify ──
+// -- 3+4. posters + imageinfo verify --
 async function pageImages(titles) {
   const out = new Map();
   for (const grp of chunk(titles, 20)) {
@@ -164,7 +164,7 @@ function fileTitleFromUploadUrl(url) {
     return decodeURIComponent(segs[segs.length - 1]);
   } catch { return null; }
 }
-// batch imageinfo on enwiki (and Commons fallback) — returns Map fileTitle -> working thumb url
+// batch imageinfo on enwiki (and Commons fallback) - returns Map fileTitle -> working thumb url
 async function imageinfoVerify(fileTitles) {
   const ok = new Map();
   for (const grp of chunk([...fileTitles], 50)) {
@@ -195,7 +195,7 @@ async function imageinfoVerify(fileTitles) {
 }
 
 (async () => {
-  // ── MOVIES ──
+ // -- MOVIES --
   const films = await scrapeFilmLists();
   console.log(`[films] total unique: ${films.size}`);
   if (films.size) {
@@ -216,7 +216,7 @@ async function imageinfoVerify(fileTitles) {
       }
     });
     console.log(`[films] +${n} fact questions`);
-    // posters
+ // posters
     const imgs = await pageImages(titles.slice(0, 700));
     console.log(`[posters] ${imgs.size}/${Math.min(titles.length, 700)}`);
     const ftitles = [...new Set([...imgs.values()].map((v) => fileTitleFromUploadUrl(v.thumb || v.original)).filter(Boolean))];
@@ -234,7 +234,7 @@ async function imageinfoVerify(fileTitles) {
     console.log(`[posters] +${added} movie poster images`);
   }
 
-  // ── GAMES covers rescue (imageinfo verification) ──
+ // -- GAMES covers rescue (imageinfo verification) --
   const steam = [];
   for (let page = 0; page < 3; page++) {
     let d;
@@ -259,7 +259,7 @@ async function imageinfoVerify(fileTitles) {
     console.log(`[game-covers] +${added} game cover images`);
   }
 
-  // ── COMICS: P18 characters, batched imageinfo verification (fast) ──
+ // -- COMICS: P18 characters, batched imageinfo verification (fast) --
   try {
     const q = `SELECT ?c ?cLabel ?img WHERE { ?c wdt:P31/wdt:P279* wd:Q1114461 ; wikibase:sitelinks ?sl ; wdt:P18 ?img . FILTER(?sl >= 8) SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } } ORDER BY DESC(?sl) LIMIT 400`;
     const r = await axios.post("https://query.wikidata.org/sparql?format=json", new URLSearchParams({ query: q }).toString(), { timeout: 90000, headers: { "User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded", Accept: "application/sparql-results+json" } });
@@ -282,7 +282,7 @@ async function imageinfoVerify(fileTitles) {
     console.log(`[comics] +${added} character images`);
   } catch (e) { console.log(`[comics] skipped: ${String(e && e.message || e).slice(0, 80)}`); }
 
-  // finalize
+ // finalize
   for (const cat of Object.keys(DS.categories)) {
     DS.categories[cat].questions.forEach((q, i) => { q.id = i + 1; });
     DS.categories[cat].images.forEach((q, i) => { q.id = i + 1; });
@@ -292,7 +292,7 @@ async function imageinfoVerify(fileTitles) {
   DS.version = 3;
   const json = JSON.stringify(DS);
   fs.writeFileSync(OUT, json);
-  let rep = `quizDataset v3 — ${DS.generatedAt}\n${Math.round(json.length / 1024)}KB\n`;
+  let rep = `quizDataset v3 - ${DS.generatedAt}\n${Math.round(json.length / 1024)}KB\n`;
   for (const [c, n] of Object.entries(DS.counts)) rep += `${c}: text=${n.text} images=${n.images}\n`;
   rep += `sources: opentdb, the-trivia-api, steamspy, tvmaze, anilist, wikidata(p18), enwiki lists+infobox scrape, enwiki pageimages\n`;
   fs.writeFileSync(REPORT, rep);

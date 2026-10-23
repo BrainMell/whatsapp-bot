@@ -1,5 +1,5 @@
 // ============================================
-// 🧩 RUINS PUZZLE GAME CARDS — 2026-10-02 owner directive
+// RUINS PUZZLE GAME CARDS - owner directive
 // The room intro scene shows the player standing before the encounter;
 // THIS card is the second image: the actual puzzle game board, rendered
 // from the seeded puzzle payload. Royal-Decree parchment language,
@@ -9,12 +9,12 @@
 const fs = require('fs');
 const path = require('path');
 
-// 🔤 GLYPH FIX (owner 2026-10-06 20:01Z: "glyphs don't render properly on the
-// image cards"): the 52-glyph pool is U+16A0–U+16EA (Runic). Neither Cinzel
+// GLYPH FIX (20:01Z: "glyphs don't render properly on the
+// image cards"): the 52-glyph pool is U+16A0-U+16EA (Runic). Neither Cinzel
 // nor IM Fell nor ANY font installed on the boxes covers the Runic block, so
-// cairo drew its hexbox fallback ("16 CA" in a box — the codepoint, not the
+// cairo drew its hexbox fallback ("16 CA" in a box - the codepoint, not the
 // rune). Noto Sans Runic (OFL, bundled below) is registered here and every
-// text run containing runes is drawn with it explicitly — cairo's toy API
+// text run containing runes is drawn with it explicitly - cairo's toy API
 // does not reliably cross families mid-string, so runs, not strings.
 const RUNIC_RE = /[\u16A0-\u16FF]/;
 const RUNIC_FONT = '"Noto Runic", "Cinzel", serif';
@@ -77,9 +77,9 @@ function _wrap(ctx, text, maxWidth) {
         else line = test;
     }
     if (line) lines.push(line);
-    // 💡 polish (owner §22 visual QA): a lone trailing punctuation fragment
-    // (a closing quote orphaned by the wrap) must never sit on its own line —
-    // pull the previous line's last word down with it.
+ // polish (owner §22 visual QA): a lone trailing punctuation fragment
+ // (a closing quote orphaned by the wrap) must never sit on its own line -
+ // pull the previous line's last word down with it.
     if (lines.length >= 2) {
         const last = lines[lines.length - 1];
         if (last.replace(/[^\p{L}\p{N}]/gu, '').length <= 2) {
@@ -129,7 +129,6 @@ function drawMixed(ctx, text, x, y) {
     return x;
 }
 
-// parse "*tokens*" out of the prompt for tile rendering
 function splitEmphasis(text) {
     const parts = [];
     const re = /\*([^*]+)\*/g;
@@ -144,7 +143,7 @@ function splitEmphasis(text) {
 }
 
 // renderPuzzleCard({ kind, prompt, attemptsUsed, attemptsMax, world, ring })
-//   → PNG buffer (null on failure; callers fall back to text)
+// → PNG buffer (null on failure; callers fall back to text)
 async function renderPuzzleCard(opts = {}) {
     try {
         if (!_ensureFonts()) return null;
@@ -156,22 +155,22 @@ async function renderPuzzleCard(opts = {}) {
 
         const kind = KINDS[opts.kind] || { glyph: '✥', accent: '#5B4A6B', label: 'PUZZLE' };
 
-        // parchment base
+ // parchment base
         ctx.fillStyle = PAL.parchment;
         ctx.fillRect(0, 0, W, H);
-        // deep blotches
+ // deep blotches
         ctx.fillStyle = 'rgba(166,124,46,0.06)';
         for (const [bx, by, br] of [[140, 120, 90], [860, 170, 120], [220, 520, 130], [780, 470, 80]]) {
             ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fill();
         }
-        // frame
+ // frame
         ctx.strokeStyle = PAL.frame;
         ctx.lineWidth = 5;
         ctx.strokeRect(18, 18, W - 36, H - 36);
         ctx.lineWidth = 1.5;
         ctx.strokeRect(30, 30, W - 60, H - 60);
 
-        // seal
+ // seal
         ctx.fillStyle = kind.accent;
         ctx.beginPath(); ctx.arc(W / 2, 120, 58, 0, Math.PI * 2); ctx.fill();
         ctx.strokeStyle = 'rgba(255,255,255,0.75)';
@@ -182,7 +181,7 @@ async function renderPuzzleCard(opts = {}) {
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(kind.glyph, W / 2, 124);
 
-        // kicker + title
+ // kicker + title
         ctx.fillStyle = PAL.inkSoft;
         ctx.font = '20px "IM Fell", serif';
         ctx.fillText('THE RUINS OF THE DEAD WORLD', W / 2, 46);
@@ -190,16 +189,16 @@ async function renderPuzzleCard(opts = {}) {
         ctx.font = '44px "Cinzel Deco", "Cinzel", serif';
         ctx.fillText(kind.label, W / 2, 214);
 
-        // body: split emphasis into plain lines + tile rows
+ // body: split emphasis into plain lines + tile rows
         const parts = splitEmphasis(opts.prompt || '');
-        // 📋 UX pass #5: the body starts a touch higher and packs tighter
-        // (36px prose leading, 64px tiles) so long prompts still leave the
-        // bottom band free for the rule card.
+ // UX pass #5: the body starts a touch higher and packs tighter
+ // (36px prose leading, 64px tiles) so long prompts still leave the
+ // bottom band free for the rule card.
         let y = 252;
         const maxW = W - 180;
         for (const part of parts) {
             if (part.tile) {
-                // tile row: big tokens (glyphs / letters / pairs like A=5)
+ // tile row: big tokens (glyphs / letters / pairs like A=5)
                 const tokens = part.text.split(/\s+/).filter(Boolean).slice(0, 8);
                 const tileW = 84, tileH = 64;
                 const gap = 16;
@@ -215,8 +214,8 @@ async function renderPuzzleCard(opts = {}) {
                     ctx.fill(); ctx.stroke();
                     ctx.fillStyle = PAL.ink;
                     const label = t.length > 4 ? t.slice(0, 4) : t;
-                    // GLYPH FIX: rune tiles get the runic font (Cinzel has no
-                    // U+16A0 block — hexboxes on the boxes); sizes unchanged
+ // GLYPH FIX: rune tiles get the runic font (Cinzel has no
+ // U+16A0 block - hexboxes on the boxes); sizes unchanged
                     if (RUNIC_RE.test(label)) ctx.font = (label.length > 2 ? '26px' : '34px') + ' ' + RUNIC_FONT;
                     else ctx.font = (label.length > 2 ? '26px' : '34px') + ' "Cinzel", serif';
                     ctx.fillText(label, tx + tileW / 2, y + tileH / 2 + 2);
@@ -224,10 +223,10 @@ async function renderPuzzleCard(opts = {}) {
                 }
                 y += tileH + 16;
             } else {
-                // GLYPH FIX: prompts can embed runes OUTSIDE the emphasis
-                // tiles too (the "(e.g. `ᛏ ᚨ`)" example). One fillText with
-                // IM Fell hexboxes them — so wrap and paint per-RUN, with the
-                // runic font carrying exactly the rune characters.
+ // GLYPH FIX: prompts can embed runes OUTSIDE the emphasis
+ // tiles too (the "(e.g. `ᛏ ᚨ`)" example). One fillText with
+ // IM Fell hexboxes them - so wrap and paint per-RUN, with the
+ // runic font carrying exactly the rune characters.
                 ctx.fillStyle = PAL.ink;
                 ctx.textAlign = 'left';
                 const words = String(part.text || '').split(/\s+/).filter(Boolean);
@@ -246,16 +245,16 @@ async function renderPuzzleCard(opts = {}) {
             if (y > H - 128) break;
         }
 
-        // 📋 UX pass #5 (owner brief 2026-10-07): the per-puzzle RULE CARD
-        // rides the board — the answer format is printed on the parchment so
-        // "how do I answer this?" never needs a guess. Fit-aware: it sits
-        // below the body (or in the reserved bottom band) and drops lines
-        // that would collide with the footer; the `examine` DM text always
-        // carries the full rule regardless.
+ // UX pass #5 (owner brief ): the per-puzzle RULE CARD
+ // rides the board - the answer format is printed on the parchment so
+ // "how do I answer this?" never needs a guess. Fit-aware: it sits
+ // below the body (or in the reserved bottom band) and drops lines
+ // that would collide with the footer; the `examine` DM text always
+ // carries the full rule regardless.
         if (opts.rules) {
             ctx.font = 'italic 19px "IM Fell", serif';
-            // canvas fonts have no emoji glyph — the 📜 becomes a tofu dot;
-            // strip it here (the DM text keeps it)
+ // canvas fonts have no emoji glyph - the becomes a tofu dot;
+ // strip it here (the DM text keeps it)
             const ruleLines = _wrap(ctx, String(opts.rules).replace(/[*`_]/g, '').replace('📜', '').trim(), W - 160);
             let ry = Math.max(y + 10, H - 118);
             const fits = ruleLines.filter((_, i) => ry + i * 24 <= H - 72).length;
@@ -266,7 +265,7 @@ async function renderPuzzleCard(opts = {}) {
             }
         }
 
-        // footer
+ // footer
         ctx.fillStyle = PAL.inkSoft;
         ctx.font = '24px "IM Fell", serif';
         const left = (opts.attemptsMax || 3) - (opts.attemptsUsed || 0);

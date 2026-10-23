@@ -1,5 +1,5 @@
-// BOX LIVE E2E (2026-09-27 overhaul v2) - run ON Box 1:
-//   cd /home/ubuntu/whatsapp-bot && node scripts/box_e2e_v2.js
+// BOX LIVE E2E (overhaul v2) - run ON Box 1:
+// cd /home/ubuntu/whatsapp-bot && node scripts/box_e2e_v2.js
 // Exercises the real network paths: Go audio service (songs + themes),
 // Wikipedia logo fetch + pixel gate + embeddings decoys, usage-fairness
 // persistence on Mongo KV, vision-worker /nsfw from Box 1.
@@ -98,8 +98,8 @@ function ok(cond, label) { if (cond) { pass++; console.log("  ok -", label); } e
   {
     const quiz = require("../core/games/quiz");
     const p1 = quiz.parseQuizArgs ? null : null;
-    // parseQuizArgs is not exported; verify through the exported parse-adjacent API
-    // (the perms suite covers it; here just confirm mode constants compile)
+ // parseQuizArgs is not exported; verify through the exported parse-adjacent API
+ // (the perms suite covers it; here just confirm mode constants compile)
     ok(typeof quiz.buildLogosQuestions !== "function" && typeof quizMedia.buildThemeSongQuestions === "function", "theme builder exported");
   }
 

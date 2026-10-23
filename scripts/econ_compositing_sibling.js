@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Sibling process for econ_compositing_qa.js (47-l1) — simulates the OTHER
+// Sibling process for econ_compositing_qa.js (47-l1) - simulates the OTHER
 // bot instance sharing the same MongoDB (box1 topology: jake + subaru).
 // Separate node process = separate in-memory snapshot, exactly like the
 // real cross-box writers racing joker on wallet/bank/eventTokens.

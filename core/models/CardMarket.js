@@ -1,5 +1,4 @@
 // models/CardMarket.js
-// Tracks active sale listings and live auctions.
 
 const mongoose = require('mongoose');
 
@@ -10,34 +9,34 @@ const BidSchema = new mongoose.Schema({
 }, { _id: false });
 
 const CardMarketSchema = new mongoose.Schema({
-  // The specific UserCard or CardDeck document being listed
+ // The specific UserCard or CardDeck document being listed
   userCardId: { type: mongoose.Schema.Types.ObjectId, ref: 'UserCard', required: false },
   deckId:     { type: mongoose.Schema.Types.ObjectId, ref: 'CardDeck', required: false },
 
-  // 💡 Phase 3e: Rune listings - runeId references the Rune model
+ // Phase 3e: Rune listings - runeId references the Rune model
   runeId: { type: String, required: false },
 
-  // Convenience copies so we don't always need a join
+ // Convenience copies so we don't always need a join
   cardId:   { type: String, required: false },
   deckName: { type: String, required: false },
   sellerId: { type: String, required: true },
 
   isDeck: { type: Boolean, default: false },
-  isRune: { type: Boolean, default: false }, // 💡 Phase 3e: marks rune listings
+  isRune: { type: Boolean, default: false }, // Phase 3e: marks rune listings
 
-  // 'sale' = fixed price | 'auction' = bidding
+ // 'sale' = fixed price | 'auction' = bidding
   type: { type: String, enum: ['sale', 'auction'], required: true },
 
-  // Fixed price (sale) or starting price (auction)
+ // Fixed price (sale) or starting price (auction)
   price: { type: Number, required: true },
 
-  // Auction fields
+ // Auction fields
   bids:         { type: [BidSchema], default: [] },
   currentBid:   { type: Number, default: 0 },
   highBidderId: { type: String, default: null },
   auctionEndsAt:{ type: Date, default: null },
 
-  // Status lifecycle
+ // Status lifecycle
   status: {
     type: String,
     enum: ['active', 'sold', 'cancelled', 'expired', 'pending_approval'],

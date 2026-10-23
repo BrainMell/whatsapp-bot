@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 // Test: Summon autonomous turn execution
-// Verifies that summonAI.performSummonAction:
 // 1. Takes a turn without player input
 // 2. Executes a sensible action (attack/skill, not idle/error)
 // 3. Produces a combat image via nextTurn
@@ -19,7 +18,7 @@ async function main() {
   const monsterSkills = require('../core/rpg/monsterSkills');
   const registry = require('../core/rpg/summonRegistry');
 
-  // Build a summon combat entity
+ // Build a summon combat entity
   const fakeSummonDoc = {
     summonId: 'test_summon_001',
     ownerJid: 'test_owner',
@@ -44,14 +43,14 @@ async function main() {
   console.log('  actionGauge:', summonEntity.actionGauge);
   console.log('  isSummon:', summonEntity.isSummon);
 
-  // Check available skills
+ // Check available skills
   const skills = monsterSkills.getSkillsForMonster(summonEntity.archetype, summonEntity.level);
   console.log('\nAvailable skills (' + skills.length + '):');
   for (const s of skills) {
     console.log('  • ' + s.name + ' (Lv.' + s.levelReq + '+, ' + s.cost + ' EN) - ' + (s.currentEffect?.type || 'unknown'));
   }
 
-  // Simulate enemies
+ // Simulate enemies
   const enemies = [
     {
       name: 'Test Goblin',
@@ -81,7 +80,7 @@ async function main() {
     },
   ];
 
-  // Test AI decision making
+ // Test AI decision making
   console.log('\n=== AI Decision Test ===');
   const decision = monsterSkills.evaluateAction(summonEntity, enemies, [summonEntity]);
   console.log('Decision:', decision.action);
@@ -89,19 +88,17 @@ async function main() {
   console.log('  Skill:', decision.skill?.name || 'none');
   if (decision.msg) console.log('  Msg:', decision.msg);
 
-  // Verify decision is sensible
   const isSensible = ['attack', 'skill', 'guard', 'skip'].includes(decision.action);
   console.log('\nSensible action?', isSensible ? '✅ YES' : '❌ NO');
   
   if (decision.target) {
     console.log('Targeting enemy:', decision.target.name, '(HP: ' + decision.target.currentHP + '/' + decision.target.maxHP + ')');
-    // Check if it prioritized the low-HP enemy
     if (decision.target.currentHP < decision.target.maxHP * 0.5) {
       console.log('✅ Prioritized low-HP target (execute-eligible)');
     }
   }
 
-  // Test personality modifier
+ // Test personality modifier
   console.log('\n=== Personality Test ===');
   summonEntity.personality = 'AGGRESSIVE';
   summonEntity.behaviorScore.aggressive = 25;

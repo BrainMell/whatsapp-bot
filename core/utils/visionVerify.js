@@ -1,19 +1,17 @@
 // ============================================
-// VISION VERIFY (2026-09-27) - subject-match check for quiz images
+// VISION VERIFY - subject-match check for quiz images
 // ============================================
 // Owner brief section 4: "use vision capabilities to verify the retrieved
 // image before sending it. If the question is asking for Zelda, the image
 // should actually depict Zelda."
-//
 // PROVIDER CHAIN (first available wins):
-//   1. VISION_ENDPOINT + VISION_KEY (env) - any OpenAI-compatible chat API
-//      that accepts image_url content parts. This is how the Box 2 CLIP
-//      verifier is wired in (core 2026-09-27 architecture: vision runs on
-//      Box 2, the 1GB Box 1 never loads a model).
-//   2. No provider -> { decision: "unknown" } - the pipeline falls back to
-//      canonical source anchoring (AniList/TVMaze/page-anchored lookups),
-//      which is the primary correctness lever; verification is additive.
-//
+// 1. VISION_ENDPOINT + VISION_KEY (env) - any OpenAI-compatible chat API
+// that accepts image_url content parts. This is how the Box 2 CLIP
+// verifier is wired in (core architecture: vision runs on
+// Box 2, the 1GB Box 1 never loads a model).
+// 2. No provider -> { decision: "unknown" } - the pipeline falls back to
+// canonical source anchoring (AniList/TVMaze/page-anchored lookups),
+// which is the primary correctness lever; verification is additive.
 // Contract (non-negotiable): this module NEVER throws, never blocks longer
 // than VISION_TIMEOUT_MS (default 8000), and on ANY error returns
 // { decision: "unknown" } so callers skip rather than reject on flake.
@@ -28,7 +26,7 @@ function providerConfigured() {
   return !!(process.env.VISION_ENDPOINT && _http) && Date.now() >= _breakerOpenUntil;
 }
 
-// 💡 CIRCUIT BREAKER (2026-09-28): the provider shares a per-minute token
+// CIRCUIT BREAKER: the provider shares a per-minute token
 // budget with the quiz LLM (Groq free tier). Three consecutive transport/
 // rate-limit failures open the breaker for 5 minutes so verification fails
 // FAST ("unknown" -> source anchoring decides) instead of stalling every
@@ -52,8 +50,8 @@ async function verifySubject(buf, mime, subject, context = "") {
   const key = process.env.VISION_KEY || "";
   const model = process.env.VISION_MODEL || "vision";
   const timeoutMs = Math.min(30000, parseInt(process.env.VISION_TIMEOUT_MS, 10) || 8000);
-  // 2026-09-28: downscale in the crash-isolated sharp worker before upload -
-  // fewer vision tokens per call (960px ~13k -> 384px ~3k), protects TPM.
+ // downscale in the crash-isolated sharp worker before upload -
+ // fewer vision tokens per call (960px ~13k -> 384px ~3k), protects TPM.
   let b64 = Buffer.from(buf).toString("base64");
   let sendMime = mime || "image/jpeg";
   try {
@@ -82,8 +80,8 @@ async function verifySubject(buf, mime, subject, context = "") {
       }],
     }, {
       timeout: timeoutMs,
-      // 💡 2026-09-28: VISION_KEY was read but NEVER SENT - every provider
-      // call 401'd (found live on Box 1 against Groq). Send it.
+ // VISION_KEY was read but NEVER SENT - every provider
+ // call 401'd (found live on Box 1 against Groq). Send it.
       headers: key ? { Authorization: `Bearer ${key}` } : undefined,
     });
     const txt = String(r.data?.choices?.[0]?.message?.content || "");

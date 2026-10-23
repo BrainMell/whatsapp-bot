@@ -6,9 +6,8 @@
 // embed with MobileNetV2 (1280-d pooled features), and write
 // data/logoEmbeddings.json as per-vector int8-quantized base64
 // (~1MB total for 627 logos - the live quiz path is pure float math).
-//
 // Usage (on box 2):
-//   cd /home/ubuntu/vision-worker && node embed_logos.js /home/ubuntu/whatsapp-bot/core/games/quizLogosPool.js out.json
+// cd /home/ubuntu/vision-worker && node embed_logos.js /home/ubuntu/whatsapp-bot/core/games/quizLogosPool.js out.json
 // Then the result is copied into the bot repo at data/logoEmbeddings.json.
 // ============================================
 
@@ -30,10 +29,10 @@ async function gentleGet(url, opts = {}, tries = 4) {
     } catch (e) {
       lastErr = e;
       const status = e.response?.status;
-      // Wikimedia rate-limits bursts: back off progressively
+ // Wikimedia rate-limits bursts: back off progressively
       await sleep(600 * (i + 1) + Math.random() * 400);
       if (i === 1 && status !== 404) {
-        // try the browser UA once from attempt 2 on (some CDN edges 403 bot UAs)
+ // try the browser UA once from attempt 2 on (some CDN edges 403 bot UAs)
         opts = { ...opts, headers: { ...(opts.headers || {}), ...BROWSER_UA.headers } };
       }
     }
@@ -42,8 +41,8 @@ async function gentleGet(url, opts = {}, tries = 4) {
 }
 
 async function findLogoFile(brand, altName, thumbwidth = 480) {
-  // mirrors quizLore.wikipediaLogoImage anchoring: file title must start with
-  // the brand string (wiki title OR display name), logo-ish word required
+ // mirrors quizLore.wikipediaLogoImage anchoring: file title must start with
+ // the brand string (wiki title OR display name), logo-ish word required
   const d = await gentleGet("https://en.wikipedia.org/w/api.php", {
     params: {
       action: "query", format: "json", formatversion: 2, redirects: 1,
@@ -110,7 +109,6 @@ function quantize(vec) {
   const outPath = process.argv[3] || "logoEmbeddings.json";
   if (!poolPath) { console.error("usage: node embed_logos.js <quizLogosPool.js> [out.json]"); process.exit(1); }
 
-  // load the pool by executing the module file directly
   const pools = require(path.resolve(poolPath));
   const all = [
     ...pools.TECH, ...pools.APPS, ...pools.FOOD, ...pools.CARS, ...pools.FASHION,

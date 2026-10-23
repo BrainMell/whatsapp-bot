@@ -1,18 +1,17 @@
 // QA: cross-bot battle-state scoping (owner issue 4 - ".s combat atk" drove
 // a battle Joker started). Joker and Subaru run in ONE process, so every
 // module-level Map was a shared singleton keyed by chat only.
-//
 // Pins (real modules, per-bot AsyncLocalStorage contexts, no DB):
-//  1. guildAdventure.gameStates: a battle created on Joker is invisible to
-//     Subaru (getGameState / composed-key compat / isUserInAdventure /
-//     getScopedState), and each bot can hold its OWN battle for the same
-//     chat+player simultaneously.
-//  2. index.js regen: isUserInAnyCombat still sees fights on either bot
-//     (no mid-battle passive healing).
-//  3. pvpSystem: duel invites/active duels are bot-scoped - Subaru can run
-//     its own duel in a chat where Joker has one, and cannot see Joker's.
-//  4. abyssSystem: static pins - run creation stamps botId, gameplay
-//     queries use activeRunFilter, admin purge stays global.
+// 1. guildAdventure.gameStates: a battle created on Joker is invisible to
+// Subaru (getGameState / composed-key compat / isUserInAdventure /
+// getScopedState), and each bot can hold its OWN battle for the same
+// chat+player simultaneously.
+// 2. index.js regen: isUserInAnyCombat still sees fights on either bot
+// (no mid-battle passive healing).
+// 3. pvpSystem: duel invites/active duels are bot-scoped - Subaru can run
+// its own duel in a chat where Joker has one, and cannot see Joker's.
+// 4. abyssSystem: static pins - run creation stamps botId, gameplay
+// queries use activeRunFilter, admin purge stays global.
 
 process.env.GO_IMAGE_SERVICE_URL = process.env.GO_IMAGE_SERVICE_URL || 'http://127.0.0.1:7860';
 
@@ -27,7 +26,7 @@ function assert(cond, label) {
     else console.log('✓', label);
 }
 
-// ── per-bot mock configs (same shape botConfig.instance provides) ────────
+// -- per-bot mock configs (same shape botConfig.instance provides) --------
 function cfgFor(botId) {
     return {
         getBotId: () => botId,
@@ -44,7 +43,7 @@ function cfgFor(botId) {
 const asJoker = (fn) => botConfig.storage.run(cfgFor('Joker'), fn);
 const asSubaru = (fn) => botConfig.storage.run(cfgFor('Subaru'), fn);
 
-// ── seed economy ─────────────────────────────────────────────────────────
+// -- seed economy ---------------------------------------------------------
 const A = 'duelist_a@s.whatsapp.net';
 const B = 'duelist_b@s.whatsapp.net';
 for (const jid of [A, B]) {
@@ -57,7 +56,7 @@ for (const jid of [A, B]) {
 const CHAT = '1203group@g.us';
 const P1 = 'fighter@s.whatsapp.net';
 
-// ═══ 1. guildAdventure battle scoping ═══
+// === 1. guildAdventure battle scoping ===
 console.log('\n── 1. guildAdventure: Joker battle invisible to Subaru ──');
 
 // Simulate a battle created under JOKER's context (same path initAdventure
@@ -109,9 +108,9 @@ asJoker(() => assert(guildAdventure.getGameState(CHAT, P1), 'Joker battle surviv
 
 console.log('\n── 3. fallback scans are bot-scoped (limits / admin stop) ──');
 asSubaru(() => {
-    // Subaru has no state in this chat now -> fallback scan must find none
+ // Subaru has no state in this chat now -> fallback scan must find none
     let found = null;
-    // emulate getGameState fallback via a stateless probe
+ // emulate getGameState fallback via a stateless probe
     found = guildAdventure.getGameState(CHAT, 'someone_else@s.whatsapp.net');
     assert(!found, 'Subaru fallback scan finds nothing (Joker state filtered)');
 });
@@ -141,7 +140,7 @@ asSubaru(() => pvpSystem.declineChallenge(CHAT, B));
 console.log('\n── 5. abyssSystem static pins (shared-Mongo run scoping) ──');
 const abyssSrc = fs.readFileSync('./core/rpg/abyssSystem.js', 'utf8');
 assert(abyssSrc.includes('function activeRunFilter(userId)'), 'activeRunFilter helper exists');
-assert(abyssSrc.includes('botId: botScope(), // 💡 CROSS-BOT LEAK FIX'), 'run creation stamps botId');
+assert(abyssSrc.includes('botId: botScope(), // CROSS-BOT LEAK FIX'), 'run creation stamps botId');
 const scopedUses = (abyssSrc.match(/AbyssRun\.findOne\(activeRunFilter\(/g) || []).length;
 assert(scopedUses >= 5, `gameplay run lookups scoped (found ${scopedUses}, need >=5: treasure/event/skip/retreat/status)`);
 assert(/AbyssRun\.findOne\(\{ userId, status: 'active' \}\)/.test(abyssSrc),

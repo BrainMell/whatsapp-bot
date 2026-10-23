@@ -1,5 +1,5 @@
-// bug_pill_qa.js — live-test economy.poisonPillAttack (.j bug @victim)
-// Run on Box2:  node scripts/bug_pill_qa.js
+// bug_pill_qa.js - live-test economy.poisonPillAttack (.j bug @victim)
+// Run on Box2: node scripts/bug_pill_qa.js
 // Real Mongo + real economy, mock nothing (function-level; the engine
 // dispatch block is thin glue mirroring rob, verified by syntax + restart).
 const economy = require('/home/ubuntu/whatsapp-bot/core/rpg/economy');
@@ -15,31 +15,31 @@ const JIDS = [ATTACKER, VICTIM, GHOST];
 let pass = 0, fail = 0;
 function check(name, cond, detail) {
   if (cond) { pass++; console.log(`  ✅ ${name}`); }
-  else { fail++; console.log(`  ❌ ${name}${detail ? ' — ' + detail : ''}`); }
+  else { fail++; console.log(`  ❌ ${name}${detail ? ' - ' + detail : ''}`); }
 }
 
 async function main() {
   await connectDB();
-  // purge leftovers BEFORE loadEconomy so the in-memory cache starts clean
+ // purge leftovers BEFORE loadEconomy so the in-memory cache starts clean
   await User.deleteMany({ userId: { $in: JIDS } });
   await economy.loadEconomy();
 
-  // ── setup: fresh users ──
+ // -- setup: fresh users --
   economy.registerUser(ATTACKER, 'BugAttacker');
   economy.registerUser(VICTIM, 'BugVictim');
   const atk = economy.getUser(ATTACKER);
   const vic = economy.getUser(VICTIM);
   check('setup: both registered', !!atk && !!vic);
 
-  // fund attacker; give victim a known mid HP
+ // fund attacker; give victim a known mid HP
   atk.wallet = 5000;
   vic.wallet = 3000;
-  // victim class for maxHP (registerUser picked a random starter)
+ // victim class for maxHP (registerUser picked a random starter)
   const progression = require('/home/ubuntu/whatsapp-bot/core/rpg/progression');
   const cid = vic.class?.id || vic.class?.name?.toUpperCase() || 'FIGHTER';
   const maxHP = Math.max(1, Math.floor(progression.getBaseStats(VICTIM, cid)?.hp || 100));
 
-  console.log('\n== T1: happy path — pill lands, drains, wallet charged ==');
+  console.log('\n== T1: happy path - pill lands, drains, wallet charged ==');
   const beforeHP = economy.getPersistentHP(VICTIM, maxHP);
   const r = economy.poisonPillAttack(ATTACKER, VICTIM);
   check('success true', r.success === true);
@@ -63,11 +63,11 @@ async function main() {
   check('wallet untouched on block', economy.getUser(ATTACKER).wallet === 4500);
 
   console.log('\n== T4: toxin suppresses out-of-combat regen ==');
-  // Backdate the regen clock 1h. Without poison: regen = floor(max/24). With poison: zero.
+ // Backdate the regen clock 1h. Without poison: regen = floor(max/24). With poison: zero.
   vic.stats.hpTs = Date.now() - 3600000;
   const suppressed = economy.getPersistentHP(VICTIM, maxHP);
   check('no regen while poisoned', suppressed === r.hpNow, `expected ${r.hpNow}, got ${suppressed}`);
-  // control: after cure the same backdating MUST regen (verified again in T6)
+ // control: after cure the same backdating MUST regen (verified again in T6)
 
   console.log('\n== T5: hospital cures the toxin (healToFull purge) ==');
   const heal = economy.healToFull(VICTIM, maxHP);

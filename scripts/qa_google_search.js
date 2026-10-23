@@ -1,28 +1,28 @@
 #!/usr/bin/env node
 /**
- * qa_google_search.js — 2026-10-12
+ * qa_google_search.js - 2026-10-12
  * Regression QA for `.j google <question>` (owner: "Add a .j Google where
  * you cam effectively Google any question and get a response, like the a.i
  * overview but it isn't out a.i grok or anything like that").
  * Run from repo root: node scripts/qa_google_search.js
  *
  * Sections:
- *  A. Query normalization — whitespace collapse, null safety, caps.
- *  B. URL unwrapping + entity decoding — DDG redirect (uddg), direct URLs,
+ *  A. Query normalization - whitespace collapse, null safety, caps.
+ *  B. URL unwrapping + entity decoding - DDG redirect (uddg), direct URLs,
  *     //→https, HTML entities in titles/snippets.
- *  C. Search parsers (offline fixtures) — DDG html cards (incl. ad skip),
+ *  C. Search parsers (offline fixtures) - DDG html cards (incl. ad skip),
  *     DDG lite table (href-before-class attr order), Bing b_algo blocks.
- *  D. Dedupe/cap — URL key, trailing-slash fold, MAX_RESULTS cap, invalid
+ *  D. Dedupe/cap - URL key, trailing-slash fold, MAX_RESULTS cap, invalid
  *     URL filtering.
- *  E. Prompt builder — question included, every excerpt included, [n]
+ *  E. Prompt builder - question included, every excerpt included, [n]
  *     citations, anti-hallucination rules, language matching.
- *  F. Message builders — AI OVERVIEW header, sources list, length cap,
+ *  F. Message builders - AI OVERVIEW header, sources list, length cap,
  *     results-only fallback (Groq down).
- *  G. Engine wiring — require, handler signature (senderJid explicit),
+ *  G. Engine wiring - require, handler signature (senderJid explicit),
  *     dispatch scope-safety, aliases, 3 backends, MIN_RESULTS gate, SMART
  *     synthesis, results-only fallback wired, awardProgression, registry.
- *  H. Collisions — `search` stays the anime alias; nothing else re-bound.
- *  K. 429 resilience — bing-rss parser (decoy-resistant keyless endpoint),
+ *  H. Collisions - `search` stays the anime alias; nothing else re-bound.
+ *  K. 429 resilience - bing-rss parser (decoy-resistant keyless endpoint),
  *     result cache (TTL/miss/eviction), per-backend 429 breaker (trip,
  *     half-open, isolation), engine wiring pins (cache-first flow, eligible
  *     retry pass, backend order incl. bing-rss). Born from the 2026-10-12
@@ -36,14 +36,14 @@ const ROOT = path.resolve(__dirname, "..");
 let pass = 0, fail = 0;
 function ok(name, cond, extra) {
   if (cond) { pass++; console.log(`  ✅ ${name}`); }
-  else { fail++; console.log(`  ❌ ${name}${extra ? " — " + extra : ""}`); }
+  else { fail++; console.log(`  ❌ ${name}${extra ? " - " + extra : ""}`); }
 }
 
 const ao = require(path.join(ROOT, "core/utils/aiOverview"));
 const engineSrc = fs.readFileSync(path.join(ROOT, "core/engine.js"), "utf8");
 const regSrc = fs.readFileSync(path.join(ROOT, "core/utils/commandRegistry.js"), "utf8");
 
-// ── fixtures (structure mirrors the real endpoints) ─────────────────────────
+// -- fixtures (structure mirrors the real endpoints) -------------------------
 const DDG_HTML_FIXTURE = `<html><body>
 <div class="result results_links results_links_deep web-result result--ad ">
   <div class="links_main links_deep">
@@ -104,14 +104,14 @@ const BRAVE_FIXTURE = `<html><body>
 </body></html>`;
 
 (async () => {
-// ── A. normalizeQuery ────────────────────────────────────────────────────────
+// -- A. normalizeQuery --------------------------------------------------------
 console.log("\nA. normalizeQuery");
 ok("collapses whitespace + trims", ao.normalizeQuery("  how   do\nsolar  panels  work? ") === "how do solar panels work?");
 ok("null → empty", ao.normalizeQuery(null) === "");
 ok("undefined → empty", ao.normalizeQuery(undefined) === "");
 ok("MAX_QUERY sane (300)", ao.MAX_QUERY === 300);
 
-// ── B. URL + entity handling ────────────────────────────────────────────────
+// -- B. URL + entity handling ------------------------------------------------
 console.log("\nB. unwrapDdgUrl / decodeEntities");
 ok("uddg redirect decoded",
   ao.unwrapDdgUrl("//duckduckgo.com/l/?uddg=https%3A%2F%2Fen.wikipedia.org%2Fwiki%2FSolar_cell&rut=1") === "https://en.wikipedia.org/wiki/Solar_cell");
@@ -123,7 +123,7 @@ ok("unknown entity preserved", ao.decodeEntities("&zzzoomm;") === "&zzzoomm;");
 ok("stripTags drops markup", ao.stripTags("<b>bold</b> and <em>soft</em>") === "bold and soft");
 ok("domainOf strips www", ao.domainOf("https://www.energy.gov/x") === "energy.gov");
 
-// ── C. parsers ───────────────────────────────────────────────────────────────
+// -- C. parsers ---------------------------------------------------------------
 console.log("\nC. search parsers (fixtures)");
 const h = ao.parseDdgHtml(DDG_HTML_FIXTURE);
 ok("ddg-html: ad skipped, 2 organic results", h.length === 2, `got ${h.length}`);
@@ -156,7 +156,7 @@ ok("brave: timestamp span dropped, markup stripped, text kept",
 ok("brave: domain extracted", bv[1] && bv[1].domain === "en.wikipedia.org");
 ok("brave: empty html → []", ao.parseBraveHtml("").length === 0);
 
-// ── D. dedupeAndCap ─────────────────────────────────────────────────────────
+// -- D. dedupeAndCap ---------------------------------------------------------
 console.log("\nD. dedupeAndCap");
 const dupes = [
   { title: "A", snippet: "", url: "https://x.com/page" },
@@ -170,7 +170,7 @@ const many = Array.from({ length: 10 }, (_, i) => ({ title: "t" + i, url: `https
 ok("capped at MAX_RESULTS=6", ao.dedupeAndCap(many).length === 6);
 ok("null-safe", ao.dedupeAndCap(null).length === 0);
 
-// ── E. synthesis prompt ─────────────────────────────────────────────────────
+// -- E. synthesis prompt -----------------------------------------------------
 console.log("\nE. buildSynthesisPrompt");
 const resForPrompt = ao.dedupeAndCap(h);
 const p = ao.buildSynthesisPrompt("How do solar panels work?", resForPrompt);
@@ -184,7 +184,7 @@ ok("anti-hallucination rule present", /Never invent/i.test(p.system));
 ok("citation rule present", /\[\d+\]|Cite sources inline/i.test(p.system));
 ok("language-match rule present", /same language/i.test(p.system));
 
-// ── F. message builders ─────────────────────────────────────────────────────
+// -- F. message builders -----------------------------------------------------
 console.log("\nF. message builders");
 const sampleResults = [
   { title: "Photovoltaics - Wikipedia", snippet: "s", url: "https://en.wikipedia.org/wiki/Photovoltaics", domain: "en.wikipedia.org" },
@@ -194,7 +194,7 @@ const msg = ao.buildOverviewMessage("How do solar panels work?", "They convert s
 ok("header present", msg.includes("🌐 *AI OVERVIEW*"));
 ok("question echoed", msg.includes("How do solar panels work?"));
 ok("answer included", msg.includes("photovoltaic effect [1][2]"));
-ok("sources numbered with domains", msg.includes("1. en.wikipedia.org — Photovoltaics - Wikipedia") && msg.includes("2. energy.gov — How Does Solar Work?"));
+ok("sources numbered with domains", msg.includes("1. en.wikipedia.org - Photovoltaics - Wikipedia") && msg.includes("2. energy.gov - How Does Solar Work?"));
 ok("footer present", msg.includes("answers grounded in web results"));
 const bigAnswer = "x".repeat(4000);
 const bigMsg = ao.buildOverviewMessage("q?", bigAnswer, sampleResults);
@@ -204,15 +204,15 @@ const roMsg = ao.buildResultsOnlyMessage("How do solar panels work?", sampleResu
 ok("results-only fallback: titles + domains", roMsg.includes("Photovoltaics - Wikipedia") && roMsg.includes("energy.gov"));
 ok("results-only fallback: degraded-mode note", roMsg.includes("AI summary unavailable"));
 
-// ── G. engine wiring ────────────────────────────────────────────────────────
+// -- G. engine wiring --------------------------------------------------------
 console.log("\nG. engine wiring");
 ok("aiOverview required in engine", engineSrc.includes('require("./utils/aiOverview")'));
-ok("handler signature (senderJid explicit — scope rule)",
+ok("handler signature (senderJid explicit - scope rule)",
   engineSrc.includes("async function handleGoogleSearchCommand(sock, chatId, rawQuery, m, senderJid)"));
 ok("handler reacts 🔍", /function handleGoogleSearchCommand[\s\S]{0,200}text: "🔍"/.test(engineSrc));
 ok("empty query → sendUsage", /handleGoogleSearchCommand[\s\S]{0,900}sendUsage\(/.test(engineSrc));
 ok("MAX_QUERY guard in handler", engineSrc.includes("query.length > aiOverview.MAX_QUERY"));
-ok("backend 0: brave (primary — verified real results from box egress)", engineSrc.includes("https://search.brave.com/search") && engineSrc.includes("parse: aiOverview.parseBraveHtml"));
+ok("backend 0: brave (primary - verified real results from box egress)", engineSrc.includes("https://search.brave.com/search") && engineSrc.includes("parse: aiOverview.parseBraveHtml"));
 ok("backend 1: ddg html", engineSrc.includes("https://html.duckduckgo.com/html/"));
 ok("backend 2: ddg lite", engineSrc.includes("https://lite.duckduckgo.com/lite/"));
 ok("backend 3: bing", engineSrc.includes("https://www.bing.com/search"));
@@ -222,7 +222,7 @@ ok("all three parsers wired",
   engineSrc.includes("parse: aiOverview.parseBingHtml"));
 ok("MIN_RESULTS gate used", engineSrc.includes("parsed.length >= aiOverview.MIN_RESULTS"));
 ok("relevance gate wired (anti-decoy)", engineSrc.includes("aiOverview.relevantEnough(query, parsed)"));
-ok("one immediate retry after all-fail — first ALIVE backend (decoys are per-request; 429-dead ones are never re-hit)", engineSrc.includes("gotResults = await runBackends([firstAlive]);") && /if \(firstAlive\) gotResults = await runBackends\(\[firstAlive\]\);/.test(engineSrc));
+ok("one immediate retry after all-fail - first ALIVE backend (decoys are per-request; 429-dead ones are never re-hit)", engineSrc.includes("gotResults = await runBackends([firstAlive]);") && /if \(firstAlive\) gotResults = await runBackends\(\[firstAlive\]\);/.test(engineSrc));
 ok("synthesis via groq + SMART model", /handleGoogleSearchCommand[\s\S]{0,14000}groq\.chat\.completions\.create\(\s*\{[\s\S]{0,400}model: MODELS\.SMART/.test(engineSrc));
 ok("synthesis failure → results-only fallback",
   engineSrc.includes("aiOverview.buildResultsOnlyMessage(query, results)") &&
@@ -230,8 +230,8 @@ ok("synthesis failure → results-only fallback",
 ok("awardProgression(senderJid, chatId) in handler",
   /function handleGoogleSearchCommand[\s\S]*?awardProgression\(senderJid, chatId\);[\s\S]{0,40}\n    \}/.test(engineSrc));
 
-// dispatch block scope-safety (same trap as quote — owner screenshot 10:51Z)
-const gBlockStart = engineSrc.indexOf("🌐 Google — `.j google <question>` (alias `gog`)");
+// dispatch block scope-safety (same trap as quote - owner screenshot 10:51Z)
+const gBlockStart = engineSrc.indexOf("🌐 Google - `.j google <question>` (alias `gog`)");
 const bareQuoteIdx = engineSrc.indexOf("// Quote Command (NEW)");
 ok("google dispatch block located", gBlockStart > -1);
 ok("google dispatch BEFORE bare quote block", gBlockStart > -1 && bareQuoteIdx > gBlockStart);
@@ -257,7 +257,7 @@ ok("google dispatch AFTER quote with-args dispatch (quote unaffected)", gBlockSt
 ok("registry: google entry in SEARCH", /SEARCH:\s*\[\s*\{\s*cmd:\s*'google'/.test(regSrc));
 ok("registry: usage string", /cmd:\s*'google'[\s\S]{0,200}usage:\s*'google <question>'/.test(regSrc));
 
-// ── H. relevance gate (anti-decoy) ──────────────────────────────────────────
+// -- H. relevance gate (anti-decoy) ------------------------------------------
 console.log("\nH. relevance gate (anti-decoy)");
 ok("significantWords drops stopwords", JSON.stringify(ao.significantWords("Who wrote the harry potter books?")) === JSON.stringify(["wrote", "harry", "potter", "books"]), JSON.stringify(ao.significantWords("Who wrote the harry potter books?")));
 const HP_DECOY = [
@@ -283,12 +283,12 @@ ok("no significant words → cannot judge → accept", ao.relevantEnough("who am
 ok("empty results → cannot judge → accept", ao.relevantEnough("harry potter", []) === true);
 ok("strict minFrac=1 rejects partial topical overlap", ao.relevantEnough("harry potter books", HP_DECOY, 1) === false);
 
-// ── I. collisions ───────────────────────────────────────────────────────────
+// -- I. collisions -----------------------------------------------------------
 console.log("\nI. collision guards");
 ok("'search' still aliased to anime search (not overridden)", /cmd:\s*'search',\s*desc:\s*'Alias for anime search\.'/.test(regSrc));
 ok("no stray google dispatch elsewhere (def + dispatch call only)", (engineSrc.match(/handleGoogleSearchCommand\(/g) || []).length === 2, "expect exactly 2: definition + dispatch");
 ok("quote with-args dispatch still intact", engineSrc.includes("lowerTxt.startsWith(\n                        `${botConfig.getPrefix().toLowerCase()} qoute `"));
-// ── J. synthesis call hygiene (live-observed Groq 400 at 13:08Z) ───────────
+// -- J. synthesis call hygiene (live-observed Groq 400 at 13:08Z) -----------
 console.log("\nJ. synthesis call hygiene");
 const synthAt = engineSrc.indexOf("buildSynthesisPrompt(query, results)");
 const synthWin = synthAt >= 0 ? engineSrc.slice(synthAt, synthAt + 900) : "";
@@ -298,16 +298,16 @@ ok("body does NOT leak 'timeout:' property (Groq 400: unsupported)", createBody.
 ok("timeout passed as per-request OPTIONS (2nd arg) instead", synthWin.includes("{ timeout: 25000 }"));
 ok("synthesis still grounded: temperature 0.2 + max_tokens 700 kept", synthWin.includes("temperature: 0.2") && synthWin.includes("max_tokens: 700"));
 
-// ── K. 429 resilience (bing-rss + cache + breaker; 2026-10-12 13:49Z) ──────
+// -- K. 429 resilience (bing-rss + cache + breaker; 13:49Z) ------
 console.log("\nK. 429 resilience (bing-rss, cache, breaker)");
 ok("aiOverview exports the resilience surface", ["parseBingRss","cacheGet","cacheSet","noteBackend429","isBackendSkip","resetSearchState"].every((k) => typeof ao[k] === "function"));
-const BING_RSS_FIXTURE = `<?xml version="1.0" encoding="utf-8" ?><rss version="2.0"><channel><title>Bing: goku vs saitama</title><link>http://www.bing.com:80/search?q=goku+vs+saitama</link><description>Search results</description><item><title>Goku | Dragon Ball Wiki | Fandom</title><link>https://dragonball.fandom.com/wiki/Goku</link><description>Son Goku is the main protagonist of the Dragon Ball series &amp;#8212; a saiyan raised on Earth.</description></item><item><title>Goku All Forms And Transformations [Remastered HD]</title><link>https://www.youtube.com/watch?v=4ZBm6fHp2Mw</link><description>Every goku transformation ranked.</description></item><item><title>Bing nav helper</title><link>http://www.bing.com/search?q=other</link><description>internal bing link — not a result</description></item></channel></rss>`;
+const BING_RSS_FIXTURE = `<?xml version="1.0" encoding="utf-8" ?><rss version="2.0"><channel><title>Bing: goku vs saitama</title><link>http://www.bing.com:80/search?q=goku+vs+saitama</link><description>Search results</description><item><title>Goku | Dragon Ball Wiki | Fandom</title><link>https://dragonball.fandom.com/wiki/Goku</link><description>Son Goku is the main protagonist of the Dragon Ball series &amp;#8212; a saiyan raised on Earth.</description></item><item><title>Goku All Forms And Transformations [Remastered HD]</title><link>https://www.youtube.com/watch?v=4ZBm6fHp2Mw</link><description>Every goku transformation ranked.</description></item><item><title>Bing nav helper</title><link>http://www.bing.com/search?q=other</link><description>internal bing link - not a result</description></item></channel></rss>`;
 ao.resetSearchState();
 const rssParsed = ao.parseBingRss(BING_RSS_FIXTURE);
 ok("parseBingRss extracts real items", rssParsed.length === 2, `got ${rssParsed.length}`);
 ok("parseBingRss skips bing-internal links", rssParsed.every((r) => !/bing\.com/i.test(r.domain)));
 ok("parseBingRss title+url+domain shape", rssParsed[0] && rssParsed[0].title === "Goku | Dragon Ball Wiki | Fandom" && rssParsed[0].url === "https://dragonball.fandom.com/wiki/Goku" && rssParsed[0].domain === "dragonball.fandom.com");
-ok("parseBingRss decodes entities in snippets", /— a saiyan raised on Earth/.test(rssParsed[0]?.snippet || ""), rssParsed[0]?.snippet);
+ok("parseBingRss decodes entities in snippets", /- a saiyan raised on Earth/.test(rssParsed[0]?.snippet || ""), rssParsed[0]?.snippet);
 ok("parseBingRss empty/null safe", ao.parseBingRss("").length === 0 && ao.parseBingRss(null).length === 0);
 // cache behavior
 ao.cacheSet("Goku  VS Saitama!", rssParsed, "bing-rss", 1000);
@@ -348,6 +348,6 @@ ok("parseWikipediaJson strips HTML from snippets", wikiParsed[0].snippet === "th
 ok("parseWikipediaJson accepts object form (axios auto-parse)", ao.parseWikipediaJson(JSON.parse(WIKI_FIXTURE)).length === 2);
 ok("parseWikipediaJson garbage/empty safe", ao.parseWikipediaJson("not json").length === 0 && ao.parseWikipediaJson("{}").length === 0 && ao.parseWikipediaJson(null).length === 0);
 
-console.log(`\n${"═".repeat(50)}\nRESULT: ${pass} pass, ${fail} fail ${fail === 0 ? "— ALL GREEN ✅" : "— FAILURES ❌"}`);
+console.log(`\n${"═".repeat(50)}\nRESULT: ${pass} pass, ${fail} fail ${fail === 0 ? "- ALL GREEN ✅" : "- FAILURES ❌"}`);
 process.exit(fail === 0 ? 0 : 1);
 })().catch((e) => { console.error("QA crashed:", e); process.exit(1); });

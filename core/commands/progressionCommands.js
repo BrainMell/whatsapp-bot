@@ -26,25 +26,23 @@ function fmtCompact(n) {
  */
 async function handleCommandReward(sock, userId, chatId, hasGuildRole = false) {
   try {
-    // Award XP (always)
+ // Award XP (always)
     const xpResult = progression.awardXP(userId);
     
-    // Award GP (only if user has guild role)
+ // Award GP (only if user has guild role)
     let gpResult = null;
     if (hasGuildRole) {
       gpResult = progression.awardGP(userId, true);
       
-      // Check for new GP achievements
       const gpAchievements = progression.checkGPAchievements(userId);
       if (gpAchievements.length > 0) {
-        // Notify about achievements later to avoid spam
+ // Notify about achievements later to avoid spam
       }
     }
     
-    // Check for new command achievements
     const cmdAchievements = progression.checkCommandAchievements(userId);
     
-    // If user leveled up, send a celebration message
+ // If user leveled up, send a celebration message
     if (xpResult.leveledUp) {
       const newAchievements = progression.checkLevelAchievements(userId, xpResult.newLevel);
       
@@ -61,7 +59,7 @@ async function handleCommandReward(sock, userId, chatId, hasGuildRole = false) {
         levelUpMsg += `🎖️ *+${gpResult.gpGained} GP* (Guild Bonus)\n`;
       }
       
-      // Add achievement notifications
+ // Add achievement notifications
       if (newAchievements.length > 0) {
         levelUpMsg += `\n🏆 *NEW ACHIEVEMENTS!*\n`;
         newAchievements.forEach(ach => {
@@ -96,7 +94,7 @@ function checkUserGuildRole(userId) {
     const member = guilds.getGuildMember(guildName, userId);
     if (!member) return false;
     
-    // User has a guild role if they're not just a regular member
+ // User has a guild role if they're not just a regular member
     return member.role !== 'member' || member.role === 'leader' || member.role === 'officer';
   } catch (err) {
     return false;
@@ -108,7 +106,6 @@ function checkUserGuildRole(userId) {
  */
 async function handleLevelCommand(sock, chatId, senderJid, args, m) {
   try {
-    // Check if looking up another user
     const targetJid = args[0]?.includes('@') ? args[0] : senderJid;
     const stats = progression.getUserStats(targetJid);
     const rank = progression.getUserRank(targetJid);
@@ -281,7 +278,7 @@ async function handleAchievementsCommand(sock, chatId, senderJid, args, m) {
       });
     }
     
-    // Show locked achievements as teasers
+ // Show locked achievements as teasers
     const allAchievements = Object.values(progression.ACHIEVEMENTS);
     const locked = allAchievements.filter(ach => 
       !stats.achievements.some(a => a.id === ach.id)
@@ -320,11 +317,11 @@ async function handleAchievementsCommand(sock, chatId, senderJid, args, m) {
  */
 async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
   try {
-    // 🎯 LIVE PROMOTION CHECK (owner live-test report #12): looking at your
-    // rank must APPLY anything you've already earned — the auto-claim inside
-    // updateAdventurerRank completes a fully-met gate trial and promotes in
-    // the same call. The card is then rendered from the post-promotion doc,
-    // so `.j rank` is both the check and the moment the rank moves.
+ // LIVE PROMOTION CHECK (owner live-test report #12): looking at your
+ // rank must APPLY anything you've already earned - the auto-claim inside
+ // updateAdventurerRank completes a fully-met gate trial and promotes in
+ // the same call. The card is then rendered from the post-promotion doc,
+ // so `.j rank` is both the check and the moment the rank moves.
     try { await economy.updateAdventurerRank(senderJid); } catch (e) {
       console.error('[rank] pre-card promotion check failed:', e.message);
     }
@@ -334,27 +331,27 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
     const xpLeaderboard = progression.getXPLeaderboard(100);
     const gpLeaderboard = progression.getGPLeaderboard(100);
 
-    // Find positions
+ // Find positions
     const xpPosition = xpLeaderboard.findIndex(u => u.userId === senderJid) + 1;
     const gpPosition = gpLeaderboard.findIndex(u => u.userId === senderJid) + 1;
 
-    // ── portrait card (primary) ──
+ // -- portrait card (primary) --
     const rankLetter = String(sheet?.adventurerRank || 'F').toUpperCase();
     const xp = stats.xp || {};
     const nickname = economy.getDisplayName(senderJid);
     const atMax = !xp.nextLevel || xp.nextLevel <= 0;
 
-    // 2026-09-14 r6 (owner: "the rank card still doesn't show the
-    // requirements needed to progress … make the requirements into a
-    // progress bar / progress section"): the rank gates are no longer plain
-    // text rows - they are computed here as structured PROGRESSION bars
-    // (level, quests, gate-mission objectives) so the card can render each
-    // requirement as a fill bar: done vs still-needed at a glance.
+ // r6 ("the rank card still doesn't show the
+ // requirements needed to progress … make the requirements into a
+ // progress bar / progress section"): the rank gates are no longer plain
+ // text rows - they are computed here as structured PROGRESSION bars
+ // (level, quests, gate-mission objectives) so the card can render each
+ // requirement as a fill bar: done vs still-needed at a glance.
     const totalUsers = rank.totalUsers || 0;
     const topPct = Math.max(1, Math.min(99, 100 - (rank.percentile || 0)));
     const standing = [
-      // r6: values kept compact so the 3×2 standing grid never kisses the
-      // label - "#4/4234 · TOP 9%" fits the half-column width.
+ // r6: values kept compact so the 3×2 standing grid never kisses the
+ // label - "#4/4234 · TOP 9%" fits the half-column width.
       { label: 'XP STANDING', value: xpPosition > 0 ? `#${xpPosition}/${totalUsers} · TOP ${topPct}%` : `-/${totalUsers}` },
       { label: 'GP STANDING', value: gpPosition > 0 ? `#${gpPosition}/${totalUsers}` : 'UNRANKED' },
       { label: 'TOTAL XP', value: fmtCompact(stats.xp?.total || 0) },
@@ -364,7 +361,7 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
     ];
     const gates = Array.isArray(gateRows) ? gateRows : [];
 
-    // ── structured progression bars (Go RANK card) ──
+ // -- structured progression bars (Go RANK card) --
     const classSystem = require('../rpg/classSystem');
     const userDoc = economy.getUser(senderJid);
     const curRank = String(userDoc?.adventurerRank || rankLetter || 'F').toUpperCase();
@@ -394,20 +391,20 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
           valueText: `${qc}/${req.questsCompleted}`,
         });
       }
-      // gate-mission objectives - each becomes its own bar
-      // ⚔️ RANK CARD TRUTH FIX (owner live-test report #12, 2026-10-07:
-      // thefirstloser "aren't moving from D rank even tho you've meet the
-      // requirements"): two lies stacked on this card.
-      //   1. pvpWins lives at the TOP LEVEL of the user doc (pvpSystem writes
-      //      user.pvpWins), but checkMissionProgress was handed user.stats —
-      //      so the "Win 3 PvP duels" objective read 0 FOREVER, even for a
-      //      player with wins. The snapshot now merges the top-level counter.
-      //   2. The Go RANK template draws only the FIRST THREE progress bars —
-      //      the mission's remaining objective bars (bosses/duels) were
-      //      computed, silently dropped from the IMAGE, and absent from the
-      //      caption too. The player saw LEVEL ✓ QUESTS ✓ WIN 20 QUESTS ✓ and
-      //      concluded the rank was broken. Overflow bars now ride the
-      //      caption, and an unfinished trial is spelled out there.
+ // gate-mission objectives - each becomes its own bar
+ // RANK CARD TRUTH FIX (owner live-test report #12,
+ // thefirstloser "aren't moving from D rank even tho you've meet the
+ // requirements"): two lies stacked on this card.
+ // 1. pvpWins lives at the TOP LEVEL of the user doc (pvpSystem writes
+ // user.pvpWins), but checkMissionProgress was handed user.stats -
+ // so the "Win 3 PvP duels" objective read 0 FOREVER, even for a
+ // player with wins. The snapshot now merges the top-level counter.
+ // 2. The Go RANK template draws only the FIRST THREE progress bars -
+ // the mission's remaining objective bars (bosses/duels) were
+ // computed, silently dropped from the IMAGE, and absent from the
+ // caption too. The player saw LEVEL QUESTS WIN 20 QUESTS and
+ // concluded the rank was broken. Overflow bars now ride the
+ // caption, and an unfinished trial is spelled out there.
       const gateMission = (() => {
         try { return classSystem.getGateMissionForRank(curRank); } catch { return null; }
       })();
@@ -430,21 +427,21 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
             done: !!o.done,
             valueText: `${o.current || 0}/${o.target || 0}`,
           }));
-          // ⚔️ IMAGE SLOTS TELL THE TRUTH (follow-up to the 1f54fa75 card
-          // fix): the Go RANK template draws only the FIRST THREE bars —
-          // with objectives in mission order an all-met pair of level/quest
-          // bars plus the first (met) objective filled every slot green and
-          // the UNMET objective hid in the caption yap. Unmet objectives now
-          // take the image slots first; met ones overflow to the caption.
+ // IMAGE SLOTS TELL THE TRUTH (follow-up to the 1f54fa75 card
+ // fix): the Go RANK template draws only the FIRST THREE bars -
+ // with objectives in mission order an all-met pair of level/quest
+ // bars plus the first (met) objective filled every slot green and
+ // the UNMET objective hid in the caption yap. Unmet objectives now
+ // take the image slots first; met ones overflow to the caption.
           bars.sort((a, b) => (a.done === b.done ? 0 : a.done ? 1 : -1));
           progress.push(...bars);
         }
       }
     }
 
-    // ⚔️ RANK CARD TRUTH: the trial line spells out the gate mission in
-    // plain words (image bars + caption) — no player ever again reads an
-    // all-green card as "requirements met, rank still stuck".
+ // RANK CARD TRUTH: the trial line spells out the gate mission in
+ // plain words (image bars + caption) - no player ever again reads an
+ // all-green card as "requirements met, rank still stuck".
     const trialLine = (() => {
       try {
         if (!nextRankInfo) return '';
@@ -461,31 +458,31 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
         const parts = mp.progress.map((o) => `${o.done ? '✅' : '▫️'} ${o.label} ${Math.min(o.current || 0, o.target)}/${o.target}`).join(' · ');
         const allDone = mp.progress.every((o) => o.done);
         return allDone
-          ? `⚔️ *${gm.icon || ''} ${gm.name}* — ${parts}\n▫️ Every objective earned — your rank advances the moment you check it.`
-          : `⚔️ *${gm.icon || ''} ${gm.name}* — ${parts}\n▫️ Earn every objective and your rank advances automatically.`;
+          ? `⚔️ *${gm.icon || ''} ${gm.name}* - ${parts}\n▫️ Every objective earned - your rank advances the moment you check it.`
+          : `⚔️ *${gm.icon || ''} ${gm.name}* - ${parts}\n▫️ Earn every objective and your rank advances automatically.`;
       } catch { return ''; }
     })();
 
-    // 🔧 HOTFIX 2026-10-07 ("can't even check rank anymore"): gateCaption
-    // was declared INSIDE the card-render try block but the image caption
-    // below reads it — every SUCCESSFUL render threw ReferenceError and the
-    // outer catch turned the whole command into "Failed to fetch rank
-    // data." Hoisted to function scope; value unchanged.
+ // HOTFIX ("can't even check rank anymore"): gateCaption
+ // was declared INSIDE the card-render try block but the image caption
+ // below reads it - every SUCCESSFUL render threw ReferenceError and the
+ // outer catch turned the whole command into "Failed to fetch rank
+ // data." Hoisted to function scope; value unchanged.
     const gateCaption = progress.slice(3)
       .map((p) => `${p.label} ${p.valueText}`)
       .join(' | ');
     let buffer = null;
     try {
       const goService = require('../utils/goImageService');
-      // The Go RANK template draws the first THREE progress bars (verified
-      // against the live card 2026-10-07); anything beyond rides in the
-      // caption so no requirement info is ever dropped.
+ // The Go RANK template draws the first THREE progress bars (verified
+ // against the live card ); anything beyond rides in the
+ // caption so no requirement info is ever dropped.
       const shownProgress = progress.slice(0, 3);
       buffer = await goService.generatePortraitCard({
         kind: 'RANK',
-        // 🧩 SPRITE CONSISTENCY 2026-09-17: themed styles draw the hero from
-        // playerClass+playerIndex - RANK never sent them, so every player
-        // rendered as Fighter variant 0 regardless of class/assigned sprite.
+ // SPRITE CONSISTENCY themed styles draw the hero from
+ // playerClass+playerIndex - RANK never sent them, so every player
+ // rendered as Fighter variant 0 regardless of class/assigned sprite.
         playerClass: String((userDoc && userDoc.class) || '').toUpperCase(),
         playerIndex: Math.max(0, Math.floor(Number(userDoc && userDoc.spriteIndex) || 0)),
         style: (() => { try { const u = economy.getUser(senderJid); return (u && u.cardStyle) || 0; } catch (e) { return 0; } })(),
@@ -525,7 +522,7 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
       return;
     }
 
-    // ── fallback: legacy text version ──
+ // -- fallback: legacy text version --
     let message = `╔═══════════════════╗\n`;
     message += `║  👑 *YOUR RANK* 👑  ║\n`;
     message += `╚═══════════════════╝\n\n`;
@@ -552,7 +549,7 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
     message += `📱 *Commands:* ${stats.commands.toLocaleString()}\n`;
     message += `🏅 *Achievements:* ${stats.achievements.length}\n\n`;
 
-    // 2026-09-14: keep the adventurer-rank gate info in the text fallback too
+ // keep the adventurer-rank gate info in the text fallback too
     if (gates.length) {
       message += `━━━━━━━━━━━━━━━\n\n`;
       for (const g of gates) {
@@ -560,7 +557,7 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
       }
       message += `\n`;
     }
-    // ⚔️ RANK CARD TRUTH: the gate mission spelled out in the text fallback
+ // RANK CARD TRUTH: the gate mission spelled out in the text fallback
     if (trialLine) {
       message += `━━━━━━━━━━━━━━━\n\n${trialLine}\n\n`;
     }
@@ -585,9 +582,8 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
 async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
   try {
     const stat = args[0];
-    // Validate amount up-front. `parseInt(args[1]) || 1` would silently
-    // default non-numeric input to 1, hiding typos from the user. Also
-    // reject 0 and negative values explicitly.
+ // default non-numeric input to 1, hiding typos from the user. Also
+ // reject 0 and negative values explicitly.
     let amount = 1;
     if (args[1] !== undefined) {
       const parsed = parseInt(args[1], 10);
@@ -602,27 +598,27 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
     if (!stat) {
       const sheet = progression.getCharacterSheet(senderJid) || {};
 
-      // 💡 2026-09-15: image-card UI for the allocation overview, rendered
-      // with the same design language as the profile cards (Royal Decree
-      // palette + type). Falls back to the text panel below on any render
-      // failure so the command can never dead-end.
+ // image-card UI for the allocation overview, rendered
+ // with the same design language as the profile cards (Royal Decree
+ // palette + type). Falls back to the text panel below on any render
+ // failure so the command can never dead-end.
       try {
-        // 💡 2026-09-15 (owner: "use the style/assets with different
-        // orientation used across the entire rpg"): the card is now a member
-        // of the Go PORTRAIT FAMILY - bg_ALLOCATE.png, 600x1000, the exact
-        // bake geometry of DUEL/QUEST/TRIAL/RANK (banner ribbon, name plate,
-        // THE POINTS/THE ALLOCATION parchment panels, wax seal). Rendered by
-        // the Go service; text panel below stays as the fallback.
+ // ("use the style/assets with different
+ // orientation used across the entire rpg"): the card is now a member
+ // of the Go PORTRAIT FAMILY - bg_ALLOCATE.png, 600x1000, the exact
+ // bake geometry of DUEL/QUEST/TRIAL/RANK (banner ribbon, name plate,
+ // THE POINTS/THE ALLOCATION parchment panels, wax seal). Rendered by
+ // the Go service; text panel below stays as the fallback.
         const classSystem = require('../rpg/classSystem');
         const allocUser = economy.getUser(senderJid);
         const allocClass = allocUser ? classSystem.getClassById(allocUser.class) : null;
         const allocTier = allocClass?.tier || 'STARTER';
-        // 💡 TICKET #b4f78f (2026-09-21): the per-point rates shown on this
-        // card come from progression.previewAllocation - the EXACT function
-        // the backend pays with, mirroring the owner contract (every point
-        // delivers base × tier; the soft cap was removed by owner ruling
-        // 2026-09-20). UI and backend read one math source, so they can never
-        // disagree again.
+ //: the per-point rates shown on this
+ // card come from progression.previewAllocation - the EXACT function
+ // the backend pays with, mirroring the owner contract (every point
+ // delivers base × tier; the soft cap was removed by owner ruling
+ // ). UI and backend read one math source, so they can never
+ // disagree again.
         const allocBase = { hp: 15, atk: 3, def: 2, mag: 3, spd: 2, luck: 2, crit: 1 };
         const allocPerPoint = {};
         for (const k of Object.keys(allocBase)) {
@@ -644,7 +640,7 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
         const cardBuffer = await goService.generatePortraitCard({
           kind: 'ALLOCATE',
           style: (allocUser && allocUser.cardStyle) || 0,
-          // 🧩 SPRITE CONSISTENCY 2026-09-17: send class + assigned sprite.
+ // SPRITE CONSISTENCY send class + assigned sprite.
           playerClass: String((allocClass && allocClass.id) || (allocUser && allocUser.class) || '').toUpperCase(),
           playerIndex: Math.max(0, Math.floor(Number(allocUser && allocUser.spriteIndex) || 0)),
           nickname: economy.getDisplayName(senderJid),
@@ -664,8 +660,8 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
           cap += `Available Points: *${Number(sheet.statPoints) || 0}*\n\n`;
           cap += `🎯 *How to allocate - every point delivers the exact value shown:*\n`;
           for (const allocS of ["hp", "atk", "def", "mag", "spd", "luck", "crit"]) {
-            // 💡 TICKET #b4f78f: show what 5 points ACTUALLY buy (base × tier,
-            // from the same function the backend pays with).
+ // show what 5 points ACTUALLY buy (base × tier,
+ // from the same function the backend pays with).
             const allocPreview = progression.previewAllocation(senderJid, allocS, 5);
             cap += `• \`${getPrefix()} allocate ${allocS} 5\` → +${allocPreview.gainedValue} ${allocS.toUpperCase()}\n`;
           }
@@ -704,8 +700,8 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
     successMsg += `Remaining Points: *${result.remainingPoints}*`;
 
     await sock.sendMessage(chatId, { text: getBotMarker() + successMsg }, { quoted: m });
-    // 💡 Phase B TUTORIAL: allocation lesson advances on a REAL spend
-    // (no-op unless a tutorial session is active).
+ // Phase B TUTORIAL: allocation lesson advances on a REAL spend
+ // (no-op unless a tutorial session is active).
     try { require('../rpg/tutorial').notify(senderJid, 'allocate', { sock, chatId }).catch(() => {}); } catch (e) {}
 
   } catch (err) {
@@ -726,7 +722,6 @@ async function handleRespecCommand(sock, chatId, senderJid, m) {
     const economy = require('../rpg/economy');
     const level = progression.getLevel(senderJid);
 
-    // Check if there's anything to respec
     const user = progression.getUser(senderJid);
     if (!user) {
       return await sock.sendMessage(chatId, {
@@ -742,8 +737,8 @@ async function handleRespecCommand(sock, chatId, senderJid, m) {
       }, { quoted: m });
     }
 
-    // Cost: 1K × level. Level 10 = 10K, level 50 = 50K, level 100 = 100K.
-    const RESPEC_COST = 1000 * Math.max(1, level); // 💡 Rebalanced 2026-08-17: 100K×L at L50 = 5M (impossible). 1K×L at L50 = 50K (~2 days).
+ // Cost: 1K × level. Level 10 = 10K, level 50 = 50K, level 100 = 100K.
+    const RESPEC_COST = 1000 * Math.max(1, level); // Rebalanced 100K×L at L50 = 5M (impossible). 1K×L at L50 = 50K (~2 days).
     const balance = economy.getBalance(senderJid);
 
     if (balance < RESPEC_COST) {
@@ -752,13 +747,13 @@ async function handleRespecCommand(sock, chatId, senderJid, m) {
       }, { quoted: m });
     }
 
-    // Deduct Zeni first (sink)
+ // Deduct Zeni first (sink)
     economy.removeMoney(senderJid, RESPEC_COST, 'Stat respec');
 
-    // Now reset stats
+ // Now reset stats
     const result = progression.resetStats(senderJid);
     if (!result.success) {
-      // Refund on failure
+ // Refund on failure
       economy.addMoney(senderJid, RESPEC_COST, 'Respec refund');
       return await sock.sendMessage(chatId, {
         text: getBotMarker() + `❌ Respec failed: ${result.message}. Zeni refunded.`

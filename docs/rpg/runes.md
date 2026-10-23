@@ -34,7 +34,7 @@ The Rune System allows players to socket runes into their class abilities, addin
 - Lesser, Greater, Supreme, Mythic - scaling power per tier.
 - Drop tiers: greater (Floor 21+), supreme (Floor 50+), mythic (special).
 
-## Recent Changes (2026-08-06)
+## Recent Changes
 - Fixed: runes had zero effect in PvP (applyRuneModifiers was missing from handlePvPAction)
 - Fixed: Void Conversion damage penalty (TRUE damage was falling into MAG mitigation)
 - Fixed: Silence status effect not being applied in PvP

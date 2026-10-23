@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* fandom_lore_scraper.js — pass7b: build lore MCQs from Fandom wiki infoboxes.
+/* fandom_lore_scraper.js - pass7b: build lore MCQs from Fandom wiki infoboxes.
  * Owner-authorized scraper route (no API keys). For each franchise wiki:
  *   1. list character pages via MediaWiki categorymembers
  *   2. fetch raw wikitext, parse the first infobox template's params
@@ -17,7 +17,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const normKey = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 const WIKIS = [
-  // comics (manga + western)
+ // comics (manga + western)
   { id: "onepiece", host: "onepiece.fandom.com", name: "One Piece", cat: "comics", topic: "Manga", cats: ["Category:Characters"] },
   { id: "dragonball", host: "dragonball.fandom.com", name: "Dragon Ball", cat: "comics", topic: "Manga", cats: ["Category:Characters"] },
   { id: "aot", host: "attackontitan.fandom.com", name: "Attack on Titan", cat: "comics", topic: "Manga", cats: ["Category:Characters"] },
@@ -25,21 +25,21 @@ const WIKIS = [
   { id: "bleach", host: "bleach.fandom.com", name: "Bleach", cat: "comics", topic: "Manga", cats: ["Category:Characters"] },
   { id: "marvel", host: "marvel.fandom.com", name: "Marvel Comics", cat: "comics", topic: "Comics", cats: ["Category:Characters"] },
   { id: "dc", host: "dc.fandom.com", name: "DC Comics", cat: "comics", topic: "Comics", cats: ["Category:Characters"] },
-  // series
+ // series
   { id: "got", host: "gameofthrones.fandom.com", name: "Game of Thrones", cat: "series", topic: "TV Series", cats: ["Category:Characters"] },
   { id: "breakingbad", host: "breakingbad.fandom.com", name: "Breaking Bad", cat: "series", topic: "TV Series", cats: ["Category:Characters"] },
   { id: "strangerthings", host: "strangerthings.fandom.com", name: "Stranger Things", cat: "series", topic: "TV Series", cats: ["Category:Characters"] },
   { id: "twd", host: "walkingdead.fandom.com", name: "The Walking Dead", cat: "series", topic: "TV Series", cats: ["Category:Characters"] },
   { id: "avatar", host: "avatar.fandom.com", name: "Avatar: The Last Airbender", cat: "series", topic: "Cartoons", cats: ["Category:Characters"] },
   { id: "simpsons", host: "simpsons.fandom.com", name: "The Simpsons", cat: "series", topic: "Cartoons", cats: ["Category:Characters"] },
-  // movies
+ // movies
   { id: "starwars", host: "starwars.fandom.com", name: "Star Wars", cat: "movies", topic: "Movies", cats: ["Category:Characters", "Category:Individuals"] },
   { id: "mcu", host: "marvelcinematicuniverse.fandom.com", name: "Marvel Cinematic Universe", cat: "movies", topic: "Movies", cats: ["Category:Characters"] },
   { id: "harrypotter", host: "harrypotter.fandom.com", name: "Harry Potter", cat: "movies", topic: "Movies", cats: ["Category:Individuals", "Category:Characters"] },
   { id: "lotr", host: "lotr.fandom.com", name: "The Lord of the Rings", cat: "movies", topic: "Movies", cats: ["Category:Characters", "Category:Individuals"] },
   { id: "pixar", host: "pixar.fandom.com", name: "Pixar", cat: "movies", topic: "Movies", cats: ["Category:Characters"] },
   { id: "jurassicpark", host: "jurassicpark.fandom.com", name: "Jurassic Park", cat: "movies", topic: "Movies", cats: ["Category:Characters"] },
-  // games
+ // games
   { id: "zelda", host: "zelda.fandom.com", name: "The Legend of Zelda", cat: "games", topic: "Video Games", cats: ["Category:Characters"] },
   { id: "minecraft", host: "minecraft.fandom.com", name: "Minecraft", cat: "games", topic: "Video Games", cats: ["Category:Characters", "Category:Mobs"] },
   { id: "gta", host: "gta.fandom.com", name: "Grand Theft Auto", cat: "games", topic: "Video Games", cats: ["Category:Characters"] },
@@ -200,7 +200,7 @@ async function listMembers(host, cats) {
   for (const ct of cats) {
     let pages = (await catList(host, ct, "page")).filter((t) => !t.includes(":") && !/\/Gallery$/i.test(t));
     if (pages.length >= 25) return pages.slice(0, MEMBER_CAP);
-    // container category: expand subcategories up to depth 2
+ // container category: expand subcategories up to depth 2
     const merged = new Set(pages);
     const queue = (await catList(host, ct, "subcat")).filter((t) => !/Galleries|Gallery/i.test(t)).slice(0, 10);
     let depth = 0;
@@ -243,7 +243,7 @@ async function scrapeWiki(w, ckpt) {
       if (!wt) continue;
       const rec = parseInfobox(wt);
       if (!rec) continue;
-      // drop values equal to the character name
+ // drop values equal to the character name
       for (const k of Object.keys(rec)) rec[k] = [...rec[k]].filter((v) => normKey(v) !== normKey(title));
       for (const k of Object.keys(rec)) if (!rec[k].length) delete rec[k];
       if (Object.keys(rec).length) {
@@ -279,7 +279,7 @@ function pickN(pool, n, exclude) {
 
 function generate(ckpt) {
   const lines = [];
-  // existing stems for dedupe
+ // existing stems for dedupe
   const seen = new Set();
   try {
     const DS = JSON.parse(fs.readFileSync("/home/ubuntu/whatsapp-bot/data/quizDataset.json", "utf8"));
@@ -293,7 +293,7 @@ function generate(ckpt) {
     lines.push(JSON.stringify({ cat, topic, q, options, correct, difficulty, source, cls: "lore" }));
     return true;
   };
-  // group question generators: template(char, franchiseName, answer)
+ // group question generators: template(char, franchiseName, answer)
   const GENS = {
     mother: (c, f, v) => `In ${f}, who is ${c}'s mother?`,
     father: (c, f, v) => `In ${f}, who is ${c}'s father?`,
@@ -318,11 +318,11 @@ function generate(ckpt) {
   }
   const stats = {};
   for (const [cat, wikis] of Object.entries(byCat)) {
-    // field questions
+ // field questions
     for (const { wid, w, data } of wikis) {
       const names = Object.keys(data.chars);
       if (!names.length) continue;
-      // build pools per group
+ // build pools per group
       const pools = {};
       for (const n of names) for (const [g, vals] of Object.entries(data.chars[n])) for (const v of vals) (pools[g] = pools[g] || new Set()).add(v);
       pools.first = pools.first || new Set();
@@ -351,7 +351,7 @@ function generate(ckpt) {
       stats[wid] = count;
       console.log(`[${wid}] +${count} field lore questions`);
     }
-    // cross-franchise ID questions
+ // cross-franchise ID questions
     if (wikis.length >= 4) {
       for (const { wid, w, data } of wikis) {
         const names = Object.keys(data.chars);

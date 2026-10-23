@@ -3,18 +3,17 @@
 // ============================================================
 // Detects and applies synergy effects when compatible runes/statuses
 // are combined on the same skill cast.
-//
 // CC SAFEGUARD: All hard CC (stun, freeze, silence, fear, root) uses
 // the existing 2-turn immunity system from PvP stun DR (Phase 1 Fix #5).
 // When any hard CC expires, the target gets 2 turns of immunity to
 // ALL hard CC types. Wet is consumed on synergy trigger.
 // ============================================================
 
-// ─── SYNERGY DEFINITIONS ─────────────────────────────────────
+// --- SYNERGY DEFINITIONS -------------------------------------
 // Each synergy: { id, name, trigger: [statusA, statusB], effect, ccType? }
 // ccType marks synergies that apply hard CC (need DR check)
 const SYNERGIES = [
-  // ── Wet & Elemental (5) ──
+ // -- Wet & Elemental (5) --
   { id: 'electrocution', name: 'Electrocution', icon: '⚡',
     trigger: ['wet', 'shock'],
     effect: { type: 'guaranteed_stun', consumeWet: true, lightningBonusMult: 1.5 },
@@ -37,7 +36,7 @@ const SYNERGIES = [
     trigger: ['burn', 'freeze'],
     effect: { type: 'bonus_damage', damageMult: 1.4, consumeBurn: true, consumeFreeze: true, applyCrippled: 1 } },
 
-  // ── Wet & Movement (5) ──
+ // -- Wet & Movement (5) --
   { id: 'water_slide', name: 'Water Slide', icon: '🌊',
     trigger: ['wet', 'knockback'],
     effect: { type: 'extended_knockback', extraDistance: 1, slipChance: 30, consumeWet: true } },
@@ -60,7 +59,7 @@ const SYNERGIES = [
     trigger: ['wet', 'spread'],
     effect: { type: 'spread_wet', spreadRadius: 2, wetDuration: 1 } },
 
-  // ── Control & Debuff (6) ──
+ // -- Control & Debuff (6) --
   { id: 'panic', name: 'Panic', icon: '😱',
     trigger: ['fear', 'silence'],
     effect: { type: 'enhanced_cc', fleeChanceBonus: 30 },
@@ -90,7 +89,7 @@ const SYNERGIES = [
     effect: { type: 'enhanced_cc', stunChanceBonus: 15, blindDurationBonus: 1 },
     ccType: 'stun' },
 
-  // ── DoT Synergies (5) ──
+ // -- DoT Synergies (5) --
   { id: 'hemorrhage', name: 'Hemorrhage', icon: '🔥🩸',
     trigger: ['burn', 'bleed'],
     effect: { type: 'enhanced_dot', dotMult: 1.5, healingReduction: 50 } },
@@ -111,7 +110,7 @@ const SYNERGIES = [
     trigger: ['curse', 'bleed'],
     effect: { type: 'max_hp_reduction', hpReductionPct: 10, healingReduction: 50 } },
 
-  // ── Advanced Combos (4) ──
+ // -- Advanced Combos (4) --
   { id: 'gravity_burst', name: 'Gravity Burst', icon: '🪝💥',
     trigger: ['pull', 'spread_blast'],
     effect: { type: 'group_aoe', damageMult: 1.3 } },
@@ -131,10 +130,8 @@ const SYNERGIES = [
     ccType: 'fear' },
 ];
 
-// ─── CHECK FOR ACTIVE SYNERGIES ──────────────────────────────
+// --- CHECK FOR ACTIVE SYNERGIES ------------------------------
 // Given a list of statuses being applied (or already on target),
-// returns an array of active synergy effects.
-//
 // @param {Array<string>} activeStatuses - e.g. ['wet', 'shock', 'burn']
 // @returns {Array<object>} - active synergies with their effects
 function detectSynergies(activeStatuses) {
@@ -144,7 +141,6 @@ function detectSynergies(activeStatuses) {
   const triggered = [];
 
   for (const synergy of SYNERGIES) {
-    // Check if all trigger statuses are present
     const allPresent = synergy.trigger.every(s => statusSet.has(s.toLowerCase()));
     if (allPresent) {
       triggered.push(synergy);
@@ -154,9 +150,8 @@ function detectSynergies(activeStatuses) {
   return triggered;
 }
 
-// ─── APPLY SYNERGY EFFECTS ───────────────────────────────────
+// --- APPLY SYNERGY EFFECTS -----------------------------------
 // Modifies the combat effect based on active synergies.
-// Returns { modifiedEffect, synergiesTriggered, messages }
 function applySynergyEffects(effect, targetStatuses, attackerRunes) {
   const result = {
     modifiedEffect: { ...effect },
@@ -166,17 +161,17 @@ function applySynergyEffects(effect, targetStatuses, attackerRunes) {
     consumeStatuses: [], // statuses to consume (remove from target)
   };
 
-  // Collect all statuses: ones on the target + ones being applied by this skill
+ // Collect all statuses: ones on the target + ones being applied by this skill
   const allStatuses = new Set([
     ...(targetStatuses || []).map(s => s.type || s),
     ...((effect.addStatuses || []).map(s => s.type)),
   ]);
 
-  // Also check rune types (some synergies trigger on rune type, not status)
+ // Also check rune types (some synergies trigger on rune type, not status)
   if (attackerRunes) {
     for (const rune of attackerRunes) {
       const runeType = rune.type || rune;
-      // Map rune types to pseudo-statuses for synergy detection
+ // Map rune types to pseudo-statuses for synergy detection
       if (runeType === 'KNOCKBACK') allStatuses.add('knockback');
       if (runeType === 'PULL') allStatuses.add('pull');
       if (runeType === 'TAUNT') allStatuses.add('taunt');
@@ -197,12 +192,12 @@ function applySynergyEffects(effect, targetStatuses, attackerRunes) {
 
     const eff = synergy.effect;
 
-    // Bonus damage
+ // Bonus damage
     if (eff.damageMult) {
       result.modifiedEffect.multiplier = (Number(result.modifiedEffect.multiplier) || 1) * eff.damageMult;
     }
 
-    // Enhanced DoT
+ // Enhanced DoT
     if (eff.dotMult) {
       result.modifiedEffect.dotMult = (result.modifiedEffect.dotMult || 1) * eff.dotMult;
     }
@@ -210,12 +205,12 @@ function applySynergyEffects(effect, targetStatuses, attackerRunes) {
       result.modifiedEffect.dotDurationBonus = (result.modifiedEffect.dotDurationBonus || 0) + eff.dotDurationBonus;
     }
 
-    // Healing reduction
+ // Healing reduction
     if (eff.healingReduction) {
       result.modifiedEffect.healingReduction = eff.healingReduction;
     }
 
-    // CC effects - track for DR check
+ // CC effects - track for DR check
     if (eff.type === 'guaranteed_stun') {
       result.ccApplied.push('stun');
       result.modifiedEffect.addStatuses = (result.modifiedEffect.addStatuses || []);
@@ -275,18 +270,18 @@ function applySynergyEffects(effect, targetStatuses, attackerRunes) {
       }
     }
 
-    // Max HP reduction
+ // Max HP reduction
     if (eff.hpReductionPct) {
       result.modifiedEffect.maxHpReductionPct = eff.hpReductionPct;
     }
 
-    // Status consumption
+ // Status consumption
     if (eff.consumeWet) result.consumeStatuses.push('wet');
     if (eff.consumeBurn) result.consumeStatuses.push('burn');
     if (eff.consumeFreeze) result.consumeStatuses.push('freeze');
     if (eff.consumePoisonDuration) result.consumeStatuses.push('poison');
 
-    // Lightning damage bonus
+ // Lightning damage bonus
     if (eff.lightningBonusMult) {
       result.modifiedEffect.multiplier = (Number(result.modifiedEffect.multiplier) || 1) * eff.lightningBonusMult;
     }
@@ -295,16 +290,15 @@ function applySynergyEffects(effect, targetStatuses, attackerRunes) {
   return result;
 }
 
-// ─── CHECK CC IMMUNITY ───────────────────────────────────────
-// Returns true if the target is immune to the given CC type
+// --- CHECK CC IMMUNITY ---------------------------------------
 // (2-turn immunity after any hard CC expires, per Phase 1 Fix #5).
 function isCCImmune(target, ccType) {
   if (!target || !ccType) return false;
-  // All hard CC types share the same immunity timer
+ // All hard CC types share the same immunity timer
   const hardCC = ['stun', 'freeze', 'sleep', 'charm', 'fear', 'root', 'silence'];
   if (!hardCC.includes(ccType)) return false;
 
-  // Check stunImmunityTurns (from PvP DR system)
+ // Check stunImmunityTurns (from PvP DR system)
   if (target.stunImmunityTurns && target.stunImmunityTurns > 0) {
     return true;
   }

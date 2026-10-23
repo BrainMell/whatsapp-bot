@@ -16,7 +16,7 @@ function test(name, fn) {
 
 console.log('=== PHASE 4 UNIT TESTS ===\n');
 
-// ─── summonCommands module ─────────────────────────────────────
+// --- summonCommands module -------------------------------------
 console.log('--- summonCommands module ---');
 
 const summonCommands = require(path.join(REPO, 'core/commands/summonCommands.js'));
@@ -25,7 +25,7 @@ test('summonCommands exports handleCommand', () => {
   assert.strictEqual(typeof summonCommands.handleCommand, 'function');
 });
 
-// ─── lootSystem egg items ──────────────────────────────────────
+// --- lootSystem egg items --------------------------------------
 console.log('\n--- lootSystem egg items ---');
 
 const lootSystem = require(path.join(REPO, 'core/rpg/lootSystem.js'));
@@ -70,7 +70,7 @@ test('summon rename tag exists', () => {
   assert.strictEqual(tag.type, 'CONSUMABLE');
 });
 
-// ─── engine.js wiring ──────────────────────────────────────────
+// --- engine.js wiring ------------------------------------------
 console.log('\n--- engine.js command wiring ---');
 
 const engineSource = fs.readFileSync(path.join(REPO, 'core/engine.js'), 'utf8');
@@ -88,7 +88,7 @@ test('summon command accepts "summons" alias', () => {
   assert.ok(engineSource.includes('primaryCmd === "summons"'));
 });
 
-// ─── summonCommands source verification ────────────────────────
+// --- summonCommands source verification ------------------------
 console.log('\n--- summonCommands source verification ---');
 
 const cmdSource = fs.readFileSync(path.join(REPO, 'core/commands/summonCommands.js'), 'utf8');
@@ -152,7 +152,7 @@ test('nickname matching works', () => {
   assert.ok(cmdSource.includes('s.nickname.toLowerCase() === query.toLowerCase()'));
 });
 
-// ─── Integration: commands use summonSystem correctly ──────────
+// --- Integration: commands use summonSystem correctly ----------
 console.log('\n--- Integration with summonSystem ---');
 
 test('commands require summonSystem', () => {
@@ -175,6 +175,6 @@ test('commands require botConfig (for prefix)', () => {
   assert.ok(cmdSource.includes("require('../../botConfig')"));
 });
 
-// ─── Summary ──────────────────────────────────────────────────
+// --- Summary --------------------------------------------------
 console.log(`\n=== PHASE 4 SUMMARY: ${pass} passed, ${fail} failed ===`);
 process.exit(fail > 0 ? 1 : 0);

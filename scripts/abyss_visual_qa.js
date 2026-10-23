@@ -1,6 +1,6 @@
-// 🕳️ ABYSS VISUAL OVERHAUL — pure QA suite (no DB, no real canvas needed:
+// ABYSS VISUAL OVERHAUL - pure QA suite (no DB, no real canvas needed:
 // the sandbox node_modules/canvas mock satisfies the require; assertions are
-// structural, not pixel-based — pixel QA lives in abyss_gallery.js on a box).
+// structural, not pixel-based - pixel QA lives in abyss_gallery.js on a box).
 // Run: node scripts/abyss_visual_qa.js
 let PASS = 0, FAIL = 0;
 function check(name, cond) {
@@ -12,7 +12,7 @@ function section(t) { console.log(`\n═══ ${t} ═══`); }
 const path = require('path');
 const REPO = path.join(__dirname, '..');
 
-// ── monkey-patch combatIntegration (would pull goImageService/axios) ──────
+// -- monkey-patch combatIntegration (would pull goImageService/axios) ------
 const ciPath = require.resolve(path.join(REPO, 'core/rpg/combatIntegration'));
 require.cache[ciPath] = {
     id: ciPath, filename: ciPath, loaded: true,
@@ -32,8 +32,8 @@ require.cache[progPath] = {
 
 const abyssScene = require(path.join(REPO, 'core/rpg/abyssScene'));
 
-// ── canvas authenticity: the sandbox ships a test MOCK (test_renderq setup,
-// node_modules/canvas is gitignored) whose getContext returns {} — it can
+// -- canvas authenticity: the sandbox ships a test MOCK (test_renderq setup,
+// node_modules/canvas is gitignored) whose getContext returns {} - it can
 // satisfy STRUCTURAL checks but cannot draw. Render-dependent checks gate on
 // this and are exercised for real by the on-box run (scripts/render_abyss_round4.js).
 const RENDER_OK = (() => {
@@ -42,27 +42,27 @@ const RENDER_OK = (() => {
         return typeof c.createCanvas(2, 2).getContext('2d').save === 'function';
     } catch (e) { return false; }
 })();
-if (!RENDER_OK) console.log('ℹ️ sandbox canvas mock detected — pixel-render checks run on-box (render_abyss_round4)');
+if (!RENDER_OK) console.log('ℹ️ sandbox canvas mock detected - pixel-render checks run on-box (render_abyss_round4)');
 
-// ═══ 1. background pools (§4) ═══
-section('FIX §4 — background pools');
+// === 1. background pools (§4) ===
+section('FIX §4 - background pools');
 const all = abyssScene.bgList(), combat = abyssScene.combatBgList();
 const regPool = abyssScene.bgListRegular();
 check(`pool >= 10 REAL pixel-art backgrounds (${all.length})`, all.length >= 10);
 check('pool is PNG pixel art (AI jpg pool removed)', all.every((f) => f.toLowerCase().endsWith('.png')));
-check(`combat sub-pool = full pool — every hall is stage-safe (${combat.length})`, combat.length === all.length);
+check(`combat sub-pool = full pool - every hall is stage-safe (${combat.length})`, combat.length === all.length);
 check('AI halls are gone', !all.some((f) => /crystal_chasm|ember_forge|spore_bloom|void_rift/i.test(f)));
 check('deterministic per floor', abyssScene.bgFileForFloor(5) === abyssScene.bgFileForFloor(5));
 check('floors rotate the pool', abyssScene.bgFileForFloor(1) !== abyssScene.bgFileForFloor(2));
 check('combat selection stays inside combat pool', combat.includes(abyssScene.bgFileForFloor(9, true)));
 // round 4 (owner 10:19Z): boss rooms keep the hall pool EXCLUSIVELY; regular
 // encounters render the abyss-themed side-stage pool (circled foundations).
-// 🕳️ round-12 (owner 2026-10-10 01:56Z): mist_hollow OUT — pool is 3.
-// 🕳️ round-13 (owner 02:56Z image-2 brief): five NEW crimson-dusk stages join
-// the pool — pool = 8, the original three all stay.
-// 🕳️ round-15 (owner 09:15Z: "the arena and sand dune looking ones literally
+// round-12 (01:56Z): mist_hollow OUT - pool is 3.
+// round-13 (owner 02:56Z image-2 brief): five NEW crimson-dusk stages join
+// the pool - pool = 8, the original three all stay.
+// round-15 (owner 09:15Z: "the arena and sand dune looking ones literally
 // don't fit"): sunken_amphitheater + crimson_dunes OUT; two unique dusk-family
-// maps IN (ashen_basilica / withered_grove) — pool stays 8.
+// maps IN (ashen_basilica / withered_grove) - pool stays 8.
 const ROUND13_BGS = ['ruined_causeway_abyss.png', 'bone_fields_abyss.png', 'obsidian_ridge_abyss.png'];
 const ROUND15_BGS = ['ashen_basilica_abyss.png', 'withered_grove_abyss.png'];
 check(`regular pool present, round-13 expanded (${regPool.length})`, regPool.length >= 8);
@@ -82,14 +82,14 @@ check('regular style picks the side-stage pool', regPool.includes(abyssScene.bgF
 check('regular style deterministic per floor', abyssScene.bgFileForFloor(4, 'regular') === abyssScene.bgFileForFloor(4, 'regular'));
 check('regular pool dir exists on disk', require('fs').existsSync(path.join(REPO, 'core/rpgasset/environment/abyss/regular')));
 
-// ═══ 2. enemy art resolution (§5) ═══
-section('FIX §5 — enemy art resolution (amalgamation family only)');
+// === 2. enemy art resolution (§5) ===
+section('FIX §5 - enemy art resolution (amalgamation family only)');
 check('enemyIdOf plain pool id', abyssScene.enemyIdOf({ name: 'MUTATED HOUND' }) === 'MUTATED_HOUND');
 check('enemyIdOf boss name with icon', abyssScene.enemyIdOf({ name: '⚡ INFECTED COLOSSUS' }) === 'INFECTED_COLOSSUS');
 check('enemyIdOf bossId precedence', abyssScene.enemyIdOf({ name: 'whatever', bossId: 'VOID_TITAN' }) === 'VOID_TITAN');
 check('enemyIdOf ignores run ids', abyssScene.enemyIdOf({ name: 'SLIME', id: 'abyss_F_1_123' }) === 'SLIME');
-// (2026-10-09 08:43Z, owner: "get rid of the slime — only those weird front
-// facing amalgamation creatures") — by-name rat/slime overrides are GONE and
+// (08:43Z, "get rid of the slime - only those weird front
+// facing amalgamation creatures") - by-name rat/slime overrides are GONE and
 // every spawn-pool id renders a front-facing amalgamation single:
 check('rat/slime by-name overrides are gone (no enemies/abyss art resolves)',
     !(abyssScene.resolveEnemyArt({ name: 'RABID RAT', spriteIndex: 86 }) || {}).dir?.endsWith('abyss')
@@ -99,8 +99,8 @@ const abyssFiles = require('fs').existsSync(path.join(REPO, 'core/rpgasset/enemi
     : [];
 check(`enemies/abyss root holds no by-name sprites (rat/slime gone): ${abyssFiles.join(',') || '(empty)'}`,
     abyssFiles.length === 0);
-// 🕳️ round-13 bestiary: 20 audited sprites in enemies/abyss/regular_bestiary/
-// (subdir — the root by-name check above must stay empty so the FROZEN boss
+// round-13 bestiary: 20 audited sprites in enemies/abyss/regular_bestiary/
+// (subdir - the root by-name check above must stay empty so the FROZEN boss
 // composition can never pick a new-style sprite up through resolveEnemyArt).
 const BEST_DIR = path.join(REPO, 'core/rpgasset/enemies/abyss/regular_bestiary');
 const bestiaryFiles = require('fs').existsSync(BEST_DIR)
@@ -141,7 +141,7 @@ if (abyssSystem && abyssSystem.ABYSS_ENEMY_POOLS) {
         ...Object.values(abyssSystem.ABYSS_BOSS_POOL).flat(),
     ]);
 } else {
-    // fallback if the models unavailable in sandbox: scan the source
+ // fallback if the models unavailable in sandbox: scan the source
     const src = require('fs').readFileSync(path.join(REPO, 'core/rpg/abyssSystem.js'), 'utf8');
     for (const m of src.matchAll(/\[\s*'([A-Z_]+)'(?:\s*,\s*'([A-Z_]+)')*\s*\]/g)) {
         for (const g of m.slice(1)) if (g) poolIds.add(g);
@@ -165,8 +165,8 @@ check('legacy id (in-flight run) still falls to curated pixel pool',
 const unknown = abyssScene.resolveEnemyArt({ name: 'MYSTERY BEAST', spriteIndex: 999 });
 check('out-of-range index never crashes (null or sheet)', unknown === null || !!unknown.file);
 
-// ═══ 3. boss-floor mirror vs the real abyssSystem rule ═══
-section('MECHANICS PRESERVATION — boss-floor mirror');
+// === 3. boss-floor mirror vs the real abyssSystem rule ===
+section('MECHANICS PRESERVATION - boss-floor mirror');
 check('F1 not boss', !abyssScene.isBossFloorMirror(1));
 check('F5 boss', abyssScene.isBossFloorMirror(5));
 check('F10 boss', abyssScene.isBossFloorMirror(10));
@@ -176,11 +176,11 @@ check('F18 S-tier mini-boss', abyssScene.isBossFloorMirror(18));
 check('F20 NOT boss (matches 20%3 rule)', !abyssScene.isBossFloorMirror(20));
 check('F25 boss again after S-tier band', abyssScene.isBossFloorMirror(25));
 
-// ═══ 4. live pool mapping (battle-tested field shapes) ═══
-section('§6 — live combat pool mapping');
+// === 4. live pool mapping (battle-tested field shapes) ===
+section('§6 - live combat pool mapping');
 const live = (() => {
-    // replicate livePools through a render plan call path — use internal via
-    // a state shaped exactly like startAbyssCombat builds
+ // replicate livePools through a render plan call path - use internal via
+ // a state shaped exactly like startAbyssCombat builds
     const state = {
         chatId: 'qa', isAbyss: true, abyssFloor: 7, dungeonRank: 0, sessionKey: 'qa_1',
         abyssRun: { currentEncounterType: 'combat' },
@@ -193,8 +193,8 @@ const live = (() => {
 check('combat state is preserved (mechanics untouched by renderer)',
     live.players[0].currentHP === 300 && live.enemies[0].stats.maxHp === 1000);
 
-// ═══ 5. frozen layouts (§6 pixel-stable turns) + end-to-end render ═══
-section('§6 — frozen layout + render contract');
+// === 5. frozen layouts (§6 pixel-stable turns) + end-to-end render ===
+section('§6 - frozen layout + render contract');
 (async () => {
     const mkState = (over) => Object.assign({
         chatId: 'qa', isAbyss: true, abyssFloor: 7, dungeonRank: 0, sessionKey: 'qa_x',
@@ -214,7 +214,7 @@ section('§6 — frozen layout + render contract');
     const broken = await abyssScene.renderAbyssCombat(null, { phase: 'START' });
     check('null state never throws (failure contract)', broken && broken.success === false);
 
-    // frozen layout stability: same sessionKey → same plan object identity
+ // frozen layout stability: same sessionKey → same plan object identity
     const st1 = mkState(); st1.sessionKey = 'frozen_1';
     await abyssScene.renderAbyssCombat(st1, { phase: 'START' });
     const st2 = mkState(); st2.sessionKey = 'frozen_1';
@@ -223,21 +223,20 @@ section('§6 — frozen layout + render contract');
     abyssScene.clearLayout('frozen_1');
     check('clearLayout runs without error', true);
 
-    // plan geometry — 🕳️ round-13 REBUILD (owner 02:56Z image-1 brief):
-    // the owner's Battle-Example composition — PLAYER FRONT-LEFT, enemy wing
-    // staggered down the RIGHT half (back-top → front-bottom), party arc
-    // behind the hero above the HUD panel. Boss tower untouched.
+ // plan geometry - round-13 REBUILD (owner 02:56Z image-1 brief):
+ // the owner's Battle-Example composition - PLAYER FRONT-LEFT, enemy wing
+ // staggered down the RIGHT half (back-top → front-bottom), party arc
+ // behind the hero above the HUD panel. Boss tower untouched.
     const pc = await abyssScene.planCombatLayout(mkState());
     check('side layout: enemy wing on the RIGHT half (Battle-Example positions)', pc.enemy.cx > abyssScene.W * 0.55 && pc.enemy.cx < abyssScene.W * 0.78 && pc.enemy.gy > 560 && pc.enemy.gy < 700);
-    // round-14 (owner 08:09Z: "the player is in the center why?"): the hero
-    // holds the TRUE front-left corner slot (fx 0.260) with feet ABOVE the
-    // HUD panel, not center-right of it
+ // round-14 (owner 08:09Z: "the player is in the center why?"): the hero
+ // HUD panel, not center-right of it
     check('side layout: player FRONT-LEFT (Battle-Example corner slot)', pc.player.cx >= abyssScene.W * 0.20 && pc.player.cx <= abyssScene.W * 0.35);
-    // round-18 (owner 13:24Z: "Some player Sprites like ninja facing the wrong
-    // way"): the hero now MIRRORS natively-LEFT class art so it faces RIGHT —
-    // the old flip===false assertion encoded the exact bug the owner reported.
-    // Contract: flip must equal the audited registry verdict for the resolved
-    // file, and this QA's ROGUE idx1 art (Rogue (1).png) is LEFT-native.
+ // round-18 (owner 13:24Z: "Some player Sprites like ninja facing the wrong
+ // way"): the hero now MIRRORS natively-LEFT class art so it faces RIGHT -
+ // the old flip===false assertion encoded the exact bug the owner reported.
+ // Contract: flip must equal the audited registry verdict for the resolved
+ // file, and this QA's ROGUE idx1 art (Rogue (1).png) is LEFT-native.
     check('side layout: player faces RIGHT toward the enemy wing (LEFT-native art mirrored)', pc.player.flip === abyssScene.playerArtFlipFor(pc.player.file) && pc.player.flip === true);
     check('side layout: player feet clear the HUD panel TOP (y 644)', pc.player.gy < 644);
     check('grounding: enemy feet on the visible floor plane', pc.enemy.gy > 540 && pc.enemy.gy < 700);
@@ -248,7 +247,7 @@ section('§6 — frozen layout + render contract');
     check('boss towers over regular enemy', boss.enemy.h > pc.enemy.h);
     check('boss pool exclusive: boss plan bg from hall pool', combat.includes(boss.bg));
     check('side plan bg from the regular side-stage pool (style mapping guard)', regPool.includes(pc.bg));
-    // pack fights render MULTIPLE enemies (owner: "some of those need multiple enemies")
+ // pack fights render MULTIPLE enemies ("some of those need multiple enemies")
     const pack = await abyssScene.planCombatLayout(mkState({
         abyssRun: { currentEncounterType: 'combat', packQueue: [
             { name: 'SHADOW STALKER', isEnemy: true, spriteIndex: 54, currentHP: 300, stats: { hp: 300, maxHp: 550 } },
@@ -256,19 +255,19 @@ section('§6 — frozen layout + render contract');
         ] },
     }));
 check('pack fight: queued members join the stage', pack.pack.length === 2);
-    // round-15 rebuild: pack members are depth-disciplined rows of the
-    // RIGHT-wing wing — the inner vanishing-point ladder when the anchor's
-    // measured box leaves room, otherwise the wide-anchor ROSE (full-sized
-    // flanking bodies at the shoulder/near corner instead of the r14
-    // edge-crush). Either way: feet deeper than the anchor, height capped at
-    // 0.93 of the anchor, nothing past the frame guard. halfW falls back to
-    // the depth estimate when the sandbox mock can't measure.
+ // round-15 rebuild: pack members are depth-disciplined rows of the
+ // RIGHT-wing wing - the inner vanishing-point ladder when the anchor's
+ // measured box leaves room, otherwise the wide-anchor ROSE (full-sized
+ // flanking bodies at the shoulder/near corner instead of the r14
+ // edge-crush). Either way: feet deeper than the anchor, height capped at
+ // 0.93 of the anchor, nothing past the frame guard. halfW falls back to
+ // the depth estimate when the sandbox mock can't measure.
     const hw = (a) => a.halfW || Math.round(a.h * 0.42);
     check('pack fight: members depth-disciplined (deeper feet, capped height, inside frame guard)', pack.pack.every((m) => m.gy <= pack.enemy.gy + 5 && m.h <= pack.enemy.h * 0.93 && m.cx + hw(m) <= 1196));
     check('pack fight: no member box overlaps the active enemy (real measured halfW, owner: "enemies overlaying")', pack.pack.every((m) => Math.abs(m.cx - pack.enemy.cx) >= (hw(m) + hw(pack.enemy)) - 24));
     check('round-13 right-edge guard: no enemy-wing body renders past the frame', [pc.enemy].concat(pack.pack).every((m) => m.cx + hw(m) <= 1196));
-    // round-8: FULL PARTY — 3 enemies + 3 allies + player, nobody fused, and
-    // the corrected facing table verified through BEHAVIOR (flip outcomes)
+ // round-8: FULL PARTY - 3 enemies + 3 allies + player, nobody fused, and
+ // the corrected facing table verified through BEHAVIOR (flip outcomes)
     const full = await abyssScene.planCombatLayout(mkState({ sessionKey: 'qa_full', abyssRun: { currentEncounterType: 'combat', packQueue: [
         { name: 'SHADOW STALKER', isEnemy: true, spriteIndex: 54, currentHP: 300, stats: { hp: 300, maxHp: 550 } },
         { name: 'VENOM SPIDER', isEnemy: true, spriteIndex: 73, currentHP: 300, stats: { hp: 300, maxHp: 550 } },
@@ -289,11 +288,11 @@ check('pack fight: queued members join the stage', pack.pack.length === 2);
     }
     check('full party (3 enemies + 3 allies + player): zero fused bodies', fused === 0);
     const allyByFile = (f) => full.allies.find((a) => a.art && a.art.file === f);
-    // round-13 mirror: the party stands LEFT and faces RIGHT — natively-right
-    // art renders UNFLIPPED. round-17 FOURTH-PASS correction: ALL 26 natives
-    // re-audited at 2× with a bisector — dragon/giant/yeti are natively RIGHT
-    // (the r15 'dragon LEFT' verdict was wrong and mirrored the companion arc
-    // at the player's back), BAT is frontal, zero natively-left species exist.
+ // round-13 mirror: the party stands LEFT and faces RIGHT - natively-right
+ // art renders UNFLIPPED. round-17 FOURTH-PASS correction: ALL 26 natives
+ // re-audited at 2× with a bisector - dragon/giant/yeti are natively RIGHT
+ // (the r15 'dragon LEFT' verdict was wrong and mirrored the companion arc
+ // at the player's back), BAT is frontal, zero natively-left species exist.
     check('round-13 facing: boar natively RIGHT → ally boar faces RIGHT unflipped (party side is left now)', allyByFile('boar.png') && allyByFile('boar.png').flip === false);
     check('round-13 facing: snake natively RIGHT → ally snake faces RIGHT unflipped', allyByFile('snake.png') && allyByFile('snake.png').flip === false);
     check('round-17 facing: dragon natively RIGHT (2× bisector audit) → ally dragon faces RIGHT unflipped (owner 10:30Z: companions faced wrong)', allyByFile('dragon.png') && allyByFile('dragon.png').flip === false);
@@ -315,8 +314,8 @@ check('pack fight: queued members join the stage', pack.pack.length === 2);
     check('§7 round-13: player holds the party side (front-LEFT, facing right via LEFT-mirror)', pw.player.cx <= abyssScene.W * 0.35 && pw.player.flip === abyssScene.playerArtFlipFor(pw.player.file) && pw.player.flip === true);
     check('§7 summon: grounded on the floor plane (not the old floating 566 line)', pw.enemy.gy > 580 && pw.enemy.gy < 700);
     check('§7 summon: wild species carried for the pill', pw.wildSpecies === 'agumon');
-    // round-16 bisector audit: the four re-listed natively-RIGHT species must
-    // flip as wilds on the enemy wing so they face the hero
+ // round-16 bisector audit: the four re-listed natively-RIGHT species must
+ // flip as wilds on the enemy wing so they face the hero
     for (const sp of ['boglurk', 'fireguard', 'frostpeep', 'lumenmoth']) {
         const pwx = await abyssScene.planCombatLayout(mkState({
             kind: 'wild',
@@ -325,8 +324,8 @@ check('pack fight: queued members join the stage', pack.pack.length === 2);
         }));
         check(`§7 round-16: wild ${sp} (natively RIGHT) flips to face the hero`, pwx.enemy && pwx.enemy.flip === true);
     }
-    // round-16: boss-path allies stand LEFT of the boss and face RIGHT toward
-    // it — natively-left art flips, natively-right art does not
+ // round-16: boss-path allies stand LEFT of the boss and face RIGHT toward
+ // it - natively-left art flips, natively-right art does not
     const pboss = await abyssScene.planCombatLayout(mkState({
         abyssFloor: 12,
         enemies: [Object.assign({ name: 'ABYSSAL GOD', isEnemy: true, spriteIndex: 0, currentHP: 9000, stats: { hp: 9000, maxHp: 12000 } }, { isBoss: true, bossId: 'ABYSSAL_GOD' })],
@@ -335,13 +334,13 @@ check('pack fight: queued members join the stage', pack.pack.length === 2);
             { species: 'dragon', name: 'Vyrn' },
         ],
     }));
-    // round-16 + r17: boss-path allies stand LEFT of the boss and face RIGHT
-    // toward it — natively-right art (all of it, per the r17 audit) unflipped
+ // round-16 + r17: boss-path allies stand LEFT of the boss and face RIGHT
+ // toward it - natively-right art (all of it, per the r17 audit) unflipped
     check('§boss round-16: ally boar (natively RIGHT) faces the boss unflipped', pboss.allies.length === 2 && pboss.allies.find((a) => a.art && a.art.file === 'boar.png').flip === false);
     check('§boss round-17: ally dragon (natively RIGHT, r17 audit) faces the boss unflipped', pboss.allies.find((a) => a.art && a.art.file === 'dragon.png').flip === false);
 
-    // ═══ 6. floor card ═══
-    section('§3 — floor descent card');
+ // === 6. floor card ===
+    section('§3 - floor descent card');
     const fc = await abyssScene.renderAbyssFloorCard({
         floor: 7, tier: 'A', mult: 1.9, encounterType: 'treasure',
         playerName: 'Mellow-San', playerClassId: 'ROGUE', playerSpriteIndex: 1,
@@ -358,8 +357,8 @@ check('pack fight: queued members join the stage', pack.pack.length === 2);
     const fcBroken = await abyssScene.renderAbyssFloorCard(null);
     check('floor card with null payload never throws', fcBroken === null || Buffer.isBuffer(fcBroken));
 
-    // ═══ 7. summons render the game's OWN sprites (owner 2026-10-09: NO DIGIMON) ═══
-    section('§7b — own sparklinlabs summon sprites (Digimon mapping removed)');
+ // === 7. summons render the game's OWN sprites (NO DIGIMON) ===
+    section('§7b - own sparklinlabs summon sprites (Digimon mapping removed)');
     const summonSprites = require(path.join(REPO, 'core/rpg/summonSprites'));
     const reg = require(path.join(REPO, 'core/rpg/summonRegistry'));
     const speciesIds = reg.getAllSpecies ? reg.getAllSpecies() : Object.keys(reg.SPECIES || reg);
@@ -387,28 +386,28 @@ check('pack fight: queued members join the stage', pack.pack.length === 2);
         pwild.enemy && pwild.enemy.art && pwild.enemy.art.file === 'dragon.png');
     check('ally art = the game\'s own bat sprite (bat.png)',
         pwild.allies.length === 1 && pwild.allies[0].art && pwild.allies[0].art.file === 'bat.png');
-    // round-17 render-proof: dragon.png faces RIGHT natively (2× bisector
-    // audit) — a wild dragon on the RIGHT enemy wing therefore FLIPS to face
-    // the hero. (The r15 'wild dragon unflipped' row was built on the wrong
-    // native verdict and is inverted here.)
+ // round-17 render-proof: dragon.png faces RIGHT natively (2× bisector
+ // audit) - a wild dragon on the RIGHT enemy wing therefore FLIPS to face
+ // the hero. (The r15 'wild dragon unflipped' row was built on the wrong
+ // native verdict and is inverted here.)
     check('dragon natively faces RIGHT (r17 audit) → wild dragon FLIPS to face the hero on the right wing',
         pwild.enemy.flip === true);
-    // round-17: starnail newly classified natively RIGHT (face cave + claws
-    // lower-right) — as a wild it must flip toward the hero
+ // round-17: starnail newly classified natively RIGHT (face cave + claws
+ // lower-right) - as a wild it must flip toward the hero
     const pst = await abyssScene.planCombatLayout(mkState({
         kind: 'wild',
         abyssRun: { currentEncounterType: 'wild_summon', currentEncounterData: { species: 'starnail', rarity: 'RARE' } },
         enemies: [{ name: 'starnail', isWildSummon: true, spriteIndex: 0, currentHP: 400, stats: { hp: 400, maxHp: 600 } }],
     }));
     check('round-17: starnail natively RIGHT → wild starnail flips to face the hero', pst.enemy && pst.enemy.flip === true);
-    // round-17: ashen_basilica no longer suits 'brute' — the dim red nave
-    // swallowed dark-magenta hulks (owner: "the background gloom brute
-    // DOESN'T WORK"); brutes stage on bright floors where they pop
+ // round-17: ashen_basilica no longer suits 'brute' - the dim red nave
+ // swallowed dark-magenta hulks ("the background gloom brute
+ // DOESN'T WORK"); brutes stage on bright floors where they pop
     const bgBrute = abyssScene.bgForEncounter(18, 'brute', {});
     check('round-17: basilica never stages brute-habitat enemies', bgBrute !== 'ashen_basilica_abyss.png');
-    // round-17 cast sink: on deep-band stages (basilica floorTop 0.66) the
-    // whole cast sinks so the front feet line lands ~40% into the floor band
-    // instead of hugging the wall seam; shallow-band stages shift by exactly 0
+ // round-17 cast sink: on deep-band stages (basilica floorTop 0.66) the
+ // whole cast sinks so the front feet line lands ~40% into the floor band
+ // instead of hugging the wall seam; shallow-band stages shift by exactly 0
     const pbasilica = await abyssScene.planCombatLayout(mkState({
         abyssFloor: 18,
         abyssRun: { currentEncounterType: 'combat' },
@@ -419,7 +418,7 @@ check('pack fight: queued members join the stage', pack.pack.length === 2);
         abyssRun: { currentEncounterType: 'combat' },
         enemies: [{ name: 'GLOOM BRUTE', isEnemy: true, spriteIndex: 72, currentHP: 900, stats: { hp: 900, maxHp: 1200 } }],
     }), { forceBg: 'dark_hall_abyss.png' });
-    check('round-17 cast sink: basilica enemy wing lands IN the floor band (feet ≥ 690, ~107px below the wall base — not on the seam)',
+    check('round-17 cast sink: basilica enemy wing lands IN the floor band (feet ≥ 690, ~107px below the wall base - not on the seam)',
         pbasilica.enemy.gy >= 690);
     check('round-17 cast sink: the player keeps the frozen HUD-panel cap (feet ≤ 646, never inside the panel)',
         pbasilica.player.gy >= 628 && pbasilica.player.gy <= 646);
@@ -428,8 +427,8 @@ check('pack fight: queued members join the stage', pack.pack.length === 2);
     check('allies stand in the arc ABOVE the HUD panel (feet clear of panel top 644)',
         pwild.allies.every((a) => a.gy < 646));
 
-    // ═══ 8. hit tint + facing contract (owner 10:19Z round) ═══
-    section('§8 — attack tint + Pokémon facing rule');
+ // === 8. hit tint + facing contract (owner 10:19Z round) ===
+    section('§8 - attack tint + Pokémon facing rule');
     check('HIT_TINT is a dark purple rgba', /^rgba\(\d+,\s*\d+,\s*\d+,/.test(abyssScene.HIT_TINT));
     const hitTurn = await abyssScene.renderAbyssCombat(mkState({ sessionKey: 'hit_1' }), {
         phase: 'TURN',
@@ -444,9 +443,9 @@ check('pack fight: queued members join the stage', pack.pack.length === 2);
     const shadowStalker = await abyssScene.planCombatLayout(mkState({
         enemies: [{ name: 'SHADOW STALKER', isEnemy: true, spriteIndex: 54, currentHP: 500, stats: { hp: 500, maxHp: 700 } }],
     }));
-    check('SHADOW STALKER (native LEFT) already faces the hero on the right wing — unflipped', shadowStalker.enemy.flip === false);
+    check('SHADOW STALKER (native LEFT) already faces the hero on the right wing - unflipped', shadowStalker.enemy.flip === false);
     check('front-facing art stays unmirrored (never flipped for nothing)', pc.enemy.flip === false);
-    // round-13 bestiary: regular encounters wear the audited new-style sprites
+ // round-13 bestiary: regular encounters wear the audited new-style sprites
     const bestiaryPlan = await abyssScene.planCombatLayout(mkState({
         enemies: [{ name: 'GLOOM BRUTE', isEnemy: true, currentHP: 500, stats: { hp: 500, maxHp: 700 } }],
     }));

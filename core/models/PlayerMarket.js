@@ -1,28 +1,26 @@
 // models/PlayerMarket.js
-// 🏪 UNIFIED PLAYER MARKET (2026-10-11) — consolidates the three standalone
+// UNIFIED PLAYER MARKET - consolidates the three standalone
 // RPG markets (item market, rune market, summon market) into one listing
 // collection with a `kind` discriminator.
-//
 // Kinds and custody semantics (preserved from each legacy market so nothing
 // else in the RPG breaks):
-//   item   — escrowed: removed from the seller's bag at listing time,
-//            returned via addItem on cancel/rollback.
-//   rune   — NOT escrowed: the Rune doc stays with the seller but carries
-//            onMarket=true (blocks socket/destroy/duplicate listings);
-//            ownership transfers on purchase.
-//   summon — NOT escrowed: the Summon doc carries forSale=true + salePrice
-//            (blocks deploy, excluded from resonance); ownership transfers
-//            on purchase.
-//
-// Fee rule (unified): 10% tax on sale — buyer pays full price, seller nets
+// item - escrowed: removed from the seller's bag at listing time,
+// returned via addItem on cancel/rollback.
+// rune - NOT escrowed: the Rune doc stays with the seller but carries
+// onMarket=true (blocks socket/destroy/duplicate listings);
+// ownership transfers on purchase.
+// summon - NOT escrowed: the Summon doc carries forSale=true + salePrice
+// (blocks deploy, excluded from resonance); ownership transfers
+// on purchase.
+// Fee rule (unified): 10% tax on sale - buyer pays full price, seller nets
 // 90%, 10% evaporates. Matches the item market, the card market and P2P
 // transfers. (Legacy rune market was 0%, legacy summon market was a 5%
-// upfront listing fee — both retired in favor of the one rule.)
+// upfront listing fee - both retired in favor of the one rule.)
 
 const mongoose = require('mongoose');
 
 const PlayerMarketSchema = new mongoose.Schema({
-  // Short human-typable id (e.g. "M-7KQ2X9") — unique
+ // Short human-typable id (e.g. "M-7KQ2X9") - unique
   listingId: { type: String, required: true, unique: true, index: true },
 
   kind: { type: String, required: true, enum: ['item', 'rune', 'summon'], index: true },
@@ -41,17 +39,17 @@ const PlayerMarketSchema = new mongoose.Schema({
   completedAt: { type: Date, default: null },
   buyerId: { type: String, default: null },
 
-  // ── kind: item ──
+ // -- kind: item --
   itemId: { type: String, default: null },
   itemName: { type: String, default: '' },
   itemRarity: { type: String, default: 'COMMON' },
   quantity: { type: Number, default: 1 },
 
-  // ── kind: rune ──
+ // -- kind: rune --
   runeId: { type: String, default: null },
   runeLabel: { type: String, default: '' },   // "Lesser Power" style display
 
-  // ── kind: summon ──
+ // -- kind: summon --
   summonId: { type: String, default: null },
   summonLabel: { type: String, default: '' }, // nickname or species name
   summonLevel: { type: Number, default: 1 },

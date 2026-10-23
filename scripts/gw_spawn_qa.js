@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// QA — OWNER PLAYTEST FIXES 2026-10-05 (10:43):
-//   #1 facing: "bottom and left means it should be facing left towards the
-//      door" — spawn/back-position sprites face TOWARD an open side arch.
-//   #2 spawn safety: "players that are weaker than the monsters in a ruin
-//      should never spawn into a room with monsters" — spawn rooms seed
-//      NO enemies and NO boss; startEvent rebakes combat/coop spawn rooms
-//      to 'empty'.
+// QA - OWNER PLAYTEST FIXES (10:43):
+// #1 facing: "bottom and left means it should be facing left towards the
+// door" - spawn/back-position sprites face TOWARD an open side arch.
+// #2 spawn safety: "players that are weaker than the monsters in a ruin
+// should never spawn into a room with monsters" - spawn rooms seed
+// NO enemies and NO boss; startEvent rebakes combat/coop spawn rooms
+// to 'empty'.
 const path = require('path');
 const roomScene = require('../core/rpg/guildWar/roomScene');
 const encounters = require('../core/rpg/guildWar/encounters');

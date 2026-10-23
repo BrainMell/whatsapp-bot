@@ -1,30 +1,29 @@
 // ============================================
-// QUIZ IMAGE SOURCES (2026-10-01) - owner bug report §4A/§4B/§5
+// QUIZ IMAGE SOURCES - owner bug report §4A/§4B/§5
 // Category-aware provider adapters added after the sandbox research phase
 // (matrix: 40 titles x 8 categories, every candidate live-tested + vision
 // graded; results + rate limits in scripts/imgresearch/).
 // ============================================
 // WHAT LIVES HERE (new vs the v3 resolver):
-//   kitsu    - anime/manga cast. STRICT title gate: Kitsu text-search is
-//              fuzzy and happily returns a DIFFERENT franchise's cast
-//              (measured: "Ben 10" -> random anime cast, "Vagabond" ->
-//              Tekken art). Search hits whose canonical titles do not match
-//              the requested title are rejected outright.
-//   steam    - games. storesearch + appdetails (header + screenshots).
-//              Doubles as the DETERMINISTIC game-category probe.
-//   speedrun - game cover art (embed=assets, reliable keyless).
-//   itunes   - movie/TV-season artwork (poster-like entity images).
-//              Doubles as the movie-category probe.
-//   ddg      - DuckDuckGo images (keyless general search, LAST fallback for
-//              per-record bytes). vqd-token flow, challenge(202)/429
-//              cooldowns, hotlink-hostile domain denylist (measured: Fandom
-//              CDN, Miraheze, TVTropes proxy all 403 from datacenter IPs),
-//              dimension prefilter. Results are IDENTITY-UNVERIFIED: the
-//              caller must run visionVerify before serving.
-//   openverse- CC search, FINAL resort only (measured semantic drift:
-//              "Casablanca" -> Moroccan pattern, "The Fall" -> autumn leaves).
-//   ENTITY_DECOYS - curated same-category title pools for entity questions.
-//
+// kitsu - anime/manga cast. STRICT title gate: Kitsu text-search is
+// fuzzy and happily returns a DIFFERENT franchise's cast
+// (measured: "Ben 10" -> random anime cast, "Vagabond" ->
+// Tekken art). Search hits whose canonical titles do not match
+// the requested title are rejected outright.
+// steam - games. storesearch + appdetails (header + screenshots).
+// Doubles as the DETERMINISTIC game-category probe.
+// speedrun - game cover art (embed=assets, reliable keyless).
+// itunes - movie/TV-season artwork (poster-like entity images).
+// Doubles as the movie-category probe.
+// ddg - DuckDuckGo images (keyless general search, LAST fallback for
+// per-record bytes). vqd-token flow, challenge(202)/429
+// cooldowns, hotlink-hostile domain denylist (measured: Fandom
+// CDN, Miraheze, TVTropes proxy all 403 from datacenter IPs),
+// dimension prefilter. Results are IDENTITY-UNVERIFIED: the
+// caller must run visionVerify before serving.
+// openverse- CC search, FINAL resort only (measured semantic drift:
+// "Casablanca" -> Moroccan pattern, "The Fall" -> autumn leaves).
+// ENTITY_DECOYS - curated same-category title pools for entity questions.
 // EVERYTHING here returns plain records and never throws.
 // ============================================
 
@@ -36,7 +35,7 @@ const _http = axios.create({ timeout: 12000, headers: { "User-Agent": _UA, "Acce
 
 const _norm = (s) => String(s || "").toLowerCase().replace(/\([^)]*\)/g, " ").replace(/[’']/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 
-// ── host-level cooldowns (learned from live failures) ──
+// -- host-level cooldowns (learned from live failures) --
 const _hostCool = new Map(); // host -> untilTs
 const DENYLIST = [
   /(^|\.)wikia\.nocookie\.net$/i,        // Fandom CDN: Cloudflare 403 from DC IPs
@@ -69,19 +68,19 @@ function noteHostFailure(url, coolMs = 10 * 60e3) {
   if (h) _hostCool.set(h, Date.now() + coolMs);
 }
 
-// ══════════════════════════════════════════
+// ==========================================
 // KITSU (anime/manga cast) - strict identity gate
-// ══════════════════════════════════════════
+// ==========================================
 async function kitsuPool(ctx) {
   try {
     const s = await _http.get("https://kitsu.io/api/edge/anime", { params: { "filter[text]": ctx.title, "page[limit]": 3 } });
     if (s.status !== 200 || !s.data?.data?.length) return [];
     const nt = _norm(ctx.title);
-    // STRICT title gate: the search hit must actually be this franchise.
-    // 2026-10-01: filter AFTER normalization - CJK titles ("ベン・トー") normalize
-    // to "" and `nt.includes("")` is always true, which let Kitsu's fuzzy
-    // search serve a DIFFERENT franchise's cast (measured: "Ben 10" -> Ben-To
-    // cast). Min length 2 also kills single-char substring noise.
+ // STRICT title gate: the search hit must actually be this franchise.
+ // filter AFTER normalization - CJK titles ("ベン・トー") normalize
+ // to "" and `nt.includes("")` is always true, which let Kitsu's fuzzy
+ // search serve a DIFFERENT franchise's cast (measured: "Ben 10" -> Ben-To
+ // cast). Min length 2 also kills single-char substring noise.
     const hit = s.data.data.find((d) => {
       const t = d.attributes || {};
       const titles = [t.canonicalTitle, t.titles?.en, t.titles?.en_jp, t.titles?.ja_jp, ...(t.abbreviatedTitles || [])].map(_norm).filter((x) => x && x.length >= 2);
@@ -99,9 +98,9 @@ async function kitsuPool(ctx) {
   } catch { return []; }
 }
 
-// ══════════════════════════════════════════
+// ==========================================
 // STEAM (games) - entity art + deterministic game probe
-// ══════════════════════════════════════════
+// ==========================================
 async function steamGameProbe(title) {
   try {
     const s = await _http.get("https://store.steampowered.com/api/storesearch/", { params: { term: title, l: "english", cc: "US" } });
@@ -128,9 +127,9 @@ async function steamEntityArt(ctx) {
   } catch { return []; }
 }
 
-// ══════════════════════════════════════════
+// ==========================================
 // SPEEDRUN.COM (game covers) - keyless, reliable
-// ══════════════════════════════════════════
+// ==========================================
 async function speedrunEntityArt(ctx) {
   try {
     const s = await _http.get("https://www.speedrun.com/api/v1/games", { params: { name: ctx.title, max: 3, embed: "assets" } });
@@ -143,9 +142,9 @@ async function speedrunEntityArt(ctx) {
   } catch { return []; }
 }
 
-// ══════════════════════════════════════════
+// ==========================================
 // ITUNES (movie/TV artwork) - keyless poster-like entity art
-// ══════════════════════════════════════════
+// ==========================================
 async function itunesEntityArt(ctx) {
   try {
     const media = ctx.category === "cartoon" || ctx.category === "tv" ? "tvSeason" : "movie";
@@ -159,11 +158,11 @@ async function itunesEntityArt(ctx) {
   } catch { return []; }
 }
 
-// ══════════════════════════════════════════
+// ==========================================
 // DUCKDUCKGO IMAGES (general search, last per-record fallback)
 // vqd token -> i.js; 202/429 => module-level cooldown (anti-bot wall).
 // Identity is NOT verified here - caller must vision-gate.
-// ══════════════════════════════════════════
+// ==========================================
 const _ddg = { vqd: new Map(), until: 0 };
 async function ddgImageSearch(query, { limit = 8 } = {}) {
   if (Date.now() < _ddg.until) return [];
@@ -174,7 +173,7 @@ async function ddgImageSearch(query, { limit = 8 } = {}) {
       const m = String(h.data || "").match(/vqd=["']?([\d-]+)["']?/);
       if (h.status === 200 && m) { vqd = m[1]; _ddg.vqd.set(query, vqd); }
       else {
-        // 202 = challenge wall: back the whole source off for 10 minutes
+ // 202 = challenge wall: back the whole source off for 10 minutes
         if (h.status === 202 || h.status === 403) _ddg.until = Date.now() + 10 * 60e3;
         return [];
       }
@@ -203,9 +202,9 @@ async function ddgRecordImages(name, franchise) {
   return [];
 }
 
-// ══════════════════════════════════════════
+// ==========================================
 // OPENVERSE (CC search) - FINAL resort, vision-gate mandatory
-// ══════════════════════════════════════════
+// ==========================================
 async function openverseImageSearch(query, { limit = 6 } = {}) {
   try {
     const r = await _http.get("https://api.openverse.org/v1/images/", { params: { q: query, page_size: limit }, timeout: 12000 });
@@ -217,10 +216,10 @@ async function openverseImageSearch(query, { limit = 6 } = {}) {
   } catch { return []; }
 }
 
-// ══════════════════════════════════════════
+// ==========================================
 // ENTITY DECOYS - curated famous titles per category for
 // "Which {movie/game/show} is this?" questions (static, no network).
-// ══════════════════════════════════════════
+// ==========================================
 const ENTITY_DECOYS = {
   movie: ["Inception", "The Matrix", "Titanic", "Jurassic Park", "The Godfather", "Pulp Fiction", "Forrest Gump", "The Dark Knight", "Interstellar", "Gladiator", "Avatar", "Toy Story", "The Lion King", "Back to the Future", "Terminator 2", "Alien", "The Shawshank Redemption", "Fight Club", "Saving Private Ryan", "Braveheart", "Apollo 13", "Rocky", "Jaws", "E.T.", "Home Alone", "Ghostbusters", "Die Hard", "The Terminator", "Mad Max", "Iron Man"],
   game: ["Minecraft", "Fortnite", "Elden Ring", "God of War", "The Legend of Zelda", "Super Mario", "Hollow Knight", "Dark Souls", "Sekiro", "Bloodborne", "Cyberpunk 2077", "The Witcher 3", "GTA V", "Red Dead Redemption 2", "Portal 2", "Half-Life 2", "Overwatch", "Valorant", "League of Legends", "Dota 2", "Among Us", "Rocket League", "FIFA 24", "Call of Duty", "Battlefield", "Doom", "Quake", "Tetris", "Pokémon", "Animal Crossing"],
@@ -229,16 +228,16 @@ const ENTITY_DECOYS = {
   anime: ["Naruto", "One Piece", "Dragon Ball", "Death Note", "Attack on Titan", "Fullmetal Alchemist", "Bleach", "Hunter x Hunter", "Demon Slayer", "Jujutsu Kaisen", "My Hero Academia", "Chainsaw Man", "Spy x Family", "Cowboy Bebop", "Neon Genesis Evangelion", "Code Geass", "Steins;Gate", "Tokyo Ghoul", "Sword Art Online", "Re:Zero", "Vinland Saga", "Dr. Stone", "Haikyuu", "Kaguya-sama", "Mob Psycho 100", "One Punch Man", "Frieren", "Bocchi the Rock", "Violet Evergarden", "Your Lie in April"],
 };
 
-// ══════════════════════════════════════════
+// ==========================================
 // VISION GATE for unanchored candidates (ddg/openverse). Never throws;
 // open/closed circuit handled inside visionVerify. Returns true when the
 // image plausibly depicts the subject.
-// ══════════════════════════════════════════
+// ==========================================
 async function visionGate(buf, mime, subject, franchise = "") {
   try {
     if (!process.env.VISION_ENDPOINT) return { ok: false, decision: "unknown", reason: "no-provider" };
     const r = await visionVerify.verifySubject(buf, mime, subject, franchise);
-    // visionVerify decision vocabulary: "accept" | "reject" | "unknown"
+ // visionVerify decision vocabulary: "accept" | "reject" | "unknown"
     return { ok: r?.decision === "accept", decision: r?.decision || "unknown", reason: r?.reason || "" };
   } catch { return { ok: false, decision: "unknown", reason: "gate-error" }; }
 }

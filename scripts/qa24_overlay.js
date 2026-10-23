@@ -1,21 +1,19 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-//  QA 24 — the catch ribbon is PLASTERED, not fused (owner 06:30Z Task 24).
-//  "the gif itself is cached, you just plaster that overlay on it depending
-//  on what you catch ... making the generation wayyy faster"
-//
-//  Checks:
-//    A1  ribbon overlay = real transparent PNG (alpha corner + opaque panel)
-//    A2  catch #1 (cold):  base MISS → valid MP4 (ftyp) + thumb
-//    A3  catch #2 (new loot, same band): base HIT → total < cold total
-//    A4  catch #1 repeat: full disk hit (< 500ms) + thumb rebuilt
-//    A5  MP4: duration ≈ 1.92s; banner VISIBLE at t=0.05 AND t=1.5 (always
-//        on, the `.j base` view look); water pixels MOVE between frames
-//    A6  ffmpeg-dead fallback: canvas plaster GIF, banner on frame 0
-//    A7  silent queue: no "still settling" text remains in base/homestead
-//
-//  Run:  QA_MODE=1 CODE_VER=qa24x NODE_PATH=<repo>/node_modules node scripts/qa24_overlay.js <outdir>
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// QA 24 - the catch ribbon is PLASTERED, not fused (owner 06:30Z ).
+// "the gif itself is cached, you just plaster that overlay on it depending
+// on what you catch ... making the generation wayyy faster"
+// Checks:
+// A1 ribbon overlay = real transparent PNG (alpha corner + opaque panel)
+// A2 catch #1 (cold): base MISS → valid MP4 (ftyp) + thumb
+// A3 catch #2 (new loot, same band): base HIT → total < cold total
+// A4 catch #1 repeat: full disk hit (< 500ms) + thumb rebuilt
+// A5 MP4: duration ≈ 1.92s; banner VISIBLE at t=0.05 AND t=1.5 (always
+// on, the `.j base` view look); water pixels MOVE between frames
+// A6 ffmpeg-dead fallback: canvas plaster GIF, banner on frame 0
+// A7 silent queue: no "still settling" text remains in base/homestead
+// Run: QA_MODE=1 CODE_VER=qa24x NODE_PATH=<repo>/node_modules node scripts/qa24_overlay.js <outdir>
+// ===========================================================================
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
@@ -28,8 +26,8 @@ const mediaConvert = require('../core/utils/mediaConvert');
 
 let pass = 0, fail = 0;
 function check(name, ok, detail = '') {
-    if (ok) { pass++; console.log(`  ✅ ${name}${detail ? ` — ${detail}` : ''}`); }
-    else { fail++; console.log(`  ❌ ${name}${detail ? ` — ${detail}` : ''}`); }
+    if (ok) { pass++; console.log(`  ✅ ${name}${detail ? ` - ${detail}` : ''}`); }
+    else { fail++; console.log(`  ❌ ${name}${detail ? ` - ${detail}` : ''}`); }
 }
 const timings = [];
 const origLog = console.log;
@@ -62,8 +60,8 @@ function regionDiff(img1, img2, x0, y0, x1, y1) {
     return { mean: sum / n / 3, bigPx: big };
 }
 
-const RIBBON_A = { head: 'The Pond', lines: ['1× River Trout — UNCOMMON · sells 140Z', '+120 ZENI'] };
-const RIBBON_B = { head: 'The Pond', lines: ['3× Pond Minnow — COMMON · sells 40Z', '+95 ZENI'] };
+const RIBBON_A = { head: 'The Pond', lines: ['1× River Trout - UNCOMMON · sells 140Z', '+120 ZENI'] };
+const RIBBON_B = { head: 'The Pond', lines: ['3× Pond Minnow - COMMON · sells 40Z', '+95 ZENI'] };
 
 (async () => {
     console.log('── A1: ribbon overlay is a real transparent PNG ──');
@@ -82,7 +80,7 @@ const RIBBON_B = { head: 'The Pond', lines: ['3× Pond Minnow — COMMON · sell
         fs.writeFileSync(path.join(OUT, 'ribbon_overlay.png'), ovl.buffer);
     }
 
-    console.log('── A2: catch #1 (cold) — base MISS, ships MP4 ──');
+    console.log('── A2: catch #1 (cold) - base MISS, ships MP4 ──');
     const tA = Date.now();
     const cA = await dockPov.renderFishingGif({ biome: 'isle', lvl: 1, band: 'low', banner: RIBBON_A });
     const msA = Date.now() - tA;
@@ -91,7 +89,7 @@ const RIBBON_B = { head: 'The Pond', lines: ['3× Pond Minnow — COMMON · sell
     check('catch A has thumb', !!(cA.thumb && cA.thumb.length > 200 && cA.thumb[0] === 0xff && cA.thumb[1] === 0xd8), `${cA.thumb && cA.thumb.length}B`);
     fs.writeFileSync(path.join(OUT, 'catch_a.mp4'), cA.buffer);
 
-    console.log('── A3: catch #2 (different loot, same band) — base HIT, faster ──');
+    console.log('── A3: catch #2 (different loot, same band) - base HIT, faster ──');
     const tB = Date.now();
     const cB = await dockPov.renderFishingGif({ biome: 'isle', lvl: 1, band: 'low', banner: RIBBON_B });
     const msB = Date.now() - tB;
@@ -100,14 +98,14 @@ const RIBBON_B = { head: 'The Pond', lines: ['3× Pond Minnow — COMMON · sell
     check('overlay-only catch is FASTER', msB < msA, `cold=${msA}ms plastered=${msB}ms`);
     fs.writeFileSync(path.join(OUT, 'catch_b.mp4'), cB.buffer);
 
-    console.log('── A4: catch #1 repeat — full disk hit ──');
+    console.log('── A4: catch #1 repeat - full disk hit ──');
     const tR = Date.now();
     const cR = await dockPov.renderFishingGif({ biome: 'isle', lvl: 1, band: 'low', banner: RIBBON_A });
     const msR = Date.now() - tR;
     check('repeat = disk hit, fast', msR < 500, `${msR}ms`);
     check('repeat thumb rebuilt', !!(cR.thumb && cR.thumb.length > 200), `${cR.thumb && cR.thumb.length}B`);
 
-    console.log('── A5: MP4 sanity — duration, always-on banner, living water ──');
+    console.log('── A5: MP4 sanity - duration, always-on banner, living water ──');
     {
         const f0 = path.join(OUT, 'f_005.png'), f1 = path.join(OUT, 'f_150.png');
         execFileSync('ffmpeg', ['-y', '-ss', '0.05', '-i', path.join(OUT, 'catch_b.mp4'), '-frames:v', '1', '-update', '1', f0]);
@@ -119,8 +117,8 @@ const RIBBON_B = { head: 'The Pond', lines: ['3× Pond Minnow — COMMON · sell
         check('banner VISIBLE at t=1.5 (always-on, not end-only)', r1 < 90 && g1 < 90, `rgb=${r1.toFixed(0)},${g1.toFixed(0)},${b1.toFixed(0)}`);
         const wd = regionDiff(i0, i1, Math.round(W * 0.1), Math.round(H * 0.55), Math.round(W * 0.9), Math.round(H * 0.78));
         check('water still ANIMATING under the overlay', wd.mean > 0.8 && wd.bigPx > 200, `meanDiff=${wd.mean.toFixed(1)} bigPx=${wd.bigPx}`);
-        // gold border stroke lives on the CRISP overlay PNG (GIF palette + H.264
-        // chroma smear eat a 1.5px line — the style itself is what we assert)
+ // gold border stroke lives on the CRISP overlay PNG (GIF palette + H.264
+ // chroma smear eat a 1.5px line - the style itself is what we assert)
         const gold = regionMean(ovlImg, BX + Math.round(BW / 2) - 2, BY - 1, BX + Math.round(BW / 2) + 2, BY + 3);
         check('ribbon wears the established gold border', gold[0] > 100 && gold[0] > gold[2] + 30, `rgb=${gold.map((x) => x.toFixed(0)).join(',')}`);
         const dur = parseFloat(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', path.join(OUT, 'catch_b.mp4')]).toString().trim());
@@ -129,9 +127,9 @@ const RIBBON_B = { head: 'The Pond', lines: ['3× Pond Minnow — COMMON · sell
 
     console.log('── A6: ffmpeg-dead → canvas plaster GIF fallback ──');
     {
-        // ⚠ the phase trick alone can't isolate the key: when the real clock
-        // phase IS 'day', phaseAt() === 'day' and A6 would disk-hit A2's MP4.
-        // A UNIQUE ribbon guarantees a unique pg4o key at any hour.
+ // the phase trick alone can't isolate the key: when the real clock
+ // phase IS 'day', phaseAt() === 'day' and A6 would disk-hit A2's MP4.
+ // A UNIQUE ribbon guarantees a unique pg4o key at any hour.
         const RIBBON_FB = { head: 'The Pond', lines: ['qa24-fallback-probe'] };
         process.env.FFMPEG_PATH = '/nonexistent-ffmpeg';
         const mod = require.resolve('../core/utils/mediaConvert');
@@ -166,7 +164,7 @@ const RIBBON_B = { head: 'The Pond', lines: ['3× Pond Minnow — COMMON · sell
         const sheet = createCanvas(cell * 3 + 40, ch + 70), s2 = sheet.getContext('2d');
         s2.fillStyle = '#101418'; s2.fillRect(0, 0, sheet.width, sheet.height);
         s2.font = '16px sans-serif'; s2.fillStyle = '#f2dfa8';
-        s2.fillText('Task 24 — ribbon overlay (transparent)', 12, 24);
+        s2.fillText('Task 24 - ribbon overlay (transparent)', 12, 24);
         s2.drawImage(ov, 10, 34, cell, ch);
         s2.fillText('plastered MP4 @ t=0.05s', cell + 24, 24);
         s2.drawImage(f0, cell + 20, 34, cell, ch);
@@ -177,6 +175,6 @@ const RIBBON_B = { head: 'The Pond', lines: ['3× Pond Minnow — COMMON · sell
 
     console.log('── timings ──');
     for (const t of timings) origLog('  ' + t);
-    origLog(`\nRESULT: ${pass} pass / ${fail} fail — cold=${msA}ms plastered=${msB}ms repeat=${msR}ms`);
+    origLog(`\nRESULT: ${pass} pass / ${fail} fail - cold=${msA}ms plastered=${msB}ms repeat=${msR}ms`);
     process.exit(fail ? 1 : 0);
 })().catch((e) => { origLog('QA FATAL:', e); process.exit(2); });

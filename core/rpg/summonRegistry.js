@@ -1,14 +1,14 @@
 // ============================================
-// 🐉 SUMMON REGISTRY - Species Database
+// SUMMON REGISTRY - Species Database
 // ============================================
 // ONLY summons with dedicated sparklinlabs sprites are in this registry.
 // Each summon maps 1:1 to its own idle.gif - no sprite sharing.
 // 23 animated idle.gif sprites + 3 static ship PNGs = 26 total summons.
 
 const SUMMON_SPECIES = {
-  // ═══════════════════════════════════════════════════════════════
-  // ANIMATED SUMMONS (idle.gif sprites from sparklinlabs)
-  // ═══════════════════════════════════════════════════════════════
+ // ===============================================================
+ // ANIMATED SUMMONS (idle.gif sprites from sparklinlabs)
+ // ===============================================================
 
   bat: {
     name: 'Nocturne', archetype: 'STALKER', element: 'shadow',
@@ -109,10 +109,10 @@ const SUMMON_SPECIES = {
     icon: '🦏', desc: 'A towering yeti from the frozen peaks. Its roar avalanches mountains.',
   },
 
-  // ═══════════════════════════════════════════════════════════════
-  // GRAND INVENTOR TORRENT SUMMONS (static PNG ship sprites)
-  // These are mechanical summons unique to the Grand Inventor class.
-  // ═══════════════════════════════════════════════════════════════
+ // ===============================================================
+ // GRAND INVENTOR TORRENT SUMMONS (static PNG ship sprites)
+ // These are mechanical summons unique to the Grand Inventor class.
+ // ===============================================================
 
   ship_cruiser: {
     name: 'Torrent Cruiser', archetype: 'BRUTE', element: 'construct',
@@ -139,9 +139,9 @@ const SUMMON_SPECIES = {
     isStatic: true, // regular summon, NOT Torrent-specific
   },
 
-  // ═══════════════════════════════════════════════════════════════
-  // BATCH 6 SUMMONS (new animated idle.gif sprites)
-  // ═══════════════════════════════════════════════════════════════
+ // ===============================================================
+ // BATCH 6 SUMMONS (new animated idle.gif sprites)
+ // ===============================================================
 
   plaguefang: {
     name: 'Plaguefang', archetype: 'STALKER', element: 'plague',
@@ -186,9 +186,9 @@ const SUMMON_SPECIES = {
     icon: '🔥', desc: 'A hulking molten-armored sentinel wreathed in flame. The heaviest frontline piece - built to outlast.',
   },
 
-  // ═══════════════════════════════════════════════════════════════
-  // BATCH 7 SUMMONS (new animated idle.gif sprites)
-  // ═══════════════════════════════════════════════════════════════
+ // ===============================================================
+ // BATCH 7 SUMMONS (new animated idle.gif sprites)
+ // ===============================================================
 
   boglurk: {
     name: 'Boglurk', archetype: 'TANK', element: 'nature',
@@ -213,9 +213,9 @@ const SUMMON_SPECIES = {
   },
 };
 
-// ════════════════════════════════════════════════════════════════
+// ================================================================
 // RARITY CONFIG
-// ════════════════════════════════════════════════════════════════
+// ================================================================
 
 const RARITY_CONFIG = {
   COMMON: { maxLevel: 30, statPointsPerLevel: 3, softCapThreshold: 50, softCapMult: 0.5, marketValue: 5000, statGrowthMult: 1.0 },
@@ -226,9 +226,9 @@ const RARITY_CONFIG = {
   MYTHIC: { maxLevel: 75, statPointsPerLevel: 5, softCapThreshold: 100, softCapMult: 0.5, marketValue: 1500000, statGrowthMult: 1.9 },
 };
 
-// ════════════════════════════════════════════════════════════════
+// ================================================================
 // XP CONFIG
-// ════════════════════════════════════════════════════════════════
+// ================================================================
 
 const SUMMON_XP_CONFIG = {
   BASE_XP: 100,
@@ -242,15 +242,15 @@ function getSummonXPForLevel(level) {
   return Math.floor(SUMMON_XP_CONFIG.BASE_XP * Math.pow(SUMMON_XP_CONFIG.XP_MULTIPLIER, level - 1));
 }
 
-// ════════════════════════════════════════════════════════════════
+// ================================================================
 // STARTER SPECIES (for Basic Summon Egg)
-// ════════════════════════════════════════════════════════════════
+// ================================================================
 
 const STARTER_SPECIES = ['bat', 'slime', 'mushroom', 'snake'];
 
-// ════════════════════════════════════════════════════════════════
+// ================================================================
 // EXPORTS
-// ════════════════════════════════════════════════════════════════
+// ================================================================
 
 function getSpecies(speciesId) {
   return SUMMON_SPECIES[speciesId] || null;
@@ -264,7 +264,7 @@ function getRarityConfig(rarity) {
   return RARITY_CONFIG[rarity] || RARITY_CONFIG.COMMON;
 }
 
-// Echoes - 💡 FIX P2 (2026-08-16): Added missing .buff field to all 8 echoes.
+// Echoes - FIX P2: Added missing .buff field to all 8 echoes.
 // applySoulEcho() in summonAI.js checks `if (!echo.buff) return ''` - without
 // this field, every echo was a no-op. Now each echo has a buff that applies
 // to the summoner on summon death.

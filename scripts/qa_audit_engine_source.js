@@ -1,4 +1,4 @@
-// qa_audit_engine_source.js — engine-layer audit assertions (P1/P4/P5/P17/P18)
+// qa_audit_engine_source.js - engine-layer audit assertions (P1/P4/P5/P17/P18)
 // The full engine needs MongoDB to boot, so these assert the deployed SOURCE
 // structure of the shared-layer changes (the runtime behavior they enable is
 // covered end-to-end by qa_quiz_audit.js).

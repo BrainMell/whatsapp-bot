@@ -1,34 +1,32 @@
 // ============================================
-// ⚡ INTERACTION TRACKER - tags / mentions / replies per pair
+// INTERACTION TRACKER - tags / mentions / replies per pair
 // ============================================
-// Owner directive (2026-09-17): the ship Match Meter needs a MAJOR factor
+// Owner directive: the ship Match Meter needs a MAJOR factor
 // based on who actually tags, mentions and replies to whom. Silent pairs
 // must NOT coast to 60% on name vibes alone.
-// Owner directive v2 (2026-09-17): the bond is RELATIVE - "percentage of
+// Owner directive v2: the bond is RELATIVE - "percentage of
 // interaction with this person compared to interaction with everyone else",
 // not raw volume. Someone who spends 80% of their interaction time on one
 // person ships high with them; a one-off tag among 40 partners does not.
-//
 // What counts as an interaction:
-//   * @-tagging someone (mentionedJid, any message type with contextInfo)
-//   * replying / quoting someone's message (contextInfo.participant)
+// * @-tagging someone (mentionedJid, any message type with contextInfo)
+// * replying / quoting someone's message (contextInfo.participant)
 // Recorded BOTH directions (A stores B, B stores A) so either side can
 // score the pair. Each entry keeps initiator semantics:
-//   c   = total events involving the pair (as seen by this user)
-//   out = events INITIATED by this user (drives the .j history arrows)
-//   t   = last event ts, to = last user-initiated ts
-//   h   = newest-first ring [{y:'m'|'r', t, d:1|0}] (d=1 owner initiated)
-//
+// c = total events involving the pair (as seen by this user)
+// out = events INITIATED by this user (drives the .j history arrows)
+// t = last event ts, to = last user-initiated ts
+// h = newest-first ring [{y:'m'|'r', t, d:1|0}] (d=1 owner initiated)
 // MEMORY MANAGEMENT (deliberate):
-//   * only REGISTERED users are tracked (economy.getUser returns null for
-//     lurkers - no profiles are created for them)
-//   * per-user cap of MAX_PAIRS pairs (evict lowest-count, oldest-first)
-//   * per-pair count capped at MAX_COUNT (log curve saturates anyway)
-//   * per-pair recent-event ring capped at HIST_CAP entries
-//   * writes are in-memory only; a single setInterval flushes dirty users
-//     to Mongo every FLUSH_MS (survives via the normal saveUser path)
-//   * recordMessage is synchronous, allocation-light and swallows every
-//     error - it can NEVER break or slow the message pipeline
+// * only REGISTERED users are tracked (economy.getUser returns null for
+// lurkers - no profiles are created for them)
+// * per-user cap of MAX_PAIRS pairs (evict lowest-count, oldest-first)
+// * per-pair count capped at MAX_COUNT (log curve saturates anyway)
+// * per-pair recent-event ring capped at HIST_CAP entries
+// * writes are in-memory only; a single setInterval flushes dirty users
+// to Mongo every FLUSH_MS (survives via the normal saveUser path)
+// * recordMessage is synchronous, allocation-light and swallows every
+// error - it can NEVER break or slow the message pipeline
 
 const economy = require('./economy');
 const botConfig = require('../../botConfig');
@@ -92,7 +90,7 @@ function bump(user, otherJid, now, type, initiated) {
     h,
   });
 
-  // evict beyond cap: lowest count first, oldest as tie-break
+ // evict beyond cap: lowest count first, oldest as tie-break
   if (mapSize(map) > MAX_PAIRS) {
     let evictKey = null, evictC = Infinity, evictT = Infinity;
     const entries = typeof map.entries === 'function'
@@ -144,8 +142,8 @@ function recordMessage(m, senderJid, chatId, opts = {}) {
       if (opts.botLid && t === opts.botLid) continue;
       if (t === sender) continue;
 
-      // A reply is the stronger signal - when a target is both mentioned
-      // and replied-to in the same message, log it as a reply.
+ // A reply is the stronger signal - when a target is both mentioned
+ // and replied-to in the same message, log it as a reply.
       const type = replied.has(raw) ? 'r' : 'm';
 
       const u = economy.getUser(sender); // registered users only
@@ -160,7 +158,7 @@ function recordMessage(m, senderJid, chatId, opts = {}) {
       }
     }
   } catch (e) {
-    // NEVER break the message pipeline
+ // NEVER break the message pipeline
   } finally {
     ensureFlushTimer();
   }
@@ -210,8 +208,8 @@ function getInteractionScore(p1, p2, jid1, jid2) {
   const days = last ? (Date.now() - last) / 86400000 : 999;
   const rec = days <= 3 ? 1.0 : days <= 7 ? 0.8 : days <= 14 ? 0.65 : days <= 30 ? 0.45 : 0.3;
 
-  // RELATIVE focus: what fraction of each user's whole interaction life
-  // involves this partner. min() = mutual focus (kills one-sided stalking).
+ // RELATIVE focus: what fraction of each user's whole interaction life
+ // involves this partner. min() = mutual focus (kills one-sided stalking).
   const totA = mapTotal(interOf(p1));
   const totB = mapTotal(interOf(p2));
   const shareA = totA > 0 ? ((a && a.c) || 0) / totA : 0;
@@ -240,8 +238,8 @@ function getPairHistory(p1, p2, jid1, jid2) {
   };
   const aToB = grab(p1, jid2);
   const bToA = grab(p2, jid1);
-  // max() = true event count (both directions mirror the same events when
-  // both sides are registered; sum() would double-count).
+ // max() = true event count (both directions mirror the same events when
+ // both sides are registered; sum() would double-count).
   const total = Math.max((aToB && aToB.c) || 0, (bToA && bToA.c) || 0);
   const lastTs = Math.max((aToB && aToB.t) || 0, (bToA && bToA.t) || 0);
   const score = total > 0 ? getInteractionScore(p1, p2, jid1, jid2) : null;
@@ -302,8 +300,8 @@ function renderPairHistory(jid1, jid2) {
     const outTotal = outA + outB;
     const hasOutA = typeof a.out === 'number';
     const hasOutB = typeof b.out === 'number';
-    // Legacy (pre-v3) entries have no initiator data - show the raw count
-    // without a direction claim instead of a misleading "0 initiated".
+ // Legacy (pre-v3) entries have no initiator data - show the raw count
+ // without a direction claim instead of a misleading "0 initiated".
     const dirLine = (fromName, toName, rec) => {
       if (!rec || !rec.c) return `💬 *${fromName} → ${toName}*: 0 initiated`;
       if (typeof rec.out === 'number') {
@@ -338,8 +336,8 @@ function renderPairHistory(jid1, jid2) {
       `💫 Bond strength: *${hist.score == null ? 0 : hist.score}/100* - how much of your chat life is each other (40% of the ship score)`,
     );
 
-    // Recent events: merge both directions' rings, newest first. d=1 means
-    // the map owner initiated - flip names accordingly.
+ // Recent events: merge both directions' rings, newest first. d=1 means
+ // the map owner initiated - flip names accordingly.
     const events = [];
     const pushH = (rec, ownerName, otherName) => {
       if (rec && Array.isArray(rec.h)) {

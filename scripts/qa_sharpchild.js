@@ -1,5 +1,4 @@
-// QA: SHARP CHILD (2026-09-28) - crash-isolated sharp worker
-// Verifies: gate parity with the old in-process gate, SVG variants (BOM /
+// QA: SHARP CHILD - crash-isolated sharp worker
 // comment / DOCTYPE / svgz) rejected WITHOUT crashing the parent, animated
 // sticker frames, poison quarantine after a forced timeout, worker respawn,
 // and circuit-breaker arithmetic.
@@ -66,7 +65,7 @@ const zlib = require("zlib");
   ok(Array.isArray(frames) && frames.length >= 1 && frames.every((f) => f.buf && f.buf.length > 500), `asticker frames extracted (${Array.isArray(frames) ? frames.length : 0} page(s))`);
 
   console.log("════ poison quarantine (forced timeout path) ════");
-  // force a 1ms timeout on the good jpeg -> job times out -> input poisoned
+ // force a 1ms timeout on the good jpeg -> job times out -> input poisoned
   let timedOut = false;
   try { await sharpChild.runJob("gate", good, {}, 1); } catch (e) { timedOut = /timed out/.test(e.message); }
   ok(timedOut, "forced-timeout job rejects with timeout");

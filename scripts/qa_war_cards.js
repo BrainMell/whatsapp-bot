@@ -1,5 +1,5 @@
 // ============================================
-// 🎨 QA RENDER: new gw cards (field manual + status/final standings)
+// QA RENDER: new gw cards (field manual + status/final standings)
 // Renders both new noticeCard functions to PNG for visual inspection.
 // Run: node scripts/qa_war_cards.js
 // ============================================

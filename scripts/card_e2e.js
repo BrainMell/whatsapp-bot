@@ -1,6 +1,6 @@
 'use strict';
 /**
- * card_e2e.js — E2E for the card system fixes.
+ * card_e2e.js - E2E for the card system fixes.
  * Runs ON the box with the REAL cardSystem handler, REAL deployed code and
  * REAL cards_data.json; only the WhatsApp sock is mocked (captures sends).
  *
@@ -51,7 +51,7 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
   });
   const findMsg = (re) => sent.find(s => (s.text && re.test(s.text)) || (s.caption && re.test(s.caption)));
 
-  // ── 1. THE owner test: einfo bulma ──────────────────────────────────────
+ // -- 1. THE owner test: einfo bulma --------------------------------------
   sent.length = 0;
   await run('.j einfo bulma');
   await new Promise(r => setTimeout(r, 1500));
@@ -67,7 +67,7 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
     }
   }
 
-  // ── 2. event search by event name ───────────────────────────────────────
+ // -- 2. event search by event name ---------------------------------------
   sent.length = 0;
   await run('.j einfo summer');
   await new Promise(r => setTimeout(r, 1500));
@@ -80,7 +80,7 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
     }
   }
 
-  // ── 3. series search via einfo ──────────────────────────────────────────
+ // -- 3. series search via einfo ------------------------------------------
   sent.length = 0;
   await run('.j einfo dragon ball');
   await new Promise(r => setTimeout(r, 1500));
@@ -89,9 +89,9 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
     ok(!!msg, 'einfo "dragon ball" (series) returns results');
   }
 
-  // ── 4. full CARD DETAIL caption via info <id> (media pre-warmed) ───────
-  // 💡 round 2: convertCardImage now caches on disk - pre-warm so the
-  // caption arrives instantly regardless of asset size.
+ // -- 4. full CARD DETAIL caption via info <id> (media pre-warmed) -------
+ // round 2: convertCardImage now caches on disk - pre-warm so the
+ // caption arrives instantly regardless of asset size.
   {
     const eCard = inst.CARD_INDEX['E-03201'];
     ok(!!eCard, 'E-03201 exists in CARD_INDEX');
@@ -126,7 +126,7 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
     }
   }
 
-  // ── 5. spawn caption from deployed source (CARD APPEARED, no location) ──
+ // -- 5. spawn caption from deployed source (CARD APPEARED, no location) --
   {
     const fs = require('fs');
     const src = fs.readFileSync(__dirname + '/../core/rpg/cardSystem.js', 'utf8');
@@ -153,7 +153,7 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
     }
   }
 
-  // ── 6. sendCardMedia magic-byte sniffing (deployed source) ──────────────
+ // -- 6. sendCardMedia magic-byte sniffing (deployed source) --------------
   {
     const fs = require('fs');
     const src = fs.readFileSync(__dirname + '/../core/rpg/cardSystem.js', 'utf8');
@@ -181,10 +181,10 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
     }
   }
 
-  // ── 7. restart-safe spawn: persist -> restore -> claim -> doc dropped ───
+ // -- 7. restart-safe spawn: persist -> restore -> claim -> doc dropped ---
   {
     const KEY = `${CHAT_ID}_E-03201`;
-    // clean slate
+ // clean slate
     await CardSpawn.deleteMany({ botId: BOT_ID });
     await cardSystem.init(sock, [], [], OWNER); // simulates a restart
     const inst2 = cardSystem.instances.get(BOT_ID);
@@ -211,7 +211,7 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
     {
       const msg = findMsg(/CLAIMED/);
       ok(!!msg, 'claim of a RESTORED spawn succeeds (lazy stat resolution works)');
-      // 💡 STYLE 2026-10-08 (owner spec): universal claim card layout
+ // STYLE (owner spec): universal claim card layout
       if (msg) {
         const t = msg.text || msg.caption || '';
         const firstLine = (t.trim().split('\n')[0] || '');
@@ -226,12 +226,12 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
       ok(!!uc, 'UserCard created for the claimer');
       const doc = await CardSpawn.findOne({ key: KEY }).lean();
       ok(!doc, 'CardSpawn doc dropped after successful claim');
-      // cleanup test rows + restore counters
+ // cleanup test rows + restore counters
       await cardSystem.UserCard.deleteOne({ userId: OWNER, cardId: 'E-03201' });
       await cardSystem.CardStat.updateOne({ cardId: 'E-03201' }, { $inc: { totalCirculation: -1, uniqueOwners: -1 } }).catch(() => {});
       console.log('  [cleanup] test claim rows removed, counters restored');
     }
-    // expire path: doc with past expiry must NOT be restored
+ // expire path: doc with past expiry must NOT be restored
     await CardSpawn.findOneAndUpdate(
       { key: KEY },
       { key: KEY, botId: BOT_ID, groupJid: CHAT_ID, cardId: 'E-03201', copyNumber: 7, maxCopies: 100, price: 500, spawnedAt: new Date(), expiresAt: new Date(Date.now() - 60000) },
@@ -245,7 +245,7 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
     await CardSpawn.deleteMany({ botId: BOT_ID });
   }
 
-  // ── round 3: owner UI overhaul — themed status text (2026-10-08) ────────
+ // -- round 3: owner UI overhaul - themed status text --------
   console.log('\n== round 3: themed status text ==');
   sent.length = 0;
   await run('.j claim 2-00147');
@@ -272,7 +272,7 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
   await run('.j coll');
   await new Promise(r => setTimeout(r, 1200));
   {
-    // OWNER may or may not own cards - both branches must be themed now
+ // OWNER may or may not own cards - both branches must be themed now
     const empty = findMsg(/COLLECTION EMPTY/);
     const list = findMsg(/\*Collection\*/);
     ok(!!empty || !!list, 'coll reply present (themed empty state or list)');

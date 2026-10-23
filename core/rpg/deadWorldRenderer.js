@@ -1,34 +1,31 @@
-// ═══════════════════════════════════════════════════════════════════════════
-//  DEAD WORLD RENDERER — the empty encounter card + the survived victory card
-// ═══════════════════════════════════════════════════════════════════════════
-//
-//  2026-09-21 owner ticket: a regular dungeon encounter can become a Dead
-//  World encounter. Nothing spawns. These two node-canvas cards are the
-//  FALLBACK path only (the primary cards are rendered by the Go service,
-//  same pipeline as every regular encounter card - see deadWorld.js).
-//
-//    renderDeadWorldScene()    the player alone in the environment, no
-//                              monsters, the world visibly "off" (dimmed,
-//                              desaturated, empty ground where the enemy
-//                              side should be). The confusion is carried by
-//                              the visual, not by text.
-//    renderDeadWorldVictory()  the closing frame: same environment, light
-//                              coming back, gold SURVIVED seal. No slain
-//                              enemies, no kill ledger - nobody was fought.
-//
-//  House rules pinned by qa_dead_world.js:
-//    - every text string on the cards is sanitized: no hyphens, no en or em
-//      dashes (owner rule for generated encounter text)
-//    - the enemy side is EMPTY on both cards, and the victory card never
-//      shows a kill count, a corpse, or an enemy silhouette
-//    - NO floor number anywhere (owner 2026-09-21): the plate carries the
-//      dungeon name and rank only
-//    - the sprite is drawn with its NATIVE facing (the way every other
-//      renderer in this codebase draws it: unmirrored, facing the enemy
-//      side), grounded on the floor line with a contact shadow directly
-//      under the feet (owner 2026-09-21: model and shadow must match how
-//      existing encounter cards render them)
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// DEAD WORLD RENDERER - the empty encounter card + the survived victory card
+// ===========================================================================
+// owner ticket: a regular dungeon encounter can become a Dead
+// World encounter. Nothing spawns. These two node-canvas cards are the
+// FALLBACK path only (the primary cards are rendered by the Go service,
+// same pipeline as every regular encounter card - see deadWorld.js).
+// renderDeadWorldScene() the player alone in the environment, no
+// monsters, the world visibly "off" (dimmed,
+// desaturated, empty ground where the enemy
+// side should be). The confusion is carried by
+// the visual, not by text.
+// renderDeadWorldVictory() the closing frame: same environment, light
+// coming back, gold SURVIVED seal. No slain
+// enemies, no kill ledger - nobody was fought.
+// House rules pinned by qa_dead_world.js:
+// - every text string on the cards is sanitized: no hyphens, no en or em
+// dashes (owner rule for generated encounter text)
+// - the enemy side is EMPTY on both cards, and the victory card never
+// shows a kill count, a corpse, or an enemy silhouette
+// - NO floor number anywhere: the plate carries the
+// dungeon name and rank only
+// - the sprite is drawn with its NATIVE facing (the way every other
+// renderer in this codebase draws it: unmirrored, facing the enemy
+// side), grounded on the floor line with a contact shadow directly
+// under the feet (model and shadow must match how
+// existing encounter cards render them)
+// ===========================================================================
 
 'use strict';
 
@@ -45,7 +42,7 @@ const FONT_DIR = path.join(ASSETS, 'fonts');
 const W = 720;
 const H = 540;
 
-// ─── FONTS (lazy, bot-owned only) ────────────────────────────────────────────
+// --- FONTS (lazy, bot-owned only) --------------------------------------------
 let _fontsReady = false;
 function _ensureFonts() {
     if (_fontsReady) return true;
@@ -53,11 +50,11 @@ function _ensureFonts() {
         const canvas = require('canvas');
         const registerFont = canvas.registerFont || (canvas.GlobalFonts && canvas.GlobalFonts.registerFromPath);
         if (!registerFont) throw new Error('no font registration API in canvas build');
-        // Some font files in the repo are Git LFS pointers on fresh clones -
-        // each registration is individually guarded and pointer files are
-        // skipped, exactly like profileCardRenderer. Dogica Pixel Bold (a
-        // real committed file) carries the pixel-font role when Pixeloid is
-        // not materialized locally.
+ // Some font files in the repo are Git LFS pointers on fresh clones -
+ // each registration is individually guarded and pointer files are
+ // skipped, exactly like profileCardRenderer. Dogica Pixel Bold (a
+ // real committed file) carries the pixel-font role when Pixeloid is
+ // not materialized locally.
         const isRealFont = (p) => {
             try {
                 if (!fs.existsSync(p)) return false;
@@ -90,7 +87,7 @@ function _ensureFonts() {
     }
 }
 
-// ─── SPRITES (same resolution discipline as the profile card) ────────────────
+// --- SPRITES (same resolution discipline as the profile card) ----------------
 const _imgCache = new Map();
 async function _loadImg(dir, name) {
     if (!name) return null;
@@ -99,7 +96,7 @@ async function _loadImg(dir, name) {
     let out = null;
     const p = path.join(dir, name);
     try {
-        // accept real PNG or JPEG bytes (skips Git LFS pointer files)
+ // accept real PNG or JPEG bytes (skips Git LFS pointer files)
         const head = fs.existsSync(p) ? fs.readFileSync(p).slice(0, 4) : Buffer.alloc(0);
         const isPng = head.toString('hex') === '89504e47';
         const isJpg = head[0] === 0xff && head[1] === 0xd8;
@@ -133,7 +130,7 @@ async function _loadPlayerSprite(classId, spriteIndex) {
     return null;
 }
 
-// ─── ENVIRONMENT ART ─────────────────────────────────────────────────────────
+// --- ENVIRONMENT ART ---------------------------------------------------------
 // Dungeon environments are keyed by the Go-side background filename that the
 // run carries in state.backgroundPath. Local committed art mirrors each
 // theme; anything unknown falls back to the always-present dark stone.
@@ -141,10 +138,10 @@ const ENV_CARD_ART = {
     'env1.png': 'cards/fire.jpg',            // Fire Cave (lava interior)
     'env2.png': 'cards/ice.jpg',             // Ice Cave
     'env3.png': 'cards/toxic.jpg',           // Toxic Cave
-    // 💡 OWNER RULING 2026-10-10: the dungeon pools wear the RESTORED
-    // cave/field family (spark_*) — the painted halls went back to being
-    // ABYSS-BOSS art only. Dead-world card art mirrors each backdrop theme;
-    // every target here is committed in this repo (ENV_DIR or cards/).
+ // OWNER RULING the dungeon pools wear the RESTORED
+ // cave/field family (spark_*) - the painted halls went back to being
+ // ABYSS-BOSS art only. Dead-world card art mirrors each backdrop theme;
+ // every target here is committed in this repo (ENV_DIR or cards/).
     'spark_1.png': 'cards/desert.jpg',       // cracked badlands (DESERT / SIMPLE_FOREST)
     'spark_1-night.png': 'cards/ash.jpg',    // blighted night (INFECTED_AFTERLIFE / TOXIC_CAVE)
     'spark_2.png': 'cards/ash.jpg',          // crimson night (DEMON_CASTLE / FIRE_CAVE / DRAGON_LAIR)
@@ -170,8 +167,8 @@ async function _loadEnvArt(backgroundPath, environmentKey) {
     if (base) candidates.push(base);              // the run's own asset, if committed here
     candidates.push('spark_10.png', 'cards/forest.jpg');
     for (const rel of candidates) {
-        // rel may carry a subdirectory (abyss/…) — resolve it under ENV_DIR;
-        // cards/ keeps its dedicated dir
+ // rel may carry a subdirectory (abyss/…) - resolve it under ENV_DIR;
+ // cards/ keeps its dedicated dir
         const img = rel.startsWith('cards/')
             ? await _loadImg(CARD_DIR, path.basename(rel))
             : await _loadImg(ENV_DIR, rel);
@@ -180,7 +177,7 @@ async function _loadEnvArt(backgroundPath, environmentKey) {
     return { img: null, rel: null };
 }
 
-// ─── TEXT SAFETY (owner rule: no hyphens or dashes on encounter text) ────────
+// --- TEXT SAFETY (owner rule: no hyphens or dashes on encounter text) --------
 function _safeText(s) {
     return String(s == null ? '' : s)
         .replace(/\u2019/g, "'")
@@ -189,7 +186,7 @@ function _safeText(s) {
         .trim();
 }
 
-// ─── SHARED PAINT HELPERS ────────────────────────────────────────────────────
+// --- SHARED PAINT HELPERS ----------------------------------------------------
 function _coverFit(ctx, img, w, h) {
     if (!img) return;
     const scale = Math.max(w / img.width, h / img.height);
@@ -214,7 +211,7 @@ function _frame(ctx, w, h, color) {
 }
 
 // Top-left plate: dungeon name + rank only. NO floor number (owner
-// 2026-09-21: the floor must not appear in the Dead World UI).
+// the floor must not appear in the Dead World UI).
 function _plate(ctx, dungeonName, rank, opts = {}) {
     const name = _safeText(dungeonName) || 'Deep Dungeon';
     const sub = `RANK ${_safeText(rank) || 'F'}`;
@@ -260,10 +257,10 @@ async function _drawPlayer(ctx, opts) {
     const groundY = Math.floor(H * 0.86);
     const px = Math.floor(W * (opts.playerX || 0.24));
     const targetH = Math.floor(H * 0.56);
-    // feet land exactly on the ground line, matching how the encounter
-    // renderer grounds the model; the contact shadow sits directly under
-    // the feet (soft, wide, slightly offset toward the light) so the
-    // character never floats (owner 2026-09-21 model/shadow fix)
+ // feet land exactly on the ground line, matching how the encounter
+ // renderer grounds the model; the contact shadow sits directly under
+ // the feet (soft, wide, slightly offset toward the light) so the
+ // character never floats (model/shadow fix)
     if (sprite) {
         const scale = targetH / sprite.height;
         const dw = sprite.width * scale;
@@ -283,15 +280,15 @@ async function _drawPlayer(ctx, opts) {
         ctx.fill();
         ctx.restore();
         ctx.restore();
-        // NATIVE facing: draw the sprite unmirrored, exactly like the
-        // encounter card pipeline does - the model faces the enemy side
-        // (right) on its own. Owner 2026-09-21 facing fix: the previous
-        // horizontal mirror transform pointed the character the wrong way.
+ // NATIVE facing: draw the sprite unmirrored, exactly like the
+ // encounter card pipeline does - the model faces the enemy side
+ // (right) on its own. facing fix: the previous
+ // horizontal mirror transform pointed the character the wrong way.
         ctx.save();
         ctx.drawImage(sprite, px - dw / 2, groundY - targetH, dw, targetH);
         ctx.restore();
     } else {
-        // sprite failed: a standing silhouette so the card never sends empty
+ // sprite failed: a standing silhouette so the card never sends empty
         ctx.save();
         ctx.fillStyle = 'rgba(0,0,0,0.35)';
         ctx.beginPath();
@@ -326,7 +323,7 @@ function _nameTag(ctx, playerName) {
 // Gold seal (Royal Decree family) - used by the victory card only.
 function _seal(ctx, label, cx, cy, r) {
     ctx.save();
-    // ribbon star
+ // ribbon star
     ctx.fillStyle = '#A67C2E';
     ctx.beginPath();
     for (let i = 0; i < 24; i++) {
@@ -351,7 +348,7 @@ function _seal(ctx, label, cx, cy, r) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const sealWord = _safeText(label).toUpperCase();
-    // fit the seal word inside the inner circle: shrink until it fits
+ // fit the seal word inside the inner circle: shrink until it fits
     let fontSize = Math.floor(r * 0.34);
     ctx.font = `bold ${fontSize}px "Cinzel"`;
     const maxW = r * 1.28; // inner diameter * 0.8
@@ -364,7 +361,7 @@ function _seal(ctx, label, cx, cy, r) {
     ctx.restore();
 }
 
-// ─── CARD 1: THE EMPTY ENCOUNTER ─────────────────────────────────────────────
+// --- CARD 1: THE EMPTY ENCOUNTER ---------------------------------------------
 /**
  * The Dead World scene: the player alone in the dungeon environment, no
  * monsters, and the environment's COLORS INVERTED (owner 2026-09-21: "I want
@@ -383,13 +380,13 @@ async function renderDeadWorldScene(opts = {}) {
         const cv = create(W, H);
         const ctx = cv.getContext('2d');
 
-        // environment, INVERTED, then the wrongness layered over it
+ // environment, INVERTED, then the wrongness layered over it
         const { img } = await _loadEnvArt(opts.backgroundPath, opts.environmentKey);
         if (img) {
             const env = create(W, H);
             const ectx = env.getContext('2d');
             _coverFit(ectx, img, W, H);
-            // pixel-level RGB inversion (difference against white keeps alpha)
+ // pixel-level RGB inversion (difference against white keeps alpha)
             ectx.globalCompositeOperation = 'difference';
             ectx.fillStyle = '#ffffff';
             ectx.fillRect(0, 0, W, H);
@@ -399,8 +396,8 @@ async function renderDeadWorldScene(opts = {}) {
             ctx.fillStyle = '#14161f'; ctx.fillRect(0, 0, W, H);
         }
 
-        // cold dim (lighter than the old pass: the inverted palette already
-        // reads unmistakably wrong; drowning it in gray would hide the effect)
+ // cold dim (lighter than the old pass: the inverted palette already
+ // reads unmistakably wrong; drowning it in gray would hide the effect)
         ctx.fillStyle = 'rgba(24,28,40,0.28)';
         ctx.fillRect(0, 0, W, H);
         const haze = ctx.createLinearGradient(0, H * 0.45, 0, H);
@@ -409,14 +406,14 @@ async function renderDeadWorldScene(opts = {}) {
         ctx.fillStyle = haze;
         ctx.fillRect(0, H * 0.45, W, H * 0.55);
 
-        // the player, alive in a floor that is not
+ // the player, alive in a floor that is not
         await _drawPlayer(ctx, opts);
         _nameTag(ctx, opts.playerName);
         _motes(ctx, W, H, 20260921, 'rgba(210,214,226,1)');
         _vignette(ctx, W, H, 0.62);
 
-        // the absent half: nothing marks the enemy side. A faint cold edge
-        // hints at the space where something should be standing.
+ // the absent half: nothing marks the enemy side. A faint cold edge
+ // hints at the space where something should be standing.
         const cold = ctx.createLinearGradient(W * 0.55, 0, W, 0);
         cold.addColorStop(0, 'rgba(30,36,52,0)');
         cold.addColorStop(1, 'rgba(30,36,52,0.4)');
@@ -435,7 +432,7 @@ async function renderDeadWorldScene(opts = {}) {
     }
 }
 
-// ─── CARD 2: THE SURVIVED VICTORY ────────────────────────────────────────────
+// --- CARD 2: THE SURVIVED VICTORY --------------------------------------------
 /**
  * The closing frame: same environment, light returning, gold SURVIVED seal.
  * Deliberately shows NO enemies, NO kill ledger - the player outlasted a
@@ -453,7 +450,7 @@ async function renderDeadWorldVictory(opts = {}) {
         if (img) _coverFit(ctx, img, W, H);
         else { ctx.fillStyle = '#1c1a14'; ctx.fillRect(0, 0, W, H); }
 
-        // gentle desaturation, less than the scene card: the world is easing
+ // gentle desaturation, less than the scene card: the world is easing
         try {
             ctx.globalCompositeOperation = 'saturation';
             ctx.fillStyle = 'rgba(128,128,128,0.45)';
@@ -461,7 +458,7 @@ async function renderDeadWorldVictory(opts = {}) {
         } catch (e) { /* ignore */ }
         try { ctx.globalCompositeOperation = 'source-over'; } catch (e) {}
 
-        // warm light returning from above
+ // warm light returning from above
         const warm = ctx.createLinearGradient(0, 0, 0, H);
         warm.addColorStop(0, 'rgba(255,208,130,0.30)');
         warm.addColorStop(0.55, 'rgba(255,196,110,0.12)');

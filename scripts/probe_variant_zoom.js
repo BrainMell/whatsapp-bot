@@ -1,4 +1,4 @@
-// Pixel-zoom crops for the variant QA (nearest-neighbour 2.5x) — verify the
+// Pixel-zoom crops for the variant QA (nearest-neighbour 2.5x) - verify the
 // treatments hug the art: arch edges, walkway strip, bone/crystal clusters,
 // rune ring edge. Usage: node scripts/probe_variant_zoom.js
 'use strict';

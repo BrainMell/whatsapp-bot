@@ -8,7 +8,7 @@ const path = require('path');
 const botConfig = require('../../botConfig');
 const economy = require('../rpg/economy');
 const system = require('../utils/system'); // NEW: Database System Module
-const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
+const goService = require('../utils/goImageService'); // singleton (PERF PATCH )
 
 // ============================================
 // SCOREBOARD MANAGEMENT (UPGRADED)
@@ -102,7 +102,7 @@ const WINNING_PATTERNS = {
 function generateWinningPatterns(gridSize, winLength) {
   const patterns = [];
   
-  // Rows - horizontal wins
+ // Rows - horizontal wins
   for (let row = 0; row < gridSize; row++) {
     for (let col = 0; col <= gridSize - winLength; col++) {
       const pattern = [];
@@ -113,7 +113,7 @@ function generateWinningPatterns(gridSize, winLength) {
     }
   }
   
-  // Columns - vertical wins
+ // Columns - vertical wins
   for (let col = 0; col < gridSize; col++) {
     for (let row = 0; row <= gridSize - winLength; row++) {
       const pattern = [];
@@ -124,7 +124,7 @@ function generateWinningPatterns(gridSize, winLength) {
     }
   }
   
-  // Diagonals (top-left to bottom-right)
+ // Diagonals (top-left to bottom-right)
   for (let row = 0; row <= gridSize - winLength; row++) {
     for (let col = 0; col <= gridSize - winLength; col++) {
       const pattern = [];
@@ -135,7 +135,7 @@ function generateWinningPatterns(gridSize, winLength) {
     }
   }
   
-  // Diagonals (top-right to bottom-left)
+ // Diagonals (top-right to bottom-left)
   for (let row = 0; row <= gridSize - winLength; row++) {
     for (let col = winLength - 1; col < gridSize; col++) {
       const pattern = [];
@@ -149,7 +149,6 @@ function generateWinningPatterns(gridSize, winLength) {
   return patterns;
 }
 
-// Initialize large grid patterns
 WINNING_PATTERNS[8] = generateWinningPatterns(8, 4);   // 8x8, 4-in-a-row
 WINNING_PATTERNS[16] = generateWinningPatterns(16, 5); // 16x16, 5-in-a-row
 
@@ -219,7 +218,7 @@ function createGame(playerAJid, playerBJid, chatId, gridSize = 3, sock, botMarke
     lastAction: Date.now()
   };
 
-  // Set timeout for 5 minutes
+ // Set timeout for 5 minutes
   gameState.timeout = setTimeout(async () => {
     if (activeGames.has(chatId)) {
       activeGames.delete(chatId);
@@ -275,7 +274,7 @@ function makeMove(chatId, playerJid, cellIndex) {
   game.lastMoveIndex = cellIndex;
   game.lastAction = Date.now();
 
-  // Reset timeout
+ // Reset timeout
   if (game.timeout) {
     clearTimeout(game.timeout);
     game.timeout = setTimeout(async () => {
@@ -356,9 +355,9 @@ function getBoardText(board, gridSize, lastMoveIndex = null, winPattern = null) 
 module.exports = {
   getAllScores,
   handleStartGame: async (sock, chatId, senderJid, mentionedJids, botMarker, m, gridSize = 3) => {
-    // 💡 FIX: Validate grid size - only 3, 8, and 16 have win patterns defined.
-    // Previously any value would pass and crash on the first move when
-    // WINNING_PATTERNS[gridSize] returned undefined.
+ // FIX: Validate grid size - only 3, 8, and 16 have win patterns defined.
+ // Previously any value would pass and crash on the first move when
+ // WINNING_PATTERNS[gridSize] returned undefined.
     if (![3, 8, 16].includes(gridSize)) {
       return sock.sendMessage(chatId, { text: botMarker + '❌ Invalid grid size! Supported sizes: 3 (tic-tac-toe), 8 (mega), 16 (ultra).' }, { quoted: m });
     }
@@ -404,12 +403,12 @@ module.exports = {
       const winnerName = normalizeJid(result.game.winner) === normalizeJid(senderJid) ? senderName : 'Opponent';
       const loserJid = result.game.winner === result.game.playerA ? result.game.playerB : result.game.playerA;
       
-      // Update scores
+ // Update scores
       updateScoreboard(result.game.winner, winnerName, points);
-      // UPDATE: Don't overwrite loser's name with "Player". 'Player' is passed but ignored by updateScoreboard if name exists.
+ // UPDATE: Don't overwrite loser's name with "Player". 'Player' is passed but ignored by updateScoreboard if name exists.
       updateScoreboard(loserJid, 'Player', -1);
       
-      // Award Money
+ // Award Money
       const moneyReward = points * 100; // 100, 200, 300
       economy.addMoney(result.game.winner, moneyReward);
 
@@ -422,7 +421,7 @@ module.exports = {
       mentionedJid = [result.game.playerA, result.game.playerB];
       deleteGame(chatId);
     } else if (result.game.status === 'draw') {
-      // UPDATE: Add players to scoreboard with 0 points so they appear on leaderboard
+ // UPDATE: Add players to scoreboard with 0 points so they appear on leaderboard
       updateScoreboard(result.game.playerA, 'Player', 0);
       updateScoreboard(result.game.playerB, 'Player', 0);
 
@@ -483,7 +482,7 @@ module.exports = {
         console.error('Error loading scores for mentions:', e);
     }
     
-    // ✅ STYLED CAPTION with separator lines
+ // STYLED CAPTION with separator lines
     const caption = botMarker + `━━━━━━━━━━━━━━━━━
 🎮 *TIC-TAC-TOE LEADERBOARD*
 ━━━━━━━━━━━━━━━━━

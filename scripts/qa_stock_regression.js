@@ -1,4 +1,4 @@
-// qa_stock_regression.js — spec section 19: prove .j stock still works after
+// qa_stock_regression.js - spec section 19: prove .j stock still works after
 // the trends/quiz changes. Real Yahoo Finance lookups + real chart PNGs through
 // the ACTUAL handleStock command path (mock socket like production engine).
 "use strict";
@@ -40,7 +40,7 @@ const CASES = [
       ok(false, `${c.label}: no graph - got: ${(r.message || "").slice(0, 100)}`);
     }
   }
-  // invalid ticker must produce a clean message, never a crash
+ // invalid ticker must produce a clean message, never a crash
   const sock2 = makeMockSock();
   const r2 = await stock.handleStock(sock2, "st@g.us", "u@s.w", MARK, { key: { id: "S2" } }, "ZZZZINVALIDTICKER123 1d");
   ok(r2.message && /❌|not|No /i.test(r2.message), "invalid ticker handled gracefully");

@@ -11,7 +11,7 @@ const mongoose = require('mongoose');
     await state.registerPlayer(created.event.eventId, { jid: 'mp@s.whatsapp.net', name: 'MP', guildId: 'G', guildName: 'G' });
     const s = await state.startEvent(created.event.eventId);
     const p = s.event.players[0];
-    // wait out cooldown
+ // wait out cooldown
     await new Promise((r) => setTimeout(r, 6100));
     try {
         const r = await dmRouter.handleDM({ async sendMessage() {} }, p.jid, p.jid, 'move n', 'GW');

@@ -1,31 +1,29 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-//  emojiBitmap.js — COLOR emoji for node-canvas via CBDT bitmap extraction
-// ═══════════════════════════════════════════════════════════════════════════
-//  WHY: canvas 3.2.3 on the render boxes cannot draw colored emoji from any
-//  font: probe 2026-10-20 proved (a) registerFont is bypassed for emoji
-//  glyph resolution (bogus family renders pixel-identical), and (b) CBDT
-//  color bitmaps come out as alpha-mask silhouettes tinted by fillStyle.
-//  Fonts can never produce color here. OWNER 2026-10-20: "Use colors not
-//  hex code cus who tf knows hex codes dude?" — so we ship the color font
-//  and paint its per-emoji PNG strikes with ctx.drawImage instead.
-//
-//  Binary layout (validated byte-for-byte against fonttools ground truth):
-//    IndexSubTable header (8B): u16 indexFormat, u16 imageFormat,
-//                               u32 imageDataOffset
-//    glyph record start = CBDT_table_offset + imageDataOffset + offsetArray[gid-first]
-//    imageFormat 17 record: [height][width][BearingX][BearingY][Advance]
-//                           [u32 dataLen][PNG bytes]   (NO per-glyph format byte)
-//    imageFormat 18: bigGlyphMetrics (8B) + u32 len + PNG
-//    imageFormat 19: u32 len + PNG
-//  Strike metrics (CBLC BitmapSize, 48B): ascender @+16, ppemX/ppemY @+44/+45.
-//
-//  LIMITATIONS (accepted): ZWJ sequences / skin tones / flags draw as
-//  adjacent component bitmaps (no GSUB shaping) — visually the same
-//  behaviour the mono font path gives today. Glyphs missing from CBDT
-//  (non-emoji like ⛭ U+26ED) return nothing and the caller falls back to
-//  the mono/system path or a text glyph.
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// emojiBitmap.js - COLOR emoji for node-canvas via CBDT bitmap extraction
+// ===========================================================================
+// WHY: canvas 3.2.3 on the render boxes cannot draw colored emoji from any
+// font: probe proved (a) registerFont is bypassed for emoji
+// glyph resolution (bogus family renders pixel-identical), and (b) CBDT
+// color bitmaps come out as alpha-mask silhouettes tinted by fillStyle.
+// Fonts can never produce color here. OWNER "Use colors not
+// hex code cus who tf knows hex codes dude?" - so we ship the color font
+// and paint its per-emoji PNG strikes with ctx.drawImage instead.
+// Binary layout (validated byte-for-byte against fonttools ground truth):
+// IndexSubTable header (8B): u16 indexFormat, u16 imageFormat,
+// u32 imageDataOffset
+// glyph record start = CBDT_table_offset + imageDataOffset + offsetArray[gid-first]
+// imageFormat 17 record: [height][width][BearingX][BearingY][Advance]
+// [u32 dataLen][PNG bytes] (NO per-glyph format byte)
+// imageFormat 18: bigGlyphMetrics (8B) + u32 len + PNG
+// imageFormat 19: u32 len + PNG
+// Strike metrics (CBLC BitmapSize, 48B): ascender @+16, ppemX/ppemY @+44/+45.
+// LIMITATIONS (accepted): ZWJ sequences / skin tones / flags draw as
+// adjacent component bitmaps (no GSUB shaping) - visually the same
+// behaviour the mono font path gives today. Glyphs missing from CBDT
+// (non-emoji like U+26ED) return nothing and the caller falls back to
+// the mono/system path or a text glyph.
+// ===========================================================================
 const fs = require('fs');
 
 const STATE = {
@@ -166,7 +164,7 @@ function glyphBitmap(gid) {
     return out;
 }
 
-// imageFormat carries the record layout (NO per-glyph format byte — validated
+// imageFormat carries the record layout (NO per-glyph format byte - validated
 // against fonttools: metrics begin at the record start).
 function decodeGlyphData(imageFormat, buf, o, len, bigMetrics) {
     if (len <= 8 || o + 8 > buf.length) return null;
@@ -187,7 +185,7 @@ function decodeGlyphData(imageFormat, buf, o, len, bigMetrics) {
         const png = pngSlice(buf, o + 4, Math.min(dlen, len - 4));
         return png ? { buf: png, m: bigMetrics || null } : null;
     }
-    return null; // raw-bitmap formats (1/2/…) unsupported — mono fallback covers
+    return null; // raw-bitmap formats (1/2/…) unsupported - mono fallback covers
 }
 
 function pngSlice(buf, o, len) {
@@ -226,10 +224,10 @@ function ready(fontPath) { return init(fontPath); }
 
 // Split a string into [run, isEmoji] runs. A run is emoji if ANY char is a
 // codepoint present in the color font's cmap (plus VS16/ZWJ/keycap glue).
-// ⚠️ cmap also maps ASCII whitespace (0x20!) — NotoColorEmoji ships blank
-// glyphs for them — so only codepoints ≥ U+2000 count as emoji candidates,
-// otherwise "🐉 Pyro" glues the space into the emoji run and paints a 1.25em
-// gap (caught by QA 2026-10-20: mixed-advance assert).
+// cmap also maps ASCII whitespace (0x20!) - NotoColorEmoji ships blank
+// glyphs for them - so only codepoints ≥ U+2000 count as emoji candidates,
+// otherwise " Pyro" glues the space into the emoji run and paints a 1.25em
+// gap (caught by QA mixed-advance assert).
 function splitRuns(str) {
     const s = String(str || '');
     const runs = [];
@@ -249,7 +247,7 @@ function splitRuns(str) {
 }
 
 // Codepoints of an emoji run → glyph ids (VS/ZWJ glue skipped; components map
-// individually — no GSUB shaping, same visual result as today's mono path).
+// individually - no GSUB shaping, same visual result as today's mono path).
 function seqToGids(run) {
     const gids = [];
     for (const c of run) {
@@ -279,12 +277,12 @@ function measure(run, px) {
 
 // Draw an emoji run with its LEFT EDGE at x (text semantics for both axes).
 // Baseline handling reads ctx.textBaseline:
-//   alphabetic (default) → glyph top at y - bearingY*s (exact font metrics:
-//     bearingY=ascender=101, bitmap 128 tall → 27px hang below baseline,
-//     matching the strike's descender of -27)
-//   middle → bitmap bbox centered on y (matches how fillText centers the em box)
-//   top → bitmap top at y; bottom → bitmap bottom at y
-// Native colors — fillStyle deliberately ignored. Returns total advance.
+// alphabetic (default) → glyph top at y - bearingY*s (exact font metrics:
+// bearingY=ascender=101, bitmap 128 tall → 27px hang below baseline,
+// matching the strike's descender of -27)
+// middle → bitmap bbox centered on y (matches how fillText centers the em box)
+// top → bitmap top at y; bottom → bitmap bottom at y
+// Native colors - fillStyle deliberately ignored. Returns total advance.
 // ImageCtor: node-canvas Image (buffer src decodes synchronously).
 function draw(ctx, run, x, y, px, ImageCtor) {
     if (!STATE.ok || !run) return 0;

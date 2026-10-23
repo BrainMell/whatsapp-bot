@@ -20,7 +20,7 @@ function get(key, defaultValue = null) {
     return systemCache.has(key) ? systemCache.get(key) : defaultValue;
 }
 
-// 💡 FIX 2026-09-11 (stale mod lists): the cache above is only populated at
+// FIX (stale mod lists): the cache above is only populated at
 // boot by loadSystemData(). Before this function existed, EVERYTHING read
 // through get() stayed frozen at boot state - so a mod added on one bot
 // instance (".g addmod" writes _shared_global_mods to MongoDB) was invisible

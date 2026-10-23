@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 // ============================================
-// 🏪 SUMMON MARKET - tradeable summon listings
+// SUMMON MARKET - tradeable summon listings
 // ============================================
 // Mirrors CardMarket schema (core/models/CardMarket.js).
 // Supports fixed-price sales + auctions.
@@ -15,10 +15,10 @@ const SummonMarketSchema = new mongoose.Schema({
 
   type: { type: String, enum: ['sale', 'auction'], default: 'sale' },
 
-  // Sale fields
+ // Sale fields
   price: { type: Number, default: 0 },           // fixed price for 'sale' type
 
-  // Auction fields
+ // Auction fields
   currentBid: { type: Number, default: null },
   highestBidder: { type: String, default: null },
   auctionEndsAt: { type: Date, default: null },
@@ -26,7 +26,7 @@ const SummonMarketSchema = new mongoose.Schema({
   status: { type: String, enum: ['active', 'sold', 'cancelled', 'expired'], default: 'active' },
   approvalStatus: { type: String, default: 'approved' }, // 'pending' for high-value listings (mod review)
 
-  // Audit trail
+ // Audit trail
   buyerId: { type: String, default: null },
   soldAt: { type: Date, default: null },
   salePrice: { type: Number, default: null }, // actual sale price (may differ from listing for auctions)

@@ -37,7 +37,7 @@ const gb = require(ROOT + '/core/rpg/guildBaseRenderer.js');
     fs.writeFileSync('/tmp/r4_box_guild.png', buf2);
     console.log('guild frame written', buf2.length);
 
-    // second owner for a different biome
+ // second owner for a different biome
     const buf3 = await hs.renderFrame({ ...baseState, owner: 'Elder Tim' }, 0, {});
     fs.writeFileSync('/tmp/r4_box_base2.png', buf3);
     console.log('base2 frame written', buf3.length);

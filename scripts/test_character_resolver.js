@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// ══════════════════════════════════════════════════════════════════
-// CHARACTER RESOLVER E2E TEST (owner spec 2026-09-30 v3)
+// ==================================================================
+// CHARACTER RESOLVER E2E TEST (owner spec v3)
 // covers: category detection, provider selection, image validity,
 // fallbacks, randomization (5 consecutive runs MUST differ), duplicate
 // characters/images, per-session independence.
 // Run on Box 1: node scripts/test_character_resolver.js
-// ══════════════════════════════════════════════════════════════════
+// ==================================================================
 const fs = require("fs");
 const path = require("path");
 const resolver = require("../core/utils/characterResolver");
@@ -19,13 +19,13 @@ const POOLS_DIR = path.join(__dirname, "..", "core", "data", "quiz_pools");
 const RECENT_FILE = path.join(__dirname, "..", "core", "data", "quiz_recent_used.json");
 
 function clearCaches(title) {
-  // cold test: drop the disk pool for this franchise so the builder really runs
+ // cold test: drop the disk pool for this franchise so the builder really runs
   const crypto = require("crypto");
   const h = crypto.createHash("sha1").update(String(title).toLowerCase().replace(/\([^)]*\)/g, " ").replace(/[^a-z0-9]+/g, " ").trim()).digest("hex").slice(0, 16);
   const f = path.join(POOLS_DIR, `pool-${h}.json`);
   try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch { /* noop */ }
-  // recency too - the randomization test needs the full pool. The resolver's
-  // franchise key is its own normalization; safest is to reset the whole file.
+ // recency too - the randomization test needs the full pool. The resolver's
+ // franchise key is its own normalization; safest is to reset the whole file.
   try { if (fs.existsSync(RECENT_FILE)) fs.unlinkSync(RECENT_FILE); } catch { /* noop */ }
 }
 
@@ -126,22 +126,22 @@ async function recencyTest(title, slug, category, anilistId, runs = 3) {
 (async () => {
   const results = [];
   const t0 = Date.now();
-  // ── ANIME ── (cast path needs fetchFranchiseCast - test via direct pool call)
-  // NOTE: fetchFranchiseCast lives in quiz.js; injecting it here would pull the
-  // whole quiz engine. The anime cast path is exercised by the regression
-  // suites (test_cast_images.js). Here we validate the RESOLVER layer:
+ // -- ANIME -- (cast path needs fetchFranchiseCast - test via direct pool call)
+ // NOTE: fetchFranchiseCast lives in quiz.js; injecting it here would pull the
+ // whole quiz engine. The anime cast path is exercised by the regression
+ // suites (test_cast_images.js). Here we validate the RESOLVER layer:
   results.push(await testFranchise("Dragon Ball", "dragonball", "anime", null));
   results.push(await testFranchise("One Piece", "onepiece", "anime", null));
   results.push(await testFranchise("Re:Zero", "rezero", "anime", null));
-  // ── GAMES ── (Hollow Knight = the known failure; Mario = uncurated; Sephiroth = registry)
+ // -- GAMES -- (Hollow Knight = the known failure; Mario = uncurated; Sephiroth = registry)
   results.push(await testFranchise("Hollow Knight", null, "game", null));
   results.push(await testFranchise("Super Mario", null, "game", null));
   results.push(await testFranchise("Final Fantasy", "finalfantasy", "game", null));
-  // ── MOVIES/TV ──
+ // -- MOVIES/TV --
   results.push(await testFranchise("Breaking Bad", "breakingbad", "tv", null));
   results.push(await testFranchise("The Matrix", null, "movie", null));
   results.push(await testFranchise("Squid Game", null, "tv", null));
-  // ── CROSS-MEDIA ── (category auto-detect, no explicit category)
+ // -- CROSS-MEDIA -- (category auto-detect, no explicit category)
   results.push(await testFranchise("Batman", "batman", null, null));
   results.push(await testFranchise("Spider-Man", null, null, null));
 
@@ -153,13 +153,13 @@ async function recencyTest(title, slug, category, anilistId, runs = 3) {
     console.log(`${ok ? "PASS" : "FAIL"}  ${r.title.padEnd(16)} cat=${r.category.padEnd(7)} pool=${String(r.poolSize).padStart(3)} img=${String(r.withImages).padStart(3)} picks=${r.picks.length} src=${[...new Set(r.srcs)].join("/")}`);
   }
 
-  // randomization: one game (the previous failure) + one anime
+ // randomization: one game (the previous failure) + one anime
   const rand1 = await randomizationTest("Hollow Knight", null, "game", null, 5);
   const rand2 = await randomizationTest("Re:Zero", "rezero", "anime", null, 5);
   const randOk = !rand1.allSame && !rand2.allSame && rand1.withinRunDupes === 0 && rand2.withinRunDupes === 0 && rand1.distinct >= 3 && rand2.distinct >= 3;
   console.log(`\nRANDOMIZATION: ${randOk ? "PASS" : "FAIL"} (HK distinct=${rand1.distinct}/5, ReZero distinct=${rand2.distinct}/5, withinRunDupes=${rand1.withinRunDupes}+${rand2.withinRunDupes})`);
 
-  // recency: consecutive runs must stop recycling the same heads
+ // recency: consecutive runs must stop recycling the same heads
   const rec1 = await recencyTest("Re:Zero", "rezero", "anime", null, 3);
   const rec2 = await recencyTest("Hollow Knight", null, "game", null, 3);
   const recOk = rec1.ok && rec2.ok;

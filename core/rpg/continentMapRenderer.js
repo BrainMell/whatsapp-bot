@@ -1,19 +1,16 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-//  CONTINENT MAP — "The Five Realms of the First World"
-//
-//  The chart itself is the traced art (core/rpgasset/continents/five_realms.jpg), drawn
-//  1:1. A guild overlay adds a LOCATION PIN at the guild's charter-stone with the guild
-//  emblem floating above it, plus tiny hearths for member home bases.
-//
-//    renderContinentMap({ guildName, guild, memberNames })  → Buffer (JPEG) | null
-//    renderContinentMap()                                   → the plain chart
-//
-//  Pure canvas, ~40 ms warm. Never throws (returns null; caller falls back to text).
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// CONTINENT MAP - "The Five Realms of the First World"
+// The chart itself is the traced art (core/rpgasset/continents/five_realms.jpg), drawn
+// 1:1. A guild overlay adds a LOCATION PIN at the guild's charter-stone with the guild
+// emblem floating above it, plus tiny hearths for member home bases.
+// renderContinentMap({ guildName, guild, memberNames }) → Buffer (JPEG) | null
+// renderContinentMap() → the plain chart
+// Pure canvas, ~40 ms warm. Never throws (returns null; caller falls back to text).
+// ===========================================================================
 const fs = require('fs');
 const C = require('./continents');
-const { emojiFont, fillTextMixed } = require('./emojiFont');   // 2026-10-20: emblem emoji glyphs; color bitmaps (owner 'use colors not hex code')
+const { emojiFont, fillTextMixed } = require('./emojiFont'); // emblem emoji glyphs; color bitmaps (owner 'use colors not hex code')
 
 const SC = 1.25;                                    // output scale over the 864×1210 chart
 let _img = null;
@@ -44,11 +41,11 @@ function drawHearth(ctx, x, y) {
 function drawPin(ctx, x, y, { color, icon, initial, name }) {
     const R = 15;                                   // pin head radius
     const headY = y - 40;
-    // soft ground shadow + pulse ring at the tip
+ // soft ground shadow + pulse ring at the tip
     ctx.save();
     ctx.fillStyle = 'rgba(30,20,10,0.35)'; ctx.beginPath(); ctx.ellipse(x, y + 1, 12, 4.2, 0, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = 'rgba(184,65,46,0.55)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(x, y + 1, 20, 7, 0, 0, Math.PI * 2); ctx.stroke();
-    // teardrop body
+ // teardrop body
     const g = ctx.createLinearGradient(x - R, headY - R, x + R, headY + R);
     g.addColorStop(0, '#E5604A'); g.addColorStop(1, '#8F2417');
     ctx.fillStyle = g; ctx.strokeStyle = '#3A140E'; ctx.lineWidth = 2.4; ctx.lineJoin = 'round';
@@ -58,11 +55,11 @@ function drawPin(ctx, x, y, { color, icon, initial, name }) {
     ctx.arc(x, headY, R, Math.PI, 0, false);
     ctx.bezierCurveTo(x + R, headY + 8, x + 5, y - 12, x, y);
     ctx.closePath(); ctx.fill(); ctx.stroke();
-    // inner hole + highlight
+ // inner hole + highlight
     ctx.fillStyle = '#3A140E'; ctx.beginPath(); ctx.arc(x, headY, 6.5, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.ellipse(x - 7, headY - 8, 4, 2.4, -0.7, 0, Math.PI * 2); ctx.fill();
 
-    // floating emblem medallion above the pin (with its own drop shadow on the pin head)
+ // floating emblem medallion above the pin (with its own drop shadow on the pin head)
     const ey = headY - 31;
     ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.beginPath(); ctx.ellipse(x, headY - 15, 10, 3.2, 0, 0, Math.PI * 2); ctx.fill();
     ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 3;
@@ -80,7 +77,7 @@ function drawPin(ctx, x, y, { color, icon, initial, name }) {
     if (!icon) { ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(40,20,10,0.8)'; ctx.strokeText(glyph, x, ey + 1); }
     fillTextMixed(ctx, glyph, x, ey + 1);
 
-    // name tag under the tip
+ // name tag under the tip
     ctx.font = '13px "Cinzel", serif';
     const label = name.length > 22 ? name.slice(0, 21) + '…' : name;
     const tw = ctx.measureText(label).width + 14;
@@ -100,8 +97,8 @@ async function renderLegacyChart(o = {}) {
         const ctx = canvas.getContext('2d');
         ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, W, H);
-        // Task 21: the legacy chart wears the hour too (pins + emblems drawn
-        // after, so they stay bright markers in the dark)
+ // the legacy chart wears the hour too (pins + emblems drawn
+ // after, so they stay bright markers in the dark)
         require('./dayNight').grade(ctx, W, H, require('./dayNight').phaseAt());
 
         const gName = o.guildName || null;

@@ -1,14 +1,14 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-// qa_dockpov_gif.js — Task 19/20 (owner 2026-10-21):
-//   ".j hunt shouldn't have a timer only a limit per how many times a day"
-//   "fishing should be a gif — generate it once and keep it, overlay the new
-//    stuff as the generation comes on" + the real dock-POV camera.
-//   Task 20: "remove the timer from the fishing too" + the float bobbing in
-//   and out of the water. Hunt GIF/sprite-sheet QA lives in qa_huntpov_gif.js.
+// ===========================================================================
+// qa_dockpov_gif.js - /20:
+// ".j hunt shouldn't have a timer only a limit per how many times a day"
+// "fishing should be a gif - generate it once and keep it, overlay the new
+// stuff as the generation comes on" + the real dock-POV camera.
+// "remove the timer from the fishing too" + the float bobbing in
+// and out of the water. Hunt GIF/sprite-sheet QA lives in qa_huntpov_gif.js.
 // Tiers: source pins (everywhere) + REAL renders/GIF encodes + hunt-limit sim
 // (needs canvas/node_modules → run ON-BOX; sandbox passes pins and skips).
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
@@ -46,14 +46,14 @@ check('send probes isGifBuffer → gifPlayback', /isGifBuffer\(media\.buffer\)/.
 check('hunt note shows today counter; fish note says NO line rest', /Hunts today: \$\{res\.dailyUsed\}/.test(bb) && /No line rest/.test(bb));
 
 console.log('\n--- §C the pond: girl-angler master asset (Task 21) ---');
-check('NO GIRL — dock-POV restored (owner Task 22: "I meant GIF, not girl… UNDO that fishing bullshit")', !/function paintGirl/.test(dp) && !/paintGirl\(/.test(dp) && /DOCK_EDGE/.test(dp));
+check('NO GIRL - dock-POV restored (owner Task 22: "I meant GIF, not girl… UNDO that fishing bullshit")', !/function paintGirl/.test(dp) && !/paintGirl\(/.test(dp) && /DOCK_EDGE/.test(dp));
 check('float bobbing up and down through the waterline (Task 20 bob restored: 0.45·bs)', /function floatBob/.test(dp) && /bs \* 0\.45;/.test(dp));
 check('committed repo asset loader (generated once, saved permanently)', /loadCommitted/.test(dp) && /ASSET_VER/.test(dp) && /assets', 'scenes/.test(dp));
-check('master bakes NO sun — compose owns the hour (no twin suns)', !/fillStyle = P\.sun/.test(dp) && /paintCelestial.c2, master.gw, master.gh, i \/ FRAMES, phase./.test(dp));
-check('girl-scene sign is GONE — the established banner explains the place now (Task 22)', !/the sign: .THE POND. on a post/.test(dp) && /drawBanner/.test(dp));
+check('master bakes NO sun - compose owns the hour (no twin suns)', !/fillStyle = P\.sun/.test(dp) && /paintCelestial.c2, master.gw, master.gh, i \/ FRAMES, phase./.test(dp));
+check('girl-scene sign is GONE - the established banner explains the place now (Task 22)', !/the sign: .THE POND. on a post/.test(dp) && /drawBanner/.test(dp));
 check('dayNight cycle wired into the compose (grade + post-lantern/pool lights)', /dayNight.grade.c2, master.gw, master.gh, phase./.test(dp) && /dockAnchors/.test(dp) && /dayNight.light.c2, A.post.x/.test(dp));
 check('biome washes keep the 5 realms distinct over the one master', /WASHERS/.test(dp) && /desert: \{/.test(dp) && /volcanic: \{/.test(dp));
-check('compose cached per (biome, level, phase, band) — pondcompose kind', /pgc2:\${biome}:L\${lvl}:\${phase}:\${band}/.test(dp) && /mediaCache.cached.'pondcompose'/.test(dp));
+check('compose cached per (biome, level, phase, band) - pondcompose kind', /pgc2:\${biome}:L\${lvl}:\${phase}:\${band}/.test(dp) && /mediaCache.cached.'pondcompose'/.test(dp));
 check('RESULT OVERLAY = the ESTABLISHED banner (structureScenes.drawBanner, owner Task 22)', /scenes.drawBanner.c2, c.gw, c.gh, ribbon./.test(dp) && /BANNER_FROM_FRAME/.test(dp) && !/drawResultPlate/.test(dp));
 check('final GIF cached per loot banner (pg3 + plateKey)', /pg3:\${biome}:L\${lvl}:\${phase}:\${band}:\${plateKey}/.test(dp) && /mediaCache.cached.'fishgif'/.test(dp));
 check('rarity signalled only AFTER the roll (overlay contract)', /never pre-signals rarity/.test(dp));
@@ -79,11 +79,11 @@ check('hunting viewer renders the clearing still (Task 20, hunt_pov key)', /isHu
 check('mediaCache CODE_VER includes dockPov.js + huntPov.js', /'dockPov\.js', 'huntPov\.js'/.test(mc));
 check('Base.js cooldowns comment documents huntDay/huntCount', /huntDay \(UTC/.test(bm) && /no timer, Task 19/.test(bm));
 
-// ── runtime tier (needs node_modules — on-box) ──────────────────────────────
+// -- runtime tier (needs node_modules - on-box) ------------------------------
 let canvasOk = false;
 try { require(path.join(ROOT, 'node_modules', 'canvas')); canvasOk = true; } catch (e) { /* sandbox */ }
 if (!canvasOk) {
-    console.log(`\n${'='.repeat(54)}\nSANDBOX: pins only (canvas missing) — ${pass} passed, ${fail} failed\n`);
+    console.log(`\n${'='.repeat(54)}\nSANDBOX: pins only (canvas missing) - ${pass} passed, ${fail} failed\n`);
     process.exit(fail ? 1 : 0);
 }
 
@@ -107,10 +107,10 @@ if (!canvasOk) {
         check(`25 hunts then BLOCK (got ${ok} ok, #${ok + 1} blocked)`, ok === 25 && !!blocked);
         check('counter tracked 1→25 through the day', lastUsed === 25);
         check('blocked text names 25/25 + midnight UTC', /25\/25/.test(blocked.text) && /midnight UTC/.test(blocked.text));
-        // day rollover: old huntDay stamp → fresh count
+ // day rollover: old huntDay stamp → fresh count
         const r2 = await act.run('hunt', T, 1, { huntDay: '2001-01-01', huntCount: 25 });
         check('new UTC day resets the counter (stale day → allowed again)', r2.ok === true && r2.dailyUsed === 1);
-        // Task 20: fish has NO timer — even a fresh stamp must not gate it
+ // fish has NO timer - even a fresh stamp must not gate it
         const rf = await act.run('fish', T, 1, { fish: Date.now() });
         const rf2 = await act.run('fish', T, 1, { fish: Date.now() });
         check('fish has NO timer (back-to-back casts both run)', rf.ok === true && rf2.ok === true);
@@ -125,7 +125,7 @@ if (!canvasOk) {
     const dpv = require(path.join(ROOT, 'core/rpg/dockPov'));
     const { createCanvas, Image } = require(path.join(ROOT, 'node_modules', 'canvas'));
 
-    // anchor mirrors the painted float (antenna knob sampled at the tip)
+ // anchor mirrors the painted float (antenna knob sampled at the tip)
     const probe = createCanvas(dpv.GW, dpv.GH), pctx = probe.getContext('2d');
     dpv.paintFrame(pctx, dpv.GW, dpv.GH, 0, { biome: 'isle', lvl: 1 });
     const g = dpv.floatGeom(dpv.GW, dpv.GH);
@@ -142,7 +142,7 @@ if (!canvasOk) {
     check(`base bake = 16 PNG frames 480×360 (${bakeMs}ms first bake)`, base.pngs.length === 16 && base.gw === 480 && base.gh === 360);
     const t1 = Date.now();
     await dpv.getBaseFrames({ biome: 'isle', lvl: 1 });
-    check(`repeat getBaseFrames is a cache hit (${Date.now() - t1}ms — "generate once")`, (Date.now() - t1) < 250);
+    check(`repeat getBaseFrames is a cache hit (${Date.now() - t1}ms - "generate once")`, (Date.now() - t1) < 250);
     for (const [i, p] of base.pngs.entries()) if (i % 5 === 0) fs.writeFileSync(path.join(outDir, `base_isle_L1_f${i}.png`), p);
 
     const bands = ['low', 'mid', 'epic'];
@@ -157,12 +157,12 @@ if (!canvasOk) {
     const tc = Date.now();
     const g2 = await dpv.renderFishingGif({ biome: 'isle', lvl: 1, band: 'epic' });
     check(`repeat catch GIF = disk hit (${Date.now() - tc}ms)`, g2.buffer.length === gifInfo.epic.bytes && (Date.now() - tc) < 250);
-    // second biome bakes independently
+ // second biome bakes independently
     const g3 = await dpv.renderFishingGif({ biome: 'tundra', lvl: 3, band: 'mid' });
     fs.writeFileSync(path.join(outDir, 'catch_tundra_L3_mid.gif'), g3.buffer);
     check('second biome/level bakes its own base (tundra L3)', g3.buffer.length > 1000);
 
-    // viewer stills through the real card path
+ // viewer stills through the real card path
     const scenes = require(path.join(ROOT, 'core/rpg/structureScenes'));
     const still = await scenes.renderStructureCard({ type: 'pond', level: 2, biome: 'isle', seed: 'qa-user-1', spec: { title: 'The Pond', subtitle: 'Dock POV · Lv.2', actions: ['.j fish'] } });
     fs.writeFileSync(path.join(outDir, 'viewer_pond_L2_still.jpg'), still.buffer);
@@ -173,8 +173,8 @@ if (!canvasOk) {
     fs.writeFileSync(path.join(outDir, 'fallback_static_fishing.jpg'), fallback.buffer);
     check('static fishing fallback card still renders (gif-failure path)', fallback.contentType === 'image/jpeg' && fallback.buffer.length > 20000);
 
-    // GIF frame count sanity: count image descriptors (0x2C) is unreliable via
-    // raw scan — instead verify NETSCAPE loop extension + trailer exist.
+ // GIF frame count sanity: count image descriptors (0x2C) is unreliable via
+ // raw scan - instead verify NETSCAPE loop extension + trailer exist.
     const raw = fs.readFileSync(path.join(outDir, 'catch_epic.gif'));
     check('GIF has NETSCAPE loop + trailer', raw.includes(Buffer.from('NETSCAPE2.0')) && raw[raw.length - 1] === 0x3B);
 
@@ -184,8 +184,8 @@ if (!canvasOk) {
 })().catch((e) => { console.error('QA crashed:', e); process.exit(1); });
 
 
-// ── Task 22 motion + overlay pins (owner: "the water looks like it's moving,
-// and the fish too" + "use the established overlay style") ──
+// -- motion + overlay pins ("the water looks like it's moving,
+// and the fish too" + "use the established overlay style") --
 check('THE WATER MOVES: traveling wave crests per band (parallax, alternating direction)', /traveling wave crests per band/.test(dp) && /const sp = 0\.045 \+ b \* 0\.02/.test(dp));
 check('THE WATER MOVES: drifting ripple rings (two staggered, swell + fade)', /drifting ripple rings/.test(dp) && /t \* 0\.5 \+ k \* 0\.5/.test(dp));
 check('THE FISH SWIM: 2-4x old speed + strong tail beat (readable in one loop)', /const speed = 0\.05 \+ rng/.test(dp) && /Math\.sin\(t \* Math\.PI \* 6/.test(dp));

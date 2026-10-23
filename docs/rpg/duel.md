@@ -445,7 +445,7 @@ Fleeing from a duel carries heavy penalties applied instantly to the fleeing pla
 
 ---
 
-## Recent Changes (2026-08-08)
+## Recent Changes
 
 ### Summon Duels
 - New `mode='summon'` in duel state for summon-vs-summon combat

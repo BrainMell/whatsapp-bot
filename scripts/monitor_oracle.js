@@ -53,7 +53,7 @@ const patterns = [
 const grepPattern = patterns.join('|');
 
 conn.on('ready', () => {
-  // Use tail -f with grep to stream matching lines
+ // Use tail -f with grep to stream matching lines
   const cmd = `timeout ${duration} tail -f ~/.pm2/logs/whatsapp-bot-out.log ~/.pm2/logs/whatsapp-bot-error.log 2>&1 | grep --line-buffered -E "${grepPattern}"`;
   conn.exec(cmd, (err, stream) => {
     if (err) {

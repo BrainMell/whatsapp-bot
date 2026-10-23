@@ -1,6 +1,6 @@
-// 🕳️ ABYSS OVERHAUL — gallery: renders every new card type through the REAL
+// ABYSS OVERHAUL - gallery: renders every new card type through the REAL
 // abyssScene module (real canvas + real assets). Run on a box:
-//   node scripts/abyss_gallery.js <repoDir> <outDir>
+// node scripts/abyss_gallery.js <repoDir> <outDir>
 const REPO = process.argv[2] || '/home/ubuntu/whatsapp-bot';
 const OUT = process.argv[3] || '/tmp/abyss_gallery';
 const path = require('path');
@@ -40,7 +40,7 @@ function mkState(opts) {
     const jobs = [];
     const save = (name, buf) => { fs.writeFileSync(path.join(OUT, name), buf); console.log('WROTE', name, buf.length, 'bytes'); };
 
-    // ── combat START scenes across tiers/biomes (real pipeline) ──
+ // -- combat START scenes across tiers/biomes (real pipeline) --
     jobs.push(['combat_f1_rat.png', abyssScene.renderAbyssCombat(mkState({
         floor: 1, enemyName: 'RABID RAT', spriteIndex: 86,
     }), { phase: 'START', turnOrderStr: '🗡️ Mellow-San → 👾 RABID RAT' })]);
@@ -56,12 +56,12 @@ function mkState(opts) {
     jobs.push(['combat_f15_boss.png', abyssScene.renderAbyssCombat(mkState({
         floor: 15, enemyName: '⚡ INFERNO LORD', isBoss: true, bossId: 'INFERNO_LORD', spriteIndex: 43, ehp: 9000, emax: 12000,
     }), { phase: 'START' })]);
-    // ── TURN render (same frozen layout, HP drained) ──
+ // -- TURN render (same frozen layout, HP drained) --
     const turnState = mkState({ floor: 8, enemyName: 'INFERNO KNIGHT', spriteIndex: 41, hp: 180, en: 30, ehp: 500, turn: 3 });
     jobs.push(['combat_f8_turn3.png', abyssScene.renderAbyssCombat(turnState, {
         phase: 'TURN', turnInfo: { turnNumber: 3, actor: { isEnemy: false } },
     })]);
-    // ── wild summon encounter (player left, summon right) ──
+ // -- wild summon encounter (player left, summon right) --
     jobs.push(['summon_f4_wild_agumon.png', abyssScene.renderAbyssCombat(mkState({
         floor: 4, kind: 'wild', enemyName: 'Agumon', spriteIndex: 0,
     }), { phase: 'START' })]);
@@ -74,7 +74,7 @@ function mkState(opts) {
         abyssRun: { currentEncounterType: 'wild_summon', currentEncounterData: { species: 'slime', rarity: 'COMMON' } },
         allies: [{ species: 'dragon', name: 'Pyraxis' }, { species: 'bat', name: 'Nocturne' }],
     }), { phase: 'START' })]);
-    // ── floor descent cards ──
+ // -- floor descent cards --
     jobs.push(['floorcard_f1.gif', abyssScene.renderAbyssFloorCard({
         floor: 1, tier: 'F', mult: 1.0, encounterType: 'combat', enemyName: 'RABID RAT',
         playerName: 'Mellow-San', playerClassId: 'ROGUE', playerSpriteIndex: 1,

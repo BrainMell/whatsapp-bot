@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 // ============================================
-// QA: 2026-09-27 PLANNING MODE + LOGOS/SONG MODES (session level)
+// QA: PLANNING MODE + LOGOS/SONG MODES (session level)
 // ============================================
 // Fixture-sock E2E through the REAL quiz module paths:
-//   1. media quiz parks in ready-gate: announce, parked session, no auto-start
-//   2. .j quiz go (confirmStart): starter allowed, quiz starts, Q1 posts
-//   3. .j quiz go: non-starter refused; mods allowed
-//   4. .j quiz end on a parked quiz: quiet cancel, lock released, group unblocked
-//   5. ready-gate expiry: session cleaned, lock released (short TTL)
-//   6. text-only lore quiz does NOT park (auto-start unchanged)
-//   7. parked quiz bounces a second .j quiz with the ready text
-//   8. logos generation: verified image questions from the real module
-//      (network section - skips cleanly offline)
-//   9. song generation with a STUBBED go service (deterministic; cover
-//      variants rejected, byte gates enforced)
+// 1. media quiz parks in ready-gate: announce, parked session, no auto-start
+// 2. .j quiz go (confirmStart): starter allowed, quiz starts, Q1 posts
+// 3. .j quiz go: non-starter refused; mods allowed
+// 4. .j quiz end on a parked quiz: quiet cancel, lock released, group unblocked
+// 5. ready-gate expiry: session cleaned, lock released (short TTL)
+// 6. text-only lore quiz does NOT park (auto-start unchanged)
+// 7. parked quiz bounces a second .j quiz with the ready text
+// 8. logos generation: verified image questions from the real module
+// (network section - skips cleanly offline)
+// 9. song generation with a STUBBED go service (deterministic; cover
+// variants rejected, byte gates enforced)
 // ============================================
 
 const path = require("path");
@@ -28,7 +28,7 @@ function ok(cond, name) { if (cond) { pass++; console.log(`  ok - ${name}`); } e
 function skip(name) { skipped++; console.log(`  SKIP - ${name}`); }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// ── fixture sock: captures sends, always "online" ──
+// -- fixture sock: captures sends, always "online" --
 function makeSock() {
   const sends = [];
   return {
@@ -77,10 +77,10 @@ async function main() {
   {
     await cleanup(CHAT);
     const sock = makeSock();
-    // launch the logo mode directly through launchQuizAsync with a fixture
+ // launch the logo mode directly through launchQuizAsync with a fixture
     const parsed = quiz.parseQuizArgs("logos 3");
     ok(parsed.mode === "logos" && parsed.count === 3, "parseQuizArgs logos mode");
-    // network needed for real logos - check reachability first
+ // network needed for real logos - check reachability first
     let netOk = true;
     try {
       const probe = await quizMedia.buildLogosQuestions({ count: 1, usedKeys: new Set(), difficulty: "easy" });
@@ -90,7 +90,7 @@ async function main() {
       skip("logo-mode E2E (wikipedia unreachable from sandbox)");
     } else {
       quiz._internal.launchQuizAsync(sock, CHAT, "alice@s.whatsapp.net", MARK, { key: { id: "m1" } }, parsed, "Alice", null).catch(() => {});
-      // wait for parking (logo build ~2s/question + cache)
+ // wait for parking (logo build ~2s/question + cache)
       let parked = false;
       for (let i = 0; i < 120; i++) { await sleep(500); const s = quiz.getSession(CHAT); if (s && s.awaitingGo) { parked = true; break; } if (i > 100) break; }
       ok(parked, "logo quiz parked in ready-gate (awaitingGo)");
@@ -101,17 +101,17 @@ async function main() {
       ok(!!readyMsg && readyMsg.includes("quiz go"), "ready message names the go command");
       const s = quiz.getSession(CHAT);
       ok(quiz.hasActive(CHAT), "parked session holds the chat");
-      // go!
+ // go!
       const r = await quiz.confirmStart(sock, CHAT, "alice@s.whatsapp.net", MARK, false);
       ok(r.handled && r.silent, "confirmStart accepted for the starter");
       ok(texts(sock).some((t) => t.includes("QUIZ STARTED")), "QUIZ STARTED card posted after go");
-      // startSection -> postQuestion is async; poll briefly for Q1 (image
-      // questions carry the card as an image CAPTION)
+ // startSection -> postQuestion is async; poll briefly for Q1 (image
+ // questions carry the card as an image CAPTION)
       let q1 = null;
       for (let i = 0; i < 20 && !q1; i++) { await sleep(250); q1 = cards(sock).find((t) => t.includes("QUESTION 1/")); }
       ok(!!q1 && q1.includes("QUESTION 1/"), "first logo question posted after go");
       ok(imagesSent(sock).length >= 1, "logo image attached to the first question");
-      // starter-only enforcement: after go the session is live -> go bounces
+ // starter-only enforcement: after go the session is live -> go bounces
       const r2 = await quiz.confirmStart(sock, CHAT, "mallory@s.whatsapp.net", MARK, false);
       ok(!r2.silent && /already running/.test(r2.message), "second go refused (already running)");
       await quiz.endQuiz(sock, CHAT, "alice@s.whatsapp.net", MARK, false);
@@ -126,14 +126,14 @@ async function main() {
     const stubGo = {
       getAudioInfo: async (query, opts) => {
         calls.push(query);
-        // first candidate returns a cover (must be rejected); afterwards echo
-        // the requested song so the P14 overlap check passes like the real
-        // service does for a genuine hit
+ // first candidate returns a cover (must be rejected); afterwards echo
+ // the requested song so the P14 overlap check passes like the real
+ // service does for a genuine hit
         if (calls.length === 1) return { audioURL: "https://x/y", metadata: { title: "Bohemian Rhapsody (Nightcore Version)" }, clipped: true, fullBytes: 400000 };
         return { audioURL: "https://x/y", metadata: { title: query }, clipped: true, fullBytes: 400000 };
       },
     };
-    // stub the clip download by intercepting axios in quizMedia via a tiny buffer >20KB
+ // stub the clip download by intercepting axios in quizMedia via a tiny buffer >20KB
     const axios = require("axios");
     const origGet = axios.get;
     axios.get = async (url) => ({ data: Buffer.alloc(400 * 1024, 3) });
@@ -161,19 +161,18 @@ async function main() {
       answeredBy: new Map(), revealed: [], sectionJobs: {}, animeCharacters: [],
       qStartedAt: Date.now(), qOpenUntil: 0,
     };
-    // park with a TINY ttl (monkey-patch READY_TTL via parkReadySession? it is
-    // module-constant - use the real 10min timer but never wait for it; we
-    // verify the timer is set + cancellation paths clear it)
+ // park with a TINY ttl (monkey-patch READY_TTL via parkReadySession? it is
+ // module-constant - use the real 10min timer but never wait for it; we
     await quiz._internal.parkReadySession(sock, "1203698@g.us", session, { head: MARK + "HEAD", introImage: null, botMarker: MARK, m: null, senderJid: "alice@s.whatsapp.net", prefix: ".j" });
     const parked = quiz.getSession("1203698@g.us");
     ok(parked && parked.awaitingGo && parked.readyTimerId, "parkReadySession parks + arms expiry timer");
     ok(texts(sock).some((t) => t.includes("quiz is ready")), "ready message sent");
-    // non-starter end refused? (endQuiz permission) - starter cancel:
+ // non-starter end refused? (endQuiz permission) - starter cancel:
     const rEnd = await quiz.endQuiz(sock, "1203698@g.us", "alice@s.whatsapp.net", MARK, false);
     ok(rEnd.message && rEnd.message.includes("cancelled before starting"), "parked quiz cancels quietly");
     ok(!quiz.hasActive("1203698@g.us"), "chat unblocked after parked cancel");
     ok(!session.readyTimerId, "expiry timer cleared on cancel");
-    // group can start a new quiz immediately (lock released)
+ // group can start a new quiz immediately (lock released)
     ok(!quiz._internal.lifecycle.has("1203698@g.us"), "lifecycle lock released after parked cancel");
   }
 

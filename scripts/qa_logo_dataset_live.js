@@ -1,4 +1,4 @@
-// Live E2E for the baked logo dataset path (2026-09-28)
+// Live E2E for the baked logo dataset path
 process.env.QUIZ_NO_MONGO = "1";
 const quizMedia = require("../core/games/quizMedia");
 
@@ -7,7 +7,7 @@ const quizMedia = require("../core/games/quizMedia");
   console.log("dataset:", JSON.stringify(info));
   if (!info.available || info.count < 300) { console.log("FAIL: dataset not loaded"); process.exit(1); }
 
-  // 1. single question for a few dataset brands (real bytes)
+ // 1. single question for a few dataset brands (real bytes)
   const pool = quizMedia.LOGOS_POOL;
   const names = ["Apple", "Nike", "Samsung", "Adidas", "Netflix", "Ikea"];
   let pass = 0, fail = 0;
@@ -27,7 +27,7 @@ const quizMedia = require("../core/games/quizMedia");
     }
   }
 
-  // 2. batch build (the real quiz path): 12 questions
+ // 2. batch build (the real quiz path): 12 questions
   const batch = await quizMedia.buildLogosQuestions({ count: 12, usedKeys: new Set(), difficulty: "easy" });
   console.log(`batch: ${batch.length}/12 built`);
   const fromDataset = batch.filter((q) => String(q.asset.source).startsWith("logo-dataset")).length;

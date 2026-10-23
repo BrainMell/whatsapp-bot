@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 /**
- * qa_sticker_cooldown.js — 2026-10-12
+ * qa_sticker_cooldown.js - 2026-10-12
  * Regression QA for the sticker-cooldown bypass (owner: "remove SLOW DOWN
- * for stickers" — batch `.j s` on a lot of images must never hit the global
+ * for stickers" - batch `.j s` on a lot of images must never hit the global
  * 5s cooldown warning). Run from repo root: node scripts/qa_sticker_cooldown.js
  *
  * Sections:
- *  A. Matcher behaviour — the exact `_isStickerCmd` logic copied from the
+ *  A. Matcher behaviour - the exact `_isStickerCmd` logic copied from the
  *     cooldown block, tested against sticker forms (must bypass) and
  *     look-alike commands (must NOT bypass).
- *  B. Source guards — the bypass is wired into the engine's cooldown
+ *  B. Source guards - the bypass is wired into the engine's cooldown
  *     condition, the SLOW DOWN sender is intact for everything else, the
  *     sticker handler match conditions still line up with the matcher.
- *  C. Scope guards — gambling hard-lock + 20s same-game cooldown untouched.
+ *  C. Scope guards - gambling hard-lock + 20s same-game cooldown untouched.
  */
 const fs = require("fs");
 const path = require("path");
@@ -21,12 +21,12 @@ const ROOT = path.resolve(__dirname, "..");
 let pass = 0, fail = 0;
 function ok(name, cond, extra) {
   if (cond) { pass++; console.log(`  ✅ ${name}`); }
-  else { fail++; console.log(`  ❌ ${name}${extra ? " — " + extra : ""}`); }
+  else { fail++; console.log(`  ❌ ${name}${extra ? " - " + extra : ""}`); }
 }
 
 const engineSrc = fs.readFileSync(path.join(ROOT, "core/engine.js"), "utf8");
 
-// ── A. Matcher behaviour (logic mirrors engine.js cooldown block) ────────────
+// -- A. Matcher behaviour (logic mirrors engine.js cooldown block) ------------
 console.log("\nA. `_isStickerCmd` matcher behaviour (prefix `.j`)");
 const PFX = ".j";
 function isStickerCmd(lowerTxt) {
@@ -47,7 +47,7 @@ ok(".j spin (no space-s)", isStickerCmd(".j spin") === false);
 ok(".j s (uppercase input pre-normalised: 'S ' form)", isStickerCmd(".j S") === false || isStickerCmd(".j s") === true, "engine only sees lowerTxt");
 ok(".j sspin (contiguous, not sticker)", isStickerCmd(".j sspin") === false);
 
-// ── B. Source guards ─────────────────────────────────────────────────────────
+// -- B. Source guards ---------------------------------------------------------
 console.log("\nB. Engine source guards");
 const bypassIdx = engineSrc.indexOf("!_isStickerCmd");
 ok("cooldown condition contains !_isStickerCmd", bypassIdx > 0);
@@ -72,7 +72,7 @@ ok("search handler matches `.j s ` prefix",
 // quiz exemptions still present (sticker bypass added alongside, not replacing)
 ok("quiz answer exemption still in condition", engineSrc.includes("!_isQuizAnswerMsg && !_quizQuestionOpen"));
 
-// ── C. Scope guards ──────────────────────────────────────────────────────────
+// -- C. Scope guards ----------------------------------------------------------
 console.log("\nC. Abuse-path guards untouched");
 ok("gambling hard spam lock still present", engineSrc.includes("checkGamblingSpam(senderJid)"));
 ok("hard lock still blocks + notifies", engineSrc.includes("SYSTEM LOCKOUT"));
@@ -81,5 +81,5 @@ ok("global cooldown still SET for non-exempt commands", /\/\/ Update global time
 ok("global cooldown still CHECKED for non-exempt commands", engineSrc.includes("if (commandCooldowns.has(senderJid)) {"));
 ok("sticker search send-gap pacing intact (300ms)", engineSrc.includes("setTimeout(res, 300)"));
 
-console.log(`\n${"═".repeat(50)}\nRESULT: ${pass} pass, ${fail} fail ${fail === 0 ? "— ALL GREEN ✅" : "— FAILURES ❌"}`);
+console.log(`\n${"═".repeat(50)}\nRESULT: ${pass} pass, ${fail} fail ${fail === 0 ? "- ALL GREEN ✅" : "- FAILURES ❌"}`);
 process.exit(fail === 0 ? 0 : 1);

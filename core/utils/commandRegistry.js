@@ -1,7 +1,7 @@
-// ============================================ 
-// 📜 COMMAND REGISTRY - PERSONABOT
+// ============================================
+// COMMAND REGISTRY - PERSONABOT
 // Maps commands to categories, descriptions, and usage
-// ============================================ 
+// ============================================
 
 const COMMAND_REGISTRY = {
   SUPPORT: [
@@ -18,14 +18,14 @@ const COMMAND_REGISTRY = {
     { cmd: 'setauthor', desc: 'Set custom sticker creator/author name (Owner/Mod only).', usage: 'setauthor <name>' }
   ],
   SEARCH: [
-    { cmd: 'google', desc: 'Google any question — real web search synthesized into a cited, AI-overview style answer. (Alias: gog)', usage: 'google <question>' },
-    { cmd: 'wmap', desc: 'Show a real-world map image of any place — country, city, town or landmark — with a Google Maps link. (.j map stays the RPG world atlas)', usage: 'wmap <place>' },
-    { cmd: 'umap', desc: 'Universe map — real NASA/telescope imagery + facts for planets, moons, stars, nebulae, galaxies, black holes and missions; a video rides along when available. (Alias: space)', usage: 'umap <object>' },
+    { cmd: 'google', desc: 'Google any question - real web search synthesized into a cited, AI-overview style answer. (Alias: gog)', usage: 'google <question>' },
+    { cmd: 'wmap', desc: 'Show a real-world map image of any place - country, city, town or landmark - with a Google Maps link. (.j map stays the RPG world atlas)', usage: 'wmap <place>' },
+    { cmd: 'umap', desc: 'Universe map - real NASA/telescope imagery + facts for planets, moons, stars, nebulae, galaxies, black holes and missions; a video rides along when available. (Alias: space)', usage: 'umap <object>' },
     { cmd: 'img', desc: 'Search for and download images.', usage: 'img <query>' },
     { cmd: 'audio', desc: 'Search for and download audio/music.', usage: 'audio <query>' },
     { cmd: 'anime search', desc: 'Search for any anime and get download links.', usage: 'anime search <name>' },
     { cmd: 'search', desc: 'Alias for anime search.', usage: 'search <name>' },
-    { cmd: 'nsfw', desc: 'Rule34.xxx image search by tag — top-scored images (Age-restricted).', usage: 'nsfw [count] <tag>' },
+    { cmd: 'nsfw', desc: 'Rule34.xxx image search by tag - top-scored images (Age-restricted).', usage: 'nsfw [count] <tag>' },
     { cmd: '18+', desc: 'Adult content search (Age-restricted).', usage: '18+ <tag>' }
   ],
   'PHANTOM THIEF': [
@@ -94,7 +94,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'guild join', desc: 'Join an existing public guild.', usage: 'guild join <name>' },
     { cmd: 'guild leave', desc: 'Leave your current guild.', usage: 'guild leave' },
     { cmd: 'guild invite', desc: 'Invite a user to join your guild.', usage: 'guild invite @user' },
-    // 💡 REMOVED 2026-09-12 (audit): 'guild accept'/'guild decline' - never dispatched; use `.accept`/`.decline`
+ // REMOVED (audit): 'guild accept'/'guild decline' - never dispatched; use `.accept`/`.decline`
     { cmd: 'guild list', desc: 'List all active guilds.', usage: 'guild list' },
     { cmd: 'guild members', desc: 'View all members in your guild.', usage: 'guild members' },
     { cmd: 'guild tag', desc: 'Mention all members of your guild.', usage: 'guild tag <msg>' },
@@ -134,7 +134,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'stats', desc: 'View your detailed RPG stats.', usage: 'stats' },
     { cmd: 'kills', desc: 'The Fortune Teller’s reading: souls you sent beyond the veil. First sight needs level 40, abyss floor 31, and the reader’s fee. (Aliases: killcount, slain)', usage: 'kills | kills pay' },
     { cmd: 'combat', desc: 'Combat actions for an active battle: attack, abilities, items, defend, rest.', usage: 'combat <atk/skill/item/def/rest> [n]' },
-    { cmd: 'world', desc: 'The living charts: cosmology atlas and the four realms with their gates. (Alias: maps — .j wmap <place> is real-world maps)', usage: 'world [all|beyond|afterlife|abyss]' },
+    { cmd: 'world', desc: 'The living charts: cosmology atlas and the four realms with their gates. (Alias: maps - .j wmap <place> is real-world maps)', usage: 'world [all|beyond|afterlife|abyss]' },
     { cmd: 'evolve', desc: 'Evolve your class when you meet the requirements.', usage: 'evolve' },
     { cmd: 'trial', desc: 'View and start ascension trials for your class.', usage: 'trial [start]' },
     { cmd: 'use', desc: 'Use a consumable from your inventory.', usage: 'use <id/#>' },
@@ -194,7 +194,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'rune buy', desc: '(alias) Buy a market listing.', usage: 'rune buy <listingId|#>' },
     { cmd: 'rune market', desc: '(alias) Browse runes on the player market.', usage: 'rune market' },
     { cmd: 'rune unsell', desc: '(alias) Cancel a rune market listing.', usage: 'rune unsell <runeId>' },
-    { cmd: 'market', desc: 'UNIFIED player market — items, runes and summons in one place.', usage: 'market [items|runes|summons] [page]' },
+    { cmd: 'market', desc: 'UNIFIED player market - items, runes and summons in one place.', usage: 'market [items|runes|summons] [page]' },
     { cmd: 'market sell', desc: 'List an item, rune or summon for sale (10% tax on sale).', usage: 'market sell item <bag#> <price> [qty] | rune <id> <price> | summon <#|id> <price>' },
     { cmd: 'market buy', desc: 'Buy a market listing.', usage: 'market buy <listingId|#>' },
     { cmd: 'market cancel', desc: 'Cancel your market listing.', usage: 'market cancel <listingId|#>' },
@@ -245,7 +245,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'summon resonance', desc: 'View resonance bonuses.', usage: 'summon resonance' },
     { cmd: 'summon codex', desc: 'View ALL summon species.', usage: 'summon codex' },
     { cmd: 'summon forge', desc: 'Soul Forge two summons.', usage: 'summon forge <id1> <id2>' },
-    { cmd: 'summon market', desc: '(alias) Summon trading — now part of the unified player market.', usage: 'summon market <list/sell/buy/cancel>' }
+    { cmd: 'summon market', desc: '(alias) Summon trading - now part of the unified player market.', usage: 'summon market <list/sell/buy/cancel>' }
   ],
   GROUP: [
     { cmd: 'record', desc: 'Toggle message recording for summaries.', usage: 'record on/off' },
@@ -282,7 +282,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'transfer', desc: 'Send currency to another user.', usage: 'transfer @user <amt>' },
     { cmd: 'send', desc: 'Alias for transfer.', usage: 'send @user <amt>' },
     { cmd: 'loan', desc: 'Request a loan from another user.', usage: 'loan @user <amt> <%> <time>' },
-    // 💡 REMOVED 2026-09-12 (audit): 'loan accept'/'loan decline' - never dispatched; use `.accept`/`.decline`
+ // REMOVED (audit): 'loan accept'/'loan decline' - never dispatched; use `.accept`/`.decline`
     { cmd: 'rob', desc: 'Attempt to rob another user\'s wallet.', usage: 'rob @user' },
     { cmd: 'steal', desc: 'Alias for rob. Rob another user.', usage: 'steal @user' },
     { cmd: 'bug', desc: 'Poison pill attack: DMs the victim, drains HP, suppresses regen 30 min. Cure: hospital.', usage: 'bug @user' },
@@ -328,8 +328,8 @@ const COMMAND_REGISTRY = {
     { cmd: 't2coll', desc: 'Move a card from main deck back to collection.', usage: 't2coll <deck#>' },
     { cmd: 'swap card', desc: 'Rearrange cards in your main deck.', usage: 'swap card <a> and <b>' },
     { cmd: 'buycard', desc: 'Browse the card market or buy a listing.', usage: 'buycard [n]' },
-    { cmd: 'eshop', desc: 'Event shop — browse the grid, flex cards individually, buy with tokens.', usage: 'eshop | <slot | range> | buy <slot> | deck ...' },
-    { cmd: 'eshop <range>', desc: 'Flex view — posts each event card individually, full art.', usage: 'eshop 1-16' },
+    { cmd: 'eshop', desc: 'Event shop - browse the grid, flex cards individually, buy with tokens.', usage: 'eshop | <slot | range> | buy <slot> | deck ...' },
+    { cmd: 'eshop <range>', desc: 'Flex view - posts each event card individually, full art.', usage: 'eshop 1-16' },
     { cmd: 'esummon', desc: 'Pull a random card from the event deck.', usage: 'esummon' },
     { cmd: 'sc', desc: 'List a card from your deck for sale.', usage: 'sc <slot> <price>' },
     { cmd: 'auction', desc: 'Start a bidding war for a card in your deck.', usage: 'auction <slot> <min> <hrs>' },
@@ -377,7 +377,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'motivate', desc: 'Get a motivational quote.', usage: 'motivate' },
     { cmd: 'meme', desc: 'Get a random meme from Reddit.', usage: 'meme' },
     { cmd: 'wyr', desc: 'Get a random \'Would You Rather\' question.', usage: 'wyr' },
-    { cmd: 'quote', desc: 'Random famous quote — or add your own text to turn it into a quote card image over a matching photo.', usage: 'quote [text] [--by author]' },
+    { cmd: 'quote', desc: 'Random famous quote - or add your own text to turn it into a quote card image over a matching photo.', usage: 'quote [text] [--by author]' },
     { cmd: 'weather', desc: 'Check current weather conditions for any city.', usage: 'weather <city>' },
     { cmd: 'translate', desc: 'Translate text into a target language.', usage: 'translate [target_lang] <text>' },
     { cmd: 'crypto', desc: 'Get the current USD price and 24h change of any cryptocurrency.', usage: 'crypto <coin>' },
@@ -393,7 +393,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'fish', desc: 'Go scavenging at the coast for rare fish and shards.', usage: 'fish' },
     { cmd: 'hunt', desc: 'Track and capture wilderness animals for profit.', usage: 'hunt' },
     { cmd: 'base', desc: 'Your outdoor base map: mines, pond, hunting grounds, market, barracks.', usage: 'base' },
-    { cmd: 'base <#id|name>', desc: 'Open a structure — zoomed card + its live stats and commands.', usage: 'base 3 | base mines | base barracks' },
+    { cmd: 'base <#id|name>', desc: 'Open a structure - zoomed card + its live stats and commands.', usage: 'base 3 | base mines | base barracks' },
     { cmd: 'base build', desc: 'Construct a structure on a free plot.', usage: 'base build <blacksmith|medbay|alchemy|market|barracks> [plot#]' },
     { cmd: 'base upgrade', desc: 'Upgrade a structure to its next form.', usage: 'base upgrade <type|#id>' }
   ],
@@ -452,7 +452,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'judge', desc: 'Let the AI judge the current debate.', usage: 'judge' }
   ],
   ANIME: [
-    { cmd: 'anime', desc: 'Anime hub — trending, airing, upcoming, top, random, news, rank, studio, or search. Bare command shows search usage.', usage: 'anime <trending|airing|upcoming|top|random|news|rank|studio|search> [query]' },
+    { cmd: 'anime', desc: 'Anime hub - trending, airing, upcoming, top, random, news, rank, studio, or search. Bare command shows search usage.', usage: 'anime <trending|airing|upcoming|top|random|news|rank|studio|search> [query]' },
     { cmd: 'anime news', desc: 'Get the latest anime news and updates.', usage: 'anime news' },
     { cmd: 'anime trending', desc: 'See what anime is hot right now.', usage: 'anime trending' },
     { cmd: 'anime airing', desc: 'List currently airing anime.', usage: 'anime airing' },

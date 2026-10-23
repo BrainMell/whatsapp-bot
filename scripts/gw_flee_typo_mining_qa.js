@@ -1,15 +1,15 @@
 // ============================================
-// ⚔️ GW FLEE-PRESENTATION + TYPO-ROUTING + MINING QA (2026-10-05)
+// GW FLEE-PRESENTATION + TYPO-ROUTING + MINING QA
 // Owner playtest regression battery:
-//   T1  typo routing: ".j move lwft" reaches the router and behaves
-//       EXACTLY like ".j move left" (it used to fall through to the
-//       generic pipeline → tictactoe "No active game in this chat")
-//   T2  flee presentation: retreating from a forced room (puzzle) now
-//       replays the room entry (retreat text → map → scene) and the
-//       war STAYS ACTIVE (the "game died on flee" report)
-//   T3  mining energy: proportional cost keeps the bar finishable at
-//       every level; recovery can never net-gain
-// Run: node scripts/gw_flee_typo_mining_qa.js   (gwtest DB + mock socks)
+// T1 typo routing: ".j move lwft" reaches the router and behaves
+// EXACTLY like ".j move left" (it used to fall through to the
+// generic pipeline → tictactoe "No active game in this chat")
+// T2 flee presentation: retreating from a forced room (puzzle) now
+// replays the room entry (retreat text → map → scene) and the
+// war STAYS ACTIVE (the "game died on flee" report)
+// T3 mining energy: proportional cost keeps the bar finishable at
+// every level; recovery can never net-gain
+// Run: node scripts/gw_flee_typo_mining_qa.js (gwtest DB + mock socks)
 // ============================================
 process.env.GW_TEST = '1';
 process.env.GW_MOVE_COOLDOWN_MS = '300'; // fast cooldown for the sim
@@ -20,7 +20,7 @@ const path = require('path');
 let PASS = 0, FAIL = 0;
 function check(name, cond, extra) {
     if (cond) { PASS++; console.log(`  ✅ ${name}`); }
-    else { FAIL++; console.log(`  ❌ ${name}${extra ? ' — ' + extra : ''}`); }
+    else { FAIL++; console.log(`  ❌ ${name}${extra ? ' - ' + extra : ''}`); }
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -50,8 +50,8 @@ function playerOf(doc, jid) { return doc.players.find((p) => p.jid === jid); }
 
 async function freshEvent() {
     const state = require('../core/rpg/guildWar/state');
-    // the router resolves a player to their OLDEST active event — sections must
-    // never leave events behind, or the next section's DMs land in the OLD war
+ // the router resolves a player to their OLDEST active event - sections must
+ // never leave events behind, or the next section's DMs land in the OLD war
     await require('../core/models/GuildWarEvent').updateMany(
         { state: { $in: ['INITIATED', 'REGISTRATION', 'ACTIVE'] } },
         { $set: { state: 'COMPLETED' } });
@@ -64,14 +64,14 @@ async function freshEvent() {
     return started.event;
 }
 
-// ═════════ T1: TYPO ROUTING ═════════
+// ========= T1: TYPO ROUTING =========
 async function t1_typo() {
     console.log('\n── T1: ".j move lwft" routes like ".j move left" ──');
     const state = require('../core/rpg/guildWar/state');
     const dmRouter = require('../core/rpg/guildWar/dmRouter');
     const ga = require('../core/rpg/guildAdventure');
 
-    // stub the combat pipeline: auto-encounters must not explode the sim
+ // stub the combat pipeline: auto-encounters must not explode the sim
     ga.startRuinsCombat = async () => ({ success: true, sessionKey: 'sim' });
 
     const ev = await freshEvent();
@@ -81,8 +81,8 @@ async function t1_typo() {
     const spawn = (await pos()).spawnRoomId;
     const reset = async () => { await state.updatePlayer(ev.eventId, 'pp0@s.whatsapp.net', {}, { roomId: spawn, prevRoomId: spawn, lastMoveAt: 0 }); };
 
-    // unit: the fuzzy matcher returns the matched ALIAS KEY (the router then
-    // runs it through MOVE_WORDS itself — returning the VALUE double-maps)
+ // unit: the fuzzy matcher returns the matched ALIAS KEY (the router then
+ // runs it through MOVE_WORDS itself - returning the VALUE double-maps)
     check('fuzzy: lwft → left', dmRouter.fuzzyMoveToken('lwft') === 'left');
     check('fuzzy: wwst → west', dmRouter.fuzzyMoveToken('wwst') === 'west');
     check('fuzzy: nort → north', dmRouter.fuzzyMoveToken('nort') === 'north');
@@ -91,7 +91,7 @@ async function t1_typo() {
     check('fuzzy: ambiguous wast (west/east tie) → null', dmRouter.fuzzyMoveToken('wast') === null);
     check('fuzzy: xyzzy → null', dmRouter.fuzzyMoveToken('xyzzy') === null);
 
-    // behavioral: the typo move and the exact move must be indistinguishable
+ // behavioral: the typo move and the exact move must be indistinguishable
     await reset(); await sleep(360);
     const r1 = await dm('.j move lwft');
     const posTypo = (await pos()).roomId;
@@ -102,23 +102,23 @@ async function t1_typo() {
     check('typo reaches the MOVE system (not the unknown-dir reply)', !(r1 && /Unknown direction/.test(r1.text || '')), JSON.stringify(r1 || {}).slice(0, 80));
     check('typo and exact ".j move left" land in the SAME room', posTypo === posExact, `typo=${posTypo} exact=${posExact}`);
 
-    // garbage direction dies HERE with guidance — never falls through again
+ // garbage direction dies HERE with guidance - never falls through again
     const r3 = await dm('.j move xyzzy');
     check('".j move xyzzy" → real guidance reply (non-null)', r3 !== null && /Unknown direction/.test(r3.text || ''), JSON.stringify(r3 || 'null').slice(0, 80));
 
-    // bare near-word WITHOUT move-intent must stay ungated (games may want it)
+ // bare near-word WITHOUT move-intent must stay ungated (games may want it)
     await dm('.j look');
     const r4 = await dm('lwft');
     check('bare "lwft" (no move intent) still falls through', r4 === null, JSON.stringify(r4 || 'null').slice(0, 60));
 
-    // no war running → quiet guidance instead of tictactoe error
+ // no war running → quiet guidance instead of tictactoe error
     const sock9 = mockSock();
     const dm9 = (txt) => dmRouter.handleDM(sock9, 'pp9@s.whatsapp.net', 'pp9@s.whatsapp.net', txt, '\u200B', { prefix: '.j', prefixed: true });
     const r5 = await dm9('.j move left');
     check('no-war ".j move left" → "Ruins stand quiet" guidance', r5 !== null && /stand quiet/.test(r5.text || ''), JSON.stringify(r5 || 'null').slice(0, 80));
 }
 
-// ═════════ T2: FLEE PRESENTATION ═════════
+// ========= T2: FLEE PRESENTATION =========
 async function t2_flee() {
     console.log('\n── T2: flee replays retreat text → map → scene; war stays ACTIVE ──');
     const state = require('../core/rpg/guildWar/state');
@@ -132,8 +132,8 @@ async function t2_flee() {
 
     let doc = await state.getEvent(ev.eventId, { fresh: true });
     const me = playerOf(doc, 'pp0@s.whatsapp.net');
-    // force the player into a live PUZZLE chamber (forced-room type) with the
-    // spawn room as retreat destination — mirrors the owner's CARVED VERSE run
+ // force the player into a live PUZZLE chamber (forced-room type) with the
+ // spawn room as retreat destination - mirrors the owner's CARVED VERSE run
     const puzzle = doc.rooms.find((r) => r.type === 'puzzle') || doc.rooms.find((r) => r.key !== me.spawnRoomId);
     await require('../core/models/GuildWarEvent').updateOne(
         { eventId: ev.eventId, 'rooms.key': puzzle.key },
@@ -151,7 +151,7 @@ async function t2_flee() {
     const roomAfter = doc.rooms.find((r) => r.key === puzzle.key);
     check('abandoned chamber stays ACTIVE (spoils forfeited, not cleared)', roomAfter.state === 'ACTIVE', `state=${roomAfter.state}`);
 
-    // the owner's ask: retreat line, then the room's map, then the scene
+ // the owner's ask: retreat line, then the room's map, then the scene
     const retreatIdx = sock.sent.findIndex((s) => /You retreat to your previous room/.test(s.text || ''));
     check('retreat line sent', retreatIdx >= 0, JSON.stringify(sock.sent.map((s) => s.text)).slice(0, 200));
     const mapIdx = sock.sent.findIndex((s, i) => i > retreatIdx && s.hasImage);
@@ -161,10 +161,10 @@ async function t2_flee() {
     check('no "No active game" anywhere in the flow', !sock.sent.some((s) => /No active game/i.test(s.text || '')));
 }
 
-// ═════════ T3: MINING ENERGY ═════════
+// ========= T3: MINING ENERGY =========
 async function t3_mining() {
     console.log('\n── T3: mining cost stays proportional to the pool ──');
-    // replica of pctCost in mineOre (kept in sync; source-scan below pins it)
+ // replica of pctCost in mineOre (kept in sync; source-scan below pins it)
     const pctCost = (maxEn, base, ml) => Math.max(5, Math.round(maxEn * Math.max(5, base - Math.floor(ml / 2)) / 100));
     check('new player pool 100, shimmering → 15 (old flat price)', pctCost(100, 15, 1) === 15);
     check('endgame pool 1000, shimmering → 150', pctCost(1000, 15, 1) === 150);
@@ -176,7 +176,7 @@ async function t3_mining() {
     const rec = (cost) => Math.max(1, Math.round(cost * 0.25)); // recovery replica
     for (const c of [5, 50, 150, 600]) check(`recovery after a ${c}-cost mine < cost`, rec(c) < c, `rec=${rec(c)}`);
 
-    // source pins: the shipped formulas + engine gate + flee presentation
+ // source pins: the shipped formulas + engine gate + flee presentation
     const cmds = fs.readFileSync(path.join(__dirname, '..', 'core', 'commands', 'rpgCommands.js'), 'utf8');
     check('mineOre uses the proportional formula', /pctCost = \(loc\) => Math\.max\(5, Math\.round\(maxEn \* Math\.max\(5, loc\.energyCost - Math\.floor\(miningLevel \/ 2\)\) \/ 100\)\)/.test(cmds));
     check('mineOre recovery is a fraction of the spend', /Math\.round\(energyCost \* 0\.25\)/.test(cmds));
@@ -195,6 +195,6 @@ async function t3_mining() {
     await t3_mining();
     const mongoose = require('mongoose');
     await mongoose.disconnect();
-    console.log(`\n[qa] DONE — ${PASS} pass, ${FAIL} fail`);
+    console.log(`\n[qa] DONE - ${PASS} pass, ${FAIL} fail`);
     process.exit(FAIL ? 1 : 0);
 })().catch((e) => { console.error('[qa] fatal:', e); process.exit(1); });

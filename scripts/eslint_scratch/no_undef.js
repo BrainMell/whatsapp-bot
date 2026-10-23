@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// eslint no-undef gate (rebuilt after sandbox wipe - see worklog Task 13)
+// eslint no-undef gate (rebuilt after sandbox wipe - see worklog )
 // Uses the Linter API directly with a minimal config that enables no-undef
 // with an explicit globals allowlist (node + es2023 + repo idioms).
 // Known non-blocking elsewhere: core/engine.js pre-existing no-unreachable.

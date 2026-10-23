@@ -1,25 +1,23 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-//  DAY & NIGHT CYCLE — one shared sky-clock for every render in the game
-//  (owner 2026-10-21, Task 21: "for all the renders … from the world map to
-//  all the 3D and even the 2D ones like the fish and hunt — implement a day
-//  and night cycle where it gets darker, but there are light sources, of
-//  course. Make the colors for this day and night cycle realistic.")
-//
-//  Every renderer calls phaseAt() → paints normally (its own true day colours)
-//  → calls grade() to wear the hour → adds its own LIGHT SOURCES on top at
-//  night with light() (additive glows: windows, lanterns, campfires, the
-//  moon). The darkening is realistic: never flat black — deep blue moonlight,
-//  warm orange horizons at golden hour, pink-gold dawn.
-//
-//  Phases are quantised from the real UTC clock (cache keys bake per phase —
-//  every render stays deterministic and disk-cached per phase):
-//      dawn   05:00–07:00   pink-gold, long cool shadows
-//      day    07:00–17:00   true colours, no grade
-//      golden 17:00–18:30   low warm sun, amber wash
-//      dusk   18:30–20:00   orange → violet, first lights come on
-//      night  20:00–05:00   deep blue moonlight, windows + fires glow
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// DAY & NIGHT CYCLE - one shared sky-clock for every render in the game
+// (, "for all the renders … from the world map to
+// all the 3D and even the 2D ones like the fish and hunt - implement a day
+// and night cycle where it gets darker, but there are light sources, of
+// course. Make the colors for this day and night cycle realistic.")
+// Every renderer calls phaseAt() → paints normally (its own true day colours)
+// → calls grade() to wear the hour → adds its own LIGHT SOURCES on top at
+// night with light() (additive glows: windows, lanterns, campfires, the
+// moon). The darkening is realistic: never flat black - deep blue moonlight,
+// warm orange horizons at golden hour, pink-gold dawn.
+// Phases are quantised from the real UTC clock (cache keys bake per phase -
+// every render stays deterministic and disk-cached per phase):
+// dawn 05:00-07:00 pink-gold, long cool shadows
+// day 07:00-17:00 true colours, no grade
+// golden 17:00-18:30 low warm sun, amber wash
+// dusk 18:30-20:00 orange → violet, first lights come on
+// night 20:00-05:00 deep blue moonlight, windows + fires glow
+// ===========================================================================
 
 const PHASES = {
     dawn:   { label: 'dawn',   dark: 0.18, lightsOn: false, h0: 5,  h1: 7 },
@@ -42,7 +40,7 @@ function phaseAt(when) {
 
 function phaseInfo(id) { return PHASES[id] || PHASES.day; }
 
-// ── the grade — realistic colour over a finished (day-painted) scene ────────
+// -- the grade - realistic colour over a finished (day-painted) scene --------
 // Each stop: [y0, y1, color, alpha] bands, painted top→bottom. Colours are
 // chosen like camera grade film: dawn pink-gold, golden amber, dusk orange
 // falling into violet, night deep blue moonlight. None of them are grey/black.
@@ -69,12 +67,12 @@ const GRADES = {
     ],
 };
 
-// ── VIBRANT GRADE (owner 2026-10-22: "increase the vibrancy of the different times") ────────────────
-// The first grade was plain alpha washes — they greyed the picture (night = murky navy, dawn/golden barely
+// -- VIBRANT GRADE ("increase the vibrancy of the different times") ----------------
+// The first grade was plain alpha washes - they greyed the picture (night = murky navy, dawn/golden barely
 // visible). The vibrant grade works in three film-style passes so colours get RICHER, not muddier:
-//   1. MULTIPLY cast   — tints the whole frame through a sky-coloured gradient (keeps saturation, drops value)
-//   2. OVERLAY punch   — the same hue pushed back through "overlay" so mid-tones gain saturation + contrast
-//   3. SCREEN glow     — sun / horizon / moon light bleeding in (additive), then a gentle vignette
+// 1. MULTIPLY cast - tints the whole frame through a sky-coloured gradient (keeps saturation, drops value)
+// 2. OVERLAY punch - the same hue pushed back through "overlay" so mid-tones gain saturation + contrast
+// 3. SCREEN glow - sun / horizon / moon light bleeding in (additive), then a gentle vignette
 // Each entry: cast = [[stopY, rgb]...] multiply, castA; punch = rgb, punchA; glows = [[x, y, r(of h), rgb, a]].
 const VIBRANT = {
     dawn: {
@@ -117,13 +115,13 @@ function grade(ctx, w, h, phaseId, box) {
     ctx.save();
     ctx.beginPath(); ctx.rect(x0, y0, ww, hh); ctx.clip();
     const blend = (mode) => { try { ctx.globalCompositeOperation = mode; } catch (e) { /* keep default */ } };
-    // 1. multiply cast through a sky gradient
+ // 1. multiply cast through a sky gradient
     const cg = ctx.createLinearGradient(0, y0, 0, y0 + hh);
     for (const [at, rgb] of v.cast) cg.addColorStop(at, `rgb(${rgb})`);
     blend('multiply'); ctx.globalAlpha = v.castA; ctx.fillStyle = cg; ctx.fillRect(x0, y0, ww, hh);
-    // 2. overlay punch (saturation + contrast in the mid-tones)
+ // 2. overlay punch (saturation + contrast in the mid-tones)
     blend('overlay'); ctx.globalAlpha = v.punchA; ctx.fillStyle = `rgb(${v.punch})`; ctx.fillRect(x0, y0, ww, hh);
-    // 3. light bleeding in
+ // 3. light bleeding in
     blend('screen');
     for (const [gx, gy, gr, rgb, ga] of v.glows) {
         const cx = x0 + ww * gx, cy = y0 + hh * gy, R = Math.max(ww, hh) * gr * 0.62;
@@ -131,7 +129,7 @@ function grade(ctx, w, h, phaseId, box) {
         g.addColorStop(0, `rgba(${rgb},1)`); g.addColorStop(1, `rgba(${rgb},0)`);
         ctx.globalAlpha = ga; ctx.fillStyle = g; ctx.fillRect(x0, y0, ww, hh);
     }
-    // 3b. light shafts ("god rays") fanning from the sun / moon — soft wedges that fade with distance
+ // 3b. light shafts ("god rays") fanning from the sun / moon - soft wedges that fade with distance
     if (v.rays) {
         const R = v.rays, sx = x0 + ww * R.src[0], sy = y0 + hh * R.src[1];
         const L = Math.max(ww, hh) * R.len;
@@ -153,7 +151,7 @@ function grade(ctx, w, h, phaseId, box) {
             ctx.closePath(); ctx.fill();
         }
     }
-    // 4. vignette — dark edges so the lit centre pops
+ // 4. vignette - dark edges so the lit centre pops
     blend('source-over');
     const vg = ctx.createRadialGradient(x0 + ww / 2, y0 + hh * 0.5, Math.min(ww, hh) * 0.35, x0 + ww / 2, y0 + hh * 0.5, Math.max(ww, hh) * 0.78);
     vg.addColorStop(0, 'rgba(0,0,12,0)'); vg.addColorStop(1, `rgba(0,0,18,${v.vig})`);
@@ -162,10 +160,10 @@ function grade(ctx, w, h, phaseId, box) {
     ctx.globalAlpha = 1;
 }
 
-/** A LIGHT SOURCE at night — additive warm/cool glow that punches through the
+/** A LIGHT SOURCE at night - additive warm/cool glow that punches through the
  *  dark (windows, lanterns, campfires, moon glints). Drawn AFTER grade(). */
 function light(ctx, x, y, r, color = '#ffcf7a', alpha = 0.34, core = true) {
-    alpha = Math.min(1, alpha * 1.45); r = r * 1.15;   // 2026-10-22 vibrancy: lights bloom brighter + wider
+    alpha = Math.min(1, alpha * 1.45); r = r * 1.15; // vibrancy: lights bloom brighter + wider
     if (r <= 0 || alpha <= 0) return;
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
@@ -195,7 +193,7 @@ function moonStars(ctx, w, h, { seed = 7, moonX = 0.78, moonY = 0.16, mr = null,
         ctx.fillStyle = i % 5 ? '#e8f0ff' : '#fff6d8';
         ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI * 2); ctx.fill();
     }
-    // the moon: pale disc, soft halo, a bite of shadow for texture
+ // the moon: pale disc, soft halo, a bite of shadow for texture
     const mx = w * moonX, my = h * moonY, R = mr || Math.max(10, h * 0.038);
     ctx.globalCompositeOperation = 'lighter';
     const halo = ctx.createRadialGradient(mx, my, R * 0.4, mx, my, R * 3.2);
@@ -211,7 +209,7 @@ function moonStars(ctx, w, h, { seed = 7, moonX = 0.78, moonY = 0.16, mr = null,
     ctx.restore();
 }
 
-/** Fireflies — warm drifting motes for dusk/night meadows. t = loop position. */
+/** Fireflies - warm drifting motes for dusk/night meadows. t = loop position. */
 function fireflies(ctx, w, h, t, seed = 11, n = 7, box = null) {
     let s = (seed >>> 0) || 1;
     const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };

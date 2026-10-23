@@ -1,31 +1,30 @@
 // ============================================
-// 🎨 RUINS ROOM DESIGN VARIANTS — pixel-level plate re-texturing
-// Owner directive 2026-10-06 ("some of these backgrounds are just a white
+// RUINS ROOM DESIGN VARIANTS - pixel-level plate re-texturing
+// Owner directive ("some of these backgrounds are just a white
 // square layered poorly on the floor"): the old flat overlay blobs are DEAD.
-// Every variant is now BAKED INTO the plate's own pixels — hue/material remaps
+// Every variant is now BAKED INTO the plate's own pixels - hue/material remaps
 // + texture synthesis that preserve the brick mortar, the AO shading and the
 // perspective, so a variant reads as if the room was always built that way.
-//
-//   • the plates' shared geometry (floor polygon, N-walkway, torch spots) is
-//     hand-measured from the art (scripts/measure_plates.js) — identical for
-//     all nine door plates
-//   • protected pixels are NEVER touched: door mouths (v<0.16), torch flames
-//     and their sconce cores (bright warm), chains & gray iron (s<0.12)
-//   • deterministic: same (plate, variant, seed) → same pixels, forever
+// • the plates' shared geometry (floor polygon, N-walkway, torch spots) is
+// hand-measured from the art (scripts/measure_plates.js) - identical for
+// all nine door plates
+// • protected pixels are NEVER touched: door mouths (v<0.16), torch flames
+// and their sconce cores (bright warm), chains & gray iron (s<0.12)
+// • deterministic: same (plate, variant, seed) → same pixels, forever
 // ============================================
 'use strict';
 const { createCanvas } = require('canvas');
 
 // the roster: the intact plate (foundation) + 10 room designs.
-// keys are STABLE — live event docs already store the old names
+// keys are STABLE - live event docs already store the old names
 // (mossy/cracked/skulls/overgrown/dim) and they all remain valid.
 const ROOM_VARIANTS = [
     'intact', 'mossy', 'sandy', 'flooded', 'cracked', 'skulls',
     'overgrown', 'dim', 'skill', 'crystal', 'emberfall',
 ];
 
-// ── shared geometry (1200×900 plates) ──────────────────────────────────────
-// floor polygon control rows: [y, xLeft, xRight] — measured, then hand-tightened
+// -- shared geometry (1200×900 plates) --------------------------------------
+// floor polygon control rows: [y, xLeft, xRight] - measured, then hand-tightened
 const FLOOR_ROWS = [
     [333, 382, 818], [400, 300, 902], [470, 226, 988], [540, 162, 1062],
     [610, 106, 1122], [680, 56, 1172], [750, 12, 1196], [820, 0, 1200],
@@ -33,7 +32,7 @@ const FLOOR_ROWS = [
 ];
 // the lit walkway strip leading into the N arch (rows above the floor line)
 const WALKWAY = { y0: 246, y1: 332, x0: 548, x1: 652 };
-// corner crates own these rects — wood must never take floor treatments
+// corner crates own these rects - wood must never take floor treatments
 const CRATES = [
     { x0: 0, y0: 782, x1: 118, y1: 900 },
     { x0: 1012, y0: 772, x1: 1200, y1: 900 },
@@ -46,7 +45,7 @@ const TORCHES = [
 ];
 const W = 1200, H = 900;
 
-// ── masks (built once per process) ─────────────────────────────────────────
+// -- masks (built once per process) -----------------------------------------
 let _masks = null;
 function masks() {
     if (_masks) return _masks;
@@ -64,12 +63,12 @@ function masks() {
     for (const c of CRATES) {
         for (let y = c.y0; y < c.y1; y++) for (let x = c.x0; x < c.x1; x++) floor[y * W + x] = 0;
     }
-    // per-column top of the floor → wall zone lives above it
+ // per-column top of the floor → wall zone lives above it
     const floorTopCol = new Int16Array(W).fill(H);
     for (let x = 0; x < W; x++) {
         for (let y = 300; y < H; y++) { if (floor[y * W + x]) { floorTopCol[x] = y; break; } }
     }
-    // floor edge proximity (0 far inside … 1 on the seam): 5×5 neighbour count
+ // floor edge proximity (0 far inside … 1 on the seam): 5×5 neighbour count
     const edge = new Float32Array(W * H);
     for (let y = 340; y < H; y++) {
         for (let x = 0; x < W; x++) {
@@ -89,7 +88,7 @@ function masks() {
     return _masks;
 }
 
-// ── colour + noise utils ───────────────────────────────────────────────────
+// -- colour + noise utils ---------------------------------------------------
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const chan = (v) => (v < 0 ? 0 : v > 255 ? 255 : v);
 function rgb2hsv(r, g, b) {
@@ -161,7 +160,7 @@ function isProtected(h, s, v) {
     return false;
 }
 
-// ── treatments ─────────────────────────────────────────────────────────────
+// -- treatments -------------------------------------------------------------
 // Each gets (data, rng, N) where N = {floor, edge, floorTopCol}; mutates data.
 
 function treatMossy(d, rng, N, nz) {
@@ -169,7 +168,7 @@ function treatMossy(d, rng, N, nz) {
         for (let x = 0; x < W; x++) {
             const isWalk = y <= WALKWAY.y1 && x >= WALKWAY.x0 && x <= WALKWAY.x1;
             if (!isWalk && !N.floor[y * W + x]) {
-                // wall-base creep: green climbing the bottom courses of walls
+ // wall-base creep: green climbing the bottom courses of walls
                 if (y > 300 && y < 700) {
                     const top = N.floorTopCol[x];
                     if (top < H && y < top && top - y < 64) {
@@ -221,7 +220,7 @@ function treatSandy(d, rng, N, nz) {
             d[i] = chan(r); d[i + 1] = chan(g); d[i + 2] = chan(b);
         }
     }
-    // sand accumulated at the wall bases
+ // sand accumulated at the wall bases
     for (let x = 0; x < W; x++) {
         const top = N.floorTopCol[x];
         if (top >= H) continue;
@@ -252,7 +251,7 @@ function treatFlooded(d, rng, N, nz) {
             d[i] = chan(r); d[i + 1] = chan(g); d[i + 2] = chan(b);
         }
     }
-    // warm torch reflections streaking toward the viewer on the wet floor
+ // warm torch reflections streaking toward the viewer on the wet floor
     for (const t of TORCHES) {
         if (t.y > 330) continue;
         const top = N.floorTopCol[clamp01(t.x) && t.x < W ? t.x : 600] || 333;
@@ -276,7 +275,7 @@ function treatFlooded(d, rng, N, nz) {
 }
 
 function treatCracked(d, rng, N, nz) {
-    // perspective cracks: seeded walks with depth-scaled steps
+ // perspective cracks: seeded walks with depth-scaled steps
     const crackPix = new Set();
     const starts = [];
     for (let k = 0; k < 11; k++) {
@@ -306,7 +305,7 @@ function treatCracked(d, rng, N, nz) {
         const [r, g, b] = hsv2rgb(h, s * 0.65, v * 0.32);
         d[i] = chan(r); d[i + 1] = chan(g); d[i + 2] = chan(b);
     }
-    // bevel highlight on one side of each crack
+ // bevel highlight on one side of each crack
     for (const idx of crackPix) {
         const x = idx % W, y = Math.floor(idx / W);
         const hx = x + 1;
@@ -316,7 +315,7 @@ function treatCracked(d, rng, N, nz) {
         const [r, g, b] = hsv2rgb(h, s, Math.min(1, v * 1.22));
         d[i] = chan(r); d[i + 1] = chan(g); d[i + 2] = chan(b);
     }
-    // sunken tiles: darkened brick patches with a deeper rim
+ // sunken tiles: darkened brick patches with a deeper rim
     for (let k = 0; k < 7; k++) {
         const cx = 220 + rng() * 760, cy = 390 + rng() * 400;
         const tw = 50 + rng() * 36, th = tw * 0.42;
@@ -332,7 +331,7 @@ function treatCracked(d, rng, N, nz) {
             }
         }
     }
-    // fallen dust under crack crossings
+ // fallen dust under crack crossings
     for (let k = 0; k < 5; k++) {
         const cx = 200 + rng() * 800, cy = 400 + rng() * 400;
         if (!N.floor[Math.round(cy) * W + Math.round(cx)]) continue;
@@ -347,7 +346,7 @@ function treatCracked(d, rng, N, nz) {
 }
 
 function treatSkulls(d, rng, N, nz) {
-    // cold, drained grade under the bone work
+ // cold, drained grade under the bone work
     for (let y = 246; y < H; y++) {
         for (let x = 0; x < W; x++) {
             if (!N.floor[y * W + x] && !(y <= WALKWAY.y1 && x >= WALKWAY.x0 && x <= WALKWAY.x1)) continue;
@@ -361,7 +360,7 @@ function treatSkulls(d, rng, N, nz) {
 }
 
 function treatOvergrown(d, rng, N, nz) {
-    // ivy sheets climbing the side walls (per-pixel, density falls with height)
+ // ivy sheets climbing the side walls (per-pixel, density falls with height)
     for (let y = 120; y < 760; y++) {
         for (let x = 0; x < W; x++) {
             if (N.floor[y * W + x]) continue;
@@ -382,7 +381,7 @@ function treatOvergrown(d, rng, N, nz) {
             }
         }
     }
-    // sparse grass tufts rooted in the floor seams
+ // sparse grass tufts rooted in the floor seams
     for (let k = 0; k < 9; k++) {
         const bx = 150 + rng() * 900, by = 400 + rng() * 420;
         if (!N.floor[Math.round(by) * W + Math.round(bx)]) continue;
@@ -421,7 +420,7 @@ function treatDim(d, rng, N, nz) {
             d[i] = chan(r); d[i + 1] = chan(g); d[i + 2] = chan(b);
         }
     }
-    // torch pools stay warm: additive radial glow around each flame anchor
+ // torch pools stay warm: additive radial glow around each flame anchor
     for (const t of TORCHES) {
         for (let dy = -110; dy <= 110; dy += 1) {
             const y = t.y + dy;
@@ -446,7 +445,7 @@ function treatEmberfall(d, rng, N, nz) {
         for (let x = 0; x < W; x++) {
             const inFloor = N.floor[y * W + x] || (y <= WALKWAY.y1 && x >= WALKWAY.x0 && x <= WALKWAY.x1);
             if (!inFloor) {
-                // upper wall courses take soot
+ // upper wall courses take soot
                 if (y < 260 && y > 30) {
                     const i = (y * W + x) * 4;
                     const [h, s, v] = rgb2hsv(d[i], d[i + 1], d[i + 2]);
@@ -473,7 +472,7 @@ function treatEmberfall(d, rng, N, nz) {
             d[i] = chan(r); d[i + 1] = chan(g); d[i + 2] = chan(b);
         }
     }
-    // drifting embers near the floor edges
+ // drifting embers near the floor edges
     for (let k = 0; k < 12; k++) {
         const x = Math.round(60 + rng() * 1080);
         const y = Math.round(380 + rng() * 460);
@@ -484,20 +483,20 @@ function treatEmberfall(d, rng, N, nz) {
     }
 }
 
-// ── canvas-drawn layers (pixel-art objects, drawn 1:1 into the plate) ──────
+// -- canvas-drawn layers (pixel-art objects, drawn 1:1 into the plate) ------
 
 // bone cluster: dithered craniums + long bones + scatters, plate-coherent
-// palette, 1px dark outline, soft AO — hugs the wall base like the props do.
+// palette, 1px dark outline, soft AO - hugs the wall base like the props do.
 function drawBoneCluster(ctx, cx, gy, s, rng) {
     const BONE = '#d6c9a2', BONE_LIT = '#e7dcb8', BONE_SH = '#93865f', OUT = '#332c1d';
     ctx.save();
     ctx.translate(cx, gy);
     ctx.scale(s, s);
-    // AO bed
+ // AO bed
     ctx.fillStyle = 'rgba(12,9,5,0.34)';
     ctx.beginPath(); ctx.ellipse(0, 1, 34, 7, 0, 0, Math.PI * 2); ctx.fill();
     const skull = (ox, oy, r, lit) => {
-        // cranium: circle + squared jaw, two-tone dither, outline
+ // cranium: circle + squared jaw, two-tone dither, outline
         ctx.fillStyle = OUT;
         ctx.beginPath(); ctx.arc(ox, oy, r + 1, 0, Math.PI * 2); ctx.fill();
         ctx.fillRect(ox - r - 1, oy, 2 * r + 3, r * 0.62 + 2);
@@ -507,7 +506,7 @@ function drawBoneCluster(ctx, cx, gy, s, rng) {
         ctx.fillStyle = BONE_SH;
         ctx.beginPath(); ctx.arc(ox + r * 0.3, oy + r * 0.28, r * 0.72, 0.3, 1.8); ctx.fill();
         ctx.fillRect(ox - r, oy + Math.round(r * 0.3), 2 * r, Math.round(r * 0.26));
-        // sockets + nasal
+ // sockets + nasal
         ctx.fillStyle = '#241f13';
         ctx.fillRect(ox - Math.round(r * 0.52), oy - Math.round(r * 0.18), Math.max(2, Math.round(r * 0.3)), Math.max(2, Math.round(r * 0.3)));
         ctx.fillRect(ox + Math.round(r * 0.16), oy - Math.round(r * 0.18), Math.max(2, Math.round(r * 0.3)), Math.max(2, Math.round(r * 0.3)));
@@ -521,7 +520,7 @@ function drawBoneCluster(ctx, cx, gy, s, rng) {
         ctx.fillStyle = BONE_LIT;
         for (const [kx, ky] of [[x0, y0], [x1, y1]]) { ctx.beginPath(); ctx.arc(kx, ky, 2.2, 0, Math.PI * 2); ctx.fill(); }
     };
-    // composition: two craniums, crossed long bones behind, bits in front
+ // composition: two craniums, crossed long bones behind, bits in front
     bone(-20, -4, 16, -12); bone(-12, -14, 22, -2);
     skull(-7, -16, 9, true);
     skull(14, -9, 6.5, false);
@@ -537,12 +536,12 @@ function drawRibcage(ctx, cx, gy, s, flip) {
     ctx.translate(cx, gy); ctx.scale(flip ? -s : s, s);
     ctx.fillStyle = 'rgba(12,9,5,0.3)';
     ctx.beginPath(); ctx.ellipse(0, 1, 30, 6, 0, 0, Math.PI * 2); ctx.fill();
-    // spine
+ // spine
     ctx.strokeStyle = OUT; ctx.lineWidth = 5; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(-26, -6); ctx.lineTo(24, -10); ctx.stroke();
     ctx.strokeStyle = BONE; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(-26, -6); ctx.lineTo(24, -10); ctx.stroke();
-    // ribs bowing up from the spine
+ // ribs bowing up from the spine
     for (let i = 0; i < 4; i++) {
         const x = -20 + i * 12;
         ctx.strokeStyle = OUT; ctx.lineWidth = 4.4;
@@ -574,7 +573,7 @@ function drawCrystalCluster(ctx, cx, gy, s, rng) {
         ctx.closePath();
         ctx.fillStyle = '#2c7ba8'; ctx.fill();
         ctx.strokeStyle = '#12374e'; ctx.lineWidth = 1.2; ctx.stroke();
-        // lit facet + core
+ // lit facet + core
         ctx.beginPath();
         ctx.moveTo(ox, -hgt + 1.5);
         ctx.lineTo(ox + wd * 0.18 + lean * 0.6, -hgt * 0.34);
@@ -610,21 +609,21 @@ function drawGlyph(ctx, x, y, a, s, rng) {
 // skill chamber: cool clean grade + perspective rune circle baked onto the floor
 function finishSkill(ctx, rng, N) {
     const CX = 600, CY = 618, RX = 208, RY = 66;
-    // under-glow wash
+ // under-glow wash
     ctx.save();
     const g = ctx.createRadialGradient(CX, CY, 10, CX, CY, RX * 1.35);
     g.addColorStop(0, 'rgba(70,205,255,0.16)');
     g.addColorStop(1, 'rgba(70,205,255,0)');
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.ellipse(CX, CY, RX * 1.35, RY * 2.1, 0, 0, Math.PI * 2); ctx.fill();
-    // outer ring (double stroke) + inner ring, elliptical for perspective
+ // outer ring (double stroke) + inner ring, elliptical for perspective
     ctx.globalCompositeOperation = 'lighter';
     for (const [rx, ry, w, a] of [[RX, RY, 5, 0.30], [RX - 3, RY - 2.5, 2.4, 0.75], [RX - 56, RY - 18, 2, 0.5]]) {
         ctx.strokeStyle = `rgba(110,225,255,${a})`;
         ctx.lineWidth = w;
         ctx.beginPath(); ctx.ellipse(CX, CY, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
     }
-    // glyph ticks between the rings + cardinal diamonds
+ // glyph ticks between the rings + cardinal diamonds
     for (let k = 0; k < 8; k++) {
         const a = (k / 8) * Math.PI * 2 + 0.2;
         const gx = CX + Math.cos(a) * (RX - 28), gy = CY + Math.sin(a) * (RY - 9);
@@ -637,12 +636,12 @@ function finishSkill(ctx, rng, N) {
         ctx.moveTo(gx, gy - 5); ctx.lineTo(gx + 4, gy); ctx.lineTo(gx, gy + 5); ctx.lineTo(gx - 4, gy);
         ctx.closePath(); ctx.fill();
     }
-    // centre sigil
+ // centre sigil
     ctx.strokeStyle = 'rgba(160,235,255,0.6)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.ellipse(CX, CY, 26, 9, 0, 0, Math.PI * 2); ctx.stroke();
     drawGlyph(ctx, CX, CY, 0, 2.6, rng);
     ctx.restore();
-    // faint sigils on the back wall stones
+ // faint sigils on the back wall stones
     for (const [sx, sy, ss] of [[350, 210, 2.2], [838, 196, 2.0], [600, 82, 1.7]]) {
         ctx.save();
         ctx.globalAlpha = 0.30;
@@ -664,7 +663,7 @@ function finishCrystal(ctx, rng, N) {
 // skulls variant object layer
 // placement audited against SPAWN_SPOTS w(258,590) e(942,612) n(596,402)
 // s(624,780), the door mouths DOORS w(168,505) e(1032,505) n(600,292), the
-// HUB panel (x<530, y>610) and the enemy/boss anchors — every cluster hugs a
+// HUB panel (x<530, y>610) and the enemy/boss anchors - every cluster hugs a
 // wall base in a pocket no actor ever occupies.
 function finishSkulls(ctx, rng, N) {
     drawBoneCluster(ctx, 410, 372, 0.95, rng);
@@ -679,7 +678,7 @@ function finishCrystalClusters(ctx, rng, N) {
     drawCrystalCluster(ctx, 872, 388, 0.7, rng);
     drawCrystalCluster(ctx, 1085, 655, 1.05, rng);
     drawCrystalCluster(ctx, 355, 435, 0.55, rng);
-    // sparkles
+ // sparkles
     ctx.fillStyle = '#eafcff';
     for (let k = 0; k < 9; k++) {
         const x = 150 + rng() * 900, y = 360 + rng() * 320;
@@ -713,7 +712,7 @@ function finishOvergrown(ctx, rng, N) {
     }
 }
 
-// ── driver ─────────────────────────────────────────────────────────────────
+// -- driver -----------------------------------------------------------------
 const _cache = new Map(); // `${plateKey}:${variant}:${seed}` → canvas
 
 async function applyVariant(img, variant, seedKey) {
@@ -739,7 +738,7 @@ async function applyVariant(img, variant, seedKey) {
         case 'dim': treatDim(d, rng, N, nz); break;
         case 'emberfall': treatEmberfall(d, rng, N, nz); break;
         case 'skill': {
-            // clean cool floor grade, then the baked rune circle
+ // clean cool floor grade, then the baked rune circle
             for (let y = 246; y < H; y++) {
                 for (let x = 0; x < W; x++) {
                     if (!N.floor[y * W + x] && !(y <= WALKWAY.y1 && x >= WALKWAY.x0 && x <= WALKWAY.x1)) continue;

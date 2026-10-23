@@ -1,24 +1,22 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-// QA — bag upgrade + null-poison save round (2026-10-17, owner: "the bag
-// upgrade bug — check the logs you'll see them complaining")
-//
+// ===========================================================================
+// QA - bag upgrade + null-poison save round ("the bag
+// upgrade bug - check the logs you'll see them complaining")
 // Live evidence: Hexub¡ typed ".j inv upgrade" 3× (07:32-07:34Z) + asked
 // "what's the prompt to upgrade inventory"; "We are also trying to upgrade".
 // 3× "Failed to save user 2348161792083: Cannot create field 'def' in
-// element {stats: null}" (07:43-07:45Z) — equipped items stored with
+// element {stats: null}" (07:43-07:45Z) - equipped items stored with
 // stats:null (obsidian_shield / gloom_hood / weavers_cloak) made EVERY
 // saveUser touching their stat leaves fail wholesale.
-//
-//  A. leafDiff null-ancestor promotion (the save killer → self-healing write)
-//  B. $set+$unset same-path conflict guard
-//  C. deepStripUndefined (undefined → BSON-null producer kill)
-//  D. regression: normal leaf granularity + Task-13 churn/merge behavior
-//  E. repairItemStats: null-stats items restored from DB defs
-//  F. upgradeInventory flow on a sandbox_ user (cost ladder / deduction / max)
-//  G. router arg pattern sanity (mirrors engine.js branches)
-// Run: node scripts/qa_bag_save_fix.js   (QA_REPO to target another checkout)
-// ═══════════════════════════════════════════════════════════════════════════
+// A. leafDiff null-ancestor promotion (the save killer → self-healing write)
+// B. $set+$unset same-path conflict guard
+// C. deepStripUndefined (undefined → BSON-null producer kill)
+// D. regression: normal leaf granularity + Task-13 churn/merge behavior
+// E. repairItemStats: null-stats items restored from DB defs
+// F. upgradeInventory flow on a sandbox_ user (cost ladder / deduction / max)
+// G. router arg pattern sanity (mirrors engine.js branches)
+// Run: node scripts/qa_bag_save_fix.js (QA_REPO to target another checkout)
+// ===========================================================================
 const path = require('path');
 process.env.QA_MODE = '1';
 const repo = process.env.QA_REPO || path.join(__dirname, '..');
@@ -42,10 +40,10 @@ function hasUndefinedDeep(v) {
 }
 
 (async () => {
-    // ── A. null-ancestor promotion ──
+ // -- A. null-ancestor promotion --
     section('A. LEAFDIFF NULL-ANCESTOR PROMOTION');
 
-    // THE LIVE CASE: equipped item with stats:null, repair writes stat leaves
+ // THE LIVE CASE: equipped item with stats:null, repair writes stat leaves
     {
         const base = { equipment: { armor: { id: 'obsidian_shield', type: 'EQUIPMENT', stats: null } } };
         const ours = { equipment: { armor: { id: 'obsidian_shield', type: 'EQUIPMENT', stats: { def: 120, hp: 50 } } } };
@@ -59,7 +57,7 @@ function hasUndefinedDeep(v) {
         ok(!hasUndefinedDeep(writeSet), 'promoted write contains no undefined values');
     }
 
-    // TOP-LEVEL poison: base stats:null, payload has stat leaves
+ // TOP-LEVEL poison: base stats:null, payload has stat leaves
     {
         const base = { stats: null };
         const ours = { stats: { def: 5, hp: 10 } };
@@ -70,7 +68,7 @@ function hasUndefinedDeep(v) {
         ok(!('stats' in unsetSet), 'NO $set stats + $unset stats in one update (old Mongo conflict)');
     }
 
-    // EMPTY-SLOT EQUIP: base armor:null, equip an item (was: "Cannot create field 'id'…")
+ // EMPTY-SLOT EQUIP: base armor:null, equip an item (was: "Cannot create field 'id'…")
     {
         const base = { equipment: { armor: null, ring: { id: 'ring_x', stats: { luck: 2 } } } };
         const ours = { equipment: { armor: { id: 'iron_armor', stats: { def: 9 } }, ring: { id: 'ring_x', stats: { luck: 2 } } } };
@@ -80,7 +78,7 @@ function hasUndefinedDeep(v) {
         ok(!('equipment.armor.id' in writeSet), 'no nested writes against null slot');
     }
 
-    // SCALAR ANCESTOR drift (same failure class): base scalar, ours object
+ // SCALAR ANCESTOR drift (same failure class): base scalar, ours object
     {
         const base = { rank: 5 };
         const ours = { rank: { tier: 'A', pts: 3 } };
@@ -88,7 +86,7 @@ function hasUndefinedDeep(v) {
         ok(writeSet['rank'] && writeSet['rank'].tier === 'A', 'scalar→object drift promotes whole write');
     }
 
-    // ── B. same-path $set/$unset conflict guard ──
+ // -- B. same-path $set/$unset conflict guard --
     section('B. SET+UNSET SAME-PATH GUARD');
     {
         const base = { stats: null, junk: { a: 1, b: 2 } };
@@ -99,7 +97,7 @@ function hasUndefinedDeep(v) {
         ok(!('junk' in writeSet) && !('junk.a' in writeSet), 'no whole-junk write when only one child changed');
     }
     {
-        // {}-clear: parent write supersedes child unsets (Task-13 rule intact)
+ // {}-clear: parent write supersedes child unsets (Task-13 rule intact)
         const base = { junk: { a: 1 } };
         const ours = { junk: {} };
         const { writeSet, unsetSet } = economy.leafDiff(ours, base);
@@ -107,14 +105,14 @@ function hasUndefinedDeep(v) {
            '{} clear = single parent write, redundant child unset dropped');
     }
     {
-        // object→scalar (existing behavior must keep working)
+ // object→scalar (existing behavior must keep working)
         const base = { x: { y: 1 } };
         const ours = { x: 5 };
         const { writeSet, unsetSet } = economy.leafDiff(ours, base);
         ok(writeSet['x'] === 5 && !('x.y' in unsetSet), 'object→scalar: $set replaces, no $unset x.y conflict');
     }
 
-    // ── C. deepStripUndefined ──
+ // -- C. deepStripUndefined --
     section('C. DEEP-STRIP-UNDEFINED (producer kill)');
     {
         const v = economy.deepStripUndefined({ a: { b: undefined, c: 1 }, d: [{ e: undefined, f: 2 }], g: undefined, h: null });
@@ -129,14 +127,14 @@ function hasUndefinedDeep(v) {
         ok(v.when === d && v.map === m, 'Dates/Maps passed through untouched');
     }
     {
-        // THE REGISTERUSER REGRESSION: template without top-level stats,
-        // stats key present-but-undefined must NEVER reach $set
+ // THE REGISTERUSER REGRESSION: template without top-level stats,
+ // stats key present-but-undefined must NEVER reach $set
         const payload = { userId: 'x', wallet: 100, stats: undefined, inventory: {} };
         const stripped = economy.deepStripUndefined(payload);
         ok(!('stats' in stripped) && stripped.wallet === 100, 'stats:undefined stripped from whole-doc payload');
     }
 
-    // ── D. regression: normal leaf granularity preserved ──
+ // -- D. regression: normal leaf granularity preserved --
     section('D. LEAF GRANULARITY + TASK-13 REGRESSION');
     {
         const base = { stats: { hp: 1, def: 2 } };
@@ -153,12 +151,12 @@ function hasUndefinedDeep(v) {
            'new leaf inside EXISTING db object stays a leaf write (object ancestor, works in Mongo)');
     }
     {
-        // Task-13 churn kill: undefined leaves skipped
+ // Task-13 churn kill: undefined leaves skipped
         const out = economy.flattenLeaves({ inventory: { brew: { quantity: 4, slot: undefined } } }, '', {});
         ok(!('inventory.brew.slot' in out) && out['inventory.brew.quantity'] === 4, 'flattenLeaves still skips undefined keys');
     }
     {
-        // Task-13 merge safety: sibling-added item survives our unrelated change
+ // Task-13 merge safety: sibling-added item survives our unrelated change
         const ours = { wallet: 500, inventory: { potion: { quantity: 1 } } };
         const base = { wallet: 500, inventory: { potion: { quantity: 1 } } };
         const theirs = { wallet: 500, inventory: { potion: { quantity: 1 }, sword: { quantity: 1 } } };
@@ -166,7 +164,7 @@ function hasUndefinedDeep(v) {
         ok(merged.inventory.sword && merged.inventory.potion, 'threeWayMerge still preserves sibling additions');
     }
 
-    // ── E. repairItemStats null-stats self-heal ──
+ // -- E. repairItemStats null-stats self-heal --
     section('E. REPAIR-ITEM-STATS NULL HEAL');
     {
         const info = inventorySystem.lootSystem ? null : null; // (lootSystem internal; use getItemInfo via repair)
@@ -179,7 +177,7 @@ function hasUndefinedDeep(v) {
                `stats restored from DB defs (${JSON.stringify(item.stats)})`);
             ok(item.baseStats && Object.keys(item.baseStats).length > 0, 'baseStats seeded for future recalcs');
         } else {
-            ok(item.stats === null || (item.stats && typeof item.stats === 'object'), 'def missing — no crash either way');
+            ok(item.stats === null || (item.stats && typeof item.stats === 'object'), 'def missing - no crash either way');
             console.log(`  ℹ️ obsidian_shield has no baseStatsRef in this checkout; skipped strict asserts`);
         }
     }
@@ -195,7 +193,7 @@ function hasUndefinedDeep(v) {
         }
     }
 
-    // ── F. upgradeInventory flow (sandbox_ user → no DB writes) ──
+ // -- F. upgradeInventory flow (sandbox_ user → no DB writes) --
     section('F. UPGRADE-INVENTORY FLOW');
     {
         const jid = 'sandbox_qa_bag_' + Date.now();
@@ -207,16 +205,16 @@ function hasUndefinedDeep(v) {
         ok(u.wallet === 100000 - inv.cost, 'wallet deducted exactly the quoted cost');
         const inv2 = inventorySystem.upgradeInventory(jid);
         ok(inv2.success && inv2.cost === Math.floor(inv.cost * 1.5), 'cost ladder ×1.5 per tier');
-        // insufficient funds
+ // insufficient funds
         u.wallet = 10;
         const inv3 = inventorySystem.upgradeInventory(jid);
         ok(!inv3.success && /Not enough Zeni/.test(inv3.message) && /2,000|3,000|4,500|6,750/.test(inv3.message),
            `insufficient message shows both numbers ("${inv3.message}")`);
-        // max slots
+ // max slots
         u.wallet = 99999999; u.inventorySlots = 100;
         const inv4 = inventorySystem.upgradeInventory(jid);
         ok(!inv4.success && /maximum/.test(inv4.message), 'max slots refused');
-        // rpgCommands wrapper end-to-end (stub sock, two-arg sendMessage)
+ // rpgCommands wrapper end-to-end (stub sock, two-arg sendMessage)
         let sent = null;
         const sock = { sendMessage: async (chat, msg) => { sent = msg; } };
         u.wallet = 50000; u.inventorySlots = 20;
@@ -224,7 +222,7 @@ function hasUndefinedDeep(v) {
         ok(sent && /BAG\+/.test(sent.text) && /20 → 25/.test(sent.text), 'wrapper sends success card with slot delta');
     }
 
-    // ── G. router arg patterns (mirrors engine.js branches) ──
+ // -- G. router arg patterns (mirrors engine.js branches) --
     section('G. ROUTER ARG PATTERNS');
     {
         const upRe = /^(upgrade|expand|up)$/i;

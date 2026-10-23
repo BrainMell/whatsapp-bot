@@ -1,15 +1,15 @@
 // ============================================
-// LOGO DATASET V2 TOP-UP (2026-10-09, OOM-safe delta)
+// LOGO DATASET V2 TOP-UP (OOM-safe delta)
 // ============================================
 // The full builder got OOM-killed twice at the same spot: Box2 has 952MB
 // total RAM and the builder's entity fetch (4600+ entities of full claims)
 // crescendos past what wa-joker + the Go service leave behind. This top-up:
-//   - takes the NEXT fame band of SPARQL qids (rank 4600..5100, sl>=5)
-//   - fetches in SMALL batches (25), frees each batch, checkpoints after
-//     every batch to data/logoTopup.state.json (resume-safe)
-//   - hard wall-clock per batch (40s) + axios 20s
-//   - audits survivors with the SAME gates as the builder (inline kills)
-//   - merges into the existing dataset (existing entries verbatim, file-dedup)
+// - takes the NEXT fame band of SPARQL qids (rank 4600..5100, sl>=5)
+// - fetches in SMALL batches (25), frees each batch, checkpoints after
+// every batch to data/logoTopup.state.json (resume-safe)
+// - hard wall-clock per batch (40s) + axios 20s
+// - audits survivors with the SAME gates as the builder (inline kills)
+// - merges into the existing dataset (existing entries verbatim, file-dedup)
 // Then logo_v2_content_filter.js + _r2.js run over the merged set as usual.
 // ============================================
 const axios = require("axios");
@@ -34,8 +34,8 @@ const norm = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
 function modernity(file) {
   const years = [...file.matchAll(/\b(19\d\d|20\d\d)\b/g)].map((m) => parseInt(m[1], 10));
   const hasPresent = /present/i.test(file);
-  const openEnd = /(\b(19|20)\d\d\b)\s*(-|–|—|to)\s*(present)?\s*($|\)|,|\.)/i.test(file.replace(/(\b(19|20)\d\d\b)\s*(-|–|—)\s*(\b(19|20)\d\d\b)/g, "")) || hasPresent;
-  const ranges = [...file.matchAll(/\b(19\d\d|20\d\d)\s*[-–—]\s*(19\d\d|20\d\d)\b/g)].map((m) => [parseInt(m[1], 10), parseInt(m[2], 10)]);
+  const openEnd = /(\b(19|20)\d\d\b)\s*(-|-|-|to)\s*(present)?\s*($|\)|,|\.)/i.test(file.replace(/(\b(19|20)\d\d\b)\s*(-|-|-)\s*(\b(19|20)\d\d\b)/g, "")) || hasPresent;
+  const ranges = [...file.matchAll(/\b(19\d\d|20\d\d)\s*[---]\s*(19\d\d|20\d\d)\b/g)].map((m) => [parseInt(m[1], 10), parseInt(m[2], 10)]);
   if (OUTDATED_RE.test(file)) return { ok: false, why: "outdated-word" };
   if (ranges.length) {
     const endMax = Math.max(...ranges.map((r) => r[1]));
@@ -122,7 +122,7 @@ async function audit(brand) {
   }
 }
 
-// 💡 the hard-timeout races leave orphaned axios promises that reject AFTER
+// the hard-timeout races leave orphaned axios promises that reject AFTER
 // the timer won; node 20 crashes on unhandled rejections. Log and survive.
 process.on("unhandledRejection", (r) => console.log(`orphan-rejection: ${String(r && r.message || r).slice(0, 80)}`));
 
@@ -134,11 +134,11 @@ process.on("unhandledRejection", (r) => console.log(`orphan-rejection: ${String(
   console.log(`topup: dataset has ${existing.length}; next fame band 4600..5100`);
 
   const state = fs.existsSync(STATE_PATH) ? JSON.parse(fs.readFileSync(STATE_PATH, "utf8")) : { offset: 0 };
-  state.verified = []; // 💡 streamed to FRESH_PATH instead — array growth OOM-ed the 320MB heap at ~2200
+  state.verified = []; // streamed to FRESH_PATH instead - array growth OOM-ed the 320MB heap at ~2200
   console.log(`FULL-BUILD mode: windows 0..7400, resuming at offset=${state.offset}`);
   console.log(`resume state: offset=${state.offset}, verified so far=${state.verified.length}`);
 
-  // fame band: SPARQL with an OFFSET window (cheap, deterministic)
+ // fame band: SPARQL with an OFFSET window (cheap, deterministic)
   const sparql = async (offset, limit) => {
     const q = `SELECT ?item ?sl WHERE { ?item wdt:P154 ?logo . ?item wikibase:sitelinks ?sl . FILTER(?sl >= 5) } ORDER BY DESC(?sl) LIMIT ${limit} OFFSET ${offset}`;
     const r = await withHardTimeout(get(`https://query.wikidata.org/sparql?query=${encodeURIComponent(q)}&format=json`), 60000, "sparql-hard-60s");
@@ -191,7 +191,7 @@ process.on("unhandledRejection", (r) => console.log(`orphan-rejection: ${String(
         for (const [re, c] of kw) if (re.test(`${label} ${desc}`.toLowerCase())) { cat = c; break; }
         batchCand.push({ name: label, wiki, qid: id, cat, prio: 2, _claims: claims });
       }
-      // audit this batch immediately (4 parallel lanes), then FREE the claims
+ // audit this batch immediately (4 parallel lanes), then FREE the claims
       const results = [];
       let ai = 0;
       const lanes = Array.from({ length: AUDIT_LANES }, async () => {
@@ -214,9 +214,9 @@ process.on("unhandledRejection", (r) => console.log(`orphan-rejection: ${String(
     if (global.gc && fresh % 100 === 0 && fresh > 0) try { global.gc(); } catch {}
   }
 
-  // merge: existing verbatim first, then fresh streamed from the JSONL (file+name dedup)
-  // stream-parse line by line and STRIP _claims (early runs appended the full
-  // wikidata claims object per entry — 74MB of JSONL, OOM-ed the merge)
+ // merge: existing verbatim first, then fresh streamed from the JSONL (file+name dedup)
+ // stream-parse line by line and STRIP _claims (early runs appended the full
+ // wikidata claims object per entry - 74MB of JSONL, OOM-ed the merge)
   const freshEntries = [];
   if (fs.existsSync(FRESH_PATH)) {
     for (const l of fs.readFileSync(FRESH_PATH, "utf8").split("\n")) {

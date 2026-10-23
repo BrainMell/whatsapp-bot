@@ -1,6 +1,6 @@
 // Boots an in-memory mongod, writes its URI into .env so the repo's own
 // test scripts (which parse .env and redirect to gwtest) run unmodified
-// against a throwaway database. Sandbox-only helper — never ships.
+// against a throwaway database. Sandbox-only helper - never ships.
 const { MongoMemoryServer } = require('mongodb-memory-server');
 const fs = require('fs');
 const path = require('path');
@@ -20,6 +20,6 @@ const path = require('path');
   console.log('[memmongo] URI written to .env:', uri);
   console.log('[memmongo] PID-file marker:', process.pid);
   fs.writeFileSync(path.join(__dirname, '_memmongo.pid'), String(process.pid));
-  // keep alive
+ // keep alive
   setInterval(() => {}, 1 << 30);
 })().catch(e => { console.error(e); process.exit(1); });

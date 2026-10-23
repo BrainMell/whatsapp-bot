@@ -1,9 +1,8 @@
-const goService = require('./goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
+const goService = require('./goImageService'); // singleton (PERF PATCH )
 const system = require('./system'); // NEW: Database System Module
 
 let sentUrls = new Set();
 
-// Load sent history on startup
 function loadLog() {
     const data = system.get('news_log', []);
     sentUrls = new Set(data);
@@ -11,7 +10,7 @@ function loadLog() {
 }
 
 function saveLog() {
-    // Keep log size manageable (max 200)
+ // Keep log size manageable (max 200)
     if (sentUrls.size > 200) {
         const arr = Array.from(sentUrls);
         sentUrls = new Set(arr.slice(arr.length - 100)); // Keep last 100
@@ -50,11 +49,10 @@ async function getUnsentNews() {
     return newArticles;
 }
 
-// Check if update is due (every 6 hours)
 function isUpdateDue() {
     const lastRun = system.get('last_news_run', 0);
     const now = Date.now();
-    // 6 hours = 21600000 ms
+ // 6 hours = 21600000 ms
     return (now - lastRun) > 21600000;
 }
 
@@ -63,7 +61,6 @@ function markUpdateComplete() {
     system.set('last_news_run', Date.now());
 }
 
-// Initialize
 loadLog();
 
 module.exports = {

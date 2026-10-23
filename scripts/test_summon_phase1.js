@@ -15,7 +15,7 @@ function test(name, fn) {
 
 console.log('=== PHASE 1 UNIT TESTS ===\n');
 
-// ─── Registry tests ────────────────────────────────────────────
+// --- Registry tests --------------------------------------------
 console.log('--- Registry ---');
 
 const registry = require(path.join(REPO, 'core/rpg/summonRegistry.js'));
@@ -104,13 +104,13 @@ test('evolution stage index correct', () => {
 });
 
 test('getEvolvedSpeciesId returns correct stage', () => {
-  // skeleton → skeleton_knight (ASCENDED) → skeleton_king (TRANSCENDENT)
+ // skeleton → skeleton_knight (ASCENDED) → skeleton_king (TRANSCENDENT)
   assert.strictEqual(registry.getEvolvedSpeciesId('skeleton', 'BASE'), 'skeleton');
   assert.strictEqual(registry.getEvolvedSpeciesId('skeleton', 'ASCENDED'), 'skeleton_knight');
   assert.strictEqual(registry.getEvolvedSpeciesId('skeleton', 'TRANSCENDENT'), 'skeleton_king');
 });
 
-// ─── System tests (no DB - test pure functions) ────────────────
+// --- System tests (no DB - test pure functions) ----------------
 console.log('\n--- System (pure functions) ---');
 
 const summonSystem = require(path.join(REPO, 'core/rpg/summonSystem.js'));
@@ -146,7 +146,7 @@ test('loyalty gates effective stats (50% loyalty = 85% stats)', () => {
     loyalty: 50
   };
   const stats = summonSystem.computeEffectiveStats(mockSummon);
-  // 50% loyalty = 0.85 multiplier
+ // 50% loyalty = 0.85 multiplier
   assert.strictEqual(stats.hp, Math.floor(100 * 0.85));
   assert.strictEqual(stats.atk, Math.floor(20 * 0.85));
 });
@@ -191,7 +191,7 @@ test('allocated stats add to effective stats', () => {
     loyalty: 100
   };
   const stats = summonSystem.computeEffectiveStats(mockSummon);
-  // hp: 80 + 5×15 = 155, atk: 15 + 5×3 = 30
+ // hp: 80 + 5×15 = 155, atk: 15 + 5×3 = 30
   assert.strictEqual(stats.hp, 155);
   assert.strictEqual(stats.atk, 30);
 });
@@ -207,7 +207,7 @@ test('soft cap reduces stat gain after 15 points', () => {
     loyalty: 100
   };
   const stats = summonSystem.computeEffectiveStats(mockSummon);
-  // hp: 80 + (15×15 + 5×15×0.5) = 80 + 225 + 37.5 = 342.5 → floor 342
+ // hp: 80 + (15×15 + 5×15×0.5) = 80 + 225 + 37.5 = 342.5 → floor 342
   assert.strictEqual(stats.hp, 342);
 });
 
@@ -218,12 +218,12 @@ test('addSummonXP levels up and grants stat points', () => {
     rarity: 'COMMON',
     level: 1,
     xp: 0,
-    statPoints: 0,  // 💡 must initialize - += on undefined produces NaN
+    statPoints: 0, // must initialize - += on undefined produces NaN
     baseStats: { hp: 80, atk: 15, def: 5, mag: 5, spd: 8 },
     allocatedStats: { hp: 0, atk: 0, def: 0, mag: 0, spd: 0 },
     loyalty: 100
   };
-  // Level 2 needs 100 XP
+ // Level 2 needs 100 XP
   const result = summonSystem.addSummonXP(mockSummon, 100);
   assert.ok(result.leveledUp, 'should level up');
   assert.strictEqual(result.newLevel, 2);
@@ -297,7 +297,7 @@ test('allocateStatPoint rejects insufficient points', () => {
   assert.ok(!result.success);
 });
 
-// ─── Resonance tests ──────────────────────────────────────────
+// --- Resonance tests ------------------------------------------
 console.log('\n--- Resonance Computation ---');
 
 test('legion resonance activates with 3 undead', () => {
@@ -361,7 +361,7 @@ test('conclave resonance activates with fire + ice + lightning', () => {
   assert.ok(resonances.includes('stormfront'), 'stormfront should also be active');
 });
 
-// ─── Combat entity builder tests ──────────────────────────────
+// --- Combat entity builder tests ------------------------------
 console.log('\n--- Combat Entity Builder ---');
 
 test('buildCombatEntity produces valid combat entity', () => {
@@ -439,6 +439,6 @@ test('buildCombatEntity turret has isStationary + autoAttack', () => {
   assert.ok(entity.autoAttack, 'turret should autoAttack');
 });
 
-// ─── Summary ──────────────────────────────────────────────────
+// --- Summary --------------------------------------------------
 console.log(`\n=== PHASE 1 SUMMARY: ${pass} passed, ${fail} failed ===`);
 process.exit(fail > 0 ? 1 : 0);

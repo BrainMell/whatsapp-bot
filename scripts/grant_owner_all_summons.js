@@ -24,7 +24,7 @@ async function main() {
   const summonSystem = require('../core/rpg/summonSystem');
   const Summon = mongoose.connection.collection('summons');
 
-  // Check what owner already has
+ // Check what owner already has
   const existing = await Summon.find({ ownerJid: OWNER_JID }).toArray();
   const existingSpecies = new Set(existing.map(s => s.species));
   console.log(`Owner has ${existing.length} summons (${existingSpecies.size} distinct species).`);
@@ -46,7 +46,7 @@ async function main() {
         rarity: speciesDef.rarity,
         obtainedFrom: 'owner_test_grant',
       });
-      // Move to backlog (not main deck)
+ // Move to backlog (not main deck)
       await Summon.updateOne(
         { summonId: summon.summonId },
         { $set: { inMainDeck: false } }

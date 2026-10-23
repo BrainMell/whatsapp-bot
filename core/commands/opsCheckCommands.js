@@ -1,10 +1,9 @@
 // ============================================
-// 🛠️ OPS CHECK - deploy-pipeline verification
-// Added 2026-09-10 after the boot-volume rebuild surgery
+// OPS CHECK - deploy-pipeline verification
+// Added after the boot-volume rebuild surgery
 // to verify the change -> push -> deploy -> pm2 chain end-to-end.
 // Harmless by design: read-only, no DB access, no side effects.
-//
-// 2026-10-02 (owner request): `-info` decluttered - the old wall of
+// (owner request): `-info` decluttered - the old wall of
 // accumulated command docs (09-26/27/28 audit notes) was cleared and
 // replaced with ONLY the latest session's changes. Older command syntax
 // lives in `.j help` / the per-command usage messages.
@@ -28,7 +27,7 @@ async function handleOpsCheck(sock, chatId, args) {
     const mem = safe('free -m | awk \'/^Mem:/ {print $3 "MB/" $2 "MB"}\'');
     const arg = String(args || '').trim().toLowerCase();
 
-    // ── -info: latest changes only ──
+ // -- -info: latest changes only --
     if (arg === '-info' || arg === 'info' || arg === '--info') {
         const info = [
             '╔═════════════════╗',

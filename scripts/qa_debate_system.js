@@ -6,8 +6,8 @@
 process.env.NODE_ENV = 'test';
 const assert = require('assert');
 
-// ── stub the KV system BEFORE debate.js loads: JSON.stringify guard mimics
-//    the BSON serializer ("Cannot convert circular structure to BSON").
+// -- stub the KV system BEFORE debate.js loads: JSON.stringify guard mimics
+// the BSON serializer ("Cannot convert circular structure to BSON").
 const __sysPath = require.resolve('../core/utils/system');
 const store = {};
 let bsonErrors = 0;
@@ -25,14 +25,14 @@ require.cache[__sysPath] = {
     },
 };
 
-// ── stub economy (debate only uses getDisplayName for labels)
+// -- stub economy (debate only uses getDisplayName for labels)
 const __ecoPath = require.resolve('../core/rpg/economy');
 require.cache[__ecoPath] = {
     id: __ecoPath, filename: __ecoPath, loaded: true,
     exports: { getDisplayName: (j) => String(j).split('@')[0] },
 };
 
-// ── stub botConfig (instance-independent)
+// -- stub botConfig (instance-independent)
 const __cfgPath = require.resolve('../botConfig');
 require.cache[__cfgPath] = {
     id: __cfgPath, filename: __cfgPath, loaded: true,
@@ -82,7 +82,7 @@ const groqOk = async () => ({
 });
 
 (async () => {
-    // 1. START: lock + promote + session stored WITHOUT BSON errors
+ // 1. START: lock + promote + session stored WITHOUT BSON errors
     let sock = mockSock();
     let r = await debate.startDebate(sock, GROUP, 'Tabs vs spaces', 'd1@s.whatsapp.net', 'd2@s.whatsapp.net', meta(), BOT, groqOk, MODELS);
     assert.strictEqual(r.success, true, 'start ok');
@@ -94,30 +94,30 @@ const groqOk = async () => ({
     assert.ok(persisted && !persisted.timeoutId, 'persisted session has NO timeout handle');
     assert.ok(!JSON.stringify(persisted).includes('timeoutId'), 'persisted JSON clean');
 
-    // 2. double-start refused
+ // 2. double-start refused
     r = await debate.startDebate(sock, GROUP, 'x', 'd1@s.whatsapp.net', 'd2@s.whatsapp.net', meta(), BOT, groqOk, MODELS);
     assert.strictEqual(r.success, false, 'double start refused');
     assert.ok(r.message.includes('already'), 'double-start message');
 
-    // 3. DM refusal
+ // 3. DM refusal
     r = await debate.startDebate(sock, 'd1@s.whatsapp.net', 'x', 'd1@s.whatsapp.net', 'd2@s.whatsapp.net', null, BOT, groqOk, MODELS);
     assert.strictEqual(r.success, false, 'DM refused');
     assert.ok(r.message.includes('groups'), 'DM refusal message');
 
-    // 4. bot-not-admin refusal in another group
+ // 4. bot-not-admin refusal in another group
     const metaNoBot = { participants: [{ id: 'd1@s.whatsapp.net', admin: 'admin' }] };
     r = await debate.startDebate(sock, GROUP2, 'x', 'd1@s.whatsapp.net', 'd2@s.whatsapp.net', metaNoBot, BOT, groqOk, MODELS);
     assert.strictEqual(r.success, false, 'non-admin bot refused');
     assert.ok(r.message.includes('Admin'), 'admin refusal message');
 
-    // 5. arguments with device-suffix and LID spellings; third party ignored
+ // 5. arguments with device-suffix and LID spellings; third party ignored
     debate.recordArgument(GROUP, 'd1:12@s.whatsapp.net', 'spaces scale across teams');
     debate.recordArgument(GROUP, 'd2@lid', 'tabs win on file size');
     debate.recordArgument(GROUP, 'random@s.whatsapp.net', 'banana interjection');
     const active = debate.getActiveDebate(GROUP);
     assert.strictEqual(active.arguments.length, 2, 'only debater arguments recorded');
 
-    // 6. JUDGE: verdict, unlock, demote, leaderboard
+ // 6. JUDGE: verdict, unlock, demote, leaderboard
     r = await debate.judgeDebate(sock, GROUP, BOT, groqOk, MODELS);
     assert.strictEqual(r.success, true, 'judge ok');
     const verdictMsg = sock.calls.sent[sock.calls.sent.length - 1].m.text;
@@ -131,12 +131,12 @@ const groqOk = async () => ({
     assert.ok(lb['d2@s.whatsapp.net'] && lb['d2@s.whatsapp.net'].wins === 1, 'winner recorded');
     assert.strictEqual(lb['d2@s.whatsapp.net'].totalScore, 85, 'score coerced Number (no string concat)');
 
-    // 7. judge with no active debate
+ // 7. judge with no active debate
     r = await debate.judgeDebate(sock, GROUP, BOT, groqOk, MODELS);
     assert.strictEqual(r.success, false, 'judge without debate refused');
     assert.ok(r.message.includes('No active debate'), 'no-debate message');
 
-    // 8. stale expired session pruned on module load (restart resilience)
+ // 8. stale expired session pruned on module load (restart resilience)
     store['active_debates_Joker'] = {
         [`Joker|stale@g.us`]: { topic: 'old', expirationTime: Date.now() - 1000, arguments: [] },
     };
@@ -144,7 +144,7 @@ const groqOk = async () => ({
     const debate2 = require('../core/games/debate');
     assert.ok(!debate2.isDebateActive('stale@g.us'), 'expired session pruned on load');
 
-    // 9. cancel flow on a fresh debate
+ // 9. cancel flow on a fresh debate
     sock = mockSock();
     r = await debate2.startDebate(sock, GROUP, 't', 'd1@s.whatsapp.net', 'd2@s.whatsapp.net', meta(), BOT, groqOk, MODELS);
     assert.ok(r.success, 'fresh debate started');
@@ -153,7 +153,7 @@ const groqOk = async () => ({
     assert.ok(!debate2.isDebateActive(GROUP), 'cancelled session gone');
     assert.strictEqual(bsonErrors, 0, 'zero BSON errors across ALL flows');
 
-    // 10. rearmTimers: safe no-op with an active session, arms exactly once
+ // 10. rearmTimers: safe no-op with an active session, arms exactly once
     const sock3 = mockSock();
     await debate2.startDebate(sock3, GROUP2, 'rearm', 'd1@s.whatsapp.net', 'd2@s.whatsapp.net', meta(), BOT, groqOk, MODELS);
     await debate2.rearmTimers(sock3, BOT);

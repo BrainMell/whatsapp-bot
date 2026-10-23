@@ -1,13 +1,12 @@
 // ============================================
-// QUIZ DATASET MODES (2026-10-10 owner overhaul)
+// QUIZ DATASET MODES (owner overhaul)
 // ============================================
-// `.j quiz games / comics / movies / series` — LLM-FREE, SEARCH-FREE.
+// `.j quiz games / comics / movies / series` - LLM-FREE, SEARCH-FREE.
 // Questions come from data/quizDataset.json (built by
 // scripts/build_quiz_dataset.js: OpenTDB, the-trivia-api, SteamSpy, TVMaze,
-// AniList, Wikidata + enwiki page images — every image verified by download
+// AniList, Wikidata + enwiki page images - every image verified by download
 // at build time). No live franchise search, no AI generation: preparation is
 // instant and cannot hallucinate or hang.
-//
 // Question shape matches the shared live-quiz machinery (see quizMedia.js):
 // text questions post as plain cards; image questions carry
 // asset {kind:"image", url} and resolve through resolveQuestionMedia
@@ -92,7 +91,7 @@ function buildDatasetQuestions({ mode, count, usedKeys, difficulty }) {
   let orderText = weightedOrder(freshText.length ? freshText : text, usage);
   let orderImg = weightedOrder(freshImg.length ? freshImg : images, usage);
 
-  // difficulty preference: sort candidates so preferred band comes first
+ // difficulty preference: sort candidates so preferred band comes first
   const byDiff = (arr) => (difficulty
     ? [...arr].sort((a, b) => (a.difficulty === difficulty ? -1 : 0) - (b.difficulty === difficulty ? -1 : 0))
     : arr);
@@ -106,12 +105,12 @@ function buildDatasetQuestions({ mode, count, usedKeys, difficulty }) {
 
   const out = [];
   const emit = (q, kind) => {
-    // 💡 v8 (owner 2026-10-10: "make most of the questions type the answer
-    // instead of the ABCD ... allow multiple answers"): dataset questions
-    // marked fmt:"typed" post WITHOUT options - players type the answer.
-    // Distractors are stripped entirely from typed questions so a wrong
-    // option text can never false-match. q.alts carries alternative
-    // accepted answers; quiz.js handleAnswer matches alts + typo tolerance.
+ // v8 ("make most of the questions type the answer
+ // instead of the ABCD ... allow multiple answers"): dataset questions
+ // marked fmt:"typed" post WITHOUT options - players type the answer.
+ // Distractors are stripped entirely from typed questions so a wrong
+ // option text can never false-match. q.alts carries alternative
+ // accepted answers; quiz.js handleAnswer matches alts + typo tolerance.
     const isTyped = q.fmt === "typed";
     const alts = isTyped && Array.isArray(q.alts) ? q.alts.map(String).filter(Boolean).slice(0, 6) : [];
     return {

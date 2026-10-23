@@ -1,6 +1,6 @@
 'use strict';
-// bake_life.js — Task 47 "bring it to life" proof: animated mp4 of the player base + guild kingdom
-//   node scripts/bake_life.js [outDir]
+// bake_life.js - "bring it to life" proof: animated mp4 of the player base + guild kingdom
+// node scripts/bake_life.js [outDir]
 const fs = require('fs');
 const OUT = process.argv[2] || '/tmp/life';
 process.env.QA_MODE = process.env.QA_MODE || '1';
@@ -36,7 +36,7 @@ process.env.QA_MODE = process.env.QA_MODE || '1';
     console.log('guild media:', guild.contentType, (guild.buffer.length / 1024).toFixed(0) + 'KB', (Date.now() - t1) + 'ms');
     fs.writeFileSync(OUT + '/guild_life.' + (guild.contentType === 'video/mp4' ? 'mp4' : 'jpg'), guild.buffer);
 
-    // contact-sheet frames (static + mid-loop)
+ // contact-sheet frames (static + mid-loop)
     const bf0 = await r.renderFrame(state, 0, { returnCanvas: true });
     fs.writeFileSync(OUT + '/base_f0.png', bf0.toBuffer('image/png'));
     const bf7 = await r.renderFrame(state, 7, { returnCanvas: true });

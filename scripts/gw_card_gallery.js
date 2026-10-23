@@ -1,5 +1,5 @@
 // Renders every ruins encounter card + all battle variants into the workspace
-// downloads folder so the owner can eyeball the whole set: 2026-10-03
+// downloads folder so the owner can eyeball the whole set:
 // Usage: node scripts/gw_card_gallery.js /home/z/my-project/download/ruins_cards
 const fs = require('fs');
 const path = require('path');
@@ -11,7 +11,7 @@ async function main() {
     fs.mkdirSync(OUT, { recursive: true });
     const jobs = [];
 
-    // 1) one card per encounter type
+ // 1) one card per encounter type
     const samples = {
         combat:    { body: 'Scavengers bar the way - bold, but no veterans.', actionHint: 'Type fight to engage. Fleeing retreats you and forfeits this room\'s spoils.' },
         puzzle:    { body: 'Three runes sit above the lintel: sun, moon, then the eye that is neither. Set them in the order the old hymn names them.', actionHint: 'Reply with your answer - 3 attempts. Wrong answers have a cost.' },
@@ -43,7 +43,7 @@ async function main() {
         })]);
     }
 
-    // 2) all battle variants on a combat card
+ // 2) all battle variants on a combat card
     for (const [key, v] of Object.entries(CFG.COMBAT.VARIANTS)) {
         jobs.push(['variant_' + key.toLowerCase(), cards.renderRoomCard({
             type: 'combat',
@@ -56,14 +56,14 @@ async function main() {
         })]);
     }
 
-    // 3) a relic banner
+ // 3) a relic banner
     jobs.push(['banner_relic', cards.renderBannerCard({
         glyph: '◈',
         title: 'Relic Claimed',
         body: 'Nyx carries the Ember Compass (Rare). Rare+ relics can be stolen in ruins duels - hand it in with handin to bank it.',
     })]);
 
-    // 4) the two initiation cards
+ // 4) the two initiation cards
     const notice = require('../core/rpg/guildWar/noticeCard');
     jobs.push(['init_alignment_organic', notice.renderAlignmentCard({ regMinutes: 45 })]);
     jobs.push(['init_mod_war_called', notice.renderWarCalledCard({ type: 'normal', host: 'Warlord Kaine', regMinutes: 45 })]);

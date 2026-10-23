@@ -1,4 +1,4 @@
-// QA harness for summonGifDelivery — local, no canvas/Go needed (fake goCall+sock).
+// QA harness for summonGifDelivery - local, no canvas/Go needed (fake goCall+sock).
 // Covers: cache hit, in-flight dedupe, soft-budget exceed → text+background MP4,
 // fast render failure → PNG fallback → text, cached-send-failure resilience.
 const assert = require('assert');
@@ -18,11 +18,11 @@ function makeSock() {
   };
 }
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-// Real 1x1 GIF89a (ffmpeg-decodable) — fake bytes fail conversion and poison the test
+// Real 1x1 GIF89a (ffmpeg-decodable) - fake bytes fail conversion and poison the test
 const realGif = () => Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
 
 (async () => {
-  console.log('— T1: fast render in budget → single MP4 send —');
+  console.log('- T1: fast render in budget → single MP4 send -');
   {
     const sock = makeSock();
     let calls = 0;
@@ -39,7 +39,7 @@ const realGif = () => Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABA
     ok(Date.now() - t0 < 5000, 'fast path is fast');
   }
 
-  console.log('— T2: cache hit → no goCall —');
+  console.log('- T2: cache hit → no goCall -');
   {
     const sock = makeSock();
     let calls = 0;
@@ -53,19 +53,19 @@ const realGif = () => Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABA
     ok(sock.sends.length === 1 && sock.sends[0].video, 'MP4 sent from cache');
   }
 
-  console.log('— T3: slow render exceeds soft budget → text now + background MP4 —');
+  console.log('- T3: slow render exceeds soft budget → text now + background MP4 -');
   {
     const sock = makeSock();
     const t0 = Date.now();
-    process.env.SUMMON_GIF_SOFT_MS = '800'; // helper reads env at module load — use small custom via direct opts? fallback: monkey patch not possible. Use default 20s → too slow for test.
-    // Instead: verify via a goCall that rejects AFTER budget → we can't shrink env post-load.
-    // So: simulate with fast-rendering-but-failing-convert? Simplest: rely on env read at load — reload module with env set:
+    process.env.SUMMON_GIF_SOFT_MS = '800'; // helper reads env at module load - use small custom via direct opts? fallback: monkey patch not possible. Use default 20s → too slow for test.
+ // Instead: verify via a goCall that rejects AFTER budget → we can't shrink env post-load.
+ // So: simulate with fast-rendering-but-failing-convert? Simplest: rely on env read at load - reload module with env set:
     delete process.env.SUMMON_GIF_SOFT_MS;
     const fresh = require('child_process').execFileSync('node', [require('path').join(__dirname, 'summon_gif_soft_budget_sub.js')], { cwd: __dirname, timeout: 30000, stdio: ['pipe', 'pipe', 'pipe'] });
     ok(true, `T3 subprocess: ${fresh.toString().trim().split('\n').join(' | ')}`);
   }
 
-  console.log('— T4: fast failure → PNG fallback —');
+  console.log('- T4: fast failure → PNG fallback -');
   {
     const sock = makeSock();
     await deliverSummonGif({
@@ -80,7 +80,7 @@ const realGif = () => Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABA
     ok(sock.sends[0].caption === 'CAP4PNG', 'PNG caption used');
   }
 
-  console.log('— T5: fast failure, PNG fails too → text —');
+  console.log('- T5: fast failure, PNG fails too → text -');
   {
     const sock = makeSock();
     await deliverSummonGif({
@@ -94,7 +94,7 @@ const realGif = () => Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABA
     ok(sock.sends.length === 1 && sock.sends[0].text === 'TEXT5', 'text fallback reached');
   }
 
-  console.log('— T6: in-flight dedupe —');
+  console.log('- T6: in-flight dedupe -');
   {
     const sockA = makeSock(), sockB = makeSock();
     let calls = 0;
@@ -107,7 +107,7 @@ const realGif = () => Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABA
     ok(sockB.sends.length === 1 && sockB.sends[0].video, 'B got MP4 (joined)');
   }
 
-  console.log('— T7: distinct payloads do NOT collide —');
+  console.log('- T7: distinct payloads do NOT collide -');
   {
     const sockA = makeSock(), sockB = makeSock();
     await Promise.all([

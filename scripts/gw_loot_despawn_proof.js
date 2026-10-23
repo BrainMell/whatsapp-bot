@@ -1,4 +1,4 @@
-// 🪙 proof montage: consumable encounter lifecycle — ACTIVE → FRESH (looter present) → LOOTED (any return)
+// proof montage: consumable encounter lifecycle - ACTIVE → FRESH (looter present) → LOOTED (any return)
 // 3 types × 3 states, labeled, for the owner's review.
 process.env.GW_TEST = '1';
 const fs = require('fs');
@@ -36,9 +36,9 @@ const rooms = require(`..${GW}/rooms`);
     const JID = 'proof@s.whatsapp.net';
 
     const TYPES = [
-        ['discovery', 'BURIED CACHE — dig'],
-        ['reward', 'OLD-WORLD VAULT — take'],
-        ['secret', 'HIDDEN CHAMBER — claim'],
+        ['discovery', 'BURIED CACHE - dig'],
+        ['reward', 'OLD-WORLD VAULT - take'],
+        ['secret', 'HIDDEN CHAMBER - claim'],
     ];
     const picks = [];
     const pool = ev.rooms.filter((r) => !['core', 'finale'].includes(r.type));
@@ -52,7 +52,7 @@ const rooms = require(`..${GW}/rooms`);
 
     const shots = [];
     for (const { type, key } of picks) {
-        // ACTIVE
+ // ACTIVE
         await GuildWarEvent.updateOne({ eventId, rooms: { $elemMatch: { key } } }, { $set: { 'rooms.$.state': 'ACTIVE' }, $unset: { 'rooms.$.lootFresh': '', 'rooms.$.clearedBy': '' } });
         await state.updatePlayer(eventId, JID, {}, { roomId: key, prevRoomId: key });
         await rooms.enterRoom(eventId, JID, null, key);
@@ -61,14 +61,14 @@ const rooms = require(`..${GW}/rooms`);
         let room = doc.rooms.find((r) => r.key === key);
         shots.push([`${type}:active`, await roomScene._renderInProcess(doc, me, room, { prefix: '.' })]);
 
-        // FRESH (just claimed, looter present)
+ // FRESH (just claimed, looter present)
         await GuildWarEvent.updateOne({ eventId, rooms: { $elemMatch: { key } } }, { $set: { 'rooms.$.state': 'CLEARED', 'rooms.$.lootFresh': true, 'rooms.$.clearedBy': JID } });
         doc = await state.getEvent(eventId, { fresh: true });
         me = doc.players.find((p) => p.jid === JID);
         room = doc.rooms.find((r) => r.key === key);
         shots.push([`${type}:fresh`, await roomScene._renderInProcess(doc, me, room, { prefix: '.' })]);
 
-        // LOOTED (after the looter left — lootFresh flipped by the exit pipeline)
+ // LOOTED (after the looter left - lootFresh flipped by the exit pipeline)
         await rooms.enterRoom(eventId, JID, key, picks.find((p) => p.key !== key).key);
         await rooms.enterRoom(eventId, JID, picks.find((p) => p.key !== key).key, key); // come back
         await GuildWarEvent.updateOne({ eventId, rooms: { $elemMatch: { key } } }, { $set: { 'rooms.$.state': 'CLEARED' }, $unset: { 'rooms.$.lootFresh': '', 'rooms.$.clearedBy': '' } });
@@ -78,15 +78,15 @@ const rooms = require(`..${GW}/rooms`);
         shots.push([`${type}:looted`, await roomScene._renderInProcess(doc, me, room, { prefix: '.' })]);
     }
 
-    // assemble 3×3 montage with labels
+ // assemble 3×3 montage with labels
     const CW = 600, CH = 450, LBL = 46;
     const W = CW * 3, H = (CH + LBL) * 3 + 70;
     const c = createCanvas(W, H);
     const ctx = c.getContext('2d');
     ctx.fillStyle = '#0b0910'; ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = '#f3ecdf'; ctx.font = 'bold 30px "Cinzel", sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('CONSUMABLE LOOT — despawns on leave, LOOTED marker stays', W / 2, 44);
-    const COLS = ['ACTIVE (untouched)', 'FRESH — looter in room', 'AFTER — anyone returns'];
+    ctx.fillText('CONSUMABLE LOOT - despawns on leave, LOOTED marker stays', W / 2, 44);
+    const COLS = ['ACTIVE (untouched)', 'FRESH - looter in room', 'AFTER - anyone returns'];
     for (let i = 0; i < shots.length; i++) {
         const [tag, buf] = shots[i];
         const col = i % 3, row = (i / 3) | 0;

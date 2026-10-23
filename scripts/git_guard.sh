@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# git_guard.sh — protected-fix watchdog + multi-agent wipe guard (2026-10-15)
+# git_guard.sh - protected-fix watchdog + multi-agent wipe guard (2026-10-15)
 # Installed: /home/ubuntu/git_guard.sh on BOTH boxes, cron */5.
 # Repo copy: scripts/git_guard.sh (keep in sync when editing).
 #

@@ -1,15 +1,14 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-//  KINGDOM3D — shared hex-world compositor for the guild kingdom + player base
-//  Art: KayKit Medieval Hexagon Pack (CC0, Kay Lousberg) — every model is
-//  PRE-BAKED to an iso sprite by scripts/kingdom3d/bake_kingdom_sprites.py, so
-//  runtime is 2D compositing only (no GL, no 3D math): ~100-250ms per card.
-//
-//  Grid: pointy-top hexes, odd-r offset (col,row). Edge index order matches the
-//  baker: 0=E 1=SE 2=SW 3=W 4=NW 5=NE.
-//  Draw order: all terrain tiles back→front, then ground shadows, then objects
-//  back→front (the same trick the KayKit promo shots use).
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// KINGDOM3D - shared hex-world compositor for the guild kingdom + player base
+// Art: KayKit Medieval Hexagon Pack (CC0, Kay Lousberg) - every model is
+// PRE-BAKED to an iso sprite by scripts/kingdom3d/bake_kingdom_sprites.py, so
+// runtime is 2D compositing only (no GL, no 3D math): ~100-250ms per card.
+// Grid: pointy-top hexes, odd-r offset (col,row). Edge index order matches the
+// baker: 0=E 1=SE 2=SW 3=W 4=NW 5=NE.
+// Draw order: all terrain tiles back→front, then ground shadows, then objects
+// back→front (the same trick the KayKit promo shots use).
+// ===========================================================================
 
 const fs = require('fs');
 const path = require('path');
@@ -38,7 +37,7 @@ const BAKE_S = () => manifest().S;
 const SIN_P = () => getView('top').sinP;
 const COS_P = () => getView('top').cosP;
 
-// ── image cache (shared across renders; sprites are tiny) ───────────────────
+// -- image cache (shared across renders; sprites are tiny) -------------------
 const _imgs = new Map();
 async function loadSprite(file, view = 'top') {
     const dir = getView(view).dir;
@@ -50,7 +49,7 @@ async function loadSprite(file, view = 'top') {
     }
     return p;
 }
-// ── biomes: recoloured terrain/nature sprites live in biomes/<biome>/<file> (same names) ──
+// -- biomes: recoloured terrain/nature sprites live in biomes/<biome>/<file> (same names) --
 function biomeInfo(view = 'top') {
     const v = getView(view);
     if (!v.binfo) {
@@ -68,7 +67,7 @@ function biomeFile(file, biome, view = 'top') {
 function spriteMeta(name, view = 'top') { return getView(view).man.sprites[name] || null; }
 function hasSprite(name, view = 'top') { return !!getView(view).man.sprites[name]; }
 
-// ── RNG helpers ──────────────────────────────────────────────────────────────
+// -- RNG helpers --------------------------------------------------------------
 function mulberry32(seed) {
     let a = seed >>> 0;
     return function () {
@@ -84,7 +83,7 @@ function hashStr(s) {
     return h >>> 0;
 }
 
-// ── hex math (odd-r offset, pointy-top) ──────────────────────────────────────
+// -- hex math (odd-r offset, pointy-top) --------------------------------------
 // neighbor deltas by row parity, edge index order E,SE,SW,W,NW,NE
 const NB_EVEN = [[1, 0], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1]];
 const NB_ODD = [[1, 0], [1, 1], [0, 1], [-1, 0], [0, -1], [1, -1]];
@@ -99,7 +98,7 @@ function dirTo(col, row, c2, r2) {
 /** world x,z of a hex centre (tile model radius: width 2, row pitch √3). */
 function hexWorld(col, row) { return { x: 2 * (col + 0.5 * (row & 1)), z: SQ3 * row }; }
 function ring(col, row, n) {
-    // all cells at hex-distance n (via cube coords)
+ // all cells at hex-distance n (via cube coords)
     const toCube = (c, r) => { const x = c - (r - (r & 1)) / 2; const z = r; return [x, -x - z, z]; };
     const fromCube = (cu) => [cu[0] + (cu[2] - (cu[2] & 1)) / 2, cu[2]];
     const cc = toCube(col, row);
@@ -118,7 +117,7 @@ function hexDist(c1, r1, c2, r2) {
     return Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]), Math.abs(a[2] - b[2]));
 }
 
-// ── autotile tables (built from the baked per-edge signatures) ───────────────
+// -- autotile tables (built from the baked per-edge signatures) ---------------
 let _tables = null;
 function tables() {
     if (_tables) return _tables;
@@ -160,7 +159,7 @@ function pickBySet(list, want, preferBases) {
 // coast tiles: canonical water-edge sets at rot 0 (read off the baked art)
 const COAST_CANON = { 1: ['hex_coast_A', 0b000010], 2: ['hex_coast_B', 0b000110], 3: ['hex_coast_C', 0b000111], 4: ['hex_coast_D', 0b100111] };
 function coastFor(mask) {
-    // contiguous cyclic run of set bits → [tileBase, rot]
+ // contiguous cyclic run of set bits → [tileBase, rot]
     const n = popcount(mask);
     const canon = COAST_CANON[n];
     if (!canon) return null;
@@ -168,9 +167,9 @@ function coastFor(mask) {
     return null;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  HexWorld: terrain grid + prop list → canvas
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// HexWorld: terrain grid + prop list → canvas
+// ===========================================================================
 class HexWorld {
     /**
      * @param {number} cols
@@ -192,16 +191,16 @@ class HexWorld {
         }
         this.objs = [];   // {name,x,z,y,flip,sc,layer,sort}
         this.overlays = []; // {fn(ctx, proj)} drawn after objects (labels etc.)
-        this.underlays = []; // {fn(ctx, proj)} drawn right after the terrain — cell-ground art (stone paving) under every object
+        this.underlays = []; // {fn(ctx, proj)} drawn right after the terrain - cell-ground art (stone paving) under every object
     }
     inb(c, r) { return c >= 0 && r >= 0 && c < this.cols && r < this.rows; }
     at(c, r) { return this.inb(c, r) ? this.cell[r][c] : null; }
     isWater(c, r) { const k = this.at(c, r); return !k ? this.oobWater : k.water; } // beyond the map = sea (isle only)
     fillWater(pred) { for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) if (pred(c, r)) this.cell[r][c].water = true; }
 
-    // ── terrain resolution ──
+ // -- terrain resolution --
     resolve() {
-        // 1. coast clean-up: land cells whose water neighbours are not one run of ≤4 become water
+ // 1. coast clean-up: land cells whose water neighbours are not one run of ≤4 become water
         for (let guard = 0; guard < 8; guard++) {
             let changed = false;
             for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
@@ -228,7 +227,7 @@ class HexWorld {
                     if (!nk || nk.water || nk.river || nk.void) want |= 1 << d;
                 }
                 if (k.crossRoad) {
-                    // pick the crossing whose river line matches and whose road line matches
+ // pick the crossing whose river line matches and whose road line matches
                     let roadWant = 0;
                     for (let d = 0; d < 6; d++) { const n = neighbor(c, r, d); const nk = this.at(n[0], n[1]); if (nk && (nk.road || nk.door) && !nk.river) roadWant |= 1 << d; }
                     let bestC = null, bs = -1;
@@ -270,8 +269,8 @@ class HexWorld {
         return trans === 2;
     }
 
-    // ── walls: lay a closed/open wall path through cells, piece by connectivity ──
-    // cells: [[c,r],...] in order; gates: Set of "c,r" that get gate pieces
+ // -- walls: lay a closed/open wall path through cells, piece by connectivity --
+ // cells: [[c,r],...] in order; gates: Set of "c,r" that get gate pieces
     layWall(cells, { closed = true, gates = new Set(), outside = true } = {}) {
         const T = tables();
         const n = cells.length;
@@ -321,7 +320,7 @@ class HexWorld {
     overlay(fn, c, r, o = {}) { const w = hexWorld(c, r); this.overlays.push({ fn, x: w.x + (o.dx || 0), z: w.z + (o.dz || 0), y: o.h || 0 }); }
     underlay(fn, c, r, o = {}) { const w = hexWorld(c, r); this.underlays.push({ fn, x: w.x + (o.dx || 0), z: w.z + (o.dz || 0), y: o.h || 0 }); }
 
-    // ── camera: world (x,z) is rotated by the view yaw first (0 for the top-down guild view) ──
+ // -- camera: world (x,z) is rotated by the view yaw first (0 for the top-down guild view) --
     rot(x, z) { const v = this.view; return v.yaw ? { x: v.cy * x + v.sy * z, z: -v.sy * x + v.cy * z } : { x, z }; }
     unrot(xr, zr) { const v = this.view; return v.yaw ? { x: v.cy * xr - v.sy * zr, z: v.sy * xr + v.cy * zr } : { x: xr, z: zr }; }
     /** depth key of a world point (bigger = closer to the camera). */
@@ -391,7 +390,7 @@ class HexWorld {
             const last = i === len - 1;
             const axis = (3 - (d % 3)) % 3;
             const rotEnd = d >= 3 ? d - 3 : d;        // end piece is open on its W side at rot 0 (edge 3)
-            // straight pieces run along the axis; the end piece must point back at the shore (edge d+3 = open side)
+ // straight pieces run along the axis; the end piece must point back at the shore (edge d+3 = open side)
             if (last) this.put(`dock_end@${(((3 - ((d + 3) % 6)) % 6) + 6) % 6}`, nx[0], nx[1], { sort: 0.3 });
             else this.put(`dock_straight@${axis}`, nx[0], nx[1], { sort: 0.3 });
             used.push(nx);
@@ -409,7 +408,7 @@ class HexWorld {
         const vk = V.key;
         const bf = (f) => biomeFile(f, this.biome, vk);
         const onCard = (p, m) => !(p.x < -140 || p.x > this.W + 140 || p.y < -200 || p.y > this.H + 200);
-        // gather the visible terrain tiles (depth sorted) + object sprites, then preload in one go
+ // gather the visible terrain tiles (depth sorted) + object sprites, then preload in one go
         const tiles = [];
         for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
             const kc = this.cell[r][c];
@@ -436,19 +435,19 @@ class HexWorld {
             else ctx.drawImage(img, dx, dy, w, h);
             if (alpha < 1) ctx.globalAlpha = 1;
         };
-        // 1. terrain, back to front
+ // 1. terrain, back to front
         if (doTerrain) for (const t of tiles) await drawSpr(t.m, t.m.file, t.m.ax, t.m.ay, t.p.x, t.p.y, 1, false, 1, t.b);
-        // 1.5 underlays — cell-ground art (stone paving) under every shadow/object
+ // 1.5 underlays - cell-ground art (stone paving) under every shadow/object
         for (const ov of this.underlays) { const p = this.proj(ov.x, ov.z, ov.y); ov.fn(ctx, p, k); }
         if (!doObjects) return;
-        // 2. shadows
+ // 2. shadows
         for (const o of sorted) {
             const m = spriteMeta(o.name, vk); if (!m || !m.sh || o.layer === 'flat') continue;
             const p = this.proj(o.x, o.z, o.y);
             if (!onCard(p)) continue;
             await drawSpr(m.sh, m.sh.file, m.sh.ax, m.sh.ay, p.x, p.y, o.sc, o.flip, o.alpha);
         }
-        // 3. objects (flat decals first)
+ // 3. objects (flat decals first)
         for (const o of sorted) {
             if (o.layer !== 'flat') continue;
             const m = spriteMeta(o.name, vk); const p = this.proj(o.x, o.z, o.y);
@@ -461,13 +460,12 @@ class HexWorld {
             if (!onCard(p)) continue;
             await drawSpr(m, m.file, m.ax, m.ay, p.x, p.y, o.sc, o.flip, o.alpha, o.biome);
         }
-        // 4. overlays (labels, banners)
+ // 4. overlays (labels, banners)
         for (const ov of this.overlays) { const p = this.proj(ov.x, ov.z, ov.y); ov.fn(ctx, p, k); }
     }
 }
 
-
-// ── procedural houses (scripts/kingdom3d/houses.py): sprites are house_<kind>_<roof> ──
+// -- procedural houses (scripts/kingdom3d/houses.py): sprites are house_<kind>_<roof> --
 const HOUSE_KIND_W = { cottage: 3, townhouse: 2, tudor: 2, stone: 1.6, roundhut: 1, shop: 0.7, barn: 0 };
 const HOUSE_ROOFS = {   // roof preference per biome / realm key (guild biomes + player-base realms)
     desert: ['orange', 'thatch', 'red', 'brown'], sunscorch: ['orange', 'thatch', 'red', 'brown'],
@@ -543,7 +541,7 @@ async function paintBackdrop(ctx, W, H, seed, opts = {}) {
     const rg = ctx.createRadialGradient(W / 2, H * 0.48, H * 0.2, W / 2, H * 0.5, Math.max(W, H) * 0.8);
     rg.addColorStop(0, 'rgba(255,255,255,0.10)'); rg.addColorStop(1, 'rgba(0,0,0,0.35)');
     ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
-    // faint hex lattice
+ // faint hex lattice
     ctx.save();
     ctx.globalAlpha = 0.07; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5;
     const hr = 62;
@@ -556,7 +554,7 @@ async function paintBackdrop(ctx, W, H, seed, opts = {}) {
         }
     }
     ctx.restore();
-    // clouds (baked KayKit clouds, tinted by alpha)
+ // clouds (baked KayKit clouds, tinted by alpha)
     const cl = ['cloud_big', 'cloud_small'];
     for (let i = 0; i < (opts.clouds == null ? 7 : opts.clouds); i++) {
         const name = cl[i % 2]; const m = spriteMeta(name); if (!m) continue;
@@ -579,9 +577,9 @@ function roundRect(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
-// ── confetti (owner: "the animations for buildings and upgrades with the confetti") —
+// -- confetti ("the animations for buildings and upgrades with the confetti") -
 // celebrated builds/upgrades rain paper scraps over the card. Deterministic per seed+t.
-// NOTE: per-scrap save/restore (NOT setTransform reset) — animated mp4 frames compose
+// NOTE: per-scrap save/restore (NOT setTransform reset) - animated mp4 frames compose
 // under a ctx scale, and an identity reset would shred the coordinate space.
 const CONFETTI_COLS = ['#ff5d5d', '#ffc93c', '#4ecdc4', '#7c6ff0', '#ff9ff3', '#6bed8f', '#feca57'];
 function paintConfetti(ctx, W, H, t, seed, k) {
@@ -602,20 +600,19 @@ function paintConfetti(ctx, W, H, t, seed, k) {
     ctx.restore();
 }
 
-// ── landing celebrate (owner 2026-10-19: "the building should fall in and when it touches
-// down it should be a confetti explosion from that source") — staged + deterministic:
-//   t < LAND_TD   the upgraded building drops onto its plot (gravity ease-in, ground shadow
-//                 grows as it closes), the scene build omitted it so the plot reads empty.
-//                 If the celebrate replaced an EXISTING building (fall.old), the old main
-//                 sprite sinks into the ground over the same window (owner: "the old one
-//                 should move into the ground as the new one comes in") — clipped at its
-//                 own rest base line so the earth visibly swallows it, shadow fading out.
-//   t = LAND_TD   squash frame + dust ring + soft gold flash
-//   t > LAND_TD   confetti BURSTS radially FROM the building (source-based, iso-compressed,
-//                 gravity droop) — not the card-wide rain
-// `fall` = { name, wx, wz, sc, flip, dx, dz, old? } — the main sprite of the celebrated
+// -- landing celebrate ("the building should fall in and when it touches
+// down it should be a confetti explosion from that source") - staged + deterministic:
+// t < LAND_TD the upgraded building drops onto its plot (gravity ease-in, ground shadow
+// grows as it closes), the scene build omitted it so the plot reads empty.
+// If the celebrate replaced an EXISTING building (fall.old), the old main
+// sprite sinks into the ground over the same window ("the old one
+// should move into the ground as the new one comes in") - clipped at its
+// own rest base line so the earth visibly swallows it, shadow fading out.
+// t = LAND_TD squash frame + dust ring + soft gold flash
+// t > LAND_TD confetti BURSTS radially FROM the building (source-based, iso-compressed,
+// gravity droop) - not the card-wide rain
+// `fall` = { name, wx, wz, sc, flip, dx, dz, old? } - the main sprite of the celebrated
 // structure (+ the replaced building's main sprite as `old`), recorded by the scene build.
-// Returns false when it cannot draw → caller falls back to rain.
 const LAND_TD = 0.42;
 async function paintLanding(ctx, w, W, H, t, seed, k, fall) {
     const meta = spriteMeta(fall.name, w.viewKey);
@@ -629,8 +626,8 @@ async function paintLanding(ctx, w, W, H, t, seed, k, fall) {
     const u = Math.max(0, Math.min(1, t / LAND_TD));
     const landed = t >= LAND_TD;
     const yOff = landed ? 0 : -(1 - u * u) * DROP;                    // gravity ease-in
-    // the replaced building (upgrade of an existing one) — resolved up front so its fading
-    // shadow sits under the incoming one's, while its walls draw over the ground
+ // the replaced building (upgrade of an existing one) - resolved up front so its fading
+ // shadow sits under the incoming one's, while its walls draw over the ground
     let om = null, oImg = null, oShImg = null, oX = 0, oY = 0;
     if (fall.old && t < LAND_TD) {
         om = spriteMeta(fall.old.name, w.viewKey);
@@ -651,13 +648,13 @@ async function paintLanding(ctx, w, W, H, t, seed, k, fall) {
         ctx.drawImage(image, -m.ax * k * sc, -m.ay * k * sc, m.w * k * sc, m.h * k * sc);
         ctx.restore();
     };
-    // the old building's shadow pools out as it sinks (gone by touchdown)
+ // the old building's shadow pools out as it sinks (gone by touchdown)
     if (om && oShImg) drawIt(om.sh, oShImg, oX, oY, fall.old.sc, fall.old.flip, 0.62 * (1 - u));
-    // ground shadow: small + faint high up, full + firm at touchdown (and for the rest of the loop)
+ // ground shadow: small + faint high up, full + firm at touchdown (and for the rest of the loop)
     if (shImg && t < LAND_TD) drawIt(meta.sh, shImg, X, Y, fall.sc * (1 + 0.4 * (1 - u)), fall.flip, 0.14 + 0.5 * u);
     else if (shImg) drawIt(meta.sh, shImg, X, Y, fall.sc, fall.flip, 0.62);
-    // the old structure sinks into the earth: straight down, clipped at its own rest base
-    // line so the ground swallows it bottom-first — fully gone as the new one touches down
+ // the old structure sinks into the earth: straight down, clipped at its own rest base
+ // line so the ground swallows it bottom-first - fully gone as the new one touches down
     if (om) {
         const sink = (om.h * k * fall.old.sc + 2) * u;
         const halfW = om.w * k * fall.old.sc + 8 * k * 2;
@@ -669,7 +666,7 @@ async function paintLanding(ctx, w, W, H, t, seed, k, fall) {
         drawIt(om, oImg, oX, oY + sink, fall.old.sc, fall.old.flip, 1);
         ctx.restore();
     }
-    // the building itself (drawn every frame — the scene has no copy of it)
+ // the building itself (drawn every frame - the scene has no copy of it)
     {
         let sx = 1, sy = 1;
         if (landed && t < LAND_TD + 0.07) {                            // touchdown squash, easing back
@@ -679,7 +676,7 @@ async function paintLanding(ctx, w, W, H, t, seed, k, fall) {
         drawIt(meta, img, X, Y + yOff, fall.sc, fall.flip, 1, sx, sy);
     }
     if (landed) {
-        // dust ring + soft flash at touchdown
+ // dust ring + soft flash at touchdown
         const dph = (t - LAND_TD + 0.02) / 0.16;
         if (dph > 0 && dph < 1) {
             ctx.save();
@@ -700,7 +697,7 @@ async function paintLanding(ctx, w, W, H, t, seed, k, fall) {
             ctx.fillRect(X - 260 * k * 2, Y - 200 * k * 2, 520 * k * 2, 400 * k * 2);
             ctx.restore();
         }
-        // THE BURST — confetti explodes radially from the building, then droops and fades
+ // THE BURST - confetti explodes radially from the building, then droops and fades
         if (t > LAND_TD + 0.02) {
             const age = (t - LAND_TD) / (1 - LAND_TD);
             const spread = 1 - Math.pow(1 - Math.min(1, age * 1.5), 2);       // fast out, ease-off

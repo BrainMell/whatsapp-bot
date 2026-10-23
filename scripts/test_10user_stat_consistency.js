@@ -53,7 +53,7 @@ async function main() {
   const inventorySystem = require('../core/rpg/inventorySystem');
   const User = require('../core/models/User');
 
-  // Get 10 real users with diverse levels
+ // Get 10 real users with diverse levels
   const users = await User.find({}).sort({ 'progression.level': -1 }).limit(10);
   if (users.length < 10) {
     console.log(`${YELLOW}Only ${users.length} users found (wanted 10)${RESET}`);
@@ -71,7 +71,7 @@ async function main() {
 
     section(`USER ${userNum}: ${jid} (Lv${userDoc.progression?.level || 0} ${userDoc.class || 'FIGHTER'})`);
 
-    // Hydrate user into economy cache
+ // Hydrate user into economy cache
     await economy.reloadUserFromDB(jid);
     const user = economy.getUser(jid);
 
@@ -80,7 +80,7 @@ async function main() {
       continue;
     }
 
-    // === TEST 1: DB vs Economy Cache Consistency ===
+ // === TEST 1: DB vs Economy Cache Consistency ===
     console.log(`  ${CYAN}[Test 1] DB vs Economy Cache${RESET}`);
     if (user.wallet === userDoc.wallet) {
       ok(`wallet:${userNum}`, `DB=${userDoc.wallet} | cache=${user.wallet}`);
@@ -98,7 +98,7 @@ async function main() {
       fail(`level:${userNum}`, `DB=${userDoc.progression?.level} | cache=${user.progression?.level}`);
     }
 
-    // === TEST 2: Class Resolution ===
+ // === TEST 2: Class Resolution ===
     console.log(`  ${CYAN}[Test 2] Class Resolution${RESET}`);
     const userClass = economy.getUserClass(jid);
     if (userClass && userClass.id) {
@@ -107,7 +107,7 @@ async function main() {
       fail(`class:${userNum}`, `getUserClass returned null or missing id: ${JSON.stringify(userClass)}`);
     }
 
-    // === TEST 3: Base Stats Computation ===
+ // === TEST 3: Base Stats Computation ===
     console.log(`  ${CYAN}[Test 3] Base Stats (with equipment + passives)${RESET}`);
     const classId = userClass?.id || (typeof user.class === 'string' ? user.class : 'FIGHTER');
     const baseStats = progression.getBaseStats(jid, classId);
@@ -129,7 +129,7 @@ async function main() {
       ok(`baseStats:${userNum}`, `hp=${baseStats.hp} atk=${baseStats.atk} def=${baseStats.def} mag=${baseStats.mag}`);
     }
 
-    // === TEST 4: HP Scales with Level (not flat 100) ===
+ // === TEST 4: HP Scales with Level (not flat 100) ===
     console.log(`  ${CYAN}[Test 4] HP Scales with Level${RESET}`);
     const level = user.progression?.level || 1;
     if (baseStats.hp === 100 && level > 1) {
@@ -142,7 +142,7 @@ async function main() {
       fail(`hp-scales:${userNum}`, `HP=${baseStats.hp} at level ${level} (unexpected)`);
     }
 
-    // === TEST 5: Equipment Stats Load ===
+ // === TEST 5: Equipment Stats Load ===
     console.log(`  ${CYAN}[Test 5] Equipment Stats${RESET}`);
     try {
       const equipStats = inventorySystem.getEquipmentStats(jid);
@@ -156,11 +156,11 @@ async function main() {
       fail(`equipStats:${userNum}`, `threw: ${e.message}`);
     }
 
-    // === TEST 6: Damage Formula Simulation ===
+ // === TEST 6: Damage Formula Simulation ===
     console.log(`  ${CYAN}[Test 6] Damage Formula${RESET}`);
-    // Simulate: damage = basePower + (atk * scaling) - enemyDef
-    // The real calculateDamage uses: damage = power; then damage -= def * 0.5; etc.
-    // For a basic attack: power = player.stats.atk
+ // Simulate: damage = basePower + (atk * scaling) - enemyDef
+ // The real calculateDamage uses: damage = power; then damage -= def * 0.5; etc.
+ // For a basic attack: power = player.stats.atk
     const power = baseStats.atk;
     const enemyDef = 50; // typical low-tier enemy
     const expectedRawDamage = power - (enemyDef * 0.5);
@@ -174,7 +174,7 @@ async function main() {
       ok(`damage:${userNum}`, `level ${level}: expected damage=${expectedDamage}`);
     }
 
-    // === TEST 7: Nickname Resolution ===
+ // === TEST 7: Nickname Resolution ===
     console.log(`  ${CYAN}[Test 7] Nickname Resolution${RESET}`);
     const displayName = economy.getDisplayName(jid);
     const isLid = /^\d{15,20}$/.test(displayName);
@@ -186,7 +186,7 @@ async function main() {
       ok(`nickname:${userNum}`, `display="${displayName}"`);
     }
 
-    // === TEST 8: Inventory Load ===
+ // === TEST 8: Inventory Load ===
     console.log(`  ${CYAN}[Test 8] Inventory Load${RESET}`);
     try {
       const inv = inventorySystem.getInventory(jid);
@@ -200,10 +200,10 @@ async function main() {
       fail(`inventory:${userNum}`, `threw: ${e.message}`);
     }
 
-    // === TEST 9: Persistent HP ===
+ // === TEST 9: Persistent HP ===
     console.log(`  ${CYAN}[Test 9] Persistent HP${RESET}`);
     try {
-      // getPersistentHP requires maxHP param to initialize/validate
+ // getPersistentHP requires maxHP param to initialize/validate
       const persistentHP = economy.getPersistentHP(jid, baseStats.hp);
       if (typeof persistentHP === 'number' && persistentHP >= 0) {
         ok(`persistentHP:${userNum}`, `persistentHP=${persistentHP} / maxHp=${baseStats.hp}`);
@@ -214,7 +214,7 @@ async function main() {
       fail(`persistentHP:${userNum}`, `threw: ${e.message}`);
     }
 
-    // === TEST 10: Stat Points ===
+ // === TEST 10: Stat Points ===
     console.log(`  ${CYAN}[Test 10] Stat Points${RESET}`);
     const statPoints = user.progression?.statPoints || 0;
     if (typeof statPoints === 'number' && statPoints >= 0) {
@@ -224,10 +224,10 @@ async function main() {
     }
   }
 
-  // === ABBYSS DAMAGE SIMULATION ===
+ // === ABBYSS DAMAGE SIMULATION ===
   section('ABYSS DAMAGE SIMULATION - 3 Users with Real Stats');
 
-  // Pick 3 users at different levels
+ // Pick 3 users at different levels
   const testUsers = [users[0], users[Math.floor(users.length / 2)], users[users.length - 1]].filter(Boolean);
 
   for (const userDoc of testUsers) {
@@ -243,17 +243,17 @@ async function main() {
     const classId = userClass?.id || 'FIGHTER';
     const baseStats = progression.getBaseStats(jid, classId);
 
-    // Simulate Abyss enemy at floor matching user level
+ // Simulate Abyss enemy at floor matching user level
     const floor = Math.floor(level / 10) * 10 || 1;
     const enemyHp = 500 + (floor * 100);
     const enemyAtk = 30 + (floor * 5);
     const enemyDef = 20 + (floor * 3);
 
-    // Player damage (basic attack): power = atk, then def mitigation
+ // Player damage (basic attack): power = atk, then def mitigation
     const playerPower = baseStats.atk;
     const playerDamageAfterDef = Math.max(1, Math.floor(playerPower - (enemyDef * 0.5)));
 
-    // Enemy damage to player: power = enemyAtk, then player def mitigation
+ // Enemy damage to player: power = enemyAtk, then player def mitigation
     const enemyPower = enemyAtk;
     const enemyDamageAfterDef = Math.max(1, Math.floor(enemyPower - (baseStats.def * 0.5)));
 
@@ -264,7 +264,6 @@ async function main() {
     console.log(`  Player damage per hit: ~${playerDamageAfterDef} (kills in ${Math.ceil(enemyHp / playerDamageAfterDef)} hits)`);
     console.log(`  Enemy damage per hit:  ~${enemyDamageAfterDef} (kills in ${Math.ceil(baseStats.hp / enemyDamageAfterDef)} hits)`);
 
-    // Verify damage scales with level
     if (level >= 50 && playerDamageAfterDef < 100) {
       fail(`abyss-damage:${jid}`, `level ${level}: player damage=${playerDamageAfterDef} (too low)`);
     } else if (level >= 50) {
@@ -273,7 +272,6 @@ async function main() {
       ok(`abyss-damage:${jid}`, `level ${level}: player damage=${playerDamageAfterDef}`);
     }
 
-    // Verify player can actually kill the enemy (not stuck)
     const hitsToKill = Math.ceil(enemyHp / playerDamageAfterDef);
     if (hitsToKill > 100) {
       fail(`abyss-killable:${jid}`, `needs ${hitsToKill} hits to kill enemy (too many - damage too low)`);
@@ -282,7 +280,7 @@ async function main() {
     }
   }
 
-  // === FINAL REPORT ===
+ // === FINAL REPORT ===
   console.log(`\n${BOLD}${CYAN}═══════════════════════════════════════════════════════════════`);
   console.log(`  SUMMARY: ${passCount} passed, ${failCount} failed`);
   console.log(`═══════════════════════════════════════════════════════════════${RESET}\n`);

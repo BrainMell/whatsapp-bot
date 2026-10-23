@@ -1,23 +1,19 @@
 // ============================================
-// QUIZ CONFIG (2026-09-26 audit - Priority 16 + 17)
+// QUIZ CONFIG (audit - Priority 16 + 17)
 // ============================================
 // ONE explicit configuration object read by EVERY quiz stage:
-//
-//   COMMAND → QUIZ CONFIG → SOURCE DATA → AI PROMPT → GENERATION →
-//   VALIDATION → SECTION CREATION → QUESTION SELECTION → LIVE QUIZ
-//
+// COMMAND → QUIZ CONFIG → SOURCE DATA → AI PROMPT → GENERATION →
+// VALIDATION → SECTION CREATION → QUESTION SELECTION → LIVE QUIZ
 // This is the structural fix for category drift (P6), the voice-actor
 // question flood (P10) and the scattered hardcoded constants (30s timer,
 // MAX_QUESTIONS=15...) that made tuning a source edit instead of a command.
-//
 // Layers:
-//   1. GLOBAL DEFAULTS           - code constants below.
-//   2. PER-GROUP overrides       - persisted via system KV "quiz_cfg:<chatId>"
-//                                  (MongoDB), set with .j quizmod by mods.
-//   3. PER-QUIZ overrides        - parsed from the command line (-images,
-//                                  -audio, count, difficulty, section) and
-//                                  clamped against the group limits.
-//
+// 1. GLOBAL DEFAULTS - code constants below.
+// 2. PER-GROUP overrides - persisted via system KV "quiz_cfg:<chatId>"
+// (MongoDB), set with .j quizmod by mods.
+// 3. PER-QUIZ overrides - parsed from the command line (-images,
+// -audio, count, difficulty, section) and
+// clamped against the group limits.
 // Scoping is explicit: every setting declares scope "group" (default) or
 // "global". Group settings only affect their own chat; a mod cannot silently
 // change another group's quiz. (The only global knob is streamingGeneration
@@ -28,7 +24,7 @@ const system = require("../utils/system");
 
 const _KEY = (chatId) => `quiz_cfg:${chatId}`;
 
-// ── defaults (all times ms-based where noted) ──
+// -- defaults (all times ms-based where noted) --
 const DEFAULTS = {
   timePerQuestion: 15,          // seconds to answer one question (P2: 7-20s band)
   sectionBreakDuration: 45,     // seconds pause between sections of long quizzes
@@ -39,14 +35,14 @@ const DEFAULTS = {
   voiceActorQuestionLimit: 1,   // HARD CAP on production/VA questions per quiz (P10)
   themeSongQuestionLimit: 1,    // max theme-song audio questions per quiz
   streamingGeneration: true,    // background-generate the next section while one plays (P19)
-  // 2026-09-28 owner pacing spec: "a randomized 10-30 second gap between
-  // questions". questionGapMin/Max bound the randomized pause the bot takes
-  // between a reveal and the next question card. quizmod-tunable per group.
+ // owner pacing spec: "a randomized 10-30 second gap between
+ // questions". questionGapMin/Max bound the randomized pause the bot takes
+ // between a reveal and the next question card. quizmod-tunable per group.
   questionGapMin: 10,           // seconds - lower bound of the between-questions pause
   questionGapMax: 30,           // seconds - upper bound of the between-questions pause
 };
 
-// ── setting registry: validation + docs in one place (P17) ──
+// -- setting registry: validation + docs in one place (P17) --
 // type: int | bool. scope: "group" | "global".
 const SETTING_DEFS = {
   timer:                   { key: "timePerQuestion",         label: "question timer",        type: "int",  min: 7,    max: 120, scope: "group",  unit: "seconds" },
@@ -77,8 +73,7 @@ const SETTING_ALIASES = {
   gap_max: "gapmax", gapmax: "gapmax",
 };
 
-// ── randomized between-questions pause (owner pacing spec) ──
-// Returns whole seconds in [min, max]; max is clamped to >= min so a mis-
+// -- randomized between-questions pause (owner pacing spec) --
 // configured group (gapmax < gapmin) still produces a sane pause instead of
 // a zero/negative delay that would fire the next question instantly.
 function questionGapSeconds(cfg) {
@@ -90,7 +85,7 @@ function questionGapSeconds(cfg) {
   return lo + Math.floor(Math.random() * (hi - lo + 1));
 }
 
-// ── group override persistence ──
+// -- group override persistence --
 // Cached in memory (reads happen on question timers - must not await DB);
 // writes go through system.set which also hits MongoDB.
 const _groupCache = new Map(); // chatId -> overrides object
@@ -117,8 +112,7 @@ function clearGroupOverrides(chatId) {
   return system.set(_KEY(chatId), {});
 }
 
-// ── validation ──
-// Returns {ok, value} or {ok:false, error} with the valid range in the text.
+// -- validation --
 function validateValue(def, raw) {
   if (def.type === "bool") {
     const s = String(raw).trim().toLowerCase();
@@ -134,9 +128,8 @@ function validateValue(def, raw) {
   return { ok: true, value: n };
 }
 
-// ── THE config object builder ──
+// -- THE config object builder --
 // merged = DEFAULTS ← GLOBAL overrides ← group overrides ← per-quiz clamps.
-// Returns a frozen plain object threaded through every quiz stage; nothing
 // downstream may read the old module constants again.
 async function buildQuizConfig(chatId, perQuiz = {}) {
   const globalOv = loadGroupOverrides("global");
@@ -149,12 +142,11 @@ async function buildQuizConfig(chatId, perQuiz = {}) {
       }
     }
   }
-  // 💡 2026-09-28 OWNER AUDIT (timer-consistency fix): SETTING_DEFS ranges are
-  // validated when a mod SETS a value, but stored overrides were merged into
-  // the live config with NO re-validation. A stale/corrupt/manual KV value
-  // (timePerQuestion 0 or "abc" from an older version) produced NaN/0ms
-  // timers - "question posts then instantly time's up", seen in live groups.
-  // Every merged numeric is now clamped to its registry range at BUILD time.
+ // OWNER AUDIT (timer-consistency fix): SETTING_DEFS ranges are
+ // the live config with NO re-validation. A stale/corrupt/manual KV value
+ // (timePerQuestion 0 or "abc" from an older version) produced NaN/0ms
+ // timers - "question posts then instantly time's up", seen in live groups.
+ // Every merged numeric is now clamped to its registry range at BUILD time.
   for (const def of Object.values(SETTING_DEFS)) {
     if (def.type !== "int") continue;
     const n = Number(merged[def.key]);
@@ -164,9 +156,9 @@ async function buildQuizConfig(chatId, perQuiz = {}) {
       merged[def.key] = Math.min(def.max, Math.max(def.min, Math.round(n)));
     }
   }
-  // per-quiz overrides (command line): count/difficulty/images/audio/section.
-  // Each clamped against the group ceiling so a user command can never
-  // exceed what the mods configured (P17).
+ // per-quiz overrides (command line): count/difficulty/images/audio/section.
+ // Each clamped against the group ceiling so a user command can never
+ // exceed what the mods configured (P17).
   const cfg = {
     ...merged,
     media: perQuiz.media || null,              // franchise object (P22 media typing)
@@ -180,15 +172,14 @@ async function buildQuizConfig(chatId, perQuiz = {}) {
     chatId: chatId || null,
     requestedBy: perQuiz.requestedBy || null,
   };
-  // theme songs can never exceed the audio budget (they share it with voice audio)
+ // theme songs can never exceed the audio budget (they share it with voice audio)
   cfg.themeSongQuestionCount = Math.min(cfg.themeSongQuestionLimit, cfg.audioQuestionCount);
   return cfg;
 }
 
-// ── .j quizmod handler (P17) ──
+// -- .j quizmod handler (P17) --
 // Shows or mutates settings. Returns {message} like every other quiz export.
 // Permission is enforced by the CALLER (engine passes canUseAdminCommands) -
-// this function double-checks and refuses without it.
 async function handleQuizMod(chatId, args, canUseAdminCommands, prefix) {
   const p = prefix || ".";
   if (!canUseAdminCommands) {
@@ -196,7 +187,7 @@ async function handleQuizMod(chatId, args, canUseAdminCommands, prefix) {
   }
   const tokens = String(args || "").trim().split(/\s+/).filter(Boolean);
   if (!tokens.length) {
-    // show current config: defaults vs this group's overrides
+ // show current config: defaults vs this group's overrides
     const overrides = loadGroupOverrides(chatId);
     let out = `⚙️ *QUIZ CONFIG*\n\n`;
     out += `Setting commands: \`${p} quizmod <setting> <value>\`\n\n`;
@@ -236,7 +227,7 @@ async function handleQuizMod(chatId, args, canUseAdminCommands, prefix) {
     return { message: `❌ ${def.label}: ${v.error}\n${range}` };
   }
   if (def.scope === "global") {
-    // global settings persist under the "global" pseudo-chat so every group sees it
+ // global settings persist under the "global" pseudo-chat so every group sees it
     await setGroupOverride("global", def.key, v.value);
     return { message: `✅ ${def.label} set to \`${v.value}\` *(GLOBAL - applies to every chat)*` };
   }

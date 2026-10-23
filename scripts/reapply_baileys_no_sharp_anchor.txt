@@ -96,7 +96,6 @@ const extractVideoThumb = async (path, destPath, time, size) => new Promise((res
 });
 export const extractImageThumb = async (bufferOrFilePath, width = 32) => {
     // TODO: Move entirely to sharp, removing jimp as it supports readable streams
-    // This will have positive speed and performance impacts as well as minimizing RAM usage.
     if (bufferOrFilePath instanceof Readable) {
         bufferOrFilePath = await toBuffer(bufferOrFilePath);
     }

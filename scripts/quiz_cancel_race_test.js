@@ -1,11 +1,11 @@
-// QA: QUIZ CANCEL RACES + GENERATION GATE (rebuilt 2026-09-27)
+// QA: QUIZ CANCEL RACES + GENERATION GATE (rebuilt )
 // Regression battery for the P3/P3b lifecycle-lock work and the P20 bot-wide
 // generation gate (FIFO semaphore):
-//   1. end during prep -> aborts the background launch (no zombie STARTED)
-//   2. cancel-while-queued -> queued launch never fires, slot not leaked
-//   3. cancel-while-generating -> session aborted at its next checkpoint
-//   4. gen-slot no-leak: after N cancelled launches, new launches still start
-//   5. parked-quiz (ready gate) end -> quiet cancel
+// 1. end during prep -> aborts the background launch (no zombie STARTED)
+// 2. cancel-while-queued -> queued launch never fires, slot not leaked
+// 3. cancel-while-generating -> session aborted at its next checkpoint
+// 4. gen-slot no-leak: after N cancelled launches, new launches still start
+// 5. parked-quiz (ready gate) end -> quiet cancel
 // Run: node scripts/quiz_cancel_race_test.js
 process.env.QUIZ_GEN_SLOTS = "2";
 const quiz = require("../core/games/quiz");
@@ -33,8 +33,8 @@ function makeValidAI(n) {
   };
 }
 async function waitActive(chatId, timeoutMs = 30000) {
-  // 2026-09-28: quizzes park behind the ready gate - fire the starting gun
-  // (the asker always passes confirmStart) with 1s test gaps, then wait ACTIVE
+ // quizzes park behind the ready gate - fire the starting gun
+ // (the asker always passes confirmStart) with 1s test gaps, then wait ACTIVE
   const t0 = Date.now();
   while (Date.now() - t0 < timeoutMs) {
     const s = quiz.getSession(chatId);
@@ -65,7 +65,7 @@ async function waitCleared(chatId, timeoutMs = 20000) {
     const chat = "race1@g.us";
     const sock = mockSock();
     await quiz.startQuiz(sock, chat, "u1@x", MARK, { key: { id: "r1" } }, '"naruto" 5 easy', "U1", makeValidAI(6), { FAST: "t" });
-    // cancel immediately - mid-generation
+ // cancel immediately - mid-generation
     const end = await quiz.endQuiz(sock, chat, "u1@x", MARK, false);
     ok(end.handled && (/cancelled|cleaned/i.test(end.message || "") || end.silent === true), "prep cancel acknowledged");
     await wait(4000); // give the background worker time to (wrongly) post STARTED
@@ -77,20 +77,20 @@ async function waitCleared(chatId, timeoutMs = 20000) {
 
   console.log("════ 2. cancel-while-queued never fires + no slot leak ════");
   {
-    // cap = 2 (env). Occupy both slots with two slow generations, queue a
-    // third, cancel it while queued, then verify a FOURTH launch runs.
+ // cap = 2 (env). Occupy both slots with two slow generations, queue a
+ // third, cancel it while queued, then verify a FOURTH launch runs.
     const slow = makeValidAI(6); // normal speed - slot holders finish quickly
     const chatA = "race2a@g.us", chatB = "race2b@g.us", chatC = "race2c@g.us", chatD = "race2d@g.us";
     await quiz.startQuiz(mockSock(), chatA, "u1@x", MARK, { key: { id: "a" } }, '"naruto" 4 easy', "U1", slow, { FAST: "t" });
     await quiz.startQuiz(mockSock(), chatB, "u2@x", MARK, { key: { id: "b" } }, '"naruto" 4 easy', "U2", slow, { FAST: "t" });
-    // third launch should be queued (both slots busy) - cancel it immediately
+ // third launch should be queued (both slots busy) - cancel it immediately
     const sockC = mockSock();
     await quiz.startQuiz(sockC, chatC, "u3@x", MARK, { key: { id: "c" } }, '"naruto" 4 easy', "U3", slow, { FAST: "t" });
     await quiz.endQuiz(sockC, chatC, "u3@x", MARK, false);
     ok(true, "queued launch cancelled without error");
     await waitActive(chatA, 40000);
     await waitActive(chatB, 40000);
-    // fourth launch must still find a free slot (no leak)
+ // fourth launch must still find a free slot (no leak)
     const sockD = mockSock();
     await quiz.startQuiz(sockD, chatD, "u4@x", MARK, { key: { id: "d" } }, '"naruto" 4 easy', "U4", slow, { FAST: "t" });
     const d = await waitActive(chatD, 60000);
@@ -117,14 +117,14 @@ async function waitCleared(chatId, timeoutMs = 20000) {
   console.log("════ 4. start during another's generation is bounced ════");
   {
     const chatA = "race4a@g.us", chatB = "race4b@g.us";
-    // A takes the chat lock; a second user starting in the SAME chat bounces
+ // A takes the chat lock; a second user starting in the SAME chat bounces
     const s1 = mockSock();
     await quiz.startQuiz(s1, chatA, "u1@x", MARK, { key: { id: "1" } }, '"naruto" 4 easy', "U1", makeValidAI(6), { FAST: "t" });
     const s2 = mockSock();
     const dup = await quiz.startQuiz(s2, chatA, "u2@x", MARK, { key: { id: "2" } }, '"naruto" 4 easy', "U2", makeValidAI(6), { FAST: "t" });
     ok(dup.handled && /already (running|being prepared)/.test(dup.message || ""), "second launch in same chat bounced");
     await quiz.endQuiz(s1, chatA, "u1@x", MARK, false);
-    // different chats must NOT interfere (cross-chat isolation)
+ // different chats must NOT interfere (cross-chat isolation)
     const s3 = mockSock();
     await quiz.startQuiz(s3, chatB, "u3@x", MARK, { key: { id: "3" } }, '"naruto" 4 easy', "U3", makeValidAI(6), { FAST: "t" });
     ok(await waitActive(chatB, 40000) !== null, "different chat unaffected by other chat's generation");
@@ -133,11 +133,11 @@ async function waitCleared(chatId, timeoutMs = 20000) {
 
   console.log("════ 5. parked quiz (ready gate) cancels quietly ════");
   {
-    // logos mode always parks for .quiz go - no media service needed to test
-    // the parking/cancel path (generation runs without goService and fails
-    // gracefully; force the parked state via the song mode failure path is
-    // env-dependent, so instead assert endQuiz on a parked session created
-    // by hand through the same API used by parkReadySession).
+ // logos mode always parks for .quiz go - no media service needed to test
+ // the parking/cancel path (generation runs without goService and fails
+ // gracefully; force the parked state via the song mode failure path is
+ // env-dependent, so instead assert endQuiz on a parked session created
+ // by hand through the same API used by parkReadySession).
     const chat = "race5@g.us";
     const session = {
       cfg: { timePerQuestion: 15 },
@@ -146,7 +146,7 @@ async function waitCleared(chatId, timeoutMs = 20000) {
       scores: new Map(), revealed: [], answeredBy: new Map(), usedKeys: new Set(),
       askedBy: "u9@x", startedAt: Date.now(), token: 0, cancelled: false,
     };
-    // park via the internal (same code path as launchQuizAsync)
+ // park via the internal (same code path as launchQuizAsync)
     await quiz._internal.parkReadySession(mockSock(), chat, session, {
       head: MARK + "🎯 *QUIZ STARTED - LOGO CHALLENGE* 🎯\n\ntest head", introImage: null,
       botMarker: MARK, m: null, senderJid: "u9@x", prefix: ".j",

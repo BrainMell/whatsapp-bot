@@ -1,12 +1,12 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-// qa_huntpov_gif.js — Task 20 (owner 2026-10-21):
-//   "make something like that for hunting too, find the appropriate animal
-//    sprites for that sprite sheet, and add the overlay to both"
+// ===========================================================================
+// qa_huntpov_gif.js -:
+// "make something like that for hunting too, find the appropriate animal
+// sprites for that sprite sheet, and add the overlay to both"
 // Tiers: source pins (everywhere) + REAL renders: sprite-sheet bake, base
 // frames per (biome, lvl), all 3 band GIFs, disk-hit repeats, shared viewer
 // still, GIF89a structure (needs canvas/node_modules → run ON-BOX).
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
@@ -52,11 +52,11 @@ check('fishing float shares one geometry (base + overlay agree)', /function floa
 check('hunting viewer = clearing still via huntPov (hunt_pov key)', /isHuntView/.test(sc) && /huntPov'\)\.paintStill/.test(sc));
 check('mediaCache CODE_VER hashes huntPov.js', /'huntPov\.js'/.test(mc));
 
-// ── runtime tier (needs node_modules — on-box) ─────────────────────────────
+// -- runtime tier (needs node_modules - on-box) -----------------------------
 let canvasOk = false;
 try { require(path.join(ROOT, 'node_modules', 'canvas')); canvasOk = true; } catch (e) { /* sandbox */ }
 if (!canvasOk) {
-    console.log(`\n${'='.repeat(54)}\nSANDBOX: pins only (canvas missing) — ${pass} passed, ${fail} failed\n`);
+    console.log(`\n${'='.repeat(54)}\nSANDBOX: pins only (canvas missing) - ${pass} passed, ${fail} failed\n`);
     process.exit(fail ? 1 : 0);
 }
 
@@ -72,7 +72,7 @@ if (!canvasOk) {
     check(`sprite sheet baked (${Date.now() - t0}ms, ${sheet.width}×${sheet.height}px = 4×8 cells of 128×96 incl. the herd)`, sheet.width === 512 && sheet.height === 768);
     fs.writeFileSync(path.join(outDir, 'sprite_sheet.png'), sheet.src);
 
-    // cells: every row must have non-empty pixels in every frame cell
+ // cells: every row must have non-empty pixels in every frame cell
     const probe = createCanvas(hpv.CW, hpv.CH), pctx = probe.getContext('2d');
     let empty = 0;
     for (const row of Object.values(hpv.ROW)) {
@@ -91,7 +91,7 @@ if (!canvasOk) {
     check(`hunt base bake = 16 PNG frames 480×360 (${Date.now() - t1}ms first bake)`, base.pngs.length === 16 && base.gw === 480 && base.gh === 360);
     const t2 = Date.now();
     await hpv.getHuntBaseFrames({ biome: 'isle', lvl: 1 });
-    check(`repeat getHuntBaseFrames is a cache hit (${Date.now() - t2}ms — "generate once")`, (Date.now() - t2) < 250);
+    check(`repeat getHuntBaseFrames is a cache hit (${Date.now() - t2}ms - "generate once")`, (Date.now() - t2) < 250);
     for (const [i, p] of base.pngs.entries()) if (i % 5 === 0) fs.writeFileSync(path.join(outDir, `hunt_base_isle_L1_f${i}.png`), p);
 
     const gifInfo = {};
@@ -123,7 +123,7 @@ if (!canvasOk) {
     fs.writeFileSync(path.join(outDir, 'viewer_pond_L2_still.jpg'), stillPond.buffer);
     check('pond viewer unaffected (dock-POV still still renders)', stillPond.contentType === 'image/jpeg' && stillPond.buffer.length > 20000);
 
-    // GIF structure sanity on the epic sample
+ // GIF structure sanity on the epic sample
     const raw = fs.readFileSync(path.join(outDir, 'hunt_epic.gif'));
     check('hunt GIF has NETSCAPE loop + trailer', raw.includes(Buffer.from('NETSCAPE2.0')) && raw[raw.length - 1] === 0x3B);
 
@@ -133,7 +133,7 @@ if (!canvasOk) {
 })().catch((e) => { console.error('QA crashed:', e); process.exit(1); });
 
 
-// ── Task 22: the herd is REAL vector art now (owner: "that looks like shit") ──
+// -- the herd is REAL vector art now ("that looks like shit") --
 check('NO fillRect pixel animals left (the px() block painter is gone)', !/function px\(/.test(hp) && !/px\(ctx, -7/.test(hp));
 check('deer family = ellipse bodies + stroked legs (established card-art technique)', /ctx\.ellipse\(0, -0\.95 \* ss, 0\.95 \* ss, 0\.46 \* ss/.test(hp) && /function strokeLeg/.test(hp));
 check('stag antlers are BRANCHED lines, not white blobs', /const br = \(bx, by, dx, dy\)/.test(hp) && /#e6d3a8/.test(hp));

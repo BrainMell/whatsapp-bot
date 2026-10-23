@@ -1,15 +1,14 @@
 #!/usr/bin/env node
-// 🛡️ OWNER GATES QA (2026-10-22) — run ON-BOX inside the bot dir:
-//   node scripts/owner_gates_qa.js [Joker|Jake|Subaru]
+// OWNER GATES QA - run ON-BOX inside the bot dir:
+// node scripts/owner_gates_qa.js [Joker|Jake|Subaru]
 // Owner ask: "only owner can make someone any mod, and only owner can use
 // .j nuke, imfact add a are you sure message with a confirmation sub command"
-//
 // Safety model:
-//   - cardSystem paths driven with mock sock (ZERO WhatsApp traffic)
-//   - nuke state machine driven via engine's exported helpers (pure, no kicks)
-//   - computeNukeTargets fed a MOCK groupInfo (no group metadata fetch)
-//   - no DB writes anywhere: global-mod protections exercised via owner-phone/
-//     bot-jid/admin rules; roster untouched
+// - cardSystem paths driven with mock sock (ZERO WhatsApp traffic)
+// - nuke state machine driven via engine's exported helpers (pure, no kicks)
+// - computeNukeTargets fed a MOCK groupInfo (no group metadata fetch)
+// - no DB writes anywhere: global-mod protections exercised via owner-phone/
+// bot-jid/admin rules; roster untouched
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -17,7 +16,7 @@ const path = require('path');
 let PASS = 0, FAIL = 0;
 function check(name, cond, extra) {
     if (cond) { PASS++; console.log(`  ✅ ${name}`); }
-    else { FAIL++; console.log(`  ❌ ${name}${extra ? ' — ' + extra : ''}`); }
+    else { FAIL++; console.log(`  ❌ ${name}${extra ? ' - ' + extra : ''}`); }
 }
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -37,17 +36,17 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     const botConfig = require(path.join(BOT, 'botConfig'));
     const cardSystem = require(path.join(BOT, 'core', 'rpg', 'cardSystem'));
     const economy = require(path.join(BOT, 'core', 'rpg', 'economy'));
-    const engine = require(path.join(BOT, 'core', 'engine')); // module load only — no startBot
+    const engine = require(path.join(BOT, 'core', 'engine')); // module load only - no startBot
     await economy.loadEconomy().catch(e => console.log(`[qa] economy warn: ${e.message}`));
 
     const OWNER = '2300000000owner@s.whatsapp.net';
-    const GLOBALMOD = '62733080870965@lid';   // real global mod — must now FAIL mod management
+    const GLOBALMOD = '62733080870965@lid';   // real global mod - must now FAIL mod management
     const RANDOM = '100000000000qa@lid';
 
     const sent = [];
     const mockSock = { sendMessage: async (jid, content) => { sent.push({ jid, content }); return { key: { id: 'QA' } }; } };
 
-    // ── §1 cardmod management is owner-only (cardSystem dispatcher) ──────
+ // -- §1 cardmod management is owner-only (cardSystem dispatcher) ------
     const store = new botConfig.BotConfig(path.join(BOT, 'instances', INSTANCE));
     await botConfig.storage.run(store, async () => {
         const P = botConfig.getPrefix();
@@ -78,7 +77,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
         check('cardmod Mahxee still PASSES .j spawn', (await run(`${P} spawn ZZZNOCARDQA`, '264299486400613@lid')).includes('Card not found matching "ZZZNOCARDQA"'));
     });
 
-    // ── §3 nuke two-step confirm state machine (engine exports, pure) ────
+ // -- §3 nuke two-step confirm state machine (engine exports, pure) ----
     console.log('\n── §3 nuke arm/confirm state machine ──');
     const { NUKE_CONFIRM_TTL_MS, pendingNukesByChat, armNuke, takeArmedNuke } = engine;
     const CHAT_A = '120363428594762331@g.us', CHAT_B = '120363409013549791@g.us';
@@ -94,7 +93,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     pendingNukesByChat.get(CHAT_A).at = Date.now() - (NUKE_CONFIRM_TTL_MS + 1000); // backdate → expired
     check('expired arm (>60s) → null', takeArmedNuke(CHAT_A) === null);
 
-    // ── §4 computeNukeTargets protections (mock groupInfo) ───────────────
+ // -- §4 computeNukeTargets protections (mock groupInfo) ---------------
     console.log('\n── §4 nuke target protection rules ──');
     const phones = engine.isBotOwner ? null : null;
     const botJid = 'bot0000000000@s.whatsapp.net';
@@ -116,13 +115,13 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     check('plain members targeted', targets.includes('plain1@lid') && targets.includes('plain2@s.whatsapp.net'));
     check('target count = 2', targets.length === 2, JSON.stringify(targets));
 
-    // ── §5 source assertions: engine gates + nuke wiring ─────────────────
+ // -- §5 source assertions: engine gates + nuke wiring -----------------
     console.log('\n── §5 source assertions (engine.js) ──');
     const src = fs.readFileSync(path.join(BOT, 'core', 'engine.js'), 'utf8');
     const gateCount = (src.match(/!isOwner && !isGlobalMod\(senderJid\)/g) || []).length;
-    // NOTE: other mod commands (mute/kick/warn/ban...) KEEP their owner||gmod
-    // gates by design — only mod-MANAGEMENT + nuke were restricted. So instead
-    // of counting gates globally, assert the OLD deny texts are gone:
+ // NOTE: other mod commands (mute/kick/warn/ban...) KEEP their owner||gmod
+ // gates by design - only mod-MANAGEMENT + nuke were restricted. So instead
+ // of counting gates globally, assert the OLD deny texts are gone:
     const oldDenies = [
         'Only the owner or a global mod can remove global moderators.',
         'Only the owner or a General Mod can add RPG moderators.',
@@ -146,8 +145,8 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     ]) check(`deny text present: ${t.slice(4, 60)}...`, src.includes(t));
     check('nuke confirm branch exists', src.includes('nuke confirm`') && src.includes('takeArmedNuke(chatId)'));
     check('arm card (are-you-sure) exists', src.includes('NUKE ARMED') && src.includes('Are you sure?'));
-    // Kicks must live ONLY in the confirm branch: within the nuke block,
-    // groupParticipantsUpdate appears exactly once, BEFORE the arm call.
+ // Kicks must live ONLY in the confirm branch: within the nuke block,
+ // groupParticipantsUpdate appears exactly once, BEFORE the arm call.
     const blockStart = src.indexOf('// 💡 NUKE - remove everyone');
     const blockEnd = src.indexOf('// .j mods - List global moderators');
     const nukeBlock = src.slice(blockStart, blockEnd);
@@ -156,7 +155,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     check('kick loop lives in confirm branch (before ARM)',
         nukeBlock.indexOf('groupParticipantsUpdate') < nukeBlock.indexOf('armNuke(chatId, targets)'));
 
-    // cardSystem source: cardmod gate owner-only
+ // cardSystem source: cardmod gate owner-only
     const csrc = fs.readFileSync(path.join(BOT, 'core', 'rpg', 'cardSystem.js'), 'utf8');
     check('cardmod gate is !isOwner', csrc.includes("if (!isOwner) return reply('❌ Only the bot owner can manage card moderators.')"));
 

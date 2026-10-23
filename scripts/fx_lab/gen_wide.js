@@ -1,4 +1,4 @@
-// gen_wide.js — v12d landscape 16:9 link-preview cards (full-width layout test)
+// gen_wide.js - v12d landscape 16:9 link-preview cards (full-width layout test)
 // WhatsApp picks narrow side-thumb layout for square thumbs; landscape bytes
 // → large full-width card. Same PHASE visual identity as the 720x720 originals.
 const { Jimp, loadFont } = require("jimp");

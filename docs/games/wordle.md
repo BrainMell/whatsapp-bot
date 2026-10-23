@@ -78,7 +78,6 @@ if (
   lowerTxt.length > `${botConfig.getPrefix().toLowerCase()} wordle `.length
 ) {
   const guess = lowerTxt.substring(`${botConfig.getPrefix().toLowerCase()} wordle `.length).trim();
-  // Checks if it is a reserved subcommand. If not, guesses:
   const result = await wordle.makeGuess(sock, chatId, senderJid, guess, BOT_MARKER, m);
   return;
 }

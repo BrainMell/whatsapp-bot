@@ -14,7 +14,6 @@ function incrementRelationship(user1Jid, user2Jid, delta) {
     const user2 = economy.getUser(user2Jid) || (economy.economyData && economy.economyData.get(user2Jid));
     if (!user1 || !user2) return;
 
-    // Load relationships for user1 -> user2
     const rels1 = getRelationshipsMap(user1);
     const score1 = getScore(rels1, user2Jid);
     const newScore1 = Math.max(-100, Math.min(100, score1 + delta));

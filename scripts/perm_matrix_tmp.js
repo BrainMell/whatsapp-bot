@@ -19,41 +19,41 @@ const QUIZMOD = "777888999@s.whatsapp.net";           // will be added as quiz m
   ok(isOwnerFn(OWNER), "isBotOwner recognizes the owner jid");
   ok(!isOwnerFn(RANDOM), "isBotOwner rejects a random member");
 
-  // add QUIZMOD through the real engine API (writes shared KV)
+ // add QUIZMOD through the real engine API (writes shared KV)
   try { await engine.addQuizMod(QUIZMOD); } catch (e) { console.log("  (addQuizMod signature differs:", e.message, ")"); }
   await wait(1500);
   const modNow = engine.isQuizMod(QUIZMOD);
   console.log("  (isQuizMod(QUIZMOD) =", modNow, ")");
 
-  // ── start gate: startQuiz as RANDOM must DENY ──
+ // -- start gate: startQuiz as RANDOM must DENY --
   const deny = await quiz.startQuiz(sock, CHAT, RANDOM, MARK, { key: { id: "p1" } }, '"naruto" 2 easy', "Random", null);
   ok(deny.handled && deny.message && deny.message.includes("limited to"), "unauthorized user CANNOT start a quiz (denied with guidance)");
   ok(!quiz.hasActive(CHAT) && !quiz._internal.lifecycle.has(CHAT), "denied start left no session/lock");
 
-  // ── start gate: owner CAN start ──
+ // -- start gate: owner CAN start --
   const allow = await quiz.startQuiz(sock, CHAT, OWNER, MARK, { key: { id: "p2" } }, '"naruto" 2 easy', "Owner", null);
   ok(allow.handled && allow.silent, "bot owner CAN start a quiz");
   let parked = null;
   for (let i = 0; i < 240 && !parked; i++) { const c = quiz.getSession(CHAT); if (c && c.awaitingGo) parked = c; else await wait(250); }
   ok(!!parked, "owner's quiz parked at the ready gate");
 
-  // ── go gate: RANDOM cannot fire someone else's go ──
+ // -- go gate: RANDOM cannot fire someone else's go --
   const denyGo = await quiz.confirmStart(sock, CHAT, RANDOM, MARK, false);
   ok(denyGo.handled && denyGo.message && denyGo.message.includes("can start this quiz"), "unauthorized user CANNOT .j quiz go someone else's quiz");
   ok(quiz.getSession(CHAT) && quiz.getSession(CHAT).awaitingGo === true, "denied go restored the ready gate (quiz still parked)");
 
-  // ── go gate: owner fires it ──
+ // -- go gate: owner fires it --
   const goOk = await quiz.confirmStart(sock, CHAT, OWNER, MARK, false);
   ok(goOk.handled && goOk.silent, "starter/owner CAN .j quiz go");
-  // ── end gate: RANDOM cannot end ──
+ // -- end gate: RANDOM cannot end --
   const denyEnd = await quiz.endQuiz(sock, CHAT, RANDOM, MARK, false);
   ok(denyEnd.handled && denyEnd.message && denyEnd.message.includes("can end it early"), "unauthorized user CANNOT end someone else's quiz");
-  // ── end gate: owner ends ──
+ // -- end gate: owner ends --
   const endOk = await quiz.endQuiz(sock, CHAT, OWNER, MARK, false);
   ok(endOk.handled, "owner CAN end the quiz");
   ok(!quiz.hasActive(CHAT), "chat freed after owner end");
 
-  // cleanup quiz mod if we added one
+ // cleanup quiz mod if we added one
   try { await engine.delQuizMod(QUIZMOD); } catch { }
   console.log(`\nPERM MATRIX: ${pass} pass, ${fail} fail`);
   process.exit(fail ? 1 : 0);

@@ -1,6 +1,6 @@
-// 🧼 One-time digimon-cache halo scrub (boxes + fresh clones).
+// One-time digimon-cache halo scrub (boxes + fresh clones).
 // Re-processes every cached sprite's ALREADY-TRANSPARENT border region with
-// the border-flood-fill white removal — no network, no re-fetch: it walks the
+// the border-flood-fill white removal - no network, no re-fetch: it walks the
 // existing PNG pixels, pushing near-white border-connected pixels to
 // transparent, healing the 1px halos the old threshold-only pass left.
 // Run: node scripts/clean_digimon_cache.js [cacheDir]

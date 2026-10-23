@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* build_quiz_dataset_pass8b.js — Fandom lore fix-up for v8.
+/* build_quiz_dataset_pass8b.js - Fandom lore fix-up for v8.
  * pass8's extracts stage yielded 0 (Fandom TextExtracts returns empty intros
  * on infobox-heavy pages). This pass parses the wikitext LEAD directly
  * (rvprop=content, the proven fandom_lore_scraper path) and fetches
@@ -41,7 +41,7 @@ function leadText(wikitext) {
   s = s.replace(/'{2,5}/g, "").replace(/&nbsp;|&amp;/g, " ").replace(/&#(\d+);/g, " ");
   s = s.replace(/\[[^\]]*\]/g, " ").replace(/[^A-Za-z0-9'’.,;:!?"()\- ]+/g, " ");
   s = s.replace(/\s+/g, " ").trim();
-  // drop list/infobox residue: first real sentence burst must be prose-ish
+ // drop list/infobox residue: first real sentence burst must be prose-ish
   if (/^(week|month|day|name|image|caption|creator|artist|author)/i.test(s)) s = s.replace(/^\w+ = \S+\s*/, "");
   return s;
 }
@@ -106,8 +106,8 @@ async function getBin(url) {
 }
 
 async function catList(host, ct, type) {
-  // proven fandom_lore_scraper logic: Fandom sometimes returns EMPTY member
-  // lists as a throttle lookalike — retry before believing the empty result
+ // proven fandom_lore_scraper logic: Fandom sometimes returns EMPTY member
+ // lists as a throttle lookalike - retry before believing the empty result
   const out = [];
   for (let cont = null; ;) {
     const url = `https://${host}/api.php?action=query&list=categorymembers&cmtitle=${encodeURIComponent(ct)}&cmlimit=500&cmtype=${type}&format=json&formatversion=2${cont ? `&cmcontinue=${encodeURIComponent(cont)}` : ""}`;
@@ -123,8 +123,8 @@ async function catList(host, ct, type) {
 }
 
 async function memberPages(host, cat) {
-  // category can be a container of subcats (onepiece "Category:Characters")
-  // — depth-2 subcat expansion, mirrors fandom_lore_scraper.listMembers
+ // category can be a container of subcats (onepiece "Category:Characters")
+ // - depth-2 subcat expansion, mirrors fandom_lore_scraper.listMembers
   let pages = (await catList(host, cat, "page")).filter((t) => !t.includes(":") && !/\/Gallery$/i.test(t));
   if (pages.length >= 25) return pages;
   const merged = new Set(pages);
@@ -171,7 +171,7 @@ async function memberPages(host, cat) {
           const fullTitle = String(p.title || "").trim();
           const title = fullTitle.replace(/\s*\([^)]*\)\s*$/, "").trim();
           if (!title || title.length > 40 || BAD_NAME_RE.test(title)) continue;
-          // ── art (GET-verified thumbnail) ──
+ // -- art (GET-verified thumbnail) --
           const thumb = p.thumbnail && p.thumbnail.source;
           if (art < ART_CAP && thumb) {
             const buf = await getBin(thumb);
@@ -185,10 +185,10 @@ async function memberPages(host, cat) {
             }
             await sleep(120);
           }
-          // ── lead-paragraph lore question ──
+ // -- lead-paragraph lore question --
           if (ex < EXTRACT_CAP) {
             const rev = p.revisions && p.revisions[0];
-            // formatversion=2 stores content at .content; v1 used ["*"] — accept both
+ // formatversion=2 stores content at .content; v1 used ["*"] - accept both
             const wt = rev && rev.slots && rev.slots.main && (rev.slots.main.content || rev.slots.main["*"]);
             if (!wt) continue;
             const lead = leadText(wt);
@@ -198,7 +198,7 @@ async function memberPages(host, cat) {
             if ((masked.match(/____/g) || []).length > 3) continue;
             const snip = masked.length > 300 ? masked.slice(0, 300).replace(/[,;:.!?\s]+\S*$/, "") + "…" : masked;
             if (snip.length < 140) continue;
-            const q = `In ${w.name}: "${snip}" — who or what is being described?`;
+            const q = `In ${w.name}: "${snip}" - who or what is being described?`;
             if (items.some((x) => normKey(x.q) === normKey(q))) continue;
             items.push({ cat: w.cat, topic: w.topic, q, options: [title], correct: 0, alts: [], fmt: "typed", cls: "lore", difficulty: "medium", source: `fandom-lead:${w.id}`, id: null });
             ex++;
@@ -212,7 +212,7 @@ async function memberPages(host, cat) {
     fs.writeFileSync(ck, JSON.stringify({ generatedAt: new Date().toISOString(), items }));
   }
 
-  // ── merge into current dataset (dedupe by stem / img url) ──
+ // -- merge into current dataset (dedupe by stem / img url) --
   const stems = new Set(), imgs = new Set();
   for (const c of Object.values(DS.categories)) {
     for (const x of (c.questions || [])) stems.add(normKey(x.q));
@@ -233,7 +233,7 @@ async function memberPages(host, cat) {
       added[it.cat]++;
     }
   }
-  // renumber ids + update counts
+ // renumber ids + update counts
   for (const [cat, c] of Object.entries(DS.categories)) {
     c.questions = c.questions.map((x, i) => ({ ...x, id: i + 1 }));
     if (DS.counts[cat]) {

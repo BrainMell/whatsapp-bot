@@ -1,10 +1,9 @@
-// QA: owner-order fixes 2026-09-22
-//  A. Mod add/remove restored (owner was told "do it manually" - the
-//     immutable-mod-roles stubs are overruled and the original DB-backed
-//     command bodies are back).
-//  B. `.j gcowner @user` - mark a per-GC owner in the DB, immune to mute/
-//     hardmute/kick/warn/demote/nuke/antispam/antibot/antilink.
-//
+// QA: owner-order fixes
+// A. Mod add/remove restored (owner was told "do it manually" - the
+// immutable-mod-roles stubs are overruled and the original DB-backed
+// command bodies are back).
+// B. `.j gcowner @user` - mark a per-GC owner in the DB, immune to mute/
+// hardmute/kick/warn/demote/nuke/antispam/antibot/antilink.
 // Runtime-proves: gcOwners registry round-trip + persistence + LID-safe
 // identity matching (real module, in-memory KV) + source pins for every
 // immunity surface and every restored command body.
@@ -14,7 +13,7 @@ process.env.GO_IMAGE_SERVICE_URL = process.env.GO_IMAGE_SERVICE_URL || 'http://1
 const botConfig = require('../botConfig');
 const System = require('../core/models/System');
 
-// ── stub DB-touching model methods (in-memory) ───────────────────────────
+// -- stub DB-touching model methods (in-memory) ---------------------------
 const kv = {};
 System.find = () => { const p = Promise.resolve(Object.entries(kv).map(([key, value]) => ({ key, value }))); return { lean: () => p, then: (r, j) => p.then(r, j), catch: (j) => p.catch(j) }; };
 System.findOne = (q) => { const p = Promise.resolve(kv[q.key] ? { key: q.key, value: kv[q.key] } : null); return { lean: () => p, then: (r, j) => p.then(r, j), catch: (j) => p.catch(j) }; };
@@ -67,12 +66,12 @@ const BYSTANDER = '251999000111@s.whatsapp.net';
     console.log('\n── 2. GC owner identity survives LID spellings ──');
     await asJoker(async () => {
         const lidResolver = require('../core/utils/lidResolver');
-        // Seed the resolver cache exactly like a live session would:
-        // LID number 923000444555 belongs to phone 251777123456.
+ // Seed the resolver cache exactly like a live session would:
+ // LID number 923000444555 belongs to phone 251777123456.
         lidResolver.lidCache.set('923000444555', OWNER_PHONE);
         assert(reg.isGcOwner('923000444555@lid', GC) === true, '@lid mention resolves to the marked phone owner');
-        // And the inverse direction: mark stored, check arrives as LID even
-        // if the mark itself was stored from an @lid mention.
+ // And the inverse direction: mark stored, check arrives as LID even
+ // if the mark itself was stored from an @lid mention.
         reg.setGcOwner('lidgc@g.us', '923000444556@lid');
         lidResolver.lidCache.set('923000444556', '251777999888');
         assert(reg.isGcOwner('251777999888@s.whatsapp.net', 'lidgc@g.us') === true, 'phone check matches an @lid-stored mark');
@@ -82,9 +81,9 @@ const BYSTANDER = '251999000111@s.whatsapp.net';
     await asJoker(async () => {
         const persisted = kv['_shared_gc_owners'];
         assert(persisted && persisted[GC] && persisted[GC].includes(OWNER_PHONE), 'mark saved under _shared_gc_owners (shared key) via System.updateOne');
-        // Fresh "boot": evict BOTH the registry and system.js, re-require,
-        // then loadGcOwners() reads the shared key STRAIGHT from the DB layer
-        // (System.findOne stub -> kv) via getFresh - no boot cache involved.
+ // Fresh "boot": evict BOTH the registry and system.js, re-require,
+ // then loadGcOwners() reads the shared key STRAIGHT from the DB layer
+ // (System.findOne stub -> kv) via getFresh - no boot cache involved.
         delete require.cache[require.resolve('../core/utils/gcOwners')];
         delete require.cache[require.resolve('../core/utils/system')];
         const reg2 = require('../core/utils/gcOwners');
@@ -100,7 +99,7 @@ const BYSTANDER = '251999000111@s.whatsapp.net';
     {
         assert(!engineSrc.includes('Mod roles are immutable'), 'no immutable-policy refusal left in engine.js');
         assert(!cardSrc.includes('Mod roles are immutable'), 'no immutable-policy refusal left in cardSystem.js');
-        // Restored bodies call the DB-backed helpers:
+ // Restored bodies call the DB-backed helpers:
         assert(/addmod[\s\S]{0,2600}?await addGlobalMod\(target\);/.test(engineSrc), 'addmod body grants via addGlobalMod');
         assert(/delmod[\s\S]{0,900}?await delGlobalMod\(target\);/.test(engineSrc), 'delmod body revokes via delGlobalMod');
         assert(/delmod[\s\S]{0,1600}?await delRpgMod\(target\);[\s\S]{0,400}?await delCardsMod\(target\);/.test(engineSrc), 'delmod cleans ALL mod roles (Global+RPG+Cards)');
@@ -108,16 +107,16 @@ const BYSTANDER = '251999000111@s.whatsapp.net';
         assert(/delrpgmod[\s\S]{0,900}?await delRpgMod\(target\);/.test(engineSrc), 'delrpgmod body revokes via delRpgMod');
         assert(/addcardsmod[\s\S]{0,900}?await addCardsMod\(target\);/.test(engineSrc), 'addcardsmod body grants via addCardsMod');
         assert(/delcardsmod[\s\S]{0,900}?await delCardsMod\(target\);/.test(engineSrc), 'delcardsmod body revokes via delCardsMod');
-        // Permission ladder: addmod OWNER-ONLY (escalation fix stands)...
+ // Permission ladder: addmod OWNER-ONLY (escalation fix stands)...
         const addmodIdx = engineSrc.indexOf('addmod`,');
         assert(addmodIdx !== -1, 'addmod branch present');
         const addmodBlock = engineSrc.slice(addmodIdx, addmodIdx + 900);
         assert(addmodBlock.includes('if (!isOwner) {'), 'addmod stays OWNER-ONLY (mods still cannot add mods)');
-        // cardmod add/del restored in cardSystem:
+ // cardmod add/del restored in cardSystem:
         assert(/case 'cardmod':[\s\S]{0,600}?sub === 'add'[\s\S]{0,600}?inst\.modJids\.add\(target\)/.test(cardSrc), 'cardmod add writes the roster again');
         assert(/case 'cardmod':[\s\S]{0,1400}?sub === 'del'[\s\S]{0,600}?inst\.modJids\.delete\(target\)/.test(cardSrc), 'cardmod del revokes the roster again');
         assert(/case 'cardmod':[\s\S]{0,400}?if \(!isOwner && !isMod\)/.test(cardSrc), 'cardmod manage stays owner/global-mod gated');
-        // reloadmods / listmods untouched:
+ // reloadmods / listmods untouched:
         assert(engineSrc.includes('reloadmods'), 'reloadmods still present');
         assert(engineSrc.includes('listmods'), 'listmods still present');
     }
@@ -138,7 +137,7 @@ const BYSTANDER = '251999000111@s.whatsapp.net';
     console.log('\n── 6. Immunity surfaces all check isGcOwner ──');
     {
         const count = (re) => (engineSrc.match(re) || []).length;
-        // mute command guard + central muteUser guard:
+ // mute command guard + central muteUser guard:
         assert(count(/isGcOwner\(targetUser, chatId\)/g) >= 2, 'mute + hardmute target guards present');
         assert(count(/isGcOwner\(target, chatId\)/g) >= 2, 'kick + demote target guards present');
         assert(engineSrc.includes('isGcOwner(senderJid, chatId)'), 'antispam + antibot sender exemptions present');
@@ -148,8 +147,8 @@ const BYSTANDER = '251999000111@s.whatsapp.net';
     }
 
     console.log(`\n${pass} passed, ${fail} failed`);
-    // Explicit exit: the fresh-boot simulation in section 3 re-requires
-    // system.js, leaving a second Mongo-handle tree the event loop waits
-    // on (same documented exit-linger noise as the rest of the battery).
+ // Explicit exit: the fresh-boot simulation in section 3 re-requires
+ // system.js, leaving a second Mongo-handle tree the event loop waits
+ // on (same documented exit-linger noise as the rest of the battery).
     process.exit(fail > 0 ? 1 : 0);
 })().catch((e) => { console.error('✗ FATAL:', e); process.exit(1); });

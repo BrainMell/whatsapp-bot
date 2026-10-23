@@ -1,39 +1,35 @@
-// ═══════════════════════════════════════════════════════════════════════════
-//  ENEMY VARIANTS — player-variant enemies & NPC encounters (pass 3, §1)
-// ═══════════════════════════════════════════════════════════════════════════
-//
-//  IMPLEMENTATION of implementation/enemy_variants.md (owner-confirmed
-//  direction: "Add variations of the player character as enemies. Add random
-//  NPC characters using player sprites. NPCs should be capable of having
-//  their own skill trees and abilities.")
-//
-//  V1 vocabulary (design §3):
-//    E1 MIRROR <CLASS>        the player's own class, stats slightly skewed
-//    E2 WANDERER <CLASS>      a random OTHER class, standard pool math
-//    E3 OTHER BANNER <CLASS>  class + "palette shift" (other-banner naming)
-//                             + a class-flavored archetype (its abilities)
-//    E4 TIMELINE DRIFTER      rare, deep; distorted; dialogue-first intro
-//
-//  Contract rules (design §7 — what must NOT happen):
-//    - No player-stat theft/debuff framing. "He fights like you" is lore.
-//    - No new card kinds. Standard enemy pipeline end to end (sprite +
-//      ability set + recordEnemyKill hooks). The mystery lives in naming,
-//      behaviour and dialogue.
-//    - Variants are DEFINITIONS referencing existing content — no live
-//      enemy files are touched, no new mechanics invented.
-//    - Recognition stays deniable: variants never confirm they are "you".
-//
-//  Ability subset (v1): each variant equips an existing MONSTER_ARCHETYPES
-//  table matching its class role (TANK/BRUTE/STALKER/MAGE/SUPPORT) — a data
-//  level reuse of existing ability rows, per design §4. True per-NPC skill
-//  trees remain a V2 proposal (owner sign-off), never stored on User.
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// ENEMY VARIANTS - player-variant enemies & NPC encounters (pass 3, §1)
+// ===========================================================================
+// IMPLEMENTATION of implementation/enemy_variants.md (owner-confirmed
+// direction: "Add variations of the player character as enemies. Add random
+// NPC characters using player sprites. NPCs should be capable of having
+// their own skill trees and abilities.")
+// V1 vocabulary (design §3):
+// E1 MIRROR <CLASS> the player's own class, stats slightly skewed
+// E2 WANDERER <CLASS> a random OTHER class, standard pool math
+// E3 OTHER BANNER <CLASS> class + "palette shift" (other-banner naming)
+// + a class-flavored archetype (its abilities)
+// E4 TIMELINE DRIFTER rare, deep; distorted; dialogue-first intro
+// Contract rules (design §7 - what must NOT happen):
+// - No player-stat theft/debuff framing. "He fights like you" is lore.
+// - No new card kinds. Standard enemy pipeline end to end (sprite +
+// ability set + recordEnemyKill hooks). The mystery lives in naming,
+// behaviour and dialogue.
+// - Variants are DEFINITIONS referencing existing content - no live
+// enemy files are touched, no new mechanics invented.
+// - Recognition stays deniable: variants never confirm they are "you".
+// Ability subset (v1): each variant equips an existing MONSTER_ARCHETYPES
+// table matching its class role (TANK/BRUTE/STALKER/MAGE/SUPPORT) - a data
+// level reuse of existing ability rows, per design §4. True per-NPC skill
+// trees remain a V2 proposal (owner sign-off), never stored on User.
+// ===========================================================================
 
 'use strict';
 
 const classSystem = require('./classSystem');
 
-// ─── CLASS → ARCHETYPE MAP (existing ability tables only) ────────────────────
+// --- CLASS → ARCHETYPE MAP (existing ability tables only) --------------------
 // Roles come from classSystem (TANK / DPS / MAGIC_DPS / SUPPORT). The fighter
 // lineage fights like a BRUTE, the scout lineage like a STALKER.
 const ROLE_ARCHETYPE = {
@@ -48,7 +44,7 @@ const BRUTE_CLASSES = new Set([
     'FIGHTER', 'WARRIOR', 'WARLORD', 'BERSERKER', 'DRAGONSLAYER', 'SAMURAI',
 ]);
 
-// ─── VARIANT VISUAL SHEETS ───────────────────────────────────────────────────
+// --- VARIANT VISUAL SHEETS ---------------------------------------------------
 // The Go service renders enemies from `core/rpgasset/enemies/` by 0-based
 // spriteIndex (C-locale sorted directory order; slot 0 = Bat, documented in
 // docs/UI-INVENTORY.md). Person-shaped sheets for person-shaped variants:
@@ -62,36 +58,36 @@ const HUMANOID_SHEETS = {
 };
 const VARIANT_SHEET_CYCLE = ['kobold', 'gnoll', 'goblin', 'sahuagin', 'werewolf', 'skeleton'];
 
-// ─── ABYSS SPRITE MAP (fix: every abyss enemy currently renders slot 0) ─────
+// --- ABYSS SPRITE MAP (fix: every abyss enemy currently renders slot 0) -----
 // enemy id → 0-based enemy-sheet index, matched by element family.
 const ABYSS_SPRITE_MAP = {
-    // F-tier creatures
+ // F-tier creatures
     RABID_RAT: 86,        // wolf_0001_brown.png (closest small vermin pack body)
-    // (2026-10-09, owner: abyss monsters must be the FORWARD-FACING pool
-    // singles like the reference) — the old bat sheet is a 9x6 side-view
-    // walk strip with no front frame; CAVE_BAT renders the winged imp
-    // single instead (fire (6).png — same pack, front-facing, unmapped)
+ // (abyss monsters must be the FORWARD-FACING pool
+ // singles like the reference) - the old bat sheet is a 9x6 side-view
+ // walk strip with no front frame; CAVE_BAT renders the winged imp
+ // single instead (fire (6).png - same pack, front-facing, unmapped)
     CAVE_BAT: 42,         // fire (6).png (winged, front-facing)
     EMBER_SPAWN: 40,      // fire (11).png
     FROST_WISP: 61,       // ice (1).png
     SLIME: 81,            // slime waterB sheet.png
-    // C-tier
+ // C-tier
     STONE_HULK: 35,       // earth (1).png
     MUTATED_HOUND: 72,    // mutated (1).png
     CRYSTAL_GOLEM: 36,    // earth (2).png
     SHADOW_STALKER: 54,   // hybrides (1).png
     VENOM_SPIDER: 73,     // mutated (2).png
-    // B-tier
+ // B-tier
     INFERNO_KNIGHT: 41,   // fire (5).png
     TIDAL_FURY: 83,       // water (4).png
     BOULDER_TITAN: 37,    // earth (3).png
     GLACIAL_WRAITH: 62,   // ice (2).png
-    // A-tier
+ // A-tier
     STORM_CALLER: 84,     // water (6).png
     VOID_HARBINGER: 55,   // hybrides (2).png
     BLOOD_REAVER: 74,     // mutated (3).png
     ANCIENT_GUARDIAN: 38, // earth (4).png
-    // S+ tier
+ // S+ tier
     ELDER_CHAOS: 28,        // calamaties (1).png
     PRIMORDIAL_CHAOS: 29,   // calamaties (2).png
     VOID_CORRUPTED: 56,     // hybrides (3).png
@@ -99,16 +95,16 @@ const ABYSS_SPRITE_MAP = {
     MUTATION_PRIME: 75,     // mutated (4).png
     ELEMENTAL_ARCHON: 47,   // highlevelbosses (10).png
     ABYSSAL_GOD: 33,        // calamaties (6).png
-    // Boss pool ids
+ // Boss pool ids
     INFECTED_COLOSSUS: 65,    // midlevelbosses (1).png
     CORRUPTED_GUARDIAN: 66,   // midlevelbosses (2).png
     MUTATED_OVERSEER: 78,     // mutated (7).png
     INFERNO_LORD: 43,         // fire (7).png
-    // 💡 ROUND-21 (owner 2026-10-20: "purge all the A.I generated enemies"):
-    // the round-13 ids kept their pools but lost their AI art with the
-    // bestiary purge — they now resolve onto the classic sheet pool too
-    // (indexes verified against the C-locale enemies/ listing, same math as
-    // the rows above: png-only readdir order, abyss/ subdir excluded).
+ // ROUND-21 ("purge all the A.I generated enemies"):
+ // the round-13 ids kept their pools but lost their AI art with the
+ // bestiary purge - they now resolve onto the classic sheet pool too
+ // (indexes verified against the C-locale enemies/ listing, same math as
+ // the rows above: png-only readdir order, abyss/ subdir excluded).
     GLOOM_BRUTE: 67,          // midlevelbosses (3).png
     DUSK_CRAWLER: 76,         // mutated (5).png
     NIGHT_WRAITH: 63,         // ice (3).png
@@ -120,7 +116,7 @@ const ABYSS_SPRITE_MAP = {
 /** Resolve the render index for an abyss enemy id (fallback: a stable
  *  pseudo-random sheet so pools at least stop rendering as one bat). */
 function abyssSpriteIndex(enemyId) {
-    // NOTE: index 0 (the bat sheet) is falsy — compare against undefined.
+ // NOTE: index 0 (the bat sheet) is falsy - compare against undefined.
     if (ABYSS_SPRITE_MAP[enemyId] !== undefined) return ABYSS_SPRITE_MAP[enemyId];
     let h = 0;
     const s = String(enemyId || 'unknown');
@@ -128,7 +124,7 @@ function abyssSpriteIndex(enemyId) {
     return HUMANOID_SHEETS[VARIANT_SHEET_CYCLE[h % VARIANT_SHEET_CYCLE.length]];
 }
 
-// ─── CLASS ROSTER (for variant naming) ───────────────────────────────────────
+// --- CLASS ROSTER (for variant naming) ---------------------------------------
 function _variantClassList() {
     try {
         const all = classSystem.getAllClasses() || [];
@@ -154,7 +150,7 @@ function archetypeForClass(classId) {
     return ROLE_ARCHETYPE[c.role] || 'BRUTE';
 }
 
-// ─── ABYSS STAT MATH (mirrors abyssSystem.generateFloorEnemy exactly) ────────
+// --- ABYSS STAT MATH (mirrors abyssSystem.generateFloorEnemy exactly) --------
 function abyssFloorMultiplier(floor) {
     return 1.0 + (floor - 1) * 0.15 + Math.pow(floor - 1, 1.5) * 0.05;
 }
@@ -177,9 +173,9 @@ function buildVariantEnemy(kind, ctx = {}) {
         : _pickOtherClass(ctx.playerClassId);
     const archetype = archetypeForClass(variantClass.id);
 
-    // Base stat templates: abyss pool math; MIRROR skews toward the player's
-    // own class template ("same openings, same lazy left guard" — lore, not
-    // stat theft). Skew windows keep it slightly OFF the player, never exact.
+ // Base stat templates: abyss pool math; MIRROR skews toward the player's
+ // own class template ("same openings, same lazy left guard" - lore, not
+ // stat theft). Skew windows keep it slightly OFF the player, never exact.
     const cls = _variantClassStats(variantClass.id);
     let hp, atk, def, spd;
     if (isBoss) {
@@ -188,7 +184,7 @@ function buildVariantEnemy(kind, ctx = {}) {
         def = _skew(30 * mult, 0.9, 1.05);
         spd = _skew(20 * mult, 0.9, 1.05);
     } else if (kind === 'MIRROR') {
-        // Player-class flavored: HP from class template (scaled), skewed.
+ // Player-class flavored: HP from class template (scaled), skewed.
         hp = _skew(cls.hp * mult, 0.85, 1.1);
         atk = _skew(cls.atk * mult, 0.85, 1.1);
         def = _skew(cls.def * mult, 0.85, 1.1);
@@ -232,15 +228,15 @@ function buildVariantEnemy(kind, ctx = {}) {
         spriteIndex: HUMANOID_SHEETS[
             VARIANT_SHEET_CYCLE[(floor + (kind === 'TIMELINE_DRIFTER' ? 3 : 0)) % VARIANT_SHEET_CYCLE.length]
         ],
-        // Dialogue-first intro (deep drifter) — an opener line may be
-        // attached by the encounter text builders; never a mechanical tell.
+ // Dialogue-first intro (deep drifter) - an opener line may be
+ // attached by the encounter text builders; never a mechanical tell.
         dialogueFirst: kind === 'TIMELINE_DRIFTER',
     };
     return enemy;
 }
 
 function _variantClassStats(classId) {
-    // Class base stats (classSystem) shaped into abyss-ish magnitudes.
+ // Class base stats (classSystem) shaped into abyss-ish magnitudes.
     const c = _classById(classId);
     const s = (classSystem.getClassById(classId) || {}).stats || { hp: 120, atk: 12, def: 10, spd: 8 };
     return {
@@ -258,8 +254,8 @@ function _pickOtherClass(playerClassId) {
     return pool[Math.floor(Math.random() * pool.length)];
 }
 
-// ─── SPAWN POLICY (design §5, amended 2026-10-12) ───────────────────────────
-// OWNER DIRECTIVE 2026-10-12 (proof-card reply "Remove these 2 sprites from
+// --- SPAWN POLICY (design §5, amended ) ---------------------------
+// OWNER DIRECTIVE (proof-card reply "Remove these 2 sprites from
 // the abyss monster pool"): MIRROR and WANDERER no longer spawn from the
 // ABYSS monster pool. Boss floors no longer roll a MIRROR replacement, and
 // the WANDERER share of the non-boss roll falls through to the regular
@@ -269,11 +265,11 @@ function _pickOtherClass(playerClassId) {
 
 const VARIANT_CHANCE = {
     EARLY: 0.00,   // floors 1-30: creatures only (heuristic routing stays clean)
-    MID: 0.12,     // floors 31-49 (was WANDERER-only — retired, falls through)
+    MID: 0.12,     // floors 31-49 (was WANDERER-only - retired, falls through)
     DEEP: 0.20,    // floors 50-89 (OTHER BANNER keeps its 50% share)
     ABYSSAL: 0.25, // floors 90+ (drifter 40% of variants, banner the rest)
 };
-const MIRROR_BOSS_CHANCE = 0.15;      // RETIRED 2026-10-12 (owner: MIRROR out of the abyss pool)
+const MIRROR_BOSS_CHANCE = 0.15; // RETIRED (MIRROR out of the abyss pool)
 const DRIFTER_SHARE_DEEP = 0.0;       // no drifters before 90
 const DRIFTER_SHARE_ABYSSAL = 0.40;   // of variants at 90+
 
@@ -281,7 +277,7 @@ const DRIFTER_SHARE_ABYSSAL = 0.40;   // of variants at 90+
  * Roll a player-variant enemy for an abyss floor. Returns null when the
  * floor keeps its regular creature pool.
  *
- * OWNER 2026-10-12: MIRROR and WANDERER are REMOVED from the abyss pool —
+ * OWNER 2026-10-12: MIRROR and WANDERER are REMOVED from the abyss pool -
  * boss floors never roll a variant, mid floors (31-49, was WANDERER-only)
  * fall through to the regular creature pool, and the WANDERER half of the
  * deep/abyssal kind roll falls through too. Survivor shares are unchanged:
@@ -296,7 +292,7 @@ const DRIFTER_SHARE_ABYSSAL = 0.40;   // of variants at 90+
 function rollAbyssVariant(floor, isBoss, playerClassId) {
     try {
         const f = Math.floor(Number(floor) || 1);
-        if (isBoss) return null; // was MIRROR from 31+ — retired (owner 2026-10-12)
+        if (isBoss) return null; // was MIRROR from 31+ - retired
 
         let chance = VARIANT_CHANCE.EARLY;
         if (f >= 90) chance = VARIANT_CHANCE.ABYSSAL;
@@ -307,9 +303,9 @@ function rollAbyssVariant(floor, isBoss, playerClassId) {
         if (f >= 90 && Math.random() < DRIFTER_SHARE_ABYSSAL) {
             return buildVariantEnemy('TIMELINE_DRIFTER', { floor: f, isBoss: false, playerClassId });
         }
-        // Mid floors only ever rolled WANDERER — retired, so they fall
-        // through to the regular creature pool. Deep floors keep their
-        // 50% OTHER BANNER share (signature archetype behavior).
+ // Mid floors only ever rolled WANDERER - retired, so they fall
+ // through to the regular creature pool. Deep floors keep their
+ // 50% OTHER BANNER share (signature archetype behavior).
         if (f >= 50 && Math.random() < 0.5) {
             return buildVariantEnemy('OTHER_BANNER', { floor: f, isBoss: false, playerClassId });
         }
@@ -323,7 +319,7 @@ function rollAbyssVariant(floor, isBoss, playerClassId) {
 /**
  * GLOBAL WANDERER SWAP ("the world feels inhabited by others").
  * Small chance that ONE mob in a standard dungeon encounter is a
- * WANDERER <CLASS> — same stats (data-level swap: naming, archetype
+ * WANDERER <CLASS> - same stats (data-level swap: naming, archetype
  * behaviour, humanoid sprite, variant tag), no balance change.
  *
  * @param {Array} enemies  encounter.enemies array (mutated copy returned)
@@ -362,7 +358,7 @@ function maybeSwapWanderer(enemies, playerClassId, opts = {}) {
 
 /**
  * Friendly NPC SIGHTING decision ("random NPC characters using player
- * sprites — occasionally encountered anywhere"). v1 = text-only moment on
+ * sprites - occasionally encountered anywhere"). v1 = text-only moment on
  * NON-HOSTILE floors (treasure/event): a person at rest, a passerby, no
  * mechanics. Returns true when a sighting beat should be attached.
  */

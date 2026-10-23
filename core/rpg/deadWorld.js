@@ -1,42 +1,38 @@
-// ═══════════════════════════════════════════════════════════════════════════
-//  DEAD WORLD ENCOUNTER RUNNER
-// ═══════════════════════════════════════════════════════════════════════════
-//
-//  2026-09-21 owner ticket. A regular dungeon encounter (plain COMBAT only,
-//  never bosses or elites) has a 5% chance to become a Dead World encounter:
-//
-//    1. the dungeon behaves completely normally until the spawn point
-//    2. at the spawn point, nothing spawns - a card shows the player alone
-//       in the environment, clearly wrong, the player visibly confused
-//    3. TEN separate text message boxes carry the player's own thoughts,
-//       one per box, growing confusion, human voice (owner: "make it 10")
-//    4. a closing victory card communicates survival, never a fight
-//    5. the encounter ENDS after the sequence and the run does NOT continue
-//       into the normal dungeon flow (owner 2026-09-21: "the encounter ends
-//       after the Dead World sequence and does not continue") - the victory
-//       card is the closing beat; the runner's caller cleans the run up
-//
-//  Rewards: none. No gold, no xp, no loot, no kill credit. Nothing died.
-//  `.j solo f -d` forces the encounter for testing (state.deadWorldForced).
-//
-//  CARD GENERATION (owner 2026-09-21: "learn from how we already generate
-//  these" + 2026-09-21 inversion order): the SCENE card is drawn by the local
-//  node-canvas renderer with the environment art's COLORS INVERTED (owner:
-//  "I want the COLORS of the backgrounds/environments for the new encounter
-//  type to be inverted") - a dead, wrong version of the dungeon the run
-//  started in. The player sprite, contact shadow, name tag and plate are
-//  drawn NORMALLY on top of the inverted world (the inversion belongs to the
-//  environment, not to the living player). The Go service cannot invert just
-//  the environment layer of its composite, and the Go service is external
-//  (iron rule: unmodified), so the canvas renderer is the PRIMARY scene path
-//  for this encounter type and the Go combat scene is the FALLBACK.
-//    victory = the standard VICTORY end card (WriteEndCard) via the Go
-//              service with no enemy and a Dead World congratulation caption
-//              (VICTORY_CAPTIONS) - deliberately NOT inverted: the owner
-//              pinned the victory card to "look like a regular encounter
-//              victory card", and the warm light-returning frame is the
-//              survival beat of the sequence.
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// DEAD WORLD ENCOUNTER RUNNER
+// ===========================================================================
+// owner ticket. A regular dungeon encounter (plain COMBAT only,
+// never bosses or elites) has a 5% chance to become a Dead World encounter:
+// 1. the dungeon behaves completely normally until the spawn point
+// 2. at the spawn point, nothing spawns - a card shows the player alone
+// in the environment, clearly wrong, the player visibly confused
+// 3. TEN separate text message boxes carry the player's own thoughts,
+// one per box, growing confusion, human voice ("make it 10")
+// 4. a closing victory card communicates survival, never a fight
+// 5. the encounter ENDS after the sequence and the run does NOT continue
+// into the normal dungeon flow ("the encounter ends
+// after the Dead World sequence and does not continue") - the victory
+// card is the closing beat; the runner's caller cleans the run up
+// Rewards: none. No gold, no xp, no loot, no kill credit. Nothing died.
+// `.j solo f -d` forces the encounter for testing (state.deadWorldForced).
+// CARD GENERATION ("learn from how we already generate
+// these" + inversion order): the SCENE card is drawn by the local
+// node-canvas renderer with the environment art's COLORS INVERTED (
+// "I want the COLORS of the backgrounds/environments for the new encounter
+// type to be inverted") - a dead, wrong version of the dungeon the run
+// started in. The player sprite, contact shadow, name tag and plate are
+// drawn NORMALLY on top of the inverted world (the inversion belongs to the
+// environment, not to the living player). The Go service cannot invert just
+// the environment layer of its composite, and the Go service is external
+// (iron rule: unmodified), so the canvas renderer is the PRIMARY scene path
+// for this encounter type and the Go combat scene is the FALLBACK.
+// victory = the standard VICTORY end card (WriteEndCard) via the Go
+// service with no enemy and a Dead World congratulation caption
+// (VICTORY_CAPTIONS) - deliberately NOT inverted: the owner
+// pinned the victory card to "look like a regular encounter
+// victory card", and the warm light-returning frame is the
+// survival beat of the sequence.
+// ===========================================================================
 
 'use strict';
 
@@ -44,7 +40,7 @@ const renderer = require('./deadWorldRenderer');
 const sequences = require('./deadWorldSequences');
 
 // The owner-specified chance for a regular encounter to become a Dead World.
-// 💡 OWNER RULING (2026-10-09): 0.05 → 0.005 — dead worlds were spawning far
+// OWNER RULING: 0.05 → 0.005 - dead worlds were spawning far
 // too often ("make them 10 times more rare"); 0.5% per regular encounter.
 const CHANCE = 0.005;
 
@@ -106,8 +102,8 @@ function _cardOpts(state) {
         adventurerRank: String(p.adventurerRank || (eco && eco.adventurerRank) || 'F'),
         dungeonName: state.dungeonName || (state.environment && state.environment.name) || 'Deep Dungeon',
         rank: state.dungeonRank || 'F',
-        // 💡 NO FLOOR (owner 2026-09-21): the floor number must not appear in
-        // the Dead World UI. The Go payload and the fallback plate both omit it.
+ // NO FLOOR: the floor number must not appear in
+ // the Dead World UI. The Go payload and the fallback plate both omit it.
         backgroundPath: state.backgroundPath || '',
         environmentKey: state.environment && state.environment.asset ? state.environment.asset : '',
     };
@@ -165,7 +161,7 @@ async function _renderScene(state) {
         const res = await combatImageGen.generateCombatImage([_combatEntities(state).player], [], {
             combatType: 'PVE',
             rank: opts.rank,
-            floor: 0, // no floor number in the Dead World UI (owner 2026-09-21)
+            floor: 0, // no floor number in the Dead World UI
             backgroundPath: opts.backgroundPath,
         });
         if (res && res.success && res.buffer && res.buffer.length > 100) return res.buffer;
@@ -195,14 +191,14 @@ async function _renderVictory(state) {
             playerClass: player.class,
             playerIndex: player.spriteIndex,
             playerLevel: player.level,
-            // no enemy: nothing was fought, none is named or shown
+ // no enemy: nothing was fought, none is named or shown
             enemyName: '',
             enemyLevel: 0,
             enemyIndex: 0,
             enemyIsBoss: false,
             enemySpecies: '',
             rank: opts.rank,
-            floor: 0, // no floor number in the Dead World UI (owner 2026-09-21)
+            floor: 0, // no floor number in the Dead World UI
             background: String(opts.backgroundPath || '').split(/[\/\\]/).pop(),
             caption: congrats.card,
         });
@@ -230,7 +226,7 @@ async function runEncounter(sock, state) {
     const chatId = state.chatId;
     state.deadWorldDone = true;
 
-    // 1. the empty encounter card (image only - the thoughts carry the words)
+ // 1. the empty encounter card (image only - the thoughts carry the words)
     try {
         const scene = await _renderScene(state);
         if (scene && scene.length > 100) {
@@ -243,7 +239,7 @@ async function runEncounter(sock, state) {
         try { await sock.sendMessage(chatId, { text: '_*「 ...it is empty... why is it empty... 」*_' }); } catch (e2) {}
     }
 
-    // 2. TEN separate message boxes - the player's own thoughts
+ // 2. TEN separate message boxes - the player's own thoughts
     const seqIdx = sequences.pickSequence(chatId);
     const ten = sequences.DEAD_WORLD_SEQUENCES[seqIdx] || sequences.DEAD_WORLD_SEQUENCES[0];
     for (let i = 0; i < 10; i++) {
@@ -256,8 +252,8 @@ async function runEncounter(sock, state) {
         if (i < 9 && _thoughtDelayMs > 0) await _sleep(_thoughtDelayMs + Math.floor(Math.random() * 300));
     }
 
-    // 3. the victory card - a regular encounter victory card with a Dead
-    //    World congratulation caption (survival, never a fight)
+ // 3. the victory card - a regular encounter victory card with a Dead
+ // World congratulation caption (survival, never a fight)
     try {
         const victory = await _renderVictory(state);
         if (victory.buffer && victory.buffer.length > 100) {

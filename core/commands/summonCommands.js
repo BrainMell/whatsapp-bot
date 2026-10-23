@@ -1,18 +1,17 @@
 // ============================================
-// 🐉 SUMMON COMMANDS - player-facing summon management
+// SUMMON COMMANDS - player-facing summon management
 // ============================================
 // Commands:
-//   .summon list              - view owned summons
-//   .summon deploy <id>       - equip a summon for combat
-//   .summon dismiss           - unequip active summon
-//   .summon info <id>         - detailed summon view
-//   .summon release <id>      - permanently release a summon
-//   .summon train <id>        - daily training (+500 XP, shared cooldown)
-//   .summon allocate <id> <stat> <points> - allocate stat points
-//   .summon resonance         - view active resonance web bonuses
-//   .summon compendium        - view tamed species (Necromancer)
-//   .summon hatch <eggId>     - hatch a summon egg
-//
+// .summon list - view owned summons
+// .summon deploy <id> - equip a summon for combat
+// .summon dismiss - unequip active summon
+// .summon info <id> - detailed summon view
+// .summon release <id> - permanently release a summon
+// .summon train <id> - daily training (+500 XP, shared cooldown)
+// .summon allocate <id> <stat> <points> - allocate stat points
+// .summon resonance - view active resonance web bonuses
+// .summon compendium - view tamed species (Necromancer)
+// .summon hatch <eggId> - hatch a summon egg
 // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md
 
 const economy = require('../rpg/economy');
@@ -22,30 +21,30 @@ const summonCapture = require('../rpg/summonCapture');
 const summonForging = require('../rpg/summonForging');
 const summonTrials = require('../rpg/summonTrials');
 const registry = require('../rpg/summonRegistry');
-// 💡 Phase C2: Image-based roster rendering
+// Phase C2: Image-based roster rendering
 const rosterRenderer = require('../rpg/summonRosterRenderer');
 const summonSprites = require('../rpg/summonSprites');
 const codexRenderer = require('../rpg/summonCodexRenderer');
-// 💡 FIX 2026-10-10: resilient GIF→MP4 delivery (cache + soft-budget + background
+// FIX resilient GIF→MP4 delivery (cache + soft-budget + background
 // follow-through). Root-cause fix for "codex no longer renders animations" and
 // "can't use summons at all": Go GIF renders measured 9-39s, blowing through the
-// 30s axios timeout, the 15s ffmpeg timeout AND the 45s command watchdog —
+// 30s axios timeout, the 15s ffmpeg timeout AND the 45s command watchdog -
 // users got a timeout notice and NO card at all.
 const summonGifDelivery = require('../utils/summonGifDelivery');
 
 const getPrefix = () => botConfig.getPrefix();
 
-// 💡 HELPER: Resolve a summon by position number (1, 2, 3) or fallback to summonId
+// HELPER: Resolve a summon by position number (1, 2, 3) or fallback to summonId
 // This replaces all the old summonId.endsWith(query) lookups.
 // SYNCHRONOUS - no I/O, no await needed.
 function resolveSummon(summons, query) {
   if (!query) return null;
-  // Try position number first
+ // Try position number first
   const num = parseInt(query);
   if (!isNaN(num) && num >= 1 && num <= summons.length) {
     return summons[num - 1];
   }
-  // Fallback: summonId match (backwards compat)
+ // Fallback: summonId match (backwards compat)
   return summons.find(s =>
     s.summonId.endsWith(query) ||
     s.summonId === query ||
@@ -53,23 +52,22 @@ function resolveSummon(summons, query) {
   ) || null;
 }
 
-
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // MAIN COMMAND ROUTER
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function handleCommand(sock, chatId, senderJid, senderName, args, m) {
   const sub = (args[0] || '').toLowerCase();
   const rest = args.slice(1);
 
-  // 💡 Phase 9: .summon with no args → Pokémon-style interface (NOT help).
-  // .summon help → command list. .summon <number> → view summon #N details.
-  // Numeric arg = navigate to summon by list position (1-indexed).
+ // Phase 9: .summon with no args → Pokémon-style interface (NOT help).
+ // .summon help → command list. .summon <number> → view summon #N details.
+ // Numeric arg = navigate to summon by list position (1-indexed).
   if (!sub) {
     return await cmdPokedex(sock, chatId, senderJid);
   }
 
-  // Numeric navigation - .summon 3 → view details of the 3rd summon in the list
+ // Numeric navigation - .summon 3 → view details of the 3rd summon in the list
   if (/^\d+$/.test(sub)) {
     return await cmdNavigate(sock, chatId, senderJid, sub, rest);
   }
@@ -147,11 +145,11 @@ async function handleCommand(sock, chatId, senderJid, senderName, args, m) {
     case 'moves':
       return await cmdAbilities(sock, chatId, senderJid, rest);
 
-    // 💡 FIX 2026-09-12: `equip`/`unequip` here were UNREACHABLE - duplicate
-    // cases above ('equip'→deploy, 'unequip'→dismiss) shadowed them, so the
-    // summon-gear commands only worked as `.summon gear ...` and gear-UNEQUIP
-    // had no route at all. Now: gear equip = `.summon gear <id> <gearId>`,
-    // gear unequip = `.summon gear unequip <id> <slot>`.
+ // FIX `equip`/`unequip` here were UNREACHABLE - duplicate
+ // cases above ('equip'→deploy, 'unequip'→dismiss) shadowed them, so the
+ // summon-gear commands only worked as `.summon gear ...` and gear-UNEQUIP
+ // had no route at all. Now: gear equip = `.summon gear <id> <gearId>`,
+ // gear unequip = `.summon gear unequip <id> <slot>`.
     case 'gear':
       if ((rest[0] || '').toLowerCase() === 'unequip') {
         return await cmdSummonUnequip(sock, chatId, senderJid, rest.slice(1));
@@ -190,9 +188,9 @@ async function handleCommand(sock, chatId, senderJid, senderName, args, m) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon - Pokémon-style Pokédex interface (DEFAULT when no subcommand)
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdPokedex(sock, chatId, senderJid) {
   const user = economy.getUser(senderJid);
@@ -211,16 +209,16 @@ async function cmdPokedex(sock, chatId, senderJid) {
     return;
   }
 
-  // 💡 NEW 2026-08-03: Render the roster as an ANIMATED GIF via the Go service.
-  // Shows summons doing their idle.gif animations on a sparklinlabs background.
-  // 💡 REWORKED 2026-10-10: cache + soft-budget + background follow-through
-  // (summonGifDelivery). Falls back to node-canvas PNG (fast failures) or text
-  // (slow renders), and the animated MP4 still arrives as a follow-up.
+ // NEW Render the roster as an ANIMATED GIF via the Go service.
+ // Shows summons doing their idle.gif animations on a sparklinlabs background.
+ // REWORKED cache + soft-budget + background follow-through
+ // (summonGifDelivery). Falls back to node-canvas PNG (fast failures) or text
+ // (slow renders), and the animated MP4 still arrives as a follow-up.
   const goService = require('../utils/goImageService');
 
   console.log('[SummonRoster] Building payload for', summons.length, 'summons');
 
-  // Build the payload for the Go service
+ // Build the payload for the Go service
   const rosterSummons = summons.map(s => {
       const stats = summonSystem.computeEffectiveStats(s);
       const species = registry.getSpecies(s.species);
@@ -270,7 +268,7 @@ async function cmdPokedex(sock, chatId, senderJid) {
 }
 
 // Text roster card (fallback when the animated GIF is slow/unavailable).
-// 💡 2026-10-10: extracted verbatim from the old inline fallback block.
+// extracted verbatim from the old inline fallback block.
 function buildRosterTextMsg(user, summons, p) {
   const activeResonances = user.activeResonances || [];
 
@@ -317,9 +315,9 @@ function buildRosterTextMsg(user, summons, p) {
   return msg;
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon <#> - navigate to summon by list position (Pokédex entry)
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdNavigate(sock, chatId, senderJid, numStr, rest) {
   const user = economy.getUser(senderJid);
@@ -338,14 +336,13 @@ async function cmdNavigate(sock, chatId, senderJid, numStr, rest) {
     return;
   }
 
-  // Check if there's a subcommand after the number (e.g., ".summon 3 deploy")
   const action = (rest[0] || '').toLowerCase();
   if (action === 'deploy' || action === 'equip') {
-    // 💡 FIX 2026-08-08: Deploy DIRECTLY using the already-resolved summonId.
-    // Previously this called cmdDeploy which called getUserSummons AGAIN,
-    // causing a double-fetch that could resolve to a different summon if the
-    // roster changed between calls. Now we call summonSystem.deploySummon
-    // directly with the summon we already resolved by index.
+ // FIX Deploy DIRECTLY using the already-resolved summonId.
+ // Previously this called cmdDeploy which called getUserSummons AGAIN,
+ // causing a double-fetch that could resolve to a different summon if the
+ // roster changed between calls. Now we call summonSystem.deploySummon
+ // directly with the summon we already resolved by index.
     const deployResult = await summonSystem.deploySummon(user, summons[index].summonId);
     await sock.sendMessage(chatId, { text: deployResult.message });
     if (deployResult.success) {
@@ -370,10 +367,10 @@ async function cmdNavigate(sock, chatId, senderJid, numStr, rest) {
     return await cmdTrial(sock, chatId, senderJid, [summons[index].summonId.slice(-8)]);
   }
 
-  // Default: show animated detail GIF via Go service (idle.gif + info hub)
-  // 💡 REWORKED 2026-10-10: resilient pipeline (summonGifDelivery) - same look,
-  // but slow renders can no longer eat the 45s command watchdog.
-  // Falls back to node-canvas PNG, then the text detail view.
+ // Default: show animated detail GIF via Go service (idle.gif + info hub)
+ // REWORKED resilient pipeline (summonGifDelivery) - same look,
+ // but slow renders can no longer eat the 45s command watchdog.
+ // Falls back to node-canvas PNG, then the text detail view.
   const goService = require('../utils/goImageService');
   const s = summons[index];
   const stats = summonSystem.computeEffectiveStats(s);
@@ -422,9 +419,9 @@ async function cmdNavigate(sock, chatId, senderJid, numStr, rest) {
   });
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon deploy <id> - equip a summon
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdDeploy(sock, chatId, senderJid, args) {
   const user = economy.getUser(senderJid);
@@ -441,9 +438,9 @@ async function cmdDeploy(sock, chatId, senderJid, args) {
     return;
   }
 
-  // Resolve summon by partial ID match (last 8 chars) or nickname
-  // 💡 FIX 2026-08-08: Use includeBacklog:true so backlog summons can be deployed too.
-  // deploySummon handles deck membership internally.
+ // Resolve summon by partial ID match (last 8 chars) or nickname
+ // FIX Use includeBacklog:true so backlog summons can be deployed too.
+ // deploySummon handles deck membership internally.
   const summons = await summonSystem.getUserSummons(senderJid, { includeBacklog: true });
   const target = resolveSummon(summons, query);
 
@@ -455,7 +452,7 @@ async function cmdDeploy(sock, chatId, senderJid, args) {
   const result = await summonSystem.deploySummon(user, target.summonId);
   await sock.sendMessage(chatId, { text: result.message });
 
-  // Refresh resonances
+ // Refresh resonances
   if (result.success) {
     try {
       await summonSystem.refreshUserResonances(user);
@@ -468,9 +465,9 @@ async function cmdDeploy(sock, chatId, senderJid, args) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon dismiss - unequip active summon
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdDismiss(sock, chatId, senderJid) {
   const user = economy.getUser(senderJid);
@@ -483,9 +480,9 @@ async function cmdDismiss(sock, chatId, senderJid) {
   await sock.sendMessage(chatId, { text: result.message });
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon info <id> - detailed view
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdInfo(sock, chatId, senderJid, args) {
   const user = economy.getUser(senderJid);
@@ -535,13 +532,13 @@ async function cmdInfo(sock, chatId, senderJid, args) {
   msg += `*SOUL ECHO:*\n`;
   msg += `${echo?.icon || '💫'} ${echo?.name || 'Unknown'} - ${echo?.desc || ''}\n\n`;
 
-  // Behavior score (personality development)
+ // Behavior score (personality development)
   const bs = target.behaviorScore || {};
   msg += `*BEHAVIOR* (shifts at ${summonCapture.PERSONALITY_SHIFT_THRESHOLD || 20} actions):\n`;
   msg += `😤 Aggressive: ${bs.aggressive || 0} | 🛡️ Protective: ${bs.protective || 0}\n`;
   msg += `🤔 Curious: ${bs.curious || 0} | 🎲 Volatile: ${bs.volatile || 0}\n\n`;
 
-  // Lineage
+ // Lineage
   if (target.lineage && target.lineage.length > 0) {
     msg += `*LINEAGE:*\n`;
     for (const ancestor of target.lineage) {
@@ -554,7 +551,7 @@ async function cmdInfo(sock, chatId, senderJid, args) {
     msg += `\n`;
   }
 
-  // Runes
+ // Runes
   if (target.socketedRuneIds && target.socketedRuneIds.length > 0) {
     msg += `*RUNES:* ${target.socketedRuneIds.length}/${registry.getRarityConfig(target.rarity).runeSlots} slots\n`;
     for (const runeId of target.socketedRuneIds) {
@@ -563,16 +560,16 @@ async function cmdInfo(sock, chatId, senderJid, args) {
     msg += `\n`;
   }
 
-  // 💡 FIX 2026-08-05: Removed summon ID from display (user feedback: too cluttered).
-  // The ID is still stored internally for lookups - just not shown on the card.
+ // FIX Removed summon ID from display (user feedback: too cluttered).
+ // The ID is still stored internally for lookups - just not shown on the card.
   msg += `📅 Obtained: ${target.obtainedAt?.toLocaleDateString() || 'unknown'} via ${target.obtainedFrom || 'unknown'}`;
 
   await sock.sendMessage(chatId, { text: msg });
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon release <id> - permanently release
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdRelease(sock, chatId, senderJid, args) {
   const user = economy.getUser(senderJid);
@@ -595,7 +592,7 @@ async function cmdRelease(sock, chatId, senderJid, args) {
     return;
   }
 
-  // Safety: can't release active summon
+ // Safety: can't release active summon
   if (user.activeSummonId === target.summonId) {
     await sock.sendMessage(chatId, { text: `❌ Cannot release your active summon. Dismiss it first with \`${getPrefix()} summon dismiss\`.` });
     return;
@@ -604,7 +601,7 @@ async function cmdRelease(sock, chatId, senderJid, args) {
   const result = await summonSystem.releaseSummon(senderJid, target.summonId);
 
   if (result.success) {
-    // Refresh resonances
+ // Refresh resonances
     try {
       await summonSystem.refreshUserResonances(user);
     } catch (e) {}
@@ -613,9 +610,9 @@ async function cmdRelease(sock, chatId, senderJid, args) {
   await sock.sendMessage(chatId, { text: result.message });
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon train <id> - daily training
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdTrain(sock, chatId, senderJid, args) {
   const user = economy.getUser(senderJid);
@@ -642,9 +639,9 @@ async function cmdTrain(sock, chatId, senderJid, args) {
   await sock.sendMessage(chatId, { text: result.message });
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon allocate <id> <stat> <points>
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdAllocate(sock, chatId, senderJid, args) {
   const user = economy.getUser(senderJid);
@@ -679,9 +676,9 @@ async function cmdAllocate(sock, chatId, senderJid, args) {
   await sock.sendMessage(chatId, { text: result.message });
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon codex - view ALL summon species in the game
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdCodex(sock, chatId, senderJid, args) {
   const user = economy.getUser(senderJid);
@@ -690,7 +687,6 @@ async function cmdCodex(sock, chatId, senderJid, args) {
     return;
   }
 
-  // Parse page number
   let page = 1;
   for (const arg of args) {
     const num = parseInt(arg);
@@ -706,7 +702,7 @@ async function cmdCodex(sock, chatId, senderJid, args) {
   const startIdx = (page - 1) * PER_PAGE;
   const pageSpecies = allSpecies.slice(startIdx, startIdx + PER_PAGE);
 
-  // Build payload for Go service - same format as roster but with all species
+ // Build payload for Go service - same format as roster but with all species
   const rosterSummons = pageSpecies.map(speciesId => {
     const s = registry.getSpecies(speciesId);
     return {
@@ -726,10 +722,10 @@ async function cmdCodex(sock, chatId, senderJid, args) {
     };
   });
 
-  // Try Go service animated GIF (same as roster, 5 per page)
-  // 💡 REWORKED 2026-10-10: resilient pipeline - codex pages are deterministic
-  // so the MP4 cache makes repeat views instant; slow renders degrade to the
-  // text page immediately with the animation following as soon as it's ready.
+ // Try Go service animated GIF (same as roster, 5 per page)
+ // REWORKED resilient pipeline - codex pages are deterministic
+ // so the MP4 cache makes repeat views instant; slow renders degrade to the
+ // text page immediately with the animation following as soon as it's ready.
   const goService = require('../utils/goImageService');
 
   const codexPayload = {
@@ -757,7 +753,7 @@ async function cmdCodex(sock, chatId, senderJid, args) {
 }
 
 // Text codex page (fallback when the animated GIF is slow/unavailable).
-// 💡 2026-10-10: extracted verbatim from the old inline fallback block.
+// extracted verbatim from the old inline fallback block.
 function buildCodexTextMsg(allSpecies, page, totalPages, pageSpecies, startIdx, p) {
   let msg = `📖 *SUMMON CODEX* - Page ${page}/${totalPages}\n`;
   msg += `Total: ${allSpecies.length} species\n\n`;
@@ -769,9 +765,9 @@ function buildCodexTextMsg(allSpecies, page, totalPages, pageSpecies, startIdx, 
   return msg;
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon resonance - view active resonance web bonuses
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdResonance(sock, chatId, senderJid) {
   const user = economy.getUser(senderJid);
@@ -780,7 +776,7 @@ async function cmdResonance(sock, chatId, senderJid) {
     return;
   }
 
-  // Refresh resonances
+ // Refresh resonances
   await summonSystem.refreshUserResonances(user);
   const active = user.activeResonances || [];
 
@@ -804,9 +800,9 @@ async function cmdResonance(sock, chatId, senderJid) {
   await sock.sendMessage(chatId, { text: msg });
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon compendium - view tamed species (Necromancer)
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdCompendium(sock, chatId, senderJid) {
   const user = economy.getUser(senderJid);
@@ -838,7 +834,7 @@ async function cmdCompendium(sock, chatId, senderJid) {
     }
   }
 
-  // Show in-progress taming
+ // Show in-progress taming
   const progress = user.tamingProgress || {};
   const inProgress = Object.entries(progress)
     .filter(([_, count]) => count > 0 && count < summonCapture.CAPTURE_CONFIG.TAMING_THRESHOLD)
@@ -856,9 +852,9 @@ async function cmdCompendium(sock, chatId, senderJid) {
   await sock.sendMessage(chatId, { text: msg });
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon hatch <eggId> - hatch a summon egg
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdHatch(sock, chatId, senderJid, args) {
   const user = economy.getUser(senderJid);
@@ -869,28 +865,28 @@ async function cmdHatch(sock, chatId, senderJid, args) {
 
   const eggId = (args[0] || '').trim();
   if (!eggId) {
-    // 💡 AUDIT FIX 2026-08-01: updated help text to reflect the new egg system
+ // AUDIT FIX updated help text to reflect the new egg system
     await sock.sendMessage(chatId, {
       text: `🥚 *SUMMON EGG HATCHING*\n\nUsage: \`${getPrefix()} summon hatch <egg_id>\`\n\n*Available eggs:*\n• \`basic_summon_egg\` - 1 of 4 starters (Tank/DPS/Mage/Support)\n• \`rare_summon_egg\` - random RARE summon\n• \`epic_summon_egg\` - random EPIC summon\n• \`legendary_summon_egg\` - random LEGENDARY summon\n• \`mythic_summon_egg\` - random MYTHIC summon\n\n_Buy a Basic Egg from the shop. Higher-tier eggs are crafted from fragments dropped by wild summons in the Abyss._`
     });
     return;
   }
 
-  // 💡 AUDIT FIX 2026-08-01: use the new summonEggSystem for tiered eggs
+ // AUDIT FIX use the new summonEggSystem for tiered eggs
   const summonEggSystem = require('../rpg/summonEggSystem');
   const result = await summonEggSystem.hatchEgg(senderJid, eggId);
   await sock.sendMessage(chatId, { text: result.message });
   if (result.success) {
-    // Refresh resonances
+ // Refresh resonances
     try {
       await summonSystem.refreshUserResonances(user);
     } catch (e) {}
   }
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon forge <id1> <id2> - Soul Forging
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdForge(sock, chatId, senderJid, args) {
   const user = economy.getUser(senderJid);
@@ -909,7 +905,7 @@ async function cmdForge(sock, chatId, senderJid, args) {
     return;
   }
 
-  // Resolve both summons by partial ID
+ // Resolve both summons by partial ID
   const summons = await summonSystem.getUserSummons(senderJid);
   const s1 = resolveSummon(summons, id1);
   const s2 = resolveSummon(summons, id2);
@@ -919,18 +915,18 @@ async function cmdForge(sock, chatId, senderJid, args) {
     return;
   }
 
-  // Confirm
+ // Confirm
   const species1 = registry.getSpecies(s1.species);
   const species2 = registry.getSpecies(s2.species);
   const totalLevel = s1.level + s2.level;
   const goldCost = summonForging.FORGE_CONFIG.GOLD_COST_BASE + (totalLevel * summonForging.FORGE_CONFIG.GOLD_COST_PER_LEVEL);
 
-  // Execute the forge
+ // Execute the forge
   const result = await summonForging.forgeSummons(senderJid, s1.summonId, s2.summonId);
   await sock.sendMessage(chatId, { text: result.message });
 
   if (result.success && result.summon) {
-    // Show active resonances update
+ // Show active resonances update
     try {
       const activeRes = user.activeResonances || [];
       if (activeRes.length > 0) {
@@ -941,9 +937,9 @@ async function cmdForge(sock, chatId, senderJid, args) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon trial <id> - attempt solo evolution trial
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdTrial(sock, chatId, senderJid, args) {
   const user = economy.getUser(senderJid);
@@ -954,7 +950,7 @@ async function cmdTrial(sock, chatId, senderJid, args) {
 
   const query = (args[0] || '').trim();
   if (!query) {
-    // Show available trials
+ // Show available trials
     const summons = await summonSystem.getUserSummons(senderJid);
     const eligible = summons.filter(s => {
       const trial = summonTrials.getTrial(s.species);
@@ -985,7 +981,7 @@ async function cmdTrial(sock, chatId, senderJid, args) {
     return;
   }
 
-  // Resolve summon
+ // Resolve summon
   const summons = await summonSystem.getUserSummons(senderJid);
   const target = resolveSummon(summons, query);
 
@@ -998,9 +994,9 @@ async function cmdTrial(sock, chatId, senderJid, args) {
   await sock.sendMessage(chatId, { text: result.message });
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon passives - view unlocked player passives from trials
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdPassives(sock, chatId, senderJid) {
   const user = economy.getUser(senderJid);
@@ -1042,10 +1038,10 @@ async function cmdPassives(sock, chatId, senderJid) {
   await sock.sendMessage(chatId, { text: msg });
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon backlog - view backlog summons
 // .summon swap <backlog#> <deckSlot> - swap backlog into main deck
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdBacklog(sock, chatId, senderJid, args) {
   const user = economy.getUser(senderJid);
@@ -1102,16 +1098,16 @@ async function cmdSwap(sock, chatId, senderJid, args) {
   await sock.sendMessage(chatId, { text: result.message });
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon market <subcommand> - summon trading market
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 const SummonMarket = require('../models/SummonMarket');
 const SummonModel = require('../models/Summon');
 
 async function cmdMarket(sock, chatId, senderJid, args) {
-  // 💡 UNIFIED PLAYER MARKET (2026-10-11): summon listings live in the same
-  // collection as items and runes now. Same verbs, same UX, one market.
+ // UNIFIED PLAYER MARKET: summon listings live in the same
+ // collection as items and runes now. Same verbs, same UX, one market.
   const playerMarket = require('../rpg/playerMarket');
   const pmReply = (text, opts = {}) => sock.sendMessage(chatId, { text, ...(opts && opts.mentions ? { mentions: opts.mentions } : {}) });
   const action = (args[0] || '').toLowerCase();
@@ -1133,7 +1129,7 @@ async function cmdMarket(sock, chatId, senderJid, args) {
       return await playerMarket.cmdMy(senderJid, pmReply);
     default:
       await sock.sendMessage(chatId, {
-        text: `🏪 *SUMMON MARKET* — now part of the unified *PLAYER MARKET*
+        text: `🏪 *SUMMON MARKET* - now part of the unified *PLAYER MARKET*
 
 • \`${getPrefix()} market summons\` - browse summons for sale
 • \`${getPrefix()} market sell summon <#|id> <price>\` - list a summon
@@ -1156,7 +1152,6 @@ async function cmdMarketList(sock, chatId, senderJid) {
       return;
     }
 
-    // Load summon details for each listing
     let msg = `🏪 *SUMMON MARKET*\n`;
     msg += `━━━━━━━━━━━━━━━\n\n`;
 
@@ -1198,7 +1193,7 @@ async function cmdMarketSell(sock, chatId, senderJid, args) {
     return;
   }
 
-  // Resolve summon
+ // Resolve summon
   const summons = await summonSystem.getUserSummons(senderJid);
   const target = resolveSummon(summons, query);
 
@@ -1207,7 +1202,6 @@ async function cmdMarketSell(sock, chatId, senderJid, args) {
     return;
   }
 
-  // Validate
   if (target.forSale) {
     await sock.sendMessage(chatId, { text: '❌ This summon is already listed for sale.' });
     return;
@@ -1225,7 +1219,7 @@ async function cmdMarketSell(sock, chatId, senderJid, args) {
     return;
   }
 
-  // Calculate listing fee (5%)
+ // Calculate listing fee (5%)
   const fee = Math.floor(price * 0.05);
   const totalCost = fee;
 
@@ -1234,10 +1228,9 @@ async function cmdMarketSell(sock, chatId, senderJid, args) {
     return;
   }
 
-  // Deduct fee
+ // Deduct fee
   economy.removeMoney(senderJid, totalCost, `Summon market listing fee`);
 
-  // Create listing
   const listingId = 'L-' + Math.random().toString(36).slice(2, 6).toUpperCase();
   const listing = new SummonMarket({
     listingId,
@@ -1250,12 +1243,12 @@ async function cmdMarketSell(sock, chatId, senderJid, args) {
   });
   await listing.save();
 
-  // Mark summon as forSale
+ // Mark summon as forSale
   target.forSale = true;
   target.salePrice = price;
   await target.save();
 
-  // Refresh resonances (forSale summons don't count)
+ // Refresh resonances (forSale summons don't count)
   try { await summonSystem.refreshUserResonances(user); } catch (e) {}
 
   const species = registry.getSpecies(target.species);
@@ -1277,7 +1270,7 @@ async function cmdMarketBuy(sock, chatId, senderJid, args) {
     return;
   }
 
-  // Find listing
+ // Find listing
   const listing = await SummonMarket.findOne({
     listingId: { $regex: query + '$' },
     status: 'active'
@@ -1288,13 +1281,13 @@ async function cmdMarketBuy(sock, chatId, senderJid, args) {
     return;
   }
 
-  // Anti-self-buy
+ // Anti-self-buy
   if (listing.sellerId === senderJid) {
     await sock.sendMessage(chatId, { text: '❌ You cannot buy your own listing.' });
     return;
   }
 
-  // Alt detection
+ // Alt detection
   try {
     const altDetection = require('../rpg/altDetection');
     const altCheck = altDetection.checkTransfer(senderJid, listing.sellerId);
@@ -1304,20 +1297,20 @@ async function cmdMarketBuy(sock, chatId, senderJid, args) {
     }
   } catch (e) {}
 
-  // Check slot space
+ // Check slot space
   const userSummons = await summonSystem.getUserSummons(senderJid);
   if (userSummons.length >= (user.summonSlots || 5)) {
     await sock.sendMessage(chatId, { text: `❌ Summon slots full (${userSummons.length}/${user.summonSlots || 5}).` });
     return;
   }
 
-  // Check funds
+ // Check funds
   if (user.wallet < listing.price) {
     await sock.sendMessage(chatId, { text: `❌ Insufficient Zeni. Need ${listing.price.toLocaleString()}, have ${user.wallet.toLocaleString()}.` });
     return;
   }
 
-  // Atomic claim
+ // Atomic claim
   const claimed = await SummonMarket.findOneAndUpdate(
     { listingId: listing.listingId, status: 'active' },
     { status: 'sold', buyerId: senderJid, soldAt: new Date(), salePrice: listing.price },
@@ -1329,18 +1322,18 @@ async function cmdMarketBuy(sock, chatId, senderJid, args) {
     return;
   }
 
-  // Transfer funds
+ // Transfer funds
   economy.removeMoney(senderJid, listing.price, `Summon market purchase: ${listing.summonId}`);
   economy.addMoney(listing.sellerId, listing.price, `Summon market sale: ${listing.summonId}`);
 
-  // Transfer summon
+ // Transfer summon
   const summon = await SummonModel.findOneAndUpdate(
     { summonId: listing.summonId },
     { ownerJid: senderJid, forSale: false, salePrice: null },
     { new: true }
   );
 
-  // Refresh resonances for both users
+ // Refresh resonances for both users
   try {
     const seller = economy.getUser(listing.sellerId);
     if (seller) await summonSystem.refreshUserResonances(seller);
@@ -1371,17 +1364,17 @@ async function cmdMarketCancel(sock, chatId, senderJid, args) {
     return;
   }
 
-  // Cancel listing
+ // Cancel listing
   listing.status = 'cancelled';
   await listing.save();
 
-  // Unmark summon
+ // Unmark summon
   await SummonModel.updateOne(
     { summonId: listing.summonId },
     { forSale: false, salePrice: null }
   );
 
-  // Refresh resonances
+ // Refresh resonances
   const user = economy.getUser(senderJid);
   if (user) {
     try { await summonSystem.refreshUserResonances(user); } catch (e) {}
@@ -1416,14 +1409,14 @@ async function cmdMarketMy(sock, chatId, senderJid) {
   await sock.sendMessage(chatId, { text: msg });
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon duel @user [wager] - PvP summon vs summon
-// 💡 REWORKED 2026-08-05: Now uses the REAL PvP engine (turn-based,
+// REWORKED Now uses the REAL PvP engine (turn-based,
 // abilities, accept/decline flow). The old flat-damage-roll simulator
 // is gone. This command issues a challenge with mode='summon'; the
 // target uses `.s accept` to accept, then both players use
 // `.s pvp attack/ability/flee` to fight.
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdDuel(sock, chatId, senderJid, args, m) {
   const user = economy.getUser(senderJid);
@@ -1432,18 +1425,18 @@ async function cmdDuel(sock, chatId, senderJid, args, m) {
     return;
   }
 
-  // Get target from mention OR reply-to-message
+ // Get target from mention OR reply-to-message
   let targetJid = null;
   let mentioned = args[0];
 
-  // 💡 FIX 2026-08-05: Support reply-to-message as target (no @mention needed)
+ // FIX Support reply-to-message as target (no @mention needed)
   if (!mentioned && m?.message?.extendedTextMessage?.contextInfo?.participant) {
     targetJid = m.message.extendedTextMessage.contextInfo.participant;
   } else if (m?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length > 0) {
     targetJid = m.message.extendedTextMessage.contextInfo.mentionedJid[0];
   }
 
-  // Fallback to parsing the mention string
+ // Fallback to parsing the mention string
   if (!targetJid && mentioned && mentioned.includes('@')) {
     targetJid = mentioned.replace(/[@!]/g, '').includes('s.whatsapp.net')
       ? mentioned.replace(/[@!]/g, '')
@@ -1462,7 +1455,7 @@ async function cmdDuel(sock, chatId, senderJid, args, m) {
     return;
   }
 
-  // Alt detection
+ // Alt detection
   try {
     const altDetection = require('../rpg/altDetection');
     const altCheck = altDetection.checkTransfer(senderJid, targetJid);
@@ -1472,7 +1465,6 @@ async function cmdDuel(sock, chatId, senderJid, args, m) {
     }
   } catch (e) {}
 
-  // Parse wager (optional - only if mentioned arg was a number, or 2nd arg)
   let wager = 0;
   if (mentioned && !mentioned.includes('@') && !isNaN(parseInt(mentioned))) {
     wager = parseInt(mentioned);
@@ -1481,7 +1473,7 @@ async function cmdDuel(sock, chatId, senderJid, args, m) {
     if (!isNaN(w) && w >= 0) wager = w;
   }
 
-  // Issue the challenge via the PvP engine with mode='summon'
+ // Issue the challenge via the PvP engine with mode='summon'
   const pvpSystem = require('../rpg/pvpSystem');
   const result = pvpSystem.challengePlayer(chatId, senderJid, targetJid, wager, { mode: 'summon' });
 
@@ -1490,7 +1482,7 @@ async function cmdDuel(sock, chatId, senderJid, args, m) {
     return;
   }
 
-  // Get summon names for the challenge message
+ // Get summon names for the challenge message
   const mySummon = await summonSystem.getActiveSummon(user);
   const targetUser = economy.getUser(targetJid);
   const targetSummon = targetUser ? await summonSystem.getActiveSummon(targetUser) : null;
@@ -1514,14 +1506,14 @@ async function cmdDuel(sock, chatId, senderJid, args, m) {
   await sock.sendMessage(chatId, { text: msg, mentions: [targetJid] });
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon skill - view/manage summon skill tree (Phase 2)
 // Subcommands:
-//   .summon skill <id>           - view skill tree for a summon
-//   .summon skill choose <id> <A|B|C> - choose a path
-//   .summon skill unlock <id> <A1-A5> - unlock a node
-//   .summon skill respec <id>    - reset skill tree (needs scroll)
-// ─────────────────────────────────────────────────────────────
+// .summon skill <id> - view skill tree for a summon
+// .summon skill choose <id> <A|B|C> - choose a path
+// .summon skill unlock <id> <A1-A5> - unlock a node
+// .summon skill respec <id> - reset skill tree (needs scroll)
+// -------------------------------------------------------------
 
 async function cmdSkillTree(sock, chatId, senderJid, args) {
   const user = economy.getUser(senderJid);
@@ -1531,13 +1523,13 @@ async function cmdSkillTree(sock, chatId, senderJid, args) {
   let summonNum = args[1] || '';
   const p = getPrefix();
 
-  // 💡 FIX 2026-08-05: .s summon skill <#> - args[0] is the summon number,
-  // not a subcommand. Detect numeric args[0] and treat as summonNum directly.
+ // FIX .s summon skill <#> - args[0] is the summon number,
+ // not a subcommand. Detect numeric args[0] and treat as summonNum directly.
   if (/^\d+$/.test(sub)) {
     summonNum = sub;
   }
 
-  // .summon skill (no args) - show help
+ // .summon skill (no args) - show help
   if (!sub || !summonNum) {
     await sock.sendMessage(chatId, {
       text: `🛤️ *SUMMON SKILL TREES*\n\nEach summon has a 3-path skill tree. Choose ONE path and unlock nodes as you level up.\n\n*Commands:*\n• \`${p} summon skill <#>\` - view skill tree for summon #N\n• \`${p} summon skill choose <#> <A|B|C>\` - choose a path\n• \`${p} summon skill unlock <#> <A1-A5>\` - unlock a node (costs 1 skill point)\n• \`${p} summon skill respec <#>\` - reset tree (needs Skill Respec Scroll)\n\n_Skill points: 1 per level. Nodes unlock at L5/10/15/25/35._\n_Use summon position number (1, 2, 3) not summon ID._`
@@ -1545,7 +1537,7 @@ async function cmdSkillTree(sock, chatId, senderJid, args) {
     return;
   }
 
-  // 💡 FIX: Use position number instead of summonId for lookup
+ // FIX: Use position number instead of summonId for lookup
   const summons = await summonSystem.getUserSummons(senderJid);
   const summonIndex = parseInt(summonNum) - 1;
   let summon = null;
@@ -1553,7 +1545,7 @@ async function cmdSkillTree(sock, chatId, senderJid, args) {
   if (!isNaN(summonIndex) && summonIndex >= 0 && summonIndex < summons.length) {
     summon = summons[summonIndex];
   } else {
-    // Fallback: try summonId match (for backwards compat)
+ // Fallback: try summonId match (for backwards compat)
     summon = summons.find(s => s.summonId.endsWith(summonNum) || s.summonId === summonNum);
   }
 
@@ -1587,7 +1579,7 @@ async function cmdSkillTree(sock, chatId, senderJid, args) {
       return;
     }
     inventorySystem.removeItem(senderJid, 'skill_respec_scroll', 1);
-    // Refund all skill points from unlocked nodes
+ // Refund all skill points from unlocked nodes
     const refunded = (summon.unlockedSkillNodes || []).length;
     summon.skillPoints = (summon.skillPoints || 0) + refunded;
     summon.unlockedSkillNodes = [];
@@ -1597,7 +1589,7 @@ async function cmdSkillTree(sock, chatId, senderJid, args) {
     return;
   }
 
-  // .summon skill <id> - show the skill tree
+ // .summon skill <id> - show the skill tree
   const tree = summonSkillTrees.getSkillTree(summon.archetype);
   const chosenPath = summon.chosenSkillPath;
   const unlocked = summon.unlockedSkillNodes || [];
@@ -1630,9 +1622,9 @@ async function cmdSkillTree(sock, chatId, senderJid, args) {
   await sock.sendMessage(chatId, { text: msg });
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon evolve <id> - evolve a summon to its next stage (Phase 3)
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdEvolve(sock, chatId, senderJid, args) {
   const user = economy.getUser(senderJid);
@@ -1651,7 +1643,7 @@ async function cmdEvolve(sock, chatId, senderJid, args) {
     return;
   }
 
-  // Resolve the summon
+ // Resolve the summon
   const summons = await summonSystem.getUserSummons(senderJid);
   const summon = resolveSummon(summons, summonIdQuery);
   if (!summon) {
@@ -1661,14 +1653,13 @@ async function cmdEvolve(sock, chatId, senderJid, args) {
 
   const summonEvolution = require('../rpg/summonEvolution');
 
-  // Check if can evolve first
   const check = summonEvolution.canEvolve(summon);
   if (!check.canEvolve) {
     await sock.sendMessage(chatId, { text: `❌ ${check.reason}` });
     return;
   }
 
-  // Show requirements + confirm
+ // Show requirements + confirm
   if (!args[1] || args[1].toLowerCase() !== 'confirm') {
     const { nextSpeciesData, reqs } = check;
     const ZENI = botConfig.getCurrency().symbol;
@@ -1690,14 +1681,14 @@ async function cmdEvolve(sock, chatId, senderJid, args) {
     return;
   }
 
-  // Execute evolution
+ // Execute evolution
   const result = await summonEvolution.evolveSummon(summon);
   await sock.sendMessage(chatId, { text: result.message });
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon equip <summonId> <gearId> - equip summon gear (Phase 5)
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdSummonEquip(sock, chatId, senderJid, args) {
   const user = economy.getUser(senderJid);
@@ -1713,12 +1704,12 @@ async function cmdSummonEquip(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  // 💡 FIX 2026-09-12: was `resolveSummon(summons, summonNum)` - summonNum is
-  // a variable of a DIFFERENT function → ReferenceError on every use.
+ // FIX was `resolveSummon(summons, summonNum)` - summonNum is
+ // a variable of a DIFFERENT function → ReferenceError on every use.
   const summon = resolveSummon(summons, summonIdQuery);
   if (!summon) { await sock.sendMessage(chatId, { text: '❌ Summon not found.' }); return; }
 
-  // Resolve gear item - look up in ITEM_DATABASE for type SUMMON_GEAR
+ // Resolve gear item - look up in ITEM_DATABASE for type SUMMON_GEAR
   const lootSystem = require('../rpg/lootSystem');
   const inventorySystem = require('../rpg/inventorySystem');
   const cleanQuery = gearIdQuery.toLowerCase().replace(/_/g, '').replace(/ /g, '');
@@ -1739,17 +1730,17 @@ async function cmdSummonEquip(sock, chatId, senderJid, args) {
     return;
   }
 
-  // Check player has the item
+ // Check player has the item
   if (!inventorySystem.hasItem(senderJid, gearId, 1)) {
     await sock.sendMessage(chatId, { text: `❌ You don't have a ${gearInfo.name}.` });
     return;
   }
 
-  // If something is already equipped in that slot, return it to inventory
-  // 💡 FIX 2026-10-10: addItem is ASYNC and can FAIL (bag full) - the old
-  // fire-and-forget call silently DESTROYED the previously equipped gear
-  // (old gear vanished, new gear took the slot). Now: await + abort equip
-  // on failure so nothing is lost.
+ // If something is already equipped in that slot, return it to inventory
+ // FIX addItem is ASYNC and can FAIL (bag full) - the old
+ // fire-and-forget call silently DESTROYED the previously equipped gear
+ // (old gear vanished, new gear took the slot). Now: await + abort equip
+ // on failure so nothing is lost.
   const oldGear = summon.summonEquipment?.[slot];
   if (oldGear) {
     const giveBack = await inventorySystem.addItem(senderJid, oldGear.id || oldGear.summonSlot, 1);
@@ -1761,7 +1752,7 @@ async function cmdSummonEquip(sock, chatId, senderJid, args) {
     }
   }
 
-  // Equip the new gear
+ // Equip the new gear
   if (!summon.summonEquipment) summon.summonEquipment = {};
   summon.summonEquipment[slot] = {
     id: gearId,
@@ -1770,7 +1761,7 @@ async function cmdSummonEquip(sock, chatId, senderJid, args) {
     rarity: gearInfo.rarity,
   };
 
-  // Remove from inventory
+ // Remove from inventory
   inventorySystem.removeItem(senderJid, gearId, 1);
   await summon.save();
 
@@ -1785,9 +1776,9 @@ async function cmdSummonEquip(sock, chatId, senderJid, args) {
   await sock.sendMessage(chatId, { text: msg });
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon unequip <summonId> <slot> - unequip summon gear (Phase 5)
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdSummonUnequip(sock, chatId, senderJid, args) {
   const user = economy.getUser(senderJid);
@@ -1810,9 +1801,9 @@ async function cmdSummonUnequip(sock, chatId, senderJid, args) {
   }
 
   const summons = await summonSystem.getUserSummons(senderJid);
-  // 💡 FIX 2026-08-31: referenced `summonNum` (a variable of a DIFFERENT
-  // function) - ReferenceError on every .summon unequip; the command was
-  // completely non-functional. Use this handler's own query variable.
+ // FIX referenced `summonNum` (a variable of a DIFFERENT
+ // function) - ReferenceError on every .summon unequip; the command was
+ // completely non-functional. Use this handler's own query variable.
   const summon = resolveSummon(summons, summonIdQuery);
   if (!summon) { await sock.sendMessage(chatId, { text: '❌ Summon not found.' }); return; }
 
@@ -1822,10 +1813,9 @@ async function cmdSummonUnequip(sock, chatId, senderJid, args) {
     return;
   }
 
-  // Return to inventory
   const inventorySystem = require('../rpg/inventorySystem');
-  // 💡 FIX 2026-08-31: await + check - a full bag previously destroyed the
-  // gear permanently (slot nulled first, addItem failure ignored).
+ // FIX await + check - a full bag previously destroyed the
+ // gear permanently (slot nulled first, addItem failure ignored).
   const returnResult = await inventorySystem.addItem(senderJid, gear.id, 1);
   if (!returnResult || !returnResult.success) {
     await sock.sendMessage(chatId, { text: `❌ ${returnResult?.message || 'Bag full - make space first.'}` });
@@ -1837,9 +1827,9 @@ async function cmdSummonUnequip(sock, chatId, senderJid, args) {
   await sock.sendMessage(chatId, { text: `✅ Unequipped ${gear.name} from ${slot} slot. Returned to inventory.` });
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon bond <id> - view bond level + bonuses (Phase 4)
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdBond(sock, chatId, senderJid, args) {
   const user = economy.getUser(senderJid);
@@ -1868,9 +1858,9 @@ async function cmdBond(sock, chatId, senderJid, args) {
   await sock.sendMessage(chatId, { text: msg });
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon traits <id> - view traits (Phase 4)
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdTraits(sock, chatId, senderJid, args) {
   const user = economy.getUser(senderJid);
@@ -1899,15 +1889,15 @@ async function cmdTraits(sock, chatId, senderJid, args) {
   await sock.sendMessage(chatId, { text: msg });
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon ai <id> <mode> - set AI behavior mode (Phase 4)
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon abilities - list auto-unlocked abilities for active summon
-// 💡 NEW 2026-08-05: Summons auto-unlock abilities at level milestones.
+// NEW Summons auto-unlock abilities at level milestones.
 // This command shows what's unlocked + what's coming next.
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 async function cmdAbilities(sock, chatId, senderJid, args) {
   const user = economy.getUser(senderJid);
   if (!user) { await sock.sendMessage(chatId, { text: '❌ Not registered.' }); return; }
@@ -1938,12 +1928,12 @@ async function cmdAbilities(sock, chatId, senderJid, args) {
   let msg = `${icon} *${name}* - Abilities (Lv.${summon.level} ${summon.archetype})\n`;
   msg += `━━━━━━━━━━━━━━━━━━━\n\n`;
 
-  // Unlocked abilities
+ // Unlocked abilities
   const unlocked = Object.entries(arch.skills)
     .filter(([, s]) => !s.isFollowUp && summon.level >= s.levelReq)
     .map(([id, s]) => ({ id, ...s }));
 
-  // Locked abilities (coming at future levels)
+ // Locked abilities (coming at future levels)
   const locked = Object.entries(arch.skills)
     .filter(([, s]) => !s.isFollowUp && summon.level < s.levelReq)
     .map(([id, s]) => ({ id, ...s }))
@@ -1960,7 +1950,7 @@ async function cmdAbilities(sock, chatId, senderJid, args) {
     }
   }
 
-  // Next to unlock
+ // Next to unlock
   if (locked.length > 0) {
     msg += `\n🔒 *NEXT TO UNLOCK:*\n`;
     const next = locked.slice(0, 3);
@@ -2024,9 +2014,9 @@ async function cmdAIMode(sock, chatId, senderJid, args) {
   await sock.sendMessage(chatId, { text: `🤖 AI mode set to *${modeData.name}* ${modeData.icon}\n${modeData.desc}` });
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon eggcraft <tier> - craft eggs from fragments
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdEggCraft(sock, chatId, senderJid, args) {
   const user = economy.getUser(senderJid);
@@ -2070,9 +2060,9 @@ async function cmdEggCraft(sock, chatId, senderJid, args) {
   await sock.sendMessage(chatId, { text: result.message });
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // .summon help
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function cmdHelp(sock, chatId) {
   const p = getPrefix();
@@ -2127,9 +2117,9 @@ async function cmdHelp(sock, chatId) {
   await sock.sendMessage(chatId, { text: msg });
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // MODULE EXPORTS
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 module.exports = {
   handleCommand

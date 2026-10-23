@@ -1,6 +1,6 @@
-// LIVE E2E v2 (runs ON Box 1) - 2026-09-28 owner spec battery:
-//   §1 direct answers  §2/§7 hidden options  §3 audio throughput+cache
-//   §4 bot-wide queue  §5/§6 entity-anchored image sources
+// LIVE E2E v2 (runs ON Box 1) - owner spec battery:
+// §1 direct answers §2/§7 hidden options §3 audio throughput+cache
+// §4 bot-wide queue §5/§6 entity-anchored image sources
 // Fixture sock; real Go audio service + real Wikipedia/AniList/Jikan.
 process.chdir("/home/ubuntu/whatsapp-bot");
 const quiz = require("/home/ubuntu/whatsapp-bot/core/games/quiz");
@@ -51,7 +51,7 @@ function mountSession(q, { hide = false, secs = 30 } = {}) {
 async function main() {
   console.log("=== QUIZ SPEC E2E v2 (Box 1) ===");
 
-  // ── §1/§2/§7: direct answers + hidden options ──
+ // -- §1/§2/§7: direct answers + hidden options --
   console.log("\n[-- direct answers + options visibility --]");
   {
     const sock = makeSock();
@@ -62,24 +62,24 @@ async function main() {
     const s = mountSession(q);
     s.qOpenUntil = Date.now() + 30000;
 
-    // bare correct text
+ // bare correct text
     let r = await quiz.handleAnswer(sock, GC, P1, "Cypher Loop", MARK, { key: { id: "m1" } }, "P1", { bareText: true });
     ok(r.handled === true && r.silent === true, "bare correct answer consumed");
     ok(sock.reacts.some((x) => x.text === "✅" && x.key.id === "m1"), "✅ react on correct");
-    // one attempt lock: second player later, same player now ignored
+ // one attempt lock: second player later, same player now ignored
     r = await quiz.handleAnswer(sock, GC, P1, "Bob Byte", MARK, { key: { id: "m2" } }, "P1", { bareText: true });
     ok(r.handled === true, "second attempt from same player still handled (locked, silent)");
     ok(!sock.reacts.some((x) => x.key.id === "m2"), "locked attempt gets NO react");
 
-    // kill the detached reveal chain from m1 (production is token-guarded;
-    // the harness swaps sessions manually so cancel s1 BEFORE mounting s2)
+ // kill the detached reveal chain from m1 (production is token-guarded;
+ // the harness swaps sessions manually so cancel s1 BEFORE mounting s2)
     s.cancelled = true;
     s.revealLock = true;
     s.token += 1;
     await sleep(1500);
 
-    // wrong-answer + chatter pass-through on a FRESH session (the first
-    // correct answer reveals + finishes a 1-question session)
+ // wrong-answer + chatter pass-through on a FRESH session (the first
+ // correct answer reveals + finishes a 1-question session)
     const s2 = mountSession({ ...q, options: [...q.options] });
     s2.qOpenUntil = Date.now() + 30000;
     r = await quiz.handleAnswer(sock, GC, P2, "i have no idea lol", MARK, { key: { id: "m3" } }, "P2", { bareText: true });
@@ -88,7 +88,7 @@ async function main() {
     ok(r.handled === true && sock.reacts.some((x) => x.key.id === "m4" && x.text === "✅"), "case/format-insensitive bare correct");
     quiz._internal.activeQuizzes.delete(GC);
 
-    // closed question = ignored (fresh session, qOpenUntil in the past)
+ // closed question = ignored (fresh session, qOpenUntil in the past)
     const s3 = mountSession({ ...q, options: [...q.options] });
     s3.qOpenUntil = 1;
     r = await quiz.handleAnswer(sock, GC, P2, "Cypher Loop", MARK, { key: { id: "m5" } }, "P2", { bareText: true });
@@ -98,7 +98,7 @@ async function main() {
   }
 
   {
-    // hidden options: letters NEVER match, text matches, card omits options
+ // hidden options: letters NEVER match, text matches, card omits options
     const sock = makeSock();
     const q = {
       q: "Which brand is this?", topic: "Logo", difficulty: "easy", type: "image",
@@ -117,13 +117,13 @@ async function main() {
     quiz._internal.activeQuizzes.delete(GC);
   }
 
-  // card formatting through the real postQuestion path (text question)
+ // card formatting through the real postQuestion path (text question)
   {
     const sock = makeSock();
     const qOpt = { q: "Capital of Testlandia?", topic: "Mixed", difficulty: "easy", type: "text", options: ["Alpha", "Beta", "Gamma", "Delta"], correct: 1 };
     const s1 = mountSession(qOpt);
     s1.qOpenUntil = 0;
-    // silence timers by cancelling right after post
+ // silence timers by cancelling right after post
     const p1 = quiz._internal.postQuestion(sock, GC, s1);
     await p1;
     const card1 = (sock.sends.map((x) => x.content.text || x.content.caption || "").join("\n"));
@@ -139,7 +139,7 @@ async function main() {
     const card2 = (sock2.sends.map((x) => x.content.text || x.content.caption || "").join("\n"));
     ok(!card2.includes("A. Nike"), "hidden-option card shows NO options");
     ok(card2.includes("No options - just type the answer in chat!"), "hidden-option card shows direct-answer hint");
-    // reveal text: plain answer (no letter prefix) - drive revealAndAdvance with a winner
+ // reveal text: plain answer (no letter prefix) - drive revealAndAdvance with a winner
     s2.qOpenUntil = Date.now() + 30000;
     await quiz.handleAnswer(sock2, GC, P2, "Nike", MARK, { key: { id: "h4" } }, "P2", { bareText: true });
     await sleep(1200); // reveal chain is detached
@@ -148,11 +148,11 @@ async function main() {
     quiz._internal.activeQuizzes.delete(GC);
   }
 
-  // ── §4: bot-wide queue ──
+ // -- §4: bot-wide queue --
   console.log("\n[-- global quiz queue --]");
   {
     const g = quiz._internal.genGate;
-    // drain any state
+ // drain any state
     ok(g.slots() === 1, "GEN_SLOTS defaults to 1 (one quiz bot-wide)");
     g.state().active = 0; g.state().waiters.length = 0;
 
@@ -173,7 +173,7 @@ async function main() {
     quiz._internal.genGate.releaseGenSlot();
     ok(g.state().active === 0 && g.state().waiters.length === 0, "gate drains to zero");
 
-    // session slot riding + idempotent release
+ // session slot riding + idempotent release
     g.state().active = 0; g.state().waiters.length = 0;
     const held = await quiz._internal.genGate.acquireGenSlot({ chatId: "333@g.us", cancelled: false }, null);
     ok(held === true && g.state().active === 1, "slot held (simulating a live quiz)");
@@ -185,7 +185,7 @@ async function main() {
     g.state().active = 0;
   }
 
-  // ── §3: audio pipeline (LIVE Go service) ──
+ // -- §3: audio pipeline (LIVE Go service) --
   console.log("\n[-- audio: live build + cache --]");
   {
     const usedKeys = new Set();
@@ -200,7 +200,7 @@ async function main() {
       const key = qs[0].assetKey;
       const cached = quizAudioCache.get(key);
       ok(!!cached, "successful clip persisted to disk cache");
-      // cached rebuild: same show entry must be served from disk (no Go call)
+ // cached rebuild: same show entry must be served from disk (no Go call)
       const poolEntry = (quizMedia.THEMES_POOL || []).find((t) => `theme:${t.show.toLowerCase().replace(/\s+/g, " ").trim()}` === key) || null;
       if (poolEntry) {
         const t1 = Date.now();
@@ -216,7 +216,7 @@ async function main() {
     }
   }
 
-  // ── §2: logos live (hideOptions + verified bytes) ──
+ // -- §2: logos live (hideOptions + verified bytes) --
   console.log("\n[-- logos: live build --]");
   {
     const qs = await quizMedia.buildLogosQuestions({ count: 2, usedKeys: new Set(), difficulty: "easy" });

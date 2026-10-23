@@ -1,22 +1,20 @@
 #!/usr/bin/env node
-// 🃏 MOVECARDS QA (2026-10-23) — run ON-BOX inside the bot dir:
-//   node scripts/qa_movecards.js [Joker|Jake|Subaru]
+// MOVECARDS QA - run ON-BOX inside the bot dir:
+// node scripts/qa_movecards.js [Joker|Jake|Subaru]
 // Owner ask: "There used to be a command that moves all of someone's cards
 // from one account to another, hmmm where the card mod, global mod or owner
 // tags the 2 accounts with a mod command, do that and force restart joker"
-//
 // What it covers:
-//   A. gate: non-mod blocked, cardmod/owner pass (dispatcher-level)
-//   B. preview: counts, listings, auction-hold, arming
-//   C. fire: cards move, copy numbers preserved, deck pulled, flags reset,
-//      listing cancelled, auction copy stays, money untouched, DST account created
-//   D. state machine: single-fire, 60s expiry, nothing-armed, same-account, usage
-//
+// A. gate: non-mod blocked, cardmod/owner pass (dispatcher-level)
+// B. preview: counts, listings, auction-hold, arming
+// C. fire: cards move, copy numbers preserved, deck pulled, flags reset,
+// listing cancelled, auction copy stays, money untouched, DST account created
+// D. state machine: single-fire, 60s expiry, nothing-armed, same-account, usage
 // Safety model:
-//   - mock sock: ZERO WhatsApp traffic
-//   - QA-husk identities (234000000011111/22222@s.whatsapp.net), fully
-//     deleted in `finally` — nothing real is touched
-//   - movecards is token-cmd-excluded → no token counter ticks
+// - mock sock: ZERO WhatsApp traffic
+// - QA-husk identities (234000000011111/22222@s.whatsapp.net), fully
+// deleted in `finally` - nothing real is touched
+// - movecards is token-cmd-excluded → no token counter ticks
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -24,7 +22,7 @@ const path = require('path');
 let PASS = 0, FAIL = 0;
 function check(name, cond, extra) {
     if (cond) { PASS++; console.log(`  ✅ ${name}`); }
-    else { FAIL++; console.log(`  ❌ ${name}${extra ? ' — ' + extra : ''}`); }
+    else { FAIL++; console.log(`  ❌ ${name}${extra ? ' - ' + extra : ''}`); }
 }
 
 (async () => {
@@ -49,8 +47,8 @@ function check(name, cond, extra) {
     const DST   = '234000000022222@s.whatsapp.net';
     const CHAT  = 'qa-movecards@g.us';
     const CHAT2 = 'qa-movecards2@g.us';
-    const RANDOM   = '100000000000qa@lid';   // plain user — must be BLOCKED
-    const CARDMOD  = '264299486400613@lid';  // Mahxee — real cardmod on Joker
+    const RANDOM   = '100000000000qa@lid';   // plain user - must be BLOCKED
+    const CARDMOD  = '264299486400613@lid';  // Mahxee - real cardmod on Joker
     const OWNER_QA = '2300000000owner@s.whatsapp.net';
 
     const sent = [];
@@ -80,7 +78,7 @@ function check(name, cond, extra) {
         check('init loaded card DB', (inst.ALL_CARDS || []).length > 100, `got ${(inst.ALL_CARDS || []).length}`);
         check('Mahxee is a cardmod on this instance (real roster)', inst.modJids.has(CARDMOD));
 
-        // source assertions
+ // source assertions
         const srcTxt = fs.readFileSync(path.join(BOT, 'core', 'rpg', 'cardSystem.js'), 'utf8');
         check('source: dispatcher gates movecards on isCardMod', /case 'movecards':\s*\n\s*case 'mc':\s*\n\s*if \(!isCardMod\)/.test(srcTxt));
         check('source: movecards+mc token-cmd-excluded', /'movecards', 'mc',/.test(srcTxt));
@@ -88,7 +86,7 @@ function check(name, cond, extra) {
         try {
             await cleanup();
 
-            // ── seed ──
+ // -- seed --
             const cardIds = inst.ALL_CARDS.slice(0, 5).map(c => c.id);
             const c1 = await UserCard.create({ userId: SRC, cardId: cardIds[0], copyNumber: 101, forSale: true, salePrice: 100, inCustomDeck: true, customDeckName: 'QADeck', inMainDeck: true, mainDeckSlot: 3 });
             const c2 = await UserCard.create({ userId: SRC, cardId: cardIds[1], copyNumber: 102, forSale: true, salePrice: 250, inCustomDeck: true, customDeckName: 'QADeck' });
@@ -105,8 +103,8 @@ function check(name, cond, extra) {
             const mentionMsg = (mentions) => ({ message: { extendedTextMessage: { contextInfo: { mentionedJid: mentions } } } });
             const fakeReply = async (text, opts) => { sent.push({ jid: CHAT, content: { text } }); return { key: { id: 'qa' } }; };
 
-            // ── D. guards ──
-            // mentions dedupe: [SRC,SRC] collapses to 1 candidate → usage reply
+ // -- D. guards --
+ // mentions dedupe: [SRC,SRC] collapses to 1 candidate → usage reply
             await cardSystem.cmdMoveCards(RANDOM, fakeReply, ['@x'], mentionMsg([SRC, SRC]), CHAT);
             check('guard: duplicate tags dedupe to usage', lastText().includes('MOVE CARDS BETWEEN ACCOUNTS'), lastText().slice(0, 80));
             await cardSystem.cmdMoveCards(RANDOM, fakeReply, [], mentionMsg([SRC]), CHAT);
@@ -114,10 +112,10 @@ function check(name, cond, extra) {
             await cardSystem.cmdMoveCards(RANDOM, fakeReply, ['confirm'], mentionMsg([]), CHAT);
             check('guard: confirm with nothing armed', lastText().includes('NOTHING ARMED'), lastText().slice(0, 80));
 
-            // ── B. preview ──
+ // -- B. preview --
             await cardSystem.cmdMoveCards(RANDOM, fakeReply, [], mentionMsg([SRC, DST]), CHAT);
             const preview = lastText();
-            check('preview: title', preview.includes('MOVE CARDS — PREVIEW'), preview.slice(0, 100));
+            check('preview: title', preview.includes('MOVE CARDS - PREVIEW'), preview.slice(0, 100));
             check('preview: SRC count 5', preview.includes('*5* card'), preview.slice(0, 120));
             check('preview: DST current 1', preview.includes('*1* card'), preview.slice(0, 140));
             check('preview: listings 1', preview.includes('*Market listings to cancel:* _1_'), preview.slice(0, 160));
@@ -125,7 +123,7 @@ function check(name, cond, extra) {
             const armed = cardSystem.moveCardsArmed.get(CHAT);
             check('preview: chat armed with src/dst', !!armed && armed.src === SRC && armed.dst === DST, JSON.stringify(armed || {}));
 
-            // ── C. fire ──
+ // -- C. fire --
             await cardSystem.cmdMoveCards(RANDOM, fakeReply, ['confirm'], mentionMsg([]), CHAT);
             const doneMsg = lastText();
             check('fire: success card', doneMsg.includes('CARDS MOVED!'), doneMsg.slice(0, 100));
@@ -140,26 +138,26 @@ function check(name, cond, extra) {
             check('post: c1 moved with flags reset', !!c1After && c1After.forSale === false && c1After.salePrice === null && c1After.inCustomDeck === false && c1After.inMainDeck === false && c1After.mainDeckSlot === null);
             check('post: c1 copyNumber preserved (101)', !!c1After && c1After.copyNumber === 101, `got ${c1After && c1After.copyNumber}`);
             const deckAfter = await CardDeck.findOne({ userId: SRC, name: 'QADeck' }).lean();
-            check('post: deck pulled — only auction copy remains', !!deckAfter && deckAfter.cards.length === 1 && String(deckAfter.cards[0]) === String(c3._id), `deck=${deckAfter && deckAfter.cards.length}`);
+            check('post: deck pulled - only auction copy remains', !!deckAfter && deckAfter.cards.length === 1 && String(deckAfter.cards[0]) === String(c3._id), `deck=${deckAfter && deckAfter.cards.length}`);
             const listingAfter = await CardMarket.findOne({ sellerId: SRC }).lean();
             check('post: listing cancelled in DB', !!listingAfter && listingAfter.status === 'cancelled', listingAfter && listingAfter.status);
             check('post: SRC users doc money untouched', !!User && await (async () => { const u = await User.findOne({ userId: SRC }).lean(); return u && u.wallet === 500 && u.bank === 250 && u.eventTokens === 7; })());
-            // The fire path's getOrCreateUser caches DST in economy RAM; flush it
-            // and require the DB doc — proves the recipient account really exists.
+ // The fire path's getOrCreateUser caches DST in economy RAM; flush it
+ // and require the DB doc - proves the recipient account really exists.
             await economy.saveUser(DST).catch(() => {});
             const dstDoc = await User.findOne({ userId: DST }).lean();
             check('post: DST economy account created & persisted', !!dstDoc, dstDoc ? '' : 'no users doc after saveUser flush');
 
-            // ── D. single-fire + expiry ──
+ // -- D. single-fire + expiry --
             await cardSystem.cmdMoveCards(RANDOM, fakeReply, ['confirm'], mentionMsg([]), CHAT);
-            check('state: single-fire — armed key consumed', lastText().includes('NOTHING ARMED'), lastText().slice(0, 80));
+            check('state: single-fire - armed key consumed', lastText().includes('NOTHING ARMED'), lastText().slice(0, 80));
             await cardSystem.cmdMoveCards(RANDOM, fakeReply, [], mentionMsg([SRC, DST]), CHAT2);
             const armed2 = cardSystem.moveCardsArmed.get(CHAT2);
             armed2.armedAt = Date.now() - 61_000;
             await cardSystem.cmdMoveCards(RANDOM, fakeReply, ['confirm'], mentionMsg([]), CHAT2);
             check('state: expired preview rejected', lastText().includes('PREVIEW EXPIRED'), lastText().slice(0, 80));
 
-            // ── A. dispatcher-level gate ──
+ // -- A. dispatcher-level gate --
             sent.length = 0;
             const mkCall = (senderJid, perms) => cardSystem.handleCommand({
                 lowerTxt: `${P} movecards`, txt: `${P} movecards @old @new`,
@@ -176,8 +174,8 @@ function check(name, cond, extra) {
             check('gate: cardmod (Mahxee roster) passes', !lastText().includes('Only card moderators'), lastText().slice(0, 90));
             cardSystem.moveCardsArmed.delete(CHAT2);
 
-            // alias: 'mc' must reach the SAME case — from a plain user the gate
-            // reply itself proves routing (unwired cmds get no reply at all)
+ // alias: 'mc' must reach the SAME case - from a plain user the gate
+ // reply itself proves routing (unwired cmds get no reply at all)
             sent.length = 0;
             await cardSystem.handleCommand({
                 lowerTxt: `${P} mc`, txt: `${P} mc`, senderJid: RANDOM, chatId: CHAT2,

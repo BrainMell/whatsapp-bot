@@ -16,14 +16,14 @@ const RUN = Math.random().toString(36).slice(2, 6);
     L.seedIdentities(roster);
     const ev = await L.startWar(roster);
 
-    // force both into the same room via direct state writes (unit-level probe)
+ // force both into the same room via direct state writes (unit-level probe)
     const doc0 = await state.getEvent(ev.eventId, { fresh: true });
     const a = doc0.players.find(p => p.jid === roster[0].jid);
     const meet = a.roomId; // A's spawn is the meeting room
-    // B teleports in (spawn-safe: empty room)
+ // B teleports in (spawn-safe: empty room)
     await state.updatePlayer(ev.eventId, roster[1].jid, {}, { roomId: meet, prevRoomId: meet, lastMoveAt: 0 });
     await GWE.updateOne({ eventId: ev.eventId, 'rooms.key': meet }, { $set: { 'rooms.$.type': 'empty' } });
-    // mirror rooms.enterRoom occupants update (what a real move would do)
+ // mirror rooms.enterRoom occupants update (what a real move would do)
     const rooms = require('../core/rpg/guildWar/rooms');
     await rooms.enterRoom(ev.eventId, roster[1].jid, roster[1].spawnRoomId || roster[1].roomId, meet);
 
@@ -35,7 +35,7 @@ const RUN = Math.random().toString(36).slice(2, 6);
     console.log('ctx.room.occupants:', JSON.stringify(ctx.room.occupants));
     console.log('ctx.players:', JSON.stringify(ctx.players.map(p => ({ jid: p.jid.slice(0, 12), name: p.name, guildId: p.guildId, roomId: p.roomId }))));
 
-    // A "moves" in (already in room: emulate late arrival by re-entering)
+ // A "moves" in (already in room: emulate late arrival by re-entering)
     const sock = L.makeSock('A');
     const roomsLib = rooms;
     await roomsLib.enterRoom(ev.eventId, roster[0].jid, roster[0].prevRoomId, meet);

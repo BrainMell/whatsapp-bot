@@ -1,5 +1,5 @@
 // ============================================
-// PREPLANNED QUIZ PACK (2026-10-10, owner: ".j quiz -preplanned")
+// PREPLANNED QUIZ PACK (".j quiz -preplanned")
 // ============================================
 // Owner brief: "follow the normal quiz formula but you are preselecting 30
 // popular brands, remember their 2026 logo ... after that it's 20 questions:
@@ -7,21 +7,18 @@
 // theme songs, 5 from games and 5 from anime, the first 30 seconds ...
 // should look, feel and act as a regular quiz ... special timers: 30s
 // response time, 45 for the music."
-//
 // FIXED curated pack - zero LLM, zero live search for trivia; logos ride the
 // verified Wikipedia dataset (current/2026 logos, imageGate-audited); music
 // rides the existing Go audio pipeline (.j audio infra, P11) with SPECIFIC
 // song-name searches so the canonical track is found.
-//
 // Timers: every question carries q.timeLimit - 30s logos/trivia, 45s music
 // (owner spec). The regular quiz config stays untouched for other modes.
-//
 // Content-policy note: the owner floated an adult-site brand for the logo
 // section; it was swapped for mainstream picks (WhatsApp ToS + the bot's own
 // media gates reject adult branding - the round would break mid-quiz).
 // ============================================
 
-// ── 30 brands - every entry verified present in data/logoDataset.json
+// -- 30 brands - every entry verified present in data/logoDataset.json
 // (baked, magic-byte verified, 2026-current files) AND quizLogosPool
 // (wiki anchors + same-category decoys). Order = curated difficulty ramp:
 // instantly recognizable first, trickier toward the end.
@@ -58,14 +55,14 @@ const BRANDS = [
   { name: "Toyota", wiki: "Toyota", cat: "Cars" },
 ];
 
-// ── 20 trivia questions - answers hand-verified against canon (owner:
+// -- 20 trivia questions - answers hand-verified against canon (
 // "make sure you get the correct answer"). fmt "typed" = type the answer
 // (alts + typo tolerance via the v8 matcher); fmt "mc" = ABCD options.
 // Owner examples in the brief: Universe 2 God of Destruction + Granolah's AI
 // companion (the answer is "Oatmeel" - spelled with TWO E's, "Oatmeal"
 // accepted as an alias).
 const TRIVIA = [
-  // ---- Dragon Ball (5) ----
+ // ---- Dragon Ball (5) ----
   {
     id: "db-u2-god", franchise: "Dragon Ball", fmt: "typed", difficulty: "medium", topic: "Dragon Ball",
     q: "In Dragon Ball Super, who is the God of Destruction of Universe 2?",
@@ -91,7 +88,7 @@ const TRIVIA = [
     q: "Which Saiyan first unlocked Super Saiyan 2 during the Cell Games?",
     options: ["Vegeta", "Goku", "Gohan", "Trunks"], correct: 2,
   },
-  // ---- Solo Leveling (5) ----
+ // ---- Solo Leveling (5) ----
   {
     id: "sl-protagonist", franchise: "Solo Leveling", fmt: "typed", difficulty: "easy", topic: "Solo Leveling",
     q: "What is the full name of Solo Leveling's protagonist?",
@@ -117,7 +114,7 @@ const TRIVIA = [
     q: "What is the name of the armored knight Jinwoo defeats in his Job Change Quest and rewrites into his most loyal shadow?",
     answer: "Igris", alts: ["Igris the Bloodred", "Knight Killer Igris"],
   },
-  // ---- Devil May Cry (5) ----
+ // ---- Devil May Cry (5) ----
   {
     id: "dmc-dante", franchise: "Devil May Cry", fmt: "typed", difficulty: "easy", topic: "Devil May Cry",
     q: "Who is the pizza-loving devil hunter at the center of Devil May Cry?",
@@ -143,7 +140,7 @@ const TRIVIA = [
     q: "What is the name of the demon king who ruled the Human World before Sparda sealed him away?",
     answer: "Mundus",
   },
-  // ---- God of War (5) ----
+ // ---- God of War (5) ----
   {
     id: "gow-kratos", franchise: "God of War", fmt: "typed", difficulty: "easy", topic: "God of War",
     q: "Who is the Ghost of Sparta - the main character of the God of War series?",
@@ -171,17 +168,17 @@ const TRIVIA = [
   },
 ];
 
-// ── 10 theme songs (5 games / 5 anime) - SPECIFIC song names in the search
-// strings so the Go audio service lands the canonical upload (owner: "find
+// -- 10 theme songs (5 games / 5 anime) - SPECIFIC song names in the search
+// strings so the Go audio service lands the canonical upload ("find
 // the specific names of the theme songs and search um up"). alts are accepted
 // typed answers on top of the show/game name. cacheKey namespaces these away
 // from the regular audio mode (this pack clips the FIRST 30 SECONDS, the
 // standard mode clips 25s).
 const THEMES = [
-  // ---- games (5) ----
-  // mustTitleAny: ANY phrase must appear in the returned metadata title - keeps
-  // the canonical upload ("God of War Main Theme") from being satisfied by
-  // any random track off the same OST.
+ // ---- games (5) ----
+ // mustTitleAny: ANY phrase must appear in the returned metadata title - keeps
+ // the canonical upload ("God of War Main Theme") from being satisfied by
+ // any random track off the same OST.
   {
     show: "Devil May Cry", search: "Devil Trigger", type: "game",
     alts: ["Devil May Cry 5", "DMC", "DMC5", "Devil Trigger"], cacheKey: "preplan:devilmaycry", mustTitleAny: ["devil trigger"],
@@ -202,7 +199,7 @@ const THEMES = [
     show: "Minecraft", search: "Sweden C418 Minecraft", type: "game",
     alts: ["Minecraft"], cacheKey: "preplan:minecraft", mustTitleAny: ["sweden"],
   },
-  // ---- anime (5) ----
+ // ---- anime (5) ----
   {
     show: "Solo Leveling", search: "LEveL SawanoHiroyuki", type: "anime",
     alts: ["Na Honjaman Level Up", "Only I Level Up", "Solo Leveling"], cacheKey: "preplan:soleoleveling", mustTitleAny: ["level"],

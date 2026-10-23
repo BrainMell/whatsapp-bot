@@ -1,4 +1,4 @@
-# API Research Findings (overnight feature build - 2026-09-25)
+# API Research Findings (overnight feature build - )
 
 ## STOCKS → CHOSEN: Yahoo Finance (no key, no crumb)
 - Chart: GET https://query1.finance.yahoo.com/v8/finance/chart/{SYM}?range=..&interval=..

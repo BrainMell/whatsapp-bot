@@ -75,7 +75,7 @@ async function cleanup(chatId) {
   ok(s.sections[0].domain === "logos", "Section 0 = Logo Round (fast start)");
   ok(!!s.sections.find((x) => ["plot", "characters", "cosmology", "mixed"].includes(x.domain)).franchise, "announced franchise attached to first LORE section");
 
-  // go + play into the logo section
+ // go + play into the logo section
   const r = await quiz.confirmStart(sock, CHAT, "alice@s.whatsapp.net", MARK, false);
   ok(r.handled, "go accepted");
   const q1 = await waitFor(() => cards(sock).find((t) => t.includes("QUESTION 1/")), 30000, "Q1");
@@ -83,7 +83,7 @@ async function cleanup(chatId) {
   const img = images(sock)[0];
   ok(!!img && Buffer.isBuffer(img.content.image) && img.content.image.length > 1500, `real logo bytes attached (${img ? img.content.image.length : 0}B)`);
 
-  // clean end
+ // clean end
   await quiz.endQuiz(sock, CHAT, "alice@s.whatsapp.net", MARK, false).catch(() => {});
   await cleanup(CHAT);
   console.log(`RANDOM MIX E2E: ${pass}/${pass + fail}`);

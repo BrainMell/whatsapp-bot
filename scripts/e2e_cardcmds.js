@@ -1,6 +1,6 @@
 // e2e_cardcmds.js - live-test .abilities / .equip / skill tree handlers
 // with a mock sock, mirroring how engine.js calls them. Run on Box1:
-//   node e2e_cardcmds.js <userJid>
+// node e2e_cardcmds.js <userJid>
 const rpgCommands = require('/home/ubuntu/whatsapp-bot/core/commands/rpgCommands');
 const skillCommands = require('/home/ubuntu/whatsapp-bot/core/commands/skillCommands');
 const economy = require('/home/ubuntu/whatsapp-bot/core/rpg/economy');
@@ -21,7 +21,7 @@ const sock = {
 };
 
 async function main() {
-  // economy keeps users in an in-memory Map - load from Mongo first
+ // economy keeps users in an in-memory Map - load from Mongo first
   await economy.loadEconomy();
   const user = economy.getUser(jid);
   console.log('== user:', jid, '| nick:', user && user.nickname, '| cardStyle:', user && user.cardStyle, '| class:', JSON.stringify(economy.getUserClass(jid)));

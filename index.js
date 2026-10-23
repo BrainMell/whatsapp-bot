@@ -4,8 +4,8 @@ require("dotenv").config();
 const dns = require('dns');
 try { dns.setDefaultResultOrder('ipv4first'); } catch (e) {}
 
-// OWNER DIRECTIVE 2026-10-07 ("queued image processing" — approved "I'd
-// prefer you go"): every canvas render — current AND future code — flows
+// OWNER DIRECTIVE ("queued image processing" - approved "I'd
+// prefer you go"): every canvas render - current AND future code - flows
 // through the render queue automatically (memory brake + serialization +
 // telemetry). This MUST run before core/engine requires the renderer
 // modules: the patch hooks the shared 'canvas' module cache, so even
@@ -20,9 +20,9 @@ require('./core/utils/canvasAutoGate').install();
 const maskLogs = (originalFn) => {
     return function(...args) {
         const str = args[0];
-        // NOTE: Only mask truly noisy library internals that spam the log with large buffers.
-        // 'Connection Closed', '440', and similar disconnect signals are LEFT UNMASKED
-        // so we can diagnose the "connected but silent" outage pattern.
+ // NOTE: Only mask truly noisy library internals that spam the log with large buffers.
+ // 'Connection Closed', '440', and similar disconnect signals are LEFT UNMASKED
+ // so we can diagnose the "connected but silent" outage pattern.
         if (typeof str === 'string' && (
             str.includes('Removing old closed session') || 
             str.includes('SessionEntry') || 
@@ -82,10 +82,10 @@ app.get('/', (req, res) => {
             overallStatus = 'Offline';
             overallClass = 'down';
         } else if (disconnectedCount > 0 || qrCount > 0 || otherCount > 0) {
-            // 💡 FIX: any non-connected bot (including `connecting`, `logged_out`,
-            // `needs_pairing`) makes the fleet Degraded. Previously these fell
-            // through and the dashboard reported "Healthy" while bots were
-            // crash-looping.
+ // FIX: any non-connected bot (including `connecting`, `logged_out`,
+ // `needs_pairing`) makes the fleet Degraded. Previously these fell
+ // through and the dashboard reported "Healthy" while bots were
+ // crash-looping.
             overallStatus = 'Degraded';
             overallClass = 'degraded';
         }
@@ -424,7 +424,7 @@ function formatUptime(seconds) {
 }
 
 // ============================================================
-// ⚠️ DEPLOY NOTIFY (2026-10-11, owner: "if there's gonna be a commit and a
+// DEPLOY NOTIFY ("if there's gonna be a commit and a
 // restart the bot should send a message saying any active game might be
 // interrupted because an update is pushing to the GCs marked as RPG")
 // The deploy script curls this endpoint BEFORE `pm2 restart` so every
@@ -438,15 +438,15 @@ app.post('/notify-deploy', async (req, res) => {
         if (!sock) {
             return res.status(503).json({ ok: false, reason: 'socket-not-ready' });
         }
-        // Process-level identity (no ALS context here) — same resolution the
-        // Guild War tick broadcast uses.
+ // Process-level identity (no ALS context here) - same resolution the
+ // Guild War tick broadcast uses.
         let botId = 'global';
         try { botId = require('./core/utils/botInstance').resolveBotId(); } catch (e) {}
         const system = require('./core/utils/system');
         const gcs = system.get(`gw_rpg_gcs_${botId}`, []) || [];
         const message = (req.body && typeof req.body.message === 'string' && req.body.message.trim())
             ? req.body.message.trim()
-            : "⚠️ *UPDATE INCOMING* 🛠️\n\nA bot update is being pushed right now — any active game (solo quests, Abyss runs, Guild Wars) may be interrupted in the next minute or two.\n\nAfter the update: interrupted quest fights (solo + group) auto-continue on their own within ~30s · Abyss fights → `.j abyss resume`\n\nSorry for the bump!";
+            : "⚠️ *UPDATE INCOMING* 🛠️\n\nA bot update is being pushed right now - any active game (solo quests, Abyss runs, Guild Wars) may be interrupted in the next minute or two.\n\nAfter the update: interrupted quest fights (solo + group) auto-continue on their own within ~30s · Abyss fights → `.j abyss resume`\n\nSorry for the bump!";
         let sent = 0;
         const failed = [];
         for (const gc of gcs) {
@@ -471,7 +471,7 @@ app.listen(port, '0.0.0.0', () => {
 });
 
 // ============================================================
-// 💓 EVENT LOOP HEARTBEAT
+// EVENT LOOP HEARTBEAT
 // Prints every 30s. If this stops printing during a freeze,
 // the Node.js event loop itself is blocked (not a socket issue).
 // If this keeps printing but messages stop → zombie socket.
@@ -484,15 +484,14 @@ setInterval(() => {
 }, 30000);
 
 // ============================================================
-// 🧟 ZOMBIE SOCKET DETECTOR
-// Tracks the last time messages.upsert fired across all bots.
+// ZOMBIE SOCKET DETECTOR
 // If the bot is 'connected' but silent for 4+ minutes in an
 // active chat window, this triggers a process.exit so Render
 // restarts cleanly instead of staying in zombie state.
 // ============================================================
 // Engine calls this whenever a real (non-stale) message is processed
 function recordUpsert(botId) {
-    // No-op: Zombie socket detector disabled to prevent false-positive reboots during quiet hours.
+ // No-op: Zombie socket detector disabled to prevent false-positive reboots during quiet hours.
 }
 
 module.exports = module.exports || {};
@@ -538,14 +537,14 @@ setInterval(() => {
 }, 30000);
 
 async function boot() {
-    // Kill Switch Check
+ // Kill Switch Check
     if (process.env.BOT_ACTIVE === 'false') {
         console.log("🛑 Kill Switch Triggered (BOT_ACTIVE=false). Manager shutting down...");
         process.exit(0);
     }
 
-    // 💡 SANDBOX AUTO-SAVE: save all active sandboxes on process exit
-    // so data isn't lost when the bot restarts.
+ // SANDBOX AUTO-SAVE: save all active sandboxes on process exit
+ // so data isn't lost when the bot restarts.
     async function gracefulShutdown() {
         try {
             const engine = require('./core/engine');
@@ -562,17 +561,17 @@ async function boot() {
 
     console.log(" Multi-Tenant Manager Booting...");
 
-    // ── 3-tenant pm2 split support (2026-10-03) ─────────────────────────
-    // In split-process mode each pm2 app runs ONE tenant (BOT_INSTANCE).
-    //   START_DELAY_MS    - staggers boots across processes so tenants never
-    //                       reconnect to WhatsApp simultaneously (same-IP
-    //                       multi-device rate limit → slow/failed relogin).
-    //   GLOBAL_SCHEDULERS - the schedulers below are GLOBAL-DB (they iterate
-    //                       every user in the economy, not one tenant): wealth
-    //                       tax, raid spawn/voting, bounty expiry, passive
-    //                       regen. Exactly ONE process per fleet must run them
-    //                       or their effects stack 3x. Default '1' keeps the
-    //                       single-process behaviour intact.
+ // -- 3-tenant pm2 split support -------------------------
+ // In split-process mode each pm2 app runs ONE tenant (BOT_INSTANCE).
+ // START_DELAY_MS - staggers boots across processes so tenants never
+ // reconnect to WhatsApp simultaneously (same-IP
+ // multi-device rate limit → slow/failed relogin).
+ // GLOBAL_SCHEDULERS - the schedulers below are GLOBAL-DB (they iterate
+ // every user in the economy, not one tenant): wealth
+ // tax, raid spawn/voting, bounty expiry, passive
+ // regen. Exactly ONE process per fleet must run them
+ // or their effects stack 3x. Default '1' keeps the
+ // single-process behaviour intact.
     const RUN_GLOBAL_SCHEDULERS = (process.env.GLOBAL_SCHEDULERS || '1') !== '0';
     const START_DELAY_MS = parseInt(process.env.START_DELAY_MS || '0', 10) || 0;
     if (START_DELAY_MS > 0) {
@@ -580,10 +579,10 @@ async function boot() {
         await new Promise(resolve => setTimeout(resolve, START_DELAY_MS));
     }
 
-    // 1. Connect to Shared Database once
+ // 1. Connect to Shared Database once
     await connectDB();
 
-    // 2. Identify bot instances
+ // 2. Identify bot instances
     const instancesDir = path.join(__dirname, 'instances');
     if (!fs.existsSync(instancesDir)) {
         console.error("❌ /instances folder not found!");
@@ -600,7 +599,7 @@ async function boot() {
         .filter(Boolean);
 
     if (selectedInstances.length > 0) {
-        // Case-insensitive match so BOT_INSTANCE=subaru matches the Subaru folder
+ // Case-insensitive match so BOT_INSTANCE=subaru matches the Subaru folder
         const selectedLower = new Set(selectedInstances.map(n => n.toLowerCase()));
         folders = folders.filter(folder => selectedLower.has(folder.toLowerCase()));
         console.log(`🎯 Instance filter active: ${selectedInstances.join(', ')}`);
@@ -611,8 +610,8 @@ async function boot() {
         return;
     }
 
-    // 3. Schedule weekly wealth tax (Phase 1 - Economy Rebalance)
-    // (GLOBAL_SCHEDULERS gate: global-DB scheduler → runs on ONE process only)
+ // 3. Schedule weekly wealth tax (Phase 1 - Economy Rebalance)
+ // (GLOBAL_SCHEDULERS gate: global-DB scheduler → runs on ONE process only)
     if (RUN_GLOBAL_SCHEDULERS) try {
       const economy = require('./core/rpg/economy');
       if (typeof economy.scheduleWealthTax === 'function') {
@@ -623,19 +622,19 @@ async function boot() {
       console.error("Failed to init wealth tax scheduler:", e.message);
     }
 
-    // 3b. (REMOVED 2026-10-03, GW overhaul: bank interest + auto loan
-    // penalties are gone — loans are no-interest, GM-approved support.)
+ // 3b. (REMOVED GW overhaul: bank interest + auto loan
+ // penalties are gone - loans are no-interest, GM-approved support.)
 
-    // 3c. Schedule weekly raid spawn + voting round resolver (Phase 5 - Avatar Raid)
-    // (GLOBAL_SCHEDULERS gate: global-DB scheduler → runs on ONE process only)
+ // 3c. Schedule weekly raid spawn + voting round resolver (Phase 5 - Avatar Raid)
+ // (GLOBAL_SCHEDULERS gate: global-DB scheduler → runs on ONE process only)
     if (RUN_GLOBAL_SCHEDULERS) try {
       const raidSystem = require('./core/rpg/raidSystem');
-      // Spawn raid boss if it doesn't exist for this week (runs on boot + every hour)
+ // Spawn raid boss if it doesn't exist for this week (runs on boot + every hour)
       const checkAndSpawnRaid = async () => {
         try {
           const existing = await raidSystem.getRaidStatus();
           if (!existing) {
-            // Estimate active player count from economy
+ // Estimate active player count from economy
             const economy = require('./core/rpg/economy');
             const econInfo = economy.getGlobalEconomyStats ? economy.getGlobalEconomyStats() : { totalUsers: 50 };
             const activeCount = econInfo.totalUsers || 50;
@@ -648,16 +647,16 @@ async function boot() {
           console.error('[RaidSystem] Spawn check failed:', e.message);
         }
       };
-      // Check on boot (delayed 2 min so DB is ready), then every hour
+ // Check on boot (delayed 2 min so DB is ready), then every hour
       setTimeout(checkAndSpawnRaid, 2 * 60 * 1000);
       setInterval(checkAndSpawnRaid, 60 * 60 * 1000);
 
-      // Voting round resolver - runs every 30s to check if voting window closed
+ // Voting round resolver - runs every 30s to check if voting window closed
       const resolveRaidRound = async () => {
         try {
           await raidSystem.resolveVotingRound();
         } catch (e) {
-          // Silent - raid may not exist yet
+ // Silent - raid may not exist yet
         }
       };
       setInterval(resolveRaidRound, 30 * 1000);
@@ -667,12 +666,12 @@ async function boot() {
       console.error("Failed to init raid scheduler:", e.message);
     }
 
-    // 3d. Schedule daily bounty expiry (Phase 6 - Bounty System)
-    // (GLOBAL_SCHEDULERS gate: global-DB scheduler → runs on ONE process only)
+ // 3d. Schedule daily bounty expiry (Phase 6 - Bounty System)
+ // (GLOBAL_SCHEDULERS gate: global-DB scheduler → runs on ONE process only)
     if (RUN_GLOBAL_SCHEDULERS) try {
       const bountySystem = require('./core/rpg/bountySystem');
       const ONE_DAY = 24 * 60 * 60 * 1000;
-      // First run in 30 min, then daily
+ // First run in 30 min, then daily
       setTimeout(() => {
         bountySystem.expireOldBounties().catch(e => console.error('[Bounty] Expire failed:', e.message));
         setInterval(() => {
@@ -684,22 +683,20 @@ async function boot() {
       console.error("Failed to init bounty scheduler:", e.message);
     }
 
-
-    // 3f. Out-of-combat passive regen scheduler (AUDIT FIX 2026-08-01)
-    // Skill-tree passives (e.g. Dragon God's "Soul of the Deep": +2-6% HP/turn,
-    // +5-13% MP/turn) and class passives with effect:'regen' (e.g. Druid's
-    // Nature's Wrath: +5 HP/turn) were ONLY applied during combat rounds.
-    // Outside combat, players had no regen at all - they could only heal via
-    // .g hospital. Now a global tick runs every 60s and applies passive regen
-    // to ALL users with persistent HP below max.
-    //
-    // Design notes:
-    //   - 60s tick = "1 turn" out of combat (combat turns are ~1-5s).
-    //   - Regen is CAPPED at maxHP - no overheal.
-    //   - Only users with currentHP < maxHP are touched (efficient).
-    //   - Reads the same passive definitions the combat engine uses, so
-    //     there's ONE source of truth.
-    //   - Non-fatal: any error for one user doesn't break the tick.
+ // 3f. Out-of-combat passive regen scheduler (AUDIT FIX )
+ // Skill-tree passives (e.g. Dragon God's "Soul of the Deep": +2-6% HP/turn,
+ // +5-13% MP/turn) and class passives with effect:'regen' (e.g. Druid's
+ // Nature's Wrath: +5 HP/turn) were ONLY applied during combat rounds.
+ // Outside combat, players had no regen at all - they could only heal via
+ // .g hospital. Now a global tick runs every 60s and applies passive regen
+ // to ALL users with persistent HP below max.
+ // Design notes:
+ // - 60s tick = "1 turn" out of combat (combat turns are ~1-5s).
+ // - Regen is CAPPED at maxHP - no overheal.
+ // - Only users with currentHP < maxHP are touched (efficient).
+ // - Reads the same passive definitions the combat engine uses, so
+ // there's ONE source of truth.
+ // - Non-fatal: any error for one user doesn't break the tick.
     try {
       const economy = require('./core/rpg/economy');
       const classSystem = require('./core/rpg/classSystem');
@@ -708,32 +705,28 @@ async function boot() {
 
       const OUT_OF_COMBAT_TICK_MS = 60 * 1000; // 60s = 1 "turn"
 
-      // 💡 AUDIT FIX 2026-08-01 (Round 5): comprehensive rewrite of the
-      // out-of-combat regen scheduler. Fixes 4 bugs from the Round 1 version:
-      //
-      // BUG 1: user.class is a STRING (e.g. 'FIGHTER'), not an object. The
-      //   old code did `user.class?.passive` which is undefined for strings.
-      //   Class passive regen (Fighter Tenacity +3, Druid Nature's Wrath +5)
-      //   was NEVER applied out of combat. Now resolves via getUserClass().
-      //
-      // BUG 2: No in-combat check. Users in combat got DOUBLE regen - once
-      //   from the combat tick (applySkillPassivesPerTurn) and once from
-      //   this scheduler. Now skips users with an active game state.
-      //
-      // BUG 3: manaRegenPerTurn was ignored. Soul of the Deep grants +5-13%
-      //   MP/turn but the out-of-combat scheduler only healed HP. Now also
-      //   restores MP (stored on user.stats.currentMP, same as HP).
-      //
-      // BUG 4: Performance - getBaseStats() is expensive (calls
-      //   getEquipmentStats + summon trial passives). Calling it for every
-      //   user every 60s caused event loop lag on 3400+ users. Now caches
-      //   maxHP per user + invalidates on level-up (detected via user.level
-      //   change). Falls back to a lightweight maxHP estimate if cache miss.
+ // AUDIT FIX (Round 5): comprehensive rewrite of the
+ // out-of-combat regen scheduler. Fixes 4 bugs from the Round 1 version:
+ // BUG 1: user.class is a STRING (e.g. 'FIGHTER'), not an object. The
+ // old code did `user.class?.passive` which is undefined for strings.
+ // Class passive regen (Fighter Tenacity +3, Druid Nature's Wrath +5)
+ // was NEVER applied out of combat. Now resolves via getUserClass().
+ // BUG 2: No in-combat check. Users in combat got DOUBLE regen - once
+ // from the combat tick (applySkillPassivesPerTurn) and once from
+ // this scheduler. Now skips users with an active game state.
+ // BUG 3: manaRegenPerTurn was ignored. Soul of the Deep grants +5-13%
+ // MP/turn but the out-of-combat scheduler only healed HP. Now also
+ // restores MP (stored on user.stats.currentMP, same as HP).
+ // BUG 4: Performance - getBaseStats() is expensive (calls
+ // getEquipmentStats + summon trial passives). Calling it for every
+ // user every 60s caused event loop lag on 3400+ users. Now caches
+ // maxHP per user + invalidates on level-up (detected via user.level
+ // change). Falls back to a lightweight maxHP estimate if cache miss.
       const maxHPCache = new Map(); // userId → { level, maxHP }
       let guildAdventureRef = null;
       try { guildAdventureRef = require('./core/rpg/guildAdventure'); } catch (e) {}
 
-      // ⚔️ Guild War boot (overhaul 2026-10-03): combat hooks + recovery
+ // Guild War boot (overhaul ): combat hooks + recovery
       try {
         const gw = require('./core/rpg/guildWar');
         gw.installCombatHooks();
@@ -751,31 +744,31 @@ async function boot() {
           for (const [userId, user] of economyData.entries()) {
             try {
               if (!user) continue;
-              // BUG 2 FIX: skip users in active combat
-              // 💡 CROSS-BOT FIX 2026-09-20: battle state is now bot-scoped
-              // (Joker battles are invisible to Subaru and vice versa), so
-              // the regen pass uses an explicit any-bot check instead of a
-              // scoped lookup - a player fighting on EITHER bot must not be
-              // passively healed mid-battle.
+ // BUG 2 FIX: skip users in active combat
+ // CROSS-BOT FIX battle state is now bot-scoped
+ // (Joker battles are invisible to Subaru and vice versa), so
+ // the regen pass uses an explicit any-bot check instead of a
+ // scoped lookup - a player fighting on EITHER bot must not be
+ // passively healed mid-battle.
               if (guildAdventureRef && typeof guildAdventureRef.isUserInAnyCombat === 'function') {
                 if (guildAdventureRef.isUserInAnyCombat(userId)) { skipped++; continue; }
-                // Group combat covered by the same scan (solo + group states)
+ // Group combat covered by the same scan (solo + group states)
               }
 
-              // BUG 1 FIX: resolve class properly. user.class is a STRING.
+ // BUG 1 FIX: resolve class properly. user.class is a STRING.
               const userClass = economy.getUserClass(userId);
               if (!userClass) continue; // no class = can't have passives
               const classId = userClass.id || userClass.name?.toUpperCase() || 'FIGHTER';
 
-              // BUG 4 FIX: cache maxHP, invalidate on level change
+ // BUG 4 FIX: cache maxHP, invalidate on level change
               const userLevel = user.level || 1;
               let maxHP;
               const cached = maxHPCache.get(userId);
               if (cached && cached.level === userLevel) {
                 maxHP = cached.maxHP;
               } else {
-                // Cache miss - compute + cache. This is the expensive path
-                // but only runs on first tick or after level-up.
+ // Cache miss - compute + cache. This is the expensive path
+ // but only runs on first tick or after level-up.
                 const baseStats = progression.getBaseStats(userId, classId);
                 maxHP = baseStats?.hp || 100;
                 maxHPCache.set(userId, { level: userLevel, maxHP });
@@ -784,20 +777,20 @@ async function boot() {
               const currentHP = economy.getPersistentHP(userId, maxHP);
               if (currentHP >= maxHP) continue; // full HP, skip
 
-              // Compute regen rate from:
-              //   1. Class passive effect:'regen' (flat HP/turn)
-              //   2. Skill-tree passiveEffects.hpRegenPerTurn (% of maxHP/turn)
+ // Compute regen rate from:
+ // 1. Class passive effect:'regen' (flat HP/turn)
+ // 2. Skill-tree passiveEffects.hpRegenPerTurn (% of maxHP/turn)
               let flatRegen = 0;
               let pctRegen = 0;
               let manaPctRegen = 0;
 
-              // BUG 1 FIX: read passive from the resolved class object
+ // BUG 1 FIX: read passive from the resolved class object
               const classPassive = userClass.passive;
               if (classPassive && classPassive.effect === 'regen') {
                 flatRegen += Number(classPassive.value) || 0;
               }
 
-              // Skill-tree passives (iterate lineage + learned skills)
+ // Skill-tree passives (iterate lineage + learned skills)
               if (user.skills) {
                 const lineage = classSystem.getLineage(classId) || [];
                 const seen = new Set();
@@ -818,7 +811,7 @@ async function boot() {
                         const val = pe.hpRegenPerTurn[idx];
                         if (typeof val === 'number' && val > pctRegen) pctRegen = val;
                       }
-                      // BUG 3 FIX: also read manaRegenPerTurn
+ // BUG 3 FIX: also read manaRegenPerTurn
                       if (Array.isArray(pe.manaRegenPerTurn)) {
                         const idx = Math.min(level - 1, pe.manaRegenPerTurn.length - 1);
                         const val = pe.manaRegenPerTurn[idx];
@@ -833,7 +826,7 @@ async function boot() {
               const totalHeal = flatRegen + pctHeal;
               if (totalHeal <= 0 && manaPctRegen <= 0) continue; // no regen passive, skip
 
-              // Apply HP regen
+ // Apply HP regen
               if (totalHeal > 0) {
                 const newHP = Math.min(maxHP, currentHP + totalHeal);
                 const actualHeal = newHP - currentHP;
@@ -843,9 +836,9 @@ async function boot() {
                 }
               }
 
-              // BUG 3 FIX: apply MP regen (out-of-combat)
-              // MP is stored on user.stats.currentMP (same pattern as HP).
-              // maxMP = 100 + level bonuses (mirrors getBaseStats maxEnergy formula).
+ // BUG 3 FIX: apply MP regen (out-of-combat)
+ // MP is stored on user.stats.currentMP (same pattern as HP).
+ // maxMP = 100 + level bonuses (mirrors getBaseStats maxEnergy formula).
               if (manaPctRegen > 0) {
                 try {
                   const maxMP = 100 + ((userLevel - 1) * 15);
@@ -862,11 +855,11 @@ async function boot() {
                     }
                   }
                 } catch (mpErr) {
-                  // Non-fatal - MP regen is best-effort
+ // Non-fatal - MP regen is best-effort
                 }
               }
             } catch (userErr) {
-              // Non-fatal - one user's error shouldn't break the tick
+ // Non-fatal - one user's error shouldn't break the tick
             }
           }
           if (touched > 0) {
@@ -877,10 +870,10 @@ async function boot() {
         }
       };
 
-      // First run in 5 min (let DB settle), then every 60s.
-      // (GLOBAL_SCHEDULERS gate: the boot block above also wires the per-process
-      //  Guild War combat hooks + recoverOnBoot - those MUST stay on every
-      //  process; only the global regen timers are single-owner.)
+ // First run in 5 min (let DB settle), then every 60s.
+ // (GLOBAL_SCHEDULERS gate: the boot block above also wires the per-process
+ // Guild War combat hooks + recoverOnBoot - those MUST stay on every
+ // process; only the global regen timers are single-owner.)
       if (RUN_GLOBAL_SCHEDULERS) {
         setTimeout(applyOutOfCombatPassiveRegen, 5 * 60 * 1000);
         setInterval(applyOutOfCombatPassiveRegen, OUT_OF_COMBAT_TICK_MS);
@@ -892,14 +885,13 @@ async function boot() {
       console.error("Failed to init passive regen scheduler:", e.message);
     }
 
-    // 4. Start each instance with a stagger delay
+ // 4. Start each instance with a stagger delay
     for (let i = 0; i < folders.length; i++) {
         const folder = folders[i];
         const instancePath = path.join(instancesDir, folder);
         const configPath = path.join(instancePath, 'botConfig.json');
         
         if (fs.existsSync(configPath)) {
-            // Create a dedicated config instance for this bot
             const config = new BotConfig(instancePath);
             if (!config.isEnabled()) {
                 console.log(`🔇 Skipping disabled bot: ${config.getBotName()} [${config.getBotId()}]`);
@@ -908,7 +900,7 @@ async function boot() {
             console.log(`📡 Spawning bot: ${config.getBotName()} [${config.getBotId()}]`);
             startBot(config);
 
-            // Add a stagger delay between bot startups (except the last one)
+ // Add a stagger delay between bot startups (except the last one)
             if (i < folders.length - 1) {
                 console.log(`⏳ Waiting 15s before spawning next bot to prevent conflicts...`);
                 await new Promise(resolve => setTimeout(resolve, 15000));
@@ -920,9 +912,9 @@ async function boot() {
 }
 
 if (require.main === module) {
-    // 🫀 event-loop stall canary (2026-10-06): a sync spin hung a bot >1h with
-    // every in-process watchdog equally blocked. The canary child survives the
-    // stall and SIGKILLs us so pm2 restarts within ~90s. LIVENESS_CANARY=0 off.
+ // event-loop stall canary: a sync spin hung a bot >1h with
+ // every in-process watchdog equally blocked. The canary child survives the
+ // stall and SIGKILLs us so pm2 restarts within ~90s. LIVENESS_CANARY=0 off.
     try {
         require('./core/utils/livenessCanary').arm();
     } catch (e) {
@@ -931,11 +923,11 @@ if (require.main === module) {
 
     boot();
 
-    // 💡 SPRITE WARM-UP: fetch all missing Digimon sprites in the background
-    // 30s after boot. This ensures the codex/roster/profile card renderers
-    // have sprites cached before any user views them. Non-blocking, non-fatal.
-    // (GLOBAL_SCHEDULERS gate: one warm-up per fleet is enough - 3 processes
-    //  fetching the same sprite set simultaneously just burns bandwidth.)
+ // SPRITE WARM-UP: fetch all missing Digimon sprites in the background
+ // 30s after boot. This ensures the codex/roster/profile card renderers
+ // have sprites cached before any user views them. Non-blocking, non-fatal.
+ // (GLOBAL_SCHEDULERS gate: one warm-up per fleet is enough - 3 processes
+ // fetching the same sprite set simultaneously just burns bandwidth.)
     if ((process.env.GLOBAL_SCHEDULERS || '1') !== '0') setTimeout(() => {
         try {
             const summonSprites = require('./core/rpg/summonSprites');

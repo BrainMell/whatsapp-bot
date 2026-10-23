@@ -1,5 +1,5 @@
 // Evidence probe: render every encounter-item room type so we can audit
-// item shadows + the broken open-chest sprite (owner 2026-10-06).
+// item shadows + the broken open-chest sprite.
 process.env.GW_TEST = '1';
 process.env.GW_MOVE_COOLDOWN_MS = '300';
 process.env.GW_SIM_DB = 'gwitemqa' + Math.floor(Math.random() * 100000);
@@ -22,7 +22,7 @@ const GWE = require('../core/models/GuildWarEvent');
     const out = '/home/z/my-project/download/item_fix_qa';
     fs.mkdirSync(out, { recursive: true });
 
-    // one showcase room per item type — vary ground line so shadows are visible
+ // one showcase room per item type - vary ground line so shadows are visible
     const cases = [
         ['reward_closed', 'reward', 'ACTIVE', {}],
         ['reward_open', 'reward', 'CLEARED', {}],

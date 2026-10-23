@@ -1,22 +1,19 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-//  GUILD BASE RENDERER — 3D hex KINGDOM (v8, owner 2026-10-18: "remake it with
-//  the 3d … I want the guild area to look like a kingdom with plots to build
-//  the various guild facilities")
-//
-//  Art: KayKit Medieval Hexagon Pack (CC0) baked to iso sprites by
-//  scripts/kingdom3d/bake_kingdom_sprites.py; this file only COMPOSITES the
-//  sprites (core/rpg/kingdom3d.js) — no 3D at runtime, ~250ms per card.
-//
-//  The island: a walled citadel (castle at the centre, wall ring + south
-//  gate, cobble avenue), five numbered BUILD PLOTS, the three guild facilities
-//  (Hall / Training / Treasury) that grow through 5 levels, a member hamlet
-//  (one home per member), and a per-guild wilderness (forest, mountains,
-//  river + mill, fields + windmill, lighthouse). Everything derives from the
-//  guild name seed, so a guild always shows the same land.
-//
-//  API unchanged: renderGuildBaseImage(state, {hint,static}) → {buffer,contentType}
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// GUILD BASE RENDERER - 3D hex KINGDOM (v8, "remake it with
+// the 3d … I want the guild area to look like a kingdom with plots to build
+// the various guild facilities")
+// Art: KayKit Medieval Hexagon Pack (CC0) baked to iso sprites by
+// scripts/kingdom3d/bake_kingdom_sprites.py; this file only COMPOSITES the
+// sprites (core/rpg/kingdom3d.js) - no 3D at runtime, ~250ms per card.
+// The island: a walled citadel (castle at the centre, wall ring + south
+// gate, cobble avenue), five numbered BUILD PLOTS, the three guild facilities
+// (Hall / Training / Treasury) that grow through 5 levels, a member hamlet
+// (one home per member), and a per-guild wilderness (forest, mountains,
+// river + mill, fields + windmill, lighthouse). Everything derives from the
+// guild name seed, so a guild always shows the same land.
+// API unchanged: renderGuildBaseImage(state, {hint,static}) → {buffer,contentType}
+// ===========================================================================
 
 const fs = require('fs');
 const path = require('path');
@@ -24,12 +21,12 @@ const os = require('os');
 const K = require('./kingdom3d');
 const KT = require('./kingdomTerrain');
 const mediaCache = require('./mediaCache');
-const { encodeRawStreamMp4 } = require('../utils/bakeStream');   // 47-k10: streaming bake — one frame alive at a time
-const ambient = require('./ambient');   // shared life layer (owner 2026-10-19: "the guild card should also be a gif")
-const dayNight = require('./dayNight');   // Task 21: shared day/night cycle for every render
-const emojiFontMod = require('./emojiFont');   // 2026-10-20: emblem emoji glyphs; color bitmaps 2026-10-20 (owner 'use colors not hex code')
+const { encodeRawStreamMp4 } = require('../utils/bakeStream'); // streaming bake - one frame alive at a time
+const ambient = require('./ambient'); // shared life layer ("the guild card should also be a gif")
+const dayNight = require('./dayNight'); // shared day/night cycle for every render
+const emojiFontMod = require('./emojiFont'); // emblem emoji glyphs; color bitmaps (owner 'use colors not hex code')
 const { emojiFont, fillTextMixed } = emojiFontMod;
-const emojiBitmap = require('./emojiBitmap');   // 2026-10-20 12:20Z: big emblem bitmaps for the castle close-up card
+const emojiBitmap = require('./emojiBitmap'); // 12:20Z: big emblem bitmaps for the castle close-up card
 
 const FRAMES = 14, FRAME_MS = 143;   // 2 s loop, 14 frames (cold bake was the slow part: ~30% cheaper than 20)
 const COLS = 23, ROWS = 31, CC = 11, CR = 15;   // oversized grid: terrain runs past every edge of the card, castle on (11,15)
@@ -38,7 +35,7 @@ const SCALE = parseFloat(process.env.RENDER_GUILD_SCALE || '0.5') || 0.5;
 const PREFIX = '.j'; // display-only default; engine passes real prefix via opts.hint when it matters
 const FONTS = path.join(__dirname, '..', 'rpgasset', 'fonts');
 
-// ── structure defs (mirror GUILD_UPGRADES visual states in guilds.js) ──
+// -- structure defs (mirror GUILD_UPGRADES visual states in guilds.js) --
 const GUILD_STRUCTS = {
     hall: {
         id: 'hall', name: 'Guild Hall',
@@ -72,7 +69,7 @@ const ARCH = {
     RESEARCH: { flag: '#2a6a6e', flagD: '#1e4e52', label: 'Research', team: 'green' },
 };
 
-// ── layout (hex coords, odd-r) ────────────────────────────────────────────
+// -- layout (hex coords, odd-r) --------------------------------------------
 const step = (c, r, dir, n) => { let p = [c, r]; for (let i = 0; i < n; i++) p = K.neighbor(p[0], p[1], dir); return p; };
 const WALL_RING = 6;          // the citadel covers a wide district: wall on ring 6 (was 4)
 // build plots: five numbered sites on the ring-3 band (training/treasury own the E/W ones)
@@ -90,7 +87,7 @@ const GUILD_PLOTS = [
     { id: 5, c: step(NW3[0], NW3[1], 0, 1)[0], r: step(NW3[0], NW3[1], 0, 1)[1] },
 ];
 
-// ── fonts ──
+// -- fonts --
 let fontsReady = false;
 function ensureFonts() {
     if (fontsReady) return true;
@@ -113,9 +110,9 @@ function ensureFonts() {
 
 const mulberry32 = K.mulberry32, hashStr = (s) => K.hashStr(String(s || ''));
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  SCENE BUILD
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// SCENE BUILD
+// ===========================================================================
 function angleDeg(c, r) { // 0=E, 90=S(down), 180=W, 270=N
     const a = K.hexWorld(c, r), b = K.hexWorld(CC, CR);
     return (Math.atan2(a.z - b.z, a.x - b.x) * 180 / Math.PI + 360) % 360;
@@ -123,8 +120,8 @@ function angleDeg(c, r) { // 0=E, 90=S(down), 180=W, 270=N
 const cdist = (c, r) => K.hexDist(CC, CR, c, r);
 const key = (c, r) => `${c},${r}`;
 
-// main sprite of a guild facility at a level — the one that drops in on a landing celebrate
-// (owner 2026-10-19). null → no fall (treasury crates: burst only).
+// main sprite of a guild facility at a level - the one that drops in on a landing celebrate
+//. null → no fall (treasury crates: burst only).
 function guildMainSprite(kind, lvl, team) {
     if (kind === 'hall') {
         if (lvl === 1) return { name: 'building_tower_A_' + team, sc: 1.0 };
@@ -150,10 +147,10 @@ function buildWorld(state, cel = null) {
     const seed = hashStr(state.name || 'guild');
     const rng = mulberry32(seed);
 
-    // ── per-guild macro profile (owner brief 2026-10-19: guilds on the same continent must not be twins) ──
-    // Claude-method: the district's compass story (market / well / field band / hamlet band) mirrors
-    // E/W as a unit, and the cottage kind mix + field/orchard density re-roll per guild seed. Walls,
-    // gate, roads and the citadel stay canonical — realm palettes still constrain every sprite.
+ // -- per-guild macro profile (owner brief guilds on the same continent must not be twins) --
+ // Claude-method: the district's compass story (market / well / field band / hamlet band) mirrors
+ // E/W as a unit, and the cottage kind mix + field/orchard density re-roll per guild seed. Walls,
+ // gate, roads and the citadel stay canonical - realm palettes still constrain every sprite.
     const mir = rng() < 0.5;
     const ang = (a) => (mir ? (360 - a) % 360 : a);                       // compass mirror around the N-S axis
     const KIND_PROFILES = {
@@ -173,13 +170,13 @@ function buildWorld(state, cel = null) {
     const train = Math.max(0, Math.min(5, parseInt((state.buildings || {}).training, 10) || 0));
     const treas = Math.max(0, Math.min(5, parseInt((state.buildings || {}).treasury, 10) || 0));
     const members = Math.max(0, Math.min(40, parseInt(state.memberCount, 10) || 0));
-    // hall-tier evolution (owner 2026-10-19: "if someone upgrades their guild hall the base
-    // becomes progressively larger and more impressive, stone roads instead of dirt, larger
-    // double layered walls ... when it's max level it becomes a full blown city"):
-    //   lv2 cobbles the gate avenue · lv3 paves every street + tower banners
-    //   lv4 raises a second curtain wall (ring 8, six bastions, own gatehouse) with an
-    //      expansion belt between the walls · lv5 is the full city: cobbled grand ward,
-    //      banner monument, market day, and the district fills with citizens' homes.
+ // hall-tier evolution ("if someone upgrades their guild hall the base
+ // becomes progressively larger and more impressive, stone roads instead of dirt, larger
+ // double layered walls ... when it's max level it becomes a full blown city"):
+ // lv2 cobbles the gate avenue · lv3 paves every street + tower banners
+ // lv4 raises a second curtain wall (ring 8, six bastions, own gatehouse) with an
+ // expansion belt between the walls · lv5 is the full city: cobbled grand ward,
+ // banner monument, market day, and the district fills with citizens' homes.
     const TIER = { stoneRoads: hall >= 3, doubleWalls: hall >= 4, fullCity: hall >= 5 };
 
     const biome = KT.pickBiome(state);
@@ -188,7 +185,7 @@ function buildWorld(state, cel = null) {
     const used = new Set();                 // cells claimed by structures/props
     const claim = (c, r) => used.add(key(c, r));
     const smokeAnchors = [];                // hearth anchors for the animated smoke (world coords)
-    // ── helpers for placing buildings (declared early: the hall-tier wall pass uses B) ──
+ // -- helpers for placing buildings (declared early: the hall-tier wall pass uses B) --
     const B = (name) => `building_${name}_${team}`;
     const nbrs = (c, r) => [0, 1, 2, 3, 4, 5].map((d) => K.neighbor(c, r, d)).filter(([a, b]) => w.inb(a, b));
     const freeNbrs = (c, r, maxD = 3) => nbrs(c, r).filter(([a, b]) => !used.has(key(a, b)) && !w.cell[b][a].water && !w.cell[b][a].river && cdist(a, b) <= maxD)
@@ -204,11 +201,11 @@ function buildWorld(state, cel = null) {
     let riverCells = [];
     let S = null;
     if (land) {
-        // land biomes: ragged haze-edged silhouette, lakes/lava pools, optional river (no sea)
+ // land biomes: ragged haze-edged silhouette, lakes/lava pools, optional river (no sea)
         S = KT.shape(w, { seed, biome, CC, CR, keepR: WALL_RING + (TIER.doubleWalls ? 3 : 1), wallRing: WALL_RING, angleDeg, cdist });
         riverCells = S.riverCells;
     } else {
-        // ── island silhouette (per-guild noise) ──
+ // -- island silhouette (per-guild noise) --
         const p1 = rng() * 6.28, p2 = rng() * 6.28, p3 = rng() * 6.28;
         const radius = (deg) => {
             const t = deg * Math.PI / 180;
@@ -220,10 +217,9 @@ function buildWorld(state, cel = null) {
             w.cell[r][c].water = d > rad || r === 0 || r === ROWS - 1 || c === 0 || c === COLS - 1;
             w.cell[r][c].void = d > rad + 1.9 + 0.5 * Math.sin(angleDeg(c, r) * 0.07 + p3);   // sea shelf, ragged edge
         }
-        // keep the walled city + a margin always land
         for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (cdist(c, r) <= 5) { w.cell[r][c].water = false; w.cell[r][c].keepLand = true; }
 
-        // ── river (decorative, outside the walls): arc of ring 6 → sea ──
+ // -- river (decorative, outside the walls): arc of ring 6 → sea --
         const riverStart = 285 + Math.floor(rng() * 40), riverSpan = 70;
         const r6 = K.ring(CC, CR, 6).filter(([c, r]) => w.inb(c, r));
         const arc = r6.filter(([c, r]) => { const a = (angleDeg(c, r) - riverStart + 360) % 360; return a <= riverSpan; });
@@ -240,26 +236,25 @@ function buildWorld(state, cel = null) {
         }
         for (const [c, r] of riverCells) if (w.inb(c, r) && !w.cell[r][c].keepLand) w.cell[r][c].river = true;
 
-
     }
 
-    // ── wall ring + south gate + north postern ──
+ // -- wall ring + south gate + north postern --
     const ringCells = K.ring(CC, CR, WALL_RING);
     const gateRow = CR + WALL_RING;
     const gateCell = ringCells.filter(([, r]) => r === gateRow).sort((a, b) => Math.abs(a[0] - CC) - Math.abs(b[0] - CC))[0];
-    // the pack's diverse gates (owner 2026-10-19): the stone gatehouse guards the south
-    // road, and a quiet wall-straight-gate postern sits in the north wall behind the keep
+ // the pack's diverse gates: the stone gatehouse guards the south
+ // road, and a quiet wall-straight-gate postern sits in the north wall behind the keep
     const postern = ringCells.filter(([, r]) => r === CR - WALL_RING).sort((a, b) => Math.abs(a[0] - CC) - Math.abs(b[0] - CC))[0];
     const gateSet = new Set([key(gateCell[0], gateCell[1])]);
     if (postern && key(postern[0], postern[1]) !== key(gateCell[0], gateCell[1])) gateSet.add(key(postern[0], postern[1]));
     for (const [c, r] of ringCells) claim(c, r);
     w.layWall(ringCells, { closed: true, gates: gateSet, outside: true });
-    // the south world-road leaves through the gate: compute its cells now so the outer
-    // curtain (hall 4+) can drop its own gate exactly on the line
+ // the south world-road leaves through the gate: compute its cells now so the outer
+ // curtain (hall 4+) can drop its own gate exactly on the line
     const outRoadCells = K.hexLine(gateCell[0], gateCell[1], CC, Math.min(ROWS - 2, CR + (TIER.doubleWalls ? 10 : 8))).slice(1);
-    // hall 4+ "larger double layered walls": a second curtain two rings out with six
-    // bastions and its own gatehouse on the south road; the belt between the walls
-    // becomes the city's expansion ward (see the suburb pass below)
+ // hall 4+ "larger double layered walls": a second curtain two rings out with six
+ // bastions and its own gatehouse on the south road; the belt between the walls
+ // becomes the city's expansion ward (see the suburb pass below)
     if (TIER.doubleWalls) {
         const outerCells = K.ring(CC, CR, WALL_RING + 2);
         const outerGate = outRoadCells.find(([c, r]) => cdist(c, r) === WALL_RING + 2)
@@ -278,7 +273,7 @@ function buildWorld(state, cel = null) {
         }
     }
 
-    // ── roads: gate → castle avenue + spur to each facility/plot + road out of the gate ──
+ // -- roads: gate → castle avenue + spur to each facility/plot + road out of the gate --
     const mainRoad = K.hexLine(gateCell[0], gateCell[1], CC, CR);
     const roadSet = new Set();
     const addRoad = (cells) => { for (const [c, r] of cells) { if (!w.inb(c, r) || w.cell[r][c].water || w.cell[r][c].wall && key(c, r) !== key(gateCell[0], gateCell[1])) continue; roadSet.add(key(c, r)); } };
@@ -289,7 +284,7 @@ function buildWorld(state, cel = null) {
         roadSet.add(key(c, r));
     }
     const spurTo = (cell) => {
-        // walk toward the nearest road cell
+ // walk toward the nearest road cell
         let best = null, bd = 99;
         for (const k of roadSet) { const [c, r] = k.split(',').map(Number); const d = K.hexDist(cell[0], cell[1], c, r); if (d < bd && d > 0) { bd = d; best = [c, r]; } }
         if (best) addRoad(K.hexLine(cell[0], cell[1], best[0], best[1]).slice(0, -1));
@@ -304,8 +299,8 @@ function buildWorld(state, cel = null) {
 
     for (const k of roadSet) { const [c, r] = k.split(',').map(Number); claim(c, r); }
     claim(CC, CR);
-    // hall-tier paving (owner 2026-10-19: "stone roads instead of dirt") — the gate avenue
-    // is cobbled from the Bailey on (hall 2), every street from the Stone Castle on (hall 3)
+ // hall-tier paving ("stone roads instead of dirt") - the gate avenue
+ // is cobbled from the Bailey on (hall 2), every street from the Stone Castle on (hall 3)
     if (hall >= 2) {
         const aveSet = new Set(mainRoad.slice(1).map(([c, r]) => key(c, r)));
         for (const k of roadSet) {
@@ -315,7 +310,7 @@ function buildWorld(state, cel = null) {
         }
     }
 
-    // ── CASTLE (hall) ──
+ // -- CASTLE (hall) --
     const castle = [CC, CR];
     let fall = null;
     const fallAt = (kind, lvl, cell) => {                              // record the celebrated facility's main sprite
@@ -323,9 +318,9 @@ function buildWorld(state, cel = null) {
         if (!ms) return;
         const wc = K.hexWorld(cell[0], cell[1]);
         fall = { name: ms.name, wx: wc.x + (ms.dx || 0), wz: wc.z + (ms.dz || 0), sc: ms.sc || 1, flip: false };
-        // an UPGRADE (cel.prev >= 1) also records the replaced works — the overlay sinks them
-        // into the ground as the new building comes in (owner 2026-10-19). Treasury lvl-1 is
-        // loose crates (no main sprite): they burst away as before, nothing sinks.
+ // an UPGRADE (cel.prev >= 1) also records the replaced works - the overlay sinks them
+ // into the ground as the new building comes in. Treasury lvl-1 is
+ // loose crates (no main sprite): they burst away as before, nothing sinks.
         const prev = Number.isInteger(cel.prev) ? Math.max(1, cel.prev) : 0;           // 0 = fresh build
         if (prev >= 1 && prev < lvl) {
             const oms = guildMainSprite(kind, prev, team);
@@ -333,7 +328,7 @@ function buildWorld(state, cel = null) {
         }
     };
     if (cel && cel.building === 'hall' && hall > 0) {
-        fallAt('hall', hall, castle);                                  // omitted from the scene — the overlay drops it in
+        fallAt('hall', hall, castle);                                  // omitted from the scene - the overlay drops it in
     } else if (hall === 0) {
         plotMarker(CC, CR, 'HALL');
         w.put('building_scaffolding', CC, CR, { sc: 0.9 });
@@ -351,7 +346,7 @@ function buildWorld(state, cel = null) {
         }
     }
 
-    // ── TRAINING ──
+ // -- TRAINING --
     const [tc, tr] = SLOT.training;
     if (cel && cel.building === 'training' && train > 0) fallAt('training', train, [tc, tr]);
     else if (train === 0) plotMarker(tc, tr, 'TRAINING');
@@ -370,7 +365,7 @@ function buildWorld(state, cel = null) {
     }
     claim(tc, tr);
 
-    // ── TREASURY ──
+ // -- TREASURY --
     const [vc, vr] = SLOT.treasury;
     if (cel && cel.building === 'treasury' && treas > 0) fallAt('treasury', treas, [vc, vr]);
     else if (treas === 0) plotMarker(vc, vr, 'TREASURY');
@@ -385,10 +380,10 @@ function buildWorld(state, cel = null) {
     }
     claim(vc, vr);
 
-    // ── numbered build plots ──
+ // -- numbered build plots --
     for (const p of GUILD_PLOTS) { plotMarker(p.c, p.r, String(p.id)); claim(p.c, p.r); }
 
-    // ── corner towers on the six wall corners (the ring is now wide enough to read as a fortress) ──
+ // -- corner towers on the six wall corners (the ring is now wide enough to read as a fortress) --
     for (let d = 0; d < 6; d++) {
         const [tcc, trr] = step(CC, CR, d, WALL_RING);
         if (!w.inb(tcc, trr) || w.cell[trr][tcc].water) continue;
@@ -396,7 +391,7 @@ function buildWorld(state, cel = null) {
         if (hall >= 3) w.put('flag_' + team, tcc, trr, { h: 1.5, sc: 0.75 });   // tower banners once the town is stone-built
     }
 
-    // ── the district inside the walls: market, well, fields, orchard, then one cottage per member (cap 24) ──
+ // -- the district inside the walls: market, well, fields, orchard, then one cottage per member (cap 24) --
     const inside = [];
     for (let d = 1; d < WALL_RING; d++) for (const [c, r] of K.ring(CC, CR, d)) {
         if (used.has(key(c, r)) || !w.inb(c, r) || w.cell[r][c].water || w.cell[r][c].river) continue;
@@ -407,15 +402,15 @@ function buildWorld(state, cel = null) {
         || takeIn((q) => q[2] >= 4 && q[2] <= 5 && ang(q[3]) > 20 && ang(q[3]) < 80);     // fallback: the same band one ring out
     if (mk) {
         w.put('building_dirt', mk[0], mk[1], { layer: 'flat' }); w.put(B('market'), mk[0], mk[1]); claim(mk[0], mk[1]);
-        // market-day clutter: the pack's long crates, pallet and sacks around the market hall
+ // market-day clutter: the pack's long crates, pallet and sacks around the market hall
         w.put('crate_long_B', mk[0], mk[1], { dx: -1.3, dz: 0.4 }); w.put('sack', mk[0], mk[1], { dx: 1.2, dz: 0.6 });
         w.put('pallet', mk[0], mk[1], { dx: 0.25, dz: 1.1 });
         if (rng() < 0.6) w.put('crate_long_A', mk[0], mk[1], { dx: 1.35, dz: -0.45 });
     }
     const wl = takeIn((q) => q[2] === 4 && ang(q[3]) > 100 && ang(q[3]) < 160);          // well, (mirrored) south-west
     if (wl) { w.put(B('well'), wl[0], wl[1]); w.put('barrel', wl[0], wl[1], { dx: 0.5, dz: 0.3 }); claim(wl[0], wl[1]); }
-    // the guard's yard: a barracks stands beside the gate road in EVERY guild ("maybe some
-    // barracks in the guild area" — owner 2026-10-19); a second joins once the keep is a castle
+ // the guard's yard: a barracks stands beside the gate road in EVERY guild ("maybe some
+ // barracks in the guild area" - ); a second joins once the keep is a castle
     const gb = takeIn((q) => q[2] >= 4 && q[2] <= 5 && ang(q[3]) > 76 && ang(q[3]) < 104)
         || takeIn((q) => q[2] >= 3 && q[2] <= 5 && ang(q[3]) > 70 && ang(q[3]) < 110);
     if (gb) {
@@ -432,8 +427,8 @@ function buildWorld(state, cel = null) {
             claim(gb2[0], gb2[1]);
         }
     }
-    // ── the grand ward (max hall, owner 2026-10-19 "full blown city"): cobbled forecourt
-    // with benches before the keep, a banner monument on the avenue axis, and market day ──
+ // -- the grand ward (max hall, "full blown city"): cobbled forecourt
+ // with benches before the keep, a banner monument on the avenue axis, and market day --
     if (TIER.fullCity) {
         for (const q of inside) {
             if (used.has(key(q[0], q[1])) || q[2] > 2 || q[3] < 40 || q[3] > 140) continue;
@@ -454,7 +449,7 @@ function buildWorld(state, cel = null) {
             w.put('sack', mk[0], mk[1], { dx: -0.4, dz: 1.45 });
         }
     }
-    // drill lawn: even before the training ground is built, targets and arrow buckets sit out on the green
+ // drill lawn: even before the training ground is built, targets and arrow buckets sit out on the green
     if (train < 2) {
         const dl = takeIn((q) => q[2] >= 3 && q[2] <= 5 && ang(q[3]) > 14 && ang(q[3]) < 70);
         if (dl) {
@@ -464,18 +459,18 @@ function buildWorld(state, cel = null) {
             claim(dl[0], dl[1]);
         }
     }
-    // festival stage on the (mirrored) north-east lawn — the pack's stage pieces were still idle
+ // festival stage on the (mirrored) north-east lawn - the pack's stage pieces were still idle
     const stg = takeIn((q) => q[2] >= 3 && q[2] <= 4 && (ang(q[3]) > 318 || ang(q[3]) < 12));
     if (stg) {
         w.put(['building_stage_A', 'building_stage_B', 'building_stage_C'][Math.floor(rng() * 3)], stg[0], stg[1]);
         w.put('flag_' + team, stg[0], stg[1], { dx: 0.85, dz: 0.5 });
         claim(stg[0], stg[1]);
     }
-    // ── the quarry yard: the pack's own mine (walkway-into-rocks) INSIDE the walls ──
-    // owner 2026-10-19: "Move the cave inside the base, it should replace the existing
-    // mines" — the ridge-foot working site is gone (kingdomTerrain populate no longer
-    // places it); the cave is a district feature tucked against the back rampart, with
-    // the same dressed look the owner signed off on (ore-hoist, ladder, stone pile).
+ // -- the quarry yard: the pack's own mine (walkway-into-rocks) INSIDE the walls --
+ // "Move the cave inside the base, it should replace the existing
+ // mines" - the ridge-foot working site is gone (kingdomTerrain populate no longer
+ // places it); the cave is a district feature tucked against the back rampart, with
+ // the same dressed look the owner signed off on (ore-hoist, ladder, stone pile).
     const qy = takeIn((q) => q[2] >= 4 && q[3] > 195 && q[3] < 345)            // back band behind the keep
         || takeIn((q) => q[2] >= 3 && q[3] > 195 && q[3] < 345)
         || takeIn((q) => q[2] >= 3);
@@ -487,9 +482,9 @@ function buildWorld(state, cel = null) {
         w.put('resource_stone', qy[0], qy[1], { dx: -0.35, dz: 1.05, sc: 0.9 });
         claim(qy[0], qy[1]);
     }
-    // ── the expansion belt (double walls, hall 4+): the city outgrew its inner curtain —
-    // cottages front the south road between the walls, a tavern joins at max hall, and
-    // paddocks/gardens fill the rest of the ward ──
+ // -- the expansion belt (double walls, hall 4+): the city outgrew its inner curtain -
+ // cottages front the south road between the walls, a tavern joins at max hall, and
+ // paddocks/gardens fill the rest of the ward --
     if (TIER.doubleWalls) {
         const belt = [];
         for (const [c, r] of K.ring(CC, CR, WALL_RING + 1)) {
@@ -545,8 +540,8 @@ function buildWorld(state, cel = null) {
         claim(c, r);
         if (got <= 8) { const wcH = K.hexWorld(c, r); smokeAnchors.push({ x: wcH.x + (i % 2 ? -0.35 : 0.35), z: wcH.z + 0.1, h: 1.65 }); }
     }
-    // max hall: the district fills with citizens' homes beyond the member hamlet — a
-    // full blown city has people, not just plot markers (seeded mix, shops every third)
+ // max hall: the district fills with citizens' homes beyond the member hamlet - a
+ // full blown city has people, not just plot markers (seeded mix, shops every third)
     if (TIER.fullCity) {
         let gotX = 0;
         for (const q of inside) {
@@ -564,7 +559,7 @@ function buildWorld(state, cel = null) {
         w.put(['trees_A_medium', 'trees_B_medium', 'tree_single_A', 'tree_single_B'][Math.floor(rng() * 4)], q[0], q[1], { flip: rng() < 0.5, sc: 0.85 }); claim(q[0], q[1]);
     }
 
-    // ── the wilds (outside the wall) ──
+ // -- the wilds (outside the wall) --
     const outer = [];
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
         const k = w.cell[r][c];
@@ -591,7 +586,7 @@ function buildWorld(state, cel = null) {
             w.put(TREES[2 + Math.floor(rng() * 2)], c, r, { flip: rng() < 0.5 }); claim(c, r);
         }
     }
-    // lumber mill beside the forest, mill on the river, mine in the mountains
+ // lumber mill beside the forest, mill on the river, mine in the mountains
     const pick = (pred) => { for (const [c, r] of outer) if (!used.has(key(c, r)) && pred(c, r)) return [c, r]; return null; };
     const lm = pick((c, r) => { const a = angleDeg(c, r); return a > 150 && a < 230 && cdist(c, r) <= 6; });
     if (lm) { w.put(B('lumbermill'), lm[0], lm[1]); claim(lm[0], lm[1]); }
@@ -601,19 +596,19 @@ function buildWorld(state, cel = null) {
         const nb = freeNbrs(wm[0], wm[1], 9)[0];
         if (nb) { w.put(B('watermill'), nb[0], nb[1]); claim(nb[0], nb[1]); }
     }
-    // lighthouse on the south-western shore (tower_B)
+ // lighthouse on the south-western shore (tower_B)
     const shore = [];
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { const k = w.cell[r][c]; if (k.coast && !used.has(key(c, r)) && angleDeg(c, r) > 85 && angleDeg(c, r) < 135) shore.push([c, r]); }
     if (shore.length) { lighthouse = shore[Math.floor(rng() * shore.length)]; w.put(B('tower_B'), lighthouse[0], lighthouse[1], { sc: 0.9 }); }
     }
 
-    // the citadel entrance: a stone gatehouse over the south gate, flanked by torches and the guild banner
+ // the citadel entrance: a stone gatehouse over the south gate, flanked by torches and the guild banner
     if (K.hasSprite('struct_gate_0', 'top')) {
         w.put('struct_gate_0', gateCell[0], gateCell[1], { sc: 1.5, sort: 0.6 });
         w.put('barrel', gateCell[0], gateCell[1], { dx: 1.35, dz: 0.8 }); w.put('crate_A_small', gateCell[0], gateCell[1], { dx: -1.35, dz: 0.85 });
     }
 
-    // gate flags + garden props inside the walls
+ // gate flags + garden props inside the walls
     w.put('flag_' + team, gateCell[0], gateCell[1], { dx: -1.0, dz: 0.55, h: 0 });
     w.put('flag_' + team, gateCell[0], gateCell[1], { dx: 1.0, dz: 0.55, h: 0 });
     for (const [c, r] of K.ring(CC, CR, 2).concat(K.ring(CC, CR, 3))) {
@@ -627,11 +622,11 @@ function buildWorld(state, cel = null) {
     return { w, castle, gateCell, hall, train, treas, team, smokeAnchors, fall };
 }
 
-// ── overlays ──
+// -- overlays --
 function cobbleOverlay(ctx, w, c, r, k) {
-    // stone paving drawn UNDER every object on a road / forecourt cell (hall-tier law,
-    // owner 2026-10-19: "stone roads instead of dirt") — warm-gray slab with seeded
-    // cobbles, clipped to the cell polygon so it can never bleed into neighbours
+ // stone paving drawn UNDER every object on a road / forecourt cell (hall-tier law,
+ // "stone roads instead of dirt") - warm-gray slab with seeded
+ // cobbles, clipped to the cell polygon so it can never bleed into neighbours
     const rnd = mulberry32(hashStr(`cobble:${c},${r}`));
     ctx.save();
     const poly = w.cellPoly(c, r, 0.015);
@@ -662,7 +657,7 @@ function plotOverlay(ctx, w, c, r, tag, k) {
     K.hexPath(ctx, w, c, r, 0.13);
     ctx.stroke();
     ctx.setLineDash([]);
-    // plaque
+ // plaque
     const wc = K.hexWorld(c, r);
     const p = w.proj(wc.x, wc.z + 0.25, 0);
     const label = /^\d+$/.test(tag) ? `PLOT ${tag}` : `${tag} PLOT`;
@@ -705,19 +700,19 @@ async function loadCrest(state) {
 const crestKey = (state) => (state && state.emblemImg ? hashStr(String(state.emblemImg)) : '');
 
 function drawBanner(ctx, x, y, k, flagCol, flagD, icon, t, crest) {
-    // the guild EMBLEM crowns the castle (owner 2026-10-19: "by guild banner I ment the
-    // guild emblem, it ahould be the thing onto of the castle") — a heraldic shield on a
-    // short mast at the keep peak, flanked by two small waving pennants so the top of
-    // the keep still moves on the animated card.
+ // the guild EMBLEM crowns the castle ("by guild banner I ment the
+ // guild emblem, it ahould be the thing onto of the castle") - a heraldic shield on a
+ // short mast at the keep peak, flanked by two small waving pennants so the top of
+ // the keep still moves on the animated card.
     const k2 = k * 2;
     const mastH = 22 * k2, sw = 74 * k2, sh = 92 * k2;
     ctx.save();
     ctx.strokeStyle = '#3a2a18'; ctx.lineWidth = Math.max(2, 3.2 * k2);
-    // the mast dips behind the keep's roof mass so the crest reads as planted on the
-    // castle (works across every hall's keep shape — no per-level anchor tuning)
+ // the mast dips behind the keep's roof mass so the crest reads as planted on the
+ // castle (works across every hall's keep shape - no per-level anchor tuning)
     ctx.beginPath(); ctx.moveTo(x, y + 26 * k2); ctx.lineTo(x, y - mastH); ctx.stroke();
     const topY = y - mastH - sh;
-    // flanking pennants fly from the shield's shoulders (drawn first, shield covers the roots)
+ // flanking pennants fly from the shield's shoulders (drawn first, shield covers the roots)
     const penn = (sx, dir) => {
         const py = topY + 10 * k2, pw = 36 * k2, ph = 17 * k2;
         ctx.beginPath();
@@ -732,7 +727,7 @@ function drawBanner(ctx, x, y, k, flagCol, flagD, icon, t, crest) {
         ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = Math.max(1, 1.2 * k2); ctx.stroke();
     };
     penn(x - sw * 0.46, -1); penn(x + sw * 0.46, 1);
-    // heater shield: emblemColor field, gold trim, inner light border, emblem glyph large
+ // heater shield: emblemColor field, gold trim, inner light border, emblem glyph large
     const shield = (w0, y0, h0) => {
         ctx.beginPath();
         ctx.moveTo(x - w0 / 2, y0);
@@ -748,7 +743,7 @@ function drawBanner(ctx, x, y, k, flagCol, flagD, icon, t, crest) {
     ctx.strokeStyle = '#e8c15a'; ctx.lineWidth = Math.max(2, 3.4 * k2); ctx.stroke();
     shield(sw - 9 * k2, topY + 4.5 * k2, sh - 7 * k2);
     ctx.strokeStyle = 'rgba(255,244,208,0.5)'; ctx.lineWidth = Math.max(1, 1.6 * k2); ctx.stroke();
-    if (crest) {                                                   // the guild's UPLOADED crest fills the shield (owner: emblem.img)
+    if (crest) { // the guild's UPLOADED crest fills the shield (emblem.img)
         ctx.save();
         shield(sw - 9 * k2, topY + 4.5 * k2, sh - 7 * k2); ctx.clip();
         const bw0 = sw - 9 * k2, bh0 = sh - 7 * k2, by0 = topY + 4.5 * k2;
@@ -762,13 +757,13 @@ function drawBanner(ctx, x, y, k, flagCol, flagD, icon, t, crest) {
         ctx.font = emojiFont(String(icon).slice(0, 2), 36 * k2);
         fillTextMixed(ctx, String(icon).slice(0, 2), x, topY + sh * 0.4);
     }
-    // gold finial on the mast tip
+ // gold finial on the mast tip
     ctx.fillStyle = '#e8c15a';
     ctx.beginPath(); ctx.arc(x, topY - 4 * k2, 4.2 * k2, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
 }
 
-// ── scene cache: the static art (no HUD, no animation) per state ──
+// -- scene cache: the static art (no HUD, no animation) per state --
 const _scenes = new Map();
 const SCENE_MAX = 4;
 function sceneKey(state, opts) {
@@ -784,7 +779,6 @@ async function buildScene(state, opts = {}) {
     const cel = (opts.celebrate && typeof opts.celebrate === 'object') ? opts.celebrate : null;
     const { w, castle, hall, train, treas, team, gateCell, smokeAnchors, fall } = buildWorld(state, cel);
     const pad = { top: 190, bottom: 190, left: 36, right: 36 };
-    // keep the card size and castle framing of the old 17x15 layout, but let the (larger) grid fill every pixel of it
     const ref = new K.HexWorld(OLD_COLS, OLD_ROWS, { scale: SCALE, biome: w.biome });
     const { W, H } = ref.layout(pad);
     const oc = K.hexWorld(OLD_CC, OLD_CR), refP = ref.proj(oc.x, oc.z, 0);
@@ -799,7 +793,7 @@ async function buildScene(state, opts = {}) {
     const bd = biome0 === 'isle' ? { top: '#cfe8ef', mid: '#8fc7b2', bot: '#3f7a5c' } : bi ? { top: bi.backdrop[0], mid: bi.backdrop[1], bot: bi.backdrop[2] } : {};
     await w.draw(ctx, { drawBackdrop: (c2) => K.paintBackdrop(c2, W, H, seed, { clouds: 8, cloudScale: SCALE * 1.05, ...bd }) });
 
-    // facility plaques + banner (drawn over the art, anchored under each facility)
+ // facility plaques + banner (drawn over the art, anchored under each facility)
     const k = SCALE;
     const placePlaque = (cell, id, lvl) => {
         const wc = K.hexWorld(cell[0], cell[1]);
@@ -818,7 +812,7 @@ async function buildScene(state, opts = {}) {
     const roofH = [0, 2.3, 2.2, 2.0, 4.1, 4.1][hall] || 2.5;
     const bpos = w.proj(wc.x, wc.z, roofH + 0.1);
 
-    // ── life layer inputs (owner 2026-10-19 "bring it to life") ──
+ // -- life layer inputs ("bring it to life") --
     const water = [];
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
         if (w.cell[r][c].tile !== 'hex_water') continue;
@@ -833,7 +827,7 @@ async function buildScene(state, opts = {}) {
     const walkers = ambient.buildWalkers(w, seed, { n: 9, maxY: H - 190 });   // villagers on the roads
     const boats = ambient.buildBoats(water, seed, k);                     // wilds trees for the wind shuffle
     const smoke = smokeAnchors.map((a) => { const p = w.proj(a.x, a.z + 0.35, a.h); return { x: p.x, y: p.y, smoky: false }; });
-    // Task 21 day/night: window/forge light anchors (the keep + every facility)
+ // day/night: window/forge light anchors (the keep + every facility)
     const lights = smokeAnchors.map((a) => { const p = w.proj(a.x, a.z + 0.35, a.h); return { x: p.x, y: p.y, warm: '#ffcf7a' }; });
     const scene = { canvas, W, H, w, lights, banner: { x: bpos.x, y: bpos.y, flagCol, flagD: archC.flagD, icon: state.emblemIcon || '', crest: await loadCrest(state) }, k, biome: w.biome, realm: w.biome, water, sway, walkers, boats, smoke, seed, fall };
     _scenes.set(key0, scene);
@@ -841,13 +835,13 @@ async function buildScene(state, opts = {}) {
     return scene;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  FRAME RENDER (frame 0 = the static card)
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// FRAME RENDER (frame 0 = the static card)
+// ===========================================================================
 const ANIM_SCALE = parseFloat(process.env.RENDER_GUILD_ANIM_SCALE || '0.62') || 0.62;
 async function renderFrame(state, frame, opts = {}) {
     const sc = await buildScene(state, opts);
-    // animated (mp4) frames compose at reduced size — same trick as the homestead renderer
+ // animated (mp4) frames compose at reduced size - same trick as the homestead renderer
     const as = opts.encoder === 'raw' ? ANIM_SCALE : 1;
     const out = require('canvas').createCanvas(Math.round(sc.W * as / 2) * 2, Math.round(sc.H * as / 2) * 2);
     const ctx = out.getContext('2d');
@@ -855,7 +849,7 @@ async function renderFrame(state, frame, opts = {}) {
     ctx.imageSmoothingQuality = 'low';
     ctx.drawImage(sc.canvas, 0, 0);
     const t = (frame || 0) / FRAMES;
-    // waving banner over the keep
+ // waving banner over the keep
     if (sc.banner) drawBanner(ctx, sc.banner.x, sc.banner.y, sc.k, sc.banner.flagCol, sc.banner.flagD, sc.banner.icon, t, sc.banner.crest);
     if (opts.animate || frame > 0) {
         const seed = hashStr(state.name || 'guild');
@@ -887,8 +881,8 @@ async function renderFrame(state, frame, opts = {}) {
         ambient.drawButterflies(ctx, sc.W, sc.H, t, seed);       // garden flutter
         ambient.drawTint(ctx, sc.W, sc.H, t);                    // warm/cool breathing
     }
-    // ── DAY & NIGHT CYCLE (Task 21) — the guild grounds get darker and the
-    // keep's windows glow through the night; applies to the static card too ──
+ // -- DAY & NIGHT CYCLE - the guild grounds get darker and the
+ // keep's windows glow through the night; applies to the static card too --
     const dnPhase = opts.phase || dayNight.phaseAt();
     dayNight.grade(ctx, sc.W, sc.H, dnPhase);
     if (dnPhase === 'night' || dnPhase === 'dusk') {
@@ -899,8 +893,8 @@ async function renderFrame(state, frame, opts = {}) {
         if (dnPhase === 'night') dayNight.moonStars(ctx, sc.W, sc.H, { seed: 61, moonX: 0.9, moonY: 0.06, stars: 14, starAlpha: 0.7, skyH: 0.20 });
     }
     if (opts.celebrate) {
-        // owner 2026-10-19: the upgraded facility falls in and the confetti explodes FROM it —
-        // landing celebrate when the frame knows the target, card-wide rain otherwise
+ // the upgraded facility falls in and the confetti explodes FROM it -
+ // landing celebrate when the frame knows the target, card-wide rain otherwise
         const cel = (opts.celebrate && typeof opts.celebrate === 'object') ? opts.celebrate : null;
         const celSeed = hashStr(state.name || 'guild');
         if (!(cel && sc.fall && await K.paintLanding(ctx, sc.w, sc.W, sc.H, t, celSeed, sc.k, sc.fall))) {
@@ -913,7 +907,7 @@ async function renderFrame(state, frame, opts = {}) {
     return out.toBuffer('image/png');
 }
 
-// ── HUD plate ──
+// -- HUD plate --
 function drawHud(ctx, state, opts, W, H) {
     const Hh = 132, Wp = W - 60;
     const x0 = 30, y0 = H - Hh - 22;
@@ -961,7 +955,7 @@ function drawHud(ctx, state, opts, W, H) {
         ctx.fill();
         ctx.font = '16px Cinzel';
         ctx.fillStyle = built ? '#e8d5a3' : '#7a663f';
-        ctx.fillText(`${label} ${built ? `L${lvl}` : '—'}`, chipX - 2, y0 + 43);
+        ctx.fillText(`${label} ${built ? `L${lvl}` : '-'}`, chipX - 2, y0 + 43);
         chipX -= 116;
     }
 
@@ -973,9 +967,9 @@ function drawHud(ctx, state, opts, W, H) {
     ctx.restore();
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  mp4 encode (celebrate moments) — same raw-BGRA → ffmpeg stdin streaming
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// mp4 encode (celebrate moments) - same raw-BGRA → ffmpeg stdin streaming
+// ===========================================================================
 const FRAME_BREATH_MS = 8;
 const breath = () => new Promise((r) => setTimeout(r, FRAME_BREATH_MS));
 
@@ -1013,7 +1007,7 @@ async function encodeFramesToMp4(frames) {
     }
 }
 
-// OUT ENCODER — card ships downscaled + JPEG (owner Task 36: phones show ~1200px)
+// OUT ENCODER - card ships downscaled + JPEG (owner phones show ~1200px)
 const OUT_MAX_W = Math.max(640, parseInt(process.env.RENDER_OUT_MAX_W || '2560', 10) || 2560);
 const OUT_JPEG_Q = Math.min(0.95, Math.max(0.5, parseFloat(process.env.RENDER_OUT_JPEG_Q || '0.9') || 0.9));
 function encodeOut(canvas) {
@@ -1051,13 +1045,13 @@ async function renderGuildBaseImage(state, opts = {}) {
     const hit = _renderCache.get(k);
     if (hit && (Date.now() - hit.ts) < CACHE_TTL) return hit;
     const out = await mediaCache.cached('guildbase', k, async () => {
-        // static card only when explicitly asked (opts.static === true): composite once → JPEG
+ // static card only when explicitly asked (opts.static === true): composite once → JPEG
         if (opts.static === true) return encodeOut(await renderFrame(state, 0, { ...opts, returnCanvas: true }));
-        // animated card (DEFAULT — owner 2026-10-19: "the guild card should also be a gif"):
-        // water shimmer + sparkles + sway + smoke + birds + tint + banner wave, raw frames → ffmpeg
-        // STREAMING BAKE (47-k10, Task-37 pattern): feed ffmpeg's stdin AS frames
-        // render — the old loop held all 20 raw BGRA frames before encoding; now
-        // one frame lives at a time and the encode overlaps the render.
+ // animated card (DEFAULT - "the guild card should also be a gif"):
+ // water shimmer + sparkles + sway + smoke + birds + tint + banner wave, raw frames → ffmpeg
+ // STREAMING BAKE (, Task-37 pattern): feed ffmpeg's stdin AS frames
+ // render - the old loop held all 20 raw BGRA frames before encoding; now
+ // one frame lives at a time and the encode overlaps the render.
         try {
             const f0 = await renderFrame(state, 0, { ...opts, encoder: 'raw', animate: true });
             await breath();
@@ -1070,19 +1064,18 @@ async function renderGuildBaseImage(state, opts = {}) {
             console.error('[guildBaseRenderer] mp4 encode failed, JPEG fallback:', e.message);
         }
         return encodeOut(await renderFrame(state, 0, { ...opts, returnCanvas: true }));
-    }, { state, opts: { hint: opts.hint, celebrate: opts.celebrate } },   // 47-k8c: journal for renderWarmer (post-deploy re-bake; `static` stripped so replays take the default mp4 path)
-    { label: 'bake:guildbase', timeoutMs: 90000 });   // 47-k9: serialize through renderQueue — concurrent .j bakes pm2-killed the box (2026-10-20 03:11Z)
+    }, { state, opts: { hint: opts.hint, celebrate: opts.celebrate } }, // journal for renderWarmer (post-deploy re-bake; `static` stripped so replays take the default mp4 path)
+    { label: 'bake:guildbase', timeoutMs: 90000 }); // serialize through renderQueue - concurrent .j bakes pm2-killed the box (03:11Z)
     cachePut(_renderCache, k, out);
     return out;
 }
 
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  GUILD HALL CARD — `.j guild`: the keep zoomed in, the emblem crowning it, and the
-//  guild's information on the panel (owner 2026-10-20: "the guild hall should obviously
-//  be a card zoomed in with the guilds information"). Static JPEG, disk-cached.
-//  spec → structureScenes.drawPanel (title/subtitle/rows/actions/note/footer/banner)
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// GUILD HALL CARD - `.j guild`: the keep zoomed in, the emblem crowning it, and the
+// guild's information on the panel ("the guild hall should obviously
+// be a card zoomed in with the guilds information"). Static JPEG, disk-cached.
+// spec → structureScenes.drawPanel (title/subtitle/rows/actions/note/footer/banner)
+// ===========================================================================
 const HALL_W = 1400, HALL_H = 1000, HALL_ZOOM = 0.78;
 async function renderGuildHallCard(state, spec = {}) {
     const key = hashStr(JSON.stringify(['hall2', state.name, state.biome || '', state.continent || '', state.level, state.archetype, state.buildings, state.memberCount, state.emblemColor, state.emblemIcon, crestKey(state), spec]));

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* build_quiz_dataset_pass8.js — dataset v8 (owner 2026-10-10):
+/* build_quiz_dataset_pass8.js - dataset v8 (owner 2026-10-10):
  *   "Get more questions ... investigate better ... make most of the questions
  *    type the answer instead of the ABCD ... allow multiple answers, not just
  *    the one"
@@ -33,7 +33,7 @@ function decodeHtml(s) {
     .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => { try { return String.fromCodePoint(parseInt(n, 16)); } catch { return " "; } })
     .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ")
-    .replace(/&hellip;/g, "...").replace(/&mdash;/g, "—").replace(/&ndash;/g, "–")
+    .replace(/&hellip;/g, "...").replace(/&mdash;/g, "-").replace(/&ndash;/g, "-")
     .replace(/&rsquo;/g, "'").replace(/&lsquo;/g, "'").replace(/&ldquo;/g, '"').replace(/&rdquo;/g, '"');
 }
 const stripHtml = (s) => decodeHtml(String(s || "")).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
@@ -60,7 +60,7 @@ async function jget(url, tries = 3) {
   }
 }
 
-// ── existing stems for dedupe ──
+// -- existing stems for dedupe --
 const DS = JSON.parse(fs.readFileSync(OUT, "utf8"));
 const seenStems = new Set();
 for (const c of Object.values(DS.categories)) {
@@ -70,18 +70,18 @@ for (const c of Object.values(DS.categories)) {
 const seenAns = new Set(); // plot questions: one per work
 function dedupeKey(q) { return normKey(q.q + "|" + (q.alts && q.alts[0] || q.options[q.correct])); }
 
-// ════════ STAGE A — convert existing MCQs to typed ════════
+// ======== STAGE A - convert existing MCQs to typed ========
 const OPT_REF = /\b(of (these|the following)|the following|which option|options?\b|one of the)\b/i;
 function convertQ(x, forceKeep) {
   const ans = String(x.options[x.correct]);
   if (x.fmt === "typed") return x; // already v8
   if (forceKeep || OPT_REF.test(x.q) || ans.length > 40 || !ans.trim()) return { ...x, fmt: "mc" };
-  // every 5th stays MC for variety (~20% MC target); deterministic by id
+ // every 5th stays MC for variety (~20% MC target); deterministic by id
   if (typeof x.id === "number" && x.id % 5 === 0) return { ...x, fmt: "mc" };
   return { ...x, fmt: "typed", options: [ans], correct: 0, alts: [] };
 }
 
-// ════════ STAGE B — TVMaze plot questions ════════
+// ======== STAGE B - TVMaze plot questions ========
 async function tvmazePlots(cap) {
   const ck = "/tmp/pass8_tvmaze.json";
   if (fs.existsSync(ck)) { const j = JSON.parse(fs.readFileSync(ck, "utf8")); if (j.items) return j.items; }
@@ -112,7 +112,7 @@ async function tvmazePlots(cap) {
   return items;
 }
 
-// ════════ STAGE C — AniList plot questions (anime + manga, real alts) ════════
+// ======== STAGE C - AniList plot questions (anime + manga, real alts) ========
 async function anilistPlots(type, cat, label, cap) {
   const ck = `/tmp/pass8_anilist_${type}.json`;
   if (fs.existsSync(ck)) { const j = JSON.parse(fs.readFileSync(ck, "utf8")); if (j.items) return j.items; }
@@ -157,7 +157,7 @@ async function anilistPlots(type, cat, label, cap) {
   return items;
 }
 
-// ════════ STAGE D — Fandom extracts + character art ════════
+// ======== STAGE D - Fandom extracts + character art ========
 const WIKIS = [
   { id: "onepiece", host: "onepiece.fandom.com", name: "One Piece", cat: "comics", topic: "Manga" },
   { id: "dragonball", host: "dragonball.fandom.com", name: "Dragon Ball", cat: "comics", topic: "Manga" },
@@ -228,7 +228,7 @@ async function fandomExtracts() {
         const title = String(p.title || "").replace(/\s*\([^)]*\)\s*$/, "").trim();
         if (!title || title.length > 40) continue;
         if (BAD_NAME_RE.test(title)) continue;
-        // ── art image question (GET-verified thumbnail) ──
+ // -- art image question (GET-verified thumbnail) --
         const thumb = p.thumbnail && p.thumbnail.source;
         if (art < ART_CAP && thumb) {
           const buf = await getBin(thumb);
@@ -243,7 +243,7 @@ async function fandomExtracts() {
           }
           await sleep(150);
         }
-        // ── extract lore question ──
+ // -- extract lore question --
         if (ex < EXTRACT_CAP) {
           const raw = stripHtml(p.extract || "");
           if (raw.length < 140) continue;
@@ -251,7 +251,7 @@ async function fandomExtracts() {
           if (masked.includes(title)) continue;
           const snip = masked.length > 300 ? masked.slice(0, 300).replace(/[,;:.!?\s]+\S*$/, "") + "…" : masked;
           if ((snip.match(/____/g) || []).length > 3) continue; // over-masked = unreadable
-          const q = `In ${w.name}: "${snip}" — who or what is being described?`;
+          const q = `In ${w.name}: "${snip}" - who or what is being described?`;
           if (seenStems.has(normKey(q))) continue;
           seenStems.add(normKey(q));
           items.push({ cat: w.cat, topic: w.topic, q, options: [title], correct: 0, alts: [], fmt: "typed", cls: "lore", difficulty: "medium", source: `fandom-extract:${w.id}`, id: null });
@@ -267,7 +267,7 @@ async function fandomExtracts() {
 }
 const BAD_NAME_RE = /^(unknown|unnamed|tba|various|n\/?a|unidentified).*$/i;
 
-// ════════ COMPOSE v8 ════════
+// ======== COMPOSE v8 ========
 (async () => {
   axios = require("axios");
   fs.copyFileSync(OUT, `${OUT}.bak-v8`);
@@ -293,15 +293,15 @@ const BAD_NAME_RE = /^(unknown|unnamed|tba|various|n\/?a|unidentified).*$/i;
     const convertedText = (old.questions || []).map((x) => convertQ(x, false));
     const convertedImg = (old.images || []).map((x, i) => {
       const ans = String(x.options[x.correct]);
-      // obscure-poster typed is brutal: keep half the image pool as MC
+ // obscure-poster typed is brutal: keep half the image pool as MC
       if (x.fmt === "typed") return x;
       if (OPT_REF.test(x.q) || ans.length > 32 || i % 2 === 1) return { ...x, fmt: "mc" };
       return { ...x, fmt: "typed", options: [x.subject || ans], correct: 0, alts: [] };
     });
-    // merge art questions into image pool (dedupe by img url)
+ // merge art questions into image pool (dedupe by img url)
     const imgUrls = new Set(convertedImg.map((x) => x.img));
     for (const a of newArt[cat]) if (!imgUrls.has(a.img)) { imgUrls.add(a.img); convertedImg.push(a); }
-    // dedupe new text vs converted stems (rebuild set per cat from final pool)
+ // dedupe new text vs converted stems (rebuild set per cat from final pool)
     const stemSet = new Set(convertedText.map((x) => normKey(x.q)));
     const fresh = newByText[cat].filter((x) => !stemSet.has(normKey(x.q)));
     for (const x of fresh) stemSet.add(normKey(x.q));

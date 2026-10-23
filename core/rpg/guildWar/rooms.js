@@ -1,7 +1,7 @@
 // ============================================
-// 🚪 ROOM OPERATIONS — Guild War Overhaul 2026-10-03
+// ROOM OPERATIONS - Guild War Overhaul
 // Enter/leave/clear with atomic DB guards. Enter/occupy/clear are all
-// findOneAndUpdate with state conditions — two players resolving the same
+// findOneAndUpdate with state conditions - two players resolving the same
 // room cannot both win the transition (multi-instance safe).
 // ============================================
 
@@ -11,7 +11,7 @@ const mapEngine = require('./mapEngine');
 const feed = require('./feed');
 const CFG = require('./config');
 
-// ── encounter seeding (at event start): server-side payloads per room ──
+// -- encounter seeding (at event start): server-side payloads per room --
 async function seedEncounters(eventDoc, map) {
     const encounters = require('./encounters');
     const bulk = [];
@@ -30,7 +30,7 @@ async function seedEncounters(eventDoc, map) {
     if (bulk.length) await GuildWarEvent.bulkWrite(bulk, { ordered: false });
 }
 
-// ── fog: merge revealed keys into a player's discovered set ──
+// -- fog: merge revealed keys into a player's discovered set --
 async function applyFog(eventId, jid, revealKeys) {
     const doc = await GuildWarEvent.findOneAndUpdate(
         { eventId, 'players.jid': jid },
@@ -40,8 +40,8 @@ async function applyFog(eventId, jid, revealKeys) {
     return doc?.players?.[0]?.discovered || null;
 }
 
-// ── enter a room (ONE atomic op: pull from old occupants + push to new) ──
-// ⚔️ LOAD FIX: was 2 round-trips; aggregation-pipeline update does both in one
+// -- enter a room (ONE atomic op: pull from old occupants + push to new) --
+// LOAD FIX: was 2 round-trips; aggregation-pipeline update does both in one
 // server-side atomic pass. Edge validity is checked upstream (topology).
 async function enterRoom(eventId, jid, fromKey, toKey) {
     await GuildWarEvent.updateOne(
@@ -58,10 +58,10 @@ async function enterRoom(eventId, jid, fromKey, toKey) {
                                     { case: { $and: [{ $ne: [fromKey, null] }, { $eq: ['$$r.key', fromKey] }] },
                                         then: { $mergeObjects: ['$$r', {
                                             occupants: { $setDifference: ['$$r.occupants', [jid]] },
-                                            // 🪙 LOOT DESPAWN (owner 2026-10-06): when the player who
-                                            // CLEARED a consumable room walks out, the fresh-loot sprite
-                                            // (gold pile / cavity coins / idol) dies with their presence —
-                                            // every later render (theirs or anyone's) shows the looted marker.
+ // LOOT DESPAWN: when the player who
+ // CLEARED a consumable room walks out, the fresh-loot sprite
+ // (gold pile / cavity coins / idol) dies with their presence -
+ // every later render (theirs or anyone's) shows the looted marker.
                                             lootFresh: { $cond: [
                                                 { $and: [{ $eq: ['$$r.state', 'CLEARED'] }, { $eq: ['$$r.clearedBy', jid] }, { $eq: ['$$r.lootFresh', true] }] },
                                                 false,
@@ -84,9 +84,9 @@ async function enterRoom(eventId, jid, fromKey, toKey) {
 }
 
 async function leaveRoom(eventId, jid, roomKey) {
-    // 🪙 LOOT DESPAWN (owner 2026-10-06): upgraded from a bare $pull to a
-    // pipeline so the looter's exit ALSO kills the fresh-loot sprite in the
-    // same atomic pass (flee/return/war-end paths route through here).
+ // LOOT DESPAWN: upgraded from a bare $pull to a
+ // pipeline so the looter's exit ALSO kills the fresh-loot sprite in the
+ // same atomic pass (flee/return/war-end paths route through here).
     await GuildWarEvent.updateOne(
         { eventId },
         [
@@ -115,15 +115,15 @@ async function leaveRoom(eventId, jid, roomKey) {
     );
 }
 
-// ── clear a room (the atomic claim): only one winner ever ──
+// -- clear a room (the atomic claim): only one winner ever --
 // condition: room ACTIVE (or UNEXPLORED for instant-clear types) and not already cleared
 async function clearRoom(eventId, roomKey, player, { extraPayload = null } = {}) {
-    // ⚔️ CLAIM SAFETY (race bug found in S3): plain 'rooms.key' + 'rooms.state'
-    // conditions can match the DOCUMENT via DIFFERENT elements, and the
-    // positional $ then writes an arbitrary element (measured: 6 winners, 6
-    // rooms corrupted). $elemMatch binds ALL conditions to ONE element, so
-    // the positional $ always points at the claimed room and the claim is
-    // lost (null) the moment another writer wins it.
+ // CLAIM SAFETY (race bug found in S3): plain 'rooms.key' + 'rooms.state'
+ // conditions can match the DOCUMENT via DIFFERENT elements, and the
+ // positional $ then writes an arbitrary element (measured: 6 winners, 6
+ // rooms corrupted). $elemMatch binds ALL conditions to ONE element, so
+ // the positional $ always points at the claimed room and the claim is
+ // lost (null) the moment another writer wins it.
     const prev = await GuildWarEvent.findOneAndUpdate(
         {
             eventId,
@@ -141,7 +141,7 @@ async function clearRoom(eventId, roomKey, player, { extraPayload = null } = {})
                 'rooms.$.clearedBy': player.jid,
                 'rooms.$.clearedByGuild': player.guildId,
                 'rooms.$.clearedAt': new Date(),
-                'rooms.$.lootFresh': true,   // 🪙 spoils render while the clearer stays; despawns on their exit
+                'rooms.$.lootFresh': true, // spoils render while the clearer stays; despawns on their exit
                 ...(extraPayload || {}),
             },
         },
@@ -149,7 +149,7 @@ async function clearRoom(eventId, roomKey, player, { extraPayload = null } = {})
     );
     if (!prev) return { won: false, reason: 'already-cleared-or-gone' };
 
-    // residue on a tunable share of cleared rooms
+ // residue on a tunable share of cleared rooms
     if (Math.random() < CFG.MAP.RESIDUE_CHANCE) {
         const residue = {
             by: player.name,
@@ -165,7 +165,7 @@ async function clearRoom(eventId, roomKey, player, { extraPayload = null } = {})
     return { won: true };
 }
 
-// ── room state transitions for encounter flow ──
+// -- room state transitions for encounter flow --
 async function markActive(eventId, roomKey) {
     return GuildWarEvent.findOneAndUpdate(
         { eventId, rooms: { $elemMatch: { key: roomKey, state: 'UNEXPLORED' } } },
@@ -183,8 +183,8 @@ async function setRoomPayload(eventId, roomKey, payloadPatch) {
     );
 }
 
-// 🔄 ENCOUNTER GATE (owner ruins_fixes.txt #8, 2026-10-05): puzzle
-// encounters no longer start on room entry — the player must interact
+// ENCOUNTER GATE (owner ruins_fixes.txt #8, ): puzzle
+// encounters no longer start on room entry - the player must interact
 // (`examine`) first. Marks the mechanism as started so later messages are
 // answers. Idempotent; only touches rooms still in play.
 async function startPuzzle(eventId, roomKey) {
@@ -193,11 +193,11 @@ async function startPuzzle(eventId, roomKey) {
             { eventId, rooms: { $elemMatch: { key: roomKey, state: { $in: ['UNEXPLORED', 'ACTIVE'] } } } },
             { $set: { 'rooms.$.payload.puzzle.started': true } }
         );
-    } catch (e) { /* best-effort — the in-memory flag still gates this turn */ }
+    } catch (e) { /* best-effort - the in-memory flag still gates this turn */ }
 }
 
-// ── PUZZLE ATTEMPT CLAIM (owner brief §7: "one authoritative evaluation") ──
-// The old flow read attemptsUsed, evaluated, then wrote it back — concurrent
+// -- PUZZLE ATTEMPT CLAIM (owner brief §7: "one authoritative evaluation") --
+// The old flow read attemptsUsed, evaluated, then wrote it back - concurrent
 // DMs all read the same value, all evaluated, and last-write-wins ate the
 // attempt count (measured: a burst of 3 wrong answers advanced the counter
 // by ONE). Now the attempt IS an atomic $inc: each player message claims
@@ -224,28 +224,28 @@ async function claimPuzzleAttempt(eventId, roomKey) {
     return { attempts: puzzle.attemptsUsed || 0, puzzle };
 }
 
-// exhaustion reset: the seal restarts from the first inscription — one atomic
+// exhaustion reset: the seal restarts from the first inscription - one atomic
 // write, so a shock is followed by a CLEAN attempt cycle, never a treadmill
 // where every further text input shocks forever.
 async function resetPuzzleAttempts(eventId, roomKey) {
     return setRoomPayload(eventId, roomKey, { 'puzzle.attemptsUsed': 0 });
 }
 
-// ── ⏳ THE FOUR WARDENS ──
-// owner 2026-10-05 23:09Z: "If a timer brings the Guild War to an end, place
+// -- ⏳ THE FOUR WARDENS --
+// 23:09Z: "If a timer brings the Guild War to an end, place
 // 4 bosses around the map. After all 4 bosses die, then the Guild War ends."
-// owner 2026-10-07 (Test Run 2 directive): the four bosses are ON THE MAP
-// FROM WAR START — randomly placed — and the war only concludes when all
+// (Test Run 2 directive): the four bosses are ON THE MAP
+// FROM WAR START - randomly placed - and the war only concludes when all
 // four fall. Room selection SCATTERS like the current (secret-room) bosses
-// do — random mid-map rooms, organically spread — but never pinned to the
+// do - random mid-map rooms, organically spread - but never pinned to the
 // border corners the way the old farthest-point sampler did (owner
-// 2026-10-06 01:07Z: "shouldn't be at the 4 edges, scattered around like
+// 01:07Z: "shouldn't be at the 4 edges, scattered around like
 // the current boss"). Eligibility is tiered, relaxing only when a small map
 // forces it, and a minimum pairwise separation keeps them from clustering.
 // Each warden room:
-//   • type 'finale' + payload {finaleBoss, wardenIndex, wardenName, enemies, boss, theme}
-//   • revealed on EVERY active champion's map (fog push) — hunting them is
-//     the whole point of the phase
+// • type 'finale' + payload {finaleBoss, wardenIndex, wardenName, enemies, boss, theme}
+// • revealed on EVERY active champion's map (fog push) - hunting them is
+// the whole point of the phase
 // All writes are atomic room updates; idempotent by the caller's ledger flip
 // (startEvent's ACTIVE flip at war start / the tick's {finale: null} flip on
 // the legacy timer path).
@@ -256,18 +256,18 @@ async function spawnFinaleBosses(eventDoc) {
     const theme = encounters.worldTheme(eventDoc.deadWorld);
     const spawnSet = new Set((eventDoc.players || []).map((p) => p.spawnRoomId).filter(Boolean));
 
-    // candidates: not the World Core, not a landing hall, not already a lair
+ // candidates: not the World Core, not a landing hall, not already a lair
     const cands = eventDoc.rooms.filter((r) => r.type !== 'core' && r.type !== 'finale' && !spawnSet.has(r.key));
     if (!cands.length) return { ok: false, reason: 'no-candidate-rooms' };
 
-    // scatter sampling (owner fix 01:07Z — see block comment above):
-    //   T0 interior rooms ≥2 steps from every landing hall
-    //   T1 interior rooms (warden may sit next to a landing hall)
-    //   T2 anywhere except core + landing halls (tiny maps only)
-    // The border ring is excluded in T0/T1 so wardens never hug the map
-    // edges; the pairwise Manhattan separation starts at ≈30% of the map
-    // side and relaxes until the quota fills. Random shuffle = the organic
-    // "like the current boss" feel instead of deterministic corners.
+ // scatter sampling (owner fix 01:07Z - see block comment above):
+ // T0 interior rooms ≥2 steps from every landing hall
+ // T1 interior rooms (warden may sit next to a landing hall)
+ // T2 anywhere except core + landing halls (tiny maps only)
+ // The border ring is excluded in T0/T1 so wardens never hug the map
+ // edges; the pairwise Manhattan separation starts at ≈30% of the map
+ // side and relaxes until the quota fills. Random shuffle = the organic
+ // "like the current boss" feel instead of deterministic corners.
     const side = eventDoc.side;
     const last = side - 1;
     const mdist = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
@@ -300,8 +300,8 @@ async function spawnFinaleBosses(eventDoc) {
             }
         }
     }
-    // absolute fallback: top up from any untouched candidate so the finale
-    // can never fail to place its wardens
+ // absolute fallback: top up from any untouched candidate so the finale
+ // can never fail to place its wardens
     if (picked.length < want) {
         picked = picked.concat(cands.filter((r) => !picked.includes(r)).slice(0, want - picked.length));
     }
@@ -333,10 +333,10 @@ async function spawnFinaleBosses(eventDoc) {
     });
     await GuildWarEvent.bulkWrite(bulk, { ordered: false });
 
-    // persist the warden ledger on the doc (the tick + onEnd hook read it)
+ // persist the warden ledger on the doc (the tick + onEnd hook read it)
     await GuildWarEvent.updateOne({ eventId: eventDoc.eventId }, { $set: { 'finale.bosses': bosses } });
 
-    // reveal every warden on every active champion's map
+ // reveal every warden on every active champion's map
     const reveal = bosses.map((b) => b.key);
     for (const p of eventDoc.players || []) {
         if (p.status !== 'active') continue;
@@ -345,7 +345,7 @@ async function spawnFinaleBosses(eventDoc) {
     return { ok: true, bosses, bossLvl };
 }
 
-// ── inactivity: carried relics drop into the current room's loot ──
+// -- inactivity: carried relics drop into the current room's loot --
 async function dropCarriedRelics(eventId, jid, reason) {
     const doc = await GuildWarEvent.findOne({ eventId }, { players: { $elemMatch: { jid } } }).lean();
     const p = doc?.players?.[0];
@@ -360,11 +360,11 @@ async function dropCarriedRelics(eventId, jid, reason) {
         { $push: { 'rooms.$.payload.droppedRelics': { $each: dropped.map((r) => r.toObject ? r.toObject() : r) } } }
     );
     await state.pushLog(eventId, 'relic-drop', jid, `${dropped.length} relics dropped (${reason})`);
-    // 💬 dedupe (owner copy overhaul 2026-10-05): the FINAL-DEATH headline in
-    // index.js already tells the group the relics lie where the champion
-    // fell — the generic drop line only fires for silent-logouts.
+ // dedupe (owner copy overhaul ): the FINAL-DEATH headline in
+ // index.js already tells the group the relics lie where the champion
+ // fell - the generic drop line only fires for silent-logouts.
     if (reason !== 'final death') {
-        feed.queue(eventId, 'normal', `💼 ${p.name} has gone quiet — their carried relics lie scattered where they stood, ripe for the next passerby.`);
+        feed.queue(eventId, 'normal', `💼 ${p.name} has gone quiet - their carried relics lie scattered where they stood, ripe for the next passerby.`);
     }
     return dropped.length;
 }

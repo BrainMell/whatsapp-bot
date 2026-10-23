@@ -1,17 +1,15 @@
 // ============================================
-// 🎨 COMBAT IMAGE GENERATOR - GO MICROSERVICE CLIENT
+// COMBAT IMAGE GENERATOR - GO MICROSERVICE CLIENT
 // ============================================
 // Generates static PNG combat scenes OR animated MP4 combat scenes
 // via the Go microservice.
-//
-// Static PNG  → /api/combat         (default)
+// Static PNG → /api/combat (default)
 // Animated MP4 → /api/combat/animated (when options.action is set)
-//
 // The animated endpoint falls back to static PNG server-side if anything
 // goes wrong, so callers can always assume a successful response contains
 // either a PNG (image/png) or MP4 (video/mp4) buffer.
 
-const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
+const goService = require('../utils/goImageService'); // singleton (PERF PATCH )
 const botConfig = require('../../botConfig');
 
 /**
@@ -21,19 +19,19 @@ function buildPayload(players, enemies, options = {}) {
     return {
         players: players.map(p => ({
             name: String(p.name || 'Unknown'),
-            // 💡 TICKET #b4f7aa (2026-09-21): fall back to APPRENTICE, the same
-            // fallback the character sheet uses (CLASS_SPRITE_SETS.APPRENTICE in
-            // profileCardRenderer) - combat previously fell back to a DIFFERENT
-            // class ('FIGHTER'), so unknown/mod-created classes rendered a
-            // different sprite in combat than on their character sheet.
-            // 💀 FIX 2026-10-11 (owner fight-card audit): guildAdventure's
-            // CLASSES entries carry NO `id` field, so p.class?.id was undefined
-            // and String(p.class) serialized the whole object as
-            // "[object Object]" - the Go registry missed and EVERY base-class
-            // hero rendered as Fighter1 in battle while the QUESTSTART portrait
-            // (which sends userClass.id) showed the real class. Resolve the id
-            // through .name too, drop objects entirely, and normalize the case
-            // so the payload always carries a registry-shaped key ("NECROMANCER").
+ //: fall back to APPRENTICE, the same
+ // fallback the character sheet uses (CLASS_SPRITE_SETS.APPRENTICE in
+ // profileCardRenderer) - combat previously fell back to a DIFFERENT
+ // class ('FIGHTER'), so unknown/mod-created classes rendered a
+ // different sprite in combat than on their character sheet.
+ // FIX (owner fight-card audit): guildAdventure's
+ // CLASSES entries carry NO `id` field, so p.class?.id was undefined
+ // and String(p.class) serialized the whole object as
+ // "[object Object]" - the Go registry missed and EVERY base-class
+ // hero rendered as Fighter1 in battle while the QUESTSTART portrait
+ // (which sends userClass.id) showed the real class. Resolve the id
+ // through .name too, drop objects entirely, and normalize the case
+ // so the payload always carries a registry-shaped key ("NECROMANCER").
             class: String(
                 p.class?.id ||
                 (typeof p.class?.name === 'string' ? p.class.name : '') ||
@@ -47,10 +45,10 @@ function buildPayload(players, enemies, options = {}) {
             energy: Math.floor(Number(p.stats?.energy || p.energy || 100)),
             maxEnergy: Math.floor(Number(p.stats?.maxEnergy || p.maxEnergy || 100)),
             adventurerRank: String(p.adventurerRank || 'F'),
-            // 💡 TICKET #b4f7aa: clamp exactly like the sheet resolver
-            // (Math.max(0, ...)) so negative/NaN indices can desync the sprite.
+ // clamp exactly like the sheet resolver
+ // (Math.max(0, ...)) so negative/NaN indices can desync the sprite.
             spriteIndex: Math.max(0, Math.floor(Number(p.spriteIndex) || 0)),
-            // 💡 NEW 2026-08-05: Pass mode + species so Go service renders summon sprites
+ // NEW Pass mode + species so Go service renders summon sprites
             mode: String(p.mode || (p._isSummon ? 'summon' : '') || ''),
             species: String(p.species || p.type || '')
         })),
@@ -61,21 +59,21 @@ function buildPayload(players, enemies, options = {}) {
             isBoss: Boolean(e.isBoss),
             justDied: Boolean(e.justDied),
             spriteIndex: Math.floor(Number(e.spriteIndex) || 0),
-            // 💡 FIX 2026-09-17: wild summons as ENEMIES (abyss floors) must
-            // render their summon species sprite, not a random monster.
+ // FIX wild summons as ENEMIES (abyss floors) must
+ // render their summon species sprite, not a random monster.
             mode: String(e.mode || ((e.isWildSummon || e._isSummon) ? 'summon' : '') || ''),
             species: String(e.species || ((e.isWildSummon || e._isSummon) ? (e.speciesId || e.id) : '') || ''),
             bossId: String(e.id || e.name || '').toUpperCase().replace(/\s+/g, '_'),
             level: Math.floor(Number(e.level || e.stats?.level || 1))
         })),
-        // 💡 Phase 7: Include summons in the combat render payload.
-        // 💡 TICKET #b4fc58 (2026-09-21): pass each summon's FACING through to
-        // the renderer ('right' = facing the enemy side, 'left' = facing its
-        // own side). summonAI.performSummonAction updates summonEntity.facing
-        // every turn; summonSystem.buildCombatEntity defaults it to 'right'.
-        // The Go renderer flips the sprite horizontally when facing === 'left',
-        // matching player-sprite facing behavior. Static (turret) summons keep
-        // their orientation.
+ // Phase 7: Include summons in the combat render payload.
+ //: pass each summon's FACING through to
+ // the renderer ('right' = facing the enemy side, 'left' = facing its
+ // own side). summonAI.performSummonAction updates summonEntity.facing
+ // every turn; summonSystem.buildCombatEntity defaults it to 'right'.
+ // The Go renderer flips the sprite horizontally when facing === 'left',
+ // matching player-sprite facing behavior. Static (turret) summons keep
+ // their orientation.
         summons: (options.summons || []).map(s => ({
             name: String(s.name || 'Summon'),
             species: String(s.type || s.species || 'skeleton'),
@@ -89,20 +87,20 @@ function buildPayload(players, enemies, options = {}) {
         combatType: String(options.combatType || 'PVE'),
         rank: String(options.rank || 'F'),
         floor: Math.floor(Number(options.floor) || 0),
-        // ⚔️ ENCOUNTER SCENE (2026-10-02): ruins room payload — when present
-        // the Go renderer switches to scene mode (props + square map panel,
-        // no banner/menu for exploration kinds). Nil-safe: absent = classic.
+ // ENCOUNTER SCENE: ruins room payload - when present
+ // the Go renderer switches to scene mode (props + square map panel,
+ // no banner/menu for exploration kinds). Nil-safe: absent = classic.
         encounter: options.encounter || undefined,
-        // 💡 FIX 2026-09-11 R2 (owner directive: "PvP background = montage_E_4
-        // style"): the colosseum (spark_15) was rejected by the owner - the
-        // duel arena is now spark_5.png (the bright open beach arena from the
-        // approved E-series audit renders). The Go service mirrors this guard.
+ // FIX R2 (owner directive: "PvP background = montage_E_4
+ // style"): the colosseum (spark_15) was rejected by the owner - the
+ // duel arena is now spark_5.png (the bright open beach arena from the
+ // approved E-series audit renders). The Go service mirrors this guard.
         background: String(options.backgroundPath
             ? options.backgroundPath.split(/[\/\\]/).pop()
-            // 💡 OWNER BRIEF 2026-10-09 §2 (encounter bg consistency): the PVE
-            // fallback was spark_1 (a legacy flat) — any flow that omitted
-            // backgroundPath leaked the old style AND mismatched the fight's
-            // own background. env1 = the new-style lava cavern, deterministic.
+ // OWNER BRIEF §2 (encounter bg consistency): the PVE
+ // fallback was spark_1 (a legacy flat) - any flow that omitted
+ // backgroundPath leaked the old style AND mismatched the fight's
+ // own background. env1 = the new-style lava cavern, deterministic.
             : (String(options.combatType).toUpperCase() === 'PVP' ? 'spark_15.png' : 'env1.png'))
     };
 }
@@ -159,14 +157,14 @@ function sniffMediaMime(buf) {
 async function generateCombatImage(players, enemies, options = {}) {
     try {
         const payload = buildPayload(players, enemies, options);
-        // 💡 FIX 2026-08-03: Pass the action payload to the STATIC renderer
-        // so it can draw the turn indicator (golden ellipse under the attacker).
-        // The static renderer uses req.Action.AttackerSide + AttackerIndex.
+ // FIX Pass the action payload to the STATIC renderer
+ // so it can draw the turn indicator (golden ellipse under the attacker).
+ // The static renderer uses req.Action.AttackerSide + AttackerIndex.
         if (options.action) {
             payload.action = buildActionPayload(options.action);
         }
-        // 💡 FIX 2026-08-04: bypassQueue for PvP duel images. Static PNGs render
-        // in ~1-3s and should not wait behind slow GIF renders in _enqueue.
+ // FIX bypassQueue for PvP duel images. Static PNGs render
+ // in ~1-3s and should not wait behind slow GIF renders in _enqueue.
         const imageBuffer = options.bypassQueue
             ? await goService.generateCombatImageDirect(payload)
             : await goService.generateCombatImage(payload);
@@ -191,43 +189,40 @@ async function generateAnimatedCombatImage(players, enemies, options = {}) {
         const payload = buildPayload(players, enemies, options);
         payload.action = buildActionPayload(options.action);
         const videoBuffer = await goService.generateAnimatedCombat(payload);
-        // The Go service returns MP4 on success, or a static image if it fell
-        // back. Sniff the buffer magic bytes to determine which.
+ // The Go service returns MP4 on success, or a static image if it fell
+ // back. Sniff the buffer magic bytes to determine which.
         const mimeType = sniffMediaMime(videoBuffer);
         return { success: true, buffer: videoBuffer, mimeType };
     } catch (error) {
         console.error('❌ Animated combat generation failed, falling back to static:', error.message);
-        // 💡 #fec95a 2026-10-02: the static fallback MUST take the express
-        // lane (bypassQueue). Load-test round 2 measured the old behavior:
-        // the fallback queued behind the very animated renders that caused
-        // it, starved at the 20s wait budget, and the user got NOTHING.
-        // Direct statics render in ~1-3s solo / ~7s worst-case under flood.
+ // #fec95a the static fallback MUST take the express
+ // lane (bypassQueue). Load-test round 2 measured the old behavior:
+ // the fallback queued behind the very animated renders that caused
+ // it, starved at the 20s wait budget, and the user got NOTHING.
+ // Direct statics render in ~1-3s solo / ~7s worst-case under flood.
         return await generateCombatImage(players, enemies, { ...options, bypassQueue: true });
     }
 }
 
 async function updateCombatImage(players, enemies, turnInfo, options = {}) {
-    // 💡 FIX 2026-08-03: Always use the STATIC PNG path (not animated MP4).
-    // Animated combat is disabled because the Go service on Box 2 (512MB RAM)
-    // takes 6-27s per MP4 encode, exceeding the 10s Go service timeout.
-    //
-    // The action payload (options.action) is now passed to the static renderer
-    // so it can draw the turn indicator (golden ellipse under the attacker).
-    // Previously this was only used for the animated path, which is disabled.
-    //
-    // To re-enable animated combat: restore the old routing:
-    //   if (turnInfo && turnInfo.action) {
-    //       return await generateAnimatedCombatImage(players, enemies, { ...options, action: turnInfo.action });
-    //   }
+ // FIX Always use the STATIC PNG path (not animated MP4).
+ // Animated combat is disabled because the Go service on Box 2 (512MB RAM)
+ // takes 6-27s per MP4 encode, exceeding the 10s Go service timeout.
+ // The action payload (options.action) is now passed to the static renderer
+ // so it can draw the turn indicator (golden ellipse under the attacker).
+ // Previously this was only used for the animated path, which is disabled.
+ // To re-enable animated combat: restore the old routing:
+ // if (turnInfo && turnInfo.action) {
+ // }
     return await generateCombatImage(players, enemies, options);
 }
 
 async function generateEndScreenImage(text, options = {}) {
     try {
-        // 💡 2026-09-14: full payload for the redesigned victory/defeat
-        // portrait card (WriteEndCard in the Go service). Legacy fields
-        // (text/victory/gold/xp/items) unchanged; the player/enemy/rank/
-        // floor/background/caption fields are optional enrichment.
+ // full payload for the redesigned victory/defeat
+ // portrait card (WriteEndCard in the Go service). Legacy fields
+ // (text/victory/gold/xp/items) unchanged; the player/enemy/rank/
+ // floor/background/caption fields are optional enrichment.
         const payload = {
             text: String(text || ''),
             victory: Boolean(options.victory),
@@ -247,8 +242,8 @@ async function generateEndScreenImage(text, options = {}) {
             background: String(options.background || ''),
             caption: String(options.caption || '')
         };
-        // 💡 DUNGEON FAST-LANE (2026-10-20): honor bypassQueue so the victory/
-        // defeat card skips the shared render semaphore (see combatIntegration).
+ // DUNGEON FAST-LANE: honor bypassQueue so the victory/
+ // defeat card skips the shared render semaphore (see combatIntegration).
         const imageBuffer = await goService.generateCombatEndScreen(
             payload,
             { bypassQueue: Boolean(options.bypassQueue) },
@@ -282,7 +277,7 @@ module.exports = {
     updateCombatImage,
     generateEndScreenImage,
     generateHuntCard,
-    // Exported for testing
+ // Exported for testing
     _buildPayload: buildPayload,
     _buildActionPayload: buildActionPayload
 };

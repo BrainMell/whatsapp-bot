@@ -1,10 +1,9 @@
 #!/usr/bin/env node
-// 🏗️ BASE WIRING QA (2026-10-20) — run ON-BOX inside the bot dir:
-//   node scripts/base_wiring_qa.js
-// Owner brief: ".j base <index> … zoomed in … wire it all up" — close-up cards
+// BASE WIRING QA - run ON-BOX inside the bot dir:
+// node scripts/base_wiring_qa.js
+// Owner brief: ".j base <index> … zoomed in … wire it all up" - close-up cards
 // for every structure, Clash market, hunting camp, pond angles, summons
 // barracks, guild hall.
-//
 // Safety: prod DB touched ONLY by the QA jid's own records (Base doc seeded
 // for the probe, DELETED in cleanup; economy reads are per-jid).
 'use strict';
@@ -14,9 +13,9 @@ const path = require('path');
 let PASS = 0, FAIL = 0, SKIP = 0;
 function check(name, cond, extra) {
     if (cond) { PASS++; console.log(`  ✅ ${name}`); }
-    else { FAIL++; console.log(`  ❌ ${name}${extra ? ' — ' + extra : ''}`); }
+    else { FAIL++; console.log(`  ❌ ${name}${extra ? ' - ' + extra : ''}`); }
 }
-function skip(name, why) { SKIP++; console.log(`  ⏭️  ${name} — ${why}`); }
+function skip(name, why) { SKIP++; console.log(`  ⏭️  ${name} - ${why}`); }
 
 async function connectDB() {
     const envPath = path.join(__dirname, '..', '.env');
@@ -42,7 +41,7 @@ const QA_JID = 'qa-base@s.whatsapp.net';
     const Base = require(path.join(BOT, 'core', 'models', 'Base'));
     const economy = require(path.join(BOT, 'core', 'rpg', 'economy'));
 
-    // ── §1 structures catalog ──
+ // -- §1 structures catalog --
     console.log('\n── §1 structures catalog ──');
     const S = renderer.structures().structures;
     check('9 structure types', S.length === 9, `got ${S.length}: ${S.map((s) => s.id).join(',')}`);
@@ -52,7 +51,7 @@ const QA_JID = 'qa-base@s.whatsapp.net';
     }
     check('fixed four intact', ['house', 'mines', 'pond', 'hunting'].every((t) => renderer.structDef(t)?.fixed));
 
-    // ── §2 pond variety (the "angles should be different" fix) ──
+ // -- §2 pond variety (the "angles should be different" fix) --
     console.log('\n── §2 pond generation variety ──');
     const aspects = new Set(), nooks = new Set();
     let pierOk = 0;
@@ -74,7 +73,7 @@ const QA_JID = 'qa-base@s.whatsapp.net';
         const bw = Math.max(...cs) - Math.min(...cs) + 1, bh = Math.max(...rs) - Math.min(...rs) + 1;
         aspects.add(Math.round((bw / bh) * 20) / 20);
         nooks.add(`${Math.min(...cs)},${Math.min(...rs)}`);
-        // pier line must be water (pond L1-L4 guarantee)
+ // pier line must be water (pond L1-L4 guarantee)
         const P = renderer.LAYOUT.pond;
         let ok = true;
         for (let i = 0; i <= 4; i++) {
@@ -87,7 +86,7 @@ const QA_JID = 'qa-base@s.whatsapp.net';
     check('lake nooks vary (≥2 positions)', nooks.size >= 2, `nooks=${nooks.size}`);
     check('pier line is water in every world (6/6)', pierOk === 6, `${pierOk}/6`);
 
-    // ── §3 close-up cards render (all viewable types) ──
+ // -- §3 close-up cards render (all viewable types) --
     console.log('\n── §3 close-up card bakes ──');
     const st = [
         { type: 'house', level: 2, x: renderer.LAYOUT.house.x, y: renderer.LAYOUT.house.y },
@@ -108,7 +107,7 @@ const QA_JID = 'qa-base@s.whatsapp.net';
         }
     }
 
-    // ── §4 enterStructure wiring (mock sock, QA base record) ──
+ // -- §4 enterStructure wiring (mock sock, QA base record) --
     console.log('\n── §4 enterStructure wiring ──');
     await Base.deleteOne({ userId: QA_JID });
     const rec = await baseBuilder.loadBase(QA_JID);           // seeds the 4 fixed structures
@@ -136,7 +135,7 @@ const QA_JID = 'qa-base@s.whatsapp.net';
     };
     const lastMedia = (t) => t.sent.filter((s) => s.content && (s.content.image || s.content.video)).pop();
 
-    // mines (#2): card + mining stats caption
+ // mines (#2): card + mining stats caption
     {
         const { ctx, sent, replies } = mkCtx();
         await baseBuilder.enterStructure(ctx, '2');
@@ -146,28 +145,28 @@ const QA_JID = 'qa-base@s.whatsapp.net';
         check('mines: caption has Mining Lv + .j mine', /Mining Lv\./.test(cap) && /\.j mine/.test(cap), cap.slice(0, 90));
         check('mines: no text fallback used', replies.length === 0, JSON.stringify(replies[0] || '').slice(0, 60));
     }
-    // name routing: 'mines' resolves the same structure
+ // name routing: 'mines' resolves the same structure
     {
         const { ctx, sent } = mkCtx();
         await baseBuilder.enterStructure(ctx, 'mines');
         const m = lastMedia({ sent });
         check('`.j base mines` (by name) → mines card', !!m && /Mines/.test(String((m && m.content.caption) || '')));
     }
-    // hunting (#4): hunt counter line
+ // hunting (#4): hunt counter line
     {
         const { ctx, sent } = mkCtx();
         await baseBuilder.enterStructure(ctx, '4');
         const m = lastMedia({ sent });
         check('hunting: hunts-today counter + .j hunt', /Hunts today: \*0\/10\*/.test(String((m && m.content.caption) || '')) && /\.j hunt/.test(String((m && m.content.caption) || '')));
     }
-    // market (#5): shop CTAs
+ // market (#5): shop CTAs
     {
         const { ctx, sent } = mkCtx();
         await baseBuilder.enterStructure(ctx, '5');
         const m = lastMedia({ sent });
         check('market: .j shop + .j itemmarket CTAs', /\.j shop/.test(String((m && m.content.caption) || '')) && /\.j itemmarket/.test(String((m && m.content.caption) || '')));
     }
-    // barracks (#6): card + summons roster follow-up
+ // barracks (#6): card + summons roster follow-up
     {
         const { ctx, sent, replies } = mkCtx();
         await baseBuilder.enterStructure(ctx, '6');
@@ -175,11 +174,11 @@ const QA_JID = 'qa-base@s.whatsapp.net';
         check('barracks: card sent', !!m && /Barracks|Summons/i.test(String((m && m.content.caption) || '')));
         check('barracks: summons roster opened after the card', sent.length + replies.length >= 2, `${sent.length} sends + ${replies.length} replies`);
     }
-    // guildhall RETIRED (owner 2026-10-20: undo the guild hall close-up) — the
-    // catalog no longer has it and loadBase silently strips any legacy record
+ // guildhall RETIRED (undo the guild hall close-up) - the
+ // catalog no longer has it and loadBase silently strips any legacy record
     check('guildhall retired from the catalog', !renderer.structDef('guildhall'));
 
-    // ── cleanup ──
+ // -- cleanup --
     await Base.deleteOne({ userId: QA_JID }).catch(() => {});
     console.log('\n[cleanup] QA base record removed');
 

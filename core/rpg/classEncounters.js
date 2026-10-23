@@ -1,5 +1,5 @@
 // ============================================
-// 🎯 CLASS-BASED ENCOUNTER SYSTEM V2
+// CLASS-BASED ENCOUNTER SYSTEM V2
 // ============================================
 // Enemies are now "The Infected" - creatures corrupted by elemental forces
 // Enemy types determined by player level ranges
@@ -7,13 +7,13 @@
 const monsterSkills = require('./monsterSkills');
 
 // ==========================================
-// 🦠 THE INFECTED - LEVEL-BASED ENEMY POOLS
+// THE INFECTED - LEVEL-BASED ENEMY POOLS
 // ==========================================
 
 const INFECTED_POOLS = {
-    // ==========================================
-    // 🐲 DRAGON LAIR (Special Dungeon)
-    // ==========================================
+ // ==========================================
+ // DRAGON LAIR (Special Dungeon)
+ // ==========================================
     DRAGON_LAIR: {
         theme: 'Dragon’s Lair',
         description: 'The ancient nesting ground of drakes and dragons',
@@ -59,9 +59,9 @@ const INFECTED_POOLS = {
         ]
     },
 
-    // ==========================================
-    // 🔥 FIRE INFECTED (Level 1-10)
-    // ==========================================
+ // ==========================================
+ // FIRE INFECTED (Level 1-10)
+ // ==========================================
     FIRE_LOW: {
         theme: 'Corrupted Flames',
         description: 'Corrupted flames taking humanoid shapes',
@@ -96,9 +96,9 @@ const INFECTED_POOLS = {
         ]
     },
     
-    // ==========================================
-    // 💧 WATER INFECTED (Level 11-20)
-    // ==========================================
+ // ==========================================
+ // WATER INFECTED (Level 11-20)
+ // ==========================================
     WATER_LOW: {
         theme: 'Drowned Corruption',
         description: 'Infected that dwell in poisoned waters',
@@ -156,9 +156,9 @@ const INFECTED_POOLS = {
         ]
     },
     
-    // ==========================================
-    // 🪨 EARTH INFECTED (Level 21-30)
-    // ==========================================
+ // ==========================================
+ // EARTH INFECTED (Level 21-30)
+ // ==========================================
     EARTH_MID: {
         theme: 'Stone Corruption',
         description: 'Infected with crystallized, rocky bodies',
@@ -219,9 +219,9 @@ const INFECTED_POOLS = {
         ]
     },
     
-    // ==========================================
-    // ❄️ ICE INFECTED (Level 31-40)
-    // ==========================================
+ // ==========================================
+ // ICE INFECTED (Level 31-40)
+ // ==========================================
     ICE_MID: {
         theme: 'Frozen Corruption',
         description: 'Infected preserved in eternal ice',
@@ -304,9 +304,9 @@ const INFECTED_POOLS = {
         ]
     },
     
-    // ==========================================
-    // 🔥 FIRE INFECTED ADVANCED (Level 41-50)
-    // ==========================================
+ // ==========================================
+ // FIRE INFECTED ADVANCED (Level 41-50)
+ // ==========================================
     FIRE_HIGH: {
         theme: 'Infernal Corruption',
         description: 'Advanced fire infected with devastating power',
@@ -377,9 +377,9 @@ const INFECTED_POOLS = {
         ]
     },
     
-    // ==========================================
-    // 💧 WATER INFECTED ADVANCED (Level 51-60)
-    // ==========================================
+ // ==========================================
+ // WATER INFECTED ADVANCED (Level 51-60)
+ // ==========================================
     WATER_HIGH: {
         theme: 'Abyssal Corruption',
         description: 'Deep sea infected from the darkest depths',
@@ -450,9 +450,9 @@ const INFECTED_POOLS = {
         ]
     },
     
-    // ==========================================
-    // 🪨 EARTH INFECTED ADVANCED (Level 61-70)
-    // ==========================================
+ // ==========================================
+ // EARTH INFECTED ADVANCED (Level 61-70)
+ // ==========================================
     EARTH_HIGH: {
         theme: 'Ancient Stone',
         description: 'Ancient earth infected awakened',
@@ -523,9 +523,9 @@ const INFECTED_POOLS = {
         ]
     },
     
-    // ==========================================
-    // 🧬 MUTATED INFECTED (Level 71-80)
-    // ==========================================
+ // ==========================================
+ // MUTATED INFECTED (Level 71-80)
+ // ==========================================
     MUTATED: {
         theme: 'Twisted Evolution',
         description: 'Grotesquely mutated infected',
@@ -596,9 +596,9 @@ const INFECTED_POOLS = {
         ]
     },
     
-    // ==========================================
-    // 🌈 HYBRID INFECTED (Level 81-90)
-    // ==========================================
+ // ==========================================
+ // HYBRID INFECTED (Level 81-90)
+ // ==========================================
     HYBRID: {
         theme: 'Elemental Fusion',
         description: 'Infected wielding multiple elements',
@@ -669,9 +669,9 @@ const INFECTED_POOLS = {
         ]
     },
     
-    // ==========================================
-    // 🔥 FIRE INFECTED ELITE (Level 91-100)
-    // ==========================================
+ // ==========================================
+ // FIRE INFECTED ELITE (Level 91-100)
+ // ==========================================
     FIRE_ELITE: {
         theme: 'Apocalyptic Flames',
         description: 'The most powerful fire infected',
@@ -744,7 +744,7 @@ const INFECTED_POOLS = {
 };
 
 const BOSS_ENCOUNTERS = {
-    // Mid-level bosses (30-60)
+ // Mid-level bosses (30-60)
     MID_LEVEL: [
         {
             id: 'INFECTED_COLOSSUS',
@@ -780,7 +780,7 @@ const BOSS_ENCOUNTERS = {
         }
     ],
     
-    // High-level bosses (61-90)
+ // High-level bosses (61-90)
     HIGH_LEVEL: [
         {
             id: 'ELEMENTAL_ARCHON',
@@ -816,7 +816,7 @@ const BOSS_ENCOUNTERS = {
         }
     ],
     
-    // Calamity bosses (91-100+)
+ // Calamity bosses (91-100+)
     CALAMITY: [
         {
             id: 'VOID_CORRUPTED',
@@ -851,9 +851,9 @@ const BOSS_ENCOUNTERS = {
             levelRange: [95, 120]
         },
         {
-            // NEW: S-rank boss - distinct from A-rank PRIMORDIAL_CHAOS so
-            // players feel escalation from A → S → SS → SSS instead of
-            // fighting the same boss four ranks in a row.
+ // NEW: S-rank boss - distinct from A-rank PRIMORDIAL_CHAOS so
+ // players feel escalation from A → S → SS → SSS instead of
+ // fighting the same boss four ranks in a row.
             id: 'ELDER_CHAOS',
             name: 'Elder Chaos',
             icon: '🌠🌀',
@@ -871,7 +871,7 @@ const BOSS_ENCOUNTERS = {
             levelRange: [100, 120]
         },
         {
-            // NEW: SS-rank boss
+ // NEW: SS-rank boss
             id: 'VOID_TITAN',
             name: 'Void Titan',
             icon: '🌑🗿',
@@ -889,7 +889,7 @@ const BOSS_ENCOUNTERS = {
             levelRange: [100, 120]
         },
         {
-            // NEW: SSS-rank boss - the ultimate challenge
+ // NEW: SSS-rank boss - the ultimate challenge
             id: 'ABYSSAL_GOD',
             name: 'Abyssal God',
             icon: '🌌👁️',
@@ -910,7 +910,7 @@ const BOSS_ENCOUNTERS = {
         }
     ],
  
-    // --- EVOLUTION TRIAL BOSSES ---
+ // --- EVOLUTION TRIAL BOSSES ---
     TRIALS: [
         { id: 'ARCANE_SENTINEL', name: 'Arcane Sentinel', icon: '🔮🛡️', stats: { hp: 18000, atk: 120, def: 30, mag: 240, spd: 15 }, levelRange: [1, 100] },
         { id: 'LICH_KING', name: 'Lich King', icon: '💀👑', stats: { hp: 60000, atk: 250, def: 40, mag: 620, spd: 25 }, levelRange: [1, 100] },
@@ -935,10 +935,10 @@ const BOSS_ENCOUNTERS = {
         { id: 'MAESTRO_OF_VOID', name: 'Maestro of Void', icon: '🎻🌑', stats: { hp: 59000, atk: 520, def: 40, mag: 820, spd: 45 }, levelRange: [1, 100] },
         { id: 'CLOCKWORK_TITAN', name: 'Clockwork Titan', icon: '⚙️🗿', stats: { hp: 23000, atk: 380, def: 420, mag: 20, spd: 15 }, levelRange: [1, 100] },
         { id: 'MECH_GOD', name: 'Mech God', icon: '🦾🤖', stats: { hp: 80000, atk: 750, def: 750, mag: 450, spd: 25 }, levelRange: [1, 100] },
-        // 💡 FIX: 7 trial bosses referenced by classSystem.js but missing from
-        // the registry - previously selectBoss silently fell back to a random
-        // boss, so the player fought the wrong enemy and the trial completion
-        // recorded the wrong boss id.
+ // FIX: 7 trial bosses referenced by classSystem.js but missing from
+ // the registry - previously selectBoss silently fell back to a random
+ // boss, so the player fought the wrong enemy and the trial completion
+ // recorded the wrong boss id.
         { id: 'DEMON_LORD',          name: 'Demon Lord',          icon: '😈👑', stats: { hp: 45000, atk: 580, def: 80,  mag: 720, spd: 50 }, levelRange: [1, 100] },
         { id: 'ELDER_FLAME',         name: 'Elder Flame',         icon: '🔥🐉', stats: { hp: 28000, atk: 420, def: 60,  mag: 680, spd: 45 }, levelRange: [1, 100] },
         { id: 'LEVIATHAN',           name: 'Leviathan',           icon: '🌊🐲', stats: { hp: 85000, atk: 720, def: 180, mag: 900, spd: 40 }, levelRange: [1, 100] },
@@ -946,17 +946,17 @@ const BOSS_ENCOUNTERS = {
         { id: 'SHADOW_LORD',         name: 'Shadow Lord',         icon: '🌑👑', stats: { hp: 38000, atk: 540, def: 70,  mag: 620, spd: 80 }, levelRange: [1, 100] },
         { id: 'PRIMORDIAL_EVIL',     name: 'Primordial Evil',     icon: '💫👹', stats: { hp: 72000, atk: 760, def: 110, mag: 980, spd: 60 }, levelRange: [1, 100] },
         { id: 'GRAVEYARD_LORD',      name: 'Graveyard Lord',      icon: '🪦💀', stats: { hp: 41000, atk: 480, def: 90,  mag: 700, spd: 35 }, levelRange: [1, 100] },
-        // 💡 Dragon Lord successor trial boss - a stronger Leviathan Spawn
-        // that emerged after the original Leviathan was slain. Used for
-        // post-first-kill Dragon-class ascensions. NOT the same as the
-        // LEVIATHAN_SPAWN that spawns naturally in the Toxic Cave dungeon
-        // (which has only 350 HP).
+ // Dragon Lord successor trial boss - a stronger Leviathan Spawn
+ // that emerged after the original Leviathan was slain. Used for
+ // post-first-kill Dragon-class ascensions. NOT the same as the
+ // LEVIATHAN_SPAWN that spawns naturally in the Toxic Cave dungeon
+ // (which has only 350 HP).
         { id: 'LEVIATHAN_SPAWN_ALPHA', name: 'Leviathan Spawn Alpha', icon: '🌊🐉', stats: { hp: 78000, atk: 680, def: 160, mag: 850, spd: 50 }, levelRange: [1, 100] },
     ]
 };
 
 // ==========================================
-// 🎓 TUTORIAL ENEMY POOL (2026-10-03, owner tutorial request)
+// TUTORIAL ENEMY POOL (owner tutorial request)
 // A dedicated, harmless training target for the interactive new-player
 // tutorial. With 0 ATK the dummy can never damage the player -
 // the tutorial fight is pure practice. findEnemyTemplate() indexes every
@@ -972,11 +972,11 @@ INFECTED_POOLS.TUTORIAL = {
             name: 'Training Dummy',
             icon: '🎯',
             desc: 'A straw-stuffed practice target. It never hits back.',
-            // 💡 Phase B (2026-10-04): HP raised 80 -> 400. Level-1 damage
-            // math (crits + element multipliers) one-shot the old dummy,
-            // ending the practice fight before the 5 combat lessons ran.
-            // 400 HP survives the full atk/def/skill/item/rest sequence and
-            // still dies in a few hits during the "finish him" step.
+ // Phase B: HP raised 80 -> 400. Level-1 damage
+ // math (crits + element multipliers) one-shot the old dummy,
+ // ending the practice fight before the 5 combat lessons ran.
+ // 400 HP survives the full atk/def/skill/item/rest sequence and
+ // still dies in a few hits during the "finish him" step.
             stats: { hp: 400, atk: 0, def: 0, mag: 0, spd: 1, luck: 0, crit: 0 },
             archetype: 'BRUTE',
             xpReward: 30,
@@ -984,10 +984,10 @@ INFECTED_POOLS.TUTORIAL = {
             element: 'none',
             tutorial: true,
         },
-        // 💡 Phase B (2026-10-04): a harmless live-mob for the tutorial SOLO
-        // quest - unlike the dummy it "fights back", but at ATK 3 vs an
-        // armored starter it deals single-digit chip damage at worst. No
-        // boss, no surprise rolls, guaranteed single encounter.
+ // Phase B: a harmless live-mob for the tutorial SOLO
+ // quest - unlike the dummy it "fights back", but at ATK 3 vs an
+ // armored starter it deals single-digit chip damage at worst. No
+ // boss, no surprise rolls, guaranteed single encounter.
         {
             id: 'GARDEN_SLIME',
             name: 'Garden Slime',
@@ -1004,7 +1004,7 @@ INFECTED_POOLS.TUTORIAL = {
 };
 
 // ==========================================
-// 🎯 ENCOUNTER SELECTION
+// ENCOUNTER SELECTION
 // ==========================================
 
 // id -> template lookup across every pool tier (guildAdventure.createEnemy
@@ -1041,13 +1041,12 @@ function getEnemyPoolByLevel(avgLevel) {
     return INFECTED_POOLS.FIRE_ELITE;
 }
 
-// 💡 FIX: selectRandomEnemy now accepts an optional `environment` parameter.
+// FIX: selectRandomEnemy now accepts an optional `environment` parameter.
 // When state.environment is a special dungeon (e.g., DRAGON_LAIR), we pull
 // from environment.mobs instead of getEnemyPoolByLevel - which was ignoring
 // the dragon pool entirely and spawning generic FIRE/WATER/EARTH enemies
 // inside the Dragon's Lair.
-//
-// 💡 FIX (Item #2 - dragon quest progression): DUNGEON_ENVIRONMENTS.DRAGON_LAIR.mobs
+// FIX (Item #2 - dragon quest progression): DUNGEON_ENVIRONMENTS.DRAGON_LAIR.mobs
 // is a flat string array (["DRAKE_SCOUT", "FIRE_BREATHER"]), NOT an object
 // with .COMMON/.ELITE sub-arrays. So the old `pool[difficulty]` lookup
 // returned undefined, fell through to getEnemyPoolByLevel, and spawned
@@ -1056,7 +1055,6 @@ function getEnemyPoolByLevel(avgLevel) {
 // Players needed 25 dragon kills for DRAGON_GOD/DRAGON_LORD evolution but
 // could only get 1 per dungeon run (the boss), making progression
 // effectively impossible without hundreds of runs.
-//
 // Fix: when environment.mobs is a flat string array (legacy format), look
 // up the matching pool in INFECTED_POOLS by environment.id (e.g.,
 // "DRAGON_LAIR" → INFECTED_POOLS.DRAGON_LAIR), which has the proper
@@ -1065,24 +1063,23 @@ function getEnemyPoolByLevel(avgLevel) {
 function selectRandomEnemy(avgLevel, difficulty = 'COMMON', environment = null) {
     let pool;
     if (environment && environment.mobs && environment.isSpecial) {
-        // Check if environment.mobs is the structured format ({COMMON:[], ELITE:[]})
-        // or the legacy flat string format (["DRAKE_SCOUT", "FIRE_BREATHER"]).
+ // or the legacy flat string format (["DRAKE_SCOUT", "FIRE_BREATHER"]).
         if (Array.isArray(environment.mobs)) {
-            // Legacy flat string format - look up the proper pool in INFECTED_POOLS
-            // by the environment's id (e.g., "DRAGON_LAIR").
+ // Legacy flat string format - look up the proper pool in INFECTED_POOLS
+ // by the environment's id (e.g., "DRAGON_LAIR").
             const envId = environment.id;
             if (envId && INFECTED_POOLS[envId]) {
                 pool = INFECTED_POOLS[envId];
             } else {
-                // No matching pool in INFECTED_POOLS - fall back to level-based
+ // No matching pool in INFECTED_POOLS - fall back to level-based
                 pool = getEnemyPoolByLevel(avgLevel);
             }
         } else {
-            // Structured format - use directly
+ // Structured format - use directly
             pool = environment.mobs;
         }
-        // If the environment pool doesn't have the requested difficulty tier,
-        // fall back to COMMON within the same pool, then to level-based.
+ // If the environment pool doesn't have the requested difficulty tier,
+ // fall back to COMMON within the same pool, then to level-based.
         if (!pool[difficulty] || pool[difficulty].length === 0) {
             if (pool.COMMON && pool.COMMON.length > 0) {
                 difficulty = 'COMMON';
@@ -1105,14 +1102,14 @@ function selectRandomEnemy(avgLevel, difficulty = 'COMMON', environment = null) 
 }
 
 function selectBoss(avgLevel, forceId = null) {
-    // If specific boss requested (for trials etc)
+ // If specific boss requested (for trials etc)
     if (forceId) {
         const allPools = Object.values(BOSS_ENCOUNTERS);
         for (const pool of allPools) {
             const found = pool.find(b => b.id === forceId);
             if (found) return { ...found };
         }
-        // Fallback: search in bossMechanics registry
+ // Fallback: search in bossMechanics registry
         try {
             const bossMechanics = require('./bossMechanics');
             if (bossMechanics && bossMechanics.BOSS_REGISTRY) {
@@ -1120,11 +1117,11 @@ function selectBoss(avgLevel, forceId = null) {
                 for (const key of Object.keys(bossMechanics.BOSS_REGISTRY)) {
                     if (key.toLowerCase() === targetKey) {
                         const foundBoss = bossMechanics.BOSS_REGISTRY[key];
-                        // 💡 FIX: spread foundBoss first, then set id last so
-                        // the uppercase `forceId` wins. (FoundBoss.id is often
-                        // lowercase, which broke every `id.includes("DRAGON")`
-                        // substring check downstream - dragon-seal-ring gate,
-                        // dragon kill tracking, etc.)
+ // FIX: spread foundBoss first, then set id last so
+ // the uppercase `forceId` wins. (FoundBoss.id is often
+ // lowercase, which broke every `id.includes("DRAGON")`
+ // substring check downstream - dragon-seal-ring gate,
+ // dragon kill tracking, etc.)
                         return { ...foundBoss, id: forceId };
                     }
                 }
@@ -1133,9 +1130,9 @@ function selectBoss(avgLevel, forceId = null) {
             console.error("Error loading boss from bossMechanics in selectBoss fallback:", err);
         }
 
-        // 💡 FIX: log when forceId is unfound so trial-boss mismatches are
-        // visible. Previously this silently fell through to a random boss and
-        // players saw the wrong enemy.
+ // FIX: log when forceId is unfound so trial-boss mismatches are
+ // visible. Previously this silently fell through to a random boss and
+ // players saw the wrong enemy.
         console.warn(`[selectBoss] forceId "${forceId}" not found in BOSS_ENCOUNTERS or BOSS_REGISTRY - falling back to random boss`);
     }
 
@@ -1171,43 +1168,43 @@ function getPoolTheme(avgLevel) {
 }
 
 // ==========================================
-// 🎲 ENCOUNTER GENERATION
+// ENCOUNTER GENERATION
 // ==========================================
 
 function generateEncounter(players, encounterType = 'COMBAT', difficulty = 1.0, options = {}) {
-    // Calculate average player level and speed
+ // Calculate average player level and speed
     const avgLevel = Math.floor(players.reduce((sum, p) => sum + (p.level || 1), 0) / players.length);
     const avgSpeed = Math.floor(players.reduce((sum, p) => sum + (p.stats?.spd || 10), 0) / players.length);
 
     const enemies = [];
 
-    // 💡 FIX P2 (2026-08-16): Group-dungeon party-level scaling.
-    // Enemy HP scales with HIGHEST party level (so a carry can't trivialize
-    // content by joining a low-level party). Enemy ATK scales with AVERAGE
-    // party level (so weaker players can still survive).
+ // FIX P2: Group-dungeon party-level scaling.
+ // Enemy HP scales with HIGHEST party level (so a carry can't trivialize
+ // content by joining a low-level party). Enemy ATK scales with AVERAGE
+ // party level (so weaker players can still survive).
     const maxLevel = Math.max(...players.map(p => p.level || 1));
-    // HP multiplier: if maxLevel > avgLevel, scale HP up by the ratio.
-    // e.g. L100 carry + L20 party: avgLevel=40, maxLevel=100 → HP × (100/40) = 2.5×
+ // HP multiplier: if maxLevel > avgLevel, scale HP up by the ratio.
+ // e.g. L100 carry + L20 party: avgLevel=40, maxLevel=100 → HP × (100/40) = 2.5×
     const hpLevelMult = avgLevel > 0 ? Math.max(1, maxLevel / avgLevel) : 1;
     
     if (encounterType === 'BOSS') {
-        // Single boss
+ // Single boss
         const boss = selectBoss(avgLevel, options.forceBossId);
         enemies.push(scaleBossStats(boss, players.length, difficulty, avgLevel, avgSpeed));
     } else if (encounterType === 'ELITE_COMBAT') {
-        // 1-2 elite enemies
+ // 1-2 elite enemies
         const eliteCount = options.maxMobs ? Math.min(options.maxMobs, 4) : Math.min(1 + Math.floor(players.length / 2), 4);
         for (let i = 0; i < eliteCount; i++) {
             const elite = selectRandomEnemy(avgLevel, 'ELITE', options.environment);
             enemies.push(scaleEnemyStats(elite, players.length, difficulty, i, avgLevel, avgSpeed));
         }
     } else {
-        // Regular combat
+ // Regular combat
         let enemyCount;
         if (options.minMobs && options.maxMobs) {
             enemyCount = Math.floor(Math.random() * (options.maxMobs - options.minMobs + 1)) + options.minMobs;
         } else {
-            // Default logic: 2-4 common enemies
+ // Default logic: 2-4 common enemies
             enemyCount = Math.min(2 + players.length, 6);
         }
 
@@ -1217,8 +1214,8 @@ function generateEncounter(players, encounterType = 'COMBAT', difficulty = 1.0, 
         }
     }
 
-    // 💡 FIX P2: Apply HP multiplier for party-level scaling.
-    // If maxLevel > avgLevel (carry in party), scale all enemy HP up.
+ // FIX P2: Apply HP multiplier for party-level scaling.
+ // If maxLevel > avgLevel (carry in party), scale all enemy HP up.
     if (hpLevelMult > 1) {
         for (const e of enemies) {
             if (e.stats && e.stats.hp) {
@@ -1243,41 +1240,40 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     const scaled = { ...enemy };
     const rankIndex = difficulty;
 
-    // =========================================================
-    // 🎯 PER-RANK BALANCED SCALING - Target: ~60% player WR
-    // =========================================================
-    // Rank difficulty values from guildAdventure (DUNGEON_RANKS[*].difficulty):
-    //   F=0.8, E=1.2, D=3.0, C=5.0, B=10.0, A=18.0, S=35.0, SS=75.0, SSS=80.0
-    //
-    // Formula breakpoints (tested to ~60% solo WR):
-    //   F/E  (0.8-1.2):  dmgF=0.08, hpF=0.12, hpQ=0.002  (baseline - unchanged)
-    //   D    (~3.0):     dmgF=0.14, hpF=0.18, hpQ=0.003
-    //   C    (~5.0):     dmgF=0.18, hpF=0.22, hpQ=0.004
-    //   B    (~10.0):    dmgF=0.22, hpF=0.28, hpQ=0.006
-    //   A    (~18.0):    dmgF=0.26, hpF=0.34, hpQ=0.008
-    //   S    (~35.0):    dmgF=0.30, hpF=0.40, hpQ=0.010
-    //   SS   (~75.0):    (uses S breakpoints - extreme scaling)
-    //   SSS  (~80.0):    (uses S breakpoints - extreme scaling)
-    // =========================================================
+ // =========================================================
+ // PER-RANK BALANCED SCALING - Target: ~60% player WR
+ // =========================================================
+ // Rank difficulty values from guildAdventure (DUNGEON_RANKS[*].difficulty):
+ // F=0.8, E=1.2, D=3.0, C=5.0, B=10.0, A=18.0, S=35.0, SS=75.0, SSS=80.0
+ // Formula breakpoints (tested to ~60% solo WR):
+ // F/E (0.8-1.2): dmgF=0.08, hpF=0.12, hpQ=0.002 (baseline - unchanged)
+ // D (~3.0): dmgF=0.14, hpF=0.18, hpQ=0.003
+ // C (~5.0): dmgF=0.18, hpF=0.22, hpQ=0.004
+ // B (~10.0): dmgF=0.22, hpF=0.28, hpQ=0.006
+ // A (~18.0): dmgF=0.26, hpF=0.34, hpQ=0.008
+ // S (~35.0): dmgF=0.30, hpF=0.40, hpQ=0.010
+ // SS (~75.0): (uses S breakpoints - extreme scaling)
+ // SSS (~80.0): (uses S breakpoints - extreme scaling)
+ // =========================================================
 
     let dmgFactor, hpFactor, hpQuadFactor;
     if (rankIndex <= 1.0) {
-        // F / E rank - baseline, no changes
+ // F / E rank - baseline, no changes
         dmgFactor = 0.08; hpFactor = 0.12; hpQuadFactor = 0.002;
     } else if (rankIndex <= 4.0) {
-        // D rank
+ // D rank
         dmgFactor = 0.14; hpFactor = 0.18; hpQuadFactor = 0.003;
     } else if (rankIndex <= 7.0) {
-        // C rank
+ // C rank
         dmgFactor = 0.18; hpFactor = 0.22; hpQuadFactor = 0.004;
     } else if (rankIndex <= 13.0) {
-        // B rank - hpFactor adjusted down for new progression system
+ // B rank - hpFactor adjusted down for new progression system
         dmgFactor = 0.22; hpFactor = 0.20; hpQuadFactor = 0.003;
     } else if (rankIndex <= 25.0) {
-        // A rank - hpFactor adjusted down for new progression system
+ // A rank - hpFactor adjusted down for new progression system
         dmgFactor = 0.26; hpFactor = 0.24; hpQuadFactor = 0.004;
     } else {
-        // S rank and above - hpFactor adjusted down for new progression system
+ // S rank and above - hpFactor adjusted down for new progression system
         dmgFactor = 0.30; hpFactor = 0.28; hpQuadFactor = 0.0045;
     }
 
@@ -1287,53 +1283,52 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
 
     scaled.stats = { ...enemy.stats };
 
-    // Check if it's an ELITE enemy
     const isElite = enemy.id.includes('ELITE') || enemy.id.includes('KING') || enemy.id.includes('BOSS') ||
         (enemy.id === 'ELDER_FLAME' || enemy.id === 'LEVIATHAN_SPAWN' || enemy.id === 'PHOENIX_CORRUPTED');
 
-    // HP scaling with quadratic component for higher ranks
+ // HP scaling with quadratic component for higher ranks
     const hpMult = 1 + (rankIndex * hpFactor) + (rankIndex * rankIndex * hpQuadFactor);
     scaled.stats.hp = Math.floor((enemy.stats.hp || 100) * partyFactor * hpMult);
     if (isElite) scaled.stats.hp = Math.floor(scaled.stats.hp * 1.25);
     scaled.stats.maxHp = scaled.stats.hp;
 
-    // Scale base stats by player average level
+ // Scale base stats by player average level
     const levelScale = 1 + (avgLevel - 1) * 0.045;
     const baseAtk = (enemy.stats.atk || 0) * levelScale;
     const baseMag = (enemy.stats.mag || 0) * levelScale;
     const baseDef = (enemy.stats.def || 0) * levelScale;
 
-    // ATK/MAG scale with dmgMult; DEF scales independently (slightly lower)
+ // ATK/MAG scale with dmgMult; DEF scales independently (slightly lower)
     scaled.stats.atk = Math.floor(baseAtk * partyFactor * dmgMult);
     scaled.stats.mag = Math.floor(baseMag * partyFactor * dmgMult);
 
-    // Speed: blend between base scaling and player speed (rubber-band)
-    // 💡 QA FIX #33: Dynamic speed scaling relative to player speed.
-    // Regular enemies: 70-90% of player speed (player naturally faster).
-    // Elite enemies: 90-110% of player speed (competitive).
-    // Archetype modifiers still apply on top.
+ // Speed: blend between base scaling and player speed (rubber-band)
+ // QA FIX #33: Dynamic speed scaling relative to player speed.
+ // Regular enemies: 70-90% of player speed (player naturally faster).
+ // Elite enemies: 90-110% of player speed (competitive).
+ // Archetype modifiers still apply on top.
     let baseSpeed = Math.floor((enemy.stats.spd || 10) * partyFactor * spdMult);
     if (isElite) baseSpeed = Math.floor(baseSpeed * 1.20);
 
-    // Start with player speed as the baseline, modified by archetype
+ // Start with player speed as the baseline, modified by archetype
     let targetSpeed = Math.max(10, avgPlayerSpeed);
     if (enemy.archetype === 'STALKER' || enemy.archetype === 'ASSASSIN' || enemy.archetype === 'VOID_WALKER') targetSpeed *= 1.15; // fast enemies slightly outspeed
     if (enemy.archetype === 'TANK' || enemy.archetype === 'BRUTE' || enemy.archetype === 'COLOSSUS') targetSpeed *= 0.75; // tanks are slow
     if (enemy.archetype === 'BERSERKER_MOB') targetSpeed *= 1.10;
     if (enemy.archetype === 'SPELLBREAKER') targetSpeed *= 1.05;
-    // Level-based modifiers: low-level enemies slightly faster (to be threatening early)
+ // Level-based modifiers: low-level enemies slightly faster (to be threatening early)
     if (avgLevel > 50) targetSpeed *= 0.90; // high-level players get an edge
     if (avgLevel < 15) targetSpeed *= 1.20;
 
-    // Regular enemies: 75% blend toward player speed (player usually faster)
-    // Elite enemies: 85% blend (competitive but player still has edge)
+ // Regular enemies: 75% blend toward player speed (player usually faster)
+ // Elite enemies: 85% blend (competitive but player still has edge)
     const speedBlend = isElite ? 0.85 : 0.75;
     scaled.stats.spd = Math.max(5, Math.floor((baseSpeed * (1 - speedBlend)) + (targetSpeed * speedBlend)));
 
-    // Defense scaling (linear, slightly lower than dmg to avoid damage immunity)
+ // Defense scaling (linear, slightly lower than dmg to avoid damage immunity)
     scaled.stats.def = Math.floor(baseDef * partyFactor * (1 + (rankIndex * 0.07)));
 
-    // Set maxHp in stats for rendering consistency
+ // Set maxHp in stats for rendering consistency
     scaled.stats.maxHp = scaled.stats.hp;
     
     scaled.currentHP = scaled.stats.hp;
@@ -1341,31 +1336,30 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     scaled.mana = 100;
     scaled.maxMana = 100;
     
-    // Dynamic skills
+ // Dynamic skills
     if (enemy.archetype) {
         scaled.abilities = monsterSkills.getSkillsForMonster(enemy.archetype, avgLevel).map(s => s.id);
     } else {
         scaled.abilities = enemy.skills || [];
     }
     
-    // Rewards - scaled significantly by difficulty rank so high-rank dungeons
-    // are actually worth doing. Previously the scaling was only +20% XP and
-    // +15% gold per rank, which made high-rank dungeons barely better than
-    // low-rank ones.
-    //
-    // 💡 FIX: Changed to EXPONENTIAL scaling so high ranks pull away from
-    // low ranks. Linear scaling (1 + rankIndex*0.5) gave S-rank only 18.5×
-    // F-rank XP, while the XP curve to L76 needs ~93.9M XP - meaning 82
-    // S-rank clears per level. With exponential scaling (1 + rankIndex^1.4)
-    // S-rank gives ~146× F-rank XP, dropping L75→L76 to ~10 clears.
-    // Gold uses a gentler exponent (1.2) so the economy doesn't inflate
-    // as fast as XP.
-    // 💡 ECONOMY RETUNE 2026-10-03 (owner progression report): exponent
-    // 1.4 -> 0.8 on trash XP. At the old exponent a single S-rank trash mob
-    // paid ~40K XP (xpReward x 20.6) and a full carried run paid more XP
-    // than the entire L1->100 curve. 0.8 keeps S-rank trash ~5x F-rank
-    // instead of ~146x; the per-fight cap in guildAdventure.endCombat is
-    // the hard guarantee on top of this.
+ // Rewards - scaled significantly by difficulty rank so high-rank dungeons
+ // are actually worth doing. Previously the scaling was only +20% XP and
+ // +15% gold per rank, which made high-rank dungeons barely better than
+ // low-rank ones.
+ // FIX: Changed to EXPONENTIAL scaling so high ranks pull away from
+ // low ranks. Linear scaling (1 + rankIndex*0.5) gave S-rank only 18.5×
+ // F-rank XP, while the XP curve to L76 needs ~93.9M XP - meaning 82
+ // S-rank clears per level. With exponential scaling (1 + rankIndex^1.4)
+ // S-rank gives ~146× F-rank XP, dropping L75→L76 to ~10 clears.
+ // Gold uses a gentler exponent (1.2) so the economy doesn't inflate
+ // as fast as XP.
+ // ECONOMY RETUNE (owner progression report): exponent
+ // 1.4 -> 0.8 on trash XP. At the old exponent a single S-rank trash mob
+ // paid ~40K XP (xpReward x 20.6) and a full carried run paid more XP
+ // than the entire L1->100 curve. 0.8 keeps S-rank trash ~5x F-rank
+ // instead of ~146x; the per-fight cap in guildAdventure.endCombat is
+ // the hard guarantee on top of this.
     scaled.xpReward = Math.floor(enemy.xpReward * (1 + Math.pow(rankIndex, 0.8)));
     scaled.goldReward = [
         Math.floor(enemy.goldReward[0] * (1 + Math.pow(rankIndex, 1.2))),
@@ -1376,12 +1370,12 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     scaled.isEnemy = true;
     scaled.enemyIndex = enemyIndex;
 
-    // 💡 OWNER BRIEF 2026-10-09 §2 (enemy sprite swap): the Go renderer's
-    // dedupe used to break ties by ARRAY POSITION, so when one same-type
-    // enemy died the survivors' sprites reshuffled. A per-INSTANCE stable
-    // seed (1..99, alive for the whole fight) makes the renderer's rotation
-    // AND dedupe deterministic per enemy — 0 is excluded because the Go side
-    // treats 0 as "no seed, fall back to position".
+ // OWNER BRIEF §2 (enemy sprite swap): the Go renderer's
+ // dedupe used to break ties by ARRAY POSITION, so when one same-type
+ // enemy died the survivors' sprites reshuffled. A per-INSTANCE stable
+ // seed (1..99, alive for the whole fight) makes the renderer's rotation
+ // AND dedupe deterministic per enemy - 0 is excluded because the Go side
+ // treats 0 as "no seed, fall back to position".
     scaled.spriteIndex = 1 + Math.floor(Math.random() * 99);
 
     return scaled;
@@ -1391,27 +1385,26 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
     const scaled = { ...boss };
     const rankIndex = difficulty;
 
-    // Standardize Party Factor to 20% per extra player
+ // Standardize Party Factor to 20% per extra player
     const partyFactor = 1 + ((partySize - 1) * 0.20);
     const dmgMult = 1 + (rankIndex * 0.15);
     const spdMult = 1 + (rankIndex * 0.08);
 
-    // 💡 FIX: ensure `level` is present on the scaled entity. Boss templates
-    // declare `level: 15` (snake_case) but downstream code calls
-    // `skill.effect(enemy.level || 1)` which read undefined for bosses,
-    // causing skill effects (ultimate multiplier, dot magnitude, etc.) to
-    // evaluate at level 1 instead of the boss's actual level.
+ // FIX: ensure `level` is present on the scaled entity. Boss templates
+ // `skill.effect(enemy.level || 1)` which read undefined for bosses,
+ // causing skill effects (ultimate multiplier, dot magnitude, etc.) to
+ // evaluate at level 1 instead of the boss's actual level.
     scaled.level = boss.level || Math.max(1, Math.floor(avgLevel));
 
     scaled.stats = { ...boss.stats };
 
-    // 💡 FIX: Boss HP scaling restored to QUADRATIC at S+ ranks.
-    // Previously the factor was deliberately nerfed to 0.16 at S/SS/SSS
-    // ("adjusted down for new progression system"), which resulted in
-    // S-rank bosses having LESS HP than the common trash mobs (boss HP
-    // was linear while common-mob HP had a quadratic term). Now bosses
-    // get a quadratic term too, so the boss is always the climax of
-    // the dungeon.
+ // FIX: Boss HP scaling restored to QUADRATIC at S+ ranks.
+ // Previously the factor was deliberately nerfed to 0.16 at S/SS/SSS
+ // ("adjusted down for new progression system"), which resulted in
+ // S-rank bosses having LESS HP than the common trash mobs (boss HP
+ // was linear while common-mob HP had a quadratic term). Now bosses
+ // get a quadratic term too, so the boss is always the climax of
+ // the dungeon.
     let bossHpFactor = 0.30;
     let bossHpQuadFactor = 0.003;
     if (rankIndex > 25.0)      { bossHpFactor = 0.30; bossHpQuadFactor = 0.005; }  // S/SS/SSS
@@ -1420,16 +1413,15 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
 
     scaled.stats.hp = Math.floor(boss.stats.hp * partyFactor * (1 + (rankIndex * bossHpFactor) + (rankIndex * rankIndex * bossHpQuadFactor)));
 
-    // 💡 FIX 2026-07-17: Boss HP floor. At low ranks (F/E/D), the boss base
-    // HP (e.g. Infected Colossus = 300) combined with the low rank scaling
-    // produced bosses with FEWER HP than regular trash mobs (372 HP boss vs
-    // 1865 HP regular enemy at F-rank). This was backwards - the boss should
-    // always be the climax of the dungeon.
-    //
-    // Fix: compute what a regular enemy's HP would be at this rank using the
-    // SAME formula as scaleEnemyStats, then ensure the boss has at least 2×
-    // that. This guarantees the boss is always the tankiest enemy in the
-    // dungeon, regardless of rank or base HP differences.
+ // FIX Boss HP floor. At low ranks (F/E/D), the boss base
+ // HP (e.g. Infected Colossus = 300) combined with the low rank scaling
+ // produced bosses with FEWER HP than regular trash mobs (372 HP boss vs
+ // 1865 HP regular enemy at F-rank). This was backwards - the boss should
+ // always be the climax of the dungeon.
+ // Fix: compute what a regular enemy's HP would be at this rank using the
+ // SAME formula as scaleEnemyStats, then ensure the boss has at least 2×
+ // that. This guarantees the boss is always the tankiest enemy in the
+ // dungeon, regardless of rank or base HP differences.
     let regularHpFactor, regularHpQuadFactor;
     if (rankIndex <= 1.0) {
         regularHpFactor = 0.12; regularHpQuadFactor = 0.002;
@@ -1445,8 +1437,8 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
         regularHpFactor = 0.28; regularHpQuadFactor = 0.0045;
     }
     const regularHpMult = 1 + (rankIndex * regularHpFactor) + (rankIndex * rankIndex * regularHpQuadFactor);
-    // 💡 Use 1500 as the baseline regular enemy HP (most templates are
-    // 1000-2000). Boss should be at least 1.5× a regular enemy's HP.
+ // Use 1500 as the baseline regular enemy HP (most templates are
+ // 1000-2000). Boss should be at least 1.5× a regular enemy's HP.
     const minBossHp = Math.floor(1500 * partyFactor * regularHpMult * 1.5);
     if (scaled.stats.hp < minBossHp) {
         scaled.stats.hp = minBossHp;
@@ -1455,25 +1447,25 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
     scaled.stats.atk = Math.floor(boss.stats.atk * partyFactor * dmgMult);
     scaled.stats.mag = Math.floor(boss.stats.mag * partyFactor * dmgMult);
     
-    // Boss Speed Scaling - 💡 QA FIX #33: Bosses must be DANGEROUS.
-    // High-tier bosses (S+, Dragon, Raid) should outspeed players to feel
-    // threatening. They use a higher blend toward player speed (90%) PLUS
-    // a boss speed bonus so they act first or trade evenly.
+ // Boss Speed Scaling - QA FIX #33: Bosses must be DANGEROUS.
+ // High-tier bosses (S+, Dragon, Raid) should outspeed players to feel
+ // threatening. They use a higher blend toward player speed (90%) PLUS
+ // a boss speed bonus so they act first or trade evenly.
     let baseSpeed = Math.floor(boss.stats.spd * partyFactor * spdMult);
 
-    // Bosses target 110% of player speed (slightly faster - they go first)
+ // Bosses target 110% of player speed (slightly faster - they go first)
     let targetSpeed = Math.max(20, avgPlayerSpeed) * 1.10;
-    // High-level bosses (S+/SS/SSS/Dragon) get EXTRA speed - they should
-    // consistently outspeed even fast players
+ // High-level bosses (S+/SS/SSS/Dragon) get EXTRA speed - they should
+ // consistently outspeed even fast players
     if (rankIndex > 25.0) targetSpeed *= 1.15; // S+ bosses: 126% of player speed
     if (rankIndex > 50.0) targetSpeed *= 1.10; // SS+ bosses: 139% of player speed
-    // Dragon bosses are always fast
+ // Dragon bosses are always fast
     if (boss.id && String(boss.id).toUpperCase().includes('DRAGON')) targetSpeed *= 1.20;
 
-    // Bosses use 80% blend toward target (stronger rubber-band than regular)
+ // Bosses use 80% blend toward target (stronger rubber-band than regular)
     scaled.stats.spd = Math.max(10, Math.floor((baseSpeed * 0.20) + (targetSpeed * 0.80)));
 
-    // 💡 QA FIX: Bosses also get mana regen per turn (was missing)
+ // QA FIX: Bosses also get mana regen per turn (was missing)
     scaled.mana = 200;
     scaled.maxMana = 200;
 
@@ -1488,42 +1480,38 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
     const xpRewardBase = boss.xpReward !== undefined ? boss.xpReward : 1000;
     const goldRewardBase = boss.goldReward !== undefined ? boss.goldReward : [100, 200];
 
-    // Boss rewards - scaled even more aggressively than regular enemies.
-    // Bosses are the climax of a dungeon and should drop significantly
-    // better loot.
-    //
-    // 💡 FIX (pass 1): Changed to EXPONENTIAL scaling (1 + rankIndex^1.5
-    // for XP, 1 + rankIndex^1.3 for gold) so S-rank bosses give ~208×
-    // F-rank XP (vs 29× under the old linear formula). Combined with
-    // the distinct S/SS/SSS boss templates, S-rank boss XP went from
-    // ~229K to ~12.5M.
-    //
-    // 💡 FIX (pass 2 - this commit): Bumped XP exponent from 1.5 → 1.55.
-    // The L75→L76 milestone (93.9M XP, 1.8× tier) was forcing ~8 S-rank
-    // boss kills per level - too grindy for the climax rank. The +0.05
-    // exponent bump yields:
-    //   S    (diff=35):  35^1.55 = 247.3 vs 35^1.5 = 207.1   → +19.4% (12.5M → 14.9M)
-    //   SS   (diff=75):  75^1.55 = 806.0 vs 75^1.5 = 649.5   → +24.1% (97.6M → 121.1M)
-    //   SSS  (diff=80):  80^1.55 = 890.8 vs 80^1.5 = 715.5   → +24.5% (286.6M → 356.7M)
-    //
-    // NOTE: An earlier draft of this comment claimed +40-50% bumps. That
-    // was a math error - 35^1.55 was miscomputed as 290.8 (actual 247.3).
-    // The bump is real but smaller than originally pitched. If a bigger
-    // bump is desired, exponent 1.6 would deliver +~107% (S: 12.5M→26.3M,
-    // SSS: 286.6M→592M) - roughly 2x the current value.
-    //
-    // Net effect at the L75 milestone (93.9M XP, the steepest single-level
-    // jump in the curve due to the 1.8× tier kicking in):
-    //   S-rank boss kills per level: was ~8, now ~6.3 (small but noticeable)
-    //   SS-rank: still ~1 boss kill per level
-    //   SSS-rank: still ~1 boss kill per level
-    // Trash XP (rankIndex^1.4 at L1155) is unchanged - this targets boss
-    // XP only. Gold exponent (1.3) unchanged.
-    // 💡 ECONOMY RETUNE 2026-10-03: boss XP exponent 1.55 -> 0.75. The old
-    // exponent made an S boss worth ~248x its base XP (14.9M for ELDER_CHAOS
-    // = 6x the whole 2.4M L1->100 curve in ONE kill). 0.75 keeps bosses
-    // meaningfully above trash while the endCombat per-fight cap bounds the
-    // payout.
+ // Boss rewards - scaled even more aggressively than regular enemies.
+ // Bosses are the climax of a dungeon and should drop significantly
+ // better loot.
+ // FIX (pass 1): Changed to EXPONENTIAL scaling (1 + rankIndex^1.5
+ // for XP, 1 + rankIndex^1.3 for gold) so S-rank bosses give ~208×
+ // F-rank XP (vs 29× under the old linear formula). Combined with
+ // the distinct S/SS/SSS boss templates, S-rank boss XP went from
+ // ~229K to ~12.5M.
+ // FIX (pass 2 - this commit): Bumped XP exponent from 1.5 → 1.55.
+ // The L75→L76 milestone (93.9M XP, 1.8× tier) was forcing ~8 S-rank
+ // boss kills per level - too grindy for the climax rank. The +0.05
+ // exponent bump yields:
+ // S (diff=35): 35^1.55 = 247.3 vs 35^1.5 = 207.1 → +19.4% (12.5M → 14.9M)
+ // SS (diff=75): 75^1.55 = 806.0 vs 75^1.5 = 649.5 → +24.1% (97.6M → 121.1M)
+ // SSS (diff=80): 80^1.55 = 890.8 vs 80^1.5 = 715.5 → +24.5% (286.6M → 356.7M)
+ // NOTE: An earlier draft of this comment claimed +40-50% bumps. That
+ // was a math error - 35^1.55 was miscomputed as 290.8 (actual 247.3).
+ // The bump is real but smaller than originally pitched. If a bigger
+ // bump is desired, exponent 1.6 would deliver +~107% (S: 12.5M→26.3M,
+ // SSS: 286.6M→592M) - roughly 2x the current value.
+ // Net effect at the L75 milestone (93.9M XP, the steepest single-level
+ // jump in the curve due to the 1.8× tier kicking in):
+ // S-rank boss kills per level: was ~8, now ~6.3 (small but noticeable)
+ // SS-rank: still ~1 boss kill per level
+ // SSS-rank: still ~1 boss kill per level
+ // Trash XP (rankIndex^1.4 at L1155) is unchanged - this targets boss
+ // XP only. Gold exponent (1.3) unchanged.
+ // ECONOMY RETUNE boss XP exponent 1.55 -> 0.75. The old
+ // exponent made an S boss worth ~248x its base XP (14.9M for ELDER_CHAOS
+ // = 6x the whole 2.4M L1->100 curve in ONE kill). 0.75 keeps bosses
+ // meaningfully above trash while the endCombat per-fight cap bounds the
+ // payout.
     scaled.xpReward = Math.floor(xpRewardBase * (1 + Math.pow(rankIndex, 0.75)));
     scaled.goldReward = [
         Math.floor(goldRewardBase[0] * (1 + Math.pow(rankIndex, 1.3))),
@@ -1534,34 +1522,34 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
     scaled.isEnemy = true;
     scaled.isBoss = true;
     scaled.currentPhase = 0;
-    // 💡 FIX P0 (2026-08-16): Copy phases from the boss definition onto the
-    // scaled combat entity. checkBossPhase() in guildAdventure.js:5278 reads
-    // boss.phases to trigger phase transitions at HP thresholds - but this
-    // field was never copied here, so phase transitions silently never fired
-    // for ANY boss. The bossMechanics.js bosses (HIVE_COMMANDER_BOSS etc.)
-    // have proper phase objects with thresholds/abilities/effects/messages;
-    // classEncounters.js bosses currently have string-array phases (handled
-    // separately in Commit B). Only copy if phases is an array of objects
-    // (not strings) to avoid breaking checkBossPhase's .threshold lookup.
+ // FIX P0: Copy phases from the boss definition onto the
+ // scaled combat entity. checkBossPhase() in guildAdventure.js:5278 reads
+ // boss.phases to trigger phase transitions at HP thresholds - but this
+ // field was never copied here, so phase transitions silently never fired
+ // for ANY boss. The bossMechanics.js bosses (HIVE_COMMANDER_BOSS etc.)
+ // have proper phase objects with thresholds/abilities/effects/messages;
+ // classEncounters.js bosses currently have string-array phases (handled
+ // separately in Commit B). Only copy if phases is an array of objects
+ // (not strings) to avoid breaking checkBossPhase's .threshold lookup.
     if (boss.phases && Array.isArray(boss.phases) && boss.phases.length > 0) {
         if (typeof boss.phases[0] === 'object' && boss.phases[0] !== null) {
             scaled.phases = boss.phases;
         }
-        // String-array phases (e.g. ['Normal', 'Enraged']) are left uncopied -
-        // checkBossPhase can't use them. Commit B converts these to objects.
+ // String-array phases (e.g. ['Normal', 'Enraged']) are left uncopied -
+ // checkBossPhase can't use them. Commit B converts these to objects.
     }
-    // Use BOSS archetype skill objects so AI can evaluate them properly
+ // Use BOSS archetype skill objects so AI can evaluate them properly
     const bossArchetype = boss.archetype || 'BOSS';
     scaled.archetype = bossArchetype;
     scaled.abilities = monsterSkills.getSkillsForMonster(bossArchetype, avgLevel).map(s => s.id);
-    // Keep raw skill list for phase transitions in guildAdventure
+ // Keep raw skill list for phase transitions in guildAdventure
     scaled.skills = boss.skills || [];
     
     return scaled;
 }
 
 // ==========================================
-// 📤 EXPORTS
+// EXPORTS
 // ==========================================
 
 module.exports = {

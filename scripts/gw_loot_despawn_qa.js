@@ -1,18 +1,17 @@
 // ============================================
-// 🪙 GW LOOT-DESPAWN QA (owner 2026-10-06)
+// GW LOOT-DESPAWN QA
 // "the gold is supposed to despawn after you leave the room but that
-//  'this room has been looted' should still be there when you or someone
-//  else comes back — all consumable encounters, not puzzles"
-//
-//   T1 discovery/dig  : gold pile ONLY while the digger stays; on exit the
-//                       despawn flag flips (atomic enterRoom pipeline) and
-//                       every re-entry (looter or stranger) renders the pit
-//   T2 reward/take    : cavity coins despawn on exit; open chest stays CLAIMED
-//   T3 secret/claim   : idol despawns on exit; torn-out setting stays CLAIMED
-//   T4 puzzle immune  : lootFresh never leaks into puzzle visuals
-//   T5 plumbing       : occupant moves still work; non-looter exit keeps the
-//                       flag; missing occupants array tolerated; no resurrection
-// Run: node scripts/gw_loot_despawn_qa.js  (gwtest DB + mock socks)
+// 'this room has been looted' should still be there when you or someone
+// else comes back - all consumable encounters, not puzzles"
+// T1 discovery/dig : gold pile ONLY while the digger stays; on exit the
+// despawn flag flips (atomic enterRoom pipeline) and
+// every re-entry (looter or stranger) renders the pit
+// T2 reward/take : cavity coins despawn on exit; open chest stays CLAIMED
+// T3 secret/claim : idol despawns on exit; torn-out setting stays CLAIMED
+// T4 puzzle immune : lootFresh never leaks into puzzle visuals
+// T5 plumbing : occupant moves still work; non-looter exit keeps the
+// flag; missing occupants array tolerated; no resurrection
+// Run: node scripts/gw_loot_despawn_qa.js (gwtest DB + mock socks)
 // ============================================
 process.env.GW_TEST = '1';
 
@@ -22,7 +21,7 @@ const path = require('path');
 let PASS = 0, FAIL = 0;
 function check(name, cond, extra) {
     if (cond) { PASS++; console.log(`  ✅ ${name}`); }
-    else { FAIL++; console.log(`  ❌ ${name}${extra ? ' — ' + extra : ''}`); }
+    else { FAIL++; console.log(`  ❌ ${name}${extra ? ' - ' + extra : ''}`); }
 }
 const mockSock = () => ({
     sent: [],
@@ -84,7 +83,7 @@ async function retype(eventId, roomKey, patch) {
         { $set: { 'rooms.$.type': patch.type, ...(patch.payload ? { 'rooms.$.payload': patch.payload } : {}) } });
 }
 
-// pixel-diff two PNG buffers (decoded) — count pixels differing by >8 on any channel
+// pixel-diff two PNG buffers (decoded) - count pixels differing by >8 on any channel
 async function pixelDiff(bufA, bufB) {
     const { createCanvas, loadImage } = require('canvas');
     const [a, b] = await Promise.all([loadImage(bufA), loadImage(bufB)]);
@@ -128,7 +127,7 @@ async function lifecycle(tag, kind, verb) {
     const sock = mockSock();
     const dm = (txt, jid) => dmRouter.handleDM(sock, jid, jid, txt, '\u200B', { prefix: '.', prefixed: true });
 
-    // ── claim it ──
+ // -- claim it --
     const res = await dm(verb, LOOTER);
     check(`${tag}: "${verb}" handled with an afterImage`, !!res && res.handled !== false && sock.sent.some((s) => s.hasImage), JSON.stringify(res || {}).slice(0, 90));
     let room = await roomOf(ev.eventId, target.key);
@@ -138,39 +137,39 @@ async function lifecycle(tag, kind, verb) {
     const fresh = await renderFor(ev.eventId, LOOTER);
     check(`${tag}: fresh render (looter present) produced`, Buffer.isBuffer(fresh.img) && fresh.img.length > 1000);
 
-    // 'look' while still in the room → spoils still render (lootFresh true in DB)
+ // 'look' while still in the room → spoils still render (lootFresh true in DB)
     const look = await dm('look', LOOTER);
     check(`${tag}: 'look' while present still works`, !!look);
 
-    // ── walk away (the atomic enterRoom flip under test) ──
+ // -- walk away (the atomic enterRoom flip under test) --
     const dest = ev.rooms.find((r) => r.key !== target.key);
     await rooms.enterRoom(ev.eventId, LOOTER, target.key, dest.key);
     room = await roomOf(ev.eventId, target.key);
     check(`${tag}: lootFresh flipped FALSE the moment the looter left`, room.lootFresh === false, `got ${room.lootFresh}`);
     check(`${tag}: looter pulled from old occupants`, !(room.occupants || []).includes(LOOTER));
 
-    // ── the looter comes back → marker, NO resurrection ──
+ // -- the looter comes back → marker, NO resurrection --
     await rooms.enterRoom(ev.eventId, LOOTER, dest.key, target.key);
     room = await roomOf(ev.eventId, target.key);
     check(`${tag}: re-entry does NOT resurrect the loot`, room.lootFresh === false, `got ${room.lootFresh}`);
     const back = await renderFor(ev.eventId, LOOTER);
     const diffLooted = await pixelDiff(fresh.img, back.img);
-    // 1200 floor: the reward chest swap only changes the cavity (~2k px);
-    // discovery/secret swap whole sprites and land far above it
+ // 1200 floor: the reward chest swap only changes the cavity (~2k px);
+ // discovery/secret swap whole sprites and land far above it
     check(`${tag}: return render ≠ fresh render (sprite swapped)`, diffLooted > 1200, `diff=${diffLooted}`);
 
-    // deterministic: re-render the same looted state → stable
+ // deterministic: re-render the same looted state → stable
     const back2 = await renderFor(ev.eventId, LOOTER);
     check(`${tag}: looted render is deterministic`, await pixelDiff(back.img, back2.img) < 500);
 
-    // ── a stranger walks in → sees the marker too ──
+ // -- a stranger walks in → sees the marker too --
     await seat(ev.eventId, STRANGER, target.key);
     const strangerView = await renderFor(ev.eventId, STRANGER);
     check(`${tag}: stranger's view renders`, Buffer.isBuffer(strangerView.img));
     room = await roomOf(ev.eventId, target.key);
     check(`${tag}: stranger's presence keeps lootFresh false`, room.lootFresh === false);
 
-    // non-looter leaving must NOT touch the flag (it's already false → stays false)
+ // non-looter leaving must NOT touch the flag (it's already false → stays false)
     await rooms.enterRoom(ev.eventId, STRANGER, target.key, dest.key);
     room = await roomOf(ev.eventId, target.key);
     check(`${tag}: non-looter exit leaves the flag alone`, room.lootFresh === false);
@@ -182,14 +181,14 @@ async function lifecycle(tag, kind, verb) {
     await connectDB();
     if (typeof roomScene.ensureFonts === 'function') await roomScene.ensureFonts();
 
-    // ═══ T1 discovery ═══
+ // === T1 discovery ===
     const t1 = await lifecycle('discovery', 'discovery', 'dig');
 
-    // explicit pixel-proof trio for the dig site: ACTIVE rubble vs fresh coins vs looted pit
+ // explicit pixel-proof trio for the dig site: ACTIVE rubble vs fresh coins vs looted pit
     {
         const { ev, target, LOOTER } = t1;
         const active = await roomOf(ev.eventId, target.key);
-        // force a third state for the comparison: fresh-loot (looter present again, flag true)
+ // force a third state for the comparison: fresh-loot (looter present again, flag true)
         const GuildWarEvent = require('../core/models/GuildWarEvent');
         await GuildWarEvent.updateOne(
             { eventId: ev.eventId, rooms: { $elemMatch: { key: target.key } } },
@@ -204,13 +203,13 @@ async function lifecycle(tag, kind, verb) {
         void active;
     }
 
-    // ═══ T2 reward ═══
+ // === T2 reward ===
     await lifecycle('reward', 'reward', 'take');
 
-    // ═══ T3 secret ═══
+ // === T3 secret ===
     await lifecycle('secret', 'secret', 'claim');
 
-    // ═══ T4 puzzle immunity ═══
+ // === T4 puzzle immunity ===
     console.log('\n── puzzle: lootFresh must not leak into puzzle visuals ──');
     {
         const ev = await freshEvent('puzzle');
@@ -229,21 +228,21 @@ async function lifecycle(tag, kind, verb) {
         check('puzzle: lootFresh true/false renders IDENTICAL (immune)', await pixelDiff(withFlag.img, noFlag.img) < 500);
     }
 
-    // ═══ T5 plumbing ═══
+ // === T5 plumbing ===
     console.log('\n── plumbing: occupant moves, non-looter exits, missing occupants ──');
     {
         const ev = await freshEvent('plumbing');
         const [a, b] = ev.rooms.slice(0, 2);
-        // occupant move still works
+ // occupant move still works
         await seat(ev.eventId, 'lp0@s.whatsapp.net', a.key);
         await rooms.enterRoom(ev.eventId, 'lp0@s.whatsapp.net', a.key, b.key);
         let ra = await roomOf(ev.eventId, a.key);
         let rb = await roomOf(ev.eventId, b.key);
         check('enterRoom: occupant pulled from A', !(ra.occupants || []).includes('lp0@s.whatsapp.net'));
         check('enterRoom: occupant pushed to B', (rb.occupants || []).includes('lp0@s.whatsapp.net'));
-        // ACTIVE room keeps lootFresh undefined through moves
+ // ACTIVE room keeps lootFresh undefined through moves
         check('enterRoom: ACTIVE room lootFresh untouched', ra.lootFresh === undefined && rb.lootFresh === undefined);
-        // missing occupants array tolerated by leaveRoom
+ // missing occupants array tolerated by leaveRoom
         const GuildWarEvent = require('../core/models/GuildWarEvent');
         await GuildWarEvent.updateOne(
             { eventId: ev.eventId, rooms: { $elemMatch: { key: b.key } } },

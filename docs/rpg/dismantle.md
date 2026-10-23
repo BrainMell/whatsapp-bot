@@ -132,7 +132,6 @@ async function dismantleItem(userId, itemId) {
         totalItemsToReturn++;
     }
 
-    // Check for enough space for all materials
     if (!inventorySystem.hasInventorySpace(userId, totalItemsToReturn)) {
         return { success: false, message: "❌ Not enough inventory space to store recovered materials!" };
     }
@@ -140,7 +139,6 @@ async function dismantleItem(userId, itemId) {
     // Remove item
     inventorySystem.removeItem(userId, itemId, 1);
 
-    // Return materials
     for (const [id, qty] of Object.entries(returned)) {
         await inventorySystem.addItem(userId, id, qty);
     }

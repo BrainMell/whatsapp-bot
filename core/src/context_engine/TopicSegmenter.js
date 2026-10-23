@@ -26,19 +26,19 @@ class TopicSegmenter {
             const current = messages[i];
             const prev = messages[i - 1];
 
-            // 1. Check time gap
+ // 1. Check time gap
             const timeGap = (current.timestamp.getTime() - prev.timestamp.getTime()) / 1000;
             const isSilenceGap = timeGap > this.silenceThreshold;
 
-            // 2. Check topic markers
+ // 2. Check topic markers
             const contentLower = current.content.toLowerCase();
             const isTopicShift = this.topicShiftMarkers.some(marker => contentLower.includes(marker));
 
-            // 3. New speaker after long message (Heuristic)
+ // 3. New speaker after long message (Heuristic)
             const isLongMsgTransition = (current.userId !== prev.userId && prev.content.length > 200);
 
-            // 4. Thread detection (Replies)
-            // If it's a reply to something NOT in the current segment, it's a new thread
+ // 4. Thread detection (Replies)
+ // If it's a reply to something NOT in the current segment, it's a new thread
             let isNewThread = false;
             if (current.replyTo) {
                 const foundInSegment = currentSegment.some(m => m.id === current.replyTo);

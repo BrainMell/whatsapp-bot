@@ -114,12 +114,12 @@ async function runCase(sock, chat, args, label) {
     await sleep(400);
     const { r: e4 } = await runCase(sock, chat, "AAPL 3h", "bad range token");
     ok(e4.handled, "bad range handled without crash (graceful)");
-    // range alias parsing
+ // range alias parsing
     const p1 = stock.parseStockArgs("AAPL 1y");
     ok(p1.ticker === "AAPL" && p1.range === "1y" && p1.rangeExplicit, "alias 1y parsed");
     const p2 = stock.parseStockArgs("msft");
     ok(p2.ticker === "msft" && p2.range === "1m" && !p2.rangeExplicit, "default range 1m");
-    // repeated calls (cache path) - 2nd must be fast
+ // repeated calls (cache path) - 2nd must be fast
     const t0 = Date.now();
     await stock.fetchChart("AAPL", "1m");
     const dt = Date.now() - t0;

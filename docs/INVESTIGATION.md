@@ -1,6 +1,6 @@
 # Image Generation Outage - Root Cause Investigation (FINAL)
 
-**Date:** 2026-07-26
+**Date:** 
 **Branch:** `audit/fix-pass-1`
 **HEAD at investigation:** `588d7b6d` → fixed in this commit's child
 **Investigator:** Agent session (post-`588d7b6`)

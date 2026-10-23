@@ -1,5 +1,5 @@
 'use strict';
-// 47-k8c probe: how long does a COLD `.j base` / `.j guild` mp4 bake take on box hw?
+// probe: how long does a COLD `.j base` / `.j guild` mp4 bake take on box hw?
 // Run on box2: QA_MODE=1 CODE_VER=coldprobe-<ts> node scripts/probe_cold_bake.js
 // QA_MODE puts mediaCache in /tmp (prod cache untouched); unique CODE_VER = guaranteed cold.
 const fs = require('fs');

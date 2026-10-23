@@ -1,17 +1,16 @@
 // ============================================
-// LOGO POOL v2 (2026-09-27) - 500+ curated brand logos
+// LOGO POOL v2 - 500+ curated brand logos
 // ============================================
 // Owner brief section 1: expand to 500+, keep it RECOGNIZABLE (modern brands,
 // apps, websites, companies, games, platforms + iconic older logos), no
 // obscure/obsolete filler. Each entry anchors a Wikipedia File-namespace
 // search: { name } is displayed, { wiki } is the search/anchor string
 // (article-style title), { cat } drives fair same-category distractors.
-//
 // Curation rules used:
-//   - every brand must be globally recognizable to a casual WhatsApp user
-//   - modern-first but with deliberately iconic classics (Coca-Cola, Disney...)
-//   - file search must plausibly find "<brand> logo" on Wikipedia - brands
-//     with no logo article presence were excluded, not padded with
+// - every brand must be globally recognizable to a casual WhatsApp user
+// - modern-first but with deliberately iconic classics (Coca-Cola, Disney...)
+// - file search must plausibly find "<brand> logo" on Wikipedia - brands
+// with no logo article presence were excluded, not padded with
 // - ============================================
 
 // ---------- Tech & Software ----------
@@ -701,6 +700,3 @@ module.exports = {
   TECH, APPS, FOOD, CARS, FASHION, SPORTS, GAMING,
   RETAIL, TRAVEL, MEDIA, FINTECH, HEALTH, INDUSTRY, TELECOM,
 };
-
-
-

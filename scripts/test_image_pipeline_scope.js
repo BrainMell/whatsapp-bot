@@ -1,29 +1,26 @@
-// ════════════════════════════════════════════════════════════════════════
+// ========================================================================
 // REGRESSION TEST: Image pipeline scope fix
-// ════════════════════════════════════════════════════════════════════════
-//
+// ========================================================================
 // BUG (pre-fix):
-//   sendImageSafe, buildThumbnail, and FALLBACK_THUMB were defined INSIDE
-//   the message-upsert callback (deeply nested at indent 20). Top-level
-//   handlers like handleAnimeTrending (defined at indent 4 inside the
-//   outer storage.run callback) could NOT see them. Every call to
-//   sendImageSafe from those handlers threw:
-//     ReferenceError: sendImageSafe is not defined
-//   which was caught by the handler's try/catch and surfaced to the
-//   user as a generic "Could not fetch..." error.
-//
+// sendImageSafe, buildThumbnail, and FALLBACK_THUMB were defined INSIDE
+// the message-upsert callback (deeply nested at indent 20). Top-level
+// handlers like handleAnimeTrending (defined at indent 4 inside the
+// outer storage.run callback) could NOT see them. Every call to
+// sendImageSafe from those handlers threw:
+// ReferenceError: sendImageSafe is not defined
+// which was caught by the handler's try/catch and surfaced to the
+// user as a generic "Could not fetch..." error.
 // FIX:
-//   Moved all three to module scope (above startBot). Now any handler
-//   at any nesting level can call sendImageSafe.
-//
+// Moved all three to module scope (above startBot). Now any handler
+// at any nesting level can call sendImageSafe.
 // This test verifies the fix by:
-//   1. Verifying the definitions are at column 0 (module scope).
-//   2. Verifying they appear BEFORE startBot (so they're at module scope,
-//      not inside any function).
-//   3. Verifying no nested duplicates remain.
-//   4. Verifying the Jimp v1.x API is used.
-//   5. Sanity-checking the sendImageSafe flow.
-// ════════════════════════════════════════════════════════════════════════
+// 1. Verifying the definitions are at column 0 (module scope).
+// 2. Verifying they appear BEFORE startBot (so they're at module scope,
+// not inside any function).
+// 3. Verifying no nested duplicates remain.
+// 4. Verifying the Jimp v1.x API is used.
+// 5. Sanity-checking the sendImageSafe flow.
+// ========================================================================
 
 const fs = require('fs');
 const path = require('path');
@@ -238,7 +235,7 @@ try {
   check('node -c core/engine.js passes', false, e.stderr?.toString() || e.message);
 }
 
-// ─── Summary ────────────────────────────────────────────────────────────
+// --- Summary ------------------------------------------------------------
 console.log(`\n══════════════════════════════════════════════════`);
 console.log(`  PASS: ${pass}   FAIL: ${fail}`);
 console.log(`══════════════════════════════════════════════════`);

@@ -1,10 +1,10 @@
-// Focused tests for the 2026-09-28 owner-audit round 2 (F1-F5, F7):
-//   F1 safeSend: retry + delivery-anchored deadline (covered e2e in
-//      qa_quiz_realistic.js §3; here: unit-level wiring)
-//   F3 -images honored on short quizzes (single-section plans)
-//   F4 planning heartbeat: no "the lore", mode-aware labels
-//   F5 buildQuizConfig clamps stored garbage overrides
-//   F7 questionNo counts DELIVERED questions only
+// Focused tests for the owner-audit round 2 (F1-F5, F7):
+// F1 safeSend: retry + delivery-anchored deadline (covered e2e in
+// qa_quiz_realistic.js §3; here: unit-level wiring)
+// F3 -images honored on short quizzes (single-section plans)
+// F4 planning heartbeat: no "the lore", mode-aware labels
+// F5 buildQuizConfig clamps stored garbage overrides
+// F7 questionNo counts DELIVERED questions only
 process.chdir(__dirname + "/..");
 const fs = require("fs");
 let pass = 0, fail = 0;
@@ -29,8 +29,8 @@ function t(name, cond) { if (cond) { pass++; console.log(`  ✅ ${name}`); } els
   t("no characters -> graceful lore-only plan (no fake images)", !plan.some((s) => s.domain === "images"));
   plan = quiz.buildSectionPlan({ ...base, imageQuestionCount: 0 }, avail);
   t("no -images flag -> plain single section", plan.length === 1 && !plan.some((s) => s.domain === "images"));
-  // random count=10 (the live-reported case): mixed plan needs lore>=6 so it
-  // falls to the simple plan - which must now still honor -images
+ // random count=10 (the live-reported case): mixed plan needs lore>=6 so it
+ // falls to the simple plan - which must now still honor -images
   plan = quiz.buildSectionPlan({ ...base, randomMode: true, imageQuestionCount: 5 }, avail);
   t("random 10 -images 5 (the live bug): pictures planned", plan.some((s) => s.domain === "images") && plan.reduce((a, s) => a + s.perSection, 0) === 10);
 
@@ -43,7 +43,7 @@ function t(name, cond) { if (cond) { pass++; console.log(`  ✅ ${name}`); } els
   t("launch passes planningLabel(parsed) to the heartbeat", launch.includes("startPrepHeartbeat(prep, sock, chatId, botMarker, planningLabel(parsed))"));
 
   console.log("\n[F5] config merge validation");
-  // corrupt the group cache directly (simulates a stale/manual KV value)
+ // corrupt the group cache directly (simulates a stale/manual KV value)
   const cache = quizConfigMod._internal._groupCache;
   cache.set("corrupt@g.us", { timePerQuestion: 0, questionGapMin: -5, maxQuestions: 9999, voiceActorQuestionLimit: "abc" });
   const cfg = await quizConfigMod.buildQuizConfig("corrupt@g.us", {});

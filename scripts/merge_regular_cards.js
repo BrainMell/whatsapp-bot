@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * merge_regular_cards.js — append the shoob-regular-scraper output
+ * merge_regular_cards.js - append the shoob-regular-scraper output
  * (output/regular_cards_new.json, 1779 cards) into the live
  * core/data/cards_data.json, with hard safety gates:
  *   - no id collisions (skip + report)

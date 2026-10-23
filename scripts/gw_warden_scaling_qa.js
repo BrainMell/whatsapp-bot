@@ -1,16 +1,15 @@
 #!/usr/bin/env node
-// ⚔️ GW WARDENS + SCALING QA — Test Run 2 directive pass (2026-10-07)
-// Verifies the owner brief: "4 bosses on the map, randomly placed, the map
+// GW WARDENS + SCALING QA - Test Run 2 directive pass
 // increasing in size with a higher number of players" + the Test Run 2 bug
 // report fixes that ship with them:
-//   A. wardens rise AT WAR START (ledger, lair rooms, fog reveal, feed major)
-//   B. war ends when all four fall; clock-out = one-time hourglass grace
-//   C. map side scales from the SIZE_RANGES table
-//   D. PvE/PvP overlap guards (challenge/accept refuse mid-combat, move blocked mid-duel)
-//   E. exactly-once duel timeout concede (timer vs sweeper claim)
-//   F. cross-instance discovery milestone dedupe
-//   G. prompt guarantee (nextTurn text fallback) + render-pool parallelism (source pins)
-//   H. rank card truth (pvpWins merged into the mission snapshot)
+// A. wardens rise AT WAR START (ledger, lair rooms, fog reveal, feed major)
+// B. war ends when all four fall; clock-out = one-time hourglass grace
+// C. map side scales from the SIZE_RANGES table
+// D. PvE/PvP overlap guards (challenge/accept refuse mid-combat, move blocked mid-duel)
+// E. exactly-once duel timeout concede (timer vs sweeper claim)
+// F. cross-instance discovery milestone dedupe
+// G. prompt guarantee (nextTurn text fallback) + render-pool parallelism (source pins)
+// H. rank card truth (pvpWins merged into the mission snapshot)
 // DB sections use the gwtest database (same pattern as gw_isolation_qa.js).
 const fs = require('fs');
 const path = require('path');
@@ -18,21 +17,21 @@ const path = require('path');
 let PASS = 0, FAIL = 0;
 function check(name, cond, extra) {
     if (cond) { PASS++; console.log(`  ✅ ${name}`); }
-    else { FAIL++; console.log(`  ❌ ${name}${extra ? ' — ' + extra : ''}`); }
+    else { FAIL++; console.log(`  ❌ ${name}${extra ? ' - ' + extra : ''}`); }
 }
 
 const ROOT = path.join(__dirname, '..');
 const CFG = require('../core/rpg/guildWar/config');
 const mapEngine = require('../core/rpg/guildWar/mapEngine');
 
-// ── A3/C: config surface ──
-console.log('\n— A/C: config surface —');
+// -- A3/C: config surface --
+console.log('\n- A/C: config surface -');
 check('FINALE.FROM_START is true', CFG.FINALE.FROM_START === true);
 check('FINALE.BOSS_COUNT is 4', CFG.FINALE.BOSS_COUNT === 4);
 check('SIZE_RANGES table present with >=4 bands', Array.isArray(CFG.MAP.SIZE_RANGES) && CFG.MAP.SIZE_RANGES.length >= 4);
 
-// ── C: map scaling (pure) ──
-console.log('\n— C: map scaling —');
+// -- C: map scaling (pure) --
+console.log('\n- C: map scaling -');
 const EXPECT = [[2, 10], [3, 10], [4, 12], [6, 12], [7, 14], [9, 14], [10, 16], [14, 16], [15, 19], [21, 19], [22, 22], [30, 22], [31, 26], [45, 26], [46, 30], [80, 30]];
 for (const [players, want] of EXPECT) {
     const m = mapEngine.generate(`scale:${players}`, players, {});
@@ -48,15 +47,15 @@ for (const [players, want] of EXPECT) {
 }
 var placementP = null;
 
-// ── A1: warden placement (pure, synthetic doc) ──
-console.log('\n— A1: warden placement —');
+// -- A1: warden placement (pure, synthetic doc) --
+console.log('\n- A1: warden placement -');
 {
     const big = mapEngine.generate('wardens:place', 12, {});
     const rooms = [...big.rooms.values()].map((r) => ({ ...r, payload: {} }));
     const players = big.spawns.slice(0, 6).map((k, i) => ({ jid: `p${i}@x`, spawnRoomId: k, status: 'active' }));
     const fakeDoc = { eventId: 'qa', side: big.side, rooms, players, deadWorld: null };
-    // stub the DB writes: spawnFinaleBosses bulk-writes rooms + ledger + fog.
-    // For the pure pass we exercise the PLACEMENT logic by monkey-patching the model.
+ // stub the DB writes: spawnFinaleBosses bulk-writes rooms + ledger + fog.
+ // For the pure pass we exercise the PLACEMENT logic by monkey-patching the model.
     const GuildWarEvent = require('../core/models/GuildWarEvent');
     const origUpdate = GuildWarEvent.updateOne.bind(GuildWarEvent);
     const origBulk = GuildWarEvent.bulkWrite ? GuildWarEvent.bulkWrite.bind(GuildWarEvent) : null;
@@ -69,8 +68,7 @@ console.log('\n— A1: warden placement —');
         return {};
     };
     GuildWarEvent.findOneAndUpdate = async () => null; // fog writes are best-effort
-    // Call the real spawner (pure placement math, zero DB). Awaited by the
-    // main runner before it exits.
+ // main runner before it exits.
     global.__placementP = (async () => {
         const roomsMod = require('../core/rpg/guildWar/rooms');
         const res = await roomsMod.spawnFinaleBosses(fakeDoc);
@@ -95,8 +93,8 @@ console.log('\n— A1: warden placement —');
     })();
 }
 
-// ── source pins (prompt guarantee / pools / ack / copy) ──
-console.log('\n— G: source pins —');
+// -- source pins (prompt guarantee / pools / ack / copy) --
+console.log('\n- G: source pins -');
 {
     const ga = fs.readFileSync(path.join(ROOT, 'core/rpg/guildAdventure.js'), 'utf8');
     check('nextTurn failed-render branch degrades to text', /} else \{\s*\n\s*\/\/ ⚔️ PROMPT GUARANTEE/.test(ga));
@@ -112,11 +110,11 @@ console.log('\n— G: source pins —');
     check('move blocked while an active duel holds the player', /The duel demands your attention/.test(dm));
     check('status clock line shows the warden tally', /wardens slain /.test(dm));
     const enc = fs.readFileSync(path.join(ROOT, 'core/rpg/guildWar/encounters.js'), 'utf8');
-    check('finale room intro copy = boss hunt from start', /holds this .*hall — one of the FOUR WARDENS/.test(enc));
+    check('finale room intro copy = boss hunt from start', /holds this .*hall - one of the FOUR WARDENS/.test(enc));
 }
 
-// ── H: rank mission snapshot (pure) ──
-console.log('\n— H: rank card truth —');
+// -- H: rank mission snapshot (pure) --
+console.log('\n- H: rank card truth -');
 {
     const classSystem = require('../core/rpg/classSystem');
     const userDoc = { stats: { questsWon: 20, bossesDefeated: 2 }, pvpWins: 1 };
@@ -128,15 +126,15 @@ console.log('\n— H: rank card truth —');
     const bossObj = mp.progress.find((o) => o.statKey === 'bossesDefeated');
     check('bosses objective reads stats (2/5)', bossObj && bossObj.current === 2);
     const pcSrc = fs.readFileSync(path.join(ROOT, 'core/commands/progressionCommands.js'), 'utf8');
-    // 🔄 auto-claim era (26090dae): the merge is a MAX of both doc shapes
-    // (schema defaults made `??` fall-through impossible), and the trial line
-    // promises automatic advancement instead of the hidden claim verb.
+ // auto-claim era (26090dae): the merge is a MAX of both doc shapes
+ // (schema defaults made `??` fall-through impossible), and the trial line
+ // promises automatic advancement instead of the hidden claim verb.
     check('rank command merges top-level pvpWins (max of both shapes)', /Math\.max\(userDoc\?\.stats\?\.pvpWins \|\| 0, userDoc\?\.pvpWins \|\| 0\)/.test(pcSrc));
     check('rank card caps image bars at 3 + caption overflow', /progress\.slice\(0, 3\)/.test(pcSrc) && /progress\.slice\(3\)/.test(pcSrc));
     check('rank caption spells out the trial + auto-advance', /advances automatically|advances the moment you check it/.test(pcSrc));
 }
 
-// ── DB sections (gwtest) ──
+// -- DB sections (gwtest) --
 async function connectDB() {
     const envPath = path.join(ROOT, '.env');
     if (fs.existsSync(envPath)) {
@@ -157,7 +155,7 @@ async function connectDB() {
     try {
         await connectDB();
     } catch (e) {
-        console.log(`\n[qa] no DB reachable (${e.message}) — DB sections skipped`);
+        console.log(`\n[qa] no DB reachable (${e.message}) - DB sections skipped`);
         finish();
         return;
     }
@@ -167,8 +165,8 @@ async function connectDB() {
     const roomsMod = require('../core/rpg/guildWar/rooms');
     const ruinsPvp = require('../core/rpg/guildWar/ruinsPvp');
 
-    // ── A2: startEvent spawns the wardens; hourglass + end paths ──
-    console.log('\n— A2: wardens at war start (DB) —');
+ // -- A2: startEvent spawns the wardens; hourglass + end paths --
+    console.log('\n- A2: wardens at war start (DB) -');
     const eventId = `gw_wardqa_${Date.now().toString(36)}`;
     await GuildWarEvent.deleteMany({ eventId });
     await GuildWarEvent.create({
@@ -181,7 +179,7 @@ async function connectDB() {
     });
     const started = await state.startEvent(eventId);
     check('startEvent ok', started.ok === true, started.reason || '');
-    await new Promise((r) => setTimeout(r, 1500)); // feed.queue's DB mirror is async — let it land
+    await new Promise((r) => setTimeout(r, 1500)); // feed.queue's DB mirror is async - let it land
     const ev1 = await GuildWarEvent.findOne({ eventId }).lean();
     check('finale ledger opened at start', ev1.finale && ev1.finale.started === true);
     check('ledger carries 4 bosses', Array.isArray(ev1.finale.bosses) && ev1.finale.bosses.length === 4);
@@ -193,14 +191,14 @@ async function connectDB() {
     check('lairs revealed on champion fog', (ev1.finale.bosses || []).every((b) => (w1.discovered || []).includes(b.key)));
     check('feed queued the warden major', (ev1.feedQueue || []).some((i) => /WARDENS HOLD THE RUINS/.test(i.text)));
 
-    // ── B: hourglass grace (one-time) ──
-    console.log('\n— B: hourglass grace (DB) —');
+ // -- B: hourglass grace (one-time) --
+    console.log('\n- B: hourglass grace (DB) -');
     const sockCalls = [];
     const mockSock = { sendMessage: async (jid, payload) => { sockCalls.push({ jid, text: payload.text || payload.caption || '' }); return {}; }, groupMetadata: async () => ({ id: '120363wardqa@g.us' }) };
     const settle = (ms) => new Promise((r) => setTimeout(r, ms));
     await GuildWarEvent.updateOne({ eventId }, { $set: { endsAt: Date.now() - 1000 } });
     await state.tick(mockSock, '\u200B');
-    await settle(2500); // tickAll's flush is fire-and-forget — let it drain before asserting
+    await settle(2500); // tickAll's flush is fire-and-forget - let it drain before asserting
     let ev2 = await GuildWarEvent.findOne({ eventId }).lean();
     check('hourglass flipped once at clock-out', ev2.finale && ev2.finale.hourglass === true);
     check('war still ACTIVE during the grace', ev2.state === 'ACTIVE');
@@ -213,8 +211,8 @@ async function connectDB() {
     check('second tick does NOT re-announce (no hourglass item left)', !(ev2.feedQueue || []).some((i) => /HOURGLASS IS EMPTY/.test(i.text)) && feedLen >= 0);
     check('second tick sends no more hourglass DMs', sockCalls.filter((c) => /war timer has run out/.test(c.text)).length === 2);
 
-    // ── B: all wardens dead → war ends ──
-    console.log('\n— B: hunt conclusion (DB) —');
+ // -- B: all wardens dead → war ends --
+    console.log('\n- B: hunt conclusion (DB) -');
     await GuildWarEvent.updateOne({ eventId, 'finale.bosses.index': 0 }, { $set: { 'finale.bosses.$[b].dead': true } }, { arrayFilters: [{ 'b.index': 0 }] });
     await state.tick(mockSock, '\u200B');
     let ev3 = await GuildWarEvent.findOne({ eventId }).lean();
@@ -224,8 +222,8 @@ async function connectDB() {
     ev3 = await GuildWarEvent.findOne({ eventId }).lean();
     check('4/4 dead → war ENDED', ev3.state === 'ENDED' || ev3.state === 'REWARDS');
 
-    // ── B: safety timeout closes an abandoned hunt ──
-    console.log('\n— B: safety timeout (DB) —');
+ // -- B: safety timeout closes an abandoned hunt --
+    console.log('\n- B: safety timeout (DB) -');
     const eventId2 = `gw_wardqb_${Date.now().toString(36)}`;
     await GuildWarEvent.deleteMany({ eventId2 });
     await GuildWarEvent.create({
@@ -243,8 +241,8 @@ async function connectDB() {
     const ev4 = await GuildWarEvent.findOne({ eventId: eventId2 }).lean();
     check('grace timeout → war ENDED', ev4.state === 'ENDED' || ev4.state === 'REWARDS');
 
-    // ── D/E: PvP guards + exactly-once concede (DB) ──
-    console.log('\n— D/E: duel guards + exactly-once concede (DB) —');
+ // -- D/E: PvP guards + exactly-once concede (DB) --
+    console.log('\n- D/E: duel guards + exactly-once concede (DB) -');
     const eventId3 = `gw_pvpqa_${Date.now().toString(36)}`;
     await GuildWarEvent.deleteMany({ eventId3 });
     const roomKey = '2,2';
@@ -261,7 +259,7 @@ async function connectDB() {
     const pa = pvpDoc.players.find((p) => p.jid === 'pa@s.whatsapp.net');
     const pb = pvpDoc.players.find((p) => p.jid === 'pb@s.whatsapp.net');
 
-    // E: exactly-once concede — expired record claimed by the timer, sweeper gets nothing
+ // E: exactly-once concede - expired record claimed by the timer, sweeper gets nothing
     const expKey = `${eventId3}:${roomKey}:pb@s.whatsapp.net`;
     await GuildWarEvent.updateOne({ eventId: eventId3 }, { $push: { pvpChallenges: { key: expKey, eventId: eventId3, challengerJid: pa.jid, challengedJid: pb.jid, roomKey, expiresAt: Date.now() - 1000 } } });
     const claimed = await ruinsPvp.claimExpiredRecord(eventId3, expKey);
@@ -271,7 +269,7 @@ async function connectDB() {
     const pruned = await ruinsPvp.pruneExpired(eventId3);
     check('sweeper has nothing left to resolve (no double concede)', pruned === 0);
 
-    // D: an active duel binds the player — challenge refuses
+ // D: an active duel binds the player - challenge refuses
     const economy = require('../core/rpg/economy');
     for (const [uj, un] of [['pa@s.whatsapp.net', 'PA'], ['pc@s.whatsapp.net', 'PC']]) {
         if (!economy.isRegistered(uj)) economy.registerUser(uj, un);
@@ -285,9 +283,9 @@ async function connectDB() {
         const pbRow = freshDoc.players.find((p) => p.jid === 'pb@s.whatsapp.net');
         const refused = await ruinsPvp.challenge(freshDoc, paRow, pbRow.jid);
         check('challenge refused while the challenger is mid-duel', refused.ok === false && /duel/.test(refused.text), refused.text || '');
-        // a rival challenging the mid-duel player is refused too
+ // a rival challenging the mid-duel player is refused too
         const pcRow = freshDoc.players.find((p) => p.jid === 'pc@s.whatsapp.net');
-        // pc is bound as the duel OPPONENT — use a 4th neutral player row for the target-side test
+ // pc is bound as the duel OPPONENT - use a 4th neutral player row for the target-side test
         await GuildWarEvent.updateOne({ eventId: eventId3 }, { $push: { players: { jid: 'pd@s.whatsapp.net', name: 'PD', guildId: 'gd', guildName: 'GD', status: 'active', roomId: roomKey, prevRoomId: roomKey, spawnRoomId: roomKey } } });
         const doc4 = await GuildWarEvent.findOne({ eventId: eventId3 }).lean();
         const pdRow = doc4.players.find((p) => p.jid === 'pd@s.whatsapp.net');
@@ -295,8 +293,8 @@ async function connectDB() {
         check('challenge refused when the TARGET is mid-duel', refused2.ok === false && /duel/.test(refused2.text), refused2.text || '');
     }
 
-    // ── F: milestone dedupe (DB) ──
-    console.log('\n— F: milestone dedupe (DB) —');
+ // -- F: milestone dedupe (DB) --
+    console.log('\n- F: milestone dedupe (DB) -');
     const eventId4 = `gw_msqa_${Date.now().toString(36)}`;
     await GuildWarEvent.deleteMany({ eventId4 });
     const discovered = [];
@@ -310,12 +308,12 @@ async function connectDB() {
     const msPlayer = msDoc.players[0];
     const encountersMod = require('../core/rpg/guildWar/encounters');
     await encountersMod.maybeDiscoveryMilestone(msDoc, msPlayer);
-    await new Promise((r) => setTimeout(r, 1500)); // feed.queue's DB mirror is async — let it land
+    await new Promise((r) => setTimeout(r, 1500)); // feed.queue's DB mirror is async - let it land
     let msAfter = await GuildWarEvent.findOne({ eventId: eventId4 }).lean();
     const msFeed1 = (msAfter.feedQueue || []).filter((i) => /charted 25 chambers/.test(i.text)).length;
     check('first milestone call queues exactly one feed line', msFeed1 === 1, `got ${msFeed1}`);
     check('milestoneClaimed advanced to 25', msAfter.players[0].milestoneClaimed === 25);
-    // second instance sees the same 25-room snapshot (stale read) → must NOT re-announce
+ // second instance sees the same 25-room snapshot (stale read) → must NOT re-announce
     await encountersMod.maybeDiscoveryMilestone(msDoc, msPlayer);
     msAfter = await GuildWarEvent.findOne({ eventId: eventId4 }).lean();
     const msFeed2 = (msAfter.feedQueue || []).filter((i) => /charted 25 chambers/.test(i.text)).length;

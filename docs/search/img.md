@@ -86,7 +86,6 @@ async function handleImgCommand(sock, chatId, query, m) {
   const data = await goService.searchPinterest(query, 5);
   const images = data.images || [];
   
-  // Iterates and downloads each image url to post to group
   for (const img of images.slice(0, 5)) {
     await sock.sendMessage(chatId, { image: { url: img } }, { quoted: m });
   }

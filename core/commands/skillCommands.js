@@ -1,6 +1,6 @@
 // ============================================
-// 🌳 SKILL TREE COMMANDS
-// ============================================ 
+// SKILL TREE COMMANDS
+// ============================================
 
 const economy = require('../rpg/economy');
 const progression = require('../rpg/progression');
@@ -11,7 +11,7 @@ const getPrefix = () => botConfig.getPrefix();
 const getBotMarker = () => `🃏 *${botConfig.getBotName()}*\n\n`;
 
 // ==========================================
-// 📊 DISPLAY SKILL TREE
+// DISPLAY SKILL TREE
 // ==========================================
 
 async function displaySkillTree(sock, chatId, senderJid, senderName) {
@@ -35,11 +35,11 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
         economy.saveUser(senderJid);
     }
 
-    // ── SKILLTREE card (primary, 2026-09-14 owner: "make the skill tree an
-    // image card … take inspiration from other RPG skill trees") - a real
-    // tree layout: 3 branch columns, tier fan-out, medallion states
-    // (maxed/learned/open/locked), cur/max pips, class root. Falls back to
-    // the legacy text layout below on any Go failure.
+ // -- SKILLTREE card (primary, "make the skill tree an
+ // image card … take inspiration from other RPG skill trees") - a real
+ // tree layout: 3 branch columns, tier fan-out, medallion states
+ // (maxed/learned/open/locked), cur/max pips, class root. Falls back to
+ // the legacy text layout below on any Go failure.
     let treeBuf = null;
     try {
         const goService = require('../utils/goImageService');
@@ -58,9 +58,9 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
                         max: skill.maxLevel || 1,
                         tier: skill.tier || 1,
                         state: maxed ? 'maxed' : cur > 0 ? 'learned' : canLearn ? 'open' : 'locked',
-                        // 🎨 2026-10-11 asset overhaul: node artwork filename
-                        // (Go loads core/rpgasset/skills/<icon>.png; absent on
-                        // older binaries -> medallion initials as before).
+ // asset overhaul: node artwork filename
+ // (Go loads core/rpgasset/skills/<icon>.png; absent on
+ // older binaries -> medallion initials as before).
                         icon: (() => { try { return require('../rpg/skillAssets').skillArtFile(skillId); } catch (e) { return null; } })() || undefined,
                     });
                 }
@@ -70,7 +70,7 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
         if (branches.length) {
             treeBuf = await goService.generatePortraitCard({
                 kind: 'SKILLTREE',
-                // 🧩 SPRITE CONSISTENCY 2026-09-17: hero sprite fields.
+ // SPRITE CONSISTENCY hero sprite fields.
                 playerClass: String((userClass && userClass.id) || '').toUpperCase(),
                 playerIndex: Math.max(0, Math.floor(Number(user && user.spriteIndex) || 0)),
                 style: (() => { try { return (user && user.cardStyle) || 0; } catch (e) { return 0; } })(),
@@ -87,17 +87,17 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
         console.error('[skilltree] card render failed:', e?.message || e);
     }
 
-    // 💡 2026-09-14 owner: "attach the old skill tree text as the caption -
-    // no info may be lost". The legacy text layout is now ALWAYS built and
-    // rides along as the image caption (capped to WhatsApp's 1024-char
-    // caption limit); when the card fails it is still sent standalone.
+ // "attach the old skill tree text as the caption -
+ // no info may be lost". The legacy text layout is now ALWAYS built and
+ // rides along as the image caption (capped to WhatsApp's 1024-char
+ // caption limit); when the card fails it is still sent standalone.
     const lineage = classSystem.getLineage(userClass.id); // e.g. [ARCHMAGE, MAGE, APPRENTICE]
 
     const buildTreeText = () => {
         let t = `🌳 *SKILL TREE: ${userClass.name.toUpperCase()}*\n`;
         t += `${userClass.icon} *${senderName}* - Lv.${level} | 📊 Points: *${user.skillPoints || 0}*\n\n`;
 
-        // --- Current class tree (SPECIALIZATION) ---
+ // --- Current class tree (SPECIALIZATION) ---
         const currentTree = skillTree.SKILL_TREES[userClass.id.toUpperCase()];
         if (currentTree) {
             t += `✨ *SPECIALIZATION*\n`;
@@ -125,7 +125,7 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
             t += `\n`;
         }
 
-        // --- Lineage / heritage trees ---
+ // --- Lineage / heritage trees ---
         if (lineage.length > 1) {
             const parents = lineage.slice(1); // skip current class
             for (const parentId of parents) {
@@ -164,8 +164,8 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
     const treeText = buildTreeText();
 
     if (treeBuf && treeBuf.length > 100) {
-        // WhatsApp hard-caps image captions at 1024 chars - keep the most
-        // valuable head of the legacy text and mark the cut.
+ // WhatsApp hard-caps image captions at 1024 chars - keep the most
+ // valuable head of the legacy text and mark the cut.
         const head = treeText.length > 980 ? treeText.slice(0, 977) + '…' : treeText;
         await sock.sendMessage(chatId, {
             image: treeBuf,
@@ -180,7 +180,7 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
 
 
 // ==========================================
-// ⬆️ UPGRADE SKILL
+// UPGRADE SKILL
 // ==========================================
 
 async function upgradeSkill(sock, chatId, senderJid, skillId) {
@@ -202,24 +202,24 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
         economy.saveUser(senderJid);
     }
     
-    // Search the full class lineage for the skill
+ // Search the full class lineage for the skill
     const lineage = classSystem.getLineage(userClass.id);
     let targetSkill = null;
     let foundInClassName = null;
 
     const cleanSearch = skillId.replace(/[\s_]/g, "").toLowerCase();
 
-    // 💡 FIX (BUG 5: "skill up rally" skilled up "rallying cry"):
-    // The old matcher used `cleanName.includes(cleanSearch)` which is a
-    // SUBSTRING match. "rally" matches "rallyingcry" (from "Rallying Cry"),
-    // so the wrong skill was returned. Now we do TWO passes:
-    //   Pass 1: EXACT match on skill id OR skill name (case-insensitive,
-    //           whitespace-insensitive).
-    //   Pass 2: Only if pass 1 finds nothing, fall back to substring match.
-    // This ensures `.g skill up rally` finds the skill literally named
-    // "Rally" before it considers "Rallying Cry".
+ // FIX (BUG 5: "skill up rally" skilled up "rallying cry"):
+ // The old matcher used `cleanName.includes(cleanSearch)` which is a
+ // SUBSTRING match. "rally" matches "rallyingcry" (from "Rallying Cry"),
+ // so the wrong skill was returned. Now we do TWO passes:
+ // Pass 1: EXACT match on skill id OR skill name (case-insensitive,
+ // whitespace-insensitive).
+ // Pass 2: Only if pass 1 finds nothing, fall back to substring match.
+ // This ensures `.g skill up rally` finds the skill literally named
+ // "Rally" before it considers "Rallying Cry".
 
-    // ── Pass 1: exact match ──
+ // -- Pass 1: exact match --
     for (const classId of lineage) {
         const tree = skillTree.SKILL_TREES[classId.toUpperCase()];
         if (!tree) continue;
@@ -238,7 +238,7 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
         if (targetSkill) break;
     }
 
-    // ── Pass 2: substring fallback (only if no exact match) ──
+ // -- Pass 2: substring fallback (only if no exact match) --
     if (!targetSkill) {
         for (const classId of lineage) {
             const tree = skillTree.SKILL_TREES[classId.toUpperCase()];
@@ -285,10 +285,10 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
         return;
     }
     
-    // 🏆 RANK GATE: T3 skills require B rank, T4/Ascended skills require A rank
-    // Grace period: if already unlocked (currentLevel > 0), allow use but block upgrades
-    // 💡 QA FIX: was missing 'GOD' - GOD-rank players got indexOf=-1, treated
-    // as below F-rank, and were blocked from learning ANY T3/T4 skills.
+ // RANK GATE: T3 skills require B rank, T4/Ascended skills require A rank
+ // Grace period: if already unlocked (currentLevel > 0), allow use but block upgrades
+ // QA FIX: was missing 'GOD' - GOD-rank players got indexOf=-1, treated
+ // as below F-rank, and were blocked from learning ANY T3/T4 skills.
     const RANK_ORDER = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'GOD'];
     const userRank = user.adventurerRank || 'F';
     const userRankIdx = RANK_ORDER.indexOf(userRank);
@@ -297,13 +297,13 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
     
     if ((skillTier >= 4 || isAscendedSkill) && userRankIdx < RANK_ORDER.indexOf('A')) {
         if (currentLevel === 0) {
-            // Block initial unlock
+ // Block initial unlock
             await sock.sendMessage(chatId, {
                 text: `🔒 *${targetSkill.name}* is a Tier 4 Ascended skill.\n\n⚠️ *Rank Required:* A rank or higher\n📊 *Your Rank:* ${userRank}\n\nReach A rank through dungeon progression to unlock this skill.`
             });
             return;
         } else {
-            // Grace period: already unlocked, warn but allow use - block further upgrades
+ // Grace period: already unlocked, warn but allow use - block further upgrades
             await sock.sendMessage(chatId, {
                 text: `⚠️ *${targetSkill.name}* is a Tier 4 Ascended skill.\n\nYou unlocked it before the rank system was enforced, so you can still use it - but upgrades are locked until you reach *A rank*.\n\n📊 *Your Rank:* ${userRank} (need A)`
             });
@@ -338,10 +338,10 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
     
     user.skills[targetSkill.id] = currentLevel + 1;
     user.skillPoints -= cost;
-    // 💡 FIX 2026-08-31: record the ACTUAL cost paid so respec refunds are
-    // exact. Without this ledger, calculateSpentPoints recomputed costs from
-    // the CURRENT (evolved) class schedule - starter-class prices (1pt/level)
-    // refunded at evolved-class rates ([2,3,4,5,6]...) = free skill points.
+ // FIX record the ACTUAL cost paid so respec refunds are
+ // exact. Without this ledger, calculateSpentPoints recomputed costs from
+ // the CURRENT (evolved) class schedule - starter-class prices (1pt/level)
+ // refunded at evolved-class rates ([2,3,4,5,6]...) = free skill points.
     if (!user.skillSpend || typeof user.skillSpend !== 'object') user.skillSpend = {};
     user.skillSpend[targetSkill.id] = (user.skillSpend[targetSkill.id] || 0) + cost;
     economy.saveUser(senderJid);
@@ -351,9 +351,9 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
 
     const heritageNote = (foundInClassName !== userClass?.name) ? `_(${foundInClassName} Heritage)_\n` : '';
 
-    // ── SKILLUP card (primary, 2026-09-14 owner: "make the skill upgrade an
-    // image card as well") - giant tier-accented skill medallion, level pips,
-    // THE PATH effect rows. Falls back to the plain text below.
+ // -- SKILLUP card (primary, "make the skill upgrade an
+ // image card as well") - giant tier-accented skill medallion, level pips,
+ // THE PATH effect rows. Falls back to the plain text below.
     let upBuf = null;
     try {
         const goService = require('../utils/goImageService');
@@ -374,11 +374,11 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
         }
         upBuf = await goService.generatePortraitCard({
             kind: 'SKILLUP',
-            // 🎨 2026-10-11 asset overhaul: per-skill artwork inside the
-            // medallion (Go service loads core/rpgasset/skills/<icon>.png).
-            // Older Go binaries ignore the field - graceful degradation.
+ // asset overhaul: per-skill artwork inside the
+ // medallion (Go service loads core/rpgasset/skills/<icon>.png).
+ // Older Go binaries ignore the field - graceful degradation.
             icon: (() => { try { return require('../rpg/skillAssets').skillArtFile(targetSkill); } catch (e) { return null; } })() || undefined,
-            // 🧩 SPRITE CONSISTENCY 2026-09-17: hero sprite fields.
+ // SPRITE CONSISTENCY hero sprite fields.
             playerClass: String((userClass && userClass.id) || '').toUpperCase(),
             playerIndex: Math.max(0, Math.floor(Number(user && user.spriteIndex) || 0)),
             style: (() => { try { const _su = economy.getUser(senderJid); return (_su && _su.cardStyle) || 0; } catch (e) { return 0; } })(),
@@ -432,7 +432,7 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
 }
 
 // ==========================================
-// 🔄 RESET SKILLS
+// RESET SKILLS
 // ==========================================
 
 async function resetSkills(sock, chatId, senderJid) {
@@ -456,12 +456,12 @@ async function resetSkills(sock, chatId, senderJid) {
         return;
     }
 
-    // 💡 ECONOMY SINK (Item #4): scale reset cost with level². Previously
-    // a flat 500 Zeni - trivially cheap for a level-100 player with
-    // millions of Zeni. Now: level 10 = 50K, level 50 = 1.25M, level 100
-    // = 5M. This makes skill resets a meaningful Zeni sink at high levels
-    // while staying accessible for low-level players experimenting with
-    // their first class.
+ // ECONOMY SINK (Item #4): scale reset cost with level². Previously
+ // a flat 500 Zeni - trivially cheap for a level-100 player with
+ // millions of Zeni. Now: level 10 = 50K, level 50 = 1.25M, level 100
+ // = 5M. This makes skill resets a meaningful Zeni sink at high levels
+ // while staying accessible for low-level players experimenting with
+ // their first class.
     const RESET_COST = 500 * Math.max(1, level * level);
     const balance = economy.getBalance(senderJid);
     
@@ -472,12 +472,12 @@ async function resetSkills(sock, chatId, senderJid) {
         return;
     }
     
-    // Refund ALL invested points
+ // Refund ALL invested points
     const spentPoints = skillTree.calculateSpentPoints(user, userClass.id);
     const totalPoints = (user.skillPoints || 0) + spentPoints;
     user.skills = {};
-    // 💡 FIX 2026-08-31: clear the spend ledger with the skills - the refund
-    // already credited every recorded point.
+ // FIX clear the spend ledger with the skills - the refund
+ // already credited every recorded point.
     user.skillSpend = {};
     user.skillPoints = totalPoints;
     economy.removeMoney(senderJid, RESET_COST);
@@ -489,10 +489,10 @@ async function resetSkills(sock, chatId, senderJid) {
 }
 
 // ==========================================
-// 📝 ABILITY EFFECT TEXT (2026-09-16)
-//    effect object -> one short readable line. This helper was referenced
-//    by the abilities text/card builders but never defined, which made
-//    every .abilities call die with "abilityEffectText is not defined".
+// ABILITY EFFECT TEXT
+// effect object -> one short readable line. This helper was referenced
+// by the abilities text/card builders but never defined, which made
+// every .abilities call die with "abilityEffectText is not defined".
 // ==========================================
 const ABILITY_CC_NAME = {
     stun: 'Stun', slow: 'Slow', freeze: 'Freeze', silence: 'Silence',
@@ -515,10 +515,10 @@ function abilityEffectText(effect) {
     const dot = ABILITY_DOT_NAME[String(effect.dot || '').toLowerCase()] || human(effect.dot);
     const buff = human(effect.buffType);
     const debuff = human(effect.debuffType);
-    // 💡 FIX (tester issue 1c4322): damage skills carry their power in
-    // `effect.multiplier` (a fraction of ATK/MAG), not `effect.value` - the
-    // abilities list showed "Deals damage" with no numbers. Render the
-    // multiplier whenever present, falling back to flat value.
+ // FIX (tester issue 1c4322): damage skills carry their power in
+ // `effect.multiplier` (a fraction of ATK/MAG), not `effect.value` - the
+ // abilities list showed "Deals damage" with no numbers. Render the
+ // multiplier whenever present, falling back to flat value.
     const mult = Number(effect.multiplier);
     const atkWord = effect.damageType === 'magic' ? 'MAG' : effect.damageType === 'true' ? 'TRUE' : 'ATK';
     const powerTxt = (Number.isFinite(mult) && mult > 0)
@@ -600,13 +600,13 @@ function abilityEffectText(effect) {
 }
 
 // ==========================================
-// 📋 VIEW ABILITIES (COMBAT LIST)
+// VIEW ABILITIES (COMBAT LIST)
 // ==========================================
 
 // ==========================================
-// 🔎 ABILITY INSPECTION (2026-10-11, owner overhaul brief)
-//    `.j abilities <number|id|name>` -> stylised skill card with artwork,
-//    tier, stats and the skill's REAL rune sockets (runeSystem slot rules).
+// ABILITY INSPECTION (owner overhaul brief)
+// `.j abilities <number|id|name>` -> stylised skill card with artwork,
+// tier, stats and the skill's REAL rune sockets (runeSystem slot rules).
 // ==========================================
 const _abilityCards = () => require('../rpg/abilityCards');
 
@@ -631,10 +631,10 @@ async function sendAbilityInspection(sock, chatId, senderJid, senderName, ctx0) 
     const atkWord = effect.damageType === 'magic' ? 'MAG' : effect.damageType === 'true' ? 'TRUE' : 'ATK';
     const damageLine = (Number.isFinite(Number(effect.multiplier)) && Number(effect.multiplier) > 0)
         ? `${Math.round(Number(effect.multiplier) * 100)}% ${atkWord}`
-        : (effect.value !== undefined && effect.value !== null ? `${effect.value}` : '—');
+        : (effect.value !== undefined && effect.value !== null ? `${effect.value}` : '-');
 
-    // 💡 v2 card (2026-10-12): unlock requirement from the REAL tree data
-    // (`requires: { <skillId>: <level> }`) + the skill's own flavor line.
+ // v2 card: unlock requirement from the REAL tree data
+ // (`requires: { <skillId>: <level> }`) + the skill's own flavor line.
     let requiresText = null;
     try {
         const req = ability.requires || (ability.skill && ability.skill.requires);
@@ -687,7 +687,7 @@ async function sendAbilityInspection(sock, chatId, senderJid, senderName, ctx0) 
             ? sockets.filter(Boolean).map((r) => `${runeSystem.RUNE_TYPES[r.type]?.icon || '💎'} ${runeSystem.RUNE_TYPES[r.type]?.name || r.type} (${runeSystem.RUNE_TIERS[r.tier]?.name || r.tier}) \`${r.runeId}\``).join('\n')
             : '_No runes socketed yet._';
         const caption = getBotMarker() +
-            `🔍 *${ability.name}* — Lv.${ability.level || 0}/${ability.maxLevel || 1}\n` +
+            `🔍 *${ability.name}* - Lv.${ability.level || 0}/${ability.maxLevel || 1}\n` +
             `${abilityEffectText(effect)}\n\n` +
             `💎 Rune sockets: *${usedTxt}/${slotCount}*\n${socketLine}\n\n` +
             `💡 \`${getPrefix()} rune socket <rune> ${skillId}\` • \`${getPrefix()} rune slots ${skillId}\``;
@@ -695,9 +695,9 @@ async function sendAbilityInspection(sock, chatId, senderJid, senderName, ctx0) 
         return;
     }
 
-    // text fallback (card failed: memory pressure / canvas error)
+ // text fallback (card failed: memory pressure / canvas error)
     const usedTxt = sockets.filter(Boolean).length;
-    let msg = `🔍 *${ability.name}* — Lv.${ability.level || 0}/${ability.maxLevel || 1}\n`;
+    let msg = `🔍 *${ability.name}* - Lv.${ability.level || 0}/${ability.maxLevel || 1}\n`;
     msg += `tier: ${ability.tier || 1}${ability.isUltimate ? ' (ultimate)' : ''}${ability.isAscended ? ' (ascended)' : ''}\n`;
     msg += `⚡ ${ability.cost || 0}${ability.cooldown ? ` | ⏱️ CD:${ability.cooldown}` : ''}\n`;
     const effLine = abilityEffectText(effect);
@@ -715,7 +715,7 @@ async function sendAbilityInspection(sock, chatId, senderJid, senderName, ctx0) 
 /**
  * Data for the `.j rune sockets` board: the player's learned skills that have
  * rune slots, each with its filled/empty sockets. Socket capacity follows
- * runeSystem.getSkillSlotCount (T1=1, T2=2, T3+=3) — never invented.
+ * runeSystem.getSkillSlotCount (T1=1, T2=2, T3+=3) - never invented.
  */
 async function getSocketBoardData(senderJid) {
     const economyMod = economy;
@@ -777,9 +777,9 @@ async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
     const user = economy.getUser(senderJid);
     const userClass = economy.getUserClass(senderJid);
     const classSystem = require('../rpg/classSystem');
-    // r6 fix: the card payload used `level` but this function never defined
-    // it - every .j abilities card render threw "level is not defined" and
-    // silently fell back to the text list.
+ // r6 fix: the card payload used `level` but this function never defined
+ // it - every .j abilities card render threw "level is not defined" and
+ // silently fell back to the text list.
     const level = progression.getLevel(senderJid);
     
     if (!userClass) {
@@ -789,7 +789,7 @@ async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
     
     const lineage = classSystem.getLineage(userClass.id);
     
-    // Collect ALL learned skills, grouped by class origin
+ // Collect ALL learned skills, grouped by class origin
     const abilityGroups = [];
     const seen = new Set();
     
@@ -829,10 +829,10 @@ async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
         }
     }
 
-    // 💡 FIX §2.11: Deduplicate mirrored/borrowed abilities against learned ones.
-    // Previously, borrowedSkills were added without checking the `seen` Set,
-    // so a skill that was both learned (via skill tree) AND borrowed (via mirror)
-    // would appear twice in the abilities list.
+ // FIX §2.11: Deduplicate mirrored/borrowed abilities against learned ones.
+ // Previously, borrowedSkills were added without checking the `seen` Set,
+ // so a skill that was both learned (via skill tree) AND borrowed (via mirror)
+ // would appear twice in the abilities list.
     const mirroredAbilities = (user.borrowedSkills || [])
         .filter(s => !seen.has(s.id))  // Skip if already in learned abilities
         .map(s => ({ ...s, level: 1, isMirrored: true }));
@@ -845,25 +845,25 @@ async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
         return;
     }
     
-    // ── ABILITIES card (2026-09-16 redesign) ──
-    // The card is the player's CODEX: identity comes from the BEGINNER class
-    // (Combat Codex / Hunter's Ledger / Ability Grimoire / Practitioner's
-    // Codex), effect runes come from the REAL skill schema, and pagination
-    // keeps 20+ skill collections readable (12 rows/page).
+ // -- ABILITIES card (redesign) --
+ // The card is the player's CODEX: identity comes from the BEGINNER class
+ // (Combat Codex / Hunter's Ledger / Ability Grimoire / Practitioner's
+ // Codex), effect runes come from the REAL skill schema, and pagination
+ // keeps 20+ skill collections readable (12 rows/page).
     const BEGINNER_DOC = {
         FIGHTER: { title: 'COMBAT CODEX', quote: '"Every scar is a lesson. Every battle, a page."' },
         SCOUT: { title: "HUNTER'S LEDGER", quote: '"The prey is already dead. It simply hasn\'t realized it yet."' },
         APPRENTICE: { title: 'ABILITY GRIMOIRE', quote: '"Every spell is a question the world must answer."' },
         ACOLYTE: { title: "PRACTITIONER'S CODEX", quote: '"Faith is the first armor. Devotion is the blade."' },
     };
-    // DejaVu-safe symbols only (verified glyph coverage on the renderer host).
+ // DejaVu-safe symbols only (verified glyph coverage on the renderer host).
     const RUNE_MAP = {
         stun: '✦', slow: '✺', freeze: '❄', burn: '♨', bleed: '⚔', poison: '☠',
         dot: '✥', heal: '✚', buff: '▲', debuff: '▼', shield: '◈', aoe: '✷',
         execute: '⚡', passive: '❖', drain: '⨀', summon: '⚑',
     };
-    // CARD payload tags: theme card faces carry no emoji glyphs, so the
-    // card gets ASCII effect tags while the text message keeps the runes.
+ // CARD payload tags: theme card faces carry no emoji glyphs, so the
+ // card gets ASCII effect tags while the text message keeps the runes.
     const CARD_TAGS = {
         stun: 'STUN', slow: 'SLOW', freeze: 'FRZ', burn: 'BURN', bleed: 'BLD', poison: 'PSN',
         dot: 'DOT', heal: 'HEAL', buff: 'BUFF', debuff: 'DBF', shield: 'SHLD', aoe: 'AOE',
@@ -912,7 +912,7 @@ async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
     const beginnerId = String(lineage[lineage.length - 1] || '').toUpperCase();
     const doc = BEGINNER_DOC[beginnerId] || { title: 'ABILITY GRIMOIRE', quote: '"Every skill is a story the body remembers."' };
 
-    // ── pagination: flatten groups → 12 rows per page ──
+ // -- pagination: flatten groups → 12 rows per page --
     const PAGE_SIZE = 12;
     const allRows = [];
     for (const group of abilityGroups) {
@@ -920,11 +920,11 @@ async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
     }
     for (const ability of mirroredAbilities) allRows.push({ group: null, ability });
 
-    // ── 🔎 INSPECTION MODE (2026-10-11): the default inspection view ──
-    // `.j abilities <number|id|name>` resolves against this player's codex
-    // (numbers = the list numbering, ids = exact, names = exact then substring)
-    // and renders the stylised inspection card. Anything that doesn't resolve
-    // falls through to the legacy list/pagination below.
+ // -- INSPECTION MODE: the default inspection view --
+ // `.j abilities <number|id|name>` resolves against this player's codex
+ // (numbers = the list numbering, ids = exact, names = exact then substring)
+ // and renders the stylised inspection card. Anything that doesn't resolve
+ // falls through to the legacy list/pagination below.
     if (pageArg !== undefined && pageArg !== null && String(pageArg).trim() !== '') {
         const q = String(pageArg).trim();
         let hit = null;
@@ -945,7 +945,7 @@ async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
             });
             return;
         }
-        // numeric arg beyond the codex -> treat as a page request (legacy)
+ // numeric arg beyond the codex -> treat as a page request (legacy)
         if (!/^\d{1,3}$/.test(q)) {
             const nq = q.toLowerCase().replace(/[^a-z0-9_]+/g, '');
             if (nq.length >= 3) {
@@ -1012,7 +1012,7 @@ async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
     let abBuf = null;
     try {
         const goService = require('../utils/goImageService');
-        // group the PAGE slice - the card never overflows, 20+ skills OK
+ // group the PAGE slice - the card never overflows, 20+ skills OK
         const pageGroups = [];
         for (const row of pageRows) {
             const key = row.group ? row.group.className : '__MIRRORED__';
@@ -1046,7 +1046,7 @@ async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
         if (pageGroups.length) {
             abBuf = await goService.generatePortraitCard({
                 kind: 'ABILITIES',
-                // 🧩 SPRITE CONSISTENCY 2026-09-17: hero sprite fields.
+ // SPRITE CONSISTENCY hero sprite fields.
                 playerClass: String((userClass && userClass.id) || '').toUpperCase(),
                 playerIndex: Math.max(0, Math.floor(Number(user && user.spriteIndex) || 0)),
                 style: (() => { try { return (user && user.cardStyle) || 0; } catch (e) { return 0; } })(),
@@ -1067,8 +1067,8 @@ async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
     }
 
     if (abBuf && abBuf.length > 100) {
-        // WhatsApp hard-caps image captions at 1024 chars - same rule as the
-        // skill tree: the full legacy list rides along, cut only if huge.
+ // WhatsApp hard-caps image captions at 1024 chars - same rule as the
+ // skill tree: the full legacy list rides along, cut only if huge.
         const head = abilitiesText.length > 980 ? abilitiesText.slice(0, 977) + '…' : abilitiesText;
         await sock.sendMessage(chatId, {
             image: abBuf,
@@ -1082,7 +1082,7 @@ async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
 }
 
 // ==========================================
-// 🔮 LEARN SKILL (Essence Mirror)
+// LEARN SKILL (Essence Mirror)
 // ==========================================
 
 async function learnSkill(sock, chatId, senderJid, skillId) {
@@ -1105,13 +1105,13 @@ async function learnSkill(sock, chatId, senderJid, skillId) {
 
     const cleanSearch = skillId.replace(/[\s_]/g, "").toLowerCase();
 
-    // 💡 BUG-06 fix: apply the same two-pass matcher (exact-then-substring)
-    // as upgradeSkill. The old single-pass matcher used `cleanName.includes(cleanSearch)`
-    // which matched 'Rallying Cry' when the user typed 'rally', 'Holy Fire' when
-    // the user typed 'fire', etc. Now Pass 1 tries exact match on skill id OR
-    // name; Pass 2 falls back to substring only if no exact match.
+ // BUG-06 fix: apply the same two-pass matcher (exact-then-substring)
+ // as upgradeSkill. The old single-pass matcher used `cleanName.includes(cleanSearch)`
+ // which matched 'Rallying Cry' when the user typed 'rally', 'Holy Fire' when
+ // the user typed 'fire', etc. Now Pass 1 tries exact match on skill id OR
+ // name; Pass 2 falls back to substring only if no exact match.
 
-    // ── Pass 1: exact match across non-lineage classes ──
+ // -- Pass 1: exact match across non-lineage classes --
     for (const [classId, classData] of Object.entries(skillTree.SKILL_TREES)) {
         if (lineage.includes(classId)) continue;
         for (const [, treeData] of Object.entries(classData.trees)) {
@@ -1129,7 +1129,7 @@ async function learnSkill(sock, chatId, senderJid, skillId) {
         if (targetSkill) break;
     }
 
-    // ── Pass 2: substring fallback (only if no exact match) ──
+ // -- Pass 2: substring fallback (only if no exact match) --
     if (!targetSkill) {
         for (const [classId, classData] of Object.entries(skillTree.SKILL_TREES)) {
             if (lineage.includes(classId)) continue;
@@ -1183,7 +1183,7 @@ async function learnSkill(sock, chatId, senderJid, skillId) {
 }
 
 // ==========================================
-// 🔄 EVOLVE CLASS
+// EVOLVE CLASS
 // ==========================================
 
 async function handleEvolve(sock, chatId, senderJid, senderName, args) {
@@ -1207,9 +1207,9 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
         {
             gold: user.wallet || 0,
             goldEarned: user.stats?.totalEarned || 0,
-            victories: user.questsWon || user.stats?.questsWon || 0, // 💡 QA FIX: was falling back to gamesWon (gambling wins), not quest wins
+            victories: user.questsWon || user.stats?.questsWon || 0, // QA FIX: was falling back to gamesWon (gambling wins), not quest wins
             undeadKills: user.stats?.undeadKills || 0,
-            kills: user.stats?.kills || 0, // 💡 FIX: pass total lifetime kills (DOOMSLAYER req)
+            kills: user.stats?.kills || 0, // FIX: pass total lifetime kills (DOOMSLAYER req)
         }
     );
 
@@ -1291,7 +1291,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
         });
     }
 
-    // === TRIALS SYSTEM: Trigger Boss Fight if required ===
+ // === TRIALS SYSTEM: Trigger Boss Fight if required ===
     if (chosen.requirement?.trialBoss && !(user.completedTrials || []).includes(chosen.requirement.trialBoss)) {
         const guildAdventure = require('../rpg/guildAdventure');
         const sessionKey = `${chatId}_${senderJid}`;
@@ -1300,23 +1300,23 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
             return sock.sendMessage(chatId, { text: `❌ Finish your current adventure before starting your Class Trial!` });
         }
 
-        // ───────────────────────────────────────────────────────────────────
-        //  💡 DRAGON GOD UNIQUENESS GATE
-        //  Only ONE player may ever hold the DRAGON_GOD class - the first
-        //  to defeat the Leviathan. Once crowned, the path closes forever
-        //  and all future Dragon-class ascenders become DRAGON_LORD instead.
-        //  We check here BEFORE the trial starts so we can redirect them
-        //  to the Dragon Lord path (Leviathan Spawn Alpha trial) rather
-        //  than waste their time fighting an unwinnable-for-the-title boss.
-        // ───────────────────────────────────────────────────────────────────
+ // -------------------------------------------------------------------
+ // DRAGON GOD UNIQUENESS GATE
+ // Only ONE player may ever hold the DRAGON_GOD class - the first
+ // to defeat the Leviathan. Once crowned, the path closes forever
+ // and all future Dragon-class ascenders become DRAGON_LORD instead.
+ // We check here BEFORE the trial starts so we can redirect them
+ // to the Dragon Lord path (Leviathan Spawn Alpha trial) rather
+ // than waste their time fighting an unwinnable-for-the-title boss.
+ // -------------------------------------------------------------------
         if (chosen.id === 'DRAGON_GOD') {
             try {
                 const DragonGod = require('../models/DragonGod');
                 const existing = await DragonGod.getCurrent();
                 if (existing) {
-                    // The Leviathan is dead. The path is closed.
-                    // Find the Dragon Lord class definition so we can show
-                    // the player their alternative path.
+ // The Leviathan is dead. The path is closed.
+ // Find the Dragon Lord class definition so we can show
+ // the player their alternative path.
                     const dragonLord = classSystem.getClassById('DRAGON_LORD');
                     const godName = existing.dragonGodName || economy.getDisplayName(existing.dragonGodJid);
                     let redirectMsg = `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
@@ -1339,16 +1339,16 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
                     }
                     return sock.sendMessage(chatId, { text: redirectMsg });
                 }
-                // No existing Dragon God - this player is attempting the
-                // FIRST ascension. Let them proceed, but flag it.
+ // No existing Dragon God - this player is attempting the
+ // FIRST ascension. Let them proceed, but flag it.
                 await sock.sendMessage(chatId, {
                     text: `🌊 *FIRST ASCENSION ATTEMPT* 🌊\n\nNo Dragon God has yet been crowned. If you defeat the *Leviathan*, you will become the *one and only* Dragon God - forever. The path will close for all who follow.\n\nThe Leviathan stirs...`
                 });
             } catch (e) {
                 console.error('[DragonGod] Uniqueness check failed:', e.message);
-                // Fail-open is dangerous here - if the DB check errors, we
-                // could accidentally let two players race to Dragon God.
-                // Fail-closed: block the trial until the check works.
+ // Fail-open is dangerous here - if the DB check errors, we
+ // could accidentally let two players race to Dragon God.
+ // Fail-closed: block the trial until the check works.
                 return sock.sendMessage(chatId, {
                     text: `❌ Could not verify Dragon God uniqueness. Please try again in a moment.\n_Error: ${e.message}_`
                 });
@@ -1358,12 +1358,12 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
         const trialMsg = `⚔️ *CLASS TRIAL INITIATED* ⚔️\n\nTo evolve into a *${chosen.name}*, you must first defeat the **${chosen.requirement.trialBoss.replace('_', ' ')}**!\n\nPrepare yourself... the battle begins in 5 seconds.`;
         await sock.sendMessage(chatId, { text: trialMsg });
 
-        // 💡 FIX: wrap trial kickoff in try/catch. If initAdventure throws
-        // (transient state issue, corrupted gameStates entry, downstream
-        // startCombat error), the player would otherwise see "CLASS TRIAL
-        // INITIATED" then nothing - no error reply, no follow-up. The
-        // unhandled promise rejection was silently swallowed by the
-        // engine's outer try/catch (engine.js:20355-20366).
+ // FIX: wrap trial kickoff in try/catch. If initAdventure throws
+ // (transient state issue, corrupted gameStates entry, downstream
+ // startCombat error), the player would otherwise see "CLASS TRIAL
+ // INITIATED" then nothing - no error reply, no follow-up. The
+ // unhandled promise rejection was silently swallowed by the
+ // engine's outer try/catch (engine.js:20355-20366).
         setTimeout(async () => {
             try {
                 const result = await guildAdventure.initAdventure(
@@ -1398,12 +1398,11 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
         return;
     }
 
-    // === EVOLUTION: PRESERVE SKILLS MODEL (If no trial or trial already won) ===
-    // Verify all resource deductions succeed before mutating class - otherwise
-    // the user could end up evolved without paying the cost (or losing the
-    // stone). Previously the return values of removeItem and removeMoney
-    // were ignored, so a race condition or stale inventory could let users
-    // evolve for free.
+ // === EVOLUTION: PRESERVE SKILLS MODEL (If no trial or trial already won) ===
+ // the user could end up evolved without paying the cost (or losing the
+ // stone). Previously the return values of removeItem and removeMoney
+ // were ignored, so a race condition or stale inventory could let users
+ // evolve for free.
     const stoneRemoved = inventorySystem.removeItem(senderJid, requiredStone, 1);
     if (!stoneRemoved.success) {
         return sock.sendMessage(chatId, {
@@ -1413,7 +1412,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     if (chosen.requirement?.item) {
         const itemRemoved = inventorySystem.removeItem(senderJid, chosen.requirement.item, 1);
         if (!itemRemoved.success) {
-            // Roll back the stone removal
+ // Roll back the stone removal
             await inventorySystem.addItem(senderJid, requiredStone, 1);
             return sock.sendMessage(chatId, {
                 text: `❌ Failed to consume required item ${chosen.requirement.item} - evolution cancelled.`
@@ -1422,11 +1421,10 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     }
     const paid = chosen.evolutionCost > 0
       ? economy.removeMoney(senderJid, chosen.evolutionCost, `Evolved to ${chosen.name}`)
-      : true; // 💡 FIX: 17 T2 classes have evolutionCost: 0. removeMoney
-              // returns false for amount <= 0, which aborted every free
-              // T2 evolution. Skip the call entirely when cost is 0.
+      : true; // FIX: 17 T2 classes have evolutionCost: 0. removeMoney
+ // T2 evolution. Skip the call entirely when cost is 0.
     if (!paid) {
-        // Roll back the item removals
+ // Roll back the item removals
         await inventorySystem.addItem(senderJid, requiredStone, 1);
         if (chosen.requirement?.item) {
             await inventorySystem.addItem(senderJid, chosen.requirement.item, 1);
@@ -1438,33 +1436,31 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     
     const oldClassName = currentClass?.name || 'Unknown';
 
-    // Calculate HP ratio before changing class to scale it properly
+ // Calculate HP ratio before changing class to scale it properly
     const oldMaxHp = progression.getBaseStats(senderJid, user.class).hp;
     const currentHp = user.stats?.hp || oldMaxHp;
     const ratio = Math.min(1, currentHp / oldMaxHp);
 
     user.class = chosen.id;
 
-    // 💡 BUG FIX: Update actual User base stats in the database
-    // Ensure the user stats object exists
+ // BUG FIX: Update actual User base stats in the database
     if (!user.stats) user.stats = { hp: 100, maxHp: 100, level: 1, xp: 0 };
     
-    // Re-initialize base stats to the new class's defaults
-    // (Progression.getBaseStats will combine these with level scaling)
+ // Re-initialize base stats to the new class's defaults
+ // (Progression.getBaseStats will combine these with level scaling)
     Object.assign(user.stats, chosen.stats);
 
-    // Scale current and max HP based on level growth
+ // Scale current and max HP based on level growth
     const newMaxHp = progression.getBaseStats(senderJid, chosen.id).hp;
     user.stats.hp = Math.round(newMaxHp * ratio);
     user.stats.maxHp = newMaxHp;
 
-    // PRESERVE SKILLS: Do not wipe user.skills
+ // PRESERVE SKILLS: Do not wipe user.skills
     if (!user.skills) user.skills = {};
     
-    // Initialize skill points if undefined/null
     skillTree.ensureSkillPointsInitialized(user, user.class, level);
     
-    // Grant Bonus Points for Evolution Tier
+ // Grant Bonus Points for Evolution Tier
     const bonusPoints = nextTier === 'ASCENDED' ? 10 : 5;
     user.skillPoints = (user.skillPoints || 0) + bonusPoints;
     
@@ -1497,15 +1493,15 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
     
     successMsg += `🌳 \`${getPrefix()} skill tree\` to continue your path!`;
 
-    // 🎴 2026-09-12: TRIAL portrait card (kind=TRIAL) - same lamoot assets,
-    // portrait orientation ("same assets but a different orientation").
-    // Non-fatal - text fallback below.
+ // TRIAL portrait card (kind=TRIAL) - same lamoot assets,
+ // portrait orientation ("same assets but a different orientation").
+ // Non-fatal - text fallback below.
     try {
         const goService = require('../utils/goImageService');
         if (await goService.isHealthy()) {
             const evolveBuf = await goService.generatePortraitCard({
                 kind: 'TRIAL',
-                // 🧩 SPRITE CONSISTENCY 2026-09-17: show the NEW class sprite.
+ // SPRITE CONSISTENCY show the NEW class sprite.
                 playerClass: String((chosen && chosen.id) || '').toUpperCase(),
                 playerIndex: Math.max(0, Math.floor(Number(user && user.spriteIndex) || 0)),
                 nickname: economy.getDisplayName(senderJid),

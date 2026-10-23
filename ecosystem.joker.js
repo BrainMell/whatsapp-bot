@@ -1,23 +1,23 @@
-// wa-joker dedicated ecosystem (Box 2) — round-20 (2026-10-10)
+// wa-joker dedicated ecosystem (Box 2) - round-20
 // REPLACES the raw pm2 cron_restart (was '0 5 * * *'), which killed any
-// in-memory dungeon/abyss/PVP run in progress at 05:00 UTC (owner:
+// in-memory dungeon/abyss/PVP run in progress at 05:00 UTC (
 // "the games keep quiting mid way?????? It happens alot"). The daily RSS
 // creep bound is preserved by scripts/gated_daily_restart.sh (crontab
 // 05:10 UTC), which defers until the bot has been chat-quiet for 180s.
-// Settings mirrored from the live pm2 config (2026-10-10T18:50Z) verbatim.
-// round-21 (2026-10-11T15:1xZ): 3 mid-run pm2 memory kills in 13 min
+// Settings mirrored from the live pm2 config verbatim.
+// round-21: 3 mid-run pm2 memory kills in 13 min
 // (14:34/14:44/14:47 UTC) during combat-card bursts. Kill-moment telemetry:
 // rss=401-426MB but heap only 176/185MB + external 39MB -> ~185MB is NATIVE
 // malloc retention (glibc arenas; combat spam 400 cmds/day, card bursts).
 // Fix: MALLOC_ARENA_MAX=2 + 16MB trim threshold (return free pages to OS),
 // cap 380M->430M for burst headroom (box has ~448MB avail + reclaimable cache).
-// round-22 (2026-10-20T03:1xZ): pm2 memory kills AGAIN, this time mid-`.j` bake.
+// round-22: pm2 memory kills AGAIN, this time mid-`.j` bake.
 // Owner fired `.j world` + `.j base` + `.j guild` back to back; the three
 // unqueued canvas bakes (base alone peaked rss=433MB > this 430M cap!) got
 // the process SIGINT'd mid-command twice in 25 minutes (boots 03:08:39 /
-// 03:11:58). Two-part fix: (a) 47-k9 serializes base/guildbase/room/atlas
+// 03:11:58). Two-part fix: (a) serializes base/guildbase/room/atlas
 // bakes through renderQueue (no more N-concurrent bake stacking), and (b)
-// this cap rises 430M->520M — a single cold bake legitimately peaks ~435MB,
+// this cap rises 430M->520M - a single cold bake legitimately peaks ~435MB,
 // so 430M left zero headroom even WITH serialization. 520M still keeps node
 // + ffmpeg + OS well inside 952MB + 2G swap; the RenderQ hard floor (140MB
 // MemAvailable) remains the real OOM guard.

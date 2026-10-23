@@ -1,4 +1,4 @@
-// QA: solo resume + abyss co-op + distraction charm + smoke bomb gate (2026-10-11)
+// QA: solo resume + abyss co-op + distraction charm + smoke bomb gate
 // Run: node scripts/qa_solo_resume_coop.js
 const path = require('path');
 process.chdir(path.join(__dirname, '..'));
@@ -9,14 +9,14 @@ function ok(cond, name) {
   else { fail++; console.log(`  ❌ ${name}`); }
 }
 
-console.log('— module load (no DB) —');
+console.log('- module load (no DB) -');
 let guildAdventure, abyssSystem;
 
 (async () => {
   guildAdventure = require('../core/rpg/guildAdventure');
   abyssSystem = require('../core/rpg/abyssSystem');
 
-  console.log('— exports —');
+  console.log('- exports -');
   ok(typeof guildAdventure.saveSoloSnapshot === 'function', 'guildAdventure.saveSoloSnapshot exported');
   ok(typeof guildAdventure.resumeSoloCombat === 'function', 'guildAdventure.resumeSoloCombat exported');
   ok(typeof guildAdventure.clearSoloSnapshot === 'function', 'guildAdventure.clearSoloSnapshot exported');
@@ -26,7 +26,7 @@ let guildAdventure, abyssSystem;
   ok(typeof abyssSystem.leaveCoopRun === 'function', 'abyssSystem.leaveCoopRun exported');
   ok(typeof abyssSystem.processCoopDeath === 'function', 'abyssSystem.processCoopDeath exported');
 
-  console.log('— items —');
+  console.log('- items -');
   const gaSrc = require('fs').readFileSync('core/rpg/guildAdventure.js', 'utf8');
   ok(gaSrc.includes('distraction_charm'), 'distraction_charm defined in CONSUMABLES');
   ok(gaSrc.includes('"distraction_charm"'), 'distraction_charm in SHOP_LIST');
@@ -36,7 +36,7 @@ let guildAdventure, abyssSystem;
   ok(gaSrc.includes('leaveCoopRun(_fleer.jid)'), 'co-op member flee leaves party only');
   ok(gaSrc.includes("processCoopDeath(state.abyssRun"), 'co-op party wipe uses processCoopDeath');
 
-  console.log('— engine wiring —');
+  console.log('- engine wiring -');
   const engSrc = require('fs').readFileSync('core/engine.js', 'utf8');
   ok(engSrc.includes('cmdArgs[1] === "resume" || cmdArgs[1] === "continue"'), '.j solo resume wired');
   ok(engSrc.includes("abyssSub === 'coop' || abyssSub === 'party'"), '.j abyss coop wired');
@@ -50,13 +50,13 @@ let guildAdventure, abyssSystem;
   const depSrc = require('fs').readFileSync('scripts/deploy_on_box.sh', 'utf8');
   ok(depSrc.includes('notify-deploy'), 'deploy script curls notify-deploy pre-restart');
 
-  console.log('— registry/menu sync —');
+  console.log('- registry/menu sync -');
   const reg = require('../core/utils/commandRegistry');
   const flat = JSON.stringify(reg);
   ok(flat.includes('abyss coop'), 'registry has abyss coop');
   ok(flat.includes('solo resume'), 'registry mentions solo resume');
 
-  console.log('— solo snapshot model —');
+  console.log('- solo snapshot model -');
   const SoloCombatSnapshot = require('../core/models/SoloCombatSnapshot');
   ok(!!SoloCombatSnapshot, 'SoloCombatSnapshot model loads');
   const doc = new SoloCombatSnapshot({ userId: 'qa@s.whatsapp.net', chatId: 'c@g.us', sessionKey: 'c@s.us_qa@s.whatsapp.net', enemies: [{ name: 'x' }] });

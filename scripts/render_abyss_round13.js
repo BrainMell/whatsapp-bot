@@ -1,11 +1,11 @@
-// Round-13 abyss samples (owner 02:56Z image brief — the Battle-Example round):
-//  A) Battle-Example formations: 1 / 2 / 3 enemies, player front-LEFT,
-//     enemy wing staggered down the RIGHT half, party arc behind the hero
-//  B) all six NEW bestiary ids solo (facing registry check: L/R/F)
-//  C) five NEW crimson-dusk backgrounds in rotation (F18..F25)
-//  D) boss-floor regression (F12/F15) — frozen boss composition untouched
-//  E) CLEARED result card regression
-// Run on-box: node scripts/render_abyss_round13.js  → scripts/render_out/abyss_r13/
+// Round-13 abyss samples (owner 02:56Z image brief - the Battle-Example round):
+// A) Battle-Example formations: 1 / 2 / 3 enemies, player front-LEFT,
+// enemy wing staggered down the RIGHT half, party arc behind the hero
+// B) all six NEW bestiary ids solo (facing registry check: L/R/F)
+// C) five NEW crimson-dusk backgrounds in rotation (F18..F25)
+// D) boss-floor regression (F12/F15) - frozen boss composition untouched
+// E) CLEARED result card regression
+// Run on-box: node scripts/render_abyss_round13.js → scripts/render_out/abyss_r13/
 const path = require('path');
 const fs = require('fs');
 const REPO = path.join(__dirname, '..');
@@ -52,7 +52,7 @@ const results = [];
         return r;
     };
 
-    // ═══ A) Battle-Example formations ═══
+ // === A) Battle-Example formations ===
     console.log('── A) formations ──');
     await shoot('r13_A1_single_gloombrute_f18.png', mkState({
         abyssFloor: 18,
@@ -79,7 +79,7 @@ const results = [];
         ],
     }));
 
-    // ═══ B) six NEW ids solo — facing registry ═══
+ // === B) six NEW ids solo - facing registry ===
     console.log('── B) new bestiary facing ──');
     const NEWS = [
         ['GLOOM BRUTE', 'B', 'F'], ['DUSK CRAWLER', 'B', 'L'], ['NIGHT WRAITH', 'A', 'F'],
@@ -96,7 +96,7 @@ const results = [];
         }));
     }
 
-    // ═══ C) five new backgrounds rotation F18..F25 ═══
+ // === C) five new backgrounds rotation F18..F25 ===
     console.log('── C) background rotation ──');
     for (let f = 18; f <= 25; f++) {
         const bg = abyssScene.bgFileForFloor(f, 'regular');
@@ -107,7 +107,7 @@ const results = [];
         }));
     }
 
-    // ═══ D) boss floors regression — frozen composition ═══
+ // === D) boss floors regression - frozen composition ===
     console.log('── D) boss regression ──');
     await shoot('r13_D_boss_f12.png', mkState({
         abyssFloor: 12,
@@ -118,7 +118,7 @@ const results = [];
         enemies: [Object.assign(mkEnemy('VOID TITAN', 15, 'SS', 1, 8000, 11000), { isBoss: true, bossId: 'VOID_TITAN' })],
     }));
 
-    // ═══ E) CLEARED result regression ═══
+ // === E) CLEARED result regression ===
     console.log('── E) result card ──');
     const clr = await abyssScene.renderAbyssResultCard({
         outcome: 'CLEARED', floor: 20, score: 2038, keptXp: 37795, keptGold: 25197,

@@ -1,5 +1,5 @@
 // ============================================
-// 🧪 QA: encounter scene flow — every ruins room type through the real
+// QA: encounter scene flow - every ruins room type through the real
 // dmRouter path at production head. Real Go renders (localhost:7860).
 // Run on box: node scripts/qa_scene_flow.js
 // ============================================
@@ -46,7 +46,7 @@ async function main() {
     const sent = [];
     const sock = { sendMessage: async (chatId, msg) => { sent.push({ chatId, msg }); }, groupMetadata: async () => ({ participants: [] }) };
 
-    // ── dynamic prefix check on a text path BEFORE the war starts ──
+ // -- dynamic prefix check on a text path BEFORE the war starts --
     sent.length = 0;
     try {
         await gw.handleGroupCommand(sock, 'qa@g.us', 'owner@s.whatsapp.net', 'Owner', ['rpg', 'status'], { prefix: '.s' });
@@ -56,7 +56,7 @@ async function main() {
     check('prefix: dynamic .s in rpg status', rpgText.includes('.s gw rpg on') && !rpgText.includes('.j gw'), rpgText.slice(0, 160));
     console.log('[qa] rpg status sends:', sent.length, 'first keys:', sent[0] ? Object.keys(sent[0].msg).join(',') : 'none');
 
-    // ── boot a war: start → join → forcestart ──
+ // -- boot a war: start → join → forcestart --
     for (const [who, args] of [['owner@s.whatsapp.net', ['start']], ['p1@s.whatsapp.net', ['join']], ['p2@s.whatsapp.net', ['join']], ['owner@s.whatsapp.net', ['forcestart']]]) {
         sent.length = 0;
         try { await gw.handleGroupCommand(sock, 'qa@g.us', who, 'Player', args, { prefix: '.s' }); } catch (e) { console.log('[qa] gw ' + args[1] + ' threw:', e.message); }
@@ -69,7 +69,7 @@ async function main() {
     const P1 = ev.players.find((p) => p.jid === 'p1@s.whatsapp.net');
     check('player deployed', !!P1 && !!P1.roomId, P1 && P1.roomId);
 
-    // find one room of each type (topology neighbors of P1 when possible)
+ // find one room of each type (topology neighbors of P1 when possible)
     const byType = {};
     for (const r of ev.rooms) if (!byType[r.type]) byType[r.type] = r;
     const types = ['puzzle', 'discovery', 'reward', 'hazard', 'lore', 'secret', 'anomaly', 'landmark', 'combat'];
@@ -83,7 +83,7 @@ async function main() {
     async function go(t, cmd, prep) {
         const r = byType[t];
         if (!r) return null;
-        // teleport P1 into a copy of the room, reset state
+ // teleport P1 into a copy of the room, reset state
         await GuildWarEvent.updateOne(
             { eventId: ev.eventId, 'players.jid': 'p1@s.whatsapp.net' },
             { $set: { 'players.$.roomId': r.key, 'players.$.status': 'active' } });
@@ -97,7 +97,7 @@ async function main() {
         return { out, room: room };
     }
 
-    // seed a real puzzle into the puzzle room payload
+ // seed a real puzzle into the puzzle room payload
     async function seedPuzzle(r) {
         const puzzles = require('../core/rpg/guildWar/puzzles');
         const rng = mapEngine.makeRng(`${ev.seed}:qa-puzzle:${r.key}`);
@@ -106,20 +106,19 @@ async function main() {
             { $set: { 'rooms.$.type': 'puzzle', 'rooms.$.payload': { puzzle: { kind: pz.kind, prompt: pz.prompt, answer: pz.answer, altAnswer: pz.altAnswer, normalize: undefined, attemptsUsed: 0 } } } });
     }
 
-    // ensure secret has NO boss so claim path works
     async function stripBoss(r) {
         await GuildWarEvent.updateOne({ eventId: ev.eventId, 'rooms.key': r.key },
             { $set: { 'rooms.$.payload.boss': false, 'rooms.$.payload.enemies': [] } });
     }
 
-    // ── puzzle: look → intro scene + game board; answer → cleared scene ──
+ // -- puzzle: look → intro scene + game board; answer → cleared scene --
     const pz = await go('puzzle', 'look', seedPuzzle);
     if (pz) {
         check('puzzle: intro scene image', Buffer.isBuffer(sent[0] && sent[0].msg.image), sent[0] && sent[0].msg.image ? `${sent[0].msg.image.length}B` : 'none');
         check('puzzle: caption text sent', !!(sent[0] && sent[0].msg.caption));
         const board = sent.find((s, i) => i > 0 && Buffer.isBuffer(s.msg.image));
         check('puzzle: game board card follows', !!board, board ? `${board.msg.image.length}B` : 'none');
-        // answer correctly (use the stored answer)
+ // answer correctly (use the stored answer)
         const fresh = await state.getEvent(ev.eventId, { fresh: true });
         const room = fresh.rooms.find((x) => x.key === byType.puzzle.key);
         const answer = room.payload && (room.payload.get ? room.payload.get('puzzle') : room.payload.puzzle);
@@ -127,7 +126,7 @@ async function main() {
         check('puzzle: solved shows changed room', Buffer.isBuffer(res && res.image), res && res.image ? `${res.image.length}B` : `text=${res && res.text ? res.text.slice(0, 60) : 'none'}`);
     }
 
-    // ── discovery: look → scene; dig → cleared scene ──
+ // -- discovery: look → scene; dig → cleared scene --
     for (const [t, cmd, name] of [['discovery', 'dig', 'dig'], ['reward', 'take', 'take'], ['lore', 'read', 'read'], ['anomaly', 'touch', 'touch']]) {
         const r = await go(t, cmd);
         if (!r) continue;
@@ -137,7 +136,7 @@ async function main() {
         check(`${t}: image in flow (intro or changed room)`, !!(retImg || sentImg), retImg ? `ret ${retImg.length}B` : (sentImg ? `sent ${sentImg.msg.image.length}B` : 'none'));
     }
 
-    // secret (no boss): claim
+ // secret (no boss): claim
     {
         const r = await go('secret', 'claim', stripBoss);
         if (r) {
@@ -146,7 +145,7 @@ async function main() {
         }
     }
 
-    // landmark: record
+ // landmark: record
     {
         const r = await go('landmark', 'record');
         if (r) {
@@ -155,7 +154,7 @@ async function main() {
         }
     }
 
-    // hazard: cross (dodge is probabilistic — accept either outcome, image may be cleared scene or none)
+ // hazard: cross (dodge is probabilistic - accept either outcome, image may be cleared scene or none)
     {
         const r = await go('hazard', 'cross');
         if (r) {
@@ -163,7 +162,7 @@ async function main() {
         }
     }
 
-    // ── combat: fight → real battle scene WITH square map (Go render) ──
+ // -- combat: fight → real battle scene WITH square map (Go render) --
     {
         const r = await go('combat', 'fight');
         if (r) {
@@ -178,7 +177,7 @@ async function main() {
         }
     }
 
-    // end the war quietly
+ // end the war quietly
     try { await gw.handleGroupCommand(sock, 'qa@g.us', 'owner@s.whatsapp.net', 'Owner', ['end'], { prefix: '.s' }); } catch (e) {}
 
     report();

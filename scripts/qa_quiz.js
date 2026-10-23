@@ -1,10 +1,10 @@
-// qa_quiz.js — CANONICAL post-overhaul suite (2026-10-11 dataset era).
-// The 2026-10-10 owner overhaul retired free-form franchise search: quizzes
+// qa_quiz.js - CANONICAL post-overhaul suite (dataset era).
+// The owner overhaul retired free-form franchise search: quizzes
 // are dataset-backed (games/comics/movies/series + logos/song/audio/random),
 // most questions are TYPED (players type the answer; q.alts aliases +
 // levenshtein typo tolerance), and logo rounds carry recognizability tiers.
 // The old free-form/Elden-Ring/Fandom suites (qa_quiz_audit/lore_live/
-// iterations/media/media2) were retired WITH the pipeline they tested —
+// iterations/media/media2) were retired WITH the pipeline they tested -
 // their still-valid units (quizConfig, quizBank) live on here.
 // Zero LLM needed: dataset questions are pre-verified at bake time.
 "use strict";
@@ -18,7 +18,7 @@ const ok = (c, label) => { if (c) { pass++; console.log("  ok -", label); } else
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const MARK = "\u200B";
 
-// hard-kill guard: v8 lesson — media-worker heartbeats keep the event loop
+// hard-kill guard: v8 lesson - media-worker heartbeats keep the event loop
 // alive and orphan QA processes. Normal completion clears this timer.
 const KILL = setTimeout(() => { console.error("HARD EXIT: QA exceeded 8 min (event loop kept alive)"); process.exit(2); }, 8 * 60 * 1000);
 
@@ -32,7 +32,7 @@ function mockSock() {
   };
 }
 
-// every quiz parks behind the ready gate (2026-09-28): fire confirmStart
+// every quiz parks behind the ready gate: fire confirmStart
 // (asker always passes the gate) until the first section is ACTIVE.
 async function waitSession(chat, timeoutMs = 120000, sock = null) {
   const t0 = Date.now();
@@ -88,12 +88,12 @@ const answerFor = (q) => (q.typed ? String(q.options[q.correct]) : "ABCD"[q.corr
 (async () => {
   console.log("════ 1. PARSE (dataset era contract) ════");
   {
-    // free-form search RETIRED — quoted + bare titles must capture retiredTitle
+ // free-form search RETIRED - quoted + bare titles must capture retiredTitle
     const p1 = quiz.parseQuizArgs('"Fullmetal Alchemist Brotherhood" 10 hard');
     ok(p1.retiredTitle === "Fullmetal Alchemist Brotherhood" && p1.count === 10 && p1.difficulty === "hard" && !p1.title, "quoted free-form title -> retiredTitle + count/diff kept");
     const p2 = quiz.parseQuizArgs("fmab 5 easy");
     ok(p2.retiredTitle === "fmab" && p2.count === 5 && p2.difficulty === "easy", "bare junk words -> retiredTitle");
-    // dataset categories (+ alias folding: tv->series, manga->comics, film->movies, game->games)
+ // dataset categories (+ alias folding: tv->series, manga->comics, film->movies, game->games)
     const cats = { games: "games", game: "games", gaming: "games", videogames: "games", comics: "comics", manga: "comics", comic: "comics", movies: "movies", film: "movies", films: "movies", series: "series", tv: "series", shows: "series", show: "series" };
     let catOK = true;
     for (const [word, mode] of Object.entries(cats)) {
@@ -101,7 +101,7 @@ const answerFor = (q) => (q.typed ? String(q.options[q.correct]) : "ABCD"[q.corr
       if (p.mode !== mode || p.title !== `__${mode}__` || p.count !== 8) { catOK = false; console.log("    !!", word, JSON.stringify(p)); }
     }
     ok(catOK, "all dataset aliases fold to the 4 categories with __title__ sentinels");
-    // special modes
+ // special modes
     const m1 = quiz.parseQuizArgs("logos 15");
     ok(m1.mode === "logos" && m1.title === "__logos__", "logos mode");
     const m2 = quiz.parseQuizArgs("song 10");
@@ -116,12 +116,12 @@ const answerFor = (q) => (q.typed ? String(q.options[q.correct]) : "ABCD"[q.corr
     ok(m5b.mode === "preplanned", "bare preplanned word works too");
     const m6 = quiz.parseQuizArgs("random 20");
     ok(m6.randomMode === true && m6.title === "__random__" && m6.count === 20, "random mode");
-    // retired flags absorbed silently with a note (muscle memory still starts)
+ // retired flags absorbed silently with a note (muscle memory still starts)
     const f1 = quiz.parseQuizArgs("series 8 hard -s cosmology");
     ok(f1.mode === "series" && f1.section === null && f1.notes.length === 1 && f1.difficulty === "hard", "retired -s flag absorbed with note, series still starts");
     const f2 = quiz.parseQuizArgs("games 8 -images 5");
     ok(f2.mode === "games" && f2.notes.length === 1 && f2.count === 8, "retired -images flag absorbed (arg swallowed too)");
-    // count/difficulty pops
+ // count/difficulty pops
     ok(quiz.parseQuizArgs("movies 99 h").count === 99, "count 99 passes (clamped at config layer)");
     const p5 = quiz.parseQuizArgs("comics 0 m");
     ok(p5.count === 1 && p5.notes.length === 1, "count clamp 0->1 with note");
@@ -220,7 +220,7 @@ const answerFor = (q) => (q.typed ? String(q.options[q.correct]) : "ABCD"[q.corr
     ok(!/cosmology/i.test(r2.message || ""), "usage card no longer documents retired -s sections");
   }
 
-  console.log("════ 7. DATASET SESSION E2E — series 5 (typed + MCQ + scoring) ════");
+  console.log("════ 7. DATASET SESSION E2E - series 5 (typed + MCQ + scoring) ════");
   {
     const sock = mockSock();
     const chat = "ds-series@g.us";
@@ -236,15 +236,15 @@ const answerFor = (q) => (q.typed ? String(q.options[q.correct]) : "ABCD"[q.corr
       ok(qs.every((q) => ["easy", "medium", "hard"].includes(q.difficulty)), "every question carries a difficulty band");
       const typedN = qs.filter((q) => q.typed).length;
       const withAlts = qs.filter((q) => q.typed && Array.isArray(q.alts) && q.alts.length > 0);
-      ok(typedN >= 1, `typed questions present (${typedN}/5 — v8: most questions typed)`);
+      ok(typedN >= 1, `typed questions present (${typedN}/5 - v8: most questions typed)`);
       console.log(`    (typed=${typedN}/5, with-alts=${withAlts.length}, img=${qs.filter((q) => q.type === "image").length})`);
 
-      // Q1: answer correctly — typed by TEXT, MCQ by letter
+ // Q1: answer correctly - typed by TEXT, MCQ by letter
       const q1 = await waitOpen(session);
       ok(!!q1, "question 1 open inside timer window (media resolved before open)");
       if (q1) {
-        // image questions send their card as a media CAPTION (quiz.js §card
-        // sender: image = clue in caption) — scan text AND caption
+ // image questions send their card as a media CAPTION (quiz.js §card
+ // sender: image = clue in caption) - scan text AND caption
         const sentTexts = () => sock.sent.map((s) => (s.content && (s.content.text || s.content.caption)) || "");
         const cardPosted = sentTexts().some((t) => /QUESTION 1\/5/.test(t));
         ok(cardPosted, "question 1/5 card posted");
@@ -257,7 +257,7 @@ const answerFor = (q) => (q.typed ? String(q.options[q.correct]) : "ABCD"[q.corr
         const score1 = session.scores.get("userA@s.whatsapp.net");
         ok(score1 && score1.points >= quiz.POINTS[q1.difficulty], `points awarded (${score1 && score1.points} Zeni, base ${quiz.POINTS[q1.difficulty]})`);
 
-        // Q2: wrong answer on an MCQ -> ❌ + lockout; typed wrong text -> no lockout
+ // Q2: wrong answer on an MCQ -> + lockout; typed wrong text -> no lockout
         const q2 = await waitOpen(session);
         if (q2) {
           const prevNo2 = session.questionNo;
@@ -275,8 +275,8 @@ const answerFor = (q) => (q.typed ? String(q.options[q.correct]) : "ABCD"[q.corr
           }
         }
 
-        // Q3 (if live is typed with alts): alias answer must be ACCEPTED —
-        // v8 multi-answer directive (owner: "allow multiple answers")
+ // Q3 (if live is typed with alts): alias answer must be ACCEPTED -
+ // v8 multi-answer directive ("allow multiple answers")
         const q3 = await waitOpen(session);
         if (q3 && q3.typed && Array.isArray(q3.alts) && q3.alts.length > 0) {
           const prevNo3 = session.questionNo;
@@ -284,13 +284,13 @@ const answerFor = (q) => (q.typed ? String(q.options[q.correct]) : "ABCD"[q.corr
           ok(session.answeredBy.get("userC@s.whatsapp.net")?.correct === true, `alt answer accepted: "${q3.alts[0]}" for "${q3.options[q3.correct]}"`);
           await waitAdvance(session, prevNo3, 20000);
         } else {
-          console.log(`    (alt-acceptance not exercised this draw — q3 ${q3 ? (q3.typed ? `typed, alts=${(q3.alts || []).length}` : "MCQ") : "none"})`);
+          console.log(`    (alt-acceptance not exercised this draw - q3 ${q3 ? (q3.typed ? `typed, alts=${(q3.alts || []).length}` : "MCQ") : "none"})`);
         }
-        // unit-level: _lev typo tolerance contract (deterministic, no timing)
+ // unit-level: _lev typo tolerance contract (deterministic, no timing)
         ok(quiz._lev("breaking bad", "breaking badd") === 1, "_lev typo distance 1");
         ok(quiz._lev("abc", "abc") === 0, "_lev identity 0");
 
-        // finish early as starter
+ // finish early as starter
         const end = await quiz.endQuiz(sock, chat, "userA@s.whatsapp.net", MARK, false);
         ok(end.handled && !quiz.hasActive(chat), "starter can end quiz");
         const finalCard = sock.sent.filter((s) => s.content.text && /QUIZ FINISHED/.test(s.content.text));
@@ -299,7 +299,7 @@ const answerFor = (q) => (q.typed ? String(q.options[q.correct]) : "ABCD"[q.corr
     }
   }
 
-  console.log("════ 8. CATEGORY SPIN — games easy / comics hard / movies ════");
+  console.log("════ 8. CATEGORY SPIN - games easy / comics hard / movies ════");
   {
     for (const [args, mode, chat] of [["games 3 easy", "games", "ds-games@g.us"], ["comics 3 hard", "comics", "ds-comics@g.us"], ["movies 3", "movies", "ds-movies@g.us"]]) {
       const sock = mockSock();
@@ -312,8 +312,8 @@ const answerFor = (q) => (q.typed ? String(q.options[q.correct]) : "ABCD"[q.corr
         ok(qs.every((q) => q.q && q.topic && q.difficulty), `${args}: questions carry stem/topic/difficulty`);
         const img = qs.filter((q) => q.type === "image");
         console.log(`    (${mode}: typed=${qs.filter((q) => q.typed).length}/3 img=${img.length} diff=[${[...new Set(qs.map((q) => q.difficulty))].join(",")}] cls-lore-src=${qs.filter((q) => q.loreRef === null).length}/3)`);
-        // dataset builder note: difficulty is a PREFERENCE — easy sessions must
-        // never be flooded with hard-only unless the band ran dry (fill note).
+ // dataset builder note: difficulty is a PREFERENCE - easy sessions must
+ // never be flooded with hard-only unless the band ran dry (fill note).
         if (/easy/.test(args)) ok(qs.filter((q) => q.difficulty === "easy").length >= 1, "easy session prefers easy band");
         const q1 = await waitOpen(session, 60000);
         ok(!!q1, `${args}: first question opens (media gate passed)`);
@@ -322,7 +322,7 @@ const answerFor = (q) => (q.typed ? String(q.options[q.correct]) : "ABCD"[q.corr
     }
   }
 
-  console.log("════ 9. RANDOM MIX — logo round first + tier validity ════");
+  console.log("════ 9. RANDOM MIX - logo round first + tier validity ════");
   {
     const sock = mockSock();
     const chat = "ds-random@g.us";
@@ -354,7 +354,7 @@ const answerFor = (q) => (q.typed ? String(q.options[q.correct]) : "ABCD"[q.corr
     const noEnd = await quiz.endQuiz(sock, chat, "u2@x", MARK, false);
     ok(noEnd.handled && /starter, admins or Quiz Mods/i.test(noEnd.message || ""), "non-starter cannot end");
     await quiz.endQuiz(sock, chat, "u1@x", MARK, false);
-    // seen-list + fresh partition machinery (dedup across sessions)
+ // seen-list + fresh partition machinery (dedup across sessions)
     const key = "ds-edge:unit";
     const before = quiz.loadSeen(key).length;
     quiz.saveSeen(key, ["hash1", "hash2"]);
@@ -362,7 +362,7 @@ const answerFor = (q) => (q.typed ? String(q.options[q.correct]) : "ABCD"[q.corr
     const part = quiz.partitionFresh([{ q: "Question A?" }, { q: "Question B?" }].map((q) => ({ ...q, options: ["1", "2", "3", "4"], correct: 0 })), key);
     ok(part.fresh.length === 2, "fresh partition on new key");
     quiz.saveSeen(key, ["hashA", "hashA"]);
-    // empty leaderboard -> clean message
+ // empty leaderboard -> clean message
     const lbEmpty = await quiz.showLeaderboard(mockSock(), "no-such-chat-edge@g.us", "x@y", MARK, null);
     ok(/No quiz scores/i.test(lbEmpty.message || ""), "empty leaderboard -> clean message");
   }

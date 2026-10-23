@@ -1,16 +1,15 @@
 // ============================================
-// 🎮 GUILD WAR FULL-GAME SIMULATION — owner brief 2026-10-05 23:09Z
+// GUILD WAR FULL-GAME SIMULATION - owner brief 23:09Z
 // "run those simulations with the ruins, play a full game with 10 players,
-//  2 players, let them meet, basically play test everything and report back"
-//
+// 2 players, let them meet, basically play test everything and report back"
 // TWO full games are played through the REAL code path (real DB events, real
 // dmRouter moves, real room scenes, real room combat sessions, real turn
 // engine, real finale + rewards):
-//   D — DUO WAR:  2 champions, one guild. They meet, talk, fight together
-//       (co-op), the timer runs out, 4 wardens rise, they hunt all four.
-//   X — BIG WAR: 10 champions across 3 guilds. Guildmates meet + fight
-//       together, a rival gets the OCCUPIED rule, talk works, finale runs,
-//       the war ends on the fourth warden death.
+// D - DUO WAR: 2 champions, one guild. They meet, talk, fight together
+// (co-op), the timer runs out, 4 wardens rise, they hunt all four.
+// X - BIG WAR: 10 champions across 3 guilds. Guildmates meet + fight
+// together, a rival gets the OCCUPIED rule, talk works, finale runs,
+// the war ends on the fourth warden death.
 // Owner-visible cheats (determinism only): sim-level movement transits +
 // enemy HP floored so level-1 sim champions can finish fights. Every
 // outcome still flows through the real combat/turn/end pipeline.
@@ -27,7 +26,7 @@ L.overlaySprites();
 
 const R = [];
 const MAN = [];
-const rep = (section, name, pass, detail) => { R.push({ section, name, pass, detail }); console.log(`${pass ? 'PASS' : 'FAIL'} [${section}] ${name}${detail ? ' — ' + detail : ''}`); };
+const rep = (section, name, pass, detail) => { R.push({ section, name, pass, detail }); console.log(`${pass ? 'PASS' : 'FAIL'} [${section}] ${name}${detail ? ' - ' + detail : ''}`); };
 
 const state = require('../core/rpg/guildWar/state');
 const mapEngine = require('../core/rpg/guildWar/mapEngine');
@@ -39,7 +38,7 @@ const sleep = L.sleep;
 const snap = async (eventId) => state.getEvent(eventId, { fresh: true });
 
 // bare sock for tick: RECORDS feed flushes (feed.tickAll sends + drains the
-// DB queue — recording the sends is the only way to keep the lines)
+// DB queue - recording the sends is the only way to keep the lines)
 function bareSock(store) {
     return { label: 'tick', sent: store || [], async sendMessage(chatId, payload) { this.sent.push({ to: chatId, payload, at: Date.now() }); } };
 }
@@ -53,12 +52,12 @@ async function realStepInto(sock, jid, destKey, doc) {
     const row = fresh.players.find((p) => p.jid === jid);
     if (row.roomId === destKey) return fresh;
     const topo = state.topologyOf(fresh);
-    // any chamber that touches the destination
+ // any chamber that touches the destination
     const touch = ['n', 'e', 's', 'w'].map((d) => ({ d, k: mapEngine.step(topo, destKey, d) })).filter((x) => x.k);
     if (!touch.length) throw new Error('destination has no neighbors: ' + destKey);
     await clearPath(fresh.eventId, fresh.rooms, [touch[0].k]);
     if (row.roomId !== touch[0].k) await teleport(fresh.eventId, jid, touch[0].k);
-    // touch[0] lies in direction touch[0].d FROM dest — so the way back is the OPPOSITE
+ // touch[0] lies in direction touch[0].d FROM dest - so the way back is the OPPOSITE
     const BACK = { n: 's', s: 'n', e: 'w', w: 'e' };
     const dir = BACK[touch[0].d];
     await L.dm(sock, jid, `.j move ${DIR_TOKEN[dir]}`);
@@ -66,7 +65,7 @@ async function realStepInto(sock, jid, destKey, doc) {
     return snap(doc.eventId);
 }
 
-// ── pathing + movement (real grammar) ──
+// -- pathing + movement (real grammar) --
 function bfsPath(doc, from, to) {
     const topo = state.topologyOf(doc);
     const prev = new Map([[from, null]]); const q = [from];
@@ -105,7 +104,7 @@ async function clearPath(eventId, rooms, keys, keepLast = true) {
         await GWE.updateOne({ eventId, 'rooms.key': k }, { $set: { 'rooms.$.state': 'CLEARED', 'rooms.$.type': 'empty', 'rooms.$.clearedBy': 'veteran', 'rooms.$.clearedAt': new Date() } });
     }
 }
-// instant transit for sim players (test harness only — real position writes)
+// instant transit for sim players (test harness only - real position writes)
 async function teleport(eventId, jid, dest) {
     const doc = await snap(eventId);
     const p = doc.players.find((x) => x.jid === jid);
@@ -124,10 +123,10 @@ async function teleport(eventId, jid, dest) {
     );
 }
 
-// ── REAL combat turn loop: every seated champion attacks on their turn ──
+// -- REAL combat turn loop: every seated champion attacks on their turn --
 async function runFight(eventId, roomKey, sockByJid, { enemyHp = 0, enemyAtk = 0, timeoutMs = 100000 } = {}) {
     const deadline = Date.now() + timeoutMs;
-    // wait for the session to exist
+ // wait for the session to exist
     let st = null;
     while (Date.now() < deadline) {
         st = ga.ruinsRoomSession(eventId, roomKey);
@@ -158,7 +157,7 @@ async function runFight(eventId, roomKey, sockByJid, { enemyHp = 0, enemyAtk = 0
     return { fought: true, enemies: enemyNames, turns: acted.size };
 }
 
-// ── wait for the finale (state.tick drives it; tick sock RECORDS feed flushes) ──
+// -- wait for the finale (state.tick drives it; tick sock RECORDS feed flushes) --
 async function awaitFinale(eventId, { timeoutMs = 90000 } = {}) {
     const tsock = bareSock(feedLines);
     const deadline = Date.now() + timeoutMs;
@@ -197,7 +196,7 @@ async function awaitWarEnd(eventId, { timeoutMs = 45000 } = {}) {
 }
 
 function saveKeyImages(socks, tag, picks) {
-    // picks: [{ match: RegExp, file, note }]
+ // picks: [{ match: RegExp, file, note }]
     for (const [label, sock] of Object.entries(socks)) {
         for (const p of picks) {
             const hit = [...sock.sent].reverse().find((s) => s.payload && s.payload.image && p.match.test(s.payload.caption || ''));
@@ -211,7 +210,7 @@ function saveKeyImages(socks, tag, picks) {
 }
 
 // stage the team INSIDE the warden chamber (sim transit) and open the real
-// fight with the `fight` verb — startRoomCombat seats every same-guild
+// fight with the `fight` verb - startRoomCombat seats every same-guild
 // occupant at ONE shared battle (the quest-party-at-start path)
 async function slayWarden(curDoc, b, team, socks, sockByJid) {
     for (const name of team) await teleport(curDoc.eventId, jidOfName[name], b.key);
@@ -237,9 +236,9 @@ async function cleanup(eventIds, jids) {
     for (const j of jids) ga.abortRuinsSession(j);
 }
 
-// ════════════════════════════════════════════════════════════
-// SCENARIO D — DUO WAR (2 players, one guild, full lifecycle)
-// ════════════════════════════════════════════════════════════
+// ============================================================
+// SCENARIO D - DUO WAR (2 players, one guild, full lifecycle)
+// ============================================================
 async function scenarioDuo() {
     console.log('\n━━━ SCENARIO D: DUO WAR (2 players, full game) ━━━');
     const roster = L.makeRoster([
@@ -257,22 +256,22 @@ async function scenarioDuo() {
     const pa = doc.players.find((p) => p.jid === A.jid);
     const pb = doc.players.find((p) => p.jid === B.jid);
 
-    // ── meet: B really walks the final step into A's spawn hall ──
+ // -- meet: B really walks the final step into A's spawn hall --
     doc = await realStepInto(socks.Boro, B.jid, pa.roomId, doc);
     doc = await snap(doc.eventId);
     const rowAt = (r) => doc.players.find((p) => p.jid === r.jid).roomId;
     rep('D', 'the duo met in one chamber', rowAt(A) === pa.roomId && rowAt(B) === pa.roomId, `A@${rowAt(A)} B@${rowAt(B)} (spawn ${pa.roomId})`);
 
-    // ── talk: B speaks, A hears ──
+ // -- talk: B speaks, A hears --
     const say = await L.dm(socks.Boro, B.jid, '.j talk hold the line, Aria!');
     await sleep(300);
-    // NOTE: in the sim the router sends through the SENDER's sock — the
-    // relay DM to A is recorded on Boro's sock with to=A.jid
+ // NOTE: in the sim the router sends through the SENDER's sock - the
+ // relay DM to A is recorded on Boro's sock with to=A.jid
     const heard = socks.Boro.to(A.jid).some((s) => (s.payload.text || '').includes('hold the line'));
     rep('D', '.j talk reaches the other champion in the room', heard, heard ? 'A received B\'s line' : `B got: ${(say && say.text || '').slice(0, 60)}`);
 
-    // ── co-op combat: A steps into an adjacent combat room (real move →
-    // auto-start), then B does the same (real move → co-op join) ──
+ // -- co-op combat: A steps into an adjacent combat room (real move →
+ // auto-start), then B does the same (real move → co-op join) --
     const topo = state.topologyOf(doc);
     const nbrs = ['n', 'e', 's', 'w'].map((d) => ({ d, k: mapEngine.step(topo, pa.roomId, d) })).filter((x) => x.k);
     const fight = nbrs[0].k;
@@ -300,16 +299,16 @@ async function scenarioDuo() {
         { match: /BATTLE|Order/i, file: 'coop_battle_start', note: 'co-op battle scene (room combat overlay)' },
     ]);
 
-    // ── wait for the war timer → FINALE ──
+ // -- wait for the war timer → FINALE --
     const finDoc = await awaitFinale(doc.eventId, { timeoutMs: 95000 });
     const bosses = (finDoc && finDoc.finale && finDoc.finale.bosses) || [];
     rep('D', 'timer expiry → FINALE with 4 wardens placed around the map', bosses.length === 4, bosses.map((b) => `${b.name}@${b.key}`).join(', '));
     if (!finDoc) { await cleanup([doc.eventId], roster.map((r) => r.jid)); return; }
-    // owner 01:07Z: wardens scatter like the current bosses — never on the border ring
+ // owner 01:07Z: wardens scatter like the current bosses - never on the border ring
     const wxyD = bosses.map((b) => b.key.split(',').map(Number));
     const lastD = finDoc.side - 1;
     const borderHitsD = wxyD.filter(([x, y]) => x === 0 || y === 0 || x === lastD || y === lastD).length;
-    rep('D', 'wardens scattered mid-map — none on the border ring', bosses.length === 4 && borderHitsD === 0, `border hits=${borderHitsD} at side=${finDoc.side}`);
+    rep('D', 'wardens scattered mid-map - none on the border ring', bosses.length === 4 && borderHitsD === 0, `border hits=${borderHitsD} at side=${finDoc.side}`);
     let minSepD = 99;
     for (let i = 0; i < wxyD.length; i++) for (let j = i + 1; j < wxyD.length; j++) {
         const sep = Math.abs(wxyD[i][0] - wxyD[j][0]) + Math.abs(wxyD[i][1] - wxyD[j][1]);
@@ -318,10 +317,10 @@ async function scenarioDuo() {
     rep('D', 'wardens keep a healthy distance apart (no clustering)', wxyD.length < 2 || minSepD >= 2, `min pairwise sep=${minSepD}`);
     const discovered = finDoc.players.filter((p) => bosses.every((b) => (p.discovered || []).includes(b.key))).length;
     rep('D', 'warden chambers revealed on champions\' maps', discovered >= 1, `${discovered}/2 champions see all 4 markers`);
-    // 🔄 wardens-at-start design (1f54fa75): the clock-out hourglass line only
-    // fires when a hunt outlives endsAt — covered by gw_warden_scaling_qa §B.
-    // What the feed must show HERE is the four wardens rising AT WAR START.
-    // (feed mirror is async — bounded re-read, cf. fbdfe35e)
+ // wardens-at-start design (1f54fa75): the clock-out hourglass line only
+ // fires when a hunt outlives endsAt - covered by gw_warden_scaling_qa §B.
+ // What the feed must show HERE is the four wardens rising AT WAR START.
+ // (feed mirror is async - bounded re-read, cf. fbdfe35e)
     let dFeed = feedTexts(doc.eventId).join(' | ');
     for (let i = 0; i < 6 && !/WARDENS HOLD THE RUINS/i.test(dFeed); i++) {
         await sleep(500);
@@ -329,8 +328,8 @@ async function scenarioDuo() {
     }
     rep('D', 'war feed announced the four wardens rising (at war start)', /WARDENS HOLD THE RUINS/i.test(dFeed) && /WARDEN/i.test(dFeed), `${dFeed.slice(0, 100)}`);
 
-    // ── hunt all four wardens: real fights opened by the real `fight` verb,
-    // the duo seated TOGETHER (party-at-start co-op path) ──
+ // -- hunt all four wardens: real fights opened by the real `fight` verb,
+ // the duo seated TOGETHER (party-at-start co-op path) --
     jidOfName = Object.fromEntries(roster.map((r) => [r.name, r.jid]));
     let curDoc = finDoc;
     for (const b of bosses) {
@@ -343,7 +342,7 @@ async function scenarioDuo() {
         if (!curDoc || curDoc.state !== 'ACTIVE') break;
     }
 
-    // ── war end ──
+ // -- war end --
     const ended = await awaitWarEnd(doc.eventId, { timeoutMs: 30000 });
     rep('D', '4th warden death ENDS the war', !!ended && ended.state !== 'ACTIVE', `state=${ended && ended.state}`);
     if (ended) {
@@ -360,9 +359,9 @@ async function scenarioDuo() {
     await cleanup([doc.eventId], roster.map((r) => r.jid));
 }
 
-// ════════════════════════════════════════════════════════════
-// SCENARIO X — BIG WAR (10 players, 3 guilds)
-// ════════════════════════════════════════════════════════════
+// ============================================================
+// SCENARIO X - BIG WAR (10 players, 3 guilds)
+// ============================================================
 async function scenarioBig() {
     console.log('\n━━━ SCENARIO X: BIG WAR (10 players, 3 guilds) ━━━');
     const specs = [];
@@ -390,7 +389,7 @@ async function scenarioBig() {
     doc.players.forEach((p) => { byName[roster.find((r) => r.jid === p.jid).name] = p; });
     const jidOf = (name) => roster.find((r) => r.name === name).jid;
 
-    // ── guildmates meet: Pia + Milo really walk their final step to Aria ──
+ // -- guildmates meet: Pia + Milo really walk their final step to Aria --
     const ariaRoom = byName['Aria'].roomId;
     for (const name of ['Pia', 'Milo']) {
         doc = await realStepInto(socks[name], jidOf(name), ariaRoom, doc);
@@ -399,15 +398,15 @@ async function scenarioBig() {
     const rowAtX = (n) => doc.players.find((p) => p.jid === jidOf(n)).roomId;
     rep('X', '3 Alpha champions share one chamber (Aria+Pia+Milo)', ['Aria', 'Pia', 'Milo'].every((n) => rowAtX(n) === ariaRoom), ['Aria', 'Pia', 'Milo'].map((n) => `${n}@${rowAtX(n)}`).join(' '));
 
-    // ── talk: Milo speaks, both guildmates hear ──
+ // -- talk: Milo speaks, both guildmates hear --
     await L.dm(socks['Milo'], jidOf('Milo'), '.j talk sticks and stones, team!');
     await sleep(300);
     const heardA = socks['Milo'].to(jidOf('Aria')).some((s) => (s.payload.text || '').includes('sticks and stones'));
     const heardP = socks['Milo'].to(jidOf('Pia')).some((s) => (s.payload.text || '').includes('sticks and stones'));
     rep('X', 'room chat reaches every champion in the chamber', heardA && heardP, 'Aria+Pia both heard Milo');
 
-    // ── co-op combat: Aria steps into an adjacent combat room (real move →
-    // auto-start); Pia + Milo do the same (real move → co-op join) ──
+ // -- co-op combat: Aria steps into an adjacent combat room (real move →
+ // auto-start); Pia + Milo do the same (real move → co-op join) --
     const topo = state.topologyOf(doc);
     const nbrs = ['n', 'e', 's', 'w'].map((d) => ({ d, k: mapEngine.step(topo, ariaRoom, d) })).filter((x) => x.k);
     const fight = nbrs[0].k;
@@ -425,7 +424,7 @@ async function scenarioBig() {
     const seated = st ? st.players.length : 0;
     rep('X', 'BOTH guildmates joined ONE shared battle (3 participants)', !!(st && st.inCombat && seated === 3), `participants=${seated}`);
 
-    // ── occupied-room rule: rival walks in mid-fight (real move) ──
+ // -- occupied-room rule: rival walks in mid-fight (real move) --
     socks['Brutus'].clear();
     doc = await realStepInto(socks['Brutus'], jidOf('Brutus'), fight, doc);
     await sleep(800);
@@ -433,11 +432,11 @@ async function scenarioBig() {
     const bSt = ga.ruinsRoomSession(doc.eventId, fight);
     const brutusSeated = bSt && bSt.players.some((p) => p.jid === jidOf('Brutus'));
     rep('X', 'rival entering an active fight gets OCCUPIED (no second battle)', occ && bSt && !brutusSeated, `session still has ${bSt ? bSt.players.length : '?'} participants, rival seated=${!!brutusSeated}`);
-    // Brutus flees back out (occupied room is escapable)
+ // Brutus flees back out (occupied room is escapable)
     await L.dm(socks['Brutus'], jidOf('Brutus'), '.j flee');
     await sleep(600);
 
-    // ── resolve the 3-player co-op fight ──
+ // -- resolve the 3-player co-op fight --
     const trio = await runFight(doc.eventId, fight, sockByJid, { enemyHp: 6 });
     rep('X', '3-champion co-op fight resolved via real turns', trio.fought, `turn-actions=${trio.turns}`);
     await sleep(2500);
@@ -450,16 +449,16 @@ async function scenarioBig() {
         { match: /YOU ARE HERE/, file: 'map_during', note: '10-war personal map' },
     ]);
 
-    // ── FINALE ──
+ // -- FINALE --
     const finDoc = await awaitFinale(doc.eventId, { timeoutMs: 95000 });
     const bosses = (finDoc && finDoc.finale && finDoc.finale.bosses) || [];
     rep('X', 'timer expiry → 4 wardens rise around the 10-player map', bosses.length === 4, bosses.map((b) => `${b.name}@${b.key}`).join(', '));
     if (!finDoc) { await cleanup([doc.eventId], roster.map((r) => r.jid)); return; }
-    // owner 01:07Z: same scatter invariants on the big map
+ // owner 01:07Z: same scatter invariants on the big map
     const wxyX = bosses.map((b) => b.key.split(',').map(Number));
     const lastX = finDoc.side - 1;
     const borderHitsX = wxyX.filter(([x, y]) => x === 0 || y === 0 || x === lastX || y === lastX).length;
-    rep('X', 'wardens scattered mid-map — none on the border ring', bosses.length === 4 && borderHitsX === 0, `border hits=${borderHitsX} at side=${finDoc.side}`);
+    rep('X', 'wardens scattered mid-map - none on the border ring', bosses.length === 4 && borderHitsX === 0, `border hits=${borderHitsX} at side=${finDoc.side}`);
     let minSepX = 99;
     for (let i = 0; i < wxyX.length; i++) for (let j = i + 1; j < wxyX.length; j++) {
         const sep = Math.abs(wxyX[i][0] - wxyX[j][0]) + Math.abs(wxyX[i][1] - wxyX[j][1]);
@@ -472,8 +471,8 @@ async function scenarioBig() {
     const seeAll = finDoc.players.filter((p) => p.status === 'active' && bosses.every((b) => (p.discovered || []).includes(b.key))).length;
     rep('X', 'wardens revealed on the hunters\' maps', seeAll >= 1, `${seeAll} active champions see all four markers`);
 
-    // ── hunt: guild teams split across the wardens (Aria+Milo, Brutus+Vex,
-    // Oro solo, Pia solo) — real fights opened by the real `fight` verb ──
+ // -- hunt: guild teams split across the wardens (Aria+Milo, Brutus+Vex,
+ // Oro solo, Pia solo) - real fights opened by the real `fight` verb --
     const hunters = [
         { team: ['Aria', 'Milo'] }, { team: ['Brutus', 'Vex'] },
         { team: ['Oro'] }, { team: ['Pia'] },
@@ -484,7 +483,7 @@ async function scenarioBig() {
         const b = bosses[i];
         const team = hunters[i % hunters.length].team;
         const { after, wf } = await slayWarden(curDoc, b, team, socks, sockByJid);
-        rep('X', `warden ${i + 1}/4 down — ${team.join('+')} (${b.name})`, !!after && wf.fought, after ? `dead=true, actions=${wf.turns}` : `ledger not updated (fought=${wf.fought})`);
+        rep('X', `warden ${i + 1}/4 down - ${team.join('+')} (${b.name})`, !!after && wf.fought, after ? `dead=true, actions=${wf.turns}` : `ledger not updated (fought=${wf.fought})`);
         saveKeyImages(socks, 'X', [
             { match: /WARDEN/i, file: `warden${i + 1}_battle`, note: `warden ${i + 1} battle scene` },
         ]);
@@ -509,11 +508,11 @@ async function scenarioBig() {
 
 (async () => {
     await L.connectDB();
-    // fresh sandbox: wipe any stale gwtest events so tick() only sees ours
+ // fresh sandbox: wipe any stale gwtest events so tick() only sees ours
     await GWE.deleteMany({}).catch(() => {});
-    // ⚔️ load guildWar/index.js — it self-installs the ruins combat hooks
-    // (onEnd: room clears, GP, warden ledger). Production boots it via
-    // engine.js; the sims bypass the engine, so load it here.
+ // load guildWar/index.js - it self-installs the ruins combat hooks
+ // (onEnd: room clears, GP, warden ledger). Production boots it via
+ // engine.js; the sims bypass the engine, so load it here.
     require('../core/rpg/guildWar/index');
     console.log('╔═══════════════════════════════════════════╗');
     console.log('║  GUILD WAR FULL-GAME SIMS (duo + 10p)     ║');
@@ -522,7 +521,7 @@ async function scenarioBig() {
     await scenarioBig();
     const pass = R.filter((r) => r.pass).length;
     console.log(`\n════════ RESULT: ${pass}/${R.length} checks passed ════════`);
-    for (const r of R.filter((x) => !x.pass)) console.log(`  ✗ [${r.section}] ${r.name}${r.detail ? ' — ' + r.detail : ''}`);
+    for (const r of R.filter((x) => !x.pass)) console.log(`  ✗ [${r.section}] ${r.name}${r.detail ? ' - ' + r.detail : ''}`);
     fs.writeFileSync(`${OUT}/results.json`, JSON.stringify({ pass, total: R.length, results: R, manifest: MAN }, null, 2));
     L.restoreSprites();
     process.exit(0);

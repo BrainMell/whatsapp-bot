@@ -1,5 +1,5 @@
 'use strict';
-// mem_probe.js v2 — Task 37 speed round: measure static + anim timings
+// mem_probe.js v2 - speed round: measure static + anim timings
 // guild static (ss=1.5) / base anim (ss=1) / room anim (ss=1) / guild celebrate anim (ss=1)
 const fs = require('fs');
 const rss = () => {

@@ -1,41 +1,38 @@
-// ═══════════════════════════════════════════════════════════════════════════
-//  WORLD MAP RENDERER — live cosmology sheets (Royal Decree chrome)
-// ═══════════════════════════════════════════════════════════════════════════
-//
-//  2026-09-21 OWNER VISUAL REDESIGN (second pass, after the owner rejected
-//  the first one as "not actually redesigned"):
-//    * THE FIRST WORLD sheet is now THE COSMOLOGICAL MAP: one large circle
-//      for the whole world system, quadrant lines through it, and the
-//      charted worlds drawn as smaller circles FILLED WITH THEIR REAL
-//      BACKGROUND ART (the game's own environment images), plus new art for
-//      worlds that had none (drowned sea / storm reach / ash gardens).
-//    * THE GATHERED CHART (.j world all) keeps the owner-confirmed pass-3
-//      geometry (invariants below) but the First World's interior now shows
-//      the same image-worlds in miniature, the Afterlife is a SMALL ORBITING
-//      DOT on its own wide dashed circuit, and the floating header plates
-//      are gone.
-//    * THE AFTERLIFE sheet OPENS THE DOT: the night realm is drawn large
-//      (the veil, the issued worlds, the shore, the ferry), so the dot on
-//      the gathered chart visibly "contains" all of this.
-//    * THE ABYSS funnel no longer slides under its info plates (the owner
-//      called it "severely misaligned": the big rings extended to x=670
-//      while the plates start at x=610, so the rings were clipped).
-//
-//  RENDER INVARIANTS (cosmology_orbits.md §5 — violating any breaks the
-//  owner-confirmed cosmology):
-//    1. r_FirstWorld == R_WorldBeyond / 2, internally tangent (one side at
-//       the WB's exact center, the opposite side on its outer circumference)
-//    2. Presence of Order at the FIRST WORLD's center, co-moving
-//    3. Quadrant cross co-rotates with the First World; worlds scatter
-//       freely across all four quadrants
-//    4. Abyss rings shrink downward; no floor; no orbit
-//    5. Afterlife orbit is its own path (independent period), never drawn
-//       as a marker on the First World's orbit
-//    6. Timelines never appear as map regions
-//
-//  All sheet text is ASCII-safe (cardstyle.Sanitize discipline). The `╒ ╛`
-//  lore framing is chat-text-only and never appears on a map.
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// WORLD MAP RENDERER - live cosmology sheets (Royal Decree chrome)
+// ===========================================================================
+// OWNER VISUAL REDESIGN (second pass, after the owner rejected
+// the first one as "not actually redesigned"):
+// * THE FIRST WORLD sheet is now THE COSMOLOGICAL MAP: one large circle
+// for the whole world system, quadrant lines through it, and the
+// charted worlds drawn as smaller circles FILLED WITH THEIR REAL
+// BACKGROUND ART (the game's own environment images), plus new art for
+// worlds that had none (drowned sea / storm reach / ash gardens).
+// * THE GATHERED CHART (.j world all) keeps the owner-confirmed pass-3
+// geometry (invariants below) but the First World's interior now shows
+// the same image-worlds in miniature, the Afterlife is a SMALL ORBITING
+// DOT on its own wide dashed circuit, and the floating header plates
+// are gone.
+// * THE AFTERLIFE sheet OPENS THE DOT: the night realm is drawn large
+// (the veil, the issued worlds, the shore, the ferry), so the dot on
+// the gathered chart visibly "contains" all of this.
+// * THE ABYSS funnel no longer slides under its info plates (the owner
+// called it "severely misaligned": the big rings extended to x=670
+// while the plates start at x=610, so the rings were clipped).
+// RENDER INVARIANTS (cosmology_orbits.md §5 - violating any breaks the
+// owner-confirmed cosmology):
+// 1. r_FirstWorld == R_WorldBeyond / 2, internally tangent (one side at
+// the WB's exact center, the opposite side on its outer circumference)
+// 2. Presence of Order at the FIRST WORLD's center, co-moving
+// 3. Quadrant cross co-rotates with the First World; worlds scatter
+// freely across all four quadrants
+// 4. Abyss rings shrink downward; no floor; no orbit
+// 5. Afterlife orbit is its own path (independent period), never drawn
+// as a marker on the First World's orbit
+// 6. Timelines never appear as map regions
+// All sheet text is ASCII-safe (cardstyle.Sanitize discipline). The `╒ ╛`
+// lore framing is chat-text-only and never appears on a map.
+// ===========================================================================
 
 'use strict';
 
@@ -43,7 +40,7 @@ const fs = require('fs');
 const path = require('path');
 const cosmology = require('./cosmology');
 
-// ─── PALETTE (matched to the approved pass-3 renders) ────────────────────────
+// --- PALETTE (matched to the approved pass-3 renders) ------------------------
 const PAL = {
     parchment: '#EADDC4',
     parchmentDeep: '#E1D1AF',
@@ -64,7 +61,7 @@ const PAL = {
 const W = 1000;
 const H = 1400;
 
-// ─── FONT REGISTRATION (lazy; bot-owned fonts only) ─────────────────────────
+// --- FONT REGISTRATION (lazy; bot-owned fonts only) -------------------------
 // Fonts resolve relative to this module with per-file TTF/OTF magic guards
 // (LFS-pointer safe). The old hardcoded dev path is what silently broke every
 // world sheet in production (ENOENT -> text fallback).
@@ -108,8 +105,8 @@ function _ensureFonts() {
     }
 }
 
-// ─── WORLD CATALOG (the charted worlds, drawn with their own skies) ──────────
-// 2026-09-21 owner brief: the map's smaller circles should "contain images of
+// --- WORLD CATALOG (the charted worlds, drawn with their own skies) ----------
+// owner brief: the map's smaller circles should "contain images of
 // the various existing backgrounds, along with new backgrounds for worlds that
 // need them". The guild names a world only after an expedition returns, so the
 // chart uses surveyor field names. Types follow the standing legend.
@@ -158,7 +155,7 @@ async function _loadWorldArt() {
     return out;
 }
 
-// ─── SEEDED SCATTER (deterministic world dots — no state) ────────────────────
+// --- SEEDED SCATTER (deterministic world dots - no state) --------------------
 function _mulberry32(seed) {
     let a = seed >>> 0;
     return function () {
@@ -183,7 +180,7 @@ function _worldDots(seed = 20260917) {
     return dots;
 }
 
-// ─── CHROME HELPERS ──────────────────────────────────────────────────────────
+// --- CHROME HELPERS ----------------------------------------------------------
 
 function _bg(ctx) {
     ctx.fillStyle = PAL.parchment;
@@ -282,7 +279,7 @@ function _waxSeal(ctx, x, y, letter) {
     ctx.fillText(letter || 'K', x, y + 6);
 }
 
-// ─── PASS-3 DESIGN HELPERS (world_map/pass3_owner_geometry) ─────────────────
+// --- PASS-3 DESIGN HELPERS (world_map/pass3_owner_geometry) -----------------
 
 /** Letter-spaced centered text (canvas has no letterSpacing API). */
 function _spaced(ctx, text, cx, y, font, color, gap = 3) {
@@ -464,7 +461,7 @@ function _bottomStack(ctx, opts = {}) {
     _waxSeal(ctx, 80, H - 62, opts.seal || 'K');
 }
 
-// ─── SHARED GEOMETRY BLOCK ───────────────────────────────────────────────────
+// --- SHARED GEOMETRY BLOCK ---------------------------------------------------
 
 function _liveGeometry(cx, cy, R, t = Date.now()) {
     const r = R * cosmology.FW_TO_WB_RADIUS_RATIO;          // invariant #1
@@ -474,14 +471,14 @@ function _liveGeometry(cx, cy, R, t = Date.now()) {
     return { R, r, cx, cy, fwx, fwy, theta: off.theta, mi, atBottom: cosmology.fwAtBottom(t), t };
 }
 
-// ─── IMAGE WORLD CIRCLES (2026-09-21 owner redesign) ─────────────────────────
+// --- IMAGE WORLD CIRCLES (owner redesign) -------------------------
 
 /** One charted world: a small circle FILLED WITH ITS OWN BACKGROUND ART,
  *  ringed in its type color, hairline outside. The art is sampled from the
  *  upper middle of the source (the Go card art carries a dark UI bar at the
  *  bottom that must never leak into a map circle). */
 function _drawWorldCircle(ctx, x, y, r, world, img, opts = {}) {
-    // disk: art if we have it, else the type color
+ // disk: art if we have it, else the type color
     ctx.save();
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.clip();
     if (img) {
@@ -490,7 +487,7 @@ function _drawWorldCircle(ctx, x, y, r, world, img, opts = {}) {
         const syBias = world.sy != null ? world.sy : 0.08;
         const sx = Math.max(0, (iw - srcW) / 2), sy = ih * syBias;
         ctx.drawImage(img, sx, sy, srcW, srcH, x - r, y - r, r * 2, r * 2);
-        // rim shading so every world sits like a sphere on the chart
+ // rim shading so every world sits like a sphere on the chart
         const g = ctx.createRadialGradient(x, y, r * 0.5, x, y, r);
         g.addColorStop(0, 'rgba(0,0,0,0)');
         g.addColorStop(0.82, 'rgba(10,6,2,0)');
@@ -502,7 +499,7 @@ function _drawWorldCircle(ctx, x, y, r, world, img, opts = {}) {
         ctx.fill();
     }
     ctx.restore();
-    // type ring + hairline (the legend's colors keep working)
+ // type ring + hairline (the legend's colors keep working)
     ctx.beginPath(); ctx.arc(x, y, r + 2.2, 0, Math.PI * 2);
     ctx.strokeStyle = PAL[world.type]; ctx.lineWidth = opts.ringW || 2.2; ctx.stroke();
     ctx.beginPath(); ctx.arc(x, y, r + 5.4, 0, Math.PI * 2);
@@ -523,12 +520,12 @@ function _worldTag(ctx, text, x, y) {
 function _drawFirstWorld(ctx, g, opts = {}) {
     const { r, fwx, fwy, theta } = g;
 
-    // FW disk
+ // FW disk
     ctx.beginPath(); ctx.arc(fwx, fwy, r, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(250,243,224,0.92)'; ctx.fill();
     ctx.lineWidth = 2.4; ctx.strokeStyle = PAL.ink; ctx.stroke();
 
-    // quadrant cross CO-ROTATING with the FW (invariant #3)
+ // quadrant cross CO-ROTATING with the FW (invariant #3)
     ctx.save();
     ctx.beginPath(); ctx.arc(fwx, fwy, r - 1, 0, Math.PI * 2); ctx.clip();
     ctx.translate(fwx, fwy); ctx.rotate(theta);
@@ -537,7 +534,7 @@ function _drawFirstWorld(ctx, g, opts = {}) {
     ctx.beginPath(); ctx.moveTo(0, -r); ctx.lineTo(0, r); ctx.stroke();
     ctx.restore();
 
-    // quadrant labels (co-rotate positions, upright text)
+ // quadrant labels (co-rotate positions, upright text)
     ctx.font = '13px "Cinzel"'; ctx.fillStyle = 'rgba(90,70,52,0.85)'; ctx.textAlign = 'center';
     const qr = r * 0.72;
     const qpos = [[qr * 0.75, -qr * 0.75, 'I'], [-qr * 0.75, -qr * 0.75, 'II'], [-qr * 0.75, qr * 0.75, 'III'], [qr * 0.75, qr * 0.75, 'IV']];
@@ -547,8 +544,8 @@ function _drawFirstWorld(ctx, g, opts = {}) {
         ctx.fillText(label, rx, ry + 4);
     }
 
-    // the charted worlds: miniature image circles (atlas scale), rotating
-    // with the disk. Falls back to the type dots when art is unavailable.
+ // the charted worlds: miniature image circles (atlas scale), rotating
+ // with the disk. Falls back to the type dots when art is unavailable.
     if (opts.mini && opts.art) {
         const MINI = [
             ['ember', 0.62, 0.58], ['frost', 2.42, 0.52], ['venom', 3.72, 0.66],
@@ -560,7 +557,7 @@ function _drawFirstWorld(ctx, g, opts = {}) {
             const ly = Math.sin(ang + theta) * rad * r;
             _drawWorldCircle(ctx, fwx + lx, fwy + ly, r * 0.115, w, opts.art[key], { ringW: 1.6 });
         }
-        // a few uncatalogued dots keep the "worlds without number" texture
+ // a few uncatalogued dots keep the "worlds without number" texture
         ctx.font = '12px "Cinzel"';
         for (const d of _worldDots().slice(0, 9)) {
             const lx = Math.cos(d.ang + theta) * d.rad * r;
@@ -571,7 +568,7 @@ function _drawFirstWorld(ctx, g, opts = {}) {
             ctx.lineWidth = 0.8; ctx.strokeStyle = 'rgba(58,42,30,0.35)'; ctx.stroke();
         }
     } else {
-        // scattered worlds (invariant #3: free scatter, all quadrants)
+ // scattered worlds (invariant #3: free scatter, all quadrants)
         for (const d of _worldDots()) {
             const lx = Math.cos(d.ang + theta) * d.rad * r;
             const ly = Math.sin(d.ang + theta) * d.rad * r;
@@ -581,8 +578,8 @@ function _drawFirstWorld(ctx, g, opts = {}) {
         }
     }
 
-    // movement indicator: wax marker riding clockwise THROUGH the FW,
-    // top -> right -> bottom, reaching the bottom link as the orbit completes
+ // movement indicator: wax marker riding clockwise THROUGH the FW,
+ // top -> right -> bottom, reaching the bottom link as the orbit completes
     ctx.beginPath(); ctx.arc(fwx, fwy, r * 0.55, 0, Math.PI * 2);
     ctx.setLineDash([4, 5]); ctx.strokeStyle = PAL.waxSoft; ctx.lineWidth = 1.4; ctx.stroke();
     ctx.setLineDash([]);
@@ -590,14 +587,14 @@ function _drawFirstWorld(ctx, g, opts = {}) {
     ctx.fillStyle = PAL.wax; ctx.fill();
     ctx.lineWidth = 1.2; ctx.strokeStyle = PAL.parchment; ctx.stroke();
 
-    // Presence of Order at the FIRST WORLD's center (invariant #2)
+ // Presence of Order at the FIRST WORLD's center (invariant #2)
     ctx.beginPath(); ctx.arc(fwx, fwy, 15, 0, Math.PI * 2);
     ctx.fillStyle = PAL.gold; ctx.fill();
     ctx.lineWidth = 2; ctx.strokeStyle = PAL.ink; ctx.stroke();
     ctx.beginPath(); ctx.arc(fwx, fwy, 6, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(58,42,30,0.7)'; ctx.lineWidth = 1.2; ctx.stroke();
 
-    // bottom / Abyss-linking point of the First World
+ // bottom / Abyss-linking point of the First World
     const bx = fwx, by = fwy + r;
     ctx.beginPath(); ctx.arc(bx, by, 7, 0, Math.PI * 2);
     ctx.fillStyle = PAL.wax; ctx.fill();
@@ -609,7 +606,7 @@ function _drawFirstWorld(ctx, g, opts = {}) {
 }
 
 function _drawAbyssDescent(ctx, x, yTop, scale = 1, label = true) {
-    // Repeating rings shrinking as they descend, continuing without end (invariant #4)
+ // Repeating rings shrinking as they descend, continuing without end (invariant #4)
     let y = yTop;
     let rw = 150 * scale;
     for (let i = 0; i < 5; i++) {
@@ -632,13 +629,12 @@ function _drawAbyssDescent(ctx, x, yTop, scale = 1, label = true) {
     }
 }
 
-// ─── SHEET 1: FIRST WORLD (.j world) — THE COSMOLOGICAL MAP ──────────────────
-// 2026-09-21 owner brief: "make it one large circle representing the overall
+// --- SHEET 1: FIRST WORLD (.j world) - THE COSMOLOGICAL MAP ------------------
+// owner brief: "make it one large circle representing the overall
 // world system. Draw quadrant lines through it, then place smaller circles
 // throughout it to represent the different worlds. Those smaller circles
 // should contain images of the various existing backgrounds, along with new
 // backgrounds for worlds that need them."
-//
 // So the sheet IS the world now: one large circle (R=400), the co-rotating
 // quadrant cross, nine charted worlds drawn as art-filled circles with their
 // surveyor names, twenty-four uncharted worlds in four COMPANIES OF SIX
@@ -648,8 +644,8 @@ function _drawAbyssDescent(ctx, x, yTop, scale = 1, label = true) {
 // on the First World's bottom link - the exact pass-3 tangent geometry, seen
 // from inside at the link hour).
 
-// ─── CELESTIAL CHART LAYER (owner 2026-10-21: sun must visibly shift on the
-// world map + a little top-right sun/moon-phase icon from an asset pack) ────
+// --- CELESTIAL CHART LAYER (sun must visibly shift on the
+// world map + a little top-right sun/moon-phase icon from an asset pack) ----
 // Found icon assets (see core/assets/icons/moon/ credits in CREDITS.md and
 // the sprite dir): sun from "Sun and Moon" (OGA, permissive), 8 moon phases
 // from "2 Moon Phases Sets" by StarNinjas (OGA, CC0).
@@ -673,7 +669,7 @@ function _loadCelestialIcons() {
     return _celestialIcons;
 }
 
-// real lunar phase: synodic month from the 2000-01-06 18:14 UTC new moon
+// real lunar phase: synodic month from the 18:14 UTC new moon
 const _SYNODIC = 29.53058867;
 function _moonPhaseIndex(t) {
     const age = (((t / 1000) - 947182440) % ( _SYNODIC * 86400) + _SYNODIC * 86400) % (_SYNODIC * 86400);
@@ -685,10 +681,10 @@ function _utcHourFloat(t) {
     return d.getUTCHours() + d.getUTCMinutes() / 60;
 }
 
-/** The chart's sky, part 1 — the orbiting sun/moon body. Called EARLY (right
+/** The chart's sky, part 1 - the orbiting sun/moon body. Called EARLY (right
  *  after the boundary arc) so chart labels pill/worlds draw OVER it: at noon
  *  the body crosses the WORLD BEYOND pill and must never hide its text.
- *  Everything best-effort — never breaks the chart render. */
+ *  Everything best-effort - never breaks the chart render. */
 function _paintCelestialBody(ctx, t) {
     try {const icons = _loadCelestialIcons();
         const CX = W / 2, CY = 660, ORB = 438;              // world circle + orbit radius
@@ -696,13 +692,13 @@ function _paintCelestialBody(ctx, t) {
         const phase = (h >= 5 && h < 7) ? 'dawn' : (h >= 7 && h < 17) ? 'day'
             : (h >= 17 && h < 18.5) ? 'golden' : (h >= 18.5 && h < 20) ? 'dusk' : 'night';
         const isNight = phase === 'night';
-        // orbit position: dawn left → noon top → dusk right (day 5h..20h);
-        // the moon rides the same rim 20h..5h with the REAL lunar phase face
+ // orbit position: dawn left → noon top → dusk right (day 5h..20h);
+ // the moon rides the same rim 20h..5h with the REAL lunar phase face
         const prog = isNight ? (((h - 20 + 24) % 24) / 9) : ((h - 5) / 15);
         const th = Math.PI * (1 - Math.min(1, Math.max(0, prog)));
         const bx = CX + Math.cos(th) * ORB, by = CY - Math.sin(th) * ORB;
 
-        // the orbit guide — a fine dashed arc, antique-chart style
+ // the orbit guide - a fine dashed arc, antique-chart style
         ctx.save();
         ctx.beginPath();
         ctx.arc(CX, CY, ORB, Math.PI, 0);
@@ -712,7 +708,7 @@ function _paintCelestialBody(ctx, t) {
         ctx.setLineDash([]);
         ctx.restore();
 
-        // the body itself: warm halo + icon (sun) / cool halo + lunar-phase icon
+ // the body itself: warm halo + icon (sun) / cool halo + lunar-phase icon
         const sun = icons.sun, moons = icons.moon;
         const moonImg = isNight ? moons[_moonPhaseIndex(t)] : null;
         const IR = 26;                                       // icon render radius
@@ -734,9 +730,7 @@ function _paintCelestialBody(ctx, t) {
     } catch (e) { /* never break the chart over the sky layer */ }
 }
 
-
-
-/** The chart's sky, part 2 — the top-right phase medallion (the "little icon"
+/** The chart's sky, part 2 - the top-right phase medallion (the "little icon"
  *  the owner asked for): sun by day, the REAL lunar phase at night, caption =
  *  current phase. Drawn LAST (topmost). */
 function _paintCelestialMedallion(ctx, t) {
@@ -780,10 +774,10 @@ async function renderFirstWorldSheet(t = Date.now()) {
 
         const cx = W / 2, cy = 660, R = 400;
 
-        // the World Beyond boundary: a great dashed arc over the chart. Its
-        // center sits on the First World's bottom link and its rim passes
-        // through the world's center and its far rim - invariant #1, drawn
-        // from inside at the link hour.
+ // the World Beyond boundary: a great dashed arc over the chart. Its
+ // center sits on the First World's bottom link and its rim passes
+ // through the world's center and its far rim - invariant #1, drawn
+ // from inside at the link hour.
         ctx.save();
         ctx.beginPath(); ctx.rect(37, 37, W - 74, H - 74); ctx.clip();
         ctx.beginPath(); ctx.arc(cx, cy + R, R * 2, 0, Math.PI * 2);
@@ -791,18 +785,18 @@ async function renderFirstWorldSheet(t = Date.now()) {
         ctx.strokeStyle = 'rgba(58,42,30,0.4)'; ctx.lineWidth = 1.6; ctx.stroke();
         ctx.setLineDash([]);
         ctx.restore();
-        _paintCelestialBody(ctx, t);   // orbiting sun/moon — UNDER the chart labels
+        _paintCelestialBody(ctx, t);   // orbiting sun/moon - UNDER the chart labels
         _pillLabel(ctx, [
             { text: 'THE WORLD BEYOND', font: '13px "Cinzel"', color: PAL.ink },
             { text: 'its center rests on the bottom link', font: 'italic 11px "IM Fell Italic"', color: PAL.inkSoft },
         ], 500, 240, '13px "Cinzel"', PAL.ink, { lh: 18, bg: 'rgba(240,228,196,0.94)' });
 
-        // the world itself
+ // the world itself
         ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(250,243,224,0.92)'; ctx.fill();
         ctx.lineWidth = 2.8; ctx.strokeStyle = PAL.ink; ctx.stroke();
 
-        // quadrant cross co-rotating with the live pose (invariant #3)
+ // quadrant cross co-rotating with the live pose (invariant #3)
         const g = _liveGeometry(cx, cy, R, t);
         ctx.save();
         ctx.beginPath(); ctx.arc(cx, cy, R - 1, 0, Math.PI * 2); ctx.clip();
@@ -812,7 +806,7 @@ async function renderFirstWorldSheet(t = Date.now()) {
         ctx.beginPath(); ctx.moveTo(0, -R); ctx.lineTo(0, R); ctx.stroke();
         ctx.restore();
 
-        // quadrant numerals (co-rotate positions, upright text)
+ // quadrant numerals (co-rotate positions, upright text)
         ctx.font = '16px "Cinzel"'; ctx.fillStyle = 'rgba(90,70,52,0.8)'; ctx.textAlign = 'center';
         const qr = R * 0.72;
         const qpos = [[qr * 0.75, -qr * 0.75, 'I'], [-qr * 0.75, -qr * 0.75, 'II'], [-qr * 0.75, qr * 0.75, 'III'], [qr * 0.75, qr * 0.75, 'IV']];
@@ -822,14 +816,14 @@ async function renderFirstWorldSheet(t = Date.now()) {
             ctx.fillText(label, rx, ry + 5);
         }
 
-        // ── the charted worlds: art-filled circles + surveyor names ──
-        // PLACED is POLAR relative to the world's center and the whole chart
-        // content CO-ROTATES with the live quadrant cross (invariant #3, the
-        // same language the atlas mini worlds use). Relative geometry is
-        // therefore phase-invariant: a label that is clear at one phase is
-        // clear at every phase. Label = radial, just past the ring.
+ // -- the charted worlds: art-filled circles + surveyor names --
+ // PLACED is POLAR relative to the world's center and the whole chart
+ // content CO-ROTATES with the live quadrant cross (invariant #3, the
+ // same language the atlas mini worlds use). Relative geometry is
+ // therefore phase-invariant: a label that is clear at one phase is
+ // clear at every phase. Label = radial, just past the ring.
         const PLACED = [
-            // key,          radius, angle(rad), r   labelRad
+ // key, radius, angle(rad), r labelRad
             ['ember',        242, 4.055, 46, 305],
             ['stormreach',   277, -1.201, 42, 336],
             ['frost',        224, -0.464, 40, 281],
@@ -848,24 +842,24 @@ async function renderFirstWorldSheet(t = Date.now()) {
             _worldTag(ctx, w.name, cx + Math.cos(a) * labelRad, cy + Math.sin(a) * labelRad + 4);
         }
 
-        // the marker's ride: dashed circle UNDER the worlds, wax marker at
-        // the live phase on top
+ // the marker's ride: dashed circle UNDER the worlds, wax marker at
+ // the live phase on top
         ctx.beginPath(); ctx.arc(cx, cy, R * 0.55, 0, Math.PI * 2);
         ctx.setLineDash([4, 5]); ctx.strokeStyle = PAL.waxSoft; ctx.lineWidth = 1.5; ctx.stroke();
         ctx.setLineDash([]);
 
-        // ── the uncharted worlds: THE COMPANY OF SIX (2026-09-21 owner
-        // density order: more worlds on the map, grouped in sixes, each
-        // group its own character so the chart never repeats itself).
-        // All positions are polar + co-rotating (phase-invariant, like the
-        // charted worlds above). Four companies, four tempers:
-        //   1. THE ROSARY    - six known worlds in a perfect inner ring
-        //   2. THE TAPER     - six corrupted worlds strung along the rim,
-        //                      dwindling as the arc runs
-        //   3. THE CHAIN     - six worlds marching a diagonal, alternating
-        //                      known and dungeon-world
-        //   4. THE SCATTER   - six dungeon-worlds loose near the rim
-        // ──
+ // -- the uncharted worlds: THE COMPANY OF SIX (owner
+ // density order: more worlds on the map, grouped in sixes, each
+ // group its own character so the chart never repeats itself).
+ // All positions are polar + co-rotating (phase-invariant, like the
+ // charted worlds above). Four companies, four tempers:
+ // 1. THE ROSARY - six known worlds in a perfect inner ring
+ // 2. THE TAPER - six corrupted worlds strung along the rim,
+ // dwindling as the arc runs
+ // 3. THE CHAIN - six worlds marching a diagonal, alternating
+ // known and dungeon-world
+ // 4. THE SCATTER - six dungeon-worlds loose near the rim
+ // --
         const _gDot = (gx, gy, gr, type) => {
             ctx.beginPath(); ctx.arc(gx, gy, gr, 0, Math.PI * 2);
             ctx.fillStyle = PAL[type]; ctx.fill();
@@ -873,7 +867,7 @@ async function renderFirstWorldSheet(t = Date.now()) {
         };
         const gPos = (rad, ang) => [cx + Math.cos(ang + g.theta) * rad, cy + Math.sin(ang + g.theta) * rad];
 
-        // 1. THE ROSARY - six known worlds, one perfect ring, upper inner disk
+ // 1. THE ROSARY - six known worlds, one perfect ring, upper inner disk
         {
             const [gx0, gy0] = gPos(200, -1.75);
             const rr = 26;
@@ -884,7 +878,7 @@ async function renderFirstWorldSheet(t = Date.now()) {
                 _gDot(gx0 + Math.cos(a) * rr, gy0 + Math.sin(a) * rr, 8, 'known');
             }
         }
-        // 2. THE TAPER - six corrupted worlds along the upper-left rim, 9 -> 5
+ // 2. THE TAPER - six corrupted worlds along the upper-left rim, 9 -> 5
         {
             const a0 = -2.5, a1 = -1.7, rad = 352;
             ctx.beginPath();
@@ -900,7 +894,7 @@ async function renderFirstWorldSheet(t = Date.now()) {
                 _gDot(px, py, 9 - f * 4, 'corrupted');
             }
         }
-        // 3. THE CHAIN - six worlds marching a lower diagonal, alternating
+ // 3. THE CHAIN - six worlds marching a lower diagonal, alternating
         {
             const ang = 1.85, rads = [185, 225, 265, 300, 335, 372];
             ctx.beginPath();
@@ -914,7 +908,7 @@ async function renderFirstWorldSheet(t = Date.now()) {
                 _gDot(px, py, k % 2 ? 6.5 : 8.5, k % 2 ? 'dungeon' : 'known');
             });
         }
-        // 4. THE SCATTER - six dungeon-worlds loose near the lower-right rim
+ // 4. THE SCATTER - six dungeon-worlds loose near the lower-right rim
         {
             const pts = [[345, 0.30, 7], [372, 0.52, 6], [336, 0.78, 8], [368, 0.98, 6], [342, 1.18, 7], [376, 1.38, 5]];
             for (const [rad, ang, r] of pts) {
@@ -927,19 +921,19 @@ async function renderFirstWorldSheet(t = Date.now()) {
         ctx.fillStyle = PAL.wax; ctx.fill();
         ctx.lineWidth = 1.4; ctx.strokeStyle = PAL.parchment; ctx.stroke();
 
-        // the Presence of Order at the exact center (invariant #2). The name
-        // is a FIXED chip drawn at the very end of the sheet: the text is
-        // horizontal, so a rotating anchor would sweep a box that the
-        // co-rotating companies pass through at other phases - the old
-        // rosary-through-the-label collision. The chip masks whatever the
-        // live cross sends beneath it.
+ // the Presence of Order at the exact center (invariant #2). The name
+ // is a FIXED chip drawn at the very end of the sheet: the text is
+ // horizontal, so a rotating anchor would sweep a box that the
+ // co-rotating companies pass through at other phases - the old
+ // rosary-through-the-label collision. The chip masks whatever the
+ // live cross sends beneath it.
         ctx.beginPath(); ctx.arc(cx, cy, 21, 0, Math.PI * 2);
         ctx.fillStyle = PAL.gold; ctx.fill();
         ctx.lineWidth = 2.2; ctx.strokeStyle = PAL.ink; ctx.stroke();
         ctx.beginPath(); ctx.arc(cx, cy, 8.5, 0, Math.PI * 2);
         ctx.strokeStyle = 'rgba(58,42,30,0.7)'; ctx.lineWidth = 1.3; ctx.stroke();
 
-        // the bottom / Abyss-linking point
+ // the bottom / Abyss-linking point
         ctx.beginPath(); ctx.arc(cx, cy + R, 8, 0, Math.PI * 2);
         ctx.fillStyle = PAL.wax; ctx.fill();
         if (g.atBottom) {
@@ -948,16 +942,16 @@ async function renderFirstWorldSheet(t = Date.now()) {
             ctx.fillText('the bottom link is engaged now', cx + 16, cy + R + 5);
         }
 
-        // the Presence's name chip, FIXED, COMPACT (two lines) and LAST.
-        // Compact + hugging the medallion keeps its footprint inside the
-        // innermost sweeping band, so a passing world tag can only graze a
-        // corner instead of disappearing under a full-width chip.
+ // the Presence's name chip, FIXED, COMPACT (two lines) and LAST.
+ // Compact + hugging the medallion keeps its footprint inside the
+ // innermost sweeping band, so a passing world tag can only graze a
+ // corner instead of disappearing under a full-width chip.
         _pillLabel(ctx, [
             { text: 'the Presence', font: 'italic 11.5px "IM Fell Italic"', color: PAL.inkSoft },
             { text: 'of Order', font: 'italic 11.5px "IM Fell Italic"', color: PAL.inkSoft },
         ], cx - 58, cy - 50, '11.5px "IM Fell Italic"', PAL.inkSoft, { lh: 16 });
 
-        // ── plates ──
+ // -- plates --
         _plate(ctx, 55, 1088, 430, 92, 'CHARTED WORLDS', [
             'nine skies are drawn with their worlds.',
             'the uncharted travel in company - the surveyors',
@@ -972,31 +966,31 @@ async function renderFirstWorldSheet(t = Date.now()) {
         _centered(ctx, 'timelines are not mapped. every world holds more than the guild can chart',
             1242, 'italic 13px "IM Fell Italic"', PAL.inkSoft);
         _liveStrip(ctx, 1272);
-        // 🔄 dynamic per-bot prefix (owner rule) - resolve at draw time via the
-        // bot's async context; '.' fallback outside any bot context
+ // dynamic per-bot prefix (owner rule) - resolve at draw time via the
+ // bot's async context; '.' fallback outside any bot context
         const _pfx1 = (require('../../botConfig').get()?.getPrefix() || '.').trim();
         _centered(ctx, `"${_pfx1} world" - the chart every adventurer carries`,
             1352, 'italic 13px "IM Fell Italic"', PAL.inkSoft);
         _waxSeal(ctx, 80, H - 62, 'I');
 
-        // top-right phase medallion (Task 22-R) — sun by day, lunar phase at night
+ // top-right phase medallion - sun by day, lunar phase at night
         _paintCelestialMedallion(ctx, t);
     });
 }
 
-// ─── SHEET: THE PRESENCE OF ORDER (.j world order) — the center held ────────
-// 2026-09-21 owner order: "Create a map showing the Presence of Order portion
+// --- SHEET: THE PRESENCE OF ORDER (.j world order) - the center held --------
+// owner order: "Create a map showing the Presence of Order portion
 // of the cosmology." The Presence's portion is the CENTER: it sits at the
 // First World's exact center (invariant #2) and moves with it - it is NOT the
 // World Beyond's center. So the sheet draws:
-//   * the First World's rim as the container, the quadrant law radiating
-//     from the center it holds (co-rotating, invariants #2 + #3);
-//   * fine order rings + tick work around the medallion - the order itself;
-//   * the live wax ride and the bottom link (the same contracts as the
-//     First World sheet);
-//   * THE RIDE inset: the Presence drawn where it actually lives - at the
-//     center of the First World riding inside the World Beyond - with the
-//     boundary's own center marked and refused ("not here").
+// * the First World's rim as the container, the quadrant law radiating
+// from the center it holds (co-rotating, invariants #2 + #3);
+// * fine order rings + tick work around the medallion - the order itself;
+// * the live wax ride and the bottom link (the same contracts as the
+// First World sheet);
+// * THE RIDE inset: the Presence drawn where it actually lives - at the
+// center of the First World riding inside the World Beyond - with the
+// boundary's own center marked and refused ("not here").
 function renderPresenceOfOrderSheet(t = Date.now()) {
     return _render(async (ctx) => {
         _titleBlock(ctx,
@@ -1006,13 +1000,13 @@ function renderPresenceOfOrderSheet(t = Date.now()) {
 
         const cx = W / 2, cy = 600, R = 330;
 
-        // the First World's rim: the container of the Presence (light disk)
+ // the First World's rim: the container of the Presence (light disk)
         ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(250,243,224,0.92)'; ctx.fill();
         ctx.lineWidth = 2.8; ctx.strokeStyle = PAL.ink; ctx.stroke();
 
-        // the order rings: fine circles around the center + tick work on the
-        // outermost - the texture of the law it holds
+ // the order rings: fine circles around the center + tick work on the
+ // outermost - the texture of the law it holds
         ctx.save();
         ctx.beginPath(); ctx.arc(cx, cy, R - 1, 0, Math.PI * 2); ctx.clip();
         for (const [rr, al] of [[60, 0.3], [105, 0.24], [150, 0.2]]) {
@@ -1029,8 +1023,8 @@ function renderPresenceOfOrderSheet(t = Date.now()) {
         }
         ctx.restore();
 
-        // quadrant cross + numerals, CO-ROTATING with the live pose (the
-        // quadrant law radiates from the center the Presence holds)
+ // quadrant cross + numerals, CO-ROTATING with the live pose (the
+ // quadrant law radiates from the center the Presence holds)
         const g = _liveGeometry(cx, cy, R, t);
         ctx.save();
         ctx.beginPath(); ctx.arc(cx, cy, R - 1, 0, Math.PI * 2); ctx.clip();
@@ -1048,8 +1042,8 @@ function renderPresenceOfOrderSheet(t = Date.now()) {
             ctx.fillText(label, rx, ry + 5);
         }
 
-        // a few of the worlds the order holds (type dots, co-rotating; the
-        // full census lives on the First World sheet)
+ // a few of the worlds the order holds (type dots, co-rotating; the
+ // full census lives on the First World sheet)
         const DOTS = [[195, -1.2, 7, 'known'], [238, -2.2, 6, 'corrupted'], [182, -3.4, 7, 'dungeon'],
             [262, 0.5, 6, 'known'], [214, 1.5, 7, 'corrupted'], [268, 2.5, 6, 'dungeon'],
             [196, 3.6, 7, 'known'], [248, 4.4, 6, 'corrupted'], [176, 5.3, 7, 'dungeon'],
@@ -1061,17 +1055,17 @@ function renderPresenceOfOrderSheet(t = Date.now()) {
             ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(58,42,30,0.35)'; ctx.stroke();
         }
 
-        // the wax ride + live marker (the Presence's world moves)
+ // the wax ride + live marker (the Presence's world moves)
         ctx.beginPath(); ctx.arc(cx, cy, R * 0.55, 0, Math.PI * 2);
         ctx.setLineDash([4, 5]); ctx.strokeStyle = PAL.waxSoft; ctx.lineWidth = 1.5; ctx.stroke();
         ctx.setLineDash([]);
 
-        // the PRESENCE: gold medallion with rays at the exact center. Its
-        // label is a FIXED parchment chip (not a rotating anchor): the text
-        // is horizontal, so a rotating anchor would sweep a box that
-        // co-rotating worlds pass through at other phases. The chip is drawn
-        // LAST so anything the live quadrant cross sends beneath it stays
-        // masked.
+ // the PRESENCE: gold medallion with rays at the exact center. Its
+ // label is a FIXED parchment chip (not a rotating anchor): the text
+ // is horizontal, so a rotating anchor would sweep a box that
+ // co-rotating worlds pass through at other phases. The chip is drawn
+ // LAST so anything the live quadrant cross sends beneath it stays
+ // masked.
         ctx.strokeStyle = 'rgba(166,124,46,0.7)'; ctx.lineWidth = 1.2;
         for (let k = 0; k < 8; k++) {
             const a = (k / 8) * Math.PI * 2 + Math.PI / 8;
@@ -1086,12 +1080,12 @@ function renderPresenceOfOrderSheet(t = Date.now()) {
         ctx.beginPath(); ctx.arc(cx, cy, 9.5, 0, Math.PI * 2);
         ctx.strokeStyle = 'rgba(58,42,30,0.7)'; ctx.lineWidth = 1.3; ctx.stroke();
 
-        // the live marker on the ride
+ // the live marker on the ride
         ctx.beginPath(); ctx.arc(g.mi.x, g.mi.y, 7, 0, Math.PI * 2);
         ctx.fillStyle = PAL.wax; ctx.fill();
         ctx.lineWidth = 1.4; ctx.strokeStyle = PAL.parchment; ctx.stroke();
 
-        // the bottom / Abyss-linking point of the world it holds
+ // the bottom / Abyss-linking point of the world it holds
         ctx.beginPath(); ctx.arc(cx, cy + R, 8, 0, Math.PI * 2);
         ctx.fillStyle = PAL.wax; ctx.fill();
         if (g.atBottom) {
@@ -1100,17 +1094,17 @@ function renderPresenceOfOrderSheet(t = Date.now()) {
             ctx.fillText('the bottom link is engaged now', cx + 16, cy + R + 5);
         }
 
-        // the Presence's name chip, FIXED, COMPACT and LAST (masks the
-        // rotating cross; small enough that a passing world dot only grazes
-        // its corner)
+ // the Presence's name chip, FIXED, COMPACT and LAST (masks the
+ // rotating cross; small enough that a passing world dot only grazes
+ // its corner)
         _pillLabel(ctx, [
             { text: 'the Presence', font: 'italic 11.5px "IM Fell Italic"', color: PAL.inkSoft },
             { text: 'of Order', font: 'italic 11.5px "IM Fell Italic"', color: PAL.inkSoft },
         ], cx - 58, cy - 50, '11.5px "IM Fell Italic"', PAL.inkSoft, { lh: 16 });
 
-        // ── THE RIDE inset: where the Presence actually lives - at the
-        // center of the First World, riding inside the World Beyond - with
-        // the boundary's own center marked and refused ──
+ // -- THE RIDE inset: where the Presence actually lives - at the
+ // center of the First World, riding inside the World Beyond - with
+ // the boundary's own center marked and refused --
         const ix = 150, iy = 935, iR = 70;
         ctx.beginPath(); ctx.arc(ix, iy, iR, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(226,210,178,0.5)'; ctx.fill();
@@ -1125,7 +1119,7 @@ function renderPresenceOfOrderSheet(t = Date.now()) {
         ctx.beginPath(); ctx.arc(gi.fwx, gi.fwy, 4.5, 0, Math.PI * 2);
         ctx.fillStyle = PAL.gold; ctx.fill();
         ctx.lineWidth = 1; ctx.strokeStyle = PAL.ink; ctx.stroke();
-        // the World Beyond's center: where the Presence is NOT
+ // the World Beyond's center: where the Presence is NOT
         ctx.beginPath(); ctx.arc(ix, iy, 5.5, 0, Math.PI * 2);
         ctx.strokeStyle = 'rgba(139,26,43,0.85)'; ctx.lineWidth = 1.3; ctx.stroke();
         ctx.beginPath(); ctx.moveTo(ix - 3.2, iy - 3.2); ctx.lineTo(ix + 3.2, iy + 3.2); ctx.stroke();
@@ -1138,7 +1132,7 @@ function renderPresenceOfOrderSheet(t = Date.now()) {
         ctx.fillStyle = PAL.wax;
         ctx.fillText('the crossed ring is the Beyond\u2019s center - not here', ix, iy + iR + 76);
 
-        // ── plates ──
+ // -- plates --
         _plate(ctx, 55, 1088, 430, 92, 'THE CENTER HELD', [
             'the Presence sits at the First World\u2019s center,',
             'not the World Beyond\u2019s. it moves when the world moves.',
@@ -1152,8 +1146,8 @@ function renderPresenceOfOrderSheet(t = Date.now()) {
         _centered(ctx, 'timelines are not mapped. every world holds more than the guild can chart',
             1242, 'italic 13px "IM Fell Italic"', PAL.inkSoft);
         _liveStrip(ctx, 1272);
-        // 🔄 dynamic per-bot prefix (owner rule) - resolve at draw time via the
-        // bot's async context; '.' fallback outside any bot context
+ // dynamic per-bot prefix (owner rule) - resolve at draw time via the
+ // bot's async context; '.' fallback outside any bot context
         const _pfx2 = (require('../../botConfig').get()?.getPrefix() || '.').trim();
         _centered(ctx, `"${_pfx2} world order" - the chart of the center`,
             1352, 'italic 13px "IM Fell Italic"', PAL.inkSoft);
@@ -1161,31 +1155,30 @@ function renderPresenceOfOrderSheet(t = Date.now()) {
     });
 }
 
-// ─── SHEET 2: WORLD BEYOND (.j world beyond) — pass3_owner_geometry ─────────
+// --- SHEET 2: WORLD BEYOND (.j world beyond) - pass3_owner_geometry ---------
 // The approved pass-3 render (submap_world_beyond.png) is the DECREE-DARK
 // variant: black plate, gold rim, radial rays, the First World as a dark
 // gold-lined disk riding its dashed orbit, and the big gold realm label.
-//
-// 2026-09-21 OWNER DENSITY/DETAIL ORDER: "a more detailed map of the world
+// OWNER DENSITY/DETAIL ORDER: "a more detailed map of the world
 // beyond, clearly showing the First World contained within it as a lower
 // dimension." The sheet now PROVES the containment instead of just stating
 // it:
-//   * the dimensional boundary - a fine double gold ring just outside the
-//     First World's rim, where the lower dimension ends;
-//   * the tangent construction - a live radial from the boundary's center
-//     through the First World: a crosshair where the near rim RESTS on the
-//     Beyond's exact center, a tick where the far rim TOUCHES the outer
-//     boundary (invariant #1, drawn, not only quoted);
-//   * a SECTION view under the plan: the Beyond as a ground line, the First
-//     World pressed into it as a shallow depression with the Presence at
-//     its bottom - a lower dimension, in elevation;
-//   * the realm label moved into the one pocket the live disk can never
-//     occupy (anti-pose, measured), so nothing crosses the disk's rim any
-//     more (the old pill rode across it at several phases).
+// * the dimensional boundary - a fine double gold ring just outside the
+// First World's rim, where the lower dimension ends;
+// * the tangent construction - a live radial from the boundary's center
+// through the First World: a crosshair where the near rim RESTS on the
+// Beyond's exact center, a tick where the far rim TOUCHES the outer
+// boundary (invariant #1, drawn, not only quoted);
+// * a SECTION view under the plan: the Beyond as a ground line, the First
+// World pressed into it as a shallow depression with the Presence at
+// its bottom - a lower dimension, in elevation;
+// * the realm label moved into the one pocket the live disk can never
+// occupy (anti-pose, measured), so nothing crosses the disk's rim any
+// more (the old pill rode across it at several phases).
 function renderWorldBeyondSheet(t = Date.now()) {
     return _render(async (ctx) => {
-        // header (the live gate IS rank S, so the design's requirement lines
-        // are used verbatim)
+ // header (the live gate IS rank S, so the design's requirement lines
+ // are used verbatim)
         _spaced(ctx, 'SUB-MAP II OF IV - GOD-RANK REALM', W / 2, 88, '14px "Cinzel"', '#C9A24B', 3);
         _spaced(ctx, 'THE WORLD BEYOND', W / 2, 152, '50px "Cinzel Deco"', '#D9B95C', 4);
         ctx.strokeStyle = 'rgba(201,162,75,0.7)';
@@ -1197,13 +1190,13 @@ function renderWorldBeyondSheet(t = Date.now()) {
         _centered(ctx, 'what the rank-gated viewer is told: "S Rank is required to chart the World Beyond."',
             244, 'italic 15px "IM Fell Italic"', '#9A7D3A');
 
-        // ── the great boundary: gold rim, dark interior, radial rays ──
+ // -- the great boundary: gold rim, dark interior, radial rays --
         const cx = W / 2, cy = 570, R = 315;
         ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
         ctx.fillStyle = '#17110B'; ctx.fill();
         ctx.lineWidth = 2.6; ctx.strokeStyle = 'rgba(201,162,75,0.9)'; ctx.stroke();
-        // rays: thin gold hairlines from the rim fading inward (the design's
-        // "vast, unchartable" texture)
+ // rays: thin gold hairlines from the rim fading inward (the design's
+ // "vast, unchartable" texture)
         ctx.strokeStyle = 'rgba(201,162,75,0.13)';
         ctx.lineWidth = 1;
         for (let i = 0; i < 64; i++) {
@@ -1214,18 +1207,18 @@ function renderWorldBeyondSheet(t = Date.now()) {
             ctx.stroke();
         }
 
-        // the First World's orbit path around the boundary's center (R/2)
+ // the First World's orbit path around the boundary's center (R/2)
         ctx.beginPath(); ctx.arc(cx, cy, R / 2, 0, Math.PI * 2);
         ctx.setLineDash([6, 8]);
         ctx.strokeStyle = 'rgba(201,162,75,0.4)'; ctx.lineWidth = 1.3; ctx.stroke();
         ctx.setLineDash([]);
 
-        // live geometry + the tangent construction (drawn under the disk)
+ // live geometry + the tangent construction (drawn under the disk)
         const g = _liveGeometry(cx, cy, R, t);
         const fwAng = Math.atan2(g.fwy - cy, g.fwx - cx);
         const anti = fwAng + Math.PI;
-        // the live radial: from the boundary's center through the First
-        // World's center out to the rim - the measuring line of invariant #1
+ // the live radial: from the boundary's center through the First
+ // World's center out to the rim - the measuring line of invariant #1
         ctx.save();
         ctx.setLineDash([2, 5]);
         ctx.strokeStyle = 'rgba(201,162,75,0.35)'; ctx.lineWidth = 1;
@@ -1234,37 +1227,37 @@ function renderWorldBeyondSheet(t = Date.now()) {
         ctx.lineTo(cx + Math.cos(fwAng) * (R - 4), cy + Math.sin(fwAng) * (R - 4));
         ctx.stroke();
         ctx.restore();
-        // T2: the far-rim tick, just inside the outer boundary on the radial
+ // T2: the far-rim tick, just inside the outer boundary on the radial
         ctx.strokeStyle = 'rgba(201,162,75,0.85)'; ctx.lineWidth = 1.6;
         ctx.beginPath();
         ctx.moveTo(cx + Math.cos(fwAng) * (R - 13), cy + Math.sin(fwAng) * (R - 13));
         ctx.lineTo(cx + Math.cos(fwAng) * (R - 3), cy + Math.sin(fwAng) * (R - 3));
         ctx.stroke();
 
-        // ── the First World, dark variant (design: gold-lined disk) ──
+ // -- the First World, dark variant (design: gold-lined disk) --
         _drawFirstWorldDark(ctx, g);
 
-        // the DIMENSIONAL BOUNDARY: fine double ring just outside the rim -
-        // where the lower dimension ends. Drawn over the rays, under the
-        // labels; travels with the disk.
+ // the DIMENSIONAL BOUNDARY: fine double ring just outside the rim -
+ // where the lower dimension ends. Drawn over the rays, under the
+ // labels; travels with the disk.
         ctx.beginPath(); ctx.arc(g.fwx, g.fwy, g.r + 9, 0, Math.PI * 2);
         ctx.strokeStyle = 'rgba(201,162,75,0.5)'; ctx.lineWidth = 1.1; ctx.stroke();
         ctx.beginPath(); ctx.arc(g.fwx, g.fwy, g.r + 13.5, 0, Math.PI * 2);
         ctx.strokeStyle = 'rgba(201,162,75,0.26)'; ctx.lineWidth = 0.9; ctx.stroke();
 
-        // T1: the boundary's exact center, where the near rim RESTS -
-        // a crosshair (the 'A LOWER DIMENSION' plate names it; no floating
-        // tag - the anti ray is reserved for the travelling labels)
+ // T1: the boundary's exact center, where the near rim RESTS -
+ // a crosshair (the 'A LOWER DIMENSION' plate names it; no floating
+ // tag - the anti ray is reserved for the travelling labels)
         ctx.strokeStyle = 'rgba(201,162,75,0.9)'; ctx.lineWidth = 1.3;
         ctx.beginPath(); ctx.moveTo(cx - 8, cy); ctx.lineTo(cx + 8, cy); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(cx, cy - 8); ctx.lineTo(cx, cy + 8); ctx.stroke();
         ctx.beginPath(); ctx.arc(cx, cy, 4.5, 0, Math.PI * 2); ctx.stroke();
 
-        // orbit annotation: one orbit, 5 real hours - on the anti-pose side
-        // of the orbit path (the arc the disk's ±60° coverage can never
-        // hide), offset perpendicular so it can never meet the travelling
-        // FIRST WORLD tag on the same ray. Clockwise arrow fully outside the
-        // covered arc.
+ // orbit annotation: one orbit, 5 real hours - on the anti-pose side
+ // of the orbit path (the arc the disk's ±60° coverage can never
+ // hide), offset perpendicular so it can never meet the travelling
+ // FIRST WORLD tag on the same ray. Clockwise arrow fully outside the
+ // covered arc.
         const orbR = R / 2;
         const perp = fwAng - Math.PI / 2;
         ctx.font = 'italic 13px "IM Fell Italic"'; ctx.fillStyle = '#9A7D3A'; ctx.textAlign = 'center';
@@ -1278,20 +1271,20 @@ function renderWorldBeyondSheet(t = Date.now()) {
             cx + Math.cos(a1) * orbR, cy + Math.sin(a1) * orbR,
             'rgba(201,162,75,0.75)', 1.6);
 
-        // FIRST WORLD tag travels with the disk, just past the dimensional
-        // boundary rings on the anti side (the pocket between the rings and
-        // the boundary's center crosshair)
+ // FIRST WORLD tag travels with the disk, just past the dimensional
+ // boundary rings on the anti side (the pocket between the rings and
+ // the boundary's center crosshair)
         _pillLabel(ctx, [
             { text: 'FIRST WORLD (IN ORBIT)', font: '14px "Cinzel"', color: '#D9B95C' },
         ], g.fwx + Math.cos(anti) * (g.r + 36), g.fwy + Math.sin(anti) * (g.r + 36), '14px "Cinzel"', '#D9B95C',
             { bg: 'rgba(13,9,6,0.78)', edge: 'rgba(201,162,75,0.45)' });
 
-        // ── the realm label: FIXED, outside the great circle, directly
-        // beneath it (figure-caption position). Every interior point is
-        // covered by the disk at some phase (the disk spans the whole
-        // radial), and the interior anti pocket is needed by the travelling
-        // tag - so the realm name lives where NOTHING can ever reach it,
-        // with a short leader onto the rim. ──
+ // -- the realm label: FIXED, outside the great circle, directly
+ // beneath it (figure-caption position). Every interior point is
+ // covered by the disk at some phase (the disk spans the whole
+ // radial), and the interior anti pocket is needed by the travelling
+ // tag - so the realm name lives where NOTHING can ever reach it,
+ // with a short leader onto the rim. --
         ctx.strokeStyle = 'rgba(201,162,75,0.5)'; ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(cx, cy + R + 2); ctx.lineTo(cx, cy + R + 14); ctx.stroke();
         _pillLabel(ctx, [
@@ -1301,24 +1294,24 @@ function renderWorldBeyondSheet(t = Date.now()) {
         ], cx, cy + R + 48, '24px "Cinzel"', '#D9B95C',
             { bg: 'rgba(13,9,6,0.9)', edge: 'rgba(201,162,75,0.4)', lh: 22 });
 
-        // ── SECTION: the same containment, in elevation. The Beyond as a
-        // ground line; the First World pressed into it as a shallow
-        // depression, the Presence at its bottom. ──
+ // -- SECTION: the same containment, in elevation. The Beyond as a
+ // ground line; the First World pressed into it as a shallow
+ // depression, the Presence at its bottom. --
         const sbY = 1046;
         _spaced(ctx, 'SECTION', 152, 1014, '12px "Cinzel"', '#9A7D3A', 3);
         ctx.font = 'italic 11.5px "IM Fell Italic"'; ctx.fillStyle = '#9A7D3A'; ctx.textAlign = 'right';
         ctx.fillText('the World Beyond, in section', 848, 1014);
-        // ground: fill the solid earth below the line, then the depression
+ // ground: fill the solid earth below the line, then the depression
         ctx.fillStyle = 'rgba(201,162,75,0.07)';
         ctx.fillRect(170, sbY, 660, 6);
-        // the sag (the First World's depression), filled darker + stroked
+ // the sag (the First World's depression), filled darker + stroked
         ctx.beginPath();
         ctx.moveTo(360, sbY);
         ctx.quadraticCurveTo(500, sbY + 88, 640, sbY);
         ctx.closePath();
         ctx.fillStyle = '#0B0805'; ctx.fill();
         ctx.strokeStyle = 'rgba(201,162,75,0.75)'; ctx.lineWidth = 1.5; ctx.stroke();
-        // ground hatching on both sides of the sag
+ // ground hatching on both sides of the sag
         ctx.strokeStyle = 'rgba(201,162,75,0.4)'; ctx.lineWidth = 1;
         for (let x = 178; x <= 344; x += 14) {
             ctx.beginPath(); ctx.moveTo(x, sbY + 3); ctx.lineTo(x - 7, sbY + 12); ctx.stroke();
@@ -1326,13 +1319,13 @@ function renderWorldBeyondSheet(t = Date.now()) {
         for (let x = 656; x <= 822; x += 14) {
             ctx.beginPath(); ctx.moveTo(x, sbY + 3); ctx.lineTo(x - 7, sbY + 12); ctx.stroke();
         }
-        // the First World in section: the disk resting in the depression
+ // the First World in section: the disk resting in the depression
         ctx.beginPath(); ctx.arc(500, sbY + 22, 24, 0, Math.PI * 2);
         ctx.fillStyle = '#1D140C'; ctx.fill();
         ctx.strokeStyle = 'rgba(201,162,75,0.95)'; ctx.lineWidth = 1.8; ctx.stroke();
         ctx.beginPath(); ctx.arc(500, sbY + 22, 3.6, 0, Math.PI * 2);
         ctx.fillStyle = '#C9A24B'; ctx.fill();
-        // depth ticks from the ground line down to the disk's shoulder
+ // depth ticks from the ground line down to the disk's shoulder
         ctx.setLineDash([2, 4]);
         ctx.strokeStyle = 'rgba(201,162,75,0.5)'; ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(468, sbY + 2); ctx.lineTo(468, sbY + 30); ctx.stroke();
@@ -1340,7 +1333,7 @@ function renderWorldBeyondSheet(t = Date.now()) {
         ctx.setLineDash([]);
         _centered(ctx, 'the First World, held as a lower dimension', sbY + 66, 'italic 12.5px "IM Fell Italic"', '#C9A24B');
 
-        // ── plates (design texts, tan on dark) ──
+ // -- plates (design texts, tan on dark) --
         _decreePlate(ctx, 64, 1160, 400, 132, 'A LOWER DIMENSION', [
             'the near rim rests on the Beyond\u2019s',
             'center; the far rim touches the outer',
@@ -1353,7 +1346,7 @@ function renderWorldBeyondSheet(t = Date.now()) {
             'GOD ascension in canon. unnamed by law.',
         ], { onDark: true });
 
-        // seal + footer (design: no clocks strip on this sheet)
+ // seal + footer (design: no clocks strip on this sheet)
         _waxSealBig(ctx, 80, H - 74, 26, 'S');
         _centered(ctx, '"j world beyond" own sheet, own lore card · never a crop of the First World map',
             1356, 'italic 12px "IM Fell Italic"', 'rgba(201,162,75,0.55)');
@@ -1387,7 +1380,7 @@ function _drawFirstWorldDark(ctx, g) {
         ctx.fillText(label, rx, ry + 4);
     }
 
-    // marker riding the clockwise path through the disk
+ // marker riding the clockwise path through the disk
     ctx.beginPath(); ctx.arc(fwx, fwy, r * 0.55, 0, Math.PI * 2);
     ctx.setLineDash([4, 5]); ctx.strokeStyle = 'rgba(139,26,43,0.8)'; ctx.lineWidth = 1.3; ctx.stroke();
     ctx.setLineDash([]);
@@ -1395,20 +1388,20 @@ function _drawFirstWorldDark(ctx, g) {
     ctx.fillStyle = PAL.wax; ctx.fill();
     ctx.lineWidth = 1.2; ctx.strokeStyle = '#C9A24B'; ctx.stroke();
 
-    // Presence of Order at the disk's center
+ // Presence of Order at the disk's center
     ctx.beginPath(); ctx.arc(fwx, fwy, 14, 0, Math.PI * 2);
     ctx.fillStyle = '#C9A24B'; ctx.fill();
     ctx.lineWidth = 1.6; ctx.strokeStyle = '#0D0906'; ctx.stroke();
     ctx.beginPath(); ctx.arc(fwx, fwy, 5.5, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(13,9,6,0.8)'; ctx.lineWidth = 1.2; ctx.stroke();
 
-    // bottom / Abyss-linking point
+ // bottom / Abyss-linking point
     ctx.beginPath(); ctx.arc(fwx, fwy + r, 6.5, 0, Math.PI * 2);
     ctx.fillStyle = PAL.wax; ctx.fill();
 }
 
-// ─── SHEET 3: AFTERLIFE (.j world afterlife) — THE OPENED DOT ────────────────
-// 2026-09-21 owner brief: on the gathered chart the Afterlife is a small
+// --- SHEET 3: AFTERLIFE (.j world afterlife) - THE OPENED DOT ----------------
+// owner brief: on the gathered chart the Afterlife is a small
 // orbiting dot - "but when someone uses .j world afterlife, it should reveal
 // that there is much more to it". So this sheet OPENS the dot: the night
 // realm is drawn LARGE (R=272, formerly 202 - the old render wasted 40% of
@@ -1420,7 +1413,7 @@ function _drawFirstWorldDark(ctx, g) {
 // body, slower period, triune, unlock - invariant #5 kept.
 function renderAfterlifeSheet(t = Date.now()) {
     return _render(async (ctx) => {
-        // header
+ // header
         _spaced(ctx, 'SUB-MAP III OF IV - INDEPENDENT ORBITAL BODY', W / 2, 84, '14px "Cinzel"', PAL.inkSoft, 2);
         _spaced(ctx, 'THE SHORE BEYOND THE VEIL', W / 2, 148, '42px "Cinzel Deco"', PAL.ink, 2);
         ctx.strokeStyle = PAL.frame;
@@ -1429,15 +1422,15 @@ function renderAfterlifeSheet(t = Date.now()) {
         ctx.fillStyle = PAL.wax;
         ctx.fillRect(W / 2 - 5, 164, 10, 14);
 
-        // requirement + what the gated viewer is told (design lines)
+ // requirement + what the gated viewer is told (design lines)
         _centered(ctx, '"j world afterlife" requirement: the dead-soul feature must already be unlocked',
             208, 'italic 16px "IM Fell Italic"', PAL.inkSoft);
         _centered(ctx, 'what the gated viewer is told: "Unlock the reading of dead souls to see this shore."',
             236, 'italic 16px "IM Fell Italic"', PAL.inkSoft);
 
-        // ── the dot reconciliation: the main structure (tiny, not to scale)
-        // beside the line that says what the gathered chart does with all of
-        // this ──
+ // -- the dot reconciliation: the main structure (tiny, not to scale)
+ // beside the line that says what the gathered chart does with all of
+ // this --
         const gx = 214, gy = 276;
         ctx.beginPath(); ctx.arc(gx, gy, 17, 0, Math.PI * 2);
         ctx.strokeStyle = 'rgba(58,42,30,0.7)'; ctx.lineWidth = 1.4; ctx.stroke();
@@ -1446,11 +1439,11 @@ function renderAfterlifeSheet(t = Date.now()) {
         _centered(ctx, 'on the gathered chart, all of this is drawn as one dot. the dot is a lie of distance.',
             282, 'italic 15.5px "IM Fell Italic"', PAL.inkSoft);
 
-        // ── the Afterlife's OWN orbit (dashed, independent - invariant #5) ──
+ // -- the Afterlife's OWN orbit (dashed, independent - invariant #5) --
         const acx = W / 2, acy = 618, aRX = 405, aRY = 272;
         _dashEllipse(ctx, acx, acy, aRX, aRY, [8, 9], PAL.afterlife, 1.8);
 
-        // ── THE OPENED DOT: a large night circle holding one world per soul ──
+ // -- THE OPENED DOT: a large night circle holding one world per soul --
         const dcx = acx, dcy = acy, dR = 272;
         const sky = ctx.createRadialGradient(dcx, dcy - 70, 24, dcx, dcy, dR + 24);
         sky.addColorStop(0, '#26303F');
@@ -1463,16 +1456,15 @@ function renderAfterlifeSheet(t = Date.now()) {
         ctx.strokeStyle = 'rgba(166,124,46,0.3)'; ctx.lineWidth = 1; ctx.stroke();
         _spaced(ctx, 'THE AFTERLIFE', dcx, dcy - dR + 48, '16px "Cinzel"', '#E8DDBF', 4);
 
-        // the veil: two pale arcs under the title, the sky's far edge
+ // the veil: two pale arcs under the title, the sky's far edge
         ctx.setLineDash([1, 4]);
         ctx.strokeStyle = 'rgba(232,221,191,0.3)'; ctx.lineWidth = 1.2;
         ctx.beginPath(); ctx.ellipse(dcx, dcy - dR + 128, 176, 34, 0, Math.PI * 1.08, Math.PI * 1.92); ctx.stroke();
         ctx.beginPath(); ctx.ellipse(dcx, dcy - dR + 150, 236, 46, 0, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
         ctx.setLineDash([]);
 
-        // the swarm: seeded, deterministic, no two dots alike. Rejection
-        // keeps the reserved zones clear (title band, veil arcs, the
-        // highlighted dot + its note, the two field notes, the shore band).
+ // the swarm: seeded, deterministic, no two dots alike. Rejection
+ // highlighted dot + its note, the two field notes, the shore band).
         const swarm = _afterlifeSwarm();
         const HOT = { x: dcx - 92, y: dcy - 92 };   // the singled-out world
         const reserved = [
@@ -1494,14 +1486,14 @@ function renderAfterlifeSheet(t = Date.now()) {
             _drawAfterlifeWorld(ctx, x, y, d);
         }
 
-        // two field notes, set INTO the night like surveyor annotations
+ // two field notes, set INTO the night like surveyor annotations
         ctx.font = 'italic 12.5px "IM Fell Italic"'; ctx.fillStyle = 'rgba(232,221,191,0.85)'; ctx.textAlign = 'center';
         ctx.fillText('a world made to hold', dcx - 128, dcy + 50);
         ctx.fillText('exactly one', dcx - 128, dcy + 68);
         ctx.fillText('some arrive still holding a', dcx + 126, dcy + 46);
         ctx.fillText('warmth they cannot name', dcx + 126, dcy + 64);
 
-        // the singled-out world + sighting line down to the shore
+ // the singled-out world + sighting line down to the shore
         _drawAfterlifeWorld(ctx, HOT.x, HOT.y, { r: 6.5, kind: 'gold', tone: '#E8C877' });
         ctx.beginPath(); ctx.arc(HOT.x, HOT.y, 12, 0, Math.PI * 2);
         ctx.strokeStyle = 'rgba(232,200,119,0.85)'; ctx.lineWidth = 1.4; ctx.stroke();
@@ -1513,20 +1505,20 @@ function renderAfterlifeSheet(t = Date.now()) {
         ctx.textAlign = 'left';
         ctx.fillText('they never say which one is yours', HOT.x + 20, HOT.y - 16);
 
-        // the shore: pillar fence falling to a scalloped shoreline across the
-        // lower chord - the standing place of the living
+ // the shore: pillar fence falling to a scalloped shoreline across the
+ // lower chord - the standing place of the living
         const shoreY = dcy + 176;
         const halfChord = Math.sqrt(dR * dR - (shoreY - dcy) * (shoreY - dcy)) - 6;
         ctx.save();
         ctx.beginPath(); ctx.arc(dcx, dcy, dR - 2, 0, Math.PI * 2); ctx.clip();
-        // pillars
+ // pillars
         ctx.strokeStyle = 'rgba(232,221,191,0.75)'; ctx.lineWidth = 1.4;
         const nP = 11;
         for (let i = 0; i < nP; i++) {
             const px = dcx - halfChord + 8 + i * ((halfChord * 2 - 16) / (nP - 1));
             ctx.beginPath(); ctx.moveTo(px, shoreY); ctx.lineTo(px, shoreY - 28); ctx.stroke();
         }
-        // scalloped shoreline
+ // scalloped shoreline
         ctx.strokeStyle = 'rgba(232,200,119,0.8)'; ctx.lineWidth = 1.6;
         const nSc = 6;
         for (let k = 0; k < nSc; k++) {
@@ -1537,15 +1529,15 @@ function renderAfterlifeSheet(t = Date.now()) {
         }
         ctx.restore();
 
-        // the ferry: the newly dead arrive by water - a dotted crossing that
-        // leaves the sheet's edge, passes the veil, and ends at a small boat
-        // on the shore
+ // the ferry: the newly dead arrive by water - a dotted crossing that
+ // leaves the sheet's edge, passes the veil, and ends at a small boat
+ // on the shore
         ctx.save();
         ctx.setLineDash([2, 6]);
         ctx.strokeStyle = 'rgba(74,85,104,0.8)'; ctx.lineWidth = 1.6;
         ctx.beginPath(); ctx.moveTo(74, 560); ctx.quadraticCurveTo(200, 640, dcx - 132, shoreY - 10); ctx.stroke();
         ctx.setLineDash([]);
-        // the boat
+ // the boat
         const bx2 = dcx - 132, by2 = shoreY - 12;
         ctx.strokeStyle = 'rgba(232,221,191,0.9)'; ctx.lineWidth = 1.6;
         ctx.beginPath(); ctx.arc(bx2, by2 - 2, 11, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
@@ -1555,12 +1547,12 @@ function renderAfterlifeSheet(t = Date.now()) {
         ctx.font = 'italic 12px "IM Fell Italic"'; ctx.fillStyle = PAL.inkSoft; ctx.textAlign = 'left';
         ctx.fillText('the newly dead cross by water', 84, 548);
 
-        // shore caption BELOW the circle in ink (cream text vanishes on
-        // parchment wherever the circle's chord narrows)
+ // shore caption BELOW the circle in ink (cream text vanishes on
+ // parchment wherever the circle's chord narrows)
         ctx.font = 'italic 12.5px "IM Fell Italic"'; ctx.fillStyle = PAL.ink; ctx.textAlign = 'center';
         ctx.fillText('the shore - where the living may stand and look out', dcx, dcy + dR + 28);
 
-        // ── the body's live position on its own circuit ──
+ // -- the body's live position on its own circuit --
         const ap = cosmology.alPhase(t) * Math.PI * 2 - Math.PI / 2;
         const ax = acx + Math.cos(ap) * aRX, ay = acy + Math.sin(ap) * aRY;
         ctx.beginPath(); ctx.arc(ax, ay, 11, 0, Math.PI * 2);
@@ -1568,9 +1560,9 @@ function renderAfterlifeSheet(t = Date.now()) {
         ctx.lineWidth = 3; ctx.strokeStyle = PAL.afterlife; ctx.stroke();
         ctx.beginPath(); ctx.arc(ax, ay, 5, 0, Math.PI * 2);
         ctx.fillStyle = PAL.afterlife; ctx.fill();
-        // label: the same DEDICATED CORNER LANE language as the gathered
-        // chart - the pill sits in the empty corner nearest the body with a
-        // dotted leader line to the marker.
+ // label: the same DEDICATED CORNER LANE language as the gathered
+ // chart - the pill sits in the empty corner nearest the body with a
+ // dotted leader line to the marker.
         const corner = ax >= acx
             ? (ay > acy ? [856, 920] : [856, 330])
             : (ay > acy ? [144, 920] : [144, 330]);
@@ -1590,14 +1582,14 @@ function renderAfterlifeSheet(t = Date.now()) {
         ctx.stroke();
         ctx.restore();
 
-        // slower-orbit note + curved arrow (design)
+ // slower-orbit note + curved arrow (design)
         _centered(ctx, 'its own, much slower orbit - one cycle ~ 2 real-world days - shares nothing with the First World\'s 5-hour path',
             952, 'italic 13px "IM Fell Italic"', PAL.inkSoft);
         const arrowTipA = Math.PI * 0.78;
         const atx = acx + Math.cos(arrowTipA) * aRX, aty = acy + Math.sin(arrowTipA) * aRY;
         _curveArrow(ctx, 310, 934, 352, 856, atx, aty, 'rgba(74,85,104,0.8)', 1.6);
 
-        // ── lore plates: the unique-afterlife philosophy (owner brief) ──
+ // -- lore plates: the unique-afterlife philosophy (owner brief) --
         _decreePlate(ctx, 55, 992, 430, 128, 'ONE SOUL, ONE WORLD', [
             'every soul is issued its own afterlife,',
             'a world made to contain exactly one.',
@@ -1611,7 +1603,7 @@ function renderAfterlifeSheet(t = Date.now()) {
             'the worlds are not so far apart.',
         ]);
 
-        // ── mechanics plates (design texts, kept) ──
+ // -- mechanics plates (design texts, kept) --
         _decreePlate(ctx, 55, 1128, 430, 124, 'TRIUNE ALIGNMENT - EVERY 7 DAYS', [
             "afterlife position + the First World's",
             'bottom (Abyss-linking) point + the Abyss',
@@ -1624,7 +1616,7 @@ function renderAfterlifeSheet(t = Date.now()) {
             'refuses to render while locked.',
         ]);
 
-        // triune announcement when the state is live now
+ // triune announcement when the state is live now
         const tri = cosmology.triuneWindow(t);
         if (tri.aligned) {
             _centered(ctx, 'THE THREE ARE ALIGNED NOW', 1270, '15px "Cinzel"', PAL.wax);
@@ -1685,12 +1677,11 @@ function _drawAfterlifeWorld(ctx, x, y, d) {
     ctx.restore();
 }
 
-// ─── SHEET 4: ABYSS (.j world abyss) — pass3_owner_geometry submap_abyss ────
+// --- SHEET 4: ABYSS (.j world abyss) - pass3_owner_geometry submap_abyss ----
 // The decree-dark variant: black plate, gold rings descending without end,
 // roman depth markers down the left margin, tan decree plates on the right,
 // the wax seal 'A' and the owner's closing quote.
-//
-// 2026-09-21 MISALIGNMENT ROOT CAUSE (owner: "the Abyss card is still
+// MISALIGNMENT ROOT CAUSE ("the Abyss card is still
 // severely misaligned"): the old funnel was centered on x=430 with rings up
 // to rx=240, so the top rings reached x=670 and slid UNDER the plates that
 // start at x=610 - the funnel looked lopsided with its right side clipped.
@@ -1700,7 +1691,7 @@ function _drawAfterlifeWorld(ctx, x, y, d) {
 // empty corner under the plates.
 function renderAbyssSheet(t = Date.now()) {
     return _render(async (ctx) => {
-        // header
+ // header
         _spaced(ctx, 'SUB-MAP IV OF IV - INFINITE DESCENT', W / 2, 92, '15px "Cinzel"', '#C9A24B', 3);
         _spaced(ctx, 'THE ABYSS', W / 2, 162, '56px "Cinzel Deco"', '#D9B95C', 4);
         _spaced(ctx, 'DEPTHS', W / 2, 192, '18px "Cinzel"', '#9A7D3A', 8);
@@ -1710,13 +1701,13 @@ function renderAbyssSheet(t = Date.now()) {
         ctx.fillStyle = PAL.wax;
         ctx.fillRect(W / 2 - 6, 208, 12, 16);
 
-        // requirement + live gate line
+ // requirement + live gate line
         _centered(ctx, '"j world abyss" requirement: level 20 - a configurable unlock',
             252, 'italic 17px "IM Fell Italic"', '#C9A24B');
         _centered(ctx, cosmology.abyssGateLine(t), 282, '14px "IM Fell"', '#9A7D3A');
 
-        // ── the rings: solid gold, shrinking as they descend, no floor ──
-        // TEN rings so every roman depth marker (I..X) points at a real ring.
+ // -- the rings: solid gold, shrinking as they descend, no floor --
+ // TEN rings so every roman depth marker (I..X) points at a real ring.
         const RX = [190, 152, 122, 97, 78, 62, 50, 40, 32, 25];
         const ringX = 400;
         let ry2 = 352;
@@ -1730,13 +1721,13 @@ function renderAbyssSheet(t = Date.now()) {
             ctx.stroke();
             ringCenters.push(ry2);
         }
-        // the rings continue: the count does not stop
+ // the rings continue: the count does not stop
         ctx.fillStyle = 'rgba(201,162,75,0.8)';
         for (let i = 0; i < 3; i++) {
             ctx.beginPath(); ctx.arc(ringX - 12 + i * 12, ringCenters[ringCenters.length - 1] + 40, 2.2, 0, Math.PI * 2); ctx.fill();
         }
 
-        // ── depth markers I..X, each tick touching its own ring ──
+ // -- depth markers I..X, each tick touching its own ring --
         const NUMERALS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
         ctx.textAlign = 'right';
         ctx.font = '14px "Cinzel"';
@@ -1750,12 +1741,12 @@ function renderAbyssSheet(t = Date.now()) {
         }
         ctx.textAlign = 'center';
 
-        // the funnel's own footnote, set on the funnel's axis
+ // the funnel's own footnote, set on the funnel's axis
         ctx.font = 'italic 14px "IM Fell Italic"'; ctx.fillStyle = '#9A7D3A'; ctx.textAlign = 'center';
         ctx.fillText('no floor is drawn - the rings continue,', ringX, 946);
         ctx.fillText('technically without end', ringX, 966);
 
-        // ── the three decree plates (tan on black, right column) ──
+ // -- the three decree plates (tan on black, right column) --
         _decreePlate(ctx, 610, 330, 330, 186, 'THE ABYSS DOES NOT ORBIT', [
             'it descends beneath the main structure -',
             "no share in the First World's 5-hour",
@@ -1769,9 +1760,9 @@ function renderAbyssSheet(t = Date.now()) {
             "the First World's bottom point links to",
             'the Abyss once per 5-hour orbit -',
             `routine. the Afterlife joins that line`,
-            // 💡 2026-10-02 (#fec94f): was hardcoded "~7 days" - the triune
-            // cadence is now a configurable cosmology constant (4 days per
-            // owner brief #fec956). Derive the text so it can never drift.
+ // (#fec94f): was hardcoded "~7 days" - the triune
+ // cadence is now a configurable cosmology constant (4 days per
+ // owner brief #fec956). Derive the text so it can never drift.
             `only once every ~${(() => {
                 const h = (cosmology.ALIGNMENT_PERIOD_MS || 96 * 3600000) / 3600000;
                 return Number.isInteger(h) ? h : h.toFixed(1);
@@ -1787,20 +1778,20 @@ function renderAbyssSheet(t = Date.now()) {
             'instead.',
         ], { onDark: true });
 
-        // the owner's closing quote fills the corner under the plates
+ // the owner's closing quote fills the corner under the plates
         ctx.font = 'italic 19px "IM Fell Italic"'; ctx.fillStyle = '#C9A24B'; ctx.textAlign = 'center';
         ctx.fillText('"the rings do not stop.', 775, 1006);
         ctx.fillText('neither does the count."', 775, 1040);
 
-        // wax seal
+ // wax seal
         _waxSealBig(ctx, W / 2, 1136, 40, 'A');
         _centered(ctx, '"j world abyss" own sheet, own lore card - separation from all orbital systems is the point',
             1310, 'italic 13px "IM Fell Italic"', 'rgba(201,162,75,0.55)');
     }, { dark: true });
 }
 
-// ─── SHEET 0: COSMOLOGY ATLAS (.j world all) — the gathered chart ───────────
-// 2026-09-21 owner redesign: the Afterlife is a SMALL ORBITING DOT on the
+// --- SHEET 0: COSMOLOGY ATLAS (.j world all) - the gathered chart -----------
+// owner redesign: the Afterlife is a SMALL ORBITING DOT on the
 // overall map (its own wide dashed circuit), the First World's interior now
 // carries the same image-worlds as its own sheet in miniature, and the old
 // floating header plates (NOT CHARTED / MOVEMENT INDICATOR) are gone - their
@@ -1810,7 +1801,7 @@ function renderAbyssSheet(t = Date.now()) {
 async function renderCosmologyAtlasSheet(t = Date.now()) {
     const art = await _loadWorldArt();
     return _render(async (ctx) => {
-        // ── header (KOSMION survey sheet) ──
+ // -- header (KOSMION survey sheet) --
         _spaced(ctx, 'COSMOLOGICAL SURVEY - THE FIRST WORLD - THE WORLD BEYOND - THE AFTERLIFE - THE ABYSS',
             W / 2, 84, '11px "Cinzel"', PAL.inkSoft, 1.2);
         _spaced(ctx, 'KOSMION', W / 2, 148, '54px "Cinzel Deco"', PAL.ink, 6);
@@ -1822,36 +1813,36 @@ async function renderCosmologyAtlasSheet(t = Date.now()) {
         _centered(ctx, 'every chart the guild holds, gathered on one page',
             200, 'italic 16px "IM Fell Italic"', PAL.inkSoft);
 
-        // ── the living circles ──
+ // -- the living circles --
         const cx = W / 2, cy = 610, R = 295;
-        // the World Beyond: the great tan disk
+ // the World Beyond: the great tan disk
         ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
         ctx.fillStyle = '#D9C49A'; ctx.fill();
         ctx.lineWidth = 2.4; ctx.strokeStyle = PAL.ink; ctx.stroke();
 
-        // the First World's orbital path: r = R/2, one rim grazing the disk's
-        // center, the other its outer rim (invariant #1). The clockwise
-        // annotation arrow needs this line to point at.
+ // the First World's orbital path: r = R/2, one rim grazing the disk's
+ // center, the other its outer rim (invariant #1). The clockwise
+ // annotation arrow needs this line to point at.
         ctx.beginPath(); ctx.arc(cx, cy, R / 2, 0, Math.PI * 2);
         ctx.setLineDash([5, 7]);
         ctx.strokeStyle = 'rgba(58,42,30,0.32)'; ctx.lineWidth = 1.2; ctx.stroke();
         ctx.setLineDash([]);
 
-        // the First World at live tangent geometry + internal structure,
-        // its worlds drawn as miniature image circles (the same nine skies
-        // the First World sheet charts, five legible at this scale)
+ // the First World at live tangent geometry + internal structure,
+ // its worlds drawn as miniature image circles (the same nine skies
+ // the First World sheet charts, five legible at this scale)
         const g = _liveGeometry(cx, cy, R, t);
         _drawFirstWorld(ctx, g, { mini: true, art });
 
-        // FW label travels with the disk (short lines stay inside r=147)
+ // FW label travels with the disk (short lines stay inside r=147)
         _pillLabel(ctx, [
             { text: 'FIRST WORLD', font: '15px "Cinzel"', color: PAL.ink },
             { text: "one rim on the Beyond's center,", font: 'italic 10.5px "IM Fell Italic"', color: PAL.inkSoft },
             { text: 'the other on the outer rim', font: 'italic 10.5px "IM Fell Italic"', color: PAL.inkSoft },
         ], g.fwx, g.fwy + 54, '15px "Cinzel"', PAL.ink, { lh: 17 });
 
-        // the Afterlife: a SMALL ORBITING DOT on its own wide dashed circuit
-        // (invariant #5 - never the First World's path)
+ // the Afterlife: a SMALL ORBITING DOT on its own wide dashed circuit
+ // (invariant #5 - never the First World's path)
         const aRX = 418, aRY = 292;
         _dashEllipse(ctx, cx, cy, aRX, aRY, [8, 9], PAL.afterlife, 1.7);
         const ap = cosmology.alPhase(t) * Math.PI * 2 - Math.PI / 2;
@@ -1863,7 +1854,7 @@ async function renderCosmologyAtlasSheet(t = Date.now()) {
         ctx.lineWidth = 2.2; ctx.strokeStyle = PAL.afterlife; ctx.stroke();
         ctx.beginPath(); ctx.arc(ax, ay, 2.6, 0, Math.PI * 2);
         ctx.fillStyle = PAL.afterlife; ctx.fill();
-        // label: DEDICATED CORNER LANE nearest the dot, dotted leader line
+ // label: DEDICATED CORNER LANE nearest the dot, dotted leader line
         const corner = ax >= cx
             ? (ay > cy ? [818, 892] : [818, 378])
             : (ay > cy ? [176, 892] : [176, 378]);
@@ -1883,9 +1874,9 @@ async function renderCosmologyAtlasSheet(t = Date.now()) {
         ctx.stroke();
         ctx.restore();
 
-        // clockwise-orbit annotation at the left edge (design: note + arrow).
-        // Drawn AFTER the corner lane so a crossing leader hides behind the
-        // pill's parchment fill, never through its text.
+ // clockwise-orbit annotation at the left edge (design: note + arrow).
+ // Drawn AFTER the corner lane so a crossing leader hides behind the
+ // pill's parchment fill, never through its text.
         _pillLabel(ctx, [
             { text: 'CLOCKWISE ORBIT', font: '12px "Cinzel"', color: PAL.ink },
             { text: '5 REAL HOURS', font: '12px "Cinzel"', color: PAL.ink },
@@ -1895,9 +1886,9 @@ async function renderCosmologyAtlasSheet(t = Date.now()) {
         const tx2 = cx + Math.cos(aimA) * (R / 2), ty2 = cy + Math.sin(aimA) * (R / 2);
         _curveArrow(ctx, 186, 474, 262, 452, tx2, ty2, 'rgba(58,42,30,0.65)', 1.5);
 
-        // WORLD BEYOND label (design: inside the great disk). ANTI-FW
-        // placement: opposite the First World's live pose, so the disk and
-        // this label can never overlap whatever the live phase is.
+ // WORLD BEYOND label (design: inside the great disk). ANTI-FW
+ // placement: opposite the First World's live pose, so the disk and
+ // this label can never overlap whatever the live phase is.
         const wbAng = Math.atan2(g.fwy - cy, g.fwx - cx) + Math.PI;
         const wbx = cx + Math.cos(wbAng) * (g.r * 1.52);
         const wby = cy + Math.sin(wbAng) * (g.r * 1.52);
@@ -1907,7 +1898,7 @@ async function renderCosmologyAtlasSheet(t = Date.now()) {
             { text: 'God-Rank realm, above dimensionality', font: 'italic 11px "IM Fell Italic"', color: PAL.inkSoft },
         ], wbx, wby, '20px "Cinzel"', PAL.ink, { lh: 23 });
 
-        // ── the Abyss: dashed rings descending beneath the boundary ──
+ // -- the Abyss: dashed rings descending beneath the boundary --
         const AB_RX = [110, 82, 61, 45, 33];
         let aby = 935;
         const bottoms = [];
@@ -1921,7 +1912,7 @@ async function renderCosmologyAtlasSheet(t = Date.now()) {
         for (let i = 0; i < 3; i++) {
             ctx.beginPath(); ctx.arc(488 + i * 10, bottoms[bottoms.length - 1] + 22, 2, 0, Math.PI * 2); ctx.fill();
         }
-        // THE ABYSS label block to the right of the rings (design position)
+ // THE ABYSS label block to the right of the rings (design position)
         ctx.textAlign = 'left';
         ctx.font = '16px "Cinzel"'; ctx.fillStyle = PAL.inkSoft;
         ctx.fillText('THE ABYSS', 648, 986);
@@ -1931,12 +1922,12 @@ async function renderCosmologyAtlasSheet(t = Date.now()) {
         ctx.fillText('not a world - a separate structure', 648, 1042);
         ctx.textAlign = 'center';
 
-        // ── legend + timelines note ──
+ // -- legend + timelines note --
         _legend(ctx, 1108);
         _centered(ctx, 'timelines are not mapped - every world holds infinite timeline variants (world to variant)',
             1134, 'italic 13px "IM Fell Italic"', PAL.inkSoft);
 
-        // ── survey plates (the pass-3 sheet's bottom plates) ──
+ // -- survey plates (the pass-3 sheet's bottom plates) --
         _decreePlate(ctx, 64, 1160, 400, 104, 'SURVEY LAW', [
             "the First World's rim touches the World",
             "Beyond's center; its far rim touches the",
@@ -1948,34 +1939,32 @@ async function renderCosmologyAtlasSheet(t = Date.now()) {
             'the Presence of Order travels with it',
         ]);
 
-        // live four-clocks strip + footer + seal
+ // live four-clocks strip + footer + seal
         _liveStrip(ctx, 1294);
         _centered(ctx, '"j world all" - the gathered chart', 1362, 'italic 12px "IM Fell Italic"', PAL.inkSoft);
         _waxSealBig(ctx, 78, 1300, 22, 'K');
     });
 }
 
-// ─── GATE CARDS (owner ticket: alignment and access failures get an IMAGE
-// ─── CARD that carries the refusal visually, not just in text) ───────────────
-//
-//  renderAbyssMisalignedCard   the abyss gate seen from outside: the living
-//                              circles above, the descent below, and the
-//                              alignment link between them NOT MET. Modes:
-//                              'closed' (window shut), 'unreadable' (cannot
-//                              be read), 'level' (the viewer's tier is not
-//                              there yet - the sheet lock).
-//  renderAfterlifeLockedCard   the shore on its own circuit, the road toward
-//                              it ending mid gap. The map itself is never
-//                              drawn (hard contract).
-//  renderWorldBeyondLockedCard the great boundary as an EMPTY gold circle -
-//                              no rays, no First World, nothing to read -
-//                              and the road of rank stopping mid air.
-//                              2026-09-21 owner: the World Beyond is locked
-//                              for everyone except the owner until the
-//                              required conditions are met.
-//
-//  All three reuse the Royal Decree chrome of the four sheets so the refusal
-//  reads as part of the same visual family.
+// --- GATE CARDS (owner ticket: alignment and access failures get an IMAGE
+// --- CARD that carries the refusal visually, not just in text) ---------------
+// renderAbyssMisalignedCard the abyss gate seen from outside: the living
+// circles above, the descent below, and the
+// alignment link between them NOT MET. Modes:
+// 'closed' (window shut), 'unreadable' (cannot
+// be read), 'level' (the viewer's tier is not
+// there yet - the sheet lock).
+// renderAfterlifeLockedCard the shore on its own circuit, the road toward
+// it ending mid gap. The map itself is never
+// drawn (hard contract).
+// renderWorldBeyondLockedCard the great boundary as an EMPTY gold circle -
+// no rays, no First World, nothing to read -
+// and the road of rank stopping mid air.
+// the World Beyond is locked
+// for everyone except the owner until the
+// required conditions are met.
+// All three reuse the Royal Decree chrome of the four sheets so the refusal
+// reads as part of the same visual family.
 
 // A large diagonal refusal stamp across the visual (kept subtle so it reads
 // as a seal on the chart, not a UI error banner).
@@ -2015,7 +2004,7 @@ function renderAbyssMisalignedCard(opts = {}) {
                     ? 'the abyss is not yours to enter yet'
                     : 'the abyss admits new descenters only while the window is open'));
 
-        // the living circles (World Beyond boundary + First World, live phase)
+ // the living circles (World Beyond boundary + First World, live phase)
         const cx = W / 2, cy = 372, R = 185;
         ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(226,210,178,0.45)'; ctx.fill();
@@ -2028,15 +2017,15 @@ function renderAbyssMisalignedCard(opts = {}) {
         _drawFirstWorld(ctx, g, { noLinkLabel: true });
         _centered(ctx, 'THE FIRST WORLD', cy + R + 24, '15px "Cinzel"', PAL.inkSoft);
 
-        // the alignment link between them: drawn NOT MET. A thread leaves the
-        // First World's bottom link and stops in the void, short of the abyss.
+ // the alignment link between them: drawn NOT MET. A thread leaves the
+ // First World's bottom link and stops in the void, short of the abyss.
         const bx = g.fwx, by = g.fwy + g.r;
         const gapY = 668;
         ctx.setLineDash([3, 6]);
         ctx.strokeStyle = 'rgba(139,26,43,0.8)'; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx, gapY - 26); ctx.stroke();
         ctx.setLineDash([]);
-        // broken end sockets that do not meet
+ // broken end sockets that do not meet
         ctx.strokeStyle = PAL.wax; ctx.lineWidth = 2.4;
         ctx.beginPath(); ctx.arc(bx, gapY - 12, 9, 0, Math.PI * 2); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(bx - 7, gapY); ctx.lineTo(bx + 7, gapY + 14); ctx.stroke();
@@ -2044,15 +2033,15 @@ function renderAbyssMisalignedCard(opts = {}) {
         _centered(ctx, mode === 'unreadable' ? 'THE ALIGNMENT CANNOT BE READ' : 'THE ALIGNMENT IS NOT MET',
             gapY + 44, '14px "Cinzel"', PAL.wax);
 
-        // refusal stamp in its own band, clear of circles, link and rings
+ // refusal stamp in its own band, clear of circles, link and rings
         _refusalStamp(ctx, mode === 'unreadable' ? 'UNREAD' : 'SEALED',
             { y: 792, lw: 500, lh: 96, font: 44, rot: -0.12 });
 
-        // the descent below (short, so nothing slides under the plates)
+ // the descent below (short, so nothing slides under the plates)
         _centered(ctx, 'THE ABYSS', 880, '15px "Cinzel"', PAL.inkSoft);
         _drawAbyssDescent(ctx, cx, 906, 0.66, false);
 
-        // plates
+ // plates
         if (mode === 'level') {
             _plate(ctx, 55, 1156, 420, 104, 'WHAT YOU NEED', [
                 `level ${String(opts.unlock != null ? opts.unlock : 20)} or above.`,
@@ -2080,7 +2069,7 @@ function renderAbyssMisalignedCard(opts = {}) {
             ]);
         }
 
-        // bottom strip + seal + footer (hand-placed: the plates sit lower)
+ // bottom strip + seal + footer (hand-placed: the plates sit lower)
         _liveStrip(ctx, 1292);
         _waxSeal(ctx, 80, H - 62, 'IV');
         _centered(ctx, 'the descent is refused, politely and completely',
@@ -2095,7 +2084,7 @@ function renderAfterlifeLockedCard(t = Date.now()) {
             'THE AFTERLIFE',
             'the road is missing its crossing');
 
-        // the afterlife on its own circuit (invariant #5), far and unreachable
+ // the afterlife on its own circuit (invariant #5), far and unreachable
         const acx = W / 2, acy = 470, aR = 235;
         ctx.beginPath(); ctx.arc(acx, acy, aR, 0, Math.PI * 2);
         ctx.setLineDash([7, 8]); ctx.strokeStyle = PAL.afterlife; ctx.lineWidth = 1.8;
@@ -2111,18 +2100,18 @@ function renderAfterlifeLockedCard(t = Date.now()) {
         ctx.beginPath(); ctx.arc(ax, ay, 6.5, 0, Math.PI * 2);
         ctx.fillStyle = PAL.afterlife; ctx.fill();
 
-        // the refusal stamp sits in the orbit's empty center, like a mark on
-        // a chart the surveyor declined to finish
+ // the refusal stamp sits in the orbit's empty center, like a mark on
+ // a chart the surveyor declined to finish
         _refusalStamp(ctx, 'LOCKED', { y: acy + 30, lw: 430, lh: 100, font: 44, rot: -0.14 });
 
-        // the road: it leaves the viewer's side and stops mid gap
+ // the road: it leaves the viewer's side and stops mid gap
         const startX = 250, startY = 950;
         const endX = 450, endY = 768;
         ctx.setLineDash([2, 7]);
         ctx.strokeStyle = 'rgba(74,85,104,0.85)'; ctx.lineWidth = 2.4;
         ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(endX, endY); ctx.stroke();
         ctx.setLineDash([]);
-        // the crossing that is missing: a closed gate glyph where the road dies
+ // the crossing that is missing: a closed gate glyph where the road dies
         const gx = endX + 44, gy = endY - 26;
         ctx.strokeStyle = PAL.afterlife; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.moveTo(gx - 16, gy + 18); ctx.lineTo(gx - 16, gy - 18); ctx.stroke();
@@ -2151,7 +2140,7 @@ function renderAfterlifeLockedCard(t = Date.now()) {
     });
 }
 
-// ─── WORLD BEYOND LOCKED CARD (2026-09-21 owner ruling) ──────────────────────
+// --- WORLD BEYOND LOCKED CARD (owner ruling) ----------------------
 // "The World Beyond map should be locked for everyone except the owner until
 // they meet the required conditions." The boundary is drawn as an EMPTY gold
 // circle on the dark plate: no rays, no First World, no interior detail of
@@ -2169,12 +2158,12 @@ function renderWorldBeyondLockedCard(t = Date.now()) {
         ctx.fillRect(W / 2 - 6, 170, 12, 16);
         _centered(ctx, 'the road ends at the rank', 216, 'italic 16px "IM Fell Italic"', '#9A7D3A');
 
-        // the great boundary: an empty gold circle. Nothing inside is drawn.
+ // the great boundary: an empty gold circle. Nothing inside is drawn.
         const cx = W / 2, cy = 490, R = 235;
         ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
         ctx.fillStyle = '#17110B'; ctx.fill();
         ctx.lineWidth = 2.6; ctx.strokeStyle = 'rgba(201,162,75,0.9)'; ctx.stroke();
-        // the First World's orbit path (structure, not map content)
+ // the First World's orbit path (structure, not map content)
         ctx.beginPath(); ctx.arc(cx, cy, R / 2, 0, Math.PI * 2);
         ctx.setLineDash([6, 8]);
         ctx.strokeStyle = 'rgba(201,162,75,0.35)'; ctx.lineWidth = 1.2; ctx.stroke();
@@ -2182,8 +2171,8 @@ function renderWorldBeyondLockedCard(t = Date.now()) {
 
         _refusalStamp(ctx, 'LOCKED', { y: cy + 10, lw: 420, lh: 96, font: 42, rot: -0.13, onDark: true });
 
-        // the rank road: gold rungs climbing from the bottom of the sheet
-        // toward the boundary, dying mid air just short of its rim
+ // the rank road: gold rungs climbing from the bottom of the sheet
+ // toward the boundary, dying mid air just short of its rim
         const rungs = 5;
         for (let i = 0; i < rungs; i++) {
             const ry = 950 - i * 44;                       // 950 .. 774
@@ -2193,7 +2182,7 @@ function renderWorldBeyondLockedCard(t = Date.now()) {
             ctx.lineWidth = 3;
             ctx.beginPath(); ctx.moveTo(cx - half, ry); ctx.lineTo(cx + half, ry); ctx.stroke();
         }
-        // the broken last rung: two stubs with a gap, short of the rim (725)
+ // the broken last rung: two stubs with a gap, short of the rim (725)
         ctx.strokeStyle = 'rgba(201,162,75,0.35)'; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.moveTo(cx - 12, 744); ctx.lineTo(cx - 3, 744); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(cx + 5, 744); ctx.lineTo(cx + 13, 744); ctx.stroke();
@@ -2216,7 +2205,7 @@ function renderWorldBeyondLockedCard(t = Date.now()) {
     }, { dark: true });
 }
 
-// ─── CANVAS DRIVER ───────────────────────────────────────────────────────────
+// --- CANVAS DRIVER -----------------------------------------------------------
 
 async function _render(drawFn, opts = {}) {
     try {
@@ -2258,4 +2247,3 @@ module.exports = {
     PAL,
     W, H,
 };
-

@@ -1,6 +1,6 @@
-// QA: ANTINUDE v2 (2026-09-27, owner brief §7 - separate moderation feature)
+// QA: ANTINUDE v2 (owner brief §7 - separate moderation feature)
 // v2: video + animated-sticker scanning (5-frame sampling), NudeNet-combined
-//     worker scores, scan logging, threshold 0.45 default, threshold parser fix.
+// worker scores, scan logging, threshold 0.45 default, threshold parser fix.
 // - media extraction: image / sticker / ANIMATED sticker / VIDEO / wrappers
 // - verdict cache: same bytes NOT re-analyzed (owner requirement)
 // - threshold + action routing: delete / warn / kick messages
@@ -76,7 +76,7 @@ const noWarn = () => 0;
     req.on("end", () => {
       const nsfw = mode === "high" ? 0.92 : mode === "low" ? 0.01 : 0.55;
       res.writeHead(200, { "Content-Type": "application/json" });
-      // v2 worker shape: nsfw + parts + falconsai
+ // v2 worker shape: nsfw + parts + falconsai
       res.end(JSON.stringify({ nsfw, decision: nsfw >= 0.7 ? "delete" : "ok", parts: nsfw >= 0.5 ? [{ label: "FEMALE_BREAST_EXPOSED", score: nsfw }] : [], falconsai: nsfw }));
     });
   });
@@ -108,28 +108,28 @@ const noWarn = () => 0;
   ok(imgAnalysis && imgAnalysis.nsfw === 0.01, "analyzer returns worker score");
 
   console.log("════ 6. video path: graceful degradation without usable frames ════");
-  // A garbage buffer is not a decodable mp4: ffmpeg (if present) extracts no
-  // frames -> analyzeMediaBuffer returns null (fail-open), never throws.
+ // A garbage buffer is not a decodable mp4: ffmpeg (if present) extracts no
+ // frames -> analyzeMediaBuffer returns null (fail-open), never throws.
   const vidAnalysis = await an2.analyzeMediaBuffer("video", Buffer.alloc(5000, 9)).catch((e) => "threw:" + e.message);
   ok(vidAnalysis === null || (vidAnalysis && vidAnalysis.kind === "video"), "garbage video fails open (null) or degrades gracefully");
   const vidStats = an2.stats();
   ok(vidStats.videos >= 1, `video scans counted (videos=${vidStats.videos})`);
 
   console.log("════ 7. animated sticker path via sharp-decodable webp ════");
-  // build a tiny static webp with sharp; pages=1 -> single frame path
+ // build a tiny static webp with sharp; pages=1 -> single frame path
   try {
     const sharp = require("sharp");
-    // gradient 256x256 -> the png frame is comfortably above the 500B sanity gate
+ // gradient 256x256 -> the png frame is comfortably above the 500B sanity gate
     const grad = await sharp({ create: { width: 256, height: 256, channels: 3, background: { r: 10, g: 20, b: 200 } } })
       .composite([{ input: Buffer.from(`<svg width="256" height="256"><rect width="256" height="256" fill="blue"/><circle cx="128" cy="128" r="90" fill="yellow"/></svg>`), top: 0, left: 0 }])
       .webp().toBuffer();
     const stAnalysis = await an2.analyzeMediaBuffer("asticker", grad).catch((e) => "threw:" + e.message);
     ok(stAnalysis !== null && stAnalysis.kind === "asticker", "static webp sticker analyzed (single page)");
-    // oversize guard
+ // oversize guard
     const bigSkip = await antinude.handleAntinude(s, mediaMsg("asticker"), settings(), noWarn, noWarn, ctx());
     ok(bigSkip === false, "oversize/undownloadable media still fails open");
   } catch (e) {
-    // sharp unavailable in test env - skip gracefully
+ // sharp unavailable in test env - skip gracefully
     console.log("  skip - sharp not available:", e.message.slice(0, 40));
   }
 

@@ -1,12 +1,12 @@
 // ============================================
-// 🔨 REPAIR SYSTEM COMMANDS
+// REPAIR SYSTEM COMMANDS
 // ============================================
 
 const inventorySystem = require('../rpg/inventorySystem');
 const durabilitySystem = require('../rpg/durabilitySystem');
 const economy = require('../rpg/economy');
 const botConfig = require('../../botConfig');
-// 💡 COSMOLOGY PASS: occasional blacksmith lore drops (plain text, never on
+// COSMOLOGY PASS: occasional blacksmith lore drops (plain text, never on
 // failure, 30-min per-user cooldown handled inside the module).
 const loreDrops = require('../rpg/loreDrops');
 
@@ -20,8 +20,7 @@ const CONDITION_ICONS = {
     GOOD: '🟩'
 };
 
-// §9 base-fusion helper — one zoomed blacksmith card. Never creates a base;
-// returns null on any failure so the caller falls back to the text flow.
+// §9 base-fusion helper - one zoomed blacksmith card. Never creates a base;
 async function smithCard(userId, banner, activity = 'browse') {
     try {
         return await require('../rpg/baseBuilder').zoomForCommand({ userId, prefix: getPrefix() }, 'blacksmith', { activity, banner });
@@ -80,12 +79,12 @@ async function displayBlacksmith(sock, chatId, userId) {
         msg += `- Repair all items: \`${getPrefix()}repair all\`\n`;
     }
 
-    // 💡 LORE DROP: blacksmith voice on the menu view (10%) - its own
-    // message box (owner ruling: a drop is a distinct lore event).
+ // LORE DROP: blacksmith voice on the menu view (10%) - its own
+ // message box (owner ruling: a drop is a distinct lore event).
     let __loreDrop = null;
     try { __loreDrop = loreDrops.maybeDrop('blacksmith', { userId, chatId, chance: 0.10 }); } catch (e) {}
-    // §9: the visit plays at the forge (FORGE READY banner + wallet) — the
-    // full gear/cost menu below remains the source of truth.
+ // §9: the visit plays at the forge (FORGE READY banner + wallet) - the
+ // full gear/cost menu below remains the source of truth.
     const forgeTxt = msg;
     try {
         const c = await smithCard(userId, {
@@ -136,10 +135,10 @@ async function repair(sock, chatId, userId, target) {
             return await sock.sendMessage(chatId, { text: `❌ Insufficient Zeni! You need 💰 ${getZENI()}${totalCost.toLocaleString()} but only have 💰 ${getZENI()}${(user.wallet || 0).toLocaleString()}.` });
         }
         
-        // Deduct money
+ // Deduct money
         economy.removeMoney(userId, totalCost, `Repaired all equipped gear`);
         
-        // Repair all items
+ // Repair all items
         for (const entry of toRepair) {
             durabilitySystem.repairItem(entry.item);
         }
@@ -150,11 +149,11 @@ async function repair(sock, chatId, userId, target) {
         successMsg += `Successfully repaired all equipped items for 💰 ${getZENI()}${totalCost.toLocaleString()}.\n`;
         successMsg += `Your gear is now in pristine condition! ✨`;
 
-        // 💡 LORE DROP: blacksmith voice (12%) - own message box
+ // LORE DROP: blacksmith voice (12%) - own message box
         let __loreDrop = null;
         try { __loreDrop = loreDrops.maybeDrop('blacksmith', { userId, chatId, chance: 0.12 }); } catch (e) {}
 
-        // §9: sparks fly at the anvil — real total cost on the ribbon
+ // §9: sparks fly at the anvil - real total cost on the ribbon
         try {
             const c = await smithCard(userId, {
                 head: 'REPAIRS COMPLETE',
@@ -170,11 +169,10 @@ async function repair(sock, chatId, userId, target) {
         await loreDrops.sendOwn(sock, chatId, __loreDrop);
     }
     
-    // Repair single item
+ // Repair single item
     let selectedSlot = null;
     let selectedItem = null;
     
-    // Check if index
     if (!isNaN(cleanTarget)) {
         const index = parseInt(cleanTarget) - 1;
         let currentIndex = 0;
@@ -189,7 +187,7 @@ async function repair(sock, chatId, userId, target) {
             }
         }
     } else {
-        // Match slot name
+ // Match slot name
         const match = Object.keys(equipment).find(slot => slot.toLowerCase() === cleanTarget);
         if (match) {
             selectedSlot = match;
@@ -210,7 +208,7 @@ async function repair(sock, chatId, userId, target) {
         return await sock.sendMessage(chatId, { text: `❌ Insufficient Zeni! You need 💰 ${getZENI()}${cost.toLocaleString()} to repair this item.` });
     }
     
-    // Deduct and repair
+ // Deduct and repair
     economy.removeMoney(userId, cost, `Repaired ${selectedItem.name}`);
     durabilitySystem.repairItem(selectedItem);
     economy.saveUser(userId);
@@ -219,11 +217,11 @@ async function repair(sock, chatId, userId, target) {
     successMsg += `Successfully repaired *${selectedItem.name}* (${selectedSlot.toUpperCase()}) for 💰 ${getZENI()}${cost.toLocaleString()}.\n`;
     successMsg += `Remaining Wallet: 💰 ${getZENI()}${(user.wallet || 0).toLocaleString()}`;
 
-    // 💡 LORE DROP: blacksmith voice (12%) - own message box
+ // LORE DROP: blacksmith voice (12%) - own message box
     let __loreDrop = null;
     try { __loreDrop = loreDrops.maybeDrop('blacksmith', { userId, chatId, chance: 0.12 }); } catch (e) {}
 
-    // §9: the repaired item lands on the anvil — real name + real cost
+ // §9: the repaired item lands on the anvil - real name + real cost
     try {
         const c = await smithCard(userId, {
             head: 'REPAIR COMPLETE',
@@ -296,9 +294,9 @@ async function inspectItem(sock, chatId, userId, target) {
     const isEquippedItem = isEquipped && item.durability !== undefined;
     const stats = item.stats || itemInfo.stats || {};
     
-    // Try rendering image card via Go Service profile card endpoint
+ // Try rendering image card via Go Service profile card endpoint
     try {
-        // 💡 singleton (PERF PATCH 2026-07-27): reuse shared instance
+ // singleton (PERF PATCH ): reuse shared instance
         const goService = require('../utils/goImageService');
         
         const cardData = {
@@ -322,7 +320,7 @@ async function inspectItem(sock, chatId, userId, target) {
             pfpUrl: "",
             statPoints: 0,
             
-            // Map stats to character stats
+ // Map stats to character stats
             hp: stats.hp || 0,
             atk: stats.atk || 0,
             def: stats.def || 0,
@@ -360,7 +358,7 @@ async function inspectItem(sock, chatId, userId, target) {
         console.error("Failed to generate inspect card image:", err.message);
     }
     
-    // Fallback to text message
+ // Fallback to text message
     let msg = `🔎 *ITEM INSPECTION* 🔎\n━━━━━━━━━━━━━━━━━━━━\n`;
     msg += `${rarityInfo.icon} *${item.name || itemInfo.name || item.id}*\n`;
     msg += `Rarity: *${rarityInfo.name}*\n`;

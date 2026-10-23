@@ -1,4 +1,4 @@
-// gen_motion.js — v17 BALL ARENA flight frames: 24 directed mid-frames
+// gen_motion.js - v17 BALL ARENA flight frames: 24 directed mid-frames
 // (12 undirected adjacent pairs x 2 directions), 1280x720 + 800x450 thumbs.
 // Ball mid-air BETWEEN cells, motion trail ghosts + speed streaks behind it,
 // faint glow on origin cell, full glow on target cell. The bot plays
@@ -134,10 +134,10 @@ async function label(img, text) {
             gridLines(img);
             const mx = (CELLX[gx1] + CELLX[gx2]) / 2, my = (CELLY[gy1] + CELLY[gy2]) / 2;
             const gapX = CELLX[gx2] - CELLX[gx1], gapY = CELLY[gy2] - CELLY[gy1];
-            // trail ghosts receding toward the origin cell
+ // trail ghosts receding toward the origin cell
             ballGhost(img, mx - gapX * 0.22, my - gapY * 0.22, 40, 90);
             ballGhost(img, mx - gapX * 0.40, my - gapY * 0.40, 28, 55);
-            // speed streaks behind the ball (3 lanes)
+ // speed streaks behind the ball (3 lanes)
             const L = 230;
             if (dx !== 0) {
                 streak(img, mx - 70, my - 34, L, dx, 0, 120);

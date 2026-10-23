@@ -1,5 +1,5 @@
 'use strict';
-// probe_base47i.js — exact card-pixel positions of fence gates / barns on homestead cards
+// probe_base47i.js - exact card-pixel positions of fence gates / barns on homestead cards
 process.env.QA_MODE = '1';
 const K = require('../core/rpg/kingdom3d');
 const r = require('../core/rpg/homesteadBaseRenderer');

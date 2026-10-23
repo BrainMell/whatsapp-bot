@@ -1,5 +1,5 @@
 'use strict';
-// probe47i.js — log every sprite placement for a guild seed (asset-utilisation audit)
+// probe47i.js - log every sprite placement for a guild seed (asset-utilisation audit)
 process.env.QA_MODE = '1';
 const K = require('../core/rpg/kingdom3d');
 const g = require('../core/rpg/guildBaseRenderer');
@@ -18,7 +18,7 @@ const WANT = process.argv[2] ? JSON.parse(process.argv[2]) : null;
     for (const gs of states) {
         log.length = 0;
         await g.renderFrame(gs, 0, { returnCanvas: true });
-        console.log('=== ' + gs.name + ' (' + (gs.biome || '?') + ') — ' + log.length + ' placements');
+        console.log('=== ' + gs.name + ' (' + (gs.biome || '?') + ') - ' + log.length + ' placements');
         const want = /windmill|barracks|stage|market|crate_long|pallet|bucket_arrows|target|weaponrack|gate|postern|wall_straight_gate|mine|watermill|lumbermill/;
         for (const l of log) if (want.test(l)) console.log('  ' + l);
     }

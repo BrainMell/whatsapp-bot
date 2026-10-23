@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Sibling process for econ_stale_guard_qa.js — simulates the OTHER bot
+// Sibling process for econ_stale_guard_qa.js - simulates the OTHER bot
 // instance sharing the same MongoDB (Box1 topology: jake + subaru).
 // Usage: node scripts/econ_stale_guard_sibling.js <step> <jid>
 // Requires economy with its OWN cache (separate node process = separate
@@ -28,8 +28,8 @@ async function connectDB() {
     await economy.loadEconomy();
 
     if (process.argv[2] === 'claim_reward') {
-        // Sibling-side player actions: quest completion + wallet payout +
-        // effect state the parent process has never seen.
+ // Sibling-side player actions: quest completion + wallet payout +
+ // effect state the parent process has never seen.
         const u = economy.getUser(jid);
         u.wallet = 1500;                                   // sibling pays quest reward
         u.questsWon = 7;                                   // sibling's quest progress

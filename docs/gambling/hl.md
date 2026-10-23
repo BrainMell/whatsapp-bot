@@ -157,7 +157,6 @@ To adjust Card boundaries or change tie rules:
   ```
 - Make ties result in a loss for the player:
   ```javascript
-  // Remove the check for firstCard === secondCard and count equal cards as a loss.
   ```
 Prefixes, limit caps, and house edges can be customized directly in the same block.
 

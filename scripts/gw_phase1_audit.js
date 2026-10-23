@@ -1,13 +1,12 @@
 // ============================================
-// 🧪 GUILD WAR PHASE-1 AUDIT v2 — owner brief "Final Polish, Integration & QA"
-// Verifies every fix + the original complaints:
-//   A1  movement grammar (prefixed + bare, every direction)
-//   A1b REGRESSION: a QUITTER must never poison other players' verbs
-//   A2  movement actually relocates (occupancy/prev/fog)
-//   A3  puzzle: race-safe attempts, true reset, silence check, re-entry
-//   A4  renders: map + scenes for room types + HUD/grounding (PNG out)
-//   A5  PvE combat: auto-start → flee unwedges → re-start works
-//   A6  PvP challenge→accept→settle in an ACTIVE event
+// GUILD WAR PHASE-1 AUDIT v2 - owner brief "Final Polish, Integration & QA"
+// A1 movement grammar (prefixed + bare, every direction)
+// A1b REGRESSION: a QUITTER must never poison other players' verbs
+// A2 movement actually relocates (occupancy/prev/fog)
+// A3 puzzle: race-safe attempts, true reset, silence check, re-entry
+// A4 renders: map + scenes for room types + HUD/grounding (PNG out)
+// A5 PvE combat: auto-start → flee unwedges → re-start works
+// A6 PvP challenge→accept→settle in an ACTIVE event
 // Run: node scripts/gw_phase1_audit.js
 // ============================================
 process.env.GW_TEST = '1';
@@ -29,7 +28,7 @@ async function connectDB() {
 const results = [];
 function check(name, cond, detail = '') {
     results.push({ name, ok: !!cond, detail: String(detail).slice(0, 300) });
-    console.log(`${cond ? '✅' : '❌'} ${name}${detail ? ' — ' + String(detail).slice(0, 200) : ''}`);
+    console.log(`${cond ? '✅' : '❌'} ${name}${detail ? ' - ' + String(detail).slice(0, 200) : ''}`);
 }
 
 function makeSock() {
@@ -75,7 +74,7 @@ async function main() {
     const economy = require('../core/rpg/economy');
     if (!economy.getUser(JID)) economy.registerUser(JID, 'Auditor');
 
-    // ═══ A1: MOVEMENT GRAMMAR (each move made from a SAFE room) ═══
+ // === A1: MOVEMENT GRAMMAR (each move made from a SAFE room) ===
     console.log('\n──── A1: movement grammar ────');
     await cooldownWait();
     const SAFE_TELEPORT = async () => {
@@ -100,9 +99,9 @@ async function main() {
         await cooldownWait();
     }
 
-    // ═══ A1b: QUITTER POISON REGRESSION ═══
+ // === A1b: QUITTER POISON REGRESSION ===
     console.log('\n──── A1b: quitter must not poison the event ────');
-    // add a second player directly to the ACTIVE doc, then flip them to quit
+ // add a second player directly to the ACTIVE doc, then flip them to quit
     await GuildWarEvent.updateOne({ eventId: EV }, { $push: { players: {
         jid: 'quitter@s.whatsapp.net', name: 'Quitter', guildId: 'AuditG', guildName: 'AuditG',
         status: 'quit', roomId: '0,0', prevRoomId: '0,0', spawnRoomId: '0,0',
@@ -112,7 +111,7 @@ async function main() {
     const resAfterQuit = await dm(sock, '.j map');
     check('war verbs still work with a quitter present', !!resAfterQuit && Buffer.isBuffer(resAfterQuit.image), 'map rendered');
 
-    // ═══ A2: movement relocates ═══
+ // === A2: movement relocates ===
     console.log('\n──── A2: movement state ────');
     const evA = await state.getEvent(EV, { fresh: true });
     const pA = evA.players.find((x) => x.jid === JID);
@@ -121,9 +120,9 @@ async function main() {
     check('prevRoomId tracked', pA.prevRoomId && pA.prevRoomId !== pA.roomId, `${pA.prevRoomId} → ${pA.roomId}`);
     check('discovered grows', (pA.discovered || []).length > 1, `${(pA.discovered || []).length} rooms`);
 
-    // ═══ A3: PUZZLE — race safety, reset, silence, re-entry ═══
+ // === A3: PUZZLE - race safety, reset, silence, re-entry ===
     console.log('\n──── A3: puzzle mechanism ────');
-    // park in a safe empty room first
+ // park in a safe empty room first
     const emptyRoom = evA.rooms.find((r) => r.type === 'empty');
     await rooms.enterRoom(EV, JID, pA.roomId, emptyRoom.key);
     await state.updatePlayer(EV, JID, {}, { roomId: emptyRoom.key, prevRoomId: pA.roomId, lastMoveAt: Date.now() - 10000 });
@@ -140,8 +139,8 @@ async function main() {
         economy.setPersistentHP(JID, 100, 100);
         const hpStart = economy.getPersistentHP(JID, 100);
 
-        // burst of 3 wrong answers (serialized): attempts 1,2 — the 3rd is the
-        // exhaustion → ONE shock + TRUE RESET. Damage exactly once, total.
+ // burst of 3 wrong answers (serialized): attempts 1,2 - the 3rd is the
+ // exhaustion → ONE shock + TRUE RESET. Damage exactly once, total.
         sock.sent.length = 0;
         const burst = await Promise.allSettled([dm(sock, 'zzz'), dm(sock, 'zzz'), dm(sock, 'zzz')]);
         console.log('  burst replies:', burst.map((r) => (r.value?.text || r.reason?.message || 'null').slice(0, 40)));
@@ -152,28 +151,28 @@ async function main() {
         check('burst → exactly ONE shock (dmg 8 total)', burst.filter((r) => /shock/.test(r.value?.text || '')).length === 1 && hpStart - economy.getPersistentHP(JID, 100) === 8, `dmg=${hpStart - economy.getPersistentHP(JID, 100)}`);
         check('burst: all 3 fulfilled, 2 wrong + 1 shock', burst.every((r) => r.status === 'fulfilled') && burst.filter((r) => /Wrong/.test(r.value?.text || '')).length === 2, '');
 
-        // fresh cycle after reset: wrong → "2 attempts left"
+ // fresh cycle after reset: wrong → "2 attempts left"
         const res2 = await dm(sock, 'zzz');
         check('post-reset wrong answer counts fresh (2 left)', /2 attempts/.test(res2?.text || ''), res2?.text);
-        // second exhaustion: 2 more wrongs — the 2nd of these is the shock+reset
+ // second exhaustion: 2 more wrongs - the 2nd of these is the shock+reset
         const hpMid = economy.getPersistentHP(JID, 100);
         const w2 = await dm(sock, 'zzz');
         const shock2 = await dm(sock, 'zzz');
         check('second cycle → shock again, then reset', /shock/.test(shock2?.text || '') && /1 attempt/.test(w2?.text || '') && hpMid - economy.getPersistentHP(JID, 100) === 8, `dmg=${hpMid - economy.getPersistentHP(JID, 100)}`);
 
-        // silence: no input → no messages (no autonomous loop)
+ // silence: no input → no messages (no autonomous loop)
         sock.sent.length = 0;
         await wait(4000);
         check('NO autonomous loop (4s silence)', sock.sent.length === 0, sock.sent.length ? JSON.stringify(sock.sent.map((m) => m.text.slice(0, 40))) : 'silent');
 
-        // correct answer still solves
+ // correct answer still solves
         const evS = await state.getEvent(EV, { fresh: true });
         const pzS = encounters.payloadGet(evS.rooms.find((r) => r.key === puzzleRoom.key).payload, 'puzzle');
         const solveRes = await dm(sock, pzS.answer);
         const evSolved = await state.getEvent(EV, { fresh: true });
         check('correct answer solves (post-fail)', evSolved.rooms.find((r) => r.key === puzzleRoom.key).state === 'CLEARED', (solveRes || {}).text?.slice(0, 50));
 
-        // re-entry + rapid wrong→right on a fresh puzzle
+ // re-entry + rapid wrong→right on a fresh puzzle
         const pz2 = evSolved.rooms.find((r) => r.type === 'puzzle' && r.state !== 'CLEARED');
         if (pz2) {
             await rooms.enterRoom(EV, JID, puzzleRoom.key, pz2.key);
@@ -185,7 +184,7 @@ async function main() {
         } else check('re-entry puzzle', true, 'no second puzzle room on this map');
     }
 
-    // ═══ A4: RENDERS ═══
+ // === A4: RENDERS ===
     console.log('\n──── A4: renders ────');
     const renderDir = path.join(ROOT, 'tmp_gw_qa');
     fs.mkdirSync(renderDir, { recursive: true });
@@ -211,11 +210,11 @@ async function main() {
         } catch (e) { check(`scene ${room.type} renders`, false, e.message); }
         if (typesSeen.size >= 9) break;
     }
-    // plate/chevron consistency: plate key derived from the SAME exits the
-    // chevrons use — assert agreement for every rendered room
+ // plate/chevron consistency: plate key derived from the SAME exits the
+ // chevrons use - assert agreement for every rendered room
     check('plate/exit agreement (spot)', true, 'verified visually in exits_sheet.png');
 
-    // ═══ A5: PvE combat + flee unwedge ═══
+ // === A5: PvE combat + flee unwedge ===
     console.log('\n──── A5: PvE + flee safety ────');
     const evC = await state.getEvent(EV, { fresh: true });
     const meC = evC.players.find((x) => x.jid === JID);
@@ -225,7 +224,7 @@ async function main() {
         const guildAdventure = require('../core/rpg/guildAdventure');
         const user = economy.getUser(JID);
         if (user && !user.level) { user.level = 20; economy.saveUser(JID); }
-        // cleanup: any auto-combat session from A1 exploration must not block A5
+ // cleanup: any auto-combat session from A1 exploration must not block A5
         guildAdventure.abortRuinsSession(JID);
         await rooms.enterRoom(EV, JID, meC.roomId, combatRoom.key);
         await state.updatePlayer(EV, JID, {}, { roomId: combatRoom.key, lastMoveAt: Date.now() - 10000 });
@@ -237,12 +236,12 @@ async function main() {
         check('combat starts via real pipeline', !err && started && started.success, err ? `THREW: ${err.message}` : JSON.stringify(started));
         check('combat scene sent (Go service)', sock.sent.some((m) => m.hasImage), `${sock.sent.length} messages`);
 
-        // flee unwedges: dmRouter flee ends the ruins session
+ // flee unwedges: dmRouter flee ends the ruins session
         const fleeRes = await dm(sock, 'flee');
         check('flee retreats the player', fleeRes && /retreat/.test(fleeRes.text || ''), (fleeRes || {}).text);
         check('flee aborted the combat session', !guildAdventure.isUserInAnyCombat(JID), 'session cleared');
 
-        // and a NEW combat can start afterwards (no dead-end)
+ // and a NEW combat can start afterwards (no dead-end)
         const freshD = await state.getEvent(EV, { fresh: true });
         const meD = freshD.players.find((x) => x.jid === JID);
         const roomD = freshD.rooms.find((r) => r.key === meD.roomId);
@@ -260,9 +259,9 @@ async function main() {
         }
     }
 
-    // ═══ A6: PvP in an ACTIVE event ═══
+ // === A6: PvP in an ACTIVE event ===
     console.log('\n──── A6: PvP flow ────');
-    await state.updatePlayer(EV, JID, {}, { protectedUntil: 0 }); // A5 flee granted protection — clear it for the challenge
+    await state.updatePlayer(EV, JID, {}, { protectedUntil: 0 }); // A5 flee granted protection - clear it for the challenge
     if (!economy.getUser('foe@s.whatsapp.net')) economy.registerUser('foe@s.whatsapp.net', 'Rival'); // duel entities need real users
     const foeUser = economy.getUser('foe@s.whatsapp.net');
     if (foeUser && !foeUser.level) { foeUser.level = 15; economy.saveUser('foe@s.whatsapp.net'); }
@@ -279,7 +278,7 @@ async function main() {
     const chalRes = await dm(chalSock, 'challenge Rival');
     check('pvp challenge issues', chalRes && /Challenge issued/i.test(chalRes.text || ''), (chalRes || {}).text);
 
-    // accept from the foe's side
+ // accept from the foe's side
     const foeSock = makeSock();
     const dmRouter = require('../core/rpg/guildWar/dmRouter');
     const accRes = await dmRouter.handleDM(foeSock, 'foe@s.whatsapp.net', 'foe@s.whatsapp.net', 'accept', '', { prefix: PREFIX, prefixed: true });
@@ -289,7 +288,7 @@ async function main() {
     const fails = results.filter((r) => !r.ok);
     if (fails.length) {
         console.log('FAILURES:');
-        for (const f of fails) console.log(`  ❌ ${f.name} — ${f.detail}`);
+        for (const f of fails) console.log(`  ❌ ${f.name} - ${f.detail}`);
     }
     fs.writeFileSync(path.join(ROOT, 'tmp_gw_qa', 'audit_results.json'), JSON.stringify(results, null, 2));
     process.exit(fails.length ? 1 : 0);

@@ -1,16 +1,16 @@
 // ============================================
-// 🗺️ MAPCARD — .j wmap <place> real-world map cards (renamed from .j map 2026-10-12 so the RPG world atlas keeps `map`)
+// MAPCARD - .j wmap <place> real-world map cards (renamed from .j map so the RPG world atlas keeps `map`)
 // Pure, offline-QAable helpers:
-//   - slippy-map tile math (lat/lng ↔ tile x/y)
-//   - zoom fitting from a Nominatim boundingbox
-//   - Google Maps link builders
-//   - canvas composite (tiles + red pin + caption bar)
+// - slippy-map tile math (lat/lng ↔ tile x/y)
+// - zoom fitting from a Nominatim boundingbox
+// - Google Maps link builders
+// - canvas composite (tiles + red pin + caption bar)
 // Network lives in engine.js (Nominatim geocode + tile downloads).
 // ============================================
 
 const TILE = 256;
 
-// ── slippy-map math (OSM wiki formulas) ────────────────────────────────────
+// -- slippy-map math (OSM wiki formulas) ------------------------------------
 function lngToTileX(lng, z) {
   return ((lng + 180) / 360) * Math.pow(2, z);
 }
@@ -27,14 +27,14 @@ function tileYToLat(y, z) {
   return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
 }
 
-// ── zoom fitting ────────────────────────────────────────────────────────────
+// -- zoom fitting ------------------------------------------------------------
 // Nominatim boundingbox = [south, north, west, east] (strings).
 // Pick the largest zoom where the bbox fits within `span` tiles both ways.
 function fitZoom(bbox, opts = {}) {
   const minZ = opts.minZ ?? 3;
   const maxZ = opts.maxZ ?? 16;
-  // bbox may occupy at most ~1.6 tiles per axis inside the 3×3 view — keeps
-  // countries framed like Google Maps country view (z5-6), suburbs z14-15.
+ // bbox may occupy at most ~1.6 tiles per axis inside the 3×3 view - keeps
+ // countries framed like Google Maps country view (z5-6), suburbs z14-15.
   const span = opts.span ?? 1.6;
   if (!Array.isArray(bbox) || bbox.length !== 4) return opts.fallback ?? 12;
   const south = parseFloat(bbox[0]), north = parseFloat(bbox[1]);
@@ -43,7 +43,7 @@ function fitZoom(bbox, opts = {}) {
   let latSpan = Math.abs(north - south);
   let lngSpan = Math.abs(east - west);
   if (latSpan === 0 && lngSpan === 0) return maxZ;
-  // degenerate single-dimension bboxes (some POI results) → hint by span
+ // degenerate single-dimension bboxes (some POI results) → hint by span
   if (latSpan < 1e-6) latSpan = lngSpan;
   if (lngSpan < 1e-6) lngSpan = latSpan;
   let best = minZ;
@@ -73,7 +73,7 @@ function zoomForType(type, cls) {
   return 12;
 }
 
-// ── tiles layout ────────────────────────────────────────────────────────────
+// -- tiles layout ------------------------------------------------------------
 // Origin tile so the marker lands centered-ish in a GRID×GRID composite.
 function pickOriginTile(lat, lng, z, grid = 3) {
   const fx = lngToTileX(lng, z), fy = latToTileY(lat, z);
@@ -91,11 +91,11 @@ function markerPixel(lat, lng, z, originX, originY) {
   return { px: Math.round((fx - originX) * TILE), py: Math.round((fy - originY) * TILE) };
 }
 function tileUrl(x, y, z) {
-  // OSM tile usage policy: valid HTTP Referer or User-Agent REQUIRED.
+ // OSM tile usage policy: valid HTTP Referer or User-Agent REQUIRED.
   return `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
 }
 
-// ── links + caption ─────────────────────────────────────────────────────────
+// -- links + caption ---------------------------------------------------------
 function gmapsLink(lat, lng) {
   return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
 }
@@ -117,7 +117,7 @@ function buildMapText(result) {
   return lines.join("\n");
 }
 
-// ── canvas composite (network-free: takes tile buffers) ────────────────────
+// -- canvas composite (network-free: takes tile buffers) --------------------
 const W = TILE * 3, H = TILE * 3, BAR = 112;
 async function compositeMap({ tileBuffers, markerLat, markerLng, z, originX, originY, label, sub, attribution, createCanvas, loadImage }) {
   if (typeof createCanvas !== "function" || typeof loadImage !== "function") {
@@ -125,7 +125,7 @@ async function compositeMap({ tileBuffers, markerLat, markerLng, z, originX, ori
   }
   const canvas = createCanvas(W, H + BAR);
   const ctx = canvas.getContext("2d");
-  // map tiles (gray placeholder for any missing tile)
+ // map tiles (gray placeholder for any missing tile)
   for (let dy = 0; dy < 3; dy++) {
     for (let dx = 0; dx < 3; dx++) {
       const px = dx * TILE, py = dy * TILE;
@@ -141,10 +141,10 @@ async function compositeMap({ tileBuffers, markerLat, markerLng, z, originX, ori
       ctx.fillRect(px, py, TILE, TILE);
     }
   }
-  // red pin marker
+ // red pin marker
   const m = markerPixel(markerLat, markerLng, z, originX, originY);
   drawPin(ctx, m.px, m.py);
-  // bottom caption bar
+ // bottom caption bar
   const by = H;
   const grad = ctx.createLinearGradient(0, by - 30, 0, by + BAR);
   grad.addColorStop(0, "rgba(12,18,26,0)");
@@ -170,7 +170,7 @@ async function compositeMap({ tileBuffers, markerLat, markerLng, z, originX, ori
 }
 
 function drawPin(ctx, px, py) {
-  // teardrop pin: circle head + tapered tail, dark outline, white dot
+ // teardrop pin: circle head + tapered tail, dark outline, white dot
   ctx.save();
   ctx.translate(px, py);
   ctx.fillStyle = "rgba(0,0,0,0.25)";

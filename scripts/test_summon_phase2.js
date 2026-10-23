@@ -19,7 +19,7 @@ function test(name, fn) {
 
 console.log('=== PHASE 2 INTEGRATION TESTS ===\n');
 
-// ─── summonAI.js loadable + exports correct ────────────────────
+// --- summonAI.js loadable + exports correct --------------------
 console.log('--- summonAI.js module ---');
 
 const summonAI = require(path.join(REPO, 'core/rpg/summonAI.js'));
@@ -35,7 +35,7 @@ test('summonAI exports all required functions', () => {
   assert.ok(summonAI.PERSONALITY_SHIFT_THRESHOLD >= 10);
 });
 
-// ─── Behavior tracking ─────────────────────────────────────────
+// --- Behavior tracking -----------------------------------------
 console.log('\n--- Behavior tracking ---');
 
 test('attack action increments aggressive score', () => {
@@ -74,7 +74,7 @@ test('skip action increments volatile score', () => {
   assert.strictEqual(summon.behaviorScore.volatile, 1);
 });
 
-// ─── Personality shift ─────────────────────────────────────────
+// --- Personality shift -----------------------------------------
 console.log('\n--- Personality shift ---');
 
 test('personality shifts to AGGRESSIVE when score ≥ threshold', () => {
@@ -115,7 +115,7 @@ test('personality shifts to PROTECTIVE when protective score is highest', () => 
   assert.strictEqual(newP, 'PROTECTIVE');
 });
 
-// ─── Soul Echo application ─────────────────────────────────────
+// --- Soul Echo application -------------------------------------
 console.log('\n--- Soul Echo ---');
 
 test('applySoulEcho adds echo buff to summoner', () => {
@@ -164,7 +164,7 @@ test('applySoulEcho handles unknown echoId gracefully', () => {
   assert.strictEqual(summoner.buffs.length, 0);
 });
 
-// ─── Personality modifier ──────────────────────────────────────
+// --- Personality modifier --------------------------------------
 console.log('\n--- Personality modifier ---');
 
 test('STOIC personality does not modify decision', () => {
@@ -176,7 +176,6 @@ test('STOIC personality does not modify decision', () => {
 });
 
 test('VOLATILE personality sometimes returns random action (mocked)', () => {
-  // We can't easily test Math.random - just verify the function doesn't crash
   const summon = { personality: 'VOLATILE' };
   const decision = { action: 'attack', target: { name: 'Enemy' } };
   const enemies = [{ name: 'E1', stats: { hp: 10 } }];
@@ -185,7 +184,7 @@ test('VOLATILE personality sometimes returns random action (mocked)', () => {
 });
 
 test('PROTECTIVE personality can override attack with guard', () => {
-  // Can't test the 50% chance deterministically, but verify it doesn't crash
+ // Can't test the 50% chance deterministically, but verify it doesn't crash
   const summon = { personality: 'PROTECTIVE', summonerJid: 'user1' };
   const decision = { action: 'attack', target: { name: 'Enemy' } };
   const enemies = [{ name: 'E1', stats: { hp: 10 } }];
@@ -194,7 +193,7 @@ test('PROTECTIVE personality can override attack with guard', () => {
   assert.ok(result.action);  // should return some decision (attack or guard)
 });
 
-// ─── guildAdventure.js source verification ─────────────────────
+// --- guildAdventure.js source verification ---------------------
 console.log('\n--- guildAdventure.js source verification ---');
 
 const gaSource = fs.readFileSync(path.join(REPO, 'core/rpg/guildAdventure.js'), 'utf8');
@@ -206,7 +205,6 @@ test('summonSystem + summonAI required at top of guildAdventure.js', () => {
 
 test('state.summons added to INITIAL_STATE_TEMPLATE', () => {
   assert.ok(gaSource.includes('summons: [],'));
-  // Verify it's in the template (before turnOrder)
   const templateIdx = gaSource.indexOf('const INITIAL_STATE_TEMPLATE');
   const summonsIdx = gaSource.indexOf('summons: [],', templateIdx);
   const turnOrderIdx = gaSource.indexOf('turnOrder: [],', templateIdx);
@@ -237,7 +235,7 @@ test('handleDeath handles summon death + Soul Echo', () => {
 });
 
 test('gameStates, calculateDamage, handleDeath exported for summonAI', () => {
-  // Find the module.exports block
+ // Find the module.exports block
   const exportIdx = gaSource.indexOf('module.exports = {');
   const exportBlock = gaSource.slice(exportIdx);
   assert.ok(exportBlock.includes('gameStates,'), 'gameStates must be exported');
@@ -246,12 +244,12 @@ test('gameStates, calculateDamage, handleDeath exported for summonAI', () => {
 });
 
 test('summons get headstart gauge (spd/2) like players', () => {
-  // The comment should mention "Players + summons"
+ // The comment should mention "Players + summons"
   assert.ok(gaSource.includes('Players + summons get headstart'));
 });
 
 test('turn loop order: players → summons → enemies', () => {
-  // allCombatants array should have players first, then summons, then enemies
+ // allCombatants array should have players first, then summons, then enemies
   const combatantsIdx = gaSource.indexOf('const allCombatants = [');
   const combatantsBlock = gaSource.slice(combatantsIdx, combatantsIdx + 300);
   const playersIdx = combatantsBlock.indexOf('state.players');
@@ -261,6 +259,6 @@ test('turn loop order: players → summons → enemies', () => {
   assert.ok(summonsIdx < enemiesIdx, 'summons must come before enemies');
 });
 
-// ─── Summary ──────────────────────────────────────────────────
+// --- Summary --------------------------------------------------
 console.log(`\n=== PHASE 2 SUMMARY: ${pass} passed, ${fail} failed ===`);
 process.exit(fail > 0 ? 1 : 0);

@@ -19,18 +19,18 @@ const KEY = '_shared_gc_owner';
 
 // gid → bot id (lowercase)
 const SEED = {
-    // contested - war group: jake dominant (1681 vs 949 log lines, 188 vs 61 GW)
+ // contested - war group: jake dominant (1681 vs 949 log lines, 188 vs 61 GW)
     '120363409467230514@g.us': 'jake',
-    // contested - subaru dominant (239 vs 176 vs 95)
+ // contested - subaru dominant (239 vs 176 vs 95)
     '120363409013549791@g.us': 'subaru',
-    // contested - jake dominant
+ // contested - jake dominant
     '120363425537623415@g.us': 'jake',
     '120363424033442252@g.us': 'jake',
-    // contested - joker is the currently-serving bot here (recent traffic + double pong)
+ // contested - joker is the currently-serving bot here (recent traffic + double pong)
     '120363198461552512@g.us': 'joker',
     '120363408369953090@g.us': 'joker',
     '120363410407950041@g.us': 'joker',
-    // single-bot groups - pinned for determinism
+ // single-bot groups - pinned for determinism
     '120363409235438388@g.us': 'joker',
     '120363423509709765@g.us': 'subaru',
     '120363412295224732@g.us': 'subaru',

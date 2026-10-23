@@ -1,19 +1,19 @@
 // ============================================
-// 💞 SHIP / MATCH METER — image card + scoring engine
+// SHIP / MATCH METER - image card + scoring engine
 // ============================================
-// v2 (2026-09-17) - owner rework:
-//   * Ship output is now a rendered IMAGE CARD (standalone file, nothing to
-//     do with the RPG card system: no lore, no medieval fonts, no factions).
-//   * Determination is a transparent multi-factor engine (no more single
-//     naive hash), deterministic per pair:
-//       1. Name chemistry     (w30) - classic letter algorithms blended
-//       2. Interaction history(w35) - real relationship scores from
-//                                     socialSystem (null when no data)
-//       3. Shared interests   (w20) - likes/hobbies/dislikes overlap
-//                                     (null when no profile data)
-//       4. Today's spark      (w15) - stable per pair per UTC day
-//     Weights renormalise over the factors that actually have data.
-//   * Tier labels are plain fun ("SOULMATES", "DISASTER") - zero RPG lore.
+// v2 - owner rework:
+// * Ship output is now a rendered IMAGE CARD (standalone file, nothing to
+// do with the RPG card system: no lore, no medieval fonts, no factions).
+// * Determination is a transparent multi-factor engine (no more single
+// naive hash), deterministic per pair:
+// 1. Name chemistry (w30) - classic letter algorithms blended
+// 2. Interaction history(w35) - real relationship scores from
+// socialSystem (null when no data)
+// 3. Shared interests (w20) - likes/hobbies/dislikes overlap
+// (null when no profile data)
+// 4. Today's spark (w15) - stable per pair per UTC day
+// Weights renormalise over the factors that actually have data.
+// * Tier labels are plain fun ("SOULMATES", "DISASTER") - zero RPG lore.
 // Names come from economy.getDisplayName (never the 'Adventurer'
 // placeholder) - the engine handler resolves them before calling us.
 
@@ -23,7 +23,7 @@ const fs = require('fs');
 let _canvas = null;
 function getCanvas() { if (!_canvas) _canvas = require('canvas'); return _canvas; }
 
-// ── Fonts: clean modern system Roboto (deliberately NOT the RPG set) ──
+// -- Fonts: clean modern system Roboto (deliberately NOT the RPG set) --
 let _fontsRegistered = false;
 const ROBOTO_DIR = '/usr/share/fonts/truetype/roboto/unhinted/RobotoTTF';
 function ensureFonts() {
@@ -48,7 +48,7 @@ function ensureFonts() {
 
 const W = 800, H = 1080;
 
-// ── Palette (modern romance, no RPG gold/parchment) ──
+// -- Palette (modern romance, no RPG gold/parchment) --
 const C = {
   bgTop: '#12131A',
   bgBot: '#1B1018',
@@ -65,9 +65,9 @@ const C = {
   amber: '#FFB35C',
 };
 
-// ════════════════════════════════════════════
-//  SCORING ENGINE
-// ════════════════════════════════════════════
+// ============================================
+// SCORING ENGINE
+// ============================================
 
 function hash32(str) {
   let h = 2166136261 >>> 0;
@@ -87,13 +87,13 @@ function nameChemistry(a, b, canon) {
   if (!la && !lb) return 50;
   const combined = la + lb;
 
-  // (a) classic L-O-V-E-S letter density
+ // (a) classic L-O-V-E-S letter density
   const loves = (combined.match(/[loves]/g) || []).length;
   const lovePct = combined.length
     ? Math.min(100, Math.round((loves / combined.length) / 0.30 * 100))
     : 50;
 
-  // (b) shared letter set (Jaccard), floored so pure math isn't brutal
+ // (b) shared letter set (Jaccard), floored so pure math isn't brutal
   const setA = new Set(la), setB = new Set(lb);
   const all = new Set([...setA, ...setB]);
   let inter = 0;
@@ -101,7 +101,7 @@ function nameChemistry(a, b, canon) {
   const jaccard = all.size ? inter / all.size : 0;
   const sharedPct = Math.round(20 + jaccard * 80);
 
-  // (c) vowel-rhythm harmony
+ // (c) vowel-rhythm harmony
   const vr = (t) => {
     if (!t) return 0.5;
     const v = (t.match(/[aeiou]/g) || []).length / t.length;
@@ -111,7 +111,7 @@ function nameChemistry(a, b, canon) {
 
   let val = lovePct * 0.42 + sharedPct * 0.34 + harmPct * 0.24;
 
-  // stable per-pair seasoning so similar-looking names still differ
+ // stable per-pair seasoning so similar-looking names still differ
   const seasoning = hash32(canon || `${la}~${lb}`) % 100;
   val = val * 0.85 + seasoning * 0.15;
 
@@ -121,7 +121,7 @@ function nameChemistry(a, b, canon) {
 // Factor 2: real interaction history - tags/mentions/replies (tracked by
 // interactionTracker, stored on user.profile.interactions) DOMINATE, with
 // socialSystem relationship points as a complement. A real pair that never
-// interacted scores LOW (owner: silent pairs must not coast to 60%).
+// interacted scores LOW (silent pairs must not coast to 60%).
 const escKey = (jid) => String(jid || '').replace(/\./g, '_');
 const relsOf = (p) => (p && ((p.profile && p.profile.relationships) || p.relationships)) || null;
 const memOf = (p) => (p && (p.memories || (p.profile && p.profile.memories))) || {};
@@ -138,7 +138,7 @@ function getRelScore(p, otherJid) {
   return grab(escKey(otherJid)) || grab(otherJid) || 0;
 }
 
-// RELATIVE interaction factor (owner v2 directive 2026-09-17): the bond
+// RELATIVE interaction factor (owner v2 directive ): the bond
 // reflects "percentage of interaction with this person compared to
 // interaction with everyone else", not raw volume. Dominant term = mutual
 // relative focus (min of the two users' shares - both sides must actually
@@ -165,7 +165,7 @@ function interactionFactor(p1, p2, jid1, jid2) {
   const last = Math.max((a && a.t) || 0, (b && b.t) || 0);
   const days = last ? (Date.now() - last) / 86400000 : 999;
   const rec = days <= 3 ? 1.0 : days <= 7 ? 0.8 : days <= 14 ? 0.65 : days <= 30 ? 0.45 : 0.3;
-  // relative focus: share of each user's whole interaction life on this partner
+ // relative focus: share of each user's whole interaction life on this partner
   const totA = mapTotal(interOf(p1));
   const totB = mapTotal(interOf(p2));
   const shareA = totA > 0 ? ((a && a.c) || 0) / totA : 0;
@@ -185,7 +185,7 @@ function bondFactor(p1, p2, jid1, jid2) {
   const inter = interactionFactor(p1, p2, jid1, jid2);
   const hasRel = !!(rel1 || rel2);
   if (inter !== null) {
-    // tags/mentions/replies are the signal - relationship points complement
+ // tags/mentions/replies are the signal - relationship points complement
     const avgRel = hasRel ? (rel1 + rel2) / 2 : 0;
     const v = inter * 0.65 + (54 + avgRel * 0.44) * 0.35;
     return Math.max(3, Math.min(98, Math.round(v)));
@@ -194,8 +194,8 @@ function bondFactor(p1, p2, jid1, jid2) {
     const avg = (rel1 + rel2) / 2;   // -100..100
     return Math.max(3, Math.min(98, Math.round(54 + avg * 0.44)));
   }
-  // Real pair (mentions path) with zero recorded interaction history:
-  // strangers score LOW on this factor - per owner directive.
+ // Real pair (mentions path) with zero recorded interaction history:
+ // strangers score LOW on this factor - per owner directive.
   return 15;
 }
 
@@ -263,9 +263,9 @@ function tierFor(score) {
  * @returns {score, factors:[{key,label,weight,value(null=no data)}], tier, mash, hearts, comment}
  */
 function computeShip({ name1, name2, jid1 = null, jid2 = null, p1 = null, p2 = null, now = null }) {
-  // order-independent canonical pair key (letters only, sorted)
+ // order-independent canonical pair key (letters only, sorted)
   const canon = [letters(name1), letters(name2)].sort().join('~');
-  // Owner directive: tags/mentions/replies history is the MAJOR factor (w40).
+ // Owner directive: tags/mentions/replies history is the MAJOR factor (w40).
   const defs = [
     { key: 'name',  label: 'Name chemistry',   weight: 25, value: nameChemistry(name1, name2, canon) },
     { key: 'bond',  label: 'Interaction focus', weight: 40, value: bondFactor(p1, p2, jid1, jid2) },
@@ -288,9 +288,9 @@ function computeShip({ name1, name2, jid1 = null, jid2 = null, p1 = null, p2 = n
   };
 }
 
-// ════════════════════════════════════════════
-//  CARD RENDERER (800x1080 PNG)
-// ════════════════════════════════════════════
+// ============================================
+// CARD RENDERER (800x1080 PNG)
+// ============================================
 
 function roundRectPath(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -394,14 +394,13 @@ function avatar(ctx, cx, cy, r, name, grad) {
 }
 
 function factorRow(ctx, y, label, value) {
-  // label
+ // label
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.font = '21px "RobotoM"';
   ctx.fillStyle = value === null ? C.dim : '#D8DAE4';
   ctx.fillText(truncateForWidth(ctx, label, 230), 90, y);
 
-  // track
   const tx = 340, tw = 290, th = 10;
   roundRectPath(ctx, tx, y - th / 2, tw, th, th / 2);
   ctx.fillStyle = C.track;
@@ -416,7 +415,7 @@ function factorRow(ctx, y, label, value) {
     ctx.fill();
   }
 
-  // value
+ // value
   ctx.textAlign = 'right';
   ctx.font = '20px "RobotoB"';
   ctx.fillStyle = value === null ? C.dim : C.text;
@@ -429,7 +428,7 @@ async function renderShipCard({ name1, name2, score, factors, tier, comment, mas
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
 
-  // ── background: dark gradient + soft rose glow behind the gauge ──
+ // -- background: dark gradient + soft rose glow behind the gauge --
   const bg = ctx.createLinearGradient(0, 0, 0, H);
   bg.addColorStop(0, C.bgTop);
   bg.addColorStop(1, C.bgBot);
@@ -442,13 +441,13 @@ async function renderShipCard({ name1, name2, score, factors, tier, comment, mas
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, W, H);
 
-  // hairline border
+ // hairline border
   ctx.strokeStyle = C.line;
   ctx.lineWidth = 1.5;
   roundRectPath(ctx, 14, 14, W - 28, H - 28, 26);
   ctx.stroke();
 
-  // ── header ──
+ // -- header --
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = C.rose;
@@ -460,18 +459,18 @@ async function renderShipCard({ name1, name2, score, factors, tier, comment, mas
   heartPath(ctx, W / 2 + 148, 68, 20);
   ctx.fill();
 
-  // ── avatars + ring gauge ──
+ // -- avatars + ring gauge --
   avatar(ctx, 150, 250, 64, name1, [C.rose, C.roseSoft]);
   avatar(ctx, 650, 250, 64, name2, [C.violet, C.violetSoft]);
 
-  // connector hearts
+ // connector hearts
   heartPath(ctx, 254, 250, 26);
   ctx.fillStyle = 'rgba(255,94,122,0.9)';
   ctx.fill();
   heartPath(ctx, 546, 250, 26);
   ctx.fill();
 
-  // ring track
+ // ring track
   const RG = 100, RGW = 16;
   ctx.beginPath();
   ctx.arc(W / 2, 250, RG, 0, Math.PI * 2);
@@ -479,7 +478,7 @@ async function renderShipCard({ name1, name2, score, factors, tier, comment, mas
   ctx.lineWidth = RGW;
   ctx.stroke();
 
-  // ring progress
+ // ring progress
   const prog = Math.max(0, Math.min(100, score)) / 100;
   if (prog > 0) {
     ctx.save();
@@ -497,7 +496,7 @@ async function renderShipCard({ name1, name2, score, factors, tier, comment, mas
     ctx.restore();
   }
 
-  // % text
+ // % text
   ctx.fillStyle = C.text;
   ctx.font = '58px "RobotoB"';
   ctx.textBaseline = 'middle';
@@ -506,14 +505,14 @@ async function renderShipCard({ name1, name2, score, factors, tier, comment, mas
   ctx.font = '17px "RobotoM"';
   spacedText(ctx, 'MATCH', W / 2, 288, 4);
 
-  // names under avatars
+ // names under avatars
   ctx.font = '24px "RobotoB"';
   ctx.fillStyle = C.text;
   ctx.textAlign = 'center';
   ctx.fillText(truncateForWidth(ctx, name1 || '?', 220), 150, 352);
   ctx.fillText(truncateForWidth(ctx, name2 || '?', 220), 650, 352);
 
-  // ── ship name mashup ──
+ // -- ship name mashup --
   ctx.fillStyle = C.dim;
   ctx.font = '13px "RobotoM"';
   spacedText(ctx, 'SHIP NAME', W / 2, 398, 4);
@@ -521,7 +520,7 @@ async function renderShipCard({ name1, name2, score, factors, tier, comment, mas
   ctx.font = 'italic 30px "RobotoI"';
   ctx.fillText(truncateForWidth(ctx, `“${mash}”`, 640), W / 2, 434);
 
-  // ── hearts row ──
+ // -- hearts row --
   const hw = 34, hgap = 12;
   const total = 10 * hw + 9 * hgap;
   let hx = W / 2 - total / 2 + hw / 2;
@@ -543,7 +542,7 @@ async function renderShipCard({ name1, name2, score, factors, tier, comment, mas
     hx += hw + hgap;
   }
 
-  // ── tier pill ──
+ // -- tier pill --
   ctx.font = '26px "RobotoB"';
   const tierText = tier.label;
   const tw = ctx.measureText(tierText).width;
@@ -557,14 +556,14 @@ async function renderShipCard({ name1, name2, score, factors, tier, comment, mas
   ctx.fillStyle = tier.color;
   ctx.fillText(tierText, W / 2, py + ph / 2 + 2);
 
-  // ── comment ──
+ // -- comment --
   ctx.fillStyle = C.muted;
   ctx.font = 'italic 22px "RobotoI"';
   ctx.textAlign = 'center';
   const clines = wrapText(ctx, comment || '', 620, 2);
   clines.forEach((ln, i) => ctx.fillText(ln, W / 2, 672 + i * 30));
 
-  // ── divider ──
+ // -- divider --
   ctx.fillStyle = '#8A8FA3';
   ctx.font = '15px "RobotoM"';
   const dl = spacedText(ctx, 'HOW THIS WAS CALCULATED', W / 2, 748, 4);
@@ -575,11 +574,11 @@ async function renderShipCard({ name1, name2, score, factors, tier, comment, mas
   ctx.moveTo(W / 2 + dl / 2 + 24, 742); ctx.lineTo(W - 80, 742);
   ctx.stroke();
 
-  // ── factor rows ──
+ // -- factor rows --
   const rows = factors || [];
   rows.forEach((f, i) => factorRow(ctx, 800 + i * 52, f.label, f.value));
 
-  // ── footer ──
+ // -- footer --
   ctx.fillStyle = C.dim;
   ctx.font = '17px "RobotoR"';
   ctx.textAlign = 'center';

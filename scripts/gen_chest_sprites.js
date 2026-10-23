@@ -1,29 +1,27 @@
 // ============================================
-// 🧰 CHEST SPRITE REBUILD (owner 2026-10-06: "the chest not actually opening,
+// CHEST SPRITE REBUILD ("the chest not actually opening,
 // like you literally removed the lid and turned it upside down??? fix that
 // with 2 chest Sprites one open and one closed")
-//
 // What was wrong:
-//  1. cache_chest_open.png had the lid DETACHED + VERTICALLY FLIPPED, floating
-//     above the box — absurd.
-//  2. BOTH sprites carry a baked-in translucent glow halo → contentBox anchors
-//     the halo bottom at the ground line → the visible chest FLOATS above its
-//     shadow, and the halo washes the contact shadow out (the "encounter item
-//     shadows" complaint).
-//
+// 1. cache_chest_open.png had the lid DETACHED + VERTICALLY FLIPPED, floating
+// above the box - absurd.
+// 2. BOTH sprites carry a baked-in translucent glow halo → contentBox anchors
+// the halo bottom at the ground line → the visible chest FLOATS above its
+// shadow, and the halo washes the contact shadow out (the "encounter item
+// shadows" complaint).
 // Fix:
-//  - closed  = original art with the border-connected halo stripped (BFS from
-//    the canvas edge through low-alpha pixels) — same look, real feet.
-//  - open    = composed fresh: box with a carved cavity (coins + inner glow)
-//    and the lid hinged BACK — raised, foreshortened, dark underside strip —
-//    in the same gold/wood palette. No halo anywhere.
+// - closed = original art with the border-connected halo stripped (BFS from
+// the canvas edge through low-alpha pixels) - same look, real feet.
+// - open = composed fresh: box with a carved cavity (coins + inner glow)
+// and the lid hinged BACK - raised, foreshortened, dark underside strip -
+// in the same gold/wood palette. No halo anywhere.
 // ============================================
 const path = require('path');
 const { createCanvas, loadImage } = require(path.join('/home/z/my-project/repo/node_modules/canvas'));
 const fs = require('fs');
 const PROP = '/home/z/my-project/repo/core/rpgasset/guildwar/ruins/props';
 
-// BFS from all border pixels through alpha < THRESH, clearing as we go —
+// BFS from all border pixels through alpha < THRESH, clearing as we go -
 // kills the outer halo ring, keeps enclosed soft shading untouched.
 function stripHalo(canvas) {
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -38,7 +36,7 @@ function stripHalo(canvas) {
         const i = y * W + x;
         if (seen[i]) return;
         seen[i] = 1;
-        if (d[i * 4 + 3] >= THRESH) return;   // solid art — wall
+        if (d[i * 4 + 3] >= THRESH) return;   // solid art - wall
         stack.push(i);
     };
     for (let x = 0; x < W; x++) { push(x, 0); push(x, H - 1); }
@@ -54,7 +52,7 @@ function stripHalo(canvas) {
 }
 
 function findSeamRow(canvas) {
-    // the widest gold band across rows 60-130 = the lid's bottom rim
+ // the widest gold band across rows 60-130 = the lid's bottom rim
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const { width: W } = canvas;
     let best = 92, bestCount = -1;
@@ -78,21 +76,21 @@ function findSeamRow(canvas) {
     const seam = findSeamRow(base) + 3; // seam = just below the lid's gold rim band
     console.log('seam row:', seam);
 
-    // ── CLOSED: cleaned original, tight to the art ──
+ // -- CLOSED: cleaned original, tight to the art --
     fs.writeFileSync(path.join(PROP, 'cache_chest.png'), base.toBuffer('image/png'));
 
-    // ── OPEN: box + carved cavity + hinged-back lid ──
+ // -- OPEN: box + carved cavity + hinged-back lid --
     const W = src.width, H = src.height;
     const out = createCanvas(W, H);
     const ctx = out.getContext('2d');
 
-    // body (below the seam) stays at its original position
+ // body (below the seam) stays at its original position
     ctx.drawImage(base, 0, seam, W, H - seam, 0, seam, W, H - seam);
 
-    // carve the cavity INTO the body top: dark opening + warm inner light.
-    // 🔄 refined: inset from the rim posts, NO loud gold lip all round — just
-    // a top-edge highlight (the open rim behind), coins tucked INSIDE so the
-    // opening reads as a hole with treasure glinting, never a tray on top.
+ // carve the cavity INTO the body top: dark opening + warm inner light.
+ // refined: inset from the rim posts, NO loud gold lip all round - just
+ // a top-edge highlight (the open rim behind), coins tucked INSIDE so the
+ // opening reads as a hole with treasure glinting, never a tray on top.
     const cavX = 38, cavW = W - 76, cavY = seam - 6, cavH = 28;
     ctx.save();
     ctx.beginPath();
@@ -106,7 +104,7 @@ function findSeamRow(canvas) {
     glow.addColorStop(1, 'rgba(120,80,10,0)');
     ctx.fillStyle = glow;
     ctx.fillRect(cavX, cavY, cavW, cavH);
-    // coin pile catching the light — bottoms clipped by the cavity edge
+ // coin pile catching the light - bottoms clipped by the cavity edge
     const coins = [[84, cavY + 22, 12, 5], [110, cavY + 25, 14, 6], [138, cavY + 23, 12, 5], [97, cavY + 18, 10, 4], [124, cavY + 17, 10, 4]];
     for (const [cx2, cy2, rx2, ry2] of coins) {
         ctx.fillStyle = '#e8b830';
@@ -119,7 +117,7 @@ function findSeamRow(canvas) {
         ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
-    // single top-edge highlight — the open rim, not a frame
+ // single top-edge highlight - the open rim, not a frame
     ctx.strokeStyle = 'rgba(248,220,120,0.75)';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -127,7 +125,7 @@ function findSeamRow(canvas) {
     ctx.lineTo(cavX + cavW - 5, cavY + 1);
     ctx.stroke();
 
-    // lid: raised, foreshortened (swung back on its hinge), underside shaded
+ // lid: raised, foreshortened (swung back on its hinge), underside shaded
     const lidH = seam;
     const lidScaleY = 0.86, lidScaleX = 0.92;
     const lidBottom = cavY + 3;            // hinge lands just over the cavity's back edge
@@ -136,14 +134,14 @@ function findSeamRow(canvas) {
     ctx.scale(lidScaleX, lidScaleY);
     ctx.drawImage(base, 0, 0, W, lidH, -W / 2, -lidH, W, lidH);
     ctx.restore();
-    // underside strip at the hinge — the lid's inner face peeking
+ // underside strip at the hinge - the lid's inner face peeking
     ctx.fillStyle = 'rgba(24,14,5,0.55)';
     ctx.fillRect(W * 0.06, lidBottom - 7, W * 0.88, 6);
 
     fs.writeFileSync(path.join(PROP, 'cache_chest_open.png'), out.toBuffer('image/png'));
     console.log('chest sprites rebuilt: closed (halo-stripped) + open (hinged lid, cavity, coins)');
 
-    // audit: content boxes after rebuild
+ // audit: content boxes after rebuild
     for (const f of ['cache_chest.png', 'cache_chest_open.png']) {
         const img = await loadImage(path.join(PROP, f));
         const c = createCanvas(img.width, img.height);

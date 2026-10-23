@@ -30,7 +30,7 @@ function summarizeChart(sym, range, interval, d) {
 
 (async () => {
   console.log("=== YAHOO CHART API (query1.finance.yahoo.com/v8/finance/chart) ===");
-  // Matrix: symbol x range x sensible interval
+ // Matrix: symbol x range x sensible interval
   const matrix = [
     ["AAPL", "1d", "5m"], ["AAPL", "5d", "15m"], ["AAPL", "1mo", "1d"], ["AAPL", "6mo", "1d"],
     ["AAPL", "1y", "1wk"], ["AAPL", "5y", "1wk"],

@@ -19,9 +19,9 @@ const CHARACTERS = [
   { id: 'maid1',         sprite: 'maid1.png',         name: 'Gwen',          title: 'the Parlour Maid' },
   { id: 'nurse1',        sprite: 'nurse1.png',        name: 'Sister Agnes',  title: 'the Nurse' },
   { id: 'chef',          sprite: 'chef.png',          name: 'Antoine',       title: 'the Chef' },
-  // --- Wave 2c cast expansion (owner 2026-10-13 16:34Z "do what's left";
-  //     existing roster sprites as base models, new names/titles, simplistic).
-  //     Two guests may share a face across cases - they are different people.
+ // --- Wave 2c cast expansion (16:34Z "do what's left";
+ // existing roster sprites as base models, new names/titles, simplistic).
+ // Two guests may share a face across cases - they are different people.
   { id: 'widow',         sprite: 'girl1.png',         name: 'Lady Aveline',  title: 'the Widow' },
   { id: 'stable',        sprite: 'boy.png',           name: 'Tobias',        title: 'the Stable Boy' },
   { id: 'magistrate',    sprite: 'investigator.png',  name: 'Inspector Hale', title: 'the Magistrate' },
@@ -106,7 +106,7 @@ const CLUES = {
     'Heavy footsteps in the pantry. A cleaver test-swung. Twice.',
     'They carved the roast at dinner with hands that never shook. The Chef\u2019s knives are always sharp.',
   ],
-  // --- Wave 2c cast expansion: ghost clues for the six new faces ---
+ // --- Wave 2c cast expansion: ghost clues for the six new faces ---
   widow: [
     'The ghost tasted mourning - the good kind, the expensive kind.',
     'Black lace, never creased. Grief worn like it was tailored.',

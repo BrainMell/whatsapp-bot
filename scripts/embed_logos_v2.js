@@ -1,14 +1,13 @@
 // ============================================
-// LOGO EMBEDDINGS V2 (2026-10-09, dataset-driven)
+// LOGO EMBEDDINGS V2 (dataset-driven)
 // ============================================
-// v1 (embed_logos.js) searched Wikipedia per pool brand — its files DIVERGED
+// v1 (embed_logos.js) searched Wikipedia per pool brand - its files DIVERGED
 // from the baked dataset (different artworks!) and the runtime dequant bug
 // kept the whole feature dead anyway. v2 reads data/logoDataset.json
 // directly: every embedding is computed from the EXACT artwork the quiz
 // serves (brand.url @ width=480), 1:1 with the question pool.
-//
 // Usage (on Box2, in vision-worker so onnxruntime-node + sharp + model resolve):
-//   cd ~/vision-worker && node embed_logos_v2.js /home/ubuntu/whatsapp-bot/data/logoDataset.json /home/ubuntu/whatsapp-bot/data/logoEmbeddings.json
+// cd ~/vision-worker && node embed_logos_v2.js /home/ubuntu/whatsapp-bot/data/logoDataset.json /home/ubuntu/whatsapp-bot/data/logoEmbeddings.json
 // ============================================
 const fs = require("fs");
 const path = require("path");

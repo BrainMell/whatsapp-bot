@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* build_quiz_dataset.js — dataset builder for the quiz overhaul (owner 2026-10-10).
+/* build_quiz_dataset.js - dataset builder for the quiz overhaul (owner 2026-10-10).
  * Categories: games | comics | movies | series
  * Sources (keyless): OpenTDB, the-trivia-api, SteamSpy (games facts), TVMaze
  * (series posters + cast), AniList GraphQL (anime/manga covers + characters),
@@ -34,7 +34,7 @@ function decodeHtml(s) {
     .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => { try { return String.fromCodePoint(parseInt(n, 16)); } catch { return " "; } })
     .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ")
-    .replace(/&hellip;/g, "...").replace(/&mdash;/g, "—").replace(/&ndash;/g, "–").replace(/&rsquo;/g, "'").replace(/&lsquo;/g, "'").replace(/&ldquo;/g, '"').replace(/&rdquo;/g, '"');
+    .replace(/&hellip;/g, "...").replace(/&mdash;/g, "-").replace(/&ndash;/g, "-").replace(/&rsquo;/g, "'").replace(/&lsquo;/g, "'").replace(/&ldquo;/g, '"').replace(/&rdquo;/g, '"');
 }
 const normKey = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
@@ -51,7 +51,7 @@ async function jget(url, opts = {}, tries = 2) {
   }
 }
 
-// ── dataset accumulators ──
+// -- dataset accumulators --
 const DS = { generatedAt: null, version: 1, counts: {}, categories: {} };
 for (const c of ["games", "comics", "movies", "series"]) DS.categories[c] = { questions: [], images: [] };
 const seenStems = new Set();     // dedupe text questions by norm stem
@@ -70,7 +70,7 @@ function addText(cat, q, options, correct, difficulty, topic) {
   return true;
 }
 function addImage(cat, entry) {
-  // entry: {img, q, options, correct, difficulty, topic, subject, source}
+ // entry: {img, q, options, correct, difficulty, topic, subject, source}
   if (!entry || !entry.img || seenImg.has(entry.img)) return false;
   seenImg.add(entry.img);
   if (!entry.q || !entry.options || entry.options.length !== 4 || entry.correct == null) return false;
@@ -89,9 +89,9 @@ function mcq(answer, distractors) {
 }
 function diffBand(rank, total) { const p = rank / Math.max(1, total); return p < 0.3 ? "easy" : p < 0.7 ? "medium" : "hard"; }
 
-// ════════════════════════════════════════════
+// ============================================
 // 1) OpenTDB (keyless, session token)
-// ════════════════════════════════════════════
+// ============================================
 async function srcOpenTDB() {
   const CATS = { 15: "games", 11: "movies", 14: "series", 29: "comics", 31: "series", 32: "series" };
   const TOPIC = { 15: "Video Games", 11: "Movies", 14: "TV Series", 29: "Comics", 31: "Anime & Manga", 32: "Cartoons" };
@@ -121,9 +121,9 @@ async function srcOpenTDB() {
   console.log(`[opentdb] +${n} text questions`);
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // 2) the-trivia-api (keyless)
-// ════════════════════════════════════════════
+// ============================================
 async function srcTriviaApi() {
   const TV_RE = /\btv\b|television|series|episode|sitcom|streaming|netflix|season/i;
   const FILM_RE = /film|movie|cinema|director|actor|actress|oscars?\b|hollywood|box.?office/i;
@@ -148,17 +148,17 @@ async function srcTriviaApi() {
   console.log(`[trivia-api] +${n} text questions`);
 }
 
-// ════════════════════════════════════════════
-// 3) jservice.io (optional — service often down)
-// ════════════════════════════════════════════
+// ============================================
+// 3) jservice.io (optional - service often down)
+// ============================================
 async function srcJservice() {
   try {
     await jget("https://jservice.io/api/random?count=1", { timeout: 8000 }, 1);
   } catch {
-    console.log("[jservice] unreachable — skipping");
+    console.log("[jservice] unreachable - skipping");
     return;
   }
-  // discover entertainment categories then pull clues
+ // discover entertainment categories then pull clues
   const want = /video game|comic|film|movie|televis|cartoon|animated|anime|disney|sitcom/i;
   const catIds = [];
   for (let off = 0; off < 20000 && catIds.length < 120; off += 500) {
@@ -187,7 +187,7 @@ async function srcJservice() {
       await sleep(250);
     }
   }
-  // turn clue answers into MCQs: "clue is the answer; stem = question" — distractors = same-category answers of similar length
+ // turn clue answers into MCQs: "clue is the answer; stem = question" - distractors = same-category answers of similar length
   let n = 0;
   for (const cat of Object.keys(poolByCat)) {
     const arr = poolByCat[cat];
@@ -203,9 +203,9 @@ async function srcJservice() {
   console.log(`[jservice] +${n} text questions`);
 }
 
-// ════════════════════════════════════════════
-// 4) SteamSpy — top games: developer/publisher facts
-// ════════════════════════════════════════════
+// ============================================
+// 4) SteamSpy - top games: developer/publisher facts
+// ============================================
 async function srcSteamSpy() {
   const games = [];
   for (let page = 0; page < 3; page++) {
@@ -238,9 +238,9 @@ async function srcSteamSpy() {
   console.log(`[steamspy] +${n} text questions`);
 }
 
-// ════════════════════════════════════════════
-// 5) TVMaze — series posters, premiere years, cast
-// ════════════════════════════════════════════
+// ============================================
+// 5) TVMaze - series posters, premiere years, cast
+// ============================================
 async function srcTVMaze() {
   const shows = [];
   for (let page = 0; page < 14; page++) {
@@ -258,7 +258,7 @@ async function srcTVMaze() {
   global.__tvShows = shows;
   const years = shows.map((s) => s.premiered).filter(Boolean);
   const names = shows.map((s) => s.name);
-  // image questions: poster → name
+ // image questions: poster → name
   let n = 0;
   const imgCount = Math.min(shows.length, 1400);
   for (let i = 0; i < imgCount; i++) {
@@ -267,7 +267,7 @@ async function srcTVMaze() {
     if (!m) continue;
     if (addImage("series", { img: s.img, q: "Which TV series is this poster from?", ...m, difficulty: diffBand(i, imgCount), topic: s.type === "Animation" ? "Cartoons" : "TV Series", subject: s.name, source: "tvmaze" })) n++;
   }
-  // premiere year questions
+ // premiere year questions
   let y = 0;
   const yCap = Math.min(shows.length, 900);
   for (let i = 0; i < yCap; i++) {
@@ -278,7 +278,7 @@ async function srcTVMaze() {
     if (addText("series", `In which year did the series "${s.name}" premiere?`, m.options, m.correct, diffBand(i, yCap), "TV Series")) y++;
   }
   console.log(`[tvmaze] +${n} images, +${y} year questions`);
-  // cast: "Who plays <character> in <show>?" — actor photo as clue
+ // cast: "Who plays <character> in <show>?" - actor photo as clue
   const top = shows.filter((s) => s.rating >= 7).slice(0, 450);
   const castShows = [];
   await pool(top, 6, async (s) => {
@@ -307,9 +307,9 @@ async function srcTVMaze() {
   console.log(`[tvmaze] +${cn} cast images, +${chn} character images (from ${castShows.length} shows)`);
 }
 
-// ════════════════════════════════════════════
-// 6) AniList — anime posters + characters, manga covers
-// ════════════════════════════════════════════
+// ============================================
+// 6) AniList - anime posters + characters, manga covers
+// ============================================
 async function anilistPost(query, variables) {
   const r = await axios.post("https://graphql.anilist.co", { query, variables }, { timeout: 20000, headers: { "Content-Type": "application/json", "User-Agent": UA } });
   return r.data;
@@ -335,7 +335,7 @@ async function srcAniList() {
   }
   console.log(`[anilist] ${anime.length} anime, ${manga.length} manga`);
   global.__anime = anime; global.__manga = manga;
-  // anime → series: poster + year + studio
+ // anime → series: poster + year + studio
   let n = 0, y = 0, st = 0;
   const years = anime.map((a) => a.year).filter(Boolean).map(String);
   const studios = [...new Set(anime.map((a) => a.studio).filter(Boolean))];
@@ -349,7 +349,7 @@ async function srcAniList() {
     if (a.year && a.year >= 1960 && a.year <= 2025) { const ym = mcq(String(a.year), years); if (ym && addText("series", `In which year did the anime "${a.name}" premiere?`, ym.options, ym.correct, diff, "Anime")) y++; }
     if (a.studio && studios.length > 10) { const sm = mcq(a.studio, studios); if (sm && addText("series", `Which animation studio produced "${a.name}"?`, sm.options, sm.correct, diff, "Anime")) st++; }
   }
-  // manga → comics covers + year
+ // manga → comics covers + year
   let mn = 0, my = 0;
   const namesM = manga.map((m) => m.name);
   const mcap = Math.min(manga.length, 250);
@@ -361,7 +361,7 @@ async function srcAniList() {
     if (m0.year && m0.year >= 1950 && m0.year <= 2025) { const ym = mcq(String(m0.year), years); if (ym && addText("comics", `In which year was the manga "${m0.name}" first published?`, ym.options, ym.correct, diff, "Manga")) my++; }
   }
   console.log(`[anilist] +${n} anime posters, +${y} anime years, +${st} studios, +${mn} manga covers, +${my} manga years`);
-  // characters for top anime: "Which character is this?" options from same show
+ // characters for top anime: "Which character is this?" options from same show
   const CHAR_Q = `query ($id: Int) { Media(id: $id, type: ANIME) { characters(sort: FAVOURITES_DESC, perPage: 8) { edges { node { name { full } image { large } } } } } }`;
   let cn = 0;
   const topIds = [];
@@ -371,7 +371,7 @@ async function srcAniList() {
     for (const m of (d?.data?.Page?.media || [])) topIds.push(m.id);
     await sleep(2200);
   }
-  // we need names again for subject; refetch minimal for the ids we use
+ // we need names again for subject; refetch minimal for the ids we use
   for (const id of topIds.slice(0, 60)) {
     let d;
     try { d = await anilistPost(CHAR_Q, { id }); } catch { await sleep(2200); continue; }
@@ -389,9 +389,9 @@ async function srcAniList() {
   console.log(`[anilist] +${cn} character images`);
 }
 
-// ════════════════════════════════════════════
-// 7) Wikidata SPARQL — film facts + comic characters w/ images
-// ════════════════════════════════════════════
+// ============================================
+// 7) Wikidata SPARQL - film facts + comic characters w/ images
+// ============================================
 async function wdQuery(sparql) {
   const url = "https://query.wikidata.org/sparql?format=json";
   const d = await axios.post(url, new URLSearchParams({ query: sparql }).toString(), { timeout: 60000, headers: { "User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded", Accept: "application/sparql-results+json" }, maxContentLength: 80 * 1024 * 1024 });
@@ -401,7 +401,7 @@ function wdRows(d) { return (d && d.results && d.results.bindings) || []; }
 const wdVal = (b, k) => (b[k] && (b[k].value || "")) || "";
 
 async function srcWikidata() {
-  // 7a. popular films: director + year facts (labels service)
+ // 7a. popular films: director + year facts (labels service)
   try {
     const q = `SELECT ?f ?fLabel ?dirLabel ?year WHERE {
       ?f wdt:P31/wdt:P279* wd:Q11424 ; wikibase:sitelinks ?sl ; wdt:P577 ?date .
@@ -425,7 +425,7 @@ async function srcWikidata() {
     console.log(`[wikidata] +${n} film fact questions`);
   } catch (e) { console.log(`[wikidata] films failed: ${String(e && e.message || e).slice(0, 90)}`); }
   await sleep(6000);
-  // 7b. comic characters with images (P18)
+ // 7b. comic characters with images (P18)
   try {
     const q = `SELECT ?c ?cLabel ?img WHERE {
       ?c wdt:P31/wdt:P279* wd:Q1114461 ; wikibase:sitelinks ?sl ; wdt:P18 ?img .
@@ -444,7 +444,7 @@ async function srcWikidata() {
     console.log(`[wikidata] +${n} comic character images`);
   } catch (e) { console.log(`[wikidata] comics failed: ${String(e && e.message || e).slice(0, 90)}`); }
   await sleep(6000);
-  // 7c. comic book series covers (P18) → comics
+ // 7c. comic book series covers (P18) → comics
   try {
     const q = `SELECT ?s ?sLabel ?img ?pubLabel WHERE {
       { ?s wdt:P31 wd:Q747544 } UNION { ?s wdt:P31 wd:Q1004 } UNION { ?s wdt:P31/wdt:P279* wd:Q1046307 }
@@ -466,11 +466,11 @@ async function srcWikidata() {
   } catch (e) { console.log(`[wikidata] comic series failed: ${String(e && e.message || e).slice(0, 90)}`); }
 }
 
-// ════════════════════════════════════════════
-// 8) en.wikipedia pageimages — game covers + film posters (non-free OK)
-// ════════════════════════════════════════════
+// ============================================
+// 8) en.wikipedia pageimages - game covers + film posters (non-free OK)
+// ============================================
 async function enwikiPageImages(titles) {
-  // batches of 20; returns Map title -> {original, thumb}
+ // batches of 20; returns Map title -> {original, thumb}
   const out = new Map();
   for (const grp of chunk(titles, 20)) {
     const params = new URLSearchParams({ action: "query", format: "json", prop: "pageimages", piprop: "original|thumbnail", pithumbsize: "640", pilicense: "any", titles: grp.join("|"), redirects: "1" });
@@ -490,7 +490,7 @@ async function enwikiPageImages(titles) {
   return out;
 }
 async function srcEnwikiImages() {
-  // 8a. game covers from top SteamSpy names
+ // 8a. game covers from top SteamSpy names
   const games = global.__steamGames || [];
   const gTitles = games.slice(0, 900).map((g) => g.name);
   const gImgs = await enwikiPageImages(gTitles);
@@ -502,7 +502,7 @@ async function srcEnwikiImages() {
     if (m && addImage("games", { img: info.thumb || info.original, q: "Which video game is this the cover art of?", ...m, difficulty: diffBand(i++, gImgs.size), topic: "Video Games", subject: title, source: "enwiki-pageimage" })) n++;
   }
   console.log(`[enwiki] +${n} game cover images`);
-  // 8b. film posters from Wikidata film titles
+ // 8b. film posters from Wikidata film titles
   const films = global.__filmTitles || [];
   const fImgs = await enwikiPageImages(films.slice(0, 800));
   console.log(`[enwiki] ${fImgs.size}/${Math.min(films.length, 800)} film page images`);
@@ -514,9 +514,9 @@ async function srcEnwikiImages() {
   console.log(`[enwiki] +${fn} movie poster images`);
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // 9) verify every image URL by real download
-// ════════════════════════════════════════════
+// ============================================
 async function verifyImages() {
   let total = 0, dropped = 0;
   for (const cat of Object.keys(DS.categories)) {
@@ -540,9 +540,9 @@ async function verifyImages() {
   console.log(`[verify] total kept ${total}, dropped ${dropped}`);
 }
 
-// ════════════════════════════════════════════
+// ============================================
 // main
-// ════════════════════════════════════════════
+// ============================================
 (async () => {
   const t0 = Date.now();
   try { axios = require("axios"); } catch { try { axios = require("/home/ubuntu/whatsapp-bot/node_modules/axios"); } catch { console.log("FATAL: axios missing"); process.exit(1); } }
@@ -556,7 +556,7 @@ async function verifyImages() {
     await sleep(1000);
   }
   await verifyImages();
-  // assign stable ids + counts
+ // assign stable ids + counts
   for (const cat of Object.keys(DS.categories)) {
     DS.categories[cat].questions.forEach((q, i) => { q.id = i + 1; });
     DS.categories[cat].images.forEach((q, i) => { q.id = i + 1; });
@@ -565,7 +565,7 @@ async function verifyImages() {
   DS.generatedAt = new Date().toISOString();
   const json = JSON.stringify(DS);
   fs.writeFileSync(OUT, json);
-  let rep = `quizDataset v1 — ${DS.generatedAt}\nbuilt in ${Math.round((Date.now() - t0) / 1000)}s, ${Math.round(json.length / 1024)}KB\n`;
+  let rep = `quizDataset v1 - ${DS.generatedAt}\nbuilt in ${Math.round((Date.now() - t0) / 1000)}s, ${Math.round(json.length / 1024)}KB\n`;
   for (const [c, n] of Object.entries(DS.counts)) rep += `${c}: text=${n.text} images=${n.images}\n`;
   rep += `sources: opentdb, the-trivia-api, jservice(optional), steamspy, tvmaze, anilist, wikidata, enwiki-pageimages\n`;
   fs.writeFileSync(REPORT, rep);

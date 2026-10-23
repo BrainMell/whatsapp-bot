@@ -1,4 +1,4 @@
-// REPRO: quests & raids "don't even start anymore" (owner 2026-09-20).
+// REPRO: quests & raids "don't even start anymore".
 // Drives guildAdventure.initAdventure the same way core/engine.js does,
 // under a per-bot AsyncLocalStorage context, with mocked sock/economy.
 process.env.GO_IMAGE_SERVICE_URL = process.env.GO_IMAGE_SERVICE_URL || 'http://127.0.0.1:7860';
@@ -42,7 +42,7 @@ const sock = {
 function banner(t) { console.log(`\n══ ${t} ══`); }
 
 (async () => {
-    banner('1. SOLO quest start (.j solo f), skipShop=true — engine path');
+    banner('1. SOLO quest start (.j solo f), skipShop=true - engine path');
     try {
         const res = await asJoker(() => guildAdventure.initAdventure(
             sock, CHAT, null, 'NORMAL', true, 'F', P1, null, null, { skipShop: true },
@@ -57,7 +57,7 @@ function banner(t) { console.log(`\n══ ${t} ══`); }
 
     await new Promise((r) => setTimeout(r, 1500));
 
-    banner('2. GROUP raid start (.j quest d) — engine path');
+    banner('2. GROUP raid start (.j quest d) - engine path');
     try {
         const res = await asJoker(() => guildAdventure.initAdventure(
             sock, CHAT, null, 'NORMAL', false, 'D', P1, null, null, {},

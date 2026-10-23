@@ -1,45 +1,38 @@
 // ============================================
-// 🎓 NEW PLAYER TUTORIAL — Phase C MILESTONE TRACKS (2026-10-11, owner directive)
-//
-// PHASE B (2026-10-04): interactive onboarding - the player PERFORMS every
+// NEW PLAYER TUTORIAL - Phase C MILESTONE TRACKS (owner directive)
+// PHASE B: interactive onboarding - the player PERFORMS every
 // mechanic as it is introduced. One action per step, the tutorial waits for
 // the real action before moving on. State machine, crash-safe loadouts.
-//
 // PHASE C (owner brief summon_tutorial_marketplace_overhaul.md):
-//   1. REGISTRATION TUTORIAL STRIPPED to the absolute basics (Boot Camp):
-//      solo + multiplayer quests, how to open the shop, `.j char`,
-//      `.j solo`, `.j quest`. Everything else moved OUT.
-//   2. MILESTONE TRACKS: reaching a level milestone delivers an IMAGE CARD
-//      announcing an unlocked tutorial for one game system. Tracks run on
-//      the SAME state machine (`tutorial <track>`), one at a time.
-//      Level map targets the game's real hard gates (Abyss L20 owner-
-//      confirmed, evolve L15, ascend L50, Sight L40).
-//   3. `tutorial list` shows every track + status. `skip` works per track.
-//
+// 1. REGISTRATION TUTORIAL STRIPPED to the absolute basics (Boot Camp):
+// solo + multiplayer quests, how to open the shop, `.j char`,
+// `.j solo`, `.j quest`. Everything else moved OUT.
+// 2. MILESTONE TRACKS: reaching a level milestone delivers an IMAGE CARD
+// announcing an unlocked tutorial for one game system. Tracks run on
+// the SAME state machine (`tutorial <track>`), one at a time.
+// Level map targets the game's real hard gates (Abyss L20 owner-
+// confirmed, evolve L15, ascend L50, Sight L40).
+// 3. `tutorial list` shows every track + status. `skip` works per track.
 // Flow - Boot Camp (registration, stripped):
-//   .j char → controlled SOLO quest (Garden Slime) →
-//   GROUP demo (player + 3 fake guild-mates) →
-//   .j shop → .j buy minor_potion → graduation (summary card).
-//
+// .j char → controlled SOLO quest (Garden Slime) →
+// GROUP demo (player + 3 fake guild-mates) →
+// .j shop → .j buy minor_potion → graduation (summary card).
 // Milestone tracks (unlock level → what they teach):
-//   L3  combat     Arms & Combat (loaner dagger, dummy lessons, hospital)
-//   L5  power      Powering Up (skill tree, stat points, rank, daily, sell)
-//   L8  equipment  Forge & Maintenance (durability, repair, enhance, crafting)
-//   L10 summons    Summoning (eggs, fragments, hatch, deck, training)
-//   L12 runes      Runes (types, socketing, removal scrolls)
-//   L15 classes    Class Evolution (paths, evolve gate, trials)
-//   L18 guild      Guilds & Rivals (guilds, duels, bounties)
-//   L20 abyss      The Abyss (gates, extraction loop, wild summons, Floor 21+ runes)
-//   L25 endgame    Raids & the Deep End (Avatar raid, summon duels, resonance, investments)
-//   L40 sight      The Sight (Soul Reader - hard gate L40)
-//   L50 ascend     Ascension (hard gate L50 requirements)
-//
+// L3 combat Arms & Combat (loaner dagger, dummy lessons, hospital)
+// L5 power Powering Up (skill tree, stat points, rank, daily, sell)
+// L8 equipment Forge & Maintenance (durability, repair, enhance, crafting)
+// L10 summons Summoning (eggs, fragments, hatch, deck, training)
+// L12 runes Runes (types, socketing, removal scrolls)
+// L15 classes Class Evolution (paths, evolve gate, trials)
+// L18 guild Guilds & Rivals (guilds, duels, bounties)
+// L20 abyss The Abyss (gates, extraction loop, wild summons, Floor 21+ runes)
+// L25 endgame Raids & the Deep End (Avatar raid, summon duels, resonance, investments)
+// L40 sight The Sight (Soul Reader - hard gate L40)
+// L50 ascend Ascension (hard gate L50 requirements)
 // Guild War / The Ruins remain deliberately untaught as a mandatory lesson
 // (owner directive) - they get a pointer inside the guild track.
-//
 // Dynamic prefix: every command is rendered through P() = the bot's real
 // configured prefix (.jk for Jake, .j for Joker/Subaru). Never hard-coded.
-//
 // Crash-safe: every granted key is recorded on user.tutorialLoadout and
 // cleanup runs at finish/skip AND at the start of any new session, so a
 // mid-tutorial restart can never strand the loadout.
@@ -55,19 +48,19 @@ const sessions = new Map();
 
 const PREFIX = '🧭';
 
-// 💡 Dynamic prefix - resolved per call from the bot config so the tutorial
+// Dynamic prefix - resolved per call from the bot config so the tutorial
 // always shows the command the player can actually execute.
 function P(explicit) {
     if (explicit && typeof explicit === 'string') return explicit;
     try { return require('../botConfig').getPrefix() || '.'; } catch (e) { return '.'; }
 }
 
-// ═══════════════════════════════════════════════════════════
-// 💡 PHASE C: MILESTONE TRACK REGISTRY
+// ===========================================================
+// PHASE C: MILESTONE TRACK REGISTRY
 // Each track = ordered steps + advance rules. Steps marked `next:true` can
 // be skipped with `next`. Basics/combat are ACTION-GATED (the player must
 // perform), reading tracks always accept `next` (no soft-locks).
-// ═══════════════════════════════════════════════════════════
+// ===========================================================
 const TRACKS = {
     basics:    { title: 'BOOT CAMP',            icon: '🧭', unlockLevel: 1,  blurb: 'the essentials: your sheet, quests, the shop' },
     combat:    { title: 'ARMS & COMBAT',        icon: '⚔️', unlockLevel: 3,  blurb: 'fight well: weapons, defense, skills, items, healing' },
@@ -203,8 +196,8 @@ const FLOWS = {
 
 function flowOf(track) { return FLOWS[track] || FLOWS.basics; }
 
-// ── step texts (short on purpose - the player ACTS, we do not lecture) ──
-// 💡 Phase C: track param selects per-track variants (combat lessons live in
+// -- step texts (short on purpose - the player ACTS, we do not lecture) --
+// Phase C: track param selects per-track variants (combat lessons live in
 // the combat track now, not basics). Reused step ids keep their old text.
 function stepMessage(id, prefix, track) {
     const p = P(prefix);
@@ -294,7 +287,7 @@ function stepMessage(id, prefix, track) {
         case 'complete_summary':
             return null; // rendered by graduate()
 
-        // ══ TRACK: combat (L3) — Arms & Combat ══
+ // == TRACK: combat (L3) - Arms & Combat ==
         case 'cb_intro':
             return `${PREFIX} *ARMS & COMBAT*\n\n` +
                 `You've swung a sword in a training quest - now learn to fight *well*. Five lessons in the practice yard, a loaner weapon, and healing when it's over.\n\n` +
@@ -306,7 +299,7 @@ function stepMessage(id, prefix, track) {
         case 'victory':
             return `🏥 *When the fighting stops, heal.* Send me \`${p} hospital\` - a free full heal on a cooldown. Out in the world, HP also regenerates slowly on its own.`;
 
-        // ══ TRACK: power (L5) — Powering Up ══
+ // == TRACK: power (L5) - Powering Up ==
         case 'pw_skilltree':
             return `${PREFIX} *POWERING UP*\n\n` +
                 `Quests pay XP; XP levels you; levels grant points. Time to spend them.\n\n` +
@@ -324,7 +317,7 @@ function stepMessage(id, prefix, track) {
             return `💰 *Claimed!* The daily is reliable rent - don't skip days.\n\n` +
                 `*Step 5 - selling.* Junk drops still have value. Sell your spare potion: \`${p} sell minor_potion\`\n\n_(Already used it? Send \`next\` to move on.)_`;
 
-        // ══ TRACK: equipment (L8) — Forge & Maintenance ══
+ // == TRACK: equipment (L8) - Forge & Maintenance ==
         case 'eq_blacksmith':
             return `${PREFIX} *FORGE & MAINTENANCE*\n\n` +
                 `Gear takes durability damage in fights - broken gear does *nothing*. The blacksmith keeps your kit alive.\n\n` +
@@ -336,7 +329,7 @@ function stepMessage(id, prefix, track) {
         case 'eq_craft':
             return `🛠️ *Step 3 - crafting.* Materials from quests and dungeons become gear and potions you can't buy. Browse what's craftable: \`${p} recipes\` (and \`${p} craft <id>\` to make one).\n\nSend \`next\` to graduate.`;
 
-        // ══ TRACK: summons (L10) — Summoning ══
+ // == TRACK: summons (L10) - Summoning ==
         case 'sm_intro':
             return `${PREFIX} *SUMMONING*\n\n` +
                 `Summons are permanent battle companions: they fight beside you in dungeons, PvP and the Abyss, level up, and gain their own skills.\n\n` +
@@ -348,7 +341,7 @@ function stepMessage(id, prefix, track) {
         case 'sm_train':
             return `📊 *Step 3 - grow them.* \`${p} summon train <#>\` grants daily XP; levels raise stats and unlock abilities. Deploy one with \`${p} summon <#> deploy\` so it fights beside you.\n\n_Optional extras: stat points, gear, forging, trials - \`${p} summon help\` shows it all. Trade on the player market: \`${p} market sell summon <#> <price>\`._\n\nSend \`next\` to graduate.`;
 
-        // ══ TRACK: runes (L12) — Runes ══
+ // == TRACK: runes (L12) - Runes ==
         case 'rn_intro':
             return `${PREFIX} *RUNES*\n\n` +
                 `Runes are socketable augments that rewrite how your skills behave: more damage, cheaper energy, burns that freeze, chain bounces, lifesteal. They come from the Abyss (Floor 21+) and rare drops.\n\n` +
@@ -358,7 +351,7 @@ function stepMessage(id, prefix, track) {
         case 'rn_socket':
             return `🔩 *Step 3 - socketing.* Bind a rune to a skill: \`${p} rune socket <runeId> <skillId>\`. Slots are limited per skill (\`${p} rune slots <skillId>\`).\n\n⚠️ *Removing a socketed rune needs a Rune Removal Scroll* (cash shop / rare raid drop) - without one you can only destroy the rune.\n\nSend \`next\` to graduate.`;
 
-        // ══ TRACK: classes (L15) — Class Evolution ══
+ // == TRACK: classes (L15) - Class Evolution ==
         case 'cl_classes':
             return `${PREFIX} *CLASS EVOLUTION*\n\n` +
                 `Your class isn't permanent - it evolves. Each of the base classes branches into stronger forms with their own kits.\n\n` +
@@ -368,7 +361,7 @@ function stepMessage(id, prefix, track) {
         case 'cl_trial':
             return `⚔️ *Step 3 - the trials.* Trial bosses are the gatekeepers. View and start them: \`${p} trial\` (start when you're geared - they're real fights).\n\nSend \`next\` to graduate.`;
 
-        // ══ TRACK: guild (L18) — Guilds & Rivals ══
+ // == TRACK: guild (L18) - Guilds & Rivals ==
         case 'gl_guild':
             return `${PREFIX} *GUILDS & RIVALS*\n\n` +
                 `Guilds are the social backbone: shared perks (+XP, +Zeni, member capacity), a treasury, and a war front.\n\n` +
@@ -378,7 +371,7 @@ function stepMessage(id, prefix, track) {
         case 'gl_bounty':
             return `🏴‍☠️ *Step 3 - bounties.* Wealthy players become targets: anyone can place a Zeni bounty (\`${p} bounty\`), hunters collect by winning PvP against the target. Level 20+ targets only. Hoard responsibly.\n\nSend \`next\` to graduate.`;
 
-        // ══ TRACK: abyss (L20) — The Abyss ══
+ // == TRACK: abyss (L20) - The Abyss ==
         case 'ab_gates':
             return `${PREFIX} *THE ABYSS*\n\n` +
                 `You've reached level 20 - the Abyss is open to you. It's the endgame dungeon: an endless descent where the loot stacks but so does the risk.\n\n` +
@@ -388,7 +381,7 @@ function stepMessage(id, prefix, track) {
         case 'ab_wilds':
             return `🐉 *What's down there:* Wild Summons (drop Summon Fragments - 10 craft an egg), runes from Floor 21+, and scale-topping gear. Bring potions. Bring a summon. Bring humility.\n\nSend \`next\` to finish.`;
 
-        // ══ TRACK: endgame (L25) — Raids & the Deep End ══
+ // == TRACK: endgame (L25) - Raids & the Deep End ==
         case 'eg_raid':
             return `${PREFIX} *RAIDS & THE DEEP END*\n\n` +
                 `*The Sunday Avatar Raid.* Every Sunday 00:00 UTC a server-wide boss spawns - everyone who joins is merged into one colossal Avatar (class of the majority, stats of the crowd). \`${p} raid\` shows the rotation and how to join.`;
@@ -397,12 +390,12 @@ function stepMessage(id, prefix, track) {
         case 'eg_invest':
             return `🏦 *Money that works.* Fixed investment plans pay out over time: \`${p} invest\`. Safer than carrying everything into the Abyss.\n\nSend \`next\` to graduate.`;
 
-        // ══ TRACK: sight (L40) — The Sight ══
+ // == TRACK: sight (L40) - The Sight ==
         case 'si_intro':
             return `${PREFIX} *THE SIGHT*\n\n` +
                 `Level 40 - your soul is loud enough to read now. The Soul Reader opens the Sight: three doors, three fates. It also demands you've faced the deep Abyss floors.\n\nIt's a one-way ritual, not a toy - read its requirements carefully before you step through.\n\nSend \`next\` to finish.`;
 
-        // ══ TRACK: ascend (L50) — Ascension ══
+ // == TRACK: ascend (L50) - Ascension ==
         case 'as_intro':
             return `${PREFIX} *ASCENSION*\n\n` +
                 `Level 50. The final gate: *100 completed quests, 100 victories, 100K Zeni and one last trial boss*. Meet it and your class transcends into its ascended form.\n\nCheck the requirements: \`${p} evolve\` · Trials: \`${p} trial\`\n\nSend \`next\` to finish.`;
@@ -418,19 +411,19 @@ function cleanupLoadout(jid) {
     const lo = user.tutorialLoadout;
     if (lo && typeof lo === 'object') {
         try {
-            // skills we ADDED (never pre-existing ones)
+ // skills we ADDED (never pre-existing ones)
             for (const sid of lo.skills || []) {
                 if (user.skills && Object.prototype.hasOwnProperty.call(user.skills, sid)) delete user.skills[sid];
             }
-            // items: remove the granted quantities
+ // items: remove the granted quantities
             for (const it of lo.items || []) {
                 try { inventorySystem.removeItem(jid, it.id, it.qty); } catch (e) { /* already gone */ }
             }
-            // equipment: unequip first so the slot doesn't hold a ghost.
-            // 💡 Phase B fix: unequip needs a free bag slot (it returns the
-            // item to the bag) - a full bag made the revoke silently fail and
-            // left the loaner gear equipped forever. If unequip can't run,
-            // force-clear the slot when it still holds the granted item.
+ // equipment: unequip first so the slot doesn't hold a ghost.
+ // Phase B fix: unequip needs a free bag slot (it returns the
+ // item to the bag) - a full bag made the revoke silently fail and
+ // left the loaner gear equipped forever. If unequip can't run,
+ // force-clear the slot when it still holds the granted item.
             if (lo.equipment) {
                 try { inventorySystem.unequipItem(jid, lo.equipment.slot); } catch (e) { /* not equipped */ }
                 try {
@@ -464,7 +457,7 @@ function setStep(jid, step) {
     if (s) {
         s.step = step;
         s.nudgedAt = 0; // fresh step = fresh nudge budget
-        s.locked = false; // 💡 release the one-action lock (was documented but missing)
+        s.locked = false; // release the one-action lock (was documented but missing)
     }
 }
 
@@ -513,7 +506,7 @@ async function grantLoadout(jid, { withSkills, potions }) {
     }
 }
 
-// ── start the group demo raid (player + 3 fake guild-mates) ──
+// -- start the group demo raid (player + 3 fake guild-mates) --
 async function startGroupDemo(sock, jid, prefix) {
     const s = sessions.get(jid);
     if (!s) return;
@@ -528,10 +521,10 @@ async function startGroupDemo(sock, jid, prefix) {
             await send(sock, chatId, `${PREFIX} The demo raid is busy - send \`retry\` in a moment.`);
             return;
         }
-        // 💡 Phase C: in the STRIPPED basics the group demo flows to the SHOP
-        // step on completion (notifyCombatEnd TUTORIAL_GROUP) - keep the step
-        // marker so that handler recognizes it. Only the combat track used the
-        // dummy next (no group demo there), so 'dummy_prep' is legacy-only.
+ // Phase C: in the STRIPPED basics the group demo flows to the SHOP
+ // step on completion (notifyCombatEnd TUTORIAL_GROUP) - keep the step
+ // marker so that handler recognizes it. Only the combat track used the
+ // dummy next (no group demo there), so 'dummy_prep' is legacy-only.
         if (s.track !== 'basics') setStep(jid, 'dummy_prep');
         else setStep(jid, 'group_quest');
     } catch (e) {
@@ -539,7 +532,7 @@ async function startGroupDemo(sock, jid, prefix) {
     }
 }
 
-// ── start the practice fight (guildAdventure TUTORIAL mode) ──
+// -- start the practice fight (guildAdventure TUTORIAL mode) --
 async function startPracticeFight(sock, jid, prefix) {
     const chatId = stepOf(jid)?.chatId;
     const user = economy.getUser(jid);
@@ -569,7 +562,7 @@ async function startPracticeFight(sock, jid, prefix) {
     }
 }
 
-// 💡 Phase C: per-user track state on the user doc (persisted, restart-safe).
+// Phase C: per-user track state on the user doc (persisted, restart-safe).
 // user.tutorialTracks: { [trackId]: 'locked'|'unlocked'|'active'|'done' }
 // user.tutorialPending: [trackIds awaiting their unlock announcement card]
 // Legacy field user.tutorial ('active'|'done') stays the BASICS flag.
@@ -584,8 +577,8 @@ function ensureTrackState(user) {
             if (id === 'basics') {
                 user.tutorialTracks[id] = (user.tutorial === 'done') ? 'done' : 'unlocked';
             } else {
-                // players who already passed the milestone get silent unlocks
-                // (no announcement card spam for veterans)
+ // players who already passed the milestone get silent unlocks
+ // (no announcement card spam for veterans)
                 user.tutorialTracks[id] = (eff >= cfg.unlockLevel) ? 'unlocked' : 'locked';
             }
         }
@@ -600,7 +593,7 @@ async function begin(sock, chatId, jid, prefix, trackArg) {
     }
     ensureTrackState(user);
 
-    // resolve requested track
+ // resolve requested track
     const requested = String(trackArg || '').toLowerCase().trim();
     let track = 'basics';
     if (requested && requested !== 'start' && requested !== 'basics') {
@@ -611,7 +604,7 @@ async function begin(sock, chatId, jid, prefix, trackArg) {
         track = requested;
     }
 
-    // one active session at a time (any track)
+ // one active session at a time (any track)
     if (sessions.has(jid)) {
         const cur = sessions.get(jid);
         await send(sock, chatId, `${PREFIX} You're already in *${TRACKS[cur.track].title}*. Finish it, or send \`skip\` to bail first.`);
@@ -624,7 +617,7 @@ async function begin(sock, chatId, jid, prefix, trackArg) {
         return {};
     }
 
-    // crash-safe: scrub any stranded loadout from a previous attempt
+ // crash-safe: scrub any stranded loadout from a previous attempt
     cleanupLoadout(jid);
     if (track === 'basics') user.tutorial = 'active'; // legacy flag = basics only
     user.tutorialTracks[track] = 'active';
@@ -634,7 +627,7 @@ async function begin(sock, chatId, jid, prefix, trackArg) {
     const flow = flowOf(track);
     sessions.set(jid, { track, step: flow.entry, chatId, startedAt: Date.now(), nudgedAt: 0, locked: false });
 
-    // combat track grants the practice weapon up front
+ // combat track grants the practice weapon up front
     if (flow.loadout) {
         try {
             await inventorySystem.addItem(jid, 'rusty_dagger', 1);
@@ -668,7 +661,7 @@ function trackListMsg(user, prefix) {
     return msg;
 }
 
-// ── DM entry: handles tutorial verbs; returns null to fall through ──
+// -- DM entry: handles tutorial verbs; returns null to fall through --
 async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
     const prefix = P(opts.prefix);
     const raw = String(txt || '').trim().toLowerCase();
@@ -676,7 +669,7 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
     const norm = raw.startsWith(prefix.toLowerCase()) ? raw.slice(prefix.length).trim() : raw;
     const user = economy.getUser(senderJid);
 
-    // 💡 Phase C: `tutorial list` / `tutorial <track>` / `tutorial start <track>`
+ // Phase C: `tutorial list` / `tutorial <track>` / `tutorial start <track>`
     if (/^(tutorial|start tutorial)(\s+.*)?$/.test(norm)) {
         const argStr = norm.replace(/^(tutorial|start tutorial)/, '').replace(/^\s*start\s+/, '').trim();
         if (/^list$/.test(argStr)) {
@@ -693,11 +686,11 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
             s.step = 'battle_prep';
             await startPracticeFight(sock, senderJid, prefix);
         } else if (s.step === 'retry_solo') {
-            // FIX 2026-10-12: the old path fired notify('inventory') — a no-op
-            // for the basics track — so a failed training-quest start left the
-            // player stuck forever (retry consumed, nothing happened).
-            // Re-open the quest directly, same contract as the auto-start in
-            // notify('char'): success → solo_fight, busy → retry_solo again.
+ // FIX the old path fired notify('inventory') - a no-op
+ // for the basics track - so a failed training-quest start left the
+ // player stuck forever (retry consumed, nothing happened).
+ // Re-open the quest directly, same contract as the auto-start in
+ // notify('char'): success → solo_fight, busy → retry_solo again.
             s.step = 'solo_quest';
             try {
                 const guildAdventure = require('./guildAdventure');
@@ -737,13 +730,13 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
     if (!s || !user) return null;
     const flow = flowOf(s.track);
 
-    // bare navigation inside the tutorial
+ // bare navigation inside the tutorial
     if (norm === 'next') {
-        // reading tracks: `next` always advances (no soft-locks)
+ // reading tracks: `next` always advances (no soft-locks)
         if (!['basics', 'combat'].includes(s.track)) {
             return await advanceStep(sock, senderJid, chatId, prefix);
         }
-        // basics/combat: only optional-action steps can be passed with `next`
+ // basics/combat: only optional-action steps can be passed with `next`
         if (s.step === 'money') {
             setStep(senderJid, 'daily');
             await send(sock, chatId, stepMessage('daily', prefix));
@@ -759,12 +752,12 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
         return { text: `${PREFIX} We're not there yet - do the step above first.` };
     }
     if (/^(finish|done|graduate)$/.test(norm)) {
-        // finishing early: allowed from any last-content step, refused mid-lesson
+ // finishing early: allowed from any last-content step, refused mid-lesson
         if (!['abyss', 'complete_summary', 'victory'].includes(s.step) && ['basics', 'combat'].includes(s.track)) {
             return { text: `${PREFIX} We're mid-lesson - finish the current step (or \`skip\` to bail).` };
         }
         if (['basics', 'combat'].includes(s.track) && s.step === 'victory') {
-            // combat: victory requires the hospital action (it's the lesson)
+ // combat: victory requires the hospital action (it's the lesson)
             return { text: `${PREFIX} We're mid-lesson - heal up first (\`${P(prefix)} hospital\`), or \`skip\` to bail.` };
         }
         return graduate(sock, chatId, senderJid, prefix);
@@ -773,7 +766,7 @@ async function handleDM(sock, senderJid, chatId, txt, BOT_MARKER, opts = {}) {
     return null; // not tutorial traffic
 }
 
-// 💡 Phase C: advance along the track's ordered steps (used by `next` in
+// Phase C: advance along the track's ordered steps (used by `next` in
 // reading tracks and by event-driven advances). Sends the next step's text,
 // fires per-step grants, graduates at the end.
 async function advanceStep(sock, jid, chatId, prefix) {
@@ -786,7 +779,7 @@ async function advanceStep(sock, jid, chatId, prefix) {
     s.step = nextStep;
     s.nudgedAt = 0;
     s.locked = false;
-    // per-step grants
+ // per-step grants
     const rule = (flow.on || {})[nextStep] || {};
     if (rule.grant === 'statpoint') {
         try {
@@ -817,7 +810,7 @@ async function graduate(sock, chatId, jid, prefix) {
         if (track === 'basics') user.tutorial = 'done'; // legacy flag
         economy.saveUser(jid);
     }
-    // 💡 Phase C: per-track graduation text
+ // Phase C: per-track graduation text
     let summary;
     if (track === 'basics') {
         summary = `${PREFIX} *BOOT CAMP COMPLETE*\n\n` +
@@ -847,7 +840,7 @@ async function graduate(sock, chatId, jid, prefix) {
     return { text: summary };
 }
 
-// ── wrong-command guidance: gentle redirect, max once per 30s per step ──
+// -- wrong-command guidance: gentle redirect, max once per 30s per step --
 async function nudge(sock, jid, lessonHint) {
     const s = sessions.get(jid);
     if (!s) return;
@@ -859,7 +852,7 @@ async function nudge(sock, jid, lessonHint) {
         `${PREFIX} Not quite yet - this step is teaching you something specific. Do the action above first.`);
 }
 
-// ── per-step expectation (shown when the player does the wrong thing) ──
+// -- per-step expectation (shown when the player does the wrong thing) --
 function stepHint(step, prefix) {
     const p = P(prefix);
     const hints = {
@@ -910,7 +903,7 @@ const EVENT_STEP_ROUTES = {
     abyss: ['abyss'],
 };
 
-// 💡 Single engine integration point: called for every recognized game
+// Single engine integration point: called for every recognized game
 // command while a tutorial session is active. Advances the tutorial when
 // the action matches the current step; gently redirects when it doesn't.
 async function notifyAction(jid, cmd, ctx = {}) {
@@ -919,9 +912,9 @@ async function notifyAction(jid, cmd, ctx = {}) {
     const c = String(cmd || '').toLowerCase();
     const flow = flowOf(s.track);
 
-    // 💡 Phase C: reading tracks (everything except basics/combat) advance on
-    // their declared event rules. Wrong commands don't nag - players keep
-    // playing while the lesson waits (no nudge spam).
+ // Phase C: reading tracks (everything except basics/combat) advance on
+ // their declared event rules. Wrong commands don't nag - players keep
+ // playing while the lesson waits (no nudge spam).
     if (!['basics', 'combat'].includes(s.track)) {
         const rule = (flow.on || {})[s.step];
         if (rule && rule.cmds.includes(c)) {
@@ -931,8 +924,8 @@ async function notifyAction(jid, cmd, ctx = {}) {
         return;
     }
 
-    // combat subcommands are coached per-lesson (combat track only - basics
-    // solo/group fights just play)
+ // combat subcommands are coached per-lesson (combat track only - basics
+ // solo/group fights just play)
     if (c === 'combat') {
         if (!flow.combatTrack) return;
         const sub = String(ctx.sub || '').toLowerCase();
@@ -948,28 +941,28 @@ async function notifyAction(jid, cmd, ctx = {}) {
     const steps = EVENT_STEP_ROUTES[c];
     if (!steps) return; // not tutorial traffic - normal gameplay proceeds
     if (steps.includes(s.step)) {
-        // 💡 State-driven rule: these commands can FAIL (insufficient funds,
-        // wrong item, cooldown) - they must only advance the tutorial on
-        // REAL success, via the success hooks inside their handlers
-        // (shopCommands.buyItem / rpgCommands.sellItem + equipItem /
-        // progressionCommands.handleAllocateCommand / engine hospital).
+ // State-driven rule: these commands can FAIL (insufficient funds,
+ // wrong item, cooldown) - they must only advance the tutorial on
+ // REAL success, via the success hooks inside their handlers
+ // (shopCommands.buyItem / rpgCommands.sellItem + equipItem /
+ // progressionCommands.handleAllocateCommand / engine hospital).
         const SUCCESS_HOOKED = new Set(['equip', 'buy', 'sell', 'allocate', 'hospital', 'heal', 'clinic']);
         if (SUCCESS_HOOKED.has(c)) return;
         const eventMap = { character: 'char', stats: 'char', bag: 'inventory', inv: 'inventory', heal: 'hospital', clinic: 'hospital', skilltree: 'st', alloc: 'allocate', me: 'profile', adventurer: 'rank', blacksmith: 'repair', enhance: 'repair', upgrade: 'repair', inspect: 'repair' };
         await notify(jid, eventMap[c] || c, ctx);
         return;
     }
-    // known command, wrong step → guide back (except always-allowed verbs)
+ // known command, wrong step → guide back (except always-allowed verbs)
     const freeVerbs = ['profile', 'me', 'rank', 'adventurer', 'char', 'character', 'stats', 'inventory', 'bag', 'inv', 'shop'];
     if (freeVerbs.includes(c)) {
-        // informational commands are harmless anywhere - no nudge spam
+ // informational commands are harmless anywhere - no nudge spam
         return;
     }
     const sock = ctx.sock;
     await nudge(sock, jid, stepHint(s.step, ctx.prefix));
 }
 
-// ── listeners wired into the game systems (all no-ops without a session) ──
+// -- listeners wired into the game systems (all no-ops without a session) --
 // notify() fires on the player's REAL successful actions. Combat lessons
 // advance only via the accepted-action hook in guildAdventure (which sends
 // combat_attack / combat_defend / combat_ability / combat_item /
@@ -983,14 +976,14 @@ async function notify(jid, event, ctx = {}) {
     const chatId = ctx.chatId || s.chatId;
     const prefix = P(ctx.prefix);
     const user = economy.getUser(jid);
-    // 💡 Phase C: session existence is the activity truth (reading tracks
-    // don't set the legacy user.tutorial='active' flag)
+ // Phase C: session existence is the activity truth (reading tracks
+ // don't set the legacy user.tutorial='active' flag)
     if (!user) { sessions.delete(jid); return; }
 
-    // Combat lessons: the event arrives when the action was ACCEPTED.
-    // Delay briefly so the action result (combat image/log) lands before
-    // the next instruction - never coach mid-resolution.
-    // 💡 Phase C: dummy lessons live in the COMBAT track only
+ // Combat lessons: the event arrives when the action was ACCEPTED.
+ // Delay briefly so the action result (combat image/log) lands before
+ // the next instruction - never coach mid-resolution.
+ // Phase C: dummy lessons live in the COMBAT track only
     const combatLessons = {
         combat_attack: { from: ['combat_atk'], to: 'combat_def', msg: 'combat_def' },
         combat_defend: { from: ['combat_def'], to: 'combat_skill', msg: 'combat_skill' },
@@ -1012,18 +1005,18 @@ async function notify(jid, event, ctx = {}) {
         return;
     }
 
-    // 💡 Phase C: reading tracks never come through here (notifyAction
-    // advances them directly) - nothing below applies to them.
+ // Phase C: reading tracks never come through here (notifyAction
+ // advances them directly) - nothing below applies to them.
     if (!['basics', 'combat'].includes(s.track)) return;
 
     switch (event) {
         case 'char':
-            // basics: sheet → STRAIGHT to the training solo quest (stripped
-            // flow - no equip/bag detour; those live in the combat track)
+ // basics: sheet → STRAIGHT to the training solo quest (stripped
+ // flow - no equip/bag detour; those live in the combat track)
             if (s.track === 'basics' && s.step === 'stats') {
                 setStep(jid, 'solo_quest');
                 await send(sock, chatId, stepMessage('solo_quest', prefix, 'basics'));
-                // open the controlled solo quest automatically
+ // open the controlled solo quest automatically
                 setTimeout(async () => {
                     try {
                         const guildAdventure = require('./guildAdventure');
@@ -1044,21 +1037,21 @@ async function notify(jid, event, ctx = {}) {
             }
             break;
         case 'equip':
-            // combat track: loaner dagger equipped
+ // combat track: loaner dagger equipped
             if (s.track === 'combat' && s.step === 'cb_intro') {
                 setStep(jid, 'cb_bag');
                 await send(sock, chatId, stepMessage('cb_bag', prefix, 'combat'));
             }
             break;
         case 'inventory':
-            // combat track: bag viewed → offer the practice yard
+ // combat track: bag viewed → offer the practice yard
             if (s.track === 'combat' && s.step === 'cb_bag') {
                 setStep(jid, 'cb_ready');
                 await send(sock, chatId, stepMessage('cb_ready', prefix, 'combat'));
             }
             break;
         case 'hospital':
-            // combat track: healed → graduate (basics has no hospital step)
+ // combat track: healed → graduate (basics has no hospital step)
             if (s.track === 'combat' && s.step === 'victory') {
                 await graduate(sock, chatId, jid, prefix);
             }
@@ -1071,7 +1064,7 @@ async function notify(jid, event, ctx = {}) {
             break;
         case 'buy':
             if (s.track === 'basics' && s.step === 'shop_buy') {
-                // last basics action → graduation card
+ // last basics action → graduation card
                 await graduate(sock, chatId, jid, prefix);
             }
             break;
@@ -1080,7 +1073,7 @@ async function notify(jid, event, ctx = {}) {
     }
 }
 
-// ── quest/combat outcomes (fired from guildAdventure.endCombat) ──
+// -- quest/combat outcomes (fired from guildAdventure.endCombat) --
 async function notifyCombatEnd(state, sock) {
     if (!state || !['TUTORIAL', 'TUTORIAL_QUEST', 'TUTORIAL_GROUP'].includes(state.mode)) return;
     const player = (state.players || []).find((p) => !p.isTutorialAlly);
@@ -1091,12 +1084,12 @@ async function notifyCombatEnd(state, sock) {
     const prefix = P();
     const victory = (state.enemies || []).every((e) => (e.stats?.hp || 0) <= 0);
 
-    // 💡 Phase C: training quest + group demo belong to the BASICS track only
+ // Phase C: training quest + group demo belong to the BASICS track only
     if (state.mode === 'TUTORIAL_QUEST') {
         if (s.track !== 'basics' || s.step !== 'solo_fight') return;
         if (victory) {
             setStep(jid, 'group_quest');
-            // let the quest-complete card land first
+ // let the quest-complete card land first
             setTimeout(async () => {
                 try {
                     await send(sock, s.chatId, stepMessage('group_quest', prefix, 'basics'));
@@ -1110,8 +1103,8 @@ async function notifyCombatEnd(state, sock) {
     }
 
     if (state.mode === 'TUTORIAL_GROUP') {
-        // 💡 Phase C: group demo victory now flows to the SHOP step (stripped
-        // basics) instead of the practice yard (which lives in the combat track)
+ // Phase C: group demo victory now flows to the SHOP step (stripped
+ // basics) instead of the practice yard (which lives in the combat track)
         if (s.track !== 'basics' || s.step !== 'group_quest') return;
         if (victory) {
             setStep(jid, 'shop');
@@ -1124,15 +1117,15 @@ async function notifyCombatEnd(state, sock) {
         return;
     }
 
-    // TUTORIAL (practice dummy) - COMBAT track only. The fight ends
-    // COMPLETELY on death - the engine guarantees no further encounters
-    // (maxEncounters=1, tutorial mode). We only teach the hospital step and
-    // revoke at graduation.
+ // TUTORIAL (practice dummy) - COMBAT track only. The fight ends
+ // COMPLETELY on death - the engine guarantees no further encounters
+ // (maxEncounters=1, tutorial mode). We only teach the hospital step and
+ // revoke at graduation.
     if (s.track !== 'combat') return;
     if (['combat_atk', 'combat_def', 'combat_skill', 'combat_item', 'combat_rest', 'combat_finish', 'retry_fight'].includes(s.step)) {
         if (!victory) {
-            // fled or lost the dummy fight (impossible vs a 0-ATK dummy,
-            // but flee exists) - return to the offer
+ // fled or lost the dummy fight (impossible vs a 0-ATK dummy,
+ // but flee exists) - return to the offer
             setStep(jid, 'retry_fight');
             await send(sock, state.chatId, `${PREFIX} Practice interrupted. Send \`retry\` to re-enter the yard, or \`skip\` to end the tutorial.`);
             return;
@@ -1151,9 +1144,9 @@ function offerLine(prefix) {
     return `\n\n${PREFIX} *New here?* DM me \`tutorial start\` and I'll walk you through quests and the shop with live practice - about three minutes, no risk to your progress. More lessons unlock as you level.`;
 }
 
-// ═══════════════════════════════════════════════════════════
-// 💡 PHASE C: MILESTONE UNLOCKS (image cards on level-up)
-// ═══════════════════════════════════════════════════════════
+// ===========================================================
+// PHASE C: MILESTONE UNLOCKS (image cards on level-up)
+// ===========================================================
 
 // Called from progression.addXP + the forward-sync in progression.getUser.
 // NEVER throws, never awaits network - it only mutates user doc state.
@@ -1164,16 +1157,16 @@ function recordLevelUps(jid, levelUps) {
         if (!Array.isArray(levelUps) || levelUps.length === 0) return;
         const user = economy.getUser(jid);
         if (!user) return;
-        // 💡 Crossed range = (min-1, max] — e.g. a 1→5 jump passes [2,3,4,5],
-        // a 4→5 jump passes [5]. Tracks whose unlockLevel sits INSIDE the
-        // crossed range get the announcement card; tracks at or below the
-        // starting point are silently unlocked (veteran rule) so nobody gets
-        // card-spammed for levels they passed long ago.
+ // Crossed range = (min-1, max] - e.g. a 1→5 jump passes [2,3,4,5],
+ // a 4→5 jump passes [5]. Tracks whose unlockLevel sits INSIDE the
+ // crossed range get the announcement card; tracks at or below the
+ // starting point are silently unlocked (veteran rule) so nobody gets
+ // card-spammed for levels they passed long ago.
         const crossedMin = Math.min(...levelUps) - 1;
         const crossedMax = Math.max(...levelUps);
-        // init track state with a TEMPORARY effective level of crossedMin so
-        // ensureTrackState doesn't silently unlock the very tracks we're
-        // about to announce
+ // init track state with a TEMPORARY effective level of crossedMin so
+ // ensureTrackState doesn't silently unlock the very tracks we're
+ // about to announce
         if (!user.tutorialTracks || typeof user.tutorialTracks !== 'object') user.tutorialTracks = {};
         if (!Array.isArray(user.tutorialPending)) user.tutorialPending = [];
         for (const [id, cfg] of Object.entries(TRACKS)) {

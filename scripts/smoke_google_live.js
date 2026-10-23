@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// smoke_google_live.js — live one-shot: real fetch + parse + (optional) format.
+// smoke_google_live.js - live one-shot: real fetch + parse + (optional) format.
 // Usage: node scripts/smoke_google_live.js "<query>" [box|local]
 const path = require("path");
 const ROOT = path.resolve(__dirname, "..");
@@ -25,8 +25,8 @@ async function tryBackend(name, url, opts, parse) {
 }
 
 (async () => {
-  // brave-first (matches engine order — verified: Brave serves real results
-  // to box egresses; Bing decoys, DDG anomaly-202, Google JS wall)
+ // brave-first (matches engine order - verified: Brave serves real results
+ // to box egresses; Bing decoys, DDG anomaly-202, Google JS wall)
   let results = await tryBackend("brave", "https://search.brave.com/search", {
     method: "GET", params: { q: query }, headers: { "Accept-Language": "en-US,en;q=0.9" },
   }, ao.parseBraveHtml);
@@ -52,7 +52,7 @@ async function tryBackend(name, url, opts, parse) {
     console.log(` • [${r.domain}] ${r.title}\n   ${r.snippet.slice(0, 110)}`);
   }
   if (results.length >= 2) {
-    const msg = ao.buildOverviewMessage(query, "SYNTHESIS PLACEHOLDER [1][2] — proves prompt/message assembly on live data.", results);
+    const msg = ao.buildOverviewMessage(query, "SYNTHESIS PLACEHOLDER [1][2] - proves prompt/message assembly on live data.", results);
     console.log("\n--- message preview (first 700 chars) ---\n" + msg.slice(0, 700));
   }
   process.exit(results.length >= 2 ? 0 : 2);

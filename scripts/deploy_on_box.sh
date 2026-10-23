@@ -11,7 +11,7 @@
 # MINING HOLD (task45, 2026-10-08): Box 1 is on mining duty (wa-miner
 #   scrapes shoob.gg event cards; jake/subaru are parked at the owner's
 #   request and WILL be turned back on later). While ~/MINING_HOLD exists
-#   this deploy syncs CODE + AUTH ONLY and never touches pm2 — no restarts,
+#   this deploy syncs CODE + AUTH ONLY and never touches pm2 - no restarts,
 #   no starts, no resurrects. Owner deletes the hold file when the bots
 #   return ("we will turn the bots back on").
 #
@@ -30,7 +30,7 @@ cd "$REPO_DIR" || exit 1
 # ── mining hold gate (task45): code-only mode when the hold file exists ──
 HOLD_FILE="$HOME/MINING_HOLD"
 if [ -f "$HOLD_FILE" ]; then
-  echo "MINING HOLD active ($HOLD_FILE) — code+auth sync only, pm2 will NOT be touched"
+  echo "MINING HOLD active ($HOLD_FILE) - code+auth sync only, pm2 will NOT be touched"
 fi
 
 echo "=== smart deploy: branch=$BRANCH  $(date -u +%FT%TZ) ==="
@@ -167,7 +167,7 @@ fi
 #     someone is mid-dungeon RIGHT NOW. (Quiz/ludo/chess need no Mongo
 #     gate: their per-question/turn timers self-expire < QUIET_WINDOW.)
 #   * DEPLOY_FORCE_AFTER_MIN (default 180, raised from 45) hard-caps the
-#     deferral so deployed code can never go stale — after the cap it
+#     deferral so deployed code can never go stale - after the cap it
 #     restarts even mid-activity (deploys must land; override freely);
 #   * FORCE_RESTART=1 bypasses the gate (emergency override).
 QUIET_WINDOW="${DEPLOY_QUIET_WINDOW:-180}"
@@ -283,7 +283,7 @@ if [ "$SKIP_RESTART" != "1" ]; then
   # ⚠️ DEPLOY NOTIFY (2026-10-11, owner: "if there's gonna be a commit and a
   # restart the bot should send a message saying any active game might be
   # interrupted ... to the GCs marked as rpg"): every RUNNING local bot gets a
-  # POST /notify-deploy BEFORE the restart machinery touches it — it messages
+  # POST /notify-deploy BEFORE the restart machinery touches it - it messages
   # all gw_rpg_gcs_<botId> chats while the sockets are still alive. Ports
   # 3001-3003 cover jake/joker/subaru; dead ports fail silently in <2s.
   for DP in 3001 3002 3003; do
@@ -292,7 +292,7 @@ if [ "$SKIP_RESTART" != "1" ]; then
   done
   sleep 3 # let the notices flush
   # Box topology guard (incident 2026-10-08 ~10:02Z, deploy b59d5c17):
-  # wa-joker present in pm2 == Box 2. Box 2 hosts wa-joker ONLY —
+  # wa-joker present in pm2 == Box 2. Box 2 hosts wa-joker ONLY -
   # never start/restart wa-jake/wa-subaru/wa-miner there (their auth
   # lives on Box 1; starting them here boots UNPAIRED impostors).
   ON_BOX2=$(pm2 jlist 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const p=JSON.parse(s);console.log((p||[]).some(x=>x&&x.name==='wa-joker')?'1':'0')}catch(e){console.log('0')}})" 2>/dev/null || echo 0)

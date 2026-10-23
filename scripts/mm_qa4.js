@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ============================================
-// MURDER MYSTERY - QA SUITE 4 (Wave 2a, owner 2026-10-13 09:44Z)
+// MURDER MYSTERY - QA SUITE 4 (Wave 2a, 09:44Z)
 // The Butler / the Medium / the Accomplice + killer night chat.
 // Offline, mock sock, stub economy. Run: node scripts/mm_qa4.js
 // Exits non-zero on any failed assertion.
@@ -243,7 +243,7 @@ async function main() {
   mm._internal.games.clear();
   mm._internal.ensureRehydrated();
 
-  // =========== 1. DEAL GATES ===========
+ // =========== 1. DEAL GATES ===========
   console.log('\n===== 1. DEAL GATES (owner 2026-10-13) =====');
   {
     const sock = makeSock(); QA_SOCK = sock;
@@ -282,7 +282,7 @@ async function main() {
     }
   }
 
-  // =========== 2. BUTLER NIGHT-3 REVEAL ===========
+ // =========== 2. BUTLER NIGHT-3 REVEAL ===========
   console.log('\n===== 2. BUTLER THIRD-NIGHT REVEAL =====');
   {
     const sock = makeSock(); QA_SOCK = sock;
@@ -301,13 +301,13 @@ async function main() {
     ok(dmTexts(sock, butler0.jid, new RegExp(`the name behind the knife: \\*${esc(killer0.name)}\\*`, 'i')) >= 1, `2.3 butler's night-3 DM names the killer (${killer0.name})`);
     ok(sock.out.some((m) => !m.isGroup && m.jid === butler0.jid && m.image && /the name behind the knife/i.test(m.text)) ||
        dmTexts(sock, butler0.jid, /third night the manor pays its debts/i) >= 1, '2.4 butler reveal arrives as a card (or text fallback)');
-    // the butler's other night DMs must NOT leak the name before night 3
+ // the butler's other night DMs must NOT leak the name before night 3
     const earlyLeak = sock.out.some((m) => !m.isGroup && m.jid === butler0.jid && /name behind the knife/i.test(m.text) === false && new RegExp(esc(killer0.name)).test(m.text) && /NIGHT 1 -/.test(m.text));
     ok(!earlyLeak, '2.5 no killer-name leak in the butler\'s night-1 DM');
     await mm.handleCommand(ctxOf(sock, CHATS[3], { sub: 'end', sender: roster[0].jid, name: roster[0].name }));
   }
 
-  // =========== 3. THE SEANCE ===========
+ // =========== 3. THE SEANCE ===========
   console.log('\n===== 3. THE MEDIUM AND THE VEIL =====');
   {
     const sock = makeSock(); QA_SOCK = sock;
@@ -325,7 +325,7 @@ async function main() {
     await mm.handleCommand(ctxOf(sock, accomp.jid, { group: false, sub: 'status', sender: accomp.jid, name: accomp.name }));
     ok(dmTexts(sock, accomp.jid, /the \*ACCOMPLICE\*/i) >= 1, '3.3 accomplice status shows the Accomplice seat');
 
-    // kill the butler night 1 so the veil has someone to carry
+ // kill the butler night 1 so the veil has someone to carry
     const k1 = g.players.find((p) => p.role === 'KILLER');
     const vIdx = aliveIdxOf(g, butler, k1.jid);
     await mm.handleCommand(ctxOf(sock, k1.jid, { group: false, sub: 'kill', rest: String(vIdx), sender: k1.jid, name: k1.name }));
@@ -356,7 +356,7 @@ async function main() {
     await mm.seanceRelay(sock, deadJid, deadJid, 'second words too fast', MARKER);
     ok(dmTexts(sock, deadJid, /so many words so fast/) >= 1, '3.15 anti-spam cooldown holds the second whisper');
 
-    // phase roll: veil does not carry across phases
+ // phase roll: veil does not carry across phases
     await mm._internal.onPhaseTimeout(CHATS[4], sock); // DISCUSSION -> VOTING
     g = await waitForPhase(CHATS[4], ['VOTING', 'ENDED'], 20000);
     if (g && g.phase === 'VOTING') {
@@ -381,7 +381,7 @@ async function main() {
     await mm.handleCommand(ctxOf(sock, CHATS[4], { sub: 'end', sender: roster[0].jid, name: roster[0].name }));
   }
 
-  // =========== 4. THE ACCOMPLICE WINS BESIDE THE KNIFE ===========
+ // =========== 4. THE ACCOMPLICE WINS BESIDE THE KNIFE ===========
   console.log('\n===== 4. ACCOMPLICE WIN PATHS =====');
   {
     const sock = makeSock(); QA_SOCK = sock;
@@ -396,7 +396,7 @@ async function main() {
     const balBefore = {};
     for (const p of roster) balBefore[p.jid] = QA_BALANCES.get(p.jid);
     g = await drive(sock, CHATS[5], 'killerWin');
-    // declareWinner tears the game down - the win lives in the group texts, ledger and purses
+ // declareWinner tears the game down - the win lives in the group texts, ledger and purses
     ok(groupText(sock, /THE KILLER WINS/) >= 1, '4.1 killer team reaches parity and wins');
     ok(groupText(sock, /the killer walks away with the purse/) >= 1, '4.2 manor-pays announcement names the killer side');
     const team = [accFinal, ...killers0];
@@ -415,7 +415,7 @@ async function main() {
     ok(arch.length && arch[arch.length - 1].winner === 'killer', '4.8 archive records the killer win');
   }
 
-  // =========== 5. THE ACCOMPLICE LOSES THE CIV WIN ===========
+ // =========== 5. THE ACCOMPLICE LOSES THE CIV WIN ===========
   console.log('\n===== 5. ACCOMPLICE LOSES THE CIV WIN =====');
   {
     const sock = makeSock(); QA_SOCK = sock;
@@ -443,7 +443,7 @@ async function main() {
     ok(arch5.length && arch5[0].winner === 'civ', '5.7 archive records the civ win (newest-first)');
   }
 
-  // =========== 6. STATIC WIRING ===========
+ // =========== 6. STATIC WIRING ===========
   console.log('\n===== 6. STATIC SOURCE WIRING =====');
   {
     const fsx = require('fs');

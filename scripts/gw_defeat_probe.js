@@ -56,20 +56,20 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     await index.handleGroupCommand(gcSock, 'feed@g.us', 'mod@s.whatsapp.net', 'Mod', ['forcestart'], { prefix: '.j' });
     await wait(1500);
 
-    // pre-drain lives to 1 via direct write (isolates the LAST death)
+ // pre-drain lives to 1 via direct write (isolates the LAST death)
     await state.updatePlayer(EV, P1, {}, { lives: 1 });
     const evF = await state.getEvent(EV, { fresh: true });
     const me0 = evF.players.find((p) => p.jid === P1);
     console.log(`[pre] lives=${me0.lives} status=${me0.status} roomId=${me0.roomId} spawn=${me0.spawnRoomId}`);
 
-    // seed a relic
+ // seed a relic
     const room = evF.rooms.find((r) => ['discovery', 'reward', 'secret'].includes(r.type));
     if (room) { try { await encounters.awardRoomRelic(evF, me0, room); } catch (e) { console.log('[relic]', e.message); } }
     const evR = await state.getEvent(EV, { fresh: true });
     const meR = evR.players.find((p) => p.jid === P1);
     console.log(`[relic] carried=${JSON.stringify(meR.carriedRelics || meR.relics || []).slice(0, 80)}`);
 
-    // fight to death
+ // fight to death
     const cRoom = evR.rooms.find((r) => ['combat', 'elite', 'cursed', 'bounty'].includes(r.type) && r.state !== 'CLEARED') || evR.rooms.find((r) => r.state !== 'CLEARED' && r.key !== meR.roomId);
     await rooms.enterRoom(EV, P1, meR.roomId, cRoom.key);
     await state.updatePlayer(EV, P1, {}, { roomId: cRoom.key, lastMoveAt: Date.now() - 10000, protectedUntil: 0 });
@@ -84,7 +84,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
         try { await guildAdventure.handleCombatAction(sock, P1, P1, 'attack', null); } catch (e) {}
         await wait(400);
     }
-    console.log('[fight] session over — watching player doc for 6s:');
+    console.log('[fight] session over - watching player doc for 6s:');
     for (let i = 0; i < 15; i++) {
         const ev = await state.getEvent(EV, { fresh: true });
         const me = ev.players.find((p) => p.jid === P1);

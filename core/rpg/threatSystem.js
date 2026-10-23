@@ -6,13 +6,12 @@
 // class-based threatMult). Enemies target the highest-threat combatant
 // instead of just the lowest-HP one. Tanks generate 1.5× threat so they
 // naturally hold aggro.
-//
 // The existing `taunt` status effect (force_target) is also wired up:
 // when a player has taunt active, enemies are forced to target them
 // regardless of threat values.
 // ============================================================
 
-// ── Class-based threat multipliers ──────────────────────────
+// -- Class-based threat multipliers --------------------------
 // Tanks generate more threat so they hold aggro. Healers/mages
 // generate less so they don't pull aggro from the tank.
 const TANK_CLASSES = new Set([
@@ -43,12 +42,12 @@ const SUPPORT_CLASSES = new Set([
 function getThreatMult(combatant) {
   if (!combatant) return 1.0;
 
-  // Summons have a fixed 0.7× multiplier (lower than tanks)
+ // Summons have a fixed 0.7× multiplier (lower than tanks)
   if (combatant.isSummon) return 0.7;
 
-  // 💡 FIX (2026-08-16): combatant.class is an OBJECT (from classSystem.getClassById),
-  // not a string. Calling .toUpperCase() on an object throws TypeError.
-  // Extract the class ID string from the object, or fall back to classId/class string.
+ // FIX: combatant.class is an OBJECT (from classSystem.getClassById),
+ // not a string. Calling .toUpperCase() on an object throws TypeError.
+ // Extract the class ID string from the object, or fall back to classId/class string.
   const rawClass = combatant.class;
   const cls = String(
     (rawClass && typeof rawClass === 'object' && rawClass.id) ? rawClass.id :
@@ -128,21 +127,21 @@ function selectTargetByThreat(targets) {
   if (!targets || targets.length === 0) return null;
   if (targets.length === 1) return targets[0];
 
-  // 1. Check for forced target (taunt)
+ // 1. Check for forced target (taunt)
   const taunted = targets.find(t => hasTaunt(t));
   if (taunted) return taunted;
 
   const roll = Math.random();
 
-  // 2. 50% chance: highest-threat target
+ // 2. 50% chance: highest-threat target
   if (roll < 0.50) {
     const highestThreat = targets.reduce((best, t) =>
       (t.threat || 0) > (best.threat || 0) ? t : best, targets[0]);
     if (highestThreat.threat > 0) return highestThreat;
-    // Fall through if no threat has been generated yet
+ // Fall through if no threat has been generated yet
   }
 
-  // 3. 30% chance: lowest-HP target (finish kills)
+ // 3. 30% chance: lowest-HP target (finish kills)
   if (roll < 0.80) {
     return targets.reduce((lowest, t) => {
       const tRatio = t.currentHP / (t.maxHp || t.stats?.maxHp || 1);
@@ -151,7 +150,7 @@ function selectTargetByThreat(targets) {
     }, targets[0]);
   }
 
-  // 4. 20% chance: random
+ // 4. 20% chance: random
   return targets[Math.floor(Math.random() * targets.length)];
 }
 

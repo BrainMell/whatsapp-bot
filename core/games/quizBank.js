@@ -1,21 +1,18 @@
 // ============================================
-// QUIZ BANK (2026-09-26 audit - Priority 13/14/15)
+// QUIZ BANK (audit - Priority 13/14/15)
 // ============================================
 // Persistent, validated question bank + duplicate prevention.
-//
 // STABLE IDENTITY (P15): every question gets a factKey derived from
-//   mediaKey + domain(factType) + subject(page or character) + property(correct fact)
+// mediaKey + domain(factType) + subject(page or character) + property(correct fact)
 // NOT from the question text. "Who is this character?" and "Can you identify
 // this character?" over the same image produce the SAME factKey, so reworded
 // duplicates can never both be stored. Extends to media questions: image
 // identity = the verified source URL of the asset; audio identity = song id
 // + clip window.
-//
 // FLOW (P13/P14): a question is banked ONLY after it has passed the full
 // validation pipeline (schema + media-relevance + fact-check + asset
 // verification where applicable). bankLookup serves validated questions
 // back BEFORE new generation spends LLM calls (P21 - reuse beats regen).
-//
 // Storage: system KV (MongoDB) "quiz_bank:<mediaKey>" - same clobber-safety
 // pattern as quiz_seen / quiz_scores (per-franchise keys, not one big map).
 // Media assets are NOT stored as bytes - we store the verified source URL +
@@ -32,7 +29,7 @@ function _sha(s) {
   return crypto.createHash("sha1").update(String(s).toLowerCase().replace(/\s+/g, " ").trim()).digest("hex").slice(0, 16);
 }
 
-// ── identity ──
+// -- identity --
 // parts: [mediaKey, domain, subject, property] - any part may be "" but the
 // more specific the identity, the better the dedup. For image/audio
 // questions pass the asset identity as part of `property` (or set
@@ -41,7 +38,7 @@ function factKey({ mediaKey, domain, subject, property, assetKey }) {
   return _sha([mediaKey, domain, subject || "", property || "", assetKey || ""].join("|"));
 }
 
-// ── CRUD ──
+// -- CRUD --
 function loadBank(mediaKey) {
   const v = system.get(_KEY(mediaKey), null);
   return Array.isArray(v) ? v : [];
@@ -51,7 +48,6 @@ function saveBank(mediaKey, entries) {
   system.set(_KEY(mediaKey), entries.slice(-BANK_CAP_PER_MEDIA));
 }
 
-// Store a validated question. Refuses duplicates (same factKey already in
 // the bank, or same stem hash - belt and suspenders against rewording that
 // also changed subject formatting). Returns true when stored.
 function bankPut(mediaKey, question) {
@@ -77,7 +73,7 @@ function bankPut(mediaKey, question) {
     domain: question.domain || null,
     topic: question.topic || null,
     type: question.type || "text", // text | image | audio | theme
-    // media reference (P13/P14): verified source, never raw bytes
+ // media reference (P13/P14): verified source, never raw bytes
     asset: question.asset || null, // {kind:"image"|"audio", url, bytesHash, mime, subject}
     loreRef: question.loreRef || null,
     ts: Date.now(),
@@ -97,7 +93,7 @@ function bankLookup(mediaKey, seenHashes, count, filter = {}) {
   if (filter.domain) bank = bank.filter((e) => e.domain === filter.domain);
   if (filter.type) bank = bank.filter((e) => (filter.type === "media" ? e.type !== "text" : e.type === filter.type));
   const fresh = bank.filter((e) => !seen.has(e.stemHash));
-  // prefer least-used for variety across sessions
+ // prefer least-used for variety across sessions
   fresh.sort((a, b) => (a.uses || 0) - (b.uses || 0) || Math.random() - 0.5);
   const picked = fresh.slice(0, count).map((e) => ({
     q: e.q,
@@ -112,7 +108,7 @@ function bankLookup(mediaKey, seenHashes, count, filter = {}) {
     factKey: e.identity,
     fromBank: true,
   }));
-  // bump use counters (in-bank only)
+ // bump use counters (in-bank only)
   if (picked.length) {
     const usedIds = new Set(picked.map((p) => p.factKey));
     for (const e of bank) if (usedIds.has(e.identity)) e.uses = (e.uses || 0) + 1;
@@ -123,9 +119,9 @@ function bankLookup(mediaKey, seenHashes, count, filter = {}) {
 
 // Media asset cache shared with the live quiz: verified download keyed by
 // URL, so a banked image/audio question re-fetches once per process.
-// 2026-09-27 OOM fix: the cache is capped by TOTAL BYTES, not just entries.
+// OOM fix: the cache is capped by TOTAL BYTES, not just entries.
 // The entry cap alone allowed 200 x up-to-6MB images = 1.2GB of heap on a
-// 1GB box - the exact profile of the 2026-09-26 heap OOM crash. Entry TTL
+// 1GB box - the exact profile of the heap OOM crash. Entry TTL
 // is unchanged (30 min); evicting oldest-first keeps hot quiz assets warm.
 const _assetCache = new Map(); // url -> { ts, buf, mime, kind }
 const ASSET_CACHE_MAX_BYTES = 48 * 1024 * 1024; // 48MB across all cached media
@@ -145,7 +141,7 @@ function _assetCachePut(url, entry) {
   if (prev && prev.buf) _assetCacheBytes -= prev.buf.length;
   _assetCache.set(url, entry);
   _assetCacheBytes += entry.buf ? entry.buf.length : 0;
-  // legacy entry-count guard kept as a secondary bound
+ // legacy entry-count guard kept as a secondary bound
   if (_assetCache.size > 200) _assetCacheEvict();
   _assetCacheEvict();
 }

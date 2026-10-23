@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* build_quiz_dataset_pass7c.js — compose dataset v7: >=90% lore, <=10% production.
+/* build_quiz_dataset_pass7c.js - compose dataset v7: >=90% lore, <=10% production.
  * Inputs: current data/quizDataset.json (v6), /tmp/lore_intake.json (pass7a),
  *         /tmp/fandom_lore.jsonl (pass7b).
  * Every text question gets {cls: lore|prod, source}. Images untouched.

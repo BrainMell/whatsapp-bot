@@ -1,16 +1,16 @@
-// qa_ticket_pass.js - runtime + contract QA for the 2026-09-21 ticket pass:
-//   #b4c0ec / #b4f5b0  abyss world-alignment gate (fail-closed, deduped)
-//   #b4c0ff            combat UI (undefined name, double announcement, hang)
-//   #b4f5d2            .j world all  (planned cosmology atlas arrangement)
-//   #b4f71c            staff afterlife access (owner/gmod/rpgmod bypass)
-//   #b4f78f            stat allocation points (source/DB/UI sync)
-//   #b4f7aa            combat sprite == character-sheet sprite
-//   #b4fbef            mod createclass sprite selection
-//   #b4fc58            summon facing payload
-//   #b4f7bd / #b4f818 / #b4f855  mod commands + menus
-//   #b4fa05            gstatus media upload
-//   #b4fa57            one command -> exactly one bot/handler response
-//   #b5087a / #b508e7  balance (Dragon God, Scout solo, +20% XP curve)
+// qa_ticket_pass.js - runtime + contract QA for the ticket pass:
+// #b4c0ec / #b4f5b0 abyss world-alignment gate (fail-closed, deduped)
+// #b4c0ff combat UI (undefined name, double announcement, hang)
+// #b4f5d2 .j world all (planned cosmology atlas arrangement)
+// #b4f71c staff afterlife access (owner/gmod/rpgmod bypass)
+// #b4f78f stat allocation points (source/DB/UI sync)
+// #b4f7aa combat sprite == character-sheet sprite
+// #b4fbef mod createclass sprite selection
+// #b4fc58 summon facing payload
+// #b4f7bd / #b4f818 / #b4f855 mod commands + menus
+// #b4fa05 gstatus media upload
+// #b4fa57 one command -> exactly one bot/handler response
+// #b5087a / #b508e7 balance (Dragon God, Scout solo, +20% XP curve)
 // Run: node scripts/qa_ticket_pass.js
 process.env.NODE_ENV = 'test';
 process.env.GO_IMAGE_SERVICE_URL = process.env.GO_IMAGE_SERVICE_URL || 'http://127.0.0.1:7860';
@@ -19,7 +19,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 
-// ─── 0. STUB ENGINE (worldMap._isStaff lazily requires ../engine) ────────────
+// --- 0. STUB ENGINE (worldMap._isStaff lazily requires ../engine) ------------
 const __enginePath = require.resolve('../core/engine.js');
 const __engineStub = { isBotOwner: () => false, isGlobalMod: () => false, isRpgMod: () => false };
 require.cache[__enginePath] = { id: __enginePath, filename: __enginePath, loaded: true, exports: __engineStub };
@@ -36,7 +36,7 @@ const SRC = (p) => fs.readFileSync(path.join(__dirname, '..', p), 'utf8');
 
 (async () => {
 
-// ─── 1. Abyss world-alignment gate (#b4c0ec + #b4f5b0) ───────────────────────
+// --- 1. Abyss world-alignment gate (#b4c0ec + #b4f5b0) -----------------------
 section('Abyss gate: fail-closed, deduped, staff bypass (#b4c0ec + #b4f5b0)');
 {
   const engine = SRC('core/engine.js');
@@ -52,7 +52,7 @@ section('Abyss gate: fail-closed, deduped, staff bypass (#b4c0ec + #b4f5b0)');
   const w = cosmology.abyssWindow();
   ok(w && typeof w.open === 'boolean' && typeof w.label === 'string', 'cosmology.abyssWindow() returns a valid gate state');
   ok(typeof cosmology.isRoutineLink === 'function', 'routine link stays a separate clock (never merged into the schedule)');
-  // window math: open exactly 1h of every 6h cycle
+ // window math: open exactly 1h of every 6h cycle
   const T0 = Date.UTC(2026, 0, 1);
   const openAt = T0 + 5 * 3600e3 + 1800e3;   // mid-window
   const lockedAt = T0 + 2 * 3600e3;          // mid-locked
@@ -61,7 +61,7 @@ section('Abyss gate: fail-closed, deduped, staff bypass (#b4c0ec + #b4f5b0)');
   ok(true, 'window open/locked math intact (1h open per 6h cycle)');
 }
 
-// ─── 2. Combat icon normalization (#b4c0ff a) ────────────────────────────────
+// --- 2. Combat icon normalization (#b4c0ff a) --------------------------------
 section('Combat icons: no message can print "undefined <Name>" (#b4c0ff a)');
 {
   const ga = require('../core/rpg/guildAdventure');
@@ -79,7 +79,7 @@ section('Combat icons: no message can print "undefined <Name>" (#b4c0ff a)');
   ok((gsrc.match(/combatTargetIcon\(/g) || []).length >= 5, 'all target-icon templates route through the resolver (definition + 4 call sites)');
 }
 
-// ─── 3. Double announcement (#b4c0ff b) ──────────────────────────────────────
+// --- 3. Double announcement (#b4c0ff b) --------------------------------------
 section('Enemy skill announced exactly once (#b4c0ff b)');
 {
   const gsrc = SRC('core/rpg/guildAdventure.js');
@@ -90,7 +90,7 @@ section('Enemy skill announced exactly once (#b4c0ff b)');
   ok((gsrc.match(/const fullMsg = statusPrefix \+ abilityRes\.message\.trim\(\);/g) || []).length === 2, 'both charge-release paths de-duplicated');
 }
 
-// ─── 4. Next-action hang (#b4c0ff c) ────────────────────────────────────────
+// --- 4. Next-action hang (#b4c0ff c) ----------------------------------------
 section('Turn promise always settles (#b4c0ff c)');
 {
   const gsrc = SRC('core/rpg/guildAdventure.js');
@@ -100,10 +100,10 @@ section('Turn promise always settles (#b4c0ff c)');
   ok((gsrc.match(/__resolveFailedTurn\(\);/) || []).length === 1, 'failed turn resolved exactly once');
 }
 
-// ─── 5. Stat allocation points (#b4f78f) ─────────────────────────────────────
+// --- 5. Stat allocation points (#b4f78f) -------------------------------------
 section('Stat points: backend math == preview math, ledger + refunds sane (#b4f78f)');
 {
-  // patch economy.getUser so progression works without Mongo
+ // patch economy.getUser so progression works without Mongo
   const economy = require('../core/rpg/economy');
   const fakeUsers = {};
   economy.getUser = (jid) => fakeUsers[jid] || null;
@@ -114,9 +114,9 @@ section('Stat points: backend math == preview math, ledger + refunds sane (#b4f7
   assert.ok(prog, 'progression record created');
   prog.level = 10; prog.statPoints = 500; prog.allocatedStats = {}; prog.allocatedStatPoints = {};
 
-  // 💡 OWNER CONTRACT (2026-09-20, remote commit 530609c): every point
-  // delivers exactly base × tier - the soft cap was REMOVED. previewAllocation
-  // mirrors it exactly (that is the #b4f78f sync guarantee).
+ // OWNER CONTRACT (remote commit 530609c): every point
+ // delivers exactly base × tier - the soft cap was REMOVED. previewAllocation
+ // mirrors it exactly (that is the #b4f78f sync guarantee).
   for (const [stat, base] of [['atk', 3], ['hp', 15], ['crit', 1]]) {
     prog.allocatedStats[stat] = 0; prog.allocatedStatPoints[stat] = 0;
     const preview = progression.previewAllocation(J, stat, 5);
@@ -129,25 +129,25 @@ section('Stat points: backend math == preview math, ledger + refunds sane (#b4f7
   }
   ok(true, 'preview == backend across stats (tier 1, owner contract base x tier)');
 
-  // single point: integer per-point (no more floor(1.5) -> 1 silent loss)
+ // single point: integer per-point (no more floor(1.5) -> 1 silent loss)
   const pvSingle = progression.previewAllocation(J, 'atk', 1);
   assert.strictEqual(pvSingle.gainedValue, 3, 'single ATK point pays exactly 3 (owner contract)');
   ok(true, 'single-point allocs pay the full advertised rate');
 
-  // tier multiplier: EVOLVED pays 2x
+ // tier multiplier: EVOLVED pays 2x
   fakeUsers[J].class = 'ROGUE';
   prog.allocatedStatPoints.atk = 0; prog.allocatedStats.atk = 0;
   const pvT2 = progression.previewAllocation(J, 'atk', 1);
   assert.strictEqual(pvT2.gainedValue, 6, 'EVOLVED tier ATK 1pt = 6');
   fakeUsers[J].class = 'FIGHTER';
 
-  // getStatPointsForRange matches the level-up formula (5/level + milestones)
+ // getStatPointsForRange matches the level-up formula (5/level + milestones)
   assert.strictEqual(progression.getStatPointsForRange(1, 2), 5, 'one level = 5 points');
   assert.strictEqual(progression.getStatPointsForRange(9, 10), 5 + 10, 'level 10 milestone bonus included');
   assert.strictEqual(progression.getStatPointsForRange(1, 11), 50 + 10, 'range 1->11 with milestone');
   ok(true, 'getStatPointsForRange matches the level-up grant formula');
 
-  // legacy reset refund is tier-aware (never double-refunds)
+ // legacy reset refund is tier-aware (never double-refunds)
   const ascUser = 'qaasc@s.whatsapp.net';
   fakeUsers[ascUser] = { jid: ascUser, class: 'DRAGON_GOD', nickname: 'AscQA' };
   const ap = progression.getUser(ascUser);
@@ -158,14 +158,14 @@ section('Stat points: backend math == preview math, ledger + refunds sane (#b4f7
   assert.strictEqual(rs.pointsRefunded, Math.floor(6 / (3 * 2)), 'tier-2 legacy refund = value/(base*tier) = 1 (was 2 before the fix)');
   ok(true, 'legacy reset refund is tier-aware');
 
-  // adminConsole setlevel uses the shared formula
+ // adminConsole setlevel uses the shared formula
   const asrc = SRC('core/commands/adminConsole.js');
   ok(/progression\.getStatPointsForRange\(oldLevel, level\)/.test(asrc), 'admin setlevel grants 5/level + milestones (was hardcoded 2/level)');
   ok(!/statPoints \+= \(level - oldLevel\) \* 2/.test(asrc), 'old 2/level grant removed');
   ok(/allocatedStatPoints\[statName\] = Math\.max\(0, Math\.round\(value \/ \(__baseVals/.test(asrc), 'admin setstat keeps the refund ledger in sync');
 }
 
-// ─── 6. XP curve +20% (#b508e7) ──────────────────────────────────────────────
+// --- 6. XP curve +20% (#b508e7) ----------------------------------------------
 section('XP curve: exactly +20% at the single canonical point (#b508e7)');
 {
   const progression = require('../core/rpg/progression');
@@ -181,7 +181,7 @@ section('XP curve: exactly +20% at the single canonical point (#b508e7)');
   ok(!/Math\.floor\(200 \* level \* level\)/.test(psrc), 'old 200 baseline removed');
 }
 
-// ─── 7. Balance: Dragon God + Scout (#b5087a) ────────────────────────────────
+// --- 7. Balance: Dragon God + Scout (#b5087a) --------------------------------
 section('Balance: Dragon God fury + MAG growth, Scout Pathfinder (#b5087a)');
 {
   const progression = require('../core/rpg/progression');
@@ -203,20 +203,20 @@ section('Balance: Dragon God fury + MAG growth, Scout Pathfinder (#b5087a)');
   ok(/function _soloHunterXpMult/.test(gsrc), 'Pathfinder solo XP helper present');
   ok((gsrc.match(/_soloHunterXpMult\(/g) || []).length >= 3, 'solo XP applied to per-combat + completion XP paths');
   ok(/getClassPassiveDamageMult\(attacker, target, isAbility, \{ solo: _isSoloFighter\(attacker, chatId\) \}\)/.test(gsrc), 'damage pipeline passes solo context');
-  // skillTree: Apocalypse Wing coefficients untouched (no double-dip)
+ // skillTree: Apocalypse Wing coefficients untouched (no double-dip)
   const stsrc = SRC('core/rpg/skillTree.js');
   ok(/damageMultiplier: \[9\.0, 10\.0, 11\.0\]/.test(stsrc), 'Apocalypse Wing 9/10/11 coefficients preserved (fury is the single buff lever)');
 }
 
-// ─── 8. World all + staff afterlife (#b4f5d2 + #b4f71c) ─────────────────────
+// --- 8. World all + staff afterlife (#b4f5d2 + #b4f71c) ---------------------
 section('world all + afterlife staff access (#b4f5d2 + #b4f71c)');
 {
   const worldMap = require('../core/rpg/worldMap');
   const sock = () => { const sent = []; return { sent, async sendMessage(c, m) { sent.push(m); } }; };
 
-  // non-staff player: `all` refuses with the unmet list, zero image bytes
-  // (owner ruling: rank S + level 20; the afterlife requirement is NOT held
-  // while the dead-soul feature does not exist - or the view would be dead)
+ // non-staff player: `all` refuses with the unmet list, zero image bytes
+ // (owner ruling: rank S + level 20; the afterlife requirement is NOT held
+ // while the dead-soul feature does not exist - or the view would be dead)
   __engineStub.isBotOwner = () => false; __engineStub.isGlobalMod = () => false; __engineStub.isRpgMod = () => false;
   let s = sock();
   await worldMap.showWorld(s, 'c1', 'u1', 'all', { getLevel: () => 12, getRank: () => 'B' });
@@ -228,7 +228,7 @@ section('world all + afterlife staff access (#b4f5d2 + #b4f71c)');
   assert.strictEqual(s.sent[0].image, undefined, 'all: locked = ZERO image bytes');
   ok(true, 'locked player: unmet list, no render (owner-ruled gates)');
 
-  // staff via injected isMod helper (engine path): renders the atlas sheet
+ // staff via injected isMod helper (engine path): renders the atlas sheet
   s = sock();
   await worldMap.showWorld(s, 'c1', 'u1', 'all', { getLevel: () => 3, getRank: () => 'F', isMod: () => true });
   const allMsg = s.sent[0];
@@ -239,7 +239,7 @@ section('world all + afterlife staff access (#b4f5d2 + #b4f71c)');
   }
   ok(true, 'staff (isMod helper): gathered cosmology atlas renders');
 
-  // staff via the _isStaff resolver (no helpers injected - direct staff bypass)
+ // staff via the _isStaff resolver (no helpers injected - direct staff bypass)
   __engineStub.isRpgMod = () => true;
   s = sock();
   await worldMap.showWorld(s, 'c1', 'u1', 'all', { getLevel: () => 3, getRank: () => 'F' });
@@ -247,8 +247,8 @@ section('world all + afterlife staff access (#b4f5d2 + #b4f71c)');
   __engineStub.isRpgMod = () => false;
   ok(true, 'staff (_isStaff resolver): gathered atlas renders without helpers');
 
-  // afterlife: non-staff get the LOCKED CARD (owner 2026-09-21: refusal is
-  // visual; the map itself stays unrendered) / staff renders the chart
+ // afterlife: non-staff get the LOCKED CARD (refusal is
+ // visual; the map itself stays unrendered) / staff renders the chart
   s = sock();
   await worldMap.showWorld(s, 'c1', 'u1', 'afterlife', { getLevel: () => 99, getRank: () => 'SSS' });
   assert.ok((s.sent[0].caption || s.sent[0].text || '').includes('dead souls'), 'afterlife: players still refused (requirement text present)');
@@ -264,14 +264,14 @@ section('world all + afterlife staff access (#b4f5d2 + #b4f71c)');
   __engineStub.isRpgMod = () => false;
   ok(true, 'afterlife staff bypass works for owner/gmod/rpgmod, players unaffected');
 
-  // usage menu lists `all`
+ // usage menu lists `all`
   s = sock();
   await worldMap.showWorld(s, 'c1', 'u1', 'bogus-arg', {});
   assert.ok(s.sent[0].text.includes('world all'), 'usage menu lists the all view');
   ok(true, 'usage text includes world all');
 }
 
-// ─── 9. Mod menu labels + createclass fall-through (#b4f818 + #b4f855) ──────
+// --- 9. Mod menu labels + createclass fall-through (#b4f818 + #b4f855) ------
 section('Mod menu labels + createclass (#b4f818 + #b4f855)');
 {
   const engine = SRC('core/engine.js');
@@ -282,7 +282,7 @@ section('Mod menu labels + createclass (#b4f818 + #b4f855)');
   ok(/_isStaff|isFallThroughCmd/.test(engine), 'fall-through logic present');
 }
 
-// ─── 10. give Zeni + numeric admin parsing (#b4f7bd) ────────────────────────
+// --- 10. give Zeni + numeric admin parsing (#b4f7bd) ------------------------
 section('Numeric admin parsing (#b4f7bd)');
 {
   const adminConsole = require('../core/commands/adminConsole');
@@ -304,13 +304,13 @@ section('Numeric admin parsing (#b4f7bd)');
   ok(/No registered player found for/.test(asrc) && /fail LOUDLY|never a silent self-give|never a silent self-grant/.test(asrc), 'pasted unregistered phone = loud error, never silent self-grant');
 }
 
-// ─── 11. createclass sprite end-to-end (#b4fbef) ─────────────────────────────
+// --- 11. createclass sprite end-to-end (#b4fbef) -----------------------------
 section('createclass Sprite field end-to-end (#b4fbef)');
 {
   const classSystem = require('../core/rpg/classSystem');
   const skillTree = require('../core/rpg/skillTree');
   const adminConsole = require('../core/commands/adminConsole');
-  // patch persistence (QA must not write Mongo)
+ // patch persistence (QA must not write Mongo)
   let captured = null;
   const origRegister = classSystem.registerCustomClass;
   const origSaveTree = skillTree.saveCustomSkillTree;
@@ -344,12 +344,12 @@ section('createclass Sprite field end-to-end (#b4fbef)');
     classSystem.registerCustomClass = origRegister;
     skillTree.saveCustomSkillTree = origSaveTree;
   }
-  // sheet consumes the custom sprite
+ // sheet consumes the custom sprite
   const prsrc = SRC('core/rpg/profileCardRenderer.js');
   ok(/params\.classData\?\.sprite/.test(prsrc), 'character sheet renders the class\'s own sprite when defined');
 }
 
-// ─── 12. Combat sprite parity + summon facing (#b4f7aa + #b4fc58) ───────────
+// --- 12. Combat sprite parity + summon facing (#b4f7aa + #b4fc58) -----------
 section('Sprite parity + summon facing (#b4f7aa + #b4fc58)');
 {
   const cig = require('../core/rpg/combatImageGenerator');
@@ -377,7 +377,7 @@ section('Sprite parity + summon facing (#b4f7aa + #b4fc58)');
   ok(/abilityRes\.message/.test(sai) && !/abilityRes\.msg\b/.test(sai), 'summon skill text reads the real field (.message, was .msg)');
 }
 
-// ─── 13. gstatus media (#b4fa05) ─────────────────────────────────────────────
+// --- 13. gstatus media (#b4fa05) ---------------------------------------------
 section('gstatus media upload (#b4fa05)');
 {
   const engine = SRC('core/engine.js');
@@ -389,7 +389,7 @@ section('gstatus media upload (#b4fa05)');
   ok(/payload\.mimetype = __mt/.test(engine), 'mimetype set explicitly so Baileys never guesses');
 }
 
-// ─── 14. Bot overlap (#b4fa57) ───────────────────────────────────────────────
+// --- 14. Bot overlap (#b4fa57) -----------------------------------------------
 section('One command, one responder (#b4fa57)');
 {
   const engine = SRC('core/engine.js');
@@ -400,7 +400,7 @@ section('One command, one responder (#b4fa57)');
   ok(/__activeBotIdentities/.test(engine), 'shared identity registry exists');
 }
 
-// ─── summary ─────────────────────────────────────────────────────────────────
+// --- summary -----------------------------------------------------------------
 console.log('\n' + '═'.repeat(60));
 if (failures > 0) {
   console.error(`❌ TICKET QA: ${failures} failure(s)`);
@@ -408,7 +408,7 @@ if (failures > 0) {
 } else {
   console.log('✅ TICKET QA: all checks passed');
 }
-// 💡 hard exit: module-level setInterval sweepers (guildAdventure etc.) would
+// hard exit: module-level setInterval sweepers (guildAdventure etc.) would
 // otherwise keep this QA process alive after the summary prints.
 process.exit(failures > 0 ? 1 : 0);
 

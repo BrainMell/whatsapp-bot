@@ -1,17 +1,16 @@
-// ═══════════════════════════════════════════════════════════════════════════
-//  SOUL READER RENDERER — the Fortune Teller's cards (`.j kills`)
-// ═══════════════════════════════════════════════════════════════════════════
-//  Implements the owner-designed Fortune Teller cards from the lore update
-//  (rpg_worldbuilding_design_pass/image_cards/fortune_teller/):
-//    · LOCKED   → "THE VEILWARD READING"  — THE SIGHT requirement checklist
-//    · UNLOCKED → "SOULS BEYOND THE VEIL" — THE LEDGER OF WHAT YOU SENT
-//
-//  The design package's art slot carried no art ("art slots point at the
-//  research"), so the live card fills that space with the READING itself:
-//  the teller's line, set as an italic quote under a drawn veil-and-stars
-//  ornament. No external assets, same in-repo node-canvas renderer family
-//  as worldMapRenderer.js / summonRosterRenderer.js.
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// SOUL READER RENDERER - the Fortune Teller's cards (`.j kills`)
+// ===========================================================================
+// Implements the owner-designed Fortune Teller cards from the lore update
+// (rpg_worldbuilding_design_pass/image_cards/fortune_teller/):
+// · LOCKED → "THE VEILWARD READING" - THE SIGHT requirement checklist
+// · UNLOCKED → "SOULS BEYOND THE VEIL" - THE LEDGER OF WHAT YOU SENT
+// The design package's art slot carried no art ("art slots point at the
+// research"), so the live card fills that space with the READING itself:
+// the teller's line, set as an italic quote under a drawn veil-and-stars
+// ornament. No external assets, same in-repo node-canvas renderer family
+// as worldMapRenderer.js / summonRosterRenderer.js.
+// ===========================================================================
 
 'use strict';
 
@@ -21,7 +20,7 @@ const path = require('path');
 const W = 950;
 const H = 1500;
 
-// ─── PALETTE (matched to the designed cards) ────────────────────────────────
+// --- PALETTE (matched to the designed cards) --------------------------------
 const PAL = {
     bg: '#221812',            // deep brown-black
     bgWarm: '#2C2018',
@@ -39,8 +38,8 @@ const PAL = {
     dark: '#1C130D',
 };
 
-// ─── FONTS (lazy; bot-owned only) ───────────────────────────────────────────
-// 💡 ROOT-CAUSE FIX (owner 2026-09-21: ".j kills still is not showing the
+// --- FONTS (lazy; bot-owned only) -------------------------------------------
+// ROOT-CAUSE FIX (".j kills still is not showing the
 // image card"): the font directory was a HARDCODED absolute path from the
 // dev sandbox (/home/z/my-project/whatsapp-bot/...). Production runs the bot
 // from /home/ubuntu/whatsapp-bot (ecosystem.config.js cwd), so registerFont
@@ -90,7 +89,7 @@ function _ensureFonts() {
     }
 }
 
-// ─── LOW-LEVEL HELPERS ──────────────────────────────────────────────────────
+// --- LOW-LEVEL HELPERS ------------------------------------------------------
 
 function _bg(ctx) {
     const grad = ctx.createLinearGradient(0, 0, 0, H);
@@ -99,7 +98,7 @@ function _bg(ctx) {
     grad.addColorStop(1, '#1A110C');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
-    // faint vignette frame
+ // faint vignette frame
     ctx.strokeStyle = PAL.goldFaint;
     ctx.lineWidth = 2;
     ctx.strokeRect(18, 18, W - 36, H - 36);
@@ -129,12 +128,12 @@ function _banner(ctx, y, h, text) {
     ctx.strokeStyle = PAL.goldDim;
     ctx.lineWidth = 1.5;
     ctx.stroke();
-    // inner hairline
+ // inner hairline
     ctx.strokeStyle = PAL.goldFaint;
     ctx.lineWidth = 1;
     ctx.strokeRect(x0 + 14, y + 8, (x1 - x0) - 28, h - 16);
 
-    // letter-spaced gold serif title
+ // letter-spaced gold serif title
     ctx.fillStyle = PAL.goldBright;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -207,10 +206,10 @@ function _wordWrap(ctx, text, maxWidth) {
     return lines;
 }
 
-// ─── THE READING PANEL (fills the design's art slot with the teller's line) ──
+// --- THE READING PANEL (fills the design's art slot with the teller's line) --
 
 function _veilOrnament(ctx, cy) {
-    // thin gold crescent + scattered stars, drawn (no assets)
+ // thin gold crescent + scattered stars, drawn (no assets)
     ctx.save();
     ctx.strokeStyle = PAL.goldDim;
     ctx.lineWidth = 1.6;
@@ -221,7 +220,7 @@ function _veilOrnament(ctx, cy) {
     ctx.beginPath();
     ctx.arc(W / 2, cy, 88, Math.PI * 0.36, Math.PI * 1.64);
     ctx.stroke();
-    // stars
+ // stars
     const stars = [[W / 2 - 150, cy - 40, 2.2], [W / 2 + 145, cy - 55, 1.8], [W / 2 + 170, cy + 25, 1.4], [W / 2 - 175, cy + 30, 1.6], [W / 2, cy - 120, 1.7]];
     ctx.fillStyle = PAL.gold;
     for (const [x, y, r] of stars) {
@@ -231,7 +230,7 @@ function _veilOrnament(ctx, cy) {
 }
 
 function _readingPanel(ctx, y, h, line) {
-    // dark panel
+ // dark panel
     const x = 60, w = W - 120;
     _roundRect(ctx, x, y, w, h, 8);
     ctx.fillStyle = 'rgba(0,0,0,0.22)';
@@ -242,7 +241,7 @@ function _readingPanel(ctx, y, h, line) {
 
     _veilOrnament(ctx, y + h * 0.30);
 
-    // the reading itself — italic cream, centered block
+ // the reading itself - italic cream, centered block
     ctx.font = 'italic 27px "IM Fell Italic"';
     const lines = _wordWrap(ctx, line, w - 130);
     const lh = 40;
@@ -253,11 +252,11 @@ function _readingPanel(ctx, y, h, line) {
         ctx.fillText(l, W / 2, ty);
         ty += lh;
     }
-    // kicker under the quote
+ // kicker under the quote
     _spacedText(ctx, 'TODAY’S READING', W / 2, y + h - 34, '15px "Cinzel"', 4);
 }
 
-// ─── LOCKED CARD — THE VEILWARD READING ─────────────────────────────────────
+// --- LOCKED CARD - THE VEILWARD READING -------------------------------------
 
 /**
  * Render the locked Fortune Teller card (THE SIGHT checklist).
@@ -275,7 +274,7 @@ async function renderLockedCard(s) {
     _readingPanel(ctx, 262, 420,
         'The veil parts for no one’s schedule, dear. Meet the sight’s three doors, and the count is yours.');
 
-    // ── THE SIGHT panel ──
+ // -- THE SIGHT panel --
     const px = 60, pw = W - 120, py = 712, ph = 560;
     _roundRect(ctx, px, py, pw, ph, 14);
     ctx.fillStyle = PAL.panel;
@@ -298,7 +297,7 @@ async function renderLockedCard(s) {
     ];
     let ry = py + 130;
     for (const [label, ok, sub] of rows) {
-        // circle marker: filled gold when met, hollow when not
+ // circle marker: filled gold when met, hollow when not
         ctx.beginPath();
         ctx.arc(px + 62, ry - 8, 11, 0, Math.PI * 2);
         if (ok) { ctx.fillStyle = PAL.gold; ctx.fill(); }
@@ -322,13 +321,13 @@ async function renderLockedCard(s) {
         ry += 96;
     }
 
-    // usage hint (how to pay) — small, subtle
+ // usage hint (how to pay) - small, subtle
     ctx.font = 'italic 18px "IM Fell Italic"';
     ctx.fillStyle = PAL.panelInkSoft;
     ctx.textAlign = 'center';
     ctx.fillText('bring the three coins to the reader and the veil opens', W / 2, py + ph - 96);
 
-    // LOCKED pill
+ // LOCKED pill
     const pillY = py + ph - 66;
     _roundRect(ctx, px + 24, pillY, pw - 48, 46, 23);
     ctx.fillStyle = PAL.dark;
@@ -336,14 +335,14 @@ async function renderLockedCard(s) {
     ctx.fillStyle = PAL.cream;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    _spacedText(ctx, 'LOCKED — REQUIREMENTS UNMET', W / 2, pillY + 24, '18px "Cinzel"', 3);
+    _spacedText(ctx, 'LOCKED - REQUIREMENTS UNMET', W / 2, pillY + 24, '18px "Cinzel"', 3);
     ctx.textBaseline = 'alphabetic';
 
     _sealX(ctx, 86, H - 86);
     return c.toBuffer('image/png');
 }
 
-// ─── UNLOCKED CARD — SOULS BEYOND THE VEIL ──────────────────────────────────
+// --- UNLOCKED CARD - SOULS BEYOND THE VEIL ----------------------------------
 
 /**
  * Render the unlocked ledger card (THE LEDGER OF WHAT YOU SENT).
@@ -360,7 +359,7 @@ async function renderLedgerCard(s) {
     _subBanner(ctx, 178, 'Reader · The Count');
     _readingPanel(ctx, 262, 400, s.tellerLine);
 
-    // ── LEDGER panel ──
+ // -- LEDGER panel --
     const px = 60, pw = W - 120, py = 692, ph = 660;
     _roundRect(ctx, px, py, pw, ph, 14);
     ctx.fillStyle = PAL.panel;
@@ -386,7 +385,6 @@ async function renderLedgerCard(s) {
         ctx.font = '24px "Cinzel"';
         ctx.fillStyle = PAL.panelInk;
         ctx.fillText(row.label, px + 40, ry + 8);
-        // track + fill
         _roundRect(ctx, barX, ry - 12, barW, 20, 10);
         ctx.fillStyle = 'rgba(46,35,24,0.16)';
         ctx.fill();
@@ -403,7 +401,7 @@ async function renderLedgerCard(s) {
         ry += rowH;
     }
 
-    // red accent row (deepest descent)
+ // red accent row (deepest descent)
     ctx.beginPath();
     ctx.moveTo(px + 36, ry - 2);
     ctx.lineTo(px + pw - 36, ry - 2);
@@ -419,7 +417,7 @@ async function renderLedgerCard(s) {
     ctx.fillStyle = PAL.red;
     ctx.fillText(s.accent.value, px + pw - 44, ry + 41);
 
-    // pill
+ // pill
     const pillY = py + ph - 66;
     _roundRect(ctx, px + 24, pillY, pw - 48, 46, 23);
     ctx.fillStyle = PAL.dark;

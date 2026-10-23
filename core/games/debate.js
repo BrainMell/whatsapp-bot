@@ -13,7 +13,7 @@ let activeDebates = {};
 let debateLeaderboard = {};
 let spectators = new Map(); // chatId -> Map(userId -> { expiry, msgCount })
 
-// 💡 CROSS-BOT FIX 2026-09-20: Joker and Subaru share this process (and the
+// CROSS-BOT FIX Joker and Subaru share this process (and the
 // system KV collection). A single `active_debates` key meant a debate
 // started on one bot was visible (and judge-able/cancellable) from the
 // other. Debate SESSIONS are per-bot; the leaderboard stays global.
@@ -23,7 +23,7 @@ function debatesKey() {
     return `active_debates_${id}`;
 }
 
-// 💡 CROSS-BOT FIX (in-memory half): the module object is a singleton shared
+// CROSS-BOT FIX (in-memory half): the module object is a singleton shared
 // by both bot instances in this process, so even per-bot DB keys alone would
 // leak live sessions across bots. Every access goes through these scoped
 // keys (per-bot in memory AND per-bot in the persisted KV).
@@ -33,12 +33,11 @@ function _dkey(chatId) {
     return `${id}|${chatId}`;
 }
 
-// Load debates and leaderboard from system cache
 function loadDebates() {
     activeDebates = system.get(debatesKey(), {}) || {};
-    // 💡 STALE-SESSION PRUNE (Issue #31ff98): sessions whose 2h window
-    // expired while the process was down must not block new debates
-    // forever (their setTimeout died with the old process).
+ // STALE-SESSION PRUNE (Issue #31ff98): sessions whose 2h window
+ // expired while the process was down must not block new debates
+ // forever (their setTimeout died with the old process).
     let pruned = false;
     const now = Date.now();
     for (const [k, d] of Object.entries(activeDebates)) {
@@ -51,7 +50,7 @@ function loadDebates() {
     debateLeaderboard = system.get('debate_leaderboard', {}) || {};
 }
 
-// 💡 BSON FIX 2026-10-02 (Issue #31ff98 "debate isn't working"): the live
+// BSON FIX (Issue #31ff98 "debate isn't working"): the live
 // setTimeout handle was stored INSIDE the session object, so every
 // saveDebates() hit "Cannot convert circular structure to BSON" (110+
 // logged occurrences) - debate state never persisted and the pipeline
@@ -85,8 +84,8 @@ function updateLeaderboard(winnerJid, score) {
         debateLeaderboard[winnerJid] = { wins: 0, totalScore: 0, debates: 0 };
     }
     debateLeaderboard[winnerJid].wins += 1;
-    // 💡 JUDGE FIX: Number() re-base - a historical string score (the old
-    // bug concatenated strings) would keep poisoning the average forever.
+ // JUDGE FIX: Number() re-base - a historical string score (the old
+ // bug concatenated strings) would keep poisoning the average forever.
     debateLeaderboard[winnerJid].totalScore = (Number(debateLeaderboard[winnerJid].totalScore) || 0) + score;
     debateLeaderboard[winnerJid].debates += 1;
     saveLeaderboard();
@@ -104,8 +103,8 @@ function recordParticipation(jid, score) {
 // Initial load
 loadDebates();
 
-// ═══ IDENTITY HELPERS (LID-aware) ═══════════════════════════════════════
-// 💡 DEBATE FIX 2026-09-20 (owner: ".j debate says the bot isn't an admin"):
+// === IDENTITY HELPERS (LID-aware) =======================================
+// DEBATE FIX (".j debate says the bot isn't an admin"):
 // the old check built the bot id as "<phone>@s.whatsapp.net" and compared it
 // EXACTLY against groupMetadata.participants[].id - but in LID-privacy
 // groups participant ids are "<num>@lid", so the check failed even when the
@@ -139,7 +138,7 @@ function userIsGroupAdmin(groupMetadata, jid) {
     return groupMetadata.participants.some((p) => _participantIsAdmin(p) && _userPart(p.id) === target);
 }
 
-// ═══ LID/PHONE-AWARE SAME-USER MATCH (Issue #31ff98) ═══════════════
+// === LID/PHONE-AWARE SAME-USER MATCH (Issue #31ff98) ===============
 // A debate is started from a MENTION (usually <phone>@s.whatsapp.net) but
 // arguments arrive as senderJid (<num>@lid in LID-privacy groups). The old
 // full-JID comparison silently DROPPED those arguments, so .j judge always
@@ -164,7 +163,7 @@ function _sameUser(a, b) {
     } catch { return false; }
 }
 
-// ═══ VERDICT PARSING HELPERS (JUDGE FIX 2026-09-22) ═════════════════
+// === VERDICT PARSING HELPERS (JUDGE FIX ) =================
 // Owner report: ".j judge doesnt work it sends this error message that has
 // json something in it and score ...". Root causes: (a) the extractor regex
 // /\{[\s\S]*\}/ is GREEDY - it swallows prose and any later brace pairs,
@@ -203,8 +202,8 @@ function extractVerdictJson(raw) {
             }
         }
         if (end !== -1) attempts.push(unfenced.slice(start, end + 1));
-        // Truncated reply (token cap): close an open string, then balance
-        // braces/brackets so JSON.parse gets a well-formed object.
+ // Truncated reply (token cap): close an open string, then balance
+ // braces/brackets so JSON.parse gets a well-formed object.
         if (inStr || depth > 0) {
             let repaired = unfenced.slice(start);
             if (inStr) repaired += '"';
@@ -231,7 +230,6 @@ function extractVerdictJson(raw) {
     return null;
 }
 
-// Validate + coerce the parsed verdict so downstream code can never see
 // string scores (leaderboard concatenation), missing scores (undefined
 // rendered into the card) or an unrecognized winner (wrong JID crowned).
 function coerceVerdict(verdict) {
@@ -248,15 +246,15 @@ function coerceVerdict(verdict) {
         best_arg_d1: verdict.best_arg_d1 && typeof verdict.best_arg_d1 === 'object' ? verdict.best_arg_d1 : { text: '', impact: '' },
         best_arg_d2: verdict.best_arg_d2 && typeof verdict.best_arg_d2 === 'object' ? verdict.best_arg_d2 : { text: '', impact: '' },
     };
-    // Winner normalization: accept "Debater 1"/"Debater 2" in any casing or
-    // spacing, bare 1/2, d1/d2, first/second - even glued into a sentence.
+ // Winner normalization: accept "Debater 1"/"Debater 2" in any casing or
+ // spacing, bare 1/2, d1/d2, first/second - even glued into a sentence.
     const wNorm = String(verdict.winner || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const saysOne = /^(1|d1|debater1|debaterone|first)/.test(wNorm);
     const saysTwo = /^(2|d2|debater2|debatertwo|second)/.test(wNorm);
     if (saysOne && !saysTwo) out.winner = 'Debater 1';
     else if (saysTwo && !saysOne) out.winner = 'Debater 2';
-    // Missing/unrecognizable winner: the higher coerced score decides; a
-    // dead tie defaults to Debater 1 so the debate can always close.
+ // Missing/unrecognizable winner: the higher coerced score decides; a
+ // dead tie defaults to Debater 1 so the debate can always close.
     else out.winner = out.debater1_score >= out.debater2_score ? 'Debater 1' : 'Debater 2';
     return out;
 }
@@ -281,7 +279,6 @@ async function rearmTimers(sock, BOT_MARKER) {
 module.exports = {
     rearmTimers,
     startDebate: async (sock, chatId, topic, debater1Jid, debater2Jid, groupMetadata, BOT_MARKER, smartGroqCall, MODELS) => {
-        // Check if debate already active
         if (activeDebates[_dkey(chatId)]) {
             return { 
                 success: false, 
@@ -289,8 +286,8 @@ module.exports = {
             };
         }
 
-        // 🛡️ Admin Check: Bot must be admin to lock group and promote
-        // (LID-aware - see the DEBATE FIX note above the helpers)
+ // Admin Check: Bot must be admin to lock group and promote
+ // (LID-aware - see the DEBATE FIX note above the helpers)
         if (!chatId || !String(chatId).endsWith('@g.us') || !groupMetadata) {
             return {
                 success: false,
@@ -304,13 +301,11 @@ module.exports = {
             };
         }
 
-        // Check if debaters were already admins (LID-aware user-part match -
-        // the old exact match always missed LID-group admins, so real admins
-        // got DEMOTED at the end of their own debate)
+ // the old exact match always missed LID-group admins, so real admins
+ // got DEMOTED at the end of their own debate)
         const debater1WasAdmin = userIsGroupAdmin(groupMetadata, debater1Jid);
         const debater2WasAdmin = userIsGroupAdmin(groupMetadata, debater2Jid);
 
-        // Create debate session
         const DEBATE_DURATION_MS = 2 * 60 * 60 * 1000; // 2 hours
         const expirationTime = Date.now() + DEBATE_DURATION_MS;
 
@@ -325,16 +320,16 @@ module.exports = {
             expirationTime: expirationTime, // Store expiration time
             locked: true
         };
-        // timer handle lives OUTSIDE the session (BSON fix - see _debateTimers)
+ // timer handle lives OUTSIDE the session (BSON fix - see _debateTimers)
         _debateTimers.set(_dkey(chatId), setTimeout(() => module.exports.handleDebateTimeout(sock, chatId, BOT_MARKER), DEBATE_DURATION_MS));
 
         saveDebates();
 
         try {
-            // Lock group settings (announcements only)
+ // Lock group settings (announcements only)
             await sock.groupSettingUpdate(chatId, 'announcement');
 
-            // Make debaters admins
+ // Make debaters admins
             await sock.groupParticipantsUpdate(chatId, [debater1Jid], 'promote');
             await sock.groupParticipantsUpdate(chatId, [debater2Jid], 'promote');
 
@@ -377,13 +372,13 @@ module.exports = {
         const debate = activeDebates[_dkey(chatId)];
         if (!debate) return;
 
-        // 💡 LID/phone-aware match (see _sameUser) - device suffixes and
-        // @lid vs @s.whatsapp.net spellings must never drop an argument.
+ // LID/phone-aware match (see _sameUser) - device suffixes and
+ // @lid vs @s.whatsapp.net spellings must never drop an argument.
         if (!_sameUser(senderJid, debate.debater1) && !_sameUser(senderJid, debate.debater2)) {
             return;
         }
 
-        // Record the argument
+ // Record the argument
         debate.arguments.push({
             debater: senderJid,
             message: message,
@@ -410,8 +405,8 @@ module.exports = {
             };
         }
 
-        // 💡 FIX: Check that BOTH debaters have at least 1 argument (LID/
-        // phone-aware via _sameUser).
+ // FIX: Check that BOTH debaters have at least 1 argument (LID/
+ // phone-aware via _sameUser).
         const d1Count = debate.arguments.filter(a => _sameUser(a.debater, debate.debater1)).length;
         const d2Count = debate.arguments.filter(a => _sameUser(a.debater, debate.debater2)).length;
         if (d1Count < 1 || d2Count < 1) {
@@ -421,12 +416,12 @@ module.exports = {
             };
         }
 
-        // Build AI prompt for judging
+ // Build AI prompt for judging
         const debater1Name = debate.debater1.split('@')[0];
         const debater2Name = debate.debater2.split('@')[0];
 
-        // Organize arguments by debater (LID/phone-aware - one debater's
-        // arguments must not split across @lid/@s.whatsapp.net spellings)
+ // Organize arguments by debater (LID/phone-aware - one debater's
+ // arguments must not split across @lid/@s.whatsapp.net spellings)
         const debater1Args = debate.arguments
             .filter(arg => _sameUser(arg.debater, debate.debater1))
             .map(arg => arg.message)
@@ -470,7 +465,7 @@ Respond ONLY in this JSON format:
 }`;
 
         try {
-            // Get AI judgment (ONE strict retry when the first reply is malformed)
+ // Get AI judgment (ONE strict retry when the first reply is malformed)
             const runJudgeCall = async (systemNote) => {
                 const completion = await smartGroqCall({
                     model: MODELS.SMART,
@@ -482,10 +477,10 @@ Respond ONLY in this JSON format:
                 return completion?.choices?.[0]?.message?.content || '';
             };
 
-            // 💡 JUDGE FIX 2026-09-22: parse via extractVerdictJson (fence-
-            // strip -> balanced-brace scan -> truncated repair) instead of
-            // the old greedy regex + bare JSON.parse, then coerceVerdict so
-            // scores are always numbers and the winner always resolvable.
+ // JUDGE FIX parse via extractVerdictJson (fence-
+ // strip -> balanced-brace scan -> truncated repair) instead of
+ // the old greedy regex + bare JSON.parse, then coerceVerdict so
+ // scores are always numbers and the winner always resolvable.
             const firstRaw = String(await runJudgeCall("You are a professional debate judge. Respond only in valid JSON format.")).trim();
             let verdict = extractVerdictJson(firstRaw);
             if (!verdict) {
@@ -493,11 +488,11 @@ Respond ONLY in this JSON format:
                 verdict = extractVerdictJson(retryRaw);
             }
             if (!verdict) {
-                // NEVER leak the raw AI reply into the chat - the old
-                // `"Failed to judge debate: " + err.message` embedded a
-                // snippet of the malformed JSON (that is the JSON the owner
-                // kept seeing). Log server-side; keep the debate OPEN so the
-                // group can simply run .j judge again.
+ // NEVER leak the raw AI reply into the chat - the old
+ // `"Failed to judge debate: " + err.message` embedded a
+ // snippet of the malformed JSON (that is the JSON the owner
+ // kept seeing). Log server-side; keep the debate OPEN so the
+ // group can simply run .j judge again.
                 console.error('Judging error: unparseable AI verdict. First 400 chars:', firstRaw.slice(0, 400));
                 return {
                     success: false,
@@ -507,17 +502,17 @@ Respond ONLY in this JSON format:
 
             verdict = coerceVerdict(verdict);
 
-            // Determine winner JID
+ // Determine winner JID
             const winnerJid = verdict.winner === "Debater 1" ? debate.debater1 : debate.debater2;
             const loserJid = verdict.winner === "Debater 1" ? debate.debater2 : debate.debater1;
             const winnerScore = verdict.winner === "Debater 1" ? verdict.debater1_score : verdict.debater2_score;
             const loserScore = verdict.winner === "Debater 1" ? verdict.debater2_score : verdict.debater1_score;
 
-            // Update leaderboard
+ // Update leaderboard
             updateLeaderboard(winnerJid, winnerScore);
             recordParticipation(loserJid, loserScore);
 
-            // Build verdict message
+ // Build verdict message
             const verdictMessage = BOT_MARKER + `┏━━━━━━━━━━━━━━━━━┓
 ┃ ⚖️ *DEBATE VERDICT*
 ┗━━━━━━━━━━━━━━━━━┛
@@ -535,7 +530,7 @@ Respond ONLY in this JSON format:
 
 _the group is unlocked. debate again anytime._`;
 
-            // Unlock group and demote debaters if they weren't admins before
+ // Unlock group and demote debaters if they weren't admins before
             try {
                 await sock.groupSettingUpdate(chatId, 'not_announcement');
                 if (!debate.debater1WasAdmin) {
@@ -548,10 +543,10 @@ _the group is unlocked. debate again anytime._`;
                 console.log('⚠️ Error unlocking group:', err.message);
             }
 
-            // Clear the timeout for the debate as it's ending
+ // Clear the timeout for the debate as it's ending
             _clearTimer(_dkey(chatId));
 
-            // Clear debate
+ // Clear debate
             delete activeDebates[_dkey(chatId)];
             saveDebates();
 
@@ -564,9 +559,9 @@ _the group is unlocked. debate again anytime._`;
 
         } catch (err) {
             console.error('Judging error:', err);
-            // 💡 JUDGE FIX: strip any JSON-looking blob from the error before
-            // it reaches the chat (Node embeds input snippets in JSON.parse
-            // errors - that was the raw JSON the owner saw).
+ // JUDGE FIX: strip any JSON-looking blob from the error before
+ // it reaches the chat (Node embeds input snippets in JSON.parse
+ // errors - that was the raw JSON the owner saw).
             const safeMsg = String(err?.message || 'unexpected judge failure')
                 .replace(/\{[\s\S]*\}/g, '')
                 .trim() || 'unexpected judge failure';
@@ -619,7 +614,7 @@ _the group is unlocked. debate again anytime._`;
         _clearTimer(_dkey(chatId));
 
         try {
-            // Unlock and demote if they weren't admins before
+ // Unlock and demote if they weren't admins before
             await sock.groupSettingUpdate(chatId, 'not_announcement');
             if (!debate.debater1WasAdmin) {
                 await sock.groupParticipantsUpdate(chatId, [debate.debater1], 'demote').catch(() => {});
@@ -627,8 +622,8 @@ _the group is unlocked. debate again anytime._`;
             if (!debate.debater2WasAdmin) {
                 await sock.groupParticipantsUpdate(chatId, [debate.debater2], 'demote').catch(() => {});
             }
-            // 💡 FIX: Clean up spectators - previously only handleDebateTimeout
-            // did this, leaving spectators promoted after cancel/judge.
+ // FIX: Clean up spectators - previously only handleDebateTimeout
+ // did this, leaving spectators promoted after cancel/judge.
             if (spectators.has(_dkey(chatId))) {
                 const groupSpectators = spectators.get(_dkey(chatId));
                 for (const [jid, data] of groupSpectators.entries()) {
@@ -658,7 +653,7 @@ _the group is unlocked. debate again anytime._`;
 
         console.log(`Debate for chat ${chatId} timed out.`);
 
-        // Perform cleanup similar to cancelDebate
+ // Perform cleanup similar to cancelDebate
         try {
             await sock.groupSettingUpdate(chatId, 'not_announcement');
             if (!debate.debater1WasAdmin) {
@@ -668,7 +663,7 @@ _the group is unlocked. debate again anytime._`;
                 await sock.groupParticipantsUpdate(chatId, [debate.debater2], 'demote');
             }
             
-            // Cleanup spectators
+ // Cleanup spectators
             if (spectators.has(_dkey(chatId))) {
                 const groupSpectators = spectators.get(_dkey(chatId));
                 for (const [jid, data] of groupSpectators.entries()) {
@@ -682,12 +677,12 @@ _the group is unlocked. debate again anytime._`;
             console.log('⚠️ Error during timeout cleanup:', err.message);
         }
 
-        // Send timeout message
+ // Send timeout message
         await sock.sendMessage(chatId, { 
             text: BOT_MARKER + "⌛ *DEBATE TIMEOUT!* ⌛\n\nThe debate has ended due to inactivity. No verdict was reached." 
         });
 
-        // Clear debate
+ // Clear debate
         delete activeDebates[_dkey(chatId)];
         saveDebates();
     },
@@ -696,9 +691,9 @@ _the group is unlocked. debate again anytime._`;
         const debate = activeDebates[_dkey(chatId)];
         if (!debate) return;
 
-        // 💡 FIX: Don't allow debaters to be added as spectators - they
-        // would get a 2-minute spectator timeout that demotes them
-        // mid-debate, losing their ability to post in the locked group.
+ // FIX: Don't allow debaters to be added as spectators - they
+ // would get a 2-minute spectator timeout that demotes them
+ // mid-debate, losing their ability to post in the locked group.
         if (_sameUser(userId, debate.debater1) || _sameUser(userId, debate.debater2)) {
             return { success: false, message: "❌ Debaters cannot be spectators!" };
         }
@@ -709,10 +704,10 @@ _the group is unlocked. debate again anytime._`;
 
         const groupSpectators = spectators.get(_dkey(chatId));
         
-        // Prevent spam adding
+ // Prevent spam adding
         if (groupSpectators.has(userId)) return;
 
-        // Limit active spectators to 5
+ // Limit active spectators to 5
         if (groupSpectators.size >= 5) {
             return { success: false, message: "❌ Too many active spectators. Wait for someone to finish." };
         }
@@ -782,7 +777,7 @@ _the group is unlocked. debate again anytime._`;
             reasoning,
             timestamp: Date.now()
         });
-        // Keep only last 1000 logs
+ // Keep only last 1000 logs
         if (logs.length > 1000) logs.shift();
         system.set('debate_moderation_logs', logs);
     },
@@ -812,7 +807,7 @@ Respond with a JSON object:
 
             let response = completion.choices[0].message.content.trim();
             
-            // Robust JSON extraction
+ // Robust JSON extraction
             const jsonMatch = response.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
                 response = jsonMatch[0];

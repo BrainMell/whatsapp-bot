@@ -1,16 +1,15 @@
 #!/usr/bin/env node
-// 🃏 ESHOP DECK OPS TOOL (47-l2, 2026-10-20)
+// ESHOP DECK OPS TOOL (47-l2, )
 // Ops tool for the System KV doc `eshop_deck_<botId>` (collection: systems).
-//   node eshop_deck_tool.js dump     — read-only: print every eshop_deck doc
-//   node eshop_deck_tool.js restore  — write Màh_Xée's overwritten stocking
-//                                      intent back into slots 5-8, then exit
-//   node eshop_deck_tool.js verify   — assert slots 5-8 hold the 4 cards
-//
+// node eshop_deck_tool.js dump - read-only: print every eshop_deck doc
+// node eshop_deck_tool.js restore - write Màh_Xée's overwritten stocking
+// intent back into slots 5-8, then exit
+// node eshop_deck_tool.js verify - assert slots 5-8 hold the 4 cards
 // Background: Màh_Xée stocked the event shop with `t2edeck add 5 <id> <price>`
 // four times (out-log 14:22-14:31Z). Each add overwrote slot 5, so the deck
 // ended with ONE card. Restore re-lands their four intended cards via the
 // REAL production writer (cardSystem.eshopAddCard → saveEShopDeck $set).
-// Run order: restore && pm2 restart wa-joker — the fresh process boots with
+// Run order: restore && pm2 restart wa-joker - the fresh process boots with
 // the restored deck in memory (restart must follow within seconds).
 const fs = require('fs');
 const path = require('path');
@@ -30,11 +29,11 @@ async function connect() {
 }
 
 /// Màh_Xée's stocking session, joker out-log 13:24-14:31Z:
-///   ✅ add 6 e-02391 250 (13:24) · ✅ add 7 e-02388 250 (13:26)
-///   ✅ add 4 e-03004 400 (14:11) · ❌ "add slot 5 ..." (14:14, bad syntax)
-///   then SEVEN `add 5 ...` calls — every one overwrote slot 5:
-///   e-02981@200, e-02968@250, e-001690(fail), e-01690@250,
-///   e-01691@200, e-01686@250, e-03000@400, e-01691@200 (final survivor)
+/// add 6 e-02391 250 (13:24) · add 7 e-02388 250 (13:26)
+/// add 4 e-03004 400 (14:11) · "add slot 5 ..." (14:14, bad syntax)
+/// then SEVEN `add 5 ...` calls - every one overwrote slot 5:
+/// e-02981@200, e-02968@250, e-001690(fail), e-01690@250,
+/// e-01691@200, e-01686@250, e-03000@400, e-01691@200 (final survivor)
 /// Deck filled count stayed 4/16 no matter what → "can only add max 4".
 /// The five LOST cards (overwritten in slot 5) are re-added below at their
 /// logged prices. Existing slots are never clobbered.
@@ -62,7 +61,7 @@ function printDeck(doc) {
     const docs = await col.find({ key: /^eshop_deck_/ }).toArray();
     if (!docs.length) { console.log('NO eshop_deck_* docs found'); process.exit(1); }
 
-    // Target: joker's doc = the most recently updated one
+ // Target: joker's doc = the most recently updated one
     docs.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
     const doc = docs[0];
     const deck = Array.isArray(doc.value) ? doc.value : [];
@@ -70,20 +69,20 @@ function printDeck(doc) {
     if (mode === 'dump') {
         docs.forEach(printDeck);
     } else if (mode === 'restore') {
-        // Direct DB write (no cardSystem require → no getBotId/side-effect
-        // risk); the live process is restarted RIGHT AFTER this so its
-        // in-memory copy reloads from this doc.
+ // Direct DB write (no cardSystem require → no getBotId/side-effect
+ // risk); the live process is restarted RIGHT AFTER this so its
+ // in-memory copy reloads from this doc.
         const data = require(path.join(__dirname, '..', 'core', 'data', 'cards_data.json'));
         const flat = [].concat(...Object.values(data).filter(Array.isArray));
         let changed = 0;
         for (const c of MAH_LOST_CARDS) {
             if (deck.some(e => e && String(e.cardId).toLowerCase() === c.cardId)) {
-                console.log(`  ${c.cardId}: already in deck — skip`); continue;
+                console.log(`  ${c.cardId}: already in deck - skip`); continue;
             }
             const card = flat.find(x => String(x.id || '').toLowerCase() === c.cardId);
-            if (!card) { console.log(`  ${c.cardId}: NOT-FOUND in cards_data — skip`); continue; }
+            if (!card) { console.log(`  ${c.cardId}: NOT-FOUND in cards_data - skip`); continue; }
             const free = deck.findIndex(e => e === null || e === undefined);
-            if (free === -1) { console.log('  deck full — stop'); break; }
+            if (free === -1) { console.log('  deck full - stop'); break; }
             deck[free] = {
                 cardId: card.id,
                 cardName: card.cardName,

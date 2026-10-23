@@ -1,11 +1,11 @@
-// QA: owner 2026-10-12 — MIRROR + WANDERER removed from the ABYSS monster
+// QA: - MIRROR + WANDERER removed from the ABYSS monster
 // pool. Verifies across a full floor/boss sweep that:
-//   1. rollAbyssVariant NEVER returns MIRROR or WANDERER again
-//   2. boss floors (any depth) never roll a variant (was MIRROR 31+)
-//   3. mid floors 31-49 fall through to the regular pool (was WANDERER-only)
-//   4. survivor shares unchanged: OTHER BANNER ~10% of deep floors (50-89),
-//      TIMELINE DRIFTER ~10% + OTHER BANNER ~7.5% of 90+ floors
-//   5. ruins/global WANDERER swap (maybeSwapWanderer) still functional
+// 1. rollAbyssVariant NEVER returns MIRROR or WANDERER again
+// 2. boss floors (any depth) never roll a variant (was MIRROR 31+)
+// 3. mid floors 31-49 fall through to the regular pool (was WANDERER-only)
+// 4. survivor shares unchanged: OTHER BANNER ~10% of deep floors (50-89),
+// TIMELINE DRIFTER ~10% + OTHER BANNER ~7.5% of 90+ floors
+// 5. ruins/global WANDERER swap (maybeSwapWanderer) still functional
 const path = require('path');
 const R = path.join(__dirname, '..', 'core', 'rpg');
 const ev = require(path.join(R, 'enemyVariants'));
@@ -16,7 +16,7 @@ function check(name, ok, detail) {
     if (!ok) fail++;
 }
 
-// ─── 1+2+3: full sweep, zero MIRROR / WANDERER ──────────────────────────────
+// --- 1+2+3: full sweep, zero MIRROR / WANDERER ------------------------------
 const N = 400; // iterations per (floor, boss) cell
 const counts = { MIRROR: 0, WANDERER: 0, OTHER_BANNER: 0, TIMELINE_DRIFTER: 0, null: 0 };
 const byBand = {
@@ -48,7 +48,7 @@ check('boss floors: no variants at any depth', bossVariants === 0, `${bossVarian
 check('floors 1-30: creatures only', byBand.early.variants === 0, `${byBand.early.variants}/${byBand.early.rolls}`);
 check('floors 31-49: fall through to regular pool', byBand.mid.variants === 0, `${byBand.mid.variants}/${byBand.mid.rolls}`);
 
-// ─── 4: survivor share windows (binomial, generous ±) ───────────────────────
+// --- 4: survivor share windows (binomial, generous ±) -----------------------
 const pct = (x, n) => (100 * x / Math.max(1, n)).toFixed(2) + '%';
 const deepBanner = byBand.deep.banner / byBand.deep.rolls;
 const abDrifter = byBand.abyssal.drifter / byBand.abyssal.rolls;
@@ -57,7 +57,7 @@ check('deep 50-89: OTHER BANNER share ~10% (0.20 x 0.50)', deepBanner > 0.08 && 
 check('90+: TIMELINE DRIFTER share ~10% (0.25 x 0.40)', abDrifter > 0.08 && abDrifter < 0.12, pct(byBand.abyssal.drifter, byBand.abyssal.rolls));
 check('90+: OTHER BANNER share ~7.5% (0.25 x 0.60 x 0.50)', abBanner > 0.055 && abBanner < 0.095, pct(byBand.abyssal.banner, byBand.abyssal.rolls));
 
-// ─── 5: ruins/global WANDERER swap untouched ────────────────────────────────
+// --- 5: ruins/global WANDERER swap untouched --------------------------------
 let swapped = 0, tries = 200;
 for (let i = 0; i < tries; i++) {
     const host = { name: 'Slime', isBoss: false, isWildSummon: false, enemyIndex: 0 };
@@ -66,7 +66,7 @@ for (let i = 0; i < tries; i++) {
 }
 check('ruins/global WANDERER swap still works', swapped === tries, `${swapped}/${tries} forced swaps`);
 
-// ─── buildVariantEnemy remains callable for QA/manual renders ───────────────
+// --- buildVariantEnemy remains callable for QA/manual renders ---------------
 const m = ev.buildVariantEnemy('MIRROR', { floor: 40, isBoss: true, playerClassId: 'FIGHTER' });
 const w = ev.buildVariantEnemy('WANDERER', { floor: 38, playerClassId: 'FIGHTER' });
 check('buildVariantEnemy intact for QA renders', !!m && !!w && !!m.spriteIndex && !!w.spriteIndex, `MIRROR=${m.name}, WANDERER=${w.name}`);

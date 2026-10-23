@@ -1,5 +1,5 @@
 // ============================================
-// 🧪 QA: gw group surface — help card / status card / end from any state
+// QA: gw group surface - help card / status card / end from any state
 // Drives handleGroupCommand with a mock sock against the TEST db (gwtest).
 // Run on box: node scripts/qa_gw_end.js
 // ============================================
@@ -39,20 +39,20 @@ async function main() {
     }
     const gw = require('../core/rpg/guildWar');
     const { state } = gw;
-    // QA: bypass the mod/owner gate (mock jids are not the real owner).
-    // handleGroupCommand reads engine.isBotOwner dynamically, so patching the
-    // export works. Production code path is exercised unchanged.
+ // QA: bypass the mod/owner gate (mock jids are not the real owner).
+ // handleGroupCommand reads engine.isBotOwner dynamically, so patching the
+ // export works. Production code path is exercised unchanged.
     const engine = require('../core/engine');
     engine.isBotOwner = () => true;
     const GuildWarEvent = require('../core/models/GuildWarEvent');
-    // clear any stale gwtest events (MAX_CONCURRENT_EVENTS = 2 would block creation)
+ // clear any stale gwtest events (MAX_CONCURRENT_EVENTS = 2 would block creation)
     await GuildWarEvent.updateMany({ state: { $in: ['INITIATED', 'REGISTRATION', 'ACTIVE', 'REWARDS'] } }, { $set: { state: 'ARCHIVED' } });
 
-    // mock sock capturing everything
+ // mock sock capturing everything
     const sent = [];
     const sock = { sendMessage: async (chatId, msg) => { sent.push({ chatId, msg }); }, groupMetadata: async () => ({ participants: [] }) };
 
-    // ── 1. bare help (empty args) → field manual card ──
+ // -- 1. bare help (empty args) → field manual card --
     sent.length = 0;
     await gw.handleGroupCommand(sock, 'qa@g.us', 'owner@s.whatsapp.net', 'Owner', [], {});
     const helpMsg = sent[0] && sent[0].msg;
@@ -60,7 +60,7 @@ async function main() {
     check('help: card image attached', Buffer.isBuffer(helpMsg && helpMsg.image), `${helpMsg && helpMsg.image ? `${helpMsg.image.length}B` : 'no image'}`);
     check('help: caption lists end', typeof helpMsg.caption === 'string' && helpMsg.caption.includes('gw end'));
 
-    // ── 2. full war → status card → end card + rewards ──
+ // -- 2. full war → status card → end card + rewards --
     const created = await state.createEvent({ type: 'normal', hostGroupId: 'qa-host@g.us', initiatedBy: 'owner@s.whatsapp.net' });
     check('war A created', created.ok, created.reason || '');
     const eventIdA = created.event.eventId;
@@ -69,7 +69,7 @@ async function main() {
     }
     const startRes = await state.startEvent(eventIdA, {});
     check('war A started', startRes.ok, startRes.reason || '');
-    // seed some points
+ // seed some points
     const points = require('../core/rpg/guildWar/points');
     await points.award(eventIdA, 'qa0@s.whatsapp.net', 25, 'qa');
     await points.award(eventIdA, 'qa2@s.whatsapp.net', 15, 'qa');
@@ -90,7 +90,7 @@ async function main() {
     const afterEnd = await GuildWarEvent.findOne({ eventId: eventIdA }).lean();
     check('end: state REWARDS', afterEnd && afterEnd.state === 'REWARDS', afterEnd && afterEnd.state);
 
-    // ── 3. war still registering → end closes quietly, no rewards ──
+ // -- 3. war still registering → end closes quietly, no rewards --
     const createdB = await state.createEvent({ type: 'normal', hostGroupId: 'qa-host@g.us', initiatedBy: 'owner@s.whatsapp.net' });
     check('war B created', createdB.ok, createdB.reason || '');
     const eventIdB = createdB.event.eventId;
@@ -104,13 +104,13 @@ async function main() {
     const afterB = await GuildWarEvent.findOne({ eventId: eventIdB }).lean();
     check('end-registering: state ABORTED', afterB && afterB.state === 'ABORTED', afterB && afterB.state);
 
-    // ── 4. no wars at all → end says so ──
+ // -- 4. no wars at all → end says so --
     sent.length = 0;
     await gw.handleGroupCommand(sock, 'qa-host@g.us', 'owner@s.whatsapp.net', 'Owner', ['end'], {});
     const noneMsg = sent[0] && sent[0].msg;
     check('end-none: text only', typeof (noneMsg && noneMsg.text) === 'string' && !noneMsg.image);
 
-    // ── 5. status with no wars → styled empty state ──
+ // -- 5. status with no wars → styled empty state --
     sent.length = 0;
     await gw.handleGroupCommand(sock, 'qa-host@g.us', 'qa0@s.whatsapp.net', 'QA0', ['status'], {});
     check('status-none: styled text', typeof (sent[0] && sent[0].msg.text) === 'string' && sent[0].msg.text.includes('No war is running'));

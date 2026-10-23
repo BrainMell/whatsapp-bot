@@ -1,5 +1,5 @@
 // ============================================
-// 🎨 PROFILE CARD RENDERER v6-10 owner-approved styles
+// PROFILE CARD RENDERER v6-10 owner-approved styles
 // ============================================
 // The 10 approved mock designs (5x "v1 set" + 5x "v2 set") are baked into
 // static backgrounds (core/rpgasset/ui/styles/bg_1..10.png) by
@@ -8,11 +8,10 @@
 // This renderer composites: bg → dynamic ops → portrait → done.
 // Owners pick a style with `<prefix> cardstyle <1-10>`; RPG Mods pick the
 // server-wide default with `<prefix> setdefaultcard <1-10>`.
-//
 // Style catalogue:
-//   1 Stonekeep      2 Golden Arcanum   3 Retro Court    4 Woodmere
-//   5 Emblem Noir    6 Holo Gacha       7 Royal Decree (DEFAULT)
-//   8 Neon Arcade    9 Rune Monolith   10 Crimson Court
+// 1 Stonekeep 2 Golden Arcanum 3 Retro Court 4 Woodmere
+// 5 Emblem Noir 6 Holo Gacha 7 Royal Decree (DEFAULT)
+// 8 Neon Arcade 9 Rune Monolith 10 Crimson Court
 
 const path = require('path');
 const fs = require('fs');
@@ -62,7 +61,7 @@ const FONT_FNS = {
   pixeloid: s => `${s}px "${FONT_REG}"`,
 };
 
-// 💡 OWNER PICK 2026-09-11: Royal Decree is the main card.
+// OWNER PICK Royal Decree is the main card.
 const DEFAULT_STYLE = 7; // Royal Decree - baked-in fallback
 
 // Runtime default - RPG Mods can switch it with `<prefix> setdefaultcard <1-10>`.
@@ -86,7 +85,7 @@ function getLayouts() {
   return _layouts;
 }
 
-// 💡 Manual reload support (`<prefix> reloadservers`): drop every module-level
+// Manual reload support (`<prefix> reloadservers`): drop every module-level
 // cache so layouts.json / bg art / extra icons / class sprites are re-read
 // from disk on the next render. Fonts stay registered (registerFont is
 // process-global and idempotent). Called by the engine's reload command.
@@ -111,17 +110,17 @@ async function loadImg(dir, name) {
 }
 const loadBg = n => loadImg(STYLES_DIR, `bg_${n}.png`);
 async function loadExtra(n) {
-  // style assets live in styles/ or styles/extra/
+ // style assets live in styles/ or styles/extra/
   return (await loadImg(STYLES_DIR, n)) || (await loadImg(path.join(STYLES_DIR, 'extra'), n));
 }
 async function loadChar(n) {
-  // clean/ holds node-canvas-compatible re-encodes; fall back to the original
+ // clean/ holds node-canvas-compatible re-encodes; fall back to the original
   return (await loadImg(path.join(CHAR_DIR, 'clean'), n)) || (await loadImg(CHAR_DIR, n));
 }
 
 // Class → full-body sprite variants (files resolved via loadChar: clean/ copy
 // first, then the original asset dir).
-// 🧩 SPRITE CONSISTENCY 2026-09-17: this map now MIRRORS the Go renderer's
+// SPRITE CONSISTENCY this map now MIRRORS the Go renderer's
 // registry (bot_generation pkg/combat/sprites.go CharacterSprites) key-for-key
 // and file-for-file, INCLUDING evolved/ascended classes. Variant selection is
 // `list[spriteIndex % list.length]` - the exact same resolution adventures,
@@ -167,7 +166,7 @@ const CLASS_SPRITE_SETS = {
   BARD: ['acolyte.png'],
   ARTIFICER: ['apprentice1.png', 'apprentice2.png', 'apprentice3.png', 'apprentice4.png'],
   AVATAR: ['elementalist (1).png', 'elementalist (2).png', 'elementalist (3).png', 'elementalist (4).png'],
-  // Ascended classes - mapped to closest thematic sprites (same as Go)
+ // Ascended classes - mapped to closest thematic sprites (same as Go)
   DRAGON_GOD: ['DoomSlayer1.png', 'DoomSlayer2.png'],
   DRAGON_LORD: ['Warlord1.png', 'warlord2.png', 'warlord3.png'],
   KAGE: ['ninja (1).png', 'ninja (2).png', 'ninja (3).png', 'ninja (4).png', 'ninja (5).png'],
@@ -282,8 +281,8 @@ function buildCardData(params) {
   const { user, classData, stats, level, rank } = params;
   const nickname = user?.nickname || '';
   const waName = user?.profile?.whatsappName || '';
-  // 💡 Owner rule: an unregistered player's card shows THEIR WHATSAPP NAME,
-  // never the generic "Adventurer".
+ // Owner rule: an unregistered player's card shows THEIR WHATSAPP NAME,
+ // never the generic "Adventurer".
   let displayName = nickname && nickname !== 'Adventurer' ? nickname : '';
   if (!displayName && waName) displayName = waName;
   if (!displayName && nickname) displayName = nickname;
@@ -292,8 +291,8 @@ function buildCardData(params) {
   const pw = Math.max(0, Number(user?.pvpWins) || 0);
   const pl = Math.max(0, Number(user?.pvpLosses) || 0);
   const cls = (classData?.name || 'Adventurer');
-  // 💡 Owner rule 2026-09-14: XP is never shown as a bare percentage - the
-  // card must also show the actual XP requirement (progress / needed).
+ // Owner rule XP is never shown as a bare percentage - the
+ // card must also show the actual XP requirement (progress / needed).
   const pct = Math.round(params.xpPercent || 0);
   const cur = Number(params.xpCurrent), need = Number(params.xpNeeded);
   const XPX = Number.isFinite(cur) && Number.isFinite(need)
@@ -313,9 +312,8 @@ function buildCardData(params) {
     XP: String(pct),
     XPX,
     GUILD: params.guildName || '',
-    // 💡 OWNER RULE: cards show "[guild title] of [guild name]". The caller
-    // resolves the title (custom title, else guild role). Defensive default
-    // keeps the sentence grammatical if a caller passes a name but no title.
+ // OWNER RULE: cards show "[guild title] of [guild name]". The caller
+ // resolves the title (custom title, else guild role). Defensive default
     GTITLE: params.guildTitle || (params.guildName ? 'Member' : ''),
   };
 }
@@ -628,21 +626,21 @@ async function renderProfileCard(params) {
   D._stats = params.stats || {};
   const lay = layout;
 
-  // Portrait art: pfp → class sprite → hood fallback
+ // Portrait art: pfp → class sprite → hood fallback
   let pfpImg = null;
   if (params.pfpBuffer) {
     try { pfpImg = await getCanvas().loadImage(params.pfpBuffer); } catch (e) { pfpImg = null; }
   }
   let spriteImg = null;
   if (!pfpImg) {
-    // 🧩 SPRITE CONSISTENCY 2026-09-17: resolve the player's ASSIGNED sprite
-    // exactly like the Go renderer does: list[spriteIndex % list.length].
+ // SPRITE CONSISTENCY resolve the player's ASSIGNED sprite
+ // exactly like the Go renderer does: list[spriteIndex % list.length].
     const clsKey = String(params.classData?.id || params.classData?.name || '').toUpperCase();
-    // 💡 TICKET #b4fbef (2026-09-21): mod-created classes carry their OWN
-    // sprite (newClass.sprite, chosen at creation via the CLASS CREATOR
-    // template). If the class defines one, it wins over the registry -
-    // otherwise custom classes would always fall back to APPRENTICE art.
-    // Same clean/-first resolution + same fallback chain as below.
+ //: mod-created classes carry their OWN
+ // sprite (newClass.sprite, chosen at creation via the CLASS CREATOR
+ // template). If the class defines one, it wins over the registry -
+ // otherwise custom classes would always fall back to APPRENTICE art.
+ // Same clean/-first resolution + same fallback chain as below.
     let file = null;
     if (params.classData?.sprite) {
       const custom = String(params.classData.sprite).trim().replace(/^\/+/, '');
@@ -665,7 +663,7 @@ async function renderProfileCard(params) {
 }
 
 // ------------------------------------------------- style pickers sheet (.j cardstyle)
-// 💡 cache is keyed by the highlighted style - the sheet marks BOTH the
+// cache is keyed by the highlighted style - the sheet marks BOTH the
 // viewer's current pick AND the server default, so a single-slot cache
 // would render stale highlights for everyone after the first viewer.
 const _sheetCache = new Map();
@@ -699,13 +697,13 @@ async function renderStyleSheet(currentStyle) {
     ctx.strokeStyle = cur ? '#f6d670' : 'rgba(255,255,255,0.25)';
     ctx.lineWidth = cur ? 5 : 2;
     roundRectPath(ctx, x, y, tw, th, 8); ctx.stroke();
-    // number chip
+ // number chip
     ctx.fillStyle = cur ? '#f6d670' : '#d4af37';
     ctx.beginPath(); ctx.arc(x + 26, y + 26, 17, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#141414';
     ctx.font = `bold 19px "${FONT_BOLD}"`; ctx.textAlign = 'center';
     ctx.fillText(String(i), x + 26, y + 27);
-    // name
+ // name
     const name = (layouts[String(i)] && layouts[String(i)].name) || `Style ${i}`;
     ctx.fillStyle = cur ? '#f6d670' : '#cfc6ae';
     ctx.font = `16px "Cinzel"`;
@@ -719,7 +717,6 @@ async function renderStyleSheet(currentStyle) {
     }
   }
   const buf = canvas.toBuffer('image/png');
-  // keep the map bounded: drop stale keys once it grows past a few renders
   if (_sheetCache.size > 12) _sheetCache.clear();
   _sheetCache.set(cacheKey, buf);
   return buf;
@@ -749,8 +746,7 @@ const EQUIPMENT_SLOTS = [
   { key: 'cloak', label: 'Cloak', short: 'CLK', icon: 'cloak.png' }
 ];
 
-
-// 💡 REDESIGN 2026-09-15 v2 (owner feedback: "completely redesign a unique
+// REDESIGN v2 (owner feedback: "completely redesign a unique
 // card … dont reuse"). The allocate card no longer borrows anything from the
 // profile deck - no bg_7 bake, no Royal Decree fonts/palette. It is drawn
 // entirely in code as its own identity: THE SOUL FORGE (obsidian + gold +
@@ -835,7 +831,7 @@ async function renderAllocateCard(params) {
   const ctx = canvas.getContext('2d');
   const cx = Math.round(W / 2);
 
-  // ── 1. Background: obsidian-indigo gradient + arcane glow + starfield ──
+ // -- 1. Background: obsidian-indigo gradient + arcane glow + starfield --
   const g = ctx.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, SOUL.bgTop);
   g.addColorStop(0.42, SOUL.bgMid);
@@ -849,7 +845,7 @@ async function renderAllocateCard(params) {
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, W, H);
 
-  // deterministic starfield (seeded LCG - identical card every render)
+ // deterministic starfield (seeded LCG - identical card every render)
   let seed = 20260915;
   const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
   for (let i = 0; i < 110; i++) {
@@ -862,7 +858,7 @@ async function renderAllocateCard(params) {
   [[140, 244, 7], [662, 204, 6], [118, 566, 6], [692, 526, 7], [176, 902, 6], [636, 880, 6], [400, 62, 7], [540, 130, 5], [252, 120, 5]]
     .forEach(([x, y, s]) => soulSparkle(ctx, x, y, s, 0.38));
 
-  // ── 2. Rune-circle watermark behind the hero number ──
+ // -- 2. Rune-circle watermark behind the hero number --
   ctx.save();
   ctx.strokeStyle = 'rgba(201,162,39,0.14)';
   ctx.lineWidth = 3;
@@ -886,14 +882,14 @@ async function renderAllocateCard(params) {
   ctx.beginPath(); ctx.arc(cx, 302, 176, -0.7, 0.85); ctx.stroke();
   ctx.restore();
 
-  // ── 3. Vignette ──
+ // -- 3. Vignette --
   const vg = ctx.createRadialGradient(cx, 540, 240, cx, 540, 760);
   vg.addColorStop(0, 'rgba(0,0,0,0)');
   vg.addColorStop(1, 'rgba(0,0,0,0.40)');
   ctx.fillStyle = vg;
   ctx.fillRect(0, 0, W, H);
 
-  // ── 4. Gold frame: double border + brackets + diamonds ──
+ // -- 4. Gold frame: double border + brackets + diamonds --
   ctx.save();
   ctx.strokeStyle = SOUL.gold;
   ctx.lineWidth = 2.5;
@@ -915,7 +911,7 @@ async function renderAllocateCard(params) {
   ctx.beginPath(); ctx.arc(cx - 20, H - 16, 2.4, 0, Math.PI * 2); ctx.fill();
   ctx.beginPath(); ctx.arc(cx + 20, H - 16, 2.4, 0, Math.PI * 2); ctx.fill();
 
-  // ── 5. Title block ──
+ // -- 5. Title block --
   drawText(ctx, {
     x: cx, y: 100, s: 'SOUL FORGE', font: 'medsharp',
     size: 64, color: SOUL.goldBright, maxW: 600,
@@ -937,7 +933,7 @@ async function renderAllocateCard(params) {
     size: 17, color: 'rgba(168,148,95,0.9)', maxW: 560,
   });
 
-  // ── 6. Hero: unspent points ──
+ // -- 6. Hero: unspent points --
   drawText(ctx, {
     x: cx, y: 234, s: 'UNSPENT POINTS', font: 'cinzel',
     size: 19, color: SOUL.goldDim,
@@ -949,7 +945,7 @@ async function renderAllocateCard(params) {
     glow: { color: 'rgba(111,224,210,0.50)', r: 26 },
   });
 
-  // ── 7. Ledger panel ──
+ // -- 7. Ledger panel --
   const PX = 70, PW = 660, PY = 424, PH = 512;
   ctx.save();
   ctx.fillStyle = 'rgba(255,255,255,0.035)';
@@ -978,7 +974,7 @@ async function renderAllocateCard(params) {
   let totalInvested = 0;
   ROWS.forEach(([code, name], i) => {
     const y = rowY0 + i * rowH + rowH / 2;
-    // element-style chip
+ // element-style chip
     ctx.save();
     ctx.fillStyle = 'rgba(127,232,220,0.07)';
     ctx.strokeStyle = 'rgba(127,232,220,0.40)';
@@ -987,9 +983,9 @@ async function renderAllocateCard(params) {
     ctx.fill(); ctx.stroke();
     ctx.restore();
     drawText(ctx, { x: 119, y, s: code, font: 'cinzel', size: 16, color: SOUL.tealSoft });
-    // stat name
+ // stat name
     drawText(ctx, { x: 158, y, s: name, font: 'medsharp', size: 27, color: SOUL.ink, anchor: 'lm', maxW: 190 });
-    // invested tally
+ // invested tally
     const inv = Math.max(0, Math.round(Number(invested[code.toLowerCase()]) || 0));
     totalInvested += inv;
     let dotsFrom = 368;
@@ -998,7 +994,7 @@ async function renderAllocateCard(params) {
       drawText(ctx, { x: 356, y, s: tally, font: 'cinzel', size: 15, color: 'rgba(168,148,95,0.95)', anchor: 'lm' });
       dotsFrom = 356 + ctx.measureText(tally).width + 14;
     }
-    // gain per point
+ // gain per point
     const valStr = allocFmtGain(perPoint[code] || 1);
     ctx.font = FONT_FNS.medsharp(30);
     const vw = ctx.measureText(valStr).width;
@@ -1013,7 +1009,7 @@ async function renderAllocateCard(params) {
     }
   });
 
-  // SPENT summary row
+ // SPENT summary row
   const spentSepY = rowY0 + ROWS.length * rowH;
   ctx.save();
   ctx.strokeStyle = 'rgba(201,162,39,0.30)';
@@ -1028,13 +1024,13 @@ async function renderAllocateCard(params) {
   soulDots(ctx, 368, 704 - spentW - 12, spentY, 0.45);
   drawText(ctx, { x: 704, y: spentY, s: spentVal, font: 'medsharp', size: 26, color: SOUL.goldBright, anchor: 'rm' });
 
-  // ── 8. Soft-cap note ──
+ // -- 8. Soft-cap note --
   drawText(ctx, {
     x: cx, y: 954, s: 'Half value per point after heavy single-stat investment', font: 'medsharp',
     size: 21, color: 'rgba(168,148,95,0.95)', maxW: 640,
   });
 
-  // ── 9. CTA pill ──
+ // -- 9. CTA pill --
   ctx.save();
   ctx.fillStyle = 'rgba(201,162,39,0.10)';
   ctx.strokeStyle = SOUL.gold;
@@ -1051,7 +1047,7 @@ async function renderAllocateCard(params) {
     size: 15, color: SOUL.goldDim, maxW: 460,
   });
 
-  // ── 10. Footer ──
+ // -- 10. Footer --
   drawText(ctx, {
     x: cx, y: 1056, s: 'spent points are permanent - choose wisely', font: 'medsharp',
     size: 17, color: 'rgba(168,148,95,0.75)',
@@ -1060,8 +1056,8 @@ async function renderAllocateCard(params) {
   return canvas.toBuffer('image/png');
 }
 
-// OWNER QUEUE RULE (2026-10-08): profile renders take the shared render slot
-// (serialized + memory-gated). No cache — cards are per-user by design.
+// OWNER QUEUE RULE: profile renders take the shared render slot
+// (serialized + memory-gated). No cache - cards are per-user by design.
 const _renderQ = require('../utils/renderQueue');
 module.exports = {
   renderProfileCard: (...args) => _renderQ.run('profileCard', () => renderProfileCard(...args)),

@@ -1,13 +1,12 @@
 // scripts/test_followup_fixes.js
-// Verifies all 6 follow-up bug fixes:
-//   1. testgc list shows GC names (code path check - getGroupMetadata)
-//   2. smart give command auto-detects summon/rune/item (code path + DB test)
-//   3. bug regex allows hyphens + validation (DB test)
-//   3b. editissue/deleteissue/clearissues/lookupban/pardon commands exist (code path)
-//   7. Maintenance lock uses correct category lookup (code path)
-//   9. Game Testers Set is engine.js-owned (DB + code test)
-//   9b. reloadmods reloads gameTesters (code path)
-//   psater: cleared from _shared_blocked_users (DB verify)
+// 1. testgc list shows GC names (code path check - getGroupMetadata)
+// 2. smart give command auto-detects summon/rune/item (code path + DB test)
+// 3. bug regex allows hyphens + validation (DB test)
+// 3b. editissue/deleteissue/clearissues/lookupban/pardon commands exist (code path)
+// 7. Maintenance lock uses correct category lookup (code path)
+// 9. Game Testers Set is engine.js-owned (DB + code test)
+// 9b. reloadmods reloads gameTesters (code path)
+// psater: cleared from _shared_blocked_users (DB verify)
 
 const mongoose = require('mongoose');
 const path = require('path');
@@ -57,7 +56,7 @@ async function cleanup() {
 }
 
 async function runTests() {
-  // ─── TEST 1: testgc list shows GC names ─────────────────────────────
+ // --- TEST 1: testgc list shows GC names -----------------------------
   console.log('\n=== TEST 1: testgc list shows GC names (code path) ===');
   const engSrc = fs.readFileSync(path.join(__dirname, '..', 'core/engine.js'), 'utf-8');
   if (!engSrc.includes('PHASE 7 FIX 2026-08-29: resolve tester GC names')) {
@@ -68,7 +67,7 @@ async function runTests() {
   }
   console.log('[+] testgc list now uses getGroupMetadata ✅');
 
-  // ─── TEST 2: smart give command exists + auto-detects ────────────────
+ // --- TEST 2: smart give command exists + auto-detects ----------------
   console.log('\n=== TEST 2: smart give command (auto-detects summon/rune/item) ===');
   const adminSrc = fs.readFileSync(path.join(__dirname, '..', 'core/commands/adminConsole.js'), 'utf-8');
   if (!adminSrc.includes("sub === 'give'")) {
@@ -77,7 +76,6 @@ async function runTests() {
   if (!adminSrc.includes("sub === 'additem'")) {
     throw new Error('adminConsole.js: additem alias not found');
   }
-  // Verify the auto-detect logic exists
   if (!adminSrc.includes('registry.getSpecies(query.toLowerCase())')) {
     throw new Error('adminConsole.js: smart give summon detection not found');
   }
@@ -86,7 +84,7 @@ async function runTests() {
   }
   console.log('[+] Smart give command present with summon/rune/item auto-detection ✅');
 
-  // ─── TEST 3a: bug regex allows hyphens + validation ──────────────────
+ // --- TEST 3a: bug regex allows hyphens + validation ------------------
   console.log('\n=== TEST 3a: bug regex allows hyphens + validation ===');
   if (!engSrc.includes('PHASE 7 FIX 2026-08-29: bug regex allows hyphens + validation')) {
     throw new Error('engine.js: bug regex fix marker not found');
@@ -102,12 +100,12 @@ async function runTests() {
   }
   console.log('[+] Bug regex now allows hyphens + validates cat/sev ✅');
 
-  // ─── TEST 3b: new commands exist (editissue/deleteissue/clearissues/lookupban/pardon) ─
+ // --- TEST 3b: new commands exist (editissue/deleteissue/clearissues/lookupban/pardon) -
   console.log('\n=== TEST 3b: new commands exist ===');
   const newCmds = ['editissue', 'deleteissue', 'clearissues', 'lookupban', 'pardon'];
   for (const cmd of newCmds) {
     if (!engSrc.includes(`addgtester`) && !engSrc.includes(cmd)) {
-      // Wait, just check cmd is in src
+ // Wait, just check cmd is in src
     }
     if (!engSrc.includes(cmd)) {
       throw new Error(`engine.js: ${cmd} command not found`);
@@ -115,18 +113,17 @@ async function runTests() {
   }
   console.log(`[+] All 5 new commands present: ${newCmds.join(', ')} ✅`);
 
-  // ─── TEST 4: testerSystem + Game Tester Set ownership ────────────────
+ // --- TEST 4: testerSystem + Game Tester Set ownership ----------------
   console.log('\n=== TEST 4: Game Tester Set is engine.js-owned ===');
   if (!engSrc.includes('PHASE 7 FIX 2026-08-29: engine.js owns the gameTesters Set')) {
     throw new Error('engine.js: gameTesters Set ownership marker not found');
   }
-  // engine.js should have its own loadGameTesters that reads _shared_game_testers directly
+ // engine.js should have its own loadGameTesters that reads _shared_game_testers directly
   if (!engSrc.includes('system.get("_shared_game_testers", null)')) {
     throw new Error('engine.js: loadGameTesters does not read _shared_game_testers directly');
   }
   console.log('[+] engine.js owns the gameTesters Set ✅');
 
-  // Verify the live cycle: add via testerSystem.addGameTester → check via testerSystem.isGameTester
   await testerSystem.addGameTester(TEST_USER);
   if (!testerSystem.isGameTester(TEST_USER)) {
     throw new Error('testerSystem.addGameTester failed - isGameTester returns false');
@@ -138,7 +135,7 @@ async function runTests() {
   }
   console.log('[+] Live: delGameTester → isGameTester=false ✅');
 
-  // ─── TEST 5: reloadmods reloads gameTesters ──────────────────────────
+ // --- TEST 5: reloadmods reloads gameTesters --------------------------
   console.log('\n=== TEST 5: reloadmods reloads gameTesters ===');
   if (!engSrc.includes('gameTesters.clear();')) {
     throw new Error('engine.js: reloadmods does not clear gameTesters');
@@ -148,20 +145,20 @@ async function runTests() {
   }
   console.log('[+] reloadmods now clears + reloads gameTesters ✅');
 
-  // ─── TEST 6: Maintenance lock uses correct category lookup ───────────
+ // --- TEST 6: Maintenance lock uses correct category lookup -----------
   console.log('\n=== TEST 6: Maintenance lock uses correct category lookup ===');
   if (!engSrc.includes('PHASE 7 FIX 2026-08-29: RPG test-mode lock - fixed category lookup')) {
     throw new Error('engine.js: maintenance lock fix marker not found');
   }
-  // The OLD broken lookup (CMD_REGISTRY.commandRegistry[primaryCmd].category) should be GONE
+ // The OLD broken lookup (CMD_REGISTRY.commandRegistry[primaryCmd].category) should be GONE
   if (engSrc.includes('CMD_REGISTRY.commandRegistry && CMD_REGISTRY.commandRegistry[primaryCmd]')) {
     throw new Error('engine.js: OLD broken CMD_REGISTRY.commandRegistry lookup still present');
   }
-  // The NEW correct lookup iterates Object.entries(CMD_REGISTRY)
+ // The NEW correct lookup iterates Object.entries(CMD_REGISTRY)
   if (!engSrc.includes('for (const [catName, cmdList] of Object.entries(CMD_REGISTRY))')) {
     throw new Error('engine.js: new CMD_REGISTRY iteration not found');
   }
-  // Should lock RPG + GUILDS + PROGRESSION + CARDS + GAMBLING + ECONOMY
+ // Should lock RPG + GUILDS + PROGRESSION + CARDS + GAMBLING + ECONOMY
   for (const cat of ['RPG', 'GUILDS', 'PROGRESSION', 'CARDS', 'GAMBLING', 'ECONOMY']) {
     if (!engSrc.includes(`catName === '${cat}'`)) {
       throw new Error(`engine.js: maintenance lock does not cover category ${cat}`);
@@ -169,7 +166,7 @@ async function runTests() {
   }
   console.log('[+] Maintenance lock iterates registry correctly + locks RPG/GUILDS/PROGRESSION/CARDS/GAMBLING/ECONOMY ✅');
 
-  // ─── TEST 7: psater is cleared from _shared_blocked_users ────────────
+ // --- TEST 7: psater is cleared from _shared_blocked_users ------------
   console.log('\n=== TEST 7: psater is cleared from all ban/block lists ===');
   for (const key of ['_shared_banned_users', '_shared_hard_banned_users', '_shared_blocked_users']) {
     const doc = await System.findOne({ key });
@@ -179,9 +176,8 @@ async function runTests() {
   }
   console.log('[+] psater is NOT on any ban/block list ✅');
 
-  // ─── TEST 8: Issue submission with hyphenated category works ─────────
+ // --- TEST 8: Issue submission with hyphenated category works ---------
   console.log('\n=== TEST 8: Issue submission with [missing-feature:high] works ===');
-  // We can't easily test the chat command from here, but we can test testerSystem.submitIssue directly
   const issue = await testerSystem.submitIssue({
     reporterId: TEST_USER,
     reporterName: 'FixTester',
@@ -199,7 +195,7 @@ async function runTests() {
   }
   console.log(`[+] Issue ${issue._id.toString().slice(-6)} stored with cat=missing-feature, sev=high ✅`);
 
-  // ─── TEST 9: editissue can change category/severity via DB ──────────
+ // --- TEST 9: editissue can change category/severity via DB ----------
   console.log('\n=== TEST 9: editissue can change category/severity ===');
   const newCat = 'bug';
   const newSev = 'critical';
@@ -210,7 +206,7 @@ async function runTests() {
   }
   console.log(`[+] Issue updated to cat=${newCat}, sev=${newSev} ✅`);
 
-  // ─── TEST 10: deleteissue works via DB ───────────────────────────────
+ // --- TEST 10: deleteissue works via DB -------------------------------
   console.log('\n=== TEST 10: deleteissue works ===');
   await Issue.findByIdAndDelete(issue._id);
   const gone = await Issue.findById(issue._id);

@@ -164,7 +164,6 @@ function startInvestment(userId, planId, amount) {
     // Deduct money
     economy.removeMoney(userId, amount, `Invested in ${plan.name}`);
     
-    // Create investment
     if (!user.investments) user.investments = [];
     
     const investment = {

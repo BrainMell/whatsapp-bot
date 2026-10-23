@@ -1,12 +1,11 @@
 // ============================================
-// 🎨 SUMMON ROSTER RENDERER - node-canvas
+// SUMMON ROSTER RENDERER - node-canvas
 // ============================================
 // Renders the Summon Codex as an image card with:
 // - Header (title + slot count)
 // - Summon cards in a grid (sprite + name + stats + loyalty bar)
 // - Element-coded borders
 // - Active summon highlighted
-//
 // Uses node-canvas for all rendering.
 // UI elements drawn with canvas primitives (no sprite dependencies).
 // Sprites loaded from summonSprites.js (Digimon cache + local assets).
@@ -25,7 +24,7 @@ const fs = require('fs');
 const summonSprites = require('./summonSprites');
 const summonSystem = require('./summonSystem');
 const registry = require('./summonRegistry');
-const { emojiFont, fillTextMixed } = require('./emojiFont');   // 2026-10-20: emoji glyphs (owner 'number boxes' bug)
+const { emojiFont, fillTextMixed } = require('./emojiFont'); // emoji glyphs (owner 'number boxes' bug)
 
 // Register fonts
 const FONTS_DIR = path.join(__dirname, '..', 'rpgasset', 'fonts');
@@ -50,9 +49,9 @@ function ensureFonts() {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // ELEMENT CONFIG - colors + icons per element
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 const ELEMENT_CONFIG = {
   fire:      { color: '#FF6B35', bg: 'rgba(255,107,53,0.15)', label: '🔥 Fire' },
@@ -78,9 +77,9 @@ const RARITY_BG = {
   LEGENDARY: 'rgba(255,152,0,0.1)', MYTHIC: 'rgba(233,30,99,0.1)'
 };
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // HELPER: rounded rectangle
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 function roundRect(ctx, x, y, w, h, r) {
   if (w < 2 * r) r = w / 2;
@@ -94,18 +93,18 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // HELPER: draw loyalty bar
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 function drawLoyaltyBar(ctx, x, y, w, loyalty) {
   const h = 6;
-  // Background
+ // Background
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
   roundRect(ctx, x, y, w, h, 3);
   ctx.fill();
 
-  // Fill
+ // Fill
   const pct = Math.max(0, Math.min(100, loyalty)) / 100;
   let color;
   if (loyalty >= 75) color = '#4CAF50';
@@ -119,9 +118,9 @@ function drawLoyaltyBar(ctx, x, y, w, loyalty) {
   ctx.fill();
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // HELPER: draw stat bar
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 function drawStatBar(ctx, x, y, w, value, maxValue, color) {
   const h = 5;
@@ -135,9 +134,9 @@ function drawStatBar(ctx, x, y, w, value, maxValue, color) {
   ctx.fill();
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // MAIN: render summon roster as an image
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 /**
  * Render the summon roster as a PNG image.
@@ -154,12 +153,12 @@ async function renderRoster(user, summons, options = {}) {
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
 
-  // ═══════════════════════════════════════════════════════════════
-  // 💡 NEW UI (2026-08-03): sparklinlabs background + arranged summons
-  // + info hub at bottom. Replaces the old dark-gradient + card layout.
-  // ═══════════════════════════════════════════════════════════════
+ // ===============================================================
+ // NEW UI: sparklinlabs background + arranged summons
+ // + info hub at bottom. Replaces the old dark-gradient + card layout.
+ // ===============================================================
 
-  // ── 1. Load sparklinlabs background ──
+ // -- 1. Load sparklinlabs background --
   const bgPaths = [
     path.join(__dirname, '..', 'rpgasset', 'environment', 'spark_7.png'),
     path.join(__dirname, '..', 'rpgasset', 'environment', 'spark_10.png'),
@@ -189,11 +188,11 @@ async function renderRoster(user, summons, options = {}) {
     ctx.fillRect(0, 0, W, H);
   }
 
-  // ── 2. Dark overlay ──
+ // -- 2. Dark overlay --
   ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
   ctx.fillRect(0, 0, W, H);
 
-  // ── 3. Header ──
+ // -- 3. Header --
   ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
   roundRect(ctx, 20, 15, W - 40, 55, 8);
   ctx.fill();
@@ -219,7 +218,7 @@ async function renderRoster(user, summons, options = {}) {
     ctx.fillText('⭐ 1 deployed', W - 40, 55);
   }
 
-  // ── 4. Summon grid ──
+ // -- 4. Summon grid --
   const gridTop = 85;
   const gridBottom = 530;
   const cardW = 240;
@@ -260,7 +259,7 @@ async function renderRoster(user, summons, options = {}) {
     ctx.fillText(`+${displaySummons.length - 8} more summons...`, W / 2, gridBottom - 5);
   }
 
-  // ── 5. Info Hub ──
+ // -- 5. Info Hub --
   const hubY = 545;
   const hubH = 160;
   ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
@@ -348,9 +347,9 @@ async function renderRoster(user, summons, options = {}) {
   return canvas.toBuffer('image/png');
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // Draw a summon card ON the background (translucent, lets bg show)
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 async function drawSummonCardOnBackground(ctx, summon, user, x, y, w, h, index) {
   const species = registry.getSpecies(summon.species);
   const elementCfg = ELEMENT_CONFIG[summon.element] || ELEMENT_CONFIG.neutral;
@@ -358,23 +357,23 @@ async function drawSummonCardOnBackground(ctx, summon, user, x, y, w, h, index) 
   const isActive = user.activeSummonId === summon.summonId;
   const name = summon.nickname || species?.name || summon.species;
 
-  // Translucent card background (lets sparklinlabs bg show through)
+ // Translucent card background (lets sparklinlabs bg show through)
   ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
   roundRect(ctx, x, y, w, h, 8);
   ctx.fill();
 
-  // Rarity-colored border
+ // Rarity-colored border
   ctx.strokeStyle = isActive ? '#FFD700' : rarityColor;
   ctx.lineWidth = isActive ? 3 : 1.5;
   roundRect(ctx, x, y, w, h, 8);
   ctx.stroke();
 
-  // Element accent strip (left side)
+ // Element accent strip (left side)
   ctx.fillStyle = elementCfg.color;
   roundRect(ctx, x, y, 4, h, 2);
   ctx.fill();
 
-  // Active star
+ // Active star
   if (isActive) {
     ctx.fillStyle = '#FFD700';
     ctx.font = `16px "${FONT_REG}", monospace`;
@@ -382,13 +381,13 @@ async function drawSummonCardOnBackground(ctx, summon, user, x, y, w, h, index) 
     ctx.fillText('⭐', x + w - 10, y + 15);
   }
 
-  // Index number
+ // Index number
   ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
   ctx.font = `12px "${FONT_REG}", monospace`;
   ctx.textAlign = 'left';
   ctx.fillText(`#${index}`, x + 8, y + 12);
 
-  // Sprite portrait
+ // Sprite portrait
   const portraitSize = 70;
   const portraitX = x + 10;
   const portraitY = y + 20;
@@ -408,7 +407,7 @@ async function drawSummonCardOnBackground(ctx, summon, user, x, y, w, h, index) 
     }
   } catch (e) {}
 
-  // Name
+ // Name
   ctx.fillStyle = rarityColor;
   ctx.font = `bold 14px "${FONT_BOLD}", monospace`;
   ctx.textAlign = 'left';
@@ -416,17 +415,17 @@ async function drawSummonCardOnBackground(ctx, summon, user, x, y, w, h, index) 
   const shortName = name.length > 16 ? name.substring(0, 14) + '…' : name;
   ctx.fillText(shortName, portraitX + portraitSize + 8, portraitY + 5);
 
-  // Level + rarity
+ // Level + rarity
   ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
   ctx.font = `12px "${FONT_REG}", monospace`;
   ctx.fillText(`Lv.${summon.level} ${summon.rarity}`, portraitX + portraitSize + 8, portraitY + 24);
 
-  // Element
+ // Element
   ctx.fillStyle = elementCfg.color;
   ctx.font = `11px "${FONT_REG}", monospace`;
   ctx.fillText(elementCfg.label, portraitX + portraitSize + 8, portraitY + 42);
 
-  // Loyalty bar
+ // Loyalty bar
   drawLoyaltyBar(ctx, portraitX + portraitSize + 8, portraitY + 60, w - portraitSize - 26, summon.loyalty || 0);
 
   ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
@@ -434,11 +433,9 @@ async function drawSummonCardOnBackground(ctx, summon, user, x, y, w, h, index) 
   ctx.fillText(`Loy: ${Math.floor(summon.loyalty || 0)}%`, portraitX + portraitSize + 8, portraitY + 68);
 }
 
-
-
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // Draw a single summon card
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function drawSummonCard(ctx, summon, user, x, y, w, h, index) {
   const species = registry.getSpecies(summon.species);
@@ -449,23 +446,23 @@ async function drawSummonCard(ctx, summon, user, x, y, w, h, index) {
   const stats = summonSystem.computeEffectiveStats(summon);
   const name = summon.nickname || species?.name || summon.species;
 
-  // Card background
+ // Card background
   ctx.fillStyle = rarityBg;
   roundRect(ctx, x, y, w, h, 8);
   ctx.fill();
 
-  // Element-colored left border
+ // Element-colored left border
   ctx.fillStyle = elementCfg.color;
   roundRect(ctx, x, y, 4, h, 2);
   ctx.fill();
 
-  // Card border
+ // Card border
   ctx.strokeStyle = isActive ? '#FFD700' : rarityColor;
   ctx.lineWidth = isActive ? 3 : 1.5;
   roundRect(ctx, x, y, w, h, 8);
   ctx.stroke();
 
-  // Active summon star
+ // Active summon star
   if (isActive) {
     ctx.fillStyle = '#FFD700';
     ctx.font = `16px "${FONT_REG}", monospace`;
@@ -473,23 +470,23 @@ async function drawSummonCard(ctx, summon, user, x, y, w, h, index) {
     ctx.fillText('⭐', x + w - 10, y + 15);
   }
 
-  // ── Sprite portrait ──
+ // -- Sprite portrait --
   const portraitSize = 80;
   const portraitX = x + 12;
   const portraitY = y + 15;
 
-  // Portrait background
+ // Portrait background
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
   roundRect(ctx, portraitX, portraitY, portraitSize, portraitSize, 6);
   ctx.fill();
 
-  // Try to load sprite (auto-fetch from API on cache miss)
+ // Try to load sprite (auto-fetch from API on cache miss)
   const spritePath = await summonSprites.getOrFetchSprite(summon.species);
   if (spritePath && fs.existsSync(spritePath)) {
     try {
       const { loadImage } = getCanvas();
       const img = await loadImage(spritePath);
-      // Fit sprite into portrait area (contain mode)
+ // Fit sprite into portrait area (contain mode)
       const scale = Math.min(portraitSize / img.width, portraitSize / img.height);
       const dw = img.width * scale;
       const dh = img.height * scale;
@@ -497,7 +494,7 @@ async function drawSummonCard(ctx, summon, user, x, y, w, h, index) {
       const dy = portraitY + (portraitSize - dh) / 2;
       ctx.drawImage(img, dx, dy, dw, dh);
     } catch (e) {
-      // Draw placeholder
+ // Draw placeholder
       ctx.fillStyle = elementCfg.color;
       ctx.font = emojiFont(species?.icon || '🐉', 32, `"${FONT_REG}", monospace`);
       ctx.textAlign = 'center';
@@ -505,7 +502,7 @@ async function drawSummonCard(ctx, summon, user, x, y, w, h, index) {
       fillTextMixed(ctx, species?.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2);
     }
   } else {
-    // Draw emoji icon as placeholder
+ // Draw emoji icon as placeholder
     ctx.fillStyle = elementCfg.color;
     ctx.font = emojiFont(species?.icon || '🐉', 32, `"${FONT_REG}", monospace`);
     ctx.textAlign = 'center';
@@ -515,7 +512,7 @@ async function drawSummonCard(ctx, summon, user, x, y, w, h, index) {
 
   ctx.textBaseline = 'alphabetic';
 
-  // ── Name + level ──
+ // -- Name + level --
   const textX = portraitX + portraitSize + 12;
   ctx.fillStyle = '#FFFFFF';
   ctx.font = `bold 16px "${FONT_BOLD}", monospace`;
@@ -526,12 +523,12 @@ async function drawSummonCard(ctx, summon, user, x, y, w, h, index) {
   ctx.font = `12px "${FONT_REG}", monospace`;
   ctx.fillText(`Lv.${summon.level} ${summon.rarity} ${summon.tier}`, textX, y + 42);
 
-  // Element + personality
+ // Element + personality
   ctx.fillStyle = elementCfg.color;
   ctx.font = `12px "${FONT_REG}", monospace`;
   ctx.fillText(`${elementCfg.label} | 🧠 ${summon.personality}`, textX, y + 58);
 
-  // ── Stats ──
+ // -- Stats --
   const statY = y + 72;
   const statW = 100;
   ctx.fillStyle = 'rgba(255,255,255,0.7)';
@@ -542,7 +539,7 @@ async function drawSummonCard(ctx, summon, user, x, y, w, h, index) {
   ctx.fillText(`MAG ${stats.mag}`, textX + 55, statY + 12);
   ctx.fillText(`SPD ${stats.spd}`, textX, statY + 24);
 
-  // ── Loyalty bar ──
+ // -- Loyalty bar --
   const loyaltyY = y + h - 20;
   ctx.fillStyle = 'rgba(255,255,255,0.5)';
   ctx.font = `10px "${FONT_REG}", monospace`;
@@ -551,13 +548,13 @@ async function drawSummonCard(ctx, summon, user, x, y, w, h, index) {
   ctx.fillStyle = 'rgba(255,255,255,0.5)';
   ctx.fillText(`${summon.loyalty}`, x + w - 30, loyaltyY);
 
-  // ── Index number ──
+ // -- Index number --
   ctx.fillStyle = 'rgba(255,255,255,0.3)';
   ctx.font = `bold 24px "${FONT_BOLD}", monospace`;
   ctx.textAlign = 'left';
   ctx.fillText(`${index}`, x + 8, y + 20);
 
-  // Tamed indicator
+ // Tamed indicator
   const isTamed = (summon.lineage || []).some(l => l.personality === 'TAMED');
   if (isTamed) {
     ctx.fillStyle = '#4CAF50';
@@ -567,17 +564,17 @@ async function drawSummonCard(ctx, summon, user, x, y, w, h, index) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 // Render a single summon detail card (for .summon <#>)
-// ─────────────────────────────────────────────────────────────
+// -------------------------------------------------------------
 
 async function renderDetailCard(summon, user) {
   const W = 800;
   const H = 500;
-  // 💡 FIX 2026-08-03: createCanvas was not defined here - it's only
-  // available via getCanvas(). The old code at line 152 destructured it
-  // locally, but this function used it without importing it, causing
-  // 'createCanvas is not defined' → image render failed → text fallback.
+ // FIX createCanvas was not defined here - it's only
+ // available via getCanvas(). The old code at line 152 destructured it
+ // locally, but this function used it without importing it, causing
+ // 'createCanvas is not defined' → image render failed → text fallback.
   const { createCanvas } = getCanvas();
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
@@ -590,30 +587,30 @@ async function renderDetailCard(summon, user) {
   const echo = registry.getEcho(summon.echoId);
   const personality = registry.getPersonalityModifier(summon.personality);
 
-  // Background
+ // Background
   const bgGradient = ctx.createLinearGradient(0, 0, 0, H);
   bgGradient.addColorStop(0, '#1a1a2e');
   bgGradient.addColorStop(1, '#0f3460');
   ctx.fillStyle = bgGradient;
   ctx.fillRect(0, 0, W, H);
 
-  // Element color wash
+ // Element color wash
   ctx.fillStyle = elementCfg.bg;
   ctx.fillRect(0, 0, W, H);
 
-  // ── Outer border (rarity-colored) ──
+ // -- Outer border (rarity-colored) --
   ctx.strokeStyle = rarityColor;
   ctx.lineWidth = 4;
   roundRect(ctx, 10, 10, W - 20, H - 20, 12);
   ctx.stroke();
 
-  // Inner border (element-colored)
+ // Inner border (element-colored)
   ctx.strokeStyle = elementCfg.color;
   ctx.lineWidth = 2;
   roundRect(ctx, 16, 16, W - 32, H - 32, 8);
   ctx.stroke();
 
-  // ── Header ──
+ // -- Header --
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   roundRect(ctx, 30, 30, W - 60, 50, 8);
   ctx.fill();
@@ -624,7 +621,7 @@ async function renderDetailCard(summon, user) {
   ctx.textBaseline = 'middle';
   fillTextMixed(ctx, `${species?.icon || '🐉'} ${name}`, W / 2, 55);
 
-  // ── Sprite portrait (large) ──
+ // -- Sprite portrait (large) --
   const portraitSize = 200;
   const portraitX = 40;
   const portraitY = 100;
@@ -653,7 +650,7 @@ async function renderDetailCard(summon, user) {
       fillTextMixed(ctx, species?.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2 + 30);
     }
   } else {
-    // No sprite - draw emoji fallback
+ // No sprite - draw emoji fallback
     ctx.fillStyle = elementCfg.color;
     ctx.font = emojiFont(species?.icon || '🐉', 80, `"${FONT_REG}", monospace`);
     ctx.textAlign = 'center';
@@ -661,7 +658,7 @@ async function renderDetailCard(summon, user) {
     fillTextMixed(ctx, species?.icon || '🐉', portraitX + portraitSize / 2, portraitY + portraitSize / 2 + 30);
   }
 
-  // ── Info panel (right side) ──
+ // -- Info panel (right side) --
   const infoX = 270;
   const infoY = 100;
   const infoW = W - infoX - 40;
@@ -670,7 +667,7 @@ async function renderDetailCard(summon, user) {
   roundRect(ctx, infoX, infoY, infoW, 200, 8);
   ctx.fill();
 
-  // Name + details
+ // Name + details
   ctx.fillStyle = '#FFFFFF';
   ctx.font = `bold 18px "${FONT_BOLD}", monospace`;
   ctx.textAlign = 'left';
@@ -684,7 +681,7 @@ async function renderDetailCard(summon, user) {
   ctx.fillStyle = elementCfg.color;
   ctx.fillText(`${elementCfg.label} | ${summon.archetype}`, infoX + 15, infoY + 52);
 
-  // Stats with bars
+ // Stats with bars
   const statLabels = [
     { key: 'hp', label: 'HP', value: stats.hp, max: 500, color: '#F44336' },
     { key: 'atk', label: 'ATK', value: stats.atk, max: 200, color: '#FF9800' },
@@ -704,10 +701,10 @@ async function renderDetailCard(summon, user) {
     ctx.fillText(`${s.value}`, infoX + infoW - 45, sy);
   }
 
-  // ── Bottom section: Loyalty + Echo + Personality ──
+ // -- Bottom section: Loyalty + Echo + Personality --
   const bottomY = 320;
 
-  // Loyalty
+ // Loyalty
   ctx.fillStyle = 'rgba(255,255,255,0.7)';
   ctx.font = `14px "${FONT_REG}", monospace`;
   ctx.fillText('💖 Loyalty', 40, bottomY);
@@ -715,14 +712,14 @@ async function renderDetailCard(summon, user) {
   ctx.fillStyle = 'rgba(255,255,255,0.8)';
   ctx.fillText(`${summon.loyalty}/100`, 290, bottomY);
 
-  // Personality
+ // Personality
   ctx.fillStyle = 'rgba(255,255,255,0.7)';
   ctx.fillText('🧠 Personality', 40, bottomY + 25);
   ctx.fillStyle = '#FFD700';
   ctx.font = `bold 14px "${FONT_BOLD}", monospace`;
   ctx.fillText(personality.name, 160, bottomY + 25);
 
-  // Echo
+ // Echo
   if (echo) {
     ctx.fillStyle = 'rgba(255,255,255,0.7)';
     ctx.font = `14px "${FONT_REG}", monospace`;
@@ -734,7 +731,7 @@ async function renderDetailCard(summon, user) {
     ctx.fillText(echo.desc, 130, bottomY + 65);
   }
 
-  // ── Footer ──
+ // -- Footer --
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   roundRect(ctx, 30, H - 50, W - 60, 30, 6);
   ctx.fill();

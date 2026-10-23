@@ -1,38 +1,36 @@
 // ============================================
-// WIKIPEDIA ENTITY IMAGES (2026-09-30) - the non-anime image source
+// WIKIPEDIA ENTITY IMAGES - the non-anime image source
 // ============================================
 // Owner brief: the image system must cover MOVIES + GAMES + TV, not just
 // anime, and it must actually WORK (measured, not assumed). Box 1 network
-// facts (scripts/wiki_entity_bakeoff.js, 2026-09-30, 286 characters x 33
+// facts (scripts/wiki_entity_bakeoff.js, 286 characters x 33
 // franchises of the live RANDOM_POOL):
-//   Fandom API+CDN          API ok, CDN 403 (Cloudflare blocks the box IP)
-//   en.wikipedia pageimages (pilicense=any) + upload.wikimedia.org  100% OK
-//   bakeoff v4/v5           257/286 (90%) gated without identity checks,
-//                           225/286 (79%) with strict identity gating
+// Fandom API+CDN API ok, CDN 403 (Cloudflare blocks the box IP)
+// en.wikipedia pageimages (pilicense=any) + upload.wikimedia.org 100% OK
+// bakeoff v4/v5 257/286 (90%) gated without identity checks,
+// 225/286 (79%) with strict identity gating
 // vs the old Fandom chain: 0/60. This module is the production form of the
 // bakeoff winner: entity-native, page-anchored, junk-proof.
-//
 // DESIGN - three identity tiers, strongest first:
-//   1. CURATED EXACT ARTICLE: franchise registry below maps each franchise to
-//      its notable characters' canonical en.wiki article titles. Batched
-//      pageimages (redirects resolved) -> the article IS the identity.
-//   2. SEARCH-ANCHORED ARTICLE: for misses, one search (name + franchise
-//      qualifier) -> top article -> but only ACCEPTED if the identity gate
-//      passes (see below). Searching may land on the franchise article whose
-//      lead image is box art - showing that as "Melina?" is WRONG, so:
-//   IDENTITY GATE (strict): accept a search hit only when
-//      (a) article title == character base name AND the franchise qualifier
-//          surfaces in title/filename (no qualifier -> accept plain matches)
-//      (b) article title is "<base> (<something>)" - a disambiguated article
-//          of exactly this subject (e.g. "Zhongli (Genshin Impact)")
-//      (c) filename contains the base name AND the article title contains
-//          the qualifier AND the filename has no product-junk words
-//          (quest/cover/xbox/ps4/... - kills "Aragorn's Quest" covers)
-//   3. Every accepted image still passes the production pixel gate
-//      (imageGate, min 150px - fair-use art is capped at ~100k pixels) and
-//      is disk-cached (quizPortraitCache, 30d) so a franchise pays its
-//      resolution cost roughly once a month, then serves warm.
-//
+// 1. CURATED EXACT ARTICLE: franchise registry below maps each franchise to
+// its notable characters' canonical en.wiki article titles. Batched
+// pageimages (redirects resolved) -> the article IS the identity.
+// 2. SEARCH-ANCHORED ARTICLE: for misses, one search (name + franchise
+// qualifier) -> top article -> but only ACCEPTED if the identity gate
+// passes (see below). Searching may land on the franchise article whose
+// lead image is box art - showing that as "Melina?" is WRONG, so:
+// IDENTITY GATE (strict): accept a search hit only when
+// (a) article title == character base name AND the franchise qualifier
+// surfaces in title/filename (no qualifier -> accept plain matches)
+// (b) article title is "<base> (<something>)" - a disambiguated article
+// of exactly this subject (e.g. "Zhongli (Genshin Impact)")
+// (c) filename contains the base name AND the article title contains
+// the qualifier AND the filename has no product-junk words
+// (quest/cover/xbox/ps4/... - kills "Aragorn's Quest" covers)
+// 3. Every accepted image still passes the production pixel gate
+// (imageGate, min 150px - fair-use art is capped at ~100k pixels) and
+// is disk-cached (quizPortraitCache, 30d) so a franchise pays its
+// resolution cost roughly once a month, then serves warm.
 // RATE DISCIPLINE: upload.wikimedia 429-throttles bursts (measured). All
 // downloads go through a 2-inflight / 220ms-gap / backoff-retry queue; all
 // API calls are paced >=350ms with 429 backoff. Nominal full-franchise cold
@@ -50,7 +48,7 @@ const portraitCache = require("./quizPortraitCache");
 const _WP_UA = { "User-Agent": "ZenithQuizBot/1.0 (WhatsApp trivia bot; contact: ops@zenithbot.dev) axios" };
 const _wpHttp = axios.create({ timeout: 15000, headers: _WP_UA });
 
-// ── curated registry: slug -> { q: qualifier, names: [article titles] } ──
+// -- curated registry: slug -> { q: qualifier, names: [article titles] } --
 // Order matters: fame-descending (easy band = head, hard band = tail).
 const W = {
   batman: { q: "Batman", names: ["Batman", "Joker (character)", "Robin (character)", "Catwoman", "Batgirl", "Nightwing", "Riddler", "Two-Face", "Harley Quinn", "Ra's al Ghul", "Bane (DC Comics)", "Penguin (character)", "Mr. Freeze", "Poison Ivy (character)"] },
@@ -73,9 +71,9 @@ const W = {
   zelda: { q: "The Legend of Zelda", names: ["Link (The Legend of Zelda)", "Princess Zelda", "Ganon", "Navi (The Legend of Zelda)", "Midna", "Sheik", "Impa", "Skull Kid", "Ghirahim", "Princess Ruto"] },
   minecraft: { q: "Minecraft", names: ["Steve (Minecraft)", "Creeper (Minecraft)", "Enderman", "Alex (Minecraft)", "Piglin", "Wither", "Ender Dragon", "Villager (Minecraft)"] },
   gta: { q: "Grand Theft Auto", names: ["Carl Johnson (Grand Theft Auto)", "Niko Bellic", "Trevor Philips", "Michael De Santa", "Franklin Clinton", "Tommy Vercetti"] },
-  // NOTE: "Zeus (God of War)" deliberately omitted - the search resolves to
-  // the MYTHOLOGY article whose lead image is a marble statue, wrong subject
-  // for a God of War quiz. Same guard philosophy as the identity gate below.
+ // NOTE: "Zeus (God of War)" deliberately omitted - the search resolves to
+ // the MYTHOLOGY article whose lead image is a marble statue, wrong subject
+ // for a God of War quiz. Same guard philosophy as the identity gate below.
   godofwar: { q: "God of War", names: ["Kratos (God of War)", "Atreus (God of War)", "Baldur (God of War)", "Mimir (God of War)", "Freya (God of War)"] },
   witcher: { q: "The Witcher", names: ["Geralt of Rivia", "Yennefer of Vengerberg", "Ciri", "Triss Merigold", "Vesemir", "Emhyr var Emreis"] },
   finalfantasy: { q: "Final Fantasy", names: ["Cloud Strife", "Sephiroth (Final Fantasy)", "Tifa Lockhart", "Aerith Gainsborough", "Squall Leonhart", "Kefka Palazzo", "Yuna (Final Fantasy)", "Lightning (Final Fantasy)", "Zidane Tribal", "Noctis Lucis Caelum"] },
@@ -91,7 +89,7 @@ const W = {
   bloodborne: { q: "Bloodborne", names: ["Hunter (Bloodborne)", "Gehrman", "Lady Maria", "Micolash, Host of the Nightmare"] },
 };
 
-// ── pacing primitives (module-global, shared by everything below) ──
+// -- pacing primitives (module-global, shared by everything below) --
 let _lastApi = 0;
 async function _apiGap(ms = 350) {
   const gap = Date.now() - _lastApi;
@@ -129,7 +127,7 @@ async function _download(url) {
   } finally { _dlFree(); }
 }
 
-// ── wiki API (en.wikipedia.org - quizLore.wikiApi is Fandom-only) ──
+// -- wiki API (en.wikipedia.org - quizLore.wikiApi is Fandom-only) --
 // 429/5xx get backoff retries (measured: wikimedia throttles API bursts too).
 async function _wikiApi(params, retries = 2) {
   await _apiGap();
@@ -196,18 +194,18 @@ async function articleNamedFile(article, name) {
   const ii = info?.query?.pages?.[0]?.imageinfo?.[0];
   if (!ii?.url) return null;
   if (ii.mime && !/image\/(jpeg|png|webp)/.test(ii.mime)) return null;
-  // 2026-09: commons thumburls moved to thumb.wikimedia.org (thumbor) -
-  // normalize to the classic upload.wikimedia.org host (both serve the same
-  // path; upload is the stable, battle-tested one on this box)
+ // 2026-09: commons thumburls moved to thumb.wikimedia.org (thumbor) -
+ // normalize to the classic upload.wikimedia.org host (both serve the same
+ // path; upload is the stable, battle-tested one on this box)
   const u = String(ii.thumburl || ii.url).replace(/^https:\/\/thumb\.wikimedia\.org\//, "https://upload.wikimedia.org/");
   return { url: u, article, file: match };
 }
 
 async function searchResolve(name, qualifier) {
-  // intitle-anchored search: only articles whose TITLE names the character
-  // are considered ("Minecraft speedrunning" can never be a candidate for
-  // "Enderman"; "Zhongli (Genshin Impact)" always is). Junk-product titles
-  // are rejected; prefer disambiguated/qualifier-matching titles.
+ // intitle-anchored search: only articles whose TITLE names the character
+ // are considered ("Minecraft speedrunning" can never be a candidate for
+ // "Enderman"; "Zhongli (Genshin Impact)" always is). Junk-product titles
+ // are rejected; prefer disambiguated/qualifier-matching titles.
   const base = String(name).replace(/\s*\([^)]*\)\s*$/, "").trim();
   const data = await _wikiApi({
     action: "query", format: "json", formatversion: "2", redirects: "1",
@@ -226,7 +224,7 @@ async function searchResolve(name, qualifier) {
     if (!nt.includes(nb) && !nf.includes(nb)) return null;
     const junk = _JUNK_TITLE.test(p.title) || _JUNK_FILE.test(_fileName(p.thumbnail.source));
     if (junk) return null;
-    // strong: title carries the qualifier or an explicit disambiguator
+ // strong: title carries the qualifier or an explicit disambiguator
     const strong = (nq && nt.includes(nq)) || /\([^)]+\)/.test(p.title);
     return { url: _normUpload(p.thumbnail.source), article: p.title, strong };
   }).filter(Boolean);
@@ -235,7 +233,7 @@ async function searchResolve(name, qualifier) {
 }
 const _JUNK_TITLE = /(speedrun|story mode|legends|movie|tv series|video game|soundtrack|album|board game|card game|novel|film series|quest|cover|remix|mod)/i;
 
-// ── identity gate (strict - see header) ──
+// -- identity gate (strict - see header) --
 const _STOP = new Set(["the", "character", "game", "movie", "film", "tv", "series", "and", "from", "of"]);
 const _JUNK_FILE = /(quest|cover|xbox|playstation|ps[2-5]|switch|boxart|box_art|gameplay|screenshot|poster)/i;
 function _norm(s) { return String(s || "").toLowerCase().replace(/\([^)]*\)/g, " ").replace(/[^a-z0-9]+/g, " ").trim(); }
@@ -251,21 +249,21 @@ function identityOk(name, article, imgUrl, qualifier) {
   const art = _norm(article);
   const file = _fileName(imgUrl).toLowerCase();
   const qToks = _norm(qualifier).split(" ").filter((t) => t.length >= 3 && !_STOP.has(t));
-  // (a) exact article match - require qualifier context when one was given
+ // (a) exact article match - require qualifier context when one was given
   if (art === base && (!qToks.length || qToks.some((t) => (art + " " + file).includes(t)))) return true;
-  // (b) disambiguated article of exactly this subject
+ // (b) disambiguated article of exactly this subject
   if (article && _norm(article).startsWith(base) && /\(/.test(article)) return true;
-  // (c) filename names the subject AND article is franchise-scoped AND not
-  //     a product/cover shot
+ // (c) filename names the subject AND article is franchise-scoped AND not
+ // a product/cover shot
   if (toks.every((t) => file.includes(t)) && qToks.length && qToks.some((t) => art.includes(t)) && !_JUNK_FILE.test(file)) return true;
   return false;
 }
 
-// ── resolution ──
+// -- resolution --
 const _sessionMemo = new Map(); // frKey -> portraits[] (process lifetime)
 
 function _bandOrder(list, difficulty) {
-  // curated lists are fame-descending; easy prefers head, hard prefers tail
+ // curated lists are fame-descending; easy prefers head, hard prefers tail
   const order = difficulty === "hard" ? [...list].reverse() : difficulty === "medium"
     ? [...list].sort(() => Math.random() - 0.5)
     : list;
@@ -284,7 +282,7 @@ async function resolveFranchisePortraits(frSlug, qualifier, names, { difficulty 
   if (memo && memo.length >= 4) return _bandOrder(memo, difficulty).slice(0, limit);
 
   const want = names.slice(0, 15);
-  // 1) batch exact-title pageimages
+ // 1) batch exact-title pageimages
   const byTitle = new Map();
   const redirectMap = new Map();
   let disambig = new Set();
@@ -296,10 +294,10 @@ async function resolveFranchisePortraits(frSlug, qualifier, names, { difficulty 
     disambig = new Set([...disambig, ...r.disambig]);
   }
 
-  // 2) resolve each name: exact article -> article file hunt -> search. A
-  // per-franchise URL dedup guards against redirect collisions (e.g. "Alex
-  // (Minecraft)" redirecting into the Steve article and inheriting Steve's
-  // lead image - two subjects must never share one picture).
+ // 2) resolve each name: exact article -> article file hunt -> search. A
+ // per-franchise URL dedup guards against redirect collisions (e.g. "Alex
+ // (Minecraft)" redirecting into the Steve article and inheriting Steve's
+ // lead image - two subjects must never share one picture).
   const resolved = [];
   const seenUrls = new Set();
   for (const raw of want) {
@@ -316,8 +314,8 @@ async function resolveFranchisePortraits(frSlug, qualifier, names, { difficulty 
     let article = direct;
     let method = "article";
     if (!url && (byTitle.has(raw) || byTitle.has(direct))) {
-      // article exists but has no lead pageimage - hunt its own file list for
-      // a file NAMED after the character (page-anchored, beats blind search)
+ // article exists but has no lead pageimage - hunt its own file list for
+ // a file NAMED after the character (page-anchored, beats blind search)
       const nf = await articleNamedFile(direct, name).catch(() => null);
       if (nf) { url = nf.url; article = nf.article; method = "article-file"; }
     }
@@ -332,7 +330,7 @@ async function resolveFranchisePortraits(frSlug, qualifier, names, { difficulty 
     if (!url) continue;
     const urlKey = String(url).split("?")[0];
     if (seenUrls.has(urlKey)) continue;
-    // 3) download + pixel gate + disk cache
+ // 3) download + pixel gate + disk cache
     const dl = await _download(url);
     if (dl && dl.buf) {
       const gate = await imageGate.inspectImageBuffer(dl.buf, { minW: 150, minH: 150, label: `wiki:${name}`.slice(0, 60) }).catch(() => ({ ok: false }));
@@ -344,8 +342,8 @@ async function resolveFranchisePortraits(frSlug, qualifier, names, { difficulty 
         portraitCache.putNegative(cacheKey);
       }
     } else {
-      // transient failures (429/5xx/timeouts) must not poison the 24h
-      // negative cache - only deterministic rejections do
+ // transient failures (429/5xx/timeouts) must not poison the 24h
+ // negative cache - only deterministic rejections do
       if (!dl?.transient) portraitCache.putNegative(cacheKey);
     }
   }
@@ -365,7 +363,7 @@ function stats() {
   return { registryFranchises: Object.keys(W).length, memoized: _sessionMemo.size, ...portraitCache.stats() };
 }
 
-// 2026-09-30: characterResolver reuses the paced primitives (wikiApi,
+// characterResolver reuses the paced primitives (wikiApi,
 // pageimagesBatch, articleNamedFile, searchResolve, identityOk, _normUpload)
 // so the generic ANY-franchise pipeline inherits the same rate discipline.
 module.exports = {

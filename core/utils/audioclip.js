@@ -1,12 +1,10 @@
 // ===============================================
-// AUDIOCLIP.JS - refined audio clipping / citing (FIX 2026-09-16)
+// AUDIOCLIP.JS - refined audio clipping / citing (FIX )
 // ===============================================
-// Syntax:  `.clip <start> <end>`  while REPLYING to an audio / voice note.
-//          `.clip <end>`          clip from the beginning to <end>.
-//          `.clip info`           while replying - shows duration + help.
-//
+// Syntax: `.clip <start> <end>` while REPLYING to an audio / voice note.
+// `.clip <end>` clip from the beginning to <end>.
+// `.clip info` while replying - shows duration + help.
 // Timestamps: `15` `15.5` `0:15` `1:30` `1:30.5` `1:02:30` (h:mm:ss).
-//
 // Design rules (owner brief): clean, reliable, refined - never a crude
 // cutter. Everything validates, everything cleans up, errors are useful.
 // Reuses Baileys' downloadContentFromMessage + local ffmpeg (already the
@@ -28,15 +26,14 @@ const VALID_AUDIO_MIMES = [
   'audio/', 'ogg', 'mpeg', 'mp3', 'mp4', 'm4a', 'aac', 'wav', 'opus', 'flac',
 ];
 
-// ── timestamp parsing ────────────────────────────────────────────────
+// -- timestamp parsing ------------------------------------------------
 // Accepts: 15 | 15.5 | 0:15 | 1:30 | 1:30.5 | 1:02:30 | 90s | 2m30s | 1h2m3s
-// Returns seconds (float) or null when invalid.
 function parseTimestamp(input) {
   if (input === null || input === undefined) return null;
   const s = String(input).trim().toLowerCase();
   if (!s) return null;
 
-  // h:m:s / m:s / s with optional .fraction
+ // h:m:s / m:s / s with optional .fraction
   const clock = /^(\d+):(\d{1,2})(?::(\d{1,2}))?(?:\.(\d{1,3}))?$/.exec(s);
   if (clock) {
     const a = parseInt(clock[1], 10);
@@ -44,7 +41,7 @@ function parseTimestamp(input) {
     const c = clock[3] ? parseInt(clock[3], 10) : null;
     const frac = clock[4] ? parseFloat('0.' + clock[4]) : 0;
     if (c === null) {
-      // m:ss form
+ // m:ss form
       if (b >= 60) return null;
       return a * 60 + b + frac;
     }
@@ -52,11 +49,11 @@ function parseTimestamp(input) {
     return a * 3600 + b * 60 + c + frac;
   }
 
-  // bare seconds: 15 | 15.5 | 90s
+ // bare seconds: 15 | 15.5 | 90s
   const bare = /^(\d+(?:\.\d+)?)(s)?$/.exec(s);
   if (bare) return parseFloat(bare[1]);
 
-  // compact units: 2m30s | 1h2m | 3m | 45s | 1h2m3.5s
+ // compact units: 2m30s | 1h2m | 3m | 45s | 1h2m3.5s
   const units = /^(?:(\d+(?:\.\d+)?)h)?(?:(\d+(?:\.\d+)?)m)?(?:(\d+(?:\.\d+)?)s)?$/.exec(s);
   if (units && (units[1] || units[2] || units[3])) {
     return (parseFloat(units[1] || 0)) * 3600 +
@@ -77,7 +74,7 @@ function fmtTimestamp(sec) {
   return `${m}:${ss}`;
 }
 
-// ── quoted media resolution ──────────────────────────────────────────
+// -- quoted media resolution ------------------------------------------
 function getQuotedAudio(m) {
   const ctx = m.message?.extendedTextMessage?.contextInfo;
   const q = ctx?.quotedMessage;
@@ -90,7 +87,7 @@ function getQuotedAudio(m) {
       return { msg: q.documentMessage, type: 'document', ptt: false };
     }
   }
-  // some clients wrap quoted media one level deep in ephemeral/view-once
+ // some clients wrap quoted media one level deep in ephemeral/view-once
   const inner = q.ephemeralMessage?.message || q.viewOnceMessage?.message || q.viewOnceMessageV2?.message;
   if (inner) {
     if (inner.audioMessage) return { msg: inner.audioMessage, type: 'audio', ptt: !!inner.audioMessage.ptt };
@@ -111,7 +108,7 @@ async function downloadBuffer(message, type) {
   return Buffer.concat(chunks);
 }
 
-// ── ffprobe / ffmpeg ─────────────────────────────────────────────────
+// -- ffprobe / ffmpeg -------------------------------------------------
 function probeDuration(file) {
   return new Promise((resolve) => {
     execFile(FFPROBE, [
@@ -135,12 +132,12 @@ function runFfmpeg(args) {
   });
 }
 
-// ── main handler ─────────────────────────────────────────────────────
+// -- main handler -----------------------------------------------------
 async function handleClipCommand(sock, chatId, senderJid, args, m, BOT_MARKER, prefix) {
   const pfx = prefix || '.';
   const quoted = getQuotedAudio(m);
 
-  // no args → help
+ // no args → help
   if (!args || args.length === 0) {
     return await sock.sendMessage(chatId, {
       text: BOT_MARKER + [
@@ -185,7 +182,7 @@ async function handleClipCommand(sock, chatId, senderJid, args, m, BOT_MARKER, p
     }
   }
 
-  // ── parse range ──
+ // -- parse range --
   let start = parseTimestamp(args[0]);
   let end = args[1] !== undefined ? parseTimestamp(args[1]) : null;
 
@@ -200,7 +197,7 @@ async function handleClipCommand(sock, chatId, senderJid, args, m, BOT_MARKER, p
     }, { quoted: m });
   }
   if (end === null) {
-    // single value = "first N seconds"
+ // single value = "first N seconds"
     end = start;
     start = 0;
   }
@@ -219,7 +216,7 @@ async function handleClipCommand(sock, chatId, senderJid, args, m, BOT_MARKER, p
   const tmpOut = path.join(os.tmpdir(), `clip_out_${token}.mp3`);
 
   try {
-    // download
+ // download
     let buf;
     try {
       buf = await downloadBuffer(quoted.msg, quoted.type);
@@ -238,7 +235,7 @@ async function handleClipCommand(sock, chatId, senderJid, args, m, BOT_MARKER, p
     }
     fs.writeFileSync(tmpIn, buf);
 
-    // duration sanity
+ // duration sanity
     const dur = await probeDuration(tmpIn);
     if (dur && start >= dur - 0.05) {
       return await sock.sendMessage(chatId, {
@@ -256,7 +253,7 @@ async function handleClipCommand(sock, chatId, senderJid, args, m, BOT_MARKER, p
       }, { quoted: m });
     }
 
-    // encode pass 1: 128k
+ // encode pass 1: 128k
     let enc = await runFfmpeg([
       '-y', '-v', 'error',
       '-i', tmpIn,
@@ -266,7 +263,7 @@ async function handleClipCommand(sock, chatId, senderJid, args, m, BOT_MARKER, p
       tmpOut,
     ]);
     if (!enc.ok) {
-      // some inputs refuse 2ch - retry mono/adaptive
+ // some inputs refuse 2ch - retry mono/adaptive
       enc = await runFfmpeg([
         '-y', '-v', 'error',
         '-i', tmpIn,
@@ -283,7 +280,7 @@ async function handleClipCommand(sock, chatId, senderJid, args, m, BOT_MARKER, p
       }, { quoted: m });
     }
 
-    // size guard: re-encode lower bitrate if huge
+ // size guard: re-encode lower bitrate if huge
     if (fs.statSync(tmpOut).size > MAX_OUTPUT_BYTES) {
       enc = await runFfmpeg([
         '-y', '-v', 'error',

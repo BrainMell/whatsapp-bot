@@ -1,29 +1,26 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-//  emojiFont.js — emoji-aware canvas text helpers (color, not hexcode)
-// ═══════════════════════════════════════════════════════════════════════════
-//  OWNER BUG 1 (2026-10-20 10:47Z): "some emoji emblems show on the various
-//  maps as weird number boxes" — map renderers drew emblem emoji through a
-//  "Noto Sans" stack that doesn't exist on the boxes; fontconfig substituted
-//  DejaVu (covers ⚜ ⚔ but no astral emoji) and canvas painted raw codepoints
-//  as HEX NUMBER BOXES (👁 → [01F441]).
-//
-//  OWNER BUG 2 (2026-10-20 11:31Z, this file): "Use colors not hex code cus
-//  who tf knows hex codes dude?" — the first fix shipped monochrome Noto
-//  Emoji. Owner wants the familiar COLORED emoji. On-box probes the same
-//  day proved canvas 3.2.3 can never draw colored emoji from fonts: emoji
-//  glyph resolution bypasses registerFont entirely, and CBDT color bitmaps
-//  come out as alpha-mask silhouettes tinted by fillStyle (red fill → solid
-//  red silhouette, zero native hues).
-//
-//  So emoji runs are now painted as COLOR BITMAPS: core/rpg/emojiBitmap.js
-//  parses the shipped NotoColorEmoji (OFL) CBDT table into per-emoji PNGs
-//  and we ctx.drawImage them at text metrics (baseline-true placement, same
-//  1.245em advance the mono font had). fillStyle is intentionally ignored
-//  for emoji runs — that IS the feature. The monochrome font remains the
-//  fallback (color font missing/corrupt), and the system-wide install
-//  (deploy step) still covers canvas draws that don't go through here.
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// emojiFont.js - emoji-aware canvas text helpers (color, not hexcode)
+// ===========================================================================
+// OWNER BUG 1 (10:47Z): "some emoji emblems show on the various
+// maps as weird number boxes" - map renderers drew emblem emoji through a
+// "Noto Sans" stack that doesn't exist on the boxes; fontconfig substituted
+// DejaVu (covers but no astral emoji) and canvas painted raw codepoints
+// as HEX NUMBER BOXES ( → [01F441]).
+// OWNER BUG 2 (11:31Z, this file): "Use colors not hex code cus
+// who tf knows hex codes dude?" - the first fix shipped monochrome Noto
+// Emoji. Owner wants the familiar COLORED emoji. On-box probes the same
+// day proved canvas 3.2.3 can never draw colored emoji from fonts: emoji
+// glyph resolution bypasses registerFont entirely, and CBDT color bitmaps
+// come out as alpha-mask silhouettes tinted by fillStyle (red fill → solid
+// red silhouette, zero native hues).
+// So emoji runs are now painted as COLOR BITMAPS: core/rpg/emojiBitmap.js
+// and we ctx.drawImage them at text metrics (baseline-true placement, same
+// 1.245em advance the mono font had). fillStyle is intentionally ignored
+// for emoji runs - that IS the feature. The monochrome font remains the
+// fallback (color font missing/corrupt), and the system-wide install
+// (deploy step) still covers canvas draws that don't go through here.
+// ===========================================================================
 const fs = require('fs');
 const path = require('path');
 const eb = require('./emojiBitmap');
@@ -82,7 +79,7 @@ function emojiFont(str, px, base) {
         : `${Math.round(px)}px ${b}`;
 }
 
-// Draw a possibly-mixed string ("🐉 Pyro") advancing across emoji/text runs,
+// Draw a possibly-mixed string (" Pyro") advancing across emoji/text runs,
 // each with the right rendering path: emoji runs paint as color bitmaps via
 // emojiBitmap (fallback: shipped mono family), text runs keep ctx.font.
 // Honours ctx.textAlign center/right by measuring the whole string first,
@@ -128,7 +125,7 @@ function fillTextMixed(ctx, str, x, y) {
     return total;
 }
 
-// Fallback run split (mono path — same semantics as the 51b3a8e version).
+// Fallback run split (mono path - same semantics as the 51b3a8e version).
 function monoRuns(s) {
     const runs = [];
     let cur = '', curP = null;

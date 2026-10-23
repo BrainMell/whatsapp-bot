@@ -74,7 +74,6 @@ function allocateStatPoint(userId, stat, amount = 1) {
     const baseStatValues = { hp: 15, atk: 3, def: 2, mag: 3, spd: 2, luck: 2, crit: 1 };
     const gainedValue = Math.floor(baseStatValues[s] * tierMultiplier * amount);
     
-    // Track points spent per stat so resetStats can refund correctly
     if (!user.allocatedStatPoints) user.allocatedStatPoints = {};
     user.allocatedStatPoints[s] = (user.allocatedStatPoints[s] || 0) + amount;
     

@@ -1,18 +1,18 @@
-// ============================================ 
-// 🛠️ ADVANCED CRAFTING & BREWING SYSTEM 
-// ============================================ 
+// ============================================
+// ADVANCED CRAFTING & BREWING SYSTEM
+// ============================================
 // Allows players to create gear, potions, and explosives from materials
 
 const inventorySystem = require('./inventorySystem');
 const economy = require('./economy');
 const lootSystem = require('./lootSystem');
 
-// ========================================== 
-// 📜 CRAFTING RECIPES (Forging & Engineering) 
-// ========================================== 
+// ==========================================
+// CRAFTING RECIPES (Forging & Engineering)
+// ==========================================
 
 const CRAFTING_RECIPES = {
-    // --- WEAPONS ---
+ // --- WEAPONS ---
     'steel_sabre': {
         name: 'Steel Sabre', category: 'WEAPON', id: 'steel_sabre',
         desc: 'A sharp, finely forged blade. (+25 ATK, +5 SPD)',
@@ -98,7 +98,7 @@ const CRAFTING_RECIPES = {
         result: { id: 'storm_bow', stats: { atk: 40, spd: 20 }, slot: 'main_hand' }
     },
 
-    // --- ARMOR ---
+ // --- ARMOR ---
     'reinforced_plate': {
         name: 'Reinforced Plate', category: 'ARMOR', id: 'reinforced_plate',
         desc: 'Heavy plate armor reinforced with steel. (+45 DEF, +50 HP)',
@@ -130,7 +130,7 @@ const CRAFTING_RECIPES = {
         result: { id: 'archmage_robes', stats: { def: 20, mag: 80 }, slot: 'armor' }
     },
 
-    // --- HELMETS ---
+ // --- HELMETS ---
     'iron_helm': {
         name: 'Iron Helmet', category: 'ARMOR', id: 'iron_helm',
         desc: 'Basic protection. (+10 DEF)',
@@ -150,7 +150,7 @@ const CRAFTING_RECIPES = {
         result: { id: 'assassin_hood', stats: { def: 10, spd: 15, crit: 8 }, slot: 'helmet' }
     },
 
-    // --- BOOTS ---
+ // --- BOOTS ---
     'leather_boots': {
         name: 'Leather Boots', category: 'ARMOR', id: 'leather_boots',
         desc: 'Simple walking boots. (+5 SPD)',
@@ -164,7 +164,7 @@ const CRAFTING_RECIPES = {
         result: { id: 'winged_sandals', stats: { spd: 40 }, slot: 'boots' }
     },
 
-    // --- ACCESSORIES ---
+ // --- ACCESSORIES ---
     'health_pendant': {
         name: 'Vitality Amulet', category: 'ACCESSORY', id: 'health_pendant',
         desc: 'Increases max health. (+50 HP)',
@@ -196,7 +196,7 @@ const CRAFTING_RECIPES = {
         result: { id: 'titan_gauntlets', stats: { atk: 30, def: 20 }, slot: 'gloves' }
     },
 
-    // --- ACCESSORIES & CLOTHING ---
+ // --- ACCESSORIES & CLOTHING ---
     'silk_cloak': {
         name: 'Silk Cloak', category: 'CLOTHING', id: 'silk_cloak',
         desc: 'Lightweight and elegant. (+30 SPD, +15 LUCK)',
@@ -222,7 +222,7 @@ const CRAFTING_RECIPES = {
         result: { id: 'wind_boots', stats: { spd: 50 }, slot: 'boots' }
     },
 
-    // --- ENGINEERING / BOMBS ---
+ // --- ENGINEERING / BOMBS ---
     'fire_bomb': {
         name: 'Fire Bomb', category: 'ENGINEERING', id: 'fire_bomb',
         desc: 'Deals 150 fire damage to all enemies.',
@@ -250,7 +250,7 @@ const CRAFTING_RECIPES = {
 
 
 
-    // --- MATERIAL CONVERSION ---
+ // --- MATERIAL CONVERSION ---
     'refined_steel_conv': {
         name: 'Refined Steel', category: 'CRAFT', id: 'refined_steel',
         desc: 'Refine 3 iron shards into a steel bar.',
@@ -282,10 +282,10 @@ const CRAFTING_RECIPES = {
         result: { id: 'legendary_shard' }
     },
 
-    // --- DRAGON KEY REPAIR ---
-    // 💡 Dragon Keys are consumed on dungeon entry. This recipe lets
-    // players craft a new key from dragon materials instead of buying
-    // from the shop every time. Makes dragon farming sustainable.
+ // --- DRAGON KEY REPAIR ---
+ // Dragon Keys are consumed on dungeon entry. This recipe lets
+ // players craft a new key from dragon materials instead of buying
+ // from the shop every time. Makes dragon farming sustainable.
     'dragon_key_repair': {
         name: 'Dragon Hunter Key', category: 'CRAFT', id: 'dragon_key',
         desc: 'Forge a new Dragon Hunter Key from dragon remains. Reusable alternative to buying from the shop.',
@@ -294,8 +294,8 @@ const CRAFTING_RECIPES = {
         result: { id: 'dragon_key' }
     },
 
-    // --- NEW RARE-MATERIAL CONVERSION (chaos → null → abyssal ladder) ---
-    // Each tier's raw ore can be refined into a workable form for forging.
+ // --- NEW RARE-MATERIAL CONVERSION (chaos → null → abyssal ladder) ---
+ // Each tier's raw ore can be refined into a workable form for forging.
     'chaos_ingot_conv': {
         name: 'Chaos Ingot', category: 'CRAFT', id: 'chaos_ingot',
         desc: 'Smelt 3 chaos ores into a single workable chaos ingot. Volatile process - keep mana crystals on hand to quench.',
@@ -315,8 +315,8 @@ const CRAFTING_RECIPES = {
         result: { id: 'abyssal_core' }
     },
 
-    // --- FORGED EQUIPMENT FROM NEW RARE MATERIALS ---
-    // Tier 1 (S-rank): chaos_blade + chaos_cloak - reqLevel 50, LEGENDARY
+ // --- FORGED EQUIPMENT FROM NEW RARE MATERIALS ---
+ // Tier 1 (S-rank): chaos_blade + chaos_cloak - reqLevel 50, LEGENDARY
     'chaos_blade': {
         name: 'Chaos Blade', category: 'WEAPON', id: 'chaos_blade',
         desc: 'Forge a chaos ingot into a two-handed blade that fractures reality on impact. (+95 ATK, +15 SPD, +10 CRIT)',
@@ -330,7 +330,7 @@ const CRAFTING_RECIPES = {
         result: { id: 'chaos_cloak', stats: { def: 55, hp: 90, spd: 20 }, slot: 'armor' }
     },
 
-    // Tier 2 (SS-rank): null_staff + null_aegis - reqLevel 70, MYTHIC
+ // Tier 2 (SS-rank): null_staff + null_aegis - reqLevel 70, MYTHIC
     'null_staff': {
         name: 'Null Staff', category: 'WEAPON', id: 'null_staff',
         desc: 'Mount a null matrix atop a mythril staff. Spells cast through it simply unmake their targets. (+135 MAG, +35 HP, +15 CRIT)',
@@ -344,7 +344,7 @@ const CRAFTING_RECIPES = {
         result: { id: 'null_aegis', stats: { def: 130, hp: 110, luck: 15 }, slot: 'armor' }
     },
 
-    // Tier 3 (SSS-rank): abyssal_blade + abyssal_crown - reqLevel 90, MYTHIC
+ // Tier 3 (SSS-rank): abyssal_blade + abyssal_crown - reqLevel 90, MYTHIC
     'abyssal_blade': {
         name: 'Abyssal Blade', category: 'WEAPON', id: 'abyssal_blade',
         desc: 'A blade with an abyssal core at its pommel. The edge exists partially outside reality. (+210 ATK, +50 MAG, +20 CRIT)',
@@ -426,10 +426,10 @@ const BREWING_RECIPES = {
         ingredients: { 'obsidian_chunk': 2, 'refined_steel': 5, 'boss_essence': 1 },
         result: { id: 'fortress_potion', usable: true, effect: 'invincibility' }
     },
-    // 💡 DEEP BREWS (cosmology pass 2026-09-19): abyss-tier brewing. Reuse
-    // EXISTING effect ids + EXISTING ingredient ids only - no new mechanics.
-    // Effect values follow the established fraction semantics (see
-    // inventorySystem.useItem: 'heal'/'restore_energy' use fraction of max).
+ // DEEP BREWS (cosmology pass ): abyss-tier brewing. Reuse
+ // EXISTING effect ids + EXISTING ingredient ids only - no new mechanics.
+ // Effect values follow the established fraction semantics (see
+ // inventorySystem.useItem: 'heal'/'restore_energy' use fraction of max).
     'abyssal_tonic': {
         name: 'Abyssal Tonic', id: 'abyssal_tonic', category: 'BREWING',
         desc: 'A deep-pressed tonic that restores all Energy. The color is not from any berry.',
@@ -478,7 +478,7 @@ const COOKING_RECIPES = {
 };
 
 // ==========================================
-// ⛏️ MINING LOCATIONS
+// MINING LOCATIONS
 // ==========================================
 
 const MINING_LOCATIONS = {
@@ -536,7 +536,7 @@ const MINING_LOCATIONS = {
 };
 
 // ==========================================
-// 🛠️ SYSTEM FUNCTIONS
+// SYSTEM FUNCTIONS
 // ==========================================
 
 function getRecipes() {
@@ -551,14 +551,14 @@ function getRecipeById(id) {
     if (!id) return null;
     const needle = String(id).toLowerCase().trim();
 
-    // 1) Direct key match (handles legacy keys like 'refined_steel_conv',
-    //    'dragon_key_repair', etc. - keeps backward compat).
+ // 1) Direct key match (handles legacy keys like 'refined_steel_conv',
+ // 'dragon_key_repair', etc. - keeps backward compat).
     if (all[needle]) return all[needle];
 
-    // 2) Match by result.id - so users can type the item name they want
-    //    to make: `.g craft refined_steel` finds the `refined_steel_conv`
-    //    recipe whose result.id is 'refined_steel'. This is the most
-    //    intuitive lookup and was previously failing as "Recipe not found."
+ // 2) Match by result.id - so users can type the item name they want
+ // to make: `.g craft refined_steel` finds the `refined_steel_conv`
+ // recipe whose result.id is 'refined_steel'. This is the most
+ // intuitive lookup and was previously failing as "Recipe not found."
     for (const key of Object.keys(all)) {
         const r = all[key];
         if (r && r.result && r.result.id && String(r.result.id).toLowerCase() === needle) {
@@ -566,8 +566,8 @@ function getRecipeById(id) {
         }
     }
 
-    // 3) Match by recipe name (normalized: lowercase, spaces → underscores).
-    //    Lets users type `.g craft refined steel` or `.g craft Refined Steel`.
+ // 3) Match by recipe name (normalized: lowercase, spaces → underscores).
+ // Lets users type `.g craft refined steel` or `.g craft Refined Steel`.
     const normalized = needle.replace(/\s+/g, '_');
     for (const key of Object.keys(all)) {
         const r = all[key];
@@ -579,7 +579,7 @@ function getRecipeById(id) {
     return null;
 }
 
-// 💡 2026-10-17: single source of truth for the Zeni cost of a craft — used by
+// single source of truth for the Zeni cost of a craft - used by
 // performCraft AND the recipe menu (the cost used to be invisible until the
 // craft failed; players with every ingredient saw "it doesn't work").
 // rarity resolution order: recipe.goldCost override → result.rarity → recipe
@@ -597,7 +597,7 @@ function getRecipeGoldCost(recipe) {
     }
     const RARITY_GOLD_COST = {
         'COMMON': 0, 'UNCOMMON': 1000, 'RARE': 5000,
-        'EPIC': 25000, 'LEGENDARY': 100000, 'MYTHIC': 250000, // 💡 Rebalanced 2026-08-17: 500K was 0.1% of community cap per craft.
+        'EPIC': 25000, 'LEGENDARY': 100000, 'MYTHIC': 250000, // Rebalanced 500K was 0.1% of community cap per craft.
     };
     return RARITY_GOLD_COST[rarity] || 0;
 }
@@ -635,16 +635,16 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
     const recipe = check.recipe;
     const resultItem = recipe.result;
 
-    // Enforce Station Type
-    // 💡 FIX 2026-10-17 (owner: "sometimes you have the item to craft but it
-    // doesn't work" + live: Hexub¡ crafted banner_ale/holy_water via .craft with
-    // every ingredient owned and got "requires a **Laboratory**" — "what do they
-    // mean laboratory?"). The MAIN `.craft` path is the universal table: the
-    // menu lists recipes with ✔ ingredient marks, so refusing them at a station
-    // the player has never been told about is pure friction. `.craft` now
-    // crafts ANY recipe; the explicit station menus (.forge/.brew/.cook) keep
-    // their gates (their lists are category-filtered, so a mismatch there is
-    // a real caller bug, not player confusion).
+ // Enforce Station Type
+ // FIX ("sometimes you have the item to craft but it
+ // doesn't work" + live: Hexub¡ crafted banner_ale/holy_water via .craft with
+ // every ingredient owned and got "requires a **Laboratory**" - "what do they
+ // mean laboratory?"). The MAIN `.craft` path is the universal table: the
+ // menu lists recipes with ingredient marks, so refusing them at a station
+ // the player has never been told about is pure friction. `.craft` now
+ // crafts ANY recipe; the explicit station menus (.forge/.brew/.cook) keep
+ // their gates (their lists are category-filtered, so a mismatch there is
+ // a real caller bug, not player confusion).
     const STATION_CATEGORIES = {
         'FORGE': ['WEAPON', 'ARMOR'],
         'BREWING': ['BREWING'],
@@ -661,16 +661,16 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
         return { success: false, message: `❌ This recipe requires a **${stationName}**!` };
     }
 
-    // 💡 BUG FIX: Check for space before removing ingredients
+ // BUG FIX: Check for space before removing ingredients
     if (!inventorySystem.hasInventorySpace(userId, 1, resultItem.id)) {
         return { success: false, message: "❌ Cannot craft: Inventory full!" };
     }
 
-    // 💡 QA FIX: Look up rarity from loot DB if recipe doesn't declare it.
-    // Previously goldCost was ALWAYS 0 because no recipe declares rarity.
-    // 2026-10-17: extracted to getRecipeGoldCost() so the craft MENU can show
-    // the same cost (the hidden Zeni wall was its own "it doesn't work" trap:
-    // menu showed ✔ on every ingredient, craft failed on Zeni with no hint).
+ // QA FIX: Look up rarity from loot DB if recipe doesn't declare it.
+ // Previously goldCost was ALWAYS 0 because no recipe declares rarity.
+ // extracted to getRecipeGoldCost() so the craft MENU can show
+ // the same cost (the hidden Zeni wall was its own "it doesn't work" trap:
+ // menu showed on every ingredient, craft failed on Zeni with no hint).
     const goldCost = getRecipeGoldCost(recipe);
 
     if (goldCost > 0) {
@@ -681,29 +681,29 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
           message: `❌ You need ${goldCost.toLocaleString()} Zeni to craft this (have ${userGold.toLocaleString()}).`,
         };
       }
-      // 💡 QA FIX: check return value - removeMoney returns false if wallet insufficient
+ // QA FIX: check return value - removeMoney returns false if wallet insufficient
       const deductResult = economy.removeMoney(userId, goldCost, `Craft: ${recipe.name}`);
       if (!deductResult) {
         return { success: false, message: '❌ Zeni deduction failed. You may not have enough Zeni.' };
       }
     }
 
-    // 💡 Phase 2: Apply guild RESEARCH craft cost reduction (-10% materials if in a RESEARCH guild)
+ // Phase 2: Apply guild RESEARCH craft cost reduction (-10% materials if in a RESEARCH guild)
     let craftReduction = 0.0;
     try {
       const guildPerks = require('./guildPerks');
       craftReduction = guildPerks.getCraftCostReduction(userId);
     } catch (e) {}
 
-    // 1. Remove ingredients (reduced by RESEARCH perk if applicable)
-    // 💡 QA FIX: capture actually-removed quantities for correct rollback,
-    // AND check removeItem return values to prevent dupe on race condition.
+ // 1. Remove ingredients (reduced by RESEARCH perk if applicable)
+ // QA FIX: capture actually-removed quantities for correct rollback,
+ // AND check removeItem return values to prevent dupe on race condition.
     const removedIngredients = [];
     for (const [ingId, qty] of Object.entries(recipe.ingredients)) {
         const reducedQty = craftReduction > 0 ? Math.max(1, Math.ceil(qty * (1.0 - craftReduction))) : qty;
         const removeResult = inventorySystem.removeItem(userId, ingId, reducedQty);
         if (!removeResult || !removeResult.success) {
-            // 💡 QA FIX: rollback what we already removed + refund Zeni
+ // QA FIX: rollback what we already removed + refund Zeni
             for (const [rid, rq] of removedIngredients) {
                 await inventorySystem.addItem(userId, rid, rq);
             }
@@ -713,9 +713,9 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
         removedIngredients.push([ingId, reducedQty]);
     }
 
-    // 2. Add result
-    // 💡 QA FIX: spread full resultItem so effect/effectValue/duration/boost/
-    // usable/type fields are preserved (was dropping them, breaking rabbit_foot etc.)
+ // 2. Add result
+ // QA FIX: spread full resultItem so effect/effectValue/duration/boost/
+ // usable/type fields are preserved (was dropping them, breaking rabbit_foot etc.)
     const itemData = {
         name: recipe.name,
         ...resultItem,
@@ -727,8 +727,8 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
     const addResult = await inventorySystem.addItem(userId, resultItem.id, 1, itemData);
 
     if (!addResult.success) {
-        // 💡 QA FIX: restore the CORRECT (reduced) quantities, not full qty.
-        // Also refund Zeni (was missing entirely).
+ // QA FIX: restore the CORRECT (reduced) quantities, not full qty.
+ // Also refund Zeni (was missing entirely).
         for (const [ingId, rq] of removedIngredients) {
             await inventorySystem.addItem(userId, ingId, rq);
         }
@@ -736,16 +736,16 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
         return addResult;
     }
 
-    // 💡 GUILD BOARD TRACKING
+ // GUILD BOARD TRACKING
     const guilds = require('./guilds');
     const userGuild = guilds.getUserGuild(userId);
     let guildMsg = "";
     if (userGuild) {
-        guilds.updateBoardProgress(userGuild, 'CRAFT_ITEMS', 1); // 💡 FIX: was 'CRAFT' - mismatched the board target type 'CRAFT_ITEMS', making RESEARCH guild boards uncompletable
+        guilds.updateBoardProgress(userGuild, 'CRAFT_ITEMS', 1); // FIX: was 'CRAFT' - mismatched the board target type 'CRAFT_ITEMS', making RESEARCH guild boards uncompletable
         guildMsg = `\n🧪 *${userGuild}* Research Lab logged your creation! (+1 Craft Progress)`;
     }
 
-    // 💡 Track for rank missions
+ // Track for rank missions
     try {
         economy.trackMissionStat(userId, 'itemsCrafted', 1);
     } catch (e) {}
@@ -753,11 +753,11 @@ async function performCraft(userId, recipeId, requiredStation = 'CRAFT') {
     const typeLabel = recipe.category === 'COOKING' ? 'COOKING' : (recipe.category === 'BREWING' ? 'BREWING' : 'CRAFT');
     const goldCostMsg = goldCost > 0 ? `\n💸 Zeni cost: ${goldCost.toLocaleString()}` : '';
 
-    // 💡 LORE DROP (lore_drop_system.md §2/§3, 8% on a high-frequency surface):
-    // category follows the recipe family - BREWING/COOKING -> brewing pool,
-    // WEAPON/ARMOR (forge family) -> blacksmith pool, everything else ->
-    // crafting pool. Carried OUT-OF-BAND on result.loreDrop - the handler
-    // sends it as its own message box (owner ruling 2026-09-20).
+ // LORE DROP (lore_drop_system.md §2/§3, 8% on a high-frequency surface):
+ // category follows the recipe family - BREWING/COOKING -> brewing pool,
+ // WEAPON/ARMOR (forge family) -> blacksmith pool, everything else ->
+ // crafting pool. Carried OUT-OF-BAND on result.loreDrop - the handler
+ // sends it as its own message box (owner ruling ).
     let craftLoreDrop = null;
     try {
       const loreDrops = require('./loreDrops');
@@ -779,24 +779,24 @@ async function dismantleItem(userId, itemId) {
     const inventory = inventorySystem.getInventory(userId);
     if (!inventory[itemId]) return { success: false, message: "Item not found in inventory." };
 
-    // 💡 QA FIX: snapshot a deep copy of itemData BEFORE removeItem mutates it.
-    // Previously itemData was a reference to inventory[itemId], and removeItem
-    // would set quantity=0 and delete the key - then the rollback would restore
-    // the item with quantity: 0 (permanently destroyed).
+ // QA FIX: snapshot a deep copy of itemData BEFORE removeItem mutates it.
+ // Previously itemData was a reference to inventory[itemId], and removeItem
+ // would set quantity=0 and delete the key - then the rollback would restore
+ // the item with quantity: 0 (permanently destroyed).
     const itemSnapshot = { ...inventory[itemId] };
     delete itemSnapshot.quantity; // let addItem set quantity: 1
     const recipe = Object.values(CRAFTING_RECIPES).find(r => r.result.id === itemId);
 
     if (!recipe) return { success: false, message: "This item cannot be dismantled." };
 
-    // Calculate returned materials (40% of each ingredient, min 1).
+ // Calculate returned materials (40% of each ingredient, min 1).
     const returned = {};
     for (const [ingId, qty] of Object.entries(recipe.ingredients)) {
         const amount = Math.max(1, Math.floor(qty * 0.4));
         returned[ingId] = amount;
     }
 
-    // Count how many NEW slots we'll actually need.
+ // Count how many NEW slots we'll actually need.
     let newSlotsNeeded = 0;
     for (const [ingId, qty] of Object.entries(returned)) {
         const ingInfo = lootSystem.getItemInfo(ingId);
@@ -804,9 +804,9 @@ async function dismantleItem(userId, itemId) {
         if (inventory[ingId]) continue;
         newSlotsNeeded++;
     }
-    // 💡 QA FIX: freesSlot check was wrong - !inventory[itemId]?.quantity is
-    // false for quantity: 1 (the most common case). Should check if the item
-    // will be fully consumed (current quantity <= 1).
+ // QA FIX: freesSlot check was wrong - !inventory[itemId]?.quantity is
+ // false for quantity: 1 (the most common case). Should check if the item
+ // will be fully consumed (current quantity <= 1).
     const removedItemInfo = lootSystem.getItemInfo(itemId);
     const currentQty = (typeof inventory[itemId] === 'number')
         ? inventory[itemId]
@@ -817,32 +817,31 @@ async function dismantleItem(userId, itemId) {
         return { success: false, message: "❌ Not enough inventory space to store recovered materials!" };
     }
 
-    // Remove item first
+ // Remove item first
     const removeResult = inventorySystem.removeItem(userId, itemId, 1);
     if (!removeResult.success) {
         return { success: false, message: `❌ Failed to dismantle: ${removeResult.message}` };
     }
 
-    // Return materials. If any addItem fails, roll back the removal.
     const addedSoFar = [];
     for (const [id, qty] of Object.entries(returned)) {
         const addResult = await inventorySystem.addItem(userId, id, qty);
         if (!addResult.success) {
-            // Rollback: remove what we added, restore the original item
+ // Rollback: remove what we added, restore the original item
             for (const [addedId, addedQty] of addedSoFar) {
                 inventorySystem.removeItem(userId, addedId, addedQty);
             }
-            // 💡 QA FIX: use itemSnapshot (clean copy) instead of itemData (mutated)
+ // QA FIX: use itemSnapshot (clean copy) instead of itemData (mutated)
             await inventorySystem.addItem(userId, itemId, 1, itemSnapshot);
             return { success: false, message: `❌ Failed to store recovered materials: ${addResult.message}` };
         }
         addedSoFar.push([id, qty]);
     }
 
-    // 💡 FIX 2026-08-31: `itemData` doesn't exist in dismantleItem (renamed to
-    // itemSnapshot in an earlier QA fix) - every successful dismantle threw
-    // ReferenceError AFTER the item was destroyed and materials granted,
-    // showing the user an error for a dismantle that actually worked.
+ // FIX `itemData` doesn't exist in dismantleItem (renamed to
+ // itemSnapshot in an earlier QA fix) - every successful dismantle threw
+ // ReferenceError AFTER the item was destroyed and materials granted,
+ // showing the user an error for a dismantle that actually worked.
     let msg = `♻️ *DISMANTLED: ${itemSnapshot?.name || itemId}*\n\nRecovered materials:\n`;
     for (const [id, qty] of Object.entries(returned)) {
         msg += `- ${qty}x ${lootSystem.getItemInfo(id).name}\n`;
@@ -4282,9 +4281,9 @@ Object.assign(CRAFTING_RECIPES, {
     }
 });
 
-// ========================================== 
-// 📤 EXPORTS
-// ========================================== 
+// ==========================================
+// EXPORTS
+// ==========================================
 
 module.exports = {
     getRecipes,

@@ -1,87 +1,83 @@
-// ═══════════════════════════════════════════════════════════════════════════
-//  SUMMON SPECIES MIGRATION SCRIPT
-// ═══════════════════════════════════════════════════════════════════════════
-//
+// ===========================================================================
+// SUMMON SPECIES MIGRATION SCRIPT
+// ===========================================================================
 // PURPOSE:
-//   The summon registry was cleaned up (commit 2db5d0a8) from 26+ species down
-//   to 17. Users who had summons under the old (stale) species names still have
-//   those stale names in their Summon documents. This causes:
-//     - Codex doesn't show their summons (iterates live registry only)
-//     - Sprites don't render (Go service fallback maps to wrong sprite)
-//     - Stats/skills are mismatched (old archetype/element/baseStats)
-//
-//   This script scans all Summon documents, finds ones with stale species,
-//   remaps them to the closest live species, and updates:
-//     species, archetype, element, rarity, baseStats, echoId
-//     (resets trialCompleted, chosenSkillPath, unlockedSkillNodes)
-//     (preserves level, xp, loyalty, nickname, lineage)
-//
+// The summon registry was cleaned up (commit 2db5d0a8) from 26+ species down
+// to 17. Users who had summons under the old (stale) species names still have
+// those stale names in their Summon documents. This causes:
+// - Codex doesn't show their summons (iterates live registry only)
+// - Sprites don't render (Go service fallback maps to wrong sprite)
+// - Stats/skills are mismatched (old archetype/element/baseStats)
+// This script scans all Summon documents, finds ones with stale species,
+// remaps them to the closest live species, and updates:
+// species, archetype, element, rarity, baseStats, echoId
+// (resets trialCompleted, chosenSkillPath, unlockedSkillNodes)
+// (preserves level, xp, loyalty, nickname, lineage)
 // SAFETY:
-//   - Backs up affected Summon docs to JSON BEFORE any write
-//   - DRY-RUN mode by default: prints what would change, writes nothing
-//   - LIVE mode requires explicit --live flag
-//   - Bulk writes in chunks of 100
-//
+// - Backs up affected Summon docs to JSON BEFORE any write
+// - DRY-RUN mode by default: prints what would change, writes nothing
+// - LIVE mode requires explicit --live flag
+// - Bulk writes in chunks of 100
 // USAGE:
-//   MONGO_URI="mongodb+srv://..." \
-//     node scripts/migrate_stale_summons.js              # dry run
-//   MONGO_URI="mongodb+srv://..." \
-//     node scripts/migrate_stale_summons.js --live       # apply
-// ═══════════════════════════════════════════════════════════════════════════
+// MONGO_URI="mongodb+srv://..." \
+// node scripts/migrate_stale_summons.js # dry run
+// MONGO_URI="mongodb+srv://..." \
+// node scripts/migrate_stale_summons.js --live # apply
+// ===========================================================================
 
 const fs = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
 
-// ─── Stale → Live species mapping ─────────────────────────────────────────
+// --- Stale → Live species mapping -----------------------------------------
 // Based on thematic similarity + element/archetype match + Go sprite fallback
 const SPECIES_MIGRATION_MAP = {
-  // Undead (Necromancer) → ghost
+ // Undead (Necromancer) → ghost
   skeleton:          'ghost',
   skeleton_knight:   'ghost',
   lich_minion:       'ghost',
 
-  // Demon (Warlock) → bat / giant
+ // Demon (Warlock) → bat / giant
   imp:               'bat',
   void_walker:       'giant',
 
-  // Elemental (Elementalist) → dragon / yeti / reptile
+ // Elemental (Elementalist) → dragon / yeti / reptile
   flame_elemental:   'dragon',
   frost_elemental:   'yeti',
   storm_elemental:   'reptile',
 
-  // Beast (Druid) → snake / boar
+ // Beast (Druid) → snake / boar
   wolf:              'snake',
   bear:              'boar',
 
-  // Construct (Artificer) → ship sprites
+ // Construct (Artificer) → ship sprites
   turret_mk1:        'ship_fighter',
   cannon_turret:     'ship_cruiser',
 
-  // Dragon (Dragon Lord) → dragon
+ // Dragon (Dragon Lord) → dragon
   wyrmling:          'dragon',
   juvenile_dragon:   'dragon',
 
-  // Starter base forms → giant / dragon / ghost / mushroom
+ // Starter base forms → giant / dragon / ghost / mushroom
   stoneguard:        'giant',
   emberdrake:        'dragon',
   mistwisp:          'ghost',
   bloompixie:        'mushroom',
 
-  // Starter tier-2 evos
+ // Starter tier-2 evos
   iron_sentinel:     'giant',
   flare_wyrm:        'dragon',
   frost_spectre:     'ghost',
   blossom_sylph:     'mushroom',
 
-  // Starter tier-3 evos
+ // Starter tier-3 evos
   mountain_titan:    'giant',
   infernal_dragon:   'dragon',
   abyssal_phantom:   'ghost',
   world_tree_spirit: 'mushroom',
 };
 
-// ─── Main ─────────────────────────────────────────────────────────────────
+// --- Main -----------------------------------------------------------------
 
 async function main() {
   const isLive = process.argv.includes('--live');
@@ -105,7 +101,7 @@ async function main() {
   const registry = require('../core/rpg/summonRegistry');
   const summonSystem = require('../core/rpg/summonSystem');
 
-  // Find all summons with stale species
+ // Find all summons with stale species
   const staleSpeciesKeys = Object.keys(SPECIES_MIGRATION_MAP);
   console.log(`Scanning for summons with stale species (${staleSpeciesKeys.length} keys)...`);
   console.log(`  Keys: ${staleSpeciesKeys.join(', ')}\n`);
@@ -122,7 +118,7 @@ async function main() {
     return;
   }
 
-  // Group by old species for summary
+ // Group by old species for summary
   const byOldSpecies = {};
   for (const s of staleSummons) {
     byOldSpecies[s.species] = (byOldSpecies[s.species] || 0) + 1;
@@ -133,7 +129,7 @@ async function main() {
   }
   console.log('');
 
-  // Backup
+ // Backup
   const backupDir = path.join(__dirname, '..', 'backups');
   if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
   const backupFile = path.join(backupDir, `summons_stale_backup_${Date.now()}.json`);
@@ -148,7 +144,7 @@ async function main() {
     return;
   }
 
-  // LIVE: apply migrations
+ // LIVE: apply migrations
   console.log('🔴 Applying migrations...\n');
 
   const bulkOps = [];
@@ -163,7 +159,7 @@ async function main() {
       continue;
     }
 
-    // Build the updated summon object
+ // Build the updated summon object
     const updatedFields = {
       species: newSpeciesKey,
       archetype: newSpecies.archetype,
@@ -175,15 +171,14 @@ async function main() {
       unlockedSkillNodes: [], // reset unlocked nodes
     };
 
-    // Recompute baseStats using applyLevelGrowth logic
-    // We need to set species first, then call applyLevelGrowth
+ // Recompute baseStats using applyLevelGrowth logic
     const tempSummon = {
       ...summon,
       species: newSpeciesKey,
       rarity: newSpecies.rarity,
       level: summon.level || 1,
     };
-    // Use the summonSystem's applyLevelGrowth to get correct baseStats
+ // Use the summonSystem's applyLevelGrowth to get correct baseStats
     try {
       summonSystem.applyLevelGrowth(tempSummon, tempSummon.level);
       updatedFields.baseStats = tempSummon.baseStats;
@@ -208,7 +203,7 @@ async function main() {
     }
   }
 
-  // Write remaining
+ // Write remaining
   if (bulkOps.length > 0) {
     console.log(`  Writing final batch of ${bulkOps.length}...`);
     await Summon.bulkWrite(bulkOps);

@@ -1,10 +1,9 @@
 // ============================================
-// 🛡️ MOD TERMINAL DATA - rebuilt 2026-09-19
+// MOD TERMINAL DATA - rebuilt
 // Single source of truth for the mod menu.
 // Mirrors the regular menu UX: main grid ->
 // category drill-down -> command explain mode.
-//
-// ⚠️ ACCURACY CONTRACT (2026-09-19 rebuild):
+// ACCURACY CONTRACT (rebuild):
 // Every `usage` below is the REAL invocation as the
 // bot dispatches it - verified against engine.js /
 // adminConsole.js / cardSystem.js dispatch sites by
@@ -12,26 +11,24 @@
 // unless its dispatch exists, and do NOT invent a
 // `mod ` prefix: most commands run standalone, only
 // the GM console tools run under `.j mod <sub>`.
-//
 // Fields per command:
-//   cmd     - lookup key for explain mode (multiword OK)
-//   usage   - real invocation WITHOUT prefix, args terse
-//   desc    - one short line
-//   console - true = runs via `.j mod <sub>` (adminConsole)
-//   eg      - optional full example (shown in explain mode)
-//
+// cmd - lookup key for explain mode (multiword OK)
+// usage - real invocation WITHOUT prefix, args terse
+// desc - one short line
+// console - true = runs via `.j mod <sub>` (adminConsole)
+// eg - optional full example (shown in explain mode)
 // tier = minimum role to SEE the category:
-//   'owner' : bot owner only
-//   'gmod'  : owner + global mods
-//   'rpg'   : owner + global mods + RPG mods
-//   'card'  : owner + global mods + card mods
-//   'any'   : all mods (group admins included)
+// 'owner' : bot owner only
+// 'gmod' : owner + global mods
+// 'rpg' : owner + global mods + RPG mods
+// 'card' : owner + global mods + card mods
+// 'any' : all mods (group admins included)
 // ============================================
 
 const MOD_MENU = {
   RPG: {
-    // 💡 2026-10-03 owner: mod menu uses singular simple word names -
-    // no ampersands, no grouped labels like "RPG Tools"/"Group Tools".
+ // mod menu uses singular simple word names -
+ // no ampersands, no grouped labels like "RPG Tools"/"Group Tools".
     name: "RPG",
     emoji: "🧬",
     tier: "rpg",
@@ -118,7 +115,6 @@ const MOD_MENU = {
       { cmd: "cardmod", usage: "cardmod add/del/list @user", desc: "Manage card mods (owner only)." },
     ],
   },
-
 
   SANDBOX: {
     name: "Sandbox",
@@ -313,7 +309,6 @@ for (const [key, cat] of Object.entries(MOD_MENU)) {
 // Resolve a standalone (non-console) command from partial args.
 // Tries 3-word, then 2-word, then 1-word prefixes - so
 // ["eshop","deck","approve","5"] and ["rank","toggleperm"] both hit.
-// Returns the entry or null. Used by the mod terminal to redirect
 // `.j mod spawn ...` style runs to their real standalone form.
 function findStandalone(args) {
   if (!args || args.length === 0) return null;
@@ -326,7 +321,7 @@ function findStandalone(args) {
   return null;
 }
 
-// 💡 MOD TIPS: one randomly chosen each time the terminal opens.
+// MOD TIPS: one randomly chosen each time the terminal opens.
 // Every tip shows the REAL invocation - same accuracy contract
 // as the menu itself.
 const MOD_TIPS = [
@@ -349,8 +344,8 @@ const MOD_TIPS = [
   `Bug reports: \`{p} bug\` to file, \`{p} issues\` to review, \`{p} organizeissues\` to tidy with Groq.`,
   `\`{p} testmode on\` locks the RPG for everyone except testers and mods.`,
   `\`{p} mod <command>\` with no extra args explains that command.`,
-  // 💡 2026-10-11: mod tips moved OUT of the regular menu (owner: players
-  // were seeing moderator tips like cards on/off + glock). These now live here.
+ // mod tips moved OUT of the regular menu (players
+ // were seeing moderator tips like cards on/off + glock). These now live here.
   `5 warnings = auto-kick. Wipe a slate with \`{p} resetwarn @user\`.`,
   `\`{p} glock rank <level>\` rank-locks the chat; \`{p} gunlock\` frees it.`,
   `\`{p} cards on\` / \`{p} cards off\` toggles spawns for this group only.`,

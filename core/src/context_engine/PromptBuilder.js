@@ -71,7 +71,7 @@ For each extraction:
      * Build the batch extraction prompt
      */
     buildPrompt(conversationStr, tasks) {
-        // Detailed trigger list for the AI to focus on
+ // Detailed trigger list for the AI to focus on
         const targetSummary = tasks.map(t => {
             const types = t.triggerTypes.map(tr => `${tr.type} (${tr.confidence.toFixed(2)})`).join(', ');
             return `- ${t.message.username} (${t.message.userId}) at ${t.message.timestamp.toLocaleTimeString()}: ${types}\n  "${t.message.content}"`;

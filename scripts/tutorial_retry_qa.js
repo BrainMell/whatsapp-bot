@@ -1,4 +1,4 @@
-// QA: tutorial retry_solo fix + `tutorial start <track>` parse fix (2026-10-12)
+// QA: tutorial retry_solo fix + `tutorial start <track>` parse fix
 // Stub economy/inventory/guildAdventure, drive the real state machine.
 const path = require('path');
 const R = '/home/ubuntu/whatsapp-bot/core/rpg';
@@ -37,7 +37,7 @@ let fail = 0;
 const ok = (cond, label) => { console.log((cond ? 'PASS' : 'FAIL') + ' - ' + label); if (!cond) fail++; };
 
 (async () => {
-    // 1) basics begin → char → auto solo quest start (stubbed to FAIL) → retry_solo
+ // 1) basics begin → char → auto solo quest start (stubbed to FAIL) → retry_solo
     await tutorial.begin(sock, CHAT, JID1, '.', '');
     sends.length = 0;
     await tutorial.notify(JID1, 'char', { sock, chatId: CHAT, prefix: '.' });
@@ -46,7 +46,7 @@ const ok = (cond, label) => { console.log((cond ? 'PASS' : 'FAIL') + ' - ' + lab
     ok(sends.some((t) => t.includes('training grounds are busy')), 'failed start → busy message + retry_solo');
     ok(questCalls === 1, 'startTutorialQuest called once (failed)');
 
-    // 2) THE FIX: retry must actually re-open the training quest
+ // 2) THE FIX: retry must actually re-open the training quest
     sends.length = 0;
     const r = await tutorial.handleDM(sock, JID1, CHAT, 'retry', null, { prefix: '.' });
     await sleep(400);
@@ -55,7 +55,7 @@ const ok = (cond, label) => { console.log((cond ? 'PASS' : 'FAIL') + ' - ' + lab
     ok(questCalls === 2, 'FIX: retry re-runs startTutorialQuest (was a dead notify(inventory))');
     ok(sends.some((t) => t.includes('slime wobbles')), 'FIX: solo_fight instruction sent after successful retry');
 
-    // 3) `tutorial start <track>` parse (was: unknown track → list spam)
+ // 3) `tutorial start <track>` parse (was: unknown track → list spam)
     sends.length = 0;
     await tutorial.handleDM(sock, JID2, CHAT, 'tutorial start combat', null, { prefix: '.' });
     await sleep(400);

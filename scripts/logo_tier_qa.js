@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * logo_tier_qa.js — QA for the logo recognizability tiers (owner 2026-10-10:
+ * logo_tier_qa.js - QA for the logo recognizability tiers (owner 2026-10-10:
  * "Group the logos into the easy medium and hard, with which is more likely
  * to be known"). Run on the box:  node scripts/logo_tier_qa.js
  *
- * A. dataset integrity  — every brand tiered, counts consistent, household
+ * A. dataset integrity  - every brand tiered, counts consistent, household
  *                         names can never be below easy.
- * B. quizMedia pool     — tier buckets built + logoTierInfo() agrees.
- * C. live selection     — build real logo questions at session difficulty
+ * B. quizMedia pool     - tier buckets built + logoTierInfo() agrees.
+ * C. live selection     - build real logo questions at session difficulty
  *                         easy + hard: labels valid, tier mix honors the
  *                         session bias, round ramps easy -> medium -> hard.
  */
@@ -18,8 +18,8 @@ const quizMedia = require(path.join(ROOT, "core", "games", "quizMedia"));
 
 let pass = 0, fail = 0;
 const ok = (cond, label, extra = "") => {
-  if (cond) { pass++; console.log(`  PASS  ${label}${extra ? " — " + extra : ""}`); }
-  else { fail++; console.log(`  FAIL  ${label}${extra ? " — " + extra : ""}`); }
+  if (cond) { pass++; console.log(`  PASS  ${label}${extra ? " - " + extra : ""}`); }
+  else { fail++; console.log(`  FAIL  ${label}${extra ? " - " + extra : ""}`); }
 };
 const RANK = { easy: 0, medium: 1, hard: 2 };
 const norm = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");

@@ -1,18 +1,15 @@
-// ═══════════════════════════════════════════════════════════════════════════
-// 🎛️ GM ADMIN CONSOLE - RPG Moderation Toolkit
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// GM ADMIN CONSOLE - RPG Moderation Toolkit
+// ===========================================================================
 // Two distinct features:
-//
 // 1. MAIN-ACCOUNT CLASS SWITCH (.g modclass <name>)
-//    Lightweight - lets RPG Mods switch their own class freely for testing.
-//    Everything else about their character stays the same.
-//
+// Lightweight - lets RPG Mods switch their own class freely for testing.
+// Everything else about their character stays the same.
 // 2. ADMIN ACCOUNT (.g admin <subcommand>)
-//    Full GM console for moderating players and testing content.
-//    Direct actions on any player's account + sandbox tools.
-//
+// Full GM console for moderating players and testing content.
+// Direct actions on any player's account + sandbox tools.
 // Permission gate: isOwner || isGlobalMod || isRpgMod
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 
 const economy = require('../rpg/economy');
 const progression = require('../rpg/progression');
@@ -21,14 +18,14 @@ const inventorySystem = require('../rpg/inventorySystem');
 const lootSystem = require('../rpg/lootSystem');
 const skillTree = require('../rpg/skillTree');
 
-// ─── HELPER: resolve class by name or ID ───────────────────────────────────
+// --- HELPER: resolve class by name or ID -----------------------------------
 function resolveClass(query) {
     if (!query) return null;
     const q = query.toUpperCase().trim();
-    // Direct ID match
+ // Direct ID match
     const direct = classSystem.getClassById(q);
     if (direct) return direct;
-    // Name match (case-insensitive)
+ // Name match (case-insensitive)
     const all = classSystem.getAllClasses();
     for (const [id, cls] of Object.entries(all)) {
         if (cls.name.toUpperCase() === q || cls.name.toUpperCase().includes(q)) {
@@ -38,7 +35,7 @@ function resolveClass(query) {
     return null;
 }
 
-// ─── HELPER: resolve skill by name or ID ───────────────────────────────────
+// --- HELPER: resolve skill by name or ID -----------------------------------
 function resolveSkill(query) {
     if (!query) return null;
     const q = query.toLowerCase().trim();
@@ -57,21 +54,21 @@ function resolveSkill(query) {
     return null;
 }
 
-// ─── HELPER: resolve item by name or ID ────────────────────────────────────
+// --- HELPER: resolve item by name or ID ------------------------------------
 function resolveItem(query) {
     if (!query) return null;
     const q = query.toLowerCase().replace(/_/g, ' ').trim();
-    // Try direct ID
+ // Try direct ID
     const direct = lootSystem.getItemInfo(query);
     if (direct && direct.name) return { id: query, ...direct };
-    // Search by name
+ // Search by name
     const ITEM_DB = lootSystem.ITEM_DATABASE || {};
     for (const [id, item] of Object.entries(ITEM_DB)) {
         if (item.name && item.name.toLowerCase().replace(/_/g, ' ') === q) {
             return { id, ...item };
         }
     }
-    // Partial match
+ // Partial match
     for (const [id, item] of Object.entries(ITEM_DB)) {
         if (item.name && item.name.toLowerCase().includes(q)) {
             return { id, ...item };
@@ -80,34 +77,34 @@ function resolveItem(query) {
     return null;
 }
 
-// ─── HELPER: resolve player JID from mention/reply/self ───────────────────
-// 💡 FIX: WhatsApp doesn't let you @mention yourself. So if no mention is
+// --- HELPER: resolve player JID from mention/reply/self -------------------
+// FIX: WhatsApp doesn't let you @mention yourself. So if no mention is
 // provided, we check:
-//   1. Is there a replied message? Use the sender of that message.
-//   2. No reply? Default to the mod running the command (self-target).
+// 1. Is there a replied message? Use the sender of that message.
+// 2. No reply? Default to the mod running the command (self-target).
 // This means:
-//   .g admin setlevel 50            → targets yourself (senderJid)
-//   .g admin setlevel 50 (replying) → targets the replied message's sender
-//   .g admin setlevel @friend 50    → targets @friend
+// .g admin setlevel 50 → targets yourself (senderJid)
+// .g admin setlevel 50 (replying) → targets the replied message's sender
+// .g admin setlevel @friend 50 → targets @friend
 function resolveTargetJid(getMentionOrReply, m, senderJid) {
-    // 1. Try @mention first
+ // 1. Try @mention first
     let target = getMentionOrReply(m);
     if (target) return target;
 
-    // 2. Try replied message's sender
+ // 2. Try replied message's sender
     const quotedCtx = m?.message?.extendedTextMessage?.contextInfo;
     if (quotedCtx?.participant) {
         const { jidNormalizedUser } = require('@whiskeysockets/baileys');
         return jidNormalizedUser(quotedCtx.participant);
     }
 
-    // 3. Default to self (the mod running the command)
+ // 3. Default to self (the mod running the command)
     return senderJid;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // 1. MAIN-ACCOUNT CLASS SWITCH
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 
 async function handleModClass(sock, chatId, senderJid, args, BOT_MARKER, prefix) {
     const query = args.join(' ').trim();
@@ -134,16 +131,16 @@ async function handleModClass(sock, chatId, senderJid, args, BOT_MARKER, prefix)
     const oldClass = economy.getUserClass(senderJid);
     const oldClassName = oldClass ? `${oldClass.icon} ${oldClass.name}` : 'None';
 
-    // Switch class - bypass all evolution requirements.
-    // 💡 FIX 2026-10-03 (owner class-change report): modclass used to grant
-    // +20 skill points on EVERY call, so repeated switches farmed infinite
-    // points, and it never touched the class_change_ticket flow. Now:
-    // - no free skill points (mods have `mod giveskillpoints` for that)
-    // - the full max-level unlock only happens the FIRST time a class is
-    //   taken (tracked in user.modclassHistory) - re-taking a class keeps
-    //   the skills already unlocked
-    // - a class_change_ticket in the inventory is consumed if present, so
-    //   the item and the mod path share one lifecycle.
+ // Switch class - bypass all evolution requirements.
+ // FIX (owner class-change report): modclass used to grant
+ // +20 skill points on EVERY call, so repeated switches farmed infinite
+ // points, and it never touched the class_change_ticket flow. Now:
+ // - no free skill points (mods have `mod giveskillpoints` for that)
+ // - the full max-level unlock only happens the FIRST time a class is
+ // taken (tracked in user.modclassHistory) - re-taking a class keeps
+ // the skills already unlocked
+ // - a class_change_ticket in the inventory is consumed if present, so
+ // the item and the mod path share one lifecycle.
     user.class = targetClass.id;
     economy.scheduleSave(senderJid);
 
@@ -152,7 +149,7 @@ async function handleModClass(sock, chatId, senderJid, args, BOT_MARKER, prefix)
       if (!Array.isArray(user.modclassHistory)) user.modclassHistory = [];
       user.modclassHistory.push(targetClass.id);
     }
-    // Consume a class_change_ticket if the player is holding one.
+ // Consume a class_change_ticket if the player is holding one.
     let ticketConsumed = false;
     try {
       const inv = inventorySystem.getInventory ? inventorySystem.getInventory(senderJid) : null;
@@ -162,10 +159,10 @@ async function handleModClass(sock, chatId, senderJid, args, BOT_MARKER, prefix)
       }
     } catch (e) { /* non-fatal */ }
 
-    // 💡 MOD CLASS UNLOCK: auto-grant ALL skills from the new class's tree
-    // at max level on the FIRST time taking this class. Mods are testing -
-    // they shouldn't have to grind skills to test a class. Re-taking a
-    // class keeps the skills already unlocked (no re-grant, no freebies).
+ // MOD CLASS UNLOCK: auto-grant ALL skills from the new class's tree
+ // at max level on the FIRST time taking this class. Mods are testing -
+ // they shouldn't have to grind skills to test a class. Re-taking a
+ // class keeps the skills already unlocked (no re-grant, no freebies).
     let unlockedCount = 0;
     if (firstTimeTaking) {
         try {
@@ -196,11 +193,11 @@ async function handleModClass(sock, chatId, senderJid, args, BOT_MARKER, prefix)
     });
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // 2. ADMIN CONSOLE - Direct Actions
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 
-// 💡 TICKET #b4f7bd (2026-09-21): robust numeric parsing for every numeric
+//: robust numeric parsing for every numeric
 // admin command (givezeni, givepoints, setwallet, setlevel, setstat,
 // sandbox amounts...). parseInt used to read "1,000" as 1 and "100k" as 100,
 // and amounts copy-pasted from WhatsApp linkified text can carry invisible
@@ -223,10 +220,10 @@ function parseAdminNumber(raw) {
 async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix, getMentionOrReply) {
     const sub = args[0]?.toLowerCase();
 
-    // 💡 LIVE MESSAGE EDITING: send a message, then edit it in-place as
-    // actions complete. Baileys supports this via { edit: messageKey }.
-    // Usage: const msgKey = await sendLive("Processing..."); then
-    //        await editLive(msgKey, "Done! Result: ...");
+ // LIVE MESSAGE EDITING: send a message, then edit it in-place as
+ // actions complete. Baileys supports this via { edit: messageKey }.
+ // Usage: const msgKey = await sendLive("Processing..."); then
+ // await editLive(msgKey, "Done! Result: ...");
     async function sendLive(text) {
         const sent = await sock.sendMessage(chatId, { text: BOT_MARKER + text });
         return sent?.key || null;
@@ -236,30 +233,29 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         try {
             await sock.sendMessage(chatId, { text: BOT_MARKER + text, edit: key });
         } catch (e) {
-            // Edit failed (old message, permissions, etc.) - send new message
+ // Edit failed (old message, permissions, etc.) - send new message
             try { await sock.sendMessage(chatId, { text: BOT_MARKER + text }); } catch (e2) {}
         }
     }
 
-    // 💡 HELPER: parse admin args. When there's an @mention, it's the first
-    // arg. When there's no mention (self-target), the first arg IS the value.
-    // 💡 NUMERIC-ARG FIX 2026-09-20 (owner: commands only work when the number
-    // is clickable like a contact): the old filter SILENTLY DROPPED every
-    // 10+ digit argument, which broke real use in both directions:
-    //   • ".j admin givezeni 251453323092189 200" (bare number = target):
-    //     the number was swallowed, remaining=[200], and the command paid
-    //     the MOD 200 - only a clickable @mention ever reached the player.
-    //   • Large legitimate values ("setwallet 10000000000") were eaten and
-    //     the command answered with its usage line.
-    // New contract:
-    //   - @mention or reply -> target (unchanged).
-    //   - FIRST arg phone/JID-like AND more args follow -> TARGET attempt:
-    //     resolve through economy (LID/phone variants included). Found ->
-    //     that player; not found -> CLEAR error (never a silent self-give,
-    //     never a trillion-Zeni amount).
-    //   - A number in ANY OTHER position is a plain VALUE and is NEVER
-    //     stripped: "givezeni 1234567890" = self +1,234,567,890.
-    // Returns null (after sending the error) on an unresolvable target.
+ // HELPER: parse admin args. When there's an @mention, it's the first
+ // arg. When there's no mention (self-target), the first arg IS the value.
+ // NUMERIC-ARG FIX (commands only work when the number
+ // is clickable like a contact): the old filter SILENTLY DROPPED every
+ // 10+ digit argument, which broke real use in both directions:
+ // • ".j admin givezeni 251453323092189 200" (bare number = target):
+ // the number was swallowed, remaining=[200], and the command paid
+ // the MOD 200 - only a clickable @mention ever reached the player.
+ // • Large legitimate values ("setwallet 10000000000") were eaten and
+ // the command answered with its usage line.
+ // New contract:
+ // - @mention or reply -> target (unchanged).
+ // - FIRST arg phone/JID-like AND more args follow -> TARGET attempt:
+ // resolve through economy (LID/phone variants included). Found ->
+ // that player; not found -> CLEAR error (never a silent self-give,
+ // never a trillion-Zeni amount).
+ // - A number in ANY OTHER position is a plain VALUE and is NEVER
+ // stripped: "givezeni 1234567890" = self +1,234,567,890.
     async function parseAdminArgs(getMentionOrReply, m, senderJid, args) {
         const hasExplicitCtx = !!getMentionOrReply(m) ||
             !!m?.message?.extendedTextMessage?.contextInfo?.participant;
@@ -278,8 +274,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                     const remaining = rest.filter((a) => !a.includes('@'));
                     return { target: resolved, remaining, isSelfTarget: false };
                 }
-                // They clearly meant to target that number - fail LOUDLY
-                // instead of silently paying/gifting themselves.
+ // They clearly meant to target that number - fail LOUDLY
+ // instead of silently paying/gifting themselves.
                 await sock.sendMessage(chatId, {
                     text: BOT_MARKER +
                         `❌ No registered player found for *${first}*.` +
@@ -289,15 +285,15 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // Strip leftover mention tokens (@...) - keep every bare number.
+ // Strip leftover mention tokens (@...) - keep every bare number.
         const remaining = rest.filter((a) => !a.includes('@'));
         const isSelfTarget = target === senderJid && !hasExplicitCtx;
         return { target, remaining, isSelfTarget };
     }
 
-    // Resolve a bare phone/LID number to a registered player account.
-    // economy.getUser resolves LID↔phone variants internally, so probing
-    // both domain spellings is enough to find the canonical account.
+ // Resolve a bare phone/LID number to a registered player account.
+ // economy.getUser resolves LID↔phone variants internally, so probing
+ // both domain spellings is enough to find the canonical account.
     function resolveNumberTarget(raw) {
         const digits = String(raw).replace(/^\+/, '').split('@')[0].split(':')[0];
         if (!/^\d{9,20}$/.test(digits)) return null;
@@ -310,7 +306,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         return null;
     }
 
-    // No subcommand - show detailed help
+ // No subcommand - show detailed help
     if (!sub || sub === 'help') {
         return await sock.sendMessage(chatId, {
             text: BOT_MARKER + `🎛️ *MOD CONSOLE - FULL GUIDE*\n\n` +
@@ -457,7 +453,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         });
     }
 
-    // ── SET LEVEL ──────────────────────────────────────────────────────────
+ // -- SET LEVEL ----------------------------------------------------------
     if (sub === 'setlevel') {
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
@@ -473,11 +469,11 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         user.progression = user.progression || {};
         user.progression.level = level;
         user.progression.xp = xpForLevel;
-        // 💡 TICKET #b4f78f (2026-09-21): the grant rate was 2/level while the
-        // normal level-up path awards 5/level + milestone bonuses - setlevel
-        // silently UNDER-granted stat points vs the same levels earned through
-        // play. Use the exact same formula (single source of truth in
-        // progression.getStatPointsForRange).
+ //: the grant rate was 2/level while the
+ // normal level-up path awards 5/level + milestone bonuses - setlevel
+ // silently UNDER-granted stat points vs the same levels earned through
+ // play. Use the exact same formula (single source of truth in
+ // progression.getStatPointsForRange).
         const __statPtsDelta = progression.getStatPointsForRange(oldLevel, level);
         user.progression.statPoints = (user.progression.statPoints || 0) + __statPtsDelta;
         economy.scheduleSave(target);
@@ -487,7 +483,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         });
     }
 
-    // ── SET STAT ───────────────────────────────────────────────────────────
+ // -- SET STAT -----------------------------------------------------------
     if (sub === 'setstat') {
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
@@ -504,12 +500,12 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         user.progression.allocatedStats = user.progression.allocatedStats || {};
         const oldValue = user.progression.allocatedStats[statName] || 0;
         user.progression.allocatedStats[statName] = value;
-        // 💡 TICKET #b4f78f (2026-09-21): allocatedStatPoints is the refund
-        // LEDGER that resetStats/.j respec read - setstat used to write
-        // allocatedStats ONLY, so a later respec refunded the wrong number of
-        // points for the stat the admin touched. Keep the ledger in sync with
-        // the tier-1 equivalent (conservative: never refunds more than the
-        // base conversion rate implies).
+ //: allocatedStatPoints is the refund
+ // LEDGER that resetStats/.j respec read - setstat used to write
+ // allocatedStats ONLY, so a later respec refunded the wrong number of
+ // points for the stat the admin touched. Keep the ledger in sync with
+ // the tier-1 equivalent (conservative: never refunds more than the
+ // base conversion rate implies).
         user.progression.allocatedStatPoints = user.progression.allocatedStatPoints || {};
         const __baseVals = { hp: 15, atk: 3, def: 2, mag: 3, spd: 2, luck: 2, crit: 1 };
         user.progression.allocatedStatPoints[statName] = Math.max(0, Math.round(value / (__baseVals[statName] || 3)));
@@ -520,7 +516,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         });
     }
 
-    // ── SET WALLET ─────────────────────────────────────────────────────────
+ // -- SET WALLET ---------------------------------------------------------
     if (sub === 'setwallet') {
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
@@ -540,9 +536,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         });
     }
 
-    // ── SMART GIVE (PHASE 7 FIX 2026-08-29) ──────────────────────────────────
-    // Auto-detects: if query matches a summon species → givesummon.
-    // If query matches a rune type → giverune. Otherwise → giveitem.
+ // -- SMART GIVE ----------------------------------
+ // Auto-detects: if query matches a summon species → givesummon.
+ // If query matches a rune type → giverune. Otherwise → giveitem.
     if (sub === 'give' || sub === 'additem') {
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
@@ -554,7 +550,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const extra1 = remaining[1] || '';
         const extra2 = remaining[2] || '';
 
-        // 1. Try summon species
+ // 1. Try summon species
         let summonSystem, registry;
         try {
             summonSystem = require('../rpg/summonSystem');
@@ -580,7 +576,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // 2. Try rune type
+ // 2. Try rune type
         let runeSystem;
         try { runeSystem = require('../rpg/runeSystem'); } catch (e) {}
         if (runeSystem && runeSystem.RUNE_TYPES[query.toUpperCase()]) {
@@ -601,14 +597,14 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // 3. Fall through to inventory item
+ // 3. Fall through to inventory item
         const item = resolveItem(query);
         if (!item) {
             return await sock.sendMessage(chatId, {
                 text: BOT_MARKER + `❌ \`${query}\` is not a summon species, rune type, or inventory item.\n\nUse \`${prefix} summon codex\` to see summon species, or \`${prefix} rune types\` for rune types.`
             });
         }
-        // Block special RPG objects (same as giveitem)
+ // Block special RPG objects (same as giveitem)
         const SPECIAL_RPG_OBJECTS = new Set([
             'summon', 'summons', 'rune', 'runes', 'card', 'cards',
             'class', 'classes', 'skill', 'skills', 'guild', 'guilds'
@@ -616,7 +612,6 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (SPECIAL_RPG_OBJECTS.has(item.id.toLowerCase())) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Cannot give \`${item.id}\` - use the dedicated command (forceevolve / giveskill).` });
         }
-        // Parse quantity
         let qty = 1;
         const q = parseInt(extra1);
         if (!isNaN(q) && q > 0) qty = q;
@@ -629,13 +624,13 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         });
     }
 
-    // ── GIVE ITEM ──────────────────────────────────────────────────────────
+ // -- GIVE ITEM ----------------------------------------------------------
     if (sub === 'giveitem') {
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
         const { target, remaining } = _parsed;
         const itemName = remaining.join(' ').trim();
-        // Try to parse "itemname qty" from the remaining args
+ // Try to parse "itemname qty" from the remaining args
         const parts = itemName.split(/\s+/);
         let qty = 1;
         const lastPart = parseInt(parts[parts.length - 1]);
@@ -651,7 +646,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (!item) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Item "${itemQuery}" not found. Try the item ID.` });
         }
-        // 💡 PHASE 7 2026-08-29: Block "special RPG objects" that aren't inventory items.
+ // PHASE 7 Block "special RPG objects" that aren't inventory items.
         const SPECIAL_RPG_OBJECTS = new Set([
             'summon', 'summons', 'rune', 'runes', 'card', 'cards',
             'class', 'classes', 'skill', 'skills', 'guild', 'guilds'
@@ -670,7 +665,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         });
     }
 
-    // ── GIVE SUMMON (PHASE 7 2026-08-29) ─────────────────────────────────────
+ // -- GIVE SUMMON -------------------------------------
     if (sub === 'givesummon') {
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
@@ -703,7 +698,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         }
     }
 
-    // ── GIVE RUNE (PHASE 7 2026-08-29) ───────────────────────────────────────
+ // -- GIVE RUNE ---------------------------------------
     if (sub === 'giverune') {
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
@@ -737,7 +732,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         }
     }
 
-    // ── TAKE ITEM ──────────────────────────────────────────────────────────
+ // -- TAKE ITEM ----------------------------------------------------------
     if (sub === 'takeitem') {
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
@@ -767,7 +762,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         });
     }
 
-    // ── GIVE SKILL ─────────────────────────────────────────────────────────
+ // -- GIVE SKILL ---------------------------------------------------------
     if (sub === 'giveskill') {
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
@@ -800,7 +795,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         });
     }
 
-    // ── REVOKE SKILL ───────────────────────────────────────────────────────
+ // -- REVOKE SKILL -------------------------------------------------------
     if (sub === 'revokeskill') {
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
@@ -827,7 +822,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         });
     }
 
-    // ── RESET PLAYER ───────────────────────────────────────────────────────
+ // -- RESET PLAYER -------------------------------------------------------
     if (sub === 'resetplayer') {
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
@@ -837,14 +832,14 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         }
         const user = economy.getUser(target);
         if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ User not found.' });
-        // Reset stats
+ // Reset stats
         if (user.progression) {
             user.progression.allocatedStats = { hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0 };
             user.progression.allocatedStatPoints = { hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0 };
             const level = user.progression.level || 1;
             user.progression.statPoints = level * 2;
         }
-        // Reset skills
+ // Reset skills
         user.skills = {};
         economy.scheduleSave(target);
         return await sock.sendMessage(chatId, {
@@ -853,7 +848,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         });
     }
 
-    // ── FORCE EVOLVE ───────────────────────────────────────────────────────
+ // -- FORCE EVOLVE -------------------------------------------------------
     if (sub === 'forceevolve') {
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
@@ -878,7 +873,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         });
     }
 
-    // ── GIVE STAT POINTS ───────────────────────────────────────────────────
+ // -- GIVE STAT POINTS ---------------------------------------------------
     if (sub === 'givepoints') {
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
@@ -899,7 +894,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         });
     }
 
-    // ── GIVE ZENI ──────────────────────────────────────────────────────────
+ // -- GIVE ZENI ----------------------------------------------------------
     if (sub === 'givezeni') {
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
@@ -919,7 +914,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         });
     }
 
-    // ── SET RANK ───────────────────────────────────────────────────────────
+ // -- SET RANK -----------------------------------------------------------
     if (sub === 'setrank') {
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
@@ -940,7 +935,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         });
     }
 
-    // ── UNSTICK (clear stuck combat state) ─────────────────────────────────
+ // -- UNSTICK (clear stuck combat state) ---------------------------------
     if (sub === 'unstick') {
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
@@ -952,7 +947,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const chatIdState = chatId;
         const soloKey = `${chatIdState}_${target}`;
         let cleared = 0;
-        // Clear solo state
+ // Clear solo state
         if (guildAdventure.getGameState(soloKey)) {
             const state = guildAdventure.getGameState(soloKey);
             state.inCombat = false;
@@ -961,7 +956,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             if (state.pendingActions) delete state.pendingActions[target];
             cleared++;
         }
-        // Clear group state
+ // Clear group state
         if (guildAdventure.getGameState(chatIdState)) {
             const state = guildAdventure.getGameState(chatIdState);
             if (state.pendingActions) delete state.pendingActions[target];
@@ -974,7 +969,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         });
     }
 
-    // ── INSPECT (full character inspection) ────────────────────────────────
+ // -- INSPECT (full character inspection) --------------------------------
     if (sub === 'inspect') {
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
@@ -1028,7 +1023,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         });
     }
 
-    // ── DISABLE SKILL ──────────────────────────────────────────────────────
+ // -- DISABLE SKILL ------------------------------------------------------
     if (sub === 'disableskill') {
         const skillName = args.slice(1).join(' ').trim();
         if (!skillName) {
@@ -1038,7 +1033,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (!skill) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Skill "${skillName}" not found.` });
         }
-        // Find and disable in skillTree
+ // Find and disable in skillTree
         const SK = skillTree.SKILL_TREES || skillTree;
         if (SK[skill.classId]?.trees) {
             for (const treeData of Object.values(SK[skill.classId].trees)) {
@@ -1053,7 +1048,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Could not find skill in tree to disable.` });
     }
 
-    // ── ENABLE SKILL ───────────────────────────────────────────────────────
+ // -- ENABLE SKILL -------------------------------------------------------
     if (sub === 'enableskill') {
         const skillName = args.slice(1).join(' ').trim();
         if (!skillName) {
@@ -1077,17 +1072,17 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Could not find skill in tree.` });
     }
 
-    // ── CREATE SKILL (template) ────────────────────────────────────────────
+ // -- CREATE SKILL (template) --------------------------------------------
     if (sub === 'createskill') {
         const template = `📝 *SKILL CREATOR*\n\nReply to this message with the filled-in template:\n\n\`\`\`\nName: <skill name>\nIcon: <emoji>\nClass: <class name or ID>\nTree: <tree name e.g. FIRE>\nTier: <1-4>\nLevelReq: <required level>\nMaxLevel: <1-5>\nCost: <energy cost>\nCooldown: <turns>\nDamageType: <PHYSICAL|MAGICAL|TRUE>\nTargeting: <SINGLE|AOE|AOE_LARGE|ALL_ENEMIES|SELF|TEAM>\nDamageMult: <multiplier e.g. 2.5>\nDescription: <short description>\n\`\`\``;
         return await sock.sendMessage(chatId, { text: BOT_MARKER + template });
     }
 
-    // ── CREATE CLASS (template) ────────────────────────────────────────────
+ // -- CREATE CLASS (template) --------------------------------------------
     if (sub === 'createclass') {
-        // 💡 TICKET #b4fbef (2026-09-21): Sprite field added - mods can pick
-        // the class's sprite at creation time. Values are file names from
-        // core/rpgasset/characters (clean/ copies preferred automatically).
+ //: Sprite field added - mods can pick
+ // the class's sprite at creation time. Values are file names from
+ // core/rpgasset/characters (clean/ copies preferred automatically).
         const spriteNames = (() => {
             try {
                 const fs = require('fs');
@@ -1105,32 +1100,31 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         return await sock.sendMessage(chatId, { text: BOT_MARKER + template });
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // ── ENEMY EDITOR (Item #12 - deeper admin console integration) ─────────
-    // ═══════════════════════════════════════════════════════════════════════
-    // Lets GMs inspect and edit boss/enemy stats at runtime. Changes apply
-    // to the in-memory BOSS_ENCOUNTERS registry (classEncounters.js), so
-    // they take effect immediately for all subsequent encounters. They are
-    // NOT persisted to MongoDB - a restart reverts them. This is by design:
-    // the editor is for live-tuning and testing, not permanent overrides.
-    // Permanent changes should go in the source file.
-    //
-    // Subcommands:
-    //   admin enemy list [pool]            - list all bosses (or one pool)
-    //   admin enemy info <bossId>          - show full boss stat block
-    //   admin enemy setstat <bossId> <stat> <value> - edit one stat
-    //   admin enemy sethp <bossId> <value> - shortcut for HP
-    //   admin enemy setatk <bossId> <value> - shortcut for ATK
-    //   admin enemy setxp <bossId> <value> - set XP reward
-    //   admin enemy setgold <bossId> <min> <max> - set gold reward range
-    //   admin enemy reset                  - reset all edits (reload from source)
+ // =======================================================================
+ // -- ENEMY EDITOR (Item #12 - deeper admin console integration) ---------
+ // =======================================================================
+ // Lets GMs inspect and edit boss/enemy stats at runtime. Changes apply
+ // to the in-memory BOSS_ENCOUNTERS registry (classEncounters.js), so
+ // they take effect immediately for all subsequent encounters. They are
+ // NOT persisted to MongoDB - a restart reverts them. This is by design:
+ // the editor is for live-tuning and testing, not permanent overrides.
+ // Permanent changes should go in the source file.
+ // Subcommands:
+ // admin enemy list [pool] - list all bosses (or one pool)
+ // admin enemy info <bossId> - show full boss stat block
+ // admin enemy setstat <bossId> <stat> <value> - edit one stat
+ // admin enemy sethp <bossId> <value> - shortcut for HP
+ // admin enemy setatk <bossId> <value> - shortcut for ATK
+ // admin enemy setxp <bossId> <value> - set XP reward
+ // admin enemy setgold <bossId> <min> <max> - set gold reward range
+ // admin enemy reset - reset all edits (reload from source)
     if (sub === 'enemy') {
         const classEncounters = require('../rpg/classEncounters');
         const enemySub = (args[1] || '').toLowerCase();
         const bossId = args[2]?.toUpperCase();
         const { BOSS_ENCOUNTERS } = classEncounters;
 
-        // ── enemy list [pool] ──
+ // -- enemy list [pool] --
         if (!enemySub || enemySub === 'list') {
             const poolFilter = (args[1] || '').toUpperCase();
             let msg = `👹 *BOSS REGISTRY*\n\n`;
@@ -1150,9 +1144,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
         }
 
-        // ── enemy reset ──
+ // -- enemy reset --
         if (enemySub === 'reset') {
-            // Force-reload the module from source
+ // Force-reload the module from source
             try {
                 delete require.cache[require.resolve('../rpg/classEncounters')];
                 return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ *ENEMY EDITS RESET*\n\nAll boss stats reloaded from source. Runtime edits discarded.` });
@@ -1161,7 +1155,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── enemy info <bossId> ──
+ // -- enemy info <bossId> --
         if (enemySub === 'info') {
             if (!bossId) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod enemy info <bossId>\`` });
             let boss = null;
@@ -1184,7 +1178,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
         }
 
-        // ── enemy setstat <bossId> <stat> <value> ──
+ // -- enemy setstat <bossId> <stat> <value> --
         if (enemySub === 'setstat') {
             const statName = (args[3] || '').toLowerCase();
             const value = parseInt(args[4]);
@@ -1208,7 +1202,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             });
         }
 
-        // ── enemy sethp <bossId> <value> ── (shortcut)
+ // -- enemy sethp <bossId> <value> -- (shortcut)
         if (enemySub === 'sethp' || enemySub === 'setatk' || enemySub === 'setdef') {
             const statMap = { sethp: 'hp', setatk: 'atk', setdef: 'def' };
             const statName = statMap[enemySub];
@@ -1229,7 +1223,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             });
         }
 
-        // ── enemy setxp <bossId> <value> ──
+ // -- enemy setxp <bossId> <value> --
         if (enemySub === 'setxp') {
             const value = parseInt(args[3]);
             if (!bossId || isNaN(value)) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod enemy setxp <bossId> <value>\`` });
@@ -1246,7 +1240,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             });
         }
 
-        // ── enemy setgold <bossId> <min> <max> ──
+ // -- enemy setgold <bossId> <min> <max> --
         if (enemySub === 'setgold') {
             const min = parseInt(args[3]);
             const max = parseInt(args[4]);
@@ -1267,20 +1261,20 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown enemy subcommand: \`${enemySub}\`\nUse \`${prefix} mod enemy list\` to see bosses.` });
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // ── ENEMY SKILL VIEWER/EDITOR ─────────────────────────────────────────
-    // .g admin enemyskills [archetype]
-    // .g admin enemyskill info <archetype> <skillId>
-    // .g admin enemyskill setcost <archetype> <skillId> <value>
-    // .g admin enemyskill setlevel <archetype> <skillId> <levelReq>
-    // .g admin enemyskill setname <archetype> <skillId> <new name>
-    // .g admin enemyskill reset
-    // ═══════════════════════════════════════════════════════════════════════
+ // =======================================================================
+ // -- ENEMY SKILL VIEWER/EDITOR -----------------------------------------
+ // .g admin enemyskills [archetype]
+ // .g admin enemyskill info <archetype> <skillId>
+ // .g admin enemyskill setcost <archetype> <skillId> <value>
+ // .g admin enemyskill setlevel <archetype> <skillId> <levelReq>
+ // .g admin enemyskill setname <archetype> <skillId> <new name>
+ // .g admin enemyskill reset
+ // =======================================================================
     if (sub === 'enemyskills' || sub === 'enemyskill') {
         const monsterSkills = require('../rpg/monsterSkills');
         const { MONSTER_ARCHETYPES } = monsterSkills;
 
-        // ── enemyskills [archetype] - list all skills ──
+ // -- enemyskills [archetype] - list all skills --
         if (sub === 'enemyskills') {
             const archFilter = (args[1] || '').toUpperCase();
             let msg = `👹 *ENEMY SKILL DATABASE*\n\n`;
@@ -1299,13 +1293,13 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
         }
 
-        // ── enemyskill <subcommand> ──
+ // -- enemyskill <subcommand> --
         const skillSub = (args[1] || '').toLowerCase();
         const archetype = (args[2] || '').toUpperCase();
         const skillId = args[3]?.toLowerCase();
         const arch = MONSTER_ARCHETYPES[archetype];
 
-        // ── enemyskill info <arch> <skillId> ──
+ // -- enemyskill info <arch> <skillId> --
         if (skillSub === 'info') {
             if (!archetype || !skillId) {
                 return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod enemyskill info <archetype> <skillId>\`\n\nExample: \`${prefix} mod enemyskill info TANK harden\`` });
@@ -1330,7 +1324,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             return await sock.sendMessage(chatId, { text: BOT_MARKER + msg });
         }
 
-        // ── enemyskill setcost <arch> <skillId> <value> ──
+ // -- enemyskill setcost <arch> <skillId> <value> --
         if (skillSub === 'setcost') {
             const value = parseInt(args[4]);
             if (!arch || !skillId || isNaN(value) || value < 0) {
@@ -1343,7 +1337,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ ${archetype}.${skillId} (${skill.name}): cost ${oldCost} → *${value}*` });
         }
 
-        // ── enemyskill setlevel <arch> <skillId> <level> ──
+ // -- enemyskill setlevel <arch> <skillId> <level> --
         if (skillSub === 'setlevel') {
             const value = parseInt(args[4]);
             if (!arch || !skillId || isNaN(value) || value < 1) {
@@ -1356,7 +1350,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ ${archetype}.${skillId} (${skill.name}): level req ${oldLvl} → *${value}*` });
         }
 
-        // ── enemyskill setname <arch> <skillId> <new name> ──
+ // -- enemyskill setname <arch> <skillId> <new name> --
         if (skillSub === 'setname') {
             const newName = args.slice(4).join(' ');
             if (!arch || !skillId || !newName) {
@@ -1369,7 +1363,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ ${archetype}.${skillId}: name "${oldName}" → *"${newName}"*` });
         }
 
-        // ── enemyskill reset ──
+ // -- enemyskill reset --
         if (skillSub === 'reset') {
             try {
                 delete require.cache[require.resolve('../rpg/monsterSkills')];
@@ -1382,9 +1376,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown enemyskill subcommand. Use \`${prefix} mod enemyskills\` to list all.` });
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // ── SET SKILL POINTS (admin gives RPG skill points to any account) ───
-    // ═══════════════════════════════════════════════════════════════════════
+ // =======================================================================
+ // -- SET SKILL POINTS (admin gives RPG skill points to any account) ---
+ // =======================================================================
     if (sub === 'setskillpoints') {
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
@@ -1404,7 +1398,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         });
     }
 
-    // ── GIVE SKILL POINTS (admin adds RPG skill points) ───────────────────
+ // -- GIVE SKILL POINTS (admin adds RPG skill points) -------------------
     if (sub === 'giveskillpoints') {
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
@@ -1424,12 +1418,12 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         });
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // ── FIGHT ANY ENEMY (mod testing tool) ───────────────────────────────
-    // .g admin fightenemy <bossId|enemyName>
-    // Starts a solo trial fight against a specific boss. Used for testing
-    // enemy stats after editing them with `mod enemy setstat`.
-    // ═══════════════════════════════════════════════════════════════════════
+ // =======================================================================
+ // -- FIGHT ANY ENEMY (mod testing tool) -------------------------------
+ // .g admin fightenemy <bossId|enemyName>
+ // Starts a solo trial fight against a specific boss. Used for testing
+ // enemy stats after editing them with `mod enemy setstat`.
+ // =======================================================================
     if (sub === 'fightenemy') {
         const query = args.slice(1).join(' ').trim();
         if (!query) {
@@ -1442,7 +1436,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             const classEncounters = require('../rpg/classEncounters');
             const guildAdventure = require('../rpg/guildAdventure');
 
-            // Find the boss by ID or name
+ // Find the boss by ID or name
             let bossId = null;
             const { BOSS_ENCOUNTERS } = classEncounters;
             const allBosses = [];
@@ -1456,7 +1450,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                     break;
                 }
             }
-            // Also check bossMechanics registry (lowercase IDs)
+ // Also check bossMechanics registry (lowercase IDs)
             if (!bossId) {
                 try {
                     const bossMechanics = require('../rpg/bossMechanics');
@@ -1475,7 +1469,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Enemy "${query}" not found.\nUse \`${prefix} mod enemy list\` to see all boss IDs.` });
             }
 
-            // Start a TRIAL-mode adventure with this boss
+ // Start a TRIAL-mode adventure with this boss
             const result = await guildAdventure.initAdventure(
                 sock, chatId, null, 'TRIAL', true, null, senderJid, null,
                 {
@@ -1495,31 +1489,30 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // ── ADMIN SANDBOX (Item #11 - isolated test character) ───────────────
-    // ═══════════════════════════════════════════════════════════════════════
-    // Each mod gets ONE sandbox test character stored in a separate MongoDB
-    // collection (adminsandboxes). It has its own wallet, stats, class,
-    // skills, inventory - fully isolated from real player data. Mods can
-    // test combat/dungeons/evolutions/economy without risking real accounts.
-    //
-    // Subcommands:
-    //   admin sandbox                     - show your sandbox status
-    //   admin sandbox reset               - wipe sandbox to level-1 fresh state
-    //   admin sandbox setlevel <1-100>    - set sandbox level (recalcs XP)
-    //   admin sandbox setclass <name>     - set sandbox class (bypasses reqs)
-    //   admin sandbox setrank <F-SSS>     - set sandbox adventurer rank
-    //   admin sandbox setwallet <amount>  - set sandbox wallet
-    //   admin sandbox givezeni <amount>   - add Zeni to sandbox wallet
-    //   admin sandbox setstat <stat> <v>  - set a sandbox stat
-    //   admin sandbox giveitem <item> [n] - add items to sandbox inventory
-    //   admin sandbox giveskill <skill> [lvl] - grant a skill to sandbox
+ // =======================================================================
+ // -- ADMIN SANDBOX (Item #11 - isolated test character) ---------------
+ // =======================================================================
+ // Each mod gets ONE sandbox test character stored in a separate MongoDB
+ // collection (adminsandboxes). It has its own wallet, stats, class,
+ // skills, inventory - fully isolated from real player data. Mods can
+ // test combat/dungeons/evolutions/economy without risking real accounts.
+ // Subcommands:
+ // admin sandbox - show your sandbox status
+ // admin sandbox reset - wipe sandbox to level-1 fresh state
+ // admin sandbox setlevel <1-100> - set sandbox level (recalcs XP)
+ // admin sandbox setclass <name> - set sandbox class (bypasses reqs)
+ // admin sandbox setrank <F-SSS> - set sandbox adventurer rank
+ // admin sandbox setwallet <amount> - set sandbox wallet
+ // admin sandbox givezeni <amount> - add Zeni to sandbox wallet
+ // admin sandbox setstat <stat> <v> - set a sandbox stat
+ // admin sandbox giveitem <item> [n] - add items to sandbox inventory
+ // admin sandbox giveskill <skill> [lvl] - grant a skill to sandbox
     if (sub === 'sandbox') {
         const AdminSandbox = require('../models/AdminSandbox');
         const senderName = m?.pushName || economy.getDisplayName(senderJid);
         const sandboxSub = (args[1] || '').toLowerCase();
 
-        // ── sandbox on - activate sandbox mode ──
+ // -- sandbox on - activate sandbox mode --
         if (sandboxSub === 'on') {
             try {
                 const engine = require('../engine');
@@ -1532,7 +1525,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── sandbox off - deactivate sandbox mode ──
+ // -- sandbox off - deactivate sandbox mode --
         if (sandboxSub === 'off') {
             try {
                 const engine = require('../engine');
@@ -1549,7 +1542,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── sandbox status (no args) - show status ──
+ // -- sandbox status (no args) - show status --
         if (!sandboxSub || sandboxSub === 'status') {
             try {
                 const engine = require('../engine');
@@ -1574,7 +1567,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── sandbox save - save sandbox data to DB without turning off ──
+ // -- sandbox save - save sandbox data to DB without turning off --
         if (sandboxSub === 'save') {
             try {
                 const engine = require('../engine');
@@ -1617,19 +1610,18 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── sandbox reset - wipe to fresh state ──
+ // -- sandbox reset - wipe to fresh state --
         if (sandboxSub === 'reset') {
             try {
-                // If sandbox is currently active, disable first so data is saved
+ // If sandbox is currently active, disable first so data is saved
                 const engine = require('../engine');
                 const isActive = engine.getSandboxJid(senderJid) !== null;
                 if (isActive) {
                     await engine.disableSandbox(senderJid);
                 }
-                // Ensure it exists first
                 await AdminSandbox.getOrCreate(senderJid, senderName);
                 const sb = await AdminSandbox.reset(senderJid);
-                // If it was active, re-enable with fresh data
+ // If it was active, re-enable with fresh data
                 if (isActive) {
                     await engine.enableSandbox(senderJid, senderName);
                 }
@@ -1641,7 +1633,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── sandbox giveall - grant all enhancement stones + key items ──
+ // -- sandbox giveall - grant all enhancement stones + key items --
         if (sandboxSub === 'giveall') {
             try {
                 const engine = require('../engine');
@@ -1653,11 +1645,11 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 const inventorySystem = require('../rpg/inventorySystem');
                 const lootSystem = require('../rpg/lootSystem');
 
-                // Grant all enhancement stones
+ // Grant all enhancement stones
                 const stones = ['minor_enhancement_stone', 'rare_enhancement_stone', 'legendary_enhancement_stone'];
-                // Grant key items
+ // Grant key items
                 const keyItems = ['dragon_key', 'dragon_key_reusable', 'evolution_stone', 'ascension_stone', 'dragon_seal_ring'];
-                // Grant all equipment from ITEM_DATABASE
+ // Grant all equipment from ITEM_DATABASE
                 const allItems = { ...lootSystem.ITEM_DATABASE };
                 const equipItems = Object.entries(allItems).filter(([id, item]) => item.type === 'EQUIPMENT');
 
@@ -1683,7 +1675,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── sandbox evolve - switch to any class without trial/stones/Zeni ──
+ // -- sandbox evolve - switch to any class without trial/stones/Zeni --
         if (sandboxSub === 'evolve') {
             try {
                 const engine = require('../engine');
@@ -1712,7 +1704,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Sandbox user not found.' });
                 const oldClassName = user.class || 'None';
                 user.class = targetClass.id;
-                // Also unlock all skills for the new class
+ // Also unlock all skills for the new class
                 try {
                     const skillTree = require('../rpg/skillTree');
                     const SK = skillTree.SKILL_TREES || skillTree;
@@ -1735,7 +1727,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── sandbox maxstats - set all stats to max ──
+ // -- sandbox maxstats - set all stats to max --
         if (sandboxSub === 'maxstats') {
             try {
                 const engine = require('../engine');
@@ -1757,7 +1749,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── sandbox setlevel <1-100> ──
+ // -- sandbox setlevel <1-100> --
         if (sandboxSub === 'setlevel') {
             const level = parseInt(args[2]);
             if (!level || level < 1 || level > 100) {
@@ -1784,7 +1776,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── sandbox setclass <name> ──
+ // -- sandbox setclass <name> --
         if (sandboxSub === 'setclass') {
             const className = args[2];
             if (!className) {
@@ -1809,7 +1801,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── sandbox setrank <F-SSS|GOD> ──
+ // -- sandbox setrank <F-SSS|GOD> --
         if (sandboxSub === 'setrank') {
             const rank = (args[2] || '').toUpperCase();
             const validRanks = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'GOD'];
@@ -1825,7 +1817,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── sandbox setwallet <amount> ──
+ // -- sandbox setwallet <amount> --
         if (sandboxSub === 'setwallet') {
             const amount = parseAdminNumber(args[2]);
             if (!Number.isSafeInteger(amount) || amount < 0) {
@@ -1840,7 +1832,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── sandbox givezeni <amount> ──
+ // -- sandbox givezeni <amount> --
         if (sandboxSub === 'givezeni') {
             const amount = parseAdminNumber(args[2]);
             if (!Number.isSafeInteger(amount) || amount <= 0) {
@@ -1856,7 +1848,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── sandbox setstat <stat> <value> ──
+ // -- sandbox setstat <stat> <value> --
         if (sandboxSub === 'setstat') {
             const statName = (args[2] || '').toLowerCase();
             const value = parseInt(args[3]);
@@ -1866,7 +1858,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
             try {
                 await AdminSandbox.getOrCreate(senderJid, senderName);
-                // Use Mongoose nested-path update
+ // Use Mongoose nested-path update
                 const update = {};
                 update[`statBonuses.${statName}`] = value;
                 if (statName === 'hp') {
@@ -1880,7 +1872,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── sandbox giveitem <item> [qty] ──
+ // -- sandbox giveitem <item> [qty] --
         if (sandboxSub === 'giveitem') {
             const itemName = args[2];
             const qty = parseInt(args[3]) || 1;
@@ -1904,7 +1896,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
-        // ── sandbox giveskill <skill> [level] ──
+ // -- sandbox giveskill <skill> [level] --
         if (sandboxSub === 'giveskill') {
             const skillName = args[2];
             const skillLvl = parseInt(args[3]) || 1;
@@ -1931,12 +1923,12 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown sandbox subcommand: \`${sandboxSub}\`\nUse \`${prefix} mod sandbox\` to see status.` });
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // ── SANDBOX GODMODE - combat cheats for testing ──────────────────────
-    // .g admin godmode [on|off]
-    // When on: sandbox user deals 99999 damage per hit and takes 0 damage.
-    // Implemented via a global flag that calculateDamage() checks.
-    // ═══════════════════════════════════════════════════════════════════════
+ // =======================================================================
+ // -- SANDBOX GODMODE - combat cheats for testing ----------------------
+ // .g admin godmode [on|off]
+ // When on: sandbox user deals 99999 damage per hit and takes 0 damage.
+ // Implemented via a global flag that calculateDamage() checks.
+ // =======================================================================
     if (sub === 'godmode') {
         const engine = require('../engine');
         const godSub = (args[1] || '').toLowerCase();
@@ -1956,10 +1948,10 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         return await sock.sendMessage(chatId, { text: BOT_MARKER + `⚡ *GODMODE: ${isActive ? '🟢 ON' : '🔴 OFF'}*\n\n_Toggle: \`${prefix} mod godmode on/off\`_` });
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // ── SANDBOX GIVESKILLSALL - unlock ALL skills from ALL classes ───────
-    // .g admin sandbox giveskillsall
-    // ═══════════════════════════════════════════════════════════════════════
+ // =======================================================================
+ // -- SANDBOX GIVESKILLSALL - unlock ALL skills from ALL classes -------
+ // .g admin sandbox giveskillsall
+ // =======================================================================
     if (sub === 'sandbox' && (args[1] || '').toLowerCase() === 'giveskillsall') {
         try {
             const engine = require('../engine');
@@ -1988,9 +1980,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // ── SANDBOX CLEARINV - clear sandbox inventory ───────────────────────
-    // ═══════════════════════════════════════════════════════════════════════
+ // =======================================================================
+ // -- SANDBOX CLEARINV - clear sandbox inventory -----------------------
+ // =======================================================================
     if (sub === 'sandbox' && (args[1] || '').toLowerCase() === 'clearinv') {
         try {
             const engine = require('../engine');
@@ -2006,9 +1998,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // ── SANDBOX UNEQUIPALL - unequip all equipment ───────────────────────
-    // ═══════════════════════════════════════════════════════════════════════
+ // =======================================================================
+ // -- SANDBOX UNEQUIPALL - unequip all equipment -----------------------
+ // =======================================================================
     if (sub === 'sandbox' && (args[1] || '').toLowerCase() === 'unequipall') {
         try {
             const engine = require('../engine');
@@ -2024,46 +2016,46 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // ── SANDBOX FIGHTBOSS - instantly fight any boss (shortcut) ──────────
-    // .g admin sandbox fightboss <bossId>
-    // ═══════════════════════════════════════════════════════════════════════
+ // =======================================================================
+ // -- SANDBOX FIGHTBOSS - instantly fight any boss (shortcut) ----------
+ // .g admin sandbox fightboss <bossId>
+ // =======================================================================
     if (sub === 'sandbox' && (args[1] || '').toLowerCase() === 'fightboss') {
         const bossQuery = args.slice(2).join(' ').trim();
         if (!bossQuery) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod sandbox fightboss <bossId|name>\`\n\nExample: \`${prefix} mod sandbox fightboss LEVIATHAN\`` });
         }
-        // Delegate to the existing fightenemy command
+ // Delegate to the existing fightenemy command
         args[1] = 'fightenemy';
         args[2] = bossQuery;
         sub = 'fightenemy';
     }
 
-    // Re-check if we redirected to fightenemy from sandbox fightboss
+ // Re-check if we redirected to fightenemy from sandbox fightboss
     if (sub === 'fightenemy') {
-        // Fall through to the existing fightenemy handler above by re-checking
-        // Actually, the fightenemy handler is earlier in the function. We need
-        // to NOT fall through to unknown subcommand. Just return a redirect message.
+ // Fall through to the existing fightenemy handler above by re-checking
+ // Actually, the fightenemy handler is earlier in the function. We need
+ // to NOT fall through to unknown subcommand. Just return a redirect message.
         return await sock.sendMessage(chatId, { text: BOT_MARKER + `💡 Use \`${prefix} mod fightenemy ${args[2] || '<bossId>'}\` to fight a boss.\n\n_Or enable sandbox first with \`${prefix} mod sandbox on\` then use \`${prefix} solo\` to test combat._` });
     }
 
-    // ── UNKNOWN SUBCOMMAND ──────────────────────────────────────────────────
-    // 💡 2026-09-10: pointer now aims at the Mod Terminal (<prefix> mod) -
-    // the single command browser - not the legacy admin console.
+ // -- UNKNOWN SUBCOMMAND --------------------------------------------------
+ // pointer now aims at the Mod Terminal (<prefix> mod) -
+ // the single command browser - not the legacy admin console.
     return await sock.sendMessage(chatId, {
         text: BOT_MARKER + `❌ Unknown command: \`${sub}\`\nUse \`${prefix} mod\` to see all commands.`
     });
 }
 
-// ─── HANDLE SKILL CREATION REPLY ───────────────────────────────────────────
+// --- HANDLE SKILL CREATION REPLY -------------------------------------------
 async function handleSkillCreationReply(sock, chatId, senderJid, replyText, BOT_MARKER, prefix) {
     try {
         const lines = replyText.split('\n');
         const data = {};
         for (const line of lines) {
-            // 💡 FIX (2026-08-16): Was /^(\w+):\s*(.+)$/ which fails on leading
-            // whitespace (WhatsApp adds spaces to reply messages). Now allows
-            // optional leading whitespace and strips code-block backticks.
+ // FIX: Was /^(\w+):\s*(.+)$/ which fails on leading
+ // whitespace (WhatsApp adds spaces to reply messages). Now allows
+ // optional leading whitespace and strips code-block backticks.
             const cleaned = line.replace(/^```/, '').replace(/```$/, '').trim();
             const match = cleaned.match(/^(\w+):\s*(.+)$/);
             if (match) data[match[1]] = match[2].trim();
@@ -2114,7 +2106,7 @@ async function handleSkillCreationReply(sock, chatId, senderJid, replyText, BOT_
         };
 
         SK[targetClass.id].trees[treeName].skills[skillId] = newSkill;
-        // 💡 2026-09-14: persist so mod-created skills survive restarts (was memory-only)
+ // persist so mod-created skills survive restarts (was memory-only)
         await skillTree.saveCustomSkill(targetClass.id, treeName, skillId, newSkill);
 
         return await sock.sendMessage(chatId, {
@@ -2125,8 +2117,8 @@ async function handleSkillCreationReply(sock, chatId, senderJid, replyText, BOT_
     }
 }
 
-// ─── HANDLE CLASS CREATION REPLY ───────────────────────────────────────────
-// 💡 2026-09-14 REWRITE (owner: "investigate the create class mod command"):
+// --- HANDLE CLASS CREATION REPLY -------------------------------------------
+// REWRITE ("investigate the create class mod command"):
 // The old version did `classSystem.getAllClasses()[id] = newClass` - a write
 // into the THROWAWAY spread object that getAllClasses() returns, so created
 // classes evaporated instantly (modclass/classes/evolve never saw them).
@@ -2148,7 +2140,7 @@ async function handleClassCreationReply(sock, chatId, senderJid, replyText, BOT_
         const lines = replyText.split('\n');
         const data = {};
         for (const line of lines) {
-            // 💡 FIX (2026-08-16): Same leading-whitespace + backtick fix as skill creator
+ // FIX: Same leading-whitespace + backtick fix as skill creator
             const cleaned = line.replace(/^```/, '').replace(/```$/, '').trim();
             const match = cleaned.match(/^(\w+):\s*(.+)$/);
             if (match) data[match[1]] = match[2].trim();
@@ -2163,10 +2155,10 @@ async function handleClassCreationReply(sock, chatId, senderJid, replyText, BOT_
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ A class with ID \`${classId}\` already exists. Pick a different name.` });
         }
 
-        // 💡 TICKET #b4fbef (2026-09-21): SPRITE selection - validate against
-        // the actual sprite files on disk (characters/ + characters/clean/)
-        // so a typo degrades to the Apprentice fallback with a clear warning
-        // instead of a silently broken class.
+ //: SPRITE selection - validate against
+ // the actual sprite files on disk (characters/ + characters/clean/)
+ // so a typo degrades to the Apprentice fallback with a clear warning
+ // instead of a silently broken class.
         let spriteWarning = null;
         let chosenSprite = null;
         if (data.Sprite) {
@@ -2190,7 +2182,7 @@ async function handleClassCreationReply(sock, chatId, senderJid, replyText, BOT_
             }
         }
 
-        // ── validated fields ──
+ // -- validated fields --
         const TIERS = ['STARTER', 'EVOLVED', 'ASCENDED'];
         const ROLES = ['TANK', 'DPS', 'MAGE', 'SUPPORT', 'HYBRID'];
         const tier = (data.Tier || 'STARTER').toUpperCase();
@@ -2229,7 +2221,7 @@ async function handleClassCreationReply(sock, chatId, senderJid, replyText, BOT_
                 warnings.push(`EvolvesFrom "${data.EvolvesFrom}" is not a known class - evolve chain NOT wired`);
             } else {
                 newClass.evolvedFrom = parent.id;
-                // optional evolution gate (canEvolve reads requirement.level / .questsCompleted)
+ // optional evolution gate (canEvolve reads requirement.level / .questsCompleted)
                 const reqLevel = parseInt(data.ReqLevel);
                 const reqQuests = parseInt(data.ReqQuests);
                 if (!isNaN(reqLevel) || !isNaN(reqQuests)) {
@@ -2252,10 +2244,10 @@ async function handleClassCreationReply(sock, chatId, senderJid, replyText, BOT_
             };
         }
 
-        // ── register + persist (throws on duplicate - already checked above) ──
+ // -- register + persist (throws on duplicate - already checked above) --
         await classSystem.registerCustomClass(newClass);
 
-        // ── companion skill tree (in-memory + persisted) ──
+ // -- companion skill tree (in-memory + persisted) --
         const SK = skillTree.SKILL_TREES || skillTree;
         let treeEntry = SK[classId];
         if (!treeEntry) {
@@ -2293,6 +2285,6 @@ module.exports = {
     resolveClass,
     resolveSkill,
     resolveItem,
-    // 💡 TICKET #b4f7bd: exported for QA pinning (scripts/qa_ticket_pass.js)
+ // exported for QA pinning (scripts/qa_ticket_pass.js)
     parseAdminNumber,
 };

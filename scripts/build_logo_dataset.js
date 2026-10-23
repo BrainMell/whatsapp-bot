@@ -1,23 +1,20 @@
 // ============================================
-// LOGO DATASET BUILDER (2026-09-28, owner brief §3)
+// LOGO DATASET BUILDER (owner brief §3)
 // ============================================
 // "Search the web for a large, free, up-to-date collection of company logos.
-//  Replace or refill the current ~500-logo dataset. Audit every entry."
-//
-// Source: **Wikidata P154 (logo image)** — structured, community-maintained,
+// Replace or refill the current ~500-logo dataset. Audit every entry."
+// Source: **Wikidata P154 (logo image)** - structured, community-maintained,
 // free, and CURRENT (when a brand rebrands, editors update P154; superseded
 // logos carry an end-time qualifier which we treat as OUTDATED and skip).
-// Matching is by wiki ITEM (wbgetentities sites=enwiki&titles=<article>) —
+// Matching is by wiki ITEM (wbgetentities sites=enwiki&titles=<article>) -
 // authoritative identity, not fuzzy filename search, so "the image actually
 // matches the company being asked about" holds by construction.
-//
-// Wordmark kill-chain (owner: "too many straight up spelt out word versions"):
-//   1. filename words: wordmark|logotype|word mark|lettering|typography -> skip
-//   2. aspect ratio: w/h > 2.6 or < 0.25 -> skip (spelled-out text is wide)
-//   3. pixel gate (imageGate): min 64x40, non-blank, decodable
-//   4. byte floor: <1.5KB -> placeholder
-//
-// Output: data/logoDataset.json  (+ data/logoDataset.report.txt)
+// Wordmark kill-chain ("too many straight up spelt out word versions"):
+// 1. filename words: wordmark|logotype|word mark|lettering|typography -> skip
+// 2. aspect ratio: w/h > 2.6 or < 0.25 -> skip (spelled-out text is wide)
+// 3. pixel gate (imageGate): min 64x40, non-blank, decodable
+// 4. byte floor: <1.5KB -> placeholder
+// Output: data/logoDataset.json (+ data/logoDataset.report.txt)
 // Runtime: quizMedia.js consumes the dataset FIRST, per-brand runtime
 // Wikipedia search stays as the fallback for unresolved brands.
 // ============================================
@@ -135,12 +132,12 @@ async function runPool(items, worker, n = 4) {
   return results;
 }
 
-// ── Stage B fallback: resolve the enwiki ARTICLE's own logo via the
+// -- Stage B fallback: resolve the enwiki ARTICLE's own logo via the
 // pageimages property (many company articles carry the logo as page image).
 // Only accepted when the rendered image passes the SAME gates; a photo of a
 // headquarters or product would usually fail the aspect/blank gates but may
 // occasionally slip - the vision-verify pass on the box double-checks.
-// ── Stage C fallback: offline AUDITED Wikipedia file-namespace search.
+// -- Stage C fallback: offline AUDITED Wikipedia file-namespace search.
 // The runtime heuristic (quizLore.wikipediaLogoImage) becomes a BAKE-TIME
 // decision here: candidates scored with the quizLore rubric, then the winner
 // must pass render + imageGate + aspect gates before it enters the dataset.
@@ -208,7 +205,7 @@ async function enwikiLogoSearch(brand) {
   let bad = results.filter((r) => !r.ok);
   console.log(`stage A (wikidata P154): ${good.length} verified, ${bad.length} rejected`);
 
-  // Stage B: retry no-wikidata-item via search-based entity resolution
+ // Stage B: retry no-wikidata-item via search-based entity resolution
   const noItem = bad.filter((b) => b.reason === "no-wikidata-item");
   bad = bad.filter((b) => b.reason !== "no-wikidata-item");
   if (noItem.length) {
@@ -224,7 +221,7 @@ async function enwikiLogoSearch(brand) {
         const claims = r2.data?.entities?.[id]?.claims || {};
         return auditOne({ ...b, wiki: b.wiki, qidOverride: id }, 0).then(async (res) => {
           if (res.ok) return res;
-          // item resolved but still no logo: try the enwiki file search (stage C inline)
+ // item resolved but still no logo: try the enwiki file search (stage C inline)
           const c = await enwikiLogoSearch(b).catch(() => null);
           if (c) return { ...b, ...c, qid: id, ok: true, reason: "ok(enwiki-search)", source: "enwiki-file-search" };
           return { ...b, reason: `stageC-miss:${res.reason}` };
@@ -236,7 +233,7 @@ async function enwikiLogoSearch(brand) {
     console.log(`stage B done: +${retry.filter((r) => r.ok).length} verified`);
   }
 
-  // Stage C: audited enwiki file-namespace search for the rest
+ // Stage C: audited enwiki file-namespace search for the rest
   if (bad.length) {
     console.log(`stage C: audited enwiki file search for ${bad.length} brands...`);
     const retry = await runPool(bad, async (b) => {

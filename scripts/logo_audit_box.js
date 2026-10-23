@@ -9,12 +9,12 @@ const POOL = require("/home/ubuntu/whatsapp-bot/core/games/quizLogosPool.js");
 
 (async () => {
   fs.mkdirSync("/tmp/logo_audit", { recursive: true });
-  // deterministic sample covering all 14 categories + known-suspect names
+ // deterministic sample covering all 14 categories + known-suspect names
   const suspects = ["Supreme", "Omega", "Mars", "Mango", "Bolt", "IBM", "Paris Saint-Germain", "DreamWorks", "Caterpillar", "CVS", "O2", "Nivea", "Vans", "Seat", "Fiat", "Zomato", "Paramount", "Under Armour", "Apple Pay", "Pringles", "Popeyes", "IPL", "Dallas Cowboys", "NBA"];
   const poolNames = new Set();
   for (const cat of Object.keys(POOL)) { (POOL[cat] || []).forEach((b) => poolNames.add(b.name)); }
   const dsBy = new Map(ds.brands.map((b) => [b.name, b]));
-  // prioritize suspects present in dataset; then fill to 40 with category spread
+ // prioritize suspects present in dataset; then fill to 40 with category spread
   const picks = [];
   const seen = new Set();
   for (const n of suspects) { const b = dsBy.get(n); if (b && !seen.has(b.name)) { picks.push(b); seen.add(b.name); } }

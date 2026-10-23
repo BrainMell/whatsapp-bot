@@ -1,6 +1,6 @@
 // Minimal fake of Box 1's Go image relay for sandbox smoke runs.
 // /health -> ready JSON; any /api/* POST -> tiny valid PNG bytes.
-// Sandbox-only helper — never ships.
+// Sandbox-only helper - never ships.
 const http = require('http');
 
 // 1x1 white PNG

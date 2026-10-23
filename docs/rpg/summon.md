@@ -81,7 +81,7 @@ Defines all 26 valid summon species with their stats, abilities, archetypes, ele
 | `.summon train` | Train summon (daily cooldown) |
 | `.summon forge <id1> <id2>` | Soul forge two summons |
 
-## Recent Changes (2026-08-08)
+## Recent Changes
 - Consolidated deploy to single canonical path (eliminated double-fetch bug)
 - Fixed Main Deck/Backlog membership (canonical `isInMainDeck`/`isInBackground`)
 - Deck size increased from 3 to 5 slots

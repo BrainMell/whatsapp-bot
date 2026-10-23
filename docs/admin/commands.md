@@ -21,7 +21,6 @@ if (targetUser) {
       "",
     )
     .trim();
-  // Remove the target user mention if it exists in the string
   const targetPhone = targetUser.split("@")[0];
   reason = reason
     .replace(new RegExp(`@${targetPhone}`, "g"), "")

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-/* shoob_reg_diff.js — quantify missing regular cards
+/* shoob_reg_diff.js - quantify missing regular cards
  * 1. fetch /sitemap/cards.1.xml (all regular card detail pages)
  * 2. load live cards_data.json, collect mongoIds from regular detailUrls
  * 3. diff -> missing list + per-tier max seq (for id assignment scheme)
@@ -44,7 +44,7 @@ const DB = '/home/ubuntu/whatsapp-bot/core/data/cards_data.json';
   console.log('[3] diffing ...');
   const missing = [];
   for (const id of siteIds) if (!dbReg.has(id)) missing.push(id);
-  // also: tombstones — DB regulars NOT on site
+ // also: tombstones - DB regulars NOT on site
   const extra = [...dbReg.keys()].filter(id => !siteSet.has(id));
   console.log(`    MISSING from DB (on site, not in DB): ${missing.length}`);
   console.log(`    EXTRA in DB (in DB, not on site):     ${extra.length}`);
@@ -53,7 +53,7 @@ const DB = '/home/ubuntu/whatsapp-bot/core/data/cards_data.json';
     JSON.stringify({ generatedAt: new Date().toISOString(), missing, extra: extra.slice(0, 50) }, null, 2));
   console.log('    saved -> scripts/shoob-miner/output/regular_missing_ids.json');
 
-  // sample 3 missing mongoIds for the detail-page test
+ // sample 3 missing mongoIds for the detail-page test
   console.log('[4] probing 3 missing detail pages (SSR check) ...');
   for (const id of missing.slice(0, 3)) {
     const r = await fetch(`https://shoob.gg/cards/info/${id}`, { headers: { 'User-Agent': UA } });

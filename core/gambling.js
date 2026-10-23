@@ -39,7 +39,6 @@ function updateGamblingStats(userId, amount, won, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return;
   
-  // Initialize stats if they don't exist
   if (!user.stats) user.stats = {};
   if (user.stats.totalGambled === undefined) user.stats.totalGambled = 0;
   if (user.stats.gamesWon === undefined) user.stats.gamesWon = 0;
@@ -146,10 +145,10 @@ function coinflip(userId, amount, choice, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
 
-  // Defensive: coerce amount to a finite positive integer. Without this, a
-  // non-numeric `amount` would slip past the `amount < GLOBAL_MIN_BET` check
-  // (NaN < x is always false) and then `user.wallet -= amount` would
-  // produce NaN, permanently corrupting the wallet.
+ // Defensive: coerce amount to a finite positive integer. Without this, a
+ // non-numeric `amount` would slip past the `amount < GLOBAL_MIN_BET` check
+ // (NaN < x is always false) and then `user.wallet -= amount` would
+ // produce NaN, permanently corrupting the wallet.
   const bet = normalizeBet(amount);
   if (bet === null) {
     return { success: false, message: `❌ Invalid bet amount!` };
@@ -255,7 +254,7 @@ function diceRoll(userId, amount, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
 
-  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+ // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
   if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
   amount = _bet;
@@ -275,7 +274,7 @@ function diceRoll(userId, amount, economyModule) {
   let dealerRoll = Math.floor(Math.random() * 6) + 1;
   const ctx = beginGamblingRound(user);
   
-  // --- LUCK FACTOR: 15% chance to reduce dealer's roll ---
+ // --- LUCK FACTOR: 15% chance to reduce dealer's roll ---
   if (Math.random() < 0.15 && dealerRoll > 1) {
     dealerRoll--;
   }
@@ -377,7 +376,7 @@ function slots(userId, amount, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
 
-  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+ // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
   if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
   amount = _bet;
@@ -394,7 +393,7 @@ function slots(userId, amount, economyModule) {
   }
   
   const symbols = ['🍒', '🍋', '🍊', '🍇', '💎', '7️⃣'];
-  // Adjusted weights to make winning harder
+ // Adjusted weights to make winning harder
   const weights = [25, 25, 20, 15, 10, 5];
   
   function getSymbol() {
@@ -568,7 +567,7 @@ function startBlackjack(userId, amount, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
 
-  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+ // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
   if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
   amount = _bet;
@@ -641,7 +640,7 @@ ${profit > 0 ? `🎉 *CONGRATULATIONS!* 🎉\n+${getZENI()}${profit.toLocaleStri
     dealerHand,
     bet: amount,
     roundCtx: ctx,
-    startedAt: Date.now() // 💡 Phase A: TTL for abandoned-game sweep
+    startedAt: Date.now() // Phase A: TTL for abandoned-game sweep
   });
   
   return {
@@ -886,12 +885,12 @@ function roulette(userId, amount, bet, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
 
-  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+ // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
   if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
   amount = _bet;
   
-  // 1. Parse and Validate Bet First!
+ // 1. Parse and Validate Bet First!
   const betLower = bet.toLowerCase();
   let multiplier = 0;
   let betType = '';
@@ -930,7 +929,7 @@ function roulette(userId, amount, bet, economyModule) {
     return { success: false, message: "❌ Invalid bet! Use: red/black/green/even/odd or a number (0-36)" };
   }
 
-  // 2. Standard Bet Limits Checks
+ // 2. Standard Bet Limits Checks
   if (amount < GLOBAL_MIN_BET) {
     return { success: false, message: `❌ Minimum bet is ${getZENI()}${GLOBAL_MIN_BET.toLocaleString()}!` };
   }
@@ -942,7 +941,7 @@ function roulette(userId, amount, bet, economyModule) {
     return { success: false, message: `❌ You only have ${getZENI()}${user.wallet}!` };
   }
 
-  // --- LIMIT CHECK (20 spins / 10 hours) ---
+ // --- LIMIT CHECK (20 spins / 10 hours) ---
   if (!user.gamblingLimits) user.gamblingLimits = {};
   if (!user.gamblingLimits.roulette) user.gamblingLimits.roulette = { count: 0, startTime: 0 };
   
@@ -950,18 +949,17 @@ function roulette(userId, amount, bet, economyModule) {
   const LIMIT_WINDOW = 10 * 60 * 60 * 1000; // 10 hours
   const MAX_SPINS = 20;
   
-  // Initialize start time if new cycle
   if (user.gamblingLimits.roulette.startTime === 0) {
       user.gamblingLimits.roulette.startTime = now;
   }
 
-  // Reset if window passed
+ // Reset if window passed
   if (now - user.gamblingLimits.roulette.startTime > LIMIT_WINDOW) {
     user.gamblingLimits.roulette.count = 0;
     user.gamblingLimits.roulette.startTime = now;
   }
   
-  // Check count
+ // Check count
   if (user.gamblingLimits.roulette.count >= MAX_SPINS) {
     const remainingTime = LIMIT_WINDOW - (now - user.gamblingLimits.roulette.startTime);
     const hours = Math.floor(remainingTime / (1000 * 60 * 60));
@@ -970,11 +968,11 @@ function roulette(userId, amount, bet, economyModule) {
     return { success: false, message: `⏳ *ROULETTE LIMIT REACHED* ⏳\n\nYou've used your ${MAX_SPINS} spins for this cycle.\nCooldown: ${hours}h ${minutes}m.` };
   }
 
-  // Increment usage count ONLY now!
+ // Increment usage count ONLY now!
   user.gamblingLimits.roulette.count++;
   economyModule.saveUser(userId);
   
-  // Deduct bet IMMEDIATELY
+ // Deduct bet IMMEDIATELY
   user.wallet -= amount;
   const ctx = beginGamblingRound(user);
   
@@ -999,7 +997,7 @@ function roulette(userId, amount, bet, economyModule) {
     won = result === num && !maybeForceLoss(ctx);
   }
   
-  // Generate a simulated spin history to wow the user (dynamic UI!)
+ // Generate a simulated spin history to wow the user (dynamic UI!)
   const history = [];
   for (let i = 0; i < 4; i++) {
     const r = Math.floor(Math.random() * 37);
@@ -1076,7 +1074,7 @@ function crash(userId, amount, multiplierStr, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
 
-  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+ // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
   if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
   amount = _bet;
@@ -1107,7 +1105,7 @@ function crash(userId, amount, multiplierStr, economyModule) {
 
   const ctx = beginGamblingRound(user);
 
-  // Generate crash point with realistic house odds
+ // Generate crash point with realistic house odds
   let crashPoint;
   const rand = Math.random();
   if (rand < 0.03) {
@@ -1121,10 +1119,10 @@ function crash(userId, amount, multiplierStr, economyModule) {
   }
   crashPoint = Math.round(crashPoint * 100) / 100;
 
-  // Force loss check if active
+ // Force loss check if active
   const forcedLoss = maybeForceLoss(ctx);
   
-  // Player wins if the crash point is greater than or equal to their target multiplier, and not a forced loss
+ // Player wins if the crash point is greater than or equal to their target multiplier, and not a forced loss
   const won = !forcedLoss && (crashPoint >= targetMultiplier);
 
   const rawPayout = won ? Math.floor(amount * targetMultiplier) : 0;
@@ -1136,7 +1134,7 @@ function crash(userId, amount, multiplierStr, economyModule) {
   }
   const profit = winnings - amount;
 
-  // Apply money transaction
+ // Apply money transaction
   user.wallet = user.wallet - amount + winnings;
 
   if (!user.stats) user.stats = {};
@@ -1230,7 +1228,7 @@ function startMines(userId, amount, mineCount, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first!" };
 
-  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+ // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
   if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
   amount = _bet;
@@ -1257,7 +1255,6 @@ function startMines(userId, amount, mineCount, economyModule) {
   economyModule.logTransaction(userId, "Mines Bet", -amount, user.wallet);
   economyModule.saveUser(userId);
 
-  // Create grid
   const grid = new Array(25).fill(false); // false = safe
   let placed = 0;
   while (placed < mines) {
@@ -1279,7 +1276,7 @@ function startMines(userId, amount, mineCount, economyModule) {
 
   activeMinesGames.set(userId, {
     ...game,
-    startedAt: Date.now() // 💡 Phase A: TTL for abandoned-game sweep
+    startedAt: Date.now() // Phase A: TTL for abandoned-game sweep
   });
 
   const gridVisual = renderMinesGrid(game, false);
@@ -1319,7 +1316,7 @@ function minesPick(userId, cellIndex, economyModule) {
 
   const user = economyModule.getUser(userId);
 
-  // HIT A MINE!
+ // HIT A MINE!
   if (game.grid[idx]) {
     activeMinesGames.delete(userId);
     if (!user.stats) user.stats = {};
@@ -1348,10 +1345,10 @@ ${gridVisual}
     };
   }
 
-  // SAFE!
+ // SAFE!
   game.revealed.push(idx);
   
-  // Calculate new multiplier
+ // Calculate new multiplier
   const n = 25;
   const m = game.mineCount;
   const r = game.revealed.length;
@@ -1453,7 +1450,7 @@ function horseRace(userId, amount, horseNum, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
 
-  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+ // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
   if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
   amount = _bet;
@@ -1550,7 +1547,7 @@ function lottery(userId, amount, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
 
-  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+ // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
   if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
   amount = _bet;
@@ -1645,7 +1642,7 @@ function rps(userId, amount, choice, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
 
-  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+ // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
   if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
   amount = _bet;
@@ -1762,7 +1759,7 @@ function penalty(userId, amount, direction, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
 
-  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+ // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
   if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
   amount = _bet;
@@ -1793,10 +1790,10 @@ function penalty(userId, amount, direction, economyModule) {
 ━━━━━━━━━━━━━━━`;
 
   if (won) {
-    // 💡 FIX: Deduct the bet first, then add the payout. Previously the
-    // bet was never deducted on win - the player only received 0.4x profit
-    // without the original bet being at risk. Now: wallet = wallet - bet + (bet * 1.4)
-    // = wallet + (bet * 0.4). Same net effect, but the accounting is correct.
+ // FIX: Deduct the bet first, then add the payout. Previously the
+ // bet was never deducted on win - the player only received 0.4x profit
+ // without the original bet being at risk. Now: wallet = wallet - bet + (bet * 1.4)
+ // = wallet + (bet * 0.4). Same net effect, but the accounting is correct.
     const rawGain = Math.floor(amount * 0.4);
     const gain = capPayoutByDailyLimit(user, applyEdgeToAmount(rawGain, ctx));
     if (gain <= 0) {
@@ -1817,7 +1814,7 @@ function penalty(userId, amount, direction, economyModule) {
       };
     }
 
-    // Deduct bet, add net profit
+ // Deduct bet, add net profit
     user.wallet -= amount;
     user.wallet += gain + amount; // Return bet + profit
     if (!user.stats) user.stats = {};
@@ -1867,7 +1864,7 @@ function guessNumber(userId, amount, guess, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
 
-  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+ // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
   if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
   amount = _bet;
@@ -1964,7 +1961,7 @@ function higherLower(userId, amount, guess, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: `❌ Register first with \`${botConfig.getPrefix()} register <nickname>\`!` };
 
-  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+ // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
   if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
   amount = _bet;
@@ -1985,18 +1982,18 @@ function higherLower(userId, amount, guess, economyModule) {
   const userGuess = normalizedGuess.startsWith('h') ? 'higher' : 'lower';
   const ctx = beginGamblingRound(user);
   
-  // Generate two numbers between 1-13
+ // Generate two numbers between 1-13
   const firstCard = Math.floor(Math.random() * 13) + 1;
   const secondCard = Math.floor(Math.random() * 13) + 1;
   
-  // Determine result
+ // Determine result
   let actualResult;
   if (secondCard > firstCard) {
     actualResult = 'higher';
   } else if (secondCard < firstCard) {
     actualResult = 'lower';
   } else {
-    // Tie - return bet
+ // Tie - return bet
     economyModule.logTransaction(userId, "Higher/Lower Tie", 0, user.wallet);
     return {
       success: true,
@@ -2101,7 +2098,7 @@ function plinko(userId, amount, risk, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first!" };
 
-  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+ // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
   if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
   amount = _bet;
@@ -2173,13 +2170,13 @@ function plinko(userId, amount, risk, economyModule) {
   economyModule.logTransaction(userId, `Plinko (${r} risk)`, profit, user.wallet);
   economyModule.saveUser(userId);
 
-  // Generate Plinko path staggered pyramid
+ // Generate Plinko path staggered pyramid
   const bucketIdx = tables[r].indexOf(multiplier);
   const steps = [];
   for (let i = 0; i < bucketIdx; i++) steps.push(1);
   for (let i = 0; i < 6 - bucketIdx; i++) steps.push(-1);
 
-  // Shuffle steps
+ // Shuffle steps
   for (let i = steps.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [steps[i], steps[j]] = [steps[j], steps[i]];
@@ -2240,7 +2237,7 @@ function scratchCard(userId, amount, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first!" };
 
-  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+ // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
   if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
   amount = _bet;
@@ -2257,7 +2254,7 @@ function scratchCard(userId, amount, economyModule) {
   const ctx = beginGamblingRound(user);
   economyModule.saveUser(userId);
 
-  // Balanced symbol pool: 6 winners, 14 fillers = 20 total symbols
+ // Balanced symbol pool: 6 winners, 14 fillers = 20 total symbols
   const winningSymbols = ['💎', '7️⃣', '🍀', '🔔', '🍒', '🍋'];
   const fillerSymbols = ['🍎', '🍊', '🍇', '🍉', '🍓', '🥑', '🍌', '🍍', '🥥', '🥭', '🥝', '🌽', '🥕', '🍆'];
   const symbols = [...winningSymbols, ...fillerSymbols];
@@ -2271,7 +2268,7 @@ function scratchCard(userId, amount, economyModule) {
   card.forEach(s => counts[s] = (counts[s] || 0) + 1);
 
   let winner = null;
-  // Only check if a WINNING symbol has 3 or more matches
+ // Only check if a WINNING symbol has 3 or more matches
   for (const s of winningSymbols) {
     if (counts[s] >= 3) {
       winner = s;
@@ -2358,7 +2355,7 @@ function cupGame(userId, amount, choice, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first!" };
 
-  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+ // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
   if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
   amount = _bet;
@@ -2445,7 +2442,7 @@ function wheelOfFortune(userId, amount, economyModule) {
   const user = economyModule.getUser(userId);
   if (!user) return { success: false, message: "❌ Register first!" };
 
-  // Defensive: coerce amount to a finite positive integer (see normalizeBet).
+ // Defensive: coerce amount to a finite positive integer (see normalizeBet).
   const _bet = normalizeBet(amount);
   if (_bet === null) return { success: false, message: "❌ Invalid bet amount!" };
   amount = _bet;
@@ -2530,7 +2527,7 @@ ${outcomeMessage}
   };
 }
 
-// 💡 Phase A (2026-10-04): abandoned interactive games leaked their
+// Phase A: abandoned interactive games leaked their
 // session objects forever (deck + hands + round context per user). The
 // bet is deducted when the game starts, so a session older than 30 min is
 // a walk-away - same outcome as a crash mid-game (bet forfeited).

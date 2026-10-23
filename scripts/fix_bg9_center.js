@@ -24,12 +24,12 @@ const BW2 = 672; // 88..760
   const ctx = c.getContext('2d');
   ctx.drawImage(img, 0, 0);
 
-  // 1. snapshot the stats block
+ // 1. snapshot the stats block
   const block = createCanvas(BW2, BH);
   block.getContext('2d').drawImage(c, BX, BY, BW2, BH, 0, 0, BW2, BH);
 
-  // 2. sample per-row background color from the clean left margin (x 30..86)
-  //    BEFORE any edits, so the fill matches the vertical gradient.
+ // 2. sample per-row background color from the clean left margin (x 30..86)
+ // BEFORE any edits, so the fill matches the vertical gradient.
   const sample = ctx.getImageData(30, BY, 56, BH);
   const rowCol = [];
   for (let y = 0; y < BH; y++) {
@@ -41,21 +41,21 @@ const BW2 = 672; // 88..760
     rowCol.push([Math.round(r / 56), Math.round(g / 56), Math.round(b / 56)]);
   }
 
-  // 3. wipe the whole block region first (removes old art), fill with sampled bg
+ // 3. wipe the whole block region first (removes old art), fill with sampled bg
   for (let y = 0; y < BH; y++) {
     const [r, g, b] = rowCol[y];
     ctx.fillStyle = `rgb(${r},${g},${b})`;
     ctx.fillRect(BX, BY + y, BW2, 1);
   }
 
-  // 4. redraw block shifted left 24px
+ // 4. redraw block shifted left 24px
   ctx.drawImage(block, BX + SHIFT, BY);
 
-  // 5. save
+ // 5. save
   fs.writeFileSync(BG, c.toBuffer('image/png'));
   console.log('bg_9.png rewritten: stats block shifted', SHIFT, 'px');
 
-  // 6. patch layouts.json value anchors
+ // 6. patch layouts.json value anchors
   const L = JSON.parse(fs.readFileSync(LAYOUTS, 'utf8'));
   const s9 = L['9'];
   let patched = 0;

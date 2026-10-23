@@ -14,26 +14,26 @@ module.exports = {
             const chatId = msg.key.remoteJid;
             const sender = msg.key.participant || msg.key.remoteJid;
 
-            // Only work in group chats
+ // Only work in group chats
             if (!chatId.endsWith('@g.us')) return;
 
-            // Get group settings
+ // Get group settings
             const settings = groupSettings.get(chatId);
             if (!settings || !settings.antilink) return;
 
             const violations = [];
             
-            // 🎯 1. DIRECT STATUS MENTION (Baileys specific)
+ // 1. DIRECT STATUS MENTION (Baileys specific)
             if (msg.message.groupStatusMentionMessage) {
                 violations.push('📢 group status mention');
             }
 
-            // 🔍 2. RECURSIVE TEXT & CONTENT EXTRACTION
+ // 2. RECURSIVE TEXT & CONTENT EXTRACTION
             const extractAllText = (obj) => {
                 let found = [];
                 if (!obj) return found;
                 
-                // Common text fields in WhatsApp messages
+ // Common text fields in WhatsApp messages
                 const fields = [
                     'conversation', 'text', 'caption', 'contentText', 'description', 
                     'footerText', 'hydratedContentText', 'hydratedFooterText', 
@@ -46,7 +46,7 @@ module.exports = {
                     }
                 }
                 
-                // Nested structures
+ // Nested structures
                 if (obj.extendedTextMessage) found.push(...extractAllText(obj.extendedTextMessage));
                 if (obj.imageMessage) found.push(...extractAllText(obj.imageMessage));
                 if (obj.videoMessage) found.push(...extractAllText(obj.videoMessage));
@@ -58,10 +58,10 @@ module.exports = {
                 if (obj.viewOnceMessage) found.push(...extractAllText(obj.viewOnceMessage.message));
                 if (obj.viewOnceMessageV2) found.push(...extractAllText(obj.viewOnceMessageV2.message));
                 if (obj.ephemeralMessage) found.push(...extractAllText(obj.ephemeralMessage.message));
-                // 💡 FIX: Add missing message types that can carry captions/text.
-                // Previously audio, sticker, contact, and liveLocation messages
-                // were not scanned - antilink could be bypassed by sending a
-                // link in an audio/sticker caption.
+ // FIX: Add missing message types that can carry captions/text.
+ // Previously audio, sticker, contact, and liveLocation messages
+ // were not scanned - antilink could be bypassed by sending a
+ // link in an audio/sticker caption.
                 if (obj.audioMessage) found.push(...extractAllText(obj.audioMessage));
                 if (obj.stickerMessage) found.push(...extractAllText(obj.stickerMessage));
                 if (obj.contactMessage) found.push(...extractAllText(obj.contactMessage));
@@ -69,7 +69,7 @@ module.exports = {
                 if (obj.liveLocationMessage) found.push(...extractAllText(obj.liveLocationMessage));
                 if (obj.ptvMessage) found.push(...extractAllText(obj.ptvMessage));
                 
-                // Polls
+ // Polls
                 if (obj.pollCreationMessage || obj.pollCreationMessageV2 || obj.pollCreationMessageV3) {
                     const poll = obj.pollCreationMessage || obj.pollCreationMessageV2 || obj.pollCreationMessageV3;
                     found.push(poll.name || '');
@@ -82,7 +82,7 @@ module.exports = {
             const allText = extractAllText(msg.message).join(' ');
             const lowerText = allText.toLowerCase();
 
-            // 🎯 3. STATUS CHECKS (Text & Mentioned JIDs)
+ // 3. STATUS CHECKS (Text & Mentioned JIDs)
             if (lowerText.includes('@status') || lowerText.includes('@broadcast') || lowerText.includes('status@broadcast')) {
                 violations.push('📢 status mention');
             }
@@ -98,12 +98,12 @@ module.exports = {
                     violations.push('📢 status mention');
                 }
                 
-                // Group Mentions
+ // Group Mentions
                 if (contextInfo.groupMentions?.some(gm => (gm.groupJid || gm) === chatId)) {
                     violations.push('📢 group status mention');
                 }
 
-                // Check externalAdReply (sometimes contains links)
+ // Check externalAdReply (sometimes contains links)
                 if (contextInfo.externalAdReply) {
                     const ad = contextInfo.externalAdReply;
                     const adText = (ad.title || '') + ' ' + (ad.body || '') + ' ' + (ad.sourceUrl || '');
@@ -113,8 +113,8 @@ module.exports = {
                 }
             }
 
-            // 🎯 4. COMPREHENSIVE LINK DETECTION
-            // This regex covers: http/https, www, group invites, wa.me, and channels
+ // 4. COMPREHENSIVE LINK DETECTION
+ // This regex covers: http/https, www, group invites, wa.me, and channels
             const linkRegex = /(https?:\/\/|www\.|chat\.whatsapp\.com|wa\.me|whatsapp\.com\/channel\/)[^\s]{2,}/gi;
             if (linkRegex.test(allText)) {
                 if (allText.includes('chat.whatsapp.com')) violations.push('👥 group invite');
@@ -122,10 +122,10 @@ module.exports = {
                 else violations.push('🔗 link');
             }
 
-            // If no violations detected, exit immediately (no network or database calls needed!)
+ // If no violations detected, exit immediately (no network or database calls needed!)
             if (violations.length === 0) return;
 
-            // Get group metadata (prefer cached)
+ // Get group metadata (prefer cached)
             const groupMetadata = cachedMetadata || await sock.groupMetadata(chatId).catch(() => null);
             if (!groupMetadata) return;
 
@@ -138,12 +138,12 @@ module.exports = {
             const senderPhone = lidResolver.resolveToPhone(normalizedSender, authPath);
             const resolvedSender = lidResolver.resolveLidToPhone(normalizedSender, authPath);
 
-            // O(1) admin check using pre-built Set from engine.js (avoids loop over 1k participants)
+ // O(1) admin check using pre-built Set from engine.js (avoids loop over 1k participants)
             let senderIsAdmin = false;
             if (cachedAdminSet) {
                 senderIsAdmin = cachedAdminSet.has(senderPhone) || cachedAdminSet.has(normalizedSender);
             } else {
-                // Fallback: linear scan (only if Set wasn't passed in)
+ // Fallback: linear scan (only if Set wasn't passed in)
                 senderIsAdmin = groupMetadata.participants.some(
                     p => {
                         const normalizedParticipant = jidNormalizedUser(p.id);
@@ -152,32 +152,32 @@ module.exports = {
                 );
             }
 
-            // Admins are exempt
+ // Admins are exempt
             if (senderIsAdmin) return;
 
-            // 👑 GC OWNER IMMUNITY (2026-09-22): the marked GC owner
-            // (`.j gcowner @user`, stored in _shared_gc_owners) is exempt
-            // from the antilink warn/kick actions as well. Lazy require -
-            // engine.js loads this module, so a top-level require would be
-            // circular (same pattern cardSystem.js uses).
+ // GC OWNER IMMUNITY: the marked GC owner
+ // (`.j gcowner @user`, stored in _shared_gc_owners) is exempt
+ // from the antilink warn/kick actions as well. Lazy require -
+ // engine.js loads this module, so a top-level require would be
+ // circular (same pattern cardSystem.js uses).
             try {
                 const engine = require('../engine');
                 if (typeof engine.isGcOwner === 'function' && engine.isGcOwner(normalizedSender, chatId)) return;
             } catch (e) { /* engine not ready - proceed as normal */ }
 
-            // ============================================
-            // ACTION PHASE
-            // ============================================
+ // ============================================
+ // ACTION PHASE
+ // ============================================
             
             const violationType = [...new Set(violations)].join(', ');
             const action = settings.antilinkAction || 'delete';
 
-            // Delete first
+ // Delete first
             try { await sock.sendMessage(chatId, { delete: msg.key }); } catch {}
 
-            // 📊 DAILY GC ACTIVITY (2026-09-22): count this deletion so
-            // `.j activity [day]` can report links deleted in this GC.
-            // chatId is normalized to match the engine's ActivityLog keys.
+ // DAILY GC ACTIVITY: count this deletion so
+ // `.j activity [day]` can report links deleted in this GC.
+ // chatId is normalized to match the engine's ActivityLog keys.
             try {
                 const ActivityLog = require('../models/ActivityLog');
                 const { jidNormalizedUser: _jnu } = require('@whiskeysockets/baileys');
@@ -194,7 +194,7 @@ module.exports = {
                 )?.id || normalizedSender;
                 const userName = participantJid.split('@')[0];
 
-                // Warn/Kick logic
+ // Warn/Kick logic
                 let warningCount = 0;
                 if (addWarning && getWarningCount) {
                     warningCount = addWarning(resolvedSender, chatId, `Antilink violation: ${violationType}`);

@@ -507,7 +507,7 @@ Boss encounters operate under advanced mechanics tracked by `BossPhaseManager` a
 
 ---
 
-## Recent Changes (2026-08-08)
+## Recent Changes
 
 ### Summon Autonomous Turns
 - Summons now take their own turns in PvE combat via `summonAI.performSummonAction()`

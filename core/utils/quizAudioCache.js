@@ -1,5 +1,5 @@
 // ============================================
-// QUIZ AUDIO CACHE (2026-09-28, owner spec §3 - audio bottleneck fix)
+// QUIZ AUDIO CACHE (owner spec §3 - audio bottleneck fix)
 // ============================================
 // Audio clips are the most expensive quiz asset: every fresh retrieval runs
 // the Go service chain (Deezer anchor -> JioSaavn -> WARP-YouTube -> ffmpeg),
@@ -7,15 +7,12 @@
 // quizzes stalled. Until now clips lived ONLY in the session ("live bytes")
 // - the moment a quiz ended, the bytes were gone and the NEXT quiz re-paid
 // the full retrieval cost for the same song.
-//
-// This module persists verified clips on Box 1 disk, keyed by stable asset
 // identity (theme:<show> / song:<song>:<artist>), with a TTL and a size cap.
 // Second-and-later quizzes serve the same clip instantly, zero external
 // calls. It also keeps a short-lived NEGATIVE cache (failure marks) so a
 // candidate whose retrieval just failed isn't re-attempted by every
 // following quiz in the same day - the retry budget goes to fresh
 // candidates instead.
-//
 // Disk (not the 48MB RAM asset cache): audio clips are ~0.5-1MB each, the
 // useful set for active groups is hundreds of clips, and they must survive
 // process restarts. 256MB cap with LRU-by-mtime eviction.
@@ -32,7 +29,7 @@ const FAIL_KEY = "quiz_audio_failmarks";   // system KV: { key: lastFailTs }
 const FAIL_TTL_MS = 24 * 60 * 60 * 1000;   // retry failed candidates after a day
 
 function _keyFile(key) {
-  // key is already normalized ASCII-ish (norm() output) - harden anyway
+ // key is already normalized ASCII-ish (norm() output) - harden anyway
   const safe = String(key).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 120);
   return path.join(CACHE_DIR, `${safe}.mp3`);
 }
@@ -48,7 +45,7 @@ function get(key) {
     if (!st.isFile() || st.size < 20 * 1024) return null;      // too small = truncated/corrupt
     if (Date.now() - st.mtimeMs > TTL_MS) { fs.unlink(f, () => {}); return null; }
     const buf = fs.readFileSync(f);
-    // touch for LRU-by-mtime
+ // touch for LRU-by-mtime
     try { const now = new Date(); fs.utimesSync(f, now, now); } catch {}
     return buf;
   } catch { return null; }
@@ -87,7 +84,7 @@ function _evict() {
   } catch {}
 }
 
-// ── negative cache (failure marks) ──
+// -- negative cache (failure marks) --
 
 function _loadFails() {
   const v = system.get(FAIL_KEY, null);
@@ -99,7 +96,7 @@ function markFail(key) {
     if (!key) return;
     const fails = _loadFails();
     fails[key] = Date.now();
-    // cap the map
+ // cap the map
     const keys = Object.keys(fails);
     if (keys.length > 500) {
       keys.sort((a, b) => fails[a] - fails[b]);

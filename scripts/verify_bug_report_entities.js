@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Owner bug report 2026-10-01: live verification of the named failing
+// Owner bug report live verification of the named failing
 // entities through the REAL production path (detectCategory -> buildPool ->
 // pickImageQuestion). Run: node scripts/verify_bug_report_entities.js
 const resolver = require("../core/utils/characterResolver");
@@ -8,7 +8,7 @@ const quizGame = require("../core/games/quiz");
 try { quizGame.setDeps({}); } catch (e) { console.log("setDeps warn:", e.message); }
 
 const CASES = [
-  // [title, expectedCategory] - owner bug report named entities first
+ // [title, expectedCategory] - owner bug report named entities first
   ["Ben 10", "cartoon"],
   ["Apollo 9", "movie"],       // owner-named; whichever media it truly is, must NOT be broken
   ["Elden Ring", "game"],

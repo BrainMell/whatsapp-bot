@@ -1,17 +1,16 @@
-// QA: Fortune Teller kills system (`.j kills`) — the designed soul-reader
+// QA: Fortune Teller kills system (`.j kills`) - the designed soul-reader
 // flow. Exercises the REAL soulReader module + renderer with a seeded
 // economy cache and mocked System KV (no DB where possible).
-//
 // Pins:
-//  1. sight gates: level 40 / abyss floor 31 / reader's fee (3,000)
-//  2. locked view never renders the ledger (locked card + checklist text)
-//  3. `.j kills pay`: short wallet refused (nothing changes), funded wallet
-//     pays exactly the fee and marks paid; paying twice is refused
-//  4. first unlocked reading plays the ceremony line ONCE; later readings
-//     show a daily teller line (never two lore lines in one reply)
-//  5. ledger uses REAL tracked stats (kills/undead/dragons/bosses/pvp)
-//  6. renderer produces PNG buffers for both cards (or null without canvas)
-//  7. registry/menu entries exist (kills, combat, world, evolve, trial, use)
+// 1. sight gates: level 40 / abyss floor 31 / reader's fee (3,000)
+// 2. locked view never renders the ledger (locked card + checklist text)
+// 3. `.j kills pay`: short wallet refused (nothing changes), funded wallet
+// pays exactly the fee and marks paid; paying twice is refused
+// 4. first unlocked reading plays the ceremony line ONCE; later readings
+// show a daily teller line (never two lore lines in one reply)
+// 5. ledger uses REAL tracked stats (kills/undead/dragons/bosses/pvp)
+// 6. renderer produces PNG buffers for both cards (or null without canvas)
+// 7. registry/menu entries exist (kills, combat, world, evolve, trial, use)
 
 process.env.GO_IMAGE_SERVICE_URL = process.env.GO_IMAGE_SERVICE_URL || 'http://127.0.0.1:7860';
 
@@ -24,7 +23,7 @@ function assert(cond, label) {
     else console.log('✓', label);
 }
 
-// ── seed economy ─────────────────────────────────────────────────────────
+// -- seed economy ---------------------------------------------------------
 const JID = 'seeker@s.whatsapp.net';
 economy.economyData.set(JID, {
     userId: JID, wallet: 100000, bank: 0, registered: true, nickname: 'seeker',
@@ -33,7 +32,7 @@ economy.economyData.set(JID, {
     progression: { level: 10, xp: 0 },
 });
 
-// ── mock sock ────────────────────────────────────────────────────────────
+// -- mock sock ------------------------------------------------------------
 const sent = [];
 const sock = {
     async sendMessage(chatId, content) {
@@ -53,7 +52,7 @@ const realGetPlayerBest = abyssSystem.getPlayerBest;
 let mockBestFloor = 0;
 abyssSystem.getPlayerBest = async () => ({ deepestFloor: mockBestFloor });
 
-// ── in-memory System KV (the real one buffers 10s without Mongo) ─────────
+// -- in-memory System KV (the real one buffers 10s without Mongo) ---------
 // The real model returns a thenable Query that also supports .lean() -
 // mimic that shape so both `await findOne(...)` and `findOne(...).lean()`
 // resolve the same way.
@@ -86,13 +85,13 @@ System.findOneAndUpdate = (q, update) => {
     const lockedBody = (out.caption || out.text || '');
     assert(!lockedBody.includes('TOTAL SOULS'), 'locked view NEVER shows the ledger');
     assert(out.image && out.image.length > 1000, 'locked card renders as PNG and is SENT (font-path fix: no more text-only fallback)');
-    // 💡 2026-09-21 owner ruling: the caption must NOT repeat what the image
-    // shows. The locked card's checklist lives ON the card; the caption is a
-    // single identifying line (no eye icon, no requirement ladder).
+ // owner ruling: the caption must NOT repeat what the image
+ // shows. The locked card's checklist lives ON the card; the caption is a
+ // single identifying line (no eye icon, no requirement ladder).
     assert(!/👁/.test(lockedBody), 'locked caption carries NO eye icon');
     assert(!lockedBody.includes('Reach level'), 'locked caption does NOT repeat the image checklist');
     assert(lockedBody.length < 200, 'locked caption stays short');
-    // the full requirement ladder survives as the RENDER-FAILURE fallback
+ // the full requirement ladder survives as the RENDER-FAILURE fallback
     const realRenderLocked = soulReaderRenderer.renderLockedCard;
     soulReaderRenderer.renderLockedCard = async () => null;
     try {
@@ -107,27 +106,27 @@ System.findOneAndUpdate = (q, update) => {
     }
 
     console.log('\n── 3. pay interaction ──');
-    // short wallet
+ // short wallet
     economy.economyData.get(JID).wallet = 100;
     sent.length = 0;
     await soulReader.viewKills(sock, CHAT, JID, ['pay']);
     assert(last().text.includes('short') || last().text.includes('3,000'), 'short wallet refused with the fee named');
     assert(economy.economyData.get(JID).wallet === 100, 'short wallet: nothing deducted');
-    // funded wallet
+ // funded wallet
     economy.economyData.get(JID).wallet = 100000;
     sent.length = 0;
     await soulReader.viewKills(sock, CHAT, JID, ['pay']);
     assert(economy.economyData.get(JID).wallet === 97000, 'fee paid: exactly 3,000 deducted');
     sight = await soulReader.getSight(JID);
     assert(sight.feeOk, 'fee door now open');
-    // double pay refused
+ // double pay refused
     sent.length = 0;
     await soulReader.viewKills(sock, CHAT, JID, ['pay']);
     assert(economy.economyData.get(JID).wallet === 97000, 'double pay: no second deduction');
     assert(last().text.includes('already') || last().text.includes('already counted'), 'double pay refused in the teller voice');
 
     console.log('\n── 4. unlock ceremony (once) + daily line after ──');
-    // open the remaining doors
+ // open the remaining doors
     economy.economyData.get(JID).progression.level = 45;
     mockBestFloor = 35;
     sent.length = 0;
@@ -136,14 +135,14 @@ System.findOneAndUpdate = (q, update) => {
     const firstView = (out.caption || out.text || '');
     assert(/souls beyond the veil/i.test(firstView), 'unlocked view shows the ledger card');
     assert(out.image && out.image.length > 1000, 'ledger card renders as PNG and is SENT (font-path fix: no more text-only fallback)');
-    // 💡 2026-09-21 owner ruling: the ledger image already carries the counts,
-    // the accent AND the reading - the caption must NOT repeat any of it.
+ // owner ruling: the ledger image already carries the counts,
+ // the accent AND the reading - the caption must NOT repeat any of it.
     assert(!/👁/.test(firstView), 'ledger caption carries NO eye icon');
     assert(!firstView.includes('1,284') && !firstView.includes('340') && !firstView.includes('29'),
         'ledger caption does NOT repeat the image counts');
     assert(!firstView.includes('Count with me'), 'ledger caption does NOT repeat the image reading');
     assert(firstView.length < 200, 'ledger caption stays short');
-    // the full ledger (real stats + ceremony voice) survives as the fallback
+ // the full ledger (real stats + ceremony voice) survives as the fallback
     const realRenderLedger = soulReaderRenderer.renderLedgerCard;
     soulReaderRenderer.renderLedgerCard = async () => null;
     try {
@@ -157,7 +156,7 @@ System.findOneAndUpdate = (q, update) => {
     } finally {
         soulReaderRenderer.renderLedgerCard = realRenderLedger;
     }
-    // second reading: no second ceremony, still the ledger, one teller line only
+ // second reading: no second ceremony, still the ledger, one teller line only
     sent.length = 0;
     await soulReader.viewKills(sock, CHAT, JID, []);
     out = last();

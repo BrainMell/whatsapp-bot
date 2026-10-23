@@ -1,27 +1,25 @@
 // ============================================
-// SHARP CHILD (2026-09-28) - parent-side manager for the crash-isolated
+// SHARP CHILD - parent-side manager for the crash-isolated
 // sharp worker (sharpChildWorker.js)
 // ============================================
 // Root cause this fixes: in-process sharp on untrusted images SIGSEGV'd the
 // whole bot (GLib/libvips native crash) - pm2 log shows SIGSEGV kills right
-// after quiz/logo media prep and sticker scans on 2026-09-27. Symptoms:
-//   - "quiz says starting then nothing" (process died during prep)
-//   - logos/lore image questions never materialising
-//   - antinude never acting (process died mid-scan)
-//
+// after quiz/logo media prep and sticker scans on . Symptoms:
+// - "quiz says starting then nothing" (process died during prep)
+// - logos/lore image questions never materialising
+// - antinude never acting (process died mid-scan)
 // Guarantees:
-//   1. A native crash only kills the WORKER child. Jobs in flight reject
-//      gracefully; the bot keeps running.
-//   2. POISON QUARANTINE: a buffer that killed (or timed out on) the worker
-//      is remembered (sha256, 15min TTL) and future jobs with it fail fast
-//      instead of crash-looping.
-//   3. CIRCUIT BREAKER: >4 abnormal worker exits within 30s opens a 15s
-//      cooldown so a poisoned stream of images can't spin-respawn children.
-//
+// 1. A native crash only kills the WORKER child. Jobs in flight reject
+// gracefully; the bot keeps running.
+// 2. POISON QUARANTINE: a buffer that killed (or timed out on) the worker
+// is remembered (sha256, 15min TTL) and future jobs with it fail fast
+// instead of crash-looping.
+// 3. CIRCUIT BREAKER: >4 abnormal worker exits within 30s opens a 15s
+// cooldown so a poisoned stream of images can't spin-respawn children.
 // API:
-//   runJob('gate', buf, {minW,minH})      -> imageGate verdict object
-//   runJob('asticker-frames', buf)        -> [{pos, buf}] (PNG pages)
-//   stats()                               -> telemetry
+// runJob('gate', buf, {minW,minH}) -> imageGate verdict object
+// runJob('asticker-frames', buf) -> [{pos, buf}] (PNG pages)
+// stats() -> telemetry
 // runJob REJECTS on infra failure (worker died/timeout/circuit). Callers
 // decide their own fail-open/fail-closed policy.
 // ============================================
@@ -51,7 +49,7 @@ const exitTimes = [];      // abnormal exit timestamps (circuit breaker)
 let circuitOpenUntil = 0;
 let _stats = { jobs: 0, done: 0, rejects: 0, timeouts: 0, respawns: 0, poisoned: 0, circuitOpens: 0 };
 
-// 2026-10-11 orphan prevention: on ANY graceful parent exit (pm2 stop, SIGINT,
+// orphan prevention: on ANY graceful parent exit (pm2 stop, SIGINT,
 // process.exit) reap the worker synchronously. SIGKILL can't be caught - that
 // path is covered by the worker's own channel-closed self-exit instead.
 process.on('exit', () => {
@@ -89,10 +87,10 @@ function spawnWorker() {
   });
   child.on('message', (msg) => {
     if (!msg || typeof msg.id !== 'number') return;
-    // id:-2 = worker idle-exit notice: detach FIRST so the next job re-forks
-    // instead of being sent into a channel that is about to close (2026-10-11
-    // worker self-recycle lifecycle). No pending jobs can exist here - the
-    // worker only idles out after 10 jobless minutes.
+ // id:-2 = worker idle-exit notice: detach FIRST so the next job re-forks
+ // instead of being sent into a channel that is about to close (
+ // worker self-recycle lifecycle). No pending jobs can exist here - the
+ // worker only idles out after 10 jobless minutes.
     if (msg.id === -2) {
       if (child) { try { child.disconnect && child.disconnect(); } catch { /* racing exit */ } }
       child = null;
@@ -168,8 +166,8 @@ function runJob(op, buf, opts = {}, timeoutMs) {
     seq++;
 
     if (!child && Date.now() < spawnBlockedUntil) {
-      // inside the respawn gap after a crash/timeout - wait briefly for the
-      // fresh worker instead of failing the caller's job spuriously
+ // inside the respawn gap after a crash/timeout - wait briefly for the
+ // fresh worker instead of failing the caller's job spuriously
       const deadline = Date.now() + 2500;
       while (!child && Date.now() < deadline) await new Promise((r) => setTimeout(r, 100));
     }

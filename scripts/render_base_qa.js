@@ -1,6 +1,6 @@
 'use strict';
-// proof: node scripts/render_base_qa.js [outDir]  → static player-base card with the
-// 47-k8 Clash gold-mine ladder + Clash garnish, plus three single-structure zooms.
+// proof: node scripts/render_base_qa.js [outDir] → static player-base card with the
+// Clash gold-mine ladder + Clash garnish, plus three single-structure zooms.
 const fs = require('fs');
 const OUT = process.argv[2] || '/tmp/baseqa';
 (async () => {

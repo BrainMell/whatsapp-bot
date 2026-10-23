@@ -16,7 +16,7 @@ async function main() {
   const style = (user && user.cardStyle) || 0;
   console.log('user style:', style, 'class:', userClass && userClass.id);
 
-  // skill tree card exactly as displaySkillTree builds it
+ // skill tree card exactly as displaySkillTree builds it
   const skillTree = require('/home/ubuntu/whatsapp-bot/core/rpg/skillTree');
   const level = require('/home/ubuntu/whatsapp-bot/core/rpg/progression').getLevel(jid);
   const branches = [];
@@ -45,7 +45,7 @@ async function main() {
   fs.writeFileSync('/tmp/live_skilltree.png', treeBuf);
   console.log('skilltree:', treeBuf.length, 'B');
 
-  // abilities card (page 1) exactly as viewAbilities builds it
+ // abilities card (page 1) exactly as viewAbilities builds it
   const abBuf = await goService.generatePortraitCard({
     kind: 'ABILITIES', style,
     nickname: 'Kaelen', className: userClass.name, level,

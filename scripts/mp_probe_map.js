@@ -1,4 +1,4 @@
-// PROBE: .j map render — why no image?
+// PROBE: .j map render - why no image?
 const L = require('./mp_lib');
 const RUN = Math.random().toString(36).slice(2, 6);
 (async () => {

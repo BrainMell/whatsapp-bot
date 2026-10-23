@@ -1,12 +1,12 @@
-// ═══════════════════════════════════════════════════════════════════════════
-//  REPRO: owner ticket 2026-09-21 (.j solo f -d)
-//  CONTRACT: the Dead World encounter is TERMINAL - empty scene card, TEN
-//  separate thought boxes, the regular-style victory card with the Dead
-//  World congratulation caption, then the run ENDS (state deleted, no next
-//  encounter, no QUEST COMPLETE banner, no rewards).
-//  Production-faithful: shop NOT skipped, real thought pacing, then asserts
-//  the terminal run. Logs every send + every state transition.
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// REPRO: owner ticket (.j solo f -d)
+// CONTRACT: the Dead World encounter is TERMINAL - empty scene card, TEN
+// separate thought boxes, the regular-style victory card with the Dead
+// World congratulation caption, then the run ENDS (state deleted, no next
+// encounter, no QUEST COMPLETE banner, no rewards).
+// Production-faithful: shop NOT skipped, real thought pacing, then asserts
+// the terminal run. Logs every send + every state transition.
+// ===========================================================================
 process.env.GO_IMAGE_SERVICE_URL = process.env.GO_IMAGE_SERVICE_URL || 'http://127.0.0.1:7860';
 
 const path = require('path');
@@ -69,7 +69,7 @@ const sock = {
     const res = await ga.initAdventure(sock, CHAT, null, 'NORMAL', true, 'F', P1, null, null, { forceDeadWorld: true });
     console.log(ts(), 'init result:', res && res.success, res && res.msg ? String(res.msg).slice(0, 40) : '');
 
-    // wait for the whole run: shop 2.5s + sequence + TERMINAL end
+ // wait for the whole run: shop 2.5s + sequence + TERMINAL end
     let gone = false;
     for (let i = 0; i < 45; i++) {
         await new Promise((r) => setTimeout(r, 1000));
@@ -78,7 +78,7 @@ const sock = {
         if (i % 3 === 0) console.log(ts(), `state: enc=${st.encounter}/${st.maxEncounters} phase=${st.phase} inCombat=${!!st.inCombat} active=${st.active} isProc=${!!st.isProcessing} dwDone=${!!st.deadWorldDone}`);
     }
 
-    // ── contract assertions ──
+ // -- contract assertions --
     const thoughts = sends.filter((m) => typeof m.text === 'string' && /^_\*「 .+ 」\*_$/s.test(m.text));
     const images = sends.filter((m) => m.image);
     const last = sends[sends.length - 1];

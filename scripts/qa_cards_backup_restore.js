@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// QA — Task 15c: Super RC auto-backup + .j unsrc restore (owner prank tooling).
+// QA - Super RC auto-backup + .j unsrc restore.
 // Source pins on cardSystem.js + CardBackup model + real-DB model smoke test.
 const fs = require('fs');
 const path = require('path');

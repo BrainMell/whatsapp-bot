@@ -54,7 +54,7 @@ async function main() {
   const inventorySystem = require('../core/rpg/inventorySystem');
   const User = require('../core/models/User');
 
-  // Get 5 real users at different levels
+ // Get 5 real users at different levels
   const users = await User.find({}).sort({ 'progression.level': -1 }).limit(5);
 
   for (const userDoc of users) {
@@ -64,7 +64,7 @@ async function main() {
 
     section(`USER: ${jid} (Lv${level} ${className})`);
 
-    // Hydrate
+ // Hydrate
     await economy.reloadUserFromDB(jid);
     const user = economy.getUser(jid);
     if (!user) { fail(`load:${jid}`, 'getUser null'); continue; }
@@ -72,14 +72,14 @@ async function main() {
     const userClass = economy.getUserClass(jid);
     const classId = userClass?.id || 'FIGHTER';
 
-    // === SOURCE OF TRUTH: progression.getBaseStats ===
+ // === SOURCE OF TRUTH: progression.getBaseStats ===
     const trueStats = progression.getBaseStats(jid, classId);
     console.log(`  ${YELLOW}Source of truth (getBaseStats):${RESET}`);
     console.log(`    hp=${trueStats.hp} atk=${trueStats.atk} def=${trueStats.def} mag=${trueStats.mag} spd=${trueStats.spd}`);
 
-    // === PATH 1: ABYSS (startAbyssCombat player build) ===
+ // === PATH 1: ABYSS (startAbyssCombat player build) ===
     console.log(`  ${CYAN}[Path 1] Abyss combat stats${RESET}`);
-    // Reproduce startAbyssCombat's player build (guildAdventure.js:5458-5503)
+ // Reproduce startAbyssCombat's player build (guildAdventure.js:5458-5503)
     const abyssClassId = userClass?.id || (typeof user.class === 'string' ? user.class : 'FIGHTER');
     const abyssBaseStats = progression.getBaseStats(jid, abyssClassId);
     const abyssPlayer = {
@@ -99,7 +99,7 @@ async function main() {
       },
     };
 
-    // Compare Abyss stats vs true stats
+ // Compare Abyss stats vs true stats
     const abyssStatsMatch = (
       abyssPlayer.stats.hp === trueStats.hp &&
       abyssPlayer.stats.atk === trueStats.atk &&
@@ -113,7 +113,7 @@ async function main() {
       fail(`abyss:stats-match`, `Abyss: hp=${abyssPlayer.stats.hp}/${trueStats.hp} atk=${abyssPlayer.stats.atk}/${trueStats.atk} def=${abyssPlayer.stats.def}/${trueStats.def}`);
     }
 
-    // === PATH 2: PvE (startJourney player build, guildAdventure.js:6408-6425) ===
+ // === PATH 2: PvE (startJourney player build, guildAdventure.js:6408-6425) ===
     console.log(`  ${CYAN}[Path 2] PvE/Guild Adventure stats${RESET}`);
     const pveClassId = userClass?.id || 'FIGHTER';
     const pveBaseStats = progression.getBaseStats(jid, pveClassId);
@@ -146,10 +146,10 @@ async function main() {
       fail(`pve:stats-match`, `PvE: hp=${pvePlayer.stats.hp}/${trueStats.hp} atk=${pvePlayer.stats.atk}/${trueStats.atk} def=${pvePlayer.stats.def}/${trueStats.def}`);
     }
 
-    // === PATH 3: PvP (buildDuelPlayer + capPvPStats) ===
+ // === PATH 3: PvP (buildDuelPlayer + capPvPStats) ===
     console.log(`  ${CYAN}[Path 3] PvP stats (with capPvPStats)${RESET}`);
     const pvpBaseStats = progression.getBaseStats(jid, classId);
-    // Reproduce capPvPStats
+ // Reproduce capPvPStats
     const cappedStats = {
       ...pvpBaseStats,
       atk:  Math.min(pvpBaseStats.atk, 1200),
@@ -160,7 +160,7 @@ async function main() {
       evasion: Math.min(pvpBaseStats.evasion || 0, 55),
     };
 
-    // PvP INTENTIONALLY caps stats - document this, don't fail
+ // PvP INTENTIONALLY caps stats - document this, don't fail
     const pvpCappedAtk = pvpBaseStats.atk > 1200;
     const pvpCappedDef = pvpBaseStats.def > 500;
     const pvpCappedMag = pvpBaseStats.mag > 1200;
@@ -177,10 +177,10 @@ async function main() {
       ok(`pvp:uncapped`, `No caps needed (stats within PvP limits)`);
     }
 
-    // === DAMAGE CONSISTENCY ===
+ // === DAMAGE CONSISTENCY ===
     console.log(`  ${CYAN}[Damage] Cross-combat damage comparison${RESET}`);
 
-    // Simulate a basic attack against a fixed enemy (def=50)
+ // Simulate a basic attack against a fixed enemy (def=50)
     const enemyDef = 50;
     const calcDamage = (atk) => Math.max(1, Math.floor(atk - (enemyDef * 0.5)));
 
@@ -192,14 +192,14 @@ async function main() {
     console.log(`    PvE damage:   ${pveDamage} (atk=${pvePlayer.stats.atk})`);
     console.log(`    PvP damage:   ${pvpDamage} (atk=${cappedStats.atk}${pvpCappedAtk ? ' [CAPPED]' : ''})`);
 
-    // Abyss and PvE damage should be IDENTICAL (same stats, same formula)
+ // Abyss and PvE damage should be IDENTICAL (same stats, same formula)
     if (abyssDamage === pveDamage) {
       ok(`damage:abyss=pve`, `both ${abyssDamage} (identical)`);
     } else {
       fail(`damage:abyss=pve`, `Abyss=${abyssDamage} vs PvE=${pveDamage} (should be identical)`);
     }
 
-    // PvP damage should match Abyss IF no cap was applied
+ // PvP damage should match Abyss IF no cap was applied
     if (!pvpCappedAtk) {
       if (pvpDamage === abyssDamage) {
         ok(`damage:pvp=abyss`, `both ${pvpDamage} (identical, no cap)`);
@@ -207,7 +207,7 @@ async function main() {
         fail(`damage:pvp=abyss`, `PvP=${pvpDamage} vs Abyss=${abyssDamage} (should match, no cap)`);
       }
     } else {
-      // Cap was applied - PvP damage should be LOWER than Abyss (expected)
+ // Cap was applied - PvP damage should be LOWER than Abyss (expected)
       if (pvpDamage < abyssDamage) {
         ok(`damage:pvp<abyss`, `PvP=${pvpDamage} < Abyss=${abyssDamage} (cap working as intended)`);
       } else {
@@ -215,14 +215,14 @@ async function main() {
       }
     }
 
-    // === HP CONSISTENCY ===
+ // === HP CONSISTENCY ===
     console.log(`  ${CYAN}[HP] Cross-combat HP comparison${RESET}`);
     if (abyssPlayer.stats.hp === pvePlayer.stats.hp) {
       ok(`hp:abyss=pve`, `both ${abyssPlayer.stats.hp}`);
     } else {
       fail(`hp:abyss=pve`, `Abyss=${abyssPlayer.stats.hp} vs PvE=${pvePlayer.stats.hp}`);
     }
-    // PvP uses stats.maxHp directly (no cap on HP)
+ // PvP uses stats.maxHp directly (no cap on HP)
     if (cappedStats.hp === trueStats.hp) {
       ok(`hp:pvp=true`, `PvP hp=${cappedStats.hp} (matches true)`);
     } else {
@@ -230,7 +230,7 @@ async function main() {
     }
   }
 
-  // === FINAL REPORT ===
+ // === FINAL REPORT ===
   console.log(`\n${BOLD}${CYAN}═══════════════════════════════════════════════════════════════`);
   console.log(`  SUMMARY: ${passCount} passed, ${failCount} failed`);
   console.log(`═══════════════════════════════════════════════════════════════${RESET}\n`);

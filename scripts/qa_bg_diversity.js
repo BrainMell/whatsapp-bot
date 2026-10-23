@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * qa_bg_diversity.js — owner ruling 2026-10-10 verification
+ * qa_bg_diversity.js - owner ruling 2026-10-10 verification
  * ("keep the cave backgrounds and use these ones" + "diversify the backgrounds")
  *
  * Asserts:
@@ -8,7 +8,7 @@
  *  2. primary asset is always a member of its own pool
  *  3. ZERO abyss-hall filenames anywhere in the dungeon pools (halls = abyss bosses only)
  *  4. every pool file has a measured ground entry in the Go groundmap registry
- *     (mirror list — the Go service owns the canonical JSON)
+ *     (mirror list - the Go service owns the canonical JSON)
  *  5. every pool file is covered by deadWorldRenderer.ENV_CARD_ART (dead-world art)
  *  6. no duplicate-VISUAL files inside one pool (spark_2==spark_1-night,
  *     spark_4==spark_2-night, spark_6==spark_3-night are byte-identical twins)
@@ -26,7 +26,7 @@ const check = (ok, label) => {
     else { fail++; console.log(`  ❌ ${label}`); }
 };
 
-// ground-verified backgrounds (bot_generation/pkg/combat/groundmap.json, 2026-09-20 vision pass)
+// ground-verified backgrounds (bot_generation/pkg/combat/groundmap.json, vision pass)
 const GROUND_VERIFIED = new Set([
     'background1.png', 'background2.png', 'background3.png',
     'env1.png', 'env2.png', 'env3.png',
@@ -35,13 +35,13 @@ const GROUND_VERIFIED = new Set([
     'spark_3.png', 'spark_3-night.png', 'spark_4.png', 'spark_5.png',
     'spark_6.png', 'spark_7.png', 'spark_8.png', 'spark_10.png', 'spark_15.png',
 ]);
-// byte-identical twins on the boxes (same md5) — never co-pool
+// byte-identical twins on the boxes (same md5) - never co-pool
 const DUP_GROUPS = [
     ['spark_2.png', 'spark_1-night.png'],
     ['spark_4.png', 'spark_2-night.png'],
     ['spark_6.png', 'spark_3-night.png'],
 ];
-// abyss-boss hall art — banned from dungeon pools by owner ruling 2026-10-10
+// abyss-boss hall art - banned from dungeon pools by owner ruling
 const HALLS = new Set([
     'ember_depths.png', 'void_sanctum.png', 'crystal_vault.png', 'obsidian_throne.png',
     'ossuary_hall.png', 'blood_chapel.png', 'frost_reliquary.png', 'fungal_grotto.png',
@@ -49,9 +49,8 @@ const HALLS = new Set([
     'ruined_library.png', 'sacrarium.png', 'web_lair.png',
 ]);
 
-console.log('\n[bg-diversity] owner ruling 2026-10-10 — cave backgrounds restored + diversified\n');
+console.log('\n[bg-diversity] owner ruling 2026-10-10 - cave backgrounds restored + diversified\n');
 
-// load DUNGEON_ENVIRONMENTS without booting the whole engine: eval the two
 // const blocks we need from the source (guildAdventure requires engine deps).
 const gaSrc = fs.readFileSync(path.join(__dirname, '..', 'core', 'rpg', 'guildAdventure.js'), 'utf8');
 const start = gaSrc.indexOf('const DUNGEON_ENVIRONMENTS');
@@ -77,7 +76,7 @@ for (const id of envIds) {
         check(!HALLS.has(f), `${id}: ${f} is NOT abyss-boss hall art`);
         check(dwRenderer.ENV_CARD_ART[f] !== undefined, `${id}: ${f} covered by dead-world ENV_CARD_ART`);
     }
-    // duplicate-visual guard
+ // duplicate-visual guard
     for (const grp of DUP_GROUPS) {
         const clash = grp.filter((f) => pool.includes(f));
         check(clash.length <= 1, `${id}: pool avoids duplicate visuals (${grp.join(' == ')}) -> ${clash.length <= 1 ? 'ok' : clash.join('+')}`);

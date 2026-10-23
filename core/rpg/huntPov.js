@@ -1,30 +1,29 @@
 'use strict';
-// ═══════════════════════════════════════════════════════════════════════════
-//  HUNT POV — the hunting grounds as a living first-person scene (Task 20:
-//  "make something like that for hunting too, find the appropriate animal
-//  sprites for that sprite sheet, and add the overlay to both" · Task 21:
-//  "find sprites of deers that fit and other animals grazing and fill them
-//  in. Place some grass around too." · Task 22 UNDO/REBUILD: the pixel-block
-//  herd was torn out and redrawn in the established flat-shaded card style. + the shared day/night cycle).
-//
-//  Same contract as the pond (dockPov.js), applied to the hunt:
-//    • ANIMAL SPRITE SHEET — rabbit / boar / stag walk+hop cycles drawn in the
-//      same flat-shaded style as the base critters, baked ONCE into a single
-//      PNG sheet and kept on disk through mediaCache. The scene compositor
-//      blits cells from the sheet — no per-frame vector re-draws.
-//    • BASE FRAMES — 16 frames per (biome, barracks level), canonical seed so
-//      every player shares one bake: drifting clouds, swaying grass, flickering
-//      campfire, birds crossing, a rustling bush. Kept on disk (survives
-//      restarts/deploys via code-versioned mediaCache keys).
-//    • HUNT GIF — kept base frames + THIS hunt's overlay composited on top,
-//      keyed ONLY by (biome, level, band): low = rabbit hops the trail, mid =
-//      a boar trots through with dust, epic = birds flush and a crowned stag
-//      steps out, pauses with an antler glint, bounds off. The band is chosen
-//      AFTER the loot roll — the animation never spoils rarity early.
-//  Delivery: pure-JS gif89a → { image, gifPlayback: true }. Text fallback
-//  stays mandatory upstream (baseBuilder renders the static spotlight card
-//  if anything here throws — the roll still happened exactly once).
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
+// HUNT POV - the hunting grounds as a living first-person scene (
+// "make something like that for hunting too, find the appropriate animal
+// sprites for that sprite sheet, and add the overlay to both" ·
+// "find sprites of deers that fit and other animals grazing and fill them
+// in. Place some grass around too." · UNDO/REBUILD: the pixel-block
+// herd was torn out and redrawn in the established flat-shaded card style. + the shared day/night cycle).
+// Same contract as the pond (dockPov.js), applied to the hunt:
+// • ANIMAL SPRITE SHEET - rabbit / boar / stag walk+hop cycles drawn in the
+// same flat-shaded style as the base critters, baked ONCE into a single
+// PNG sheet and kept on disk through mediaCache. The scene compositor
+// blits cells from the sheet - no per-frame vector re-draws.
+// • BASE FRAMES - 16 frames per (biome, barracks level), canonical seed so
+// every player shares one bake: drifting clouds, swaying grass, flickering
+// campfire, birds crossing, a rustling bush. Kept on disk (survives
+// restarts/deploys via code-versioned mediaCache keys).
+// • HUNT GIF - kept base frames + THIS hunt's overlay composited on top,
+// keyed ONLY by (biome, level, band): low = rabbit hops the trail, mid =
+// a boar trots through with dust, epic = birds flush and a crowned stag
+// steps out, pauses with an antler glint, bounds off. The band is chosen
+// AFTER the loot roll - the animation never spoils rarity early.
+// Delivery: pure-JS gif89a → { image, gifPlayback: true }. Text fallback
+// stays mandatory upstream (baseBuilder renders the static spotlight card
+// if anything here throws - the roll still happened exactly once).
+// ===========================================================================
 const fs = require('fs');
 const path = require('path');
 const mediaCache = require('./mediaCache');
@@ -36,8 +35,8 @@ const hashStr = (s) => K.hashStr(String(s || ''));
 const GW = 480, GH = 360, FRAMES = 16, DELAY_MS = 120;   // 1.92s loop
 const CONTAINER_MAGIC = 'HUNTPOV1';
 const SHEET_MAGIC = 'HUNTSPR3';
-const CW = 128, CH = 96, COLS = 4;                       // sheet cell geometry (Task 22: bigger cells for the vector art)
-// Task 21: the sheet grew a proper deer herd + other grazing animals —
+const CW = 128, CH = 96, COLS = 4; // sheet cell geometry
+// the sheet grew a proper deer herd + other grazing animals -
 // rabbit / boar / stag / alert-stag / DOE / DOE-GRAZING / FAWN / SHEEP.
 const ROW = { rabbit: 0, boar: 1, stag: 2, alert: 3, doe: 4, graze: 5, fawn: 6, sheep: 7 };
 const SHEET_ROWS = 8;
@@ -46,7 +45,7 @@ const SHEET_ROWS = 8;
 // same physical size in the frame (and the epic glint anchors follow suit).
 const SHEET_COMP = 0.75;
 
-// ── biome palettes (flat, GIF-quantizer friendly) ──────────────────────────
+// -- biome palettes (flat, GIF-quantizer friendly) --------------------------
 // sky 3 bands · cloud 2 tones · far treeline + dark · meadow far→near ·
 // tuft/fg grass · trail dirt + edge · bush · wood/canvas (camp) · rock · fire.
 const PALETTES = {
@@ -92,7 +91,7 @@ const PALETTES = {
     },
 };
 
-// ── layout: horizon, trail gap, camp anchor ────────────────────────────────
+// -- layout: horizon, trail gap, camp anchor --------------------------------
 const HZ = 0.30, FORE = 0.80;                 // horizon y, foreground band top
 const GAPX = 0.45;                            // where the trail meets the treeline
 
@@ -102,13 +101,13 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1 } = {}) {
     const rng = K.mulberry32(hashStr(`huntpov:${biome}:${lvl}`));
     const hz = Math.round(HZ * h), foreY = Math.round(FORE * h);
 
-    // ── sky: three flat bands (the sun/moon are added per-hour by the
-    // day/night cycle — dockPov.paintCelestial — so one base serves every hour) ──
+ // -- sky: three flat bands (the sun/moon are added per-hour by the
+ // day/night cycle - dockPov.paintCelestial - so one base serves every hour) --
     ctx.fillStyle = P.sky[0]; ctx.fillRect(0, 0, w, Math.round(hz * 0.45));
     ctx.fillStyle = P.sky[1]; ctx.fillRect(0, Math.round(hz * 0.45), w, Math.round(hz * 0.3));
     ctx.fillStyle = P.sky[2]; ctx.fillRect(0, Math.round(hz * 0.75), w, hz - Math.round(hz * 0.75));
 
-    // drifting clouds (flat 2-tone puffs, slow loop drift)
+ // drifting clouds (flat 2-tone puffs, slow loop drift)
     for (let i = 0; i < 3; i++) {
         const cy = hz * (0.16 + rng() * 0.42), cw2 = w * (0.09 + rng() * 0.07), sp = 0.012 + rng() * 0.014;
         const cx = (((rng() + t * sp) % 1.25) - 0.125) * w;
@@ -116,7 +115,7 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1 } = {}) {
         ctx.fillStyle = P.cloud[0]; ctx.beginPath(); ctx.ellipse(cx, cy, cw2, h * 0.014, 0, 0, Math.PI * 2); ctx.fill();
         ctx.beginPath(); ctx.ellipse(cx + cw2 * 0.5, cy - h * 0.008, cw2 * 0.55, h * 0.011, 0, 0, Math.PI * 2); ctx.fill();
     }
-    // a bird or two crossing the sky mid-loop
+ // a bird or two crossing the sky mid-loop
     for (let i = 0; i < 2; i++) {
         const u = (t * (0.55 + i * 0.22) + i * 0.45) % 1;
         if (u > 0.06 && u < 0.94) {
@@ -127,22 +126,22 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1 } = {}) {
         }
     }
 
-    // ── far treeline: seeded canopy bumps with a lighter gap at the trail ──
+ // -- far treeline: seeded canopy bumps with a lighter gap at the trail --
     ctx.fillStyle = P.farDark;
     for (let x = 0; x < w; x += w / 34) {
         const th = h * (0.045 + rng() * 0.05) * (Math.abs(x / w - GAPX) < 0.06 ? 0.45 : 1);
         ctx.beginPath(); ctx.moveTo(x, hz + 1); ctx.lineTo(x + w / 68, hz - th); ctx.lineTo(x + w / 34, hz + 1); ctx.closePath(); ctx.fill();
     }
     ctx.fillStyle = P.far; ctx.fillRect(0, hz, w, Math.max(2, h * 0.012));
-    // the gap: pale opening where the trail enters the deep woods
+ // the gap: pale opening where the trail enters the deep woods
     ctx.fillStyle = P.gap; ctx.fillRect(w * GAPX - w * 0.028, hz - h * 0.035, w * 0.056, h * 0.047);
 
-    // ── meadow: three flat perspective bands, far (light) → near (rich) ──
+ // -- meadow: three flat perspective bands, far (light) → near (rich) --
     const bands = [[hz, foreY * 0.45], [foreY * 0.45, foreY * 0.68], [foreY * 0.68, h]];
     for (let i = 0; i < 3; i++) { ctx.fillStyle = P.meadow[i]; ctx.fillRect(0, bands[i][0], w, bands[i][1] - bands[i][0] + 1); }
 
-    // ── grass patches (Task 21: "place some grass around too") — soft darker
-    // swaths the grazers can stand in, seeded per (biome, lvl) ──
+ // -- grass patches - soft darker
+ // swaths the grazers can stand in, seeded per (biome, lvl) --
     for (let i = 0; i < 9 + lvl * 2; i++) {
         const f = rng();
         const py = hz + (h - hz) * (0.1 + 0.85 * f), px2 = rng() * w;
@@ -152,7 +151,7 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1 } = {}) {
         ctx.globalAlpha = 1;
     }
 
-    // ── trail: dirt path from bottom-centre converging to the treeline gap ──
+ // -- trail: dirt path from bottom-centre converging to the treeline gap --
     const tb = [w * 0.30, w * 0.56], tg = [w * (GAPX - 0.024), w * (GAPX + 0.024)];
     ctx.fillStyle = P.trail[1];
     ctx.beginPath(); ctx.moveTo(tb[0] - w * 0.012, h); ctx.lineTo(tg[0] - w * 0.006, hz); ctx.lineTo(tg[1] + w * 0.006, hz); ctx.lineTo(tb[1] + w * 0.012, h); ctx.closePath(); ctx.fill();
@@ -163,7 +162,7 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1 } = {}) {
         ctx.fillStyle = P.trail[1]; ctx.fillRect(px, hz + (h - hz) * f * 0.92, Math.max(1.5, w * 0.006 * (0.5 + f)), Math.max(1, h * 0.005 * (0.5 + f)));
     }
 
-    // ── bushes: seeded rounded clumps; one rustles once per loop ──
+ // -- bushes: seeded rounded clumps; one rustles once per loop --
     const rustleAt = 6 + Math.floor(rng() * 4);   // frame index of the rustle
     for (let i = 0; i < 3; i++) {
         const f = 0.35 + i * 0.24 + rng() * 0.08, bx2 = rng() < 0.5 ? w * (0.08 + rng() * 0.16) : w * (0.62 + rng() * 0.24);
@@ -172,15 +171,15 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1 } = {}) {
         ctx.fillStyle = P.bush[1]; ctx.beginPath(); ctx.ellipse(bx2 + jx, by2, s * 1.7, s, 0, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = P.bush[0]; ctx.beginPath(); ctx.ellipse(bx2 - s * 0.4 + jx, by2 - s * 0.45, s * 1.15, s * 0.7, 0, 0, Math.PI * 2); ctx.fill();
     }
-    // rocks (static, flat 2-tone)
+ // rocks (static, flat 2-tone)
     for (let i = 0; i < 2; i++) {
         const rx = w * (0.12 + rng() * 0.2 + i * 0.4), ry = hz + (h - hz) * (0.5 + rng() * 0.3), rs = h * (0.014 + rng() * 0.012);
         ctx.fillStyle = P.rock[1]; ctx.beginPath(); ctx.ellipse(rx, ry, rs * 1.6, rs * 0.8, 0, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = P.rock[0]; ctx.beginPath(); ctx.ellipse(rx - rs * 0.3, ry - rs * 0.3, rs * 1.1, rs * 0.55, 0, 0, Math.PI * 2); ctx.fill();
     }
 
-    // ── grass tufts: seeded, blades sway with per-tuft phase. Task 21: the
-    // grounds got noticeably lusher — nearly double the tufts. ──
+ // -- grass tufts: seeded, blades sway with per-tuft phase. the
+ // grounds got noticeably lusher - nearly double the tufts. --
     const ntuft = 44 + lvl * 8;
     for (let i = 0; i < ntuft; i++) {
         const f = rng();                                   // 0=far 1=near
@@ -194,7 +193,7 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1 } = {}) {
         }
     }
 
-    // ── the camp (right reach): tent + fire, L2+ target + second tent, L3 banner
+ // -- the camp (right reach): tent + fire, L2+ target + second tent, L3 banner
     const campY = hz + (foreY - hz) * 0.42, campX = w * 0.80;
     ctx.fillStyle = P.canvas[1];                                                          // tent shadow side
     ctx.beginPath(); ctx.moveTo(campX - w * 0.055, campY); ctx.lineTo(campX, campY - h * 0.085); ctx.lineTo(campX + w * 0.055, campY); ctx.closePath(); ctx.fill();
@@ -228,7 +227,7 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1 } = {}) {
         ctx.fillStyle = P.glow; ctx.globalAlpha = 0.3; ctx.fillRect(px2, py2 - h * 0.16, Math.max(1.5, w * 0.005), h * 0.16); ctx.globalAlpha = 1;
     }
 
-    // ── foreground grass band: dark, tall, swaying blade clusters ──
+ // -- foreground grass band: dark, tall, swaying blade clusters --
     ctx.fillStyle = P.fg; ctx.fillRect(0, foreY, w, h - foreY);
     for (let i = 0; i < 13; i++) {
         const gx = (i + rng() * 0.6) * (w / 13), gh2 = (h - foreY) * (0.5 + rng() * 0.5);
@@ -240,9 +239,9 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1 } = {}) {
     return { gapX: w * GAPX, hz, foreY };
 }
 
-// ── the WILDLIFE PLAN (Task 21: deer herd + other animals grazing) ──────────
+// -- the WILDLIFE PLAN ----------
 // Deterministic per (biome, lvl): a stag + doe by the treeline, a grazing doe
-// and her fawn mid-field, two sheep nearer the foreground — kept off the trail
+// and her fawn mid-field, two sheep nearer the foreground - kept off the trail
 // and clear of the camp. Blitted from the sprite sheet into every base frame.
 function wildlifePlan(w, h, { biome = 'isle', lvl = 1 } = {}) {
     const rng = K.mulberry32(hashStr(`wildlife:${biome}:${lvl}`));
@@ -262,7 +261,7 @@ function wildlifePlan(w, h, { biome = 'isle', lvl = 1 } = {}) {
         put(ROW.sheep, 0.665, 0.78, false, 0.05),
         put(ROW.graze, 0.095, 0.66, true),         // a lone doe on the left reach
     ];
-    // grass at each grazer's feet — "place some grass around too"
+ // grass at each grazer's feet - "place some grass around too"
     const tufts = [];
     for (const a of plan) {
         for (let i = 0; i < 5; i++) {
@@ -273,7 +272,7 @@ function wildlifePlan(w, h, { biome = 'isle', lvl = 1 } = {}) {
 }
 function blitWildlife(ctx, w, h, t, sheet, { biome = 'isle', lvl = 1 } = {}) {
     const { plan, tufts } = wildlifePlan(w, h, { biome, lvl });
-    // fresh grass right at the hooves, swaying with the rest
+ // fresh grass right at the hooves, swaying with the rest
     ctx.strokeStyle = (PALETTES[biome] || PALETTES.isle).tuft; ctx.lineCap = 'round';
     for (const tf of tufts) {
         const sway = Math.sin(t * Math.PI * 2 + tf.x) * tf.s * 0.7;
@@ -292,7 +291,7 @@ function blitWildlife(ctx, w, h, t, sheet, { biome = 'isle', lvl = 1 } = {}) {
     }
 }
 
-// ── camp anchors for the night lights (fire + tent opening) ────────────────
+// -- camp anchors for the night lights (fire + tent opening) ----------------
 function campAnchors(w, h) {
     const hz = Math.round(HZ * h), foreY = Math.round(FORE * h);
     const campY = hz + (foreY - hz) * 0.42, campX = w * 0.80;
@@ -303,20 +302,20 @@ function campAnchors(w, h) {
     };
 }
 
-// ╔══════════════════════════════════════════════════════════════════════╗
-//  ANIMAL SPRITE SHEET — REAL ONLINE ASSETS (owner 2026-10-21: "I said FIND
-//  animal grazing assets ONLINE, ones that fit this theme, NOT fucking make
-//  them. … yes I saw your new deers they look trash"). The hand-drawn herd is
-//  REPLACED by frames sliced from CC-BY sprite sheets committed at
-//  core/assets/sprites/ (full credits + links: core/assets/sprites/CREDITS.md):
-//    • Calciumtrice "Deer" — male (antlers) + female, idle & GRAZING cycles
-//    • daneeklu "LPC style farm animals" — sheep eat cycle; pig eat cycle
-//      tinted boar-brown for the rooting boar (CC-BY allows derivatives)
-//    • Redshrike "Bunny Rabbit LPC style for PixelFarm" — hop frames
-//  Every row is normalised to face RIGHT (the old art's native direction), so
-//  wildlifePlan's flip semantics are untouched. A flat silhouette stands in
-//  for any row whose source file is ever missing.
-// ╚══════════════════════════════════════════════════════════════════════╝
+// +======================================================================+
+// ANIMAL SPRITE SHEET - REAL ONLINE ASSETS ("I said FIND
+// animal grazing assets ONLINE, ones that fit this theme, NOT fucking make
+// them. … yes I saw your new deers they look trash"). The hand-drawn herd is
+// REPLACED by frames sliced from CC-BY sprite sheets committed at
+// core/assets/sprites/ (full credits + links: core/assets/sprites/CREDITS.md):
+// • Calciumtrice "Deer" - male (antlers) + female, idle & GRAZING cycles
+// • daneeklu "LPC style farm animals" - sheep eat cycle; pig eat cycle
+// tinted boar-brown for the rooting boar (CC-BY allows derivatives)
+// • Redshrike "Bunny Rabbit LPC style for PixelFarm" - hop frames
+// Every row is normalised to face RIGHT (the old art's native direction), so
+// wildlifePlan's flip semantics are untouched. A flat silhouette stands in
+// for any row whose source file is ever missing.
+// +======================================================================+
 const SPRITE_DIR = path.join(__dirname, '..', 'assets', 'sprites');
 const _spriteImgs = new Map();
 function _spriteImg(name) {
@@ -329,9 +328,9 @@ function _spriteImg(name) {
 }
 
 // Per-row slicing spec → 4 pose columns of CW×CH each.
-//   file, frames [sx, sy, sw, sh]×4, scale, flipSrc (source faces LEFT),
-//   tint (boar-brown pixel remap), dy (extra px the art bottom sits above the
-//   cell ground line, matching the old painters' ground anchoring).
+// file, frames [sx, sy, sw, sh]×4, scale, flipSrc (source faces LEFT),
+// tint (boar-brown pixel remap), dy (extra px the art bottom sits above the
+// cell ground line, matching the old painters' ground anchoring).
 const SPRITE_ROWS = {
     [ROW.rabbit]: { file: 'rabbit_lpc.png', scale: 0.95, flipSrc: false, frames: [
         [27, 282, 26, 38], [59, 282, 28, 38], [91, 282, 38, 38], [134, 282, 33, 38]] },
@@ -351,7 +350,7 @@ const SPRITE_ROWS = {
         [0, 384, 128, 128], [128, 384, 128, 128], [256, 384, 128, 128], [384, 384, 128, 128]] },
 };
 
-/** Boar tint — the found pig sprite remapped from farm-pink to wild boar
+/** Boar tint - the found pig sprite remapped from farm-pink to wild boar
  *  browns (per-pixel multiply, alpha untouched). CC-BY allows derivatives. */
 function _tintBoar(c2, sw, sh) {
     const d = c2.getImageData(0, 0, sw, sh), p = d.data;
@@ -389,8 +388,8 @@ function paintSpriteRow(c2, row) {
             done = true;
         } catch (e) { /* source missing → vector fallback below */ }
         if (!done) {
-            // emergency fallback (sources are committed, so this should never
-            // fire): a flat silhouette so the clearing is never empty
+ // emergency fallback (sources are committed, so this should never
+ // fire): a flat silhouette so the clearing is never empty
             c2.fillStyle = '#6e5a3e';
             c2.beginPath(); c2.ellipse(0, -0.35 * CH * 0.33, CW * 0.28, CH * 0.16, 0, 0, Math.PI * 2); c2.fill();
             c2.beginPath(); c2.arc(CW * 0.22, -0.62 * CH * 0.33, CH * 0.09, 0, Math.PI * 2); c2.fill();
@@ -408,7 +407,7 @@ function _tintedFrame(sw, sh, img, sx, sy) {
     return off;
 }
 
-/** Bake (once) the sprite sheet PNG — 8 rows × 4 cols of CW×CH cells, now
+/** Bake (once) the sprite sheet PNG - 8 rows × 4 cols of CW×CH cells, now
  *  from the REAL online assets (cache key bumped hs3 → hs4 for the swap). */
 async function getHuntSpriteSheet() {
     const out = await mediaCache.cached('huntsprites', 'hs4-assets', async () => {
@@ -425,7 +424,7 @@ async function getHuntSpriteSheet() {
     return getHuntSpriteSheet._img;
 }
 
-/** Blit a sheet cell (with ground shadow) — flip for leftward travel. */
+/** Blit a sheet cell (with ground shadow) - flip for leftward travel. */
 function blitAnimal(ctx, sheet, row, col, x, y, scale = 1, flip = false, shadow = true) {
     const dw = CW * scale * SHEET_COMP, dh = CH * scale * SHEET_COMP;
     if (shadow) {
@@ -438,11 +437,11 @@ function blitAnimal(ctx, sheet, row, col, x, y, scale = 1, flip = false, shadow 
     ctx.restore();
 }
 
-// ── hunt overlays (band chosen AFTER the roll — never spoils rarity) ───────
+// -- hunt overlays (band chosen AFTER the roll - never spoils rarity) -------
 function paintHuntOverlay(ctx, w, h, t, band, sheet) {
     const hz = Math.round(HZ * h);
     if (band === 'low') {
-        // rabbit: three hops L→R along the trail, mid-ground
+ // rabbit: three hops L→R along the trail, mid-ground
         const u = Math.min(1, Math.max(0, (t - 0.06) / 0.88));
         if (u > 0 && u < 1) {
             const x = w * (0.14 + 0.66 * u), gy = hz + (h - hz) * 0.56;
@@ -451,7 +450,7 @@ function paintHuntOverlay(ctx, w, h, t, band, sheet) {
             blitAnimal(ctx, sheet, ROW.rabbit, pose, x, gy - hop, 0.62 * SHEET_COMP);
         }
     } else if (band === 'mid') {
-        // boar: trots in from the right, snout down, dust at its heels
+ // boar: trots in from the right, snout down, dust at its heels
         const u = Math.min(1, Math.max(0, (t - 0.04) / 0.9));
         if (u > 0 && u < 1) {
             const x = w * (0.88 - 0.74 * u), gy = hz + (h - hz) * (0.5 + 0.14 * u);
@@ -464,7 +463,7 @@ function paintHuntOverlay(ctx, w, h, t, band, sheet) {
             blitAnimal(ctx, sheet, ROW.boar, pose, x, gy, sc, true);
         }
     } else if (band === 'epic') {
-        // birds flush from the treeline gap first
+ // birds flush from the treeline gap first
         if (t > 0.04 && t < 0.26) {
             for (let i = 0; i < 3; i++) {
                 const bu = (t - 0.04) / 0.22, bx2 = w * (GAPX - 0.02 + i * 0.025) + bu * w * (0.05 + i * 0.02);
@@ -473,7 +472,7 @@ function paintHuntOverlay(ctx, w, h, t, band, sheet) {
                 ctx.beginPath(); ctx.moveTo(bx2 - h * 0.009, by2 + flap); ctx.lineTo(bx2, by2); ctx.lineTo(bx2 + h * 0.009, by2 + flap); ctx.stroke();
             }
         }
-        // the crowned stag: walks out, pauses alert with an antler glint, bounds off
+ // the crowned stag: walks out, pauses alert with an antler glint, bounds off
         const IN = 0.14, PAUSE0 = 0.55, PAUSE1 = 0.78, OUT = 0.96;
         if (t > IN && t < OUT) {
             let x, gy, sc, row, pose;
@@ -483,7 +482,7 @@ function paintHuntOverlay(ctx, w, h, t, band, sheet) {
                 sc = (0.8 + 0.25 * u) * SHEET_COMP; row = ROW.stag; pose = Math.floor(u * 8) % 4;
             } else if (t < PAUSE1) {
                 x = w * (GAPX - 0.03); gy = hz + (h - hz) * 0.64; sc = 1.05 * SHEET_COMP; row = ROW.alert; pose = 0;
-                if (t > 0.6 && t < 0.74) {   // antler glint — the crown reads gold
+                if (t > 0.6 && t < 0.74) {   // antler glint - the crown reads gold
                     const gl = Math.sin(((t - 0.6) / 0.14) * Math.PI);
                     const gx = x + 26 * sc, gyy = gy - CH * sc + 12 * sc;   // sc already compensated
                     ctx.strokeStyle = `rgba(244,224,160,${0.5 + 0.5 * gl})`; ctx.lineWidth = Math.max(1, h * 0.004);
@@ -501,14 +500,14 @@ function paintHuntOverlay(ctx, w, h, t, band, sheet) {
     }
 }
 
-// ── base-frame container through mediaCache (shared with the pond pipeline) ─
+// -- base-frame container through mediaCache (shared with the pond pipeline) -
 let _imgCache = new Map();
 function decodePngs(pngs) {
     const { Image } = require('canvas');
     return pngs.map((p) => { const im = new Image(); im.src = p; return im; });
 }
 
-/** Bake (once) the base frames for a biome+level — the clearing WITH its
+/** Bake (once) the base frames for a biome+level - the clearing WITH its
  *  grazing herd blitted in (Task 21). Every player shares one bake. */
 async function getHuntBaseFrames({ biome = 'isle', lvl = 1 } = {}) {
     const key = `hp3:${biome}:L${Math.max(1, Math.min(3, lvl))}`;
@@ -519,8 +518,8 @@ async function getHuntBaseFrames({ biome = 'isle', lvl = 1 } = {}) {
         for (let i = 0; i < FRAMES; i++) {
             const cv = createCanvas(GW, GH), c2 = cv.getContext('2d');
             paintFrame(c2, GW, GH, i / FRAMES, { biome, lvl });
-            // the deer herd + sheep live IN the clearing now (base art, graded
-            // with everything else by the day/night cycle at compose time)
+ // the deer herd + sheep live IN the clearing now (base art, graded
+ // with everything else by the day/night cycle at compose time)
             blitWildlife(c2, GW, GH, i / FRAMES, sheet, { biome, lvl });
             pngs.push(cv.toBuffer('image/png'));
         }
@@ -537,12 +536,12 @@ async function getHuntBaseFrames({ biome = 'isle', lvl = 1 } = {}) {
     return _imgCache.get(ck);
 }
 
-// ── compose: kept base frames + the hour's grade + night lights + overlay ──
-// ── hunt treeline occluder — the skyline the sun sets behind ───────────────
-// ⚠⚠ rng sequence MUST stay identical to paintFrame's (clouds eat 12 calls =
-// 3 clouds × 4, then the treeline loop eats 34) — this replicates the treeline
+// -- compose: kept base frames + the hour's grade + night lights + overlay --
+// -- hunt treeline occluder - the skyline the sun sets behind ---------------
+// rng sequence MUST stay identical to paintFrame's (clouds eat 12 calls =
+// 3 clouds × 4, then the treeline loop eats 34) - this replicates the treeline
 // so paintCelestial can CLIP the sun to the sky and REPAINT the trees over the
-// disc. Without this the sun floats on top of the forest (owner 2026-10-21).
+// disc. Without this the sun floats on top of the forest.
 function huntOccluder(w, h, biome = 'isle', lvl = 1) {
     const P = PALETTES[biome] || PALETTES.isle;
     const hz = Math.round(HZ * h);
@@ -554,7 +553,7 @@ function huntOccluder(w, h, biome = 'isle', lvl = 1) {
     return {
         lineAt: (x) => hz - th[Math.max(0, Math.min(33, Math.floor(x / step)))],
         repaint: (c) => {
-            // ⚠ shapes identical to paintFrame's treeline + gap + far strip
+ // shapes identical to paintFrame's treeline + gap + far strip
             c.fillStyle = P.farDark;
             for (let i = 0; i < 34; i++) {
                 const x = i * step;
@@ -593,8 +592,8 @@ async function composeHunt({ biome = 'isle', lvl = 1, phase = null, band = 'low'
                     dayNight.fireflies(c2, base.gw, base.gh, i / FRAMES, 71, 8, { x: 0, y: base.gh * 0.34, w: base.gw, h: base.gh * 0.6 });
                 }
             }
-            // "add the overlay to both": this hunt's animal + effects drawn OVER
-            // the kept clearing animation — same contract as the pond.
+ // "add the overlay to both": this hunt's animal + effects drawn OVER
+ // the kept clearing animation - same contract as the pond.
             paintHuntOverlay(c2, base.gw, base.gh, i / FRAMES, band, sheet);
             pngs.push(cv.toBuffer('image/png'));
         }
@@ -602,7 +601,7 @@ async function composeHunt({ biome = 'isle', lvl = 1, phase = null, band = 'low'
     });
 }
 
-/** `.j hunt` — the hunt GIF: kept base frames + hour + THIS hunt's overlay +
+/** `.j hunt` - the hunt GIF: kept base frames + hour + THIS hunt's overlay +
  * the grounds/catch plate. Final GIF cached per (biome, lvl, phase, band, loot). */
 async function renderHuntGif({ biome = 'isle', lvl = 1, band = 'low', drops = {}, phase = null, banner = null } = {}) {
     lvl = Math.max(1, Math.min(3, lvl));
@@ -626,11 +625,11 @@ async function renderHuntGif({ biome = 'isle', lvl = 1, band = 'low', drops = {}
         for (let i = 0; i < FRAMES; i++) {
             const cv = createCanvas(c.gw, c.gh), c2 = cv.getContext('2d');
             c2.drawImage(imgs[i], 0, 0, c.gw, c.gh);
-            if (i >= FRAMES - 5) require('./structureScenes').drawBanner(c2, c.gw, c.gh, { head, lines });   // ESTABLISHED ribbon (Task 22)
+            if (i >= FRAMES - 5) require('./structureScenes').drawBanner(c2, c.gw, c.gh, { head, lines }); // ESTABLISHED ribbon
             if (i === 0) {
-                // real frame-0 JPEG for the video-bubble preview — GIFs go out
-                // as { video, gifPlayback: true } (WhatsApp proto) and the
-                // engine patch stamps gray on videos without a thumbnail.
+ // real frame-0 JPEG for the video-bubble preview - GIFs go out
+ // as { video, gifPlayback: true } (WhatsApp proto) and the
+ // engine patch stamps gray on videos without a thumbnail.
                 try {
                     const tw = 240, th = Math.round(240 * c.gh / c.gw);
                     const tc = createCanvas(tw, th), tc2 = tc.getContext('2d');
@@ -647,7 +646,7 @@ async function renderHuntGif({ biome = 'isle', lvl = 1, band = 'low', drops = {}
     });
 }
 
-/** `.j base hunting` viewer still — the clearing wearing the hour, herd in. */
+/** `.j base hunting` viewer still - the clearing wearing the hour, herd in. */
 async function paintStill(ctx, w, h, { biome = 'isle', lvl = 1, phase = null } = {}) {
     phase = phase || dayNight.phaseAt();
     paintFrame(ctx, w, h, 0, { biome, lvl });
