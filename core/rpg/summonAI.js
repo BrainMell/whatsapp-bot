@@ -256,6 +256,7 @@ async function performSummonAction(sock, summonEntity, sessionKey) {
     }
   }
 
+  let summonDmg = 0; // 🔴 hit-flash: real damage this summon dealt this turn
   if (decision.action === 'guard' && decision.target) {
     // Guard mode: summon intercepts damage for the target
     decision.target.guardedBy = summonEntity.id;
@@ -271,6 +272,7 @@ async function performSummonAction(sock, summonEntity, sessionKey) {
         decision.target.stats.hp = Math.max(0, decision.target.stats.hp - damage.damage);
         decision.target.currentHP = decision.target.stats.hp;
         actionMsg += `⚔️ ${summonEntity.icon} ${summonEntity.name} attacks ${decision.target.name} for ${damage.damage} damage!`;
+        summonDmg = damage.damage;
         // 💡 FIX #6: Generate threat for the summon (0.7× multiplier - lower
         // than tanks so tanks hold aggro better, but summons still pull some)
         try { require('./threatSystem').generateThreat(summonEntity, damage.damage); } catch(e) {}
@@ -314,6 +316,7 @@ async function performSummonAction(sock, summonEntity, sessionKey) {
         } else {
           actionMsg += `✨ ${summonEntity.icon} ${summonEntity.name} uses ${skill.name || 'a skill'}!`;
         }
+        summonDmg = Math.max(0, Math.floor(Number(abilityRes && abilityRes.damage) || 0));
         // Check for kills
         if (decision.target.stats && decision.target.stats.hp <= 0) {
           actionMsg += `\n💀 ${decision.target.name} was defeated!`;
@@ -364,7 +367,7 @@ async function performSummonAction(sock, summonEntity, sessionKey) {
       actor: summonEntity,
       action: { name: decision.skill?.name || (decision.action === 'attack' ? 'Attack' : decision.action) },
       target: decision.target,
-      damage: 0,
+      damage: summonDmg,
       healing: 0,
       effects: [],
       turnNumber: state.turnCount || 0,

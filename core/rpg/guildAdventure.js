@@ -5791,6 +5791,7 @@ async function performAction(sock, player, action, sessionKey) {
       turnInfo.action = { name: action.result.abilityName || "Ability" };
       turnInfo.damage = action.result.damage || 0;
       turnInfo.healing = action.result.healing || 0;
+      turnInfo.target = action.result.target || null; // 🔴 hit-flash: real damaged entity rides to the Go renderer
     } else {
       resultMsg += `✨ Uses ability!`;
       turnInfo.action = { name: "Ability" };
@@ -6000,6 +6001,7 @@ async function performAction(sock, player, action, sessionKey) {
               }
             }
             turnInfo.damage = item.effectValue || 80;
+            turnInfo.target = state.enemies.find((e) => e.stats.hp > 0) || null; // 🔴 hit-flash: real damaged entity rides to the Go renderer
             break;
           case "aoe_debuff_damage":
             for (const e of state.enemies) {
@@ -6014,6 +6016,8 @@ async function performAction(sock, player, action, sessionKey) {
                 }
               }
             }
+            turnInfo.damage = item.effectValue || 150;
+            turnInfo.target = state.enemies.find((e) => e.stats.hp > 0) || null; // 🔴 hit-flash: real damaged entity rides to the Go renderer
             break;
           case "percent_hp_damage":
             // True damage based on % of Max HP (ignores defense)
@@ -6030,6 +6034,7 @@ async function performAction(sock, player, action, sessionKey) {
               (player.combatStats.damageDealt || 0) + finalDmg;
             resultMsg += `\n💥 The Abyssal Detonator consumes ${target.name}! Dealt ${finalDmg} TRUE damage!`;
             turnInfo.damage = finalDmg;
+            turnInfo.target = target; // 🔴 hit-flash: real damaged entity rides to the Go renderer
             if (target.stats.hp <= 0) {
               await handleDeath(sock, target, sessionKey, player.name);
               resultMsg += `\n💀 ${target.name} has fallen!`;
@@ -6319,6 +6324,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
           if (await checkCombatEnd(sock, state, sessionKey)) { resolve(); return; }
           turnInfo.action.name = skillData.name;
           turnInfo.target = target;
+          turnInfo.damage = Math.max(0, Math.floor(Number(abilityRes && abilityRes.damage) || 0)); // 🔴 hit-flash: real damaged entity rides to the Go renderer
           const statusPrefix = state.pendingStatusMsg ? state.pendingStatusMsg + '\n' : '';
           state.pendingStatusMsg = null;
           if (abilityRes && abilityRes.message) {
@@ -6368,6 +6374,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
 
           turnInfo.action.name = followUpSkill.name;
           turnInfo.target = target;
+          turnInfo.damage = Math.max(0, Math.floor(Number(abilityRes && abilityRes.damage) || 0)); // 🔴 hit-flash: real damaged entity rides to the Go renderer
           enemy.isCharging = false;
           enemy.chargingSkill = null;
           enemy.chargeTarget = null;
@@ -6475,6 +6482,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
 
         turnInfo.action.name = skill.name;
         turnInfo.target = target;
+        turnInfo.damage = Math.max(0, Math.floor(Number(abilityRes && abilityRes.damage) || 0)); // 🔴 hit-flash: real damaged entity rides to the Go renderer
 
         // 💡 BUG FIX: Send the enemy's full ability message (including damage
         // breakdown) IMMEDIATELY as a standalone message. Previously this was
@@ -12175,6 +12183,10 @@ async function applyAbilityEffect(
   let msg = `${icon} ${player.name} uses ${animStr}*${ability.name}*!\n\n`;
   let totalDamage = 0;
   let totalHealing = 0;
+  // 🔴 HIT FLASH (owner 2026-10-23: red aura in dungeons/raids too): first entity
+  // actually damaged or healed this cast, returned to the caller so the turn
+  // render payload can flash the right sprite red. Null for pure buffs/CC.
+  let hitTarget = null;
 
   // DAMAGE ABILITIES
   // 💡 QA FIX: removed "multi_hit" from damageKeywords - it caused multi-hit
@@ -12320,6 +12332,7 @@ async function applyAbilityEffect(
       target.stats.hp -= damage;
       target.currentHP = target.stats.hp; // Sync V2
       totalDamage += damage;
+      if (!hitTarget) hitTarget = target;
 
       if (!target.isEnemy) {
           const durabilitySystem = require('./durabilitySystem');
@@ -12499,6 +12512,7 @@ async function applyAbilityEffect(
       target.stats.hp -= damage;
       target.currentHP = target.stats.hp; // Sync V2
       totalDamage += damage;
+      if (!hitTarget) hitTarget = target;
 
       if (!target.isEnemy) {
           const durabilitySystem = require('./durabilitySystem');
@@ -12645,6 +12659,7 @@ async function applyAbilityEffect(
           target.stats.hp += healAmount;
           target.currentHP = target.stats.hp;
           totalHealing += healAmount;
+          if (!hitTarget) hitTarget = target;
 
           const targetIcon = target.class?.icon || "👤";
           // Display label uses chatHealMult only (so passive boost doesn't
@@ -12991,6 +13006,7 @@ async function applyAbilityEffect(
           target.stats.hp = Math.max(0, target.stats.hp - dmgResult.damage);
           target.currentHP = target.stats.hp;
           totalSplitDmg += dmgResult.damage;
+          if (!hitTarget) hitTarget = target;
           msg += `  ${i+1}. 💥 ${dmgResult.damage}${dmgResult.isCrit ? ' (CRIT!)' : ''}\n`;
           if (target.stats.hp <= 0) {
             target.isDead = true;
@@ -13074,6 +13090,7 @@ async function applyAbilityEffect(
         target.stats.hp += healAmount;
         target.currentHP = target.stats.hp;
         totalHealing += healAmount;
+        if (!hitTarget) hitTarget = target;
 
         const targetIcon = target.class?.icon || "👤";
         msg += `💚 ${targetIcon} ${target.name} healed for ${healAmount} HP!${chatHealMult < 1 ? " (Healing Reduced)" : chatHealMult > 1 ? " (Holy Ground!)" : ""}\n`;
@@ -13224,6 +13241,7 @@ async function applyAbilityEffect(
           }
         }
         target.currentHP = Math.max(0, target.stats.hp);
+        if (!hitTarget) hitTarget = target;
 
         if (target.stats.hp > 0 && target.isBoss) {
           await checkBossPhase(sock, target, chatId);
@@ -13348,6 +13366,7 @@ async function applyAbilityEffect(
         const executeDmg = Math.floor(totalDamage * (effect.executeBonus - 1));
         target.stats.hp = Math.max(0, target.stats.hp - executeDmg);
         target.currentHP = target.stats.hp;
+        if (!hitTarget) hitTarget = target;
         msg += `💀⚔️ SOUL RIP! ${target.name} is executed for ${executeDmg} bonus true damage!\n`;
         if (target.stats.hp <= 0 && !target.isDead) {
           target.isDead = true;
@@ -13419,7 +13438,7 @@ async function applyAbilityEffect(
     msg += `💧 Targets are soaked - primed for SHOCK synergy!\n`;
   }
 
-  return { message: msg, damage: totalDamage, healing: totalHealing };
+  return { message: msg, damage: totalDamage, healing: totalHealing, target: hitTarget || null };
 }
 // ==========================================
 // 🎯 TARGET SELECTION HELPERS

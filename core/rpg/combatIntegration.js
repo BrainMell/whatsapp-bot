@@ -155,6 +155,24 @@ function buildAnimationAction(turnInfo, options = {}) {
     }
     if (targetIndex < 0) targetSide = null;
 
+    // 🔴 HIT FLASH FALLBACK (owner 2026-10-23: "the red aura should be in regular
+    // dungeons and raids too"): the turn dealt real damage but no explicit target
+    // survived resolution (DoT-style paths, edge cases). Infer the most plausible
+    // victim from the attacker's side so the Go renderer always has someone to
+    // flash — abyss parity (it flashes on damage>0 alone). Explicit targets
+    // always win when present.
+    if (!targetSide && Number(turnInfo.damage) > 0) {
+      const aliveIdx = (arr) => arr.findIndex((e) => e && !e.isDead && !e.justDied &&
+        ((e.currentHP ?? e.stats?.hp ?? 0) > 0));
+      if (attackerSide === 'player' || attackerSide === 'summon') {
+        const vi = aliveIdx(enemies);
+        if (vi >= 0) { targetSide = 'enemy'; targetIndex = vi; }
+      } else if (attackerSide === 'enemy') {
+        const vi = aliveIdx(players);
+        if (vi >= 0) { targetSide = 'player'; targetIndex = vi; }
+      }
+    }
+
     // If we can't resolve sides, skip animation (fall back to static)
     if (!attackerSide || !targetSide) return null;
 
