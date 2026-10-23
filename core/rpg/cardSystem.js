@@ -4725,6 +4725,11 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       return true;
 
     case 'cs':
+      // 💡 2026-10-24 owner: cs is the info alternative — same card-mod wall.
+      // §10 walled .j info / .j ci / .j rc, but .j cs still handed regular
+      // users name/tier/ID/series lookups (the exact data the wall guards).
+      // Gate identical to info's — owner/global mods/card mods pass untouched.
+      if (!isCardMod) return reply('❌ Card search is for card moderators and above only.'), true;
       await cmdCS(reply, args, { isOwner, isCardMod });
       return true;
 
