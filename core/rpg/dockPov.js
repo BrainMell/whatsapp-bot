@@ -698,15 +698,25 @@ async function getBaseGif({ biome = 'isle', lvl = 1, phase = null, band = 'low' 
     });
 }
 
-/** The loot ribbon ALONE on a transparent GW×GH canvas — the plaster. */
+/** The loot ribbon ALONE on a transparent GW×GH canvas — the plaster. Task 25:
+ *  the ribbon now carries the catch's item portraits (lootArt) when drops rode
+ *  in — gold-rimmed slots + fish art beside the text. */
 async function renderRibbonOverlay(ribbon) {
-    const plateKey = hashStr(JSON.stringify(ribbon));
+    const plateKey = hashStr(JSON.stringify({ head: ribbon.head, lines: ribbon.lines, drops: ribbon.drops || null }));
     return mediaCache.cached('fishribbon', `fr:${plateKey}`, async () => {
         const { createCanvas } = require('canvas');
         const scenes = require('./structureScenes');
         try { require('./worldMapRenderer')._ensureFonts(); } catch (e) { /* default fonts */ }
         const cv = createCanvas(GW, GH), c2 = cv.getContext('2d');
-        scenes.drawBanner(c2, GW, GH, ribbon);
+        const spec = { head: ribbon.head, lines: ribbon.lines };
+        if (ribbon.drops) {
+            try {
+                const art = await require('./lootArt').artForDrops(ribbon.drops);
+                if (art.length) spec.art = art;
+            } catch (e) { /* art is decorative */ }
+        }
+        if (spec.art && spec.art.length) scenes.drawLootBanner(c2, GW, GH, spec);
+        else scenes.drawBanner(c2, GW, GH, spec);
         const png = cv.toBuffer('image/png');
         if (!png || png.length < 100) throw new Error('ribbon overlay render failed');
         return { buffer: png, contentType: 'image/png' };
@@ -718,8 +728,8 @@ async function renderFishingGif({ biome = 'isle', lvl = 1, band = 'low', drops =
     lvl = Math.max(1, Math.min(3, lvl));
     phase = phase || dayNight.phaseAt();
     const ribbon = banner && (banner.head || (banner.lines || []).length)
-        ? { head: String(banner.head || 'The Pond'), lines: (banner.lines || []).slice(0, 6) }
-        : { head: 'The Pond', lines: plateLines('fish', drops) };
+        ? { head: String(banner.head || 'The Pond'), lines: (banner.lines || []).slice(0, 6), drops: drops || null }
+        : { head: 'The Pond', lines: plateLines('fish', drops), drops: drops || null };
     const plateKey = hashStr(JSON.stringify(ribbon));
     const key = `pg4o:${biome}:L${lvl}:${phase}:${band}:${plateKey}`;
     const out = await mediaCache.cached('fishgif', key, async () => {

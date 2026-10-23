@@ -1198,7 +1198,7 @@ async function mineOre(sock, chatId, senderJid, locationId) {
         const lines = Object.entries(found).map(([id, qty]) => `${qty}× ${lootSystem.getItemInfo(id).name}`);
         if (luckyFinds > 0) lines.push(`+${luckyFinds.toLocaleString()} ZENI (lucky find)`);
         lines.push(`⚡ -${energyCost} energy · Mines Lv.${minesLvl} (×${minesMult})`);
-        const card = await _bb.zoomForCommand({ senderJid, prefix: getPrefix() }, 'mines', { activity: 'mining', banner: { head: loc.name, lines } });
+        const card = await _bb.zoomForCommand({ senderJid, prefix: getPrefix() }, 'mines', { activity: 'mining', drops: found, banner: { head: loc.name, lines } });
         if (card && card.buffer && card.buffer.length > 500) return await sock.sendMessage(chatId, { image: card.buffer, caption: msg });
     } catch (e) { /* text result below */ }
     await sock.sendMessage(chatId, { text: msg });

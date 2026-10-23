@@ -55,13 +55,70 @@ function drawBanner(ctx, w, h, banner = {}) {
 }
 
 /**
- * spec: { title, subtitle, rows:[[label,value],...] (≤6), actions:[string,...] (≤5), footer,
+ * The RESULT banner with LOOT ART (Task 25, owner 2026-10-23): the same dark +
+ * gold double-border plate as drawBanner, but the haul gets item portraits —
+ * Kenney fish / the hunting sheets' animals / the ore icons — in gold-rimmed
+ * slots on the left, the text lines beside them. `art` items come from
+ * lootArt.artForDrops(): [{ id, qty, img, w, h }].
+ */
+function drawLootBanner(ctx, w, h, banner = {}) {
+    const head = String(banner.head || ''), lines = (banner.lines || []).slice(0, 4);
+    const art = (banner.art || []).slice(0, 4);
+    if (!head && !lines.length) return;
+    const u = h / 1000;
+    const A = 118 * u, gap = 16 * u, pad = 30 * u;
+    ctx.save();
+    ctx.font = `${Math.max(11, Math.round(25 * u))}px Cinzel`;
+    const textMax = Math.min(460 * u, lines.reduce((m, ln) => Math.max(m, ctx.measureText(String(ln).slice(0, 56)).width), 0));
+    const artW = art.length ? art.length * (A + gap) - gap + pad : 0;
+    const bw = Math.min(w - 120 * u, Math.max(560 * u, artW + textMax + 76 * u));
+    const bodyH = Math.max(art.length ? A + 20 * u : 0, lines.length * 34 * u + 20 * u);
+    const bh = 64 * u + bodyH + 22 * u;
+    const bx = (w - bw) / 2, by = 36 * u;
+    ctx.fillStyle = 'rgba(28,19,10,0.90)'; K.roundRect(ctx, bx, by, bw, bh, 18 * u); ctx.fill();
+    ctx.strokeStyle = '#c9a65a'; ctx.lineWidth = Math.max(1.5, 3 * u); K.roundRect(ctx, bx, by, bw, bh, 18 * u); ctx.stroke();
+    ctx.strokeStyle = 'rgba(201,166,90,0.35)'; ctx.lineWidth = Math.max(1, u); K.roundRect(ctx, bx + 7 * u, by + 7 * u, bw - 14 * u, bh - 14 * u, 13 * u); ctx.stroke();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `${Math.max(13, Math.round(34 * u))}px "Cinzel Deco", Cinzel`; ctx.fillStyle = '#f2dfa8';
+    ctx.fillText(head.slice(0, 42), w / 2, by + 40 * u);
+    // art slots — gold-rimmed cells, portrait centred, qty chip bottom-right
+    const slotY = by + 74 * u;
+    art.forEach((a, i) => {
+        const sx = bx + pad + i * (A + gap);
+        ctx.fillStyle = 'rgba(0,0,0,0.38)'; K.roundRect(ctx, sx, slotY, A, A, 12 * u); ctx.fill();
+        ctx.strokeStyle = '#c9a65a'; ctx.lineWidth = Math.max(1.5, 2.5 * u); K.roundRect(ctx, sx, slotY, A, A, 12 * u); ctx.stroke();
+        const iw = a.img.width || a.w, ih = a.img.height || a.h;
+        const sc = Math.min((A - 22 * u) / iw, (A - 22 * u) / ih);
+        const dw = iw * sc, dh = ih * sc;
+        try { ctx.imageSmoothingEnabled = true; ctx.drawImage(a.img, sx + (A - dw) / 2, slotY + (A - dh) / 2, dw, dh); } catch (e) { /* art is decorative */ }
+        const q = `×${a.qty}`;
+        ctx.font = `${Math.max(11, Math.round(21 * u))}px Cinzel`;
+        const qw = ctx.measureText(q).width + 16 * u;
+        ctx.fillStyle = 'rgba(20,13,6,0.92)'; K.roundRect(ctx, sx + A - qw - 6 * u, slotY + A - 30 * u, qw, 26 * u, 7 * u); ctx.fill();
+        ctx.strokeStyle = 'rgba(201,166,90,0.7)'; ctx.lineWidth = u; K.roundRect(ctx, sx + A - qw - 6 * u, slotY + A - 30 * u, qw, 26 * u, 7 * u); ctx.stroke();
+        ctx.fillStyle = '#f2dfa8'; ctx.fillText(q, sx + A - qw / 2 - 6 * u, slotY + A - 17 * u);
+    });
+    // loot lines beside the slots, vertically centred in the body area
+    const tx = art.length ? bx + pad + art.length * (A + gap) + 12 * u : bx + pad + 8 * u;
+    const bodyTop = by + 74 * u, bodyH2 = bh - 74 * u - 22 * u;
+    const y0 = bodyTop + bodyH2 / 2 - (lines.length - 1) * 17 * u;
+    ctx.textAlign = 'left';
+    ctx.font = `${Math.max(11, Math.round(25 * u))}px Cinzel`; ctx.fillStyle = '#e8d5a3';
+    lines.forEach((ln, i) => ctx.fillText(String(ln).slice(0, 56), tx, y0 + i * 34 * u));
+    ctx.restore();
+}
+
+/** spec: { title, subtitle, rows:[[label,value],...] (≤6), actions:[string,...] (≤5), footer,
  *         banner:{ head, lines:[...] } , accent:'#c9a65a' }
  */
 function drawPanel(ctx, w, h, spec = {}) {
     const accent = spec.accent || '#c9a65a';
-    // result ribbon floats over the art, top-centre (shared painter — Task 22)
-    if (spec.banner && (spec.banner.head || (spec.banner.lines || []).length)) drawBanner(ctx, w, h, spec.banner);
+    // result ribbon floats over the art, top-centre (shared painter — Task 22;
+    // Task 25: banners that carry loot art use the portrait variant)
+    if (spec.banner && (spec.banner.head || (spec.banner.lines || []).length)) {
+        if (spec.banner.art && spec.banner.art.length) drawLootBanner(ctx, w, h, spec.banner);
+        else drawBanner(ctx, w, h, spec.banner);
+    }
     const x0 = 28, pw = w - 56, y0 = h - PANEL_H - 22;
     ctx.save();
     ctx.fillStyle = 'rgba(24,17,10,0.90)'; K.roundRect(ctx, x0, y0, pw, PANEL_H, 18); ctx.fill();
@@ -249,6 +306,66 @@ function drawMiner(ctx, x, y, s, flip = false) {
     ctx.fillStyle = '#ffe9a3'; ctx.beginPath(); ctx.arc(0.16 * s, -1.62 * s, 0.07 * s, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
 }
+/** ⚙️ The mine MACHINE (Task 25, owner 2026-10-23: ".j mine, instead of a person
+ *  doing that make it a machine or something"). A tracked steam-drill rig in the
+ *  same flat-shaded style as the other actors: crawler tracks, riveted boiler
+ *  hull, lit cab, flywheel, exhaust smoke and a drill bit chewing the rock face
+ *  to the LEFT (flip to mirror). Anchor (x, y) = ground point, s ≈ height unit.
+ */
+function drawMineMachine(ctx, x, y, s, seed = 1, flip = false) {
+    const rng = mulberry32(hashStr(`machine:${seed}`));
+    ctx.save(); ctx.translate(x, y); if (flip) ctx.scale(-1, 1);
+    shade(ctx, 0, 0.05 * s, 1.5 * s, 0.2 * s, 0.28);
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    // ── crawler tracks
+    ctx.fillStyle = '#26262c';
+    ctx.beginPath(); ctx.moveTo(-1.18 * s, -0.5 * s); ctx.lineTo(1.02 * s, -0.5 * s);
+    ctx.arc(1.02 * s, -0.29 * s, 0.21 * s, -Math.PI / 2, Math.PI / 2);
+    ctx.lineTo(-1.18 * s, -0.08 * s);
+    ctx.arc(-1.18 * s, -0.29 * s, 0.21 * s, Math.PI / 2, Math.PI * 1.5);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#51515a';
+    for (const wx of [-0.92, -0.32, 0.28, 0.82]) { ctx.beginPath(); ctx.arc(wx * s, -0.29 * s, 0.15 * s, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#1b1b20'; ctx.beginPath(); ctx.arc(wx * s, -0.29 * s, 0.06 * s, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#51515a'; }
+    // ── riveted boiler hull (rust red)
+    ctx.fillStyle = '#8a4a2a'; ctx.strokeStyle = '#3f2010'; ctx.lineWidth = 0.045 * s;
+    ctx.beginPath(); ctx.moveTo(-1.02 * s, -0.52 * s); ctx.lineTo(0.98 * s, -0.52 * s); ctx.lineTo(0.9 * s, -1.38 * s); ctx.lineTo(-0.94 * s, -1.38 * s); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = 'rgba(63,32,16,0.55)'; ctx.lineWidth = 0.02 * s;
+    ctx.beginPath(); ctx.moveTo(-0.98 * s, -0.82 * s); ctx.lineTo(0.94 * s, -0.82 * s); ctx.stroke();
+    ctx.fillStyle = '#c98a4a';
+    for (const [rx, ry] of [[-0.88, -1.26], [-0.88, -0.62], [0.84, -1.26], [0.84, -0.62], [0.0, -0.62]]) { ctx.beginPath(); ctx.arc(rx * s, ry * s, 0.028 * s, 0, Math.PI * 2); ctx.fill(); }
+    // ── cab (lit window)
+    ctx.fillStyle = '#a85a32'; ctx.strokeStyle = '#3f2010'; ctx.lineWidth = 0.045 * s;
+    ctx.fillRect(0.3 * s, -1.98 * s, 0.62 * s, 0.62 * s); ctx.strokeRect(0.3 * s, -1.98 * s, 0.62 * s, 0.62 * s);
+    ctx.fillStyle = '#3f2010'; ctx.fillRect(0.38 * s, -1.88 * s, 0.44 * s, 0.34 * s);
+    ctx.fillStyle = '#ffd98a'; ctx.fillRect(0.41 * s, -1.85 * s, 0.38 * s, 0.28 * s);
+    // exhaust + smoke puffs
+    ctx.fillStyle = '#4a4a52'; ctx.fillRect(-0.62 * s, -2.02 * s, 0.13 * s, 0.66 * s);
+    for (let i = 0; i < 3; i++) {
+        const py = -2.1 * s - i * 0.24 * s, pr = (0.11 + rng() * 0.06) * s + i * 0.05 * s;
+        ctx.fillStyle = `rgba(232,228,220,${0.42 - i * 0.11})`;
+        ctx.beginPath(); ctx.arc((-0.56 + (rng() - 0.5) * 0.3) * s, py, pr, 0, Math.PI * 2); ctx.fill();
+    }
+    // ── flywheel on the hull flank
+    ctx.fillStyle = '#3a3a42'; ctx.beginPath(); ctx.arc(-0.42 * s, -0.95 * s, 0.3 * s, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#6a6a74'; ctx.lineWidth = 0.035 * s;
+    for (let i = 0; i < 6; i++) { const a2 = i / 6 * Math.PI * 2 + 0.3; ctx.beginPath(); ctx.moveTo(-0.42 * s, -0.95 * s); ctx.lineTo(-0.42 * s + Math.cos(a2) * 0.27 * s, -0.95 * s + Math.sin(a2) * 0.27 * s); ctx.stroke(); }
+    ctx.fillStyle = '#c9a65a'; ctx.beginPath(); ctx.arc(-0.42 * s, -0.95 * s, 0.06 * s, 0, Math.PI * 2); ctx.fill();
+    // ── drill boom + bit chewing the rock face to the left
+    ctx.strokeStyle = '#5a5a64'; ctx.lineWidth = 0.14 * s;
+    ctx.beginPath(); ctx.moveTo(-0.9 * s, -1.05 * s); ctx.lineTo(-1.62 * s, -0.72 * s); ctx.stroke();
+    ctx.fillStyle = '#6a6a74'; ctx.beginPath(); ctx.arc(-0.9 * s, -1.05 * s, 0.11 * s, 0, Math.PI * 2); ctx.fill();
+    ctx.save(); ctx.translate(-1.62 * s, -0.72 * s); ctx.rotate(0.5);
+    for (let i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? '#b9c2cc' : '#8a94a0'; ctx.beginPath(); ctx.moveTo(-0.09 * s, -i * 0.13 * s); ctx.lineTo(0.09 * s, -i * 0.13 * s); ctx.lineTo(0.05 * s, -(i + 1) * 0.13 * s); ctx.lineTo(-0.05 * s, -(i + 1) * 0.13 * s); ctx.closePath(); ctx.fill(); }
+    ctx.fillStyle = '#e2e8ee'; ctx.beginPath(); ctx.moveTo(-0.05 * s, -0.52 * s); ctx.lineTo(0.05 * s, -0.52 * s); ctx.lineTo(0, -0.66 * s); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    // dust collar where the bit meets the face
+    ctx.fillStyle = 'rgba(196,178,140,0.5)'; ctx.beginPath(); ctx.ellipse(-1.86 * s, -0.5 * s, 0.16 * s, 0.1 * s, -0.4, 0, Math.PI * 2); ctx.fill();
+    // headlamp
+    ctx.fillStyle = '#ffe9a3'; ctx.beginPath(); ctx.arc(0.95 * s, -1.16 * s, 0.055 * s, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+}
+
 function drawSparks(ctx, x, y, s, seed = 1, n = 5) {
     const rng = mulberry32(hashStr(`spark:${seed}`));
     ctx.save(); ctx.translate(x, y);
@@ -495,10 +612,12 @@ function buildScene(type, lvl, biome, seed, o = {}) {
             P('wheelbarrow', { dx: 1.5, dz: 2.4, sc: 1.2 });
             if (lvl >= 2) { P('ladder', { dx: -2.2, dz: 0.8, sc: 1.4 }); P('crate_long_A', { dx: -2.9, dz: 1.7, sc: 1.2 }); }
             if (lvl >= 3) { P('building_scaffolding', { dx: -2.6, dz: -0.6, sc: 1.5, flip: true }); P('resource_lumber', { dx: 0.4, dz: 2.9, sc: 1.2 }); P('crate_B_big', { dx: -1.6, dz: 2.5, sc: 1.1 }); }
-            // ⛏️ §12: a miner working the face — pickaxe up, chips flying
+            // ⚙️ Task 25: the MACHINE works the face — steam-drill rig chewing
+            // the rock, chips flying from the bit (owner: "instead of a person
+            // doing that make it a machine or something")
             if (activity === 'mining') {
-                w.overlay((c2, p, k) => drawMiner(c2, p.x, p.y, 52 * k * 2 / 1.5, true), 0, 0, { dx: cen.x + 1.6, dz: cen.z + 1.9 });
-                w.overlay((c2, p, k) => drawSparks(c2, p.x - 18 * (k * 2 / 1.5), p.y - 60 * (k * 2 / 1.5), 40 * k * 2 / 1.5, seed, 7), 0, 0, { dx: cen.x + 1.6, dz: cen.z + 1.9 });
+                w.overlay((c2, p, k2) => { const MS = 46 * k2 * 2 / 1.5; drawMineMachine(c2, p.x, p.y, MS, seed); }, 0, 0, { dx: cen.x + 1.45, dz: cen.z + 1.95 });
+                w.overlay((c2, p, k2) => { const MS = 46 * k2 * 2 / 1.5; drawSparks(c2, p.x - 1.86 * MS, p.y - 0.5 * MS, 40 * k2 * 2 / 1.5, seed, 7); }, 0, 0, { dx: cen.x + 1.45, dz: cen.z + 1.95 });
             }
             break;
         }
@@ -653,6 +772,15 @@ async function renderStructureCard(o = {}) {
     const key = hashStr(JSON.stringify(['sc3', isPondView ? 'pond_pov' : isHuntView ? 'hunt_pov' : type, lvl, biome, seed, activity, spotlight, tint, phase, o.spec || {}]));
     return mediaCache.cached('structcard', key, async () => {
         fonts();
+        // Task 25: loot portraits in the result banner — resolved from the
+        // drops that rode in with the spec (fish/hunt/mine results)
+        try {
+            const drops = (o.spec && o.spec.banner && o.spec.banner.drops) || (o.spec && o.spec.drops) || null;
+            if (drops && o.spec.banner) {
+                const art = await require('./lootArt').artForDrops(drops);
+                if (art.length) o.spec.banner = { ...o.spec.banner, art };
+            }
+        } catch (e) { /* art is decorative — never block the card */ }
         const { createCanvas } = require('canvas');
         const cv = createCanvas(W, H), ctx = cv.getContext('2d');
         if (isPondView) {
@@ -686,4 +814,4 @@ async function renderStructureCard(o = {}) {
     });
 }
 
-module.exports = { renderStructureCard, drawPanel, drawBanner, drawDeer, drawBoar, drawCampfire, drawMerchant, drawMiner, drawCauldron, drawBottleShelf, drawSummonCircle, drawSummonSprite, pickSummons, drawMedCross, PANEL_H, W, H };
+module.exports = { renderStructureCard, drawPanel, drawBanner, drawLootBanner, drawDeer, drawBoar, drawCampfire, drawMerchant, drawMiner, drawMineMachine, drawCauldron, drawBottleShelf, drawSummonCircle, drawSummonSprite, pickSummons, drawMedCross, PANEL_H, W, H };

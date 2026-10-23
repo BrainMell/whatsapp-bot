@@ -453,7 +453,7 @@ async function cmdActivity(ctx, kind) {
             const note = kind === 'hunt'
                 ? `Hunts today: ${res.dailyUsed}/${act.RULES.hunt.dailyLimit} · resets midnight UTC.`
                 : `No line rest — cast again whenever you like.`;
-            try { media = await renderZoom(ctx, rec, st, { banner: res.banner, note, activity: kind === 'fish' ? 'fishing' : 'hunting', spotlight: spot }); } catch (e) { console.error('[base] activity card failed:', e.message); }
+            try { media = await renderZoom(ctx, rec, st, { banner: res.banner, drops: res.drops, note, activity: kind === 'fish' ? 'fishing' : 'hunting', spotlight: spot }); } catch (e) { console.error('[base] activity card failed:', e.message); }
         }
         if (media && media.buffer) {
             // Task 24: the fish lane ships a REAL MP4 straight from dockPov —
