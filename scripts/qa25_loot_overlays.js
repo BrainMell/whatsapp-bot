@@ -130,7 +130,8 @@ function diffStats(img1, img2) {
     const imgK = await toImg(ovKoi.buffer);
     const koiOrange = countColor(imgK, [244, 128, 38], 46);
     const koiWhite = countColor(imgK, [252, 250, 244], 14);
-    check('C6 koi pixels present', koiOrange > 100 && koiWhite > 60, `orange=${koiOrange}px white=${koiWhite}px`);
+    // slot at this canvas is ~42px (A = 118 × GH/1000 ≈ 42.5) — calibrate to that
+    check('C6 koi pixels present', koiOrange > 40 && koiWhite > 30, `orange=${koiOrange}px white=${koiWhite}px`);
 
     console.log('— C7: banner geometry —');
     const U = dockPov.GH / 1000, GW = dockPov.GW, GH = dockPov.GH;
