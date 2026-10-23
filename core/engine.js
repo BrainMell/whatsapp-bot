@@ -33552,13 +33552,44 @@ _(or reply to their message)_
                   // 💡 PROJECT REALGUY (owner 2026-10-20): feed EVERY text
                   // message in enabled chats to the persona's ambient-awareness
                   // buffer — the bot "hears" the group even when it stays quiet.
+                  // 💡 REALGUY v5: resolve WHO this message is aimed at (reply
+                  // quote target / @tags) so the model sees "sam (replying to
+                  // mike): ..." instead of a raw "@2348..." blob.
+                  let _obsText = String(cleanTxt || txt || "");
+                  let _replyToName = null;
+                  let _toNames = null;
+                  const _nameOfJid = (j) => {
+                    try {
+                      const nj = jidNormalizedUser(j);
+                      if (nj === botJid || (botLid && nj === botLid)) return botConfig.getBotName();
+                      return personaEngine.bestName(chatId, nj, null) || economy.getDisplayName(nj) || null;
+                    } catch (e) { return null; }
+                  };
+                  try {
+                    if (quotedParticipant && waContextInfo?.quotedMessage) {
+                      _replyToName = _nameOfJid(quotedParticipant);
+                    }
+                    const _men = waContextInfo?.mentionedJid || [];
+                    if (_men.length) {
+                      _toNames = [];
+                      for (const j of _men) {
+                        const nm = _nameOfJid(j);
+                        if (!nm) continue;
+                        _toNames.push(nm);
+                        const dg = _digitsOf(j);
+                        if (dg) _obsText = _obsText.split("@" + dg).join("@" + nm);
+                      }
+                    }
+                  } catch (e) {}
                   try {
                     personaEngine.observe({
                       chatId,
                       who: m.pushName || economy.getDisplayName(senderJid) || "someone",
                       jid: senderJid, // 💡 REALGUY v2.5: identity for the name roster
-                      text: String(cleanTxt || txt || ""),
+                      text: _obsText,
                       ts: Date.now(),
+                      replyTo: _replyToName,
+                      toNames: _toNames,
                     });
                   } catch (e) {}
 
@@ -33834,6 +33865,7 @@ _(or reply to their message)_
                           text: promptWithReply,
                           isAmbient: false,
                           profileText: _profileText,
+                          addressMode: isReplyToBot ? "reply" : isBotMentioned ? "mention" : "name",
                         }),
                       { retryOnNull: true }, // an empty direct turn is a failure — retry it
                     );
@@ -33851,8 +33883,15 @@ _(or reply to their message)_
                       ts: Date.now(),
                     });
 
-                    const mood = await detectMood(prompt);
-                    const stickerPath = getRandomSticker(mood);
+                    // 💡 REALGUY v5: sticker mood comes from what the bot
+                    // ACTUALLY said (not the user's message), deterministic
+                    // file mapping, no repeats, sparse — see pickSticker().
+                    const _stk = personaEngine.pickSticker({
+                      chatId,
+                      replyText: _turn.replies.join(" "),
+                      exists: (f) => fs.existsSync(botConfig.getStickerPath(f)),
+                    });
+                    const stickerPath = _stk ? botConfig.getStickerPath(_stk.file) : null;
 
                     // send the reply the human way (presence → typing delay →
                     // chunks → paused; every send silently retried x2 more).
@@ -33866,11 +33905,9 @@ _(or reply to their message)_
                       { quoteM: m },
                     );
 
-                    // Determine sticker probability based on mood
-                    const stickerChance = mood === "neutral" ? 0.15 : 0.40;
-
-                    // send sticker only if file exists and chance hits
-                    if (stickerPath && fs.existsSync(stickerPath) && Math.random() < stickerChance) {
+                    // pickSticker already rolled the chance + cooldown
+                    if (stickerPath && fs.existsSync(stickerPath)) {
+                      await new Promise((r) => setTimeout(r, 700 + Math.floor(Math.random() * 900)));
                       try {
                         await sock.sendMessage(chatId, {
                           sticker: fs.readFileSync(stickerPath),

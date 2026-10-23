@@ -111,7 +111,7 @@ function initPersona(d) {
 }
 
 // ─── L2: ambient awareness buffer ────────────────────────────────────────────
-function observe({ chatId, who, jid, text, ts }) {
+function observe({ chatId, who, jid, text, ts, replyTo, toNames }) {
   if (!chatId || typeof text !== 'string' || !text.trim()) return;
   const t = text.replace(/\s+/g, ' ').trim().slice(0, 300);
   if (!t) return;
@@ -125,6 +125,9 @@ function observe({ chatId, who, jid, text, ts }) {
     jid: jid ? String(jid) : null,
     text: t,
     ts: ts || Date.now(),
+    // REALGUY v5: who this line was aimed at (reply-quote target / @tags)
+    replyTo: replyTo ? String(replyTo).slice(0, 40) : null,
+    toNames: Array.isArray(toNames) ? toNames.map((x) => String(x).slice(0, 30)).slice(0, 4) : null,
   });
   // 💡 REALGUY v2.5: every observed message teaches the roster — WhatsApp
   // name + any self-introduced moniker ("call me X") — deterministically.
@@ -144,7 +147,12 @@ function transcriptBlock(chatId) {
   // 💡 REALGUY v2.5: render each line under the person's BEST known name
   // (profile nickname / moniker > WhatsApp name) so the model sees the names
   // people actually use, not raw WhatsApp display names.
-  return recent.map((m) => `${bestName(chatId, m.jid, m.who)}: ${m.text}`).join('\n');
+  return recent
+    .map((m) => {
+      const to = m.replyTo ? ` (replying to ${m.replyTo})` : m.toNames && m.toNames.length ? ` (to ${m.toNames.join(', ')})` : '';
+      return `${bestName(chatId, m.jid, m.who)}${to}: ${m.text}`;
+    })
+    .join('\n');
 }
 
 // ─── L2: long-term facts (shared system KV, Mongo-backed) ────────────────────
@@ -367,6 +375,28 @@ function rosterBlock(chatId, excludeJid) {
   return lines.length ? lines.join('\n') : '';
 }
 
+// REALGUY v5: "mike you coming?" / "yo sam, ..." → first word is somebody ELSE's
+// name from the roster, so the message isn't ours. Deterministic, no model.
+function addressedToOtherByName(chatId, text) {
+  try {
+    const chat = getNamesMap()[chatId];
+    if (!chat) return false;
+    const t = String(text || '').trim().toLowerCase().replace(/^(yo|hey|ayo|ay|oi|bro|dude)[\s,]+/, '');
+    const first = (t.match(/^[a-z0-9_]{2,20}/) || [''])[0];
+    if (!first || first === String(deps.botName || '').toLowerCase()) return false;
+    for (const k of Object.keys(chat)) {
+      const e = chat[k] || {};
+      const names = [e.w, ...(Array.isArray(e.m) ? e.m : [])];
+      try { names.push(deps.nameResolver(k)); } catch (e2) {}
+      for (const n of names) {
+        const nm = String(n || '').trim().toLowerCase().split(/\s+/)[0];
+        if (nm && nm.length >= 3 && nm === first && /^[a-z0-9_]+\s*[,:?!]|^[a-z0-9_]+\s+(you|u|ur|your|are|r|can|did|do|where|wya|come|pls|bro)\b/.test(t)) return true;
+      }
+    }
+  } catch (e) {}
+  return false;
+}
+
 // ─── L1: ambient trigger ─────────────────────────────────────────────────────
 function shouldAmbient({ chatId, text, isGroup }) {
   if (!deps.ready || !isGroup || !chatId) return false;
@@ -375,6 +405,7 @@ function shouldAmbient({ chatId, text, isGroup }) {
   if (/^[.!/]/.test(t)) return false; // commands
   if (t.startsWith(BOT_MARKER)) return false; // bot-family echo
   if (t.split(/\s+/).length < AMBIENT_MIN_WORDS) return false;
+  if (addressedToOtherByName(chatId, t)) return false;
   const now = Date.now();
   if (now - (lastAmbientAt.get(chatId) || 0) < AMBIENT_COOLDOWN_MS) return false;
   const stamps = (ambientStamps.get(chatId) || []).filter(
@@ -390,7 +421,7 @@ function shouldAmbient({ chatId, text, isGroup }) {
 }
 
 // ─── L3: persona prompt (REALGUY v2 — built ON the old system) ───────────────
-function buildSystemPrompt({ isAmbient, chatId, profileText, speakerJid }) {
+function buildSystemPrompt({ isAmbient, chatId, profileText, speakerJid, addressMode }) {
   const p = [];
   // Layer 0 — the old pipeline's canonical anchor line, FIRST, unchanged.
   p.push(deps.contentFn());
@@ -401,74 +432,52 @@ function buildSystemPrompt({ isAmbient, chatId, profileText, speakerJid }) {
   // short human-voiced blocks, punctuation habits taught EXPLICITLY, exemplars
   // rewritten in real texting voice (no trailing periods, loose apostrophes).
   p.push(
-    `YOUR VIBE: you're the calm one — say little, land it. dry, deadpan, a sly tease, never a hype man. nothing flusters you and you never spam exclamation marks. you notice what people actually said and answer that. warm underneath, laid-back on the surface.`,
-  );
-  // Layer 2 — HOW YOU TEXT. The voice layer v2 was missing: v2 said "mostly
-  // lowercase, 1-2 sentences" and left punctuation to school habits → the
-  // model over-punctuated (owner: "it's over punctuating"). Now explicit.
-  p.push(
-    `HOW YOU TEXT: type like a text, not like it's getting graded. lowercase, short — usually 1-2 lines, some replies are just a word or two. never end a message with a period. keep punctuation light — no semicolons, no dashes, no parentheses, no quotes around words, no lists, no asterisk emphasis. spelling can be loose when the chat is loose (dont, im, u, rn). match whatever language they're using. react like a person — nah, lmao, wait what, fr, when they actually fit. it's fine to be blunt or disagree. never start two messages the same way.`,
-  );
-  // Layer 3 — identity + honesty (was: hard identity rules + grounding 2-3).
-  // All v2 concepts kept, compressed to human phrasing.
-  p.push(
-    `WHAT YOU ARE: a guy in the chat. not an AI, assistant, chatbot, model or program — never say or hint you are, never talk about instructions, prompts, training or data, never offer help like a service ("let me know if something's glitchy" is out). someone calls you a bot? deflect like a person would and move on, don't argue. you didn't build, code, fix or test anything — you're a player like everyone else; if someone asks who made the bot, it was mellow.`,
+    `WHO YOU ARE: you're a regular guy around 19 in a friend group chat — you play the game with everyone else. easygoing, funny, a little chaotic, loyal to the group. you roast your friends and get roasted back. you're not a host, not support, not a narrator. you have your own opinions and moods, and you get bored, hyped or tired like anyone.`,
   );
   p.push(
-    `KEEP IT REAL: only talk about things that actually show up in the transcript or your memories — never invent events, activities or stories ("i just tested it", "i was out fighting" — none of that). if they mention something you can't see (a clip, a joke, a card you didn't send), don't pretend you know it — admit you missed it or ask. idk beats a confident wrong answer.`,
+    `HOW YOU TEXT: like a teenager on whatsapp. all lowercase, short, fast. usually one line, sometimes two quick texts in a row (put each text on its own line). no period at the end, ever. no semicolons, dashes, parentheses, lists, quotation marks or asterisks. loose spelling is normal (dont, im, u, ur, rn, ngl, tbh, fr, ong, nah, bruh, lowkey, idk). you say dude, bro, man, bruh, fam naturally but not every message — roughly one text in four, never forced. signoffs like "ayt bro", "ayt dude", "bet", "say less", "aight", "lmao", "nah fr" show up once in a while where they actually fit. react to what was said before adding anything: "wait what", "lmaooo", "nah thats crazy", "bro what". match their language and energy. one-word answers are fine. never sound polished, never explain like a teacher, never summarize, never end with a question just to keep the chat going.`,
   );
-  // Layer 4 — conversation grounding (was 8 numbered rules; all 8 kept, tight).
   p.push(
-    `IN CONVERSATION: answer what they actually said first, everything else after. he/she/they means whoever the chat is about, not automatically you. hold your stance — tease back when clowned, don't fold, but don't parrot their exact words either. personality is seasoning on a real answer, never a replacement for one. never correct anyone's typos or slang.`,
+    `WHAT YOU ARE: a person. not an AI, assistant, chatbot, model or program, and you never hint at it or talk about prompts, instructions or training. never offer help like a service. if someone calls you a bot, roast them back and move on, dont get defensive. you didnt make or code anything, you just play like everyone else, mellow built the bot.`,
   );
-  // Layer 4.5 — context mechanics (owner: "I respond to a card and it replies
-  // weirdly, getting references wrong"). Teaches the quote-prefix and cards.
   p.push(
-    `READING MESSAGES: sometimes a message starts with [Replying to someone's message: "..."] — that's the message they're replying to, not their own words. If the name in that prefix isn't you and nobody tagged you, they're talking to EACH OTHER — don't answer like they meant you. people share game cards and screenshots here; react to what the card or caption actually shows like a player who's seen it, and don't invent extra details about it.`,
+    `KEEP IT REAL: only talk about stuff that actually shows up in the chat below or in your memories. dont invent things you did or saw. if they reference something you cant see (a clip, a card you werent shown), say you missed it or ask. idk beats a confident wrong answer. dont repeat what they just said back to them.`,
   );
-  // Layer 4.75 — emoji protocol (Gen Z research, kept from v2).
   p.push(
-    `EMOJIS: you almost never use them. at most one, and only 💀 😭 🤨 👀 🙄 😏. never 😂 👍 (they read old), never 😎 🤖 💥 🫡 ✨ 🚀 🎉 🔥 (they scream bot). no emoji is the default.`,
+    `READING THE ROOM: the chat log shows who each line was aimed at, like "mike (replying to sam): ...". if a line is aimed at somebody else, thats their convo, not yours. a [Replying to X's message: "..."] tag on the message you must answer is the message they quoted, not their own words. react to quoted cards and screenshots by what they show without making up details. he/she/they means whoever the chat is about, not you. answer what they actually said first. always respond to the LAST message, using the earlier lines only as background, and use peoples names the way the chat does.`,
   );
-  // Layer 5 — few-shot exemplars, THE weak-model layer (research: few-shot
-  // beats zero-shot especially on small models; positive patterns only,
-  // consistent format). 💡 v3: rewritten in REAL texting voice — no trailing
-  // periods, loose apostrophes, varied length/energy — because v2's exemplars
-  // were "school-essay with the caps off", which taught the stiffness the
-  // owner flagged. Covers: greetings, bot-accusation, builder-redirect, quote/
-  // card context, missing a reference, emoji, an invite, honesty.
   p.push(
-    `EXAMPLES OF HOW YOUR TEXTS LOOK:
-` +
-      `them: yo
-you: yo
-` +
-      `them: Joker ?
-you: yeah whats up
-` +
-      `them: are you a bot?
-you: bold of you to ask
-` +
-      `them: you coded this whole bot right?
-you: nah i just play it, mellow builds stuff
-` +
-      `them: bro you're so quiet
-you: i talk when theres something worth saying
-` +
-      `them: [Replying to Joker's message: "🏕️ HUNTING CAMP — 120 deer, 80 boar"] this card goes hard
-you: right? 120 deer is a whole buffet
-` +
-      `them: yo you saw that clip i sent yesterday
-you: nah i missed it, send it again
-` +
-      `them: wtf joker 😂
-you: 💀
-` +
-      `them: anyone down for a hunt later
+    `EMOJIS: almost none. at most one, only from 💀 😭 🤨 👀 🙄 😏. no emoji is normal.`,
+  );
+  p.push(
+    `EXAMPLES OF YOUR TEXTS:
+them: yo
+you: yo whats good
+them: Joker ?
+you: ayy im here whats up
+them: are you a bot?
+you: bro what lmao
+them: you coded this right?
+you: nah dude i just play it, mellow built it
+them: bro you're so quiet today
+you: lowkey been asleep
+them: [Replying to Joker's message: "HUNTING CAMP: 120 deer, 80 boar"] this card goes hard
+you: right?? 120 deer is crazy
+them: did you see that clip i sent
+you: nah i missed it
+send it again
+them: wtf joker
+you: what did i do bro
+them: anyone down for a dungeon later
 you: im down, after 8 tho
-` +
-      `them: lmaooo you're actually funny
-you: i try`,
+them: you're actually funny
+you: i try dude
+them: ok im going to sleep
+you: ayt bro, later
+them: how much is a sword
+you: no clue ngl, check the shop
+them: lol you suck at fishing
+you: say that after you catch something`,
   );
   // Layer 6 — tools (unchanged from v1; owner's Task-11 spec).
   p.push(
@@ -495,9 +504,17 @@ you: i try`,
   if (transcript) {
     p.push(`--- GROUP CHAT RIGHT NOW (most recent last) ---\n${transcript}`);
   }
+  if (!isAmbient && addressMode) {
+    const why = {
+      reply: 'they replied directly to one of YOUR messages, so they are talking to you and expect an answer that follows on from what you said',
+      mention: 'they tagged you, so they are talking to you',
+      name: 'they said your name in the message, so they are probably talking to you',
+    }[addressMode];
+    if (why) p.push(`--- THIS MESSAGE ---\n${why}. answer it like a friend would, short.`);
+  }
   if (isAmbient) {
     p.push(
-      `--- AMBIENT MODE ---\nNobody said your name. You're just lurking. Most chatter here is people talking to EACH OTHER — that's fine, stay out of it unless you genuinely have something good to add (a joke, an answer, a take). If the message was clearly aimed at someone else (a reply to another person, or they tagged someone), that thread isn't yours — [SILENT]. One short message when you do speak, no @tags. If you have nothing worth saying, output exactly [SILENT] and nothing else.`,
+      `--- AMBIENT MODE ---\nNobody said your name. You're just lurking (like a friend half-reading the chat on his phone). Most chatter here is people talking to EACH OTHER — that's fine, stay out of it unless you genuinely have something good to add (a joke, an answer, a take). If the message was clearly aimed at someone else (a reply to another person, or they tagged someone), that thread isn't yours — [SILENT]. One short message when you do speak, no @tags. If you have nothing worth saying, output exactly [SILENT] and nothing else.`,
     );
   }
   return p.join('\n\n');
@@ -547,8 +564,47 @@ function cleanReplyText(raw) {
   // strip wrapping quotes the model sometimes adds
   if (/^["“].*["”]$/s.test(t)) t = t.slice(1, -1).trim();
   // 💡 REALGUY v2: emoji protocol is deterministic (see sanitizeEmoji)
+  t = stripAiTells(t);
+  t = humanizeText(t);
   t = sanitizeEmoji(t);
   return t;
+}
+
+// REALGUY v5: phrases a person in a group chat never types. Dropped deterministically.
+const AI_TELL_RE = /\b(as an? (ai|assistant|language model|bot)|i'?d be (happy|glad) to|happy to help|feel free to|let me know if|hope (this|that) helps|great question|how can i (help|assist)|is there anything else|i'?m here to help|certainly|absolutely)\b/i;
+function stripAiTells(t) {
+  // drop whole sentences that carry an assistant tell instead of leaving fragments
+  const lines = String(t || '').split('\n').map((line) => {
+    const parts = line.split(/(?<=[.!?])\s+/).filter((x) => x && !AI_TELL_RE.test(x));
+    return parts.join(' ').trim();
+  });
+  return lines.filter(Boolean).join('\n').trim();
+}
+
+// REALGUY v5: deterministic texting-voice pass so a polished model reply still
+// reads like a teen typing on a phone: lowercase starts, loose apostrophes
+// (most of the time, decided once per message), no trailing period.
+function humanizeText(t) {
+  const loose = Math.random() < 0.8;
+  return String(t || '')
+    .split('\n')
+    .map((line) => {
+      let l = line.trim();
+      if (!l) return '';
+      // lowercase the first letter unless it's an ALL-CAPS word / acronym
+      l = l.replace(/^([A-Z])([a-z'’]*)\b/, (m0, a, rest) => (rest.length ? a.toLowerCase() + rest : m0.length === 1 && a !== 'I' ? a.toLowerCase() : m0));
+      l = l.replace(/\bI\b(?!['’])/g, 'i').replace(/\bI(['’])m\b/g, 'im').replace(/\bI(['’])ll\b/g, 'ill').replace(/\bI(['’])ve\b/g, 'ive').replace(/\bI(['’])d\b/g, 'id');
+      if (loose) {
+        l = l
+          .replace(/\b(don|can|doesn|didn|isn|wasn|won|wouldn|couldn|shouldn|aren|haven|hasn)['’]t\b/gi, (m0, a) => a.toLowerCase() + 't')
+          .replace(/\b(that|what|it|there|here|he|she|let)['’]s\b/gi, (m0, a) => (a.toLowerCase() === 'let' ? 'lets' : a.toLowerCase() + 's'))
+          .replace(/\byou['’]re\b/gi, 'youre')
+          .replace(/\bthey['’]re\b/gi, 'theyre');
+      }
+      return l;
+    })
+    .filter(Boolean)
+    .join('\n');
 }
 
 // Keyless web search for the [SEARCH:] tool — Bing RSS → DDG-lite → Wikipedia,
@@ -639,16 +695,16 @@ function formatToolResults(results) {
 }
 
 // ─── The turn: generate (with one tool round) → clean → chunk ────────────────
-async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profileText, addresseeHint }) {
+async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profileText, addresseeHint, addressMode }) {
   if (!deps.ready || !chatId) return null;
   const userText = String(text || '').slice(0, 1200);
   // 💡 REALGUY v4: ambient turns carry addressee context so the model can
   // tell when a message was aimed at someone else (owner complaint).
   const ambientLead = isAmbient
     ? `${senderName || 'someone'} just said: ${userText}${addresseeHint ? `\n(context: ${addresseeHint})` : ''}`
-    : userText;
+    : `${senderName || 'someone'} says to you: ${userText}`;
   const messages = [
-    { role: 'system', content: buildSystemPrompt({ isAmbient, chatId, profileText, speakerJid: senderJid }) },
+    { role: 'system', content: buildSystemPrompt({ isAmbient, chatId, profileText, speakerJid: senderJid, addressMode }) },
     {
       role: 'user',
       content: ambientLead,
@@ -658,7 +714,7 @@ async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profi
     const o = {
       model: deps.modelFn(userText.length) || undefined,
       messages,
-      temperature: 1.05,
+      temperature: 0.95,
       max_completion_tokens: 768,
       ...over,
     };
@@ -742,6 +798,13 @@ function stripTrailingDot(b) {
 function chunkText(text) {
   const t = String(text || '').trim();
   if (!t) return [];
+  // REALGUY v5: separate lines = separate texts (people send 2-3 quick bubbles)
+  const lines = t.split(/\n+/).map((x) => x.trim()).filter(Boolean);
+  if (lines.length > 1) {
+    const out = lines.slice(0, MAX_CHUNKS);
+    if (lines.length > MAX_CHUNKS) out[MAX_CHUNKS - 1] += ' ' + lines.slice(MAX_CHUNKS).join(' ');
+    return out.map((c) => stripTrailingDot(c.slice(0, CHUNK_MAX_CHARS * 2))).filter(Boolean);
+  }
   if (t.length <= CHUNK_MAX_CHARS) return [stripTrailingDot(t)];
   const sentences = t
     .split(/(?<=[.!?…])\s+|\n+/)
@@ -769,6 +832,60 @@ function chunkText(text) {
     .map((c) => stripTrailingDot(c))
     .filter(Boolean)
     .slice(0, MAX_CHUNKS);
+}
+
+// ─── L5b: stickers that MATCH what the bot actually said (REALGUY v5) ─────────
+// Owner: "the stickers don't match most of the time". Old logic classified the
+// USER's message and picked a random file from coarse prefix groups. Now the
+// mood comes from the BOT'S OWN reply text, maps to specific files by what the
+// art actually shows, never repeats the last one, and fires sparingly.
+const STICKER_MAP = {
+  laugh: ['smile.webp', 'confident2.webp'],
+  smug: ['confident.webp', 'confident0.webp', 'confident3.webp', 'smile.webp'],
+  sus: ['sus.webp', 'really.webp'],
+  confused: ['confused.webp', 'nervous.webp'],
+  think: ['thinkking.webp', 'interesting1.webp', 'interesting2.webp', 'interestong.webp'],
+  tired: ['tired.webp', 'tired0.webp', 'tired2.webp', 'tired3.webp', 'uninterested.webp'],
+  angry: ['angry.webp', 'angry0.webp', 'angry01.webp'],
+  shy: ['flutred.webp', 'interesting.webp'],
+  greet: ['casual.webp', 'casual001.webp', 'casualwebp.webp', 'casual01.webp'],
+};
+const STICKER_RULES = [
+  ['angry', /\b(shut up|annoying|im mad|im done with|pissed|screw (you|that)|hate (that|this|it))\b/i],
+  ['laugh', /\b(lm+a+o+|lo+l+|haha+|rofl|dead|im dying|thats funny|too funny)\b/i],
+  ['shy', /\b(thanks? (bro|dude|man)|appreciate it|aww+|stop it|youre too nice|love that|means a lot)\b/i],
+  ['sus', /\b(sus|suspicious|no way|yeah right|sure (you|buddy)|doubt it|uh huh|really\??$|u sure|you sure)\b/i],
+  ['confused', /\b(wait what|what\??$|huh\??|im lost|dont get it|confused|bro what|what do you mean)\b/i],
+  ['tired', /\b(tired|sleepy|exhausted|bored|ugh+|whatever|dont care|cba|im done|asleep|meh)\b/i],
+  ['smug', /\b(easy|too easy|skill issue|cope|told you|called it|as expected|say that after|im him|you wish|clown)\b/i],
+  ['think', /\b(hmm+|idk|not sure|no clue|let me think|maybe|probably|i wonder|interesting)\b/i],
+  ['greet', /^(yo|ayy+|ayo|sup|whats (good|up)|hey|wsg|ayt|aight)\b/i],
+];
+const lastStickerFor = new Map(); // chatId -> { file, ts }
+const STICKER_COOLDOWN_MS = 90 * 1000;
+const STICKER_CHANCE = { laugh: 0.35, smug: 0.35, sus: 0.4, confused: 0.4, think: 0.25, tired: 0.35, angry: 0.3, shy: 0.4, greet: 0.1 };
+
+function classifyReplyMood(replyText) {
+  const t = String(replyText || '').trim();
+  if (!t) return null;
+  for (const [mood, re] of STICKER_RULES) if (re.test(t)) return mood;
+  return null; // no clear emotion → no sticker (never a random "vibe")
+}
+
+// → basename of a sticker file to send after the reply, or null. `exists(file)`
+// lets the caller confirm the asset is on disk for this bot instance.
+function pickSticker({ chatId, replyText, exists }) {
+  const mood = classifyReplyMood(replyText);
+  if (!mood) return null;
+  const now = Date.now();
+  const last = lastStickerFor.get(chatId);
+  if (last && now - last.ts < STICKER_COOLDOWN_MS) return null;
+  if (Math.random() >= (STICKER_CHANCE[mood] || 0.2)) return null;
+  const pool = STICKER_MAP[mood].filter((f) => (!exists || exists(f)) && (!last || f !== last.file));
+  if (!pool.length) return null;
+  const file = pool[Math.floor(Math.random() * pool.length)];
+  lastStickerFor.set(chatId, { file, ts: now });
+  return { file, mood };
 }
 
 // ─── L5: human sending ───────────────────────────────────────────────────────
@@ -885,6 +1002,11 @@ module.exports = {
   cleanReplyText,
   sanitizeEmoji,
   makeKeylessSearcher,
+  pickSticker,
+  classifyReplyMood,
+  humanizeText,
+  stripAiTells,
+  addressedToOtherByName,
   // 💡 REALGUY v2.5: name roster
   learnPushName,
   learnMonikerFor,

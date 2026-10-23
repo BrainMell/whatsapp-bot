@@ -26,12 +26,12 @@ ok(/addresseeHint: _mentionsOtherHuman/.test(eng), 'tagged-someone-else hint rea
 ok(/name-trigger suppressed \(aimed elsewhere:/.test(eng), 'suppressed name-triggers are logged (bug class was invisible twice)');
 
 console.log('── persona: prompt + plumbing');
-ok(/If the name in that prefix isn't you and nobody tagged you, they're talking to EACH OTHER/.test(per), 'READING MESSAGES teaches thread ownership');
+ok(/if a line is aimed at somebody else, thats their convo, not yours/.test(per), 'READING MESSAGES teaches thread ownership');
 ok(/If the message was clearly aimed at someone else \(a reply to another person, or they tagged someone\), that thread isn't yours — \[SILENT\]/.test(per), 'AMBIENT MODE addressee rule + [SILENT]');
 ok(/async function maybeAmbientChime\(\{ sock, chatId, isGroup, senderName, senderJid, text, addresseeHint \}\)/.test(per), 'chime accepts addresseeHint');
 ok(/buildTurn\(\{ chatId, senderName, senderJid, text, isAmbient: true, addresseeHint \}\)/.test(per), 'hint flows into buildTurn');
 ok(/addresseeHint \? `\\n\(context: \$\{addresseeHint\}\)` : ''/.test(per), 'hint rendered into ambient lead');
-ok(/async function buildTurn\(\{ chatId, senderName, senderJid, text, isAmbient, profileText, addresseeHint \}\)/.test(per), 'buildTurn signature carries addresseeHint');
+ok(/async function buildTurn\(\{ chatId, senderName, senderJid, text, isAmbient, profileText, addresseeHint, addressMode \}\)/.test(per), 'buildTurn signature carries addresseeHint');
 
 console.log('── regressions (explicit address still fires)');
 ok(/const isReplyToBot = _quotedDigits\s*\n\s*\? _botIdDigits\.includes\(_quotedDigits\)/.test(eng), 'reply-to-bot compare intact');
