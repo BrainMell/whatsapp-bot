@@ -10029,16 +10029,52 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                         );
                       }
                       // remember our last posts per (instance, chat) for `.gstatus delete`
-                      globalThis.__gsMine = globalThis.__gsMine || new Map();
+                      globalThis.__gsMineLoad();
                       const __gsMineK = `${jidNormalizedUser(sock2?.user?.id || "")}:${chatId2}`;
                       const __gsMineArr = globalThis.__gsMine.get(__gsMineK) || [];
                       __gsMineArr.push({ id: __gsId, ts: Date.now() });
                       while (__gsMineArr.length > 30) __gsMineArr.shift();
                       globalThis.__gsMine.set(__gsMineK, __gsMineArr);
+                      globalThis.__gsMineSave();
                       if (isMedia) console.log(`[GStatus] posted media ok (id=…${__gsId.slice(-8)}) in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
                       if (key2) await sock2.sendMessage(chatId2, { react: { text: "✅", key: key2 } }).catch(() => {});
                     };
 
+                    // ── group-status revoke (owner 2026-10-22: ".j gstatus delete literally doesn't work"):
+                    // a status was SENT inside the groupStatusMessageV2 envelope, so the revoke must travel in the same
+                    // envelope — a plain { delete } protocolMessage is ignored by WhatsApp for statuses. Try the wrapped
+                    // revoke first, then fall back to the plain delete. Our own posts are also persisted to disk so a
+                    // restart no longer forgets them.
+                    if (!globalThis.__gsRevoke) {
+                      const _fs = require("fs"), _path = require("path");
+                      const GS_FILE = _path.join(__dirname, "..", "data", "gstatus_mine.json");
+                      globalThis.__gsMineLoad = () => {
+                        if (globalThis.__gsMine) return globalThis.__gsMine;
+                        globalThis.__gsMine = new Map();
+                        try { const o = JSON.parse(_fs.readFileSync(GS_FILE, "utf8")); for (const [k, v] of Object.entries(o)) globalThis.__gsMine.set(k, v); } catch { /* none yet */ }
+                        return globalThis.__gsMine;
+                      };
+                      globalThis.__gsMineSave = () => {
+                        try { _fs.mkdirSync(_path.dirname(GS_FILE), { recursive: true }); _fs.writeFileSync(GS_FILE, JSON.stringify(Object.fromEntries(globalThis.__gsMineLoad()))); } catch (e) { console.log("[GStatus] persist failed:", e?.message); }
+                      };
+                      globalThis.__gsRevoke = async (sock2, chatId2, key) => {
+                        const revokeMsg = { protocolMessage: { key, type: 0 } };       // 0 = REVOKE
+                        try {
+                          const id2 = require("@whiskeysockets/baileys").generateMessageID();
+                          const secret = require("crypto").randomBytes(32);
+                          await sock2.relayMessage(chatId2, {
+                            messageContextInfo: { messageSecret: secret },
+                            groupStatusMessageV2: { message: { ...revokeMsg, messageContextInfo: { messageSecret: secret } } },
+                          }, { messageId: id2 });
+                          return true;
+                        } catch (e1) {
+                          console.log("[GStatus] wrapped revoke failed, trying plain delete:", e1?.message);
+                        }
+                        try { await sock2.sendMessage(chatId2, { delete: key }); return true; } catch (e2) {
+                          console.log("[GStatus] plain delete failed:", e2?.message); return false;
+                        }
+                      };
+                    }
                     // message ids for status relays (Baileys helper, safe fallback)
                     const gsMsgId = () => {
                       try {
@@ -18648,6 +18684,9 @@ Commands:
                       if (!canUseAdminCommands) {
                         return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
                       }
+                      const gsRevokeFn = (key) => (globalThis.__gsRevoke
+                        ? globalThis.__gsRevoke(sock, chatId, key)
+                        : sock.sendMessage(chatId, { delete: key }).then(() => true, () => false));
                       const rqCtx = m.message?.extendedTextMessage?.contextInfo || null;
                       const rqQuoted = rqCtx?.quotedMessage || null;
                       const rqIsStatus = !!(
@@ -18662,24 +18701,18 @@ Commands:
                       if (rqIsStatus && (rqCtx.stanzaId || rqCtx.participant)) {
                         const rqKey = { remoteJid: chatId, fromMe: false, id: rqCtx.stanzaId || undefined, participant: rqCtx.participant };
                         let rqOk = false;
-                        try { await sock.sendMessage(chatId, { delete: rqKey }); rqOk = true; } catch (eD) {
-                          console.log("[GStatus] delete(replied) failed:", eD?.message);
-                        }
+                        rqOk = await gsRevokeFn(rqKey);
                         return await sock.sendMessage(chatId, {
                           text: BOT_MARKER + (rqOk
                             ? `🗑️ Revoke sent for the replied group status - check the Status tab (WhatsApp may take a moment or refuse status revokes).`
                             : `❌ WhatsApp refused that revoke - status revokes are best-effort.`),
                         });
                       }
-                      globalThis.__gsMine = globalThis.__gsMine || new Map();
+                      const dMineMap = globalThis.__gsMineLoad ? globalThis.__gsMineLoad() : (globalThis.__gsMine = globalThis.__gsMine || new Map());
                       const dMineK = `${jidNormalizedUser(sock?.user?.id || "")}:${chatId}`;
-                      const dArr = globalThis.__gsMine.get(dMineK) || [];
+                      const dArr = dMineMap.get(dMineK) || [];
                       const dArg = String(argsGS[3] || "").toLowerCase();
-                      const dRevoke = async (rec) => {
-                        try { await sock.sendMessage(chatId, { delete: { remoteJid: chatId, fromMe: true, id: rec.id } }); return true; } catch (eD2) {
-                          console.log("[GStatus] delete(mine) failed:", eD2?.message); return false;
-                        }
-                      };
+                      const dRevoke = async (rec) => { const ok = await gsRevokeFn({ remoteJid: chatId, fromMe: true, id: rec.id }); if (globalThis.__gsMineSave) globalThis.__gsMineSave(); return ok; };
                       if (!dArr.length) {
                         return await sock.sendMessage(chatId, {
                           text: BOT_MARKER + `I haven't posted a group status in this group since my last restart - nothing to delete.`,
@@ -18710,7 +18743,7 @@ Commands:
                       }
                       const dLast = dArr[dArr.length - 1];
                       const dOk = await dRevoke(dLast);
-                      dArr.pop();
+                      dArr.pop(); if (globalThis.__gsMineSave) globalThis.__gsMineSave();
                       return await sock.sendMessage(chatId, {
                         text: BOT_MARKER + (dOk
                           ? `🗑️ Revoke sent for my last group status here (id …${dLast.id.slice(-8)}) - check the Status tab.`
@@ -18723,7 +18756,7 @@ Commands:
                       if (!canUseAdminCommands) {
                         return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
                       }
-                      const lArr = (globalThis.__gsMine && globalThis.__gsMine.get(`${jidNormalizedUser(sock?.user?.id || "")}:${chatId}`)) || [];
+                      const lArr = ((globalThis.__gsMineLoad ? globalThis.__gsMineLoad() : globalThis.__gsMine) || new Map()).get(`${jidNormalizedUser(sock?.user?.id || "")}:${chatId}`) || [];
                       const P = botConfig.getPrefix().toLowerCase();
                       return await sock.sendMessage(chatId, {
                         text: BOT_MARKER + (lArr.length
