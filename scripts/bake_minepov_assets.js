@@ -32,7 +32,7 @@ const REPO = path.join(__dirname, '..');
 const OUT = path.join(REPO, 'core', 'rpgasset', 'minepov');
 const PREVIEWS = path.join(__dirname, 'minepov_previews');
 
-const GW = 480, GH = 360, FRAMES = 16, DELAY_MS = 120; // same geometry as the fish lane
+const GW = 480, GH = 360, FRAMES = 36, DELAY_MS = 60; // same geometry as the fish lane
 
 // ── seeded rng ──
 function mulberry32(a) {
@@ -340,9 +340,10 @@ function hexGlow(hex) {
 function miner(ctx, P, x, y, s, t, band, rng) {
     // swing timeline across the loop: windup (0-0.30), strike (0.30-0.42), recover (0.42-1)
     let ang;
-    if (t < 0.30) ang = -1.15 + (t / 0.30) * 0.25;          // raise pick (radians from horizontal)
-    else if (t < 0.42) ang = -0.9 + ((t - 0.30) / 0.12) * 2.3; // fast strike down
-    else ang = 1.4 - ((t - 0.42) / 0.58) * 0.35;             // recover
+    const ease = (u) => u * u * (3 - 2 * u);
+    if (t < 0.30) ang = -0.95 - 0.35 * ease(t / 0.30);          // wind up: pick rises behind the head
+    else if (t < 0.42) { const u = (t - 0.30) / 0.12; ang = -1.30 + 2.7 * u * u; }   // accelerating strike
+    else ang = 1.4 - 2.35 * ease(Math.min(1, (t - 0.42) / 0.58));   // ease back to guard (loop-closes at -0.95)
     const strike = t >= 0.40 && t < 0.46;
 
     // ground shadow — grounds him
@@ -354,18 +355,19 @@ function miner(ctx, P, x, y, s, t, band, rng) {
     ctx.save();
     ctx.translate(x, y);
     // legs
-    ctx.strokeStyle = '#141009'; ctx.lineWidth = 5 * s; ctx.lineCap = 'round';
+    ctx.strokeStyle = '#4a3a2a'; ctx.lineWidth = 5.4 * s; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(-6 * s, 26 * s); ctx.lineTo(-11 * s, 44 * s); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(7 * s, 26 * s); ctx.lineTo(13 * s, 44 * s); ctx.stroke();
     // body (lean into the face)
     ctx.save(); ctx.rotate(0.12);
-    ctx.fillStyle = '#191410';
+    ctx.fillStyle = '#8a5a34';
     ctx.beginPath(); ctx.ellipse(0, 8 * s, 12 * s, 20 * s, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,214,150,0.55)'; ctx.lineWidth = 1.6 * s; ctx.beginPath(); ctx.ellipse(0, 8 * s, 12 * s, 20 * s, 0, -1.2, 0.9); ctx.stroke();   // torch rim light
     ctx.restore();
     // head + helmet + lamp
-    ctx.fillStyle = '#191410';
+    ctx.fillStyle = '#d9a67a';
     ctx.beginPath(); ctx.arc(9 * s, -14 * s, 8.5 * s, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#2e2617';
+    ctx.fillStyle = '#d2a52c';
     ctx.beginPath(); ctx.arc(9 * s, -16 * s, 8.8 * s, Math.PI * 1.05, Math.PI * 1.98); ctx.fill();
     // lamp + its glow (flicker slight)
     const lampA = 0.75 + 0.25 * Math.sin(t * Math.PI * 2 * 3);
@@ -397,22 +399,28 @@ function miner(ctx, P, x, y, s, t, band, rng) {
     ctx.restore();
     ctx.restore();
     // far arm holding the face
-    ctx.strokeStyle = '#141009'; ctx.lineWidth = 4 * s;
+    ctx.strokeStyle = '#8a5a34'; ctx.lineWidth = 4.6 * s;
     ctx.beginPath(); ctx.moveTo(2 * s, 0); ctx.lineTo(-16 * s, -10 * s); ctx.stroke();
     ctx.restore();
 
-    // chips fly FROM the rock face contact point (the face is to the miner's right)
-    if (strike || (t >= 0.46 && t < 0.75)) {
-        const chipT = strike ? 0 : (t - 0.46) / 0.29; // 0..1 flight
-        const fx = x + 62 * s, fy = y - 20 * s;
-        for (let i = 0; i < 8; i++) {
-            const ca = -1.75 + rng() * 1.35;
-            const spd = 40 + rng() * 62;
+    // impact flash + chips fly FROM the rock face contact point (the face is to the miner's right).
+    // Particles are PRE-SEEDED (same seed every frame) so each chip follows one smooth arc instead of re-rolling per frame.
+    const fx = x + 62 * s, fy = y - 20 * s;
+    if (t >= 0.40 && t < 0.50) {
+        const fa = 1 - (t - 0.40) / 0.10;
+        glow(ctx, fx, fy, 38 * s, 'rgba(255,236,190,0.95)', 0.75 * fa);
+        sparkle(ctx, fx, fy, 15 * s * fa, fa, '#fff8e0');
+    }
+    if (t >= 0.40 && t < 0.80) {
+        const chipT = (t - 0.40) / 0.40;                  // 0..1 flight
+        const crng = mulberry32(0xC41F);
+        for (let i = 0; i < 10; i++) {
+            const ca = -1.9 + crng() * 1.5, spd = 38 + crng() * 64, rad = 1.3 + crng() * 1.8;
             const cxp = fx + Math.cos(ca) * spd * chipT;
-            const cyp = fy + Math.sin(ca) * spd * chipT + 130 * chipT * chipT; // gravity
-            ctx.save(); ctx.globalAlpha = Math.max(0, 1 - chipT * 0.9);
+            const cyp = fy + Math.sin(ca) * spd * chipT + 140 * chipT * chipT;
+            ctx.save(); ctx.globalAlpha = Math.max(0, 1 - chipT * chipT * 1.05);
             ctx.fillStyle = i % 2 ? P.wallLight : P.rim;
-            ctx.beginPath(); ctx.arc(cxp, cyp, 1.4 + rng() * 1.7, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(cxp, cyp, rad, 0, Math.PI * 2); ctx.fill();
             ctx.restore();
         }
     }
@@ -442,14 +450,14 @@ function paintFrame(ctx, locId, band, frameIdx) {
     // first so the location's ore feature sits ON it and the miner works in front
     const faceX = 342, faceY = 258;
     // dark outline pass behind each face blob — separates the face from the bg
-    rockBlob(ctx, faceX, faceY - 14, 121, 105, '#0b0912', mulberry32(0xFACE + frameIdx), 0.18);
-    rockBlob(ctx, faceX, faceY - 14, 116, 100, P.wallDark, mulberry32(0xFACE + frameIdx), 0.18);
+    rockBlob(ctx, faceX, faceY - 14, 121, 105, '#0b0912', mulberry32(0xFACE), 0.18);
+    rockBlob(ctx, faceX, faceY - 14, 116, 100, P.wallDark, mulberry32(0xFACE), 0.18);
     rockShade(ctx, faceX, faceY - 14, 116, 100, '#0b0912');
-    rockBlob(ctx, faceX - 66, faceY + 48, 74, 52, '#0b0912', mulberry32(0xFACE + 7 + frameIdx), 0.24);
-    rockBlob(ctx, faceX - 66, faceY + 48, 70, 48, P.wallDark, mulberry32(0xFACE + 7 + frameIdx), 0.24);
+    rockBlob(ctx, faceX - 66, faceY + 48, 74, 52, '#0b0912', mulberry32(0xFACE + 7), 0.24);
+    rockBlob(ctx, faceX - 66, faceY + 48, 70, 48, P.wallDark, mulberry32(0xFACE + 7), 0.24);
     rockShade(ctx, faceX - 66, faceY + 48, 70, 48, '#0b0912');
-    rockBlob(ctx, 452, 306, 62, 44, '#0b0912', mulberry32(0xFACE + 21 + frameIdx), 0.26);
-    rockBlob(ctx, 452, 306, 58, 40, P.wallDark, mulberry32(0xFACE + 21 + frameIdx), 0.26);
+    rockBlob(ctx, 452, 306, 62, 44, '#0b0912', mulberry32(0xFACE + 21), 0.26);
+    rockBlob(ctx, 452, 306, 58, 40, P.wallDark, mulberry32(0xFACE + 21), 0.26);
     rockShade(ctx, 452, 306, 58, 40, '#0b0912');
     // strong warm kiss on the face's left edge (torch side) so it separates from the bg
     ctx.save();
@@ -462,16 +470,16 @@ function paintFrame(ctx, locId, band, frameIdx) {
 
     // location features — the ORE on the face is the primary glint anchor
     let glints = [];
-    if (locId === 'shimmering_caves') glints = crystals(ctx, P, mulberry32(0x99 + frameIdx), t);
-    if (locId === 'deep_vein_shafts') glints = goldVein(ctx, mulberry32(0x88 + frameIdx), t);
-    if (locId === 'volcanic_hollow') lavaCracks(ctx, mulberry32(0x66 + frameIdx), t);
-    if (locId === 'void_fissure') glints = voidRift(ctx, mulberry32(0x55 + frameIdx), t);
+    if (locId === 'shimmering_caves') glints = crystals(ctx, P, mulberry32(0x99), t);
+    if (locId === 'deep_vein_shafts') glints = goldVein(ctx, mulberry32(0x88), t);
+    if (locId === 'volcanic_hollow') lavaCracks(ctx, mulberry32(0x66), t);
+    if (locId === 'void_fissure') glints = voidRift(ctx, mulberry32(0x55), t);
 
     // floor
-    floorRubble(ctx, P, mulberry32(0xD00D + frameIdx));
+    floorRubble(ctx, P, mulberry32(0xD00D));
 
     // miner — bigger, working the face
-    miner(ctx, P, 226, 262, 1.32, t, band, mulberry32(0xC11 + frameIdx));
+    miner(ctx, P, 226, 262, 1.32, t, band, mulberry32(0xC11));
 
     // ambient dust motes
     const drng = mulberry32(0xD057 + locId.length * 17);
@@ -532,7 +540,7 @@ function bakeOne(locId, band, doPreviews) {
     for (let i = 0; i < FRAMES; i++) {
         paintFrame(ctx, locId, band, i);
         fs.writeFileSync(path.join(tmp, `f${String(i).padStart(2, '0')}.png`), canvas.toBuffer('image/png'));
-        if (doPreviews && (i === 0 || i === 5 || i === 10)) {
+        if (doPreviews && (i === 0 || i === 14 || i === 20)) {
             fs.mkdirSync(PREVIEWS, { recursive: true });
             fs.writeFileSync(path.join(PREVIEWS, `${locId}_${band}_f${i}.png`), canvas.toBuffer('image/png'));
         }
