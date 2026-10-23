@@ -183,30 +183,48 @@ function roundRect(ctx, x, y, w, h, r) {
 // is the mirror. Falls back to the procedural painter when sprites are
 // missing (drawKitWalls returns false).
 // ══════════════════════════════════════════════════════════════════════
-const KIT_SEG_W = TW * 2;              // one 2m segment spans 2 tiles
+const KIT_SEG_W = TW;                  // a 2m segment = 2 tiles = 64px on screen
 const KIT_SEGS = N / 2;                // 12 tiles = 6 segments per wall run
-const KIT_BASE_FRAC = 116 / 134;       // baked wall base line inside the sprite
+const KIT_SKIRT = 14;                  // baked base band below the base line
 async function drawKitWalls(ctx, theme, seed) {
     const base = await img(`${theme.wallKit}.png`);
     if (!base) return false;
     const win = await img(`${theme.wallKit}_win.png`);
-    const lh = WALL_H;
-    const by = Math.round(lh * KIT_BASE_FRAC);
-    const paint = (spr, bx, gy, mirror) => {
-        if (mirror) {
-            ctx.save();
-            ctx.translate(bx, gy);
-            ctx.scale(-1, 1);
-            ctx.drawImage(spr, -KIT_SEG_W / 2, -by, KIT_SEG_W, lh);
-            ctx.restore();
-        } else {
-            ctx.drawImage(spr, bx - KIT_SEG_W / 2, gy - by, KIT_SEG_W, lh);
-        }
+    const paint = (spr, bx, by, mirror) => {
+        ctx.save();
+        ctx.translate(bx, by);
+        if (mirror) ctx.scale(-1, 1);
+        ctx.transform(1, 0.5, 0, 1, 0, 0);   // base line slants at the room's 2:1
+        ctx.drawImage(spr, 0, -WALL_H, KIT_SEG_W, WALL_H + KIT_SKIRT);
+        ctx.restore();
+    };
+    // timber frame overlay (posts + beams) so pack textures read as framed walls
+    const timber = theme.wall[2], timberD = theme.wall[3];
+    const frameSeg = (bx, by, mirror, s) => {
+        ctx.save();
+        ctx.translate(bx, by);
+        if (mirror) ctx.scale(-1, 1);
+        ctx.transform(1, 0.5, 0, 1, 0, 0);
+        ctx.strokeStyle = s % 2 ? timberD : timber;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(0.5, 0); ctx.lineTo(0.5, -WALL_H);
+        ctx.moveTo(0, -WALL_H + 3); ctx.lineTo(KIT_SEG_W, -WALL_H + 3);
+        ctx.moveTo(0, -WALL_H * 0.55); ctx.lineTo(KIT_SEG_W, -WALL_H * 0.55);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,235,190,0.12)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, -WALL_H + 6); ctx.lineTo(KIT_SEG_W, -WALL_H + 6);
+        ctx.stroke();
+        ctx.restore();
     };
     for (let k = 0; k < KIT_SEGS; k++) {
-        const spr = win && k % 3 === 1 ? win : base;   // two windows per run (2nd + 5th segment)
-        paint(spr, isoX(0, 2 * k + 1), isoY(0, 2 * k + 1), false);   // left run
-        paint(spr, isoX(2 * k + 1, 0), isoY(2 * k + 1, 0), true);    // right run (mirrored)
+        const spr = win && k % 3 === 1 ? win : base;   // window on the 2nd + 5th segment
+        paint(spr, isoX(0, 2 * k), isoY(0, 2 * k), true);    // left run (mirrored: descends left)
+        paint(spr, isoX(2 * k, 0), isoY(2 * k, 0), false);   // right run: descends right
+        frameSeg(isoX(0, 2 * k), isoY(0, 2 * k), true, k);
+        frameSeg(isoX(2 * k, 0), isoY(2 * k, 0), false, k + 7);
     }
     return true;
 }
@@ -662,8 +680,13 @@ async function renderFrame(state, frame, opts = {}) {
         if (railSpr) {
             for (let k = 0; k < N / 2; k++) {
                 if (k === 4) continue;   // opening where the stairs land
-                const bx = isoX(mezzDepth, 2 * k + 1), by = isoY(mezzDepth, 2 * k + 1);
-                ctx.drawImage(railSpr, bx - KIT_SEG_W / 2, by - MEZZ_LIFT - 52, KIT_SEG_W, 60);
+                const bx = isoX(mezzDepth, 2 * k), by = isoY(mezzDepth, 2 * k);
+                ctx.save();
+                ctx.translate(bx, by - MEZZ_LIFT);
+                ctx.scale(-1, 1);                 // deck edge runs along the left axis
+                ctx.transform(1, 0.5, 0, 1, 0, 0);
+                ctx.drawImage(railSpr, 0, -70, KIT_SEG_W, 70);
+                ctx.restore();
             }
         }
         // staircase: chunky wooden steps from the deck edge down to the floor

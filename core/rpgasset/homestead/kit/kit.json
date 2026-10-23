@@ -1,15 +1,15 @@
 {
- "title": "Medieval house builder architecture kit (interior sprites)",
+ "title": "Medieval house builder interior kit (Polyy.AI pack-derived)",
  "camera": {
   "yaw": 45.0,
-  "pitch": 30.0,
+  "pitch": 26.565,
   "px_per_m": 45.2548
  },
  "provenance": {
-  "source": "joker_medieval_house_builder starter kit (handcrafted GLBs, in-house)",
-  "generator": "upload joker_medieval_house_builder/build_structure_assets.py (trimesh, vertex colours)",
-  "license": "in-house art for this repo",
-  "baked_by": "scripts/kingdom3d/bake_house_kit.py with scripts/kingdom3d/kk_raster.py"
+  "source": "Polyy.AI itch.io packs (CC0): City Builder Village Buildings + RTS Castles 105",
+  "slicing": "256sun frontal face crops, clone-tiled, AO/shade baked; slant applied by renderer shear",
+  "fetched": "scripts/fetch_polyy2.sh (signed-URL click-capture)",
+  "baked_by": "scripts/bake_house_kit_v2.py"
  },
  "sprites": {
   "hou_deck_stone": {
@@ -28,31 +28,13 @@
   },
   "hou_deck_wood": {
    "file": "kit/hou_deck_wood.png",
-   "w": 355,
-   "h": 225,
-   "ax": 177.5,
-   "ay": 140.91,
-   "sh": {
-    "file": "kit/hou_deck_wood_sh.png",
-    "w": 388,
-    "h": 194,
-    "ax": 170.32,
-    "ay": 107.8
-   }
+   "w": 352,
+   "h": 174
   },
   "hou_doorframe": {
    "file": "kit/hou_doorframe.png",
    "w": 56,
-   "h": 115,
-   "ax": 27.84,
-   "ay": 101.91,
-   "sh": {
-    "file": "kit/hou_doorframe_sh.png",
-    "w": 123,
-    "h": 59,
-    "ax": 28.56,
-    "ay": 44.27
-   }
+   "h": 115
   },
   "hou_floor_stone": {
    "file": "kit/hou_floor_stone.png",
@@ -70,10 +52,8 @@
   },
   "hou_mezz": {
    "file": "kit/hou_mezz.png",
-   "w": 227,
-   "h": 126,
-   "ax": 113.5,
-   "ay": 73.64
+   "w": 224,
+   "h": 126
   },
   "hou_mezz_stairs": {
    "file": "kit/hou_mezz_stairs.png",
@@ -91,178 +71,63 @@
   },
   "hou_platform_ext": {
    "file": "kit/hou_platform_ext.png",
-   "w": 131,
-   "h": 77,
-   "ax": 65.5,
-   "ay": 48.85,
-   "sh": {
-    "file": "kit/hou_platform_ext_sh.png",
-    "w": 141,
-    "h": 74,
-    "ax": 61.74,
-    "ay": 40.64
-   }
+   "w": 128,
+   "h": 78
   },
   "hou_railing": {
    "file": "kit/hou_railing.png",
-   "w": 75,
-   "h": 74,
-   "ax": 37.28,
-   "ay": 57.18
+   "w": 128,
+   "h": 74
   },
   "hou_wall_t1": {
    "file": "kit/hou_wall_t1.png",
-   "w": 72,
-   "h": 134,
-   "ax": 36.27,
-   "ay": 116.04,
-   "sh": {
-    "file": "kit/hou_wall_t1_sh.png",
-    "w": 148,
-    "h": 71,
-    "ax": 38.11,
-    "ay": 51.54
-   }
+   "w": 64,
+   "h": 140
   },
   "hou_wall_t1_win": {
    "file": "kit/hou_wall_t1_win.png",
-   "w": 72,
-   "h": 134,
-   "ax": 36.32,
-   "ay": 116.06,
-   "sh": {
-    "file": "kit/hou_wall_t1_win_sh.png",
-    "w": 148,
-    "h": 71,
-    "ax": 38.16,
-    "ay": 51.56
-   }
+   "w": 64,
+   "h": 140
   },
   "hou_wall_t2": {
    "file": "kit/hou_wall_t2.png",
-   "w": 75,
-   "h": 135,
-   "ax": 38.16,
-   "ay": 117.06,
-   "sh": {
-    "file": "kit/hou_wall_t2_sh.png",
-    "w": 148,
-    "h": 72,
-    "ax": 38.72,
-    "ay": 52.54
-   }
+   "w": 64,
+   "h": 140
   },
   "hou_wall_t2_win": {
    "file": "kit/hou_wall_t2_win.png",
-   "w": 75,
-   "h": 135,
-   "ax": 38.16,
-   "ay": 117.06,
-   "sh": {
-    "file": "kit/hou_wall_t2_win_sh.png",
-    "w": 148,
-    "h": 72,
-    "ax": 38.72,
-    "ay": 52.54
-   }
+   "w": 64,
+   "h": 140
   },
   "hou_wall_t3": {
    "file": "kit/hou_wall_t3.png",
-   "w": 75,
-   "h": 135,
-   "ax": 36.96,
-   "ay": 116.46,
-   "sh": {
-    "file": "kit/hou_wall_t3_sh.png",
-    "w": 149,
-    "h": 72,
-    "ax": 37.68,
-    "ay": 51.94
-   }
+   "w": 64,
+   "h": 140
   },
   "hou_wall_t3_win": {
    "file": "kit/hou_wall_t3_win.png",
-   "w": 75,
-   "h": 135,
-   "ax": 38.48,
-   "ay": 117.22,
-   "sh": {
-    "file": "kit/hou_wall_t3_win_sh.png",
-    "w": 149,
-    "h": 72,
-    "ax": 39.2,
-    "ay": 52.7
-   }
+   "w": 64,
+   "h": 140
   },
   "hou_wall_t4": {
    "file": "kit/hou_wall_t4.png",
-   "w": 75,
-   "h": 135,
-   "ax": 36.88,
-   "ay": 116.42,
-   "sh": {
-    "file": "kit/hou_wall_t4_sh.png",
-    "w": 149,
-    "h": 72,
-    "ax": 37.92,
-    "ay": 51.9
-   }
+   "w": 64,
+   "h": 140
   },
   "hou_wall_t4_win": {
    "file": "kit/hou_wall_t4_win.png",
-   "w": 75,
-   "h": 135,
-   "ax": 38.48,
-   "ay": 117.22,
-   "sh": {
-    "file": "kit/hou_wall_t4_win_sh.png",
-    "w": 149,
-    "h": 72,
-    "ax": 39.52,
-    "ay": 52.7
-   }
+   "w": 64,
+   "h": 140
   },
   "hou_wall_t5": {
    "file": "kit/hou_wall_t5.png",
-   "w": 75,
-   "h": 137,
-   "ax": 38.08,
-   "ay": 118.59,
-   "sh": {
-    "file": "kit/hou_wall_t5_sh.png",
-    "w": 151,
-    "h": 73,
-    "ax": 39.28,
-    "ay": 52.99
-   }
+   "w": 64,
+   "h": 140
   },
   "hou_wall_t5_win": {
    "file": "kit/hou_wall_t5_win.png",
-   "w": 75,
-   "h": 137,
-   "ax": 39.04,
-   "ay": 119.07,
-   "sh": {
-    "file": "kit/hou_wall_t5_win_sh.png",
-    "w": 151,
-    "h": 73,
-    "ax": 40.24,
-    "ay": 53.47
-   }
-  },
-  "hou_window_goth": {
-   "file": "kit/hou_window_goth.png",
-   "w": 39,
-   "h": 68,
-   "ax": 19.36,
-   "ay": 57.82
-  },
-  "hou_window_lead": {
-   "file": "kit/hou_window_lead.png",
-   "w": 39,
-   "h": 67,
-   "ax": 19.36,
-   "ay": 56.95
+   "w": 64,
+   "h": 140
   }
  }
 }
