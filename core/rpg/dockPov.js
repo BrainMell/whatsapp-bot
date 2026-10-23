@@ -283,10 +283,23 @@ function paintFrame(ctx, w, h, t, { biome = 'isle', lvl = 1, fish = true } = {})
     ctx.fillStyle = P.wood[2]; ctx.fillRect(w * 0.06, h * 0.86, w * 0.1, h * 0.09);
     ctx.fillStyle = P.wood[0]; ctx.fillRect(w * 0.06, h * 0.86, w * 0.1, h * 0.024);
     if (lvl >= 2) {
-        ctx.fillStyle = P.lantern; ctx.globalAlpha = 0.34;
-        ctx.beginPath(); ctx.ellipse(w * 0.2, h * 0.9, w * 0.13, h * 0.07, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = P.lantern; ctx.fillRect(w * 0.185, h * 0.8, w * 0.03, h * 0.06);
+        // soft pooled glow (was a hard-edged ellipse) + a small real lantern (cap, glass, flame, ring) on the planks
+        const gx = w * 0.2, gy = h * 0.9, gr = w * 0.13;
+        ctx.save(); ctx.translate(gx, gy); ctx.scale(1, 0.54); ctx.translate(-gx, -gy);
+        const pg = ctx.createRadialGradient(gx, gy, 0, gx, gy, gr);
+        pg.addColorStop(0, 'rgba(255,214,140,0.34)'); pg.addColorStop(0.6, 'rgba(255,200,120,0.14)'); pg.addColorStop(1, 'rgba(255,200,120,0)');
+        ctx.fillStyle = pg; ctx.beginPath(); ctx.arc(gx, gy, gr, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        const lx = w * 0.2, lw = w * 0.026, lh = h * 0.07, ly = h * 0.86 - lh;
+        ctx.fillStyle = P.wood[2]; ctx.fillRect(lx - lw * 0.62, ly + lh - h * 0.008, lw * 1.24, h * 0.012);
+        ctx.fillStyle = 'rgba(255,214,140,0.85)'; ctx.fillRect(lx - lw / 2, ly + h * 0.012, lw, lh - h * 0.02);
+        ctx.fillStyle = P.wood[2];
+        ctx.fillRect(lx - lw * 0.62, ly, lw * 1.24, h * 0.012);
+        ctx.fillRect(lx - lw / 2, ly + h * 0.012, Math.max(1, lw * 0.1), lh - h * 0.02);
+        ctx.fillRect(lx + lw / 2 - Math.max(1, lw * 0.1), ly + h * 0.012, Math.max(1, lw * 0.1), lh - h * 0.02);
+        ctx.strokeStyle = P.wood[2]; ctx.lineWidth = Math.max(1, h * 0.004);
+        ctx.beginPath(); ctx.arc(lx, ly - h * 0.004, lw * 0.4, Math.PI, 0); ctx.stroke();
+        ctx.fillStyle = '#fff3c4'; ctx.beginPath(); ctx.ellipse(lx, ly + lh * 0.52, lw * 0.16, lh * 0.2, 0, 0, Math.PI * 2); ctx.fill();
     }
     if (lvl >= 3) { // gold trim on the edge board — a kept, well-funded pond
         ctx.fillStyle = P.lantern; ctx.globalAlpha = 0.8;
@@ -521,6 +534,46 @@ function dockAnchors(w, h, lvl = 1) {
 }
 
 /** `.j base pond` viewer still — the dock-POV scene at any size, wearing the hour. */
+
+// 2026-10-23 (owner: "night time card for fishing looks off"): the graded night sky stayed a light periwinkle with the
+// flat paintFrame bands showing, and the moon glint was a round blue blob nowhere near a believable reflection.
+// nightSky deepens + smooths the sky (multiply through a navy gradient, drawn BEFORE moon/stars); moonGlint paints a
+// narrow, broken column of shimmer straight under the moon.
+function nightSky(ctx, w, h) {
+    const hz = Math.round(HORIZON * h);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, w, hz); ctx.clip();
+    ctx.globalCompositeOperation = 'multiply';
+    const g = ctx.createLinearGradient(0, 0, 0, hz);
+    g.addColorStop(0, 'rgb(34,42,92)'); g.addColorStop(0.65, 'rgb(62,74,138)'); g.addColorStop(1, 'rgb(96,108,170)');
+    ctx.globalAlpha = 0.92; ctx.fillStyle = g; ctx.fillRect(0, 0, w, hz);
+    ctx.restore();
+    // water a touch deeper too, so the sky/lake split reads as night rather than dusk
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, hz, w, h - hz); ctx.clip();
+    ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = 0.45; ctx.fillStyle = 'rgb(70,86,150)'; ctx.fillRect(0, hz, w, h - hz);
+    ctx.restore();
+}
+function moonGlint(ctx, w, h) {
+    const hz = Math.round(HORIZON * h), mx = w * 0.18;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const rng = K.mulberry32(hashStr('moonglint'));
+    for (let i = 0; i < 16; i++) {                                   // shimmer dashes, widening toward the viewer
+        const t = i / 15, y = hz + (h * 0.30) * t + 4, len = (w * 0.012 + w * 0.05 * t) * (0.6 + rng() * 0.8);
+        const x = mx + (rng() - 0.5) * w * (0.02 + 0.05 * t);
+        ctx.globalAlpha = (0.30 - 0.18 * t) * (0.5 + 0.5 * rng());
+        ctx.fillStyle = '#dbe8ff';
+        ctx.fillRect(x - len / 2, y, len, Math.max(1, h * 0.004));
+    }
+    const g = ctx.createRadialGradient(mx, hz + 4, 0, mx, hz + 4, h * 0.16);
+    g.addColorStop(0, 'rgba(190,210,255,0.22)'); g.addColorStop(1, 'rgba(190,210,255,0)');
+    ctx.save(); ctx.translate(mx, hz + 4); ctx.scale(0.35, 1); ctx.translate(-mx, -(hz + 4));
+    ctx.globalAlpha = 1; ctx.fillStyle = g; ctx.fillRect(mx - h * 0.2, hz, h * 0.4, h * 0.34);
+    ctx.restore();
+    ctx.restore();
+}
+
 function paintStill(ctx, w, h, { lvl = 1, biome = 'isle', phase = null, t = 0 } = {}) {
     phase = phase || dayNight.phaseAt();
     paintFrame(ctx, w, h, t, { lvl });
@@ -532,14 +585,15 @@ function paintStill(ctx, w, h, { lvl = 1, biome = 'isle', phase = null, t = 0 } 
         if (wash.all) { ctx.fillStyle = wash.all; ctx.fillRect(0, 0, w, h); }
     }
     paintCelestial(ctx, w, h, t, phase, { lvl });
-    dayNight.grade(ctx, w, h, phase);
+    dayNight.grade(ctx, w, h, phase, null, { rays: false });
+    if (phase === 'night') nightSky(ctx, w, h);
     if (phase === 'night' || phase === 'dusk') {
         const A = dockAnchors(w, h, lvl);
         dayNight.light(ctx, A.post.x, A.post.y, h * 0.14, '#ffcf7a', phase === 'night' ? 0.5 : 0.3);
         if (lvl >= 2) dayNight.light(ctx, A.pool.x, A.pool.y, h * 0.1, '#ffc98a', phase === 'night' ? 0.22 : 0.12, false);
         if (phase === 'night') {
             dayNight.moonStars(ctx, w, h, { seed: 17, moonX: 0.18, moonY: 0.09, stars: Math.round(20 * w / GW), starAlpha: 0.85, skyH: HORIZON * 0.92 });
-            dayNight.light(ctx, w * 0.18, h * 0.52, h * 0.15, '#cfe0ff', 0.15, false);   // moon glint on the water
+            moonGlint(ctx, w, h);   // moon glint on the water
         }
     }
 }
@@ -566,14 +620,15 @@ async function composePond({ biome = 'isle', lvl = 1, phase = null, band = 'low'
                 if (wash.all) { c2.fillStyle = wash.all; c2.fillRect(0, 0, master.gw, master.gh); }
             }
             paintCelestial(c2, master.gw, master.gh, i / FRAMES, phase, { lvl });
-            dayNight.grade(c2, master.gw, master.gh, phase);
+            dayNight.grade(c2, master.gw, master.gh, phase, null, { rays: false });
+            if (phase === 'night') nightSky(c2, master.gw, master.gh);
             if (phase === 'night' || phase === 'dusk') {
                 const A = dockAnchors(master.gw, master.gh, lvl);
                 dayNight.light(c2, A.post.x, A.post.y, master.gh * 0.15, '#ffcf7a', phase === 'night' ? 0.55 : 0.32);
                 if (lvl >= 2) dayNight.light(c2, A.pool.x, A.pool.y, master.gh * 0.1, '#ffc98a', phase === 'night' ? 0.24 : 0.13, false);
                 if (phase === 'night') {   // moon over the pond + glint + warm pool on the deck
                     dayNight.moonStars(c2, master.gw, master.gh, { seed: 17, moonX: 0.18, moonY: 0.09, stars: 20, starAlpha: 0.85, skyH: HORIZON * 0.92 });
-                    dayNight.light(c2, master.gw * 0.18, master.gh * 0.52, master.gh * 0.16, '#cfe0ff', 0.16, false);
+                    moonGlint(c2, master.gw, master.gh);
                 }
             }
             paintCatchOverlay(c2, master.gw, master.gh, i / FRAMES, band);

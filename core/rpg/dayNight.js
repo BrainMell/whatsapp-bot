@@ -109,7 +109,7 @@ const VIBRANT = {
 
 /** Wear the hour onto a finished day-lit scene. `box` limits the grade to a
  *  sub-rectangle (the world atlas grades only its map area, not the parchments). */
-function grade(ctx, w, h, phaseId, box) {
+function grade(ctx, w, h, phaseId, box, opts = {}) {
     const v = VIBRANT[phaseId];
     if (!v) return;                                   // day: true colours
     const x0 = box ? box.x : 0, y0 = box ? box.y : 0;
@@ -132,7 +132,7 @@ function grade(ctx, w, h, phaseId, box) {
         ctx.globalAlpha = ga; ctx.fillStyle = g; ctx.fillRect(x0, y0, ww, hh);
     }
     // 3b. light shafts ("god rays") fanning from the sun / moon — soft wedges that fade with distance
-    if (v.rays) {
+    if (v.rays && opts.rays !== false) {
         const R = v.rays, sx = x0 + ww * R.src[0], sy = y0 + hh * R.src[1];
         const L = Math.max(ww, hh) * R.len;
         let sd = ((Math.round(sx) * 73856093) ^ (Math.round(ww) * 19349663)) >>> 0;
