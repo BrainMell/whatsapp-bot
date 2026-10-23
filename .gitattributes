@@ -118,3 +118,7 @@ core/assets/scenes/*.png -filter -diff -merge -text
 # alchemy dedicated-model sprites must be real bytes everywhere (reset --hard
 # deploys on the boxes would otherwise serve LFS pointers to the renderer)
 core/rpgasset/kingdom3d_iso/struct_alc_*.png -filter -diff -merge -text
+
+# house-builder interior kit bakes must be real bytes everywhere (reset --hard
+# deploys on the boxes would otherwise serve LFS pointers to the room renderer)
+core/rpgasset/homestead/kit/*.png -filter -diff -merge -text

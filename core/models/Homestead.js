@@ -46,6 +46,14 @@ const HomesteadSchema = new mongoose.Schema(
     // soft stats cache (recomputed on write; informational)
     comfort: { type: Number, default: 0 },
 
+    // ── medieval house builder ──
+    // top-bunk floor: 0 none, 1 mezzanine (4x3 decks), 2 grand (6x5)
+    mezz: { type: Number, default: 0 },
+    // room currently being viewed/edited (main lives in `placed`)
+    activeRoom: { type: String, default: 'main' },
+    // extra purchased rooms: roomId -> { placed: [{item,x,y,uid,f}] }
+    rooms: { type: Object, default: {} },
+
     createdAt: { type: Number, default: () => Date.now() },
     updatedAt: { type: Number, default: () => Date.now() },
   },

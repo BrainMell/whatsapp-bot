@@ -583,7 +583,20 @@ async function cmdUpgrade(ctx, rec, args) {
             economy.addMoney(ctx.senderJid, next.price, `Base: refund upgrade ${d.name}`);
             return ctx.reply('🔥 The ledger refused the deed — your ZENI was returned. Try again.');
         }
-        return viewBase(ctx, { celebrate: { type: st.type, x: st.x, y: st.y, level: next.level, prev: next.level - 1 }, hint: `The *${d.name}* is now *${next.name}* (Lv.${next.level})!` });
+        const p = ctx.prefix;
+        // house-builder upsell: a bigger house unlocks rooms + the top-bunk floor
+        let perks = '';
+        if (st.type === 'house' && next.level >= 2) {
+            perks = `\n\n🛏️ *More house to live in!* The builder now offers:\n` +
+                `• \`${p} home buy mezzanine\` — raise a top-bunk floor with stairs and railing\n` +
+                `• \`${p} home buy room_bedroom\` — carve out a bedroom\n`;
+            if (next.level >= 3) {
+                perks += `• \`${p} home buy room_kitchen\` / \`${p} home buy room_study\` — more rooms\n` +
+                    `• \`${p} home buy mezzanine\` again — expand it grand (6x5)\n`;
+            }
+            perks += `• \`${p} home themes\` — timber & stone wall tiers in the outfitter`;
+        }
+        return viewBase(ctx, { celebrate: { type: st.type, x: st.x, y: st.y, level: next.level, prev: next.level - 1 }, hint: `The *${d.name}* is now *${next.name}* (Lv.${next.level})!${perks}` });
     } finally {
         opLocks.delete(ctx.senderJid);
     }

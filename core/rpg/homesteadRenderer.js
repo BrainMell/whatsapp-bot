@@ -48,7 +48,23 @@ const THEMES = {
     tidecourt:   { name: 'Tidecourt',   floor: ['floor_mvm_redbrick'],    wall: ['#cfe0dc', '#b8cdc8', '#3e6a72', '#27454c'], mortar: '#1f434b', frame: 'post',  price: 14000 },
     arcaneum:    { name: 'Arcaneum',    floor: ['floor_mvm_wooddark'],    wall: ['#ddd2e0', '#c8bacb', '#5a3a66', '#38203f'], mortar: '#3d1a35', frame: 'grid',  price: 20000 },
     blackvault:  { name: 'Blackvault',  floor: ['floor_mvm_unevenbrick'], wall: ['#c9c9c9', '#b0b0b0', '#3a3d42', '#232527'], mortar: '#232527', frame: 'post',  price: 26000 },
+
+    // ── medieval house-builder kit tiers (baked architecture sprites in kit/,
+    //    scripts/kingdom3d/bake_house_kit.py). wallKit = a 2m baked wall
+    //    elevation tiled 3x per run; the _win variant is used on the middle
+    //    segment. floorBlock floors are 2x2-tile diamonds drawn as blocks. ──
+    timberglen:   { name: 'Timberglen',   floor: ['kit/hou_floor_wood'],   floorBlock: true, wall: ['#d9c49a', '#c4ac82', '#6b4a2a', '#4a3118'], mortar: '#4a2d17', frame: 'grid',  price: 3500,  wallKit: 'kit/hou_wall_t1' },
+    plastercourt: { name: 'Plastercourt', floor: ['kit/hou_floor_wood'],   floorBlock: true, wall: ['#e6d9bd', '#d6c6a4', '#7a5631', '#573b1f'], mortar: '#4a2d17', frame: 'brace', price: 7500,  wallKit: 'kit/hou_wall_t2' },
+    brickhaven:   { name: 'Brickhaven',   floor: ['kit/hou_floor_stone'],  floorBlock: true, wall: ['#d8c8ac', '#c2b096', '#8f4530', '#6b3226'], mortar: '#c4b598', frame: 'post',  price: 11000, wallKit: 'kit/hou_wall_t3' },
+    rubblehold:   { name: 'Rubblehold',   floor: ['kit/hou_floor_stone'],  floorBlock: true, wall: ['#cfcabc', '#b8b2a4', '#6f6c5f', '#4e4e45'], mortar: '#8f8b7d', frame: 'post',  price: 16000, wallKit: 'kit/hou_wall_t4' },
+    dressedcourt: { name: 'Dressedcourt', floor: ['kit/hou_floor_stone'],  floorBlock: true, wall: ['#e8e2d4', '#d2cab8', '#9a9284', '#6e6a60'], mortar: '#b0a898', frame: 'brace', price: 22000, wallKit: 'kit/hou_wall_t5' },
 };
+
+// ── top-bunk floor (mezzanine) geometry ──
+// tier 1 = 4x3-tile decks along the left wall, tier 2 = grand 6x5 decks.
+// LIFT is the deck walking surface above the floor, in art px.
+const MEZZ_LIFT = 86;
+function mezzDepthOf(state) { const t = state.mezz | 0; return t >= 2 ? 6 : (t ? 4 : 0); }
 
 // ── rarity chrome for cards ──
 const RARITY = {
@@ -160,6 +176,41 @@ function roundRect(ctx, x, y, w, h, r) {
 // WALLS — plaster + timber frame (matches the MVM village exterior);
 // same sloped-run geometry law as before (N segments along the iso edge)
 // ══════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════
+// KIT WALLS — baked 2m wall elevations (medieval house builder kit), 3
+// segments per run with the _win variant on the middle one. The bake's long
+// edge rises to the right, which reads as the left run as-is; the right run
+// is the mirror. Falls back to the procedural painter when sprites are
+// missing (drawKitWalls returns false).
+// ══════════════════════════════════════════════════════════════════════
+const KIT_SEG_W = TW * 2;              // one 2m segment spans 2 tiles
+const KIT_SEGS = N / 2;                // 12 tiles = 6 segments per wall run
+const KIT_BASE_FRAC = 116 / 134;       // baked wall base line inside the sprite
+async function drawKitWalls(ctx, theme, seed) {
+    const base = await img(`${theme.wallKit}.png`);
+    if (!base) return false;
+    const win = await img(`${theme.wallKit}_win.png`);
+    const lh = WALL_H;
+    const by = Math.round(lh * KIT_BASE_FRAC);
+    const paint = (spr, bx, gy, mirror) => {
+        if (mirror) {
+            ctx.save();
+            ctx.translate(bx, gy);
+            ctx.scale(-1, 1);
+            ctx.drawImage(spr, -KIT_SEG_W / 2, -by, KIT_SEG_W, lh);
+            ctx.restore();
+        } else {
+            ctx.drawImage(spr, bx - KIT_SEG_W / 2, gy - by, KIT_SEG_W, lh);
+        }
+    };
+    for (let k = 0; k < KIT_SEGS; k++) {
+        const spr = win && k % 3 === 1 ? win : base;   // two windows per run (2nd + 5th segment)
+        paint(spr, isoX(0, 2 * k + 1), isoY(0, 2 * k + 1), false);   // left run
+        paint(spr, isoX(2 * k + 1, 0), isoY(2 * k + 1, 0), true);    // right run (mirrored)
+    }
+    return true;
+}
+
 function drawWallRun(ctx, x0, y0, x1, y1, theme, seedBase, frame) {
     const segs = N;
     const dx = (x1 - x0) / segs, dy = (y1 - y0) / segs;
@@ -334,11 +385,13 @@ async function renderFrame(state, frame, opts = {}) {
     ctx.fillStyle = amb;
     ctx.fillRect(0, 0, ART_W, ART_H);
 
-    // walls + corner shading
+    // walls + corner shading (kit tiers use baked wall elevations)
     const leftEnd = { x: isoX(0, N), y: isoY(0, N) };
     const rightEnd = { x: isoX(N, 0), y: isoY(N, 0) };
-    drawWallRun(ctx, OX, OY, leftEnd.x, leftEnd.y, theme, seed + 1, frame);
-    drawWallRun(ctx, OX, OY, rightEnd.x, rightEnd.y, theme, seed + 2, frame);
+    if (!(theme.wallKit && await drawKitWalls(ctx, theme, seed))) {
+        drawWallRun(ctx, OX, OY, leftEnd.x, leftEnd.y, theme, seed + 1, frame);
+        drawWallRun(ctx, OX, OY, rightEnd.x, rightEnd.y, theme, seed + 2, frame);
+    }
     const cg = ctx.createLinearGradient(OX - 10, 0, OX + 10, 0);
     cg.addColorStop(0, 'rgba(0,0,0,0.22)');
     cg.addColorStop(0.5, 'rgba(0,0,0,0)');
@@ -346,9 +399,33 @@ async function renderFrame(state, frame, opts = {}) {
     ctx.fillStyle = cg;
     ctx.fillRect(OX - 10, OY - WALL_H - 8, 20, WALL_H + 10);
 
-    // torches
-    drawTorch(ctx, isoX(0, 3.5), isoY(0, 3.5) - 40, frame, seed + 11);
-    drawTorch(ctx, isoX(0, 8.5), isoY(0, 8.5) - 40, frame, seed + 12);
+    // ── top-bunk floor: raised mezzanine deck along the left wall ──
+    const mezzTier = state.mezz | 0;
+    const mezzDepth = mezzDepthOf(state);
+    let sconceLift = 0;
+    if (mezzTier > 0) {
+        const deckSpr = mezzTier >= 2 ? await img('kit/hou_deck_wood.png') : await img('kit/hou_mezz.png');
+        const extSpr = await img('kit/hou_platform_ext.png');
+        const deckW2 = mezzTier >= 2 ? 6 : 4, deckH2 = mezzTier >= 2 ? 5 : 3;
+        const topOff = 3 + (deckW2 + deckH2) * (TH / 4);   // deck-top centre inside the sprite
+        if (deckSpr) {
+            for (let yk = 0; yk + deckH2 <= N; yk += deckH2) {
+                const c = footCenter(0, yk, deckW2, deckH2);
+                ctx.drawImage(deckSpr, c.x - (deckW2 + deckH2) * (TW / 4), c.y - MEZZ_LIFT - topOff, (deckW2 + deckH2) * (TW / 2), (deckW2 + deckH2) * (TH / 2) + 14);
+            }
+            if (mezzTier >= 2 && extSpr) {
+                for (let bx = 0; bx < 6; bx += 2) {
+                    const c = footCenter(bx, 10, 2, 2);
+                    ctx.drawImage(extSpr, c.x - 2 * (TW / 2), c.y - MEZZ_LIFT - (3 + TH), 2 * TW, 2 * TH + 13);
+                }
+            }
+        }
+        sconceLift = MEZZ_LIFT + 26;   // left-wall torches become sconces above the railing
+    }
+
+    // torches (left pair rides up with the mezzanine deck)
+    drawTorch(ctx, isoX(0, 3.5), isoY(0, 3.5) - 40 - sconceLift, frame, seed + 11);
+    drawTorch(ctx, isoX(0, 8.5), isoY(0, 8.5) - 40 - sconceLift, frame, seed + 12);
     drawTorch(ctx, isoX(3.5, 0), isoY(3.5, 0) - 40, frame, seed + 13);
     drawTorch(ctx, isoX(8.5, 0), isoY(8.5, 0) - 40, frame, seed + 14);
 
@@ -366,19 +443,31 @@ async function renderFrame(state, frame, opts = {}) {
         ctx.drawImage(spr, wx - w / 2, wy - h - 18 + bob, w, h);
     }
 
-    // floor
+    // floor (kit themes tile 2x2-tile block diamonds, legacy themes tile 1x1)
     const floorImgs = [];
     for (const f of theme.floor) {
         const im = await img(`${f}.png`);
         if (im) floorImgs.push(im);
     }
-    for (let sum = 0; sum <= 2 * (N - 1); sum++) {
-        for (let x = Math.max(0, sum - N + 1); x <= Math.min(N - 1, sum); x++) {
-            const y = sum - x;
-            const r = mulberry32(seed + x * 131 + y * 17)();
-            const timg = floorImgs[Math.floor(r * floorImgs.length)] || floorImgs[0];
-            if (!timg) continue;
-            ctx.drawImage(timg, isoX(x, y) - TW / 2, isoY(x, y) - TH / 2);
+    if (theme.floorBlock) {
+        for (let by = 0; by < N; by += 2) {
+            for (let bx = 0; bx < N; bx += 2) {
+                const r = mulberry32(seed + bx * 131 + by * 17)();
+                const timg = floorImgs[Math.floor(r * floorImgs.length)] || floorImgs[0];
+                if (!timg) continue;
+                const c = footCenter(bx, by, 2, 2);
+                ctx.drawImage(timg, c.x - TW, c.y - TH, TW * 2, TH * 2);
+            }
+        }
+    } else {
+        for (let sum = 0; sum <= 2 * (N - 1); sum++) {
+            for (let x = Math.max(0, sum - N + 1); x <= Math.min(N - 1, sum); x++) {
+                const y = sum - x;
+                const r = mulberry32(seed + x * 131 + y * 17)();
+                const timg = floorImgs[Math.floor(r * floorImgs.length)] || floorImgs[0];
+                if (!timg) continue;
+                ctx.drawImage(timg, isoX(x, y) - TW / 2, isoY(x, y) - TH / 2);
+            }
         }
     }
     // front edge rim
@@ -436,7 +525,8 @@ async function renderFrame(state, frame, opts = {}) {
         if (!spr) continue;
         const c = footCenter(p.x, p.y, p.def.fw, p.def.fh);
         const w = spr.width * 2, h = spr.height * 2;
-        ctx.drawImage(spr, c.x - w / 2, c.y - h / 2, w, h);
+        const rlift = mezzDepth && p.x < mezzDepth ? MEZZ_LIFT : 0;
+        ctx.drawImage(spr, c.x - w / 2, c.y - rlift - h / 2, w, h);
     }
 
     // ── grid preview overlay (Section 3): floor-pass — labelled axes + cells ──
@@ -444,7 +534,8 @@ async function renderFrame(state, frame, opts = {}) {
 
     const t = frame / FRAMES;
 
-    // preload sprites + compute anchors once for both passes
+    // preload sprites + compute anchors once for both passes; furniture in the
+    // mezzanine columns rides up with the deck
     const drawn = [];
     for (const p of items) {
         const spr = await img(`${p.item}.png`);
@@ -452,8 +543,9 @@ async function renderFrame(state, frame, opts = {}) {
         const c = footCenter(p.x, p.y, p.def.fw, p.def.fh);
         // anchor: lowest painted floor vertex of the footprint (+2px settle) —
         // a sprite's base line lands exactly on its own tiles' south edge.
-        const anchorY = c.y + (p.def.fw + p.def.fh) * (TH / 4) - TH / 2 + 2;
-        drawn.push({ p, spr, c, anchorY, w: spr.width * 2, h: spr.height * 2 });
+        const lift = mezzDepth && p.x < mezzDepth ? MEZZ_LIFT : 0;
+        const anchorY = c.y + (p.def.fw + p.def.fh) * (TH / 4) - TH / 2 + 2 - lift;
+        drawn.push({ p, spr, c, anchorY, lift, w: spr.width * 2, h: spr.height * 2 });
     }
 
     // ── move locomotion (owner 2026-10-16 "moving doesn't trigger an
@@ -489,66 +581,114 @@ async function renderFrame(state, frame, opts = {}) {
         }
     }
 
-    // ═══ SHADOWS — rebuilt from scratch (owner: "scrap it and redo") ═══
-    // isoShadow.js: sprite-SILHOUETTE cast shadows squashed onto the floor
-    // plane and marched along the key-light direction (upper-left key →
-    // lower-right cast, consistent with the sprite art's own shading), plus
-    // a tight contact-AO band under each base line. No more generic
-    // rhombi/ellipses that didn't fit the sprites.
-    for (const d of drawn) {
-        let sal = 1;
-        if (opts.pop && !opts.pop.from && opts.pop.item === d.p.item && opts.pop.x === d.p.x && opts.pop.y === d.p.y) {
-            // placement fades its shadow in; a SLIDE keeps its shadow riding
-            // along under the piece for the whole glide
-            sal = Math.min(1, t * 4);
-        }
-        isoShadow.drawItemShadow(ctx, {
-            img: d.spr, key: `${d.p.item}${d.p.f ? ':f' : ''}`, scale: 2,
-            ax: d.c.x, ay: d.anchorY, flip: !!d.p.f, alpha: sal,
-        });
-    }
-
-    // ═══ SPRITES (depth-sorted back→front) ═══
-    for (const d of drawn) {
-        const { p, spr, c, anchorY, w, h } = d;
-        // placement pop-in — ONLY for real placements (no `from`): a slide
-        // must never also drop from above (owner 2026-10-16 21:23Z close-move
-        // law). rotate passes pop without `from` and keeps its turn-bounce.
-        let drop = 0, alpha = 1;
-        if (opts.pop && !opts.pop.from && opts.pop.item === p.item && opts.pop.x === p.x && opts.pop.y === p.y) {
-            const pt = Math.min(1, t * 2.2);
-            const bounce = pt < 1 ? Math.abs(Math.cos(pt * Math.PI * 1.6)) * Math.pow(1 - pt, 1.6) : 0;
-            drop = -(1 - pt) * 90 - bounce * 26;
-            alpha = Math.min(1, pt * 4);
-            if (pt > 0.92) {
-                const pr = mulberry32(seed + 99);
+    // ═══ SPRITES — two passes so the mezzanine railing paints in front of
+    // upstairs furniture but behind everything on the main floor:
+    //   1. upstairs items (lifted) → 2. railing + stairs → 3. floor items ═══
+    const paintItems = async (list) => {
+        // isoShadow.js: sprite-SILHOUETTE cast shadows squashed onto the walking
+        // plane (floor, or the deck surface for lifted pieces)
+        for (const d of list) {
+            let sal = 1;
+            if (opts.pop && !opts.pop.from && opts.pop.item === d.p.item && opts.pop.x === d.p.x && opts.pop.y === d.p.y) {
+                // placement fades its shadow in; a SLIDE keeps its shadow riding
+                // along under the piece for the whole glide
+                sal = Math.min(1, t * 4);
+            }
+            if (d.lift) {
+                // upstairs: soft contact pool on the deck instead of a floor cast
                 ctx.save();
-                ctx.globalAlpha = (1 - pt) * 6 * 0.4;
-                ctx.fillStyle = '#cbb78f';
-                for (let i = 0; i < 7; i++) {
-                    const a = pr() * Math.PI * 2, rr = 8 + pr() * 26;
-                    ctx.beginPath();
-                    ctx.ellipse(c.x + Math.cos(a) * rr, anchorY - 4 + Math.sin(a) * rr * 0.4, 4, 2.4, 0, 0, Math.PI * 2);
-                    ctx.fill();
-                }
+                ctx.globalAlpha = 0.28 * sal;
+                ctx.fillStyle = '#000000';
+                ctx.beginPath();
+                ctx.ellipse(d.c.x, d.anchorY + 2, d.w * 0.3, d.w * 0.11, 0, 0, Math.PI * 2);
+                ctx.fill();
                 ctx.restore();
+            } else {
+                isoShadow.drawItemShadow(ctx, {
+                    img: d.spr, key: `${d.p.item}${d.p.f ? ':f' : ''}`, scale: 2,
+                    ax: d.c.x, ay: d.anchorY, flip: !!d.p.f, alpha: sal,
+                });
             }
         }
+        for (const d of list) {
+            const { p, spr, c, anchorY, w, h } = d;
+            // placement pop-in — ONLY for real placements (no `from`): a slide
+            // must never also drop from above (owner 2026-10-16 21:23Z close-move
+            // law). rotate passes pop without `from` and keeps its turn-bounce.
+            let drop = 0, alpha = 1;
+            if (opts.pop && !opts.pop.from && opts.pop.item === p.item && opts.pop.x === p.x && opts.pop.y === p.y) {
+                const pt = Math.min(1, t * 2.2);
+                const bounce = pt < 1 ? Math.abs(Math.cos(pt * Math.PI * 1.6)) * Math.pow(1 - pt, 1.6) : 0;
+                drop = -(1 - pt) * 90 - bounce * 26;
+                alpha = Math.min(1, pt * 4);
+                if (pt > 0.92) {
+                    const pr = mulberry32(seed + 99);
+                    ctx.save();
+                    ctx.globalAlpha = (1 - pt) * 6 * 0.4;
+                    ctx.fillStyle = '#cbb78f';
+                    for (let i = 0; i < 7; i++) {
+                        const a = pr() * Math.PI * 2, rr = 8 + pr() * 26;
+                        ctx.beginPath();
+                        ctx.ellipse(c.x + Math.cos(a) * rr, anchorY - 4 + Math.sin(a) * rr * 0.4, 4, 2.4, 0, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    ctx.restore();
+                }
+            }
 
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        if (p.f) {
-            // flip = mirror around the item's own center axis (iso 90° fake,
-            // standard for sprites with a single authored facing)
-            ctx.translate(2 * c.x, 0);
-            ctx.scale(-1, 1);
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            if (p.f) {
+                // flip = mirror around the item's own center axis (iso 90° fake,
+                // standard for sprites with a single authored facing)
+                ctx.translate(2 * c.x, 0);
+                ctx.scale(-1, 1);
+            }
+            if (p.item === 'hearth_brick') await drawHearth(ctx, spr, c, anchorY, frame, seed, w, h, drop);
+            else if (p.item === 'cauldron') await drawCauldron(ctx, spr, c, anchorY, frame, seed, w, h, drop);
+            else if (p.item === 'well_wishing') await drawWell(ctx, spr, c, anchorY, frame, seed, w, h, drop);
+            else ctx.drawImage(spr, c.x - w / 2, anchorY - h + drop, w, h);
+            ctx.restore();
         }
-        if (p.item === 'hearth_brick') await drawHearth(ctx, spr, c, anchorY, frame, seed, w, h, drop);
-        else if (p.item === 'cauldron') await drawCauldron(ctx, spr, c, anchorY, frame, seed, w, h, drop);
-        else if (p.item === 'well_wishing') await drawWell(ctx, spr, c, anchorY, frame, seed, w, h, drop);
-        else ctx.drawImage(spr, c.x - w / 2, anchorY - h + drop, w, h);
-        ctx.restore();
+    };
+
+    const mezzDrawn = drawn.filter((d) => d.lift);
+    const floorDrawn = drawn.filter((d) => !d.lift);
+    await paintItems(mezzDrawn);
+
+    // mezzanine guardrail + the staircase down to the main floor
+    if (mezzTier > 0) {
+        const railSpr = await img('kit/hou_railing.png');
+        if (railSpr) {
+            for (let k = 0; k < N / 2; k++) {
+                if (k === 4) continue;   // opening where the stairs land
+                const bx = isoX(mezzDepth, 2 * k + 1), by = isoY(mezzDepth, 2 * k + 1);
+                ctx.drawImage(railSpr, bx - KIT_SEG_W / 2, by - MEZZ_LIFT - 52, KIT_SEG_W, 60);
+            }
+        }
+        // staircase: chunky wooden steps from the deck edge down to the floor
+        const steps = 6;
+        for (let i = 0; i < steps; i++) {
+            const h = MEZZ_LIFT * (1 - i / steps);
+            const cx = isoX(mezzDepth + 0.32 + i * 0.33, 9.55);
+            const cy = isoY(mezzDepth + 0.32 + i * 0.33, 9.55) - h;
+            const w2 = TW * 0.36, h2 = TH * 0.36, face = 6 + i * 0.4;
+            ctx.fillStyle = i % 2 ? '#a5713d' : '#96622f';   // tread
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - h2); ctx.lineTo(cx + w2, cy); ctx.lineTo(cx, cy + h2); ctx.lineTo(cx - w2, cy);
+            ctx.closePath(); ctx.fill();
+            ctx.fillStyle = '#5e3c1c';                        // south-east riser
+            ctx.beginPath();
+            ctx.moveTo(cx + w2, cy); ctx.lineTo(cx, cy + h2); ctx.lineTo(cx, cy + h2 + face); ctx.lineTo(cx + w2, cy + face);
+            ctx.closePath(); ctx.fill();
+            ctx.fillStyle = '#4a2e14';                        // south-west riser
+            ctx.beginPath();
+            ctx.moveTo(cx - w2, cy); ctx.lineTo(cx, cy + h2); ctx.lineTo(cx, cy + h2 + face); ctx.lineTo(cx - w2, cy + face);
+            ctx.closePath(); ctx.fill();
+        }
     }
+
+    await paintItems(floorDrawn);
 
     // ── grid preview overlay (above items): pulsing selection + chevron ──
     if (opts.grid) drawGridSelection(ctx, opts.grid, frame);
@@ -916,7 +1056,7 @@ function cachePut(map, key, out) {
     map.set(key, { ...out, ts: Date.now() });
 }
 function stateHash(state, opts = {}) {
-    return hashStr(JSON.stringify([state.owner, state.theme, state.placed, opts.pop || null, opts.hint || '', opts.grid || null, opts.static ? 1 : 0]));
+    return hashStr(JSON.stringify([state.owner, state.theme, state.placed, state.mezz | 0, state.roomId || '', opts.pop || null, opts.hint || '', opts.grid || null, opts.static ? 1 : 0]));
 }
 
 // EVENT-LOOP BREATH — real timers between frames keep the canary heartbeat
