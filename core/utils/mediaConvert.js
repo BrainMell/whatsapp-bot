@@ -70,4 +70,25 @@ async function gifToMp4Overlaid(gifBuf, pngBuf) {
     } finally { _clean(gi, pi, mo); }
 }
 
-module.exports = { gifToMp4Even, gifToMp4Overlaid };
+/** Repo-baked MP4 + transparent PNG overlay → MP4 in ONE pass (minePov lane:
+ *  the underground loops are committed assets, so the ONLY runtime work is
+ *  this plaster — same filter graph as gifToMp4Overlaid, mp4 input). */
+async function mp4ToMp4Overlaid(mp4Buf, pngBuf) {
+    const mi = _tmp('.mp4'), pi = _tmp('.png'), mo = _tmp('.mp4');
+    try {
+        fs.writeFileSync(mi, mp4Buf);
+        fs.writeFileSync(pi, pngBuf);
+        await _run([
+            '-y', '-i', mi, '-i', pi,
+            '-filter_complex',
+            '[0:v]scale=trunc(iw/2)*2:trunc(ih/2)*2[base];[base][1:v]overlay=0:0:format=auto:eof_action=repeat[out]',
+            '-map', '[out]', '-movflags', 'faststart', '-pix_fmt', 'yuv420p',
+            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '24', '-an', mo,
+        ]);
+        const out = fs.readFileSync(mo);
+        if (out.length <= 500) throw new Error('empty mp4');
+        return out;
+    } finally { _clean(mi, pi, mo); }
+}
+
+module.exports = { gifToMp4Even, gifToMp4Overlaid, mp4ToMp4Overlaid };

@@ -1170,8 +1170,30 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     if (luckyFinds > 0) msg += `\n💰 *LUCKY FIND!* You found a lost pouch containing ${economy.getZENI()}${luckyFinds.toLocaleString()}!\n`;
     const energyLeft = economy.getPersistentEnergy(senderJid, maxEn);
     msg += `\n⚡ Energy Left: ${energyLeft}/${maxEn} (-${energyCost})\n⛏️ Mines Lv.${minesLvl} · yield ×${minesMult}`;
-    // 🏔️ §12: the result plays on the zoomed-in MINES card with the miner
-    // swinging on the face, the haul as a ribbon — silent text fallback
+    // ⛏️ 2026-10-23 (owner: "let's make a mine card, one that takes place
+    // underground with rocks and animations … have the assets saved on the
+    // repo, and have them call for said assets and overlay like the fishing
+    // so that it's instant"): the haul ships on the PRE-BAKED underground POV
+    // loop — a committed repo MP4 (core/rpgasset/minepov) + the loot ribbon
+    // plastered in ONE ffmpeg pass, cached per (loc, band, haul text). No
+    // scene bake at runtime, so spam can't queue renders. Loot rarity picks
+    // the loop: rarest ore in the haul = the epic sparkle surge.
+    try {
+        const minePov = require('../rpg/minePov');
+        const lines = Object.entries(found).map(([id, qty]) => `${qty}× ${lootSystem.getItemInfo(id).name}`);
+        if (luckyFinds > 0) lines.push(`+${luckyFinds.toLocaleString()} ZENI (lucky find)`);
+        lines.push(`⚡ -${energyCost} energy · Mines Lv.${minesLvl} (×${minesMult})`);
+        const media = await minePov.renderMineCard({ loc: loc.id, drops: found, banner: { head: loc.name, lines } });
+        if (media && media.buffer && media.buffer.length > 500) {
+            const payload = { caption: msg, gifPlayback: true };
+            if (media.contentType === 'video/mp4') payload.video = media.buffer;
+            else payload.image = media.buffer;
+            if (media.thumb) payload.jpegThumbnail = media.thumb;
+            return await sock.sendMessage(chatId, payload);
+        }
+    } catch (e) { console.error('[MineCard] pov lane failed, falling back:', e.message); }
+    // 🏔️ §12 static fallback: the zoomed-in MINES card (full-scene render —
+    // slower, so it only answers when the pre-baked lane is unavailable)
     try {
         const lines = Object.entries(found).map(([id, qty]) => `${qty}× ${lootSystem.getItemInfo(id).name}`);
         if (luckyFinds > 0) lines.push(`+${luckyFinds.toLocaleString()} ZENI (lucky find)`);
