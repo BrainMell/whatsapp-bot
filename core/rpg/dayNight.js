@@ -82,28 +82,28 @@ const VIBRANT = {
         punch: '255,86,140', punchA: 0.32,
         glows: [[0.12, 0.34, 0.95, '255,170,120', 0.34], [0.30, 0.10, 0.55, '255,214,150', 0.20]],
         vig: 0.16,
-        rays: { src: [0.08, -0.04], rgb: '255,196,150', a: 0.22, n: 7, spread: 0.55, len: 1.25 },
+        rays: { src: [0.08, -0.04], rgb: '255,196,150', a: 0.17, n: 7, spread: 0.55, len: 1.25 },
     },
     golden: {
         cast: [[0, '255,214,150'], [0.5, '255,190,110'], [1, '255,150,84']], castA: 0.66,
         punch: '255,150,40', punchA: 0.26,
         glows: [[0.86, 0.22, 1.05, '255,190,90', 0.36], [0.70, 0.12, 0.5, '255,236,170', 0.22]],
         vig: 0.18,
-        rays: { src: [0.90, -0.05], rgb: '255,214,130', a: 0.26, n: 8, spread: 0.60, len: 1.3 },
+        rays: { src: [0.90, -0.05], rgb: '255,214,130', a: 0.19, n: 8, spread: 0.60, len: 1.3 },
     },
     dusk: {
         cast: [[0, '255,150,110'], [0.4, '226,120,160'], [0.75, '140,100,200'], [1, '70,76,170']], castA: 0.76,
         punch: '210,70,150', punchA: 0.28,
         glows: [[0.82, 0.30, 1.0, '255,120,60', 0.34], [0.50, 0.50, 0.9, '190,90,200', 0.14]],
         vig: 0.26,
-        rays: { src: [0.86, -0.04], rgb: '255,150,110', a: 0.18, n: 6, spread: 0.50, len: 1.1 },
+        rays: { src: [0.86, -0.04], rgb: '255,150,110', a: 0.14, n: 6, spread: 0.50, len: 1.1 },
     },
     night: {
         cast: [[0, '92,122,214'], [0.55, '70,96,188'], [1, '48,66,150']], castA: 0.80,
         punch: '60,90,235', punchA: 0.30,
         glows: [[0.80, 0.14, 0.85, '150,180,255', 0.20], [0.50, 0.55, 1.1, '70,100,220', 0.12]],
         vig: 0.34,
-        rays: { src: [0.80, -0.02], rgb: '150,185,255', a: 0.16, n: 5, spread: 0.40, len: 1.0 },
+        rays: { src: [0.80, -0.02], rgb: '150,185,255', a: 0.07, n: 5, spread: 0.40, len: 1.0 },
     },
 };
 
@@ -138,19 +138,30 @@ function grade(ctx, w, h, phaseId, box) {
         let sd = ((Math.round(sx) * 73856093) ^ (Math.round(ww) * 19349663)) >>> 0;
         const rnd = () => { sd = (sd * 1664525 + 1013904223) >>> 0; return sd / 4294967296; };
         blend('screen');
-        const base = Math.PI / 2 + (R.src[0] > 0.5 ? 0.38 : -0.38);          // aim across the scene, toward the far side
-        for (let i = 0; i < R.n; i++) {
-            const ang = base + (i / Math.max(1, R.n - 1) - 0.5) * R.spread + (rnd() - 0.5) * 0.08;
-            const half = 0.012 + rnd() * 0.03;                              // wedge half-width (rad)
+        // 2026-10-23 (owner: "rays look weird and unnatural"): the old shafts were thin hard-edged wedges meeting at one
+        // point — laser beams. Now: a few WIDE shafts, each built from stacked wedges of growing width / falling alpha
+        // (soft feathered edges), a long slow fade, a haze bloom at the source, and a much lower overall strength.
+        const base = Math.PI / 2 + (R.src[0] > 0.5 ? 0.42 : -0.42);          // aim across the scene, toward the far side
+        const n = Math.max(3, Math.min(5, R.n - 2));
+        const bloom = ctx.createRadialGradient(sx, sy, 0, sx, sy, L * 0.42);
+        bloom.addColorStop(0, `rgba(${R.rgb},0.55)`); bloom.addColorStop(1, `rgba(${R.rgb},0)`);
+        ctx.globalAlpha = R.a * 0.9; ctx.fillStyle = bloom; ctx.fillRect(x0, y0, ww, hh);
+        for (let i = 0; i < n; i++) {
+            const ang = base + (i / Math.max(1, n - 1) - 0.5) * R.spread * 1.15 + (rnd() - 0.5) * 0.10;
+            const core = 0.035 + rnd() * 0.05;                                  // shaft half-width (rad)
+            const str = 0.45 + 0.55 * rnd();                                    // some shafts brighter than others
             const ex = sx + Math.cos(ang) * L, ey = sy + Math.sin(ang) * L;
             const g = ctx.createLinearGradient(sx, sy, ex, ey);
-            g.addColorStop(0, `rgba(${R.rgb},1)`); g.addColorStop(0.55, `rgba(${R.rgb},0.35)`); g.addColorStop(1, `rgba(${R.rgb},0)`);
-            ctx.globalAlpha = R.a * (0.55 + 0.45 * rnd());
+            g.addColorStop(0, `rgba(${R.rgb},0.9)`); g.addColorStop(0.35, `rgba(${R.rgb},0.45)`); g.addColorStop(0.75, `rgba(${R.rgb},0.12)`); g.addColorStop(1, `rgba(${R.rgb},0)`);
             ctx.fillStyle = g;
-            ctx.beginPath(); ctx.moveTo(sx, sy);
-            ctx.lineTo(sx + Math.cos(ang - half) * L, sy + Math.sin(ang - half) * L);
-            ctx.lineTo(sx + Math.cos(ang + half) * L, sy + Math.sin(ang + half) * L);
-            ctx.closePath(); ctx.fill();
+            for (let layer = 0; layer < 6; layer++) {                           // feathered: wide+faint → narrow+brighter
+                const half = core * (1.9 - layer * 0.28);
+                ctx.globalAlpha = R.a * 0.5 * str * (0.22 + layer * 0.09);
+                ctx.beginPath(); ctx.moveTo(sx, sy);
+                ctx.lineTo(sx + Math.cos(ang - half) * L, sy + Math.sin(ang - half) * L);
+                ctx.lineTo(sx + Math.cos(ang + half) * L, sy + Math.sin(ang + half) * L);
+                ctx.closePath(); ctx.fill();
+            }
         }
     }
     // 4. vignette — dark edges so the lit centre pops
