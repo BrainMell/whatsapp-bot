@@ -230,7 +230,13 @@ const sk = (l) => { skip++; console.log('  SKIP -', l); };
     await run('.j gs tier=1 --page 2');
     const p2 = lastText(/GLOBAL CARD SEARCH/);
     ok(!!p2 && /Page: 2 \//.test(p2), 'gs --page 2 advances pagination');
-    ok(!!p2 && /--page 1/.test(p2), 'page-2 footer offers way back');
+    // footer follows the scc/series cycle-forward convention: page 2 of N>2
+    // offers --page 3; on the last page it wraps to --page 1.
+    if (p2) {
+      const total = parseInt((p2.match(/Page: 2 \/ (\d+)/) || [])[1]);
+      const expected = total > 2 ? 3 : 1;
+      ok(new RegExp(`--page ${expected}`).test(p2), `page-2 footer offers --page ${expected} (cycle-forward)`);
+    }
   } else sk('tier=1 fits on one page — pagination path untested here');
 
   // guardrails
