@@ -14,7 +14,13 @@ const { encodeGif } = require('../utils/gif89a');
 
 const W = 480;
 const H = 360;
-const FRAME_COUNT = 8;
+// ⚔️ FIX 2026-10-24 (owner: 'charging an attack and the next message is
+// literally just an image card with the enemy gone'): 8 frames + the pure-JS
+// GIF encode blew the 8s race on busy boxes (RenderQ piling up mid-cast), so
+// the GIF silently degraded to the text fallback and the next card the player
+// saw was the post-kill war log with the dead enemy hidden. 6 frames keeps the
+// animation readable and leaves headroom under render pressure.
+const FRAME_COUNT = 6;
 const FRAME_DELAY_MS = 200;
 const GIF_PLAYBACK_MS = FRAME_COUNT * FRAME_DELAY_MS * 2;
 const PALETTE = {
@@ -650,8 +656,15 @@ function drawEffect(ctx, entry, t, frame, targetSide) {
   }
 }
 
-async function renderSignatureGif(state, player, ability, entry, target) {
-  let baseBuffer = await getBattleBackground(state, player, ability, target);
+async function renderSignatureGif(state, player, ability, entry, target, baseSceneBuffer) {
+  // ⚔️ FIX 2026-10-24: prefer the CACHED scene the player is already looking
+  // at (stashed on the combat state by guildAdventure at every card send).
+  // The old path re-rendered a full Go card mid-cast, which both cost 0.2-1.3s
+  // of the 8s budget and raced the busy Go engine; the cache is instant and
+  // always shows the enemy exactly as last seen (pre-hit).
+  let baseBuffer = (Buffer.isBuffer(baseSceneBuffer) && baseSceneBuffer.length > 1000)
+    ? baseSceneBuffer
+    : await getBattleBackground(state, player, ability, target);
   let baseImage = null;
   if (baseBuffer) {
     try { baseImage = await loadImage(baseBuffer); } catch (e) { baseImage = null; }
@@ -700,6 +713,10 @@ async function animateUltimate(options = {}) {
     || (requestedIndex >= 0 && state.enemies ? state.enemies[requestedIndex] : null)
     || liveEnemies[0]
     || null;
+  // ⚔️ FIX 2026-10-24: enemy-side signatures with NO live enemy target would
+  // render an empty battlefield (the reported 'image card with the enemy
+  // gone'). Skip the whole animation and let the normal resolution proceed.
+  if (entry.side === 'enemy' && !target) return false;
   const sendText = typeof options.sendText === 'function' ? options.sendText : async () => {};
   const sendGif = typeof options.sendGif === 'function' ? options.sendGif : async () => ({ ok: false });
   const name = ability.name || entry.id.replace(/_/g, ' ');
@@ -714,7 +731,10 @@ async function animateUltimate(options = {}) {
       await sendText(messages[i]);
       if (i < messages.length - 1) await wait(i === 0 ? 400 : 450);
     }
-    const gif = await raceTimeout(renderSignatureGif(state, player, ability, entry, target), 8000);
+    const gif = await raceTimeout(
+      renderSignatureGif(state, player, ability, entry, target, options.baseSceneBuffer),
+      8000
+    );
     if (gif && Buffer.isBuffer(gif) && gif.length > 100) {
       const mediaResult = await sendGif(gif, '💥 *' + name + '* UNLEASHED!');
       if (mediaResult && mediaResult.ok !== false) await wait(GIF_PLAYBACK_MS);

@@ -4786,8 +4786,13 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   if (scene.backgroundPath) {
     state.backgroundPath = scene.backgroundPath;
   }
-
+  // ⚔️ FIX 2026-10-24: stash the scene the player is CURRENTLY looking at so
+  // the class-ultimate VFX (skillVfx) can reuse it as the pre-hit GIF base
+  // instead of racing a fresh Go render mid-cast (which blew its 8s budget on
+  // busy boxes and silently degraded the ultimate to a text line).
   if (scene.success) {
+    state.lastCombatScene = scene.buffer
+      || (scene.imagePath && fs.existsSync(scene.imagePath) ? fs.readFileSync(scene.imagePath) : null);
     // 💡 RPG OPT PASS (2026-10-20): bounded send — the old mediaError catch
     // fired a text fallback immediately on a send error; a wedged-then-drained
     // send made the image AND the text both arrive (duplicate battle-start
@@ -7183,6 +7188,10 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
       );
       const scene = await Promise.race([scenePromise, timeoutPromise]);
       if (scene.success) {
+        // ⚔️ FIX 2026-10-24: stash the freshest battle card for the class-ultimate
+        // VFX base (see startCombat stash note) — the player is looking at THIS.
+        state.lastCombatScene = scene.buffer
+          || (scene.imagePath && fs.existsSync(scene.imagePath) ? fs.readFileSync(scene.imagePath) : null);
         try {
           // 💡 NEW 2026-07-29: Detect MP4 vs PNG and send accordingly.
           // The animated combat endpoint returns video/mp4 with VFX + sprite reactions.
@@ -12193,6 +12202,8 @@ async function applyAbilityEffect(
           player,
           ability,
           targetIndex,
+          // ⚔️ FIX 2026-10-24: pre-hit GIF reuses the scene already on screen
+          baseSceneBuffer: state.lastCombatScene || null,
           sendText: (text) => boundedSend(sock, chatId, { text }, 'ultimateCharge'),
           sendGif: (buffer, caption) => sendMediaBounded(sock, chatId, {
             image: buffer,
