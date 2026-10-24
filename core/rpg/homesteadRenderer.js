@@ -782,6 +782,7 @@ function drawGridSelection(ctx, g, frame) {
 //     embers + drifting dust motes (the old 2D loop's life, in overlay form)
 //   • move/moveto feedback — fading slide trail + expanding impact ring
 const I3 = require('./interior3d/scene');
+const HRooms = require('./homesteadRooms');
 const LIGHT_IDS = new Set(['hearth_brick', 'oven_brick', 'oven_stone', 'candelabra', 'lantern_stand', 'cauldron']);
 
 function draw3dOverlay(ctx, room, k, oy, state, frame, opts) {
@@ -816,62 +817,90 @@ function draw3dOverlay(ctx, room, k, oy, state, frame, opts) {
     // ── A. selection grid (opts.grid) ──
     if (opts.grid) {
         const g = opts.grid;
-        // hairlines across every main-room floor tile
-        ctx.strokeStyle = 'rgba(250,240,210,0.30)';
+        // Draw on the selected platform instead of underneath the loft slab.
+        // Ground level follows the main room and every built annex; the loft
+        // uses its own 6x6 footprint.
+        const floorZ = fz(g.lvl);
+        const regions = g.lvl === 1
+            ? [HRooms.LOFT]
+            : [
+                { x0: 0, y0: 0, x1: N3, y1: N3 },
+                ...(state.annex || []).map((a) => HRooms.SIDES[a.side]).filter(Boolean),
+            ];
+
+        ctx.strokeStyle = 'rgba(250,240,210,0.38)';
         ctx.lineWidth = 1.2;
-        for (let i = 1; i < N3; i++) {
-            let a = P(I3.cellX(i), I3.cellY(0), 0.02), b = P(I3.cellX(i), I3.cellY(N3), 0.02);
-            ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
-            a = P(I3.cellX(0), I3.cellY(i), 0.02); b = P(I3.cellX(N3), I3.cellY(i), 0.02);
-            ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+        for (const r of regions) {
+            for (let i = r.x0 + 1; i < r.x1; i++) {
+                const a = P(I3.cellX(i), I3.cellY(r.y0), floorZ);
+                const b = P(I3.cellX(i), I3.cellY(r.y1), floorZ);
+                ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+            }
+            for (let i = r.y0 + 1; i < r.y1; i++) {
+                const a = P(I3.cellX(r.x0), I3.cellY(i), floorZ);
+                const b = P(I3.cellX(r.x1), I3.cellY(i), floorZ);
+                ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+            }
         }
-        // gold front rims: SW edge (y = N3) + SE edge (x = N3)
+
+        // Gold front rims at the same height as the selected floor.
         ctx.strokeStyle = 'rgba(244,206,110,0.95)';
         ctx.lineWidth = 3;
-        for (const edge of ['sw', 'se']) {
+        for (const r of regions) {
             ctx.beginPath();
-            for (let i = 0; i <= N3; i++) {
-                const p = edge === 'sw' ? P(I3.cellX(i), I3.cellY(N3), 0.02) : P(I3.cellX(N3), I3.cellY(i), 0.02);
-                if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
+            for (let i = r.x0; i <= r.x1; i++) {
+                const p = P(I3.cellX(i), I3.cellY(r.y1), floorZ);
+                if (i === r.x0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
+            }
+            ctx.stroke();
+            ctx.beginPath();
+            for (let i = r.y0; i <= r.y1; i++) {
+                const p = P(I3.cellX(r.x1), I3.cellY(i), floorZ);
+                if (i === r.y0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
             }
             ctx.stroke();
         }
-        // bold coordinate numbers in the front-edge tiles (old 26px art sizing)
+
+        // Front-edge coordinates include annex global positions and are deduped.
+        const edgeCells = new Map();
+        for (const r of regions) {
+            for (let gx = r.x0; gx < r.x1; gx++) edgeCells.set(String(gx) + ',' + String(r.y1 - 1), [gx, r.y1 - 1]);
+            for (let gy = r.y0; gy < r.y1; gy++) edgeCells.set(String(r.x1 - 1) + ',' + String(gy), [r.x1 - 1, gy]);
+        }
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.font = 'bold 26px Cinzel, Medieval, sans-serif';
-        for (let i = 0; i < N3; i++) {
-            for (const [gx, gy] of [[i, N3 - 1], [N3 - 1, i]]) {
-                const [tx, ty] = cellC(gx, gy, 0.02);
-                ctx.lineWidth = 5;
-                ctx.strokeStyle = 'rgba(28,17,6,0.88)';
-                ctx.strokeText(String(i), tx, ty);
-                ctx.fillStyle = '#ffd76a';
-                ctx.fillText(String(i), tx, ty);
-            }
+        for (const [gx, gy] of edgeCells.values()) {
+            const [tx, ty] = cellC(gx, gy, floorZ);
+            ctx.lineWidth = 5;
+            ctx.strokeStyle = 'rgba(28,17,6,0.88)';
+            ctx.strokeText(String(gx), tx, ty);
+            ctx.fillStyle = '#ffd76a';
+            ctx.fillText(String(gx), tx, ty);
         }
-        // pulsing footprint cells (projected diamonds, valid gold / invalid red)
+
+        // The pulsing footprint and selection chevron track the item's level.
         const pulse = 0.5 + 0.5 * Math.sin(ft);
-        const fw = g.fw || 1, fh = g.fh || 1, valid = g.valid !== false, z = fz(g.lvl);
+        const fw = g.fw || 1, fh = g.fh || 1, valid = g.valid !== false;
         for (let ix = 0; ix < fw; ix++) {
             for (let iy = 0; iy < fh; iy++) {
                 const gx = g.x + ix, gy = g.y + iy;
                 const quad = [
-                    P(I3.cellX(gx), I3.cellY(gy + 1), z), P(I3.cellX(gx + 1), I3.cellY(gy + 1), z),
-                    P(I3.cellX(gx + 1), I3.cellY(gy), z), P(I3.cellX(gx), I3.cellY(gy), z),
+                    P(I3.cellX(gx), I3.cellY(gy + 1), floorZ), P(I3.cellX(gx + 1), I3.cellY(gy + 1), floorZ),
+                    P(I3.cellX(gx + 1), I3.cellY(gy), floorZ), P(I3.cellX(gx), I3.cellY(gy), floorZ),
                 ];
                 ctx.beginPath();
                 quad.forEach((p, i) => (i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1])));
                 ctx.closePath();
-                ctx.fillStyle = valid ? `rgba(255,214,100,${0.16 + 0.14 * pulse})` : `rgba(235,70,50,${0.18 + 0.16 * pulse})`;
+                ctx.fillStyle = valid ? ('rgba(255,214,100,' + (0.16 + 0.14 * pulse) + ')') : ('rgba(235,70,50,' + (0.18 + 0.16 * pulse) + ')');
                 ctx.fill();
-                ctx.strokeStyle = valid ? `rgba(255,214,100,${0.65 + 0.35 * pulse})` : `rgba(240,85,60,${0.7 + 0.3 * pulse})`;
+                ctx.strokeStyle = valid ? ('rgba(255,214,100,' + (0.65 + 0.35 * pulse) + ')') : ('rgba(240,85,60,' + (0.7 + 0.3 * pulse) + ')');
                 ctx.lineWidth = 3;
                 ctx.stroke();
             }
         }
-        // bobbing chevron + label above the selected piece (old drawGridSelection)
-        const cc = cellC(g.x + fw / 2, g.y + fh / 2, fz(g.lvl) + 1.35);
+
+        const cc = cellC(g.x + fw / 2, g.y + fh / 2, floorZ + 1.35);
         const topY = cc[1] - 26 + Math.sin(ft) * 4;
         ctx.fillStyle = valid ? 'rgba(240,200,90,0.95)' : 'rgba(230,80,60,0.95)';
         ctx.strokeStyle = 'rgba(20,12,6,0.8)';
