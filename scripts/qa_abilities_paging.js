@@ -32,30 +32,31 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
   const CHAT_ID = '120363000000000000@g.us';
 
   // ── find a real user who actually has learned skills (read-only) ─────────
-  // viewAbilities reads user.skills; a fresh test jid has none and would take
-  // the "no abilities" early-out, which never paginates.
+  // viewAbilities reads user.skills (a { skillId: level } map); a fresh test
+  // jid has none and would take the "no abilities" early-out, which never
+  // paginates. skills is an OBJECT map → $objectToArray counts its keys.
   const usersCol = mongoose.connection.collection('users');
-  const candidate = await usersCol.findOne(
-    { 'skills.0': { $exists: true } },
-    { projection: { userId: 1, nickname: 1 } },
-  ).catch(() => null);
-  // skills may be a subdocument map, not an array — try that shape too
   let OWNER, OWNER_NAME;
-  if (candidate && candidate.userId) {
-    OWNER = candidate.userId;
-    OWNER_NAME = candidate.nickname || 'QA Tester';
-  } else {
+  try {
+    const hit = await usersCol.findOne({
+      $expr: { $gt: [{ $size: { $objectToArray: { $ifNull: ['$skills', {}] } } }, 0] },
+    }, { projection: { userId: 1, nickname: 1, skills: 1 } });
+    if (hit && hit.userId) { OWNER = hit.userId; OWNER_NAME = hit.nickname || 'QA Tester'; }
+  } catch (e) { /* fall through to scan */ }
+  if (!OWNER) {
     const alt = await usersCol.aggregate([
-      { $sample: { size: 25 } },
+      { $sample: { size: 200 } },
       { $project: { userId: 1, nickname: 1, skills: 1 } },
     ]).toArray();
     const withSkills = alt.find((u) => u.skills && Object.keys(u.skills).length > 0);
-    if (!withSkills) {
-      console.error('FATAL: no user with learned skills found in DB sample — cannot exercise pagination');
-      process.exit(1);
+    if (withSkills) {
+      OWNER = withSkills.userId;
+      OWNER_NAME = withSkills.nickname || 'QA Tester';
     }
-    OWNER = withSkills.userId;
-    OWNER_NAME = withSkills.nickname || 'QA Tester';
+  }
+  if (!OWNER) {
+    console.error('FATAL: no user with learned skills found in DB — cannot exercise pagination');
+    process.exit(1);
   }
   console.log('[user] testing as', OWNER, '/', OWNER_NAME);
 
