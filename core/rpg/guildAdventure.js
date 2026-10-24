@@ -12217,6 +12217,8 @@ async function applyAbilityEffect(
             fallbackText: caption,
           }),
         });
+      } else {
+        console.log(`[SkillVFX] no signature mapped for ${classId}/${ability?.id} — normal resolution`);
       }
     } catch (vfxError) {
       console.warn('[SkillVFX] combat hook failed; applying skill normally:', vfxError?.message || vfxError);

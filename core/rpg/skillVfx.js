@@ -22,6 +22,14 @@ const H = 360;
 // animation readable and leaves headroom under render pressure.
 const FRAME_COUNT = 6;
 const FRAME_DELAY_MS = 200;
+// ⚔️ FIX 2026-10-24 round 2 (owner: 'still doesn't work... just an image card'):
+// the previous overlay was technically delivered but read as a STATIC card —
+// thin strokes + near-identical frames at phone size. Timeline analysis of the
+// real 18:23 cast (7s gap < texts+8s-timeout, zero wedge warns) proves the GIF
+// WAS sent; the content just didn't read as an ultimate. So: screen shake +
+// zoom-punch + buildup dim + 1-frame warm flash (enemy silhouette returns the
+// very next frame — 'enemy gone' stays impossible) + hit-tint settle frame.
+const IMPACT_FRAME = 3;
 const GIF_PLAYBACK_MS = FRAME_COUNT * FRAME_DELAY_MS * 2;
 const PALETTE = {
   FIGHTER: ['#fff1b0', '#ffcb45', '#e85a37'],
@@ -656,7 +664,7 @@ function drawEffect(ctx, entry, t, frame, targetSide) {
   }
 }
 
-async function renderSignatureGif(state, player, ability, entry, target, baseSceneBuffer) {
+async function renderSignatureGif(state, player, ability, entry, target, baseSceneBuffer, frameSink) {
   // ⚔️ FIX 2026-10-24: prefer the CACHED scene the player is already looking
   // at (stashed on the combat state by guildAdventure at every card send).
   // The old path re-rendered a full Go card mid-cast, which both cost 0.2-1.3s
@@ -670,19 +678,64 @@ async function renderSignatureGif(state, player, ability, entry, target, baseSce
     try { baseImage = await loadImage(baseBuffer); } catch (e) { baseImage = null; }
   }
   const frames = [];
+  const classId = String(player.class?.id || player.classId || '').toUpperCase();
   for (let i = 0; i < FRAME_COUNT; i++) {
     const canvas = createCanvas(W, H);
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = false;
+    const t = i / (FRAME_COUNT - 1);
+    const k = Math.sin(Math.PI * t);
+    // 💥 screen shake + zoom punch — the 'this is an ANIMATION' read at phone size
+    const shakeAmp = i === IMPACT_FRAME ? 10 : (i === IMPACT_FRAME + 1 ? 6 : (i === FRAME_COUNT - 1 ? 0 : 1.5 + k * 2));
+    const dx = Math.sin(i * 2.9 + 0.7) * shakeAmp;
+    const dy = Math.cos(i * 3.7) * shakeAmp * 0.5;
+    const zoom = 1 + 0.09 * k;
     if (baseImage) {
-      ctx.drawImage(baseImage, 0, 0, W, H);
-      ctx.fillStyle = 'rgba(4, 5, 13, 0.14)';
-      ctx.fillRect(0, 0, W, H);
+      ctx.save();
+      ctx.translate(W / 2 + dx, H / 2 + dy);
+      ctx.scale(zoom, zoom);
+      ctx.drawImage(baseImage, -W / 2, -H / 2, W, H);
+      ctx.restore();
     } else {
       fallbackBackground(ctx);
     }
-    const t = i / (FRAME_COUNT - 1);
-    drawEffect(ctx, { ...entry, classId: String(player.class?.id || player.classId || '').toUpperCase() }, t, i, entry.side);
+    // 🌑 buildup dims the field so the impact pops; settle keeps a light veil
+    const veil = i < IMPACT_FRAME ? (0.26 + 0.06 * i) : (i === IMPACT_FRAME ? 0.10 : (i === IMPACT_FRAME + 1 ? 0.16 : 0.24));
+    ctx.fillStyle = 'rgba(4, 5, 13, ' + veil + ')';
+    ctx.fillRect(0, 0, W, H);
+    // ⚡ ONE warm flash frame at impact (never two — silhouette returns next
+    // frame, so the GIF can never read as 'enemy vanished')
+    if (i === IMPACT_FRAME) {
+      ctx.fillStyle = 'rgba(255, 243, 205, 0.78)';
+      ctx.fillRect(0, 0, W, H);
+    } else if (i === IMPACT_FRAME + 1) {
+      ctx.fillStyle = 'rgba(255, 210, 110, 0.20)';
+      ctx.fillRect(0, 0, W, H);
+    }
+    // class overlay — scaled up around the target anchor on impact frames
+    const tx = entry.side === 'self' ? W * 0.25 : W * 0.72;
+    const ty = entry.side === 'self' ? H * 0.53 : H * 0.55;
+    const oScale = i >= IMPACT_FRAME ? 1.5 : 1 + 0.15 * k;
+    ctx.save();
+    ctx.translate(tx, ty);
+    ctx.scale(oScale, oScale);
+    ctx.translate(-tx, -ty);
+    drawEffect(ctx, { ...entry, classId }, t, i, entry.side);
+    ctx.restore();
+    // 🩸 settle frame: hit-tint + cracks linger on the target so the last
+    // thing the eye keeps is 'that thing got HIT'
+    if (i === FRAME_COUNT - 1 && baseImage) {
+      const grad = ctx.createRadialGradient(tx, ty, 6, tx, ty, 78);
+      grad.addColorStop(0, 'rgba(160, 20, 20, 0.34)');
+      grad.addColorStop(1, 'rgba(160, 20, 20, 0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(tx - 80, ty - 80, 160, 160);
+      for (let ci = 0; ci < 3; ci++) {
+        const ang = 0.5 + ci * 1.05;
+        strokeLine(ctx, [[tx + Math.cos(ang) * 14, ty + Math.sin(ang) * 10], [tx + Math.cos(ang) * (46 + ci * 10), ty + Math.sin(ang) * (34 + ci * 8)]], '#1c0b12', 3, 0.85);
+      }
+    }
+    if (typeof frameSink === 'function') { try { frameSink(i, canvas); } catch (e) {} }
     // Quantize each frame to 4 bits per channel so the repo's small GIF encoder
     // keeps combat art recognizable instead of carrying millions of near-colors.
     const raw = ctx.getImageData(0, 0, W, H).data;
@@ -716,7 +769,10 @@ async function animateUltimate(options = {}) {
   // ⚔️ FIX 2026-10-24: enemy-side signatures with NO live enemy target would
   // render an empty battlefield (the reported 'image card with the enemy
   // gone'). Skip the whole animation and let the normal resolution proceed.
-  if (entry.side === 'enemy' && !target) return false;
+  if (entry.side === 'enemy' && !target) {
+    console.log('[SkillVFX] skip ' + classId + '/' + ability.id + ' — enemy-side ult with no live target');
+    return false;
+  }
   const sendText = typeof options.sendText === 'function' ? options.sendText : async () => {};
   const sendGif = typeof options.sendGif === 'function' ? options.sendGif : async () => ({ ok: false });
   const name = ability.name || entry.id.replace(/_/g, ' ');
@@ -731,15 +787,21 @@ async function animateUltimate(options = {}) {
       await sendText(messages[i]);
       if (i < messages.length - 1) await wait(i === 0 ? 400 : 450);
     }
+    const cacheHit = Buffer.isBuffer(options.baseSceneBuffer) && options.baseSceneBuffer.length > 1000;
+    console.log('[SkillVFX] cast ' + classId + '/' + ability.id + ' entry=' + entry.style + ' cache=' + (cacheHit ? 'hit' : 'miss') + ' target=' + (target && (target.name || target.id) || 'enemy'));
+    const renderT0 = Date.now();
     const gif = await raceTimeout(
       renderSignatureGif(state, player, ability, entry, target, options.baseSceneBuffer),
       8000
     );
     if (gif && Buffer.isBuffer(gif) && gif.length > 100) {
+      console.log('[SkillVFX] gif ' + gif.length + 'B in ' + (Date.now() - renderT0) + 'ms');
       const mediaResult = await sendGif(gif, '💥 *' + name + '* UNLEASHED!');
+      console.log('[SkillVFX] send ok=' + (mediaResult && mediaResult.ok !== false) + ' late=' + Boolean(mediaResult && mediaResult.late));
       if (mediaResult && mediaResult.ok !== false) await wait(GIF_PLAYBACK_MS);
       else await wait(350);
     } else {
+      console.warn('[SkillVFX] render null/timeout after 8s — text fallback for ' + classId + '/' + ability.id);
       await sendText('💥 *' + name + '* is unleashed!');
     }
     return true;
