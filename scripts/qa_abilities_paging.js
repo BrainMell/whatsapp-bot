@@ -60,17 +60,21 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
   try {
     candidates = await usersCol.aggregate([
       { $match: { $expr: { $gt: [{ $size: { $objectToArray: { $ifNull: ['$skills', {}] } } }, 0] } } },
-      { $project: { userId: 1, nickname: 1, skills: 1 } },
-      { $limit: 12 },
+      { $project: { userId: 1, nickname: 1, skills: 1, nSkills: { $size: { $objectToArray: { $ifNull: ['$skills', {}] } } } } },
+      { $sort: { nSkills: -1 } },
+      { $limit: 40 },
     ]).toArray();
   } catch (e) {
     candidates = (await usersCol.aggregate([
       { $sample: { size: 200 } },
       { $project: { userId: 1, nickname: 1, skills: 1 } },
-    ]).toArray()).filter((u) => u.skills && Object.keys(u.skills).length > 0).slice(0, 12);
+    ]).toArray()).filter((u) => u.skills && Object.keys(u.skills).length > 0).slice(0, 40);
   }
   console.log('[finder] candidates with non-empty skills:', candidates.length);
 
+  // Render each candidate's codex and keep the one with the MOST pages —
+  // reply-chain tests need totalPages > 1; single-page falls back gracefully.
+  let best = null; // { OWNER, OWNER_NAME, totalPages }
   for (const cand of candidates) {
     if (!cand.userId) continue;
     sent.length = 0;
@@ -80,21 +84,24 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
       console.log('  [finder] viewAbilities threw for', cand.userId, '-', e.message);
       continue;
     }
-    const codex = sent.map(bodyOf).find((t) => /Page \d+\/\d+/.test(t) || /Codex|Ledger|Grimoire/i.test(t));
-    if (codex) {
-      OWNER = cand.userId;
-      OWNER_NAME = cand.nickname || 'QA Tester';
-      const m = codex.match(/Page (\d+)\/(\d+)/);
-      totalPages = m ? parseInt(m[2]) : 1;
-      break;
+    const codex = sent.map(bodyOf).find((t) => /Codex|Ledger|Grimoire/i.test(t) && /total abilities/.test(t));
+    if (!codex) {
+      const first = sent[0] ? bodyOf(sent[0]).slice(0, 100) : '(nothing sent)';
+      console.log('  [finder] skip', cand.userId, '→', first.replace(/\n/g, ' '));
+      continue;
     }
-    const first = sent[0] ? bodyOf(sent[0]).slice(0, 110) : '(nothing sent)';
-    console.log('  [finder] skip', cand.userId, '→', first.replace(/\n/g, ' '));
+    const m = codex.match(/Page \d+\/(\d+)/);
+    const pages = m ? parseInt(m[1]) : 1;
+    if (!best || pages > best.totalPages) {
+      best = { OWNER: cand.userId, OWNER_NAME: cand.nickname || 'QA Tester', totalPages: pages };
+    }
+    if (best.totalPages > 1) break; // good enough — a paginated codex
   }
-  if (!OWNER) {
+  if (!best) {
     console.error('FATAL: no candidate rendered a codex — skills may not resolve to lineage trees for any sampled user');
     process.exit(1);
   }
+  OWNER = best.OWNER; OWNER_NAME = best.OWNER_NAME; totalPages = best.totalPages;
   console.log('[user] testing as', OWNER, '/', OWNER_NAME, '| totalPages =', totalPages);
 
   const findMsg = (re) => sent.map((e) => bodyOf(e)).find((t) => re.test(t)) || null;
@@ -111,8 +118,11 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
   const codex1 = lastCodex();
   ok(!!codex1, 'codex renders (image caption or text)');
   const t1 = codex1 ? bodyOf(codex1) : '';
-  const pageMatch = t1.match(/Page (\d+)\/(\d+)/);
-  ok(!!pageMatch && pageMatch[1] === '1', 'codex shows Page 1/' + totalPages);
+  if (totalPages > 1) {
+    ok(/Page 1\//.test(t1), 'codex shows Page 1/' + totalPages);
+  } else {
+    ok(!/Page \d+\/\d+/.test(t1) || /Page 1\/1/.test(t1), 'single-page codex (no page footer by design)');
+  }
   if (totalPages > 1) {
     ok(/Reply to this message/.test(t1), 'footer advertises reply-paging');
     ok(/flip pages \(5 min\)/.test(t1), 'footer states the 5-min window');
