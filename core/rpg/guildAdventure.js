@@ -12244,7 +12244,7 @@ async function applyAbilityEffect(
               if (Buffer.isBuffer(still) && still.length > 100) {
                 return sendMediaBounded(sock, chatId, {
                   image: still,
-                  caption: caption + '\\n_(Animation unavailable on this server.)_',
+                  caption: caption + '\n_(Animation unavailable on this server.)_',
                 }, {
                   label: 'classUltimateVfxStill',
                   ms: 10000,
