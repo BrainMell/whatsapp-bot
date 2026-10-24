@@ -605,13 +605,158 @@ function miner(ctx, P, x, y, s, t, band, rng) {
 }
 
 // ── the scene painter ───────────────────────────────────────────────────────
+
+// ═══ v2 scene dressing (owner 2026-10-24: "the mining card looks bad") ══════
+// depth + light + props: receding timber arches with a lit tunnel mouth, rails
+// + sleepers, a loaded ore cart (fill follows the loot band), faceted ore on
+// the face, hanging lanterns with soft light shafts, flying rock chips, grain.
+const GEM = {
+    shimmering_caves: ['#57c4e8', '#bff3ff', '#1f5f78'],
+    deep_vein_shafts: ['#ffd95e', '#fff2b0', '#8a6418'],
+    volcanic_hollow: ['#ff7a3a', '#ffd08a', '#7a2410'],
+    void_fissure: ['#b98cff', '#ecdcff', '#4a2a88'],
+};
+function shade(hex, f) { // f<0 darken, f>0 lighten
+    const n = parseInt(hex.slice(1), 16);
+    const c = (v) => Math.max(0, Math.min(255, Math.round(f >= 0 ? v + (255 - v) * f : v * (1 + f))));
+    return `rgb(${c((n >> 16) & 255)},${c((n >> 8) & 255)},${c(n & 255)})`;
+}
+/** one faceted gem/nugget: 3 shaded planes + hot edge */
+function facet(ctx, x, y, r, col, rot = 0) {
+    const [mid, hi, dark] = col;
+    const pts = [];
+    for (let i = 0; i < 6; i++) { const a = rot + (i / 6) * Math.PI * 2; pts.push([x + Math.cos(a) * r, y + Math.sin(a) * r * 0.9]); }
+    const tri = (a, b, c, f) => { ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.lineTo(...c); ctx.closePath(); ctx.fillStyle = f; ctx.fill(); };
+    const C = [x, y - r * 0.15];
+    tri(C, pts[0], pts[1], mid); tri(C, pts[1], pts[2], hi); tri(C, pts[2], pts[3], mid);
+    tri(C, pts[3], pts[4], dark); tri(C, pts[4], pts[5], shade(dark, 0.15)); tri(C, pts[5], pts[0], shade(mid, -0.25));
+    ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 0.8;
+    ctx.beginPath(); pts.forEach((q, i) => (i ? ctx.lineTo(...q) : ctx.moveTo(...q))); ctx.closePath(); ctx.stroke();
+}
+function farArches(ctx, P, t) {
+    // glowing tunnel continuing behind the scene
+    glow(ctx, 232, 168, 120, hexGlow(P.torch), 0.30 + 0.04 * Math.sin(t * Math.PI * 2));
+    for (let i = 0; i < 4; i++) {
+        const w = 150 - i * 26, top = 74 + i * 20, x0 = 232 - w / 2;
+        const a = 0.34 - i * 0.06;
+        ctx.save(); ctx.globalAlpha = a;
+        ctx.fillStyle = '#2a2018';
+        ctx.fillRect(x0 - 8, top, 9, GH - top - 60); ctx.fillRect(x0 + w - 1, top, 9, GH - top - 60);
+        ctx.fillRect(x0 - 12, top - 9, w + 24, 10);
+        ctx.restore();
+    }
+}
+function railsAndTies(ctx, P) {
+    const y1 = GH - 40, y2 = GH - 24;
+    for (let x = -10; x < GW + 20; x += 34) { // sleepers
+        ctx.fillStyle = '#2a1f15'; ctx.fillRect(x, y1 - 2, 22, 22);
+        ctx.fillStyle = '#4a3826'; ctx.fillRect(x, y1 - 2, 22, 4);
+    }
+    for (const [y, th] of [[y1, 3], [y2, 3.5]]) {
+        ctx.fillStyle = '#17181f'; ctx.fillRect(0, y + 2, GW, th + 1);
+        ctx.fillStyle = '#8e95a6'; ctx.fillRect(0, y, GW, th);
+        ctx.fillStyle = '#d5dbe8'; ctx.fillRect(0, y, GW, 1);
+    }
+}
+function oreCart(ctx, P, loc, x, y, t, band, rng) {
+    const [mid, hi, dark] = GEM[loc];
+    ctx.save(); ctx.translate(x, y);
+    // shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.38)'; ctx.beginPath(); ctx.ellipse(8, 2, 52, 6, 0, 0, Math.PI * 2); ctx.fill();
+    // box
+    ctx.beginPath(); ctx.moveTo(-42, -36); ctx.lineTo(50, -36); ctx.lineTo(40, -2); ctx.lineTo(-32, -2); ctx.closePath();
+    const bg = ctx.createLinearGradient(0, -36, 0, 0); bg.addColorStop(0, '#6e5a44'); bg.addColorStop(1, '#3b2f22');
+    ctx.fillStyle = bg; ctx.fill(); ctx.strokeStyle = '#1a130c'; ctx.lineWidth = 2; ctx.stroke();
+    // iron bands + rivets
+    ctx.fillStyle = '#2b2d36'; ctx.fillRect(-40, -34, 88, 5); ctx.fillRect(-34, -12, 72, 4);
+    ctx.fillStyle = '#a9afbd'; for (let i = 0; i < 6; i++) { ctx.beginPath(); ctx.arc(-34 + i * 16, -31.5, 1.4, 0, 7); ctx.fill(); }
+    // wheels
+    for (const wx of [-20, 28]) {
+        ctx.fillStyle = '#17181f'; ctx.beginPath(); ctx.arc(wx, 2, 8, 0, 7); ctx.fill();
+        ctx.fillStyle = '#7a8091'; ctx.beginPath(); ctx.arc(wx, 2, 5, 0, 7); ctx.fill();
+        ctx.fillStyle = '#17181f'; ctx.beginPath(); ctx.arc(wx, 2, 1.8, 0, 7); ctx.fill();
+    }
+    // ore heap — fill follows the loot band
+    const n = band === 'epic' ? 11 : band === 'mid' ? 7 : 4;
+    const rr2 = mulberry32(0xA11 + (band === 'epic' ? 7 : band === 'mid' ? 4 : 1));
+    for (let i = 0; i < n; i++) {
+        const px = -30 + rr2() * 70, py = -38 - rr2() * (band === 'epic' ? 14 : 8);
+        const r = 5 + rr2() * 4;
+        if (band === 'low' || i % 3 === 2) { // plain rock chunks
+            ctx.fillStyle = i % 2 ? '#4b4f5c' : '#3a3d48';
+            ctx.beginPath(); ctx.ellipse(px, py, r + 1, r * 0.8, rr2() * 3, 0, 7); ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.13)'; ctx.beginPath(); ctx.ellipse(px - 1.5, py - 2, r * 0.5, r * 0.28, 0, 0, 7); ctx.fill();
+        } else facet(ctx, px, py, r, GEM[loc], rr2() * 2);
+    }
+    if (band === 'epic') {
+        glow(ctx, 4, -46, 70, hexGlow(mid), 0.35 + 0.1 * Math.sin(t * Math.PI * 2));
+        for (let i = 0; i < 3; i++) {
+            const ph = (t * 1.5 + i * 0.33) % 1;
+            sparkle(ctx, -18 + i * 24, -50 - ph * 16, 6 * Math.sin(ph * Math.PI) + 1, Math.sin(ph * Math.PI), '#fff8dc');
+        }
+    }
+    ctx.restore();
+}
+function faceOre(ctx, P, loc, t, band) {
+    const rr2 = mulberry32(0x0BE + loc.length * 7);
+    const spots = [[300, 232, 9], [322, 206, 7], [352, 238, 11], [384, 214, 8], [410, 252, 9], [338, 280, 8], [372, 290, 10], [430, 288, 7]];
+    const n = band === 'epic' ? 8 : band === 'mid' ? 6 : 4;
+    for (let i = 0; i < n; i++) {
+        const [x, y, r] = spots[i];
+        if (loc === 'volcanic_hollow' || loc === 'void_fissure' || loc === 'shimmering_caves' || loc === 'deep_vein_shafts') {
+            glow(ctx, x, y, r * 4, hexGlow(GEM[loc][0]), 0.10 + 0.05 * Math.sin(t * Math.PI * 2 + i));
+            facet(ctx, x, y, r, GEM[loc], rr2() * 2);
+        }
+    }
+}
+function rockChips(ctx, P, t, band) {
+    // debris kicked off where the drill bites (~x 292, y 232)
+    const n = band === 'epic' ? 14 : 9;
+    const r = mulberry32(0xC41B);
+    for (let i = 0; i < n; i++) {
+        const ph = (t * 2 + r()) % 1, vx = 20 + r() * 50, vy = -50 - r() * 40;
+        const x = 304 + vx * ph, y = 270 + vy * ph + 140 * ph * ph;
+        ctx.save(); ctx.globalAlpha = 1 - ph * 0.9; ctx.fillStyle = i % 4 === 0 ? GEM_CUR[0] : '#7a7f90';
+        ctx.translate(x, y); ctx.rotate(ph * 9 + i);
+        ctx.fillRect(-2, -1.5, 4 + r() * 2, 3); ctx.restore();
+    }
+}
+let GEM_CUR = ['#fff'];
+function lanternWithShaft(ctx, P, x, t, seed) {
+    const sway = Math.sin(t * Math.PI * 2 + seed) * 3;
+    const lx = x + sway, ly = 78;
+    ctx.save(); ctx.strokeStyle = '#2b2d36'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(x, 40); ctx.lineTo(lx, ly - 10); ctx.stroke();
+    // soft light shaft
+    const sg = ctx.createLinearGradient(lx, ly, lx, GH - 30);
+    sg.addColorStop(0, hexGlow(P.torch)); sg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.16;
+    ctx.fillStyle = sg; ctx.beginPath(); ctx.moveTo(lx - 5, ly); ctx.lineTo(lx + 5, ly); ctx.lineTo(lx + 62, GH - 30); ctx.lineTo(lx - 62, GH - 30); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    // lantern body
+    ctx.fillStyle = '#2b2d36'; ctx.fillRect(lx - 7, ly - 10, 14, 4); ctx.fillRect(lx - 7, ly + 10, 14, 3);
+    ctx.fillStyle = '#ffd98a'; ctx.globalAlpha = 0.95; ctx.fillRect(lx - 5, ly - 6, 10, 16); ctx.globalAlpha = 1;
+    glow(ctx, lx, ly + 2, 80, hexGlow(P.torch), 0.42);
+}
+function grain(ctx, frameIdx) {
+    const r = mulberry32(0x6A41 + frameIdx * 101);
+    ctx.save();
+    for (let i = 0; i < 260; i++) {
+        ctx.globalAlpha = 0.05 + r() * 0.06; ctx.fillStyle = r() < 0.5 ? '#000' : '#fff';
+        ctx.fillRect(r() * GW, r() * GH, 1.2, 1.2);
+    }
+    ctx.restore();
+}
+
 function paintFrame(ctx, locId, band, frameIdx) {
     const P = LOCS[locId];
     const t = frameIdx / FRAMES;
     const rng = mulberry32(0xBEEF + 77 * (locId.length) + frameIdx * 13 + (band === 'epic' ? 5 : band === 'mid' ? 3 : 1));
 
+    GEM_CUR = GEM[locId];
     // cavern wall base
     vgrad(ctx, 0, 0, 0, GH, P.bgTop, P.bgBot);
+    farArches(ctx, P, t);
     // big wall rocks (background mass)
     const wallRng = mulberry32(0xCAFE + locId.length * 31);
     for (let i = 0; i < 7; i++) {
@@ -653,13 +798,19 @@ function paintFrame(ctx, locId, band, frameIdx) {
     if (locId === 'volcanic_hollow') lavaCracks(ctx, mulberry32(0x66), t);
     if (locId === 'void_fissure') glints = voidRift(ctx, mulberry32(0x55), t);
 
+    faceOre(ctx, P, locId, t, band);
+
     // floor
     floorRubble(ctx, P, mulberry32(0xD00D));
+    railsAndTies(ctx, P);
+    oreCart(ctx, P, locId, 66, GH - 16, t, band, mulberry32(0xCA27));
 
     // ⚙️ Task 25 (owner: ".j mine, instead of a person doing that make it a
     // machine or something"): the STEAM-DRILL RIG works the face — same slot
     // the miner held, same contact point, machine animation on t.
-    machine(ctx, P, 180, 268, 1.0, t, band, mulberry32(0xC11));
+    machine(ctx, P, 192, 304, 1.0, t, band, mulberry32(0xC11));
+
+    rockChips(ctx, P, t, band);
 
     // ambient dust motes
     const drng = mulberry32(0xD057 + locId.length * 17);
@@ -673,7 +824,9 @@ function paintFrame(ctx, locId, band, frameIdx) {
     }
 
     // torch on the left wall — the constant light source
-    torch(ctx, P, 68, 128, t, locId.length);
+    torch(ctx, P, 20, 128, t, locId.length);
+    lanternWithShaft(ctx, P, 170, t, 1.3);
+    lanternWithShaft(ctx, P, 330, t, 3.1);
     // cool rim light from the right (crystal / lava / rift tint)
     glow(ctx, GW - 40, GH * 0.45, 150, hexGlow(P.rim), 0.16);
 
@@ -699,6 +852,7 @@ function paintFrame(ctx, locId, band, frameIdx) {
     const vg = ctx.createRadialGradient(GW / 2, GH * 0.52, GH * 0.34, GW / 2, GH * 0.52, GW * 0.78);
     vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(5,3,8,0.62)');
     ctx.fillStyle = vg; ctx.fillRect(0, 0, GW, GH);
+    grain(ctx, frameIdx);
 }
 
 // ── encode helpers ──────────────────────────────────────────────────────────
@@ -716,9 +870,13 @@ function encodeMp4(framesDir, outPath) {
 
 function bakeOne(locId, band, doPreviews) {
     const canvas = createCanvas(GW, GH), ctx = canvas.getContext('2d');
+    const big = createCanvas(GW * 2, GH * 2), bctx = big.getContext('2d');
+    bctx.scale(2, 2);
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'minepov-'));
     for (let i = 0; i < FRAMES; i++) {
-        paintFrame(ctx, locId, band, i);
+        paintFrame(bctx, locId, band, i);
+        ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+        ctx.clearRect(0, 0, GW, GH); ctx.drawImage(big, 0, 0, GW, GH);
         fs.writeFileSync(path.join(tmp, `f${String(i).padStart(2, '0')}.png`), canvas.toBuffer('image/png'));
         if (doPreviews && (i === 0 || i === 14 || i === 20)) {
             fs.mkdirSync(PREVIEWS, { recursive: true });
