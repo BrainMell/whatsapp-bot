@@ -12177,6 +12177,40 @@ async function applyAbilityEffect(
       healing: 0,
     };
   }
+  // ⚔️ CLASS ULTIMATES: play the class signature charge-up + animated GIF
+  // BEFORE changing HP. The usual effect resolution immediately below remains
+  // authoritative; after this animation finishes the normal combat render shows
+  // the real damage/healing result. Unmapped skills and render failures fall
+  // straight through without touching combat mechanics.
+  if (state.inCombat !== false && !player.isEnemy && !player.isSummon) {
+    try {
+      const signatureVfx = require('./skillVfx');
+      const classId = String(player.class?.id || player.classId || '').toUpperCase();
+      if (signatureVfx.getSignature(classId, ability?.id)) {
+        await signatureVfx.animateUltimate({
+          state,
+          player,
+          ability,
+          targetIndex,
+          sendText: (text) => boundedSend(sock, chatId, { text }, 'ultimateCharge'),
+          sendGif: (buffer, caption) => sendMediaBounded(sock, chatId, {
+            image: buffer,
+            caption,
+            mimetype: 'image/gif',
+            gifPlayback: true,
+          }, {
+            label: 'classUltimateVfx',
+            ms: 15000,
+            grace: 5000,
+            fallbackText: caption,
+          }),
+        });
+      }
+    } catch (vfxError) {
+      console.warn('[SkillVFX] combat hook failed; applying skill normally:', vfxError?.message || vfxError);
+    }
+  }
+
   let animation = ability.animation || effect?.animation || "";
   if (animation === "undefined") animation = "";
   const animStr = animation ? `${animation} ` : "";
