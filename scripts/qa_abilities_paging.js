@@ -21,15 +21,22 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
 
 (async () => {
   require('dotenv').config();
-  const uri = process.env.MONGODB_URI || process.env.MONGO_URI || process.env.MONGO_URL;
-  if (!uri) { console.error('FATAL: no mongo uri in env'); process.exit(1); }
-  const mongoose = require('mongoose');
-  await mongoose.connect(uri, { serverSelectionTimeoutMS: 15000 });
-  console.log('[db] connected');
-
   const skillCommands = require('../core/commands/skillCommands');
   const economy = require('../core/rpg/economy');
   const CHAT_ID = '120363000000000000@g.us';
+
+  // viewAbilities → economy.getUser reads the IN-MEMORY user map the bot
+  // boots with — until loadEconomy() runs, every lookup is null and the
+  // codex early-outs with "No class assigned!" (that's why round 1 failed).
+  console.log('[economy] loadEconomy() (boot-equivalent user cache)...');
+  await economy.loadEconomy();
+  const mongoose = require('mongoose');
+  if (!mongoose.connection.readyState) {
+    // only needed for the raw fixture queries below; economy already opened it
+    const uri = process.env.MONGODB_URI || process.env.MONGO_URI || process.env.MONGO_URL;
+    if (uri) await mongoose.connect(uri, { serverSelectionTimeoutMS: 15000 });
+  }
+  console.log('[db] ready');
 
   // ── find a real user whose skills actually RESOLVE into a codex ─────────
   // user.skills (a { skillId: level } map) only counts if the keys belong to
