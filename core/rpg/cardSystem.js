@@ -100,6 +100,21 @@ async function ownerOf(jid) {
   return v.length === 1 ? { userId: jid } : { userId: { $in: v } };
 }
 
+// 💡 FIX 2026-10-24 (owner: "the Coll number in .j fc is wrong sometimes, recurring"):
+// ONE definition of the numbered collection. Every command that prints or
+// consumes a "Coll #" (coll, fc, gift, burn, t2deck, t2cdeck) must index THIS
+// list: non-deck, non-custom, non-sale, orphans dropped, in-auction cards KEPT
+// (so numbers never shift under the player), and a stable _id tie-break so
+// cards claimed in the same millisecond can't swap numbers between queries.
+// Before: fc counted orphans, burn/t2deck/t2cdeck dropped auction cards, and
+// createdAt ties were unordered - each skewed the number differently.
+async function getNumberedCollection(jid) {
+  const owned = await UserCard.find({
+    ...(await ownerOf(jid)), inMainDeck: false, inCustomDeck: false, forSale: false,
+  }).sort({ createdAt: 1, _id: 1 });
+  return owned.filter((o) => CARD_INDEX()[o.cardId]);
+}
+
 // ── Config ───────────────────────────────────────────────────────────────────
 const botConfig  = require('../../botConfig');
 const ZENI       = () => botConfig.getCurrency().symbol;
@@ -1877,7 +1892,7 @@ async function sendCardMedia(sock, chatId, buffer, caption, mentions) {
 async function cmdCardsTier(senderJid, reply, chatId) {
   const inst = getInst();
   const p = P();
-  const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
+  const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1, _id: 1 });
   if (!owned.length) return reply(`📭  *COLLECTION EMPTY*\n\n💡 ⟢ _Claim cards from group spawns to start collecting_`);
 
   // Group by Tier
@@ -2069,11 +2084,8 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
     else {
       const idx = parseInt(input);
       if (!isNaN(idx)) {
-        const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
-        // 💡 FIX 2026-10-08: index against the SAME list the collection
-        // prints (orphans excluded in both places) so `.j coll <n>` always
-        // opens the card shown as #n.
-        uc = owned.filter(o => CARD_INDEX()[o.cardId])[idx - 1];
+        // 💡 FIX 2026-10-08: index against the SAME list the collection prints.
+        uc = (await getNumberedCollection(senderJid))[idx - 1];
         collIndex = idx;
       }
     }
@@ -2104,7 +2116,7 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   }
 
   console.log(`🃏 [cmdColl] querying UserCard.find | senderJid=${senderJid?.split('@')[0]}`);
-  const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
+  const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1, _id: 1 });
   console.log(`🃏 [cmdColl] UserCard.find returned ${owned.length} cards`);
   if (!owned.length) {
     console.log(`🃏 [cmdColl] collection empty, sending text reply`);
@@ -2338,16 +2350,11 @@ async function cmdScc(senderJid, reply, chatId, args = []) {
   // map from COLL-ONLY cards (matching .g coll numbering). The old code built
   // collNumberMap from ALL cards, so the numbers didn't match what .g coll
   // showed - and the collNum was computed but never rendered in the output.
-  const allOwned = await UserCard.find({ ...(await ownerOf(senderJid)) }).sort({ createdAt: 1 });
+  const allOwned = await UserCard.find({ ...(await ownerOf(senderJid)) }).sort({ createdAt: 1, _id: 1 });
 
   // Build coll-number map from COLL-ONLY cards (not in deck, not for sale).
   // This matches the numbering used by .g coll, .g t2deck, .g burn, .g cg, etc.
-  const collOnly = await UserCard.find({
-    ...(await ownerOf(senderJid)),
-    inMainDeck: false,
-    inCustomDeck: false,
-    forSale: false,
-  }).sort({ createdAt: 1 });
+  const collOnly = await getNumberedCollection(senderJid); // same list as .coll/.fc (2026-10-24)
   const collNumberMap = new Map();
   collOnly.forEach((uc, i) => {
     collNumberMap.set(uc._id.toString(), i + 1);
@@ -2437,7 +2444,7 @@ async function cmdMaker(senderJid, reply, chatId, args = []) {
   const makerQuery = args.join(' ').replace(/["']/g, '').toLowerCase().trim();
   if (!makerQuery) return sendUsage(reply, `${P()} maker`, `${P()} maker "<maker_name>"`, `${P()} maker Mah_xee`);
 
-  const owned = await UserCard.find({ ...(await ownerOf(senderJid)) }).sort({ createdAt: 1 });
+  const owned = await UserCard.find({ ...(await ownerOf(senderJid)) }).sort({ createdAt: 1, _id: 1 });
   const filtered = owned.filter(uc => {
     const card = CARD_INDEX()[uc.cardId];
     return card?.creator?.toLowerCase().includes(makerQuery);
@@ -2483,9 +2490,10 @@ async function cmdBurn(senderJid, reply, chatId, args = []) {
   // 💡 FIX 2026-10-08: exclude inAuction too - burning an auction-committed
   // card let the auction later "sell" a card that no longer existed (winner
   // paid for nothing).
-  const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false }).sort({ createdAt: 1 });
+  const owned = await getNumberedCollection(senderJid);
   const uc = owned[index - 1];
   if (!uc) return reply(`❌  *CARD NOT FOUND*\n\n📍 ⟢ _Not in your collection_`);
+  if (uc.inAuction) return reply(`🔨  *IN AUCTION*\n\n📍 ⟢ _Card #${index} is committed to an auction and can't be burned_`);
 
   const card = CARD_INDEX()[uc.cardId];
   const p = P();
@@ -2706,16 +2714,17 @@ async function cmdFc(senderJid, reply, args = []) {
   }
 
   // 3. Search Collection (cards not in any deck, not for sale)
-  const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
-  for (let i = 0; i < owned.length; i++) {
-    const uc = owned[i];
+  // Numbered with the SAME list .coll prints (see getNumberedCollection).
+  const numbered = await getNumberedCollection(senderJid);
+  for (let i = 0; i < numbered.length; i++) {
+    const uc = numbered[i];
     const card = CARD_INDEX()[uc.cardId];
     if (uc.cardId.toLowerCase() === query || (card?.cardName && card.cardName.toLowerCase().includes(query))) {
       matches.push({
         card,
         cardId: uc.cardId,
         copyNumber: uc.copyNumber,
-        location: `Collection (Coll #${i + 1})`,
+        location: `Collection (Coll #${i + 1})${uc.inAuction ? ' · in auction' : ''}`,
         ucId: uc._id,
       });
     }
@@ -2970,7 +2979,7 @@ async function cmdT2Deck(senderJid, reply, args = []) {
 
   // 💡 FIX 2026-10-08: exclude inAuction - moving an auction-committed card
   // into the deck/custom-deck desyncs the auction settlement.
-  const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false }).sort({ createdAt: 1 });
+  const owned = await getNumberedCollection(senderJid);
   const deck  = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: true }).sort({ mainDeckSlot: 1 });
 
   const slotsAvailable = MAIN_DECK_SIZE - deck.length;
@@ -2985,6 +2994,7 @@ async function cmdT2Deck(senderJid, reply, args = []) {
   for (const idx of indices) {
     const uc = owned[idx - 1];
     if (!uc) { results.push(`❌ #${idx} - not found`); continue; }
+    if (uc.inAuction) { results.push(`🔨 #${idx} - in an auction, can't move`); continue; }
     const card = CARD_INDEX()[uc.cardId];
     const slot = getNextSlot();
     uc.inMainDeck = true;
@@ -3022,7 +3032,7 @@ async function cmdT2CDeck(senderJid, reply, args = []) {
   }
 
   // 💡 FIX 2026-10-08: exclude inAuction here as well (same desync as t2deck).
-  const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false }).sort({ createdAt: 1 });
+  const owned = await getNumberedCollection(senderJid);
   const decks = await CardDeck.find({ ...(await ownerOf(senderJid)) });
   if (decks.length === 0) return reply(`❌  *NO CUSTOM DECKS*\n\n💡 ⟢ _Create one first with_ _.create deck <name>_`);
 
@@ -3035,6 +3045,7 @@ async function cmdT2CDeck(senderJid, reply, args = []) {
   for (const idx of uniqueIndices) {
     const uc = owned[idx - 1];
     if (!uc) { results.push(`❌ #${idx} - not found`); continue; }
+    if (uc.inAuction) { results.push(`🔨 #${idx} - in an auction, can't move`); continue; }
     uc.inCustomDeck = true;
     uc.customDeckName = targetDeck.name;
     nextSlot++;
@@ -3541,7 +3552,7 @@ async function cmdTcoll(senderJid, reply, chatId, args = []) {
   const tierMode = args.includes('--tier');
 
   // Fetch ALL cards regardless of deck/market status
-  const allOwned = await UserCard.find({ ...(await ownerOf(senderJid)) }).sort({ createdAt: 1 });
+  const allOwned = await UserCard.find({ ...(await ownerOf(senderJid)) }).sort({ createdAt: 1, _id: 1 });
   if (!allOwned.length) return reply(`📭  *TRUE COLLECTION EMPTY*\n\n💡 ⟢ _Every card you own, across all decks_`);
 
   if (tierMode) {
@@ -3607,7 +3618,7 @@ async function cmdEcoll(senderJid, reply, chatId, args = []) {
   const p = P();
 
   // Fetch ALL cards, filter to event cards only
-  const allOwned = await UserCard.find({ ...(await ownerOf(senderJid)) }).sort({ createdAt: 1 });
+  const allOwned = await UserCard.find({ ...(await ownerOf(senderJid)) }).sort({ createdAt: 1, _id: 1 });
   const eventCards = [];
   allOwned.forEach((uc, i) => {
     const card = CARD_INDEX()[uc.cardId];
@@ -3717,8 +3728,7 @@ async function cmdCG(senderJid, reply, args = [], m) {
     // In-auction cards STAY in the numbering (they show in .coll too), so
     // indexes never shift; the inAuction guard below catches those with a
     // friendly error instead of silently skipping and shifting numbers.
-    const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false }).sort({ createdAt: 1 });
-    uc = owned.filter(o => CARD_INDEX()[o.cardId])[index - 1];
+    uc = (await getNumberedCollection(senderJid))[index - 1];
     sourceLabel = `Collection #${index}`;
   }
 
