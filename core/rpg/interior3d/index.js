@@ -2,10 +2,10 @@
 const { render, R, U } = require('./raster');
 const { buildScene } = require('./scene');
 
-const VERSION = 5;   // v5: selection glow-through-walls sprite pass + 3D shop thumbs (owner 2026-10-24
+const VERSION = 6;   // v6: platform-aware room grid + upgraded shared procedural bed models (owner 2026-10-24
                      // 21:00Z "anything that is selected should glow and be visible through walls" + "the
                      // items in the shop, the images are still the old 2d ones not the new 3d ones") —
-                     // old disk bakes invalidated
+                     // old room bakes and item thumbnails invalidated
 
 /** state -> node-canvas Canvas (W x H). Camera auto-fits the whole footprint (annexes, loft, 2nd-floor walls). */
 async function renderInterior(state, opts = {}) {
