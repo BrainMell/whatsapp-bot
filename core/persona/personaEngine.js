@@ -136,6 +136,11 @@ function observe({ chatId, who, jid, text, ts, replyTo, toNames }) {
       learnPushName(chatId, jid, who);
       learnMonikerFromText(chatId, jid, t);
     } catch (e) {}
+    // REALGUY v5 memory v2: automatic, deterministic self-fact capture + batch tick
+    try {
+      for (const f of extractSelfFacts(t)) addMemory(chatId, jid, f.fact, { cat: f.cat, src: 'said' });
+      if (deps.ready) _tickConsolidate(chatId);
+    } catch (e) {}
   }
   if (buf.length > BUFFER_CAP) buf.splice(0, buf.length - BUFFER_CAP);
 }
@@ -175,6 +180,11 @@ function rememberFact(chatId, name, fact) {
   while (arr.length > FACTS_CAP_PER_CHAT) arr.shift();
   map[chatId] = arr;
   try {
+    const _j = _jidForName(chatId, n);
+    if (_j) addMemory(chatId, _j, f, { cat: 'other', src: 'said' });
+    else addMemory(chatId, null, `${n}: ${f}`, { cat: 'other', src: 'said' });
+  } catch (e) {}
+  try {
     deps.system.set(FACTS_KEY, map); // async persist, cache-first (warlog pattern)
   } catch (e) {
     console.error('[persona] failed to persist fact:', e.message);
@@ -186,6 +196,254 @@ function factsBlock(chatId) {
   const arr = getFactsMap()[chatId];
   if (!Array.isArray(arr) || !arr.length) return '';
   return arr.map((x) => `- ${x.n}: ${x.f}`).join('\n');
+}
+
+// ─── L2b: MEMORY v2 (owner 2026-10-24: "the memory system … improve it") ──────
+// v1 stored free-text "name: fact" lines (30/chat, FIFO) that only the model's
+// own [REMEMBER:] tags could fill, and dumped ALL of them into every prompt.
+// v2: per-PERSON (jid) facts, filled AUTOMATICALLY — deterministic self-
+// statement extraction on every message (free) + a throttled batch LLM
+// consolidation that also keeps a rolling "what's been going on" summary and
+// inside jokes. Dedupes near-duplicates, scores/evicts by importance+recency,
+// and retrieval is RELEVANCE-ranked (speaker + people in the thread + group),
+// so the prompt carries a handful of useful lines instead of a dump.
+const MEM_KEY = '_shared_persona_mem_v2';
+const MEM_PERSON_CAP = 30;
+const MEM_GROUP_CAP = 25;
+const MEM_FACT_MAX = 110;
+const CONSOLIDATE_EVERY_MSGS = 18; // new messages in a chat before a batch pass
+const CONSOLIDATE_COOLDOWN_MS = 8 * 60 * 1000;
+const CAT_WEIGHT = { bio: 3, relationship: 2.6, pref: 2, game: 1.8, event: 1.5, joke: 1.6, other: 1 };
+// never auto-store: health, religion, politics, sexuality, money, IDs, minors, self-harm, legal
+const MEM_SENSITIVE_RE = /\b(sick|ill(ness)?|cancer|diabet|depress|anxiety|therap|medic|pills?|disorder|suicid|self.?harm|kill myself|religio|christian|muslim|islam|jesus|allah|church|atheis|trump|biden|vote|election|party|gay|lesbian|bi(sexual)?|trans(gender)?|sexual|virgin|porn|nude|salary|paid|debt|broke|loan|bank|password|pin code|passport|ssn|police|arrest|prison|jail|immigra|visa|abuse|rape|years? old|yo\b|age is|\d{2}\s*(y\/?o)|school|grade \d|teen)\b/i;
+const MEM_STOP = new Set(['the', 'and', 'for', 'that', 'this', 'with', 'you', 'your', 'are', 'was', 'have', 'has', 'not', 'but', 'its', 'just', 'like', 'what', 'when', 'who', 'how', 'why', 'they', 'them', 'their', 'there', 'from', 'about', 'been', 'will', 'can', 'does', 'did', 'dont', 'cant', 'yeah', 'bro', 'dude', 'lol', 'lmao']);
+let _consolidating = false;
+const _msgSince = new Map(); // chatId -> count since last consolidation
+const _lastConsolidateAt = new Map();
+
+function _memAll() {
+  try {
+    const v = deps.system.get(MEM_KEY, {});
+    return v && typeof v === 'object' ? v : {};
+  } catch (e) {
+    return {};
+  }
+}
+function _memSave(all) {
+  try {
+    deps.system.set(MEM_KEY, all);
+  } catch (e) {
+    console.error('[persona] failed to persist memory v2:', e.message);
+  }
+}
+function _memChat(all, chatId) {
+  if (!all[chatId] || typeof all[chatId] !== 'object') all[chatId] = {};
+  const c = all[chatId];
+  if (!c.people || typeof c.people !== 'object') c.people = {};
+  if (!Array.isArray(c.group)) c.group = [];
+  return c;
+}
+function _tok(t) {
+  return String(t || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !MEM_STOP.has(w));
+}
+function _similar(a, b) {
+  const A = new Set(_tok(a));
+  const B = new Set(_tok(b));
+  if (!A.size || !B.size) return String(a).toLowerCase() === String(b).toLowerCase();
+  let inter = 0;
+  A.forEach((w) => B.has(w) && inter++);
+  return inter / Math.min(A.size, B.size) >= 0.7;
+}
+function _factScore(f, now) {
+  const ageDays = Math.max(0, (now - (f.ts || now)) / 86400000);
+  return (CAT_WEIGHT[f.cat] || 1) + (f.src === 'said' ? 0.6 : 0) - Math.min(2.5, ageDays / 20);
+}
+function _addTo(list, cap, text, cat, src) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim().slice(0, MEM_FACT_MAX);
+  if (t.length < 4 || MEM_SENSITIVE_RE.test(t)) return false;
+  const now = Date.now();
+  const dup = list.find((f) => _similar(f.t, t));
+  if (dup) {
+    // fresher / longer wording wins; refreshes recency
+    if (t.length >= dup.t.length) dup.t = t;
+    dup.ts = now;
+    if ((CAT_WEIGHT[cat] || 1) > (CAT_WEIGHT[dup.cat] || 1)) dup.cat = cat;
+    return false;
+  }
+  list.push({ t, cat: CAT_WEIGHT[cat] ? cat : 'other', src: src || 'auto', ts: now });
+  if (list.length > cap) {
+    list.sort((a, b) => _factScore(b, now) - _factScore(a, now));
+    list.length = cap;
+  }
+  return true;
+}
+function addMemory(chatId, jid, text, { cat = 'other', src = 'auto' } = {}) {
+  if (!deps.ready || !chatId || !text) return false;
+  const all = _memAll();
+  const c = _memChat(all, chatId);
+  let added;
+  if (jid) {
+    const k = String(jid);
+    if (!Array.isArray(c.people[k])) c.people[k] = [];
+    added = _addTo(c.people[k], MEM_PERSON_CAP, text, cat, src);
+  } else {
+    added = _addTo(c.group, MEM_GROUP_CAP, text, cat, src);
+  }
+  _memSave(all);
+  return added;
+}
+function forgetPerson(chatId, jid) {
+  const all = _memAll();
+  const c = all[chatId];
+  if (!c || !c.people || !c.people[String(jid)]) return 0;
+  const n = c.people[String(jid)].length;
+  delete c.people[String(jid)];
+  _memSave(all);
+  return n;
+}
+function listMemories(chatId, jid) {
+  const c = _memAll()[chatId];
+  return c && c.people && Array.isArray(c.people[String(jid)]) ? c.people[String(jid)].map((f) => f.t) : [];
+}
+
+// Deterministic self-statement extraction — free, runs on every human message.
+const _clip = (s) => String(s || '').trim().replace(/\s+(and|but|so|because|cuz|tho|though|lol|lmao|rn|now)\b.*$/i, '').slice(0, 40);
+const SELF_PATTERNS = [
+  [/\bi (?:really |actually |just |kinda |lowkey )?(love|like|enjoy|prefer) (?!to\b|when\b|that\b|how\b|it\b|this\b|you\b)([a-z0-9' -]{3,40})/i, 'pref', (m) => `${m[1].toLowerCase()}s ${_clip(m[2])}`],
+  [/\bi (?:really |actually |just )?(hate|dislike|can'?t stand|cant stand) (?!when\b|that\b|how\b|it\b|this\b|you\b)([a-z0-9' -]{3,40})/i, 'pref', (m) => `${/hate/i.test(m[1]) ? 'hates' : 'dislikes'} ${_clip(m[2])}`],
+  [/\bmy (?:fav|favorite|favourite) ([a-z ]{2,20}?) (?:is|are) ([a-z0-9' -]{2,30})/i, 'pref', (m) => `favorite ${m[1].toLowerCase()} is ${_clip(m[2])}`],
+  [/\bi (?:main|play as|use) ([a-z0-9' -]{3,25}?)(?: in | on | for |$|[.,!?])/i, 'game', (m) => `mains ${_clip(m[1])}`],
+  [/\bi(?:'m| am|m) from ([a-z][a-z .'-]{2,25})/i, 'bio', (m) => `from ${_clip(m[1])}`],
+  [/\bi live in ([a-z][a-z .'-]{2,25})/i, 'bio', (m) => `lives in ${_clip(m[1])}`],
+  [/\bmy (?:birthday|bday) is ([a-z0-9 ,'-]{3,25})/i, 'bio', (m) => `birthday is ${_clip(m[1])}`],
+  [/\bi (?:work|study) (?:as|at|in) ([a-z0-9 ,'-]{3,30})/i, 'bio', (m) => `${/study/i.test(m[0]) ? 'studies' : 'works'} ${/ as /i.test(m[0]) ? 'as' : /\bat /i.test(m[0]) ? 'at' : 'in'} ${_clip(m[1])}`],
+  [/\bmy (dog|cat|brother|sister|bf|gf|girlfriend|boyfriend) (?:is )?(?:named|called) ([A-Z][a-zA-Z]{2,15})/, 'relationship', (m) => `has a ${m[1].toLowerCase()} named ${m[2]}`],
+  [/\bi (?:got|have|own|just bought|just got) (?:a|an|the) ((?:new )?[a-z0-9' -]{3,30}?)(?:[.,!?]|$| and | but | lol)/i, 'event', (m) => `has ${_clip(m[1])}`],
+];
+function extractSelfFacts(text) {
+  const t = String(text || '').trim();
+  if (!t || t.length > 300 || /\?\s*$/.test(t) || /^[.!/]/.test(t)) return [];
+  const out = [];
+  for (const [re, cat, fmt] of SELF_PATTERNS) {
+    const m = re.exec(t);
+    if (!m) continue;
+    const fact = fmt(m).replace(/\s+/g, ' ').trim();
+    if (fact.length >= 6 && !MEM_SENSITIVE_RE.test(fact)) out.push({ fact, cat });
+  }
+  return out.slice(0, 2);
+}
+
+function _jidForName(chatId, name) {
+  const chat = getNamesMap()[chatId];
+  const n = String(name || '').trim().toLowerCase();
+  if (!chat || !n) return null;
+  for (const k of Object.keys(chat)) {
+    const e = chat[k] || {};
+    const names = [e.w, ...(Array.isArray(e.m) ? e.m : [])];
+    try { names.push(deps.nameResolver(k)); } catch (e2) {}
+    if (names.some((x) => String(x || '').trim().toLowerCase() === n)) return k;
+  }
+  return null;
+}
+
+// Throttled batch LLM pass: durable facts + inside jokes + rolling summary.
+async function consolidate(chatId) {
+  if (_consolidating || !deps.ready) return false;
+  const buf = (chatBuffers.get(chatId) || []).slice(-30);
+  if (buf.length < 10) return false;
+  _consolidating = true;
+  _lastConsolidateAt.set(chatId, Date.now());
+  _msgSince.set(chatId, 0);
+  try {
+    const log = buf.map((m) => `${bestName(chatId, m.jid, m.who)}: ${m.text}`).join('\n');
+    const res = await deps.smartGroqCall({
+      model: deps.modelFn(log.length) || undefined,
+      temperature: 0.2,
+      max_completion_tokens: 700,
+      ...(String(deps.modelFn(log.length) || '').includes('gpt-oss') ? { reasoning_effort: 'low' } : {}),
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You maintain notes for a friend group chat. From the chat log output ONLY compact JSON: {"summary":"1-2 short sentences on what the group has been up to / talking about lately","facts":[{"who":"exact name as shown in the log","fact":"short durable fact the person stated about THEMSELVES (likes, habits, game they play, plans, pets, where they are from)","cat":"pref|bio|relationship|game|event"}],"jokes":["short recurring inside joke or running gag, if any"]}. Rules: only things clearly stated in the log, never guess; skip health, religion, politics, sexuality, money, age, school, private/family trouble; skip one-off chatter; max 6 facts, 2 jokes; facts under 12 words; empty arrays are fine.',
+        },
+        { role: 'user', content: log },
+      ],
+    });
+    const raw = res?.choices?.[0]?.message?.content || '';
+    const mm = raw.match(/\{[\s\S]*\}/);
+    if (!mm) return false;
+    const j = JSON.parse(mm[0]);
+    const all = _memAll();
+    const c = _memChat(all, chatId);
+    for (const f of Array.isArray(j.facts) ? j.facts.slice(0, 6) : []) {
+      const jid = _jidForName(chatId, f && f.who);
+      if (!jid || !f.fact) continue; // unknown person → never mis-attribute
+      _addTo(c.people[jid] || (c.people[jid] = []), MEM_PERSON_CAP, f.fact, String(f.cat || 'other'), 'auto');
+    }
+    for (const jk of Array.isArray(j.jokes) ? j.jokes.slice(0, 2) : []) _addTo(c.group, MEM_GROUP_CAP, jk, 'joke', 'auto');
+    if (j.summary && typeof j.summary === 'string' && !MEM_SENSITIVE_RE.test(j.summary)) {
+      c.summary = j.summary.slice(0, 260);
+      c.sumTs = Date.now();
+    }
+    _memSave(all);
+    return true;
+  } catch (e) {
+    console.error('[persona] consolidate failed silently:', e?.message);
+    return false;
+  } finally {
+    _consolidating = false;
+  }
+}
+function _tickConsolidate(chatId) {
+  const n = (_msgSince.get(chatId) || 0) + 1;
+  _msgSince.set(chatId, n);
+  if (n >= CONSOLIDATE_EVERY_MSGS && Date.now() - (_lastConsolidateAt.get(chatId) || 0) > CONSOLIDATE_COOLDOWN_MS) {
+    consolidate(chatId).catch(() => {});
+  }
+}
+
+// Relevance-ranked retrieval for the prompt.
+function memoryBlock(chatId, speakerJid, queryText) {
+  const c = _memAll()[chatId];
+  if (!c) return { people: '', summary: '', jokes: '' };
+  const now = Date.now();
+  const q = new Set(_tok(queryText));
+  const rel = (f) => {
+    let o = 0;
+    _tok(f.t).forEach((w) => q.has(w) && o++);
+    return _factScore(f, now) + o * 2.2;
+  };
+  const buf = (chatBuffers.get(chatId) || []).slice(-8);
+  const nearJids = new Set();
+  buf.forEach((m) => m.jid && nearJids.add(String(m.jid)));
+  const lowerQ = String(queryText || '').toLowerCase();
+  const chat = getNamesMap()[chatId] || {};
+  for (const k of Object.keys(chat)) {
+    const e = chat[k] || {};
+    const names = [e.w, ...(Array.isArray(e.m) ? e.m : [])];
+    try { names.push(deps.nameResolver(k)); } catch (e2) {}
+    if (names.some((n) => n && String(n).length >= 3 && lowerQ.includes(String(n).toLowerCase().split(/\s+/)[0]))) nearJids.add(k);
+  }
+  const lines = [];
+  const take = (jid, max) => {
+    const list = c.people[String(jid)];
+    if (!Array.isArray(list) || !list.length) return;
+    const top = list.slice().sort((a, b) => rel(b) - rel(a)).slice(0, max);
+    lines.push(`- ${bestName(chatId, jid, 'someone')}: ${top.map((f) => f.t).join('; ')}`);
+  };
+  if (speakerJid) take(speakerJid, 5);
+  [...nearJids].filter((j) => j !== String(speakerJid)).slice(0, 3).forEach((j) => take(j, 3));
+  const jokes = (c.group || []).slice().sort((a, b) => rel(b) - rel(a)).slice(0, 2).map((f) => f.t);
+  return {
+    people: lines.join('\n'),
+    summary: c.summary && now - (c.sumTs || 0) < 3 * 86400000 ? c.summary : '',
+    jokes: jokes.length ? jokes.join('; ') : '',
+  };
 }
 
 // ─── L2.5: name roster (REALGUY v2.5) ──────────────────────────────
@@ -421,7 +679,7 @@ function shouldAmbient({ chatId, text, isGroup }) {
 }
 
 // ─── L3: persona prompt (REALGUY v2 — built ON the old system) ───────────────
-function buildSystemPrompt({ isAmbient, chatId, profileText, speakerJid, addressMode }) {
+function buildSystemPrompt({ isAmbient, chatId, profileText, speakerJid, addressMode, queryText }) {
   const p = [];
   // Layer 0 — the old pipeline's canonical anchor line, FIRST, unchanged.
   p.push(deps.contentFn());
@@ -498,8 +756,16 @@ you: say that after you catch something`,
       `--- PERSON YOU'RE TALKING TO ---\n${String(profileText).trim().slice(0, 900)}\nUse this naturally in conversation. Don't recite it.`,
     );
   }
+  const mem = memoryBlock(chatId, speakerJid, queryText);
+  if (mem.people) {
+    p.push(
+      `--- WHAT YOU KNOW ABOUT PEOPLE HERE ---\n${mem.people}\nuse this like a friend who just knows stuff: bring it up only when it genuinely fits what theyre saying, never list it or recite it, and dont announce that you remember.`,
+    );
+  }
+  if (mem.jokes) p.push(`--- RUNNING JOKES IN THIS CHAT ---\n${mem.jokes}`);
+  if (mem.summary) p.push(`--- WHATS BEEN GOING ON LATELY ---\n${mem.summary}`);
   const facts = factsBlock(chatId);
-  if (facts) p.push(`--- THINGS YOU REMEMBER ABOUT PEOPLE ---\n${facts}`);
+  if (facts) p.push(`--- OTHER THINGS YOU NOTED ---\n${facts.split('\n').slice(-6).join('\n')}`);
   const transcript = transcriptBlock(chatId);
   if (transcript) {
     p.push(`--- GROUP CHAT RIGHT NOW (most recent last) ---\n${transcript}`);
@@ -704,7 +970,7 @@ async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profi
     ? `${senderName || 'someone'} just said: ${userText}${addresseeHint ? `\n(context: ${addresseeHint})` : ''}`
     : `${senderName || 'someone'} says to you: ${userText}`;
   const messages = [
-    { role: 'system', content: buildSystemPrompt({ isAmbient, chatId, profileText, speakerJid: senderJid, addressMode }) },
+    { role: 'system', content: buildSystemPrompt({ isAmbient, chatId, profileText, speakerJid: senderJid, addressMode, queryText: userText }) },
     {
       role: 'user',
       content: ambientLead,
@@ -998,6 +1264,12 @@ module.exports = {
   silentRetryTurn,
   rememberFact,
   factsBlock,
+  addMemory,
+  forgetPerson,
+  listMemories,
+  memoryBlock,
+  extractSelfFacts,
+  consolidate,
   parseToolCalls,
   cleanReplyText,
   sanitizeEmoji,
