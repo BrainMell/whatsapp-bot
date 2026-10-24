@@ -153,6 +153,18 @@ function section(t) { console.log(`\n══ ${t} ══`); }
         ok(stillOwned === 1, `uid-precise pull: 1 of 2 chair instances consumed (${stillOwned} left)`);
     }
 
+    // ── upgraded bed family: same procedural 3D geometry feeds room + shop thumbs ──
+    section('BED MODELS — shared 3D bed family and outfitter thumbs');
+    {
+        const i3 = require(path.join(repo, 'core/rpg/interior3d'));
+        const bedIds = ['bed_bedroll', 'bed_traveller', 'bed_rustic', 'bed_forest', 'bed_lake', 'bed_cloud', 'bed_noble', 'bed_royal'];
+        for (const id of bedIds) {
+            const thumb = await i3.renderItemThumb(id);
+            ok(Buffer.isBuffer(thumb) && thumb.length > 800 && thumb.slice(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])),
+                id + ' renders a PNG 3D outfitter thumb');
+        }
+    }
+
     // ════════════════ §3 MOVEMENT SYSTEM ════════════════
     section('3. MOVEMENT — select/move/moveto/rotate + grid preview');
     {
