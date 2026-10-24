@@ -1467,6 +1467,16 @@ async function renderCatalogPage(page, pages, opts = {}) {
             ctx.fillText(`Needs ${rooms.HOUSE_NAMES[need]}`, x + cw / 2, y + 150);
         }
         ctx.restore();
+        // buy-by-number chip (top-right, above any lock veil — still readable):
+        // the caption lists the same numbers, `.home buy <n>` buys off this page
+        ctx.save();
+        ctx.fillStyle = 'rgba(201,168,90,0.16)';
+        roundRect(ctx, x + cw - 44, y + 8, 36, 25, 8); ctx.fill();
+        ctx.strokeStyle = 'rgba(201,168,90,0.55)'; ctx.lineWidth = 1.5;
+        roundRect(ctx, x + cw - 44, y + 8, 36, 25, 8); ctx.stroke();
+        ctx.font = 'bold 17px Cinzel'; ctx.fillStyle = '#f0c05a'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(String(i + 1), x + cw - 26, y + 21);
+        ctx.restore();
     }
 
     ctx.font = '22px Medieval';
@@ -1491,9 +1501,20 @@ const ROWS_PER_PAGE = 12;   // owner 2026-10-24 21:19Z "the names and the listed
 // rows are 1-based across pages, placed pieces first (room order), then storage.
 // `.home select 7` / `.home remove 2-5` use these exact numbers.
 function inventoryRows(rec) {
+    const roomsR = require('./homesteadRooms');
     const placedRows = (rec.placed || []).map((p) => {
         const d = itemDef(p.item) || {};
-        return { d, status: d.layer === 'wall' ? `wall ${p.x}` : `(${p.x},${p.y})`, placed: true, uid: p.uid };
+        // space-aware status (owner 21:34Z): the card + caption tell you WHERE
+        // each piece lives — loft, an annex side, or the main hall
+        let status;
+        if (d.layer === 'wall') status = `wall ${p.x}`;
+        else if (p.lvl) status = `↑loft (${p.x},${p.y})`;
+        else {
+            const reg = roomsR.regionAt(rec, p.x, p.y);
+            const tag = reg && reg !== 'main' ? `${reg.toUpperCase()}-annex ` : '';
+            status = `${tag}(${p.x},${p.y})`;
+        }
+        return { d, status, placed: true, uid: p.uid };
     });
     const storedRows = (rec.owned || []).map((o) => ({ d: itemDef(o.id) || {}, status: 'storage', placed: false, uid: o.uid }));
     const rows = [...placedRows, ...storedRows];
