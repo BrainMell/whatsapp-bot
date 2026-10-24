@@ -1187,7 +1187,8 @@ async function handleQuickInput(ctx) {
         return true;
     }
     if (!bareSelection && !(pendingId && coords) &&
-        !(hasSelection && (dir || coords || space || remove || rotate || store))) {
+        !((hasSelection && (dir || coords || space || rotate || store)) ||
+          ((hasSelection || inSelectMode) && remove))) {
         return false;
     }
 
@@ -1220,7 +1221,7 @@ async function handleQuickInput(ctx) {
         await cmdStore(ctx, rec, [], 'store');
         return true;
     }
-    if (hasSelection && remove) {
+    if ((hasSelection || inSelectMode) && remove) {
         await cmdStore(ctx, rec, remove[2].trim().split(/\s+/), 'remove');
         return true;
     }

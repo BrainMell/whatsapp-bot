@@ -191,6 +191,17 @@ function section(t) { console.log(`\n══ ${t} ══`); }
         const after6 = await Homestead.findOne({ userId: QA }).lean();
         ok(!(after6.placed || []).some((p) => p.item === 'chair_wood'), 'store by selection removes from room');
         ok((after6.owned || []).some((o) => o.id === 'chair_wood' && o.uid), 'stored instance keeps its uid in storage');
+
+        // Pick up multiple numbered pieces with a bare input while the picker is open.
+        await stage(QA, [
+            { item: 'chair_wood', x: 2, y: 2, uid: 'rm1' },
+            { item: 'barrel_oak', x: 7, y: 6, uid: 'rm2' },
+        ], []);
+        await homestead.handleCommand(makeCtx(QA, '.j home select'));
+        await homestead.handleQuickInput(makeCtx(QA, 'remove 1-2'));
+        const rmState = await Homestead.findOne({ userId: QA }).lean();
+        ok((rmState.placed || []).length === 0, 'bare remove 1-2 picks up both placed items');
+        ok((rmState.owned || []).length === 2, 'multi-remove preserves both furniture instances in storage');
     }
 
     // ════════════════ §4 ATOMIC PURCHASES ════════════════
