@@ -33730,11 +33730,23 @@ _(or reply to their message)_
                     }
                   }
 
-                  const prompt = txt
-                    .replace(new RegExp(`${botConfig.getPrefix()}`, "gi"), "")
-                    .replace(nameRegex, "")
+                  // 💡 REALGUY v5 (owner: "joker doesn't respond when I say
+                  // joker"): the prefix ".j" was used as a RAW regex — "." matched
+                  // any char, so "yo joker" became "yooker" and a bare "joker"
+                  // stripped to nothing → silent return. Escape it, strip only a
+                  // leading prefix, and never drop a bare name call.
+                  const _pfxAi = String(botConfig.getPrefix() || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                  let prompt = txt
+                    .replace(_pfxAi ? new RegExp(`^\\s*${_pfxAi}\\b\\s*`, "i") : /$^/, "")
+                    .replace(new RegExp(`^\\s*(?:yo|hey|ayo)?\\s*${nameRegex.source}[\\s,:!?.-]*`, "i"), "") // leading name call only; mid-sentence mentions keep their meaning
+                    .replace(/@\d{6,}/g, "")
+                    .replace(/\s{2,}/g, " ")
+                    .replace(/^[\s,.:;!-]+/, "")
                     .trim();
-                  if (!prompt) return;
+                  if (!prompt) {
+                    // bare name / tag: they're just calling for him
+                    prompt = "(they only said your name to get your attention)";
+                  }
 
                   // Prepend quoted message context to prompt if user is replying to a specific message
                   let promptWithReply = prompt;
