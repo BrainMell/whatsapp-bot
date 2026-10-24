@@ -610,6 +610,8 @@ const ENEMY_SIZE = {
     GLOOM_BRUTE: 1.10, DUSK_CRAWLER: 0.85, NIGHT_WRAITH: 0.80,
     CRIMSON_DEVOURER: 0.90, HOLLOW_SERAPH: 0.95, ABYSS_WEAVER: 0.88,
 };
+// Owner request 2026-10-24: monsters render 20% larger; facing logic is unchanged.
+const ENEMY_RENDER_SCALE = 1.2;
 const SUMMON_SIZE = {
     DRAGON: 1.18, GIANT: 1.10, FIREGUARD: 1.05, YETI: 1.05, TIDALMAW: 1.00, OCTOPUS: 1.00,
     LUMENMOTH: 1.00, BOAR: 1.00, PLAGUEFANG: 0.98, SHIP_CRUISER: 0.95, SHIP_FIGHTER: 0.95,
@@ -698,7 +700,7 @@ async function planCombatLayout(state, opts = {}) {
             art: resolveEnemyArt(enemy),
             cx: W * 0.5,
             gy: BOSS_GY,
-            h: Math.round(perspH(BOSS_GY) * 2.05),
+            h: Math.round(perspH(BOSS_GY) * 2.05 * ENEMY_RENDER_SCALE),
             flip: false,
             name: safeName(enemy && enemy.name, 22),
             isBoss: true,
@@ -905,7 +907,7 @@ async function planCombatLayout(state, opts = {}) {
         const sizeMul = m.kind === 'wild' ? summonSizeOf(speciesKey) : enemySizeOf(enemyIdOf(m.e));
         const cx = SX(m.slot.fx), gy = floorClamp(SY(FY(m.slot.fy)));
         let h = Math.round(perspH(gy) * m.slot.mul * sizeMul
-            * (m.kind === 'wild' ? 1.18 : 1.12));
+            * (m.kind === 'wild' ? 1.18 : 1.12) * ENEMY_RENDER_SCALE);
         // DEPTH CAP (VLM critic, bg4_2e zoom-verified): a big-bodied back-row
         // species must never render larger than the front-row actor on the
         // same plane — deeper reads smaller, no exceptions

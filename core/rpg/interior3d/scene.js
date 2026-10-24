@@ -242,78 +242,8 @@ async function buildScene(state, opts = {}) {
 }
 
 
-const BED_PALETTES = {
-    bed_bedroll: { frame: [0.28, 0.17, 0.09], frameLight: [0.48, 0.31, 0.16], mattress: [0.46, 0.29, 0.17], sheet: [0.75, 0.63, 0.47], blanket: [0.32, 0.18, 0.12], trim: [0.77, 0.55, 0.27], pillow: [0.79, 0.72, 0.59], head: 0.38, roll: true },
-    bed_traveller: { frame: [0.25, 0.15, 0.08], frameLight: [0.47, 0.29, 0.13], mattress: [0.79, 0.73, 0.60], sheet: [0.91, 0.85, 0.71], blanket: [0.13, 0.34, 0.38], trim: [0.76, 0.53, 0.25], pillow: [0.91, 0.86, 0.75], head: 0.61 },
-    bed_rustic: { frame: [0.20, 0.12, 0.07], frameLight: [0.40, 0.24, 0.11], mattress: [0.77, 0.68, 0.53], sheet: [0.89, 0.80, 0.65], blanket: [0.48, 0.22, 0.12], trim: [0.78, 0.49, 0.20], pillow: [0.91, 0.85, 0.73], head: 0.64 },
-    bed_forest: { frame: [0.20, 0.14, 0.08], frameLight: [0.40, 0.30, 0.14], mattress: [0.76, 0.73, 0.60], sheet: [0.88, 0.83, 0.66], blanket: [0.13, 0.32, 0.19], trim: [0.46, 0.58, 0.24], pillow: [0.90, 0.87, 0.72], head: 0.69 },
-    bed_lake: { frame: [0.20, 0.13, 0.09], frameLight: [0.38, 0.24, 0.13], mattress: [0.74, 0.79, 0.78], sheet: [0.86, 0.92, 0.91], blanket: [0.08, 0.24, 0.43], trim: [0.24, 0.65, 0.75], pillow: [0.88, 0.93, 0.92], head: 0.68 },
-    bed_cloud: { frame: [0.45, 0.48, 0.57], frameLight: [0.68, 0.71, 0.80], mattress: [0.85, 0.86, 0.95], sheet: [0.95, 0.94, 1.00], blanket: [0.45, 0.53, 0.83], trim: [0.77, 0.83, 1.00], pillow: [0.97, 0.96, 1.00], head: 0.78, ornate: true },
-    bed_noble: { frame: [0.15, 0.09, 0.05], frameLight: [0.38, 0.24, 0.10], mattress: [0.78, 0.70, 0.55], sheet: [0.92, 0.85, 0.70], blanket: [0.30, 0.12, 0.35], trim: [0.87, 0.66, 0.20], pillow: [0.96, 0.89, 0.73], head: 0.84, ornate: true },
-    bed_royal: { frame: [0.11, 0.07, 0.04], frameLight: [0.57, 0.36, 0.10], mattress: [0.80, 0.73, 0.60], sheet: [0.95, 0.88, 0.73], blanket: [0.40, 0.06, 0.12], trim: [0.95, 0.75, 0.28], pillow: [0.98, 0.91, 0.77], head: 0.94, ornate: true },
-};
-const BED_IDS = new Set(Object.keys(BED_PALETTES));
-
-/** Shared stylised bed geometry: one definition is used in room placement and shop thumbnails. */
-function addBedGeometry(sc, id, def, options = {}) {
-    const placed = options.placed || { x: 0, y: 0, r: 0, lvl: 0 };
-    const foot = options.foot || effFoot(placed, def);
-    const centered = options.centered === true;
-    const cx = centered ? 0 : cellX(placed.x || 0) + foot.fw * CELL / 2;
-    const cy = centered ? 0 : cellY(placed.y || 0) - foot.fh * CELL / 2;
-    const z = options.z === undefined ? ((placed.lvl || 0) === 1 ? LOFT_Z : 0) : options.z;
-    const yaw = options.yaw === undefined ? (foot.r || 0) * 90 : options.yaw;
-    const length = Math.max(def.fw, def.fh) * CELL * 0.86;
-    const width = Math.min(def.fw, def.fh) * CELL * 0.72;
-    const pal = BED_PALETTES[id] || BED_PALETTES.bed_rustic;
-    const radians = yaw * Math.PI / 180;
-    const co = Math.cos(radians), si = Math.sin(radians);
-    const B = (rx, ry, rz, sx, sy, sz, color) => {
-        const bx = rx * co - ry * si, by = rx * si + ry * co;
-        sc.addBox([cx + bx, cy + by, z + rz], [sx, sy, sz], color, yaw);
-    };
-
-    if (pal.roll) {
-        B(0, 0, 0.10, length * 0.96, width * 0.88, 0.16, pal.frame);
-        B(0, 0, 0.20, length * 0.88, width * 0.82, 0.08, pal.blanket);
-        B(length * 0.28, 0, 0.25, length * 0.20, width * 0.84, 0.04, pal.trim);
-        B(-length * 0.28, 0, 0.27, length * 0.17, width * 0.31, 0.06, pal.pillow);
-        B(-length * 0.28, 0, 0.305, length * 0.08, width * 0.025, 0.008, pal.trim);
-        return { dx: length + 0.16, dy: width + 0.16, dz: 0.43 };
-    }
-
-    for (const lx of [-1, 1]) for (const ly of [-1, 1]) {
-        B(lx * length * 0.39, ly * width * 0.37, 0.115, 0.10, 0.10, 0.23, pal.frame);
-    }
-    B(0, 0, 0.205, length * 0.98, width * 0.98, 0.14, pal.frame);
-    B(0, -width * 0.445, 0.245, length * 0.93, width * 0.065, 0.13, pal.frameLight);
-    B(0, width * 0.445, 0.245, length * 0.93, width * 0.065, 0.13, pal.frameLight);
-
-    B(0, 0, 0.315, length * 0.91, width * 0.84, 0.15, pal.mattress);
-    B(0, 0, 0.398, length * 0.87, width * 0.80, 0.025, pal.sheet);
-    B(length * 0.145, 0, 0.425, length * 0.56, width * 0.80, 0.035, pal.blanket);
-    B(length * 0.355, 0, 0.448, length * 0.11, width * 0.82, 0.025, pal.trim);
-    for (const s of [-1, 0, 1]) {
-        B(length * (0.02 + s * 0.105), 0, 0.447, length * 0.018, width * 0.62, 0.008, pal.frameLight);
-    }
-    for (const py of [-1, 1]) {
-        B(-length * 0.275, py * width * 0.205, 0.445, length * 0.19, width * 0.31, 0.065, pal.pillow);
-        B(-length * 0.275, py * width * 0.205, 0.481, length * 0.13, width * 0.022, 0.008, pal.sheet);
-    }
-
-    const head = pal.head || 0.64;
-    B(-length * 0.455, 0, head / 2, 0.12, width * 1.12, head, pal.frame);
-    B(-length * 0.455 + 0.062, 0, head * 0.52, 0.018, width * 0.78, head * 0.48, pal.frameLight);
-    B(-length * 0.455 + 0.075, 0, head * 0.81, 0.026, width * 0.92, 0.075, pal.trim);
-    B(length * 0.455, 0, 0.29, 0.09, width * 1.06, 0.34, pal.frame);
-    if (pal.ornate) {
-        for (const py of [-1, 1]) {
-            B(-length * 0.455, py * width * 0.51, head + 0.035, 0.13, 0.13, 0.12, pal.trim);
-            B(-length * 0.455 + 0.08, py * width * 0.32, head * 0.58, 0.025, width * 0.10, head * 0.15, pal.trim);
-        }
-    }
-    return { dx: length + 0.20, dy: width + 0.22, dz: head + 0.18 };
-}
+// Beds use their shipped GLB models in both the room and shop thumbnails.
+// The previous procedural box-bed override bypassed those actual models.
 
 // ── v5 SHARED PIECE PLACEMENT ────────────────────────────────────────────────
 const zOf = (p) => ((p.lvl || 0) === 1 ? LOFT_Z : 0);
@@ -323,10 +253,6 @@ const zOf = (p) => ((p.lvl || 0) === 1 ? LOFT_Z : 0);
  *  piece lands at the EXACT world transform it has in the full room raster */
 async function addPiece(sc, p, def) {
     const e = effFoot(p, def);
-    if (BED_IDS.has(p.item)) {
-        addBedGeometry(sc, p.item, def, { placed: p, foot: e });
-        return;
-    }
     const m = await model('furniture', p.item);
     if (def.layer === 'rug') {
         const cx = cellX(p.x) + e.fw * CELL / 2, cy = cellY(p.y) - e.fh * CELL / 2, z = zOf(p) + (p.lvl ? 0.01 : 0);
@@ -375,21 +301,7 @@ async function buildHighlight(hl) {
  *  shop, the images are still the old 2d ones not the new 3d ones"). Sets
  *  sc.itemBBox = {dx,dy,dz} of the CENTRED piece for camera auto-fit. */
 async function buildItemScene(id) {
-    const def = DEFS.get(id);
-    if (BED_IDS.has(id) && def) {
-        const sc = new Scene();
-        const bbox = addBedGeometry(sc, id, def, {
-            centered: true,
-            placed: { x: 0, y: 0, r: 0, lvl: 0 },
-            foot: { fw: def.fw, fh: def.fh, r: 0 },
-            z: 0,
-        });
-        const floorM = await model('floors', THEME_FLOOR.oakhaven);
-        if (floorM) sc.addModel(floorM, { pos: [0, 0, -FLOOR_T], scale: [bbox.dx * 1.12, bbox.dy * 1.12, 1] });
-        sc.itemBBox = bbox;
-        return sc.finalize();
-    }
-
+    // All catalog items, including beds, use the actual GLB for matching thumbnails.
     const m = await model('furniture', id);
     if (!m) return null;
     const sc = new Scene();

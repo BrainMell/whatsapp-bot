@@ -1178,8 +1178,12 @@ async function render3dCard(state, opts) {
 }
 
 async function renderRoomImage(state, opts = {}) {
-    const key = stateHash(state, { ...opts, v3d: process.env.HOMESTEAD_3D === '0' ? 0 : 1 });
-    if (process.env.HOMESTEAD_3D !== '0') {
+    // 3D GLB room rendering is canonical. HOMESTEAD_3D=0 used to silently
+    // route deployments back to legacy sprites, hiding whether models worked.
+    // The 2D renderer is now explicit emergency recovery only.
+    const legacyFallback = process.env.HOMESTEAD_3D_LEGACY_FALLBACK === '1';
+    const key = stateHash(state, { ...opts, v3d: legacyFallback ? 0 : 1 });
+    if (!legacyFallback) {
         const hit3 = _renderCache.get(key);
         if (hit3 && (Date.now() - hit3.ts) < CACHE_TTL) return hit3;
         try {
@@ -1247,7 +1251,11 @@ async function renderRoomImage(state, opts = {}) {
             }, null, { label: 'bake:room3d', timeoutMs: 90000 });
             cachePut(_renderCache, key, out3);
             return out3;
-        } catch (e) { console.error('[homestead] 3D render failed, 2D fallback:', e.message); }
+        } catch (e) {
+            console.error('[homestead] 3D render failed; refusing silent legacy 2D output:', e.message);
+            // Surface deployment/model errors instead of disguising them as a successful sprite render.
+            throw e;
+        }
     }
     const hit = _renderCache.get(key);
     if (hit && (Date.now() - hit.ts) < CACHE_TTL) return hit;

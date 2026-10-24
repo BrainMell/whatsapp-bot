@@ -1,21 +1,30 @@
-# homestead3d - whole-room 3D interior renderer (prototype)
+# Homestead 3D asset and proof pipeline
 
-Owner request 2026-10-24: make the `.home` interior more 3D and able to recreate the
-reference cutaway room (timber frame, loft, stairs, layered furniture).
+This directory holds proof-render scripts and selected upstream GLB source assets. The live `.home` / `.house` interior uses the Node renderer in `core/rpg/interior3d/`.
 
-`iso3d.py` renders a WHOLE ROOM in one pass (numpy + Pillow + trimesh, no GPU):
-visibility z-buffer -> sun shadow map -> per-pixel textured Lambert shading. Because the
-room is one scene, the loft shadows the stairs/furniture and everything occludes correctly,
-which per-item sprite baking cannot do.
+## Runtime model source of truth
 
-`room_proof.py` builds the reference room from the house-builder pack GLBs in `pack_models/`
-(walls, window, door, hearth, bed, desk, table...) plus box primitives (foundation, loft posts,
-planks, stairs, rugs) and writes a PNG:
+- `core/rpgasset/interior3d/models/arch/`: wall tiers, doors, windows, loft, stairs, raised platforms and railings.
+- `core/rpgasset/interior3d/models/floors/`: floors used by theme mappings.
+- `core/rpgasset/interior3d/models/furniture/`: a GLB per ID in `core/rpgasset/homestead/catalog.json`, including beds used in the room and shop/inventory thumbnails.
+- `core/rpgasset/interior3d/models/walls/`: theme wall models and variants.
 
-    python3 scripts/homestead3d/room_proof.py out.png      # ~13 s, 9k triangles
+The live path is `core/rpg/homesteadRenderer.js` → `core/rpg/interior3d/index.js` → `core/rpg/interior3d/scene.js`. Do not use this proof script as evidence that live rendering is visually verified; inspect the actual `.home house` output.
 
-Proof render: `docs/homestead3d/interior_proof.jpg`.
+## Proof renders and checks
 
-NOT wired into `.home` yet (brief: owner approves proof renders first). Next steps:
-scene from the Homestead document (item ids -> GLB map, grid cell -> world xy), bake to a
-mediaCache key that includes the renderer version, keep the 2D renderer behind a flag.
+`room_proof.py` composes a reference room from source GLBs in `pack_models/` plus geometry helpers. It is useful for source asset/layout experiments, not the live bot renderer.
+
+Run the static asset audit:
+
+```sh
+node scripts/qa_homestead_glb.js
+```
+
+Run the runtime/database suite only in an authorized test environment with its required `.env` and dependencies:
+
+```sh
+node scripts/qa_homestead_v2.js
+```
+
+The runtime 3D cache version is `core/rpg/interior3d/index.js`'s `VERSION`; bump it whenever camera, model, geometry or texture output changes. Legacy 2D fallback is explicit emergency-only via `HOMESTEAD_3D_LEGACY_FALLBACK=1`.

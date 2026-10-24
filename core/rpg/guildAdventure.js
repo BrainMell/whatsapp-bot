@@ -42,6 +42,7 @@ const summonSystem = require("./summonSystem");
 const summonAI = require("./summonAI");
 // 💡 Phase 3: Necromancer capture pipeline
 const summonCapture = require("./summonCapture");
+const { resolvePartyDungeonRank } = require("./partyDungeonRank");
 
 // ==========================================
 // 📊 GAME CONSTANTS
@@ -9546,73 +9547,41 @@ const joinAdventure = (chatId, senderJid, senderName) => {
 };
 
 // ============================================
-// 🎯 PARTY RANK RECALIBRATION (2026-10-03, owner directive)
+// 🎯 PARTY RANK RECALIBRATION (2026-10-24 safety correction)
 // ============================================
-// 💡 PROGRESSION OVERHAUL: the dungeon rank is NO LONGER whatever the
-// initiator typed. After the FULL participant list is known and before the
-// raid is generated (startJourney = roster locked, shop not yet run, rewards
-// not yet computed), the raid's rank is derived from the party itself:
-//   1. Read every participant's CURRENT adventurerRank from their user doc
-//      (fresh read - covers rank changes between creation and start).
-//      The initiator is included automatically (auto-join fix).
-//   2. Take the MOST COMMON rank among the group.
-//      - Tie between two ranks: the HIGHER of the tied ranks wins (a 2B/2C
-//        party plays as a B party, not a C party).
-//      - Ranks outside the normal ladder (DRAGON/GOD, mod-granted) are NOT
-//        counted - a high-rank carrier cannot drag the group's rank up.
-//   3. The raid runs ONE RANK ABOVE that most-common rank (capped at SSS).
-// A mostly-B party + one SS initiator therefore plays an A raid, not an
-// SS raid - mixed-rank groups can still play together, but nobody skips
-// the progression curve by piggybacking on a carrier.
+// The roster is read fresh after it locks and BEFORE the shop, encounters or
+// rewards are generated. Mixed-rank parties are capped to one rank above the
+// LOWEST-ranked member. A high-rank carrier must never drag low-rank members
+// into dangerous content. Uniform parties still run one rank above their
+// common rank (capped at SSS). DRAGON/GOD and other special ranks are excluded.
 const PARTY_RANK_LADDER = ["F", "E", "D", "C", "B", "A", "S", "SS", "SSS"];
 
 function recalibratePartyRank(state) {
-  if (state.solo) return null; // solo keeps its initiator+1 creation gate
+  if (state.solo) return null;
 
-  const counts = {};
-  for (const p of state.players) {
+  const playerRanks = state.players.map((p) => {
     const u = p.jid ? economy.getUser(p.jid) : null;
-    const r = String((u && u.adventurerRank) || p.adventurerRank || "F")
+    return String((u && u.adventurerRank) || p.adventurerRank || "F")
       .trim()
       .toUpperCase();
-    if (!PARTY_RANK_LADDER.includes(r)) continue; // special ranks don't count
-    counts[r] = (counts[r] || 0) + 1;
-  }
-  const entries = Object.entries(counts);
-  if (!entries.length) return null;
+  });
+  const resolved = resolvePartyDungeonRank(playerRanks, {
+    ladder: PARTY_RANK_LADDER,
+    total: state.players.length,
+  });
+  if (!resolved) return null;
 
-  // Most common rank; ties resolved to the higher of the tied ranks.
-  let commonRank = entries[0][0];
-  let commonCount = entries[0][1];
-  for (const [rank, n] of entries) {
-    if (
-      n > commonCount ||
-      (n === commonCount &&
-        PARTY_RANK_LADDER.indexOf(rank) > PARTY_RANK_LADDER.indexOf(commonRank))
-    ) {
-      commonRank = rank;
-      commonCount = n;
-    }
-  }
-
-  const commonIdx = PARTY_RANK_LADDER.indexOf(commonRank);
-  const newRank = PARTY_RANK_LADDER[
-    Math.min(PARTY_RANK_LADDER.length - 1, commonIdx + 1)
-  ];
-  const rankData = DUNGEON_RANKS[newRank];
+  const rankData = DUNGEON_RANKS[resolved.newRank];
   if (!rankData) return null;
 
   const oldRank = state.dungeonRank;
-  // Re-derive every rank-dependent field (mirrors initAdventure's setup):
-  state.dungeonRank = newRank;
+  state.dungeonRank = resolved.newRank;
   state.difficulty = rankData.difficulty;
   state.maxEncounters = rankData.encounters;
   state.dungeonName = rankData.name;
-  // Special-rank dungeons (DRAGON/GOD) keep their bespoke handling - a
-  // recalibrated group can never be promoted into those.
   if (state.trialTarget) state.trialTarget = null;
 
-  return { oldRank, newRank, commonRank, commonCount, total: state.players.length };
+  return { ...resolved, oldRank, total: state.players.length };
 }
 
 async function startJourney(sock, sessionKey) {
@@ -9637,15 +9606,18 @@ async function startJourney(sock, sessionKey) {
   if (!state.solo && !state.isRankRecalibrated) {
     state.isRankRecalibrated = true; // never recalibrate twice on a session
     const recal = recalibratePartyRank(state);
-    if (recal && recal.newRank !== recal.oldRank) {
+    if (recal && recal.mixed) {
       state.rankNote =
-        `🎯 *Raid rank set by the party:* mostly ${recal.commonRank}-rank heroes` +
-        ` (${recal.commonCount}/${recal.total}) -> this raid runs at *${recal.newRank}-rank*` +
-        ` (one above the party's common rank).`;
+        `⚠️ *Mixed-tier party warning:* members range from ${recal.lowestRank} to ${recal.highestRank} rank.` +
+        ` This dungeon is set to *${recal.newRank}-rank* based on the lowest-ranked member (${recal.lowestRank}),` +
+        ` not the highest-ranked player, so lower-tier heroes aren't forced into dangerous content.`;
+    } else if (recal && recal.newRank !== recal.oldRank) {
+      state.rankNote =
+        `🎯 *Raid rank set by the party:* ${recal.commonCount}/${recal.rankedCount} ranked heroes are ${recal.commonRank}-rank` +
+        ` -> this raid runs at *${recal.newRank}-rank* (one above the party rank).`;
     } else if (recal) {
       state.rankNote =
-        `🎯 *Raid rank set by the party:* mostly ${recal.commonRank}-rank heroes` +
-        ` -> this raid runs at *${recal.newRank}-rank*.`;
+        `🎯 *Raid rank set by the party:* ${recal.commonRank}-rank heroes -> *${recal.newRank}-rank* dungeon.`;
     }
   }
   state.phase = "SHOPPING";
