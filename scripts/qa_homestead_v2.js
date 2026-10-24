@@ -158,11 +158,13 @@ function section(t) { console.log(`\n══ ${t} ══`); }
     {
         // clean room: one chair at (5,5)
         await stage(QA, [{ item: 'chair_wood', x: 5, y: 5, uid: 'c1' }], []);
-        await homestead.handleCommand(makeCtx(QA, '.j home select chair_wood'));
-        ok(lastMedia() && (lastMedia().video || lastMedia().image), 'select renders grid preview media');
-        ok((lastMedia()?.caption || '').includes('Selected'), 'preview caption names the selection');
-        // directional move: right (+X)
-        await homestead.handleCommand(makeCtx(QA, '.j home move right 2'));
+        await homestead.handleCommand(makeCtx(QA, '.j home select'));
+        ok((lastMedia()?.caption || '').includes('Select mode is on'), 'no-argument select opens the simplified picker');
+        await homestead.handleQuickInput(makeCtx(QA, '1'));
+        ok(lastMedia() && (lastMedia().video || lastMedia().image), 'bare inventory number selects an item');
+        ok((lastMedia()?.caption || '').includes('Selected'), 'bare selection previews and names the chosen item');
+        // Plain replies work after selecting: right (+X), with no ".j home" prefix.
+        await homestead.handleQuickInput(makeCtx(QA, 'right 2'));
         const after1 = await Homestead.findOne({ userId: QA }).lean();
         const c1 = after1.placed.find((p) => p.item === 'chair_wood');
         ok(c1.x === 7, `move right 2 → x 5→${c1.x}`);
@@ -172,12 +174,12 @@ function section(t) { console.log(`\n══ ${t} ══`); }
         const c2 = after2.placed.find((p) => p.item === 'chair_wood');
         ok(c2.x === 11, `directional move clamps to grid bounds (x=${c2.x})`);
         // moveto with relocation
-        await homestead.handleCommand(makeCtx(QA, `.j home moveto 4 4`));
+        await homestead.handleQuickInput(makeCtx(QA, '4 4'));
         const after3 = await Homestead.findOne({ userId: QA }).lean();
         const c3 = after3.placed.find((p) => p.item === 'chair_wood');
         ok(c3.x === 4 && c3.y === 4, `moveto lands (${c3.x},${c3.y})`);
         // rotate toggles f
-        await homestead.handleCommand(makeCtx(QA, '.j home rotate'));
+        await homestead.handleQuickInput(makeCtx(QA, 'rotate'));
         const after4 = await Homestead.findOne({ userId: QA }).lean();
         const c4 = after4.placed.find((p) => p.item === 'chair_wood');
         ok(c4.f === true, 'rotate sets flip flag (f=true)');
@@ -185,7 +187,7 @@ function section(t) { console.log(`\n══ ${t} ══`); }
         const after5 = await Homestead.findOne({ userId: QA }).lean();
         ok(after5.placed.find((p) => p.item === 'chair_wood').f === false, 'rotate toggles back (f=false)');
         // store by selection
-        await homestead.handleCommand(makeCtx(QA, '.j home store'));
+        await homestead.handleQuickInput(makeCtx(QA, 'store'));
         const after6 = await Homestead.findOne({ userId: QA }).lean();
         ok(!(after6.placed || []).some((p) => p.item === 'chair_wood'), 'store by selection removes from room');
         ok((after6.owned || []).some((o) => o.id === 'chair_wood' && o.uid), 'stored instance keeps its uid in storage');

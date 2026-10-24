@@ -92,6 +92,10 @@ function selGet(jid) {
 }
 // ── placement mode (§5 inventory flow): jid → owned item id awaiting placement ──
 const pendingPlace = new Map();
+// Explicit furniture picker mode: the next bare number/name selects an item.
+// Session-scoped by sender and short-lived so normal chat is never hijacked.
+const selectMode = new Map();
+const SELECT_MODE_TTL_MS = 5 * 60 * 1000;
 // ── BARE-MOVE previews (owner 21:34Z "just use right left or coords directly
 // with a timer"): direct moves ack with TEXT instantly (no 10-25s bake per
 // step) and the animated preview renders ONCE on a 2.5s idle timer — rapid
@@ -528,27 +532,11 @@ async function cmdPlace(ctx, rec, args) {
 async function cmdSelect(ctx, rec, args) {
     const query = args.join(' ');
     if (!query) {
-        const sel = selGet(ctx.senderJid);
-        if (sel === 'EXPIRED') return ctx.reply(`⏱️ Selection expired (holds 5 min) — pick it again: \`${ctx.prefix} home select <number|name>\`.`);
-        if (sel) {
-            const p = rec.placed.find((q) => q.uid === sel);
-            if (!p) { selection.delete(ctx.senderJid); return ctx.reply('🕯️ That selection is gone — pick another piece.'); }
-            return viewRoom(ctx, rec, gridOptsFor(p, renderer.itemDef(p.item)));
+        if (!rec.owned.length && !rec.placed.length) {
+            selectMode.delete(ctx.senderJid);
+            return cmdInventory(ctx, rec);
         }
-        // §5 placement mode still armed? → show the grid for the pending piece
-        const pendId = pendingPlace.get(ctx.senderJid);
-        if (pendId) {
-            const pd = renderer.itemDef(pendId);
-            if (pd) {
-                const spot = findFreeSpot(rec, pd);
-                const grid = spot ? { x: spot.x, y: spot.y, fw: pd.fw, fh: pd.fh, valid: true, label: `${pd.name} → (${spot.x},${spot.y})` } : null;
-                // v5: placement ghost — the pending piece glows at its preview spot
-                const hl = spot ? { item: pd.id, x: spot.x, y: spot.y, valid: true } : null;
-                return viewRoom(ctx, rec, { grid, hl, hint: `Placement mode — *${pd.name}*. Confirm: \`${ctx.prefix} home place ${pd.id} <x> <y>\` (or bare \`${ctx.prefix} home place ${pd.id}\`). Cancel: \`${ctx.prefix} home deselect\`.` });
-            }
-            pendingPlace.delete(ctx.senderJid);
-        }
-        // §5 (redesign): no selection → NAMES CARD of every furniture item owned
+        selectMode.set(ctx.senderJid, Date.now());
         return cmdInventory(ctx, rec);
     }
     // Numbered law (one numbering with the furniture card — renderer
@@ -561,6 +549,7 @@ async function cmdSelect(ctx, rec, args) {
         if (!row || !row.d || !row.d.id) {
             return ctx.reply(`❌ No piece #${query} — you own ${rows.length} piece${rows.length === 1 ? '' : 's'}. \`${ctx.prefix} home select\` lists them with their numbers.`);
         }
+        selectMode.delete(ctx.senderJid);
         if (!row.placed) {
             // storage row → placement mode (same flow as select-by-name on storage)
             const it = row.d;
@@ -588,6 +577,7 @@ async function cmdSelect(ctx, rec, args) {
         if (rec.owned.some((o) => o.id === it.id)) {
             // §5: owned-but-unplaced → PLACEMENT MODE (grid preview + suggested spot)
             pendingPlace.set(ctx.senderJid, it.id);
+            selectMode.delete(ctx.senderJid);
             selClear(ctx.senderJid);
             const spot = findFreeSpot(rec, it);
             const grid = spot ? { x: spot.x, y: spot.y, fw: it.fw, fh: it.fh, valid: true, label: `${it.name} → (${spot.x},${spot.y})` } : null;
@@ -596,6 +586,7 @@ async function cmdSelect(ctx, rec, args) {
         return ctx.reply(`❌ You don't own a *${it.name}*. Your furniture: \`${ctx.prefix} home select\` • Shop: \`${ctx.prefix} home catalog\`.`);
     }
     const p = cand[0];
+    selectMode.delete(ctx.senderJid);
     selSet(ctx.senderJid, p.uid);
     pendingPlace.delete(ctx.senderJid);
     await viewRoom(ctx, rec, { ...gridOptsFor(p, it), hint: `Selected the *${it.name}*. Move it with \`${ctx.prefix} home move <left|right|up|down>\`` });
@@ -617,8 +608,11 @@ async function cmdInventory(ctx, rec, page) {
     if (pg > totalPages) pg = totalPages;
     const slice = rows.slice((pg - 1) * per, pg * per);
     const list = slice.map((r) => `#${r.n} ${r.d.name || r.d.id}${r.placed ? ` — ${r.status}` : ' — 📦 storage'}`).join('\n');
+    const selectHint = selectMode.has(ctx.senderJid)
+        ? `\n\n🟡 *Select mode is on.* Reply with the item's number or name. Type \`cancel\` to exit.`
+        : '';
     const cap = `🪑 *Your Furniture* — page ${pg}/${totalPages} — 📍 ${rec.placed.length} placed • 📦 ${rec.owned.length} in storage\n\n` +
-        `${list}\n\n` +
+        `${list}${selectHint}\n\n` +
         `_${ctx.prefix} home select <number|name> — select it • ${ctx.prefix} home remove <numbers> — pick up (2-5 works)_\n` +
         `_${ctx.prefix} home right/left/up/down — steer it • ${ctx.prefix} home to loft/east/… — hop spaces_` +
         (pg < totalPages ? `\n_${ctx.prefix} home inv ${pg + 1} — next page_` : '');
@@ -1146,6 +1140,93 @@ function cmdHelp(ctx) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Handle short, unprefixed WhatsApp replies while a user is editing furniture.
+ * Returns true only when a recognized editing input was consumed; ordinary
+ * chat text passes through untouched. Select mode accepts a bare number/name;
+ * active selection accepts bare directions, coordinates, room hops, and edits.
+ */
+async function handleQuickInput(ctx) {
+    const raw = String(ctx.rawText || ctx.text || '').trim();
+    const prefix = String(ctx.prefix || '').toLowerCase();
+    if (!raw || raw.startsWith('.') || (prefix && raw.toLowerCase().startsWith(prefix))) return false;
+
+    const jid = ctx.senderJid;
+    const now = Date.now();
+    const modeAt = selectMode.get(jid);
+    if (modeAt && now - modeAt > SELECT_MODE_TTL_MS) selectMode.delete(jid);
+    const inSelectMode = selectMode.has(jid);
+    const hasSelection = selection.has(jid);
+    const pendingId = pendingPlace.get(jid);
+    if (!inSelectMode && !hasSelection && !pendingId) return false;
+
+    const input = raw.replace(/\s+/g, ' ').trim();
+    const lower = input.toLowerCase();
+    const coords = /^(?:to\s+)?(-?\d+)\s*(?:,\s*|\s+)(-?\d+)$/.exec(lower);
+    const dir = /^(right|r|east|left|l|west|down|d|south|up|u|north|upright|ur|upleft|ul|downright|dr|downleft|dl)(?:\s+(\d+))?$/.exec(lower);
+    const space = /^(?:to|room|space)\s+(main|hall|ground|floor|loft|upstairs|top|east|e|south|s|front|north|n|back|west|w|left|right|up|down)$/.exec(lower);
+    const remove = /^(remove|pick\s+up)\s+(.+)$/i.exec(input);
+    const promptAgain = /^(select|choose|pick|list|inventory)$/i.test(lower);
+    const cancel = /^(cancel|exit|done|stop)$/i.test(lower);
+    const rotate = /^(rotate|turn)$/i.test(lower);
+    const store = /^(store|put\s+away)$/i.test(lower);
+    const bareSelection = inSelectMode && (/^\d+$/.test(lower) || !!resolveItem(input));
+
+    if (cancel) {
+        selectMode.delete(jid);
+        selClear(jid);
+        pendingPlace.delete(jid);
+        await ctx.reply('✋ Furniture editing closed. Your room is unchanged unless you already moved something.');
+        return true;
+    }
+    if (promptAgain) {
+        selectMode.set(jid, Date.now());
+        const rec = await loadRec(jid);
+        await cmdInventory(ctx, rec);
+        return true;
+    }
+    if (!bareSelection && !(pendingId && coords) &&
+        !(hasSelection && (dir || coords || space || remove || rotate || store))) {
+        return false;
+    }
+
+    const rec = await loadRec(jid);
+    if (pendingId && coords) {
+        await cmdPlace(ctx, rec, [pendingId, coords[1], coords[2]]);
+        return true;
+    }
+    if (bareSelection) {
+        await cmdSelect(ctx, rec, [input]);
+        return true;
+    }
+    if (hasSelection && dir) {
+        await cmdMoveFast(ctx, rec, dir[1], dir[2] ? [dir[2]] : []);
+        return true;
+    }
+    if (hasSelection && coords) {
+        await cmdMoveFastTo(ctx, rec, Number(coords[1]), Number(coords[2]));
+        return true;
+    }
+    if (hasSelection && space) {
+        await cmdTo(ctx, rec, [space[1]]);
+        return true;
+    }
+    if (hasSelection && rotate) {
+        await cmdRotate(ctx, rec);
+        return true;
+    }
+    if (hasSelection && store) {
+        await cmdStore(ctx, rec, [], 'store');
+        return true;
+    }
+    if (hasSelection && remove) {
+        await cmdStore(ctx, rec, remove[2].trim().split(/\s+/), 'remove');
+        return true;
+    }
+    return false;
+}
+
 // ENTRY — called from engine.js
 // ctx: { sock, chatId, senderJid, m, reply, text, prefix }
 //   text = full lowercased command text (".j home place bed 3 4")
@@ -1242,6 +1323,8 @@ async function handleCommand(ctx) {
                 return cmdPlace(ctx, rec, args);
             case 'select': case 'sel': case 'grab':
                 return cmdSelect(ctx, rec, args);
+            case 'edit': case 'arrange':
+                return cmdSelect(ctx, rec, []);
             case 'move': case 'nudge':
                 return cmdMove(ctx, rec, args);
             case 'moveto': case 'goto': case 'send':
@@ -1303,4 +1386,4 @@ async function helpText(ctx) {
     return `🏠 *THE HOMESTEAD*\n• \`${p} home\` (base map) • \`${p} house\` (interior) • \`${p} home catalog\`\n• \`${p} home buy/place/select/move/moveto/rotate/store\` • \`${p} home themes\` • \`${p} home visit @user\``;
 }
 
-module.exports = { handleCommand, loadRec, viewRoom };
+module.exports = { handleCommand, handleQuickInput, loadRec, viewRoom };

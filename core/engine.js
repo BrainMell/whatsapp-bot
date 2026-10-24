@@ -14696,6 +14696,22 @@ Usage: ${newUsage}/5${warningText}`;
                   }
 
                   // ============================================
+                  // Contextual furniture controls: while a homestead editing session is active,
+                  // let replies like "7", "left", "3 4", or "to loft" work without a command prefix.
+                  // The module consumes only recognized editing inputs and leaves ordinary chat alone.
+                  if (!_looksLikeCmd && txt) {
+                    try {
+                      const _homeQuickHandled = await require("./rpg/homestead").handleQuickInput({
+                        sock, chatId, senderJid, m, reply,
+                        text: lowerTxt, rawText: txt, prefix: botConfig.getPrefix(),
+                        isMod: isOwner || isGlobalMod(senderJid) || isRpgMod(senderJid) || overrideUsers.has(senderJid),
+                      });
+                      if (_homeQuickHandled) return;
+                    } catch (_homeQuickErr) {
+                      console.error("[homestead] quick input error:", _homeQuickErr.message);
+                    }
+                  }
+
                   // HOMESTEAD — isometric house builder (base builder)
                   // ============================================
 
