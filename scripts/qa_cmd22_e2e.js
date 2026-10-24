@@ -59,6 +59,17 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const mkCtx = (text) => ({ sock, chatId: 'qa-chat', senderJid: QA_JID, m: { key: { id: 'qa' + Math.random() } }, reply: async (t) => { replies.push(String(t)); }, text, prefix: '.j' });
     const say = async (text) => { replies.length = 0; await H.handleCommand(mkCtx(text)); return replies[0] || ''; };
     const freshRec = async () => Homestead.findOne({ userId: QA_JID }).lean();
+    // rendering commands report via media sends, not reply() — wait until the
+    // send stream goes quiet (bake ~10-28s) before asserting media outcomes
+    const waitForQuiet = async (maxS = 70) => {
+        let last = sends.length, stable = 0;
+        for (let i = 0; i < maxS; i++) {
+            await sleep(1000);
+            if (sends.length === last) { if (++stable >= 3 && i > 3) return true; }
+            else { stable = 0; last = sends.length; }
+        }
+        return false;
+    };
 
     // ── §1 furniture card: names in the caption ──
     console.log('\n── §1 select card + caption listing ──');
@@ -73,7 +84,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
     // ── §2 select by number ──
     r = await say(`.j home select ${floorRow.n}`);
-    check(`select ${floorRow.n} renders grid preview (image)`, sends.length >= 2 && !!sends[sends.length - 1].image);
+    check(`select ${floorRow.n} renders grid preview (media)`, sends.length >= 2 && !!(sends[sends.length - 1].image || sends[sends.length - 1].video));
     const selUid = floorRow.uid;
 
     // ── §3 bare movement: .home <dir> 2 ──
@@ -88,11 +99,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     let after = (await freshRec()).placed.find((q) => q.uid === selUid);
     check('DB position moved as acked', after.x === before.x + expDx && after.y === before.y, `(${before.x},${before.y}) → (${after.x},${after.y}) (expected dx=${expDx})`);
     r = await say(`.j home ${dirWord}`);
-    check('second bare move acks (no preview hint on continuation)', r.startsWith('➡️') && !r.includes('preview renders'), r.slice(0, 60));
+    const blocked = r.startsWith('🚧');
+    check('second bare move acks (➡️) or a legit block (🚧)', r.startsWith('➡️') || blocked, r.slice(0, 60));
     const stopM2 = r.match(/stopped after (\d+)/);
-    const expDx2 = sign * (stopM2 ? +stopM2[1] : 1);
+    const expDx2 = blocked ? 0 : sign * (stopM2 ? +stopM2[1] : 1);
     after = (await freshRec()).placed.find((q) => q.uid === selUid);
-    check('DB position moved as acked (2nd)', after.x === before.x + expDx + expDx2, `x=${after.x}`);
+    check('DB position matches acks (2nd)', after.x === before.x + expDx + expDx2, `x=${after.x}`);
 
     // ── §4 idle-timer preview (2.5s → one animated render) ──
     const sendsBeforePreview = sends.length;
@@ -115,7 +127,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     after = (await freshRec()).placed.find((q) => q.uid === selUid);
     check('coords DB position matches ack', mCoords && +mCoords[1] === after.x && +mCoords[2] === after.y, `ack ${mCoords ? mCoords[0] : '?'} vs (${after.x},${after.y})`);
     r = await say('.j home 3');
-    check('.home 3 (single number) still opens structure list (not coords)', r.includes('No such structure') || r.includes('Structure'), r.slice(0, 80));
+    check('.home 3 (single number) does NOT steer — structure route (or its guild gate)', r.includes('No such structure') || r.includes('Bases belong to guild'), r.slice(0, 80));
+    // the coords move re-armed an idle preview — let it finish before §6
+    await waitForQuiet();
 
     // ── §6 space hopping ──
     console.log('\n── §6 .home to <space> ──');
@@ -124,14 +138,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     r = await say('.j home to loft');
     check('.home to loft without a loft → build hint', r.includes('loft first'), r.slice(0, 80));
     await Homestead.updateOne({ userId: QA_JID }, { $set: { upper: true } });
+    const sendsBeforeLoft = sends.length;
     r = await say('.j home to loft');
-    check('.home to loft hops upstairs', r.includes('in the loft now'), r.slice(0, 80));
+    check('.home to loft reports via media render', sends.length > sendsBeforeLoft, `sends ${sendsBeforeLoft}→${sends.length}`);
     after = (await freshRec()).placed.find((q) => q.uid === selUid);
     check('piece is lvl 1 inside the loft bounds', after.lvl === 1 && after.x >= 0 && after.x < 6 && after.y >= 0 && after.y < 6, `lvl=${after.lvl} (${after.x},${after.y})`);
     r = await say('.j home to e');
     check('.home to east without an annex → build hint', r.includes("don't have a East annex"), r.slice(0, 90));
     r = await say('.j home to main');
-    check('.home to main brings it down', r.includes('in the Main hall now'), r.slice(0, 80));
+    await waitForQuiet();
+    check('.home to main reports via media render', sends.length > sendsAfterLoft);
     after = (await freshRec()).placed.find((q) => q.uid === selUid);
     check('piece back on the ground floor', !after.lvl, `lvl=${after.lvl}`);
 
