@@ -691,7 +691,8 @@ async function animateUltimate(options = {}) {
   if (!state || !player || !ability || player.isEnemy || player.isSummon) return false;
   const classId = String(player.class?.id || player.classId || '').toUpperCase();
   const entry = getSignature(classId, ability.id);
-  if (!entry || state.inCombat === false) return false;
+  const isCombatContext = state.inCombat === true || String(state.phase || '').toUpperCase() === 'COMBAT';
+  if (!entry || !isCombatContext) return false;
 
   const liveEnemies = (state.enemies || []).filter((e) => e && !e.isDead && Number(e.currentHP ?? e.stats?.hp ?? 1) > 0);
   const requestedIndex = Number.isFinite(Number(options.targetIndex)) ? Number(options.targetIndex) : -1;
