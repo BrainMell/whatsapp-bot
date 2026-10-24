@@ -7126,6 +7126,8 @@ ${targetCategory}`;
         `Type \`${prefix} bots\` to see which bot instances are online right now.`,
         `The GAMES category has Wordle and more - type \`${prefix} menu games\` to browse.`,
         `Search the web straight from chat: \`${prefix} search <query>\`.`,
+        `Search the ENTIRE card pool with \`${prefix} gs <text> tier=5 maker=x\` — and \`${prefix} mcount <maker>\` counts a maker's cards.`,
+        `Abilities codex got pages? Just REPLY to it with \`2\` or \`3\` to flip — no retyping.`,
         `Turn images into stickers with the STICKERS tools - \`${prefix} menu stickers\`.`,
         `Interactions (\`${prefix} hug\`, \`${prefix} slap\`...) - \`${prefix} reactions\` lists them all.`,
         // 💡 2026-10-11: tips for the new-generation features (menu freshness pass).
@@ -10851,6 +10853,27 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                   // ── PERSISTENT SELECTION LOGIC (For search results) ────────────────
                   const numOnly = lowerTxt.match(/^([1-9][0-9]*)$/);
                   if (numOnly) {
+                    // ── ABILITIES CODEX reply-paging (2026-10-24, Mellow) ──
+                    // Reply "2"/"3" to a codex message flips to that page.
+                    // Quoting the codex is the most specific intent signal,
+                    // so this check runs before the other bare-number flows.
+                    // Session map auto-expires in 5 min — nothing can hang.
+                    try {
+                      const abQuotedId = getQuotedMessageId(m);
+                      if (abQuotedId && skillCommands.handleAbilitiesPageReply) {
+                        const abHandled = await skillCommands.handleAbilitiesPageReply(
+                          sock, chatId, senderJid, abQuotedId, numOnly[1],
+                        );
+                        if (abHandled) {
+                          await sock.sendMessage(chatId, {
+                            react: { text: "✅", key: m.key },
+                          });
+                          return;
+                        }
+                      }
+                    } catch (abErr) {
+                      console.error("[abilities] page-reply error:", abErr?.message || abErr);
+                    }
                     // If powerscale is waiting for a pick, handle it here
                     if (hasPendingSelection(chatId)) {
                       const selectedNumber = numOnly[1];
@@ -12559,7 +12582,10 @@ _💡 Reply with another number from your search list!_`.trim();
 
                     // .j abilities / .j skills
                     if (primaryCmd === "abilities" || primaryCmd === "skills") {
-                      // FIX 2026-09-16: page arg - `.j abilities 2` shows page 2.
+                      // 2026-10-24 (Mellow): arg routing lives inside
+                      // viewAbilities — `<id|name|n>` inspects a specific
+                      // ability (2026-10-11 overhaul), page flips ride as
+                      // REPLIES to the codex message (see numOnly gate above).
                       await skillCommands.viewAbilities(
                         sock,
                         chatId,

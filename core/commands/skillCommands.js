@@ -772,7 +772,54 @@ async function getSocketBoardData(senderJid) {
     return { rows, totalSocketed, totalSlots };
 }
 
-async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
+// ── 2026-10-24 (Mellow: ".j abilities <id>" was doing double duty — one use
+// "viewing abilities ids", the other "move to the next ability page" — and the
+// command could feel like it hangs) ──────────────────────────────────────────
+// Resolution: page numbers now ride as REPLIES to the codex message itself
+// (reply "2"/"3" → that page), the how-to is printed ON the codex footer, and
+// every stage is bounded: card render races an 8s timer (text fallback wins),
+// page sessions auto-expire after 5 minutes, and expiry is lazy (no timers,
+// nothing left running to hang).
+const ABILITIES_PAGE_TTL_MS = 5 * 60 * 1000;
+const abilitiesPageSessions = new Map(); // sent codex msgId -> session
+
+function registerAbilitiesSession(msgId, session) {
+    if (!msgId) return;
+    const now = Date.now();
+    for (const [k, v] of abilitiesPageSessions) {
+        if (now > v.expiresAt) abilitiesPageSessions.delete(k);
+    }
+    abilitiesPageSessions.set(String(msgId), {
+        ...session,
+        expiresAt: now + ABILITIES_PAGE_TTL_MS,
+    });
+}
+
+// Returns true if this reply WAS a codex page-flip (caller stops processing).
+async function handleAbilitiesPageReply(sock, chatId, senderJid, quotedId, pageStr) {
+    const key = String(quotedId || '');
+    if (!key || !abilitiesPageSessions.size) return false;
+    const session = abilitiesPageSessions.get(key);
+    if (!session) return false;
+    abilitiesPageSessions.delete(key); // one-shot; the re-render registers the new id
+    if (Date.now() > session.expiresAt) return false;
+    if (session.ownerJid !== senderJid) return false; // not your codex — ignore silently
+    const page = parseInt(pageStr, 10);
+    if (!Number.isFinite(page) || page < 1 || page > session.totalPages) {
+        await sock.sendMessage(chatId, {
+            text: `↩ That codex has *${session.totalPages}* page${session.totalPages === 1 ? '' : 's'} — reply with a number between 1 and ${session.totalPages}.`,
+        });
+        return true;
+    }
+    // Re-render the requested page; registers the fresh message id so the
+    // flip chain can continue (2 → 3 → …) until the TTL runs out.
+    // forcePage: with the 2026-10-11 inspection mode, a small numeric arg
+    // means "inspect ability #N" — the reply path must render the PAGE.
+    await viewAbilities(sock, chatId, senderJid, session.senderName, String(page), { forcePage: true });
+    return true;
+}
+
+async function viewAbilities(sock, chatId, senderJid, senderName, pageArg, opts = {}) {
     economy.initializeClass(senderJid);
     const user = economy.getUser(senderJid);
     const userClass = economy.getUserClass(senderJid);
@@ -927,7 +974,10 @@ async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
     // (numbers = the list numbering, ids = exact, names = exact then substring)
     // and renders the stylised inspection card. Anything that doesn't resolve
     // falls through to the legacy list/pagination below.
-    if (pageArg !== undefined && pageArg !== null && String(pageArg).trim() !== '') {
+    // ⛔ skipped when opts.forcePage — the reply-paging path must render a
+    // PAGE even for small numbers (that's the whole point of moving paging
+    // off the ambiguous numeric arg, Mellow 2026-10-24).
+    if (!opts.forcePage && pageArg !== undefined && pageArg !== null && String(pageArg).trim() !== '') {
         const q = String(pageArg).trim();
         let hit = null;
         if (/^\d{1,3}$/.test(q)) {
@@ -1002,8 +1052,11 @@ async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
             }
         }
         if (totalPages > 1) {
-            const nextPage = page < totalPages ? page + 1 : 1;
-            t += `📄 \`${getPrefix()} abilities ${nextPage}\` for page ${nextPage}/${totalPages}\n`;
+            // 2026-10-24 (Mellow): numbers typed at the command now INSPECT a
+            // specific ability (2026-10-11 overhaul), so the old
+            // ".abilities <n> for page" advice was a lie. Paging rides on the
+            // message itself: reply "2"/"3" to THIS codex message.
+            t += `↩ *Reply to this message* with \`2\`–\`${totalPages}\` to flip pages (5 min)\n`;
         }
         t += `💡 \`${getPrefix()} combat ability <num>\` in battle\n`;
         t += `📊 \`${getPrefix()} skill tree\` to learn more skills`;
@@ -1046,23 +1099,37 @@ async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
             }
         }
         if (pageGroups.length) {
-            abBuf = await goService.generatePortraitCard({
-                kind: 'ABILITIES',
-                // 🧩 SPRITE CONSISTENCY 2026-09-17: hero sprite fields.
-                playerClass: String((userClass && userClass.id) || '').toUpperCase(),
-                playerIndex: Math.max(0, Math.floor(Number(user && user.spriteIndex) || 0)),
-                style: (() => { try { return (user && user.cardStyle) || 0; } catch (e) { return 0; } })(),
-                nickname: senderName,
-                className: userClass.name,
-                level,
-                groups: pageGroups,
-                sealText: String(user.adventurerRank || 'F').toUpperCase(),
-                docTitle: doc.title,
-                docQuote: doc.quote,
-                pageLabel: totalPages > 1 ? `PAGE ${page}/${totalPages}` : '',
-                startNumber: (page - 1) * PAGE_SIZE + 1,
-                caption: `cast with .combat ability <num>`,
-            });
+            // ⏱️ 2026-10-24 (Mellow: "it shouldn't hang so terminate after abit"):
+            // race the render against a hard 8s timer. goService already caps
+            // axios at 10s, but a sick service + queue wait could still stack
+            // delays — the race guarantees the codex (text form) always lands.
+            let renderTimer;
+            try {
+                abBuf = await Promise.race([
+                    goService.generatePortraitCard({
+                        kind: 'ABILITIES',
+                        // 🧩 SPRITE CONSISTENCY 2026-09-17: hero sprite fields.
+                        playerClass: String((userClass && userClass.id) || '').toUpperCase(),
+                        playerIndex: Math.max(0, Math.floor(Number(user && user.spriteIndex) || 0)),
+                        style: (() => { try { return (user && user.cardStyle) || 0; } catch (e) { return 0; } })(),
+                        nickname: senderName,
+                        className: userClass.name,
+                        level,
+                        groups: pageGroups,
+                        sealText: String(user.adventurerRank || 'F').toUpperCase(),
+                        docTitle: doc.title,
+                        docQuote: doc.quote,
+                        pageLabel: totalPages > 1 ? `PAGE ${page}/${totalPages}` : '',
+                        startNumber: (page - 1) * PAGE_SIZE + 1,
+                        caption: `cast with .combat ability <num>`,
+                    }),
+                    new Promise((_, reject) => {
+                        renderTimer = setTimeout(() => reject(new Error('abilities render timeout (8s)')), 8000);
+                    }),
+                ]);
+            } finally {
+                if (renderTimer) clearTimeout(renderTimer);
+            }
         }
     } catch (e) {
         console.error('[abilities] card render failed:', e?.message || e);
@@ -1075,17 +1142,27 @@ async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
         if (head.length > 980) { // cut on a whole-line boundary, never mid-ability
             const lines = head.split('\n'); head = '';
             for (const ln of lines) { if ((head + ln + '\n').length > 940) break; head += ln + '\n'; }
-            head = head.trimEnd() + `\n…more with \`${getPrefix()} abilities <page>\``;
+            // 2026-10-24 (Mellow): if the cut ate the reply-hint footer, the
+            // trailer must still carry the paging instruction (numbers typed
+            // at the command now INSPECT — they don't flip pages).
+            head = head.trimEnd() + `\n…flip pages by *replying to this message* with the page number`;
         }
-        await sock.sendMessage(chatId, {
+        const sentImg = await sock.sendMessage(chatId, {
             image: abBuf,
             caption: getBotMarker() + head,
             mimetype: 'image/jpeg',
         });
+        // Track the codex message so a numeric REPLY to it flips pages.
+        registerAbilitiesSession(sentImg?.key?.id, {
+            ownerJid: senderJid, chatId, senderName, totalPages,
+        });
         return;
     }
 
-    await sock.sendMessage(chatId, { text: getBotMarker() + abilitiesText });
+    const sentTxt = await sock.sendMessage(chatId, { text: getBotMarker() + abilitiesText });
+    registerAbilitiesSession(sentTxt?.key?.id, {
+        ownerJid: senderJid, chatId, senderName, totalPages,
+    });
 }
 
 // ==========================================
@@ -1554,6 +1631,7 @@ module.exports = {
     upgradeSkill,
     resetSkills,
     viewAbilities,
+    handleAbilitiesPageReply,
     learnSkill,
     handleEvolve,
     sendAbilityInspection,
