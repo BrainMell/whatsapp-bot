@@ -37,7 +37,7 @@ jobs:
           node --check scripts/abyss_visual_qa.js
           node scripts/qa_party_dungeon_rank.js
           node scripts/qa_homestead_glb.js
-          node scripts/abyss_visual_qa.js
+          node scripts/qa_facing_contract.js
 
       - name: SSH and Deploy (smart auth precedence)
         uses: appleboy/ssh-action@v1.0.3
