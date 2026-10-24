@@ -63,7 +63,7 @@ const THEMES = {
 // ── top-bunk floor (mezzanine) geometry ──
 // tier 1 = 4x3-tile decks along the left wall, tier 2 = grand 6x5 decks.
 // LIFT is the deck walking surface above the floor, in art px.
-const MEZZ_LIFT = 86;
+const MEZZ_LIFT = 54;   // housekit-v5: deck GLB top surface 1.38m x 39.19 px/m (pitch-30 law)
 function mezzDepthOf(state) { const t = state.mezz | 0; return t >= 2 ? 6 : (t ? 4 : 0); }
 
 // ── rarity chrome for cards ──
@@ -128,6 +128,35 @@ async function img(file) {
     return out;
 }
 
+// ── housekit-v5 asset metadata ──
+let KIT_META = null;
+function kitSprite(name) {
+    if (!KIT_META) {
+        try { KIT_META = JSON.parse(fs.readFileSync(path.join(ASSETS, 'kit', 'kit.json'), 'utf8')); }
+        catch (e) { KIT_META = { sprites: {} }; }
+    }
+    return KIT_META.sprites[name] || null;
+}
+let HOUSEKIT = null;
+function houseKitItem(id) {
+    if (!HOUSEKIT) {
+        try { HOUSEKIT = JSON.parse(fs.readFileSync(path.join(ASSETS, 'housekit', 'manifest.json'), 'utf8')); }
+        catch (e) { HOUSEKIT = { items: {} }; }
+    }
+    return (HOUSEKIT.items || {})[id] || null;
+}
+// manifest-driven furniture sprite: GLB-baked sprite when the manifest has the
+// item, legacy 2D PNG as the explicit documented fallback otherwise.
+async function itemSprite(id) {
+    const hk = houseKitItem(id);
+    if (hk && hk.fallback !== true) {
+        const s = await img(`housekit/${hk.sprite}`);
+        if (s) return { spr: s, hk };
+    }
+    const s = await img(`${id}.png`);
+    return { spr: s, hk };
+}
+
 let CATALOG = null;
 function catalog() {
     if (!CATALOG) {
@@ -190,12 +219,22 @@ async function drawKitWalls(ctx, theme, seed) {
     const base = await img(`${theme.wallKit}.png`);
     if (!base) return false;
     const win = await img(`${theme.wallKit}_win.png`);
-    const paint = (spr, bx, by, mirror) => {
+    const baseMeta = kitSprite(theme.wallKit);
+    const winMeta = win ? kitSprite(`${theme.wallKit}_win`) : null;
+    const paint = (spr, bx, by, mirror, meta) => {
         ctx.save();
         ctx.translate(bx, by);
         if (mirror) ctx.scale(-1, 1);
-        ctx.transform(1, 0.5, 0, 1, 0, 0);   // base line slants at the room's 2:1
-        ctx.drawImage(spr, 0, -WALL_H, KIT_SEG_W, WALL_H + KIT_SKIRT);
+        if (meta && meta.ax != null) {
+            // housekit-v5: TRUE-ISO GLB wall renders — natural size, anchored
+            // at the centerline base left end (ax/ay from kit.json), no shear.
+            const ax = mirror && meta.w ? (meta.w - meta.ax) : meta.ax;
+            ctx.drawImage(spr, -ax, -meta.ay);
+        } else {
+            // legacy pack-crop fallback: frontal crop + renderer-side shear
+            ctx.transform(1, 0.5, 0, 1, 0, 0);
+            ctx.drawImage(spr, 0, -WALL_H, KIT_SEG_W, WALL_H + KIT_SKIRT);
+        }
         ctx.restore();
     };
     // timber frame overlay (posts + beams) so pack textures read as framed walls
@@ -220,11 +259,18 @@ async function drawKitWalls(ctx, theme, seed) {
         ctx.restore();
     };
     for (let k = 0; k < KIT_SEGS; k++) {
-        const spr = win && k % 3 === 1 ? win : base;   // window on the 2nd + 5th segment
-        paint(spr, isoX(0, 2 * k), isoY(0, 2 * k), true);    // left run (mirrored: descends left)
-        paint(spr, isoX(2 * k, 0), isoY(2 * k, 0), false);   // right run: descends right
-        frameSeg(isoX(0, 2 * k), isoY(0, 2 * k), true, k);
-        frameSeg(isoX(2 * k, 0), isoY(2 * k, 0), false, k + 7);
+        const isWin = win && k % 3 === 1;   // window on the 2nd + 5th segment
+        const spr = isWin ? win : base;
+        const meta = isWin ? (winMeta || baseMeta) : baseMeta;
+        if (meta && meta.ax != null) {
+            paint(spr, isoX(0, 2 * k), isoY(0, 2 * k), true, meta);    // left run (mirrored: descends left)
+            paint(spr, isoX(2 * k, 0), isoY(2 * k, 0), false, meta);   // right run: descends right
+        } else {
+            paint(spr, isoX(0, 2 * k), isoY(0, 2 * k), true, null);
+            paint(spr, isoX(2 * k, 0), isoY(2 * k, 0), false, null);
+            frameSeg(isoX(0, 2 * k), isoY(0, 2 * k), true, k);
+            frameSeg(isoX(2 * k, 0), isoY(2 * k, 0), false, k + 7);
+        }
     }
     return true;
 }
@@ -426,7 +472,21 @@ async function renderFrame(state, frame, opts = {}) {
         const extSpr = await img('kit/hou_platform_ext.png');
         const deckW2 = mezzTier >= 2 ? 6 : 4, deckH2 = mezzTier >= 2 ? 5 : 3;
         const topOff = 3 + (deckW2 + deckH2) * (TH / 4);   // deck-top centre inside the sprite
-        if (deckSpr) {
+        const deckMeta = kitSprite(mezzTier >= 2 ? 'kit/hou_deck_wood' : 'kit/hou_mezz');
+        const extMeta = kitSprite('kit/hou_platform_ext');
+        if (deckSpr && deckMeta && deckMeta.ax != null) {
+            // housekit-v5: GLB platform renders, anchor = deck-TOP surface center
+            for (let yk = 0; yk + deckH2 <= N; yk += deckH2) {
+                const c = footCenter(0, yk, deckW2, deckH2);
+                ctx.drawImage(deckSpr, c.x - deckMeta.ax, c.y - MEZZ_LIFT - deckMeta.ay);
+            }
+            if (mezzTier >= 2 && extSpr && extMeta && extMeta.ax != null) {
+                for (let bx = 0; bx < 6; bx += 2) {
+                    const c = footCenter(bx, 10, 2, 2);
+                    ctx.drawImage(extSpr, c.x - extMeta.ax, c.y - MEZZ_LIFT - extMeta.ay);
+                }
+            }
+        } else if (deckSpr) {
             for (let yk = 0; yk + deckH2 <= N; yk += deckH2) {
                 const c = footCenter(0, yk, deckW2, deckH2);
                 ctx.drawImage(deckSpr, c.x - (deckW2 + deckH2) * (TW / 4), c.y - MEZZ_LIFT - topOff, (deckW2 + deckH2) * (TW / 2), (deckW2 + deckH2) * (TH / 2) + 14);
@@ -438,7 +498,7 @@ async function renderFrame(state, frame, opts = {}) {
                 }
             }
         }
-        sconceLift = MEZZ_LIFT + 26;   // left-wall torches become sconces above the railing
+        sconceLift = MEZZ_LIFT - 10;   // housekit-v5: sconces on the upper wall band, above the deck
     }
 
     // torches (left pair rides up with the mezzanine deck)
@@ -450,7 +510,7 @@ async function renderFrame(state, frame, opts = {}) {
     // wall banners
     const wallBanners = (state.placed || []).filter(p => (itemDef(p.item) || {}).layer === 'wall');
     for (const p of wallBanners) {
-        const spr = await img(`${p.item}.png`);
+        const spr = (await itemSprite(p.item)).spr;
         if (!spr) continue;
         const t = Math.max(1, Math.min(N - 1, p.x));
         const right = p.y === 1;
@@ -539,7 +599,7 @@ async function renderFrame(state, frame, opts = {}) {
         .sort((a, b) => ((a.x + a.def.fw / 2) + (a.y + a.def.fh / 2)) - ((b.x + b.def.fw / 2) + (b.y + b.def.fh / 2)));
 
     for (const p of rugs) {
-        const spr = await img(`${p.item}.png`);
+        const spr = (await itemSprite(p.item)).spr;
         if (!spr) continue;
         const c = footCenter(p.x, p.y, p.def.fw, p.def.fh);
         const w = spr.width * 2, h = spr.height * 2;
@@ -556,14 +616,16 @@ async function renderFrame(state, frame, opts = {}) {
     // mezzanine columns rides up with the deck
     const drawn = [];
     for (const p of items) {
-        const spr = await img(`${p.item}.png`);
+        const { spr: spr0, hk } = await itemSprite(p.item);
+        const sprF = (p.f && hk && hk.sprite_f) ? await img(`housekit/${hk.sprite_f}`) : null;
+        const spr = sprF || spr0;
         if (!spr) continue;
         const c = footCenter(p.x, p.y, p.def.fw, p.def.fh);
         // anchor: lowest painted floor vertex of the footprint (+2px settle) —
         // a sprite's base line lands exactly on its own tiles' south edge.
         const lift = mezzDepth && p.x < mezzDepth ? MEZZ_LIFT : 0;
         const anchorY = c.y + (p.def.fw + p.def.fh) * (TH / 4) - TH / 2 + 2 - lift;
-        drawn.push({ p, spr, c, anchorY, lift, w: spr.width * 2, h: spr.height * 2 });
+        drawn.push({ p, spr, sprF, c, anchorY, lift, w: spr.width * 2, h: spr.height * 2 });
     }
 
     // ── move locomotion (owner 2026-10-16 "moving doesn't trigger an
@@ -623,7 +685,7 @@ async function renderFrame(state, frame, opts = {}) {
                 ctx.restore();
             } else {
                 isoShadow.drawItemShadow(ctx, {
-                    img: d.spr, key: `${d.p.item}${d.p.f ? ':f' : ''}`, scale: 2,
+                    img: d.spr, key: `${d.p.item}${d.sprF ? ':fv' : (d.p.f ? ':f' : '')}`, scale: 2,
                     ax: d.c.x, ay: d.anchorY, flip: !!d.p.f, alpha: sal,
                 });
             }
@@ -656,9 +718,9 @@ async function renderFrame(state, frame, opts = {}) {
 
             ctx.save();
             ctx.globalAlpha = alpha;
-            if (p.f) {
-                // flip = mirror around the item's own center axis (iso 90° fake,
-                // standard for sprites with a single authored facing)
+            if (p.f && !d.sprF) {
+                // legacy fallback: flip = mirror around the item's own center axis
+                // (iso 90° fake) — GLB-baked items use their real _f view instead
                 ctx.translate(2 * c.x, 0);
                 ctx.scale(-1, 1);
             }
@@ -677,15 +739,23 @@ async function renderFrame(state, frame, opts = {}) {
     // mezzanine guardrail + the staircase down to the main floor
     if (mezzTier > 0) {
         const railSpr = await img('kit/hou_railing.png');
+        const railMeta = kitSprite('kit/hou_railing');
         if (railSpr) {
             for (let k = 0; k < N / 2; k++) {
                 if (k === 4) continue;   // opening where the stairs land
                 const bx = isoX(mezzDepth, 2 * k), by = isoY(mezzDepth, 2 * k);
                 ctx.save();
                 ctx.translate(bx, by - MEZZ_LIFT);
-                ctx.scale(-1, 1);                 // deck edge runs along the left axis
-                ctx.transform(1, 0.5, 0, 1, 0, 0);
-                ctx.drawImage(railSpr, 0, -70, KIT_SEG_W, 70);
+                if (railMeta && railMeta.ax != null) {
+                    // housekit-v5: GLB railing, mirrored (deck edge runs along +y),
+                    // anchor = centerline base left end
+                    ctx.scale(-1, 1);
+                    ctx.drawImage(railSpr, -railMeta.ax, -railMeta.ay);
+                } else {
+                    ctx.scale(-1, 1);                 // deck edge runs along the left axis
+                    ctx.transform(1, 0.5, 0, 1, 0, 0);
+                    ctx.drawImage(railSpr, 0, -70, KIT_SEG_W, 70);
+                }
                 ctx.restore();
             }
         }
@@ -1113,8 +1183,15 @@ function cachePut(map, key, out) {
     }
     map.set(key, { ...out, ts: Date.now() });
 }
+// housekit-v5: cache keys include the renderer version + asset build hash so
+// re-bakes and manifest updates invalidate every stale disk-cached render.
+const RENDERER_VERSION = 'housekit-v5';
+const ASSET_BUILD = (() => {
+    try { return fs.readFileSync(path.join(ASSETS, 'ASSET_BUILD_HASH'), 'utf8').trim(); }
+    catch (e) { return 'dev'; }
+})();
 function stateHash(state, opts = {}) {
-    return hashStr(JSON.stringify([state.owner, state.theme, state.placed, state.mezz | 0, state.roomId || '', opts.pop || null, opts.hint || '', opts.grid || null, opts.static ? 1 : 0]));
+    return hashStr(JSON.stringify([RENDERER_VERSION, ASSET_BUILD, state.owner, state.theme, state.placed, state.mezz | 0, state.roomId || '', opts.pop || null, opts.hint || '', opts.grid || null, opts.static ? 1 : 0]));
 }
 
 // EVENT-LOOP BREATH — real timers between frames keep the canary heartbeat

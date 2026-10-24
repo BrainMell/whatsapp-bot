@@ -1,0 +1,1850 @@
+{
+ "law": {
+  "px_per_m_source": 45.2548,
+  "draw_scale": 2,
+  "yaw_a": 45.0,
+  "yaw_b": 135.0,
+  "pitch": 30.0,
+  "ss": 8,
+  "anchor": "sprite bottom = lowest silhouette px (renderer bottoms sprite at southY-14)"
+ },
+ "camera": {
+  "type": "orthographic",
+  "convention": "pyrender -Z forward, Z-up world"
+ },
+ "lights": {
+  "key": {
+   "dir": [
+    -0.45,
+    0.55,
+    -0.7
+   ],
+   "color": [
+    1.0,
+    0.93,
+    0.82
+   ],
+   "intensity": 3.1
+  },
+  "fill": {
+   "dir": [
+    0.6,
+    -0.35,
+    -0.55
+   ],
+   "color": [
+    0.72,
+    0.78,
+    1.0
+   ],
+   "intensity": 0.85
+  },
+  "ambient": 0.42
+ },
+ "source_pack": {
+  "root": "/home/z/my-project/download/assets/JOKER_MEDIEVAL_HOUSE_BUILDER_COMPLETE/03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack",
+  "glb_dir": "models/furniture"
+ },
+ "items": {
+  "bucket": {
+   "sprite": "bucket.png",
+   "sprite_f": "bucket_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/bucket.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.45,
+    0.4,
+    0.434
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 2,
+   "n_faces": 336,
+   "fallback": false,
+   "note": ""
+  },
+  "stool_amber": {
+   "sprite": "stool_amber.png",
+   "sprite_f": "stool_amber_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/stool_amber.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.46,
+    0.46,
+    0.4125
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 3,
+   "n_faces": 108,
+   "fallback": false,
+   "note": ""
+  },
+  "crate_old": {
+   "sprite": "crate_old.png",
+   "sprite_f": "crate_old_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/crate_old.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.62,
+    0.5355,
+    0.466
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 4,
+   "n_faces": 120,
+   "fallback": false,
+   "note": ""
+  },
+  "stool_crimson": {
+   "sprite": "stool_crimson.png",
+   "sprite_f": "stool_crimson_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/stool_crimson.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.46,
+    0.46,
+    0.4125
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 3,
+   "n_faces": 108,
+   "fallback": false,
+   "note": ""
+  },
+  "chair_wood": {
+   "sprite": "chair_wood.png",
+   "sprite_f": "chair_wood_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/chair_wood.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.49,
+    0.45,
+    1.08
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 2,
+   "n_faces": 84,
+   "fallback": false,
+   "note": ""
+  },
+  "vase_blue": {
+   "sprite": "vase_blue.png",
+   "sprite_f": "vase_blue_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/vase_blue.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.44,
+    0.44,
+    0.49
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 2,
+   "n_faces": 396,
+   "fallback": false,
+   "note": ""
+  },
+  "barrel_small": {
+   "sprite": "barrel_small.png",
+   "sprite_f": "barrel_small_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/barrel_small.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.4243,
+    0.4243,
+    0.4075
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 2,
+   "n_faces": 492,
+   "fallback": false,
+   "note": ""
+  },
+  "plant_flower": {
+   "sprite": "plant_flower.png",
+   "sprite_f": "plant_flower_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/plant_flower.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.3312,
+    0.3229,
+    0.69
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 8,
+   "n_faces": 772,
+   "fallback": false,
+   "note": ""
+  },
+  "chair_carved": {
+   "sprite": "chair_carved.png",
+   "sprite_f": "chair_carved_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/chair_carved.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.54,
+    0.46,
+    1.18
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 4,
+   "n_faces": 496,
+   "fallback": false,
+   "note": ""
+  },
+  "basin_wash": {
+   "sprite": "basin_wash.png",
+   "sprite_f": "basin_wash_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/basin_wash.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.5,
+    0.5,
+    0.29
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 3,
+   "n_faces": 336,
+   "fallback": false,
+   "note": ""
+  },
+  "nightstand": {
+   "sprite": "nightstand.png",
+   "sprite_f": "nightstand_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/nightstand.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.61,
+    0.505,
+    0.585
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 4,
+   "n_faces": 72,
+   "fallback": false,
+   "note": ""
+  },
+  "table_small": {
+   "sprite": "table_small.png",
+   "sprite_f": "table_small_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/table_small.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.66,
+    0.58,
+    0.5125
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.591,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 2,
+   "n_faces": 144,
+   "fallback": false,
+   "note": ""
+  },
+  "chest_wood": {
+   "sprite": "chest_wood.png",
+   "sprite_f": "chest_wood_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/chest_wood.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.6448,
+    0.4863,
+    0.3382
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 4,
+   "n_faces": 180,
+   "fallback": false,
+   "note": ""
+  },
+  "barrel_rain": {
+   "sprite": "barrel_rain.png",
+   "sprite_f": "barrel_rain_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/barrel_rain.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.5304,
+    0.5304,
+    0.61
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 3,
+   "n_faces": 532,
+   "fallback": false,
+   "note": ""
+  },
+  "barrel_oak": {
+   "sprite": "barrel_oak.png",
+   "sprite_f": "barrel_oak_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/barrel_oak.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.5092,
+    0.5092,
+    0.5675
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 2,
+   "n_faces": 492,
+   "fallback": false,
+   "note": ""
+  },
+  "rug_dusty": {
+   "sprite": "rug_dusty.png",
+   "sprite_f": "rug_dusty_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/rug_dusty.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.2,
+    0.885,
+    0.031
+   ],
+   "slot_tiles": [
+    3.0,
+    2.0
+   ],
+   "scale_applied": [
+    2.35,
+    2.124,
+    2.124
+   ],
+   "n_geoms": 2,
+   "n_faces": 228,
+   "fallback": false,
+   "note": "rug slot-fill x2.35/2.12"
+  },
+  "bed_bedroll": {
+   "sprite": "bed_bedroll.png",
+   "sprite_f": "bed_bedroll_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/bed_bedroll.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.95,
+    0.4248,
+    0.2025
+   ],
+   "slot_tiles": [
+    2.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 5,
+   "n_faces": 108,
+   "fallback": false,
+   "note": ""
+  },
+  "rug_round": {
+   "sprite": "rug_round.png",
+   "sprite_f": "rug_round_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/rug_round.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.8256,
+    0.8256,
+    0.032
+   ],
+   "slot_tiles": [
+    2.0,
+    2.0
+   ],
+   "scale_applied": [
+    2.277,
+    2.277,
+    2.277
+   ],
+   "n_geoms": 2,
+   "n_faces": 288,
+   "fallback": false,
+   "note": "rug slot-fill x2.28/2.28"
+  },
+  "dresser": {
+   "sprite": "dresser.png",
+   "sprite_f": "dresser_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/dresser.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.7632,
+    0.452,
+    0.6488
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.376,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 4,
+   "n_faces": 576,
+   "fallback": false,
+   "note": "slot-clamp 1.38/1.60"
+  },
+  "table_long": {
+   "sprite": "table_long.png",
+   "sprite_f": "table_long_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/table_long.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.2,
+    0.66,
+    0.5825
+   ],
+   "slot_tiles": [
+    2.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.591,
+    1.6
+   ],
+   "n_geoms": 2,
+   "n_faces": 144,
+   "fallback": false,
+   "note": ""
+  },
+  "table_refectory": {
+   "sprite": "table_refectory.png",
+   "sprite_f": "table_refectory_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/table_refectory.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.22,
+    0.68,
+    0.673
+   ],
+   "slot_tiles": [
+    2.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.544,
+    1.6
+   ],
+   "n_geoms": 3,
+   "n_faces": 216,
+   "fallback": false,
+   "note": "slot-clamp 1.60/1.54"
+  },
+  "bed_traveller": {
+   "sprite": "bed_traveller.png",
+   "sprite_f": "bed_traveller_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/bed_traveller.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.038,
+    0.576,
+    0.5309
+   ],
+   "slot_tiles": [
+    2.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 4,
+   "n_faces": 180,
+   "fallback": false,
+   "note": ""
+  },
+  "plant_shrub": {
+   "sprite": "plant_shrub.png",
+   "sprite_f": "plant_shrub_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/plant_shrub.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.391,
+    0.3812,
+    0.665
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 4,
+   "n_faces": 488,
+   "fallback": false,
+   "note": ""
+  },
+  "rug_meadow": {
+   "sprite": "rug_meadow.png",
+   "sprite_f": "rug_meadow_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/rug_meadow.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.2,
+    0.885,
+    0.035
+   ],
+   "slot_tiles": [
+    3.0,
+    2.0
+   ],
+   "scale_applied": [
+    2.35,
+    2.124,
+    2.124
+   ],
+   "n_geoms": 3,
+   "n_faces": 340,
+   "fallback": false,
+   "note": "rug slot-fill x2.35/2.12"
+  },
+  "rug_rose": {
+   "sprite": "rug_rose.png",
+   "sprite_f": "rug_rose_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/rug_rose.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.2,
+    0.885,
+    0.048
+   ],
+   "slot_tiles": [
+    3.0,
+    2.0
+   ],
+   "scale_applied": [
+    2.35,
+    2.124,
+    2.124
+   ],
+   "n_geoms": 2,
+   "n_faces": 768,
+   "fallback": false,
+   "note": "rug slot-fill x2.35/2.12"
+  },
+  "banner_stand": {
+   "sprite": "banner_stand.png",
+   "sprite_f": "banner_stand_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/banner_stand.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.48,
+    0.32,
+    1.26
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 4,
+   "n_faces": 247,
+   "fallback": false,
+   "note": ""
+  },
+  "table_round": {
+   "sprite": "table_round.png",
+   "sprite_f": "table_round_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/table_round.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.7806,
+    0.7728,
+    0.6
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.345,
+    1.359,
+    1.6
+   ],
+   "n_geoms": 3,
+   "n_faces": 204,
+   "fallback": false,
+   "note": "slot-clamp 1.35/1.36"
+  },
+  "chest_gold": {
+   "sprite": "chest_gold.png",
+   "sprite_f": "chest_gold_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/chest_gold.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.676,
+    0.4965,
+    0.356
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.553,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 2,
+   "n_faces": 180,
+   "fallback": false,
+   "note": "slot-clamp 1.55/1.60"
+  },
+  "oven_brick": {
+   "sprite": "oven_brick.png",
+   "sprite_f": "oven_brick_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/oven_brick.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.7776,
+    0.6222,
+    1.05
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.35,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 5,
+   "n_faces": 212,
+   "fallback": false,
+   "note": "slot-clamp 1.35/1.60"
+  },
+  "cart_merchant": {
+   "sprite": "cart_merchant.png",
+   "sprite_f": "cart_merchant_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/cart_merchant.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.55,
+    0.82,
+    0.7475
+   ],
+   "slot_tiles": [
+    2.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.355,
+    1.28,
+    1.6
+   ],
+   "n_geoms": 6,
+   "n_faces": 452,
+   "fallback": false,
+   "note": "slot-clamp 1.35/1.28"
+  },
+  "bed_rustic": {
+   "sprite": "bed_rustic.png",
+   "sprite_f": "bed_rustic_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/bed_rustic.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.081,
+    0.614,
+    0.5353
+   ],
+   "slot_tiles": [
+    2.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 4,
+   "n_faces": 180,
+   "fallback": false,
+   "note": ""
+  },
+  "table_feast": {
+   "sprite": "table_feast.png",
+   "sprite_f": "table_feast_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/table_feast.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.26,
+    0.72,
+    0.835
+   ],
+   "slot_tiles": [
+    2.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.458,
+    1.6
+   ],
+   "n_geoms": 6,
+   "n_faces": 512,
+   "fallback": false,
+   "note": "slot-clamp 1.60/1.46"
+  },
+  "bureau": {
+   "sprite": "bureau.png",
+   "sprite_f": "bureau_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/bureau.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.8268,
+    0.452,
+    0.7478
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.27,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 4,
+   "n_faces": 748,
+   "fallback": false,
+   "note": "slot-clamp 1.27/1.60"
+  },
+  "wardrobe": {
+   "sprite": "wardrobe.png",
+   "sprite_f": "wardrobe_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/wardrobe.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.756,
+    0.3798,
+    1.28
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.389,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 5,
+   "n_faces": 280,
+   "fallback": false,
+   "note": "slot-clamp 1.39/1.60"
+  },
+  "bed_forest": {
+   "sprite": "bed_forest.png",
+   "sprite_f": "bed_forest_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/bed_forest.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.0982,
+    0.6216,
+    0.5353
+   ],
+   "slot_tiles": [
+    2.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 6,
+   "n_faces": 352,
+   "fallback": false,
+   "note": ""
+  },
+  "banner_lake": {
+   "sprite": "banner_lake.png",
+   "sprite_f": "banner_lake_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/banner_lake.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.87,
+    0.12,
+    0.815
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.207,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 4,
+   "n_faces": 275,
+   "fallback": false,
+   "note": "slot-clamp 1.21/1.60"
+  },
+  "banner_crimson": {
+   "sprite": "banner_crimson.png",
+   "sprite_f": "banner_crimson_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/banner_crimson.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.87,
+    0.13,
+    0.815
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.207,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 3,
+   "n_faces": 319,
+   "fallback": false,
+   "note": "slot-clamp 1.21/1.60"
+  },
+  "bed_lake": {
+   "sprite": "bed_lake.png",
+   "sprite_f": "bed_lake_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/bed_lake.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.0982,
+    0.6216,
+    0.5353
+   ],
+   "slot_tiles": [
+    2.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 5,
+   "n_faces": 352,
+   "fallback": false,
+   "note": ""
+  },
+  "banner_royal": {
+   "sprite": "banner_royal.png",
+   "sprite_f": "banner_royal_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/banner_royal.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.87,
+    0.126,
+    0.815
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.207,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 3,
+   "n_faces": 251,
+   "fallback": false,
+   "note": "slot-clamp 1.21/1.60"
+  },
+  "table_rosedrape": {
+   "sprite": "table_rosedrape.png",
+   "sprite_f": "table_rosedrape_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/table_rosedrape.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.9,
+    0.7,
+    0.5825
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.167,
+    1.5,
+    1.6
+   ],
+   "n_geoms": 4,
+   "n_faces": 396,
+   "fallback": false,
+   "note": "slot-clamp 1.17/1.50"
+  },
+  "chest_ruby": {
+   "sprite": "chest_ruby.png",
+   "sprite_f": "chest_ruby_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/chest_ruby.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.6864,
+    0.5488,
+    0.5
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.53,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 3,
+   "n_faces": 340,
+   "fallback": false,
+   "note": "slot-clamp 1.53/1.60"
+  },
+  "table_azure": {
+   "sprite": "table_azure.png",
+   "sprite_f": "table_azure_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/table_azure.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.92,
+    0.7,
+    0.624
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.141,
+    1.5,
+    1.6
+   ],
+   "n_geoms": 3,
+   "n_faces": 192,
+   "fallback": false,
+   "note": "slot-clamp 1.14/1.50"
+  },
+  "table_banquet": {
+   "sprite": "table_banquet.png",
+   "sprite_f": "table_banquet_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/table_banquet.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.94,
+    0.74,
+    0.654
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.117,
+    1.419,
+    1.6
+   ],
+   "n_geoms": 4,
+   "n_faces": 168,
+   "fallback": false,
+   "note": "slot-clamp 1.12/1.42"
+  },
+  "cabinet_display": {
+   "sprite": "cabinet_display.png",
+   "sprite_f": "cabinet_display_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/cabinet_display.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.82,
+    0.4675,
+    1.12
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.28,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 7,
+   "n_faces": 280,
+   "fallback": false,
+   "note": "slot-clamp 1.28/1.60"
+  },
+  "bed_cloud": {
+   "sprite": "bed_cloud.png",
+   "sprite_f": "bed_cloud_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/bed_cloud.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.0982,
+    0.6646,
+    0.9338
+   ],
+   "slot_tiles": [
+    2.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.58,
+    1.6
+   ],
+   "n_geoms": 5,
+   "n_faces": 832,
+   "fallback": false,
+   "note": "slot-clamp 1.60/1.58"
+  },
+  "bed_noble": {
+   "sprite": "bed_noble.png",
+   "sprite_f": "bed_noble_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/bed_noble.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.2156,
+    0.7012,
+    1.0338
+   ],
+   "slot_tiles": [
+    2.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.497,
+    1.6
+   ],
+   "n_geoms": 6,
+   "n_faces": 848,
+   "fallback": false,
+   "note": "slot-clamp 1.60/1.50"
+  },
+  "hearth_brick": {
+   "sprite": "hearth_brick.png",
+   "sprite_f": "hearth_brick_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/hearth_brick.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.9,
+    0.675,
+    0.73
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.167,
+    1.556,
+    1.6
+   ],
+   "n_geoms": 6,
+   "n_faces": 244,
+   "fallback": false,
+   "note": "slot-clamp 1.17/1.56"
+  },
+  "rug_royal": {
+   "sprite": "rug_royal.png",
+   "sprite_f": "rug_royal_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/rug_royal.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.2,
+    0.905,
+    0.034
+   ],
+   "slot_tiles": [
+    3.0,
+    2.0
+   ],
+   "scale_applied": [
+    2.35,
+    2.077,
+    2.077
+   ],
+   "n_geoms": 3,
+   "n_faces": 288,
+   "fallback": false,
+   "note": "rug slot-fill x2.35/2.08"
+  },
+  "rug_ocean": {
+   "sprite": "rug_ocean.png",
+   "sprite_f": "rug_ocean_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/rug_ocean.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.2,
+    0.905,
+    0.034
+   ],
+   "slot_tiles": [
+    3.0,
+    2.0
+   ],
+   "scale_applied": [
+    2.35,
+    2.077,
+    2.077
+   ],
+   "n_geoms": 2,
+   "n_faces": 264,
+   "fallback": false,
+   "note": "rug slot-fill x2.35/2.08"
+  },
+  "pavilion": {
+   "sprite": "pavilion.png",
+   "sprite_f": "pavilion_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/pavilion.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.394,
+    1.26,
+    1.345
+   ],
+   "slot_tiles": [
+    2.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.506,
+    0.833,
+    1.6
+   ],
+   "n_geoms": 7,
+   "n_faces": 772,
+   "fallback": false,
+   "note": "slot-clamp 1.51/0.83"
+  },
+  "chest_arcane": {
+   "sprite": "chest_arcane.png",
+   "sprite_f": "chest_arcane_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/chest_arcane.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.728,
+    0.587,
+    0.425
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.442,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 4,
+   "n_faces": 352,
+   "fallback": false,
+   "note": "slot-clamp 1.44/1.60"
+  },
+  "clock_grand": {
+   "sprite": "clock_grand.png",
+   "sprite_f": "clock_grand_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/clock_grand.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.6,
+    0.498,
+    1.375
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 6,
+   "n_faces": 376,
+   "fallback": false,
+   "note": ""
+  },
+  "stall_market": {
+   "sprite": "stall_market.png",
+   "sprite_f": "stall_market_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/stall_market.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.2,
+    0.7425,
+    0.89
+   ],
+   "slot_tiles": [
+    2.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.414,
+    1.6
+   ],
+   "n_geoms": 6,
+   "n_faces": 456,
+   "fallback": false,
+   "note": "slot-clamp 1.60/1.41"
+  },
+  "cauldron": {
+   "sprite": "cauldron.png",
+   "sprite_f": "cauldron_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/cauldron.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.64,
+    0.64,
+    0.725
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 4,
+   "n_faces": 848,
+   "fallback": false,
+   "note": ""
+  },
+  "well_wishing": {
+   "sprite": "well_wishing.png",
+   "sprite_f": "well_wishing_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/well_wishing.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.9907,
+    0.8828,
+    1.405
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.06,
+    1.189,
+    1.6
+   ],
+   "n_geoms": 7,
+   "n_faces": 252,
+   "fallback": false,
+   "note": "slot-clamp 1.06/1.19"
+  },
+  "shelf_books": {
+   "sprite": "shelf_books.png",
+   "sprite_f": "shelf_books_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/shelf_books.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.755,
+    0.25,
+    1.05
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.391,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 10,
+   "n_faces": 996,
+   "fallback": false,
+   "note": "slot-clamp 1.39/1.60"
+  },
+  "mirror_stand": {
+   "sprite": "mirror_stand.png",
+   "sprite_f": "mirror_stand_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/mirror_stand.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.45,
+    0.22,
+    0.83
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 6,
+   "n_faces": 164,
+   "fallback": false,
+   "note": ""
+  },
+  "candelabra": {
+   "sprite": "candelabra.png",
+   "sprite_f": "candelabra_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/candelabra.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.64,
+    0.3,
+    0.825
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 3,
+   "n_faces": 556,
+   "fallback": false,
+   "note": ""
+  },
+  "lantern_stand": {
+   "sprite": "lantern_stand.png",
+   "sprite_f": "lantern_stand_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/lantern_stand.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.32,
+    0.32,
+    1.075
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 5,
+   "n_faces": 240,
+   "fallback": false,
+   "note": ""
+  },
+  "oven_stone": {
+   "sprite": "oven_stone.png",
+   "sprite_f": "oven_stone_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/oven_stone.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.134,
+    0.6222,
+    1.2455
+   ],
+   "slot_tiles": [
+    2.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 5,
+   "n_faces": 212,
+   "fallback": false,
+   "note": ""
+  },
+  "basin_copper": {
+   "sprite": "basin_copper.png",
+   "sprite_f": "basin_copper_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/basin_copper.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.5,
+    0.5,
+    0.34
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 3,
+   "n_faces": 368,
+   "fallback": false,
+   "note": ""
+  },
+  "bench_oak": {
+   "sprite": "bench_oak.png",
+   "sprite_f": "bench_oak_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/bench_oak.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.05,
+    0.36,
+    0.4875
+   ],
+   "slot_tiles": [
+    2.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 4,
+   "n_faces": 72,
+   "fallback": false,
+   "note": ""
+  },
+  "desk_scribe": {
+   "sprite": "desk_scribe.png",
+   "sprite_f": "desk_scribe_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/desk_scribe.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.0,
+    0.55,
+    0.865
+   ],
+   "slot_tiles": [
+    2.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 6,
+   "n_faces": 292,
+   "fallback": false,
+   "note": ""
+  },
+  "armour_stand": {
+   "sprite": "armour_stand.png",
+   "sprite_f": "armour_stand_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/armour_stand.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.6168,
+    0.36,
+    1.42
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 4,
+   "n_faces": 232,
+   "fallback": false,
+   "note": ""
+  },
+  "weapon_rack": {
+   "sprite": "weapon_rack.png",
+   "sprite_f": "weapon_rack_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/weapon_rack.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.0,
+    0.345,
+    1.1
+   ],
+   "slot_tiles": [
+    2.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 6,
+   "n_faces": 216,
+   "fallback": false,
+   "note": ""
+  },
+  "pot_herbs": {
+   "sprite": "pot_herbs.png",
+   "sprite_f": "pot_herbs_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/pot_herbs.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.31,
+    0.31,
+    0.63
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 3,
+   "n_faces": 456,
+   "fallback": false,
+   "note": ""
+  },
+  "barrel_tall": {
+   "sprite": "barrel_tall.png",
+   "sprite_f": "barrel_tall_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/barrel_tall.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.4668,
+    0.4668,
+    0.7275
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 2,
+   "n_faces": 492,
+   "fallback": false,
+   "note": ""
+  },
+  "chest_iron": {
+   "sprite": "chest_iron.png",
+   "sprite_f": "chest_iron_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/chest_iron.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.7072,
+    0.5067,
+    0.3738
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.485,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 3,
+   "n_faces": 180,
+   "fallback": false,
+   "note": "slot-clamp 1.48/1.60"
+  },
+  "bed_royal": {
+   "sprite": "bed_royal.png",
+   "sprite_f": "bed_royal_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/bed_royal.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.556,
+    0.9532,
+    1.28
+   ],
+   "slot_tiles": [
+    3.0,
+    2.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 5,
+   "n_faces": 944,
+   "fallback": false,
+   "note": ""
+  },
+  "rug_emerald": {
+   "sprite": "rug_emerald.png",
+   "sprite_f": "rug_emerald_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/rug_emerald.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.2,
+    0.905,
+    0.034
+   ],
+   "slot_tiles": [
+    3.0,
+    2.0
+   ],
+   "scale_applied": [
+    2.35,
+    2.077,
+    2.077
+   ],
+   "n_geoms": 2,
+   "n_faces": 288,
+   "fallback": false,
+   "note": "rug slot-fill x2.35/2.08"
+  },
+  "banner_serpent": {
+   "sprite": "banner_serpent.png",
+   "sprite_f": "banner_serpent_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/banner_serpent.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.87,
+    0.135,
+    0.755
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.207,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 4,
+   "n_faces": 333,
+   "fallback": false,
+   "note": "slot-clamp 1.21/1.60"
+  },
+  "clock_mantel": {
+   "sprite": "clock_mantel.png",
+   "sprite_f": "clock_mantel_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/clock_mantel.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.45,
+    0.368,
+    0.515
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 4,
+   "n_faces": 292,
+   "fallback": false,
+   "note": ""
+  },
+  "bathtub_copper": {
+   "sprite": "bathtub_copper.png",
+   "sprite_f": "bathtub_copper_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/bathtub_copper.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    1.1,
+    0.703,
+    0.294
+   ],
+   "slot_tiles": [
+    2.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.6,
+    1.494,
+    1.6
+   ],
+   "n_geoms": 4,
+   "n_faces": 124,
+   "fallback": false,
+   "note": "slot-clamp 1.60/1.49"
+  },
+  "fountain_table": {
+   "sprite": "fountain_table.png",
+   "sprite_f": "fountain_table_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/fountain_table.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.72,
+    0.72,
+    0.75
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.458,
+    1.458,
+    1.6
+   ],
+   "n_geoms": 3,
+   "n_faces": 752,
+   "fallback": false,
+   "note": "slot-clamp 1.46/1.46"
+  },
+  "painting_land": {
+   "sprite": "painting_land.png",
+   "sprite_f": "painting_land_f.png",
+   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/painting_land.glb",
+   "pack": "joker-homestead-3d-pack",
+   "model_extents_m": [
+    0.78,
+    0.135,
+    0.6
+   ],
+   "slot_tiles": [
+    1.0,
+    1.0
+   ],
+   "scale_applied": [
+    1.346,
+    1.6,
+    1.6
+   ],
+   "n_geoms": 6,
+   "n_faces": 144,
+   "fallback": false,
+   "note": "slot-clamp 1.35/1.60"
+  }
+ }
+}

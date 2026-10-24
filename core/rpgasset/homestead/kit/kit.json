@@ -1,15 +1,16 @@
 {
- "title": "Medieval house builder interior kit (Polyy.AI pack-derived)",
+ "title": "Medieval house builder interior kit v5 (GLB-baked, unified iso law)",
  "camera": {
   "yaw": 45.0,
-  "pitch": 26.565,
-  "px_per_m": 45.2548
+  "pitch": 30.0,
+  "px_per_m": 45.2548,
+  "law": "1m plan axis -> (32,16) screen px; 1m vertical -> 39.19 px; ortho"
  },
  "provenance": {
-  "source": "Polyy.AI itch.io packs (CC0): City Builder Village Buildings + RTS Castles 105",
-  "slicing": "256sun frontal face crops, clone-tiled, AO/shade baked; slant applied by renderer shear",
-  "fetched": "scripts/fetch_polyy2.sh (signed-URL click-capture)",
-  "baked_by": "scripts/bake_house_kit_v2.py"
+  "source": "JOKER_MEDIEVAL_HOUSE_BUILDER_COMPLETE bundle GLBs (02_ARCHITECTURE_MODELS)",
+  "baked_by": "scripts/bake_arch_v1.py + scripts/bake_furniture_v1.py (pyrender GLX, SS<=8 Lanczos)",
+  "contract": "sprite filenames unchanged (kit.json contract); walls now TRUE-ISO renders (no renderer shear)",
+  "licence": "CC0 pack sources per bundle ASSET_SOURCE_CATALOG.md"
  },
  "sprites": {
   "hou_deck_stone": {
@@ -37,18 +38,24 @@
    "h": 115
   },
   "hou_floor_stone": {
-   "file": "kit/hou_floor_stone.png",
+   "file": "hou_floor_stone.png",
    "w": 128,
-   "h": 67,
+   "h": 65,
    "ax": 64.0,
-   "ay": 34.59
+   "ay": 32.5,
+   "anchor_meaning": "top-face diamond center (exact 2:1 crop, seamless tiling)",
+   "source_glb": "floor_stone_flagstone_tile_2x2.glb",
+   "derived": "glb-bake-v5"
   },
   "hou_floor_wood": {
-   "file": "kit/hou_floor_wood.png",
-   "w": 130,
-   "h": 68,
-   "ax": 64.64,
-   "ay": 36.04
+   "file": "hou_floor_wood.png",
+   "w": 129,
+   "h": 66,
+   "ax": 64.5,
+   "ay": 33.0,
+   "anchor_meaning": "top-face diamond center (exact 2:1 crop, seamless tiling)",
+   "source_glb": "floor_wood_plank_tile_2x2.glb",
+   "derived": "glb-bake-v5"
   },
   "hou_mezz": {
    "file": "kit/hou_mezz.png",
