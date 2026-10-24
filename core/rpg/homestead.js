@@ -280,7 +280,10 @@ async function viewRoom(ctx, rec, opts = {}) {
         try {
             let watchdogTimer;
             media = await Promise.race([
-                renderer.renderRoomImage(state, { pop: opts.pop || null, hint: opts.hint, grid: opts.grid || null, hl: opts.hl || null, static: false }),
+                // static:true = the plain "regular house view" as a single PNG
+                // (owner nitpick 2026-10-24 21:29Z: `.j base 1` doesn't need the
+                // animated mp4 bake) — animated stays the default everywhere else.
+                renderer.renderRoomImage(state, { pop: opts.pop || null, hint: opts.hint, grid: opts.grid || null, hl: opts.hl || null, static: opts.static === true }),
                 new Promise((_, reject) => {
                     watchdogTimer = setTimeout(() => reject(new Error('render watchdog: room render exceeded 90s')), 90000);
                     if (watchdogTimer.unref) watchdogTimer.unref();
@@ -320,12 +323,35 @@ async function viewRoom(ctx, rec, opts = {}) {
 
 async function cmdCatalog(ctx, rec, args) {
     const items = CAT().items;
+    const balance = economy.getBalance(ctx.senderJid);
+    const houseLv = await houseLevel(ctx.senderJid);
+    // search mode: `.home catalog <word>` — a non-numeric first arg filters the
+    // shop by name/id (renderer draws the term in the header, architect page off)
+    const term = args.length && !/^\d+$/.test(args[0]) ? args.join(' ').trim().toLowerCase().slice(0, 40) : '';
+    if (term) {
+        const needle = term.replace(/\s+/g, '_');
+        const hits = items.filter((it) => it.name.toLowerCase().includes(term) || it.id.includes(needle));
+        if (!hits.length) {
+            const sug = items.filter((it) => it.id.includes(term.slice(0, 4).replace(/\s+/g, '_'))).slice(0, 4).map((x) => x.name);
+            return ctx.reply(`🔍 Nothing matching *${term}* in the outfitter.\n` +
+                (sug.length ? `Closest: ${sug.join(', ')}\n` : '') +
+                `Full shop: \`${ctx.prefix} home catalog\``);
+        }
+        const pages = Math.max(1, Math.ceil(hits.length / 12));
+        let page = args.map((a) => parseInt(a, 10)).find((n) => Number.isFinite(n) && n >= 1) || 1;
+        if (page > pages) page = pages;
+        const buf = await renderer.renderCatalogPage(page - 1, pages, { balance, houseLv, items: hits, searchTerm: term });
+        return ctx.sock.sendMessage(ctx.chatId, {
+            image: buf,
+            caption: `🔍 *Outfitter:* "${term}" — ${hits.length} match${hits.length === 1 ? '' : 'es'} (page ${page}/${pages})\n` +
+                `💰 Your purse: *${Number(balance).toLocaleString()} ZENI*\n\n` +
+                `_${ctx.prefix} home buy <name> — purchase an item • ${ctx.prefix} home catalog — full shop_`,
+        }, { quoted: ctx.m });
+    }
     const pages = Math.max(1, Math.ceil(items.length / 12)) + 1;   // +1 = architect page
     let page = parseInt(args[0], 10);
     if (!Number.isFinite(page) || page < 1) page = 1;
     if (page > pages) page = pages;
-    const balance = economy.getBalance(ctx.senderJid);
-    const houseLv = await houseLevel(ctx.senderJid);
     const buf = await renderer.renderCatalogPage(page - 1, pages, { balance, houseLv });
     await ctx.sock.sendMessage(ctx.chatId, {
         image: buf,
@@ -468,8 +494,36 @@ async function cmdSelect(ctx, rec, args) {
         // §5 (redesign): no selection → NAMES CARD of every furniture item owned
         return cmdInventory(ctx, rec);
     }
-    // §5: a bare page number pages the inventory card
-    if (/^\d+$/.test(query) && !resolveItem(query)) return cmdInventory(ctx, rec, parseInt(query, 10));
+    // Numbered law (one numbering with the furniture card — renderer
+    // inventoryRows): `.home select 7` picks the piece wearing number 7.
+    // Placed rows select, storage rows arm placement. Paging the card itself
+    // lives at `.home inv <page>` now.
+    if (/^\d+$/.test(query)) {
+        const rows = renderer.inventoryRows(rec);
+        const row = rows[parseInt(query, 10) - 1];
+        if (!row || !row.d || !row.d.id) {
+            return ctx.reply(`❌ No piece #${query} — you own ${rows.length} piece${rows.length === 1 ? '' : 's'}. \`${ctx.prefix} home select\` lists them with their numbers.`);
+        }
+        if (!row.placed) {
+            // storage row → placement mode (same flow as select-by-name on storage)
+            const it = row.d;
+            pendingPlace.set(ctx.senderJid, it.id);
+            selection.delete(ctx.senderJid);
+            const spot = findFreeSpot(rec, it);
+            const grid = spot ? { x: spot.x, y: spot.y, fw: it.fw, fh: it.fh, valid: true, label: `${it.name} → (${spot.x},${spot.y})` } : null;
+            return viewRoom(ctx, rec, { grid, hint: `Placement mode — *${it.name}* (in storage). Confirm: \`${ctx.prefix} home place ${it.id} <x> <y>\`${spot ? ` (suggested spot ${spot.x},${spot.y})` : ''} • Cancel: \`${ctx.prefix} home deselect\`.` });
+        }
+        const pp = rec.placed.find((q) => q.uid === row.uid);
+        if (!pp) return ctx.reply('🕯️ That selection is gone — pick another piece.');
+        selection.set(ctx.senderJid, pp.uid);
+        pendingPlace.delete(ctx.senderJid);
+        // wall pieces live on wall slots (y = side index, not a floor row) —
+        // select them without the floor footprint grid
+        if (row.d.layer === 'wall') {
+            return viewRoom(ctx, rec, { hint: `Selected the *${row.d.name}* (wall slot ${pp.x}) — \`${ctx.prefix} home store\` takes it down.` });
+        }
+        return viewRoom(ctx, rec, { ...gridOptsFor(pp, row.d), hint: `Selected the *${row.d.name}*. Move it with \`${ctx.prefix} home move <left|right|up|down>\`` });
+    }
     const it = resolveItem(query);
     if (!it) return ctx.reply(`❌ Nothing called *${query}*. Browse every piece you own: \`${ctx.prefix} home select\`.`);
     const cand = rec.placed.filter((p) => p.item === it.id && (renderer.itemDef(p.item) || {}).layer !== 'wall');
@@ -496,11 +550,13 @@ async function cmdInventory(ctx, rec, page) {
         return ctx.reply(`📦 You own no furniture yet.\nBrowse: \`${ctx.prefix} home catalog\` — then \`${ctx.prefix} home buy <name>\`.`);
     }
     const buf = await renderer.renderInventoryCard(rec, { prefix: ctx.prefix, page });
+    const totalPages = Math.max(1, Math.ceil((rec.placed.length + rec.owned.length) / (renderer.INV_ROWS_PER_PAGE || 12)));
     const cap = `🪑 *Your Furniture* — 📍 ${rec.placed.length} placed • 📦 ${rec.owned.length} in storage\n\n` +
-        `_${ctx.prefix} home select <name> — select a placed piece, or arm a storage piece for placement_\n` +
+        `_${ctx.prefix} home select <number|name> — select the numbered piece, or arm a storage piece for placement_\n` +
+        `_${ctx.prefix} home remove <numbers> — pick up numbered pieces (2-5 works too)_\n` +
         `_${ctx.prefix} home place <name> [x y] — place a storage piece_\n` +
-        `_${ctx.prefix} home store [x y] — pick a placed piece up_` +
-        (page ? `\n_${ctx.prefix} home select ${page + 1} — next page_` : '');
+        `_${ctx.prefix} home store [x y] — pick the selected piece up_` +
+        (page && page < totalPages ? `\n_${ctx.prefix} home inv ${page + 1} — next page_` : '');
     await ctx.sock.sendMessage(ctx.chatId, { image: buf, caption: cap }, { quoted: ctx.m });
 }
 
@@ -612,7 +668,41 @@ async function cmdRotate(ctx, rec) {
     await viewRoom(ctx, rec, { ...gridOptsFor(p, d), pop: { item: p.item, x: p.x, y: p.y }, hint: `The *${d.name}* turns ${nr * 90}° (rotate again for the next quarter).` });
 }
 
-async function cmdStore(ctx, rec, args) {
+async function cmdStore(ctx, rec, args, sub = 'store') {
+    // `remove <numbers>` — the furniture card's numbering: pick up numbered
+    // PLACED pieces in one atomic swap (`remove 3`, `remove 2-5`, `remove 2 4`).
+    // Coordinates stay on `store`/`pick` so `.home store 2 3` still means (x,y).
+    if ((sub === 'remove' || sub === 'unplace') && args.length && args.every((a) => /^(\d+)(\s*-\s*\d+)?$/.test(a))) {
+        const rows = renderer.inventoryRows(rec);
+        const nums = new Set();
+        for (const a of args) {
+            const m = a.match(/^(\d+)(?:\s*-\s*(\d+))?$/);
+            const a0 = parseInt(m[1], 10), b0 = m[2] ? parseInt(m[2], 10) : a0;
+            const lo = Math.min(a0, b0), hi = Math.max(a0, b0);
+            if (hi - lo > 60) return ctx.reply('❌ That range is too wide — 60 pieces per pick-up at most.');
+            for (let n = lo; n <= hi; n++) nums.add(n);
+        }
+        const picked = []; const skipped = [];
+        for (const n of nums) {
+            const row = rows[n - 1];
+            if (!row || !row.d || !row.d.id) { skipped.push(`#${n} (no such piece)`); continue; }
+            if (!row.placed) { skipped.push(`#${n} ${row.d.name || row.d.id} (already in storage)`); continue; }
+            picked.push(row);
+        }
+        if (!picked.length) return ctx.reply(`❌ Nothing to pick up: ${skipped.join(', ')}.\n\`${ctx.prefix} home select\` lists your pieces with their numbers.`);
+        // §4: ONE conditional update pulls every uid at once — money/instance
+        // style atomicity for the batch (uids come fresh off inventoryRows)
+        const uids = picked.map((r) => r.uid);
+        await Homestead.updateOne(
+            { userId: ctx.senderJid },
+            { $pull: { placed: { uid: { $in: uids } } }, $push: { owned: { $each: picked.map((r) => ({ id: r.d.id, uid: r.uid })) } }, $set: { updatedAt: Date.now() } },
+        );
+        rec.placed = rec.placed.filter((q) => !uids.includes(q.uid));
+        rec.owned = [...rec.owned, ...picked.map((r) => ({ id: r.d.id, uid: r.uid }))];
+        if (uids.includes(selection.get(ctx.senderJid))) selection.delete(ctx.senderJid);
+        const names = picked.map((r) => `#${r.n} *${r.d.name || r.d.id}*`).join(', ');
+        return ctx.reply(`📦 Picked up ${picked.length} piece${picked.length === 1 ? '' : 's'}: ${names}` + (skipped.length ? `\nSkipped: ${skipped.join(', ')}.` : ''));
+    }
     let p = null;
     const selUid = selection.get(ctx.senderJid);
     if ((!args.length || args[0] === undefined) && selUid) {
@@ -807,14 +897,13 @@ function cmdHelp(ctx) {
         `🏠 *THE HOMESTEAD* — base hub + isometric room\n\n` +
         `• \`${p} home\` — your outdoor base map\n` +
         `• \`${p} home house\` / \`${p} house\` — enter your house interior\n` +
-        `• \`${p} home catalog\` — furniture outfitter\n` +
+        `• \`${p} home catalog\` — furniture outfitter • \`${p} home catalog <word>\` — search it\n` +
         `• \`${p} home buy <name>\` — buy with ZENI\n` +
         `• \`${p} home place <name> [x y]\` — place furniture\n` +
-        `• \`${p} home select\` — YOUR FURNITURE LIST (names card)\n` +
-        `• \`${p} home select <name>\` — select a piece (grid preview / placement mode)\n` +
-        `• \`${p} home move <left|right|up|down> [n]\` — nudge it\n` +
-        `• \`${p} home moveto <x> <y>\` — send it to coordinates\n` +
-        `• \`${p} home store [x y]\` — pick furniture up\n` +
+        `• \`${p} home select\` / \`${p} home inv [page]\` — YOUR FURNITURE (numbered list)\n` +
+        `• \`${p} home select <number|name>\` — select a piece (grid preview / placement mode)\n` +
+        `• \`${p} home remove <numbers>\` — pick up numbered pieces (\`2-5\` works) • \`${p} home store [x y]\` — by coordinates\n` +
+        `• \`${p} home move <left|right|up|down> [n]\` — nudge it • \`${p} home moveto <x> <y>\` — send it to coordinates\n` +
         `• \`${p} home rotate\` — quarter-turn (repeat for 90°/180°/270°) • \`${p} home move upleft 3\` — diagonals\n` +
         `• \`${p} home rooms\` — ARCHITECT: annex rooms (walled/open), top-floor loft, 2nd-floor walls\n` +
         `• \`${p} home loft\` / \`${p} home ground\` — send the selected piece upstairs / back down\n` +
@@ -881,7 +970,7 @@ async function handleCommand(ctx) {
     // base subcommands (build/upgrade/info/admin/map/...) route to baseBuilder —
     // `.j base upgrade mines`, `.j base build blacksmith 3`, `.j baseadmin ...`
     const BASE_SUBS = ['map', 'build', 'construct', 'upgrade', 'up', 'info', 'structures', 'ledger', 'list', 'admin', 'baseadmin'];
-    if (BASE_SUBS.includes(sub) || cmdWord === 'baseadmin' || (cmdWord === 'base' && sub !== 'catalog' && sub !== 'buy' && sub !== 'place' && sub !== 'select' && sub !== 'move' && sub !== 'moveto' && sub !== 'rotate' && sub !== 'store' && sub !== 'themes' && sub !== 'theme' && sub !== 'visit' && sub !== 'help')) {
+    if (BASE_SUBS.includes(sub) || cmdWord === 'baseadmin' || (cmdWord === 'base' && sub !== 'catalog' && sub !== 'buy' && sub !== 'place' && sub !== 'select' && sub !== 'move' && sub !== 'moveto' && sub !== 'rotate' && sub !== 'store' && sub !== 'remove' && sub !== 'unplace' && sub !== 'inv' && sub !== 'inventory' && sub !== 'items' && sub !== 'themes' && sub !== 'theme' && sub !== 'visit' && sub !== 'help')) {
         const baseBuilder = require('./baseBuilder');
         return baseBuilder.handleBaseCommand(ctx);
     }
@@ -910,8 +999,11 @@ async function handleCommand(ctx) {
                 selection.delete(ctx.senderJid);
                 pendingPlace.delete(ctx.senderJid);
                 return ctx.reply('✋ Selection cleared.');
-            case 'store': case 'remove': case 'pick':
-                return cmdStore(ctx, rec, args);
+            case 'store': case 'pick': case 'remove': case 'unplace':
+                return cmdStore(ctx, rec, args, sub);
+            case 'inv': case 'inventory': case 'items':
+                // `.home inv [page]` — the numbered furniture card (paging home)
+                return cmdInventory(ctx, rec, args.length ? (parseInt(args[0], 10) || 1) : undefined);
             case 'rooms': case 'architect': case 'expand': case 'extend': case 'annex':
                 return cmdBuild(ctx, rec, sub === 'rooms' || sub === 'architect' ? args : [sub === 'extend' ? 'annex' : 'annex', ...args]);
             case 'loft': case 'upstairs':

@@ -251,10 +251,13 @@ async function enterStructure(ctx, idArg) {
     if (!st) return ctx.reply(`❌ No such structure. \`${ctx.prefix} base info\` lists them with their #ids.`);
     const d = structDef(st.type);
     if (st.type === 'house') {
-        // the house interior IS the existing isometric room (preserved 1:1)
+        // the house interior IS the existing room view (preserved 1:1). Owner
+        // nitpick 2026-10-24 21:29Z: the plain "open my house" entry is basically
+        // your regular house view — send a single PNG (no animated bake); the
+        // moving grid/mp4 stays on the select/place flows.
         const hRec = await homestead.loadRec(ctx.senderJid);
         const lv = d.levels.find((l) => l.level === st.level) || d.levels[0];
-        return homestead.viewRoom(ctx, hRec, { hint: `Your ${lv.name} (Structure #1, Lv.${st.level}) — ${ctx.prefix} home select <item> to rearrange.` });
+        return homestead.viewRoom(ctx, hRec, { static: true, hint: `Your ${lv.name} (Structure #1, Lv.${st.level}) — ${ctx.prefix} home select <name|number> to rearrange.` });
     }
     return zoomIn(ctx, rec, st);
 }

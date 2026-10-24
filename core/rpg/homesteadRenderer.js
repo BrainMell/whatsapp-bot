@@ -1148,6 +1148,16 @@ async function renderRoomImage(state, opts = {}) {
         if (hit3 && (Date.now() - hit3.ts) < CACHE_TTL) return hit3;
         try {
             const out3 = await mediaCache.cached('room', 'v3d' + require('./interior3d').VERSION + '-' + key, async () => {
+                // STATIC law (owner 2026-10-24 21:29Z "make the .j base 1
+                // basically your regular house view a png"): the plain
+                // house-entry view skips the 14-frame mp4 bake — ONE interior
+                // raster + frame 0 as a full-res PNG. stateHash already folds
+                // opts.static in, so this caches separately from the animated
+                // bake and never evicts it.
+                if (opts.static) {
+                    const roomS = await render3dBase(state, opts);
+                    return { buffer: compose3dFrame(roomS, state, 0, opts).toBuffer('image/png'), contentType: 'image/png' };
+                }
                 // ONE interior raster per bake (GLB models + rasteriser stay
                 // untouched) — the loop is that raster + cheap projected
                 // overlays streamed through the SAME ffmpeg mp4 "GIF" pipe the
@@ -1344,9 +1354,10 @@ async function renderCatalogPage(page, pages, opts = {}) {
     ctx.fillStyle = '#e8d5a3';
     ctx.font = '44px "Cinzel Deco", Cinzel';
     ctx.fillText('HOMESTEAD OUTFITTER', W / 2, 84);
-    ctx.font = '20px Medieval';
+    ctx.font = '22px Medieval';
     ctx.fillStyle = '#9c8455';
-    ctx.fillText(`— page ${page + 1} of ${pages} —`, W / 2, 128);
+    // search mode shows what was searched; plain mode shows the page counter
+    ctx.fillText(opts.searchTerm ? `— search: "${String(opts.searchTerm).slice(0, 28)}" —` : `— page ${page + 1} of ${pages} —`, W / 2, 128);
     ctx.strokeStyle = '#a67c2e';
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(120, 158); ctx.lineTo(W - 120, 158); ctx.stroke();
@@ -1360,11 +1371,11 @@ async function renderCatalogPage(page, pages, opts = {}) {
         ctx.fillText(`${Number(opts.balance).toLocaleString()} ZENI`, W / 2, 196);
     }
 
-    const items = catalogSorted();
+    const items = opts.items || catalogSorted();
     const COLS = 4, ROWS = 3, PER = COLS * ROWS;
     const rooms = require('./homesteadRooms');
     const houseLv = opts.houseLv || 1;
-    if (page >= Math.ceil(items.length / PER)) return renderArchitectCard(ctx, canvas, { W, H, page, pages, houseLv, rooms, balance: opts.balance });
+    if (!opts.items && page >= Math.ceil(items.length / PER)) return renderArchitectCard(ctx, canvas, { W, H, page, pages, houseLv, rooms, balance: opts.balance });
     const gx0 = 60, gy0 = 236, cw = 234, ch = 320, gapx = 16, gapy = 20;
     for (let i = 0; i < PER; i++) {
         const it = items[page * PER + i];
@@ -1423,44 +1434,44 @@ async function renderCatalogPage(page, pages, opts = {}) {
             }
         }
 
-        ctx.font = '19px Medieval';
+        ctx.font = '22px Medieval';
         ctx.fillStyle = '#e8d5a3';
         let nm = it.name;
-        while (ctx.measureText(nm).width > cw - 20 && nm.length > 4) nm = nm.slice(0, -2);
+        while (ctx.measureText(nm).width > cw - 18 && nm.length > 4) nm = nm.slice(0, -2);
         if (nm !== it.name) nm += '…';
-        ctx.fillText(nm, x + cw / 2, y + 232);
+        ctx.fillText(nm, x + cw / 2, y + 228);
 
-        ctx.font = '13px Medieval';
+        ctx.font = '15px Medieval';
         ctx.fillStyle = R.col;
-        ctx.fillText(it.rarity.toUpperCase(), x + cw / 2, y + 254);
+        ctx.fillText(it.rarity.toUpperCase(), x + cw / 2, y + 253);
 
-        ctx.font = '22px Cinzel';
+        ctx.font = '26px Cinzel';
         ctx.fillStyle = '#f0c05a';
-        ctx.fillText(`◆ ${it.price.toLocaleString()}`, x + cw / 2, y + 286);
+        ctx.fillText(`◆ ${it.price.toLocaleString()}`, x + cw / 2, y + 288);
 
         if (it.comfort > 0) {
-            ctx.font = '14px Medieval';
+            ctx.font = '16px Medieval';
             ctx.fillStyle = '#7ec8a0';
-            ctx.fillText('♥'.repeat(Math.min(it.comfort, 8)), x + cw / 2, y + 306);
+            ctx.fillText('♥'.repeat(Math.min(it.comfort, 8)), x + cw / 2, y + 310);
         }
         // house-level tag (top-left chip) + lock veil
         ctx.save();
         ctx.fillStyle = locked ? 'rgba(150,40,30,0.92)' : 'rgba(40,70,48,0.9)';
-        roundRect(ctx, x + 8, y + 8, 64, 22, 8); ctx.fill();
-        ctx.font = '13px Medieval'; ctx.fillStyle = '#f4e8c8'; ctx.textAlign = 'center';
-        ctx.fillText(`${locked ? '🔒 ' : ''}House ${need}`, x + 40, y + 20);
+        roundRect(ctx, x + 8, y + 8, 78, 25, 8); ctx.fill();
+        ctx.font = '15px Medieval'; ctx.fillStyle = '#f4e8c8'; ctx.textAlign = 'center';
+        ctx.fillText(`${locked ? '🔒 ' : ''}House ${need}`, x + 47, y + 21);
         if (locked) {
             ctx.fillStyle = 'rgba(10,6,3,0.55)';
             roundRect(ctx, x, y, cw, ch, 12); ctx.fill();
-            ctx.font = '20px Cinzel'; ctx.fillStyle = '#e07060';
+            ctx.font = '22px Cinzel'; ctx.fillStyle = '#e07060';
             ctx.fillText(`Needs ${rooms.HOUSE_NAMES[need]}`, x + cw / 2, y + 150);
         }
         ctx.restore();
     }
 
-    ctx.font = '20px Medieval';
+    ctx.font = '22px Medieval';
     ctx.fillStyle = '#9c8455';
-    ctx.fillText('.home buy <name>   •   .home place <name>   •   .home catalog <page>   •   .home rooms', W / 2, H - 46);
+    ctx.fillText(opts.searchTerm ? '.home buy <name>   •   .home catalog — full stock' : '.home buy <name>   •   .home catalog search <name>   •   .home rooms', W / 2, H - 46);
     ctx.strokeStyle = 'rgba(166,124,46,0.5)';
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(120, H - 78); ctx.lineTo(W - 120, H - 78); ctx.stroke();
@@ -1474,17 +1485,27 @@ async function renderCatalogPage(page, pages, opts = {}) {
 //  items available to them" + §5 inventory: placed vs storage at a glance)
 // ═══════════════════════════════════════════════════════════════════════════
 const STAR = { common: '⚪', uncommon: '🟢', rare: '🔵', epic: '🟣', legendary: '🟠' };
-const ROWS_PER_PAGE = 14;
+const ROWS_PER_PAGE = 12;   // owner 2026-10-24 21:19Z "the names and the listed items are wayyyy too small" — fewer, taller rows
+
+// Shared row model — ONE numbering law for the card AND the command layer:
+// rows are 1-based across pages, placed pieces first (room order), then storage.
+// `.home select 7` / `.home remove 2-5` use these exact numbers.
+function inventoryRows(rec) {
+    const placedRows = (rec.placed || []).map((p) => {
+        const d = itemDef(p.item) || {};
+        return { d, status: d.layer === 'wall' ? `wall ${p.x}` : `(${p.x},${p.y})`, placed: true, uid: p.uid };
+    });
+    const storedRows = (rec.owned || []).map((o) => ({ d: itemDef(o.id) || {}, status: 'storage', placed: false, uid: o.uid }));
+    const rows = [...placedRows, ...storedRows];
+    rows.forEach((r, i) => { r.n = i + 1; });
+    return rows;
+}
 
 async function renderInventoryCard(rec, opts = {}) {
     ensureFonts();
-    // rows: placed pieces first (room order), then storage
-    const placedRows = (rec.placed || []).map((p) => {
-        const d = itemDef(p.item) || {};
-        return { d, status: d.layer === 'wall' ? `wall ${p.x}` : `(${p.x},${p.y})`, placed: true };
-    });
-    const storedRows = (rec.owned || []).map((o) => ({ d: itemDef(o.id) || {}, status: 'storage', placed: false }));
-    const rows = [...placedRows, ...storedRows];
+    const rows = inventoryRows(rec);
+    const placedRows = rows.filter((r) => r.placed);
+    const storedRows = rows.filter((r) => !r.placed);
     const pages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
     let page = parseInt(opts.page, 10);
     if (!Number.isFinite(page) || page < 1) page = 1;
@@ -1517,12 +1538,12 @@ async function renderInventoryCard(rec, opts = {}) {
     ctx.beginPath(); ctx.moveTo(120, 158); ctx.lineTo(W - 120, 158); ctx.stroke();
 
     const comfort = (rec.placed || []).reduce((s, p) => s + ((itemDef(p.item) || {}).comfort || 0), 0);
-    ctx.font = '22px Cinzel';
+    ctx.font = '24px Cinzel';
     ctx.fillStyle = '#7ec8a0';
     fillTextMixed(ctx, `♥ ${comfort} comfort   •   📍 ${placedRows.length} placed   •   📦 ${storedRows.length} storage`, W / 2, 196);
 
     const slice = rows.slice((page - 1) * ROWS_PER_PAGE, page * ROWS_PER_PAGE);
-    const y0 = 236, rh = 64;
+    const y0 = 240, rh = 80;
     let lastPlaced = null;
     for (let i = 0; i < slice.length; i++) {
         const row = slice[i];
@@ -1531,70 +1552,82 @@ async function renderInventoryCard(rec, opts = {}) {
         // section divider
         if (row.placed !== lastPlaced) {
             lastPlaced = row.placed;
-            ctx.font = '17px Medieval';
+            ctx.font = '20px Medieval';
             ctx.fillStyle = '#c9a25e';
             ctx.textAlign = 'center';
-            fillTextMixed(ctx, row.placed ? '— 📍 PLACED IN YOUR ROOM —' : '— 📦 IN STORAGE —', W / 2, y + 10);
+            fillTextMixed(ctx, row.placed ? '— 📍 PLACED IN YOUR ROOM —' : '— 📦 IN STORAGE —', W / 2, y + 8);
         }
-        const rowY = y + 34;
-        // row plate
+        const rowY = y + 46;
+        // row plate (taller)
         ctx.fillStyle = 'rgba(32,24,14,0.72)';
-        roundRect(ctx, 70, rowY - 21, W - 140, 44, 9);
+        roundRect(ctx, 60, rowY - 27, W - 120, 58, 10);
         ctx.fill();
         ctx.strokeStyle = 'rgba(166,124,46,0.35)';
         ctx.lineWidth = 1;
-        roundRect(ctx, 70, rowY - 21, W - 140, 44, 9);
+        roundRect(ctx, 60, rowY - 27, W - 120, 58, 10);
         ctx.stroke();
+        // pick number — the SAME number `.home select <n>` / `.home remove <n>` takes
+        ctx.save();
+        ctx.fillStyle = 'rgba(201,168,90,0.16)';
+        roundRect(ctx, 74, rowY - 18, 40, 40, 9); ctx.fill();
+        ctx.strokeStyle = 'rgba(201,168,90,0.55)'; ctx.lineWidth = 1.5;
+        roundRect(ctx, 74, rowY - 18, 40, 40, 9); ctx.stroke();
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = 'bold 25px Cinzel';
+        ctx.fillStyle = '#f0c05a';
+        ctx.fillText(String(row.n), 94, rowY + 2);
+        ctx.restore();
         // 3D thumbnail (GLB through the interior3d rasteriser) — 2D sprite fallback
         const thumb = row.d.id ? await itemThumb3d(row.d.id) : null;
         if (thumb) {
             const im = await require('canvas').loadImage(thumb);
-            const s = Math.min(38 / im.height, 60 / im.width);
+            const s = Math.min(48 / im.height, 76 / im.width);
             ctx.save();
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
-            ctx.drawImage(im, 100 - (im.width * s) / 2, rowY - (im.height * s) / 2, im.width * s, im.height * s);
+            ctx.drawImage(im, 148 - (im.width * s) / 2, rowY - (im.height * s) / 2, im.width * s, im.height * s);
             ctx.restore();
         } else {
             const spr = row.d.id ? await img(`${row.d.id}.png`) : null;
             if (spr) {
-                const maxH = 36, maxW = 56;
+                const maxH = 46, maxW = 72;
                 let s = Math.min(maxH / spr.height, maxW / spr.width, 2);
-                ctx.drawImage(spr, 100 - (spr.width * s) / 2, rowY - (spr.height * s) / 2, spr.width * s, spr.height * s);
+                ctx.drawImage(spr, 148 - (spr.width * s) / 2, rowY - (spr.height * s) / 2, spr.width * s, spr.height * s);
             }
         }
-        // name + star
+        // name + star (bigger — owner 21:19Z "wayyyy too small")
         ctx.textAlign = 'left';
-        ctx.font = '22px Medieval';
+        ctx.textBaseline = 'middle';
+        ctx.font = '28px Medieval';
         ctx.fillStyle = R.col;
         let nm = `${STAR[row.d.rarity] || '⚪'} ${row.d.name || row.d.id}`;
-        const maxNm = W - 140 - 220 - 130;
+        const maxNm = W - 120 - 200 - 170 - 90;
         while (ctx.measureText(nm).width > maxNm && nm.length > 4) nm = nm.slice(0, -2);
         if (nm !== `${STAR[row.d.rarity] || '⚪'} ${row.d.name || row.d.id}`) nm += '…';
-        ctx.fillText(nm, 140, rowY);
+        ctx.fillText(nm, 196, rowY);
         // comfort chips
         if (row.d.comfort > 0) {
-            ctx.font = '15px Medieval';
+            ctx.font = '17px Medieval';
             ctx.fillStyle = '#7ec8a0';
-            ctx.fillText('♥'.repeat(Math.min(row.d.comfort, 5)), 140 + ctx.measureText(nm).width + 18, rowY + 1);
+            ctx.fillText('♥'.repeat(Math.min(row.d.comfort, 5)), 196 + ctx.measureText(nm).width + 18, rowY + 1);
         }
         // status (right-aligned)
         ctx.textAlign = 'right';
-        ctx.font = '20px Medieval';
+        ctx.font = '24px Medieval';
         ctx.fillStyle = row.placed ? '#e8d5a3' : '#9c8455';
-        ctx.fillText(row.placed ? `📍 ${row.status}` : '📦 storage', W - 100, rowY);
+        ctx.fillText(row.placed ? `📍 ${row.status}` : '📦 storage', W - 84, rowY);
     }
     if (!slice.length) {
-        ctx.font = '24px Medieval';
+        ctx.font = '26px Medieval';
         ctx.fillStyle = '#9c8455';
         ctx.textAlign = 'center';
         ctx.fillText('An empty homestead — visit the outfitter!', W / 2, 400);
     }
 
     ctx.textAlign = 'center';
-    ctx.font = '20px Medieval';
+    ctx.font = '22px Medieval';
     ctx.fillStyle = '#9c8455';
-    ctx.fillText(`${opts.prefix || '.'}home select <name>   •   ${opts.prefix || '.'}home place <name> [x y]   •   ${opts.prefix || '.'}home store [x y]`, W / 2, H - 46);
+    ctx.fillText(`${opts.prefix || '.'}home select <number|name>   •   ${opts.prefix || '.'}home remove <numbers>   •   ${opts.prefix || '.'}home place <name> [x y]`, W / 2, H - 46);
     ctx.strokeStyle = 'rgba(166,124,46,0.5)';
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(120, H - 78); ctx.lineTo(W - 120, H - 78); ctx.stroke();
@@ -1611,6 +1644,8 @@ module.exports = {
     renderRoomImage,
     renderCatalogPage,
     renderInventoryCard,
+    inventoryRows,
+    INV_ROWS_PER_PAGE: ROWS_PER_PAGE,
     encodeFramesToMp4,
     itemDef,
     catalog,
