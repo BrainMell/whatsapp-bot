@@ -12,7 +12,7 @@ eq(r.mixed,true,'mixed group gets a warning');
 r = resolvePartyDungeonRank(['SSS','SSS','F']);
 eq(r.newRank,'E','high-rank majority cannot drag F-rank member into high content');
 r = resolvePartyDungeonRank(['B','C']);
-eq(r.newRank,'D','rank ties choose the lower tier, then one rank above it');
+eq(r.newRank,'B','rank ties choose the lower tier, then one rank above it');
 eq(r.commonRank,'C','common-rank diagnostic ties choose lower tier');
 r = resolvePartyDungeonRank(['B','B','B']);
 eq(r.newRank,'A','uniform groups retain one-rank-above progression');
