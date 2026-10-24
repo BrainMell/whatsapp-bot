@@ -334,6 +334,8 @@ function buildWorld(state, cel = null) {
 
     // ── streets / plaza: the saved square-grid street plan re-drawn as hex lines ──
     const roadList = [];
+    const roadPolys = [];       // straight world-space centre lines of every street (drawn as clean ribbons; hex road tiles are blanked)
+    const worldOf = (c, r) => { const q = K.hexWorld(c, r); return [q.x, q.z]; };
     const roadCells = (cells, closed = false) => {
         let prev = null, first = null;
         for (const [c, r] of cells) {
@@ -347,7 +349,7 @@ function buildWorld(state, cel = null) {
         }
         if (closed && first && prev) w.link(prev[0], prev[1], first[0], first[1]);
     };
-    const roadLine = (p1, p2) => { const [c1, r1] = hc(p1[0], p1[1]), [c2, r2] = hc(p2[0], p2[1]); roadCells(K.hexLine(c1, r1, c2, r2)); };
+    const roadLine = (p1, p2) => { const [c1, r1] = hc(p1[0], p1[1]), [c2, r2] = hc(p2[0], p2[1]); roadCells(K.hexLine(c1, r1, c2, r2)); roadPolys.push({ pts: [worldOf(c1, r1), worldOf(c2, r2)] }); };
     roadLine([8, 4], [8, N + 3]);                       // main street, through the gate and out of the village
     roadLine([3, 4], [13, 4]);                          // north lane (miners' row + pond lane)
     roadLine([2, 9], [7, 9]);                           // hunting walk
@@ -355,9 +357,11 @@ function buildWorld(state, cel = null) {
     {   // the road beyond the gate runs off into the wilds
         const [c1, r1] = hc(8, N + 3), [c2, r2] = hc(10, N + 14);
         roadCells(K.hexLine(c1, r1, c2, r2));
+        roadPolys.push({ pts: [worldOf(c1, r1), worldOf(c2, r2)] });
     }
     const [pc, pr] = hc(8, 7);
-    roadCells(K.ring(pc, pr, 1), true);                 // village green ring
+    roadCells(K.ring(pc, pr, 1), true);
+    roadPolys.push({ pts: K.ring(pc, pr, 1).map(([c, r]) => worldOf(c, r)), closed: true });                 // village green ring
     claim(pc, pr);
     w.put('building_well_' + team, pc, pr, { sc: 1.1 });
     w.put('flag_' + team, pc, pr, { dx: 0.9, dz: 0.5 });
@@ -393,6 +397,7 @@ function buildWorld(state, cel = null) {
             prev = [c, r];
         }
         if (K.hexDist(prev[0], prev[1], nr.to[0], nr.to[1]) <= 1 && !foot.has(keyOf(prev[0], prev[1]))) w.link(prev[0], prev[1], nr.to[0], nr.to[1]);
+        roadPolys.push({ pts: [worldOf(nr.from[0], nr.from[1]), worldOf(nr.to[0], nr.to[1])], spur: true });
     }
     // ── the HUNTING GROUNDS = FOREST (owner 2026-10-21: "the hunting grounds is supposed to be a forest"): no camp, no
     // buildings — the west woods stay thick and a small unclaimed-by-props glade holds wandering game (deer, boar, rabbit).
@@ -415,22 +420,19 @@ function buildWorld(state, cel = null) {
         const homeSt0 = (state.structures || []).find((x) => x.type === 'house');
         const homeLv = Math.max(1, Math.min(3, (homeSt0 && homeSt0.level) || 1));
         w.__homeLv = homeLv;
-        if (homeLv >= 2) {
+        {
             const inVillage = (c, r) => ringDist(c, r) <= FAR_R - 1;
             const rcells = roadList.filter(([c, r], i, a) => inVillage(c, r) && w.cell[r][c].road && a.findIndex((q) => q[0] === c && q[1] === r) === i);
             const PAVE = homeLv >= 3
                 ? { edge: '#4a2217', base: '#a8472d', mortar: '#d98a63', dash: [4, 3.2], wd: 0.56 }
-                : { edge: '#44474c', base: '#8f949b', mortar: '#b7bbc1', dash: [2.4, 2.6], wd: 0.5 };
+                : homeLv === 2
+                    ? { edge: '#44474c', base: '#8f949b', mortar: '#b7bbc1', dash: [2.4, 2.6], wd: 0.5 }
+                    : { edge: '#4a3622', base: '#a58557', mortar: '#b99c6c', dash: [1.2, 3.4], wd: 0.46 };   // lv1 packed-earth lanes
             const segs = [];
-            for (const [c, r] of rcells) {
-                const a = K.hexWorld(c, r);
-                segs.push([a.x, a.z, a.x, a.z]);                                          // round cap at the centre
-                for (let e = 0; e < 6; e++) {
-                    const [nc, nr] = K.neighbor(c, r, e);
-                    if (!w.inb(nc, nr) || !w.cell[nr][nc].road || !inVillage(nc, nr)) continue;
-                    const b = K.hexWorld(nc, nr);
-                    segs.push([a.x, a.z, (a.x + b.x) / 2, (a.z + b.z) / 2]);
-                }
+            for (const poly of roadPolys) {
+                const pts = poly.pts, n = pts.length;
+                for (let i = 0; i < n - 1; i++) segs.push([pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]]);
+                if (poly.closed && n > 2) segs.push([pts[n - 1][0], pts[n - 1][1], pts[0][0], pts[0][1]]);
             }
             w.underlay((ctx, p, k) => {
                 const S = w.view.S * w.scale;
@@ -441,7 +443,7 @@ function buildWorld(state, cel = null) {
                     ctx.stroke(); ctx.restore();
                 };
                 stroke(PAVE.edge, PAVE.wd + 0.1);
-                for (const [c, r] of [[pc, pr], ...K.ring(pc, pr, 1)]) {            // the green's square is paved edge to edge
+                for (const [c, r] of (homeLv >= 2 ? [[pc, pr], ...K.ring(pc, pr, 1)] : [])) {            // the green's square is paved edge to edge
                     const poly = w.cellPoly(c, r, 0.02, 0.28);
                     ctx.save(); ctx.fillStyle = PAVE.edge; ctx.beginPath(); poly.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.closePath(); ctx.fill(); ctx.restore();
                     const poly2 = w.cellPoly(c, r, 0.02, 0.42);
@@ -451,6 +453,7 @@ function buildWorld(state, cel = null) {
                 stroke(PAVE.mortar, PAVE.wd * 0.96, PAVE.dash.map((d) => d * S * 0.09));
                 stroke(PAVE.base, PAVE.wd * 0.5);
             }, 0, 0);
+          if (homeLv >= 2) {
             // lamp posts: every other cell of the main street (+ the plaza ring); lv3 adds every lane
             const lampSet = new Set();
             let li = 0;
@@ -484,8 +487,11 @@ function buildWorld(state, cel = null) {
                 for (const [dx, dz] of [[1.1, -0.6], [-1.1, 0.9]]) w.put('flag_' + team, pc, pr, { dx, dz, sc: 0.9 });
             }
         }
+      }
     }
     w.resolve();
+    // clean roads: the ribbons above ARE the streets — blank the zig-zagging per-hex road tiles under them
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { const kk = w.cell[r][c]; if (kk.road && !kk.door && !kk.water && !kk.river) kk.tile = 'hex_grass'; }
 
     // (2026-10-22: the stone wall + towers that used to cut across the south of the village are gone — the palisade's own
     //  gate is the one entrance, so nothing wall-like sits INSIDE the base any more)
@@ -860,6 +866,7 @@ function buildWorld(state, cel = null) {
         }
     }
     w.resolve();                                                      // re-resolve now that the pier cells are water
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { const kk = w.cell[r][c]; if (kk.road && !kk.door && !kk.water && !kk.river) kk.tile = 'hex_grass'; }
     for (const [c, r, len, pd] of lakeShore) {
         const cells = w.layPier(c, r, pd || 0, len);
         const last = cells[cells.length - 1];
