@@ -32,7 +32,10 @@ const REPO = path.join(__dirname, '..');
 const OUT = path.join(REPO, 'core', 'rpgasset', 'minepov');
 const PREVIEWS = path.join(__dirname, 'minepov_previews');
 
-const GW = 480, GH = 360, FRAMES = 36, DELAY_MS = 60; // same geometry as the fish lane
+// 54 frames = 3 full pickaxe strike cycles (18f each): two cracking hits, then
+// the burst + fresh-node fade — the ambient layers are all periodic in t so the
+// longer loop still closes seamlessly.
+const GW = 480, GH = 360, FRAMES = 54, DELAY_MS = 60; // same geometry as the fish lane
 
 // ── seeded rng ──
 function mulberry32(a) {
@@ -722,6 +725,390 @@ function rockChips(ctx, P, t, band) {
     }
 }
 let GEM_CUR = ['#fff'];
+
+// ═══ ⛏ PICKAXE LANE (owner 2026-10-24: "remove the mining machine ONLY … place
+// in the pickaxe and have it hit a smaller rock in front of the existing big one
+// with all the effects set and have said rock break") ═════════════════════════
+// Faithful port of the approved demo animation: the pickaxe floats, winds up
+// and strikes at intervals; branching cracks grow per hit; on the third strike
+// the small node BURSTS (chunks + ore gems + popup) and a fresh node fades in.
+// The BIG face rock is never touched; the machine is gone. All particle motion
+// is ANALYTIC (pure functions of the frame index, seeded params) so any paint
+// order / --only run / preview frame is deterministic and the 54-frame loop
+// closes perfectly. The lane paints AFTER the cart ⇒ the pickaxe is topmost —
+// no more "part of the axe goes behind something" (owner round-2 bug).
+const PK_D2R = Math.PI / 180;
+const PK = {
+    SC: 0.50,            // sprite scale on the card (360px work sprite)
+    PIV: [203, 247],     // grip pivot in scene coords
+    STRIKE_ANG: 147,     // CW degrees from head-up at impact (demo-proven)
+    IP: [236, 320],      // impact point — small rock's upper-left face
+    SM_CX: 258, SM_BASE: 350, SM_HW: 30, SM_HH: 26,   // small node in front of the face
+    FLOOR: 348, CYC: 18, // frames per swing cycle
+};
+PK.STRIKES = new Set([13, 31, 49]);
+PK.BURST_F = 49;
+PK.GEM_XY = [[248, 336], [268, 340], [257, 345], [243, 347], [271, 331]]; // 2/3/5 by band
+PK.POP = { low: 'ORE +2', mid: 'ORE +4', epic: 'ORE +8' };
+
+function pkLerp(a, b, t) { return a + (b - a) * t; }
+function pkEaseOut(t) { return 1 - (1 - t) * (1 - t); }
+function pkEaseIn(t) { return t * t * t; }
+function pkHex(hex) { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function pkCol(c, f) { // f<0 darken, f>0 lighten — rgb array in, css string out
+    const v = (x) => Math.max(0, Math.min(255, Math.round(f >= 0 ? x + (255 - x) * f : x * (1 + f))));
+    return `rgb(${v(c[0])},${v(c[1])},${v(c[2])})`;
+}
+
+// ── sprite: the crescent-head pickaxe from the approved demo, rebuilt on
+//    canvas. Anti-clip pad (pivot dead-centre, 170px clearance) — the Task 55
+//    lesson: a tight sprite box is what clipped the head on the leftward swing.
+let PICK_SPR = null;
+const PICK_PAD = 170;
+function buildPickaxe() {
+    if (PICK_SPR) return;
+    const S = 360, cv = createCanvas(S, S), g = cv.getContext('2d');
+    const cx = 180, D = PK_D2R;
+    g.lineJoin = 'round'; g.lineCap = 'round';
+    // steel crescent head: outer top arc L→R, hooked tips, inner top arc R→L
+    g.beginPath();
+    g.arc(cx, 100, 64, 185 * D, 356 * D, false);
+    g.lineTo(250, 132);
+    g.arc(cx, 118, 64, 355 * D, 185 * D, true);
+    g.lineTo(110, 132);
+    g.closePath();
+    g.fillStyle = '#d6dde8'; g.fill();
+    g.strokeStyle = '#1e202a'; g.lineWidth = 3; g.stroke();
+    g.strokeStyle = '#f5f9fd'; g.lineWidth = 4;
+    g.beginPath(); g.arc(cx, 102, 54, 200 * D, 340 * D, false); g.stroke();
+    g.strokeStyle = '#767f8e';
+    g.beginPath(); g.arc(cx, 106, 54, 205 * D, 335 * D, false); g.stroke();
+    // collar at the head/handle joint
+    rr(g, cx - 14, 44, 28, 22, 5);
+    g.fillStyle = '#5a6270'; g.fill();
+    g.strokeStyle = '#1e202a'; g.lineWidth = 3; g.stroke();
+    // long tapered handle + grain line
+    g.beginPath(); g.moveTo(cx - 8, 48); g.lineTo(cx + 8, 48); g.lineTo(cx + 5, 276); g.lineTo(cx - 5, 276); g.closePath();
+    g.fillStyle = '#7a4a22'; g.fill();
+    g.strokeStyle = '#321c0c'; g.lineWidth = 2.5; g.stroke();
+    g.strokeStyle = '#a96e34'; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(cx - 4, 54); g.lineTo(cx - 3, 272); g.stroke();
+    // grip wraps + butt cap
+    for (let i = 0; i < 5; i++) {
+        const y = 238 + i * 9, o = i % 2;
+        g.fillStyle = '#4a2e16'; g.strokeStyle = '#28160a'; g.lineWidth = 1.5;
+        g.beginPath(); g.rect(cx - 7 + o, y, 14 - 2 * o, 5); g.fill(); g.stroke();
+    }
+    rr(g, cx - 12, 272, 24, 16, 5);
+    g.fillStyle = '#402612'; g.fill();
+    g.strokeStyle = '#1e1006'; g.lineWidth = 2; g.stroke();
+    // scale to card size and paste into the padded square, pivot at centre
+    const small = createCanvas(Math.round(S * PK.SC), Math.round(S * PK.SC));
+    const sg = small.getContext('2d');
+    sg.imageSmoothingEnabled = true; sg.imageSmoothingQuality = 'high';
+    sg.drawImage(cv, 0, 0, small.width, small.height);
+    PICK_SPR = createCanvas(PICK_PAD * 2, PICK_PAD * 2);
+    const pg = PICK_SPR.getContext('2d');
+    pg.drawImage(small, PICK_PAD - cx * PK.SC, PICK_PAD - 268 * PK.SC);
+}
+
+// ── pose curves (ported; bob/sway close every CYC so the loop seams invisibly)
+function pickPose(f) {
+    const o = f % PK.CYC;
+    const idleS = Math.sin(o * (2 * Math.PI / PK.CYC));
+    if (o < 5) return { ang: -22 + idleS * 3, pyv: PK.PIV[1] + idleS * 7, glow: 64, smear: 0, shake: 0 };
+    if (o < 9) {
+        const t = pkEaseOut((o - 5) / 4);
+        return { ang: pkLerp(-22, -78, t), pyv: PK.PIV[1] + 7 - 12 * t - idleS * 4, glow: pkLerp(64, 112, t), smear: 0, shake: 0 };
+    }
+    if (o < 11) return { ang: -78 + (o === 10 ? 0.8 : -0.8), pyv: PK.PIV[1] - 5, glow: 118, smear: 0, shake: 0 };
+    if (o < 13) {
+        const t = pkEaseIn((o - 11) / 2);
+        return { ang: pkLerp(-78, PK.STRIKE_ANG, t), pyv: PK.PIV[1] - 5 + 20 * t, glow: 118, smear: 1, shake: 0 };
+    }
+    if (o === 13) return { ang: PK.STRIKE_ANG, pyv: PK.PIV[1] + 15, glow: 128, smear: 0, shake: 5 };
+    const t = (o - 13) / 4;
+    return {
+        ang: pkLerp(PK.STRIKE_ANG, -22, pkEaseOut(t)) + (o === 16 ? -6 : 0),
+        pyv: PK.PIV[1] + 15 - 22 * pkEaseOut(t), glow: pkLerp(128, 64, t), smear: 0,
+        shake: 5 * Math.pow(0.55, o - 13),
+    };
+}
+
+// ── cracks: seeded branching polylines + fracture arcs (replaces the jaded
+//    3-zigzag look — these fork, taper and read like real fracture lines)
+function pkPolyline(ip, ang0, segs, r) {
+    const pts = [[ip[0], ip[1]]];
+    let x = ip[0], y = ip[1], ang = ang0, L = 8 + r() * 3, branch = null;
+    for (let s = 0; s < segs; s++) {
+        ang += (r() - 0.5) * 0.84;
+        x += Math.cos(ang) * L; y += Math.sin(ang) * L;
+        pts.push([x, y]);
+        if (s === 1 && !branch && r() < 0.9) {
+            let ba = ang + (r() < 0.5 ? -0.7 : 0.7), bx = x, by = y, bl = L * 0.7;
+            const bp = [[bx, by]];
+            for (let k = 0; k < 2; k++) { ba += (r() - 0.5) * 0.8; bx += Math.cos(ba) * bl; by += Math.sin(ba) * bl; bp.push([bx, by]); }
+            branch = bp;
+        }
+        L *= 1.28;
+    }
+    return [pts, branch];
+}
+function pkArcPts(ip, rad, a0, a1) {
+    const out = [];
+    for (let i = 0; i < 7; i++) { const a = a0 + (a1 - a0) * i / 6; out.push([ip[0] + rad * Math.cos(a), ip[1] + rad * Math.sin(a)]); }
+    return out;
+}
+let PK_CRACKS = null;
+function buildCracks(ip) {
+    const r = mulberry32(0xACE5);
+    const s0 = [], s1 = [], s2 = [];
+    for (const a0 of [52 * PK_D2R, 96 * PK_D2R, 138 * PK_D2R]) {
+        const [pts, br] = pkPolyline(ip, a0, 4, r);
+        (s0.length < 2 ? s0 : s1).push([pts, 3.2]);
+        if (br) s1.push([br, 2.2]);
+    }
+    for (const [rad, a0deg] of [[10, 10], [16, 160], [20, 280]]) {
+        const a0 = a0deg * PK_D2R;
+        s2.push([pkArcPts(ip, rad, a0, a0 + (55 + r() * 40) * PK_D2R), 1.6]);
+    }
+    PK_CRACKS = [s0, s0.concat(s1)];
+}
+
+// ── the small foreground node — same visual grammar as the big face (dark
+//    outline, top-light, faceted ore in the location's gem colour) so it reads
+//    as part of the same wall, plus a natural scatter of neighbours
+function pkRockPts(cx, base, hw, hh, seed) {
+    const r = mulberry32(seed), pts = [], n = 9;
+    for (let i = 0; i <= n; i++) {
+        const a = Math.PI * i / n;
+        const j = 1 + (i % 2 ? 0.10 : -0.08) + (r() * 0.08 - 0.04);
+        pts.push([cx + hw * j * Math.cos(a), base - hh * j * Math.sin(a)]);
+    }
+    const poly = [[cx - hw * 1.04, base]].concat(pts, [[cx + hw * 1.04, base]]);
+    return {
+        poly,
+        fac: [[cx - hw * .55, base], [cx - hw * .1, base - hh * .95], [cx + hw * .1, base], [cx + hw * .55, base]],
+        fac2: [[cx + hw * .1, base], [cx + hw * .5, base - hh * .7], [cx + hw * .8, base]],
+        top: [[cx - hw * .5, base - hh * .72], [cx - hw * .05, base - hh * .92], [cx + hw * .45, base - hh * .68]],
+    };
+}
+const PK_ROCK = pkRockPts(PK.SM_CX, PK.SM_BASE, PK.SM_HW, PK.SM_HH, 22);
+PK_ROCK.notch = [
+    [[PK.SM_CX - 26, PK.SM_BASE - 27], [PK.SM_CX - 19, PK.SM_BASE - 23], [PK.SM_CX - 24, PK.SM_BASE - 20]],
+    [[PK.SM_CX - 31, PK.SM_BASE - 16], [PK.SM_CX - 24, PK.SM_BASE - 14], [PK.SM_CX - 28, PK.SM_BASE - 9]],
+    [[PK.SM_CX - 15, PK.SM_BASE - 30], [PK.SM_CX - 8, PK.SM_BASE - 26], [PK.SM_CX - 13, PK.SM_BASE - 22]],
+];
+const PK_BACK = [[232, 343, 12, 9, 31], [291, 344, 13, 9, 32]];
+const PK_FRONT = [[221, 357, 10, 7, 41], [297, 357, 11, 7, 42], [205, 361, 7, 5, 43]];
+
+function pkDrawRock(ctx, P, locId, rk, fillRGB, cracks, notches, gemN, alpha) {
+    ctx.save();
+    if (alpha != null) ctx.globalAlpha = alpha;
+    const path = (pts) => { ctx.beginPath(); pts.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]))); ctx.closePath(); };
+    path(rk.poly); ctx.fillStyle = pkCol(fillRGB, 0); ctx.fill();
+    ctx.strokeStyle = '#0b0912'; ctx.lineWidth = 2; ctx.stroke();
+    path(rk.fac); ctx.fillStyle = pkCol(fillRGB, -0.18); ctx.fill();
+    path(rk.fac2); ctx.fillStyle = pkCol(fillRGB, -0.32); ctx.fill();
+    ctx.strokeStyle = pkCol(fillRGB, 0.45); ctx.lineWidth = 3; ctx.lineJoin = 'round';
+    ctx.beginPath(); rk.top.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]))); ctx.stroke();
+    for (const [gx, gy] of PK.GEM_XY.slice(0, gemN)) facet(ctx, gx, gy, 4.5, GEM[locId], (gx * 7) % 3);
+    if (cracks) for (const [pts, w] of cracks) {
+        ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        // light echo under a dark core — the fracture reads as a real split
+        ctx.strokeStyle = 'rgba(255,255,255,0.17)'; ctx.lineWidth = w + 1.8;
+        ctx.beginPath(); pts.forEach((q, i) => (i ? ctx.lineTo(q[0] + 1.2, q[1] + 1.2) : ctx.moveTo(q[0] + 1.2, q[1] + 1.2))); ctx.stroke();
+        ctx.strokeStyle = '#06040f'; ctx.lineWidth = w;
+        ctx.beginPath(); pts.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]))); ctx.stroke();
+    }
+    if (notches) for (const tri of rk.notch) { path(tri); ctx.fillStyle = '#0e081a'; ctx.fill(); }
+    ctx.restore();
+}
+
+// ── analytic ballistics: pure per-frame (no state — deterministic, loop-safe)
+function pkFly(x0, y0, vx, vy, g, floor, dt) {
+    let x = x0, y = y0;
+    for (let i = 0; i < dt; i++) {
+        x += vx; y += vy; vy += g;
+        if (y > floor) { y = floor; vy *= -0.35; vx *= 0.7; }
+    }
+    return [x, y];
+}
+
+// ── lane painter — called from paintFrame exactly where the machine used to be
+function pickaxeLane(ctx, P, locId, band, f) {
+    buildPickaxe();
+    if (!PK_CRACKS) buildCracks(PK.IP);
+    const pose = pickPose(f);
+    const burst = f >= PK.BURST_F;
+    const nStruck = [...PK.STRIKES].filter((s) => f > s).length;
+    const stage = Math.max(0, Math.min(2, nStruck - (burst ? 1 : 0)));
+    const gemN = band === 'epic' ? 5 : band === 'mid' ? 3 : 2;
+    const scatterFill = pkHex(P.wall).map((v) => v * 0.82);
+
+    // pickaxe ground shadow (scales with float height)
+    const hgt = (PK.FLOOR - pose.pyv) / 150;
+    ctx.save(); ctx.globalAlpha = Math.max(0.06, 0.20 - hgt * 0.06); ctx.fillStyle = '#080510';
+    ctx.beginPath(); ctx.ellipse(PK.PIV[0], PK.FLOOR + 1, 18 + hgt * 7, 3.4, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+
+    // neighbourhood: back scatter sits behind the node
+    for (const [cx, base, hw, hh, sd] of PK_BACK) {
+        pkDrawRock(ctx, P, locId, pkRockPts(cx, base, hw, hh, sd), scatterFill, null, false, 0, null);
+    }
+
+    if (burst) {
+        // crater + rubble where the node stood
+        ctx.fillStyle = pkCol(pkHex(P.bgBot), -0.35);
+        ctx.beginPath(); ctx.ellipse(PK.SM_CX, 349, 40, 8.5, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = pkCol(pkHex(P.bgBot), 0.12);
+        ctx.beginPath(); ctx.ellipse(PK.SM_CX, 350, 27, 5.5, 0, 0, Math.PI * 2); ctx.fill();
+        const rr2 = mulberry32(0xCA7A);
+        for (let i = 0; i < 6; i++) {
+            pebble(ctx, PK.SM_CX + ((i * 31) % 64) - 32, 348 + (rr2() - 0.5) * 4, 2.6, P.wallDark, rr2);
+        }
+    } else {
+        // node contact shadow + the rock itself (cracks/notches grow per strike)
+        ctx.save(); ctx.globalAlpha = 0.24; ctx.fillStyle = '#080510';
+        ctx.beginPath(); ctx.ellipse(PK.SM_CX, PK.SM_BASE + 2, PK.SM_HW * 1.05, 4, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        pkDrawRock(ctx, P, locId, PK_ROCK, pkCol(pkHex(P.wallLight), -0.15).match(/\d+/g).map(Number),
+            stage ? PK_CRACKS[stage - 1] : null, stage >= 2, gemN, null);
+    }
+
+    // burst debris (analytic across the seam — settles as the fresh node forms)
+    const bdt = (f - PK.BURST_F + FRAMES) % FRAMES;
+    if (burst || f < 10) {
+        for (let i = 0; i < 7; i++) {
+            const crng = mulberry32(0xB055 + i * 131);
+            const life = 14, dt = bdt;
+            if (dt < 1 || dt > life) continue;
+            const x0 = PK.SM_CX + (crng() - 0.5) * 56, y0 = 338 + (crng() - 0.5) * 28;
+            const vx = (crng() - 0.5) * 8, vy = -2.5 - crng() * 4.7;
+            const [x, y] = pkFly(x0, y0, vx, vy, 0.5, PK.FLOOR - 3, dt);
+            ctx.save(); ctx.globalAlpha = Math.max(0, 1 - dt / life);
+            ctx.fillStyle = pkCol(scatterFill, 0.08); ctx.strokeStyle = '#0b0912'; ctx.lineWidth = 1.4;
+            ctx.beginPath(); ctx.moveTo(x + 6, y); ctx.lineTo(x - 5, y + 5); ctx.lineTo(x - 2, y - 5);
+            ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+        }
+        const gn = band === 'epic' ? 8 : band === 'mid' ? 6 : 4;
+        for (let i = 0; i < gn; i++) {
+            const grng = mulberry32(0x9E8E + i * 97);
+            const life = 12 + (i % 3), dt = bdt;
+            if (dt < 1 || dt > life) continue;
+            const x0 = PK.SM_CX + (grng() - 0.5) * 48, y0 = 336;
+            const vx = (grng() - 0.5) * 5, vy = -3.2 - grng() * 3.6;
+            const [x, y] = pkFly(x0, y0, vx, vy, 0.55, PK.FLOOR - 2, dt);
+            ctx.save(); ctx.globalAlpha = Math.max(0, 1 - dt / (life + 3));
+            facet(ctx, x, y, 4.5, GEM[locId], (i * 1.1) % 2);
+            if (f % 6 === 0) {
+                ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1.2;
+                ctx.beginPath(); ctx.moveTo(x - 6, y); ctx.lineTo(x + 6, y);
+                ctx.moveTo(x, y - 6); ctx.lineTo(x, y + 6); ctx.stroke();
+            }
+            ctx.restore();
+        }
+    }
+
+    // front scatter (foreground neighbourhood — drawn over crater/rock base)
+    for (const [cx, base, hw, hh, sd] of PK_FRONT) {
+        pkDrawRock(ctx, P, locId, pkRockPts(cx, base, hw, hh, sd), scatterFill, null, false, 0, null);
+    }
+
+    // chips + dust at the impact point (each strike re-seeds its own burst)
+    for (const s of PK.STRIKES) {
+        const dt = (f - s + FRAMES) % FRAMES;
+        for (let i = 0; i < 13; i++) {
+            const crng = mulberry32(0xC41F + s * 131 + i * 17);
+            const life = 11 + Math.floor(crng() * 7);
+            if (dt < 1 || dt > life) { crng(); crng(); crng(); crng(); continue; }
+            const vx = (crng() - 0.5) * 6.4, vy = -1.6 - crng() * 4.4;
+            const ci = Math.floor(crng() * 4), r = 1.5 + crng() * 2;
+            const cols = [pkCol(pkHex(P.wallLight), 0.1), pkCol(pkHex(P.wall), 0.15), GEM[locId][1], GEM[locId][0]];
+            const [x, y] = pkFly(PK.IP[0], PK.IP[1], vx, vy, 0.55, PK.FLOOR - 2, dt);
+            ctx.fillStyle = cols[ci];
+            ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        }
+        for (let i = 0; i < 6; i++) {
+            const drng = mulberry32(0xD057 + s * 131 + i * 29);
+            const life = 14 + Math.floor(drng() * 7);
+            if (dt < 1 || dt > life) { drng(); drng(); drng(); drng(); continue; }
+            const x0 = PK.SM_CX + (drng() - 0.5) * 68, vx = (drng() - 0.5) * 1.4, vy = -0.4 - drng() * 0.7;
+            const r0 = 4.5 + drng() * 4;
+            const [x, y] = pkFly(x0, 344, vx, vy, 0, 400, dt);
+            ctx.save(); ctx.globalAlpha = 0.27 * Math.max(0, 1 - dt / life); ctx.fillStyle = P.dust;
+            ctx.beginPath(); ctx.ellipse(x, y, r0 + 0.42 * dt, (r0 + 0.42 * dt) * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    // impact ring (expands over 2 frames) + 8-ray starburst on the strike frame
+    const justHit = PK.STRIKES.has(f) || PK.STRIKES.has(f - 1);
+    if (justHit) {
+        const t2 = PK.STRIKES.has(f - 1) ? 1 : 0;
+        const r2 = pkLerp(8, 21, t2), a2 = pkLerp(0.78, 0.24, t2);
+        ctx.save(); ctx.globalAlpha = a2; ctx.strokeStyle = '#ffecaa'; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.arc(PK.IP[0], PK.IP[1], r2, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+    }
+    if (PK.STRIKES.has(f)) {
+        ctx.save(); ctx.strokeStyle = '#fff4c8'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+        for (let k = 0; k < 8; k++) {
+            const aa = k * Math.PI / 4 + 0.35, l1 = 6, l2 = 13 + (k % 3) * 5;
+            ctx.beginPath();
+            ctx.moveTo(PK.IP[0] + l1 * Math.cos(aa), PK.IP[1] + l1 * Math.sin(aa));
+            ctx.lineTo(PK.IP[0] + l2 * Math.cos(aa), PK.IP[1] + l2 * Math.sin(aa));
+            ctx.stroke();
+        }
+        ctx.fillStyle = '#fffff0';
+        ctx.beginPath(); ctx.arc(PK.IP[0], PK.IP[1], 5, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+    }
+
+    // swing smear arc
+    if (pose.smear) {
+        ctx.save(); ctx.globalAlpha = 0.35; ctx.strokeStyle = '#dce4f0'; ctx.lineWidth = 6;
+        ctx.beginPath(); ctx.arc(PK.PIV[0], pose.pyv, 76, -100 * PK_D2R, 55 * PK_D2R); ctx.stroke(); ctx.restore();
+    }
+
+    // aura glow (charge colour deepens into the strike) + orbit sparkles
+    ctx.save();
+    const ag = ctx.createRadialGradient(PK.PIV[0], pose.pyv - 12, 2, PK.PIV[0], pose.pyv - 12, 30);
+    ag.addColorStop(0, `rgba(176,122,255,${(pose.glow / 255) * 0.6})`);
+    ag.addColorStop(1, 'rgba(176,122,255,0)');
+    ctx.fillStyle = ag;
+    ctx.fillRect(PK.PIV[0] - 34, pose.pyv - 46, 68, 68);
+    ctx.restore();
+    for (let i = 0; i < 3; i++) {
+        const ph = (f % PK.CYC) * (2 * Math.PI / PK.CYC) * 1.5 + i * 2.094;
+        const sx = PK.PIV[0] + 20 * Math.cos(ph), sy = pose.pyv + 7 * Math.sin(ph) - 8;
+        ctx.fillStyle = i ? 'rgba(214,168,255,0.92)' : 'rgba(255,255,255,0.94)';
+        ctx.beginPath(); ctx.arc(sx, sy, 1.8, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // ⛏ THE PICKAXE — topmost scene element (owner round-2: never clipped again)
+    ctx.save();
+    ctx.translate(PK.PIV[0], pose.pyv);
+    ctx.rotate(pose.ang * PK_D2R);
+    ctx.drawImage(PICK_SPR, -PICK_PAD, -PICK_PAD);
+    ctx.restore();
+
+    // burst popup
+    if (f >= PK.BURST_F + 1) {
+        const t3 = Math.min(1, (f - PK.BURST_F) / 6);
+        const yy = 294 - 30 * t3, aa3 = pkLerp(0.94, 0.35, t3);
+        ctx.save(); ctx.globalAlpha = aa3;
+        ctx.font = 'bold 15px "DejaVu Sans", sans-serif'; ctx.textAlign = 'center';
+        ctx.fillStyle = '#1e1004'; ctx.fillText(PK.POP[band], PK.SM_CX + 1.5, yy + 1.5);
+        ctx.fillStyle = '#ffcf5e'; ctx.fillText(PK.POP[band], PK.SM_CX, yy);
+        ctx.restore();
+    }
+
+    // seam: fade a fresh node in over the crater
+    if (f >= FRAMES - 3) {
+        const t4 = (f - (FRAMES - 4)) / 3;
+        pkDrawRock(ctx, P, locId, PK_ROCK, pkCol(pkHex(P.wallLight), -0.15).match(/\d+/g).map(Number),
+            null, false, gemN, Math.min(1, t4));
+    }
+}
+
 function lanternWithShaft(ctx, P, x, t, seed) {
     const sway = Math.sin(t * Math.PI * 2 + seed) * 3;
     const lx = x + sway, ly = 78;
@@ -754,6 +1141,17 @@ function paintFrame(ctx, locId, band, frameIdx) {
     const rng = mulberry32(0xBEEF + 77 * (locId.length) + frameIdx * 13 + (band === 'epic' ? 5 : band === 'mid' ? 3 : 1));
 
     GEM_CUR = GEM[locId];
+
+    // ── strike shake: the whole cavern jolts on impact (decays 0.55^n like the
+    //    demo); pre-fill first so the translated frame never bleeds stale pixels
+    const lanePose = pickPose(frameIdx);
+    ctx.fillStyle = P.bgBot; ctx.fillRect(0, 0, GW, GH);
+    ctx.save();
+    if (lanePose.shake > 0.4) {
+        const srng = mulberry32(0x5AFE + frameIdx * 131);
+        ctx.translate(Math.round((srng() - 0.5) * 2 * lanePose.shake), Math.round((srng() - 0.5) * 1.2 * lanePose.shake));
+    }
+
     // cavern wall base
     vgrad(ctx, 0, 0, 0, GH, P.bgTop, P.bgBot);
     farArches(ctx, P, t);
@@ -805,12 +1203,11 @@ function paintFrame(ctx, locId, band, frameIdx) {
     railsAndTies(ctx, P);
     oreCart(ctx, P, locId, 66, GH - 16, t, band, mulberry32(0xCA27));
 
-    // ⚙️ Task 25 (owner: ".j mine, instead of a person doing that make it a
-    // machine or something"): the STEAM-DRILL RIG works the face — same slot
-    // the miner held, same contact point, machine animation on t.
-    machine(ctx, P, 192, 304, 1.0, t, band, mulberry32(0xC11));
-
-    rockChips(ctx, P, t, band);
+    // ⛏ owner 2026-10-24 ("remove the mining machine ONLY"): the machine is
+    // gone — the floating PICKAXE now works a smaller rock in front of the face
+    // (full crack → break → fresh-node cycle). Painted AFTER the cart so it can
+    // never disappear behind scenery on the leftward swing.
+    pickaxeLane(ctx, P, locId, band, frameIdx);
 
     // ambient dust motes
     const drng = mulberry32(0xD057 + locId.length * 17);
@@ -848,7 +1245,9 @@ function paintFrame(ctx, locId, band, frameIdx) {
         }
     }
 
-    // vignette (carve the cave mouth)
+    ctx.restore(); // end shake translate
+
+    // vignette (carve the cave mouth) + grain stay unshaken (post FX)
     const vg = ctx.createRadialGradient(GW / 2, GH * 0.52, GH * 0.34, GW / 2, GH * 0.52, GW * 0.78);
     vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(5,3,8,0.62)');
     ctx.fillStyle = vg; ctx.fillRect(0, 0, GW, GH);
@@ -878,7 +1277,7 @@ function bakeOne(locId, band, doPreviews) {
         ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
         ctx.clearRect(0, 0, GW, GH); ctx.drawImage(big, 0, 0, GW, GH);
         fs.writeFileSync(path.join(tmp, `f${String(i).padStart(2, '0')}.png`), canvas.toBuffer('image/png'));
-        if (doPreviews && (i === 0 || i === 14 || i === 20)) {
+        if (doPreviews && [0, 10, 12, 13, 19, 24, 31, 37, 47, 49, 51, 53].includes(i)) {
             fs.mkdirSync(PREVIEWS, { recursive: true });
             fs.writeFileSync(path.join(PREVIEWS, `${locId}_${band}_f${i}.png`), canvas.toBuffer('image/png'));
         }
