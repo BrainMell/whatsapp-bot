@@ -31,35 +31,12 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
   const economy = require('../core/rpg/economy');
   const CHAT_ID = '120363000000000000@g.us';
 
-  // ── find a real user who actually has learned skills (read-only) ─────────
-  // viewAbilities reads user.skills (a { skillId: level } map); a fresh test
-  // jid has none and would take the "no abilities" early-out, which never
-  // paginates. skills is an OBJECT map → $objectToArray counts its keys.
+  // ── find a real user whose skills actually RESOLVE into a codex ─────────
+  // user.skills (a { skillId: level } map) only counts if the keys belong to
+  // the user's class lineage trees — otherwise viewAbilities early-outs with
+  // "No abilities learned yet". Iterate candidates until one renders a codex.
   const usersCol = mongoose.connection.collection('users');
-  let OWNER, OWNER_NAME;
-  try {
-    const hit = await usersCol.findOne({
-      $expr: { $gt: [{ $size: { $objectToArray: { $ifNull: ['$skills', {}] } } }, 0] },
-    }, { projection: { userId: 1, nickname: 1, skills: 1 } });
-    if (hit && hit.userId) { OWNER = hit.userId; OWNER_NAME = hit.nickname || 'QA Tester'; }
-  } catch (e) { /* fall through to scan */ }
-  if (!OWNER) {
-    const alt = await usersCol.aggregate([
-      { $sample: { size: 200 } },
-      { $project: { userId: 1, nickname: 1, skills: 1 } },
-    ]).toArray();
-    const withSkills = alt.find((u) => u.skills && Object.keys(u.skills).length > 0);
-    if (withSkills) {
-      OWNER = withSkills.userId;
-      OWNER_NAME = withSkills.nickname || 'QA Tester';
-    }
-  }
-  if (!OWNER) {
-    console.error('FATAL: no user with learned skills found in DB — cannot exercise pagination');
-    process.exit(1);
-  }
-  console.log('[user] testing as', OWNER, '/', OWNER_NAME);
-
+  let OWNER, OWNER_NAME, totalPages = 0;
   const STRANGER = '2999999999999@s.whatsapp.net';
   let msgSeq = 0;
   const sent = [];
@@ -70,8 +47,49 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
       return { key: { id, remoteJid: chat, fromMe: true } };
     },
   };
-
   const bodyOf = (entry) => entry.msg.text || entry.msg.caption || '';
+
+  let candidates = [];
+  try {
+    candidates = await usersCol.aggregate([
+      { $match: { $expr: { $gt: [{ $size: { $objectToArray: { $ifNull: ['$skills', {}] } } }, 0] } } },
+      { $project: { userId: 1, nickname: 1, skills: 1 } },
+      { $limit: 12 },
+    ]).toArray();
+  } catch (e) {
+    candidates = (await usersCol.aggregate([
+      { $sample: { size: 200 } },
+      { $project: { userId: 1, nickname: 1, skills: 1 } },
+    ]).toArray()).filter((u) => u.skills && Object.keys(u.skills).length > 0).slice(0, 12);
+  }
+  console.log('[finder] candidates with non-empty skills:', candidates.length);
+
+  for (const cand of candidates) {
+    if (!cand.userId) continue;
+    sent.length = 0;
+    try {
+      await skillCommands.viewAbilities(sock, CHAT_ID, cand.userId, cand.nickname || 'QA Tester', undefined);
+    } catch (e) {
+      console.log('  [finder] viewAbilities threw for', cand.userId, '-', e.message);
+      continue;
+    }
+    const codex = sent.map(bodyOf).find((t) => /Page \d+\/\d+/.test(t) || /Codex|Ledger|Grimoire/i.test(t));
+    if (codex) {
+      OWNER = cand.userId;
+      OWNER_NAME = cand.nickname || 'QA Tester';
+      const m = codex.match(/Page (\d+)\/(\d+)/);
+      totalPages = m ? parseInt(m[2]) : 1;
+      break;
+    }
+    const first = sent[0] ? bodyOf(sent[0]).slice(0, 110) : '(nothing sent)';
+    console.log('  [finder] skip', cand.userId, '→', first.replace(/\n/g, ' '));
+  }
+  if (!OWNER) {
+    console.error('FATAL: no candidate rendered a codex — skills may not resolve to lineage trees for any sampled user');
+    process.exit(1);
+  }
+  console.log('[user] testing as', OWNER, '/', OWNER_NAME, '| totalPages =', totalPages);
+
   const findMsg = (re) => sent.map((e) => bodyOf(e)).find((t) => re.test(t)) || null;
   const lastCodex = () => {
     for (let i = sent.length - 1; i >= 0; i--) {
@@ -87,7 +105,6 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
   ok(!!codex1, 'codex renders (image caption or text)');
   const t1 = codex1 ? bodyOf(codex1) : '';
   const pageMatch = t1.match(/Page (\d+)\/(\d+)/);
-  const totalPages = pageMatch ? parseInt(pageMatch[2]) : 1;
   ok(!!pageMatch && pageMatch[1] === '1', 'codex shows Page 1/' + totalPages);
   if (totalPages > 1) {
     ok(/Reply to this message/.test(t1), 'footer advertises reply-paging');
