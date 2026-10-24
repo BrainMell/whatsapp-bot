@@ -39,7 +39,7 @@ const scene=fs.readFileSync(path.join(ROOT,'core','rpg','interior3d','scene.js')
 const index=fs.readFileSync(path.join(ROOT,'core','rpg','interior3d','index.js'),'utf8');
 check(renderer.includes("HOMESTEAD_3D_LEGACY_FALLBACK === '1'"),'legacy 2D renderer is opt-in only');
 check(renderer.includes('refusing silent legacy 2D output'),'3D failures do not silently route to old sprites');
-check(scene.includes("loadGLB(path.join(MODELS, sub"),'room scene loads actual GLB models');
+check(scene.includes("loadGLB(path.join(MODELS, sub") && scene.includes("model('furniture', p.item)"),'room scene loads actual GLB furniture models');
 check(!scene.includes('BED_IDS.has(p.item)')&&!scene.includes('BED_IDS.has(id)'),'beds use GLBs in rooms and shop thumbnails');
 check(/const VERSION = 7;/.test(index),'renderer version invalidates old room and thumbnail caches');
 console.log('\n'+pass+' passed, '+fail+' failed');
