@@ -8988,6 +8988,21 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 // are just the base ceiling.
                 s: 240000,       // sticker search: up to 30 × (download+convert+send)
                 tovid: 180000,   // animated webp → gif → mp4 → upload
+                // 💡 FIX 2026-10-24 (owner: the 45s wall "spamming when we are
+                // fishing hunting or mining"): these lanes are media-upload
+                // heavy — the card render is sub-second, but a stalled WhatsApp
+                // upload (rawSend, recurring since Sep 17) or a slow Atlas
+                // roundtrip can push the WHOLE command past the generic ceiling
+                // even though it recovers and delivers the card. 90s headroom
+                // means slow-but-alive runs never cry wolf. The timeout catch
+                // below ALSO gives the orphaned handler a grace window and
+                // throttles repeat notices per (chat, command).
+                mine: 90000,
+                fish: 90000,
+                fishing: 90000,
+                cast: 90000,
+                hunt: 90000,
+                hunting: 90000,
               };
               // 💡 FIX 2026-07-29: Capture context for the timeout catch handler.
               const _cmdContext = { primaryCmd: null, senderJid: null, chatId: null, txt: null, timeoutMs: null };
@@ -9025,9 +9040,13 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 }, 5000);
               });
 
+              // 💡 FIX 2026-10-24: hoisted (let, declared OUTSIDE the try so the
+              // timeout catch can see it) — the catch watches the orphaned
+              // handler settle during its grace window, and a late rejection
+              // is consumed instead of becoming an unhandledRejection.
+              let _handlerPromise = null;
               try {
-                await Promise.race([
-                  botConfig.storage.run(configInstance, async () => {
+                _handlerPromise = botConfig.storage.run(configInstance, async () => {
                 try {
                   const rawChatId = m.key.remoteJid;
                   const chatId = jidNormalizedUser(rawChatId);
@@ -33972,7 +33991,9 @@ _(or reply to their message)_
                     } catch (_) {}
                   }
                 }
-                  }), // END storage.run callback
+                  }); // END storage.run callback — hoisted (timeout catch watches it)
+                await Promise.race([
+                  _handlerPromise,
                   _cmdTimeoutPromise,
                 ]); // END Promise.race
                 // 💡 Phase A: stop the timeout poller — command finished first
@@ -34014,7 +34035,35 @@ _(or reply to their message)_
                 if (_ctx.chatId && typeof _ctx.chatId === 'string' && _ctx.chatId.includes('@')) {
                   try {
                     if (isRealTimeout) {
-                      await sock.sendMessage(_ctx.chatId, { text: BOT_MARKER + `⏱️ Command timed out after ${elapsed}s.\n\nThe bot is having trouble reaching a backend service (image renderer, database, or network). The owner has been notified.\n\nTry again in a minute, or use \`${botConfig.getPrefix()}ping\` to check if the bot is alive.\n\nCmd: \`${_ctx.primaryCmd || 'unknown'}\`` });
+                      // 💡 FIX 2026-10-24 (owner: "can get this to fucking stop
+                      // spamming when we are fishing hunting or mining"): the
+                      // race ORPHANS the handler — a stalled-but-recovering
+                      // upload delivered the card AFTER the scary wall, and a
+                      // user retrying a stuck .mine got SEVEN walls in 15s
+                      // (Box2 log 07:15:37-52, same chat). Two shields:
+                      // (1) GRACE — give the orphaned handler 15s to settle;
+                      //     if it finishes (card or its own error text), the
+                      //     notice would be a lie, so it is never sent.
+                      // (2) THROTTLE — one notice per (chat, command) per 10
+                      //     minutes; repeats inside the window are console-only.
+                      let _orphanSettled = false;
+                      const _markOrphanSettled = () => { _orphanSettled = true; };
+                      if (_handlerPromise) _handlerPromise.then(_markOrphanSettled, _markOrphanSettled);
+                      await new Promise((r) => setTimeout(r, 15000));
+                      if (_orphanSettled) {
+                        console.error(`⏱️ [watchdog] cmd=${_ctx.primaryCmd || 'unknown'} chat=${_ctx.chatId?.split('@')[0] || 'unknown'} timed out at ${elapsed}s but SETTLED during the 15s grace — no chat notice (outcome already delivered)`);
+                      } else {
+                        const _spamKey = `${_ctx.chatId}|${_ctx.primaryCmd || 'unknown'}`;
+                        const _now = Date.now();
+                        const _notices = globalThis.__cmdTimeoutNotice || (globalThis.__cmdTimeoutNotice = new Map());
+                        const _lastNotice = _notices.get(_spamKey) || 0;
+                        _notices.set(_spamKey, _now);
+                        if (_now - _lastNotice >= 10 * 60 * 1000) {
+                          await sock.sendMessage(_ctx.chatId, { text: BOT_MARKER + `⏱️ Command timed out after ${elapsed}s.\n\nThe bot is having trouble reaching a backend service (image renderer, database, or network). The owner has been notified.\n\nTry again in a minute, or use \`${botConfig.getPrefix()}ping\` to check if the bot is alive.\n\nCmd: \`${_ctx.primaryCmd || 'unknown'}\`` });
+                        } else {
+                          console.error(`⏱️ [watchdog] repeat timeout notice suppressed for ${_spamKey} (last notice sent ${Math.round((_now - _lastNotice) / 1000)}s ago)`);
+                        }
+                      }
                     } else {
                       // 💡 FIX 2026-08-06: Sync error - show actual error message, not "timeout"
                       const errMsg = _cmdTimeoutErr?.message?.slice(0, 200) || 'Unknown error';
