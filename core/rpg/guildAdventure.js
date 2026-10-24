@@ -12205,25 +12205,58 @@ async function applyAbilityEffect(
           // ⚔️ FIX 2026-10-24: pre-hit GIF reuses the scene already on screen
           baseSceneBuffer: state.lastCombatScene || null,
           sendText: (text) => boundedSend(sock, chatId, { text }, 'ultimateCharge'),
-          sendGif: (buffer, caption) => {
-            // ⚔️ FIX 2026-10-24 R3 (owner: "I still only get an image"): the GIF
-            // used to leave as `image:` — but WAProto's IImageMessage has NO
-            // gifPlayback field (0 decls vs IVideoMessage's 1), so baileys
-            // silently dropped the flag and every cast landed as a STATIC
-            // photo on the phone. videoMessage+gifPlayback is the exact
-            // mechanism WhatsApp Web itself uses for GIFs (baileys even labels
-            // it 'gif' in messages-send.js). Let baileys pick video/mp4.
-            console.log('[SkillVFX] gif payload: videoMessage+gifPlayback (animated)');
-            return sendMediaBounded(sock, chatId, {
-              video: buffer,
-              caption,
-              gifPlayback: true,
-            }, {
-              label: 'classUltimateVfx',
-              ms: 15000,
-              grace: 5000,
-              fallbackText: caption,
-            });
+          sendGif: async (buffer, caption) => {
+            // WhatsApp's GIF-style video lane requires H.264 MP4 bytes, not
+            // a raw GIF in the video field. Reuse the shared, production-used
+            // converter that the summon/reaction/fishing animations already use.
+            const gif89a = require('../utils/gif89a');
+            const { gifToMp4Even } = require('../utils/mediaConvert');
+            try {
+              if (!gif89a.isGifBuffer(buffer)) throw new Error('renderer did not return a valid GIF buffer');
+              const mp4Buffer = await gifToMp4Even(buffer);
+              const jpegThumbnail = gif89a.firstFrameJpeg(buffer);
+              if (!Buffer.isBuffer(mp4Buffer) || mp4Buffer.length < 500 ||
+                  mp4Buffer.toString('latin1', 4, 8) !== 'ftyp') {
+                throw new Error('GIF conversion did not produce a valid MP4');
+              }
+              const payload = {
+                video: mp4Buffer,
+                mimetype: 'video/mp4',
+                caption,
+                gifPlayback: true,
+              };
+              // Match the repo's working animation paths: a real frame-0
+              // thumbnail prevents WhatsApp's broken/gray video preview.
+              if (Buffer.isBuffer(jpegThumbnail) && jpegThumbnail.length > 500) {
+                payload.jpegThumbnail = jpegThumbnail;
+              }
+              console.log(`[SkillVFX] converted ultimate GIF ${buffer.length}B → MP4 ${mp4Buffer.length}B`);
+              return sendMediaBounded(sock, chatId, payload, {
+                label: 'classUltimateVfx',
+                ms: 15000,
+                grace: 5000,
+                fallbackText: caption,
+              });
+            } catch (convertError) {
+              console.error('[SkillVFX] GIF→MP4 failed:', convertError?.message || convertError);
+              // Still show the rendered first frame if transcoding fails.
+              const still = gif89a.firstFrameJpeg(buffer);
+              if (Buffer.isBuffer(still) && still.length > 100) {
+                return sendMediaBounded(sock, chatId, {
+                  image: still,
+                  caption: caption + '\\n_(Animation unavailable on this server.)_',
+                }, {
+                  label: 'classUltimateVfxStill',
+                  ms: 10000,
+                  grace: 3000,
+                  fallbackText: caption,
+                });
+              }
+              await boundedSend(sock, chatId, {
+                text: '⚠️ The ultimate animation could not be encoded. The skill will still resolve normally.',
+              }, 'ultimateVfxFallback');
+              return { ok: false };
+            }
           },
         });
       } else {
