@@ -913,7 +913,9 @@ async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
     const doc = BEGINNER_DOC[beginnerId] || { title: 'ABILITY GRIMOIRE', quote: '"Every skill is a story the body remembers."' };
 
     // ── pagination: flatten groups → 12 rows per page ──
-    const PAGE_SIZE = 12;
+    // 2026-10-24 (owner: "abilities too much for the card"): 12 rows + group headers
+    // overflowed the fixed-height card; 7 per page always fits. Pages are cheap.
+    const PAGE_SIZE = 7;
     const allRows = [];
     for (const group of abilityGroups) {
         for (const ability of group.skills) allRows.push({ group, ability });
@@ -1069,7 +1071,12 @@ async function viewAbilities(sock, chatId, senderJid, senderName, pageArg) {
     if (abBuf && abBuf.length > 100) {
         // WhatsApp hard-caps image captions at 1024 chars - same rule as the
         // skill tree: the full legacy list rides along, cut only if huge.
-        const head = abilitiesText.length > 980 ? abilitiesText.slice(0, 977) + '…' : abilitiesText;
+        let head = abilitiesText;
+        if (head.length > 980) { // cut on a whole-line boundary, never mid-ability
+            const lines = head.split('\n'); head = '';
+            for (const ln of lines) { if ((head + ln + '\n').length > 940) break; head += ln + '\n'; }
+            head = head.trimEnd() + `\n…more with \`${getPrefix()} abilities <page>\``;
+        }
         await sock.sendMessage(chatId, {
             image: abBuf,
             caption: getBotMarker() + head,
