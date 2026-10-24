@@ -12182,10 +12182,11 @@ async function applyAbilityEffect(
   // authoritative; after this animation finishes the normal combat render shows
   // the real damage/healing result. Unmapped skills and render failures fall
   // straight through without touching combat mechanics.
-  if (state.inCombat !== false && !player.isEnemy && !player.isSummon) {
+  const isCombatContext = state.inCombat === true || String(state.phase || '').toUpperCase() === 'COMBAT';
+  if (isCombatContext && !player.isEnemy && !player.isSummon) {
     try {
       const signatureVfx = require('./skillVfx');
-      const classId = String(player.class?.id || player.classId || '').toUpperCase();
+      const classId = String(player.class?.id || player.classId || (typeof player.class === 'string' ? player.class : '') || '').toUpperCase();
       if (signatureVfx.getSignature(classId, ability?.id)) {
         await signatureVfx.animateUltimate({
           state,
