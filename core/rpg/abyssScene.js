@@ -513,6 +513,10 @@ const PLAYER_ART_FACES_NEVER = new Set([   // CENTER verdicts — never flip
         "voidwalker (5).png",
         "voidwalker (6).png",
 ]);   // per-file headroom, empty today
+// OWNER-PROTECTED FACING CONTRACT (2026-10-24):
+// Player direction is currently approved. Do not rework these per-file tables
+// or the flip decision while adjusting actor size/positions. See
+// docs/HOUSE_BUILDER_3D_RULES.md and scripts/abyss_visual_qa.js for regressions.
 function playerFaceKey(file) {
     return String(file || '').toLowerCase().replace(/^graded:/, '');
 }
@@ -963,7 +967,7 @@ async function planCombatLayout(state, opts = {}) {
         // measured box replaces it in the measure pass below)
         const estHalf = (s) => {
             const gy = floorClamp(SY(FY(s.fy)));
-            const est = packQueueLive[0] ? Math.round(perspH(gy) * s.mul * enemySizeOf(enemyIdOf(packQueueLive[0])) * 1.12 * 0.42) : 60;
+            const est = packQueueLive[0] ? Math.round(perspH(gy) * s.mul * enemySizeOf(enemyIdOf(packQueueLive[0])) * 1.12 * ENEMY_RENDER_SCALE * 0.42) : 60;
             return Math.min(est, Math.round((actors[0].h || 200) * 0.92 * 0.42));
         };
         let cursor = anchorRight;
@@ -2571,7 +2575,7 @@ module.exports = {
     bgForEncounter, liveEntities, BG_META, coverTransform,
     enemyIdOf, resolveEnemyArt, resolveEnemyArtRegular, resolveSummonArt,
     enemyNativeFacing, playerArtFlipFor, PLAYER_ART_FACES_LEFT, PLAYER_ART_FACES_NEVER,
-    ENEMY_FACING, ABYSS_ART_OVERRIDES,
+    ENEMY_FACING, ABYSS_ART_OVERRIDES, ENEMY_RENDER_SCALE,
     isBossFloorMirror,
     HIT_TINT, HIT_GLOW,
     isAnimatedCard: (b) => { try { return require('../utils/gif89a').isGifBuffer(b); } catch (e) { return false; } },

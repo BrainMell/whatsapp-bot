@@ -122,6 +122,12 @@ check('facing registry: audited R set (natively right-facing → flip to face th
     .every((id) => abyssScene.enemyNativeFacing(id) === 'R'));
 check('facing registry: audited F set (front-facing never flips)', ['VENOM_SPIDER', 'PRIMORDIAL_CHAOS', 'HOLLOW_SERAPH', 'ELDER_CHAOS', 'NIGHT_WRAITH', 'VOID_CORRUPTED']
     .every((id) => abyssScene.enemyNativeFacing(id) === 'F'));
+check('hostile monster art has the requested +20% global render scale',
+    abyssScene.ENEMY_RENDER_SCALE === 1.2);
+// Guard the orientation baseline separately from scale/layout tuning.
+check('approved player-facing table still controls the live flip helper',
+    abyssScene.playerArtFlipFor('rogue (1).png') === true
+    && abyssScene.playerArtFlipFor('necromancer.png') === false);
 check('boss path still resolves the OLD art for shared ids (bestiary isolation)',
     (() => { const a = abyssScene.resolveEnemyArt({ name: 'ELDER CHAOS', bossId: 'ELDER_CHAOS', spriteIndex: 24 });
         return a && !String(a.dir).includes('regular_bestiary'); })());
