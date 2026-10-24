@@ -83,7 +83,11 @@ async function mp4ToMp4Overlaid(mp4Buf, pngBuf) {
             '-filter_complex',
             '[0:v]scale=trunc(iw/2)*2:trunc(ih/2)*2[base];[base][1:v]overlay=0:0:format=auto:eof_action=repeat[out]',
             '-map', '[out]', '-movflags', 'faststart', '-pix_fmt', 'yuv420p',
-            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '24', '-an', mo,
+            // -bf 0 (on-box A/B 2026-10-24, Box2, 54f mine loop): 700ms → 586ms
+            // per fresh plaster for +12KB — every new haul text pays this pass,
+            // so the encode is the hot loop. ultrafast/superfast were rejected:
+            // only ~90-200ms faster but 2-3× the file size (slower WA upload).
+            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '24', '-bf', '0', '-an', mo,
         ]);
         const out = fs.readFileSync(mo);
         if (out.length <= 500) throw new Error('empty mp4');

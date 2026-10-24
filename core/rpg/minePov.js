@@ -119,6 +119,7 @@ async function renderMineCard({ loc, band = null, drops = {}, banner = null } = 
     const overlay = await renderRibbonOverlay(ribbon); // cached per loot text
     const thumb = await makeThumb(loc, resolvedBand, overlay ? overlay.buffer : null);
     const key = `mp:${loc}:${resolvedBand}:${hashStr(JSON.stringify(ribbon))}`;
+    const t0 = Date.now();
     const out = await mediaCache.cached('minepov', key, async () => {
         let buffer = null, contentType = null, lane = 'mp4-overlay';
         try {
@@ -130,8 +131,32 @@ async function renderMineCard({ loc, band = null, drops = {}, banner = null } = 
         if (!buffer) { lane = 'raw-base'; buffer = base; contentType = 'video/mp4'; }
         return { buffer, contentType, lane };
     });
+    // parity with the fish lane's timing line — repeat hauls must read as disk
+    // hits, fresh hauls show the real plaster cost (owner 2026-10-24: "make it
+    // faster … the existing overlay being the only thing generated on demand")
+    console.log(`[mine-gif] ${out && out.lane ? out.lane : 'disk-hit'} total=${Date.now() - t0}ms base=repo ribbon=${overlay && overlay.cached ? 'hit' : 'MISS'}`);
     if (!out || !out.buffer) return null;
     return { buffer: out.buffer, contentType: out.contentType, thumb, lane: out.lane };
 }
 
-module.exports = { renderMineCard, bandFor, LOCS };
+/**
+ * Boot warm — index.js schedules this ~20s after start (idle, unref'd, once).
+ * The overlay chain's FIRST run in a process pays the one-time tax: painter
+ * module compiles, font registration, lootArt sprite reads, libx264 init —
+ * measured 3.9s on Box2 before the very first card a user sees. Warming with
+ * one throwaway plaster moves that tax to boot idle: after it, ANY haul is a
+ * ~0.6s plaster (fresh text) or an ~80ms disk read (repeat), same as fishing.
+ * Idempotent; failures are logged and non-fatal (lane falls back per call).
+ */
+let _warmPromise = null;
+function warm() {
+    if (_warmPromise) return _warmPromise;
+    _warmPromise = (async () => {
+        const t0 = Date.now();
+        await renderMineCard({ loc: 'shimmering_caves', band: 'low', banner: { head: 'The Mines', lines: [] } });
+        console.log(`[mine-gif] boot warm ${Date.now() - t0}ms — overlay chain hot`);
+    })().catch((e) => console.error('[mine-gif] boot warm skipped:', e && e.message));
+    return _warmPromise;
+}
+
+module.exports = { renderMineCard, bandFor, LOCS, warm };

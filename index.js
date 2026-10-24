@@ -13,6 +13,17 @@ try { dns.setDefaultResultOrder('ipv4first'); } catch (e) {}
 // receive the gated versions. Escape hatch: RENDERQ_DISABLE=1 + pm2 restart.
 require('./core/utils/canvasAutoGate').install();
 
+// OWNER 2026-10-24 ("let's make it faster … the existing overlay being the
+// only thing generated on demand, like the fishing"): the mine/fish overlay
+// chain costs ~3.9s on the FIRST card after a restart (painter module
+// compiles, fonts, lootArt, x264 init) — whichever user fires the first
+// .mine eats it. This idle warm runs ONE throwaway mine-card plaster at
+// boot+20s so every real haul afterwards pays disk prices (~0.6s fresh
+// plaster / ~80ms repeat). Guarded, once, unref'd — never holds the process.
+setTimeout(() => {
+    try { require('./core/rpg/minePov').warm(); } catch (e) { /* lane optional */ }
+}, 20000).unref();
+
 /*
  * GLOBAL RAM TRAP - ULTRA AGGRESSIVE
  * Intercepts hardcoded library logs that serialize large Buffer objects.
