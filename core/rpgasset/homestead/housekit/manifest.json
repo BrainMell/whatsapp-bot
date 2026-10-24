@@ -61,9 +61,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 2,
    "n_faces": 336,
@@ -85,9 +85,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 3,
    "n_faces": 108,
@@ -109,9 +109,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 4,
    "n_faces": 120,
@@ -133,9 +133,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 3,
    "n_faces": 108,
@@ -157,9 +157,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 2,
    "n_faces": 84,
@@ -181,9 +181,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 2,
    "n_faces": 396,
@@ -205,9 +205,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 2,
    "n_faces": 492,
@@ -229,9 +229,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 8,
    "n_faces": 772,
@@ -253,9 +253,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 4,
    "n_faces": 496,
@@ -277,9 +277,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 3,
    "n_faces": 336,
@@ -301,9 +301,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 4,
    "n_faces": 72,
@@ -325,9 +325,9 @@
     1.0
    ],
    "scale_applied": [
-    1.591,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 2,
    "n_faces": 144,
@@ -349,9 +349,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 4,
    "n_faces": 180,
@@ -373,9 +373,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 3,
    "n_faces": 532,
@@ -397,9 +397,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 2,
    "n_faces": 492,
@@ -445,9 +445,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 5,
    "n_faces": 108,
@@ -493,14 +493,14 @@
     1.0
    ],
    "scale_applied": [
-    1.376,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 4,
    "n_faces": 576,
    "fallback": false,
-   "note": "slot-clamp 1.38/1.60"
+   "note": ""
   },
   "table_long": {
    "sprite": "table_long.png",
@@ -517,9 +517,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.591,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 2,
    "n_faces": 144,
@@ -541,14 +541,14 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.544,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 3,
    "n_faces": 216,
    "fallback": false,
-   "note": "slot-clamp 1.60/1.54"
+   "note": ""
   },
   "bed_traveller": {
    "sprite": "bed_traveller.png",
@@ -565,9 +565,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 4,
    "n_faces": 180,
@@ -589,9 +589,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 4,
    "n_faces": 488,
@@ -661,9 +661,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 4,
    "n_faces": 247,
@@ -685,14 +685,14 @@
     1.0
    ],
    "scale_applied": [
-    1.345,
-    1.359,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 3,
    "n_faces": 204,
    "fallback": false,
-   "note": "slot-clamp 1.35/1.36"
+   "note": ""
   },
   "chest_gold": {
    "sprite": "chest_gold.png",
@@ -709,14 +709,14 @@
     1.0
    ],
    "scale_applied": [
-    1.553,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 2,
    "n_faces": 180,
    "fallback": false,
-   "note": "slot-clamp 1.55/1.60"
+   "note": ""
   },
   "oven_brick": {
    "sprite": "oven_brick.png",
@@ -733,14 +733,14 @@
     1.0
    ],
    "scale_applied": [
-    1.35,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 5,
    "n_faces": 212,
    "fallback": false,
-   "note": "slot-clamp 1.35/1.60"
+   "note": ""
   },
   "cart_merchant": {
    "sprite": "cart_merchant.png",
@@ -757,14 +757,14 @@
     1.0
    ],
    "scale_applied": [
-    1.355,
-    1.28,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 6,
    "n_faces": 452,
    "fallback": false,
-   "note": "slot-clamp 1.35/1.28"
+   "note": ""
   },
   "bed_rustic": {
    "sprite": "bed_rustic.png",
@@ -781,9 +781,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 4,
    "n_faces": 180,
@@ -805,14 +805,14 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.458,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 6,
    "n_faces": 512,
    "fallback": false,
-   "note": "slot-clamp 1.60/1.46"
+   "note": ""
   },
   "bureau": {
    "sprite": "bureau.png",
@@ -829,14 +829,14 @@
     1.0
    ],
    "scale_applied": [
-    1.27,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 4,
    "n_faces": 748,
    "fallback": false,
-   "note": "slot-clamp 1.27/1.60"
+   "note": ""
   },
   "wardrobe": {
    "sprite": "wardrobe.png",
@@ -853,14 +853,14 @@
     1.0
    ],
    "scale_applied": [
-    1.389,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 5,
    "n_faces": 280,
    "fallback": false,
-   "note": "slot-clamp 1.39/1.60"
+   "note": ""
   },
   "bed_forest": {
    "sprite": "bed_forest.png",
@@ -877,9 +877,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 6,
    "n_faces": 352,
@@ -901,14 +901,14 @@
     1.0
    ],
    "scale_applied": [
-    1.207,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 4,
    "n_faces": 275,
    "fallback": false,
-   "note": "slot-clamp 1.21/1.60"
+   "note": ""
   },
   "banner_crimson": {
    "sprite": "banner_crimson.png",
@@ -925,14 +925,14 @@
     1.0
    ],
    "scale_applied": [
-    1.207,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 3,
    "n_faces": 319,
    "fallback": false,
-   "note": "slot-clamp 1.21/1.60"
+   "note": ""
   },
   "bed_lake": {
    "sprite": "bed_lake.png",
@@ -949,9 +949,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 5,
    "n_faces": 352,
@@ -973,14 +973,14 @@
     1.0
    ],
    "scale_applied": [
-    1.207,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 3,
    "n_faces": 251,
    "fallback": false,
-   "note": "slot-clamp 1.21/1.60"
+   "note": ""
   },
   "table_rosedrape": {
    "sprite": "table_rosedrape.png",
@@ -997,14 +997,14 @@
     1.0
    ],
    "scale_applied": [
-    1.167,
-    1.5,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 4,
    "n_faces": 396,
    "fallback": false,
-   "note": "slot-clamp 1.17/1.50"
+   "note": ""
   },
   "chest_ruby": {
    "sprite": "chest_ruby.png",
@@ -1021,14 +1021,14 @@
     1.0
    ],
    "scale_applied": [
-    1.53,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 3,
    "n_faces": 340,
    "fallback": false,
-   "note": "slot-clamp 1.53/1.60"
+   "note": ""
   },
   "table_azure": {
    "sprite": "table_azure.png",
@@ -1045,14 +1045,14 @@
     1.0
    ],
    "scale_applied": [
-    1.141,
-    1.5,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 3,
    "n_faces": 192,
    "fallback": false,
-   "note": "slot-clamp 1.14/1.50"
+   "note": ""
   },
   "table_banquet": {
    "sprite": "table_banquet.png",
@@ -1069,14 +1069,14 @@
     1.0
    ],
    "scale_applied": [
-    1.117,
-    1.419,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 4,
    "n_faces": 168,
    "fallback": false,
-   "note": "slot-clamp 1.12/1.42"
+   "note": ""
   },
   "cabinet_display": {
    "sprite": "cabinet_display.png",
@@ -1093,14 +1093,14 @@
     1.0
    ],
    "scale_applied": [
-    1.28,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 7,
    "n_faces": 280,
    "fallback": false,
-   "note": "slot-clamp 1.28/1.60"
+   "note": ""
   },
   "bed_cloud": {
    "sprite": "bed_cloud.png",
@@ -1117,14 +1117,14 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.58,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 5,
    "n_faces": 832,
    "fallback": false,
-   "note": "slot-clamp 1.60/1.58"
+   "note": ""
   },
   "bed_noble": {
    "sprite": "bed_noble.png",
@@ -1141,14 +1141,14 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.497,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 6,
    "n_faces": 848,
    "fallback": false,
-   "note": "slot-clamp 1.60/1.50"
+   "note": ""
   },
   "hearth_brick": {
    "sprite": "hearth_brick.png",
@@ -1165,14 +1165,14 @@
     1.0
    ],
    "scale_applied": [
-    1.167,
-    1.556,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 6,
    "n_faces": 244,
    "fallback": false,
-   "note": "slot-clamp 1.17/1.56"
+   "note": ""
   },
   "rug_royal": {
    "sprite": "rug_royal.png",
@@ -1237,14 +1237,14 @@
     1.0
    ],
    "scale_applied": [
-    1.506,
+    1.0,
     0.833,
-    1.6
+    1.0
    ],
    "n_geoms": 7,
    "n_faces": 772,
    "fallback": false,
-   "note": "slot-clamp 1.51/0.83"
+   "note": "slot-clamp 1.00/0.83"
   },
   "chest_arcane": {
    "sprite": "chest_arcane.png",
@@ -1261,14 +1261,14 @@
     1.0
    ],
    "scale_applied": [
-    1.442,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 4,
    "n_faces": 352,
    "fallback": false,
-   "note": "slot-clamp 1.44/1.60"
+   "note": ""
   },
   "clock_grand": {
    "sprite": "clock_grand.png",
@@ -1285,9 +1285,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 6,
    "n_faces": 376,
@@ -1309,14 +1309,14 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.414,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 6,
    "n_faces": 456,
    "fallback": false,
-   "note": "slot-clamp 1.60/1.41"
+   "note": ""
   },
   "cauldron": {
    "sprite": "cauldron.png",
@@ -1333,9 +1333,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 4,
    "n_faces": 848,
@@ -1357,14 +1357,14 @@
     1.0
    ],
    "scale_applied": [
-    1.06,
-    1.189,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 7,
    "n_faces": 252,
    "fallback": false,
-   "note": "slot-clamp 1.06/1.19"
+   "note": ""
   },
   "shelf_books": {
    "sprite": "shelf_books.png",
@@ -1381,14 +1381,14 @@
     1.0
    ],
    "scale_applied": [
-    1.391,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 10,
    "n_faces": 996,
    "fallback": false,
-   "note": "slot-clamp 1.39/1.60"
+   "note": ""
   },
   "mirror_stand": {
    "sprite": "mirror_stand.png",
@@ -1405,9 +1405,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 6,
    "n_faces": 164,
@@ -1429,9 +1429,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 3,
    "n_faces": 556,
@@ -1453,9 +1453,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 5,
    "n_faces": 240,
@@ -1477,9 +1477,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 5,
    "n_faces": 212,
@@ -1501,9 +1501,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 3,
    "n_faces": 368,
@@ -1525,9 +1525,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 4,
    "n_faces": 72,
@@ -1549,9 +1549,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 6,
    "n_faces": 292,
@@ -1573,9 +1573,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 4,
    "n_faces": 232,
@@ -1597,9 +1597,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 6,
    "n_faces": 216,
@@ -1621,9 +1621,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 3,
    "n_faces": 456,
@@ -1645,9 +1645,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 2,
    "n_faces": 492,
@@ -1669,14 +1669,14 @@
     1.0
    ],
    "scale_applied": [
-    1.485,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 3,
    "n_faces": 180,
    "fallback": false,
-   "note": "slot-clamp 1.48/1.60"
+   "note": ""
   },
   "bed_royal": {
    "sprite": "bed_royal.png",
@@ -1693,9 +1693,9 @@
     2.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 5,
    "n_faces": 944,
@@ -1741,14 +1741,14 @@
     1.0
    ],
    "scale_applied": [
-    1.207,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 4,
    "n_faces": 333,
    "fallback": false,
-   "note": "slot-clamp 1.21/1.60"
+   "note": ""
   },
   "clock_mantel": {
    "sprite": "clock_mantel.png",
@@ -1765,9 +1765,9 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 4,
    "n_faces": 292,
@@ -1789,14 +1789,14 @@
     1.0
    ],
    "scale_applied": [
-    1.6,
-    1.494,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 4,
    "n_faces": 124,
    "fallback": false,
-   "note": "slot-clamp 1.60/1.49"
+   "note": ""
   },
   "fountain_table": {
    "sprite": "fountain_table.png",
@@ -1813,14 +1813,14 @@
     1.0
    ],
    "scale_applied": [
-    1.458,
-    1.458,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 3,
    "n_faces": 752,
    "fallback": false,
-   "note": "slot-clamp 1.46/1.46"
+   "note": ""
   },
   "painting_land": {
    "sprite": "painting_land.png",
@@ -1837,14 +1837,14 @@
     1.0
    ],
    "scale_applied": [
-    1.346,
-    1.6,
-    1.6
+    1.0,
+    1.0,
+    1.0
    ],
    "n_geoms": 6,
    "n_faces": 144,
    "fallback": false,
-   "note": "slot-clamp 1.35/1.60"
+   "note": ""
   }
  }
 }

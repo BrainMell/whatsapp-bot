@@ -63,18 +63,21 @@
    "h": 126
   },
   "hou_mezz_stairs": {
-   "file": "kit/hou_mezz_stairs.png",
-   "w": 144,
-   "h": 164,
-   "ax": 71.83,
-   "ay": 129.35,
+   "file": "hou_mezz_stairs.png",
+   "w": 188,
+   "h": 84,
+   "ax": 90.4,
+   "ay": 67.6,
    "sh": {
     "file": "kit/hou_mezz_stairs_sh.png",
     "w": 205,
     "h": 104,
     "ax": 67.21,
     "ay": 66.98
-   }
+   },
+   "anchor_meaning": "bottom-end centerline base; run descends +X, top step flush with deck top",
+   "source_glb": "composed: 10 solid oak steps, rise 1.38m (deck top), run 2.2m, width 1.2m",
+   "derived": "glb-bake-v5"
   },
   "hou_platform_ext": {
    "file": "kit/hou_platform_ext.png",
@@ -82,59 +85,114 @@
    "h": 78
   },
   "hou_railing": {
-   "file": "kit/hou_railing.png",
-   "w": 128,
-   "h": 74
+   "file": "hou_railing.png",
+   "w": 82,
+   "h": 83,
+   "ax": 5.24,
+   "ay": 44.1,
+   "anchor_meaning": "centerline base left end (run descends right; mirror for left run)",
+   "source_glb": "balcony_railing_segment_2m.glb",
+   "derived": "glb-bake-v5"
   },
   "hou_wall_t1": {
-   "file": "kit/hou_wall_t1.png",
-   "w": 64,
-   "h": 140
+   "file": "hou_wall_t1.png",
+   "w": 80,
+   "h": 140,
+   "ax": 7.27,
+   "ay": 103.04,
+   "anchor_meaning": "centerline base left end (run descends right; mirror for left run)",
+   "source_glb": "tier01_rustic_plank_wall.glb",
+   "derived": "glb-bake-v5"
   },
   "hou_wall_t1_win": {
-   "file": "kit/hou_wall_t1_win.png",
-   "w": 64,
-   "h": 140
+   "file": "hou_wall_t1_win.png",
+   "w": 80,
+   "h": 140,
+   "ax": 7.32,
+   "ay": 103.06,
+   "anchor_meaning": "centerline base left end (run descends right; mirror for left run)",
+   "source_glb": "tier01_rustic_plank_wall_with_window.glb",
+   "derived": "glb-bake-v5"
   },
   "hou_wall_t2": {
-   "file": "kit/hou_wall_t2.png",
-   "w": 64,
-   "h": 140
+   "file": "hou_wall_t2.png",
+   "w": 84,
+   "h": 141,
+   "ax": 7.88,
+   "ay": 103.42,
+   "anchor_meaning": "centerline base left end (run descends right; mirror for left run)",
+   "source_glb": "tier02_half_timber_wall.glb",
+   "derived": "glb-bake-v5"
   },
   "hou_wall_t2_win": {
-   "file": "kit/hou_wall_t2_win.png",
-   "w": 64,
-   "h": 140
+   "file": "hou_wall_t2_win.png",
+   "w": 84,
+   "h": 141,
+   "ax": 7.88,
+   "ay": 103.42,
+   "anchor_meaning": "centerline base left end (run descends right; mirror for left run)",
+   "source_glb": "tier02_half_timber_wall_with_window.glb",
+   "derived": "glb-bake-v5"
   },
   "hou_wall_t3": {
-   "file": "kit/hou_wall_t3.png",
-   "w": 64,
-   "h": 140
+   "file": "hou_wall_t3.png",
+   "w": 82,
+   "h": 141,
+   "ax": 6.68,
+   "ay": 102.66,
+   "anchor_meaning": "centerline base left end (run descends right; mirror for left run)",
+   "source_glb": "tier03_brick_masonry_wall.glb",
+   "derived": "glb-bake-v5"
   },
   "hou_wall_t3_win": {
-   "file": "kit/hou_wall_t3_win.png",
-   "w": 64,
-   "h": 140
+   "file": "hou_wall_t3_win.png",
+   "w": 84,
+   "h": 141,
+   "ax": 8.2,
+   "ay": 103.42,
+   "anchor_meaning": "centerline base left end (run descends right; mirror for left run)",
+   "source_glb": "tier03_brick_masonry_wall_with_window.glb",
+   "derived": "glb-bake-v5"
   },
   "hou_wall_t4": {
-   "file": "kit/hou_wall_t4.png",
-   "w": 64,
-   "h": 140
+   "file": "hou_wall_t4.png",
+   "w": 82,
+   "h": 141,
+   "ax": 6.92,
+   "ay": 102.62,
+   "anchor_meaning": "centerline base left end (run descends right; mirror for left run)",
+   "source_glb": "tier04_rubble_stone_wall.glb",
+   "derived": "glb-bake-v5"
   },
   "hou_wall_t4_win": {
-   "file": "kit/hou_wall_t4_win.png",
-   "w": 64,
-   "h": 140
+   "file": "hou_wall_t4_win.png",
+   "w": 86,
+   "h": 141,
+   "ax": 8.52,
+   "ay": 103.42,
+   "anchor_meaning": "centerline base left end (run descends right; mirror for left run)",
+   "source_glb": "tier04_rubble_stone_wall_with_window.glb",
+   "derived": "glb-bake-v5"
   },
   "hou_wall_t5": {
-   "file": "kit/hou_wall_t5.png",
-   "w": 64,
-   "h": 140
+   "file": "hou_wall_t5.png",
+   "w": 84,
+   "h": 143,
+   "ax": 7.96,
+   "ay": 104.95,
+   "anchor_meaning": "centerline base left end (run descends right; mirror for left run)",
+   "source_glb": "tier05_dressed_stone_wall.glb",
+   "derived": "glb-bake-v5"
   },
   "hou_wall_t5_win": {
-   "file": "kit/hou_wall_t5_win.png",
-   "w": 64,
-   "h": 140
+   "file": "hou_wall_t5_win.png",
+   "w": 86,
+   "h": 143,
+   "ax": 8.92,
+   "ay": 105.43,
+   "anchor_meaning": "centerline base left end (run descends right; mirror for left run)",
+   "source_glb": "tier05_dressed_stone_wall_with_window.glb",
+   "derived": "glb-bake-v5"
   }
  }
 }
