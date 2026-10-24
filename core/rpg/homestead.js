@@ -1331,13 +1331,13 @@ async function handleQuickInput(ctx) {
     if (raw.toLowerCase() === prefix || raw.toLowerCase().startsWith(prefix + ' ')) return false;
     // Do not consume long prose or unrelated chat while in selection mode.
     const value = raw.toLowerCase();
-    const direction = /^(right|r|east|left|l|west|down|d|south|up|u|north|upright|ur|upleft|ul|downright|dr|downleft|dl)(?:\\s+\\d{1,2})?$/.test(value);
-    const coords = /^-?\\d+\\s*[, ]\\s*-?\\d+$/.test(value);
-    const numeric = /^\\d{1,3}$/.test(value);
+    const direction = /^(right|r|east|left|l|west|down|d|south|up|u|north|upright|ur|upleft|ul|downright|dr|downleft|dl)(?:\s+\d{1,2})?$/.test(value);
+    const coords = /^-?\d+\s*[, ]\s*-?\d+$/.test(value);
+    const numeric = /^\d{1,3}$/.test(value);
     const itemName = !!resolveItem(raw);
     if (!direction && !coords && !numeric && !itemName) return false;
     const synthetic = direction
-        ? `${prefix} home ${value.replace(/\\s+/g, ' ')}`
+        ? `${prefix} home ${value.replace(/\s+/g, ' ')}`
         : coords
             ? `${prefix} home ${value.replace(',', ' ')}`
             : `${prefix} home select ${raw}`;
