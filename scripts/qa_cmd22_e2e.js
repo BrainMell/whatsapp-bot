@@ -59,14 +59,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const mkCtx = (text) => ({ sock, chatId: 'qa-chat', senderJid: QA_JID, m: { key: { id: 'qa' + Math.random() } }, reply: async (t) => { replies.push(String(t)); }, text, prefix: '.j' });
     const say = async (text) => { replies.length = 0; await H.handleCommand(mkCtx(text)); return replies[0] || ''; };
     const freshRec = async () => Homestead.findOne({ userId: QA_JID }).lean();
-    // rendering commands report via media sends, not reply() — wait until the
-    // send stream goes quiet (bake ~10-28s) before asserting media outcomes
-    const waitForQuiet = async (maxS = 70) => {
-        let last = sends.length, stable = 0;
+    // rendering commands report via media sends, not reply() — wait until a
+    // PENDING render lands (bake ~10-28s; quiet-period polling can't see an
+    // in-flight bake, so lock-sensitive flows wait for the send itself)
+    const waitForSend = async (maxS = 60) => {
+        const start = sends.length;
         for (let i = 0; i < maxS; i++) {
             await sleep(1000);
-            if (sends.length === last) { if (++stable >= 3 && i > 3) return true; }
-            else { stable = 0; last = sends.length; }
+            if (sends.length > start) return true;
         }
         return false;
     };
@@ -128,8 +128,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     check('coords DB position matches ack', mCoords && +mCoords[1] === after.x && +mCoords[2] === after.y, `ack ${mCoords ? mCoords[0] : '?'} vs (${after.x},${after.y})`);
     r = await say('.j home 3');
     check('.home 3 (single number) does NOT steer — structure route (or its guild gate)', r.includes('No such structure') || r.includes('Bases belong to guild'), r.slice(0, 80));
-    // the coords move re-armed an idle preview — let it finish before §6
-    await waitForQuiet();
+    // the coords move re-armed an idle preview — let it LAND before the
+    // lock-sensitive space-hop renders below
+    await waitForSend();
 
     // ── §6 space hopping ──
     console.log('\n── §6 .home to <space> ──');
@@ -145,9 +146,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     check('piece is lvl 1 inside the loft bounds', after.lvl === 1 && after.x >= 0 && after.x < 6 && after.y >= 0 && after.y < 6, `lvl=${after.lvl} (${after.x},${after.y})`);
     r = await say('.j home to e');
     check('.home to east without an annex → build hint', r.includes("don't have a East annex"), r.slice(0, 90));
+    const sendsBeforeMain = sends.length;
     r = await say('.j home to main');
-    await waitForQuiet();
-    check('.home to main reports via media render', sends.length > sendsAfterLoft);
+    check('.home to main reports via media render', sends.length > sendsBeforeMain, `sends ${sendsBeforeMain}→${sends.length}`);
     after = (await freshRec()).placed.find((q) => q.uid === selUid);
     check('piece back on the ground floor', !after.lvl, `lvl=${after.lvl}`);
 
