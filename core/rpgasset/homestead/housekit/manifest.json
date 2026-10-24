@@ -145,8 +145,8 @@
   "chair_wood": {
    "sprite": "chair_wood.png",
    "sprite_f": "chair_wood_f.png",
-   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/chair_wood.glb",
-   "pack": "joker-homestead-3d-pack",
+   "source_glb": "kitchen/FreeKitchen/glb/Chair.glb",
+   "pack": "joseph-ships-free (Medieval Modular Assets by Mortaleh, CC0 1.0)",
    "model_extents_m": [
     0.49,
     0.45,
@@ -164,7 +164,9 @@
    "n_geoms": 2,
    "n_faces": 84,
    "fallback": false,
-   "note": ""
+   "note": "adopted over 75-pack twin after side-by-side (joseph_compare_sheet.png)",
+   "model_name": "Chair",
+   "licence": "CC0 1.0 Universal (https://creativecommons.org/publicdomain/zero/1.0/)"
   },
   "vase_blue": {
    "sprite": "vase_blue.png",
@@ -505,8 +507,8 @@
   "table_long": {
    "sprite": "table_long.png",
    "sprite_f": "table_long_f.png",
-   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/table_long.glb",
-   "pack": "joker-homestead-3d-pack",
+   "source_glb": "kitchen/FreeKitchen/glb/LongTable.glb",
+   "pack": "joseph-ships-free (Medieval Modular Assets by Mortaleh, CC0 1.0)",
    "model_extents_m": [
     1.2,
     0.66,
@@ -524,7 +526,9 @@
    "n_geoms": 2,
    "n_faces": 144,
    "fallback": false,
-   "note": ""
+   "note": "adopted over 75-pack twin after side-by-side (joseph_compare_sheet.png)",
+   "model_name": "LongTable",
+   "licence": "CC0 1.0 Universal (https://creativecommons.org/publicdomain/zero/1.0/)"
   },
   "table_refectory": {
    "sprite": "table_refectory.png",
@@ -769,8 +773,8 @@
   "bed_rustic": {
    "sprite": "bed_rustic.png",
    "sprite_f": "bed_rustic_f.png",
-   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/bed_rustic.glb",
-   "pack": "joker-homestead-3d-pack",
+   "source_glb": "bedroom/FreeMedievalBedroom/gltf/SingleBedRed.glb",
+   "pack": "joseph-ships-free (Medieval Modular Assets by Mortaleh, CC0 1.0)",
    "model_extents_m": [
     1.081,
     0.614,
@@ -788,7 +792,9 @@
    "n_geoms": 4,
    "n_faces": 180,
    "fallback": false,
-   "note": ""
+   "note": "adopted over 75-pack twin after side-by-side (joseph_compare_sheet.png)",
+   "model_name": "SingleBedRed",
+   "licence": "CC0 1.0 Universal (https://creativecommons.org/publicdomain/zero/1.0/)"
   },
   "table_feast": {
    "sprite": "table_feast.png",
@@ -841,8 +847,8 @@
   "wardrobe": {
    "sprite": "wardrobe.png",
    "sprite_f": "wardrobe_f.png",
-   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/wardrobe.glb",
-   "pack": "joker-homestead-3d-pack",
+   "source_glb": "bedroom/FreeMedievalBedroom/gltf/Wardrobe.glb",
+   "pack": "joseph-ships-free (Medieval Modular Assets by Mortaleh, CC0 1.0)",
    "model_extents_m": [
     0.756,
     0.3798,
@@ -860,7 +866,9 @@
    "n_geoms": 5,
    "n_faces": 280,
    "fallback": false,
-   "note": ""
+   "note": "adopted over 75-pack twin after side-by-side (joseph_compare_sheet.png)",
+   "model_name": "Wardrobe",
+   "licence": "CC0 1.0 Universal (https://creativecommons.org/publicdomain/zero/1.0/)"
   },
   "bed_forest": {
    "sprite": "bed_forest.png",
@@ -937,8 +945,8 @@
   "bed_lake": {
    "sprite": "bed_lake.png",
    "sprite_f": "bed_lake_f.png",
-   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/bed_lake.glb",
-   "pack": "joker-homestead-3d-pack",
+   "source_glb": "bedroom/FreeMedievalBedroom/gltf/SingleBedBlue.glb",
+   "pack": "joseph-ships-free (Medieval Modular Assets by Mortaleh, CC0 1.0)",
    "model_extents_m": [
     1.0982,
     0.6216,
@@ -956,7 +964,9 @@
    "n_geoms": 5,
    "n_faces": 352,
    "fallback": false,
-   "note": ""
+   "note": "adopted over 75-pack twin after side-by-side (joseph_compare_sheet.png)",
+   "model_name": "SingleBedBlue",
+   "licence": "CC0 1.0 Universal (https://creativecommons.org/publicdomain/zero/1.0/)"
   },
   "banner_royal": {
    "sprite": "banner_royal.png",
@@ -1657,8 +1667,8 @@
   "chest_iron": {
    "sprite": "chest_iron.png",
    "sprite_f": "chest_iron_f.png",
-   "source_glb": "03_EXISTING_3D_ASSET_PACK/joker-homestead-3d-pack/models/furniture/chest_iron.glb",
-   "pack": "joker-homestead-3d-pack",
+   "source_glb": "bedroom/FreeMedievalBedroom/gltf/ChestSquareIron.glb",
+   "pack": "joseph-ships-free (Medieval Modular Assets by Mortaleh, CC0 1.0)",
    "model_extents_m": [
     0.7072,
     0.5067,
@@ -1676,7 +1686,9 @@
    "n_geoms": 3,
    "n_faces": 180,
    "fallback": false,
-   "note": ""
+   "note": "adopted over 75-pack twin after side-by-side (joseph_compare_sheet.png)",
+   "model_name": "ChestSquareIron",
+   "licence": "CC0 1.0 Universal (https://creativecommons.org/publicdomain/zero/1.0/)"
   },
   "bed_royal": {
    "sprite": "bed_royal.png",
@@ -1846,5 +1858,11 @@
    "fallback": false,
    "note": ""
   }
+ },
+ "provenance": {
+  "furniture_primary": "joker-homestead-3d-pack 75-item GLB pack (bundle 03_EXISTING_3D_ASSET_PACK)",
+  "furniture_upgrades": "Joseph Ships free packs = Medieval Modular Assets by Mortaleh, CC0 1.0, fetched 2026-10-24, archives + licence files vendored under download/assets/packs/, PACK_MANIFEST.json records urls/author/models; 6 items adopted (see per-item pack field)",
+  "architecture": "bundle 02_ARCHITECTURE_MODELS GLBs + composed staircase",
+  "pipeline": "pyrender GLX bake, ortho yaw45/135 pitch30, 45.2548 px/m, SS8 Lanczos"
  }
 }
