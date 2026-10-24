@@ -380,14 +380,26 @@ function drawEffect(ctx, entry, t, frame, targetSide) {
       if (impact) { strokeLine(ctx, [[tx - 72, ty - 42], [tx - 28, ty], [tx - 72, ty + 43]], a, 5, impact); strokeLine(ctx, [[tx + 72, ty - 42], [tx + 28, ty], [tx + 72, ty + 43]], b, 5, impact); }
       break;
     case 'merchant_rain':
-    case 'tycoon_zeni':
       for (let i = 0; i < 18; i++) {
-        const x = ((i * 31 + f * (entry.style === 'tycoon_zeni' ? 17 : 11)) % (W - 30)) + 15;
+        const x = ((i * 31 + f * 11) % (W - 30)) + 15;
         const y = ((i * 23 + f * 29) % 300);
         ring(ctx, x, y, 5 + (i % 3), 7 + (i % 3), i % 2 ? a : b, 3, 0.9);
         strokeLine(ctx, [[x, y - 5], [x - 2, y + 5]], c, 1.5, 0.8);
       }
       burst(ctx, tx, ty, 25 + 28 * impact, 12, a, impact, 8, f);
+      break;
+    case 'tycoon_zeni':
+      for (let i = 0; i < 9; i++) {
+        const ang = p * 2 + i * Math.PI * 2 / 9;
+        const rr = 24 + 38 * t;
+        const x = tx + Math.cos(ang) * rr;
+        const y = ty + Math.sin(ang) * rr * 0.6;
+        ring(ctx, x, y, 7 + (i % 3), 9 + (i % 3), a, 3, 0.95);
+        ctx.save(); ctx.globalAlpha = Math.max(0.2, k); ctx.fillStyle = b;
+        ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center'; ctx.fillText('Z', x, y + 4); ctx.restore();
+      }
+      ring(ctx, tx, ty, 22 + 48 * t, 12 + 24 * t, a, 4, k);
+      burst(ctx, tx, ty, 28 * impact, 10, b, impact, 8, f);
       break;
     case 'cleric_wrath':
       strokeLine(ctx, [[tx - 80, 0], [tx - 20, ty - 36], [tx + 12, ty + 4]], a, 12, k);
@@ -396,11 +408,21 @@ function drawEffect(ctx, entry, t, frame, targetSide) {
       burst(ctx, tx, ty + 4, 32 * impact, 10, a, impact, 9, p);
       break;
     case 'ninja_eclipse':
-    case 'nightblade_eclipse':
       ctx.save(); ctx.globalAlpha = 0.9 * k; ctx.fillStyle = c; ctx.beginPath(); ctx.arc(tx, ty, 33 + 9 * impact, 0, Math.PI * 2); ctx.fill(); ctx.restore();
       ctx.save(); ctx.globalAlpha = 0.9 * k; ctx.fillStyle = '#090b1c'; ctx.beginPath(); ctx.arc(tx + 17 * k, ty - 10 * k, 28 + 6 * impact, 0, Math.PI * 2); ctx.fill(); ctx.restore();
       strokeLine(ctx, [[selfX, selfY], [selfX + 65 * t, selfY - 25], [tx - 30, ty + 3]], a, 5, k);
-      for (let i = 0; i < 4; i++) strokeLine(ctx, [[tx - 42 + i * 23, ty - 40], [tx + 22 - i * 16, ty + 37]], b, 4, impact);
+      for (let i = 0; i < 4; i++) {
+        const ang = p * 7 + i * Math.PI / 2;
+        const x = tx + Math.cos(ang) * 40, y = ty + Math.sin(ang) * 27;
+        strokeLine(ctx, [[x - 10, y - 10], [x + 10, y + 10]], a, 5, impact);
+        strokeLine(ctx, [[x - 10, y + 10], [x + 10, y - 10]], b, 5, impact);
+      }
+      break;
+    case 'nightblade_eclipse':
+      ring(ctx, tx, ty, 47 + 14 * k, 23 + 8 * k, c, 6, 0.95, p * 4, p * 4 + Math.PI * 1.7);
+      ring(ctx, tx, ty, 34 + 12 * k, 44 + 12 * k, b, 4, 0.8, -p * 3, -p * 3 + Math.PI * 1.6);
+      strokeLine(ctx, [[selfX + 10, selfY - 18], [tx - 48, ty - 37], [tx - 4, ty - 8], [tx + 43, ty + 29]], a, 5, k);
+      burst(ctx, tx, ty, 25 * impact, 8, c, impact, 6, p);
       break;
     case 'monk_enlightenment':
     case 'god_hand_meditation':
