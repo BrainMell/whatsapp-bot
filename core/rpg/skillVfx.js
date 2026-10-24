@@ -444,7 +444,6 @@ function drawEffect(ctx, entry, t, frame, targetSide) {
       if (impact) burst(ctx, tx, ty, 70 * impact, 24, b, impact, 16, f);
       break;
     case 'warlord_total_war':
-    case 'shogun_empire':
       for (let i = 0; i < 5; i++) {
         const x = tx - 65 + i * 31;
         strokeLine(ctx, [[x, base], [x, base - 78 - 16 * Math.sin(i + p * 4)]], c, 5, k);
@@ -610,9 +609,6 @@ function drawEffect(ctx, entry, t, frame, targetSide) {
       drawSickle(ctx, tx, ty + 8, 0.75 + 0.35 * k, b, k);
       strokeLine(ctx, [[tx - 58, ty + 35], [tx - 6, ty - 35], [tx + 46, ty + 23]], a, 4, impact);
       ring(ctx, tx, ty, 35 + 24 * impact, 16 + 10 * impact, c, 3, impact);
-      break;
-    case 'death_lord_tether':
-      // The dedicated soul-tether path above draws the chain to the pulled soul.
       break;
     default:
       // Signature fallback stays animated, but does not replace any mapped style:
