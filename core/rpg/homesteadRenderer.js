@@ -861,22 +861,29 @@ function draw3dOverlay(ctx, room, k, oy, state, frame, opts) {
             ctx.stroke();
         }
 
-        // Front-edge coordinates include annex global positions and are deduped.
+        // Front-edge coordinates use global positions for annexes. Labels on
+        // the lower edge show X; labels on the right edge show Y. Dedupe the
+        // shared corner so its two labels do not overprint one another.
         const edgeCells = new Map();
         for (const r of regions) {
-            for (let gx = r.x0; gx < r.x1; gx++) edgeCells.set(String(gx) + ',' + String(r.y1 - 1), [gx, r.y1 - 1]);
-            for (let gy = r.y0; gy < r.y1; gy++) edgeCells.set(String(r.x1 - 1) + ',' + String(gy), [r.x1 - 1, gy]);
+            for (let gx = r.x0; gx < r.x1; gx++) {
+                edgeCells.set(String(gx) + ',' + String(r.y1 - 1), { x: gx, y: r.y1 - 1, label: String(gx) });
+            }
+            for (let gy = r.y0; gy < r.y1; gy++) {
+                const key = String(r.x1 - 1) + ',' + String(gy);
+                if (!edgeCells.has(key)) edgeCells.set(key, { x: r.x1 - 1, y: gy, label: String(gy) });
+            }
         }
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.font = 'bold 26px Cinzel, Medieval, sans-serif';
-        for (const [gx, gy] of edgeCells.values()) {
-            const [tx, ty] = cellC(gx, gy, floorZ);
+        for (const cell of edgeCells.values()) {
+            const [tx, ty] = cellC(cell.x, cell.y, floorZ);
             ctx.lineWidth = 5;
             ctx.strokeStyle = 'rgba(28,17,6,0.88)';
-            ctx.strokeText(String(gx), tx, ty);
+            ctx.strokeText(cell.label, tx, ty);
             ctx.fillStyle = '#ffd76a';
-            ctx.fillText(String(gx), tx, ty);
+            ctx.fillText(cell.label, tx, ty);
         }
 
         // The pulsing footprint and selection chevron track the item's level.
