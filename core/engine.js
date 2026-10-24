@@ -22093,9 +22093,12 @@ Admins can:
                           else if (guild.admins && guild.admins.includes(jid)) {
                             titleDisplay = "⭐ Admin";
                           }
-                          // Check for custom title
+                          // Check for custom title — 💡 defensive clean: titles
+                          // stored before the 2026-10-24 sanitizer may still
+                          // carry raw @id tokens (owner bug report on the
+                          // roster card showing "@175132… Battle Beaver")
                           else if (guild.titles && guild.titles[jid]) {
-                            titleDisplay = `🎖️ ${guild.titles[jid]}`;
+                            titleDisplay = `🎖️ ${guilds.cleanTitle(guild.titles[jid]) || "Member"}`;
                           }
                           // Default member
                           else {

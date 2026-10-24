@@ -830,6 +830,22 @@ async function kickFromGuild(ownerOrAdminJid, targetJid) {
   };
 }
 
+// 💡 2026-10-24 (owner: "why does pink dildo's title have the weird numbers?"):
+// titles are DISPLAY TEXT — raw mention/snowflake tokens must never reach a
+// card. A past `.guild title` stored "@<id> Battle Beaver" because the engine
+// only stripped the TARGET's own mention; any other @id (or a bare pasted id)
+// survived onto the roster. Clean at BOTH ends: on every write here +
+// defensively on every render (engine roster card).
+function cleanTitle(title) {
+  return String(title || '')
+    .replace(/<@!?\d{5,}>/g, ' ')   // <@123…> / <@!123…> mention forms
+    .replace(/@\d{5,}/g, ' ')       // bare @snowflake
+    .replace(/\b\d{9,}\b/g, ' ')    // bare long ids pasted without @
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 40);
+}
+
 // give someone a special title
 function setMemberTitle(ownerJid, targetJid, title) {
   const info = globalGuildData;
@@ -845,12 +861,17 @@ function setMemberTitle(ownerJid, targetJid, title) {
     return { success: false, message: "❌ That user is not in your guild!" };
   }
 
-  guild.titles[targetJid] = title;
+  const clean = cleanTitle(title);
+  if (!clean) {
+    return { success: false, message: "❌ Title can't be empty (or just a mention)! Try: `.guild title @user Elite Warrior`" };
+  }
+
+  guild.titles[targetJid] = clean;
   syncGuild(guildName);
 
   return {
     success: true,
-    message: `✅ @${economy.getDisplayName(targetJid)} title set to: ${title}`
+    message: `✅ @${economy.getDisplayName(targetJid)} title set to: ${clean}`
   };
 }
 
@@ -1568,6 +1589,7 @@ module.exports = {
   kickFromGuild,
   setMemberTitle,
   getMemberTitle,
+  cleanTitle,
   getUserGuild,
   getCardGuildInfo,
   getGuild,
