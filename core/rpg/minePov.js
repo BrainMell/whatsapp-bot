@@ -116,7 +116,9 @@ async function renderMineCard({ loc, band = null, drops = {}, banner = null } = 
     const ribbon = banner && (banner.head || (banner.lines || []).length)
         ? { head: String(banner.head || 'The Mines'), lines: (banner.lines || []).slice(0, 6), drops: drops || null }
         : { head: 'The Mines', lines: [], drops: drops || null };
+    const tR = Date.now();
     const overlay = await renderRibbonOverlay(ribbon); // cached per loot text
+    const ribbonMs = Date.now() - tR;
     const thumb = await makeThumb(loc, resolvedBand, overlay ? overlay.buffer : null);
     const key = `mp:${loc}:${resolvedBand}:${hashStr(JSON.stringify(ribbon))}`;
     const t0 = Date.now();
@@ -134,7 +136,7 @@ async function renderMineCard({ loc, band = null, drops = {}, banner = null } = 
     // parity with the fish lane's timing line — repeat hauls must read as disk
     // hits, fresh hauls show the real plaster cost (owner 2026-10-24: "make it
     // faster … the existing overlay being the only thing generated on demand")
-    console.log(`[mine-gif] ${out && out.lane ? out.lane : 'disk-hit'} total=${Date.now() - t0}ms base=repo ribbon=${overlay && overlay.cached ? 'hit' : 'MISS'}`);
+    console.log(`[mine-gif] ${out && out.lane ? out.lane : 'disk-hit'} total=${Date.now() - t0}ms base=repo ribbon=${overlay && overlay.cached ? 'hit' : 'MISS'}/${ribbonMs}ms`);
     if (!out || !out.buffer) return null;
     return { buffer: out.buffer, contentType: out.contentType, thumb, lane: out.lane };
 }

@@ -1137,6 +1137,13 @@ async function mineOre(sock, chatId, senderJid, locationId) {
         economy.setPersistentEnergy(senderJid, leftAfterMine + energyRecovered, maxEn);
     }
 
+    // ⛏️ 2026-10-24 (owner: "when the player sends the command before the gif
+    // send a message saying descending into the mines"): instant feedback line
+    // while the haul card renders. Sent right after validation passes, so
+    // rejected commands (locked / dry energy / bad location) never announce a
+    // descent — and it doubles as the narrative beat between command and card.
+    await sock.sendMessage(chatId, { text: `⛏️ Descending into the ${loc.name}…` });
+
     let msg = `⛏️ *MINING: ${loc.name.toUpperCase()}* ⛏️\n\nYou strike the veins of the earth...\n\n`;
     const luck = sheet.stats.luck || 5;
     const baseRolls = 2 + Math.floor((minesLvl - 1) * 1.5);

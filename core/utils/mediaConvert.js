@@ -78,17 +78,27 @@ async function mp4ToMp4Overlaid(mp4Buf, pngBuf) {
     try {
         fs.writeFileSync(mi, mp4Buf);
         fs.writeFileSync(pi, pngBuf);
-        await _run([
+        const base = [
             '-y', '-i', mi, '-i', pi,
             '-filter_complex',
             '[0:v]scale=trunc(iw/2)*2:trunc(ih/2)*2[base];[base][1:v]overlay=0:0:format=auto:eof_action=repeat[out]',
             '-map', '[out]', '-movflags', 'faststart', '-pix_fmt', 'yuv420p',
             // -bf 0 (on-box A/B 2026-10-24, Box2, 54f mine loop): 700ms → 586ms
             // per fresh plaster for +12KB — every new haul text pays this pass,
-            // so the encode is the hot loop. ultrafast/superfast were rejected:
-            // only ~90-200ms faster but 2-3× the file size (slower WA upload).
-            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '24', '-bf', '0', '-an', mo,
-        ]);
+            // so the encode is the hot loop. ultrafast/superfast were rejected
+            // AGAIN in A/B round 2 (same day, crf 26-28 bump to buy back size):
+            // still 87-106KB vs 69KB. sliced-threads=1 (round 2 winner, nproc=2
+            // box): 723-883ms → ~600ms with size UNCHANGED (+3%) — x264
+            // frame-thread lookahead is pure latency on 2 vCPUs. If an old
+            // libx264 rejects the param we retry once without it — the
+            // ribbon-less raw-base fallback must stay a last resort.
+            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '24', '-bf', '0', '-an',
+        ];
+        try {
+            await _run([...base, '-x264-params', 'sliced-threads=1', mo]);
+        } catch (e) {
+            await _run([...base, mo]);
+        }
         const out = fs.readFileSync(mo);
         if (out.length <= 500) throw new Error('empty mp4');
         return out;

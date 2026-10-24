@@ -9,7 +9,8 @@ const jid = `qa_energy_${Date.now()}@s.whatsapp.net`;
 
 const sent = [];
 const mockSock = {
-  sendMessage: async (chat, content) => { sent.push(content.text || ''); },
+  // gif lane (minePov/dockPov) ships caption inside payload.caption, not .text
+  sendMessage: async (chat, content) => { sent.push(content.text || content.caption || ''); },
 };
 
 async function main() {
@@ -81,7 +82,10 @@ async function main() {
   economy.setPersistentEnergy(jid, maxEn, maxEn);
   sent.length = 0;
   await mineOre(mockSock, 'qa-energy-chat@s.whatsapp.net', jid, 'shimmering_caves');
-  const okMsg = sent[0] || '';
+  // 2026-10-24: mineOre now opens with the 'Descending into the …' feedback
+  // line (owner ask) before the haul card renders, so scan for the caption
+  // instead of assuming sent[0].
+  const okMsg = sent.find(t => /Energy Left/.test(t)) || '';
   const m = okMsg.match(/Energy Left: (\d+)\/(\d+)/);
   const after = economy.getPersistentEnergy(jid, maxEn);
   check(`mine display matches pool (msg ${m && m[1]}/${m && m[2]}, pool ${after}/${maxEn})`,
