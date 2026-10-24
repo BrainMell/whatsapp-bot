@@ -245,6 +245,9 @@ function gridOptsFor(p, def, valid = true) {
             x: p.x, y: p.y, fw: e.fw, fh: e.fh, valid, lvl: p.lvl || 0,
             label: `${def.name} (${p.x},${p.y})${p.lvl ? ' ↑ loft' : ''}`,
         },
+        // v5: the selected piece itself renders GLOWING and visible THROUGH
+        // walls (owner 2026-10-24 21:00Z) — sprite pass over the room raster
+        hl: { item: p.item, x: p.x, y: p.y, r: p.r, f: p.f, lvl: p.lvl || 0, valid },
     };
 }
 
@@ -277,7 +280,7 @@ async function viewRoom(ctx, rec, opts = {}) {
         try {
             let watchdogTimer;
             media = await Promise.race([
-                renderer.renderRoomImage(state, { pop: opts.pop || null, hint: opts.hint, grid: opts.grid || null, static: false }),
+                renderer.renderRoomImage(state, { pop: opts.pop || null, hint: opts.hint, grid: opts.grid || null, hl: opts.hl || null, static: false }),
                 new Promise((_, reject) => {
                     watchdogTimer = setTimeout(() => reject(new Error('render watchdog: room render exceeded 90s')), 90000);
                     if (watchdogTimer.unref) watchdogTimer.unref();
@@ -456,7 +459,9 @@ async function cmdSelect(ctx, rec, args) {
             if (pd) {
                 const spot = findFreeSpot(rec, pd);
                 const grid = spot ? { x: spot.x, y: spot.y, fw: pd.fw, fh: pd.fh, valid: true, label: `${pd.name} → (${spot.x},${spot.y})` } : null;
-                return viewRoom(ctx, rec, { grid, hint: `Placement mode — *${pd.name}*. Confirm: \`${ctx.prefix} home place ${pd.id} <x> <y>\` (or bare \`${ctx.prefix} home place ${pd.id}\`). Cancel: \`${ctx.prefix} home deselect\`.` });
+                // v5: placement ghost — the pending piece glows at its preview spot
+                const hl = spot ? { item: pd.id, x: spot.x, y: spot.y, valid: true } : null;
+                return viewRoom(ctx, rec, { grid, hl, hint: `Placement mode — *${pd.name}*. Confirm: \`${ctx.prefix} home place ${pd.id} <x> <y>\` (or bare \`${ctx.prefix} home place ${pd.id}\`). Cancel: \`${ctx.prefix} home deselect\`.` });
             }
             pendingPlace.delete(ctx.senderJid);
         }

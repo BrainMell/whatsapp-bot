@@ -2,8 +2,10 @@
 const { render, R, U } = require('./raster');
 const { buildScene } = require('./scene');
 
-const VERSION = 4;   // v4: canvas.project exposure (owner 2026-10-24 "add the moving gif we used to have
-                     // for the old furniture system for this, the grid too") — old static bakes invalidated
+const VERSION = 5;   // v5: selection glow-through-walls sprite pass + 3D shop thumbs (owner 2026-10-24
+                     // 21:00Z "anything that is selected should glow and be visible through walls" + "the
+                     // items in the shop, the images are still the old 2d ones not the new 3d ones") —
+                     // old disk bakes invalidated
 
 /** state -> node-canvas Canvas (W x H). Camera auto-fits the whole footprint (annexes, loft, 2nd-floor walls). */
 async function renderInterior(state, opts = {}) {
@@ -32,7 +34,43 @@ async function renderInterior(state, opts = {}) {
             -(rx * U[0] + ry * U[1] + rz * U[2]) * scale + H * cy];
     };
     canvas.cam = { scale, cy, org, W, H };
+    // v5 ADDITIVE: selection highlight — the selected piece rendered ALONE with
+    // the SAME camera onto a transparent canvas (no shadows, bg:null), so the
+    // room view can composite it glowing OVER walls: pieces in annexes hidden
+    // behind the main back walls, ground pieces under the loft slab, pieces
+    // behind low partitions — all stay visible while selected. The rasteriser
+    // and the scene build are untouched; this is a second cheap one-model pass
+    // reusing the already-cached GLB.
+    if (opts.hl) {
+        try {
+            const { buildHighlight } = require('./scene');
+            const hs = await buildHighlight(opts.hl);
+            if (hs) canvas.hl = render(hs, { W, H, scale, origin: org, cy, ss: opts.ss || 2, bg: null, shadows: false });
+        } catch (e) { console.warn('[interior3d] highlight pass skipped:', e.message); }   // cosmetic — never fail the room
+    }
     return canvas;
 }
 
-module.exports = { renderInterior, VERSION };
+/** v5 3D shop thumb — ONE furniture piece centred on a floor tile, camera
+ *  auto-fitted on its bbox, same iso basis as the rooms, transparent PNG
+ *  Buffer (or null). Used by the outfitter/inventory cards. */
+async function renderItemThumb(id) {
+    const { buildItemScene } = require('./scene');
+    const scene = await buildItemScene(id);
+    if (!scene || !scene.nTri) return null;
+    const W = 360, H = 360;
+    const { dx, dy, dz } = scene.itemBBox;
+    const org = [0, 0, dz * 0.45];
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const x of [-dx * 0.6, dx * 0.6]) for (const y of [-dy * 0.6, dy * 0.6]) for (const z of [-0.1, dz]) {
+        const rx = x - org[0], ry = y - org[1], rz = z - org[2];
+        const sx = rx * R[0] + ry * R[1] + rz * R[2], sy = -(rx * U[0] + ry * U[1] + rz * U[2]);
+        minX = Math.min(minX, sx); maxX = Math.max(maxX, sx); minY = Math.min(minY, sy); maxY = Math.max(maxY, sy);
+    }
+    const scale = Math.min(170, (W * 0.80) / (maxX - minX), (H * 0.80) / (maxY - minY));
+    const cy = (H / 2 - ((minY + maxY) / 2) * scale) / H;
+    const canvas = render(scene, { W, H, scale, origin: org, cy, ss: 2, bg: null, shadows: false });
+    return canvas.toBuffer('image/png');
+}
+
+module.exports = { renderInterior, renderItemThumb, VERSION };

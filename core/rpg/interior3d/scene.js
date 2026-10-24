@@ -226,40 +226,7 @@ async function buildScene(state, opts = {}) {
 
     // ── placed items ──
     const placed = (state.placed || []).map((p) => ({ p, def: DEFS.get(p.item) })).filter((o) => o.def);
-    const zOf = (p) => ((p.lvl || 0) === 1 ? LOFT_Z : 0);
-
-    for (const { p, def } of placed.filter((o) => o.def.layer === 'rug')) {
-        const m = await model('furniture', p.item);
-        const e = effFoot(p, def);
-        const cx = cellX(p.x) + e.fw * CELL / 2, cy = cellY(p.y) - e.fh * CELL / 2, z = zOf(p) + (p.lvl ? 0.01 : 0);
-        if (!m) { sc.addBox([cx, cy, z + 0.015], [e.fw * CELL * 0.92, e.fh * CELL * 0.92, 0.03], [0.5, 0.2, 0.2]); continue; }
-        const dx = m.max[0] - m.min[0], dy = m.max[1] - m.min[1];
-        const rot = (dx < dy) !== (e.fw < e.fh);
-        const ax = rot ? dy : dx, ay = rot ? dx : dy;
-        sc.addModel(m, { pos: [cx, cy, z], yaw: rot ? 90 : 0, scale: [e.fw * CELL * 0.94 / ax, e.fh * CELL * 0.94 / ay, 1], sz: 1.2 });
-    }
-
-    for (const { p, def } of placed.filter((o) => o.def.layer === 'item')) {
-        const m = await model('furniture', p.item);
-        const e = effFoot(p, def);
-        const cx = cellX(p.x) + e.fw * CELL / 2, cy = cellY(p.y) - e.fh * CELL / 2, z = zOf(p);
-        if (!m) { sc.addBox([cx, cy, z + 0.3], [e.fw * CELL * 0.8, e.fh * CELL * 0.8, 0.6], [0.5, 0.35, 0.2]); continue; }
-        const dx = m.max[0] - m.min[0], dy = m.max[1] - m.min[1];
-        const rot0 = (dx < dy) !== (def.fw < def.fh) && def.fw !== def.fh;     // native long axis vs catalog footprint
-        const ax = rot0 ? dy : dx, ay = rot0 ? dx : dy;
-        let s = Math.min(def.fw * CELL * 1.02 / ax, def.fh * CELL * 1.02 / ay);
-        s = Math.max(0.9, Math.min(s, 2.0));
-        const yaw = (rot0 ? 90 : 0) + e.r * 90;
-        const midx = (m.min[0] + m.max[0]) / 2, midy = (m.min[1] + m.max[1]) / 2;
-        const yr = yaw * Math.PI / 180, co = Math.cos(yr), si = Math.sin(yr);
-        sc.addModel(m, { pos: [cx - (midx * co - midy * si) * s, cy - (midx * si + midy * co) * s, z], yaw, scale: s });
-    }
-
-    for (const { p, def } of placed.filter((o) => o.def.layer === 'wall')) {
-        const m = await model('furniture', p.item);
-        if (!m) continue;
-        sc.addModel(m, { pos: [cellX(p.x) + CELL / 2, HALF - 0.02, 0.9], scale: 1.6 });
-    }
+    for (const o of placed) await addPiece(sc, o.p, o.def);
 
     // grid overlay (placement preview)
     if (opts.grid) {
@@ -274,4 +241,72 @@ async function buildScene(state, opts = {}) {
     return sc.finalize();
 }
 
-module.exports = { buildScene, N, CELL, HALF, cellX, cellY, DEFS, THEME_WALL, THEME_FLOOR, LOFT_Z };
+// ── v5 SHARED PIECE PLACEMENT ────────────────────────────────────────────────
+const zOf = (p) => ((p.lvl || 0) === 1 ? LOFT_Z : 0);
+
+/** place ONE furniture piece into a scene — shared by buildScene, the v5
+ *  selection-highlight pass and the shop-thumb builder, so a highlighted
+ *  piece lands at the EXACT world transform it has in the full room raster */
+async function addPiece(sc, p, def) {
+    const m = await model('furniture', p.item);
+    const e = effFoot(p, def);
+    if (def.layer === 'rug') {
+        const cx = cellX(p.x) + e.fw * CELL / 2, cy = cellY(p.y) - e.fh * CELL / 2, z = zOf(p) + (p.lvl ? 0.01 : 0);
+        if (!m) { sc.addBox([cx, cy, z + 0.015], [e.fw * CELL * 0.92, e.fh * CELL * 0.92, 0.03], [0.5, 0.2, 0.2]); return; }
+        const dx = m.max[0] - m.min[0], dy = m.max[1] - m.min[1];
+        const rot = (dx < dy) !== (e.fw < e.fh);
+        const ax = rot ? dy : dx, ay = rot ? dx : dy;
+        sc.addModel(m, { pos: [cx, cy, z], yaw: rot ? 90 : 0, scale: [e.fw * CELL * 0.94 / ax, e.fh * CELL * 0.94 / ay, 1], sz: 1.2 });
+        return;
+    }
+    if (def.layer === 'wall') {
+        if (!m) return;
+        sc.addModel(m, { pos: [cellX(p.x) + CELL / 2, HALF - 0.02, 0.9], scale: 1.6 });
+        return;
+    }
+    const cx = cellX(p.x) + e.fw * CELL / 2, cy = cellY(p.y) - e.fh * CELL / 2, z = zOf(p);
+    if (!m) { sc.addBox([cx, cy, z + 0.3], [e.fw * CELL * 0.8, e.fh * CELL * 0.8, 0.6], [0.5, 0.35, 0.2]); return; }
+    const dx = m.max[0] - m.min[0], dy = m.max[1] - m.min[1];
+    const rot0 = (dx < dy) !== (def.fw < def.fh) && def.fw !== def.fh;     // native long axis vs catalog footprint
+    const ax = rot0 ? dy : dx, ay = rot0 ? dx : dy;
+    let s = Math.min(def.fw * CELL * 1.02 / ax, def.fh * CELL * 1.02 / ay);
+    s = Math.max(0.9, Math.min(s, 2.0));
+    const yaw = (rot0 ? 90 : 0) + e.r * 90;
+    const midx = (m.min[0] + m.max[0]) / 2, midy = (m.min[1] + m.max[1]) / 2;
+    const yr = yaw * Math.PI / 180, co = Math.cos(yr), si = Math.sin(yr);
+    sc.addModel(m, { pos: [cx - (midx * co - midy * si) * s, cy - (midx * si + midy * co) * s, z], yaw, scale: s });
+}
+
+/** v5 SELECTION HIGHLIGHT — the selected piece built ALONE ({item,x,y,r,f,lvl}
+ *  = a placed piece or a pending-placement ghost) so renderInterior can
+ *  composite it glowing OVER walls: annex pieces hidden behind the main back
+ *  walls, ground pieces under the loft slab — all stay visible while selected
+ *  (owner 2026-10-24 21:00Z "anything that is selected should glow and be
+ *  visible through walls"). */
+async function buildHighlight(hl) {
+    const def = DEFS.get(hl && hl.item);
+    if (!def) return null;
+    const sc = new Scene();
+    await addPiece(sc, { item: hl.item, x: hl.x || 0, y: hl.y || 0, r: hl.r, f: hl.f, lvl: hl.lvl || 0 }, def);
+    if (!sc.nTri) return null;
+    return sc.finalize();
+}
+
+/** v5 3D SHOP THUMBS — one furniture piece centred on a floor tile for the
+ *  outfitter / inventory cards (owner 2026-10-24 21:00Z: "the items in the
+ *  shop, the images are still the old 2d ones not the new 3d ones"). Sets
+ *  sc.itemBBox = {dx,dy,dz} of the CENTRED piece for camera auto-fit. */
+async function buildItemScene(id) {
+    const m = await model('furniture', id);
+    if (!m) return null;
+    const sc = new Scene();
+    const cx = (m.min[0] + m.max[0]) / 2, cy = (m.min[1] + m.max[1]) / 2;
+    const dx = Math.max(m.max[0] - m.min[0], 0.35), dy = Math.max(m.max[1] - m.min[1], 0.35);
+    sc.addModel(m, { pos: [-cx, -cy, -m.min[2]] });          // centred on origin, feet on z=0
+    const floorM = await model('floors', THEME_FLOOR.oakhaven);
+    if (floorM) sc.addModel(floorM, { pos: [0, 0, -FLOOR_T], scale: [dx * 1.18, dy * 1.18, 1] });
+    sc.itemBBox = { dx, dy, dz: Math.max(m.max[2] - m.min[2], 0.3) };
+    return sc.finalize();
+}
+
+module.exports = { buildScene, buildHighlight, buildItemScene, N, CELL, HALF, cellX, cellY, DEFS, THEME_WALL, THEME_FLOOR, LOFT_Z };

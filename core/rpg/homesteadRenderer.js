@@ -794,6 +794,25 @@ function draw3dOverlay(ctx, room, k, oy, state, frame, opts) {
     const cellC = (gx, gy, z) => P(I3.cellX(gx) + I3.CELL / 2, I3.cellY(gy) - I3.CELL / 2, z);
     ctx.save();
 
+    // ── A0. selection highlight (interior3d v5) — the selected piece re-rendered
+    // ALONE with the room's own camera, composited OVER the raster so it GLOWS
+    // and stays visible THROUGH walls (annex back walls, loft slab, partitions)
+    // — owner 2026-10-24 21:00Z "anything that is selected should glow and be
+    // visible through walls". Gold halo while the spot fits, red when blocked.
+    if (room.hl) {
+        const pulse = 0.5 + 0.5 * Math.sin(ft);
+        const valid = !(opts.grid && opts.grid.valid === false);
+        const dw = room.width * k, dh = room.height * k;
+        ctx.save();
+        ctx.shadowColor = valid ? `rgba(255,206,88,${(0.80 + 0.20 * pulse).toFixed(3)})` : `rgba(242,84,56,${(0.80 + 0.20 * pulse).toFixed(3)})`;
+        ctx.shadowBlur = 24 + 12 * pulse;
+        ctx.drawImage(room.hl, 0, oy, dw, dh);
+        ctx.drawImage(room.hl, 0, oy, dw, dh);      // double pass deepens the halo
+        ctx.shadowBlur = 0;
+        ctx.drawImage(room.hl, 0, oy, dw, dh);      // crisp piece on top
+        ctx.restore();
+    }
+
     // ── A. selection grid (opts.grid) ──
     if (opts.grid) {
         const g = opts.grid;
@@ -1079,7 +1098,7 @@ function cachePut(map, key, out) {
     map.set(key, { ...out, ts: Date.now() });
 }
 function stateHash(state, opts = {}) {
-    return hashStr(JSON.stringify([state.owner, state.theme, state.placed, state.annex || null, state.upper || 0, state.upperWalls || 0, state.style || '', opts.pop || null, opts.hint || '', opts.grid || null, opts.static ? 1 : 0]));
+    return hashStr(JSON.stringify([state.owner, state.theme, state.placed, state.annex || null, state.upper || 0, state.upperWalls || 0, state.style || '', opts.pop || null, opts.hint || '', opts.grid || null, opts.hl || null, opts.static ? 1 : 0]));
 }
 
 // EVENT-LOOP BREATH — real timers between frames keep the canary heartbeat
@@ -1100,7 +1119,7 @@ const breath = () => new Promise((r) => setTimeout(r, FRAME_BREATH_MS));
 // HOMESTEAD_3D=0 or any render error falls back to the legacy 2D sprite room.
 async function render3dBase(state, opts) {
     const interior = require('./interior3d');
-    return interior.renderInterior(state, { grid: opts.grid, ss: 2 });
+    return interior.renderInterior(state, { grid: opts.grid, hl: opts.hl, ss: 2 });
 }
 
 // compose one ART-space frame: the 3D raster + projected overlay + HUD plate
@@ -1250,6 +1269,22 @@ function catalogSorted() {
     return catalog().items.slice().sort((a, b) => (rooms.itemMinHouse(a) - rooms.itemMinHouse(b)) || (a.price - b.price) || a.id.localeCompare(b.id));
 }
 
+// ── 3D item thumbs (owner 2026-10-24 21:00Z: "the items in the shop, the
+// images are still the old 2d ones not the new 3d ones") — every outfitter /
+// inventory icon is the piece's own GLB through the SAME interior3d rasteriser,
+// disk-cached per item via mediaCache (survives restarts AND deploys). Any
+// failure falls back to the legacy 2D sprite, so the shop can never blank.
+async function itemThumb3d(id) {
+    try {
+        const out = await mediaCache.cached('itemthumb', 'i3' + require('./interior3d').VERSION + '-' + id, async () => {
+            const buf = await require('./interior3d').renderItemThumb(id);
+            if (!buf || buf.length < 800) throw new Error('thumb render failed');
+            return { buffer: buf, contentType: 'image/png' };
+        }, null, { label: 'thumb:' + id, timeoutMs: 45000 });
+        return out && out.buffer ? out.buffer : null;
+    } catch (e) { console.warn('[homesteadRenderer] 3D thumb failed for', id, e.message); return null; }
+}
+
 function renderArchitectCard(ctx, canvas, o) {
     const { W, H, rooms, houseLv } = o;
     ctx.textAlign = 'center';
@@ -1356,23 +1391,36 @@ async function renderCatalogPage(page, pages, opts = {}) {
         }
 
         const dcx = x + cw / 2, dcy = y + 176;
-        const fl = await img('floor_wood.png');
-        if (fl) {
+        // 3D representation first (GLB through the interior3d rasteriser);
+        // the legacy 2D sprite + wood sliver remain as the fallback
+        const thumb = await itemThumb3d(it.id);
+        if (thumb) {
+            const im = await require('canvas').loadImage(thumb);
+            const s = Math.min((cw - 24) / im.width, 180 / im.height);
             ctx.save();
-            ctx.globalAlpha = 0.85;
-            ctx.drawImage(fl, dcx - 32, dcy - 16);
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(im, dcx - (im.width * s) / 2, dcy - im.height * s + 10, im.width * s, im.height * s);
             ctx.restore();
-        }
+        } else {
+            const fl = await img('floor_wood.png');
+            if (fl) {
+                ctx.save();
+                ctx.globalAlpha = 0.85;
+                ctx.drawImage(fl, dcx - 32, dcy - 16);
+                ctx.restore();
+            }
 
-        const spr = await img(`${it.id}.png`);
-        if (spr) {
-            const w = spr.width * 2, h = spr.height * 2;
-            const maxH = 180, maxW = cw - 30;
-            let s = 2;
-            if (h > maxH) s = maxH / spr.height;
-            if (w * (s / 2) > maxW) s = Math.min(s, (maxW / spr.width));
-            const dw = spr.width * s, dh = spr.height * s;
-            ctx.drawImage(spr, dcx - dw / 2, dcy - dh + 6, dw, dh);
+            const spr = await img(`${it.id}.png`);
+            if (spr) {
+                const w = spr.width * 2, h = spr.height * 2;
+                const maxH = 180, maxW = cw - 30;
+                let s = 2;
+                if (h > maxH) s = maxH / spr.height;
+                if (w * (s / 2) > maxW) s = Math.min(s, (maxW / spr.width));
+                const dw = spr.width * s, dh = spr.height * s;
+                ctx.drawImage(spr, dcx - dw / 2, dcy - dh + 6, dw, dh);
+            }
         }
 
         ctx.font = '19px Medieval';
@@ -1497,12 +1545,23 @@ async function renderInventoryCard(rec, opts = {}) {
         ctx.lineWidth = 1;
         roundRect(ctx, 70, rowY - 21, W - 140, 44, 9);
         ctx.stroke();
-        // sprite thumbnail
-        const spr = row.d.id ? await img(`${row.d.id}.png`) : null;
-        if (spr) {
-            const maxH = 36, maxW = 56;
-            let s = Math.min(maxH / spr.height, maxW / spr.width, 2);
-            ctx.drawImage(spr, 100 - (spr.width * s) / 2, rowY - (spr.height * s) / 2, spr.width * s, spr.height * s);
+        // 3D thumbnail (GLB through the interior3d rasteriser) — 2D sprite fallback
+        const thumb = row.d.id ? await itemThumb3d(row.d.id) : null;
+        if (thumb) {
+            const im = await require('canvas').loadImage(thumb);
+            const s = Math.min(38 / im.height, 60 / im.width);
+            ctx.save();
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(im, 100 - (im.width * s) / 2, rowY - (im.height * s) / 2, im.width * s, im.height * s);
+            ctx.restore();
+        } else {
+            const spr = row.d.id ? await img(`${row.d.id}.png`) : null;
+            if (spr) {
+                const maxH = 36, maxW = 56;
+                let s = Math.min(maxH / spr.height, maxW / spr.width, 2);
+                ctx.drawImage(spr, 100 - (spr.width * s) / 2, rowY - (spr.height * s) / 2, spr.width * s, spr.height * s);
+            }
         }
         // name + star
         ctx.textAlign = 'left';
