@@ -2482,6 +2482,189 @@ async function cmdMaker(senderJid, reply, chatId, args = []) {
   return reply(msg);
 }
 
+// ── 2026-10-24 (Mellow: "Add a command that shows how many cards a maker has
+// made, and a way to search my anime, character name, tier and what not across
+// all the cards not just the one you own") ───────────────────────────────────
+// Two GLOBAL-pool tools beside the owned-only .maker/.scc/.fc family. Both
+// read the in-memory ALL_CARDS index only — zero DB round-trips, so they are
+// effectively instant even on the 2-vCPU boxes.
+//   .mcount <maker>              → pool-wide maker stats (total, tier breakdown)
+//   .gs <text> [key=value …]     → multi-facet browse of the WHOLE card pool
+// Consistency: .maker already lists E-tier card names to players and .escc
+// browses event/S cards ungated, so .gs shows the full pool to everyone too.
+
+const GS_TIER_ORDER = { 'S': 100, '6': 90, '5': 80, '4': 70, '3': 60, '2': 50, '1': 40, 'E': 30 };
+const GS_TIER_ICONS = { 'S': '👑', 'E': '🎁', '6': '💎', '5': '✨', '4': '🎗', '3': '🔮', '2': '🌈', '1': '🎴' };
+
+async function cmdMCount(reply, args = []) {
+  const p = P();
+  const q = args.join(' ').replace(/["'`]/g, '').toLowerCase().trim();
+  if (!q) return sendUsage(reply, `${p} mcount`, `${p} mcount <maker>`, `${p} mcount Mah_xee`);
+
+  // Group every pool card by its exact creator tag (substring, case-insensitive).
+  const groups = new Map();
+  for (const c of ALL_CARDS()) {
+    const maker = String(c.creator || '').trim();
+    if (!maker || maker.toLowerCase() === 'unknown') continue;
+    if (!maker.toLowerCase().includes(q)) continue;
+    const k = maker.toLowerCase();
+    if (!groups.has(k)) groups.set(k, { display: maker, cards: [] });
+    groups.get(k).cards.push(c);
+  }
+
+  if (!groups.size) {
+    return reply(`🔍  *NO RESULTS*\n\n🎨 ⟢ *Maker:* _${q}_\n📭 ⟢ _No cards by this maker in the pool_\n\n💡 ⟢ _Maker tags appear on every card — try \`${p} gs <card name>\` to see one._`);
+  }
+
+  // Ambiguous short queries ("mah") can hit several distinct tags — ask, don't guess.
+  if (groups.size > 1) {
+    const ranked = [...groups.values()].sort((a, b) => b.cards.length - a.cards.length);
+    let msg = `🎨 *MAKERS matching "${q}"*\n\n`;
+    ranked.slice(0, 12).forEach((g) => {
+      msg += `🔹 *${g.display}* — ${g.cards.length} card${g.cards.length === 1 ? '' : 's'}\n`;
+    });
+    if (ranked.length > 12) msg += `…and ${ranked.length - 12} more — type more of the name\n`;
+    msg += `\n💡 Refine: \`${p} mcount ${ranked[0].display}\``;
+    return reply(msg);
+  }
+
+  const { display, cards } = [...groups.values()][0];
+  const events = cards.filter(isEventCard).length;
+  const tierCounts = {};
+  cards.forEach((c) => {
+    if (isEventCard(c)) return; // event cards report on the 🎁 line, not their real tier
+    const t = String(c.tier);
+    tierCounts[t] = (tierCounts[t] || 0) + 1;
+  });
+  const tierLine = Object.keys(GS_TIER_ORDER)
+    .filter(t => tierCounts[t])
+    .map(t => `${GS_TIER_ICONS[t]} ${t}: *${tierCounts[t]}*`)
+    .join(' · ');
+  const seriesCount = new Set(cards.map(c => String(c.animeName || '').toLowerCase())).size;
+
+  let msg = `🎨 *MAKER STATS*\n\n`;
+  msg += `🎨 ⟢ *Maker:* _${display}_\n`;
+  msg += `🃏 ⟢ *Total cards:* *${cards.length}*\n`;
+  msg += `📚 ⟢ *Series covered:* *${seriesCount}*\n`;
+  if (events) msg += `🎁 ⟢ *Event cards:* *${events}*\n`;
+  if (tierLine) msg += `\n${tierLine}\n`;
+  msg += `\n💡 Browse their work: \`${p} gs maker=${display}\`\n`;
+  msg += `💡 Your copies: \`${p} maker ${display}\``;
+  return reply(msg);
+}
+
+// .gs filter grammar: value = quoted string ("attack on titan") or one token
+// (mah_xee, 4,5). Unquoted multi-word would swallow the user's free text, so
+// it is not supported — quotes are the documented way (same convention as
+// .ci "<name> | <tier>").
+const GS_FILTER_RE = new RegExp(
+  '\\b(tier|series|artist|character|anime|maker|name|char|t)\\s*=\\s*("[^"]*"|\'[^\']*\'|\\S+)',
+  'gi'
+);
+const GS_KNOWN_KEYS = ['tier', 't', 'maker', 'artist', 'anime', 'series', 'name', 'character', 'char'];
+
+async function cmdGs(reply, args = []) {
+  const p = P();
+  let page = 1;
+  const pageIdx = args.findIndex(a => a === '--page' || a === '-p');
+  if (pageIdx !== -1 && args[pageIdx + 1]) {
+    page = parseInt(args[pageIdx + 1]) || 1;
+    args.splice(pageIdx, 2);
+  }
+  const raw = args.join(' ').trim();
+
+  // Unknown filter keys get a friendly redirect instead of silently polluting
+  // the free-text query ("color=red" would otherwise be searched as words).
+  const seenKeys = [...raw.matchAll(/\b([a-z]+)\s*=/gi)].map(m => m[1].toLowerCase());
+  const unknown = seenKeys.find(k => !GS_KNOWN_KEYS.includes(k));
+  if (unknown) {
+    return reply(`❌ Unknown filter \`${unknown}=\`\n\n✅ Valid: \`tier=\` \`maker=\` \`anime=\` \`name=\`\n\n📝 Example: \`${p} gs naruto tier=5 maker=mah\``);
+  }
+
+  const filters = { tiers: [], makers: [], animes: [], names: [] };
+  let freeText = raw;
+  for (const m of [...raw.matchAll(GS_FILTER_RE)]) {
+    const key = m[1].toLowerCase();
+    let val = String(m[2] || '').replace(/^["']|["']$/g, '').replace(/["'`]/g, ' ').trim().toLowerCase();
+    if (!val) continue;
+    if (key === 'tier' || key === 't') filters.tiers.push(...val.split(','));
+    else if (key === 'maker' || key === 'artist') filters.makers.push(...val.split(','));
+    else if (key === 'anime' || key === 'series') filters.animes.push(...val.split(','));
+    else filters.names.push(...val.split(','));
+    freeText = freeText.replace(m[0], ' ');
+  }
+  filters.tiers = filters.tiers.map(t => t.trim().toUpperCase()).filter(Boolean);
+  filters.makers = filters.makers.map(s => s.trim()).filter(Boolean);
+  filters.animes = filters.animes.map(s => s.trim()).filter(Boolean);
+  filters.names = filters.names.map(s => s.trim()).filter(Boolean);
+
+  const badTier = filters.tiers.find(t => t !== 'S' && !/^[1-7]$/.test(t));
+  if (badTier) return reply(`❌ Invalid tier \`${badTier}\`. Use S or 1-7 — comma list works too (e.g. \`tier=4,5\`).`);
+
+  const tokens = _nameTokens(freeText);
+  if (!tokens.length && !filters.tiers.length && !filters.makers.length && !filters.animes.length && !filters.names.length) {
+    return sendUsage(reply, `${p} gs`, `${p} gs <text> [tier=] [maker=] [anime=] [name=] [--page n]`, `${p} gs naruto tier=5 maker=mah`);
+  }
+
+  const lc = s => String(s || '').toLowerCase();
+  const cards = ALL_CARDS().filter((c) => {
+    // free text = resilient token AND-match over character + series (owner
+    // brief 2026-10-09 §1 — same matcher as info/cs/series)
+    if (tokens.length && !_cardMatchesTokens(c, tokens, true)) return false;
+    if (filters.tiers.length && !filters.tiers.includes(String(c.tier).toUpperCase())) return false;
+    if (filters.makers.length && !filters.makers.some(m => lc(c.creator).includes(m))) return false;
+    if (filters.animes.length && !filters.animes.some(a => lc(c.animeName).includes(a))) return false;
+    if (filters.names.length && !filters.names.some(n => lc(c.cardName).includes(n))) return false;
+    return true;
+  });
+
+  const chips = [];
+  if (tokens.length) chips.push(`🔎 _"${freeText.replace(/\s+/g, ' ').trim()}"_`);
+  if (filters.tiers.length) chips.push(`🎯 tier: _${filters.tiers.join(', ')}_`);
+  if (filters.makers.length) chips.push(`🎨 maker: _${filters.makers.join(', ')}_`);
+  if (filters.animes.length) chips.push(`📚 anime: _${filters.animes.join(', ')}_`);
+  if (filters.names.length) chips.push(`👤 name: _${filters.names.join(', ')}_`);
+
+  if (!cards.length) {
+    let m = `🔍  *NO RESULTS*\n\n`;
+    chips.forEach(x => { m += `${x}\n`; });
+    m += `📭 ⟢ _Nothing in the pool matches_.\n\n💡 ⟢ _Try fewer filters, shorter text, or quotes around multi-word values._`;
+    return reply(m);
+  }
+
+  // Rarity-first (S → 1), then name, then ID — same ordering culture as scc.
+  cards.sort((a, b) =>
+    (GS_TIER_ORDER[String(b.tier)] || 0) - (GS_TIER_ORDER[String(a.tier)] || 0) ||
+    String(a.cardName).localeCompare(String(b.cardName)) ||
+    String(a.id).localeCompare(String(b.id)));
+
+  const byTier = {};
+  cards.forEach((c) => { const t = String(c.tier); byTier[t] = (byTier[t] || 0) + 1; });
+  const tierLine = Object.keys(GS_TIER_ORDER)
+    .filter(t => byTier[t])
+    .map(t => `${t}×${byTier[t]}`)
+    .join(' · ');
+
+  const pageSize = 15;
+  const totalPages = Math.max(1, Math.ceil(cards.length / pageSize));
+  if (page > totalPages) page = totalPages;
+  const start = (page - 1) * pageSize;
+  const chunk = cards.slice(start, start + pageSize);
+
+  let msg = `🔎 *GLOBAL CARD SEARCH*\n\n`;
+  chips.forEach(x => { msg += `${x}\n`; });
+  msg += `📦 ⟢ *${cards.length}* matches${tierLine ? ` · ${tierLine}` : ''}\n`;
+  msg += `📖 Page: ${page} / ${totalPages}\n\n`;
+  chunk.forEach((c) => {
+    msg += `${GS_TIER_ICONS[String(c.tier)] || '🃏'} *${c.cardName}* (T${c.tier})\n`;
+    msg += `   ➥ 📚 _${c.animeName || 'Unknown'}_ · 🎨 _${c.creator || 'Unknown'}_ · 🆔 \`${c.id}\`\n`;
+  });
+  if (totalPages > 1) {
+    msg += `\n💡 Use \`${p} gs ${raw} --page ${page < totalPages ? page + 1 : 1}\` for more.`;
+  }
+  return reply(msg);
+}
+
 async function cmdBurn(senderJid, reply, chatId, args = []) {
   const inst = getInst();
   const index = parseInt(args[0]);
@@ -4864,6 +5047,15 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
 
     case 'maker':
       await cmdMaker(senderJid, reply, chatId, args);
+      return true;
+
+    // 2026-10-24 (Mellow): global maker stats + whole-pool multi-facet search
+    case 'mcount':
+      await cmdMCount(reply, args);
+      return true;
+
+    case 'gs':
+      await cmdGs(reply, args);
       return true;
 
     case 'burn':

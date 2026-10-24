@@ -342,6 +342,8 @@ const COMMAND_REGISTRY = {
     { cmd: 'cltr', desc: 'See top collectors of a specific series.', usage: 'cltr <series>' },
     { cmd: 'scc', desc: 'Search collection by anime name.', usage: 'scc <anime>' },
     { cmd: 'maker', desc: 'Search owned cards by maker tag.', usage: 'maker "<name>"' },
+    { cmd: 'mcount', desc: 'See how many cards a maker has made across the whole card pool.', usage: 'mcount <maker>' },
+    { cmd: 'gs', desc: 'Search ALL cards (not just yours) by character, anime, tier and maker.', usage: 'gs <text> [tier=5] [maker=x] [anime="attack on titan"] [name=] [--page n]' },
     { cmd: 'burn', desc: 'Permanently delete a card from your collection.', usage: 'burn <coll#>' },
     { cmd: 'anim', desc: 'Toggle collection/deck rendering: animated hybrid MP4 (default) or static PNG.', usage: 'anim <on|off>' },
     { cmd: 'tokens', desc: 'Check your event token balance and the event status.', usage: 'tokens' },

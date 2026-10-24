@@ -267,7 +267,7 @@
 
 ## Phase 10 - Card Game
 
-Player: `claim` · `anim on\|hybrid\|static` · `coll [-a\|-s] [-p]` · `deck` · `t2deck` · `t2coll` · `t2cdeck` · `tcoll` · `ecoll` · `cdeck <name> [slot\|remove <slot>]` · `swap` · `cg` · `cs` · `buycard` · `sc` · `auction <slot> <minBid> <m\|h\|d>` · `bid [<n> <amt>]` · `lock <slot\|cardId>` · `merge` · `mergeall` · `list decks` · `create deck <name>` · `rename deck <old> <new>` · `delete deck <name>` · `cltr` · `escc` · `fc` · `scc` · `maker` · `burn` (+`accept`/`decline`) · `tokens` · `cardlb`/`clb`
+Player: `claim` · `anim on\|hybrid\|static` · `coll [-a\|-s] [-p]` · `deck` · `t2deck` · `t2coll` · `t2cdeck` · `tcoll` · `ecoll` · `cdeck <name> [slot\|remove <slot>]` · `swap` · `cg` · `cs` · `buycard` · `sc` · `auction <slot> <minBid> <m\|h\|d>` · `bid [<n> <amt>]` · `lock <slot\|cardId>` · `merge` · `mergeall` · `list decks` · `create deck <name>` · `rename deck <old> <new>` · `delete deck <name>` · `cltr` · `escc` · `fc` · `scc` · `maker` · `mcount <maker>` · `gs <text> [tier=] [maker=] [anime=] [name=]` · `burn` (+`accept`/`decline`) · `tokens` · `cardlb`/`clb`
 
 eShop/event (mod-gated unless noted): `eshop` (+ `eshop buy <1-16>`) · `eshop deck sell\|buy\|pending` · `eshop deck approve\|reject` 🛡️ · `event start\|stop\|status` 🛡️ · `setprice edeck <slot> <price>` 🛡️ · `t2edeck add\|remove\|price\|clear` 🛡️ · `esummon` 🛡️ · `trc` 🛡️ · `ci` 🛡️ · `endauction` 👑 · `setauctiongc` 👑
 
