@@ -933,8 +933,34 @@ const breath = () => new Promise((r) => setTimeout(r, FRAME_BREATH_MS));
 // the grid overlay drawn (slide/turn plays under the labelled grid).
 // Speed: the bake is disk-cached per stateHash (mediaCache.js) — first view
 // renders, every repeat is an instant disk read even across restarts.
+// 3D interior (pure-Node rasteriser over the house-builder GLB pack). Default ON;
+// HOMESTEAD_3D=0 or any render error falls back to the legacy 2D sprite room.
+async function render3dCard(state, opts) {
+    ensureFonts();
+    const { createCanvas } = require('canvas');
+    const interior = require('./interior3d');
+    const room = await interior.renderInterior(state, { grid: opts.grid, ss: 2 });
+    const S = 2, c = createCanvas(ART_W * S, ART_H * S), ctx = c.getContext('2d');
+    ctx.scale(S, S);
+    ctx.fillStyle = '#18141c'; ctx.fillRect(0, 0, ART_W, ART_H);
+    const h = ART_W * room.height / room.width;
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(room, 0, 78, ART_W, h);
+    drawHud(ctx, state, THEMES[state.theme] || THEMES.oakhaven, opts);
+    return c;
+}
+
 async function renderRoomImage(state, opts = {}) {
-    const key = stateHash(state, opts);
+    const key = stateHash(state, { ...opts, v3d: process.env.HOMESTEAD_3D === '0' ? 0 : 1 });
+    if (process.env.HOMESTEAD_3D !== '0') {
+        const hit3 = _renderCache.get(key);
+        if (hit3 && (Date.now() - hit3.ts) < CACHE_TTL) return hit3;
+        try {
+            const out3 = await mediaCache.cached('room', 'v3d1-' + key, async () => encodeOut(await render3dCard(state, opts)), null, { label: 'bake:room3d', timeoutMs: 90000 });
+            cachePut(_renderCache, key, out3);
+            return out3;
+        } catch (e) { console.error('[homestead] 3D render failed, 2D fallback:', e.message); }
+    }
     const hit = _renderCache.get(key);
     if (hit && (Date.now() - hit.ts) < CACHE_TTL) return hit;
     const out = await mediaCache.cached('room', key, async () => {
