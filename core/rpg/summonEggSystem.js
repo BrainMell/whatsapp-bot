@@ -177,11 +177,16 @@ async function craftEgg(userId, targetTier) {
 
   const fragId = tier.fragmentsRequired.id;
   const fragCount = tier.fragmentsRequired.count;
+  // TDZ FIX 2026-10-24 (Box2 live: "Cannot access 'fragName' before
+  // initialization" on every inventory-full craft): the refund path below
+  // (addRes failure) reads fragName BEFORE the function-scope declaration that
+  // used to sit at the bottom of craftEgg. One hoisted declaration, no
+  // shadowing duplicates.
+  const fragName = lootSystem.getItemInfo(fragId)?.name || fragId;
 
   // Check fragments
   if (!inventorySystem.hasItem(userId, fragId, fragCount)) {
     const have = inventorySystem.getItemCount(userId, fragId);
-    const fragName = lootSystem.getItemInfo(fragId)?.name || fragId;
     return {
       success: false,
       message: `❌ Need ${fragCount}x ${fragName} to craft a ${lootSystem.getItemInfo(tier.eggId)?.name}. You have ${have}.`
@@ -210,7 +215,6 @@ async function craftEgg(userId, targetTier) {
   }
 
   const eggName = lootSystem.getItemInfo(tier.eggId)?.name || tier.eggId;
-  const fragName = lootSystem.getItemInfo(fragId)?.name || fragId;
   return {
     success: true,
     message: `✨ *EGG CRAFTED!*\n\nUsed ${fragCount}x ${fragName} → ${eggName}\n\n_Use \`${botConfig.getPrefix()} summon hatch ${tier.eggId}\` to hatch it!_`
