@@ -12205,17 +12205,26 @@ async function applyAbilityEffect(
           // ⚔️ FIX 2026-10-24: pre-hit GIF reuses the scene already on screen
           baseSceneBuffer: state.lastCombatScene || null,
           sendText: (text) => boundedSend(sock, chatId, { text }, 'ultimateCharge'),
-          sendGif: (buffer, caption) => sendMediaBounded(sock, chatId, {
-            image: buffer,
-            caption,
-            mimetype: 'image/gif',
-            gifPlayback: true,
-          }, {
-            label: 'classUltimateVfx',
-            ms: 15000,
-            grace: 5000,
-            fallbackText: caption,
-          }),
+          sendGif: (buffer, caption) => {
+            // ⚔️ FIX 2026-10-24 R3 (owner: "I still only get an image"): the GIF
+            // used to leave as `image:` — but WAProto's IImageMessage has NO
+            // gifPlayback field (0 decls vs IVideoMessage's 1), so baileys
+            // silently dropped the flag and every cast landed as a STATIC
+            // photo on the phone. videoMessage+gifPlayback is the exact
+            // mechanism WhatsApp Web itself uses for GIFs (baileys even labels
+            // it 'gif' in messages-send.js). Let baileys pick video/mp4.
+            console.log('[SkillVFX] gif payload: videoMessage+gifPlayback (animated)');
+            return sendMediaBounded(sock, chatId, {
+              video: buffer,
+              caption,
+              gifPlayback: true,
+            }, {
+              label: 'classUltimateVfx',
+              ms: 15000,
+              grace: 5000,
+              fallbackText: caption,
+            });
+          },
         });
       } else {
         console.log(`[SkillVFX] no signature mapped for ${classId}/${ability?.id} — normal resolution`);
