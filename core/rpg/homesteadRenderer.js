@@ -768,6 +768,169 @@ function drawGridSelection(ctx, g, frame) {
     ctx.restore();
 }
 
+// ═══ 3D INTERIOR OVERLAYS (owner 2026-10-24: "add the moving gif we used to have
+// for the old furniture system for this, the grid too — functionality wise it
+// should be similar except better; leave the new Models and rendering untouched") ═══
+// The 3D room bakes ONE interior raster (interior3d models + rasteriser stay
+// untouched); every loop frame is that raster + these CHEAP projected overlays,
+// streamed through the same ffmpeg mp4 "GIF" pipe the 2D room uses:
+//   • the old furniture-system selection grid (1227b6c §3) — hairlines, gold
+//     front rims, X/Y coordinate labels on the front edges, pulsing footprint
+//     cells, bobbing chevron + name/(x,y) label — ported from
+//     drawGridFloor/drawGridSelection and re-projected through the 3D camera
+//   • living-room ambience — hearth/oven/candelabra/lantern glow pulse + rising
+//     embers + drifting dust motes (the old 2D loop's life, in overlay form)
+//   • move/moveto feedback — fading slide trail + expanding impact ring
+const I3 = require('./interior3d/scene');
+const LIGHT_IDS = new Set(['hearth_brick', 'oven_brick', 'oven_stone', 'candelabra', 'lantern_stand', 'cauldron']);
+
+function draw3dOverlay(ctx, room, k, oy, state, frame, opts) {
+    if (!room.project) return;   // older interior build — overlays silently off
+    const N3 = I3.N;
+    const ft = (frame / FRAMES) * Math.PI * 2;
+    const fz = (lvl) => (lvl === 1 ? I3.LOFT_Z : 0) + 0.02;
+    // project world -> room px -> ART px (room is drawn at (0, oy, ART_W, h))
+    const P = (x, y, z) => { const p = room.project(x, y, z); return [p[0] * k, oy + p[1] * k]; };
+    const cellC = (gx, gy, z) => P(I3.cellX(gx) + I3.CELL / 2, I3.cellY(gy) - I3.CELL / 2, z);
+    ctx.save();
+
+    // ── A. selection grid (opts.grid) ──
+    if (opts.grid) {
+        const g = opts.grid;
+        // hairlines across every main-room floor tile
+        ctx.strokeStyle = 'rgba(250,240,210,0.30)';
+        ctx.lineWidth = 1.2;
+        for (let i = 1; i < N3; i++) {
+            let a = P(I3.cellX(i), I3.cellY(0), 0.02), b = P(I3.cellX(i), I3.cellY(N3), 0.02);
+            ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+            a = P(I3.cellX(0), I3.cellY(i), 0.02); b = P(I3.cellX(N3), I3.cellY(i), 0.02);
+            ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+        }
+        // gold front rims: SW edge (y = N3) + SE edge (x = N3)
+        ctx.strokeStyle = 'rgba(244,206,110,0.95)';
+        ctx.lineWidth = 3;
+        for (const edge of ['sw', 'se']) {
+            ctx.beginPath();
+            for (let i = 0; i <= N3; i++) {
+                const p = edge === 'sw' ? P(I3.cellX(i), I3.cellY(N3), 0.02) : P(I3.cellX(N3), I3.cellY(i), 0.02);
+                if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
+            }
+            ctx.stroke();
+        }
+        // bold coordinate numbers in the front-edge tiles (old 26px art sizing)
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = 'bold 26px Cinzel, Medieval, sans-serif';
+        for (let i = 0; i < N3; i++) {
+            for (const [gx, gy] of [[i, N3 - 1], [N3 - 1, i]]) {
+                const [tx, ty] = cellC(gx, gy, 0.02);
+                ctx.lineWidth = 5;
+                ctx.strokeStyle = 'rgba(28,17,6,0.88)';
+                ctx.strokeText(String(i), tx, ty);
+                ctx.fillStyle = '#ffd76a';
+                ctx.fillText(String(i), tx, ty);
+            }
+        }
+        // pulsing footprint cells (projected diamonds, valid gold / invalid red)
+        const pulse = 0.5 + 0.5 * Math.sin(ft);
+        const fw = g.fw || 1, fh = g.fh || 1, valid = g.valid !== false, z = fz(g.lvl);
+        for (let ix = 0; ix < fw; ix++) {
+            for (let iy = 0; iy < fh; iy++) {
+                const gx = g.x + ix, gy = g.y + iy;
+                const quad = [
+                    P(I3.cellX(gx), I3.cellY(gy + 1), z), P(I3.cellX(gx + 1), I3.cellY(gy + 1), z),
+                    P(I3.cellX(gx + 1), I3.cellY(gy), z), P(I3.cellX(gx), I3.cellY(gy), z),
+                ];
+                ctx.beginPath();
+                quad.forEach((p, i) => (i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1])));
+                ctx.closePath();
+                ctx.fillStyle = valid ? `rgba(255,214,100,${0.16 + 0.14 * pulse})` : `rgba(235,70,50,${0.18 + 0.16 * pulse})`;
+                ctx.fill();
+                ctx.strokeStyle = valid ? `rgba(255,214,100,${0.65 + 0.35 * pulse})` : `rgba(240,85,60,${0.7 + 0.3 * pulse})`;
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+        }
+        // bobbing chevron + label above the selected piece (old drawGridSelection)
+        const cc = cellC(g.x + fw / 2, g.y + fh / 2, fz(g.lvl) + 1.35);
+        const topY = cc[1] - 26 + Math.sin(ft) * 4;
+        ctx.fillStyle = valid ? 'rgba(240,200,90,0.95)' : 'rgba(230,80,60,0.95)';
+        ctx.strokeStyle = 'rgba(20,12,6,0.8)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(cc[0] - 11, topY - 12); ctx.lineTo(cc[0] + 11, topY - 12); ctx.lineTo(cc[0], topY);
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+        if (g.label) {
+            ctx.font = '15px Medieval, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.strokeStyle = 'rgba(20,12,6,0.85)';
+            ctx.lineWidth = 3;
+            ctx.strokeText(g.label, cc[0], topY - 24);
+            ctx.fillStyle = '#f2e2b8';
+            ctx.fillText(g.label, cc[0], topY - 24);
+        }
+    }
+
+    // ── B. living-room ambience (every view) ──
+    const placed = state.placed || [];
+    // warm glow + embers at light sources
+    placed.forEach((p, idx) => {
+        if (!LIGHT_IDS.has(p.item)) return;
+        const def = itemDef(p.item) || {};
+        const z = fz(p.lvl || 0);
+        const [cx, cy] = cellC(p.x + (def.fw || 1) / 2, p.y - (def.fh || 1) / 2, z);
+        const flick = 0.10 + 0.05 * Math.sin(ft + idx * 1.3) + 0.02 * Math.sin(ft * 3.1 + idx);
+        const grad = ctx.createRadialGradient(cx, cy - 30, 6, cx, cy - 30, 150);
+        grad.addColorStop(0, `rgba(255,176,72,${0.85 * flick + 0.10})`);
+        grad.addColorStop(0.4, `rgba(255,140,50,${0.45 * flick})`);
+        grad.addColorStop(1, 'rgba(255,120,40,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.arc(cx, cy - 30, 150, 0, Math.PI * 2); ctx.fill();
+        // three embers per source, seeded rise
+        for (let e = 0; e < 3; e++) {
+            const seed = ((idx * 7 + e * 13) % 100) / 100;
+            const t = (frame / FRAMES + seed) % 1;
+            const ex = cx + Math.sin(t * Math.PI * 2 + seed * 9) * 14;
+            const ey = cy - 40 - t * 78;
+            ctx.fillStyle = `rgba(255,${160 + Math.round(60 * seed)},60,${(0.55 * (1 - t)).toFixed(3)})`;
+            ctx.beginPath(); ctx.arc(ex, ey, 2.4, 0, Math.PI * 2); ctx.fill();
+        }
+    });
+    // drifting dust motes
+    for (let m = 0; m < 16; m++) {
+        const seed = ((m * 37) % 100) / 100;
+        const mx = (seed * 1.7 * ART_W + frame * 2.2 + m * 53) % ART_W;
+        const my = 120 + ((seed * 5.3 * ART_H + m * 97) % (ART_H - 240)) + Math.sin(ft + m) * 6;
+        ctx.fillStyle = `rgba(240,225,190,${(0.05 + 0.05 * (0.5 + 0.5 * Math.sin(ft * 2 + seed * 6))).toFixed(3)})`;
+        ctx.beginPath(); ctx.arc(mx, my, 1.8, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // ── C. move/moveto pop feedback — slide trail + impact ring ──
+    if (opts.pop) {
+        const pop = opts.pop;
+        const z = fz(pop.lvl || 0);
+        const [dx, dy] = cellC(pop.x, pop.y, z);
+        if (pop.from) {
+            const [fx, fy] = cellC(pop.from.x, pop.from.y, z);
+            for (let s = 0; s < 3; s++) {
+                const t = 0.25 + s * 0.25;
+                const alpha = 0.55 - s * 0.16 - (frame / FRAMES) * 0.3;
+                if (alpha <= 0.03) continue;
+                ctx.fillStyle = `rgba(255,214,100,${alpha.toFixed(3)})`;
+                ctx.beginPath(); ctx.arc(fx + (dx - fx) * t, fy + (dy - fy) * t, 6 - s * 1.4, 0, Math.PI * 2); ctx.fill();
+            }
+        }
+        if (frame < 5) {
+            const t = frame / 5;
+            ctx.strokeStyle = `rgba(255,214,100,${(0.75 * (1 - t)).toFixed(3)})`;
+            ctx.lineWidth = 3.5;
+            ctx.beginPath(); ctx.arc(dx, dy, 12 + t * 52, 0, Math.PI * 2); ctx.stroke();
+        }
+    }
+    ctx.restore();
+}
+
 // ── HUD plate ──
 function drawHud(ctx, state, theme, opts) {
     const H = 132, Wp = ART_W - 60;
@@ -935,19 +1098,28 @@ const breath = () => new Promise((r) => setTimeout(r, FRAME_BREATH_MS));
 // renders, every repeat is an instant disk read even across restarts.
 // 3D interior (pure-Node rasteriser over the house-builder GLB pack). Default ON;
 // HOMESTEAD_3D=0 or any render error falls back to the legacy 2D sprite room.
-async function render3dCard(state, opts) {
-    ensureFonts();
-    const { createCanvas } = require('canvas');
+async function render3dBase(state, opts) {
     const interior = require('./interior3d');
-    const room = await interior.renderInterior(state, { grid: opts.grid, ss: 2 });
-    const S = 2, c = createCanvas(ART_W * S, ART_H * S), ctx = c.getContext('2d');
-    ctx.scale(S, S);
-    ctx.fillStyle = '#18141c'; ctx.fillRect(0, 0, ART_W, ART_H);
+    return interior.renderInterior(state, { grid: opts.grid, ss: 2 });
+}
+
+// compose one ART-space frame: the 3D raster + projected overlay + HUD plate
+function compose3dFrame(room, state, frame, opts) {
+    const { createCanvas } = require('canvas');
+    const k = ART_W / room.width;
     const h = ART_W * room.height / room.width;
+    const c = createCanvas(ART_W, ART_H), ctx = c.getContext('2d');
+    ctx.fillStyle = '#18141c'; ctx.fillRect(0, 0, ART_W, ART_H);
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(room, 0, 78, ART_W, h);
+    draw3dOverlay(ctx, room, k, 78, state, frame, opts);
     drawHud(ctx, state, THEMES[state.theme] || THEMES.oakhaven, opts);
     return c;
+}
+
+async function render3dCard(state, opts) {
+    ensureFonts();
+    return compose3dFrame(await render3dBase(state, opts), state, 0, opts);
 }
 
 async function renderRoomImage(state, opts = {}) {
@@ -956,7 +1128,58 @@ async function renderRoomImage(state, opts = {}) {
         const hit3 = _renderCache.get(key);
         if (hit3 && (Date.now() - hit3.ts) < CACHE_TTL) return hit3;
         try {
-            const out3 = await mediaCache.cached('room', 'v3d' + require('./interior3d').VERSION + '-' + key, async () => encodeOut(await render3dCard(state, opts)), null, { label: 'bake:room3d', timeoutMs: 90000 });
+            const out3 = await mediaCache.cached('room', 'v3d' + require('./interior3d').VERSION + '-' + key, async () => {
+                // ONE interior raster per bake (GLB models + rasteriser stay
+                // untouched) — the loop is that raster + cheap projected
+                // overlays streamed through the SAME ffmpeg mp4 "GIF" pipe the
+                // 2D room uses (owner 2026-10-24: "add the moving gif we used
+                // to have for the old furniture system for this, the grid too
+                // — similar except better"). Select previews animate again,
+                // hearths/lanterns flicker, embers rise, moves leave a trail.
+                const room = await render3dBase(state, opts);
+                const frameAt = async (f) => {
+                    const c = compose3dFrame(room, state, f, opts);
+                    return { raw: c.toBuffer('raw'), w: c.width, h: c.height };
+                };
+                const fbin = process.env.FFMPEG_PATH || 'ffmpeg';
+                const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'homestead3d-'));
+                const outFile = path.join(tmp, 'room3d.mp4');
+                try {
+                    const f0 = await frameAt(0);
+                    await breath();
+                    const args = [
+                        '-f', 'rawvideo', '-pix_fmt', 'bgra', '-video_size', `${f0.w}x${f0.h}`,
+                        '-framerate', `${1000 / FRAME_MS}`, '-i', 'pipe:0',
+                        '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+                        '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0',
+                        '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', String(process.env.RENDER_CRF || '25'),
+                        '-movflags', '+faststart', '-an', '-y', outFile,
+                    ];
+                    await new Promise((resolve, reject) => {
+                        const p = require('child_process').spawn(fbin, args, { stdio: ['pipe', 'ignore', 'pipe'] });
+                        let err = '';
+                        p.stderr.on('data', (d) => { err += d; if (err.length > 6000) err = err.slice(-3000); });
+                        p.on('error', reject);
+                        p.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`ffmpeg exit ${code}: ${err.slice(-500)}`)));
+                        (async () => {
+                            const feed = async (raw) => { if (!p.stdin.write(raw)) await new Promise((r) => p.stdin.once('drain', r)); };
+                            await feed(f0.raw);
+                            for (let f = 1; f < FRAMES; f++) {
+                                const fr = await frameAt(f);
+                                await feed(fr.raw);
+                                await breath();
+                            }
+                            p.stdin.end();
+                        })().catch((e) => { try { p.stdin.destroy(); } catch (e2) {} try { p.kill('SIGKILL'); } catch (e3) {} reject(e); });
+                    });
+                    const mp4 = fs.readFileSync(outFile);
+                    if (mp4 && mp4.length > 1000) return { buffer: mp4, contentType: 'video/mp4' };
+                } finally {
+                    try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e2) {}
+                }
+                console.warn('[homesteadRenderer] 3D mp4 encode failed — static 3D card fallback');
+                return encodeOut(compose3dFrame(room, state, 0, opts));
+            }, null, { label: 'bake:room3d', timeoutMs: 90000 });
             cachePut(_renderCache, key, out3);
             return out3;
         } catch (e) { console.error('[homestead] 3D render failed, 2D fallback:', e.message); }

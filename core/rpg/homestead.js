@@ -277,7 +277,7 @@ async function viewRoom(ctx, rec, opts = {}) {
         try {
             let watchdogTimer;
             media = await Promise.race([
-                renderer.renderRoomImage(state, { pop: opts.pop || null, hint: opts.hint, grid: opts.grid || null, static: !opts.pop && !!opts.grid }),
+                renderer.renderRoomImage(state, { pop: opts.pop || null, hint: opts.hint, grid: opts.grid || null, static: false }),
                 new Promise((_, reject) => {
                     watchdogTimer = setTimeout(() => reject(new Error('render watchdog: room render exceeded 90s')), 90000);
                     if (watchdogTimer.unref) watchdogTimer.unref();
