@@ -36,12 +36,23 @@ const HomesteadSchema = new mongoose.Schema(
           x: { type: Number, required: true },
           y: { type: Number, required: true },
           uid: { type: String, default: '' },   // instance identity (atomic ops)
-          f: { type: Boolean, default: false }, // flipped facing (rotate)
+          f: { type: Boolean, default: false }, // legacy flipped facing (kept for the 2D fallback)
+          r: { type: Number, default: 0 },      // quarter-turn rotation 0..3 (3D interior)
+          lvl: { type: Number, default: 0 },    // 0 = ground floor, 1 = top-floor loft
           _id: false,
         },
       ],
       default: [],
     },
+
+    // room expansions (owner 2026-10-24): [{ side:'e'|'s'|'n'|'w', kind:'walled'|'open' }]
+    annex: { type: Array, default: [] },
+    // top-floor loft + second-floor walling
+    upper: { type: Boolean, default: false },
+    upperWalls: { type: Boolean, default: false },
+    // house style ("remade houses"; locked until the owner defines requirements)
+    style: { type: String, default: 'default' },
+    stylesOwned: { type: Array, default: [] },
 
     // soft stats cache (recomputed on write; informational)
     comfort: { type: Number, default: 0 },

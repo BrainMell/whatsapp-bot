@@ -37,6 +37,7 @@
 const Homestead = require('../models/Homestead');
 const renderer = require('./homesteadRenderer');
 const economy = require('./economy');
+const rooms = require('./homesteadRooms');
 
 const N = renderer.N;
 const CAT = renderer.catalog;
@@ -79,6 +80,12 @@ const pendingPlace = new Map();
 let _uidCounter = 0;
 function uid() { return `${Date.now().toString(36)}${(_uidCounter++).toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`; }
 
+/** footprint of a placed piece after its rotation (odd quarter-turns swap fw/fh) */
+function effDef(p, d) {
+    const r = ((p && p.r) || 0) % 4;
+    return (r % 2 === 1 && d.fw !== d.fh) ? { ...d, fw: d.fh, fh: d.fw } : d;
+}
+
 function cellsOf(x, y, def) {
     const out = [];
     for (let ix = 0; ix < def.fw; ix++)
@@ -93,7 +100,7 @@ function overlaps(aCells, bCells) {
 }
 
 /** Can def be placed at (x,y)? ignoreUid lets moves skip the moved item. */
-function canPlace(rec, x, y, def, ignoreUid = null) {
+function canPlace(rec, x, y, def, ignoreUid = null, lvl = 0) {
     if (def.layer === 'wall') {
         if (!Number.isInteger(x) || x < 1 || x > N - 2) return false;
         if (y !== 0 && y !== 1) return false;
@@ -102,27 +109,29 @@ function canPlace(rec, x, y, def, ignoreUid = null) {
             (renderer.itemDef(p.item) || {}).layer === 'wall' &&
             p.x === x && p.y === y);
     }
-    if (x < 0 || y < 0 || x + def.fw > N || y + def.fh > N) return false;
+    if (!Number.isInteger(x) || !Number.isInteger(y)) return false;
+    if (!rooms.footprintValid(rec, x, y, def, lvl)) return false;
     const cells = cellsOf(x, y, def);
     for (const p of rec.placed) {
         if (p.uid === ignoreUid) continue;
+        if ((p.lvl || 0) !== lvl) continue;
         const d = renderer.itemDef(p.item);
         if (!d || d.layer === 'wall') continue;
         if (def.layer === 'rug' && d.layer === 'rug') continue; // rugs stack on rugs
-        if (overlaps(cells, cellsOf(p.x, p.y, d))) return false;
+        if (overlaps(cells, cellsOf(p.x, p.y, effDef(p, d)))) return false;
     }
     return true;
 }
 
 /** First free spot for def, spiralling out from the room centre. */
-function findFreeSpot(rec, def) {
-    const mid = Math.floor(N / 2) - Math.floor(def.fw / 2);
-    for (let ring = 0; ring < N; ring++) {
+function findFreeSpot(rec, def, lvl = 0) {
+    const mid = (lvl === 1 ? 3 : Math.floor(N / 2)) - Math.floor(def.fw / 2);
+    for (let ring = 0; ring < 20; ring++) {
         for (let y = mid - ring; y <= mid + ring; y++) {
             for (let x = mid - ring; x <= mid + ring; x++) {
                 const onRing = (x === mid - ring || x === mid + ring || y === mid - ring || y === mid + ring);
                 if (!onRing) continue;
-                if (canPlace(rec, x, y, def)) return { x, y };
+                if (canPlace(rec, x, y, def, null, lvl)) return { x, y };
             }
         }
     }
@@ -130,9 +139,9 @@ function findFreeSpot(rec, def) {
 }
 
 /** §2: nearest free spot spiralling around a REQUESTED position. */
-function findFreeNear(rec, def, rx, ry, ignoreUid = null) {
-    if (canPlace(rec, rx, ry, def, ignoreUid)) return { x: rx, y: ry };
-    for (let ring = 1; ring < N * 2; ring++) {
+function findFreeNear(rec, def, rx, ry, ignoreUid = null, lvl = 0) {
+    if (canPlace(rec, rx, ry, def, ignoreUid, lvl)) return { x: rx, y: ry };
+    for (let ring = 1; ring < N * 3; ring++) {
         // try candidates on this ring ordered by distance from the request
         const cands = [];
         for (let dy = -ring; dy <= ring; dy++) {
@@ -143,7 +152,7 @@ function findFreeNear(rec, def, rx, ry, ignoreUid = null) {
         }
         cands.sort((a, b) => a[2] - b[2]);
         for (const [x, y] of cands) {
-            if (canPlace(rec, x, y, def, ignoreUid)) return { x, y };
+            if (canPlace(rec, x, y, def, ignoreUid, lvl)) return { x, y };
         }
     }
     return null;
@@ -230,10 +239,11 @@ const RARITY_STAR = { common: '⚪', uncommon: '🟢', rare: '🔵', epic: '🟣
 function itemName(it) { return `${RARITY_STAR[it.rarity] || '⚪'} *${it.name}*`; }
 
 function gridOptsFor(p, def, valid = true) {
+    const e = effDef(p, def);
     return {
         grid: {
-            x: p.x, y: p.y, fw: def.fw, fh: def.fh, valid,
-            label: `${def.name} (${p.x},${p.y})`,
+            x: p.x, y: p.y, fw: e.fw, fh: e.fh, valid, lvl: p.lvl || 0,
+            label: `${def.name} (${p.x},${p.y})${p.lvl ? ' ↑ loft' : ''}`,
         },
     };
 }
@@ -257,6 +267,10 @@ async function viewRoom(ctx, rec, opts = {}) {
             owner: opts.ownerName || economy.getDisplayName(rec.userId),
             theme: rec.theme,
             placed: rec.placed,
+            annex: rec.annex || [],
+            upper: !!rec.upper,
+            upperWalls: !!rec.upperWalls,
+            style: rec.style || 'default',
         };
         // render watchdog: a hung render must never ghost the command
         let media;
@@ -303,17 +317,19 @@ async function viewRoom(ctx, rec, opts = {}) {
 
 async function cmdCatalog(ctx, rec, args) {
     const items = CAT().items;
-    const pages = Math.max(1, Math.ceil(items.length / 12));
+    const pages = Math.max(1, Math.ceil(items.length / 12)) + 1;   // +1 = architect page
     let page = parseInt(args[0], 10);
     if (!Number.isFinite(page) || page < 1) page = 1;
     if (page > pages) page = pages;
     const balance = economy.getBalance(ctx.senderJid);
-    const buf = await renderer.renderCatalogPage(page - 1, pages, { balance });
+    const houseLv = await houseLevel(ctx.senderJid);
+    const buf = await renderer.renderCatalogPage(page - 1, pages, { balance, houseLv });
     await ctx.sock.sendMessage(ctx.chatId, {
         image: buf,
         caption: `🛒 *Homestead Outfitter* — page ${page}/${pages}\n` +
             `💰 Your purse: *${Number(balance).toLocaleString()} ZENI*\n\n` +
-            `_${ctx.prefix} home buy <name> — purchase an item_\n` +
+            `🏠 House Lv.${houseLv} (${rooms.HOUSE_NAMES[houseLv] || 'Hovel'}) — 🔒 pieces open up as you upgrade it\n` +
+            `_${ctx.prefix} home buy <name> — purchase an item • ${ctx.prefix} home rooms — build rooms/loft_\n` +
             `_${ctx.prefix} home themes — room skins_`,
     }, { quoted: ctx.m });
 }
@@ -328,6 +344,13 @@ async function cmdBuy(ctx, rec, args) {
         return ctx.reply(`❌ No furniture called *${query || '—'}*.\n` +
             (sug.length ? `Did you mean: ${sug.join(', ')}?\n` : '') +
             `Browse: \`${ctx.prefix} home catalog\``);
+    }
+
+    // house-level gate: a better house opens more of the shop
+    const hl = await houseLevel(ctx.senderJid);
+    const need = rooms.itemMinHouse(it);
+    if (hl < need) {
+        return ctx.reply(`🔒 *${it.name}* is stocked for a *${rooms.HOUSE_NAMES[need]}* (house Lv.${need}) and up.\nYour house is Lv.${hl} — \`${ctx.prefix} base upgrade house\` to unlock more of the shop.`);
     }
 
     // WhatsApp redelivery / double-tap guard (same message id = same purchase)
@@ -389,8 +412,8 @@ async function cmdPlace(ctx, rec, args) {
         // the grid"): snap the request into room bounds BEFORE the nearest-free
         // spiral — an off-map coordinate settles flush at the nearest edge, and
         // an overhanging 2x2 pulls inboard to sit flush, never an error.
-        const clx = Math.max(0, Math.min(N - it.fw, rx));
-        const cly = Math.max(0, Math.min(N - it.fh, ry));
+        const cl0 = rooms.clampTo(rec, rx, ry, it, 0);
+        const clx = cl0.x, cly = cl0.y;
         // §2: requested spot blocked → nearest fitting spot around it, never a rejection
         const spot = findFreeNear(rec, it, clx, cly);
         if (!spot) return ctx.reply('🏠 Nowhere in the room fits that piece right now — store something first: `.home store <x> <y>`');
@@ -484,15 +507,17 @@ async function cmdMove(ctx, rec, args) {
     if (idx === -1) { selection.delete(ctx.senderJid); return ctx.reply('🕯️ That selection is gone — pick another piece.'); }
     const p = rec.placed[idx];
     const d = renderer.itemDef(p.item);
-    const dirRaw = String(args[0] || '').toLowerCase();
-    const DIRS = { right: [1, 0], r: [1, 0], east: [1, 0], left: [-1, 0], l: [-1, 0], west: [-1, 0], down: [0, 1], d: [0, 1], south: [0, 1], up: [0, -1], u: [0, -1], north: [0, -1] };
+    const dirRaw = String(args[0] || '').toLowerCase().replace(/[^a-z]/g, '');
+    const DIRS = { right: [1, 0], r: [1, 0], east: [1, 0], left: [-1, 0], l: [-1, 0], west: [-1, 0], down: [0, 1], d: [0, 1], south: [0, 1], up: [0, -1], u: [0, -1], north: [0, -1],
+        // screen diagonals (iso): up-right = along the back-right wall etc.
+        upright: [1, -1], ur: [1, -1], upleft: [-1, -1], ul: [-1, -1], downright: [1, 1], dr: [1, 1], downleft: [-1, 1], dl: [-1, 1] };
     const dir = DIRS[dirRaw];
     if (!dir) {
         return ctx.reply(`Usage: \`${ctx.prefix} home move <left|right|up|down> [steps]\`\n_(right = +X, left = −X, down = +Y, up = −Y — the labelled axes on the preview)_`);
     }
     let steps = parseInt(args[1], 10);
     if (!Number.isFinite(steps) || steps < 1) steps = 1;
-    if (steps > 11) steps = 11;
+    if (steps > 17) steps = 17;
 
     if (d.layer === 'wall') return ctx.reply(`🖼️ *${d.name}* hangs on the wall — move it with \`${ctx.prefix} home place ${p.item} <slot 1-10> <left|right>\`.`);
 
@@ -500,7 +525,12 @@ async function cmdMove(ctx, rec, args) {
     let nx = p.x, ny = p.y, moved = 0;
     for (let i = 0; i < steps; i++) {
         const tx = nx + dir[0], ty = ny + dir[1];
-        if (!canPlace(rec, tx, ty, d, p.uid)) break;
+        if (!canPlace(rec, tx, ty, effDef(p, d), p.uid, p.lvl || 0)) {
+            // leap a 1-cell obstacle/partition once so pieces can cross into an annex
+            const jx = tx + dir[0], jy = ty + dir[1];
+            if (steps > 1 && canPlace(rec, jx, jy, effDef(p, d), p.uid, p.lvl || 0) && i + 1 < steps) { nx = jx; ny = jy; moved++; i++; continue; }
+            break;
+        }
         nx = tx; ny = ty; moved++;
     }
     if (!moved) return ctx.reply(`🚧 *${d.name}* is blocked that way — it stays at (${p.x},${p.y}).`);
@@ -533,10 +563,10 @@ async function cmdMoveTo(ctx, rec, args) {
     // the south edge, moveto -3 5 at the west edge, and a double-grid piece
     // pulled flush instead of overhanging. The spiral then only has to dodge
     // occupied tiles, so it can never dead-end off the map.
-    const clx = Math.max(0, Math.min(N - d.fw, tx));
-    const cly = Math.max(0, Math.min(N - d.fh, ty));
+    const cl1 = rooms.clampTo(rec, tx, ty, effDef(p, d), p.lvl || 0);
+    const clx = cl1.x, cly = cl1.y;
     const clamped = (clx !== tx || cly !== ty);
-    const spot = findFreeNear(rec, d, clx, cly, p.uid);
+    const spot = findFreeNear(rec, effDef(p, d), clx, cly, p.uid, p.lvl || 0);
     if (!spot) return ctx.reply('🏠 Nowhere in the room fits it right now — free some space first.');
     const fx0 = p.x, fy0 = p.y;
     await Homestead.updateOne(
@@ -557,13 +587,24 @@ async function cmdRotate(ctx, rec) {
     if (!p) { selection.delete(ctx.senderJid); return ctx.reply('🕯️ That selection is gone — pick another piece.'); }
     const d = renderer.itemDef(p.item);
     if (d.layer === 'wall') return ctx.reply('🖼️ Banners face one way — the wall decides that.');
-    const nf = !p.f;
+    // quarter-turn rotation (0..3); odd turns swap a 2x1 footprint → needs room to swing
+    const cur = ((p.r != null ? p.r : (p.f ? 2 : 0)) % 4 + 4) % 4;
+    const arg = String(args && args[0] || '').toLowerCase();
+    const nr = arg === 'back' || arg === 'ccw' || arg === 'left' ? (cur + 3) % 4 : (cur + 1) % 4;
+    let nx = p.x, ny = p.y;
+    const trial = { ...p, r: nr };
+    if (!canPlace(rec, nx, ny, effDef(trial, d), p.uid, p.lvl || 0)) {
+        const spot = findFreeNear(rec, effDef(trial, d), p.x, p.y, p.uid, p.lvl || 0);
+        if (!spot || Math.abs(spot.x - p.x) + Math.abs(spot.y - p.y) > 3) return ctx.reply(`🚧 No room to turn the *${d.name}* here — move it somewhere roomier first.`);
+        nx = spot.x; ny = spot.y;
+    }
+    const nf = nr >= 2;
     await Homestead.updateOne(
         { userId: ctx.senderJid, 'placed.uid': p.uid },
-        { $set: { 'placed.$.f': nf, updatedAt: Date.now() } },
+        { $set: { 'placed.$.r': nr, 'placed.$.f': nf, 'placed.$.x': nx, 'placed.$.y': ny, updatedAt: Date.now() } },
     );
-    p.f = nf;
-    await viewRoom(ctx, rec, { ...gridOptsFor(p, d), pop: { item: p.item, x: p.x, y: p.y }, hint: `The *${d.name}* turns to face ${nf ? 'the other way' : 'its original way'}.` });
+    p.r = nr; p.f = nf; p.x = nx; p.y = ny;
+    await viewRoom(ctx, rec, { ...gridOptsFor(p, d), pop: { item: p.item, x: p.x, y: p.y }, hint: `The *${d.name}* turns ${nr * 90}° (rotate again for the next quarter).` });
 }
 
 async function cmdStore(ctx, rec, args) {
@@ -580,7 +621,8 @@ async function cmdStore(ctx, rec, args) {
             const d = renderer.itemDef(q.item);
             if (!d) return false;
             if (d.layer === 'wall') return q.x === fx && q.y === (fy === 1 ? 1 : 0);
-            return fx >= q.x && fx < q.x + d.fw && fy >= q.y && fy < q.y + d.fh;
+            const e = effDef(q, d);
+            return fx >= q.x && fx < q.x + e.fw && fy >= q.y && fy < q.y + e.fh;
         });
         p = found;
     }
@@ -612,6 +654,8 @@ async function cmdThemes(ctx, rec, args) {
         await Homestead.updateOne({ userId: ctx.senderJid }, { $set: { theme: id, updatedAt: Date.now() } }, { upsert: true });
         return viewRoom(ctx, { ...rec, theme: id }, { hint: `.home theme <id> to reskin • .home themes to browse` });
     }
+    const hlT = await houseLevel(ctx.senderJid);
+    if (hlT < rooms.themeMinHouse(theme)) return ctx.reply(`🔒 *${theme.name}* needs a *${rooms.HOUSE_NAMES[rooms.themeMinHouse(theme)]}* (house Lv.${rooms.themeMinHouse(theme)}).`);
     const balance = economy.getBalance(ctx.senderJid);
     if (balance < theme.price) {
         return ctx.reply(`💰 Not enough ZENI — *${theme.name}* costs *${theme.price.toLocaleString()}* and you have *${balance.toLocaleString()}*.`);
@@ -625,6 +669,125 @@ async function cmdThemes(ctx, rec, args) {
         { upsert: true },
     );
     await viewRoom(ctx, { ...rec, theme: id, themesOwned: rec.themesOwned }, { hint: `Welcome to ${theme.name}!` });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ARCHITECTURE — expansions, loft, second-floor walls, house styles, floors
+// ═══════════════════════════════════════════════════════════════════════════
+async function houseLevel(jid) {
+    try { return await require('./baseBuilder').getStructureLevel(jid, 'house') || 1; } catch (e) { return 1; }
+}
+
+async function cmdBuild(ctx, rec, args) {
+    const P = ctx.prefix;
+    const hl = await houseLevel(ctx.senderJid);
+    const annex = rooms.annexList(rec);
+    const sub = String(args[0] || '').toLowerCase();
+    const bal = economy.getBalance(ctx.senderJid);
+
+    if (!sub || sub === 'list' || sub === 'shop') {
+        const lock = (b) => hl >= b.minHouse ? '' : `  🔒 needs *${rooms.HOUSE_NAMES[b.minHouse]}* (house Lv.${b.minHouse})`;
+        const B = rooms.BUILD;
+        const sides = ['e', 's', 'n', 'w'].map((k) => {
+            const a = annex.find((q) => q.side === k);
+            return `${rooms.SIDES[k].name}: ${a ? `✅ ${a.kind === 'walled' ? 'walled annex' : 'open extension'}` : '— empty'}`;
+        }).join('  •  ');
+        return ctx.reply(
+            `🏗️ *HOMESTEAD ARCHITECT* — your house is a *${rooms.HOUSE_NAMES[hl] || 'Hovel'}* (Lv.${hl})\n💰 ${Number(bal).toLocaleString()} ZENI\n\n` +
+            `🚪 *${B.annex_walled.name}* — ${B.annex_walled.price.toLocaleString()} ZENI${lock(B.annex_walled)}\n   ${B.annex_walled.desc}\n   \`${P} home rooms annex <east|south|north|west> walled\`\n\n` +
+            `🌿 *${B.annex_open.name}* — ${B.annex_open.price.toLocaleString()} ZENI${lock(B.annex_open)}\n   ${B.annex_open.desc}\n   \`${P} home rooms annex <east|south|north|west> open\`\n\n` +
+            `🪜 *${B.loft.name}* — ${B.loft.price.toLocaleString()} ZENI${lock(B.loft)}${rec.upper ? '  ✅ built' : ''}\n   ${B.loft.desc}\n   \`${P} home rooms loft\`\n\n` +
+            `🧱 *${B.loft_walls.name}* — ${B.loft_walls.price.toLocaleString()} ZENI${lock(B.loft_walls)}${rec.upperWalls ? '  ✅ built' : ''}\n   ${B.loft_walls.desc}\n   \`${P} home rooms loftwalls\`\n\n` +
+            `Rooms: ${sides}\nRoom slots at this house level: *${annex.length}/${rooms.annexAllowance(hl)}* (upgrade the house for more)\n\n` +
+            `_Move furniture upstairs: \`${P} home select <item>\` then \`${P} home up\`._`);
+    }
+
+    // ── purchase paths ──
+    let b, apply, okMsg;
+    if (sub === 'annex' || sub === 'room' || sub === 'extend' || sub === 'extension') {
+        const side = rooms.SIDE_ALIAS[String(args[1] || '').toLowerCase()];
+        const kindRaw = String(args[2] || '').toLowerCase();
+        const kind = kindRaw.startsWith('w') ? 'walled' : (kindRaw.startsWith('o') ? 'open' : null);
+        if (!side || !kind) return ctx.reply(`Usage: \`${P} home rooms annex <east|south|north|west> <walled|open>\``);
+        b = kind === 'walled' ? rooms.BUILD.annex_walled : rooms.BUILD.annex_open;
+        if (hl < b.minHouse) return ctx.reply(`🔒 *${b.name}* needs a *${rooms.HOUSE_NAMES[b.minHouse]}* (house Lv.${b.minHouse}). Yours is Lv.${hl} — \`${P} base upgrade house\`.`);
+        if (annex.some((q) => q.side === side)) return ctx.reply(`🚧 The ${rooms.SIDES[side].name} side already has a room.`);
+        if (annex.length >= rooms.annexAllowance(hl)) return ctx.reply(`🔒 Your ${rooms.HOUSE_NAMES[hl]} supports *${rooms.annexAllowance(hl)}* extra room${rooms.annexAllowance(hl) === 1 ? '' : 's'}. Upgrade the house for more.`);
+        apply = { $push: { annex: { side, kind } } };
+        okMsg = `${kind === 'walled' ? '🚪' : '🌿'} Built a *${kind === 'walled' ? 'Walled Annex' : 'Open Extension'}* on the ${rooms.SIDES[side].name} side!`;
+        var after = () => { rec.annex = [...annex, { side, kind }]; };
+    } else if (sub === 'loft' || sub === 'upper' || sub === 'floor' || sub === 'topfloor') {
+        b = rooms.BUILD.loft;
+        if (rec.upper) return ctx.reply('🪜 You already have a loft.');
+        if (hl < b.minHouse) return ctx.reply(`🔒 *${b.name}* needs a *${rooms.HOUSE_NAMES[b.minHouse]}* (house Lv.${b.minHouse}). Yours is Lv.${hl}.`);
+        apply = { $set: { upper: true } };
+        okMsg = '🪜 Built the *Top Floor Loft* — stairs, deck and railings!';
+        var after = () => { rec.upper = true; };
+    } else if (sub === 'loftwalls' || sub === 'upperwalls' || sub === 'walls' || sub === 'secondwalls') {
+        b = rooms.BUILD.loft_walls;
+        if (!rec.upper) return ctx.reply(`🪜 Build the loft first: \`${P} home rooms loft\``);
+        if (rec.upperWalls) return ctx.reply('🧱 Your second-floor walls are already up.');
+        if (hl < b.minHouse) return ctx.reply(`🔒 *${b.name}* needs a *${rooms.HOUSE_NAMES[b.minHouse]}* (house Lv.${b.minHouse}). Yours is Lv.${hl}.`);
+        apply = { $set: { upperWalls: true } };
+        okMsg = '🧱 Raised the *second-floor walls*!';
+        var after = () => { rec.upperWalls = true; };
+    } else {
+        return ctx.reply(`❌ Unknown build option. See \`${P} home rooms\``);
+    }
+
+    await waitOpLock(ctx.senderJid);
+    opLocks.add(ctx.senderJid);
+    try {
+        if (!economy.removeMoney(ctx.senderJid, b.price, `Homestead: ${b.name}`)) {
+            return ctx.reply(`💰 Not enough ZENI — *${b.name}* costs *${b.price.toLocaleString()}* and you have *${Number(economy.getBalance(ctx.senderJid)).toLocaleString()}*.`);
+        }
+        try {
+            const r = await Homestead.updateOne({ userId: ctx.senderJid }, { ...apply, $set: { ...(apply.$set || {}), updatedAt: Date.now() } }, { upsert: true });
+            if (!r.acknowledged) throw new Error('write not acknowledged');
+        } catch (e) {
+            economy.addMoney(ctx.senderJid, b.price, `Homestead: refund ${b.name}`);
+            return ctx.reply('🔥 The builders dropped your ZENI back on the counter (write failed). Nothing was lost — try again.');
+        }
+        after();
+    } finally { opLocks.delete(ctx.senderJid); }
+    await viewRoom(ctx, rec, { hint: okMsg });
+}
+
+async function cmdLevel(ctx, rec, up) {
+    const selUid = selection.get(ctx.senderJid);
+    if (!selUid) return ctx.reply(`Select a piece first: \`${ctx.prefix} home select <name>\`.`);
+    const p = rec.placed.find((q) => q.uid === selUid);
+    if (!p) { selection.delete(ctx.senderJid); return ctx.reply('🕯️ That selection is gone — pick another piece.'); }
+    const d = renderer.itemDef(p.item);
+    if (d.layer === 'wall') return ctx.reply('🖼️ Wall pieces stay on the ground-floor walls.');
+    const lvl = up ? 1 : 0;
+    if ((p.lvl || 0) === lvl) return ctx.reply(up ? '⬆️ It is already upstairs.' : '⬇️ It is already on the ground floor.');
+    if (up && !rec.upper) return ctx.reply(`🪜 You need a loft first: \`${ctx.prefix} home rooms loft\``);
+    const e = effDef(p, d);
+    const spot = findFreeNear(rec, e, up ? Math.min(p.x, 5) : p.x, up ? Math.min(p.y, 5) : p.y, p.uid, lvl);
+    if (!spot) return ctx.reply(up ? '🏠 The loft has no free spot for that piece.' : '🏠 No free spot downstairs for that piece.');
+    await Homestead.updateOne({ userId: ctx.senderJid, 'placed.uid': p.uid }, { $set: { 'placed.$.lvl': lvl, 'placed.$.x': spot.x, 'placed.$.y': spot.y, updatedAt: Date.now() } });
+    p.lvl = lvl; p.x = spot.x; p.y = spot.y;
+    await viewRoom(ctx, rec, { ...gridOptsFor(p, d), pop: { item: p.item, x: p.x, y: p.y }, hint: up ? `The *${d.name}* is now in the loft.` : `The *${d.name}* is back on the ground floor.` });
+}
+
+async function cmdStyles(ctx, rec, args) {
+    const P = ctx.prefix;
+    const id = String(args[0] || '').toLowerCase();
+    if (!id) {
+        const lines = Object.values(rooms.STYLES).map((st) => {
+            const own = rooms.isStyleUnlocked(rec, st.id);
+            const on = (rec.style || 'default') === st.id;
+            return `${on ? '🏠' : own ? '✅' : '🔒'} *${st.name}* (\`${st.id}\`) — ${st.desc}${own ? '' : '\n    _Unlock requirements not announced yet._'}`;
+        });
+        return ctx.reply(`🏘️ *HOUSE STYLES* — remade houses\n\n${lines.join('\n')}\n\n_Apply an unlocked one: \`${P} home style <id>\`_`);
+    }
+    const st = rooms.STYLES[id];
+    if (!st) return ctx.reply(`❌ Unknown style. List: \`${P} home styles\``);
+    if (!rooms.isStyleUnlocked(rec, id)) return ctx.reply(`🔒 *${st.name}* is locked — its unlock requirements haven't been announced yet.`);
+    rec.style = id;
+    await Homestead.updateOne({ userId: ctx.senderJid }, { $set: { style: id, updatedAt: Date.now() } }, { upsert: true });
+    await viewRoom(ctx, rec, { hint: `Your house is now the ${st.name}.` });
 }
 
 async function cmdVisit(ctx, rec, targetJid) {
@@ -646,8 +809,11 @@ function cmdHelp(ctx) {
         `• \`${p} home select <name>\` — select a piece (grid preview / placement mode)\n` +
         `• \`${p} home move <left|right|up|down> [n]\` — nudge it\n` +
         `• \`${p} home moveto <x> <y>\` — send it to coordinates\n` +
-        `• \`${p} home rotate\` — turn it around\n` +
         `• \`${p} home store [x y]\` — pick furniture up\n` +
+        `• \`${p} home rotate\` — quarter-turn (repeat for 90°/180°/270°) • \`${p} home move upleft 3\` — diagonals\n` +
+        `• \`${p} home rooms\` — ARCHITECT: annex rooms (walled/open), top-floor loft, 2nd-floor walls\n` +
+        `• \`${p} home loft\` / \`${p} home ground\` — send the selected piece upstairs / back down\n` +
+        `• \`${p} home styles\` — remade house styles (locked)\n` +
         `• \`${p} home themes\` / \`${p} home theme <id>\` — room skins\n` +
         `• \`${p} base build/upgrade/info\` — outdoor structures\n\n` +
         `_Comfort grows with every piece — legendary furniture shines brightest._`,
@@ -741,6 +907,16 @@ async function handleCommand(ctx) {
                 return ctx.reply('✋ Selection cleared.');
             case 'store': case 'remove': case 'pick':
                 return cmdStore(ctx, rec, args);
+            case 'rooms': case 'architect': case 'expand': case 'extend': case 'annex':
+                return cmdBuild(ctx, rec, sub === 'rooms' || sub === 'architect' ? args : [sub === 'extend' ? 'annex' : 'annex', ...args]);
+            case 'loft': case 'upstairs':
+                return cmdLevel(ctx, rec, true);
+            case 'ground': case 'downstairs':
+                return cmdLevel(ctx, rec, false);
+            case 'styles': case 'houses':
+                return cmdStyles(ctx, rec, []);
+            case 'style':
+                return cmdStyles(ctx, rec, args);
             case 'themes':
                 return cmdThemes(ctx, rec, []);
             case 'theme': case 'skin':

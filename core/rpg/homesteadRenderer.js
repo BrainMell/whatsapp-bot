@@ -916,7 +916,7 @@ function cachePut(map, key, out) {
     map.set(key, { ...out, ts: Date.now() });
 }
 function stateHash(state, opts = {}) {
-    return hashStr(JSON.stringify([state.owner, state.theme, state.placed, opts.pop || null, opts.hint || '', opts.grid || null, opts.static ? 1 : 0]));
+    return hashStr(JSON.stringify([state.owner, state.theme, state.placed, state.annex || null, state.upper || 0, state.upperWalls || 0, state.style || '', opts.pop || null, opts.hint || '', opts.grid || null, opts.static ? 1 : 0]));
 }
 
 // EVENT-LOOP BREATH — real timers between frames keep the canary heartbeat
@@ -956,7 +956,7 @@ async function renderRoomImage(state, opts = {}) {
         const hit3 = _renderCache.get(key);
         if (hit3 && (Date.now() - hit3.ts) < CACHE_TTL) return hit3;
         try {
-            const out3 = await mediaCache.cached('room', 'v3d1-' + key, async () => encodeOut(await render3dCard(state, opts)), null, { label: 'bake:room3d', timeoutMs: 90000 });
+            const out3 = await mediaCache.cached('room', 'v3d' + require('./interior3d').VERSION + '-' + key, async () => encodeOut(await render3dCard(state, opts)), null, { label: 'bake:room3d', timeoutMs: 90000 });
             cachePut(_renderCache, key, out3);
             return out3;
         } catch (e) { console.error('[homestead] 3D render failed, 2D fallback:', e.message); }
@@ -1021,6 +1021,50 @@ async function renderRoomImage(state, opts = {}) {
 // ═══════════════════════════════════════════════════════════════════════════
 // PUBLIC: catalog cards
 // ═══════════════════════════════════════════════════════════════════════════
+// catalogue ordered by what your house unlocks, then price (stable ids → stable pages)
+function catalogSorted() {
+    const rooms = require('./homesteadRooms');
+    return catalog().items.slice().sort((a, b) => (rooms.itemMinHouse(a) - rooms.itemMinHouse(b)) || (a.price - b.price) || a.id.localeCompare(b.id));
+}
+
+function renderArchitectCard(ctx, canvas, o) {
+    const { W, H, rooms, houseLv } = o;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#e8d5a3'; ctx.font = '30px Cinzel';
+    ctx.fillText('ARCHITECT — rooms & floors', W / 2, 262);
+    const B = Object.values(rooms.BUILD);
+    const cw = 470, ch = 330, gx = 60, gy = 310, gap = 40;
+    B.forEach((b, i) => {
+        const x = gx + (i % 2) * (cw + gap), y = gy + Math.floor(i / 2) * (ch + 30);
+        const locked = houseLv < b.minHouse;
+        ctx.fillStyle = 'rgba(32,24,14,0.92)'; roundRect(ctx, x, y, cw, ch, 14); ctx.fill();
+        ctx.strokeStyle = locked ? '#7a3a2e' : '#a67c2e'; ctx.lineWidth = 2.5; roundRect(ctx, x, y, cw, ch, 14); ctx.stroke();
+        // plan glyph
+        ctx.save(); ctx.translate(x + 120, y + 150);
+        ctx.strokeStyle = '#c9a85a'; ctx.fillStyle = 'rgba(201,168,90,0.14)'; ctx.lineWidth = 3;
+        ctx.fillRect(-50, -40, 100, 80); ctx.strokeRect(-50, -40, 100, 80);
+        if (b.id === 'annex_walled') { ctx.fillStyle = 'rgba(120,200,150,0.2)'; ctx.fillRect(50, -40, 60, 80); ctx.strokeRect(50, -40, 60, 80); ctx.clearRect(47, -12, 7, 24); }
+        if (b.id === 'annex_open') { ctx.fillStyle = 'rgba(120,200,150,0.2)'; ctx.fillRect(50, -40, 60, 80); ctx.setLineDash([6, 5]); ctx.strokeRect(50, -40, 60, 80); ctx.setLineDash([]); }
+        if (b.id === 'loft' || b.id === 'loft_walls') { ctx.fillStyle = 'rgba(120,170,230,0.25)'; ctx.fillRect(-50, -40, 50, 40); ctx.strokeRect(-50, -40, 50, 40); for (let k = 0; k < 4; k++) ctx.strokeRect(0 + k * 12, 0, 12, 40 - k * 10); }
+        if (b.id === 'loft_walls') { ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(-50, 40); ctx.lineTo(-50, -40); ctx.lineTo(50, -40); ctx.stroke(); }
+        ctx.restore();
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#e8d5a3'; ctx.font = '26px Cinzel'; ctx.fillText(b.name, x + 250, y + 62);
+        ctx.fillStyle = '#f0c05a'; ctx.font = '24px Cinzel'; ctx.fillText(`◆ ${b.price.toLocaleString()}`, x + 250, y + 100);
+        ctx.fillStyle = locked ? '#e07060' : '#7ec8a0'; ctx.font = '17px Medieval';
+        ctx.fillText(locked ? `🔒 needs ${rooms.HOUSE_NAMES[b.minHouse]} (house ${b.minHouse})` : `✔ open at house ${b.minHouse}`, x + 250, y + 132);
+        ctx.fillStyle = '#b8a070'; ctx.font = '15px Medieval';
+        const words = b.desc.split(' '); let line = '', yy = 172;
+        for (const w of words) { if (ctx.measureText(line + w).width > cw - 40) { ctx.fillText(line, x + 24, y + 250 - 20 + (yy - 172)); line = ''; yy += 22; } line += w + ' '; }
+        ctx.fillText(line, x + 24, y + 250 - 20 + (yy - 172));
+        ctx.fillStyle = '#7a663f'; ctx.fillText(b.id === 'loft' ? '.home rooms loft' : b.id === 'loft_walls' ? '.home rooms loftwalls' : `.home rooms annex <side> ${b.id === 'annex_open' ? 'open' : 'walled'}`, x + 24, y + ch - 24);
+        ctx.textAlign = 'center';
+    });
+    ctx.fillStyle = '#9c8455'; ctx.font = '20px Medieval';
+    ctx.fillText('Stack rooms on ANY side • Remade house styles: .home styles (locked)', W / 2, H - 46);
+    return canvas.toBuffer('image/png');
+}
+
 async function renderCatalogPage(page, pages, opts = {}) {
     ensureFonts();
     const W = 1080, H = 1350;
@@ -1058,8 +1102,11 @@ async function renderCatalogPage(page, pages, opts = {}) {
         ctx.fillText(`${Number(opts.balance).toLocaleString()} ZENI`, W / 2, 196);
     }
 
-    const items = catalog().items;
+    const items = catalogSorted();
     const COLS = 4, ROWS = 3, PER = COLS * ROWS;
+    const rooms = require('./homesteadRooms');
+    const houseLv = opts.houseLv || 1;
+    if (page >= Math.ceil(items.length / PER)) return renderArchitectCard(ctx, canvas, { W, H, page, pages, houseLv, rooms, balance: opts.balance });
     const gx0 = 60, gy0 = 236, cw = 234, ch = 320, gapx = 16, gapy = 20;
     for (let i = 0; i < PER; i++) {
         const it = items[page * PER + i];
@@ -1067,6 +1114,7 @@ async function renderCatalogPage(page, pages, opts = {}) {
         const x = gx0 + (i % COLS) * (cw + gapx);
         const y = gy0 + Math.floor(i / COLS) * (ch + gapy);
         const R = RARITY[it.rarity] || RARITY.common;
+        const need = rooms.itemMinHouse(it), locked = houseLv < need;
 
         ctx.fillStyle = 'rgba(32,24,14,0.92)';
         roundRect(ctx, x, y, cw, ch, 12);
@@ -1124,11 +1172,24 @@ async function renderCatalogPage(page, pages, opts = {}) {
             ctx.fillStyle = '#7ec8a0';
             ctx.fillText('♥'.repeat(Math.min(it.comfort, 8)), x + cw / 2, y + 306);
         }
+        // house-level tag (top-left chip) + lock veil
+        ctx.save();
+        ctx.fillStyle = locked ? 'rgba(150,40,30,0.92)' : 'rgba(40,70,48,0.9)';
+        roundRect(ctx, x + 8, y + 8, 64, 22, 8); ctx.fill();
+        ctx.font = '13px Medieval'; ctx.fillStyle = '#f4e8c8'; ctx.textAlign = 'center';
+        ctx.fillText(`${locked ? '🔒 ' : ''}House ${need}`, x + 40, y + 20);
+        if (locked) {
+            ctx.fillStyle = 'rgba(10,6,3,0.55)';
+            roundRect(ctx, x, y, cw, ch, 12); ctx.fill();
+            ctx.font = '20px Cinzel'; ctx.fillStyle = '#e07060';
+            ctx.fillText(`Needs ${rooms.HOUSE_NAMES[need]}`, x + cw / 2, y + 150);
+        }
+        ctx.restore();
     }
 
     ctx.font = '20px Medieval';
     ctx.fillStyle = '#9c8455';
-    ctx.fillText('.home buy <name>   •   .home place <name>   •   .home catalog <page>', W / 2, H - 46);
+    ctx.fillText('.home buy <name>   •   .home place <name>   •   .home catalog <page>   •   .home rooms', W / 2, H - 46);
     ctx.strokeStyle = 'rgba(166,124,46,0.5)';
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(120, H - 78); ctx.lineTo(W - 120, H - 78); ctx.stroke();

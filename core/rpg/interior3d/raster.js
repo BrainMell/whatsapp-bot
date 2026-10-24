@@ -142,7 +142,7 @@ function render(scene, o = {}) {
     const w = W * ss, h = H * ss, sc = (o.scale || 135) * ss;
     const org = o.origin || [0, 0, 0];
     const ambient = o.ambient !== undefined ? o.ambient : 0.98, diffuse = o.diffuse !== undefined ? o.diffuse : 0.5;
-    const warm = o.warm || [1.0, 0.93, 0.82], cool = o.cool || [0.80, 0.86, 1.0];
+    const warm = o.warm || [1.0, 0.93, 0.82], cool = o.cool || [0.94, 0.93, 0.96];
     const bg = o.bg === null ? null : (o.bg || [18, 20, 26]);
     const n = scene.nTri;
     const V = scene.V;
@@ -150,7 +150,7 @@ function render(scene, o = {}) {
     const P = project(V, n, (x, y, z) => {
         const rx = x - org[0], ry = y - org[1], rz = z - org[2];
         return [(rx * R[0] + ry * R[1] + rz * R[2]) * sc + w * 0.5,
-            -(rx * U[0] + ry * U[1] + rz * U[2]) * sc + h * 0.40,
+            -(rx * U[0] + ry * U[1] + rz * U[2]) * sc + h * (o.cy !== undefined ? o.cy : 0.40),
             rx * D[0] + ry * D[1] + rz * D[2]];
     });
     const { zb, ib } = rasterIds(P, n, w, h, true);

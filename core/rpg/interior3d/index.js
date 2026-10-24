@@ -2,22 +2,24 @@
 const { render, R, U } = require('./raster');
 const { buildScene } = require('./scene');
 
-const VERSION = 1;
-const CAM = { origin: [0, 0, 1.0], scale: 96 };
+const VERSION = 3;
 
-/** world -> output px (for overlays) */
-function projector(W, H, scale = CAM.scale, origin = CAM.origin) {
-    return (x, y, z) => {
-        const rx = x - origin[0], ry = y - origin[1], rz = z - origin[2];
-        return [(rx * R[0] + ry * R[1] + rz * R[2]) * scale + W * 0.5, -(rx * U[0] + ry * U[1] + rz * U[2]) * scale + H * 0.40];
-    };
-}
-
-/** state -> node-canvas Canvas (W x H) */
+/** state -> node-canvas Canvas (W x H). Camera auto-fits the whole footprint (annexes, loft, 2nd-floor walls). */
 async function renderInterior(state, opts = {}) {
     const W = opts.W || 1500, H = opts.H || 1100;
     const scene = await buildScene(state, opts);
-    return render(scene, { W, H, scale: opts.scale || CAM.scale, origin: CAM.origin, ss: opts.ss || 2, bg: opts.bg === undefined ? [24, 20, 28] : opts.bg });
+    const b = scene.bounds;
+    const org = [(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, 1.0];
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const x of [b.x0 - 0.3, b.x1 + 0.3]) for (const y of [b.y0 - 0.3, b.y1 + 0.3]) for (const z of [-0.9, b.zTop]) {
+        const rx = x - org[0], ry = y - org[1], rz = z - org[2];
+        const sx = rx * R[0] + ry * R[1] + rz * R[2], sy = -(rx * U[0] + ry * U[1] + rz * U[2]);
+        minX = Math.min(minX, sx); maxX = Math.max(maxX, sx); minY = Math.min(minY, sy); maxY = Math.max(maxY, sy);
+    }
+    const scale = Math.min(opts.scale || 110, (W * 0.96) / (maxX - minX), (H * 0.95) / (maxY - minY));
+    const cy = (H / 2 - ((minY + maxY) / 2) * scale) / H;
+    scene.camera = { scale, cy, org };
+    return render(scene, { W, H, scale, origin: org, cy, ss: opts.ss || 2, bg: opts.bg === undefined ? [24, 20, 28] : opts.bg });
 }
 
-module.exports = { renderInterior, projector, VERSION, CAM };
+module.exports = { renderInterior, VERSION };
