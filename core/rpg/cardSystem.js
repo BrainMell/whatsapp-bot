@@ -6450,6 +6450,8 @@ module.exports = {
   // 💡 mentoring promote (2026-10-08): hot-reload the DB after an atomic
   // file swap — same function `.g reloadcards` uses, now callable from code.
   loadCardsDB,
+  // 💡 HIDDEN SETS (2026-10-25): QA hooks for the per-group gate
+  cardBlockedForGroup, visibleCardsFor, loadHiddenSetConfig, cmdHiddenSet,
 };
 
 // 💡 OWNER BRIEF 2026-10-09 §1 diagnostics: env-guarded hook so QA harnesses
