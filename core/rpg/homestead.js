@@ -125,6 +125,31 @@ setInterval(() => {
     const cutoff = Date.now() - 10 * 60 * 1000;
     for (const [k, v] of lastShop) if (v.ts < cutoff) lastShop.delete(k);
 }, 60 * 1000).unref();
+// ── card registry (owner 2026-10-25 "you just reply to the message"): chat →
+// { msgId: ts } of homestead media cards we SENT recently. Replying to any of
+// them arms quick input even when selection mode expired — the quoted card IS
+// the context. 10 min TTL, capped per chat.
+const cardMsgIds = new Map();
+const CARD_TTL_MS = 10 * 60 * 1000;
+function rememberCard(chatId, sent) {
+    const id = sent?.key?.id;
+    if (!chatId || !id) return;
+    let set = cardMsgIds.get(chatId);
+    if (!set) { set = new Map(); cardMsgIds.set(chatId, set); }
+    set.set(id, Date.now());
+    while (set.size > 25) set.delete(set.keys().next().value);
+}
+setInterval(() => {
+    const cutoff = Date.now() - CARD_TTL_MS;
+    for (const [, set] of cardMsgIds) for (const [k, ts] of set) if (ts < cutoff) set.delete(k);
+}, 60 * 1000).unref();
+function isCardReply(ctx) {
+    const q = ctx?.m?.message?.extendedTextMessage?.contextInfo;
+    const id = q?.stanzaId;
+    if (!q?.quotedMessage || !id) return false;
+    const set = cardMsgIds.get(ctx.chatId || ctx.m?.key?.remoteJid);
+    return !!(set && set.has(id));
+}
 
 // ── helpers ──
 let _uidCounter = 0;
@@ -353,14 +378,16 @@ async function viewRoom(ctx, rec, opts = {}) {
         const cap = `🏠 *${state.owner}'s Homestead* — ${theme.name}\n\n` +
             `♥ Comfort *${comfort}*  •  🪑 ${rec.placed.length} pieces placed  •  📦 ${rec.owned.length} in storage\n` +
             (opts.pop ? `✨ The *${(renderer.itemDef(opts.pop.item) || {}).name}* was placed!\n` : '') +
-            (opts.grid ? `🎯 Selected: *${opts.grid.label}*\n_${ctx.prefix} home right/left/up/down [n] — steer it (single word, instant) • ${ctx.prefix} home 3 4 — send to coordinates • ${ctx.prefix} home rotate_\n_${ctx.prefix} home to <main|loft|east|south|north|west> — hop it to another room/platform • ${ctx.prefix} home to — list your spaces_\n` : '') +
+            (opts.grid ? `🎯 Selected: *${opts.grid.label}*\n_Single word steer: \`${ctx.prefix} home right/left/up/down [n]\` (instant). Coordinates: \`${ctx.prefix} home 3 4\`. Rotate: \`${ctx.prefix} home rotate\`._\n_Hop to another room or platform: \`${ctx.prefix} home to loft/east/south/north/west/main\`. List spaces: \`${ctx.prefix} home to\`._\n` : '') +
             `\n_${opts.hint || `${ctx.prefix} home place <item> • ${ctx.prefix} home catalog • ${ctx.prefix} home help`}_`;
         try {
+            let sent;
             if (media.contentType === 'video/mp4') {
-                await sock.sendMessage(chatId, { video: media.buffer, gifPlayback: true, caption: cap }, { quoted: ctx.m });
+                sent = await sock.sendMessage(chatId, { video: media.buffer, gifPlayback: true, caption: cap }, { quoted: ctx.m });
             } else {
-                await sock.sendMessage(chatId, { image: media.buffer, caption: cap }, { quoted: ctx.m });
+                sent = await sock.sendMessage(chatId, { image: media.buffer, caption: cap }, { quoted: ctx.m });
             }
+            rememberCard(chatId, sent);
         } catch (sendErr) {
             console.error('[homestead] media send failed:', sendErr.message);
             return reply(`🏠 The portrait is painted but WhatsApp refused delivery (${String(sendErr.message).slice(0, 60)}). Try again shortly.`);
@@ -486,7 +513,9 @@ async function cmdBuy(ctx, rec, args) {
             economy.addMoney(ctx.senderJid, it.price, `Homestead: refund ${it.name}`);
             return ctx.reply(`🔥 The outfitter dropped your ZENI back on the counter (storage write failed). Nothing was lost — try again.`);
         }
-        return ctx.reply(`${RARITY_STAR[it.rarity]} Bought *${it.name}* for *${it.price.toLocaleString()}* ZENI!\n\nPlace it: \`${ctx.prefix} home place ${it.id}\``);
+        pendingPlace.set(ctx.senderJid, it.id);
+        setSelectionMode(ctx.senderJid, true);
+        return ctx.reply(`${RARITY_STAR[it.rarity]} Bought *${it.name}* for *${it.price.toLocaleString()}* ZENI!\n\nPlacement mode is on: just type *place* to set it down, or *place 3 4* for a spot. (Full form: \`${ctx.prefix} home place ${it.id} <x> <y>\`)`);
     } finally {
         opLocks.delete(ctx.senderJid);
     }
@@ -561,7 +590,8 @@ async function cmdSelect(ctx, rec, args) {
                 const grid = spot ? { x: spot.x, y: spot.y, fw: pd.fw, fh: pd.fh, valid: true, label: `${pd.name} → (${spot.x},${spot.y})` } : null;
                 // v5: placement ghost — the pending piece glows at its preview spot
                 const hl = spot ? { item: pd.id, x: spot.x, y: spot.y, valid: true } : null;
-                return viewRoom(ctx, rec, { grid, hl, hint: `Placement mode — *${pd.name}*. Confirm: \`${ctx.prefix} home place ${pd.id} <x> <y>\` (or bare \`${ctx.prefix} home place ${pd.id}\`). Cancel: \`${ctx.prefix} home deselect\`.` });
+                setSelectionMode(ctx.senderJid, true);
+                return viewRoom(ctx, rec, { grid, hl, hint: `Placement mode: *${pd.name}*. Confirm with \`${ctx.prefix} home place ${pd.id} <x> <y>\` (or bare \`${ctx.prefix} home place ${pd.id}\`). Cancel: \`${ctx.prefix} home deselect\`. You can also just reply *place* here.` });
             }
             pendingPlace.delete(ctx.senderJid);
         }
@@ -583,9 +613,10 @@ async function cmdSelect(ctx, rec, args) {
             const it = row.d;
             pendingPlace.set(ctx.senderJid, it.id);
             selClear(ctx.senderJid);
+            setSelectionMode(ctx.senderJid, true);
             const spot = findFreeSpot(rec, it);
             const grid = spot ? { x: spot.x, y: spot.y, fw: it.fw, fh: it.fh, valid: true, label: `${it.name} → (${spot.x},${spot.y})` } : null;
-            return viewRoom(ctx, rec, { grid, hint: `Placement mode — *${it.name}* (in storage). Confirm: \`${ctx.prefix} home place ${it.id} <x> <y>\`${spot ? ` (suggested spot ${spot.x},${spot.y})` : ''} • Cancel: \`${ctx.prefix} home deselect\`.` });
+            return viewRoom(ctx, rec, { grid, hint: `Placement mode: *${it.name}* (in storage). Confirm: \`${ctx.prefix} home place ${it.id} <x> <y>\`${spot ? ` (suggested spot ${spot.x},${spot.y})` : ''}. Cancel: \`${ctx.prefix} home deselect\`. Or just reply *place* here.` });
         }
         const pp = rec.placed.find((q) => q.uid === row.uid);
         if (!pp) return ctx.reply('🕯️ That selection is gone — pick another piece.');
@@ -594,9 +625,11 @@ async function cmdSelect(ctx, rec, args) {
         // wall pieces live on wall slots (y = side index, not a floor row) —
         // select them without the floor footprint grid
         if (row.d.layer === 'wall') {
-            return viewRoom(ctx, rec, { hint: `Selected the *${row.d.name}* (wall slot ${pp.x}) — \`${ctx.prefix} home store\` takes it down.` });
+            setSelectionMode(ctx.senderJid, true);
+            return viewRoom(ctx, rec, { hint: `Selected the *${row.d.name}* (wall slot ${pp.x}). \`${ctx.prefix} home store\` takes it down.` });
         }
-        return viewRoom(ctx, rec, { ...gridOptsFor(pp, row.d), hint: `Selected the *${row.d.name}* — steer: \`${ctx.prefix} home right/left/up/down [n]\` (single word, instant) • coords: \`${ctx.prefix} home 3 4\` • hop it to another room/platform: \`${ctx.prefix} home to loft/east/…\` (list: \`${ctx.prefix} home to\`)` });
+        setSelectionMode(ctx.senderJid, true);
+        return viewRoom(ctx, rec, { ...gridOptsFor(pp, row.d), hint: `Selected the *${row.d.name}*. Steer: \`${ctx.prefix} home right/left/up/down [n]\` (single word, instant). Coordinates: \`${ctx.prefix} home 3 4\`. Hop it to another room or platform: \`${ctx.prefix} home to loft/east/...\` (list: \`${ctx.prefix} home to\`). Or just reply \`left\`, \`3 4\` or \`to loft\` here.` });
     }
     const it = resolveItem(query);
     if (!it) return ctx.reply(`❌ Nothing called *${query}*. Browse every piece you own: \`${ctx.prefix} home select\`.`);
@@ -606,16 +639,18 @@ async function cmdSelect(ctx, rec, args) {
             // §5: owned-but-unplaced → PLACEMENT MODE (grid preview + suggested spot)
             pendingPlace.set(ctx.senderJid, it.id);
             selClear(ctx.senderJid);
+            setSelectionMode(ctx.senderJid, true);
             const spot = findFreeSpot(rec, it);
             const grid = spot ? { x: spot.x, y: spot.y, fw: it.fw, fh: it.fh, valid: true, label: `${it.name} → (${spot.x},${spot.y})` } : null;
-            return viewRoom(ctx, rec, { grid, hint: `Placement mode — *${it.name}* (in storage). Confirm: \`${ctx.prefix} home place ${it.id} <x> <y>\`${spot ? ` (suggested spot ${spot.x},${spot.y})` : ''} • Cancel: \`${ctx.prefix} home deselect\`.` });
+            return viewRoom(ctx, rec, { grid, hint: `Placement mode: *${it.name}* (in storage). Confirm: \`${ctx.prefix} home place ${it.id} <x> <y>\`${spot ? ` (suggested spot ${spot.x},${spot.y})` : ''}. Cancel: \`${ctx.prefix} home deselect\`. Or just reply *place* here.` });
         }
         return ctx.reply(`❌ You don't own a *${it.name}*. Your furniture: \`${ctx.prefix} home select\` • Shop: \`${ctx.prefix} home catalog\`.`);
     }
     const p = cand[0];
     selSet(ctx.senderJid, p.uid);
     pendingPlace.delete(ctx.senderJid);
-    await viewRoom(ctx, rec, { ...gridOptsFor(p, it), hint: `Selected the *${it.name}* — steer: \`${ctx.prefix} home right/left/up/down [n]\` (single word, instant) • coords: \`${ctx.prefix} home 3 4\` • hop it to another room/platform: \`${ctx.prefix} home to loft/east/…\` (list: \`${ctx.prefix} home to\`)` });
+    setSelectionMode(ctx.senderJid, true);
+    await viewRoom(ctx, rec, { ...gridOptsFor(p, it), hint: `Selected the *${it.name}*. Steer: \`${ctx.prefix} home right/left/up/down [n]\` (single word, instant). Coordinates: \`${ctx.prefix} home 3 4\`. Hop it to another room or platform: \`${ctx.prefix} home to loft/east/...\` (list: \`${ctx.prefix} home to\`). Or just reply \`left\`, \`3 4\` or \`to loft\` here.` });
 }
 
 // §5: readable names card — every owned piece, placed vs storage (pagination)
@@ -634,12 +669,13 @@ async function cmdInventory(ctx, rec, page) {
     if (pg > totalPages) pg = totalPages;
     const slice = rows.slice((pg - 1) * per, pg * per);
     const list = slice.map((r) => `#${r.n} ${r.d.name || r.d.id}${r.placed ? ` — ${r.status}` : ' — 📦 storage'}`).join('\n');
-    const cap = `🪑 *Your Furniture* — page ${pg}/${totalPages} — 📍 ${rec.placed.length} placed • 📦 ${rec.owned.length} in storage\n\n` +
+    const cap = `🪑 *Your Furniture* (page ${pg}/${totalPages})  📍 ${rec.placed.length} placed  📦 ${rec.owned.length} in storage\n\n` +
         `${list}\n\n` +
-        `_${ctx.prefix} home select <number|name> — select it • ${ctx.prefix} home remove <numbers> — pick up (2-5 works)_\n` +
-        `_${ctx.prefix} home right/left/up/down — steer it • ${ctx.prefix} home to loft/east/… — hop spaces_` +
-        (pg < totalPages ? `\n_${ctx.prefix} home inv ${pg + 1} — next page_` : '');
-    await ctx.sock.sendMessage(ctx.chatId, { image: buf, caption: cap }, { quoted: ctx.m });
+        `_${ctx.prefix} home select <number|name> selects it. ${ctx.prefix} home remove <numbers> picks up (2 to 5 works)_\n` +
+        `_${ctx.prefix} home right/left/up/down steers it. ${ctx.prefix} home to loft/east/... hops spaces. Or just reply a number, \`left\`, or \`3 4\` here._` +
+        (pg < totalPages ? `\n_${ctx.prefix} home inv ${pg + 1} shows the next page_` : '');
+    const sent = await ctx.sock.sendMessage(ctx.chatId, { image: buf, caption: cap }, { quoted: ctx.m });
+    rememberCard(ctx.chatId, sent);
 }
 
 /** Step-walk the selection `steps` tiles in `dir`, stopping at the last legal
@@ -778,7 +814,7 @@ async function cmdMoveFast(ctx, rec, dirWord, args) {
     armMovePreview(ctx, p.uid, from);
     const burst = movePreviews.get(ctx.senderJid);
     const first = burst && burst.fromX === from.x && burst.fromY === from.y;
-    return ctx.reply(`➡️ (${nx},${ny})${moved < steps ? ` — stopped after ${moved} step${moved > 1 ? 's' : ''} (blocked)` : ''}${first ? `\n_⏱️ preview renders when you pause — keep steering: \`${ctx.prefix} home right/left/up/down\`_` : ''}`);
+    return ctx.reply(`➡️ (${nx},${ny})${moved < steps ? `. Stopped after ${moved} step${moved > 1 ? 's' : ''} (blocked)` : ''}${first ? `\n_⏱️ Preview renders when you pause. Keep steering: \`${ctx.prefix} home right/left/up/down\`, or just reply \`left\` here._` : ''}`);
 }
 
 async function cmdMoveFastTo(ctx, rec, tx, ty) {
@@ -1323,8 +1359,21 @@ async function helpText(ctx) {
 
 // Intercept plain replies only while the user is actively editing furniture.
 // Bare numbers/names select; directions and coordinates steer the current piece.
+// Owner 2026-10-25 "you don't have to use the prefix and home, you just reply
+// to the message or just send whatever is needed, like left or coords like
+// 3 0, or even after you purchase something the placing just type place":
+//  (a) selection mode now arms on EVERY selection/placement/buy, not only the
+//      bare `.home select` card, so plain words actually land mid-flow;
+//  (b) replying to any homestead card we sent re-arms the editor (card
+//      registry remembers the message ids);
+//  (c) the word list grew: `place [x y]` (uses the pending purchase), `to
+//      <space>` (room/platform hop), `rotate`, `deselect/cancel`.
 async function handleQuickInput(ctx) {
-    if (!ctx || !ctx.senderJid || !hasSelectionMode(ctx.senderJid)) return false;
+    if (!ctx || !ctx.senderJid) return false;
+    if (!hasSelectionMode(ctx.senderJid)) {
+        if (!isCardReply(ctx)) return false;   // replying to our card re-arms
+        setSelectionMode(ctx.senderJid, true);
+    }
     const raw = String(ctx.rawText || ctx.text || '').trim();
     if (!raw) return false;
     const prefix = String(ctx.prefix || '.j').trim().toLowerCase();
@@ -1334,13 +1383,24 @@ async function handleQuickInput(ctx) {
     const direction = /^(right|r|east|left|l|west|down|d|south|up|u|north|upright|ur|upleft|ul|downright|dr|downleft|dl)(?:\s+\d{1,2})?$/.test(value);
     const coords = /^-?\d+\s*[, ]\s*-?\d+$/.test(value);
     const numeric = /^\d{1,3}$/.test(value);
-    const itemName = !!resolveItem(raw);
-    if (!direction && !coords && !numeric && !itemName) return false;
-    const synthetic = direction
-        ? `${prefix} home ${value.replace(/\s+/g, ' ')}`
-        : coords
-            ? `${prefix} home ${value.replace(',', ' ')}`
-            : `${prefix} home select ${raw}`;
+    const placeCmd = /^place(?:\s+-?\d+\s*[, ]\s*-?\d+)?$/.test(value);
+    const toSpace = /^to\s+(main|hall|ground|down|floor|loft|up|upstairs|top|e|east|right|s|south|front|n|north|back|w|west|left)$/.test(value);
+    const rotateCmd = /^rotate$/.test(value);
+    const cancelCmd = /^(deselect|unselect|cancel)$/.test(value);
+    if (!direction && !coords && !numeric && !placeCmd && !toSpace && !rotateCmd && !cancelCmd) return false;
+    let synthetic;
+    if (direction) synthetic = `${prefix} home ${value.replace(/\s+/g, ' ')}`;
+    else if (coords) synthetic = `${prefix} home ${value.replace(',', ' ')}`;
+    else if (placeCmd) {
+        const pendId = pendingPlace.get(ctx.senderJid);
+        if (!pendId) return false;   // nothing pending → ordinary chat, not ours
+        const tail = value.replace(/^place/, '').trim().replace(',', ' ');
+        synthetic = `${prefix} home place ${pendId}${tail ? ` ${tail}` : ''}`;
+    }
+    else if (toSpace) synthetic = `${prefix} home ${value.replace(/\s+/g, ' ')}`;
+    else if (rotateCmd) synthetic = `${prefix} home rotate`;
+    else if (cancelCmd) synthetic = `${prefix} home deselect`;
+    else synthetic = `${prefix} home select ${raw}`;
     await handleCommand({ ...ctx, text: synthetic.toLowerCase(), rawText: synthetic });
     return true;
 }
