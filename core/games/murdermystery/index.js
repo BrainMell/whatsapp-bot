@@ -3711,7 +3711,14 @@ async function handleHalloweenCommand(ctx) {
     if(!buf)return sendGroup(sock,chatId,botMarker+'🎃 Card renderer failed. The text commands still work.');
     return sendGroupImage(sock,chatId,buf,botMarker+'🎃 HALLOWEEN CARD: '+kind.toUpperCase()+'\nA fresh Blackvale illustration rendered locally.');
   }
-  if(['create','open','new','lobby'].includes(action))return createLobby({...ctx,halloweenMode:true,sub:'create'});
+  if(['create','open','new','lobby'].includes(action)){
+    // Halloween is a moderator-launched event. Keep the gallery/help public,
+    // but never let a regular player open the themed lobby.
+    if(!ctx.isMod && !isModJid(ctx.senderJid)){
+      return sendGroup(sock,chatId,botMarker+'🎃 Only a moderator can launch the Blackvale Halloween event.');
+    }
+    return createLobby({...ctx,halloweenMode:true,sub:'create'});
+  }
   if(action==='start'){
     const g=getGame(chatId);
     if(!g||!g.halloween)return sendGroup(sock,chatId,botMarker+'🎃 No Halloween case is active. Use '+prefix+' mm halloween create.');
