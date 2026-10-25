@@ -6,11 +6,21 @@ const cards = require('./cards');
 const WIDE = { width: 1600, height: 900 };
 const TALL = { width: 900, height: 1400 };
 const TALL_KINDS = new Set(['role','character','clue','evidence','ritual','blackmail','escape','guide','collectible']);
+const ROLE_CARD_STYLE = {
+  KILLER: { title: 'THE KILLER', color: '#d83b4b' },
+  INVESTIGATOR: { title: 'THE INVESTIGATOR', color: '#e0bd5c' },
+  GUARDIAN: { title: 'THE GUARDIAN', color: '#9fd8c8' },
+  MEDIUM: { title: 'THE MEDIUM', color: '#b9a7e0' },
+  BUTLER: { title: 'THE BUTLER', color: '#c7d0d9' },
+  ACCOMPLICE: { title: 'THE ACCOMPLICE', color: '#c99a8a' },
+  CIVILIAN: { title: 'THE CIVILIAN', color: '#ece2c8' }
+};
+
 const PRESETS = {
   guide: { kicker:'BLACKVALE MANOR • OCTOBER 31', title:'THE HALLOWEEN FILES', subtitle:'A limited-time murder mystery mode', lines:['A moonless night. A sealed manor. Someone has brought a second name to bury.','Use mm halloween create to open a themed lobby.','Use mm halloween card clue|evidence|ritual|blackmail|escape to render a dossier card.'] },
   lobby: { kicker:'BLACKVALE MANOR • OCTOBER 31', title:'THE BLACK MOON RISES', subtitle:'The doors are open. The dead are listening.', lines:[] },
   intro: { kicker:'THE HALLOWEEN CASE', title:'THE HOUSE REMEMBERS', subtitle:'Every guest arrived with a secret.', lines:['Read the room. Compare the stories. Trust the evidence, not the atmosphere.'] },
-  role: { kicker:'SEALED • FOR YOUR EYES ONLY', title:'YOUR SECRET ROLE', subtitle:'The face is public. The role is not.', lines:[] },
+  role: { kicker:'BLACKVALE • PRIVATE ROLE FILE', title:'YOUR SECRET ROLE', subtitle:'Your assignment is for your eyes only.', lines:[] },
   character: { kicker:'GUEST DOSSIER', title:'A FACE IN THE CANDLELIGHT', subtitle:'', lines:[] },
   night: { kicker:'BLACKVALE AFTER DARK', title:'THE WITCHING HOUR', subtitle:'The manor has gone quiet. That is never good.', lines:[] },
   morning: { kicker:'OCTOBER 31 • DAWN REPORT', title:'THE NIGHT LEFT MARKS', subtitle:'Search carefully. Someone is lying.', lines:[] },
@@ -43,7 +53,7 @@ function writeWrap(ctx, text, x, y, width, lineHeight, maxLines) {
 // These are the existing game art assets; the old vector silhouette-house was
 // removed so every card is actually set inside Blackvale's locations.
 const SCENES = {
-  guide: 'manor', lobby: 'manor', intro: 'manor', role: 'gallery',
+  guide: 'manor', lobby: 'manor', intro: 'greatroom', role: 'gallery',
   character: 'gallery', night: 'hallway_c', morning: 'entrance',
   body: 'bedroom_a', clue: 'bedroom_b', evidence: 'hallway_a',
   ritual: 'library', blackmail: 'drawing', escape: 'entrance',
@@ -132,13 +142,15 @@ async function render(input) {
   input=input||{};
   const kind=PRESETS[input.kind]?input.kind:'collectible', preset=PRESETS[kind], tall=TALL_KINDS.has(kind);
   const dims=tall?TALL:WIDE,w=dims.width,h=dims.height;
-  const title=input.title||preset.title,kicker=input.kicker||preset.kicker,subtitle=input.subtitle||input.openingLine||input.line||preset.subtitle;
+  const roleStyle = kind === 'role' ? (ROLE_CARD_STYLE[String(input.role || '').toUpperCase()] || ROLE_CARD_STYLE.CIVILIAN) : null;
+  const title=input.title||(roleStyle ? roleStyle.title : preset.title),kicker=input.kicker||preset.kicker,subtitle=input.subtitle||input.openingLine||input.line||preset.subtitle;
+  const accent = roleStyle ? roleStyle.color : '#dba75d';
   const lines=defaultLines(input,kind,preset);
   return cards.renderCard(w,h,async function(ctx) {
     await drawScene(ctx,w,h,tall,kind);
-    ctx.strokeStyle='#dba75d';ctx.lineWidth=4;ctx.strokeRect(24,24,w-48,h-48);
-    ctx.strokeStyle='rgba(238,211,157,.45)';ctx.lineWidth=1.5;ctx.strokeRect(38,38,w-76,h-76);
-    ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.fillStyle='#f4bf70';ctx.font=(tall?'23px':'25px')+' Type';ctx.fillText(String(kicker).toUpperCase().slice(0,90),w/2,tall?100:92);
+    ctx.strokeStyle=accent;ctx.lineWidth=4;ctx.strokeRect(24,24,w-48,h-48);
+    ctx.strokeStyle=roleStyle ? accent+'88' : 'rgba(238,211,157,.45)';ctx.lineWidth=1.5;ctx.strokeRect(38,38,w-76,h-76);
+    ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.fillStyle=accent;ctx.font=(tall?'23px':'25px')+' Type';ctx.fillText(String(kicker).toUpperCase().slice(0,90),w/2,tall?100:92);
     ctx.fillStyle='#f7e7c5';ctx.shadowColor='#e27739';ctx.shadowBlur=16;ctx.font='bold '+(tall?54:76)+'px PF-Black';
     writeWrap(ctx,String(title).toUpperCase(),w/2,tall?190:190,w-120,tall?64:82,2);ctx.shadowBlur=0;
     ctx.fillStyle='#e0d3cb';ctx.font=(tall?'27px':'31px')+' EB-Reg';writeWrap(ctx,String(subtitle||''),w/2,tall?335:305,w-150,tall?40:44,3);
