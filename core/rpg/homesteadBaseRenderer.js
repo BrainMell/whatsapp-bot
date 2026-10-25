@@ -253,7 +253,7 @@ function buildWorld(state, cel = null) {
     const FARM = biome === 'coast' || biome === 'wildwood';
     const mir = rng() < 0.5;                                              // scenery mirror E/W (layout untouched)
     const MX = (gx) => (mir ? (N - 1) - gx : gx);
-    const LAKE_C = [[16, 2], [15, 3], [17, 1]][Math.floor(rng() * 3)];    // lake nook in the (mirrored) NE quadrant
+    const LAKE_C = [[14, 3], [15, 3], [14, 4]][Math.floor(rng() * 3)];    // lake nook in the (mirrored) NE quadrant
     const KIND_PROFILES = {
         village: null,                                                                    // default weights
         farmstead: { barn: 2.4, hut: 1.8, cottage: 1.2, townhouse: 0.4, stone: 0.6, tudor: 0.9, shop: 0.4 },
@@ -289,7 +289,7 @@ function buildWorld(state, cel = null) {
     const LW = K.hexWorld(lc, lr);
     const lakeAng = rng() * Math.PI;                              // bearing of the long axis (per base)
     const lakeStretch = 1.25 + rng() * 0.95;                      // 1.25x .. 2.2x elongation
-    const lakeR = 3.4 + rng() * 0.8;                              // mean radius in world units
+    const lakeR = 2.3 + rng() * 0.6;                              // mean radius in world units
     const lakeCos = Math.cos(lakeAng), lakeSin = Math.sin(lakeAng);
     const lakeEdge = (c, r) => vnoise(seed + 911, c * 0.55, r * 0.55) * 1.1 - 0.55;
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
@@ -298,29 +298,20 @@ function buildWorld(state, cel = null) {
         if (Math.abs(dxc) > 8 || Math.abs(dzc) > 8) continue;     // cheap pre-cull
         const rx = (dxc * lakeCos - dzc * lakeSin) / lakeStretch; // long axis → rotated x
         const rz = dxc * lakeSin + dzc * lakeCos;
+        if (ringDist(c, r) > FAR_R - 3) continue;                  // the pond stays INSIDE the village walls
         if (Math.sqrt(rx * rx + rz * rz) <= lakeR + lakeEdge(c, r)) { const kk = w.cell[r][c]; kk.water = true; kk.lake = true; }
     }
     // pier guarantee: the pond boardwalk extends off the plot's SE corner — keep that line water.
     // (implicit when the lake was a fixed blob; a rotated/stretched lake can swing away from it)
     {
         const [pc0, pr0] = hc(LAYOUT.pond.x + LAYOUT.pond.fw - 1, LAYOUT.pond.y + LAYOUT.pond.fh - 1);
-        for (let i = 0; i <= 4; i++) {
+        for (let i = 0; i <= 3; i++) {
+            if (ringDist(pc0 + i, pr0) > FAR_R - 3) break;
             const kk = w.at(pc0 + i, pr0);
             if (kk) { kk.water = true; kk.lake = true; kk.river = false; }
         }
     }
-    if (coastal) {                                      // the lake is joined to the ocean by a channel
-        const [tc, tr] = hc(MX(23), 4);
-        for (const [c, r] of K.hexLine(lc, lr, tc, tr)) if (inCells(c, r)) w.cell[r][c].water = true;
-    } else if (biome !== 'desert') {                    // a stream wanders off the lake to the edge of the world
-        let cur = [lc, lr];
-        const [tc, tr] = hc(34, -22);
-        const way = [hc(MX(22 + Math.floor(rng() * 4)), -2 + Math.floor(rng() * 4)), hc(MX(28 + Math.floor(rng() * 4)), -12 + Math.floor(rng() * 4)), [tc, tr]];
-        for (const nx of way) {
-            for (const [c, r] of K.hexLine(cur[0], cur[1], nx[0], nx[1])) if (inCells(c, r) && !w.cell[r][c].water) w.cell[r][c].river = true;
-            cur = nx;
-        }
-    }
+    // (2026-10-25: no channel/stream out of the lake any more — the pond is a self-contained pond INSIDE the walls)
 
     // ── 2026-10-22 ("the mine is beside a water source?"): the sea / lake / stream may never swallow a work site —
     // carve a land apron round the mines, house, market and barracks (the pond keeps its water on purpose).
@@ -573,7 +564,17 @@ function buildWorld(state, cel = null) {
             // sprite yaw must equal MINUS the edge's world tangent (the bake yaws the model
             // clockwise, the iso cam yaw cancels out): tangents are e0/e3 90°, e1/e4 150°,
             // e2/e5 30° → yaws 90/30/150. The old +60e mapping walled every E/SE/W/NW gap sideways.
-            w.put('struct_gate_' + [90, 30, 150, 90, 30, 150][ge], 0, 0, { wx: (a0.x + a1.x) / 2, wz: (a0.z + a1.z) / 2, sc: 1.35, sort: 0.6 });
+            w.put('struct_gate_' + [90, 30, 150, 90, 30, 150][ge], 0, 0, { wx: (a0.x + a1.x) / 2, wz: (a0.z + a1.z) / 2, sc: 1.9, sort: 0.6 });
+        }
+        if (best) {   // gate lodge: a tower either side of the entrance + banners, so the way in is unmistakable
+            const [gc3, gr3] = best.split(',').slice(0, 2).map(Number);
+            const gi = ringCells.findIndex(([c, r]) => c === gc3 && r === gr3);
+            if (gi >= 0) for (const off of [-2, 2]) {
+                const [tc, tr] = ringCells[(gi + off + ringCells.length) % ringCells.length];
+                if (!w.inb(tc, tr) || w.cell[tr][tc].water) continue;
+                w.put('building_tower_A_' + team, tc, tr, { sc: 1.0, sort: 0.5 });
+                w.put('flag_' + team, tc, tr, { dx: 0.3, dz: -0.2, h: 1.3, sc: 0.8 });
+            }
         }
         w.put('flag_' + team, ...(best ? best.split(',').slice(0, 2).map(Number) : [0, 0]), { dx: -1.0, dz: 0.6 });
         w.put('flag_' + team, ...(best ? best.split(',').slice(0, 2).map(Number) : [0, 0]), { dx: 1.0, dz: 0.6 });
