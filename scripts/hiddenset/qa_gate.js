@@ -48,21 +48,24 @@ check('after opt-in: artPending STILL blocked (no broken renders)',
 check('after opt-in: visibleCardsFor still excludes all hidden (artPending)',
   cs.visibleCardsFor(GROUP).length === all.length - hidden.length);
 
-// simulate art landing: artPending off on a clone-ish test card
-const artDone = { ...sample, artPending: false };
+// simulate art landing: flip artPending IN THE CATALOG (a clone would not
+// be part of inst.ALL_CARDS, so the count check below would never move)
+const realCard = inst.CARD_INDEX[vg[0]];
+const wasArtPending = realCard.artPending;
+realCard.artPending = false;
 check('art done + opt-in: card becomes visible',
-  cs.cardBlockedForGroup(artDone, GROUP) === false);
-check('art done + opt-in: only 1 visible change', true);
+  cs.cardBlockedForGroup(realCard, GROUP) === false);
 const vis = cs.visibleCardsFor(GROUP);
 check('visible count grows by exactly 1 after art lands',
   vis.length === all.length - hidden.length + 1);
+realCard.artPending = wasArtPending; // restore catalog state
 
-// other groups unaffected
-check('other group stays blocked', cs.cardBlockedForGroup(artDone, 'other@g.us') === true);
+// other groups unaffected (art still pending on the restored card)
+check('other group stays blocked', cs.cardBlockedForGroup(realCard, 'other@g.us') === true);
 
 // toggle off again
 inst.hiddenSetChats.delete(GROUP);
-check('after toggle off: blocked again', cs.cardBlockedForGroup(artDone, GROUP) === true);
+check('after toggle off: blocked again', cs.cardBlockedForGroup(realCard, GROUP) === true);
 
 console.log(`\nRESULT: ${pass}/${pass + fail} ${fail === 0 ? 'ALL GREEN' : 'FAILURES PRESENT'}`);
 process.exit(fail === 0 ? 0 : 1);
