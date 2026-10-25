@@ -34,6 +34,7 @@ const cases = require('./cases');
 const caseGen = require('./caseGen');
 const cards = require('./cards');
 const halloweenCards = require('./halloweenCards');
+const storyMode = require('./storyMode');
 const crypto = require('crypto');
 // baileys 7 rc14 ships poll-vote decryption but never calls it (the block in
 // Utils/process-message.js is commented out with a TODO), so we invoke its own
@@ -3860,6 +3861,22 @@ async function handleHalloweenCommand(ctx) {
 }
 
 async function handleCommand(ctx) {
+  // Blackvale Story Mode is a separate game with its own state, phase machine,
+  // timers, commands, and persistence key. Route before touching classic MM.
+  const requestedMode = String(ctx.sub || '').toLowerCase().replace(/[^a-z]/g, '');
+  if (['story', 'chronicle', 'casefiles'].includes(requestedMode)) {
+    return storyMode.handleCommand(ctx, {
+      sendGroup,
+      sendGroupImage,
+      sendDM,
+      cards,
+      cases,
+      characters,
+      caseGen,
+      system,
+      botConfig,
+    });
+  }
   ensureRehydrated();
   const { sock, chatId, senderJid, botMarker } = ctx;
   // capture the live sock on any game in this chat - timer-driven sends
@@ -4005,6 +4022,7 @@ async function handleCommand(ctx) {
 // init() is safe to call from engine boot (after system data loads)
 function init() {
   ensureRehydrated();
+  storyMode.init();
 }
 
 module.exports = {
