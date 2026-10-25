@@ -400,10 +400,7 @@ function makeCase(game) {
     player.questionsByPhase = {};
     player.nightAct = null;
     player.objective = objectiveFor(player.role);
-    const secret = caseGen.SECRETS && caseGen.SECRETS.length
-      ? null
-      : null;
-    player.secret = secret;
+    player.secret = null;
   });
   const killer = game.players.find((p) => p.role === 'KILLER');
   if (!killer) throw new Error('Story mode could not deal a killer.');
@@ -862,7 +859,7 @@ async function startGame(ctx, game) {
   return true;
 }
 
-async function showStatus(game, player) {
+async function showStatus(game) {
   if (!game) return false;
   const alive = game.players.filter((p) => p.alive);
   const phaseLine = game.phase === 'LOBBY'
@@ -872,7 +869,6 @@ async function showStatus(game, player) {
       : game.phase + ' · ' + timeLabel(remainingMs(game)) + ' remaining';
   const rows = game.players.map((p, i) => (i + 1) + '. ' + p.name + (p.alive ? '' : ' (out)')).join('\n');
   const text = '🕯️ *' + MODE_NAME + ' · STORY MODE*\n' + phaseLine + '\nGuests: ' + game.players.length + '/' + MAX_PLAYERS + '\nLiving: ' + alive.length + '\n\n' + rows + '\n\nRoles and secrets are private. Use ' + game.prefix + ' murder story help for actions.';
-  if (player && !isGroup({ chatId: game.chatId, isGroup: false })) await privateText(game, player, text);
   return groupText(game, text);
 }
 
@@ -902,7 +898,7 @@ async function searchRoom(game, player, raw) {
   const limit = player.role === 'INVESTIGATOR' ? 2 : 1;
   if (used >= limit) return privateText(game, player, 'You have used your search allowance for this phase (' + used + '/' + limit + ').');
   player.searchesByPhase[game.phase] = used + 1;
-  const clue = game.evidence.find((c) => !c.discovered && c.roomId === room.id && !(c.secretForJid && normJid(c.secretForJid) !== normJid(player.jid)));
+  const clue = game.evidence.find((c) => !c.discovered && c.roomId === room.id);
   if (!clue) {
     persist();
     await groupText(game, '🔎 ' + player.name + ' searched the ' + room.name + '. The room yields no new evidence.');
@@ -1118,7 +1114,10 @@ async function handleCommand(ctx, services) {
 
   if (game) bindContext(ctx, game);
   if (['help', 'menu', 'rules'].includes(action)) {
-    return groupContext ? groupText(game, helpText(ctx.prefix)) : privateText(game, playerForAction(ctx, game), helpText(ctx.prefix));
+    const help = helpText(ctx.prefix);
+    if (game) return groupContext ? groupText(game, help) : privateText(game, playerForAction(ctx, game), help);
+    if (groupContext) return runtime.sendGroup ? runtime.sendGroup(ctx.sock, ctx.chatId, help) : false;
+    return runtime.sendDM ? runtime.sendDM(ctx.sock, ctx.senderJid, help) : false;
   }
   if (['create', 'open', 'new', 'lobby'].includes(action)) return createLobby(ctx);
   if (!game) {
