@@ -200,6 +200,10 @@ function roomById(game, id) {
   return (game.rooms || []).find((room) => room.id === id) || null;
 }
 
+function isClueDiscoverable(clue, player) {
+  return !!clue && !(clue.secretForJid && normJid(clue.secretForJid) !== normJid(player && player.jid));
+}
+
 function roomForBeat(game, beat, index) {
   if (beat && beat.room) {
     const found = game.rooms.find((r) => r.id === beat.room || r.name.toLowerCase() === String(beat.room).toLowerCase());
@@ -1046,7 +1050,7 @@ async function searchRoom(game, player, raw) {
   const limit = player.role === 'INVESTIGATOR' ? 2 : 1;
   if (used >= limit) return privateText(game, player, 'You have used your search allowance for this phase (' + used + '/' + limit + ').');
   player.searchesByPhase[game.phase] = used + 1;
-  const clue = game.evidence.find((c) => !c.discovered && c.roomId === room.id && !(c.secretForJid && normJid(c.secretForJid) !== normJid(player.jid)));
+  const clue = game.evidence.find((c) => !c.discovered && c.roomId === room.id && isClueDiscoverable(c, player));
   if (!clue) {
     persist();
     await groupText(game, '🔎 ' + player.name + ' searched the ' + room.name + '. The room yields no new evidence.');
@@ -1365,6 +1369,7 @@ module.exports = {
     objectiveComplete,
     accusationTally,
     accusationTallyLine,
+    isClueDiscoverable,
     PHASE_MS: DURATIONS,
   },
 };
