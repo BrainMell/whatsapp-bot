@@ -6,6 +6,7 @@
 
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const fs = require('node:fs');
 
 // Keep this harness offline and side-effect free. Story Mode's game rules use
 // the existing system-data API, but tests only need a small in-memory store.
@@ -78,6 +79,16 @@ const game = makeGame(ctx);
 for (let i = 2; i <= 8; i++) game.players.push(player('23324000000' + i, 'Guest ' + i));
 makeCase(game);
 
+const assetRoot = path.join(__dirname, '..', 'core', 'games', 'murdermystery', 'assets');
+const caseContent = require('../core/games/murdermystery/cases');
+const characterContent = require('../core/games/murdermystery/characters');
+for (const room of caseContent.ROOMS) {
+  assert.ok(fs.existsSync(path.join(assetRoot, 'bg', room.id + '.jpg')), 'scene background exists: ' + room.id);
+}
+for (const char of characterContent.CHARACTERS) {
+  assert.ok(fs.existsSync(path.join(assetRoot, 'char', char.sprite)), 'character sprite exists: ' + char.sprite);
+}
+
 assert.equal(game.mode, 'STORY', 'new game identifies itself as Story Mode');
 assert.equal(game.players.length, 8, 'test roster is preserved');
 assert.equal(game.rooms.length, 6, 'case uses six selected locations');
@@ -87,6 +98,9 @@ assert.equal(game.killerJid, game.players.find((p) => p.role === 'KILLER').jid, 
 assert.ok(game.murderRoomId && game.rooms.some((r) => r.id === game.murderRoomId), 'crime scene exists inside the selected map');
 assert.ok(game.evidence.length >= game.players.length + 5, 'case generates enough distinct leads for a full roster');
 assert.equal(new Set(game.evidence.map((e) => e.id)).size, game.evidence.length, 'evidence IDs are unique');
+for (const clue of game.evidence) {
+  assert.ok(fs.existsSync(path.join(assetRoot, 'clues', clue.art)), 'evidence illustration exists: ' + clue.art);
+}
 assert.ok(game.players.every((p) => p.char && p.statement && p.secret && p.objective), 'each character has an account, secret, and objective');
 const privateClue = game.evidence.find((e) => e.secretForJid);
 assert.ok(privateClue, 'case creates player-specific private notes');
@@ -128,4 +142,8 @@ assert.equal(verdict(game).targetJid, null, 'under-majority count cannot convict
 game.votes = { voter1: killer.jid, voter2: killer.jid, voter3: 'skip', voter4: 'skip' };
 assert.equal(verdict(game).targetJid, null, 'skip ballots do not create a conviction');
 
-console.log('Story Mode QA passed: role decks, case generation, evidence, targeting, rooms, and verdict thresholds.');
+const dispatcher = fs.readFileSync(path.join(__dirname, '..', 'core', 'games', 'murdermystery', 'index.js'), 'utf8');
+assert.match(dispatcher, /requestedMode\)\s*\{[\s\S]{0,150}\['story', 'chronicle', 'casefiles'\]/, 'Story Mode is routed from the existing Murder Mystery dispatcher');
+assert.match(dispatcher, /storyMode\.hasActiveGame\(ctx\.chatId\)/, 'the dispatcher prevents Classic and Story Mode overlap in a group');
+
+console.log('Story Mode QA passed: role decks, case generation, private clue ownership, assets, accusation tally, routing, and verdict thresholds.');
