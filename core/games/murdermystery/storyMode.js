@@ -621,7 +621,7 @@ async function advancePhase(chatId) {
   game._transitioning = true;
   try {
     if (game.phase === 'INVESTIGATION') {
-      setPhase(game, 'NIGHT', '🌑 *The house falls silent.* Hidden actions are open for 90 seconds. Use your role ability in private with ' + game.prefix + ' murder story action <target>.');
+      setPhase(game, 'NIGHT', '🌑 *The house falls silent.* Hidden actions are open for 90 seconds. Use ' + game.prefix + ' murder story dossier privately to check your role action. Never reveal private instructions in the group.');
     } else if (game.phase === 'NIGHT') {
       await resolveNight(game);
       setPhase(game, 'DISCUSSION', '🕯️ *The bell rings again.* The house is open for a final investigation and public questions. Build a theory before the verdict.');
