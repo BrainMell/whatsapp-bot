@@ -1131,6 +1131,9 @@ async function startGame(ctx) {
 function scheduleIntros(sock, chatId, cast) {
   const g = getGame(chatId);
   if (!g) return;
+  // Read the mode outside the timer callback. `gg` is scoped inside that callback;
+  // referencing gg.testMode in setTimeout's delay expression freezes STARTING.
+  const testMode = !!g.testMode;
   if (g.case) g.case.introDone = true; // never replay after a restart
   persistGames();
   const nameMap = {};
@@ -1860,7 +1863,8 @@ async function beginDiscussion(sock, chatId) {
   if (!beginTransition(g, `discussion${g.night}`)) return; // same-round double-fire guard
   noteSock(g, sock);
   g.phase = PHASE.DISCUSSION;
-  g.deadline = Date.now() + (g.testMode ? 18000 : DISCUSS_MS);
+  const discussionMs = g.testMode ? 18000 : DISCUSS_MS;
+  g.deadline = Date.now() + discussionMs;
   g.searches = { night: g.night, used: {} };
   g._resolving = false;
   g._resolving2 = false;
@@ -1868,7 +1872,7 @@ async function beginDiscussion(sock, chatId) {
   schedulePhaseTimer(chatId);
   // reminder fires 60s BEFORE the deadline (2026-10-12 fix: it used to fire
   // 60s AFTER the phase began, announcing "ONE minute" with four minutes left)
-  scheduleReminder(chatId, Math.max(5000, DISCUSS_MS - DISCUSS_REMIND_BEFORE_MS), 'discussion');
+  scheduleReminder(chatId, Math.max(5000, discussionMs - (g.testMode ? 5000 : DISCUSS_REMIND_BEFORE_MS)), 'discussion');
   ensureWatchdog();
   console.log(`🔪 [MurderMystery] DISCUSSION begins (night ${g.night}) in ${chatId}`);
 
@@ -1883,7 +1887,7 @@ async function beginDiscussion(sock, chatId) {
     `🏠 The house asks each of you: *which room were you in when the dark came - and what were you doing there?*\n` +
     `${bodyNote}` +
     `🔍 Each living guest may search *one* room before the vote: \`${g.prefix} mm search <number|room>\` - searches are public, the ghost's clue is not. \`${g.prefix} mm letters\` re-reads your fragments.\n` +
-    `The vote begins when the clock runs out.\n⏱️ *5 minutes* remaining.\n\n` +
+    `The vote begins when the clock runs out.\n⏱️ *${g.testMode ? '18 seconds' : '5 minutes'}* remaining.\n\n` +
     `_Live status: \`${g.prefix} mm status\`_`);
 }
 
@@ -2557,13 +2561,14 @@ async function beginVoting(sock, chatId) {
   noteSock(g, sock);
   g.phase = PHASE.VOTING;
   g.votes = {};
-  g.deadline = Date.now() + (g.testMode ? 12000 : VOTE_MS);
+  const votingMs = g.testMode ? 12000 : VOTE_MS;
+  g.deadline = Date.now() + votingMs;
   g._resolving = false;
   g._resolving2 = false;
   g._poll = null; // fresh ballot UI every round - a stale poll must never survive into the next vote
   persistGames();
   schedulePhaseTimer(chatId);
-  scheduleReminder(chatId, Math.max(3000, VOTE_MS - VOTE_REMIND_BEFORE_MS), 'vote');
+  scheduleReminder(chatId, Math.max(3000, votingMs - (g.testMode ? 4000 : VOTE_REMIND_BEFORE_MS)), 'vote');
   ensureWatchdog();
   console.log(`🔪 [MurderMystery] VOTING begins (${alivePlayers(g).length} alive) in ${chatId}`);
 
@@ -2573,7 +2578,7 @@ async function beginVoting(sock, chatId) {
   await sendGroupCritical(g, chatId,
     `⚖️ *VOTING*\n\nWho do you believe is the Killer?\n\n${roster}\n\n` +
     `Cast your vote: \`${g.prefix} mm vote <number>\` - or a name - or \`skip\` - or just tap the poll.\n` +
-    `Living players only. One ballot each. You may change it until the count. Ballots are public.\n⏱️ *90 seconds.*`);
+    `Living players only. One ballot each. You may change it until the count. Ballots are public.\n⏱️ *${g.testMode ? '12 seconds' : '90 seconds'}.*`);
 
   // owner 2026-10-13 17:45Z: the ballot gets a native WhatsApp poll - tap to vote,
   // every vote and every change announces itself, the tally takes the poll down.
