@@ -1171,7 +1171,7 @@ function scheduleIntros(sock, chatId, cast) {
           }
         }
       }
-    }, i === 0 ? (g.testMode ? 500 : INTRO_FIRST_MS) : (g.testMode ? 900 : INTRO_INTERVAL_MS));
+    }, i === 0 ? (testMode ? 500 : INTRO_FIRST_MS) : (testMode ? 900 : INTRO_INTERVAL_MS));
     if (!introTimers.has(chatId)) introTimers.set(chatId, []);
     introTimers.get(chatId).push(t);
   };
