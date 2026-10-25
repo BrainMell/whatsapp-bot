@@ -32,6 +32,7 @@ const characters = require('./characters');
 const cases = require('./cases');
 const caseGen = require('./caseGen');
 const cards = require('./cards');
+const halloweenCards = require('./halloweenCards');
 const crypto = require('crypto');
 // baileys 7 rc14 ships poll-vote decryption but never calls it (the block in
 // Utils/process-message.js is commented out with a TODO), so we invoke its own
@@ -149,6 +150,11 @@ const introTimers = new Map(); // chatId -> [Timeout] cast introduction chain
 const silenced = new Map();  // chatId -> Map(normJid -> ts)
 const imgNotices = new Map(); // chatId -> ts (media-gate notice throttle)
 let _watchdog = null;
+
+async function renderGameCard(game, normalRenderer, halloweenKind, payload) {
+  if (game && game.halloween) return halloweenCards.render({ kind: halloweenKind, ...payload });
+  return cards[normalRenderer](payload);
+}
 
 function normJid(jid) {
   if (!jid) return '';
@@ -819,6 +825,7 @@ async function createLobby(ctx) {
   const game = {
     chatId,
     botId: ctx.botId,
+    halloween: !!ctx.halloweenMode,
     prefix: ctx.prefix,
     host: normJid(senderJid),
     createdAt: Date.now(),
@@ -854,7 +861,7 @@ async function createLobby(ctx) {
   // the start message gets a card (user ask) - text fallback kept
   let lobbyCardOk = false;
   try {
-    const buf = await cards.renderLobbyCard({
+    const buf = await renderGameCard(game, 'renderLobbyCard', 'lobby', {
       manorName: cases.MANOR_NAME,
       playerCount: game.players.length,
       minPlayers: MIN_PLAYERS,
@@ -1053,7 +1060,7 @@ async function startGame(ctx) {
   for (const p of g.players) {
     let sent = false;
     try {
-      const buf = await cards.renderRoleCard({
+      const buf = await renderGameCard(g, 'renderRoleCard', 'role', {
         character: p.char,
         playerName: nameOf(p),
         role: p.role,
@@ -1073,7 +1080,7 @@ async function startGame(ctx) {
   // group introduction card
   const roleHeadline = `${nP} guests. ${killerCount === 2 ? 'Two of them share a knife.' : 'One killer.'} ${investCount === 2 ? 'Two investigators hunt them.' : 'One detective hunts them.'}${guardianCount ? ' One guardian watches.' : ''}${mediumCount ? ' A medium can wake the dead.' : ''}${butlerCount ? ' The butler serves every side.' : ''}${accompliceCount ? ' Someone hidden roots for the knife.' : ''}`;
   try {
-    const buf = await cards.renderIntro({
+    const buf = await renderGameCard(g, 'renderIntro', 'intro', {
       playerCount: nP,
       manorName: cases.MANOR_NAME,
       openingLine: cases.pick(cases.OPENING_LINES),
@@ -1131,7 +1138,7 @@ function scheduleIntros(sock, chatId, cast) {
       const cap = caseGen.introCaptionFor(c.id, nameMap, gg.case, c.title);
       const s = sockForGame(gg);
       try {
-        const buf = await cards.renderCharacterIntroCard({ char: c, caption: cap, index: i + 1, total: cast.length, manorName: cases.MANOR_NAME });
+        const buf = await renderGameCard(gg, 'renderCharacterIntroCard', 'character', { char: c, caption: cap, index: i + 1, total: cast.length, manorName: cases.MANOR_NAME });
         if (buf) await sendGroupImage(s, chatId, buf, `🕯️ *${c.name}* — ${c.title}\n_${cap}_`);
         else throw new Error('intro render null');
       } catch (e) {
@@ -1239,7 +1246,7 @@ async function beginNight(sock, chatId) {
 
   // group night card
   try {
-    const buf = await cards.renderNightCard({ night: g.night, line, manorName: cases.MANOR_NAME });
+    const buf = await renderGameCard(g, 'renderNightCard', 'night', { night: g.night, line, manorName: cases.MANOR_NAME });
     if (buf) await sendGroupImage(sock, chatId, buf, `🌙 Night ${g.night} falls over the manor. Check your DMs.`);
     else throw new Error('night render null');
   } catch (e) {
@@ -1782,7 +1789,7 @@ async function resolveNight(sock, chatId, _reason) {
   // ---- public morning card (never names the victim - the body must be found) ----
   await sleep(1200);
   try {
-    const buf = await cards.renderMorningCard({
+    const buf = await renderGameCard(g, 'renderMorningCard', 'morning', {
       night: g.night,
       outcome,
       line: morningLine,
@@ -2245,7 +2252,7 @@ async function submitSearch(ctx, raw) {
     await sleep(500);
     let cardOk = false;
     try {
-      const buf = await cards.renderBodyFoundCard({
+      const buf = await renderGameCard(g, 'renderBodyFoundCard', 'body', {
         victimChar: victim.char,
         victimName: body.victimName,
         room: hit.room,
@@ -2286,7 +2293,7 @@ async function submitSearch(ctx, raw) {
     } catch (e) { ghostMove = ''; }
     let clueOk = false;
     try {
-      const buf = await cards.renderGhostClueCard({
+      const buf = await renderGameCard(g, 'renderGhostClueCard', 'clue', {
         clue,
         tier: Math.min(tier, 3),
         victimName: body.victimName,
@@ -2660,7 +2667,7 @@ async function resolveVote(sock, chatId, _reason) {
   }
 
   try {
-    const buf = await cards.renderVoteCard({
+    const buf = await renderGameCard(g, 'renderVoteCard', 'vote', {
       tally,
       skipVotes,
       eliminated: eliminated ? { charId: eliminated.char.id, name: nameOf(eliminated) } : null,
@@ -2835,7 +2842,7 @@ async function declareWinner(sock, chatId, winner) {
   const closing = cases.pick(winner === 'civ' ? cases.CIV_WIN_LINES : cases.KILLER_WIN_LINES);
 
   try {
-    const buf = await cards.renderFinalCard({
+    const buf = await renderGameCard(g, 'renderFinalCard', 'final', {
       winner,
       killerChar: killer.char,
       killerName: killers.length > 1 ? killers.map(nameOf).join(' & ') : nameOf(killer),
@@ -3543,6 +3550,10 @@ function helpText(prefix) {
   return (
     `🕯️ *MURDER MYSTERY - BLACKVALE MANOR*\n\n` +
     `A murder will be committed. One of you is the killer.\n\n` +
+    `*Halloween special:*\n` +
+    `• \`${prefix} mm halloween\` - illustrated Halloween mode and card gallery\n` +
+    `• \`${prefix} mm halloween create\` - open a themed case (same join/start commands)\n` +
+    `• \`${prefix} mm halloween card clue\` - render an illustrated clue card\n\n` +
     `*Lobby (group):*\n` +
     `• \`${prefix} mm create\` - open the manor\n` +
     `• \`${prefix} mm join\` - accept the invitation\n` +
@@ -3626,6 +3637,41 @@ const SUB_FIXES = {
   leadreboard: 'leaderboard', leaderboardd: 'leaderboard',
 };
 
+async function handleHalloweenCommand(ctx) {
+  const raw=String(ctx.rest||'').trim();
+  const parts=raw.split(/\s+/).filter(Boolean);
+  const action=String(parts.shift()||'help').toLowerCase();
+  const arg=parts.join(' ').trim();
+  const sock=ctx.sock,chatId=ctx.chatId,botMarker=ctx.botMarker,prefix=ctx.prefix;
+  if(['help','menu'].includes(action)){
+    const buf=await halloweenCards.render({kind:'guide',prefix:prefix});
+    if(buf)return sendGroupImage(sock,chatId,buf,botMarker+'🎃 BLACKVALE: HALLOWEEN FILES\n\nOpen a themed lobby: '+prefix+' mm halloween create\nJoin/start: '+prefix+' mm join / '+prefix+' mm start\nRender a card: '+prefix+' mm halloween card <clue|evidence|ritual|blackmail|escape>');
+    return sendGroup(sock,chatId,botMarker+'🎃 HALLOWEEN FILES\nCreate: '+prefix+' mm halloween create\nCards: '+prefix+' mm halloween card clue');
+  }
+  if(['card','art','render','gallery'].includes(action)){
+    const requested=arg.toLowerCase().replace(/[^a-z]/g,'');
+    const allowed=['clue','evidence','ritual','blackmail','escape','collectible','guide'];
+    const kind=allowed.includes(requested)?requested:'collectible';
+    const titles={clue:'A CLUE FROM THE VEIL',evidence:'THE EVIDENCE DOES NOT LIE',ritual:'THE SEVENTH CANDLE',blackmail:'THE LETTER UNDER THE DOOR',escape:'THE GATE IS LOCKED',collectible:'A RELIC FROM BLACKVALE',guide:'THE HALLOWEEN FILES'};
+    const lines={clue:['Cold ash on the sill.','A guest claims to have been upstairs.','The candle wax says otherwise.'],evidence:['Found beside the east gallery.','One edge is wet; the other is clean.','Compare it with the night timeline.'],ritual:['Seven candles were set. Only six burned.','The missing flame was carried by hand.','Someone interrupted the final verse.'],blackmail:['I know what happened in the chapel.','Bring the brass key before the last bell.','Come alone, or the whole house will hear.'],escape:['The western gate is chained from outside.','Footprints lead away from the only key.','The next exit may be inside the house.'],collectible:['A marked brass key from the archive.','Its owner has scratched their initials away.','The teeth fit one door in Blackvale.'],guide:['Open a Halloween lobby.','Play the full murder mystery with themed image cards.','Keep every clue tied to the actual case.']};
+    const buf=await halloweenCards.render({kind:kind,title:titles[kind],prefix:prefix,lines:lines[kind]});
+    if(!buf)return sendGroup(sock,chatId,botMarker+'🎃 Card renderer failed. The text commands still work.');
+    return sendGroupImage(sock,chatId,buf,botMarker+'🎃 HALLOWEEN CARD: '+kind.toUpperCase()+'\nA fresh Blackvale illustration rendered locally.');
+  }
+  if(['create','open','new','lobby'].includes(action))return createLobby({...ctx,halloweenMode:true,sub:'create'});
+  if(action==='start'){
+    const g=getGame(chatId);
+    if(!g||!g.halloween)return sendGroup(sock,chatId,botMarker+'🎃 No Halloween case is active. Use '+prefix+' mm halloween create.');
+    return startGame(ctx);
+  }
+  const current=getGame(chatId);
+  if(['join','leave','players','status','vote','search','ask','evidence','accuse','end','help'].includes(action)){
+    if(!current||!current.halloween)return sendGroup(sock,chatId,botMarker+'🎃 No Halloween case is active here. Open one with '+prefix+' mm halloween create.');
+    return handleCommand({...ctx,sub:action,rest:arg});
+  }
+  return sendGroup(sock,chatId,botMarker+'🎃 Unknown Halloween action. Use '+prefix+' mm halloween for the illustrated menu.');
+}
+
 async function handleCommand(ctx) {
   ensureRehydrated();
   const { sock, chatId, senderJid, botMarker } = ctx;
@@ -3644,6 +3690,9 @@ async function handleCommand(ctx) {
   }
 
   switch (sub) {
+    case 'halloween':
+    case 'halloweencase':
+      return handleHalloweenCommand(ctx);
     case 'create':
     case 'open':
     case 'new':
