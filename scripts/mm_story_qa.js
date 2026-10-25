@@ -143,7 +143,7 @@ game.votes = { voter1: killer.jid, voter2: killer.jid, voter3: 'skip', voter4: '
 assert.equal(verdict(game).targetJid, null, 'skip ballots do not create a conviction');
 
 const dispatcher = fs.readFileSync(path.join(__dirname, '..', 'core', 'games', 'murdermystery', 'index.js'), 'utf8');
-assert.match(dispatcher, /requestedMode\)\s*\{[\s\S]{0,150}\['story', 'chronicle', 'casefiles'\]/, 'Story Mode is routed from the existing Murder Mystery dispatcher');
+assert.match(dispatcher, /if\s*\(\['story',\s*'chronicle',\s*'casefiles'\]\.includes\(requestedMode\)\)/, 'Story Mode is routed from the existing Murder Mystery dispatcher');
 assert.match(dispatcher, /storyMode\.hasActiveGame\(ctx\.chatId\)/, 'the dispatcher prevents Classic and Story Mode overlap in a group');
 
 console.log('Story Mode QA passed: role decks, case generation, private clue ownership, assets, accusation tally, routing, and verdict thresholds.');
