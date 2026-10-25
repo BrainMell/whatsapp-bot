@@ -1031,7 +1031,7 @@ function drawHud(ctx, state, theme, opts) {
     ctx.textAlign = 'center';
     ctx.font = '15px Medieval';
     ctx.fillStyle = '#7a663f';
-    ctx.fillText(opts.hint || '.home select <item>  •  .home move <dir>  •  .home catalog', x0 + Wp / 2, y0 + H - 26);
+    ctx.fillText(opts.hint || '.home select <item>  •  .home right/left/up/down  •  .home to loft/east  •  .home catalog', x0 + Wp / 2, y0 + H - 26);
     ctx.restore();
 }
 

@@ -353,7 +353,7 @@ async function viewRoom(ctx, rec, opts = {}) {
         const cap = `🏠 *${state.owner}'s Homestead* — ${theme.name}\n\n` +
             `♥ Comfort *${comfort}*  •  🪑 ${rec.placed.length} pieces placed  •  📦 ${rec.owned.length} in storage\n` +
             (opts.pop ? `✨ The *${(renderer.itemDef(opts.pop.item) || {}).name}* was placed!\n` : '') +
-            (opts.grid ? `🎯 Selected: *${opts.grid.label}*\n_${ctx.prefix} home move <left|right|up|down> [n] • ${ctx.prefix} home moveto <x> <y> • ${ctx.prefix} home rotate_\n` : '') +
+            (opts.grid ? `🎯 Selected: *${opts.grid.label}*\n_${ctx.prefix} home right/left/up/down [n] — steer it (single word, instant) • ${ctx.prefix} home 3 4 — send to coordinates • ${ctx.prefix} home rotate_\n_${ctx.prefix} home to <main|loft|east|south|north|west> — hop it to another room/platform • ${ctx.prefix} home to — list your spaces_\n` : '') +
             `\n_${opts.hint || `${ctx.prefix} home place <item> • ${ctx.prefix} home catalog • ${ctx.prefix} home help`}_`;
         try {
             if (media.contentType === 'video/mp4') {
@@ -596,7 +596,7 @@ async function cmdSelect(ctx, rec, args) {
         if (row.d.layer === 'wall') {
             return viewRoom(ctx, rec, { hint: `Selected the *${row.d.name}* (wall slot ${pp.x}) — \`${ctx.prefix} home store\` takes it down.` });
         }
-        return viewRoom(ctx, rec, { ...gridOptsFor(pp, row.d), hint: `Selected the *${row.d.name}*. Move it with \`${ctx.prefix} home move <left|right|up|down>\`` });
+        return viewRoom(ctx, rec, { ...gridOptsFor(pp, row.d), hint: `Selected the *${row.d.name}* — steer: \`${ctx.prefix} home right/left/up/down [n]\` (single word, instant) • coords: \`${ctx.prefix} home 3 4\` • hop it to another room/platform: \`${ctx.prefix} home to loft/east/…\` (list: \`${ctx.prefix} home to\`)` });
     }
     const it = resolveItem(query);
     if (!it) return ctx.reply(`❌ Nothing called *${query}*. Browse every piece you own: \`${ctx.prefix} home select\`.`);
@@ -615,7 +615,7 @@ async function cmdSelect(ctx, rec, args) {
     const p = cand[0];
     selSet(ctx.senderJid, p.uid);
     pendingPlace.delete(ctx.senderJid);
-    await viewRoom(ctx, rec, { ...gridOptsFor(p, it), hint: `Selected the *${it.name}*. Move it with \`${ctx.prefix} home move <left|right|up|down>\`` });
+    await viewRoom(ctx, rec, { ...gridOptsFor(p, it), hint: `Selected the *${it.name}* — steer: \`${ctx.prefix} home right/left/up/down [n]\` (single word, instant) • coords: \`${ctx.prefix} home 3 4\` • hop it to another room/platform: \`${ctx.prefix} home to loft/east/…\` (list: \`${ctx.prefix} home to\`)` });
 }
 
 // §5: readable names card — every owned piece, placed vs storage (pagination)
