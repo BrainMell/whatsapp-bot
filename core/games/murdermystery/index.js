@@ -2850,7 +2850,7 @@ async function handlePollVoteMessage(m, sock, botMarker) {
     );
     if (!me || !me.alive) {
       if (me) console.log(`🔪 [MurderMystery] poll tap from a dead guest ignored in ${chatId}`);
-      else console.log(`🔪 [MurderMystery] poll tap from an unknown jid (${String(voterJid || '').slice(-8)}) ignored in ${chatId}`);
+      else console.log(`🔪 [MurderMystery] poll tap from an unknown jid (${String(rawVoterJid || '').slice(-8)}) ignored in ${chatId}`);
       return; // onlookers and the dead tap silently - text commands answer them
     }
     const ctx = { sock, chatId, senderJid: me.jid, botMarker: botMarker || '', isGroup: true, viaPoll: true };
