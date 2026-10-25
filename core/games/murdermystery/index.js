@@ -4051,7 +4051,13 @@ function init() {
     system,
     botConfig,
     getSock: getSockSafe,
-    classicActive: (groupChatId) => !!getGame(groupChatId),
+    // 2026-10-25 owner audit (Oatmeal): keep this callback identical to the
+    // handleCommand one — an ENDED/FINISHED classic game must not block the
+    // creation of a Story Mode lobby after a restart.
+    classicActive: (groupChatId) => {
+      const existing = getGame(groupChatId);
+      return !!existing && existing.phase !== 'ENDED' && existing.phase !== 'FINISHED';
+    },
   });
 }
 

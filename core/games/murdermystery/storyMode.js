@@ -1027,9 +1027,9 @@ async function renderCrimeScene(game) {
 }
 
 async function showRooms(game, player) {
-  const text = '🗺️ *ROOMS IN THIS CASE*\\n' +
-    game.rooms.map((r, i) => (i + 1) + '. ' + r.name + ' · ' + r.hint).join('\\n') +
-    '\\n\\nThe map shows locations, not hidden evidence. Search rooms to discover leads.';
+  const text = '🗺️ *ROOMS IN THIS CASE*\n' +
+    game.rooms.map((r, i) => (i + 1) + '. ' + r.name + ' · ' + r.hint).join('\n') +
+    '\n\nThe map shows locations, not hidden evidence. Search rooms to discover leads.';
   let sent = false;
   try {
     const buf = await renderRoomBoard(game);
