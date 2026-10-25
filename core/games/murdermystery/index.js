@@ -35,6 +35,11 @@ const caseGen = require('./caseGen');
 const cards = require('./cards');
 const halloweenCards = require('./halloweenCards');
 const storyMode = require('./storyMode');
+// Blackvale: Dead of Night — the rebuilt story-mode engine (owner 2026-10-25).
+// Same command surface (`murder story ...`), new phase machine underneath:
+// animated phase clips, DM menus with single-character replies, phases that
+// end early when everyone has acted, and a serial group outbox.
+const noir = require('./noir');
 const crypto = require('crypto');
 // baileys 7 rc14 ships poll-vote decryption but never calls it (the block in
 // Utils/process-message.js is commented out with a TODO), so we invoke its own
@@ -3880,17 +3885,24 @@ async function handleCommand(ctx) {
     },
   };
   storyMode.init(storyServices);
+  noir.init(storyServices);
   ensureRehydrated();
 
   // Blackvale Story Mode is a separate game with its own state, phase machine,
   // timers, commands, and persistence key. Route before touching classic MM.
   const requestedMode = String(ctx.sub || '').toLowerCase().replace(/[^a-z]/g, '');
   if (['story', 'chronicle', 'casefiles'].includes(requestedMode)) {
-    return storyMode.handleCommand(ctx, storyServices);
+    // Dead of Night owns new cases; the legacy Story Mode engine keeps running
+    // any case that was already in progress so nothing is orphaned. The sender
+    // check covers DM commands (chatId is the player's jid there, not the group).
+    if (storyMode.hasActiveGame(ctx.chatId) || storyMode.hasActiveGameForSender(ctx.senderJid)) {
+      return storyMode.handleCommand(ctx, storyServices);
+    }
+    return noir.handleCommand(ctx, storyServices);
   }
   // Do not let the classic mode create/advance a second game over Story Mode
   // in the same group. Both modes remain selectable; a group runs one at once.
-  if (storyMode.hasActiveGame(ctx.chatId) &&
+  if ((noir.hasActiveGame(ctx.chatId) || storyMode.hasActiveGame(ctx.chatId)) &&
       !['help', 'rules', 'howto', 'lb', 'leaderboard', 'top', 'scoreboard', 'ranking', 'rankings'].includes(requestedMode)) {
     return sendGroup(ctx.sock, ctx.chatId,
       '🕯️ Blackvale Story Mode is active in this group. Use ' + (ctx.prefix || '.j') +
@@ -4040,7 +4052,7 @@ async function handleCommand(ctx) {
 // init() is safe to call from engine boot (after system data loads)
 function init() {
   ensureRehydrated();
-  storyMode.init({
+  const bootStoryServices = {
     sendGroup,
     sendGroupImage,
     sendDM,
@@ -4058,13 +4070,17 @@ function init() {
       const existing = getGame(groupChatId);
       return !!existing && existing.phase !== 'ENDED' && existing.phase !== 'FINISHED';
     },
-  });
+  };
+  storyMode.init(bootStoryServices);
+  noir.init(bootStoryServices);
 }
 
 module.exports = {
   handleCommand,
   init,
   isSilenced,
+  // Bare menu replies for Dead of Night ("2", "B", "SHARE" in the bot DMs).
+  noirRelay: (sock, senderJid, chatId, txt, botMarker) => noir.relay(sock, senderJid, chatId, txt),
   // engine hooks (2026-10-12 expansion)
   handleParticipantLeave, // group-participants.update: leaver handling
   gateGameMedia,          // in-case media gate: delete player images + view-once (stickers/docs pass, owner 20:26Z)

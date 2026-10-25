@@ -140,13 +140,18 @@ console.error = (...a) => { errs.push(a.join(' ')); _err(...a); };
   let passed = 0;
   const ok = (name) => { passed++; console.log('  ✓ ' + name); };
 
-  // setup: lobby + 4 joins + start (host = player 1)
+  // setup: new story commands open Dead of Night (noir), so the legacy engine
+  // under test is seeded directly; joins/start then route to it via the
+  // sender-aware legacy check in index.js.
   await run(g(1, 'murder story create'));
+  await run(g(1, 'murder story end')); // clear the noir lobby
+  const game = story._internal.makeGame(g(1, 'murder story create'));
+  story._internal.games.set(GROUP, game);
+  story._internal.persist();
   await run(g(2, 'murder story join'));
   await run(g(3, 'murder story join'));
   await run(g(4, 'murder story join'));
   await run(g(1, 'murder story start'));
-  const game = story._internal.games.get(GROUP);
   assert.ok(game && game.phase === 'INVESTIGATION', 'game started');
 
   // T4 - dossier notice carries the actionable investigation guidance

@@ -10451,6 +10451,19 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                     } catch (e) {
                       console.error("[MurderMystery] seance relay error:", e.message);
                     }
+                    // 🕯 BLACKVALE: DEAD OF NIGHT — bare menu replies (single
+                    // chars: "2", "B", "SHARE") typed in the bot DMs while a
+                    // noir case is live. Consumes ONLY when the sender is a
+                    // living guest with a pending menu choice; every other DM
+                    // falls through untouched.
+                    try {
+                      const noirConsumed = await murderMystery.noirRelay(
+                        sock, senderJid, chatId, txt, BOT_MARKER,
+                      );
+                      if (noirConsumed) return;
+                    } catch (e) {
+                      console.error("[MurderMystery] noir relay error:", e.message);
+                    }
                   }
 
                   const handlePendingNameReply = async () => {

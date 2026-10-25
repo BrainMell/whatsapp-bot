@@ -124,15 +124,20 @@ function lastGroupText() { const arr = sentTo(GROUP); return arr.length ? textOf
   let passed = 0;
   const ok = (name) => { passed++; console.log('  ✓ ' + name); };
 
-  // T1 - routing: ".j murder story create" must reach Story Mode, not classic
+  // T1 - routing: NEW story commands go to Dead of Night (noir); the legacy
+  // Story Mode engine remains live for in-flight cases, so its lobby is
+  // seeded directly here and the dispatcher must route subsequent story
+  // commands to it while it is active.
   await run(g(1, 'murder story create'));
-  assert.ok(sentTo(GROUP).length >= 1, 'lobby reply sent to group');
-  assert.ok(/STORY MODE/i.test(sentTo(GROUP).map(textOf).join('\n')), 'reply identifies as Story Mode');
-  const game1 = story._internal.games.get(GROUP);
-  assert.ok(game1 && game1.phase === 'LOBBY', 'story lobby created and routed');
-  ok('T1 story routing + lobby creation');
+  assert.ok(/DEAD OF NIGHT/i.test(sentTo(GROUP).map(textOf).join('\n')), 'new story commands open Dead of Night');
+  await run(g(1, 'murder story end')); // clear the noir lobby for the legacy regression
+  const game1 = story._internal.makeGame(g(1, 'murder story create'));
+  story._internal.games.set(GROUP, game1);
+  story._internal.persist();
+  assert.ok(game1 && game1.phase === 'LOBBY', 'legacy story lobby seeded');
+  ok('T1 routing: noir for new cases, legacy engine seeded for regression');
 
-  // T2 - joins cap at roster
+  // T2 - joins reach the LEGACY lobby (dispatcher routes active legacy games)
   await run(g(2, 'murder story join'));
   await run(g(3, 'murder story join'));
   await run(g(4, 'murder story join'));
@@ -224,8 +229,18 @@ function lastGroupText() { const arr = sentTo(GROUP); return arr.length ? textOf
   assert.match(reveal, new RegExp('The killer was ' + killerName), 'full text reveal names the killer');
   ok('T9 strict-majority verdict + full reveal');
 
-  // T10 - rooms text fix: no literal "\n" in the DM fallback text
-  await run(d(1, 'murder story rooms'));
+  // T10 - rooms text fix: no literal "\n" in the DM fallback text.
+  // This drives the LEGACY engine directly: after the T9 verdict the sender is
+  // no longer in a live legacy case, so the dispatcher now hands DMs to noir
+  // (correct production behavior) - this regression targets the legacy text.
+  const storyServices = {
+    sendGroup: async (sock, to, text) => { sent.push({ to, content: { text } }); return true; },
+    sendGroupImage: async (sock, to, buf, cap) => { sent.push({ to, content: { image: buf, caption: cap } }); return true; },
+    sendDM: async (sock, to, text) => { sent.push({ to, content: { text } }); return true; },
+    getSock: () => QA_SOCK,
+    classicActive: () => false,
+  };
+  await story.handleCommand(d(1, 'murder story rooms'), storyServices);
   const roomsText = sentTo(jid(1)).map(textOf).find((t) => /ROOMS IN THIS CASE/i.test(t)) || '';
   assert.ok(roomsText.length > 0, 'rooms text sent');
   assert.ok(!roomsText.includes('\\n'), 'rooms text has real newlines (no literal backslash-n)');
@@ -248,12 +263,13 @@ function lastGroupText() { const arr = sentTo(GROUP); return arr.length ? textOf
   assert.equal(story2.hasActiveGame(GROUP), false, 'finished game is not "active" after restart');
   ok('T11 persistence round-trip + restart recovery');
 
-  // T12 - finished game does not block a new story lobby
-  // (mm.handleCommand still routes to the OLD story instance in this harness —
-  // a real restart reloads index.js too — so check the routed instance's map)
+  // T12 - finished legacy game does not block a new lobby. New story commands
+  // route to Dead of Night (noir), so the new lobby opens THERE.
+  const noirPath = require.resolve(path.join(REPO, 'core', 'games', 'murdermystery', 'noir.js'));
+  const noir = require(noirPath);
   await run(g(2, 'murder story create'));
-  const game2 = story._internal.games.get(GROUP);
-  assert.ok(game2 && game2.phase === 'LOBBY' && game2 !== restored, 'new lobby replaces finished case');
+  const game2 = noir._internal.games.get(GROUP);
+  assert.ok(game2 && game2.phase === 'LOBBY' && game2.mode === 'NOIR', 'new Dead of Night lobby opens over a finished legacy case');
   ok('T12 new lobby opens over finished case');
 
   console.log('\nSTORY FLOW QA PASSED: ' + passed + '/12 through the real dispatcher' +

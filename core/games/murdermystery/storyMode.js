@@ -1422,6 +1422,17 @@ function hasActiveGame(chatId) {
   return !!game && game.phase !== 'FINISHED';
 }
 
+// True when the sender is a guest of a live legacy case (any group). The noir
+// router uses this so seated legacy players' DM commands are not hijacked.
+function hasActiveGameForSender(jid) {
+  loadPersisted();
+  const id = normJid(jid);
+  for (const game of games.values()) {
+    if (game.phase !== 'FINISHED' && playerByJid(game, id)) return true;
+  }
+  return false;
+}
+
 function init(services) {
   runtime = services || runtime || {};
   loadPersisted();
@@ -1431,6 +1442,7 @@ module.exports = {
   handleCommand,
   init,
   hasActiveGame,
+  hasActiveGameForSender,
   _internal: {
     games,
     loadPersisted,
