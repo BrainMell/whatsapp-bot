@@ -258,12 +258,19 @@ function hiddenSetsForGroup(groupJid) {
   return (groupJid && getInst().hiddenSetChats.get(groupJid)) || null;
 }
 
-function cardBlockedForGroup(card, groupJid) {
+// 💡 opts.discovery (2026-10-25, Mellow round 2): discovery surfaces (name
+// search, series listing, info lookup) in a chat that opted IN may BROWSE
+// artPending cards — they render with the committed art_pending.png
+// placeholder, so nothing breaks. Spawns always block artPending (the spawn
+// canvas needs real art). Without opts.discovery the old strict rule holds:
+// artPending = invisible everywhere.
+function cardBlockedForGroup(card, groupJid, opts = {}) {
   if (!card || !card.hidden) return false;
-  if (card.artPending) return true; // no artwork yet: invisible everywhere
   const sets = groupJid && getInst().hiddenSetChats.get(groupJid);
-  if (!sets || !sets.size) return true;
-  return !(card.hiddenSet && sets.has(card.hiddenSet));
+  const optedIn = !!(card.hiddenSet && sets && sets.size && sets.has(card.hiddenSet));
+  if (card.artPending) return !(opts.discovery && optedIn);
+  if (!optedIn) return true;
+  return false;
 }
 
 // Filtered catalog view for one chat. Use this anywhere players can
@@ -271,7 +278,19 @@ function cardBlockedForGroup(card, groupJid) {
 // (claim) intentionally bypass this so enabled groups can claim spawns.
 function visibleCardsFor(groupJid) {
   const cards = ALL_CARDS() || [];
-  return cards.filter(c => !cardBlockedForGroup(c, groupJid));
+  return cards.filter(c => !cardBlockedForGroup(c, groupJid, { discovery: true }));
+}
+
+// 💡 ART PENDING placeholder (2026-10-25, Mellow round 2): hidden-set cards
+// without artwork render this committed PNG on discovery surfaces instead of
+// trying to fetch an empty URL (which used to mean "invisible everywhere").
+const ART_PENDING_PATH = path.join(__dirname, '..', 'data', 'art_pending.png');
+let _artPendingBuf = null;
+function artPendingImage() {
+  if (_artPendingBuf !== null) return _artPendingBuf;
+  try { _artPendingBuf = fs.readFileSync(ART_PENDING_PATH); }
+  catch (e) { _artPendingBuf = false; }
+  return _artPendingBuf;
 }
 
 // 💡 FIX 2026-09-11: single source of truth for "is this card animated".
@@ -866,6 +885,10 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection', index =
   const copyLine  = uc ? `\n📋 ⟢ *Copy:* _#${uc.copyNumber} / ${stat?.maxCopies || '?'}_` : '';
   const ownerLine = uc ? `\n👤 ⟢ *Owner:* _@${economy.getDisplayName(uc.userId)}_` : '';
 
+  // 💡 artPending note (2026-10-25): browsable preview while artwork is missing
+  const artLine = (card.artPending && !card.imageUrl)
+    ? `\n🎨 ⟢ *Art:* _pending — spawns unlock when artwork lands_` : '';
+
   // 💡 DATA MODEL (2026-10-08): animeName = the card's REAL anime/series,
   // eventName = the event the card belongs to. Two separate concepts, two
   // separate lines (owner rule: "the event should be separate from the
@@ -887,7 +910,7 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection', index =
 
 🏷️ ⟢ *Name:* _${card.cardName}_
 📺 ⟢ *Series:* _${seriesDisplay}_
-🏆 ❖ *Tier:* _${label}_
+🏆 ❖ *Tier:* _${label}_${artLine}
 🎨 ⟢ *Artist:* _${card.creator || 'Unknown'}_${eventLine}${descLine}${copyLine}${ownerLine}
 
 📍 ⟢ *Location:* _${locStr}_`
@@ -3160,13 +3183,22 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
   // Exact ID check first
   // 💡 FIX (2026-10-08): case-insensitive id lookup (see eventMode note above)
   // 💡 HIDDEN SETS (2026-10-25): hidden cards stay invisible to ID lookups
-  // in chats that have not enabled their set (artPending: everywhere).
+  // in chats that have not enabled their set; opted-in chats can browse
+  // them (artPending cards come back with the placeholder image).
   const _exactRaw = CARD_INDEX()[query] || CARD_INDEX()[query.toUpperCase()];
-  const exact = (_exactRaw && !cardBlockedForGroup(_exactRaw, chatId)) ? _exactRaw : null;
+  // 💡 HIDDEN SETS round 2 (2026-10-25): discovery pass — in chats that opted
+  // in, artPending cards are BROWSABLE here (placeholder art, no spawn).
+  const exact = (_exactRaw && !cardBlockedForGroup(_exactRaw, chatId, { discovery: true })) ? _exactRaw : null;
   if (exact) {
     const stat = await CardStat.findOne({ cardId: exact.id });
     const caption = buildCardDetailCaption(exact, null, stat, 'Global Database');
     try {
+      // 💡 artPending: no real image yet — send the committed placeholder
+      if (exact.artPending && !exact.imageUrl) {
+        const ph = artPendingImage();
+        if (ph) return await getInst().sock_ref.sendMessage(chatId, { image: ph, caption });
+        return reply(caption);
+      }
       if (isAnimatedCard(exact)) {
         const gifBuffer = await goService.convertCardImage(exact.imageUrl);
         if (gifBuffer) {
@@ -3212,6 +3244,12 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
     const stat = await CardStat.findOne({ cardId: card.id });
     const caption = buildCardDetailCaption(card, null, stat, 'Global Database');
     try {
+      // 💡 artPending: no real image yet — send the committed placeholder
+      if (card.artPending && !card.imageUrl) {
+        const ph = artPendingImage();
+        if (ph) return await getInst().sock_ref.sendMessage(chatId, { image: ph, caption });
+        return reply(caption);
+      }
       if (isAnimatedCard(card)) {
         const gifBuffer = await goService.convertCardImage(card.imageUrl);
         if (gifBuffer) {
