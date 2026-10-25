@@ -223,6 +223,14 @@ function getInst() {
       // Avoids hitting MongoDB on every .jk coll / .jk deck invocation.
       // Key: userId (normalized phone@... JID), Value: 'hybrid' | 'static'
       userRenderModes: new Map(),
+      // 💡 HIDDEN CARD SETS (2026-10-25, Mellow): sets that never spawn or
+      // surface anywhere until a group opts in via .j hiddenset <set> on.
+      // Per-group state is persisted in System key card_hidden_sets and
+      // cached here. Cards carry hidden:true (+ hiddenSet:'<name>'); cards
+      // still missing artwork carry artPending:true and stay invisible
+      // everywhere so no surface can ever render a broken image.
+      hiddenSetChats: new Map(), // groupJid -> Set<setName>
+      HIDDEN_SET_INDEX: {},      // setName -> [cardId, ...]
     });
   }
   return instances.get(id);
@@ -238,6 +246,32 @@ const CARDS_BY_TIER = () => getInst().CARDS_BY_TIER;
 // the reliable way to identify event cards.
 function isEventCard(card) {
   return card && card.id && String(card.id).startsWith('E-');
+}
+
+// ── HIDDEN CARD SETS (2026-10-25, Mellow) ────────────────────────────────
+// Some cards must never spawn or surface anywhere until a GROUP opts in
+// via .j hiddenset <set> on. Visibility is per-group-chat; the toggle
+// state lives in Mongo (System key card_hidden_sets), cached in
+// inst.hiddenSetChats. Non-group contexts (DMs, global listings) never
+// see hidden cards.
+function hiddenSetsForGroup(groupJid) {
+  return (groupJid && getInst().hiddenSetChats.get(groupJid)) || null;
+}
+
+function cardBlockedForGroup(card, groupJid) {
+  if (!card || !card.hidden) return false;
+  if (card.artPending) return true; // no artwork yet: invisible everywhere
+  const sets = groupJid && getInst().hiddenSetChats.get(groupJid);
+  if (!sets || !sets.size) return true;
+  return !(card.hiddenSet && sets.has(card.hiddenSet));
+}
+
+// Filtered catalog view for one chat. Use this anywhere players can
+// DISCOVER cards (spawn rolls, searches, listings). Direct-ID paths
+// (claim) intentionally bypass this so enabled groups can claim spawns.
+function visibleCardsFor(groupJid) {
+  const cards = ALL_CARDS() || [];
+  return cards.filter(c => !cardBlockedForGroup(c, groupJid));
 }
 
 // 💡 FIX 2026-09-11: single source of truth for "is this card animated".
@@ -338,6 +372,19 @@ function loadCardsDB() {
       if (isEventCard(card)) {
         inst.EVENT_CARDS.push(card);
       }
+    }
+    // 💡 HIDDEN SETS: index hidden cards per set for .j hiddenset status
+    inst.HIDDEN_SET_INDEX = {};
+    for (const card of inst.ALL_CARDS) {
+      if (card.hidden) {
+        const s = card.hiddenSet || 'default';
+        if (!inst.HIDDEN_SET_INDEX[s]) inst.HIDDEN_SET_INDEX[s] = [];
+        inst.HIDDEN_SET_INDEX[s].push(card.id);
+      }
+    }
+    const _hTotal = Object.values(inst.HIDDEN_SET_INDEX).reduce((n, a) => n + a.length, 0);
+    if (_hTotal) {
+      console.log(`[CardSystem][${botConfig.getBotId()}] Hidden sets: ${_hTotal} card(s) across ${Object.keys(inst.HIDDEN_SET_INDEX).length} set(s): ${Object.keys(inst.HIDDEN_SET_INDEX).join(', ')}`);
     }
     console.log(`[CardSystem][${botConfig.getBotId()}] Loaded ${inst.ALL_CARDS.length} cards across ${Object.keys(inst.CARDS_BY_TIER).length} tiers (${inst.EVENT_CARDS.length} event cards).`);
   } catch (e) {
@@ -646,6 +693,32 @@ async function loadSpawnInterval() {
   }
 }
 
+// 💡 Load per-group hidden-set toggles (System key card_hidden_sets).
+async function loadHiddenSetConfig() {
+  const inst = getInst();
+  try {
+    const doc = await System.findOne({ key: 'card_hidden_sets' });
+    inst.hiddenSetChats = new Map();
+    if (doc && doc.value) {
+      for (const [g, sets] of Object.entries(doc.value)) {
+        if (Array.isArray(sets) && sets.length) inst.hiddenSetChats.set(g, new Set(sets));
+      }
+      if (inst.hiddenSetChats.size) {
+        console.log(`[CardSystem][${botConfig.getBotId()}] Hidden-set toggles loaded for ${inst.hiddenSetChats.size} group(s)`);
+      }
+    }
+  } catch (e) {
+    console.error('[CardSystem] Failed to load hidden-set config:', e.message);
+  }
+}
+
+async function saveHiddenSetConfig() {
+  const inst = getInst();
+  const obj = {};
+  for (const [g, sets] of inst.hiddenSetChats) obj[g] = [...sets];
+  await System.findOneAndUpdate({ key: 'card_hidden_sets' }, { value: obj }, { upsert: true });
+}
+
 // 💡 Load persisted tier spawn config from System collection on startup.
 async function loadTierConfig() {
   const inst = getInst();
@@ -890,6 +963,10 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
       card = ALL_CARDS().find(c => c.cardName.toLowerCase() === q && tierOk(c));
       if (!card) card = ALL_CARDS().find(c => c.cardName.toLowerCase().includes(q) && tierOk(c));
     }
+    // 💡 HIDDEN SETS: artPending cards never render (no image = broken spawn),
+    // so they are unspawnable even by explicit ID. Non-artPending hidden cards
+    // CAN be force-spawned here: it is an explicit mod action (preview path).
+    if (card && card.artPending) card = null;
     if (!card) return null;
     stat = await getOrInitStat(card.id, card.tier);
   } else {
@@ -916,7 +993,7 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
     // Use the EVENT_CARDS list instead.
     const pool = String(tier).toUpperCase() === 'E'
       ? [...(inst.EVENT_CARDS || [])]
-      : [...(CARDS_BY_TIER()[tier] || [])].filter(c => !isEventCard(c));
+      : [...(CARDS_BY_TIER()[tier] || [])].filter(c => !isEventCard(c) && !cardBlockedForGroup(c, targetGroup));
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [pool[i], pool[j]] = [pool[j], pool[i]];
@@ -928,8 +1005,8 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
     }
     
     if (!card) {
-        // T1 Fallback - exclude event cards
-        const t1 = [...(CARDS_BY_TIER()['1'] || [])].filter(c => !isEventCard(c));
+        // T1 Fallback - exclude event cards + hidden-set cards not enabled here
+        const t1 = [...(CARDS_BY_TIER()['1'] || [])].filter(c => !isEventCard(c) && !cardBlockedForGroup(c, targetGroup));
         for (const c of t1) {
             const s = await getOrInitStat(c.id, '1');
             if (s.totalSpawned < s.maxCopies) { card = c; stat = s; break; }
@@ -1156,6 +1233,7 @@ const TOKEN_CMD_EXCLUDED = new Set([
   'reloadcards', 'einfo', 'spawnset', 'spawninfo', 'trc', 'ci', 'rc', 'erc',
   'info', 'endauction', 'setauctiongc', 't2edeck', 'tokenreset', 'src', 'tokenlb', 'tlb',
   'unsrc', 'restorecards', // Task 15c: backup restore (mod management, never token-eligible)
+  'hiddenset', // Task 31 2026-10-25: per-group hidden-set toggle (mod management)
   'movecards', 'mc', // 💡 2026-10-23: mod-level card mover — never farms tokens
 ]);
 
@@ -2764,8 +2842,9 @@ async function cmdCltr(reply, chatId, args = []) {
   }
 
   try {
-    // 1. Find all cards in this series
-    const seriesCards = ALL_CARDS().filter(c => c.animeName.toLowerCase().includes(query));
+    // 1. Find all cards in this series (hidden-set cards only show in chats
+    // that enabled their set via .j hiddenset)
+    const seriesCards = visibleCardsFor(chatId).filter(c => c.animeName.toLowerCase().includes(query));
     if (seriesCards.length === 0) {
       return reply(`🔍  *NO RESULTS*\n\n🔎 ⟢ *Series:* _"${query}"_\n📭 ⟢ _No cards found for this series_`);
     }
@@ -2821,7 +2900,8 @@ async function cmdEScc(reply, args = []) {
   const query = args.join(' ').toLowerCase().trim();
   if (!query) return sendUsage(reply, `${p} escc`, `${p} escc <series_name> [--page n]`, `${p} escc fullmetal`);
 
-  const matches = ALL_CARDS().filter(c => c.animeName.toLowerCase().includes(query) && c.tier === 'S');
+  // 💡 HIDDEN SETS: escc has no group context, so hidden cards never show here
+  const matches = ALL_CARDS().filter(c => !c.hidden && c.animeName.toLowerCase().includes(query) && c.tier === 'S');
   if (matches.length === 0) return reply(`🔍  *NO RESULTS*\n\n🔎 ⟢ *Series:* _"${query}"_\n🎪 ⟢ _No event (Tier S) cards found_`);
 
   const pageSize = 15;
@@ -3079,7 +3159,10 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
 
   // Exact ID check first
   // 💡 FIX (2026-10-08): case-insensitive id lookup (see eventMode note above)
-  const exact = CARD_INDEX()[query] || CARD_INDEX()[query.toUpperCase()];
+  // 💡 HIDDEN SETS (2026-10-25): hidden cards stay invisible to ID lookups
+  // in chats that have not enabled their set (artPending: everywhere).
+  const _exactRaw = CARD_INDEX()[query] || CARD_INDEX()[query.toUpperCase()];
+  const exact = (_exactRaw && !cardBlockedForGroup(_exactRaw, chatId)) ? _exactRaw : null;
   if (exact) {
     const stat = await CardStat.findOne({ cardId: exact.id });
     const caption = buildCardDetailCaption(exact, null, stat, 'Global Database');
@@ -3100,7 +3183,7 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
   // 💡 P3 (2026-08-16): If query looks like a card ID (N-NNNNN format) but
   // wasn't found in CARD_INDEX, explicitly flag it as missing from the DB
   // instead of falling through to a generic name search.
-  if (/^\d+-\d+$/.test(query) || /^E-\d+$/i.test(query) || /^S-\d+$/i.test(query)) {
+  if (/^\d+-\d+$/.test(query) || /^E-\d+$/i.test(query) || /^S-\d+$/i.test(query) || /^V-\d+$/i.test(query)) {
     return reply(`⚠️  *ID NOT IN DATABASE*\n\n🆔 ⟢ *ID:* _"${query}"_\n📍 ⟢ _Standard format, but no card with this ID exists_\n\n💡 ⟢ _Use_ \`${p} info <card name>\` _to search by name instead_`);
   }
 
@@ -3109,13 +3192,13 @@ async function cmdInfo(reply, chatId, args = [], perms = {}) {
   // armstrong" vs the stored "Olivier Mira Armstrong" (missing middle name).
   const tokens = _nameTokens(query);
   const animeTokens = _nameTokens(animeFilter);
-  let matches = ALL_CARDS().filter(c =>
+  let matches = visibleCardsFor(chatId).filter(c =>
       _cardMatchesTokens(c, tokens, false) &&
       (!animeTokens.length || animeTokens.every(t => String(c.animeName || '').toLowerCase().includes(t)))
   );
   if (!matches.length && tokens.length) {
       // second chance: let series names satisfy the tokens before giving up
-      matches = ALL_CARDS().filter(c => _cardMatchesTokens(c, tokens, true));
+      matches = visibleCardsFor(chatId).filter(c => _cardMatchesTokens(c, tokens, true));
   }
   matches.sort((a, b) =>
       _cardRelevance(a, tokens) - _cardRelevance(b, tokens) ||
@@ -5382,6 +5465,13 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       await cmdRestoreCards(senderJid, reply, args, m);
       return true;
 
+    // 💡 HIDDEN SETS (2026-10-25, Mellow): per-group visibility toggle for
+    // hidden card sets (e.g. the video game set). Card-mod exclusive.
+    case 'hiddenset':
+      if (!isCardMod) return reply('❌ Only card moderators and above can toggle hidden card sets.'), true;
+      await cmdHiddenSet(senderJid, reply, args, m);
+      return true;
+
     // §5: event-token leaderboard. Public.
     case 'tokenlb':
     case 'tlb':
@@ -5452,6 +5542,7 @@ async function init(sock, admins = [], mods = [], owner = null) {
     loadTokenRateCounters(),
     loadEShopDeck(),
     loadTierConfig(),
+    loadHiddenSetConfig(),
   ]);
   // 💡 RESTART-SAFE SPAWNS (2026-10-08): restore unclaimed spawns after a
   // restart so mid-window cards survive deploys.
@@ -6068,6 +6159,67 @@ async function cmdRestoreCards(senderJid, reply, args = [], m = {}) {
     `🔁 ⟢ *Already present (skipped):* _${Math.max(skipped, 0)}_\n` +
     `🕐 ⟢ *Wiped on:* _${backup.createdAt ? backup.createdAt.toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : 'unknown'}_`,
     { mentions: [mentioned] }
+  );
+}
+
+// 💡 HIDDEN SETS (2026-10-25, Mellow): per-group toggle for hidden card sets.
+//   .j hiddenset                  -> status for this chat (public view)
+//   .j hiddenset list             -> same, all sets + counts
+//   .j hiddenset <set> on|off     -> toggle for THIS group (card-mod only,
+//                                    enforced at the dispatch switch)
+// Toggle state is per group chat, persisted in System key card_hidden_sets.
+// OFF (default): the set never spawns, never appears in search/series/ID
+// lookups, nothing card-related. ON: the set joins this chat's normal pool.
+// Cards still marked artPending stay invisible even when ON (no broken renders).
+async function cmdHiddenSet(senderJid, reply, args = [], m = {}) {
+  const p = P();
+  const inst = getInst();
+  const chatId = (m && m.key && m.key.remoteJid) || senderJid;
+  const idx = inst.HIDDEN_SET_INDEX || {};
+  const setNames = Object.keys(idx);
+
+  if (!args.length || String(args[0]).toLowerCase() === 'list') {
+    const enabled = inst.hiddenSetChats.get(chatId) || new Set();
+    let msg = `🫥 *HIDDEN CARD SETS*\n\n`;
+    if (!setNames.length) {
+      msg += `📭 _No hidden sets are loaded in the catalog yet._\n`;
+    }
+    for (const s of setNames) {
+      const on = enabled.has(s);
+      msg += `${on ? '✅' : '⛔'} *${s}* — ${idx[s].length} card${idx[s].length === 1 ? '' : 's'} — _${on ? 'ON in this chat' : 'off in this chat'}_\n`;
+    }
+    msg += `\n⌨️ ⟢ _Usage:_ \`${p} hiddenset <set> on|off\`\n🧭 ⟢ _Off means no spawns and nothing in search or any card command. On means the set joins this chat's normal pool._\n🏷️ ⟢ _Per chat: turning it on here never affects other groups._`;
+    return reply(msg);
+  }
+
+  const setName = String(args[0]).toLowerCase();
+  const action = String(args[1] || '').toLowerCase();
+  if (!setNames.includes(setName)) {
+    return reply(`❌ *UNKNOWN SET*\n\n🫥 ⟢ _"${args[0]}" is not a hidden set._\n💡 ⟢ _Known sets:_ ${setNames.map(s => `*${s}*`).join(', ') || '(none loaded)'}`);
+  }
+  if (action !== 'on' && action !== 'off') {
+    return reply(`⌨️ *USAGE*\n\n\`${p} hiddenset <set> on|off\`\n💡 _Example:_ \`${p} hiddenset ${setNames[0]} on\``);
+  }
+
+  const sets = inst.hiddenSetChats.get(chatId) || new Set();
+  if (action === 'on') {
+    sets.add(setName);
+    inst.hiddenSetChats.set(chatId, sets);
+  } else {
+    sets.delete(setName);
+    if (!sets.size) inst.hiddenSetChats.delete(chatId);
+  }
+  try {
+    await saveHiddenSetConfig();
+  } catch (e) {
+    return reply(`⚠️ _Toggled in memory but failed to persist: ${e.message}_`);
+  }
+  const count = (idx[setName] || []).length;
+  console.log(`[CardSystem][${botConfig.getBotId()}] HIDDENSET ${action} '${setName}' by ${senderJid} in ${chatId}`);
+  return reply(
+    `${action === 'on' ? '✅' : '⛔'} *HIDDEN SET ${action.toUpperCase()}*\n\n` +
+    `🫥 ⟢ *Set:* _${setName}_ (${count} card${count === 1 ? '' : 's'})\n` +
+    `💬 ⟢ *This chat:* _${action === 'on' ? 'the set can now spawn and show up here' : 'the set is fully hidden here again'}_`
   );
 }
 
