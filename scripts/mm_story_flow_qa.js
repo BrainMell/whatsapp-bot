@@ -53,13 +53,17 @@ require.cache[enginePath] = {
 };
 // ---- sandbox-only package shims: baileys/canvas may be absent locally; on
 // box2 the real packages load and this hook never fires for them ------------
+let HAS_CANVAS = false;
+let HAS_BAILEYS = false;
+try { require(require.resolve('canvas', { paths: [REPO] })); HAS_CANVAS = true; } catch (_) {}
+try { require(require.resolve('@whiskeysockets/baileys', { paths: [REPO] })); HAS_BAILEYS = true; } catch (_) {}
 const Module = require('module');
 const _origLoad = Module._load;
 Module._load = function (request) {
-  if (request === '@whiskeysockets/baileys') {
+  if (request === '@whiskeysockets/baileys' && !HAS_BAILEYS) {
     return { decryptPollVote: () => null, jidNormalizedUser: (j) => String(j || '') };
   }
-  if (request === 'canvas') return {}; // renderCard throws -> text fallbacks
+  if (request === 'canvas' && !HAS_CANVAS) return {}; // renderCard throws -> text fallbacks
   return _origLoad.apply(this, arguments);
 };
 
@@ -150,7 +154,10 @@ function lastGroupText() { const arr = sentTo(GROUP); return arr.length ? textOf
   ok('T4 host start + role deal');
 
   // T5 - privacy: DM dossiers arrive; group never sees roles/secrets
-  await sleep(300); // fire-and-forget dossier DMs from start
+  // Freeze the phase clock: canvas renders are slower than the 6s QA phases,
+  // so the harness drives transitions itself via _internal.advancePhase
+  // (deadline far-future -> the drift guard keeps deferring the armed timer).
+  game1.deadline = Date.now() + 600000;
   for (let n = 1; n <= 4; n++) {
     await run(d(n, 'murder story dossier'));
     const dm = sentTo(jid(n)).map(textOf).join('\n');
@@ -171,8 +178,10 @@ function lastGroupText() { const arr = sentTo(GROUP); return arr.length ? textOf
   ok('T6 DM-only search enforced + search works');
 
   // T7 - night phase: killer frame + investigator compare resolve
-  await sleep(6200); // INVESTIGATION (6s) expires -> NIGHT
-  assert.equal(game1.phase, 'NIGHT', 'timer advanced INVESTIGATION -> NIGHT');
+  // (force INVESTIGATION -> NIGHT: deadline 0 makes advancePhase skip the drift guard)
+  game1.deadline = 0;
+  await story._internal.advancePhase(GROUP);
+  assert.equal(game1.phase, 'NIGHT', 'forced transition INVESTIGATION -> NIGHT');
   const killer = game1.players.find((p) => p.role === 'KILLER');
   const inv = game1.players.find((p) => p.role === 'INVESTIGATOR');
   const killerN = Number(Object.keys(NAMES).find((n) => jid(n) === killer.jid));
@@ -180,26 +189,31 @@ function lastGroupText() { const arr = sentTo(GROUP); return arr.length ? textOf
   const victimN = [1, 2, 3, 4].find((n) => n !== killerN && n !== invN);
   await run(d(killerN, 'murder story frame ' + victimN)); // killer frames a civilian
   await run(d(invN, 'murder story compare ' + victimN));   // investigator compares same civilian
-  await sleep(5400); // NIGHT (5s) expires -> DISCUSSION, resolveNight ran
+  game1.deadline = 0;
+  await story._internal.advancePhase(GROUP); // NIGHT resolves (resolveNight) -> DISCUSSION
   assert.equal(game1.phase, 'DISCUSSION', 'NIGHT resolved into DISCUSSION');
+  game1.deadline = Date.now() + 600000; // freeze again for the discussion step
   const planted = game1.evidence.find((c) => c.kind === 'planted-trace');
   assert.ok(planted && planted.manipulated === true, 'killer frame planted a manipulated trace');
   const invDm = sentTo(jid(invN)).map(textOf).join('\n');
   assert.match(invDm, /PRIVATE COMPARISON/i, 'investigator got private comparison result');
   ok('T7 night resolution: planted trace + investigator compare');
 
-  // T8 - discussion: sealed accusation + public questioning
+  // T8 - discussion: sealed accusation + public questioning (by a non-killer)
   const killerName = killer.name;
-  await run(d(1, 'murder story accuse ' + killerName + ' | E01'));
-  const accDm = sentTo(jid(1)).map(textOf).join('\n');
+  const askerN = [1, 2, 3, 4].find((n) => n !== killerN);
+  await run(d(askerN, 'murder story accuse ' + killerName + ' | E01'));
+  const accDm = sentTo(jid(askerN)).map(textOf).join('\n');
   assert.match(accDm, /Your accusation is sealed/i, 'accusation sealed privately');
-  await run(g(3, 'murder story question ' + killerName));
+  await run(g(askerN, 'murder story question ' + killerName));
   assert.match(lastGroupText(), /OFFICIAL ACCOUNT/i, 'questioning posts official account to group');
   ok('T8 accusation sealed + public question');
 
   // T9 - voting: strict majority convicts the killer, case closes
-  await sleep(6200); // DISCUSSION (6s) expires -> VOTING
+  game1.deadline = 0;
+  await story._internal.advancePhase(GROUP);
   assert.equal(game1.phase, 'VOTING', 'DISCUSSION -> VOTING');
+  game1.deadline = Date.now() + 600000;
   const votesNeeded = Math.floor(4 / 2) + 1;
   for (const n of [1, 2, 3]) await run(d(n, 'murder story vote ' + killerName));
   assert.equal(game1.phase, 'FINISHED', 'strict majority closed the case');
@@ -247,6 +261,10 @@ function lastGroupText() { const arr = sentTo(GROUP); return arr.length ? textOf
   process.exit(0);
 })().catch((e) => {
   console.error('STORY FLOW QA FAILED:', e.message);
+  console.error('--- captured sends (last 12, to/text/caption-or-image) ---');
+  for (const s of sent.slice(-12)) {
+    console.error('  to=' + s.to + ' :: ' + (((s.content && (s.content.text || s.content.caption)) || (s.content && s.content.image ? '<image>' : '')).slice(0, 140)));
+  }
   console.error(e.stack);
   process.exit(1);
 });

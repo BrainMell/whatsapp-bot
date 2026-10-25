@@ -1389,6 +1389,11 @@ module.exports = {
     accusationTally,
     accusationTallyLine,
     isClueDiscoverable,
+    // exposed for QA harnesses: lets them freeze a phase (game.deadline far
+    // future -> the drift guard just re-arms) and force transitions
+    // deterministically (deadline 0 -> advancePhase skips the drift check),
+    // the same way the classic mode's MM_QA_NOTIMER suites work.
+    advancePhase,
     PHASE_MS: DURATIONS,
   },
 };
