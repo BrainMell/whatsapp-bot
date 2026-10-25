@@ -3994,61 +3994,12 @@ async function cmdSwapCard(senderJid, reply, args = []) {
   return reply(`✅  *SLOTS SWAPPED!*\n\n🔢 ⟢ *Swapped:* _Slot #${a} ↔ Slot #${b}_`);
 }
 
-async function cmdCG(senderJid, reply, args = [], m) {
-  const p = P();
-  // Usage: .cg @user <index> [-deck | -coll]
-  //   .cg @user 5        -> gifts collection card #5 (instant, same numbering as .coll)
-  //   .cg @user 5 -coll  -> same thing, explicit
-  //   .cg @user 5 -deck  -> gifts main-deck slot #5
-  // 💡 2026-10-08 (owner request): source flag accepts -deck/-coll with or
-  // without the dash, any case. Default source = collection ("gift from
-  // your coll instead of deck").
-  const mentionedJid = getTaggedJid(m); // 💡 FIX 2026-10-08: @mention OR reply/quote
-  if (!mentionedJid) return sendUsage(reply, `${p} cg`, `${p} cg @user <index> [-deck | -coll]`, `${p} cg @user 5 -deck`);
-
-  // 💡 FIX 2026-10-08: resolve the mention to the identity the economy DB
-  // knows. Raw mentions created orphaned cards the recipient could never see.
-  const targetJid = resolveMentionJid(mentionedJid);
-
-  const flagArgs = args.map(a => String(a).toLowerCase());
-  const wantsDeck = flagArgs.some(a => a === '-deck' || a === 'deck' || a === '-d');
-  const wantsColl = flagArgs.some(a => a === '-coll' || a === 'coll' || a === '-collection');
-  const indexStr = args.find(a => !isNaN(parseInt(a)));
-  const index = parseInt(indexStr);
-
-  if (isNaN(index)) return sendUsage(reply, `${p} cg`, `${p} cg @user <index> [-deck | -coll]`, `${p} cg @user 1`);
-  if (wantsDeck && wantsColl) return reply(`❌  *PICK ONE SOURCE*\n\n🧭 ⟢ _Use \`-deck\` or \`-coll\` — not both_`);
-
-  if (targetJid === senderJid) return reply(`❌  *SELF GIFT*\n\n📍 ⟢ _You cannot gift a card to yourself_`);
-
-  let uc;
-  let sourceLabel;
-  if (wantsDeck) {
-    uc = await UserCard.findOne({ ...(await ownerOf(senderJid)), inMainDeck: true, mainDeckSlot: index });
-    sourceLabel = `Main Deck (Slot #${index})`;
-  } else {
-    // Numbering matches `.coll` EXACTLY: non-deck, non-custom, non-sale,
-    // orphans dropped - the identical filter chain the collection prints.
-    // In-auction cards STAY in the numbering (they show in .coll too), so
-    // indexes never shift; the inAuction guard below catches those with a
-    // friendly error instead of silently skipping and shifting numbers.
-    uc = (await getNumberedCollection(senderJid))[index - 1];
-    sourceLabel = `Collection #${index}`;
-  }
-
-  if (!uc) return reply(`❌  *CARD NOT FOUND*\n\n🃏 ⟢ _No card #${index} in your ${wantsDeck ? 'deck' : 'collection'}_`);
-  if (uc.isLocked) return reply(`🔒  *CARD LOCKED*\n\n📍 ⟢ _Unlock this card before gifting it_`);
-  // 💡 FIX 2026-10-08 (gift-vs-market race): a deck card can simultaneously be
-  // listed for sale (.sc) or in an auction (.auction). Gifting it anyway let
-  // the later buyer/winner PAY and then yank the card away from the gift
-  // recipient - cards "randomly disappearing" right after arriving. Block
-  // committed cards like .sc/.auction already do.
-  if (uc.forSale) return reply(`🛒  *CARD IS LISTED*\n\n📍 ⟢ _Unlist it first — or gift a different card_`);
-  if (uc.inAuction) return reply(`🔨  *CARD IN AUCTION*\n\n📍 ⟢ _Wait for the auction to end before gifting_`);
-
-  // 💡 FIX 2026-10-08 (owner report): check if the recipient already owns this
-  // card BEFORE the transfer, so the confirmation can say so - gift order
-  // numbers gave no clue whether the card was new to them or a duplicate.
+// 💡 2026-10-25 (multi-gift): ONE transfer routine for single + bulk gifts.
+// Order matters: count the recipient's copies BEFORE the deck-array pull and
+// the save, then the full 2026-10-08 state reset (the recipient must never
+// inherit the sender's market/auction/deck flags), then the economy-account
+// ensure. Returns recipientCopies for the already-owns hint line.
+async function giftTransferCard(uc, senderJid, targetJid) {
   const recipientCopies = await UserCard.countDocuments({ userId: targetJid, cardId: uc.cardId });
 
   // 💡 FIX 2026-10-08: full state reset on transfer. The old code only cleared
@@ -4081,6 +4032,132 @@ async function cmdCG(senderJid, reply, args = [], m) {
   // userId with no user doc (43 such orphans in the audit) and is invisible
   // until they happen to register under the exact same format.
   try { economy.getOrCreateUser(targetJid); } catch (e) { /* non-fatal */ }
+
+  return recipientCopies;
+}
+
+async function cmdCG(senderJid, reply, args = [], m) {
+  const p = P();
+  // Usage: .cg @user <index> [-deck | -coll]
+  //   .cg @user 5        -> gifts collection card #5 (instant, same numbering as .coll)
+  //   .cg @user 5 -coll  -> same thing, explicit
+  //   .cg @user 5 -deck  -> gifts main-deck slot #5
+  // 💡 2026-10-08 (owner request): source flag accepts -deck/-coll with or
+  // without the dash, any case. Default source = collection ("gift from
+  // your coll instead of deck").
+  const mentionedJid = getTaggedJid(m); // 💡 FIX 2026-10-08: @mention OR reply/quote
+  if (!mentionedJid) return sendUsage(reply, `${p} cg`, `${p} cg @user <index(es)> [-deck | -coll]`, `${p} cg @user 190,201,28 -deck`);
+
+  // 💡 FIX 2026-10-08: resolve the mention to the identity the economy DB
+  // knows. Raw mentions created orphaned cards the recipient could never see.
+  const targetJid = resolveMentionJid(mentionedJid);
+
+  const flagArgs = args.map(a => String(a).toLowerCase());
+  const wantsDeck = flagArgs.some(a => a === '-deck' || a === 'deck' || a === '-d');
+  const wantsColl = flagArgs.some(a => a === '-coll' || a === 'coll' || a === '-collection');
+  // 💡 2026-10-25 (multi-gift): collect comma/space separated indexes —
+  // ".j cg @user 190,201,28,114,295". Flags (-deck/-coll) never count as
+  // indexes; "7x" still parses as 7 exactly like the old parseInt behavior.
+  const flagTokens = new Set(['-deck', 'deck', '-d', '-coll', 'coll', '-collection']);
+  const indexList = [];
+  for (const a of args) {
+    const s = String(a).toLowerCase();
+    if (flagTokens.has(s)) continue;
+    const parts = s.includes(',') ? s.split(',') : [s];
+    for (const part of parts) {
+      const n = parseInt(part);
+      if (!isNaN(n) && n > 0) indexList.push(n);
+    }
+  }
+  const deduped = [...new Set(indexList)];
+  const index = deduped[0];
+
+  if (deduped.length === 0) return sendUsage(reply, `${p} cg`, `${p} cg @user <index(es)> [-deck | -coll]`, `${p} cg @user 190,201,28`);
+  if (wantsDeck && wantsColl) return reply(`❌  *PICK ONE SOURCE*\n\n🧭 ⟢ _Use \`-deck\` or \`-coll\` — not both_`);
+
+  if (targetJid === senderJid) return reply(`❌  *SELF GIFT*\n\n📍 ⟢ _You cannot gift a card to yourself_`);
+
+  // 💡 2026-10-25 (owner: "make thus a command sending multiple cards
+  // .j cg 190,201,28,114,295"): comma/space separated indexes gift in ONE
+  // command. ONE numbered-collection snapshot resolves every index up front —
+  // the numbers the sender typed are the numbers .coll prints right now,
+  // because earlier gifts inside the same batch must NOT renumber later ones
+  // (transfers happen per card _id). Locked/listed/in-auction cards are
+  // skipped with a per-line reason instead of failing the whole batch.
+  if (deduped.length > 1) {
+    const CG_BULK_MAX = 10;
+    if (deduped.length > CG_BULK_MAX) {
+      return reply(`❌  *TOO MANY CARDS*\n\n🧭 ⟢ _Bulk gift caps at ${CG_BULK_MAX} per command — you listed ${deduped.length}_`);
+    }
+    let items;
+    if (wantsDeck) {
+      // deck slots are fixed positions - they never renumber
+      const deckCards = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: true, mainDeckSlot: { $in: deduped } });
+      const bySlot = new Map(deckCards.map(d => [d.mainDeckSlot, d]));
+      items = deduped.map(i => ({ index: i, uc: bySlot.get(i) || null }));
+    } else {
+      // coll numbering SHIFTS as cards leave - resolve every index against
+      // ONE snapshot of the exact .coll filter chain, transfer per _id
+      const numbered = await getNumberedCollection(senderJid);
+      items = deduped.map(i => ({ index: i, uc: numbered[i - 1] || null }));
+    }
+    const seen = new Set();
+    const lines = [];
+    let sentCount = 0;
+    for (const { index: i, uc: snapUc } of items) {
+      if (!snapUc) { lines.push(`▫️ *#${i}* — ❌ _no card in that ${wantsDeck ? 'deck slot' : 'coll slot'}_`); continue; }
+      if (seen.has(String(snapUc._id))) continue;
+      seen.add(String(snapUc._id));
+      // fresh read right before the transfer - the snapshot can go stale
+      const uc = await UserCard.findById(snapUc._id);
+      const card = CARD_INDEX()[uc?.cardId];
+      const nm = card?.cardName || uc?.cardId || `#${i}`;
+      if (!uc) { lines.push(`▫️ *#${i}* — ❌ _${nm}: vanished mid-batch_`); continue; }
+      if (uc.isLocked) { lines.push(`▫️ *#${i}* — 🔒 _${nm}: locked, skipped_`); continue; }
+      if (uc.forSale) { lines.push(`▫️ *#${i}* — 🛒 _${nm}: listed, skipped_`); continue; }
+      if (uc.inAuction) { lines.push(`▫️ *#${i}* — 🔨 _${nm}: in auction, skipped_`); continue; }
+      const recipientCopies = await giftTransferCard(uc, senderJid, targetJid);
+      sentCount++;
+      lines.push(`▫️ *#${i}* — ✅ _${nm}_ \`${uc.cardId}\`${recipientCopies > 0 ? ` (their copy #${recipientCopies + 1})` : ''}`);
+    }
+    return reply(
+      `🎁  *BULK GIFT — ${sentCount}/${items.length} SENT*\n\n` +
+      `👤 ⟢ *From:* _@${economy.getDisplayName(senderJid)}_\n` +
+      `🎯 ⟢ *To:* _@${economy.getDisplayName(targetJid)}_\n\n` +
+      lines.join('\n'),
+      { mentions: [senderJid, targetJid] }
+    );
+  }
+
+  let uc;
+  let sourceLabel;
+  if (wantsDeck) {
+    uc = await UserCard.findOne({ ...(await ownerOf(senderJid)), inMainDeck: true, mainDeckSlot: index });
+    sourceLabel = `Main Deck (Slot #${index})`;
+  } else {
+    // Numbering matches `.coll` EXACTLY: non-deck, non-custom, non-sale,
+    // orphans dropped - the identical filter chain the collection prints.
+    // In-auction cards STAY in the numbering (they show in .coll too), so
+    // indexes never shift; the inAuction guard below catches those with a
+    // friendly error instead of silently skipping and shifting numbers.
+    uc = (await getNumberedCollection(senderJid))[index - 1];
+    sourceLabel = `Collection #${index}`;
+  }
+
+  if (!uc) return reply(`❌  *CARD NOT FOUND*\n\n🃏 ⟢ _No card #${index} in your ${wantsDeck ? 'deck' : 'collection'}_`);
+  if (uc.isLocked) return reply(`🔒  *CARD LOCKED*\n\n📍 ⟢ _Unlock this card before gifting it_`);
+  // 💡 FIX 2026-10-08 (gift-vs-market race): a deck card can simultaneously be
+  // listed for sale (.sc) or in an auction (.auction). Gifting it anyway let
+  // the later buyer/winner PAY and then yank the card away from the gift
+  // recipient - cards "randomly disappearing" right after arriving. Block
+  // committed cards like .sc/.auction already do.
+  if (uc.forSale) return reply(`🛒  *CARD IS LISTED*\n\n📍 ⟢ _Unlist it first — or gift a different card_`);
+  if (uc.inAuction) return reply(`🔨  *CARD IN AUCTION*\n\n📍 ⟢ _Wait for the auction to end before gifting_`);
+
+  // 💡 FIX 2026-10-08 (owner report): check if the recipient already owns this
+  // card BEFORE the transfer, so the confirmation can say so - gift order
+  // numbers gave no clue whether the card was new to them or a duplicate.
+  const recipientCopies = await giftTransferCard(uc, senderJid, targetJid);
 
   const card = CARD_INDEX()[uc.cardId];
   const dupLine = recipientCopies > 0 ? `\n💡 ⟢ _They already owned this card — this is copy #${recipientCopies + 1}_` : '';
