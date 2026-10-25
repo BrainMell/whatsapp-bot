@@ -721,7 +721,12 @@ async function showDossier(game, player) {
     'Character: ' + player.char.name + ', ' + player.char.title,
     'Personal objective: ' + (player.objective && player.objective.text || 'Help resolve the case.'),
   ];
-  if (player.role === 'KILLER') roleLines.push('You are responsible for the murder. Do not reveal this. Your motive is: ' + game.case.motive.detail);
+  if (player.role === 'KILLER') {
+    roleLines.push('You are responsible for the murder. Do not reveal this. Your motive is: ' + game.case.motive.detail);
+    roleLines.push('Crime scene: ' + ((roomById(game, game.murderRoomId) || {}).name || 'unknown') + '.');
+    roleLines.push('Method: ' + game.murderMethod + ' · approximate time: ' + game.murderHour + '.');
+    roleLines.push('You may frame a guest or blackmail them during the hidden night. Your actions can leave traces.');
+  }
   else if (player.role === 'INVESTIGATOR') roleLines.push('During the night, use compare <player> to privately check an account against the case timeline.');
   else if (player.role === 'GUARDIAN') roleLines.push('During the night, use protect <player> to block one framing or blackmail attempt.');
   else if (player.role === 'MEDIUM') roleLines.push('During the night, use seance to receive an ambiguous last-memory clue.');
@@ -780,6 +785,9 @@ async function sendCastCards(game) {
 
 async function createLobby(ctx) {
   if (!isGroup(ctx)) return runtime.sendDM ? runtime.sendDM(ctx.sock, ctx.senderJid, 'Open Story Mode from the group chat with ' + (ctx.prefix || '.j') + ' murder story create.') : false;
+  if (runtime.classicActive && runtime.classicActive(ctx.chatId)) {
+    return runtime.sendGroup ? runtime.sendGroup(ctx.sock, ctx.chatId, '🕯️ Classic Murder Mystery is already active in this group. Finish or close it before opening Story Mode. Neither mode can overwrite the other.') : false;
+  }
   const old = games.get(ctx.chatId);
   if (old && old.phase !== 'FINISHED' && !(old.phase === 'LOBBY' && Date.now() - old.createdAt > LOBBY_TTL_MS)) {
     return groupText(old, '🕯️ Story Mode already has a ' + String(old.phase).toLowerCase() + ' in this group. Use ' + old.prefix + ' murder story status.');
@@ -848,8 +856,28 @@ async function startGame(ctx, game) {
   game.round = 1;
   game.startedAt = Date.now();
   setPhase(game, 'INVESTIGATION', '🕯️ *' + game.victim + ' is dead.* The house is sealed. Search rooms, question suspects, and build your own case. No one is cleared by a secret, and suspicion is not proof.');
+  let sceneSent = false;
+  try {
+    const intro = await cards.renderIntro({
+      playerCount: game.players.length,
+      manorName: MODE_NAME + ' · STORY MODE',
+      openingLine: 'A death has stopped the clock at Blackvale.',
+      nightLine: 'One guest knows exactly what happened. Everyone else has a theory.',
+    });
+    sceneSent = await groupImage(game, intro, '🕯️ *' + MODE_NAME + ' · THE MURDER*');
+  } catch (e) {
+    console.error('[MM Story] opening card failed:', e.message);
+  }
+  try {
+    const crime = await renderCrimeScene(game);
+    const sent = await groupImage(game, crime, '🩸 *THE CRIME SCENE* · ' + ((roomById(game, game.murderRoomId) || {}).name || 'Blackvale Manor'));
+    sceneSent = sceneSent || sent;
+  } catch (e) {
+    console.error('[MM Story] crime scene card failed:', e.message);
+  }
+  if (!sceneSent) await groupText(game, '🕯️ *' + MODE_NAME + ' · THE MURDER*\nVictim: ' + game.victim + '\nLocation: ' + ((roomById(game, game.murderRoomId) || {}).name || 'unknown') + '\nMethod: ' + game.murderMethod + '\nApproximate time: ' + game.murderHour);
   for (const player of game.players) {
-    const sent = await privateText(game, player, '🔒 *' + MODE_NAME + ' · YOUR PRIVATE DOSSIER*\nYour role card is being delivered. Use ' + game.prefix + ' murder story dossier to reopen it.\nNever forward your private role or secret.');
+    const sent = await privateText(game, player, '🔒 *' + MODE_NAME + ' · YOUR PRIVATE DOSSIER*\nYour role, secret, personal objective, and account are in the private card. Use ' + game.prefix + ' murder story dossier to reopen it.\nNever forward your private role or secret.');
     void sent;
   }
   void sendCastCards(game).catch((e) => console.error('[MM Story] cast sequence failed:', e.message));
@@ -871,6 +899,108 @@ async function showStatus(game) {
   const text = '🕯️ *' + MODE_NAME + ' · STORY MODE*\n' + phaseLine + '\nGuests: ' + game.players.length + '/' + MAX_PLAYERS + '\nLiving: ' + alive.length + '\n\n' + rows + '\n\nRoles and secrets are private. Use ' + game.prefix + ' murder story help for actions.';
   return groupText(game, text);
 }
+
+async function renderRoomBoard(game) {
+  const W = 1600;
+  const H = 1000;
+  return cards.renderCard(W, H, async (ctx) => {
+    const bg = await cards.loadBg('manor');
+    cards.drawCover(ctx, bg, 0, 0, W, H);
+    cards.atmosphere(ctx, W, H, { dark: 0.76, grainAlpha: 0.025 });
+    ctx.textAlign = 'center';
+    ctx.font = '30px EB-Semi';
+    ctx.fillStyle = cards.C.amber;
+    cards.spaced(ctx, 'THE HOUSE HAS SIX OPEN DOORS', W / 2, 110, 7);
+    ctx.font = '82px PF-Black';
+    ctx.fillStyle = cards.C.ivory;
+    cards.spaced(ctx, 'THE SCENE MAP', W / 2, 205, 5);
+    cards.ornament(ctx, W / 2, 248, 520);
+
+    const columns = 2;
+    const gapX = 34;
+    const gapY = 24;
+    const cardW = 690;
+    const cardH = 190;
+    const startX = (W - columns * cardW - gapX) / 2;
+    const startY = 290;
+    (game.rooms || []).forEach((room, i) => {
+      const col = i % columns;
+      const row = Math.floor(i / columns);
+      const x = startX + col * (cardW + gapX);
+      const y = startY + row * (cardH + gapY);
+      ctx.save();
+      ctx.fillStyle = 'rgba(13,11,16,0.78)';
+      ctx.fillRect(x, y, cardW, cardH);
+      ctx.strokeStyle = 'rgba(201,161,59,0.66)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 1, y + 1, cardW - 2, cardH - 2);
+      ctx.textAlign = 'left';
+      ctx.font = '30px PF-Bold';
+      ctx.fillStyle = cards.C.amberHi;
+      ctx.fillText(String(i + 1).padStart(2, '0') + '  ·  ' + String(room.name || 'Unknown room'), x + 26, y + 48);
+      ctx.font = '24px EB-Reg';
+      ctx.fillStyle = cards.C.ivory;
+      cards.wrap(ctx, String(room.hint || 'A quiet room conceals a history.'), x + 28, y + 92, cardW - 56, 32, 2);
+      ctx.restore();
+    });
+    ctx.textAlign = 'center';
+    ctx.font = '24px Type';
+    ctx.fillStyle = cards.C.ivoryDim;
+    ctx.fillText('Room clues are discovered through play. The map reveals no hidden evidence.', W / 2, H - 74);
+    cards.footer(ctx, W, H, MODE_NAME + ' · STORY MODE');
+  });
+}
+
+async function renderCrimeScene(game) {
+  const W = 1600;
+  const H = 900;
+  return cards.renderCard(W, H, async (ctx) => {
+    const bg = await cards.loadBg(game.murderRoomId || 'manor');
+    cards.drawCover(ctx, bg, 0, 0, W, H);
+    cards.atmosphere(ctx, W, H, { dark: 0.79 });
+    ctx.textAlign = 'center';
+    ctx.font = '29px EB-Semi';
+    ctx.fillStyle = cards.C.crimsonHi;
+    cards.spaced(ctx, 'THE FIRST CRIME · STORY MODE', W / 2, 132, 7);
+    ctx.font = '88px PF-Black';
+    cards.fitFont(ctx, String(game.victim || 'Lord Edmund Blackvale').toUpperCase(), 'PF-Black', 88, 1320, 48);
+    ctx.fillStyle = cards.C.ivory;
+    ctx.shadowColor = 'rgba(0,0,0,0.9)';
+    ctx.shadowBlur = 18;
+    ctx.fillText(String(game.victim || 'Lord Edmund Blackvale').toUpperCase(), W / 2, 280);
+    ctx.shadowColor = 'transparent';
+    cards.ornament(ctx, W / 2, 336, 540, cards.C.crimson);
+    ctx.font = 'italic 42px PF-MedIt';
+    ctx.fillStyle = cards.C.ivory;
+    ctx.fillText('Found in ' + ((roomById(game, game.murderRoomId) || {}).name || 'an unknown room'), W / 2, 424);
+    ctx.font = '31px EB-Semi';
+    ctx.fillStyle = cards.C.amberHi;
+    ctx.fillText('METHOD: ' + String(game.murderMethod || 'unknown').toUpperCase(), W / 2, 512);
+    ctx.font = '28px EB-Reg';
+    ctx.fillStyle = cards.C.ivoryDim;
+    ctx.fillText('Approximate time: ' + String(game.murderHour || 'unknown'), W / 2, 570);
+    ctx.font = 'italic 32px PF-MedIt';
+    ctx.fillStyle = cards.C.ivory;
+    ctx.fillText('Every guest has a story. Not every story is true.', W / 2, 674);
+    cards.footer(ctx, W, H, MODE_NAME + ' · STORY MODE');
+  });
+}
+
+async function showRooms(game, player) {
+  const text = '🗺️ *ROOMS IN THIS CASE*\\n' +
+    game.rooms.map((r, i) => (i + 1) + '. ' + r.name + ' · ' + r.hint).join('\\n') +
+    '\\n\\nThe map shows locations, not hidden evidence. Search rooms to discover leads.';
+  let sent = false;
+  try {
+    const buf = await renderRoomBoard(game);
+    sent = await privateImage(game, player, buf, '🔒 ' + MODE_NAME + ' · PRIVATE SCENE MAP');
+  } catch (e) {
+    console.error('[MM Story] room map render failed:', e.message);
+  }
+  if (!sent) return privateText(game, player, text);
+  return privateText(game, player, text);
+}
+
 
 function evidenceSummary(game, player) {
   const discovered = (player.knownClues || []).map((id) => game.evidence.find((c) => c.id === id)).filter(Boolean);
@@ -1143,7 +1273,7 @@ async function handleCommand(ctx, services) {
   }
   if (action === 'start') return startGame(ctx, game);
   if (action === 'status' || action === 'players') return showStatus(game);
-  if (action === 'rooms') return privateText(game, playerForAction(ctx, game), '🗺️ *ROOMS IN THIS CASE*\n' + game.rooms.map((r, i) => (i + 1) + '. ' + r.name + ' · ' + r.hint).join('\n'));
+  if (action === 'rooms') return showRooms(game, playerForAction(ctx, game));
   const player = playerForAction(ctx, game);
   if (!player) return groupContext ? groupText(game, 'Only guests on this Story Mode roster can use case actions.') : runtime.sendDM(ctx.sock, ctx.senderJid, 'You are not on the guest list for this Story Mode case.');
   if (action === 'dossier' || action === 'role') return showDossier(game, player);
@@ -1159,6 +1289,13 @@ async function handleCommand(ctx, services) {
   return groupContext ? groupText(game, helpText(ctx.prefix)) : privateText(game, player, helpText(ctx.prefix));
 }
 
+
+function hasActiveGame(chatId) {
+  loadPersisted();
+  const game = games.get(chatId);
+  return !!game && game.phase !== 'FINISHED';
+}
+
 function init() {
   loadPersisted();
 }
@@ -1166,9 +1303,11 @@ function init() {
 module.exports = {
   handleCommand,
   init,
+  hasActiveGame,
   _internal: {
     games,
     loadPersisted,
+    hasActiveGame,
     persist,
     makeGame,
     makeCase,
