@@ -1,0 +1,27 @@
+name: Murder Mystery Story Mode Preflight
+
+on:
+  push:
+    branches:
+      - feature/murder-mystery-story-mode
+  pull_request:
+    branches:
+      - audit/fix-pass-1
+
+jobs:
+  story-mode-preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout proposed changes
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax and isolated game rules
+        run: |
+          set -e
+          node --check core/games/murdermystery/index.js
+          node --check core/games/murdermystery/storyMode.js
+          node --check scripts/mm_story_qa.js
+          node scripts/mm_story_qa.js
