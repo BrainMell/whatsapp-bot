@@ -32,7 +32,7 @@ require.cache[botConfigPath] = {
 
 const story = require('../core/games/murdermystery/storyMode');
 
-const { makeGame, makeCase, roleDeck, findTarget, findRoom, verdict } = story._internal;
+const { makeGame, makeCase, roleDeck, findTarget, findRoom, verdict, accusationTally, isClueDiscoverable } = story._internal;
 
 function player(jid, name) {
   return {
@@ -88,6 +88,12 @@ assert.ok(game.murderRoomId && game.rooms.some((r) => r.id === game.murderRoomId
 assert.ok(game.evidence.length >= game.players.length + 5, 'case generates enough distinct leads for a full roster');
 assert.equal(new Set(game.evidence.map((e) => e.id)).size, game.evidence.length, 'evidence IDs are unique');
 assert.ok(game.players.every((p) => p.char && p.statement && p.secret && p.objective), 'each character has an account, secret, and objective');
+const privateClue = game.evidence.find((e) => e.secretForJid);
+assert.ok(privateClue, 'case creates player-specific private notes');
+const privateOwner = game.players.find((p) => p.jid === privateClue.secretForJid);
+const otherPlayer = game.players.find((p) => p.jid !== privateClue.secretForJid);
+assert.ok(isClueDiscoverable(privateClue, privateOwner), 'the owner can discover their private note');
+assert.equal(isClueDiscoverable(privateClue, otherPlayer), false, 'other players cannot discover a private note');
 assert.equal(new Set(game.players.map((p) => p.char.id)).size, game.players.length, 'a cast does not duplicate a character ID');
 
 const killer = game.players.find((p) => p.role === 'KILLER');
@@ -95,6 +101,18 @@ assert.equal(findTarget(game, String(game.players.indexOf(killer) + 1)).player.j
 assert.equal(findTarget(game, killer.char.name).player.jid, killer.jid, 'character-name targeting works');
 assert.ok(findRoom(game, '1'), 'room-number lookup works');
 assert.ok(findRoom(game, game.rooms[0].name), 'room-name lookup works');
+
+const nonKillerTarget = game.players.find((p) => p.jid !== killer.jid);
+const secondTarget = game.players.find((p) => p.jid !== killer.jid && p.jid !== nonKillerTarget.jid);
+game.accusations = {
+  [game.players[0].jid]: { targetJid: nonKillerTarget.jid, evidenceIds: [] },
+  [game.players[1].jid]: { targetJid: nonKillerTarget.jid, evidenceIds: ['E01'] },
+  [game.players[2].jid]: { targetJid: secondTarget.jid, evidenceIds: [] },
+};
+const tallies = accusationTally(game);
+assert.equal(tallies[0].player.jid, nonKillerTarget.jid, 'most-accused suspect appears first');
+assert.equal(tallies[0].count, 2, 'formal accusations are tallied by target');
+assert.match(story._internal.accusationTallyLine(game), /Sealed accusations received/, 'accusation tally has a public phase announcement');
 
 game.phase = 'VOTING';
 game.votes = {
