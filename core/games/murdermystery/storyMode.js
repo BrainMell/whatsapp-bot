@@ -219,7 +219,7 @@ function buildEvidence(game, generated) {
     line: method.line || 'Something at the scene does not belong where it was found.',
     roomId: game.murderRoomId,
     kind: 'method',
-    supportsKiller: true,
+    supportsCase: true,
     discovered: false,
     shared: false,
     manipulated: false,
@@ -236,7 +236,7 @@ function buildEvidence(game, generated) {
       line: String(beat.hour || 'An unknown hour') + ': ' + String(beat.text || 'A guest moved through the house.'),
       roomId: room.id,
       kind: 'timeline',
-      supportsKiller: true,
+      supportsCase: true,
       discovered: false,
       shared: false,
       manipulated: false,
@@ -264,7 +264,7 @@ function buildEvidence(game, generated) {
       roomId: pick(game.rooms).id,
       kind: 'personal-item',
       linkedCharId: rumour.linkedCharId || null,
-      supportsKiller: false,
+      supportsCase: false,
       discovered: false,
       shared: false,
       manipulated: false,
@@ -283,7 +283,7 @@ function buildEvidence(game, generated) {
       roomId: pick(game.rooms).id,
       kind: 'relationship',
       linkedCharId: null,
-      supportsKiller: false,
+      supportsCase: false,
       discovered: false,
       shared: false,
       manipulated: false,
@@ -304,7 +304,7 @@ function buildEvidence(game, generated) {
       roomId: room.id,
       kind: 'secret-note',
       linkedCharId: player.char.id,
-      supportsKiller: false,
+      supportsCase: false,
       discovered: false,
       shared: false,
       manipulated: false,
@@ -534,7 +534,7 @@ async function resolveNight(game) {
         roomId: killerAction.roomId || game.murderRoomId,
         kind: 'planted-trace',
         linkedCharId: target.char.id,
-        supportsKiller: false,
+        supportsCase: false,
         discovered: false,
         shared: false,
         manipulated: true,
@@ -569,7 +569,7 @@ async function resolveNight(game) {
         roomId: accompliceAction.roomId || game.murderRoomId,
         kind: 'misdirection',
         linkedCharId: target.char.id,
-        supportsKiller: false,
+        supportsCase: false,
         discovered: false,
         shared: false,
         manipulated: true,
@@ -669,10 +669,10 @@ async function finishGame(game) {
   game.finishedAt = Date.now();
   game.updatedAt = Date.now();
   game.verdict = { targetJid: picked ? picked.jid : null, correct: civiliansWon, votes: result.count, skip: result.skip };
-  const sharedTruth = game.evidence.filter((c) => c.shared && !c.manipulated && c.supportsKiller).length;
+  const sharedTruth = game.evidence.filter((c) => c.shared && !c.manipulated && c.supportsCase).length;
   const verdictStrength = civiliansWon
     ? (sharedTruth >= 2 ? 'The group backed its verdict with several reliable leads.' : 'The culprit was named, but the public evidence was thin.')
-    : 'The culprit escaped a supported conviction.';
+    : 'The group did not reach a correct supported conviction.';
   const truthLines = [
     'Victim: ' + game.victim + '.',
     'Crime scene: ' + ((roomById(game, game.murderRoomId) || {}).name || game.murderRoomId) + '.',
@@ -706,12 +706,16 @@ async function finishGame(game) {
   } catch (e) {
     console.error('[MM Story] report render failed:', e.message);
   }
-  if (!sent) {
-    await groupText(game, '🕯️ *CASE FILE CLOSED: ' + MODE_NAME + '*\n\n' +
-      'The killer was ' + (killer ? killer.name + ' (' + killer.char.name + ')' : 'unknown') + '.\n' +
-      'Motive: ' + game.case.motive.detail + '\n' + truthLines.join('\n') +
-      '\n\nPersonal objectives completed: ' + objectives.filter((o) => o.complete).length + '/' + objectives.length + '.');
-  }
+  const objectiveLines = objectives.map((o) =>
+    (o.complete ? '✓ ' : '· ') + o.name + ' (' + o.role + '): ' + (o.objective || 'No objective')
+  ).join('\n');
+  const fullReveal = '🕯️ *CASE FILE CLOSED: ' + MODE_NAME + '*\n\n' +
+    'The killer was ' + (killer ? killer.name + ' (' + killer.char.name + ')' : 'unknown') + '.\n' +
+    'Motive: ' + game.case.motive.detail + '\n' + truthLines.join('\n') +
+    '\n\n*Personal objectives*\n' + objectiveLines;
+  // Never rely on the image alone for the reveal: some card layouts intentionally
+  // show only a summary, while this text carries the complete case outcome.
+  await groupText(game, fullReveal);
 }
 
 async function showDossier(game, player) {
@@ -753,9 +757,12 @@ async function showDossier(game, player) {
   } catch (e) {
     console.error('[MM Story] dossier render failed:', e.message);
   }
-  if (!imageSent) {
-    await privateText(game, player, '🔒 *PRIVATE STORY DOSSIER*\n\n' + sections.map((s) => '*' + s.title + '*\n' + (s.lines || []).filter(Boolean).join('\n')).join('\n\n'));
-  }
+  const textDossier = '🔒 *PRIVATE STORY DOSSIER · TEXT REFERENCE*\n\n' +
+    sections.map((s) => '*' + s.title + '*\n' + (s.lines || []).filter(Boolean).join('\n')).join('\n\n');
+  // The image is the cinematic summary; send the complete text reference too so
+  // details beyond the card's layout limit (notably the killer's method/time)
+  // are never clipped out of the private instructions.
+  await privateText(game, player, textDossier);
 }
 
 async function sendCastCards(game) {
@@ -803,7 +810,7 @@ async function createLobby(ctx) {
       playerCount: game.players.length,
       minPlayers: MIN_PLAYERS,
       maxPlayers: MAX_PLAYERS,
-      openingLine: 'One guest has already been murdered. One of you knows why.',
+      openingLine: 'The host has been murdered. One of you knows why.',
       prefix: game.prefix + ' murder story',
       prize: null,
     });
@@ -856,7 +863,7 @@ async function startGame(ctx, game) {
   game.round = 1;
   game.startedAt = Date.now();
   setPhase(game, 'INVESTIGATION', '🕯️ *' + game.victim + ' is dead.* The house is sealed. Search rooms, question suspects, and build your own case. No one is cleared by a secret, and suspicion is not proof.');
-  let sceneSent = false;
+  let introSent = false;
   try {
     const intro = await cards.renderIntro({
       playerCount: game.players.length,
@@ -864,18 +871,19 @@ async function startGame(ctx, game) {
       openingLine: 'A death has stopped the clock at Blackvale.',
       nightLine: 'One guest knows exactly what happened. Everyone else has a theory.',
     });
-    sceneSent = await groupImage(game, intro, '🕯️ *' + MODE_NAME + ' · THE MURDER*');
+    introSent = await groupImage(game, intro, '🕯️ *' + MODE_NAME + ' · THE MURDER*');
   } catch (e) {
     console.error('[MM Story] opening card failed:', e.message);
   }
+  let crimeSent = false;
   try {
     const crime = await renderCrimeScene(game);
     const sent = await groupImage(game, crime, '🩸 *THE CRIME SCENE* · ' + ((roomById(game, game.murderRoomId) || {}).name || 'Blackvale Manor'));
-    sceneSent = sceneSent || sent;
+    crimeSent = sent;
   } catch (e) {
     console.error('[MM Story] crime scene card failed:', e.message);
   }
-  if (!sceneSent) await groupText(game, '🕯️ *' + MODE_NAME + ' · THE MURDER*\nVictim: ' + game.victim + '\nLocation: ' + ((roomById(game, game.murderRoomId) || {}).name || 'unknown') + '\nMethod: ' + game.murderMethod + '\nApproximate time: ' + game.murderHour);
+  if (!crimeSent) await groupText(game, '🕯️ *' + MODE_NAME + ' · THE MURDER*\nVictim: ' + game.victim + '\nLocation: ' + ((roomById(game, game.murderRoomId) || {}).name || 'unknown') + '\nMethod: ' + game.murderMethod + '\nApproximate time: ' + game.murderHour);
   for (const player of game.players) {
     const sent = await privateText(game, player, '🔒 *' + MODE_NAME + ' · YOUR PRIVATE DOSSIER*\nYour role, secret, personal objective, and account are in the private card. Use ' + game.prefix + ' murder story dossier to reopen it.\nNever forward your private role or secret.');
     void sent;
