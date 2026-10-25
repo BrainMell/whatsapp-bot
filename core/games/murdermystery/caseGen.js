@@ -46,6 +46,17 @@ const MOTIVES = [
   { id: 'testimony', title: 'the transported brother', detail: 'The killer\u2019s brother was transported for poaching the estate\u2019s land, on the word of one witness. That witness is pouring wine at this table.' },
 ];
 
+const HALLOWEEN_MOTIVES = [
+  { id: 'black_mirror', title: 'the black mirror', detail: 'The host staged a séance to expose a forgery. The killer knew a witness was hidden behind the mirror.' },
+  { id: 'seventh_candle', title: 'the seventh candle', detail: 'A private ledger was hidden beneath the ritual table. The killer needed the final candle extinguished before anyone noticed the book was gone.' },
+  { id: 'grave_contract', title: 'the grave contract', detail: 'The burial register proves a title was stolen. The killer has lived off that false inheritance, and the real heir has arrived.' },
+  { id: 'borrowed_face', title: 'the borrowed face', detail: 'A guest used the masquerade to impersonate a dead relative and claim a fortune. The killer discovered the costume and papers.' },
+  { id: 'false_seance', title: 'the false séance', detail: 'Blackvale’s hauntings were staged to frighten a witness into silence. One guest found the hidden equipment and payment ledger.' },
+  { id: 'sealed_chapel', title: 'the sealed chapel', detail: 'A chapel key opens a wall safe containing proof of an old crime. The killer needs the key and everyone who knows what it opens silenced.' },
+  { id: 'last_invitation', title: 'the last invitation', detail: 'The host invited the same witnesses to Blackvale every Halloween to learn who altered the original will. This year, one arrived with proof.' },
+  { id: 'lantern_code', title: 'the lantern code', detail: 'A lantern sequence marked a secret route through the manor. The killer used the old code to reach a locked room without entering the guest book.' },
+];
+
 // Relationship web types (MD §5) - public framing + tension line used in
 // statements and clues. Composed between two drawn cast members.
 const RELATIONSHIPS = [
@@ -96,6 +107,23 @@ const SECRETS = [
   { id: 'keyring', text: 'has kept copies of every key in this house since the first winter they stayed - all of them, still working' },
 ];
 
+const HALLOWEEN_SECRETS = [
+  { id: 'fake_medium', text: 'has been faking messages from the dead for money, and the host kept the receipts' },
+  { id: 'mask_swap', text: 'swapped two masquerade masks before midnight and insists it was a joke' },
+  { id: 'grave_record', text: 'has a copied page from the manor burial register that contradicts the family tree' },
+  { id: 'candle_wax', text: 'hid a brass key inside a candle and cannot explain why its wax was found upstairs' },
+  { id: 'staged_haunting', text: 'helped stage a famous haunting, but someone was injured and the report was buried' },
+  { id: 'costume', text: 'arrived in a missing guest’s costume and cut the name from its lining' },
+  { id: 'chapel_key', text: 'borrowed the chapel key and returned a copy made from softened wax' },
+  { id: 'will_fragment', text: 'keeps a torn corner of a will showing a signature that should not exist' },
+  { id: 'lantern_signal', text: 'used the old lantern code to summon someone to the west wing and refuses to name them' },
+  { id: 'cordial', text: 'replaced a ceremonial cordial with an ordinary drink after discovering the host’s private plan' },
+  { id: 'buried_letter', text: 'has a letter from the previous host and has never shown it to the family' },
+  { id: 'mirror_crack', text: 'knows who cracked the black mirror, but that person paid for their silence before the party began' },
+  { id: 'fake_identity', text: 'is using a dead relative’s name to claim a place at the table' },
+  { id: 'locked_room', text: 'learned how to open one locked room without its key and demonstrated it only once' },
+];
+
 // Personal items: each cast member is assigned one distinct item. It becomes
 // the ambiguous "points at a player without naming guilt" clue layer (MD §6).
 const PERSONAL_ITEMS = [
@@ -140,6 +168,19 @@ const TIMELINE_BEATS = [
   { hour: '3:30 am', text: 'the night watchman changed shifts and found the side gate unbolted' },
 ];
 
+const HALLOWEEN_TIMELINE_BEATS = [
+  { hour: '7:30 pm', text: 'the guests arrived in masks; the host checked every invitation against the old register' },
+  { hour: '8 pm', text: 'the first candle was lit in the gallery, and the host announced the séance would begin after dinner' },
+  { hour: '9 pm', text: 'a masked figure crossed the east gallery while the party watched the clock strike nine' },
+  { hour: '9:30 pm', text: 'the host showed the black mirror to three guests, then covered it with a velvet cloth' },
+  { hour: '10 pm', text: 'the lights failed briefly; when they returned, a chair had moved beside the chapel door' },
+  { hour: '10:30 pm', text: 'someone rang the chapel bell once, although its rope had been cut before the guests arrived' },
+  { hour: '11 pm', text: 'the final candle burned blue at its wick, and the host dismissed guests from the ritual room' },
+  { hour: '11:30 pm', text: 'a lantern flashed twice in the courtyard, the signal recorded in the gamekeeper’s notebook' },
+  { hour: 'midnight', text: 'the west wing was locked; the keeper signed the register, but the ink was still wet at dawn' },
+  { hour: '12:30 am', text: 'a tray returned from the gallery with one untouched glass and wax that did not match the candles' },
+];
+
 // ---------- helpers ----------
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 function shuffle(arr) {
@@ -165,12 +206,26 @@ function saveHistory(history) {
   try { system.set(historyKey(), history.slice(-HISTORY_MAX)); } catch (e) {}
 }
 
+function minutesFromTime(label) {
+  const value = String(label || '').trim().toLowerCase();
+  if (value === 'midnight') return 1440;
+  if (value === 'noon') return 720;
+  const match = value.match(/^([0-9]{1,2})(?::([0-9]{2}))?[ ]*(am|pm)?$/);
+  if (!match) return Number.MAX_SAFE_INTEGER;
+  let hour = Number(match[1]) % 12;
+  if (match[3] === 'pm') hour += 12;
+  let total = hour * 60 + Number(match[2] || 0);
+  if (match[3] === 'am' && hour < 6) total += 1440;
+  return total;
+}
+
 // ---------- statements (MD §8, template layer) ----------
 // Every character gets a fixed public account (their alibi) and one
 // observation of another guest. The killer's account is a lie; one further
 // innocent may be genuinely mistaken. Players compare accounts + evidence.
-function buildStatements({ cast, web, rooms, killerCharIds, victimsPool }) {
+function buildStatements({ cast, web, rooms, killerCharIds, victimsPool, timelineBeats }) {
   const roomNames = rooms.map((r) => r.name);
+  const caseBeats = Array.isArray(timelineBeats) && timelineBeats.length ? timelineBeats : TIMELINE_BEATS;
   const statements = {};
   const usedRooms = new Set();
   const observed = new Set(); // a -> b only once
@@ -182,10 +237,13 @@ function buildStatements({ cast, web, rooms, killerCharIds, victimsPool }) {
     // killers avoid the truth by claiming a room far from their habits; innocents may collide
     while (usedRooms.has(room) && tries < 6) { room = pick(roomNames); tries++; }
     usedRooms.add(room);
-    const hourPick = pick(TIMELINE_BEATS).hour;
+    const hourPick = pick(caseBeats).hour;
 
     // one observation about another cast member (movement / behaviour)
-    const others = cast.filter((o) => o.id !== c.id && !observed.has(`${c.id}->${o.id}`));
+    const linkedIds = web.filter((w) => w.a === c.id || w.b === c.id)
+      .map((w) => w.a === c.id ? w.b : w.a);
+    const linkedOthers = cast.filter((o) => o.id !== c.id && linkedIds.includes(o.id) && !observed.has(c.id + '->' + o.id));
+    const others = linkedOthers.length ? linkedOthers : cast.filter((o) => o.id !== c.id && !observed.has(c.id + '->' + o.id));
     const target = others.length ? pick(others) : null;
     if (target) observed.add(`${c.id}->${target.id}`);
     const seeTemplates = [
@@ -245,8 +303,9 @@ const REL_SHORT = {
 };
 
 // ---------- generation ----------
-function generateCase({ cast, killers, rooms, methodTitles }) {
+function generateCase({ cast, killers, rooms, methodTitles, theme = 'classic' }) {
   if (!cast || cast.length < 4 || !killers || !killers.length) return null;
+  const isHalloween = theme === 'halloween';
   const history = loadHistory();
   const castIds = cast.map((c) => c.id);
 
@@ -254,20 +313,20 @@ function generateCase({ cast, killers, rooms, methodTitles }) {
   const recentSigs = new Set(history.map((h) => h.sig));
   let motive = null;
   let sig = '';
-  const motivePool = shuffle(MOTIVES);
+  const motivePool = shuffle(isHalloween ? HALLOWEEN_MOTIVES : MOTIVES);
   for (const m of motivePool) {
     sig = `${castIds.slice().sort().join('|')}#${m.id}`;
     if (!recentSigs.has(sig)) { motive = m; break; }
   }
   if (!motive) motive = motivePool[0]; // history exhausted - reuse least-recent
 
-  // 2) relationship web: 2-4 disjoint pairs among the cast
+  // 2) Connected relationship web: no isolated pairs that never link to clues.
   const web = [];
   const pool = shuffle(castIds);
   const relTypes = shuffle(RELATIONSHIPS);
-  const pairCount = Math.min(pool.length >= 6 ? 3 : 2, Math.floor(pool.length / 2));
+  const pairCount = pool.length;
   for (let i = 0; i < pairCount; i++) {
-    const a = pool[i * 2], b = pool[i * 2 + 1];
+    const a = pool[i], b = pool[(i + 1) % pool.length];
     const type = relTypes[i % relTypes.length];
     const nameOf = (id) => (cast.find((c) => c.id === id) || {}).name || id;
     web.push({
@@ -280,7 +339,7 @@ function generateCase({ cast, killers, rooms, methodTitles }) {
 
   // 3) secrets - every character gets one (innocents especially; the killer's
   //    secret must NOT be the motive - the motive is the reason to kill)
-  const secretPool = shuffle(SECRETS);
+  const secretPool = shuffle(isHalloween ? HALLOWEEN_SECRETS : SECRETS);
   const secrets = {};
   castIds.forEach((id, i) => { secrets[id] = secretPool[i % secretPool.length]; });
 
@@ -290,9 +349,10 @@ function generateCase({ cast, killers, rooms, methodTitles }) {
   castIds.forEach((id, i) => { personalItems[id] = items[i % items.length]; });
 
   // 5) timeline + statements (killer accounts are lies)
-  const timeline = shuffle(TIMELINE_BEATS).slice(0, 5).sort((x, y) => x.hour.localeCompare(y.hour));
+  const timelinePool = isHalloween ? HALLOWEEN_TIMELINE_BEATS : TIMELINE_BEATS;
+  const timeline = shuffle(timelinePool).slice(0, 5).sort((x, y) => minutesFromTime(x.hour) - minutesFromTime(y.hour));
   const killerCharIds = killers.map((k) => k.id);
-  const statements = buildStatements({ cast, web, rooms, killerCharIds });
+  const statements = buildStatements({ cast, web, rooms, killerCharIds, timelineBeats: timeline });
 
   // 6) method plan - the murder will use one of the killer's planned methods
   const planned = (methodTitles || []).filter((t) => METHOD_EVIDENCE[t]);
@@ -300,6 +360,7 @@ function generateCase({ cast, killers, rooms, methodTitles }) {
 
   const kase = {
     version: 1,
+    theme: isHalloween ? 'halloween' : 'classic',
     motifId: motive.id,
     motive,
     web: web.map((w) => ({ ...w, shortFor: undefined })), // functions never persist
@@ -337,12 +398,18 @@ function validateCase(kase, cast, rooms) {
     if (!kase.timeline.length || !kase.timeline.every((t) => t.hour && t.text)) return false;
     if (!Object.keys(kase.statements).every((id) => castIds.has(id) && kase.statements[id].account)) return false;
     if (!kase.methodPlan.length || !kase.methodPlan.every((m) => METHOD_EVIDENCE[m])) return false;
-    // web pairs must not repeat a character
-    const seen = new Set();
-    for (const w of kase.web) {
-      if (seen.has(w.a) || seen.has(w.b)) return false;
-      seen.add(w.a); seen.add(w.b);
+    const reached = new Set([cast[0].id]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const w of kase.web) {
+        if (reached.has(w.a) && !reached.has(w.b)) { reached.add(w.b); changed = true; }
+        if (reached.has(w.b) && !reached.has(w.a)) { reached.add(w.a); changed = true; }
+      }
     }
+    if (reached.size !== castIds.size) return false;
+    const caseHours = new Set(kase.timeline.map((t) => t.hour));
+    if (!Object.values(kase.statements).every((st) => caseHours.has(st.hour))) return false;
     return true;
   } catch (e) { return false; }
 }
@@ -594,6 +661,9 @@ function statementFor(kase, charId) {
 
 module.exports = {
   MOTIVES,
+  HALLOWEEN_MOTIVES,
+  HALLOWEEN_SECRETS,
+  HALLOWEEN_TIMELINE_BEATS,
   RELATIONSHIPS,
   SECRETS,
   PERSONAL_ITEMS,

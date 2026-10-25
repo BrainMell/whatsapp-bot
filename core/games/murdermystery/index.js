@@ -1021,10 +1021,11 @@ async function startGame(ctx) {
       killers: g.players.filter((p) => p.role === 'KILLER').map((p) => p.char),
       rooms: g.rooms,
       methodTitles: cases.METHODS.map((m) => m.title),
+      theme: g.halloween ? 'halloween' : 'classic',
     });
     if (g.case) {
       caseGen.saveHistory([...caseGen.loadHistory(), g.case.sig]);
-      console.log(`🔪 [MurderMystery] case generated: motive=${g.case.motifId} web=${g.case.web.length}pairs`);
+      console.log(`🔪 [MurderMystery] case generated: theme=${g.case.theme || 'classic'} motive=${g.case.motifId} web=${g.case.web.length}links timeline=${g.case.timeline.length} beats`);
     } else {
       console.log(`🔪 [MurderMystery] case generation returned null - legacy flavor round`);
     }
