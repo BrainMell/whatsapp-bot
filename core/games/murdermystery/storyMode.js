@@ -126,7 +126,7 @@ function sockForGame(game) {
 async function groupText(game, text, extra) {
   try {
     const sock = sockForGame(game);
-    if (!game || !sock) return false;
+    if (!game || !sock) { console.warn('[MM Story] group text skipped: no sock for ' + ((game && game.chatId) || '?')); return false; }
     if (runtime.sendGroup) return await runtime.sendGroup(sock, game.chatId, text, extra || {});
     await sock.sendMessage(game.chatId, { text: text, ...(extra || {}) });
     return true;
@@ -140,7 +140,7 @@ async function groupImage(game, buf, caption) {
   if (!buf) return false;
   try {
     const sock = sockForGame(game);
-    if (!game || !sock) return false;
+    if (!game || !sock) { console.warn('[MM Story] group image skipped: no sock for ' + ((game && game.chatId) || '?')); return false; }
     if (runtime.sendGroupImage) return await runtime.sendGroupImage(sock, game.chatId, buf, caption || '');
     await sock.sendMessage(game.chatId, { image: buf, caption: caption || '' });
     return true;
@@ -153,7 +153,7 @@ async function groupImage(game, buf, caption) {
 async function privateText(game, player, text) {
   try {
     const sock = sockForGame(game);
-    if (!game || !sock || !player || !player.jid) return false;
+    if (!game || !sock || !player || !player.jid) { console.warn('[MM Story] DM skipped: no sock/player for ' + ((player && player.jid) || '?')); return false; }
     if (runtime.sendDM) return await runtime.sendDM(sock, player.jid, text);
     await sock.sendMessage(player.jid, { text: text });
     return true;
@@ -167,7 +167,7 @@ async function privateImage(game, player, buf, caption) {
   if (!buf) return false;
   try {
     const sock = sockForGame(game);
-    if (!game || !sock || !player || !player.jid) return false;
+    if (!game || !sock || !player || !player.jid) { console.warn('[MM Story] DM image skipped: no sock/player for ' + ((player && player.jid) || '?')); return false; }
     await sock.sendMessage(player.jid, { image: buf, caption: caption || '' });
     return true;
   } catch (e) {
@@ -517,7 +517,7 @@ function setPhase(game, phase, announcement) {
   game.updatedAt = Date.now();
   game.events.push({ at: Date.now(), phase: phase, text: announcement || '' });
   persist();
-  if (announcement) void groupText(game, announcement);
+  if (announcement) announcePhase(game, announcement);
   if (game.deadline) schedulePhase(game);
 }
 
@@ -531,6 +531,59 @@ function schedulePhase(game) {
   }, wait);
   timers.set(game.chatId, timer);
   if (typeof timer.unref === 'function') timer.unref();
+}
+
+// 💡 2026-10-25 live-fire fix (owner: "game gets stuck after character
+// introductions"): the phase machine ran a full lifecycle on schedule, but the
+// group announcements were fired once with `void` and their result was
+// discarded - a single failed/skipped send left the group with NO phase signal
+// at all (players saw intros then silence; the game "looked" stuck). Every
+// announcement now retries with a refreshed sock and logs its outcome, and the
+// night/vote phases additionally DM every living player their actionable
+// prompt so a group-announce loss can never strand a phase again.
+function announcePhase(game, text) {
+  void (async () => {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const okSend = await groupText(game, text);
+      if (okSend) {
+        if (attempt > 1) console.log('[MM Story] phase announcement delivered on attempt ' + attempt + ' to ' + game.chatId);
+        return;
+      }
+      console.warn('[MM Story] phase announcement attempt ' + attempt + '/3 failed for ' + game.chatId + ' (' + String(game.phase) + ')');
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      const alt = runtime.getSock ? runtime.getSock() : null;
+      if (alt && game._sock !== alt) game._sock = alt;
+    }
+    console.error('[MM Story] phase announcement UNDELIVERED after 3 attempts to ' + game.chatId + ' (' + String(game.phase) + ')');
+  })().catch((e) => console.error('[MM Story] announcePhase crashed:', e.message));
+}
+
+function nightPromptFor(player, game) {
+  const p = game.prefix || '.j';
+  if (player.role === 'KILLER') return '🌑 Night at Blackvale. One hidden move before the bell: `' + p + ' murder story frame <player> [room]` to plant a trace, or `' + p + ' murder story blackmail <player>`. Send it here in the DM.';
+  if (player.role === 'INVESTIGATOR') return '🌑 Night at Blackvale. Privately check one account against the timeline: `' + p + ' murder story compare <player number or name>`. Send it here in the DM.';
+  if (player.role === 'GUARDIAN') return "🌑 Night at Blackvale. You may shield one guest from the killer's schemes: `" + p + ' murder story protect <player number or name>`. Send it here in the DM.';
+  if (player.role === 'MEDIUM') return "🌑 Night at Blackvale. The veil is thin - receive the victim's last memory: `" + p + ' murder story seance`. Send it here in the DM.';
+  if (player.role === 'ACCOMPLICE') return '🌑 Night at Blackvale. Seed one false lead to mislead the house: `' + p + ' murder story spread <player number or name>`. Send it here in the DM.';
+  return '🌑 Night at Blackvale. Your role has no hidden action - use the quiet to review your dossier and evidence: `' + p + ' murder story evidence`. The bell rings soon.';
+}
+
+function sendNightPrompts(game) {
+  const secs = Math.max(15, Math.round((DURATIONS.NIGHT || 90000) / 1000));
+  for (const player of game.players.filter((pl) => pl.alive)) {
+    privateText(game, player, nightPromptFor(player, game) + ' (' + secs + 's of dark remain.)')
+      .then((okSend) => { if (!okSend) console.warn('[MM Story] night prompt not delivered to ' + (player.name || player.jid)); })
+      .catch(() => {});
+  }
+}
+
+function sendVotePrompts(game) {
+  const p = game.prefix || '.j';
+  for (const player of game.players.filter((pl) => pl.alive)) {
+    privateText(game, player, '⚖️ The verdict is open. Cast your vote here in the DM: `' + p + ' murder story vote <player number or name>` - or `' + p + ' murder story vote skip`. A strict majority is required to convict.')
+      .then((okSend) => { if (!okSend) console.warn('[MM Story] vote prompt not delivered to ' + (player.name || player.jid)); })
+      .catch(() => {});
+  }
 }
 
 async function resolveNight(game) {
@@ -644,12 +697,14 @@ async function advancePhase(chatId) {
   try {
     if (game.phase === 'INVESTIGATION') {
       setPhase(game, 'NIGHT', '🌑 *The house falls silent.* Hidden actions are open for 90 seconds. Use ' + game.prefix + ' murder story dossier privately to check your role action. Never reveal private instructions in the group.');
+      sendNightPrompts(game);
     } else if (game.phase === 'NIGHT') {
       await resolveNight(game);
       setPhase(game, 'DISCUSSION', '🕯️ *The bell rings again.* The house is open for a final investigation and public questions. Build a theory before the verdict.');
     } else if (game.phase === 'DISCUSSION') {
       const tally = accusationTallyLine(game);
       setPhase(game, 'VOTING', '⚖️ *The final verdict.* Use ' + game.prefix + ' murder story vote <player number or name> in the bot DM. A strict majority is required.\n\n' + tally);
+      sendVotePrompts(game);
     } else if (game.phase === 'VOTING') {
       await finishGame(game);
     }
@@ -855,7 +910,10 @@ async function createLobby(ctx) {
 
 async function joinLobby(ctx, game) {
   if (!isGroup(ctx)) return privateText(game, playerForAction(ctx, game), 'Join Story Mode from the group chat.');
-  if (!game || game.phase !== 'LOBBY') return groupText(game, '🕯️ There is no open Story Mode lobby here.');
+  if (!game || game.phase !== 'LOBBY') {
+    if (game && game.phase !== 'FINISHED') return groupText(game, '🕯️ The case is already underway (' + String(game.phase).toLowerCase() + ' phase). New guests cannot join mid-case.');
+    return groupText(game, '🕯️ There is no open Story Mode lobby here.');
+  }
   const jid = senderId(ctx);
   if (!jid) return groupText(game, 'I could not identify your WhatsApp account.');
   if (playerByJid(game, jid)) return groupText(game, senderName(ctx) + ', you are already on the guest list.');
@@ -917,7 +975,7 @@ async function startGame(ctx, game) {
   }
   if (!crimeSent) await groupText(game, '🕯️ *' + MODE_NAME + ' · THE MURDER*\nVictim: ' + game.victim + '\nLocation: ' + ((roomById(game, game.murderRoomId) || {}).name || 'unknown') + '\nMethod: ' + game.murderMethod + '\nApproximate time: ' + game.murderHour);
   for (const player of game.players) {
-    const sent = await privateText(game, player, '🔒 *' + MODE_NAME + ' · YOUR PRIVATE DOSSIER*\nYour role, secret, personal objective, and account are in the private card. Use ' + game.prefix + ' murder story dossier to reopen it.\nNever forward your private role or secret.');
+    const sent = await privateText(game, player, '🔒 *' + MODE_NAME + ' · YOUR PRIVATE DOSSIER*\nYour role, secret, personal objective, and account are in the private card. Use ' + game.prefix + ' murder story dossier to reopen it.\nNever forward your private role or secret.\n\nWhile the house is awake: ' + game.prefix + ' murder story rooms and ' + game.prefix + ' murder story search <room> here in the DM, and ' + game.prefix + ' murder story question <player> in the group. What you find stays private until you share it.');
     void sent;
   }
   void sendCastCards(game).catch((e) => console.error('[MM Story] cast sequence failed:', e.message));
