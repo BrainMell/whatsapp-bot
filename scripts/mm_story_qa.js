@@ -1,0 +1,87 @@
+#!/usr/bin/env node
+'use strict';
+
+// Offline deterministic-shape QA for Blackvale Story Mode.
+// No WhatsApp connection, MongoDB writes, or image rendering is required.
+
+const assert = require('node:assert/strict');
+const story = require('../core/games/murdermystery/storyMode');
+
+const { makeGame, makeCase, roleDeck, findTarget, findRoom, verdict } = story._internal;
+
+function player(jid, name) {
+  return {
+    jid: jid + '@s.whatsapp.net',
+    name,
+    alive: true,
+    joinedAt: Date.now(),
+    role: null,
+    char: null,
+    knownClues: [],
+    sharedClues: 0,
+    searchesByPhase: {},
+    questionsUsed: 0,
+    questionsByPhase: {},
+    nightAct: null,
+    objective: null,
+    secret: null,
+  };
+}
+
+const roleExpectations = [
+  [4, { KILLER: 1, INVESTIGATOR: 1, GUARDIAN: 0, MEDIUM: 0, ACCOMPLICE: 0 }],
+  [5, { KILLER: 1, INVESTIGATOR: 1, GUARDIAN: 1, MEDIUM: 0, ACCOMPLICE: 0 }],
+  [6, { KILLER: 1, INVESTIGATOR: 1, GUARDIAN: 1, MEDIUM: 1, ACCOMPLICE: 0 }],
+  [8, { KILLER: 1, INVESTIGATOR: 1, GUARDIAN: 1, MEDIUM: 1, ACCOMPLICE: 1 }],
+];
+
+for (const [count, expected] of roleExpectations) {
+  const roles = roleDeck(count);
+  const actual = Object.fromEntries(['KILLER', 'INVESTIGATOR', 'GUARDIAN', 'MEDIUM', 'ACCOMPLICE']
+    .map((role) => [role, roles.filter((r) => r === role).length]));
+  for (const role of Object.keys(expected)) assert.equal(actual[role], expected[role], count + '-player role count for ' + role);
+  assert.equal(roles.length, count, count + '-player role deck must fill every seat');
+}
+
+const ctx = {
+  chatId: 'story-qa@g.us',
+  senderJid: '233240000001@s.whatsapp.net',
+  name: 'QA Host',
+  prefix: '.j',
+};
+const game = makeGame(ctx);
+for (let i = 2; i <= 8; i++) game.players.push(player('23324000000' + i, 'Guest ' + i));
+makeCase(game);
+
+assert.equal(game.mode, 'STORY', 'new game identifies itself as Story Mode');
+assert.equal(game.players.length, 8, 'test roster is preserved');
+assert.equal(game.rooms.length, 6, 'case uses six selected locations');
+assert.ok(game.case && game.case.motive && game.case.timeline.length >= 4, 'case truth is generated before play');
+assert.equal(game.players.filter((p) => p.role === 'KILLER').length, 1, 'Story Mode has a single killer in its first ruleset');
+assert.equal(game.killerJid, game.players.find((p) => p.role === 'KILLER').jid, 'killer identity matches the dealt role');
+assert.ok(game.murderRoomId && game.rooms.some((r) => r.id === game.murderRoomId), 'crime scene exists inside the selected map');
+assert.ok(game.evidence.length >= game.players.length + 5, 'case generates enough distinct leads for a full roster');
+assert.equal(new Set(game.evidence.map((e) => e.id)).size, game.evidence.length, 'evidence IDs are unique');
+assert.ok(game.players.every((p) => p.char && p.statement && p.secret && p.objective), 'each character has an account, secret, and objective');
+assert.equal(new Set(game.players.map((p) => p.char.id)).size, game.players.length, 'a cast does not duplicate a character ID');
+
+const killer = game.players.find((p) => p.role === 'KILLER');
+assert.equal(findTarget(game, String(game.players.indexOf(killer) + 1)).player.jid, killer.jid, 'roster-number targeting works');
+assert.equal(findTarget(game, killer.char.name).player.jid, killer.jid, 'character-name targeting works');
+assert.ok(findRoom(game, '1'), 'room-number lookup works');
+assert.ok(findRoom(game, game.rooms[0].name), 'room-name lookup works');
+
+game.phase = 'VOTING';
+game.votes = {
+  voter1: killer.jid,
+  voter2: killer.jid,
+  voter3: killer.jid,
+  voter4: killer.jid,
+};
+assert.equal(verdict(game).targetJid, killer.jid, 'strict majority can return the killer');
+game.votes = { voter1: killer.jid, voter2: killer.jid, voter3: killer.jid };
+assert.equal(verdict(game).targetJid, null, 'under-majority count cannot convict');
+game.votes = { voter1: killer.jid, voter2: killer.jid, voter3: 'skip', voter4: 'skip' };
+assert.equal(verdict(game).targetJid, null, 'skip ballots do not create a conviction');
+
+console.log('Story Mode QA passed: role decks, case generation, evidence, targeting, rooms, and verdict thresholds.');
