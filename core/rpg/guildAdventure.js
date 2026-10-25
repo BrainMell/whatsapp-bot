@@ -12198,7 +12198,13 @@ async function applyAbilityEffect(
           // ⚔️ FIX 2026-10-24: pre-hit GIF reuses the scene already on screen
           baseSceneBuffer: state.lastCombatScene || null,
           sendText: (text) => boundedSend(sock, chatId, { text }, 'ultimateCharge'),
-          sendGif: async (buffer, caption) => {
+          sendGif: async (buffer, caption, extra) => {
+            // sprite engine hands over a finished H.264 MP4 (+ JPEG thumb): send as-is
+            if (Buffer.isBuffer(buffer) && buffer.length > 500 && buffer.toString('latin1', 4, 8) === 'ftyp') {
+              const pl = { video: buffer, mimetype: 'video/mp4', caption, gifPlayback: true };
+              if (extra && Buffer.isBuffer(extra.thumb)) pl.jpegThumbnail = extra.thumb;
+              return sendMediaBounded(sock, chatId, pl, { label: 'classUltimateVfx', ms: 15000, grace: 5000, fallbackText: caption });
+            }
             // WhatsApp's GIF-style video lane requires H.264 MP4 bytes, not
             // a raw GIF in the video field. Reuse the shared, production-used
             // converter that the summon/reaction/fishing animations already use.

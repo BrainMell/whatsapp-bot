@@ -30,7 +30,7 @@ const FRAME_DELAY_MS = 200;
 // zoom-punch + buildup dim + 1-frame warm flash (enemy silhouette returns the
 // very next frame — 'enemy gone' stays impossible) + hit-tint settle frame.
 const IMPACT_FRAME = 3;
-const GIF_PLAYBACK_MS = FRAME_COUNT * FRAME_DELAY_MS * 2;
+const GIF_PLAYBACK_MS = 2700;
 const PALETTE = {
   FIGHTER: ['#fff1b0', '#ffcb45', '#e85a37'],
   SCOUT: ['#e7f6ff', '#6edcff', '#6574ff'],
@@ -790,13 +790,21 @@ async function animateUltimate(options = {}) {
     const cacheHit = Buffer.isBuffer(options.baseSceneBuffer) && options.baseSceneBuffer.length > 1000;
     console.log('[SkillVFX] cast ' + classId + '/' + ability.id + ' entry=' + entry.style + ' cache=' + (cacheHit ? 'hit' : 'miss') + ' target=' + (target && (target.name || target.id) || 'enemy'));
     const renderT0 = Date.now();
-    const gif = await raceTimeout(
+    // 2026-10-25: sprite-sheet engine first (real VFX frames, 15fps MP4); the
+    // legacy hand-drawn GIF renderer stays as the fallback.
+    let vid = null;
+    try {
+      vid = await raceTimeout(require('./ultimateFx').renderUltimateVideo({
+        baseBuffer: options.baseSceneBuffer, classId, name, side: entry.side, palette: PALETTE[classId]
+      }), 9000);
+    } catch (e) { console.warn('[SkillVFX] sprite engine failed:', e?.message || e); }
+    const gif = vid && vid.mp4 ? vid.mp4 : await raceTimeout(
       renderSignatureGif(state, player, ability, entry, target, options.baseSceneBuffer),
       8000
     );
     if (gif && Buffer.isBuffer(gif) && gif.length > 100) {
-      console.log('[SkillVFX] gif ' + gif.length + 'B in ' + (Date.now() - renderT0) + 'ms');
-      const mediaResult = await sendGif(gif, '💥 *' + name + '* UNLEASHED!');
+      console.log('[SkillVFX] ' + (vid && vid.mp4 ? 'sprite mp4 ' : 'gif ') + gif.length + 'B in ' + (Date.now() - renderT0) + 'ms');
+      const mediaResult = await sendGif(gif, '💥 *' + name + '* UNLEASHED!', vid && vid.thumb ? { thumb: vid.thumb } : null);
       console.log('[SkillVFX] send ok=' + (mediaResult && mediaResult.ok !== false) + ' late=' + Boolean(mediaResult && mediaResult.late));
       if (mediaResult && mediaResult.ok !== false) await wait(GIF_PLAYBACK_MS);
       else await wait(350);
