@@ -3068,6 +3068,7 @@ function tagFor(r) {
 // write one finished case into the global ledger (idempotent per case:
 // declareWinner's ENDED guard means this fires exactly once per game)
 function recordMatchStats(g, winner) {
+  if (g && g.testMode) return; // sandbox cases must never pollute the all-time ledger
   try {
     const murderCount = (g.bodies || []).length; // every body is one kill by the killer
     const findsBy = {};
