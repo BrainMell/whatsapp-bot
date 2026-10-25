@@ -343,3 +343,33 @@ Notes: night = 100 s, discussion = 5 min, vote = 90 s; phases resolve early when
 - `guild challenge` / `guild challenges` - half-built stub (empty CHALLENGE_TYPES, no accept/resolve mechanic; guild **war** is the real system).
 - 15 stale repo files: 4× engine.js.bak, pvpSystem/raidSystem/abyssSystem/guildAdventure/goImageService .bak copies, cards_data.json.bak, orphaned `performEnemyAction_new.js` (never imported), stale root `test_T11/T12.js`, Subaru config .bak.
 - Empty legacy Mongo collections `carddecks`/`usercards` (superseded by `cardDecks`/`userCards`) - dropped on the live DB.
+
+
+---
+
+## Murder Mystery Story Mode - The Last Invitation (NEW, separate mode)
+
+Story Mode is a separate case-driven game. It has its own commands, phase machine and persistence key. The classic Blackvale/Manor Murder Mystery commands and lobby are not replaced.
+
+- `.j murder story help` - list the Story Mode commands
+- `.j murder story create` - open a Story Mode lobby
+- `.j murder story join` / `.j murder story leave` - join or leave before the case begins
+- `.j murder story start` - host starts with 4-8 players
+- `.j murder story status` / `.j murder story rooms` - show public status or privately list the case map
+- `.j murder story dossier` - privately review role, secret, objective, relationship and personal account
+- `.j murder story search <room>` - search a location (private result)
+- `.j murder story question <player>` - reveal a suspect's official account to the group
+- `.j murder story evidence` / `.j murder story inspect <E-ID>` - review known and shared clues
+- `.j murder story share <E-ID>` - add a discovered clue to the public record
+- `.j murder story frame <player> [room]` / `.j murder story blackmail <player>` - Killer night actions
+- `.j murder story protect <player>` - Guardian action
+- `.j murder story compare <player>` - Investigator action
+- `.j murder story seance` - Medium action
+- `.j murder story spread <player>` - Accomplice action
+- `.j murder story accuse <player> | E01,E02` - submit a formal theory during discussion
+- `.j murder story vote <player or skip>` - submit a private ballot
+- `.j murder story end` - host-only close
+
+Private evidence stays private until deliberately shared. The game uses the existing local Victorian-noir backgrounds, character sprites, clue illustrations, fonts and card renderer. No external asset downloads occur during live play. External art candidates and licensing checks are documented in `docs/murder-mystery-story-mode-assets.md`.
+
+**QA:** `node scripts/mm_story_qa.js` covers role distribution, case generation, evidence IDs, character/room targeting, and verdict thresholds. This does not replace an end-to-end WhatsApp integration run.
