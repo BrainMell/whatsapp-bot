@@ -626,7 +626,8 @@ async function advancePhase(chatId) {
       await resolveNight(game);
       setPhase(game, 'DISCUSSION', '🕯️ *The bell rings again.* The house is open for a final investigation and public questions. Build a theory before the verdict.');
     } else if (game.phase === 'DISCUSSION') {
-      setPhase(game, 'VOTING', '⚖️ *The final verdict.* Use ' + game.prefix + ' murder story vote <player number or name>. A strict majority is required.');
+      const tally = accusationTallyLine(game);
+      setPhase(game, 'VOTING', '⚖️ *The final verdict.* Use ' + game.prefix + ' murder story vote <player number or name> in the bot DM. A strict majority is required.\n\n' + tally);
     } else if (game.phase === 'VOTING') {
       await finishGame(game);
     }
@@ -709,10 +710,19 @@ async function finishGame(game) {
   const objectiveLines = objectives.map((o) =>
     (o.complete ? '✓ ' : '· ') + o.name + ' (' + o.role + '): ' + (o.objective || 'No objective')
   ).join('\n');
+  const accusationLines = Object.entries(game.accusations || {}).map(([jid, accusation]) => {
+    const accuser = playerByJid(game, jid);
+    const target = accusation && playerByJid(game, accusation.targetJid);
+    if (!accuser || !target) return null;
+    return accuser.name + ' accused ' + target.name + (accusation.evidenceIds && accusation.evidenceIds.length
+      ? ' citing ' + accusation.evidenceIds.join(', ')
+      : ' without citing evidence');
+  }).filter(Boolean);
   const fullReveal = '🕯️ *CASE FILE CLOSED: ' + MODE_NAME + '*\n\n' +
     'The killer was ' + (killer ? killer.name + ' (' + killer.char.name + ')' : 'unknown') + '.\n' +
     'Motive: ' + game.case.motive.detail + '\n' + truthLines.join('\n') +
-    '\n\n*Personal objectives*\n' + objectiveLines;
+    '\n\n*Formal accusation record*\n' + (accusationLines.length ? accusationLines.join('\n') : 'No formal accusations were filed.') +
+    '\n\n*Personal objectives*\n' + objectiveLines
   // Never rely on the image alone for the reveal: some card layouts intentionally
   // show only a summary, while this text carries the complete case outcome.
   await groupText(game, fullReveal);
@@ -1195,6 +1205,26 @@ async function accuse(game, player, raw) {
   return privateText(game, player, '⚖️ Your accusation is sealed against ' + targetResult.player.name + '.\nEvidence cited: ' + (valid.length ? valid.join(', ') : 'none') + '.\nThe verdict vote is separate and happens in the next phase.');
 }
 
+function accusationTally(game) {
+  const counts = new Map();
+  for (const accusation of Object.values(game.accusations || {})) {
+    if (!accusation || !accusation.targetJid) continue;
+    const key = normJid(accusation.targetJid);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([jid, count]) => ({ jid, count, player: playerByJid(game, jid) }))
+    .filter((row) => row.player)
+    .sort((a, b) => b.count - a.count || a.player.name.localeCompare(b.player.name));
+}
+
+function accusationTallyLine(game) {
+  const rows = accusationTally(game);
+  if (!rows.length) return 'No formal accusations were filed. Every guest may still cast a vote.';
+  return 'Sealed accusations received: ' + rows.map((r) => r.player.name + ' (' + r.count + ')').join(' · ') +
+    '. The individual accusers and any private evidence remain sealed until the case closes.';
+}
+
 async function castVote(game, player, raw) {
   if (game.phase !== 'VOTING') return privateText(game, player, 'Voting has not opened yet.');
   const text = String(raw || '').trim();
@@ -1234,9 +1264,9 @@ function helpText(prefix) {
   const p = prefix || '.j';
   return '🕯️ *BLACKVALE STORY MODE*\nA separate, case-driven mystery. Classic Murder Mystery still works exactly as before.\n\n' +
     '*Lobby*\n' + p + ' murder story create\n' + p + ' murder story join\n' + p + ' murder story leave\n' + p + ' murder story start\n' + p + ' murder story status\n\n' +
-    '*Investigate*\n' + p + ' murder story rooms\n' + p + ' murder story search <room>\n' + p + ' murder story question <player>\n' + p + ' murder story evidence\n' + p + ' murder story inspect <clue ID>\n' + p + ' murder story share <clue ID>\n' + p + ' murder story dossier\n\n' +
-    '*Hidden night actions*\n' + p + ' murder story frame <player> [room] (killer)\n' + p + ' murder story blackmail <player> (killer)\n' + p + ' murder story protect <player> (guardian)\n' + p + ' murder story compare <player> (investigator)\n' + p + ' murder story seance (medium)\n' + p + ' murder story spread <player> (accomplice)\n\n' +
-    '*Finale*\n' + p + ' murder story accuse <player> | E01,E02\n' + p + ' murder story vote <player or skip>\n' + p + ' murder story end (host only)\n\n' +
+    '*Investigate*\n' + p + ' murder story rooms (DM)\n' + p + ' murder story search <room> (DM)\n' + p + ' murder story question <player> (public account)\n' + p + ' murder story evidence (DM)\n' + p + ' murder story inspect <clue ID> (DM)\n' + p + ' murder story share <clue ID> (public)\n' + p + ' murder story dossier (DM)\n\n' +
+    '*Hidden night actions (DM)*\n' + p + ' murder story frame <player> [room] (killer)\n' + p + ' murder story blackmail <player> (killer)\n' + p + ' murder story protect <player> (guardian)\n' + p + ' murder story compare <player> (investigator)\n' + p + ' murder story seance (medium)\n' + p + ' murder story spread <player> (accomplice)\n\n' +
+    '*Finale*\n' + p + ' murder story accuse <player> | E01,E02 (DM)\n' + p + ' murder story vote <player or skip> (DM)\n' + p + ' murder story end (host only)\n\n' +
     'Search results are private until shared. An alibi is a claim, secrets are not proof, and the final verdict needs a strict majority.';
 }
 
@@ -1333,6 +1363,8 @@ module.exports = {
     findRoom,
     verdict,
     objectiveComplete,
+    accusationTally,
+    accusationTallyLine,
     PHASE_MS: DURATIONS,
   },
 };
