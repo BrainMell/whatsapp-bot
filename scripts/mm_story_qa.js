@@ -5,6 +5,31 @@
 // No WhatsApp connection, MongoDB writes, or image rendering is required.
 
 const assert = require('node:assert/strict');
+const path = require('node:path');
+
+// Keep this harness offline and side-effect free. Story Mode's game rules use
+// the existing system-data API, but tests only need a small in-memory store.
+const memory = new Map();
+const systemPath = require.resolve(path.join(__dirname, '..', 'core', 'utils', 'system.js'));
+const botConfigPath = require.resolve(path.join(__dirname, '..', 'botConfig.js'));
+require.cache[systemPath] = {
+  id: systemPath,
+  filename: systemPath,
+  loaded: true,
+  exports: {
+    get: (key, fallback = null) => memory.has(key) ? memory.get(key) : fallback,
+    getFresh: async (key, fallback = null) => memory.has(key) ? memory.get(key) : fallback,
+    set: async (key, value) => { memory.set(key, value); },
+    loadSystemData: async () => {},
+  },
+};
+require.cache[botConfigPath] = {
+  id: botConfigPath,
+  filename: botConfigPath,
+  loaded: true,
+  exports: { getBotId: () => 'story-qa-bot' },
+};
+
 const story = require('../core/games/murdermystery/storyMode');
 
 const { makeGame, makeCase, roleDeck, findTarget, findRoom, verdict } = story._internal;
