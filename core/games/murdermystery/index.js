@@ -601,7 +601,7 @@ function scheduleReminder(chatId, ms, kind) {
 
 async function sendPhaseReminder(chatId, kind) {
   const g = getGame(chatId);
-  if (!g || !g.deadline) return;
+  if (!g || !g.deadline || g.testMode) return; // shortened sandbox phases do not use production reminders
   const prefix = g.prefix || '.j';
   if (kind === 'discussion' && g.phase === PHASE.DISCUSSION) {
     const unfound = (g.bodies || []).filter((b) => !b.found).length;
@@ -649,13 +649,16 @@ function schedulePhaseTimer(chatId) {
 function scheduleNudge(chatId) {
   const g = getGame(chatId);
   if (!g || !g.deadline) return;
+  // Clear the previous round's reminder before deciding whether this short
+  // sandbox night is long enough to warrant a new one.
+  if (nudges.has(chatId)) clearTimeout(nudges.get(chatId));
+  nudges.delete(chatId);
   const fireIn = g.deadline - NUDGE_BEFORE_MS - Date.now();
   if (fireIn <= 1500) return; // too late to bother
   const n = setTimeout(() => {
     nudges.delete(chatId);
     sendNightNudges(chatId).catch((e) => console.error('🔪 [MurderMystery] nudge error:', e.message));
   }, fireIn);
-  if (nudges.has(chatId)) clearTimeout(nudges.get(chatId));
   nudges.set(chatId, n);
 }
 
@@ -1872,7 +1875,8 @@ async function beginDiscussion(sock, chatId) {
   schedulePhaseTimer(chatId);
   // reminder fires 60s BEFORE the deadline (2026-10-12 fix: it used to fire
   // 60s AFTER the phase began, announcing "ONE minute" with four minutes left)
-  scheduleReminder(chatId, Math.max(5000, discussionMs - (g.testMode ? 5000 : DISCUSS_REMIND_BEFORE_MS)), 'discussion');
+  if (!g.testMode) scheduleReminder(chatId, Math.max(5000, discussionMs - DISCUSS_REMIND_BEFORE_MS), 'discussion');
+  else if (reminders.has(chatId)) { clearTimeout(reminders.get(chatId)); reminders.delete(chatId); }
   ensureWatchdog();
   console.log(`🔪 [MurderMystery] DISCUSSION begins (night ${g.night}) in ${chatId}`);
 
@@ -2568,7 +2572,8 @@ async function beginVoting(sock, chatId) {
   g._poll = null; // fresh ballot UI every round - a stale poll must never survive into the next vote
   persistGames();
   schedulePhaseTimer(chatId);
-  scheduleReminder(chatId, Math.max(3000, votingMs - (g.testMode ? 4000 : VOTE_REMIND_BEFORE_MS)), 'vote');
+  if (!g.testMode) scheduleReminder(chatId, Math.max(3000, votingMs - VOTE_REMIND_BEFORE_MS), 'vote');
+  else if (reminders.has(chatId)) { clearTimeout(reminders.get(chatId)); reminders.delete(chatId); }
   ensureWatchdog();
   console.log(`🔪 [MurderMystery] VOTING begins (${alivePlayers(g).length} alive) in ${chatId}`);
 
