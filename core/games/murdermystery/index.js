@@ -34,6 +34,7 @@ const cases = require('./cases');
 const caseGen = require('./caseGen');
 const cards = require('./cards');
 const halloweenCards = require('./halloweenCards');
+const storyMode = require('./storyMode');
 const crypto = require('crypto');
 // baileys 7 rc14 ships poll-vote decryption but never calls it (the block in
 // Utils/process-message.js is commented out with a TODO), so we invoke its own
@@ -3860,7 +3861,41 @@ async function handleHalloweenCommand(ctx) {
 }
 
 async function handleCommand(ctx) {
+  // Hydrate both isolated state machines before checking cross-mode exclusivity.
+  // These services also let Story Mode restore timers after a process restart.
+  const storyServices = {
+    sendGroup,
+    sendGroupImage,
+    sendDM,
+    cards,
+    cases,
+    characters,
+    caseGen,
+    system,
+    botConfig,
+    getSock: getSockSafe,
+    classicActive: (groupChatId) => {
+      const existing = getGame(groupChatId);
+      return !!existing && existing.phase !== 'ENDED' && existing.phase !== 'FINISHED';
+    },
+  };
+  storyMode.init(storyServices);
   ensureRehydrated();
+
+  // Blackvale Story Mode is a separate game with its own state, phase machine,
+  // timers, commands, and persistence key. Route before touching classic MM.
+  const requestedMode = String(ctx.sub || '').toLowerCase().replace(/[^a-z]/g, '');
+  if (['story', 'chronicle', 'casefiles'].includes(requestedMode)) {
+    return storyMode.handleCommand(ctx, storyServices);
+  }
+  // Do not let the classic mode create/advance a second game over Story Mode
+  // in the same group. Both modes remain selectable; a group runs one at once.
+  if (storyMode.hasActiveGame(ctx.chatId) &&
+      !['help', 'rules', 'howto', 'lb', 'leaderboard', 'top', 'scoreboard', 'ranking', 'rankings'].includes(requestedMode)) {
+    return sendGroup(ctx.sock, ctx.chatId,
+      '🕯️ Blackvale Story Mode is active in this group. Use ' + (ctx.prefix || '.j') +
+      ' murder story help, or finish the case before opening/using Classic Murder Mystery. The classic mode has not been replaced.');
+  }
   const { sock, chatId, senderJid, botMarker } = ctx;
   // capture the live sock on any game in this chat - timer-driven sends
   // (vote prompt, dawn, reminders) must use the account that is IN the group
@@ -4005,6 +4040,19 @@ async function handleCommand(ctx) {
 // init() is safe to call from engine boot (after system data loads)
 function init() {
   ensureRehydrated();
+  storyMode.init({
+    sendGroup,
+    sendGroupImage,
+    sendDM,
+    cards,
+    cases,
+    characters,
+    caseGen,
+    system,
+    botConfig,
+    getSock: getSockSafe,
+    classicActive: (groupChatId) => !!getGame(groupChatId),
+  });
 }
 
 module.exports = {
