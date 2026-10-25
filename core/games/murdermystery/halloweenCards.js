@@ -82,8 +82,8 @@ async function drawCharacter(ctx, character, w, h, tall) {
   if (!character || !character.id) return;
   try {
     const img = await cards.loadSprite(character.id);
-    const maxH = h * (tall ? 0.47 : 0.61);
-    const maxW = w * (tall ? 0.43 : 0.31);
+    const maxH = h * (tall ? 0.44 : 0.54);
+    const maxW = w * (tall ? 0.40 : 0.28);
     const scale = Math.min(maxH / img.height, maxW / img.width);
     const sw = Math.max(1, Math.round(img.width * scale));
     const sh = Math.max(1, Math.round(img.height * scale));
@@ -102,7 +102,7 @@ async function drawCharacter(ctx, character, w, h, tall) {
     sctx.putImageData(frame, 0, 0);
 
     const cx = w * (tall ? 0.78 : 0.80);
-    const bottomY = h * (tall ? 0.79 : 0.91);
+    const bottomY = h * (tall ? 0.83 : 0.91);
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.78)';
     ctx.shadowBlur = tall ? 22 : 18;
@@ -146,7 +146,7 @@ async function render(input) {
     const character=input.character||input.char||input.victimChar||input.killerChar;
     await drawCharacter(ctx, character, w, h, tall);
     ctx.textAlign='left';ctx.fillStyle='#f8e9ca';ctx.font=(tall?'27px':'28px')+' EB-Reg';
-    for(const raw of lines.slice(0,tall?7:5)){if(!raw)continue;const line='• '+String(raw);y=writeWrap(ctx,line,tall?60:92,y,tall?w*.60:w*.65,tall?39:40,2)+(tall?11:8);if(y>h-170)break;}
+    for(const raw of lines.slice(0,tall?7:5)){if(!raw)continue;const line='• '+String(raw);y=writeWrap(ctx,line,tall?60:92,y,tall?w*.50:w*.52,tall?39:40,2)+(tall?11:8);if(y>h-170)break;}
     ctx.fillStyle='#ef8f42';ctx.beginPath();ctx.arc(w-(tall?100:130),h-(tall?122:116),tall?48:54,0,Math.PI*2);ctx.fill();
     ctx.fillStyle='#1a1220';ctx.font='bold '+(tall?20:22)+'px PF-Bold';ctx.textAlign='center';ctx.fillText('31',w-(tall?100:130),h-(tall?114:108));
     ctx.font=(tall?'13px':'14px')+' Type';ctx.fillText('OCT',w-(tall?100:130),h-(tall?92:84));
