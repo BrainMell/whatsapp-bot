@@ -23,7 +23,8 @@ const introStart = indexSrc.indexOf('function scheduleIntros(sock, chatId, cast)
 const introEnd = indexSrc.indexOf('\nfunction butlerOf(g)', introStart);
 assert.ok(introStart >= 0 && introEnd > introStart, 'intro scheduler exists');
 const intro = indexSrc.slice(introStart, introEnd);
-check(!intro.includes('gg.testMode'), 'intro timer delay does not reference callback-scoped gg');
+const introCode = intro.replace(/\/\/[^\\n]*/g, '');
+check(intro.includes('const testMode = !!g.testMode') && !introCode.includes('gg.testMode') && introCode.includes('(testMode ? 500 : INTRO_FIRST_MS)'), 'intro timer delay uses the captured game mode, not callback-scoped gg');
 check(intro.includes('finally') && intro.includes('step(i + 1)'), 'intro chain advances even after a card send failure');
 check(intro.includes('beginNight(sockForGame(current), chatId)'), 'last guest card transitions into NIGHT');
 check(indexSrc.includes("const discussionMs = g.testMode ? 18000 : DISCUSS_MS") &&
