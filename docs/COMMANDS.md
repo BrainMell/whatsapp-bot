@@ -372,4 +372,4 @@ Story Mode is a separate case-driven game. It has its own commands, phase machin
 
 Private evidence stays private until deliberately shared. The game uses the existing local Victorian-noir backgrounds, character sprites, clue illustrations, fonts and card renderer. No external asset downloads occur during live play. External art candidates and licensing checks are documented in `docs/murder-mystery-story-mode-assets.md`.
 
-**QA:** `node scripts/mm_story_qa.js` covers role distribution, case generation, evidence IDs, character/room targeting, and verdict thresholds. This does not replace an end-to-end WhatsApp integration run.
+**QA:** `node scripts/mm_story_qa.js` covers role distribution, case generation, private clue ownership, bundled scene/character/evidence asset paths, accusation tallying, dispatcher routing, target/room lookup and verdict thresholds. This does not replace an end-to-end WhatsApp integration run.
