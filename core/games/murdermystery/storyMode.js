@@ -737,7 +737,7 @@ async function showDossier(game, player) {
   else if (player.role === 'ACCOMPLICE') roleLines.push('During the night, use spread <player> to seed an anonymous false lead.');
   else roleLines.push('Search carefully, question suspects, share evidence, and build a supported accusation.');
   const sections = [
-    { title: 'Your role', lines: roleLines.slice(0, 4) },
+    { title: 'Your role', lines: roleLines },
     { title: 'Your private secret', lines: [player.secret] },
     { title: 'Your relationship', lines: [player.relationship || 'A private tie links you to the house.'] },
     { title: 'Your account', lines: [
@@ -1036,7 +1036,7 @@ async function searchRoom(game, player, raw) {
   const limit = player.role === 'INVESTIGATOR' ? 2 : 1;
   if (used >= limit) return privateText(game, player, 'You have used your search allowance for this phase (' + used + '/' + limit + ').');
   player.searchesByPhase[game.phase] = used + 1;
-  const clue = game.evidence.find((c) => !c.discovered && c.roomId === room.id);
+  const clue = game.evidence.find((c) => !c.discovered && c.roomId === room.id && !(c.secretForJid && normJid(c.secretForJid) !== normJid(player.jid)));
   if (!clue) {
     persist();
     await groupText(game, '🔎 ' + player.name + ' searched the ' + room.name + '. The room yields no new evidence.');
@@ -1281,9 +1281,17 @@ async function handleCommand(ctx, services) {
   }
   if (action === 'start') return startGame(ctx, game);
   if (action === 'status' || action === 'players') return showStatus(game);
-  if (action === 'rooms') return showRooms(game, playerForAction(ctx, game));
   const player = playerForAction(ctx, game);
   if (!player) return groupContext ? groupText(game, 'Only guests on this Story Mode roster can use case actions.') : runtime.sendDM(ctx.sock, ctx.senderJid, 'You are not on the guest list for this Story Mode case.');
+  if (action === 'rooms') return showRooms(game, player);
+  const dmOnlyActions = new Set([
+    'dossier', 'role', 'evidence', 'journal', 'search', 'inspectroom', 'inspect',
+    'frame', 'blackmail', 'protect', 'compare', 'seance', 'spread', 'accuse', 'vote',
+  ]);
+  if (groupContext && dmOnlyActions.has(action)) {
+    return groupText(game, '🔒 For privacy, send `' + game.prefix + ' murder story ' + action +
+      (arg ? ' …' : '') + '` in the bot’s DM. The hidden action was not submitted.');
+  }
   if (action === 'dossier' || action === 'role') return showDossier(game, player);
   if (action === 'evidence' || action === 'journal') return showEvidence(game, player);
   if (action === 'search' || action === 'inspectroom') return searchRoom(game, player, arg);
