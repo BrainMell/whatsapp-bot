@@ -717,10 +717,12 @@ async function onPhaseTimeout(chatId, sockOverride = null, opts = {}) {
   if (g.phase === PHASE.NIGHT) {
     if (nightNeedsExtension(g)) {
       g.extendedTonight = true;
-      g.deadline = Date.now() + DAWN_EXTEND_MS;
+      g.deadline = Date.now() + (g.testMode ? 4000 : DAWN_EXTEND_MS);
       persistGames();
       schedulePhaseTimer(chatId);
-      await sendGroup(sock, chatId, `🌙 Dawn hesitates. The manor grants the darkness one more minute.`);
+      await sendGroup(sock, chatId, g.testMode
+        ? `🌙 The sandbox gives the night one brief extra window for missed actions.`
+        : `🌙 Dawn hesitates. The manor grants the darkness one more minute.`);
       await sendNightNudges(chatId);
       return;
     }
@@ -1143,14 +1145,27 @@ function scheduleIntros(sock, chatId, cast) {
       const s = sockForGame(gg);
       try {
         const buf = await renderGameCard(gg, 'renderCharacterIntroCard', 'character', { char: c, caption: cap, index: i + 1, total: cast.length, manorName: cases.MANOR_NAME });
-        if (buf) await sendGroupImage(s, chatId, buf, `🕯️ *${c.name}* — ${c.title}\n_${cap}_`);
-        else throw new Error('intro render null');
+        if (buf) {
+          const sent = await sendGroupImage(s, chatId, buf, `🕯️ *${c.name}* — ${c.title}\n_${cap}_`);
+          if (!sent) await sendGroup(s, chatId, `🕯️ *${c.name}* — ${c.title}\n_${cap}_`);
+        } else {
+          await sendGroup(s, chatId, `🕯️ *${c.name}* — ${c.title}\n_${cap}_`);
+        }
       } catch (e) {
-        await sendGroup(s, chatId, `🕯️ *${c.name}* — ${c.title}\n_${cap}_`);
+        console.error('🔪 [MurderMystery] guest intro card failed:', e.message);
+        try { await sendGroup(s, chatId, `🕯️ *${c.name}* — ${c.title}\n_${cap}_`); } catch (_) {}
+      } finally {
+        // Do not let a failed image/text send strand the case on its intro card.
+        const current = getGame(chatId);
+        if (current && current.phase === 'STARTING') {
+          if (i + 1 < cast.length) step(i + 1);
+          else {
+            try { await beginNight(sockForGame(current), chatId); }
+            catch (e) { console.error('🔪 [MurderMystery] intro-to-night transition failed:', e.message); }
+          }
+        }
       }
-      if (i + 1 < cast.length) step(i + 1);
-      else beginNight(s, chatId);
-    }, i === 0 ? (gg.testMode ? 500 : INTRO_FIRST_MS) : (gg.testMode ? 900 : INTRO_INTERVAL_MS));
+    }, i === 0 ? (g.testMode ? 500 : INTRO_FIRST_MS) : (g.testMode ? 900 : INTRO_INTERVAL_MS));
     if (!introTimers.has(chatId)) introTimers.set(chatId, []);
     introTimers.get(chatId).push(t);
   };
