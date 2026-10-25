@@ -3875,7 +3875,16 @@ async function handleCommand(ctx) {
       caseGen,
       system,
       botConfig,
+      classicActive: (groupChatId) => !!getGame(groupChatId),
     });
+  }
+  // Do not let the classic mode create/advance a second game over Story Mode
+  // in the same group. Both modes remain selectable; a group runs one at once.
+  if (storyMode.hasActiveGame(ctx.chatId) &&
+      !['help', 'rules', 'howto', 'lb', 'leaderboard', 'top', 'scoreboard', 'ranking', 'rankings'].includes(requestedMode)) {
+    return sendGroup(ctx.sock, ctx.chatId,
+      '🕯️ Blackvale Story Mode is active in this group. Use ' + (ctx.prefix || '.j') +
+      ' murder story help, or finish the case before opening/using Classic Murder Mystery. The classic mode has not been replaced.');
   }
   ensureRehydrated();
   const { sock, chatId, senderJid, botMarker } = ctx;
