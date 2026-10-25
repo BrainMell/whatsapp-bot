@@ -102,6 +102,7 @@ game.votes = {
   voter2: killer.jid,
   voter3: killer.jid,
   voter4: killer.jid,
+  voter5: killer.jid,
 };
 assert.equal(verdict(game).targetJid, killer.jid, 'strict majority can return the killer');
 game.votes = { voter1: killer.jid, voter2: killer.jid, voter3: killer.jid };
