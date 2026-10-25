@@ -149,7 +149,7 @@ async function render(input) {
   return cards.renderCard(w,h,async function(ctx) {
     await drawScene(ctx,w,h,tall,kind);
     ctx.strokeStyle=accent;ctx.lineWidth=4;ctx.strokeRect(24,24,w-48,h-48);
-    ctx.strokeStyle=roleStyle ? accent+'88' : 'rgba(238,211,157,.45)';ctx.lineWidth=1.5;ctx.strokeRect(38,38,w-76,h-76);
+    ctx.strokeStyle=roleStyle ? accent : 'rgba(238,211,157,.45)';ctx.lineWidth=1.5;ctx.strokeRect(38,38,w-76,h-76);
     ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.fillStyle=accent;ctx.font=(tall?'23px':'25px')+' Type';ctx.fillText(String(kicker).toUpperCase().slice(0,90),w/2,tall?100:92);
     ctx.fillStyle='#f7e7c5';ctx.shadowColor='#e27739';ctx.shadowBlur=16;ctx.font='bold '+(tall?54:76)+'px PF-Black';
     writeWrap(ctx,String(title).toUpperCase(),w/2,tall?190:190,w-120,tall?64:82,2);ctx.shadowBlur=0;
