@@ -28,6 +28,8 @@ jobs:
           set -e
           node --check core/games/murdermystery/index.js
           node --check core/games/murdermystery/halloweenCards.js
+          node --check scripts/qa_murdermystery_halloween.js
+          node scripts/qa_murdermystery_halloween.js
           node --check core/rpg/guildAdventure.js
           node --check core/rpg/abyssScene.js
           node --check core/rpg/interior3d/scene.js
