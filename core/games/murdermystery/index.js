@@ -27,6 +27,7 @@
 // ============================================
 
 const system = require('../../utils/system');
+const lidResolver = require('../../utils/lidResolver');
 const botConfig = require('../../../botConfig');
 const characters = require('./characters');
 const cases = require('./cases');
@@ -2756,8 +2757,7 @@ async function createVotePoll(sock, chatId, g, alive) {
     for (const opt of optionNames) hashes[pollOptionHash(opt)] = opt;
     const secret = crypto.randomBytes(32);
     const sent = await sock.sendMessage(chatId, {
-      poll: { name: POLL_NAME, values: optionNames, selectableCount: 1 },
-      messageSecret: secret, // rides into messageContextInfo - voters' clients encrypt their ballots against it
+      poll: { name: POLL_NAME, values: optionNames, selectableCount: 1, messageSecret: secret }, // MUST be nested here; Baileys reads message.poll.messageSecret
     });
     if (sent && sent.key) {
       g._poll = { key: sent.key, secret, hashes };
@@ -2784,23 +2784,75 @@ async function handlePollVoteMessage(m, sock, botMarker) {
     if (g._resolving || g._resolving2) return; // the count is underway - same rule as text ballots
     const meIdNorm = jidNormalizedUser((sock && sock.user && sock.user.id) || '');
     const keyAuthor = (key) => jidNormalizedUser(key && key.fromMe ? meIdNorm : ((key && (key.participant || key.remoteJid)) || ''));
-    const voterJid = keyAuthor(m.key);
-    const voteMsg = decryptPollVote(
-      { encPayload: content.vote.encPayload, encIv: content.vote.encIv },
-      { pollEncKey: g._poll.secret, pollCreatorJid: keyAuthor(creationKey), pollMsgId: g._poll.key.id, voterJid }
+    const rawVoterJid = keyAuthor(m.key);
+
+    // WhatsApp poll encryption may use a LID for the creator and a phone-number
+    // JID for the voter. Try known aliases instead of silently discarding valid
+    // ballots from groups where WhatsApp identifies participants by LID.
+    const aliasesFor = (jid) => {
+      const aliases = [];
+      const add = (value) => {
+        if (!value) return;
+        try {
+          const normalized = jidNormalizedUser(String(value));
+          if (normalized && !aliases.includes(normalized)) aliases.push(normalized);
+        } catch (_) {}
+      };
+      add(jid);
+      try {
+        const mapped = lidResolver.getMapping(jid);
+        if (mapped && mapped.phone) add(mapped.phone + '@s.whatsapp.net');
+        if (mapped && mapped.lid) add(mapped.lid + '@lid');
+        const phone = lidResolver.resolveToPhone(jid);
+        if (phone) add(phone);
+      } catch (_) {}
+      return aliases;
+    };
+    const creatorJids = [];
+    if (creationKey.fromMe) {
+      // sock.user.lid is the preferred creator ID for poll-vote key derivation.
+      creatorJids.push(...aliasesFor((sock && sock.user && sock.user.lid) || ''));
+    }
+    creatorJids.push(...aliasesFor(keyAuthor(creationKey)));
+    creatorJids.push(...aliasesFor((sock && sock.user && sock.user.id) || ''));
+    const uniqueCreatorJids = [...new Set(creatorJids)];
+    const voterJids = aliasesFor(rawVoterJid).sort((a, b) =>
+      Number(b.endsWith('@s.whatsapp.net')) - Number(a.endsWith('@s.whatsapp.net'))
     );
+
+    let voteMsg = null;
+    let decryptError = null;
+    for (const pollCreatorJid of uniqueCreatorJids) {
+      for (const voterJidCandidate of voterJids) {
+        try {
+          voteMsg = decryptPollVote(
+            content.vote,
+            { pollEncKey: g._poll.secret, pollCreatorJid, pollMsgId: g._poll.key.id, voterJid: voterJidCandidate }
+          );
+          if (voteMsg) break;
+        } catch (e) { decryptError = e; }
+      }
+      if (voteMsg) break;
+    }
+    if (!voteMsg) {
+      console.log(`🔪 [MurderMystery] poll vote decryption failed for ${String(rawVoterJid || '').slice(-8)}: ${decryptError ? decryptError.message : 'no JID candidates'}`);
+      return;
+    }
     const optionName = ((voteMsg && voteMsg.selectedOptions) || [])
       .map((o) => Buffer.from(o).toString('hex'))
       .map((hex) => g._poll.hashes[hex])
       .find(Boolean);
     if (!optionName) return; // deselection or unknown option - the current ballot stands
-    const me = getPlayer(g, voterJid);
+    const voterAliases = new Set(aliasesFor(rawVoterJid));
+    const me = getPlayer(g, rawVoterJid) || g.players.find((player) =>
+      aliasesFor(player.jid).some((alias) => voterAliases.has(alias))
+    );
     if (!me || !me.alive) {
       if (me) console.log(`🔪 [MurderMystery] poll tap from a dead guest ignored in ${chatId}`);
       else console.log(`🔪 [MurderMystery] poll tap from an unknown jid (${String(voterJid || '').slice(-8)}) ignored in ${chatId}`);
       return; // onlookers and the dead tap silently - text commands answer them
     }
-    const ctx = { sock, chatId, senderJid: voterJid, botMarker: botMarker || '', isGroup: true, viaPoll: true };
+    const ctx = { sock, chatId, senderJid: me.jid, botMarker: botMarker || '', isGroup: true, viaPoll: true };
     if (optionName === 'Skip') return castVoteInGame(ctx, g, 'skip');
     const num = optionName.match(/^(\d+)\./);
     if (!num) return;
