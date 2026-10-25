@@ -73,6 +73,7 @@ function loadPersisted() {
     game._sock = null;
     game._transitioning = false;
     games.set(chatId, game);
+    if (game.phase !== 'LOBBY' && game.phase !== 'FINISHED' && game.deadline) schedulePhase(game);
   }
 }
 
@@ -111,11 +112,23 @@ function bindContext(ctx, game) {
   if (game.phase !== 'LOBBY' && game.phase !== 'FINISHED' && !timers.has(game.chatId)) schedulePhase(game);
 }
 
+function sockForGame(game) {
+  if (game && game._sock) return game._sock;
+  try {
+    const sock = runtime.getSock ? runtime.getSock() : null;
+    if (sock && game) game._sock = sock;
+    return sock || null;
+  } catch (_) {
+    return null;
+  }
+}
+
 async function groupText(game, text, extra) {
   try {
-    if (!game || !game._sock) return false;
-    if (runtime.sendGroup) return await runtime.sendGroup(game._sock, game.chatId, text, extra || {});
-    await game._sock.sendMessage(game.chatId, { text: text, ...(extra || {}) });
+    const sock = sockForGame(game);
+    if (!game || !sock) return false;
+    if (runtime.sendGroup) return await runtime.sendGroup(sock, game.chatId, text, extra || {});
+    await sock.sendMessage(game.chatId, { text: text, ...(extra || {}) });
     return true;
   } catch (e) {
     console.error('[MM Story] group send failed:', e.message);
@@ -126,8 +139,10 @@ async function groupText(game, text, extra) {
 async function groupImage(game, buf, caption) {
   if (!buf) return false;
   try {
-    if (runtime.sendGroupImage) return await runtime.sendGroupImage(game._sock, game.chatId, buf, caption || '');
-    await game._sock.sendMessage(game.chatId, { image: buf, caption: caption || '' });
+    const sock = sockForGame(game);
+    if (!game || !sock) return false;
+    if (runtime.sendGroupImage) return await runtime.sendGroupImage(sock, game.chatId, buf, caption || '');
+    await sock.sendMessage(game.chatId, { image: buf, caption: caption || '' });
     return true;
   } catch (e) {
     console.error('[MM Story] group image failed:', e.message);
@@ -137,9 +152,10 @@ async function groupImage(game, buf, caption) {
 
 async function privateText(game, player, text) {
   try {
-    if (!game || !game._sock || !player || !player.jid) return false;
-    if (runtime.sendDM) return await runtime.sendDM(game._sock, player.jid, text);
-    await game._sock.sendMessage(player.jid, { text: text });
+    const sock = sockForGame(game);
+    if (!game || !sock || !player || !player.jid) return false;
+    if (runtime.sendDM) return await runtime.sendDM(sock, player.jid, text);
+    await sock.sendMessage(player.jid, { text: text });
     return true;
   } catch (e) {
     console.error('[MM Story] DM failed:', e.message);
@@ -150,7 +166,9 @@ async function privateText(game, player, text) {
 async function privateImage(game, player, buf, caption) {
   if (!buf) return false;
   try {
-    await game._sock.sendMessage(player.jid, { image: buf, caption: caption || '' });
+    const sock = sockForGame(game);
+    if (!game || !sock || !player || !player.jid) return false;
+    await sock.sendMessage(player.jid, { image: buf, caption: caption || '' });
     return true;
   } catch (e) {
     console.error('[MM Story] private image failed:', e.message);
@@ -1346,7 +1364,8 @@ function hasActiveGame(chatId) {
   return !!game && game.phase !== 'FINISHED';
 }
 
-function init() {
+function init(services) {
+  runtime = services || runtime || {};
   loadPersisted();
 }
 
