@@ -8798,7 +8798,14 @@ async function endCombat(sock, victory, sessionKey, expectedGen) {
 
   const rewards = {
     gold: totalGold,
-    xp: totalXP,
+    // 💡 XP RECONCILE (owner 2026-10-25 "xp gained from individual bosses is
+    // high but the actual xp you get at the end doesn't register it"): the
+    // victory card used to advertise the RAW encounter XP (totalXP) while
+    // players were CREDITED the rank-capped, party-split, solo-multiplied
+    // xpPerPlayer - so a F-rank boss card said 5,537 XP and the run summary
+    // later said combat: 900. The card now shows the number that actually
+    // lands on the player, keeping every card and the final summary equal.
+    xp: victory ? xpPerPlayer : 0,
     items: (lootResults.items || []).map((item) => ({
       name: item.name || item.id,
     })),
@@ -11447,6 +11454,20 @@ async function endAdventure(sock, sessionKey, victory = true) {
           economy.saveUser(player.jid);
         } else {
           console.error(`[QuestPayout] SP drop skipped: no economy user for ${player.jid}`);
+        }
+      }
+
+      // 💡 XP RECONCILE (owner 2026-10-25 "I like the xp you actually get at
+      // the end but why is it missing from the player?"): the completion
+      // bonus was DISPLAYED in the summary but never credited - addXP only
+      // ran per-combat. The end-of-quest XP the summary promises (base +
+      // guild bonus) now lands on the player, so the final card's number is
+      // the number they actually received.
+      if (__finalXPBase + guildBonusXp > 0) {
+        try {
+          progression.addXP(player.jid, __finalXPBase + guildBonusXp, "Quest completion");
+        } catch (xpErr) {
+          console.error(`[QuestPayout] completion XP credit failed for ${player.jid}:`, xpErr.message);
         }
       }
 
