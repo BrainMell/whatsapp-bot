@@ -148,6 +148,7 @@ const timers = new Map();    // chatId -> Timeout (phase deadline)
 const nudges = new Map();    // chatId -> Timeout (pre-dawn reminder)
 const reminders = new Map(); // chatId -> Timeout (vote/discussion clock reminder)
 const introTimers = new Map(); // chatId -> [Timeout] cast introduction chain
+const testDriverTimers = new Map(); // sandbox NPC driver timers, never persisted
 const silenced = new Map();  // chatId -> Map(normJid -> ts)
 const imgNotices = new Map(); // chatId -> ts (media-gate notice throttle)
 let _watchdog = null;
@@ -975,7 +976,7 @@ async function startGame(ctx) {
   // ---- the manor's purse ----
   // Owner rule 2026-09-14: no entry fee - the manor PAYS a prize to the
   // winning side when the case closes. Anyone can play for free.
-  const purse = g.prize || 0;
+  const purse = g.testMode ? 0 : (g.prize || 0);
 
   // lock lobby, assign characters + secret roles
   // (2026-10-12 role scaling, owner: "10 people playing and there was only
@@ -1060,6 +1061,7 @@ async function startGame(ctx) {
   // mandatory private role cards - paced to respect the flood gods
   const partnerOf = (p) => g.players.find((x) => x.role === p.role && normJid(x.jid) !== normJid(p.jid)) || null;
   for (const p of g.players) {
+    if (p.isNpc) continue; // sandbox guests act internally; never DM fake JIDs
     let sent = false;
     try {
       const buf = await renderGameCard(g, 'renderRoleCard', 'role', {
@@ -1148,7 +1150,7 @@ function scheduleIntros(sock, chatId, cast) {
       }
       if (i + 1 < cast.length) step(i + 1);
       else beginNight(s, chatId);
-    }, i === 0 ? INTRO_FIRST_MS : INTRO_INTERVAL_MS);
+    }, i === 0 ? (gg.testMode ? 500 : INTRO_FIRST_MS) : (gg.testMode ? 900 : INTRO_INTERVAL_MS));
     if (!introTimers.has(chatId)) introTimers.set(chatId, []);
     introTimers.get(chatId).push(t);
   };
@@ -1235,7 +1237,7 @@ async function beginNight(sock, chatId) {
   g.visits = { night: g.night, picks: {} }; // Wave 2b: fresh wander ledger each night
   // Wave 2c: jammed mechanisms forgive with the new night
   for (const s of (g.seals && g.seals.active) || []) s.attempts = 0;
-  g.deadline = Date.now() + NIGHT_MS;
+  g.deadline = Date.now() + (g.testMode ? 18000 : NIGHT_MS);
   g._resolving = false;
   g._resolving2 = false;
   persistGames();
@@ -1843,7 +1845,7 @@ async function beginDiscussion(sock, chatId) {
   if (!beginTransition(g, `discussion${g.night}`)) return; // same-round double-fire guard
   noteSock(g, sock);
   g.phase = PHASE.DISCUSSION;
-  g.deadline = Date.now() + DISCUSS_MS;
+  g.deadline = Date.now() + (g.testMode ? 18000 : DISCUSS_MS);
   g.searches = { night: g.night, used: {} };
   g._resolving = false;
   g._resolving2 = false;
@@ -2540,7 +2542,7 @@ async function beginVoting(sock, chatId) {
   noteSock(g, sock);
   g.phase = PHASE.VOTING;
   g.votes = {};
-  g.deadline = Date.now() + VOTE_MS;
+  g.deadline = Date.now() + (g.testMode ? 12000 : VOTE_MS);
   g._resolving = false;
   g._resolving2 = false;
   g._poll = null; // fresh ballot UI every round - a stale poll must never survive into the next vote
@@ -3690,6 +3692,105 @@ const SUB_FIXES = {
   leadreboard: 'leaderboard', leaderboardd: 'leaderboard',
 };
 
+
+/**
+ * Interactive sandbox: one real player plus simulated guests. NPCs act against
+ * the normal phase machine, but never receive WhatsApp DMs or earn real prizes.
+ */
+const TEST_BOT_NAMES = ['Mara Voss','Edwin Crowe','Iris Bell','Silas Reed','Vera Ash','Jonah Pike','Ada Wren','Felix Vale','Nora Finch','Theo Graves','Mina Locke'];
+function scheduleTestBotDriver(chatId) {
+  if (testDriverTimers.has(chatId)) clearTimeout(testDriverTimers.get(chatId));
+  const tick = async () => {
+    const g = getGame(chatId);
+    if (!g || !g.testMode || g.phase === 'ENDED') { testDriverTimers.delete(chatId); return; }
+    try {
+      const npcs = g.players.filter(p => p.isNpc && p.alive);
+      if (g.phase === PHASE.NIGHT) {
+        const stamp = 'night:' + g.night;
+        if (g._npcActed !== stamp) {
+          g._npcActed = stamp;
+          const killers = npcs.filter(p => p.role === 'KILLER');
+          if (!g.killerTargetJid && killers.length) {
+            const targets = alivePlayers(g).filter(p => p.role !== 'KILLER');
+            if (targets.length) {
+              const target = targets[Math.floor(Math.random() * targets.length)];
+              g.killerTargetJid = target.jid;
+              g.killerRoomIdx = Math.floor(Math.random() * Math.max(1, (g.rooms || []).length));
+              for (const k of killers) g.nightActs[normJid(k.jid)] = { type:'kill', targetJid:target.jid, roomIdx:g.killerRoomIdx };
+            }
+          }
+          for (const p of npcs) {
+            if (p.role === 'INVESTIGATOR') p.compLeft = 0;
+            if (p.role === 'GUARDIAN' && !g.protectTargetJid) {
+              const targets = alivePlayers(g);
+              if (targets.length) g.protectTargetJid = targets[Math.floor(Math.random() * targets.length)].jid;
+            }
+            if (g.rooms && g.rooms.length) g.visits.picks[normJid(p.jid)] = Math.floor(Math.random() * g.rooms.length);
+          }
+          persistGames();
+        }
+      } else if (g.phase === PHASE.DISCUSSION) {
+        const stamp = 'discussion:' + g.night;
+        if (g._npcActed !== stamp) {
+          g._npcActed = stamp;
+          g.searches = g.searches || { night:g.night, used:{} };
+          if (g.searches.night !== g.night) g.searches = { night:g.night, used:{} };
+          for (const p of npcs) {
+            const rooms = g.rooms || [];
+            if (rooms.length) g.searches.used[normJid(p.jid)] = Math.floor(Math.random() * rooms.length);
+          }
+          persistGames();
+        }
+      } else if (g.phase === PHASE.VOTING) {
+        const stamp = 'voting:' + g.night;
+        if (g._npcActed !== stamp) {
+          g._npcActed = stamp;
+          const alive = alivePlayers(g);
+          for (const p of npcs) {
+            const targets = alive.filter(t => normJid(t.jid) !== normJid(p.jid));
+            if (!targets.length) continue;
+            const lastAccuse = (g.log || []).slice().reverse().find(x => x.accusation);
+            let target = null;
+            if (lastAccuse && Math.random() < 0.35) target = targets.find(t => nameOf(t) === lastAccuse.accusation.against);
+            if (!target) target = targets[Math.floor(Math.random() * targets.length)];
+            g.votes[normJid(p.jid)] = target.jid;
+          }
+          persistGames();
+        }
+      }
+    } catch (e) { console.error('🔪 [MurderMystery] sandbox NPC tick failed:', e.message); }
+    const next = setTimeout(tick, 1200);
+    testDriverTimers.set(chatId, next);
+  };
+  const first = setTimeout(tick, 1200);
+  testDriverTimers.set(chatId, first);
+}
+
+async function startTestMode(ctx) {
+  const { sock, chatId, senderJid, botMarker } = ctx;
+  if (!ctx.isGroup) return sendGroup(sock, chatId, `${botMarker}🧪 Start sandbox mode from the group where you want to test.`);
+  if (!ctx.isMod && !isModJid(senderJid)) return sendGroup(sock, chatId, `${botMarker}🧪 Test mode is moderator-only.`);
+  if (getGame(chatId)) return sendGroup(sock, chatId, `${botMarker}🧪 End the current case first with ${ctx.prefix} mm end.`);
+  const raw = String(ctx.rest || '').trim().toLowerCase();
+  const halloween = /halloween|hallowe'en/.test(raw);
+  const match = raw.match(/\b(3|4|5|6|7|8|9|10|11)\b/);
+  const npcCount = match ? Number(match[1]) : 5;
+  await createLobby({ ...ctx, halloweenMode:halloween, sub:'create' });
+  const g = getGame(chatId);
+  if (!g || g.phase !== PHASE.LOBBY) return;
+  g.testMode = true;
+  g.halloween = halloween;
+  g.prize = 0;
+  for (let i=0; i<npcCount && g.players.length < MAX_PLAYERS; i++) {
+    g.players.push({ jid:`mmnpc-${Date.now().toString(36)}-${i}@s.whatsapp.net`, name:TEST_BOT_NAMES[i % TEST_BOT_NAMES.length], char:null, role:'CIVILIAN', alive:true, isNpc:true });
+  }
+  persistGames();
+  await sendGroup(sock, chatId,
+    `${botMarker}🧪 *SANDBOX MODE*\nYou are playing with ${g.players.length-1} simulated guests. No real prize is paid and NPCs never receive DMs.\nThe story introductions are sped up; night/discussion/voting windows are shortened so you can see the full flow.\nUse the normal commands. End the case with ${ctx.prefix} mm end.`);
+  await startGame(ctx);
+  scheduleTestBotDriver(chatId);
+}
+
 async function handleHalloweenCommand(ctx) {
   const raw=String(ctx.rest||'').trim();
   const parts=raw.split(/\s+/).filter(Boolean);
@@ -3750,6 +3851,9 @@ async function handleCommand(ctx) {
   }
 
   switch (sub) {
+    case 'test':
+    case 'sandbox':
+      return startTestMode(ctx);
     case 'halloween':
     case 'halloweencase':
       return handleHalloweenCommand(ctx);
