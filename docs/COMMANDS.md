@@ -355,19 +355,19 @@ Story Mode is a separate case-driven game. It has its own commands, phase machin
 - `.j murder story create` - open a Story Mode lobby
 - `.j murder story join` / `.j murder story leave` - join or leave before the case begins
 - `.j murder story start` - host starts with 4-8 players
-- `.j murder story status` / `.j murder story rooms` - show public status or privately list the case map
-- `.j murder story dossier` - privately review role, secret, objective, relationship and personal account
-- `.j murder story search <room>` - search a location (private result)
+- `.j murder story status` - show public status; `.j murder story rooms` (DM) - privately list the case map
+- `.j murder story dossier` (DM) - privately review role, secret, objective, relationship and personal account
+- `.j murder story search <room>` (DM) - search a location (private result)
 - `.j murder story question <player>` - reveal a suspect's official account to the group
-- `.j murder story evidence` / `.j murder story inspect <E-ID>` - review known and shared clues
+- `.j murder story evidence` / `.j murder story inspect <E-ID>` (DM) - review known and shared clues
 - `.j murder story share <E-ID>` - add a discovered clue to the public record
-- `.j murder story frame <player> [room]` / `.j murder story blackmail <player>` - Killer night actions
-- `.j murder story protect <player>` - Guardian action
-- `.j murder story compare <player>` - Investigator action
-- `.j murder story seance` - Medium action
-- `.j murder story spread <player>` - Accomplice action
-- `.j murder story accuse <player> | E01,E02` - submit a formal theory during discussion
-- `.j murder story vote <player or skip>` - submit a private ballot
+- `.j murder story frame <player> [room]` / `.j murder story blackmail <player>` (DM) - Killer night actions
+- `.j murder story protect <player>` (DM) - Guardian action
+- `.j murder story compare <player>` (DM) - Investigator action
+- `.j murder story seance` (DM) - Medium action
+- `.j murder story spread <player>` (DM) - Accomplice action
+- `.j murder story accuse <player> | E01,E02` (DM) - submit a formal theory during discussion
+- `.j murder story vote <player or skip>` (DM) - submit a private ballot
 - `.j murder story end` - host-only close
 
 Private evidence stays private until deliberately shared. The game uses the existing local Victorian-noir backgrounds, character sprites, clue illustrations, fonts and card renderer. No external asset downloads occur during live play. External art candidates and licensing checks are documented in `docs/murder-mystery-story-mode-assets.md`.
