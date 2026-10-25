@@ -3875,6 +3875,7 @@ async function handleCommand(ctx) {
       caseGen,
       system,
       botConfig,
+      getSock: getSockSafe,
       classicActive: (groupChatId) => !!getGame(groupChatId),
     });
   }
@@ -4031,7 +4032,19 @@ async function handleCommand(ctx) {
 // init() is safe to call from engine boot (after system data loads)
 function init() {
   ensureRehydrated();
-  storyMode.init();
+  storyMode.init({
+    sendGroup,
+    sendGroupImage,
+    sendDM,
+    cards,
+    cases,
+    characters,
+    caseGen,
+    system,
+    botConfig,
+    getSock: getSockSafe,
+    classicActive: (groupChatId) => !!getGame(groupChatId),
+  });
 }
 
 module.exports = {
