@@ -4914,6 +4914,44 @@ async function checkCombatEnd(sock, state, sessionKey) {
   return false;
 }
 
+// Race one automated turn against a watchdog without leaving a live timeout
+// behind after success. The old Promise.race timers were never cleared, so a
+// perfectly successful turn could increment watchdogStrikes 60/90 seconds
+// later. Several of those delayed callbacks could collapse an actively played
+// dungeon. A timeout counts once; a late completion cannot undo that strike.
+async function runTurnWithWatchdog(state, label, work, timeoutMs, resetOnSuccess = true) {
+  let timer = null;
+  let settled = false;
+  const timeoutResult = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      state.watchdogStrikes = (state.watchdogStrikes || 0) + 1;
+      console.warn(`[Quest] ⏱️ ${label} watchdog fired for ${state.sessionKey || state.chatId || '?'} — advancing`);
+      resolve({ timedOut: true });
+    }, timeoutMs);
+  });
+
+  const workResult = Promise.resolve()
+    .then(work)
+    .then((value) => {
+      if (!settled) {
+        settled = true;
+        if (timer) clearTimeout(timer);
+        if (resetOnSuccess) state.watchdogStrikes = 0;
+      }
+      return { timedOut: false, value };
+    }, (error) => {
+      if (!settled) {
+        settled = true;
+        if (timer) clearTimeout(timer);
+      }
+      throw error;
+    });
+
+  return Promise.race([workResult, timeoutResult]);
+}
+
 async function processCombatTurn(sock, sessionKey) {
   // 🫀 liveness v2: automated combat turn = a match is LIVE. The canary holds
   // its stall-kill for this grace window instead of SIGKILLing mid-quest
@@ -5320,26 +5358,22 @@ The dungeon collapsed after too many stalled turns. Your slot has been released 
       // old code had, minus the permanent freeze.
       if (activeActor.isEnemy) {
         // AI Turn
-        await Promise.race([
-          performEnemyAction(sock, activeActor, sessionKey),
-          new Promise((r) => setTimeout(() => {
-            console.warn(`[Quest] ⏱️ enemy turn watchdog fired for ${activeActor?.name || '?'} (${sessionKey}) — advancing`);
-            state.watchdogStrikes = (state.watchdogStrikes || 0) + 1;
-            r();
-          }, 90000)),
-        ]);
+        await runTurnWithWatchdog(
+          state,
+          `enemy turn (${activeActor?.name || '?'})`,
+          () => performEnemyAction(sock, activeActor, sessionKey),
+          90000
+        );
         // The loop continues because performEnemyAction resolved
       } else if (activeActor.isSummon) {
         // 💡 Phase 2: Summon AI Turn - personality-driven behavior,
         // loyalty decay, behavior tracking, optional betrayal.
-        await Promise.race([
-          summonAI.performSummonAction(sock, activeActor, sessionKey),
-          new Promise((r) => setTimeout(() => {
-            console.warn(`[Quest] ⏱️ summon turn watchdog fired for ${activeActor?.name || '?'} (${sessionKey}) — advancing`);
-            state.watchdogStrikes = (state.watchdogStrikes || 0) + 1;
-            r();
-          }, 90000)),
-        ]);
+        await runTurnWithWatchdog(
+          state,
+          `summon turn (${activeActor?.name || '?'})`,
+          () => summonAI.performSummonAction(sock, activeActor, sessionKey),
+          90000
+        );
       } else if (activeActor.isTutorialAlly) {
         // 💡 Phase B (2026-10-04): TUTORIAL GROUP quest - fake party members
         // auto-act after a short beat instead of waiting for input that will
@@ -5482,14 +5516,13 @@ async function promptPlayerAction(sock, player, sessionKey) {
           // watchdog — performAction contains unbounded awaits (sends, loot
           // DB, endCombat hooks) and if it wedged, resolve() below never ran
           // and the whole fight froze (same family as the enemy-turn freeze).
-          await Promise.race([
-            performAction(sock, player, { type: "defend" }, sessionKey),
-            new Promise((r) => setTimeout(() => {
-              console.warn(`[Quest] ⏱️ AFK auto-defend watchdog fired for ${player?.name || '?'} — advancing`);
-              state.watchdogStrikes = (state.watchdogStrikes || 0) + 1;
-              r();
-            }, 60000)),
-          ]);
+          await runTurnWithWatchdog(
+            state,
+            `AFK auto-defend (${player?.name || '?'})`,
+            () => performAction(sock, player, { type: "defend" }, sessionKey),
+            60000,
+            false
+          );
         } catch (err) {
           console.error("Error in combat timeout defend:", err.message);
         }
