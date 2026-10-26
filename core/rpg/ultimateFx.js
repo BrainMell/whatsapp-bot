@@ -314,24 +314,24 @@ function fallbackBase() {
     return c;
 }
 
-// ── video HUD rail (2026-10-26) ─────────────────────────────────────────────
-// The ultimate video's base frame is a hud:"none" battlefield, so the effects
-// can never bake over the panel. This painter draws the caster's HUD as the
-// FINAL pass (after flash/vignette/banner, outside the camera transform) -
-// a compact left rail mirroring the Go renderer's v2 design: dark glass,
-// class-accent edge, portrait medallion, name, class/LV/RANK chips, gradient
-// HP + Energy bars with numeric readouts and a derived status chip.
-const _hudSprites = new Map();
-async function hudClassSprite(classId) {
-    if (_hudSprites.has(classId)) return _hudSprites.get(classId);
-    let img = null;
-    try {
-        const sets = require('./profileCardRenderer').CLASS_SPRITE_SETS || {};
-        const list = sets[String(classId || '').toUpperCase()] || sets.APPRENTICE;
-        if (list && list.length) img = await loadImage(path.join(__dirname, '..', 'rpgasset', 'characters', list[0]));
-    } catch (e) { /* medallion draws without a portrait */ }
-    _hudSprites.set(classId, img);
-    return img;
+// ── video HUD - medieval bottom-left plate (2026-10-26 round 2) ────────────
+// Owner round 2: "simple at the bottom left, name + hp + energy, medieval rpg
+// themed" - the dark-glass neo rail is GONE. The ultimate video's base frame
+// is a hud:"none" battlefield, so effects can never bake over the panel; this
+// painter draws the caster's plate as the FINAL pass (after flash/vignette/
+// banner, outside the camera transform). Same recipe as the Go renderer's
+// battle plate (box1 e1af254): walnut panel, gold trim + corner accents, the
+// game's own heart.png / mana.png icons, deep red HP + mana-blue energy bars
+// with numeric readouts. Bottom-left corner - sprite feet cap ~307 in video
+// space, the plate starts at y=368, so it can never cover a fighter.
+const _hudIcons = new Map();
+async function loadHudIcons() {
+    if (_hudIcons.has('set')) return _hudIcons.get('set');
+    const set = { heart: null, mana: null };
+    try { set.heart = await loadImage(path.join(__dirname, '..', 'rpgasset', 'ui', 'heart.png')); } catch (e) { /* fallback shape */ }
+    try { set.mana = await loadImage(path.join(__dirname, '..', 'rpgasset', 'ui', 'mana.png')); } catch (e) { /* fallback shape */ }
+    _hudIcons.set('set', set);
+    return set;
 }
 
 function hudFitText(ctx, text, cx, y, maxW, px, color) {
@@ -356,111 +356,91 @@ function hudRoundRect(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
-function drawVideoHud(ctx, hud, palette) {
-    if (!hud || typeof hud !== 'object') return;
-    const accent = palette[1] || '#ffcb45';
-    const RX = 6, RY = 86, RW = 148, RH = 236;
-    const cx = RX + RW / 2, pad = 10, iw = RW - pad * 2;
+function hudMedievalPanel(ctx, x0, y0, w, h) {
+    const grad = ctx.createLinearGradient(0, y0, 0, y0 + h);
+    grad.addColorStop(0, 'rgba(43,31,17,0.97)'); grad.addColorStop(0.55, 'rgba(29,20,9,0.98)'); grad.addColorStop(1, 'rgba(18,11,4,0.99)');
+    ctx.fillStyle = grad; ctx.fillRect(x0, y0, w, h);
+    // faint top sheen so the name strip reads slightly lit
+    const sh = ctx.createLinearGradient(0, y0, 0, y0 + 46);
+    sh.addColorStop(0, 'rgba(255,223,158,0.10)'); sh.addColorStop(1, 'rgba(255,223,158,0)');
+    ctx.fillStyle = sh; ctx.fillRect(x0, y0, w, 46);
+    // near-black outer frame
+    ctx.strokeStyle = 'rgba(6,3,2,1)'; ctx.lineWidth = 2; ctx.strokeRect(x0 + 1, y0 + 1, w - 2, h - 2);
+    // gold trim + corner accents
+    const tx0 = x0 + 5, ty0 = y0 + 5, tx1 = x0 + w - 5, ty1 = y0 + h - 5;
+    ctx.strokeStyle = 'rgba(201,161,59,0.9)'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(tx0, ty0, tx1 - tx0, ty1 - ty0);
+    ctx.fillStyle = 'rgba(231,199,102,1)';
+    const cl = 12, ct = 3;
+    ctx.fillRect(tx0 - 1, ty0 - 1, cl, ct); ctx.fillRect(tx0 - 1, ty0 - 1, ct, cl);
+    ctx.fillRect(tx1 + 1 - cl, ty0 - 1, cl, ct); ctx.fillRect(tx1 + 1 - ct, ty0 - 1, ct, cl);
+    ctx.fillRect(tx0 - 1, ty1 + 1 - ct, cl, ct); ctx.fillRect(tx0 - 1, ty1 + 1 - cl, ct, cl);
+    ctx.fillRect(tx1 + 1 - cl, ty1 + 1 - ct, cl, ct); ctx.fillRect(tx1 + 1 - ct, ty1 + 1 - cl, ct, cl);
+}
 
-    // panel: dark glass + accent edge + border (no clip - same recipe as Go)
-    const grad = ctx.createLinearGradient(0, RY, 0, RY + RH);
-    grad.addColorStop(0, 'rgba(20,24,40,0.90)'); grad.addColorStop(1, 'rgba(5,7,13,0.94)');
-    hudRoundRect(ctx, RX, RY, RW, RH, 10); ctx.fillStyle = grad; ctx.fill();
-    hudRoundRect(ctx, RX + 2, RY + 5, 4, RH - 10, 2); ctx.fillStyle = accent; ctx.fill();
-    hudRoundRect(ctx, RX + 0.75, RY + 0.75, RW - 1.5, RH - 1.5, 10);
-    ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1; ctx.stroke();
-
-    // medallion: bottom-anchored full-body sprite on a dark plate
-    const mSize = 56, mTop = RY + 10;
-    hudRoundRect(ctx, cx - mSize / 2, mTop, mSize, mSize, 8);
-    ctx.fillStyle = 'rgba(6,9,16,0.9)'; ctx.fill();
-    const sprite = hud._sprite;
-    if (sprite) {
-        const sw = sprite.width, sh = sprite.height;
-        const scale = Math.min((mSize - 8) / sw, (mSize - 5) / sh);
-        const tw = sw * scale, th = sh * scale;
-        ctx.drawImage(sprite, cx - tw / 2, mTop + mSize - th - 2, tw, th);
+function hudBarMedieval(ctx, x, y, w, h, pct, kind, label) {
+    pct = Math.max(0, Math.min(1, pct));
+    hudRoundRect(ctx, x, y, w, h, 5); ctx.fillStyle = 'rgba(16,11,6,0.95)'; ctx.fill();
+    if (pct > 0) {
+        const grad = ctx.createLinearGradient(0, y, 0, y + h);
+        if (kind === 'hp') {
+            if (pct < 0.25) { grad.addColorStop(0, '#c0392b'); grad.addColorStop(0.5, '#8f1a10'); grad.addColorStop(1, '#5c0f08'); }
+            else { grad.addColorStop(0, '#d2552e'); grad.addColorStop(0.5, '#a52a18'); grad.addColorStop(1, '#6e150c'); }
+        } else { grad.addColorStop(0, '#4b7fc4'); grad.addColorStop(0.5, '#2c549b'); grad.addColorStop(1, '#16315e'); }
+        hudRoundRect(ctx, x, y, Math.max(w * pct, h * 0.8), h, 5); ctx.fillStyle = grad; ctx.fill();
+        const gl = ctx.createLinearGradient(0, y, 0, y + h * 0.5);
+        gl.addColorStop(0, 'rgba(255,255,255,0.18)'); gl.addColorStop(1, 'rgba(255,255,255,0)');
+        hudRoundRect(ctx, x + 1.5, y + 1.5, Math.max(w * pct - 3, h * 0.4), h * 0.5, 4); ctx.fillStyle = gl; ctx.fill();
     }
-    hudRoundRect(ctx, cx - mSize / 2 + 1, mTop + 1, mSize - 2, mSize - 2, 8);
-    ctx.strokeStyle = accent; ctx.lineWidth = 1.5; ctx.stroke();
+    hudRoundRect(ctx, x + 0.75, y + 0.75, w - 1.5, h - 1.5, 5);
+    ctx.strokeStyle = 'rgba(201,161,59,0.8)'; ctx.lineWidth = 1.5; ctx.stroke();
+    // numeric readout (right of the bar)
+    ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillText(label, x + w + 7, y + h / 2 + 1);
+    ctx.fillStyle = '#f3ecd8'; ctx.fillText(label, x + w + 6, y + h / 2);
+}
 
-    // name + chips (long class names wrap to a second row, like the Go rail)
-    hudFitText(ctx, String(hud.name || 'Champion'), cx, mTop + mSize + 12, iw, 13, '#ffffff');
-    const cls = String(hud.class || '').replace(/_/g, ' ');
-    const lv = hud.level ? 'LV ' + hud.level : '';
-    const rk = 'RANK ' + (hud.rank || 'F');
-    const chipRow = (items, y) => {
-        ctx.font = 'bold 8px sans-serif';
-        const widths = items.map((it) => ctx.measureText(it.t).width + 10);
-        const gap = 4;
-        const total = widths.reduce((a, b) => a + b, 0) + gap * (items.length - 1);
-        let chipX = Math.max(RX + 4, cx - total / 2);
-        items.forEach((it, i) => {
-            hudRoundRect(ctx, chipX, y - 7, widths[i], 14, 7);
-            ctx.fillStyle = 'rgba(21,26,43,0.85)'; ctx.fill();
-            ctx.strokeStyle = 'rgba(255,255,255,0.16)'; ctx.lineWidth = 1; ctx.stroke();
-            ctx.font = 'bold 8px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillStyle = it.c; ctx.fillText(it.t, chipX + widths[i] / 2, y + 0.5);
-            chipX += widths[i] + gap;
-        });
-    };
-    let chipY = mTop + mSize + 28;
-    const row1 = [{ t: cls, c: accent }];
-    const row2 = [];
-    if (lv) row2.push({ t: lv, c: '#dfe5f2' });
-    row2.push({ t: rk, c: '#ffd66e' });
-    ctx.font = 'bold 8px sans-serif';
-    const oneRowW = [cls, lv, rk].filter(Boolean).map((t) => ctx.measureText(t).width + 10)
-        .reduce((a, b) => a + b, 0) + 4;
-    if (oneRowW <= iw + 2) {
-        chipRow([...row1, ...row2], chipY);
+function drawVideoHud(ctx, hud, icons) {
+    if (!hud || typeof hud !== 'object' || !icons) return;
+    const PX = -10, PY = 368, PW = 262, PH = 118; // bottom-left corner bleed, same proportions as the Go plate
+    hudMedievalPanel(ctx, PX, PY, PW, PH);
+    const visCx = PX + PW / 2 + 6; // compensate the left bleed like the Go plate
+
+    // name
+    hudFitText(ctx, String(hud.name || 'Champion'), visCx, PY + 22, PW - 46, 15, '#f3ecd8');
+
+    // gold divider with center diamond
+    const dvy = PY + 39.75;
+    ctx.fillStyle = 'rgba(201,161,59,0.85)'; ctx.fillRect(visCx - 106, dvy - 0.75, 212, 1.5);
+    const dr = 4;
+    ctx.beginPath();
+    ctx.moveTo(visCx, dvy - dr); ctx.lineTo(visCx + dr, dvy); ctx.lineTo(visCx, dvy + dr); ctx.lineTo(visCx - dr, dvy);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(231,199,102,1)'; ctx.fill();
+
+    // HP row: heart icon + red bar + numerics
+    if (icons.heart) {
+        ctx.drawImage(icons.heart, PX + 16, PY + 46, 20, 24);
     } else {
-        chipRow(row1, chipY);
-        chipRow(row2, chipY + 16);
-        chipY += 16;
+        ctx.fillStyle = '#b3202a';
+        ctx.beginPath(); ctx.arc(PX + 21, PY + 55, 5.5, 0, Math.PI * 2); ctx.arc(PX + 27, PY + 55, 5.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(PX + 15.5, PY + 57); ctx.lineTo(PX + 24, PY + 70); ctx.lineTo(PX + 32.5, PY + 57); ctx.closePath(); ctx.fill();
     }
+    hudBarMedieval(ctx, PX + 42, PY + 51, 140, 13,
+        hud.maxHp > 0 ? hud.hp / hud.maxHp : 0, 'hp',
+        `${Math.max(0, Math.floor(hud.hp || 0))} / ${Math.max(1, Math.floor(hud.maxHp || 1))}`);
 
-    // bars
-    const bar = (label, y, val, max, kind) => {
-        ctx.font = 'bold 8px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-        ctx.fillStyle = 'rgba(154,163,184,0.95)'; ctx.fillText(label, RX + pad, y);
-        ctx.textAlign = 'right'; ctx.fillStyle = '#e8ecf6';
-        ctx.fillText(Math.max(0, val) + ' / ' + Math.max(1, max), RX + RW - pad, y);
-        const by = y + 6, bh = kind === 'hp' ? 10 : 7;
-        hudRoundRect(ctx, RX + pad, by, iw, bh, bh / 2); ctx.fillStyle = 'rgba(4,5,10,0.85)'; ctx.fill();
-        const pct = Math.max(0, Math.min(1, max > 0 ? val / max : 0));
-        if (pct > 0) {
-            const lo = kind === 'en' ? '#2f8fff' : (pct < 0.25 ? '#c62828' : '#ff5a3d');
-            const hi = kind === 'en' ? '#66e0ff' : (pct < 0.25 ? '#ff6b45' : '#ffb03d');
-            const bg = ctx.createLinearGradient(RX + pad, 0, RX + pad + iw, 0);
-            bg.addColorStop(0, lo); bg.addColorStop(1, hi);
-            hudRoundRect(ctx, RX + pad, by, Math.max(iw * pct, bh * 0.6), bh, bh / 2);
-            ctx.fillStyle = bg; ctx.fill();
-        }
-        hudRoundRect(ctx, RX + pad + 0.5, by + 0.5, iw - 1, bh - 1, bh / 2);
-        ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1; ctx.stroke();
-    };
-    bar('HP', chipY + 18, hud.hp, hud.maxHp, 'hp');
-    bar('ENERGY', chipY + 44, hud.energy, hud.maxEnergy, 'en');
-
-    // status chip + rank crest
-    const p = hud.maxHp > 0 ? hud.hp / hud.maxHp : 0;
-    const st = p <= 0 ? ['DOWN', '#ff5a4a'] : p > 0.5 ? ['HEALTHY', '#69d86f'] : p > 0.25 ? ['HURT', '#ffb03d'] : ['CRITICAL', '#ff5a4a'];
-    ctx.font = 'bold 8px sans-serif';
-    const stw = ctx.measureText(st[0]).width + 10;
-    hudRoundRect(ctx, RX + pad, chipY + 66, stw, 14, 7);
-    ctx.fillStyle = 'rgba(16,21,34,0.9)'; ctx.fill();
-    ctx.strokeStyle = 'rgba(44,53,80,0.9)'; ctx.stroke();
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = st[1]; ctx.fillText(st[0], RX + pad + stw / 2, chipY + 73.5);
-    const crestCy = RY + RH - 30;
-    ctx.beginPath(); ctx.arc(cx, crestCy, 17, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(17,20,31,0.92)'; ctx.fill();
-    ctx.strokeStyle = accent; ctx.lineWidth = 1.5; ctx.stroke();
-    ctx.font = 'bold 15px sans-serif'; ctx.fillStyle = '#f2f5fc';
-    ctx.fillText(String(hud.rank || 'F'), cx, crestCy + 0.5);
-    ctx.font = 'bold 6px sans-serif'; ctx.fillStyle = 'rgba(139,147,168,0.95)';
-    ctx.fillText('ADVENTURER RANK', cx, crestCy + 25);
+    // Energy row: mana icon + blue bar + numerics
+    if (icons.mana) {
+        ctx.drawImage(icons.mana, PX + 18, PY + 74, 16, 24);
+    } else {
+        ctx.fillStyle = '#2f6bbf';
+        ctx.beginPath(); ctx.arc(PX + 26, PY + 90, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(PX + 20.5, PY + 88); ctx.lineTo(PX + 26, PY + 76); ctx.lineTo(PX + 31.5, PY + 88); ctx.closePath(); ctx.fill();
+    }
+    hudBarMedieval(ctx, PX + 42, PY + 78, 140, 12,
+        hud.maxEnergy > 0 ? hud.energy / hud.maxEnergy : 0, 'en',
+        `${Math.max(0, Math.floor(hud.energy || 0))} / ${Math.max(1, Math.floor(hud.maxEnergy || 1))}`);
 }
 
 // ── encode ──────────────────────────────────────────────────────────────────
@@ -502,6 +482,7 @@ async function renderUltimateVideo(o) {
     let base = null;
     if (Buffer.isBuffer(o.baseBuffer) && o.baseBuffer.length > 1000) { try { base = await loadImage(o.baseBuffer); } catch (e) { base = null; } }
     if (!base) base = fallbackBase();
+    const hudIcons = o.hud && typeof o.hud === 'object' ? await loadHudIcons() : null;
 
     const self = o.side === 'self';
     const A = { C: [W * 0.27, H * 0.62], T: self ? [W * 0.27, H * 0.58] : [W * 0.72, H * 0.58], F: [W * 0.5, H * 0.55] };
@@ -556,13 +537,10 @@ async function renderUltimateVideo(o) {
         vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.38)');
         ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
         banner(ctx, time, o.name, palette[1]);
-        // 💡 HUD 2026-10-26: the caster's rail is the LAST pass - above the
-        // flash, vignette, banner and every effect, and outside the camera
-        // transform, so the panel never shakes, dims or gets covered.
-        if (o.hud && typeof o.hud === 'object') {
-            if (o.hud._sprite === undefined) o.hud._sprite = await hudClassSprite(o.classId);
-            drawVideoHud(ctx, o.hud, palette);
-        }
+        // 💡 HUD 2026-10-26 round 2: the caster's medieval plate is the LAST
+        // pass - above the flash, vignette, banner and every effect, and
+        // outside the camera transform, so nothing ever covers or dims it.
+        if (hudIcons) drawVideoHud(ctx, o.hud, hudIcons);
         if (f === Math.round(IMPACT * FPS) + 1) thumb = canvas.toBuffer('image/jpeg', { quality: 0.8 });
         frames.push(canvas.toBuffer('raw'));
     }
