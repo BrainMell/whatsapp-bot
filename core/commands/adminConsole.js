@@ -1519,6 +1519,28 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const senderName = m?.pushName || economy.getDisplayName(senderJid);
         const sandboxSub = (args[1] || '').toLowerCase();
 
+        // Unlock every skill registered for a class at its defined max level.
+        // This is shared by both sandbox class-switch commands.
+        function unlockSandboxClassSkills(classId, existingSkills) {
+            const trees = skillTree.SKILL_TREES || {};
+            const wanted = String(classId || '').toLowerCase();
+            const entry = Object.entries(trees).find(([key, value]) =>
+                String(key).toLowerCase() === wanted ||
+                String(value?.id || '').toLowerCase() === wanted
+            );
+            const skills = existingSkills instanceof Map
+                ? Object.fromEntries(existingSkills.entries())
+                : { ...(existingSkills || {}) };
+            let count = 0;
+            for (const tree of Object.values(entry?.[1]?.trees || {})) {
+                for (const [skillId, skill] of Object.entries(tree?.skills || {})) {
+                    skills[skillId] = Math.max(1, Number(skill?.maxLevel) || 1);
+                    count++;
+                }
+            }
+            return { skills, count };
+        }
+
         // ── sandbox on - activate sandbox mode ──
         if (sandboxSub === 'on') {
             try {
@@ -1711,24 +1733,14 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 const user = economy.getUser(sandboxJid);
                 if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Sandbox user not found.' });
                 const oldClassName = user.class || 'None';
-                user.class = targetClass.id;
-                // Also unlock all skills for the new class
-                try {
-                    const skillTree = require('../rpg/skillTree');
-                    const SK = skillTree.SKILL_TREES || skillTree;
-                    const tree = SK[targetClass.id.toUpperCase()];
-                    if (tree && tree.trees) {
-                        if (!user.skills) user.skills = {};
-                        for (const [, treeData] of Object.entries(tree.trees)) {
-                            if (!treeData.skills) continue;
-                            for (const [skillId, skill] of Object.entries(treeData.skills)) {
-                                user.skills[skillId] = skill.maxLevel || 1;
-                            }
-                        }
-                    }
-                } catch (e) {}
+                const { skills: unlockedSkills, count: unlockedCount } =
+                    unlockSandboxClassSkills(targetClass.id, user.skills);
+                await AdminSandbox.patch(senderJid, {
+                    class: targetClass.id,
+                    skills: unlockedSkills
+                });
                 return await sock.sendMessage(chatId, {
-                    text: BOT_MARKER + `🧬 *SANDBOX EVOLVED*\n\n🔄 ${oldClassName} → ${targetClass.icon} *${targetClass.name}*\n✨ All class skills unlocked at max level!\n\n_No trials, stones, or Zeni required in sandbox._`
+                    text: BOT_MARKER + `🧬 *SANDBOX EVOLVED*\n\n🔄 ${oldClassName} → ${targetClass.icon} *${targetClass.name}*\n✨ ${unlockedCount} class skills unlocked at max level!\n\n_No trials, stones, or Zeni required in sandbox._`
                 });
             } catch (e) {
                 return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Evolve failed: ${e.message}` });
@@ -1786,23 +1798,29 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
         // ── sandbox setclass <name> ──
         if (sandboxSub === 'setclass') {
-            const className = args[2];
+            const className = args.slice(2).join(' ').trim();
             if (!className) {
-                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod sandbox setclass <class name or ID>\`` });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: ${prefix} mod sandbox setclass <class name or ID>` });
             }
             const cls = resolveClass(className);
             if (!cls) {
                 return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Class "${className}" not found.` });
             }
             try {
-                await AdminSandbox.getOrCreate(senderJid, senderName);
-                const sb = await AdminSandbox.patch(senderJid, {
+                const sb = await AdminSandbox.getOrCreate(senderJid, senderName);
+                const engine = require('../engine');
+                const sandboxJid = engine.getSandboxJid(senderJid);
+                const live = sandboxJid ? economy.getUser(sandboxJid) : null;
+                const { skills, count } = unlockSandboxClassSkills(cls.id, live?.skills || sb.skills);
+                const hp = Number(cls.stats?.hp) || Number(live?.stats?.maxHp) || Number(sb.stats?.maxHp) || 100;
+                await AdminSandbox.patch(senderJid, {
                     class: cls.id,
-                    'stats.maxHp': cls.stats?.hp || 100,
-                    'stats.hp': cls.stats?.hp || 100,
+                    'stats.maxHp': hp,
+                    'stats.hp': hp,
+                    skills
                 });
                 return await sock.sendMessage(chatId, {
-                    text: BOT_MARKER + `✅ *SANDBOX CLASS SET*\n\n${cls.icon} *${cls.name}*\n🆔 \`${cls.id}\`\n📊 Tier: ${cls.tier || 'STARTER'}\n\n_Sandbox now has this class for testing. No requirements were checked._`
+                    text: BOT_MARKER + `✅ *SANDBOX CLASS SET*\n\n${cls.icon} *${cls.name}*\n🆔 \`${cls.id}\`\n📊 Tier: ${cls.tier || 'STARTER'}\n✨ ${count} class skills unlocked at max level\n\n_Sandbox now has this class for testing. No requirements were checked._`
                 });
             } catch (e) {
                 return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed: ${e.message}` });
