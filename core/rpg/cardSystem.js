@@ -6540,16 +6540,17 @@ async function cmdTokenLB(senderJid, reply, args = []) {
   }
   const { hidden } = await tokenLbHiddenSet();
   const rows = [];
-  let hiddenCount = 0;
   for (const u of top) {
     if (rows.length >= 10) break;
     let variants = [String(u.userId)];
     try { variants = await cardOwnerVariants(u.userId); } catch (e) { /* single identity */ }
-    if (variants.some((v) => hidden.has(String(v).toLowerCase()))) { hiddenCount++; continue; }
+    if (variants.some((v) => hidden.has(String(v).toLowerCase()))) continue; // 🤫 silently skipped
     rows.push(u);
   }
   if (!rows.length) {
-    return reply(`📭  *TOKEN LEADERBOARD*\n\n🪙 ⟢ _No one outside the inner circle holds Event Tokens yet - claim cards during the event!_`);
+    // 🤫 zero-footprint (Mellow 2026-10-26): same text as the natural empty
+    // board — no hint that anyone is filtered out.
+    return reply(`📭  *TOKEN LEADERBOARD*\n\n🪙 ⟢ _No one holds any Event Tokens yet - claim cards during the event!_`);
   }
   let msg = `🎫  *EVENT TOKEN LEADERBOARD*\n\n`;
   for (let i = 0; i < rows.length; i++) {
@@ -6558,9 +6559,8 @@ async function cmdTokenLB(senderJid, reply, args = []) {
     const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
     msg += `${medal} ⟢ _${name}_ — *${u.eventTokens} token${u.eventTokens === 1 ? '' : 's'}*\n`;
   }
-  if (hiddenCount > 0) {
-    msg += `\n🫣 ⟢ _${hiddenCount} inner-circle account${hiddenCount === 1 ? '' : 's'} hidden from this board._`;
-  }
+  // 🤫 zero-footprint: no footnote, no counts — the board renders exactly
+  // as it would if the filter didn't exist.
   msg += `\n💡 ⟢ _Check your own balance:_ \`${p} tokens\``;
   return reply(msg);
 }

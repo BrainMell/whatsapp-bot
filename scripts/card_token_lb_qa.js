@@ -207,7 +207,7 @@ const baseUsers = () => ([
     assert.match(txt, /EVENT TOKEN LEADERBOARD/);
     assert.match(txt, /Carol/);
     assert.match(txt, /Dave/);
-    assert.match(txt, /2 inner-circle accounts hidden/);
+    assert.doesNotMatch(txt, /hidden|inner.circle/i, 'zero footprint');
     assert.doesNotMatch(txt, /Alice/);
     assert.doesNotMatch(txt, /Bob/);
     // Eve is NOT in the group and not yet explicitly hidden -> still on board
@@ -225,7 +225,7 @@ const baseUsers = () => ([
     const r2 = await run(cs, '.j tokenlb');
     const t2 = r2.texts.join('\n');
     assert.doesNotMatch(t2, /Eve/);
-    assert.match(t2, /3 inner-circle accounts hidden/);
+    assert.doesNotMatch(t2, /hidden|inner.circle/i, 'zero footprint');
     const r3 = await run(cs, `.j tokenlb unhide ${EVE}`);
     assert.match(r3.texts.join('\n'), /VISIBLE AGAIN/);
     const r4 = await run(cs, '.j tokenlb');
@@ -260,7 +260,7 @@ const baseUsers = () => ([
     const cs2 = loadCardSystem(); // fresh module = cold roster cache, like a restart
     const r = await run(cs2, '.j tokenlb');
     const txt = r.texts.join('\n');
-    assert.match(txt, /2 inner-circle accounts hidden/);
+    assert.doesNotMatch(txt, /hidden|inner.circle/i, 'zero footprint');
     assert.doesNotMatch(txt, /Alice/);
     assert.doesNotMatch(txt, /Bob/);
   });
@@ -294,21 +294,24 @@ const baseUsers = () => ([
     assert.match(r1.texts.join('\n'), /\*Members now filtered:\* _12_/);
     const r2 = await run(cs, '.j tokenlb');
     const txt = r2.texts.join('\n');
-    assert.match(txt, /12 inner-circle accounts hidden/);
+    assert.doesNotMatch(txt, /hidden|inner.circle/i, 'zero footprint');
     assert.doesNotMatch(txt, /pub\d@lid/);
     for (let i = 1; i <= 8; i++) assert.match(txt, new RegExp(`pub${i}`));
     assert.ok(!/\b12\./.test(txt), 'never renders more than 10 rows');
   });
 
-  // T10: everyone holding tokens is inner circle -> dedicated empty text
-  await t('all top holders hidden -> inner-circle empty message', async (cs) => {
+  // T10: everyone holding tokens is hidden -> board looks NATURALLY empty
+  // (zero footprint: identical to a world where nobody holds tokens)
+  await t('all top holders hidden -> board reads as natural empty, zero leak', async (cs) => {
     QA_USERS = [
       { userId: '222222222@lid', eventTokens: 100 },
       { userId: '111111111@lid', eventTokens: 90 },
     ];
     await run(cs, '.j tokenlb hide gc privé');
     const r = await run(cs, '.j tokenlb');
-    assert.match(r.texts.join('\n'), /No one outside the inner circle/);
+    const txt = r.texts.join('\n');
+    assert.match(txt, /No one holds any Event Tokens yet/, 'natural empty text');
+    assert.doesNotMatch(txt, /hidden|inner.circle/i, 'must not hint a filter exists');
   });
 
   // T11: duplicate hide + unhide-when-not-hidden are friendly no-ops
