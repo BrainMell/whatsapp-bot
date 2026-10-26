@@ -42,7 +42,32 @@ const SETS = {
     fire_slash: { strip: 'attack5.png', n: 4, fps: 10 },
     vine_slash: { strip: 'attack6.png', n: 4, fps: 8 },
     claw:       { strip: 'attack7.png', n: 4, fps: 10 },
+    // CC0 Foozle/Baldur pixel strips (48px tall) + Kenney smoke/explosion sets, see rpgasset/vfx/CREDITS.md
+    necro1:     { root: 'foozle_necro_attack01.png', n: 7, fps: 12 },
+    necro2:     { root: 'foozle_necro_attack02.png', n: 7, fps: 12 },
+    necro3:     { root: 'foozle_necro_attack03.png', n: 12, fps: 14 },
+    destroy:    { root: 'foozle_destroy.png', n: 6, fps: 12 },
+    wave_big:   { root: 'foozle_wave_big.png', n: 3, fps: 8 },
+    k_ground:   { kdir: 'ground_', n: 9, fps: 18, smooth: true },
+    k_regular:  { kdir: 'regular_', n: 9, fps: 18, smooth: true },
+    k_pixel:    { kdir: 'pixel_', n: 9, fps: 18 },
+    k_simple:   { kdir: 'simple_', n: 9, fps: 18, smooth: true },
+    k_sonic:    { kdir: 'sonic_', n: 9, fps: 20, smooth: true },
+    k_sexp:     { kdir: 'sexp_', n: 5, fps: 12, smooth: true },
+    k_flash:    { kdir: 'flash_', n: 5, fps: 14, smooth: true },
+    k_puff:     { kdir: 'puff_', n: 13, fps: 16, smooth: true },
+    k_bsmoke:   { kdir: 'bsmoke_', n: 13, fps: 14, smooth: true },
+    k_gas:      { kdir: 'gas_', n: 5, fps: 8, smooth: true },
 };
+const LAYERS = (() => { try { return require('./ultimateFxLayers').LAYERS; } catch (e) { console.warn('[UltFx] layers unavailable:', e.message); return {}; } })();
+const RECIPE_PACK = (() => { try { return require('./ultimateFxRecipes'); } catch (e) { console.warn('[UltFx] class recipes unavailable:', e.message); return null; } })();
+const _singles = new Map();
+async function loadSingles() {
+    if (_singles.size) return _singles;
+    const dir = path.join(DIR, 'kenney');
+    try { for (const f of fs.readdirSync(dir)) if (/^p_.*\.png$/.test(f)) _singles.set(f.replace('.png', ''), await loadImage(path.join(dir, f))); } catch (e) { /* layers draw without sprites */ }
+    return _singles;
+}
 const _frames = new Map();
 const _tinted = new Map();
 
@@ -51,8 +76,10 @@ async function loadSet(name) {
     const def = SETS[name];
     const out = [];
     try {
-        if (def.strip) {
-            const img = await loadImage(path.join(DIR, 'attack', def.strip));
+        if (def.kdir) {
+            for (let i = 1; i <= def.n; i++) out.push(await loadImage(path.join(DIR, 'kenney', `${def.kdir}${i}.png`)));
+        } else if (def.strip || def.root) {
+            const img = await loadImage(def.root ? path.join(DIR, def.root) : path.join(DIR, 'attack', def.strip));
             const fw = Math.floor(img.width / def.n);
             for (let i = 0; i < def.n; i++) {
                 const c = createCanvas(fw, img.height);
@@ -223,7 +250,7 @@ function drawTrackInstances(ctx, tr, sets, A, time, rng, palette) {
         const fade = tr.loop ? 1 : Math.min(1, (dur - lt) / 0.2 + 0.2);
         const rot = Array.isArray(tr.rot) ? tr.rot[i % tr.rot.length] : (tr.rot || 0);
         ctx.save();
-        ctx.imageSmoothingEnabled = false;
+        ctx.imageSmoothingEnabled = !!def.smooth;
         ctx.globalAlpha = (tr.alpha !== undefined ? tr.alpha : 1) * Math.min(1, fade) * Math.min(1, lt / 0.06 + 0.25);
         if (tr.add) ctx.globalCompositeOperation = 'lighter';
         ctx.translate(px, py);
@@ -315,9 +342,13 @@ async function renderUltimateVideo(o) {
     const palette = o.palette && o.palette.length >= 3 ? o.palette : ['#fff1b0', '#ffcb45', '#e85a37'];
     const recipeKey = STYLE_RECIPE[String(o.classId || '').toUpperCase()] || 'fire';
     const sets = {};
-    const tracks = RECIPES[recipeKey](palette);
-    for (const t of tracks) if (!sets[t.fx]) sets[t.fx] = await loadSet(t.fx);
-    if (!Object.values(sets).some((s) => s && s.length)) return null;     // assets missing → caller falls back to the legacy renderer
+    const classTracks = RECIPE_PACK && RECIPE_PACK.classRecipe ? RECIPE_PACK.classRecipe(String(o.classId || '').toUpperCase(), palette, { IMPACT }) : null;
+    const tracks = classTracks || RECIPES[recipeKey](palette);
+    for (const t of tracks) {
+        for (const nm of [t.fx, t.land]) if (nm && SETS[nm] && !sets[nm]) sets[nm] = await loadSet(nm);
+    }
+    const singles = await loadSingles();
+    if (!Object.values(sets).some((s) => s && s.length) && !tracks.some((t) => t.layer)) return null;     // assets missing → caller falls back to the legacy renderer
 
     let base = null;
     if (Buffer.isBuffer(o.baseBuffer) && o.baseBuffer.length > 1000) { try { base = await loadImage(o.baseBuffer); } catch (e) { base = null; } }
@@ -358,7 +389,11 @@ async function renderUltimateVideo(o) {
             glow(ctx, A.C[0], A.C[1], 70 + 90 * k + Math.sin(f * 1.7) * 6, rgba(palette[1], 'A'), 0.35 + 0.45 * k);
         }
         // sprite tracks, ordered
-        for (const tr of tracks) drawTrackInstances(ctx, tr, sets, A, time, mulberry(seed + f), palette);
+        const env = { A, time, W, H, base, self, seed, sets, spr: (n) => singles.get(n) || null };
+        for (const tr of tracks) {
+            if (tr.layer) { const L = LAYERS[tr.layer]; if (L) { ctx.save(); try { L(ctx, tr, env); } catch (e) { /* a bad layer never kills the clip */ } ctx.restore(); } }
+            else drawTrackInstances(ctx, tr, sets, A, time, mulberry(seed + f), palette);
+        }
         // impact glow
         if (sinceHit >= 0 && sinceHit < 0.5) glow(ctx, A.T[0], A.T[1], 200 * easeOut(sinceHit / 0.25) + 40, rgba(palette[0], 'A'), 0.85 * (1 - sinceHit / 0.5));
         embers(ctx, A, time, palette, seed);
