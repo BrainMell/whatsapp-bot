@@ -12222,23 +12222,46 @@ async function applyAbilityEffect(
         // 1-3s) and fall back to the cache when the box is busy - the sprite
         // engine paints its own HUD as the FINAL pass over the finished video,
         // so VFX can never cover the panel again either way.
+        // 💡 VFX LAYERS 2026-10-26 (owner: "summons circle under the player /
+        // army of dead hole under the monster but heads over / translucent
+        // rectangle where the monster was / spell origins not on the players"):
+        // request the LAYERED render (bg + combatants overlay + isolated focus
+        // target + real feet anchors) so the video can draw ground fx UNDER the
+        // fighters and air fx OVER them with exact origins. Falls back to the
+        // plain hud:"none" render, then to the cached scene, exactly as before.
         let ultBaseBuffer = state.lastCombatScene || null;
+        let ultLayers = null;
+        const ultCasterIndex = Math.max(0, (state.players || []).indexOf(player));
         try {
           const combatImageGenerator = require('./combatImageGenerator');
-          const freshBase = await Promise.race([
-            combatImageGenerator.generateCombatImage(state.players || [], state.enemies || [], {
-              combatType: 'PVE',
-              rank: state.dungeonRank,
-              floor: state.isAbyss ? state.abyssFloor : 0,
-              backgroundPath: state.backgroundPath || undefined,
-              summons: state.summons || [],
-              hud: 'none',
-              bypassQueue: true,
+          const baseOpts = {
+            combatType: 'PVE',
+            rank: state.dungeonRank,
+            floor: state.isAbyss ? state.abyssFloor : 0,
+            backgroundPath: state.backgroundPath || undefined,
+            summons: state.summons || [],
+            hud: 'none',
+            bypassQueue: true,
+          };
+          const layered = await Promise.race([
+            combatImageGenerator.generateCombatLayers(state.players || [], state.enemies || [], {
+              ...baseOpts,
+              focusSide: 'enemy',
+              focusIndex: Math.max(0, Number(targetIndex) || 0),
             }),
-            new Promise((resolve) => setTimeout(() => resolve(null), 3500)),
+            new Promise((resolve) => setTimeout(() => resolve(null), 4000)),
           ]);
-          if (freshBase && freshBase.success && Buffer.isBuffer(freshBase.buffer) && freshBase.buffer.length > 1000) {
-            ultBaseBuffer = freshBase.buffer;
+          if (layered && layered.success) {
+            ultLayers = layered;
+            ultBaseBuffer = null; // the mp4 lane composites bg+sprites itself; the gif lane flattens them
+          } else {
+            const freshBase = await Promise.race([
+              combatImageGenerator.generateCombatImage(state.players || [], state.enemies || [], baseOpts),
+              new Promise((resolve) => setTimeout(() => resolve(null), 3500)),
+            ]);
+            if (freshBase && freshBase.success && Buffer.isBuffer(freshBase.buffer) && freshBase.buffer.length > 1000) {
+              ultBaseBuffer = freshBase.buffer;
+            }
           }
         } catch (baseErr) {
           console.warn('[UltFx] hud:none base render failed, using cached scene:', baseErr?.message || baseErr);
@@ -12250,6 +12273,10 @@ async function applyAbilityEffect(
           targetIndex,
           // ⚔️ FIX 2026-10-24: pre-hit GIF reuses the scene already on screen
           baseSceneBuffer: ultBaseBuffer,
+          // 💡 VFX LAYERS 2026-10-26: layered payload + caster index for the
+          // exact spell origins
+          layers: ultLayers,
+          casterIndex: ultCasterIndex,
           // 💡 HUD 2026-10-26: real combatant data for the video HUD rail
           hudData: {
             name: String(player.name || 'The Champion'),

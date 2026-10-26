@@ -210,6 +210,45 @@ async function generateAnimatedCombatImage(players, enemies, options = {}) {
     }
 }
 
+/**
+ * 💡 VFX LAYERS (2026-10-26, owner VFX-alignment round): layered combat render
+ * for the ultimate-video compositor. Returns { bg, sprites, focus, anchors, w, h }
+ * where bg = scene WITHOUT combatants, sprites = transparent combatants overlay,
+ * focus = the isolated target combatant (when focusSide given), anchors = exact
+ * per-combatant feet rects in Go canvas space. ultimateFx draws ground fx
+ * (summon circles, rifts, cracks) between bg and sprites, and air fx above.
+ * Graceful: returns null on ANY failure so callers fall back to the plain base.
+ *
+ * @param {Array} players
+ * @param {Array} enemies
+ * @param {object} options - { combatType, summons, backgroundPath, rank, floor, hud, focusSide, focusIndex }
+ */
+async function generateCombatLayers(players, enemies, options = {}) {
+    try {
+        const payload = buildPayload(players, enemies, options);
+        payload.hud = String(options.hud || 'none');
+        payload.vfx = 'layers';
+        if (options.focusSide) {
+            payload.focusSide = String(options.focusSide);
+            payload.focusIndex = Math.floor(Number(options.focusIndex) || 0);
+        }
+        const body = await goService.generateCombatLayers(payload);
+        if (!body || !body.image || !body.sprites) return null;
+        return {
+            success: true,
+            w: Math.floor(Number(body.w) || 1024),
+            h: Math.floor(Number(body.h) || 687),
+            bg: Buffer.from(body.image, 'base64'),
+            sprites: Buffer.from(body.sprites, 'base64'),
+            focus: body.focus ? Buffer.from(body.focus, 'base64') : null,
+            anchors: Array.isArray(body.anchors) ? body.anchors : [],
+        };
+    } catch (error) {
+        console.warn('⚠️ Combat layers generation failed (falling back to plain base):', error.message);
+        return null;
+    }
+}
+
 async function updateCombatImage(players, enemies, turnInfo, options = {}) {
     // 💡 FIX 2026-08-03: Always use the STATIC PNG path (not animated MP4).
     // Animated combat is disabled because the Go service on Box 2 (512MB RAM)
@@ -282,6 +321,7 @@ async function generateHuntCard(data = {}) {
 
 module.exports = {
     generateCombatImage,
+    generateCombatLayers,
     generateAnimatedCombatImage,
     updateCombatImage,
     generateEndScreenImage,

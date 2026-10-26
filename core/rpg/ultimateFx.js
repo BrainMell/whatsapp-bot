@@ -479,13 +479,54 @@ async function renderUltimateVideo(o) {
     const singles = await loadSingles();
     if (!Object.values(sets).some((s) => s && s.length) && !tracks.some((t) => t.layer)) return null;     // assets missing → caller falls back to the legacy renderer
 
+    // 💡 VFX LAYERS (2026-10-26, owner VFX-alignment round): optional layered
+    // base from the Go renderer - bg WITHOUT combatants + a transparent
+    // combatants overlay + the isolated focus combatant + exact per-combatant
+    // feet anchors. This is what makes ground fx render UNDER the fighters
+    // (summon circles, army-of-dead rift) and air fx OVER them (hands, bolts),
+    // with every spell origin pinned to the real sprite feet.
+    let layers = null;
+    let sprImg = null, focImg = null;
+    if (o.layers && Buffer.isBuffer(o.layers.bg) && Buffer.isBuffer(o.layers.sprites)) {
+        try { sprImg = await loadImage(o.layers.sprites); } catch (e) { sprImg = null; }
+        if (sprImg && o.layers.focus) { try { focImg = await loadImage(o.layers.focus); } catch (e) { focImg = null; } }
+        if (sprImg) layers = o.layers; else console.warn('[UltFx] layers payload broken (sprites undecodable) - plain base');
+    }
+
     let base = null;
-    if (Buffer.isBuffer(o.baseBuffer) && o.baseBuffer.length > 1000) { try { base = await loadImage(o.baseBuffer); } catch (e) { base = null; } }
+    if (layers && Buffer.isBuffer(layers.bg)) { try { base = await loadImage(layers.bg); } catch (e) { base = null; } }
+    if (!base && Buffer.isBuffer(o.baseBuffer) && o.baseBuffer.length > 1000) { try { base = await loadImage(o.baseBuffer); } catch (e) { base = null; } }
     if (!base) base = fallbackBase();
     const hudIcons = o.hud && typeof o.hud === 'object' ? await loadHudIcons() : null;
 
     const self = o.side === 'self';
     const A = { C: [W * 0.27, H * 0.62], T: self ? [W * 0.27, H * 0.58] : [W * 0.72, H * 0.58], F: [W * 0.5, H * 0.55] };
+    // 💡 VFX LAYERS: pin C/T to the REAL sprite feet ("spells starting points
+    // not on the players" - the old fixed 0.27W/0.72W fractions missed the
+    // caster whenever the formation moved). Go canvas -> video space scale.
+    let focRect = null, casterRect = null;
+    if (layers && Array.isArray(layers.anchors) && layers.anchors.length) {
+        const kx = W / (Number(layers.w) || 1024), ky = H / (Number(layers.h) || 687);
+        const find = (side, idx) => layers.anchors.find((v) => v && v.side === side && v.index === idx);
+        const rectOf = (a) => [a.x * kx, a.feetY * ky, Math.max(24, a.w * kx), Math.max(24, a.h * ky)];
+        const caster = find('player', Math.max(0, Math.floor(Number(o.casterIndex) || 0))) || find('player', 0);
+        if (caster) { A.C = [caster.x * kx, caster.feetY * ky]; casterRect = rectOf(caster); }
+        if (self) { A.T = A.C.slice(); }
+        else {
+            // 💡 PVP VFX (2026-10-26, owner: "I dont see the vfx in pvps dude"):
+            // in duels the target is the OTHER DUELIST, which the Go layers
+            // payload also reports as side "player". targetSide picks which
+            // roster the target anchor is looked up on (PvP casts pass 'player').
+            const tSide = String(o.targetSide || 'enemy');
+            const tgt = find(tSide, Math.max(0, Math.floor(Number(o.targetIndex) || 0)))
+                || layers.anchors.find((v) => v && v.side === tSide);
+            if (tgt) { A.T = [tgt.x * kx, tgt.feetY * ky]; if (!focRect) focRect = rectOf(tgt); }
+        }
+        const fa = find(String(o.focusSide || 'enemy'), Math.floor(Number(o.focusIndex !== undefined ? o.focusIndex : o.targetIndex) || 0));
+        if (fa) focRect = rectOf(fa);
+    }
+    // the isolated focus monster is drawn BY the hands layer while it sinks
+    const sinkOwnsFocus = !!(layers && focImg && !self && tracks.some((t) => t.layer === 'hands' && t.sink));
     const seed = hash((o.classId || '') + (o.name || ''));
     const total = Math.round(DURATION * FPS);
     const frames = [];
@@ -513,7 +554,25 @@ async function renderUltimateVideo(o) {
         ctx.scale(zoom, zoom);
         ctx.translate(-W * (self ? 0.27 : 0.5 + (fx - 0.5) * 0.18), -H * (0.5 + (fy - 0.5) * 0.12));
         ctx.drawImage(base, 0, 0, W, H);
+        // 💡 VFX LAYERS round (2026-10-26): layered compositing finally matches
+        // real game VFX layering -
+        //   bg → ground fx (UNDER) → combatants → veil → air fx (OVER).
+        // Ground fx = every track flagged under:true (rune circles, rifts,
+        // cracks). The isolated focus combatant is skipped here when a sink
+        // recipe owns it (the hands layer draws it, sinking into the rift).
+        const env = { A, time, W, H, base, self, seed, sets, spr: (n) => singles.get(n) || null,
+            layers: !!layers, sprImg, focImg, focRect, casterRect };
+        if (env.layers) {
+            for (const tr of tracks) {
+                if (!tr.under) continue;
+                if (tr.layer) { const L = LAYERS[tr.layer]; if (L) { ctx.save(); try { L(ctx, tr, env); } catch (e) { /* a bad layer never kills the clip */ } ctx.restore(); } }
+                else drawTrackInstances(ctx, tr, sets, A, time, mulberry(seed + f), palette);
+            }
+            ctx.drawImage(sprImg, 0, 0, W, H);
+            if (focImg && !sinkOwnsFocus) ctx.drawImage(focImg, 0, 0, W, H);
+        }
         // dim the field while charging so effects pop; lift after the hit
+        // (layered: AFTER the combatants so they dim exactly like the flat base)
         const veil = time < IMPACT ? 0.12 + 0.3 * easeIn(time / IMPACT) : 0.42 * (1 - easeOut((sinceHit) / 0.6)) + 0.08;
         ctx.fillStyle = rgba('#05060f', veil); ctx.fillRect(-40, -40, W + 80, H + 80);
         // charge aura at the caster
@@ -521,9 +580,10 @@ async function renderUltimateVideo(o) {
             const k = easeIn(time / IMPACT);
             glow(ctx, A.C[0], A.C[1], 70 + 90 * k + Math.sin(f * 1.7) * 6, rgba(palette[1], 'A'), 0.35 + 0.45 * k);
         }
-        // sprite tracks, ordered
-        const env = { A, time, W, H, base, self, seed, sets, spr: (n) => singles.get(n) || null };
+        // sprite tracks, ordered (under:true tracks already painted in the
+        // ground pass above)
         for (const tr of tracks) {
+            if (tr.under) continue;
             if (tr.layer) { const L = LAYERS[tr.layer]; if (L) { ctx.save(); try { L(ctx, tr, env); } catch (e) { /* a bad layer never kills the clip */ } ctx.restore(); } }
             else drawTrackInstances(ctx, tr, sets, A, time, mulberry(seed + f), palette);
         }

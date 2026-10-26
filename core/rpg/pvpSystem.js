@@ -1173,6 +1173,96 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
             }
         }
 
+        // 💡 PVP ULTIMATE VFX (2026-10-26, owner: "I dont see the vfx in pvps
+        // dude"): duels never played the class ultimate videos - only raids
+        // did, because the animation hook lived in guildAdventure's cast site.
+        // Mirror it here: when the used ability resolves to an animated
+        // signature (own or lineage-inherited), race a LAYERED PVP render
+        // (battlefield without combatants + transparent combatants overlay +
+        // isolated defender + exact feet anchors - same Go contract the raids
+        // use, so ground fx draw UNDER the duelists and air fx OVER them with
+        // the spell origins pinned to the real sprites), then play the video
+        // BEFORE the result card. Non-ultimates, summon duels and any render
+        // failure fall straight through - the resolution above stays
+        // authoritative and untouched.
+        try {
+            const sigVfx = require('./skillVfx');
+            const casterClassId = String(currentPlayer.class?.id || currentPlayer.classId || (typeof currentPlayer.class === 'string' ? currentPlayer.class : '') || '').toUpperCase();
+            if (!currentPlayer.isSummon && sigVfx.resolveSignature(casterClassId, ability)) {
+                const casterIdx = Math.max(0, duel.players.indexOf(currentPlayer));
+                const defenderIdx = Math.max(0, duel.players.indexOf(opponent));
+                const pvpBaseOpts = {
+                    combatType: 'PVP',
+                    hud: 'none',
+                    bypassQueue: true,
+                    backgroundPath: duel.ruinsBackground
+                        ? `rpgasset/environment/${duel.ruinsBackground}`
+                        : undefined,
+                    summons: duel.summons || [],
+                };
+                let ultLayers = null;
+                let ultBase = null;
+                try {
+                    const layered = await Promise.race([
+                        combatImageGenerator.generateCombatLayers(duel.players, [], {
+                            ...pvpBaseOpts,
+                            focusSide: 'player',
+                            focusIndex: defenderIdx,
+                        }),
+                        new Promise((resolve) => setTimeout(() => resolve(null), 4000)),
+                    ]);
+                    if (layered && layered.success) ultLayers = layered;
+                } catch (layerErr) {
+                    console.warn('[PvP VFX] layered render failed, plain base:', layerErr?.message || layerErr);
+                }
+                if (!ultLayers) {
+                    try {
+                        const plain = await Promise.race([
+                            combatImageGenerator.generateCombatImage(duel.players, [], pvpBaseOpts),
+                            new Promise((resolve) => setTimeout(() => resolve(null), 3500)),
+                        ]);
+                        if (plain && plain.success && Buffer.isBuffer(plain.buffer) && plain.buffer.length > 1000) ultBase = plain.buffer;
+                    } catch (baseErr) {
+                        console.warn('[PvP VFX] plain base render failed:', baseErr?.message || baseErr);
+                    }
+                }
+                const { sendText, sendGif } = sigVfx.makeUltimateSender(sock, chatId);
+                await sigVfx.animateUltimate({
+                    // animateUltimate gates on inCombat + picks the target from
+                    // state.enemies - feed it a duel-shaped pseudo state with
+                    // the defender as the (only) live target.
+                    state: {
+                        inCombat: true,
+                        players: duel.players,
+                        enemies: [Object.assign({}, opponent, { index: 0 })],
+                    },
+                    player: currentPlayer,
+                    ability,
+                    targetIndex: 0,
+                    // the defender is on the PLAYER roster of the Go layers
+                    // payload - targetSide switches the anchor lookup.
+                    targetSide: 'player',
+                    baseSceneBuffer: ultBase,
+                    layers: ultLayers,
+                    casterIndex: casterIdx,
+                    hudData: {
+                        name: String(currentPlayer.name || 'The Champion'),
+                        class: casterClassId,
+                        level: Math.floor(Number(currentPlayer.level) || 0),
+                        rank: String(currentPlayer.adventurerRank || currentPlayer.rank || 'F').toUpperCase(),
+                        hp: Math.max(0, Math.floor(Number(currentPlayer.currentHP ?? currentPlayer.hp ?? 0))),
+                        maxHp: Math.max(1, Math.floor(Number(currentPlayer.maxHp ?? currentPlayer.stats?.maxHp ?? 100))),
+                        energy: Math.max(0, Math.floor(Number(currentPlayer.energy ?? currentPlayer.stats?.energy ?? 0))),
+                        maxEnergy: Math.max(1, Math.floor(Number(currentPlayer.maxEnergy ?? currentPlayer.stats?.maxEnergy ?? 100))),
+                    },
+                    sendText,
+                    sendGif,
+                });
+            }
+        } catch (pvpVfxErr) {
+            console.warn('[PvP VFX] ultimate animation failed; duel continues normally:', pvpVfxErr?.message || pvpVfxErr);
+        }
+
     } else if (action === 'flee') {
         // 💡 NEW 2026-08-05: Summon duel flee - CP penalty instead of player XP/wallet/item loss.
         // Fleeing summon loses CP (combat power) rating via temporary loyalty reduction.

@@ -113,15 +113,42 @@ LAYERS.rift = (ctx, tr, env) => {
     ctx.restore();
 };
 
-/** skeletal hands burst out of the ground around T, grab, and drag the enemy down. */
+/** skeletal hands burst out of the ground around T, grab, and drag the enemy down.
+ * 💡 VFX LAYERS (2026-10-26, owner: "the hole the hands come out of should be
+ * under but the heads themselves should be over ... weird translucent rectangle
+ * where the monster was"): with a layered base the ISOLATED focus monster is
+ * drawn BY this layer for the whole video (the Go renderer excluded it from the
+ * combatants overlay), so the rift opens UNDER it (under pass) and the hands
+ * grab OVER it. The sink is now a real clipped descent into the pit - the old
+ * hideRegion center-column patch that painted a translucent rectangle over the
+ * monster is gone. */
 LAYERS.hands = (ctx, tr, env) => {
     const { t } = local(env, tr), dur = tr.dur || 1.7;
-    if (t < 0 || t > dur) return;
-    const [cx, gy0] = pt(env, tr.pos || 'T', tr);
     const grab = tr.grab || 0.75, sinkEnd = tr.sinkEnd || 1.3;
+    const [cx, gy0] = pt(env, tr.pos || 'T', tr);
+    if (env.focImg) {
+        // the isolated target: natural position until the grab, then a clipped
+        // straight-down descent - visible only ABOVE the ground line, so it
+        // truly vanishes INTO the opened pit
+        const groundY = (env.focRect ? env.focRect[1] : env.A.T[1]) + 4;
+        if (tr.sink && !env.self && t > grab) {
+            const u = clamp01((t - grab) / (sinkEnd - grab));
+            const depth = (tr.depth || 150) * easeIn(u);
+            ctx.save(); ctx.beginPath(); ctx.rect(0, 0, env.W, groundY); ctx.clip();
+            // 5-arg form: the WHOLE full-canvas focus overlay, shifted down
+            ctx.drawImage(env.focImg, Math.sin(t * 60) * 2 * (1 - u), depth, env.W, env.H);
+            ctx.restore();
+            // pit mouth over the feet so the enemy vanishes INTO the ground
+            ctx.fillStyle = 'rgba(2,0,8,0.9)'; ctx.beginPath(); ctx.ellipse(cx, groundY, 58 + 20 * Math.sin(t * 9), 17, 0, 0, 7); ctx.fill();
+        } else {
+            ctx.drawImage(env.focImg, 0, 0, env.W, env.H);
+        }
+    }
+    if (t < 0 || t > dur) return;
     const n = tr.n || 5;
-    // sink the target (only the enemy; self-casts skip it)
-    if (tr.sink && !env.self && t > grab) {
+    // LEGACY single-image sink (no layered base available): the old patch
+    // behavior, kept only for non-layered callers.
+    if (!env.focImg && tr.sink && !env.self && t > grab) {
         const u = easeIn((t - grab) / (sinkEnd - grab));
         const gline = gy0 + (tr.ground || 62);
         const depth = (tr.depth || 150) * clamp01(u);
@@ -267,26 +294,46 @@ LAYERS.crescent = (ctx, tr, env) => {
     }
 };
 
-/** caster dashes through to the target, leaving afterimages. */
+/** caster dashes through to the target, leaving afterimages.
+ * 💡 VFX LAYERS (2026-10-26): with a layered base the afterimages are copies
+ * of the caster's REAL sprite region taken from the transparent combatants
+ * overlay (exact per-sprite anchor rect) - the hideRegion rectangular patch
+ * that sampled the image center is gone. The caster also stays standing (the
+ * ghosts read as the dash afterimages, no vanishing caster). */
 LAYERS.dash = (ctx, tr, env) => {
     const { t } = local(env, tr), dur = tr.dur || 0.38;
     if (t < 0 || t > dur + 0.25 || !env.base) return;
     const [x0, y0] = pt(env, 'C'), [x1, y1] = pt(env, tr.to || 'T');
     const u = easeIn(clamp01(t / dur));
-    const w = 130, h = 190, b = env.base, kx = b.width / env.W, ky = b.height / env.H;
-    if (t < dur + 0.2) hideRegion(ctx, env, x0, y0 - 30, w, h);
-    const ox = tr.off ? tr.off[0] : -50;
-    for (let g = 5; g >= 0; g--) {
-        const uu = clamp01(u - g * 0.08); const px = x0 + (x1 + ox - x0) * uu, py = y0 + (y1 - y0) * uu;
-        const aa = (1 - g / 6) * 0.8 * (t < dur ? 1 : 1 - (t - dur) / 0.25);
-        ctx.save(); ctx.globalAlpha = aa; if (g > 0) ctx.filter = 'none';
-        ctx.drawImage(b, (x0 - w / 2) * kx, (y0 - 30 - h / 2) * ky, w * kx, h * ky, px - w / 2, py - 30 - h / 2, w, h);
-        if (g > 0) { ctx.globalCompositeOperation = 'source-atop'; ctx.fillStyle = tr.color || 'rgba(120,90,255,0.5)'; ctx.globalAlpha = 0.35; ctx.fillRect(px - w / 2, py - 30 - h / 2, w, h); }
-        ctx.restore();
+    const w = 130, h = 190;
+    if (env.layers && env.sprImg) {
+        const caster = env.casterRect || [x0, y0 + h, w, h];
+        const gw = Math.max(24, caster[2]), gh = Math.max(30, caster[3]);
+        const cx0 = caster[0], cyFeet = caster[1];
+        const kx = env.sprImg.width / env.W, ky = env.sprImg.height / env.H;
+        for (let g = 5; g >= 1; g--) {
+            const uu = clamp01(u - g * 0.08); if (uu <= 0) continue;
+            const px = x0 + (x1 - x0) * uu, py = y0 + (y1 - y0) * uu;
+            ctx.save();
+            ctx.globalAlpha = (1 - g / 6) * 0.7 * (t < dur ? 1 : 1 - (t - dur) / 0.25);
+            ctx.drawImage(env.sprImg, (cx0 - gw / 2) * kx, (cyFeet - gh) * ky, gw * kx, gh * ky, px - gw / 2, py - gh, gw, gh);
+            ctx.restore();
+        }
+    } else {
+        if (t < dur + 0.2) hideRegion(ctx, env, x0, y0 - 30, w, h);
+        const ox = tr.off ? tr.off[0] : -50;
+        for (let g = 5; g >= 0; g--) {
+            const uu = clamp01(u - g * 0.08); const px = x0 + (x1 + ox - x0) * uu, py = y0 + (y1 - y0) * uu;
+            const aa = (1 - g / 6) * 0.8 * (t < dur ? 1 : 1 - (t - dur) / 0.25);
+            ctx.save(); ctx.globalAlpha = aa; if (g > 0) ctx.filter = 'none';
+            ctx.drawImage(env.base, (x0 - w / 2) * (env.base.width / env.W), (y0 - 30 - h / 2) * (env.base.height / env.H), w * (env.base.width / env.W), h * (env.base.height / env.H), px - w / 2, py - 30 - h / 2, w, h);
+            if (g > 0) { ctx.globalCompositeOperation = 'source-atop'; ctx.fillStyle = tr.color || 'rgba(120,90,255,0.5)'; ctx.globalAlpha = 0.35; ctx.fillRect(px - w / 2, py - 30 - h / 2, w, h); }
+            ctx.restore();
+        }
     }
     // speed lines
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = tr.color || '#c7b8ff'; ctx.lineWidth = 2; ctx.globalAlpha = 0.6 * (1 - clamp01((t - dur) / 0.25));
-    for (let i = 0; i < 7; i++) { const yy = y0 - 60 + i * 18 + (y1 - y0) * u, xx = x0 + (x1 + ox - x0) * u; ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx - 80 - i * 6, yy + (y0 - y1) * 0.1); ctx.stroke(); }
+    for (let i = 0; i < 7; i++) { const yy = y0 - 60 + i * 18 + (y1 - y0) * u, xx = x0 + (x1 + (tr.off ? tr.off[0] : -50) - x0) * u; ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx - 80 - i * 6, yy + (y0 - y1) * 0.1); ctx.stroke(); }
     ctx.restore();
 };
 

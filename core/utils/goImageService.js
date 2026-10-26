@@ -355,6 +355,39 @@ class GoImageService {
   }
 
   /*
+   * 💡 VFX LAYERS (2026-10-26, owner: "summons circle under the player / army
+   * of dead hole under the monster but heads over / translucent rectangle
+   * where the monster was / spell origins not on the players"): layered combat
+   * render for the ultimate-video compositor. The Go service responds with a
+   * JSON payload: scene WITHOUT combatants (jpeg), a transparent combatants
+   * overlay (png), the isolated focus combatant (png) and exact per-combatant
+   * feet anchors. Direct axios call (same pattern as generateCombatImageDirect
+   * - ultimate casts already bypass the queue with bypassQueue:true).
+   */
+  async generateCombatLayers(data) {
+    const startTime = Date.now();
+    try {
+      const axios = require('axios');
+      const baseURL = this.client.defaults.baseURL;
+      const response = await axios.post(baseURL + '/api/combat?fmt=jpeg', data, {
+        responseType: 'json',
+        timeout: 20000,
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      const body = response.data;
+      const ok = body && typeof body === 'object' && body.image && body.sprites;
+      console.log(`[GoService] Combat layers: ok=${!!ok} in ${elapsed}s`);
+      if (!ok) throw new Error('layers: malformed response');
+      return body;
+    } catch (error) {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.error(`[GoService] Combat layers FAILED after ${elapsed}s:`, error.message);
+      throw error;
+    }
+  }
+
+  /*
    * Animated-render semaphore (dedicated; does NOT use _enqueue slots).
    * Throws on wait-budget expiry so the caller falls back to the static
    * express lane early instead of queueing behind stalled encodes.

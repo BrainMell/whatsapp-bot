@@ -354,11 +354,14 @@ function drawSickle(ctx, x, y, size, color, alpha) {
   strokeLine(ctx, [[x - 22 * size, y - 29 * size], [x - 7 * size, y - 44 * size], [x + 9 * size, y - 47 * size]], '#fff1d4', 2 * size, alpha);
 }
 
-function drawEffect(ctx, entry, t, frame, targetSide) {
+function drawEffect(ctx, entry, t, frame, targetSide, ax) {
   const colors = PALETTE[entry.classId] || ['#fff0b0', '#ffbd57', '#e94b53'];
   const a = colors[0], b = colors[1], c = colors[2];
-  const selfX = W * 0.25, selfY = H * 0.53;
-  const enemyX = W * 0.72, enemyY = H * 0.55;
+  // 💡 VFX LAYERS 2026-10-26: ax = { self:[x,y], enemy:[x,y] } real sprite-feet
+  // anchors (renderer-provided). Falls back to the legacy fractions when absent
+  // - fixes "spell starting points not on the players" in the GIF lane too.
+  const selfX = ax && ax.self ? ax.self[0] : W * 0.25, selfY = ax && ax.self ? ax.self[1] : H * 0.53;
+  const enemyX = ax && ax.enemy ? ax.enemy[0] : W * 0.72, enemyY = ax && ax.enemy ? ax.enemy[1] : H * 0.55;
   const tx = targetSide === 'self' ? selfX : enemyX;
   const ty = targetSide === 'self' ? selfY : enemyY;
   const k = Math.sin(Math.PI * t);
@@ -707,7 +710,7 @@ function drawEffect(ctx, entry, t, frame, targetSide) {
   }
 }
 
-async function renderSignatureGif(state, player, ability, entry, target, baseSceneBuffer, frameSink) {
+async function renderSignatureGif(state, player, ability, entry, target, baseSceneBuffer, frameSink, layers, casterIndex, targetSide) {
   // ⚔️ FIX 2026-10-24: prefer the CACHED scene the player is already looking
   // at (stashed on the combat state by guildAdventure at every card send).
   // The old path re-rendered a full Go card mid-cast, which both cost 0.2-1.3s
@@ -719,6 +722,35 @@ async function renderSignatureGif(state, player, ability, entry, target, baseSce
   let baseImage = null;
   if (baseBuffer) {
     try { baseImage = await loadImage(baseBuffer); } catch (e) { baseImage = null; }
+  }
+  // 💡 VFX LAYERS 2026-10-26: when the layered payload exists, flatten
+  // bg + combatants (+ isolated focus) into one base so the GIF fallback shows
+  // the exact same battlefield the mp4 lane used.
+  let ax = null;
+  if (layers && Buffer.isBuffer(layers.bg) && Buffer.isBuffer(layers.sprites)) {
+    try {
+      const bgI = await loadImage(layers.bg);
+      const spI = await loadImage(layers.sprites);
+      const flat = createCanvas(bgI.width, bgI.height);
+      const fg = flat.getContext('2d');
+      fg.drawImage(bgI, 0, 0);
+      fg.drawImage(spI, 0, 0);
+      if (layers.focus) { try { fg.drawImage(await loadImage(layers.focus), 0, 0); } catch (e2) {} }
+      baseImage = flat;
+      if (Array.isArray(layers.anchors) && layers.anchors.length) {
+        const kx = W / (Number(layers.w) || 1024), ky = H / (Number(layers.h) || 687);
+        const find = (side, idx) => layers.anchors.find((v) => v && v.side === side && v.index === idx);
+        const ca = find('player', Math.max(0, Math.floor(Number(casterIndex) || 0))) || find('player', 0);
+        // 💡 PVP VFX: the target can be the other DUELIST (side "player") -
+        // targetSide picks the roster (defaults to "enemy" for raids).
+        const tSide = String(targetSide || 'enemy');
+        const ta = find(tSide, Math.max(0, Math.floor(Number(target && target.index) || 0))) || layers.anchors.find((v) => v && v.side === tSide);
+        ax = {
+          self: ca ? [ca.x * kx, ca.feetY * ky] : null,
+          enemy: ta ? [ta.x * kx, ta.feetY * ky] : null,
+        };
+      }
+    } catch (e) { /* keep the plain base */ }
   }
   const frames = [];
   const classId = String(player.class?.id || player.classId || '').toUpperCase();
@@ -756,14 +788,15 @@ async function renderSignatureGif(state, player, ability, entry, target, baseSce
       ctx.fillRect(0, 0, W, H);
     }
     // class overlay — scaled up around the target anchor on impact frames
-    const tx = entry.side === 'self' ? W * 0.25 : W * 0.72;
-    const ty = entry.side === 'self' ? H * 0.53 : H * 0.55;
+    // (💡 VFX LAYERS: anchors pinned to the real sprite feet when available)
+    const tx = ax && ax[entry.side === 'self' ? 'self' : 'enemy'] ? ax[entry.side === 'self' ? 'self' : 'enemy'][0] : (entry.side === 'self' ? W * 0.25 : W * 0.72);
+    const ty = ax && ax[entry.side === 'self' ? 'self' : 'enemy'] ? ax[entry.side === 'self' ? 'self' : 'enemy'][1] : (entry.side === 'self' ? H * 0.53 : H * 0.55);
     const oScale = i >= IMPACT_FRAME ? 1.5 : 1 + 0.15 * k;
     ctx.save();
     ctx.translate(tx, ty);
     ctx.scale(oScale, oScale);
     ctx.translate(-tx, -ty);
-    drawEffect(ctx, { ...entry, classId }, t, i, entry.side);
+    drawEffect(ctx, { ...entry, classId }, t, i, entry.side, ax);
     ctx.restore();
     // 🩸 settle frame: hit-tint + cracks linger on the target so the last
     // thing the eye keeps is 'that thing got HIT'
@@ -843,11 +876,21 @@ async function animateUltimate(options = {}) {
         baseBuffer: options.baseSceneBuffer, classId: fxClass, name, side: entry.side, palette: PALETTE[fxClass] || PALETTE[classId],
         // 💡 HUD 2026-10-26: the video draws its own left HUD rail as the FINAL
         // pass (above every effect) from the caster's live combat data.
-        hud: options.hudData || null
+        hud: options.hudData || null,
+        // 💡 VFX LAYERS 2026-10-26: layered base (bg + combatants overlay +
+        // isolated focus target + real feet anchors) - ground fx under the
+        // fighters, air fx over them, spell origins on the actual sprites.
+        layers: options.layers || null,
+        casterIndex: Number.isFinite(Number(options.casterIndex)) ? Number(options.casterIndex) : 0,
+        targetIndex: Number(target && target.index),
+        // 💡 PVP VFX (2026-10-26, owner: "I dont see the vfx in pvps dude"):
+        // duel targets are the other duelist - Go anchors report them as side
+        // "player", so the target anchor lookup must switch rosters.
+        targetSide: String(options.targetSide || 'enemy')
       }), 9000);
     } catch (e) { console.warn('[SkillVFX] sprite engine failed:', e?.message || e); }
     const gif = vid && vid.mp4 ? vid.mp4 : await raceTimeout(
-      renderSignatureGif(state, player, ability, entry, target, options.baseSceneBuffer),
+      renderSignatureGif(state, player, ability, entry, target, options.baseSceneBuffer, null, options.layers || null, options.casterIndex, options.targetSide),
       8000
     );
     if (gif && Buffer.isBuffer(gif) && gif.length > 100) {
@@ -867,11 +910,66 @@ async function animateUltimate(options = {}) {
   }
 }
 
+// 💡 PVP VFX (2026-10-26, owner: "I dont see the vfx in pvps dude"): shared
+// bounded media sender for ultimate videos - the exact recipe the PVE cast
+// site uses in guildAdventure (finished H.264 MP4 straight to the video lane,
+// raw GIF -> MP4 via the shared converters, JPEG still fallback, text last
+// resort; every send raced so a wedged socket can never freeze the duel turn).
+// Exported so PvP duels reuse it instead of duplicating the 60 lines.
+function makeUltimateSender(sock, chatId) {
+  const sendText = async (text) => {
+    try { await sock.sendMessage(chatId, { text }); } catch (e) {
+      console.warn('[SkillVFX] charge text send failed:', e?.message || e);
+    }
+  };
+  const sendGif = async (buffer, caption, extra) => {
+    try {
+      // sprite engine hands over a finished H.264 MP4 (+ JPEG thumb): send as-is
+      if (Buffer.isBuffer(buffer) && buffer.length > 500 && buffer.toString('latin1', 4, 8) === 'ftyp') {
+        const pl = { video: buffer, mimetype: 'video/mp4', caption, gifPlayback: true };
+        if (extra && Buffer.isBuffer(extra.thumb)) pl.jpegThumbnail = extra.thumb;
+        return { ok: true, result: await sock.sendMessage(chatId, pl) };
+      }
+      // WhatsApp's GIF-style video lane requires H.264 MP4 bytes, not a raw
+      // GIF in the video field - same converters the summon/reaction/fishing
+      // animations already use.
+      const gif89a = require('../utils/gif89a');
+      const { gifToMp4Even } = require('../utils/mediaConvert');
+      if (!gif89a.isGifBuffer(buffer)) throw new Error('renderer did not return a valid GIF buffer');
+      const mp4Buffer = await gifToMp4Even(buffer);
+      const jpegThumbnail = gif89a.firstFrameJpeg(buffer);
+      if (!Buffer.isBuffer(mp4Buffer) || mp4Buffer.length < 500 ||
+          mp4Buffer.toString('latin1', 4, 8) !== 'ftyp') {
+        throw new Error('GIF conversion did not produce a valid MP4');
+      }
+      const payload = { video: mp4Buffer, mimetype: 'video/mp4', caption, gifPlayback: true };
+      if (Buffer.isBuffer(jpegThumbnail) && jpegThumbnail.length > 500) payload.jpegThumbnail = jpegThumbnail;
+      console.log(`[SkillVFX] converted ultimate GIF ${buffer.length}B → MP4 ${mp4Buffer.length}B`);
+      return { ok: true, result: await sock.sendMessage(chatId, payload) };
+    } catch (convertError) {
+      console.error('[SkillVFX] GIF→MP4 failed:', convertError?.message || convertError);
+      // Still show the rendered first frame if transcoding fails.
+      try {
+        const gif89a = require('../utils/gif89a');
+        const still = gif89a.firstFrameJpeg(buffer);
+        if (Buffer.isBuffer(still) && still.length > 100) {
+          return { ok: true, result: await sock.sendMessage(chatId, {
+            image: still, caption: caption + '\n_(Animation unavailable on this server.)_' }) };
+        }
+      } catch (stillErr) { /* fall through to text */ }
+      try { await sock.sendMessage(chatId, { text: '⚠️ The ultimate animation could not be encoded. The skill will still resolve normally.' }); } catch (e) {}
+      return { ok: false };
+    }
+  };
+  return { sendText, sendGif };
+}
+
 module.exports = {
   SIGNATURE_SKILLS,
   getSignature,
   resolveSignature,
   animateUltimate,
+  makeUltimateSender,
   renderSignatureGif,
   GIF_PLAYBACK_MS,
   FRAME_COUNT

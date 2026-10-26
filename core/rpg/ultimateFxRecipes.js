@@ -4,8 +4,15 @@
 // classRecipe(classId, palette, {IMPACT}) -> track[] | null (null = use the style recipe).
 // Tracks with `layer` are layers; others are sprite tracks (see ultimateFx.js RECIPES docs).
 
+// 💡 VFX LAYERS (2026-10-26, owner: "the summons circle under them / the hole
+// should be under"): ground-plane layers render in the UNDER pass - between
+// the battlefield bg and the combatants - so circles/rifts/cracks sit beneath
+// the fighters while every other fx stays above them. An explicit under in the
+// track options still wins.
+const GROUND_LAYERS = new Set(['circle', 'rift', 'cracks']);
+
 function classRecipe(cls, p, { IMPACT: I }) {
-    const L = (layer, o) => ({ layer, ...o });
+    const L = (layer, o) => ({ layer, under: GROUND_LAYERS.has(layer), ...o });
     const flash = (c, a = 0.5, at = I, dur = 0.22) => L('wash', { at, dur, color: c, a, add: true });
     const dark = (a = 0.45, at = 0.1, dur = I + 0.4) => L('wash', { at, dur, color: '#05000c', a });
     const R = {
