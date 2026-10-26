@@ -486,6 +486,33 @@ LAYERS.affect = (ctx, tr, env) => {
     }
 };
 
+/** 🔴 HURT FLASH (owner 2026-10-26: "when the attack hits make the victim have
+ * a hurt red flashing overlay animation"): draws RED-tinted copies of the REAL
+ * victim cutouts in a hard double-pulse exactly when the impact lands - the
+ * classic "that thing just got HIT" read. env.hurtList is built once per render
+ * next to affectList (same fighters, same rects, red tint) and the track is
+ * auto-pushed for every offensive cast, so no recipe has to opt in. The pulse
+ * is DONE before the class-colour affect wash settles: flash → echo → colour. */
+LAYERS.hurt = (ctx, tr, env) => {
+    const { t } = local(env, tr);
+    const dur = tr.dur || 0.5;
+    if (t < 0 || t > dur) return;
+    const list = env.hurtList || [];
+    if (!list.length) return;
+    // main spike (~2 frames) + a softer echo ~0.2s later, like hit-i-frames
+    const k = Math.min(1, bell(clamp01(t / 0.15)) + 0.62 * bell(clamp01((t - 0.2) / 0.17)));
+    const a = (tr.a || 0.85) * k;
+    if (a <= 0.004) return;
+    for (const c of list) {
+        if (!c.tinted) continue;
+        ctx.save();
+        ctx.globalAlpha = a;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.drawImage(c.tinted, c.x, c.y, c.w, c.h);
+        ctx.restore();
+    }
+};
+
 /** generic particle emitter: dot | glow | star | spark | coin | leaf | soul | note | rune. */
 LAYERS.emit = (ctx, tr, env) => {
     const n = tr.n || 24, life = tr.life || 0.9, dur = tr.dur || 1;

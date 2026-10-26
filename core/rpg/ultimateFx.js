@@ -580,6 +580,11 @@ async function renderUltimateVideo(o) {
         ? Math.max(0, Math.floor(Number(o.focusIndex)))
         : Math.max(0, Math.floor(Number(o.targetIndex) || 0));
     let affectList = [];
+    // 🔴 HURT FLASH list (owner: "when the attack hits make the victim have a
+    // hurt red flashing overlay animation"): the SAME affected cutouts, tinted
+    // hurt-red, pulsed by LAYERS.hurt at the impact moment. Offensive casts
+    // only - a heal/buff never reads as "hurt".
+    let hurtList = [];
     if (layers && Array.isArray(layers.cuts) && layers.cuts.length) {
         const cutImgs = [];
         await Promise.all(layers.cuts.map(async (c) => {
@@ -612,6 +617,10 @@ async function renderUltimateVideo(o) {
         for (const c of affected) {
             const tinted = tintCutout(c.img, tintHex);
             if (tinted) affectList.push({ x: c.x, y: c.y, w: c.w, h: c.h, tinted });
+            if (!self) {
+                const red = tintCutout(c.img, '#ff2222');
+                if (red) hurtList.push({ x: c.x, y: c.y, w: c.w, h: c.h, tinted: red });
+            }
         }
     }
 
@@ -650,6 +659,12 @@ async function renderUltimateVideo(o) {
     if (layers && affectList.length && !tracks.some((t) => t.layer === 'affect')) {
         tracks.push({ layer: 'affect', at: IMPACT, dur: 1.25, curve: 'hold', a: self ? 0.7 : 0.9 });
     }
+    // 🔴 HURT FLASH auto-track: fires on every offensive cast that has real
+    // victim cutouts - flash + echo land BEFORE the class-colour wash above
+    // settles, so the hit reads red first, class colour second.
+    if (layers && hurtList.length && !tracks.some((t) => t.layer === 'hurt')) {
+        tracks.push({ layer: 'hurt', at: IMPACT + 0.01, dur: 0.5, a: 0.85 });
+    }
     const seed = hash((o.classId || '') + (o.name || ''));
     const total = Math.round(DURATION * FPS);
     const frames = [];
@@ -684,7 +699,7 @@ async function renderUltimateVideo(o) {
         // cracks). The isolated focus combatant is skipped here when a sink
         // recipe owns it (the hands layer draws it, sinking into the rift).
         const env = { A, time, W, H, base, self, seed, sets, spr: (n) => singles.get(n) || null,
-            layers: !!layers, sprImg, focImg, focRect, casterRect, affectList };
+            layers: !!layers, sprImg, focImg, focRect, casterRect, affectList, hurtList };
         if (env.layers) {
             for (const tr of tracks) {
                 if (!tr.under) continue;
@@ -712,6 +727,13 @@ async function renderUltimateVideo(o) {
         }
         // impact glow
         if (sinceHit >= 0 && sinceHit < 0.5) glow(ctx, A.T[0], A.T[1], 200 * easeOut(sinceHit / 0.25) + 40, rgba(palette[0], 'A'), 0.85 * (1 - sinceHit / 0.5));
+        // 🔴 HURT FLASH fallback (no cutouts → no hurtList): same double-pulse
+        // timing as LAYERS.hurt, as a red radial burn on the victim anchor so
+        // the "that got HIT" read survives the plain-base lane too.
+        if (!self && !hurtList.length && sinceHit >= 0 && sinceHit < 0.45) {
+            const k = Math.min(1, bell(clamp01(sinceHit / 0.15)) + 0.62 * bell(clamp01((sinceHit - 0.2) / 0.17)));
+            glow(ctx, A.T[0], A.T[1] - 26, 130, rgba('#ff2222', 'A'), 0.5 * k);
+        }
         embers(ctx, A, time, palette, seed);
         ctx.restore();
         // full-screen flash frames (soft, 2 frames) + vignette
