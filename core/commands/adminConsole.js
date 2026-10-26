@@ -1475,12 +1475,16 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Enemy "${query}" not found.\nUse \`${prefix} mod enemy list\` to see all boss IDs.` });
             }
 
-            // Start a TRIAL-mode adventure with this boss
+            // If sandbox mode is active, launch the trial as the isolated test
+            // character rather than accidentally starting it on the moderator's
+            // real account.
+            const engine = require('../engine');
+            const combatJid = engine.getSandboxJid(senderJid) || senderJid;
             const result = await guildAdventure.initAdventure(
-                sock, chatId, null, 'TRIAL', true, null, senderJid, null,
+                sock, chatId, null, 'TRIAL', true, null, combatJid, null,
                 {
                     trialBoss: bossId,
-                    targetClass: economy.getUserClass(senderJid)?.id || 'FIGHTER',
+                    targetClass: economy.getUserClass(combatJid)?.id || 'FIGHTER',
                     stoneId: 'evolution_stone',
                     cost: 0,
                 }
@@ -1946,6 +1950,76 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
         }
 
+
+        // Unlock every class skill into the active sandbox and persist it.
+        if (sandboxSub === 'giveskillsall') {
+            try {
+                const engine = require('../engine');
+                const sandboxJid = engine.getSandboxJid(senderJid);
+                if (!sandboxJid) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox mode is not active. Use \`${prefix} mod sandbox on\` first.` });
+                const user = economy.getUser(sandboxJid);
+                if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Sandbox user not found.' });
+                const allTrees = skillTree.SKILL_TREES || {};
+                const skills = user.skills instanceof Map
+                    ? Object.fromEntries(user.skills.entries())
+                    : { ...(user.skills || {}) };
+                let count = 0;
+                for (const tree of Object.values(allTrees)) {
+                    for (const branch of Object.values(tree?.trees || {})) {
+                        for (const [skillId, skill] of Object.entries(branch?.skills || {})) {
+                            skills[skillId] = Math.max(1, Number(skill?.maxLevel) || 1);
+                            count++;
+                        }
+                    }
+                }
+                await AdminSandbox.patch(senderJid, { skills });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `🔮 *ALL SKILLS UNLOCKED*\n\nGranted ${count} skills from all classes at max level.\n\n_Only skills compatible with the current class can be used in combat._` });
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to unlock skills: ${e.message}` });
+            }
+        }
+
+        // Clear the sandbox inventory in both the persisted profile and live cache.
+        if (sandboxSub === 'clearinv') {
+            try {
+                const engine = require('../engine');
+                if (!engine.getSandboxJid(senderJid)) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox mode is not active. Use \`${prefix} mod sandbox on\` first.` });
+                await AdminSandbox.patch(senderJid, { inventory: {} });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + '🧹 *Sandbox inventory cleared.*' });
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to clear inventory: ${e.message}` });
+            }
+        }
+
+        // Unequip every slot in both persisted sandbox data and the live account.
+        if (sandboxSub === 'unequipall') {
+            try {
+                const engine = require('../engine');
+                if (!engine.getSandboxJid(senderJid)) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox mode is not active. Use \`${prefix} mod sandbox on\` first.` });
+                const emptyEquipment = {
+                    main_hand: null, off_hand: null, armor: null, helmet: null,
+                    boots: null, ring: null, amulet: null, cloak: null, gloves: null
+                };
+                await AdminSandbox.patch(senderJid, { equipment: emptyEquipment });
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + '🛡️ *All sandbox equipment unequipped.*' });
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to unequip items: ${e.message}` });
+            }
+        }
+
+        // Run the existing mod boss-fight flow under the sandbox JID.
+        if (sandboxSub === 'fightboss') {
+            const bossQuery = args.slice(2).join(' ').trim();
+            if (!bossQuery) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod sandbox fightboss <bossId|name>\`\nExample: \`${prefix} mod sandbox fightboss LEVIATHAN\`` });
+            }
+            const engine = require('../engine');
+            if (!engine.getSandboxJid(senderJid)) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox mode is not active. Use \`${prefix} mod sandbox on\` first.` });
+            }
+            return await handleAdmin(sock, chatId, senderJid, ['fightenemy', bossQuery], m, BOT_MARKER, prefix, getMentionOrReply);
+        }
+
         return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown sandbox subcommand: \`${sandboxSub}\`\nUse \`${prefix} mod sandbox\` to see status.` });
     }
 
@@ -1972,97 +2046,6 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         }
         const isActive = global.godModeUsers && global.godModeUsers.has(sandboxJid || senderJid);
         return await sock.sendMessage(chatId, { text: BOT_MARKER + `⚡ *GODMODE: ${isActive ? '🟢 ON' : '🔴 OFF'}*\n\n_Toggle: \`${prefix} mod godmode on/off\`_` });
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // ── SANDBOX GIVESKILLSALL - unlock ALL skills from ALL classes ───────
-    // .g admin sandbox giveskillsall
-    // ═══════════════════════════════════════════════════════════════════════
-    if (sub === 'sandbox' && (args[1] || '').toLowerCase() === 'giveskillsall') {
-        try {
-            const engine = require('../engine');
-            const sandboxJid = engine.getSandboxJid(senderJid);
-            if (!sandboxJid) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox mode is not active.` });
-            const economy = require('../rpg/economy');
-            const skillTree = require('../rpg/skillTree');
-            const SK = skillTree.SKILL_TREES || skillTree;
-            const user = economy.getUser(sandboxJid);
-            if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Sandbox user not found.' });
-            if (!user.skills) user.skills = {};
-            let count = 0;
-            for (const [classId, tree] of Object.entries(SK)) {
-                if (!tree.trees) continue;
-                for (const [, treeData] of Object.entries(tree.trees)) {
-                    if (!treeData.skills) continue;
-                    for (const [skillId, skill] of Object.entries(treeData.skills)) {
-                        user.skills[skillId] = skill.maxLevel || 1;
-                        count++;
-                    }
-                }
-            }
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `🔮 *ALL SKILLS UNLOCKED*\n\nGranted ${count} skills from all classes at max level.\n\n_Note: skills outside your current class lineage won't be usable in combat, but are saved for testing._` });
-        } catch (e) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed: ${e.message}` });
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // ── SANDBOX CLEARINV - clear sandbox inventory ───────────────────────
-    // ═══════════════════════════════════════════════════════════════════════
-    if (sub === 'sandbox' && (args[1] || '').toLowerCase() === 'clearinv') {
-        try {
-            const engine = require('../engine');
-            const sandboxJid = engine.getSandboxJid(senderJid);
-            if (!sandboxJid) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox mode is not active.` });
-            const economy = require('../rpg/economy');
-            const user = economy.getUser(sandboxJid);
-            if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Sandbox user not found.' });
-            user.inventory = {};
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `🧹 *Sandbox inventory cleared.*` });
-        } catch (e) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed: ${e.message}` });
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // ── SANDBOX UNEQUIPALL - unequip all equipment ───────────────────────
-    // ═══════════════════════════════════════════════════════════════════════
-    if (sub === 'sandbox' && (args[1] || '').toLowerCase() === 'unequipall') {
-        try {
-            const engine = require('../engine');
-            const sandboxJid = engine.getSandboxJid(senderJid);
-            if (!sandboxJid) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox mode is not active.` });
-            const economy = require('../rpg/economy');
-            const user = economy.getUser(sandboxJid);
-            if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Sandbox user not found.' });
-            user.equipment = {};
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `🛡️ *All sandbox equipment unequipped.*` });
-        } catch (e) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed: ${e.message}` });
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // ── SANDBOX FIGHTBOSS - instantly fight any boss (shortcut) ──────────
-    // .g admin sandbox fightboss <bossId>
-    // ═══════════════════════════════════════════════════════════════════════
-    if (sub === 'sandbox' && (args[1] || '').toLowerCase() === 'fightboss') {
-        const bossQuery = args.slice(2).join(' ').trim();
-        if (!bossQuery) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod sandbox fightboss <bossId|name>\`\n\nExample: \`${prefix} mod sandbox fightboss LEVIATHAN\`` });
-        }
-        // Delegate to the existing fightenemy command
-        args[1] = 'fightenemy';
-        args[2] = bossQuery;
-        sub = 'fightenemy';
-    }
-
-    // Re-check if we redirected to fightenemy from sandbox fightboss
-    if (sub === 'fightenemy') {
-        // Fall through to the existing fightenemy handler above by re-checking
-        // Actually, the fightenemy handler is earlier in the function. We need
-        // to NOT fall through to unknown subcommand. Just return a redirect message.
-        return await sock.sendMessage(chatId, { text: BOT_MARKER + `💡 Use \`${prefix} mod fightenemy ${args[2] || '<bossId>'}\` to fight a boss.\n\n_Or enable sandbox first with \`${prefix} mod sandbox on\` then use \`${prefix} solo\` to test combat._` });
     }
 
     // ── UNKNOWN SUBCOMMAND ──────────────────────────────────────────────────
