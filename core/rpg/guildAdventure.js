@@ -2309,6 +2309,16 @@ async function sendMediaBounded(sock, chatId, payload, opts = {}) {
   const ms = opts.ms || 20000;      // fast-ack window
   const grace = opts.grace || 10000; // extra wait for a late settle
   const label = opts.label || 'media';
+  // 🩘 SOCK GUARD (2026-10-26): boundedSend skips silently on a missing
+  // socket, but this helper used to dereference it raw — an undefined sock
+  // crashed the TURN image+caption send ("Turn image send failed in
+  // nextTurn: Cannot read properties of undefined (reading 'sendMessage')")
+  // AND its own text fallback (same deref inside the catch), so the player
+  // got NOTHING for the turn. Drop the media, log once, never wedge.
+  if (!sock || !chatId || !payload) {
+    console.warn(`[Quest] ${label} media send skipped — no socket/chat/payload (dropped, never wedges the turn)`);
+    return { ok: false, late: false };
+  }
   let settled = false; // settled SUCCESSFULLY (image will arrive)
   const sendP = (async () => {
     await sock.sendMessage(chatId, payload);
@@ -4562,6 +4572,14 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   if (!state) return;
   const chatId = state.chatId;
   if (!groq) groq = state.groq;
+  // 🩘 SOCK FALLBACK (2026-10-26): the combatStart timer below closes over
+  // THIS sock for the whole fight — a socketless caller here used to doom
+  // every subsequent turn send (watchdog train → invisible fight).
+  if (!sock) sock = state.sock || state.sock_ref;
+  // Stamp it for late callers — but NEVER stomp the RUINS co-op multicast
+  // wrapper (makeRuinsSock): a raw sock here would collapse every seat's
+  // visuals back to a single chat.
+  if (!state.sock) state.sock = sock;
   state.inCombat = true;
   // 💡 ROUND-19: generation stamp + guard re-arm. Every fight gets a fresh
   // combatGen; stale resolutions carrying the previous gen are refused in
@@ -5418,6 +5436,10 @@ The dungeon collapsed after too many stalled turns. Your slot has been released 
 async function promptPlayerAction(sock, player, sessionKey) {
   const state = gameStates.get(sessionKey);
   if (!state) return;
+  // 🩘 SOCK FALLBACK (2026-10-26): the YOUR TURN prompt must never die to a
+  // socketless caller (10-19: "Failed to send player prompt ... reading
+  // 'sendMessage'" — boundedSend silently skipped, player sat promptless).
+  if (!sock) sock = state.sock || state.sock_ref;
   const chatId = state.chatId;
   const icon = player.class?.icon || "👤";
   const inventory = inventorySystem.formatInventory(player.jid);
@@ -7181,6 +7203,10 @@ async function handleDeath(
 async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
   const state = gameStates.get(sessionKey);
   if (!state || !state.inCombat) return;
+  // 🩘 SOCK FALLBACK (2026-10-26): same family as the processVotes heal —
+  // any caller that lost its socket still delivers the battle card +
+  // YOUR TURN caption through the state's stored socket.
+  if (!sock) sock = state.sock || state.sock_ref;
 
   // Generate incremental combat image if action just happened
   if (lastTurnInfo) {
@@ -7467,7 +7493,7 @@ async function startAbyssCombat(sock, chatId, senderJid, enemy, abyssRun, floor)
     roundLog: [],
     timers: {},
     groq: null,
-    sock_ref: sock,
+    sock: sock, sock_ref: sock,
     dungeonRank: 0,
     difficulty: 0,
     isProcessing: false,
@@ -7613,7 +7639,7 @@ async function startAbyssCoopCombat(sock, chatId, hostJid, enemy, abyssRun, floo
     roundLog: [],
     timers: {},
     groq: null,
-    sock_ref: sock,
+    sock: sock, sock_ref: sock,
     dungeonRank: 0,
     difficulty: 0,
     isProcessing: false,
@@ -7863,7 +7889,7 @@ async function resumeSoloCombat(sock, chatId, senderJid) {
     roundLog: [],
     timers: {},
     groq: null,
-    sock_ref: sock,
+    sock: sock, sock_ref: sock,
     isProcessing: false,
     isEndingCombat: false,
     // 💡 flag the rebuild so the start scene says RESUMED, not BATTLE COMMENCES
@@ -8218,7 +8244,7 @@ async function resumeGroupCombat(sock, chatId, senderJid) {
     roundLog: [],
     timers: {},
     groq: null,
-    sock_ref: sock,
+    sock: sock, sock_ref: sock,
     isProcessing: false,
     isEndingCombat: false,
     // 💡 flag the rebuild so the start scene says RESUMED, not BATTLE COMMENCES
@@ -10673,7 +10699,15 @@ async function handleNonCombatEncounter(sock, encounter, sessionKey) {
 async function processVotes(sock, encounter, sessionKey) {
   const state = gameStates.get(sessionKey);
   if (!state) return;
-  if (!sock) sock = state.sock;
+  // 🩘 SOCK FALLBACK (2026-10-26): state.sock is ONLY ever set for RUINS
+  // co-op (makeRuinsSock) — every other mode stores the live socket on
+  // state.sock_ref. A bare `sock = state.sock` here handed the whole
+  // vote→encounter→next-fight chain a undefined socket: every send died
+  // ("Cannot read properties of undefined (reading 'sendMessage')"), the
+  // rest message / next fight's battle card / YOUR TURN caption all went
+  // silent, and the fight zombied on invisibly until the breaker collapsed
+  // it. Read the real socket before driving the chain.
+  if (!sock) sock = state.sock || state.sock_ref;
   clearTimeout(state.timers.vote);
 
   const chatId = state.chatId;
@@ -13878,7 +13912,7 @@ module.exports = {
       if (state.voteProcessing) return "❌ Votes are already being processed.";
       state.voteProcessing = true;
       clearTimeout(state.timers.vote);
-      const sock = state.sock;
+      const sock = state.sock || state.sock_ref; // 🩘 sock_ref fallback — state.sock is RUINS-only (see processVotes)
       const sessionKey = state.sessionKey;
       setTimeout(
         () => {
@@ -13907,7 +13941,7 @@ module.exports = {
       clearTimeout(state.timers.vote);
 
       // Use setTimeout to avoid blocking
-      const sock = state.sock;
+      const sock = state.sock || state.sock_ref; // 🩘 sock_ref fallback — state.sock is RUINS-only (see processVotes)
       setTimeout(
         () => {
           processVotes(sock, currentEnc, sessionKey).catch((e) =>
