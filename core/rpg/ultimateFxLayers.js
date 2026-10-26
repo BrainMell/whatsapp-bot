@@ -20,6 +20,10 @@ const bell = (u) => Math.sin(Math.PI * clamp01(u));
 function hashS(str) { let h = 2166136261; for (const ch of String(str)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
 
 function pt(env, spec, tr) {
+    // 💡 AoE FAN (owner: "fix up the vfx for individual and multiple
+    // opponents"): fanned track replicas carry an explicit _pt target (video
+    // space feet point per enemy anchor) that overrides pos entirely.
+    if (tr && tr._pt) return Array.isArray(tr._pt) ? tr._pt.slice() : [tr._pt[0], tr._pt[1]];
     let p;
     if (Array.isArray(spec)) p = [spec[0] * env.W, spec[1] * env.H];
     else p = (env.A[spec || 'T'] || env.A.T).slice();
@@ -445,6 +449,34 @@ LAYERS.wash = (ctx, tr, env) => {
     const a = (tr.a || 0.5) * (tr.curve === 'in' ? easeIn(u) : tr.curve === 'out' ? 1 - u : bell(u));
     if (a <= 0.003) return;
     ctx.save(); if (tr.add) ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a; ctx.fillStyle = tr.color || '#000'; ctx.fillRect(-60, -60, env.W + 120, env.H + 120); ctx.restore();
+};
+
+/** per-fighter sprite affects (💡 MULTI-TARGET 2026-10-26, owner: "fix up the
+ * vfx for individual and multiple opponents - instead of pulling down a cut
+ * out of the sprite and the background just grab the individual or multiple
+ * enemy sprites and affect them"): draws PRE-TINTED copies of the REAL
+ * combatant cutouts (Go layers `cuts`) exactly over their fighters. The
+ * affect is the class colour washing the fighter's own pixels - the single
+ * target, the whole enemy roster for AoE casts, or the caster/party for
+ * self-casts. env.affectList = [{x,y,w,h,tinted}] built once per render. */
+LAYERS.affect = (ctx, tr, env) => {
+    const { t } = local(env, tr);
+    const dur = tr.dur || 0.55;
+    if (t < 0 || t > dur) return;
+    const list = env.affectList || [];
+    if (!list.length) return;
+    const u = clamp01(t / dur);
+    const k = tr.curve === 'hold' ? Math.min(1, u * 8) * (1 - u * u) : bell(u);
+    const a = (tr.a || 0.85) * k;
+    if (a <= 0.004) return;
+    for (const c of list) {
+        if (!c.tinted) continue;
+        ctx.save();
+        ctx.globalAlpha = a;
+        if (tr.add !== false) ctx.globalCompositeOperation = 'lighter';
+        ctx.drawImage(c.tinted, c.x, c.y, c.w, c.h);
+        ctx.restore();
+    }
 };
 
 /** generic particle emitter: dot | glow | star | spark | coin | leaf | soul | note | rune. */

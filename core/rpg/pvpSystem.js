@@ -1242,6 +1242,15 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
                     // the defender is on the PLAYER roster of the Go layers
                     // payload - targetSide switches the anchor lookup.
                     targetSide: 'player',
+                    // 💡 anchor precision: the defender's real PLAYER-roster
+                    // index (targetIndex 0 is the pseudo-enemy index and would
+                    // anchor duelist 0 even when the defender is duelist 1)
+                    focusIndex: defenderIdx,
+                    // 💡 MULTI-TARGET (2026-10-26, owner: "grab the individual
+                    // or multiple enemy sprites and affect them"): AoE flags
+                    // the video so impact tracks fan per anchor - in duels
+                    // there is a single defender, so this stays focused
+                    aoe: effect?.type === 'aoe',
                     baseSceneBuffer: ultBase,
                     layers: ultLayers,
                     casterIndex: casterIdx,

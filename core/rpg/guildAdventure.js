@@ -12277,6 +12277,10 @@ async function applyAbilityEffect(
           // exact spell origins
           layers: ultLayers,
           casterIndex: ultCasterIndex,
+          // 💡 MULTI-TARGET (2026-10-26, owner: "grab the individual or
+          // multiple enemy sprites and affect them"): AoE ultimates fan their
+          // impact tracks per enemy anchor and tint the whole enemy roster
+          aoe: effect?.type === 'aoe',
           // 💡 HUD 2026-10-26: real combatant data for the video HUD rail
           hudData: {
             name: String(player.name || 'The Champion'),

@@ -710,7 +710,7 @@ function drawEffect(ctx, entry, t, frame, targetSide, ax) {
   }
 }
 
-async function renderSignatureGif(state, player, ability, entry, target, baseSceneBuffer, frameSink, layers, casterIndex, targetSide) {
+async function renderSignatureGif(state, player, ability, entry, target, baseSceneBuffer, frameSink, layers, casterIndex, targetSide, focusIndex) {
   // ⚔️ FIX 2026-10-24: prefer the CACHED scene the player is already looking
   // at (stashed on the combat state by guildAdventure at every card send).
   // The old path re-rendered a full Go card mid-cast, which both cost 0.2-1.3s
@@ -742,9 +742,11 @@ async function renderSignatureGif(state, player, ability, entry, target, baseSce
         const find = (side, idx) => layers.anchors.find((v) => v && v.side === side && v.index === idx);
         const ca = find('player', Math.max(0, Math.floor(Number(casterIndex) || 0))) || find('player', 0);
         // 💡 PVP VFX: the target can be the other DUELIST (side "player") -
-        // targetSide picks the roster (defaults to "enemy" for raids).
+        // targetSide picks the roster (defaults to "enemy" for raids) and
+        // focusIndex carries the defender's real roster index (PvP only).
         const tSide = String(targetSide || 'enemy');
-        const ta = find(tSide, Math.max(0, Math.floor(Number(target && target.index) || 0))) || layers.anchors.find((v) => v && v.side === tSide);
+        const ti = Number.isFinite(Number(focusIndex)) ? Math.max(0, Math.floor(Number(focusIndex))) : Math.max(0, Math.floor(Number(target && target.index) || 0));
+        const ta = find(tSide, ti) || layers.anchors.find((v) => v && v.side === tSide);
         ax = {
           self: ca ? [ca.x * kx, ca.feetY * ky] : null,
           enemy: ta ? [ta.x * kx, ta.feetY * ky] : null,
@@ -886,11 +888,18 @@ async function animateUltimate(options = {}) {
         // 💡 PVP VFX (2026-10-26, owner: "I dont see the vfx in pvps dude"):
         // duel targets are the other duelist - Go anchors report them as side
         // "player", so the target anchor lookup must switch rosters.
-        targetSide: String(options.targetSide || 'enemy')
+        targetSide: String(options.targetSide || 'enemy'),
+        // the defender's index on the PLAYER roster (PvP only) - targetIndex 0
+        // is the pseudo-enemy index and would anchor the wrong duelist
+        focusIndex: Number.isFinite(Number(options.focusIndex)) ? Number(options.focusIndex) : undefined,
+        // 💡 MULTI-TARGET (2026-10-26, owner: "grab the individual or multiple
+        // enemy sprites and affect them"): AoE casts fan the impact tracks per
+        // enemy anchor and tint the WHOLE enemy roster, not just the focus
+        aoe: !!options.aoe
       }), 9000);
     } catch (e) { console.warn('[SkillVFX] sprite engine failed:', e?.message || e); }
     const gif = vid && vid.mp4 ? vid.mp4 : await raceTimeout(
-      renderSignatureGif(state, player, ability, entry, target, options.baseSceneBuffer, null, options.layers || null, options.casterIndex, options.targetSide),
+      renderSignatureGif(state, player, ability, entry, target, options.baseSceneBuffer, null, options.layers || null, options.casterIndex, options.targetSide, options.focusIndex),
       8000
     );
     if (gif && Buffer.isBuffer(gif) && gif.length > 100) {

@@ -84,7 +84,7 @@ function classRecipe(cls, p, { IMPACT: I }) {
         ],
         SCOUT: () => [
             L('emit', { at: 0.1, dur: 0.7, pos: 'C', n: 10, life: 0.5, shape: 'spark', colors: ['#c9ffa8'], v: [60, -50], vr: [30, 20] }),
-            L('fall', { at: I - 0.35, pos: 'T', kind: 'arrow', n: 14, gap: 0.045, fall: 0.3, slant: -110, spreadX: 210, spreadY: 80, color: '#ffe9a0', land: 'k_simple', landW: 70, landAdd: true }),
+            L('fall', { at: I - 0.35, pos: 'T', kind: 'arrow', n: 14, gap: 0.045, fall: 0.3, slant: -110, spreadX: 210, spreadY: 80, color: '#ffe9a0', land: 'k_simple', landW: 70, landAdd: true, spread: 'enemies', fanGap: 0.05 }),
             L('rings', { at: I + 0.2, pos: 'T', n: 2, color: '#e8ffbf', r: 120 }),
             flash('#fff3c4', 0.3, I + 0.3, 0.15),
         ],
@@ -107,19 +107,19 @@ function classRecipe(cls, p, { IMPACT: I }) {
         WARLORD: () => [...meteorStorm(I, 6, 0.08, 'k_ground', 180, '#ff8a2a', '#ffd9a0'), L('rings', { at: I + 0.15, pos: 'T', n: 2, color: '#ffb050', r: 170 })],
         ELEMENTALIST: () => [
             L('circle', { at: 0.05, pos: 'C', r: 80, dur: 1.2, color: '#7ad7ff', points: 6 }),
-            L('fall', { at: I - 0.3, pos: 'T', kind: 'shard', n: 6, gap: 0.07, fall: 0.28, color: '#bff3ff', land: 'k_simple', landW: 90, landAdd: true }),
-            { fx: 'fire_blast', at: I + 0.1, pos: 'T', w: 300, n: 2, jit: [50, 30], gap: 0.1 },
-            { fx: 'lightning', at: I + 0.1, pos: 'T', w: 260, n: 2, jit: [60, 0], gap: 0.09, off: [0, -80], add: true },
-            L('cracks', { at: I + 0.1, pos: 'T', n: 6, r: 150, dur: 1, color: '#ffd27a' }),
+            L('fall', { at: I - 0.3, pos: 'T', kind: 'shard', n: 6, gap: 0.07, fall: 0.28, color: '#bff3ff', land: 'k_simple', landW: 90, landAdd: true, spread: 'enemies' }),
+            { fx: 'fire_blast', at: I + 0.1, pos: 'T', w: 300, n: 2, jit: [50, 30], gap: 0.1, spread: 'enemies', fanGap: 0.08 },
+            { fx: 'lightning', at: I + 0.1, pos: 'T', w: 260, n: 2, jit: [60, 0], gap: 0.09, off: [0, -80], add: true, spread: 'enemies', fanGap: 0.08 },
+            L('cracks', { at: I + 0.1, pos: 'T', n: 6, r: 150, dur: 1, color: '#ffd27a', spread: 'enemies', fanGap: 0.08 }),
             flash('#e8fbff', 0.4),
         ],
         AVATAR: () => [
             dark(0.4),
             L('circle', { at: 0.05, pos: 'C', r: 100, dur: 1.4, color: '#ffffff', points: 6, spin: 2.2 }),
-            L('pillar', { at: I - 0.2, pos: 'T', w: 120, dur: 0.8, color: '#7ad7ff', mid: '#ffffff' }),
-            L('fall', { at: I - 0.2, pos: 'T', kind: 'meteor', n: 5, gap: 0.09, fall: 0.3, land: 'k_regular', landW: 170, color: '#ff7a1a' }),
-            { fx: 'lightning', at: I + 0.1, pos: 'T', w: 300, n: 3, jit: [70, 0], gap: 0.08, off: [0, -80], add: true },
-            L('rings', { at: I + 0.1, pos: 'T', n: 3, gap: 0.1, color: '#ffffff', r: 190 }),
+            L('pillar', { at: I - 0.2, pos: 'T', w: 120, dur: 0.8, color: '#7ad7ff', mid: '#ffffff', spread: 'enemies', fanGap: 0.09 }),
+            L('fall', { at: I - 0.2, pos: 'T', kind: 'meteor', n: 5, gap: 0.09, fall: 0.3, land: 'k_regular', landW: 170, color: '#ff7a1a', spread: 'enemies' }),
+            { fx: 'lightning', at: I + 0.1, pos: 'T', w: 300, n: 3, jit: [70, 0], gap: 0.08, off: [0, -80], add: true, spread: 'enemies', fanGap: 0.08 },
+            L('rings', { at: I + 0.1, pos: 'T', n: 3, gap: 0.1, color: '#ffffff', r: 190, spread: 'enemies', fanGap: 0.09 }),
             flash('#ffffff', 0.55),
         ],
         // ── void / time / tinker ───────────────────────────────────────────
@@ -176,8 +176,8 @@ function classRecipe(cls, p, { IMPACT: I }) {
         return [
             L('circle', { at: 0.05, pos: 'C', r: 70, dur: 1.1, color: col }),
             { fx: 'fire_bomb', at: 0.1, pos: 'C', off: [0, 10], w: 140, dur: 0.9, tint: [col, 0.35], add: true, alpha: 0.9 },
-            L('fall', { at: I - 0.35, pos: 'T', kind: 'meteor', n, gap, fall: 0.32, spreadX: 230, land, landW, color: col, landAdd: false }),
-            L('rings', { at: I + 0.15, pos: 'T', n: 2, gap: 0.12, color: col, r: 170 }),
+            L('fall', { at: I - 0.35, pos: 'T', kind: 'meteor', n, gap, fall: 0.32, spreadX: 230, land, landW, color: col, landAdd: false, spread: 'enemies' }),
+            L('rings', { at: I + 0.15, pos: 'T', n: 2, gap: 0.12, color: col, r: 170, spread: 'enemies', fanGap: 0.09 }),
             flash(fl, 0.2, I + 0.1, 0.15),
         ];
     }
@@ -213,9 +213,9 @@ function classRecipe(cls, p, { IMPACT: I }) {
         return [
             { fx: 'holy_start', at: 0.05, pos: 'C', w: 120, dur: 0.9, loop: true, add: true },
             L('circle', { at: 0.1, pos: 'T', r: 100 * k, dur: 1.6, color: '#ffe27a', points: 6, spin: 1.2 }),
-            L('pillar', { at: I - 0.2, pos: 'T', w: 110 * k, dur: 0.8, color: '#ffe27a', mid: '#fff6c8' }),
-            { fx: 'holy_pillar', at: I - 0.2, pos: 'T', w: 280, off: [0, -120], n: 3, jit: [90, 0], gap: 0.08 },
-            { fx: 'holy_burst', at: I, pos: 'T', w: 380, add: true },
+            L('pillar', { at: I - 0.2, pos: 'T', w: 110 * k, dur: 0.8, color: '#ffe27a', mid: '#fff6c8', spread: 'enemies', fanGap: 0.09 }),
+            { fx: 'holy_pillar', at: I - 0.2, pos: 'T', w: 280, off: [0, -120], n: 3, jit: [90, 0], gap: 0.08, spread: 'enemies', fanGap: 0.08 },
+            { fx: 'holy_burst', at: I, pos: 'T', w: 380, add: true, spread: 'enemies', fanGap: 0.08 },
             L('emit', { at: I, dur: 0.9, pos: 'T', box: [120, 40], n: 22, life: 1, shape: 'star', colors: ['#fff2b0', '#ffffff'], v: [0, -60], vr: [50, 20] }),
             flash('#fff6d0', 0.5),
         ];
@@ -236,9 +236,9 @@ function classRecipe(cls, p, { IMPACT: I }) {
         return [
             L('emit', { at: 0.05, dur: 1.2, pos: 'C', box: [100, 30], n: 22, life: 1, shape: 'leaf', colors: ['#6bd44a', '#a8ff7a', '#3f9a2c'], v: [30, -50], vr: [30, 20], size: 6, swirl: 4 }),
             L('circle', { at: 0.1, pos: 'T', r: 100, dur: 1.5, color: '#8aff6a', points: 5 }),
-            L('cracks', { at: I - 0.3, pos: 'T', n: 7, r: 130, dur: 1.2, color: '#a8ff7a' }),
-            L('vines', { at: I - 0.3, pos: 'T', n, dur: 1.6, color: '#3fa82a' }),
-            { fx: 'vine_slash', at: I + 0.1, pos: 'T', w: 300, n: 3, jit: [60, 40], gap: 0.1, rot: [-0.5, 0.4, 0.8] },
+            L('cracks', { at: I - 0.3, pos: 'T', n: 7, r: 130, dur: 1.2, color: '#a8ff7a', spread: 'enemies', fanGap: 0.08 }),
+            L('vines', { at: I - 0.3, pos: 'T', n, dur: 1.6, color: '#3fa82a', spread: 'enemies', fanGap: 0.08 }),
+            { fx: 'vine_slash', at: I + 0.1, pos: 'T', w: 300, n: 3, jit: [60, 40], gap: 0.1, rot: [-0.5, 0.4, 0.8], spread: 'enemies', fanGap: 0.08 },
             L('emit', { at: I, dur: 0.8, pos: 'T', box: [100, 30], n: 20, life: 1, shape: 'leaf', colors: ['#6bd44a', '#a8ff7a'], v: [0, -90], vr: [70, 30], size: 6, swirl: 5 }),
             flash('#d4ffb0', 0.35),
         ];
@@ -246,9 +246,9 @@ function classRecipe(cls, p, { IMPACT: I }) {
     function goldSet(I, n) {
         return [
             L('emit', { at: 0.05, dur: 0.9, pos: 'C', box: [90, 20], n: 14, life: 0.8, shape: 'coin', v: [0, -90], vr: [40, 30], g: 220, size: 6 }),
-            L('fall', { at: I - 0.4, pos: 'T', kind: 'coin', n: n * 2, gap: 0.035, fall: 0.34, spreadX: 240, spreadY: 80, slant: -40, land: 'k_flash', landW: 70, landAdd: true, color: '#ffd24a' }),
-            L('pillar', { at: I, pos: 'T', w: 90, dur: 0.6, color: '#ffd24a', mid: '#fff0b0' }),
-            { fx: 'white_burst', at: I, pos: 'T', w: 300, add: true, tint: ['#ffd24a', 0.7] },
+            L('fall', { at: I - 0.4, pos: 'T', kind: 'coin', n: n * 2, gap: 0.035, fall: 0.34, spreadX: 240, spreadY: 80, slant: -40, land: 'k_flash', landW: 70, landAdd: true, color: '#ffd24a', spread: 'enemies', fanGap: 0.05 }),
+            L('pillar', { at: I, pos: 'T', w: 90, dur: 0.6, color: '#ffd24a', mid: '#fff0b0', spread: 'enemies', fanGap: 0.09 }),
+            { fx: 'white_burst', at: I, pos: 'T', w: 300, add: true, tint: ['#ffd24a', 0.7], spread: 'enemies', fanGap: 0.08 },
             L('emit', { at: I, dur: 0.9, pos: 'T', box: [120, 30], n: 26, life: 1, shape: 'coin', v: [0, -150], vr: [90, 40], g: 380, size: 6 }),
             flash('#fff0b0', 0.4),
         ];

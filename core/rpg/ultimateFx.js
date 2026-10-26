@@ -236,9 +236,9 @@ function drawTrackInstances(ctx, tr, sets, A, time, rng, palette) {
         // per-instance deterministic jitter
         const jr = mulberry(hash(tr.fx + i + tr.at));
         const jx = tr.jit ? (jr() - 0.5) * 2 * tr.jit[0] : 0, jy = tr.jit ? (jr() - 0.5) * 2 * tr.jit[1] : 0;
-        let [px, py] = anchor(tr.pos, A);
+        let [px, py] = tr._pt ? [tr._pt[0], tr._pt[1]] : anchor(tr.pos, A);
         if (tr.to) {
-            const [qx, qy] = anchor(tr.to, A);
+            const [qx, qy] = tr._ptTo ? [tr._ptTo[0], tr._ptTo[1]] : anchor(tr.to, A);
             const u = easeIn(lt / (tr.dur || 0.4));
             px = px + (qx - px) * u; py = py + (qy - py) * u;
         }
@@ -250,7 +250,15 @@ function drawTrackInstances(ctx, tr, sets, A, time, rng, palette) {
         const fade = tr.loop ? 1 : Math.min(1, (dur - lt) / 0.2 + 0.2);
         const rot = Array.isArray(tr.rot) ? tr.rot[i % tr.rot.length] : (tr.rot || 0);
         ctx.save();
-        ctx.imageSmoothingEnabled = !!def.smooth;
+        // 💡 GLITCH FIX (2026-10-26, owner: "weird rectangle thing where the
+        // monster was"): these fx sheets are 48-64px pixel art that get blown
+        // up 3-5x on the 640x480 video - nearest-neighbour at that ratio
+        // shatters the sprite into hard red/black blocks (the necro3 crown
+        // read as corrupted glitch rectangles around the sinking monster).
+        // Smooth every upscale; keep the sheet's own crispness at 1x / down.
+        const upscaling = w > img.width * 1.5;
+        ctx.imageSmoothingEnabled = upscaling || !!def.smooth;
+        if (upscaling) ctx.imageSmoothingQuality = 'high';
         ctx.globalAlpha = (tr.alpha !== undefined ? tr.alpha : 1) * Math.min(1, fade) * Math.min(1, lt / 0.06 + 0.25);
         if (tr.add) ctx.globalCompositeOperation = 'lighter';
         ctx.translate(px, py);
@@ -312,6 +320,29 @@ function fallbackBase() {
     gr.addColorStop(0, '#171e35'); gr.addColorStop(0.63, '#32344a'); gr.addColorStop(1, '#10121f');
     g.fillStyle = gr; g.fillRect(0, 0, W, H);
     return c;
+}
+
+// 💡 MULTI-TARGET SPRITE FX (2026-10-26, owner: "fix up the vfx for individual
+// and multiple opponents - instead of pulling down a cut out of the sprite and
+// the background just grab the individual or multiple enemy sprites and affect
+// them"): tint a REAL fighter cutout (transparent PNG from the Go layers
+// payload) with the class colour. The silhouette keeps a hint of the original
+// sprite detail so the fighter still reads through the colour, and the affect
+// layer composites it additively over the untouched overlay - the colour lands
+// ONLY on the fighter's own pixels, never as a rectangle patch of the frame.
+function tintCutout(img, hex) {
+    if (!img) return null;
+    try {
+        const c = createCanvas(img.width, img.height), g = c.getContext('2d');
+        g.drawImage(img, 0, 0);
+        g.globalCompositeOperation = 'source-atop';
+        g.fillStyle = hex;
+        g.fillRect(0, 0, c.width, c.height);
+        g.globalAlpha = 0.45;
+        g.globalCompositeOperation = 'source-over';
+        g.drawImage(img, 0, 0);
+        return c;
+    } catch (e) { return null; }
 }
 
 // ── video HUD - medieval bottom-left plate (2026-10-26 round 2) ────────────
@@ -472,7 +503,7 @@ async function renderUltimateVideo(o) {
     const recipeKey = STYLE_RECIPE[String(o.classId || '').toUpperCase()] || 'fire';
     const sets = {};
     const classTracks = RECIPE_PACK && RECIPE_PACK.classRecipe ? RECIPE_PACK.classRecipe(String(o.classId || '').toUpperCase(), palette, { IMPACT }) : null;
-    const tracks = classTracks || RECIPES[recipeKey](palette);
+    let tracks = classTracks || RECIPES[recipeKey](palette);
     for (const t of tracks) {
         for (const nm of [t.fx, t.land]) if (nm && SETS[nm] && !sets[nm]) sets[nm] = await loadSet(nm);
     }
@@ -518,15 +549,107 @@ async function renderUltimateVideo(o) {
             // payload also reports as side "player". targetSide picks which
             // roster the target anchor is looked up on (PvP casts pass 'player').
             const tSide = String(o.targetSide || 'enemy');
-            const tgt = find(tSide, Math.max(0, Math.floor(Number(o.targetIndex) || 0)))
+            // focusIndex = the defender's real roster index (PvP) - targetIndex
+            // 0 is the pseudo-enemy index and would anchor the wrong duelist
+            const ti = Number.isFinite(Number(o.focusIndex)) && o.focusIndex !== null && o.focusIndex !== undefined
+                ? Math.max(0, Math.floor(Number(o.focusIndex)))
+                : Math.max(0, Math.floor(Number(o.targetIndex) || 0));
+            const tgt = find(tSide, ti)
                 || layers.anchors.find((v) => v && v.side === tSide);
             if (tgt) { A.T = [tgt.x * kx, tgt.feetY * ky]; if (!focRect) focRect = rectOf(tgt); }
         }
-        const fa = find(String(o.focusSide || 'enemy'), Math.floor(Number(o.focusIndex !== undefined ? o.focusIndex : o.targetIndex) || 0));
+        const fa = find(String(o.focusSide || String(o.targetSide || 'enemy')), Number.isFinite(Number(o.focusIndex)) && o.focusIndex !== null && o.focusIndex !== undefined ? Math.max(0, Math.floor(Number(o.focusIndex))) : Math.max(0, Math.floor(Number(o.targetIndex) || 0)));
         if (fa) focRect = rectOf(fa);
     }
     // the isolated focus monster is drawn BY the hands layer while it sinks
     const sinkOwnsFocus = !!(layers && focImg && !self && tracks.some((t) => t.layer === 'hands' && t.sink));
+
+    // 💡 MULTI-TARGET SPRITE FX (2026-10-26, owner: "fix up the vfx for
+    // individual and multiple opponents - instead of pulling down a cut out of
+    // the sprite and the background just grab the individual or multiple enemy
+    // sprites and affect them"): the Go layers payload now ships every fighter
+    // as its own transparent cutout. Resolve the affected set - the single
+    // target (the caster for self-casts), or the WHOLE enemy roster when the
+    // cast is AoE - and pre-tint each REAL sprite once. The affect layer draws
+    // these tinted fighters exactly over their originals every frame.
+    const kxL = layers ? W / (Number(layers.w) || 1024) : 1;
+    const kyL = layers ? H / (Number(layers.h) || 687) : 1;
+    const tSideAll = String(o.targetSide || 'enemy');
+    const casterIdxAll = Math.max(0, Math.floor(Number(o.casterIndex) || 0));
+    const focusIdxAll = Number.isFinite(Number(o.focusIndex)) && o.focusIndex !== null && o.focusIndex !== undefined
+        ? Math.max(0, Math.floor(Number(o.focusIndex)))
+        : Math.max(0, Math.floor(Number(o.targetIndex) || 0));
+    let affectList = [];
+    if (layers && Array.isArray(layers.cuts) && layers.cuts.length) {
+        const cutImgs = [];
+        await Promise.all(layers.cuts.map(async (c) => {
+            if (!c || !c.png) return;
+            try {
+                cutImgs.push({
+                    side: String(c.side || ''), index: Math.floor(Number(c.index) || 0),
+                    x: (Number(c.x) || 0) * kxL, y: (Number(c.y) || 0) * kyL,
+                    w: Math.max(4, (Number(c.w) || 0) * kxL), h: Math.max(4, (Number(c.h) || 0) * kyL),
+                    img: await loadImage(Buffer.from(c.png, 'base64')),
+                });
+            } catch (e) { /* a broken cutout never kills the video */ }
+        }));
+        const findCut = (side, idx) => cutImgs.find((c) => c.side === side && c.index === idx);
+        // the roster that gets hit: enemy side for offenses, the party for
+        // self-casts; the caster is never affected by their own offense
+        const roster = cutImgs.filter((c) => c.side === (self ? 'player' : tSideAll))
+            .filter((c) => self || !(tSideAll === 'player' && c.index === casterIdxAll));
+        let affected = [];
+        if (self) affected = o.aoe ? roster.slice() : (findCut('player', casterIdxAll) ? [findCut('player', casterIdxAll)] : []);
+        else if (o.aoe) affected = roster.slice();
+        else {
+            const fc = findCut(tSideAll, focusIdxAll) || cutImgs.find((c) => c.side === tSideAll) || null;
+            if (fc) affected = [fc];
+        }
+        // a sinking focus is owned by the hands layer - tinting its original
+        // position would ghost above the descending sprite
+        if (sinkOwnsFocus) affected = affected.filter((c) => !(c.side === tSideAll && c.index === focusIdxAll));
+        const tintHex = self ? '#ffe9a8' : (palette[1] || '#ffffff');
+        for (const c of affected) {
+            const tinted = tintCutout(c.img, tintHex);
+            if (tinted) affectList.push({ x: c.x, y: c.y, w: c.w, h: c.h, tinted });
+        }
+    }
+
+    // 💡 AoE FAN (same owner quote): when the cast is AoE, every track flagged
+    // spread:'enemies' is replicated per enemy anchor so meteors / arrows /
+    // shards / rings / pillars / vines hit EACH opponent - not one shared
+    // impact point. Single-target casts keep the focused timeline untouched.
+    if (layers && o.aoe && Array.isArray(layers.anchors) && layers.anchors.length) {
+        const casterIdxFan = casterIdxAll;
+        const fanPts = layers.anchors
+            .filter((v) => v && v.side === (self ? 'player' : tSideAll))
+            .filter((v) => self || !(v.side === 'player' && v.index === casterIdxFan))
+            .sort((a, b) => a.x - b.x)
+            .map((a) => [a.x * kxL, a.feetY * kyL]);
+        if (fanPts.length > 1) {
+            const expanded = [];
+            for (const tr of tracks) {
+                if (tr.spread === 'enemies' && tr.layer !== 'hands') {
+                    fanPts.forEach((p2, i) => {
+                        const rep = Object.assign({}, tr, { _pt: p2, _ptTo: p2 });
+                        if (i > 0) rep.at = (Number(tr.at) || 0) + i * (tr.fanGap || 0.06);
+                        expanded.push(rep);
+                    });
+                } else expanded.push(tr);
+            }
+            tracks = expanded;
+        }
+    }
+
+    // every ultimate gets the per-fighter impact unless the recipe ships its
+    // own affect track; self-casts glow warm gold, offenses in the class colour.
+    // 💡 QA round: 'hold' curve + 1.25s so the colour wash is still readable
+    // on the fighters AFTER the impact fx fade (a bell at IMPACT was buried
+    // under the explosion sprites and read as invisible; the tail now lingers
+    // into the settle for a clear "this fighter was hit by THAT spell" read).
+    if (layers && affectList.length && !tracks.some((t) => t.layer === 'affect')) {
+        tracks.push({ layer: 'affect', at: IMPACT, dur: 1.25, curve: 'hold', a: self ? 0.7 : 0.9 });
+    }
     const seed = hash((o.classId || '') + (o.name || ''));
     const total = Math.round(DURATION * FPS);
     const frames = [];
@@ -561,7 +684,7 @@ async function renderUltimateVideo(o) {
         // cracks). The isolated focus combatant is skipped here when a sink
         // recipe owns it (the hands layer draws it, sinking into the rift).
         const env = { A, time, W, H, base, self, seed, sets, spr: (n) => singles.get(n) || null,
-            layers: !!layers, sprImg, focImg, focRect, casterRect };
+            layers: !!layers, sprImg, focImg, focRect, casterRect, affectList };
         if (env.layers) {
             for (const tr of tracks) {
                 if (!tr.under) continue;

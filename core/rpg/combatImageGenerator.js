@@ -242,6 +242,12 @@ async function generateCombatLayers(players, enemies, options = {}) {
             sprites: Buffer.from(body.sprites, 'base64'),
             focus: body.focus ? Buffer.from(body.focus, 'base64') : null,
             anchors: Array.isArray(body.anchors) ? body.anchors : [],
+            // 💡 MULTI-TARGET (2026-10-26, owner: "grab the individual or
+            // multiple enemy sprites and affect them"): per-combatant cutouts
+            // from the Go renderer - each fighter isolated on transparent PNG
+            // + its crop rect, so the video can tint/flash REAL sprites
+            // instead of rectangle patches of the flattened frame.
+            cuts: Array.isArray(body.cuts) ? body.cuts : [],
         };
     } catch (error) {
         console.warn('⚠️ Combat layers generation failed (falling back to plain base):', error.message);
