@@ -7262,8 +7262,13 @@ ${targetCategory}`;
           // console - `.j mod createclass` must open the real CLASS CREATOR
           // template (detailed creation fields), not the generic one-line menu
           // description. It was being intercepted by this explain view.
+          // 2026-10-26 (owner: ".j mod sandbox on tells me what it does instead of
+          // doing it"): a command whose usage has NO <placeholder>/[optional] slot
+          // is a complete runnable ("sandbox on", "sandbox off", ...) - bare
+          // lookup must RUN it, not explain it.
+          const isFullyFormedRunnable = !/[<\[]/.test(String(exact.usage || ""));
           const isFallThroughCmd =
-            exact.cmd === "modclass" || exact.cmd === "createclass";
+            exact.cmd === "modclass" || exact.cmd === "createclass" || isFullyFormedRunnable;
           if (isBareLookup && !isFallThroughCmd && visible.some(([k]) => k === exact.catKey)) {
             const cat = MOD_MENU[exact.catKey];
             let explainMsg = GET_BANNER(`${cat.emoji} ${botConfig.getBotName().toUpperCase()}`) + `\n\n`;
