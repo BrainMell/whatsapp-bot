@@ -10845,8 +10845,12 @@ async function processVotes(sock, encounter, sessionKey) {
 //   ranking dungeons" -> S/SS/SSS = 5/7/10 (avg 7.3, inside the band)
 //   GOD = 10 (endgame vault stays above SSS), DRAGON = 2 (special mid-tier lair)
 //   F/E = 0 (low ranks level fast — 1 SP/level already flows there)
+//   2026-10-26 OWNER ORDER: "+50% for B rank and above" -> B/A 2→3,
+//   S 5→8, SS 7→11, SSS 10→15, GOD 10→15 (halves rounded up so every
+//   bumped rank pays ≥1.5x the old rate; the DRAGON special lair stays
+//   mid-tier at 2 — flag to owner if it should ride the ladder too)
 const DUNGEON_SKILL_POINT_DROPS = {
-  F: 0, E: 0, D: 1, C: 1, B: 2, A: 2, S: 5, SS: 7, SSS: 10, DRAGON: 2, GOD: 10,
+  F: 0, E: 0, D: 1, C: 1, B: 3, A: 3, S: 8, SS: 11, SSS: 15, DRAGON: 2, GOD: 15,
 };
 
 const SP_LADDER = ["F", "E", "D", "C", "B", "A", "S", "SS", "SSS"];
