@@ -369,16 +369,19 @@ async function renderUltimateVideo(o) {
         // camera: slow push-in while charging, punch + shake on impact, hit-stop (freeze) 2 frames
         const sinceHit = time - IMPACT;
         const hitStop = sinceHit >= 0 && sinceHit < 2 / FPS;
-        const push = time < IMPACT ? easeIn(time / IMPACT) * 0.05 : 0.05 * (1 - easeOut((sinceHit - 0.1) / 0.8));
+        // CAMERA-CALM (owner: "VFX background movement unnatural"): the old
+        // 0.05 push + wide pan made the whole battlefield swim. Zoom stays,
+        // drift is now barely-there; impact punch + shake untouched.
+        const push = time < IMPACT ? easeIn(time / IMPACT) * 0.03 : 0.03 * (1 - easeOut((sinceHit - 0.1) / 0.8));
         const punch = sinceHit >= 0 ? Math.max(0, 1 - sinceHit / 0.35) * 0.07 : 0;
         const zoom = 1 + push + punch;
         const amp = hitStop ? 0 : (sinceHit >= 0 && sinceHit < 0.7 ? 16 * Math.pow(1 - sinceHit / 0.7, 2) : (time < IMPACT ? 1.2 * easeIn(time / IMPACT) : 0));
         const sx = Math.sin(f * 2.31 + seed) * amp, sy = Math.cos(f * 3.17 + seed) * amp * 0.6;
         const fx = A.T[0] / W, fy = A.T[1] / H;
         ctx.save();
-        ctx.translate(W * (self ? 0.27 : 0.5 + (fx - 0.5) * 0.5) + sx, H * (0.5 + (fy - 0.5) * 0.4) + sy);
+        ctx.translate(W * (self ? 0.27 : 0.5 + (fx - 0.5) * 0.18) + sx, H * (0.5 + (fy - 0.5) * 0.12) + sy);
         ctx.scale(zoom, zoom);
-        ctx.translate(-W * (self ? 0.27 : 0.5 + (fx - 0.5) * 0.5), -H * (0.5 + (fy - 0.5) * 0.4));
+        ctx.translate(-W * (self ? 0.27 : 0.5 + (fx - 0.5) * 0.18), -H * (0.5 + (fy - 0.5) * 0.12));
         ctx.drawImage(base, 0, 0, W, H);
         // dim the field while charging so effects pop; lift after the hit
         const veil = time < IMPACT ? 0.12 + 0.3 * easeIn(time / IMPACT) : 0.42 * (1 - easeOut((sinceHit) / 0.6)) + 0.08;

@@ -12206,14 +12206,16 @@ async function applyAbilityEffect(
   // ⚔️ CLASS ULTIMATES: play the class signature charge-up + animated GIF
   // BEFORE changing HP. The usual effect resolution immediately below remains
   // authoritative; after this animation finishes the normal combat render shows
-  // the real damage/healing result. Unmapped skills and render failures fall
-  // straight through without touching combat mechanics.
+  // the real damage/healing result. Non-ultimate skills and render failures
+  // fall straight through without touching combat mechanics. resolveSignature
+  // also animates every ultimate inherited from earlier classes in the
+  // player's lineage (cross-class evolution keeps them castable AND animated).
   const isCombatContext = state.inCombat === true || String(state.phase || '').toUpperCase() === 'COMBAT';
   if (isCombatContext && !player.isEnemy && !player.isSummon) {
     try {
       const signatureVfx = require('./skillVfx');
       const classId = String(player.class?.id || player.classId || (typeof player.class === 'string' ? player.class : '') || '').toUpperCase();
-      if (signatureVfx.getSignature(classId, ability?.id)) {
+      if (signatureVfx.resolveSignature(classId, ability)) {
         await signatureVfx.animateUltimate({
           state,
           player,

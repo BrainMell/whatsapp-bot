@@ -134,6 +134,49 @@ function getSignature(classId, skillId) {
   const entry = SIGNATURE_SKILLS[String(classId || '').toUpperCase()];
   return entry && entry.id === String(skillId || '').toLowerCase() ? entry : null;
 }
+
+// ⚔️ CROSS-CLASS ULTIMATE RESOLUTION (2026-10-26, owner: "animated sprite not
+// triggering for others" + "make sure the multiple ultimate skills people get
+// transfer across evolution, so someone like a lich has multiple ultimates"):
+// the old gate animated ONLY the current class's single hand-mapped signature,
+// so every ultimate inherited from an earlier class (a LICH casting the
+// NECROMANCER army_of_dead) resolved silently with no animation. Resolution
+// order: (1) exact hand-tuned entry for the current class, (2) the OWNING
+// class of a mapped signature with the same skill id (inherited ults keep
+// their authentic recipe + palette), (3) ANY skill flagged isUltimate gets a
+// derived entry (side inferred from the effect shape), (4) null -> no anim.
+const SIGNATURE_BY_SKILL = (() => {
+  const idx = {};
+  for (const [cls, entry] of Object.entries(SIGNATURE_SKILLS)) {
+    if (entry && entry.id && !idx[entry.id]) idx[entry.id] = { classId: cls, entry };
+  }
+  return idx;
+})();
+
+function deriveSide(ability) {
+  try {
+    if (String(ability.targeting || '').toUpperCase() === 'SELF') return 'self';
+    const eff = typeof ability.effect === 'function'
+      ? ability.effect(ability.skillLevel || ability.level || 1)
+      : (ability.effects || ability.effect || {});
+    const blob = JSON.stringify(eff || {});
+    const offensive = /multiplier|"aoe"|"dot"|lifesteal|drain/i.test(blob);
+    const support = /\b(heal|regen|shield|cleanse|buff|mana|energy|revive)\b/i.test(blob);
+    if (support && !offensive) return 'self';
+  } catch (e) { /* fall through to the enemy-side default */ }
+  return 'enemy';
+}
+
+function resolveSignature(classId, ability) {
+  const cid = String(classId || '').toUpperCase();
+  const skillId = String((ability && ability.id) || '').toLowerCase();
+  const mapped = getSignature(cid, skillId);
+  if (mapped) return { ...mapped, ownerClass: cid };
+  const owner = SIGNATURE_BY_SKILL[skillId];
+  if (owner) return { ...owner.entry, ownerClass: owner.classId };
+  if (!ability || ability.isUltimate !== true) return null;
+  return { id: skillId, style: 'derived', side: deriveSide(ability), ownerClass: cid, derived: true };
+}
 function wait(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 function raceTimeout(promise, ms) {
   let timer;
@@ -756,7 +799,7 @@ async function animateUltimate(options = {}) {
   const ability = options.ability;
   if (!state || !player || !ability || player.isEnemy || player.isSummon) return false;
   const classId = String(player.class?.id || player.classId || '').toUpperCase();
-  const entry = getSignature(classId, ability.id);
+  const entry = resolveSignature(classId, ability);
   const isCombatContext = state.inCombat === true || String(state.phase || '').toUpperCase() === 'COMBAT';
   if (!entry || !isCombatContext) return false;
 
@@ -793,9 +836,11 @@ async function animateUltimate(options = {}) {
     // 2026-10-25: sprite-sheet engine first (real VFX frames, 15fps MP4); the
     // legacy hand-drawn GIF renderer stays as the fallback.
     let vid = null;
+    // ⚔️ inherited ults render with the OWNING class's recipe + palette
+    const fxClass = String(entry.ownerClass || classId).toUpperCase();
     try {
       vid = await raceTimeout(require('./ultimateFx').renderUltimateVideo({
-        baseBuffer: options.baseSceneBuffer, classId, name, side: entry.side, palette: PALETTE[classId]
+        baseBuffer: options.baseSceneBuffer, classId: fxClass, name, side: entry.side, palette: PALETTE[fxClass] || PALETTE[classId]
       }), 9000);
     } catch (e) { console.warn('[SkillVFX] sprite engine failed:', e?.message || e); }
     const gif = vid && vid.mp4 ? vid.mp4 : await raceTimeout(
@@ -822,6 +867,7 @@ async function animateUltimate(options = {}) {
 module.exports = {
   SIGNATURE_SKILLS,
   getSignature,
+  resolveSignature,
   animateUltimate,
   renderSignatureGif,
   GIF_PLAYBACK_MS,
