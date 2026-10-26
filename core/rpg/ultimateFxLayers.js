@@ -466,7 +466,14 @@ LAYERS.affect = (ctx, tr, env) => {
     const list = env.affectList || [];
     if (!list.length) return;
     const u = clamp01(t / dur);
-    const k = tr.curve === 'hold' ? Math.min(1, u * 8) * (1 - u * u) : bell(u);
+    // "sustain" is used by Time Stop: the affected sprite glows with a
+    // readable freeze tint through the pre-hit windup, then fades before the
+    // impact. Unlike the ordinary impact bell, it holds emphasis in the middle
+    // instead of immediately fading after a quick peak.
+    const k = tr.curve === 'sustain'
+        ? Math.min(easeOut(clamp01(t / Math.min(0.14, dur * 0.25))),
+            easeOut(clamp01((dur - t) / Math.min(0.18, dur * 0.3))))
+        : (tr.curve === 'hold' ? Math.min(1, u * 8) * (1 - u * u) : bell(u));
     const a = (tr.a || 0.85) * k;
     if (a <= 0.004) return;
     for (const c of list) {
