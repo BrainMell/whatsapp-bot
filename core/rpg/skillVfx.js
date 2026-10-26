@@ -844,6 +844,20 @@ async function animateUltimate(options = {}) {
     || (requestedIndex >= 0 && state.enemies ? state.enemies[requestedIndex] : null)
     || liveEnemies[0]
     || null;
+  // 🔴 HIT REACTION HP (owner 2026-10-26: "the hp bar drops"): pre-hit HP of
+  // every live victim, keyed to the Go anchors' index convention so the video
+  // can chip the overhead bars down at the impact moment. In PvP duels the
+  // defender arrives as pseudo-enemy index 0 but anchors on the PLAYER roster
+  // at focusIndex - rekey entry 0 there so the bar lands on the right duelist.
+  const _tSide = String(options.targetSide || 'enemy');
+  const _focusIdx = Number.isFinite(Number(options.focusIndex)) ? Math.max(0, Math.floor(Number(options.focusIndex))) : null;
+  const victimStats = liveEnemies.map((e, i) => ({
+    index: (_tSide === 'player' && _focusIdx !== null && i === 0)
+      ? _focusIdx
+      : Math.max(0, Math.floor(Number(e.index) || 0)),
+    hp: Math.max(0, Math.floor(Number(e.currentHP ?? e.hp ?? e.stats?.hp ?? 0))),
+    maxHp: Math.max(1, Math.floor(Number(e.stats?.maxHp ?? e.maxHp ?? e.stats?.hp ?? 1))),
+  }));
   // ⚔️ FIX 2026-10-24: enemy-side signatures with NO live enemy target would
   // render an empty battlefield (the reported 'image card with the enemy
   // gone'). Skip the whole animation and let the normal resolution proceed.
@@ -895,7 +909,10 @@ async function animateUltimate(options = {}) {
         // 💡 MULTI-TARGET (2026-10-26, owner: "grab the individual or multiple
         // enemy sprites and affect them"): AoE casts fan the impact tracks per
         // enemy anchor and tint the WHOLE enemy roster, not just the focus
-        aoe: !!options.aoe
+        aoe: !!options.aoe,
+        // 🔴 HIT REACTION (owner: "hurt red flashing overlay + the hp bar drops"):
+        // pre-hit per-victim HP for the animated overhead-bar chip
+        targets: victimStats
       }), 9000);
     } catch (e) { console.warn('[SkillVFX] sprite engine failed:', e?.message || e); }
     const gif = vid && vid.mp4 ? vid.mp4 : await raceTimeout(

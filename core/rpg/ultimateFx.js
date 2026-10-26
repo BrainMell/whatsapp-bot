@@ -498,6 +498,36 @@ function encodeMp4(frames) {
 }
 
 // ── main ────────────────────────────────────────────────────────────────────
+// 🔴 HP DROP painter (owner: "the hp bar drops"): 1:1 mimic of the Go
+// drawOverheadHPBar look (dark rounded track + left→right darkred→orange
+// fill, 1px inset) at the Go bars' exact geometry - enemy bars 100x12 @
+// (center-50, top-15), player/duelist bars 80x10 @ (center-40, top-12),
+// scaled Go-canvas → video. The track is padded 1.5px so the baked bar in
+// the base scene NEVER peeks out from behind the animated repaint.
+function drawVictimHpBar(ctx, x, y, w, h, pct, flashK) {
+    pct = Math.max(0, Math.min(1, pct));
+    const pad = 1.5, r = Math.max(1.5, 3 * (w / 100));
+    ctx.save();
+    hudRoundRect(ctx, x - pad, y - pad, w + pad * 2, h + pad * 2, r);
+    ctx.fillStyle = 'rgba(10,10,15,0.94)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = 1; ctx.stroke();
+    const ix = x + 1, iy = y + 1, ih = h - 2;
+    const iw = (w - 2) * pct;
+    if (iw >= 0.75) {
+        const fillW = Math.max(iw, 1.5);
+        const grad = ctx.createLinearGradient(ix, 0, ix + fillW, 0);
+        grad.addColorStop(0, '#db1f1a'); grad.addColorStop(1, '#ffab26');
+        hudRoundRect(ctx, ix, iy, fillW, ih, Math.max(1, r - 0.75));
+        ctx.fillStyle = grad; ctx.fill();
+        // 2-frame white hit-flash on the fill the moment the bar starts dropping
+        if (flashK > 0) {
+            ctx.fillStyle = `rgba(255,244,224,${(0.8 * flashK).toFixed(3)})`;
+            ctx.fill();
+        }
+    }
+    ctx.restore();
+}
+
 async function renderUltimateVideo(o) {
     const palette = o.palette && o.palette.length >= 3 ? o.palette : ['#fff1b0', '#ffcb45', '#e85a37'];
     const recipeKey = STYLE_RECIPE[String(o.classId || '').toUpperCase()] || 'fire';
@@ -650,6 +680,28 @@ async function renderUltimateVideo(o) {
         }
     }
 
+    // 🔴 HP DROP victims (owner: "the hp bar drops"): the overhead bars are
+    // BAKED into the Go base scene at pre-hit values, so a landed ultimate
+    // used to read as "nothing happened to that bar". Repaint the VICTIMS'
+    // bars from the impact onward: white hit-flash, then the fill chips down
+    // a proportional chunk (24-42% of the CURRENT bar, deterministic per cast
+    // - real damage resolves after the video plays; the post-ult combat card
+    // stays authoritative) and holds. Single-target drops the focus bar, AoE
+    // drops every victim bar with the same small stagger as the impact fan.
+    const victims = new Map();
+    if (Array.isArray(o.targets)) {
+        for (const t of o.targets) {
+            const idx = Math.floor(Number(t && t.index) || 0);
+            const hp = Number(t && t.hp), maxHp = Number(t && t.maxHp);
+            if (!Number.isFinite(hp) || !Number.isFinite(maxHp) || maxHp <= 0 || hp <= 0) continue;
+            const pct0 = Math.max(0.02, Math.min(1, hp / maxHp));
+            const rv = mulberry(hash('hpdrop' + idx + (o.classId || '') + (o.name || '')))();
+            const p1 = Math.max(0.03, pct0 * (0.58 + 0.18 * rv));
+            victims.set(idx, { pct0, p1 });
+        }
+    }
+    const dropAll = !!o.aoe;
+
     // every ultimate gets the per-fighter impact unless the recipe ships its
     // own affect track; self-casts glow warm gold, offenses in the class colour.
     // 💡 QA round: 'hold' curve + 1.25s so the colour wash is still readable
@@ -708,6 +760,30 @@ async function renderUltimateVideo(o) {
             }
             ctx.drawImage(sprImg, 0, 0, W, H);
             if (focImg && !sinkOwnsFocus) ctx.drawImage(focImg, 0, 0, W, H);
+            // 🔴 HP DROP: repaint the victims' overhead bars over the baked
+            // ones (exact Go geometry via anchors) BEFORE the veil so they dim
+            // and shake exactly like the base scene they cover. Hidden until
+            // the impact so the windup shows the untouched baked bar.
+            if (victims.size && Array.isArray(layers.anchors)) {
+                const fanAnchors = layers.anchors
+                    .filter((v2) => v2 && v2.side === tSideAll && victims.has(Math.floor(Number(v2.index) || 0)) && (dropAll || Math.floor(Number(v2.index) || 0) === focusIdxAll))
+                    .sort((a2, b2) => a2.x - b2.x);
+                let vi = 0;
+                for (const a2 of fanAnchors) {
+                    const v = victims.get(Math.floor(Number(a2.index) || 0));
+                    if (!v) continue;
+                    const isPlayerSide = a2.side === 'player';
+                    const bw = (isPlayerSide ? 80 : 100) * kxL, bh = (isPlayerSide ? 10 : 12) * kyL;
+                    const bxc = (Number(a2.x) - (isPlayerSide ? 40 : 50)) * kxL;
+                    const byc = (Number(a2.feetY) - Math.max(24, Number(a2.h) || 0)) * kyL - (isPlayerSide ? 12 : 15) * kyL;
+                    const at = IMPACT + vi * 0.06;
+                    vi++;
+                    if (time < at) continue;
+                    const du = clamp01((time - at) / 0.45);
+                    const pct = v.pct0 + (v.p1 - v.pct0) * (1 - Math.pow(1 - du, 3));
+                    drawVictimHpBar(ctx, bxc, byc, bw, bh, pct, time - at < 2 / FPS ? 1 : 0);
+                }
+            }
         }
         // dim the field while charging so effects pop; lift after the hit
         // (layered: AFTER the combatants so they dim exactly like the flat base)
@@ -731,7 +807,8 @@ async function renderUltimateVideo(o) {
         // timing as LAYERS.hurt, as a red radial burn on the victim anchor so
         // the "that got HIT" read survives the plain-base lane too.
         if (!self && !hurtList.length && sinceHit >= 0 && sinceHit < 0.45) {
-            const k = Math.min(1, bell(clamp01(sinceHit / 0.15)) + 0.62 * bell(clamp01((sinceHit - 0.2) / 0.17)));
+            // bell() lives in ultimateFxLayers - inline the sine envelope here
+            const k = Math.min(1, Math.sin(Math.PI * clamp01(sinceHit / 0.15)) + 0.62 * Math.sin(Math.PI * clamp01((sinceHit - 0.2) / 0.17)));
             glow(ctx, A.T[0], A.T[1] - 26, 130, rgba('#ff2222', 'A'), 0.5 * k);
         }
         embers(ctx, A, time, palette, seed);
