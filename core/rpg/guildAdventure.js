@@ -13220,6 +13220,40 @@ async function applyAbilityEffect(
             } catch (e) {}
             summonCapture.setCaptureWindow(state, player.jid, summonLevel);
             msg += `🗡️ *Army of the Dead active!* Soul capture window open for ${summonCapture.CAPTURE_CONFIG.CAPTURE_WINDOW_TURNS} turns.\n`;
+
+            // 💀 DRAG-DOWN EXECUTION (owner 2026-10-26: "when the army of death
+            // drags down an enemy they instantly die, unless its another player
+            // or a boss, so it drugs down and insta kills regular mobs"). The
+            // ult's whole identity is the earth swallowing the enemy — so the
+            // gameplay now matches the animation: every LIVING non-boss enemy
+            // on the field is dragged under and killed outright. Bosses (and
+            // any boss-flagged abyss floor guardian) are too heavy for the
+            // hands; players can never be touched (PvP duels resolve through
+            // pvpSystem and never reach this PvE effect path — and this sweep
+            // only iterates state.enemies). Kills go through the REAL kill
+            // pipeline (recordEnemyKill) so on-kill passives, kill stats and
+            // the capture window opened one line above all fire normally —
+            // dragged souls are exactly what the capture roll wants.
+            try {
+              let dragged = 0;
+              for (const victim of (state.enemies || [])) {
+                // living regular mobs only — bosses are too heavy for the hands
+                if (!victim || victim.isDead || victim.isBoss || victim.bossId) continue;
+                if (!victim.stats || !(Number(victim.stats.hp) > 0)) continue;
+                victim.stats.hp = 0;
+                victim.currentHP = 0;
+                victim.isDead = true;
+                victim.justDied = true;
+                msg += `🕸️ *${victim.name}* is dragged screaming under the earth!\n`;
+                recordEnemyKill(state, victim);
+                dragged++;
+              }
+              if (dragged > 0) {
+                console.log(`[Capture] army_of_dead drag-down executed on ${dragged} regular mob(s) (${chatId})`);
+              }
+            } catch (dragErr) {
+              console.error('[Capture] drag-down sweep failed:', dragErr?.message || dragErr);
+            }
           }
         } catch (captureErr) {
           console.error('[Capture] setCaptureWindow failed:', captureErr?.message || captureErr);
