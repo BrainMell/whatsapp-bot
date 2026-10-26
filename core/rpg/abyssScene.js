@@ -722,10 +722,12 @@ async function planCombatLayout(state, opts = {}) {
             // render byte-identical to the approved composition (no co-op
             // members → same array, same slots, same order).
             const __coop = (state.players || []).slice(1, 5).filter((p) => p && !p.isDead);
-            const __summons = (state.summons || []).filter((s) => s && !s.isDead);
-            const __arc = [];
-            for (const m of __coop) __arc.push({ kind: 'coop', ref: m });
-            for (const s of __summons) __arc.push({ kind: 'summon', ref: s });
+            // Owner directive 2026-10-26: no deployed summons in Abyss BOSS
+            // fights. The boss composition is already crowded and summon
+            // plates/HP bars were the source of persistent overlap. Co-op
+            // player allies remain supported; wild-summon encounters use the
+            // separate side-stage path below and are unaffected.
+            const __arc = __coop.map((m) => ({ kind: 'coop', ref: m }));
             for (let i = 0; i < __arc.length && i < 2; i++) {
                 const a = __arc[i];
                 // 2026-10-23 (owner: "abyss boss fights have unique arrangements ... summon placement is all wonky"):
