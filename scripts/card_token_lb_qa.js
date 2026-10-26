@@ -328,6 +328,58 @@ const baseUsers = () => ([
     assert.match(r2.texts.join('\n'), /EVENT TOKEN LEADERBOARD/);
   });
 
+  // T13: REAL-WORLD FAILURE Mellow hit (2026-10-26): he typed "Escape Privé",
+  // actual subject is "espace privé" (French spelling) -> dead end, no hints.
+  await t('close-match: typo "Escape Privé" auto-resolves to "espace privé"', async (cs) => {
+    const prev = GROUPS_ALL[ESCAPE_JID].subject;
+    GROUPS_ALL[ESCAPE_JID].subject = 'espace privé'; // real GC name, no emoji
+    try {
+      const r = await run(cs, '.j tokenlb hide gc Escape Privé');
+      const txt = r.texts.join('\n');
+      assert.match(txt, /INNER CIRCLE HIDDEN/);
+      assert.match(txt, /espace privé/, 'actual subject echoed back');
+      const cfg = memory.get('card_token_lb_hidden');
+      assert.deepEqual(cfg.groups, [ESCAPE_JID]);
+      assert.equal(cfg.snapshots[ESCAPE_JID].members.length, 3);
+    } finally {
+      GROUPS_ALL[ESCAPE_JID].subject = prev;
+    }
+  });
+
+  // T14: unaccented spelling "espace prive" -> accent-folded exact match
+  await t('accent-folded exact match: "espace prive" (no accent) hides', async (cs) => {
+    const prev = GROUPS_ALL[ESCAPE_JID].subject;
+    GROUPS_ALL[ESCAPE_JID].subject = 'espace privé';
+    try {
+      const r = await run(cs, '.j tokenlb hide gc espace prive');
+      const txt = r.texts.join('\n');
+      assert.match(txt, /INNER CIRCLE HIDDEN/);
+      assert.match(txt, /espace privé/);
+      assert.deepEqual(memory.get('card_token_lb_hidden').groups, [ESCAPE_JID]);
+    } finally {
+      GROUPS_ALL[ESCAPE_JID].subject = prev;
+    }
+  });
+
+  // T15: two accent spellings that FOLD to the same name -> AMBIGUOUS, never guess
+  await t('folded-exact ambiguity: "espace privé" + "ESPACE PRIVÉ" -> listed', async (cs) => {
+    const ALT = '120363555509@g.us';
+    const prev = GROUPS_ALL[ESCAPE_JID].subject;
+    GROUPS_ALL[ESCAPE_JID].subject = 'espace privé';
+    GROUPS_ALL[ALT] = { id: ALT, subject: 'ESPACE PRIVÉ', participants: [{ id: '777000111@lid' }] };
+    try {
+      const r = await run(cs, '.j tokenlb hide gc Escape Privé');
+      const txt = r.texts.join('\n');
+      assert.match(txt, /AMBIGUOUS NAME/);
+      assert.match(txt, /espace privé/);
+      assert.match(txt, /ESPACE PRIVÉ/);
+      assert.equal(memory.has('card_token_lb_hidden'), false, 'nothing persisted on close-ambiguity');
+    } finally {
+      delete GROUPS_ALL[ALT];
+      GROUPS_ALL[ESCAPE_JID].subject = prev;
+    }
+  });
+
   console.log(`\nALL ${n} TOKEN-LB QA TESTS PASSED`);
   process.exit(0);
 })().catch((e) => {

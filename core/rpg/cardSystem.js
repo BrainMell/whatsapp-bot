@@ -6399,6 +6399,26 @@ async function tokenLbSaveCfg(cfg) {
   );
 }
 
+// Accent/case folding for forgiving group-name matching (é->e, É->e).
+function tokenLbFoldName(s) {
+  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+// Levenshtein distance for small strings (group subjects only).
+function tokenLbEditDistance(a, b) {
+  if (a === b) return 0;
+  if (!a.length || !b.length) return a.length || b.length;
+  let prev = new Array(b.length + 1);
+  for (let j = 0; j <= b.length; j++) prev[j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
 // Resolve a "name or JID" query against the bot's live group list.
 // Returns { ok:true, group:{id,subject} } | { ok:false, reason } |
 //         { ok:false, matches:[{id,subject}] } for ambiguous names.
@@ -6420,11 +6440,33 @@ async function tokenLbFindGroup(query) {
     return direct ? { ok: true, group: { id: String(direct.id), subject: direct.subject || '' } }
                   : { ok: false, reason: 'not-found' };
   }
-  const exact = list.filter((g) => String(g.subject || '').toLowerCase() === q);
-  const fuzzy = exact.length ? exact : list.filter((g) => String(g.subject || '').toLowerCase().includes(q));
-  if (!fuzzy.length) return { ok: false, reason: 'not-found' };
-  if (fuzzy.length > 1) return { ok: false, matches: fuzzy.slice(0, 8).map((g) => ({ id: String(g.id), subject: String(g.subject || '') })) };
-  return { ok: true, group: { id: String(fuzzy[0].id), subject: String(fuzzy[0].subject || '') } };
+  const fold = (s) => tokenLbFoldName(s);
+  const pick = (arr) => (arr.length > 1)
+    ? { ok: false, matches: arr.slice(0, 8).map((g) => ({ id: String(g.id), subject: String(g.subject || '') })) }
+    : { ok: true, group: { id: String(arr[0].id), subject: String(arr[0].subject || '') } };
+  const exact = list.filter((g) => fold(g.subject) === fold(q));
+  if (exact.length) return pick(exact);
+  const fuzzy = list.filter((g) => fold(g.subject).includes(fold(q)));
+  if (fuzzy.length) return pick(fuzzy);
+  // Zero direct hits: forgiving close-match (typos like escape/espace, é/e).
+  // Unique near-match auto-resolves; several -> ambiguity list, never guess.
+  const fq = fold(q);
+  if (fq) {
+    const tol = Math.max(2, Math.floor(fq.length * 0.2));
+    const close = list.filter((g) => {
+      const subj = fold(g.subject);
+      if (!subj) return false;
+      const dFull = tokenLbEditDistance(fq, subj);
+      const dPre = tokenLbEditDistance(fq, subj.slice(0, fq.length));
+      return Math.min(dFull, dPre) <= tol;
+    });
+    if (close.length === 1) {
+      console.log(`[CardSystem][${botConfig.getBotId()}] tokenlb close-match: "${query}" -> "${close[0].subject}"`);
+      return { ok: true, group: { id: String(close[0].id), subject: String(close[0].subject || '') } };
+    }
+    if (close.length > 1) return { ok: false, matches: close.slice(0, 8).map((g) => ({ id: String(g.id), subject: String(g.subject || '') })) };
+  }
+  return { ok: false, reason: 'not-found' };
 }
 
 // Live roster for one group, with snapshot fallback. Mutates cfg.snapshots
