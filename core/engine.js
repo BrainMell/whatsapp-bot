@@ -11532,7 +11532,7 @@ _💡 Reply with another number from your search list!_`.trim();
                       // Subcommand run - route to admin console (unchanged behavior)
                       if (isOwner || isGlobalMod(senderJid) || isRpgMod(senderJid)) {
                         const adminConsole = require('./commands/adminConsole');
-                        await adminConsole.handleAdmin(sock, chatId, senderJid, modArgs, m, BOT_MARKER, botConfig.getPrefix(), getMentionOrReply);
+                        await adminConsole.handleAdmin(sock, chatId, realSenderJid, modArgs, m, BOT_MARKER, botConfig.getPrefix(), getMentionOrReply);
                         return;
                       } else {
                         return reply(BOT_MARKER + '❌ GM admin subcommands require RPG Mod or higher.');
@@ -11547,7 +11547,7 @@ _💡 Reply with another number from your search list!_`.trim();
                         return reply(BOT_MARKER + '❌ Sandbox tools are for RPG Mods and above.');
                       }
                       const adminConsole = require('./commands/adminConsole');
-                      await adminConsole.handleAdmin(sock, chatId, senderJid, cmdArgs, m, BOT_MARKER, botConfig.getPrefix(), getMentionOrReply);
+                      await adminConsole.handleAdmin(sock, chatId, realSenderJid, cmdArgs, m, BOT_MARKER, botConfig.getPrefix(), getMentionOrReply);
                       return;
                     }
 
