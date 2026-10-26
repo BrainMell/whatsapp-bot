@@ -9599,7 +9599,24 @@ const joinAdventure = (chatId, senderJid, senderName) => {
     },
   });
 
-  return `✅ *${senderName}* has joined the adventure! (${state.players.length}/${state.solo ? 1 : GAME_CONFIG.MAX_PLAYERS})`;
+  const joined = `✅ *${senderName}* has joined the adventure! (${state.players.length}/${state.solo ? 1 : GAME_CONFIG.MAX_PLAYERS})`;
+
+  // Recalculate as each member joins, not only after registration closes.
+  // This immediately caps mixed-tier parties to one rank above the lowest
+  // normal rank, and makes the join response explain the new selected tier.
+  const recal = recalibratePartyRank(state);
+  if (recal && recal.mixed) {
+    state.rankNote =
+      `⚠️ *Mixed-tier party:* ${recal.lowestRank}-rank to ${recal.highestRank}-rank. ` +
+      `This run is now capped at *${recal.newRank}-rank* based on the lowest-ranked member.`;
+    return joined + `\n\n` + state.rankNote;
+  }
+  if (recal && recal.newRank !== recal.oldRank) {
+    state.rankNote =
+      `🎯 *Party rank recalibrated:* ${recal.commonRank}-rank heroes -> *${recal.newRank}-rank* dungeon.`;
+    return joined + `\n\n` + state.rankNote;
+  }
+  return joined;
 };
 
 // ============================================
