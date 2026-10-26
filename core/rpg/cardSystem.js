@@ -1873,7 +1873,11 @@ async function cmdClaim(args, senderJid, reply, chatId) {
       // single-spaced like the owner's "TIER III" sample (TIER_LABEL table
       // carries double spaces - normalize).
       const _claimTierLabel = String(_claimLabel).replace(/\s+/g, ' ').trim();
-      return reply(`${rarity.emoji}  *CLAIMED*\n\n🏷️⟢ _${spawn.card.cardName}_\n📺 ⟢ _${spawn.card.animeName}_\n\n🏆 _${_claimTierLabel}_  ⟢  🔢 _#${spawn.copyNumber}_\n        \`${rarity.label}\`\n\n📦 _Added to collection_${tokenMsg}`);
+      // 💡 OWNER 2026-10-26: the CLAIMED card must TAG the person who claimed
+      // it — header carries "@DisplayName" and the mentions array carries the
+      // jid (same proven pattern as gift / cardmod add / rc), so the message
+      // pings the claimer instead of scrolling past them.
+      return reply(`${rarity.emoji}  *CLAIMED by @${economy.getDisplayName(senderJid)}*\n\n🏷️⟢ _${spawn.card.cardName}_\n📺 ⟢ _${spawn.card.animeName}_\n\n🏆 _${_claimTierLabel}_  ⟢  🔢 _#${spawn.copyNumber}_\n        \`${rarity.label}\`\n\n📦 _Added to collection_${tokenMsg}`, { mentions: [senderJid] });
   } catch (err) {
     console.error('[Claim Error]', err);
     // 💡 FIX 2026-08-31 (rollback): restore the spawn so a transient DB

@@ -35,6 +35,11 @@ const {
   runPowerscaleCommand,
   sendCard,
 } = require('./utils/powerscale');
+// 🪪 Fandom character profile mode (owner 2026-10-26): .j charprofile <name>
+// + .j powerscale profile <name> — infobox basic info from the matching wiki
+const charProfile = require('./utils/charProfile');
+// ⚖️ User style judge agent (owner 2026-10-26): .j judge [@user|<text>]
+const styleJudge = require('./utils/styleJudge');
 // 🎧 LIST-FIRST audio (owner 2026-10-19): searches show a numbered
 // title/author/length list; a numeric reply plays that exact video via the
 // Go service URL-mode. Legacy single-shot chain stays as fallback.
@@ -10963,6 +10968,38 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                       await sock.sendMessage(chatId, { react: { text: "🎵", key: m.key } });
                       // exact-video download + send (Go URL-mode inside)
                       await handleAudioCommand(sock, chatId, pick.videoUrl, m);
+                      return;
+                    }
+                    // 🪪 Fandom profile pick lists (owner 2026-10-26): a number
+                    // while a charprofile match list is up selects that wiki
+                    // match — same contract as the powerscale block above.
+                    // ("buffered" = pick typed mid-search, held on the session
+                    // until the candidates land — the ⏳ react acknowledged it.)
+                    if (charProfile.hasPendingSelection(chatId)) {
+                      await sock.sendMessage(chatId, { react: { text: "⏳", key: m.key } });
+                      try {
+                        const cpResult = await charProfile.handleProfileSelection(
+                          chatId,
+                          numOnly[1],
+                        );
+                        if (!cpResult) return;
+                        if (cpResult.mode === "buffered") return;
+                        if (!cpResult.success) {
+                          await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                          return await sock.sendMessage(chatId, {
+                            text: BOT_MARKER + `❌ ${cpResult.error}`,
+                          });
+                        }
+                        await sock.sendMessage(chatId, { react: { text: "🪪", key: m.key } });
+                        await sendCard(sock, chatId, BOT_MARKER, cpResult);
+                        await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } });
+                      } catch (err) {
+                        console.error("❌ CharProfile Selection Error:", err.message);
+                        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `❌ Failed to load that profile.`,
+                        });
+                      }
                       return;
                     }
                     {
@@ -27247,6 +27284,109 @@ Write ONE witty verdict line (max 90 chars) about their compatibility. Roast the
                         m,
                         senderJid,
                       );
+                      return;
+                    }
+
+                    // 🪪 Character profile — `.j charprofile <name>` (alias
+                    // `cprofile`; also reachable as `.j powerscale profile <name>`,
+                    // which routes through splitCategory inside powerscale.js).
+                    // Owner 2026-10-26: "add a character profile mode that shows
+                    // basic info on a character using fandom wiki". Same scope
+                    // discipline as google/quote: only lowerTxt/cleanTxt/m/sock/
+                    // chatId/senderJid/botConfig are legal here.
+                    if (
+                      lowerTxt ===
+                        `${botConfig.getPrefix().toLowerCase()} charprofile` ||
+                      lowerTxt.startsWith(
+                        `${botConfig.getPrefix().toLowerCase()} charprofile `,
+                      ) ||
+                      lowerTxt ===
+                        `${botConfig.getPrefix().toLowerCase()} cprofile` ||
+                      lowerTxt.startsWith(
+                        `${botConfig.getPrefix().toLowerCase()} cprofile `,
+                      )
+                    ) {
+                      const cpRaw = cleanTxt
+                        .substring(botConfig.getPrefix().length)
+                        .trim()
+                        .replace(/^\S+\s*/, ""); // drop the command word, keep the name's case
+                      try {
+                        await charProfile.runCharProfileCommand({
+                          sock,
+                          chatId,
+                          msgKey: m.key,
+                          raw: cpRaw,
+                          botMarker: BOT_MARKER,
+                          prefix: currentPrefix,
+                        });
+                      } catch (err) {
+                        console.error("❌ CharProfile Error:", err.message);
+                        await sock.sendMessage(chatId, {
+                          react: { text: "❌", key: m.key },
+                        });
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `❌ Fandom profile lookup failed.`,
+                        });
+                      }
+                      return;
+                    }
+
+                    // ⚖️ User style judge agent — `.j judge` (alias
+                    // `stylejudge`). Owner 2026-10-26: "add a user style judge
+                    // agent". Bare = judge your own recent chat style; @tag =
+                    // that user; words after = judge the pasted text; reply =
+                    // judge the quoted message. LLM via the shared Groq key
+                    // pool, deterministic heuristic fallback inside the module.
+                    //
+                    // ⚠️ COEXISTENCE: bare `.j judge` is ALSO the debate
+                    // verdict command (debate.judgeDebate, dispatched further
+                    // below). This block sits earlier in the chain, so it MUST
+                    // stand down whenever a debate is active in this chat —
+                    // otherwise ending a debate with .j judge would get eaten
+                    // by the style judge. No debate active = style judge owns
+                    // the bare form; during a debate the debate system does.
+                    if (
+                      (lowerTxt ===
+                        `${botConfig.getPrefix().toLowerCase()} judge` ||
+                      lowerTxt.startsWith(
+                        `${botConfig.getPrefix().toLowerCase()} judge `,
+                      ) ||
+                      lowerTxt ===
+                        `${botConfig.getPrefix().toLowerCase()} stylejudge` ||
+                      lowerTxt.startsWith(
+                        `${botConfig.getPrefix().toLowerCase()} stylejudge `,
+                      )) &&
+                      !(
+                        lowerTxt ===
+                          `${botConfig.getPrefix().toLowerCase()} judge` &&
+                        chatId.endsWith("@g.us") &&
+                        debate.isDebateActive(chatId)
+                      )
+                    ) {
+                      const judgeRaw = cleanTxt
+                        .substring(botConfig.getPrefix().length)
+                        .trim()
+                        .replace(/^\S+\s*/, ""); // drop the command word, keep the text's case
+                      try {
+                        await styleJudge.runStyleJudgeCommand({
+                          sock,
+                          chatId,
+                          msgKey: m.key,
+                          raw: judgeRaw,
+                          botMarker: BOT_MARKER,
+                          prefix: currentPrefix,
+                          senderJid,
+                          msg: m,
+                        });
+                      } catch (err) {
+                        console.error("❌ StyleJudge Error:", err.message);
+                        await sock.sendMessage(chatId, {
+                          react: { text: "❌", key: m.key },
+                        });
+                        await sock.sendMessage(chatId, {
+                          text: BOT_MARKER + `❌ The judge stepped out — try again in a moment.`,
+                        });
+                      }
                       return;
                     }
 

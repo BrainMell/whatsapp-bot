@@ -297,7 +297,18 @@ async function runPowerscaleCommand(ctx) {
     global.__PS_PREFIX = String(ctx.prefix || "j").replace(/^\./, "");
     const react = (t) => sock.sendMessage(chatId, { react: { text: t, key: msgKey } }).catch(() => {});
 
-    const { category, featsOverview, query } = vsb.splitCategory(ctx.raw);
+    // 💡 2026-10-26 (owner): "cosmology" is a sub-search marker (two-level
+    // flow: verse page list -> general overview vs specific parts); "profile"
+    // routes into the Fandom character-profile mode (charProfile.js —
+    // infobox basic info, not VS Battles stats). Lazy require: charProfile
+    // pulls vsbFeats too, and a top-level cycle would be fragile.
+    const meta = vsb.splitCategory(ctx.raw);
+    const { category, featsOverview, query } = meta;
+    if (meta.profileMode) {
+        const prof = require("./charProfile");
+        return prof.runCharProfileCommand(ctx);
+    }
+    const cosmology = !!meta.cosmology;
 
     if (!query) {
         return sendUsageCard(sock, chatId, botMarker);
@@ -312,6 +323,7 @@ async function runPowerscaleCommand(ctx) {
     pendingSelections.set(chatId, {
         phase: "searching",
         category: category || null,
+        cosmology,
         query,
         timestamp: now(),
     });
@@ -319,12 +331,14 @@ async function runPowerscaleCommand(ctx) {
 
     await react("🔍");
     await sock.sendMessage(chatId, {
-        text: `${botMarker}🔍 *VS Battles* — searching _"${clip(query, 40)}"_${category ? ` · category *${category}*` : ""}…`,
+        text: `${botMarker}${cosmology ? "🌌 *VS Battles Cosmology*" : "🔍 *VS Battles*"} — searching _"${clip(query, 40)}"_${category ? ` · category *${category}*` : ""}…`,
     });
 
     let result;
     try {
-        result = await resolveFlow(query, category, featsOverview);
+        result = cosmology
+            ? await resolveCosmologyFlow(query)
+            : await resolveFlow(query, category, featsOverview);
     } catch (err) {
         console.error("[Powerscale] resolveFlow failed:", err.message);
         pendingSelections.delete(chatId); // searching session gone — stop swallowing numbers
@@ -346,12 +360,14 @@ async function runPowerscaleCommand(ctx) {
         if (session && session.phase === "searching") {
             session.phase = "pick";
             session.characters = result.characters;
+            session.cosmology = cosmology || undefined;
             session.pickedId = 0;
             session.timestamp = now();
         } else {
             pendingSelections.set(chatId, {
                 phase: "pick",
                 characters: result.characters,
+                cosmology: cosmology || undefined,
                 category: category || null,
                 query,
                 pickedId: 0,
@@ -400,6 +416,22 @@ async function runPowerscaleCommand(ctx) {
         armAutoClear(chatId);
     }
 
+    // 💡 COSMOLOGY auto-pick (2026-10-26): single unambiguous cosmology page
+    // skipped the level-1 list, so the session is still phase "searching" —
+    // transition it to "cosmo-parts" NOW or the overview/parts numbers would
+    // land on a stale searching session and be buffered into silence.
+    if (result.mode === "card" && result.cosmoData) {
+        const sess = pendingSelections.get(chatId);
+        if (sess && sess.phase === "searching") {
+            sess.phase = "cosmo-parts";
+            sess.cosmology = true;
+            sess.cosmoPages = result.characters;
+            sess.cosmoData = result.cosmoData;
+            sess.pickedId = result.pickedId || 1;
+            sess.timestamp = now();
+        }
+    }
+
     await react("⚖️");
     await sendCard(sock, chatId, botMarker, result);
     await react("✅");
@@ -411,6 +443,10 @@ async function sendUsageCard(sock, chatId, botMarker) {
         SEP,
         `*powerscale <name>* — full stat card + image`,
         `*powerscale speed <name>* — speed feats (pick from matches first)`,
+        `*powerscale cosmology <verse>* — cosmology deep-dive:`,
+        `  pick the verse page, then reply *1* for the general`,
+        `  overview or *2+* for specific parts (realms, gods, planes)`,
+        `*powerscale profile <name>* — fandom character profile`,
         "",
         `*Categories:* tier · ap · speed · dur · strike · lift · stam · range · intel · gear · weakness · hax · techniques`,
         `_category can go before OR after the name_`,
@@ -446,6 +482,140 @@ async function resolveFlow(query, category, featsOverview) {
         return { success: false, error: `Found *${top.name}* but the page parse failed. Try another result: reply 1-${characters.length}.` };
     }
     return buildCardResult({ characters, data, category: category || null, featsOverview, pickedId: top.id });
+}
+
+// ---------- cosmology two-level flow (2026-10-26, owner) ----------
+// Level 1: numbered list of cosmology pages for the verse.
+// Level 2: after a pick, a SECOND menu — "1" = general overview (page lead),
+// "2+" = specific parts (h2/h3 sections, deep-dived one reply at a time).
+// The session stays alive in phase "cosmo-parts" so the user can keep
+// hopping between overview and parts without re-searching.
+
+// headers read badly with the raw "User blog:Author: Title" — strip the
+// author prefix for display (the full title is kept in data.name for parses)
+function cosmoDisplayName(name) {
+    return String(name || "").replace(/^User blog:[^:]+:\s*/i, "");
+}
+
+async function resolveCosmologyFlow(query) {
+    const pages = await vsb.searchCosmologyPages(query, 10);
+    if (!pages.length) {
+        return { success: false, error: `No cosmology pages for "${clip(query, 40)}" on VS Battles. Try another verse spelling?` };
+    }
+    // single unambiguous page -> skip the first list (same auto-pick rule)
+    if (pages.length === 1) {
+        const data = await vsb.parsePageWithSections(pages[0].title);
+        if (!data) {
+            return { success: false, error: `Found *${pages[0].name}* but the page parse failed. Try again in a moment.` };
+        }
+        return buildCosmoMenuResult(pages, data, 1);
+    }
+    return { success: true, mode: "list", message: formatCosmologyList(query, pages), characters: pages, cosmology: true };
+}
+
+function formatCosmologyList(query, pages) {
+    const lines = [];
+    lines.push(`🌌 *${pages.length} cosmolog${pages.length > 1 ? "ies" : "y"} for "${clip(query, 40)}"*`);
+    lines.push("");
+    pages.slice(0, 10).forEach((p) => {
+        lines.push(`*${p.id}.* ${clip(p.name, 70)}${p.isBlog ? "  _blog_" : ""}`);
+        if (p.snippet) lines.push(`    _${clip(p.snippet, 130)}_`);
+    });
+    lines.push("");
+    lines.push(`_Reply with a *number* (1-${Math.min(pages.length, 10)}) — then choose the *general overview* or *specific parts*._`);
+    return lines.join("\n");
+}
+
+/** Level-2 menu: overview vs specific parts. */
+function buildCosmoMenuResult(pages, data, pickedId) {
+    const lines = [];
+    lines.push(`🌌 *COSMOLOGY — ${clip(cosmoDisplayName(data.name).toUpperCase(), 60)}*`);
+    lines.push(SEP);
+    lines.push(`*Choose your view:*`);
+    lines.push(`*1.* 🌍 General overview`);
+    data.sections.forEach((s, i) => {
+        lines.push(`*${i + 2}.* ${s.level === 3 ? "└ " : ""}${clip(s.line, 64)}`);
+    });
+    lines.push(SEP);
+    lines.push(`🔗 ${shortUrl(data.pageUrl)}`);
+    lines.push(`_Reply a number — *1* for the general overview, *2+* for specific parts._`);
+    return {
+        success: true,
+        mode: "card",
+        name: data.name,
+        pageUrl: data.pageUrl,
+        imageUrl: data.imageUrl,
+        imageUrls: [],
+        characters: pages,
+        pickedId: pickedId || 1,
+        category: null,
+        cosmoData: data, // lets runPowerscaleCommand arm the parts session on auto-pick
+        message: lines.join("\n").slice(0, LINE_LIMIT),
+        detail: null,
+        autoPickHint: null,
+    };
+}
+
+/** "General overview" — the page lead + what parts exist. */
+function buildCosmoOverviewResult(pages, data, pickedId) {
+    const lines = [];
+    lines.push(`🌍 *COSMOLOGY OVERVIEW — ${clip(cosmoDisplayName(data.name).toUpperCase(), 60)}*`);
+    lines.push(SEP);
+    if (data.overview) {
+        lines.push(clip(data.overview, 1700));
+    } else {
+        lines.push(`_This page has no lead paragraph — dive into a specific part below._`);
+    }
+    if (data.sections.length) {
+        lines.push("");
+        lines.push(`*Specific parts — reply:*`);
+        data.sections.slice(0, 8).forEach((s, i) => {
+            lines.push(`*${i + 2}.* ${s.level === 3 ? "└ " : ""}${clip(s.line, 60)}`);
+        });
+        if (data.sections.length > 8) {
+            lines.push(`_…and ${data.sections.length - 8} more (numbers 10-${data.sections.length + 1})_`);
+        }
+    }
+    lines.push(SEP);
+    lines.push(`🔗 ${shortUrl(data.pageUrl)}`);
+    return {
+        success: true,
+        mode: "card",
+        name: data.name,
+        pageUrl: data.pageUrl,
+        imageUrl: data.imageUrl,
+        imageUrls: [],
+        characters: pages,
+        pickedId: pickedId || 1,
+        category: null,
+        message: lines.join("\n").slice(0, LINE_LIMIT),
+        detail: null,
+        autoPickHint: null,
+    };
+}
+
+/** One specific part (h2/h3 subtree). */
+function buildCosmoSectionResult(pages, data, sec, secData, pickedId) {
+    const lines = [];
+    lines.push(`🗺️ *${clip(sec.line, 70).toUpperCase()} — ${clip(cosmoDisplayName(data.name).toUpperCase(), 50)}*`);
+    lines.push(SEP);
+    lines.push(clip(secData.text, 2400));
+    lines.push(SEP);
+    lines.push(`_reply *1* for the general overview · *2-${data.sections.length + 1}* for other parts_`);
+    return {
+        success: true,
+        mode: "card",
+        name: data.name,
+        pageUrl: data.pageUrl,
+        imageUrl: null,
+        imageUrls: [],
+        characters: pages,
+        pickedId: pickedId || 1,
+        category: null,
+        message: lines.join("\n").slice(0, LINE_LIMIT),
+        detail: null,
+        autoPickHint: null,
+    };
 }
 
 /**
@@ -517,9 +687,14 @@ async function sendCard(sock, chatId, botMarker, result) {
         }
     }
 
-    // WA caption cap is 1024 chars - compact the caption when the card is long
+    // WA caption cap is 1024 chars - compact the caption when the card is long.
+    // 💡 2026-10-26: cosmo/profile cards carry no .data stat map — when they
+    // overflow next to an image, the FULL message follows as a text bubble
+    // (the old compact path just swallowed everything past 1000 chars).
     let caption = `${botMarker}${result.message}`;
+    let followUpText = null;
     if (imagePayload && caption.length > 1000) {
+        followUpText = !result.data || !result.data.stats ? result.message : null;
         caption = compactCaption(result, botMarker);
     }
     if (imagePayload) {
@@ -527,6 +702,8 @@ async function sendCard(sock, chatId, botMarker, result) {
             await sock.sendMessage(chatId, { image: imagePayload.buffer, caption });
             if (result.detail) {
                 await sock.sendMessage(chatId, { text: `${botMarker}${result.detail}` });
+            } else if (followUpText) {
+                await sock.sendMessage(chatId, { text: `${botMarker}${followUpText}`.slice(0, 3500) });
             }
             if (result.autoPickHint) {
                 await sock.sendMessage(chatId, { text: `${botMarker}${result.autoPickHint}` });
@@ -549,6 +726,13 @@ async function sendCard(sock, chatId, botMarker, result) {
 // short caption used when the full card doesn't fit next to an image
 function compactCaption(result, botMarker) {
     const data = result.data;
+    // cosmology / profile results carry no .data stat map — compact header +
+    // link; the full card rides as the follow-up text (sendCard handles it)
+    if (!data || !data.stats) {
+        const firstLine = String(result.message || "").split("\n")[0] || "⚖️";
+        const link = result.pageUrl ? `\n🔗 ${shortUrl(result.pageUrl)}` : "";
+        return `${botMarker}${firstLine}${link}`.slice(0, 1000);
+    }
     const lines = [];
     lines.push("⚖️ *POWER SCALE*");
     lines.push(`*${fmtName(data)}*`);
@@ -585,6 +769,27 @@ async function handlePowerscaleSelection(chatId, selection) {
     touch(session);
 
     const idx = parseInt(selection, 10);
+
+    // 💡 COSMOLOGY level-2 (2026-10-26): "1" = general overview, "2+" = one
+    // specific part. Runs BEFORE the generic 1-10 range check because the
+    // parts menu can legitimately hold up to 15 entries while the level-1
+    // page list that spawned it had fewer.
+    if (session.phase === "cosmo-parts") {
+        const max = Math.min((session.cosmoData.sections.length || 0) + 1, 15);
+        if (isNaN(idx) || idx < 1 || idx > max) {
+            return { success: false, error: `Pick a number between 1 and ${max}.` };
+        }
+        if (idx === 1) {
+            return buildCosmoOverviewResult(session.cosmoPages, session.cosmoData, session.pickedId);
+        }
+        const sec = session.cosmoData.sections[idx - 2];
+        const secData = await vsb.parseSectionText(session.cosmoData.name, sec.index).catch(() => null);
+        if (!secData || !secData.text) {
+            return { success: false, error: `*${clip(sec.line, 50)}* came back empty — pick another part.` };
+        }
+        return buildCosmoSectionResult(session.cosmoPages, session.cosmoData, sec, secData, session.pickedId);
+    }
+
     if (isNaN(idx) || idx < 1 || idx > Math.min(session.characters ? session.characters.length : 10, 10)) {
         // searching session: characters not known yet — validate range 1-10 only
         if (session.phase === "searching") {
@@ -615,6 +820,23 @@ async function handlePowerscaleSelection(chatId, selection) {
     const chosen = session.characters[idx - 1];
     session.pickedId = idx;
     console.log(`[Powerscale] numeric pick: chat=${chatId} n=${idx} phase=${session.phase} -> "${chosen.name}"`);
+
+    // 💡 COSMOLOGY level-1 pick (2026-10-26): the chosen entry is a cosmology
+    // PAGE (not a character) — parse lead + sections, drop the session into
+    // phase "cosmo-parts" and send the overview-vs-parts menu.
+    if (session.cosmology) {
+        const data = await vsb.parsePageWithSections(chosen.title).catch(() => null);
+        if (!data) {
+            console.log(`[Powerscale] cosmology page parse FAILED: chat=${chatId} n=${idx} "${chosen.title}"`);
+            return { success: false, error: `Failed to parse *${chosen.name}*. Try another number.` };
+        }
+        session.phase = "cosmo-parts";
+        session.cosmoPages = session.characters;
+        session.cosmoData = data;
+        session.timestamp = now();
+        console.log(`[Powerscale] cosmology page picked: chat=${chatId} "${chosen.title}" (${data.sections.length} parts)`);
+        return buildCosmoMenuResult(session.cosmoPages, data, idx);
+    }
 
     // already showing this exact character? just re-prompt category usage
     if (session.phase === "view" && session.data && session.data.name === chosen.name) {
@@ -650,6 +872,12 @@ module.exports = {
     buildCardResult,
     sendCard,
     resolveFlow,
+    // cosmology two-level flow (internals exposed for QA)
+    resolveCosmologyFlow,
+    formatCosmologyList,
+    buildCosmoMenuResult,
+    buildCosmoOverviewResult,
+    buildCosmoSectionResult,
     // internals exposed for QA
     pendingSelections,
     SELECTION_TIMEOUT_MS,

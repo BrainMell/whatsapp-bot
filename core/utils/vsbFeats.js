@@ -125,12 +125,46 @@ const CATEGORY_ICONS = {
  * Split a raw command tail into { category, query }.
  * Accepts category in front ("speed goku") or at the back ("goku speed").
  * "feats" alone is NOT a category - it just means show the overview menu.
+ * 💡 2026-10-26 (owner): "cosmology" is a special SUB-SEARCH marker, not a
+ * stat category - ".j powerscale cosmology dragon ball" /
+ * ".j powerscale dragon ball cosmology" routes into the two-level cosmology
+ * flow (pick verse page -> pick overview vs specific parts). Same for
+ * "profile" - routes into the Fandom character-profile mode.
  * @returns {{category: string|null, query: string}}
  */
 function splitCategory(raw) {
     const text = String(raw || "").trim();
     if (!text) return { category: null, query: "" };
     const tokens = text.split(/\s+/);
+    // 0) special sub-search markers at either end (never part of the query):
+    //    "cosmology dragon ball" / "dragon ball cosmology" -> cosmology flow
+    //    "profile goku" / "goku profile"                   -> fandom profile
+    const MARKERS = ["cosmology", "cosmo", "profile"];
+    const markerHit = (tok) => MARKERS.includes(tok.toLowerCase());
+    // bare marker (".j powerscale cosmology") -> marker + empty query so the
+    // caller shows the usage card instead of searching VSB for a character
+    // literally named "cosmology"
+    if (tokens.length === 1 && markerHit(tokens[0])) {
+        const out = { category: null, query: "" };
+        const t = tokens[0].toLowerCase();
+        if (t === "profile") out.profileMode = true;
+        else out.cosmology = true;
+        return out;
+    }
+    if (tokens.length > 1 && markerHit(tokens[0])) {
+        const out = { category: null, query: tokens.slice(1).join(" ") };
+        const t = tokens[0].toLowerCase();
+        if (t === "profile") out.profileMode = true;
+        else out.cosmology = true;
+        return out;
+    }
+    if (tokens.length > 1 && markerHit(tokens[tokens.length - 1])) {
+        const out = { category: null, query: tokens.slice(0, -1).join(" ") };
+        const t = tokens[tokens.length - 1].toLowerCase();
+        if (t === "profile") out.profileMode = true;
+        else out.cosmology = true;
+        return out;
+    }
     // 1) "feats <name>" / "<name> feats" -> overview mode marker, not a category
     if (tokens.length > 1 && tokens[0].toLowerCase() === "feats") {
         return { category: null, featsOverview: true, query: tokens.slice(1).join(" ") };
@@ -494,6 +528,159 @@ function splitTopLevelPipes(html) {
     return parts;
 }
 
+// ---------- cosmology sub-search (2026-10-26, owner brief) ----------
+// Owner: "add a sub search for powerscale that targets cosmology, so dragon
+// ball or dc cosmology, and after you choose from the list there should be
+// another list for if you want the general overview or specific parts."
+//
+// Two-level flow, all served by the three functions below:
+//   1. searchCosmologyPages(verse)   -> numbered page list ("Dragon Ball
+//      Cosmology" content pages + User_blog cosmology writeups, ns 0 + 500)
+//   2. parsePageWithSections(title)  -> ONE MediaWiki call returning the lead
+//      (general overview text) AND the h2/h3 section map (the "specific
+//      parts" the second menu lists)
+//   3. parseSectionText(title, idx)  -> one section's full text (deep dive)
+// Blog namespace matters: most VSB cosmology deep-dives live as User_blog
+// posts linked from verse pages, ns 0 alone misses them.
+
+async function searchCosmologyPages(query, limit = 10) {
+    const q = String(query || "").trim();
+    if (!q) return [];
+    const SR_NS = "0|500"; // mainspace + User blog (cosmology blogs live here)
+
+    const runSearch = async (srsearch, n) => {
+        const data = await mwRequest({
+            action: "query",
+            list: "search",
+            srsearch,
+            srlimit: Math.min(n, 20),
+            srnamespace: SR_NS,
+        });
+        return (data.query && data.query.search) || [];
+    };
+
+    // primary: "<verse> cosmology"; top up from the bare verse search when the
+    // ranked hits are thin (some verses title their page "Cosmology of X")
+    const seen = new Set();
+    const merged = [];
+    const push = (hits) => {
+        for (const h of hits) {
+            if (seen.has(h.title)) continue;
+            seen.add(h.title);
+            merged.push(h);
+        }
+    };
+    try {
+        push(await runSearch(`${q} cosmology`, limit));
+    } catch (e) {
+        console.log(`[vsbFeats] cosmology search failed (${e.message})`);
+    }
+    if (merged.length < 3) {
+        try {
+            push(await runSearch(q, limit));
+        } catch (e) {
+            console.log(`[vsbFeats] bare-verse top-up failed: ${e.message}`);
+        }
+    }
+
+    const stripSnip = (s) => htmlToText(String(s || "").replace(/<\/?span[^>]*>/g, ""));
+    const pages = merged.map((h, i) => ({
+        id: i + 1,
+        title: h.title,
+        name: h.title.replace(/^User blog:[^:]+:\s*/i, ""), // display: drop "User blog:Author:"
+        isBlog: /^User blog:/i.test(h.title),
+        snippet: clipText(stripSnip(h.snippet), 160),
+        url: `https://vsbattles.fandom.com/wiki/${encodeURIComponent(h.title).replace(/%28/g, "(").replace(/%29/g, ")")}`,
+    }));
+    // cosmology-titled pages first (content or blog), then everything else
+    pages.sort((a, b) => {
+        const ca = /cosmolog/i.test(a.title) ? 0 : 1;
+        const cb = /cosmolog/i.test(b.title) ? 0 : 1;
+        return ca - cb;
+    });
+    pages.forEach((p, i) => (p.id = i + 1));
+    return pages.slice(0, limit);
+}
+
+function clipText(s, n) {
+    const t = String(s || "").trim();
+    if (t.length <= n) return t;
+    return `${t.slice(0, n - 1).trimEnd()}…`;
+}
+
+/**
+ * Parse a cosmology page: lead text (overview) + h2/h3 section list in ONE
+ * call. Cached like parseCharacter (30 min).
+ * @returns {Object} { name, pageUrl, isBlog, imageUrl, overview, sections:[{index, level, line}] }
+ */
+async function parsePageWithSections(title) {
+    const key = `cosect::${title}`;
+    const cached = cacheGet(key);
+    if (cached) return cached;
+
+    const data = await mwRequest(
+        { action: "parse", page: title, prop: "text|sections", redirects: 1 },
+        45000
+    );
+    if (!data || !data.parse || !data.parse.text) return null;
+
+    const html = data.parse.text;
+    const out = {
+        name: data.parse.title || title,
+        pageUrl: `https://vsbattles.fandom.com/wiki/${encodeURIComponent(data.parse.title || title)}`,
+        isBlog: /^User blog:/i.test(data.parse.title || title),
+        imageUrl: null,
+        overview: "",
+        sections: [],
+    };
+
+    // first page figure (verse maps / tier charts) - same relay as parseCharacter
+    const imgMatch = html.match(/<figure[^>]*>[\s\S]*?<img[^>]*src="(https:\/\/static\.wikia\.nocookie\.net[^"]+)"[^>]*>/i);
+    if (imgMatch) out.imageUrl = imgMatch[1];
+
+    // overview = all text BEFORE the first h2 heading (the page lead)
+    const h2Idx = html.search(/<h[23]><span class="mw-headline"/);
+    const leadHtml = h2Idx > -1 ? html.slice(0, h2Idx) : html;
+    out.overview = htmlToText(
+        // drop the infobox/table markup so the lead reads as prose
+        leadHtml.replace(/<table[\s\S]*?<\/table>/gi, " ")
+    ).slice(0, 1800);
+
+    // h2/h3 section map for the "specific parts" menu
+    for (const s of data.parse.sections || []) {
+        const level = Number(s.level) || 0;
+        if (level < 2 || level > 3) continue;
+        if (!s.index && s.index !== "0") continue; // uneditable TOC ghosts
+        out.sections.push({ index: String(s.index), level, line: s.line, anchor: s.anchor });
+    }
+    out.sections = out.sections.slice(0, 14);
+
+    cachePut(key, out);
+    return out;
+}
+
+/**
+ * One section's content (the "specific part" deep dive). Cached 30 min.
+ * @returns {Object|null} { title, text }
+ */
+async function parseSectionText(title, sectionIndex) {
+    const key = `cosec::${title}#${sectionIndex}`;
+    const cached = cacheGet(key);
+    if (cached) return cached;
+
+    const data = await mwRequest(
+        { action: "parse", page: title, section: String(sectionIndex), prop: "text", redirects: 1 },
+        45000
+    );
+    if (!data || !data.parse || !data.parse.text) return null;
+    // a sub-section parse pulls ALL of its children too - that's the point
+    // ("specific parts" of the cosmology writeup, full subtree text)
+    const text = htmlToText(String(data.parse.text)).slice(0, 2600);
+    const out = { title, index: String(sectionIndex), text };
+    cachePut(key, out);
+    return out;
+}
+
 // ---------- image relay ----------
 
 /**
@@ -571,4 +758,8 @@ module.exports = {
     CATEGORY_ICONS,
     htmlToText,
     PAGE_CACHE,
+    // cosmology sub-search (2026-10-26, owner)
+    searchCosmologyPages,
+    parsePageWithSections,
+    parseSectionText,
 };

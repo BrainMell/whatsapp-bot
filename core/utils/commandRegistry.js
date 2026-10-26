@@ -19,6 +19,7 @@ const COMMAND_REGISTRY = {
   ],
   SEARCH: [
     { cmd: 'google', desc: 'Google any question — real web search synthesized into a cited, AI-overview style answer. (Alias: gog)', usage: 'google <question>' },
+    { cmd: 'charprofile', desc: 'Character profile — basic info (species, age, status, affiliation…) pulled from the matching Fandom wiki, auto-detected. Pin it: charprofile naruto itachi. (Alias: cprofile; also powerscale profile <name>)', usage: 'charprofile [franchise] <name>' },
     { cmd: 'wmap', desc: 'Show a real-world map image of any place — country, city, town or landmark — with a Google Maps link. (.j map stays the RPG world atlas)', usage: 'wmap <place>' },
     { cmd: 'umap', desc: 'Universe map — real NASA/telescope imagery + facts for planets, moons, stars, nebulae, galaxies, black holes and missions; a video rides along when available. (Alias: space)', usage: 'umap <object>' },
     { cmd: 'img', desc: 'Search for and download images.', usage: 'img <query>' },
@@ -449,10 +450,11 @@ const COMMAND_REGISTRY = {
   ],
   PowerScaling: [
     { cmd: 'powerscale', desc: 'Get character power stats.', usage: 'powerscale <char>' },
+    { cmd: 'powerscale cosmology', desc: 'Cosmology sub-search: pick a verse (dragon ball, dc…), then reply 1 for the general overview or 2+ for specific parts.', usage: 'powerscale cosmology <verse>' },
     { cmd: 'debate on', desc: 'Start an AI-judged debate between two users.', usage: 'debate on <topic>' },
     { cmd: 'debate off', desc: 'Cancel an active debate.', usage: 'debate off' },
     { cmd: 'debate leaderboard', desc: 'View the debate rankings.', usage: 'debate leaderboard' },
-    { cmd: 'judge', desc: 'Let the AI judge the current debate.', usage: 'judge' }
+    { cmd: 'judge', desc: 'During an active debate: end it and get the AI verdict. Otherwise: the style judge agent rates your (or a tagged user\'s) recent chat style, or a pasted text. Alias: stylejudge', usage: 'judge' }
   ],
   ANIME: [
     { cmd: 'anime', desc: 'Anime hub — trending, airing, upcoming, top, random, news, rank, studio, or search. Bare command shows search usage.', usage: 'anime <trending|airing|upcoming|top|random|news|rank|studio|search> [query]' },
