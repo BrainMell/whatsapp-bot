@@ -38,6 +38,25 @@ function resolveClass(query) {
     return null;
 }
 
+// Shared skill-tree unlocker for mod class switches and sandbox tools.
+function unlockClassSkills(classId, existingSkills) {
+    const allTrees = skillTree.SKILL_TREES || {};
+    const wanted = String(classId || '').toLowerCase();
+    const found = Object.entries(allTrees).find(([key, value]) =>
+        String(key).toLowerCase() === wanted || String(value?.id || '').toLowerCase() === wanted
+    );
+    const skills = existingSkills instanceof Map
+        ? Object.fromEntries(existingSkills.entries())
+        : { ...(existingSkills || {}) };
+    let count = 0;
+    for (const tree of Object.values(found?.[1]?.trees || {})) {
+        for (const [skillId, skill] of Object.entries(tree?.skills || {})) {
+            skills[skillId] = Math.max(1, Number(skill?.maxLevel) || 1);
+            count++;
+        }
+    }
+    return { skills, count };
+}
 // ─── HELPER: resolve skill by name or ID ───────────────────────────────────
 function resolveSkill(query) {
     if (!query) return null;
@@ -126,6 +145,10 @@ async function handleModClass(sock, chatId, senderJid, args, BOT_MARKER, prefix)
         });
     }
 
+    const engine = require('../engine');
+    const sandboxJid = engine.getSandboxJid(senderJid);
+    const isSandbox = !!sandboxJid || String(senderJid || '').startsWith('sandbox_');
+    const realJid = isSandbox ? String(senderJid).replace(/^sandbox_/, '') : senderJid;
     const user = economy.getUser(senderJid);
     if (!user) {
         return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Not registered.' });
@@ -145,14 +168,16 @@ async function handleModClass(sock, chatId, senderJid, args, BOT_MARKER, prefix)
     // - a class_change_ticket in the inventory is consumed if present, so
     //   the item and the mod path share one lifecycle.
     user.class = targetClass.id;
-    economy.scheduleSave(senderJid);
+    if (!isSandbox) economy.scheduleSave(senderJid);
 
-    const firstTimeTaking = !(Array.isArray(user.modclassHistory) && user.modclassHistory.includes(targetClass.id));
-    if (firstTimeTaking) {
+    const firstTimeTaking = isSandbox || !(Array.isArray(user.modclassHistory) && user.modclassHistory.includes(targetClass.id));
+    if (firstTimeTaking && !isSandbox) {
       if (!Array.isArray(user.modclassHistory)) user.modclassHistory = [];
       user.modclassHistory.push(targetClass.id);
     }
-    // Consume a class_change_ticket if the player is holding one.
+    // Normal-account switches consume a ticket when one is held. Sandbox
+    // class changes are testing operations and must remain free.
+    if (!isSandbox) {
     let ticketConsumed = false;
     try {
       const inv = inventorySystem.getInventory ? inventorySystem.getInventory(senderJid) : null;
@@ -161,36 +186,32 @@ async function handleModClass(sock, chatId, senderJid, args, BOT_MARKER, prefix)
         ticketConsumed = !!(rm && rm.success);
       }
     } catch (e) { /* non-fatal */ }
+    }
 
-    // 💡 MOD CLASS UNLOCK: auto-grant ALL skills from the new class's tree
-    // at max level on the FIRST time taking this class. Mods are testing -
-    // they shouldn't have to grind skills to test a class. Re-taking a
-    // class keeps the skills already unlocked (no re-grant, no freebies).
+    // Normal accounts unlock a class the first time only. In the sandbox,
+    // always unlock the selected class at max level, even when re-selecting it.
     let unlockedCount = 0;
     if (firstTimeTaking) {
-        try {
-            const skillTree = require('../rpg/skillTree');
-            const SK = skillTree.SKILL_TREES || skillTree;
-            const tree = SK[targetClass.id.toUpperCase()];
-            if (tree && tree.trees) {
-                if (!user.skills) user.skills = {};
-                for (const [, treeData] of Object.entries(tree.trees)) {
-                    if (!treeData.skills) continue;
-                    for (const [skillId, skill] of Object.entries(treeData.skills)) {
-                        user.skills[skillId] = skill.maxLevel || 1;
-                        unlockedCount++;
-                    }
-                }
+        const result = unlockClassSkills(targetClass.id, user.skills);
+        user.skills = result.skills;
+        unlockedCount = result.count;
+        if (isSandbox) {
+            try {
+                const AdminSandbox = require('../models/AdminSandbox');
+                await AdminSandbox.patch(realJid, { class: targetClass.id, skills: result.skills });
+            } catch (e) {
+                return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Class changed, but sandbox skills could not be saved: ${e.message}` });
             }
+        } else {
             economy.saveUser(senderJid);
-        } catch (e) {
-            console.error('[ModClass] skill unlock failed:', e.message);
         }
     }
 
-    const unlockLine = firstTimeTaking
-        ? `✨ *All ${unlockedCount} class skills unlocked at max level!*`
-        : `📚 Skills kept as-is (you already unlocked this class before).`;
+    const unlockLine = isSandbox
+        ? `✨ *All ${unlockedCount} class skills unlocked at max level!* (sandbox testing)`
+        : firstTimeTaking
+            ? `✨ *All ${unlockedCount} class skills unlocked at max level!*`
+            : `📚 Skills kept as-is (you already unlocked this class before).`;
     return await sock.sendMessage(chatId, {
         text: BOT_MARKER + `✅ *CLASS SWITCHED (MOD)*\n\n👤 Your character: *${user.nickname}*\n🔄 *${oldClassName}* → ${targetClass.icon} *${targetClass.name}*\n📝 ${targetClass.desc || ''}\n\n${unlockLine}\n${ticketConsumed ? '🎫 Consumed 1 Class Change Ticket from your bag.' : ''}\n\n_No free skill points on class switches - use \`${prefix} mod giveskillpoints\` if needed._`
     });
@@ -1525,26 +1546,6 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
         // Unlock every skill registered for a class at its defined max level.
         // This is shared by both sandbox class-switch commands.
-        function unlockSandboxClassSkills(classId, existingSkills) {
-            const trees = skillTree.SKILL_TREES || {};
-            const wanted = String(classId || '').toLowerCase();
-            const entry = Object.entries(trees).find(([key, value]) =>
-                String(key).toLowerCase() === wanted ||
-                String(value?.id || '').toLowerCase() === wanted
-            );
-            const skills = existingSkills instanceof Map
-                ? Object.fromEntries(existingSkills.entries())
-                : { ...(existingSkills || {}) };
-            let count = 0;
-            for (const tree of Object.values(entry?.[1]?.trees || {})) {
-                for (const [skillId, skill] of Object.entries(tree?.skills || {})) {
-                    skills[skillId] = Math.max(1, Number(skill?.maxLevel) || 1);
-                    count++;
-                }
-            }
-            return { skills, count };
-        }
-
         // ── sandbox on - activate sandbox mode ──
         if (sandboxSub === 'on') {
             try {
@@ -1738,7 +1739,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Sandbox user not found.' });
                 const oldClassName = user.class || 'None';
                 const { skills: unlockedSkills, count: unlockedCount } =
-                    unlockSandboxClassSkills(targetClass.id, user.skills);
+                    unlockClassSkills(targetClass.id, user.skills);
                 await AdminSandbox.patch(senderJid, {
                     class: targetClass.id,
                     skills: unlockedSkills
@@ -1815,7 +1816,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 const engine = require('../engine');
                 const sandboxJid = engine.getSandboxJid(senderJid);
                 const live = sandboxJid ? economy.getUser(sandboxJid) : null;
-                const { skills, count } = unlockSandboxClassSkills(cls.id, live?.skills || sb.skills);
+                const { skills, count } = unlockClassSkills(cls.id, live?.skills || sb.skills);
                 const hp = Number(cls.stats?.hp) || Number(live?.stats?.maxHp) || Number(sb.stats?.maxHp) || 100;
                 await AdminSandbox.patch(senderJid, {
                     class: cls.id,
