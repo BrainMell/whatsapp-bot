@@ -554,6 +554,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ User not found.' });
         const oldWallet = user.wallet || 0;
         user.wallet = amount;
+        economy.ledgerMove(user, 'wallet', amount - oldWallet); // 47-l3
         economy.scheduleSave(target);
         return await sock.sendMessage(chatId, {
             text: BOT_MARKER + `✅ *WALLET SET*\n\n👤 @${economy.getDisplayName(target)}\n💰 Wallet: ${oldWallet.toLocaleString()} → *${amount.toLocaleString()}*`,
@@ -933,6 +934,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ User not found.' });
         const oldWallet = user.wallet || 0;
         user.wallet = oldWallet + amount;
+        economy.ledgerMove(user, 'wallet', amount); // 47-l3
         economy.scheduleSave(target);
         return await sock.sendMessage(chatId, {
             text: BOT_MARKER + `✅ *ZENI GRANTED*\n\n👤 @${economy.getDisplayName(target)}\n💰 Wallet: ${oldWallet.toLocaleString()} → *${(oldWallet + amount).toLocaleString()}* (+${amount.toLocaleString()})`,

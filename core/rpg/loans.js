@@ -314,6 +314,7 @@ function checkDueLoans() {
             economy.removeMoney(loan.borrower, borrowerBal.wallet); // Empty wallet
             const user = economy.getUser(loan.borrower);
             user.bank -= remaining;
+            economy.ledgerMove(user, 'bank', -remaining); // 47-l3
             economy.saveUser(loan.borrower);
         }
 
@@ -341,6 +342,8 @@ function checkDueLoans() {
             user.frozenAssets.bank += user.bank || 0;
             user.frozenAssets.reason = "Unpaid Loan Default";
             
+            economy.ledgerMove(user, 'wallet', -(user.wallet || 0)); // 47-l3
+            economy.ledgerMove(user, 'bank', -(user.bank || 0)); // 47-l3
             user.wallet = 0;
             user.bank = 0;
             economy.saveUser(loan.borrower);

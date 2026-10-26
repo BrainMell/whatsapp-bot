@@ -210,6 +210,35 @@ const META_STRIP = ['_id', '__v', 'createdAt', 'updatedAt'];
 // leaves move as DELTAS ($inc) instead of absolute $set so concurrent
 // credits/debits compose exactly the way the money moved in the real world.
 const COMPOSITING_COUNTER_LEAVES = ['wallet', 'bank', 'eventTokens'];
+
+// ── 47-l3 COUNTER LEDGER (self-healing deltas) ──
+// 2026-10-26 (owner: "pink dildo got 100k from S but her wallet had only 1"):
+// a fresh wallet delta vanished between the in-memory credit and the debounced
+// write while history/stats.totalEarned from the SAME reward DID persist —
+// the in-memory cache object had its wallet snapped back to the baseline
+// value mid-flight (the stale-guard merge-refresh Object.assign adopts the
+// sibling's counter for leaves it thinks we didn't move; under multi-writer
+// + DB-stall concurrency that "we didn't move it" judgment can be wrong).
+// Fix: every currency mutator records its delta on a WeakMap keyed by the
+// cache object; saveUserInner compares cache counters against baseline +
+// ledger and RESTORES the ledger truth before the payload snapshot, so a
+// reverted counter can no longer silently drop the delta. Covers wallet,
+// bank and eventTokens (all COMPOSITING_COUNTER_LEAVES) on every box.
+const counterLedger = new WeakMap(); // userCacheObj -> { wallet, bank, eventTokens }
+function ledgerMove(user, field, delta) {
+    if (!user || typeof user !== 'object') return;
+    const k = String(field);
+    if (!COMPOSITING_COUNTER_LEAVES.includes(k)) return;
+    const d = Number(delta) || 0;
+    if (!d) return;
+    let led = counterLedger.get(user);
+    if (!led) { led = {}; counterLedger.set(user, led); }
+    led[k] = (Number(led[k]) || 0) + d;
+}
+function ledgerReset(user) {
+    if (!user || typeof user !== 'object') return;
+    counterLedger.delete(user);
+}
 function stripMeta(doc) {
     const out = {};
     for (const k of Object.keys(doc)) {
@@ -467,6 +496,30 @@ async function saveUserInner(userId) {
         return;
     }
 
+    // ── 47-l3 COUNTER LEDGER SELF-HEAL — MUST run BEFORE the payload snapshot ──
+    // (payload = stripMeta(data) below is a shallow copy; healing after it would
+    // leave the stale counter inside the payload and the diff would skip the write).
+    const canonicalIdEarly = (typeof data.userId === 'string' && data.userId) ? data.userId : resolvedId;
+    const metaEarly = syncMeta.get(resolvedId) || syncMeta.get(canonicalIdEarly) || null;
+    if (metaEarly && metaEarly.syncedAt) {
+        let baseEarly = {};
+        try { baseEarly = JSON.parse(metaEarly.baseJson || '{}'); } catch (e) { baseEarly = {}; }
+        const __ledger = counterLedger.get(data);
+        if (__ledger) {
+            for (const k of COMPOSITING_COUNTER_LEAVES) {
+                const moved = Math.round(Number(__ledger[k]) || 0);
+                if (!moved) continue;
+                const baseVal = Number(baseEarly[k]);
+                if (!Number.isFinite(baseVal)) continue;
+                const expected = Math.round(baseVal) + moved;
+                if (Math.round(Number(data[k])) !== expected) {
+                    console.warn(`🔧 [economy] counter self-heal for ${canonicalIdEarly}: ${k} cache=${data[k]} expected=${expected} (base ${baseVal} + ledger ${moved}) — in-memory counter diverged from our own recorded movement (merge-refresh adoption / sibling clobber); restoring ledger truth so the delta survives the write`);
+                    data[k] = expected;
+                }
+            }
+        }
+    }
+
     try {
         // 💡 LOAN-BUG FIX 2026-09-20: after a cross-format heal (LID incoming,
         // account stored under phone, or vice versa) the cache holds the doc
@@ -613,6 +666,10 @@ async function saveUserInner(userId) {
         // register as "stale" to ourselves
         stampSyncMeta(resolvedId, stampDoc);
         if (canonicalId !== resolvedId) stampSyncMeta(canonicalId, stampDoc);
+        // 47-l3: the deltas just persisted — the freshly stamped baseline is the
+        // new zero point, so drop the ledger (prevents double-counting on the
+        // next save of this object).
+        ledgerReset(data);
 
         if (merged) {
             // refresh the cache IN PLACE (object identity preserved —
@@ -1244,6 +1301,7 @@ function addMoney(userId, amount, description = "Money Added") {
   user.wallet += val;
   // 💡 ANTI-INFLATION: clamp wallet to hard ceiling
   if (user.wallet > MAX_WALLET) user.wallet = MAX_WALLET;
+  ledgerMove(user, 'wallet', user.wallet - preWallet); // 47-l3
   user.stats.totalEarned = (Number(user.stats.totalEarned) || 0) + (Number(val) || 0);
 
   logTransaction(userId, description, val, user.wallet);
@@ -1266,6 +1324,7 @@ function removeMoney(userId, amount, description = "Money Removed") {
 
   const preWallet = user.wallet;
   user.wallet -= val;
+  ledgerMove(user, 'wallet', -val); // 47-l3
   user.stats.totalSpent += val;
 
   logTransaction(userId, description, -val, user.wallet);
@@ -1322,6 +1381,7 @@ function addTokens(userId, amount) {
   const val = Math.floor(Number(amount));
   if (!Number.isFinite(val) || val <= 0) return false;
   user.eventTokens = (user.eventTokens || 0) + val;
+  ledgerMove(user, 'eventTokens', val); // 47-l3
   scheduleSave(userId);
   return true;
 }
@@ -1333,6 +1393,7 @@ function removeTokens(userId, amount) {
   if (!Number.isFinite(val) || val <= 0) return false;
   if ((user.eventTokens || 0) < val) return false;
   user.eventTokens -= val;
+  ledgerMove(user, 'eventTokens', -val); // 47-l3
   scheduleSave(userId);
   return true;
 }
@@ -1358,6 +1419,7 @@ function addEventTokens(userId, amount) {
   const val = Math.floor(Number(amount));
   if (!Number.isFinite(val) || val <= 0) return false;
   user.eventTokens = (user.eventTokens || 0) + val;
+  ledgerMove(user, 'eventTokens', val); // 47-l3
   scheduleSave(userId);
   return true;
 }
@@ -1370,6 +1432,7 @@ function removeEventTokens(userId, amount) {
   if (!Number.isFinite(val) || val <= 0) return false;
   if ((user.eventTokens || 0) < val) return false;
   user.eventTokens -= val;
+  ledgerMove(user, 'eventTokens', -val); // 47-l3
   scheduleSave(userId);
   return true;
 }
@@ -1386,6 +1449,7 @@ async function resetAllTokens() {
   for (const user of economyData.values()) {
     if (!user || typeof user !== 'object') continue;
     if ((user.eventTokens || 0) !== 0) {
+      ledgerReset(user); // 47-l3: the wipe IS the new truth — never heal it back
       user.eventTokens = 0;
       memoryHolders++;
     }
@@ -1510,6 +1574,7 @@ function sellItem(userId, itemId, quantity = 1) {
             }
         }
         user.wallet += total;
+        ledgerMove(user, 'wallet', total); // 47-l3
         user.stats.totalEarned = (Number(user.stats.totalEarned) || 0) + (Number(total) || 0);
         scheduleSave(userId);
         return { success: true, msg: `💰 Sold ${count} items for ${getZENI()}${total.toLocaleString()}` };
@@ -1538,6 +1603,7 @@ function sellItem(userId, itemId, quantity = 1) {
     } catch (e) {}
     const value = Math.floor(ITEMS[itemId].value * qty * sellMult);
     user.wallet += value;
+    ledgerMove(user, 'wallet', value); // 47-l3
     user.stats.totalEarned = (Number(user.stats.totalEarned) || 0) + (Number(value) || 0);
     
     // 💡 GUILD CONTRIBUTION
@@ -1620,6 +1686,8 @@ function transferMoney(fromUserId, toUserId, amount) {
   receiver.wallet += receiverGets;
   // Clamp receiver to MAX_WALLET
   if (receiver.wallet > MAX_WALLET) receiver.wallet = MAX_WALLET;
+  ledgerMove(sender, 'wallet', -val); // 47-l3
+  ledgerMove(receiver, 'wallet', receiver.wallet - receiverPreWallet); // 47-l3 (exact post-clamp delta)
 
   logTransaction(fromUserId, `Transfer to @${getDisplayName(toUserId)}`, -val, sender.wallet);
   logTransaction(toUserId, `Transfer from @${getDisplayName(fromUserId)}`, receiverGets, receiver.wallet);
@@ -1712,6 +1780,8 @@ function deposit(userId, amount) {
     // Partial deposit - only deposit up to the cap
     user.wallet -= canDeposit;
     user.bank += canDeposit;
+    ledgerMove(user, 'wallet', -canDeposit); // 47-l3
+    ledgerMove(user, 'bank', canDeposit); // 47-l3
     logTransaction(userId, "Bank Deposit (capped)", -canDeposit, user.wallet);
     scheduleSave(userId);
     return {
@@ -1726,6 +1796,8 @@ function deposit(userId, amount) {
 
   user.wallet -= val;
   user.bank += val;
+  ledgerMove(user, 'wallet', -val); // 47-l3
+  ledgerMove(user, 'bank', val); // 47-l3
 
   logTransaction(userId, "Bank Deposit", -val, user.wallet);
   // 💡 P4: Settlement record for deposit (transfer between wallet↔bank, same user)
@@ -1790,6 +1862,8 @@ function withdraw(userId, amount) {
     }
     user.bank -= canWithdraw;
     user.wallet += canWithdraw;
+    ledgerMove(user, 'bank', -canWithdraw); // 47-l3
+    ledgerMove(user, 'wallet', canWithdraw); // 47-l3
     logTransaction(userId, "Bank Withdrawal (capped)", canWithdraw, user.wallet);
     scheduleSave(userId);
     return {
@@ -1804,6 +1878,8 @@ function withdraw(userId, amount) {
 
   user.bank -= val;
   user.wallet += val;
+  ledgerMove(user, 'bank', -val); // 47-l3
+  ledgerMove(user, 'wallet', val); // 47-l3
 
   const today = getTodayKey();
   if (!user.gamblingProfile) {
@@ -1915,6 +1991,7 @@ function claimDaily(userId) {
 
   const totalReward = DAILY_REWARD + bonus;
   user.wallet += totalReward;
+  ledgerMove(user, 'wallet', totalReward); // 47-l3
   user.lastDaily = now;
   user.stats.totalEarned = (Number(user.stats.totalEarned) || 0) + (Number(totalReward) || 0);
 
@@ -2108,6 +2185,7 @@ function resetClass(userId) {
   
   const refund = Math.floor(currentClass.evolutionCost * 0.5);
   user.wallet += refund;
+  ledgerMove(user, 'wallet', refund); // 47-l3
   user.class = starterClass.id;
   user.spriteIndex = Math.floor(Math.random() * 100);
   scheduleSave(userId);
@@ -3190,6 +3268,8 @@ module.exports = {
   getOrCreateUser,
   logTransaction,
   recordSettlement,
+  ledgerMove, // 47-l3: counter ledger for modules that mutate wallet/bank/eventTokens directly
+  ledgerReset, // 47-l3
   checkDailyQuestCap,
   incrementDailyQuestCount,
   getDailyQuestCap,
