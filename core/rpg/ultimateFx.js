@@ -384,27 +384,41 @@ function drawVideoHud(ctx, hud, palette) {
     hudRoundRect(ctx, cx - mSize / 2 + 1, mTop + 1, mSize - 2, mSize - 2, 8);
     ctx.strokeStyle = accent; ctx.lineWidth = 1.5; ctx.stroke();
 
-    // name + chips
+    // name + chips (long class names wrap to a second row, like the Go rail)
     hudFitText(ctx, String(hud.name || 'Champion'), cx, mTop + mSize + 12, iw, 13, '#ffffff');
     const cls = String(hud.class || '').replace(/_/g, ' ');
     const lv = hud.level ? 'LV ' + hud.level : '';
     const rk = 'RANK ' + (hud.rank || 'F');
+    const chipRow = (items, y) => {
+        ctx.font = 'bold 8px sans-serif';
+        const widths = items.map((it) => ctx.measureText(it.t).width + 10);
+        const gap = 4;
+        const total = widths.reduce((a, b) => a + b, 0) + gap * (items.length - 1);
+        let chipX = Math.max(RX + 4, cx - total / 2);
+        items.forEach((it, i) => {
+            hudRoundRect(ctx, chipX, y - 7, widths[i], 14, 7);
+            ctx.fillStyle = 'rgba(21,26,43,0.85)'; ctx.fill();
+            ctx.strokeStyle = 'rgba(255,255,255,0.16)'; ctx.lineWidth = 1; ctx.stroke();
+            ctx.font = 'bold 8px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillStyle = it.c; ctx.fillText(it.t, chipX + widths[i] / 2, y + 0.5);
+            chipX += widths[i] + gap;
+        });
+    };
+    let chipY = mTop + mSize + 28;
+    const row1 = [{ t: cls, c: accent }];
+    const row2 = [];
+    if (lv) row2.push({ t: lv, c: '#dfe5f2' });
+    row2.push({ t: rk, c: '#ffd66e' });
     ctx.font = 'bold 8px sans-serif';
-    const cw = [cls, lv, rk].filter(Boolean).map((t) => ctx.measureText(t).width + 10);
-    const gap = 4;
-    const total = cw.reduce((a, b) => a + b, 0) + gap * (cw.length - 1);
-    let chipX = cx - total / 2;
-    const chipY = mTop + mSize + 28;
-    const chips = [cls, lv, rk].filter(Boolean);
-    const colors = [accent, '#dfe5f2', '#ffd66e'];
-    chips.forEach((t, i) => {
-        hudRoundRect(ctx, chipX, chipY - 7, cw[i], 14, 7);
-        ctx.fillStyle = 'rgba(21,26,43,0.85)'; ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.16)'; ctx.lineWidth = 1; ctx.stroke();
-        ctx.font = 'bold 8px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillStyle = colors[i]; ctx.fillText(t, chipX + cw[i] / 2, chipY + 0.5);
-        chipX += cw[i] + gap;
-    });
+    const oneRowW = [cls, lv, rk].filter(Boolean).map((t) => ctx.measureText(t).width + 10)
+        .reduce((a, b) => a + b, 0) + 4;
+    if (oneRowW <= iw + 2) {
+        chipRow([...row1, ...row2], chipY);
+    } else {
+        chipRow(row1, chipY);
+        chipRow(row2, chipY + 16);
+        chipY += 16;
+    }
 
     // bars
     const bar = (label, y, val, max, kind) => {
