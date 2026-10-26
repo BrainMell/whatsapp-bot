@@ -9209,6 +9209,22 @@ const initAdventure = async (
   if (!limitCheck.allowed) return { success: false, msg: limitCheck.msg };
 
   const sessionKey = solo ? scopedKey(`${chatId}_${senderJid}`) : scopedKey(chatId);
+  // 🧹 STALE-SESSION SELF-HEAL (2026-10-26, owner screenshot: "You already have
+  // an active Solo raid!" while ".j end" said "No active adventure found" and
+  // ".j abyss resume" said nothing to resume): a state left in the map with
+  // active=false / phase IDLE is a corpse — it blocked every new solo until a
+  // restart. Reap it here instead of refusing the player.
+  if (gameStates.has(sessionKey)) {
+    const _stale = gameStates.get(sessionKey);
+    if (_stale && (!_stale.active || String(_stale.phase || '').toUpperCase() === 'IDLE')) {
+      console.warn(`[Quest] 🧹 reaping stale session ${sessionKey} (active=${_stale.active} phase=${_stale.phase}) so a new run can start`);
+      try { if (_stale.timers) Object.values(_stale.timers).forEach((t) => { if (t) clearTimeout(t); }); } catch (e) {}
+      try { _stale.inCombat = false; _stale.combatGen = (_stale.combatGen || 0) + 1; if (_stale.resolveTurn) { const r = _stale.resolveTurn; _stale.resolveTurn = null; r(); } } catch (e) {}
+      try { clearCombatSnapshot(_stale).catch(() => {}); } catch (e) {}
+      try { cleanupCoopIndexForSession(sessionKey); } catch (e) {}
+      gameStates.delete(sessionKey);
+    }
+  }
   if (gameStates.has(sessionKey)) {
     return {
       success: false,
@@ -9876,7 +9892,15 @@ const stopQuest = (chatId, senderJid = null, isAdmin = false) => {
 
   // 2. Standard user check (their own solo or the group quest)
   const state = getGameState(chatId, senderJid);
-  if (!state || !state.active)
+  if (state && !state.active) {
+    // stale corpse (see initAdventure note): ".j end" / ".j unstick" now clears it
+    try { if (state.timers) Object.values(state.timers).forEach((t) => { if (t) clearTimeout(t); }); } catch (e) {}
+    try { state.combatGen = (state.combatGen || 0) + 1; if (state.resolveTurn) { const r = state.resolveTurn; state.resolveTurn = null; r(); } } catch (e) {}
+    try { clearCombatSnapshot(state).catch(() => {}); } catch (e) {}
+    deleteGameState(chatId, senderJid);
+    return "🧹 Cleared a stuck session — you can start a new run now.";
+  }
+  if (!state)
     return "❌ No active adventure found for you in this chat!";
 
   const wasSolo = state.solo;

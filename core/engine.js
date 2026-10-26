@@ -12248,7 +12248,7 @@ _💡 Reply with another number from your search list!_`.trim();
                     }
 
                     // .j stop - Cancel the active quest
-                    if (primaryCmd === "stop" || primaryCmd === "end") {
+                    if (primaryCmd === "stop" || primaryCmd === "end" || primaryCmd === "unstick") {
                       const result = guildAdventure.stopQuest(
                         chatId,
                         senderJid,
@@ -33032,6 +33032,7 @@ _(or reply to their message)_
                       "join",
                       "stop",
                       "end",
+                      "unstick",
                       "vote",
                       "craft",
                       "brew",
