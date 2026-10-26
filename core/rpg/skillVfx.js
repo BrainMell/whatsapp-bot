@@ -893,6 +893,10 @@ async function animateUltimate(options = {}) {
         // 💡 HUD 2026-10-26: the video draws its own left HUD rail as the FINAL
         // pass (above every effect) from the caster's live combat data.
         hud: options.hudData || null,
+        // 💡 SKILL-LEVEL INTENSITY (owner 2026-10-26): each upgrade makes the ult bigger/denser/louder
+        skillLevel: Math.max(1, Number(ability.skillLevel || ability.level) || 1),
+        maxLevel: Math.max(1, Number(ability.maxLevel) || 3),
+        intensity: (() => { const l = Math.max(1, Number(ability.skillLevel || ability.level) || 1), m = Math.max(1, Number(ability.maxLevel) || 3); return m <= 1 ? 1 : Math.min(1, (l - 1) / (m - 1)); })(),
         // 💡 VFX LAYERS 2026-10-26: layered base (bg + combatants overlay +
         // isolated focus target + real feet anchors) - ground fx under the
         // fighters, air fx over them, spell origins on the actual sprites.

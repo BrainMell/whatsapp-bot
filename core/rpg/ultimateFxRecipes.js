@@ -298,4 +298,42 @@ function classRecipe(cls, p, { IMPACT: I }) {
     return R[cls] ? R[cls]() : null;
 }
 
-module.exports = { classRecipe };
+
+// ── skill-level intensity (owner 2026-10-26: "each skill upgrade should make the
+// ability more intense") ────────────────────────────────────────────────────────
+// k = 0..1 from (skillLevel-1)/(maxLevel-1). Level 1 is a readable, smaller cast;
+// max level is a screen-filling one. Timing never changes (IMPACT stays put) so the
+// hit-reaction / HP-drop sync is untouched; only size, count, brightness and extras grow.
+const COUNT_KEYS = ['n'];
+const SIZE_KEYS = ['w', 'r', 'rx', 'ew', 'eh', 'span'];
+function scaleTracks(tracks, k, palette, IMPACT) {
+    k = Math.max(0, Math.min(1, Number(k) || 0));
+    if (!Array.isArray(tracks)) return tracks;
+    const f = 0.72 + 0.56 * k;            // size  0.72 .. 1.28
+    const cnt = 0.6 + 0.9 * k;            // count 0.60 .. 1.50
+    const out = tracks.map((t) => {
+        const o = { ...t };
+        if (o.layer === 'wash') { o.a = Math.min(0.9, (o.a || 0.5) * (0.65 + 0.7 * k)); return o; }
+        for (const key of SIZE_KEYS) if (typeof o[key] === 'number' && key !== 'span') o[key] = Math.round(o[key] * f);
+        if (typeof o.n === 'number' && o.n > 1) o.n = Math.max(o.layer === 'hands' ? 3 : 1, Math.round(o.n * cnt * (o.layer === 'emit' ? 1.15 : 1)));
+        if (!o.layer && typeof o.alpha === 'number') o.alpha = Math.min(1, o.alpha * (0.85 + 0.3 * k));
+        if (o.layer === 'emit' && typeof o.size === 'number') o.size = o.size * (0.85 + 0.35 * k);
+        return o;
+    });
+    const col = (palette && palette[1]) || '#ffffff', hi = (palette && palette[0]) || '#ffffff';
+    const I = IMPACT;
+    if (k >= 0.45) {   // mid levels: a trailing shockwave + sparks
+        out.push({ layer: 'rings', at: I + 0.05, pos: 'T', n: k >= 0.9 ? 3 : 2, gap: 0.1, color: col, r: Math.round(150 + 60 * k) });
+        out.push({ layer: 'emit', at: I, dur: 0.6, pos: 'T', box: [90, 30], n: Math.round(14 + 14 * k), life: 0.8, shape: 'spark', colors: [hi, col], v: [0, -70], vr: [90, 40], g: 120 });
+    }
+    if (k >= 0.9) {    // max level: ground crack, pillar of light, double flash, falling stars
+        out.push({ layer: 'cracks', at: I, pos: 'T', n: 9, r: 175, dur: 1.2, color: col });
+        out.push({ layer: 'pillar', at: I - 0.05, pos: 'T', w: 70, dur: 0.55, color: col, mid: hi });
+        out.push({ layer: 'wash', at: I, dur: 0.18, color: hi, a: 0.5, add: true });
+        out.push({ layer: 'wash', at: I + 0.28, dur: 0.16, color: col, a: 0.32, add: true });
+        out.push({ layer: 'emit', at: I + 0.1, dur: 0.9, pos: 'T', box: [160, 20], n: 26, life: 1, shape: 'star', colors: [hi, '#ffffff', col], v: [0, 40], vr: [40, 30], size: 5, g: -30 });
+    }
+    return out;
+}
+
+module.exports = { classRecipe, scaleTracks };

@@ -296,7 +296,7 @@ function embers(ctx, A, time, palette, seed) {
     }
 }
 
-function banner(ctx, time, name, color) {
+function banner(ctx, time, name, color, lvl, maxLvl) {
     const a = Math.min(1, time / 0.2) * (time < 1.6 ? 1 : Math.max(0, 1 - (time - 1.6) / 0.35));
     if (a <= 0 || !name) return;
     const slide = (1 - easeOut(time / 0.3)) * 60;
@@ -311,6 +311,10 @@ function banner(ctx, time, name, color) {
     ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
     ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.9)'; ctx.strokeText(txt, x, y + 1);
     ctx.fillStyle = '#fff6d6'; ctx.fillText(txt, x, y + 1);
+    if (lvl && maxLvl && maxLvl > 1) {   // skill-level pips under the name
+        const n = Math.min(maxLvl, 5), gap = 16, x0 = x - ((n - 1) * gap) / 2;
+        for (let i = 0; i < n; i++) { ctx.beginPath(); ctx.arc(x0 + i * gap, y + 34, 5, 0, 7); ctx.fillStyle = i < lvl ? color : 'rgba(255,255,255,0.18)'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.stroke(); }
+    }
     ctx.restore();
 }
 
@@ -534,6 +538,9 @@ async function renderUltimateVideo(o) {
     const sets = {};
     const classTracks = RECIPE_PACK && RECIPE_PACK.classRecipe ? RECIPE_PACK.classRecipe(String(o.classId || '').toUpperCase(), palette, { IMPACT }) : null;
     let tracks = classTracks || RECIPES[recipeKey](palette);
+    // skill level -> intensity (see ultimateFxRecipes.scaleTracks); 0..1, default mid-high so legacy callers look the same as before
+    const K = Number.isFinite(Number(o.intensity)) ? Math.max(0, Math.min(1, Number(o.intensity))) : 0.6;
+    if (RECIPE_PACK && RECIPE_PACK.scaleTracks) tracks = RECIPE_PACK.scaleTracks(tracks, K, palette, IMPACT);
     for (const t of tracks) {
         for (const nm of [t.fx, t.land]) if (nm && SETS[nm] && !sets[nm]) sets[nm] = await loadSet(nm);
     }
@@ -736,7 +743,8 @@ async function renderUltimateVideo(o) {
         const push = time < IMPACT ? easeIn(time / IMPACT) * 0.03 : 0.03 * (1 - easeOut((sinceHit - 0.1) / 0.8));
         const punch = sinceHit >= 0 ? Math.max(0, 1 - sinceHit / 0.35) * 0.07 : 0;
         const zoom = 1 + push + punch;
-        const amp = hitStop ? 0 : (sinceHit >= 0 && sinceHit < 0.7 ? 16 * Math.pow(1 - sinceHit / 0.7, 2) : (time < IMPACT ? 1.2 * easeIn(time / IMPACT) : 0));
+        const shk = 0.7 + 0.7 * K;   // skill level -> camera punch
+        const amp = hitStop ? 0 : (sinceHit >= 0 && sinceHit < 0.7 ? 16 * shk * Math.pow(1 - sinceHit / 0.7, 2) : (time < IMPACT ? 1.2 * shk * easeIn(time / IMPACT) : 0));
         const sx = Math.sin(f * 2.31 + seed) * amp, sy = Math.cos(f * 3.17 + seed) * amp * 0.6;
         const fx = A.T[0] / W, fy = A.T[1] / H;
         ctx.save();
@@ -818,7 +826,7 @@ async function renderUltimateVideo(o) {
         const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, H * 0.95);
         vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.38)');
         ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
-        banner(ctx, time, o.name, palette[1]);
+        banner(ctx, time, o.name, palette[1], o.skillLevel, o.maxLevel);
         // 💡 HUD 2026-10-26 round 2: the caster's medieval plate is the LAST
         // pass - above the flash, vignette, banner and every effect, and
         // outside the camera transform, so nothing ever covers or dims it.
