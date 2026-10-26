@@ -93,6 +93,10 @@ function buildPayload(players, enemies, options = {}) {
         // the Go renderer switches to scene mode (props + square map panel,
         // no banner/menu for exploration kinds). Nil-safe: absent = classic.
         encounter: options.encounter || undefined,
+        // 💡 HUD 2026-10-26: Go renderer HUD selector - "v2" left-attached rail,
+        // "v3" compact corner plate, "none" clean battlefield (ultimate video
+        // bases), "" legacy parchment panels (deadWorld keeps its own look).
+        hud: String(options.hud || ''),
         // 💡 FIX 2026-09-11 R2 (owner directive: "PvP background = montage_E_4
         // style"): the colosseum (spark_15) was rejected by the owner - the
         // duel arena is now spark_5.png (the bright open beach arena from the

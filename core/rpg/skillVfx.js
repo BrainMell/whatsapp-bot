@@ -840,7 +840,10 @@ async function animateUltimate(options = {}) {
     const fxClass = String(entry.ownerClass || classId).toUpperCase();
     try {
       vid = await raceTimeout(require('./ultimateFx').renderUltimateVideo({
-        baseBuffer: options.baseSceneBuffer, classId: fxClass, name, side: entry.side, palette: PALETTE[fxClass] || PALETTE[classId]
+        baseBuffer: options.baseSceneBuffer, classId: fxClass, name, side: entry.side, palette: PALETTE[fxClass] || PALETTE[classId],
+        // 💡 HUD 2026-10-26: the video draws its own left HUD rail as the FINAL
+        // pass (above every effect) from the caster's live combat data.
+        hud: options.hudData || null
       }), 9000);
     } catch (e) { console.warn('[SkillVFX] sprite engine failed:', e?.message || e); }
     const gif = vid && vid.mp4 ? vid.mp4 : await raceTimeout(

@@ -2064,11 +2064,14 @@ async function generateDuelImage(duel) {
     // needing to reorder the array.
     const players = duel.players; // Fixed slot order: [0]=left, [1]=right
 
-    return await combatImageGenerator.generateCombatImage(
+        return await combatImageGenerator.generateCombatImage(
         players, [],
         {
             combatType: 'PVP',
             bypassQueue: true,
+            // 💡 HUD V2 (2026-10-26): duels get the left rail (P1) + mirrored
+            // right rail (P2) instead of the two parchment plates.
+            hud: 'v2',
             // ⚔️ RUINS DUELS (owner spec §15): duels that begin inside a Guild
             // War room render IN that room — duel.ruinsBackground carries the
             // room's own door-plate; regular duels keep the arena default.

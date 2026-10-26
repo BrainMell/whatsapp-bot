@@ -12216,13 +12216,51 @@ async function applyAbilityEffect(
       const signatureVfx = require('./skillVfx');
       const classId = String(player.class?.id || player.classId || (typeof player.class === 'string' ? player.class : '') || '').toUpperCase();
       if (signatureVfx.resolveSignature(classId, ability)) {
+        // 💡 HUD 2026-10-26 (owner: "the vfx was initially overlaying the hub"):
+        // the video base must be a HUD-FREE battlefield. The cached scene has
+        // the rail baked in, so race a fresh hud:"none" render (express lane,
+        // 1-3s) and fall back to the cache when the box is busy - the sprite
+        // engine paints its own HUD as the FINAL pass over the finished video,
+        // so VFX can never cover the panel again either way.
+        let ultBaseBuffer = state.lastCombatScene || null;
+        try {
+          const combatImageGenerator = require('./combatImageGenerator');
+          const freshBase = await Promise.race([
+            combatImageGenerator.generateCombatImage(state.players || [], state.enemies || [], {
+              combatType: 'PVE',
+              rank: state.dungeonRank,
+              floor: state.isAbyss ? state.abyssFloor : 0,
+              backgroundPath: state.backgroundPath || undefined,
+              summons: state.summons || [],
+              hud: 'none',
+              bypassQueue: true,
+            }),
+            new Promise((resolve) => setTimeout(() => resolve(null), 3500)),
+          ]);
+          if (freshBase && freshBase.success && Buffer.isBuffer(freshBase.buffer) && freshBase.buffer.length > 1000) {
+            ultBaseBuffer = freshBase.buffer;
+          }
+        } catch (baseErr) {
+          console.warn('[UltFx] hud:none base render failed, using cached scene:', baseErr?.message || baseErr);
+        }
         await signatureVfx.animateUltimate({
           state,
           player,
           ability,
           targetIndex,
           // ⚔️ FIX 2026-10-24: pre-hit GIF reuses the scene already on screen
-          baseSceneBuffer: state.lastCombatScene || null,
+          baseSceneBuffer: ultBaseBuffer,
+          // 💡 HUD 2026-10-26: real combatant data for the video HUD rail
+          hudData: {
+            name: String(player.name || 'The Champion'),
+            class: classId,
+            level: Math.floor(Number(player.level) || 0),
+            rank: String(player.adventurerRank || player.rank || 'F').toUpperCase(),
+            hp: Math.max(0, Math.floor(Number(player.currentHP ?? player.hp ?? 0))),
+            maxHp: Math.max(1, Math.floor(Number(player.stats?.maxHp ?? player.maxHp ?? 100))),
+            energy: Math.max(0, Math.floor(Number(player.stats?.energy ?? player.energy ?? 0))),
+            maxEnergy: Math.max(1, Math.floor(Number(player.stats?.maxEnergy ?? player.maxEnergy ?? 100))),
+          },
           sendText: (text) => boundedSend(sock, chatId, { text }, 'ultimateCharge'),
           sendGif: async (buffer, caption, extra) => {
             // sprite engine hands over a finished H.264 MP4 (+ JPEG thumb): send as-is

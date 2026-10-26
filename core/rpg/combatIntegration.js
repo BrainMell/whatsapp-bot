@@ -32,6 +32,10 @@ async function renderCombatStart(players, enemies, encounterInfo) {
             summons: encounterInfo.summons || [],
             // ⚔️ ruins encounter scene: square map panel replaces Options_menu
             encounter: encounterInfo.encounter || undefined,
+            // 💡 HUD V2 (2026-10-26 owner: "redesign the hud, attach it to the
+            // left"): classic battle cards carry the new left-attached rail
+            // (code-drawn panel, medallion, gradient bars) - see Go hud.go.
+            hud: 'v2',
             bypassQueue: true
         });
         return result;
@@ -71,6 +75,8 @@ async function renderCombatTurn(players, enemies, turnInfo, options = {}) {
                 backgroundPath: options.backgroundPath,
                 summons: options.summons || [],
                 action: animAction,  // null if no actionable attack
+                // 💡 HUD V2 (2026-10-26): same left-rail HUD as battle start.
+                hud: 'v2',
                 // 💡 DUNGEON FAST-LANE (2026-10-20): turn renders take the direct
                 // express lane (1-3s) instead of queueing behind GIF renders —
                 // same rationale as renderCombatStart above.
