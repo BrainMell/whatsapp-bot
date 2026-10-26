@@ -995,6 +995,7 @@ function makeUltimateSender(sock, chatId) {
 }
 
 module.exports = {
+  PALETTE,
   SIGNATURE_SKILLS,
   getSignature,
   resolveSignature,

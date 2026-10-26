@@ -53,6 +53,7 @@ const MOD_MENU = {
       { cmd: "setrank", usage: "mod setrank [@user] <E-SSS>", desc: "Set a player's RPG rank.", console: true },
       { cmd: "forceevolve", usage: "mod forceevolve [@user] <class>", desc: "Force a class evolution, no requirements.", console: true },
       { cmd: "resetplayer", usage: "mod resetplayer [@user]", desc: "Wipe stats AND skills - destructive, no undo.", console: true },
+      { cmd: "vfx", usage: "mod vfx [class|all] [level]", desc: "Preview every class ultimate animation at every skill level (instant).", console: true },
       { cmd: "unstick", usage: "mod unstick [@user]", desc: "Safely clear stuck combat state.", console: true },
       { cmd: "inspect", usage: "mod inspect [@user]", desc: "Full character sheet: stats, skills, class, gear.", console: true },
       { cmd: "setdefaultcard", usage: "setdefaultcard <1-10|name>", desc: "Server-wide DEFAULT character card style." },

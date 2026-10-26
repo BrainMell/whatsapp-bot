@@ -538,8 +538,8 @@ async function renderUltimateVideo(o) {
     const sets = {};
     const classTracks = RECIPE_PACK && RECIPE_PACK.classRecipe ? RECIPE_PACK.classRecipe(String(o.classId || '').toUpperCase(), palette, { IMPACT }) : null;
     let tracks = classTracks || RECIPES[recipeKey](palette);
-    // skill level -> intensity (see ultimateFxRecipes.scaleTracks); 0..1, default mid-high so legacy callers look the same as before
-    const K = Number.isFinite(Number(o.intensity)) ? Math.max(0, Math.min(1, Number(o.intensity))) : 0.6;
+    // skill level -> intensity (see ultimateFxRecipes.scaleTracks); 0..1, default 0 = the original look (level 1)
+    const K = Number.isFinite(Number(o.intensity)) ? Math.max(0, Math.min(1, Number(o.intensity))) : 0;
     if (RECIPE_PACK && RECIPE_PACK.scaleTracks) tracks = RECIPE_PACK.scaleTracks(tracks, K, palette, IMPACT);
     for (const t of tracks) {
         for (const nm of [t.fx, t.land]) if (nm && SETS[nm] && !sets[nm]) sets[nm] = await loadSet(nm);
@@ -743,7 +743,7 @@ async function renderUltimateVideo(o) {
         const push = time < IMPACT ? easeIn(time / IMPACT) * 0.03 : 0.03 * (1 - easeOut((sinceHit - 0.1) / 0.8));
         const punch = sinceHit >= 0 ? Math.max(0, 1 - sinceHit / 0.35) * 0.07 : 0;
         const zoom = 1 + push + punch;
-        const shk = 0.7 + 0.7 * K;   // skill level -> camera punch
+        const shk = 1 + 0.6 * K;   // skill level -> camera punch
         const amp = hitStop ? 0 : (sinceHit >= 0 && sinceHit < 0.7 ? 16 * shk * Math.pow(1 - sinceHit / 0.7, 2) : (time < IMPACT ? 1.2 * shk * easeIn(time / IMPACT) : 0));
         const sx = Math.sin(f * 2.31 + seed) * amp, sy = Math.cos(f * 3.17 + seed) * amp * 0.6;
         const fx = A.T[0] / W, fy = A.T[1] / H;

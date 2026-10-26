@@ -301,23 +301,23 @@ function classRecipe(cls, p, { IMPACT: I }) {
 
 // ── skill-level intensity (owner 2026-10-26: "each skill upgrade should make the
 // ability more intense") ────────────────────────────────────────────────────────
-// k = 0..1 from (skillLevel-1)/(maxLevel-1). Level 1 is a readable, smaller cast;
-// max level is a screen-filling one. Timing never changes (IMPACT stays put) so the
+// k = 0..1 from (skillLevel-1)/(maxLevel-1). Level 1 IS the original (pre-scaling) look;
+// every upgrade grows from there up to a screen-filling max-level cast. Timing never changes (IMPACT stays put) so the
 // hit-reaction / HP-drop sync is untouched; only size, count, brightness and extras grow.
 const COUNT_KEYS = ['n'];
 const SIZE_KEYS = ['w', 'r', 'rx', 'ew', 'eh', 'span'];
 function scaleTracks(tracks, k, palette, IMPACT) {
     k = Math.max(0, Math.min(1, Number(k) || 0));
     if (!Array.isArray(tracks)) return tracks;
-    const f = 0.72 + 0.56 * k;            // size  0.72 .. 1.28
-    const cnt = 0.6 + 0.9 * k;            // count 0.60 .. 1.50
+    const f = 1 + 0.32 * k;               // size  1.00 .. 1.32  (level 1 = the original look)
+    const cnt = 1 + 0.7 * k;              // count 1.00 .. 1.70
     const out = tracks.map((t) => {
         const o = { ...t };
-        if (o.layer === 'wash') { o.a = Math.min(0.9, (o.a || 0.5) * (0.65 + 0.7 * k)); return o; }
+        if (o.layer === 'wash') { o.a = Math.min(0.9, (o.a || 0.5) * (1 + 0.5 * k)); return o; }
         for (const key of SIZE_KEYS) if (typeof o[key] === 'number' && key !== 'span') o[key] = Math.round(o[key] * f);
         if (typeof o.n === 'number' && o.n > 1) o.n = Math.max(o.layer === 'hands' ? 3 : 1, Math.round(o.n * cnt * (o.layer === 'emit' ? 1.15 : 1)));
-        if (!o.layer && typeof o.alpha === 'number') o.alpha = Math.min(1, o.alpha * (0.85 + 0.3 * k));
-        if (o.layer === 'emit' && typeof o.size === 'number') o.size = o.size * (0.85 + 0.35 * k);
+        if (!o.layer && typeof o.alpha === 'number') o.alpha = Math.min(1, o.alpha * (1 + 0.15 * k));
+        if (o.layer === 'emit' && typeof o.size === 'number') o.size = o.size * (1 + 0.4 * k);
         return o;
     });
     const col = (palette && palette[1]) || '#ffffff', hi = (palette && palette[0]) || '#ffffff';

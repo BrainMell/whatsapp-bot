@@ -962,6 +962,66 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     }
 
     // ── UNSTICK (clear stuck combat state) ─────────────────────────────────
+    // ── VFX PREVIEW (owner 2026-10-26: check every class's animated skill + levels instantly) ──
+    if (sub === 'vfx' || sub === 'vfxtest' || sub === 'ultpreview') {
+        const skillVfx = require('../rpg/skillVfx');
+        const ultFx = require('../rpg/ultimateFx');
+        const skillTreeData = require('../rpg/skillTree').SKILL_TREES || {};
+        const sigs = skillVfx.SIGNATURE_SKILLS;
+        const info = (cid) => {
+            const entry = sigs[cid]; if (!entry) return null;
+            let name = entry.id.replace(/_/g, ' '), max = 3;
+            const tree = skillTreeData[cid];
+            outer: for (const t of Object.values((tree && tree.trees) || {})) {
+                const sk = t.skills && t.skills[entry.id];
+                if (sk) { name = sk.name || name; max = Number(sk.maxLevel) || 3; break outer; }
+            }
+            return { cid, entry, name, max };
+        };
+        const all = Object.keys(sigs).map(info).filter(Boolean);
+        const q = String(args[1] || '').trim();
+        if (!q) {
+            const lines = all.map((x) => `• *${x.cid}* — ${x.name} (Lv 1-${x.max})`).join('\n');
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `🎞️ *VFX PREVIEW*\n\n${lines}\n\n` +
+                `\`${prefix} mod vfx <class>\` — every level of that class's ultimate\n` +
+                `\`${prefix} mod vfx <class> <level>\` — one level\n` +
+                `\`${prefix} mod vfx all [level]\` — every class (default: max level)` });
+        }
+        const lvArg = args[2] ? String(args[2]).toLowerCase() : '';
+        let list, levelsFor;
+        if (q.toLowerCase() === 'all') {
+            list = all;
+            levelsFor = (x) => [lvArg && /^\d+$/.test(lvArg) ? Math.min(x.max, Math.max(1, parseInt(lvArg, 10))) : x.max];
+        } else {
+            const cls = resolveClass(q);
+            const x = cls && info(String(cls.id).toUpperCase());
+            if (!x) return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ No ultimate animation for "${q}". Use \`${prefix} mod vfx\` to list classes.` });
+            list = [x];
+            levelsFor = (y) => (lvArg && /^\d+$/.test(lvArg)) ? [Math.min(y.max, Math.max(1, parseInt(lvArg, 10)))] : Array.from({ length: y.max }, (_, i) => i + 1);
+        }
+        const total = list.reduce((n, x) => n + levelsFor(x).length, 0);
+        await sock.sendMessage(chatId, { text: BOT_MARKER + `🎞️ Rendering ${total} clip${total === 1 ? '' : 's'}…` });
+        let sent = 0;
+        for (const x of list) {
+            for (const lv of levelsFor(x)) {
+                try {
+                    const k = x.max <= 1 ? 1 : (lv - 1) / (x.max - 1);
+                    const pal = skillVfx.PALETTE[x.cid];
+                    const vid = await ultFx.renderUltimateVideo({ classId: x.cid, name: x.name, side: x.entry.side, palette: pal, skillLevel: lv, maxLevel: x.max, intensity: k });
+                    if (vid && vid.mp4) {
+                        await sock.sendMessage(chatId, { video: vid.mp4, mimetype: 'video/mp4', gifPlayback: true, jpegThumbnail: vid.thumb || undefined, caption: `🎞️ *${x.cid}* — ${x.name}  ·  Lv ${lv}/${x.max}` });
+                        sent++;
+                    } else {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + `⚠️ ${x.cid} Lv${lv}: render returned nothing.` });
+                    }
+                } catch (e) {
+                    await sock.sendMessage(chatId, { text: BOT_MARKER + `⚠️ ${x.cid} Lv${lv}: ${e.message}` });
+                }
+            }
+        }
+        return await sock.sendMessage(chatId, { text: BOT_MARKER + `✅ Sent ${sent}/${total} clips.` });
+    }
+
     if (sub === 'unstick') {
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
