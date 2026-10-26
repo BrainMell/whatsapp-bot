@@ -125,7 +125,7 @@ function classRecipe(cls, p, { IMPACT: I }) {
         // ── void / time / tinker ───────────────────────────────────────────
         VOIDWALKER: () => voidSet(I, '#7a4cff', 90),
         ARCHMAGE: () => [...voidSet(I, '#a56bff', 110), L('beam', { at: I - 0.25, dur: 0.6, from: 'C', to: 'T', color: '#8a5cff', mid: '#e6d4ff', w: 36, offFrom: [20, -50] })],
-        CHRONOMANCER: () => timeSet(I, '#7fe6ff', 100),
+        CHRONOMANCER: () => stopTimeSet(I, '#7fe6ff', 105),
         TIMELORD: () => [...timeSet(I, '#ffe27a', 120), L('circle', { at: 0.1, pos: 'C', r: 70, dur: 1.3, color: '#ffe27a', clock: true })],
         ARTIFICER: () => tinkerSet(I, '#ffb04a'),
         GRAND_INVENTOR: () => [...tinkerSet(I, '#6de9ff'), L('beam', { at: I - 0.3, dur: 0.7, from: 'C', to: 'T', color: '#6de9ff', mid: '#d6fbff', w: 44, offFrom: [20, -50] })],
@@ -199,6 +199,44 @@ function classRecipe(cls, p, { IMPACT: I }) {
             flash(col, 0.4),
         ];
     }
+    function stopTimeSet(I, col, r) {
+        return [
+            // A giant clock materializes over the immobilized enemy, holds
+            // through the windup, and fades OUT just before the hit lands.
+            L('wash', { at: 0.04, dur: I - 0.08, color: '#031321', a: 0.34 }),
+            L('circle', {
+                at: 0.03, pos: 'T', off: [0, -145], r: r * 2.1,
+                dur: I - 0.13, color: col, clock: true, ratio: 0.84,
+                spin: -1.25, ticks: 24
+            }),
+            L('circle', {
+                at: 0.08, pos: 'T', off: [0, -145], r: r * 1.62,
+                dur: I - 0.17, color: '#e2fbff', clock: true, ratio: 0.84,
+                spin: 0.7, ticks: 12
+            }),
+            // Keep the enemy's real sprite distinctly cyan-lit and isolated
+            // during the time-lock windup, then restore a strong post-hit
+            // highlight so the crowd-control effect is unmistakable.
+            L('affect', { at: 0.04, dur: I - 0.05, curve: 'sustain', a: 0.96, add: true }),
+            L('emit', {
+                at: 0.08, dur: I - 0.07, pos: 'T', off: [0, -145],
+                box: [150, 90], n: 26, life: 0.75, shape: 'star',
+                colors: [col, '#ffffff'], v: [0, -25], vr: [46, 28], swirl: 3
+            }),
+            { fx: 'lightning', at: I, pos: 'T', w: 290, n: 3, jit: [70, 0], gap: 0.08, off: [0, -80], add: true, tint: [col, 0.55] },
+            L('rings', { at: I, pos: 'T', n: 4, gap: 0.09, color: col, r: 190 }),
+            L('affect', { at: I + 0.02, dur: 0.9, curve: 'hold', a: 0.96, add: true }),
+            // A smaller after-clock reinforces that time remains locked
+            // during the enemy's two skipped turns.
+            L('circle', {
+                at: I + 0.06, pos: 'T', off: [0, -120], r: 135,
+                dur: 0.78, color: col, clock: true, ratio: 0.82,
+                spin: -0.55, ticks: 24
+            }),
+            flash(col, 0.42),
+        ];
+    }
+
     function tinkerSet(I, col) {
         return [
             L('gears', { at: 0.1, pos: 'C', dur: 1.8, color: col, color2: '#8a8a99', glow: col }),
