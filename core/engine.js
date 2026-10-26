@@ -7257,8 +7257,14 @@ ${targetCategory}`;
           // console - `.j mod createclass` must open the real CLASS CREATOR
           // template (detailed creation fields), not the generic one-line menu
           // description. It was being intercepted by this explain view.
+          // Multi-word console actions such as "sandbox on", "sandbox reset",
+          // and "sandbox setlevel" are executable commands, not help lookups.
+          // Treating them as explain pages swallowed the command before the
+          // admin console could run it. Keep single-word bare commands in
+          // explain mode so ".j mod setlevel" still shows its usage.
+          const isConsoleAction = exact.console === true && exact.cmd.includes(" ");
           const isFallThroughCmd =
-            exact.cmd === "modclass" || exact.cmd === "createclass";
+            exact.cmd === "modclass" || exact.cmd === "createclass" || isConsoleAction;
           if (isBareLookup && !isFallThroughCmd && visible.some(([k]) => k === exact.catKey)) {
             const cat = MOD_MENU[exact.catKey];
             let explainMsg = GET_BANNER(`${cat.emoji} ${botConfig.getBotName().toUpperCase()}`) + `\n\n`;
