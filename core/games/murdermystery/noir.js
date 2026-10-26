@@ -25,6 +25,7 @@ const botConfig = require('../../../botConfig');
 const characters = require('./characters');
 const cases = require('./cases');
 const anim = require('./noirAnim');
+const ncards = require('./noirCards');
 
 const STATE_KEY = 'murder_noir_games_v1';
 const MIN_PLAYERS = 4;
@@ -40,6 +41,8 @@ const GAME_TTL = 6 * 60 * 60 * 1000;
 const OUTBOX_GAP_MS = QA ? 30 : 2200;
 const EARLY_ADVANCE_DEBOUNCE = QA ? 120 : 1500;
 const MAX_MURDERS = 2;
+const DEBATE_MIN_MS = QA ? 800 : 45000;   // protected discussion window: a debate never ends before this
+const NOTE_LIMIT = 3, TELL_LIMIT = 14;
 
 const VICTIMS = ['Lord Edmund Blackvale', 'Lady Honoria Blackvale', 'Sir Alistair Blackvale', 'Dame Cordelia Blackvale'];
 const TRACES = [
@@ -152,7 +155,7 @@ function groupMedia(game, payload) {
     const asText = payload.text != null ? payload.text : payload.text2;
     try {
       if (payload.video) {
-        try { await sock.sendMessage(game.chatId, { video: payload.video, caption: payload.caption || '' }); }
+        try { await sock.sendMessage(game.chatId, { video: payload.video, gifPlayback: true, jpegThumbnail: payload.thumb || undefined, caption: payload.caption || '' }); }
         catch (ve) {
           console.error('[Noir] video send failed, falling back to still:', ve.message);
           if (payload.still) await sock.sendMessage(game.chatId, { image: payload.still, caption: payload.caption || '' });
@@ -237,6 +240,7 @@ function flavorFind() {
 
 function roleDeck(n) {
   const roles = ['KILLER', 'DETECTIVE', 'GUARDIAN'];
+  if (n >= 6) roles.push('ACCOMPLICE');   // the killer's partner: a private line + one sabotage a night
   while (roles.length < n) roles.push('CIVILIAN');
   return shuffle(roles);
 }
@@ -358,7 +362,8 @@ function commitPhase(game, phase) {
   game.phaseStartedAt = Date.now();
   game.deadline = (phase === 'FINISHED' || phase === 'LOBBY') ? null : Date.now() + (DUR[phase] || DUR.SEARCH);
   game.updatedAt = Date.now();
-  for (const p of game.players) { p.acted = false; p.pendingRoomPick = null; p.bolted = false; }
+  for (const p of game.players) { p.acted = false; p.pendingRoomPick = null; p.bolted = false; if (phase === 'SEARCH') { p.pressed = 0; p.notesSent = 0; p.lastRoom = null; } }
+  if (phase === 'DEBATE' || phase === 'SEARCH') game.skips = [];
   game._transitioning = false;
   game._forceAdvance = false;
   persist();
@@ -378,6 +383,20 @@ function maybeEarlyAdvance(game) {
   if (game._transitioning || game._earlyTimer) return;
   const alive = living(game);
   if (!alive.length) return;
+  if (game.phase === 'DEBATE') {
+    // protected discussion window: only a majority of PUBLIC skips, and never before DEBATE_MIN_MS
+    const need = Math.floor(alive.length / 2) + 1;
+    if ((game.skips || []).length < need) return;
+    const wait = Math.max(EARLY_ADVANCE_DEBOUNCE, DEBATE_MIN_MS - (Date.now() - (game.phaseStartedAt || 0)));
+    game._earlyTimer = setTimeout(() => {
+      game._earlyTimer = null;
+      if (game.phase !== 'DEBATE' || game._transitioning) return;
+      clearTimer(game.chatId); game._forceAdvance = true;
+      advancePhase(game.chatId).catch((e) => console.error('[Noir] early advance failed:', e.message));
+    }, wait);
+    if (typeof game._earlyTimer.unref === 'function') game._earlyTimer.unref();
+    return;
+  }
   if (!alive.every((p) => p.acted)) return;
   persist();
   game._earlyTimer = setTimeout(() => {
@@ -404,8 +423,9 @@ function resolveNight(game) {
   if (act && killer && killer.alive && game.murders < MAX_MURDERS) {
     const target = game.players.find((p) => p.char && p.char.id === act.targetId && p.alive);
     if (target && target !== killer) {
-      const guarded = game.players.some((p) => p.alive && p.role === 'GUARDIAN' && p.protectId === target.char.id);
-      if (guarded || target.bolted) {
+      const stripped = game.stripId && game.stripId === target.char.id;   // the accomplice picked the lock / drugged the watchman
+      const guarded = !stripped && game.players.some((p) => p.alive && p.role === 'GUARDIAN' && p.protectId === target.char.id);
+      if (guarded || (target.bolted && !stripped)) {
         outcome = 'saved';
         line = target.bolted
           ? target.name + ' held their door. The blade scratched and withdrew.'
@@ -428,7 +448,7 @@ function resolveNight(game) {
     }
   }
   game.dawn = { outcome, victimId: victim ? victim.char.id : null, round: game.round };
-  game.nightAct = null;
+  game.nightAct = null; game.stripId = null;
   for (const p of game.players) { p.protectId = null; p.savedTonight = false; }
   persist();
   return { outcome, victim, line };
@@ -440,12 +460,11 @@ function sendDawnMedia(game, outcome, victim, line) {
   const payload = { text2: '🌅 Dawn of round ' + game.round + ': ' + (outcome === 'murder' ? (victim ? victim.name + ' is dead. ' : 'A body is found. ') : outcome === 'saved' ? 'Someone was saved in the night. ' : 'The night passed quietly. ') + line };
   (async () => {
     try {
-      const clip = await anim.dawnClip({
-        outcome,
-        victim: victim ? { charId: victim.char.id, name: victim.name } : null,
-        line,
-      });
-      if (clip) { payload.video = clip.mp4; payload.still = clip.still; payload.caption = '🌅 Dawn — round ' + game.round + ' of ' + ROUNDS; }
+      const args = { outcome, victim: victim ? { charId: victim.char.id, name: victim.name } : null, line };
+      // only a MURDER earns the animated clip; a quiet/saved dawn is a crisp still card
+      const clip = outcome === 'murder' ? await anim.dawnClip(args) : await anim.stillOf(anim.dawnClip, args);
+      if (clip && clip.mp4) { payload.video = clip.mp4; payload.thumb = clip.thumb; payload.still = clip.still; payload.caption = '🌅 Dawn — round ' + game.round + ' of ' + ROUNDS; }
+      else if (clip && clip.still) { payload.image = clip.still; payload.caption = '🌅 Dawn — round ' + game.round + ' of ' + ROUNDS + '\n' + line; }
     } catch (e) { console.error('[Noir] dawn clip error:', e.message); }
     groupMedia(game, payload);
   })();
@@ -506,7 +525,14 @@ function checkSuddenEnd(game) {
 
 // ---------- phase openers (one clip + one DM menu per player) ----------
 function clipWrap(clip, caption, text2) {
-  if (clip) return { video: clip.mp4, still: clip.still, caption, text2 };
+  if (clip && clip.mp4) return { video: clip.mp4, thumb: clip.thumb, still: clip.still, caption, text2 };
+  if (clip && clip.still) return { image: clip.still, caption, text2 };
+  return { text2 };
+}
+// crisp still card (owner 2026-10-25: ordinary events are image cards, not blurry videos)
+function stillWrap(card, caption, text2) {
+  const buf = card && (card.still || card);
+  if (buf && Buffer.isBuffer(buf)) return { image: buf, caption, text2 };
   return { text2 };
 }
 
@@ -516,16 +542,16 @@ function openSearch(game) {
     privateText(game, p, searchMenu(game, p));
   }
   (async () => {
-    const clip = await anim.phaseClip({
+    const clip = await anim.stillOf(anim.phaseClip, {
       bgId: pick(game.rooms).id,
       kicker: 'Round ' + game.round + ' of ' + ROUNDS,
       title: 'Search',
-      steps: ['Check your DMs — I sent you a menu', 'Reply with ONE number: a room or a person', 'Reply SHARE to pin what you find'],
+      steps: ['Check your DMs — pick a room (1 move)', 'Out loud: ' + (game.prefix || '.j') + ' mm press <n> grills a guest', (game.prefix || '.j') + ' mm show lays your find on the table', 'Rooms you share = people you meet'],
       secondsLeft: Math.round(DUR.SEARCH / 1000),
-      footer: 'The round ends the moment everyone has acted',
+      footer: 'Talk in this chat — pressing and showing are PUBLIC',
     }).catch(() => null);
-    groupMedia(game, clipWrap(clip, '🔎 Round ' + game.round + ' — SEARCH',
-      '🔎 *Round ' + game.round + ' of ' + ROUNDS + ' — SEARCH*\nEveryone has been DM’d a menu. One move each: search a room or press a guest. The round ends the moment everyone has acted.'));
+    groupMedia(game, stillWrap(clip, '🔎 *Round ' + game.round + '/' + ROUNDS + ' — SEARCH*\n📩 DM: pick ONE room to search (or press a guest privately).\n💬 HERE: `' + (game.prefix || '.j') + ' mm press <n>` grills a guest in public · `' + (game.prefix || '.j') + ' mm show` lays your find on the table.\n' + game.players.map((x, i) => (i + 1) + '. ' + x.char.name).join(' · '),
+      '🔎 *Round ' + game.round + ' of ' + ROUNDS + ' — SEARCH*\nPick a room in your DMs. Press guests in public with `' + (game.prefix || '.j') + ' mm press <n>`.'));
   })();
 }
 
@@ -536,7 +562,8 @@ function searchMenu(game, p) {
   const others = living(game).filter((x) => x !== p);
   others.forEach((o, i) => lines.push('*' + (game.rooms.length + 1 + i) + '* — press ' + o.char.name + ' ' + o.char.title + ' about their account'));
   lines.push('');
-  lines.push('Or reply *SHARE* to pin your latest find to the case board.');
+  lines.push('Or reply *SHARE* to lay your latest find on the table (public card).');
+  lines.push('_In the GROUP: `' + pfx(game) + ' mm press <n>` grills a guest, `' + pfx(game) + ' mm show` shows your find. Whisper to anyone you meet: `note <name> <msg>`._');
   lines.push('_The round ends the moment everyone has acted. ' + timeLabel(Math.max(0, (game.deadline || Date.now()) - Date.now())) + ' remain._');
   return lines.join('\n');
 }
@@ -548,14 +575,16 @@ function openDebate(game) {
   }
   (async () => {
     const boardPlayers = game.players.map((p) => ({ charId: p.char.id, name: p.char.name, short: p.char.name.split(' ').pop(), alive: p.alive }));
-    const clip = await anim.boardClip({
+    const clip = await anim.stillOf(anim.boardClip, {
       round: game.round, rounds: ROUNDS,
       players: boardPlayers,
-      notes: game.notes.slice(-2),
+      notes: game.notes.slice(-3),
       hint: game.case.hint,
     }).catch(() => null);
-    groupMedia(game, clipWrap(clip, '🗂 The case board — round ' + game.round,
-      '🗂 *The case board — round ' + game.round + ' of ' + ROUNDS + '*\nDebate in the group as you wish — I stay quiet. Sealed accusations and evidence-sharing happen in your DMs.'));
+    const need = Math.floor(living(game).length / 2) + 1, pf = game.prefix || '.j';
+    groupMedia(game, stillWrap(clip, '🗂 *DEBATE — round ' + game.round + '/' + ROUNDS + '* · ' + Math.round(DUR.DEBATE / 1000) + 's\n💬 This is the table talk. Argue, defend, accuse — out loud.\n🔨 `' + pf + ' mm accuse <n>` (public; ' + need + ' agreeing hangs them NOW)\n⏭ `' + pf + ' mm skip` (majority ends the debate after ' + Math.round(DEBATE_MIN_MS / 1000) + 's)\n' + game.players.map((x, i) => (i + 1) + '. ' + x.char.name + (x.alive ? '' : ' ☠')).join(' · '),
+      '🗂 *DEBATE — round ' + game.round + ' of ' + ROUNDS + '*\nAccuse in public: `' + pf + ' mm accuse <n>`.'));
+    sendEncounters(game);
   })();
 }
 
@@ -567,7 +596,7 @@ function debateMenu(game, p) {
   lines.push('*S* — share a find with the board instead');
   lines.push('*K* — accuse no one this round');
   lines.push('');
-  lines.push('_Debate openly in the group too — the board shows what has been shared._');
+  lines.push('_The real debate is in the GROUP: `' + pfx(game) + ' mm accuse <n>` is public — a majority hangs them on the spot._');
   return lines.join('\n');
 }
 
@@ -577,7 +606,7 @@ async function openNight(game) {
   for (const p of living(game)) {
     privateText(game, p, nightMenu(game, p));
   }
-  const clip = await anim.phaseClip({
+  const clip = await anim.stillOf(anim.phaseClip, {
     bgId: pick(['hallway_a', 'hallway_b', 'bedroom_a', 'bedroom_b']),
     kicker: 'Round ' + game.round + ' of ' + ROUNDS,
     title: 'Night',
@@ -585,7 +614,7 @@ async function openNight(game) {
     secondsLeft: Math.round(DUR.NIGHT / 1000),
     footer: 'The house sleeps. Doors are bolted. Blades are bare.',
   }).catch(() => null);
-  groupMedia(game, clipWrap(clip, '🌑 Night — round ' + game.round,
+  groupMedia(game, stillWrap(clip, '🌑 Night — round ' + game.round,
     '🌑 *Night falls on Blackvale — round ' + game.round + ' of ' + ROUNDS + '*\nEvery living guest has a private move waiting in their DMs.'));
 }
 
@@ -600,6 +629,8 @@ function nightMenu(game, p) {
       lines.push('Choose your prey. Reply a number:');
       others.forEach((o, i) => lines.push('*' + (i + 1) + '* — ' + o.char.name + ' ' + o.char.title));
       lines.push('*K* — stay your hand tonight');
+      const ac = game.players.find((x) => x.role === 'ACCOMPLICE' && x.alive);
+      if (ac) lines.push('_Your partner ' + ac.char.name + ' can strip one guest\'s protection — send `tell <who to strip>` first._');
     }
   } else if (p.role === 'GUARDIAN') {
     lines.push('Stand watch over one guest tonight (yourself included). Reply a number:');
@@ -609,6 +640,11 @@ function nightMenu(game, p) {
     lines.push('Lay one guest’s 11 PM account against the house’s records. Reply a number:');
     others.forEach((o, i) => lines.push('*' + (i + 1) + '* — compare ' + o.char.name + ' ' + o.char.title));
     lines.push('*K* — keep your counsel tonight');
+  } else if (p.role === 'ACCOMPLICE') {
+    const k = game.players.find((x) => x.role === 'KILLER');
+    lines.push('You serve ' + (k ? k.char.name : 'the killer') + '. Pick a guest to *strip of protection tonight* (their door unbarred, their guardian drugged). Coordinate with `tell <message>`:');
+    others.forEach((o, i) => lines.push('*' + (i + 1) + '* — strip ' + o.char.name + ' ' + o.char.title));
+    lines.push('*K* — do nothing tonight');
   } else {
     lines.push('You hold no blade and no badge. Bolt your door, or trust the dark:');
     lines.push('*B* — bolt your door (unmurderable tonight)');
@@ -625,7 +661,7 @@ function openVote(game) {
     privateText(game, p, voteMenu(game, p));
   }
   (async () => {
-    const clip = await anim.phaseClip({
+    const clip = await anim.stillOf(anim.phaseClip, {
       bgId: 'entrance',
       kicker: 'The trial',
       title: 'Verdict',
@@ -633,7 +669,7 @@ function openVote(game) {
       secondsLeft: Math.round(DUR.VOTE / 1000),
       footer: 'Name the murderer — or the murderer names you.',
     }).catch(() => null);
-    groupMedia(game, clipWrap(clip, '⚖️ The final verdict',
+    groupMedia(game, stillWrap(clip, '⚖️ The final verdict',
       '⚖️ *The final verdict.* Ballots are in your DMs. A strict majority of the living is required to convict.'));
   })();
 }
@@ -660,6 +696,7 @@ async function doSearch(game, p, n) {
   const room = findRoomByPick(game, Number(n));
   if (!room) return false;
   p.acted = true;
+  p.lastRoom = room.id;
   const finds = game.case.searchIndex[room.id] || [];
   const doneHere = p.knownClues.filter((c) => c.roomId === room.id).length;
   const find = finds[doneHere];
@@ -712,8 +749,8 @@ async function doShare(game, p) {
   game.notes.push({ kind: clue.isTrace ? 'trace' : 'find', text: clue.roomName + ' · ' + clue.line });
   p.acted = true;
   persist();
-  await privateText(game, p, '📌 Pinned to the case board: ' + clue.line);
-  groupMedia(game, { text: '📌 ' + p.char.name + ' pins a find to the board (' + clue.roomName + '). The board speaks at the next debate.' });
+  await privateText(game, p, '📌 Laid on the table for everyone: ' + clue.line);
+  postEvidence(game, p, clue);
   maybeEarlyAdvance(game);
   return true;
 }
@@ -800,6 +837,15 @@ async function doNightAction(game, p, choice) {
     maybeEarlyAdvance(game);
     return true;
   }
+  if (p.role === 'ACCOMPLICE') {
+    if (/^k$/i.test(c)) { p.acted = true; persist(); await privateText(game, p, '🌙 You do nothing tonight. You have acted.'); maybeEarlyAdvance(game); return true; }
+    const target = findOtherByPick(game, p, c);
+    if (!target) return false;
+    game.stripId = target.char.id; p.acted = true; persist();
+    await privateText(game, p, '🗝 You slip into ' + target.char.name + '’s corridor and spoil their lock. If your partner strikes there tonight, no shield will hold.');
+    maybeEarlyAdvance(game);
+    return true;
+  }
   // civilians
   if (/^b$/i.test(c)) {
     p.acted = true;
@@ -846,6 +892,129 @@ async function doVote(game, p, raw) {
   } else {
     maybeEarlyAdvance(game);
   }
+  return true;
+}
+
+
+// ---------- the table talk: PUBLIC verbs (the group chat is the stage) ----------
+function pfx(game) { return game.prefix || '.j'; }
+function byNumber(game, n) { const t = game.players[Number(n) - 1]; return t || null; }
+function rosterLine(game) { return game.players.map((x, i) => (i + 1) + '. ' + x.char.name + (x.alive ? '' : ' ☠')).join(' · '); }
+
+async function postEvidence(game, p, clue) {
+  const card = await ncards.evidenceCard({ art: clue.art, roomName: clue.roomName, line: clue.line, by: { charId: p.char.id, name: p.char.name }, trace: !!clue.isTrace }).catch(() => null);
+  groupMedia(game, stillWrap(card, (clue.isTrace ? '🩸 ' : '📌 ') + '*' + p.char.name + '* lays evidence on the table — ' + clue.roomName + '\n_' + clue.line + '_',
+    '📌 ' + p.char.name + ' lays evidence on the table (' + clue.roomName + '): ' + clue.line));
+}
+
+async function doPress(game, p, n) {
+  if (!['SEARCH', 'DEBATE'].includes(game.phase)) { await privateText(game, p, 'You can only press a guest while the house is awake.'); return true; }
+  if ((p.pressed || 0) >= 1) { await privateText(game, p, 'You already pressed someone this round — let the table react.'); return true; }
+  const t = byNumber(game, n);
+  if (!t || t === p || !t.alive) { await privateText(game, p, 'Press who? Use the number from the roster:\n' + rosterLine(game) + '\n`' + pfx(game) + ' mm press <n>`'); return true; }
+  p.pressed = 1;
+  const c10 = game.case.claims[t.char.id]['10 PM'], c11 = game.case.claims[t.char.id]['11 PM'];
+  const quote = 'At ten I was in ' + c10.roomName + '. At eleven, ' + c11.roomName + '. Ask anyone.';
+  const note = t.char.name + ' swears: 10 PM ' + c10.roomName.replace(/^the /i, '') + ', 11 PM ' + c11.roomName.replace(/^the /i, '') + '.';
+  if (!game.notes.some((x) => x.text === note)) game.notes.push({ kind: 'press', text: note });
+  persist();
+  const card = await ncards.pressCard({ asker: { charId: p.char.id, name: p.char.name }, target: { charId: t.char.id, name: t.char.name }, quote, round: game.round }).catch(() => null);
+  groupMedia(game, stillWrap(card, '🔦 *' + p.char.name + '* presses *' + t.char.name + '*:\n_“' + quote + '”_\nDoes anyone know better? `' + pfx(game) + ' mm press <n>` · `' + pfx(game) + ' mm accuse <n>`',
+    '🔦 ' + p.char.name + ' presses ' + t.char.name + ': “' + quote + '”'));
+  return true;
+}
+
+async function doAccusePublic(game, p, n) {
+  if (game.phase !== 'DEBATE') { await privateText(game, p, 'Accusations are made during the debate.'); return true; }
+  const t = byNumber(game, n);
+  if (!t || t === p || !t.alive) { await privateText(game, p, 'Accuse who? ' + rosterLine(game)); return true; }
+  game.accusations[p.jid] = t.char.id; persist();
+  const alive = living(game), need = Math.floor(alive.length / 2) + 1;
+  const count = alive.filter((x) => game.accusations[x.jid] === t.char.id).length;
+  const card = await ncards.accuseCard({ accuser: { charId: p.char.id, name: p.char.name }, target: { charId: t.char.id, name: t.char.name }, count, need }).catch(() => null);
+  groupMedia(game, stillWrap(card, '🔨 *' + p.char.name + '* accuses *' + t.char.name + '* — ' + count + '/' + need + (count >= need ? '\n⚖️ The table has spoken.' : ' · agree with `' + pfx(game) + ' mm accuse ' + n + '`'),
+    '🔨 ' + p.char.name + ' accuses ' + t.char.name + ' (' + count + '/' + need + ')'));
+  if (count >= need && !game._transitioning) await hang(game, t);
+  return true;
+}
+
+async function doSkipPublic(game, p) {
+  if (game.phase !== 'DEBATE') return true;
+  game.skips = game.skips || [];
+  if (!game.skips.includes(p.jid)) game.skips.push(p.jid);
+  persist();
+  const need = Math.floor(living(game).length / 2) + 1;
+  groupMedia(game, { text: '⏭ ' + p.char.name + ' is done talking (' + game.skips.length + '/' + need + ').' });
+  maybeEarlyAdvance(game);
+  return true;
+}
+
+async function hang(game, t) {
+  game._transitioning = true;
+  clearTimer(game.chatId);
+  if (game._earlyTimer) { clearTimeout(game._earlyTimer); game._earlyTimer = null; }
+  if (t.role === 'KILLER') return finishGame(game, t, 'The table turned on the killer.');
+  t.alive = false;
+  game.accusations = {};
+  game.notes.push({ kind: 'verdict', text: t.char.name + ' was hanged by the table — innocent.' });
+  persist();
+  privateText(game, t, '☠️ *You were hanged — wrongly.* Watch in silence; the living must find the killer without you.');
+  groupMedia(game, { text: '⚖️ *' + t.char.name + ' is hanged by the table…* and they were *innocent*.\nThe killer is still among you. Night falls.' });
+  if (checkSuddenEnd(game)) return true;
+  await openNight(game);
+  return true;
+}
+
+// rooms where 2+ guests searched together = an encounter: a scene card in the group + a way to whisper
+function sendEncounters(game) {
+  const byRoom = {};
+  for (const p of living(game)) if (p.lastRoom) (byRoom[p.lastRoom] = byRoom[p.lastRoom] || []).push(p);
+  let cardsSent = 0;
+  for (const [roomId, ps] of Object.entries(byRoom)) {
+    if (ps.length < 2) continue;
+    const room = game.rooms.find((r) => r.id === roomId); if (!room) continue;
+    for (const a of ps) { a.contacts = a.contacts || []; for (const b of ps) if (a !== b && !a.contacts.includes(b.char.id)) a.contacts.push(b.char.id); }
+    const names = ps.map((x) => x.char.name);
+    game.notes.push({ kind: 'sight', text: names.join(' & ') + ' met in ' + room.name + ' (round ' + game.round + ').' });
+    for (const x of ps) {
+      const others = ps.filter((y) => y !== x).map((y) => y.char.name);
+      privateText(game, x, '🚪 In ' + room.name + ' you ran into *' + others.join(' and ') + '*. They saw you here — and you saw them.\nWhisper to them: `note ' + others[0].split(' ').slice(-1)[0] + ' <message>`');
+    }
+    if (cardsSent++ < 2) {
+      const line = names.join(' and ') + ' end up in ' + room.name + ' together. Neither expected company.';
+      (async () => {
+        const card = await ncards.roomSceneCard({ roomId, roomName: room.name, who: ps.map((x) => ({ charId: x.char.id, name: x.char.name })), line, round: game.round }).catch(() => null);
+        groupMedia(game, stillWrap(card, '🚪 *' + room.name.replace(/^the /i, 'The ') + '* — ' + names.join(' & ') + ' crossed paths.', '🚪 ' + line));
+      })();
+    }
+  }
+  persist();
+}
+
+// private channels: `note <who> <msg>` (anyone you met) and `tell <msg>` (killer <-> accomplice)
+async function doMessage(game, p, text) {
+  const m = text.match(/^(tell|t|note)\s+(.+)$/i); if (!m) return false;
+  const kind = m[1].toLowerCase(), rest = m[2].trim();
+  if (kind === 'tell' || kind === 't') {
+    if (p.role !== 'KILLER' && p.role !== 'ACCOMPLICE') return false;
+    const partner = game.players.find((x) => x !== p && (x.role === 'KILLER' || x.role === 'ACCOMPLICE'));
+    if (!partner) { await privateText(game, p, 'You have no partner in this house.'); return true; }
+    game.tells = (game.tells || 0) + 1;
+    if (game.tells > TELL_LIMIT) { await privateText(game, p, 'The walls have ears — you have said enough.'); return true; }
+    await privateText(game, partner, '🕯 *' + p.char.name + ' (your partner):* ' + rest.slice(0, 220));
+    await privateText(game, p, '✉️ Sent to ' + partner.char.name + '.');
+    return true;
+  }
+  if ((p.notesSent || 0) >= NOTE_LIMIT) { await privateText(game, p, 'No more notes this round — three is all the candlelight allows.'); return true; }
+  const wm = rest.match(/^(\S+)\s+([\s\S]+)$/); if (!wm) { await privateText(game, p, 'Usage: `note <name> <message>` — to someone you met.'); return true; }
+  const key = wm[1].toLowerCase(), body = wm[2].trim().slice(0, 140);
+  const others = living(game).filter((x) => x !== p);
+  const target = Number.isFinite(Number(key)) ? others[Number(key) - 1] : others.find((x) => x.char.name.toLowerCase().split(' ').some((w) => w.replace(/[^a-z]/g, '') === key.replace(/[^a-z]/g, '')) || x.name.toLowerCase().includes(key));
+  if (!target) { await privateText(game, p, 'No living guest answers to “' + wm[1] + '”.'); return true; }
+  if (!(p.contacts || []).includes(target.char.id)) { await privateText(game, p, 'You have not crossed paths with ' + target.char.name + ' — you cannot slip them a note. Search the same room as someone to meet them.'); return true; }
+  p.notesSent = (p.notesSent || 0) + 1;
+  await privateText(game, target, '📨 *Note from ' + p.char.name + ':* ' + body + '\n_(Reply with_ `note ' + p.char.name.split(' ').slice(-1)[0] + ' <message>`_)_');
+  await privateText(game, p, '✉️ Slipped to ' + target.char.name + '.');
   return true;
 }
 
@@ -896,8 +1065,10 @@ async function finishGame(game, convictedPlayer, reason) {
 async function relay(sock, senderJid, chatId, txt) {
   loadPersisted();
   const text = String(txt || '').trim();
-  if (!text || text.length > 24) return false;
-  if (!/^(\d{1,2}|[bk]|share(\s+\d+)?|skip)$/i.test(text)) return false;
+  if (!text) return false;
+  const isMsg = /^(tell|t|note)\s+\S+/i.test(text);
+  if (isMsg ? text.length > 260 : text.length > 24) return false;
+  if (!isMsg && !/^(\d{1,2}|[bk]|share(\s+\d+)?|skip)$/i.test(text)) return false;
   const id = normJid(senderJid);
   let game = null;
   for (const g of games.values()) {
@@ -909,6 +1080,7 @@ async function relay(sock, senderJid, chatId, txt) {
   if (!p || !p.alive) return false;
   try {
     bindContext({ sock }, game);
+    if (isMsg) return await doMessage(game, p, text);
     if (game.phase === 'SEARCH') {
       const n = Number(text);
       if (Number.isFinite(n) && n >= 1) {
@@ -921,8 +1093,9 @@ async function relay(sock, senderJid, chatId, txt) {
     if (game.phase === 'DEBATE') {
       if (/^(skip|k)$/i.test(text)) {
         p.acted = true;
+        game.skips = game.skips || []; if (!game.skips.includes(p.jid)) game.skips.push(p.jid);
         persist();
-        await privateText(game, p, '🗡 You accuse no one this round. You have acted.');
+        await privateText(game, p, '🗡 You accuse no one this round — and you are done talking.');
         maybeEarlyAdvance(game);
         return true;
       }
@@ -967,7 +1140,13 @@ function helpText(prefix) {
     '`' + prefix + ' murder story status` — who sits at the table',
     '`' + prefix + ' murder story end` — close the case',
     '',
-    'Everything else happens in your DMs — I send a menu every phase, you reply with a single character.',
+    '*In the group (the stage):*',
+    '`' + prefix + ' murder press <n>` — grill a guest on their account',
+    '`' + prefix + ' murder show` — lay your latest find on the table',
+    '`' + prefix + ' murder accuse <n>` — accuse; a majority hangs them on the spot',
+    '`' + prefix + ' murder skip` — you are done talking (majority ends the debate)',
+    '',
+    '*In your DMs (the secret layer):* a menu every phase — reply with a number. Whisper `note <name> <msg>` to anyone you met in a room; killer & accomplice use `tell <msg>`.',
   ].join('\n');
 }
 
@@ -985,9 +1164,10 @@ function statusText(game) {
 function dossierText(game, p) {
   if (!p.char) return 'The case has not been dealt yet.';
   const roleLine = {
-    KILLER: '🔪 *You are the Killer.* Your 10 PM and 11 PM accounts below are LIES you must hold. The trace in the blood carries the letter "' + game.case.traceInitial + '" — keep them from that room and that letter.',
+    KILLER: '🔪 *You are the Killer.*' + (game.players.some((x) => x.role === 'ACCOMPLICE') ? ' Your accomplice is *' + game.players.find((x) => x.role === 'ACCOMPLICE').char.name + '* — whisper with `tell <message>`.' : '') + ' Your 10 PM and 11 PM accounts below are LIES you must hold. The trace in the blood carries the letter "' + game.case.traceInitial + '" — keep them from that room and that letter.',
     DETECTIVE: '🔍 *You are the Detective.* Each night you may lay one guest’s 11 PM account against the house’s records and learn whether it holds.',
     GUARDIAN: '🛡 *You are the Guardian.* Each night you may stand watch over one guest — if the killer comes for them, they live.',
+    ACCOMPLICE: '🗝 *You are the Accomplice.* You know the killer: *' + ((game.players.find((x) => x.role === 'KILLER') || {char: {name: 'the killer'}}).char.name) + '*. Win when they walk free. Each night you may strip one guest of protection. Whisper to your partner with `tell <message>`. Expect to lie in public.',
     CIVILIAN: '🤍 *You are a Civilian.* Your eyes and your wits are your weapons. Bolt your door at night, and press guests on their accounts.',
   }[p.role] || 'You are a guest of Blackvale.';
   const lines = ['🕯 *YOUR DOSSIER* — ' + p.char.name + ', ' + p.char.title, '', roleLine, '', '*Your account of the night:*'];
@@ -1147,7 +1327,11 @@ async function handleCommand(ctx, services) {
   if (['evidence', 'journal', 'clues'].includes(action)) return privateText(game, p, evidenceText(game, p));
   if (action === 'board') return sendBoardStill(game, p);
   if (action === 'rooms') return privateText(game, p, game.rooms.map((r, i) => '*' + (i + 1) + '* — ' + r.name + ' — _' + r.hint + '_').join('\n'));
-  if (action === 'share') return doShare(game, p);
+  if (['share', 'show'].includes(action)) return doShare(game, p);
+  if (['press', 'ask'].includes(action)) return doPress(game, p, Number(arg));
+  if (action === 'accuse' && groupContext) return doAccusePublic(game, p, Number(arg));
+  if (action === 'skip' && game.phase === 'DEBATE' && groupContext) return doSkipPublic(game, p);
+  if (['note', 'tell'].includes(action)) return doMessage(game, p, action + ' ' + arg);
 
   if (game.phase === 'INTRO') return privateText(game, p, dossierText(game, p) + '\n\n_The first round begins shortly._');
 
@@ -1175,8 +1359,9 @@ async function handleCommand(ctx, services) {
   if (game.phase === 'DEBATE') {
     if (action === 'skip') {
       p.acted = true;
+      game.skips = game.skips || []; if (!game.skips.includes(p.jid)) game.skips.push(p.jid);
       persist();
-      await privateText(game, p, '🗡 You accuse no one this round. You have acted.');
+      await privateText(game, p, '🗡 You accuse no one this round — and you are done talking.');
       maybeEarlyAdvance(game);
       return true;
     }
@@ -1225,8 +1410,12 @@ function init(services) {
   loadPersisted();
 }
 
+const PUBLIC_VERBS = ['press', 'ask', 'show', 'accuse', 'skip', 'note', 'tell'];
+function isVerb(v) { return PUBLIC_VERBS.includes(String(v || '').toLowerCase().replace(/[^a-z]/g, '')); }
+
 module.exports = {
   handleCommand,
+  isVerb,
   init,
   hasActiveGame,
   relay,

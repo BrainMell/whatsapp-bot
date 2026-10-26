@@ -3900,6 +3900,11 @@ async function handleCommand(ctx) {
     }
     return noir.handleCommand(ctx, storyServices);
   }
+  // Public table-talk verbs (press / show / accuse / skip / note / tell) typed in the
+  // group during a Dead of Night case belong to noir: the group chat is the stage.
+  if (noir.hasActiveGame(ctx.chatId) && noir.isVerb(requestedMode)) {
+    return noir.handleCommand({ ...ctx, rest: requestedMode + ' ' + String(ctx.rest || '') }, storyServices);
+  }
   // Do not let the classic mode create/advance a second game over Story Mode
   // in the same group. Both modes remain selectable; a group runs one at once.
   if ((noir.hasActiveGame(ctx.chatId) || storyMode.hasActiveGame(ctx.chatId)) &&

@@ -192,7 +192,11 @@ const dmBlob = (n) => sentTo(jid(n)).map(textOf).join('\n');
   await run(d(2, 'murder story 1'));
   await run(d(3, 'murder story skip'));
   await run(d(4, 'murder story skip'));
-  await sleep(400);
+  await sleep(150);
+  assert.equal(game.phase, 'DEBATE', 'sealed accusations alone do not end the debate (protected window)');
+  await run(d(1, 'murder story skip'));
+  await run(d(2, 'murder story skip'));
+  await sleep(1500); // DEBATE_MIN_MS (800ms in QA) + debounce
   assert.equal(game.phase, 'NIGHT', 'DEBATE -> NIGHT');
   ok('T8 sealed accusations -> NIGHT');
 

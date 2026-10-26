@@ -19,7 +19,11 @@ const { spawn } = require('child_process');
 const cards = require('./cards');
 const characters = require('./characters');
 
+const { AsyncLocalStorage } = require('async_hooks');
 const W = 640, H = 480, FPS = 15;
+// 2026-10-25 owner: "videos look blurry and low quality" — draw at 1.5x (960x720), encode slower/cleaner.
+const Q = 1.5;
+const als = new AsyncLocalStorage();
 const C = cards.C;
 const NOCLIP = process.env.MM_NOIR_NOCLIP === '1';
 
@@ -51,9 +55,9 @@ function rng(seed) {
 function encodeMP4(frameGen) {
   return new Promise((resolve, reject) => {
     const out = path.join(os.tmpdir(), `noir_${process.pid}_${Date.now()}_${Math.floor(Math.random() * 1e6)}.mp4`);
-    const args = ['-y', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-video_size', `${W}x${H}`, '-framerate', String(FPS), '-i', 'pipe:0',
+    const args = ['-y', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-video_size', `${Math.round(W * Q)}x${Math.round(H * Q)}`, '-framerate', String(FPS), '-i', 'pipe:0',
       '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0', '-pix_fmt', 'yuv420p',
-      '-preset', 'veryfast', '-crf', '24', '-movflags', '+faststart', '-an', out];
+      '-preset', 'medium', '-crf', '19', '-movflags', '+faststart', '-an', out];
     const p = spawn(process.env.FFMPEG_PATH || 'ffmpeg', args, { stdio: ['pipe', 'ignore', 'pipe'] });
     let err = '';
     p.stderr.on('data', (d) => { err += d; if (err.length > 4000) err = err.slice(-2000); });
@@ -77,24 +81,32 @@ function encodeMP4(frameGen) {
 
 // renderClip — drawFrame(ctx, t, f, total) paints one complete frame.
 async function renderClip(seconds, drawFrame, thumbAt = 0.62) {
-  if (NOCLIP) return null;
+  const store = als.getStore();
+  const stillOnly = !!(store && store.still);
+  if (NOCLIP && !stillOnly) return null;
   try {
     cards.registerFonts();
     const { createCanvas } = cards.cv();
     const total = Math.max(3, Math.round(seconds * FPS));
-    const canvas = createCanvas(W, H);
+    const PW = Math.round(W * Q), PH = Math.round(H * Q);
+    const canvas = createCanvas(PW, PH);
     const ctx = canvas.getContext('2d');
+    const paint = async (t, f) => { ctx.setTransform(Q, 0, 0, Q, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; await drawFrame(ctx, t, f, total); };
+    if (stillOnly) {
+      await paint(1, total - 1);
+      return { mp4: null, thumb: canvas.toBuffer('image/jpeg', { quality: 0.86 }), still: canvas.toBuffer('image/png') };
+    }
     const frameGen = (async function * () {
       for (let f = 0; f < total; f++) {
-        await drawFrame(ctx, f / (total - 1), f, total);
-        const { data } = ctx.getImageData(0, 0, W, H);
+        await paint(f / (total - 1), f);
+        const { data } = ctx.getImageData(0, 0, PW, PH);
         yield Buffer.from(data.buffer, data.byteOffset, data.byteLength);
       }
     })();
     const mp4 = await encodeMP4(frameGen);
-    await drawFrame(ctx, thumbAt, Math.round(thumbAt * (total - 1)), total);
-    const thumb = canvas.toBuffer('image/jpeg', { quality: 0.82 });
-    await drawFrame(ctx, 1, total - 1, total);
+    await paint(thumbAt, Math.round(thumbAt * (total - 1)));
+    const thumb = canvas.toBuffer('image/jpeg', { quality: 0.86 });
+    await paint(1, total - 1);
     const still = canvas.toBuffer('image/png');
     return { mp4, thumb, still };
   } catch (e) {
@@ -102,6 +114,9 @@ async function renderClip(seconds, drawFrame, thumbAt = 0.62) {
     return null;
   }
 }
+
+/** render any clip function as a single high-res still (no encode): stillOf(phaseClip, args) → {still, thumb} */
+function stillOf(fn, args) { return als.run({ still: true }, () => fn(args)); }
 
 // ---------- shared painters ----------
 // Room background with a slow Ken-Burns push + noir atmosphere.
@@ -530,4 +545,4 @@ async function verdictClip({ accused, killer, townWins, reason }) {
   });
 }
 
-module.exports = { W, H, FPS, renderClip, introClip, crimeClip, phaseClip, boardClip, dawnClip, verdictClip };
+module.exports = { W, H, FPS, Q, stillOf, renderClip, introClip, crimeClip, phaseClip, boardClip, dawnClip, verdictClip };
