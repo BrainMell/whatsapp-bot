@@ -1082,8 +1082,70 @@ async function enableSandbox(realJid, senderName) {
     return sandboxMode.get(realJid).sandboxDoc || null;
   }
 
-  // Get or create the sandbox document
-  const sb = await AdminSandbox.getOrCreate(realJid, senderName);
+  // Get or create the sandbox document. Schema v2 aligns old records with
+  // the stacked test character promised by the mod menu. Only untouched legacy
+  // defaults are promoted; any sandbox the mod has customized is preserved.
+  let sb = await AdminSandbox.getOrCreate(realJid, senderName);
+  if (!sb.schemaVersion) {
+    const bonusKeys = ['hp', 'atk', 'def', 'mag', 'spd', 'luck', 'crit'];
+    const defaultBonuses = bonusKeys.every((key) => Number(sb.statBonuses?.[key] || 0) === 0);
+    const untouchedLegacyDefaults =
+      Number(sb.stats?.level || 1) <= 1 &&
+      Number(sb.progression?.level || 1) <= 1 &&
+      Number(sb.wallet ?? 100000) === 100000 &&
+      Number(sb.bank ?? 1000000) === 1000000 &&
+      String(sb.class || 'FIGHTER').toUpperCase() === 'FIGHTER' &&
+      String(sb.adventurerRank || 'F').toUpperCase() === 'F' &&
+      Number(sb.skillPoints || 0) === 0 &&
+      defaultBonuses;
+
+    if (untouchedLegacyDefaults) {
+      const stackedStats = {
+        ...(sb.stats || {}),
+        hp: 99999, maxHp: 99999, xp: 0, level: 100,
+        totalEarned: 999999999, kills: 9999, undeadKills: 9999
+      };
+      const allocated = { hp: 100, atk: 100, def: 100, mag: 100, spd: 100, luck: 100, crit: 100 };
+      const trials = [
+        'INFECTED_COLOSSUS', 'MUTATION_PRIME', 'CORRUPTED_GUARDIAN', 'SHADOW_STALKER',
+        'IRON_BODY_GRANDMASTER', 'ANCIENT_WURM', 'SHADOW_LORD', 'ARCANE_SENTINEL',
+        'SOUL_EATER', 'ELEMENTAL_PRIMORDIAL', 'GRAVEYARD_LORD', 'CHRONOS_WARDEN',
+        'GOLDEN_GOLEM', 'SOUND_REAPER', 'CLOCKWORK_TITAN', 'ELDER_FLAME', 'LEVIATHAN',
+        'LEVIATHAN_SPAWN_ALPHA', 'LICH_KING', 'VOID_ASSASSIN', 'ETERNAL_DRAGON',
+        'VOID_TITAN', 'PRIMORDIAL_EVIL', 'PRIMORDIAL_CHAOS', 'DEMON_LORD',
+        'VOID_CORRUPTED', 'ABYSSAL_WHISPER', 'PRIME_ELEMENT', 'TIME_EATER',
+        'SERAPHIM_PRIME', 'GAIA_SENTINEL', 'TREASURE_HOARDER', 'MAESTRO_OF_VOID',
+        'MECH_GOD', 'VOID_NECROMANCER'
+      ];
+      await AdminSandbox.patch(realJid, {
+        wallet: 999999999,
+        bank: 999999999,
+        class: 'WARLORD',
+        adventurerRank: 'GOD',
+        stats: stackedStats,
+        statBonuses: { hp: 5000, atk: 5000, def: 5000, mag: 5000, spd: 5000, luck: 5000, crit: 500 },
+        skillPoints: 999,
+        completedTrials: trials,
+        evolutionHistory: [
+          { from: 'Fighter', to: 'Warrior', level: 15, timestamp: Date.now() },
+          { from: 'Warrior', to: 'Warlord', level: 50, timestamp: Date.now() }
+        ],
+        evolvedAt: 50,
+        inventorySlots: 999,
+        progression: {
+          ...(sb.progression || {}),
+          xp: 0, level: 100, gp: 99999, totalGP: 99999,
+          statPoints: 999, totalXPEarned: 999999999,
+          allocatedStats: allocated, allocatedStatPoints: allocated
+        },
+        schemaVersion: 2
+      });
+    } else {
+      // Preserve customized legacy characters; only mark the migration.
+      await AdminSandbox.patch(realJid, { schemaVersion: 2 });
+    }
+    sb = await AdminSandbox.getOrCreate(realJid, senderName);
+  }
 
   // Back up the real user data (deep clone)
   const realUser = economy.getUser(realJid);
