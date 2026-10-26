@@ -101,8 +101,12 @@ function mockSock(tag) {
         const listMsg = sock2.sends.find((s) => s.includes("Fandom match"));
         if (profileMsg) {
             ok(true, "profile card reached the user");
+            // 💡 a long card takes the overflow path (image + short header
+            // caption, then the FULL card as a follow-up text) — scan ALL sends
+            // for the infobox fields, not just the first matching one
+            const fullCard = sock2.sends.filter((s) => s.includes("CHARACTER PROFILE")).join("\n");
             console.log(`     ${profileMsg.split("\n").slice(0, 8).join("\n     ")}`);
-            ok(/Species|Race|Alias|Status|Home/i.test(profileMsg), "profile carries infobox fields");
+            ok(/Species|Race|Alias|Status|Home/i.test(fullCard), "profile carries infobox fields");
         } else if (listMsg) {
             ok(true, "multi-match list reached the user (auto-detect ambiguity) — picking 1");
             const r = await cp.handleProfileSelection(CHAT2, "1");

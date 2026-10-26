@@ -651,7 +651,8 @@ async function parsePageWithSections(title) {
         const level = Number(s.level) || 0;
         if (level < 2 || level > 3) continue;
         if (!s.index && s.index !== "0") continue; // uneditable TOC ghosts
-        out.sections.push({ index: String(s.index), level, line: s.line, anchor: s.anchor });
+        // line can carry raw entities ("Xenoverse &amp; Heroes") — decode
+        out.sections.push({ index: String(s.index), level, line: decodeEntities(s.line), anchor: s.anchor });
     }
     out.sections = out.sections.slice(0, 14);
 
