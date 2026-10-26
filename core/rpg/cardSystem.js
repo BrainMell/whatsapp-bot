@@ -5587,9 +5587,15 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       await cmdHiddenSet(senderJid, reply, args, m);
       return true;
 
-    // §5: event-token leaderboard. Public.
+    // §5: event-token leaderboard. Public. (hide/unhide/hidden/sync =
+    // card-mod only management of the inner-circle filter, 2026-10-26.)
     case 'tokenlb':
     case 'tlb':
+      if (args.length && ['hide', 'unhide', 'hidden', 'list', 'status', 'sync'].includes(String(args[0]).toLowerCase())) {
+        if (!isCardMod) return reply('❌ Only card moderators and above can manage the token leaderboard filter.'), true;
+        await cmdTokenLbManage(senderJid, reply, args, m);
+        return true;
+      }
       await cmdTokenLB(senderJid, reply, args);
       return true;
 
@@ -6338,29 +6344,320 @@ async function cmdHiddenSet(senderJid, reply, args = [], m = {}) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+//  2026-10-26 OWNER REQUEST (Mellow): the people in the private mods/
+//  close-friends GC must not sit on the public token leaderboard. Hiding
+//  works by GROUP MEMBERSHIP, not by hand-listing accounts:
+//    .j tokenlb hide gc <name|jid>    card-mod hides a whole group
+//    .j tokenlb unhide gc <name|jid>  unhides it
+//    .j tokenlb hide @user            explicit single-account hide
+//    .j tokenlb unhide @user
+//    .j tokenlb hidden                filter status (mod view)
+//    .j tokenlb sync                  force-refresh hidden-group rosters
+//  Every participant of a hidden group is filtered out of .j tokenlb.
+//  Identities: group rosters arrive in whatever JID flavor WhatsApp hands
+//  over (usually @lid now) while User records may be @s.whatsapp.net or
+//  @lid — candidate matching therefore always runs through
+//  cardOwnerVariants() (LidMapping) so both flavors collide correctly.
+//  Live rosters are snapshotted into the System KV so the filter keeps
+//  working after a restart or during a WhatsApp outage (stale roster beats
+//  no roster). Failures degrade to an UNFILTERED board, never a broken one.
+// ═══════════════════════════════════════════════════════════════════════
+const TOKEN_LB_HIDDEN_KEY    = 'card_token_lb_hidden';
+const TOKEN_LB_ROSTER_TTL_MS = 10 * 60 * 1000; // live roster re-fetch cadence
+const TOKEN_LB_SNAPSHOT_CAP  = 400;            // members persisted per group
+let _tokenLbCfgCache  = null;                  // { cfg, ts }
+let _tokenLbRosterAt  = new Map();             // gid -> last live-fetch ts
+
+async function tokenLbCfg(force = false) {
+  if (!force && _tokenLbCfgCache && Date.now() - _tokenLbCfgCache.ts < 60_000) {
+    return _tokenLbCfgCache.cfg;
+  }
+  const fresh = { groups: [], users: [], snapshots: {} };
+  try {
+    // findOne await gives the doc directly; no .lean() needed for a read.
+    const doc = await System.findOne({ key: TOKEN_LB_HIDDEN_KEY });
+    if (doc && doc.value && typeof doc.value === 'object') {
+      fresh.groups = Array.isArray(doc.value.groups) ? doc.value.groups.slice() : [];
+      fresh.users  = Array.isArray(doc.value.users)  ? doc.value.users.slice()  : [];
+      fresh.snapshots = (doc.value.snapshots && typeof doc.value.snapshots === 'object') ? doc.value.snapshots : {};
+    }
+  } catch (e) {
+    // DB hiccup: keep serving the last known config (and its snapshots).
+    if (_tokenLbCfgCache) return _tokenLbCfgCache.cfg;
+  }
+  _tokenLbCfgCache = { cfg: fresh, ts: Date.now() };
+  return fresh;
+}
+
+async function tokenLbSaveCfg(cfg) {
+  _tokenLbCfgCache = { cfg, ts: Date.now() };
+  await System.findOneAndUpdate(
+    { key: TOKEN_LB_HIDDEN_KEY },
+    { value: cfg },
+    { upsert: true, returnDocument: 'after' }
+  );
+}
+
+// Resolve a "name or JID" query against the bot's live group list.
+// Returns { ok:true, group:{id,subject} } | { ok:false, reason } |
+//         { ok:false, matches:[{id,subject}] } for ambiguous names.
+async function tokenLbFindGroup(query) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return { ok: false, reason: 'empty' };
+  const inst = getInst();
+  const sock = inst && inst.sock_ref;
+  let all = null;
+  try {
+    if (sock && typeof sock.groupFetchAllParticipating === 'function') {
+      all = await sock.groupFetchAllParticipating();
+    }
+  } catch (e) { /* treated as unreachable below */ }
+  if (!all) return { ok: false, reason: 'no-sock' };
+  const list = Object.values(all).filter(Boolean);
+  if (q.endsWith('@g.us')) {
+    const direct = list.find((g) => String(g.id || '') === q);
+    return direct ? { ok: true, group: { id: String(direct.id), subject: direct.subject || '' } }
+                  : { ok: false, reason: 'not-found' };
+  }
+  const exact = list.filter((g) => String(g.subject || '').toLowerCase() === q);
+  const fuzzy = exact.length ? exact : list.filter((g) => String(g.subject || '').toLowerCase().includes(q));
+  if (!fuzzy.length) return { ok: false, reason: 'not-found' };
+  if (fuzzy.length > 1) return { ok: false, matches: fuzzy.slice(0, 8).map((g) => ({ id: String(g.id), subject: String(g.subject || '') })) };
+  return { ok: true, group: { id: String(fuzzy[0].id), subject: String(fuzzy[0].subject || '') } };
+}
+
+// Live roster for one group, with snapshot fallback. Mutates cfg.snapshots
+// in place on success; caller persists when something changed.
+async function tokenLbGroupMembers(gid, cfg) {
+  const inst = getInst();
+  const sock = inst && inst.sock_ref;
+  const canFetch = sock && typeof sock.groupMetadata === 'function';
+  const fresh = canFetch && (Date.now() - (_tokenLbRosterAt.get(gid) || 0) > TOKEN_LB_ROSTER_TTL_MS);
+  if (fresh) {
+    try {
+      const meta = await sock.groupMetadata(gid);
+      const members = ((meta && meta.participants) || [])
+        .map((x) => String((x && (x.id || x.jid)) || '').toLowerCase())
+        .filter(Boolean);
+      cfg.snapshots[gid] = {
+        name: (meta && meta.subject) || (cfg.snapshots[gid] && cfg.snapshots[gid].name) || gid,
+        members: members.slice(0, TOKEN_LB_SNAPSHOT_CAP),
+        fetchedAt: new Date().toISOString(),
+      };
+      _tokenLbRosterAt.set(gid, Date.now());
+      return { members, changed: true };
+    } catch (e) {
+      console.log(`[CardSystem][${botConfig.getBotId()}] tokenlb roster fetch failed for ${gid}: ${e.message} — using snapshot`);
+    }
+  }
+  const snap = cfg.snapshots[gid];
+  return { members: (snap && snap.members) || [], changed: false };
+}
+
+// The full hidden-identity set: every member of every hidden group plus any
+// explicitly hidden accounts. Never throws — on total failure the set is
+// just empty and the board renders unfiltered (availability > filtering).
+async function tokenLbHiddenSet() {
+  const cfg = await tokenLbCfg();
+  const hidden = new Set((cfg.users || []).map((u) => String(u).toLowerCase()));
+  let dirty = false;
+  for (const gid of cfg.groups || []) {
+    try {
+      const { members, changed } = await tokenLbGroupMembers(gid, cfg);
+      dirty = dirty || changed;
+      for (const mem of members) hidden.add(String(mem).toLowerCase());
+    } catch (e) { /* never let one bad group break the board */ }
+  }
+  if (dirty) {
+    try { await tokenLbSaveCfg(cfg); } catch (e) { /* snapshot persist is best-effort */ }
+  }
+  return { hidden, cfg };
+}
+
 /**
  * cmdTokenLB - §5: event-token leaderboard. Top 10 players by current
  * event-token balance. Public command (monitoring is for everyone).
+ * 2026-10-26 (Mellow): inner-circle groups (mods / close friends GC) are
+ * filtered from the board — see the tokenLb* block above.
  */
 async function cmdTokenLB(senderJid, reply, args = []) {
   const p = P();
-  const top = await User.find({ eventTokens: { $gt: 0 } })
-    .sort({ eventTokens: -1 })
-    .limit(10)
-    .select('userId eventTokens')
-    .lean();
+  let top;
+  try {
+    top = await User.find({ eventTokens: { $gt: 0 } })
+      .sort({ eventTokens: -1 })
+      .limit(40)
+      .select('userId eventTokens')
+      .lean();
+  } catch (e) {
+    return reply(`⚠️  *TOKEN LEADERBOARD*\n\n🛠️ ⟢ _Could not load token balances right now (${e.message}). Try again shortly._`);
+  }
   if (!top.length) {
     return reply(`📭  *TOKEN LEADERBOARD*\n\n🪙 ⟢ _No one holds any Event Tokens yet - claim cards during the event!_`);
   }
+  const { hidden } = await tokenLbHiddenSet();
+  const rows = [];
+  let hiddenCount = 0;
+  for (const u of top) {
+    if (rows.length >= 10) break;
+    let variants = [String(u.userId)];
+    try { variants = await cardOwnerVariants(u.userId); } catch (e) { /* single identity */ }
+    if (variants.some((v) => hidden.has(String(v).toLowerCase()))) { hiddenCount++; continue; }
+    rows.push(u);
+  }
+  if (!rows.length) {
+    return reply(`📭  *TOKEN LEADERBOARD*\n\n🪙 ⟢ _No one outside the inner circle holds Event Tokens yet - claim cards during the event!_`);
+  }
   let msg = `🎫  *EVENT TOKEN LEADERBOARD*\n\n`;
-  for (let i = 0; i < top.length; i++) {
-    const u = top[i];
+  for (let i = 0; i < rows.length; i++) {
+    const u = rows[i];
     const name = economy.getDisplayName(u.userId) || String(u.userId).split('@')[0];
     const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
     msg += `${medal} ⟢ _${name}_ — *${u.eventTokens} token${u.eventTokens === 1 ? '' : 's'}*\n`;
   }
+  if (hiddenCount > 0) {
+    msg += `\n🫣 ⟢ _${hiddenCount} inner-circle account${hiddenCount === 1 ? '' : 's'} hidden from this board._`;
+  }
   msg += `\n💡 ⟢ _Check your own balance:_ \`${p} tokens\``;
   return reply(msg);
+}
+
+/**
+ * cmdTokenLbManage - inner-circle filter management (card-mod+; the dispatch
+ * switch enforces the tier, same as hiddenset).
+ *   .j tokenlb hidden             → status view
+ *   .j tokenlb hide gc <name|jid> → hide every member of a group
+ *   .j tokenlb unhide gc <name|jid>
+ *   .j tokenlb hide @user         → hide one account (mention/reply/raw JID)
+ *   .j tokenlb unhide @user
+ *   .j tokenlb sync               → force-refresh every hidden group's roster
+ */
+async function cmdTokenLbManage(senderJid, reply, args = [], m = {}) {
+  const p = P();
+  const action = String(args[0] || '').toLowerCase();
+  const cfg = await tokenLbCfg(true);
+
+  if (action === 'hidden' || action === 'list' || action === 'status') {
+    let msg = `🫣 *TOKEN LB — INNER CIRCLE FILTER*\n\n`;
+    if (!cfg.groups.length && !cfg.users.length) {
+      msg += `📭 _Nothing is hidden yet._\n`;
+    }
+    for (const gid of cfg.groups) {
+      let name = (cfg.snapshots[gid] && cfg.snapshots[gid].name) || gid;
+      let count = ((cfg.snapshots[gid] && cfg.snapshots[gid].members) || []).length;
+      let synced = (cfg.snapshots[gid] && cfg.snapshots[gid].fetchedAt) || 'never';
+      try {
+        const inst = getInst();
+        if (inst.sock_ref && typeof inst.sock_ref.groupMetadata === 'function') {
+          const meta = await inst.sock_ref.groupMetadata(gid);
+          if (meta && meta.subject) name = meta.subject;
+          if (meta && meta.participants) count = meta.participants.length;
+        }
+      } catch (e) { /* snapshot view */ }
+      msg += `👥 ⟢ _${name}_ — ${count} member${count === 1 ? '' : 's'} — _synced ${String(synced).slice(0, 16).replace('T', ' ')}_\n`;
+    }
+    for (const u of cfg.users) {
+      msg += `👤 ⟢ _${economy.getDisplayName(u) || u}_\n`;
+    }
+    msg += `\n⌨️ ⟢ _Usage:_ \`${p} tokenlb hide gc <name|jid>\` · \`${p} tokenlb hide @user\` · \`${p} tokenlb sync\`\n🔒 ⟢ _Members of hidden groups never appear on the token leaderboard._`;
+    return reply(msg);
+  }
+
+  if (action === 'sync') {
+    if (!cfg.groups.length) return reply(`🫣 _No hidden groups to sync — add one with \`${p} tokenlb hide gc <name>\`._`);
+    _tokenLbRosterAt.clear();
+    let msg = `🔄 *ROSTER SYNC*\n\n`;
+    for (const gid of cfg.groups) {
+      const { members } = await tokenLbGroupMembers(gid, cfg);
+      const name = (cfg.snapshots[gid] && cfg.snapshots[gid].name) || gid;
+      msg += `👥 ⟢ _${name}_ — ${members.length} member${members.length === 1 ? '' : 's'}\n`;
+    }
+    try { await tokenLbSaveCfg(cfg); } catch (e) { /* best-effort */ }
+    return reply(msg);
+  }
+
+  if (action !== 'hide' && action !== 'unhide') {
+    return reply(`⌨️ *USAGE*\n\n\`${p} tokenlb hide gc <name|jid>\` — hide a whole group\n\`${p} tokenlb hide @user\` — hide one account\n\`${p} tokenlb hidden\` — current filter\n\`${p} tokenlb sync\` — refresh rosters`);
+  }
+
+  const target = args[1] ? String(args[1]).toLowerCase() : '';
+  if (target === 'gc' || target === 'group' || target === 'g') {
+    const query = args.slice(2).join(' ').trim();
+    if (!query) return reply(`⌨️ _Usage:_ \`${p} tokenlb ${action} gc <name|jid>\``);
+    const res = await tokenLbFindGroup(query);
+    if (res.ok === false && res.reason === 'no-sock') {
+      return reply(`⏳ _The WhatsApp connection isn't ready yet — try again in a minute._`);
+    }
+    if (res.ok === false && res.matches) {
+      let msg = `❓ *AMBIGUOUS NAME*\n\nSeveral groups match _"${query}"_ — be more specific:\n`;
+      for (const g of res.matches) msg += `• ${g.subject} — \`${g.id}\`\n`;
+      return reply(msg);
+    }
+    if (res.ok === false) {
+      return reply(`❌ _No group named "${query}" found in my chats._\n💡 _I must be a member of the group to hide it. You can also paste the raw JID._`);
+    }
+    const gid = res.group.id;
+    if (action === 'hide') {
+      if (cfg.groups.includes(gid)) return reply(`🫣 _"${res.group.subject}" is already hidden from the token leaderboard._`);
+      cfg.groups.push(gid);
+      _tokenLbRosterAt.delete(gid); // force first live fetch on next render
+      try { await tokenLbSaveCfg(cfg); } catch (e) {
+        return reply(`⚠️ _Could not persist the filter: ${e.message}_`);
+      }
+      const { members } = await tokenLbGroupMembers(gid, cfg);
+      try { await tokenLbSaveCfg(cfg); } catch (e) { /* best-effort snapshot */ }
+      console.log(`[CardSystem][${botConfig.getBotId()}] TOKENLB HIDE GROUP '${res.group.subject}' (${gid}, ${members.length} members) by ${senderJid}`);
+      return reply(
+        `🫣 *INNER CIRCLE HIDDEN*\n\n` +
+        `👥 ⟢ *Group:* _${res.group.subject}_\n` +
+        `🧮 ⟢ *Members now filtered:* _${members.length}_\n` +
+        `🎫 ⟢ _They no longer appear on the token leaderboard._`
+      );
+    }
+    const hit = cfg.groups.find((g) => String(g) === gid) || cfg.groups.find((g) => String(g).toLowerCase() === gid);
+    if (!hit) return reply(`🫣 _"${res.group.subject}" wasn't hidden._`);
+    cfg.groups = cfg.groups.filter((g) => g !== hit);
+    delete cfg.snapshots[hit];
+    _tokenLbRosterAt.delete(hit);
+    await tokenLbSaveCfg(cfg);
+    console.log(`[CardSystem][${botConfig.getBotId()}] TOKENLB UNHIDE GROUP '${res.group.subject}' (${hit}) by ${senderJid}`);
+    return reply(`✅ *VISIBLE AGAIN*\n\n👥 ⟢ *Group:* _${res.group.subject}_\n🎫 ⟢ _Its members can appear on the token leaderboard again._`);
+  }
+
+  // explicit user hide/unhide: @mention, reply/quote, or raw JID
+  let targetJid = null;
+  try {
+    const tagged = getTaggedJids(m);
+    if (tagged && tagged.length) targetJid = tagged[0];
+  } catch (e) { /* fall through to raw arg */ }
+  if (!targetJid && args[1] && String(args[1]).includes('@')) targetJid = args[1];
+  if (!targetJid) {
+    return reply(`⌨️ _Usage:_ \`${p} tokenlb ${action} @user\` (or reply to one of their messages)\n👥 ⟢ _To hide a whole group instead:_ \`${p} tokenlb ${action} gc <name|jid>\``);
+  }
+  targetJid = resolveMentionJid(targetJid);
+  const key = String(targetJid).toLowerCase();
+  if (action === 'hide') {
+    if (cfg.users.some((u) => String(u).toLowerCase() === key)) {
+      return reply(`🫣 _${economy.getDisplayName(targetJid) || targetJid} is already hidden from the token leaderboard._`);
+    }
+    cfg.users.push(targetJid);
+    await tokenLbSaveCfg(cfg);
+    console.log(`[CardSystem][${botConfig.getBotId()}] TOKENLB HIDE USER ${targetJid} by ${senderJid}`);
+    return reply(
+      `🫣 *ACCOUNT HIDDEN*\n\n` +
+      `👤 ⟢ *${economy.getDisplayName(targetJid) || targetJid}*\n` +
+      `🎫 ⟢ _They no longer appear on the token leaderboard._`
+    );
+  }
+  const before = cfg.users.length;
+  cfg.users = cfg.users.filter((u) => String(u).toLowerCase() !== key);
+  if (cfg.users.length === before) {
+    return reply(`🫣 _${economy.getDisplayName(targetJid) || targetJid} wasn't hidden._`);
+  }
+  await tokenLbSaveCfg(cfg);
+  console.log(`[CardSystem][${botConfig.getBotId()}] TOKENLB UNHIDE USER ${targetJid} by ${senderJid}`);
+  return reply(`✅ *VISIBLE AGAIN*\n\n👤 ⟢ *${economy.getDisplayName(targetJid) || targetJid}*\n🎫 ⟢ _They can appear on the token leaderboard again._`);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -6567,6 +6864,8 @@ module.exports = {
   loadCardsDB,
   // 💡 HIDDEN SETS (2026-10-25): QA hooks for the per-group gate
   cardBlockedForGroup, visibleCardsFor, loadHiddenSetConfig, cmdHiddenSet,
+  // 💡 Token LB inner-circle filter (2026-10-26, Mellow): QA hooks
+  cmdTokenLB, cmdTokenLbManage, tokenLbHiddenSet,
 };
 
 // 💡 OWNER BRIEF 2026-10-09 §1 diagnostics: env-guarded hook so QA harnesses
