@@ -217,7 +217,11 @@ function classRecipe(cls, p, { IMPACT: I }) {
             // Keep the enemy's real sprite distinctly cyan-lit and isolated
             // during the time-lock windup, then restore a strong post-hit
             // highlight so the crowd-control effect is unmistakable.
-            L('affect', { at: 0.04, dur: I - 0.05, curve: 'sustain', a: 0.96, add: true }),
+            // 💡 POLISH (2026-10-26 QA): 0.96 additive turned the victim into
+            // an unreadable cyan crystal blob at windup (owner: "clear and
+            // dramatic... without making the effect distracting"). 0.72 keeps
+            // the freeze tint unmistakable AND the sprite readable under it.
+            L('affect', { at: 0.04, dur: I - 0.05, curve: 'sustain', a: 0.72, add: true }),
             L('emit', {
                 at: 0.08, dur: I - 0.07, pos: 'T', off: [0, -145],
                 box: [150, 90], n: 26, life: 0.75, shape: 'star',
@@ -225,7 +229,7 @@ function classRecipe(cls, p, { IMPACT: I }) {
             }),
             { fx: 'lightning', at: I, pos: 'T', w: 290, n: 3, jit: [70, 0], gap: 0.08, off: [0, -80], add: true, tint: [col, 0.55] },
             L('rings', { at: I, pos: 'T', n: 4, gap: 0.09, color: col, r: 190 }),
-            L('affect', { at: I + 0.02, dur: 0.9, curve: 'hold', a: 0.96, add: true }),
+            L('affect', { at: I + 0.02, dur: 0.9, curve: 'hold', a: 0.8, add: true }),
             // A smaller after-clock reinforces that time remains locked
             // during the enemy's two skipped turns.
             L('circle', {
