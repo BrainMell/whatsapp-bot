@@ -177,8 +177,8 @@ async function handleModClass(sock, chatId, senderJid, args, BOT_MARKER, prefix)
     }
     // Normal-account switches consume a ticket when one is held. Sandbox
     // class changes are testing operations and must remain free.
-    if (!isSandbox) {
     let ticketConsumed = false;
+    if (!isSandbox) {
     try {
       const inv = inventorySystem.getInventory ? inventorySystem.getInventory(senderJid) : null;
       if (inv && (inv.class_change_ticket || inv.reroll_ticket)) {
@@ -1544,8 +1544,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const senderName = m?.pushName || economy.getDisplayName(senderJid);
         const sandboxSub = (args[1] || '').toLowerCase();
 
-        // Unlock every skill registered for a class at its defined max level.
-        // This is shared by both sandbox class-switch commands.
+        // Sandbox class-switch commands use the shared unlockClassSkills()
+        // helper above so class trees stay consistent across both entry points.
         // ── sandbox on - activate sandbox mode ──
         if (sandboxSub === 'on') {
             try {
