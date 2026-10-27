@@ -40,6 +40,7 @@ function classRecipe(cls, p, { IMPACT: I }) {
     function cutSet({ col, mid = '#ffffff', angles, n, len = 150, w = 11, gap = 0.075, burst = true, sprite = 'claw', extra = [] }) {
         return [
             casterAura(col),
+            L('lunge', { at: I - 0.32, dur: 0.6, color: col }),
             L('slashes', { at: I - 0.02, n, gap, color: col, mid, len, w, angles }),
             ...(sprite ? [{ fx: sprite, at: I + 0.02, pos: 'T', w: 270, n: 2, jit: [40, 35], gap: 0.1, rot: [-0.5, 0.4], tint: [col, 0.4] }] : []),
             ...(burst ? [L('slashes', { at: I + n * gap - 0.03, n: 6, gap: 0.01, kind: 'burst', color: col, mid, len: 80 })] : []),
@@ -51,6 +52,7 @@ function classRecipe(cls, p, { IMPACT: I }) {
     function eclipseCuts(col, mid, hits, I2) {
         return [
             dark(0.5),
+            L('lunge', { at: I2 - 0.32, dur: 0.6, color: col }),
             L('eclipse', { at: 0.15, pos: 'T', r: 88, dur: I2 + 0.6, color: col, mid }),
             L('slashes', { at: I2 - 0.02, n: hits, gap: 0.07, color: col, mid, len: 200, w: 12, angles: [-0.9, 0.9, 0.0, -0.45, 1.3, 1.57, 0.5] }),
             L('slashes', { at: I2 + hits * 0.07 - 0.03, n: 12, gap: 0.01, kind: 'burst', color: col, mid, len: 150 }),
@@ -214,6 +216,7 @@ function classRecipe(cls, p, { IMPACT: I }) {
         // rogue: two quick stabs and a critical pop (no lunge)
         ROGUE: () => [
             { fx: 'dark_a', at: 0.05, pos: 'C', w: 130, dur: 0.9, loop: true, alpha: 0.6 },
+            L('lunge', { at: I - 0.32, dur: 0.6, color: '#9d86ff' }),
             L('slashes', { at: I - 0.02, n: 2, gap: 0.12, kind: 'stab', color: '#9d86ff', mid: '#e6dcff', len: 150, w: 10, angles: [-0.35, 0.3], jit: [14, 20] }),
             L('slashes', { at: I + 0.22, n: 16, gap: 0.008, kind: 'burst', color: '#b9a6ff', mid: '#ffffff', len: 170 }),
             { fx: 'claw', at: I + 0.2, pos: 'T', w: 270, n: 2, jit: [30, 20], gap: 0.08, rot: [-0.6, 0.6], tint: ['#9d86ff', 0.8] },
@@ -393,7 +396,7 @@ function classRecipe(cls, p, { IMPACT: I }) {
 // energy (a ring + sparks + a brighter flash) but NEVER sky lasers or ground cracks (owner: "the level 3s are
 // spamming lasers where they don't belong"). Timing never changes so hit sync is untouched.
 const SIZE_KEYS = ['w', 'r', 'rx', 'ew', 'eh', 'len'];
-const NOSCALE = new Set(['focus', 'bgfill', 'invert', 'vortex', 'camera', 'hidecaster', 'dragon', 'robohand', 'scythe', 'reticle', 'staff']);
+const NOSCALE = new Set(['lunge', 'focus', 'bgfill', 'invert', 'vortex', 'camera', 'hidecaster', 'dragon', 'robohand', 'scythe', 'reticle', 'staff']);
 function scaleTracks(tracks, k, palette, IMPACT) {
     k = Math.max(0, Math.min(1, Number(k) || 0));
     if (!Array.isArray(tracks)) return tracks;

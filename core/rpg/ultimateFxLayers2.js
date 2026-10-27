@@ -431,6 +431,36 @@ module.exports = function install(LAYERS, H) {
         ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = '#05030c'; ctx.beginPath(); ctx.arc(x, cy, R, 0, TAU); ctx.fill(); ctx.restore();
     };
 
+    // ── lunge: the caster dashes to the target and snaps back, with motion blur ──
+    // Uses the caster's REAL cutout (the renderer hides the caster in the base while this runs):
+    // sub-frame ghost samples along the path = motion blur, plus speed streaks.
+    LAYERS.lunge = (ctx, tr, env) => {
+        const c = env.casterCut; if (!c || env.self) return;
+        const t = env.time - tr.at, dur = tr.dur || 0.55; if (t < 0 || t > dur) return;
+        const hitX = env.A.T[0] - (tr.gap || 95), hitY = env.A.T[1];
+        const cx0 = c.x + c.w / 2, feet0 = c.y + c.h;
+        const dx = hitX - cx0, dy = hitY - feet0;
+        const prof = (tt) => { const u = clamp01(tt / dur); return u < 0.42 ? easeIn(u / 0.42) : u < 0.6 ? 1 : 1 - easeOut((u - 0.6) / 0.4) * 1; };
+        const SAMPLES = 9, span = 0.05;   // blur length in seconds
+        const speed = Math.abs(prof(t) - prof(t - 0.03));
+        const blur = Math.min(1, speed * 9);
+        for (let k = SAMPLES; k >= 0; k--) {
+            const tt = Math.max(0, t - (k / SAMPLES) * span * (0.3 + blur)), p = prof(tt);
+            const a = k === 0 ? 1 : (1 - k / (SAMPLES + 1)) * 0.38 * (0.25 + blur);
+            if (a <= 0.01) continue;
+            ctx.save(); ctx.globalAlpha = a;
+            ctx.drawImage(c.img, c.x + dx * p, c.y + dy * p, c.w * (1 + 0.25 * blur * (k ? 1 : 0.3)), c.h);
+            if (k && tr.color) { ctx.globalCompositeOperation = 'source-atop'; }
+            ctx.restore();
+        }
+        // streaks while moving fast
+        if (blur > 0.25) {
+            const p = prof(t); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = tr.color || '#ffffff'; ctx.lineCap = 'round';
+            for (let i = 0; i < 7; i++) { const yy = feet0 + dy * p - c.h * (0.15 + i * 0.12), xx = cx0 + dx * p, dir = (t / dur) < 0.5 ? -1 : -1; ctx.globalAlpha = 0.5 * blur; ctx.lineWidth = 2 + (i % 3); ctx.beginPath(); ctx.moveTo(xx + dir * 20, yy); ctx.lineTo(xx + dir * (70 + i * 14) * blur, yy + (i % 2 ? 3 : -3)); ctx.stroke(); }
+            ctx.restore();
+        }
+    };
+
     // ── camera: marker track read by the renderer (zoom delta) ─────────────
     LAYERS.camera = () => { };
     LAYERS.hidecaster = () => { };

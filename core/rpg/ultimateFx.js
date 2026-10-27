@@ -781,7 +781,7 @@ async function renderUltimateVideo(o) {
                 else drawTrackInstances(ctx, tr, sets, A, time, mulberry(seed + f), palette);
             }
             // 💨 hidecaster windows (Reaper: the caster vanishes, only the scythe remains)
-            const hideNow = !!(casterCut && tracks.some((t) => t.layer === 'hidecaster' && time >= t.at && time <= t.at + t.dur));
+            const hideNow = !!(casterCut && tracks.some((t) => (t.layer === 'hidecaster' || t.layer === 'lunge') && time >= t.at && time <= t.at + t.dur));
             if (hideNow) {
                 if (!sprNoCaster) {
                     sprNoCaster = createCanvas(sprImg.width, sprImg.height);
