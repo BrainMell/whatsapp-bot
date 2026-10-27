@@ -1,0 +1,5 @@
+{
+  "_readme": "See README_SWAP.md. Add sprite sets under 'sets', then point effect layers at them under 'overrides'. Empty = built-in procedural effects.",
+  "sets": {},
+  "overrides": {}
+}

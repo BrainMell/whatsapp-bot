@@ -126,6 +126,40 @@ async function loadSingles() {
 const _frames = new Map();
 const _tinted = new Map();
 
+// ── ASSET MANIFEST (2026-10-27): drop-in swapping of effect art without touching code ──────────
+// core/rpgasset/vfx/vfx_assets.json  { sets: {name: def}, overrides: {layer | layer@CLASS: {set, w, n, ...}} }
+// See core/rpgasset/vfx/README_SWAP.md. Re-read automatically when the file changes.
+const MANIFEST_PATH = path.join(DIR, 'vfx_assets.json');
+let _manifest = { sets: {}, overrides: {} }, _manifestMtime = 0;
+const OVERRIDABLE = new Set(['slashes', 'swarm', 'scythe', 'robohand', 'breath', 'dragon', 'tether', 'soulflow', 'elements', 'reticle', 'staff', 'ripple', 'eclipse', 'rings', 'pillar', 'crescent', 'circle', 'rift', 'cracks', 'vines', 'gears', 'blackhole', 'fall', 'emit', 'beam']);
+function loadManifest() {
+    try {
+        const st = fs.statSync(MANIFEST_PATH);
+        if (st.mtimeMs === _manifestMtime) return _manifest;
+        const j = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
+        for (const nm of Object.keys(_manifest.sets || {})) { if (SETS[nm] && SETS[nm].__manifest) { delete SETS[nm]; _frames.delete(nm); } }
+        for (const [nm, def] of Object.entries(j.sets || {})) { if (nm.startsWith('_')) continue; SETS[nm] = Object.assign({ fps: 16, n: 1 }, def, { __manifest: true }); _frames.delete(nm); }
+        _manifest = { sets: j.sets || {}, overrides: j.overrides || {} };
+        _manifestMtime = st.mtimeMs;
+    } catch (e) { if (e && e.code !== 'ENOENT') console.warn('[UltFx] vfx_assets.json unusable:', e.message); _manifest = { sets: {}, overrides: {} }; }
+    return _manifest;
+}
+function applyOverrides(tracks, cls) {
+    const ov = loadManifest().overrides || {};
+    if (!Object.keys(ov).length) return tracks;
+    return tracks.map((t) => {
+        if (!t.layer || !OVERRIDABLE.has(t.layer)) return t;
+        const o = ov[t.layer + '@' + cls] || ov[t.layer];
+        if (!o || !o.set || !SETS[o.set]) return t;
+        const base = o.w || t.w || (t.R ? t.R * 2 : 0) || (t.r ? t.r * 2 : 0) || (t.len ? t.len * 1.4 : 0) || 220;
+        return {
+            fx: o.set, at: t.at, pos: t.pos || 'T', off: o.off || t.off, w: base, n: o.n || 1, gap: o.gap !== undefined ? o.gap : (t.gap || 0.08),
+            jit: o.jit || t.jit, rot: o.rot !== undefined ? o.rot : t.rot, tint: o.tint, alpha: o.alpha, add: o.add !== false, loop: !!o.loop,
+            dur: o.dur || (o.loop ? t.dur : undefined), to: o.to ? 'T' : undefined, flip: o.flip, under: t.under, spread: t.spread, fanGap: t.fanGap, _pt: t._pt,
+        };
+    });
+}
+
 const _framePromises = new Map();
 function loadSet(name) {
     if (_frames.has(name)) return Promise.resolve(_frames.get(name));
@@ -141,7 +175,15 @@ async function loadSetReal(name) {
     if (!def) return [];
     const out = [];
     try {
-        if (def.kdir) {
+        if (def.grid || def.files) {
+            // grid: one sheet cut into cols x rows cells (row-major, `n` frames used); files: list of single frames
+            if (def.files) { for (const f of def.files) out.push(await loadImage(path.join(DIR, f))); }
+            else {
+                const img = await loadImage(path.join(DIR, def.file)), cols = def.grid.cols || 1, rows = def.grid.rows || 1;
+                const fw = Math.floor(img.width / cols), fh = Math.floor(img.height / rows), total = Math.min(def.n || cols * rows, cols * rows);
+                for (let i = 0; i < total; i++) { const c = createCanvas(fw, fh); c.getContext('2d').drawImage(img, (i % cols) * fw, Math.floor(i / cols) * fh, fw, fh, 0, 0, fw, fh); out.push(c); }
+            }
+        } else if (def.kdir) {
             for (let i = 1; i <= def.n; i++) out.push(await loadImage(path.join(DIR, 'kenney', `${def.kdir}${i}.png`)));
         } else if (def.strip || def.root) {
             const rootBase = def.base ? path.join(DIR, '..', def.base) : DIR;
@@ -627,6 +669,7 @@ async function renderUltimateVideo(o) {
     // skill level -> intensity (see ultimateFxRecipes.scaleTracks); 0..1, default 0 = the original look (level 1)
     const K = Number.isFinite(Number(o.intensity)) ? Math.max(0, Math.min(1, Number(o.intensity))) : 0;
     if (RECIPE_PACK && RECIPE_PACK.scaleTracks) tracks = RECIPE_PACK.scaleTracks(tracks, K, palette, IMP);
+    tracks = applyOverrides(tracks, String(o.classId || '').toUpperCase());
     for (const t of tracks) {
         for (const nm of [t.fx, t.land]) if (nm && SETS[nm] && !sets[nm]) sets[nm] = await loadSet(nm);
     }
@@ -1002,4 +1045,4 @@ async function renderUltimateVideo(o) {
     return { mp4, thumb };
 }
 
-module.exports = { renderUltimateVideo, RECIPES, STYLE_RECIPE, W, H, FPS, DURATION, prewarm };
+module.exports = { renderUltimateVideo, _assets: { SETS, loadSet, loadManifest, OVERRIDABLE }, RECIPES, STYLE_RECIPE, W, H, FPS, DURATION, prewarm };
