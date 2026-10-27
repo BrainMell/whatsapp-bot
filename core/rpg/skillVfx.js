@@ -178,11 +178,11 @@ function resolveSignature(classId, ability) {
   return { id: skillId, style: 'derived', side: deriveSide(ability), ownerClass: cid, derived: true };
 }
 function wait(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
-function raceTimeout(promise, ms) {
+function raceTimeout(promise, ms, onTimeout) {
   let timer;
   return Promise.race([
     Promise.resolve(promise),
-    new Promise((resolve) => { timer = setTimeout(resolve, ms, null); })
+    new Promise((resolve) => { timer = setTimeout(() => { try { if (onTimeout) onTimeout(); } catch (e) {} resolve(null); }, ms, null); })
   ]).finally(() => clearTimeout(timer));
 }
 function asBuffer(value) {
@@ -888,6 +888,10 @@ async function animateUltimate(options = {}) {
     // ⚔️ inherited ults render with the OWNING class's recipe + palette
     const fxClass = String(entry.ownerClass || classId).toUpperCase();
     try {
+      // 🔥 26-R5: when the 22s race fires, the LOSING render must stop painting
+      // (otherwise it zombies on in the background and drags every following
+      // cast past the floor with it)
+      const ultAbort = { flag: false };
       vid = await raceTimeout(require('./ultimateFx').renderUltimateVideo({
         baseBuffer: options.baseSceneBuffer, classId: fxClass, name, side: entry.side, palette: PALETTE[fxClass] || PALETTE[classId],
         // 💡 HUD 2026-10-26: the video draws its own left HUD rail as the FINAL
@@ -916,8 +920,11 @@ async function animateUltimate(options = {}) {
         aoe: !!options.aoe,
         // 🔴 HIT REACTION (owner: "hurt red flashing overlay + the hp bar drops"):
         // pre-hit per-victim HP for the animated overhead-bar chip
-        targets: victimStats
-      }), 22000);   // 🔥 R3: was 12000 (R2 raised 9000) — REAL duels proved 12s still loses: a DRAGON_GOD cast at 16:46:54Z raced out at 12s and silently played the OLD hand-drawn gif (log: "[SkillVFX] gif 117278B in 13804ms"). Profiled the engine (18-22s: breath sprites 40% + full-canvas vortex warp 19%) and made both fast in ultimateFxLayers/2; 22s is the hard floor so no cast can ever degrade to the legacy gif again.
+        targets: victimStats,
+        // 🔥 26-R5 abort token — the race's timeout flips this so the losing
+        // render stops painting instead of zombie-ing through the next casts
+        abort: ultAbort
+      }), 30000, () => { ultAbort.flag = true; });   // 🔥 R3: was 12000 (R2 raised 9000) — REAL duels proved 12s still loses: a DRAGON_GOD cast at 16:46:54Z raced out at 12s and silently played the OLD hand-drawn gif (log: "[SkillVFX] gif 117278B in 13804ms"). Profiled the engine (18-22s: breath sprites 40% + full-canvas vortex warp 19%) and made both fast in ultimateFxLayers/2. 26-R5: the FIRST cast of a new geometry also PAINTS + SAVES its plates (~20-25s on the heaviest classes) — 30s keeps that one-time capture from degrading to the legacy gif; every later cast replays plates in ~9-11s.
     } catch (e) { console.warn('[SkillVFX] sprite engine failed:', e?.message || e); }
     const gif = vid && vid.mp4 ? vid.mp4 : await raceTimeout(
       renderSignatureGif(state, player, ability, entry, target, options.baseSceneBuffer, null, options.layers || null, options.casterIndex, options.targetSide, options.focusIndex),

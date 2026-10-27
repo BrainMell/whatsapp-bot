@@ -63,36 +63,44 @@ function keyFor(parts) {
 }
 
 const dirFor = (key) => path.join(ROOT, key);
-const frameName = (f, pass, g) => `f${String(f).padStart(3, '0')}_${pass}${g}.png`;
-const frameFile = (key, f, pass, g) => path.join(dirFor(key), frameName(f, pass, g));
+// plates are DEDUPED by content: identical consecutive frames (before a track
+// starts, after it fades, static holds) share one u<i>.png — the replay decodes
+// each unique plate once per render
+const frameFile = (key, idx) => path.join(dirFor(key), `u${idx}.png`);
 
 function loadMeta(key) {
     if (disabled) return null;
     try {
         const meta = JSON.parse(fs.readFileSync(path.join(dirFor(key), 'meta.json'), 'utf8'));
-        if (!meta || meta.W !== 640 || meta.H !== 480 || !Array.isArray(meta.groups) || !Array.isArray(meta.frames)) return null;
+        if (!meta || meta.W !== 640 || meta.H !== 480 || !Array.isArray(meta.under) || !Array.isArray(meta.over) || !Array.isArray(meta.frames)) return null;
         return meta;
     } catch (e) { return null; }
 }
 
-function hasPlate(meta, f, pass, g) {
+// returns the unique-plate index for (frame, pass, group): >= 0 → replay file,
+// -1 → capture proved this frame paints nothing (skip), undefined → missing (live fallback)
+function plateIndex(meta, f, pass, g) {
     const fr = meta && meta.frames && meta.frames[f];
-    return !!(fr && fr[pass] && fr[pass][g]);
+    if (!fr || !fr[pass] || !Array.isArray(fr[pass])) return undefined;
+    const v = fr[pass][g];
+    return typeof v === 'number' ? v : undefined;
 }
 
 function makeCapture() { return { key: null, meta: null, pngs: new Map() }; }
 
-// Fire-and-forget (called without await from the render tail): writes PNGs +
-// meta LAST so a crash mid-write leaves no loadable half-set.
+// Fire-and-forget (called without await from the render tail): writes the
+// deduped unique PNGs (u<i>.png, rects live in meta) + meta LAST so a crash
+// mid-write leaves no loadable half-set.
 async function saveCapture(cap) {
-    if (disabled || !cap || !cap.key || !cap.meta || !cap.pngs.size) return;
+    if (disabled || !cap || !cap.key || !cap.meta) return;
+    if (!cap.meta.skip && (!Array.isArray(cap.uniques) || !cap.uniques.length)) return;
     const dir = dirFor(cap.key);
     const tmp = path.join(ROOT, `.tmp-${process.pid}-${Date.now()}.png`);
     try {
         fs.mkdirSync(dir, { recursive: true });
-        for (const [name, buf] of cap.pngs) {
-            fs.writeFileSync(tmp, buf);
-            fs.renameSync(tmp, path.join(dir, name));
+        for (let i = 0; i < cap.uniques.length; i++) {
+            fs.writeFileSync(tmp, cap.uniques[i].buf);
+            fs.renameSync(tmp, path.join(dir, `u${i}.png`));
         }
         try { fs.unlinkSync(tmp); } catch (e) {}
         fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify(cap.meta));
@@ -131,4 +139,4 @@ function prune() {
     } catch (e) {}
 }
 
-module.exports = { VER, sha1, keyFor, loadMeta, frameFile, frameName, hasPlate, makeCapture, saveCapture, isDisabled: () => disabled, ROOT };
+module.exports = { VER, sha1, keyFor, loadMeta, frameFile, plateIndex, makeCapture, saveCapture, isDisabled: () => disabled, ROOT };

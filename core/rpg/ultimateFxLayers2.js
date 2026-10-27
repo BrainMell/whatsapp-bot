@@ -114,11 +114,28 @@ module.exports = function install(LAYERS, H) {
             }
         }
         oc.c.putImageData(od, 0, 0);
-        ctx.drawImage(oc.cv, x0, y0, w, h);
-        // accretion ring around the hole
-        ctx.save(); ctx.translate(cx, cy); ctx.globalCompositeOperation = 'lighter';
-        for (let k = 0; k < 2; k++) { ctx.save(); ctx.rotate(t * (2 + k) + k); ctx.scale(1, 0.42); ctx.globalAlpha = 0.65 * s; ctx.strokeStyle = k ? '#ffffff' : (tr.rim || '#9d6bff'); ctx.lineWidth = 4 - k; ctx.beginPath(); ctx.arc(0, 0, hr * (1.5 + k * 0.45) + 4, 0.2, 5.3); ctx.stroke(); ctx.restore(); }
-        ctx.restore();
+        // 🔥 26-R5: the accretion ring is baked INTO the warp raster (it always
+        // sits INSIDE the opaque disk, radius ≤ hr*1.95+4 < R) with lineWidth and
+        // radius pre-divided by SS — so the whole vortex becomes ONE pure
+        // source-over painter and replays pixel-exact from a plate. Falls back
+        // to drawing on the target ctx if a custom `hole` pushes the ring out.
+        const ringMax = (tr.hole || 18) * s * 1.95 + 4;
+        if (ringMax < R - 6) {
+            const rcx = (cx - x0) / SS, rcy = (cy - y0) / SS;
+            for (let k = 0; k < 2; k++) {
+                oc.c.save(); oc.c.translate(rcx, rcy); oc.c.rotate(t * (2 + k) + k); oc.c.scale(1, 0.42);
+                oc.c.globalAlpha = 0.65 * s; oc.c.strokeStyle = k ? '#ffffff' : (tr.rim || '#9d6bff');
+                oc.c.lineWidth = (4 - k) / SS;
+                oc.c.beginPath(); oc.c.arc(0, 0, ((tr.hole || 18) * s * (1.5 + k * 0.45) + 4) / SS, 0.2, 5.3); oc.c.stroke();
+                oc.c.restore();
+            }
+            ctx.drawImage(oc.cv, x0, y0, w, h);
+        } else {
+            ctx.drawImage(oc.cv, x0, y0, w, h);
+            ctx.save(); ctx.translate(cx, cy); ctx.globalCompositeOperation = 'lighter';
+            for (let k = 0; k < 2; k++) { ctx.save(); ctx.rotate(t * (2 + k) + k); ctx.scale(1, 0.42); ctx.globalAlpha = 0.65 * s; ctx.strokeStyle = k ? '#ffffff' : (tr.rim || '#9d6bff'); ctx.lineWidth = 4 - k; ctx.beginPath(); ctx.arc(0, 0, hr * (1.5 + k * 0.45) + 4, 0.2, 5.3); ctx.stroke(); ctx.restore(); }
+            ctx.restore();
+        }
     };
 
     // ── bgfill: gradient replaces the bg (under pass) ──────────────────────
