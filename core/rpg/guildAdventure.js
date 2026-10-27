@@ -1777,6 +1777,13 @@ const STATUS_EFFECTS = {
     effect: "skip_turn",
     duration: 1,
   },
+  // ⏳ Chronomancer Time Stop (owner 2026-10-27): its own status, NOT the ice freeze
+  locked_in_time: {
+    name: "Locked in Time",
+    icon: "⏳",
+    effect: "skip_turn",
+    duration: 2,
+  },
   stun: {
     name: "Stun",
     icon: "💫",
@@ -3346,7 +3353,7 @@ function applyStatusEffect(
   // expires, the target is immune to the same CC type for 2 of their
   // turns. Prevents chaining (e.g. Spellbreaker casting arcane_silence
   // every turn to permanently lock a player out of abilities).
-  const CC_TYPES = ['freeze', 'stun', 'sleep', 'charm', 'slow', 'shock', 'petrify', 'silence'];
+  const CC_TYPES = ['freeze', 'stun', 'sleep', 'charm', 'slow', 'shock', 'petrify', 'silence', 'locked_in_time'];
 
   // 💡 BUG-10 fix: DR check - if this CC type was recently applied and
   // expired, the target is immune for 2 of their turns.
@@ -3561,7 +3568,7 @@ function applyTotalAnnihilation(state) {
   const boss = state.activeCombatant || { name: "The Boss", statusEffects: [] };
   const res = { fizzled: false, wiped: false, msg: "" };
   const cc = (boss.statusEffects || []).find((e) =>
-    ["freeze", "stun", "sleep", "charm"].includes(e.type),
+    ["freeze", "stun", "sleep", "charm", "locked_in_time"].includes(e.type),
   );
   // The attempt is consumed whether it casts or fizzles (re-arm window).
   state.lastAnnihilationTurn = state.turnCount;
@@ -3635,7 +3642,7 @@ function tickDurations(entity) {
       // for 2 of their turns. Prevents chaining (e.g. Silence lock).
       // _turnCount was just incremented above, so ccImmuneUntil = current + 2
       // means "immune until 2 more of the target's turns have passed."
-      const CC_TYPES_FOR_DR = ['freeze', 'stun', 'sleep', 'charm', 'slow', 'shock', 'petrify', 'silence'];
+      const CC_TYPES_FOR_DR = ['freeze', 'stun', 'sleep', 'charm', 'slow', 'shock', 'petrify', 'silence', 'locked_in_time'];
       if (CC_TYPES_FOR_DR.includes(effect.type)) {
         if (!entity.ccImmuneUntil) entity.ccImmuneUntil = {};
         entity.ccImmuneUntil[effect.type] = entity._turnCount + 2;
@@ -5325,7 +5332,7 @@ The dungeon collapsed after too many stalled turns. Your slot has been released 
       // all targeting logic). The charm status still ticks down each turn
       // and expires naturally. Previously charm was applied but had zero
       // effect - Bribe (Merchant / Tycoon skill) was effectively useless.
-      const skipEffects = ["freeze", "stun", "sleep", "charm"];
+      const skipEffects = ["freeze", "stun", "sleep", "charm", "locked_in_time"];
       const activeEffect = (activeActor.statusEffects || []).find((e) =>
         skipEffects.includes(e.type),
       );
@@ -5969,7 +5976,7 @@ async function performAction(sock, player, action, sessionKey) {
             if (itemKey === "elixir" || item.cureStatus) {
               const beforeCount = target.statusEffects ? target.statusEffects.length : 0;
               if (beforeCount > 0) {
-                const negativeEffects = ["poison", "burn", "bleed", "freeze", "stun", "sleep", "root", "slow", "curse", "weak", "vulnerability"];
+                const negativeEffects = ["poison", "burn", "bleed", "freeze", "stun", "sleep", "locked_in_time", "root", "slow", "curse", "weak", "vulnerability"];
                 target.statusEffects = target.statusEffects.filter(s => !negativeEffects.includes(s.type));
                 const clearedCount = beforeCount - target.statusEffects.length;
                 if (clearedCount > 0) {
@@ -5982,7 +5989,7 @@ async function performAction(sock, player, action, sessionKey) {
             if (target) {
               const beforeCount = target.statusEffects ? target.statusEffects.length : 0;
               if (beforeCount > 0) {
-                const negativeEffects = ["poison", "burn", "bleed", "freeze", "stun", "sleep", "root", "slow", "curse", "weak", "vulnerability"];
+                const negativeEffects = ["poison", "burn", "bleed", "freeze", "stun", "sleep", "locked_in_time", "root", "slow", "curse", "weak", "vulnerability"];
                 target.statusEffects = target.statusEffects.filter(s => !negativeEffects.includes(s.type));
                 const clearedCount = beforeCount - target.statusEffects.length;
                 if (clearedCount > 0) {
@@ -12781,10 +12788,25 @@ async function applyAbilityEffect(
 
       damage = Math.max(1, Math.floor(damage));
 
+      // ☠️ EXECUTE REGULARS (owner 2026-10-27: Soul Harvest / Apocalypse Wing one-shot regular enemies,
+      // never bosses or players). Soul Harvest also returns the soul as healing.
+      let _soulExecuted = false;
+      if (effect.executeRegular && !player.isEnemy && !target.isBoss && !target.isPlayer && !target.jid && target.stats.hp > 0) {
+        damage = Math.max(damage, Math.floor(target.stats.hp));
+        _soulExecuted = true;
+      }
+
       target.stats.hp -= damage;
       target.currentHP = target.stats.hp; // Sync V2
       totalDamage += damage;
       if (!hitTarget) hitTarget = target;
+      if (_soulExecuted && effect.soulHealPct && player.stats) {
+        const _maxHp = player.stats.maxHp || player.maxHp || player.stats.hp;
+        const _heal = Math.max(1, Math.floor(_maxHp * effect.soulHealPct / 100));
+        player.stats.hp = Math.min(_maxHp, (player.stats.hp || 0) + _heal);
+        player.currentHP = player.stats.hp;
+        msg += `🩸 A soul tears free of ${target.name} and flows into ${player.name} (+${_heal} HP)!\n`;
+      }
 
       if (!target.isEnemy) {
           const durabilitySystem = require('./durabilitySystem');
@@ -13022,12 +13044,14 @@ async function applyAbilityEffect(
         }
         msg += `💀 All enemies receive -${effData.value}% ${effData.stat}!\n`;
       }
-      else if (effId === "stun" || effId === "freeze" || effId === "sleep") {
+      else if (effId === "stun" || effId === "freeze" || effId === "sleep" || effId === "locked_in_time") {
         const targets = getTargets(player, effect, targetIndex, sessionKey);
         for (const target of targets) {
           if (Math.random() * 100 < (effData.chance || 100)) {
             applyStatusEffect(target, effId, effData.duration || 1);
-            msg += `💫 ${target.name} is ${effId.toUpperCase()}NED for ${effData.duration || 1} turn(s)!\n`;
+            msg += effId === 'locked_in_time'
+              ? `⏳ ${target.name} is *LOCKED IN TIME* for ${effData.duration || 1} turn(s)!\n`
+              : `💫 ${target.name} is ${effId.toUpperCase()}NED for ${effData.duration || 1} turn(s)!\n`;
           }
         }
       }
@@ -13086,7 +13110,7 @@ async function applyAbilityEffect(
         const cleanseTargets = (effect.targeting || '').toUpperCase() === 'SELF'
           ? [player]
           : targets.length > 0 ? targets : [player];
-        const negativeEffects = ['poison', 'burn', 'bleed', 'freeze', 'stun', 'sleep',
+        const negativeEffects = ['poison', 'burn', 'bleed', 'freeze', 'stun', 'sleep', 'locked_in_time',
                                   'root', 'slow', 'curse', 'weak', 'vulnerability',
                                   'blind', 'silence', 'shock', 'charm', 'fear'];
         let totalCleansed = 0;

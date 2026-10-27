@@ -1740,8 +1740,8 @@ const SKILL_TREES = {
                         energyCost: [116, 109, 102],
                         cooldown: 2,
                         targeting: 'ALL_ENEMIES',
-                        effects: { freeze: { duration: 2 } },
-                        description: 'Freeze time, team acts freely',
+                        effects: { locked_in_time: { duration: 2 } },
+                        description: 'Lock every enemy in time for 2 turns (Locked in Time) - the team acts freely',
                         animation: '⏸️🌀✨',
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
@@ -2828,7 +2828,9 @@ const SKILL_TREES = {
                         damageMultiplier: [10.23, 11.37, 12.50],
                         damageType: 'MAGICAL',
                         targeting: 'AOE_LARGE',
-                        description: 'Consume souls for power',
+                        description: 'Rip the souls out of every regular enemy - instantly slaying them (not bosses) - and heal from each one. Bosses take normal damage.',
+                        executeRegular: true,
+                        soulHealPct: 12,
                         animation: '💀🌑✨',
                         isUltimate: true,
                         skillPointCost: [5, 7, 10]
@@ -4599,7 +4601,7 @@ const SKILL_TREES = {
                         targeting: 'AOE_ALL',
                         isUltimate: true,
                         isAscended: true,
-                        description: 'UNLEASH the Leviathan\'s stored apocalypse. Hits ALL enemies for 9-11× MAG damage. Inflicts Burn, Stun, and Drown. The sky breaks.',
+                        description: 'UNLEASH the Leviathan\'s stored apocalypse. Hits ALL enemies for 9-11× MAG damage and instantly slays every regular enemy (bosses take the damage). Inflicts Burn, Stun, and Drown. The sky breaks.',
                         animation: '🌋🌊🐉🔥',
                         // 💡 FIX 2026-08-01: Fixed multiplier (was 12/14/16, should be 9/10/11),
                         // fixed CC2 (was 'fear', should be 'stun' per description),
@@ -4607,6 +4609,7 @@ const SKILL_TREES = {
                         // added drown as a separate DoT effect.
                         effect: (level) => ({
                             type: 'aoe',
+                            executeRegular: true,   // owner 2026-10-27: one-shots every regular enemy (not bosses)
                             multiplier: 8.0 + level,  // 9/10/11 - matches description
                             damageType: 'magic',
                             targeting: 'ALL_ENEMIES',
@@ -5871,6 +5874,8 @@ function getSkillEffect(skill, level) {
         }
 
         const effect = {
+            executeRegular: !!skill.executeRegular,
+            soulHealPct: skill.soulHealPct || 0,
             type: (skill.targeting === 'AOE' || skill.targeting === 'AOE_LARGE' || skill.targeting === 'CHAIN' || skill.targeting === 'ALL_ENEMIES') ? 'aoe' : type,
             damageType: (skill.damageType === 'MAGICAL' || skill.damageType === 'magic') ? 'magic' : 'physical',
             targets: targets, // undefined for ALL_ENEMIES → getTargets caps to living count
@@ -5899,7 +5904,7 @@ function getSkillEffect(skill, level) {
                 };
 
                 // Map common effects to existing engine properties
-                if (effId === 'stun' || effId === 'freeze' || effId === 'sleep' || effId === 'charm') {
+                if (effId === 'stun' || effId === 'freeze' || effId === 'sleep' || effId === 'charm' || effId === 'locked_in_time') {
                     effect.cc = effId;
                     effect.ccChance = chance || 100;
                     effect.ccDuration = dur || 1;
