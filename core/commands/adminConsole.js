@@ -987,9 +987,13 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `🎞️ *VFX PREVIEW*\n\n${lines}\n\n` +
                 `\`${prefix} mod vfx <class>\` — every level of that class's ultimate\n` +
                 `\`${prefix} mod vfx <class> <level>\` — one level\n` +
-                `\`${prefix} mod vfx all [level]\` — every class (default: max level)` });
+                `\`${prefix} mod vfx all [level]\` — every class (default: max level)\n` +
+                `Add \`aoe\` to preview the multi-enemy version (3 enemies), e.g. \`${prefix} mod vfx archmage 3 aoe\`.\n` +
+                `_Previews use a test stage (blue = caster, red = target)._` });
         }
-        const lvArg = args[2] ? String(args[2]).toLowerCase() : '';
+        const restArgs = args.slice(2).map((a) => String(a).toLowerCase());
+        const aoePrev = restArgs.includes('aoe');
+        const lvArg = restArgs.find((a) => /^\d+$/.test(a)) || '';
         let list, levelsFor;
         if (q.toLowerCase() === 'all') {
             list = all;
@@ -1009,9 +1013,10 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 try {
                     const k = x.max <= 1 ? 1 : (lv - 1) / (x.max - 1);
                     const pal = skillVfx.PALETTE[x.cid];
-                    const vid = await ultFx.renderUltimateVideo({ classId: x.cid, name: x.name, side: x.entry.side, palette: pal, skillLevel: lv, maxLevel: x.max, intensity: k });
+                    const stage = require('../rpg/vfxPreviewStage')(aoePrev ? 3 : 1);
+                    const vid = await ultFx.renderUltimateVideo({ classId: x.cid, name: x.name, side: x.entry.side, palette: pal, skillLevel: lv, maxLevel: x.max, intensity: k, layers: stage, casterIndex: 0, targetIndex: 0, focusIndex: 0, targetSide: 'enemy', aoe: aoePrev, targets: [{ index: 0, hp: 800, maxHp: 1000 }] });
                     if (vid && vid.mp4) {
-                        await sock.sendMessage(chatId, { video: vid.mp4, mimetype: 'video/mp4', gifPlayback: true, jpegThumbnail: vid.thumb || undefined, caption: `🎞️ *${x.cid}* — ${x.name}  ·  Lv ${lv}/${x.max}` });
+                        await sock.sendMessage(chatId, { video: vid.mp4, mimetype: 'video/mp4', gifPlayback: true, jpegThumbnail: vid.thumb || undefined, caption: `🎞️ *${x.cid}* — ${x.name}  ·  Lv ${lv}/${x.max}${aoePrev ? '  ·  AoE' : ''}` });
                         sent++;
                     } else {
                         await sock.sendMessage(chatId, { text: BOT_MARKER + `⚠️ ${x.cid} Lv${lv}: render returned nothing.` });

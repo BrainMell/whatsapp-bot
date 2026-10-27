@@ -536,11 +536,14 @@ async function renderUltimateVideo(o) {
     const palette = o.palette && o.palette.length >= 3 ? o.palette : ['#fff1b0', '#ffcb45', '#e85a37'];
     const recipeKey = STYLE_RECIPE[String(o.classId || '').toUpperCase()] || 'fire';
     const sets = {};
-    const classTracks = RECIPE_PACK && RECIPE_PACK.classRecipe ? RECIPE_PACK.classRecipe(String(o.classId || '').toUpperCase(), palette, { IMPACT }) : null;
+    // per-class timing (Dragon God etc. run longer); default = the classic 2.7s / 1.05s
+    const meta = (RECIPE_PACK && RECIPE_PACK.classMeta && RECIPE_PACK.classMeta(String(o.classId || '').toUpperCase())) || {};
+    const IMP = meta.impact || IMPACT, DUR = meta.duration || DURATION;
+    const classTracks = RECIPE_PACK && RECIPE_PACK.classRecipe ? RECIPE_PACK.classRecipe(String(o.classId || '').toUpperCase(), palette, { IMPACT: IMP }) : null;
     let tracks = classTracks || RECIPES[recipeKey](palette);
     // skill level -> intensity (see ultimateFxRecipes.scaleTracks); 0..1, default 0 = the original look (level 1)
     const K = Number.isFinite(Number(o.intensity)) ? Math.max(0, Math.min(1, Number(o.intensity))) : 0;
-    if (RECIPE_PACK && RECIPE_PACK.scaleTracks) tracks = RECIPE_PACK.scaleTracks(tracks, K, palette, IMPACT);
+    if (RECIPE_PACK && RECIPE_PACK.scaleTracks) tracks = RECIPE_PACK.scaleTracks(tracks, K, palette, IMP);
     for (const t of tracks) {
         for (const nm of [t.fx, t.land]) if (nm && SETS[nm] && !sets[nm]) sets[nm] = await loadSet(nm);
     }
@@ -599,7 +602,7 @@ async function renderUltimateVideo(o) {
         if (fa) focRect = rectOf(fa);
     }
     // the isolated focus monster is drawn BY the hands layer while it sinks
-    const sinkOwnsFocus = !!(layers && focImg && !self && tracks.some((t) => t.layer === 'hands' && t.sink));
+    const sinkOwnsFocus = !!(layers && focImg && !self && tracks.some((t) => (t.layer === 'hands' && t.sink) || t.layer === 'focus'));
 
     // 💡 MULTI-TARGET SPRITE FX (2026-10-26, owner: "fix up the vfx for
     // individual and multiple opponents - instead of pulling down a cut out of
@@ -617,6 +620,7 @@ async function renderUltimateVideo(o) {
         ? Math.max(0, Math.floor(Number(o.focusIndex)))
         : Math.max(0, Math.floor(Number(o.targetIndex) || 0));
     let affectList = [];
+    let casterCut = null;
     // 🔴 HURT FLASH list (owner: "when the attack hits make the victim have a
     // hurt red flashing overlay animation"): the SAME affected cutouts, tinted
     // hurt-red, pulsed by LAYERS.hurt at the impact moment. Offensive casts
@@ -636,6 +640,7 @@ async function renderUltimateVideo(o) {
             } catch (e) { /* a broken cutout never kills the video */ }
         }));
         const findCut = (side, idx) => cutImgs.find((c) => c.side === side && c.index === idx);
+        casterCut = findCut('player', casterIdxAll) || null;
         // the roster that gets hit: enemy side for offenses, the party for
         // self-casts; the caster is never affected by their own offense
         const roster = cutImgs.filter((c) => c.side === (self ? 'player' : tSideAll))
@@ -712,39 +717,48 @@ async function renderUltimateVideo(o) {
     // every ultimate gets the per-fighter impact unless the recipe ships its
     // own affect track; self-casts glow warm gold, offenses in the class colour.
     // 💡 QA round: 'hold' curve + 1.25s so the colour wash is still readable
-    // on the fighters AFTER the impact fx fade (a bell at IMPACT was buried
+    // on the fighters AFTER the impact fx fade (a bell at IMP was buried
     // under the explosion sprites and read as invisible; the tail now lingers
     // into the settle for a clear "this fighter was hit by THAT spell" read).
     if (layers && affectList.length && !tracks.some((t) => t.layer === 'affect')) {
-        tracks.push({ layer: 'affect', at: IMPACT, dur: 1.25, curve: 'hold', a: self ? 0.7 : 0.9 });
+        tracks.push({ layer: 'affect', at: IMP, dur: 1.25, curve: 'hold', a: self ? 0.7 : 0.9 });
     }
     // 🔴 HURT FLASH auto-track: fires on every offensive cast that has real
     // victim cutouts - flash + echo land BEFORE the class-colour wash above
     // settles, so the hit reads red first, class colour second.
     if (layers && hurtList.length && !tracks.some((t) => t.layer === 'hurt')) {
-        tracks.push({ layer: 'hurt', at: IMPACT + 0.01, dur: 0.5, a: 0.85 });
+        tracks.push({ layer: 'hurt', at: IMP + 0.01, dur: 0.5, a: 0.85 });
     }
     const seed = hash((o.classId || '') + (o.name || ''));
-    const total = Math.round(DURATION * FPS);
+    const total = Math.round(DUR * FPS);
     const frames = [];
     let thumb = null;
     const canvas = createCanvas(W, H), ctx = canvas.getContext('2d');
+    let sprNoCaster = null;
     for (let f = 0; f < total; f++) {
         const time = f / FPS;
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
         ctx.imageSmoothingEnabled = true;
         // camera: slow push-in while charging, punch + shake on impact, hit-stop (freeze) 2 frames
-        const sinceHit = time - IMPACT;
+        const sinceHit = time - IMP;
         const hitStop = sinceHit >= 0 && sinceHit < 2 / FPS;
         // CAMERA-CALM (owner: "VFX background movement unnatural"): the old
         // 0.05 push + wide pan made the whole battlefield swim. Zoom stays,
         // drift is now barely-there; impact punch + shake untouched.
-        const push = time < IMPACT ? easeIn(time / IMPACT) * 0.03 : 0.03 * (1 - easeOut((sinceHit - 0.1) / 0.8));
+        // 🔎 SPOTLIGHT ZOOM (owner 2026-10-27: "when an ability is cast everything except the target gets darker
+        // and it zooms in on them at the start"): a quick push-in on the target that holds through the windup,
+        // relaxes after the hit. Recipes can add/subtract with {layer:'camera', at, dur, dz} tracks.
+        let camDz = 0;
+        for (const tr of tracks) if (tr.layer === 'camera' && time >= tr.at && time <= tr.at + tr.dur) {
+            const cu = (time - tr.at) / tr.dur; camDz += (tr.dz || 0) * Math.min(easeOut(clamp01(cu / (tr.fin || 0.3))), 1 - easeIn(clamp01((cu - (1 - (tr.fout || 0.25))) / (tr.fout || 0.25))));
+        }
+        const baseZoom = meta.zoom === undefined ? 0.11 : meta.zoom;
+        const push = (time < IMP ? easeOut(clamp01(time / 0.35)) * baseZoom : baseZoom * (1 - easeOut((sinceHit - 0.15) / 0.9))) + camDz;
         const punch = sinceHit >= 0 ? Math.max(0, 1 - sinceHit / 0.35) * 0.07 : 0;
         const zoom = 1 + push + punch;
         const shk = 1 + 0.6 * K;   // skill level -> camera punch
-        const amp = hitStop ? 0 : (sinceHit >= 0 && sinceHit < 0.7 ? 16 * shk * Math.pow(1 - sinceHit / 0.7, 2) : (time < IMPACT ? 1.2 * shk * easeIn(time / IMPACT) : 0));
+        const amp = hitStop ? 0 : (sinceHit >= 0 && sinceHit < 0.7 ? 16 * shk * Math.pow(1 - sinceHit / 0.7, 2) : (time < IMP ? 1.2 * shk * easeIn(time / IMP) : 0));
         const sx = Math.sin(f * 2.31 + seed) * amp, sy = Math.cos(f * 3.17 + seed) * amp * 0.6;
         const fx = A.T[0] / W, fy = A.T[1] / H;
         ctx.save();
@@ -759,14 +773,23 @@ async function renderUltimateVideo(o) {
         // cracks). The isolated focus combatant is skipped here when a sink
         // recipe owns it (the hands layer draws it, sinking into the rift).
         const env = { A, time, W, H, base, self, seed, sets, spr: (n) => singles.get(n) || null,
-            layers: !!layers, sprImg, focImg, focRect, casterRect, affectList, hurtList };
+            layers: !!layers, sprImg, focImg, focRect, casterRect, affectList, hurtList, casterCut, impact: IMP };
         if (env.layers) {
             for (const tr of tracks) {
                 if (!tr.under) continue;
                 if (tr.layer) { const L = LAYERS[tr.layer]; if (L) { ctx.save(); try { L(ctx, tr, env); } catch (e) { /* a bad layer never kills the clip */ } ctx.restore(); } }
                 else drawTrackInstances(ctx, tr, sets, A, time, mulberry(seed + f), palette);
             }
-            ctx.drawImage(sprImg, 0, 0, W, H);
+            // 💨 hidecaster windows (Reaper: the caster vanishes, only the scythe remains)
+            const hideNow = !!(casterCut && tracks.some((t) => t.layer === 'hidecaster' && time >= t.at && time <= t.at + t.dur));
+            if (hideNow) {
+                if (!sprNoCaster) {
+                    sprNoCaster = createCanvas(sprImg.width, sprImg.height);
+                    const sc = sprNoCaster.getContext('2d'); sc.drawImage(sprImg, 0, 0);
+                    sc.globalCompositeOperation = 'destination-out'; sc.drawImage(casterCut.img, casterCut.x * (sprImg.width / W), casterCut.y * (sprImg.height / H), casterCut.w * (sprImg.width / W), casterCut.h * (sprImg.height / H));
+                }
+                ctx.drawImage(sprNoCaster, 0, 0, W, H);
+            } else ctx.drawImage(sprImg, 0, 0, W, H);
             if (focImg && !sinkOwnsFocus) ctx.drawImage(focImg, 0, 0, W, H);
             // 🔴 HP DROP: repaint the victims' overhead bars over the baked
             // ones (exact Go geometry via anchors) BEFORE the veil so they dim
@@ -784,7 +807,7 @@ async function renderUltimateVideo(o) {
                     const bw = (isPlayerSide ? 80 : 100) * kxL, bh = (isPlayerSide ? 10 : 12) * kyL;
                     const bxc = (Number(a2.x) - (isPlayerSide ? 40 : 50)) * kxL;
                     const byc = (Number(a2.feetY) - Math.max(24, Number(a2.h) || 0)) * kyL - (isPlayerSide ? 12 : 15) * kyL;
-                    const at = IMPACT + vi * 0.06;
+                    const at = IMP + vi * 0.06;
                     vi++;
                     if (time < at) continue;
                     const du = clamp01((time - at) / 0.45);
@@ -795,11 +818,18 @@ async function renderUltimateVideo(o) {
         }
         // dim the field while charging so effects pop; lift after the hit
         // (layered: AFTER the combatants so they dim exactly like the flat base)
-        const veil = time < IMPACT ? 0.12 + 0.3 * easeIn(time / IMPACT) : 0.42 * (1 - easeOut((sinceHit) / 0.6)) + 0.08;
-        ctx.fillStyle = rgba('#05060f', veil); ctx.fillRect(-40, -40, W + 80, H + 80);
+        const veil = time < IMP ? 0.1 + 0.42 * easeOut(clamp01(time / 0.3)) : 0.52 * (1 - easeOut((sinceHit) / 0.7)) + 0.08;
+        if (o.aoe || meta.flatVeil) { ctx.fillStyle = rgba('#05060f', veil * 0.85); ctx.fillRect(-40, -40, W + 80, H + 80); }
+        else {
+            // spotlight: the target stays lit, everything else darkens
+            const sp = self ? A.C : A.T, spr = 110;
+            const sg = ctx.createRadialGradient(sp[0], sp[1] - 55, spr * 0.55, sp[0], sp[1] - 55, spr * 2.9);
+            sg.addColorStop(0, rgba('#05060f', veil * 0.12)); sg.addColorStop(1, rgba('#05060f', veil * 1.05));
+            ctx.fillStyle = sg; ctx.fillRect(-40, -40, W + 80, H + 80);
+        }
         // charge aura at the caster
-        if (time < IMPACT + 0.25) {
-            const k = easeIn(time / IMPACT);
+        if (time < IMP + 0.25) {
+            const k = easeIn(time / IMP);
             glow(ctx, A.C[0], A.C[1], 70 + 90 * k + Math.sin(f * 1.7) * 6, rgba(palette[1], 'A'), 0.35 + 0.45 * k);
         }
         // sprite tracks, ordered (under:true tracks already painted in the
@@ -831,7 +861,7 @@ async function renderUltimateVideo(o) {
         // pass - above the flash, vignette, banner and every effect, and
         // outside the camera transform, so nothing ever covers or dims it.
         if (hudIcons) drawVideoHud(ctx, o.hud, hudIcons);
-        if (f === Math.round(IMPACT * FPS) + 1) thumb = canvas.toBuffer('image/jpeg', { quality: 0.8 });
+        if (f === Math.round(IMP * FPS) + 1) thumb = canvas.toBuffer('image/jpeg', { quality: 0.8 });
         frames.push(canvas.toBuffer('raw'));
     }
     if (!thumb) thumb = canvas.toBuffer('image/jpeg', { quality: 0.8 });

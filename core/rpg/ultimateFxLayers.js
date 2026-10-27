@@ -365,10 +365,32 @@ LAYERS.fall = (ctx, tr, env) => {
             } else if (kind === 'shard') {
                 ctx.save(); ctx.translate(x, y); ctx.rotate(ang + Math.PI / 2); ctx.fillStyle = tr.color || '#bff3ff'; ctx.beginPath(); ctx.moveTo(0, 26); ctx.lineTo(8, -4); ctx.lineTo(0, -22); ctx.lineTo(-8, -4); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#ffffff'; ctx.fillRect(-1, -14, 2, 30); ctx.restore();
                 glowDot(ctx, x, y, 24, tr.color || '#59c8ff', 0.5);
+            } else if (kind === 'rock') {
+                // one big flaming boulder: lumpy rock polygon + fire trail
+                const R0 = tr.size || 56;
+                for (let k = 9; k >= 0; k--) { const e2 = easeIn(clamp01(u - k * 0.03)); const px = sx + (lx - sx) * e2, py = sy + (ly - sy) * e2; glowDot(ctx, px, py, R0 * (1.1 - k * 0.07), k < 3 ? '#fff2b0' : (tr.color || '#ff7a1a'), 0.5 * (1 - k / 11)); }
+                ctx.save(); ctx.translate(x, y); ctx.rotate(t * 3 + i);
+                const rk = mulberry(hashS('rock' + i + tr.at)); ctx.beginPath();
+                for (let v = 0; v < 11; v++) { const a2 = (v / 11) * Math.PI * 2, rad = R0 * (0.78 + rk() * 0.3); v ? ctx.lineTo(Math.cos(a2) * rad, Math.sin(a2) * rad) : ctx.moveTo(Math.cos(a2) * rad, Math.sin(a2) * rad); }
+                ctx.closePath(); const rg = ctx.createRadialGradient(-R0 * 0.3, -R0 * 0.3, 4, 0, 0, R0); rg.addColorStop(0, '#8a5a3a'); rg.addColorStop(1, '#2a1610');
+                ctx.fillStyle = rg; ctx.fill(); ctx.strokeStyle = '#1a0c08'; ctx.lineWidth = 4; ctx.stroke();
+                ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = '#ff8a2a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-R0 * 0.5, -R0 * 0.1); ctx.lineTo(-R0 * 0.1, R0 * 0.15); ctx.lineTo(R0 * 0.2, -R0 * 0.2); ctx.lineTo(R0 * 0.5, R0 * 0.25); ctx.stroke();
+                ctx.restore(); glowDot(ctx, x, y, R0 * 1.3, tr.color || '#ff7a1a', 0.45);
+            } else if (kind === 'spear') {
+                ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+                ctx.fillStyle = '#6b4a2a'; ctx.fillRect(-92, -2.5, 96, 5); ctx.fillStyle = '#e8edf5'; ctx.beginPath(); ctx.moveTo(26, 0); ctx.lineTo(4, -8); ctx.lineTo(4, 8); ctx.closePath(); ctx.fill();
+                ctx.fillStyle = tr.color || '#ff3a3a'; ctx.fillRect(-96, -5, 8, 10); ctx.restore();
+                ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(255,230,200,0.45)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - Math.cos(ang) * 150, y - Math.sin(ang) * 150); ctx.lineTo(x - Math.cos(ang) * 96, y - Math.sin(ang) * 96); ctx.stroke(); ctx.restore();
             } else if (kind === 'coin') {
                 const sq = Math.abs(Math.cos(t * 14 + i)); ctx.save(); ctx.translate(x, y); ctx.fillStyle = '#ffcf3a'; ctx.strokeStyle = '#9a6a00'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(0, 0, 11 * Math.max(0.15, sq), 11, 0, 0, 7); ctx.fill(); ctx.stroke(); ctx.restore();
                 glowDot(ctx, x, y, 22, '#ffe27a', 0.5);
             }
+        } else if (kind === 'spear' && t - fallT < (tr.stay || 0.9)) {
+            const lt = t - fallT, ang = Math.atan2(ly - sy, lx - sx);
+            ctx.save(); ctx.globalAlpha = 1 - easeIn(clamp01((lt - (tr.stay || 0.9) * 0.6) / ((tr.stay || 0.9) * 0.4)));
+            ctx.translate(lx, ly); ctx.rotate(ang); ctx.fillStyle = '#6b4a2a'; ctx.fillRect(-92, -2.5, 96, 5); ctx.fillStyle = '#e8edf5'; ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(-6, -7); ctx.lineTo(-6, 7); ctx.closePath(); ctx.fill(); ctx.fillStyle = tr.color || '#ff3a3a'; ctx.fillRect(-96, -5, 8, 10); ctx.restore();
+            if (lt < 0.12) glowDot(ctx, lx, ly, 50, '#ffe0b0', 0.8 * (1 - lt / 0.12));
+            if (tr.land && env.sets[tr.land] && env.sets[tr.land].length) { const fr = env.sets[tr.land], fi = Math.floor(lt * (tr.landFps || 22)); if (fi < fr.length) sprite(ctx, fr[fi], lx, ly, tr.landW || 90, 0, 1, !!tr.landAdd); }
         } else if (tr.land && env.sets[tr.land] && env.sets[tr.land].length) {
             const fr = env.sets[tr.land], lt = t - fallT, fps = tr.landFps || 22, fi = Math.floor(lt * fps);
             if (fi < fr.length) sprite(ctx, fr[fi], lx, ly, tr.landW || 130, 0, 1, !!tr.landAdd);
@@ -542,5 +564,9 @@ LAYERS.emit = (ctx, tr, env) => {
         ctx.restore();
     }
 };
+
+try {
+    require('./ultimateFxLayers2')(LAYERS, { pt, local, glowDot, sprite, mulberry, hashS, clamp01, easeOut, easeIn, bell });
+} catch (e) { console.warn('[UltFx] layers v2 unavailable:', e.message); }
 
 module.exports = { LAYERS, boneHand };
