@@ -39,8 +39,31 @@ function glowDot(ctx, x, y, r, color, a) {
     g.addColorStop(0, color); g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a; ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2); ctx.restore();
 }
+const _prescale = new WeakMap();
+/** downscale an oversized source ONCE per (img, quantized width).
+ * 🔥 perf (R3, V8 profile of a real DRAGON_GOD render): sprite() was ~40% of
+ * total CPU because the 384px fire-jet frames were being Cairo-transformed
+ * down to ~32-140px DESTINATION pixels on EVERY particle of EVERY frame.
+ * Pre-shrinking to the drawn width makes the per-blit cost proportional to the
+ * output size instead of the source size. Deterministic (same pixels each
+ * render) and alpha-preserving, so renders stay byte-identical per class. */
+function prescaled(img, w) {
+    const iw = img.width, ih = img.height;
+    if (!iw || !ih) return img;
+    const qw = Math.max(8, Math.round(w / 24) * 24);
+    if (qw >= iw * 0.8) return img;   // not a meaningful downscale — draw original
+    let m = _prescale.get(img);
+    if (!m) { m = new Map(); _prescale.set(img, m); }
+    let c = m.get(qw);
+    if (c) return c;
+    c = createCanvas(qw, Math.max(1, Math.round(ih * qw / iw)));
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    m.set(qw, c);
+    return c;
+}
 function sprite(ctx, img, x, y, w, rot, alpha, add) {
     if (!img) return;
+    img = prescaled(img, w);
     const h = w * (img.height / img.width);
     ctx.save(); ctx.globalAlpha = alpha; if (add) ctx.globalCompositeOperation = 'lighter';
     ctx.translate(x, y); if (rot) ctx.rotate(rot); ctx.drawImage(img, -w / 2, -h / 2, w, h); ctx.restore();

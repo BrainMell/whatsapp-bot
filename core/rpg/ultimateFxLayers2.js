@@ -90,13 +90,20 @@ module.exports = function install(LAYERS, H) {
         const R = tr.R || 220;
         const x0 = Math.max(0, Math.floor(cx - R)), y0 = Math.max(0, Math.floor(cy - R)), x1 = Math.min(W, Math.ceil(cx + R)), y1 = Math.min(Hh, Math.ceil(cy + R));
         const w = x1 - x0, h = y1 - y0; if (w <= 0 || h <= 0) return;
-        const key = w + 'x' + h; let oc = _oc.get(key); if (!oc) { const cv = createCanvas(w, h); oc = { cv, c: cv.getContext('2d') }; _oc.set(key, oc); }
-        const od = oc.c.createImageData(w, h), o = od.data, sd = srcPixels(env).data;
+        // 🔥 perf (R3, V8 profile: LAYERS.vortex ≈ 19% of a DRAGON_GOD render):
+        // the warp is computed at HALF resolution and upscaled by drawImage —
+        // 4x fewer atan2/pow pixel ops, and the bilinear upscale just softens
+        // an already-swirling distortion. Full-res coords (+1 = sample centre)
+        // keep the mapping identical, so output stays deterministic.
+        const SS = 2;
+        const w2 = Math.max(1, Math.ceil(w / SS)), h2 = Math.max(1, Math.ceil(h / SS));
+        const key = w2 + 'x' + h2; let oc = _oc.get(key); if (!oc) { const cv = createCanvas(w2, h2); oc = { cv, c: cv.getContext('2d') }; _oc.set(key, oc); }
+        const od = oc.c.createImageData(w2, h2), o = od.data, sd = srcPixels(env).data;
         const twist = (tr.twist || 5) * s, pull = (tr.pull || 2.4) * s, hr = (tr.hole || 18) * s;
         const rim = hexRgb(tr.rim || '#9d6bff');
-        for (let y = 0; y < h; y++) {
-            for (let x = 0; x < w; x++) {
-                const px = x0 + x - cx, py = y0 + y - cy, r = Math.sqrt(px * px + py * py), i = (y * w + x) * 4;
+        for (let y = 0; y < h2; y++) {
+            for (let x = 0; x < w2; x++) {
+                const px = x0 + x * SS + 1 - cx, py = y0 + y * SS + 1 - cy, r = Math.sqrt(px * px + py * py), i = (y * w2 + x) * 4;
                 if (r >= R) { o[i + 3] = 0; continue; }
                 if (r < hr) { o[i] = 2; o[i + 1] = 0; o[i + 2] = 6; o[i + 3] = 255; continue; }
                 const n = r / R, th = Math.atan2(py, px) + twist * (1 - n) * (1 - n), rs = R * Math.pow(n, 1 / (1 + pull));
@@ -107,7 +114,7 @@ module.exports = function install(LAYERS, H) {
             }
         }
         oc.c.putImageData(od, 0, 0);
-        ctx.drawImage(oc.cv, x0, y0);
+        ctx.drawImage(oc.cv, x0, y0, w, h);
         // accretion ring around the hole
         ctx.save(); ctx.translate(cx, cy); ctx.globalCompositeOperation = 'lighter';
         for (let k = 0; k < 2; k++) { ctx.save(); ctx.rotate(t * (2 + k) + k); ctx.scale(1, 0.42); ctx.globalAlpha = 0.65 * s; ctx.strokeStyle = k ? '#ffffff' : (tr.rim || '#9d6bff'); ctx.lineWidth = 4 - k; ctx.beginPath(); ctx.arc(0, 0, hr * (1.5 + k * 0.45) + 4, 0.2, 5.3); ctx.stroke(); ctx.restore(); }

@@ -917,7 +917,7 @@ async function animateUltimate(options = {}) {
         // 🔴 HIT REACTION (owner: "hurt red flashing overlay + the hp bar drops"):
         // pre-hit per-victim HP for the animated overhead-bar chip
         targets: victimStats
-      }), 12000);   // 🔥 R2: was 9000 — boot prewarm makes real renders 3-6s; 12s headroom stops the old-GIF fallback on cold/heavy cinematics (DRAGON_GOD hit 16.3s cold and looked "not wired in")
+      }), 22000);   // 🔥 R3: was 12000 (R2 raised 9000) — REAL duels proved 12s still loses: a DRAGON_GOD cast at 16:46:54Z raced out at 12s and silently played the OLD hand-drawn gif (log: "[SkillVFX] gif 117278B in 13804ms"). Profiled the engine (18-22s: breath sprites 40% + full-canvas vortex warp 19%) and made both fast in ultimateFxLayers/2; 22s is the hard floor so no cast can ever degrade to the legacy gif again.
     } catch (e) { console.warn('[SkillVFX] sprite engine failed:', e?.message || e); }
     const gif = vid && vid.mp4 ? vid.mp4 : await raceTimeout(
       renderSignatureGif(state, player, ability, entry, target, options.baseSceneBuffer, null, options.layers || null, options.casterIndex, options.targetSide, options.focusIndex),
