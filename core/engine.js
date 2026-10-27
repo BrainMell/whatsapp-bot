@@ -10278,6 +10278,13 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
 
                   const txt = text ? text.trim() : "";
 
+                  // 🤫 GROUP WHISPER (owner 2026-10-27): owner-only DM flow - pick a group, pick members,
+                  // post a message only they receive. See utils/groupWhisper.js.
+                  if (!isGroupChat && txt && !m.key.fromMe && isBotOwner(senderJid)) {
+                    try { if (await require('./utils/groupWhisper').handle(sock, chatId, senderJid, txt)) return; }
+                    catch (gwErr) { console.warn('[GroupWhisper]', gwErr?.message || gwErr); try { await sock.sendMessage(chatId, { text: '❌ Whisper failed: ' + (gwErr?.message || gwErr) }); } catch (e) {} return; }
+                  }
+
                   // 💡 SIBLING PREFIX COLLISION GUARD (2026-08-14):
                   // If the message starts with a sibling bot's prefix, skip it entirely.
                   // This prevents Jake's ".jk char" from being misread by Joker as
