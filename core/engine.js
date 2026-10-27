@@ -7995,6 +7995,49 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               } catch (e) {
                 console.error("[AutoResume] schedule failed:", e?.message);
               }
+              // 📣 ONE-SHOT OmniNotice (owner directive 2026-10-27): post a mod
+              // alert about Lapis bot use into the Omniverse community, tag every
+              // mod roster + group admins, then marker-off. The NEXT commit
+              // removes this block entirely (owner: send -> remove -> restart).
+              try {
+                if (BOT_ID === "Joker" && !global.__omniNoticeScheduled && !require("fs").existsSync("/home/ubuntu/.omniverse_bot_notice_sent")) {
+                  global.__omniNoticeScheduled = true;
+                  console.log(`📣 [OmniNotice] armed (${BOT_ID}) - fires ~40s after connect`);
+                  setTimeout(async () => {
+                    try {
+                      const __fs = require("fs");
+                      if (__fs.existsSync("/home/ubuntu/.omniverse_bot_notice_sent")) return;
+                      const groups = await sock.groupFetchAllParticipating();
+                      const all = Object.values(groups || {});
+                      const target = all.find((g) => /omniverse/i.test(g.subject || ""));
+                      console.log(`📣 [OmniNotice] groups=${all.length} match=${target ? target.id + " " + target.subject : "NONE"}`);
+                      if (!target) { console.error("📣 [OmniNotice] ABORT: no omniverse group found"); return; }
+                      const system = require("./utils/system");
+                      const rosters = ["_shared_global_mods", "_shared_rpg_mods", "_shared_cards_mods", "_shared_quiz_mods"];
+                      const mods = new Set();
+                      for (const k of rosters) {
+                        const arr = await system.getFresh(k, []);
+                        (Array.isArray(arr) ? arr : []).forEach((j) => { if (j) mods.add(j); });
+                      }
+                      (target.participants || []).forEach((p) => { if (p.admin) mods.add(p.id); });
+                      const modJids = Array.from(mods);
+                      const text =
+                        "🚨 *MOD ALERT* 🚨\n\n" +
+                        modJids.map((j) => "@" + j.split("@")[0]).join(" ") + "\n\n" +
+                        "𝕷𝖆𝖕𝖎𝖘 has been detected using a bot.\n" +
+                        "Mods - take action.";
+                      await sock.sendMessage(target.id, { text, mentions: modJids });
+                      __fs.writeFileSync("/home/ubuntu/.omniverse_bot_notice_sent", new Date().toISOString() + " chat=" + target.id + " mods=" + modJids.join(",") + "\n");
+                      console.log(`📣 [OmniNotice] SENT -> ${target.id} tagging ${modJids.length}: ${modJids.join(",")}`);
+                    } catch (e) {
+                      console.error("📣 [OmniNotice] fire failed:", e?.message);
+                    }
+                  }, 40 * 1000);
+                }
+              } catch (e) {
+                console.error("[OmniNotice] setup failed:", e?.message);
+              }
+
               // 💡 FIX-PASS-2 (2026-10-03): removed `ignoreBroadcasts = false` -
               // assigned here but read NOWHERE (dead implicit-global write; the
               // reader it once served was removed in an earlier refactor).
