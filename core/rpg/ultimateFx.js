@@ -58,7 +58,24 @@ const SETS = {
     k_puff:     { kdir: 'puff_', n: 13, fps: 16, smooth: true },
     k_bsmoke:   { kdir: 'bsmoke_', n: 13, fps: 14, smooth: true },
     k_gas:      { kdir: 'gas_', n: 5, fps: 8, smooth: true },
+    // 💡 REAL-ART LAYER SETS (owner 2026-10-27: "replace all the hand made art ... with actual
+    // game assets"): the layer painters swap their procedural bodies for these free packs.
+    // `base` is relative to core/rpgasset/ (the merged fx/ library); `from`+`pad` support
+    // zero-padded non-1-based frame numbers (fx/circle ships 010000-010027).
+    rune_circle:{ base: 'fx', dir: 'circle', prefix: '', n: 28, fps: 16, from: 10000, pad: 6, smooth: true },
+    portal:     { base: 'fx', dir: 'portal1', prefix: 'portal', n: 64, fps: 20, from: 1, pad: 2, smooth: true },
+    soul_orb:   { base: 'fx', dir: 'cosmic/1', prefix: 'Cosmic_', n: 5, fps: 10, from: 1, pad: 2, smooth: true },
+    fire_jet:   { base: 'fx', dir: 'fire/5', prefix: 'Fire-Wrath__', n: 5, fps: 12, from: 21, pad: 2, smooth: true },
+    elem_fire:  { base: 'fx', dir: 'fire/1', prefix: 'Fire-Wrath__', n: 5, fps: 10, from: 1, pad: 2, smooth: true },
+    elem_water: { base: 'fx', dir: 'water/01', prefix: 'Water__', n: 5, fps: 10, from: 1, pad: 2, smooth: true },
+    elem_light: { base: 'fx', dir: 'light', prefix: 'LightEffect_', n: 25, fps: 14, from: 1, pad: 2, smooth: true },
+    elem_earth: { base: 'fx', dir: 'earth/1', prefix: 'Earth-Impact_', n: 5, fps: 10, from: 1, pad: 2, smooth: true },
+    music_note: { base: 'fx', dir: 'music/purple/1', prefix: 'Music_', n: 5, fps: 10, from: 1, pad: 2, smooth: true },
+    dragon_head:{ dir: 'dragon', prefix: 'dragon_', n: 6, fps: 10, smooth: true },
+    robo_hand:  { dir: 'robo', prefix: 'robo_', n: 2, fps: 8, smooth: true },
 };
+// sets the layer painters consume directly from env.sets (preloaded once per process)
+const LAYER_ART = ['rune_circle', 'portal', 'soul_orb', 'fire_jet', 'elem_fire', 'elem_water', 'elem_light', 'elem_earth', 'music_note', 'dragon_head', 'robo_hand', 'claw'];
 const LAYERS = (() => { try { return require('./ultimateFxLayers').LAYERS; } catch (e) { console.warn('[UltFx] layers unavailable:', e.message); return {}; } })();
 const RECIPE_PACK = (() => { try { return require('./ultimateFxRecipes'); } catch (e) { console.warn('[UltFx] class recipes unavailable:', e.message); return null; } })();
 const _singles = new Map();
@@ -79,7 +96,8 @@ async function loadSet(name) {
         if (def.kdir) {
             for (let i = 1; i <= def.n; i++) out.push(await loadImage(path.join(DIR, 'kenney', `${def.kdir}${i}.png`)));
         } else if (def.strip || def.root) {
-            const img = await loadImage(def.root ? path.join(DIR, def.root) : path.join(DIR, 'attack', def.strip));
+            const rootBase = def.base ? path.join(DIR, '..', def.base) : DIR;
+            const img = await loadImage(def.root ? path.join(rootBase, def.root) : path.join(DIR, 'attack', def.strip));
             const fw = Math.floor(img.width / def.n);
             for (let i = 0; i < def.n; i++) {
                 const c = createCanvas(fw, img.height);
@@ -87,7 +105,12 @@ async function loadSet(name) {
                 out.push(c);
             }
         } else {
-            for (let i = 1; i <= def.n; i++) out.push(await loadImage(path.join(DIR, def.dir, `${def.prefix}${i}.png`)));
+            const dirBase = def.base ? path.join(DIR, '..', def.base) : DIR;
+            for (let i = 1; i <= def.n; i++) {
+                const idx = (def.from === undefined ? 1 : def.from) - 1 + i;
+                const tag = def.pad ? String(idx).padStart(def.pad, '0') : String(idx);
+                out.push(await loadImage(path.join(dirBase, def.dir, `${def.prefix}${tag}.png`)));
+            }
         }
     } catch (e) { out.length = 0; }
     _frames.set(name, out);
@@ -547,6 +570,7 @@ async function renderUltimateVideo(o) {
     for (const t of tracks) {
         for (const nm of [t.fx, t.land]) if (nm && SETS[nm] && !sets[nm]) sets[nm] = await loadSet(nm);
     }
+    for (const nm of LAYER_ART) if (SETS[nm] && !sets[nm]) sets[nm] = await loadSet(nm);   // layer painters' art
     const singles = await loadSingles();
     if (!Object.values(sets).some((s) => s && s.length) && !tracks.some((t) => t.layer)) return null;     // assets missing → caller falls back to the legacy renderer
 

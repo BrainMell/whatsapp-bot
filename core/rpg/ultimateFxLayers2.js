@@ -24,7 +24,7 @@
 const { createCanvas } = require('canvas');
 
 module.exports = function install(LAYERS, H) {
-    const { pt, glowDot, sprite, mulberry, hashS, clamp01, easeOut, easeIn, bell } = H;
+    const { pt, glowDot, sprite, mulberry, hashS, clamp01, easeOut, easeIn, bell, setFr, tintImg } = H;
     const lerp = (a, b, t) => a + (b - a) * t;
     const TAU = Math.PI * 2;
     const hexRgb = (h) => { const m = /^#?([0-9a-f]{6})$/i.exec(String(h || '')); if (!m) return [255, 255, 255]; const v = parseInt(m[1], 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255]; };
@@ -136,6 +136,9 @@ module.exports = function install(LAYERS, H) {
 
     // ── slashes: tapered cuts / radial bursts on the target ────────────────
     LAYERS.slashes = (ctx, tr, env) => {
+        // 💡 REAL ART (owner 2026-10-27): polygon blades -> the claw sprite strip
+        // (attack7, real asset) tinted to the class colour; burst fans real Kenney
+        // p_slash singles. n/gap/life/angles/jitter contracts unchanged.
         const n = tr.n || 5, gap = tr.gap === undefined ? 0.07 : tr.gap, life = tr.life || 0.3;
         const [x, y] = pt(env, tr.pos || 'T', tr), cy0 = y - (tr.rise === undefined ? 55 : tr.rise);
         const col = tr.color || '#ffffff', mid = tr.mid || '#ffffff';
@@ -146,15 +149,26 @@ module.exports = function install(LAYERS, H) {
             if (tr.kind === 'burst') {
                 const a = rr() * TAU, r0 = 8 + rr() * 16, L = (tr.len || 120) * (0.6 + rr() * 0.7) * easeOut(clamp01(u / 0.4));
                 const mx = x + (rr() - 0.5) * jit[0], my = cy0 + (rr() - 0.5) * jit[1];
-                ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = fade; ctx.lineCap = 'round';
-                for (const [lw, c2] of [[8, col], [3, mid]]) { ctx.strokeStyle = c2; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(mx + Math.cos(a) * r0, my + Math.sin(a) * r0); ctx.lineTo(mx + Math.cos(a) * (r0 + L), my + Math.sin(a) * (r0 + L)); ctx.stroke(); }
-                ctx.restore();
+                const pick = env.spr('p_slash_0' + (1 + (i % 4)));
+                if (pick) sprite(ctx, tintImg(pick, col, 0.35), mx + Math.cos(a) * r0 * 0.5, my + Math.sin(a) * r0 * 0.5, L * 1.25, a, fade, true);
+                else {
+                    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = fade; ctx.lineCap = 'round';
+                    for (const [lw, c2] of [[8, col], [3, mid]]) { ctx.strokeStyle = c2; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(mx + Math.cos(a) * r0, my + Math.sin(a) * r0); ctx.lineTo(mx + Math.cos(a) * (r0 + L), my + Math.sin(a) * (r0 + L)); ctx.stroke(); }
+                    ctx.restore();
+                }
                 if (i % 3 === 0) glowDot(ctx, mx, my, 46 * fade + 10, col, 0.55 * fade);
                 continue;
             }
             const ang = tr.angles ? tr.angles[i % tr.angles.length] : (-0.95 + rr() * 1.9);
             const mx = x + (rr() - 0.5) * jit[0] * 2, my = cy0 + (rr() - 0.5) * jit[1] * 2;
-            const L = (tr.len || 170) * (0.85 + rr() * 0.3), dx = Math.cos(ang), dy = Math.sin(ang), nx = -dy, ny = dx;
+            const L = (tr.len || 170) * (0.85 + rr() * 0.3);
+            const cimg = setFr(env, 'claw', Math.floor((env.time - tr.at) * 14) + i);
+            if (cimg) {
+                sprite(ctx, tintImg(cimg, col, 0.45), mx, my, L * 1.15, ang, fade, true);
+                if (u < 0.45) glowDot(ctx, mx, my, 26, col, 0.7 * (1 - u / 0.45));
+                continue;
+            }
+            const dx = Math.cos(ang), dy = Math.sin(ang), nx = -dy, ny = dx;
             const head = lerp(-L, L, easeOut(clamp01(u / 0.3))), tail = u > 0.3 ? lerp(-L, L * 0.5, clamp01((u - 0.3) / 0.7)) : -L;
             if (head <= tail) continue;
             const w0 = (tr.w || 11) * (tr.kind === 'stab' ? 1.3 : 1);
@@ -252,30 +266,42 @@ module.exports = function install(LAYERS, H) {
         if (passed > 0 && u < 0.85) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = (1 - easeIn(clamp01((u - 0.5) / 0.35))); ctx.strokeStyle = '#fff'; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x - 150 * passed, cy - 90 * passed); ctx.lineTo(x + 150 * passed, cy + 90 * passed); ctx.stroke(); ctx.restore(); }
     };
 
-    // ── robohand ───────────────────────────────────────────────────────────
+    // ── robohand: giant REAL mech fist slam (BrawlBot, OGA CC0) ─────────────
+    // 💡 REAL ART (owner 2026-10-27): the blocky fillRect forearm/palm/fingers
+    // are replaced by a segmented knuckle-plate fist sprite (robo_1, 273px,
+    // teal seam glow) falling on the target. Fall/press/lift envelopes, the
+    // ground-shadow warning and the cyan core glow are kept; motion-trail
+    // ghosts add the weight the old blocks lacked.
     LAYERS.robohand = (ctx, tr, env) => {
         const t = env.time - tr.at, dur = tr.dur || 1.4; if (t < 0 || t > dur) return;
         const fall = tr.fall || 0.42, S = tr.s || 1.7, [x, y] = pt(env, tr.pos || 'T', tr);
         const rect = env.focRect || [x, y, 90, 130], topY = rect[1] - rect[3];
         const land = clamp01(t / fall), lift = easeOut(clamp01((t - (dur - 0.4)) / 0.4));
         const press = t >= fall ? 14 * Math.min(1, (t - fall) / 0.12) : 0;
-        const palmY = lerp(-460, topY + 6, easeIn(land)) + press - lift * 480;
-        const steel = '#8a96a8', dark = '#2b3342', hi = '#d4deee', glowC = tr.color || '#59e6ff';
+        const glowC = tr.color || '#59e6ff';
+        const fr = (env.sets && env.sets.robo_hand) || [];
+        if (!fr.length) return;
+        const img = fr[0];
+        const w = 105 * S * 1.8, h = w * (img.height / img.width);
+        // bottom edge lands on the target's head, presses 14px, lifts away
+        const bottom = lerp(-h * 0.6, topY + 10, easeIn(land)) + press - lift * 560;
+        const cy = bottom - h * 0.42;
         // ground shadow warning
         if (t < fall + 0.1) { ctx.save(); ctx.globalAlpha = 0.45 * easeOut(land); ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(x, rect[1] + 2, 90 * S * 0.6 * (0.5 + land * 0.5), 20, 0, 0, TAU); ctx.fill(); ctx.restore(); }
-        const px = Math.round(x), W0 = 150 * S, H0 = 70 * S;
-        const rr = (a, b, w, h, c) => { ctx.fillStyle = dark; ctx.fillRect(a - 3, b - 3, w + 6, h + 6); ctx.fillStyle = c; ctx.fillRect(a, b, w, h); };
-        // forearm up to the top
-        const armW = 70 * S; rr(px - armW / 2, palmY - 560, armW, 560, steel);
-        ctx.fillStyle = hi; ctx.fillRect(px - armW / 2 + 6, palmY - 560, 8, 560);
-        for (let k = 1; k < 7; k++) { ctx.fillStyle = dark; ctx.fillRect(px - armW / 2, palmY - k * 80, armW, 5); ctx.fillStyle = glowC; ctx.fillRect(px - 4, palmY - k * 80 - 6, 8, 8); }
-        // palm
-        rr(px - W0 / 2, palmY - H0, W0, H0, steel); ctx.fillStyle = hi; ctx.fillRect(px - W0 / 2 + 6, palmY - H0 + 6, W0 - 12, 8);
-        ctx.fillStyle = glowC; ctx.fillRect(px - 10, palmY - H0 / 2 - 8, 20, 20); glowDot(ctx, px, palmY - H0 / 2, 40, glowC, 0.7);
-        // fingers (pressing down) + thumb
-        const fw = W0 / 4 - 6;
-        for (let k = 0; k < 4; k++) { const fx = px - W0 / 2 + 3 + k * (fw + 6), fl = (70 + (k === 1 || k === 2 ? 16 : 0)) * S * 0.9; rr(fx, palmY, fw, fl, steel); ctx.fillStyle = dark; ctx.fillRect(fx, palmY + fl * 0.5, fw, 4); ctx.fillStyle = glowC; ctx.fillRect(fx + fw / 2 - 3, palmY + fl * 0.5 - 7, 6, 6); }
-        ctx.save(); ctx.translate(px + W0 / 2, palmY - H0 * 0.3); ctx.rotate(-0.7); rr(0, 0, fw, 70 * S * 0.8, steel); ctx.restore();
+        // motion trail (weight)
+        for (let g = 3; g >= 1; g--) {
+            const gy2 = bottom - g * 46 * (1 - land * 0.5);
+            ctx.save(); ctx.globalAlpha = 0.16 * (1 - g / 4) * (1 - land); ctx.drawImage(img, x - w / 2, gy2 - h * 0.42, w, h); ctx.restore();
+        }
+        sprite(ctx, img, x, cy, w, 0, 1, false);
+        // power core + impact
+        glowDot(ctx, x, cy, w * 0.30, glowC, 0.55);
+        if (land >= 1 && lift < 0.9) {
+            const ik = 1 - lift;
+            glowDot(ctx, x, bottom, 90 * S * ik + 30, glowC, 0.85 * ik);
+            ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.8 * ik; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(x - 120 * S * ik - 20, bottom - 6); ctx.lineTo(x + 120 * S * ik + 20, bottom - 6); ctx.stroke(); ctx.restore();
+        }
     };
 
     // ── breath: stream of fire from a mouth ────────────────────────────────
@@ -291,37 +317,47 @@ module.exports = function install(LAYERS, H) {
             const k = t / life, dist = easeOut(k) * Ld * (tr.reach || 1.08), spread = (rr() - 0.5) * 2 * (w * k + 4) + Math.sin(t * 18 + i) * 6 * k;
             const px = sx + ux * dist + nx * spread, py = sy + uy * dist + ny * spread, r = (9 + k * 30) * sz;
             const col = k < 0.22 ? cols[0] : k < 0.5 ? cols[1] : k < 0.78 ? cols[2] : cols[3], a = Math.pow(1 - k, 0.7) * 0.75;
-            glowDot(ctx, px, py, r * 1.7, col, a);
+            // 💡 REAL ART (owner 2026-10-27): cone particles ride real Fire-Wrath frames
+            const fimg = setFr(env, 'fire_jet', Math.floor(t * 16 + i));
+            if (fimg) sprite(ctx, fimg, px, py, r * 3.6, Math.atan2(uy, ux) + (k - 0.5) * 2.2 + (rr() - 0.5), a, true);
+            else glowDot(ctx, px, py, r * 1.7, col, a);
             if (i % 3 === 0) sprite(ctx, env.spr('p_flame_03'), px, py, r * 3.2, Math.atan2(uy, ux) + Math.PI / 2 + (rr() - 0.5), a, true);
         }
     };
 
-    // ── dragon: giant procedural dragon head ───────────────────────────────
+    // ── dragon: giant REAL dragon head (Dragon - Fully Animated, OGA CC0) ───
+    // 💡 REAL ART (owner 2026-10-27, "dragon Sprites"): the procedural skull/jaw/
+    // teeth/horns are replaced by a 6-frame jaw-open sequence from cethiel's CC0
+    // pack (dragon_1..6, faces LEFT natively -> mirrored to face the target).
+    // The frame index follows the same `open` envelope the old jaw used, so the
+    // recipe contract (pos/s/dur/open) is unchanged. Envelope/bob/mouth glow kept.
     LAYERS.dragon = (ctx, tr, env) => {
         const t = env.time - tr.at, dur = tr.dur || 1.5; if (t < 0 || t > dur) return;
         const S = tr.s || 2.2, [x, y] = pt(env, tr.pos || [0.2, 0.42], tr), a = env3(t, dur, 0.35, 0.3);
         const open = tr.open === undefined ? easeOut(clamp01((t - 0.25) / 0.3)) : tr.open, bob = Math.sin(t * 5) * 3;
-        const body = tr.color || '#2f7f8f', belly = tr.belly || '#9fe0d0', flame = tr.flame || '#ff9a30';
-        ctx.save(); ctx.globalAlpha = a; ctx.translate(x, y + bob); ctx.scale(S, S);
-        ctx.lineJoin = 'round'; ctx.strokeStyle = '#0c1a24'; ctx.lineWidth = 3 / S * 1.6;
-        // neck sweeping off-screen
-        ctx.fillStyle = body; ctx.beginPath(); ctx.moveTo(-60, -40); ctx.bezierCurveTo(-150, -50, -200, 20, -300, 90); ctx.lineTo(-300, 190); ctx.bezierCurveTo(-200, 110, -140, 90, -70, 60); ctx.closePath(); ctx.fill(); ctx.stroke();
-        // lower jaw (opens)
-        ctx.save(); ctx.translate(-20, 30); ctx.rotate(open * 0.5);
-        ctx.fillStyle = belly; ctx.beginPath(); ctx.moveTo(-40, 6); ctx.lineTo(110, 14); ctx.lineTo(125, 30); ctx.lineTo(10, 40); ctx.lineTo(-40, 34); ctx.closePath(); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#fff'; for (let k = 0; k < 5; k++) { ctx.beginPath(); ctx.moveTo(10 + k * 22, 14); ctx.lineTo(18 + k * 22, 0); ctx.lineTo(26 + k * 22, 14); ctx.fill(); }
+        const fr = (env.sets && env.sets.dragon_head) || [];
+        if (!fr.length) return;
+        const fi = Math.min(fr.length - 1, Math.max(0, Math.round(open * (fr.length - 1))));
+        const img = fr[fi];
+        const w = 235 * S, h = w * (img.height / img.width);
+        const face = tr.face === 'left' ? 1 : -1;          // native art faces LEFT
+        ctx.save(); ctx.globalAlpha = a; ctx.translate(x, y - h * 0.28 + bob);
+        // fire under-glow separates the head from the bg + keeps the class flame identity
+        glowDot(ctx, face * w * 0.18, h * 0.10, w * 0.55, tr.flame || '#ff9a30', 0.25 * a);
+        ctx.save(); ctx.scale(face, 1);
+        ctx.drawImage(img, -w / 2, -h / 2, w, h);
         ctx.restore();
-        // mouth glow
-        const mr = 60 * (0.4 + open), mg = ctx.createRadialGradient(70, 24, 2, 70, 24, mr); mg.addColorStop(0, '#fff4c0'); mg.addColorStop(0.45, flame); mg.addColorStop(1, 'rgba(255,60,0,0)');
-        ctx.fillStyle = mg; ctx.beginPath(); ctx.arc(70, 24, mr, 0, TAU); ctx.fill();
-        // skull + snout
-        ctx.fillStyle = body; ctx.beginPath(); ctx.moveTo(-70, -10); ctx.lineTo(-60, -50); ctx.lineTo(-20, -68); ctx.lineTo(40, -48); ctx.lineTo(118, -34); ctx.lineTo(132, -16); ctx.lineTo(118, 2); ctx.lineTo(20, 12); ctx.lineTo(-30, 28); ctx.lineTo(-64, 18); ctx.closePath(); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#fff'; for (let k = 0; k < 5; k++) { ctx.beginPath(); ctx.moveTo(24 + k * 20, 6); ctx.lineTo(32 + k * 20, 22); ctx.lineTo(40 + k * 20, 4); ctx.fill(); }
-        // horns + brow + eye
-        ctx.fillStyle = '#d8cfa8'; ctx.beginPath(); ctx.moveTo(-40, -58); ctx.quadraticCurveTo(-90, -110, -150, -100); ctx.quadraticCurveTo(-100, -80, -62, -44); ctx.closePath(); ctx.fill(); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(-10, -64); ctx.quadraticCurveTo(-40, -130, -100, -140); ctx.quadraticCurveTo(-60, -100, -30, -52); ctx.closePath(); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#ffd24a'; ctx.beginPath(); ctx.moveTo(10, -34); ctx.lineTo(48, -42); ctx.lineTo(40, -26); ctx.closePath(); ctx.fill(); glowDot(ctx, 36, -34, 26 / S * S, '#ffb030', 0.7);
-        ctx.fillStyle = '#0c1a24'; ctx.fillRect(30, -38, 4, 8);
+        // ember spray from the jaws once they open (real fire frames drifting forward)
+        const fj = (env.sets && env.sets.fire_jet) || [];
+        if (open > 0.45 && fj.length) {
+            ctx.globalCompositeOperation = 'lighter';
+            for (let k = 0; k < 4; k++) {
+                const rr = mulberry(hashS('dg' + k + tr.at));
+                const fk = (open - 0.45) / 0.55, dist = (0.25 + rr() * 0.4) * fk * w;
+                const ex = face * (w * 0.30 + dist), ey = -h * 0.02 + (rr() - 0.5) * h * 0.16 * fk + fk * 26;
+                sprite(ctx, fj[(k + Math.floor(t * 16)) % fj.length], ex, ey, w * (0.14 + rr() * 0.12), face * (0.5 + (rr() - 0.5)) + (rr() - 0.5) * 0.8, 0.8 * a * fk, true);
+            }
+        }
         ctx.restore();
     };
 
@@ -331,10 +367,20 @@ module.exports = function install(LAYERS, H) {
         const [x0, y0] = pt(env, 'C', { off: tr.offFrom || [10, -60] }), [x1, y1] = pt(env, 'T', { off: tr.offTo || [0, -60] });
         const col = tr.color || '#c43bff', reach = easeOut(clamp01(t / 0.3)), fade = 1 - easeIn(clamp01((t - dur + 0.3) / 0.3));
         const N = 26, pulse = 1 + 0.35 * Math.sin(t * 24);
+        // 💡 REAL ART (owner 2026-10-27): the rect soul links are now real
+        // Cosmic orb frames (fx library CC0) strung along the wobble curve,
+        // purple-biased so the class colour still reads.
+        const so = (env.sets && env.sets.soul_orb) || [];
         ctx.save(); ctx.globalAlpha = fade;
         for (let k = 0; k <= N * reach; k++) {
             const f = k / N, wob = Math.sin(f * 14 - t * 12) * 12 * Math.sin(Math.PI * f), px = lerp(x0, x1, f), py = lerp(y0, y1, f) + wob - Math.sin(Math.PI * f) * 26;
-            ctx.save(); ctx.translate(px, py); ctx.rotate(f * 9 + t * 2); ctx.fillStyle = '#17061f'; ctx.fillRect(-9, -5, 18, 10); ctx.fillStyle = k % 2 ? col : '#7d1fb0'; ctx.fillRect(-7, -3, 14, 6); ctx.restore();
+            if (so.length) {
+                const simg = so[(k * 3 + Math.floor(t * 12)) % so.length];
+                glowDot(ctx, px, py, 20, col, 0.30 * fade);
+                sprite(ctx, tintImg(simg, col, 0.4), px, py, 30, f * 9 + t * 2, 0.85, true);
+            } else {
+                ctx.save(); ctx.translate(px, py); ctx.rotate(f * 9 + t * 2); ctx.fillStyle = '#17061f'; ctx.fillRect(-9, -5, 18, 10); ctx.fillStyle = k % 2 ? col : '#7d1fb0'; ctx.fillRect(-7, -3, 14, 6); ctx.restore();
+            }
         }
         ctx.restore();
         glowDot(ctx, x1, y1, 50 * pulse, col, 0.7 * fade * reach); glowDot(ctx, x0, y0, 36 * pulse, col, 0.6 * fade);
@@ -349,11 +395,16 @@ module.exports = function install(LAYERS, H) {
         const col = tr.color || '#8dff9c', cx = (x0 + x1) / 2, cy = Math.min(y0, y1) - 120;
         const bez = (f) => [(1 - f) * (1 - f) * x0 + 2 * (1 - f) * f * cx + f * f * x1, (1 - f) * (1 - f) * y0 + 2 * (1 - f) * f * cy + f * f * y1];
         const u = clamp01(t / dur);
+        // 💡 REAL ART (owner 2026-10-27): the traveling soul is a real Cosmic
+        // orb frame (fx library CC0) flickering along the bezier arc.
+        const so = (env.sets && env.sets.soul_orb) || [];
         if (t < dur) {
             // soul tears out of the target
             if (u < 0.25) { glowDot(ctx, x0, y0, 70 * bell(u / 0.25) + 20, col, 0.7); }
             for (let j = 14; j >= 0; j--) { const f = easeIn(clamp01(u - j * 0.022)); const p = bez(f); glowDot(ctx, p[0], p[1], 26 - j * 1.4, j < 2 ? '#ffffff' : col, 0.8 * (1 - j / 16)); }
-            const p = bez(easeIn(u)); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = '#fff'; ctx.fillRect(Math.round(p[0]) - 3, Math.round(p[1]) - 5, 7, 10); ctx.restore();
+            const p = bez(easeIn(u));
+            if (so.length) sprite(ctx, so[(Math.floor(t * 14)) % so.length], p[0], p[1], 44, t * 3, 0.95, true);
+            else { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = '#fff'; ctx.fillRect(Math.round(p[0]) - 3, Math.round(p[1]) - 5, 7, 10); ctx.restore(); }
         } else {
             const a = t - dur;
             if (a < 0.5) {
@@ -370,12 +421,17 @@ module.exports = function install(LAYERS, H) {
         const [tx, ty] = pt(env, tr.pos || 'T', tr), fx = tx, fy = ty - (tr.fuseUp || 120), [cx, cy] = pt(env, 'C', { off: [0, -90] });
         const ph1 = clamp01(u / 0.4), ph2 = clamp01((u - 0.4) / 0.6);
         const S = tr.s || 1;
+        // 💡 REAL ART (owner 2026-10-27): each orb is a real elemental sprite
+        // (Fire-Wrath / Water / LightEffect / Earth-Impact, fx library CC0)
+        const orbSets = [env.sets && env.sets.elem_fire, env.sets && env.sets.elem_water, env.sets && env.sets.elem_light, env.sets && env.sets.elem_earth];
         for (let i = 0; i < 4; i++) {
             const a = (i / 4) * TAU + u * 9 * (1 - ph2 * 0.5);
             const orbR = lerp(60, 14, easeIn(ph2)) * S, base = [lerp(cx, fx, easeInOut(ph2)), lerp(cy, fy, easeInOut(ph2))];
             const px = base[0] + Math.cos(a) * orbR, py = base[1] + Math.sin(a) * orbR * 0.7, r = (14 + 10 * ph1) * S * (1 - 0.3 * ph2);
+            const oimg = orbSets[i] && orbSets[i].length ? orbSets[i][(i * 3 + Math.floor(t * 12)) % orbSets[i].length] : null;
             for (let j = 6; j >= 1; j--) { const a2 = a - j * 0.18; glowDot(ctx, base[0] + Math.cos(a2) * orbR, base[1] + Math.sin(a2) * orbR * 0.7, r * (1 - j / 8), cols[i], 0.35); }
-            glowDot(ctx, px, py, r * 2, cols[i], 0.9); glowDot(ctx, px, py, r * 0.9, '#ffffff', 0.9);
+            if (oimg) sprite(ctx, oimg, px, py, r * 3.4, t * 2 + i, 0.95, true);
+            else { glowDot(ctx, px, py, r * 2, cols[i], 0.9); glowDot(ctx, px, py, r * 0.9, '#ffffff', 0.9); }
         }
         if (ph2 > 0.6) { const k = (ph2 - 0.6) / 0.4, rr = (18 + 70 * k) * S; glowDot(ctx, fx, fy, rr * 2.2, '#ffffff', 0.6 * k); glowDot(ctx, fx, fy, rr, '#ffffff', 0.95); }
     };
@@ -408,7 +464,9 @@ module.exports = function install(LAYERS, H) {
         }
         for (let i = 0; i < 28; i++) { const bh = (0.2 + 0.8 * Math.abs(Math.sin(t * 7 + i * 1.7))) * 90 * a; ctx.fillStyle = i % 2 ? col : col2; ctx.globalAlpha = 0.45 * a; ctx.fillRect(i * (env.W / 28) + 3, env.H - bh, env.W / 28 - 6, bh); }
         ctx.restore();
-        for (let i = 0; i < 10; i++) { const rr = mulberry(hashS('stf' + i)), sp = 80 + rr() * 90, xx = ((rr() * env.W + t * sp) % (env.W + 60)) - 30, l = Math.floor(rr() * 5); const yy = env.H * 0.28 + l * 16 + Math.sin(xx * 0.02 + t * 5 + l * 0.6) * 10 * a; ctx.save(); ctx.globalAlpha = a; ctx.translate(xx, yy); ctx.rotate(-0.3); ctx.fillStyle = i % 2 ? col : col2; ctx.beginPath(); ctx.ellipse(0, 0, 8, 6, 0, 0, TAU); ctx.fill(); ctx.fillRect(7, -22, 2, 22); ctx.restore(); }
+        // 💡 REAL ART (owner 2026-10-27): floating notes are real music-note frames
+        const mn = (env.sets && env.sets.music_note) || [];
+        for (let i = 0; i < 10; i++) { const rr = mulberry(hashS('stf' + i)), sp = 80 + rr() * 90, xx = ((rr() * env.W + t * sp) % (env.W + 60)) - 30, l = Math.floor(rr() * 5); const yy = env.H * 0.28 + l * 16 + Math.sin(xx * 0.02 + t * 5 + l * 0.6) * 10 * a; if (mn.length) { sprite(ctx, mn[(i + Math.floor(t * 8)) % mn.length], xx, yy, 30, -0.25, a, true); continue; } ctx.save(); ctx.globalAlpha = a; ctx.translate(xx, yy); ctx.rotate(-0.3); ctx.fillStyle = i % 2 ? col : col2; ctx.beginPath(); ctx.ellipse(0, 0, 8, 6, 0, 0, TAU); ctx.fill(); ctx.fillRect(7, -22, 2, 22); ctx.restore(); }
     };
 
     // ── ripple: contracting (rewind) or expanding rings ────────────────────

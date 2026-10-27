@@ -11,6 +11,7 @@
 //  Layers are pure functions of `time` (deterministic → re-renders identically).
 // ═══════════════════════════════════════════════════════════════════════════
 const PX = 4;
+const { createCanvas } = require('canvas');
 
 function mulberry(seed) { let s = seed >>> 0; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
@@ -52,6 +53,31 @@ function hideRegion(ctx, env, cx, cy, w, h) {
     ctx.drawImage(b, (env.W * 0.5 - w / 2) * k, (cy - h / 2) * (b.height / env.H), w * k, h * (b.height / env.H), cx - w / 2, cy - h / 2, w, h);
     ctx.fillStyle = 'rgba(5,6,15,0.30)'; ctx.fillRect(cx - w / 2, cy - h / 2, w, h);
     ctx.restore();
+}
+
+// ── real-art helpers (owner 2026-10-27: replace hand-made art with game assets) ──
+/** frame n of a preloaded set (env.sets[set]), or null when the set is missing. */
+function setFr(env, set, fi) {
+    const fr = env.sets && env.sets[set];
+    if (!fr || !fr.length) return null;
+    return fr[((fi % fr.length) + fr.length) % fr.length];
+}
+const _tintWeak = new WeakMap();
+/** colour-bias a real sprite so it keeps the class palette identity (memoized per img+colour). */
+function tintImg(img, color, strength) {
+    if (!img || !color || !strength) return img;
+    let m = _tintWeak.get(img);
+    if (!m) { m = new Map(); _tintWeak.set(img, m); }
+    const key = color + '|' + strength;
+    if (m.has(key)) return m.get(key);
+    const c = createCanvas(img.width, img.height), g = c.getContext('2d');
+    g.drawImage(img, 0, 0);
+    g.globalCompositeOperation = 'source-atop';
+    g.globalAlpha = Math.min(1, Math.max(0, strength));
+    g.fillStyle = color;
+    g.fillRect(0, 0, img.width, img.height);
+    m.set(key, c);
+    return c;
 }
 
 // ── bone hand (pixel blocks) ────────────────────────────────────────────────
@@ -99,7 +125,9 @@ function boneHand(ctx, x, gy, rise, curl, s, flip, glow) {
 // ── layers ──────────────────────────────────────────────────────────────────
 const LAYERS = {};
 
-/** ground rift (dark pit + glowing lip) that opens, holds and closes. */
+/** ground rift (dark pit + glowing lip) that opens, holds and closes.
+ * 💡 REAL ART (owner 2026-10-27): the pit now burns with a real portal sprite
+ * (fx/portal1 64-frame CC0 loop, squashed to the ground plane) under the lip. */
 LAYERS.rift = (ctx, tr, env) => {
     const { t } = local(env, tr), dur = tr.dur || 1.6;
     if (t < 0 || t > dur + 0.25) return;
@@ -109,9 +137,18 @@ LAYERS.rift = (ctx, tr, env) => {
     const rx = (tr.rx || 70) * open, ry = rx * 0.34;
     ctx.save(); ctx.translate(x, y);
     ctx.fillStyle = 'rgba(2,0,8,0.92)'; ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, 7); ctx.fill();
-    const g = ctx.createRadialGradient(0, 0, ry * 0.2, 0, 0, rx);
-    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.8, tr.color || 'rgba(150,60,255,0.35)'); g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, rx * 1.18, ry * 1.3, 0, 0, 7); ctx.fill();
+    // real portal swirl (squashed to the ground ellipse), tinted to the class colour
+    const pimg = setFr(env, 'portal', Math.floor(t * 22));
+    if (pimg) {
+        const pw = rx * 3.6, ph = pw * (pimg.height / pimg.width);
+        ctx.save(); ctx.scale(1, ry / (rx * 0.62));
+        sprite(ctx, tintImg(pimg, tr.color || '#9d6bff', 0.45), 0, 0, pw, 0, 0.85 * open, true);
+        ctx.restore();
+    } else {
+        const g = ctx.createRadialGradient(0, 0, ry * 0.2, 0, 0, rx);
+        g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.8, tr.color || 'rgba(150,60,255,0.35)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, rx * 1.18, ry * 1.3, 0, 0, 7); ctx.fill();
+    }
     ctx.strokeStyle = tr.lip || '#b78bff'; ctx.globalAlpha = 0.65 + 0.25 * Math.sin(t * 22); ctx.lineWidth = 3;
     ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, 7); ctx.stroke();
     ctx.restore();
@@ -183,7 +220,10 @@ LAYERS.hands = (ctx, tr, env) => {
     }
 };
 
-/** rune circle on the ground (or a clock face when hands:true). */
+/** rune circle on the ground (or a clock face when hands:true).
+ * 💡 REAL ART (owner 2026-10-27): the drawn rings/glyphs/star are replaced by a
+ * 28-frame real summon-circle loop (fx/circle, CC0), tinted to the class colour
+ * so each cast keeps its identity. The clock variant keeps procedural hands on top. */
 LAYERS.circle = (ctx, tr, env) => {
     const { t, u } = local(env, tr), dur = tr.dur || 1.2;
     if (t < 0 || t > dur + 0.2) return;
@@ -192,33 +232,29 @@ LAYERS.circle = (ctx, tr, env) => {
     if (grow <= 0.01) return;
     const R = (tr.r || 90) * grow, ratio = tr.ratio || 0.38;
     const col = tr.color || '#b78bff', spin = (tr.spin || 1.4) * t;
-    ctx.save(); ctx.translate(x, y); ctx.scale(1, ratio); ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = 0.85; ctx.strokeStyle = col; ctx.lineWidth = 3 / Math.max(0.4, ratio * 1.6);
-    ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.stroke();
-    ctx.lineWidth = 1.5 / ratio * 0.5; ctx.beginPath(); ctx.arc(0, 0, R * 0.82, 0, 7); ctx.stroke();
-    // glyph ticks
-    const nt = tr.ticks || 16;
-    for (let i = 0; i < nt; i++) {
-        const a = spin + (i / nt) * Math.PI * 2, r0 = R * 0.84, r1 = R * (i % 2 ? 0.95 : 0.99);
-        ctx.beginPath(); ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0); ctx.lineTo(Math.cos(a) * r1, Math.sin(a) * r1); ctx.stroke();
-    }
-    // star polygon (hexagram or pentagram)
-    const pts = tr.points || 6, step = pts === 5 ? 2 : 2;
-    ctx.lineWidth = 2 / ratio * 0.5; ctx.rotate(-spin * 0.6);
-    if (pts === 6) {
-        for (const off of [0, Math.PI]) { ctx.beginPath(); for (let k = 0; k < 3; k++) { const a = off + (k / 3) * Math.PI * 2 - Math.PI / 2; const px = Math.cos(a) * R * 0.78, py = Math.sin(a) * R * 0.78; k ? ctx.lineTo(px, py) : ctx.moveTo(px, py); } ctx.closePath(); ctx.stroke(); }
+    const rimg = setFr(env, 'rune_circle', Math.floor(t * 14));
+    if (rimg) {
+        const rw = R * 2.9, rh = rw * (rimg.height / rimg.width) * (0.55 + ratio * 0.55);
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        sprite(ctx, tintImg(rimg, col, 0.5), x, y - rh * 0.06, rw, spin * 0.05, 0.9 * grow, true);
+        ctx.restore();
     } else {
-        ctx.beginPath(); for (let k = 0; k <= pts; k++) { const a = ((k * step) % pts / pts) * Math.PI * 2 - Math.PI / 2; const px = Math.cos(a) * R * 0.78, py = Math.sin(a) * R * 0.78; k ? ctx.lineTo(px, py) : ctx.moveTo(px, py); } ctx.stroke();
+        ctx.save(); ctx.translate(x, y); ctx.scale(1, ratio); ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.85; ctx.strokeStyle = col; ctx.lineWidth = 3 / Math.max(0.4, ratio * 1.6);
+        ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.stroke();
+        ctx.lineWidth = 1.5 / ratio * 0.5; ctx.beginPath(); ctx.arc(0, 0, R * 0.82, 0, 7); ctx.stroke();
+        ctx.restore();
     }
     if (tr.clock) {
-        ctx.rotate(spin * 0.6);
+        ctx.save(); ctx.translate(x, y - R * 0.06); ctx.scale(1, ratio); ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.85 * grow; ctx.strokeStyle = col; ctx.lineWidth = 2.5 / Math.max(0.4, ratio * 1.6);
         for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; ctx.beginPath(); ctx.moveTo(Math.cos(a) * R * 0.6, Math.sin(a) * R * 0.6); ctx.lineTo(Math.cos(a) * R * 0.72, Math.sin(a) * R * 0.72); ctx.stroke(); }
         ctx.lineWidth = 3 / ratio * 0.5;
         const hm = t * 9, hh = t * 0.75;
         ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(hm) * R * 0.55, Math.sin(hm) * R * 0.55); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(hh) * R * 0.33, Math.sin(hh) * R * 0.33); ctx.stroke();
+        ctx.restore();
     }
-    ctx.restore();
     glowDot(ctx, x, y, R * 0.9, col, 0.22 * grow);
 };
 
@@ -556,8 +592,8 @@ LAYERS.emit = (ctx, tr, env) => {
             case 'spark': sprite(ctx, env.spr('p_spark_03'), x, y, sz * 6, Math.atan2(vy + gr * t, vx), a, true); break;
             case 'coin': { const sq = Math.abs(Math.cos(t * 12 + i)); ctx.fillStyle = '#ffcf3a'; ctx.strokeStyle = '#9a6a00'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(x, y, sz * 1.4 * Math.max(0.2, sq), sz * 1.4, 0, 0, 7); ctx.fill(); ctx.stroke(); break; }
             case 'leaf': ctx.translate(x, y); ctx.rotate(t * 4 + i); ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(0, 0, sz * 1.5, sz * 0.7, 0, 0, 7); ctx.fill(); break;
-            case 'soul': glowDot(ctx, x, y, sz * 3.2, col, a * 0.8); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = '#fff'; ctx.fillRect(Math.round(x) - 2, Math.round(y) - 3, 5, 6); ctx.globalAlpha = a * 0.5; ctx.fillRect(Math.round(x) - 1, Math.round(y) + 3, 3, 8); break;
-            case 'note': ctx.translate(x, y); ctx.rotate(-0.3); ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(0, 0, sz * 1.2, sz * 0.9, 0, 0, 7); ctx.fill(); ctx.fillRect(sz * 0.9, -sz * 3, 2, sz * 3); ctx.fillRect(sz * 0.9, -sz * 3, sz * 1.6, 3); break;
+            case 'soul': { const simg = setFr(env, 'soul_orb', Math.floor(t * 10 + i)); if (simg) { sprite(ctx, tintImg(simg, col, 0.35), x, y, sz * 3.6, t * 2 + i, a * 0.95, true); glowDot(ctx, x, y, sz * 2.6, col, a * 0.5); } else { glowDot(ctx, x, y, sz * 3.2, col, a * 0.8); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = '#fff'; ctx.fillRect(Math.round(x) - 2, Math.round(y) - 3, 5, 6); ctx.globalAlpha = a * 0.5; ctx.fillRect(Math.round(x) - 1, Math.round(y) + 3, 3, 8); } break; }
+            case 'note': { const nimg = setFr(env, 'music_note', Math.floor(t * 8 + i)); if (nimg) sprite(ctx, nimg, x, y, sz * 4.2, -0.25, a, true); else { ctx.translate(x, y); ctx.rotate(-0.3); ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(0, 0, sz * 1.2, sz * 0.9, 0, 0, 7); ctx.fill(); ctx.fillRect(sz * 0.9, -sz * 3, 2, sz * 3); ctx.fillRect(sz * 0.9, -sz * 3, sz * 1.6, 3); } break; }
             case 'spr': sprite(ctx, env.spr(tr.spr || 'p_magic_03'), x, y, sz * 6, t * (tr.spin || 0), a, true); break;
             default: ctx.fillStyle = col; ctx.globalAlpha = a; if (tr.add) ctx.globalCompositeOperation = 'lighter'; ctx.fillRect(Math.round(x), Math.round(y), Math.round(sz), Math.round(sz));
         }
@@ -566,7 +602,7 @@ LAYERS.emit = (ctx, tr, env) => {
 };
 
 try {
-    require('./ultimateFxLayers2')(LAYERS, { pt, local, glowDot, sprite, mulberry, hashS, clamp01, easeOut, easeIn, bell });
+    require('./ultimateFxLayers2')(LAYERS, { pt, local, glowDot, sprite, mulberry, hashS, clamp01, easeOut, easeIn, bell, setFr, tintImg });
 } catch (e) { console.warn('[UltFx] layers v2 unavailable:', e.message); }
 
 module.exports = { LAYERS, boneHand };
