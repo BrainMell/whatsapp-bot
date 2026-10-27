@@ -214,12 +214,23 @@ function classRecipe(cls, p, { IMPACT: I }) {
             ...cutSet({ col: '#ff4a2a', mid: '#ffd8a0', angles: [-0.9, 0.7, -0.3, 1.2, 0.1, -0.6, 0.95, -1.1, 0.3], n: 9, len: 165, w: 11, gap: 0.05, sprite: 'fire_slash' }),
             L('wash', { at: I, dur: 0.5, color: '#ff2a0a', a: 0.3, add: true }),
         ],
-        // arrows rain (owner: fine as is)
+        // assassinate volley — R3 rework (owner 2026-10-27 "Assassinate doesn't
+        // animated"): the old arrow rain had no veil/spotlight and 14 thin
+        // arrows on a bright field — the impact read as an empty scene on a
+        // phone. Now every other-ult standard applies: dim veil + caster aura,
+        // aim rings lock the victim, TWO glowing volleys, burst slashes +
+        // claw hit + triple rings + hard flash at the kill.
         SCOUT: () => [
-            L('emit', { at: 0.1, dur: 0.7, pos: 'C', n: 10, life: 0.5, shape: 'spark', colors: ['#c9ffa8'], v: [60, -50], vr: [30, 20] }),
-            L('fall', { at: I - 0.35, pos: 'T', kind: 'arrow', n: 14, gap: 0.045, fall: 0.3, slant: -110, spreadX: 210, spreadY: 80, color: '#ffe9a0', land: 'k_simple', landW: 70, landAdd: true, spread: 'enemies', fanGap: 0.05 }),
-            L('rings', { at: I + 0.2, pos: 'T', n: 2, color: '#e8ffbf', r: 120 }),
-            flash('#fff3c4', 0.3, I + 0.3, 0.15),
+            dark(0.5, 0.08, I + 0.55),
+            casterAura('#c9ffa8', 14),
+            L('emit', { at: 0.1, dur: 0.7, pos: 'C', n: 14, life: 0.5, shape: 'spark', colors: ['#c9ffa8', '#ffffff'], v: [60, -50], vr: [30, 20] }),
+            L('rings', { at: 0.35, pos: 'T', n: 2, color: '#e8ffbf', r: 90 }),
+            L('fall', { at: I - 0.4, pos: 'T', kind: 'arrow', n: 22, gap: 0.04, fall: 0.28, slant: -110, spreadX: 230, spreadY: 90, color: '#fff7cf', land: 'k_simple', landW: 84, landAdd: true, spread: 'enemies', fanGap: 0.05 }),
+            L('fall', { at: I - 0.18, pos: 'T', kind: 'arrow', n: 12, gap: 0.05, fall: 0.24, slant: -95, spreadX: 150, spreadY: 70, color: '#ffe9a0', land: 'k_regular', landW: 110, landAdd: true, spread: 'enemies', fanGap: 0.06 }),
+            L('slashes', { at: I + 0.05, n: 10, gap: 0.01, kind: 'burst', color: '#d9ffb0', mid: '#ffffff', len: 160 }),
+            { fx: 'claw', at: I + 0.18, pos: 'T', w: 250, n: 2, jit: [26, 18], gap: 0.08, rot: [-0.5, 0.5], tint: ['#c9ffa8', 0.75] },
+            L('rings', { at: I + 0.25, pos: 'T', n: 3, color: '#e8ffbf', r: 130 }),
+            flash('#fff3c4', 0.5, I + 0.28, 0.16),
         ],
         // rogue: two quick stabs and a critical pop (no lunge)
         ROGUE: () => [

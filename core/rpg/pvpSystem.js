@@ -1267,6 +1267,12 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
                     sendText,
                     sendGif,
                 });
+            } else if (!currentPlayer.isSummon) {
+                // 🔍 R3 observability (owner: "Assassinate doesn't animated" —
+                // turned out the duel had expired, but a silent skip looks
+                // identical to a broken engine from the outside): always leave
+                // a breadcrumb when a cast does NOT animate.
+                console.log('[PvP VFX] skip ' + casterClassId + '/' + (ability && ability.id) + ' — no animated signature for this cast (non-ult or unmapped skill)');
             }
         } catch (pvpVfxErr) {
             console.warn('[PvP VFX] ultimate animation failed; duel continues normally:', pvpVfxErr?.message || pvpVfxErr);
