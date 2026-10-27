@@ -239,6 +239,12 @@ module.exports = function install(LAYERS, H) {
     };
 
     // ── scythe ─────────────────────────────────────────────────────────────
+    // 💀 REAL SCYTHE (owner 2026-10-27: "The reapers syth should be a real syth ... I want
+    // um to became tiny and a gaint syth hits"): when the recipe passes art:'scythe_art',
+    // the pendulum swings the Wenrexa dark scythe sprite (CC0, purple-tinted) instead of
+    // the procedural handle+blade. The sprite is drawn along the swing arm so the BLADE
+    // leads the arc; the swoosh, glow and cut flash are unchanged. artRot aligns the
+    // sprite's own blade direction with the arm (+x) — tuned on the Wenrexa sheet.
     LAYERS.scythe = (ctx, tr, env) => {
         const t = env.time - tr.at, dur = tr.dur || 0.9; if (t < 0 || t > dur) return;
         const u = t / dur, [x, y] = pt(env, tr.pos || 'T', tr), cy = y - (tr.rise === undefined ? 60 : tr.rise), R = tr.R || 250;
@@ -251,14 +257,29 @@ module.exports = function install(LAYERS, H) {
         ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
         for (const [lw, c2, al] of [[34, col, 0.28], [12, edge, 0.6]]) { ctx.strokeStyle = c2; ctx.globalAlpha = al * fade * appear; ctx.lineWidth = lw; ctx.beginPath(); ctx.arc(Px, Py, R * 1.02, Math.min(a0, ang), Math.max(a0, ang)); ctx.stroke(); }
         ctx.restore();
-        // handle + blade
-        ctx.save(); ctx.globalAlpha = fade * appear; ctx.translate(Px, Py); ctx.rotate(ang);
-        ctx.strokeStyle = '#150f24'; ctx.lineWidth = 16; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-R * 0.35, 0); ctx.lineTo(R, 0); ctx.stroke();
-        ctx.strokeStyle = '#6b5a8f'; ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(-R * 0.35, 0); ctx.lineTo(R, 0); ctx.stroke();
-        const B = R * (tr.blade || 0.95); ctx.translate(R, 0);
-        const blade = ctx.createLinearGradient(0, 0, 0, B); blade.addColorStop(0, edge); blade.addColorStop(1, col);
-        ctx.fillStyle = blade; ctx.strokeStyle = '#150f24'; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(0, -4); ctx.quadraticCurveTo(B * 0.25, B * 0.9, -B * 0.75, B * 1.05); ctx.quadraticCurveTo(-B * 0.1, B * 0.55, -6, 6); ctx.closePath(); ctx.fill(); ctx.stroke();
+        // the scythe itself
+        const art = tr.art && env.sets && env.sets[tr.art] && env.sets[tr.art][0];
+        ctx.save(); ctx.globalAlpha = fade * appear;
+        if (art) {
+            // real sprite: centered on the arm at 45% out, rotated to lead with the blade
+            const armX = Px + Math.cos(ang) * R * 0.45, armY = Py + Math.sin(ang) * R * 0.45;
+            const w = R * (tr.artW || 1.5);
+            ctx.translate(armX, armY); ctx.rotate(ang + (tr.artRot === undefined ? Math.PI * 0.78 : tr.artRot));
+            if (tr.tintArt !== false) {
+                ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = fade * appear * 0.5;
+                ctx.drawImage(art, -w / 2, -w / 2, w, w); ctx.restore();
+            }
+            ctx.drawImage(art, -w / 2, -w / 2, w, w);
+        } else {
+            // procedural handle + blade (fallback when no art shipped)
+            ctx.translate(Px, Py); ctx.rotate(ang);
+            ctx.strokeStyle = '#150f24'; ctx.lineWidth = 16; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-R * 0.35, 0); ctx.lineTo(R, 0); ctx.stroke();
+            ctx.strokeStyle = '#6b5a8f'; ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(-R * 0.35, 0); ctx.lineTo(R, 0); ctx.stroke();
+            const B = R * (tr.blade || 0.95); ctx.translate(R, 0);
+            const blade = ctx.createLinearGradient(0, 0, 0, B); blade.addColorStop(0, edge); blade.addColorStop(1, col);
+            ctx.fillStyle = blade; ctx.strokeStyle = '#150f24'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(0, -4); ctx.quadraticCurveTo(B * 0.25, B * 0.9, -B * 0.75, B * 1.05); ctx.quadraticCurveTo(-B * 0.1, B * 0.55, -6, 6); ctx.closePath(); ctx.fill(); ctx.stroke();
+        }
         ctx.restore();
         glowDot(ctx, Q[0], Q[1], 60, col, 0.5 * fade);
         // the cut (when the blade passes the target)
@@ -335,7 +356,8 @@ module.exports = function install(LAYERS, H) {
         const t = env.time - tr.at, dur = tr.dur || 1.5; if (t < 0 || t > dur) return;
         const S = tr.s || 2.2, [x, y] = pt(env, tr.pos || [0.2, 0.42], tr), a = env3(t, dur, 0.35, 0.3);
         const open = tr.open === undefined ? easeOut(clamp01((t - 0.25) / 0.3)) : tr.open, bob = Math.sin(t * 5) * 3;
-        const fr = (env.sets && env.sets.dragon_head) || [];
+        // tr.set picks a variant set (DRAGON_LORD: 'dragon_head_inv' = color-inverted frames)
+        const fr = (env.sets && env.sets[tr.set || 'dragon_head']) || [];
         if (!fr.length) return;
         const fi = Math.min(fr.length - 1, Math.max(0, Math.round(open * (fr.length - 1))));
         const img = fr[fi];

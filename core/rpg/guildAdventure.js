@@ -10,6 +10,11 @@
 // - Actual challenge and risk
 
 const fs = require("fs");
+// 🔥 VFX PREWARM (Task 26-R2): decode every ultimate-FX sprite set once at boot in the
+// background. The first real cast after a restart used to pay 10-16s of cold PNG decoding,
+// blew the video race and fell back to the old hand-drawn GIF — the "new animations aren't
+// wired into combat" report. No-op after the first call.
+try { require('./ultimateFx').prewarm(); } catch (e) { /* vfx optional at boot */ }
 // 💡 FIX #6 (2026-08-15): Threat/aggro system for PvE combat
 const threatSystem = require('./threatSystem');
 

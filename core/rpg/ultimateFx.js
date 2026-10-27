@@ -26,7 +26,6 @@ const IMPACT = 1.05;                  // seconds: the hit lands
 
 // ── sprite sets ─────────────────────────────────────────────────────────────
 const SETS = {
-    fire_bomb:  { dir: 'magic', prefix: 'Fire-bomb', n: 15, fps: 16 },
     lightning:  { dir: 'magic', prefix: 'Lightning', n: 11, fps: 18 },
     dark_bolt:  { dir: 'magic', prefix: 'Dark-Bolt', n: 12, fps: 16 },
     holy_burst: { dir: 'holy',  prefix: 'Holy VFX 02 ', n: 16, fps: 18 },
@@ -38,7 +37,6 @@ const SETS = {
     ice_shards: { strip: 'attack1.png', n: 4, fps: 8 },
     white_burst:{ strip: 'attack2.png', n: 4, fps: 10 },
     ice_beam:   { strip: 'attack3.png', n: 4, fps: 9 },
-    fire_blast: { strip: 'attack4.png', n: 4, fps: 8 },
     fire_slash: { strip: 'attack5.png', n: 4, fps: 10 },
     vine_slash: { strip: 'attack6.png', n: 4, fps: 8 },
     claw:       { strip: 'attack7.png', n: 4, fps: 10 },
@@ -62,11 +60,30 @@ const SETS = {
     // game assets"): the layer painters swap their procedural bodies for these free packs.
     // `base` is relative to core/rpgasset/ (the merged fx/ library); `from`+`pad` support
     // zero-padded non-1-based frame numbers (fx/circle ships 010000-010027).
+    // 🔥 ROUND 2 (owner 2026-10-27: "the flame... idk I don't like this these flame assets you used"):
+    // fire_blast (4×96px pixel blobs), fire_bomb (15 tiny blobs) and the Fire-Wrath jets are
+    // replaced with big license-clean art: Sinestesia 2D Explosion Animations (CC0), Cethiel
+    // Fireball Effect (CC0) — see vfx/CREDITS.md. Same SET KEYS so recipes never change.
+    fire_blast: { dir: 'fire2', prefix: 'blast_', n: 6, fps: 12, smooth: true },
+    fire_bomb:  { dir: 'fire2', prefix: 'stream_', n: 6, fps: 10, smooth: true },
+    fire_jet:   { dir: 'fire2', prefix: 'jet_', n: 4, fps: 8, smooth: true },
+    elem_fire:  { dir: 'fire2', prefix: 'jet_', n: 4, fps: 8, smooth: true },
+    // ⏳ MAGIC CLOCK (owner: "a gaint magic clock fade in adn out"): AntumDeluge clock-animation
+    // tick loop + Cethiel Cosmic-Time mandala halo (both CC0), stacked in LAYERS.magicClock.
+    clock_face: { dir: 'clock', prefix: 'face_', n: 12, fps: 12, smooth: true },
+    clock_mandala: { dir: 'clock', prefix: 'mandala_', n: 7, fps: 10, smooth: true },
+    // ☄️ REAL METEORS (owner: "the Meteor sprite for both the mage and apprentice skills are ASS"):
+    // boulder = JadisGames rotating rock (CC-BY 4.0, trail drawn in code), comet = Game Developer
+    // Studio high-res fire ball with its own tail (CC-BY 3.0).
+    meteor_rock:{ dir: 'meteor', prefix: 'boulder_', n: 8, fps: 12, smooth: true },
+    meteor_comet:{ dir: 'meteor', prefix: 'comet_', n: 6, fps: 12, smooth: true },
+    // 💀 REAL SCYTHE (owner: "The reapers syth should be a real syth"): Wenrexa dark scythe (CC0).
+    scythe_art: { dir: 'scythe', prefix: 'scythe', n: 1, fps: 1, smooth: true },
+    // 🐉 DRAGON_LORD color-inverted wyvern (owner: "the dragon lord should have the color be inverted")
+    dragon_head_inv:{ dir: 'dragon', prefix: 'dragon_', n: 6, fps: 10, smooth: true, invert: true },
     rune_circle:{ base: 'fx', dir: 'circle', prefix: '', n: 28, fps: 16, from: 10000, pad: 6, smooth: true },
     portal:     { base: 'fx', dir: 'portal1', prefix: 'portal', n: 64, fps: 20, from: 1, pad: 2, smooth: true },
     soul_orb:   { base: 'fx', dir: 'cosmic/1', prefix: 'Cosmic_', n: 5, fps: 10, from: 1, pad: 2, smooth: true },
-    fire_jet:   { base: 'fx', dir: 'fire/5', prefix: 'Fire-Wrath__', n: 5, fps: 12, from: 21, pad: 2, smooth: true },
-    elem_fire:  { base: 'fx', dir: 'fire/1', prefix: 'Fire-Wrath__', n: 5, fps: 10, from: 1, pad: 2, smooth: true },
     elem_water: { base: 'fx', dir: 'water/01', prefix: 'Water__', n: 5, fps: 10, from: 1, pad: 2, smooth: true },
     elem_light: { base: 'fx', dir: 'light', prefix: 'LightEffect_', n: 25, fps: 14, from: 1, pad: 2, smooth: true },
     elem_earth: { base: 'fx', dir: 'earth/1', prefix: 'Earth-Impact_', n: 5, fps: 10, from: 1, pad: 2, smooth: true },
@@ -75,7 +92,28 @@ const SETS = {
     robo_hand:  { dir: 'robo', prefix: 'robo_', n: 2, fps: 8, smooth: true },
 };
 // sets the layer painters consume directly from env.sets (preloaded once per process)
-const LAYER_ART = ['rune_circle', 'portal', 'soul_orb', 'fire_jet', 'elem_fire', 'elem_water', 'elem_light', 'elem_earth', 'music_note', 'dragon_head', 'robo_hand', 'claw'];
+const LAYER_ART = ['rune_circle', 'portal', 'soul_orb', 'fire_jet', 'elem_fire', 'elem_water', 'elem_light', 'elem_earth', 'music_note', 'dragon_head', 'dragon_head_inv', 'robo_hand', 'claw', 'clock_face', 'clock_mandala', 'meteor_rock', 'meteor_comet', 'scythe_art'];
+
+// 🔥 BOOT PREWARM (Task 26-R2, owner: "the new animations haven't been wired into the combat"):
+// the real DRAGON_GOD cast 13:26Z rendered 16.3s on a cold image cache, blew the 9s race and fell
+// back to the OLD hand-drawn GIF — the exact "preview shows new anims, combat shows old ones" report.
+// Decode every set once, in the background, the moment this module loads (boot-time via the
+// guildAdventure require). Promise-memoized loadSet keeps concurrent casts from double-decoding.
+let _prewarmed = false;
+function prewarm() {
+    if (_prewarmed) return;
+    _prewarmed = true;
+    setImmediate(() => {
+        (async () => {
+            const t0 = Date.now();
+            for (const nm of Object.keys(SETS)) await loadSet(nm);
+            await loadSingles();
+            await loadHudIcons();
+            console.log('[UltFx] prewarm: ' + _frames.size + ' sets cached in ' + (Date.now() - t0) + 'ms');
+        })().catch((e) => console.warn('[UltFx] prewarm failed:', e?.message || e));
+    });
+}
+prewarm();
 const LAYERS = (() => { try { return require('./ultimateFxLayers').LAYERS; } catch (e) { console.warn('[UltFx] layers unavailable:', e.message); return {}; } })();
 const RECIPE_PACK = (() => { try { return require('./ultimateFxRecipes'); } catch (e) { console.warn('[UltFx] class recipes unavailable:', e.message); return null; } })();
 const _singles = new Map();
@@ -88,9 +126,19 @@ async function loadSingles() {
 const _frames = new Map();
 const _tinted = new Map();
 
-async function loadSet(name) {
-    if (_frames.has(name)) return _frames.get(name);
+const _framePromises = new Map();
+function loadSet(name) {
+    if (_frames.has(name)) return Promise.resolve(_frames.get(name));
+    let p = _framePromises.get(name);
+    if (p) return p;                                   // concurrent casts share one decode
+    p = loadSetReal(name).then((out) => { _framePromises.delete(name); return out; },
+        (e) => { _framePromises.delete(name); return []; });
+    _framePromises.set(name, p);
+    return p;
+}
+async function loadSetReal(name) {
     const def = SETS[name];
+    if (!def) return [];
     const out = [];
     try {
         if (def.kdir) {
@@ -110,6 +158,18 @@ async function loadSet(name) {
                 const idx = (def.from === undefined ? 1 : def.from) - 1 + i;
                 const tag = def.pad ? String(idx).padStart(def.pad, '0') : String(idx);
                 out.push(await loadImage(path.join(dirBase, def.dir, `${def.prefix}${tag}.png`)));
+            }
+        }
+        // 🐉 invert variant (DRAGON_LORD: "the color be inverted"): negative of every frame,
+        // alpha preserved — cached like a normal set (dragon_head_inv).
+        if (def.invert) {
+            for (let i = 0; i < out.length; i++) {
+                const c = createCanvas(out[i].width, out[i].height), g = c.getContext('2d');
+                g.drawImage(out[i], 0, 0);
+                const d = g.getImageData(0, 0, c.width, c.height), px = d.data;
+                for (let k = 0; k < px.length; k += 4) { px[k] = 255 - px[k]; px[k + 1] = 255 - px[k + 1]; px[k + 2] = 255 - px[k + 2]; }
+                g.putImageData(d, 0, 0);
+                out[i] = c;
             }
         }
     } catch (e) { out.length = 0; }
@@ -645,6 +705,7 @@ async function renderUltimateVideo(o) {
         : Math.max(0, Math.floor(Number(o.targetIndex) || 0));
     let affectList = [];
     let casterCut = null;
+    let cutsAll = null;      // full roster cutouts (video space) for the shrink/hidecaster drawer
     // 🔴 HURT FLASH list (owner: "when the attack hits make the victim have a
     // hurt red flashing overlay animation"): the SAME affected cutouts, tinted
     // hurt-red, pulsed by LAYERS.hurt at the impact moment. Offensive casts
@@ -663,6 +724,8 @@ async function renderUltimateVideo(o) {
                 });
             } catch (e) { /* a broken cutout never kills the video */ }
         }));
+        cutImgs.sort((a, b) => (a.side === b.side ? a.index - b.index : a.side === 'player' ? -1 : 1));
+        cutsAll = cutImgs;
         const findCut = (side, idx) => cutImgs.find((c) => c.side === side && c.index === idx);
         casterCut = findCut('player', casterIdxAll) || null;
         // the roster that gets hit: enemy side for offenses, the party for
@@ -759,8 +822,46 @@ async function renderUltimateVideo(o) {
     let thumb = null;
     const canvas = createCanvas(W, H), ctx = canvas.getContext('2d');
     let sprNoCaster = null;
+    // 🎥 ACTOR SHRINK (owner 2026-10-27, REAPER: "I want um to became tiny and a gaint syth hits",
+    // DRAGON_GOD: "zoom out wayy more so that the characger Sprites look small leave the dragon the
+    // same size tho"): recipes push {layer:'shrink', at, dur, to} tracks and the combatant roster
+    // scales down IN PLACE around each fighter's own feet — feet anchors (and therefore every
+    // track origin) stay valid, the battlefield keeps its size, and the giant screen-space art
+    // (scythe / dragon) towers over the tiny fighters. First active track wins (min).
+    const shrinkAt = (time) => {
+        let k = 1;
+        for (const tr of tracks) {
+            if (tr.layer !== 'shrink' || time < tr.at) continue;
+            const u = clamp01((time - tr.at) / (tr.dur || 0.4));
+            k = Math.min(k, 1 - (1 - (tr.to === undefined ? 0.5 : tr.to)) * easeOut(u));
+        }
+        return k;
+    };
+    // draw the roster: per-fighter cutouts scaled in place (feet pinned), honoring hidecaster.
+    // k===1 && !hide falls back to the exact pre-R2 single-drawImage path (all other classes).
+    const drawRoster = (env, k, hide) => {
+        const cutList = env.cutsAll;
+        if (k >= 0.999 && !hide && cutList === null) { ctx.drawImage(sprImg, 0, 0, W, H); return; }
+        if (cutList && cutList.length) {
+            for (const c of cutList) {
+                if (hide && casterCut && c.side === 'player' && c.index === casterIdxAll) continue;
+                if (k >= 0.999) { ctx.drawImage(c.img, c.x, c.y, c.w, c.h); continue; }
+                const feetY = c.y + c.h, cx = c.x + c.w / 2;
+                ctx.drawImage(c.img, cx - c.w * k / 2, feetY - c.h * k, c.w * k, c.h * k);
+            }
+        } else if (k < 0.999) {
+            const px = W * 0.5, py = H * 0.72;      // roster-scale fallback around the stage floor
+            ctx.save(); ctx.translate(px, py); ctx.scale(k, k); ctx.translate(-px, -py);
+            ctx.drawImage(sprImg, 0, 0, W, H); ctx.restore();
+        } else if (hide && sprNoCaster) {
+            ctx.drawImage(sprNoCaster, 0, 0, W, H);
+        } else {
+            ctx.drawImage(sprImg, 0, 0, W, H);
+        }
+    };
     for (let f = 0; f < total; f++) {
         const time = f / FPS;
+        const shrinkK = shrinkAt(time);   // 🎥 1 = normal, <1 = roster drawn tiny in place
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
         ctx.imageSmoothingEnabled = true;
@@ -797,6 +898,7 @@ async function renderUltimateVideo(o) {
         // cracks). The isolated focus combatant is skipped here when a sink
         // recipe owns it (the hands layer draws it, sinking into the rift).
         const env = { A, time, W, H, base, self, seed, sets, spr: (n) => singles.get(n) || null,
+            shrinkK, cutsAll,
             layers: !!layers, sprImg, focImg, focRect, casterRect, affectList, hurtList, casterCut, impact: IMP };
         if (env.layers) {
             for (const tr of tracks) {
@@ -805,16 +907,22 @@ async function renderUltimateVideo(o) {
                 else drawTrackInstances(ctx, tr, sets, A, time, mulberry(seed + f), palette);
             }
             // 💨 hidecaster windows (Reaper: the caster vanishes, only the scythe remains)
+            // + 🎥 actor shrink (Reaper/Dragon God: the roster draws tiny in place)
             const hideNow = !!(casterCut && tracks.some((t) => (t.layer === 'hidecaster' || t.layer === 'lunge') && time >= t.at && time <= t.at + t.dur));
-            if (hideNow) {
-                if (!sprNoCaster) {
-                    sprNoCaster = createCanvas(sprImg.width, sprImg.height);
-                    const sc = sprNoCaster.getContext('2d'); sc.drawImage(sprImg, 0, 0);
-                    sc.globalCompositeOperation = 'destination-out'; sc.drawImage(casterCut.img, casterCut.x * (sprImg.width / W), casterCut.y * (sprImg.height / H), casterCut.w * (sprImg.width / W), casterCut.h * (sprImg.height / H));
+            if (hideNow && !sprNoCaster && sprImg && casterCut) {
+                sprNoCaster = createCanvas(sprImg.width, sprImg.height);
+                const sc = sprNoCaster.getContext('2d'); sc.drawImage(sprImg, 0, 0);
+                sc.globalCompositeOperation = 'destination-out'; sc.drawImage(casterCut.img, casterCut.x * (sprImg.width / W), casterCut.y * (sprImg.height / H), casterCut.w * (sprImg.width / W), casterCut.h * (sprImg.height / H));
+            }
+            drawRoster(env, shrinkK, hideNow);
+            // isolated focus combatant (scaled with the roster when shrunk — feet stay pinned)
+            if (focImg && !sinkOwnsFocus) {
+                if (shrinkK >= 0.999 || !focRect) ctx.drawImage(focImg, 0, 0, W, H);
+                else {
+                    const [fx0, fy0, fw0, fh0] = focRect, feetY2 = fy0 + fh0, cx2 = fx0 + fw0 / 2;
+                    ctx.drawImage(focImg, cx2 - fw0 * shrinkK / 2, feetY2 - fh0 * shrinkK, fw0 * shrinkK, fh0 * shrinkK);
                 }
-                ctx.drawImage(sprNoCaster, 0, 0, W, H);
-            } else ctx.drawImage(sprImg, 0, 0, W, H);
-            if (focImg && !sinkOwnsFocus) ctx.drawImage(focImg, 0, 0, W, H);
+            }
             // 🔴 HP DROP: repaint the victims' overhead bars over the baked
             // ones (exact Go geometry via anchors) BEFORE the veil so they dim
             // and shake exactly like the base scene they cover. Hidden until
@@ -828,9 +936,10 @@ async function renderUltimateVideo(o) {
                     const v = victims.get(Math.floor(Number(a2.index) || 0));
                     if (!v) continue;
                     const isPlayerSide = a2.side === 'player';
-                    const bw = (isPlayerSide ? 80 : 100) * kxL, bh = (isPlayerSide ? 10 : 12) * kyL;
-                    const bxc = (Number(a2.x) - (isPlayerSide ? 40 : 50)) * kxL;
-                    const byc = (Number(a2.feetY) - Math.max(24, Number(a2.h) || 0)) * kyL - (isPlayerSide ? 12 : 15) * kyL;
+                    // bars ride the shrink so they hug the tiny sprites instead of floating
+                    const bw = (isPlayerSide ? 80 : 100) * kxL * shrinkK, bh = (isPlayerSide ? 10 : 12) * kyL * shrinkK;
+                    const bxc = (Number(a2.x)) * kxL - bw / 2;
+                    const byc = (Number(a2.feetY) - Math.max(24, (Number(a2.h) || 0) * shrinkK)) * kyL - (isPlayerSide ? 12 : 15) * kyL * shrinkK;
                     const at = IMP + vi * 0.06;
                     vi++;
                     if (time < at) continue;
@@ -893,4 +1002,4 @@ async function renderUltimateVideo(o) {
     return { mp4, thumb };
 }
 
-module.exports = { renderUltimateVideo, RECIPES, STYLE_RECIPE, W, H, FPS, DURATION };
+module.exports = { renderUltimateVideo, RECIPES, STYLE_RECIPE, W, H, FPS, DURATION, prewarm };

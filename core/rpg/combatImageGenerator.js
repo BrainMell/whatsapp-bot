@@ -325,6 +325,74 @@ async function generateHuntCard(data = {}) {
     }
 }
 
+/**
+ * ⏳ TIME-FREEZE DIM (Task 26-R2, owner 2026-10-27: "place the time freeze effect
+ * which for the turns it's on everything but the players sprite should be dimmed
+ * out color wise"): while the Chronomancer's Locked-in-Time status is active, the
+ * TURN card is re-composited so the whole battlefield (frozen enemies included)
+ * sinks under a cold blue dim — then every PLAYER-side fighter is pasted back at
+ * full colour from the Go renderer's per-combatant cutouts, so the acting team
+ * literally pops out of the frozen scene.
+ *
+ * Implementation: one extra express Go layers call (hud:"none") for the cutouts +
+ * node-canvas recomposite. Anything that fails returns null and the caller sends
+ * the normal undimmed card — the gameplay never waits on a cosmetic pass.
+ *
+ * @param {Array} players - the exact roster the card was rendered with
+ * @param {Array} enemies - the exact roster the card was rendered with
+ * @param {Buffer} cardBuffer - the flattened Go turn card
+ * @param {object} goOpts - { combatType, rank, floor, backgroundPath, summons }
+ * @returns {Promise<Buffer|null>} dimmed PNG or null (skip dim)
+ */
+async function applyTimeFreezeDim(players, enemies, cardBuffer, goOpts = {}) {
+    try {
+        const frozen = (enemies || []).some((e) => Array.isArray(e.statusEffects) &&
+            e.statusEffects.some((s) => s && s.type === 'locked_in_time'));
+        if (!frozen) return null;
+        const layers = await Promise.race([
+            generateCombatLayers(players, enemies, {
+                combatType: String(goOpts.combatType || 'PVE'),
+                rank: goOpts.rank,
+                floor: goOpts.floor || 0,
+                backgroundPath: goOpts.backgroundPath,
+                summons: goOpts.summons || [],
+                hud: 'none',
+                bypassQueue: true,
+            }),
+            new Promise((resolve) => setTimeout(() => resolve(null), 4000)),
+        ]);
+        if (!layers || !layers.success || !Array.isArray(layers.cuts) || !layers.cuts.length) return null;
+        const { createCanvas, loadImage } = require('canvas');
+        const card = await loadImage(cardBuffer);
+        const canvas = createCanvas(card.width, card.height);
+        const g = canvas.getContext('2d');
+        g.drawImage(card, 0, 0);
+        // cold time-stop wash over EVERYTHING (HUD included — the UI reads as frozen too)
+        g.fillStyle = 'rgba(22,44,88,0.45)';
+        g.fillRect(0, 0, canvas.width, canvas.height);
+        // faint frost vignette on the edges
+        const vg = g.createRadialGradient(canvas.width / 2, canvas.height / 2, canvas.height * 0.35,
+            canvas.width / 2, canvas.height / 2, canvas.height * 0.85);
+        vg.addColorStop(0, 'rgba(120,190,255,0)');
+        vg.addColorStop(1, 'rgba(120,190,255,0.18)');
+        g.fillStyle = vg;
+        g.fillRect(0, 0, canvas.width, canvas.height);
+        // the acting team back at full colour, crisp — exactly their card pixels
+        for (const cut of layers.cuts) {
+            if (!cut || String(cut.side || '') !== 'player' || !cut.png) continue;
+            try {
+                const img = await loadImage(Buffer.from(cut.png, 'base64'));
+                g.drawImage(img, Number(cut.x) || 0, Number(cut.y) || 0,
+                    Math.max(4, Number(cut.w) || 0), Math.max(4, Number(cut.h) || 0));
+            } catch (e) { /* one broken cutout never kills the card */ }
+        }
+        return canvas.toBuffer('image/png');
+    } catch (error) {
+        console.warn('⚠️ Time-freeze dim failed (normal card continues):', error.message);
+        return null;
+    }
+}
+
 module.exports = {
     generateCombatImage,
     generateCombatLayers,
@@ -332,6 +400,7 @@ module.exports = {
     updateCombatImage,
     generateEndScreenImage,
     generateHuntCard,
+    applyTimeFreezeDim,
     // Exported for testing
     _buildPayload: buildPayload,
     _buildActionPayload: buildActionPayload

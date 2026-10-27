@@ -258,6 +258,55 @@ LAYERS.circle = (ctx, tr, env) => {
     glowDot(ctx, x, y, R * 0.9, col, 0.22 * grow);
 };
 
+/** ⏳ GIANT MAGIC CLOCK (owner 2026-10-27: "the time stop should again have a gaint magic
+ * clock fade in adn out and place the time freeze effect"): a real ticking clock face
+ * (AntumDeluge CC0) stacked over the Cethiel Cosmic-Time mandala halo (CC0), both tinted
+ * warm gold, with a slow rune ring + holy glow. FADES IN, hangs over the frozen victim,
+ * FADES OUT — the whole read of the Chronomancer's Locked in Time. */
+LAYERS.magicClock = (ctx, tr, env) => {
+    const { t } = local(env, tr), dur = tr.dur || 2;
+    if (t < 0 || t > dur) return;
+    const [x, y] = pt(env, tr.pos || 'T', tr);
+    const off = tr.off || [0, 0];
+    const cx = x + off[0], cy = y + off[1];
+    const R = tr.r || 235;
+    // fade in (0.45s) → hold → fade out (0.45s) — the "fade in and out" the owner asked for
+    const a = Math.min(easeOut(clamp01(t / 0.45)), easeOut(clamp01((dur - t) / 0.45)));
+    if (a <= 0.01) return;
+    const col = tr.color || '#ffd98a';
+    const settle = 1 + 0.08 * (1 - easeOut(clamp01(t / 0.5)));   // gentle overshoot on entry
+    // 1) mandala halo (real art, slow breathing spin) — the "magic" half of the read
+    const mand = setFr(env, 'clock_mandala', Math.floor(t * 8));
+    if (mand) {
+        ctx.save(); ctx.translate(cx, cy); ctx.rotate(Math.sin(t * 0.9) * 0.22); ctx.globalCompositeOperation = 'lighter';
+        sprite(ctx, tintImg(mand, col, 0.5), 0, 0, R * 2.7 * settle, 0, 0.6 * a, true);
+        ctx.restore();
+    }
+    // 2) glow behind the face so it separates from the battlefield
+    glowDot(ctx, cx, cy, R * 1.5 * settle, col, 0.30 * a);
+    // 3) the ticking clock face itself (12 real frames — the hands actually move)
+    const face = setFr(env, 'clock_face', Math.floor(t * 12));
+    if (face) {
+        ctx.save(); ctx.translate(cx, cy); ctx.globalAlpha = 0.92 * a;
+        const d = R * 2 * settle;
+        ctx.drawImage(face, -d / 2, -d / 2, d, d);
+        ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.30 * a;
+        ctx.drawImage(face, -d / 2, -d / 2, d, d);
+        ctx.restore();
+    } else {
+        // fallback: procedural face if the art is missing
+        ctx.save(); ctx.translate(cx, cy); ctx.scale(1, 1); ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.8 * a; ctx.strokeStyle = col; ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.stroke();
+        ctx.restore();
+    }
+    // 4) rune ring spinning around the rim + frost motes falling inside
+    ctx.save(); ctx.translate(cx, cy); ctx.globalCompositeOperation = 'lighter';
+    const ring = setFr(env, 'rune_circle', Math.floor(t * 10));
+    if (ring) sprite(ctx, tintImg(ring, col, 0.55), 0, 0, R * 2.35, t * 0.6, 0.5 * a, true);
+    ctx.restore();
+};
+
 /** sustained beam C→T (wobbling edges, white core). */
 LAYERS.beam = (ctx, tr, env) => {
     const { t } = local(env, tr), dur = tr.dur || 0.7;
@@ -392,9 +441,17 @@ LAYERS.fall = (ctx, tr, env) => {
             const e = easeIn(u), x = sx + (lx - sx) * e, y = sy + (ly - sy) * e;
             const ang = Math.atan2(ly - sy, lx - sx);
             if (kind === 'meteor') {
-                for (let k = 7; k >= 0; k--) { const e2 = easeIn(clamp01(u - k * 0.035)); const px = sx + (lx - sx) * e2, py = sy + (ly - sy) * e2; glowDot(ctx, px, py, 26 - k * 2, k < 2 ? '#fff2b0' : (tr.color || '#ff7a1a'), 0.55 * (1 - k / 9)); }
-                sprite(ctx, env.spr('p_flame_03'), x, y, 74, ang + Math.PI / 2 + Math.PI, 0.95, true);
-                glowDot(ctx, x, y, 34, '#fff7d0', 0.9);
+                // ☄️ REAL COMET (owner: "the Meteor sprite for both the mage and apprentice
+                // skills are ASS"): Game Developer Studio high-res fire ball (CC-BY 3.0) —
+                // the sprite carries its own wavy flame tail; ride it along the fall vector
+                // with a white-hot core glow. Smoke-puff "fire" trail deleted.
+                const cimg = setFr(env, 'meteor_comet', Math.floor(t * 14));
+                for (let k = 5; k >= 0; k--) { const e2 = easeIn(clamp01(u - k * 0.035)); const px = sx + (lx - sx) * e2, py = sy + (ly - sy) * e2; glowDot(ctx, px, py, 30 - k * 3, k < 2 ? '#fff2b0' : (tr.color || '#ff7a1a'), 0.5 * (1 - k / 7)); }
+                if (cimg) {
+                    const w = (tr.mw || 170) * (0.8 + rr() * 0.4);
+                    sprite(ctx, cimg, x, y, w, ang + Math.PI + (rr() - 0.5) * 0.14, 0.96, false);
+                } else sprite(ctx, env.spr('p_flame_03'), x, y, 74, ang + Math.PI / 2 + Math.PI, 0.95, true);
+                glowDot(ctx, x, y, 36, '#fff7d0', 0.9);
             } else if (kind === 'arrow') {
                 ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.fillStyle = '#e8e3d0'; ctx.fillRect(-26, -1.5, 30, 3); ctx.fillStyle = tr.color || '#ffd77a'; ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(-2, -5); ctx.lineTo(-2, 5); ctx.fill(); ctx.fillStyle = '#9a4b3a'; ctx.fillRect(-30, -3, 6, 6); ctx.restore();
                 ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(255,240,200,0.5)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - Math.cos(ang) * 70, y - Math.sin(ang) * 70); ctx.lineTo(x - Math.cos(ang) * 30, y - Math.sin(ang) * 30); ctx.stroke(); ctx.restore();
@@ -402,16 +459,35 @@ LAYERS.fall = (ctx, tr, env) => {
                 ctx.save(); ctx.translate(x, y); ctx.rotate(ang + Math.PI / 2); ctx.fillStyle = tr.color || '#bff3ff'; ctx.beginPath(); ctx.moveTo(0, 26); ctx.lineTo(8, -4); ctx.lineTo(0, -22); ctx.lineTo(-8, -4); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#ffffff'; ctx.fillRect(-1, -14, 2, 30); ctx.restore();
                 glowDot(ctx, x, y, 24, tr.color || '#59c8ff', 0.5);
             } else if (kind === 'rock') {
-                // one big flaming boulder: lumpy rock polygon + fire trail
-                const R0 = tr.size || 56;
-                for (let k = 9; k >= 0; k--) { const e2 = easeIn(clamp01(u - k * 0.03)); const px = sx + (lx - sx) * e2, py = sy + (ly - sy) * e2; glowDot(ctx, px, py, R0 * (1.1 - k * 0.07), k < 3 ? '#fff2b0' : (tr.color || '#ff7a1a'), 0.5 * (1 - k / 11)); }
-                ctx.save(); ctx.translate(x, y); ctx.rotate(t * 3 + i);
-                const rk = mulberry(hashS('rock' + i + tr.at)); ctx.beginPath();
-                for (let v = 0; v < 11; v++) { const a2 = (v / 11) * Math.PI * 2, rad = R0 * (0.78 + rk() * 0.3); v ? ctx.lineTo(Math.cos(a2) * rad, Math.sin(a2) * rad) : ctx.moveTo(Math.cos(a2) * rad, Math.sin(a2) * rad); }
-                ctx.closePath(); const rg = ctx.createRadialGradient(-R0 * 0.3, -R0 * 0.3, 4, 0, 0, R0); rg.addColorStop(0, '#8a5a3a'); rg.addColorStop(1, '#2a1610');
-                ctx.fillStyle = rg; ctx.fill(); ctx.strokeStyle = '#1a0c08'; ctx.lineWidth = 4; ctx.stroke();
-                ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = '#ff8a2a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-R0 * 0.5, -R0 * 0.1); ctx.lineTo(-R0 * 0.1, R0 * 0.15); ctx.lineTo(R0 * 0.2, -R0 * 0.2); ctx.lineTo(R0 * 0.5, R0 * 0.25); ctx.stroke();
-                ctx.restore(); glowDot(ctx, x, y, R0 * 1.3, tr.color || '#ff7a1a', 0.45);
+                // ☄️ BIG REAL METEOR (owner: mage/apprentice meteors "are ASS"): JadisGames
+                // rotating craggy boulder (CC-BY 4.0) with a live fire trail — Cethiel
+                // fireball frames (CC0) + white-hot glow streaming behind along the fall
+                // vector. The old lumpy procedural polygon is gone.
+                const R0 = tr.size || 56, w = R0 * 3.4;
+                const bimg = setFr(env, 'meteor_rock', Math.floor(t * 12));
+                for (let k = 9; k >= 0; k--) { const e2 = easeIn(clamp01(u - k * 0.03)); const px = sx + (lx - sx) * e2, py = sy + (ly - sy) * e2; glowDot(ctx, px, py, R0 * (1.15 - k * 0.07), k < 3 ? '#fff2b0' : (tr.color || '#ff7a1a'), 0.5 * (1 - k / 11)); }
+                // fire trail: real fireball frames dragged behind the boulder
+                const jf = env.sets && env.sets.fire_jet;
+                if (jf && jf.length) {
+                    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+                    for (let k = 1; k <= 4; k++) {
+                        const e2 = easeIn(clamp01(u + k * 0.045));
+                        const px = sx + (lx - sx) * e2, py = sy + (ly - sy) * e2;
+                        sprite(ctx, jf[(k * 2 + Math.floor(t * 10)) % jf.length], px, py, w * (0.85 - k * 0.13), ang + Math.PI / 2, 0.75 * (1 - k / 5), true);
+                    }
+                    ctx.restore();
+                }
+                if (bimg) sprite(ctx, bimg, x, y, w, ang + Math.PI / 2 + Math.sin(t * 2.2) * 0.2, 1, false);
+                else {
+                    // procedural fallback if the boulder art is missing
+                    ctx.save(); ctx.translate(x, y); ctx.rotate(t * 3 + i);
+                    const rk = mulberry(hashS('rock' + i + tr.at)); ctx.beginPath();
+                    for (let v = 0; v < 11; v++) { const a2 = (v / 11) * Math.PI * 2, rad = R0 * (0.78 + rk() * 0.3); v ? ctx.lineTo(Math.cos(a2) * rad, Math.sin(a2) * rad) : ctx.moveTo(Math.cos(a2) * rad, Math.sin(a2) * rad); }
+                    ctx.closePath(); const rg = ctx.createRadialGradient(-R0 * 0.3, -R0 * 0.3, 4, 0, 0, R0); rg.addColorStop(0, '#8a5a3a'); rg.addColorStop(1, '#2a1610');
+                    ctx.fillStyle = rg; ctx.fill(); ctx.strokeStyle = '#1a0c08'; ctx.lineWidth = 4; ctx.stroke();
+                    ctx.restore();
+                }
+                glowDot(ctx, x, y, R0 * 1.4, tr.color || '#ff7a1a', 0.5);
             } else if (kind === 'spear') {
                 ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
                 ctx.fillStyle = '#6b4a2a'; ctx.fillRect(-92, -2.5, 96, 5); ctx.fillStyle = '#e8edf5'; ctx.beginPath(); ctx.moveTo(26, 0); ctx.lineTo(4, -8); ctx.lineTo(4, 8); ctx.closePath(); ctx.fill();
@@ -534,12 +610,18 @@ LAYERS.affect = (ctx, tr, env) => {
         : (tr.curve === 'hold' ? Math.min(1, u * 8) * (1 - u * u) : bell(u));
     const a = (tr.a || 0.85) * k;
     if (a <= 0.004) return;
+    // 🎥 ride the actor shrink (Reaper/Dragon God): tinted cutouts land on the TINY sprites
+    const sk = env.shrinkK === undefined ? 1 : env.shrinkK;
     for (const c of list) {
         if (!c.tinted) continue;
         ctx.save();
         ctx.globalAlpha = a;
         if (tr.add !== false) ctx.globalCompositeOperation = 'lighter';
-        ctx.drawImage(c.tinted, c.x, c.y, c.w, c.h);
+        if (sk >= 0.999) ctx.drawImage(c.tinted, c.x, c.y, c.w, c.h);
+        else {
+            const feetY = c.y + c.h, cx = c.x + c.w / 2;
+            ctx.drawImage(c.tinted, cx - c.w * sk / 2, feetY - c.h * sk, c.w * sk, c.h * sk);
+        }
         ctx.restore();
     }
 };
@@ -561,12 +643,17 @@ LAYERS.hurt = (ctx, tr, env) => {
     const k = Math.min(1, bell(clamp01(t / 0.15)) + 0.62 * bell(clamp01((t - 0.2) / 0.17)));
     const a = (tr.a || 0.85) * k;
     if (a <= 0.004) return;
+    const sk = env.shrinkK === undefined ? 1 : env.shrinkK;
     for (const c of list) {
         if (!c.tinted) continue;
         ctx.save();
         ctx.globalAlpha = a;
         ctx.globalCompositeOperation = 'lighter';
-        ctx.drawImage(c.tinted, c.x, c.y, c.w, c.h);
+        if (sk >= 0.999) ctx.drawImage(c.tinted, c.x, c.y, c.w, c.h);
+        else {
+            const feetY = c.y + c.h, cx = c.x + c.w / 2;
+            ctx.drawImage(c.tinted, cx - c.w * sk / 2, feetY - c.h * sk, c.w * sk, c.h * sk);
+        }
         ctx.restore();
     }
 };

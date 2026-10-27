@@ -83,6 +83,32 @@ async function renderCombatTurn(players, enemies, turnInfo, options = {}) {
                 bypassQueue: true
             }
         );
+        // ⏳ TIME-FREEZE VISUAL (Task 26-R2, owner 2026-10-27): while Locked in Time is
+        // active the whole turn card dims cold and only the player-side fighters keep
+        // their colour — "for the turns it's on everything but the players sprite should
+        // be dimmed out color wise". Cosmetic only: any failure sends the normal card.
+        try {
+            if (result && result.success && Buffer.isBuffer(result.buffer) &&
+                enemiesToShow.some((e) => Array.isArray(e.statusEffects) &&
+                    e.statusEffects.some((s) => s && s.type === 'locked_in_time'))) {
+                const dimmed = await Promise.race([
+                    combatImageGen.applyTimeFreezeDim(playersToShow, enemiesToShow, result.buffer, {
+                        combatType: 'PVE',
+                        rank: options.rank,
+                        floor: options.floor || 0,
+                        backgroundPath: options.backgroundPath,
+                        summons: options.summons || [],
+                    }),
+                    new Promise((resolve) => setTimeout(() => resolve(null), 5500)),
+                ]);
+                if (dimmed) {
+                    result.buffer = dimmed;
+                    if (result.thumb !== undefined) delete result.thumb;   // stale thumb would show the undimmed frame
+                }
+            }
+        } catch (freezeErr) {
+            console.warn('[TimeFreeze] turn-card dim skipped:', freezeErr?.message || freezeErr);
+        }
         return result;
     } catch (error) {
         console.error('Combat turn render error:', error);

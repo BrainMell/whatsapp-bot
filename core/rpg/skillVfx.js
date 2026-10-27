@@ -917,7 +917,7 @@ async function animateUltimate(options = {}) {
         // 🔴 HIT REACTION (owner: "hurt red flashing overlay + the hp bar drops"):
         // pre-hit per-victim HP for the animated overhead-bar chip
         targets: victimStats
-      }), 9000);
+      }), 12000);   // 🔥 R2: was 9000 — boot prewarm makes real renders 3-6s; 12s headroom stops the old-GIF fallback on cold/heavy cinematics (DRAGON_GOD hit 16.3s cold and looked "not wired in")
     } catch (e) { console.warn('[SkillVFX] sprite engine failed:', e?.message || e); }
     const gif = vid && vid.mp4 ? vid.mp4 : await raceTimeout(
       renderSignatureGif(state, player, ability, entry, target, options.baseSceneBuffer, null, options.layers || null, options.casterIndex, options.targetSide, options.focusIndex),

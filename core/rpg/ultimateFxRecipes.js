@@ -114,17 +114,21 @@ function classRecipe(cls, p, { IMPACT: I }) {
         ];
     }
     function stopTimeSet(col, r) {
+        // ⏳ ROUND 2 (owner 2026-10-27: "the time stop should again have a gaint magic clock
+        // fade in adn out and place the time freeze effect"): the giant REAL clock face
+        // (ticking 12-frame loop) + cosmic mandala halo fades IN over the victim, the icy
+        // sustain wash freezes them, a contracting ripple snaps at the impact, and the
+        // clock fades OUT. The turn cards stay dimmed while Locked in Time is active
+        // (combatIntegration.applyTimeFreezeDim) — the video is only the cast moment.
         return [
-            // a giant GOLDEN clock locks over the enemy (this is "Locked in Time", not the ice freeze)
-            L('wash', { at: 0.04, dur: I - 0.08, color: '#1a1204', a: 0.3 }),
-            L('circle', { at: 0.03, pos: 'T', off: [0, -145], r: r * 2.1, dur: I - 0.13, color: col, clock: true, ratio: 0.84, spin: -1.25, ticks: 24 }),
-            L('circle', { at: 0.08, pos: 'T', off: [0, -145], r: r * 1.62, dur: I - 0.17, color: '#fff3c4', clock: true, ratio: 0.84, spin: 0.7, ticks: 12 }),
-            L('affect', { at: 0.04, dur: I - 0.05, curve: 'sustain', a: 0.6, add: true }),
-            L('emit', { at: 0.08, dur: I - 0.07, pos: 'T', off: [0, -145], box: [150, 90], n: 26, life: 0.75, shape: 'star', colors: [col, '#ffffff'], v: [0, -25], vr: [46, 28], swirl: 3 }),
-            L('ripple', { at: I - 0.05, pos: 'T', n: 3, gap: 0.12, color: col, r: 190, inward: true, dur: 0.5 }),
-            L('affect', { at: I + 0.02, dur: 0.9, curve: 'hold', a: 0.7, add: true }),
-            L('circle', { at: I + 0.06, pos: 'T', off: [0, -120], r: 135, dur: 0.78, color: col, clock: true, ratio: 0.82, spin: -0.55, ticks: 24 }),
-            flash(col, 0.38),
+            L('wash', { at: 0.04, dur: I + 0.35, color: '#0a1226', a: 0.4 }),
+            L('magicClock', { at: 0.06, dur: I + 0.62, pos: 'T', off: [0, -150], r: 232, color: col }),
+            L('affect', { at: 0.06, dur: I - 0.04, curve: 'sustain', a: 0.7, add: true }),
+            L('emit', { at: 0.1, dur: I - 0.08, pos: 'T', off: [0, -140], box: [180, 120], n: 28, life: 0.8, shape: 'star', colors: [col, '#dff4ff', '#ffffff'], v: [0, -20], vr: [44, 28], swirl: 2.5 }),
+            L('ripple', { at: I - 0.05, pos: 'T', n: 3, gap: 0.12, color: '#bfe8ff', r: 200, inward: true, dur: 0.5 }),
+            L('affect', { at: I + 0.02, dur: 0.95, curve: 'hold', a: 0.75, add: true }),
+            L('emit', { at: I + 0.02, dur: 0.7, pos: 'T', box: [130, 60], n: 18, life: 0.7, shape: 'star', colors: ['#ffffff', col], v: [0, -60], vr: [60, 30] }),
+            flash(col, 0.35),
         ];
     }
     const R = {
@@ -160,16 +164,20 @@ function classRecipe(cls, p, { IMPACT: I }) {
             { fx: 'dark_a', at: I, pos: 'T', w: 240, n: 2, gap: 0.12, jit: [30, 20], add: true, tint: ['#c43bff', 0.6] },
             flash('#d79bff', 0.4),
         ],
-        // the world implodes into a dot; the caster is gone; a giant scythe cuts through
+        // the world implodes into a dot; the caster is gone; a GIANT REAL scythe cuts through
+        // (owner round 2: "should be a real syth ... doesn't zoom out enough I want um to
+        // became tiny and a gaint syth hits") — the roster shrinks to ~0.45 as the vortex
+        // pulls, then the Wenrexa dark scythe (CC0, purple-tinted) sweeps the whole stage.
         REAPER: () => [
             dark(0.45, 0.1, 1.6),
             L('vortex', { at: 0.1, pos: 'T', hy: 40, R: 600, twist: 9, pull: 4.2, hole: 5, rim: '#a58bff', dur: 1.15, inFrac: 0.7, outFrom: 0.9 }),
             L('camera', { at: 1.0, dur: 0.7, dz: -0.09 }),
+            L('shrink', { at: 0.95, dur: 0.55, to: 0.45 }),
             L('hidecaster', { at: 1.05, dur: 2.2 }),
             L('emit', { at: 0.2, dur: 0.8, pos: 'T', box: [200, 100], n: 24, life: 0.9, shape: 'soul', colors: ['#c5b3ff'], v: [0, -30], vr: [60, 40], swirl: 5 }),
-            L('scythe', { at: I - 0.5, pos: 'T', R: 300, dur: 0.95, color: '#a58bff', mid: '#efe6ff', a0: 0.2, a1: 2.95 }),
-            L('slashes', { at: I - 0.03, n: 2, gap: 0.05, color: '#a58bff', mid: '#ffffff', len: 260, w: 16, angles: [-0.5, -0.5] }),
-            { fx: 'destroy', at: I + 0.05, pos: 'T', w: 240, n: 2, gap: 0.14, jit: [40, 30], add: true },
+            L('scythe', { at: I - 0.55, pos: 'T', R: 470, dur: 1.05, color: '#a58bff', mid: '#efe6ff', a0: 0.15, a1: 3.0, art: 'scythe_art', artW: 1.55 }),
+            L('slashes', { at: I - 0.03, n: 2, gap: 0.05, color: '#a58bff', mid: '#ffffff', len: 300, w: 16, angles: [-0.5, -0.5] }),
+            { fx: 'destroy', at: I + 0.05, pos: 'T', w: 260, n: 2, gap: 0.14, jit: [40, 30], add: true },
             L('emit', { at: I, dur: 0.8, pos: 'T', n: 18, life: 0.9, shape: 'soul', colors: ['#c5b3ff'], v: [0, -100], vr: [40, 20] }),
             flash('#c5b3ff', 0.4, I, 0.2),
         ],
@@ -247,21 +255,25 @@ function classRecipe(cls, p, { IMPACT: I }) {
             L('rings', { at: I + 0.1, pos: 'T', n: 2, gap: 0.12, color: '#ff8a2a', r: 150 }),
             flash('#ffb05a', 0.35, I, 0.2),
         ],
-        // a smaller dragon, a strong but not final blast
+        // a smaller dragon, a strong but not final blast — owner round 2: "the dragon lord
+        // should have the color be inverted" → the wyvern rides the INVERTED frame set
         DRAGON_LORD: () => [
             dark(0.4, 0.1, 2.0),
             L('camera', { at: 0.25, dur: 1.0, dz: -0.05 }),
-            L('dragon', { at: 0.3, pos: [0.14, 0.34], s: 1.35, dur: 2.0, color: '#7a3a2a', belly: '#e8b070', flame: '#ff7a1a' }),
+            L('dragon', { at: 0.3, pos: [0.14, 0.34], s: 1.35, dur: 2.0, set: 'dragon_head_inv', color: '#7a3a2a', belly: '#e8b070', flame: '#ff7a1a' }),
             L('breath', { at: 0.95, from: [0.14, 0.34], offFrom: [160, 24], to: 'T', offTo: [0, -50], dur: 0.9, n: 120, life: 0.55, w: 92, size: 1.3, spread: 'enemies', fanGap: 0.1 }),
             { fx: 'fire_blast', at: I, pos: 'T', w: 330, n: 2, jit: [50, 30], gap: 0.12, spread: 'enemies', fanGap: 0.08 },
             L('rings', { at: I + 0.05, pos: 'T', n: 2, gap: 0.12, color: '#ffb050', r: 170, spread: 'enemies', fanGap: 0.08 }),
             flash('#ffc070', 0.35, I, 0.2),
         ],
         // the world goes into a black hole, a pale void, a giant dragon engulfs the scene
+        // (owner round 2: "zoom out wayy more so that the characger Sprites look small
+        // leave the dragon the same size tho") — roster shrinks to 0.4, dragon keeps s 2.0
         DRAGON_GOD: () => [
             L('vortex', { at: 0.1, pos: 'T', hy: 40, R: 600, twist: 8, pull: 4, hole: 6, rim: '#9fd6ff', dur: 1.2, inFrac: 0.7, outFrom: 0.88 }),
             L('bgfill', { at: 1.05, dur: 1.9, pos: [0.5, 0.5], colors: ['#d8f2ff', '#6fb4e8'], fin: 0.35, fout: 0.45 }),
             L('camera', { at: 1.1, dur: 1.2, dz: -0.1, fin: 0.5 }),
+            L('shrink', { at: 1.1, dur: 0.5, to: 0.4 }),
             L('dragon', { at: 1.35, pos: [0.1, 0.3], s: 2.0, dur: 1.9, color: '#27576a', belly: '#9fe0d0', flame: '#ff9a30' }),
             L('breath', { at: 1.95, from: [0.1, 0.3], offFrom: [236, 40], to: 'T', offTo: [0, -50], dur: 1.1, n: 170, life: 0.6, w: 170, size: 2.0, reach: 1.15, spread: 'enemies', fanGap: 0.08 }),
             L('wash', { at: 2.1, dur: 0.75, color: '#ff8a1a', a: 0.85, curve: 'in' }),
@@ -396,7 +408,7 @@ function classRecipe(cls, p, { IMPACT: I }) {
 // energy (a ring + sparks + a brighter flash) but NEVER sky lasers or ground cracks (owner: "the level 3s are
 // spamming lasers where they don't belong"). Timing never changes so hit sync is untouched.
 const SIZE_KEYS = ['w', 'r', 'rx', 'ew', 'eh', 'len'];
-const NOSCALE = new Set(['lunge', 'focus', 'bgfill', 'invert', 'vortex', 'camera', 'hidecaster', 'dragon', 'robohand', 'scythe', 'reticle', 'staff']);
+const NOSCALE = new Set(['lunge', 'focus', 'bgfill', 'invert', 'vortex', 'camera', 'hidecaster', 'dragon', 'robohand', 'scythe', 'reticle', 'staff', 'shrink', 'magicClock']);
 function scaleTracks(tracks, k, palette, IMPACT) {
     k = Math.max(0, Math.min(1, Number(k) || 0));
     if (!Array.isArray(tracks)) return tracks;
