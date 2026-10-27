@@ -115,6 +115,100 @@ function prewarm() {
 }
 prewarm();
 const LAYERS = (() => { try { return require('./ultimateFxLayers').LAYERS; } catch (e) { console.warn('[UltFx] layers unavailable:', e.message); return {}; } })();
+const plates = require('./ultimatePlateCache');
+
+// ── PLATE CACHE wiring (Task 26-R5, owner: "pre-bake them so it's really
+// fast" + "some effects have to be behind the player and some on top") ──
+// Per-duel pixels (combatant cutouts, the isolated focus sprite, tint/hurt
+// overlays) can never be plates — they stay LIVE. Everything else paints
+// self-contained fx whose geometry is pinned by the cache key, so repeat
+// casts replay them as a few drawImage calls. Painters are grouped per pass
+// (ground/under, air/over) into consecutive same-blend-mode runs: 'over'
+// groups replay with source-over, additive groups with 'lighter' — alpha
+// compositing chains are associative within a mode, so capture-vs-live stays
+// pixel-faithful except where a painter mixes modes internally (vortex's
+// lighter rim outside its opaque warp disk — bounded, QA-eyeballed).
+const PLATE_LIVE = new Set(['hands', 'focus', 'affect', 'hurt', 'dash']);
+const PLATE_NOOP = new Set(['camera', 'hidecaster']);   // logic-only tracks, consumed by the frame loop
+const LAYER_GCO = Object.assign({
+    // additive-dominant painters (sprite(add:true) / glow particles)
+    emit: 'lighter', fall: 'lighter', magicClock: 'lighter', rift: 'lighter',
+    pillar: 'lighter', rings: 'lighter', circle: 'lighter', swarm: 'lighter',
+    breath: 'lighter', elements: 'lighter', soulflow: 'lighter', ripple: 'lighter',
+    staff: 'lighter', eclipse: 'lighter', dragon: 'lighter', reticle: 'lighter',
+    tether: 'lighter',
+    // alpha/opaque-dominant painters
+    vortex: 'over', bgfill: 'over', invert: 'over', slashes: 'over', scythe: 'over',
+    robohand: 'over', crescent: 'over', beam: 'over', cracks: 'over', vines: 'over',
+    gears: 'over', blackhole: 'over', lunge: 'over',
+}, JSON.parse(process.env.ULT_PLATE_GCO || '{}'));   // QA escape hatch: {"name":"live"|"lighter"|"over"}
+function plateGco(tr) {
+    if (!tr.layer) return tr.add ? 'lighter' : 'over';                    // fx-instance tracks
+    if (PLATE_LIVE.has(tr.layer) || LAYER_GCO[tr.layer] === 'live') return 'live';
+    if (tr.layer === 'wash') return tr.add ? 'lighter' : 'over';          // flash vs dark veil
+    return LAYER_GCO[tr.layer] === 'lighter' ? 'lighter' : 'over';
+}
+// per pass: consecutive plate-safe tracks with the same blend mode form one
+// plate group; live tracks split groups so z-order is preserved exactly.
+function buildGroups(list) {
+    const groups = [];
+    let cur = null;
+    for (const tr of list) {
+        if (!tr.layer && !tr.fx) continue;
+        if (tr.layer && (PLATE_NOOP.has(tr.layer) || !LAYERS[tr.layer])) continue;
+        const g = plateGco(tr);
+        if (g === 'live') { groups.push({ live: tr }); cur = null; continue; }
+        if (!cur || cur.mode !== g) { cur = { mode: g, tracks: [] }; groups.push(cur); }
+        cur.tracks.push(tr);
+    }
+    return groups.filter((g) => g.live || g.tracks.length);
+}
+const groupMetaOf = (gs) => gs.map((g) => (g.live ? { live: 1, layer: g.live.layer } : { mode: g.mode, tracks: g.tracks.map((t) => t.layer || 'fx:' + t.fx) }));
+function paintOne(ctx2, tr, o) {
+    if (tr.layer) { const L = LAYERS[tr.layer]; if (L) { ctx2.save(); try { L(ctx2, tr, o.env); } catch (e) { /* a bad layer never kills the clip */ } ctx2.restore(); } }
+    else drawTrackInstances(ctx2, tr, o.sets, o.A, o.time, mulberry(o.seed + o.f), o.palette);
+}
+const _plateScratch = null;   // (unused — per-render scratch lives on o.scratch)
+async function paintGroups(ctx, groups, o) {
+    const { f, env, plateMeta, plateKey, plateCap } = o;
+    for (let gi = 0; gi < groups.length; gi++) {
+        const g = groups[gi];
+        if (g.live) { paintOne(ctx, g.live, o); continue; }
+        const pass = o.under ? 'u' : 'o';
+        if (plateMeta && plates.hasPlate(plateMeta, f, pass, gi)) {
+            try {
+                const img = await loadImage(plates.frameFile(plateKey, f, pass, gi));
+                ctx.save(); ctx.globalAlpha = 1;
+                ctx.globalCompositeOperation = g.mode === 'lighter' ? 'lighter' : 'source-over';
+                ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+                ctx.drawImage(img, 0, 0, env.W, env.H);
+                ctx.restore();
+                continue;
+            } catch (e) { /* unreadable plate → capture-paint below */ }
+        }
+        let run = o.scratch.get(gi);
+        if (!run) { run = createCanvas(env.W, env.H); o.scratch.set(gi, run); }
+        const rc = run.getContext('2d');
+        rc.setTransform(1, 0, 0, 1, 0, 0); rc.globalAlpha = 1;
+        rc.globalCompositeOperation = 'source-over';
+        rc.imageSmoothingEnabled = true; rc.clearRect(0, 0, env.W, env.H);
+        for (const tr of g.tracks) paintOne(rc, tr, o);
+        ctx.save(); ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = g.mode === 'lighter' ? 'lighter' : 'source-over';
+        ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(run, 0, 0, env.W, env.H);
+        ctx.restore();
+        if (plateCap) {
+            try { plateCap.pngs.set(plates.frameName(f, pass, gi), await run.toBuffer('image/png')); } catch (e) { /* skip this plate */ }
+        }
+    }
+}
+function plateGroupsDirect(ctx, groups, o) {
+    for (const g of groups) {
+        if (g.live) { paintOne(ctx, g.live, o); continue; }
+        for (const tr of g.tracks) paintOne(ctx, tr, o);   // plates disabled → the original direct path
+    }
+}
 const RECIPE_PACK = (() => { try { return require('./ultimateFxRecipes'); } catch (e) { console.warn('[UltFx] class recipes unavailable:', e.message); return null; } })();
 const _singles = new Map();
 async function loadSingles() {
@@ -604,26 +698,34 @@ function drawVideoHud(ctx, hud, icons) {
 }
 
 // ── encode ──────────────────────────────────────────────────────────────────
-function encodeMp4(frames) {
-    return new Promise((resolve, reject) => {
-        const out = path.join(os.tmpdir(), `ult_${process.pid}_${Date.now()}_${Math.floor(Math.random() * 1e6)}.mp4`);
-        const args = ['-y', '-f', 'rawvideo', '-pix_fmt', 'bgra', '-video_size', `${W}x${H}`, '-framerate', String(FPS), '-i', 'pipe:0',
-            '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0', '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '22', '-movflags', '+faststart', '-an', out];
-        const p = spawn(process.env.FFMPEG_PATH || 'ffmpeg', args, { stdio: ['pipe', 'ignore', 'pipe'] });
-        let err = '';
-        p.stderr.on('data', (d) => { err += d; if (err.length > 4000) err = err.slice(-2000); });
-        p.on('error', reject);
-        p.on('exit', (code) => {
-            try {
-                if (code !== 0) return reject(new Error('ffmpeg exit ' + code + ': ' + err.slice(-300)));
-                const b = fs.readFileSync(out); fs.unlinkSync(out); resolve(b);
-            } catch (e) { reject(e); }
-        });
-        (async () => {
-            for (const f of frames) { if (!p.stdin.write(f)) await new Promise((r) => p.stdin.once('drain', r)); }
-            p.stdin.end();
-        })().catch((e) => { try { p.kill('SIGKILL'); } catch (e2) {} reject(e); });
+// 🔥 memory (26-R5): the encoder is STARTED BEFORE the frame loop and fed one
+// raw frame at a time — the old frames[] accumulator held ~75MB of BGRA per
+// render on a 952MB box (joker heap capped at 340MB, OOM'd twice on 10-27).
+function startMp4Encoder() {
+    let rejectOut, resolveOut;
+    const done = new Promise((res, rej) => { resolveOut = res; rejectOut = rej; });
+    const out = path.join(os.tmpdir(), `ult_${process.pid}_${Date.now()}_${Math.floor(Math.random() * 1e6)}.mp4`);
+    const args = ['-y', '-f', 'rawvideo', '-pix_fmt', 'bgra', '-video_size', `${W}x${H}`, '-framerate', String(FPS), '-i', 'pipe:0',
+        '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0', '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '22', '-movflags', '+faststart', '-an', out];
+    const p = spawn(process.env.FFMPEG_PATH || 'ffmpeg', args, { stdio: ['pipe', 'ignore', 'pipe'] });
+    let err = '', failed = false;
+    p.stderr.on('data', (d) => { err += d; if (err.length > 4000) err = err.slice(-2000); });
+    p.on('error', (e) => { failed = true; rejectOut(e); });
+    p.on('exit', (code) => {
+        try {
+            if (code !== 0) return rejectOut(new Error('ffmpeg exit ' + code + ': ' + err.slice(-300)));
+            const b = fs.readFileSync(out); fs.unlinkSync(out); resolveOut(b);
+        } catch (e) { rejectOut(e); }
     });
+    return {
+        async push(buf) {
+            if (failed || !p.stdin.writable) return;
+            try { if (!p.stdin.write(buf)) await new Promise((r) => p.stdin.once('drain', r)); }
+            catch (e) { failed = true; }
+        },
+        async abort() { failed = true; try { p.stdin.destroy(); } catch (e) {} try { p.kill('SIGKILL'); } catch (e2) {} },
+        finish: () => { try { p.stdin.end(); } catch (e) {} return done; },
+    };
 }
 
 // ── main ────────────────────────────────────────────────────────────────────
@@ -861,10 +963,55 @@ async function renderUltimateVideo(o) {
     }
     const seed = hash((o.classId || '') + (o.name || ''));
     const total = Math.round(DUR * FPS);
-    const frames = [];
     let thumb = null;
     const canvas = createCanvas(W, H), ctx = canvas.getContext('2d');
     let sprNoCaster = null;
+    // ── PLATE CACHE (26-R5, owner: "pre-bake them so it's really fast"): a
+    // miss paints every effect track onto per-group transparent plates and
+    // saves them in the BACKGROUND; a hit replays the stored plates and skips
+    // the per-pixel track work (R3 profile: breath blits 40% + vortex warp
+    // 19% of a DRAGON_GOD render). Fighters, victim HP bars, banner, HUD,
+    // camera and every per-duel pixel stay live either way — so ground fx
+    // stay UNDER the fighters and air fx OVER them, exactly as baked.
+    const scratch = new Map();   // per-render run-canvas reuse (never shared across concurrent renders)
+    const enc = startMp4Encoder();
+    let plateMeta = null, plateKey = null, plateCap = null;
+    const underGroups = buildGroups(tracks.filter((t) => t.under));
+    const overGroups = buildGroups(tracks.filter((t) => !t.under));
+    try {
+        if (!plates.isDisabled()) {
+            const plateBaseBuf = (layers && Buffer.isBuffer(layers.bg) && layers.bg.length > 1000) ? layers.bg
+                : (Buffer.isBuffer(o.baseBuffer) && o.baseBuffer.length > 1000 ? o.baseBuffer : null);
+            const anyPlatable = underGroups.some((g) => !g.live) || overGroups.some((g) => !g.live);
+            if (plateBaseBuf && anyPlatable) {
+                const q4 = (v) => Math.round(Number(v) / 4) * 4;
+                const tracksSig = tracks.map((t) => {
+                    const c = Object.assign({}, t);
+                    if (c._pt) c._pt = [q4(c._pt[0]), q4(c._pt[1])];      // snap fan points to the key grid
+                    if (c._ptTo) c._ptTo = [q4(c._ptTo[0]), q4(c._ptTo[1])];
+                    return c;
+                });
+                plateKey = plates.keyFor({
+                    cls: String(o.classId || ''), dur: DUR, imp: IMP, k: K, side: o.side || '', aoe: !!o.aoe,
+                    pal: palette, ac: [q4(A.C[0]), q4(A.C[1])], at: [q4(A.T[0]), q4(A.T[1])],
+                    base: plates.sha1(plateBaseBuf), tracks: tracksSig,
+                });
+                plateMeta = plates.loadMeta(plateKey);
+                if (plateMeta) {
+                    // the group plan is deterministic per key — a stored meta that
+                    // disagrees (older writer) must never be mis-replayed
+                    if (JSON.stringify(groupMetaOf(underGroups)) !== JSON.stringify(plateMeta.under)
+                        || JSON.stringify(groupMetaOf(overGroups)) !== JSON.stringify(plateMeta.over)) {
+                        plateMeta = null;
+                        console.warn('[UltFx] plates meta drift — recapturing', plateKey.slice(0, 8));
+                    } else {
+                        console.log('[UltFx] plates HIT', plateKey.slice(0, 8), 'u' + underGroups.length + '/o' + overGroups.length);
+                    }
+                }
+                if (!plateMeta) { plateCap = plates.makeCapture(); plateCap.key = plateKey; }
+            }
+        }
+    } catch (e) { plateMeta = null; plateCap = null; console.warn('[UltFx] plates setup failed:', e?.message || e); }
     // 🎥 ACTOR SHRINK (owner 2026-10-27, REAPER: "I want um to became tiny and a gaint syth hits",
     // DRAGON_GOD: "zoom out wayy more so that the characger Sprites look small leave the dragon the
     // same size tho"): recipes push {layer:'shrink', at, dur, to} tracks and the combatant roster
@@ -944,11 +1091,9 @@ async function renderUltimateVideo(o) {
             shrinkK, cutsAll,
             layers: !!layers, sprImg, focImg, focRect, casterRect, affectList, hurtList, casterCut, impact: IMP };
         if (env.layers) {
-            for (const tr of tracks) {
-                if (!tr.under) continue;
-                if (tr.layer) { const L = LAYERS[tr.layer]; if (L) { ctx.save(); try { L(ctx, tr, env); } catch (e) { /* a bad layer never kills the clip */ } ctx.restore(); } }
-                else drawTrackInstances(ctx, tr, sets, A, time, mulberry(seed + f), palette);
-            }
+            const po = { f, env, sets, A, time, seed, palette, plateMeta, plateKey, plateCap, scratch };
+            if (plateMeta || plateCap) await paintGroups(ctx, underGroups, Object.assign(po, { under: true }));
+            else plateGroupsDirect(ctx, underGroups, Object.assign(po, { under: true }));
             // 💨 hidecaster windows (Reaper: the caster vanishes, only the scythe remains)
             // + 🎥 actor shrink (Reaper/Dragon God: the roster draws tiny in place)
             const hideNow = !!(casterCut && tracks.some((t) => (t.layer === 'hidecaster' || t.layer === 'lunge') && time >= t.at && time <= t.at + t.dur));
@@ -1010,11 +1155,9 @@ async function renderUltimateVideo(o) {
         }
         // sprite tracks, ordered (under:true tracks already painted in the
         // ground pass above)
-        for (const tr of tracks) {
-            if (tr.under) continue;
-            if (tr.layer) { const L = LAYERS[tr.layer]; if (L) { ctx.save(); try { L(ctx, tr, env); } catch (e) { /* a bad layer never kills the clip */ } ctx.restore(); } }
-            else drawTrackInstances(ctx, tr, sets, A, time, mulberry(seed + f), palette);
-        }
+        const po = { f, env, sets, A, time, seed, palette, plateMeta, plateKey, plateCap, scratch };
+        if (plateMeta || plateCap) await paintGroups(ctx, overGroups, Object.assign(po, { under: false }));
+        else plateGroupsDirect(ctx, overGroups, Object.assign(po, { under: false }));
         // impact glow
         if (sinceHit >= 0 && sinceHit < 0.5) glow(ctx, A.T[0], A.T[1], 200 * easeOut(sinceHit / 0.25) + 40, rgba(palette[0], 'A'), 0.85 * (1 - sinceHit / 0.5));
         // 🔴 HURT FLASH fallback (no cutouts → no hurtList): same double-pulse
@@ -1038,11 +1181,27 @@ async function renderUltimateVideo(o) {
         // outside the camera transform, so nothing ever covers or dims it.
         if (hudIcons) drawVideoHud(ctx, o.hud, hudIcons);
         if (f === Math.round(IMP * FPS) + 1) thumb = canvas.toBuffer('image/jpeg', { quality: 0.8 });
-        frames.push(canvas.toBuffer('raw'));
+        await enc.push(canvas.toBuffer('raw'));
     }
+    // ── plate persist (background — never delays the send) ────────────────
+    let plateState = 'off';
+    if (plateCap && plateKey && plateCap.pngs.size) {
+        try {
+            const framesPresence = [];
+            for (let f2 = 0; f2 < total; f2++) {
+                framesPresence.push({
+                    u: underGroups.map((g, gi) => (plateCap.pngs.has(plates.frameName(f2, 'u', gi)) ? 1 : 0)),
+                    o: overGroups.map((g, gi) => (plateCap.pngs.has(plates.frameName(f2, 'o', gi)) ? 1 : 0)),
+                });
+            }
+            plateCap.meta = { W, H, FPS, total, under: groupMetaOf(underGroups), over: groupMetaOf(overGroups), frames: framesPresence };
+            plateState = 'captured';
+            plates.saveCapture(plateCap).catch(() => {});
+        } catch (e) { console.warn('[UltFx] plates save skipped:', e?.message || e); }
+    } else if (plateMeta) plateState = 'hit';
     if (!thumb) thumb = canvas.toBuffer('image/jpeg', { quality: 0.8 });
-    const mp4 = await encodeMp4(frames);
-    return { mp4, thumb };
+    const mp4 = await enc.finish();
+    return { mp4, thumb, plates: plateState };
 }
 
 module.exports = { renderUltimateVideo, _assets: { SETS, loadSet, loadManifest, OVERRIDABLE }, RECIPES, STYLE_RECIPE, W, H, FPS, DURATION, prewarm };
