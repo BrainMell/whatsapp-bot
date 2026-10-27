@@ -10,7 +10,7 @@
 //   * every cast darkens everything except the target and zooms in (renderer spotlight)
 
 // ground-plane layers render UNDER the combatants
-const GROUND_LAYERS = new Set(['circle', 'rift', 'cracks', 'vortex', 'bgfill', 'eclipse']);
+const GROUND_LAYERS = new Set(['circle', 'rift', 'cracks', 'vortex', 'bgfill', 'eclipse', 'dragon', 'staff']);
 
 const META = {
     DRAGON_GOD: { duration: 4.1, impact: 2.55, zoom: 0.02, flatVeil: true },
