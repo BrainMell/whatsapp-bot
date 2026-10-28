@@ -10,10 +10,10 @@ let pass = 0;
 let fail = 0;
 const ok = (c, l) => { if (c) { pass++; console.log(`  ✅ ${l}`); } else { fail++; console.log(`  ❌ ${l}`); } };
 
-const vsb = require("./core/utils/vsbFeats");
-const ps = require("./core/utils/powerscale");
-const cp = require("./core/utils/charProfile");
-const sj = require("./core/utils/styleJudge");
+const vsb = require("../../core/utils/vsbFeats");
+const ps = require("../../core/utils/powerscale");
+const cp = require("../../core/utils/charProfile");
+const sj = require("../../core/utils/styleJudge");
 
 function mockSock(tag) {
     const sends = [];

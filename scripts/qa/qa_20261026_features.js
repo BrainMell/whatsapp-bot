@@ -13,7 +13,7 @@ function ok(cond, label) {
 function section(t) { console.log(`\n=== ${t} ===`); }
 
 const path = require("path");
-const ROOT = path.join(__dirname, "core", "utils");
+const ROOT = path.join(__dirname, "..", "..", "core", "utils");
 
 // ---------- 1. splitCategory markers ----------
 section("splitCategory: cosmology / profile / feats / normal")
@@ -200,7 +200,7 @@ ps.pendingSelections.set(CHAT, {
         // ---------- 5. claim tag (string-level) ----------
         section("cardSystem: CLAIMED message tags the claimer")
         const fs = require("fs");
-        const csSrc = fs.readFileSync(path.join(__dirname, "core", "rpg", "cardSystem.js"), "utf8");
+        const csSrc = fs.readFileSync(path.join(__dirname, "..", "..", "core", "rpg", "cardSystem.js"), "utf8");
         ok(csSrc.includes("*CLAIMED by @${economy.getDisplayName(senderJid)}*"), "CLAIMED header carries @DisplayName");
         ok(/CLAIMED by[\s\S]{0,600}mentions: \[senderJid\]/.test(csSrc), "mentions: [senderJid] rides the reply");
 

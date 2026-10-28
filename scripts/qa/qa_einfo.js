@@ -7,8 +7,8 @@
 process.env.CARD_DIAG = '1';
 const mongoose = require('mongoose');
 mongoose.set('bufferTimeoutMS', 45000);
-const connectDB = require('./db');
-const cs = require('./core/rpg/cardSystem');
+const connectDB = require('../../db');
+const cs = require('../../core/rpg/cardSystem');
 
 let pass = 0, fail = 0;
 const check = (name, cond, extra) => {
