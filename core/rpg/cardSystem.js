@@ -138,24 +138,66 @@ const TIER_LABEL = {
   '4': 'TIER  IV', '5': 'TIER  V',   '6': 'TIER  VI',  'S': 'TIER  S', 'E': 'EVENT'
 };
 
-// 💡 OWNER 2026-10-28 v2 (Mellow): event token drop LADDER, rolled per
-// token-bearing claim (1-in-2 spawn rule unchanged):
-//   60% -> 1 token, 25% -> 2, 10% -> 3, 4% -> 5, 1% -> 8 (sums to 100%).
-const TOKEN_DROP_LADDER = [
-  { pct: 60, tokens: 1 },
-  { pct: 25, tokens: 2 },
-  { pct: 10, tokens: 3 },
-  { pct: 4,  tokens: 5 },
-  { pct: 1,  tokens: 8 },
-];
+// 💡 OWNER 2026-10-28 v3 (Mellow): GUARANTEED tier-keyed payouts — no RNG.
+// "tier 2 is always 2, tier 4 is always 5" — a token-bearing claim pays its
+// card tier's row, always. Two tables, toggleable PER GROUP by mods via
+// `.j event rate low|high` (owner: "a command so that I can turn it on in
+// specific gcs"); default everywhere = low.
+//   low  (v3 spec):      T1→1 T2→2 T3→3 T4→5 T5→8 (T6/S/E ride the cap = 8)
+//   high (v1 "old high"): T1→5 T2→10 T3→15 T4→20 T5→25 T6→30, S/E→35
+const TOKEN_PAY_LOW  = { '1': 1, '2': 2, '3': 3, '4': 5, '5': 8, '6': 8, 'S': 8, 'E': 8 };
+const TOKEN_PAY_HIGH = { '1': 5, '2': 10, '3': 15, '4': 20, '5': 25, '6': 30, 'S': 35, 'E': 35 };
+const TOKEN_RATE_MODES = { low: TOKEN_PAY_LOW, high: TOKEN_PAY_HIGH };
 
-function rollTokenDrop() {
-  let _r = Math.random() * 100;
-  for (const _step of TOKEN_DROP_LADDER) {
-    if (_r < _step.pct) return _step.tokens;
-    _r -= _step.pct;
+// Per-GC rate mode ('low' | 'high'), persisted in System key token_rate_modes
+// so it survives restarts. Missing group = 'low' (v3 default).
+const _tokenRateModes = new Map(); // chatJid -> 'low' | 'high'
+
+function getTokenRateMode(chatJid) {
+  return _tokenRateModes.get(chatJid) || 'low';
+}
+
+function tokenPayFor(chatJid, tier) {
+  const _table = TOKEN_RATE_MODES[getTokenRateMode(chatJid)] || TOKEN_PAY_LOW;
+  const _amt = _table[String(tier)];
+  if (_amt != null) return _amt;
+  return _table['1']; // unknown tier fallback — never NaN into the economy
+}
+
+async function loadTokenRateModes() {
+  try {
+    const doc = await System.findOne({ key: 'token_rate_modes' }).lean();
+    _tokenRateModes.clear();
+    if (doc && doc.value && doc.value.modes) {
+      for (const [jid, mode] of Object.entries(doc.value.modes)) {
+        if (mode === 'high' || mode === 'low') _tokenRateModes.set(jid, mode);
+      }
+    }
+    const _hi = [..._tokenRateModes.values()].filter(m => m === 'high').length;
+    console.log(`[cardSystem] token rate modes loaded: ${_tokenRateModes.size} group(s) pinned (${_hi} high, rest default low)`);
+  } catch (e) { console.error('[cardSystem] loadTokenRateModes failed:', e.message); }
+}
+
+async function setTokenRateMode(chatJid, mode) {
+  if (mode !== 'low' && mode !== 'high') return { success: false, message: '❌ Mode must be `low` or `high`.' };
+  _tokenRateModes.set(chatJid, mode);
+  try {
+    await System.findOneAndUpdate(
+      { key: 'token_rate_modes' },
+      { $set: { value: { modes: Object.fromEntries(_tokenRateModes) } } },
+      { upsert: true }
+    );
+  } catch (e) {
+    console.error('[cardSystem] setTokenRateMode persist failed:', e.message);
+    return { success: false, message: '⚠️ Mode applied in memory but the save failed — it may revert on restart.' };
   }
-  return 1; // float-safety fallback
+  const _tbl = TOKEN_RATE_MODES[mode];
+  const _rows = ['1', '2', '3', '4', '5', '6', 'S', 'E']
+    .map(t => `${TIER_LABEL[t] ? TIER_LABEL[t].replace(/\s+/g, ' ').trim() : 'T' + t} → ${_tbl[t]}`).join(' · ');
+  return {
+    success: true,
+    message: `🎫 *Token drops: ${mode.toUpperCase()}* for this group\n\n${_rows}\n\nPayouts are guaranteed per card tier (no RNG). _Saves across restarts._`,
+  };
 }
 
 // 💡 Default tier spawn weights. Can be overridden per-bot via .g spawnset tier.
@@ -653,7 +695,7 @@ async function setSpawnInterval(minutesOrRange, callerJid, isOwner, maxMinutes) 
 
 📊 Approximate rates (based on avg ${avgMinutes} min):
 • ${spawnsPerHour} spawns/hour
-• ~${tokensPerHour} token drops/hour per group (during events, 1 per ${TOKEN_SPAWNS_PER_TOKEN} spawns — each drop rolls 1-8 tokens)
+• ~${tokensPerHour} token drops/hour per group (during events, 1 per ${TOKEN_SPAWNS_PER_TOKEN} spawns — each drop pays a guaranteed tier-keyed amount)
 
 _Interval persists across bot restarts._`
   };
@@ -1875,8 +1917,9 @@ async function cmdClaim(args, senderJid, reply, chatId) {
     try {
       const eventActive = await isTokenEventActive();
       if (eventActive && spawn.hasToken) {
-        // 💡 OWNER 2026-10-28 v2: rolled ladder (60/25/10/4/1% -> 1/2/3/5/8 tokens).
-        const _tokAmt = rollTokenDrop();
+        // 💡 OWNER 2026-10-28 v3: guaranteed tier-keyed payout, per-GC mode
+        // (low = 1/2/3/5/8 · high = 5/10/15/20/25/30). Mods: `.j event rate`.
+        const _tokAmt = tokenPayFor(chatId, spawn.card && spawn.card.tier);
         economy.addEventTokens(senderJid, _tokAmt); // 💡 47-l2: registration-gate-free grant
         const balance = economy.getEventTokens(senderJid);
         tokenMsg = `\n\n🎫 +${_tokAmt} *Event Token${_tokAmt === 1 ? '' : 's'}!* (Total: ${balance})\n_Spend them with \`${P()} eshop\`._`;
@@ -5116,7 +5159,21 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         const active = await isTokenEventActive();
         return reply(`📊 *Token Event Status*\n\nStatus: ${active ? '🟢 ACTIVE' : '🔴 INACTIVE'}\n\nUse \`${p} event start\` or \`${p} event stop\`.`), true;
       }
-      return reply(`🎫 *Token Event Control*\n\n➥ \`${p} event start\` - Start the token event\n➥ \`${p} event stop\` - Stop the token event\n➥ \`${p} event status\` - Check current status`), true;
+      // 💡 OWNER 2026-10-28 v3: per-GC payout mode — guaranteed tier-keyed
+      // amounts; low (default) = 1/2/3/5/8, high = old v1 rates 5..30.
+      if (eventSub === 'rate') {
+        const rateSub = args[1]?.toLowerCase();
+        if (rateSub === 'low' || rateSub === 'high') {
+          const isGroupChat = chatId.endsWith('@g.us') || chatId.endsWith('@lid');
+          if (!isGroupChat) return reply('❌ *Groups only*\n\n`event rate` pins a payout mode per group — run it inside the GC you want to change.'), true;
+          const _res = await setTokenRateMode(chatId, rateSub);
+          return reply(_res.message), true;
+        }
+        const _cur = getTokenRateMode(chatId);
+        const _other = _cur === 'low' ? 'high' : 'low';
+        return reply(`🎫 *Token Drop Rate (this group)*\n\nCurrent mode: *${_cur.toUpperCase()}*\n\n➥ \`${p} event rate low\` — guaranteed T1→1 T2→2 T3→3 T4→5 T5→8\n➥ \`${p} event rate high\` — guaranteed T1→5 T2→10 T3→15 T4→20 T5→25 T6→30\n\n_Switch with_ \`${p} event rate ${_other}\`_. Saves across restarts._`), true;
+      }
+      return reply(`🎫 *Token Event Control*\n\n➥ \`${p} event start\` - Start the token event\n➥ \`${p} event stop\` - Stop the token event\n➥ \`${p} event status\` - Check current status\n➥ \`${p} event rate low|high\` - Set this group's payout mode`), true;
 
     case 'setprice':
       // .j setprice edeck <slot> <price>
@@ -5687,6 +5744,7 @@ async function init(sock, admins = [], mods = [], owner = null) {
     loadRoles(),
     loadTokenEventState(),
     loadTokenRateCounters(),
+    loadTokenRateModes(),
     loadEShopDeck(),
     loadTierConfig(),
     loadHiddenSetConfig(),
@@ -6934,6 +6992,8 @@ module.exports = {
   cardBlockedForGroup, visibleCardsFor, loadHiddenSetConfig, cmdHiddenSet,
   // 💡 Token LB inner-circle filter (2026-10-26, Mellow): QA hooks
   cmdTokenLB, cmdTokenLbManage, tokenLbHiddenSet,
+  // 💡 Per-GC token payout mode (2026-10-28 v3, Mellow): QA hooks
+  getTokenRateMode, setTokenRateMode, loadTokenRateModes, tokenPayFor,
 };
 
 // 💡 OWNER BRIEF 2026-10-09 §1 diagnostics: env-guarded hook so QA harnesses
