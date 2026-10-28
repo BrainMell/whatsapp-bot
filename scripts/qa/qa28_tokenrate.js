@@ -50,7 +50,7 @@ ok(cards.tokenPayFor(GC1, 'E') === 8, 'E rides cap -> 8');
 ok(cards.tokenPayFor(GC1, undefined) === 1, 'unknown tier falls back to T1 row (never NaN)');
 
 // ---------- 2. HIGH mode per GC + isolation ----------
-section('per-GC HIGH mode (old v1 rates) + isolation')
+section('per-GC HIGH mode (old v1 rates) + isolation');
 (async () => {
   const r = await cards.setTokenRateMode(GC1, 'high');
   ok(r && r.success === true, 'setTokenRateMode(high) succeeds');
