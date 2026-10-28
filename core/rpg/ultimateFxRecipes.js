@@ -12,9 +12,10 @@
 // ground-plane layers render UNDER the combatants (rings/ripple are perspective-
 // flattened shockwave ellipses pinned to fighter feet — engine also force-stamps
 // them, see ultimateFx.js; owner 2026-10-28: "flat ring effects are overlaying")
-const GROUND_LAYERS = new Set(['circle', 'rift', 'cracks', 'vortex', 'bgfill', 'eclipse', 'dragon', 'staff', 'rings', 'ripple']);
+const GROUND_LAYERS = new Set(['world', 'circle', 'rift', 'cracks', 'vortex', 'bgfill', 'eclipse', 'dragon', 'staff', 'rings', 'ripple']);
 
 const META = {
+    MAGE: { duration: 3.0, impact: 1.2, zoom: 0.06 },
     DRAGON_GOD: { duration: 4.1, impact: 2.55, zoom: 0.02, flatVeil: true },
     DRAGON_LORD: { duration: 3.5, impact: 1.95, zoom: 0.04 },
     REAPER: { duration: 3.4, impact: 1.75, zoom: 0.03 },
@@ -30,9 +31,32 @@ const META = {
     AVATAR: { duration: 3.1, impact: 1.3 },
     KAGE: { duration: 3.0, impact: 1.25 },
 };
-function classMeta(cls) { return META[cls] || null; }
+// 🌌 WORLD-SHIFT (owner 2026-10-28): the big skills open with a cosmic cinematic (zoom-blur out ->
+// planet + asteroid -> impact -> the arena becomes another world), then play their normal recipe,
+// shifted later by SHIFT seconds. planet:false = warp tunnel into another dimension (shorter).
+const WORLD = {
+    MAGE: { kind: 'lava', planet: true },          // owner: the asteroid-hits-a-planet idea was for the MAGE ult
+    ARCHMAGE: { kind: 'storm', planet: true },
+    TIMELORD: { kind: 'gold', planet: true },
+    AVATAR: { kind: 'ice', planet: true },
+    DEATH_LORD: { kind: 'blood', planet: true },
+    KAGE: { kind: 'void', planet: false, sil: true },
+    VOIDWALKER: { kind: 'void', planet: false },
+    REAPER: { kind: 'void', planet: false },
+    LICH: { kind: 'ice', planet: false },
+    GRAND_INVENTOR: { kind: 'storm', planet: false },
+    WARLOCK: { kind: 'blood', planet: false },
+    ELEMENTALIST: { kind: 'storm', planet: false },
+    VIRTUOSO: { kind: 'gold', planet: false },
+};
+const shiftOf = (cls) => (WORLD[cls] ? (WORLD[cls].planet ? 1.9 : 1.5) : 0);
+function classMeta(cls) {
+    const m = META[cls]; if (!m) return null;
+    const S = shiftOf(cls);
+    return S ? { ...m, duration: m.duration + S, impact: m.impact + S } : m;
+}
 
-function classRecipe(cls, p, { IMPACT: I }) {
+function classRecipeBase(cls, p, { IMPACT: I }) {
     const L = (layer, o) => ({ layer, under: GROUND_LAYERS.has(layer), ...o });
     const flash = (c, a = 0.5, at = I, dur = 0.22) => L('wash', { at, dur, color: c, a, add: true });
     const dark = (a = 0.45, at = 0.1, dur = I + 0.4) => L('wash', { at, dur, color: '#05000c', a });
@@ -421,7 +445,22 @@ function classRecipe(cls, p, { IMPACT: I }) {
 // energy (a ring + sparks + a brighter flash) but NEVER sky lasers or ground cracks (owner: "the level 3s are
 // spamming lasers where they don't belong"). Timing never changes so hit sync is untouched.
 const SIZE_KEYS = ['w', 'r', 'rx', 'ew', 'eh', 'len'];
-const NOSCALE = new Set(['lunge', 'focus', 'bgfill', 'invert', 'vortex', 'camera', 'hidecaster', 'dragon', 'robohand', 'scythe', 'reticle', 'staff', 'shrink', 'magicClock']);
+const NOSCALE = new Set(['lunge', 'focus', 'bgfill', 'invert', 'vortex', 'camera', 'hidecaster', 'dragon', 'robohand', 'scythe', 'reticle', 'staff', 'shrink', 'magicClock', 'cosmic', 'world']);
+function classRecipe(cls, p, o) {
+    const W = WORLD[cls], S = shiftOf(cls);
+    if (!W) return classRecipeBase(cls, p, o);
+    const base = classRecipeBase(cls, p, { ...o, IMPACT: o.IMPACT - S });      // recipes are written against the un-shifted impact
+    if (!base) return base;
+    const drop = new Set(W.drop || []);
+    const moved = base.filter((t) => !drop.has(t.layer)).map((t) => ({ ...t, at: (t.at || 0) + S, ...(t.hit !== undefined ? { hit: t.hit + S } : {}) }));
+    const total = (META[cls].duration || 3) + S, T3 = W.planet ? 1.7 : 1.35, wAt = T3 - 0.1;
+    return [
+        { layer: 'cosmic', at: 0, dur: W.planet ? 2.0 : 1.7, world: W.kind, planet: W.planet },
+        { layer: 'world', under: true, at: wAt, dur: total - wAt - 0.25, kind: W.kind, sil: W.sil, fin: 0.25, fout: 0.4 },
+        ...moved,
+    ];
+}
+
 function scaleTracks(tracks, k, palette, IMPACT) {
     k = Math.max(0, Math.min(1, Number(k) || 0));
     if (!Array.isArray(tracks)) return tracks;

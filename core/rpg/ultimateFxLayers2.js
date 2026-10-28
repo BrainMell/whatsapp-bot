@@ -568,4 +568,7 @@ module.exports = function install(LAYERS, H) {
     // ── camera: marker track read by the renderer (zoom delta) ─────────────
     LAYERS.camera = () => { };
     LAYERS.hidecaster = () => { };
+
+    // cosmic world-shift cinematic (cosmic + world layers) lives in its own file
+    require('./ultimateFxCosmic')(LAYERS, H);
 };
