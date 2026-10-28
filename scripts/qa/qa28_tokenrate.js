@@ -17,11 +17,12 @@ function section(t) { console.log(`\n=== ${t} ===`); }
 const SYS_PATH = path.join(__dirname, '..', '..', 'core', 'models', 'System.js');
 const sysStore = new Map(); // key -> value doc
 const SystemMock = {
-  findOne: async (q) => {
-    if (!sysStore.has(q.key)) return null;
-    const doc = { key: q.key, value: sysStore.get(q.key) };
-    doc.lean = async () => ({ key: doc.key, value: doc.value });
-    return doc;
+  // mongoose semantics: findOne returns a Query with .lean() (NOT a promise),
+  // so loadTokenRateModes' `await System.findOne({...}).lean()` really reads
+  // the store instead of tripping into its catch and passing off warm RAM.
+  findOne: (q) => {
+    const doc = sysStore.has(q.key) ? { key: q.key, value: sysStore.get(q.key) } : null;
+    return { lean: async () => doc };
   },
   findOneAndUpdate: async (q, upd) => {
     sysStore.set(q.key, upd.$set.value);
