@@ -37,3 +37,41 @@ replaced by a downloaded sprite sheet through `vfx_assets.json` (this folder). T
 Overridable layers: slashes, swarm, scythe, robohand, breath, dragon, tether, soulflow, elements, reticle, staff, ripple,
 eclipse, rings, pillar, crescent, circle, rift, cracks, vines, gears, blackhole, fall, emit, beam.
 Per-class recipes live in `core/rpg/ultimateFxRecipes.js`; layers in `ultimateFxLayers*.js`.
+
+
+## Swapping the cinematic intros + arenas (full-screen art)
+
+Every ultimate class opens with a short procedural **intro sequence** (`LAYERS.cinema`, `LAYERS.cosmic` for Mage), and
+three skills also swap the **arena** (`world`). Both are drawn in code today; replace either with downloaded art
+(an image sequence, a sprite sheet cut with `grid`, or one still image) without touching code:
+
+```json
+"sets": {
+  "mage_asteroid": { "files": ["mage/a1.png", "mage/a2.png", "mage/a3.png"], "fps": 12 },
+  "lava_arena":    { "files": ["worlds/lava.png"] }
+},
+"overrides": {
+  "cosmic@MAGE":    { "set": "mage_asteroid", "loop": false },
+  "cinema@REAPER":  { "set": "reaper_cut",    "fit": "cover" },
+  "world@lava":     { "set": "lava_arena" }
+}
+```
+* `cinema@CLASS` (or `cosmic@MAGE`) paints the set **full-screen over the battle for the intro's window** (1.4s for the short
+  classes, 2.1s for the long ones, ~2.0s Mage), fading in/out. Frames play at the set's `fps`; `loop:false` holds the last
+  frame. `fit`: `cover` (default) or `contain`; `alpha` 0-1. The class attack still plays afterwards, so only the intro changes.
+* `world@KIND` is painted as the arena **behind the fighters** (kinds that exist: `lava` (Mage), `void` (Kage, Archmage)).
+  Same `fps` / `loop` / `fit` / `alpha` fields.
+* `node scripts/vfx_assets_check.js` prints the exact keys available (`cinema@...`, `cosmic@...`, `world@...`).
+
+What each intro is meant to show (so an asset hunter knows what to look for):
+Mage asteroid hitting a planet -> lava world · Archmage black hole swallowing the arena (singularity) -> void · Kage ink +
+many eyes opening in darkness -> shadow figures · Time Lord inside a clock face, hands spinning back · Avatar four
+elements merging into a glowing eye · Death Lord skull moon + bone hands · Voidwalker screen shattering into inverted shards
+· Reaper a scythe cut splitting the screen · Lich frost crystallising the frame · Grand Inventor blueprint becoming metal ·
+Warlock pentagram under a blood moon · Elementalist fire/water/earth/air quadrants colliding · Virtuoso curtains opening on
+a stage · and a 1.4s intro for each remaining class (Necromancer souls, Fighter fist, Warrior planted sword, Samurai iai
+cut, Shogun banner army, Berserker rage, Scout scope, Rogue dagger glints, Ninja moon leap, Nightblade crescent, Apprentice
+spellbook, Dragonslayer dragon at sunset, Doomslayer black sun, Warlord charge, Chronomancer hourglass, Artificer scanner
+HUD, Bard note ribbon, Acolyte candle, Paladin shield, Cleric rose window, Saint heaven, Monk lotus, Zen Master enso,
+Templar cross, Divine Fist fist barrage, God Hand giant hand, Druid forest, Archdruid world tree, Merchant scales + coins,
+Tycoon skyline). Dragon God and Dragon Lord keep their original cinematics.

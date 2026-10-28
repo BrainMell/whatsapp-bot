@@ -237,6 +237,19 @@ module.exports = function install(LAYERS, H) {
         return hand;
     }
 
+    // ── backdrop: a downloaded sprite set / image sequence painted full-screen (manifest swap target) ──
+    LAYERS.backdrop = (ctx, tr, env) => {
+        const t = env.time - tr.at, dur = tr.dur || 2;
+        if (t < 0 || t > dur) return;
+        const fr = env.sets && env.sets[tr.fx]; if (!fr || !fr.length) return;
+        const fps = tr.fps || 16, i = Math.floor(t * fps), img = fr[tr.loop === false ? Math.min(i, fr.length - 1) : i % fr.length];
+        if (!img) return;
+        const W = env.W, Hh = env.H, sc = (tr.fit === 'contain' ? Math.min : Math.max)(W / img.width, Hh / img.height);
+        const a = (tr.a === undefined ? 1 : tr.a) * easeOut(clamp01(t / (tr.fin || 0.1))) * (1 - easeIn(clamp01((t - (dur - (tr.fout || 0.4))) / (tr.fout || 0.4))));
+        if (a < 0.01) return;
+        ctx.save(); ctx.globalAlpha = a; ctx.drawImage(img, (W - img.width * sc) / 2, (Hh - img.height * sc) / 2, img.width * sc, img.height * sc); ctx.restore();
+    };
+
     // ── world: the replacement battlefield ──────────────────────────────────
     LAYERS.world = (ctx, tr, env) => {
         const t = env.time - tr.at, dur = tr.dur || 2;
@@ -333,6 +346,16 @@ module.exports = function install(LAYERS, H) {
             for (let i = 0; i < 3; i++) { const sw = Math.sin(tt * 1.4 + i * 2) * W * 0.15, g = ctx.createLinearGradient(0, 0, 0, Hh); g.addColorStop(0, 'rgba(255,241,176,0.5)'); g.addColorStop(1, 'rgba(255,241,176,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(W * (0.25 + i * 0.25), 0); ctx.lineTo(W * (0.25 + i * 0.25) + 16, 0); ctx.lineTo(W * (0.25 + i * 0.25) + sw + 130, Hh); ctx.lineTo(W * (0.25 + i * 0.25) + sw - 130, Hh); ctx.fill(); }
             ctx.restore();
             for (const side of [0, 1]) { const g = ctx.createLinearGradient(side ? W : 0, 0, side ? W - W * 0.2 : W * 0.2, 0); for (let k = 0; k <= 6; k++) g.addColorStop(k / 6, k % 2 ? '#7a0a1a' : '#b01a2c'); ctx.fillStyle = g; ctx.fillRect(side ? W * 0.8 : 0, 0, W * 0.2, Hh); }
+        }
+        if (K === 'void' && tr.debris) {                        // chunks of the old arena drifting in the void (singularity aftermath)
+            const rd = mulberry(hashS('debris'));
+            for (let i = 0; i < 16; i++) {
+                const bx = rd() * W, by = Hh * (0.15 + rd() * 0.75), sz = 18 + rd() * 46, ang = rd() * TAU + tt * (0.2 + rd() * 0.5) * (i % 2 ? 1 : -1), dy = Math.sin(tt * 0.7 + i) * 10;
+                ctx.save(); ctx.translate(bx, by + dy); ctx.rotate(ang); ctx.globalAlpha = a * (0.55 + 0.4 * rd());
+                ctx.fillStyle = '#3a2a1a'; ctx.beginPath(); ctx.moveTo(-sz, 0); ctx.lineTo(-sz * 0.4, -sz * 0.7); ctx.lineTo(sz * 0.7, -sz * 0.3); ctx.lineTo(sz, sz * 0.4); ctx.lineTo(0, sz); ctx.closePath(); ctx.fill();
+                ctx.fillStyle = '#4a8a3a'; ctx.beginPath(); ctx.moveTo(-sz, 0); ctx.lineTo(-sz * 0.4, -sz * 0.7); ctx.lineTo(sz * 0.7, -sz * 0.3); ctx.lineTo(sz * 0.6, -sz * 0.05); ctx.lineTo(-sz * 0.5, -sz * 0.1); ctx.closePath(); ctx.fill();
+                ctx.restore();
+            }
         } else if (K === 'spirit') {                            // drifting souls over teal mist
             ctx.save(); ctx.globalCompositeOperation = 'lighter'; for (let i = 0; i < 30; i++) { glowDot(ctx, rr() * W + Math.sin(tt * 1.2 + i) * 24, Hh - ((rr() * Hh + tt * (30 + rr() * 50)) % Hh), 10 + rr() * 12, '#7af0d0', 0.5 * a); } ctx.restore();
         } else if (K === 'hell') {                              // pentagram on the floor + flame pillars

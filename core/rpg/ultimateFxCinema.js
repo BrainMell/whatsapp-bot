@@ -8,7 +8,7 @@
 //  dissolves onto that class's own `world` arena (ultimateFxCosmic.js); the normal
 //  class recipe plays after it (shifted by the recipe wrapper).
 //
-//    ARCHMAGE   constellation: stars link into a giant rune sigil
+//    ARCHMAGE   SINGULARITY: a black hole swirls the arena away, the fight moves into the void
 //    TIMELORD   clockwork: you fall into a clock, hands spin backwards
 //    AVATAR     four elements spiral in and merge into the glowing eye
 //    DEATH_LORD the moon becomes a skull, bone hands claw up
@@ -59,25 +59,23 @@ module.exports = function install(LAYERS, H, W_OF, stars) {
 
     const CIN = {};
 
-    // ── ARCHMAGE: constellation sigil ───────────────────────────────────────
+    // ── ARCHMAGE: SINGULARITY - a black hole eats the arena, the fight moves into the void ──
     CIN.ARCHMAGE = (c, t, D, W, Hh, wd, snap) => {
-        if (t < 0.45) { warpOut(c, snap, W, Hh, easeIn(t / 0.45)); stars(c, W, Hh, t, 5 * t, 'arc'); return; }
-        const u = t - 0.45, cx = W / 2, cy = Hh * 0.5, R = Hh * 0.36;
-        grad(c, W, Hh, '#04041a', '#1a1050'); stars(c, W, Hh, t, 0, 'arc');
-        const nodes = [...Array(7)].map((_, i) => { const a = -Math.PI / 2 + (i / 7) * TAU + u * 0.12; return [cx + Math.cos(a) * R, cy + Math.sin(a) * R]; });
-        c.save(); c.globalCompositeOperation = 'lighter'; c.lineCap = 'round';
-        for (let k = 0; k < 7; k++) {
-            const fr = clamp01((u - 0.08 - k * 0.1) / 0.28); if (fr <= 0) continue;
-            const a = nodes[k], b = nodes[(k + 3) % 7];
-            c.strokeStyle = 'rgba(160,190,255,0.35)'; c.lineWidth = 9; partial(c, [a, b], fr);
-            c.strokeStyle = '#eef4ff'; c.lineWidth = 2.5; partial(c, [a, b], fr);
-            glowDot(c, a[0], a[1], 24 + 6 * Math.sin(t * 8 + k), '#bcd0ff', 0.9);
+        const cx = W / 2, cy = Hh * 0.5, RM = Math.hypot(W, Hh) / 2, tw = easeIn(clamp01((t - 0.15) / 1.15)), RINGS = 30;
+        c.fillStyle = '#000'; c.fillRect(0, 0, W, Hh);
+        for (let i = RINGS - 1; i >= 0; i--) {            // swirl + pinch: every ring of the frame rotates more the closer it is to the hole
+            const r0 = (i / RINGS) * RM, r1 = ((i + 1) / RINGS) * RM + 1.5, k = (i + 0.5) / RINGS;
+            c.save(); c.beginPath(); c.arc(cx, cy, r1, 0, TAU); c.arc(cx, cy, r0, 0, TAU, true); c.clip();
+            c.translate(cx, cy); c.rotate(tw * 7 * Math.pow(1 - k, 1.6)); const sc = 1 - 0.6 * tw * Math.pow(1 - k, 1.1); c.scale(sc, sc); c.translate(-cx, -cy);
+            c.drawImage(snap, 0, 0, W, Hh); c.restore();
         }
-        const rf = clamp01((u - 0.75) / 0.4);
-        if (rf > 0) { c.strokeStyle = '#cfe0ff'; c.lineWidth = 3; c.beginPath(); c.arc(cx, cy, R * 1.08, -Math.PI / 2, -Math.PI / 2 + TAU * rf); c.stroke(); c.lineWidth = 1.5; c.beginPath(); c.arc(cx, cy, R * 1.18, -Math.PI / 2, -Math.PI / 2 - TAU * rf, true); c.stroke(); }
-        const fl = clamp01((u - 1.05) / 0.2);
-        if (fl > 0) { glowDot(c, cx, cy, R * (0.6 + fl * 2.2), '#ffffff', 0.9 * fl); }
+        const hole = RM * (0.03 + 0.2 * easeIn(clamp01((t - 0.1) / 1.2))) + RM * 1.3 * easeIn(clamp01((t - 1.3) / 0.45));
+        c.save(); c.globalCompositeOperation = 'lighter';
+        for (let arm = 0; arm < 5; arm++) { c.strokeStyle = arm % 2 ? 'rgba(190,150,255,0.55)' : 'rgba(255,255,255,0.5)'; c.lineWidth = 2; c.beginPath(); for (let k = 0; k <= 40; k++) { const q = k / 40, ang = arm * 1.2566 + t * 3 + q * 5, r = hole * (1.05 + q * 2.4); k ? c.lineTo(cx + Math.cos(ang) * r, cy + Math.sin(ang) * r * 0.55) : c.moveTo(cx + Math.cos(ang) * r, cy + Math.sin(ang) * r * 0.55); } c.stroke(); }
+        glowDot(c, cx, cy, hole * 2.2, '#9a6bff', 0.45 * clamp01(t / 0.4)); c.strokeStyle = '#ffe9c4'; c.lineWidth = 4; c.beginPath(); c.ellipse(cx, cy, hole * 1.12, hole * 0.62, 0, 0, TAU); c.stroke();
         c.restore();
+        c.fillStyle = '#000'; c.beginPath(); c.arc(cx, cy, hole, 0, TAU); c.fill();
+        if (t > 1.5) { stars(c, W, Hh, t, 0, 'void'); c.globalAlpha = clamp01((t - 1.5) / 0.25) * 0.0; c.globalAlpha = 1; }
     };
 
     // ── TIMELORD: inside the clock ──────────────────────────────────────────

@@ -35,20 +35,21 @@ const META = {
 // planet + asteroid -> impact -> the arena becomes another world), then play their normal recipe,
 // shifted later by SHIFT seconds. planet:false = warp tunnel into another dimension (shorter).
 const WORLD = {
-    MAGE: { kind: 'lava', planet: true },                                  // owner: asteroid hits a planet = the MAGE idea (LAYERS.cosmic)
-    // every other class has its OWN bespoke sequence (LAYERS.cinema, ultimateFxCinema.js) + its own arena
-    ARCHMAGE: { kind: 'arcane', cin: 'ARCHMAGE' },                         // stars link into a giant rune sigil
-    TIMELORD: { kind: 'clockwork', cin: 'TIMELORD' },                      // fall into a clock, hands spin backwards
-    AVATAR: { kind: 'sky', cin: 'AVATAR' },                                // four elements spiral into the glowing eye
-    DEATH_LORD: { kind: 'graveyard', cin: 'DEATH_LORD' },                  // moon becomes a skull, bone hands rise
-    KAGE: { kind: 'void', cin: 'KAGE', sil: true },                        // ink swallows the frame, eyes open
-    VOIDWALKER: { kind: 'void', cin: 'VOIDWALKER' },                       // the screen shatters into inverted shards
-    REAPER: { kind: 'spirit', cin: 'REAPER' },                             // one scythe cut splits the world
-    LICH: { kind: 'ice', cin: 'LICH' },                                    // frost crystallises the frame
-    GRAND_INVENTOR: { kind: 'factory', cin: 'GRAND_INVENTOR' },            // blueprint draws itself, becomes metal
-    WARLOCK: { kind: 'hell', cin: 'WARLOCK' },                             // pentagram burns in under a blood moon
-    ELEMENTALIST: { kind: 'storm', cin: 'ELEMENTALIST' },                  // four elements collide
-    VIRTUOSO: { kind: 'stage', cin: 'VIRTUOSO' },                          // curtains open on a stage
+    // arenas are RARE (owner): only the skills that really rewrite the map get one
+    MAGE: { kind: 'lava', planet: true },                                  // asteroid hits a planet -> lava world (LAYERS.cosmic)
+    ARCHMAGE: { kind: 'void', cin: 'ARCHMAGE', debris: true },             // SINGULARITY: a black hole eats reality, the fight is in a void
+    KAGE: { kind: 'void', cin: 'KAGE', sil: true },                        // ink swallows the frame, eyes open, shadow figures throw from everywhere
+    // everyone else: a bespoke intro sequence, then back onto the normal field (no new map)
+    TIMELORD: { cin: 'TIMELORD' },                                         // fall into a clock, hands spin backwards
+    AVATAR: { cin: 'AVATAR' },                                             // four elements spiral into the glowing eye
+    DEATH_LORD: { cin: 'DEATH_LORD' },                                     // moon becomes a skull, bone hands rise
+    VOIDWALKER: { cin: 'VOIDWALKER' },                                     // the screen shatters into inverted shards (+ the colour invert)
+    REAPER: { cin: 'REAPER' },                                             // one scythe cut splits the world
+    LICH: { cin: 'LICH' },                                                 // frost crystallises the frame
+    GRAND_INVENTOR: { cin: 'GRAND_INVENTOR' },                             // blueprint draws itself, becomes metal
+    WARLOCK: { cin: 'WARLOCK' },                                           // pentagram burns in under a blood moon
+    ELEMENTALIST: { cin: 'ELEMENTALIST' },                                 // four elements collide
+    VIRTUOSO: { cin: 'VIRTUOSO' },                                         // curtains open on a stage with the equaliser
     // short (1.4s) bespoke intros for every remaining class - ultimateFxCinema2.js; no arena swap, they dissolve back onto the normal field
     NECROMANCER: { cin: 'NECROMANCER', short: true },
     FIGHTER: { cin: 'FIGHTER', short: true },
@@ -390,7 +391,7 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
             L('wash', { at: 0.1, dur: I + 0.8, color: '#04000c', a: 0.4 }),
             L('circle', { at: 0.05, pos: 'C', r: 90, dur: 1.5, color: '#a56bff', points: 6, spin: 2 }),
             L('emit', { at: 0.1, dur: 1.0, pos: 'C', box: [80, 30], n: 22, life: 0.8, shape: 'star', colors: ['#a56bff', '#e6d4ff'], v: [0, -80], vr: [40, 20], swirl: 4 }),
-            L('vortex', { at: 0.45, pos: 'T', hy: 60, R: 200, twist: 8, pull: 3.2, hole: 24, rim: '#b78bff', dur: 1.7, inFrac: 0.35, outFrom: 0.8, spread: 'enemies', fanGap: 0.06 }),
+            L('blackhole', { at: 0.45, pos: 'T', r: 92, dur: 1.7, spread: 'enemies', fanGap: 0.06 }),
             L('focus', { at: 0.75, dur: 1.4, mode: 'suck', hit: I + 0.3 }),
             L('rings', { at: I + 0.35, pos: 'T', n: 3, gap: 0.1, color: '#a56bff', r: 170, spread: 'enemies', fanGap: 0.06 }),
             flash('#c4a4ff', 0.4, I + 0.4, 0.2),
@@ -487,7 +488,7 @@ function classRecipe(cls, p, o) {
     const total = ((META[cls] && META[cls].duration) || 2.7) + S, T3 = W.cin ? 1.75 : 1.7, wAt = T3 - 0.1;
     return [
         W.cin ? { layer: 'cinema', at: 0, dur: W.short ? 1.4 : 2.1, kind: W.cin, world: W.kind } : { layer: 'cosmic', at: 0, dur: 2.0, world: W.kind, planet: W.planet },
-        ...(W.kind ? [{ layer: 'world', under: true, at: wAt, dur: total - wAt - 0.25, kind: W.kind, sil: W.sil, fin: 0.25, fout: 0.4 }] : []),
+        ...(W.kind ? [{ layer: 'world', under: true, at: wAt, dur: total - wAt - 0.25, kind: W.kind, sil: W.sil, debris: W.debris, fin: 0.25, fout: 0.4 }] : []),
         ...moved,
     ];
 }

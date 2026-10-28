@@ -297,6 +297,13 @@ function applyOverrides(tracks, cls) {
     const ov = loadManifest().overrides || {};
     if (!Object.keys(ov).length) return tracks;
     return tracks.map((t) => {
+        // 🎬 full-screen art swaps (owner 2026-10-28): cinema@CLASS / cosmic@CLASS replace the intro sequence,
+        // world@KIND replaces the arena backdrop. {set, fit?, fps?, loop?, alpha?}  -> LAYERS.backdrop
+        if (t.layer === 'cinema' || t.layer === 'cosmic' || t.layer === 'world') {
+            const o = t.layer === 'world' ? (ov['world@' + t.kind]) : (ov['cinema@' + cls] || ov['cosmic@' + cls]);
+            if (!o || !o.set || !SETS[o.set]) return t;
+            return { layer: 'backdrop', fx: o.set, at: t.at, dur: t.dur, under: t.layer === 'world', fit: o.fit || 'cover', fps: o.fps || SETS[o.set].fps, loop: o.loop !== false, a: o.alpha, fin: t.layer === 'world' ? (t.fin || 0.25) : 0.1, fout: t.layer === 'world' ? (t.fout || 0.4) : 0.4 };
+        }
         if (!t.layer || !OVERRIDABLE.has(t.layer)) return t;
         const o = ov[t.layer + '@' + cls] || ov[t.layer];
         if (!o || !o.set || !SETS[o.set]) return t;
