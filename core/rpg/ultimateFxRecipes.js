@@ -35,21 +35,22 @@ const META = {
 // planet + asteroid -> impact -> the arena becomes another world), then play their normal recipe,
 // shifted later by SHIFT seconds. planet:false = warp tunnel into another dimension (shorter).
 const WORLD = {
-    MAGE: { kind: 'lava', planet: true },          // owner: the asteroid-hits-a-planet idea was for the MAGE ult
-    ARCHMAGE: { kind: 'storm', planet: true },
-    TIMELORD: { kind: 'gold', planet: true },
-    AVATAR: { kind: 'ice', planet: true },
-    DEATH_LORD: { kind: 'blood', planet: true },
-    KAGE: { kind: 'void', planet: false, sil: true },
-    VOIDWALKER: { kind: 'void', planet: false },
-    REAPER: { kind: 'void', planet: false },
-    LICH: { kind: 'ice', planet: false },
-    GRAND_INVENTOR: { kind: 'storm', planet: false },
-    WARLOCK: { kind: 'blood', planet: false },
-    ELEMENTALIST: { kind: 'storm', planet: false },
-    VIRTUOSO: { kind: 'gold', planet: false },
+    MAGE: { kind: 'lava', planet: true },                                  // owner: asteroid hits a planet = the MAGE idea (LAYERS.cosmic)
+    // every other class has its OWN bespoke sequence (LAYERS.cinema, ultimateFxCinema.js) + its own arena
+    ARCHMAGE: { kind: 'arcane', cin: 'ARCHMAGE' },                         // stars link into a giant rune sigil
+    TIMELORD: { kind: 'clockwork', cin: 'TIMELORD' },                      // fall into a clock, hands spin backwards
+    AVATAR: { kind: 'sky', cin: 'AVATAR' },                                // four elements spiral into the glowing eye
+    DEATH_LORD: { kind: 'graveyard', cin: 'DEATH_LORD' },                  // moon becomes a skull, bone hands rise
+    KAGE: { kind: 'void', cin: 'KAGE', sil: true },                        // ink swallows the frame, eyes open
+    VOIDWALKER: { kind: 'void', cin: 'VOIDWALKER' },                       // the screen shatters into inverted shards
+    REAPER: { kind: 'spirit', cin: 'REAPER' },                             // one scythe cut splits the world
+    LICH: { kind: 'ice', cin: 'LICH' },                                    // frost crystallises the frame
+    GRAND_INVENTOR: { kind: 'factory', cin: 'GRAND_INVENTOR' },            // blueprint draws itself, becomes metal
+    WARLOCK: { kind: 'hell', cin: 'WARLOCK' },                             // pentagram burns in under a blood moon
+    ELEMENTALIST: { kind: 'storm', cin: 'ELEMENTALIST' },                  // four elements collide
+    VIRTUOSO: { kind: 'stage', cin: 'VIRTUOSO' },                          // curtains open on a stage
 };
-const shiftOf = (cls) => (WORLD[cls] ? (WORLD[cls].planet ? 1.9 : 1.5) : 0);
+const shiftOf = (cls) => (WORLD[cls] ? (WORLD[cls].cin ? 2.0 : 1.9) : 0);
 function classMeta(cls) {
     const m = META[cls]; if (!m) return null;
     const S = shiftOf(cls);
@@ -445,7 +446,7 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
 // energy (a ring + sparks + a brighter flash) but NEVER sky lasers or ground cracks (owner: "the level 3s are
 // spamming lasers where they don't belong"). Timing never changes so hit sync is untouched.
 const SIZE_KEYS = ['w', 'r', 'rx', 'ew', 'eh', 'len'];
-const NOSCALE = new Set(['lunge', 'focus', 'bgfill', 'invert', 'vortex', 'camera', 'hidecaster', 'dragon', 'robohand', 'scythe', 'reticle', 'staff', 'shrink', 'magicClock', 'cosmic', 'world']);
+const NOSCALE = new Set(['lunge', 'focus', 'bgfill', 'invert', 'vortex', 'camera', 'hidecaster', 'dragon', 'robohand', 'scythe', 'reticle', 'staff', 'shrink', 'magicClock', 'cosmic', 'world', 'cinema']);
 function classRecipe(cls, p, o) {
     const W = WORLD[cls], S = shiftOf(cls);
     if (!W) return classRecipeBase(cls, p, o);
@@ -453,9 +454,9 @@ function classRecipe(cls, p, o) {
     if (!base) return base;
     const drop = new Set(W.drop || []);
     const moved = base.filter((t) => !drop.has(t.layer)).map((t) => ({ ...t, at: (t.at || 0) + S, ...(t.hit !== undefined ? { hit: t.hit + S } : {}) }));
-    const total = (META[cls].duration || 3) + S, T3 = W.planet ? 1.7 : 1.35, wAt = T3 - 0.1;
+    const total = (META[cls].duration || 3) + S, T3 = W.cin ? 1.75 : 1.7, wAt = T3 - 0.1;
     return [
-        { layer: 'cosmic', at: 0, dur: W.planet ? 2.0 : 1.7, world: W.kind, planet: W.planet },
+        W.cin ? { layer: 'cinema', at: 0, dur: 2.1, kind: W.cin, world: W.kind } : { layer: 'cosmic', at: 0, dur: 2.0, world: W.kind, planet: W.planet },
         { layer: 'world', under: true, at: wAt, dur: total - wAt - 0.25, kind: W.kind, sil: W.sil, fin: 0.25, fout: 0.4 },
         ...moved,
     ];

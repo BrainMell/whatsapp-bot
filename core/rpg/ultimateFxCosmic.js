@@ -29,6 +29,14 @@ module.exports = function install(LAYERS, H) {
         ice:   { sky: ['#0a1e3a', '#5f9fd4'], ground: ['#bcdcf2', '#6c9cc6'], glow: '#8fe0ff', hot: '#ffffff', planet: ['#4a80b0', '#e8fbff'], ember: '#e8fbff' },
         storm: { sky: ['#080b18', '#34426e'], ground: ['#161c30', '#06080f'], glow: '#ffe070', hot: '#ffffff', planet: ['#20305a', '#ffe070'], ember: '#ffe9a0' },
         gold:  { sky: ['#241602', '#b8862a'], ground: ['#5a3e0e', '#1e1403'], glow: '#fff0a0', hot: '#ffffff', planet: ['#7a5a14', '#fff0a0'], ember: '#fff0a0' },
+        arcane:    { sky: ['#04041a', '#2a1a70'], ground: ['#120a38', '#04020e'], glow: '#9fb8ff', hot: '#ffffff', planet: ['#1a1050', '#9fb8ff'], ember: '#cfe0ff' },
+        clockwork: { sky: ['#140c02', '#6a4a10'], ground: ['#3a2808', '#120c02'], glow: '#ffd98a', hot: '#fff1c4', planet: ['#5a3e0e', '#ffd98a'], ember: '#ffe9a8' },
+        sky:       { sky: ['#4aa0e8', '#d8f0ff'], ground: ['#e8f4ff', '#a8c8e8'], glow: '#ffffff', hot: '#ffffff', planet: ['#4aa0e8', '#ffffff'], ember: '#ffffff' },
+        graveyard: { sky: ['#10020a', '#4a0a14'], ground: ['#1a0a10', '#06020a'], glow: '#9ff0c8', hot: '#e8fff4', planet: ['#2a0a14', '#9ff0c8'], ember: '#9ff0c8' },
+        factory:   { sky: ['#06182a', '#1c4a6e'], ground: ['#26323e', '#0a1016'], glow: '#ffb24a', hot: '#ffe0a0', planet: ['#26323e', '#ffb24a'], ember: '#ffb24a' },
+        stage:     { sky: ['#1a0408', '#5a0a1c'], ground: ['#4a2a0c', '#120802'], glow: '#fff1b0', hot: '#ffffff', planet: ['#5a0a1c', '#fff1b0'], ember: '#fff1b0' },
+        spirit:    { sky: ['#020c10', '#0e4048'], ground: ['#06242a', '#020a0c'], glow: '#7af0d0', hot: '#e8fff8', planet: ['#06242a', '#7af0d0'], ember: '#7af0d0' },
+        hell:      { sky: ['#0e0002', '#5a0612'], ground: ['#2a0408', '#0a0002'], glow: '#ff3a2a', hot: '#ffb0a0', planet: ['#2a0408', '#ff3a2a'], ember: '#ff7a4a' },
         blood: { sky: ['#160208', '#620a1a'], ground: ['#260410', '#0a0104'], glow: '#ff2a40', hot: '#ffb0b8', planet: ['#340810', '#ff2a40'], ember: '#ff6a7a' },
     };
     const W_OF = (k) => WORLDS[k] || WORLDS.lava;
@@ -191,6 +199,8 @@ module.exports = function install(LAYERS, H) {
         ctx.restore();
     };
 
+    require('./ultimateFxCinema')(LAYERS, H, W_OF, stars);   // bespoke per-class intro sequences
+
     // ── 3D silhouettes (Kage's void world) ──────────────────────────────────
     function figure(ctx, x, y, h, dir, ph, wd, t, i) {
         const sway = Math.sin(t * 1.3 + i) * 0.02 * h;
@@ -291,6 +301,43 @@ module.exports = function install(LAYERS, H) {
                 const g = ctx.createRadialGradient(cx, cy, 5, cx, cy, W * 0.28); g.addColorStop(0, wd.glow + '30'); g.addColorStop(1, wd.glow + '00'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, yH + 40);
             }
             ctx.restore();
+        }
+
+        const K = tr.kind;
+        if (K === 'arcane') {                                   // star-sky + a huge rune circle turning on the ground
+            for (let i = 0; i < 80; i++) { ctx.globalAlpha = a * (0.3 + 0.6 * Math.abs(Math.sin(tt * 2 + i))); ctx.fillStyle = '#fff'; ctx.fillRect(rr() * W, rr() * yH, 1.6, 1.6); }
+            ctx.save(); ctx.globalAlpha = a * 0.7; ctx.translate(W / 2, Hh * 0.72); ctx.scale(1, 0.28); ctx.rotate(tt * 0.25); ctx.strokeStyle = wd.glow; ctx.lineWidth = 3; ctx.globalCompositeOperation = 'lighter';
+            ctx.beginPath(); ctx.arc(0, 0, W * 0.36, 0, TAU); ctx.stroke(); ctx.beginPath(); ctx.arc(0, 0, W * 0.3, 0, TAU); ctx.stroke();
+            ctx.beginPath(); for (let i = 0; i <= 7; i++) { const ang = ((i * 3) % 7) / 7 * TAU; i ? ctx.lineTo(Math.cos(ang) * W * 0.3, Math.sin(ang) * W * 0.3) : ctx.moveTo(Math.cos(ang) * W * 0.3, Math.sin(ang) * W * 0.3); } ctx.stroke(); ctx.restore();
+        } else if (K === 'clockwork') {                         // giant gears turning behind the fighters
+            ctx.save(); ctx.lineWidth = 3;
+            for (const [gx, gy, gr, tn, dir] of [[0.18, 0.28, 0.3, 14, 1], [0.5, 0.2, 0.24, 11, -1], [0.82, 0.3, 0.32, 15, 1], [0.34, 0.42, 0.16, 8, -1], [0.68, 0.44, 0.15, 8, -1]]) {
+                ctx.beginPath(); for (let i = 0; i < tn * 2; i++) { const ang = tt * 0.35 * dir + (i / (tn * 2)) * TAU, rad = i % 2 ? Hh * gr * 0.86 : Hh * gr; i ? ctx.lineTo(W * gx + Math.cos(ang) * rad, Hh * gy + Math.sin(ang) * rad) : ctx.moveTo(W * gx + Math.cos(ang) * rad, Hh * gy + Math.sin(ang) * rad); }
+                ctx.closePath(); ctx.fillStyle = 'rgba(90,60,12,0.7)'; ctx.fill(); ctx.strokeStyle = 'rgba(255,217,138,0.7)'; ctx.stroke();
+            }
+            ctx.restore();
+        } else if (K === 'sky') {                               // bright sky, drifting clouds, floating rocks
+            for (let i = 0; i < 7; i++) { const cx = ((rr() * W * 1.4 + tt * (8 + i * 3)) % (W * 1.4)) - W * 0.2, cy = yH * (0.15 + rr() * 0.7); ctx.fillStyle = 'rgba(255,255,255,0.75)'; for (let k = 0; k < 5; k++) { ctx.beginPath(); ctx.arc(cx + k * 28, cy + Math.sin(k * 2) * 8, 24 + (k % 2) * 10, 0, TAU); ctx.fill(); } }
+            for (let i = 0; i < 4; i++) { const rx = W * (0.12 + i * 0.26), ry = yH * 0.55 + Math.sin(tt + i) * 10; ctx.fillStyle = '#6a5a48'; ctx.beginPath(); ctx.moveTo(rx - 60, ry); ctx.lineTo(rx + 60, ry); ctx.lineTo(rx + 20, ry + 50); ctx.lineTo(rx - 10, ry + 62); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#6aa84a'; ctx.fillRect(rx - 60, ry - 5, 120, 6); }
+        } else if (K === 'graveyard') {                         // tombstones, dead trees, a skull moon, fog
+            ctx.fillStyle = '#e8dcd0'; ctx.globalAlpha = a * 0.9; ctx.beginPath(); ctx.arc(W * 0.5, yH * 0.4, Hh * 0.13, 0, TAU); ctx.fill(); ctx.globalAlpha = a; ctx.fillStyle = '#14020a'; for (const sx of [-1, 1]) { ctx.beginPath(); ctx.ellipse(W * 0.5 + sx * Hh * 0.045, yH * 0.38, Hh * 0.03, Hh * 0.036, 0, 0, TAU); ctx.fill(); }
+            ctx.fillStyle = '#06020a'; for (let i = 0; i < 9; i++) { const x = W * (0.04 + i * 0.115), h = 36 + (i % 3) * 14; ctx.beginPath(); ctx.moveTo(x - 16, yH + 18); ctx.lineTo(x - 16, yH + 18 - h + 14); ctx.arc(x, yH + 18 - h + 14, 16, Math.PI, 0); ctx.lineTo(x + 16, yH + 18); ctx.fill(); }
+            for (let i = 0; i < 3; i++) { const x = W * (0.15 + i * 0.35); ctx.strokeStyle = '#06020a'; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(x, yH + 10); ctx.lineTo(x + 6, yH - 90); ctx.moveTo(x + 4, yH - 50); ctx.lineTo(x + 40, yH - 100); ctx.moveTo(x + 5, yH - 70); ctx.lineTo(x - 34, yH - 110); ctx.stroke(); }
+            for (let i = 0; i < 5; i++) { ctx.globalAlpha = a * 0.16; ctx.fillStyle = '#9ff0c8'; ctx.beginPath(); ctx.ellipse(((tt * 14 + i * 230) % (W + 300)) - 150, yH + 30 + i * 18, 190, 26, 0, 0, TAU); ctx.fill(); }
+        } else if (K === 'factory') {                           // pipes, gears, sparks
+            ctx.fillStyle = '#0a1420'; for (let i = 0; i < 6; i++) ctx.fillRect(W * (0.06 + i * 0.17), 0, 18, yH + 10);
+            ctx.strokeStyle = '#3a4a5a'; ctx.lineWidth = 12; ctx.beginPath(); ctx.moveTo(0, yH * 0.4); ctx.lineTo(W, yH * 0.4); ctx.moveTo(0, yH * 0.7); ctx.lineTo(W, yH * 0.7); ctx.stroke();
+            for (const [gx, gy, gr, dir] of [[0.15, 0.5, 0.2, 1], [0.6, 0.35, 0.26, -1], [0.88, 0.55, 0.16, 1]]) { ctx.beginPath(); for (let i = 0; i < 24; i++) { const ang = tt * 0.5 * dir + (i / 24) * TAU, rad = i % 2 ? Hh * gr * 0.84 : Hh * gr; i ? ctx.lineTo(W * gx + Math.cos(ang) * rad, Hh * gy + Math.sin(ang) * rad) : ctx.moveTo(W * gx + Math.cos(ang) * rad, Hh * gy + Math.sin(ang) * rad); } ctx.closePath(); ctx.fillStyle = 'rgba(30,44,58,0.9)'; ctx.fill(); ctx.strokeStyle = 'rgba(143,224,255,0.5)'; ctx.lineWidth = 2; ctx.stroke(); }
+        } else if (K === 'stage') {                             // curtains framing the sides + spotlight cones + a floor glow
+            ctx.save(); ctx.globalCompositeOperation = 'lighter';
+            for (let i = 0; i < 3; i++) { const sw = Math.sin(tt * 1.4 + i * 2) * W * 0.15, g = ctx.createLinearGradient(0, 0, 0, Hh); g.addColorStop(0, 'rgba(255,241,176,0.5)'); g.addColorStop(1, 'rgba(255,241,176,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(W * (0.25 + i * 0.25), 0); ctx.lineTo(W * (0.25 + i * 0.25) + 16, 0); ctx.lineTo(W * (0.25 + i * 0.25) + sw + 130, Hh); ctx.lineTo(W * (0.25 + i * 0.25) + sw - 130, Hh); ctx.fill(); }
+            ctx.restore();
+            for (const side of [0, 1]) { const g = ctx.createLinearGradient(side ? W : 0, 0, side ? W - W * 0.2 : W * 0.2, 0); for (let k = 0; k <= 6; k++) g.addColorStop(k / 6, k % 2 ? '#7a0a1a' : '#b01a2c'); ctx.fillStyle = g; ctx.fillRect(side ? W * 0.8 : 0, 0, W * 0.2, Hh); }
+        } else if (K === 'spirit') {                            // drifting souls over teal mist
+            ctx.save(); ctx.globalCompositeOperation = 'lighter'; for (let i = 0; i < 30; i++) { glowDot(ctx, rr() * W + Math.sin(tt * 1.2 + i) * 24, Hh - ((rr() * Hh + tt * (30 + rr() * 50)) % Hh), 10 + rr() * 12, '#7af0d0', 0.5 * a); } ctx.restore();
+        } else if (K === 'hell') {                              // pentagram on the floor + flame pillars
+            ctx.save(); ctx.globalAlpha = a * 0.75; ctx.translate(W / 2, Hh * 0.74); ctx.scale(1, 0.26); ctx.strokeStyle = '#ff3a2a'; ctx.lineWidth = 4; ctx.globalCompositeOperation = 'lighter'; ctx.beginPath(); ctx.arc(0, 0, W * 0.34, 0, TAU); ctx.stroke(); ctx.beginPath(); for (let i = 0; i <= 5; i++) { const ang = -Math.PI / 2 + ((i * 2) % 5) / 5 * TAU; i ? ctx.lineTo(Math.cos(ang) * W * 0.34, Math.sin(ang) * W * 0.34) : ctx.moveTo(Math.cos(ang) * W * 0.34, Math.sin(ang) * W * 0.34); } ctx.stroke(); ctx.restore();
+            ctx.save(); ctx.globalCompositeOperation = 'lighter'; for (const fx of [0.08, 0.92, 0.3, 0.7]) for (let i = 0; i < 14; i++) glowDot(ctx, W * fx + Math.sin(tt * 4 + i) * 12, yH + 30 - ((tt * 120 + i * 40) % (yH * 0.9)), 22 + (i % 3) * 8, i % 2 ? '#ff5a1a' : '#ffb24a', 0.4 * a); ctx.restore();
         }
 
         // horizon glow + drifting particles (embers / snow / dust / motes)
