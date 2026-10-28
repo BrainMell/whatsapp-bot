@@ -49,12 +49,42 @@ const WORLD = {
     WARLOCK: { kind: 'hell', cin: 'WARLOCK' },                             // pentagram burns in under a blood moon
     ELEMENTALIST: { kind: 'storm', cin: 'ELEMENTALIST' },                  // four elements collide
     VIRTUOSO: { kind: 'stage', cin: 'VIRTUOSO' },                          // curtains open on a stage
+    // short (1.4s) bespoke intros for every remaining class - ultimateFxCinema2.js; no arena swap, they dissolve back onto the normal field
+    NECROMANCER: { cin: 'NECROMANCER', short: true },
+    FIGHTER: { cin: 'FIGHTER', short: true },
+    WARRIOR: { cin: 'WARRIOR', short: true },
+    SAMURAI: { cin: 'SAMURAI', short: true },
+    SHOGUN: { cin: 'SHOGUN', short: true },
+    BERSERKER: { cin: 'BERSERKER', short: true },
+    SCOUT: { cin: 'SCOUT', short: true },
+    ROGUE: { cin: 'ROGUE', short: true },
+    NINJA: { cin: 'NINJA', short: true },
+    NIGHTBLADE: { cin: 'NIGHTBLADE', short: true },
+    APPRENTICE: { cin: 'APPRENTICE', short: true },
+    DRAGONSLAYER: { cin: 'DRAGONSLAYER', short: true },
+    DOOMSLAYER: { cin: 'DOOMSLAYER', short: true },
+    WARLORD: { cin: 'WARLORD', short: true },
+    CHRONOMANCER: { cin: 'CHRONOMANCER', short: true },
+    ARTIFICER: { cin: 'ARTIFICER', short: true },
+    BARD: { cin: 'BARD', short: true },
+    ACOLYTE: { cin: 'ACOLYTE', short: true },
+    PALADIN: { cin: 'PALADIN', short: true },
+    CLERIC: { cin: 'CLERIC', short: true },
+    SAINT: { cin: 'SAINT', short: true },
+    MONK: { cin: 'MONK', short: true },
+    ZENMASTER: { cin: 'ZENMASTER', short: true },
+    TEMPLAR: { cin: 'TEMPLAR', short: true },
+    DIVINE_FIST: { cin: 'DIVINE_FIST', short: true },
+    GOD_HAND: { cin: 'GOD_HAND', short: true },
+    DRUID: { cin: 'DRUID', short: true },
+    ARCHDRUID: { cin: 'ARCHDRUID', short: true },
+    MERCHANT: { cin: 'MERCHANT', short: true },
+    TYCOON: { cin: 'TYCOON', short: true },
 };
-const shiftOf = (cls) => (WORLD[cls] ? (WORLD[cls].cin ? 2.0 : 1.9) : 0);
+const shiftOf = (cls) => (WORLD[cls] ? (WORLD[cls].short ? 1.3 : (WORLD[cls].cin ? 2.0 : 1.9)) : 0);
 function classMeta(cls) {
-    const m = META[cls]; if (!m) return null;
-    const S = shiftOf(cls);
-    return S ? { ...m, duration: m.duration + S, impact: m.impact + S } : m;
+    const S = shiftOf(cls), m = META[cls] || (S ? {} : null); if (!m) return null;
+    return S ? { ...m, duration: (m.duration || 2.7) + S, impact: (m.impact || 1.05) + S } : m;
 }
 
 function classRecipeBase(cls, p, { IMPACT: I }) {
@@ -454,10 +484,10 @@ function classRecipe(cls, p, o) {
     if (!base) return base;
     const drop = new Set(W.drop || []);
     const moved = base.filter((t) => !drop.has(t.layer)).map((t) => ({ ...t, at: (t.at || 0) + S, ...(t.hit !== undefined ? { hit: t.hit + S } : {}) }));
-    const total = (META[cls].duration || 3) + S, T3 = W.cin ? 1.75 : 1.7, wAt = T3 - 0.1;
+    const total = ((META[cls] && META[cls].duration) || 2.7) + S, T3 = W.cin ? 1.75 : 1.7, wAt = T3 - 0.1;
     return [
-        W.cin ? { layer: 'cinema', at: 0, dur: 2.1, kind: W.cin, world: W.kind } : { layer: 'cosmic', at: 0, dur: 2.0, world: W.kind, planet: W.planet },
-        { layer: 'world', under: true, at: wAt, dur: total - wAt - 0.25, kind: W.kind, sil: W.sil, fin: 0.25, fout: 0.4 },
+        W.cin ? { layer: 'cinema', at: 0, dur: W.short ? 1.4 : 2.1, kind: W.cin, world: W.kind } : { layer: 'cosmic', at: 0, dur: 2.0, world: W.kind, planet: W.planet },
+        ...(W.kind ? [{ layer: 'world', under: true, at: wAt, dur: total - wAt - 0.25, kind: W.kind, sil: W.sil, fin: 0.25, fout: 0.4 }] : []),
         ...moved,
     ];
 }

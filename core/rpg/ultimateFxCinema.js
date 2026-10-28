@@ -296,6 +296,9 @@ module.exports = function install(LAYERS, H, W_OF, stars) {
         const fl = clamp01((t - (D - 0.85)) / 0.4); if (fl > 0) { c.save(); c.globalCompositeOperation = 'lighter'; glowDot(c, cx, Hh * 0.5, 160 + 420 * fl, '#fff1b0', 0.9 * fl); c.restore(); }
     };
 
+    // short per-class cinematics for every other class live in their own file
+    require('./ultimateFxCinema2')(CIN, { partial, grad, dimSnap, glowDot, rrng, clamp01, easeOut, easeIn, lerp, TAU, gearPath });
+
     // ── the layer: scratch render, fade in/out, hand the snapshot over ──────
     LAYERS.cinema = (ctx, tr, env) => {
         const t = env.time - tr.at, D = tr.dur || 2.1;
