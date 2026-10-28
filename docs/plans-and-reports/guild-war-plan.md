@@ -1,7 +1,7 @@
 # Guild War Overhaul — Implementation Plan
 
 Branch: `guild-war-ruins` (off `audit/fix-pass-1`). Written BEFORE any code, per owner brief.
-Author: Super Z (agent). Status: IN PROGRESS — see `docs/guild-war-progress.md` for live state.
+Author: Super Z (agent). Status: IN PROGRESS — see `docs/plans-and-reports/guild-war-progress.md` for live state.
 
 ## 0. Audit summary (full findings)
 

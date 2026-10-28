@@ -19919,7 +19919,7 @@ Moderation:
                     // Now: if the sender has no explicit rank but IS a WA
                     // admin/superadmin, treat them as (topRank - 0) for
                     // superadmin or (topRank - 1) for admin. This matches the
-                    // documented inheritance behavior in docs/rank-system.md
+                    // documented inheritance behavior in docs/reference/rank-system.md
                     // without restoring the auto-assignment that caused the
                     // "GrandRegent explosion".
                     if (senderLevel === 0 && !isOwner && !isGlobalMod(senderJid)) {

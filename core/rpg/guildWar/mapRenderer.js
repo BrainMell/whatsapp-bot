@@ -33,7 +33,7 @@ const PAL = {
     ember: 'rgba(224,120,64,0.55)',
 };
 
-// room glyphs — ONLY the DejaVu-verified whitelist (docs/CARD-SYSTEM.md §6)
+// room glyphs — ONLY the DejaVu-verified whitelist (docs/reference/CARD-SYSTEM.md §6)
 // 🔁 owner 2026-10-08 (ruins puzzle fixes #4): deconflicted the chart —
 //   • warden lairs used ☠ (identical to trapped halls — the hunt target was
 //     indistinguishable from a hazard) → ❖, unused on the map

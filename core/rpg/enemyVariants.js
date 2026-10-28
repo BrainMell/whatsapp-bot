@@ -51,7 +51,7 @@ const BRUTE_CLASSES = new Set([
 // ─── VARIANT VISUAL SHEETS ───────────────────────────────────────────────────
 // The Go service renders enemies from `core/rpgasset/enemies/` by 0-based
 // spriteIndex (C-locale sorted directory order; slot 0 = Bat, documented in
-// docs/UI-INVENTORY.md). Person-shaped sheets for person-shaped variants:
+// docs/reference/UI-INVENTORY.md). Person-shaped sheets for person-shaped variants:
 const HUMANOID_SHEETS = {
     kobold: 64,   // kobold_0000_red.png
     gnoll: 45,    // gnoll sheet.png

@@ -516,7 +516,7 @@ const PLAYER_ART_FACES_NEVER = new Set([   // CENTER verdicts — never flip
 // OWNER-PROTECTED FACING CONTRACT (2026-10-24):
 // Player direction is currently approved. Do not rework these per-file tables
 // or the flip decision while adjusting actor size/positions. See
-// docs/HOUSE_BUILDER_3D_RULES.md and scripts/abyss_visual_qa.js for regressions.
+// docs/reference/HOUSE_BUILDER_3D_RULES.md and scripts/abyss_visual_qa.js for regressions.
 function playerFaceKey(file) {
     return String(file || '').toLowerCase().replace(/^graded:/, '');
 }

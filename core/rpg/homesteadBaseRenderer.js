@@ -178,7 +178,7 @@ function mainSpriteOf(st, lvl, team) {
     if (T === 'mines') {
         // 47-k8 (owner: "implement some of the Clash assets ... make it fit in"): Clash-grade gold-mine
         // ladder on the SAME worksite — wooden hut → stone mine → deep dark seam (tinted to the palette,
-        // GPLv3 credit in docs/asset_credits.md). KayKit cave stays as the fallback below.
+        // GPLv3 credit in docs/reference/asset_credits.md). KayKit cave stays as the fallback below.
         if (K.hasSprite('coc_mine_l1', 'iso')) return { name: 'coc_mine_l' + lvl, sc: lvl === 1 ? 1.05 : lvl === 2 ? 1.15 : 1.25, dx: 0.1, dz: 0.15 };
         // the pack's own cave (rock face + walkway-into-rocks) IS the mine — owner 2026-10-19:
         // "For the player base not just the guild base" (it replaces the struct_mine family)

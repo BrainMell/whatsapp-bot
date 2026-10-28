@@ -87,7 +87,7 @@ Improve `med_infirmary` / `med_sanatorium` in `scripts/kingdom3d/houses.py`: add
 2. Open `scripts/kingdom3d/bake_kingdom_sprites.py`. Find where it iterates the pack's glTF files and where it appends `houses.py` STRUCTS (search `STRUCTS` / `make_struct`). Add a second loop over `extra_models/*.glb|gltf` using the same loader (`kk_raster.load_model`; if the model uses per-material colours instead of the KayKit gradient atlas, add a branch that reads `material.baseColorFactor` and fills per-vertex colour).
 3. Normalise: scale so the model's longest ground axis ≈ 1.8 units (a `struct_*` model fits roughly one hex-pair), centre at origin, ground at y = 0, front towards +z (conventions are in `houses.py` docstring).
 4. Name it `struct_<thing>_<level>` e.g. `struct_med_l1/l2/l3`. The sprite is baked once (not 6 rotations).
-5. Run the bake with the same env as documented in `docs/kingdom3d.md`:
+5. Run the bake with the same env as documented in `docs/kingdom3d/kingdom3d.md`:
    `python3 -I scripts/kingdom3d/bake_kingdom_sprites.py` (needs `numpy trimesh pillow`). Because pycache is tracked, afterwards run `git checkout scripts/kingdom3d/__pycache__`.
 6. Confirm `core/rpgasset/kingdom3d_iso/manifest.json` now has the new sprite keys (`python3 -c "import json;print([k for k in json.load(open('core/rpgasset/kingdom3d_iso/manifest.json'))['sprites'] if 'med' in k])"`).
 7. Reference it in `structureScenes.js` `case 'medbay'` (replace `struct_med_*` names) and in `homesteadBaseRenderer.js` `mainSpriteOf` / `buildWorld` (search `struct_med`) and `core/rpgasset/homestead/structures.json` (the `sprite` field of the medbay levels is a legacy name; the renderers key off `struct_med_*`).
@@ -280,7 +280,7 @@ Run in this order; each must pass before the next.
 7. Med Bay brew: simulate time (inject `now`): stock at 0/1/2/cap intervals; concurrent collect (two parallel calls give potions once).
 8. `grep -rn "followUp(" core/rpg/baseBuilder.js` → no matches.
 9. Cache: add `structureScenes.js` (already), `structureClip.js`, `medbayBrew.js` (not render, skip) to the `files` array in `mediaCache.js` (~line 55) — render-only files.
-10. Docs: update `docs/kingdom3d.md` (new section "Command fusion") and add `docs/CREDITS.md` if any CC-BY model is used.
+10. Docs: update `docs/kingdom3d/kingdom3d.md` (new section "Command fusion") and add `docs/CREDITS.md` if any CC-BY model is used.
 11. Commit with explicit paths; trailers `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` + `Claude-Session: …`; push to `audit/fix-pass-1` (fetch/rebase first — other sessions push here; on conflicts **prefer the owner's already-approved work**, never reset it away).
 
 ---

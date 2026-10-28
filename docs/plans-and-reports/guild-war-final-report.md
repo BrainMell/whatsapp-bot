@@ -75,7 +75,7 @@ Rendered via `scripts/gw_visual.js` (copies in `/tmp/gwtest/scripts/render_out/`
 5. **Event-loop stalls**: in-process canvas renders (5.2s) → child pool; mongoose casting of full maps on reads → `.lean()` + caches; per-move full-doc re-reads → projected context.
 6. Mongoose pipeline updates need `updatePipeline: true`; mongoose Maps reject `.` in keys (jids encoded).
 
-## 6. Decisions made on your behalf (full log in `docs/guild-war-decisions.md`)
+## 6. Decisions made on your behalf (full log in `docs/plans-and-reports/guild-war-decisions.md`)
 
 - "Thud"/red-section: do not exist in this repo (exhaustive sweep) → satisfied structurally (the Ruins sheet has no banner/rank/encounter-sprite block by construction).
 - Map rendering uses the node-canvas Royal Decree kit, not the Go service (code wins; combat art inside rooms stays Go-side).

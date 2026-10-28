@@ -2,7 +2,7 @@
 
 > 2026-09-16 v2: the card-style system was REBUILT as nine genuine design
 > systems (the previous palette-swap pass was rejected by the owner).
-> Canonical spec + card inventory: docs/CARD-REDESIGN-PLAN.md
+> Canonical spec + card inventory: docs/plans-and-reports/CARD-REDESIGN-PLAN.md
 > Style 6 is now SOUL FORGE (owner-provided Allocate card defines it).
 > Battle-active cards keep the combat art family by owner rule. Royal
 > Decree (style 7) stays the baked default. Go: pkg/cardstyle + style
@@ -402,4 +402,4 @@ departure/kick (`handleParticipantLeave` hook), and the 30-min inactivity dissol
 - 2026-09-16 - theme engine (10 identities) for RANK/ALLOCATE/ABILITIES; abilities codex
   identity + effect runes + pagination; Ludo board redesign + forfeit system; audio clip
   command (`.clip`); trivia fixes; powerscale rewritten on the MediaWiki API (Cloudflare).
-- Earlier - see `git log` and `docs/UI-INVENTORY.md` for the full UI census.
+- Earlier - see `git log` and `docs/reference/UI-INVENTORY.md` for the full UI census.

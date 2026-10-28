@@ -89,7 +89,7 @@ sprite renderers and will not run against v8 — safe to delete/archive.
 ## Guild biomes (v9)
 Each guild gets one of 5 biomes from its name hash (`state.biome` overrides): `isle` (now a COASTAL realm: sea on one seeded side only,
 the only one with a sea), `desert`, `tundra`, `highlands` (autumn), `volcanic`. Goal + log:
-`docs/KINGDOM_BIOMES_GOAL.md`; proof sheet: `docs/kingdom3d_biomes.jpg`.
+`docs/plans-and-reports/KINGDOM_BIOMES_GOAL.md`; proof sheet: `docs/kingdom3d/kingdom3d_biomes.jpg`.
 - **Art**: `scripts/kingdom3d/recolor_biomes.py` palette-swaps the baked terrain/nature sprites into
   `core/rpgasset/kingdom3d/biomes/<biome>/` (same file names; buildings/walls shared). Re-run it after
   re-baking the base sprites. `K.biomeFile()` resolves per-biome paths; `HexWorld({biome})` selects the set.
@@ -127,7 +127,7 @@ random part of it holds the guild's marker, with the member home bases nearby, l
   (coast / desert / tundra / wildwood / ashlands); a solo player gets a realm seeded from their name. The saved
   16x16 grid and `LAYOUT` are untouched. The caption names the realm and, for guild members, the region.
 - **QA:** `node scripts/qa_continents.js` (geometry, markers/hamlets on land, determinism, parsing);
-  proofs: `scripts/render_base_realms.js`, `docs/kingdom3d_continents_*.jpg`, `docs/kingdom3d_base_realms.jpg`.
+  proofs: `scripts/render_base_realms.js`, `docs/kingdom3d/kingdom3d_continents_*.jpg`, `docs/kingdom3d/kingdom3d_base_realms.jpg`.
 
 Cosmology fit: realms are lands *of the First World* and scatter across all four quadrants of the chart;
 timelines never appear as regions. Names reuse the surveyor field-names of the existing catalog.
