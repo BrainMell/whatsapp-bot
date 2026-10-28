@@ -20,7 +20,8 @@ ImageGenScrapes
 
 # Assets and Generated
 *.exe
-*.logscripts/backups/
+*.log
+scripts/backups/
 
 # ── WhatsApp Session Auth (CRITICAL - never delete, never track) ───────
 # Baileys stores session keys here. These files are modified at runtime
@@ -84,3 +85,6 @@ media_cache/
 
 # 47-k8: Lords Mobile marker renders — derived from game assets, box-provisioned only, never committed
 core/rpgasset/kingdom3d/lm_castle_*
+
+# generated artefacts (untracked 2026-10-28 cleanup)
+scripts/render_out/
