@@ -233,10 +233,12 @@ async function paintGroups(ctx, groups, o) {
         ctx.restore();
         if (plateCap) {
             try {
-                // 🔥 26-R5 per-group adaptive capture: a group whose paint work
-                // is trivial (<150ms cumulative) never stores plates — replay
-                // paints it live (as fast) and the capture skips its PNG cost
-                if ((plateCap.paintByGroup[pass + gi] || 0) < 150) { plateCap.liveGroups.add(pass + gi); continue; }
+                // 🔥 26-R5 per-group adaptive capture — decided at PERSIST time (see the
+                // persist block): cheap groups (<150ms cumulative paint) replay live and
+                // never cost PNG storage. The old per-frame check marked a group live on
+                // its FIRST frames (cumulative still <150) and then the persist loop
+                // discarded every png of that group — DRAGON_GOD ended with uniques=0 and
+                // its plates NEVER persisted (every cast re-captured, zero HITs ever).
                 if (plateRunIsEmpty(rc, env.W, env.H)) continue;   // fully transparent frame → store nothing, replay skips it
                 plateCap.pngs.set(pass + gi + '_' + f, await run.toBuffer('image/png', { compressionLevel: 1 }));
             } catch (e) { /* skip this plate */ }
@@ -825,6 +827,14 @@ async function renderUltimateVideo(o) {
     const K = Number.isFinite(Number(o.intensity)) ? Math.max(0, Math.min(1, Number(o.intensity))) : 0;
     if (RECIPE_PACK && RECIPE_PACK.scaleTracks) tracks = RECIPE_PACK.scaleTracks(tracks, K, palette, IMP);
     tracks = applyOverrides(tracks, String(o.classId || '').toUpperCase());
+    // 🩶 FLAT GROUND RINGS UNDER THE FIGHTERS (owner 2026-10-28: "some of the skills
+    // effects that are supposed to not overlay like the overall flat ring effects are
+    // overlaying"): rings/ripple paint perspective-flattened ellipses pinned to a
+    // fighter's FEET — they are ground-plane marks, so they belong to the under pass
+    // (rendered before the roster) — the fighters stand ON them, never under them.
+    // Stamped here in the engine so recipe-authored tracks AND the auto-added
+    // level-up rings both get the z-order, whatever the recipe said.
+    for (const t of tracks) if ((t.layer === 'rings' || t.layer === 'ripple') && !t.under) t.under = true;
     for (const t of tracks) {
         for (const nm of [t.fx, t.land]) if (nm && SETS[nm] && !sets[nm]) sets[nm] = await loadSet(nm);
     }
@@ -1073,12 +1083,22 @@ async function renderUltimateVideo(o) {
     // scales down IN PLACE around each fighter's own feet — feet anchors (and therefore every
     // track origin) stay valid, the battlefield keeps its size, and the giant screen-space art
     // (scythe / dragon) towers over the tiny fighters. First active track wins (min).
+    // 🔁 RESTORE (owner 2026-10-28: "as the normal world comes back the player Sprites aren't
+    // sized back to normal"): the shrink now recovers — 1 → `to` over `dur`, holds tiny for
+    // `hold` seconds, then eases back to 1 over `recover` so the roster is normal-sized again
+    // once the world returns. First active track wins (min).
     const shrinkAt = (time) => {
         let k = 1;
         for (const tr of tracks) {
             if (tr.layer !== 'shrink' || time < tr.at) continue;
-            const u = clamp01((time - tr.at) / (tr.dur || 0.4));
-            k = Math.min(k, 1 - (1 - (tr.to === undefined ? 0.5 : tr.to)) * easeOut(u));
+            const to = tr.to === undefined ? 0.5 : tr.to;
+            const d = tr.dur || 0.4;
+            const hold = tr.hold === undefined ? 0.5 : tr.hold;
+            const rec = tr.recover === undefined ? 0.6 : tr.recover;
+            let k2 = 1 - (1 - to) * easeOut(clamp01((time - tr.at) / d));                       // 1 → to
+            const tRec0 = tr.at + d + hold;
+            if (time >= tRec0 && rec > 0) k2 = to + (1 - to) * easeOut(clamp01((time - tRec0) / rec));   // to → 1
+            k = Math.min(k, k2);
         }
         return k;
     };
@@ -1090,6 +1110,13 @@ async function renderUltimateVideo(o) {
         if (cutList && cutList.length) {
             for (const c of cutList) {
                 if (hide && casterCut && c.side === 'player' && c.index === casterIdxAll) continue;
+                // 🕳️ SINK EXCLUSION (owner 2026-10-28: "the hole the necromancer skill drags
+                // them into is on top of the player sprite and the enemy doesn't get pushed
+                // down"): a hands-sink recipe owns the focus victim — the hands layer draws
+                // it descending into the rift (over pass, clipped at the ground line). The
+                // roster loop re-pinning that cutout at its natural position painted the
+                // fighter permanently standing over the pit. Skip it here.
+                if (sinkOwnsFocus && c.side === tSideAll && c.index === focusIdxAll) continue;
                 if (k >= 0.999) { ctx.drawImage(c.img, c.x, c.y, c.w, c.h); continue; }
                 const feetY = c.y + c.h, cx = c.x + c.w / 2;
                 ctx.drawImage(c.img, cx - c.w * k / 2, feetY - c.h * k, c.w * k, c.h * k);
@@ -1165,8 +1192,10 @@ async function renderUltimateVideo(o) {
                 sc.globalCompositeOperation = 'destination-out'; sc.drawImage(casterCut.img, casterCut.x * (sprImg.width / W), casterCut.y * (sprImg.height / H), casterCut.w * (sprImg.width / W), casterCut.h * (sprImg.height / H));
             }
             drawRoster(env, shrinkK, hideNow);
-            // isolated focus combatant (scaled with the roster when shrunk — feet stay pinned)
-            if (focImg && !sinkOwnsFocus) {
+            // isolated focus combatant (scaled with the roster when shrunk — feet stay pinned).
+            // With a full cutout roster the loop above already drew the focus at the same
+            // anchor — the full-canvas overlay draw here would stack it twice (subtle darkening).
+            if (focImg && !sinkOwnsFocus && !(cutsAll && cutsAll.length)) {
                 if (shrinkK >= 0.999 || !focRect) ctx.drawImage(focImg, 0, 0, W, H);
                 else {
                     const [fx0, fy0, fw0, fh0] = focRect, feetY2 = fy0 + fh0, cx2 = fx0 + fw0 / 2;
@@ -1260,10 +1289,14 @@ async function renderUltimateVideo(o) {
                 return byHash.get(h);
             };
             const framesPresence = [];
+            // 🔥 adaptive capture, decided ONCE here with the FINAL cumulative paint
+            // times: a group whose whole-render paint work is trivial (<150ms) replays
+            // live (null → live paint on replay) and its captured pngs are discarded.
+            const groupIsLive = (pass2, gi) => (plateCap.paintByGroup[pass2 + gi] || 0) < 150;
             for (let f2 = 0; f2 < total; f2++) {
                 framesPresence.push({
-                    u: underGroups.map((g, gi) => (plateCap.liveGroups.has('u' + gi) ? null : (plateCap.pngs.get('u' + gi + '_' + f2) ? idxOf(plateCap.pngs.get('u' + gi + '_' + f2)) : -1))),
-                    o: overGroups.map((g, gi) => (plateCap.liveGroups.has('o' + gi) ? null : (plateCap.pngs.get('o' + gi + '_' + f2) ? idxOf(plateCap.pngs.get('o' + gi + '_' + f2)) : -1))),
+                    u: underGroups.map((g, gi) => (plateCap.liveGroups.has('u' + gi) || groupIsLive('u', gi) ? null : (plateCap.pngs.get('u' + gi + '_' + f2) ? idxOf(plateCap.pngs.get('u' + gi + '_' + f2)) : -1))),
+                    o: overGroups.map((g, gi) => (plateCap.liveGroups.has('o' + gi) || groupIsLive('o', gi) ? null : (plateCap.pngs.get('o' + gi + '_' + f2) ? idxOf(plateCap.pngs.get('o' + gi + '_' + f2)) : -1))),
                 });
             }
             plateCap.uniques = uniques;

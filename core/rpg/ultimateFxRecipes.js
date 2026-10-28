@@ -9,8 +9,10 @@
 //   * big skills use shake + camera (zoom / vortex / invert) instead of stacking more particles
 //   * every cast darkens everything except the target and zooms in (renderer spotlight)
 
-// ground-plane layers render UNDER the combatants
-const GROUND_LAYERS = new Set(['circle', 'rift', 'cracks', 'vortex', 'bgfill', 'eclipse', 'dragon', 'staff']);
+// ground-plane layers render UNDER the combatants (rings/ripple are perspective-
+// flattened shockwave ellipses pinned to fighter feet — engine also force-stamps
+// them, see ultimateFx.js; owner 2026-10-28: "flat ring effects are overlaying")
+const GROUND_LAYERS = new Set(['circle', 'rift', 'cracks', 'vortex', 'bgfill', 'eclipse', 'dragon', 'staff', 'rings', 'ripple']);
 
 const META = {
     DRAGON_GOD: { duration: 4.1, impact: 2.55, zoom: 0.02, flatVeil: true },
@@ -284,7 +286,7 @@ function classRecipe(cls, p, { IMPACT: I }) {
             L('vortex', { at: 0.1, pos: 'T', hy: 40, R: 600, twist: 8, pull: 4, hole: 6, rim: '#9fd6ff', dur: 1.2, inFrac: 0.7, outFrom: 0.88 }),
             L('bgfill', { at: 1.05, dur: 1.9, pos: [0.5, 0.5], colors: ['#d8f2ff', '#6fb4e8'], fin: 0.35, fout: 0.45 }),
             L('camera', { at: 1.1, dur: 1.2, dz: -0.1, fin: 0.5 }),
-            L('shrink', { at: 1.1, dur: 0.5, to: 0.4 }),
+            L('shrink', { at: 1.1, dur: 0.5, to: 0.4, hold: 1.0 }),
             L('dragon', { at: 1.35, pos: [0.1, 0.3], s: 2.0, dur: 1.9, color: '#27576a', belly: '#9fe0d0', flame: '#ff9a30' }),
             L('breath', { at: 1.95, from: [0.1, 0.3], offFrom: [236, 40], to: 'T', offTo: [0, -50], dur: 1.1, n: 170, life: 0.6, w: 170, size: 2.0, reach: 1.15, spread: 'enemies', fanGap: 0.08 }),
             L('wash', { at: 2.1, dur: 0.75, color: '#ff8a1a', a: 0.85, curve: 'in' }),
