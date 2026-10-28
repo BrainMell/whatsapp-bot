@@ -138,6 +138,15 @@ const TIER_LABEL = {
   '4': 'TIER  IV', '5': 'TIER  V',   '6': 'TIER  VI',  'S': 'TIER  S', 'E': 'EVENT'
 };
 
+// 💡 OWNER 2026-10-28 (Mellow): event token drop amounts per card tier,
+// granted at claim time on token-bearing spawns (1-in-2 spawn rule unchanged).
+// S/E are owner-enableable extras -> 35, one step above T6.
+const CARD_TOKEN_DROP = {
+  '1': 5,  '2': 10, '3': 15,
+  '4': 20, '5': 25,  '6': 30,
+  'S': 35, 'E': 35,
+};
+
 // 💡 Default tier spawn weights. Can be overridden per-bot via .g spawnset tier.
 // Weights are relative (not percentages). The system normalizes them.
 // T5 and T6 have separate "per-interval chance" gates that fire BEFORE
@@ -633,7 +642,7 @@ async function setSpawnInterval(minutesOrRange, callerJid, isOwner, maxMinutes) 
 
 📊 Approximate rates (based on avg ${avgMinutes} min):
 • ${spawnsPerHour} spawns/hour
-• ~${tokensPerHour} event tokens/hour per group (during events, 1 per ${TOKEN_SPAWNS_PER_TOKEN} spawns)
+• ~${tokensPerHour} token drops/hour per group (during events, 1 per ${TOKEN_SPAWNS_PER_TOKEN} spawns — each drop pays 5-30 tokens by card tier)
 
 _Interval persists across bot restarts._`
   };
@@ -1855,9 +1864,12 @@ async function cmdClaim(args, senderJid, reply, chatId) {
     try {
       const eventActive = await isTokenEventActive();
       if (eventActive && spawn.hasToken) {
-        economy.addEventTokens(senderJid, 1); // 💡 47-l2: registration-gate-free grant
+        // 💡 OWNER 2026-10-28: tier-based token drops - T1=5 T2=10 T3=15 T4=20 T5=25 T6=30
+        // (S/E -> 35). Flat +1 retired; spawn frequency unchanged.
+        const _tokAmt = CARD_TOKEN_DROP[String(spawn.card && spawn.card.tier)] || 5;
+        economy.addEventTokens(senderJid, _tokAmt); // 💡 47-l2: registration-gate-free grant
         const balance = economy.getEventTokens(senderJid);
-        tokenMsg = `\n\n🎫 +1 *Event Token!* (Total: ${balance})\n_Spend them with \`${P()} eshop\`._`;
+        tokenMsg = `\n\n🎫 +${_tokAmt} *Event Token${_tokAmt === 1 ? '' : 's'}!* (Total: ${balance})\n_Spend them with \`${P()} eshop\`._`;
       }
     } catch (tokenErr) {
       // Don't fail the claim if token drop fails
