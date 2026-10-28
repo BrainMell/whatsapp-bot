@@ -1,3 +1,12 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// ENGINE.JS - the big one. Roughly top to bottom:
+//   1. imports + config        (this bit)
+//   2. who's blocked/banned/mod (access control)
+//   3. little helpers (uptime, got, sandbox, thumbnails)
+//   4. startBot() - the giant function that wires up every command
+//   5. tail helpers (getSock, nuke targets)
+// Stuff marked //~ is dead code (nobody calls it) - commented, not deleted, just in case.
+// ═══════════════════════════════════════════════════════════════════════════
 require("dotenv").config();
 const botConfig = require("../botConfig");
 const { storage } = botConfig;
@@ -16,6 +25,9 @@ function recordUpsert(botId) {
         if (typeof _recordUpsert === 'function') _recordUpsert(botId);
     } catch (e) { /* not running under index.js (e.g. local dev) - safe to skip */ }
 }
+// ═══════════════════════════════════════════════════════════════════════════
+// WHATSAPP (baileys) - socket + the bits we pull from it
+// ═══════════════════════════════════════════════════════════════════════════
 const makeWASocket = require("@whiskeysockets/baileys").default;
 const {
   useMultiFileAuthState,
@@ -48,10 +60,16 @@ const classSystem = require('./rpg/classSystem');
 
 // Global map to track connection health of bot instances
 const botInstancesHealth = new Map();
+// ═══════════════════════════════════════════════════════════════════════════
+// RPG SYSTEMS - guilds, skills, bosses etc
+// ═══════════════════════════════════════════════════════════════════════════
 const guilds = require('./rpg/guilds');
 const guildAdventure = require('./rpg/guildAdventure');
 const skillTree = require('./rpg/skillTree');
 const bossMechanics = require('./rpg/bossMechanics');
+// ═══════════════════════════════════════════════════════════════════════════
+// LIBS + MEDIA TOOLS - qr, ai, ffmpeg, scraping, stickers
+// ═══════════════════════════════════════════════════════════════════════════
 const qrcode = require("qrcode-terminal");
 const Groq = require("groq-sdk");
 const fs = require("fs");
@@ -107,6 +125,9 @@ function getSiblingPrefixes() {
     return getAllInstancePrefixes().filter((p) => p !== mine);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ACCESS CONTROL - blocked / banned / mods / testers (all per-bot-instance)
+// ═══════════════════════════════════════════════════════════════════════════
 // Instance-bound sets map (botId -> Set)
 const blockedUsersByBot = new Map();
 const globalModsByBot = new Map();
@@ -348,6 +369,9 @@ function isBanned(userId) {
 // mod tries to undo it.
 // ════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════════
+// HARD BANS + HARD MUTES - global, no expiry
+// ═══════════════════════════════════════════════════════════════════════════
 const hardBannedUsers = new Set();
 const hardMutedUsers = new Set(); // global hard-mute (all chats, no expiry)
 
@@ -428,6 +452,9 @@ function isHardMuted(userId) {
   return crossFormatSetMatch(hardMutedUsers, userId);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// MODERATORS - global, rpg, cards, quiz + game testers
+// ═══════════════════════════════════════════════════════════════════════════
 // Load global mods from DB
 async function loadGlobalMods() {
   const system = require('./utils/system');
@@ -837,6 +864,9 @@ function isQuizMod(userId) {
 //                   can use it)
 //
 // 💡 NOTE: owner check uses the module-level isBotOwner() helper below.
+// ═══════════════════════════════════════════════════════════════════════════
+// PERMISSION CHECKS - who is allowed to do what
+// ═══════════════════════════════════════════════════════════════════════════
 function hasModPermission(userId, category) {
   if (!userId) return false;
   if (isBotOwner(userId)) return true;
@@ -959,6 +989,9 @@ function isStaff(jid) {
   return false;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SMALL HELPERS - got, uptime formatting
+// ═══════════════════════════════════════════════════════════════════════════
 // Helper for dynamic ESM import of got-scraping
 async function getGot() {
   const { gotScraping } = await import("got-scraping");
@@ -1051,6 +1084,9 @@ if (!global.waConnectionLog) global.waConnectionLog = true;
 // 💡 SANDBOX MODE - when active, the admin's commands use a test character
 // stored in the AdminSandbox collection instead of their real account.
 // Map: realJid → { backup: <cloned real user>, sandboxJid: <virtual JID> }
+// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// SANDBOX MODE - owner test accounts (Lv100 playground)
 // ═══════════════════════════════════════════════════════════════════════════
 const sandboxMode = new Map();
 
@@ -1407,6 +1443,9 @@ const jpegJs = require("jpeg-js");
 // Light-gray 24×24 JPEG placeholder (~470 bytes). Used ONLY when a real
 // thumbnail cannot be generated (download failed, undecodable bytes,
 // video). Replaces the old 1×1 BLACK fallback that rendered previews black.
+// ═══════════════════════════════════════════════════════════════════════════
+// THUMBNAILS + SAFE IMAGE SENDING
+// ═══════════════════════════════════════════════════════════════════════════
 const FALLBACK_THUMB = (() => {
   try {
     const W = 24, H = 24, data = Buffer.alloc(W * H * 4);
@@ -1712,6 +1751,10 @@ async function sendImageSafe(sock, chatId, imageUrl, caption, quotedMsg) {
 
 let _moduleSock = null;
 
+// ═══════════════════════════════════════════════════════════════════════════
+// startBot() - THE BIG ONE. Everything below is inside this function:
+// connection, message pipeline, then every command. Ctrl+F the command name.
+// ═══════════════════════════════════════════════════════════════════════════
 async function startBot(configInstance) {
   let sock;
   let qrShown = false;
@@ -3148,26 +3191,26 @@ async function startBot(configInstance) {
     }
 
     // helper to extract quoted message id from incoming message `m`
-    function getQuotedMessageId(m) {
-      try {
-        const ctx =
-          m.message?.extendedTextMessage?.contextInfo ||
-          m.message?.conversation?.contextInfo ||
-          m.message?.imageMessage?.contextInfo;
-        if (!ctx) return null;
-        if (ctx.stanzaId) return ctx.stanzaId;
-        if (
-          ctx.quotedMessage &&
-          ctx.quotedMessage.key &&
-          ctx.quotedMessage.key.id
-        )
-          return ctx.quotedMessage.key.id;
-        if (ctx.quotedMessageId) return ctx.quotedMessageId;
-        return null;
-      } catch (e) {
-        return null;
-      }
-    }
+//~     function getQuotedMessageId(m) {
+//~       try {
+//~         const ctx =
+//~           m.message?.extendedTextMessage?.contextInfo ||
+//~           m.message?.conversation?.contextInfo ||
+//~           m.message?.imageMessage?.contextInfo;
+//~         if (!ctx) return null;
+//~         if (ctx.stanzaId) return ctx.stanzaId;
+//~         if (
+//~           ctx.quotedMessage &&
+//~           ctx.quotedMessage.key &&
+//~           ctx.quotedMessage.key.id
+//~         )
+//~           return ctx.quotedMessage.key.id;
+//~         if (ctx.quotedMessageId) return ctx.quotedMessageId;
+//~         return null;
+//~       } catch (e) {
+//~         return null;
+//~       }
+//~     }
 
     // ============================================
     // UTILS & CORE DATA (Moved Up for initSocket)
@@ -3216,7 +3259,7 @@ async function startBot(configInstance) {
     const gcOwner = global.sharedGcOwner;
     const gcOwnerSkipLog = new Map(); // gid → last "staying silent" log ts
     const returnByDeathCounters = new Map();
-    const returnByDeathCooldowns = new Map();
+//~     const returnByDeathCooldowns = new Map();
     const supportUsage = new Map();
     const userWarnings = new Map();
     const groupMessageHistory = new Map();
@@ -3530,61 +3573,61 @@ async function startBot(configInstance) {
     // inside spawnBot that reference _isBotOwner directly.
     const _isBotOwner = isBotOwner;
 
-    function hasActionPermission(chatId, userJid, cmdKey) {
-      if (!userJid || typeof userJid !== 'string') return false;
-      const isOwner = _isBotOwner(userJid) || (sock?.user?.id && jidNormalizedUser(sock.user.id) === jidNormalizedUser(userJid));
-      const globalMod = isGlobalMod && isGlobalMod(userJid);
-      if (isOwner || globalMod) return true;
-
-      // 💡 QA FIX: if rank system is OFF, skip rank permission checks entirely.
-      // Previously, checkRankPermission could return false (denying permission)
-      // even when ranksEnabled was false, blocking pin/unpin and other actions.
-      const settings = getGroupSettings(chatId);
-      if (settings.ranksEnabled !== false) {
-        const level = getMemberRankLevel(chatId, userJid);
-        const override = checkRankPermission(chatId, level, cmdKey);
-        if (override === true) return true;
-        if (override === false) return false;
-      }
-
-      const lockMode = settings.lockMode || 'open';
-
-      const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
-      const phoneJid = resolveToPhone(userJid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
-      const canonicalJid = resolveJid(userJid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
-
-      const meta = groupMetadataCache.get(chatId);
-      let isGroupAdmin = false;
-      let isGroupSuperadmin = false;
-      if (meta && meta.participants) {
-        const p = meta.participants.find(x => {
-          const pid = jidNormalizedUser(x.id || x);
-          const normJid = jidNormalizedUser(userJid);
-          const normPhone = phoneJid ? jidNormalizedUser(phoneJid) : null;
-          const normCan = canonicalJid ? jidNormalizedUser(canonicalJid) : null;
-          return pid === normJid || pid === normPhone || pid === normCan;
-        });
-        if (p) {
-          if (p.admin === 'superadmin') isGroupSuperadmin = true;
-          if (p.admin === 'admin') isGroupAdmin = true;
-        }
-      }
-
-      if (lockMode === 'locked') {
-        return isGroupSuperadmin;
-      } else if (lockMode === 'admin' || lockMode === 'open') {
-        return isGroupAdmin || isGroupSuperadmin;
-      } else if (lockMode.startsWith('rank:')) {
-        const requiredRank = parseInt(lockMode.split(':')[1], 10);
-        // 💡 FIX-PASS-2 (2026-10-03): `level` was scoped to the ranksEnabled
-        // block above - referencing it here threw ReferenceError on every
-        // permission check in rank-locked chats. Compute the member level
-        // locally instead.
-        return getMemberRankLevel(chatId, userJid) >= requiredRank;
-      }
-
-      return false;
-    }
+//~     function hasActionPermission(chatId, userJid, cmdKey) {
+//~       if (!userJid || typeof userJid !== 'string') return false;
+//~       const isOwner = _isBotOwner(userJid) || (sock?.user?.id && jidNormalizedUser(sock.user.id) === jidNormalizedUser(userJid));
+//~       const globalMod = isGlobalMod && isGlobalMod(userJid);
+//~       if (isOwner || globalMod) return true;
+//~ 
+//~       // 💡 QA FIX: if rank system is OFF, skip rank permission checks entirely.
+//~       // Previously, checkRankPermission could return false (denying permission)
+//~       // even when ranksEnabled was false, blocking pin/unpin and other actions.
+//~       const settings = getGroupSettings(chatId);
+//~       if (settings.ranksEnabled !== false) {
+//~         const level = getMemberRankLevel(chatId, userJid);
+//~         const override = checkRankPermission(chatId, level, cmdKey);
+//~         if (override === true) return true;
+//~         if (override === false) return false;
+//~       }
+//~ 
+//~       const lockMode = settings.lockMode || 'open';
+//~ 
+//~       const { resolveToPhone, resolveJid } = require('./utils/lidResolver');
+//~       const phoneJid = resolveToPhone(userJid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
+//~       const canonicalJid = resolveJid(userJid, configInstance?.getAuthPath ? configInstance.getAuthPath() : null);
+//~ 
+//~       const meta = groupMetadataCache.get(chatId);
+//~       let isGroupAdmin = false;
+//~       let isGroupSuperadmin = false;
+//~       if (meta && meta.participants) {
+//~         const p = meta.participants.find(x => {
+//~           const pid = jidNormalizedUser(x.id || x);
+//~           const normJid = jidNormalizedUser(userJid);
+//~           const normPhone = phoneJid ? jidNormalizedUser(phoneJid) : null;
+//~           const normCan = canonicalJid ? jidNormalizedUser(canonicalJid) : null;
+//~           return pid === normJid || pid === normPhone || pid === normCan;
+//~         });
+//~         if (p) {
+//~           if (p.admin === 'superadmin') isGroupSuperadmin = true;
+//~           if (p.admin === 'admin') isGroupAdmin = true;
+//~         }
+//~       }
+//~ 
+//~       if (lockMode === 'locked') {
+//~         return isGroupSuperadmin;
+//~       } else if (lockMode === 'admin' || lockMode === 'open') {
+//~         return isGroupAdmin || isGroupSuperadmin;
+//~       } else if (lockMode.startsWith('rank:')) {
+//~         const requiredRank = parseInt(lockMode.split(':')[1], 10);
+//~         // 💡 FIX-PASS-2 (2026-10-03): `level` was scoped to the ranksEnabled
+//~         // block above - referencing it here threw ReferenceError on every
+//~         // permission check in rank-locked chats. Compute the member level
+//~         // locally instead.
+//~         return getMemberRankLevel(chatId, userJid) >= requiredRank;
+//~       }
+//~ 
+//~       return false;
+//~     }
 
     // ⚡ MODE: updates-feed control shared by '.jmode' and the bare
     // '.updates' alias. Returns the reply text (string).
@@ -4244,7 +4287,7 @@ async function startBot(configInstance) {
       try { return jidNormalizedUser(sock.user ? sock.user.id : ''); } catch (e) { return null; }
     }
     const spamTracker = new Map();
-    const menuSessions = new Map();
+//~     const menuSessions = new Map();
 
     function addWarning(userId, groupId, reason) {
       const key = `${userId}@${groupId}`;
@@ -4348,31 +4391,31 @@ async function startBot(configInstance) {
       }
     }
 
-    async function getChatActivity(chatId) {
-      const ChatActivity = require('./models/ChatActivity');
-      try {
-        const escapedChatId = chatId.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-        const docs = await ChatActivity.find({ key: { $regex: '^' + escapedChatId + '_' } });
-        return docs.map(doc => ({
-          userId: doc.key.split('_')[1],
-          count: doc.count,
-          firstSeen: doc.firstSeen,
-          lastMessage: doc.lastMessage
-        }));
-      } catch (err) {
-        console.error(`Error getting chat activity for ${chatId}:`, err.message);
-        return [];
-      }
-    }
+//~     async function getChatActivity(chatId) {
+//~       const ChatActivity = require('./models/ChatActivity');
+//~       try {
+//~         const escapedChatId = chatId.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+//~         const docs = await ChatActivity.find({ key: { $regex: '^' + escapedChatId + '_' } });
+//~         return docs.map(doc => ({
+//~           userId: doc.key.split('_')[1],
+//~           count: doc.count,
+//~           firstSeen: doc.firstSeen,
+//~           lastMessage: doc.lastMessage
+//~         }));
+//~       } catch (err) {
+//~         console.error(`Error getting chat activity for ${chatId}:`, err.message);
+//~         return [];
+//~       }
+//~     }
 
-    async function getChatActivityForPeriod(chatId, periodMs) {
-      // Kept for compatibility - delegates to the explicit-range variant.
-      return getChatActivityBetween(
-        chatId,
-        periodMs !== null && periodMs !== undefined ? new Date(Date.now() - periodMs) : null,
-        new Date(),
-      );
-    }
+//~     async function getChatActivityForPeriod(chatId, periodMs) {
+//~       // Kept for compatibility - delegates to the explicit-range variant.
+//~       return getChatActivityBetween(
+//~         chatId,
+//~         periodMs !== null && periodMs !== undefined ? new Date(Date.now() - periodMs) : null,
+//~         new Date(),
+//~       );
+//~     }
 
     // 📊 DAILY GC ACTIVITY: explicit [start, end) window over ActivityLog.
     // Powers `.j activity [day]` (midnight-based days) and the midnight
@@ -5250,7 +5293,7 @@ What to do:
     const FFMPEG_PATH =
       process.env.FFMPEG_PATH ||
       (process.platform === "win32" ? "ffmpeg" : "ffmpeg");
-    const YTDLP_PATH = process.env.YTDLP_PATH || `yt-dlp`;
+//~     const YTDLP_PATH = process.env.YTDLP_PATH || `yt-dlp`;
 
     // --- Auth check ---
 
@@ -5319,37 +5362,37 @@ What to do:
     // helper to pick random sticker
     // basically rng but for stickers
     // maybe improve mood system later marker[01]
-    function getRandomSticker(mood) {
-      try {
-        const fs = require('fs');
-        const path = require('path');
-        const stickersDir = botConfig.getStickerPath();
-        if (fs.existsSync(stickersDir)) {
-          const files = fs.readdirSync(stickersDir).filter(f => f.endsWith('.webp'));
-          let prefixes = [];
-          if (mood === 'neutral') prefixes = ['casual'];
-          else if (mood === 'happy') prefixes = ['smile', 'flutred'];
-          else if (mood === 'sarcastic') prefixes = ['sus', 'confident'];
-          else if (mood === 'thinking') prefixes = ['thinkking', 'thinking', 'interesting', 'interestong', 'confused', 'nervous'];
-          else if (mood === 'concerned') prefixes = ['uninterested', 'tired', 'angry'];
-          
-          const filtered = files.filter(f => {
-            const lower = f.toLowerCase();
-            return prefixes.some(p => lower.startsWith(p));
-          });
-          
-          if (filtered.length > 0) {
-            const chosen = filtered[Math.floor(Math.random() * filtered.length)];
-            return botConfig.getStickerPath(chosen);
-          }
-        }
-      } catch (err) {
-        console.error("❌ Error reading stickers dynamically:", err.message);
-      }
-
-      const list = stickerPaths[mood] || stickerPaths.neutral;
-      return list[Math.floor(Math.random() * list.length)];
-    }
+//~     function getRandomSticker(mood) {
+//~       try {
+//~         const fs = require('fs');
+//~         const path = require('path');
+//~         const stickersDir = botConfig.getStickerPath();
+//~         if (fs.existsSync(stickersDir)) {
+//~           const files = fs.readdirSync(stickersDir).filter(f => f.endsWith('.webp'));
+//~           let prefixes = [];
+//~           if (mood === 'neutral') prefixes = ['casual'];
+//~           else if (mood === 'happy') prefixes = ['smile', 'flutred'];
+//~           else if (mood === 'sarcastic') prefixes = ['sus', 'confident'];
+//~           else if (mood === 'thinking') prefixes = ['thinkking', 'thinking', 'interesting', 'interestong', 'confused', 'nervous'];
+//~           else if (mood === 'concerned') prefixes = ['uninterested', 'tired', 'angry'];
+//~           
+//~           const filtered = files.filter(f => {
+//~             const lower = f.toLowerCase();
+//~             return prefixes.some(p => lower.startsWith(p));
+//~           });
+//~           
+//~           if (filtered.length > 0) {
+//~             const chosen = filtered[Math.floor(Math.random() * filtered.length)];
+//~             return botConfig.getStickerPath(chosen);
+//~           }
+//~         }
+//~       } catch (err) {
+//~         console.error("❌ Error reading stickers dynamically:", err.message);
+//~       }
+//~ 
+//~       const list = stickerPaths[mood] || stickerPaths.neutral;
+//~       return list[Math.floor(Math.random() * list.length)];
+//~     }
 
     // view-once message extractor
     // grabs the hidden content from view-once messages
@@ -5409,24 +5452,24 @@ What to do:
 
     // NEW: Write EXIF metadata to WebP stickers
 
-    async function imageToSticker(inputPath, outputPath) {
-      try {
-        const cmd = `${FFMPEG_PATH} -i "${inputPath}" -vf "scale=512:512:force_original_aspect_ratio=increase,crop=512:512,setsar=1" -c:v libwebp -preset drawing -loop 0 -q:v 75 -an "${outputPath}"`;
-
-        await execPromise(cmd);
-
-        return true;
-      } catch (err) {
-        console.error("Error converting image to sticker, sum fucked up:", err);
-        return false;
-      }
-    }
+//~     async function imageToSticker(inputPath, outputPath) {
+//~       try {
+//~         const cmd = `${FFMPEG_PATH} -i "${inputPath}" -vf "scale=512:512:force_original_aspect_ratio=increase,crop=512:512,setsar=1" -c:v libwebp -preset drawing -loop 0 -q:v 75 -an "${outputPath}"`;
+//~ 
+//~         await execPromise(cmd);
+//~ 
+//~         return true;
+//~       } catch (err) {
+//~         console.error("Error converting image to sticker, sum fucked up:", err);
+//~         return false;
+//~       }
+//~     }
     // helper to normalize JIDs for comparison
-    function normalizeJid(jid) {
-      if (!jid) return null;
-      // Remove everything after @ and :
-      return jid.split("@")[0].split(":")[0];
-    }
+//~     function normalizeJid(jid) {
+//~       if (!jid) return null;
+//~       // Remove everything after @ and :
+//~       return jid.split("@")[0].split(":")[0];
+//~     }
 
     // ---------- scraper (Hybrid Node/Go Service) ----------
     // 💡 singleton (PERF PATCH 2026-07-27): reuse the shared instance instead of creating a new one
@@ -5551,29 +5594,29 @@ What to do:
     /*
      * Search Klipy Stickers (Go Service)
      */
-    async function searchStickers(query, count = 10) {
-      try {
-        console.log(`🔍 Sticker Search (Go Service): ${query}`);
-        const result = await goService.searchStickers(query, count);
-        return result.stickers || [];
-      } catch (err) {
-        console.error("❌ Sticker Error:", err.message);
-        return [];
-      }
-    }
+//~     async function searchStickers(query, count = 10) {
+//~       try {
+//~         console.log(`🔍 Sticker Search (Go Service): ${query}`);
+//~         const result = await goService.searchStickers(query, count);
+//~         return result.stickers || [];
+//~       } catch (err) {
+//~         console.error("❌ Sticker Error:", err.message);
+//~         return [];
+//~       }
+//~     }
 
-    async function stickerToImage(inputPath, outputPath) {
-      try {
-        // Convert WebP sticker to PNG - pretty straightforward
-        const cmd = `${FFMPEG_PATH} -i ${inputPath} ${outputPath}`;
-
-        await execPromise(cmd);
-        return true;
-      } catch (err) {
-        console.error("Error converting sticker to image:", err);
-        return false;
-      }
-    }
+//~     async function stickerToImage(inputPath, outputPath) {
+//~       try {
+//~         // Convert WebP sticker to PNG - pretty straightforward
+//~         const cmd = `${FFMPEG_PATH} -i ${inputPath} ${outputPath}`;
+//~ 
+//~         await execPromise(cmd);
+//~         return true;
+//~       } catch (err) {
+//~         console.error("Error converting sticker to image:", err);
+//~         return false;
+//~       }
+//~     }
 
     // Helper to get target user from mention or reply
     function getMentionOrReply(m) {
@@ -5696,15 +5739,15 @@ What to do:
     // who replies to (quotes) someone's message to target them should NOT be
     // @-tagged/pinged by the bot, but a player who explicitly @-tags someone
     // has already notified them, so the bot may also ping.
-    function getExplicitMention(m) {
-      const mentioned =
-        m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-      if (mentioned.length > 0) {
-        const rawJid = jidNormalizedUser(mentioned[0]);
-        return resolveLidToPhone(rawJid, configInstance.getAuthPath()) || rawJid;
-      }
-      return null;
-    }
+//~     function getExplicitMention(m) {
+//~       const mentioned =
+//~         m.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+//~       if (mentioned.length > 0) {
+//~         const rawJid = jidNormalizedUser(mentioned[0]);
+//~         return resolveLidToPhone(rawJid, configInstance.getAuthPath()) || rawJid;
+//~       }
+//~       return null;
+//~     }
 
     // Helper: was `jid` explicitly @-mentioned in the incoming command?
     // Returns true only for real @-tags, NOT for reply/quote participants.
@@ -5743,8 +5786,8 @@ What to do:
     }
 
     // ✅ Blacklist - banned words or blocked users
-    const blacklistWords = new Set();
-    const blacklistedUsers = new Set();
+//~     const blacklistWords = new Set();
+//~     const blacklistedUsers = new Set();
 
     setInterval(() => {
       const now = Date.now();
@@ -6331,28 +6374,28 @@ What to do:
       }
 
       // Keywords to look for before storing in memory
-      const MEMORY_KEYWORDS = [
-        "remember",
-        "my name is",
-        "i like",
-        "i love",
-        "i hate",
-        "i dislike",
-        "favorite",
-        "prefer",
-        "born",
-        "birthday",
-        "age",
-        "from",
-        "live",
-        "nickname",
-        "call me",
-        "hobby",
-        "interests",
-        "work",
-        "job",
-        "study",
-      ];
+//~       const MEMORY_KEYWORDS = [
+//~         "remember",
+//~         "my name is",
+//~         "i like",
+//~         "i love",
+//~         "i hate",
+//~         "i dislike",
+//~         "favorite",
+//~         "prefer",
+//~         "born",
+//~         "birthday",
+//~         "age",
+//~         "from",
+//~         "live",
+//~         "nickname",
+//~         "call me",
+//~         "hobby",
+//~         "interests",
+//~         "work",
+//~         "job",
+//~         "study",
+//~       ];
 
       // DON'T store commands in conversation history
       const isCommand =
@@ -6647,73 +6690,73 @@ What to do:
 
     // Mood detection for sticker selection
     // reads the message and picks what vibe the user is giving off
-    async function detectMood(text) {
-      // Fast keyword-based pre-filter for common cases (no AI call needed)
-      const lower = text.toLowerCase();
-
-      // Angry/upset patterns
-      if (
-        /\b(mad|angry|annoyed|wtf|damn|hate|shut up|idiot|stupid|dumb|ugly|trash|garbage|awful)\b/.test(
-          lower,
-        )
-      )
-        return "concerned";
-      // Very happy/excited patterns
-      if (
-        /\b(haha|lol|lmao|funny|hilarious|joke|rofl)\b/.test(lower) ||
-        lower.includes("😂") ||
-        lower.includes("🤣")
-      )
-        return "happy";
-      // Sarcasm/shade
-      if (
-        /\b(sure|right|okay then|wow|interesting|uh huh|oh really|nice one)\b/.test(
-          lower,
-        ) &&
-        lower.length < 50
-      )
-        return "sarcastic";
-      // Thinking/question
-      if (
-        /\?/.test(lower) ||
-        /\b(what|why|how|when|where|who|hmm|wonder|think|maybe|perhaps)\b/.test(
-          lower,
-        )
-      )
-        return "thinking";
-
-      // Use AI for nuanced cases
-      try {
-        const res = await smartGroqCall({
-          model: "openai/gpt-oss-20b",
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are a mood classifier. Respond with EXACTLY one word from: happy, sarcastic, thinking, concerned, neutral. No explanation.",
-            },
-            {
-              role: "user",
-              content: `Classify the mood of this message: "${text.slice(0, 200)}"`,
-            },
-          ],
-        });
-        const mood = res.choices[0].message.content
-          .trim()
-          .toLowerCase()
-          .split(/\s+/)[0];
-        const valid = [
-          "happy",
-          "sarcastic",
-          "thinking",
-          "concerned",
-          "neutral",
-        ];
-        return valid.includes(mood) ? mood : "neutral";
-      } catch (err) {
-        return "neutral";
-      }
-    }
+//~     async function detectMood(text) {
+//~       // Fast keyword-based pre-filter for common cases (no AI call needed)
+//~       const lower = text.toLowerCase();
+//~ 
+//~       // Angry/upset patterns
+//~       if (
+//~         /\b(mad|angry|annoyed|wtf|damn|hate|shut up|idiot|stupid|dumb|ugly|trash|garbage|awful)\b/.test(
+//~           lower,
+//~         )
+//~       )
+//~         return "concerned";
+//~       // Very happy/excited patterns
+//~       if (
+//~         /\b(haha|lol|lmao|funny|hilarious|joke|rofl)\b/.test(lower) ||
+//~         lower.includes("😂") ||
+//~         lower.includes("🤣")
+//~       )
+//~         return "happy";
+//~       // Sarcasm/shade
+//~       if (
+//~         /\b(sure|right|okay then|wow|interesting|uh huh|oh really|nice one)\b/.test(
+//~           lower,
+//~         ) &&
+//~         lower.length < 50
+//~       )
+//~         return "sarcastic";
+//~       // Thinking/question
+//~       if (
+//~         /\?/.test(lower) ||
+//~         /\b(what|why|how|when|where|who|hmm|wonder|think|maybe|perhaps)\b/.test(
+//~           lower,
+//~         )
+//~       )
+//~         return "thinking";
+//~ 
+//~       // Use AI for nuanced cases
+//~       try {
+//~         const res = await smartGroqCall({
+//~           model: "openai/gpt-oss-20b",
+//~           messages: [
+//~             {
+//~               role: "system",
+//~               content:
+//~                 "You are a mood classifier. Respond with EXACTLY one word from: happy, sarcastic, thinking, concerned, neutral. No explanation.",
+//~             },
+//~             {
+//~               role: "user",
+//~               content: `Classify the mood of this message: "${text.slice(0, 200)}"`,
+//~             },
+//~           ],
+//~         });
+//~         const mood = res.choices[0].message.content
+//~           .trim()
+//~           .toLowerCase()
+//~           .split(/\s+/)[0];
+//~         const valid = [
+//~           "happy",
+//~           "sarcastic",
+//~           "thinking",
+//~           "concerned",
+//~           "neutral",
+//~         ];
+//~         return valid.includes(mood) ? mood : "neutral";
+//~       } catch (err) {
+//~         return "neutral";
+//~       }
+//~     }
 
     /*
      * Awards progression (XP/GP) to a user for interacting with the bot.
@@ -6818,17 +6861,17 @@ What to do:
     }
 
     // Pre-flight check - makes sure AI is working before starting
-    async function preflightCheck() {
-      try {
-        console.log("Checking AI with sample 'hi' prompt…");
-        const response = await askAI("test-user", "hi");
-        console.log("✅ AI responded:", response);
-        return true;
-      } catch (err) {
-        console.error("❌ AI check failed:", err.message);
-        return false;
-      }
-    }
+//~     async function preflightCheck() {
+//~       try {
+//~         console.log("Checking AI with sample 'hi' prompt…");
+//~         const response = await askAI("test-user", "hi");
+//~         console.log("✅ AI responded:", response);
+//~         return true;
+//~       } catch (err) {
+//~         console.error("❌ AI check failed:", err.message);
+//~         return false;
+//~       }
+//~     }
 
     const COMMAND_REGISTRY = require('./utils/commandRegistry');
 
@@ -7399,14 +7442,14 @@ ${targetCategory}`;
     }
 
     // Helper to format the news digest message
-    function formatNewsDigest(articles) {
-      let message = `╔══════════════════════╗\n   📰 *ANIME NEWS UPDATE* 📰\n╚══════════════════════╝\n\nHere are the latest stories:\n\n`;
-      articles.forEach((a, i) => {
-        message += `${i + 1}. *${a.title}*\n🔗 ${a.link}\n\n`;
-      });
-      message += `_Use ${botConfig.getPrefix().toLowerCase()} news off to disable updates._`;
-      return message;
-    }
+//~     function formatNewsDigest(articles) {
+//~       let message = `╔══════════════════════╗\n   📰 *ANIME NEWS UPDATE* 📰\n╚══════════════════════╝\n\nHere are the latest stories:\n\n`;
+//~       articles.forEach((a, i) => {
+//~         message += `${i + 1}. *${a.title}*\n🔗 ${a.link}\n\n`;
+//~       });
+//~       message += `_Use ${botConfig.getPrefix().toLowerCase()} news off to disable updates._`;
+//~       return message;
+//~     }
 
     // Helper to send news to a specific group
     async function sendNewsToGroup(sock, chatId, articles) {
@@ -13541,25 +13584,25 @@ _💡 Reply with another number from your search list!_`.trim();
                   // ============================================
                   // 🌍 GLOBAL WEATHER SYSTEM
                   // ============================================
-                  function getCurrentWeather() {
-                    const hours = new Date().getHours();
-                    const cycles = [
-                      { name: "Clear Skies", icon: "☀️", effect: "None" },
-                      { name: "Foggy", icon: "🌫️", effect: "-15% Accuracy" },
-                      {
-                        name: "Blood Moon",
-                        icon: "🌑",
-                        effect: "+50% Zeni, +25% Mob Damage",
-                      },
-                      {
-                        name: "Acid Rain",
-                        icon: "🌧️",
-                        effect: "-10% DEF for everyone",
-                      },
-                    ];
-                    // Rotate every 6 hours
-                    return cycles[Math.floor(hours / 6) % cycles.length];
-                  }
+//~                   function getCurrentWeather() {
+//~                     const hours = new Date().getHours();
+//~                     const cycles = [
+//~                       { name: "Clear Skies", icon: "☀️", effect: "None" },
+//~                       { name: "Foggy", icon: "🌫️", effect: "-15% Accuracy" },
+//~                       {
+//~                         name: "Blood Moon",
+//~                         icon: "🌑",
+//~                         effect: "+50% Zeni, +25% Mob Damage",
+//~                       },
+//~                       {
+//~                         name: "Acid Rain",
+//~                         icon: "🌧️",
+//~                         effect: "-10% DEF for everyone",
+//~                       },
+//~                     ];
+//~                     // Rotate every 6 hours
+//~                     return cycles[Math.floor(hours / 6) % cycles.length];
+//~                   }
 
                   // ============================================
                   // 🏹 WILDERNESS SYSTEMS (FISHING & HUNTING)
@@ -34320,6 +34363,9 @@ _(or reply to their message)_
   });
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// TAIL HELPERS - socket getter + nuke (mass-remove) bookkeeping
+// ═══════════════════════════════════════════════════════════════════════════
 function getSock() {
   return _moduleSock;
 }
