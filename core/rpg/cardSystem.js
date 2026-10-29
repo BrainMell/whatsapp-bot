@@ -2324,7 +2324,78 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   if (args.length > 0) {
     const input = args[0];
     if (input === '--tier') return cmdCardsTier(senderJid, reply, chatId);
-    
+
+    // 💡 FEATURE 2026-10-29 (owner: ".j coll 1,2,3 make it a collection
+    // collage like the deck or collection ones — images easier with their
+    // Location and Id stated under them"): comma-separated picks render ONE
+    // labeled collage grid instead of N separate sends. Parts can be coll
+    // indices (1,2,3) or card ids (E-03004,...). Every tile states its coll
+    // id under the image so the numbers feed straight into
+    // `cdeck <deck> add <coll#>`.
+    const joinedArgs = args.join('').replace(/\s+/g, '');
+    if (joinedArgs.includes(',')) {
+      const parts = joinedArgs.split(',').filter(Boolean);
+      const listedPicks = await getNumberedCollection(senderJid); // same numbering as the bare view
+      const picks = [];
+      const errors = [];
+      const seenIds = new Set();
+      for (const part of parts) {
+        if (picks.length >= 12) { errors.push(`⚠️ Collage cap is 12 — extra picks were skipped`); break; }
+        let pickUc = null;
+        let locLabel = null;
+        if (/^\d+$/.test(part)) {
+          const idx = parseInt(part);
+          pickUc = listedPicks[idx - 1];
+          locLabel = `Coll #${idx}`;
+          if (!pickUc) errors.push(`❌ #${idx} — not in your collection`);
+        } else {
+          pickUc = await UserCard.findOne({ ...(await ownerOf(senderJid)), cardId: part });
+          if (pickUc && !CARD_INDEX()[pickUc.cardId]) pickUc = null;
+          locLabel = part.toUpperCase();
+          if (!pickUc) errors.push(`❌ ${part} — not found`);
+        }
+        if (!pickUc || seenIds.has(String(pickUc._id))) continue;
+        seenIds.add(String(pickUc._id));
+        picks.push({ uc: pickUc, card: CARD_INDEX()[pickUc.cardId], locLabel });
+      }
+      if (!picks.length) {
+        return reply(`📭  *NO CARDS PICKED*\n\n${errors.join('\n') || 'Nothing matched.'}\n\n💡 ⟢ _Try:_ \`${p} coll 1,2,3\``);
+      }
+
+      const pickUrls = picks.map(pk => ({
+        url: pk.card.imageUrl,
+        animated: isAnimatedCard(pk.card),
+        name: pk.card.cardName || '',
+        tier: String(pk.card.tier || ''),
+        // 💡 per-tile label: Location + Id under each image (owner spec)
+        sub: `📍 ${pk.locLabel}`,
+      }));
+
+      let cap = `🎴 *COLLECTION PICKS*\n━━━━━━━━━━━━━━━\n\n`;
+      picks.forEach((pk, i) => {
+        cap += `*${i + 1}.* 🏷️ _${pk.card.cardName}_ (T${pk.card.tier}) · 📍 _${pk.locLabel}_\n`;
+      });
+      if (errors.length) cap += `\n${errors.join('\n')}\n`;
+      cap += `\n💡 ⟢ _Detail:_ \`${p} coll <id>\` · _Deck it:_ \`${p} cdeck <deck> add <id>\``;
+
+      console.log(`🃏 [cmdColl] picks collage: ${picks.length} card(s), mode=${useHybridAnim ? 'hybrid' : 'static'}`);
+      let pickBuf = null;
+      let pickContentType = null;
+      if (useHybridAnim) {
+        const pickHybrid = await goService.generateHybridGrid(pickUrls, 'COLLECTION PICKS');
+        if (pickHybrid) { pickBuf = pickHybrid.buffer; pickContentType = pickHybrid.contentType; }
+      }
+      if (!pickBuf) pickBuf = await goService.generateCardGrid(pickUrls, 'COLLECTION PICKS');
+      if (pickBuf) {
+        const isVideo = pickContentType && pickContentType.includes('video');
+        console.log(`🃏 [cmdColl] sending picks collage (${isVideo ? 'video' : 'image'})`);
+        if (isVideo) return await inst.sock_ref.sendMessage(chatId, { video: pickBuf, gifPlayback: true, caption: cap });
+        return await inst.sock_ref.sendMessage(chatId, { image: pickBuf, caption: cap });
+      }
+      console.log(`🃏 [cmdColl] picks collage render failed - text fallback`);
+      return reply(cap); // renderer down — text list still carries Location + Id
+    }
+
     let uc = null;
     let collIndex = null;
     if (input.includes('-')) uc = await UserCard.findOne({ ...(await ownerOf(senderJid)), cardId: input });
@@ -2396,6 +2467,15 @@ async function cmdColl(senderJid, reply, chatId, args = []) {
   // GIF generation for collection (Top 15 Highlights)
   const topCards = getTopCards(listed);
   const imageUrls = getTopImageUrls(topCards);
+  // 💡 FEATURE 2026-10-29 (owner: "Location and Id stated under them"):
+  // per-tile "Coll #n" sub-labels on the highlights grid — same numbering the
+  // text list prints, so every tile can be fed straight into `.j coll <n>`.
+  // topCards ⊆ listed (orphan-filtered upstream) so index alignment holds.
+  const collIdxOf = new Map(listed.map((o, i) => [String(o._id), i + 1]));
+  for (let ti = 0; ti < imageUrls.length && ti < topCards.length; ti++) {
+    const collNum = collIdxOf.get(String(topCards[ti]._id));
+    if (collNum) imageUrls[ti].sub = `📍 Coll #${collNum}`;
+  }
   if (imageUrls.length > 0) {
     const currentHash = getDeckHash(topCards);
     const cached = gifCache.collections.get(senderJid);
@@ -4697,55 +4777,74 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
   if (!args[0]) return sendUsage(
     reply,
     `${p} cdeck`,
-    `${p} cdeck <name> [slot] — open a deck (or one card in it)\n• Add cards: ${p} cdeck <name> add <coll#> [coll#...]\n• Remove a card: ${p} cdeck <name> remove <slot>\n• Render: ${p} cdeck <name> --anim / --static\n• Manage: ${p} create deck · ${p} list decks · ${p} rename deck · ${p} delete deck`,
-    `${p} cdeck Waifus\n${p} cdeck Waifus add 3 7\n${p} cdeck Waifus remove 2`
+    `${p} cdeck <name> [slot] — open a deck (or one card in it)\n• Add cards: ${p} cdeck <name> add <coll#>,<coll#>,... (e.g. add 424,18,12)\n• Remove cards: ${p} cdeck <name> remove <slot>,<slot>,...\n• Render: ${p} cdeck <name> --anim / --static\n• Manage: ${p} create deck · ${p} list decks · ${p} rename deck · ${p} delete deck`,
+    `${p} cdeck Waifus\n${p} cdeck Waifus add 424,18,12\n${p} cdeck Waifus remove 2,5`
   );
 
   // Check for 'remove' subcommand
-  // .j cdeck <name> remove <slot>
+  // .j cdeck <name> remove <slot> [slot...] — comma or space lists, e.g. remove 1,2,3
   const removeIndex = args.findIndex(a => a.toLowerCase() === 'remove');
   if (removeIndex !== -1 && args.length > removeIndex + 1) {
     const deckName = args.slice(0, removeIndex).join(' ').trim();
-    const slot = parseInt(args[removeIndex + 1]);
+    const rmSlots = [...new Set(
+      args.slice(removeIndex + 1).flatMap(a => String(a).split(',')).map(s => parseInt(String(s).trim())).filter(n => n > 0)
+    )];
     
-    if (!deckName || isNaN(slot)) return reply(`❌ Usage: \`${p} cdeck <name> remove <slot>\``);
+    if (!deckName || !rmSlots.length) return reply(`❌ Usage: \`${p} cdeck <name> remove <slot> [slot...]\``);
     
     const deck = await CardDeck.findOne({ ...(await ownerOf(senderJid)), name: { $regex: new RegExp(`^${escapeRegex(deckName)}$`, 'i') } });
     if (!deck) return reply(`❌  *DECK NOT FOUND*\n\n🃏 ⟢ *Deck:* _"${deckName}"_`);
     
-    const ucId = deck.cards[slot - 1];
-    if (!ucId) return reply(`❌  *EMPTY SLOT*\n\n🃏 ⟢ *Deck:* _"${deck.name}"_\n🔢 ⟢ *Slot:* _#${slot}_`);
-    
-    const uc = await UserCard.findById(ucId);
-    if (uc) {
-      uc.inCustomDeck = false;
-      uc.customDeckName = null;
-      uc.customDeckSlot = null;
-      await uc.save();
+    // 💡 MULTI 2026-10-29: remove many at once — splice from the HIGHEST slot
+    // down so earlier removals never shift the slots still being processed.
+    const results = [];
+    for (const slot of [...rmSlots].sort((a, b) => b - a)) {
+      const ucId = deck.cards[slot - 1];
+      if (!ucId) { results.push(`❌ Slot #${slot} — empty`); continue; }
+      const uc = await UserCard.findById(ucId);
+      if (uc) {
+        uc.inCustomDeck = false;
+        uc.customDeckName = null;
+        uc.customDeckSlot = null;
+        await uc.save();
+      }
+      deck.cards.splice(slot - 1, 1);
+      results.push(`✅ Slot #${slot} — returned to collection`);
     }
-    
-    deck.cards.splice(slot - 1, 1);
     await deck.save();
-    await renumberCustomDeckSlots(deck); // 💡 UPGRADE 2026-10-29: keep stored slots aligned
+    await renumberCustomDeckSlots(deck); // keep stored slots aligned after removals
     
-    return reply(`✅  *CARD REMOVED!*\n\n🃏 ⟢ *Deck:* _"${deck.name}"_\n🔢 ⟢ *Slot:* _#${slot}_\n\n📦 ⟢ _Returned to your collection_`);
+    const okCount = results.filter(r => r.startsWith('✅')).length;
+    const header = rmSlots.length === 1 ? `✅  *CARD REMOVED!*` : `✅  *${okCount} CARDS REMOVED!*`;
+    return reply(`${header}\n\n🃏 ⟢ *Deck:* _"${deck.name}"_\n\n${results.join('\n')}\n\n📦 ⟢ _Cards returned to your collection_`);
   }
 
   // 💡 NEW SUBCOMMAND (UPGRADE 2026-10-29): .j cdeck <name> add <coll#> [coll#...]
-  // Adds card(s) straight from your collection (same numbering as .coll —
-  // excludes main-deck/custom-deck/market/auction cards) into this deck.
+  // Adds card(s) straight from your collection into this deck. Numbering is
+  // the .coll numbering (getNumberedCollection) — see ALIGNMENT note below.
   // Parity with `remove`; the old flow forced users over to `t2cdeck` and
   // that was never advertised in the usage text.
   const addIndex = args.findIndex(a => a.toLowerCase() === 'add');
   if (addIndex !== -1 && args.length > addIndex + 1) {
     const deckName = args.slice(0, addIndex).join(' ').trim();
-    const collIdxs = [...new Set(args.slice(addIndex + 1).map(a => parseInt(a)).filter(n => n > 0))];
+    // 💡 FIX 2026-10-29 (owner: ".j cdeck dragon ball add 424,18,12"): split
+    // EVERY arg on commas — the old parseInt swallowed "424,18,12" as just
+    // 424 and silently dropped the rest. Comma, space and mixed lists all
+    // multi-add now.
+    const collIdxs = [...new Set(
+      args.slice(addIndex + 1).flatMap(a => String(a).split(',')).map(s => parseInt(String(s).trim())).filter(n => n > 0)
+    )];
     if (!deckName || !collIdxs.length) return reply(`❌ Usage: \`${p} cdeck <name> add <coll#> [coll#...]\``);
 
     const deck = await CardDeck.findOne({ ...(await ownerOf(senderJid)), name: { $regex: new RegExp(`^${escapeRegex(deckName)}$`, 'i') } });
     if (!deck) return reply(`❌  *DECK NOT FOUND*\n\n🃏 ⟢ *Deck:* _"${deckName}"_`);
 
-    const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false }).sort({ createdAt: 1 });
+    // 💡 ALIGNMENT 2026-10-29: pool + numbering now EXACTLY match the .coll
+    // list (getNumberedCollection — same filter, same sort, orphans hidden)
+    // so the Coll #n printed under collage tiles is the same number `add`
+    // consumes. Auctioned cards stay included (they show in .coll too);
+    // settleAuction already pulls sold cards back out of custom decks.
+    const owned = await getNumberedCollection(senderJid);
     const results = [];
     for (const idx of collIdxs) {
       const uc = owned[idx - 1];

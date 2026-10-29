@@ -357,16 +357,15 @@ const COMMAND_REGISTRY = {
     { cmd: 'unlistitem', desc: 'Cancel your item market listing. (Alias: uli)', usage: 'unlistitem <listingId|#>' },
     { cmd: 'buyitem', desc: 'Buy a listing from the player item market. (Alias: bi)', usage: 'buyitem <listingId|#>' },
     { cmd: 'accept', desc: 'Confirm a pending action (like burning a card).', usage: 'accept' },
-    { cmd: 'decline', desc: 'Cancel a pending action.', usage: 'decline' }
-  ],
-  // 💡 UPGRADE 2026-10-29 (owner: "place it in the menu"): custom decks got
-  // their own menu category instead of being scattered at the bottom of CARDS.
-  'CUSTOM DECKS': [
+    { cmd: 'decline', desc: 'Cancel a pending action.', usage: 'decline' },
+    // 💡 UPGRADE 2026-10-29 r2 (owner: "the cdeck should be in the cards sub
+    // menu NOT its own section"): custom-deck commands live inside CARDS —
+    // the separate CUSTOM DECKS category is gone.
     { cmd: 'create deck', desc: 'Create a new custom card deck.', usage: 'create deck <name>' },
     { cmd: 'list decks', desc: 'List all your custom decks with card counts.', usage: 'list decks' },
-    { cmd: 'cdeck', desc: 'Open a custom deck — hybrid animated grid, card detail, add/remove cards.', usage: 'cdeck <name> [slot] | cdeck <name> add <coll#>... | cdeck <name> remove <slot>' },
-    { cmd: 'cdeck add', desc: 'Move card(s) from your collection into the deck (same numbering as .coll).', usage: 'cdeck <name> add <coll#> [coll#...]' },
-    { cmd: 'cdeck remove', desc: 'Move a card from the deck back to your collection.', usage: 'cdeck <name> remove <slot>' },
+    { cmd: 'cdeck', desc: 'Open a custom deck — hybrid animated grid, card detail, add/remove cards.', usage: 'cdeck <name> [slot] | cdeck <name> add <coll#>,<coll#>,... | cdeck <name> remove <slot>,<slot>,...' },
+    { cmd: 'cdeck add', desc: 'Move card(s) from your collection into the deck (.coll numbering, comma list works).', usage: 'cdeck <name> add 424,18,12' },
+    { cmd: 'cdeck remove', desc: 'Move card(s) from the deck back to your collection (comma list works).', usage: 'cdeck <name> remove <slot>,<slot>,...' },
     { cmd: 't2cdeck', desc: 'Move card(s) from your collection into a custom deck.', usage: 't2cdeck <coll#> [coll#...] <deck_name>' },
     { cmd: 't2ccoll', desc: 'Move card(s) from a custom deck back to your collection.', usage: 't2ccoll <slot> [slot...] <deck_name>' },
     { cmd: 'rename deck', desc: 'Rename one of your custom decks.', usage: 'rename deck <old> | <new>' },
