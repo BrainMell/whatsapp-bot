@@ -394,10 +394,48 @@ async function runWarningCompare(sock, chatId, senderJid) {
     });
 }
 
+// The JOKER mod menu (owner 2026-10-29: "mod proto should pull up a menu").
+// Canonical copy lives here; the identical template in adminConsole.js's
+// original protomenu block is unreachable dead code since the lab took over
+// the 'proto'/'protomenu' routing.
+function modMenuHtml() {
+    return `<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+*{box-sizing:border-box} body{margin:0;padding:18px;background:#101014;color:#f5f1f5;font-family:Arial,Helvetica,sans-serif}
+.shell{max-width:680px;margin:auto;border:1px solid #44303b;border-radius:18px;overflow:hidden;background:#15131a}
+.hero{padding:24px 18px;text-align:center;background:linear-gradient(135deg,#260e19,#111116 68%);border-bottom:1px solid #593040}
+.mark{font-size:12px;letter-spacing:4px;color:#e9a7b2}.name{font-size:34px;font-weight:900;letter-spacing:5px;margin:8px 0;color:#fff}.sub{font-size:11px;letter-spacing:2px;color:#c9a4af}.meta{margin-top:16px;font-size:12px;color:#d4c8d0}.meta b{color:#f3c3ce}
+.content{padding:18px}.eyebrow{font-size:11px;letter-spacing:2px;color:#e27b91;margin:0 0 12px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.card{padding:13px 11px;border:1px solid #382b38;border-radius:11px;background:#1d1922;min-height:72px}
+.card .icon{font-size:19px;margin-bottom:7px}.card strong{display:block;font-size:12px;letter-spacing:.4px}.card span{display:block;margin-top:5px;font-size:10px;line-height:1.4;color:#bcb0bf}
+.feature{margin-top:16px;padding:15px;border-radius:12px;background:#25151e;border:1px solid #573043}.feature strong{font-size:12px;color:#f0b0c0}.feature p{margin:7px 0 0;font-size:11px;line-height:1.6;color:#d7cbd6}
+.footer{text-align:center;padding:14px;border-top:1px solid #302631;color:#8e8291;font-size:10px;letter-spacing:1px}
+@media(max-width:360px){body{padding:8px}.content{padding:12px}.grid{gap:6px}.card{padding:10px 8px}.name{font-size:27px}}
+</style>
+</head>
+<body><main class="shell">
+<header class="hero"><div class="mark">♠ THE PHANTOM COMMAND SYSTEM ♠</div><div class="name">JOKER</div><div class="sub">MODERATOR TERMINAL · PROTOTYPE</div><div class="meta"><b>VERSION 5.3.4</b> &nbsp;·&nbsp; BY MELLOW<br><br>PREFIX &nbsp; <b>.j</b></div></header>
+<section class="content"><p class="eyebrow">▸ SELECT A DESTINATION</p><div class="grid">
+<div class="card"><div class="icon">🧬</div><strong>RPG</strong><span>Character control and progression</span></div>
+<div class="card"><div class="icon">🏗️</div><strong>FORGE</strong><span>Classes, skills and enemy tools</span></div>
+<div class="card"><div class="icon">⚔️</div><strong>GUILD WAR</strong><span>War state and test skirmishes</span></div>
+<div class="card"><div class="icon">🎴</div><strong>CARDS</strong><span>Spawns, tokens and eShop</span></div>
+<div class="card"><div class="icon">🧪</div><strong>SANDBOX</strong><span>Test character and godmode</span></div>
+<div class="card"><div class="icon">🎯</div><strong>QUIZ</strong><span>Quiz sessions and configuration</span></div>
+<div class="card"><div class="icon">🛡️</div><strong>MANAGEMENT</strong><span>Moderator roles and permissions</span></div>
+<div class="card"><div class="icon">🧰</div><strong>TESTERS</strong><span>Issues, reports and test controls</span></div>
+</div><div class="feature"><strong>✦ QUICK NAVIGATION</strong><p>Use <b>.j mod sandbox on</b> to enter the RPG test sandbox.<br>Use <b>.j mod &lt;category&gt;</b> to open a command category.<br>Use <b>.j mod &lt;command&gt;</b> to inspect a command.</p></div><div class="feature"><strong>⚠ EXPERIMENTAL HTML VIEW</strong><p>This is a visual prototype. The cards are not clickable yet. WhatsApp may render this experimental message differently across clients.</p></div></section><footer class="footer">JOKER · MAKE YOUR NEXT MOVE</footer></main></body></html>`;
+}
+
 const HELP = [
     'JOKER PROTOCOL LAB',
     '',
-    '.j mod proto opens the rich HTML lab dashboard.',
+    '.j mod proto opens the JOKER mod menu (rich HTML).',
+    '.j mod proto lab  The protocol-lab workshop dashboard',
     '.j mod proto html  HTML primitive plus edit replay',
     '.j mod proto htmlraw  HTML primitive without edit replay',
     '.j mod proto warning  A/B test for the download prompt',
@@ -428,8 +466,14 @@ async function handleProtoLab(sock, chatId, senderJid, args = [], BOT_MARKER = '
             case 'tests':
                 return await sock.sendMessage(chatId, { text: BOT_MARKER + HELP });
             case 'menu':
-            case 'dashboard':
             case 'protomenu':
+                // owner 2026-10-29: bare .j mod proto / protomenu must open the
+                // MOD MENU, not the lab workshop. Edit-replay delivery = the
+                // most promising download-gate bypass until the A/B verdict.
+                return await sendRich(sock, chatId, senderJid, htmlEnvelope(modMenuHtml()), true);
+            case 'lab':
+            case 'workshop':
+            case 'dashboard':
                 return await sendHtmlProbe(sock, chatId, senderJid, 'menu', true);
             case 'html':
                 return await sendHtmlProbe(sock, chatId, senderJid, 'html', true);
