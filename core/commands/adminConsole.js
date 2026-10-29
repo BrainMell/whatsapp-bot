@@ -14,6 +14,8 @@
 // Permission gate: isOwner || isGlobalMod || isRpgMod
 // ═══════════════════════════════════════════════════════════════════════════
 
+const { randomUUID } = require('crypto');
+const { generateWAMessageFromContent } = require('@whiskeysockets/baileys');
 const economy = require('../rpg/economy');
 const progression = require('../rpg/progression');
 const classSystem = require('../rpg/classSystem');
@@ -243,6 +245,79 @@ function parseAdminNumber(raw) {
 
 async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix, getMentionOrReply) {
     const sub = args[0]?.toLowerCase();
+    // EXPERIMENTAL: HTML-rich mod menu prototype. This uses Meta's
+    // undocumented FOAHtmlPrimitiveDemoDONOTUSE response primitive.
+    // Keep isolated behind an explicit command until rendering is verified.
+    if (sub === 'protomenu') {
+        const html = `<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+*{box-sizing:border-box} body{margin:0;padding:18px;background:#101014;color:#f5f1f5;font-family:Arial,Helvetica,sans-serif}
+.shell{max-width:680px;margin:auto;border:1px solid #44303b;border-radius:18px;overflow:hidden;background:#15131a}
+.hero{padding:24px 18px;text-align:center;background:linear-gradient(135deg,#260e19,#111116 68%);border-bottom:1px solid #593040}
+.mark{font-size:12px;letter-spacing:4px;color:#e9a7b2}.name{font-size:34px;font-weight:900;letter-spacing:5px;margin:8px 0;color:#fff}.sub{font-size:11px;letter-spacing:2px;color:#c9a4af}.meta{margin-top:16px;font-size:12px;color:#d4c8d0}.meta b{color:#f3c3ce}
+.content{padding:18px}.eyebrow{font-size:11px;letter-spacing:2px;color:#e27b91;margin:0 0 12px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.card{padding:13px 11px;border:1px solid #382b38;border-radius:11px;background:#1d1922;min-height:72px}
+.card .icon{font-size:19px;margin-bottom:7px}.card strong{display:block;font-size:12px;letter-spacing:.4px}.card span{display:block;margin-top:5px;font-size:10px;line-height:1.4;color:#bcb0bf}
+.feature{margin-top:16px;padding:15px;border-radius:12px;background:#25151e;border:1px solid #573043}.feature strong{font-size:12px;color:#f0b0c0}.feature p{margin:7px 0 0;font-size:11px;line-height:1.6;color:#d7cbd6}
+.footer{text-align:center;padding:14px;border-top:1px solid #302631;color:#8e8291;font-size:10px;letter-spacing:1px}
+@media(max-width:360px){body{padding:8px}.content{padding:12px}.grid{gap:6px}.card{padding:10px 8px}.name{font-size:27px}}
+</style>
+</head>
+<body><main class="shell">
+<header class="hero"><div class="mark">♠ THE PHANTOM COMMAND SYSTEM ♠</div><div class="name">JOKER</div><div class="sub">MODERATOR TERMINAL · PROTOTYPE</div><div class="meta"><b>VERSION 5.3.4</b> &nbsp;·&nbsp; BY MELLOW<br><br>PREFIX &nbsp; <b>.j</b></div></header>
+<section class="content"><p class="eyebrow">▸ SELECT A DESTINATION</p><div class="grid">
+<div class="card"><div class="icon">🧬</div><strong>RPG</strong><span>Character control and progression</span></div>
+<div class="card"><div class="icon">🏗️</div><strong>FORGE</strong><span>Classes, skills and enemy tools</span></div>
+<div class="card"><div class="icon">⚔️</div><strong>GUILD WAR</strong><span>War state and test skirmishes</span></div>
+<div class="card"><div class="icon">🎴</div><strong>CARDS</strong><span>Spawns, tokens and eShop</span></div>
+<div class="card"><div class="icon">🧪</div><strong>SANDBOX</strong><span>Test character and godmode</span></div>
+<div class="card"><div class="icon">🎯</div><strong>QUIZ</strong><span>Quiz sessions and configuration</span></div>
+<div class="card"><div class="icon">🛡️</div><strong>MANAGEMENT</strong><span>Moderator roles and permissions</span></div>
+<div class="card"><div class="icon">🧰</div><strong>TESTERS</strong><span>Issues, reports and test controls</span></div>
+</div><div class="feature"><strong>✦ QUICK NAVIGATION</strong><p>Use <b>.j mod sandbox on</b> to enter the RPG test sandbox.<br>Use <b>.j mod &lt;category&gt;</b> to open a command category.<br>Use <b>.j mod &lt;command&gt;</b> to inspect a command.</p></div><div class="feature"><strong>⚠ EXPERIMENTAL HTML VIEW</strong><p>This is a visual prototype. The cards are not clickable yet. WhatsApp may render this experimental message differently across clients.</p></div></section><footer class="footer">JOKER · MAKE YOUR NEXT MOVE</footer></main></body></html>`;
+        try {
+            const waMsg = generateWAMessageFromContent(chatId, {
+                botForwardedMessage: {
+                    message: {
+                        richResponseMessage: {
+                            messageType: 1,
+                            unifiedResponse: {
+                                data: Buffer.from(JSON.stringify({
+                                    __typename: 'GenAIUnifiedResponse',
+                                    response_id: randomUUID(),
+                                    sections: [{
+                                        __typename: 'GenAIUnifiedResponseSection',
+                                        view_model: {
+                                            __typename: 'GenAISingleLayoutViewModel',
+                                            primitive: {
+                                                __typename: 'FOAHtmlPrimitiveDemoDONOTUSE',
+                                                trusted_sources: [],
+                                                payload: html
+                                            }
+                                        }
+                                    }]
+                                })).toString('base64')
+                            },
+                            contextInfo: { isForwarded: true, forwardOrigin: 4 }
+                        }
+                    }
+                }
+            }, { userJid: senderJid });
+            await sock.relayMessage(chatId, waMsg.message, { messageId: waMsg.key.id });
+            return waMsg;
+        } catch (err) {
+            console.error('[mod protomenu] Rich HTML send failed:', err?.stack || err);
+            return await sock.sendMessage(chatId, {
+                text: BOT_MARKER + '⚠️ Rich HTML prototype failed to send on this Baileys build.\n\n' +
+                    'The HTML view uses an undocumented WhatsApp primitive. Check the bot logs for the exact error.'
+            });
+        }
+    }
+
 
     // 💡 LIVE MESSAGE EDITING: send a message, then edit it in-place as
     // actions complete. Baileys supports this via { edit: messageKey }.
