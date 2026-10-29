@@ -22,7 +22,7 @@ const goService = require('../utils/goImageService'); // 💡 singleton (PERF PA
 // NEWER than the process start time in future logs -> stale-process incident.
 try {
   const __buildMtime = fs.statSync(__filename).mtime.toISOString();
-  console.log(`[cardSystem] BUILD einfo-v3 (8d806270a) loaded | pid=${process.pid} | file mtime=${__buildMtime} | loaded at ${new Date().toISOString()}`);
+  console.log(`[cardSystem] BUILD predrop-v1 loaded | pid=${process.pid} | file mtime=${__buildMtime} | loaded at ${new Date().toISOString()}`);
 } catch (e) { console.log('[cardSystem] BUILD marker stat failed: ' + e.message); }
 
 // 47-k8c: background cache warmer — after a deploy every .j base/guild render
@@ -515,6 +515,61 @@ async function loadRoles() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+//  💡 OWNER PRE-DROP DM ALERTS (2026-10-30, Mellow)
+//  "Before a card drops in escape prive and omniverse imma need joker to
+//   send 2 messages one saying what gc it's in and the other the cards Id
+//   for me to copy, it should send it 1 minute before the card drops in
+//   those 2 gcs to my number in dms"
+//
+//  Flow (AUTO timer spawns ONLY - manual .g spawn / .g espawn untouched):
+//    timer fires for a target group
+//      -> roll the card NOW (zero side effects, stat untouched)
+//      -> DM #1 to owner: which GC (+ what card is coming)
+//      -> DM #2 to owner: the bare card ID (copy-paste ready)
+//      -> hold 60s, then doSpawn(forceCardId) drops the SAME card
+//  Target GCs resolve by FOLDED subject match (é->e, spaces/punct stripped)
+//  against the bot's live group list, cached 10 min. The drop-time doSpawn
+//  re-checks the copy cap, so a card that caps out during the hold cancels
+//  cleanly (owner gets a cancellation DM).
+// ═══════════════════════════════════════════════════════════════════════
+const PRE_DROP_ALERT = {
+  leadMs: 60 * 1000,                          // DM lands 1 minute before the drop
+  groupHints: ['escapeprive', 'omniverse'],   // folded subject match (alphanumeric only)
+};
+const PRE_DROP_TARGETS_TTL_MS = 10 * 60 * 1000;
+const _preDropTargets = { map: new Map(), ts: 0 }; // groupJid -> subject
+
+function preDropFold(s) {
+  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+async function resolvePreDropTargets(inst) {
+  const now = Date.now();
+  if ((now - _preDropTargets.ts) < PRE_DROP_TARGETS_TTL_MS) return _preDropTargets.map;
+  const sock = inst && inst.sock_ref;
+  if (!sock || typeof sock.groupFetchAllParticipating !== 'function') return _preDropTargets.map;
+  try {
+    const all = await sock.groupFetchAllParticipating();
+    const map = new Map();
+    for (const g of Object.values(all || {})) {
+      const norm = preDropFold(g && g.subject);
+      if (norm && PRE_DROP_ALERT.groupHints.some((h) => norm.includes(h))) {
+        map.set(String(g.id), String(g.subject || g.id));
+      }
+    }
+    _preDropTargets.map = map;
+    _preDropTargets.ts = now;
+    if (map.size) {
+      console.log(`[CardSystem][${botConfig.getBotId()}] pre-drop alert targets (${map.size}): ${[...map.values()].join(' | ')}`);
+    }
+  } catch (e) {
+    console.error(`[CardSystem] pre-drop target resolve failed: ${e.message}`);
+  }
+  return _preDropTargets.map;
+}
+
 // 💡 FIX 2026-08-31: shared per-instance timer (re)builder. Works for ANY
 // instance (not just the current getInst()) so cross-bot sync can rebuild
 // other bots' timers instead of clearing them and leaving them dead.
@@ -560,8 +615,10 @@ function rebuildSpawnTimersForInstance(inst) {
         // (getOrInitStat/stat.save); an unhandled rejection from a timer
         // callback kills the process on Node >=15. The chain must ALSO
         // continue scheduling on failure or the group goes spawn-dead.
-        Promise.resolve(doSpawn(null, null, false, gid)).catch((spawnErr) => {
-          console.error(`[CardSystem] timer doSpawn failed for ${gid}:`, spawnErr?.message || spawnErr);
+        // 💡 PRE-DROP (2026-10-30): target GCs get the 1-minute DM heads-up
+        // first; every other group spawns immediately, unchanged.
+        Promise.resolve(dispatchGroupSpawn(inst, gid)).catch((spawnErr) => {
+          console.error(`[CardSystem] timer spawn failed for ${gid}:`, spawnErr?.message || spawnErr);
         });
         // Schedule the next fire at a fresh random delay
         scheduleNext(randomDelay());
@@ -1025,6 +1082,60 @@ async function getOrInitStat(cardId, tier) {
   return stat;
 }
 
+// 💡 PRE-DROP (2026-10-30): the card ROLL extracted from doSpawn so a spawn
+// can be picked ahead of time with ZERO side effects (stat is NOT mutated
+// here — doSpawn re-checks the cap and increments at drop time). The random
+// path below is the old doSpawn else-branch verbatim (tier chances, pool
+// shuffle, cap scan, T1 fallback), so pre-rolled and live-rolled cards come
+// from exactly the same distribution.
+async function pickSpawnCard(targetGroup, forceTier) {
+  const inst = getInst();
+  const tier = forceTier || (() => {
+    // 💡 Use per-bot configurable tier chances (T5/T6/S/E fire first)
+    const chances = inst.tierChances || { '5': DEFAULT_T5_CHANCE, '6': DEFAULT_T6_CHANCE, 'S': 0, 'E': 0 };
+    if (chances['6'] > 0 && Math.random() < chances['6']) return '6';
+    if (chances['5'] > 0 && Math.random() < chances['5']) return '5';
+    if (chances['S'] > 0 && Math.random() < chances['S']) return 'S';
+    if (chances['E'] > 0 && Math.random() < chances['E']) return 'E';
+    // Weighted pool for T1-T4 (+ any T5/T6/S/E with weight > 0)
+    const weights = inst.tierWeights || { ...DEFAULT_SPAWN_WEIGHTS };
+    const entries = Object.entries(weights).filter(([t, w]) => w > 0);
+    if (entries.length === 0) return '1'; // fallback
+    const total = entries.reduce((s, [, w]) => s + w, 0);
+    let roll = Math.random() * total;
+    for (const [t, w] of entries) { roll -= w; if (roll <= 0) return t; }
+    return entries[0][0];
+  })();
+
+  // 💡 FIX 2026-08-31: 'E' is a virtual tier - there is no CARDS_BY_TIER['E']
+  // bucket (event cards live in their real-tier buckets), so a random 'E'
+  // roll produced an EMPTY pool and silently degraded to the T1 fallback.
+  // Use the EVENT_CARDS list instead.
+  const pool = String(tier).toUpperCase() === 'E'
+    ? [...(inst.EVENT_CARDS || [])]
+    : [...(CARDS_BY_TIER()[tier] || [])].filter(c => !isEventCard(c) && !cardBlockedForGroup(c, targetGroup));
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+
+  let card = null, stat = null;
+  for (const c of pool) {
+    const s = await getOrInitStat(c.id, c.tier);
+    if (s.totalSpawned < s.maxCopies) { card = c; stat = s; break; }
+  }
+
+  if (!card) {
+    // T1 Fallback - exclude event cards + hidden-set cards not enabled here
+    const t1 = [...(CARDS_BY_TIER()['1'] || [])].filter(c => !isEventCard(c) && !cardBlockedForGroup(c, targetGroup));
+    for (const c of t1) {
+      const s = await getOrInitStat(c.id, '1');
+      if (s.totalSpawned < s.maxCopies) { card = c; stat = s; break; }
+    }
+  }
+  return card ? { card, stat } : null;
+}
+
 async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, targetGroup = null) {
   const inst  = getInst();
   if (!inst.sock_ref || !targetGroup) return;
@@ -1057,48 +1168,10 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
     if (!card) return null;
     stat = await getOrInitStat(card.id, card.tier);
   } else {
-    const tier = forceTier || (() => {
-      // 💡 Use per-bot configurable tier chances (T5/T6/S/E fire first)
-      const chances = inst.tierChances || { '5': DEFAULT_T5_CHANCE, '6': DEFAULT_T6_CHANCE, 'S': 0, 'E': 0 };
-      if (chances['6'] > 0 && Math.random() < chances['6']) return '6';
-      if (chances['5'] > 0 && Math.random() < chances['5']) return '5';
-      if (chances['S'] > 0 && Math.random() < chances['S']) return 'S';
-      if (chances['E'] > 0 && Math.random() < chances['E']) return 'E';
-      // Weighted pool for T1-T4 (+ any T5/T6/S/E with weight > 0)
-      const weights = inst.tierWeights || { ...DEFAULT_SPAWN_WEIGHTS };
-      const entries = Object.entries(weights).filter(([t, w]) => w > 0);
-      if (entries.length === 0) return '1'; // fallback
-      const total = entries.reduce((s, [, w]) => s + w, 0);
-      let roll = Math.random() * total;
-      for (const [t, w] of entries) { roll -= w; if (roll <= 0) return t; }
-      return entries[0][0];
-    })();
-
-    // 💡 FIX 2026-08-31: 'E' is a virtual tier - there is no CARDS_BY_TIER['E']
-    // bucket (event cards live in their real-tier buckets), so a random 'E'
-    // roll produced an EMPTY pool and silently degraded to the T1 fallback.
-    // Use the EVENT_CARDS list instead.
-    const pool = String(tier).toUpperCase() === 'E'
-      ? [...(inst.EVENT_CARDS || [])]
-      : [...(CARDS_BY_TIER()[tier] || [])].filter(c => !isEventCard(c) && !cardBlockedForGroup(c, targetGroup));
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
-    }
-
-    for (const c of pool) {
-      const s = await getOrInitStat(c.id, c.tier);
-      if (s.totalSpawned < s.maxCopies) { card = c; stat = s; break; }
-    }
-    
-    if (!card) {
-        // T1 Fallback - exclude event cards + hidden-set cards not enabled here
-        const t1 = [...(CARDS_BY_TIER()['1'] || [])].filter(c => !isEventCard(c) && !cardBlockedForGroup(c, targetGroup));
-        for (const c of t1) {
-            const s = await getOrInitStat(c.id, '1');
-            if (s.totalSpawned < s.maxCopies) { card = c; stat = s; break; }
-        }
-    }
+    // 💡 PRE-DROP (2026-10-30): roll extracted into pickSpawnCard() (shared
+    // with the owner pre-drop DM flow) — same distribution, same filters.
+    const picked = await pickSpawnCard(targetGroup, forceTier);
+    if (picked) { card = picked.card; stat = picked.stat; }
   }
 
   if (!card || (!bypassCap && stat.totalSpawned >= stat.maxCopies)) return;
@@ -1179,6 +1252,63 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
   } catch (err) {
     stat.totalSpawned -= 1;
     await stat.save();
+  }
+}
+
+// 💡 PRE-DROP (2026-10-30): the two DMs to the owner. #1 = which GC (+ what's
+// coming), #2 = the bare card ID only, so hold-to-copy grabs exactly the ID.
+async function sendPreDropDMs(inst, subject, card) {
+  const to = inst.ownerJid || '233201487480@s.whatsapp.net'; // primary owner
+  if (!inst.sock_ref) return;
+  const tierLabel = String(TIER_LABEL[String(card.tier)] || `TIER ${card.tier}`).replace(/\s+/g, ' ').trim();
+  const msg1 =
+`⏳ *PRE-DROP ALERT*
+
+A card is dropping in *${subject}* in 1 minute.
+
+🎴 _${card.cardName}_ — ${tierLabel}`;
+  await inst.sock_ref.sendMessage(to, { text: msg1 });
+  await inst.sock_ref.sendMessage(to, { text: String(card.id) }); // bare ID — copy-ready
+}
+
+// 💡 PRE-DROP dispatch (called from the spawn timer). Non-target groups:
+// spawn immediately, unchanged. Target groups: roll now -> DM owner -> hold
+// PRE_DROP_ALERT.leadMs -> doSpawn(forceCardId) drops the SAME card. The cap
+// is re-checked at drop time (doSpawn forceCardId path), so a card that hits
+// its copy cap during the 60s hold cancels cleanly (owner gets a DM).
+async function dispatchGroupSpawn(inst, gid) {
+  try {
+    const targets = await resolvePreDropTargets(inst);
+    const gidS = String(gid);
+    if (!targets.has(gidS)) return doSpawn(null, null, false, gid);
+
+    const subject = targets.get(gidS);
+    const picked = await pickSpawnCard(gid, null).catch(() => null);
+    if (!picked || !picked.card) return doSpawn(null, null, false, gid); // pool exhausted — behave as before
+
+    try {
+      await sendPreDropDMs(inst, subject, picked.card);
+      console.log(`[CardSystem][${botConfig.getBotId()}] PRE-DROP: ${picked.card.cardName} (${picked.card.id}) in "${subject}" drops in ${PRE_DROP_ALERT.leadMs / 1000}s — DMs sent to owner`);
+    } catch (dmErr) {
+      console.error(`[CardSystem] pre-drop DM failed for ${gidS}: ${dmErr?.message || dmErr}`);
+    }
+
+    setTimeout(() => {
+      Promise.resolve(doSpawn(picked.card.id, null, false, gid))
+        .then((res) => {
+          if (!res) {
+            console.warn(`[CardSystem] PRE-DROP ${picked.card.id} aborted at drop time for ${gidS}`);
+            if (inst.sock_ref && inst.ownerJid) {
+              inst.sock_ref.sendMessage(inst.ownerJid, { text: `⚠️ The *${picked.card.cardName}* drop in *${subject}* was cancelled (copy cap hit during the hold).` }).catch(() => {});
+            }
+          }
+        })
+        .catch((e) => console.error(`[CardSystem] PRE-DROP doSpawn failed for ${gidS}: ${e?.message || e}`));
+    }, PRE_DROP_ALERT.leadMs);
+    return { preDropped: true, cardId: picked.card.id };
+  } catch (e) {
+    console.error(`[CardSystem] dispatchGroupSpawn failed for ${gid}: ${e?.message || e} — falling back to immediate spawn`);
+    return doSpawn(null, null, false, gid);
   }
 }
 
