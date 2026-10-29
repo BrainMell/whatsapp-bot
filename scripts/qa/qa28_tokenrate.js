@@ -40,15 +40,15 @@ const GC2 = '197370994229253@lid';
 // ---------- 1. default mode = LOW, guaranteed per tier ----------
 section('default mode LOW — guaranteed tier-keyed payouts (owner v3 table)')
 ok(cards.getTokenRateMode(GC1) === 'low', 'unset group defaults to low');
-ok(cards.tokenPayFor(GC1, '1') === 1, 'T1 -> 1');
-ok(cards.tokenPayFor(GC1, '2') === 2, 'T2 -> 2 (always, no RNG)');
-ok(cards.tokenPayFor(GC1, '3') === 3, 'T3 -> 3');
-ok(cards.tokenPayFor(GC1, '4') === 5, 'T4 -> 5 (always)');
-ok(cards.tokenPayFor(GC1, '5') === 8, 'T5 -> 8');
-ok(cards.tokenPayFor(GC1, '6') === 8, 'T6 rides table cap -> 8');
-ok(cards.tokenPayFor(GC1, 'S') === 8, 'S rides cap -> 8');
-ok(cards.tokenPayFor(GC1, 'E') === 8, 'E rides cap -> 8');
-ok(cards.tokenPayFor(GC1, undefined) === 1, 'unknown tier falls back to T1 row (never NaN)');
+ok(cards.tokenPayFor(GC1, '1') === 2, 'T1 -> 2 (v4 doubled)');
+ok(cards.tokenPayFor(GC1, '2') === 4, 'T2 -> 4 (always, no RNG)');
+ok(cards.tokenPayFor(GC1, '3') === 6, 'T3 -> 6');
+ok(cards.tokenPayFor(GC1, '4') === 10, 'T4 -> 10 (always)');
+ok(cards.tokenPayFor(GC1, '5') === 16, 'T5 -> 16');
+ok(cards.tokenPayFor(GC1, '6') === 16, 'T6 rides table cap -> 16');
+ok(cards.tokenPayFor(GC1, 'S') === 16, 'S rides cap -> 16');
+ok(cards.tokenPayFor(GC1, 'E') === 16, 'E rides cap -> 16');
+ok(cards.tokenPayFor(GC1, undefined) === 2, 'unknown tier falls back to T1 row (never NaN)');
 
 // ---------- 2. HIGH mode per GC + isolation ----------
 section('per-GC HIGH mode (old v1 rates) + isolation');
@@ -65,7 +65,7 @@ section('per-GC HIGH mode (old v1 rates) + isolation');
   ok(cards.tokenPayFor(GC1, '6') === 30, 'high T6 -> 30');
   ok(cards.tokenPayFor(GC1, 'S') === 35, 'high S -> 35');
   ok(cards.tokenPayFor(GC1, 'E') === 35, 'high E -> 35');
-  ok(cards.tokenPayFor(GC2, '5') === 8, 'GC2 (low) T5 still 8 while GC1 pays 25');
+  ok(cards.tokenPayFor(GC2, '5') === 16, 'GC2 (low) T5 still 16 while GC1 pays 25');
 
   // ---------- 3. invalid mode rejected ----------
   section('invalid mode rejected, state untouched')
@@ -81,11 +81,11 @@ section('per-GC HIGH mode (old v1 rates) + isolation');
   await cards.loadTokenRateModes(); // simulates a fresh boot
   ok(cards.getTokenRateMode(GC1) === 'high', 'GC1 restored to high after reload');
   ok(cards.getTokenRateMode(GC2) === 'high', 'GC2 restored to high after reload');
-  ok(cards.tokenPayFor('999@ignored-g.us', '4') === 5, 'never-pinned group still defaults low after reload');
+  ok(cards.tokenPayFor('999@ignored-g.us', '4') === 10, 'never-pinned group still defaults low after reload');
   const back = await cards.setTokenRateMode(GC1, 'low');
   ok(back && back.success === true, 'switch back to low works');
   await cards.loadTokenRateModes();
-  ok(cards.getTokenRateMode(GC1) === 'low' && cards.tokenPayFor(GC1, '5') === 8, 'GC1 low again (T5 -> 8) after round-trip');
+  ok(cards.getTokenRateMode(GC1) === 'low' && cards.tokenPayFor(GC1, '5') === 16, 'GC1 low again (T5 -> 16) after round-trip');
 
   // ---------- 5. static wiring of claim path + dispatcher ----------
   section('static wiring (claim path + .j event rate dispatcher)')

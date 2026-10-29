@@ -143,9 +143,11 @@ const TIER_LABEL = {
 // card tier's row, always. Two tables, toggleable PER GROUP by mods via
 // `.j event rate low|high` (owner: "a command so that I can turn it on in
 // specific gcs"); default everywhere = low.
-//   low  (v3 spec):      T1→1 T2→2 T3→3 T4→5 T5→8 (T6/S/E ride the cap = 8)
+//   low  (v4 spec):      T1→2 T2→4 T3→6 T4→10 T5→16 (T6/S/E ride the cap = 16)
 //   high (v1 "old high"): T1→5 T2→10 T3→15 T4→20 T5→25 T6→30, S/E→35
-const TOKEN_PAY_LOW  = { '1': 1, '2': 2, '3': 3, '4': 5, '5': 8, '6': 8, 'S': 8, 'E': 8 };
+// 💡 OWNER 2026-10-29 v4 (Mellow): "Double the minimum token spawns so the
+// tier 5 is now 16 not 8, 1 now 2 yada yada" — every low row doubled.
+const TOKEN_PAY_LOW  = { '1': 2, '2': 4, '3': 6, '4': 10, '5': 16, '6': 16, 'S': 16, 'E': 16 };
 const TOKEN_PAY_HIGH = { '1': 5, '2': 10, '3': 15, '4': 20, '5': 25, '6': 30, 'S': 35, 'E': 35 };
 const TOKEN_RATE_MODES = { low: TOKEN_PAY_LOW, high: TOKEN_PAY_HIGH };
 
@@ -1993,7 +1995,7 @@ async function cmdClaim(args, senderJid, reply, chatId) {
       const eventActive = await isTokenEventActive();
       if (eventActive && spawn.hasToken) {
         // 💡 OWNER 2026-10-28 v3: guaranteed tier-keyed payout, per-GC mode
-        // (low = 1/2/3/5/8 · high = 5/10/15/20/25/30). Mods: `.j event rate`.
+        // (low = 2/4/6/10/16 · high = 5/10/15/20/25/30). Mods: `.j event rate`.
         const _tokAmt = tokenPayFor(chatId, spawn.card && spawn.card.tier);
         economy.addEventTokens(senderJid, _tokAmt); // 💡 47-l2: registration-gate-free grant
         const balance = economy.getEventTokens(senderJid);
@@ -5236,7 +5238,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         return reply(`📊 *Token Event Status*\n\nStatus: ${active ? '🟢 ACTIVE' : '🔴 INACTIVE'}\n\nUse \`${p} event start\` or \`${p} event stop\`.`), true;
       }
       // 💡 OWNER 2026-10-28 v3: per-GC payout mode — guaranteed tier-keyed
-      // amounts; low (default) = 1/2/3/5/8, high = old v1 rates 5..30.
+      // amounts; low (default) = 2/4/6/10/16, high = old v1 rates 5..30.
       if (eventSub === 'rate') {
         const rateSub = args[1]?.toLowerCase();
         if (rateSub === 'low' || rateSub === 'high') {
@@ -5247,7 +5249,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         }
         const _cur = getTokenRateMode(chatId);
         const _other = _cur === 'low' ? 'high' : 'low';
-        return reply(`🎫 *Token Drop Rate (this group)*\n\nCurrent mode: *${_cur.toUpperCase()}*\n\n➥ \`${p} event rate low\` — guaranteed T1→1 T2→2 T3→3 T4→5 T5→8\n➥ \`${p} event rate high\` — guaranteed T1→5 T2→10 T3→15 T4→20 T5→25 T6→30\n\n_Switch with_ \`${p} event rate ${_other}\`_. Saves across restarts._`), true;
+        return reply(`🎫 *Token Drop Rate (this group)*\n\nCurrent mode: *${_cur.toUpperCase()}*\n\n➥ \`${p} event rate low\` — guaranteed T1→2 T2→4 T3→6 T4→10 T5→16\n➥ \`${p} event rate high\` — guaranteed T1→5 T2→10 T3→15 T4→20 T5→25 T6→30\n\n_Switch with_ \`${p} event rate ${_other}\`_. Saves across restarts._`), true;
       }
       return reply(`🎫 *Token Event Control*\n\n➥ \`${p} event start\` - Start the token event\n➥ \`${p} event stop\` - Stop the token event\n➥ \`${p} event status\` - Check current status\n➥ \`${p} event rate low|high\` - Set this group's payout mode`), true;
 
