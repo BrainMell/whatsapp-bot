@@ -1462,7 +1462,8 @@ async function eshopAddCard(slot, cardId, price) {
     imageUrl: card.imageUrl,
     tier: String(card.tier),
     anime: card.animeName || '',
-    price: priceNum
+    price: priceNum,
+    addedAt: Date.now()
   };
   await saveEShopDeck();
   return {
@@ -1513,6 +1514,7 @@ async function eshopSetPrice(slot, price) {
  * Anyone can use this.
  */
 async function eshopBuy(senderJid, slot) {
+  await syncEshopSold();
   const inst = getInst();
   if (slot < 1 || slot > 16) {
     return { success: false, message: '❌ Slot must be 1-16.' };
@@ -1578,10 +1580,32 @@ async function eshopBuy(senderJid, slot) {
 }
 
 /**
+ * 💡 2026-10-29 (owner: "when someone buys it should just automatically be locked"): event cards only enter
+ * circulation through the shop, so any unsold slot whose card already has an owner (created after the slot
+ * was stocked, when we know when that was) is marked SOLD automatically - covers purchases made before the
+ * sold-once rule existed. Runs whenever the shop is viewed or a buy is attempted.
+ */
+async function syncEshopSold() {
+  const inst = getInst();
+  let changed = false;
+  for (const e of inst.eshopDeck) {
+    if (!e || e.sold) continue;
+    try {
+      const q = { cardId: e.cardId };
+      if (e.addedAt) q.createdAt = { $gte: new Date(e.addedAt - 1000) };
+      const owner = await UserCard.findOne(q).select('userId createdAt').lean();
+      if (owner) { e.sold = true; e.soldTo = owner.userId; e.soldAt = owner.createdAt ? new Date(owner.createdAt).getTime() : Date.now(); changed = true; }
+    } catch (err) { /* DB hiccup: leave the slot on sale */ }
+  }
+  if (changed) await saveEShopDeck();
+}
+
+/**
  * Generate the eShop deck image via the Go Image Service.
  * Returns a PNG buffer.
  */
 async function generateEShopDeckImage() {
+  await syncEshopSold();
   const inst = getInst();
   const cards = inst.eshopDeck
     .map((entry, i) => entry ? { slot: i + 1, ...entry } : null)
@@ -1636,6 +1660,7 @@ const eshopFlexLastRun = new Map(); // chatId -> ts
 async function eshopFlexView(senderJid, reply, chatId, startSlot, endSlot) {
   const p = P();
   const inst = getInst();
+  await syncEshopSold();
   const now = Date.now();
   const single = startSlot === endSlot;
   // only the bulk burst gets throttled — a one-card peek is a normal 1-message view
