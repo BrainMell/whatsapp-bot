@@ -3506,6 +3506,7 @@ async function cmdT2CDeck(senderJid, reply, args = []) {
     results.push(`✅ *${card?.cardName ?? uc.cardId}* → Slot #${nextSlot}`);
   }
   await targetDeck.save();
+  await renumberCustomDeckSlots(targetDeck); // 💡 UPGRADE 2026-10-29: keep stored slots aligned
 
   const header = uniqueIndices.length === 1
     ? `✅ Card moved to custom deck *"${targetDeck.name}"*!`
@@ -3855,6 +3856,7 @@ async function cmdT2CColl(senderJid, reply, args = []) {
   }
 
   await targetDeck.save();
+  await renumberCustomDeckSlots(targetDeck); // 💡 UPGRADE 2026-10-29: keep stored slots aligned after removals
 
   // Re-sort results ascending for display
   results.sort((a, b) => {
@@ -4610,14 +4612,18 @@ async function cmdMergeAll(senderJid, reply) {
 }
 
 async function cmdListDecks(senderJid, reply) {
+  const p = P();
   const decks = await CardDeck.find({ ...(await ownerOf(senderJid)) });
   if (decks.length === 0) return reply(`📭  *NO CUSTOM DECKS*\n\n💡 ⟢ _Create one with_ _.create deck <name>_`);
 
-  let msg = `📂 *YOUR CUSTOM DECKS*\n\n`;
+  // 💡 UPGRADE 2026-10-29: totals line + next-step hints (was a bare name/count list).
+  const totalCards = decks.reduce((n, d) => n + d.cards.length, 0);
+  let msg = `📂 *YOUR CUSTOM DECKS*\n`;
+  msg += `🃏 ⟢ *${decks.length}* deck${decks.length === 1 ? '' : 's'} · *${totalCards}* card${totalCards === 1 ? '' : 's'} stored\n\n`;
   decks.forEach((d, i) => {
-    msg += `*${i + 1}.* ${d.name} (${d.cards.length} cards)\n`;
+    msg += `*${i + 1}.* ${d.name} — ${d.cards.length} card${d.cards.length === 1 ? '' : 's'}\n`;
   });
-
+  msg += `\n💡 ⟢ _Open:_ \`${p} cdeck <name>\` · _Fill:_ \`${p} cdeck <name> add <coll#>\``;
   return reply(msg);
 }
 
@@ -4644,10 +4650,56 @@ async function cmdCreateDeck(senderJid, reply, args = [], isMod = false, m = {})
   }
 }
 
+// 💡 UPGRADE 2026-10-29: after any structural edit to a custom deck's card
+// array (add/remove/t2cdeck/t2ccoll), re-stamp customDeckSlot on every
+// remaining card so stored slots always equal array position + 1. Previously
+// removals left gaps (slot 3 gone but 4/5 kept old numbers) and .coll card
+// detail lines showed phantom slot numbers.
+async function renumberCustomDeckSlots(deck) {
+  try {
+    for (let i = 0; i < deck.cards.length; i++) {
+      const uc = await UserCard.findById(deck.cards[i]).catch(() => null);
+      if (uc && uc.customDeckSlot !== i + 1) {
+        uc.customDeckSlot = i + 1;
+        await uc.save().catch(() => {});
+      }
+    }
+  } catch (e) { console.error('[cardSystem] renumberCustomDeckSlots failed:', e.message); }
+}
+
 async function cmdCDeck(senderJid, reply, chatId, args = []) {
   const p = P();
-  
-  if (!args[0]) return sendUsage(reply, `${p} cdeck`, `${p} cdeck <name> [slot]`, `${p} cdeck <name> remove <slot>`);
+  const inst = getInst();
+
+  // 💡 UPGRADE 2026-10-29 (owner: "custom deck seems somewhat outdated — fix
+  // it, update the commands, usage, sub commands and functionality, place it
+  // in the menu"): cdeck now matches the main-deck experience — hybrid
+  // animated grid renders (same --anim/--static flags + per-user render
+  // preference as .deck/.coll), a new `add` subcommand for collection→deck
+  // straight from the deck view, slot renumbering after every edit so stored
+  // slot numbers never go stale, and a menu category of its own.
+  let useHybridAnim;
+  const animFlagIdx = args.findIndex(a => a === '--anim' || a === '-a' || a === '--animated');
+  const staticFlagIdx = args.findIndex(a => a === '--static' || a === '-s');
+  if (animFlagIdx !== -1) {
+    useHybridAnim = true;
+    args.splice(animFlagIdx, 1);
+    console.log(`🃏 [cmdCDeck] --anim flag (one-shot override) → hybrid`);
+  } else if (staticFlagIdx !== -1) {
+    useHybridAnim = false;
+    args.splice(staticFlagIdx, 1);
+    console.log(`🃏 [cmdCDeck] --static flag (one-shot override) → static`);
+  } else {
+    const mode = await getUserRenderMode(senderJid);
+    useHybridAnim = (mode === 'hybrid');
+  }
+
+  if (!args[0]) return sendUsage(
+    reply,
+    `${p} cdeck`,
+    `${p} cdeck <name> [slot] — open a deck (or one card in it)\n• Add cards: ${p} cdeck <name> add <coll#> [coll#...]\n• Remove a card: ${p} cdeck <name> remove <slot>\n• Render: ${p} cdeck <name> --anim / --static\n• Manage: ${p} create deck · ${p} list decks · ${p} rename deck · ${p} delete deck`,
+    `${p} cdeck Waifus\n${p} cdeck Waifus add 3 7\n${p} cdeck Waifus remove 2`
+  );
 
   // Check for 'remove' subcommand
   // .j cdeck <name> remove <slot>
@@ -4674,8 +4726,44 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
     
     deck.cards.splice(slot - 1, 1);
     await deck.save();
+    await renumberCustomDeckSlots(deck); // 💡 UPGRADE 2026-10-29: keep stored slots aligned
     
     return reply(`✅  *CARD REMOVED!*\n\n🃏 ⟢ *Deck:* _"${deck.name}"_\n🔢 ⟢ *Slot:* _#${slot}_\n\n📦 ⟢ _Returned to your collection_`);
+  }
+
+  // 💡 NEW SUBCOMMAND (UPGRADE 2026-10-29): .j cdeck <name> add <coll#> [coll#...]
+  // Adds card(s) straight from your collection (same numbering as .coll —
+  // excludes main-deck/custom-deck/market/auction cards) into this deck.
+  // Parity with `remove`; the old flow forced users over to `t2cdeck` and
+  // that was never advertised in the usage text.
+  const addIndex = args.findIndex(a => a.toLowerCase() === 'add');
+  if (addIndex !== -1 && args.length > addIndex + 1) {
+    const deckName = args.slice(0, addIndex).join(' ').trim();
+    const collIdxs = [...new Set(args.slice(addIndex + 1).map(a => parseInt(a)).filter(n => n > 0))];
+    if (!deckName || !collIdxs.length) return reply(`❌ Usage: \`${p} cdeck <name> add <coll#> [coll#...]\``);
+
+    const deck = await CardDeck.findOne({ ...(await ownerOf(senderJid)), name: { $regex: new RegExp(`^${escapeRegex(deckName)}$`, 'i') } });
+    if (!deck) return reply(`❌  *DECK NOT FOUND*\n\n🃏 ⟢ *Deck:* _"${deckName}"_`);
+
+    const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false }).sort({ createdAt: 1 });
+    const results = [];
+    for (const idx of collIdxs) {
+      const uc = owned[idx - 1];
+      if (!uc) { results.push(`❌ #${idx} - not found in collection`); continue; }
+      uc.inCustomDeck = true;
+      uc.customDeckName = deck.name;
+      uc.customDeckSlot = deck.cards.length + 1;
+      await uc.save();
+      deck.cards.push(uc._id);
+      const card = CARD_INDEX()[uc.cardId];
+      results.push(`✅ *${card?.cardName ?? uc.cardId}* → Slot #${uc.customDeckSlot}`);
+    }
+    await deck.save();
+    await renumberCustomDeckSlots(deck); // keep stored slots aligned after edits
+
+    const okCount = results.filter(r => r.startsWith('✅')).length;
+    const header = collIdxs.length === 1 ? `✅  *CARD ADDED!*\n\n🃏 ⟢ *Deck:* _"${deck.name}"_` : `✅  *${okCount} CARDS ADDED!*\n\n🃏 ⟢ *Deck:* _"${deck.name}"_`;
+    return reply(`${header}\n\n${results.join('\n')}\n\n💡 ⟢ _Open it:_ \`${p} cdeck ${deck.name}\``);
   }
 
   // Try to parse slot if last arg is a number
@@ -4733,35 +4821,61 @@ async function cmdCDeck(senderJid, reply, chatId, args = []) {
 
   if (deck.cards.length === 0) return reply(`📭  *DECK EMPTY*\n\n🃏 ⟢ *Deck:* _"${name}"_\n📍 ⟢ _No cards in this deck yet_`);
 
-  let msg = `📂 *CUSTOM DECK | ${deck.name.toUpperCase()}*\n\n`;
+  let msg = `📂 *CUSTOM DECK | ${deck.name.toUpperCase()}*\n`;
+  msg += `🃏 ⟢ *${deck.cards.length}* card${deck.cards.length === 1 ? '' : 's'}\n\n`;
   const ownedCards = [];
   for (let i = 0; i < deck.cards.length; i++) {
     const uc = await UserCard.findById(deck.cards[i]);
     if (uc) {
       const card = CARD_INDEX()[uc.cardId];
-      msg += `*${i + 1}.* ${card?.cardName || 'Unknown'} (${card?.tier || '?'})\n`;
+      // 💡 UPGRADE 2026-10-29: rows now use the house field emojis (matching
+      // main .deck rows) with series + tier label — was bare "Name (tier)".
+      const tierLabel = String(TIER_LABEL[String(card?.tier)] || `TIER ${card?.tier ?? '?'}`).replace(/\s+/g, ' ').trim();
+      msg += `*${i + 1}.* 🏷️⟢ _${card?.cardName || 'Unknown'}_\n     📺 ⟢ _${card?.animeName || 'Unknown'}_ · 🏆 ⟢ _${tierLabel}_\n`;
       ownedCards.push(uc);
     }
   }
-  msg += `\n💡 Use \`${p} cdeck ${deck.name} <slot>\` for details.`;
+  msg += `\n💡 ⟢ _Detail:_ \`${p} cdeck ${deck.name} <slot>\` · _Insert:_ \`add <coll#>\` · _Free:_ \`remove <slot>\``;
 
-  // GIF generation for custom deck (Top 6)
+  // 💡 UPGRADE 2026-10-29: hybrid animated grid (was static-only generateCardGrid
+  // with a mode-blind cache). Same engine as .deck/.coll — MP4 when the deck
+  // holds animated cards, styled PNG otherwise; per-user render preference and
+  // one-shot --anim/--static flags honored; both modes cached separately.
   const topCards = getTopCards(ownedCards);
   const imageUrls = getTopImageUrls(topCards);
   if (imageUrls.length > 0) {
     const currentHash = getDeckHash(topCards);
-    const cached = gifCache.decks.get(`${senderJid}_${deck.name}`);
-    
+    const cacheKey = `${senderJid}_${deck.name}`;
+    const cached = gifCache.decks.get(cacheKey);
+    const modeKey = useHybridAnim ? 'hybrid' : 'static';
+
     let gifBuffer;
-    if (cached && cached.hash === currentHash && (Date.now() - (cached.ts || 0)) < GIF_CACHE_TTL_MS) {
-        gifBuffer = cached.buffer;
+    let hybridContentType = null;
+    if (cached && cached.hash === currentHash && cached.mode === modeKey && (Date.now() - (cached.ts || 0)) < GIF_CACHE_TTL_MS) {
+      gifBuffer = cached.buffer;
+      hybridContentType = cached.contentType || null;
+    } else if (useHybridAnim) {
+      const hybridResult = await goService.generateHybridGrid(imageUrls, `DECK: ${deck.name.toUpperCase()}`);
+      if (hybridResult) {
+        gifBuffer = hybridResult.buffer;
+        hybridContentType = hybridResult.contentType;
+        const animFlagCount = imageUrls.filter(u => u && u.animated).length;
+        if (animFlagCount > 0 && hybridContentType && !hybridContentType.includes('video')) {
+          console.log(`⚠️ [cmdCDeck] hybrid PNG fallback despite ${animFlagCount} animated card(s) - check go service [HybridGrid] logs`);
+        }
+        gifCache.decks.set(cacheKey, { hash: currentHash, buffer: gifBuffer, mode: modeKey, contentType: hybridContentType, ts: Date.now() });
+      }
     } else {
-        gifBuffer = await goService.generateCardGrid(imageUrls, `DECK: ${deck.name.toUpperCase()}`);
-        if (gifBuffer) gifCache.decks.set(`${senderJid}_${deck.name}`, { hash: currentHash, buffer: gifBuffer, ts: Date.now() });
+      gifBuffer = await goService.generateCardGrid(imageUrls, `DECK: ${deck.name.toUpperCase()}`);
+      if (gifBuffer) gifCache.decks.set(cacheKey, { hash: currentHash, buffer: gifBuffer, mode: modeKey, ts: Date.now() });
     }
 
     if (gifBuffer) {
-        return await getInst().sock_ref.sendMessage(chatId, { image: gifBuffer, caption: msg });
+      const isVideo = useHybridAnim && hybridContentType && hybridContentType.includes('video');
+      if (isVideo) {
+        return await inst.sock_ref.sendMessage(chatId, { video: gifBuffer, gifPlayback: true, caption: msg });
+      }
+      return await inst.sock_ref.sendMessage(chatId, { image: gifBuffer, caption: msg });
     }
   }
 

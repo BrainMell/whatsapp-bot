@@ -6904,6 +6904,7 @@ What to do:
 
       PROGRESSION: "📈",
       CARDS: "🃏",
+      "CUSTOM DECKS": "🗂️",
       ECONOMY: "💰",
 
       GAMBLING: "🎰",

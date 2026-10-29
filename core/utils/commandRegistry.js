@@ -325,7 +325,6 @@ const COMMAND_REGISTRY = {
     { cmd: 'series', desc: 'Browse every card in a series: grouped by tier, shows card + maker, paginated.', usage: 'series <series> [--page n]' },
     { cmd: 'deck', desc: 'View deck. Use .deck <slot> for details.', usage: 'deck [slot]' },
     { cmd: 't2deck', desc: 'Move a card from collection to main deck.', usage: 't2deck <coll#>' },
-    { cmd: 't2cdeck', desc: 'Move a card from collection to a custom deck.', usage: 't2cdeck <coll#> <deck_name>' },
     { cmd: 't2coll', desc: 'Move a card from main deck back to collection.', usage: 't2coll <deck#>' },
     { cmd: 'swap card', desc: 'Rearrange cards in your main deck.', usage: 'swap card <a> and <b>' },
     { cmd: 'buycard', desc: 'Browse the card market or buy a listing.', usage: 'buycard [n]' },
@@ -350,7 +349,6 @@ const COMMAND_REGISTRY = {
     { cmd: 'tokens', desc: 'Check your event token balance and the event status.', usage: 'tokens' },
     { cmd: 'tcoll', desc: 'True collection: every card you own across all decks, tier view.', usage: 'tcoll [tier]' },
     { cmd: 'ecoll', desc: 'Event collection grouped by tier.', usage: 'ecoll' },
-    { cmd: 't2ccoll', desc: 'Move cards from a custom deck back to your collection.', usage: 't2ccoll <slot> [slot2]... <deck_name>' },
     { cmd: 'fc', desc: 'Find a card by name or ID across your decks and collection.', usage: 'fc <card_name/id>' },
     { cmd: 'escc', desc: 'Search event (Tier S) cards by series name.', usage: 'escc <series> [--page n]' },
     { cmd: 'cardlb', desc: 'Card leaderboard: top collectors overall or per tier. (Alias: clb)', usage: 'cardlb [tier 1-7]' },
@@ -359,12 +357,20 @@ const COMMAND_REGISTRY = {
     { cmd: 'unlistitem', desc: 'Cancel your item market listing. (Alias: uli)', usage: 'unlistitem <listingId|#>' },
     { cmd: 'buyitem', desc: 'Buy a listing from the player item market. (Alias: bi)', usage: 'buyitem <listingId|#>' },
     { cmd: 'accept', desc: 'Confirm a pending action (like burning a card).', usage: 'accept' },
-    { cmd: 'decline', desc: 'Cancel a pending action.', usage: 'decline' },
-    { cmd: 'list decks', desc: 'List all your custom card decks.', usage: 'list decks' },
+    { cmd: 'decline', desc: 'Cancel a pending action.', usage: 'decline' }
+  ],
+  // 💡 UPGRADE 2026-10-29 (owner: "place it in the menu"): custom decks got
+  // their own menu category instead of being scattered at the bottom of CARDS.
+  'CUSTOM DECKS': [
     { cmd: 'create deck', desc: 'Create a new custom card deck.', usage: 'create deck <name>' },
-    { cmd: 'cdeck', desc: 'View or remove cards from a custom deck.', usage: 'cdeck <name> [slot] or cdeck <name> remove <slot>' },
+    { cmd: 'list decks', desc: 'List all your custom decks with card counts.', usage: 'list decks' },
+    { cmd: 'cdeck', desc: 'Open a custom deck — hybrid animated grid, card detail, add/remove cards.', usage: 'cdeck <name> [slot] | cdeck <name> add <coll#>... | cdeck <name> remove <slot>' },
+    { cmd: 'cdeck add', desc: 'Move card(s) from your collection into the deck (same numbering as .coll).', usage: 'cdeck <name> add <coll#> [coll#...]' },
+    { cmd: 'cdeck remove', desc: 'Move a card from the deck back to your collection.', usage: 'cdeck <name> remove <slot>' },
+    { cmd: 't2cdeck', desc: 'Move card(s) from your collection into a custom deck.', usage: 't2cdeck <coll#> [coll#...] <deck_name>' },
+    { cmd: 't2ccoll', desc: 'Move card(s) from a custom deck back to your collection.', usage: 't2ccoll <slot> [slot...] <deck_name>' },
     { cmd: 'rename deck', desc: 'Rename one of your custom decks.', usage: 'rename deck <old> | <new>' },
-    { cmd: 'delete deck', desc: 'Delete a custom deck (Cards are returned to collection).', usage: 'delete deck <name>' }
+    { cmd: 'delete deck', desc: 'Delete a custom deck (cards return to your collection).', usage: 'delete deck <name>' }
   ],
   FUN: [
     { cmd: 'joke', desc: 'Get a random funny joke.', usage: 'joke' },
