@@ -1,5 +1,34 @@
 {
   "_readme": "See README_SWAP.md. Add sprite sets under 'sets', then point effect layers at them under 'overrides'. Empty = built-in procedural effects.",
-  "sets": {},
-  "overrides": {}
+  "sets": {
+    "planet_hit": {
+      "files": ["packs/planets/planet_hit_1.png", "packs/planets/planet_hit_2.png", "packs/planets/planet_hit_3.png", "packs/planets/planet_hit_4.png", "packs/planets/planet_hit_5.png", "packs/planets/planet_hit_6.png"],
+      "fps": 3
+    },
+    "lava_world": { "files": ["packs/planets/lava_world.png"], "fps": 1 },
+    "void_world": { "files": ["packs/planets/void_world.png"], "fps": 1 },
+    "blackhole_art": { "files": ["packs/void/blackhole.png"], "fps": 1 },
+    "ink": {
+      "files": ["packs/void/ink_1.png", "packs/void/ink_2.png", "packs/void/ink_3.png", "packs/void/ink_4.png", "packs/void/ink_5.png", "packs/void/ink_6.png", "packs/void/ink_7.png", "packs/void/ink_8.png"],
+      "fps": 12
+    },
+    "gate_blue": {
+      "files": ["packs/void/gate_blue_1.png", "packs/void/gate_blue_2.png", "packs/void/gate_blue_3.png", "packs/void/gate_blue_4.png", "packs/void/gate_blue_5.png", "packs/void/gate_blue_6.png", "packs/void/gate_blue_7.png", "packs/void/gate_blue_8.png"],
+      "fps": 12
+    },
+    "gate_blood": {
+      "files": ["packs/void/gate_blood_1.png", "packs/void/gate_blood_2.png", "packs/void/gate_blood_3.png", "packs/void/gate_blood_4.png", "packs/void/gate_blood_5.png", "packs/void/gate_blood_6.png", "packs/void/gate_blood_7.png", "packs/void/gate_blood_8.png"],
+      "fps": 12
+    }
+  },
+  "overrides": {
+    "cosmic@MAGE": { "set": "planet_hit", "loop": false },
+    "world@lava": { "set": "lava_world" },
+    "world@void": { "set": "void_world" },
+    "cinema@ARCHMAGE": { "set": "blackhole_art", "fit": "contain" },
+    "cinema@KAGE": { "set": "ink", "fit": "cover", "alpha": 0.94 },
+    "cinema@VOIDWALKER": { "set": "gate_blue", "fit": "cover" },
+    "cinema@WARLOCK": { "set": "gate_blood", "fit": "cover" },
+    "blackhole": { "set": "blackhole_art", "w": 240, "add": false }
+  }
 }

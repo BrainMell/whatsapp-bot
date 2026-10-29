@@ -21,3 +21,10 @@ Fetched from the public CC0 collection https://github.com/series-ai/jam-ready-as
 - `clock/face_1..12.png` — "Clock animation" by AntumDeluge (https://opengameart.org/content/clock-animation). CC0. 12-frame ticking face used by the Time Stop magic clock.
 - `clock/mandala_1..7.png` — "Cosmic Time - Magic Effect" by cethiel (https://opengameart.org/content/cosmic-time-magic-effect). CC0. 7 sampled frames of the 25-frame mandala; halo behind the clock face.
 - `dragon/dragon_1..6.png` (inverted variant `dragon_head_inv`) — same cethiel CC0 pack as above; the DRAGON_LORD ultimate reads the pixel-inverted frames (inversion applied in-engine at load, source files untouched).
+
+## Task 30b additions (owner asset hunt: strange planet / space / void / little animations, 2026-10-29)
+
+- `packs/planets/magma.png`, `packs/planets/voidball.png`, `packs/planets/planet_hit_1..6.png`, `packs/planets/lava_world.png`, `packs/planets/void_world.png` — base planets "2D Planet OGA pack 2" by phoenix1291 (https://opengameart.org/content/2d-planet-oga-pack-2). **CC0**. planet_hit adds a procedurally drawn starfield + limb glow + fire2/blast impact frame (bake: scripts/bake_void_packs.py); lava_world/void_world are equator-band closeups under a code-drawn ember sky.
+- `packs/void/blackhole.png` — crop (black sphere + accretion disk) from "Some Suns, White/Brown Dwarf, Pulsar and Black Hole" by Varkalandar / Hansjörg Malthaner (https://opengameart.org/content/some-suns-whitebrown-dwarf-pulsar-and-black-hole). **CC-BY 3.0**. Attribution: "black hole art by Varkalandar (opengameart.org), licensed under CC-BY 3.0".
+- `packs/void/ink_1..8.png` — "Smoke Aura" by Beast (https://opengameart.org/content/smoke-aura). **CC0**. 8 of 30 frames from the 6x5 sheet, tinted dark violet in the bake.
+- `packs/void/gate_blue_1..8.png`, `packs/void/gate_blood_1..8.png` — "Animated Portal or Wormhole, several Variants" by Varkalandar (https://opengameart.org/content/animated-portal-or-wormhole-several-variants), variants 5 (blue) and 6 (crimson), 8 of 64 frames each. **CC-BY 4.0**. Attribution: "wormhole art by Varkalandar (opengameart.org), licensed under CC-BY 4.0".
