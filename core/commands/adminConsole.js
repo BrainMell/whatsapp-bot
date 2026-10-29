@@ -16,6 +16,7 @@
 
 const { randomUUID } = require('crypto');
 const { generateWAMessageFromContent } = require('@whiskeysockets/baileys');
+const { handleProtoLab } = require('./protoLab');
 const economy = require('../rpg/economy');
 const progression = require('../rpg/progression');
 const classSystem = require('../rpg/classSystem');
@@ -245,6 +246,11 @@ function parseAdminNumber(raw) {
 
 async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix, getMentionOrReply) {
     const sub = args[0]?.toLowerCase();
+
+    // Research-only WhatsApp message-format experiments.
+    if (sub === 'proto' || sub === 'protomenu') {
+        return handleProtoLab(sock, chatId, senderJid, sub === 'protomenu' ? ['menu'] : args.slice(1), BOT_MARKER);
+    }
     // EXPERIMENTAL: HTML-rich mod menu prototype. This uses Meta's
     // undocumented FOAHtmlPrimitiveDemoDONOTUSE response primitive.
     // Keep isolated behind an explicit command until rendering is verified.
