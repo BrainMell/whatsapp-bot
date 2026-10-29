@@ -1521,6 +1521,10 @@ async function eshopBuy(senderJid, slot) {
   if (!entry) {
     return { success: false, message: `❌ Slot ${slot} is empty.` };
   }
+  // 💡 2026-10-29 (owner): every token-event card sells ONCE - after that the slot stays on the grid with a SOLD stamp
+  if (entry.sold) {
+    return { success: false, message: `🛑 *SOLD OUT* - *${entry.cardName}* (slot ${slot}) was already bought. Event cards only sell once.` };
+  }
 
   const balance = economy.getEventTokens(senderJid); // 💡 47-l2: no registration gate
   if (balance < entry.price) {
@@ -1535,6 +1539,8 @@ async function eshopBuy(senderJid, slot) {
   if (!deducted) {
     return { success: false, message: '❌ Failed to deduct tokens. Try again.' };
   }
+  // claim the card synchronously (no await since the entry.sold check above) so two buyers can never both get it
+  entry.sold = true; entry.soldTo = senderJid; entry.soldAt = Date.now();
 
   // Grant the card to the user
   try {
@@ -1551,6 +1557,7 @@ async function eshopBuy(senderJid, slot) {
     const copyNumber = (updatedStat && updatedStat.totalCirculation) || (stat.totalCirculation + 1);
     await UserCard.create({ userId: senderJid, cardId: entry.cardId, copyNumber });
 
+    await saveEShopDeck();   // persist the SOLD flag
     const newBalance = economy.getEventTokens(senderJid); // 💡 47-l2
     return {
       success: true,
@@ -1564,6 +1571,7 @@ async function eshopBuy(senderJid, slot) {
   } catch (err) {
     // Roll back the token deduction if card grant failed
     economy.addEventTokens(senderJid, entry.price); // 💡 47-l2: refund bypasses the gate too
+    delete entry.sold; delete entry.soldTo; delete entry.soldAt;   // card goes back on sale
     console.error('[eShop Buy Error]', err);
     return { success: false, message: '❌ Purchase failed - tokens refunded.' };
   }
@@ -1587,7 +1595,8 @@ async function generateEShopDeckImage() {
 
   try {
     const result = await goService.generateEShopDeck(payload);
-    return result;
+    // SOLD stamps + WebM posters (Go can't draw those) - see utils/eshopStamp.js
+    return result ? await require('../utils/eshopStamp').decorate(result, cards) : result;
   } catch (err) {
     console.error('[eShop] Image generation failed:', err.message);
     return null;
@@ -1669,6 +1678,10 @@ async function eshopFlexView(senderJid, reply, chatId, startSlot, endSlot) {
 
   const failed = [];
   for (const entry of entries) {
+    if (entry.sold) {   // one purchase per event card: no art, just the stamp
+      try { await reply(`🛑 *#${entry.slot} — ${entry.cardName}* · *SOLD*\n_Already bought - event cards only sell once._`); } catch (e) { /* cosmetic */ }
+      continue;
+    }
     try {
       // Same fetch contract as every other single-card path (spawn/summon/info)
       const res = await axios.get(entry.imageUrl, { responseType: 'arraybuffer', timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
@@ -3533,7 +3546,7 @@ async function cmdEShop(senderJid, reply, chatId, args = [], isMod = false) {
       `━━━━━━━━━━━━━━━\n` +
       `🎫 Your Tokens: *${tokenBalance}*\n` +
       `📊 Event Status: ${eventActive ? '🟢 ACTIVE' : '🔴 INACTIVE'}\n` +
-      `📦 Cards Available: *${filledSlots}/16*\n\n` +
+      `📦 Cards Available: *${inst.eshopDeck.filter(e => e && !e.sold).length}/${filledSlots}* (sold cards are stamped)\n\n` +
       `💡 Use \`${p} eshop buy <slot_number>\` to purchase.`;
     try {
       return await getInst().sock_ref.sendMessage(chatId, { image: imageBuffer, caption });
@@ -3547,7 +3560,7 @@ async function cmdEShop(senderJid, reply, chatId, args = [], isMod = false) {
   msg += `🎫 Your Tokens: *${economy.getEventTokens(senderJid)}*\n\n`; // 💡 47-l2
   inst.eshopDeck.forEach((entry, i) => {
     if (entry) {
-      msg += `*${i + 1}.* ${entry.cardName} (T${entry.tier})\n   🎫 Price: ${entry.price} tokens\n   📺 ${entry.anime}\n\n`;
+      msg += `*${i + 1}.* ${entry.cardName} (T${entry.tier})${entry.sold ? ' — 🛑 *SOLD*' : ''}\n   🎫 Price: ${entry.price} tokens\n   📺 ${entry.anime}\n\n`;
     }
   });
   msg += `💡 Use \`${p} eshop buy <slot_number>\` to purchase.`;
@@ -5822,6 +5835,16 @@ async function cmdT2EDeck(senderJid, reply, args, isOwner, isMod, chatId) {
     return reply(result.message);
   }
 
+  // 💡 2026-10-29: mark a slot SOLD / back on sale by hand (e.g. a card bought before the sold-once rule existed)
+  if (sub === 'sold' || sub === 'unsold') {
+    const slot = parseInt(args[1]);
+    const inst = getInst(), entry = inst.eshopDeck[slot - 1];
+    if (isNaN(slot) || !entry) return reply(`❌ Usage: \`${p} t2edeck ${sub} <slot 1-16>\` (slot must hold a card)`);
+    if (sub === 'sold') { entry.sold = true; entry.soldAt = Date.now(); } else { delete entry.sold; delete entry.soldTo; delete entry.soldAt; }
+    await saveEShopDeck();
+    return reply(`✅ Slot ${slot} (*${entry.cardName}*) is now ${sub === 'sold' ? '🛑 SOLD' : '🟢 on sale'}.`);
+  }
+
   if (sub === 'remove') {
     const slot = parseInt(args[1]);
     if (isNaN(slot)) {
@@ -5865,6 +5888,7 @@ async function cmdT2EDeck(senderJid, reply, args, isOwner, isMod, chatId) {
     caption += `➥ \`${p} t2edeck add <slot> <cardId> <price>\`\n`;
     caption += `➥ \`${p} t2edeck remove <slot>\`\n`;
     caption += `➥ \`${p} t2edeck price <slot> <price>\`\n`;
+    caption += `➥ \`${p} t2edeck sold|unsold <slot>\`\n`;
     caption += `➥ \`${p} t2edeck clear\``;
     try {
       // 💡 FIX 2026-08-31: `reply` is a plain function - reply._chatId /

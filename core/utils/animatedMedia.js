@@ -126,7 +126,7 @@ async function webmPoster(buf) {
   const outPath = path.join(CACHE_DIR, `${sha}.poster.png`);
   fs.writeFileSync(srcPath, buf);
   try {
-    await runFfmpeg(['-y', '-i', srcPath, '-frames:v', '1', '-vf', 'scale=540:-2', tmpPath], POSTER_TIMEOUT_MS);
+    await runFfmpeg(['-y', '-i', srcPath, '-frames:v', '1', '-vf', 'scale=540:-2', '-f', 'image2', '-c:v', 'png', tmpPath], POSTER_TIMEOUT_MS);
     if (!fs.statSync(tmpPath).size) throw new Error('ffmpeg produced an empty poster');
     fs.renameSync(tmpPath, outPath);
     stats.posterHits += 0; // first extraction counts as a conversion, not a hit
