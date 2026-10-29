@@ -535,7 +535,10 @@ async function loadRoles() {
 // ═══════════════════════════════════════════════════════════════════════
 const PRE_DROP_ALERT = {
   leadMs: 60 * 1000,                          // DM lands 1 minute before the drop
-  groupHints: ['escapeprive', 'omniverse'],   // folded subject match (alphanumeric only)
+  // 💡 2026-10-30: the escape GC's real subject is "espace privé" (French,
+  // folded 'espaceprive') — owner typed "escape prive", so BOTH spellings
+  // are hints. Live-verified via tokenlb roster snapshot.
+  groupHints: ['espaceprive', 'escapeprive', 'omniverse'],
 };
 const PRE_DROP_TARGETS_TTL_MS = 10 * 60 * 1000;
 const _preDropTargets = { map: new Map(), ts: 0 }; // groupJid -> subject
