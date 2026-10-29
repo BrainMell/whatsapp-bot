@@ -11,7 +11,6 @@
 // Permission gate: isOwner || isGlobalMod || isRpgMod
 // ===========================================================================
 
-const { handleProtoLab } = require('./protoLab');
 const economy = require('../rpg/economy');
 const progression = require('../rpg/progression');
 const classSystem = require('../rpg/classSystem');
@@ -221,10 +220,6 @@ function parseAdminNumber(raw) {
 async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix, getMentionOrReply) {
     const sub = args[0]?.toLowerCase();
 
-    // Research-only WhatsApp message-format experiments.
-    if (sub === 'proto' || sub === 'protomenu') {
-        return handleProtoLab(sock, chatId, senderJid, sub === 'protomenu' ? ['menu'] : args.slice(1), BOT_MARKER);
-    }
 
  // LIVE MESSAGE EDITING: send a message, then edit it in-place as
  // actions complete. Baileys supports this via { edit: messageKey }.
