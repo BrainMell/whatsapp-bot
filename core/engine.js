@@ -5273,6 +5273,29 @@ What to do:
       // 🧠 people memory v3: one dossier per PERSON (phone-resolved), old .likes/.note profiles imported once
       canonicalFn: (j) => { try { return jidNormalizedUser(lidResolver.resolveToPhone(j, configInstance.getAuthPath()) || j); } catch { return j; } },
       oldProfileFn: (j) => { try { return getUserProfile(j); } catch { return null; } },
+      // 🎮 RPG is its own system (economy + progression): turn real game numbers into roast material
+      gameFactsFn: (j) => {
+        const out = [];
+        try {
+          const u = economy.getUser(j); if (!u) return out;
+          const sh = (() => { try { return progression.getCharacterSheet(j); } catch { return null; } })();
+          const cls = sh && sh.class ? String(sh.class).replace(/_/g, " ") : (u.class && (u.class.id || u.class)) ? String(u.class.id || u.class).replace(/_/g, " ") : "";
+          const lvl = sh ? sh.level : 0;
+          if (lvl && cls) out.push(lvl <= 6 ? `still level ${lvl} ${cls}` : lvl >= 60 ? `level ${lvl} ${cls} and acts like it` : `level ${lvl} ${cls}`);
+          const w = u.pvpWins || 0, l = u.pvpLosses || 0;
+          if (l >= 3 && l > w) out.push(`pvp record ${w} wins ${l} losses`);
+          else if (w >= 8 && w > l * 2) out.push(`${w}-${l} in pvp and wont let anyone forget it`);
+          const qf = u.questsFailed || 0, qw = u.questsWon || 0;
+          if (qf >= 3 && qf > qw) out.push(`failed ${qf} quests, won ${qw}`);
+          const cash = (u.wallet || 0) + (u.bank || 0);
+          if (cash < 300) out.push("wallet is basically empty");
+          else if (cash > 2000000) out.push("sitting on a mountain of zeni and still talks like that");
+          if ((u.robberyStrikes || 0) >= 2) out.push(`caught robbing people ${u.robberyStrikes} times`);
+          if (u.jailUntil && u.jailUntil > Date.now()) out.push("currently in jail");
+          if (u.adventurerRank === "F" && (u.questsCompleted || 0) >= 15) out.push("adventurer rank F after 15+ quests");
+        } catch (_) { /* rpg data is optional */ }
+        return out.slice(0, 4);
+      },
       // 💡 REALGUY v2: the old pipeline's canonical persona line anchors the
       // prompt FIRST again ("You are Joker from Persona 5.")
       contentFn: () => botConfig.getContentDescription(),
@@ -31516,6 +31539,8 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                       user.profile = initializeUserProfile(senderJid);
                       economy.saveUser(senderJid);
                     }
+                    // 🧠 also wipe what Joker learned by watching (people memory v3 + per-chat facts)
+                    try { personaEngine.people.forget(senderJid); if (typeof personaEngine.forgetPerson === "function") personaEngine.forgetPerson(chatId, senderJid); } catch (_) {}
                     const memKey = `${senderJid}_${chatId || 'dm'}`;
                     conversationMemory.delete(memKey);
                     conversationMemory.delete(senderJid);
