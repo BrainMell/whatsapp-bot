@@ -10173,7 +10173,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   // WhatsApp group statuses arrive wrapped in
                   // groupStatusMentionMessage/groupStatusMessage(V2) - or with
                   // contextInfo.isGroupStatus after Baileys unwrapping.
-                  if (isGroupChat && !gsLockViolated && getGroupSettings(chatId).gstatusAnnounce === true && !m.key.fromMe) {
+                  if (isGroupChat && getGroupSettings(chatId).gstatusAnnounce === true && !m.key.fromMe) {
                     try {
                       const gsWrap =
                         m.message.groupStatusMentionMessage ||
