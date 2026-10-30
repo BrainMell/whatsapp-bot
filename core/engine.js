@@ -9127,6 +9127,33 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     senderJid = sandboxJid;
                   }
 
+                  // JOKER GROUP-STATUS MODERATION (always on; before the master GC gate).
+                  // Only Joker itself, the bot owner and registered global moderators are
+                  // exempt. WhatsApp group-admin status is intentionally NOT an exemption.
+                  if (String(BOT_ID || "").toLowerCase() === "joker" && isGroupChat) {
+                    try {
+                      const __gsStatusModeration = require("./utils/gstatusModeration");
+                      const __gsStatusInfo = __gsStatusModeration.inspectGroupStatus(m.message);
+                      if (__gsStatusInfo) {
+                        const __gsRawAuthor = __gsStatusModeration.resolveGroupStatusAuthor(m.key, __gsStatusInfo.contextInfo, realSenderJid || senderJid);
+                        const __gsAuthor = __gsRawAuthor ? jidNormalizedUser(__gsRawAuthor) : "";
+                        let __gsPhone = __gsAuthor;
+                        try {
+                          const __gsResolved = __gsAuthor ? resolveLidToPhone(__gsAuthor, configInstance.getAuthPath()) : null;
+                          if (__gsResolved) __gsPhone = jidNormalizedUser(__gsResolved);
+                        } catch (_) {}
+                        const __gsAllowed = isOwner || __gsStatusModeration.isAllowedGroupStatusAuthor(__gsAuthor, __gsPhone, { isOwner: _isBotOwner, isGlobalMod });
+                        if (!__gsAllowed) {
+                          const __gsStatusKey = __gsStatusModeration.buildGroupStatusRevokeKey(m.key, chatId, __gsRawAuthor);
+                          const __gsResult = await __gsStatusModeration.revokeGroupStatus(sock, chatId, __gsStatusKey);
+                          console.log("[GStatusAutoMod] rejected author=" + (__gsAuthor || "unknown") + " in " + chatId + " revoked=" + __gsResult.ok + " method=" + (__gsResult.method || "none") + (__gsResult.error ? " error=" + __gsResult.error : ""));
+                          return; // Never pass a rejected status into normal message handling.
+                        }
+                      }
+                    } catch (__gsModErr) {
+                      console.log("[GStatusAutoMod] moderation failed:", __gsModErr && (__gsModErr.message || __gsModErr));
+                    }
+                  }
                   // --- 0. REPLY HELPER ---
                   const reply = async (content, options = {}) => {
                     if (typeof content === "string")
@@ -9729,116 +9756,6 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     }
                   }
 
-                  // 3.5 🔒 GROUP STATUS LOCK (opt-in via `.gstatus lock on`).
-                  // When enabled, only "us" may post group statuses: the bot itself,
-                  // group admins, the bot owner and global mods. Anyone else's status
-                  // is auto-deleted, warned, and the member is removed at 3 strikes
-                  // (shares the standard addWarning pool, same as antilink).
-                  let gsLockViolated = false;
-                  // 💡 FIX 2026-09-22 (owner: "gstatus STILL can't do images and
-                  // videos"): GS_UNSUPPORTED used to be declared INSIDE
-                  // __gsEnsureHelpers but referenced in the pending-post catch AND
-                  // the command-media catch - both OUTSIDE its scope. Every
-                  // unsupported-media rejection then crashed the catch itself with
-                  // "ReferenceError: GS_UNSUPPORTED is not defined" instead of
-                  // telling the user what was wrong. Hoisted to per-message scope.
-                  const GS_UNSUPPORTED = '__gs_unsupported_media__';
-                  if (isGroupChat && !m.key.fromMe && getGroupSettings(chatId).gstatusLock === true) {
-                    try {
-                      const gslWrap =
-                        m.message.groupStatusMentionMessage ||
-                        m.message.groupStatusMessage ||
-                        m.message.groupStatusMessageV2;
-                      const gslCtx =
-                        m.message.extendedTextMessage?.contextInfo ||
-                        m.message.imageMessage?.contextInfo ||
-                        m.message.videoMessage?.contextInfo;
-                      const gslIs =
-                        !!gslWrap ||
-                        gslCtx?.isGroupStatus === true ||
-                        gslCtx?.isGroupStatus === 1;
-                      if (gslIs) {
-                        // 2026-09-15: ground-truth logger - every incoming group
-                        // status dumps its shape so we can compare the OFFICIAL
-                        // client's structure against what we relay ourselves.
-                        try {
-                          const __wK = m.message.groupStatusMessageV2 ? "V2" : m.message.groupStatusMessage ? "V1" : m.message.groupStatusMentionMessage ? "MENTION" : "CTX";
-                          const __inr = (m.message.groupStatusMessageV2 || m.message.groupStatusMessage || m.message.groupStatusMentionMessage || {}).message || m.message;
-                          const __iK = Object.keys(__inr).filter((k) => !/ContextInfo$/.test(k)).slice(0, 6).join("+");
-                          const __mM = __inr.imageMessage || __inr.videoMessage || __inr.audioMessage || null;
-                          const __cT = __inr.imageMessage?.contextInfo || __inr.videoMessage?.contextInfo || __inr.extendedTextMessage?.contextInfo || null;
-                          console.log(`[GStatusIn] wrap=${__wK} inner=[${__iK}] media=${__mM ? "y" : "n"} isGS=${__cT?.isGroupStatus ?? "-"} secret=${__inr.messageContextInfo?.messageSecret ? "y" : "n"} from=${String(m.key.participant || "").slice(0, 16)}`);
-                        } catch { }
-                        const gslAuthorRaw =
-                          gslCtx?.participant || m.key.participant || m.key.remoteJid;
-                        const gslAuthor = jidNormalizedUser(gslAuthorRaw || senderJid);
-                        const gslPhone = lidResolver.resolveToPhone(gslAuthor, configInstance.getAuthPath());
-                        // Admin check - prefer the O(1) Set cache, fall back to metadata scan
-                        let gslIsAdmin = false;
-                        const gslMeta = groupMetadata || await getGroupMetadata(chatId).catch(() => null);
-                        if (gslMeta) {
-                          const admSet = cachedAdminSet || buildAdminCache(chatId, gslMeta.participants);
-                          gslIsAdmin = admSet.has(gslPhone) || admSet.has(gslAuthor);
-                        }
-                        const gslExempt =
-                          gslIsAdmin ||
-                          _isBotOwner(gslAuthor) ||
-                          (typeof isGlobalMod === "function" && isGlobalMod(gslAuthor)) ||
-                          gslAuthor === jidNormalizedUser(sock?.user?.id || "");
-                        if (!gslExempt) {
-                          gsLockViolated = true;
-                          // best-effort delete - WhatsApp may refuse revoking status
-                          // protocol messages; never let a failed revoke skip the warn
-                          let gslDeleted = false;
-                          try { await sock.sendMessage(chatId, { delete: m.key }); gslDeleted = true; } catch {}
-                          // 2026-09-15 (owner: "doesn't actually remove them"):
-                          // 1) key strikes by the RESOLVED PHONE so one person
-                          // can't split counts across LIDs/devices;
-                          // 2) await the removal and REPORT failure (bot not
-                          // admin) instead of swallowing it in setTimeout.
-                          const gslStableId = (gslPhone && String(gslPhone).includes("@")) ? gslPhone : gslAuthor;
-                          const gslCount = addWarning(gslStableId, chatId, "Group-status lock violation");
-                          const gslName = `@${String(gslAuthor).split("@")[0].split(":")[0]}`;
-                          if (gslCount >= 3) {
-                            let gslRemoved = false;
-                            let gslRemoveErr = "";
-                            try {
-                              await sock.groupParticipantsUpdate(chatId, [gslAuthor], "remove");
-                              gslRemoved = true;
-                            } catch (gslRE) {
-                              gslRemoveErr = (gslRE && gslRE.message) || String(gslRE || "unknown");
-                            }
-                            await sock.sendMessage(chatId, {
-                              text: BOT_MARKER + `🔒 *GROUP STATUS VIOLATION*
-
-*User:* ${gslName}
-*Action:* ${gslRemoved ? "REMOVED ✅" : "REMOVAL FAILED ❌ - _I need to be an admin to remove members_"}
-*Strikes:* ${gslCount}/3
-
-_Only admins can post group statuses here._`,
-                              mentions: [gslAuthor],
-                            });
-                            console.log(`[GStatusLock] ${gslStableId} strike ${gslCount}/3 in ${chatId} removed=${gslRemoved}${gslRemoved ? "" : " err=" + gslRemoveErr}`);
-                          } else {
-                            await sock.sendMessage(chatId, {
-                              text: BOT_MARKER + `🔒 *GROUP STATUS NOT ALLOWED*
-
-*User:* ${gslName}
-${gslDeleted ? "*Status:* revoke sent (WhatsApp may keep it visible)" : "*Status:* removal not permitted by WhatsApp"}
-*Strikes:* ${gslCount}/3
-
-_Only admins can post group statuses here. 3 strikes = removal._`,
-                              mentions: [gslAuthor],
-                            });
-                          }
-                          console.log(`[GStatusLock] ${gslAuthor} strike ${gslCount}/3 in ${chatId} (deleted=${gslDeleted})`);
-                        }
-                      }
-                    } catch (gslErr) {
-                      console.log("[GStatusLock] failed:", gslErr?.message || gslErr);
-                    }
-                  }
-
                   // ── Group-status media helpers (defined once per process) ──
                   const __gsEnsureHelpers = () => {
                     if (globalThis.__gsHelpers) return globalThis.__gsHelpers;
@@ -10133,21 +10050,8 @@ _Only admins can post group statuses here. 3 strikes = removal._`,
                         try { _fs.mkdirSync(_path.dirname(GS_FILE), { recursive: true }); _fs.writeFileSync(GS_FILE, JSON.stringify(Object.fromEntries(globalThis.__gsMineLoad()))); } catch (e) { console.log("[GStatus] persist failed:", e?.message); }
                       };
                       globalThis.__gsRevoke = async (sock2, chatId2, key) => {
-                        const revokeMsg = { protocolMessage: { key, type: 0 } };       // 0 = REVOKE
-                        try {
-                          const id2 = require("@whiskeysockets/baileys").generateMessageID();
-                          const secret = require("crypto").randomBytes(32);
-                          await sock2.relayMessage(chatId2, {
-                            messageContextInfo: { messageSecret: secret },
-                            groupStatusMessageV2: { message: { ...revokeMsg, messageContextInfo: { messageSecret: secret } } },
-                          }, { messageId: id2 });
-                          return true;
-                        } catch (e1) {
-                          console.log("[GStatus] wrapped revoke failed, trying plain delete:", e1?.message);
-                        }
-                        try { await sock2.sendMessage(chatId2, { delete: key }); return true; } catch (e2) {
-                          console.log("[GStatus] plain delete failed:", e2?.message); return false;
-                        }
+                        const result = await require("./utils/gstatusModeration").revokeGroupStatus(sock2, chatId2, key);
+                        return !!result.ok;
                       };
                     }
                     // message ids for status relays (Baileys helper, safe fallback)
@@ -18822,23 +18726,21 @@ Commands:
                     const argsGS = lowerTxt.split(" ");
                     const settingsGS = getGroupSettings(chatId);
 
-                    // .gstatus lock on/off - only admins/owner may post group statuses;
-                    // violators: auto-delete + warn, removed at the 3rd strike.
+                    // Group-status enforcement is a Joker-wide policy, not a per-group toggle.
+                    // Keep the old command as a compatibility alias; "off" cannot disable it.
                     if (argsGS[2] === "lock") {
                       if (!canUseAdminCommands) {
                         return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
                       }
                       if (argsGS[3] !== "on" && argsGS[3] !== "off") {
                         return await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + `Usage: \`${botConfig.getPrefix().toLowerCase()} gstatus lock on/off\` - currently ${settingsGS.gstatusLock ? "ON" : "OFF"}.`,
+                          text: BOT_MARKER + "Group-status protection is always ON in Joker. Only Joker, the bot owner and global moderators may post group statuses; group admins are not exempt. The lock cannot be switched off.",
                         });
                       }
-                      settingsGS.gstatusLock = argsGS[3] === "on";
+                      settingsGS.gstatusLock = true;
                       saveGroupSettings();
                       return await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + (settingsGS.gstatusLock
-                          ? `🔒 Group-status lock *ON*. Only admins can post group statuses - others are auto-deleted, warned, and removed at 3/3 strikes.`
-                          : `🔓 Group-status lock *OFF*. Everyone can post group statuses again.`),
+                        text: BOT_MARKER + "🔒 Group-status protection is always ON. Only Joker, the bot owner and global moderators may post group statuses. Group admins are not exempt.",
                       });
                     }
 

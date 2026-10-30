@@ -271,7 +271,7 @@ const MOD_MENU = {
       { cmd: "antispam", usage: "antispam [on|off]", desc: "Spam protection." },
       { cmd: "announce", usage: "announce <on|off>", desc: "Promote/demote announcements." },
       { cmd: "news", usage: "news <on|off>", desc: "Anime news feed toggle." },
-      { cmd: "gstatus", usage: "gstatus [lock on|off|delete|caption]", desc: "Group status posts." },
+      { cmd: "gstatus", usage: "gstatus [text|delete [id|all]|list|lock]", desc: "Post group statuses; Joker auto-revokes posts from anyone except the bot owner and global moderators. Group admins are not exempt." },
       { cmd: "welcome", usage: "welcome <on|off>", desc: "Toggle welcome messages." },
       { cmd: "setwelcome", usage: "setwelcome <text>", desc: "Set the welcome message." },
       { cmd: "bye", usage: "bye <on|off>", desc: "Toggle goodbye messages." },

@@ -57,7 +57,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'antilink', desc: 'Manage link protection and actions.', usage: 'antilink on/off/action' },
     { cmd: 'antispam', desc: 'Enable/disable anti-spam protection.', usage: 'antispam on/off' },
     { cmd: 'antibot', desc: 'Detect other bots posting in the group and act on them.', usage: 'antibot on/off/action/mode' },
-    { cmd: 'gstatus', desc: "Post to this group's status or toggle status announcements.", usage: "gstatus <text> | gstatus (reply media) | gstatus on/off | gstatus list | gstatus delete [id|all]" },
+    { cmd: 'gstatus', desc: "Post group statuses; Joker automatically revokes statuses from anyone except the bot owner and global moderators. Group admins are not exempt.", usage: "gstatus <text> | gstatus (reply media) | gstatus list | gstatus delete [id|all] | gstatus lock" },
     { cmd: 'announce', desc: 'Toggle admin promote/demote announcements.', usage: 'announce on/off' },
     { cmd: 'welcome', desc: 'Toggle welcome messages for new members.', usage: 'welcome on/off' },
     { cmd: 'setwelcome', desc: 'Set or view custom welcome message.', usage: 'setwelcome [text]' },
