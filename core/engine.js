@@ -5281,6 +5281,10 @@ What to do:
           const sh = (() => { try { return progression.getCharacterSheet(j); } catch { return null; } })();
           const cls = sh && sh.class ? String(sh.class).replace(/_/g, " ") : (u.class && (u.class.id || u.class)) ? String(u.class.id || u.class).replace(/_/g, " ") : "";
           const lvl = sh ? sh.level : 0;
+          // only people who actually PLAY the rpg (mid/high level, or real activity) get RPG material at all;
+          // someone who never touches it is not roasted for a level-1 character they never asked for
+          const plays = (u.questsCompleted || 0) + (u.pvpWins || 0) + (u.pvpLosses || 0);
+          if (!(lvl >= 10 || plays >= 5)) return out;
           if (lvl && cls) out.push(lvl <= 6 ? `still level ${lvl} ${cls}` : lvl >= 60 ? `level ${lvl} ${cls} and acts like it` : `level ${lvl} ${cls}`);
           const w = u.pvpWins || 0, l = u.pvpLosses || 0;
           if (l >= 3 && l > w) out.push(`pvp record ${w} wins ${l} losses`);
