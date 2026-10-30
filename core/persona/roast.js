@@ -17,10 +17,11 @@ function pickHooks(kit, recentLines) {
   for (const q of kit.quotes || []) hooks.push({ kind: 'quote', text: q, w: 5 });
   for (const m of kit.moments || []) hooks.push({ kind: 'moment', text: m, w: 4.5 });
   // RPG is a separate system and only exists for people who actually play it (engine gates that:
-  // mid/high level or real activity). For them ONE game detail joins the pool as spice - it competes
+  // mid/high level or real activity). For them ONE game detail can join the pool as spice - it competes
   // with quotes/habits/facts, it is never the whole roast.
   const gm = (kit.game || []).filter(Boolean);
-  if (gm.length) hooks.push({ kind: 'game', text: gm[Math.floor(Math.random() * gm.length)], w: 3.2 });
+  // ...and even for them only about 1 roast in 4 uses it (owner 2026-10-30)
+  if (gm.length && Math.random() < 0.25) hooks.push({ kind: 'game', text: gm[Math.floor(Math.random() * gm.length)], w: 3.2 });
   for (const h of kit.habits || []) hooks.push({ kind: 'habit', text: h, w: 3.5 });
   for (const f of kit.facts || []) hooks.push({ kind: 'fact', text: f, w: 3 });
   for (const l of (recentLines || []).slice(-4)) if (l.length > 15) hooks.push({ kind: 'recent', text: l, w: 2.5 });
