@@ -5266,7 +5266,8 @@ What to do:
       botName: botConfig.getBotName(),
       system,
       smartGroqCall,
-      modelFn: (len) => selectModel(len, false),
+      // 💡 2026-10-30: the 20b model leaked control tokens / chain-of-thought into chat - persona turns use the 120b (PERSONA_MODEL overrides)
+      modelFn: (len) => process.env.PERSONA_MODEL || MODELS.SMART,
       searchFn: personaEngine.makeKeylessSearcher(aiOverview, axios),
       // 💡 REALGUY v2: the old pipeline's canonical persona line anchors the
       // prompt FIRST again ("You are Joker from Persona 5.")
@@ -33741,8 +33742,15 @@ _(or reply to their message)_
                   const _quotedDigits = quotedParticipant
                     ? _digitsOf(quotedParticipant)
                     : null;
+                  // 💡 2026-10-30 (owner: "someone responds to a card and he's saying kinda
+                  // funny you're laughing at a card, makes no sense"): replying to one of the
+                  // bot's CARDS / game images / videos / files is talking about the card to the
+                  // group, not chatting with the persona (which only ever sends text + stickers).
+                  // Only an explicit @mention or saying its name pulls the persona in then.
+                  const _qm = waContextInfo?.quotedMessage || {};
+                  const _quotedIsBotMedia = !!(_qm.imageMessage || _qm.videoMessage || _qm.documentMessage);
                   const isReplyToBot = _quotedDigits
-                    ? _botIdDigits.includes(_quotedDigits)
+                    ? _botIdDigits.includes(_quotedDigits) && !_quotedIsBotMedia
                     : false;
 
                   // 2b. Addressee evidence — is this message clearly aimed at
@@ -33756,7 +33764,7 @@ _(or reply to their message)_
                   const quotedIsHuman =
                     !!waContextInfo?.quotedMessage &&
                     !!quotedParticipant &&
-                    !isReplyToBot;
+                    !_botIdDigits.includes(_quotedDigits || "");
                   const _mentionsOtherHuman = (
                     waContextInfo?.mentionedJid || []
                   ).some((j) => {

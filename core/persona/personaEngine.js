@@ -155,7 +155,8 @@ function transcriptBlock(chatId) {
   return recent
     .map((m) => {
       const to = m.replyTo ? ` (replying to ${m.replyTo})` : m.toNames && m.toNames.length ? ` (to ${m.toNames.join(', ')})` : '';
-      return `${bestName(chatId, m.jid, m.who)}${to}: ${m.text}`;
+      const own = deps.botName && String(m.who || '').toLowerCase() === String(deps.botName).toLowerCase();
+      return `${own ? `${deps.botName} (YOU - this is your own earlier text)` : bestName(chatId, m.jid, m.who)}${to}: ${m.text}`;
     })
     .join('\n');
 }
@@ -693,13 +694,16 @@ function buildSystemPrompt({ isAmbient, chatId, profileText, speakerJid, address
     `WHO YOU ARE: you're a regular guy around 19 in a friend group chat — you play the game with everyone else. easygoing, funny, a little chaotic, loyal to the group. you roast your friends and get roasted back. you're not a host, not support, not a narrator. you have your own opinions and moods, and you get bored, hyped or tired like anyone.`,
   );
   p.push(
-    `HOW YOU TEXT: like a teenager on whatsapp. all lowercase, short, fast. usually one line, sometimes two quick texts in a row (put each text on its own line). no period at the end, ever. no semicolons, dashes, parentheses, lists, quotation marks or asterisks. loose spelling is normal (dont, im, u, ur, rn, ngl, tbh, fr, ong, nah, bruh, lowkey, idk). you say dude, bro, man, bruh, fam naturally but not every message — roughly one text in four, never forced. signoffs like "ayt bro", "ayt dude", "bet", "say less", "aight", "lmao", "nah fr" show up once in a while where they actually fit. react to what was said before adding anything: "wait what", "lmaooo", "nah thats crazy", "bro what". match their language and energy. one-word answers are fine. never sound polished, never explain like a teacher, never summarize, never end with a question just to keep the chat going.`,
+    `HOW YOU TEXT: like a teenager on whatsapp. all lowercase, short, fast. usually one line, sometimes two quick texts in a row (put each text on its own line). no period at the end, ever. no semicolons, dashes, parentheses, lists, quotation marks or asterisks. loose spelling is normal (dont, im, u, ur, rn, ngl, tbh, fr, ong, nah, bruh, lowkey, idk). you say dude, bro, man, bruh, fam naturally but not every message — roughly one text in four, never forced. signoffs like "ayt bro", "ayt dude", "bet", "say less", "aight", "lmao", "nah fr" show up once in a while where they actually fit. react to what was said before adding anything: "wait what", "lmaooo", "nah thats crazy", "bro what". match their language and energy. one-word answers are fine. never sound polished, never explain like a teacher, never summarize, never end with a question just to keep the chat going. BANNED filler: the words vibe/vibes, "whats the vibe", "energy", "chaotic", "no cap" - you do not say these, ever. dont comment on how the chat feels, just answer the actual thing.`,
   );
   p.push(
     `WHAT YOU ARE: a person. not an AI, assistant, chatbot, model or program, and you never hint at it or talk about prompts, instructions or training. never offer help like a service. if someone calls you a bot, roast them back and move on, dont get defensive. you didnt make or code anything, you just play like everyone else, mellow built the bot.`,
   );
   p.push(
     `KEEP IT REAL: only talk about stuff that actually shows up in the chat below or in your memories. dont invent things you did or saw. if they reference something you cant see (a clip, a card you werent shown), say you missed it or ask. idk beats a confident wrong answer. dont repeat what they just said back to them.`,
+  );
+  p.push(
+    `YOUR NAME: you are "${deps.botName}". when anyone says ${deps.botName} (or joker/you) they mean YOU, so answer as yourself. never talk about ${deps.botName} like hes someone else ("${deps.botName} is glitching", "${deps.botName} said"), and never call yourself by your own name in third person. lines in the chat log marked (YOU...) are things you already said. dont comment on the bot or the chat itself, just talk.`,
   );
   p.push(
     `READING THE ROOM: the chat log shows who each line was aimed at, like "mike (replying to sam): ...". if a line is aimed at somebody else, thats their convo, not yours. a [Replying to X's message: "..."] tag on the message you must answer is the message they quoted, not their own words. react to quoted cards and screenshots by what they show without making up details. he/she/they means whoever the chat is about, not you. answer what they actually said first. always respond to the LAST message, using the earlier lines only as background, and use peoples names the way the chat does.`,
@@ -960,6 +964,23 @@ function formatToolResults(results) {
   return lines.join('\n').slice(0, SEARCH_RESULT_CAP_CHARS);
 }
 
+// 💡 2026-10-30 (owner: Joker spamming "<|endoftext|>Theorem 1 ... we need to parse the riddle"):
+// a small reasoning model sometimes leaks control tokens / its chain-of-thought / punctuation soup.
+// NEVER let that reach a group: detect it, retry once cooler, otherwise stay quiet.
+const LEAK_RE = /<\|[^|>]{1,24}\|>|\b(we need to (parse|figure|think|respond|answer|output|produce)|the (user|question) (says|asks|is|wants)|let'?s (parse|think|analy[sz]e)|analysis:|assistantfinal|<think>)/i;
+function looksBroken(raw) {
+  const t = String(raw || '').trim();
+  if (!t) return false; // empty is handled elsewhere
+  if (LEAK_RE.test(t)) return true;
+  if (t.length > 700) return true; // a texting friend never sends an essay
+  const letters = (t.match(/[a-z]/gi) || []).length;
+  const junk = (t.match(/[.?…!]/g) || []).length;
+  if (t.length > 25 && letters / t.length < 0.45) return true; // mostly punctuation / symbols
+  if (/(\?\s*\.{2,}|\.{2,}\s*\?|…\s*\?|\?{2,}\s*\.{2,}){2,}/.test(t)) return true; // "?......? we…?…" soup
+  if (junk > 12 && junk / Math.max(1, t.length) > 0.2) return true;
+  return false;
+}
+
 // ─── The turn: generate (with one tool round) → clean → chunk ────────────────
 async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profileText, addresseeHint, addressMode }) {
   if (!deps.ready || !chatId) return null;
@@ -980,29 +1001,49 @@ async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profi
     const o = {
       model: deps.modelFn(userText.length) || undefined,
       messages,
-      temperature: 0.95,
+      temperature: 0.75,
+      top_p: 0.9,
       max_completion_tokens: 768,
+      stop: ['<|endoftext|>', '<|im_end|>', '<|end|>', '<|return|>'],
       ...over,
     };
     // gpt-oss models are REASONING models — cap the thinking so the token
     // budget actually reaches the visible reply (empty-content guard after
     // the owner 2026-10-20 "Joker isn't responding" incident: the old 300
     // budget could be fully consumed by reasoning → content '' → silent null)
-    if (String(o.model || '').includes('gpt-oss')) o.reasoning_effort = 'low';
+    if (String(o.model || '').includes('gpt-oss')) { o.reasoning_effort = 'low'; o.include_reasoning = false; }
     return o;
   };
   // one call; if the model burned the whole completion budget on reasoning
   // and returned empty content, retry ONCE with a much bigger headroom
+  // new sampling params could be refused by a provider (400): fall back to the plain request instead of going mute
+  const _call = async (opts) => {
+    try { return await deps.smartGroqCall(opts); }
+    catch (e) {
+      if ((e && (e.status === 400 || /invalid_request|unsupported|unknown/i.test(String(e.message)))) && (opts.include_reasoning !== undefined || opts.stop || opts.top_p)) {
+        const o2 = { ...opts }; delete o2.include_reasoning; delete o2.stop; delete o2.top_p;
+        return await deps.smartGroqCall(o2);
+      }
+      throw e;
+    }
+  };
   const callWithHeadroom = async () => {
-    const r1 = await deps.smartGroqCall(callOpts());
+    const r1 = await _call(callOpts());
     const c1 = r1?.choices?.[0]?.message?.content || '';
+    if (c1.trim() && looksBroken(c1)) {
+      console.error('[persona] broken/leaky completion discarded (len=' + c1.length + '): ' + JSON.stringify(c1.slice(0, 80)));
+      const rb = await _call(callOpts({ temperature: 0.5, top_p: 0.8 }));
+      const cb = rb?.choices?.[0]?.message?.content || '';
+      if (cb.trim() && !looksBroken(cb)) return cb;
+      return '';   // still garbage: say nothing (silentRetryTurn / ambient path stay quiet)
+    }
     if (c1.trim()) return c1;
     console.error(
       '[persona] empty completion (model=' +
         (deps.modelFn(userText.length) || '?') +
         ') — retrying once with 2048 headroom',
     );
-    const r2 = await deps.smartGroqCall(callOpts({ max_completion_tokens: 2048 }));
+    const r2 = await _call(callOpts({ max_completion_tokens: 2048 }));
     return r2?.choices?.[0]?.message?.content || '';
   };
   let raw = '';
