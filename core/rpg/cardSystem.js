@@ -22,7 +22,7 @@ const goService = require('../utils/goImageService'); // 💡 singleton (PERF PA
 // NEWER than the process start time in future logs -> stale-process incident.
 try {
   const __buildMtime = fs.statSync(__filename).mtime.toISOString();
-  console.log(`[cardSystem] BUILD predrop-v3-alwaystok loaded | pid=${process.pid} | file mtime=${__buildMtime} | loaded at ${new Date().toISOString()}`);
+  console.log(`[cardSystem] BUILD predrop-v4-eventtok loaded | pid=${process.pid} | file mtime=${__buildMtime} | loaded at ${new Date().toISOString()}`);
 } catch (e) { console.log('[cardSystem] BUILD marker stat failed: ' + e.message); }
 
 // 47-k8c: background cache warmer — after a deploy every .j base/guild render
@@ -751,15 +751,16 @@ async function setSpawnInterval(minutesOrRange, callerJid, isOwner, maxMinutes) 
   const intervalLabel = minMins === maxMins ? `${minMins} minutes` : `${minMins}-${maxMins} minutes (random)`;
   const avgMinutes = (minMins + maxMins) / 2;
   const spawnsPerHour = Math.round(60 / avgMinutes * 10) / 10;
-  // 💡 2026-10-23: token rate is a flat 1 per 2 spawns (per group) - no RNG bonus layer (was 1 per 10).
-  const tokensPerHour = Math.round(spawnsPerHour / TOKEN_SPAWNS_PER_TOKEN * 10) / 10;
+  // 💡 2026-10-30 v6: event-scoped — while an event runs EVERY spawn pays,
+  // so token drops/hour == spawns/hour; outside events the rate is zero.
+  const tokensPerHour = spawnsPerHour;
   return {
     success: true,
     message: `✅ Spawn interval set to *${intervalLabel}* for ${botConfig.getBotId()}.
 
 📊 Approximate rates (based on avg ${avgMinutes} min):
 • ${spawnsPerHour} spawns/hour
-• ~${tokensPerHour} token drops/hour per group (always on, 1 per ${TOKEN_SPAWNS_PER_TOKEN} spawns — each drop pays a guaranteed tier-keyed amount)
+• ~${tokensPerHour} token drops/hour per group while an event is ACTIVE (every card pays) — zero outside events
 
 _Interval persists across bot restarts._`
   };
@@ -778,8 +779,8 @@ function getSpawnIntervalInfo() {
   // Average rate based on midpoint of range
   const avgMinutes = (minMinutes + maxMinutes) / 2;
   const spawnsPerHour = Math.round(60 / avgMinutes * 10) / 10;
-  // 💡 2026-10-23: 1 token per 2 spawns (per group), no RNG bonus layer (was 1 per 10).
-  const tokensPerHour = Math.round(spawnsPerHour / TOKEN_SPAWNS_PER_TOKEN * 10) / 10;
+  // 💡 2026-10-30 v6: event-scoped — every spawn pays during events.
+  const tokensPerHour = spawnsPerHour;
   return {
     minutes: maxMinutes,  // legacy field (kept for backward compat)
     minMinutes,
@@ -1216,32 +1217,16 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
     }
 
     const spawnKey = `${targetGroup}_${card.id}`;
-    // 💡 TOKEN RATES (2026-10-08 doc §2 + §14; rate retuned 2026-10-23 owner: 1 per 2):
-    //   1 token per 2 cards spawned, with PER-GROUP counters - each group's
-    //   progression is fully independent (activity in one group never
-    //   advances another group's token clock). OWNER 2026-10-30 (Mellow):
-    //   "tokens are always guaranteed to drop" — event gate REMOVED, the
-    //   1-in-2 ratio is now a 24/7 cadence. Replaces the old global
-    //   every-3rd-spawn + 25% RNG mechanic.
+    // 💡 TOKEN RATES (2026-10-08 doc §2 + §14): tokens are EVENT-SCOPED.
+    //   OWNER 2026-10-30 19:21Z clarification (Mellow, undoing the 19:15Z
+    //   always-on misread — "I didn't ask you to always make events drop"):
+    //   "instead of every second card having a chance of a token... every
+    //   card during an event should drop a token". So while an event is
+    //   ACTIVE every spawn in every group is token-bearing (the old 1-in-2
+    //   per-group counter is retired); outside events nothing drops.
     let isTokenSpawn = false;
-    // ALWAYS-ON (owner 2026-10-30): counter advances on every spawn.
-    {
-      // 💡 47-l2 (owner 2026-10-21: "haven't seen anyone get an event token even
-      // when they claimed alot of cards"): the map key MUST be safeCounterKey
-      // here too. loadTokenRateCounters() stores sanitized keys (dots stripped
-      // for Mongo), but this lookup used the RAW group jid — so after every
-      // restart get('@g.us') missed the stored '@g_us' key and every group's
-      // counter silently restarted from 0. With the cmd layer OFF (47-l1) that
-      // made tokens essentially never drop.
-      const gKey = safeCounterKey(targetGroup);
-      const count = (inst.tokenSpawnCounters.get(gKey) || 0) + 1;
-      if (count >= TOKEN_SPAWNS_PER_TOKEN) {
-        inst.tokenSpawnCounters.set(gKey, 0);
-        isTokenSpawn = true;
-      } else {
-        inst.tokenSpawnCounters.set(gKey, count);
-      }
-      persistTokenSpawnCounters();
+    if (await isTokenEventActive()) {
+      isTokenSpawn = true;
     }
     inst.activeSpawns.set(spawnKey, {
       card, copyNumber: stat.totalSpawned, stat, price,
@@ -1455,7 +1440,10 @@ async function loadTokenEventState() {
 //  progression. Event activity in one group NEVER affects another group.
 // ═══════════════════════════════════════════════════════════════════════════
 
-const TOKEN_SPAWNS_PER_TOKEN  = 2;   // §2 owner 2026-10-23: "tokens guaranteed with every 2 cards that spawn" (was 1 per 10)
+// 💡 RETIRED 2026-10-30 v6 (Mellow: "every card during an event should drop
+// a token") — the 1-in-2 spawn counter no longer gates anything; constant
+// kept only as reference.
+const TOKEN_SPAWNS_PER_TOKEN  = 2;
 const TOKEN_CMDS_PER_TOKEN    = 15;  // §3: 1 token per 15 eligible commands
 // 💡 47-l1 (owner 2026-10-20: "card tokens are spawning in even when people
 // aren't claiming cards???? recently all received tokens"): the §3 hidden
@@ -2143,15 +2131,17 @@ async function cmdClaim(args, senderJid, reply, chatId) {
 
     // 💡 TOKEN DROP (2026-10-08 requirements doc §2 + §4):
     // Single deterministic layer - a spawn is marked hasToken at SPAWN time
-    // (1 in 2 spawns per group, see doSpawn — owner retune 2026-10-23). On claim, if the event is
-    // active AND the spawn is token-bearing, grant +1 token. No RNG layer.
+    // (EVERY spawn while an event is active — see doSpawn, owner 2026-10-30
+    // v6; was 1-in-2). On claim, if the event is active AND the spawn is
+    // token-bearing, grant the tier-keyed payout. No RNG layer.
     // §4: the message simply tells the player they received an Event Token -
     // it must NOT reveal the spawn rate, probability, or the mechanic.
     let tokenMsg = '';
     try {
-      // ALWAYS-ON (owner 2026-10-30 Mellow): no event gate — every
-      // token-bearing claim pays.
-      if (spawn.hasToken) {
+      // EVENT-SCOPED (owner 2026-10-30 19:21Z Mellow): event gate restored —
+      // token-bearing claims pay only while the event is active.
+      const eventActive = await isTokenEventActive();
+      if (eventActive && spawn.hasToken) {
         // 💡 OWNER 2026-10-28 v3: guaranteed tier-keyed payout, per-GC mode
         // (low = 3/5/7/11/17 v5 · high = 5/10/15/20/25/30). Mods: `.j event rate`.
         const _tokAmt = tokenPayFor(chatId, spawn.card && spawn.card.tier);
@@ -5590,7 +5580,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         `━━━━━━━━━━━━━━━\n` +
         `Your Balance: *${tokenBal} tokens*\n` +
         `Event Status: ${eventActive ? '🟢 ACTIVE' : '🔴 INACTIVE'}\n\n` +
-        `💡 Token drops are ALWAYS on — every 2nd card in this group pays!\n` +
+        `💡 While an event is ACTIVE, every card claim pays tokens!\n` +
         `Spend them with \`${p} eshop\` to buy event cards.`
       ), true;
 
@@ -6042,7 +6032,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         `📊 *Spawn Configuration - ${botConfig.getBotId()}*\n\n` +
         `⏱️ Interval: *${intervalLabel}*\n` +
         `📈 Rate (avg): *${info.spawnsPerHour} spawns/hour*\n` +
-        `🎫 Tokens: *1 per ${TOKEN_SPAWNS_PER_TOKEN} spawns, per group — ALWAYS on*\n\n` +
+        `🎫 Tokens: *every card pays while an event is ACTIVE*\n\n` +
         `🏠 Active groups: *${info.activeGroups}*\n` +
         `⚙️ Timer: ${info.timerRunning ? '✅ Running' : '⏸️ Idle (no active groups)'}\n\n` +
         `📋 *Tier Spawn Config:*\n${formatTierConfig(inst)}\n\n` +
