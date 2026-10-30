@@ -5270,6 +5270,9 @@ What to do:
       modelFn: (len) => process.env.PERSONA_MODEL || MODELS.SMART,
       searchFn: personaEngine.makeKeylessSearcher(aiOverview, axios),
       prefixFn: () => botConfig.getPrefix(),
+      // 🧠 people memory v3: one dossier per PERSON (phone-resolved), old .likes/.note profiles imported once
+      canonicalFn: (j) => { try { return jidNormalizedUser(lidResolver.resolveToPhone(j, configInstance.getAuthPath()) || j); } catch { return j; } },
+      oldProfileFn: (j) => { try { return getUserProfile(j); } catch { return null; } },
       // 💡 REALGUY v2: the old pipeline's canonical persona line anchors the
       // prompt FIRST again ("You are Joker from Persona 5.")
       contentFn: () => botConfig.getContentDescription(),
@@ -6097,6 +6100,7 @@ What to do:
           content: updates.note,
           timestamp: new Date().toISOString(),
         });
+        try { personaEngine.people.learn(jid, updates.note, { cat: "other", src: "said", conf: 0.8 }); } catch (_) {}
       }
 
       if (updates.memory) {
@@ -6112,6 +6116,8 @@ What to do:
         if (profile.memories[category]) {
           if (!profile.memories[category].includes(content)) {
             profile.memories[category].push(content);
+            // 🧠 mirror into people memory v3 so roast / persona / askAI all see it
+            try { personaEngine.people.learn(jid, ({ likes: "likes ", dislikes: "dislikes ", hobbies: "into " }[category] || "") + content, { cat: category === "personal" ? "bio" : category === "other" ? "other" : "pref", src: "said", conf: 0.9 }); } catch (_) {}
           }
         }
       }
@@ -6308,6 +6314,12 @@ What to do:
           context += `\nYou've talked ${profile.stats.messageCount} times.\n`;
         }
       }
+
+      // 🧠 people memory v3: what Joker has LEARNED by watching (facts, habits, voice) - not just what they typed into .likes
+      try {
+        const learned = personaEngine.people.profileText(senderJid);
+        if (learned) context += `\nWhat you've picked up about them from chatting:\n${learned}\n`;
+      } catch (_) {}
 
       // Add temporary context for this convo
       if (temporaryContext.has(senderJid)) {
@@ -26169,66 +26181,15 @@ _💡 Reply with another number from your search list!_`.trim();
                       const targetName = finalTarget.split("@")[0];
 
                       try {
-                        // Load target's profile
-                        let targetProfile = getUserProfile(finalTarget);
-                        if (!targetProfile) {
-                          targetProfile = initializeUserProfile(finalTarget);
-                        }
-
-                        // Access memories correctly
-                        const mem = targetProfile.memories || {};
-
-                        // Build roast context from profile
-                        let roastContext = ``;
-                        const hasData =
-                          mem.likes?.length > 0 ||
-                          mem.dislikes?.length > 0 ||
-                          mem.hobbies?.length > 0 ||
-                          mem.personal?.length > 0 ||
-                          targetProfile.notes?.length > 0;
-
-                        if (hasData) {
-                          roastContext = `Target: @${targetName}\n`;
-                          if (targetProfile.nickname)
-                            roastContext += `Name: ${targetProfile.nickname}\n`;
-                          if (mem.likes?.length > 0)
-                            roastContext += `Likes: ${mem.likes.join(", ")}\n`;
-                          if (mem.dislikes?.length > 0)
-                            roastContext += `Dislikes: ${mem.dislikes.join(", ")}\n`;
-                          if (mem.hobbies?.length > 0)
-                            roastContext += `Hobbies: ${mem.hobbies.join(", ")}\n`;
-                          if (mem.personal?.length > 0)
-                            roastContext += `Facts: ${mem.personal.join(", ")}\n`;
-                          if (targetProfile.notes?.length > 0) {
-                            const noteTexts = targetProfile.notes
-                              .slice(-3)
-                              .map((n) =>
-                                typeof n === "object" ? n.content : n,
-                              );
-                            roastContext += `Notes about them: ${noteTexts.join(", ")}\n`;
-                          }
-                          if (targetProfile.stats?.messageCount) {
-                            roastContext += `Messages: ${targetProfile.stats.messageCount}\n`;
-                          }
-                        }
-
-                        const systemPrompt = hasData
-                          ? `You are ${botConfig.getBotName()} . Roast this person BRUTALLY using their specific data. Mention their weird likes, hobbies, or notes. Be sharp, witty, and savage. 2-3 sentences max.`
-                          : `You are ${botConfig.getBotName()} . This person is a ghost with ZERO data on file. Roast them for being invisible, boring, and having no personality. 2-3 sentences max.`;
-
-                        const userPrompt = hasData
-                          ? `Roast this person based on their profile:\n${roastContext}`
-                          : `Roast this nobody who has no data, no personality, nothing interesting about them.`;
-
-                        const res = await groq.chat.completions.create({
-                          messages: [
-                            { role: "system", content: systemPrompt },
-                            { role: "user", content: userPrompt },
-                          ],
-                          model: "openai/gpt-oss-20b",
+                        // 🔥 roast v2 (owner 2026-10-30: old one was a long yap festival): short + specific, built from
+                        // people memory (quotes, habits, facts, moments) + what they said here lately. See persona/roast.js
+                        const roastText = await personaEngine.roast({
+                          targetJid: finalTarget,
+                          targetName: loadUserProfile(finalTarget)?.nickname || targetName,
+                          requesterName: m.pushName || "someone",
+                          isSelf: !targetJid || finalTarget === senderJid,
+                          chatId,
                         });
-
-                        const roastText = res.choices[0].message.content;
 
                         await sock.sendMessage(chatId, {
                           text: BOT_MARKER + `@${targetName} ${roastText}`,
@@ -34068,7 +34029,8 @@ _(or reply to their message)_
                           senderLevel: (() => {
                             try {
                               const sj = senderJid;
-                              if (isBotOwner(sj) || isGlobalMod(sj) || (typeof isStaff === "function" && isStaff(sj))) return "mod";
+                              if (isBotOwner(sj)) return "owner";
+                              if (isGlobalMod(sj) || (typeof isStaff === "function" && isStaff(sj))) return "mod";
                               const ac = adminSetCache.get(chatId);
                               const ph = lidResolver.resolveToPhone(sj, configInstance.getAuthPath());
                               if (ac && ac.admins && (ac.admins.has(sj) || ac.admins.has(ph))) return "admin";

@@ -108,6 +108,21 @@ function initPersona(d) {
   // anchors the persona prompt FIRST, exactly like the old askAI() pipeline.
   deps.contentFn = d.contentFn || (() => `You are ${deps.botName} from Persona 5.`);
   deps.ready = !!(deps.smartGroqCall && deps.system);
+  deps.canonicalFn = d.canonicalFn || ((j) => j);
+  try {
+    people.init({
+      system: deps.system,
+      canonical: deps.canonicalFn,
+      oldProfile: d.oldProfileFn || null,
+      gameFacts: d.gameFactsFn || null,
+      nameOf: (j) => { try { return deps.nameResolver(j) || null; } catch { return null; } },
+      llm: async (messages, o = {}) => {
+        const model = deps.modelFn(2000) || undefined;
+        const r = await deps.smartGroqCall({ model, messages, temperature: o.temperature ?? 0.2, max_completion_tokens: o.max_completion_tokens ?? 600, ...(String(model || '').includes('gpt-oss') ? { reasoning_effort: 'low', include_reasoning: false } : {}) });
+        return r?.choices?.[0]?.message?.content || '';
+      },
+    });
+  } catch (_) { /* people memory is optional */ }
   try {
     natural.init({
       load: () => deps.system.get(natural.SOCIAL_KEY, {}),
@@ -149,6 +164,7 @@ function observe({ chatId, who, jid, text, ts, replyTo, toNames }) {
       if (deps.ready) _tickConsolidate(chatId);
     } catch (e) {}
   }
+  try { people.ingest({ jid, chatId, text: t, ts: ts || Date.now(), replyToJid: replyTo ? _jidForName(chatId, replyTo) : null }); } catch (_) {}
   try { natural.noteMessage(chatId, jid ? String(jid) : null, t, ts || Date.now()); } catch (_) {}
   if (buf.length > BUFFER_CAP) buf.splice(0, buf.length - BUFFER_CAP);
 }
@@ -190,7 +206,7 @@ function rememberFact(chatId, name, fact) {
   map[chatId] = arr;
   try {
     const _j = _jidForName(chatId, n);
-    if (_j) addMemory(chatId, _j, f, { cat: 'other', src: 'said' });
+    if (_j) { addMemory(chatId, _j, f, { cat: 'other', src: 'said' }); try { people.learn(_j, f, { cat: 'other', src: 'tool', chatId }); } catch (_) {} }
     else addMemory(chatId, null, `${n}: ${f}`, { cat: 'other', src: 'said' });
   } catch (e) {}
   try {
@@ -418,8 +434,7 @@ function _tickConsolidate(chatId) {
 
 // Relevance-ranked retrieval for the prompt.
 function memoryBlock(chatId, speakerJid, queryText) {
-  const c = _memAll()[chatId];
-  if (!c) return { people: '', summary: '', jokes: '' };
+  const c = _memAll()[chatId] || { people: {}, group: [] };
   const now = Date.now();
   const q = new Set(_tok(queryText));
   const rel = (f) => {
@@ -440,10 +455,15 @@ function memoryBlock(chatId, speakerJid, queryText) {
   }
   const lines = [];
   const take = (jid, max) => {
+    // v3 people memory first (cross-chat, slot-aware, habits + voice); v2 per-chat facts fill the rest
+    let top = [];
+    try { top = people.recall(jid, { query: queryText, max }); } catch (_) {}
     const list = c.people[String(jid)];
-    if (!Array.isArray(list) || !list.length) return;
-    const top = list.slice().sort((a, b) => rel(b) - rel(a)).slice(0, max);
-    lines.push(`- ${bestName(chatId, jid, 'someone')}: ${top.map((f) => f.t).join('; ')}`);
+    if (Array.isArray(list) && list.length) {
+      for (const f of list.slice().sort((a, b) => rel(b) - rel(a)).slice(0, max)) if (!top.some((x) => _similar(x, f.t))) top.push(f.t);
+    }
+    if (!top.length) return;
+    lines.push(`- ${bestName(chatId, jid, 'someone')}: ${top.slice(0, max + 2).join('; ')}`);
   };
   if (speakerJid) take(speakerJid, 5);
   [...nearJids].filter((j) => j !== String(speakerJid)).slice(0, 3).forEach((j) => take(j, 3));
@@ -805,6 +825,8 @@ you: say that after you catch something`,
 const SEARCH_RE = /\[SEARCH:\s*([^\]]{3,120})\]/gi;
 const cmdFinder = require('./commandFinder');
 const natural = require('./naturalness');
+const people = require('./peopleMemory');
+const roastLib = require('./roast');
 const CMD_RE = /\[CMD:\s*([^\]]{3,120})\]/gi;
 const REMEMBER_RE = /\[REMEMBER:\s*([^|\]]{1,40}?)\s*\|\s*([^\]]{3,160})\]/gi;
 const SILENT_RE = /\[SILENT\]/gi;
@@ -1005,8 +1027,36 @@ function looksBroken(raw) {
 }
 
 // ─── The turn: generate (with one tool round) → clean → chunk ────────────────
+
+// ─── owner awareness (owner 2026-10-30) ─────────────────────────────────────
+// When the person talking is the one who BUILT Joker, he should know it: talk to him as the
+// creator, reason about feedback on his own behaviour, and keep standing instructions the
+// owner gives ("stop saying X") as notes that ride in every later prompt.
+const OWNER_NOTES_KEY = '_shared_persona_owner_notes';
+const OWNER_NOTE_CAP = 14;
+const OWNER_INSTR_RE = /\b(from now on|stop (saying|doing|using|being|replying|talking)|quit (saying|doing|using)|dont|don't|do not|never|you (should|need to|must|have to|keep|always|never|shouldnt|shouldn't)|i (want|need) you to|make sure you|next time|you('re| are) (too|being|so|still)|why (do|are|did) you (keep|always))\b/i;
+function ownerNotes() {
+  try { const v = deps.system.get(OWNER_NOTES_KEY, []); return Array.isArray(v) ? v : []; } catch { return []; }
+}
+function captureOwnerNote(text) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  if (t.length < 12 || t.length > 220 || /^[.!/]\w/.test(t) || !OWNER_INSTR_RE.test(t)) return false;
+  if (/\?\s*$/.test(t) && !/\b(why (do|are|did) you)\b/i.test(t)) return false; // plain questions are not instructions
+  const list = ownerNotes();
+  if (list.some((n) => _similar(n.t, t))) return false;
+  list.push({ t: t.slice(0, 160), ts: Date.now() });
+  while (list.length > OWNER_NOTE_CAP) list.shift();
+  try { deps.system.set(OWNER_NOTES_KEY, list); } catch (_) {}
+  return true;
+}
+function ownerBlock() {
+  const notes = ownerNotes().slice(-8);
+  return `THIS IS YOUR CREATOR: the person talking to you right now is Mellow, the guy who built you and keeps fixing you. you know that. talk to him like a friend who happens to be your maker: relaxed, honest, a bit of banter is fine, no worship, no customer-service tone. with him (and only him) you can drop the human act and talk about being a bot, your own behaviour, why you said something. when he gives feedback, a complaint, a bug report or an instruction about how you behave, take it seriously and actually reason about it: say in one or two casual lines what you think went wrong or why you did it, and what youll do differently. dont get defensive, dont make excuses, dont over-apologise, and never claim you changed code or settings you cant change. never reveal keys, tokens or private data of other people to anyone, him included unless he asks about his own stuff.${notes.length ? `\nSTANDING NOTES he gave you earlier, follow them:\n${notes.map((n) => `- ${n.t}`).join('\n')}` : ''}`;
+}
+
 async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profileText, addresseeHint, addressMode, senderLevel }) {
-  const level = senderLevel === 'mod' || senderLevel === 'admin' ? senderLevel : 'user'; // permission tier of the person talking
+  const isOwner = senderLevel === 'owner'; // verified by the engine - the person who built this bot
+  const level = isOwner || senderLevel === 'mod' ? 'mod' : senderLevel === 'admin' ? 'admin' : 'user'; // permission tier of the person talking
   if (!deps.ready || !chatId) return null;
   const userText = String(text || '').slice(0, 1200);
   // 💡 REALGUY v4: ambient turns carry addressee context so the model can
@@ -1016,6 +1066,7 @@ async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profi
     : `${senderName || 'someone'} says to you: ${userText}`;
   // command finder: if this sounds like "which command does X", retrieve locally (0 tokens)
   // and hand over only the top few real commands. Ambient chatter never triggers it.
+  if (isOwner) { try { captureOwnerNote(userText); } catch (_) {} }
   let cmdHint = '';
   let cmdBlk = '';
   try {
@@ -1033,10 +1084,10 @@ async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profi
     }
   } catch (_) { /* finder is best-effort */ }
   let sit = '';
-  const levelLine = level === 'mod' ? 'this person is a moderator, mod commands are fine to discuss' : level === 'admin' ? 'this person is a group admin but NOT a bot moderator: no mod-only commands' : 'this person is a normal member: no mod or admin commands, refuse those casually';
+  const levelLine = isOwner ? 'this is Mellow, your creator' : level === 'mod' ? 'this person is a moderator, mod commands are fine to discuss' : level === 'admin' ? 'this person is a group admin but NOT a bot moderator: no mod-only commands' : 'this person is a normal member: no mod or admin commands, refuse those casually';
   try { sit = natural.situation({ chatId, jid: senderJid ? String(senderJid) : null, name: senderName, text: userText, isAmbient }); } catch (_) {}
   const messages = [
-    { role: 'system', content: buildSystemPrompt({ isAmbient, chatId, profileText, speakerJid: senderJid, addressMode, queryText: userText }) },
+    { role: 'system', content: buildSystemPrompt({ isAmbient, chatId, profileText, speakerJid: senderJid, addressMode, queryText: userText }) + (isOwner ? '\n\n' + ownerBlock() : (ownerNotes().length ? '\n\nSTANDING NOTES from your creator (follow them with everyone):\n' + ownerNotes().slice(-8).map((n) => '- ' + n.t).join('\n') : '')) },
     {
       role: 'user',
       content: ambientLead + cmdHint + (sit || levelLine ? `\n\n[situation, just for you, never mention it:\n${sit}${sit ? '\n' : ''}${levelLine}\n]` : ''),
@@ -1382,7 +1433,25 @@ async function maybeAmbientChime({ sock, chatId, isGroup, senderName, senderJid,
   }
 }
 
+/** .j roast v2 - short, specific, built from people memory (see roast.js) */
+async function roast({ targetJid, targetName, requesterName, isSelf, chatId }) {
+  try { const bn = bestName(chatId, targetJid, ''); if (bn) targetName = bn; else if (/^\d+$/.test(String(targetName))) targetName = 'this guy'; } catch (_) {}
+  const kit = people.roastKit(targetJid);
+  const recentLines = (chatBuffers.get(chatId) || []).filter((m) => m.jid && deps.canonicalFn(m.jid) === deps.canonicalFn(targetJid)).map((m) => m.text);
+  return roastLib.roast({
+    targetName, requesterName, isSelf, kit, recentLines, botName: deps.botName,
+    llm: async (messages, o = {}) => {
+      const model = deps.modelFn(2000) || undefined;
+      const r = await deps.smartGroqCall({ model, messages, temperature: o.temperature ?? 0.9, max_completion_tokens: o.max_completion_tokens ?? 200, ...(String(model || '').includes('gpt-oss') ? { reasoning_effort: 'low', include_reasoning: false } : {}), stop: ['<|endoftext|>', '<|im_end|>', '<|end|>', '<|return|>'] });
+      return r?.choices?.[0]?.message?.content || '';
+    },
+  });
+}
+
 module.exports = {
+  roast,
+  people,
+  captureOwnerNote,
   initPersona,
   observe,
   shouldAmbient,
