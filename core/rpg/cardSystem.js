@@ -22,7 +22,7 @@ const goService = require('../utils/goImageService'); // 💡 singleton (PERF PA
 // NEWER than the process start time in future logs -> stale-process incident.
 try {
   const __buildMtime = fs.statSync(__filename).mtime.toISOString();
-  console.log(`[cardSystem] BUILD predrop-v2-tok loaded | pid=${process.pid} | file mtime=${__buildMtime} | loaded at ${new Date().toISOString()}`);
+  console.log(`[cardSystem] BUILD predrop-v3-alwaystok loaded | pid=${process.pid} | file mtime=${__buildMtime} | loaded at ${new Date().toISOString()}`);
 } catch (e) { console.log('[cardSystem] BUILD marker stat failed: ' + e.message); }
 
 // 47-k8c: background cache warmer — after a deploy every .j base/guild render
@@ -143,11 +143,13 @@ const TIER_LABEL = {
 // card tier's row, always. Two tables, toggleable PER GROUP by mods via
 // `.j event rate low|high` (owner: "a command so that I can turn it on in
 // specific gcs"); default everywhere = low.
-//   low  (v4 spec):      T1→2 T2→4 T3→6 T4→10 T5→16 (T6/S/E ride the cap = 16)
+//   low  (v5, 10-30 +1 each): T1→3 T2→5 T3→7 T4→11 T5→17 (T6/S/E ride the cap = 17)
 //   high (v1 "old high"): T1→5 T2→10 T3→15 T4→20 T5→25 T6→30, S/E→35
 // 💡 OWNER 2026-10-29 v4 (Mellow): "Double the minimum token spawns so the
 // tier 5 is now 16 not 8, 1 now 2 yada yada" — every low row doubled.
-const TOKEN_PAY_LOW  = { '1': 2, '2': 4, '3': 6, '4': 10, '5': 16, '6': 16, 'S': 16, 'E': 16 };
+// 💡 OWNER 2026-10-30 v5 (Mellow): "increase the event rate low by 1 tokens
+// each, so if it was 2 it's 3 now" — every low row +1.
+const TOKEN_PAY_LOW  = { '1': 3, '2': 5, '3': 7, '4': 11, '5': 17, '6': 17, 'S': 17, 'E': 17 };
 const TOKEN_PAY_HIGH = { '1': 5, '2': 10, '3': 15, '4': 20, '5': 25, '6': 30, 'S': 35, 'E': 35 };
 const TOKEN_RATE_MODES = { low: TOKEN_PAY_LOW, high: TOKEN_PAY_HIGH };
 
@@ -757,7 +759,7 @@ async function setSpawnInterval(minutesOrRange, callerJid, isOwner, maxMinutes) 
 
 📊 Approximate rates (based on avg ${avgMinutes} min):
 • ${spawnsPerHour} spawns/hour
-• ~${tokensPerHour} token drops/hour per group (during events, 1 per ${TOKEN_SPAWNS_PER_TOKEN} spawns — each drop pays a guaranteed tier-keyed amount)
+• ~${tokensPerHour} token drops/hour per group (always on, 1 per ${TOKEN_SPAWNS_PER_TOKEN} spawns — each drop pays a guaranteed tier-keyed amount)
 
 _Interval persists across bot restarts._`
   };
@@ -1217,13 +1219,13 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
     // 💡 TOKEN RATES (2026-10-08 doc §2 + §14; rate retuned 2026-10-23 owner: 1 per 2):
     //   1 token per 2 cards spawned, with PER-GROUP counters - each group's
     //   progression is fully independent (activity in one group never
-    //   advances another group's token clock). Counters only advance while
-    //   a token event is ACTIVE, so the 1-in-2 ratio maps exactly to
-    //   event-window spawns. Replaces the old global every-3rd-spawn +
-    //   25% RNG mechanic.
+    //   advances another group's token clock). OWNER 2026-10-30 (Mellow):
+    //   "tokens are always guaranteed to drop" — event gate REMOVED, the
+    //   1-in-2 ratio is now a 24/7 cadence. Replaces the old global
+    //   every-3rd-spawn + 25% RNG mechanic.
     let isTokenSpawn = false;
-    const eventActiveNow = await isTokenEventActive();
-    if (eventActiveNow) {
+    // ALWAYS-ON (owner 2026-10-30): counter advances on every spawn.
+    {
       // 💡 47-l2 (owner 2026-10-21: "haven't seen anyone get an event token even
       // when they claimed alot of cards"): the map key MUST be safeCounterKey
       // here too. loadTokenRateCounters() stores sanitized keys (dots stripped
@@ -2147,10 +2149,11 @@ async function cmdClaim(args, senderJid, reply, chatId) {
     // it must NOT reveal the spawn rate, probability, or the mechanic.
     let tokenMsg = '';
     try {
-      const eventActive = await isTokenEventActive();
-      if (eventActive && spawn.hasToken) {
+      // ALWAYS-ON (owner 2026-10-30 Mellow): no event gate — every
+      // token-bearing claim pays.
+      if (spawn.hasToken) {
         // 💡 OWNER 2026-10-28 v3: guaranteed tier-keyed payout, per-GC mode
-        // (low = 2/4/6/10/16 · high = 5/10/15/20/25/30). Mods: `.j event rate`.
+        // (low = 3/5/7/11/17 v5 · high = 5/10/15/20/25/30). Mods: `.j event rate`.
         const _tokAmt = tokenPayFor(chatId, spawn.card && spawn.card.tier);
         economy.addEventTokens(senderJid, _tokAmt); // 💡 47-l2: registration-gate-free grant
         const balance = economy.getEventTokens(senderJid);
@@ -5587,7 +5590,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         `━━━━━━━━━━━━━━━\n` +
         `Your Balance: *${tokenBal} tokens*\n` +
         `Event Status: ${eventActive ? '🟢 ACTIVE' : '🔴 INACTIVE'}\n\n` +
-        `💡 Earn tokens by claiming cards during the event!\n` +
+        `💡 Token drops are ALWAYS on — every 2nd card in this group pays!\n` +
         `Spend them with \`${p} eshop\` to buy event cards.`
       ), true;
 
@@ -5608,7 +5611,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         return reply(`📊 *Token Event Status*\n\nStatus: ${active ? '🟢 ACTIVE' : '🔴 INACTIVE'}\n\nUse \`${p} event start\` or \`${p} event stop\`.`), true;
       }
       // 💡 OWNER 2026-10-28 v3: per-GC payout mode — guaranteed tier-keyed
-      // amounts; low (default) = 2/4/6/10/16, high = old v1 rates 5..30.
+      // amounts; low (default, v5) = 3/5/7/11/17, high = old v1 rates 5..30.
       if (eventSub === 'rate') {
         const rateSub = args[1]?.toLowerCase();
         if (rateSub === 'low' || rateSub === 'high') {
@@ -5619,7 +5622,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         }
         const _cur = getTokenRateMode(chatId);
         const _other = _cur === 'low' ? 'high' : 'low';
-        return reply(`🎫 *Token Drop Rate (this group)*\n\nCurrent mode: *${_cur.toUpperCase()}*\n\n➥ \`${p} event rate low\` — guaranteed T1→2 T2→4 T3→6 T4→10 T5→16\n➥ \`${p} event rate high\` — guaranteed T1→5 T2→10 T3→15 T4→20 T5→25 T6→30\n\n_Switch with_ \`${p} event rate ${_other}\`_. Saves across restarts._`), true;
+        return reply(`🎫 *Token Drop Rate (this group)*\n\nCurrent mode: *${_cur.toUpperCase()}*\n\n➥ \`${p} event rate low\` — guaranteed T1→3 T2→5 T3→7 T4→11 T5→17\n➥ \`${p} event rate high\` — guaranteed T1→5 T2→10 T3→15 T4→20 T5→25 T6→30\n\n_Switch with_ \`${p} event rate ${_other}\`_. Saves across restarts._`), true;
       }
       return reply(`🎫 *Token Event Control*\n\n➥ \`${p} event start\` - Start the token event\n➥ \`${p} event stop\` - Stop the token event\n➥ \`${p} event status\` - Check current status\n➥ \`${p} event rate low|high\` - Set this group's payout mode`), true;
 
@@ -6039,7 +6042,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         `📊 *Spawn Configuration - ${botConfig.getBotId()}*\n\n` +
         `⏱️ Interval: *${intervalLabel}*\n` +
         `📈 Rate (avg): *${info.spawnsPerHour} spawns/hour*\n` +
-        `🎫 Tokens (during events): *1 per ${TOKEN_SPAWNS_PER_TOKEN} spawns, per group*\n\n` +
+        `🎫 Tokens: *1 per ${TOKEN_SPAWNS_PER_TOKEN} spawns, per group — ALWAYS on*\n\n` +
         `🏠 Active groups: *${info.activeGroups}*\n` +
         `⚙️ Timer: ${info.timerRunning ? '✅ Running' : '⏸️ Idle (no active groups)'}\n\n` +
         `📋 *Tier Spawn Config:*\n${formatTierConfig(inst)}\n\n` +
