@@ -228,7 +228,11 @@ async function sendWebviewSuite(sock, chatId, senderJid) {
         url: REPO_URL,
         merchant_url: REPO_URL
     });
-    const tile = await labImageMessage(sock).catch(() => null);
+    let tileError = null;
+    const tile = await labImageMessage(sock).catch((e) => {
+        tileError = e?.message || String(e);
+        return null;
+    });
     const variants = [];
     // W1 — modern cta_url button, text-only header
     await relayInteractive(sock, chatId, senderJid, {
@@ -274,7 +278,7 @@ async function sendWebviewSuite(sock, chatId, senderJid) {
         }, 'open_webview');
         variants.push('W3 open_webview + image header (tile)');
     } else {
-        variants.push('W3 SKIPPED (image upload failed)');
+        variants.push('W3 SKIPPED (image upload failed: ' + tileError + ')');
     }
     // W4 — modern cta_url + PICTURE header
     if (tile) {
@@ -286,7 +290,7 @@ async function sendWebviewSuite(sock, chatId, senderJid) {
         }, 'cta_url');
         variants.push('W4 cta_url + image header (tile)');
     } else {
-        variants.push('W4 SKIPPED (image upload failed)');
+        variants.push('W4 SKIPPED (image upload failed: ' + tileError + ')');
     }
     return sock.sendMessage(chatId, {
         text: 'WEBVIEW SUITE SENT\n\n' + variants.join('\n') +
@@ -299,7 +303,11 @@ async function sendWebviewSuite(sock, chatId, senderJid) {
 // flow card with the tile, P3 orderMessage box with the tile as thumbnail.
 async function sendMarketSuite(sock, chatId, senderJid) {
     const botJid = getUserJid(sock, senderJid);
-    const tile = await labImageMessage(sock).catch(() => null);
+    let tileError = null;
+    const tile = await labImageMessage(sock).catch((e) => {
+        tileError = e?.message || String(e);
+        return null;
+    });
     const variants = [];
     // P1 — standalone product card (no real catalog behind it)
     await relayContent(sock, chatId, senderJid, {
@@ -343,7 +351,7 @@ async function sendMarketSuite(sock, chatId, senderJid) {
         }, 'catalog_message');
         variants.push('P2 catalog_message card + image header (tile)');
     } else {
-        variants.push('P2 SKIPPED (image upload failed)');
+        variants.push('P2 SKIPPED (image upload failed: ' + tileError + ')');
     }
     // P3 — order box with tile thumbnail
     await relayContent(sock, chatId, senderJid, {
@@ -510,7 +518,11 @@ async function sendListSuite(sock, chatId, senderJid) {
 // X1 native flow + tile header, X2 classic business template + tile,
 // X3/X3b carousel (floating cards) + tile, X4 ancient buttonsMessage + tile.
 async function sendMediaSuite(sock, chatId, senderJid) {
-    const tile = await labImageMessage(sock).catch(() => null);
+    let tileError = null;
+    const tile = await labImageMessage(sock).catch((e) => {
+        tileError = e?.message || String(e);
+        return null;
+    });
     const variants = [];
     if (tile) {
         // X1 — native flow card with picture header
@@ -577,7 +589,7 @@ async function sendMediaSuite(sock, chatId, senderJid) {
         });
         variants.push('X4 legacy buttonsMessage + tile header');
     } else {
-        variants.push('SKIPPED — image upload failed, no tile this round');
+        variants.push('SKIPPED — image upload failed, no tile this round (' + tileError + ')');
     }
     return sock.sendMessage(chatId, {
         text: 'MEDIA MATRIX SENT\n\n' + variants.join('\n') +
