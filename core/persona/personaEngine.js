@@ -108,6 +108,12 @@ function initPersona(d) {
   // anchors the persona prompt FIRST, exactly like the old askAI() pipeline.
   deps.contentFn = d.contentFn || (() => `You are ${deps.botName} from Persona 5.`);
   deps.ready = !!(deps.smartGroqCall && deps.system);
+  try {
+    natural.init({
+      load: () => deps.system.get(natural.SOCIAL_KEY, {}),
+      save: (o) => deps.system.set(natural.SOCIAL_KEY, o),
+    });
+  } catch (_) { /* naturalness is optional */ }
   return deps.ready;
 }
 
@@ -143,6 +149,7 @@ function observe({ chatId, who, jid, text, ts, replyTo, toNames }) {
       if (deps.ready) _tickConsolidate(chatId);
     } catch (e) {}
   }
+  try { natural.noteMessage(chatId, jid ? String(jid) : null, t, ts || Date.now()); } catch (_) {}
   if (buf.length > BUFFER_CAP) buf.splice(0, buf.length - BUFFER_CAP);
 }
 
@@ -797,6 +804,7 @@ you: say that after you catch something`,
 // ─── L4: weak-model tool protocol ────────────────────────────────────────────
 const SEARCH_RE = /\[SEARCH:\s*([^\]]{3,120})\]/gi;
 const cmdFinder = require('./commandFinder');
+const natural = require('./naturalness');
 const CMD_RE = /\[CMD:\s*([^\]]{3,120})\]/gi;
 const REMEMBER_RE = /\[REMEMBER:\s*([^|\]]{1,40}?)\s*\|\s*([^\]]{3,160})\]/gi;
 const SILENT_RE = /\[SILENT\]/gi;
@@ -1014,11 +1022,13 @@ async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profi
       if (blk) cmdHint = `\n\n[real commands that might fit, use only if they actually answer the question, tell them the exact command casually, dont invent others:\n${blk}\n]`;
     }
   } catch (_) { /* finder is best-effort */ }
+  let sit = '';
+  try { sit = natural.situation({ chatId, jid: senderJid ? String(senderJid) : null, name: senderName, text: userText, isAmbient }); } catch (_) {}
   const messages = [
     { role: 'system', content: buildSystemPrompt({ isAmbient, chatId, profileText, speakerJid: senderJid, addressMode, queryText: userText }) },
     {
       role: 'user',
-      content: ambientLead + cmdHint,
+      content: ambientLead + cmdHint + (sit ? `\n\n[situation, just for you, never mention it:\n${sit}\n]` : ''),
     },
   ];
   const callOpts = (over = {}) => {
@@ -1118,7 +1128,19 @@ async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profi
   }
   if (isAmbient && SILENT_RE.test(raw)) return null;
   SILENT_RE.lastIndex = 0;
-  const clean = cleanReplyText(raw);
+  let clean = cleanReplyText(raw);
+  // repetition guard: if he's about to say something he already said, one retry with the reason
+  try {
+    const rep = clean && natural.repetition(chatId, clean);
+    if (rep) {
+      messages.push({ role: 'assistant', content: raw });
+      messages.push({ role: 'user', content: `[thats repetitive: ${rep}. say it a different way with different words, still short and casual]` });
+      const r3 = await _call(callOpts({ temperature: 0.95, top_p: 0.95 }));
+      const c3 = r3?.choices?.[0]?.message?.content || '';
+      if (c3.trim() && !looksBroken(c3)) { const cl3 = cleanReplyText(c3); if (cl3 && !natural.repetition(chatId, cl3)) clean = cl3; else if (isAmbient) return null; }
+    }
+    if (clean) clean = natural.clampLength(clean, userText) || clean;
+  } catch (e) { console.error('[persona] naturalness pass failed:', e.message); }
   if (!clean) {
     console.error(
       '[persona] reply cleaned to nothing (rawLen=' + raw.length + ') — staying quiet',
@@ -1127,6 +1149,7 @@ async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profi
   }
   const replies = chunkText(clean);
   if (!replies.length) return null;
+  try { natural.noteOwnReply(chatId, replies.join(' ')); } catch (_) {}
   return { replies, usedSearch: !!parsed.search };
 }
 
