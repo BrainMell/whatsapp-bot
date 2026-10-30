@@ -109,6 +109,10 @@ async function revokeGroupStatus(sock, groupJid, messageKey, dependencies = {}) 
   const logger = dependencies.logger || console;
   const revokeMessage = { protocolMessage: { key: messageKey, type: 0 } };
 
+  // WhatsApp drops revokes without the `edit` stanza attr: '7' = own message, '8' = admin
+  // revoking someone else's (Baileys sets this itself only for sendMessage({delete})).
+  const edit = messageKey.fromMe ? "7" : "8";
+  let wrappedOk = false;
   try {
     const secret = randomBytes(32);
     await sock.relayMessage(groupJid, {
@@ -116,13 +120,22 @@ async function revokeGroupStatus(sock, groupJid, messageKey, dependencies = {}) 
       groupStatusMessageV2: {
         message: { ...revokeMessage, messageContextInfo: { messageSecret: secret } },
       },
-    }, { messageId: generateMessageID() });
-    return { ok: true, method: "wrapped", error: null };
+    }, { messageId: generateMessageID(), additionalAttributes: { edit } });
+    wrappedOk = true;
   } catch (wrappedError) {
     try {
       logger.log("[GStatus] wrapped revoke failed, trying plain delete:", wrappedError?.message || wrappedError);
     } catch (_) {}
   }
+
+  // bare revoke with the edit attr too - covers clients that don't want the V2 envelope
+  try {
+    await sock.relayMessage(groupJid, revokeMessage, { messageId: generateMessageID(), additionalAttributes: { edit } });
+    if (wrappedOk) return { ok: true, method: "wrapped+bare", error: null };
+    wrappedOk = true;
+  } catch (_) {}
+
+  if (wrappedOk) return { ok: true, method: "wrapped", error: null };
 
   try {
     await sock.sendMessage(groupJid, { delete: messageKey });
