@@ -16,7 +16,10 @@ function pickHooks(kit, recentLines) {
   const hooks = [];
   for (const q of kit.quotes || []) hooks.push({ kind: 'quote', text: q, w: 5 });
   for (const m of kit.moments || []) hooks.push({ kind: 'moment', text: m, w: 4.5 });
-  for (const g of kit.game || []) hooks.push({ kind: 'game', text: g, w: 4 });
+  // RPG is a separate system: it is only a SPICE, never the centre of the roast.
+  // At most one game detail, and only ~1 roast in 4 even gets to see it.
+  const gm = (kit.game || []).filter(Boolean);
+  if (gm.length && Math.random() < 0.25) hooks.push({ kind: 'game', text: gm[Math.floor(Math.random() * gm.length)], w: 2.2 });
   for (const h of kit.habits || []) hooks.push({ kind: 'habit', text: h, w: 3.5 });
   for (const f of kit.facts || []) hooks.push({ kind: 'fact', text: f, w: 3 });
   for (const l of (recentLines || []).slice(-4)) if (l.length > 15) hooks.push({ kind: 'recent', text: l, w: 2.5 });
@@ -47,7 +50,7 @@ async function roast(o) {
   const system = `You are ${o.botName || 'Joker'}, a quick-witted friend roasting someone in a group chat. A good roast is SHORT and SPECIFIC. Rules: ONE line, two at the very most, under ${MAX_WORDS} words total. Use ONE concrete detail from the material below (quote it or reference it directly), twist it into a punchline, then STOP. No setup paragraphs, no list of insults, no explaining the joke, no moralising. Never use generic insults (loser, boring, nobody, ghost, no personality). Never invent facts that are not in the material. all lowercase, casual texting voice, at most one emoji. Punch at their habits and moments, never at health, family, looks, race, religion or anything that is not their own doing.`;
   const material = thin
     ? `We know almost nothing about ${name} (they barely speak here). Roast exactly that in one short line, for example how quiet or unknowable they are, without calling them boring or a ghost.`
-    : `Material about ${name}:\n${top.map((h) => `- (${h.kind}) ${h.text}`).join('\n')}${o.kit && o.kit.voice ? `\n- how they come across: ${o.kit.voice}` : ''}\nPick the single best detail. ${o.isSelf ? `${name} asked to be roasted, so go a little harder.` : `${o.requesterName || 'someone'} asked for this roast.`}`;
+    : `Material about ${name}:\n${top.map((h) => `- (${h.kind}) ${h.text}`).join('\n')}${o.kit && o.kit.voice ? `\n- how they come across: ${o.kit.voice}` : ''}\nPick the single best detail (anything tagged game is just a side detail, never the main subject). ${o.isSelf ? `${name} asked to be roasted, so go a little harder.` : `${o.requesterName || 'someone'} asked for this roast.`}`;
   let out = '';
   for (let attempt = 0; attempt < 2 && o.llm; attempt++) {
     try {

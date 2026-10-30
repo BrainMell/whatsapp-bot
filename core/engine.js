@@ -31529,6 +31529,33 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                     return;
                   }
 
+                  // 👂 .j listen on|off|status - "always listen here" (owner 2026-10-30). A listening chat feeds Joker's
+                  // awareness + people memory on EVERY text message even when `.on` is off. It is free (local heuristics,
+                  // zero model calls); replies still follow `.on`, so it never chimes in uninvited.
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} listen` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} listen `)
+                  ) {
+                    let _lAllowed = isBotOwner(senderJid) || isGlobalMod(senderJid) || (typeof isStaff === "function" && isStaff(senderJid));
+                    try { if (!_lAllowed && typeof canUseAdminCommands !== "undefined" && canUseAdminCommands) _lAllowed = true; } catch (_) {}
+                    if (!isGroupChat) return await sock.sendMessage(chatId, { text: BOT_MARKER + "Groups only." });
+                    if (!_lAllowed) return await sock.sendMessage(chatId, { text: BOT_MARKER + "Admins only." });
+                    const _la = lowerTxt.split(" ")[2];
+                    if (_la === "on" || _la === "off") {
+                      personaEngine.setListening(chatId, _la === "on");
+                      return await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + (_la === "on"
+                          ? "👂 ok im always listening in here now. i pick up on everything even when im off, but i only talk when the AI is on."
+                          : "👂 stopped listening in here (unless the AI is on)."),
+                      });
+                    }
+                    const _lOn = personaEngine.isListening(chatId);
+                    const _g = personaEngine.govStats();
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `👂 Listening here: *${_lOn ? "ON" : "OFF"}* (AI replies: ${enabledChats.has(chatId) ? "on" : "off"})\nModel load last minute: ${Object.entries(_g.lastMin).map(([k, v]) => `${k} ${v}`).join(", ")} | in flight ${_g.inflight}\nUse \`${botConfig.getPrefix().toLowerCase()} listen on/off\`.`,
+                    });
+                  }
+
                   // delete user`s profile
                   if (
                     lowerTxt ===
@@ -33718,8 +33745,10 @@ _(or reply to their message)_
                   // `.on` in the DM to turn the AI on for that conversation.
                   const isDM = !chatId.endsWith("@g.us");
                   const isBotEnabled = enabledChats.has(chatId);
+                  // 👂 listening chats are observed even when the AI is off (see `.j listen`)
+                  const _listenOnly = !isBotEnabled && !isDM && personaEngine.isListening(chatId);
 
-                  if (!isBotEnabled) return;
+                  if (!isBotEnabled && !_listenOnly) return;
 
                   // 💡 PROJECT REALGUY (owner 2026-10-20): feed EVERY text
                   // message in enabled chats to the persona's ambient-awareness
@@ -33764,6 +33793,7 @@ _(or reply to their message)_
                       toNames: _toNames,
                     });
                   } catch (e) {}
+                  if (_listenOnly) return; // heard + learned, but the AI is off here so no reply
 
                   // 💡 REALGUY ambient layer: with no direct trigger the
                   // persona may still "feel like" chiming in (small random roll,

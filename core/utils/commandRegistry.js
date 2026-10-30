@@ -57,6 +57,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'antilink', desc: 'Manage link protection and actions.', usage: 'antilink on/off/action' },
     { cmd: 'antispam', desc: 'Enable/disable anti-spam protection.', usage: 'antispam on/off' },
     { cmd: 'antibot', desc: 'Detect other bots posting in the group and act on them.', usage: 'antibot on/off/action/mode' },
+    { cmd: 'listen', desc: 'Make Joker always listen in this group (learns and remembers even when the AI is off; replies still need the AI on). Admins/mods.', usage: 'listen on/off/status' },
     { cmd: 'gstatus', desc: "Post group statuses; Joker automatically revokes statuses from anyone except the bot owner and global moderators. Group admins are not exempt.", usage: "gstatus <text> | gstatus (reply media) | gstatus list | gstatus delete [id|all] | gstatus lock" },
     { cmd: 'announce', desc: 'Toggle admin promote/demote announcements.', usage: 'announce on/off' },
     { cmd: 'welcome', desc: 'Toggle welcome messages for new members.', usage: 'welcome on/off' },

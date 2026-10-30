@@ -92,6 +92,39 @@ const ambientStamps = new Map(); // chatId -> [ts] within window
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// ─── load governor (owner 2026-10-30: "make sure it doesnt overload the model") ──────
+// Listening is free (local heuristics only). The only things that cost model calls are
+// direct replies, ambient chimes, the per-person memory pass and roasts. This keeps the
+// non-essential ones from piling up: sliding 60s budgets per kind, max 2 background calls
+// in flight, and direct replies wait briefly instead of stampeding when the model is busy.
+const GOV = { inflight: 0, limits: { direct: 40, ambient: 4, memory: 4, roast: 8 }, stamps: { direct: [], ambient: [], memory: [], roast: [] } };
+function govTry(kind) {
+  const now = Date.now(), st = GOV.stamps[kind] || (GOV.stamps[kind] = []);
+  while (st.length && now - st[0] > 60000) st.shift();
+  if (st.length >= (GOV.limits[kind] || 10)) return false;
+  if (kind !== 'direct' && GOV.inflight >= 2) return false; // background work yields to real conversation
+  st.push(now); return true;
+}
+async function gcall(opts) {
+  // direct replies never get dropped, but if the model is swamped they queue for a moment
+  for (let i = 0; i < 4 && GOV.inflight >= 5; i++) await sleep(1500);
+  GOV.inflight++;
+  try { return await deps.smartGroqCall(opts); } finally { GOV.inflight--; }
+}
+function govStats() { return { inflight: GOV.inflight, lastMin: Object.fromEntries(Object.entries(GOV.stamps).map(([k, v]) => [k, v.filter((t) => Date.now() - t < 60000).length])) }; }
+
+// ─── "always listen here" chats (owner 2026-10-30) ───────────────────────────────────
+// Listening chats feed the awareness buffer + people memory even when `.on` is off.
+const LISTEN_KEY = '_shared_persona_listen_chats';
+function listenSet() { try { const v = deps.system.get(LISTEN_KEY, []); return new Set(Array.isArray(v) ? v : []); } catch { return new Set(); } }
+function isListening(chatId) { return listenSet().has(chatId); }
+function setListening(chatId, on) {
+  const s = listenSet(); if (on) s.add(chatId); else s.delete(chatId);
+  try { deps.system.set(LISTEN_KEY, [...s]); } catch (_) {}
+  return on;
+}
+
+
 function initPersona(d) {
   deps.botName = d.botName || 'the bot';
   deps.system = d.system; // shared KV module: get(key, fallback) / set(key, val)
@@ -118,7 +151,8 @@ function initPersona(d) {
       nameOf: (j) => { try { return deps.nameResolver(j) || null; } catch { return null; } },
       llm: async (messages, o = {}) => {
         const model = deps.modelFn(2000) || undefined;
-        const r = await deps.smartGroqCall({ model, messages, temperature: o.temperature ?? 0.2, max_completion_tokens: o.max_completion_tokens ?? 600, ...(String(model || '').includes('gpt-oss') ? { reasoning_effort: 'low', include_reasoning: false } : {}) });
+        if (!govTry('memory')) throw new Error('governor: memory budget');
+        const r = await gcall({ model, messages, temperature: o.temperature ?? 0.2, max_completion_tokens: o.max_completion_tokens ?? 600, ...(String(model || '').includes('gpt-oss') ? { reasoning_effort: 'low', include_reasoning: false } : {}) });
         return r?.choices?.[0]?.message?.content || '';
       },
     });
@@ -377,7 +411,7 @@ function _jidForName(chatId, name) {
 
 // Throttled batch LLM pass: durable facts + inside jokes + rolling summary.
 async function consolidate(chatId) {
-  if (_consolidating || !deps.ready) return false;
+  if (_consolidating || !deps.ready || !govTry('memory')) return false;
   const buf = (chatBuffers.get(chatId) || []).slice(-30);
   if (buf.length < 10) return false;
   _consolidating = true;
@@ -385,7 +419,7 @@ async function consolidate(chatId) {
   _msgSince.set(chatId, 0);
   try {
     const log = buf.map((m) => `${bestName(chatId, m.jid, m.who)}: ${m.text}`).join('\n');
-    const res = await deps.smartGroqCall({
+    const res = await gcall({
       model: deps.modelFn(log.length) || undefined,
       temperature: 0.2,
       max_completion_tokens: 700,
@@ -1058,6 +1092,8 @@ async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profi
   const isOwner = senderLevel === 'owner'; // verified by the engine - the person who built this bot
   const level = isOwner || senderLevel === 'mod' ? 'mod' : senderLevel === 'admin' ? 'admin' : 'user'; // permission tier of the person talking
   if (!deps.ready || !chatId) return null;
+  if (isAmbient && !govTry('ambient')) return null; // chiming in is optional: skip when the model is busy
+  if (!isAmbient) govTry('direct');
   const userText = String(text || '').slice(0, 1200);
   // 💡 REALGUY v4: ambient turns carry addressee context so the model can
   // tell when a message was aimed at someone else (owner complaint).
@@ -1114,11 +1150,11 @@ async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profi
   // and returned empty content, retry ONCE with a much bigger headroom
   // new sampling params could be refused by a provider (400): fall back to the plain request instead of going mute
   const _call = async (opts) => {
-    try { return await deps.smartGroqCall(opts); }
+    try { return await gcall(opts); }
     catch (e) {
       if ((e && (e.status === 400 || /invalid_request|unsupported|unknown/i.test(String(e.message)))) && (opts.include_reasoning !== undefined || opts.stop || opts.top_p)) {
         const o2 = { ...opts }; delete o2.include_reasoning; delete o2.stop; delete o2.top_p;
-        return await deps.smartGroqCall(o2);
+        return await gcall(o2);
       }
       throw e;
     }
@@ -1437,18 +1473,20 @@ async function maybeAmbientChime({ sock, chatId, isGroup, senderName, senderJid,
 async function roast({ targetJid, targetName, requesterName, isSelf, chatId }) {
   try { const bn = bestName(chatId, targetJid, ''); if (bn) targetName = bn; else if (/^\d+$/.test(String(targetName))) targetName = 'this guy'; } catch (_) {}
   const kit = people.roastKit(targetJid);
+  const _llmOk = govTry('roast'); // over budget -> roast comes from the no-model template
   const recentLines = (chatBuffers.get(chatId) || []).filter((m) => m.jid && deps.canonicalFn(m.jid) === deps.canonicalFn(targetJid)).map((m) => m.text);
   return roastLib.roast({
     targetName, requesterName, isSelf, kit, recentLines, botName: deps.botName,
-    llm: async (messages, o = {}) => {
+    llm: !_llmOk ? null : async (messages, o = {}) => {
       const model = deps.modelFn(2000) || undefined;
-      const r = await deps.smartGroqCall({ model, messages, temperature: o.temperature ?? 0.9, max_completion_tokens: o.max_completion_tokens ?? 200, ...(String(model || '').includes('gpt-oss') ? { reasoning_effort: 'low', include_reasoning: false } : {}), stop: ['<|endoftext|>', '<|im_end|>', '<|end|>', '<|return|>'] });
+      const r = await gcall({ model, messages, temperature: o.temperature ?? 0.9, max_completion_tokens: o.max_completion_tokens ?? 200, ...(String(model || '').includes('gpt-oss') ? { reasoning_effort: 'low', include_reasoning: false } : {}), stop: ['<|endoftext|>', '<|im_end|>', '<|end|>', '<|return|>'] });
       return r?.choices?.[0]?.message?.content || '';
     },
   });
 }
 
 module.exports = {
+  isListening, setListening, govStats,
   roast,
   people,
   captureOwnerNote,
