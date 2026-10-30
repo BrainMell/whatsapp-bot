@@ -152,13 +152,17 @@ async function labImageMessage(sock) {
     if (labImageCache) {
         return labImageCache;
     }
+    // Baileys 7 contract: the VALUE of the media key is the media spec
+    // (Buffer | {url} | {stream}); uploadData fields like jpegThumbnail ride
+    // at the top level. Supplying jpegThumbnail skips thumbnail computation.
+    const bytes = Buffer.from(LAB_IMAGE_B64, 'base64');
     const prep = await prepareWAMessageMedia(
-        { image: { buffer: Buffer.from(LAB_IMAGE_B64, 'base64') } },
+        { image: bytes, jpegThumbnail: bytes },
         { upload: sock.waUploadToServer }
     );
-    const media = prep?.image?.imageMessage || prep?.imageMessage || null;
-    if (!media) {
-        throw new Error('prepareWAMessageMedia returned no imageMessage');
+    const media = prep?.imageMessage || prep?.image?.imageMessage || null;
+    if (!media || !media.url) {
+        throw new Error('prepareWAMessageMedia returned no uploaded imageMessage');
     }
     labImageCache = media;
     return labImageCache;
