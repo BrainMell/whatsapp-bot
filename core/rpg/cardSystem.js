@@ -22,7 +22,7 @@ const goService = require('../utils/goImageService'); // 💡 singleton (PERF PA
 // NEWER than the process start time in future logs -> stale-process incident.
 try {
   const __buildMtime = fs.statSync(__filename).mtime.toISOString();
-  console.log(`[cardSystem] BUILD predrop-v1 loaded | pid=${process.pid} | file mtime=${__buildMtime} | loaded at ${new Date().toISOString()}`);
+  console.log(`[cardSystem] BUILD predrop-v2-tok loaded | pid=${process.pid} | file mtime=${__buildMtime} | loaded at ${new Date().toISOString()}`);
 } catch (e) { console.log('[cardSystem] BUILD marker stat failed: ' + e.message); }
 
 // 47-k8c: background cache warmer — after a deploy every .j base/guild render
@@ -6053,6 +6053,15 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       await cmdTrc(senderJid, reply, args, m);
       return true;
 
+    // 💡 2026-10-30 (Mellow): tok - one command to CHANGE a player's tokens:
+    // add / remove / set, plus a bare-mention balance check. Card-mod gated
+    // (same tier as trc/tokenreset). Works on unregistered holders (47-l2).
+    case 'tok':
+    case 'token':
+      if (!isCardMod) return reply('❌ Only moderators and above can adjust tokens.'), true;
+      await cmdTok(senderJid, reply, args, m);
+      return true;
+
     // 💡 P3 (2026-08-16): Ci - admin lookup, count of players holding a card.
     case 'ci':
       if (!isCardMod) return reply('❌ Only moderators and above can use card lookup.'), true;
@@ -6415,6 +6424,90 @@ async function cmdTrc(senderJid, reply, args, m) {
   economy.removeEventTokens(targetJid, toRemove);
   const displayName = economy.getDisplayName(targetJid) || targetJid.split('@')[0];
   return reply(`🎫 *TOKEN REMOVAL*\n\n👤 Player: ${displayName}\n💸 Removed: *${toRemove} tokens*\n💰 Remaining: *${currentBal - toRemove} tokens*`);
+}
+// 💡 2026-10-30 (Mellow): tok - the add+remove+set counterpart to trc.
+// Usage:
+//   .j tok @user              -> balance check
+//   .j tok @user add 5        -> +5   (aliases: give, grant, "+5", bare "5")
+//   .j tok @user remove 3     -> -3, clamped at 0 (aliases: rem, take, sub, "-3")
+//   .j tok @user set 10       -> exact balance (aliases: "=", "set +5"/"set -3" diffs too)
+// Card-mod gated like trc. Same mention-or-reply targeting, LID-resolved.
+async function cmdTok(senderJid, reply, args, m) {
+  const p = P();
+  const mentioned = getTaggedJid(m); // @mention OR reply/quote - same as trc
+  if (!mentioned) {
+    return reply(
+      `❌ Usage: \`${p} tok @user <add|remove|set> <amount>\`\n` +
+      `💡 Examples: \`${p} tok @user add 5\` · \`${p} tok @user remove 2\` · \`${p} tok @user set 10\` · \`${p} tok @user\` (balance check)`
+    );
+  }
+  const targetJid = resolveMentionJid(mentioned);
+  const cur = economy.getEventTokens(targetJid);
+  const displayName = economy.getDisplayName(targetJid) || targetJid.split('@')[0];
+
+  // Parse action + amount. Accepted shapes:
+  //   "add 5" / "5" / "+5" / "give 5"   -> add
+  //   "remove 3" / "-3" / "take 3"      -> remove
+  //   "set 10" / "=10" / "set +2"       -> set exact balance
+  //   no action                         -> balance readout
+  let action = null; // 'add' | 'remove' | 'set'
+  let amount = null;
+  let bareNumber = null;
+  for (const a of args) {
+    let mm2;
+    if ((mm2 = a.match(/^([+=-])(\d+)$/))) {
+      if (action === null) action = mm2[1] === '+' ? 'add' : mm2[1] === '-' ? 'remove' : 'set';
+      amount = parseInt(mm2[2], 10);
+      break;
+    }
+    if ((mm2 = a.match(/^(add|give|grant|rem|remove|take|sub|set|=)$/i))) {
+      const w = mm2[1].toLowerCase();
+      action = (w === 'add' || w === 'give' || w === 'grant') ? 'add'
+        : (w === 'set' || w === '=') ? 'set' : 'remove';
+      continue; // amount arrives in a later arg
+    }
+    if (/^\d+$/.test(a) && bareNumber === null) bareNumber = parseInt(a, 10);
+  }
+  if (action === null && bareNumber !== null) action = 'add'; // ".j tok @u 5" = grant 5
+  if (amount === null && bareNumber !== null) amount = bareNumber;
+
+  // No actionable pair -> balance readout
+  if (action === null || amount === null) {
+    return reply(
+      `🎫 *TOKEN CHECK*\n\n👤 Player: ${displayName}\n💰 Tokens: *${cur}*\n\n` +
+      `💡 \`${p} tok @user add|remove|set <amount>\` to change them.`
+    );
+  }
+
+  let ok = false;
+  let delta = 0;
+  if (action === 'add') {
+    if (amount < 1) return reply(`❌ Amount must be a whole number ≥ 1 for add.`);
+    ok = economy.addEventTokens(targetJid, amount);
+    delta = amount;
+  } else if (action === 'remove') {
+    if (amount < 1) return reply(`❌ Amount must be a whole number ≥ 1 for remove.`);
+    const toRemove = Math.min(amount, cur); // graceful clamp, same UX as trc
+    if (toRemove <= 0) return reply(`❌ ${displayName} has *0 tokens* — nothing to remove.`);
+    ok = economy.removeEventTokens(targetJid, toRemove);
+    delta = -toRemove;
+  } else { // set (0 allowed; positive/negative diff applied atomically here)
+    const diff = amount - cur;
+    if (diff > 0) ok = economy.addEventTokens(targetJid, diff);
+    else if (diff < 0) ok = economy.removeEventTokens(targetJid, -diff);
+    else ok = true;
+    delta = diff;
+  }
+  if (!ok) return reply(`❌ Failed to update tokens for ${displayName}.`);
+  const newBal = economy.getEventTokens(targetJid);
+  const verb = action === 'add' ? '➕ Added' : action === 'remove' ? '➖ Removed' : '🎯 Set';
+  const deltaTxt = delta === 0 ? '±0' : (delta > 0 ? `+${delta}` : `${delta}`);
+  return reply(
+    `🎫 *TOKEN ADJUSTMENT*\n\n` +
+    `👤 Player: ${displayName}\n` +
+    `${verb}: *${deltaTxt} tokens*\n` +
+    `💰 Balance: *${cur} → ${newBal}*`
+  );
 }
 
 // 💡 P3 (2026-08-16): Ci - admin card lookup, count of players holding a card.

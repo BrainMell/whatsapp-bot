@@ -114,6 +114,7 @@ const MOD_MENU = {
       { cmd: "rc", usage: "rc @user <card> [tier]", desc: "Force-remove a player's card." },
       { cmd: "erc", usage: "erc @user <eventcard>", desc: "Force-remove a player's event card." },
       { cmd: "trc", usage: "trc @user <tokens>", desc: "Remove event tokens from a player." },
+      { cmd: "tok", usage: "tok @user <add|remove|set> <amount>", desc: "Change a player's event tokens (+/-/set; bare mention = balance check)." },
       { cmd: "ci", usage: "ci <card>", desc: "Look up who holds a card." },
       { cmd: "movecards", usage: "movecards @old @new", desc: "Move ALL cards from one account to another (two-step, cards only)." },
       { cmd: "cardmod", usage: "cardmod add/del/list @user", desc: "Manage card mods (owner only)." },
