@@ -9,7 +9,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 const REGISTRY = require('../utils/commandRegistry');
 
-const STOP = new Set('a an the and or of to in on for with is are was be do does did can could would should i me my you your we us it its this that these those how what which where when who whom why any some there here please pls just like want need get give make let lets use using command commands cmd bot joker a im ur u so if then than too very really about into as at by from not no yes ok okay hey yo bro dude'.split(' '));
+const STOP = new Set('a an the and or of to in on for with is are was be do does did can could would should i me my you your we us it its this that these those how what which where when who whom why any some there here please pls just like want need get give make let lets use using command commands cmd bot joker a im ur u so if then than too very really about into as at by from not no yes ok okay hey yo bro dude check see view show open go put tell about all something someone anyone somebody thing stuff way able'.split(' '));
 
 // tiny thesaurus: user wording -> words the registry actually uses
 const SYN = {
@@ -53,6 +53,51 @@ const STEM = (w) => {
 const tok = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9+ ]+/g, ' ').split(/\s+/).filter(Boolean);
 const terms = (s, keepStop) => tok(s).filter((w) => keepStop || (!STOP.has(w) && w.length > 1)).map(STEM);
 
+// Hand-curated intents: the ~45 things people actually ask about. A matching phrase gives its
+// commands a big boost, so the common questions are right even when the descriptions use other words.
+// [phrase regex, [command names as they appear in the registry]]
+const INTENTS = [
+  [/\b(balance|how much (money|zeni|cash|gold|coins)|my (money|zeni|wallet|cash)|wallet)\b/, ['balance', 'bal']],
+  [/\b(send|give|pay|transfer|gift)\b.*\b(money|zeni|coins|cash|gold|friend|someone|him|her|them|@)/, ['transfer', 'send']],
+  [/\b(daily|every ?day|free (reward|money|zeni))/, ['daily']],
+  [/\b(rob|steal|mug)\b/, ['rob', 'steal']],
+  [/\b(richest|wealth(iest)?|top (money|zeni)|who.?s rich)/, ['rich']],
+  [/\b(leaderboard|ranking|top players|who.?s (the )?(top|best|number one))/, ['leaderboard', 'lb']],
+  [/\b(fight|duel|pvp|1v1|battle)\b.*\b(player|someone|friend|him|her|them|@|user|person)|\b(duel|pvp|1v1)\b/, ['duel', 'pvp']],
+  [/\b(dungeon|quest|adventure|monsters?|boss(es)?|grind)\b/, ['quest', 'solo', 'abyss']],
+  [/\b(solo|by myself|alone)\b.*\b(quest|dungeon|adventure)|\b(quest|dungeon|adventure)\b.*\b(solo|alone|by myself)/, ['solo']],
+  [/\b(abyss|endless|floors?)\b/, ['abyss', 'abyss enter']],
+  [/\b(skills?|abilit(y|ies)|learn (a )?skill|upgrade (my )?skills?)\b/, ['skill', 'skills']],
+  [/\b(inventory|my (bag|items|stuff)|backpack)\b/, ['inventory']],
+  [/\b(equip|wear|put on)\b|\b(sword|armor|armour|weapon|gear)\b/, ['equip']],
+  [/(?<!event )(?<!e)(?<!e-)\b(shop|store)\b(?!.*\b(event|e-?shop)\b)/, ['shop', 'buy']],
+  [/\b(event shop|e-?shop|event tokens?|tokens?)\b/, ['eshop', 'tokens', 'tokenlb']],
+  [/\b(market|player market|list.*(for sale)|sell (my|an?) (item|rune|summon))/, ['market', 'market sell']],
+  [/\b(collection|my cards|card list|cards? i (have|own))\b/, ['coll']],
+  [/\b(deck)\b/, ['cdeck']],
+  [/\b(auction|bid(ding)?)\b/, ['auction']],
+  [/\b(summons?|pets?|companions?|familiars?|eggs?)\b/, ['summon']],
+  [/\b(guild|clan)\b/, ['guild create', 'guild join', 'guild info']],
+  [/\b(profile|my stats|who am i|my level|my info)\b/, ['profile', 'me']],
+  [/\b(rank|adventurer rank)\b/, ['rank']],
+  [/\b(sticker|make .*sticker|turn .*(picture|image|photo|video) into)\b/, ['s']],
+  [/\b(sticker.*(to|into|back) (an? )?(image|picture|photo)|toimg)\b/, ['toimg']],
+  [/\b(google|look ?up|search (the )?(web|internet|online))\b/, ['google']],
+  [/\b(images?|pictures?|pics?|photos?)\b.*\b(search|find|get|download)|\b(search|find|get|download)\b.*\b(images?|pictures?|pics?)/, ['img']],
+  [/\b(song|music|audio|mp3)\b/, ['audio']],
+  [/\b(weather|forecast|temperature)\b/, ['weather']],
+  [/\b(gstatus|group status)\b|\bpost .*status\b/, ['gstatus']],
+  [/\b(kick|remove|throw out|boot)\b.*\b(member|someone|user|person|him|her|group|chat)\b/, ['kick']],
+  [/\b(gamble|gambling|casino|bet|wager)\b/, ['bj', 'roulette', 'dice', 'flip']],
+  [/\b(blackjack|21)\b/, ['bj']],
+  [/\b(coin ?flip|flip a coin|heads or tails)\b/, ['flip', 'cf']],
+  [/\b(fish(ing)?)\b/, ['fish']], [/\b(mine|mining|ores?)\b/, ['mine']], [/\b(hunt(ing)?|animals?)\b/, ['hunt']],
+  [/\b(world map|atlas|realms?)\b/, ['world']],
+  [/\b(commands?|menu|help|what can you do|list of)\b/, ['menu', 'help']],
+  [/\b(nick ?name|rename|change my name)\b/, ['nickname']],
+  [/\b(how (do|to) (i )?(join)|join (a |the )?(quest|fight|dungeon))\b/, ['join']],
+];
+
 let _idx = null;
 function build() {
   const docs = [];
@@ -89,12 +134,13 @@ function lev(a, b) {
 function find(query, k = 3) {
   const ix = _idx || build();
   const base = terms(query);
-  if (!base.length) return [];
+  if (!base.length && !INTENTS.some(([re]) => re.test(String(query).toLowerCase()))) return [];
   // query terms: originals weight 1, synonyms 0.45
   const q = new Map();
   for (const t of base) q.set(t, Math.max(q.get(t) || 0, 1));
   for (const t of tok(query)) for (const s of SYN[t] || []) { const st = STEM(s); if (!q.has(st)) q.set(st, 0.45); }
   const k1 = 1.4, b = 0.7;
+  const ql = String(query).toLowerCase();
   const hits = [];
   for (const d of ix.docs) {
     let sc = 0;
@@ -110,6 +156,8 @@ function find(query, k = 3) {
         if (n === t) sc += 6; else if (t.length > 4 && lev(n, t) === 1) sc += 3.5; else if (t.length > 5 && lev(n, t) === 2) sc += 1.5;
       }
     }
+    // curated intents: big boost for the commands the phrase is known to mean
+    for (const [re, names] of INTENTS) { if (re.test(ql) && d.names.some((n) => names.includes(n))) { sc += 9; break; } }
     if (sc > 0) hits.push({ cmd: d.cmd, cat: d.cat, desc: d.desc, usage: d.usage, score: sc });
   }
   hits.sort((a, b2) => b2.score - a.score);
@@ -124,6 +172,11 @@ function looksLikeCommandQuestion(text) {
   const t = String(text || '');
   return ASK_RE.test(t) || /\b(command|commands|cmd)\b/i.test(t);
 }
+/** Strong signal even without ASK wording: an intent phrase matched AND it reads like a question. */
+function looksLikeBotQuestion(text) {
+  const t = String(text || '');
+  return /\?|\b(how|where|what|which|can i|is there)\b/i.test(t) && find(t, 1).length > 0 && find(t, 1)[0].score >= 9;
+}
 
 /** Compact block for the prompt, or '' when nothing confident. ~25 tokens/command. */
 function promptBlock(query, prefix, k = 3) {
@@ -134,4 +187,35 @@ function promptBlock(query, prefix, k = 3) {
   return lines.join('\n');
 }
 
-module.exports = { find, promptBlock, looksLikeCommandQuestion, _rebuild: build };
+// ── validator: every command name that really exists (registry names + aliases + scanned extras)
+let _valid = null;
+function validNames() {
+  if (_valid) return _valid;
+  const ix = _idx || build();
+  _valid = new Set();
+  for (const d of ix.docs) for (const n of d.names) { _valid.add(n); _valid.add(n.split(' ')[0]); }
+  try { for (const x of require('./extraCommands.json')) _valid.add(x); } catch (_) {}
+  return _valid;
+}
+
+/**
+ * Check command mentions in a reply, e.g. ".j daily", ".j rob @x". Returns
+ * { bad: [names that dont exist], fixed: reply with near-miss typos corrected }.
+ */
+function checkReply(text, prefix) {
+  const p = String(prefix || '.j').toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(^|[\\s(\"'\`])(${p})\\s+([a-z0-9+]{2,20})`, 'gi');
+  const valid = validNames(); const bad = []; let fixed = String(text);
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const w = m[3].toLowerCase();
+    if (valid.has(w)) continue;
+    let best = null, bd = 3;
+    for (const v of valid) { if (v.length < 3) continue; const d = lev(v, w); if (d < bd) { bd = d; best = v; } }
+    if (best && bd <= 1 && w.length >= 4) fixed = fixed.replace(new RegExp(`(${p}\\s+)${w}\\b`, 'i'), `$1${best}`);
+    else bad.push(w);
+  }
+  return { bad, fixed };
+}
+
+module.exports = { looksLikeBotQuestion, checkReply, validNames, find, promptBlock, looksLikeCommandQuestion, _rebuild: build };

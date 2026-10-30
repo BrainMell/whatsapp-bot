@@ -753,7 +753,7 @@ you: say that after you catch something`,
   );
   // Layer 6 — tools (unchanged from v1; owner's Task-11 spec).
   p.push(
-    `TOOLS you can use when you feel like it (exact syntax, on their own line):\n` +
+    `COMMANDS: you only know a bot command exists if it appears in a [real commands] note on the message or a [Commands that exist] result. if asked how to do something in the bot and you dont have that, use [CMD: ...] first. never guess or invent a command name or its usage. if nothing matches, say you dont think theres a command for that.\n\nTOOLS you can use when you feel like it (exact syntax, on their own line):\n` +
       `[SEARCH: short query] — output this ALONE and stop, if you need current or factual info. You'll be handed what you found, then answer casually — like you already knew it or just checked your phone. NEVER mention searching, results, sources, links or "according to".\n` +
       `[CMD: short description] — output this ALONE and stop when someone asks how to do something with the bot / whether a command exists and the answer isnt already shown above. You'll be handed the real matching commands, then answer casually with the exact command. Never make up commands.\n` +
       `[REMEMBER: their name | short fact] — note something worth remembering about someone; you can also reply normally in the same message. If someone tells you what to call them, remember it as [REMEMBER: <their name> | goes by <what they said>].`,
@@ -1016,10 +1016,16 @@ async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profi
   // command finder: if this sounds like "which command does X", retrieve locally (0 tokens)
   // and hand over only the top few real commands. Ambient chatter never triggers it.
   let cmdHint = '';
+  let cmdBlk = '';
   try {
-    if (!isAmbient && cmdFinder.looksLikeCommandQuestion(userText)) {
-      const blk = cmdFinder.promptBlock(userText, deps.prefixFn(), 3);
-      if (blk) cmdHint = `\n\n[real commands that might fit, use only if they actually answer the question, tell them the exact command casually, dont invent others:\n${blk}\n]`;
+    if (!isAmbient) {
+      const asked = cmdFinder.looksLikeCommandQuestion(userText);
+      if (asked || cmdFinder.looksLikeBotQuestion(userText)) {
+        cmdBlk = cmdFinder.promptBlock(userText, deps.prefixFn(), 3);
+        cmdHint = cmdBlk
+          ? `\n\n[real commands that might fit. these are the ONLY commands you may name, copy them exactly, and only if they actually answer the question:\n${cmdBlk}\n]`
+          : asked ? `\n\n[you searched the command list and nothing matches this. say you dont think the bot has that, or you dont know. NEVER make up a command name]` : '';
+      }
     }
   } catch (_) { /* finder is best-effort */ }
   let sit = '';
@@ -1138,6 +1144,21 @@ async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profi
       const r3 = await _call(callOpts({ temperature: 0.95, top_p: 0.95 }));
       const c3 = r3?.choices?.[0]?.message?.content || '';
       if (c3.trim() && !looksBroken(c3)) { const cl3 = cleanReplyText(c3); if (cl3 && !natural.repetition(chatId, cl3)) clean = cl3; else if (isAmbient) return null; }
+    }
+    if (clean) {
+      // command validator: never let him name a command that doesnt exist
+      const pf = deps.prefixFn();
+      let chk = cmdFinder.checkReply(clean, pf);
+      if (chk.bad.length) {
+        const blk = cmdBlk || cmdFinder.promptBlock(userText + ' ' + chk.bad.join(' '), pf, 3);
+        messages.push({ role: 'assistant', content: raw });
+        messages.push({ role: 'user', content: `[${chk.bad.map((b) => `"${pf} ${b}"`).join(', ')} is not a real command. ${blk ? `real ones:\n${blk}\nUse only those, or` : 'Dont name any command,'} say you arent sure what its called. keep it casual and short]` });
+        const r4 = await _call(callOpts({ temperature: 0.4, top_p: 0.8 }));
+        const c4 = cleanReplyText(r4?.choices?.[0]?.message?.content || '');
+        const chk4 = c4 ? cmdFinder.checkReply(c4, pf) : null;
+        if (c4 && !looksBroken(c4) && !chk4.bad.length) { clean = chk4.fixed; chk = { bad: [], fixed: clean }; }
+        else clean = 'idk the exact command for that, try ' + pf + ' menu';
+      } else clean = chk.fixed;
     }
     if (clean) clean = natural.clampLength(clean, userText) || clean;
   } catch (e) { console.error('[persona] naturalness pass failed:', e.message); }
