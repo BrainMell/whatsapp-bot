@@ -19,29 +19,44 @@ function responseData(sections) {
     })).toString('base64');
 }
 
-function htmlEnvelope(html) {
-    return {
-        botForwardedMessage: {
-            message: {
-                richResponseMessage: {
-                    messageType: 1,
-                    unifiedResponse: {
-                        data: responseData([{
-                            __typename: 'GenAIUnifiedResponseSection',
-                            view_model: {
-                                __typename: 'GenAISingleLayoutViewModel',
-                                primitive: {
-                                    __typename: 'FOAHtmlPrimitiveDemoDONOTUSE',
-                                    trusted_sources: [],
-                                    payload: String(html).trim()
-                                }
-                            }
-                        }])
+function htmlEnvelope(html, forwardedOrigin = 0) {
+    const rich = {
+        messageType: 1,
+        unifiedResponse: {
+            data: responseData([{
+                __typename: 'GenAIUnifiedResponseSection',
+                view_model: {
+                    __typename: 'GenAISingleLayoutViewModel',
+                    primitive: {
+                        __typename: 'FOAHtmlPrimitiveDemoDONOTUSE',
+                        trusted_sources: [],
+                        payload: String(html).trim()
                     }
                 }
-            }
+            }])
         }
     };
+    // 💡 2026-10-30 (owner: "used to work, now it says update"): the classic
+    // 8efe5aede envelope carries isForwarded + forwardOrigin 4 (fakes a
+    // forwarded Meta AI message) — the ONLY delivery owner-confirmed to
+    // render. forwardOrigin > 0 re-enables that shape.
+    if (forwardedOrigin) {
+        rich.contextInfo = { isForwarded: true, forwardOrigin: forwardedOrigin };
+    }
+    return {
+        botForwardedMessage: {
+            message: { richResponseMessage: rich }
+        }
+    };
+}
+
+// 💡 CLASSIC delivery (2026-10-30): single plain relay of the forwarded-origin
+// envelope, NO MESSAGE_EDIT replay. Owner report: edit-replay envelopes now
+// render as an "update WhatsApp" prompt on his (fully updated) client, while
+// this classic shape is what rendered on day one (8efe5aede, "Holy fuck it
+// worked"). Menu + dashboard ship this way; the probes keep testing the rest.
+async function sendClassicHtml(sock, chatId, senderJid, html) {
+    return relayContent(sock, chatId, senderJid, htmlEnvelope(html, 4));
 }
 
 function richEnvelope(sections) {
@@ -434,8 +449,8 @@ function modMenuHtml() {
 const HELP = [
     'JOKER PROTOCOL LAB',
     '',
-    '.j mod proto opens the JOKER mod menu (rich HTML).',
-    '.j mod proto lab  The protocol-lab workshop dashboard',
+    '.j mod proto opens the JOKER mod menu (rich HTML, classic envelope).',
+    '.j mod proto lab  The protocol-lab workshop dashboard (classic envelope)',
     '.j mod proto html  HTML primitive plus edit replay',
     '.j mod proto htmlraw  HTML primitive without edit replay',
     '.j mod proto warning  A/B test for the download prompt',
@@ -468,13 +483,15 @@ async function handleProtoLab(sock, chatId, senderJid, args = [], BOT_MARKER = '
             case 'menu':
             case 'protomenu':
                 // owner 2026-10-29: bare .j mod proto / protomenu must open the
-                // MOD MENU, not the lab workshop. Edit-replay delivery = the
-                // most promising download-gate bypass until the A/B verdict.
-                return await sendRich(sock, chatId, senderJid, htmlEnvelope(modMenuHtml()), true);
+                // MOD MENU, not the lab workshop.
+                // owner 2026-10-30: edit-replay delivery renders as an
+                // "update WhatsApp" prompt on his client — menu goes back to
+                // the CLASSIC 8efe5aede envelope (forwarded origin, no replay).
+                return await sendClassicHtml(sock, chatId, senderJid, modMenuHtml());
             case 'lab':
             case 'workshop':
             case 'dashboard':
-                return await sendHtmlProbe(sock, chatId, senderJid, 'menu', true);
+                return await sendClassicHtml(sock, chatId, senderJid, dashboardHtml());
             case 'html':
                 return await sendHtmlProbe(sock, chatId, senderJid, 'html', true);
             case 'htmlraw':

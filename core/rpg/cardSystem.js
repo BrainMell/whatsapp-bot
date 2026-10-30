@@ -1139,6 +1139,36 @@ async function pickSpawnCard(targetGroup, forceTier) {
   return card ? { card, stat } : null;
 }
 
+// 💡 PRE-DROP (2026-10-30): force-card RESOLUTION extracted from doSpawn so
+// the pre-drop dispatcher can learn WHICH card a manual spawn will drop
+// (owner DM needs the real ID) with zero side effects. Resolution rules are
+// the old doSpawn forceCardId branch verbatim (index → exact name → partial
+// name, tier guard incl. virtual 'E' tier, artPending never spawnable).
+function resolveForceCard(forceCardId, forceTier) {
+  let card = CARD_INDEX()[forceCardId];
+  if (!card) {
+    const q = forceCardId.toLowerCase();
+    // 💡 FIX 2026-08-31: 'E' is a VIRTUAL tier - event cards carry their
+    // real tier (1-6/S) with an 'E-' ID prefix, so `String(c.tier)==='E'`
+    // never matched and `.g espawn <name>` ALWAYS failed (only exact
+    // E-XXXXX IDs worked). When forceTier is 'E', match event cards by
+    // ID prefix instead of tier.
+    const tierOk = (c) => {
+      if (!forceTier) return true;
+      if (String(c.tier) === String(forceTier)) return true;
+      if (String(forceTier).toUpperCase() === 'E' && isEventCard(c)) return true;
+      return false;
+    };
+    card = ALL_CARDS().find(c => c.cardName.toLowerCase() === q && tierOk(c));
+    if (!card) card = ALL_CARDS().find(c => c.cardName.toLowerCase().includes(q) && tierOk(c));
+  }
+  // 💡 HIDDEN SETS: artPending cards never render (no image = broken spawn),
+  // so they are unspawnable even by explicit ID. Non-artPending hidden cards
+  // CAN be force-spawned here: it is an explicit mod action (preview path).
+  if (card && card.artPending) card = null;
+  return card || null;
+}
+
 async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, targetGroup = null) {
   const inst  = getInst();
   if (!inst.sock_ref || !targetGroup) return;
@@ -1147,27 +1177,7 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
   let stat = null;
 
   if (forceCardId) {
-    card = CARD_INDEX()[forceCardId];
-    if (!card) {
-      const q = forceCardId.toLowerCase();
-      // 💡 FIX 2026-08-31: 'E' is a VIRTUAL tier - event cards carry their
-      // real tier (1-6/S) with an 'E-' ID prefix, so `String(c.tier)==='E'`
-      // never matched and `.g espawn <name>` ALWAYS failed (only exact
-      // E-XXXXX IDs worked). When forceTier is 'E', match event cards by
-      // ID prefix instead of tier.
-      const tierOk = (c) => {
-        if (!forceTier) return true;
-        if (String(c.tier) === String(forceTier)) return true;
-        if (String(forceTier).toUpperCase() === 'E' && isEventCard(c)) return true;
-        return false;
-      };
-      card = ALL_CARDS().find(c => c.cardName.toLowerCase() === q && tierOk(c));
-      if (!card) card = ALL_CARDS().find(c => c.cardName.toLowerCase().includes(q) && tierOk(c));
-    }
-    // 💡 HIDDEN SETS: artPending cards never render (no image = broken spawn),
-    // so they are unspawnable even by explicit ID. Non-artPending hidden cards
-    // CAN be force-spawned here: it is an explicit mod action (preview path).
-    if (card && card.artPending) card = null;
+    card = await resolveForceCard(forceCardId, forceTier);
     if (!card) return null;
     stat = await getOrInitStat(card.id, card.tier);
   } else {
@@ -1274,44 +1284,56 @@ A card is dropping in *${subject}* in 1 minute.
   await inst.sock_ref.sendMessage(to, { text: String(card.id) }); // bare ID — copy-ready
 }
 
-// 💡 PRE-DROP dispatch (called from the spawn timer). Non-target groups:
-// spawn immediately, unchanged. Target groups: roll now -> DM owner -> hold
-// PRE_DROP_ALERT.leadMs -> doSpawn(forceCardId) drops the SAME card. The cap
-// is re-checked at drop time (doSpawn forceCardId path), so a card that hits
-// its copy cap during the 60s hold cancels cleanly (owner gets a DM).
-async function dispatchGroupSpawn(inst, gid) {
+// 💡 PRE-DROP dispatch (called from the spawn timer AND from every manual
+// spawn path — owner 2026-10-30: "undo the not sending the ids to my dms":
+// manual .g spawn / .g espawn / .g cards-on spawns in the target GCs get the
+// same treatment). Non-target groups: spawn immediately, unchanged. Target
+// groups: resolve the card now -> DM owner -> hold PRE_DROP_ALERT.leadMs ->
+// doSpawn drops the SAME card. The cap is re-checked at drop time, so an
+// auto-drop that caps out during the hold cancels cleanly (owner gets a DM).
+// Manual spawns keep their bypassCap flag at drop time. Returns
+// { preDropped, card, subject } when deferred (so command handlers can tell
+// the mod), otherwise whatever doSpawn returned.
+async function dispatchGroupSpawn(inst, gid, forceCardId = null, forceTier = null, bypassCap = false) {
   try {
     const targets = await resolvePreDropTargets(inst);
     const gidS = String(gid);
-    if (!targets.has(gidS)) return doSpawn(null, null, false, gid);
+    if (!targets.has(gidS)) return doSpawn(forceCardId, forceTier, bypassCap, gid);
+
+    // Target GC: learn WHICH card is coming before any side effects.
+    let card = null;
+    if (forceCardId) {
+      card = await resolveForceCard(forceCardId, forceTier).catch(() => null);
+    } else {
+      const picked = await pickSpawnCard(gid, null).catch(() => null);
+      card = picked && picked.card;
+    }
+    if (!card) return doSpawn(forceCardId, forceTier, bypassCap, gid); // unresolvable — behave exactly as before
 
     const subject = targets.get(gidS);
-    const picked = await pickSpawnCard(gid, null).catch(() => null);
-    if (!picked || !picked.card) return doSpawn(null, null, false, gid); // pool exhausted — behave as before
-
     try {
-      await sendPreDropDMs(inst, subject, picked.card);
-      console.log(`[CardSystem][${botConfig.getBotId()}] PRE-DROP: ${picked.card.cardName} (${picked.card.id}) in "${subject}" drops in ${PRE_DROP_ALERT.leadMs / 1000}s — DMs sent to owner`);
+      await sendPreDropDMs(inst, subject, card);
+      console.log(`[CardSystem][${botConfig.getBotId()}] PRE-DROP: ${card.cardName} (${card.id}) in "${subject}" drops in ${PRE_DROP_ALERT.leadMs / 1000}s — DMs sent to owner`);
     } catch (dmErr) {
       console.error(`[CardSystem] pre-drop DM failed for ${gidS}: ${dmErr?.message || dmErr}`);
     }
 
     setTimeout(() => {
-      Promise.resolve(doSpawn(picked.card.id, null, false, gid))
+      Promise.resolve(doSpawn(forceCardId || card.id, forceCardId ? forceTier : null, bypassCap, gid))
         .then((res) => {
           if (!res) {
-            console.warn(`[CardSystem] PRE-DROP ${picked.card.id} aborted at drop time for ${gidS}`);
+            console.warn(`[CardSystem] PRE-DROP ${card.id} aborted at drop time for ${gidS}`);
             if (inst.sock_ref && inst.ownerJid) {
-              inst.sock_ref.sendMessage(inst.ownerJid, { text: `⚠️ The *${picked.card.cardName}* drop in *${subject}* was cancelled (copy cap hit during the hold).` }).catch(() => {});
+              inst.sock_ref.sendMessage(inst.ownerJid, { text: `⚠️ The *${card.cardName}* drop in *${subject}* was cancelled (card no longer spawnable during the hold).` }).catch(() => {});
             }
           }
         })
         .catch((e) => console.error(`[CardSystem] PRE-DROP doSpawn failed for ${gidS}: ${e?.message || e}`));
     }, PRE_DROP_ALERT.leadMs);
-    return { preDropped: true, cardId: picked.card.id };
+    return { preDropped: true, card, subject };
   } catch (e) {
     console.error(`[CardSystem] dispatchGroupSpawn failed for ${gid}: ${e?.message || e} — falling back to immediate spawn`);
-    return doSpawn(null, null, false, gid);
+    return doSpawn(forceCardId, forceTier, bypassCap, gid);
   }
 }
 
@@ -5459,7 +5481,9 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         if (inst.activeGroups.has(chatId)) return reply('⚠️ Already ON.'), true;
         inst.activeGroups.add(chatId);
         await saveActiveGroups();
-        doSpawn(null, null, false, chatId);
+        // 💡 PRE-DROP (2026-10-30): welcome spawn goes through the dispatcher
+        // so target GCs still get the 1-minute owner DM.
+        dispatchGroupSpawn(inst, chatId);
         ensureTimerRunning();
         return reply('✅ *CARD SYSTEM ONLINE*'), true;
       }
@@ -5789,7 +5813,13 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       }
       if (!spawnQuery) return sendUsage(reply, `${p} spawn`, `${p} spawn <name or id> | <tier>`, `${p} spawn Roy mustang | 5`), true;
 
-      const spawnRes = await doSpawn(spawnQuery, forceTier, true, chatId);
+      // 💡 PRE-DROP (2026-10-30, owner "undo the not sending the ids"): in the
+      // alert-target GCs the drop is announced to the owner 60s ahead; the
+      // mod gets a scheduling reply instead of an instant drop.
+      const spawnRes = await dispatchGroupSpawn(inst, chatId, spawnQuery, forceTier, true);
+      if (spawnRes && spawnRes.preDropped) {
+        return reply(`⏳ *PRE-DROP SET* — _${spawnRes.card.cardName}_ (\`${spawnRes.card.id}\`) drops in *${spawnRes.subject}* in 60s.\n📥 Owner has been DM'd the ID.`), true;
+      }
       if (!spawnRes) return reply(`❌ Card not found matching "${spawnQuery}"${forceTier ? ` in Tier ${forceTier}` : ''}.`), true;
       return true;
     }
@@ -5830,7 +5860,11 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         }
         return reply(listMsg), true;
       }
-      const espawnRes = await doSpawn(espawnQuery, 'E', true, chatId);
+      // 💡 PRE-DROP (2026-10-30): same 60s owner-DM flow in alert-target GCs.
+      const espawnRes = await dispatchGroupSpawn(inst, chatId, espawnQuery, 'E', true);
+      if (espawnRes && espawnRes.preDropped) {
+        return reply(`⏳ *PRE-DROP SET* — _${espawnRes.card.cardName}_ (\`${espawnRes.card.id}\`) drops in *${espawnRes.subject}* in 60s.\n📥 Owner has been DM'd the ID.`), true;
+      }
       if (!espawnRes) {
         const eventCards = getInst().EVENT_CARDS || [];
         return reply(`❌ Event card not found matching "${espawnQuery}".\n\n${eventCards.length} event cards available. Use \`${p} espawn\` (no args) to list them all.`), true;
