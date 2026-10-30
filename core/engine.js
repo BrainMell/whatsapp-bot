@@ -9756,6 +9756,9 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     }
                   }
 
+                  // Shared typed-error sentinel for pending and command media handlers.
+                  const GS_UNSUPPORTED = '__gs_unsupported_media__';
+
                   // ── Group-status media helpers (defined once per process) ──
                   const __gsEnsureHelpers = () => {
                     if (globalThis.__gsHelpers) return globalThis.__gsHelpers;

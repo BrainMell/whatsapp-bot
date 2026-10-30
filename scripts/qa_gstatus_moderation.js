@@ -78,6 +78,7 @@ async function main() {
   assert(!/senderIsAdmin|gslIsAdmin|isGroupAdmin/.test(guard), "group-admin status is not an exemption");
   assert(guard.includes("revokeGroupStatus") && guard.includes("return;"), "rejected statuses are revoked and stopped");
   assert(engine.includes("Group-status protection is always ON"), "legacy lock command cannot disable auto-moderation");
+  assert(engine.includes("const GS_UNSUPPORTED = '__gs_unsupported_media__';"), "gstatus media error sentinel remains in the message-handler scope");
 
   console.log("\n── result ──");
   console.log("PASS: " + pass + " | FAIL: " + fail);
