@@ -34064,6 +34064,17 @@ _(or reply to their message)_
                           isAmbient: false,
                           profileText: _profileText,
                           addressMode: isReplyToBot ? "reply" : isBotMentioned ? "mention" : "name",
+                          // 🔒 owner 2026-10-30: permission tier so Joker never shares mod-only commands with non-mods
+                          senderLevel: (() => {
+                            try {
+                              const sj = senderJid;
+                              if (isBotOwner(sj) || isGlobalMod(sj) || (typeof isStaff === "function" && isStaff(sj))) return "mod";
+                              const ac = adminSetCache.get(chatId);
+                              const ph = lidResolver.resolveToPhone(sj, configInstance.getAuthPath());
+                              if (ac && ac.admins && (ac.admins.has(sj) || ac.admins.has(ph))) return "admin";
+                            } catch (_) {}
+                            return "user";
+                          })(),
                         }),
                       { retryOnNull: true }, // an empty direct turn is a failure — retry it
                     );

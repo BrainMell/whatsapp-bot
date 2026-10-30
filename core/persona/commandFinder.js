@@ -93,10 +93,25 @@ const INTENTS = [
   [/\b(coin ?flip|flip a coin|heads or tails)\b/, ['flip', 'cf']],
   [/\b(fish(ing)?)\b/, ['fish']], [/\b(mine|mining|ores?)\b/, ['mine']], [/\b(hunt(ing)?|animals?)\b/, ['hunt']],
   [/\b(world map|atlas|realms?)\b/, ['world']],
+  [/\bmod(erator)?s?\b.*\b(commands?|menu|terminal|panel|list|tools?)\b|\b(commands?|menu|panel)\b.*\b(for|of) (the )?(mods?|moderators?|admins?)\b/, ['mod']],
   [/\b(commands?|menu|help|what can you do|list of)\b/, ['menu', 'help']],
   [/\b(nick ?name|rename|change my name)\b/, ['nickname']],
   [/\b(how (do|to) (i )?(join)|join (a |the )?(quest|fight|dungeon))\b/, ['join']],
 ];
+
+// ── permission tiers: 'mod' (owner/global mods/staff) > 'admin' (group admin) > 'user'.
+const MOD_NAME_RE = /(ban|mute|nuke|reload|mods?$|^addgtester|tester|issue|setrank|removerank|testmode|setmarket|questcap|addstat|resetstats|gcowner|baseadmin|pardon|listmods|setclass|modclass|^setpack|^setauthor|tokenreset|^src$|t2e|^mentor|^instances?$|opscheck|^commit$|^debug$|^diag$|quizmod)/i;
+const MOD_DESC_RE = /\b(mods?\+|moderators?|owner|gmod|staff|testers?|card mods?|quiz mods?|rpg mods?|owner\/mod)\b/i;
+function tierOf(cat, cmd, desc) {
+  if (cat === 'MODERATOR') return 'mod';
+  const name = String(cmd || '').toLowerCase().split(' ')[0];
+  if (MOD_DESC_RE.test(desc || '') || MOD_NAME_RE.test(name)) return 'mod';
+  if (cat === 'ADMIN') return 'admin';
+  if (/\badmins?\b/i.test(desc || '') && /only|admins?\+|\(admins?\)/i.test(desc || '')) return 'admin';
+  return 'user';
+}
+const RANK = { user: 0, admin: 1, mod: 2 };
+const allowed = (need, level) => RANK[level || 'user'] >= RANK[need];
 
 let _idx = null;
 function build() {
@@ -112,7 +127,7 @@ function build() {
       const tf = new Map();
       const bump = (t, w) => tf.set(t, (tf.get(t) || 0) + w);
       nameT.forEach((t) => bump(t, 4)); body.forEach((t) => bump(t, 1)); catT.forEach((t) => bump(t, 0.5));
-      docs.push({ cmd: c.cmd, cat, desc: c.desc || '', usage: c.usage || '', aliases, tf, len: nameT.length * 4 + body.length + catT.length * 0.5, names: [c.cmd.toLowerCase(), ...aliases] });
+      docs.push({ tier: tierOf(cat, c.cmd, c.desc), cmd: c.cmd, cat, desc: c.desc || '', usage: c.usage || '', aliases, tf, len: nameT.length * 4 + body.length + catT.length * 0.5, names: [c.cmd.toLowerCase(), ...aliases] });
     }
   }
   const df = new Map();
@@ -131,7 +146,12 @@ function lev(a, b) {
 }
 
 /** @returns {Array<{cmd,cat,desc,usage,score}>} best matches, best first */
-function find(query, k = 3) {
+function find(query, k = 3, level = 'mod') {
+  const r = findRaw(query, k, level);
+  return r.hits;
+}
+/** like find() but also reports when the best match was off-limits for this level */
+function findRaw(query, k = 3, level = 'mod') {
   const ix = _idx || build();
   const base = terms(query);
   if (!base.length && !INTENTS.some(([re]) => re.test(String(query).toLowerCase()))) return [];
@@ -157,14 +177,23 @@ function find(query, k = 3) {
       }
     }
     // curated intents: big boost for the commands the phrase is known to mean
-    for (const [re, names] of INTENTS) { if (re.test(ql) && d.names.some((n) => names.includes(n))) { sc += 9; break; } }
-    if (sc > 0) hits.push({ cmd: d.cmd, cat: d.cat, desc: d.desc, usage: d.usage, score: sc });
+    for (const [re, names] of INTENTS) { if (re.test(ql) && d.names.some((n) => names.includes(n) || names.includes(n.replace(/\s*[\[<(].*$/, '')))) { sc += 9; break; } }
+    if (sc > 0) hits.push({ tier: d.tier, cmd: d.cmd, cat: d.cat, desc: d.desc, usage: d.usage, score: sc });
   }
   hits.sort((a, b2) => b2.score - a.score);
   const top = hits[0]?.score || 0;
   // confidence gate: drop weak tails and weak winners
-  return top < 3.2 ? [] : hits.filter((h) => h.score >= top * (top < 8 ? 0.8 : 0.6)).slice(0, k);
+  if (top < 3.2) return { hits: [], blocked: false };
+  const near = hits.filter((h) => h.score >= top * (top < 8 ? 0.8 : 0.6));
+  // if the TOP match is off-limits, stop there - never fall through to weaker unrelated commands
+  if (!allowed(hits[0].tier, level)) return { hits: [], blocked: true };
+  const ok = near.filter((h) => allowed(h.tier, level)).slice(0, k);
+  // the best match exists but this person may not know about it -> say so, dont leak it
+  return { hits: ok, blocked: !ok.length && near.length > 0 };
 }
+
+/** true when the best match for this query is a command this level isnt allowed to know about */
+function isRestricted(query, level) { return findRaw(query, 3, level).blocked; }
 
 // does the message sound like "help me find a command / how do i do X in this bot"?
 const ASK_RE = /\b(is there (a|any)|any (command|way)|which command|what command|what'?s the command|whats the command|command (for|to|that)|how (do|can|would|to) (i|you|we|u)|how to|where (do|can) i|can (i|you|we|u) .*(with|using|in) (the )?(bot|joker)|what does .* do|how does .* work|what is .*\bcommand|is it possible to|how u|how do u|is there something)\b/i;
@@ -173,14 +202,14 @@ function looksLikeCommandQuestion(text) {
   return ASK_RE.test(t) || /\b(command|commands|cmd)\b/i.test(t);
 }
 /** Strong signal even without ASK wording: an intent phrase matched AND it reads like a question. */
-function looksLikeBotQuestion(text) {
+function looksLikeBotQuestion(text) {  // (level-agnostic: only decides whether to look)
   const t = String(text || '');
   return /\?|\b(how|where|what|which|can i|is there)\b/i.test(t) && find(t, 1).length > 0 && find(t, 1)[0].score >= 9;
 }
 
 /** Compact block for the prompt, or '' when nothing confident. ~25 tokens/command. */
-function promptBlock(query, prefix, k = 3) {
-  const hits = find(query, k);
+function promptBlock(query, prefix, k = 3, level = 'mod') {
+  const hits = find(query, k, level);
   if (!hits.length) return '';
   const p = prefix || '.j';
   const lines = hits.map((h) => `${p} ${String(h.usage || h.cmd).slice(0, 60)} - ${String(h.desc).replace(/\s*\((alias|aliases)[^)]*\)\s*/ig, ' ').slice(0, 140).trim()}`);
@@ -189,6 +218,12 @@ function promptBlock(query, prefix, k = 3) {
 
 // ── validator: every command name that really exists (registry names + aliases + scanned extras)
 let _valid = null;
+function tierByName(w) {
+  const ix = _idx || build();
+  const d = ix.docs.find((x) => x.names.includes(w) || x.names.some((n) => n.split(' ')[0] === w));
+  if (d) return d.tier;
+  return MOD_NAME_RE.test(w) ? 'mod' : 'user';
+}
 function validNames() {
   if (_valid) return _valid;
   const ix = _idx || build();
@@ -202,14 +237,18 @@ function validNames() {
  * Check command mentions in a reply, e.g. ".j daily", ".j rob @x". Returns
  * { bad: [names that dont exist], fixed: reply with near-miss typos corrected }.
  */
-function checkReply(text, prefix) {
+function checkReply(text, prefix, level = 'mod') {
   const p = String(prefix || '.j').toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const re = new RegExp(`(^|[\\s(\"'\`])(${p})\\s+([a-z0-9+]{2,20})`, 'gi');
   const valid = validNames(); const bad = []; let fixed = String(text);
   let m;
   while ((m = re.exec(text)) !== null) {
     const w = m[3].toLowerCase();
-    if (valid.has(w)) continue;
+    if (valid.has(w)) {
+      // exists, but is it off-limits for this person? never repeat it to them
+      if (!allowed(tierByName(w), level)) bad.push(w);
+      continue;
+    }
     let best = null, bd = 3;
     for (const v of valid) { if (v.length < 3) continue; const d = lev(v, w); if (d < bd) { bd = d; best = v; } }
     if (best && bd <= 1 && w.length >= 4) fixed = fixed.replace(new RegExp(`(${p}\\s+)${w}\\b`, 'i'), `$1${best}`);
@@ -218,4 +257,4 @@ function checkReply(text, prefix) {
   return { bad, fixed };
 }
 
-module.exports = { looksLikeBotQuestion, checkReply, validNames, find, promptBlock, looksLikeCommandQuestion, _rebuild: build };
+module.exports = { isRestricted, tierOf, looksLikeBotQuestion, checkReply, validNames, find, promptBlock, looksLikeCommandQuestion, _rebuild: build };
