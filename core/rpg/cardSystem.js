@@ -22,7 +22,7 @@ const goService = require('../utils/goImageService'); // 💡 singleton (PERF PA
 // NEWER than the process start time in future logs -> stale-process incident.
 try {
   const __buildMtime = fs.statSync(__filename).mtime.toISOString();
-  console.log(`[cardSystem] BUILD predrop-v5-noiddm loaded | pid=${process.pid} | file mtime=${__buildMtime} | loaded at ${new Date().toISOString()}`);
+  console.log(`[cardSystem] BUILD cardsys-v6-nopredrop loaded | pid=${process.pid} | file mtime=${__buildMtime} | loaded at ${new Date().toISOString()}`);
 } catch (e) { console.log('[cardSystem] BUILD marker stat failed: ' + e.message); }
 
 // 47-k8c: background cache warmer — after a deploy every .j base/guild render
@@ -517,64 +517,6 @@ async function loadRoles() {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-//  💡 OWNER PRE-DROP DM ALERTS (2026-10-30, Mellow)
-//  "Before a card drops in escape prive and omniverse imma need joker to
-//   send 2 messages one saying what gc it's in and the other the cards Id
-//   for me to copy, it should send it 1 minute before the card drops in
-//   those 2 gcs to my number in dms"
-//
-//  Flow (AUTO timer spawns ONLY - manual .g spawn / .g espawn untouched):
-//    timer fires for a target group
-//      -> roll the card NOW (zero side effects, stat untouched)
-//      -> DM #1 to owner: which GC (+ what card is coming)
-//      -> DM #2 to owner: the bare card ID (copy-paste ready)
-//      -> hold 60s, then doSpawn(forceCardId) drops the SAME card
-//  Target GCs resolve by FOLDED subject match (é->e, spaces/punct stripped)
-//  against the bot's live group list, cached 10 min. The drop-time doSpawn
-//  re-checks the copy cap, so a card that caps out during the hold cancels
-//  cleanly (owner gets a cancellation DM).
-// ═══════════════════════════════════════════════════════════════════════
-const PRE_DROP_ALERT = {
-  leadMs: 60 * 1000,                          // DM lands 1 minute before the drop
-  // 💡 2026-10-30: the escape GC's real subject is "espace privé" (French,
-  // folded 'espaceprive') — owner typed "escape prive", so BOTH spellings
-  // are hints. Live-verified via tokenlb roster snapshot.
-  groupHints: ['espaceprive', 'escapeprive', 'omniverse'],
-};
-const PRE_DROP_TARGETS_TTL_MS = 10 * 60 * 1000;
-const _preDropTargets = { map: new Map(), ts: 0 }; // groupJid -> subject
-
-function preDropFold(s) {
-  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
-async function resolvePreDropTargets(inst) {
-  const now = Date.now();
-  if ((now - _preDropTargets.ts) < PRE_DROP_TARGETS_TTL_MS) return _preDropTargets.map;
-  const sock = inst && inst.sock_ref;
-  if (!sock || typeof sock.groupFetchAllParticipating !== 'function') return _preDropTargets.map;
-  try {
-    const all = await sock.groupFetchAllParticipating();
-    const map = new Map();
-    for (const g of Object.values(all || {})) {
-      const norm = preDropFold(g && g.subject);
-      if (norm && PRE_DROP_ALERT.groupHints.some((h) => norm.includes(h))) {
-        map.set(String(g.id), String(g.subject || g.id));
-      }
-    }
-    _preDropTargets.map = map;
-    _preDropTargets.ts = now;
-    if (map.size) {
-      console.log(`[CardSystem][${botConfig.getBotId()}] pre-drop alert targets (${map.size}): ${[...map.values()].join(' | ')}`);
-    }
-  } catch (e) {
-    console.error(`[CardSystem] pre-drop target resolve failed: ${e.message}`);
-  }
-  return _preDropTargets.map;
-}
-
 // 💡 FIX 2026-08-31: shared per-instance timer (re)builder. Works for ANY
 // instance (not just the current getInst()) so cross-bot sync can rebuild
 // other bots' timers instead of clearing them and leaving them dead.
@@ -620,10 +562,8 @@ function rebuildSpawnTimersForInstance(inst) {
         // (getOrInitStat/stat.save); an unhandled rejection from a timer
         // callback kills the process on Node >=15. The chain must ALSO
         // continue scheduling on failure or the group goes spawn-dead.
-        // 💡 PRE-DROP (2026-10-30): target GCs get the 1-minute DM heads-up
-        // first; every other group spawns immediately, unchanged.
-        Promise.resolve(dispatchGroupSpawn(inst, gid)).catch((spawnErr) => {
-          console.error(`[CardSystem] timer spawn failed for ${gid}:`, spawnErr?.message || spawnErr);
+        Promise.resolve(doSpawn(null, null, false, gid)).catch((spawnErr) => {
+          console.error(`[CardSystem] timer doSpawn failed for ${gid}:`, spawnErr?.message || spawnErr);
         });
         // Schedule the next fire at a fresh random delay
         scheduleNext(randomDelay());
@@ -1088,12 +1028,11 @@ async function getOrInitStat(cardId, tier) {
   return stat;
 }
 
-// 💡 PRE-DROP (2026-10-30): the card ROLL extracted from doSpawn so a spawn
-// can be picked ahead of time with ZERO side effects (stat is NOT mutated
-// here — doSpawn re-checks the cap and increments at drop time). The random
-// path below is the old doSpawn else-branch verbatim (tier chances, pool
-// shuffle, cap scan, T1 fallback), so pre-rolled and live-rolled cards come
-// from exactly the same distribution.
+// 💡 (2026-10-30): the card ROLL extracted from doSpawn into a zero-side-
+// effect helper (stat is NOT mutated here — doSpawn re-checks the cap and
+// increments at drop time). The random path below is the old doSpawn
+// else-branch verbatim (tier chances, pool shuffle, cap scan, T1 fallback),
+// so rolled and live-spawned cards come from exactly the same distribution.
 async function pickSpawnCard(targetGroup, forceTier) {
   const inst = getInst();
   const tier = forceTier || (() => {
@@ -1142,11 +1081,10 @@ async function pickSpawnCard(targetGroup, forceTier) {
   return card ? { card, stat } : null;
 }
 
-// 💡 PRE-DROP (2026-10-30): force-card RESOLUTION extracted from doSpawn so
-// the pre-drop dispatcher can learn WHICH card a manual spawn will drop
-// (owner DM needs the real ID) with zero side effects. Resolution rules are
-// the old doSpawn forceCardId branch verbatim (index → exact name → partial
-// name, tier guard incl. virtual 'E' tier, artPending never spawnable).
+// 💡 (2026-10-30): force-card RESOLUTION extracted from doSpawn so it can
+// be reused with zero side effects. Resolution rules are the old doSpawn
+// forceCardId branch verbatim (index → exact name → partial name, tier guard
+// incl. virtual 'E' tier, artPending never spawnable).
 function resolveForceCard(forceCardId, forceTier) {
   let card = CARD_INDEX()[forceCardId];
   if (!card) {
@@ -1184,8 +1122,8 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
     if (!card) return null;
     stat = await getOrInitStat(card.id, card.tier);
   } else {
-    // 💡 PRE-DROP (2026-10-30): roll extracted into pickSpawnCard() (shared
-    // with the owner pre-drop DM flow) — same distribution, same filters.
+    // 💡 (2026-10-30): roll extracted into pickSpawnCard() helper — same
+    // distribution, same filters.
     const picked = await pickSpawnCard(targetGroup, forceTier);
     if (picked) { card = picked.card; stat = picked.stat; }
   }
@@ -1252,79 +1190,6 @@ async function doSpawn(forceCardId = null, forceTier = null, bypassCap = false, 
   } catch (err) {
     stat.totalSpawned -= 1;
     await stat.save();
-  }
-}
-
-// 💡 PRE-DROP (2026-10-30 v2): ONE DM to the owner — which GC + what's
-// coming. OWNER 2026-10-30 20:43Z (Mellow): "stop sending token ids to my
-// dms" — the bare-ID second DM is GONE (his 06:56Z ask had been misread as
-// "add manual spawns to id-DMing"; this removes it for auto AND manual
-// paths, which both funnel through here). No card id ever leaves the bot
-// to his DMs anymore.
-async function sendPreDropDMs(inst, subject, card) {
-  const to = inst.ownerJid || '233201487480@s.whatsapp.net'; // primary owner
-  if (!inst.sock_ref) return;
-  const tierLabel = String(TIER_LABEL[String(card.tier)] || `TIER ${card.tier}`).replace(/\s+/g, ' ').trim();
-  const msg1 =
-`⏳ *PRE-DROP ALERT*
-
-A card is dropping in *${subject}* in 1 minute.
-
-🎴 _${card.cardName}_ — ${tierLabel}`;
-  await inst.sock_ref.sendMessage(to, { text: msg1 });
-}
-
-// 💡 PRE-DROP dispatch (called from the spawn timer AND from every manual
-// spawn path — owner 2026-10-30: "undo the not sending the ids to my dms":
-// manual .g spawn / .g espawn / .g cards-on spawns in the target GCs get the
-// same treatment). Non-target groups: spawn immediately, unchanged. Target
-// groups: resolve the card now -> DM owner -> hold PRE_DROP_ALERT.leadMs ->
-// doSpawn drops the SAME card (v2: owner DM carries NO card id). The cap
-// is re-checked at drop time, so an
-// auto-drop that caps out during the hold cancels cleanly (owner gets a DM).
-// Manual spawns keep their bypassCap flag at drop time. Returns
-// { preDropped, card, subject } when deferred (so command handlers can tell
-// the mod), otherwise whatever doSpawn returned.
-async function dispatchGroupSpawn(inst, gid, forceCardId = null, forceTier = null, bypassCap = false) {
-  try {
-    const targets = await resolvePreDropTargets(inst);
-    const gidS = String(gid);
-    if (!targets.has(gidS)) return doSpawn(forceCardId, forceTier, bypassCap, gid);
-
-    // Target GC: learn WHICH card is coming before any side effects.
-    let card = null;
-    if (forceCardId) {
-      card = await resolveForceCard(forceCardId, forceTier).catch(() => null);
-    } else {
-      const picked = await pickSpawnCard(gid, null).catch(() => null);
-      card = picked && picked.card;
-    }
-    if (!card) return doSpawn(forceCardId, forceTier, bypassCap, gid); // unresolvable — behave exactly as before
-
-    const subject = targets.get(gidS);
-    try {
-      await sendPreDropDMs(inst, subject, card);
-      console.log(`[CardSystem][${botConfig.getBotId()}] PRE-DROP: ${card.cardName} (${card.id}) in "${subject}" drops in ${PRE_DROP_ALERT.leadMs / 1000}s — DM sent to owner`);
-    } catch (dmErr) {
-      console.error(`[CardSystem] pre-drop DM failed for ${gidS}: ${dmErr?.message || dmErr}`);
-    }
-
-    setTimeout(() => {
-      Promise.resolve(doSpawn(forceCardId || card.id, forceCardId ? forceTier : null, bypassCap, gid))
-        .then((res) => {
-          if (!res) {
-            console.warn(`[CardSystem] PRE-DROP ${card.id} aborted at drop time for ${gidS}`);
-            if (inst.sock_ref && inst.ownerJid) {
-              inst.sock_ref.sendMessage(inst.ownerJid, { text: `⚠️ The *${card.cardName}* drop in *${subject}* was cancelled (card no longer spawnable during the hold).` }).catch(() => {});
-            }
-          }
-        })
-        .catch((e) => console.error(`[CardSystem] PRE-DROP doSpawn failed for ${gidS}: ${e?.message || e}`));
-    }, PRE_DROP_ALERT.leadMs);
-    return { preDropped: true, card, subject };
-  } catch (e) {
-    console.error(`[CardSystem] dispatchGroupSpawn failed for ${gid}: ${e?.message || e} — falling back to immediate spawn`);
-    return doSpawn(forceCardId, forceTier, bypassCap, gid);
   }
 }
 
@@ -5478,9 +5343,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         if (inst.activeGroups.has(chatId)) return reply('⚠️ Already ON.'), true;
         inst.activeGroups.add(chatId);
         await saveActiveGroups();
-        // 💡 PRE-DROP (2026-10-30): welcome spawn goes through the dispatcher
-        // so target GCs still get the 1-minute owner DM.
-        dispatchGroupSpawn(inst, chatId);
+        doSpawn(null, null, false, chatId);
         ensureTimerRunning();
         return reply('✅ *CARD SYSTEM ONLINE*'), true;
       }
@@ -5810,13 +5673,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       }
       if (!spawnQuery) return sendUsage(reply, `${p} spawn`, `${p} spawn <name or id> | <tier>`, `${p} spawn Roy mustang | 5`), true;
 
-      // 💡 PRE-DROP (2026-10-30, owner "undo the not sending the ids"): in the
-      // alert-target GCs the drop is announced to the owner 60s ahead; the
-      // mod gets a scheduling reply instead of an instant drop.
-      const spawnRes = await dispatchGroupSpawn(inst, chatId, spawnQuery, forceTier, true);
-      if (spawnRes && spawnRes.preDropped) {
-        return reply(`⏳ *PRE-DROP SET* — _${spawnRes.card.cardName}_ (\`${spawnRes.card.id}\`) drops in *${spawnRes.subject}* in 60s.`), true;
-      }
+      const spawnRes = await doSpawn(spawnQuery, forceTier, true, chatId);
       if (!spawnRes) return reply(`❌ Card not found matching "${spawnQuery}"${forceTier ? ` in Tier ${forceTier}` : ''}.`), true;
       return true;
     }
@@ -5857,11 +5714,7 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
         }
         return reply(listMsg), true;
       }
-      // 💡 PRE-DROP (2026-10-30): same 60s owner-DM flow in alert-target GCs.
-      const espawnRes = await dispatchGroupSpawn(inst, chatId, espawnQuery, 'E', true);
-      if (espawnRes && espawnRes.preDropped) {
-        return reply(`⏳ *PRE-DROP SET* — _${espawnRes.card.cardName}_ (\`${espawnRes.card.id}\`) drops in *${espawnRes.subject}* in 60s.`), true;
-      }
+      const espawnRes = await doSpawn(espawnQuery, 'E', true, chatId);
       if (!espawnRes) {
         const eventCards = getInst().EVENT_CARDS || [];
         return reply(`❌ Event card not found matching "${espawnQuery}".\n\n${eventCards.length} event cards available. Use \`${p} espawn\` (no args) to list them all.`), true;
