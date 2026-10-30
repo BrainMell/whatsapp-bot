@@ -97,6 +97,7 @@ function initPersona(d) {
   deps.system = d.system; // shared KV module: get(key, fallback) / set(key, val)
   deps.smartGroqCall = d.smartGroqCall; // engine's rotating Groq caller
   deps.modelFn = d.modelFn || (() => null); // (msgLen) => model id
+  deps.prefixFn = d.prefixFn || (() => '.j');
   deps.searchFn = d.searchFn || (async () => ''); // (query) => result digest
   // 💡 REALGUY v2.5: engine-provided nickname resolver (economy profile
   // nickname). (jid) => string|null — lets the persona call people by the
@@ -747,6 +748,7 @@ you: say that after you catch something`,
   p.push(
     `TOOLS you can use when you feel like it (exact syntax, on their own line):\n` +
       `[SEARCH: short query] — output this ALONE and stop, if you need current or factual info. You'll be handed what you found, then answer casually — like you already knew it or just checked your phone. NEVER mention searching, results, sources, links or "according to".\n` +
+      `[CMD: short description] — output this ALONE and stop when someone asks how to do something with the bot / whether a command exists and the answer isnt already shown above. You'll be handed the real matching commands, then answer casually with the exact command. Never make up commands.\n` +
       `[REMEMBER: their name | short fact] — note something worth remembering about someone; you can also reply normally in the same message. If someone tells you what to call them, remember it as [REMEMBER: <their name> | goes by <what they said>].`,
   );
   // Layer 6.5 — WHO'S WHO (REALGUY v2.5): speaker identity + known-people
@@ -794,6 +796,8 @@ you: say that after you catch something`,
 
 // ─── L4: weak-model tool protocol ────────────────────────────────────────────
 const SEARCH_RE = /\[SEARCH:\s*([^\]]{3,120})\]/gi;
+const cmdFinder = require('./commandFinder');
+const CMD_RE = /\[CMD:\s*([^\]]{3,120})\]/gi;
 const REMEMBER_RE = /\[REMEMBER:\s*([^|\]]{1,40}?)\s*\|\s*([^\]]{3,160})\]/gi;
 const SILENT_RE = /\[SILENT\]/gi;
 
@@ -804,7 +808,9 @@ function parseToolCalls(raw) {
   let m;
   REMEMBER_RE.lastIndex = 0;
   while ((m = REMEMBER_RE.exec(raw)) !== null) remember.push({ name: m[1], fact: m[2] });
-  return { search, remember };
+  const cm = raw.match(CMD_RE);
+  const cmd = cm ? cm[0].replace(CMD_RE, '$1').trim() : null;
+  return { search, cmd, remember };
 }
 
 // 💡 REALGUY v2: deterministic emoji enforcement (see EMOJI_* tunables).
@@ -826,7 +832,7 @@ function sanitizeEmoji(text) {
 
 function cleanReplyText(raw) {
   let t = String(raw || '');
-  t = t.replace(SEARCH_RE, ' ').replace(REMEMBER_RE, ' ').replace(SILENT_RE, ' ');
+  t = t.replace(SEARCH_RE, ' ').replace(CMD_RE, ' ').replace(REMEMBER_RE, ' ').replace(SILENT_RE, ' ');
   t = t.replace(/^\s*[*#`\s]*(you are )?(the )?bot(Name)?\s*:\s*/i, '');
   t = t.replace(/\*\*/g, '').replace(/^#+\s*/gm, '');
   // 💡 REALGUY v3 (owner: "it's over punctuating"): nobody texts with em-dashes
@@ -999,11 +1005,20 @@ async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profi
   const ambientLead = isAmbient
     ? `${senderName || 'someone'} just said: ${userText}${addresseeHint ? `\n(context: ${addresseeHint})` : ''}`
     : `${senderName || 'someone'} says to you: ${userText}`;
+  // command finder: if this sounds like "which command does X", retrieve locally (0 tokens)
+  // and hand over only the top few real commands. Ambient chatter never triggers it.
+  let cmdHint = '';
+  try {
+    if (!isAmbient && cmdFinder.looksLikeCommandQuestion(userText)) {
+      const blk = cmdFinder.promptBlock(userText, deps.prefixFn(), 3);
+      if (blk) cmdHint = `\n\n[real commands that might fit, use only if they actually answer the question, tell them the exact command casually, dont invent others:\n${blk}\n]`;
+    }
+  } catch (_) { /* finder is best-effort */ }
   const messages = [
     { role: 'system', content: buildSystemPrompt({ isAmbient, chatId, profileText, speakerJid: senderJid, addressMode, queryText: userText }) },
     {
       role: 'user',
-      content: ambientLead,
+      content: ambientLead + cmdHint,
     },
   ];
   const callOpts = (over = {}) => {
@@ -1064,6 +1079,20 @@ async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profi
   }
   const parsed = parseToolCalls(raw);
   for (const r of parsed.remember) rememberFact(chatId, r.name, r.fact);
+  if (parsed.cmd && !parsed.search) {
+    // model asked for the command list itself: local lookup, no network
+    const blk = cmdFinder.promptBlock(parsed.cmd, deps.prefixFn(), 3);
+    messages.push({ role: 'assistant', content: raw });
+    messages.push({
+      role: 'user',
+      content: blk
+        ? `[Commands that exist:\n${blk}\n]\n\nAnswer casually in your own voice with the exact command. Only use commands from that list.`
+        : `[No command matches that. Say you dont think theres one for that, dont invent a command.]`,
+    });
+    try { raw = await callWithHeadroom(); } catch (e) { console.error('[persona] cmd-round failed:', e.message); return null; }
+    const parsedC = parseToolCalls(raw);
+    for (const r of parsedC.remember) rememberFact(chatId, r.name, r.fact);
+  }
   if (parsed.search) {
     let digest = '';
     try {

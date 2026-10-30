@@ -5269,6 +5269,7 @@ What to do:
       // 💡 2026-10-30: the 20b model leaked control tokens / chain-of-thought into chat - persona turns use the 120b (PERSONA_MODEL overrides)
       modelFn: (len) => process.env.PERSONA_MODEL || MODELS.SMART,
       searchFn: personaEngine.makeKeylessSearcher(aiOverview, axios),
+      prefixFn: () => botConfig.getPrefix(),
       // 💡 REALGUY v2: the old pipeline's canonical persona line anchors the
       // prompt FIRST again ("You are Joker from Persona 5.")
       contentFn: () => botConfig.getContentDescription(),
