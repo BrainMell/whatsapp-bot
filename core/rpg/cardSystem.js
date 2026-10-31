@@ -22,7 +22,7 @@ const goService = require('../utils/goImageService'); // 💡 singleton (PERF PA
 // NEWER than the process start time in future logs -> stale-process incident.
 try {
   const __buildMtime = fs.statSync(__filename).mtime.toISOString();
-  console.log(`[cardSystem] BUILD cardsys-v7-myseries loaded | pid=${process.pid} | file mtime=${__buildMtime} | loaded at ${new Date().toISOString()}`);
+  console.log(`[cardSystem] BUILD cardsys-v7-myscoll loaded | pid=${process.pid} | file mtime=${__buildMtime} | loaded at ${new Date().toISOString()}`);
 } catch (e) { console.log('[cardSystem] BUILD marker stat failed: ' + e.message); }
 
 // 47-k8c: background cache warmer — after a deploy every .j base/guild render
@@ -6483,8 +6483,9 @@ async function cmdSeries(reply, args = [], perms = {}) {
 // (2026-10-09 brief), these are the personal counterparts:
 //   `.j myseries`            every series you own + card counts (+ kinds + best tier)
 //   `.j myseries <name>`     drill-down (delegates to scoll)
-//   `.j scoll <name>`        your individual cards of one series (copies, tier, ID,
-//                            where the copies live: coll / deck / listed)
+//   `.j scoll <name>`        your individual cards of one series (copies, tier,
+//                            Coll # / deck # per row — numbers the player can
+//                            actually use; IDs only as fallback)
 // Counts cover ALL owned UserCards — deck + market listings included.
 
 const _MY_TIER_ORDER = { '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, 'S': 7, 'E': 8 };
@@ -6576,13 +6577,25 @@ async function cmdSeriesColl(senderJid, reply, args = []) {
   const counts = {};
   hits.forEach(o => { const a = CARD_INDEX()[o.cardId].animeName || 'Unknown'; counts[a] = (counts[a] || 0) + 1; });
   const seriesName = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+  // 💡 OWNER FEEDBACK 2026-10-31 (".j scoll dragon ball, instead of the ids
+  // just name the coll number or deck number"): rows carry the numbers the
+  // player can actually USE — Coll #N feeds `.j coll <#>` (the SAME canonical
+  // numbering), Main #slot feeds the main deck, custom decks print <name>
+  // #slot. IDs stay only as a fallback for copies with no number.
+  const collNum = new Map();
+  (await getNumberedCollection(senderJid)).forEach((uc, i) => collNum.set(String(uc._id), i + 1));
   const byCard = new Map();
   for (const o of hits) {
-    if (!byCard.has(o.cardId)) byCard.set(o.cardId, { def: CARD_INDEX()[o.cardId], copies: 0, deck: 0, market: 0 });
+    if (!byCard.has(o.cardId)) byCard.set(o.cardId, { def: CARD_INDEX()[o.cardId], copies: 0, deck: 0, market: 0, collNums: [], mainSlots: [], custom: [], listed: 0 });
     const e = byCard.get(o.cardId);
     e.copies++;
-    if (o.inMainDeck || o.inCustomDeck) e.deck++;
-    else if (o.forSale) e.market++;
+    if (o.inMainDeck) { e.deck++; e.mainSlots.push(o.mainDeckSlot); }
+    else if (o.inCustomDeck) { e.deck++; e.custom.push({ name: String(o.customDeckName || 'deck'), slot: o.customDeckSlot }); }
+    else if (o.forSale) { e.market++; e.listed++; }
+    else {
+      const n = collNum.get(String(o._id));
+      if (n) e.collNums.push(n); else e.listed++; // unnumbered coll copy: rare race — keep the row actionable
+    }
   }
   const cards = [...byCard.values()];
   cards.sort((a, b) =>
@@ -6606,16 +6619,22 @@ async function cmdSeriesColl(senderJid, reply, args = []) {
   if (totalDeck) msg += ` · ${totalDeck} in decks 🎴`;
   if (totalMarket) msg += ` · ${totalMarket} listed 💰`;
   msg += `\n📖 Page: ${cur} / ${totalPages}\n\n`;
+  const fmtNums = (arr, cap) => arr.slice(0, cap).map(n => `#${n}`).join(', ') + (arr.length > cap ? ` +${arr.length - cap}` : '');
   cards.slice(start, start + pageSize).forEach(c => {
     const allColl = c.deck + c.market === 0;
     const mixed = c.deck > 0 && c.market > 0;
     const locTag = allColl ? '' : (mixed ? ' 🧩' : (c.market ? ' 💰' : ' 🎴'));
-    msg += `▫️ *${c.def.cardName}* ${TIER_STARS[String(c.def.tier)] || ''}${locTag} ×${c.copies}\n   ➥ ID: \`${c.def.id}\`\n`;
+    const loc = [];
+    if (c.collNums.length) loc.push('Coll ' + fmtNums(c.collNums.sort((a, b) => a - b), 4));
+    if (c.mainSlots.length) loc.push('Main ' + fmtNums(c.mainSlots.sort((a, b) => a - b), 12));
+    if (c.custom.length) loc.push('CD ' + c.custom.slice(0, 2).map(x => `${x.name.slice(0, 12)} #${x.slot}`).join(', ') + (c.custom.length > 2 ? ` +${c.custom.length - 2}` : ''));
+    if (c.listed) loc.push(`${c.listed} listed 💰`);
+    msg += `▫️ *${c.def.cardName}* ${TIER_STARS[String(c.def.tier)] || ''}${locTag} ×${c.copies}\n   ➥ ${loc.length ? loc.join(' · ') : `ID: \`${c.def.id}\``}\n`;
   });
   if (totalPages > 1) {
     msg += `\n💡 Use \`${p} scoll ${rawName} --page ${cur < totalPages ? cur + 1 : 1}\` for more.`;
   }
-  msg += `\n💡 \`${p} coll <ID>\` opens a card · \`${p} myseries\` back to your series list.`;
+  msg += `\n💡 \`${p} coll <#>\` opens a card · \`${p} deck\` views the main deck · \`${p} myseries\` back to the list.`;
   return reply(msg);
 }
 
@@ -7556,7 +7575,7 @@ module.exports = {
 // 💡 OWNER BRIEF 2026-10-09 §1 diagnostics: env-guarded hook so QA harnesses
 // can drive the card search internals without the full bot runtime.
 if (process.env.CARD_DIAG === '1') {
-  module.exports.__diag = { cmdInfo, cmdCS, cmdCi, cmdSeries, cmdMySeries, cmdSeriesColl, loadCardsDB, _nameTokens, _cardMatchesTokens, _cardRelevance };
+  module.exports.__diag = { cmdInfo, cmdCS, cmdCi, cmdSeries, cmdMySeries, cmdSeriesColl, loadCardsDB, getNumberedCollection, _nameTokens, _cardMatchesTokens, _cardRelevance };
 }
 
 // 💡 47-l2: env-guarded QA surface for the token-rate counter machinery
