@@ -1854,14 +1854,20 @@ function penalty(userId, amount, direction, economyModule) {
     }
 
     // Deduct bet, add net profit
+    // 💡 AUDIT FIX 2026-11-01: ledger the NET delta once (+gain), mirroring
+    // cupGame(). The old -(amount) entry made the save-time 47-l3 self-heal
+    // force wallet = base + ledger = base - amount — every PENALTY WIN was
+    // silently reverted to a full bet loss (message said GOAL, balance said
+    // otherwise), and the result was never persisted (no saveUser).
     user.wallet -= amount;
-    _ledgerWallet(user, -(amount)); // ledger the loss (47-l3 self-heal guard)
     user.wallet += gain + amount; // Return bet + profit
+    _ledgerWallet(user, gain);
     if (!user.stats) user.stats = {};
     user.stats.totalEarned = (user.stats.totalEarned || 0) + gain;
     trackDailyNet(user, gain);
     updateGamblingStats(userId, amount, true, economyModule);
     economyModule.logTransaction(userId, `Penalty Goal (${userDir})`, gain, user.wallet);
+    economyModule.saveUser(userId); // 💡 persist resolved bets immediately
     return {
       success: true,
       won: true,
@@ -1882,6 +1888,7 @@ function penalty(userId, amount, direction, economyModule) {
     trackDailyNet(user, -amount);
     updateGamblingStats(userId, amount, false, economyModule);
     economyModule.logTransaction(userId, `Penalty Miss (${userDir})`, -amount, user.wallet);
+    economyModule.saveUser(userId); // 💡 persist resolved bets immediately
     return {
       success: true,
       won: false,

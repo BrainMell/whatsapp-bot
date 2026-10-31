@@ -168,6 +168,7 @@ async function repair(sock, chatId, userId, target) {
         } catch (e) { /* text below */ }
         await sock.sendMessage(chatId, { text: successMsg });
         await loreDrops.sendOwn(sock, chatId, __loreDrop);
+        return; // 💡 AUDIT FIX 2026-11-01: the 'all' text path fell through into the single-item lookup → bogus "❌ Item/Slot not found!" right after a successful repair-all
     }
     
     // Repair single item

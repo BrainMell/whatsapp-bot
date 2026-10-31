@@ -65,6 +65,16 @@ const ELEMENT_CONFIG = {
   construct: { color: '#607D8B', bg: 'rgba(96,125,139,0.15)', label: '🔫 Construct' },
   holy:      { color: '#FFF9C4', bg: 'rgba(255,249,196,0.15)', label: '✨ Holy' },
   neutral:   { color: '#9E9E9E', bg: 'rgba(158,158,158,0.15)', label: '⚪ Neutral' },
+  // 💡 AUDIT FIX 2026-11-01: the 8 live registry elements below had no entries
+  // — every shadow/nature/water/... summon fell through to default grey tints
+  shadow:    { color: '#4527A0', bg: 'rgba(69,39,176,0.15)', label: '🌑 Shadow' },
+  earth:     { color: '#795548', bg: 'rgba(121,85,72,0.15)', label: '🪨 Earth' },
+  nature:    { color: '#43A047', bg: 'rgba(67,160,71,0.15)', label: '🌿 Nature' },
+  water:     { color: '#039BE5', bg: 'rgba(3,155,229,0.15)', label: '💧 Water' },
+  poison:    { color: '#C0CA33', bg: 'rgba(192,202,51,0.15)', label: '☠️ Poison' },
+  plague:    { color: '#827717', bg: 'rgba(130,119,23,0.15)', label: '🦠 Plague' },
+  light:     { color: '#FFF176', bg: 'rgba(255,241,118,0.15)', label: '🌟 Light' },
+  crystal:   { color: '#26C6DA', bg: 'rgba(38,198,218,0.15)', label: '💎 Crystal' },
 };
 
 const RARITY_COLORS = {

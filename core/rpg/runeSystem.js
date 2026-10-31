@@ -1022,8 +1022,13 @@ function applyRuneModifiers(effect, socketedRunes) {
     modifiedEffect.critBonus = (modifiedEffect.critBonus || 0) + critBonus;
   }
   // Apply DEF ignore
+  // 💡 AUDIT FIX 2026-11-01: the ENDURANCE table stores FRACTIONS
+  // ([0.20..0.60]) but combat consumes ignoreDefense as a PERCENT
+  // (defSubtracted * (ignoreDefense / 100)) — a Greater ENDURANCE rune added
+  // 0.4% instead of 40% (a dead 5-10% damage PENALTY). Convert to percent
+  // here; VOID_CONVERSION already stores 100 (percent) and passes through.
   if (defIgnorePct > 0) {
-    modifiedEffect.ignoreDefense = (modifiedEffect.ignoreDefense || 0) + Math.min(100, defIgnorePct);
+    modifiedEffect.ignoreDefense = (modifiedEffect.ignoreDefense || 0) + Math.min(100, defIgnorePct * 100);
   }
   // Apply cannot-evade flag
   if (cannotEvade) {

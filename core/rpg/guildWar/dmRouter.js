@@ -364,7 +364,11 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
     if (eventDoc.state === 'REGISTRATION') {
         if (/^(join|gw join)$/.test(norm)) {
             const res = await state.registerPlayer(eventDoc.eventId, { jid: senderJid, name: displayName(senderJid), guildId: player.guildId, guildName: player.guildName });
-            return res ? { text: '✅ Already registered - stand by.' } : null;
+            // 💡 AUDIT FIX 2026-11-01: registerPlayer returns the DOC on success
+            // and null when already joined — the old ternary was inverted, so
+            // every DM join returned null (silence / wrong system) and the
+            // "Already registered" message was dead code.
+            return res ? { text: '✅ Registered for the war. Stand by for deployment.' } : { text: '✅ Already registered - stand by.' };
         }
         return { text: '⏳ The war is still gathering. Deployment begins soon.' };
     }

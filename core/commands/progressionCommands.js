@@ -187,7 +187,8 @@ async function handleXPTopCommand(sock, chatId, m) {
       
       message += `${rankEmoji} *#${index + 1}* | ${progression.getLevelDisplay(user.level)}\n`;
       message += `   @${economy.getDisplayName(jid)}\n`;
-      message += `   💎 ${user.totalXP.toLocaleString()} XP | 📱 ${user.commandCount} cmds\n\n`;
+      // 💡 AUDIT FIX 2026-11-01: field names were totalXP/commandCount — exist nowhere. xptop threw TypeError on row 1 for EVERY user.
+      message += `   💎 ${(Number(user.totalXPEarned) || 0).toLocaleString()} XP | 📱 ${Number(user.commandsUsed) || 0} cmds\n\n`;
     });
     
     message += `━━━━━━━━━━━━━━━\n`;

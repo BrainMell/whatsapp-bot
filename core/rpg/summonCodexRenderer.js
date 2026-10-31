@@ -47,7 +47,10 @@ function roundRect(ctx, x, y, w, h, r) {
 const ELEMENT_COLORS = {
   undead: '#9C27B0', demon: '#D32F2F', fire: '#FF6B35', ice: '#4FC3F7',
   lightning: '#FFEB3B', beast: '#8BC34A', dragon: '#FFD700',
-  construct: '#607D8B', holy: '#FFF9C4', neutral: '#9E9E9E'
+  construct: '#607D8B', holy: '#FFF9C4', neutral: '#9E9E9E',
+  // 💡 AUDIT FIX 2026-11-01: 8 live registry elements had no colors (grey fallback)
+  shadow: '#4527A0', earth: '#795548', nature: '#43A047', water: '#039BE5',
+  poison: '#C0CA33', plague: '#827717', light: '#FFF176', crystal: '#26C6DA'
 };
 
 const RARITY_COLORS = {

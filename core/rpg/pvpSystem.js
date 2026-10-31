@@ -1404,6 +1404,10 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
                 console.error('[BountyClaim] Failed:', e.message);
             }
         }
+        // 💡 AUDIT FIX 2026-11-01: hoisted — ZENI was declared BELOW the flee
+        // block that uses it → ReferenceError on every flee-with-bounty (the
+        // penalty WAS taken but the player was never told).
+        const ZENI = botConfig.getCurrency().symbol;
         if (fleeingUser) {
             fleeingUser.pvpLosses = (fleeingUser.pvpLosses || 0) + 1;
             economy.saveUser(fleeingJid);
@@ -1430,8 +1434,7 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
         }
 
         // Give the standard win rewards to the staying player
-        const ZENI = botConfig.getCurrency().symbol;
-        let rewardMsg = '';
+        let rewardMsg = ''; // (ZENI hoisted above — 2026-11-01 TDZ fix)
         if (duel.stake > 0) {
             const pot = duel.stake * 2;
             economy.addMoney(stayingJid, pot);

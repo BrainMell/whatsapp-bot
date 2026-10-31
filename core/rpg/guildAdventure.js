@@ -11587,9 +11587,11 @@ async function endAdventure(sock, sessionKey, victory = true) {
       // ran per-combat. The end-of-quest XP the summary promises (base +
       // guild bonus) now lands on the player, so the final card's number is
       // the number they actually received.
+      let __completionXPCredited = false;
       if (__finalXPBase + guildBonusXp > 0) {
         try {
           progression.addXP(player.jid, __finalXPBase + guildBonusXp, "Quest completion");
+          __completionXPCredited = true;
         } catch (xpErr) {
           console.error(`[QuestPayout] completion XP credit failed for ${player.jid}:`, xpErr.message);
         }
@@ -11635,7 +11637,14 @@ async function endAdventure(sock, sessionKey, victory = true) {
       const guildXpMult = guildPerks.getXpMultiplier(player.jid);
       xpToAward = Math.floor(__finalXPBase * guildXpMult);
     } catch (e) {}
-    progression.awardXP(player.jid, xpToAward);
+    // 💡 AUDIT FIX 2026-11-01 (P0 double-pay): alive players were paid
+    // completion XP TWICE — the 2026-10-25 "XP reconcile" credit above AND
+    // this Phase-4 award (which also ran for survivors). Now this only pays
+    // players who did NOT get the reconcile credit (the fallen — their
+    // consolation XP, matching what their summary row displays).
+    if (!__completionXPCredited) {
+      progression.awardXP(player.jid, xpToAward);
+    }
 
     // 💡 PHASE 4 (2026-08-01): Award XP to deployed summons + persist changes.
     try {
@@ -12167,7 +12176,15 @@ async function useAbility(sock, player, abilityIndex, targetIndex, chatId) {
   }
 
   // Check if passive
-  if (ability.cost === 0) {
+  // 💡 AUDIT FIX 2026-11-01: gate on the passive FLAG, not cost === 0.
+  // Several genuine actives (ZENMASTER perfect_strike / one_with_universe /
+  // focused_meditation, ARCHMAGE mana_surge, GOD_HAND meditation) have
+  // 0-cost energy arrays and were PERMANENTLY uncastable in PvE with this
+  // misleading "passive" error (PvP charged them 20 and cast them fine).
+  const __isPassive = ability.passive === true ||
+    (ability.effect && (ability.effect.passive === true || ability.effect.type === 'passive')) ||
+    String(ability.targeting || '').toUpperCase() === 'PASSIVE';
+  if (__isPassive) {
     return {
       success: false,
       message: `❌ *${ability.name}* is a passive ability and cannot be manually activated!`,

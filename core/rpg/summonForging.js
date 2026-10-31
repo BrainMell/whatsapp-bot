@@ -180,6 +180,8 @@ async function forgeSummons(ownerJid, summon1Id, summon2Id) {
     allocatedStats: { hp: 0, atk: 0, def: 0, mag: 0, spd: 0 },
     baseStats: fusedBaseStats,
     loyalty: Math.max(summon1.loyalty, summon2.loyalty),  // inherit higher loyalty
+    // (baseStats: grown from species base below, then fusion bonuses layered —
+    //  💡 AUDIT FIX 2026-11-01)
     personality: fusedPersonality,
     behaviorScore: { aggressive: 0, protective: 0, curious: 0, volatile: 0 },
     lineage,
@@ -197,8 +199,19 @@ async function forgeSummons(ownerJid, summon1Id, summon2Id) {
     lastTrainedAt: null
   });
 
-  // 16. Apply level growth (so stats match the fused level)
+  // 16. Apply level growth + fusion bonuses
+  // 💡 AUDIT FIX 2026-11-01: applyLevelGrowth RECOMPUTES baseStats from the
+  // species base — it silently WIPED the fusion multipliers baked into
+  // fusedBaseStats (purebred/crossbred + mutations), so the "Purebred bonus
+  // applied!" messages were cosmetic lies. Grow from the species base FIRST,
+  // then layer the lineage multiplier + mutations on top so they land.
   summonSystem.applyLevelGrowth(fused, cappedLevel);
+  for (const __stat of Object.keys(fused.baseStats || {})) {
+    if (typeof fused.baseStats[__stat] === 'number') {
+      fused.baseStats[__stat] = Math.floor(fused.baseStats[__stat] * lineageBonusMult);
+    }
+  }
+  applyMutations(fused.baseStats, appliedMutations);
 
   // 17. Apply mutations as a special lineage marker
   if (appliedMutations.length > 0) {

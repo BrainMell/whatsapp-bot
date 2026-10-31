@@ -5070,7 +5070,7 @@ What to do:
             .state.tick(sock, BOT_MARKER)
             .catch((e) => console.error("[GuildWar] sweeper:", e?.message));
         }
-        const results = loans.checkDueLoans();
+        const results = await loans.checkDueLoans(); // 💡 2026-11-01: async (atomic per-loan claim)
         if (results.length > 0) {
           console.log(
             `💸 [${BOT_ID}] Processed ${results.length} loan transactions/defaults.`,
@@ -21756,9 +21756,15 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                     }
 
                     // `${botConfig.getPrefix().toLowerCase()}` guild invite @user
+                    // 💡 AUDIT FIX 2026-11-01: exclude `guild invites` — the
+                    // prefix match swallowed it and the invite-check command
+                    // could never run.
                     if (
                       lowerTxt.startsWith(
                         `${botConfig.getPrefix().toLowerCase()} guild invite`,
+                      ) &&
+                      !lowerTxt.startsWith(
+                        `${botConfig.getPrefix().toLowerCase()} guild invites`,
                       )
                     ) {
                       const targetUser = getMentionOrReply(m);
@@ -23906,7 +23912,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                     // ============================================
                     // 💡 PHASE 6: BOUNTY COMMANDS (`.g bounty ...`)
                     // ============================================
-                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} bounty`)) {
+                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} bounty `) || lowerTxt === `${botConfig.getPrefix().toLowerCase()} bounty`) { // 💡 2026-11-01: word boundary — .j bountyfoo did not open the bounty help
                       const bountyArgs = txt.trim().split(/\s+/).slice(2);
                       const bountySub = bountyArgs[0]?.toLowerCase();
                       const bountySystem = require('./rpg/bountySystem');
@@ -24082,7 +24088,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                     // ============================================
                     // 💡 PHASE 4: ABYSS COMMANDS (`.g abyss ...`)
                     // ============================================
-                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} abyss`)) {
+                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} abyss `) || lowerTxt === `${botConfig.getPrefix().toLowerCase()} abyss`) { // 💡 2026-11-01: word boundary
                       const abyssArgs = txt.trim().split(/\s+/).slice(2);
                       const abyssSub = abyssArgs[0]?.toLowerCase();
                       const abyssSystem = require('./rpg/abyssSystem');
@@ -24851,7 +24857,7 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                     // ============================================
                     // 💡 PHASE 5: RAID COMMANDS (`.g raid ...`)
                     // ============================================
-                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} raid`)) {
+                    if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} raid `) || lowerTxt === `${botConfig.getPrefix().toLowerCase()} raid`) { // 💡 2026-11-01: word boundary
                       const raidArgs = txt.trim().split(/\s+/).slice(2);
                       const raidSub = raidArgs[0]?.toLowerCase();
                       const raidSystem = require('./rpg/raidSystem');
@@ -29892,7 +29898,7 @@ ${senderName} said y'all should know:
                   if (
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} daily`
                   ) {
-                    const result = economy.claimDaily(senderJid);
+                    const result = await economy.claimDaily(senderJid); // 💡 2026-11-01: async (cross-tenant double-claim gate)
                     await sock.sendMessage(chatId, {
                       text: BOT_MARKER + result.message,
                     });
@@ -30127,7 +30133,7 @@ Examples:
                       return;
                     }
 
-                    const result = economy.transferMoney(
+                    const result = await economy.transferMoney( // 💡 2026-11-01: async (cross-tenant double-spend gate)
                       senderJid,
                       receiver,
                       amount,
@@ -31019,10 +31025,18 @@ Example: \`${botConfig.getPrefix().toLowerCase()} crash 300 2.5\``,
                       `${botConfig.getPrefix().toLowerCase()} mines `,
                     )
                   ) {
-                    const { amount, extra, extra2 } = parseGamblingArgs(txt, ['mines']);
+                    const { amount, extra, extra2, rawArgs } = parseGamblingArgs(txt, ['mines']);
+                    // 💡 AUDIT FIX 2026-11-01: `.mines pick <n>` / `.mines out`
+                    // NEVER worked — the subcommand word lands in rawArgs[1]
+                    // (parseGamblingArgs puts args[cmdIdx+1] into `amount`), so
+                    // `extra === "pick"` was always false: the documented syntax
+                    // (printed on every mines board) fell through to the usage
+                    // message while bets rode 30 min to the sweep. Match on
+                    // rawArgs[1]; for `pick`, the cell number is in `extra`.
+                    const minesSub = String((rawArgs && rawArgs[1]) || '').toLowerCase();
 
-                    if (extra === "pick") {
-                      const cell = extra2;
+                    if (minesSub === "pick") {
+                      const cell = extra;
                       if (!cell)
                         return await sock.sendMessage(chatId, {
                           text:
@@ -31040,7 +31054,7 @@ Example: \`${botConfig.getPrefix().toLowerCase()} crash 300 2.5\``,
                       });
                     }
 
-                    if (extra === "out" || extra === "cashout") {
+                    if (minesSub === "out" || minesSub === "cashout") {
                       const result = gambling.minesCashOut(senderJid, economy);
                       await awardProgression(senderJid, chatId);
                       return await sock.sendMessage(chatId, {
