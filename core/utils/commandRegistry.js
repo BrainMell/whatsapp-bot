@@ -536,6 +536,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'diag', desc: 'Image pipeline diagnostic (banner, renderers, send path).', usage: 'diag' },
     { cmd: 'tokenreset', desc: 'Card Mods: reset a player\'s event tokens.', usage: 'tokenreset @user' },
     { cmd: 'src', desc: 'Card Mods: Super RC - strip a protected/locked card.', usage: 'src @user <card>' },
+    { cmd: 'reports', desc: 'Mods+: see the bugs/requests people asked Joker to pass on to the owner. (reports clear to wipe)', usage: 'reports [clear]' },
     { cmd: 'tokenlb', desc: 'Event token leaderboard (alias: tlb).', usage: 'tokenlb' },
     { cmd: 't2ecoll', desc: 'Manage the event (E-tier) collection pool.', usage: 't2ecoll <add|remove|clear>' },
   ]

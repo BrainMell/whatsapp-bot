@@ -131,6 +131,7 @@ function initPersona(d) {
   deps.smartGroqCall = d.smartGroqCall; // engine's rotating Groq caller
   deps.modelFn = d.modelFn || (() => null); // (msgLen) => model id
   deps.axios = d.axios || null;
+  deps.ownerJidFn = d.ownerJidFn || (() => null); // () => owner's phone jid (fallback when we have not seen them in a chat)
   deps.prefixFn = d.prefixFn || (() => '.j');
   deps.searchFn = d.searchFn || (async () => ''); // (query) => result digest
   // 💡 REALGUY v2.5: engine-provided nickname resolver (economy profile
@@ -170,7 +171,8 @@ function initPersona(d) {
 }
 
 // ─── L2: ambient awareness buffer ────────────────────────────────────────────
-function observe({ chatId, who, jid, text, ts, replyTo, toNames }) {
+function observe({ chatId, who, jid, text, ts, replyTo, toNames, isOwner }) {
+  if (isOwner && jid) { try { noteOwnerSeen(chatId, jid); } catch (_) {} }
   if (!chatId || typeof text !== 'string' || !text.trim()) return;
   const t = text.replace(/\s+/g, ' ').trim().slice(0, 300);
   if (!t) return;
@@ -816,6 +818,7 @@ you: say that after you catch something`,
       `[REMEMBER: their name | short fact] — note something worth remembering about someone; you can also reply normally in the same message. If someone tells you what to call them, remember it as [REMEMBER: <their name> | goes by <what they said>].`,
   );
   p.push(tools.PROMPT);
+  p.push(CAPABILITIES);
   // Layer 6.5 — WHO'S WHO (REALGUY v2.5): speaker identity + known-people
   // roster. Teaches the WhatsApp-name vs moniker difference explicitly and
   // gives the model the names people ACTUALLY use.
@@ -901,7 +904,7 @@ function sanitizeEmoji(text) {
 
 function cleanReplyText(raw) {
   let t = String(raw || '');
-  t = tools.strip(t).replace(SEARCH_RE, ' ').replace(CMD_RE, ' ').replace(REMEMBER_RE, ' ').replace(SILENT_RE, ' ');
+  t = tools.strip(t).replace(ESCALATE_RE, ' ').replace(SEARCH_RE, ' ').replace(CMD_RE, ' ').replace(REMEMBER_RE, ' ').replace(SILENT_RE, ' ');
   t = t.replace(/^\s*[*#`\s]*(you are )?(the )?bot(Name)?\s*:\s*/i, '');
   t = t.replace(/\*\*/g, '').replace(/^#+\s*/gm, '');
   // 💡 REALGUY v3 (owner: "it's over punctuating"): nobody texts with em-dashes
@@ -1115,6 +1118,49 @@ function sanitizeOutgoing(text, chatId, commandContext) {
   return t;
 }
 
+// ─── tagging people + passing problems to the owner (owner 2026-10-30) ──────────────
+// Joker can @tag people by NAME (resolved against the chat roster to a real WhatsApp mention) and, when
+// someone asks him to fix/change something he cant, says he'll get Mellow on it and tags him.
+const OWNER_SEEN = new Map();          // chatId -> the jid form the owner actually uses in that chat (may be a LID)
+const OWNER_NAMES = new Set(['mellow', 'melly', 'mel', 'owner', 'creator', 'dev']);
+const REPORTS_KEY = '_shared_persona_reports';
+const ESCALATE_RE = /\[ESCALATE:\s*([^\]]{3,160})\]/gi;
+const lastEscalation = new Map();      // chatId -> ts
+function ownerJidFor(chatId) { return OWNER_SEEN.get(chatId) || deps.ownerJidFn(chatId) || null; }
+function noteOwnerSeen(chatId, jid) { if (chatId && jid) OWNER_SEEN.set(chatId, String(jid)); }
+function reports() { try { const v = deps.system.get(REPORTS_KEY, []); return Array.isArray(v) ? v : []; } catch { return []; } }
+function addReport(r) {
+  const list = reports(); list.push({ ...r, ts: Date.now() }); while (list.length > 40) list.shift();
+  try { deps.system.set(REPORTS_KEY, list); } catch (_) {}
+}
+function clearReports() { try { deps.system.set(REPORTS_KEY, []); } catch (_) {} }
+/** @name -> real mention. returns { text, mentions } (unknown @names just lose the @) */
+function resolveMentions(chatId, text, speakerJid) {
+  const mentions = []; const chat = getNamesMap()[chatId] || {};
+  const bot = String(deps.botName || '').toLowerCase();
+  const out = String(text).replace(/@([A-Za-z][\w.'-]{1,24})/g, (whole, raw) => {
+    const n = raw.toLowerCase().replace(/[.'-]+$/, '');
+    if (n === bot || n === 'joker') return raw; // never tag himself
+    let jid = null;
+    if (OWNER_NAMES.has(n)) jid = ownerJidFor(chatId);
+    if (!jid) {
+      const hits = [];
+      for (const k of Object.keys(chat)) {
+        const e = chat[k] || {};
+        const names = [e.w, ...(Array.isArray(e.m) ? e.m : [])];
+        try { names.push(deps.nameResolver(k)); } catch (_) {}
+        if (names.some((x) => { const xl = String(x || '').toLowerCase().trim(); return xl && (xl === n || xl.split(/\s+/)[0] === n); })) hits.push(k);
+      }
+      if (hits.length === 1) jid = hits[0];
+    }
+    if (!jid || mentions.length >= 3) return raw; // unknown or too many: plain name, no @
+    if (!mentions.includes(jid)) mentions.push(jid);
+    return '@' + String(jid).split('@')[0].split(':')[0];
+  });
+  return { text: out, mentions };
+}
+const CAPABILITIES = `WHAT YOU CAN AND CANT DO (know this about yourself, mention it only when it comes up, and in a sentence or two like a person saying what theyre good at, never a feature list): you can chat, remember people across chats, look stuff up online, work out maths/dice/coin/picks/time/unit conversions/dates/weather, find which bot command does what, roast people when asked with the roast command, tag people with @name, and pass bugs or requests on to Mellow. you CANT run bot commands yourself, change settings or code, see images videos or voice notes unless someone describes them, or hear chats where youre switched off. when someone asks you to fix, change or add something to the bot, or reports something broken, you cant do it yourself: say you'll get Mellow on it in your own words, tag him as @mellow, and put [ESCALATE: one short line saying what they want] on its own line. only do that for real problems or requests, not for chitchat or things you can answer. you can tag others the same way (@ then their name as shown in WHO YOU'RE TALKING TO / PEOPLE YOU KNOW) when calling someone out, pointing one person to another, or answering a specific person in a busy chat, but dont tag people in every message.`;
+
 async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profileText, addresseeHint, addressMode, senderLevel }) {
   const isOwner = senderLevel === 'owner'; // verified by the engine - the person who built this bot
   const level = isOwner || senderLevel === 'mod' ? 'mod' : senderLevel === 'admin' ? 'admin' : 'user'; // permission tier of the person talking
@@ -1129,6 +1175,7 @@ async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profi
     : `${senderName || 'someone'} says to you: ${userText}`;
   // command finder: if this sounds like "which command does X", retrieve locally (0 tokens)
   // and hand over only the top few real commands. Ambient chatter never triggers it.
+  if (isOwner) { noteOwnerSeen(chatId, senderJid); }
   if (isOwner) { try { captureOwnerNote(userText); natural.learnBansFromOwner(chatId, userText); } catch (_) {} }
   let cmdHint = '';
   let cmdBlk = '';
@@ -1323,10 +1370,24 @@ async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profi
     );
     return null;
   }
+  // pass-it-to-Mellow: the model flagged a real problem/request it cant handle itself
+  try {
+    ESCALATE_RE.lastIndex = 0;
+    const em = ESCALATE_RE.exec(String(raw || ''));
+    if (em && !isOwner && !isAmbient && Date.now() - (lastEscalation.get(chatId) || 0) > 90 * 1000) {
+      lastEscalation.set(chatId, Date.now());
+      if (!/@(mellow|melly|mel|owner)\b/i.test(clean)) clean = (clean + ' @mellow').trim(); // always actually tag him
+      addReport({ chatId, jid: senderJid ? String(senderJid) : null, name: senderName || 'someone', what: em[1].trim().slice(0, 160), said: userText.slice(0, 160) });
+    } else if (isOwner || isAmbient || em) {
+      clean = clean.replace(/\s*@(mellow|melly|mel)\b/gi, (m0) => (isOwner ? '' : m0)); // dont tag him while talking to him
+    }
+  } catch (_) {}
+  const mres = resolveMentions(chatId, clean, senderJid);
+  clean = mres.text;
   const replies = chunkText(clean);
   if (!replies.length) return null;
   try { natural.noteOwnReply(chatId, replies.join(' ')); } catch (_) {}
-  return { replies, usedSearch: !!parsed.search };
+  return { replies, mentions: mres.mentions, usedSearch: !!parsed.search };
 }
 
 // Split into 1-3 human-sized bubbles at sentence boundaries.
@@ -1470,6 +1531,10 @@ async function humanSend(sock, chatId, replies, opts = {}) {
     } catch (e) {}
     await sleep(typingDelayMs(chunk));
     const content = { text: BOT_MARKER + chunk };
+    if (Array.isArray(opts.mentions) && opts.mentions.length) {
+      const mm = opts.mentions.filter((j) => chunk.includes('@' + String(j).split('@')[0].split(':')[0]));
+      if (mm.length) content.mentions = mm;
+    }
     // 💡 REALGUY v3: quote for real — third argument, not a content key
     if (opts.quoteM && i === 0) {
       const ok = await silentSend(sock, chatId, content, opts.quoteM);
@@ -1521,7 +1586,7 @@ async function maybeAmbientChime({ sock, chatId, isGroup, senderName, senderJid,
       buildTurn({ chatId, senderName, senderJid, text, isAmbient: true, addresseeHint }),
     );
     if (!turn || !turn.replies || !turn.replies.length) return null;
-    await humanSend(sock, chatId, turn.replies, {});
+    await humanSend(sock, chatId, turn.replies, { mentions: turn.mentions });
     return turn.replies;
   } catch (e) {
     console.error('[persona] ambient chime failed silently:', e?.message);
@@ -1546,6 +1611,7 @@ async function roast({ targetJid, targetName, requesterName, isSelf, chatId }) {
 }
 
 module.exports = {
+  reports, clearReports, noteOwnerSeen, resolveMentions,
   isListening, setListening, govStats,
   roast,
   people,

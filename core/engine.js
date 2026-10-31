@@ -5271,6 +5271,7 @@ What to do:
       searchFn: personaEngine.makeKeylessSearcher(aiOverview, axios),
       prefixFn: () => botConfig.getPrefix(),
       axios,
+      ownerJidFn: () => (BOT_OWNER_PHONES[0] ? BOT_OWNER_PHONES[0] + "@s.whatsapp.net" : null),
       // 🧠 people memory v3: one dossier per PERSON (phone-resolved), old .likes/.note profiles imported once
       canonicalFn: (j) => { try { return jidNormalizedUser(lidResolver.resolveToPhone(j, configInstance.getAuthPath()) || j); } catch { return j; } },
       oldProfileFn: (j) => { try { return getUserProfile(j); } catch { return null; } },
@@ -31534,6 +31535,23 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                     return;
                   }
 
+                  // 📋 .j reports [clear] - things people asked Joker to get the owner on (mods/owner only)
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} reports` ||
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} reports clear`
+                  ) {
+                    if (!(isBotOwner(senderJid) || isGlobalMod(senderJid) || (typeof isStaff === "function" && isStaff(senderJid)))) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "Mods only." });
+                    }
+                    if (lowerTxt.endsWith(" clear")) { personaEngine.clearReports(); return await sock.sendMessage(chatId, { text: BOT_MARKER + "📋 reports cleared." }); }
+                    const _rp = personaEngine.reports().slice(-10).reverse();
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + (_rp.length
+                        ? "📋 *Things people asked Joker to pass to you* (newest first)\n\n" + _rp.map((r) => `• *${r.name}* (${new Date(r.ts).toISOString().slice(5, 16).replace("T", " ")}): ${r.what}\n   _\"${r.said}\"_`).join("\n")
+                        : "📋 nothing reported."),
+                    });
+                  }
+
                   // 👂 .j listen on|off|status - "always listen here" (owner 2026-10-30). A listening chat feeds Joker's
                   // awareness + people memory on EVERY text message even when `.on` is off. It is free (local heuristics,
                   // zero model calls); replies still follow `.on`, so it never chimes in uninvited.
@@ -33792,6 +33810,7 @@ _(or reply to their message)_
                       chatId,
                       who: m.pushName || economy.getDisplayName(senderJid) || "someone",
                       jid: senderJid, // 💡 REALGUY v2.5: identity for the name roster
+                      isOwner: isBotOwner(senderJid),
                       text: _obsText,
                       ts: Date.now(),
                       replyTo: _replyToName,
@@ -34133,7 +34152,7 @@ _(or reply to their message)_
                       sock,
                       chatId,
                       _turn.replies,
-                      { quoteM: m },
+                      { quoteM: m, mentions: _turn.mentions },
                     );
 
                     // pickSticker already rolled the chance + cooldown
