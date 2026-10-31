@@ -171,7 +171,7 @@ function initPersona(d) {
 }
 
 // ─── L2: ambient awareness buffer ────────────────────────────────────────────
-function observe({ chatId, who, jid, text, ts, replyTo, toNames, isOwner }) {
+function observe({ chatId, who, jid, text, ts, replyTo, toNames, isOwner, card }) {
   if (isOwner && jid) { try { noteOwnerSeen(chatId, jid); } catch (_) {} }
   if (!chatId || typeof text !== 'string' || !text.trim()) return;
   const t = text.replace(/\s+/g, ' ').trim().slice(0, 300);
@@ -189,6 +189,7 @@ function observe({ chatId, who, jid, text, ts, replyTo, toNames, isOwner }) {
     // REALGUY v5: who this line was aimed at (reply-quote target / @tags)
     replyTo: replyTo ? String(replyTo).slice(0, 40) : null,
     toNames: Array.isArray(toNames) ? toNames.map((x) => String(x).slice(0, 30)).slice(0, 4) : null,
+    card: !!card,
   });
   // 💡 REALGUY v2.5: every observed message teaches the roster — WhatsApp
   // name + any self-introduced moniker ("call me X") — deterministically.
@@ -203,6 +204,7 @@ function observe({ chatId, who, jid, text, ts, replyTo, toNames, isOwner }) {
       if (deps.ready) _tickConsolidate(chatId);
     } catch (e) {}
   }
+  if (card) { if (buf.length > BUFFER_CAP) buf.splice(0, buf.length - BUFFER_CAP); return; }
   try { people.ingest({ jid, chatId, text: t, ts: ts || Date.now(), replyToJid: replyTo ? _jidForName(chatId, replyTo) : null }); } catch (_) {}
   try { natural.noteMessage(chatId, jid ? String(jid) : null, t, ts || Date.now()); } catch (_) {}
   if (buf.length > BUFFER_CAP) buf.splice(0, buf.length - BUFFER_CAP);
@@ -218,6 +220,7 @@ function transcriptBlock(chatId) {
   return recent
     .map((m) => {
       const to = m.replyTo ? ` (replying to ${m.replyTo})` : m.toNames && m.toNames.length ? ` (to ${m.toNames.join(', ')})` : '';
+      if (m.card) return `[a bot command posted this card in the chat - its command output, NOT you talking and NOT aimed at you]: ${m.text.slice(0, 150)}`;
       const own = deps.botName && String(m.who || '').toLowerCase() === String(deps.botName).toLowerCase();
       return `${own ? `${deps.botName} (YOU - this is your own earlier text)` : bestName(chatId, m.jid, m.who)}${to}: ${m.text}`;
     })
@@ -1521,6 +1524,15 @@ async function silentSend(sock, chatId, content, quoted) {
   return false;
 }
 
+// content objects humanSend sends - lets the engine tell Joker's own chat apart from command cards
+const PERSONA_CONTENT = new WeakSet();
+function isPersonaContent(c) { return !!c && typeof c === 'object' && PERSONA_CONTENT.has(c); }
+/** a card/command output the bot posted (not persona chat): remember it as such so he never thinks it was aimed at him */
+function noteBotOutput(chatId, text) {
+  const t = String(text || '').replace(BOT_MARKER, '').trim();
+  if (!chatId || t.length < 4) return;
+  observe({ chatId, who: deps.botName, text: t, ts: Date.now(), card: true });
+}
 async function humanSend(sock, chatId, replies, opts = {}) {
   const list = Array.isArray(replies) ? replies.slice(0, MAX_CHUNKS) : [];
   for (let i = 0; i < list.length; i++) {
@@ -1531,6 +1543,7 @@ async function humanSend(sock, chatId, replies, opts = {}) {
     } catch (e) {}
     await sleep(typingDelayMs(chunk));
     const content = { text: BOT_MARKER + chunk };
+    PERSONA_CONTENT.add(content);
     if (Array.isArray(opts.mentions) && opts.mentions.length) {
       const mm = opts.mentions.filter((j) => chunk.includes('@' + String(j).split('@')[0].split(':')[0]));
       if (mm.length) content.mentions = mm;
@@ -1611,6 +1624,7 @@ async function roast({ targetJid, targetName, requesterName, isSelf, chatId }) {
 }
 
 module.exports = {
+  isPersonaContent, noteBotOutput,
   reports, clearReports, noteOwnerSeen, resolveMentions,
   isListening, setListening, govStats,
   roast,

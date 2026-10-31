@@ -5819,6 +5819,16 @@ What to do:
       return Array.from(out);
     }
 
+    // label a command target: real @mention when they were explicitly tagged, otherwise their NAME (never a raw number)
+    function _mentionLabel(m, jid) {
+      const mj = buildMentions(m, [], jid);
+      if (mj.length) return { label: String(mj[0]).split("@")[0].split(":")[0], ping: true, mentions: mj };
+      let name = null;
+      try { name = loadUserProfile(jid)?.nickname || economy.getDisplayName(jid); } catch (_) {}
+      if (!name || /^\d{8,}$/.test(String(name))) name = "this guy";
+      return { label: name, ping: false, mentions: [] };
+    }
+
     // ✅ Blacklist - banned words or blocked users
 //~     const blacklistWords = new Set();
 //~     const blacklistedUsers = new Set();
@@ -26207,7 +26217,8 @@ _💡 Reply with another number from your search list!_`.trim();
                       }
 
                       const finalTarget = targetJid || senderJid;
-                      const targetName = finalTarget.split("@")[0];
+                      const _rl2 = targetJid ? _mentionLabel(m, finalTarget) : { label: m.pushName || economy.getDisplayName(finalTarget) || finalTarget.split("@")[0], ping: false, mentions: [] };
+                      const targetName = _rl2.label;
 
                       try {
                         // 🔥 roast v2 (owner 2026-10-30: old one was a long yap festival): short + specific, built from
@@ -26221,8 +26232,8 @@ _💡 Reply with another number from your search list!_`.trim();
                         });
 
                         await sock.sendMessage(chatId, {
-                          text: BOT_MARKER + `@${targetName} ${roastText}`,
-                          contextInfo: { mentionedJid: buildMentions(m, [], targetJid) },
+                          text: BOT_MARKER + `${_rl2.ping ? "@" : ""}${targetName} ${roastText}`,
+                          contextInfo: { mentionedJid: _rl2.mentions },
                         });
                         await awardProgression(senderJid, chatId);
                         return;
@@ -26956,7 +26967,11 @@ Write ONE witty verdict line (max 90 chars) about their compatibility. Roast the
                       // If it's a person
                       if (target) {
                         const targetJid = target;
-                        const targetName = targetJid.split("@")[0];
+                        // 💡 FIX 2026-10-31 (owner: "rate commands jid is broken"): a REPLY target is deliberately not pinged
+                        // (buildMentions only pings explicit @tags), so printing "@<digits>" showed a raw number. Pinged -> real
+                        // @mention; not pinged -> the person's NAME.
+                        const _rl = _mentionLabel(m, targetJid);
+                        const targetName = _rl.label;
 
                         try {
                           let targetProfile = getUserProfile(targetJid);
@@ -26987,8 +27002,8 @@ Write ONE witty verdict line (max 90 chars) about their compatibility. Roast the
                           await sock.sendMessage(chatId, {
                             text:
                               BOT_MARKER +
-                              `⭐ *Rating @${targetName}*\n\n${rating}`,
-                            contextInfo: { mentionedJid: buildMentions(m, [], targetJid) },
+                              `⭐ *Rating ${_rl.ping ? "@" : ""}${targetName}*\n\n${rating}`,
+                            contextInfo: { mentionedJid: _rl.mentions },
                           });
                           await awardProgression(senderJid, chatId);
                           return;
@@ -33768,6 +33783,22 @@ _(or reply to their message)_
                   // `.on` in the DM to turn the AI on for that conversation.
                   const isDM = !chatId.endsWith("@g.us");
                   const isBotEnabled = enabledChats.has(chatId);
+                  // 🧾 owner 2026-10-31: Joker said "thanks for the rating" after a .j rate card because he never knew the
+                  // bot posted it. Every text the bot sends that is NOT his own chatting is now noted as a command card,
+                  // so he can tell "the bot's command output" apart from "me talking".
+                  if (!sock.__personaCardWrap) {
+                    sock.__personaCardWrap = true;
+                    const _origSend = sock.sendMessage.bind(sock);
+                    sock.sendMessage = async (jid, content, opts) => {
+                      const r = await _origSend(jid, content, opts);
+                      try {
+                        if (content && typeof content.text === "string" && !personaEngine.isPersonaContent(content) && (enabledChats.has(jid) || personaEngine.isListening(jid))) {
+                          personaEngine.noteBotOutput(jid, content.text);
+                        }
+                      } catch (_) {}
+                      return r;
+                    };
+                  }
                   // 👂 listening chats are observed even when the AI is off (see `.j listen`)
                   const _listenOnly = !isBotEnabled && !isDM && personaEngine.isListening(chatId);
 
