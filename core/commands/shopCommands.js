@@ -404,9 +404,34 @@ async function buyItem(sock, chatId, senderJid, input) {
         return;
     }
     
+    // 💡 FIX 2026-10-31: CHARGE FIRST, then apply the effect. The old code ran
+    // the effect switch BELOW and only then called removeMoney - if the wallet
+    // changed between the balance check and the charge, the effect STAYED
+    // applied while payment "failed" (free consumables / stat boosts / class
+    // changes; the old "deduct FIRST" comment described the opposite of the
+    // code). Now: pay first (with the 47-l1 DB-fresh retry), apply the effect,
+    // and refund if the effect itself fails.
+    let paid = economy.removeMoney(senderJid, item.cost, `Bought ${item.id}`);
+    if (!paid) {
+        // 💡 47-l1 (owner 2026-10-20 "wtf is this?"): multi-bot wallet
+        // contention can leave this process's cached balance seconds
+        // behind the DB — a valid buy died on a stale read. Re-pull
+        // the doc from MongoDB once and retry before failing.
+        try {
+            await economy.reloadUserFromDB(senderJid);
+            paid = economy.removeMoney(senderJid, item.cost, `Bought ${item.id}`);
+        } catch (e) { /* fall through to the failure path */ }
+    }
+    if (!paid) {
+        await sock.sendMessage(chatId, {
+            text: `❌ Purchase failed: insufficient funds (your wallet may have changed).`
+        });
+        return;
+    }
+
     // Handle different item types
     let result;
-    
+
     switch (item.type) {
         case 'CLASS_CHANGE':
             result = await handleClassChange(senderJid);
@@ -434,57 +459,9 @@ async function buyItem(sock, chatId, senderJid, input) {
         default:
             result = { success: false, message: `❌ Unknown item type: ${item.type}` };
     }
-    
-    if (result.success) {
-        // 💡 FIX: For non-rollbackable items (STAT_BOOST, CLASS_CHANGE, RESET,
-        // CONSUMABLE), deduct money FIRST, then apply the effect. Previously
-        // the effect was applied first and removeMoney was called after - if
-        // removeMoney failed (race condition), the user got the effect for free.
-        // For EQUIPMENT, the item can be rolled back, so the order doesn't
-        // matter as much - but we still verify payment.
-        const nonRollbackable = ['STAT_BOOST', 'STAT_BOOST_PERM', 'CLASS_CHANGE', 'RESET', 'CONSUMABLE', 'BOOSTER', 'SPECIAL_KEY', 'EVOLUTION', 'ASCENSION'];
 
-        if (nonRollbackable.includes(item.type)) {
-            // Deduct FIRST, then apply effect
-            let paid = economy.removeMoney(senderJid, item.cost, `Bought ${item.id}`);
-            if (!paid) {
-                // 💡 47-l1 (owner 2026-10-20 "wtf is this?"): multi-bot wallet
-                // contention can leave this process's cached balance seconds
-                // behind the DB — a valid buy died on a stale read. Re-pull
-                // the doc from MongoDB once and retry before failing.
-                try {
-                    await economy.reloadUserFromDB(senderJid);
-                    paid = economy.removeMoney(senderJid, item.cost, `Bought ${item.id}`);
-                } catch (e) { /* fall through to the failure path */ }
-            }
-            if (!paid) {
-                await sock.sendMessage(chatId, {
-                    text: `❌ Purchase failed: insufficient funds (your wallet may have changed).`
-                });
-                return;
-            }
-            // Effect was already applied above - if we reach here, payment succeeded.
-        } else {
-            // EQUIPMENT: can be rolled back if payment fails
-            let paid = economy.removeMoney(senderJid, item.cost, `Bought ${item.id}`);
-            if (!paid) {
-                // 💡 47-l1: same stale-cache retry as above — one DB-fresh
-                // attempt before we roll the item back and fail the buy.
-                try {
-                    await economy.reloadUserFromDB(senderJid);
-                    paid = economy.removeMoney(senderJid, item.cost, `Bought ${item.id}`);
-                } catch (e) { /* fall through to the failure path */ }
-            }
-            if (!paid) {
-                try {
-                    await inventorySystem.removeItem(senderJid, item.id, 1);
-                } catch (e) { /* best effort */ }
-                await sock.sendMessage(chatId, {
-                    text: `❌ Purchase failed: your wallet balance changed during the transaction.`
-                });
-                return;
-            }
-        }
+    if (result.success) {
+        // Payment already succeeded above - effect is applied.
 
         // 💡 LORE DROP: trading voice (8% on shop buy) - own message box
         let __shopDrop = null;
@@ -511,7 +488,9 @@ async function buyItem(sock, chatId, senderJid, input) {
             await loreDrops.sendOwn(sock, chatId, __shopDrop);
         } catch (e) {}
     } else {
-        await sock.sendMessage(chatId, { text: result.message });
+        // 💡 FIX 2026-10-31: effect failed AFTER payment succeeded - refund.
+        economy.addMoney(senderJid, item.cost, `Shop refund (effect failed: ${item.id})`);
+        await sock.sendMessage(chatId, { text: `${result.message}\n\n💸 Refunded: ${getZENI()}${item.cost.toLocaleString()} (purchase failed)` });
     }
 }
 
