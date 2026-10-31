@@ -905,12 +905,14 @@ function modMenuHtml() {
 <div class="card"><div class="icon">🧬</div><strong>RPG</strong><span>Character control and progression</span></div>
 <div class="card"><div class="icon">🏗️</div><strong>FORGE</strong><span>Classes, skills and enemy tools</span></div>
 <div class="card"><div class="icon">⚔️</div><strong>GUILD WAR</strong><span>War state and test skirmishes</span></div>
-<div class="card"><div class="icon">🎴</div><strong>CARDS</strong><span>Spawns, tokens and eShop</span></div>
+<div class="card"><div class="icon">🎴</div><strong>CARDS</strong><span>Spawns, tokens, eShop, myseries / scoll</span></div>
+<div class="card"><div class="icon">🐉</div><strong>DB TIMELINES</strong><span>Visual guide · .j proto dbtimelines</span></div>
+<div class="card"><div class="icon">🎮</div><strong>GAMES</strong><span>Wordle (hard = 10 pts + 500 Z), lbranks</span></div>
 <div class="card"><div class="icon">🧪</div><strong>SANDBOX</strong><span>Test character and godmode</span></div>
 <div class="card"><div class="icon">🎯</div><strong>QUIZ</strong><span>Quiz sessions and configuration</span></div>
 <div class="card"><div class="icon">🛡️</div><strong>MANAGEMENT</strong><span>Moderator roles and permissions</span></div>
-<div class="card"><div class="icon">🧰</div><strong>TESTERS</strong><span>Issues, reports and test controls</span></div>
-</div><div class="feature"><strong>✦ QUICK NAVIGATION</strong><p>Use <b>.j mod sandbox on</b> to enter the RPG test sandbox.<br>Use <b>.j mod &lt;category&gt;</b> to open a command category.<br>Use <b>.j mod &lt;command&gt;</b> to inspect a command.</p></div><div class="feature"><strong>⚠ EXPERIMENTAL HTML VIEW</strong><p>This is a visual prototype. The cards are not clickable yet. WhatsApp may render this experimental message differently across clients.</p></div></section><footer class="footer">JOKER · MAKE YOUR NEXT MOVE</footer></main></body></html>`;
+<div class="card"><div class="icon">🧰</div><strong>STAFF</strong><span>Roster, issues and test controls (testers · mods · rpgmod)</span></div>
+</div><div class="feature"><strong>✦ QUICK NAVIGATION</strong><p>Use <b>.j mod sandbox on</b> to enter the RPG test sandbox.<br>Use <b>.j mod &lt;category&gt;</b> to open a command category.<br>Use <b>.j mod &lt;command&gt;</b> to inspect a command.<br>Use <b>.j mod find &lt;text&gt;</b> to search every mod command.</p></div><div class="feature"><strong>⚠ EXPERIMENTAL HTML VIEW</strong><p>This is a visual prototype. The cards are not clickable yet. WhatsApp may render this experimental message differently across clients.</p></div></section><footer class="footer">JOKER · MAKE YOUR NEXT MOVE</footer></main></body></html>`;
 }
 
 const HELP = [
