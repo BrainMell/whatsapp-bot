@@ -176,32 +176,62 @@ async function cmdBuyItem(senderJid, reply, args = []) {
     return reply(`❌ Insufficient funds! Need ${ZENI()}${listing.price.toLocaleString()}, have ${ZENI()}${balance.toLocaleString()}.`), true;
   }
 
+  // 💡 FIX 2026-10-31: atomic claim. The old flow read status:'active', moved
+  // money/items across several awaits and only flipped the status at the end -
+  // two concurrent buys BOTH passed every check (seller paid twice, item
+  // duplicated). Claim the listing for THIS buyer first; loser of the race aborts.
+  const claimed = await ItemMarket.findOneAndUpdate(
+    { _id: listing._id, status: 'active' },
+    { $set: { status: 'pending', buyerId: senderJid } },
+    { new: true }
+  );
+  if (!claimed) {
+    return reply('❌ Someone else just bought this listing. Try another one!'), true;
+  }
+
+  const releaseClaim = async () => {
+    await ItemMarket.updateOne({ _id: claimed._id, status: 'pending' }, { $set: { status: 'active' }, $unset: { buyerId: 1 } }).catch(() => {});
+  };
+
   // 10% tax - buyer pays full price, seller gets 90%, 10% evaporates.
-  const taxAmount = Math.floor(listing.price * 0.10);
-  const sellerGets = listing.price - taxAmount;
+  const taxAmount = Math.floor(claimed.price * 0.10);
+  const sellerGets = claimed.price - taxAmount;
 
   // Pay FIRST. If buyer's wallet changes mid-transaction, abort.
-  const paid = economy.removeMoney(senderJid, listing.price, `Bought item ${listing.itemId} ×${listing.quantity} on market`);
+  const paid = economy.removeMoney(senderJid, claimed.price, `Bought item ${claimed.itemId} ×${claimed.quantity} on market`);
   if (!paid) {
+    await releaseClaim();
     return reply('❌ Purchase failed: wallet balance changed during transaction. Try again.'), true;
   }
 
   // Credit seller. If this fails, roll back buyer payment.
-  const credited = economy.addMoney(listing.sellerId, sellerGets, `Sold item ${listing.itemId} ×${listing.quantity} (after 10% tax)`);
+  const credited = economy.addMoney(claimed.sellerId, sellerGets, `Sold item ${claimed.itemId} ×${claimed.quantity} (after 10% tax)`);
   if (!credited) {
-    economy.addMoney(senderJid, listing.price, `Item purchase rollback (seller credit failed)`);
+    economy.addMoney(senderJid, claimed.price, `Item purchase rollback (seller credit failed)`);
+    await releaseClaim();
     return reply('❌ Purchase failed: seller could not be credited. Try again later.'), true;
   }
 
   // Transfer items to buyer. If this fails, roll back the entire money transaction.
-  const transferred = await addItem(senderJid, listing.itemId, listing.quantity, {
-    name: listing.itemName,
-    rarity: listing.itemRarity
+  const transferred = await addItem(senderJid, claimed.itemId, claimed.quantity, {
+    name: claimed.itemName,
+    rarity: claimed.itemRarity
   });
   if (!transferred || !transferred.success) {
-    // Roll back money
-    economy.addMoney(senderJid, listing.price, `Item purchase rollback (inventory full)`);
-    economy.removeMoney(listing.sellerId, sellerGets, `Item sale rollback (buyer inventory full)`);
+    // Roll back money (buyer refund + checked seller clawback)
+    economy.addMoney(senderJid, claimed.price, `Item purchase rollback (inventory full)`);
+    const clawedBack = economy.removeMoney(claimed.sellerId, sellerGets, `Item sale rollback (buyer inventory full)`);
+    if (!clawedBack) {
+      // 💡 FIX 2026-10-31: checked clawback - if the seller already spent the
+      // credit we keep the listing PENDING (escrow preserved, sale blocked) and
+      // alert. Never leave it 'active' (double-sale risk) or 'sold' (item never moved).
+      console.error(`[ItemMarket] ROLLBACK INCOMPLETE: seller ${claimed.sellerId} could not be clawed back ${sellerGets} for listing ${claimed._id} - listing left pending`);
+      return reply(
+        `❌ Purchase failed: your inventory is full. Your payment was refunded, ` +
+        `but the seller's credit could not be reversed - an admin has been notified via logs.`
+      ), true;
+    }
+    await releaseClaim();
     return reply(
       `❌ Purchase failed: your inventory is full (or another error). ` +
       `Clear space and try again. No money was lost.`
@@ -210,16 +240,16 @@ async function cmdBuyItem(senderJid, reply, args = []) {
   await economy.saveUser(senderJid);
 
   // Finalize the listing.
-  listing.status = 'sold';
-  listing.buyerId = senderJid;
-  listing.completedAt = new Date();
-  await listing.save();
+  claimed.status = 'sold';
+  claimed.buyerId = senderJid;
+  claimed.completedAt = new Date();
+  await claimed.save().catch(err => console.error(`[ItemMarket] finalize save failed for ${claimed._id}:`, err.message));
 
   return reply(
     `✅ *PURCHASE COMPLETE!*\n\n` +
-    `📦 ${listing.itemName} ×${listing.quantity}\n` +
-    `💰 Paid: ${ZENI()}${listing.price.toLocaleString()} (10% tax: ${ZENI()}${taxAmount.toLocaleString()})\n` +
-    `👤 Seller: @${economy.getDisplayName(listing.sellerId)}`
+    `📦 ${claimed.itemName} ×${claimed.quantity}\n` +
+    `💰 Paid: ${ZENI()}${claimed.price.toLocaleString()} (10% tax: ${ZENI()}${taxAmount.toLocaleString()})\n` +
+    `👤 Seller: @${economy.getDisplayName(claimed.sellerId)}`
   ), true;
 }
 

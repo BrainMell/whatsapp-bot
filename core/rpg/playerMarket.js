@@ -348,72 +348,101 @@ async function cmdBuy(senderJid, reply, args = []) {
   const taxAmount = Math.floor(listing.price * TAX_RATE);
   const sellerGets = listing.price - taxAmount;
 
+  // 💡 FIX 2026-10-31: atomic claim (same class as the itemMarket fix). The old
+  // flow resolved the listing, moved money + asset across several awaits and
+  // flipped status LAST - two concurrent buys both passed every check: seller
+  // paid twice, and for items BOTH buyers got a copy (dupe). Claim the listing
+  // for THIS buyer first; the loser of the race aborts cleanly.
+  const claimed = await PlayerMarket.findOneAndUpdate(
+    { _id: listing._id, status: 'active' },
+    { $set: { status: 'pending', buyerId: senderJid } },
+    { new: true },
+  );
+  if (!claimed) {
+    return reply('❌ Someone else just bought this listing. Try another one!'), true;
+  }
+  const releaseClaim = async () => {
+    await PlayerMarket.updateOne({ _id: claimed._id, status: 'pending' }, { $set: { status: 'active' }, $unset: { buyerId: 1 } }).catch(() => {});
+  };
+
   // Pay FIRST (abort if the wallet changed mid-transaction)
-  const paid = economy.removeMoney(senderJid, listing.price, `Market purchase (${listing.kind}): ${listing.listingId}`);
+  const paid = economy.removeMoney(senderJid, claimed.price, `Market purchase (${claimed.kind}): ${claimed.listingId}`);
   if (!paid) {
+    await releaseClaim();
     return reply('❌ Purchase failed: wallet balance changed during transaction. Try again.'), true;
   }
   // Credit seller (roll back buyer on failure)
-  const credited = economy.addMoney(listing.sellerId, sellerGets, `Market sale (${listing.kind}): ${listing.listingId} (after 10% tax)`);
+  const credited = economy.addMoney(claimed.sellerId, sellerGets, `Market sale (${claimed.kind}): ${claimed.listingId} (after 10% tax)`);
   if (!credited) {
-    economy.addMoney(senderJid, listing.price, `Market purchase rollback (seller credit failed)`);
+    economy.addMoney(senderJid, claimed.price, `Market purchase rollback (seller credit failed)`);
+    await releaseClaim();
     return reply('❌ Purchase failed: seller could not be credited. Try again later.'), true;
   }
 
   // Kind-specific transfer with rollback
   try {
-    if (listing.kind === 'item') {
-      const transferred = await inventorySystem.addItem(senderJid, listing.itemId, listing.quantity, {
-        name: listing.itemName, rarity: listing.itemRarity,
+    if (claimed.kind === 'item') {
+      const transferred = await inventorySystem.addItem(senderJid, claimed.itemId, claimed.quantity, {
+        name: claimed.itemName, rarity: claimed.itemRarity,
       });
       if (!transferred || !transferred.success) throw new Error('INVENTORY_FULL');
       await economy.saveUser(senderJid);
-    } else if (listing.kind === 'rune') {
+    } else if (claimed.kind === 'rune') {
       const Rune = require('../models/Rune');
-      const rune = await Rune.findOne({ runeId: listing.runeId });
+      // 💡 FIX 2026-10-31: guarded transfer - only move the rune if it is STILL
+      // escrowed for this sale (onMarket, owned by seller, not socketed).
+      const rune = await Rune.findOneAndUpdate(
+        { runeId: claimed.runeId, ownerJid: claimed.sellerId, onMarket: true, socketedSkillId: null },
+        { ownerJid: senderJid, onMarket: false, marketPrice: 0 },
+        { new: true },
+      );
       if (!rune) throw new Error('RUNE_GONE');
-      rune.ownerJid = senderJid;
-      rune.onMarket = false;
-      rune.marketPrice = 0;
-      await rune.save();
     } else {
       const SummonModel = require('../models/Summon');
       const summonSystem = require('./summonSystem');
+      // 💡 FIX 2026-10-31: guarded transfer - the old update had NO owner/forSale
+      // filter, so any concurrent caller could win the summon away from the sale.
       const summon = await SummonModel.findOneAndUpdate(
-        { summonId: listing.summonId },
+        { summonId: claimed.summonId, ownerJid: claimed.sellerId, forSale: true },
         { ownerJid: senderJid, forSale: false, salePrice: null },
         { new: true },
       );
       if (!summon) throw new Error('SUMMON_GONE');
       try {
-        const seller = economy.getUser(listing.sellerId);
+        const seller = economy.getUser(claimed.sellerId);
         if (seller) await summonSystem.refreshUserResonances(seller);
         const buyer = economy.getUser(senderJid);
         if (buyer) await summonSystem.refreshUserResonances(buyer);
       } catch (e) {}
     }
   } catch (e) {
-    // full rollback
-    economy.addMoney(senderJid, listing.price, `Market purchase rollback (${e.message})`);
-    economy.removeMoney(listing.sellerId, sellerGets, `Market sale rollback (${e.message})`);
+    // full rollback (buyer refund + checked seller clawback)
+    economy.addMoney(senderJid, claimed.price, `Market purchase rollback (${e.message})`);
+    const clawedBack = economy.removeMoney(claimed.sellerId, sellerGets, `Market sale rollback (${e.message})`);
+    if (!clawedBack) {
+      console.error(`[PlayerMarket] ROLLBACK INCOMPLETE: seller ${claimed.sellerId} could not be clawed back ${sellerGets} for ${claimed.listingId} - listing left pending`);
+      const why = e.message === 'INVENTORY_FULL' ? 'your inventory is full' : e.message === 'SUMMON_GONE' ? 'the summon no longer exists' : e.message === 'RUNE_GONE' ? 'the rune no longer exists' : 'the transfer failed';
+      return reply(`❌ Purchase failed: ${why}. Your payment was refunded, but the seller's credit could not be reversed - an admin has been notified via logs.`), true;
+    }
+    await releaseClaim();
     const why = e.message === 'INVENTORY_FULL' ? 'your inventory is full' : e.message === 'SUMMON_GONE' ? 'the summon no longer exists' : e.message === 'RUNE_GONE' ? 'the rune no longer exists' : 'the transfer failed';
     return reply(`❌ Purchase failed: ${why}. No money was lost — everything rolled back.`), true;
   }
 
   // Finalize
-  listing.status = 'sold';
-  listing.buyerId = senderJid;
-  listing.completedAt = new Date();
-  await listing.save();
+  claimed.status = 'sold';
+  claimed.buyerId = senderJid;
+  claimed.completedAt = new Date();
+  await claimed.save().catch(err => console.error(`[PlayerMarket] finalize save failed for ${claimed.listingId}:`, err.message));
 
   const KIND_ICON = { item: '📦', rune: '💎', summon: '🐉' };
-  const label = listing.kind === 'item' ? `${listing.itemName} ×${listing.quantity}`
-    : listing.kind === 'rune' ? `Rune: ${listing.runeLabel}`
-    : `${listing.summonLabel} (Lv.${listing.summonLevel})`;
+  const label = claimed.kind === 'item' ? `${claimed.itemName} ×${claimed.quantity}`
+    : claimed.kind === 'rune' ? `Rune: ${claimed.runeLabel}`
+    : `${claimed.summonLabel} (Lv.${claimed.summonLevel})`;
   return reply(
-    `✅ *PURCHASE COMPLETE!*\n\n${KIND_ICON[listing.kind]} ${label}\n` +
-    `💰 Paid: ${ZENI()}${listing.price.toLocaleString()} (10% tax: ${ZENI()}${taxAmount.toLocaleString()})\n` +
-    `👤 Seller: @${economy.getDisplayName(listing.sellerId)}`
+    `✅ *PURCHASE COMPLETE!*\n\n${KIND_ICON[claimed.kind]} ${label}\n` +
+    `💰 Paid: ${ZENI()}${claimed.price.toLocaleString()} (10% tax: ${ZENI()}${taxAmount.toLocaleString()})\n` +
+    `👤 Seller: @${economy.getDisplayName(claimed.sellerId)}`
   ), true;
 }
 
