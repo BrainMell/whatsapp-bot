@@ -1551,6 +1551,9 @@ function formatInventory(userId) {
         return {
             isEmpty: true,
             message: '📦 Your inventory is empty!',
+            // 2026-10-31 fuzz: callers do `inventory.items[n]` / `.items.some()`
+            // (enhance, use, repair inspect, pvp...) - an empty bag crashed them.
+            items: [],
             slots,
             count
         };

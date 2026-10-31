@@ -13,7 +13,8 @@ const INVESTMENT_PLANS = {
 
 function startInvestment(userId, planId, amount) {
     const user = economy.getUser(userId);
-    const plan = INVESTMENT_PLANS[planId.toUpperCase()];
+    planId = String(planId || '').toUpperCase();
+    const plan = Object.prototype.hasOwnProperty.call(INVESTMENT_PLANS, planId) ? INVESTMENT_PLANS[planId] : null;
 
     if (!user) return { success: false, message: "❌ User not registered!" };
     if (!plan) return { success: false, message: "❌ Invalid investment plan!" };
@@ -56,7 +57,7 @@ function startInvestment(userId, planId, amount) {
     if (!user.investments) user.investments = [];
 
     const investment = {
-        planId: planId.toUpperCase(),
+        planId,
         amount: amtInt,
         startTime: Date.now(),
         endTime: Date.now() + (plan.durationHours * 60 * 60 * 1000),

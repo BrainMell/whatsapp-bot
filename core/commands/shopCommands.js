@@ -128,14 +128,14 @@ function getRememberedShopList(chatId) {
 // composes with EVERY view (category, search, summon). Bare `.j shop <rank>`
 // lists that rank across the whole shop. Name search still works exactly as
 // before whenever no rank token is present.
-const RANK_ALIASES = {
+const RANK_ALIASES = Object.assign(Object.create(null), {
     common: 'COMMON', commons: 'COMMON',
     uncommon: 'UNCOMMON', uncommons: 'UNCOMMON', uc: 'UNCOMMON',
     rare: 'RARE', rares: 'RARE',
     epic: 'EPIC', epics: 'EPIC',
     legendary: 'LEGENDARY', legendaries: 'LEGENDARY', leg: 'LEGENDARY',
     mythic: 'MYTHIC', mythics: 'MYTHIC', myth: 'MYTHIC',
-};
+});
 const RARITY_ICONS = { COMMON: '⚪', UNCOMMON: '🟢', RARE: '🔵', EPIC: '🟣', LEGENDARY: '🟠', MYTHIC: '🔴' };
 
 // Splits ".j shop <args>" into { rank, query }: rank = rarity keyword (or null),
@@ -271,7 +271,7 @@ async function displayShop(sock, chatId, category = 'all', senderJid = null) {
     };
 
     const items = { ...classItems, ...mainItems };
-    const activeCat = categoryInfo[query.toLowerCase()] || categoryInfo.all;
+    const activeCat = (Object.prototype.hasOwnProperty.call(categoryInfo, query.toLowerCase()) && categoryInfo[query.toLowerCase()]) || categoryInfo.all;
 
     let msg = `${activeCat.icon} *SHOP*${query.toLowerCase() !== 'all' ? ` • ${activeCat.name}` : ''}${rankTag}\n`;
     msg += `━━━━━━━━━━━━━━━\n`;

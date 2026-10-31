@@ -1493,19 +1493,19 @@ function addItem(userId, itemId, quantity = 1) {
              // Migrate on the fly
              user.inventory[itemId] = {
                  id: itemId,
-                 quantity: user.inventory[itemId] + quantity,
+                 quantity: user.inventory[itemId] + qty,
                  acquiredAt: Date.now(),
                  ...baseItem
              };
         } else {
-             user.inventory[itemId].quantity = (user.inventory[itemId].quantity || 0) + quantity;
+             user.inventory[itemId].quantity = (Number(user.inventory[itemId].quantity) || 0) + qty;
              // Ensure base properties are present
              Object.assign(user.inventory[itemId], { ...baseItem, id: itemId });
         }
     } else {
         user.inventory[itemId] = {
             id: itemId,
-            quantity: quantity,
+            quantity: qty,
             acquiredAt: Date.now(),
             ...baseItem
         };
@@ -1549,7 +1549,7 @@ function removeItem(userId, itemId, quantity = 1) {
 // sell items for bread
 function sellItem(userId, itemId, quantity = 1) {
     const user = getUser(userId);
-    if (!user || !ITEMS[itemId]) return { success: false, msg: "❌ Invalid item." };
+    if (!user || !Object.prototype.hasOwnProperty.call(ITEMS, itemId) || !ITEMS[itemId]) return { success: false, msg: "❌ Invalid item." };
 
     // 💡 FIX: reject negative/zero/NaN quantity - was exploitable to gain items
     // AND drain money by passing quantity=-N
@@ -1664,8 +1664,10 @@ function transferMoney(fromUserId, toUserId, amount) {
     // Fail open - allow transfer if alt detection module is broken
   }
   
-  const val = Number(amount);
-  if (isNaN(val) || val <= 0) {
+  // 2026-10-31 fuzz: floor to whole Zeni (fractional/Infinity amounts used to
+  // leave non-integer wallets), same rule as addMoney/removeMoney.
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) {
     return { success: false, message: `❌ *INVALID AMOUNT*\n\n💢 Amount must be a valid positive number.` };
   }
   

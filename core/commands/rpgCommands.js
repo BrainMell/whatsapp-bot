@@ -735,14 +735,14 @@ function getSlotIcon(slot) {
 //   • affordability marks (have/need) per ingredient — the craft equivalent
 //     of the shop's price line
 const RARITY_ICONS_CRAFT = { COMMON: '⚪', UNCOMMON: '🟢', RARE: '🔵', EPIC: '🟣', LEGENDARY: '🟠', MYTHIC: '🔴' };
-const RANK_ALIASES_CRAFT = {
+const RANK_ALIASES_CRAFT = Object.assign(Object.create(null), {
     common: 'COMMON', commons: 'COMMON',
     uncommon: 'UNCOMMON', uncommons: 'UNCOMMON', uc: 'UNCOMMON',
     rare: 'RARE', rares: 'RARE',
     epic: 'EPIC', epics: 'EPIC',
     legendary: 'LEGENDARY', legendaries: 'LEGENDARY', leg: 'LEGENDARY',
     mythic: 'MYTHIC', mythics: 'MYTHIC', myth: 'MYTHIC',
-};
+});
 const _lastCraftList = new Map(); // chatId → { list: [recipe...], expiresAt }
 const CRAFT_LIST_TTL_MS = 10 * 60 * 1000;
 const STATION_KEYWORDS = new Set(['forge', 'brew', 'brewing', 'cook', 'cooking', 'craft', 'all']);

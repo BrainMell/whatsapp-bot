@@ -287,6 +287,12 @@ function addXP(userId, amount = 10, source = 'Unknown') {
     const user = getUser(userId);
     if (!user) return { leveledUp: false, xpGained: 0 };
 
+    // 2026-10-31 fuzz: a NaN/Infinity/string reward (bad multiplier upstream) used to
+    // be written straight into xp - NaN/"05" stuck on the player forever. Floor to a
+    // finite non-negative whole number; anything else grants nothing.
+    amount = Math.floor(Number(amount));
+    if (!Number.isFinite(amount) || amount < 0) amount = 0;
+
     const oldLevel = user.level;
     user.xp += amount;
     user.totalXPEarned += amount;
@@ -427,6 +433,7 @@ function bumpPersistentHPWithStatGain(userId, gainedValue) {
 function allocateStatPoint(userId, stat, amount = 1) {
     const user = getUser(userId);
     if (!user) return { success: false, message: "User not found" };
+    if (typeof stat !== 'string' || !stat) return { success: false, message: "Pick a stat to allocate!" };
 
     // Validate amount: must be a positive finite integer. Previously a
     // negative `amount` would slip past the `user.statPoints < amount`

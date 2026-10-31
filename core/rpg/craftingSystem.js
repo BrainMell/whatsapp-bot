@@ -553,7 +553,7 @@ function getRecipeById(id) {
 
     // 1) Direct key match (handles legacy keys like 'refined_steel_conv',
     //    'dragon_key_repair', etc. - keeps backward compat).
-    if (all[needle]) return all[needle];
+    if (Object.prototype.hasOwnProperty.call(all, needle) && all[needle]) return all[needle];
 
     // 2) Match by result.id - so users can type the item name they want
     //    to make: `.g craft refined_steel` finds the `refined_steel_conv`

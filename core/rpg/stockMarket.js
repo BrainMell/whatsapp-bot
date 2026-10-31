@@ -33,8 +33,13 @@ function updatePrices() {
 }
 
 function buyStock(userId, symbol, amount) {
+    // 2026-10-31 fuzz: normalise the ticker once - lowercase input used to be stored
+    // under 'aapl' while lookups/portfolio used 'AAPL' (shares vanished), and an
+    // unregistered user / missing symbol threw.
+    symbol = String(symbol || '').toUpperCase();
     const user = economy.getUser(userId);
-    const stock = STOCKS[symbol.toUpperCase()];
+    if (!user) return { success: false, message: "❌ User not registered!" };
+    const stock = Object.prototype.hasOwnProperty.call(STOCKS, symbol) ? STOCKS[symbol] : null;
 
     if (!stock) return { success: false, message: "❌ Invalid stock symbol!" };
     // Reject non-positive, non-integer, or NaN amounts. Stocks are whole shares.
@@ -59,8 +64,13 @@ function buyStock(userId, symbol, amount) {
 }
 
 function sellStock(userId, symbol, amount) {
+    // 2026-10-31 fuzz: normalise the ticker once - lowercase input used to be stored
+    // under 'aapl' while lookups/portfolio used 'AAPL' (shares vanished), and an
+    // unregistered user / missing symbol threw.
+    symbol = String(symbol || '').toUpperCase();
     const user = economy.getUser(userId);
-    const stock = STOCKS[symbol.toUpperCase()];
+    if (!user) return { success: false, message: "❌ User not registered!" };
+    const stock = Object.prototype.hasOwnProperty.call(STOCKS, symbol) ? STOCKS[symbol] : null;
 
     if (!stock) return { success: false, message: "❌ Invalid stock symbol!" };
     const amt = Math.floor(Number(amount));

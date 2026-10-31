@@ -1156,7 +1156,8 @@ const ITEM_DATABASE = {
 };
 
 function getItemInfo(itemId) {
-    return ITEM_DATABASE[itemId] || {
+    // 2026-10-31 fuzz: own-property only - `.j use constructor` resolved to Object.
+    return (Object.prototype.hasOwnProperty.call(ITEM_DATABASE, itemId) && ITEM_DATABASE[itemId]) || {
         name: itemId,
         description: 'Unknown item',
         rarity: 'COMMON',
