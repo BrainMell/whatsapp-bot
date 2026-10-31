@@ -11633,6 +11633,28 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
+                    // 🐉 2026-10-31 (owner typed ".j proto dbtimelines" and hit Unknown
+                    // command — the lab only lived under "mod"): top-level ".j proto"
+                    // alias. Everyone gets the Dragon Ball timelines guide; every other
+                    // sub routes into the admin console's mod-gated proto lab.
+                    if (primaryCmd === "proto") {
+                      const subProto = (cmdArgs[1] || "").toLowerCase();
+                      if (!subProto || subProto === "dbtimelines" || subProto === "timelines" || subProto === "guide") {
+                        if (!subProto) {
+                          await reply(BOT_MARKER + '🧪 *PROTO · DRAGON BALL TIMELINES*\n\nDelivering the guide: in-app quick view + full document…');
+                        }
+                        const dbTimelines = require("./commands/dbTimelines");
+                        await dbTimelines.sendGuide(sock, chatId, senderJid, m, BOT_MARKER);
+                        return;
+                      }
+                      if (isOwner || isGlobalMod(senderJid) || isRpgMod(senderJid)) {
+                        const adminConsole = require('./commands/adminConsole');
+                        await adminConsole.handleAdmin(sock, chatId, senderJid, cmdArgs, m, BOT_MARKER, botConfig.getPrefix(), getMentionOrReply);
+                        return;
+                      }
+                      return reply(BOT_MARKER + '❌ Unknown proto probe: *' + subProto + '*\n\n💡 Try `.j proto dbtimelines` for the Dragon Ball guide.');
+                    }
+
                     // 🧪 .fx — WhatsApp feature experiments (owner research
                     // 2026-10-14: confetti reactions, ptt/ptv lifecycles, .was
                     // lottie stickers via tag-74/tag-26, invisible-message

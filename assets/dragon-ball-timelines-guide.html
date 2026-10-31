@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dragon Ball Timelines — The Visual Guide (.j proto dbtimelines)</title>
+<style>
+  :root{
+    --bg:#0b141a; --panel:#111b21; --panel2:#182229; --panel3:#1f2c34; --line:#2a3942;
+    --teal:#00a884; --teal2:#06cf9c; --green:#25d366; --gold:#f2c14e; --red:#f15c6d;
+    --purple:#b48cff; --blue:#53bdeb; --ink:#e9edef; --mut:#8696a0; --dim:#66787f;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{scroll-behavior:smooth;}
+  body{background:var(--bg); color:var(--ink); font-family:'Segoe UI',system-ui,-apple-system,Roboto,'Helvetica Neue',Arial,sans-serif; font-size:15.5px; line-height:1.7;}
+  code,.chip,.mono{font-family:ui-monospace,'Cascadia Code','JetBrains Mono',Consolas,'Courier New',monospace;}
+  a{color:var(--teal2); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  .wrap{max-width:1080px; margin:0 auto; padding:0 18px 90px;}
+
+  /* ===== bot chrome ===== */
+  .botbar{position:sticky; top:0; z-index:50; background:#005c4b; border-bottom:1px solid rgba(0,0,0,.35); box-shadow:0 2px 10px rgba(0,0,0,.35);}
+  .botbar-in{max-width:1080px; margin:0 auto; padding:9px 18px; display:flex; align-items:center; gap:12px;}
+  .avatar{width:38px; height:38px; border-radius:50%; background:#0b141a; display:flex; align-items:center; justify-content:center; font-size:20px; border:2px solid rgba(255,255,255,.25); flex:none;}
+  .botname{font-weight:600; font-size:15px; letter-spacing:.2px;}
+  .botname small{display:block; font-weight:400; color:#cfe9e2; font-size:11.5px;}
+  .botbar .cmd{margin-left:auto; background:rgba(0,0,0,.28); color:#d9fbf1; padding:5px 12px; border-radius:8px; font-size:12.5px; border:1px solid rgba(255,255,255,.15);}
+  .online-dot{width:9px; height:9px; border-radius:50%; background:#25d366; box-shadow:0 0 8px #25d366; flex:none;}
+
+  /* ===== hero ===== */
+  .hero{background:linear-gradient(160deg,#0d2118 0%,#0b1a2a 55%,#0b141a 100%); border-bottom:1px solid var(--line); padding:46px 0 40px;}
+  .hero-in{max-width:1080px; margin:0 auto; padding:0 18px;}
+  .hero .kicker{color:var(--teal2); font-size:12.5px; letter-spacing:2.5px; text-transform:uppercase; font-weight:600;}
+  .hero h1{font-size:clamp(30px,5vw,52px); line-height:1.12; margin:10px 0 14px; font-weight:800;}
+  .hero h1 .grad{background:linear-gradient(90deg,#25d366,#53bdeb 45%,#b48cff); -webkit-background-clip:text; background-clip:text; color:transparent;}
+  .hero p.lead{color:var(--mut); max-width:760px; font-size:16.5px;}
+  .hero .meta{display:flex; flex-wrap:wrap; gap:10px; margin-top:20px;}
+  .pill{background:var(--panel2); border:1px solid var(--line); border-radius:999px; padding:6px 14px; font-size:12.5px; color:var(--mut);}
+  .pill b{color:var(--ink); font-weight:600;}
+
+  /* ===== menu tiles ===== */
+  .menu-title{margin:38px 0 6px; display:flex; align-items:center; gap:10px; color:var(--mut); font-size:13px; letter-spacing:2px; text-transform:uppercase;}
+  .menu-title::after{content:""; flex:1; height:1px; background:var(--line);}
+  .tiles{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; margin-top:16px;}
+  .tile{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px 16px; display:flex; gap:13px; align-items:flex-start; cursor:pointer; transition:all .18s ease; position:relative; overflow:hidden;}
+  .tile:hover{border-color:var(--teal); transform:translateY(-2px); box-shadow:0 6px 18px rgba(0,168,132,.12);}
+  .tile .num{font-size:11px; color:var(--dim); letter-spacing:1px;}
+  .tile .ic{font-size:22px; line-height:1; margin-top:2px;}
+  .tile h3{font-size:14.5px; font-weight:600; margin:2px 0 3px;}
+  .tile p{font-size:12px; color:var(--mut); line-height:1.45;}
+  .tile::after{content:attr(data-n); position:absolute; right:10px; top:8px; font-size:26px; font-weight:800; color:rgba(255,255,255,.045); font-family:ui-monospace,monospace;}
+
+  /* ===== sections ===== */
+  section{margin-top:56px; scroll-margin-top:76px;}
+  .sec-head{display:flex; align-items:center; gap:12px; margin-bottom:6px; flex-wrap:wrap;}
+  .sec-head .snum{font-family:ui-monospace,monospace; font-size:12px; color:var(--teal2); background:rgba(6,207,156,.08); border:1px solid rgba(6,207,156,.25); padding:3px 10px; border-radius:7px;}
+  .sec-head h2{font-size:clamp(21px,3vw,28px); font-weight:800;}
+  .sec-cmd{font-size:11.5px; color:var(--dim); margin-bottom:16px;}
+  .sec-cmd .chip{background:#0d1418; border:1px solid var(--line); border-radius:6px; padding:2px 8px; color:var(--teal2);}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:22px 24px; margin-top:14px;}
+  .card h3{font-size:17px; margin-bottom:8px; color:#fff;}
+  .card h3 .em{margin-right:6px;}
+  p + p{margin-top:10px;}
+  .muted{color:var(--mut);}
+  .small{font-size:13px;}
+  .hl-t{color:var(--teal2); font-weight:600;} .hl-g{color:var(--gold); font-weight:600;} .hl-r{color:var(--red); font-weight:600;} .hl-p{color:var(--purple); font-weight:600;} .hl-b{color:var(--blue); font-weight:600;} .hl-z{color:var(--teal2); font-weight:600;}
+  .kv{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:10px; margin-top:14px;}
+  .kv .box{background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:12px 14px;}
+  .kv .box b{display:block; font-size:13.5px;}
+  .kv .box span{font-size:12.5px; color:var(--mut);}
+  table{width:100%; border-collapse:collapse; font-size:13.5px; margin-top:12px;}
+  th{color:var(--mut); font-weight:600; text-align:left; font-size:12px; text-transform:uppercase; letter-spacing:.8px; padding:8px 10px; border-bottom:1px solid var(--line);}
+  td{padding:8px 10px; border-bottom:1px solid rgba(42,57,66,.55); vertical-align:top;}
+  tr:hover td{background:rgba(0,168,132,.04);}
+  .tag{display:inline-block; font-size:10.5px; font-weight:700; letter-spacing:.5px; border-radius:5px; padding:1px 7px; margin-right:5px;}
+  .tag.core{background:rgba(37,211,102,.14); color:#25d366; border:1px solid rgba(37,211,102,.35);}
+  .tag.sup{background:rgba(180,140,255,.13); color:#b48cff; border:1px solid rgba(180,140,255,.35);}
+  .tag.z{background:rgba(83,189,235,.12); color:#53bdeb; border:1px solid rgba(83,189,235,.3);}
+  .tag.gt{background:rgba(242,193,78,.12); color:#f2c14e; border:1px solid rgba(242,193,78,.3);}
+  .tag.alt{background:rgba(241,92,109,.12); color:#f15c6d; border:1px solid rgba(241,92,109,.3);}
+
+  /* debate boxes */
+  .debate{border:1px solid rgba(242,193,78,.3); background:linear-gradient(180deg,rgba(242,193,78,.05),rgba(242,193,78,.015)); border-radius:14px; padding:16px 18px; margin-top:14px;}
+  .debate h4{color:var(--gold); font-size:14px; letter-spacing:.4px; margin-bottom:10px; display:flex; gap:8px; align-items:center;}
+  .vs-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  @media(max-width:720px){.vs-grid{grid-template-columns:1fr;}}
+  .vs-a,.vs-b{background:var(--panel2); border-radius:10px; padding:12px 14px; font-size:13.5px;}
+  .vs-a{border:1px solid rgba(37,211,102,.28);} .vs-b{border:1px solid rgba(241,92,109,.28);}
+  .vs-a b{color:#25d366;} .vs-b b{color:#f15c6d;}
+  .vs-foot{font-size:12.5px; color:var(--mut); margin-top:10px; padding-top:8px; border-top:1px dashed var(--line);}
+  .vs-foot b{color:var(--ink);}
+
+  /* figure */
+  figure{background:var(--panel2); border:1px solid var(--line); border-radius:14px; padding:16px; margin-top:14px; overflow-x:auto;}
+  figcaption{font-size:12.5px; color:var(--mut); margin-top:10px; line-height:1.5;}
+  figcaption b{color:var(--ink);}
+  svg text{font-family:'Segoe UI',system-ui,sans-serif;}
+  .legend{display:flex; flex-wrap:wrap; gap:8px 16px; margin-top:10px; font-size:12.5px; color:var(--mut);}
+  .legend .sw{display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:6px; vertical-align:-1px;}
+
+  /* video table */
+  .vfilter{margin-top:12px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+  .vfilter input{background:#0d1418; border:1px solid var(--line); color:var(--ink); border-radius:9px; padding:9px 13px; font-size:13.5px; width:min(340px,100%); outline:none;}
+  .vfilter input:focus{border-color:var(--teal);}
+  .vfilter .cnt{font-size:12.5px; color:var(--mut);}
+  #vtable td:first-child{color:var(--dim); font-family:ui-monospace,monospace; font-size:12px;}
+  #vtable .vt{max-width:420px;}
+  #vtable .views{white-space:nowrap; color:var(--gold); font-family:ui-monospace,monospace; font-size:12.5px;}
+
+  /* footer */
+  footer{margin-top:70px; border-top:1px solid var(--line); padding-top:22px; color:var(--dim); font-size:12.5px; line-height:1.7;}
+  .fab{position:fixed; right:18px; bottom:18px; z-index:60; background:var(--teal); color:#04241c; font-weight:700; border:none; border-radius:999px; padding:11px 18px; font-size:13px; cursor:pointer; box-shadow:0 8px 22px rgba(0,168,132,.35);}
+  .fab:hover{background:var(--teal2);}
+  .notice{background:rgba(83,189,235,.06); border:1px solid rgba(83,189,235,.25); border-radius:12px; padding:12px 16px; font-size:13px; color:var(--mut); margin-top:14px;}
+  .notice b{color:var(--blue);}
+</style>
+</head>
+<body>
+
+<div class="botbar"><div class="botbar-in">
+  <div class="avatar">🃏</div>
+  <div class="botname">Joker Bot <small>• Kingdom3D R&amp;D — proto lab module</small></div>
+  <div class="cmd mono">.j proto dbtimelines</div>
+  <div class="online-dot"></div>
+</div></div>
+
+<div class="hero"><div class="hero-in">
+  <div class="kicker">🧪 Proto Lab · Module 04 · fan-made visual guide</div>
+  <h1>Dragon Ball <span class="grad">Timelines</span><br>— How the Multiverse Actually Works</h1>
+  <p class="lead">A comprehensive breakdown of every timeline in the Dragon Ball franchise: the official Age calendar, the Cell arc's four-world split, Super's Time Ring multiverse, the placement fights around <i>Super</i> and GT — and, importantly, <b style="color:var(--gold)">where fans and sources genuinely disagree</b>. Synthesized from the top 50 YouTube timeline explainers and cross-checked against the Dragon Ball Wiki, VS Battles Wiki, Kanzenshuu's databook translations, and the official site.</p>
+  <div class="meta">
+    <span class="pill">📺 <b>50</b> videos analyzed</span>
+    <span class="pill">🕸️ <b>4</b> reference sites cross-checked</span>
+    <span class="pill">🗺️ <b>7</b> hand-drawn diagrams</span>
+    <span class="pill">⚖️ <b>10</b> debates mapped</span>
+  </div>
+</div></div>
+
+<div class="wrap">
+
+<div class="menu-title">📋 module menu — tap a tile</div>
+<div class="tiles">
+  <div class="tile" data-goto="s1" data-n="01"><div class="ic">📜</div><div><div class="num">MODULE 01</div><h3>The Age System &amp; Master Chronology</h3><p>Age 714 → 790: every anchor date on one ruler.</p></div></div>
+  <div class="tile" data-goto="s2" data-n="02"><div class="ic">🧬</div><div><div class="num">MODULE 02</div><h3>Canon Layers — What "Counts"</h3><p>Manga core, Toriyama-supervised, filler, GT, games.</p></div></div>
+  <div class="tile" data-goto="s3" data-n="03"><div class="ic">⏳</div><div><div class="num">MODULE 03</div><h3>Two Time-Travel Engines</h3><p>Trunks' machine vs the Kaioshin Time Rings.</p></div></div>
+  <div class="tile" data-goto="s4" data-n="04"><div class="ic">🐉</div><div><div class="num">MODULE 04</div><h3>The Cell Arc: Four Timelines</h3><p>The famous branch — plus the fights over 3 vs 4.</p></div></div>
+  <div class="tile" data-goto="s5" data-n="05"><div class="ic">🌆</div><div><div class="num">MODULE 05</div><h3>History of Trunks — Dates &amp; Gaps</h3><p>Gohan's death, Age 785, Age 788, and the special's discrepancies.</p></div></div>
+  <div class="tile" data-goto="s6" data-n="06"><div class="ic">🌹</div><div><div class="num">MODULE 06</div><h3>Goku Black &amp; the Ring Multiverse</h3><p>Three Zamasus, one erased world, one copy-world escape.</p></div></div>
+  <div class="tile" data-goto="s7" data-n="07"><div class="ic">📅</div><div><div class="num">MODULE 07</div><h3>Super's Placement &amp; the End-of-Z Crunch</h3><p>BoG 778, Broly 780, Super Hero 782/783?, Age 784 wall.</p></div></div>
+  <div class="tile" data-goto="s8" data-n="08"><div class="ic">🔄</div><div><div class="num">MODULE 08</div><h3>The Retcon Map</h3><p>Bardock ×2, Goku's birth year, Broly ×2, Trunks' sword.</p></div></div>
+  <div class="tile" data-goto="s9" data-n="09"><div class="ic">⚖️</div><div><div class="num">MODULE 09</div><h3>The Great Debates Matrix</h3><p>Majority view vs alternative reading, with evidence.</p></div></div>
+  <div class="tile" data-goto="s10" data-n="10"><div class="ic">📺</div><div><div class="num">MODULE 10</div><h3>Sources: The Top 50 Videos</h3><p>The full ranked list + wiki/official cross-references.</p></div></div>
+</div>
+
+<!-- ============================== S1 ============================== -->
+<section id="s1">
+  <div class="sec-head"><span class="snum">MODULE 01</span><h2>📜 The Age System &amp; Master Chronology</h2></div>
+  <div class="sec-cmd">rendered from <span class="chip">.j proto dbtimelines --module=01</span></div>
+
+  <div class="card">
+    <h3><span class="em">🗓️</span>What is an "Age"?</h3>
+    <p>Dragon Ball runs on an in-universe calendar counting years as <b>Ages</b> — roughly our Gregorian years. The system was formalized by the <b class="hl-t">Daizenshuu databooks</b> (the seven-volume encyclopedia Shueisha published in 1995–96, with Akira Toriyama's direct involvement) and has been the backbone every later guidebook, video game and wiki has built on. Nearly every timeline explainer video you'll find on YouTube ultimately recites — or argues with — the Daizenshuu 7 chronology, translated for Western fans by <a href="https://www.kanzenshuu.com/translations/" target="_blank" rel="noopener">Kanzenshuu</a>.</p>
+    <p>Two things surprise most first-time viewers. First, the "future" of the franchise is extremely close: the original manga's epilogue (the 28th World Martial Arts Tournament, where Goku meets Uub) is dated <b class="hl-g">Age 784</b> — just ten years after the Buu battle. Second, the deep past got a massive expansion by <b class="hl-p">Dragon Ball Daima</b> (2024–25), which formalized the "Divine Calendar" of the Demon Realm and pinned down creation lore: the multiverse was created by <b>Rymus</b> at the Demon King's command, the Super Dragon Balls were formed by <b>Zalama</b> in Divine Year 41, and the Namekians are refugees from the Demon Realm.</p>
+    <div class="notice"><b>Cross-check note:</b> the official <a href="https://en.dragon-ball-official.com/" target="_blank" rel="noopener">Dragon Ball portal site</a> publishes news, merchandise and event pages but hosts no canon chronology — the Ages people argue about online come from the databooks (Daizenshuu / Chōzenshū), film production materials, and games. That's why <i>every</i> placement debate in Module 07 traces back to which of those sources you trust.</div>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 1400 340" width="100%" role="img" aria-label="Master Dragon Ball chronology ruler, Age 730 to Age 790">
+      <defs>
+        <linearGradient id="axisg" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#25d366"/><stop offset=".5" stop-color="#53bdeb"/><stop offset="1" stop-color="#b48cff"/>
+        </linearGradient>
+      </defs>
+      <!-- era bands -->
+      <rect x="40" y="164" width="964" height="32" rx="8" fill="#15332a" stroke="#25d366" stroke-opacity=".35"/>
+      <rect x="1004" y="164" width="336" height="32" rx="8" fill="#1a2a38" stroke="#53bdeb" stroke-opacity=".35"/>
+      <text x="520" y="140" text-anchor="middle" fill="#25d366" font-size="12.5" font-weight="700">DRAGON BALL / DBZ — THE MANGA ERA</text>
+      <text x="1120" y="140" text-anchor="middle" fill="#53bdeb" font-size="12.5" font-weight="700">SUPER → END OF Z</text>
+      <text x="1329" y="140" text-anchor="middle" fill="#53bdeb" font-size="12.5" font-weight="700">→ GT</text>
+      <!-- axis -->
+      <line x1="40" y1="180" x2="1340" y2="180" stroke="url(#axisg)" stroke-width="2.5" opacity=".9"/>
+      <!-- decade labels -->
+      <g fill="#66787f" font-size="11" font-family="ui-monospace,monospace">
+        <text x="40" y="215">730</text><text x="257" y="215">740</text><text x="473" y="215">750</text><text x="690" y="215">760</text><text x="907" y="215">770</text><text x="1106" y="215">780</text><text x="1336" y="215">790</text>
+      </g>
+      <!-- TOP events (stems up: 178 -> 130) -->
+      <g font-size="11.5" fill="#e9edef">
+        <g><circle cx="192" cy="180" r="5.5" fill="#f15c6d"/><line x1="192" y1="174" x2="192" y2="128" stroke="#f15c6d" stroke-opacity=".45"/><text x="192" y="122" text-anchor="middle" fill="#f2c14e">Age 737</text><text x="192" y="104" text-anchor="middle">Kakarot to Earth;</text><text x="192" y="88" text-anchor="middle">Planet Vegeta destroyed</text></g>
+        <g><circle cx="777" cy="180" r="5.5" fill="#f2c14e"/><line x1="777" y1="174" x2="777" y2="128" stroke="#f2c14e" stroke-opacity=".45"/><text x="777" y="122" text-anchor="middle" fill="#f2c14e">764</text><text x="777" y="104" text-anchor="middle">Trunks kills Mecha-Frieza;</text><text x="777" y="88" text-anchor="middle">⚠ Cell lands (same year!)</text></g>
+        <g><circle cx="994" cy="180" r="5.5" fill="#f15c6d"/><line x1="994" y1="174" x2="994" y2="128" stroke="#f15c6d" stroke-opacity=".45"/><text x="994" y="122" text-anchor="middle" fill="#f2c14e">774</text><text x="994" y="104" text-anchor="middle">Buu awakens</text></g>
+        <g><circle cx="1211" cy="180" r="6.5" fill="#f2c14e"/><line x1="1211" y1="174" x2="1211" y2="128" stroke="#f2c14e" stroke-opacity=".5"/><text x="1211" y="122" text-anchor="middle" fill="#f2c14e">784</text><text x="1211" y="104" text-anchor="middle">END OF Z —</text><text x="1211" y="88" text-anchor="middle">28th Budokai; Goku meets Uub</text></g>
+      </g>
+      <!-- BOTTOM events (stems down: 182 -> 238) -->
+      <g font-size="11.5" fill="#e9edef">
+        <g><circle cx="452" cy="180" r="5.5" fill="#25d366"/><line x1="452" y1="186" x2="452" y2="238" stroke="#25d366" stroke-opacity=".45"/><text x="452" y="258" text-anchor="middle" fill="#f2c14e">749</text><text x="452" y="276" text-anchor="middle">Goku meets Bulma</text></g>
+        <g><circle cx="842" cy="180" r="5.5" fill="#f15c6d"/><line x1="842" y1="186" x2="842" y2="238" stroke="#f15c6d" stroke-opacity=".45"/><text x="842" y="258" text-anchor="middle" fill="#f2c14e">767</text><text x="842" y="276" text-anchor="middle">Androids wake (May 12) ·</text><text x="842" y="292" text-anchor="middle">Cell Games (May 26)</text></g>
+        <g><circle cx="1124" cy="180" r="5.5" fill="#b48cff"/><line x1="1124" y1="186" x2="1124" y2="238" stroke="#b48cff" stroke-opacity=".45"/><text x="1124" y="258" text-anchor="middle" fill="#f2c14e">779–780</text><text x="1124" y="276" text-anchor="middle">Resurrection 'F' · Broly ·</text><text x="1124" y="292" text-anchor="middle">Goku Black crisis</text></g>
+        <g><circle cx="1319" cy="180" r="5.5" fill="#f2c14e"/><line x1="1319" y1="186" x2="1319" y2="238" stroke="#f2c14e" stroke-opacity=".45"/><text x="1319" y="258" text-anchor="middle" fill="#f2c14e">789</text><text x="1319" y="276" text-anchor="middle">GT begins</text></g>
+      </g>
+      <text x="700" y="326" text-anchor="middle" fill="#66787f" font-size="11">Precursor years (732 Frieza takes the Saiyans · 749-756 Budokai era · 761 Raditz · 762 Saiyans/Namek) sit left of the Super band · Super Hero = Age 782-783 (contested — Module 07) · Daima slots into the post-Buu gap (774-778)</text>
+    </svg>
+    <figcaption><b>Fig. 1 — The master ruler, Age 730 → 790.</b> Dates follow the Daizenshuu 7 chronology as maintained by the <a href="https://dragonball.fandom.com/wiki/Dragon_Ball_Timeline" target="_blank" rel="noopener">Dragon Ball Wiki's franchise timeline</a>, which compiles guidebook and video-game dates. Note how compressed everything after Buu is — ten years of story house all of Super, and GT only gets five.</figcaption>
+  </figure>
+
+  <div class="card">
+    <h3><span class="em">🧾</span>The anchor dates everyone argues from</h3>
+    <table>
+      <tr><th>Age</th><th>Event</th><th>Why it matters for timelines</th></tr>
+      <tr><td class="mono">737</td><td>Kakarot launched to Earth; Planet Vegeta destroyed one month later</td><td>The single most-retconned year — two incompatible Bardock stories happen here (Module 08).</td></tr>
+      <tr><td class="mono">761</td><td>Raditz arrives; Goku dies for the first time</td><td>Z-era kickoff; the afterlife calendar (Snake Way, King Kai) becomes load-bearing.</td></tr>
+      <tr><td class="mono">762</td><td>Vegeta &amp; Nappa attack; Namek destroyed</td><td>Last era Goku can still die and come back cheaply.</td></tr>
+      <tr><td class="mono">764</td><td>Future Trunks kills Mecha-Frieza &amp; King Cold; warns Goku</td><td><b class="hl-t">Trip 1</b> — this visit creates the entire main-timeline branch. Cell lands the same year (Module 04).</td></tr>
+      <tr><td class="mono">767</td><td>Androids awaken May 12; Cell Games May 26; Goku dies of the heart virus in Future Trunks' world</td><td>The divergence year for every Cell-arc timeline.</td></tr>
+      <tr><td class="mono">774</td><td>Majin Buu awakens and is defeated</td><td>End of the manga's main action; Daima and Super both hang off this year.</td></tr>
+      <tr><td class="mono">778–780</td><td>Battle of Gods · Resurrection 'F' · Broly · Goku Black crisis</td><td>Super's engine years; the Black arc's branches are drawn in Module 06.</td></tr>
+      <tr><td class="mono">784</td><td>28th Budokai — "End of Z"</td><td>The hard wall Super must fit in front of; see the crunch debate (Module 07).</td></tr>
+      <tr><td class="mono">789–790</td><td>GT: Baby, Super 17, Shadow Dragons</td><td>The anime-only continuation — status disputed (Module 09).</td></tr>
+      <tr><td class="mono">1000</td><td>Dragon Ball Online (MMO)</td><td>A licensed "distant future" with Age 1000 time-distortion plots; officially sanctioned, rarely counted.</td></tr>
+    </table>
+    <p class="muted small" style="margin-top:10px">Deep-past anchors (all databook/Daima-sourced): multiverse created in Divine Year 0 · Super Dragon Balls in Divine Year 41 · Old Kai sealed in the Z Sword 75 million years before Age · Moro rampaged 10 million years before Age · Buu created 5 million years before Age · the legendary Super Saiyan Yamoshi ≈ 238 years before Age.</p>
+  </div>
+</section>
+
+<!-- ============================== S2 ============================== -->
+<section id="s2">
+  <div class="sec-head"><span class="snum">MODULE 02</span><h2>🧬 Canon Layers — What "Counts"</h2></div>
+  <div class="sec-cmd">rendered from <span class="chip">.j proto dbtimelines --module=02</span></div>
+
+  <div class="card">
+    <h3><span class="em">🥸</span>The four-layer model most explainers converge on</h3>
+    <p>Ask ten YouTubers "what is Dragon Ball canon?" and you'll get eleven answers — but the <i>structure</i> of their answers is almost always the same four-layer onion, because it's the only way to reconcile Toriyama's manga with the enormous media empire built around it. The top 50 timeline videos overwhelmingly organize their content this way: first sort the media, then place it in the Ages.</p>
+    <figure>
+      <svg viewBox="0 0 1000 250" width="100%" role="img" aria-label="Dragon Ball canon layers diagram">
+        <g font-size="13">
+          <rect x="60" y="18" width="880" height="44" rx="10" fill="rgba(37,211,102,.10)" stroke="#25d366"/>
+          <text x="80" y="45" fill="#25d366" font-weight="700" font-size="14">LAYER 1 — THE MANGA</text>
+          <text x="330" y="45" fill="#e9edef">Toriyama's 519 chapters (1984–1995). Everything is measured against this.</text>
+          <rect x="60" y="70" width="880" height="44" rx="10" fill="rgba(180,140,255,.10)" stroke="#b48cff"/>
+          <text x="80" y="97" fill="#b48cff" font-weight="700" font-size="14">LAYER 2 — TORIYAMA-SUPERVISED</text>
+          <text x="330" y="97" fill="#e9edef">Dragon Ball Super (manga &amp; anime), BoG/RF/Broly/Super Hero films, Daima, Jaco, Minus.</text>
+          <rect x="60" y="122" width="880" height="44" rx="10" fill="rgba(83,189,235,.08)" stroke="#53bdeb"/>
+          <text x="80" y="149" fill="#53bdeb" font-weight="700" font-size="14">LAYER 3 — THE Z-ERA ANIME</text>
+          <text x="330" y="149" fill="#e9edef">DBZ filler, the History of Trunks special (timeline-critical!), Bardock TV special, DB/Kai.</text>
+          <rect x="60" y="174" width="880" height="44" rx="10" fill="rgba(242,193,78,.08)" stroke="#f2c14e"/>
+          <text x="80" y="201" fill="#f2c14e" font-weight="700" font-size="14">LAYER 4 — EVERYTHING ELSE</text>
+          <text x="330" y="201" fill="#e9edef">GT (anime-original), the 13 Z movies, Heroes, Xenoverse, games — "what-if" by default.</text>
+          <path d="M 940 40 L 950 40" stroke="none"/>
+        </g>
+      </svg>
+      <figcaption><b>Fig. 2 — Canon onion.</b> The wrinkle nobody agrees on: <b>Layer 3 contains two stories that ARE timeline-critical</b> — the History of Trunks special and the Bardock special — while Layer 4's movies spawned an entire YouTube genre proving they "can't happen" (Dragon Ball University's 4.3M-view video is the manifesto). Meanwhile History of Trunks is load-bearing canon: without it, Future Trunks' world doesn't exist on screen.</figcaption>
+    </figure>
+    <div class="kv">
+      <div class="box"><b>✅ Universally accepted</b><span>The manga; Super's Beerus/Broly/Super Hero films (Toriyama wrote them); Minus; Jaco.</span></div>
+      <div class="box"><b>🟡 Accepted with asterisks</b><span>Super anime (watched as continuity by most, contested by manga-first fans due to divergences); History of Trunks; Daima (Toriyama's final credited story work).</span></div>
+      <div class="box"><b>🟠 Timeline-critical but anime</b><span>The Z-era pieces that define the future timelines: History of Trunks (TV special) and the manga's own Trunks epilogue — the manga is Layer 1, the special is Layer 3, and <i>they disagree on dates</i> (Module 05).</span></div>
+      <div class="box"><b>❌ Not canon, but functional</b><span>GT (anime-original, described by Toriyama in later interviews as an anime "side story" — paraphrase; he drew designs for it but didn't write it). Games like Xenoverse and Heroes are self-aware time-tourism.</span></div>
+    </div>
+    <p>One more modern complication worth its own paragraph: the franchise now has <b>two Super continuities running in parallel</b> — the manga (Toyotarou, continuing past where the 2018 anime stopped, through Moro, Granolah, Super Hero and a new arc) and, as of October 2026, a brand-new <b class="hl-p">"Dragon Ball Super: Beerus" anime</b> that Kanzenshuu reports debuted this month and retells the Battle of Gods era. Timeline videos made before 2026 obviously don't cover it, which is exactly why the "newest placement" explainers (Carthu's Dojo's "NEW Dragon Ball Timeline") keep getting re-uploaded — the target keeps moving.</p>
+  </div>
+</section>
+
+<!-- ============================== S3 ============================== -->
+<section id="s3">
+  <div class="sec-head"><span class="snum">MODULE 03</span><h2>⏳ Two Time-Travel Engines</h2></div>
+  <div class="sec-cmd">rendered from <span class="chip">.j proto dbtimelines --module=03</span></div>
+
+  <div class="card">
+    <h3><span class="em">🛠️</span>Engine 1: Trunks' time machine (Z, Cell arc)</h3>
+    <p>Future Trunks' Capsule Corp machine runs on the rule Bulma states mid-Cell-arc, and which every serious explainer treats as Toriyama's own word on the subject: <b>you cannot change your own past</b>. Traveling back doesn't rewrite history — it spawns a <b>new parallel world</b> that splits at your arrival, while your home world continues exactly as before, forever doomed. This is why Future Trunks' warning to Goku (Age 764) saves the <i>manga's</i> world but not his own — the manga drives this home brutally in its epilogue, where Trunks returns home anyway and has to save his own world by himself.</p>
+    <p>Consequences that follow directly: every round trip the machine makes creates or re-enters branches; your home timeline can only be fixed from inside it; and there is no single "true" history — only a growing tree. Fuel is the practical limiter (Bulma hunts for a power source in both Z and Super; it's why Trunks can't just hop around freely), though fans note the limiter is soft — Trunks manages three trips in Z and another in Super.</p>
+  </div>
+
+  <div class="card">
+    <h3><span class="em">💍</span>Engine 2: the Kaioshin Time Rings (Super, Future Trunks saga)</h3>
+    <p>When Super needed time travel again for the Goku Black arc, it didn't reuse the machine's rules — it revealed that Supreme Kais carry <b>Time Rings</b>, and Whis/Shin explain their physics: a Ring takes you to the <b>past of a parallel world</b>, never your own history; changes made there never propagate back; and a Ring physically reacts (glows green) when it detects that "history has been altered" somewhere. Super's arc treats this as the reason Beerus destroying the main timeline's Zamasu did <i>not</i> save Future Trunks' world — that Zamasu came from yet another parallel world entirely.</p>
+    <p>The Dragon Ball Wiki's <a href="https://dragonball.fandom.com/wiki/Alternate_Timeline" target="_blank" rel="noopener">Alternate Timeline article</a> frames Trunks' Z-era machine trips in exactly these terms — each trip "altered" a timeline and spawned a new branch, retroactively decorating the Z-era story with Super-era Ring mechanics (their Age 764 article notes a "Green Time Ring" was effectively created by Trunks' alteration).</p>
+    <table>
+      <tr><th></th><th>⏳ Time Machine (Z)</th><th>💍 Time Rings (Super)</th></tr>
+      <tr><td><b>User</b></td><td>Anyone with the machine + fuel (Trunks, Cell)</td><td>Supreme Kai apprentices and above (Zamasu, Black)</td></tr>
+      <tr><td><b>Destination</b></td><td>A new branch created at arrival</td><td>The past of a parallel world</td></tr>
+      <tr><td><b>Home world affected?</b></td><td>No — never (Bulma's law)</td><td>No — never (Shin's law)</td></tr>
+      <tr><td><b>Alteration detector</b></td><td>None</td><td>Ring glows when history is tampered with</td></tr>
+      <tr><td><b>Can bring passengers</b></td><td>Yes (Trunks, later Mai; Cell stowed away)</td><td>Not the point — but Super's ending moves Trunks &amp; Mai wholesale (Module 06)</td></tr>
+      <tr><td><b>Fan verdict</b></td><td>"Hard sci-fi-ish, consequences shown on screen"</td><td>"Same rule, now with enforcement — but the ending breaks its own spirit"</td></tr>
+    </table>
+    <div class="debate">
+      <h4>⚠️ DEBATE — do the two engines actually contradict each other?</h4>
+      <div class="vs-grid">
+        <div class="vs-a"><b>Majority view:</b> No contradiction — both engines implement the same "branching parallel worlds" rule; Rings are just the official, god-sanctioned version, and the machine is the rogue version. Super is restating Toriyama's Z-era model with better special effects.</div>
+        <div class="vs-b"><b>Alternative reading:</b> The mechanics don't match in the details — the machine physically departs/arrives (it's found in ruins with Cell!), creates a <i>branch at arrival</i>, and crosses decades; Rings create no new branch (they visit "the past of a parallel world" that already exists) and are subject to Zeno-era enforcement (history "corrections"). Under a strict reading they behave like different devices, and the arc's own ending (Module 06) muddies it further.</div>
+      </div>
+      <div class="vs-foot"><b>Evidence anchors:</b> Bulma's Z-era explanation vs Whis/Shin's Ring briefing; the wiki's framing of the machine trips as branch-creators; and the long-running fan complaint threads this guide's video list keeps surfacing (e.g. Laughingstock Media's "HOW Does TIME TRAVEL Work In Dragon Ball Z?"). Both camps agree on the headline rule: <b>the past you visit is never your own.</b></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== S4 ============================== -->
+<section id="s4">
+  <div class="sec-head"><span class="snum">MODULE 04</span><h2>🐉 The Cell Arc: Four Timelines</h2></div>
+  <div class="sec-cmd">rendered from <span class="chip">.j proto dbtimelines --module=04 --diagram=branchmap</span></div>
+
+  <div class="card">
+    <h3><span class="em">🌍</span>The branching — as the sources stabilize it</h3>
+    <p>Here is the heart of every Dragon Ball timeline discussion. The Cell arc quietly builds a four-world multiverse, and the authoritative reading — the one the Daizenshuu 7 diagram encodes and the <a href="https://dragonball.fandom.com/wiki/Alternate_Timeline" target="_blank" rel="noopener">Dragon Ball Wiki's Alternate Timeline article</a> maintains — counts <b class="hl-t">four distinct timelines</b>. One of them is never shown on screen at all. Labeling is a mess across sources (the wiki numbers them 1–4; forum posts use letters; videos invent their own names), so this guide uses fixed letters:</p>
+    <div class="kv">
+      <div class="box"><b class="hl-t">TIMELINE A — The Manga Timeline</b><span>The one we watch. Created by Future Trunks' <b>first</b> machine trip; later also receives Cell.</span></div>
+      <div class="box"><b class="hl-b">TIMELINE B — Future Trunks' Home</b><span>History of Trunks + the manga's epilogue. The "original" history Goku's world branched away from.</span></div>
+      <div class="box"><b class="hl-r">TIMELINE C — Cell's Home ("the unseen timeline")</b><span>Nearly identical to B — but there, Cell won. His Trunks is dead; his time machine is stolen.</span></div>
+      <div class="box"><b class="hl-p">TIMELINE D — The Never-Seen Past</b><span>The world Timeline C's Trunks visited to get strong enough to beat his androids. Exists purely by inference.</span></div>
+    </div>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 1000 640" width="100%" role="img" aria-label="Four-timeline branch map of the Cell arc, Age 762 to 790">
+      <defs>
+        <marker id="arrT" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#06cf9c"/></marker>
+        <marker id="arrR" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#f15c6d"/></marker>
+        <marker id="arrP" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#b48cff"/></marker>
+        <marker id="arrG" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#8696a0"/></marker>
+      </defs>
+      <!-- year gridlines -->
+      <g stroke="#22303a" stroke-width="1" stroke-dasharray="3 5">
+        <line x1="170" y1="42" x2="170" y2="612"/><line x1="260" y1="42" x2="260" y2="612"/><line x1="470" y1="42" x2="470" y2="612"/><line x1="650" y1="42" x2="650" y2="612"/><line x1="770" y1="42" x2="770" y2="612"/><line x1="890" y1="42" x2="890" y2="612"/>
+      </g>
+      <g font-family="ui-monospace,monospace" font-size="11.5" fill="#66787f">
+        <text x="170" y="32" text-anchor="middle">764</text><text x="260" y="32" text-anchor="middle">767</text><text x="470" y="32" text-anchor="middle">774</text><text x="650" y="32" text-anchor="middle">780</text><text x="770" y="32" text-anchor="middle">784</text><text x="890" y="32" text-anchor="middle">788</text>
+      </g>
+
+      <!-- ===== LANE A ===== -->
+      <rect x="4" y="52" width="992" height="108" rx="12" fill="rgba(0,168,132,.05)" stroke="#00a884" stroke-opacity=".3"/>
+      <text x="14" y="74" fill="#06cf9c" font-size="12.5" font-weight="700">A · MANGA TIMELINE</text>
+      <text x="14" y="90" fill="#8696a0" font-size="10.5">the story we watch</text>
+      <line x1="110" y1="118" x2="950" y2="118" stroke="#00a884" stroke-width="2.5"/>
+      <circle cx="160" cy="118" r="6" fill="#06cf9c"/><text x="160" y="102" text-anchor="middle" font-size="10.5" fill="#e9edef">① Trunks-B arrives</text>
+      <circle cx="184" cy="118" r="6" fill="#f15c6d"/><text x="184" y="136" text-anchor="middle" font-size="10.5" fill="#f15c6d">④ Cell lands</text>
+      <circle cx="268" cy="118" r="6" fill="#f2c14e"/><text x="282" y="136" text-anchor="start" font-size="10.5" fill="#f2c14e">androids wake · Cell Games → Gohan wins</text>
+      <text x="600" y="102" font-size="10.5" fill="#8696a0">…Buu arc (774) · Super (778–784) happen here, untouched by the branch logic…</text>
+
+      <!-- ===== LANE B ===== -->
+      <rect x="4" y="196" width="992" height="118" rx="12" fill="rgba(83,189,235,.05)" stroke="#53bdeb" stroke-opacity=".3"/>
+      <text x="14" y="218" fill="#53bdeb" font-size="12.5" font-weight="700">B · TRUNKS' HOME</text>
+      <text x="14" y="234" fill="#8696a0" font-size="10.5">History of Trunks + manga epilogue</text>
+      <line x1="110" y1="262" x2="950" y2="262" stroke="#53bdeb" stroke-width="2.5"/>
+      <circle cx="268" cy="262" r="6" fill="#f15c6d"/><text x="268" y="246" text-anchor="middle" font-size="10.5" fill="#f15c6d">767: Goku dies (heart virus);</text>
+      <text x="268" y="284" text-anchor="middle" font-size="10.5" fill="#f15c6d">androids begin 18-year rampage</text>
+      <circle cx="650" cy="262" r="6" fill="#f15c6d"/><text x="650" y="246" text-anchor="middle" font-size="10.5" fill="#f15c6d">780: Gohan dies</text>
+      <text x="650" y="302" text-anchor="middle" font-size="10.5" fill="#f15c6d">→ Trunks goes SSJ</text>
+      <circle cx="770" cy="262" r="6" fill="#06cf9c"/><text x="745" y="284" text-anchor="middle" font-size="10.5" fill="#06cf9c">① Trip 1 departs</text>
+      <circle cx="802" cy="262" r="6" fill="#06cf9c"/><text x="812" y="246" text-anchor="middle" font-size="10.5" fill="#06cf9c">② Trip 2 departs</text>
+      <circle cx="838" cy="262" r="6" fill="#f2c14e"/><text x="846" y="302" text-anchor="middle" font-size="10.5" fill="#f2c14e">③ 785: kills #17 &amp; #18</text>
+      <circle cx="890" cy="262" r="6" fill="#f2c14e"/><text x="988" y="284" text-anchor="end" font-size="10.5" fill="#f2c14e">788: kills his world's Cell</text>
+
+      <!-- ===== LANE C ===== -->
+      <rect x="4" y="350" width="992" height="118" rx="12" fill="rgba(241,92,109,.05)" stroke="#f15c6d" stroke-opacity=".3"/>
+      <text x="14" y="372" fill="#f15c6d" font-size="12.5" font-weight="700">C · CELL'S HOME</text>
+      <text x="14" y="388" fill="#8696a0" font-size="10.5">the "unseen timeline" — Cell won here</text>
+      <line x1="110" y1="416" x2="950" y2="416" stroke="#f15c6d" stroke-width="2.5"/>
+      <circle cx="770" cy="416" r="6" fill="#b48cff"/><text x="790" y="400" text-anchor="end" font-size="10.5" fill="#b48cff">⑤ Trunks-C departs (784)</text>
+      <circle cx="838" cy="416" r="6" fill="#f2c14e"/><text x="846" y="438" text-anchor="middle" font-size="10.5" fill="#f2c14e">785: androids destroyed</text>
+      <circle cx="890" cy="416" r="6" fill="#f15c6d"/><text x="986" y="400" text-anchor="end" font-size="10.5" fill="#f15c6d">788: CELL kills Trunks →</text>
+      <text x="560" y="452" font-size="10.5" fill="#8696a0">…history runs like B until Age 788 — then the fight goes the other way…</text>
+
+      <!-- ===== LANE D ===== -->
+      <rect x="4" y="504" width="992" height="108" rx="12" fill="rgba(180,140,255,.05)" stroke="#b48cff" stroke-opacity=".3"/>
+      <text x="14" y="526" fill="#b48cff" font-size="12.5" font-weight="700">D · THE NEVER-SEEN PAST</text>
+      <text x="14" y="542" fill="#8696a0" font-size="10.5">exists by inference only</text>
+      <line x1="110" y1="570" x2="950" y2="570" stroke="#b48cff" stroke-width="2.5" stroke-dasharray="6 6"/>
+      <circle cx="170" cy="570" r="6" fill="#b48cff"/><text x="170" y="554" text-anchor="middle" font-size="10.5" fill="#b48cff">⑤ Trunks-C arrives (764)</text>
+      <rect x="260" y="548" width="410" height="44" rx="8" fill="none" stroke="#b48cff" stroke-dasharray="4 4" stroke-opacity=".5"/>
+      <text x="465" y="565" text-anchor="middle" font-size="10.5" fill="#b48cff">history never shown: its own androids, its own Cell…</text>
+      <text x="465" y="582" text-anchor="middle" font-size="10.5" fill="#8696a0">if its Cell later steals its machine, D spawns an E — recursion (see debate)</text>
+
+      <!-- flight arrows -->
+      <path d="M 770 256 Q 460 30 172 106" fill="none" stroke="#06cf9c" stroke-width="2" marker-end="url(#arrT)" opacity=".85"/>
+      <path d="M 802 256 Q 520 175 288 170" fill="none" stroke="#06cf9c" stroke-width="2" marker-end="url(#arrT)" opacity=".85"/>
+      <path d="M 272 172 Q 560 225 792 250" fill="none" stroke="#8696a0" stroke-width="1.6" stroke-dasharray="5 5" marker-end="url(#arrG)" opacity=".7"/>
+      <path d="M 886 410 Q 560 240 196 132" fill="none" stroke="#f15c6d" stroke-width="2" marker-end="url(#arrR)" opacity=".8"/>
+      <path d="M 764 422 Q 460 505 186 562" fill="none" stroke="#b48cff" stroke-width="2" marker-end="url(#arrP)" opacity=".8"/>
+      <text x="425" y="80" font-size="10.5" fill="#06cf9c" font-weight="700">① Trip 1 — creates Timeline A</text>
+      <text x="470" y="205" font-size="10.5" fill="#06cf9c" font-weight="700">② Trip 2 — joins the Cell war</text>
+      <text x="500" y="222" font-size="10" fill="#8696a0">③ returns home after the Games</text>
+      <text x="415" y="330" font-size="10.5" fill="#f15c6d" font-weight="700">④ Cell-C's stolen flight → lands Age 764, 3 years underground</text>
+      <text x="330" y="520" font-size="10.5" fill="#b48cff" font-weight="700">⑤ Trunks-C's trip — creates Timeline D</text>
+    </svg>
+    <div class="legend">
+      <span><span class="sw" style="background:#06cf9c"></span>Trunks-B machine flight</span>
+      <span><span class="sw" style="background:#f15c6d"></span>Cell's stolen flight / deaths</span>
+      <span><span class="sw" style="background:#b48cff"></span>Trunks-C flight</span>
+      <span><span class="sw" style="background:#f2c14e"></span>victories</span>
+      <span><span class="sw" style="background:#8696a0"></span>routine return trip</span>
+    </div>
+    <figcaption><b>Fig. 3 — The Cell-arc branch map (Age 762→790).</b> Structure follows the <a href="https://dragonball.fandom.com/wiki/Alternate_Timeline" target="_blank" rel="noopener">Alternate Timeline article</a>'s four-timeline model (its "Timeline 4 is never seen, but it is the timeline in which the Trunks from Cell's original timeline goes back in time to find a means to destroy the androids" is this diagram's lane D). Dates from the Daizenshuu 7 chronology and the manga epilogue. <i>Zoom tip: open this file in any browser and pinch-zoom — it's pure vector.</i></figcaption>
+  </figure>
+
+  <div class="card">
+    <h3><span class="em">🔍</span>Walking each lane</h3>
+    <p><b class="hl-t">Timeline A (manga):</b> Trunks-B arrives in Age 764 — this arrival is the branch point that "creates" A — kills Mecha-Frieza, and warns Goku. Cell-C lands the same year and buries himself to power down for three years (his line when Piccolo finds him in Age 767 checks out against a 764 landing). The androids wake May 12, 767; Cell absorbs them; the Cell Games end with Gohan's Father-Son Kamehameha on May 26, 767. Trunks-B then goes home.</p>
+    <p><b class="hl-b">Timeline B:</b> Goku dies of the heart virus around Age 767; the androids spend 18 years grinding the world down. Gohan dies in Age 780 (Trunks is 14 — his birth year 766 makes the special's math exact). Bulma finishes the machine; Trunks departs at 18 (Age 784), makes two visits, and returns home in Age 785 strong enough to destroy #17 and #18. Three years later, in Age 788, the manga's epilogue shows him destroying his own world's Cell — which never time-traveled because Trunks was there to stop it.</p>
+    <p><b class="hl-r">Timeline C:</b> Identical to B on the surface — androids destroyed in Age 785 — but in Age 788 the Cell fight goes the other way. Cell kills Trunks, steals the machine, and flies to Age 764 of Timeline A. His stated motive: with the androids gone, there was nothing left for him to absorb in his own world.</p>
+    <p><b class="hl-p">Timeline D:</b> The wiki's "never seen" world — the past that Trunks-C visited on his own round trip, which is how he came home strong enough to beat his androids. Everything about D beyond that one sentence is projection, which is exactly why it's the community's favorite toy box.</p>
+  </div>
+
+  <div class="card">
+    <h3><span class="em">🧨</span>Why do B and C differ if they're "identical"? The remote-control theory</h3>
+    <p>Since B and C look the same until Age 788, the fight outcome needs a cause. The manga never explains it outright, so the fandom built the most-cited bridge: in the Cell arc, Bulma builds an <b>emergency stop controller</b> designed to shut the androids down. The theory says Timeline B's Trunks won by raw power trained across <i>two</i> past trips (including surviving the Cell Games era), while Timeline C's Trunks — with only one trip, to D — may have won his android fight by other means (a controller-like device, or simply less Cell-Game-forged experience), and therefore lost his Age 788 duel. Explainer videos keep this theory alive; the wiki keeps it out of its main articles as speculation. It's the single best example of how Dragon Ball timeline lore is really written: canon gives the state machine, the fandom fills in the transition table.</p>
+    <div class="debate">
+      <h4>⚠️ DEBATE PACK — the Cell arc's four live arguments</h4>
+      <div class="vs-grid">
+        <div class="vs-a"><b>Four timelines (majority):</b> A, B, C, and the inferred D — matching the Daizenshuu diagram and the wiki. Cell's landing doesn't split A, because arrivals don't branch destinations.</div>
+        <div class="vs-b"><b>Three timelines (the minimalist camp):</b> Cell's arrival in Age 764 of A is itself an unbookkept alteration — if Trunks' arrival created A, Cell's arrival can't coexist in the same branch unless it happened <i>after</i> Trunks' (same year, unverified order!). Minimalists either accept A got created twice (a contradiction) or quietly drop D.</div>
+      </div>
+      <div class="vs-grid" style="margin-top:10px">
+        <div class="vs-a"><b>Ordering in Age 764 (mainstream):</b> Trunks arrives first, Cell lands shortly after — the Daizenshuu diagram's spacing, which keeps A a single coherent world (Cell just lives in it underground). Videos like Qaaman's "UNSEEN TIMELINE" deep-dives defend this bookkeeping.</div>
+        <div class="vs-b"><b>Ordering skeptic:</b> Nothing on-panel pins the order within the year. If Cell landed first, the manga world is actually a <i>fifth</i> timeline (Cell's landing creating an A′ that Trunks' Trip 1 then forks) — and the tree is taller than advertised. SpellCommander91's "All 25 Timelines" video is the maximalist endpoint of this logic.</div>
+      </div>
+      <div class="vs-grid" style="margin-top:10px">
+        <div class="vs-a"><b>"Why not warn earlier?" (mainstream answer):</b> Fuel is scarce (Bulma's hunt in both Z and Super), and any earlier arrival just creates <i>another</i> doomed branch — you cannot save your own world from the past, so a bigger margin wouldn't help B at all.</div>
+        <div class="vs-b"><b>The pushback:</b> Trunks nonetheless makes three Z-era trips plus a Super trip, so the fuel limit is soft; and "saving another world" is morally identical to saving yours — the characters keep doing it. The in-universe answer is emotional (Trunks' own words about protecting his home), not mechanical.</div>
+      </div>
+      <div class="vs-foot"><b>Evidence anchors:</b> <a href="https://dragonball.fandom.com/wiki/Alternate_Timeline" target="_blank" rel="noopener">Alternate Timeline (DB Wiki)</a> · <a href="https://www.reddit.com/r/dragonball/" target="_blank" rel="noopener">r/dragonball "How was Timeline 4 dealt with?" threads</a> · Daizenshuu 7 diagram (Kanzenshuu-translated) · the manga epilogue's Age 785/788 dates.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== S5 ============================== -->
+<section id="s5">
+  <div class="sec-head"><span class="snum">MODULE 05</span><h2>🌆 History of Trunks — Dates &amp; Gaps</h2></div>
+  <div class="sec-cmd">rendered from <span class="chip">.j proto dbtimelines --module=05</span></div>
+
+  <div class="card">
+    <h3><span class="em">💀</span>Timeline B's calendar, verified line by line</h3>
+    <p>The future we actually see on screen is assembled from two sources of unequal authority: the <b class="hl-b">History of Trunks TV special</b> (1993, Layer 3 anime) and the <b>manga's epilogue</b> (Layer 1, chapters 419–420). The Daizenshuu 7 chronology reconciles them into the dates below — the same dates Carthu's Dojo's "Future Trunks' CONFUSING Age EXPLAINED" video works through, because the age math only closes if you use them.</p>
+    <table>
+      <tr><th>Age</th><th>Event in Timeline B</th><th>Source</th></tr>
+      <tr><td class="mono">766</td><td>Trunks born (same year as his main-timeline self)</td><td>Databooks</td></tr>
+      <tr><td class="mono">767</td><td>Goku dies of the heart virus shortly before the androids activate; #17 &amp; #18 begin their rampage</td><td>Special + manga + Daizenshuu</td></tr>
+      <tr><td class="mono">780</td><td>Gohan dies fighting the androids; Trunks transforms at 14 (766 + 14 = 780 ✓)</td><td>History of Trunks special</td></tr>
+      <tr><td class="mono">784</td><td>Trunks (18) departs on Trip 1 — "20 years in the future" back-calculation lands here</td><td>Manga, back-derived; Daizenshuu</td></tr>
+      <tr><td class="mono">785</td><td>Trunks returns from Timeline A and destroys #17 &amp; #18</td><td>Manga epilogue + Daizenshuu 7</td></tr>
+      <tr><td class="mono">788</td><td>Trunks destroys his own world's Cell</td><td>Manga epilogue + Daizenshuu 7</td></tr>
+    </table>
+    <p style="margin-top:12px">Notice what this table does <i>not</i> contain: any mention of Cell in the special. That's not an oversight — the special aired while the Cell arc was still being written, so it knows nothing of him. The epilogue's Age 788 duel retro-fitted Cell into Timeline B, and the special's android designs (grey-skinned, wardrobe-different) never matched the manga's #17/#18. The Dragon Ball Wiki's timeline pages quietly treat the manga as authoritative wherever the two disagree — which is also where the community landed after years of arguing.</p>
+    <div class="debate">
+      <h4>⚠️ DEBATE — "the original timeline" mindset</h4>
+      <div class="vs-grid">
+        <div class="vs-a"><b>Majority view:</b> Timeline B <i>is</i> the original history — the unbranched trunk where Goku dies, the androids win, and Trunks' interference only ever produces better worlds elsewhere. The manga's world is the fork; ours, not theirs, is the "changed" copy. Videos like Laughingstock Media's "What Happened In The ORIGINAL TIMELINE" build entire retrospectives on this poignancy.</div>
+        <div class="vs-b"><b>Alternative reading:</b> "Original" is a misnomer — under branching physics there is no trunk, only a family tree with no root label. The emotional reading is fine; the mechanical one is not. BlazingAuras' "The Original Timeline of DRAGON BALL was INSANE" and similar videos lean into the trunk framing because it makes better storytelling.</div>
+      </div>
+      <div class="vs-foot"><b>Evidence anchors:</b> Bulma's branching speech (manga); the wiki's alternate-timeline structure; the epilogue dates above. Both camps agree Trunks' world cannot be "saved" from the past — only from inside (or by Zeno, catastrophically — Module 06).</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== S6 ============================== -->
+<section id="s6">
+  <div class="sec-head"><span class="snum">MODULE 06</span><h2>🌹 Goku Black &amp; the Ring Multiverse</h2></div>
+  <div class="sec-cmd">rendered from <span class="chip">.j proto dbtimelines --module=06 --diagram=zamasu-map</span></div>
+
+  <div class="card">
+    <h3><span class="em">🌀</span>Three Zamasus, two murders of history, one erasure</h3>
+    <p>Super's Future Trunks saga is the franchise's second great timeline event, and it works by introducing a new rule (Module 03's Time Rings) and then weaponizing it: <b>because the past you visit is a parallel world's past, your own world's evils stay undefeated</b>. The arc runs on three Zamasus — the main timeline's (dealt with quickly), an unseen world's (who becomes Goku Black), and Future Trunks' own (who becomes immortal). The Dragon Ball Wiki's <a href="https://dragonball.fandom.com/wiki/Alternate_Timeline" target="_blank" rel="noopener">Alternate Timeline article</a> treats the resulting mess as the arc's structural spine, and explainer videos treat it as their favorite paradox (Geekdom101's "Zamasu's Time Loop" and Kameha Man's "Zamasu's Time Paradox" are built on it).</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 1000 520" width="100%" role="img" aria-label="Goku Black arc timeline map with three Zamasus and the copy-world ending">
+      <defs>
+        <marker id="zA" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#b48cff"/></marker>
+        <marker id="zR" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#f15c6d"/></marker>
+        <marker id="zG" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#06cf9c"/></marker>
+        <marker id="zY" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#f2c14e"/></marker>
+      </defs>
+      <!-- main timeline Zamasu -->
+      <rect x="16" y="34" width="252" height="64" rx="10" fill="rgba(0,168,132,.07)" stroke="#00a884"/>
+      <text x="30" y="58" font-size="12" font-weight="700" fill="#06cf9c">ZAMASU ① — main timeline</text>
+      <text x="30" y="76" font-size="10.5" fill="#c9d6dc">U10 apprentice; turns against mortals</text>
+      <text x="30" y="90" font-size="10.5" fill="#c9d6dc">after meeting Goku (Age 779)</text>
+      <path d="M 268 66 L 330 66" stroke="#f15c6d" stroke-width="2" marker-end="url(#zR)"/>
+      <rect x="336" y="38" width="212" height="56" rx="10" fill="rgba(241,92,109,.08)" stroke="#f15c6d"/>
+      <text x="350" y="62" font-size="11.5" font-weight="700" fill="#f15c6d">destroyed by Beerus (Age 779)</text>
+      <text x="350" y="80" font-size="10.5" fill="#c9d6dc">main world: problem solved…</text>
+      <text x="560" y="52" font-size="10.5" fill="#8696a0">…for one world only. The Ring rule guarantees</text>
+      <text x="560" y="68" font-size="10.5" fill="#8696a0">other worlds carry their own Zamasu —</text>
+      <text x="560" y="84" font-size="10.5" fill="#8696a0">which is exactly what happens below.</text>
+
+      <!-- GOKU BLACK node -->
+      <rect x="630" y="168" width="130" height="48" rx="10" fill="#1c1424" stroke="#b48cff" stroke-width="1.5"/>
+      <text x="695" y="188" text-anchor="middle" font-size="12" font-weight="800" fill="#b48cff">GOKU BLACK</text>
+      <text x="695" y="206" text-anchor="middle" font-size="10" fill="#c9d6dc">(later Rosé)</text>
+      <path d="M 594 192 L 622 192" stroke="#b48cff" stroke-width="2" marker-end="url(#zA)"/>
+
+      <!-- unseen world Zamasu -->
+      <rect x="16" y="150" width="252" height="60" rx="10" fill="rgba(180,140,255,.08)" stroke="#b48cff"/>
+      <text x="30" y="174" font-size="12" font-weight="700" fill="#b48cff">ZAMASU ② — an unseen world</text>
+      <text x="30" y="192" font-size="10.5" fill="#c9d6dc">a parallel world we never visit (again —</text>
+      <text x="30" y="206" font-size="10.5" fill="#c9d6dc">the Cell-arc trick, reused)</text>
+      <path d="M 268 180 L 330 180" stroke="#b48cff" stroke-width="2" marker-end="url(#zA)"/>
+      <rect x="336" y="136" width="258" height="106" rx="10" fill="rgba(180,140,255,.06)" stroke="#b48cff"/>
+      <text x="350" y="158" font-size="11.5" font-weight="700" fill="#b48cff">THE ZERO-MORTAL ORIGIN KIT</text>
+      <text x="350" y="176" font-size="10.5" fill="#c9d6dc">① Super Dragon Balls: swap bodies with Goku</text>
+      <text x="350" y="192" font-size="10.5" fill="#c9d6dc">② kills that world's Goku (and his family)</text>
+      <text x="350" y="208" font-size="10.5" fill="#c9d6dc">③ kills his master Gowasu → inherits a</text>
+      <text x="350" y="224" font-size="10.5" fill="#c9d6dc">Time Ring → can cross into parallel pasts</text>
+      <!-- erasure -->
+      <path d="M 860 142 L 860 232" stroke="#f15c6d" stroke-width="2.5" marker-end="url(#zR)"/>
+      <rect x="740" y="96" width="240" height="44" rx="9" fill="rgba(241,92,109,.12)" stroke="#f15c6d" stroke-width="1.5"/>
+      <text x="860" y="114" text-anchor="middle" font-size="11.5" font-weight="800" fill="#f15c6d">⚡ FUTURE ZENO ERASES THE WORLD</text>
+      <text x="860" y="132" text-anchor="middle" font-size="10" fill="#c9d6dc">the timeline ends — not gets fixed, ends</text>
+
+      <!-- Black → Trunks' world -->
+      <path d="M 695 216 Q 730 230 778 240" stroke="#b48cff" stroke-width="2" fill="none" marker-end="url(#zA)"/>
+
+      <!-- Trunks world Zamasu -->
+      <rect x="16" y="300" width="252" height="64" rx="10" fill="rgba(83,189,235,.07)" stroke="#53bdeb"/>
+      <text x="30" y="324" font-size="12" font-weight="700" fill="#53bdeb">ZAMASU ③ — Trunks' own world</text>
+      <text x="30" y="342" font-size="10.5" fill="#c9d6dc">kills his Gowasu, wishes on the Super</text>
+      <text x="30" y="356" font-size="10.5" fill="#c9d6dc">Dragon Balls for immortality</text>
+      <path d="M 268 332 Q 420 322 630 260" stroke="#53bdeb" stroke-width="2" fill="none" marker-end="url(#zY)"/>
+
+      <!-- Future Trunks world box -->
+      <rect x="640" y="240" width="340" height="120" rx="12" fill="rgba(242,193,78,.05)" stroke="#f2c14e"/>
+      <text x="656" y="264" font-size="12.5" font-weight="700" fill="#f2c14e">FUTURE TRUNKS' WORLD (Timeline B, Super era)</text>
+      <text x="656" y="284" font-size="10.5" fill="#c9d6dc">its Shin is dead → its Beerus died with him (life-link)</text>
+      <text x="656" y="300" font-size="10.5" fill="#c9d6dc">Black ② arrives by Ring; allies with Zamasu ③</text>
+      <text x="656" y="316" font-size="10.5" fill="#c9d6dc">Potara fusion → MERGED ZAMASU (immortal-ish)</text>
+      <text x="656" y="332" font-size="10.5" fill="#c9d6dc">Zamasu ①'s destruction (top row) saved no one here</text>
+      <text x="656" y="348" font-size="10.5" fill="#c9d6dc">— parallel worlds do not propagate corrections.</text>
+
+      <!-- escape -->
+      <path d="M 810 360 Q 810 420 640 428 L 500 428" stroke="#06cf9c" stroke-width="2" fill="none" marker-end="url(#zG)"/>
+      <rect x="120" y="402" width="380" height="86" rx="12" fill="rgba(6,207,156,.06)" stroke="#06cf9c"/>
+      <text x="136" y="426" font-size="12" font-weight="700" fill="#06cf9c">WHIS' LOOPHOLE — the copy world</text>
+      <text x="136" y="444" font-size="10.5" fill="#c9d6dc">Trunks &amp; Mai are moved to the past of a parallel world</text>
+      <text x="136" y="460" font-size="10.5" fill="#c9d6dc">nearly identical to their own — where its Beerus can</text>
+      <text x="136" y="476" font-size="10.5" fill="#c9d6dc">destroy its Zamasu preemptively. A fresh branch (B′) becomes home.</text>
+      <text x="530" y="470" font-size="10.5" fill="#8696a0">their original world stays erased forever.</text>
+    </svg>
+    <figcaption><b>Fig. 4 — The Zamasu triangle.</b> Three versions of the same person, two of whom get to act; Black's body-swap makes him neither Goku nor quite Zamasu; and the ending resolves nothing by <i>fixing</i> anything — it moves the survivors to a different branch. The unseen world ② exists exactly like Cell's home timeline: because the story needs a place for its monster to come from.</figcaption>
+  </figure>
+
+  <div class="card">
+    <h3><span class="em">🧮</span>The bookkeeping this arc creates</h3>
+    <p>Counting strictly: the Cell arc gave us A/B/C/D; the Black arc adds the unseen origin world ②, Trunks' Super-era world (a continuation of B), the post-erasure nothing, and the new copy-world branch B′ — while the main timeline keeps rolling. Maximalist counters (the "25 timelines" school of video essay) also tally every Ring trip and every implication; minimalists argue only ② and B′ are genuinely new worlds. Nobody's count is "wrong"; the canon simply refuses to publish a ledger.</p>
+    <div class="debate">
+      <h4>⚠️ DEBATE PACK — the Black arc's live arguments</h4>
+      <div class="vs-grid">
+        <div class="vs-a"><b>Copy-world ending (majority):</b> It's a bittersweet but legal solution — Whis explicitly picks "a world almost identical," so Trunks &amp; Mai get a home while the rules stay intact. It honors the one law the franchise keeps repeating: the past you save is never your own.</div>
+        <div class="vs-b"><b>The objection:</b> It quietly manufactures an <i>infinite</i> multiverse (any world can be re-run as a copy), it dooms that copy world's Trunks to lose his home by substitution (or does he grow up alongside our Trunks? the anime doesn't say), and it makes Beerus' earlier "clean" fix of Zamasu ① look arbitrary. Videos like Carthu's "Saving Dragon Ball's Future Timeline" pitch alternatives — restoration, repopulation, Time-Ring loops — because the canon ending leaves the erased world permanently dark.</div>
+      </div>
+      <div class="vs-grid" style="margin-top:10px">
+        <div class="vs-a"><b>Why Beerus' fix didn't help (mainstream):</b> Rings/branches, full stop — the arc explains it on screen, and it's the cleanest rule demonstration in the franchise.</div>
+        <div class="vs-b"><b>The plot-hole hunt:</b> If Zamasu ② came from an unseen world, which Trip or Ring moved him to Trunks' world — and why does Trunks' world have a Time Machine-shaped hole in its defenses (Bulma's present-day machine needed for the rescue) when Rings were always available to gods? The wiki documents the mechanics; the "why" is fandom territory.</div>
+      </div>
+      <div class="vs-foot"><b>Evidence anchors:</b> <a href="https://dragonball.fandom.com/wiki/Alternate_Timeline" target="_blank" rel="noopener">Alternate Timeline (DB Wiki)</a> · the anime's Whis/Shin Ring briefing · Geekdom101's and Kameha Man's paradox explainers (Module 10, videos #18 &amp; #26).</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== S7 ============================== -->
+<section id="s7">
+  <div class="sec-head"><span class="snum">MODULE 07</span><h2>📅 Super's Placement &amp; the End-of-Z Crunch</h2></div>
+  <div class="sec-cmd">rendered from <span class="chip">.j proto dbtimelines --module=07</span></div>
+
+  <div class="card">
+    <h3><span class="em">🧗</span>Ten years, one wall</h3>
+    <p>Everything Super does must fit between the Buu battle (Age 774) and the 28th Budokai (Age 784) — the "End of Z" epilogue, where Goku leaves with Uub and the designs age up. That wall is why placement is the most fought-over real estate in the fandom, and why the wiki's own timeline page opens with a list of things it <i>refuses</i> to reconcile.</p>
+    <figure>
+      <svg viewBox="0 0 1000 262" width="100%" role="img" aria-label="Super placement bar from Age 774 to 789">
+        <defs>
+          <pattern id="hatch" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+            <rect width="8" height="8" fill="rgba(180,140,255,.10)"/><line x1="0" y1="0" x2="0" y2="8" stroke="rgba(180,140,255,.5)" stroke-width="2"/>
+          </pattern>
+        </defs>
+        <!-- bar segments -->
+        <g>
+          <rect x="40" y="84" width="243" height="44" rx="8" fill="rgba(134,150,160,.15)" stroke="#57656d"/>
+          <rect x="283" y="84" width="61" height="44" rx="6" fill="rgba(180,140,255,.22)" stroke="#b48cff"/>
+          <rect x="344" y="84" width="61" height="44" rx="6" fill="rgba(180,140,255,.22)" stroke="#b48cff"/>
+          <rect x="405" y="84" width="61" height="44" rx="6" fill="rgba(180,140,255,.22)" stroke="#b48cff"/>
+          <rect x="466" y="84" width="60" height="44" rx="6" fill="rgba(180,140,255,.22)" stroke="#b48cff"/>
+          <rect x="526" y="84" width="61" height="44" fill="url(#hatch)" stroke="#b48cff" stroke-dasharray="4 3"/>
+          <rect x="587" y="84" width="61" height="44" fill="url(#hatch)" stroke="#b48cff" stroke-dasharray="4 3"/>
+          <rect x="648" y="84" width="244" height="44" rx="8" fill="rgba(242,193,78,.12)" stroke="#f2c14e" stroke-dasharray="7 5"/>
+          <rect x="892" y="84" width="64" height="44" rx="8" fill="rgba(241,92,109,.12)" stroke="#f15c6d"/>
+        </g>
+        <!-- labels -->
+        <g font-size="10.5" fill="#c9d6dc">
+          <text x="55" y="102" fill="#8696a0" font-weight="700">POST-BUU GAP (774–778)</text>
+          <text x="55" y="118" fill="#8696a0">Daima slots in here (Age 774–778)</text>
+          <text x="288" y="102" fill="#b48cff" font-weight="700">778</text><text x="288" y="118" font-size="9.5">BoG</text>
+          <text x="349" y="102" fill="#b48cff" font-weight="700">779</text><text x="349" y="118" font-size="9.5">RF · FT saga</text>
+          <text x="410" y="102" fill="#b48cff" font-weight="700">780</text><text x="410" y="118" font-size="9.5">Broly</text>
+          <text x="471" y="102" fill="#b48cff" font-weight="700">781</text><text x="471" y="118" font-size="9.5">Moro</text>
+          <text x="531" y="102" fill="#b48cff" font-weight="700">782?</text><text x="531" y="118" font-size="9.5">Granolah?</text>
+          <text x="592" y="102" fill="#b48cff" font-weight="700">783?</text><text x="592" y="118" font-size="9.5">Super Hero?</text>
+          <text x="663" y="102" fill="#f2c14e" font-weight="700">784 — END OF Z (28th Budokai, Uub)</text>
+          <text x="663" y="118" fill="#8696a0">10-year quiet gap…</text>
+          <text x="897" y="102" fill="#f15c6d" font-weight="700">789</text><text x="897" y="118" font-size="9.5">GT</text>
+        </g>
+        <!-- year ticks -->
+        <g font-family="ui-monospace,monospace" font-size="10.5" fill="#66787f">
+          <text x="40" y="148">774</text><text x="283" y="148">778</text><text x="344" y="148">779</text><text x="405" y="148">780</text><text x="466" y="148">781</text><text x="526" y="148">782</text><text x="587" y="148">783</text><text x="648" y="148">784</text><text x="892" y="148">789</text>
+        </g>
+        <!-- crunch bracket -->
+        <path d="M 40 168 L 40 180 L 648 180 L 648 168" stroke="#f15c6d" fill="none" stroke-width="1.6"/>
+        <text x="344" y="198" text-anchor="middle" font-size="11" fill="#f15c6d" font-weight="700">THE CRUNCH — 10 years must contain ALL of Super</text>
+        <text x="344" y="216" text-anchor="middle" font-size="10.5" fill="#8696a0">BoG + RF + FT saga + Broly + Moro + Granolah + Super Hero + the new manga arc… before Goku meets Uub</text>
+        <text x="500" y="236" text-anchor="middle" font-size="10.5" fill="#f2c14e">⚠ and End-of-Z designs (Gohan's scholar hair, Vegeta's mustache era, kid-sized Goten/Trunks)</text>
+        <text x="500" y="252" text-anchor="middle" font-size="10.5" fill="#f2c14e">are already "spoiled" by the manga's own final chapter</text>
+      </svg>
+      <figcaption><b>Fig. 5 — The placement squeeze.</b> Solid purple = placements with solid official backing; hatched = the contested zone; gold = the wall; red = GT beyond it. The wiki's timeline page explicitly compiles guidebook/game dates and notes it is <b>ignoring</b> the Weekly Jump 2015 claim that the Beerus saga happens "six months after Buu's defeat," plus "dates established in Broly and the Granolah arc… due to notable inconsistencies" — i.e., even the reference wiki publicly picks winners among official sources.</figcaption>
+    </figure>
+    <div class="kv">
+      <div class="box"><b>🟣 Battle of Gods — Age 778</b><span>Guidebook date. Weekly Jump's "6 months after Buu" (→ Age 774–775) contradicts it; the wiki follows the databooks.</span></div>
+      <div class="box"><b>🟣 Resurrection 'F — Age 779</b><span>Frieza's return; Future Trunks saga follows in 779–780 (Module 06).</span></div>
+      <div class="box"><b>🟣 Broly — Age 780</b><span>Film materials anchor it; the same film's flashbacks (Age 732/737) reshuffled Bardock lore (Module 08).</span></div>
+      <div class="box"><b>❓ Super Hero — Age 782 or 783?</b><span>The wiki hosts an "Age 783" page; community threads argue for 782 with equal heat. No on-screen year card settles it.</span></div>
+    </div>
+    <div class="debate">
+      <h4>⚠️ DEBATE PACK — can Super still "reach" End of Z?</h4>
+      <div class="vs-grid">
+        <div class="vs-a"><b>The optimists:</b> There's room — Super Hero's era leaves a year before Age 784, the manga can compress arcs, and Super's own final scenes (Goku farming, Vegeta in a polo) already walk the designs toward End of Z. Some fans even read the Super manga's later arcs as deliberately clearing the runway.</div>
+        <div class="vs-b"><b>The skeptics:</b> Power creep has erased End of Z's stakes (why does Goku care about the 28th Budokai if he's fought angels?), the crunchy continuity details multiply (Goten/Trunks' ages and designs, Gohan's scholar life, the never-explained quiet decade), and every new arc makes the wall heavier. This camp expects the story to simply stop short of 784 forever.</div>
+      </div>
+      <div class="vs-foot"><b>Evidence anchors:</b> the wiki timeline page's exclusion notes (quoted above); the Super Hero year threads; and the endlessly re-uploaded "updated timeline" videos (Module 10, videos #8 &amp; #39) whose very existence proves the target keeps moving. Add to it the new <b class="hl-p">"Super: Beerus" anime (October 2026)</b> retelling the BoG era — placement discourse is being re-litigated in real time.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== S8 ============================== -->
+<section id="s8">
+  <div class="sec-head"><span class="snum">MODULE 08</span><h2>🔄 The Retcon Map</h2></div>
+  <div class="sec-cmd">rendered from <span class="chip">.j proto dbtimelines --module=08</span></div>
+
+  <div class="card">
+    <h3><span class="em">👶</span>Bardock: one year (Age 737), two incompatible stories</h3>
+    <p>No year in the franchise has been rewritten harder. The <b class="hl-z">1990 TV special</b> made Bardock a visionary who defies Frieza alone and dies cursing him, sending baby Kakarot away in a final act of rebellion. Then <b class="hl-p">Dragon Ball Minus</b> (2014, the bonus chapter of the Jaco volume) and <b class="hl-p">Broly (2018)</b> rebuilt the departure as a quiet parental decision: Bardock and Gine, worried because Frieza has started treating Saiyans strangely, put Kakarot in a pod themselves — no psychic visions, no last stand, and (per the Broly film) Bardock's fate is simply "killed with the planet." The Dragon Ball Wiki's master timeline literally files <i>all three</i> stories under Age 737 side by side, and adds a birth-year footnote: in Minus/Broly, Goku was born <b>Age 734</b> and spent three years in his nursing capsule before launch, where the classic databooks say Age 737 outright. The community's peace treaty: Minus/Broly wins (it's Toriyama-authored and Layer 2), the special survives as an emotionally beloved Layer 3 "what if" — and video essays like the "entire Bardock timeline" genre exist to reconcile them anyway.</p>
+  </div>
+
+  <div class="card">
+    <h3><span class="em">🗡️</span>The smaller retcons that never die</h3>
+    <table>
+      <tr><th>Item</th><th>Old story</th><th>Current story</th><th>Debate temperature</th></tr>
+      <tr><td><b>Goku's birth</b></td><td>Born Age 737 (databooks)</td><td>Born 734, launched 737 (Minus/Broly)</td><td>🟡 Both circulate; wikis footnote the gap.</td></tr>
+      <tr><td><b>Broly</b></td><td>1993 film villain (Layer 4), "the Legendary Super Saiyan"</td><td>2018 reimagining (Layer 2, Toriyama-written), born Age 732, raised on Vampa</td><td>🟢 Settled: the new Broly replaced the old.</td></tr>
+      <tr><td><b>Trunks' sword</b></td><td>Movie 13's Tapion hands young Trunks a sword (Layer 4)</td><td>Never explained in canon; End-of-Z teen Trunks carries one anyway</td><td>🔴 Eternal. Every timeline video gets asked.</td></tr>
+      <tr><td><b>Heart virus</b></td><td>Funimation dub implies Goku "caught it on Yardrat"</td><td>The manga never names an origin; dub line is dub lore</td><td>🟡 Dub-vs-manga classic.</td></tr>
+      <tr><td><b>GT</b></td><td>Aired 1996–97 as the sequel (Age 789–790)</td><td>Anime-original "side story" (Toriyama contributed designs, not the script — paraphrase of his later comments); Super lives in the same decade and ignores it</td><td>🔴 The franchise's biggest "is it canon?" fight (Module 09).</td></tr>
+      <tr><td><b>Games (Xenoverse, Heroes, DBO)</b></td><td>—</td><td>Self-aware time-tourism: the Time Patrol polices "correct history," implying an official meta-multiverse where every era is revisitable</td><td>🟢 Fun, explicitly non-continuity.</td></tr>
+    </table>
+    <p style="margin-top:12px">The pattern across every row is the same and worth naming: <b>Dragon Ball doesn't delete its past media — it re-stacks the layers and lets the wikis arbitrate.</b> That's why "timeline explained" content never goes stale: each retcon refreshes the whole genre. The Bardock special and History of Trunks are the only Layer 3 pieces so load-bearing that the canon visibly grew around them rather than over them.</p>
+  </div>
+</section>
+
+<!-- ============================== S9 ============================== -->
+<section id="s9">
+  <div class="sec-head"><span class="snum">MODULE 09</span><h2>⚖️ The Great Debates Matrix</h2></div>
+  <div class="sec-cmd">rendered from <span class="chip">.j proto dbtimelines --module=09</span></div>
+
+  <div class="card">
+    <h3><span class="em">📊</span>Where opinions and interpretations actually split</h3>
+    <p>Modules 03–08 flagged each argument in place. Here they all are on one board — ten debates, the position the community mostly settles on, and the live alternative. This is the section the top 50 videos are <i>really</i> about: almost every timeline explainer is one of these rows stretched to 20 minutes.</p>
+    <table>
+      <tr><th style="width:19%">Debate</th><th style="width:28%">Majority view</th><th style="width:28%">Alternative reading</th><th style="width:25%">Anchors &amp; video tie-ins</th></tr>
+      <tr><td><b>1. Cell arc: 3 or 4 timelines?</b></td><td>Four — A/B/C/D per the Daizenshuu diagram and the wiki (Module 04).</td><td>Three, or five-plus — depends on whether Cell's Age 764 landing is counted as its own branch.</td><td>Wiki: <a href="https://dragonball.fandom.com/wiki/Alternate_Timeline" target="_blank" rel="noopener">Alternate Timeline</a> · videos #10, #14, #21, #35.</td></tr>
+      <tr><td><b>2. Does the unseen-timeline pattern recurse?</b></td><td>Cut the tree at four; D is the last honest inference.</td><td>Maximalists let it recurse forever (every Cell has a home world) — hence "All 25 Timelines."</td><td>Video #15 (SpellCommander91) is the maximalist anthem.</td></tr>
+      <tr><td><b>3. Machine vs Rings — contradiction?</b></td><td>Same branching law, two tools; Super restates Z-era physics (Module 03).</td><td>Different mechanics in detail (branch-at-arrival vs parallel-past visit); the copy-world ending strains them further.</td><td>Wiki mechanics pages · video #43.</td></tr>
+      <tr><td><b>4. Is Timeline B "the original timeline"?</b></td><td>Emotionally yes — the trunk Goku's world forked from (Module 05).</td><td>Mechanically there is no trunk; "original" is an artifact of narrative sympathy.</td><td>Videos #21, #34 (the whole "original timeline" genre).</td></tr>
+      <tr><td><b>5. The copy-world ending</b></td><td>Legal and bittersweet; honors the branching law (Module 06).</td><td>Creates an infinite multiverse and a permanently dark world; alternatives keep getting pitched.</td><td>Videos #12, #18, #26, #50.</td></tr>
+      <tr><td><b>6. Super Hero year</b></td><td>Age 783 (the wiki hosts the page).</td><td>Age 782, argued from design ages and manga pacing.</td><td>Wiki: <a href="https://dragonball.fandom.com/wiki/Age_783" target="_blank" rel="noopener">Age 783</a> · community placement threads.</td></tr>
+      <tr><td><b>7. GT's status</b></td><td>Anime-original side story; not in the manga's continuity; Super occupies 778–784 and simply leaves no room.</td><td>A licensed "valid future" (Age 789+) some fans run as their personal canon — and games/DBO keep its props alive.</td><td>Toriyama's comments (paraphrased across Kanzenshuu's archive) · video #24.</td></tr>
+      <tr><td><b>8. Which Super counts — anime or manga?</b></td><td>Both under Toriyama supervision; readers default to the manga where they diverge.</td><td>Anime-first fans treat the anime as the standard; the FT saga's details differ enough to matter (Module 06's map follows the broad beats both share).</td><td>Video #17 (manga-side recap) vs the anime-focused explainers #18, #28.</td></tr>
+      <tr><td><b>9. The Z movies</b></td><td>Layer 4 — they structurally can't fit (Goku is dead/elsewhere/surrounded by people who don't exist yet).</td><td>The placement-theory school slots them into gaps anyway, with site-specific caveats — a hobby, not a heresy.</td><td>Videos #1 (the 4.3M-view manifesto), #11, #13, #20, #27, #38, #47, #49.</td></tr>
+      <tr><td><b>10. How big is the cosmology, formally?</b></td><td>Per VS Battles' <a href="https://vsbattles.fandom.com/wiki/Dragon_Ball_Cosmology" target="_blank" rel="noopener">Dragon Ball Cosmology</a> page: "a Dragon Ball timeline consists of many different universal space-times"; the 12-universe structure rates 2-C, and their <a href="https://vsbattles.fandom.com/wiki/User_blog:Firestorm808/Dragon_Ball_-_Cosmology" target="_blank" rel="noopener">cosmology blog</a> argues the full multiverse reaches 2-B "due to countless timelines… Trunks cites that each action in a timeline creates a new timeline."</td><td>A dedicated VS Battles essay (the "Low 1-C Dragon Ball Timelines" line of argument, hashed out in their <a href="https://vsbattles.com/threads/dragon-ball-cosmology-revision.148648" target="_blank" rel="noopener">cosmology revision threads</a>) pushes higher still by treating the space <i>between</i> space-times as a 5th dimension; lore purists, meanwhile, reject tier-wikis as a lens entirely.</td><td>VS Battles cosmology page + forum revision threads · the video list's powerscaling-adjacent entries.</td></tr>
+    </table>
+    <div class="notice"><b>Reading the board:</b> rows 1–5 are settled <i>mechanics</i> with disputed <i>bookkeeping</i>; rows 6–8 are disputed <i>dates</i> with settled mechanics; rows 9–10 are disputed <i>lenses</i>. That's also, roughly, the taxonomy of the entire YouTube timeline genre.</div>
+  </div>
+</section>
+
+<!-- ============================== S10 ============================== -->
+<section id="s10">
+  <div class="sec-head"><span class="snum">MODULE 10</span><h2>📺 Sources: The Top 50 Videos + Cross-References</h2></div>
+  <div class="sec-cmd">rendered from <span class="chip">.j proto dbtimelines --module=10 --sources=full</span></div>
+
+  <div class="card">
+    <h3><span class="em">🎬</span>The top 50 YouTube videos explaining Dragon Ball timelines</h3>
+    <p>Ranked by view count (search-time snapshot, October 2026 — treat counts as approximate). This guide's synthesis is built from this list's content and the consensus it encodes, with the wikis cross-checking every date and structure claim. Type to filter:</p>
+    <div class="vfilter">
+      <input id="vq" type="text" placeholder="🔎 filter by title, channel, topic… (e.g. 'cell', 'qaaman', 'gt')">
+      <span class="cnt" id="vcnt"></span>
+    </div>
+    <div style="overflow-x:auto">
+    <table id="vtable">
+      <thead><tr><th>#</th><th>Video (click to open)</th><th>Channel</th><th>Views</th><th>Focus</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3><span class="em">🕸️</span>Cross-reference sources used for every fact-check</h3>
+    <div class="kv">
+      <div class="box"><b>🐉 Dragon Ball Wiki (Fandom)</b><span><a href="https://dragonball.fandom.com/wiki/Dragon_Ball_Timeline" target="_blank" rel="noopener">Dragon Ball Timeline</a> (master Age list) · <a href="https://dragonball.fandom.com/wiki/Alternate_Timeline" target="_blank" rel="noopener">Alternate Timeline</a> (4-timeline model, Ring rules) · <a href="https://dragonball.fandom.com/wiki/Age_783" target="_blank" rel="noopener">Age 783</a> · Age 764.</span></div>
+      <div class="box"><b>⚔️ VS Battles Wiki</b><span><a href="https://vsbattles.fandom.com/wiki/Dragon_Ball_Cosmology" target="_blank" rel="noopener">Dragon Ball Cosmology</a> (timelines as space-times) · <a href="https://vsbattles.fandom.com/wiki/User_blog:Firestorm808/Dragon_Ball_-_Cosmology" target="_blank" rel="noopener">Firestorm808's cosmology blog</a> (2-B "countless timelines") · <a href="https://vsbattles.com/threads/dragon-ball-cosmology-revision.148648" target="_blank" rel="noopener">revision threads</a>.</span></div>
+      <div class="box"><b>📜 Kanzenshuu</b><span><a href="https://www.kanzenshuu.com/translations/" target="_blank" rel="noopener">Translations archive</a> (Daizenshuu/Chōzenshū databooks, incl. the <a href="https://www.kanzenshuu.com/translations/chozenshu-4-akira-toriyama" target="_blank" rel="noopener">Chōzenshū 4 Toriyama interview</a>) · news archive documenting the <b>Super: Beerus</b> anime debut (Oct 2026).</span></div>
+      <div class="box"><b>🌐 Official Dragon Ball site</b><span><a href="https://en.dragon-ball-official.com/" target="_blank" rel="noopener">en.dragon-ball-official.com</a> — news, merchandise, events. It hosts <b>no canon chronology</b>; official placements come from databooks and film materials, which is itself a finding worth knowing.</span></div>
+      <div class="box"><b>💬 Community threads</b><span>r/dragonball &amp; r/Dragonballsuper debates on Timeline 4's fate, the unseen timeline, Super Hero's year, and "reaching End of Z" — cited where a wiki page won't arbitrate.</span></div>
+      <div class="box"><b>📚 The manga itself</b><span>Toriyama's 519 chapters + the Trunks epilogue (ch. 419–420) remain the primary text; everything on this page ultimately defers to it.</span></div>
+    </div>
+    <div class="notice" style="margin-top:16px"><b>Methodology &amp; honest limitations.</b> The 50 videos were identified, ranked and reviewed via their listings, titles, descriptions and the well-documented arguments they cover; notes marked per-item are title/description-derived. Where videos conflict, this guide follows the Dragon Ball Wiki's compiled structure and flags the disagreement — that's what the debate boxes are. View counts are October 2026 search snapshots. Named-interview quotes are paraphrases unless quotation-marked. Timeline numbering differs across sources (this guide uses fixed letters A–D to stay consistent). The Dragon Ball image-search for artwork was unavailable at build time, so every diagram is hand-drawn SVG — no hotlinks, no broken images, ever.</div>
+  </div>
+</section>
+
+<footer>
+  <p><b style="color:var(--mut)">🃏 Joker Bot · Proto Lab — Module 04: dbtimelines.</b> A fan-made visual guide assembled from the top 50 YouTube timeline explainers and cross-checked against the Dragon Ball Wiki, VS Battles Wiki, Kanzenshuu's databook translations, and the official Dragon Ball portal. Dragon Ball, Dragon Ball Z, Dragon Ball GT and Dragon Ball Super are © Bird Studio / Shueisha / Toei Animation / Akira Toriyama estate. This page is unofficial, unaffiliated, and renders fully offline — single file, zero dependencies.</p>
+  <p style="margin-top:6px">Built 2026-10-31 · every diagram is inline vector · filter script runs locally · no trackers, no cookies, no JS required except the video table &amp; nav niceties.</p>
+</footer>
+
+<button class="fab" onclick="window.scrollTo({top:0,behavior:'smooth'})">⬆ menu</button>
+
+<script>
+// tile navigation
+document.querySelectorAll('.tile').forEach(function(t){
+  t.addEventListener('click', function(){
+    var el = document.getElementById(t.dataset.goto);
+    if (el) el.scrollIntoView({behavior:'smooth', block:'start'});
+  });
+});
+
+// top 50 videos
+var VIDEOS = [
+[1,"Why The Movies Can't Happen | Dragon Ball Z","Dragon Ball University","https://www.youtube.com/watch?v=hSt85B-ayCA","4.3M","Why DBZ movies contradict the canon timeline"],
+[2,"The Dragon Ball Timeline EXPLAINED","Carthu's Dojo","https://www.youtube.com/watch?v=xUJLbDM4-eU","2.5M","Full in-universe chronology, DB → Super"],
+[3,"The Complete Dragon Ball Z Timeline | Get In The Robot","Get In The Robot","https://www.youtube.com/watch?v=KAWxoKUKOaA","1.8M","Complete DBZ chronology walkthrough"],
+[4,"The FULL Dragon Ball Timeline Explained in 60 Minutes","Bruuce TS","https://www.youtube.com/watch?v=3Y7jjzYwAOo","1.1M","Hour-long full-franchise timeline"],
+[5,"The Complete Dragon Ball Timeline | Channel Frederator","ChannelFrederator","https://www.youtube.com/watch?v=GiJWxWC6Jog","1M","Complete franchise timeline retrospective"],
+[6,"The Future Trunks Who RUINED Timelines - Dragon Ball SD (Full Story)","SmugStick","https://www.youtube.com/watch?v=_37frn3iWDI","883K","DB SD story: Trunks damages timelines"],
+[7,"The Main Dragon Ball Timeline EXPLAINED!","Carthu's Dojo","https://www.youtube.com/watch?v=lohZEIejUdU","865K","Main canon timeline only"],
+[8,"The NEW Dragon Ball Timeline Explained","Carthu's Dojo","https://www.youtube.com/watch?v=cc28NAwrIUg","723K","Updated timeline incl. Daima-era placement"],
+[9,"Is Dragon Ball Daima REALLY Canon?","Carthu's Dojo","https://www.youtube.com/watch?v=dfEsOudkV50","709K","Daima canonicity & placement"],
+[10,"The Dragon Ball Z Alternate Timeline Theory","Qaaman","https://www.youtube.com/watch?v=lh58fPJtfR4","665K","Classic alternate-timeline theory"],
+[11,"Why Every Dragon Ball Z Movie is Impossible To Happen","MoodZi","https://www.youtube.com/watch?v=crubnDVaavQ","654K","Movies vs timeline impossibility"],
+[12,"Saving Dragon Ball's Future Timeline","Carthu's Dojo","https://www.youtube.com/watch?v=J0C5EU6P-9s","576K","How the erased future could be restored"],
+[13,"Dragon Ball Z Theory - Movie Timeline Placements","Qaaman","https://www.youtube.com/watch?v=0T5PHgbTAog","509K","Slotting DBZ movies into the timeline"],
+[14,"The \"UNSEEN\" TIMELINE Of Dragon Ball Z Explained","Qaaman","https://www.youtube.com/watch?v=ZJKISp0DUzo","358K","Cell's home timeline deep-dive"],
+[15,"All 25 Dragon Ball Timelines Explained","SpellCommander91","https://www.youtube.com/watch?v=--4zyKHvYr0","330K","The maximalist timeline count"],
+[16,"History of the Androids Explained in Dragon Ball","Geekdom101","https://www.youtube.com/watch?v=1WPll1ojGgU","250K","Android history across timelines"],
+[17,"The Entire Goku Black Arc | Dragon Ball Super Manga","Justin's Den","https://www.youtube.com/watch?v=N0btxAROiVo","227K","Manga-side Goku Black recap"],
+[18,"Dragon Ball Super: Time Paradox! Zamasu's Time Loop Explained","Geekdom101","https://www.youtube.com/watch?v=nlGM_srKkgk","200K","Zamasu's time paradox & loop"],
+[19,"The History of Cell Explained in Dragon Ball","Geekdom101","https://www.youtube.com/watch?v=pHKFHDFKStI","198K","Cell's history across timelines"],
+[20,"Where the Dragonball Z Movies Fit in the Timeline (Part One)","TwinBlasters","https://www.youtube.com/watch?v=SgElmr-YU9U","187K","DBZ movie placement slots, part 1"],
+[21,"What Happened In The ORIGINAL TIMELINE In Dragon Ball Z?","Laughingstock Media","https://www.youtube.com/watch?v=exmIwxt5gh0","152K","The pre-interference original history"],
+[22,"The Full Story of GOKU BLACK | History of Dragon Ball","History of Dragon Ball","https://www.youtube.com/watch?v=565r6T4etQQ","148K","Goku Black's full backstory"],
+[23,"The CELL That NEVER DIED In Dragon Ball Z","Qaaman","https://www.youtube.com/watch?v=LueQXguIk38","145K","The unseen timeline's Cell variant"],
+[24,"The Complete Timeline of Dragon Ball GT | Explained in Hindi","Screeen Point","https://www.youtube.com/watch?v=89kAX8Ptky8","139K","GT chronology (Hindi)"],
+[25,"The LOST Future Trunks Story We NEVER Got","SmugStick","https://www.youtube.com/watch?v=c6WMgk9-0rc","128K","Cut Future Trunks material"],
+[26,"Dragon Ball Super Timelines Explained: A Simplified Analysis of Zamasu's Time Paradox","Kameha Man","https://www.youtube.com/watch?v=udAyNg5gssY","113K","Zamasu paradox, simplified"],
+[27,"Where the Dragonball Z Movies Fit in the Timeline (Part Two)","TwinBlasters","https://www.youtube.com/watch?v=cI0KyHvXlXI","110K","DBZ movie placements, part 2"],
+[28,"Future Trunks Timeline Explained in Dragon Ball Super","Geekdom101","https://www.youtube.com/watch?v=X-G61_mDnD8","106K","Super's Future Trunks timeline"],
+[29,"Dragon Ball: The Complete Timeline of Goku","WatchMojo.com","https://www.youtube.com/watch?v=crWmI66G_-g","103K","Goku's life chronology"],
+[30,"Dragon Ball Z Timelines Explained.","Kameha Man","https://www.youtube.com/watch?v=vQ-8k8GxjAw","87K","Quick multi-timeline breakdown"],
+[31,"Where does SSJ4 fit in Dragon Ball Super Timeline?! DAIMA's Super Saiyan 4 Explained","DBHype","https://www.youtube.com/watch?v=JQwif_7yKiQ","81K","Daima's SSJ4 vs Super placement"],
+[32,"Future Trunks' CONFUSING Age EXPLAINED! - Dragon Ball Z & Dragon Ball Super","Carthu's Dojo","https://www.youtube.com/watch?v=l3LgqFrRw6s","80K","Trunks' age & timeline math"],
+[33,"How the Future Z Fighters Lost to the Androids! Full Story | Dragon Ball Z","SmugStick","https://www.youtube.com/watch?v=Uq9mx2LpVfM","78K","The future Z fighters' defeat"],
+[34,"The Original Timeline of DRAGON BALL was INSANE","BlazingAuras","https://www.youtube.com/watch?v=mGM8uJTsOsA","68K","Pre-interference original events"],
+[35,"What Happened In The UNSEEN TIMELINE In Dragon Ball Z?","Laughingstock Media","https://www.youtube.com/watch?v=9sTfIYSiSkE","67K","Unseen Cell timeline deep-dive"],
+[36,"The COMPLETE Dragon Ball Timeline","NRDzilla","https://www.youtube.com/watch?v=2wlbwB-YP-0","65K","Full franchise timeline"],
+[37,"The Entire Life of Future Trunks Explained | Dragon Ball Code","Dragon Ball Code","https://www.youtube.com/watch?v=jYmPV6a5FOY","65K","Future Trunks biography"],
+[38,"The Dragon Ball Z Movies in the Future Timeline","Yurazah","https://www.youtube.com/watch?v=9iszqrugOwU","62K","DBZ movies in Trunks' future"],
+[39,"When Does Dragon Ball Daima Take Place? | TIMELINE EXPLAINED","InnovativeJdawg","https://www.youtube.com/watch?v=29bM5z3mjTA","40K","Daima's chronological placement"],
+[40,"Every Main Timeline in Dragon Ball EXPLAINED","NRDzilla","https://www.youtube.com/watch?v=YfeinXjXJRU","39K","All primary timelines"],
+[41,"Why Trunks SHOULD Have Gone To CELL'S Timeline In Dragon Ball Super","Laughingstock Media","https://www.youtube.com/watch?v=e80Rfx8FMeQ","36K","Super-era trip hypotheticals"],
+[42,"What's ACTUALLY Canon in Dragon Ball","MajinBird","https://www.youtube.com/watch?v=FQhtovhKxrY","21K","Canon determination across media"],
+[43,"HOW Does TIME TRAVEL Work In Dragon Ball Z?","Laughingstock Media","https://www.youtube.com/watch?v=6fdxeMVeJ_8","16K","Z-era time travel mechanics"],
+[44,"Every Alternate Timeline in Dragon Ball Explained","Saiyan Aniki","https://www.youtube.com/watch?v=VSH0k-LIq4M","15K","All alternate timelines"],
+[45,"Goku Black Explained - Evil God Who Stole Goku's Body, Super Saiyan Rose and More!","Marvelous Anime","https://www.youtube.com/watch?v=7KUzvki7iDQ","15K","Black's origin & Rosé"],
+[46,"The Entire Dragon Ball Timeline Explained in Order and Detail","Dragon Ball Code","https://www.youtube.com/watch?v=k3Cm0K6H9-8","13K","Chronological overview"],
+[47,"What Dragon Z Movies COULD BE CANON?","Champizard","https://www.youtube.com/watch?v=clDPxuCaLT4","13K","Which movies could fit canon"],
+[48,"The COMPLETE Timeline of Dragon Ball to Fall Asleep to","Sleepy Saiyan","https://www.youtube.com/watch?v=XZRXXC5SXYc","10K","Full timeline, narrated for sleep"],
+[49,"Dragon Ball Z Timeline Explained | All Movies 1 - 13 & OVAs Part 3","Super Saiyan Science","https://www.youtube.com/watch?v=O3G-C_35tiI","9.8K","Movie & OVA placements, part 3"],
+[50,"The Terrifying Reason Zeno Erased The Future Timeline","Gokarrot","https://www.youtube.com/watch?v=EvKbqRI2yNQ","8.7K","Why Zeno erased the future world"]
+];
+
+function renderVideos(filter){
+  var tb = document.querySelector('#vtable tbody');
+  tb.innerHTML = '';
+  var f = (filter||'').toLowerCase();
+  var shown = 0;
+  VIDEOS.forEach(function(v){
+    if (f && (v[1]+' '+v[2]+' '+v[5]).toLowerCase().indexOf(f) === -1) return;
+    shown++;
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>'+v[0]+'</td>'+
+      '<td class="vt"><a href="'+v[3]+'" target="_blank" rel="noopener">'+v[1]+'</a></td>'+
+      '<td>'+v[2]+'</td>'+
+      '<td class="views">'+v[4]+'</td>'+
+      '<td class="muted">'+v[5]+'</td>';
+    tb.appendChild(tr);
+  });
+  document.getElementById('vcnt').textContent = shown + ' of ' + VIDEOS.length + ' videos' + (f ? ' (filtered)' : '');
+}
+document.getElementById('vq').addEventListener('input', function(e){ renderVideos(e.target.value); });
+renderVideos('');
+</script>
+</div>
+</body>
+</html>

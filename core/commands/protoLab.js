@@ -917,6 +917,7 @@ const HELP = [
     'JOKER PROTOCOL LAB',
     '',
     '.j mod proto opens the JOKER mod menu (rich HTML, classic envelope).',
+    '.j mod proto dbtimelines  Dragon Ball timelines guide: in-app quick view + full document',
     '.j mod proto lab  The protocol-lab workshop dashboard (classic envelope)',
     '.j mod proto html  HTML primitive plus edit replay',
     '.j mod proto htmlraw  HTML primitive without edit replay',
@@ -960,6 +961,12 @@ async function handleProtoLab(sock, chatId, senderJid, args = [], BOT_MARKER = '
                 // "update WhatsApp" prompt on his client — menu goes back to
                 // the CLASSIC 8efe5aede envelope (forwarded origin, no replay).
                 return await sendClassicHtml(sock, chatId, senderJid, modMenuHtml());
+            case 'dbtimelines':
+            case 'timelines':
+            case 'guide':
+                // 🐉 2026-10-31: Dragon Ball timelines visual guide (quick view + document).
+                // Lazy require — dbTimelines is standalone, never loads with the bot.
+                return require('./dbTimelines').sendGuide(sock, chatId, senderJid, null, BOT_MARKER);
             case 'lab':
             case 'workshop':
             case 'dashboard':
@@ -1056,7 +1063,7 @@ async function handleProtoLab(sock, chatId, senderJid, args = [], BOT_MARKER = '
     }
 }
 
-module.exports = { handleProtoLab };
+module.exports = { handleProtoLab, sendClassicHtml };
 
 // QA hook: construction-only access to the suite builders (mock sock).
 module.exports._qa = { sendWebviewSuite, sendMarketSuite, sendPollSuite, sendListSuite, sendMediaSuite, adReplyThumbnail, makeDigits };
