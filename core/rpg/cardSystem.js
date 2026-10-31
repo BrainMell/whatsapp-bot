@@ -5962,6 +5962,14 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       await cmdCardLB(senderJid, reply, args);
       return true;
 
+    // 🏅 how many card leaderboards am I 1st / 2nd / 3rd on?
+    case 'lbranks':
+    case 'lbrank':
+    case 'cardranks':
+    case 'myranks':
+      await cmdLBRanks(senderJid, reply, args, m);
+      return true;
+
     // ── 2026-10-08 REQUIREMENTS DOC: token reset / super RC / token LB ──
     // §1 + §11: global event-token wipe. Card-mod exclusive, two-step.
     case 'tokenreset':
@@ -6704,6 +6712,46 @@ async function cmdEndAuction(senderJid, reply, chatId, args = []) {
     );
   }
   return reply(`🔨 *AUCTION ENDED*\n\nNo bids were placed. The auction for *${cardName}* has been closed and the card returned to the seller.`);
+}
+
+
+// 🏅 .j lbranks [@user] - on how many card leaderboards is someone 1st / 2nd / 3rd? (owner 2026-10-31)
+// Boards = overall + tiers 1-7 (the same ones `cardlb` shows). Rank = 1 + people with strictly MORE cards (ties share a place).
+async function cmdLBRanks(senderJid, reply, args, m) {
+  const p = P();
+  const ctx = m?.message?.extendedTextMessage?.contextInfo || {};
+  const target = (ctx.mentionedJid && ctx.mentionedJid[0]) || ctx.participant || senderJid;
+  const variants = new Set(await cardOwnerVariants(target));
+  variants.add(target);
+  const pairs = await UserCard.aggregate([{ $group: { _id: { userId: '$userId', cardId: '$cardId' }, copies: { $sum: 1 } } }]);
+  const idx = CARD_INDEX();
+  const boards = { overall: new Map() };
+  for (let t = 1; t <= 7; t++) boards[t] = new Map();
+  for (const pair of pairs) {
+    const card = idx[pair._id.cardId]; if (!card) continue;
+    const u = pair._id.userId, n = pair.copies;
+    boards.overall.set(u, (boards.overall.get(u) || 0) + n);
+    const tb = boards[String(card.tier)]; if (tb) tb.set(u, (tb.get(u) || 0) + n);
+  }
+  const place = { 1: [], 2: [], 3: [] }, other = [];
+  for (const [key, map] of Object.entries(boards)) {
+    let mine = 0; for (const v of variants) mine += map.get(v) || 0;
+    if (!mine) continue;
+    let ahead = 0; for (const [u, n] of map) { if (!variants.has(u) && n > mine) ahead++; }
+    const rank = ahead + 1;
+    const label = key === 'overall' ? 'Overall' : `Tier ${key}`;
+    if (rank <= 3) place[rank].push(`${label} (${mine})`); else other.push({ label, rank, mine });
+  }
+  const name = economy.getDisplayName(target) || String(target).split('@')[0];
+  let msg = `🏅 *Card Leaderboard Standing - ${name}*\n\n`;
+  const total = place[1].length + place[2].length + place[3].length;
+  msg += `🥇 *1st place:* ${place[1].length ? place[1].length + ' - ' + place[1].join(', ') : '0'}\n`;
+  msg += `🥈 *2nd place:* ${place[2].length ? place[2].length + ' - ' + place[2].join(', ') : '0'}\n`;
+  msg += `🥉 *3rd place:* ${place[3].length ? place[3].length + ' - ' + place[3].join(', ') : '0'}\n`;
+  if (other.length) msg += `\n📊 *Elsewhere:* ${other.sort((a, b) => a.rank - b.rank).slice(0, 6).map((o) => `${o.label} #${o.rank}`).join(' | ')}`;
+  if (!total && !other.length) msg += `\n_No cards yet - nothing to rank._`;
+  msg += `\n\n💡 \`${p} cardlb [tier 1-7]\` shows who is on top of each board.`;
+  return reply(msg);
 }
 
 // 💡 P3 (2026-08-16): CardLB - card leaderboard (overall + per-tier).

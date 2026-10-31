@@ -353,6 +353,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'ecoll', desc: 'Event collection grouped by tier.', usage: 'ecoll' },
     { cmd: 'fc', desc: 'Find a card by name or ID across your decks and collection.', usage: 'fc <card_name/id>' },
     { cmd: 'escc', desc: 'Search event (Tier S) cards by series name.', usage: 'escc <series> [--page n]' },
+    { cmd: 'lbranks', desc: 'How many card leaderboards you (or @user) are 1st, 2nd or 3rd on - overall and per tier. (Aliases: cardranks, myranks)', usage: 'lbranks [@user]' },
     { cmd: 'cardlb', desc: 'Card leaderboard: top collectors overall or per tier. (Alias: clb)', usage: 'cardlb [tier 1-7]' },
     { cmd: 'itemmarket', desc: 'Player item market: browse items, runes and summons for sale. (Alias: im)', usage: 'itemmarket [items|runes|summons] [page]' },
     { cmd: 'listitem', desc: 'List an item from your bag on the player market. (Alias: li)', usage: 'listitem <bag#> <price> [qty]' },

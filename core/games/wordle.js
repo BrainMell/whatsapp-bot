@@ -195,7 +195,7 @@ function updateScoreboard(playerJid, playerName, won, attempts, difficulty = 'me
     scores[normalizedJid].points = 0;
   }
 
-  const pointsMap = { easy: 1, medium: 2, hard: 3 };
+  const pointsMap = { easy: 1, medium: 2, hard: 10 }; // owner 2026-10-31: hard mode wins are worth a lot more
   const earnedPoints = pointsMap[difficulty] || 2;
 
   if (won) {
@@ -537,7 +537,7 @@ module.exports = {
     // Difficulty display
     const difficultyEmoji = { easy: '🟢', medium: '🟡', hard: '🔴' };
     const difficultyName = difficulty.toUpperCase();
-    const pointsEarned = { easy: '1pt', medium: '2pts', hard: '3pts' };
+    const pointsEarned = { easy: '1pt', medium: '2pts', hard: '10pts' };
     
     let message = botMarker + "┌───────────────┐\n";
     message += "🔤 *WORDLE STARTED!* 🔤\n";
@@ -706,7 +706,7 @@ showLeaderboard: async (sock, chatId, botMarker, m) => {
   message += "└───────────────\n\n";
   message += leaderboard + "\n\n";
   message += "┌───────────────\n";
-  message += "🟢 Easy = 1pt | 🟡 Medium = 2pts | 🔴 Hard = 3pts\n";
+  message += "🟢 Easy = 1pt | 🟡 Medium = 2pts | 🔴 Hard = 10pts\n";
   message += "└───────────────";
 
   try {
