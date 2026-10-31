@@ -22,7 +22,7 @@ const goService = require('../utils/goImageService'); // 💡 singleton (PERF PA
 // NEWER than the process start time in future logs -> stale-process incident.
 try {
   const __buildMtime = fs.statSync(__filename).mtime.toISOString();
-  console.log(`[cardSystem] BUILD cardsys-v6-nopredrop loaded | pid=${process.pid} | file mtime=${__buildMtime} | loaded at ${new Date().toISOString()}`);
+  console.log(`[cardSystem] BUILD cardsys-v7-myseries loaded | pid=${process.pid} | file mtime=${__buildMtime} | loaded at ${new Date().toISOString()}`);
 } catch (e) { console.log('[cardSystem] BUILD marker stat failed: ' + e.message); }
 
 // 47-k8c: background cache warmer — after a deploy every .j base/guild render
@@ -5510,6 +5510,21 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
       await cmdSeries(reply, args, { isOwner, isCardMod });
       return true;
 
+    // 💡 OWNER BRIEF 2026-10-31 ("a command that shows lists every series
+    // you have and the number of cards you have of them, and you should be
+    // able to look up a series and see the individual cards you have of in
+    // they series/anime — 2 new commands"): the PERSONAL counterparts to the
+    // global `.j series` search. myseries = census of your own collection;
+    // scoll = your individual cards inside one series. Counts cover ALL
+    // owned copies (decks + market listings included, flagged per row).
+    case 'myseries':
+      await cmdMySeries(senderJid, reply, args);
+      return true;
+
+    case 'scoll':
+      await cmdSeriesColl(senderJid, reply, args);
+      return true;
+
     case 'buycard':
       await cmdBuyCard(senderJid, reply, args);
       return true;
@@ -6463,6 +6478,147 @@ async function cmdSeries(reply, args = [], perms = {}) {
 // transfer` is a money-only command). Now it runs the SAME settlement path
 // as the automatic sweeper (settleAuction): bidder pays, seller gets 90%,
 // card transfers to the winner.
+// ═══ 💡 OWNER BRIEF 2026-10-31: per-series views of the player's OWN
+// collection — 2 new commands. `.j series` stays the GLOBAL catalog search
+// (2026-10-09 brief), these are the personal counterparts:
+//   `.j myseries`            every series you own + card counts (+ kinds + best tier)
+//   `.j myseries <name>`     drill-down (delegates to scoll)
+//   `.j scoll <name>`        your individual cards of one series (copies, tier, ID,
+//                            where the copies live: coll / deck / listed)
+// Counts cover ALL owned UserCards — deck + market listings included.
+
+const _MY_TIER_ORDER = { '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, 'S': 7, 'E': 8 };
+
+async function _myOwnedCards(senderJid) {
+  const owned = await UserCard.find({ ...(await ownerOf(senderJid)) })
+    .sort({ createdAt: 1, _id: 1 }).lean();
+  // orphans (cardId no longer in the catalog) are invisible in every other
+  // collection view — drop them here too so counts stay usable
+  return owned.filter(o => CARD_INDEX()[o.cardId]);
+}
+
+function _stripPageFlag(args) {
+  const pageIdx = args.findIndex(a => a === '--page' || a === '-p');
+  if (pageIdx !== -1 && args[pageIdx + 1]) {
+    const page = parseInt(args[pageIdx + 1]) || 1;
+    args.splice(pageIdx, 2);
+    return page;
+  }
+  return 1;
+}
+
+async function cmdMySeries(senderJid, reply, args = []) {
+  const p = P();
+  const page = _stripPageFlag(args);
+  const rawName = args.join(' ').trim();
+  if (rawName) return cmdSeriesColl(senderJid, reply, args);
+  const owned = await _myOwnedCards(senderJid);
+  if (!owned.length) {
+    return reply(`📦 *YOUR SERIES*\n\n📚 ⟢ You don't own any cards yet.\n\n💡 ⟢ Claim spawns first — try \`${p} cards\`.`);
+  }
+  const bySeries = {};
+  for (const o of owned) {
+    const def = CARD_INDEX()[o.cardId];
+    const s = String(def.animeName || 'Unknown');
+    if (!bySeries[s]) bySeries[s] = { count: 0, kinds: new Set(), best: '', bestRank: 0 };
+    const e = bySeries[s];
+    e.count++;
+    e.kinds.add(o.cardId);
+    const rank = _MY_TIER_ORDER[String(def.tier)] || 0;
+    if (rank > e.bestRank) { e.bestRank = rank; e.best = String(def.tier); }
+  }
+  const rows = Object.entries(bySeries).sort((a, b) =>
+    b[1].count - a[1].count || a[0].localeCompare(b[0]));
+  const pageSize = 15;
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const cur = Math.min(page, totalPages);
+  const start = (cur - 1) * pageSize;
+  let msg = `📚 *YOUR SERIES* — ${rows.length} series · ${owned.length} cards\n`;
+  msg += `📖 Page: ${cur} / ${totalPages}\n\n`;
+  rows.slice(start, start + pageSize).forEach(([name, e]) => {
+    msg += `▫️ *${name}* — ${e.count} cards · ${e.kinds.size} kinds · best ${TIER_STARS[e.best] || ('T' + e.best)}\n`;
+  });
+  if (totalPages > 1) {
+    msg += `\n💡 Use \`${p} myseries --page ${cur < totalPages ? cur + 1 : 1}\` for more.`;
+  }
+  msg += `\n💡 \`${p} myseries <series name>\` or \`${p} scoll <series name>\` shows the cards YOU own of it.`;
+  return reply(msg);
+}
+
+async function cmdSeriesColl(senderJid, reply, args = []) {
+  const p = P();
+  const page = _stripPageFlag(args);
+  const rawName = args.join(' ').trim();
+  if (!rawName) return cmdMySeries(senderJid, reply, []);
+  const tokens = _nameTokens(rawName);
+  if (!tokens.length) {
+    return reply(`🔍 *SERIES COLLECTION*\n\n💡 ⟢ Usage: \`${p} scoll <series name>\`\n➥ e.g. \`${p} scoll one piece\``);
+  }
+  const owned = await _myOwnedCards(senderJid);
+  if (!owned.length) {
+    return reply(`📦 *SERIES COLLECTION*\n\n📚 ⟢ You don't own any cards yet.\n\n💡 ⟢ Claim spawns first — try \`${p} cards\`.`);
+  }
+  const hits = owned.filter(o => {
+    const def = CARD_INDEX()[o.cardId];
+    return tokens.every(t => String(def.animeName || '').toLowerCase().includes(t));
+  });
+  if (!hits.length) {
+    const names = new Set();
+    owned.forEach(o => {
+      const a = String(CARD_INDEX()[o.cardId].animeName || '');
+      if (a && tokens.some(t => a.toLowerCase().includes(t))) names.add(a);
+    });
+    let msg = `🔍 *NO MATCH IN YOUR COLLECTION*\n\n📚 ⟢ You own no cards of a series matching _"${rawName}"_\n`;
+    if (names.size) msg += `\n💡 ⟢ Closest series you DO own: ${[...names].slice(0, 3).map(n => `*${n}*`).join(' · ')}\n`;
+    msg += `\n➤ \`${p} myseries\` lists every series you have.`;
+    return reply(msg);
+  }
+  const counts = {};
+  hits.forEach(o => { const a = CARD_INDEX()[o.cardId].animeName || 'Unknown'; counts[a] = (counts[a] || 0) + 1; });
+  const seriesName = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+  const byCard = new Map();
+  for (const o of hits) {
+    if (!byCard.has(o.cardId)) byCard.set(o.cardId, { def: CARD_INDEX()[o.cardId], copies: 0, deck: 0, market: 0 });
+    const e = byCard.get(o.cardId);
+    e.copies++;
+    if (o.inMainDeck || o.inCustomDeck) e.deck++;
+    else if (o.forSale) e.market++;
+  }
+  const cards = [...byCard.values()];
+  cards.sort((a, b) =>
+    (_MY_TIER_ORDER[String(a.def.tier)] || 9) - (_MY_TIER_ORDER[String(b.def.tier)] || 9) ||
+    String(a.def.cardName).localeCompare(String(b.def.cardName)) ||
+    String(a.def.id).localeCompare(String(b.def.id)));
+  const byTier = {};
+  cards.forEach(c => { byTier[c.def.tier] = (byTier[c.def.tier] || 0) + 1; });
+  const tierLine = Object.keys(byTier)
+    .sort((a, b) => (_MY_TIER_ORDER[a] || 9) - (_MY_TIER_ORDER[b] || 9))
+    .map(t => `T${t}×${byTier[t]}`).join(' · ');
+  const totalDeck = cards.reduce((n, c) => n + c.deck, 0);
+  const totalMarket = cards.reduce((n, c) => n + c.market, 0);
+  const pageSize = 15;
+  const totalPages = Math.max(1, Math.ceil(cards.length / pageSize));
+  const cur = Math.min(page, totalPages);
+  const start = (cur - 1) * pageSize;
+  let msg = `🗃️ *${seriesName}* — YOUR CARDS\n`;
+  msg += `📦 ${hits.length} copies · ${cards.length} kinds · ${tierLine}\n`;
+  msg += `📍 ${hits.length - totalDeck - totalMarket} in coll`;
+  if (totalDeck) msg += ` · ${totalDeck} in decks 🎴`;
+  if (totalMarket) msg += ` · ${totalMarket} listed 💰`;
+  msg += `\n📖 Page: ${cur} / ${totalPages}\n\n`;
+  cards.slice(start, start + pageSize).forEach(c => {
+    const allColl = c.deck + c.market === 0;
+    const mixed = c.deck > 0 && c.market > 0;
+    const locTag = allColl ? '' : (mixed ? ' 🧩' : (c.market ? ' 💰' : ' 🎴'));
+    msg += `▫️ *${c.def.cardName}* ${TIER_STARS[String(c.def.tier)] || ''}${locTag} ×${c.copies}\n   ➥ ID: \`${c.def.id}\`\n`;
+  });
+  if (totalPages > 1) {
+    msg += `\n💡 Use \`${p} scoll ${rawName} --page ${cur < totalPages ? cur + 1 : 1}\` for more.`;
+  }
+  msg += `\n💡 \`${p} coll <ID>\` opens a card · \`${p} myseries\` back to your series list.`;
+  return reply(msg);
+}
+
 async function cmdEndAuction(senderJid, reply, chatId, args = []) {
   const p = P();
   // Auctions are stored in CardMarket with type: 'auction', status: 'active'
@@ -7400,7 +7556,7 @@ module.exports = {
 // 💡 OWNER BRIEF 2026-10-09 §1 diagnostics: env-guarded hook so QA harnesses
 // can drive the card search internals without the full bot runtime.
 if (process.env.CARD_DIAG === '1') {
-  module.exports.__diag = { cmdInfo, cmdCS, cmdCi, cmdSeries, _nameTokens, _cardMatchesTokens, _cardRelevance };
+  module.exports.__diag = { cmdInfo, cmdCS, cmdCi, cmdSeries, cmdMySeries, cmdSeriesColl, loadCardsDB, _nameTokens, _cardMatchesTokens, _cardRelevance };
 }
 
 // 💡 47-l2: env-guarded QA surface for the token-rate counter machinery
