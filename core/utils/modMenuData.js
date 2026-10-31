@@ -53,9 +53,12 @@ const MOD_MENU = {
       { cmd: "setrank", usage: "mod setrank [@user] <E-SSS>", desc: "Set a player's RPG rank.", console: true },
       { cmd: "forceevolve", usage: "mod forceevolve [@user] <class>", desc: "Force a class evolution, no requirements.", console: true },
       { cmd: "resetplayer", usage: "mod resetplayer [@user]", desc: "Wipe stats AND skills - destructive, no undo.", console: true },
-      { cmd: "vfx", usage: "mod vfx [class|all] [level]", desc: "Preview every class ultimate animation at every skill level (instant).", console: true },
+      { cmd: "vfx", usage: "mod vfx [class|all] [level]", desc: "Preview class ultimate animations at every skill level (aliases: ultpreview, vfxtest).", console: true },
       { cmd: "unstick", usage: "mod unstick [@user]", desc: "Safely clear stuck combat state.", console: true },
       { cmd: "inspect", usage: "mod inspect [@user]", desc: "Full character sheet: stats, skills, class, gear.", console: true },
+      { cmd: "networth", usage: "networth [@user]", desc: "Net worth breakdown (mods can check anyone). Alias: nw." },
+      { cmd: "setmarketprice", usage: "setmarketprice <tier> <amount>", desc: "Set an item-market price tier." },
+      { cmd: "proto", usage: "proto [dbtimelines|menu|<probe>]", desc: "Proto lab: Dragon Ball timeline guide + experiments (mod probes)." },
       { cmd: "setdefaultcard", usage: "setdefaultcard <1-10|name>", desc: "Server-wide DEFAULT character card style." },
     ],
   },
@@ -152,10 +155,18 @@ const MOD_MENU = {
   },
 
   TESTERS: {
-    name: "Testers",
+    name: "Staff",
     emoji: "🧪",
     tier: "rpg",
+    // 2026-10-31 owner: "was looking for the command to add game tester and it
+    // wasn't there" - the category was called "Testers" and only matched exactly.
+    // Aliases make tester/gametester/gtester/mods/staff all open it.
+    aliases: ["testers", "tester", "gametester", "gametesters", "gtester", "gtesters", "staff", "roster", "bugs", "issues", "mods", "rpgmod"],
     commands: [
+      { cmd: "addrpgmod", usage: "addrpgmod @user", desc: "Add an RPG Moderator (owner only)." },
+      { cmd: "delrpgmod", usage: "delrpgmod @user", desc: "Remove an RPG Moderator (owner only)." },
+      { cmd: "mods", usage: "mods", desc: "List global mods." },
+      { cmd: "listmods", usage: "listmods", desc: "List every mod tier (General, RPG, Cards, Quiz, Testers)." },
       { cmd: "bug", usage: "bug <text>", desc: "Submit a bug report ([cat:sev] prefix optional).", eg: "bug [bug:high] PvP initiative is wrong" },
       { cmd: "issues", usage: "issues [count] [status]", desc: "View tester issues (alias: issue)." },
       { cmd: "organizeissues", usage: "organizeissues", desc: "Send all open issues to Groq for cleanup." },
@@ -195,16 +206,12 @@ const MOD_MENU = {
     commands: [
       { cmd: "addmod", usage: "addmod @user", desc: "Add a Global Moderator (owner only)." },
       { cmd: "delmod", usage: "delmod @user", desc: "Remove a Global Moderator (owner only)." },
-      { cmd: "addrpgmod", usage: "addrpgmod @user", desc: "Add an RPG Moderator (owner only)." },
-      { cmd: "delrpgmod", usage: "delrpgmod @user", desc: "Remove an RPG Moderator (owner only)." },
       { cmd: "addcardsmod", usage: "addcardsmod @user", desc: "Add a Cards Moderator (owner only)." },
       { cmd: "delcardsmod", usage: "delcardsmod @user", desc: "Remove a Cards Moderator (owner only)." },
       { cmd: "addquizmod", usage: "addquizmod @user", desc: "Add a Quiz Moderator (owner only) - quiz start/manage only." },
       { cmd: "delquizmod", usage: "delquizmod @user", desc: "Remove a Quiz Moderator (owner only)." },
       { cmd: "gcowner", usage: "gcowner @user", desc: "Mark the protected owner of this GC (bot owner only). Immune to mute/kick/warn/demote." },
       { cmd: "ungcowner", usage: "ungcowner", desc: "Remove this GC's protected-owner mark (bot owner only)." },
-      { cmd: "mods", usage: "mods", desc: "List global mods." },
-      { cmd: "listmods", usage: "listmods", desc: "List every mod tier." },
       { cmd: "reloadmods", usage: "reloadmods", desc: "Re-sync mod sets from DB (after external edits)." },
       { cmd: "reloaduser", usage: "reloaduser @user", desc: "Hard-reload a user from DB (after manual edits)." },
       { cmd: "pardon", usage: "pardon @user", desc: "Unified unban + unhardban + unblock." },
@@ -527,4 +534,35 @@ const MOD_TIPS = [
   `\`{p} mod createclass\` / \`{p} mod createskill\` open the interactive creators in DMs.`,
 ];
 
-module.exports = { MOD_MENU, MOD_TIPS, findStandalone };
+// Subs the GM console handles itself (so the menu never hijacks a real run).
+const CONSOLE_SUBS = new Set([
+  "help", "protomenu", "proto", "give", "additem", "ultpreview", "vfxtest", "enemy", "enemyskills", "enemyskill",
+  "sandbox", "godmode", "createskill", "createclass",
+]);
+for (const cat of Object.values(MOD_MENU)) for (const c of cat.commands) if (c.console) CONSOLE_SUBS.add(c.cmd.toLowerCase().split(" ")[0]);
+
+// Fuzzy command search over name/usage/desc - powers `mod find <text>` and
+// the "did you mean" fallback. Returns [{key, cat, c}] best-first.
+function searchCommands(text, limit = 10) {
+  const words = String(text || "").toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+  if (!words.length) return [];
+  const out = [];
+  for (const [key, cat] of Object.entries(MOD_MENU)) {
+    for (const c of cat.commands) {
+      const name = c.cmd.toLowerCase();
+      const hay = `${name} ${c.usage} ${c.desc}`.toLowerCase();
+      let sc = 0;
+      for (const w of words) {
+        const stem = w.replace(/s$/, "");
+        if (name === w) sc += 10;
+        else if (name.includes(stem)) sc += 6;
+        else if (hay.includes(stem)) sc += 2;
+        else if (cat.aliases && cat.aliases.includes(w)) sc += 1;
+      }
+      if (sc > 0) out.push({ key, cat, c, sc });
+    }
+  }
+  return out.sort((a, b) => b.sc - a.sc).slice(0, limit);
+}
+
+module.exports = { MOD_MENU, MOD_TIPS, findStandalone, searchCommands, CONSOLE_SUBS };

@@ -7282,7 +7282,7 @@ ${targetCategory}`;
     // ============================================
     async function sendModMenu(sock, chatId, senderJid, args = [], senderIsOwner = false) {
       const prefix = botConfig.getPrefix() || ".j";
-      const { MOD_MENU, MOD_TIPS } = require("./utils/modMenuData");
+      const { MOD_MENU, MOD_TIPS, searchCommands, CONSOLE_SUBS } = require("./utils/modMenuData");
 
       // Resolve the viewer's tiers (same gate as the old MOD COMMAND CENTER)
       const tier = {
@@ -7299,7 +7299,10 @@ ${targetCategory}`;
       };
       tier.any = tier.owner || tier.gmod || tier.rpg || tier.card;
 
-      const visible = Object.entries(MOD_MENU).filter(([key, cat]) => tier[cat.tier]);
+      // Mod-only categories first, player-facing RPG_* mirrors last.
+      const visible = Object.entries(MOD_MENU)
+        .filter(([key, cat]) => tier[cat.tier])
+        .sort((a, b) => (a[0].startsWith("RPG_") ? 1 : 0) - (b[0].startsWith("RPG_") ? 1 : 0));
 
       // Flat index: "setlevel" / "eshop deck approve" -> command entry
       const flat = {};
@@ -7316,7 +7319,8 @@ ${targetCategory}`;
       if (input) {
         const catMatch = visible.find(
           ([key, cat]) =>
-            key.toLowerCase() === input || cat.name.toLowerCase() === input,
+            key.toLowerCase() === input || cat.name.toLowerCase() === input ||
+            (cat.aliases && cat.aliases.includes(input)),
         );
         if (catMatch) {
           const [key, cat] = catMatch;
@@ -7377,6 +7381,24 @@ ${targetCategory}`;
             return true;
           }
         }
+        // ── FIND (mod find <text>) + "did you mean" for unknown words ──
+        const _first = cleanArgs[0].toLowerCase();
+        const _isFind = _first === "find" || _first === "search";
+        if (_isFind || (!CONSOLE_SUBS.has(_first) && !flat[_first])) {
+          const q = _isFind ? cleanArgs.slice(1).join(" ") : input;
+          const hits = searchCommands(q, 8).filter((h) => visible.some(([k]) => k === h.key));
+          if (hits.length) {
+            let fm = GET_BANNER(`🔎 MOD SEARCH`) + `\n\n_Matches for "${q}":_\n\n`;
+            for (const h of hits) fm += `➤ \`${prefix} ${h.c.usage}\` — ${h.c.desc.slice(0, 70)}  _(${h.cat.name})_\n`;
+            fm += `\n➤ Open a category: \`${prefix} mod <category>\``;
+            await sendMenuWithBanner(sock, chatId, fm);
+            return true;
+          }
+          if (_isFind) {
+            await sendMenuWithBanner(sock, chatId, GET_BANNER(`🔎 MOD SEARCH`) + `\n\nNothing matched "${q}". Try \`${prefix} mod\` for all categories.`);
+            return true;
+          }
+        }
         // Unknown or run-with-args -> fall through to the admin console
         return false;
       }
@@ -7414,6 +7436,7 @@ ${targetCategory}`;
 
       mainMsg += `\n➤ Type \`${prefix} mod <CATEGORY>\` to see its commands.`;
       mainMsg += `\n➤ Type \`${prefix} mod <command>\` for details.`;
+      mainMsg += `\n➤ Can't find something? \`${prefix} mod find <word>\` (e.g. \`mod find tester\`).`;
       mainMsg += `\n\n💡 *Tip:* ${tip}`;
 
       await sendMenuWithBanner(sock, chatId, mainMsg);

@@ -460,6 +460,10 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 `  Adds RPG SKILL points (does NOT overwrite).\n\n` +
                 `• \`${prefix} mod fightenemy <bossId|name>\`\n` +
                 `  Fight any boss for testing. Use \`mod enemy list\` to find IDs.\n\n` +
+                `• \`${prefix} mod givesummon <@user> <summon>\` / \`${prefix} mod giverune <@user> <rune>\`\n` +
+                `  Grant a summon or an Abyss rune (partial names OK).\n\n` +
+                `• \`${prefix} mod vfx [class|all] [level]\`\n` +
+                `  Preview class ultimate animations (aliases: ultpreview, vfxtest).\n\n` +
                 `• \`${prefix} mod givezeni <@user> <amount>\`\n` +
                 `  Adds Zeni to wallet (does NOT overwrite - adds to existing).\n\n` +
                 `• \`${prefix} mod setrank <@user> <F|E|D|C|B|A|S|SS|SSS|GOD>\`\n` +
@@ -555,6 +559,15 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 `  All other stats/items/progress unchanged.\n` +
                 `  Example: \`${prefix} modclass Archmage\`\n` +
                 `  Use \`${prefix} modclass\` (no args) to see all available classes.\n\n` +
+                `━━━━━━━━━━━━━━━━━━━\n` +
+                `🧑‍💼 *STAFF & TESTERS (standalone, not under mod)*\n` +
+                `━━━━━━━━━━━━━━━━━━━\n` +
+                `• \`${prefix} addgtester @user\` / \`${prefix} delgtester @user\` / \`${prefix} listtesters\`\n` +
+                `• \`${prefix} addrpgmod @user\` / \`${prefix} delrpgmod @user\` / \`${prefix} listmods\` (owner manages rosters)\n` +
+                `• \`${prefix} testmode on|off|status\` / \`${prefix} testgc add|remove|list\`\n` +
+                `• \`${prefix} bug <text>\` / \`${prefix} issues\` / \`${prefix} organizeissues\` / \`${prefix} editissue\` / \`${prefix} deleteissue\` / \`${prefix} clearissues\`\n` +
+                `• \`${prefix} networth @user\`, \`${prefix} setmarketprice <tier> <amount>\`, \`${prefix} questcap [n]\`\n\n` +
+                `🔎 Lost? \`${prefix} mod find <word>\` searches every mod command. Category list: \`${prefix} mod\`.\n\n` +
                 `_Non-mods cannot use any of these commands._`
         });
     }
