@@ -136,9 +136,15 @@ async function claimBounty(hunterJid, targetJid) {
   const claimedBounties = [];
 
   for (const bounty of bounties) {
-    // 💡 P4 Item 18 fix (2026-08-17): 10% economy tax evaporates FIRST (genuine sink,
-    // same as P2P transfer + card/item market). THEN 5% hunter fee to guild treasury
-    // is computed on the post-tax amount.
+    // 💡 AUDIT FIX 2026-11-01: claim each bounty atomically FIRST. The old
+    // find→pay→save let two tenants (or two chats) settle the same bounty
+    // concurrently — both paid hunterPayout for one bounty.
+    const __claim = await Bounty.findOneAndUpdate(
+      { _id: bounty._id, status: 'active' },
+      { $set: { status: 'claimed', claimedByJid: hunterJid, claimedAt: new Date() } },
+      { new: true }
+    ).catch(() => null);
+    if (!__claim) continue; // another tenant/chat just claimed it
     const economyTax = Math.floor(bounty.amount * 0.10);
     const afterTax = bounty.amount - economyTax;
     const fee = Math.floor(afterTax * HUNTER_FEE_PCT);
@@ -153,11 +159,11 @@ async function claimBounty(hunterJid, targetJid) {
     totalClaimed += hunterPayout;
     totalFee += fee;
     totalTax += economyTax;
-    bounty.status = 'claimed';
-    bounty.claimedByJid = hunterJid;
-    bounty.claimedAt = new Date();
-    await bounty.save();
-    claimedBounties.push(bounty);
+    claimedBounties.push(__claim);
+  }
+
+  if (claimedBounties.length === 0) {
+    return { success: false, claimed: false, message: '❌ No active bounties on that target.' };
   }
 
   // Award guild XP + war points for the claim
@@ -245,8 +251,14 @@ async function expireOldBounties() {
       expiresAt: { $lt: new Date() },
     });
     for (const bounty of expired) {
-      bounty.status = 'expired';
-      await bounty.save();
+      // 💡 AUDIT FIX 2026-11-01: atomic expire+claim race guard — a claim on
+      // another tenant could previously pay the hunter WHILE we refunded the
+      // placer for the same bounty. Only refund if the expire claim wins.
+      const __exp = await Bounty.findOneAndUpdate(
+        { _id: bounty._id, status: 'active' },
+        { $set: { status: 'expired' } }
+      ).catch(() => null);
+      if (!__exp) continue;
       // Refund placer
       economy.addMoney(bounty.placerJid, bounty.amount, `Bounty expired (refund): ${bounty.bountyId}`);
       expiredCount++;

@@ -290,7 +290,7 @@ function getPendingRequest(userJid) {
 }
 
 // Check loans (run this in interval)
-function checkDueLoans() {
+async function checkDueLoans() {
   const now = Date.now();
   const results = []; // Messages to send
 
@@ -300,6 +300,28 @@ function checkDueLoans() {
     
     if (now >= loan.dueDate) {
       // Time is up!
+      // 💡 AUDIT FIX 2026-11-01: claim the loan atomically before any money
+      // moves. All 3 tenants run this 60s checker against the shared DB and
+      // each used to repay/seize the SAME due loan (borrower debited 2-3x,
+      // lender credited 2-3x). The claim flips status first; losers skip.
+      // If a process dies mid-settlement the loan stays 'settling' (funds
+      // unmoved — safe; ops can inspect status:'settling' docs).
+      let __claimWon = false;
+      try {
+        const __claimed = await LoanModel.findOneAndUpdate(
+          { loanId: loan.loanId, status: 'active' },
+          { $set: { status: 'settling', settledBy: process.env.BOT_NAME || 'unknown', settledAt: new Date() } },
+          { new: true }
+        );
+        __claimWon = !!__claimed;
+      } catch (e) {
+        console.error('[loans] due-loan claim failed, failing open:', e.message);
+        __claimWon = true; // DB hiccup → old behaviour
+      }
+      if (!__claimWon) {
+        activeLoans.splice(i, 1); // another tenant is settling this one
+        continue;
+      }
       const borrowerBal = economy.getBankBalance(loan.borrower);
       
       if (borrowerBal.total >= loan.totalRepayment) {

@@ -462,12 +462,25 @@ async function cmdCancel(senderJid, reply, args = []) {
   }
   if (!listing) return reply(`❌ No active listing matching "${query}" belonging to you.`), true;
 
-  // Return custody (inventory-full keeps the listing alive, same as legacy)
+  // 💡 AUDIT FIX 2026-11-01 (P0): claim the listing atomically BEFORE touching
+  // custody. The old restore-then-flag order raced a buyer's claim: the buyer
+  // transferred the item+money while the seller ALSO restored the escrowed
+  // copy — item duplicated, sale completed. Losers of the claim exit here.
+  const claimed = await PlayerMarket.findOneAndUpdate(
+    { _id: listing._id, status: 'active', sellerId: senderJid },
+    { $set: { status: 'cancelled', completedAt: new Date() } },
+    { new: true }
+  );
+  if (!claimed) return reply(`❌ That listing was just bought or cancelled.`), true;
+
+  // Return custody (inventory-full reopens the listing)
   if (listing.kind === 'item') {
     const restored = await inventorySystem.addItem(senderJid, listing.itemId, listing.quantity, {
       name: listing.itemName, rarity: listing.itemRarity,
     });
     if (!restored || !restored.success) {
+      // reopen the listing — the claim won but custody was NOT restored
+      await PlayerMarket.updateOne({ _id: claimed._id, status: 'cancelled' }, { $set: { status: 'active' }, $unset: { completedAt: 1 } }).catch(() => {});
       return reply(`❌ Couldn't return ${listing.quantity}× ${listing.itemName} to your bag (full?). Clear some space and try again. Listing still active.`), true;
     }
     await economy.saveUser(senderJid);

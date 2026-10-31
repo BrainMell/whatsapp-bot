@@ -3735,6 +3735,12 @@ async function cmdEShopDeckTrading(senderJid, reply, chatId, args = [], isMod = 
     if (!deck) return reply(`❌  *DECK NOT FOUND*\n\n🃏 ⟢ *Deck:* _"${deckName}"_`);
     if (deck.cards.length === 0) return reply(`❌  *EMPTY DECK*\n\n🃏 ⟢ _You cannot sell an empty deck!_`);
 
+    // 💡 AUDIT FIX 2026-11-01 (P0): one live listing per deck. Two concurrent
+    // listings previously let TWO buyers pay for ONE deck (the second buyer's
+    // purchase reassigned the same cards away from the first).
+    const __dupListing = await CardMarket.findOne({ deckId: deck._id, status: { $in: ['active', 'pending_approval', 'pending'] } });
+    if (__dupListing) return reply(`❌  *ALREADY LISTED*\n\n🃏 ⟢ _"${deck.name}" already has a shop listing (#${__dupListing._id}). Cancel it first._`);
+
     try {
       await CardMarket.create({
         deckId: deck._id,
@@ -3760,14 +3766,22 @@ async function cmdEShopDeckTrading(senderJid, reply, chatId, args = [], isMod = 
       if (!listing || !listing.isDeck) return reply(`❌  *LISTING NOT FOUND*\n\n🔢 ⟢ *Listing:* _#${id}_`);
 
       if (sub === 'approve') {
-        listing.status = 'active';
-        listing.approvalStatus = 'approved';
-        await listing.save();
+        // 💡 AUDIT FIX 2026-11-01 (P0): guarded approve — the old save() could
+        // resurrect an already-sold listing for a second purchase.
+        const __approved = await CardMarket.findOneAndUpdate(
+          { _id: id, isDeck: true, status: 'pending_approval' },
+          { $set: { status: 'active', approvalStatus: 'approved' } },
+          { new: true }
+        );
+        if (!__approved) return reply(`❌  *CANNOT APPROVE*\n\n🔢 ⟢ _Listing #${id} was already processed, sold or cancelled_`);
         return reply(`✅  *LISTING APPROVED!*\n\n🔢 ⟢ *Listing:* _#${id}_\n🛒 ⟢ _Now live in the Deck Shop!_`);
       } else {
-        listing.status = 'cancelled';
-        listing.approvalStatus = 'rejected';
-        await listing.save();
+        const __rejected = await CardMarket.findOneAndUpdate(
+          { _id: id, isDeck: true, status: 'pending_approval' },
+          { $set: { status: 'cancelled', approvalStatus: 'rejected' } },
+          { new: true }
+        );
+        if (!__rejected) return reply(`❌  *CANNOT REJECT*\n\n🔢 ⟢ _Listing #${id} was already processed, sold or cancelled_`);
         return reply(`❌  *LISTING REJECTED*\n\n🔢 ⟢ *Listing:* _#${id}_`);
       }
     } catch (err) { return reply(`❌  *ACTION FAILED*\n\n📍 ⟢ _Something went wrong — try again_`); }
@@ -3804,24 +3818,43 @@ async function cmdEShopDeckTrading(senderJid, reply, chatId, args = [], isMod = 
     if (balance < listing.price) return reply(`❌  *INSUFFICIENT FUNDS*\n\n💰 ⟢ *Needed:* ${ZENI()}${listing.price.toLocaleString()}\n📉 ⟢ _Your balance is too low_`);
 
     try {
+      // 💡 AUDIT FIX 2026-11-01 (P0): atomic claim + content recheck. The old
+      // find→pay→save let two buyers (same or cross-tenant) both pay for one
+      // deck, and let a seller empty the deck between approval and purchase
+      // (buyer paid, got an empty cards array, seller kept everything).
+      const claimed = await CardMarket.findOneAndUpdate(
+        { _id: listing._id, status: 'active', isDeck: true },
+        { $set: { status: 'pending' } },
+        { new: true }
+      );
+      if (!claimed) return reply(`❌  *JUST SOLD*\n\n🛒 ⟢ _Someone beat you to this deck_`);
+
+      // Re-verify the deck still has its cards and still belongs to the seller
+      const deck = await CardDeck.findById(listing.deckId);
+      if (!deck || String(deck.userId) !== String(listing.sellerId) || deck.cards.length === 0) {
+        await CardMarket.updateOne({ _id: claimed._id, status: 'pending' }, { $set: { status: 'cancelled', completedAt: new Date() } }).catch(() => {});
+        return reply(`❌  *DECK NO LONGER AVAILABLE*\n\n🛒 ⟢ _The seller emptied or altered this deck after approval — purchase aborted, nothing charged_`);
+      }
+
       // Transfer Funds
       economy.removeMoney(senderJid, listing.price);
       economy.addMoney(listing.sellerId, listing.price);
 
       // Transfer Deck & Cards
-      const deck = await CardDeck.findById(listing.deckId);
-      if (deck) {
-        deck.userId = senderJid;
-        await deck.save();
-        await UserCard.updateMany({ _id: { $in: deck.cards } }, { userId: senderJid, createdAt: new Date(), claimedAt: new Date() });
-      }
+      deck.userId = senderJid;
+      await deck.save();
+      await UserCard.updateMany({ _id: { $in: deck.cards } }, { userId: senderJid, createdAt: new Date(), claimedAt: new Date() });
 
-      listing.status = 'sold';
-      listing.completedAt = new Date();
-      await listing.save();
+      claimed.status = 'sold';
+      claimed.completedAt = new Date();
+      await claimed.save();
 
       return reply(`🎉  *CONGRATULATIONS!*\n\n🃏 ⟢ *Deck:* _"${listing.deckName}"_\n💰 ⟢ *Paid:* ${ZENI()}${listing.price.toLocaleString()}\n\n📦 ⟢ _The deck is now yours!_`);
-    } catch (err) { return reply(`❌  *PURCHASE FAILED*\n\n📍 ⟢ _Could not complete the purchase — try again_`); }
+    } catch (err) {
+      // release the claim so the listing isn't stuck invisible
+      try { await CardMarket.updateOne({ _id: listing._id, status: 'pending' }, { $set: { status: 'active' } }); } catch (e) {}
+      return reply(`❌  *PURCHASE FAILED*\n\n📍 ⟢ _Could not complete the purchase — try again_`);
+    }
   }
 
   // Default: List Deck Shop
@@ -4656,7 +4689,11 @@ async function cmdMerge(senderJid, reply, args = []) {
 
   try {
     const toDelete = owned[0];
-    await UserCard.findByIdAndDelete(toDelete._id);
+    // 💡 AUDIT FIX 2026-11-01: delete-then-pay guard — a concurrent merge
+    // (double-tap / cross-tenant) previously deleted nothing (second
+    // findByIdAndDelete no-ops) while BOTH calls paid 500 Zeni.
+    const deleted = await UserCard.findOneAndDelete({ _id: toDelete._id, ...(await ownerOf(senderJid)) });
+    if (!deleted) return reply(`🧬  *ALREADY MERGED*\n\n🔢 ⟢ _That copy is gone — nothing was charged_`);
     const reward = 500;
     economy.addMoney(senderJid, reward);
     const card = CARD_INDEX()[query];
@@ -4683,7 +4720,9 @@ async function cmdMergeAll(senderJid, reply) {
       if (list.length >= 2) {
         const toDeleteCount = list.length - 1;
         for (let i = 0; i < toDeleteCount; i++) {
-          await UserCard.findByIdAndDelete(list[i]._id);
+          // 💡 AUDIT FIX 2026-11-01: pay only for copies the delete actually removed
+          const __del = await UserCard.findOneAndDelete({ _id: list[i]._id });
+          if (!__del) continue;
           totalMerged++;
           totalReward += 500;
         }
@@ -5128,7 +5167,7 @@ async function cmdBid(senderJid, reply, args = []) {
     // settlement flips it to sold/expired, and this bid then fails instead of
     // resurrecting it).
     const bidDoc = await CardMarket.findOneAndUpdate(
-      { _id: auction._id, status: 'active', type: 'auction' },
+      { _id: auction._id, status: 'active', type: 'auction', auctionEndsAt: { $gt: new Date() } },
       { $set: { currentBid: amount, highBidderId: senderJid }, $push: { bids: { bidderId: senderJid, amount, placedAt: new Date() } } },
       { new: true },
     );

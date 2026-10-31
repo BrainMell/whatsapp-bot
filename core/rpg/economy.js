@@ -239,6 +239,56 @@ function ledgerReset(user) {
     if (!user || typeof user !== 'object') return;
     counterLedger.delete(user);
 }
+
+// ── 2026-11-01 AUDIT: ATOMIC CROSS-TENANT DEBIT GATE ──
+// The 3 tenants share one Mongo DB and each holds a stale-prone cache, so an
+// in-memory `wallet >= amount` check can pass on two tenants at once; both
+// debits then land as $inc deltas and the counterparty credit is never rolled
+// back (Zeni printed from nothing). This gate moves the debit into a
+// conditional atomic findOneAndUpdate, then REBASES this process's baseline
+// and adopts the DB truth into the cache so the debounced composited-counter
+// save cannot $inc the same debit a second time.
+async function atomicWalletDebit(userCacheObj, amount) {
+    try {
+        if (!userCacheObj || !Number.isFinite(Number(amount)) || amount <= 0) return { ok: false };
+        const resolvedId = resolveJidHelper(userCacheObj.userId);
+        const canonicalId = (typeof userCacheObj.userId === 'string' && userCacheObj.userId) ? userCacheObj.userId : resolvedId;
+        const gate = await User.findOneAndUpdate(
+            { userId: canonicalId, wallet: { $gte: amount } },
+            { $inc: { wallet: -amount } },
+            { returnDocument: 'after' }
+        );
+        if (!gate) return { ok: false }; // DB truth: insufficient funds
+        const dbWallet = Number(gate.wallet);
+        if (!Number.isFinite(dbWallet)) return { ok: false };
+        // pending same-process moves (a reward may land mid-transfer)
+        const led = counterLedger.get(userCacheObj);
+        const pending = Math.round(Number(led && led.wallet) || 0);
+        // 1. adopt DB truth, keeping our pending moves visible in the cache
+        userCacheObj.wallet = dbWallet + pending;
+        // 2. rebase baseline(s) so the next save diffs from the post-gate DB
+        //    → save's counterDeltas = cache − base = pending (the gate debit is
+        //    already IN the DB, so it must not ride the next $inc)
+        for (const key of new Set([resolvedId, canonicalId].filter(Boolean))) {
+            const meta = syncMeta.get(key);
+            if (!meta || !meta.baseJson) continue;
+            try {
+                const b = JSON.parse(meta.baseJson);
+                if (Number.isFinite(Number(b.wallet))) {
+                    b.wallet = dbWallet;
+                    meta.baseJson = JSON.stringify(b);
+                }
+            } catch (e) { /* unparseable baseline → leave as-is */ }
+        }
+        // 3. ledger untouched: self-heal expects cache = rebased base + pending
+        //    = dbWallet + pending ✓ (the gate debit is deliberately NOT in it)
+        return { ok: true, dbWallet };
+    } catch (e) {
+        // DB hiccup → fail OPEN to the legacy in-memory path (old behaviour)
+        console.error('[economy] atomicWalletDebit failed, failing open:', e.message);
+        return { ok: true, failOpen: true };
+    }
+}
 function stripMeta(doc) {
     const out = {};
     for (const k of Object.keys(doc)) {
@@ -1644,7 +1694,7 @@ function getInventory(userId) {
 //========================================
 
 //==================this part handles the bank and daily bread==================
-function transferMoney(fromUserId, toUserId, amount) {
+async function transferMoney(fromUserId, toUserId, amount) {
   const sender = getUser(fromUserId);
   const receiver = getUser(toUserId);
   
@@ -1675,6 +1725,18 @@ function transferMoney(fromUserId, toUserId, amount) {
     return { success: false, message: `❌ *INSUFFICIENT FUNDS*\n\n💰 Your wallet: ${getZENI()}${sender.wallet.toLocaleString()}\n📊 Needed: ${getZENI()}${val.toLocaleString()}\n⚠️ Short by: ${getZENI()}${(val - sender.wallet).toLocaleString()}` };
   }
 
+  // 💡 AUDIT FIX 2026-11-01: cross-tenant double-spend gate. The in-memory
+  // check above passes on EVERY tenant with a stale cache; this atomic DB
+  // debit is authoritative — only one tenant can win it. On success the
+  // cache + baseline were rebased inside the helper, so the debounced
+  // composited-counter save will NOT $inc this debit a second time.
+  const __spendGate = await atomicWalletDebit(sender, val);
+  if (!__spendGate.ok) {
+    return { success: false, message: `❌ *INSUFFICIENT FUNDS*\n\n💰 Your wallet: ${getZENI()}${sender.wallet.toLocaleString()}\n📊 Needed: ${getZENI()}${val.toLocaleString()}\n⚠️ Short by: ${getZENI()}${(val - sender.wallet).toLocaleString()}` };
+  }
+  // (failOpen: the legacy in-memory debit is applied below in the mutation
+  // block — applied exactly once, never here)
+
   // 💡 P4 Item 6 (2026-08-16): Universal 10% tax on all currency movement.
   // Sender pays 100, receiver gets 90, 10 evaporates from circulation (genuine sink).
   const taxRate = 0.10;
@@ -1684,11 +1746,14 @@ function transferMoney(fromUserId, toUserId, amount) {
   const senderPreWallet = sender.wallet;
   const receiverPreWallet = receiver.wallet;
 
-  sender.wallet -= val;
   receiver.wallet += receiverGets;
   // Clamp receiver to MAX_WALLET
   if (receiver.wallet > MAX_WALLET) receiver.wallet = MAX_WALLET;
-  ledgerMove(sender, 'wallet', -val); // 47-l3
+  if (!__spendGate || __spendGate.failOpen) {
+    // legacy path: the sender debit was NOT applied by the DB gate
+    sender.wallet -= val;
+    ledgerMove(sender, 'wallet', -val); // 47-l3
+  } // else: sender debit already landed atomically in the DB (gate)
   ledgerMove(receiver, 'wallet', receiver.wallet - receiverPreWallet); // 47-l3 (exact post-clamp delta)
 
   logTransaction(fromUserId, `Transfer to @${getDisplayName(toUserId)}`, -val, sender.wallet);
@@ -1948,7 +2013,7 @@ function getBankBalance(userId) {
   };
 }
 
-function claimDaily(userId) {
+async function claimDaily(userId) {
   const user = getUser(userId);
   if (!user) return { success: false, message: `❌ *NOT REGISTERED*\n\n🎮 Join the game first!\n💡 Use: _${botConfig.getPrefix()} register <nickname>_` };
 
@@ -1977,6 +2042,44 @@ function claimDaily(userId) {
   // a `dailyBonus` field (1000 for PREMIUM, 5000 for DIAMOND) but it was
   // never actually granted. Players paid 50k-250k for membership and got
   // the same daily reward as free players.
+  // 💡 AUDIT FIX 2026-11-01: cross-tenant double-claim gate. The in-memory
+  // lastDaily check above reads this process's cache; with 3 tenants on one
+  // users collection a player could claim on every stale tenant (2-3x reward
+  // via composited $inc). Claim atomically first: exactly one tenant's
+  // findOneAndUpdate flips lastDaily inside the window.
+  {
+    const __resolved = resolveJidHelper(userId);
+    const __canonical = (typeof user.userId === 'string' && user.userId) ? user.userId : __resolved;
+    let __dailyGate;
+    try {
+      __dailyGate = await User.findOneAndUpdate(
+        { userId: __canonical, lastDaily: { $lt: now - dayInMs + 1 } },
+        { $set: { lastDaily: now } },
+        { returnDocument: 'after' }
+      );
+    } catch (e) {
+      __dailyGate = 'ERR'; // DB hiccup → fail open to legacy behaviour
+      console.error('[economy] daily claim gate failed, failing open:', e.message);
+    }
+    if (__dailyGate === null) {
+      // Another tenant already claimed — read the DB's fresh timestamp so
+      // the countdown is honest instead of the stale cache value.
+      let __fresh = user.lastDaily;
+      try {
+        const __doc = await User.findOne({ userId: __canonical }, { lastDaily: 1 }).lean();
+        if (__doc && Number.isFinite(Number(__doc.lastDaily))) __fresh = Number(__doc.lastDaily);
+      } catch (e) { /* keep cache value */ }
+      const timeLeft = Math.max(0, dayInMs - (now - __fresh));
+      const hoursLeft = Math.floor(timeLeft / 3600000);
+      const minsLeft = Math.floor((timeLeft % 3600000) / 60000);
+      return {
+        success: false,
+        message: `⏰ *DAILY ALREADY CLAIMED!*\n\n━━━━━━━━━━━━━━━\n🕐 Come back in:\n   *${hoursLeft}h ${minsLeft}m*\n━━━━━━━━━━━━━━━\n\n💡 _Check back tomorrow for your reward!_`
+      };
+    }
+    user.lastDaily = now; // keep cache in sync with what the gate wrote
+  }
+
   let bonus = 0;
   let membershipLabel = '';
   if (user.membership && user.membership.expires > now) {
