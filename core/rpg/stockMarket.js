@@ -41,9 +41,6 @@ function buyStock(userId, symbol, amount) {
     if (!user) return { success: false, message: "❌ User not registered!" };
     const stock = Object.prototype.hasOwnProperty.call(STOCKS, symbol) ? STOCKS[symbol] : null;
 
-    // 💡 AUDIT FIX 2026-11-01: getUser returns null for unregistered users →
-    // `user.wallet` threw a TypeError on every .stocks buy from a new player.
-    if (!user) return { success: false, message: "❌ Register first! Use `.register <nickname>`." };
     if (!stock) return { success: false, message: "❌ Invalid stock symbol!" };
     // Reject non-positive, non-integer, or NaN amounts. Stocks are whole shares.
     const amt = Math.floor(Number(amount));
@@ -75,7 +72,6 @@ function sellStock(userId, symbol, amount) {
     if (!user) return { success: false, message: "❌ User not registered!" };
     const stock = Object.prototype.hasOwnProperty.call(STOCKS, symbol) ? STOCKS[symbol] : null;
 
-    if (!user) return { success: false, message: "❌ Register first! Use `.register <nickname>`." }; // 💡 AUDIT FIX 2026-11-01: unregistered TypeError gate
     if (!stock) return { success: false, message: "❌ Invalid stock symbol!" };
     const amt = Math.floor(Number(amount));
     if (!Number.isFinite(amt) || amt <= 0) {
