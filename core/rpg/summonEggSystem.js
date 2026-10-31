@@ -11,10 +11,12 @@
 //
 // Fragment tiers → egg tiers → summon rarities:
 //   Common Fragment   → (craft) → Rare Egg     → hatches RARE summon
-//   Rare Fragment     → (craft) → Epic Egg     → hatches EPIC summon
-//   Epic Fragment     → (craft) → Legendary Egg → hatches LEGENDARY summon
-//   Legendary Fragment→ (craft) → Mythic Egg   → hatches MYTHIC summon
-//   Mythic Fragment   → (endgame currency, future use)
+//
+// 💡 RETIRED 2026-11-01 (dead-content removal): the EPIC/LEGENDARY/MYTHIC
+// egg tiers were removed. The registry has zero EPIC+ species, so those
+// eggs could only ever hatch a common starter ("10 fragments → a bat").
+// Fragment drops now cap at RARE. Pre-removal eggs/fragments in player
+// bags get an explicit "retired" message and can be sold for Zeni.
 //
 // Basic Egg is shop-buyable (5K Zeni) and only hatches the 4 starters.
 // All other eggs are crafted from fragments dropped in the Abyss.
@@ -51,30 +53,17 @@ const EGG_TIERS = {
     fragmentsRequired: { id: 'common_fragment', count: 10 },
     craftsInto: 'rare_summon_egg',
   },
-  epic: {
-    eggId: 'epic_summon_egg',
-    incubationMs: 12 * 60 * 60 * 1000,      // 12 hours
-    speedUpCost: 30000,
-    rarityPool: ['EPIC'],
-    fragmentsRequired: { id: 'rare_fragment', count: 10 },
-    craftsInto: 'epic_summon_egg',
-  },
-  legendary: {
-    eggId: 'legendary_summon_egg',
-    incubationMs: 24 * 60 * 60 * 1000,      // 24 hours
-    speedUpCost: 100000,
-    rarityPool: ['LEGENDARY'],
-    fragmentsRequired: { id: 'epic_fragment', count: 10 },
-    craftsInto: 'legendary_summon_egg',
-  },
-  mythic: {
-    eggId: 'mythic_summon_egg',
-    incubationMs: 48 * 60 * 60 * 1000,      // 48 hours
-    speedUpCost: 500000,
-    rarityPool: ['MYTHIC'],
-    fragmentsRequired: { id: 'legendary_fragment', count: 10 },
-    craftsInto: 'mythic_summon_egg',
-  },
+  // 💡 RETIRED 2026-11-01: epic/legendary/mythic tiers removed - the registry
+  // contains no EPIC+ species (rarityPool was always empty → silent starter
+  // fallback). Re-add tiers ONLY together with new EPIC+ registry species.
+};
+
+// Pre-removal eggs still sitting in player bags: fail honestly instead of
+// "Invalid egg type." / silently hatching a common starter.
+const RETIRED_EGGS = {
+  epic_summon_egg: 'Epic Summon Egg',
+  legendary_summon_egg: 'Legendary Summon Egg',
+  mythic_summon_egg: 'Mythic Summon Egg',
 };
 
 // ─── HATCH AN EGG ─────────────────────────────────────────────────
@@ -85,6 +74,12 @@ const EGG_TIERS = {
 async function hatchEgg(userId, eggId) {
   const tier = Object.values(EGG_TIERS).find(t => t.eggId === eggId);
   if (!tier) {
+    if (RETIRED_EGGS[eggId]) {
+      return {
+        success: false,
+        message: `🚫 The ${RETIRED_EGGS[eggId]} has been retired - no EPIC+ summons exist in the world yet, so it could never hatch one.\n_Sell it on the market or to other players; it keeps its item value._`
+      };
+    }
     return { success: false, message: '❌ Invalid egg type.' };
   }
 
@@ -183,7 +178,7 @@ async function hatchEgg(userId, eggId) {
 async function craftEgg(userId, targetTier) {
   const tier = EGG_TIERS[targetTier];
   if (!tier || tier.isStarter) {
-    return { success: false, message: '❌ Invalid egg tier. Available: rare, epic, legendary, mythic.' };
+    return { success: false, message: '❌ Invalid egg tier. Available: rare (10x Common Fragment).' };
   }
 
   const fragId = tier.fragmentsRequired.id;
@@ -322,19 +317,16 @@ function generateWildSummonEncounter(floor) {
 // Called when a wild summon is defeated. Returns the fragment item ID
 // + quantity based on floor depth + species rarity.
 function getFragmentDrop(floor, speciesRarity) {
-  // Determine fragment tier based on floor + species rarity
+  // 💡 RETIRED 2026-11-01: fragment tiers cap at RARE now (no EPIC+ egg tiers
+  // to craft towards). Deep floors used to drop epic/legendary fragments that
+  // could only craft retired eggs - that would have made deep-floor fragment
+  // sources dead too. Floor 11+ / EPIC+ species now drop rare fragments.
   let fragmentTier;
-  if (floor >= 50 || speciesRarity === 'MYTHIC') fragmentTier = 'legendary';
-  else if (floor >= 21 || speciesRarity === 'LEGENDARY') fragmentTier = 'epic';
-  else if (floor >= 11 || speciesRarity === 'EPIC') fragmentTier = 'rare';
+  if (floor >= 11 || ['EPIC', 'LEGENDARY', 'MYTHIC'].includes(speciesRarity)) fragmentTier = 'rare';
   else fragmentTier = 'common';
 
-  // Rare chance to drop one tier higher
-  if (Math.random() < 0.10) {
-    const tiers = ['common', 'rare', 'epic', 'legendary', 'mythic'];
-    const idx = tiers.indexOf(fragmentTier);
-    if (idx < tiers.length - 1) fragmentTier = tiers[idx + 1];
-  }
+  // Rare chance to upgrade a common fragment to rare
+  if (fragmentTier === 'common' && Math.random() < 0.10) fragmentTier = 'rare';
 
   const fragmentId = `${fragmentTier}_fragment`;
 

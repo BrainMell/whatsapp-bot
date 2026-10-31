@@ -268,11 +268,19 @@ function getGP(userId) {
     return user ? (user.gp || 0) : 0;
 }
 
-function awardGP(userId, isGuildMember = false) {
-    if (!isGuildMember) return { awarded: false };
+function awardGP(userId, gpGainOrIsGuild = false, isGuildMember = true) {
+    // 💡 AUDIT FIX 2026-11-01: amount-aware overload. guildAdventure.js pays
+    // rank-scaled GP via awardGP(jid, gpGain) where gpGain is a NUMBER (1-100);
+    // the old boolean-only signature coerced it to truthiness so every clear
+    // paid exactly 5 GP while the summary card printed the real gpGain.
+    let amount = 5;
+    if (typeof gpGainOrIsGuild === 'number' && Number.isFinite(gpGainOrIsGuild) && gpGainOrIsGuild > 0) {
+        amount = Math.floor(gpGainOrIsGuild);
+    } else if (gpGainOrIsGuild === false) {
+        return { awarded: false };
+    }
     const user = getUser(userId);
     if (!user) return { awarded: false };
-    const amount = 5;
     user.gp = (user.gp || 0) + amount;
     user.totalGP = (user.totalGP || 0) + amount;
     saveProgression(userId);
@@ -306,8 +314,9 @@ function addXP(userId, amount = 10, source = 'Unknown') {
         } else break;
     }
     
-    saveProgression(userId);
-    
+    // 💡 AUDIT FIX 2026-11-01: the old order persisted the new LEVEL first
+    // and granted the points after — a crash between the two writes
+    // permanently lost the points (level already bumped, no re-award).
     if (levelUps.length > 0) {
         let statPointsGained = levelUps.length * STAT_GROWTH.STAT_POINTS_PER_LEVEL;
         let skillPointsGained = levelUps.length;
@@ -317,6 +326,7 @@ function addXP(userId, amount = 10, source = 'Unknown') {
         }
         user.statPoints += statPointsGained;
         user.totalLevelsGained += levelUps.length;
+        saveProgression(userId); // 💡 single save now covers level + points
         
         const mainUser = economy.getUser(userId);
         if (mainUser) {
@@ -330,6 +340,7 @@ function addXP(userId, amount = 10, source = 'Unknown') {
         
         return { leveledUp: true, oldLevel, newLevel: user.level, levelsGained: levelUps.length, statPointsGained, skillPointsGained, xpGained: amount, source };
     }
+    saveProgression(userId);
     return { leveledUp: false, xpGained: amount, source };
 }
 
@@ -378,26 +389,9 @@ function getBaseStats(userId, classId) {
         if (typeof baseStats[stat] !== 'undefined') baseStats[stat] += bonus;
     }
 
-    // 💡 FIX 2026-08-01: Apply summon trial passives.
-    // computePassiveBonuses() returns {hp, atk, def, mag, spd, luck, crit, ...}
-    // based on which trial passives the user has unlocked and which element
-    // summons they own. Previously this was NEVER called - all 14 trial
-    // passives were dead data.
-    try {
-        const summonTrials = require('./summonTrials');
-        if (mainUser && mainUser.unlockedSummonPassives && mainUser.unlockedSummonPassives.length > 0) {
-            const passiveBonuses = summonTrials.computePassiveBonuses(mainUser);
-            if (passiveBonuses) {
-                for (const [stat, bonus] of Object.entries(passiveBonuses)) {
-                    if (typeof baseStats[stat] !== 'undefined' && typeof bonus === 'number') {
-                        baseStats[stat] += bonus;
-                    }
-                }
-            }
-        }
-    } catch (e) {
-        // Non-fatal - trial passives are optional
-    }
+    // 💡 RETIRED 2026-11-01: summon trial passives removed with the trials
+    // feature (dead content - no live species has a trial, so
+    // computePassiveBonuses() could never return anything non-empty).
 
     baseStats.maxHp = baseStats.hp;
     baseStats.maxEnergy = 100 + (levelsGained * 15) + (Math.floor(baseStats.mag * 3));
@@ -628,6 +622,7 @@ function getGPLeaderboard(limit = 10) {
         .map(u => ({
             userId: u.userId,
             nickname: u.nickname || economy.getDisplayName(u.userId),
+            level: u.progression.level || 1, // 💡 AUDIT FIX 2026-11-01: gptop printed 'undefined Level undefined' — the map had no level
             gp: u.progression.gp || 0,
             totalGP: u.progression.totalGP || 0,
         }))

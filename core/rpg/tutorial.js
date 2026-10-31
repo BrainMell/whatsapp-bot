@@ -344,9 +344,9 @@ function stepMessage(id, prefix, track) {
         case 'sm_hatch':
             return `🥚 *Step 1 - hatch.* If you own an egg: \`${p} summon hatch <egg_id>\` (a bought Basic Egg is \`${p} summon hatch basic_summon_egg\`). No egg yet? No problem - send \`next\`.\n\n_Fragments route: \`${p} summon eggcraft <tier>\` turns 10 fragments into an egg._`;
         case 'sm_deck':
-            return `🐉 *Step 2 - your roster.* Summons live on a Main Deck (3 slots, deployable) plus a Backlog. View it: \`${p} summons\` (or \`${p} summon list\`)\n\n_Move summons between Deck and Backlog with \`${p} summon swap <backlog#> <deckSlot>\`._`;
+            return `🐉 *Step 2 - your roster.* Summons live on a Main Deck (5 slots, deployable) plus a Backlog. View it: \`${p} summons\` (or \`${p} summon list\`)\n\n_Move summons between Deck and Backlog with \`${p} summon swap <backlog#> <deckSlot>\`._`;
         case 'sm_train':
-            return `📊 *Step 3 - grow them.* \`${p} summon train <#>\` grants daily XP; levels raise stats and unlock abilities. Deploy one with \`${p} summon <#> deploy\` so it fights beside you.\n\n_Optional extras: stat points, gear, forging, trials - \`${p} summon help\` shows it all. Trade on the player market: \`${p} market sell summon <#> <price>\`._\n\nSend \`next\` to graduate.`;
+            return `📊 *Step 3 - grow them.* \`${p} summon train <#>\` grants daily XP; levels raise stats and unlock abilities. Deploy one with \`${p} summon <#> deploy\` so it fights beside you.\n\n_Optional extras: stat points, gear, forging - \`${p} summon help\` shows it all. Trade on the player market: \`${p} market sell summon <#> <price>\`._\n\nSend \`next\` to graduate.`;
 
         // ══ TRACK: runes (L12) — Runes ══
         case 'rn_intro':

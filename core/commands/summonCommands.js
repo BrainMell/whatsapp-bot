@@ -20,7 +20,8 @@ const botConfig = require('../../botConfig');
 const summonSystem = require('../rpg/summonSystem');
 const summonCapture = require('../rpg/summonCapture');
 const summonForging = require('../rpg/summonForging');
-const summonTrials = require('../rpg/summonTrials');
+// 💡 RETIRED 2026-11-01: summonTrials + summonEvolution removed (dead content -
+// zero trials/evolution chains exist for any of the 26 live species).
 const registry = require('../rpg/summonRegistry');
 // 💡 Phase C2: Image-based roster rendering
 const rosterRenderer = require('../rpg/summonRosterRenderer');
@@ -129,7 +130,14 @@ async function handleCommand(sock, chatId, senderJid, senderName, args, m) {
 
     case 'evolve':
     case 'evolution':
-      return await cmdEvolve(sock, chatId, senderJid, rest);
+    case 'trial':
+    case 'passives':
+      // 💡 RETIRED 2026-11-01: trials/evolution were dead content - 0 of 26
+      // species have a trial or a multi-stage evolution chain, so every
+      // attempt failed forever. Reply honestly instead of silently erroring.
+      return await sock.sendMessage(chatId, {
+        text: `🚫 Summon trials & evolution have been retired.\n_No species currently has a trial or a next stage, so these commands could never succeed. They may return if EPIC+ summons are added to the world._`
+      });
 
     case 'bond':
       return await cmdBond(sock, chatId, senderJid, rest);
@@ -161,12 +169,6 @@ async function handleCommand(sock, chatId, senderJid, senderName, args, m) {
     case 'forge':
     case 'fuse':
       return await cmdForge(sock, chatId, senderJid, rest);
-
-    case 'trial':
-      return await cmdTrial(sock, chatId, senderJid, rest);
-
-    case 'passives':
-      return await cmdPassives(sock, chatId, senderJid);
 
     case 'market':
     case 'shop':
@@ -366,9 +368,6 @@ async function cmdNavigate(sock, chatId, senderJid, numStr, rest) {
   if (action === 'train') {
     return await cmdTrain(sock, chatId, senderJid, [summons[index].summonId.slice(-8)]);
   }
-  if (action === 'trial') {
-    return await cmdTrial(sock, chatId, senderJid, [summons[index].summonId.slice(-8)]);
-  }
 
   // Default: show animated detail GIF via Go service (idle.gif + info hub)
   // 💡 REWORKED 2026-10-10: resilient pipeline (summonGifDelivery) - same look,
@@ -404,7 +403,7 @@ async function cmdNavigate(sock, chatId, senderJid, numStr, rest) {
     }],
   };
 
-  const detailCaption = `${species?.icon || '🐉'} *${name}*${active ? ' ⭐ DEPLOYED' : ''}\n💡 \`${p} summon ${index + 1} deploy\` - equip | \`${p} summon ${index + 1} trial\` - evolve`;
+  const detailCaption = `${species?.icon || '🐉'} *${name}*${active ? ' ⭐ DEPLOYED' : ''}\n💡 \`${p} summon ${index + 1} deploy\` - equip | \`${p} summon ${index + 1} train\` - daily XP`;
 
   await summonGifDelivery.deliverSummonGif({
     kind: 'detail',
@@ -871,7 +870,7 @@ async function cmdHatch(sock, chatId, senderJid, args) {
   if (!eggId) {
     // 💡 AUDIT FIX 2026-08-01: updated help text to reflect the new egg system
     await sock.sendMessage(chatId, {
-      text: `🥚 *SUMMON EGG HATCHING*\n\nUsage: \`${getPrefix()} summon hatch <egg_id>\`\n\n*Available eggs:*\n• \`basic_summon_egg\` - 1 of 4 starters (Tank/DPS/Mage/Support)\n• \`rare_summon_egg\` - random RARE summon\n• \`epic_summon_egg\` - random EPIC summon\n• \`legendary_summon_egg\` - random LEGENDARY summon\n• \`mythic_summon_egg\` - random MYTHIC summon\n\n_Buy a Basic Egg from the shop. Higher-tier eggs are crafted from fragments dropped by wild summons in the Abyss._`
+      text: `🥚 *SUMMON EGG HATCHING*\n\nUsage: \`${getPrefix()} summon hatch <egg_id>\`\n\n*Available eggs:*\n• \`basic_summon_egg\` - 1 of 4 starters (Tank/DPS/Mage/Support)\n• \`rare_summon_egg\` - random RARE summon\n\n_Buy a Basic Egg from the shop. Rare Eggs are crafted from 10 Common Fragments dropped by wild summons in the Abyss._`
     });
     return;
   }
@@ -942,105 +941,10 @@ async function cmdForge(sock, chatId, senderJid, args) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon trial <id> - attempt solo evolution trial
+// 💡 RETIRED 2026-11-01: cmdTrial + cmdPassives removed (summon trials were
+// dead content - no live species has a trial). See the retired-notice case
+// in handleCommand's switch.
 // ─────────────────────────────────────────────────────────────
-
-async function cmdTrial(sock, chatId, senderJid, args) {
-  const user = economy.getUser(senderJid);
-  if (!user) {
-    await sock.sendMessage(chatId, { text: '❌ Not registered.' });
-    return;
-  }
-
-  const query = (args[0] || '').trim();
-  if (!query) {
-    // Show available trials
-    const summons = await summonSystem.getUserSummons(senderJid);
-    const eligible = summons.filter(s => {
-      const trial = summonTrials.getTrial(s.species);
-      return trial && !s.trialCompleted && s.level >= trial.requiredSummonLevel && s.tier === trial.requiredTier;
-    });
-
-    let msg = `⚔️ *SUMMON TRIALS*\n`;
-    msg += `━━━━━━━━━━━━━━━\n\n`;
-
-    if (eligible.length === 0) {
-      msg += `No eligible summons for trials right now.\n\n`;
-      msg += `Trials require:\n• Summon at the required level\n• Correct evolution tier (BASE or ASCENDED)\n• Trial not already completed\n\n`;
-      msg += `Use \`${getPrefix()} summon trial <id>\` to attempt a trial.`;
-    } else {
-      msg += `*ELIGIBLE SUMMONS:*\n`;
-      for (const s of eligible) {
-        const trial = summonTrials.getTrial(s.species);
-        const species = registry.getSpecies(s.species);
-        msg += `${species?.icon || '🐉'} *${s.nickname || species?.name || s.species}* - ${trial.name}\n`;
-        msg += `   📊 Lv.${s.level} | Boss: ${trial.bossId} (Lv.${trial.bossLevel})\n`;
-        msg += `   🆔 \`${s.summonId.slice(-8)}\`\n`;
-        msg += `   Reward: Evolve to ${trial.rewardEvolution} + unlock *${summonTrials.getPassive(trial.rewardPassive)?.name || 'passive'}*\n\n`;
-      }
-      msg += `Use \`${getPrefix()} summon trial <id>\` to attempt.`;
-    }
-
-    await sock.sendMessage(chatId, { text: msg });
-    return;
-  }
-
-  // Resolve summon
-  const summons = await summonSystem.getUserSummons(senderJid);
-  const target = resolveSummon(summons, query);
-
-  if (!target) {
-    await sock.sendMessage(chatId, { text: `❌ No summon matching "${query}".` });
-    return;
-  }
-
-  const result = await summonTrials.attemptTrial(senderJid, target.summonId);
-  await sock.sendMessage(chatId, { text: result.message });
-}
-
-// ─────────────────────────────────────────────────────────────
-// .summon passives - view unlocked player passives from trials
-// ─────────────────────────────────────────────────────────────
-
-async function cmdPassives(sock, chatId, senderJid) {
-  const user = economy.getUser(senderJid);
-  if (!user) {
-    await sock.sendMessage(chatId, { text: '❌ Not registered.' });
-    return;
-  }
-
-  const passives = summonTrials.getActivePlayerPassives(user);
-  const allPassives = Object.entries(summonTrials.PLAYER_PASSIVES);
-
-  let msg = `✨ *SUMMON TRIAL PASSIVES*\n`;
-  msg += `━━━━━━━━━━━━━━━\n`;
-  msg += `Unlocked: ${passives.length}/${allPassives.length}\n\n`;
-
-  if (passives.length === 0) {
-    msg += `No passives unlocked yet.\n\n`;
-    msg += `Complete summon trials to unlock permanent player passives.\n`;
-    msg += `Each passive is active whenever you own a summon of the matching element.\n\n`;
-    msg += `Use \`${getPrefix()} summon trial\` to see eligible summons.`;
-  } else {
-    msg += `*ACTIVE PASSIVES:*\n`;
-    for (const p of passives) {
-      msg += `✅ ${p.name} - ${p.desc}\n`;
-    }
-
-    const locked = allPassives.filter(([id]) => !user.unlockedSummonPassives.includes(id));
-    if (locked.length > 0) {
-      msg += `\n*LOCKED:*\n`;
-      for (const [id, p] of locked.slice(0, 10)) {
-        msg += `🔒 ${p.name} - ${p.desc}\n`;
-      }
-      if (locked.length > 10) {
-        msg += `... and ${locked.length - 10} more\n`;
-      }
-    }
-  }
-
-  await sock.sendMessage(chatId, { text: msg });
-}
 
 // ─────────────────────────────────────────────────────────────
 // .summon backlog - view backlog summons
@@ -1631,69 +1535,10 @@ async function cmdSkillTree(sock, chatId, senderJid, args) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// .summon evolve <id> - evolve a summon to its next stage (Phase 3)
+// 💡 RETIRED 2026-11-01: cmdEvolve removed (every species has a single-stage
+// evolutionStages chain, so canEvolve always failed with "final evolution
+// stage"). See the retired-notice case in handleCommand's switch.
 // ─────────────────────────────────────────────────────────────
-
-async function cmdEvolve(sock, chatId, senderJid, args) {
-  const user = economy.getUser(senderJid);
-  if (!user) { await sock.sendMessage(chatId, { text: '❌ Not registered.' }); return; }
-
-  const summonIdQuery = (args[0] || '').trim();
-  if (!summonIdQuery) {
-    const summonEvolution = require('../rpg/summonEvolution');
-    const p = getPrefix();
-    let msg = `✨ *SUMMON EVOLUTION*\n\nEvolve your summon to its next form!\n\n`;
-    msg += `*Requirements:*\n`;
-    msg += `• Stage 2 (ASCENDED): L15 + 1x Summon Essence (T2) + 10K Zeni\n`;
-    msg += `• Stage 3 (TRANSCENDENT): L30 + 1x Summon Essence (T3) + 50K Zeni\n\n`;
-    msg += `_Essences drop from Abyss bosses. Use \`${p} summon evolve <id>\` to evolve._`;
-    await sock.sendMessage(chatId, { text: msg });
-    return;
-  }
-
-  // Resolve the summon
-  const summons = await summonSystem.getUserSummons(senderJid);
-  const summon = resolveSummon(summons, summonIdQuery);
-  if (!summon) {
-    await sock.sendMessage(chatId, { text: `❌ Summon not found. Use \`${getPrefix()} summon list\` to see your summons.` });
-    return;
-  }
-
-  const summonEvolution = require('../rpg/summonEvolution');
-
-  // Check if can evolve first
-  const check = summonEvolution.canEvolve(summon);
-  if (!check.canEvolve) {
-    await sock.sendMessage(chatId, { text: `❌ ${check.reason}` });
-    return;
-  }
-
-  // Show requirements + confirm
-  if (!args[1] || args[1].toLowerCase() !== 'confirm') {
-    const { nextSpeciesData, reqs } = check;
-    const ZENI = botConfig.getCurrency().symbol;
-    let msg = `✨ *EVOLUTION PREVIEW*\n\n`;
-    msg += `${registry.getSpecies(summon.species)?.icon || '🐉'} ${registry.getSpecies(summon.species)?.name || summon.species}\n`;
-    msg += `→ ${nextSpeciesData.icon} *${nextSpeciesData.name}* (${reqs.tier})\n\n`;
-    msg += `*New Stats:*\n`;
-    msg += `❤️ HP: ${nextSpeciesData.baseStats.hp} | ⚔️ ATK: ${nextSpeciesData.baseStats.atk}\n`;
-    msg += `🛡️ DEF: ${nextSpeciesData.baseStats.def} | 🔮 MAG: ${nextSpeciesData.baseStats.mag}\n`;
-    msg += `💨 SPD: ${nextSpeciesData.baseStats.spd}\n\n`;
-    msg += `*Requirements:*\n`;
-    msg += `📊 Level: ${summon.level}/${reqs.levelReq} ${summon.level >= reqs.levelReq ? '✅' : '❌'}\n`;
-    const hasEssence = require('../rpg/inventorySystem').hasItem(senderJid, reqs.essenceId, 1);
-    msg += `💎 ${reqs.essenceName}: ${hasEssence ? '✅' : '❌'}\n`;
-    const balance = economy.getGold(senderJid);
-    msg += `💰 Zeni: ${balance.toLocaleString()}/${reqs.zeniCost.toLocaleString()} ${balance >= reqs.zeniCost ? '✅' : '❌'}\n\n`;
-    msg += `_Confirm with: \`${getPrefix()} summon evolve ${summonIdQuery} confirm\`_`;
-    await sock.sendMessage(chatId, { text: msg });
-    return;
-  }
-
-  // Execute evolution
-  const result = await summonEvolution.evolveSummon(summon);
-  await sock.sendMessage(chatId, { text: result.message });
-}
 
 // ─────────────────────────────────────────────────────────────
 // .summon equip <summonId> <gearId> - equip summon gear (Phase 5)
@@ -2036,7 +1881,9 @@ async function cmdEggCraft(sock, chatId, senderJid, args) {
   }
 
   const tier = (args[0] || '').toLowerCase().trim();
-  const validTiers = ['rare', 'epic', 'legendary', 'mythic'];
+  // 💡 RETIRED 2026-11-01: epic/legendary/mythic tiers removed (empty pools -
+  // no EPIC+ species exist). Rare is the only crafted egg with a live pool.
+  const validTiers = ['rare'];
 
   if (!tier) {
     const inventorySystem = require('../rpg/inventorySystem');
@@ -2060,7 +1907,7 @@ async function cmdEggCraft(sock, chatId, senderJid, args) {
 
   if (!validTiers.includes(tier)) {
     await sock.sendMessage(chatId, {
-      text: `❌ Invalid tier. Use: \`${getPrefix()} summon eggcraft <rare|epic|legendary|mythic>\``
+      text: `❌ Invalid tier. Use: \`${getPrefix()} summon eggcraft rare\` (10x Common Fragment → Rare Summon Egg)`
     });
     return;
   }
@@ -2091,15 +1938,13 @@ async function cmdHelp(sock, chatId) {
   msg += `🔗 \`${p} summon resonance\` - view active resonance bonuses\n`;
   msg += `📚 \`${p} summon codex\` - view ALL summon species (5 per page)\n`;
   msg += `🥚 \`${p} summon hatch <egg_id>\` - hatch a summon egg\n`;
-  msg += `💎 \`${p} summon eggcraft <tier>\` - craft eggs from fragments\n`;
+  msg += `💎 \`${p} summon eggcraft rare\` - 10x Common Fragment → Rare Egg\n`;
   msg += `⚔️ \`${p} summon forge <#1> <#2>\` - Soul Forge two summons\n`;
-  msg += `🏆 \`${p} summon trial <#>\` - attempt evolution trial\n`;
-  msg += `✨ \`${p} summon passives\` - view unlocked trial passives\n`;
   msg += `🏪 \`${p} summon market <list/sell/buy/cancel>\` - summon trading\n`;
   msg += `⚔️ \`${p} summon duel @user\` - summon vs summon PvP\n`;
   msg += `💔 \`${p} summon release <#>\` - permanently release a summon\n\n`;
   msg += `*MAIN DECK & BACKLOG:*\n`;
-  msg += `• Main Deck = 3 slots (deployable in combat)\n`;
+  msg += `• Main Deck = 5 slots (deployable in combat)\n`;
   msg += `• Backlog = unlimited storage for extra summons\n`;
   msg += `• Use \`${p} summon swap <backlog#> <deckSlot>\` to move summons\n`;
   msg += `• Example: \`${p} summon swap 1 2\` = backlog #1 → deck slot 2\n\n`;
@@ -2107,14 +1952,11 @@ async function cmdHelp(sock, chatId) {
   msg += `• 🥚 Buy a *Basic Summon Egg* from the shop (5K Zeni) → hatches 1 of 4 starters\n`;
   msg += `• 🐉 Explore the *Abyss* - 10% chance per floor to encounter a Wild Summon\n`;
   msg += `• 💎 Defeat Wild Summons → drop *Summon Fragments* (tiered by floor depth)\n`;
-  msg += `• 🔮 Craft higher-tier eggs from fragments → hatch stronger summons\n`;
+  msg += `• 🔮 Craft a Rare Egg from 10 fragments → hatch a stronger summon\n`;
   msg += `• Necromancer: cast Army of the Dead to capture enemies\n`;
   msg += `• Buy from other players on the summon market\n\n`;
   msg += `*EGG CRAFTING:*\n`;
-  msg += `• 10x Common Fragment → Rare Egg\n`;
-  msg += `• 10x Rare Fragment → Epic Egg\n`;
-  msg += `• 10x Epic Fragment → Legendary Egg\n`;
-  msg += `• 10x Legendary Fragment → Mythic Egg\n\n`;
+  msg += `• 10x Common Fragment → Rare Egg (hatches a random RARE summon)\n\n`;
   msg += `*MECHANICS:*\n`;
   msg += `• Summons act via gauge-based turn order (high SPD = more turns)\n`;
   msg += `• Personalities shift based on how you use them\n`;

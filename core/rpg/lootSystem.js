@@ -1043,20 +1043,22 @@ const ITEM_DATABASE = {
     // --- SUMMON EGGS ---
     'basic_summon_egg':    { name: 'Basic Summon Egg',    description: 'A common egg that hatches one of 4 starter summons. (Tank/DPS/Mage/Support)', rarity: 'COMMON', value: 5000, type: 'ITEM', usable: true },
     'rare_summon_egg':     { name: 'Rare Summon Egg',     description: 'Hatches a random RARE-tier summon. Crafted from 10 Common Fragments.', rarity: 'RARE', value: 25000, type: 'ITEM', usable: true },
-    'epic_summon_egg':     { name: 'Epic Summon Egg',     description: 'Hatches a random EPIC-tier summon. Crafted from 10 Rare Fragments.', rarity: 'EPIC', value: 80000, type: 'ITEM', usable: true },
-    'legendary_summon_egg':{ name: 'Legendary Summon Egg',description: 'Hatches a random LEGENDARY-tier summon. Crafted from 10 Epic Fragments.', rarity: 'LEGENDARY', value: 250000, type: 'ITEM', usable: true },
-    'mythic_summon_egg':   { name: 'Mythic Summon Egg',   description: 'Hatches a random MYTHIC-tier summon. The rarest egg. Crafted from 10 Legendary Fragments.', rarity: 'MYTHIC', value: 1000000, type: 'ITEM', usable: true },
+    'epic_summon_egg':     { name: 'Epic Summon Egg',     description: '(Retired) No EPIC-tier summons exist yet - this egg can no longer hatch. Sell it to recoup its value.', rarity: 'EPIC', value: 80000, type: 'ITEM', usable: false },
+    'legendary_summon_egg':{ name: 'Legendary Summon Egg',description: '(Retired) No LEGENDARY-tier summons exist yet - this egg can no longer hatch. Sell it to recoup its value.', rarity: 'LEGENDARY', value: 250000, type: 'ITEM', usable: false },
+    'mythic_summon_egg':   { name: 'Mythic Summon Egg',   description: '(Retired) No MYTHIC-tier summons exist yet - this egg can no longer hatch. Sell it to recoup its value.', rarity: 'MYTHIC', value: 1000000, type: 'ITEM', usable: false },
 
     // --- SUMMON FRAGMENTS (dropped by wild summons in the Abyss) ---
     'common_fragment':     { name: 'Common Summon Fragment',  description: 'A faint soul fragment from a defeated wild summon. Collect 10 to craft a Rare Egg.', rarity: 'COMMON', value: 500, type: 'MATERIAL' },
-    'rare_fragment':       { name: 'Rare Summon Fragment',    description: 'A glowing soul fragment from a stronger wild summon. Collect 10 to craft an Epic Egg.', rarity: 'RARE', value: 3000, type: 'MATERIAL' },
-    'epic_fragment':       { name: 'Epic Summon Fragment',    description: 'A pulsing soul fragment radiating power. Collect 10 to craft a Legendary Egg.', rarity: 'EPIC', value: 12000, type: 'MATERIAL' },
-    'legendary_fragment':  { name: 'Legendary Summon Fragment',description: 'A blinding fragment of immense power. Collect 10 to craft a Mythic Egg.', rarity: 'LEGENDARY', value: 50000, type: 'MATERIAL' },
-    'mythic_fragment':     { name: 'Mythic Summon Fragment',  description: 'A fragment of pure divine essence. Only obtainable from the deepest Abyss floors + raids.', rarity: 'MYTHIC', value: 200000, type: 'MATERIAL' },
+    'rare_fragment':       { name: 'Rare Summon Fragment',    description: 'A glowing soul fragment from a stronger wild summon. 10 of these were the old Epic-egg recipe (retired) - now a valuable sell.', rarity: 'RARE', value: 3000, type: 'MATERIAL' },
+    'epic_fragment':       { name: 'Epic Summon Fragment',    description: '(Retired) crafted-egg tier removed. Worth good Zeni to collectors - sell it.', rarity: 'EPIC', value: 12000, type: 'MATERIAL' },
+    'legendary_fragment':  { name: 'Legendary Summon Fragment',description: '(Retired) crafted-egg tier removed. Worth serious Zeni to collectors - sell it.', rarity: 'LEGENDARY', value: 50000, type: 'MATERIAL' },
+    'mythic_fragment':     { name: 'Mythic Summon Fragment',  description: '(Retired) crafted-egg tier removed. A collector\'s trophy - sell it.', rarity: 'MYTHIC', value: 200000, type: 'MATERIAL' },
 
-    // --- SUMMON EVOLUTION STONES (Phase 3) ---
-    'summon_essence_t2':   { name: 'Summon Essence (T2)',    description: 'Crystallized essence used to evolve a summon to its 2nd form. Dropped by Abyss bosses floor 5+.', rarity: 'RARE', value: 15000, type: 'MATERIAL' },
-    'summon_essence_t3':   { name: 'Summon Essence (T3)',    description: 'Pure crystallized essence used to evolve a summon to its final form. Dropped by Abyss bosses floor 21+.', rarity: 'EPIC', value: 60000, type: 'MATERIAL' },
+    // --- SUMMON EVOLUTION STONES --- 💡 RETIRED 2026-11-01 (kept as sellable
+    // mementos - the evolution feature they fed was removed: no live species
+    // has a second stage).
+    'summon_essence_t2':   { name: 'Summon Essence (T2)',    description: '(Retired) evolution was never possible - no species has a 2nd form. Sell to a collector.', rarity: 'RARE', value: 15000, type: 'MATERIAL' },
+    'summon_essence_t3':   { name: 'Summon Essence (T3)',    description: '(Retired) evolution was never possible - no species has a final form. Sell to a collector.', rarity: 'EPIC', value: 60000, type: 'MATERIAL' },
     'skill_respec_scroll': { name: 'Skill Respec Scroll',    description: 'Resets a summon\'s skill tree, refunding all skill points. The path choice is also reset.', rarity: 'EPIC', value: 40000, type: 'CONSUMABLE', usable: true },
 
     // ═══════════════════════════════════════════════════════════════

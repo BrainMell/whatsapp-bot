@@ -46,11 +46,13 @@ function buildShopCatalog() {
 
         // Summon-specific items live in the dedicated summon shop
         // 💡 Only basic_summon_egg is buyable - higher-tier eggs come from crafting fragments
+        // 💡 RETIRED 2026-11-01: epic/legendary/mythic fragments + essences are
+        // retired items (EPIC+ egg/evolution content removed) - no longer sold.
         const isSummonItem = item.type === 'SUMMON_GEAR' ||
                              id === 'basic_summon_egg' ||
                              id === 'summon_healing_pill' ||
-                             id.includes('_fragment') ||
-                             id.includes('summon_essence') ||
+                             id === 'common_fragment' ||
+                             id === 'rare_fragment' ||
                              id.includes('skill_respec_scroll');
 
         if (isSummonItem) {
