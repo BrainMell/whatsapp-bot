@@ -31,6 +31,19 @@ function normalizeBet(amount) {
   return n;
 }
 
+// 💡 FIX 2026-10-31: every direct wallet write in the games must be recorded in
+// the 47-l3 counter ledger - otherwise the economy save-time self-heal treats
+// the delta as in-memory divergence and REVERTS it whenever any ledgered move
+// (daily/deposit/transfer) is pending for the same user in the same save window
+// (wins vanish / losses silently undone = money created from nothing).
+function _ledgerWallet(user, delta) {
+  try {
+    if (!user || typeof user !== 'object' || !delta) return;
+    economy.ledgerMove(user, 'wallet', delta);
+  } catch (e) {}
+
+}
+
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
@@ -206,6 +219,7 @@ function coinflip(userId, amount, choice, economyModule) {
     }
 
     user.wallet += gain;
+    _ledgerWallet(user, gain); // ledger the gain (47-l3 self-heal guard)
     if (!user.stats) user.stats = {};
     user.stats.totalEarned = (user.stats.totalEarned || 0) + gain;
     trackDailyNet(user, gain);
@@ -226,6 +240,7 @@ function coinflip(userId, amount, choice, economyModule) {
     };
   } else {
     user.wallet -= amount;
+    _ledgerWallet(user, -(amount)); // ledger the loss (47-l3 self-heal guard)
     if (!user.stats) user.stats = {};
     user.stats.totalSpent = (user.stats.totalSpent || 0) + amount;
     trackDailyNet(user, -amount);
@@ -328,6 +343,7 @@ function diceRoll(userId, amount, economyModule) {
     }
 
     user.wallet += gain;
+    _ledgerWallet(user, gain); // ledger the gain (47-l3 self-heal guard)
     if (!user.stats) user.stats = {};
     user.stats.totalEarned = (user.stats.totalEarned || 0) + gain;
     trackDailyNet(user, gain);
@@ -348,6 +364,7 @@ function diceRoll(userId, amount, economyModule) {
     };
   } else {
     user.wallet -= amount;
+    _ledgerWallet(user, -(amount)); // ledger the loss (47-l3 self-heal guard)
     if (!user.stats) user.stats = {};
     user.stats.totalSpent = (user.stats.totalSpent || 0) + amount;
     trackDailyNet(user, -amount);
@@ -467,6 +484,7 @@ function slots(userId, amount, economyModule) {
     }
 
     user.wallet += gain;
+    _ledgerWallet(user, gain); // ledger the gain (47-l3 self-heal guard)
     user.stats.totalEarned += gain;
     trackDailyNet(user, gain);
     updateGamblingStats(userId, amount, true, economyModule);
@@ -486,6 +504,7 @@ ${result === 'JACKPOT' ? '🎊 *CONGRATULATIONS! JACKPOT!* 🎊' : '🎉 *CONGRA
     };
   } else {
     user.wallet -= amount;
+    _ledgerWallet(user, -(amount)); // ledger the loss (47-l3 self-heal guard)
     user.stats.totalSpent += amount;
     trackDailyNet(user, -amount);
     updateGamblingStats(userId, amount, false, economyModule);
@@ -589,6 +608,7 @@ function startBlackjack(userId, amount, economyModule) {
   }
   
   user.wallet -= amount;
+  _ledgerWallet(user, -(amount)); // ledger the loss (47-l3 self-heal guard)
   const ctx = beginGamblingRound(user);
   economyModule.logTransaction(userId, "Blackjack Bet", -amount, user.wallet);
   economyModule.saveUser(userId);
@@ -609,6 +629,7 @@ function startBlackjack(userId, amount, economyModule) {
     const profit = payout - amount;
 
     user.wallet += payout;
+    _ledgerWallet(user, payout); // ledger the gain (47-l3 self-heal guard)
     if (!user.stats) user.stats = {};
     if (profit > 0) {
       user.stats.totalEarned = (user.stats.totalEarned || 0) + profit;
@@ -748,6 +769,7 @@ function blackjackStand(userId, economyModule) {
     }
     profit = payout - game.bet;
     user.wallet += payout;
+    _ledgerWallet(user, payout); // ledger the gain (47-l3 self-heal guard)
     result = '🎉 DEALER BUST! YOU WIN! 🎉';
   } else if (playerValue > dealerValue) {
     won = true;
@@ -759,10 +781,12 @@ function blackjackStand(userId, economyModule) {
     }
     profit = payout - game.bet;
     user.wallet += payout;
+    _ledgerWallet(user, payout); // ledger the gain (47-l3 self-heal guard)
     result = '🎉 YOU WIN! 🎉';
   } else if (playerValue === dealerValue) {
     payout = game.bet;
     user.wallet += payout;
+    _ledgerWallet(user, payout); // ledger the gain (47-l3 self-heal guard)
     result = '🤝 PUSH (TIE) 🤝\nBet returned';
     economyModule.logTransaction(userId, "Blackjack Push", payout, user.wallet);
     economyModule.saveUser(userId);
@@ -842,6 +866,7 @@ function blackjackDouble(userId, economyModule) {
   }
   
   user.wallet -= game.bet;
+  _ledgerWallet(user, -(game.bet)); // ledger the loss (47-l3 self-heal guard)
   economyModule.logTransaction(userId, "Blackjack Double Bet", -game.bet, user.wallet);
   game.bet *= 2;
   economyModule.saveUser(userId);
@@ -976,6 +1001,7 @@ function roulette(userId, amount, bet, economyModule) {
   
   // Deduct bet IMMEDIATELY
   user.wallet -= amount;
+  _ledgerWallet(user, -(amount)); // ledger the loss (47-l3 self-heal guard)
   const ctx = beginGamblingRound(user);
   
   const result = Math.floor(Math.random() * 37); // 0-36
@@ -1018,6 +1044,7 @@ function roulette(userId, amount, bet, economyModule) {
     }
     const profit = payout - amount;
     user.wallet += payout;
+    _ledgerWallet(user, payout); // ledger the gain (47-l3 self-heal guard)
     if (!user.stats) user.stats = {};
     user.stats.totalEarned = (user.stats.totalEarned || 0) + profit;
     trackDailyNet(user, profit);
@@ -1138,6 +1165,7 @@ function crash(userId, amount, multiplierStr, economyModule) {
 
   // Apply money transaction
   user.wallet = user.wallet - amount + winnings;
+  _ledgerWallet(user, winnings - amount); // ledger the net delta (47-l3 self-heal guard)
 
   if (!user.stats) user.stats = {};
   
@@ -1253,6 +1281,7 @@ function startMines(userId, amount, mineCount, economyModule) {
   }
 
   user.wallet -= amount;
+  _ledgerWallet(user, -(amount)); // ledger the loss (47-l3 self-heal guard)
   const ctx = beginGamblingRound(user);
   economyModule.logTransaction(userId, "Mines Bet", -amount, user.wallet);
   economyModule.saveUser(userId);
@@ -1407,6 +1436,7 @@ function minesCashOut(userId, economyModule) {
   const profit = winnings - game.bet;
 
   user.wallet += winnings;
+  _ledgerWallet(user, winnings); // ledger the gain (47-l3 self-heal guard)
   if (!user.stats) user.stats = {};
   if (profit > 0) {
     user.stats.totalEarned = (user.stats.totalEarned || 0) + profit;
@@ -1503,6 +1533,7 @@ ${horses}
     }
 
     user.wallet += gain;
+    _ledgerWallet(user, gain); // ledger the gain (47-l3 self-heal guard)
     if (!user.stats) user.stats = {};
     user.stats.totalEarned = (user.stats.totalEarned || 0) + gain;
     trackDailyNet(user, gain);
@@ -1522,6 +1553,7 @@ ${horses}
     };
   } else {
     user.wallet -= amount;
+    _ledgerWallet(user, -(amount)); // ledger the loss (47-l3 self-heal guard)
     if (!user.stats) user.stats = {};
     user.stats.totalSpent = (user.stats.totalSpent || 0) + amount;
     trackDailyNet(user, -amount);
@@ -1598,6 +1630,7 @@ function lottery(userId, amount, economyModule) {
     }
 
     user.wallet += gain;
+    _ledgerWallet(user, gain); // ledger the gain (47-l3 self-heal guard)
     if (!user.stats) user.stats = {};
     user.stats.totalEarned = (user.stats.totalEarned || 0) + gain;
     trackDailyNet(user, gain);
@@ -1617,6 +1650,7 @@ function lottery(userId, amount, economyModule) {
     };
   } else {
     user.wallet -= amount;
+    _ledgerWallet(user, -(amount)); // ledger the loss (47-l3 self-heal guard)
     if (!user.stats) user.stats = {};
     user.stats.totalSpent = (user.stats.totalSpent || 0) + amount;
     trackDailyNet(user, -amount);
@@ -1715,6 +1749,7 @@ function rps(userId, amount, choice, economyModule) {
     }
 
     user.wallet += gain;
+    _ledgerWallet(user, gain); // ledger the gain (47-l3 self-heal guard)
     if (!user.stats) user.stats = {};
     user.stats.totalEarned = (user.stats.totalEarned || 0) + gain;
     trackDailyNet(user, gain);
@@ -1734,6 +1769,7 @@ function rps(userId, amount, choice, economyModule) {
     };
   } else {
     user.wallet -= amount;
+    _ledgerWallet(user, -(amount)); // ledger the loss (47-l3 self-heal guard)
     if (!user.stats) user.stats = {};
     user.stats.totalSpent = (user.stats.totalSpent || 0) + amount;
     trackDailyNet(user, -amount);
@@ -1819,6 +1855,7 @@ function penalty(userId, amount, direction, economyModule) {
 
     // Deduct bet, add net profit
     user.wallet -= amount;
+    _ledgerWallet(user, -(amount)); // ledger the loss (47-l3 self-heal guard)
     user.wallet += gain + amount; // Return bet + profit
     if (!user.stats) user.stats = {};
     user.stats.totalEarned = (user.stats.totalEarned || 0) + gain;
@@ -1839,6 +1876,7 @@ function penalty(userId, amount, direction, economyModule) {
     };
   } else {
     user.wallet -= amount;
+    _ledgerWallet(user, -(amount)); // ledger the loss (47-l3 self-heal guard)
     if (!user.stats) user.stats = {};
     user.stats.totalSpent = (user.stats.totalSpent || 0) + amount;
     trackDailyNet(user, -amount);
@@ -1917,6 +1955,7 @@ function guessNumber(userId, amount, guess, economyModule) {
     }
 
     user.wallet += gain;
+    _ledgerWallet(user, gain); // ledger the gain (47-l3 self-heal guard)
     if (!user.stats) user.stats = {};
     user.stats.totalEarned = (user.stats.totalEarned || 0) + gain;
     trackDailyNet(user, gain);
@@ -1936,6 +1975,7 @@ function guessNumber(userId, amount, guess, economyModule) {
     };
   } else {
     user.wallet -= amount;
+    _ledgerWallet(user, -(amount)); // ledger the loss (47-l3 self-heal guard)
     if (!user.stats) user.stats = {};
     user.stats.totalSpent = (user.stats.totalSpent || 0) + amount;
     trackDailyNet(user, -amount);
@@ -2044,6 +2084,7 @@ Result: ${actualResult}
     }
 
     user.wallet += gain;
+    _ledgerWallet(user, gain); // ledger the gain (47-l3 self-heal guard)
     user.stats.totalEarned += gain;
     trackDailyNet(user, gain);
     updateGamblingStats(userId, amount, true, economyModule);
@@ -2066,6 +2107,7 @@ Result: ${actualResult}
     };
   } else {
     user.wallet -= amount;
+    _ledgerWallet(user, -(amount)); // ledger the loss (47-l3 self-heal guard)
     user.stats.totalSpent += amount;
     trackDailyNet(user, -amount);
     updateGamblingStats(userId, amount, false, economyModule);
@@ -2143,6 +2185,7 @@ function plinko(userId, amount, risk, economyModule) {
   }
 
   user.wallet -= amount;
+  _ledgerWallet(user, -(amount)); // ledger the loss (47-l3 self-heal guard)
   const ctx = beginGamblingRound(user);
 
   let multiplier = getResult(tables[r], weights[r]);
@@ -2157,6 +2200,7 @@ function plinko(userId, amount, risk, economyModule) {
   const profit = winnings - amount;
 
   user.wallet += winnings;
+  _ledgerWallet(user, winnings); // ledger the gain (47-l3 self-heal guard)
   if (!user.stats) user.stats = {};
   if (profit > 0) {
     user.stats.totalEarned = (user.stats.totalEarned || 0) + profit;
@@ -2254,6 +2298,7 @@ function scratchCard(userId, amount, economyModule) {
   if (user.wallet < amount) return { success: false, message: "❌ Insufficient funds!" };
 
   user.wallet -= amount;
+  _ledgerWallet(user, -(amount)); // ledger the loss (47-l3 self-heal guard)
   const ctx = beginGamblingRound(user);
   economyModule.saveUser(userId);
 
@@ -2300,6 +2345,7 @@ function scratchCard(userId, amount, economyModule) {
   if (!user.stats) user.stats = {};
   if (winnings > 0) {
     user.wallet += winnings;
+    _ledgerWallet(user, winnings); // ledger the gain (47-l3 self-heal guard)
     if (profit > 0) {
       user.stats.totalEarned = (user.stats.totalEarned || 0) + profit;
       trackDailyNet(user, profit);
@@ -2378,25 +2424,35 @@ function cupGame(userId, amount, choice, economyModule) {
   const ball = Math.floor(Math.random() * 3) + 1;
   const won = cup === ball && !maybeForceLoss(ctx);
 
-  const rawPayout = amount * 4; // 4x payout
-  const adjustedPayout = applyEdgeToAmount(rawPayout, ctx);
-  const winnings = won ? capPayoutByDailyLimit(user, adjustedPayout) : 0;
-  const profit = winnings - amount;
+  // 💡 FIX 2026-10-31: the old code added a 4x payout WITHOUT deducting the
+  // bet on the win path (loss path deducted) - at 1-in-3 odds that is +63%
+  // player EV: an infinite money printer. penalty() got this exact fix on
+  // 2026-08 (see its comment at the top of its win branch); cupGame was missed.
+  // Now mirrors penalty()'s accounting: deduct bet, add back net profit (2x)
+  // + stake. EV = (1/3)(2 x 0.97) - (2/3) = -2% (house edge).
+  const rawGain = Math.floor(amount * 2); // 2x net profit
+  const gain = won ? capPayoutByDailyLimit(user, applyEdgeToAmount(rawGain, ctx)) : 0;
 
   if (!user.stats) user.stats = {};
   if (won) {
-    if (profit > 0) {
-      user.wallet += winnings;
-      user.stats.totalEarned = (user.stats.totalEarned || 0) + profit;
-      trackDailyNet(user, profit);
+    if (gain > 0) {
+      // Deduct bet, return stake + net profit (penalty() convention).
+      // Ledger the NET delta (+gain) once - not each intermediate write.
+      user.wallet -= amount;
+      user.wallet += gain + amount;
+      _ledgerWallet(user, gain);
+      user.stats.totalEarned = (user.stats.totalEarned || 0) + gain;
+      trackDailyNet(user, gain);
       updateGamblingStats(userId, amount, true, economyModule);
-      economyModule.logTransaction(userId, "Cup Game Won", profit, user.wallet);
+      economyModule.logTransaction(userId, "Cup Game Won", gain, user.wallet);
     } else {
+      // Daily cap hit - refund (no loss, no gain), same as penalty()
       updateGamblingStats(userId, amount, true, economyModule);
       economyModule.logTransaction(userId, "Cup Game Refund (Daily Cap)", 0, user.wallet);
     }
   } else {
     user.wallet -= amount;
+    _ledgerWallet(user, -amount);
     user.stats.totalSpent = (user.stats.totalSpent || 0) + amount;
     trackDailyNet(user, -amount);
     updateGamblingStats(userId, amount, false, economyModule);
@@ -2415,8 +2471,8 @@ ${finalCups}
 
   let outcomeMessage = '';
   if (won) {
-    if (profit > 0) {
-      outcomeMessage = `🎉 *YOU FOUND THE BALL!* 🥎\n📈 *Payout:* +${getZENI()}${winnings.toLocaleString()}\n🏆 *Net Profit:* +${getZENI()}${profit.toLocaleString()}`;
+    if (gain > 0) {
+      outcomeMessage = `🎉 *YOU FOUND THE BALL!* 🥎\n📈 *Payout:* +${getZENI()}${(gain + amount).toLocaleString()}\n🏆 *Net Profit:* +${getZENI()}${gain.toLocaleString()}`;
     } else {
       outcomeMessage = `🎉 *YOU FOUND THE BALL!* 🥎\n⚠️ *DAILY CAP REACHED!*\n🔄 *Bet Refunded:* ${getZENI()}${amount.toLocaleString()} (No loss, no gain)`;
     }
@@ -2484,6 +2540,7 @@ function wheelOfFortune(userId, amount, economyModule) {
   const profit = winnings - amount;
 
   user.wallet = user.wallet - amount + winnings;
+  _ledgerWallet(user, winnings - amount); // ledger the net delta (47-l3 self-heal guard)
   if (!user.stats) user.stats = {};
   if (profit > 0) {
     user.stats.totalEarned = (user.stats.totalEarned || 0) + profit;
