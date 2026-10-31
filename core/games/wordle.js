@@ -587,7 +587,7 @@ module.exports = {
     if (result.gameOver) {
       if (result.won) {
         // Award Money
-        const rewards = { easy: 100, medium: 200, hard: 300 };
+        const rewards = { easy: 100, medium: 200, hard: 500 };
         const amount = rewards[game.difficulty] || 200;
         economy.addMoney(senderJid, amount);
 
