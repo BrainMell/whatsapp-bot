@@ -50,29 +50,41 @@ async function approveLoan(guildMasterJid, guildId, targetJid, opts = {}) {
     if (!member || (member.role !== 'leader' && member.role !== 'officer')) {
         return { ok: false, text: '❌ Only the Guild Master (or an officer) can approve loans.' };
     }
-    const req = await GuildLoan.findOne({ guildId, playerId: targetJid, status: 'requested' }).sort({ requestedAt: -1 });
+    // 💡 FIX 2026-10-31: atomic claim. The old findOne → payout → save let two
+    // officers approving in the same tick BOTH read status:'requested' and both
+    // pay out (double payout, debt recorded once). rejectLoan already used the
+    // findOneAndUpdate claim pattern - approve does now too.
+    const req = await GuildLoan.findOneAndUpdate(
+        { guildId, playerId: targetJid, status: 'requested' },
+        { status: 'active', approvedBy: guildMasterJid, approvedAt: new Date(), dueAt: new Date(Date.now() + CFG.LOANS.TERM_MS) },
+        { new: true, sort: { requestedAt: -1 } }
+    );
     if (!req) return { ok: false, text: '❌ No pending loan request from that player.' };
 
     // fresh balance check (refreshGuildMoney re-reads DB for money-critical ops)
     const fresh = await guilds.refreshGuildMoney(guildId);
     const cap = maxLoan(fresh?.balance ?? 0);
     if (req.amount > cap) {
+        // give the request back - the rejection reason is funds, not fraud
+        await GuildLoan.updateOne({ _id: req._id, status: 'active' }, { $set: { status: 'requested' }, $unset: { approvedBy: 1, approvedAt: 1, dueAt: 1 } }).catch(() => {});
         return { ok: false, text: `❌ The bank can no longer cover this loan (cap ${cap.toLocaleString()}).` };
     }
 
     // checked debit: bank → wallet
     const guild = guilds.getGuild(guildId);
-    if ((guild?.balance || 0) < req.amount) return { ok: false, text: '❌ Guild balance changed - insufficient funds.' };
+    if ((guild?.balance || 0) < req.amount) {
+        await GuildLoan.updateOne({ _id: req._id, status: 'active' }, { $set: { status: 'requested' }, $unset: { approvedBy: 1, approvedAt: 1, dueAt: 1 } }).catch(() => {});
+        return { ok: false, text: '❌ Guild balance changed - insufficient funds.' };
+    }
     guild.balance -= req.amount;
     const persisted = await guilds.syncGuild(guildId);
-    if (!persisted) return { ok: false, text: '❌ Bank persist failed - loan not paid out.' };
+    if (!persisted) {
+        await GuildLoan.updateOne({ _id: req._id, status: 'active' }, { $set: { status: 'requested' }, $unset: { approvedBy: 1, approvedAt: 1, dueAt: 1 } }).catch(() => {});
+        return { ok: false, text: '❌ Bank persist failed - loan not paid out.' };
+    }
 
     economy.addMoney(req.playerId, req.amount, `Guild loan from ${guildId}`);
 
-    req.status = 'active';
-    req.approvedBy = guildMasterJid;
-    req.approvedAt = new Date();
-    req.dueAt = new Date(Date.now() + CFG.LOANS.TERM_MS);
     await req.save();
     return { ok: true, text: `✅ Loan approved: *${req.amount.toLocaleString()}* Zeni paid to <@${req.playerId}> from the guild bank.\n_No interest. Repay with \`${opts.prefix || '.'} guild loan repay <amt>\`._` };
 }

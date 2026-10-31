@@ -21979,9 +21979,21 @@ Admins can:
                         );
 
                         if (result.success) {
+                          // 💡 FIX 2026-10-31: settle active guild loans on KICK.
+                          // '.guild leave' settles via bankLoans.handleGuildLeave,
+                          // but kick skipped it: borrowing max then getting a
+                          // friend-officer to kick you left the loan 'active'
+                          // forever with the Zeni already in your wallet.
+                          let _kickLoanNote = '';
+                          try {
+                            const _loanSettle = await require('./rpg/guildWar/bankLoans').handleGuildLeave(result.targetJid, result.guildName);
+                            if (_loanSettle?.action === 'deducted') _kickLoanNote = `\n💳 Outstanding guild loan (*${_loanSettle.amount.toLocaleString()}*) settled from their wallet.`;
+                            else if (_loanSettle?.action === 'debt') _kickLoanNote = `\n📉 Unpaid guild loan (*${_loanSettle.amount.toLocaleString()}*) converted to personal debt.`;
+                          } catch (_loanErr) { console.error('[GuildKick] loan settlement failed:', _loanErr.message); }
+
                           const message = `💢 *GUILD KICK* 💢
 
-@${economy.getDisplayName(result.targetJid)} has been kicked from *${result.guildName}*.`;
+@${economy.getDisplayName(result.targetJid)} has been kicked from *${result.guildName}*.${_kickLoanNote}`;
 
                           await sock.sendMessage(chatId, {
                             text: BOT_MARKER + message,
