@@ -112,6 +112,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'guild pointsboard', desc: 'Leaderboard of guilds by points.', usage: 'guild pointsboard' },
     { cmd: 'guild upgrade', desc: 'Upgrade guild buildings for bonuses.', usage: 'guild upgrade <id>' },
     { cmd: 'guild perks', desc: 'View active guild perks and multipliers.', usage: 'guild perks' },
+    { cmd: 'guild hall', desc: 'Zoomed-in view of your guild hall with the emblem on the keep and your guild info panel (follows day/night).', usage: 'guild hall' },
     { cmd: 'guild info', desc: 'Comprehensive guild status dashboard.', usage: 'guild info' },
     { cmd: 'guild donate', desc: 'Donate Zeni to guild bank (earns guild XP).', usage: 'guild donate <amount>' },
     { cmd: 'guild loan', desc: 'Borrow from guild bank (7-day repayment).', usage: 'guild loan <amount> | list | repay <amount>' },

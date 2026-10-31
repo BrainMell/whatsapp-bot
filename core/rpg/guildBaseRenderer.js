@@ -1085,7 +1085,7 @@ async function renderGuildBaseImage(state, opts = {}) {
 // ═══════════════════════════════════════════════════════════════════════════
 const HALL_W = 1400, HALL_H = 1000, HALL_ZOOM = 0.78;
 async function renderGuildHallCard(state, spec = {}) {
-    const key = hashStr(JSON.stringify(['hall2', state.name, state.biome || '', state.continent || '', state.level, state.archetype, state.buildings, state.memberCount, state.emblemColor, state.emblemIcon, crestKey(state), spec]));
+    const key = hashStr(JSON.stringify(['hall2', state.name, state.biome || '', state.continent || '', state.level, state.archetype, state.buildings, state.memberCount, state.emblemColor, state.emblemIcon, crestKey(state), spec, dayNight.phaseAt()]));
     return mediaCache.cached('guildhall', key, async () => {
         try { require('./worldMapRenderer')._ensureFonts(); } catch (e) { /* default fonts */ }
         const SC = require('./structureScenes');
@@ -1106,6 +1106,7 @@ async function renderGuildHallCard(state, spec = {}) {
         const vg = ctx.createRadialGradient(HALL_W / 2, HALL_H * 0.42, HALL_H * 0.25, HALL_W / 2, HALL_H * 0.45, HALL_H * 0.95);
         vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.34)');
         ctx.fillStyle = vg; ctx.fillRect(0, 0, HALL_W, HALL_H);
+        dayNight.grade(ctx, HALL_W, HALL_H, dayNight.phaseAt());   // owner 2026-10-31: the hall card follows the day/night cycle too
         SC.drawPanel(ctx, HALL_W, HALL_H, { accent: flagCol, ...spec });
         return { buffer: cv.toBuffer('image/jpeg', { quality: 0.9 }), contentType: 'image/jpeg' };
     });
