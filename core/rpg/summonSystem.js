@@ -984,7 +984,7 @@ async function swapToMainDeck(ownerJid, backlogSummonId, deckSlot) {
   const user = economy.getUser(ownerJid);
   if (user && oldDeckSummon && user.activeSummonId === oldDeckSummon.summonId) {
     user.activeSummonId = null;
-    economy.saveUser(user);
+    economy.saveUser(user.userId); // 💡 FIX 2026-10-31: was the OBJECT (silent no-op - get() never matches an object key)
   }
 
   const backlogName = backlogSummon.nickname || registry.getSpecies(backlogSummon.species)?.name || backlogSummon.species;
@@ -1013,7 +1013,7 @@ async function moveToBacklog(ownerJid, deckSlot) {
   const user = economy.getUser(ownerJid);
   if (user && user.activeSummonId === summon.summonId) {
     user.activeSummonId = null;
-    economy.saveUser(user);
+    economy.saveUser(user.userId); // 💡 FIX 2026-10-31: was the OBJECT (silent no-op - get() never matches an object key)
   }
 
   const name = summon.nickname || registry.getSpecies(summon.species)?.name || summon.species;

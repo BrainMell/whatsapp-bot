@@ -140,7 +140,14 @@ async function hatchEgg(userId, eggId) {
   }
 
   // Consume the egg
-  inventorySystem.removeItem(userId, eggId, 1);
+  // 💡 FIX 2026-10-31: check the removal result. The old code ignored it -
+  // a double-tapped '.summon hatch' raced: message B passed hasItem while
+  // message A was parked at the getUserSummons await below, then B's
+  // removeItem failed silently and B still created a summon (2 summons, 1 egg).
+  const removed = inventorySystem.removeItem(userId, eggId, 1);
+  if (!removed || removed.success === false) {
+    return { success: false, message: `❌ You don't have a ${lootSystem.getItemInfo(eggId)?.name || eggId} anymore.` };
+  }
 
   // Create the summon
   try {
@@ -150,6 +157,8 @@ async function hatchEgg(userId, eggId) {
     });
 
     if (!summon) {
+      // 💡 FIX 2026-10-31: refund the egg - it was already consumed above.
+      inventorySystem.addItem(userId, eggId, 1).catch(() => {});
       return { success: false, message: '❌ Failed to create summon. Please report this.' };
     }
 
@@ -162,6 +171,8 @@ async function hatchEgg(userId, eggId) {
     };
   } catch (e) {
     console.error('[SummonEgg] hatchEgg failed:', e.message);
+    // 💡 FIX 2026-10-31: refund the egg on failure instead of eating it.
+    inventorySystem.addItem(userId, eggId, 1).catch(() => {});
     return { success: false, message: `❌ Hatch failed: ${e.message}` };
   }
 }

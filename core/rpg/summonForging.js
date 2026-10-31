@@ -227,7 +227,7 @@ async function forgeSummons(ownerJid, summon1Id, summon2Id) {
   if (user.summonStats) {
     user.summonStats.forged = (user.summonStats.forged || 0) + 1;
   }
-  economy.saveUser(user);  // 💡 FIX: was missing - cooldown + stats didn't persist
+  economy.saveUser(user.userId); // 💡 FIX 2026-10-31: was saveUser(user) - the OBJECT, not the id. get() never matches an object key => silent no-op, cooldown/stats never persisted
 
   // 19. Refresh resonances
   try {
