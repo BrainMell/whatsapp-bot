@@ -486,15 +486,29 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
     }
 
     const nextPlayer = state.chess.turn() === 'w' ? state.playerW : state.playerB;
+
+    // 💡 FIX 2026-10-31: checked bet settlement. removeMoney() returns false when
+    // the loser's wallet can't cover the bet (balance is only checked at challenge
+    // time - the loser can spend mid-game). The old code paid the winner regardless
+    // => Zeni minted from thin air (same class as cardSystem's auction fix).
+    // If the loser can't cover it, the payout is VOID - no money moves.
+    let betVoided = false;
+    if (gameEnded && state.bet > 0 && state.chess.isCheckmate()) {
+        const betLoser = !isWhiteTurn ? state.playerB : state.playerW;
+        const loserPaid = economy.removeMoney(betLoser, state.bet);
+        if (loserPaid) {
+            economy.addMoney(currentPlayer, state.bet);
+        } else {
+            betVoided = true;
+            console.warn(`[Chess] bet VOIDED on checkmate: loser ${betLoser} cannot cover ${state.bet} (spent mid-game)`);
+        }
+    }
+
     const caption = botMarker + `♟️ *CHESS MOVE: ${moveStr}*\n\n` +
         (gameEnded ? resultMsg : (resultMsg ? resultMsg + "\n" : "") + `👉 Next turn: @${normalizeJid(nextPlayer)}`) +
-        (state.bet > 0 && gameEnded ? `\n💰 @${normalizeJid(currentPlayer)} wins ${state.bet.toLocaleString()} Zeni from @${normalizeJid(!isWhiteTurn ? state.playerB : state.playerW)}!` : "");
+        (state.bet > 0 && gameEnded ? (betVoided ? `\n⚠️ @${normalizeJid(!isWhiteTurn ? state.playerB : state.playerW)} couldn't cover the bet - payout VOIDED!` : `\n💰 @${normalizeJid(currentPlayer)} wins ${state.bet.toLocaleString()} Zeni from @${normalizeJid(!isWhiteTurn ? state.playerB : state.playerW)}!`) : "");
 
     if (gameEnded) {
-        if (state.bet > 0 && state.chess.isCheckmate()) {
-            economy.addMoney(currentPlayer, state.bet);
-            economy.removeMoney(!isWhiteTurn ? state.playerB : state.playerW, state.bet);
-        }
         deleteGame(chatId);
     }
 
@@ -576,8 +590,14 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         const winner = (cleanJid(loser) === cleanJid(state.playerW)) ? state.playerB : state.playerW;
 
         if (state.bet > 0) {
-            economy.addMoney(winner, state.bet);
-            economy.removeMoney(loser, state.bet);
+            // 💡 FIX 2026-10-31: checked settlement - void the payout if the
+            // resigning player can't actually cover the bet (see checkmate fix).
+            const loserPaid = economy.removeMoney(loser, state.bet);
+            if (loserPaid) {
+                economy.addMoney(winner, state.bet);
+            } else {
+                console.warn(`[Chess] resign bet VOIDED: ${loser} cannot cover ${state.bet}`);
+            }
         }
 
         updateChessScore(winner, 'win');
@@ -609,11 +629,30 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
 
         if (isPlayer || isForce || isAdmin) {
             console.log(`[Chess] Termination triggered in ${chatId} by ${senderJid} (cmd: ${cmd})`);
+
+            // 💡 FIX 2026-10-31 (games forfeit rule): a PLAYER terminating a live
+            // BET match is a FORFEIT, not a neutral void - previously a losing
+            // player could dodge the stake with '.chess stop'. Mirrors the ludo
+            // forfeit system (ludo.js). Admin force-clears stay neutral.
+            let forfeitNote = "";
+            if (isPlayer && state.bet > 0) {
+                const forfeitWinner = cleanJid(senderJid) === cleanJid(state.playerW) ? state.playerB : state.playerW;
+                const loserPaid = economy.removeMoney(senderJid, state.bet);
+                if (loserPaid) {
+                    economy.addMoney(forfeitWinner, state.bet);
+                    forfeitNote = `\n💰 Forfeit: @${normalizeJid(forfeitWinner)} wins ${state.bet.toLocaleString()} Zeni.`;
+                } else {
+                    forfeitNote = `\n⚠️ Bet VOIDED (forfeiting player can't cover it).`;
+                }
+                updateChessScore(forfeitWinner, 'win');
+                updateChessScore(senderJid, 'loss');
+            }
+
             deleteGame(chatId);
             activeGames.delete(chatId); // Double-ensure memory is wiped
 
             const msg = isForce ? "🛑 Chess game has been FORCE CLEARED by admin." : "🛑 Chess game has been terminated.";
-            return sock.sendMessage(chatId, { text: botMarker + msg });
+            return sock.sendMessage(chatId, { text: botMarker + msg + forfeitNote, contextInfo: { mentionedJid: [senderJid] } });
         } else {
             return sock.sendMessage(chatId, { text: botMarker + "❌ Only players or admins can stop the game." });
         }
