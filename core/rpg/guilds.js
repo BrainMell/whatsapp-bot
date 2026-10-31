@@ -1599,6 +1599,7 @@ module.exports = {
   isGuildAdmin,
 
   getGuildLeaderboard,
+  getAllGuilds: () => (globalGuildData && globalGuildData.guilds) || {},
   tagGuildMembers,
 
   addGuildPoints,

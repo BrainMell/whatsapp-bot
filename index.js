@@ -23,6 +23,8 @@ require('./core/utils/canvasAutoGate').install();
 setTimeout(() => {
     try { require('./core/rpg/minePov').warm(); } catch (e) { /* lane optional */ }
 }, 20000).unref();
+// guild cards: pre-bake every guild x every time of day so `.j guild` is a disk read
+try { require('./core/rpg/guildCardWarmer').schedule(); } catch (e) { /* optional */ }
 
 /*
  * GLOBAL RAM TRAP - ULTRA AGGRESSIVE

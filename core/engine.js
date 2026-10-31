@@ -23010,37 +23010,15 @@ Admins can:
                           }
                         }
 
+                        // 🃏 dedicated guild card: disk-cached per guild x time-of-day, graded for the hour (see rpg/guildCard.js).
+                        // guildCardWarmer pre-bakes every guild, so this is normally a disk read.
                         let cardBuf = null;
                         try {
-                          const goService = require('./utils/goImageService');
-                          cardBuf = await goService.generatePortraitCard({
-                            kind: 'GUILDINFO',
-                            style: (() => { try { return (economy.getUser(senderJid) || {}).cardStyle || 0; } catch (e) { return 0; } })(),
-                            nickname: userGuild,
-                            sealText: `L${guildLevel}`,
-                            level: guildLevel,
-                            xpPercent: Math.max(0, Math.min(100, Math.floor((guildPoints / guildXpNeed) * 100))),
-                            hexColor: guild.emblem?.color || '',
-                            emblem: guild.emblem?.img || '',
-                            motto: guild.motto || '',
-                            caption: '',
-                            rows: [
-                              { label: 'ARCHETYPE', value: String(guild.type || 'ADVENTURER').toUpperCase() },
-                              { label: 'LEADER', value: guild.owner ? '@' + guild.owner.split('@')[0] : 'UNKNOWN' },
-                              { label: 'MEMBERS', value: `${(guild.members || []).length}/${memberCap}` },
-                              { label: 'BANK', value: `${(guild.balance || 0).toLocaleString()} ZENI` },
-                            ],
-                            buildings: [
-                              { name: 'HALL', level: (guild.buildings?.hall?.level) || 0 },
-                              { name: 'TRAINING', level: (guild.buildings?.training?.level) || 0 },
-                              { name: 'TREASURY', level: (guild.buildings?.treasury?.level) || 0 },
-                            ],
-                          });
+                          const _gcm = await require('./rpg/guildCard').render(userGuild, guild, { style: (() => { try { return (economy.getUser(senderJid) || {}).cardStyle || 0; } catch (e) { return 0; } })() });
+                          cardBuf = _gcm && _gcm.buffer;
                         } catch (e) {
                           console.error('[guild] info card failed:', e?.message || e);
                         }
-                        // 🌗 owner 2026-10-31: the dedicated guild card follows the day/night cycle like every other render
-                        if (cardBuf) cardBuf = await require('./utils/dayNightGrade').gradeBuffer(cardBuf);
 
                         if (cardBuf && cardBuf.length > 100) {
                           const infoMentions0 = [];
