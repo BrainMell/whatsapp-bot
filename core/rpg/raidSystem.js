@@ -391,6 +391,13 @@ async function resolveVotingRound() {
     // No votes - skip round (boss attacks for free)
     raid.combatLog.push(`Round ${raid.round}: No votes cast - Avatar hesitates! Boss attacks for free.`);
     await bossAttack(raid);
+    // 💡 FIX 2026-10-31: wipe check. The voted path resolves 'lost' when everyone
+    // is dead, but this path didn't - the boss could kill the last alive attackers
+    // here and the raid then sat in limbo (nobody can vote while dead) until the
+    // 24h flee timeout, with the boss hitting for free every 30s tick.
+    if (Array.isArray(raid.attackers) && raid.attackers.length > 0 && raid.attackers.every(a => a.isDead)) {
+      return await resolveRaid(raid, 'lost');
+    }
     raid.round += 1;
     raid.votingClosesAt = null;
     raid.currentVotes = [];

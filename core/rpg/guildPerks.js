@@ -248,7 +248,12 @@ function getWeekKey(date) {
   const dayNum = (d.getUTCDay() + 6) % 7; // Monday = 0
   d.setUTCDate(d.getUTCDate() - dayNum + 3); // nearest Thursday
   const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
-  const week = 1 + Math.ceil(((d - firstThursday) / 86400000 + firstThursday.getUTCDay() + 1) / 7);
+  // 💡 FIX 2026-10-31: the old ceil-based formula produced duplicate/impossible
+  // week numbers at year boundaries (verified: 2027-01-04 -> "2027-W02" instead
+  // of W01, 2021-01-01 -> "2020-W54"). Two calendar weeks sharing a key meant
+  // the weekly Abyss leaderboard never reset between them and the raid boss
+  // rotation skipped/repeated a boss. Standard ISO-8601 week number:
+  const week = 1 + Math.round(((d - firstThursday) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
   return `${d.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
 }
 
