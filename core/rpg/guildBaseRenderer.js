@@ -1084,8 +1084,61 @@ async function renderGuildBaseImage(state, opts = {}) {
 //  spec → structureScenes.drawPanel (title/subtitle/rows/actions/note/footer/banner)
 // ═══════════════════════════════════════════════════════════════════════════
 const HALL_W = 1400, HALL_H = 1000, HALL_ZOOM = 0.78;
+// ── courtyard walkers for the zoomed hall card (owner 2026-10-31: "a castle
+// with animations of people walking around and what not") — seeded ping-pong
+// paths between the courtyard cells IN FRONT of the keep, painted by the
+// shared ambient.drawWalkers villager (same painter the grounds card uses). ──
+function buildHallWalkers(w, castle, seed) {
+    try {
+        const rnd = K.mulberry32(seed + 7300);
+        const wcC = K.hexWorld(castle[0], castle[1]);
+        const baseP = w.proj(wcC.x, wcC.z, 0);                  // keep footprint centre on screen
+        const yMin = baseP.y + 26, yMax = HALL_H - 300;         // courtyard strip: in front of the keep, above the panel
+        const cells = [];
+        for (let dr = -1; dr <= 3; dr++) for (let dc = -3; dc <= 3; dc++) {
+            const c = castle[0] + dc, r = castle[1] + dr;
+            const cl = w.at(c, r);
+            if (!cl || cl.water || cl.river || cl.void) continue;
+            const hw = K.hexWorld(c, r), p = w.proj(hw.x, hw.z, 0.04);
+            if (p.x < 90 || p.x > HALL_W - 90 || p.y < yMin || p.y > yMax) continue;
+            cells.push({ c, r, x: p.x, y: p.y });
+        }
+        if (!cells.length) return [];
+        const key = (c, r) => c + ',' + r;
+        const cmap = new Map(cells.map((cl) => [key(cl.c, cl.r), cl]));
+        const nbrs = (cl) => {
+            const out = [];
+            for (let d = 0; d < 6; d++) {
+                const [nc, nr] = K.neighbor(cl.c, cl.r, d);
+                const nb = cmap.get(key(nc, nr));
+                if (nb) out.push(nb);
+            }
+            return out;
+        };
+        const TUNICS = ['#c4453a', '#3f78c4', '#d9a73a', '#4a9a5c', '#8b5aa8', '#d0703a'];
+        const pool = cells.filter((cl) => nbrs(cl).length);
+        const out = [];
+        for (let i = 0; i < 5 && pool.length; i++) {
+            let cur = pool[Math.floor(rnd() * pool.length)], prev = null;
+            const pts = [{ x: cur.x, y: cur.y }];
+            const steps = 1 + Math.floor(rnd() * 3);
+            for (let s = 0; s < steps; s++) {
+                const opts = nbrs(cur).filter((q) => q !== prev);
+                const nx = (opts.length ? opts : nbrs(cur))[Math.floor(rnd() * (opts.length || nbrs(cur).length))];
+                if (!nx) break;
+                pts.push({ x: nx.x, y: nx.y }); prev = cur; cur = nx;
+            }
+            if (pts.length < 2) continue;
+            let len = 0; const seg = [];
+            for (let q = 1; q < pts.length; q++) { const d = Math.hypot(pts[q].x - pts[q - 1].x, pts[q].y - pts[q - 1].y); seg.push(d); len += d; }
+            out.push({ pts, seg, len, ph: rnd(), tunic: TUNICS[i % TUNICS.length], hair: rnd() < 0.5 ? '#3a2a1c' : '#8a5a2a', beats: 6 + (i % 3) * 2 });
+        }
+        return out;
+    } catch (e) { return []; }
+}
+
 async function renderGuildHallCard(state, spec = {}) {
-    const key = hashStr(JSON.stringify(['hall2', state.name, state.biome || '', state.continent || '', state.level, state.archetype, state.buildings, state.memberCount, state.emblemColor, state.emblemIcon, crestKey(state), spec, dayNight.phaseAt()]));
+    const key = hashStr(JSON.stringify(['hall3-life', state.name, state.biome || '', state.continent || '', state.level, state.archetype, state.buildings, state.memberCount, state.emblemColor, state.emblemIcon, crestKey(state), spec, dayNight.phaseAt()]));
     return mediaCache.cached('guildhall', key, async () => {
         try { require('./worldMapRenderer')._ensureFonts(); } catch (e) { /* default fonts */ }
         const SC = require('./structureScenes');
@@ -1093,23 +1146,79 @@ async function renderGuildHallCard(state, spec = {}) {
         w.scale = HALL_ZOOM;
         const wc = K.hexWorld(castle[0], castle[1]);
         w.layoutFixed(HALL_W, HALL_H, wc.x, wc.z + 0.5, HALL_W / 2, (HALL_H - SC.PANEL_H) * 0.76);
-        const cv = require('canvas').createCanvas(HALL_W, HALL_H), ctx = cv.getContext('2d');
         const seed = hashStr(state.name || 'guild');
         const bi = (K.biomeInfo().biomes || {})[w.biome];
         const bd = w.biome === 'isle' ? { top: '#cfe8ef', mid: '#8fc7b2', bot: '#3f7a5c' } : bi ? { top: bi.backdrop[0], mid: bi.backdrop[1], bot: bi.backdrop[2] } : {};
-        await w.draw(ctx, { drawBackdrop: (c2) => K.paintBackdrop(c2, HALL_W, HALL_H, seed, { clouds: 6, cloudScale: HALL_ZOOM, ...bd }) });
         const archC = ARCH[state.archetype] || ARCH.ADVENTURER;
         const flagCol = (state.emblemColor && /^#[0-9a-fA-F]{3,8}$/.test(state.emblemColor)) ? state.emblemColor : archC.flag;
         const roofH = [0, 2.3, 2.2, 2.0, 4.1, 4.1][Math.max(0, Math.min(5, hall))] || 2.5;
         const bp = w.proj(wc.x, wc.z, roofH + 0.1);
-        drawBanner(ctx, bp.x, bp.y, HALL_ZOOM, flagCol, archC.flagD, state.emblemIcon || '', 0.1, await loadCrest(state));
-        const vg = ctx.createRadialGradient(HALL_W / 2, HALL_H * 0.42, HALL_H * 0.25, HALL_W / 2, HALL_H * 0.45, HALL_H * 0.95);
-        vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.34)');
-        ctx.fillStyle = vg; ctx.fillRect(0, 0, HALL_W, HALL_H);
-        dayNight.grade(ctx, HALL_W, HALL_H, dayNight.phaseAt());   // owner 2026-10-31: the hall card follows the day/night cycle too
-        SC.drawPanel(ctx, HALL_W, HALL_H, { accent: flagCol, ...spec });
+        const crest = await loadCrest(state);
+        const walkers = buildHallWalkers(w, castle, seed);
+        const doorP = w.proj(wc.x, wc.z + 1.25, 0.05);          // warm door-glow anchor (dusk/night)
+        const smokeP = w.proj(wc.x + 0.4, wc.z - 0.2, roofH + 1.3);   // keep chimney mouth
+
+        // the world is drawn ONCE into a base canvas; every frame just paints
+        // the life layers over it (Task-37 pattern — same as the grounds card)
+        const base = require('canvas').createCanvas(HALL_W, HALL_H), bctx = base.getContext('2d');
+        await w.draw(bctx, { drawBackdrop: (c2) => K.paintBackdrop(c2, HALL_W, HALL_H, seed, { clouds: 6, cloudScale: HALL_ZOOM, ...bd }) });
+
+        const paint = (cv, t) => {
+            const ctx = cv.getContext('2d');
+            ctx.drawImage(base, 0, 0);
+            drawBanner(ctx, bp.x, bp.y, HALL_ZOOM, flagCol, archC.flagD, state.emblemIcon || '', t, crest);
+            ambient.drawWalkers(ctx, walkers, t, HALL_ZOOM);          // villagers strolling the courtyard
+            ctx.save();
+            for (let i = 0; i < 4; i++) {                             // hearth smoke over the keep
+                const ph = (t + i / 4) % 1;
+                ctx.globalAlpha = 0.5 * (1 - ph);
+                ctx.fillStyle = '#d8d8de';
+                ctx.beginPath(); ctx.arc(smokeP.x + Math.sin(ph * 5 + i) * 4 * HALL_ZOOM * 2 + ph * 6, smokeP.y - ph * 42 * HALL_ZOOM * 2, (3 + ph * 7) * HALL_ZOOM * 2, 0, Math.PI * 2); ctx.fill();
+            }
+            for (let i = 0; i < 26; i++) {                            // fireflies around the keep
+                const r1 = mulberry32(seed + 900 + i)(), r2 = mulberry32(seed + 1900 + i)();
+                const ph = (t + r1) % 1;
+                ctx.globalAlpha = 0.7 * Math.sin(ph * Math.PI);
+                ctx.fillStyle = i % 3 ? '#ffffff' : '#ffe9a8';
+                ctx.beginPath();
+                ctx.arc(HALL_W * (0.05 + 0.9 * r1), HALL_H * (0.30 + 0.55 * r2) - ph * 12, 1.6 + (i % 3), 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+            ambient.drawCloudShadows(ctx, HALL_W, HALL_H, t, seed);
+            ambient.drawBirds(ctx, HALL_W, HALL_H, t, seed);
+            ambient.drawTint(ctx, HALL_W, HALL_H, t);
+            const vg = ctx.createRadialGradient(HALL_W / 2, HALL_H * 0.42, HALL_H * 0.25, HALL_W / 2, HALL_H * 0.45, HALL_H * 0.95);
+            vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.34)');
+            ctx.fillStyle = vg; ctx.fillRect(0, 0, HALL_W, HALL_H);
+            const dnPhase = dayNight.phaseAt();
+            dayNight.grade(ctx, HALL_W, HALL_H, dnPhase);             // owner 2026-10-31: the hall card follows the day/night cycle too
+            if (dnPhase === 'night' || dnPhase === 'dusk') {
+                dayNight.light(ctx, doorP.x, doorP.y, HALL_H * 0.045, '#ffcf7a', dnPhase === 'night' ? 0.5 : 0.26, false);
+                dayNight.light(ctx, doorP.x, doorP.y, HALL_H * 0.012, '#ffcf7a', dnPhase === 'night' ? 0.55 : 0.3);
+                if (dnPhase === 'night') dayNight.moonStars(ctx, HALL_W, HALL_H, { seed: 61, moonX: 0.9, moonY: 0.06, stars: 14, starAlpha: 0.7, skyH: 0.20 });
+            }
+            SC.drawPanel(ctx, HALL_W, HALL_H, { accent: flagCol, ...spec });
+        };
+
+        // animated card (owner 2026-10-31: the hall is a 2d castle scene with
+        // people walking around — same streaming raw-BGRA bake as the grounds)
+        try {
+            const f0 = require('canvas').createCanvas(HALL_W, HALL_H);
+            paint(f0, 0);
+            await breath();
+            const mp4 = await encodeRawStreamMp4({
+                first: { raw: f0.toBuffer('raw'), w: HALL_W, h: HALL_H }, count: FRAMES, frameMs: FRAME_MS, tmpPrefix: 'guildhall',
+                next: async (f) => { const fc = require('canvas').createCanvas(HALL_W, HALL_H); paint(fc, f / FRAMES); await breath(); return { raw: fc.toBuffer('raw'), w: HALL_W, h: HALL_H }; },
+            });
+            if (mp4 && mp4.length > 1000) return { buffer: mp4, contentType: 'video/mp4' };
+        } catch (e) {
+            console.error('[guildBaseRenderer] hall mp4 encode failed, JPEG fallback:', e.message);
+        }
+        const cv = require('canvas').createCanvas(HALL_W, HALL_H);
+        paint(cv, 0.1);
         return { buffer: cv.toBuffer('image/jpeg', { quality: 0.9 }), contentType: 'image/jpeg' };
-    });
+    }, { state }, { label: 'bake:guildhall', timeoutMs: 120000 });
 }
 
 module.exports = { GUILD_STRUCTS, GUILD_PLOTS, ARCH, FRAMES, renderFrame, renderGuildBaseImage, renderGuildHallCard, encodeFramesToMp4 };
