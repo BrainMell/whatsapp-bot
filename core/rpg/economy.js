@@ -2712,6 +2712,13 @@ function robUser(thiefId, victimId) {
     
     victim.wallet -= amount;
     thief.wallet += amount;
+    // 💡 FIX 2026-10-31: record ledger movement. wallet is a composited counter
+    // leaf (47-l3) - direct writes without ledgerMove() get silently reverted by
+    // the save-time self-heal whenever any ledgered delta (daily/deposit/transfer)
+    // is pending for the same user in the same save window (stolen Zeni restored
+    // while the thief keeps the gain = Zeni printed from nothing).
+    ledgerMove(thief, 'wallet', amount);
+    ledgerMove(victim, 'wallet', -amount);
     
     logTransaction(thiefId, `Robbed @${getDisplayName(victimId)}`, amount, thief.wallet);
     logTransaction(victimId, `Robbed by @${getDisplayName(thiefId)}`, -amount, victim.wallet);
@@ -2724,7 +2731,9 @@ function robUser(thiefId, victimId) {
     };
   } else {
     const fine = Math.max(500, Math.floor(thief.wallet * 0.01));
+    const preFineWallet = thief.wallet;
     thief.wallet = Math.max(0, thief.wallet - fine);
+    ledgerMove(thief, 'wallet', thief.wallet - preFineWallet); // 💡 FIX 2026-10-31: ledger the fine (see above)
 
     thief.robberyStrikes = (thief.robberyStrikes || 0) + 1;
 
@@ -2820,7 +2829,9 @@ function poisonPillAttack(attackerId, victimId) {
   const toxinExpiresAt = grantEffect(victimId, 'poison_pill', POISON_PILL.DURATION_MS);
 
   // ── the bill: payment + attacker cooldown ──
+  const prePillWallet = attacker.wallet;
   attacker.wallet = Math.max(0, attacker.wallet - POISON_PILL.COST);
+  ledgerMove(attacker, 'wallet', attacker.wallet - prePillWallet); // 💡 FIX 2026-10-31: ledger the drain (self-heal otherwise reverts it)
   logTransaction(attackerId, `Poison pill → @${getDisplayName(victimId)}`, -POISON_PILL.COST, attacker.wallet);
   scheduleSave(attackerId);
   grantEffect(attackerId, 'bug_cd', POISON_PILL.COOLDOWN_MS);
@@ -3009,11 +3020,15 @@ async function runWealthTax() {
     let remaining = tax;
     const walletTax = Math.min(walletBalance, remaining);
     if (walletTax > 0) {
+      const preWallet = user.wallet;
       user.wallet = Math.max(0, walletBalance - walletTax);
       remaining -= walletTax;
+      ledgerMove(user, 'wallet', user.wallet - preWallet); // 💡 FIX 2026-10-31: ledger the tax (self-heal otherwise reverts it)
     }
     if (remaining > 0) {
+      const preBank = user.bank;
       user.bank = Math.max(0, bankBalance - remaining);
+      ledgerMove(user, 'bank', user.bank - preBank); // 💡 FIX 2026-10-31: bank is also a composited counter leaf
     }
     scheduleSave(userId);
     totalTaxed += tax;
