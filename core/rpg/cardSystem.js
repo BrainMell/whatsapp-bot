@@ -5111,15 +5111,28 @@ async function cmdBid(senderJid, reply, args = []) {
   if (!auction) return reply(`❌  *AUCTION NOT FOUND*\n\n🔢 ⟢ *Pick:* _#${index}_`);
   if (auction.sellerId === senderJid) return reply(`❌  *NOT ALLOWED*\n\n🔨 ⟢ _You cannot bid on your own auction_`);
   if (amount <= auction.currentBid) return reply(`❌  *BID TOO LOW*\n\n💰 ⟢ *Current Bid:* ${ZENI()}${auction.currentBid.toLocaleString()}\n📈 ⟢ _Go higher to take the lead_`);
+  // 💡 FIX 2026-10-31: reject bids on expired auctions. The sweeper only runs
+  // every 60s - the old code happily accepted bids after the hammer and did a
+  // stale full-doc save that could resurrect a settled auction (status back to
+  // 'active' with auctionEndsAt in the past => settled AGAIN = double payout).
+  if (auction.auctionEndsAt && auction.auctionEndsAt.getTime() <= Date.now()) {
+    return reply(`⏱️  *AUCTION ENDED*\n\n🔨 ⟢ _This auction already closed - settlement in progress_`);
+  }
 
   const balance = economy.getBalance(senderJid);
   if (balance < amount) return reply(`❌  *INSUFFICIENT FUNDS*\n\n💰 ⟢ *Needed:* ${ZENI()}${amount.toLocaleString()}\n📉 ⟢ _Your wallet can't cover that bid_`);
 
   try {
-    auction.currentBid = amount;
-    auction.highBidderId = senderJid;
-    auction.bids.push({ bidderId: senderJid, amount, placedAt: new Date() });
-    await auction.save();
+    // 💡 FIX 2026-10-31: targeted update instead of a stale full-doc save -
+    // the update only lands if the auction is STILL active (a concurrent
+    // settlement flips it to sold/expired, and this bid then fails instead of
+    // resurrecting it).
+    const bidDoc = await CardMarket.findOneAndUpdate(
+      { _id: auction._id, status: 'active', type: 'auction' },
+      { $set: { currentBid: amount, highBidderId: senderJid }, $push: { bids: { bidderId: senderJid, amount, placedAt: new Date() } } },
+      { new: true },
+    );
+    if (!bidDoc) return reply(`⏱️  *AUCTION ENDED*\n\n🔨 ⟢ _This auction already closed - settlement in progress_`);
     return reply(`✅  *BID PLACED!*\n\n🃏 ⟢ *Card:* _${CARD_INDEX()[auction.cardId]?.cardName}_\n💰 ⟢ *Your Bid:* ${ZENI()}${amount.toLocaleString()}\n\n👑 ⟢ _You are now the high bidder_`);
   } catch (err) { return reply(`❌  *BID FAILED*\n\n📍 ⟢ _Could not place the bid — try again_`); }
 }
@@ -5192,8 +5205,26 @@ async function finalizeAuctions(sock) {
 
   for (const a of expired) {
     try {
-      await settleAuction(a);
-    } catch (err) { console.error('Finalize auction failed:', err); }
+      // 💡 FIX 2026-10-31: atomic claim before settling. The old loop settled
+      // whatever it found 'active' - overlapping sweeper passes (slow Mongo,
+      // backlog after downtime) both found the same doc and moved money TWICE
+      // (bidder debited 2x, seller credited 2x). Claim first; only the winner
+      // of the claim settles. cmdEndAuction/cmdBuyCard already use this pattern.
+      const claimed = await CardMarket.findOneAndUpdate(
+        { _id: a._id, status: 'active', type: 'auction' },
+        { $set: { status: 'pending' } },
+        { new: true },
+      );
+      if (!claimed) continue; // another pass (or the manual command) took it
+      const outcome = await settleAuction(claimed);
+      if (outcome.outcome === 'error') {
+        // give the auction back so a future pass can retry the settlement
+        await CardMarket.updateOne({ _id: claimed._id, status: 'pending' }, { $set: { status: 'active' } }).catch(() => {});
+      }
+    } catch (err) {
+      console.error('Finalize auction failed:', err);
+      await CardMarket.updateOne({ _id: a._id, status: 'pending' }, { $set: { status: 'active' } }).catch(() => {});
+    }
   }
 }
 
