@@ -693,6 +693,14 @@ function findOtherByPick(game, p, n) {
 }
 
 async function doSearch(game, p, n) {
+  // 💡 FIX 2026-10-31: one search per living guest per day (spec). p.acted was
+  // set but never checked - a player could number through every room and sweep
+  // the full clue set solo (searchIndex hands out DEEPER finds on each repeat
+  // search of the same room, rewarding exactly that).
+  if (p.acted) {
+    await privateText(game, p, '🕯 You already searched this round. One search per day - wait for the next.');
+    return true;
+  }
   const room = findRoomByPick(game, Number(n));
   if (!room) return false;
   p.acted = true;
@@ -774,6 +782,15 @@ async function doAccuse(game, p, target) {
 }
 
 async function doNightAction(game, p, choice) {
+  // 💡 FIX 2026-10-31: one night action per player. Every branch SET p.acted
+  // but nothing ENFORCED it - the killer could re-open the target picker and
+  // rewrite nightAct until dawn, the guardian/accomplice could overwrite their
+  // target, the detective could investigate the whole roster in one night.
+  // storyMode.js already guards its night actions; noir was missed.
+  if (p.acted) {
+    await privateText(game, p, '🤐 You have already acted tonight. Wait for dawn.');
+    return true;
+  }
   const c = String(choice);
   if (p.role === 'KILLER') {
     if (game.murders >= MAX_MURDERS || /^k$/i.test(c)) {

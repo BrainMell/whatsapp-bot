@@ -164,6 +164,7 @@ class LudoGame {
     this.lastRoll = 0;
     this.consecutiveSixes = 0;
     this.hasExtraTurn = false;
+    this.awaitingMove = false; // 💡 FIX 2026-10-31: reroll guard
     // FIX 2026-09-16: forfeit system - every abandonment path marks the
     // leaver here; their pieces stop existing for turns/captures/walls.
     this.forfeited = new Set();
@@ -278,6 +279,7 @@ class LudoGame {
   rollDice() {
     const roll = Math.floor(Math.random() * 6) + 1;
     this.lastRoll = roll;
+    this.awaitingMove = true; // 💡 FIX 2026-10-31: a live roll now exists - no rerolls until it resolves
     this.diceHistory.push({ player: this.getCurrentPlayer().fullJid, roll, time: Date.now() });
 
     if (roll === 6) {
@@ -450,6 +452,7 @@ class LudoGame {
   }
 
   nextTurn() {
+    this.awaitingMove = false; // 💡 FIX 2026-10-31: the roll resolved (moved/burned/no-move)
     if (this.hasExtraTurn) {
       this.hasExtraTurn = false;
       return;
@@ -621,6 +624,13 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
     if (!game) return { success: false, message: BOT_MARKER + "❌ No active Ludo game!" };
     if (normalizeJid(game.getCurrentPlayer().fullJid) !== normalizeJid(senderJid)) return { success: false, message: BOT_MARKER + "❌ Not your turn!" };
     if (game.isForfeited(game.getCurrentPlayer())) return { success: false, message: BOT_MARKER + "❌ You have forfeited this game!" };
+    // 💡 FIX 2026-10-31: no rerolls. rollDice() used to overwrite lastRoll with
+    // nothing blocking a second roll, so a player could spam '.ludo roll' until
+    // the desired face came up, then move (deterministic dice in a game paying
+    // Zeni; also defeated the 3-sixes burn rule).
+    if (game.awaitingMove && game.lastRoll && game.getMovablePieces(game.getCurrentPlayer()).length > 0) {
+      return { success: false, message: BOT_MARKER + `❌ You already rolled *${game.lastRoll}* - move a piece first (no rerolls)!` };
+    }
 
     const rollResult = game.rollDice();
     game.resetTimeout(sock);
@@ -641,6 +651,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
       message += `Next turn: @${economy.getDisplayName(game.getCurrentPlayer().fullJid)}`;
     } else if (movablePieces.length === 0) {
       message += `❌ No movable pieces!\n\n`;
+      game.awaitingMove = false; // 💡 FIX 2026-10-31: nothing to move - re-roll (extra turn) or hand over is legal
       if (rollResult.extraTurn) {
         message += `🎲 But you rolled a 6! Roll again!`;
         game.hasExtraTurn = true;
