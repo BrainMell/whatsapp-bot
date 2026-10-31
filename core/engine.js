@@ -8948,6 +8948,42 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         // replays the same key.id after reconnects/retries — each replay
         // used to re-run the whole command pipeline (double sends).
         const _processedMsgIds = new Set();
+        // 🧾📛 one wrapper on sock.sendMessage (owner 2026-10-31):
+        //  1) every text the bot posts that is NOT Joker's own chatting is noted as a command card, so Joker can tell
+        //     "the bot's command output" apart from "me talking" ("thanks for the rating" bug);
+        //  2) any "@<digits>" in outgoing text that is NOT a real mention (reply targets are deliberately not pinged, so it
+        //     rendered as a raw number) is swapped for the person's name. Fixes ~60 commands at once.
+        if (!sock.__sendWrap) {
+          sock.__sendWrap = true;
+          const _origSend = sock.sendMessage.bind(sock);
+          sock.sendMessage = async (jid, content, opts) => {
+            try {
+              if (content && typeof content === "object" && !personaEngine.isPersonaContent(content)) {
+                const _fix = (txt) => {
+                  const ment = new Set([...(content.mentions || []), ...(content.contextInfo?.mentionedJid || [])].map((j) => String(j).split("@")[0].split(":")[0]));
+                  return String(txt).replace(/@(\d{8,16})\b/g, (whole, dg) => {
+                    if (ment.has(dg)) return whole;
+                    let nm = null;
+                    for (const suf of ["@s.whatsapp.net", "@lid"]) {
+                      try { nm = nm || personaEngine.bestName(jid, dg + suf, null) || economy.getDisplayName(dg + suf); } catch (_) {}
+                    }
+                    return nm && !/^\d{6,}$/.test(String(nm)) ? String(nm) : whole;
+                  });
+                };
+                if (typeof content.text === "string" && content.text.includes("@")) content = { ...content, text: _fix(content.text) };
+                else if (typeof content.caption === "string" && content.caption.includes("@")) content = { ...content, caption: _fix(content.caption) };
+              }
+            } catch (_) { /* never block a send */ }
+            const r = await _origSend(jid, content, opts);
+            try {
+              if (content && typeof content.text === "string" && !personaEngine.isPersonaContent(content) && (enabledChats.has(jid) || personaEngine.isListening(jid))) {
+                personaEngine.noteBotOutput(jid, content.text);
+              }
+            } catch (_) {}
+            return r;
+          };
+        }
+
         sock.ev.on("messages.upsert", async ({ messages, type }) => {
           if (type !== "notify" && type !== "append") return;
           global.waLastInbound = global.waLastInbound || {};
@@ -33783,22 +33819,6 @@ _(or reply to their message)_
                   // `.on` in the DM to turn the AI on for that conversation.
                   const isDM = !chatId.endsWith("@g.us");
                   const isBotEnabled = enabledChats.has(chatId);
-                  // 🧾 owner 2026-10-31: Joker said "thanks for the rating" after a .j rate card because he never knew the
-                  // bot posted it. Every text the bot sends that is NOT his own chatting is now noted as a command card,
-                  // so he can tell "the bot's command output" apart from "me talking".
-                  if (!sock.__personaCardWrap) {
-                    sock.__personaCardWrap = true;
-                    const _origSend = sock.sendMessage.bind(sock);
-                    sock.sendMessage = async (jid, content, opts) => {
-                      const r = await _origSend(jid, content, opts);
-                      try {
-                        if (content && typeof content.text === "string" && !personaEngine.isPersonaContent(content) && (enabledChats.has(jid) || personaEngine.isListening(jid))) {
-                          personaEngine.noteBotOutput(jid, content.text);
-                        }
-                      } catch (_) {}
-                      return r;
-                    };
-                  }
                   // 👂 listening chats are observed even when the AI is off (see `.j listen`)
                   const _listenOnly = !isBotEnabled && !isDM && personaEngine.isListening(chatId);
 

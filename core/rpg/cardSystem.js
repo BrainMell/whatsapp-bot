@@ -1529,7 +1529,7 @@ async function eshopSetPrice(slot, price) {
  * Buy a card from the eShop using event tokens.
  * Anyone can use this.
  */
-// 💡 2026-10-29 (owner): ONE event card per person, and a confirmation before the tokens are spent.
+// 💡 2026-10-29 (owner): confirmation before the tokens are spent. (2026-10-31: the one-card-per-person limit was removed.)
 const _eshopPending = new Map();   // sender -> { slot, ts }   (first `eshop buy <slot>` arms it, `... confirm` completes it)
 const _eshopBusy = new Set();      // senders mid-purchase (blocks parallel double buys)
 const ESHOP_CONFIRM_MS = 90 * 1000;
@@ -1555,18 +1555,7 @@ async function _eshopBuyInner(senderJid, slot, confirmed) {
     return { success: false, message: `🛑 *SOLD OUT* - *${entry.cardName}* (slot ${slot}) was already bought. Event cards only sell once.` };
   }
 
-  // one event card per person: they already bought from this shop (deck record or a copy in their collection)
-  const variants = await cardOwnerVariants(senderJid);
-  const mine = inst.eshopDeck.find(e => e && e.sold && e.soldTo && variants.includes(e.soldTo));
-  let ownedName = mine && mine.cardName;
-  if (!ownedName) {
-    const ids = inst.eshopDeck.filter(Boolean).map(e => e.cardId);
-    const have = ids.length ? await UserCard.findOne({ ...(await ownerOf(senderJid)), cardId: { $in: ids } }).lean() : null;
-    if (have) { const hc = inst.eshopDeck.find(e => e && e.cardId === have.cardId); ownedName = hc ? hc.cardName : 'an event card'; }
-  }
-  if (ownedName) {
-    return { success: false, message: `🚫 *ONE EVENT CARD PER PERSON*\n\nYou already have *${ownedName}* from this event shop - everyone can only take one.` };
-  }
+  // (owner 2026-10-31: the one-event-card-per-person rule was scrapped - people can buy as many cards as they can afford)
 
   // confirmation step
   const pend = _eshopPending.get(senderJid);
@@ -1575,7 +1564,7 @@ async function _eshopBuyInner(senderJid, slot, confirmed) {
     return {
       success: false,
       message: `⚠️ *CONFIRM PURCHASE*\n\n🎁 *${entry.cardName}* - _${entry.anime}_\n🎫 Price: *${entry.price}* tokens (you have ${economy.getEventTokens(senderJid)})\n\n` +
-        `📌 *Rules:*\n• You can only buy *ONE* event card - this is your only pick\n• Each card sells *once* - nobody else can get it after you\n• All sales are final\n\n` +
+        `📌 *Rules:*\n• Each card sells *once* - nobody else can get it after you\n• All sales are final\n\n` +
         `✅ To buy it, send: \`${P()} eshop buy ${slot} confirm\` (within 90s)`
     };
   }
