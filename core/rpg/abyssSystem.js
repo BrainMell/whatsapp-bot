@@ -1060,28 +1060,15 @@ async function processSkip(userId) {
   let msg = `⏭️ You skip floor ${run.currentFloor}.\n`;
   run.currentFloor += 1;
   const nextEncounter = generateFloorEncounter(run.currentFloor);
-  let skipLoreDrop = null; // 💡 2026-09-20: out-of-band, own message box
-  if (nextEncounter.type === 'combat') {
-    run.currentEnemy = nextEncounter.enemy;
-    run.currentEncounterType = 'combat';
-    run.currentEncounterData = null;
-    run.packQueue = Array.isArray(nextEncounter.packQueue) ? nextEncounter.packQueue : [];
-    msg += `\n🕳️ *Floor ${run.currentFloor}* - ${nextEncounter.enemy.name}\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n${run.packQueue.length ? `👥 *PACK FIGHT* - ${run.packQueue.length + 1} enemies, one after another (no HP reset between them)!\n` : ''}_Attack with \`${P()} combat attack\`_`;
-    // 💡 LORE DROP: opener beat / humanoid bark (one max per reply)
-    skipLoreDrop = _encounterIntroDrop(nextEncounter) || null;
-  } else if (nextEncounter.type === 'treasure') {
-    run.currentEnemy = null;
-    run.currentEncounterType = 'treasure';
-    run.currentEncounterData = nextEncounter.treasure;
-    msg += `\n${nextEncounter.treasure.icon} *Floor ${run.currentFloor}* - ${nextEncounter.treasure.name}\n_Collect with \`${P()} abyss collect\`_`;
-    skipLoreDrop = _encounterIntroDrop(nextEncounter) || null;
-  } else if (nextEncounter.type === 'event') {
-    run.currentEnemy = null;
-    run.currentEncounterType = 'event';
-    run.currentEncounterData = nextEncounter.event;
-    msg += `\n${_eventFloorText(nextEncounter.event, run.currentFloor)}`;
-    skipLoreDrop = _encounterIntroDrop(nextEncounter) || null;
-  }
+  // 💡 FIX 2026-10-31: processSkip was the ONE advance handler still on the old
+  // inline combat|treasure|event chain (processTreasure/processEventChoice moved
+  // to the shared applier on 2026-08-31). A wild_summon roll (10% of non-boss
+  // floors) fell through WITHOUT setting anything, so the run kept the PREVIOUS
+  // floor's encounterType/data - the same treasure could be collected again
+  // (loot duplication) and the old event re-chosen.
+  const __next = applyNextEncounter(run, nextEncounter);
+  msg += __next.msg;
+  const skipLoreDrop = __next.loreDrop; // out-of-band, own message box
 
   await run.save();
   return { success: true, message: msg, run, loreDrop: skipLoreDrop };
