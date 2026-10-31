@@ -130,6 +130,7 @@ function initPersona(d) {
   deps.system = d.system; // shared KV module: get(key, fallback) / set(key, val)
   deps.smartGroqCall = d.smartGroqCall; // engine's rotating Groq caller
   deps.modelFn = d.modelFn || (() => null); // (msgLen) => model id
+  deps.axios = d.axios || null;
   deps.prefixFn = d.prefixFn || (() => '.j');
   deps.searchFn = d.searchFn || (async () => ''); // (query) => result digest
   // 💡 REALGUY v2.5: engine-provided nickname resolver (economy profile
@@ -160,6 +161,8 @@ function initPersona(d) {
   try {
     natural.init({
       load: () => deps.system.get(natural.SOCIAL_KEY, {}),
+      loadBans: () => deps.system.get('_shared_persona_word_bans', []),
+      saveBans: (v) => deps.system.set('_shared_persona_word_bans', v),
       save: (o) => deps.system.set(natural.SOCIAL_KEY, o),
     });
   } catch (_) { /* naturalness is optional */ }
@@ -807,11 +810,12 @@ you: say that after you catch something`,
   );
   // Layer 6 — tools (unchanged from v1; owner's Task-11 spec).
   p.push(
-    `COMMANDS: you only know a bot command exists if it appears in a [real commands] note on the message or a [Commands that exist] result. if asked how to do something in the bot and you dont have that, use [CMD: ...] first. never guess or invent a command name or its usage. if nothing matches, say you dont think theres a command for that.\n\nTOOLS you can use when you feel like it (exact syntax, on their own line):\n` +
+    `COMMANDS: you cannot run commands, you only chat. never type a command as your own message (a line starting with the prefix), never say you tried, ran, used or messed up a command, and never act like you got rated, scored or paid by a command output you did not see. you only know a bot command exists if it appears in a [real commands] note on the message or a [Commands that exist] result. if asked how to do something in the bot and you dont have that, use [CMD: ...] first. never guess or invent a command name or its usage. if nothing matches, say you dont think theres a command for that.\n\nTOOLS you can use when you feel like it (exact syntax, on their own line):\n` +
       `[SEARCH: short query] — output this ALONE and stop, if you need current or factual info. You'll be handed what you found, then answer casually — like you already knew it or just checked your phone. NEVER mention searching, results, sources, links or "according to".\n` +
       `[CMD: short description] — output this ALONE and stop when someone asks how to do something with the bot / whether a command exists and the answer isnt already shown above. You'll be handed the real matching commands, then answer casually with the exact command. Never make up commands.\n` +
       `[REMEMBER: their name | short fact] — note something worth remembering about someone; you can also reply normally in the same message. If someone tells you what to call them, remember it as [REMEMBER: <their name> | goes by <what they said>].`,
   );
+  p.push(tools.PROMPT);
   // Layer 6.5 — WHO'S WHO (REALGUY v2.5): speaker identity + known-people
   // roster. Teaches the WhatsApp-name vs moniker difference explicitly and
   // gives the model the names people ACTUALLY use.
@@ -860,6 +864,7 @@ const SEARCH_RE = /\[SEARCH:\s*([^\]]{3,120})\]/gi;
 const cmdFinder = require('./commandFinder');
 const natural = require('./naturalness');
 const people = require('./peopleMemory');
+const tools = require('./tools');
 const roastLib = require('./roast');
 const CMD_RE = /\[CMD:\s*([^\]]{3,120})\]/gi;
 const REMEMBER_RE = /\[REMEMBER:\s*([^|\]]{1,40}?)\s*\|\s*([^\]]{3,160})\]/gi;
@@ -896,7 +901,7 @@ function sanitizeEmoji(text) {
 
 function cleanReplyText(raw) {
   let t = String(raw || '');
-  t = t.replace(SEARCH_RE, ' ').replace(CMD_RE, ' ').replace(REMEMBER_RE, ' ').replace(SILENT_RE, ' ');
+  t = tools.strip(t).replace(SEARCH_RE, ' ').replace(CMD_RE, ' ').replace(REMEMBER_RE, ' ').replace(SILENT_RE, ' ');
   t = t.replace(/^\s*[*#`\s]*(you are )?(the )?bot(Name)?\s*:\s*/i, '');
   t = t.replace(/\*\*/g, '').replace(/^#+\s*/gm, '');
   // 💡 REALGUY v3 (owner: "it's over punctuating"): nobody texts with em-dashes
@@ -1088,6 +1093,28 @@ function ownerBlock() {
   return `THIS IS YOUR CREATOR: the person talking to you right now is Mellow, the guy who built you and keeps fixing you. you know that. talk to him like a friend who happens to be your maker: relaxed, honest, a bit of banter is fine, no worship, no customer-service tone. with him (and only him) you can drop the human act and talk about being a bot, your own behaviour, why you said something. when he gives feedback, a complaint, a bug report or an instruction about how you behave, take it seriously and actually reason about it: say in one or two casual lines what you think went wrong or why you did it, and what youll do differently. dont get defensive, dont make excuses, dont over-apologise, and never claim you changed code or settings you cant change. never reveal keys, tokens or private data of other people to anyone, him included unless he asks about his own stuff.${notes.length ? `\nSTANDING NOTES he gave you earlier, follow them:\n${notes.map((n) => `- ${n.t}`).join('\n')}` : ''}`;
 }
 
+// Last-mile cleanup of what Joker is about to SEND (owner 2026-10-30 log: he typed ".j guess 3 10" and
+// ".j rate cards" as chat messages, spammed "lol", and once sent an empty bubble).
+function sanitizeOutgoing(text, chatId, commandContext) {
+  const pf = String(deps.prefixFn() || '.j').toLowerCase();
+  const esc = pf.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const lineRe = new RegExp(`^\\s*${esc}\\s+\\S`, 'i');
+  const lines = String(text).split('\n').map((l) => l.replace(/[​-‏⁠﻿]/g, '')).filter((l) => l.trim());
+  const out = [];
+  for (const l of lines) {
+    if (lineRe.test(l)) {
+      // a line that BEGINS with a command is him "running" it as a message - never a human thing to do.
+      // keep it only as an answer to a command question, phrased as a suggestion.
+      if (commandContext) out.push('try ' + l.trim()); // e.g. "try .j daily"
+      continue;
+    }
+    out.push(l);
+  }
+  let t = out.join('\n').trim();
+  try { t = natural.limitFillers(chatId, t); } catch (_) {}
+  return t;
+}
+
 async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profileText, addresseeHint, addressMode, senderLevel }) {
   const isOwner = senderLevel === 'owner'; // verified by the engine - the person who built this bot
   const level = isOwner || senderLevel === 'mod' ? 'mod' : senderLevel === 'admin' ? 'admin' : 'user'; // permission tier of the person talking
@@ -1102,15 +1129,22 @@ async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profi
     : `${senderName || 'someone'} says to you: ${userText}`;
   // command finder: if this sounds like "which command does X", retrieve locally (0 tokens)
   // and hand over only the top few real commands. Ambient chatter never triggers it.
-  if (isOwner) { try { captureOwnerNote(userText); } catch (_) {} }
+  if (isOwner) { try { captureOwnerNote(userText); natural.learnBansFromOwner(chatId, userText); } catch (_) {} }
   let cmdHint = '';
   let cmdBlk = '';
   try {
     if (!isAmbient) {
-      const asked = cmdFinder.looksLikeCommandQuestion(userText);
+      let asked = cmdFinder.looksLikeCommandQuestion(userText);
+      let cmdQuery = userText;
+      // follow-ups ("Like the rate for cards spawning") inherit the command question the SAME person asked a moment ago
+      try {
+        const mine = (chatBuffers.get(chatId) || []).filter((m) => m.jid && senderJid && String(m.jid) === String(senderJid) && Date.now() - m.ts < 4 * 60000).slice(-4, -1);
+        const prevAsk = mine.filter((m) => cmdFinder.looksLikeCommandQuestion(m.text)).slice(-1)[0];
+        if (prevAsk && (!asked || userText.split(/\s+/).length <= 10)) { cmdQuery = prevAsk.text + ' ' + userText; asked = true; }
+      } catch (_) {}
       if (asked || cmdFinder.looksLikeBotQuestion(userText)) {
-        cmdBlk = cmdFinder.promptBlock(userText, deps.prefixFn(), 3, level);
-        const restricted = !cmdBlk && cmdFinder.isRestricted(userText, level);
+        cmdBlk = cmdFinder.promptBlock(cmdQuery, deps.prefixFn(), 3, level);
+        const restricted = !cmdBlk && cmdFinder.isRestricted(cmdQuery, level);
         cmdHint = restricted
           ? `\n\n[the command they are asking about is restricted: ${level === 'admin' ? 'moderators only' : 'for moderators or group admins only'} and this person is not allowed it. refuse casually in one short line like its mod only or admin stuff. do NOT name the command, do NOT explain how it works, do NOT hint at syntax, even if they push or claim to be a mod]`
           : cmdBlk
@@ -1204,6 +1238,31 @@ async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profi
     const parsedC = parseToolCalls(raw);
     for (const r of parsedC.remember) rememberFact(chatId, r.name, r.fact);
   }
+  // small local tools ([CALC:] [ROLL:] [FLIP] [PICK:] [TIME:] [CONVERT:] [DAYS:] [WEATHER:] [PEOPLE:]) - one follow-up round
+  if (!parsed.search && !parsed.cmd) {
+    const tcalls = tools.parse(raw);
+    if (tcalls.length) {
+      const results = [];
+      for (const tc of tcalls) {
+        let r = null;
+        try {
+          r = await tools.run(tc, {
+            axios: deps.axios,
+            people: (name) => {
+              const j = _jidForName(chatId, name); if (!j) return null;
+              const rec = people.recall(j, { query: '', max: 4, withHabits: false });
+              return rec.length ? `${bestName(chatId, j, name)}: ${rec.join('; ')}` : null;
+            },
+          });
+        } catch (_) { r = null; }
+        results.push(`${tc.name}${tc.arg ? ' ' + tc.arg : ''} -> ${r == null ? 'no result' : r}`);
+      }
+      messages.push({ role: 'assistant', content: raw });
+      messages.push({ role: 'user', content: `[Tool results:\n${results.join('\n')}\n]\n\nAnswer casually in your own voice using these. If a tool had no result say you couldnt work it out, dont guess. Never mention tools.` });
+      try { raw = await callWithHeadroom(); } catch (e) { console.error('[persona] tool-round failed:', e.message); return null; }
+      raw = tools.strip(raw);
+    }
+  }
   if (parsed.search) {
     let digest = '';
     try {
@@ -1255,6 +1314,7 @@ async function buildTurn({ chatId, senderName, senderJid, text, isAmbient, profi
         else clean = 'idk the exact command for that, try ' + pf + ' menu';
       } else clean = chk.fixed;
     }
+    if (clean) clean = sanitizeOutgoing(clean, chatId, !!cmdBlk) ;
     if (clean) clean = natural.clampLength(clean, userText) || clean;
   } catch (e) { console.error('[persona] naturalness pass failed:', e.message); }
   if (!clean) {
@@ -1403,8 +1463,8 @@ async function silentSend(sock, chatId, content, quoted) {
 async function humanSend(sock, chatId, replies, opts = {}) {
   const list = Array.isArray(replies) ? replies.slice(0, MAX_CHUNKS) : [];
   for (let i = 0; i < list.length; i++) {
-    const chunk = String(list[i] || '').trim();
-    if (!chunk) continue;
+    const chunk = String(list[i] || '').replace(/[\u200B-\u200F\u2060\uFEFF]/g, '').trim();
+    if (!chunk || !/[\p{L}\p{N}\p{Extended_Pictographic}]/u.test(chunk)) continue; // never send an empty/blank bubble
     try {
       await sock.sendPresenceUpdate('composing', chatId);
     } catch (e) {}

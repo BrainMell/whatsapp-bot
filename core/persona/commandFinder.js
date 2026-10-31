@@ -28,6 +28,7 @@ const SYN = {
   group: ['gc', 'chat'], admin: ['mod', 'moderator', 'staff'], mod: ['moderator', 'admin', 'staff'], mute: ['silence', 'timeout'],
   warn: ['warning', 'strike'], link: ['url', 'antilink'], spam: ['antispam', 'flood'], status: ['gstatus', 'story'],
   profile: ['me', 'whois', 'stats', 'info'], stats: ['profile', 'level', 'rank', 'info'], level: ['xp', 'rank', 'exp', 'progression'], xp: ['level', 'exp', 'rank'],
+  rate: ['interval', 'frequency', 'speed', 'chance'], spawn: ['spawnset', 'spawninfo', 'appear', 'drop'], frequency: ['rate', 'interval'], interval: ['rate', 'frequency', 'spawnset'],
   rank: ['level', 'leaderboard', 'tier'], leaderboard: ['lb', 'top', 'rank', 'ranking'], top: ['leaderboard', 'lb', 'rank'],
   daily: ['reward', 'claim', 'streak'], reward: ['daily', 'claim', 'prize', 'bonus'], claim: ['daily', 'reward', 'collect'],
   guild: ['party', 'clan', 'team', 'guilds'], party: ['guild', 'team', 'group'], clan: ['guild'], summon: ['pet', 'familiar', 'companion', 'minion'], pet: ['summon', 'companion'],
@@ -93,6 +94,7 @@ const INTENTS = [
   [/\b(coin ?flip|flip a coin|heads or tails)\b/, ['flip', 'cf']],
   [/\b(fish(ing)?)\b/, ['fish']], [/\b(mine|mining|ores?)\b/, ['mine']], [/\b(hunt(ing)?|animals?)\b/, ['hunt']],
   [/\b(world map|atlas|realms?)\b/, ['world']],
+  [/\bspawn(ing|s)?\b.*\b(rate|speed|interval|often|frequency|time|timer|change|set)\b|\b(rate|speed|interval|how often|frequency)\b.*\b(spawn|spawning|spanw\w*)\b|\bcards?\b.*\b(spawn|spanw)\w*\b.*\b(rate|often|speed)\b/, ['spawnset', 'spawninfo']],
   [/\bmod(erator)?s?\b.*\b(commands?|menu|terminal|panel|list|tools?)\b|\b(commands?|menu|panel)\b.*\b(for|of) (the )?(mods?|moderators?|admins?)\b/, ['mod']],
   [/\b(commands?|menu|help|what can you do|list of)\b/, ['menu', 'help']],
   [/\b(nick ?name|rename|change my name)\b/, ['nickname']],
@@ -141,7 +143,7 @@ function lev(a, b) {
   if (Math.abs(a.length - b.length) > 2) return 9;
   const dp = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
   for (let j = 1; j <= b.length; j++) dp[0][j] = j;
-  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) { dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) dp[i][j] = Math.min(dp[i][j], dp[i - 2][j - 2] + 1); }
   return dp[a.length][b.length];
 }
 
@@ -153,6 +155,14 @@ function find(query, k = 3, level = 'mod') {
 /** like find() but also reports when the best match was off-limits for this level */
 function findRaw(query, k = 3, level = 'mod') {
   const ix = _idx || build();
+  // typo repair: unknown words get snapped to the nearest known word (spanwing -> spawn)
+  const vocab = ix.vocab || (ix.vocab = [...ix.df.keys()]);
+  const fixedQ = String(query).split(/\s+/).map((w) => {
+    const lw = w.toLowerCase().replace(/[^a-z0-9]/g, ''); if (lw.length < 5 || STOP.has(lw) || ix.df.has(STEM(lw))) return w;
+    let best = null, bd = 3; for (const v of vocab) { if (Math.abs(v.length - lw.length) > 3) continue; const dd = lev(v, STEM(lw)); if (dd < bd) { bd = dd; best = v; } }
+    return best && bd <= 2 ? best : w;
+  }).join(' ');
+  query = fixedQ;
   const base = terms(query);
   if (!base.length && !INTENTS.some(([re]) => re.test(String(query).toLowerCase()))) return [];
   // query terms: originals weight 1, synonyms 0.45
@@ -173,11 +183,11 @@ function findRaw(query, k = 3, level = 'mod') {
     for (const t of tok(query)) {
       if (t.length < 3 || STOP.has(t)) continue;
       for (const n of d.names) {
-        if (n === t) sc += 6; else if (t.length > 4 && lev(n, t) === 1) sc += 3.5; else if (t.length > 5 && lev(n, t) === 2) sc += 1.5;
+        if (n === t) sc += 6; else if (t.length >= 4 && n.length > t.length && (n.startsWith(t) || n.includes(t))) sc += 4.5; else if (t.length > 4 && lev(n, t) === 1) sc += 3.5; else if (t.length > 5 && lev(n, t) === 2) sc += 1.5;
       }
     }
     // curated intents: big boost for the commands the phrase is known to mean
-    for (const [re, names] of INTENTS) { if (re.test(ql) && d.names.some((n) => names.includes(n) || names.includes(n.replace(/\s*[\[<(].*$/, '')))) { sc += 9; break; } }
+    for (const [re, names] of INTENTS) { if (re.test(ql) && d.names.some((n) => names.includes(n) || names.includes(n.replace(/\s*[\[<(].*$/, '')))) { sc += 14; break; } }
     if (sc > 0) hits.push({ tier: d.tier, cmd: d.cmd, cat: d.cat, desc: d.desc, usage: d.usage, score: sc });
   }
   hits.sort((a, b2) => b2.score - a.score);

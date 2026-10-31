@@ -176,4 +176,59 @@ function clampLength(reply, userText) {
   return out;
 }
 
-module.exports = { init, noteMessage, noteOwnReply, repetition, situation, clampLength, SOCIAL_KEY };
+
+// ── filler limiter + owner bans (owner 2026-10-30: "you really like saying lol", it never stopped) ──
+// Telling a model to stop saying a word doesn't work reliably, so it is enforced in code:
+//   * stock fillers (lol, lmao, bro...) are allowed at most once per ~6 of his replies per chat
+//   * words the owner told him to drop are removed from every reply, for a day (persisted)
+const FILLERS = ['lol', 'lmao', 'lmfao', 'haha', 'bro', 'dude', 'bruh', 'fr', 'ngl', 'tbh', 'lowkey', 'fam'];
+const BANS_KEY = '_shared_persona_word_bans';
+const BAN_TTL = 24 * 3600 * 1000;
+function bans() {
+  try {
+    const v = (store && store.loadBans && store.loadBans()) || [];
+    return (Array.isArray(v) ? v : []).filter((b) => Date.now() - b.ts < BAN_TTL);
+  } catch { return []; }
+}
+function addBan(word) {
+  const w = String(word || '').toLowerCase().replace(/[^a-z']/g, '');
+  if (w.length < 2 || w.length > 14) return false;
+  const list = bans().filter((b) => b.w !== w); list.push({ w, ts: Date.now() });
+  try { store && store.saveBans && store.saveBans(list.slice(-20)); } catch (_) {}
+  return true;
+}
+/** owner said "stop saying X" / "turn it down" -> ban the word (or his most overused filler) */
+function learnBansFromOwner(chatId, text) {
+  const t = String(text || '').toLowerCase();
+  let hit = false;
+  const m = /\b(?:stop|quit|dont|don't|do not|never|no more|enough)\s+(?:with\s+)?(?:saying|using|typing|spamming|say|use)\s+(?:the word\s+|so much\s+|that\s+)?["'“]?([a-z']{2,14})/.exec(t);
+  if (m && !/^(that|it|this|the|so|too|those|these)$/.test(m[1])) hit = addBan(m[1]) || hit;
+  if (!hit && /\b(turn (it|that|them) down|tone (it|that) down|too (much|many)|so (much|many)|less of (it|that)|ease off|calm down with|cut (it|that) out|overdoing|over ?using|keep saying)\b/.test(t)) {
+    // which filler has he been overusing lately? ban that one
+    const prev = (own.get(chatId) || []).slice(-8).join(' ');
+    const named = FILLERS.find((f) => new RegExp(`\\b${f}\\b`).test(t)); // owner named it ("saying lol so much")
+    let pick = named;
+    if (!pick) {
+      const counts = FILLERS.map((f) => [f, (prev.match(new RegExp(`\\b${f}\\b`, 'g')) || []).length]).sort((a, b) => b[1] - a[1]);
+      if (counts[0][1] >= 1) pick = counts[0][0];
+    }
+    if (pick) hit = addBan(pick) || hit;
+  }
+  return hit;
+}
+function _stripWord(t, w) { return t.replace(new RegExp(`(^|[\\s,.!?])${w}(?=$|[\\s,.!?])[,.!?]*`, 'gi'), '$1'); }
+/** deterministic pass over a finished reply */
+function limitFillers(chatId, text) {
+  let t = String(text || '');
+  for (const b of bans()) t = _stripWord(t, b.w);
+  const prev = (own.get(chatId) || []).slice(-6).join(' ');
+  for (const f of FILLERS) {
+    const re = new RegExp(`\\b${f}\\b`, 'gi');
+    const inReply = (t.match(re) || []).length; if (!inReply) continue;
+    const recentUse = (prev.match(re) || []).length;
+    if (recentUse >= 1 || inReply > 1) t = _stripWord(t, f); // used lately (or twice in one reply): drop it
+  }
+  return t.replace(/\s{2,}/g, ' ').replace(/\s+([,.!?])(?=\s|$)/g, '$1').replace(/^[,.\s]+(?!j\b)/, '').trim();
+}
+
+module.exports = { limitFillers, learnBansFromOwner, addBan, init, noteMessage, noteOwnReply, repetition, situation, clampLength, SOCIAL_KEY };

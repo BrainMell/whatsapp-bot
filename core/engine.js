@@ -5270,6 +5270,7 @@ What to do:
       modelFn: (len) => process.env.PERSONA_MODEL || MODELS.SMART,
       searchFn: personaEngine.makeKeylessSearcher(aiOverview, axios),
       prefixFn: () => botConfig.getPrefix(),
+      axios,
       // 🧠 people memory v3: one dossier per PERSON (phone-resolved), old .likes/.note profiles imported once
       canonicalFn: (j) => { try { return jidNormalizedUser(lidResolver.resolveToPhone(j, configInstance.getAuthPath()) || j); } catch { return j; } },
       oldProfileFn: (j) => { try { return getUserProfile(j); } catch { return null; } },
