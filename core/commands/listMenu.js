@@ -179,6 +179,27 @@ function listEnvelope(opts = {}) {
 // (B — pre-v3 bare interactiveMessage + biz/native_flow nodes, i.e. the
 // 1d8b96616 payload shape). Same jmenu:* rowIds either way, so the tap
 // router is variant-agnostic.
+// 2026-11-01 owner: "make the native1 box larger". A card's bubble height follows its
+// header image, and the banner is 1.84:1 (short). `tall` re-frames it to 4:5 — the
+// banner sits full-width over a dimmed, blurred copy of itself — so the whole card
+// grows. Cached per file+mtime.
+const _tallCache = new Map();
+async function tallImage(imagePath) {
+    const key = imagePath + ':' + fs.statSync(imagePath).mtimeMs;
+    if (_tallCache.has(key)) return _tallCache.get(key);
+    const sharp = require('sharp');
+    const W = 1080, H = 1350;
+    const bg = await sharp(imagePath).resize(W, H, { fit: 'cover' }).blur(28).modulate({ brightness: 0.55 }).toBuffer();
+    const fg = await sharp(imagePath).resize(W).toBuffer();
+    const fgH = (await sharp(fg).metadata()).height || 0;
+    const out = await sharp(bg)
+        .composite([{ input: fg, left: 0, top: Math.max(0, Math.floor((H - fgH) / 2)) }])
+        .jpeg({ quality: 88 })
+        .toBuffer();
+    _tallCache.set(key, out);
+    return out;
+}
+
 async function sendListMenu(sock, chatId, senderJid, opts = {}) {
     const interactive = listEnvelope(opts);
     // 2026-11-01: native2 (flow name 'mixed') rendered for the owner, so it is now the
@@ -187,7 +208,7 @@ async function sendListMenu(sock, chatId, senderJid, opts = {}) {
     if (opts.imagePath && fs.existsSync(opts.imagePath)) {
         try {
             const media = await prepareWAMessageMedia(
-                { image: fs.readFileSync(opts.imagePath) },
+                { image: opts.tall ? await tallImage(opts.imagePath) : fs.readFileSync(opts.imagePath) },
                 { upload: sock.waUploadToServer },
             );
             if (media && media.imageMessage) {

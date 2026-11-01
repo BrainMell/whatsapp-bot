@@ -7093,12 +7093,18 @@ What to do:
           GET_BANNER(`🧪 ${botName.toUpperCase()} NATIVE MENU`) +
           `\n *Version ${botConfig.getVersion() || "1.0.0"}* \n *By mellow* \n\nSame Joker menu, new navigation — tap the button on the next card and pick a category.\n\n➤ A/B test: \`${prefix} menu native1\` = card ·A (view-once) · \`${prefix} menu native2\` = card ·B (bare+nodes)\n\n➤ Classic text menu is unchanged: \`${prefix} menu\``;
         const __nmImg = botConfig.getAssetPath("banner.png");
+        const __nmLarge = !(__nmArg === "native2" || __nmArg === "n2"); // n1/native = large card, n2 = compact
         return await listMenu.sendListMenu(sock, chatId, senderJid, {
           headerTitle: `🃏 ${botName} MENU`,
-          bodyText: `*Version ${botConfig.getVersion() || "1.0.0"}* · By mellow\n\nPick a category — its command list opens right here, no typing needed.`,
+          bodyText: __nmLarge
+            ? `*Version ${botConfig.getVersion() || "1.0.0"}* · By mellow\n\n` +
+              `Tap *Open categories* below — each category opens its command list right here, no typing needed.\n\n` +
+              Object.keys(COMMAND_REGISTRY).filter((c) => c !== "MODERATOR").map((c) => `• ${CATEGORY_EMOJIS[c] || "📂"} ${c} (${(COMMAND_REGISTRY[c] || []).length})`).join("\n")
+            : `*Version ${botConfig.getVersion() || "1.0.0"}* · By mellow\n\nPick a category — its command list opens right here, no typing needed.`,
           footerText: `classic text menu: ${prefix} menu`,
           page: 0,
           imagePath: __nmImg,
+          tall: __nmLarge,
         });
       }
       // 💡 2026-10-11: trailing page number support (.j menu rpg 2).
