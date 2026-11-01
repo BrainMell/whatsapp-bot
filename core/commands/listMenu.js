@@ -209,13 +209,58 @@ async function sendListMenu(sock, chatId, senderJid, opts = {}) {
     return generated;
 }
 
+// Taps can arrive WRAPPED (ephemeralMessage / viewOnceMessage — e.g. chats
+// with disappearing messages, or newer clients wrapping interactive replies).
+// Every tap check must resolve the innermost message first. v1 checked the
+// TOP level only, which is why real taps were silently dropped (2026-11-01).
+function innerMessage(m) {
+    const mm = (m && m.message) || {};
+    return (
+        mm.ephemeralMessage?.message ||
+        mm.viewOnceMessage?.message ||
+        mm.viewOnceMessageV2?.message ||
+        mm.viewOnceMessageV2Extension?.message ||
+        mm
+    );
+}
+
+function hasTapPayload(m) {
+    const mm = innerMessage(m);
+    return !!(mm.interactiveResponseMessage || mm.listResponseMessage);
+}
+
+function tapKeys(m) {
+    try {
+        return Object.keys(innerMessage(m) || {});
+    } catch (_e) {
+        return [];
+    }
+}
+
+// One-line human-readable dump of whatever the tap carried (log-only).
+function tapSnippet(m) {
+    try {
+        const mm = innerMessage(m);
+        const irm = mm.interactiveResponseMessage;
+        if (irm) {
+            const nf = irm.nativeFlowResponseMessage || {};
+            return `irm.name=${nf.name || "?"} params=${String(nf.paramsJson || "").slice(0, 140)}`;
+        }
+        const lrm = mm.listResponseMessage;
+        if (lrm) {
+            return `lrm.rowId=${(lrm.singleSelectReply && lrm.singleSelectReply.selectedRowId) || lrm.rowId || "?"}`;
+        }
+    } catch (_e) { /* ignore */ }
+    return "snippet=none";
+}
+
 // Extract a jmenu:* row id from an incoming tap. Handles both shapes:
 //  - modern:  interactiveResponseMessage.nativeFlowResponseMessage.paramsJson (JSON with .id)
 //  - legacy:  listResponseMessage.singleSelectReply.selectedRowId
 // Returns null for anything that is not ours (never intercepts other flows).
 function extractMenuRowId(m) {
     try {
-        const mm = (m && m.message) || {};
+        const mm = innerMessage(m);
         const irm = mm.interactiveResponseMessage;
         if (irm && irm.nativeFlowResponseMessage) {
             let j = null;
@@ -245,7 +290,7 @@ function extractMenuRowId(m) {
 // antibot exemption: a human tapping a list must never be fingerprinted as a
 // bot just because interactive responses score 1.5 (strict threshold = 1.0).
 function isMenuTap(m) {
-    const mm = (m && m.message) || {};
+    const mm = innerMessage(m);
     return !!(
         mm.interactiveResponseMessage ||
         mm.listResponseMessage ||
@@ -322,7 +367,7 @@ function _diag() {
 }
 
 console.log(
-    `[LISTMENU] ready v1 · ${visibleCategories().length} categories · flow=${FLOW_NAME}`,
+    `[LISTMENU] ready v2 · ${visibleCategories().length} categories · flow=${FLOW_NAME} · unwrap=on`,
 );
 
 module.exports = {
@@ -333,5 +378,9 @@ module.exports = {
     extractMenuRowId,
     isMenuTap,
     listSections,
+    innerMessage,
+    hasTapPayload,
+    tapKeys,
+    tapSnippet,
     _diag,
 };

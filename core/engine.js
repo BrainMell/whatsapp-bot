@@ -9352,6 +9352,17 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   // 4. Diagnostic Log
                   console.log(`📩 [${botConfig.getBotId()}] Message received from ${senderJid} in ${chatId}`);
 
+                  // 🧪 [msgtype] 2026-11-01: log the envelope of messages that carry
+                  // none of the standard content keys (taps, poll votes, oddities).
+                  // Makes silent drop points — like the native-menu tap — debuggable.
+                  try {
+                    const __mk = Object.keys(m.message || {});
+                    const __known = ['conversation','extendedTextMessage','imageMessage','videoMessage','stickerMessage','audioMessage','pttMessage','documentMessage','documentWithCaptionMessage','reactionMessage','protocolMessage','senderKeyDistributionMessage','pinInChatMessage','contactMessage','contactsArrayMessage','locationMessage','liveLocationMessage','productMessage'];
+                    if (!__mk.some((k) => __known.includes(k))) {
+                      console.log(`📩 [msgtype] unusual chat=${String(chatId).split('@')[0]} by=${String(senderJid).split('@')[0]} keys=${__mk.join('|')}`);
+                    }
+                  } catch (_mkErr) { /* diagnostics never break the pipeline */ }
+
                   // 💡 HARDMUTE AUTO-DELETE (2026-08-14):
                   // Check VERY EARLY - before MongoDB persist, before any command processing.
                   // If the sender is hard-muted AND this is a group chat, attempt to delete
@@ -10372,14 +10383,11 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   // default pipeline would silently ignore them. Route
                   // jmenu:* rowIds back into the menu system; log every tap
                   // response so adoption vs the typed menu is measurable.
-                  if (
-                    m.message.interactiveResponseMessage ||
-                    m.message.listResponseMessage
-                  ) {
+                  if (listMenu.hasTapPayload(m)) {
                     try {
                       const __rowId = listMenu.extractMenuRowId(m);
                       console.log(
-                        `[LISTMENU] response seen: rowId=${__rowId || "(not ours)"} chat=${String(chatId).split("@")[0]} by=${String(senderJid).split("@")[0]}`,
+                        `[LISTMENU] response seen: keys=${listMenu.tapKeys(m).join("|")} | ${listMenu.tapSnippet(m)} | rowId=${__rowId || "(not ours)"} | chat=${String(chatId).split("@")[0]} | by=${String(senderJid).split("@")[0]}`,
                       );
                       if (__rowId) {
                         await listMenu.handleMenuTap(sock, chatId, senderJid, __rowId, {
