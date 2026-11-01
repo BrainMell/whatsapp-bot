@@ -74,7 +74,7 @@ const RETIRED_EGGS = {
 async function hatchEgg(userId, eggId) {
   const tier = Object.values(EGG_TIERS).find(t => t.eggId === eggId);
   if (!tier) {
-    if (RETIRED_EGGS[eggId]) {
+    if (Object.prototype.hasOwnProperty.call(RETIRED_EGGS, eggId)) {
       return {
         success: false,
         message: `🚫 The ${RETIRED_EGGS[eggId]} has been retired - no EPIC+ summons exist in the world yet, so it could never hatch one.\n_Sell it on the market or to other players; it keeps its item value._`
