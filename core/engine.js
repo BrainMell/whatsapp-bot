@@ -7068,6 +7068,63 @@ What to do:
       // native2/n2 → variant B (bare interactive + biz/native_flow nodes,
       // the 1d8b96616 payload shape). Bare "2" retired — it collided with
       // the classic menu's page numbers.
+      const TIPS = [
+        `Use \`${prefix} blacksmith\` to check and repair your gear! Broken items lose all stats.`,
+        `Enhancement stones stack additively, not multiplicatively. A Legendary Stone (+35%) is always better than 3 Minor Stones (+15%).`,
+        `Mythic items can be enhanced up to Level 30 - that's 11.5× base stats. Don't waste Legendary Stones on Common gear!`,
+        `Socket a COOLDOWN Rune (Abyss drop) into your ultimate to cast it every turn. ABYSSAL tier = no cooldown at all.`,
+        `Status effects stack! WET + SHOCK = automatic stun. Use SHOCK_INFUSION rune on a water skill for free CC.`,
+        `BARRAGE rune splits one hit into 5 weaker hits that bypass shields - perfect against tanky bosses with active shields.`,
+        `SOUL_RIP rune executes enemies below 20% HP for up to 4× bonus true damage. Pair with LIFESTEAL for maximum sustain.`,
+        `Chain Lightning (Elementalist) arcs to 3 enemies. Socket MULTI_SHOT rune to hit even more targets.`,
+        `Defend gives you a shield equal to 1.5× your DEF. Use it when enemies are charging up a big attack.`,
+        `Your MAG stat affects magical skills. If your class uses magic (Mage, Warlock, Elementalist), invest in MAG not ATK.`,
+        `Crit chance is capped at 100%. Beyond that, invest in CRIT damage via equipment and runes.`,
+        `Evasion caps at 75%. Beyond that, stack DEF and damage reduction instead.`,
+        `Runes only drop in the Abyss (Floor 21+). The deeper you go, the better the tier.`,
+        `Abyss Floor 50+ can drop ABYSSAL-tier runes - the strongest in the game.`,
+        `Use \`${prefix} rune inv\` to see your rune inventory and \`${prefix} rune socket <runeId> <skillId>\` to socket them.`,
+        `Ultimate skills have 3 rune slots. Regular skills have 1-2. Plan your socketing accordingly.`,
+        `Guild bank balance is used for building upgrades, not guild XP. Donate Zeni to fund your guild's growth.`,
+        `Rank missions unlock every 2 rank promotions. Complete them via \`${prefix} rank mission\` to advance past D, B, S, and SSS rank.`,
+        `PvP duels use your actual maxEnergy, not a capped 100. Ultimates like Singularity (162 energy) are fully castable.`,
+        `Weapons with elemental damage (e.g. Hellfire Greatmaul) can proc bonus status effects on basic attacks.`,
+        `Durability decreases with each hit. A broken weapon does ZERO damage - always carry a repair kit!`,
+        `Crafting recipes often require materials from specific dungeon ranks. Check \`${prefix} craft\` for the full recipe list.`,
+        `The Dragon Seal Ring is required to damage dragons. Keep it in your bag OR equipped - both work.`,
+        `Boss HP scales with dungeon rank AND party size. A solo F-rank boss has ~2500 HP; a 5-player S-rank boss has millions.`,
+        `Overkill damage (2× the killing blow) grants bonus Zeni. Save your ultimates for the killing blow!`,
+        `Skills don't reset between floors in the Abyss. If you used your ultimate on Floor 1, it's on cooldown for Floor 2.`,
+        `Cards spawn every 20 minutes in enabled chats. Use \`${prefix} spawninfo\` to check the timer.`,
+        `Event cards (E-tier) never spawn naturally - your ways in are the \`${prefix} eshop\` and live token events.`,
+        `Investment system offers 5-80% interest rates. Higher risk = higher reward, but you can lose your principal.`,
+        `Wealth tax runs every 72 hours. Keep your wallet balanced or the taxman cometh.`,
+        // 💡 2026-09-10: non-RPG tips - groups, games, utility, economy ops.
+        `Reply to any message and use \`${prefix} pin\` to pin it for the whole group.`,
+        `Deck creators: submit to the eShop, then a mod approves it via the deck queue.`,
+        `Type \`${prefix} menu <command>\` on ANY command to see its full usage guide.`,
+        `Type \`${prefix} bots\` to see which bot instances are online right now.`,
+        `The GAMES category has Wordle and more - type \`${prefix} menu games\` to browse.`,
+        `Search the web straight from chat: \`${prefix} search <query>\`.`,
+        `Search the ENTIRE card pool with \`${prefix} gs <text> tier=5 maker=x\` — and \`${prefix} mcount <maker>\` counts a maker's cards.`,
+        `Abilities codex got pages? Just REPLY to it with \`2\` or \`3\` to flip — no retyping.`,
+        `Turn images into stickers with the STICKERS tools - \`${prefix} menu stickers\`.`,
+        `Interactions (\`${prefix} hug\`, \`${prefix} slap\`...) - \`${prefix} reactions\` lists them all.`,
+        // 💡 2026-10-11: tips for the new-generation features (menu freshness pass).
+        `Quiz nights run logo challenges, theme songs and dataset trivia - try \`${prefix} quiz logos 15\`.`,
+        `Logo rounds come in easy / medium / hard tiers - bigger Zeni for harder brands.`,
+        `Sell the gear you never use: \`${prefix} market sell item <bag#> <price>\` lists it on the player market.`,
+        `Browse everything players are selling - items, runes, summons - with \`${prefix} itemmarket\`.`,
+        `Prefer crisp static images? \`${prefix} anim off\` switches collection/deck renders to PNG.`,
+        `New here? \`${prefix} tutorial start\` walks you through your first battle hands-on.`,
+        `Materials pile up fast - \`${prefix} forge\` and \`${prefix} cook\` turn them into gear and food.`,
+        `\`${prefix} gear\` shows every equipped item with its remaining durability - broken gear does nothing.`,
+        `Only ONE Dragon God will ever be crowned. Check who holds the crown: \`${prefix} dglord\`.`,
+        `Mining energy recovers over time - plan your deepest expedition for a full bar.`,
+        `When war opens in the Ruins, \`${prefix} gw join\` enrolls your guild - battles are fought in your DMs.`,
+        `Track your kill count with \`${prefix} kills\` - the Fortune Teller keeps the ledger.`,
+        `Card hunters: \`${prefix} cardlb\` shows the top collectors on the server, per tier too.`,
+      ];
       const NATIVE_MENU_TRIGGERS = [
         "native", "n", "list", "tap", "native1", "n1", "native2", "n2",
       ];
@@ -7109,12 +7166,24 @@ What to do:
         return await listMenu.sendListMenu(sock, chatId, senderJid, {
           headerTitle: `🃏 ${botName} MENU`,
           bodyText: __nmLarge
-            ? // 2026-11-01 owner 12:43Z: no category grid — duck ASCII + base
-              // info + rotating classic tip (see menuLab.duckBody).
-              require("./commands/menuLab").duckBody(
-                botConfig.getVersion() || "1.0.0",
-                prefix,
-              )
+            ? (() => {
+                // 2026-11-01 owner: caption = art + the classic menu's base info (version,
+                // author, prefix) + a rotating tip; no long command list. Plain ASCII in a
+                // ``` block, <=34 cols, so alignment survives and the bubble stretches wide.
+                const art = [
+                  "        __            ",
+                  "      <(o )___        ",
+                  "       ( ._> /        ",
+                  "  ~~~~~~`---'~~~~~~~~ ",
+                  "                      ",
+                  "   J  O  K  E  R      ",
+                  "   =  =  =  =  =      ",
+                ].map((l) => l.trimEnd()).join("\n");
+                const tip = TIPS[Math.floor(Math.random() * TIPS.length)];
+                return "```\n" + art + "\n```\n" +
+                  `*Version ${botConfig.getVersion() || "1.0.0"}* · *By mellow*\n*Prefix:* ${prefix}\n\n` +
+                  `📂 Tap *Open categories* below to browse every command.\n\n💡 *Tip:* ${tip}`;
+              })()
             : `*Version ${botConfig.getVersion() || "1.0.0"}* · By mellow\n\nPick a category — its command list opens right here, no typing needed.`,
           footerText: `classic text menu: ${prefix} menu`,
           page: 0,
@@ -7255,63 +7324,7 @@ ${targetCategory}`;
       // 💡 2026-10-11 (owner): MOD TIPS live ONLY in the mod terminal now —
       // players were seeing moderator tips (cards on/off, glock, resetwarn)
       // in the regular menu. See MOD_TIPS in ./utils/modMenuData.js.
-      const TIPS = [
-        `Use \`${prefix} blacksmith\` to check and repair your gear! Broken items lose all stats.`,
-        `Enhancement stones stack additively, not multiplicatively. A Legendary Stone (+35%) is always better than 3 Minor Stones (+15%).`,
-        `Mythic items can be enhanced up to Level 30 - that's 11.5× base stats. Don't waste Legendary Stones on Common gear!`,
-        `Socket a COOLDOWN Rune (Abyss drop) into your ultimate to cast it every turn. ABYSSAL tier = no cooldown at all.`,
-        `Status effects stack! WET + SHOCK = automatic stun. Use SHOCK_INFUSION rune on a water skill for free CC.`,
-        `BARRAGE rune splits one hit into 5 weaker hits that bypass shields - perfect against tanky bosses with active shields.`,
-        `SOUL_RIP rune executes enemies below 20% HP for up to 4× bonus true damage. Pair with LIFESTEAL for maximum sustain.`,
-        `Chain Lightning (Elementalist) arcs to 3 enemies. Socket MULTI_SHOT rune to hit even more targets.`,
-        `Defend gives you a shield equal to 1.5× your DEF. Use it when enemies are charging up a big attack.`,
-        `Your MAG stat affects magical skills. If your class uses magic (Mage, Warlock, Elementalist), invest in MAG not ATK.`,
-        `Crit chance is capped at 100%. Beyond that, invest in CRIT damage via equipment and runes.`,
-        `Evasion caps at 75%. Beyond that, stack DEF and damage reduction instead.`,
-        `Runes only drop in the Abyss (Floor 21+). The deeper you go, the better the tier.`,
-        `Abyss Floor 50+ can drop ABYSSAL-tier runes - the strongest in the game.`,
-        `Use \`${prefix} rune inv\` to see your rune inventory and \`${prefix} rune socket <runeId> <skillId>\` to socket them.`,
-        `Ultimate skills have 3 rune slots. Regular skills have 1-2. Plan your socketing accordingly.`,
-        `Guild bank balance is used for building upgrades, not guild XP. Donate Zeni to fund your guild's growth.`,
-        `Rank missions unlock every 2 rank promotions. Complete them via \`${prefix} rank mission\` to advance past D, B, S, and SSS rank.`,
-        `PvP duels use your actual maxEnergy, not a capped 100. Ultimates like Singularity (162 energy) are fully castable.`,
-        `Weapons with elemental damage (e.g. Hellfire Greatmaul) can proc bonus status effects on basic attacks.`,
-        `Durability decreases with each hit. A broken weapon does ZERO damage - always carry a repair kit!`,
-        `Crafting recipes often require materials from specific dungeon ranks. Check \`${prefix} craft\` for the full recipe list.`,
-        `The Dragon Seal Ring is required to damage dragons. Keep it in your bag OR equipped - both work.`,
-        `Boss HP scales with dungeon rank AND party size. A solo F-rank boss has ~2500 HP; a 5-player S-rank boss has millions.`,
-        `Overkill damage (2× the killing blow) grants bonus Zeni. Save your ultimates for the killing blow!`,
-        `Skills don't reset between floors in the Abyss. If you used your ultimate on Floor 1, it's on cooldown for Floor 2.`,
-        `Cards spawn every 20 minutes in enabled chats. Use \`${prefix} spawninfo\` to check the timer.`,
-        `Event cards (E-tier) never spawn naturally - your ways in are the \`${prefix} eshop\` and live token events.`,
-        `Investment system offers 5-80% interest rates. Higher risk = higher reward, but you can lose your principal.`,
-        `Wealth tax runs every 72 hours. Keep your wallet balanced or the taxman cometh.`,
-        // 💡 2026-09-10: non-RPG tips - groups, games, utility, economy ops.
-        `Reply to any message and use \`${prefix} pin\` to pin it for the whole group.`,
-        `Deck creators: submit to the eShop, then a mod approves it via the deck queue.`,
-        `Type \`${prefix} menu <command>\` on ANY command to see its full usage guide.`,
-        `Type \`${prefix} bots\` to see which bot instances are online right now.`,
-        `The GAMES category has Wordle and more - type \`${prefix} menu games\` to browse.`,
-        `Search the web straight from chat: \`${prefix} search <query>\`.`,
-        `Search the ENTIRE card pool with \`${prefix} gs <text> tier=5 maker=x\` — and \`${prefix} mcount <maker>\` counts a maker's cards.`,
-        `Abilities codex got pages? Just REPLY to it with \`2\` or \`3\` to flip — no retyping.`,
-        `Turn images into stickers with the STICKERS tools - \`${prefix} menu stickers\`.`,
-        `Interactions (\`${prefix} hug\`, \`${prefix} slap\`...) - \`${prefix} reactions\` lists them all.`,
-        // 💡 2026-10-11: tips for the new-generation features (menu freshness pass).
-        `Quiz nights run logo challenges, theme songs and dataset trivia - try \`${prefix} quiz logos 15\`.`,
-        `Logo rounds come in easy / medium / hard tiers - bigger Zeni for harder brands.`,
-        `Sell the gear you never use: \`${prefix} market sell item <bag#> <price>\` lists it on the player market.`,
-        `Browse everything players are selling - items, runes, summons - with \`${prefix} itemmarket\`.`,
-        `Prefer crisp static images? \`${prefix} anim off\` switches collection/deck renders to PNG.`,
-        `New here? \`${prefix} tutorial start\` walks you through your first battle hands-on.`,
-        `Materials pile up fast - \`${prefix} forge\` and \`${prefix} cook\` turn them into gear and food.`,
-        `\`${prefix} gear\` shows every equipped item with its remaining durability - broken gear does nothing.`,
-        `Only ONE Dragon God will ever be crowned. Check who holds the crown: \`${prefix} dglord\`.`,
-        `Mining energy recovers over time - plan your deepest expedition for a full bar.`,
-        `When war opens in the Ruins, \`${prefix} gw join\` enrolls your guild - battles are fought in your DMs.`,
-        `Track your kill count with \`${prefix} kills\` - the Fortune Teller keeps the ledger.`,
-        `Card hunters: \`${prefix} cardlb\` shows the top collectors on the server, per tier too.`,
-      ];
+      // (TIPS hoisted above the native-menu branch 2026-11-01 so .j menu native1 can show one)
       // 💡 LORE TIP SLOT (lore_drop_system.md §3 "general"): one menu in six
       // appends a general-world lore drop as its OWN message after the menu
       // (owner 2026-09-20: a drop is a distinct lore event, never baked into
