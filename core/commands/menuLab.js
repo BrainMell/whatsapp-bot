@@ -176,6 +176,7 @@ const VARIANTS = {
 function labIndex(prefix) {
     return `🧪 *MENU LAB*\n\nTry each, tell me which render + feel right:\n\n` +
         `➤ \`${prefix} menu n1\` / \`n2\` — native list (the one that worked)\n` +
+        `➤ \`${prefix} menu nativeall\` — fire ALL variants at once (side-by-side)\n` +
         Object.entries(VARIANTS).map(([k, v]) => `➤ \`${prefix} menu ${k}\` — ${v.desc}`).join('\n') +
         `\n\n_Taps on the button variants open the category like the list does._`;
 }
@@ -197,4 +198,69 @@ async function sendVariant(sock, chatId, senderJid, key, opts = {}) {
     }
 }
 
-module.exports = { VARIANTS, labIndex, sendVariant };
+// 🧪 nativeall (owner 2026-11-01: "Add a .j menu nativeall") — fire every
+// variant in one go so they can be compared side by side. n1/n2 are the
+// listMenu shapes (large/compact), n3..n9 come from VARIANTS. 1.4s spacing
+// keeps well clear of flood limits; every send swallows its own errors and
+// the final text reports the scoreboard.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function sendAll(sock, chatId, senderJid, opts = {}) {
+    const version = opts.version || "1.0.0";
+    const who = opts.botName || "Joker";
+    const baseBody = `*Version ${version}* · ${who}\n\nPick a category — it opens right here, no typing needed.`;
+    const overview = cats()
+        .map((c) => `• ${EMOJI[c] || "📂"} ${c} (${(COMMAND_REGISTRY[c] || []).length})`)
+        .join("\n");
+    const results = [];
+    const step = async (key, fn) => {
+        try {
+            await fn();
+            console.log(`[MENULAB] ALL ${key} ok chat=${String(chatId).split("@")[0]}`);
+            results.push(`${key}:✅`);
+        } catch (e) {
+            console.error(`[MENULAB] ALL ${key} failed:`, e.message);
+            results.push(`${key}:❌ ${e.message}`);
+        }
+        await sleep(1400);
+    };
+    await sock.sendMessage(chatId, {
+        text: `🧪 *ALL MENU VARIANTS* — ${2 + Object.keys(VARIANTS).length} incoming, one at a time…`,
+    });
+    await step("n1", () => listMenu.sendListMenu(sock, chatId, senderJid, {
+        headerTitle: opts.title || "🃏 JOKER MENU",
+        bodyText: `*Version ${version}* · ${who}\n\n` +
+            `Tap *Open categories* below — each category opens its command list right here, no typing needed.\n\n` +
+            overview,
+        footerText: `classic text menu: ${opts.prefix || ".j"} menu`,
+        page: 0,
+        imagePath: opts.imagePath,
+        tall: true,
+    }));
+    await step("n2", () => listMenu.sendListMenu(sock, chatId, senderJid, {
+        headerTitle: opts.title || "🃏 JOKER MENU",
+        bodyText: baseBody,
+        footerText: `classic text menu: ${opts.prefix || ".j"} menu`,
+        page: 0,
+        imagePath: opts.imagePath,
+    }));
+    for (const k of Object.keys(VARIANTS)) {
+        await step(k, async () => {
+            const r = await sendVariant(sock, chatId, senderJid, k, {
+                imagePath: opts.imagePath,
+                title: opts.title || "🃏 JOKER MENU",
+                body: baseBody,
+            });
+            if (!r.ok) throw new Error(r.error || "send failed");
+        });
+    }
+    const okCount = results.filter((r) => r.endsWith("✅")).length;
+    const bad = results.filter((r) => !r.endsWith("✅"));
+    await sock.sendMessage(chatId, {
+        text: `🧪 done — ${okCount}/${results.length} sent` + (bad.length ? `:\n${bad.join("\n")}` : ""),
+    });
+    console.log(`[MENULAB] ALL chat=${String(chatId).split("@")[0]} sent=${okCount}/${results.length}`);
+    return { ok: okCount === results.length, results };
+}
+
+module.exports = { VARIANTS, labIndex, sendVariant, sendAll };

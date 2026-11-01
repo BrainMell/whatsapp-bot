@@ -7074,6 +7074,18 @@ What to do:
       const __nmArg = String(cleanArgs[0] || "").toLowerCase();
       const __nmVariant =
         __nmArg === "native2" || __nmArg === "n2" ? "bare" : "viewonce";
+      // 🧪 NATIVEALL (owner 2026-11-01: "Add a .j menu nativeall") — every
+      // variant in one burst for side-by-side comparison.
+      if (__nmArg === "nativeall" || __nmArg === "nall") {
+        const menuLab = require("./commands/menuLab");
+        return await menuLab.sendAll(sock, chatId, senderJid, {
+          imagePath: botConfig.getAssetPath("banner.png"),
+          title: `🃏 ${botName} MENU`,
+          botName,
+          version: botConfig.getVersion() || "1.0.0",
+          prefix,
+        });
+      }
       // 🧪 MENU LAB (owner 2026-11-01: "experiment with different methods and menu types")
       if (__nmArg === "lab" || /^n[3-9]$/.test(__nmArg)) {
         const menuLab = require("./commands/menuLab");
