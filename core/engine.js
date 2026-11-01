@@ -7445,7 +7445,10 @@ ${targetCategory}`;
           // doing it"): a command whose usage has NO <placeholder>/[optional] slot
           // is a complete runnable ("sandbox on", "sandbox off", ...) - bare
           // lookup must RUN it, not explain it.
-          const isFullyFormedRunnable = !/[<\[]/.test(String(exact.usage || ""));
+          // 2026-11-01: `[@user]` is optional (target defaults to the caller), so a usage whose
+          // ONLY placeholder is `[@user]` is also a complete runnable - `.j mod resetplayer`
+          // used to print the explain card instead of resetting the caller.
+          const isFullyFormedRunnable = !/[<\[]/.test(String(exact.usage || "").replace(/\[@user\]/g, ""));
           const isFallThroughCmd =
             exact.cmd === "modclass" || exact.cmd === "createclass" || isFullyFormedRunnable;
           if (isBareLookup && !isFallThroughCmd && visible.some(([k]) => k === exact.catKey)) {

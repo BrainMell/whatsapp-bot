@@ -594,7 +594,16 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         // play. Use the exact same formula (single source of truth in
         // progression.getStatPointsForRange).
         const __statPtsDelta = progression.getStatPointsForRange(oldLevel, level);
-        user.progression.statPoints = (user.progression.statPoints || 0) + __statPtsDelta;
+        if (level < oldLevel) {
+            // 2026-11-01 owner report: Lv100 -> setlevel 1 left 200 unspent points (and any
+            // allocated stats) on a level-1 character. Lowering the level now re-bases the
+            // stat ledger to exactly what the new level is entitled to.
+            user.progression.allocatedStats = { hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0 };
+            user.progression.allocatedStatPoints = { hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0 };
+            user.progression.statPoints = progression.getStatPointsForRange(1, level);
+        } else {
+            user.progression.statPoints = (user.progression.statPoints || 0) + __statPtsDelta;
+        }
         economy.scheduleSave(target);
         return await sock.sendMessage(chatId, {
             text: BOT_MARKER + `✅ *LEVEL SET*\n\n👤 @${economy.getDisplayName(target)}\n📊 Level: ${oldLevel} → *${level}*\n⚡ XP set to ${xpForLevel.toLocaleString()}\n💎 +${__statPtsDelta} stat points granted (5/level + milestones)`,
@@ -958,13 +967,15 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             user.progression.allocatedStats = { hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0 };
             user.progression.allocatedStatPoints = { hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0 };
             const level = user.progression.level || 1;
-            user.progression.statPoints = level * 2;
+            // 2026-11-01: was `level * 2` - the pre-b4f78f rate. A Lv100 reset handed back 200
+            // points instead of what 100 levels actually grant (5/level + milestones).
+            user.progression.statPoints = progression.getStatPointsForRange(1, level);
         }
         // Reset skills
         user.skills = {};
         economy.scheduleSave(target);
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `✅ *PLAYER RESET*\n\n👤 @${economy.getDisplayName(target)}\n📊 Stats reset to 0 (refunded ${user.progression?.level * 2 || 0} points)\n✨ All skills revoked\n💰 Wallet/level unchanged`,
+            text: BOT_MARKER + `✅ *PLAYER RESET*\n\n👤 @${economy.getDisplayName(target)}\n📊 Stats reset to 0 (refunded ${user.progression ? progression.getStatPointsForRange(1, user.progression.level || 1) : 0} points)\n✨ All skills revoked\n💰 Wallet/level unchanged`,
             mentions: [target]
         });
     }
