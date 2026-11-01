@@ -3300,7 +3300,11 @@ function calculateDamage(
   // 💡 FIX #6 (2026-08-15): Global evasion cap at 50%. Previously there
   // was no cap - KAGE L100 with Mirror Image + veil_of_the_void + foggy
   // weather could reach 185% (guaranteed dodge). Now capped at 50%.
-  evasionChance = Math.min(50, Math.max(0, evasionChance));
+  // 2026-11-01 owner: "enemies evade too much". Enemies have 0 base evasion, so everything
+  // here was stacked flat bonuses (fog +15 for a quarter of the day, forest camouflage +15,
+  // desert sandstorm, evasion-buff skills) rolled on EVERY hit incl. each AoE target -
+  // up to the 50% player cap. Enemy targets now cap at 25% so a normal fight isn't a miss-fest.
+  evasionChance = Math.min(target.isEnemy ? 25 : 50, Math.max(0, evasionChance));
 
   if (Math.random() * 100 < evasionChance) {
     return { damage: 0, isCrit: false, wasEvaded: true };
@@ -11464,6 +11468,9 @@ async function endAdventure(sock, sessionKey, victory = true) {
     // completion XP as well as per-combat XP.
     const __soloXpMult = _soloHunterXpMult(player, state);
     const __finalXPBase = Math.floor(finalXP * __soloXpMult);
+    // 2026-11-01 hammer: declared at loop scope - it was `let` inside the alive-only block but read
+    // below it, so EVERY player threw ReferenceError -> 'Reward calculation failed'.
+    let __completionXPCredited = false;
     let finalGold = Math.floor(player.goldEarned * multiplier * (1 + (player.passiveGoldFind || 0) / 100));
     let bonusGold = player.isDead ? 0 : _baseBonusGold;
     const gpGain = player.isDead ? 0 : _baseGp;
@@ -11587,7 +11594,6 @@ async function endAdventure(sock, sessionKey, victory = true) {
       // ran per-combat. The end-of-quest XP the summary promises (base +
       // guild bonus) now lands on the player, so the final card's number is
       // the number they actually received.
-      let __completionXPCredited = false;
       if (__finalXPBase + guildBonusXp > 0) {
         try {
           progression.addXP(player.jid, __finalXPBase + guildBonusXp, "Quest completion");
