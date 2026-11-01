@@ -7086,7 +7086,7 @@ What to do:
         return await listMenu.sendListMenu(sock, chatId, senderJid, {
           headerTitle: `🃏 ${botName} MENU · ${__nmVariant === "bare" ? "B" : "A"}`,
           bodyText: "Pick a category — its command list opens right here, no typing needed.",
-          footerText: `Variant ${__nmVariant === "bare" ? "B · bare+nodes" : "A · view-once"} · classic: ${prefix} menu`,
+          footerText: `Variant ${__nmVariant === "bare" ? "B · mixed" : "A · single_select"} · classic: ${prefix} menu`,
           page: 0,
           variant: __nmVariant,
         });

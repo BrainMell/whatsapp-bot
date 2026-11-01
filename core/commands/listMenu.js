@@ -179,67 +179,59 @@ function listEnvelope(opts = {}) {
 // router is variant-agnostic.
 async function sendListMenu(sock, chatId, senderJid, opts = {}) {
     const interactive = listEnvelope(opts);
+    // 2026-11-01 v5: BOTH earlier variants were half of the recipe that other Baileys
+    // bots use for native-flow cards: A (view-once envelope, NO biz nodes) and B (biz
+    // nodes, NO view-once envelope) each rendered as nothing. The working shape is the
+    // view-once + messageContextInfo envelope AND the biz/interactive/native_flow node
+    // (+ bot node in private chats only). native1 = flow name "single_select" on the
+    // node, native2 = flow name "mixed" (what multi-button cards use).
     const variant = opts.variant === "bare" ? "bare" : "viewonce";
-    let generated;
-    if (variant === "bare") {
-        generated = generateWAMessageFromContent(
-            chatId,
-            { interactiveMessage: interactive },
-            {
-                userJid: getUserJid(sock, senderJid),
-                messageId: makeId(),
-            },
-        );
-        const additionalNodes = [
-            {
-                tag: "biz",
-                attrs: {},
-                content: [
-                    {
-                        tag: "interactive",
-                        attrs: { type: "native_flow", v: "1" },
-                        content: [
-                            {
-                                tag: "native_flow",
-                                attrs: { v: "9", name: FLOW_NAME },
-                            },
-                        ],
+    const nodeFlowName = variant === "bare" ? "mixed" : FLOW_NAME;
+    const generated = generateWAMessageFromContent(
+        chatId,
+        {
+            viewOnceMessage: {
+                message: {
+                    messageContextInfo: {
+                        deviceListMetadataVersion: 2,
+                        deviceListMetadata: {},
                     },
-                ],
-            },
-        ];
-        if (!String(chatId).endsWith("@g.us")) {
-            additionalNodes.push({ tag: "bot", attrs: { biz_bot: "1" } });
-        }
-        await sock.relayMessage(chatId, generated.message, {
-            messageId: generated.key.id,
-            additionalNodes,
-        });
-    } else {
-        generated = generateWAMessageFromContent(
-            chatId,
-            {
-                viewOnceMessage: {
-                    message: {
-                        messageContextInfo: {
-                            deviceListMetadataVersion: 2,
-                            deviceListMetadata: {},
-                        },
-                        interactiveMessage: interactive,
-                    },
+                    interactiveMessage: interactive,
                 },
             },
-            {
-                userJid: getUserJid(sock, senderJid),
-                messageId: makeId(),
-            },
-        );
-        await sock.relayMessage(chatId, generated.message, {
-            messageId: generated.key.id,
-        });
+        },
+        {
+            userJid: getUserJid(sock, senderJid),
+            messageId: makeId(),
+        },
+    );
+    const additionalNodes = [
+        {
+            tag: "biz",
+            attrs: {},
+            content: [
+                {
+                    tag: "interactive",
+                    attrs: { type: "native_flow", v: "1" },
+                    content: [
+                        {
+                            tag: "native_flow",
+                            attrs: { v: "9", name: nodeFlowName },
+                        },
+                    ],
+                },
+            ],
+        },
+    ];
+    if (!String(chatId).endsWith("@g.us")) {
+        additionalNodes.push({ tag: "bot", attrs: { biz_bot: "1" } });
     }
+    await sock.relayMessage(chatId, generated.message, {
+        messageId: generated.key.id,
+        additionalNodes,
+    });
     console.log(
-        `[LISTMENU] SENT page=${(opts.page || 0) + 1} variant=${variant === "bare" ? "B-bare+nodes" : "A-viewonce"} chat=${String(chatId).split("@")[0]}`,
+        `[LISTMENU] SENT page=${(opts.page || 0) + 1} variant=${variant === "bare" ? "B-viewonce+nodes(mixed)" : "A-viewonce+nodes(single_select)"} chat=${String(chatId).split("@")[0]}`,
     );
     return generated;
 }
