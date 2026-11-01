@@ -7063,24 +7063,32 @@ What to do:
       // 🧪 NATIVE LIST MENU (experiment 2026-11-01): same banner image, then
       // WhatsApp's native single_select popup list instead of the text grid.
       // The classic menu below is completely untouched.
-      const NATIVE_MENU_TRIGGERS = ["native", "n", "2", "list", "tap"];
-      if (
-        cleanArgs.length &&
-        NATIVE_MENU_TRIGGERS.includes(String(cleanArgs[0]).toLowerCase())
-      ) {
+      // 🧪 v4 A/B (owner 2026-11-01: "make .j menu native1 and native2"):
+      // native1/n1/native/n/list/tap → variant A (view-once envelope, v3).
+      // native2/n2 → variant B (bare interactive + biz/native_flow nodes,
+      // the 1d8b96616 payload shape). Bare "2" retired — it collided with
+      // the classic menu's page numbers.
+      const NATIVE_MENU_TRIGGERS = [
+        "native", "n", "list", "tap", "native1", "n1", "native2", "n2",
+      ];
+      const __nmArg = String(cleanArgs[0] || "").toLowerCase();
+      const __nmVariant =
+        __nmArg === "native2" || __nmArg === "n2" ? "bare" : "viewonce";
+      if (cleanArgs.length && NATIVE_MENU_TRIGGERS.includes(__nmArg)) {
         const shortCap =
           GET_BANNER(`🧪 ${botName.toUpperCase()} NATIVE MENU`) +
-          `\n *Version ${botConfig.getVersion() || "1.0.0"}* \n *By mellow* \n\nSame Joker menu, new navigation — tap the button on the next card and pick a category.\n\n➤ Classic text menu is unchanged: \`${prefix} menu\``;
+          `\n *Version ${botConfig.getVersion() || "1.0.0"}* \n *By mellow* \n\nSame Joker menu, new navigation — tap the button on the next card and pick a category.\n\n➤ A/B test: \`${prefix} menu native1\` = card ·A (view-once) · \`${prefix} menu native2\` = card ·B (bare+nodes)\n\n➤ Classic text menu is unchanged: \`${prefix} menu\``;
         try {
           await sendMenuWithBanner(sock, chatId, shortCap);
         } catch (_nmErr) {
           console.error("[LISTMENU] banner send failed:", _nmErr.message);
         }
         return await listMenu.sendListMenu(sock, chatId, senderJid, {
-          headerTitle: `🃏 ${botName} MENU`,
+          headerTitle: `🃏 ${botName} MENU · ${__nmVariant === "bare" ? "B" : "A"}`,
           bodyText: "Pick a category — its command list opens right here, no typing needed.",
-          footerText: `Native list experiment · classic: ${prefix} menu`,
+          footerText: `Variant ${__nmVariant === "bare" ? "B · bare+nodes" : "A · view-once"} · classic: ${prefix} menu`,
           page: 0,
+          variant: __nmVariant,
         });
       }
       // 💡 2026-10-11: trailing page number support (.j menu rpg 2).

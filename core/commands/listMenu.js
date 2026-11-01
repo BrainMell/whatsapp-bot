@@ -172,35 +172,74 @@ function listEnvelope(opts = {}) {
     };
 }
 
-// v3 envelope (2026-11-01): viewOnceMessage-wrapped interactiveMessage with
-// inner messageContextInfo, relayed WITHOUT biz nodes — the documented
-// working single_select recipe. Plan B if this fails too: protoLab's legacy
-// listMessage route (biz > list v=2 type=product_list).
+// v4 A/B (owner 2026-11-01): two competing envelopes, owner tests side by
+// side. opts.variant: 'viewonce' (A, default — the v3 recipe) or 'bare'
+// (B — pre-v3 bare interactiveMessage + biz/native_flow nodes, i.e. the
+// 1d8b96616 payload shape). Same jmenu:* rowIds either way, so the tap
+// router is variant-agnostic.
 async function sendListMenu(sock, chatId, senderJid, opts = {}) {
     const interactive = listEnvelope(opts);
-    const generated = generateWAMessageFromContent(
-        chatId,
-        {
-            viewOnceMessage: {
-                message: {
-                    messageContextInfo: {
-                        deviceListMetadataVersion: 2,
-                        deviceListMetadata: {},
+    const variant = opts.variant === "bare" ? "bare" : "viewonce";
+    let generated;
+    if (variant === "bare") {
+        generated = generateWAMessageFromContent(
+            chatId,
+            { interactiveMessage: interactive },
+            {
+                userJid: getUserJid(sock, senderJid),
+                messageId: makeId(),
+            },
+        );
+        const additionalNodes = [
+            {
+                tag: "biz",
+                attrs: {},
+                content: [
+                    {
+                        tag: "interactive",
+                        attrs: { type: "native_flow", v: "1" },
+                        content: [
+                            {
+                                tag: "native_flow",
+                                attrs: { v: "9", name: FLOW_NAME },
+                            },
+                        ],
                     },
-                    interactiveMessage: interactive,
+                ],
+            },
+        ];
+        if (!String(chatId).endsWith("@g.us")) {
+            additionalNodes.push({ tag: "bot", attrs: { biz_bot: "1" } });
+        }
+        await sock.relayMessage(chatId, generated.message, {
+            messageId: generated.key.id,
+            additionalNodes,
+        });
+    } else {
+        generated = generateWAMessageFromContent(
+            chatId,
+            {
+                viewOnceMessage: {
+                    message: {
+                        messageContextInfo: {
+                            deviceListMetadataVersion: 2,
+                            deviceListMetadata: {},
+                        },
+                        interactiveMessage: interactive,
+                    },
                 },
             },
-        },
-        {
-            userJid: getUserJid(sock, senderJid),
-            messageId: makeId(),
-        },
-    );
-    await sock.relayMessage(chatId, generated.message, {
-        messageId: generated.key.id,
-    });
+            {
+                userJid: getUserJid(sock, senderJid),
+                messageId: makeId(),
+            },
+        );
+        await sock.relayMessage(chatId, generated.message, {
+            messageId: generated.key.id,
+        });
+    }
     console.log(
-        `[LISTMENU] SENT page=${(opts.page || 0) + 1} chat=${String(chatId).split('@')[0]}`,
+        `[LISTMENU] SENT page=${(opts.page || 0) + 1} variant=${variant === "bare" ? "B-bare+nodes" : "A-viewonce"} chat=${String(chatId).split("@")[0]}`,
     );
     return generated;
 }
@@ -363,7 +402,7 @@ function _diag() {
 }
 
 console.log(
-    `[LISTMENU] ready v3 · ${visibleCategories().length} categories · flow=${FLOW_NAME} · unwrap=on · env=viewonce`,
+    `[LISTMENU] ready v4 · ${visibleCategories().length} categories · flow=${FLOW_NAME} · unwrap=on · variants=A-viewonce,B-bare+nodes`,
 );
 
 module.exports = {
