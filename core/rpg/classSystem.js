@@ -1168,16 +1168,16 @@ function checkRankPromotionEligibility(currentRank, completedMissions) {
  * Returns null if no mission is required.
  */
 function getGateMissionForRank(currentRank) {
-    const gate = RANK_MISSION_GATES[currentRank];
+    const gate = Object.prototype.hasOwnProperty.call(RANK_MISSION_GATES, currentRank) ? RANK_MISSION_GATES[currentRank] : undefined;
     if (gate === null || gate === undefined) return null;
-    return RANK_MISSIONS[gate];
+    return RANK_MISSIONS[gate] || null;
 }
 
 /**
  * Get a mission by ID.
  */
 function getRankMission(missionId) {
-    return RANK_MISSIONS[missionId] || null;
+    return (Object.prototype.hasOwnProperty.call(RANK_MISSIONS, missionId) && RANK_MISSIONS[missionId]) || null;
 }
 
 /**
@@ -1185,8 +1185,9 @@ function getRankMission(missionId) {
  * Returns { complete, progress: [{ objective, current, target, done }] }.
  */
 function checkMissionProgress(missionId, playerStats) {
-    const mission = RANK_MISSIONS[missionId];
+    const mission = Object.prototype.hasOwnProperty.call(RANK_MISSIONS, missionId) ? RANK_MISSIONS[missionId] : null;
     if (!mission) return { complete: false, progress: [] };
+    playerStats = playerStats || {};
 
     const progress = mission.objectives.map(obj => {
         const current = Math.min(playerStats[obj.statKey] || 0, obj.target);
@@ -1334,10 +1335,13 @@ function getClassById(classId) {
     }
     if (!classId || typeof classId !== 'string') return null;
     const allClasses = getAllClasses();
+    // 2026-10-31 hammer: own-property lookup only. Player text like 'constructor' /
+    // '__proto__' / 'toString' resolved to Object.prototype members (truthy "class").
+    const _own = (k) => (Object.prototype.hasOwnProperty.call(allClasses, k) ? allClasses[k] : undefined);
     return (
-        allClasses[classId] ||
-        allClasses[classId.toUpperCase()] ||
-        allClasses[classId.toLowerCase()] ||
+        _own(classId) ||
+        _own(classId.toUpperCase()) ||
+        _own(classId.toLowerCase()) ||
         null
     );
 }
@@ -1354,7 +1358,9 @@ function isFighterLineage(classId) {
     const classData = getClassById(classId);
     if (!classData) return false;
     let current = classData;
-    while (current && current.evolvedFrom) {
+    // 2026-10-31 hammer: cycle guard (custom class with evolvedFrom loop hung the bot)
+    let _guard = 0;
+    while (current && current.evolvedFrom && _guard++ < 20) {
         if (current.evolvedFrom === 'FIGHTER') return true;
         current = getClassById(current.evolvedFrom);
     }
@@ -1467,7 +1473,8 @@ function getNextRankRequirements(currentRank) {
 function getLineage(classId) {
     const lineage = [];
     let currentId = classId;
-    while (currentId) {
+    // 2026-10-31 hammer: cycle guard (custom class evolvedFrom loop = infinite loop)
+    while (currentId && lineage.length < 20 && !lineage.includes(currentId)) {
         lineage.push(currentId);
         const classData = getClassById(currentId);
         if (!classData?.evolvedFrom) break;

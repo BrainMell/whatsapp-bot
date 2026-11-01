@@ -417,6 +417,26 @@ const RUNE_TIERS = {
   ABYSSAL: { id: 'ABYSSAL', name: 'Abyssal', multIndex: 3, dropWeight: 0 },
 };
 
+// 2026-10-31 hammer: per-user async mutex. socket/fuse/remove/destroy are
+// read-then-write over Mongo; two concurrent commands (double-sent message)
+// both passed the slot-count / "rune exists" checks -> over-socketed skills and
+// double-fused runes (2 new runes from the same 2 consumed).
+const _runeLocks = new Map();
+async function _withRuneLock(userJid, fn) {
+  const key = String(userJid);
+  const prev = _runeLocks.get(key) || Promise.resolve();
+  let release;
+  const gate = new Promise(r => { release = r; });
+  const chain = prev.then(() => gate);
+  _runeLocks.set(key, chain);
+  await prev;
+  try { return await fn(); }
+  finally {
+    release();
+    if (_runeLocks.get(key) === chain) _runeLocks.delete(key);
+  }
+}
+
 // ─── SKILL SLOT CAPACITY ──────────────────────────────────────────────────
 // How many rune slots a skill has, based on its tier.
 // Starter skills: 0, Evolved: 1, Ascended: 2, Ultimate: 3
@@ -513,6 +533,7 @@ async function getRuneInventory(userJid) {
 // Returns the Rune document, or null if not found.
 async function resolveRune(userJid, query) {
   if (!query) return null;
+  query = String(query);
   const q = query.toUpperCase().trim();
 
   // 1. Old-style ID (R-XXXX or rune_XXXX)
@@ -571,9 +592,10 @@ async function resolveRune(userJid, query) {
 // @param typeQuery  - e.g. "POWER", "power", "Power Rune"
 // @param countQuery - number (2, 4, 6...) or "all"
 // @returns { success, message, fusedCount }
-async function fuseRunesByName(userJid, typeQuery, countQuery) {
+function fuseRunesByName(userJid, typeQuery, countQuery) { return _withRuneLock(userJid, () => _fuseRunesByName(userJid, typeQuery, countQuery)); }
+async function _fuseRunesByName(userJid, typeQuery, countQuery) {
   if (!typeQuery) return { success: false, message: '❌ Specify a rune type to fuse.' };
-  const q = typeQuery.toUpperCase().trim();
+  const q = String(typeQuery).toUpperCase().trim();
 
   // Resolve type
   let matchedType = Object.keys(RUNE_TYPES).find(t => t === q || t.replace('_', '') === q);
@@ -690,7 +712,8 @@ async function getSocketedRunes(userJid, skillId) {
 }
 
 // ─── SOCKET A RUNE INTO A SKILL ───────────────────────────────────────────
-async function socketRune(userJid, runeId, skillId) {
+function socketRune(userJid, runeId, skillId) { return _withRuneLock(userJid, () => _socketRune(userJid, runeId, skillId)); }
+async function _socketRune(userJid, runeId, skillId) {
   const rune = await Rune.findOne({ runeId, ownerJid: userJid });
   if (!rune) return { success: false, message: '❌ Rune not found in your inventory.' };
   if (rune.socketedSkillId) return { success: false, message: `❌ This rune is already socketed in ${rune.socketedSkillId}.` };
@@ -709,7 +732,8 @@ async function socketRune(userJid, runeId, skillId) {
     if (!classTree || !classTree.trees) continue;
     for (const [treeName, treeData] of Object.entries(classTree.trees)) {
       if (!treeData || !treeData.skills) continue;
-      if (treeData.skills[skillId]) {
+      // 2026-10-31 hammer: own-property only - 'constructor'/'__proto__' hit Object.prototype and counted as a real skill.
+      if (Object.prototype.hasOwnProperty.call(treeData.skills, skillId)) {
         skillDef = treeData.skills[skillId];
         break;
       }
@@ -821,7 +845,8 @@ async function getAllSocketedRunes(userJid) {
 // handler, which checks the user's inventory).
 // 💡 FIX 2026-08-06: Now accepts friendly names (void_conversion-greater,
 // void_conversion) via resolveSocketedRune, not just raw R-XXXX IDs.
-async function removeRune(userJid, runeQuery, hasScroll = false) {
+function removeRune(userJid, runeQuery, hasScroll) { return _withRuneLock(userJid, () => _removeRune(userJid, runeQuery, hasScroll)); }
+async function _removeRune(userJid, runeQuery, hasScroll = false) {
   // Try direct runeId lookup first (R-XXXX format)
   let rune = await Rune.findOne({ runeId: runeQuery, ownerJid: userJid });
   // Fall back to name-based resolution (socketed runes only)
@@ -857,7 +882,8 @@ async function removeRune(userJid, runeQuery, hasScroll = false) {
 
 // ─── DESTROY A SOCKETED RUNE (no scroll needed) ───────────────────────────
 // 💡 FIX 2026-08-06: Now accepts friendly names via resolveSocketedRune.
-async function destroyRune(userJid, runeQuery) {
+function destroyRune(userJid, runeQuery) { return _withRuneLock(userJid, () => _destroyRune(userJid, runeQuery)); }
+async function _destroyRune(userJid, runeQuery) {
   let rune = await Rune.findOne({ runeId: runeQuery, ownerJid: userJid });
   if (!rune) rune = await resolveSocketedRune(userJid, runeQuery);
   if (!rune) return { success: false, message: '❌ Rune not found. Use `' + require('../../botConfig').getPrefix() + ' rune sockets` to see your socketed runes.' };

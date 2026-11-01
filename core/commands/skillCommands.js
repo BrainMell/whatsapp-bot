@@ -207,7 +207,12 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
     let targetSkill = null;
     let foundInClassName = null;
 
-    const cleanSearch = skillId.replace(/[\s_]/g, "").toLowerCase();
+    // 2026-10-31 hammer: empty/underscore-only/non-string query made pass 2 `includes('')` match the FIRST skill (free random skill-up / mirror).
+    const cleanSearch = String(skillId == null ? '' : skillId).replace(/[\s_]/g, "").toLowerCase();
+    if (!cleanSearch) {
+        await sock.sendMessage(chatId, { text: `❌ Tell me which skill. Use \`${getPrefix()} skill tree\` to see available skills.` });
+        return;
+    }
 
     // 💡 FIX (BUG 5: "skill up rally" skilled up "rallying cry"):
     // The old matcher used `cleanName.includes(cleanSearch)` which is a
@@ -1187,7 +1192,12 @@ async function learnSkill(sock, chatId, senderJid, skillId) {
     let targetSkill = null;
     let sourceClassId = null;
 
-    const cleanSearch = skillId.replace(/[\s_]/g, "").toLowerCase();
+    // 2026-10-31 hammer: empty/underscore-only/non-string query made pass 2 `includes('')` match the FIRST skill (free random skill-up / mirror).
+    const cleanSearch = String(skillId == null ? '' : skillId).replace(/[\s_]/g, "").toLowerCase();
+    if (!cleanSearch) {
+        await sock.sendMessage(chatId, { text: `❌ Tell me which skill. Use \`${getPrefix()} skill tree\` to see available skills.` });
+        return;
+    }
 
     // 💡 BUG-06 fix: apply the same two-pass matcher (exact-then-substring)
     // as upgradeSkill. The old single-pass matcher used `cleanName.includes(cleanSearch)`

@@ -69,7 +69,7 @@ function getThreatMult(combatant) {
  * @returns {number} - Threat generated
  */
 function generateThreat(attacker, damage) {
-  if (!attacker || damage <= 0) return 0;
+  if (!attacker || !(damage > 0) || !Number.isFinite(damage)) return 0; // 2026-10-31 hammer: NaN/Infinity damage poisoned threat
   const mult = getThreatMult(attacker);
   const threat = Math.floor(damage * mult);
   attacker.threat = (attacker.threat || 0) + threat;
@@ -83,7 +83,7 @@ function generateThreat(attacker, damage) {
  * @returns {number} - Threat generated
  */
 function generateHealThreat(healer, healAmount) {
-  if (!healer || healAmount <= 0) return 0;
+  if (!healer || !(healAmount > 0) || !Number.isFinite(healAmount)) return 0; // 2026-10-31 hammer: NaN guard
   const mult = getThreatMult(healer);
   const threat = Math.floor(healAmount * 0.5 * mult);
   healer.threat = (healer.threat || 0) + threat;
@@ -96,7 +96,7 @@ function generateHealThreat(healer, healAmount) {
  * @param {number} amount - Flat threat amount
  */
 function addFlatThreat(combatant, amount) {
-  if (!combatant) return;
+  if (!combatant || !Number.isFinite(amount)) return; // 2026-10-31 hammer: NaN guard
   combatant.threat = (combatant.threat || 0) + amount;
 }
 

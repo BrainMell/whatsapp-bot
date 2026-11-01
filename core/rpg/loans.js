@@ -112,7 +112,8 @@ const MAX_LOAN = 5000000; // 💡 Rebalanced 2026-08-17: a single loan can't exc
 // Request a loan
 function requestLoan(borrowerJid, lenderJid, amount, interestRate, durationMinutes) {
   // Basic validation
-  const amt = Number(amount);
+  // 2026-10-31 hammer: floor fractional amounts (1500.5 made float loans + float repayment).
+  const amt = Math.floor(Number(amount));
   const interest = Number(interestRate);
   const duration = Number(durationMinutes);
   if (!Number.isFinite(amt) || amt <= 0) return { success: false, msg: `❌ Amount must be a positive number.` };
@@ -166,9 +167,9 @@ function requestLoan(borrowerJid, lenderJid, amount, interestRate, durationMinut
   return { 
     success: true, 
     msg: `📝 *LOAN REQUEST SENT*\n\nTo: @${economy.getDisplayName(lenderJid)}
-Amount: ${getZENI()}${amount}
-Interest: ${interestRate}%
-Duration: ${durationMinutes} mins
+Amount: ${getZENI()}${amt.toLocaleString()}
+Interest: ${interest}%
+Duration: ${duration} mins
 
 ⏳ *Time:* 120s to accept.
 Waiting for them to type:
@@ -223,7 +224,8 @@ function acceptLoan(lenderJid) {
 
   // Save active loan
   const loanObj = {
-    loanId: Date.now().toString(),
+    // 2026-10-31 hammer: random suffix - two loans accepted in the same ms shared an id and the DB upsert merged them.
+    loanId: Date.now().toString() + '-' + Math.random().toString(36).slice(2, 7),
     lender: lenderJid,
     borrower: request.borrowerJid,
     amount: request.amount,

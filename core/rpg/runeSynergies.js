@@ -140,7 +140,7 @@ const SYNERGIES = [
 function detectSynergies(activeStatuses) {
   if (!activeStatuses || activeStatuses.length < 2) return [];
 
-  const statusSet = new Set(activeStatuses.map(s => s.toLowerCase()));
+  const statusSet = new Set(activeStatuses.map(s => String(s).toLowerCase()));
   const triggered = [];
 
   for (const synergy of SYNERGIES) {
@@ -158,8 +158,10 @@ function detectSynergies(activeStatuses) {
 // Modifies the combat effect based on active synergies.
 // Returns { modifiedEffect, synergiesTriggered, messages }
 function applySynergyEffects(effect, targetStatuses, attackerRunes) {
+  effect = effect || {}; // 2026-10-31 hammer: null effect threw
   const result = {
-    modifiedEffect: { ...effect },
+    // 2026-10-31 hammer: copy addStatuses so synergy pushes don't mutate the shared skill definition permanently
+    modifiedEffect: { ...effect, ...(Array.isArray(effect.addStatuses) ? { addStatuses: effect.addStatuses.map(s => ({ ...s })) } : {}) },
     synergies: [],
     messages: [],
     ccApplied: [], // track CC for DR check
@@ -169,7 +171,7 @@ function applySynergyEffects(effect, targetStatuses, attackerRunes) {
   // Collect all statuses: ones on the target + ones being applied by this skill
   const allStatuses = new Set([
     ...(targetStatuses || []).map(s => s.type || s),
-    ...((effect.addStatuses || []).map(s => s.type)),
+    ...((Array.isArray(effect.addStatuses) ? effect.addStatuses : []).map(s => s && s.type)),
   ]);
 
   // Also check rune types (some synergies trigger on rune type, not status)

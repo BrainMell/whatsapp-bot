@@ -281,6 +281,24 @@ function getGuildInfo() {
   return globalGuildData;
 }
 
+// 2026-10-31 hammer: loose JID match shared by leave/promote/demote/kick/role. The old inline
+// find() let an empty/short target ('' or '@lid') match members[0] (the OWNER) and let a short
+// number match the wrong member. Exact match first; loose match only for a 5+ char bare number.
+function _findMemberJid(list, targetJid) {
+  const arr = Array.isArray(list) ? list : [];
+  const t = String(targetJid || '');
+  if (!t) return undefined;
+  const exact = arr.find(m => m === t);
+  if (exact) return exact;
+  const bare = t.split('@')[0].split(':')[0];
+  if (bare.length < 5) return undefined;
+  return arr.find(m => {
+    if (typeof m !== 'string') return false;
+    const mb = m.split('@')[0].split(':')[0];
+    return mb === bare || economy.getDisplayName(m) === bare;
+  });
+}
+
 // make a new guild
 function createGuild(guildName, creatorJid, archetype = 'ADVENTURER', continentKey = null) {
   const info = globalGuildData;
@@ -313,6 +331,12 @@ Delete it first with: ${botConfig.getPrefix()} guild delete`
     };
   }
 
+  // 2026-10-31 hammer: reject non-strings and names that collide with Object.prototype keys
+  // ('__proto__' rewrote the guilds map prototype; 'constructor'/'toString' made info.guilds[name] truthy for a guild that doesn't exist).
+  if (typeof guildName !== 'string' || !guildName.trim() || (guildName in {}) || /[\u0000-\u001f]/.test(guildName)) {
+    return { success: false, message: "❌ Invalid guild name!" };
+  }
+  archetype = String(archetype || 'ADVENTURER');
   const lowerName = guildName.toLowerCase();
   if (Object.keys(info.guilds).some(g => g.toLowerCase() === lowerName)) {
     return { success: false, message: "❌ Guild name already taken!" };
@@ -411,6 +435,10 @@ function setGuildMotto(userJid, newMotto) {
     return { success: false, message: "❌ Only the Guild Master can set the motto!" };
   }
 
+  newMotto = String(newMotto == null ? '' : newMotto).replace(/[\u0000-\u001f]/g, ' ').trim(); // 2026-10-31 hammer: non-string / control chars
+  if (!newMotto) {
+    return { success: false, message: "❌ Motto can't be empty!" };
+  }
   if (newMotto.length > 50) {
     return { success: false, message: "❌ Motto too long! Max 50 characters." };
   }
@@ -468,7 +496,7 @@ Leave first with: ${botConfig.getPrefix()} guild leave`
   }
 
   const guild = Object.entries(info.guilds).find(
-    ([name]) => name.toLowerCase() === guildName.toLowerCase()
+    ([name]) => name.toLowerCase() === String(guildName == null ? '' : guildName).trim().toLowerCase() // 2026-10-31 hammer: undefined guildName crashed
   );
 
   if (!guild) {
@@ -523,17 +551,13 @@ function leaveGuild(userJid) {
   const guild = info.guilds[guildName];
   if (guild) {
     // 💡 QA FIX: loose JID matching for member removal
-    const memberJid = (guild.members || []).find(m =>
-      m === userJid || economy.getDisplayName(m) === userJid.split('@')[0] ||
-      m.includes(userJid.split('@')[0]) ||
-      userJid.includes(m.split('@')[0])
-    );
+    const memberJid = _findMemberJid(guild.members, userJid); // 2026-10-31 hammer: exact-first (loose find removed the wrong member)
     const removeJid = memberJid || userJid; // fallback to raw if not found
     guild.members = guild.members.filter(m => m !== removeJid);
     guild.admins = (guild.admins || []).filter(a => a !== removeJid);
     // 💡 QA FIX: also clean up recruits
     if (guild.recruits) guild.recruits = guild.recruits.filter(r => r !== removeJid);
-    delete guild.titles[removeJid];
+    if (guild.titles) delete guild.titles[removeJid];
     syncGuild(guildName);
   } else {
     console.warn(`[Guild] Found orphaned member ${userJid} for missing guild ${guildName}`);
@@ -715,14 +739,14 @@ async function promoteToAdmin(ownerJid, targetJid) {
 
   // 💡 QA FIX: try to match targetJid against members using loose matching
   // (LID vs phone format may differ)
-  const memberJid = guild.members.find(m =>
-    m === targetJid || economy.getDisplayName(m) === targetJid.split('@')[0] ||
-    m.includes(targetJid.split('@')[0]) ||
-    targetJid.includes(m.split('@')[0])
-  );
+  const memberJid = _findMemberJid(guild.members, targetJid);
 
   if (!memberJid) {
     return { success: false, message: "❌ That user is not in your guild!" };
+  }
+
+  if (memberJid === guild.owner) {
+    return { success: false, message: "❌ The guild leader can't be made an officer!" }; // 2026-10-31 hammer
   }
 
   if (guild.admins && guild.admins.includes(memberJid)) {
@@ -756,11 +780,7 @@ async function demoteAdmin(ownerJid, targetJid) {
   }
 
   // 💡 QA FIX: loose JID matching (same as promoteToAdmin)
-  const adminJid = guild.admins.find(a =>
-    a === targetJid || economy.getDisplayName(a) === targetJid.split('@')[0] ||
-    a.includes(targetJid.split('@')[0]) ||
-    targetJid.includes(a.split('@')[0])
-  );
+  const adminJid = _findMemberJid(guild.admins, targetJid);
 
   if (!adminJid) {
     return { success: false, message: "❌ That user is not an officer!" };
@@ -798,11 +818,7 @@ async function kickFromGuild(ownerOrAdminJid, targetJid) {
   }
 
   // 💡 QA FIX: loose JID matching
-  const memberJid = guild.members.find(m =>
-    m === targetJid || economy.getDisplayName(m) === targetJid.split('@')[0] ||
-    m.includes(targetJid.split('@')[0]) ||
-    targetJid.includes(m.split('@')[0])
-  );
+  const memberJid = _findMemberJid(guild.members, targetJid);
 
   if (!memberJid) {
     return { success: false, message: "❌ That user is not in your guild!" };
@@ -811,12 +827,11 @@ async function kickFromGuild(ownerOrAdminJid, targetJid) {
   if (memberJid === guild.owner) {
     return { success: false, message: "❌ Can't kick the guild owner!" };
   }
-
   guild.members = guild.members.filter(m => m !== memberJid);
   guild.admins = (guild.admins || []).filter(a => a !== memberJid);
   // 💡 QA FIX: also clean up recruits
   if (guild.recruits) guild.recruits = guild.recruits.filter(r => r !== memberJid);
-  delete guild.titles[memberJid];
+  if (guild.titles) delete guild.titles[memberJid];
   delete info.memberGuilds[memberJid];
 
   await syncGuild(guildName);
@@ -856,10 +871,12 @@ function setMemberTitle(ownerJid, targetJid, title) {
   }
 
   const guild = info.guilds[guildName];
+  if (!guild) return { success: false, message: "❌ Guild data not found!" }; // 2026-10-31 hammer
 
   if (!guild.members.includes(targetJid)) {
     return { success: false, message: "❌ That user is not in your guild!" };
   }
+  if (!guild.titles) guild.titles = {};
 
   const clean = cleanTitle(title);
   if (!clean) {
@@ -894,11 +911,7 @@ function getGuildMember(guildName, userJid) {
   if (!guild) return null;
 
   // 💡 QA FIX: loose JID matching for member lookup
-  const memberJid = (guild.members || []).find(m =>
-    m === userJid || economy.getDisplayName(m) === userJid.split('@')[0] ||
-    m.includes(userJid.split('@')[0]) ||
-    userJid.includes(m.split('@')[0])
-  );
+  const memberJid = _findMemberJid(guild.members, userJid); // 2026-10-31 hammer: exact-first
   if (!memberJid) return null;
 
   if (!guild.recruits) guild.recruits = [];
@@ -929,12 +942,9 @@ async function setMemberRole(ownerJid, targetJid, newRole) {
   if (!guild) return { success: false, message: '❌ Guild not found.' };
 
   // 💡 QA FIX: loose JID matching
-  const memberJid = (guild.members || []).find(m =>
-    m === targetJid || economy.getDisplayName(m) === targetJid.split('@')[0] ||
-    m.includes(targetJid.split('@')[0]) ||
-    targetJid.includes(m.split('@')[0])
-  );
+  const memberJid = _findMemberJid(guild.members, targetJid);
   if (!memberJid) return { success: false, message: '❌ That user is not in your guild!' };
+  if (!['officer', 'recruit', 'member'].includes(newRole)) return { success: false, message: '❌ Role must be recruit, member or officer.' }; // 2026-10-31 hammer: junk role silently demoted to member
   if (guild.owner === memberJid) {
     return { success: false, message: '❌ Cannot change the leader\'s role.' };
   }
@@ -967,6 +977,7 @@ function isGuildOwner(userJid) {
   // 💡 QA FIX: check direct + loose match for LID/phone format tolerance
   if (info.guildOwners[userJid]) return true;
   const phone = userJid.split('@')[0];
+  if (!phone) return false; // 2026-10-31 hammer: '' made includes('') true for everyone
   for (const jid of Object.keys(info.guildOwners)) {
     if (jid.split('@')[0] === phone || jid.includes(phone) || userJid.includes(jid.split('@')[0])) return true;
   }
@@ -1027,7 +1038,7 @@ function isGuildAdmin(userJid) {
   if (!guildName) return false;
 
   const guild = info.guilds[guildName];
-  return guild.admins.includes(userJid);
+  return !!(guild && Array.isArray(guild.admins) && guild.admins.includes(userJid)); // 2026-10-31 hammer: orphaned membership crashed
 }
 //========================================
 
@@ -1231,8 +1242,8 @@ function updateBoardProgress(guildName, targetType, amount) {
   let boardUpdated = false;
   guild.dailyBoard.targets.forEach(t => {
     // Exact match for targetType (EARN_ZENI, CRAFT_ITEMS, or monster IDs)
-    if (t.type === targetType && t.current < t.count) {
-      t.current = Math.min(t.count, t.current + amount);
+    if (t.type === targetType && t.current < t.count && Number.isFinite(Number(amount)) && Number(amount) > 0) { // 2026-10-31 hammer: NaN/negative amount corrupted progress
+      t.current = Math.min(t.count, t.current + Number(amount));
       boardUpdated = true;
     }
   });
@@ -1241,8 +1252,9 @@ function updateBoardProgress(guildName, targetType, amount) {
     const allDone = guild.dailyBoard.targets.every(t => t.current >= t.count);
     if (allDone && !guild.dailyBoard.completed) {
         guild.dailyBoard.completed = true;
-        addGuildPoints(guildName, guild.dailyBoard.rewards.xp, "Board Completed");
-        addGuildBalance(guildName, guild.dailyBoard.rewards.gold);
+        const _rw = guild.dailyBoard.rewards || { xp: 500 * (guild.level || 1), gold: 1000 * (guild.level || 1) }; // 2026-10-31 hammer: legacy boards had no rewards
+        addGuildPoints(guildName, _rw.xp, "Board Completed");
+        addGuildBalance(guildName, _rw.gold);
     }
     syncGuild(guildName);
   }
@@ -1258,6 +1270,7 @@ async function displayGuildBoard(sock, chatId, userJid) {
   }
 
   const guild = info.guilds[guildName];
+  if (!guild) { await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Guild not found!" }); return; } // 2026-10-31 hammer
   if (!guild.dailyBoard) guild.dailyBoard = { lastUpdate: 0, targets: [] };
   
   const lastUpdate = guild.dailyBoard.lastUpdate || 0;
@@ -1291,7 +1304,7 @@ async function displayGuildBoard(sock, chatId, userJid) {
   
   if (guild.dailyBoard.completed) {
       msg += `✅ *STATUS:* COMPLETED!\n\n`;
-  } else {
+  } else if (guild.dailyBoard.rewards) {
       msg += `🎁 *REWARDS (Shared):*\n`;
       msg += `💰 ${guild.dailyBoard.rewards.gold} Zeni\n`;
       msg += `⭐ ${guild.dailyBoard.rewards.xp} Guild XP\n\n`;
@@ -1405,12 +1418,13 @@ function upgradeGuildBuilding(userJid, buildingId) {
     return { success: false, message: "❌ Only the Guild Master or officers can upgrade buildings!" };
   }
 
-  const upgrade = GUILD_UPGRADES[buildingId];
+  const upgrade = Object.prototype.hasOwnProperty.call(GUILD_UPGRADES, buildingId) ? GUILD_UPGRADES[buildingId] : null; // 2026-10-31 hammer: 'constructor' gave NaN cost -> NaN guild balance
 
   if (!upgrade) {
     return { success: false, message: "❌ Invalid building ID!" };
   }
 
+  if (!guild.buildings) guild.buildings = { hall: { level: 1 }, training: { level: 0 }, treasury: { level: 0 } };
   const currentLevel = guild.buildings[buildingId]?.level || 0;
   if (currentLevel >= upgrade.maxLevel) {
     return { success: false, message: "❌ Building is already at maximum level!" };

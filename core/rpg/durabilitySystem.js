@@ -31,7 +31,7 @@ function getDurabilityProfile(itemId, itemInstance, itemInfo) {
     let max = Math.round(baseDur * mult);
     
     // Material override
-    const cleanId = itemId.toLowerCase();
+    const cleanId = String(itemId || '').toLowerCase(); // 2026-10-31 hammer: undefined itemId threw
     if (cleanId.includes('steel') || cleanId.includes('iron') || cleanId.includes('plate')) {
         max += 20;
     } else if (cleanId.includes('crystal') || cleanId.includes('mythril') || cleanId.includes('arcane')) {
@@ -128,6 +128,7 @@ function getRepairCost(item) {
  */
 function repairItem(item) {
     if (item.durability === undefined || item.durability === null) return { success: false, cost: 0 };
+    if (!Number.isFinite(item.maxDurability)) return { success: false, cost: 0 }; // 2026-10-31 hammer: would set durability=undefined
     const cost = getRepairCost(item);
     item.durability = item.maxDurability;
     delete item.warnedLow;
@@ -183,7 +184,7 @@ function applyWear(entity, slotOrAll, opts = {}) {
             // Decoupled / fallback
         }
         
-        const amount = opts.amount !== undefined ? opts.amount : 1;
+        const amount = (opts.amount !== undefined && Number.isFinite(opts.amount)) ? opts.amount : 1; // 2026-10-31 hammer: NaN amount made durability NaN
         const finalLoss = amount * lossRate;
         
         item.durability = Math.max(0, item.durability - finalLoss);
@@ -210,7 +211,7 @@ function applySelfRepair(entity) {
         if (!item || item.durability === undefined || item.durability === null) continue;
         
         const traits = item.durabilityTraits || [];
-        if (traits.includes('SELF_REPAIRING')) {
+        if (traits.includes('SELF_REPAIRING') && Number.isFinite(item.maxDurability)) { // 2026-10-31 hammer: NaN guard
             const amount = 2;
             item.durability = Math.min(item.maxDurability, item.durability + amount);
             if (item.durability > (item.maxDurability * 0.15)) {

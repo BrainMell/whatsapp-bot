@@ -134,25 +134,35 @@ async function cmdUnlistItem(senderJid, reply, args = []) {
   if (!listing) return reply(`❌ No active listing #${num}.`), true;
   if (listing.sellerId !== senderJid) return reply('❌ You can only unlist your own items.'), true;
 
+  // 2026-10-31 hammer: atomic claim BEFORE returning items - an unlist racing a buyitem both succeeded
+  // (buyer got the goods AND the seller got them back, status then overwritten to 'cancelled').
+  const claimedU = await ItemMarket.findOneAndUpdate(
+    { _id: listing._id, status: 'active', sellerId: senderJid },
+    { $set: { status: 'pending' } },
+    { new: true }
+  );
+  if (!claimedU) return reply('❌ That listing was just sold or changed. Check `itemmarket`.'), true;
+
   try {
     // Return the items to the seller's inventory FIRST.
-    const restored = await addItem(senderJid, listing.itemId, listing.quantity, {
-      name: listing.itemName,
-      rarity: listing.itemRarity
+    const restored = await addItem(senderJid, claimedU.itemId, claimedU.quantity, {
+      name: claimedU.itemName,
+      rarity: claimedU.itemRarity
     });
     if (!restored || !restored.success) {
       // Inventory full - keep the listing active, tell them to clear space.
+      await ItemMarket.updateOne({ _id: claimedU._id, status: 'pending' }, { $set: { status: 'active' } }).catch(() => {});
       return reply(
-        `❌ Couldn't return ${listing.quantity}× ${listing.itemName} to your inventory (full?). ` +
+        `❌ Couldn't return ${claimedU.quantity}× ${claimedU.itemName} to your inventory (full?). ` +
         `Clear some space and try again. Listing still active.`
       ), true;
     }
     await economy.saveUser(senderJid);
 
-    listing.status = 'cancelled';
-    listing.completedAt = new Date();
-    await listing.save();
-    return reply(`✅ Unlisted: ${listing.itemName} ×${listing.quantity} returned to your inventory.`), true;
+    claimedU.status = 'cancelled';
+    claimedU.completedAt = new Date();
+    await claimedU.save();
+    return reply(`✅ Unlisted: ${claimedU.itemName} ×${claimedU.quantity} returned to your inventory.`), true;
   } catch (err) {
     console.error('[ItemMarket] unlistItem error:', err);
     return reply('❌ Unlist failed: ' + (err.message || 'unknown error')), true;

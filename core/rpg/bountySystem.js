@@ -38,18 +38,35 @@ function generateBountyId() {
 }
 
 // ─── PLACE BOUNTY ─────────────────────────────────────────────────────────
+const _placing = new Set(); // 2026-10-31 hammer: per-placer in-flight lock (concurrent calls both passed the cooldown check)
 async function placeBounty(placerJid, targetJid, amount, placerLevel, targetLevel, placerPhone) {
+  // 2026-10-31 hammer: coerce to a whole number - 5000.5 / '5000' / Infinity used to slip through and store a float amount.
+  amount = Math.floor(Number(amount));
+  if (!placerJid || !targetJid) {
+    return { success: false, message: '❌ Invalid target.' };
+  }
+  if (_placing.has(placerJid)) {
+    return { success: false, message: '❌ Your previous bounty is still being placed.' };
+  }
+  _placing.add(placerJid);
+  try {
+    return await _placeBountyInner(placerJid, targetJid, amount, placerLevel, targetLevel, placerPhone);
+  } finally {
+    _placing.delete(placerJid);
+  }
+}
+async function _placeBountyInner(placerJid, targetJid, amount, placerLevel, targetLevel, placerPhone) {
   // Validation
   if (placerJid === targetJid) {
     return { success: false, message: '❌ You cannot place a bounty on yourself.' };
   }
-  if (!amount || amount < MIN_BOUNTY) {
+  if (!Number.isFinite(amount) || amount < MIN_BOUNTY) {
     return { success: false, message: `❌ Minimum bounty is ${MIN_BOUNTY.toLocaleString()} Zeni.` };
   }
   if (amount > MAX_BOUNTY) {
     return { success: false, message: `❌ Maximum bounty is ${MAX_BOUNTY.toLocaleString()} Zeni.` };
   }
-  if (targetLevel < 20) {
+  if (!(Number(targetLevel) >= 20)) {
     return { success: false, message: `❌ Target must be at least level 20. (They are L${targetLevel})` };
   }
 
@@ -77,7 +94,9 @@ async function placeBounty(placerJid, targetJid, amount, placerLevel, targetLeve
   }
 
   // Deduct from placer
-  economy.removeMoney(placerJid, amount, `Bounty placed on ${targetJid}`);
+  if (!economy.removeMoney(placerJid, amount, `Bounty placed on ${targetJid}`)) {
+    return { success: false, message: '❌ Could not deduct the bounty amount from your wallet.' };
+  }
 
   // Create bounty
   const bounty = new Bounty({
@@ -89,7 +108,13 @@ async function placeBounty(placerJid, targetJid, amount, placerLevel, targetLeve
     expiresAt: new Date(Date.now() + BOUNTY_EXPIRY_MS),
     status: 'active',
   });
-  await bounty.save();
+  try {
+    await bounty.save();
+  } catch (e) {
+    // 2026-10-31 hammer: save failed after the Zeni was taken - refund instead of silently destroying it.
+    economy.addMoney(placerJid, amount, `Bounty placement failed (refund)`);
+    return { success: false, message: '❌ Failed to record the bounty. Your Zeni was refunded.' };
+  }
 
   return {
     success: true,
@@ -122,6 +147,9 @@ async function getTopBounties(limit = 10) {
 // ─── CLAIM BOUNTY (called after PvP win) ──────────────────────────────────
 // Awards the bounty to the hunter, deducts hunter fee to guild treasury.
 async function claimBounty(hunterJid, targetJid) {
+  if (!hunterJid || hunterJid === targetJid) {
+    return { success: false, claimed: false, message: '❌ You cannot claim a bounty on yourself.' };
+  }
   const bounties = await Bounty.find({ targetJid, status: 'active' }).sort({ amount: -1 });
   if (bounties.length === 0) {
     return { success: false, claimed: false, message: '❌ No active bounties on that target.' };
@@ -149,7 +177,11 @@ async function claimBounty(hunterJid, targetJid) {
     const afterTax = bounty.amount - economyTax;
     const fee = Math.floor(afterTax * HUNTER_FEE_PCT);
     const hunterPayout = afterTax - fee;
-    economy.addMoney(hunterJid, hunterPayout, `Bounty claim (10% tax + ${HUNTER_FEE_PCT*100}% fee): ${bounty.bountyId}`);
+    if (!economy.addMoney(hunterJid, hunterPayout, `Bounty claim (10% tax + ${HUNTER_FEE_PCT*100}% fee): ${bounty.bountyId}`)) {
+      // 2026-10-31 hammer: payout failed (unregistered hunter) - put the bounty back instead of burning it.
+      await Bounty.updateOne({ _id: bounty._id }, { $set: { status: 'active' } });
+      continue;
+    }
     // Fee to hunter's guild treasury if they have one
     const hunterGuild = guilds.getUserGuild(hunterJid);
     if (hunterGuild && fee > 0) {
@@ -166,6 +198,9 @@ async function claimBounty(hunterJid, targetJid) {
     return { success: false, claimed: false, message: '❌ No active bounties on that target.' };
   }
 
+  if (claimedBounties.length === 0) {
+    return { success: false, claimed: false, message: '❌ No active bounties on that target.' };
+  }
   // Award guild XP + war points for the claim
   try {
     guildPerks.awardGuildXp(hunterJid, 20, `Bounty claim: ${targetJid}`);
@@ -284,7 +319,8 @@ async function getPlacedBounties(placerJid) {
 
 // ─── CANCEL BOUNTY (placer can cancel early, 10% cancellation fee) ────────
 async function cancelBounty(placerJid, bountyId) {
-  const bounty = await Bounty.findOne({ bountyId, placerJid, status: 'active' });
+  // 2026-10-31 hammer: atomic flip first - double-cancel used to refund twice (refund was paid before the status save).
+  const bounty = await Bounty.findOneAndUpdate({ bountyId: String(bountyId), placerJid, status: 'active' }, { $set: { status: 'cancelled' } });
   if (!bounty) {
     return { success: false, message: '❌ Bounty not found or not active.' };
   }
@@ -292,8 +328,6 @@ async function cancelBounty(placerJid, bountyId) {
   const cancelFee = Math.floor(bounty.amount * 0.10); // 10% cancellation fee
   const refund = bounty.amount - cancelFee;
   economy.addMoney(placerJid, refund, `Bounty cancelled (refund): ${bountyId}`);
-  bounty.status = 'cancelled';
-  await bounty.save();
   return {
     success: true,
     message: `✅ Cancelled bounty. Refunded ${refund.toLocaleString()} Zeni (10% cancellation fee: ${cancelFee.toLocaleString()}).`,
@@ -346,9 +380,9 @@ async function adminCancelBounty(bountyId) {
       return { success: false, message: `❌ Bounty is already ${bounty.status}.` };
     }
     const economy = require('./economy');
-    economy.addMoney(bounty.placerJid, bounty.amount, `Admin bounty cancel (full refund): ${bountyId}`);
     bounty.status = 'cancelled';
     await bounty.save();
+    economy.addMoney(bounty.placerJid, bounty.amount, `Admin bounty cancel (full refund): ${bountyId}`);
     return {
       success: true,
       message: `✅ Admin-cancelled bounty ${bountyId}. Full refund (${bounty.amount.toLocaleString()} Zeni) issued to placer.`,
