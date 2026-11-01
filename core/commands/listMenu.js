@@ -130,8 +130,9 @@ function listSections(pageIdx) {
 }
 
 function singleSelectParams(sections) {
+    // Match the exact single_select parameter shape used by the working
+    // protocol-lab probe. Unknown fields can cause WhatsApp to drop the card.
     return JSON.stringify({
-        status: true,
         title: '📂 Open categories',
         sections,
     });
