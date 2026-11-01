@@ -209,9 +209,6 @@ async function sendAll(sock, chatId, senderJid, opts = {}) {
     const version = opts.version || "1.0.0";
     const who = opts.botName || "Joker";
     const baseBody = `*Version ${version}* · ${who}\n\nPick a category — it opens right here, no typing needed.`;
-    const overview = cats()
-        .map((c) => `• ${EMOJI[c] || "📂"} ${c} (${(COMMAND_REGISTRY[c] || []).length})`)
-        .join("\n");
     const results = [];
     const step = async (key, fn) => {
         try {
@@ -229,13 +226,10 @@ async function sendAll(sock, chatId, senderJid, opts = {}) {
     });
     await step("n1", () => listMenu.sendListMenu(sock, chatId, senderJid, {
         headerTitle: opts.title || "🃏 JOKER MENU",
-        bodyText: `*Version ${version}* · ${who}\n\n` +
-            `Tap *Open categories* below — each category opens its command list right here, no typing needed.\n\n` +
-            overview,
+        bodyText: duckBody(version, opts.prefix || ".j"),
         footerText: `classic text menu: ${opts.prefix || ".j"} menu`,
         page: 0,
         imagePath: opts.imagePath,
-        tall: true,
     }));
     await step("n2", () => listMenu.sendListMenu(sock, chatId, senderJid, {
         headerTitle: opts.title || "🃏 JOKER MENU",
@@ -263,4 +257,42 @@ async function sendAll(sock, chatId, senderJid, opts = {}) {
     return { ok: okCount === results.length, results };
 }
 
-module.exports = { VARIANTS, labIndex, sendVariant, sendAll };
+// 🧪 duckBody (owner 2026-11-01 12:43Z: "instead of the long ad list of
+// commands… base info from the old one like version, made by… and even the
+// tip should be there… find ascii art… like a duck… aesthetically pleasing"):
+// the shared native1 card body. Small cowsay-style duck in a plain-ASCII
+// ``` block (monospace-aligned, no emoji), classic base info, a rotating tip
+// picked from the classic menu's REAL tip pool (verbatim entries), one nav
+// line. No category grid — the rows were the "long ad list".
+const DUCK_TIPS = [
+    (p) => `Type \`${p} menu <command>\` on ANY command to see its full usage guide.`,
+    (p) => `Search the web straight from chat: \`${p} search <query>\`.`,
+    (p) => `Track your kill count with \`${p} kills\` - the Fortune Teller keeps the ledger.`,
+    (p) => `Card hunters: \`${p} cardlb\` shows the top collectors on the server, per tier too.`,
+    (p) => `The GAMES category has Wordle and more - type \`${p} menu games\` to browse.`,
+    (p) => `Type \`${p} bots\` to see which bot instances are online right now.`,
+];
+
+function duckBody(version, prefix) {
+    const p = prefix || ".j";
+    const quack = [
+        " __",
+        "< tap a category - quack! >",
+        " -------------------------",
+        " \\",
+        "  \\",
+        "        __",
+        "     <(o )___",
+        "      ( ._> /",
+        "       `---'",
+    ].join("\n");
+    const tip = DUCK_TIPS[Math.floor(Math.random() * DUCK_TIPS.length)](p);
+    return (
+        "```\n" + quack + "\n```\n" +
+        `*Version ${version || "1.0.0"}* · *By mellow*\n` +
+        `💡 *Tip:* ${tip}\n\n` +
+        `_Tap *Open categories* below — its commands open right here, no typing needed._`
+    );
+}
+
+module.exports = { VARIANTS, labIndex, sendVariant, sendAll, duckBody };

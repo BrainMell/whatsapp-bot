@@ -7109,20 +7109,12 @@ What to do:
         return await listMenu.sendListMenu(sock, chatId, senderJid, {
           headerTitle: `🃏 ${botName} MENU`,
           bodyText: __nmLarge
-            ? (() => {
-                // 2026-11-01 owner: replace the long category list with ASCII art that fits
-                // the bubble. Plain ASCII only (no emoji: they break monospace alignment),
-                // 28 cols wide, two columns of <=11 chars, inside a ``` block.
-                const W = 34; // 36 monospace cols total: wide enough that the code block itself stretches the bubble to the classic menu's width
-                const line = (t) => "| " + String(t).padEnd(W - 2).slice(0, W - 2) + " |";
-                const center = (t) => line(" ".repeat(Math.max(0, Math.floor((W - 2 - t.length) / 2))) + t);
-                const bar = "+" + "-".repeat(W) + "+";
-                const cats = Object.keys(COMMAND_REGISTRY).filter((c) => c !== "MODERATOR").map((c) => ({ "PHANTOM THIEF": "PHANTOM", POWERSCALING: "POWER", INTERACTIONS: "REACTIONS", "USER INFO": "USER" }[String(c).toUpperCase()] || String(c).toUpperCase()).slice(0, 11));
-                const rows = [];
-                for (let k = 0; k < cats.length; k += 2) rows.push(line(cats[k].padEnd(16) + (cats[k + 1] || "")));
-                const art = [bar, center("J O K E R   M E N U"), center("v" + (botConfig.getVersion() || "1.0.0") + " . by mellow"), bar, ...rows, bar, center("tap the button below"), bar].join("\n");
-                return "```\n" + art + "\n```";
-              })()
+            ? // 2026-11-01 owner 12:43Z: no category grid — duck ASCII + base
+              // info + rotating classic tip (see menuLab.duckBody).
+              require("./commands/menuLab").duckBody(
+                botConfig.getVersion() || "1.0.0",
+                prefix,
+              )
             : `*Version ${botConfig.getVersion() || "1.0.0"}* · By mellow\n\nPick a category — its command list opens right here, no typing needed.`,
           footerText: `classic text menu: ${prefix} menu`,
           page: 0,
