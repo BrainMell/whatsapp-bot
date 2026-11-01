@@ -7,11 +7,15 @@
 // NOT touched; .j menu native = banner image (same asset/pipeline) + the list.
 //
 // Why hand-built: Baileys 7.0.0-rc14 ships NO listMessage/sections sugar at
-// all (grep of lib/Utils/messages.js: zero hits). The only owner-confirmed
-// rendering path for interactive payloads in this codebase is protoLab.js
-// relayInteractive: generateWAMessageFromContent({ interactiveMessage }) +
-// relayMessage with biz/native_flow additionalNodes (v=9). We reuse that exact
-// pattern with a `single_select` button — WhatsApp's current native list sheet.
+// all (grep of lib/Utils/messages.js: zero hits).
+// NOTE (2026-11-01 v3): v1's "owner-confirmed" claim was WRONG — the confirmed
+// renderer in this repo is the GenAI/FOAHtmlPrimitive protomenu
+// (adminConsole.js botForwardedMessage envelope), NOT protoLab.relayInteractive.
+// A BARE interactiveMessage + biz/native_flow additionalNodes relays fine
+// (server ACKs, [LISTMENU] SENT logs) but renders as NOTHING on modern
+// clients — verified live twice (07:29 + 07:45, card invisible in screenshot).
+// v3 switches to the community-standard single_select recipe: viewOnceMessage
+// wrapper + inner messageContextInfo + plain relayMessage, no biz nodes.
 //
 // Limits respected: row title ≤24 chars, row description ≤72, button label
 // ≤20, section title ≤24, header ≤60, body ≤1024, footer ≤60, and a
@@ -168,41 +172,32 @@ function listEnvelope(opts = {}) {
     };
 }
 
-// The PROVEN relay pattern (protoLab.relayInteractive, owner-confirmed render).
+// v3 envelope (2026-11-01): viewOnceMessage-wrapped interactiveMessage with
+// inner messageContextInfo, relayed WITHOUT biz nodes — the documented
+// working single_select recipe. Plan B if this fails too: protoLab's legacy
+// listMessage route (biz > list v=2 type=product_list).
 async function sendListMenu(sock, chatId, senderJid, opts = {}) {
     const interactive = listEnvelope(opts);
     const generated = generateWAMessageFromContent(
         chatId,
-        { interactiveMessage: interactive },
+        {
+            viewOnceMessage: {
+                message: {
+                    messageContextInfo: {
+                        deviceListMetadataVersion: 2,
+                        deviceListMetadata: {},
+                    },
+                    interactiveMessage: interactive,
+                },
+            },
+        },
         {
             userJid: getUserJid(sock, senderJid),
             messageId: makeId(),
         },
     );
-    const additionalNodes = [
-        {
-            tag: 'biz',
-            attrs: {},
-            content: [
-                {
-                    tag: 'interactive',
-                    attrs: { type: 'native_flow', v: '1' },
-                    content: [
-                        {
-                            tag: 'native_flow',
-                            attrs: { v: '9', name: FLOW_NAME },
-                        },
-                    ],
-                },
-            ],
-        },
-    ];
-    if (!String(chatId).endsWith('@g.us')) {
-        additionalNodes.push({ tag: 'bot', attrs: { biz_bot: '1' } });
-    }
     await sock.relayMessage(chatId, generated.message, {
         messageId: generated.key.id,
-        additionalNodes,
     });
     console.log(
         `[LISTMENU] SENT page=${(opts.page || 0) + 1} chat=${String(chatId).split('@')[0]}`,
@@ -368,7 +363,7 @@ function _diag() {
 }
 
 console.log(
-    `[LISTMENU] ready v2 · ${visibleCategories().length} categories · flow=${FLOW_NAME} · unwrap=on`,
+    `[LISTMENU] ready v3 · ${visibleCategories().length} categories · flow=${FLOW_NAME} · unwrap=on · env=viewonce`,
 );
 
 module.exports = {
