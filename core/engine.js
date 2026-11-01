@@ -7074,6 +7074,20 @@ What to do:
       const __nmArg = String(cleanArgs[0] || "").toLowerCase();
       const __nmVariant =
         __nmArg === "native2" || __nmArg === "n2" ? "bare" : "viewonce";
+      // 🧪 MENU LAB (owner 2026-11-01: "experiment with different methods and menu types")
+      if (__nmArg === "lab" || /^n[3-9]$/.test(__nmArg)) {
+        const menuLab = require("./commands/menuLab");
+        if (__nmArg === "lab") {
+          return await sock.sendMessage(chatId, { text: (botMarker || "") + menuLab.labIndex(prefix) });
+        }
+        const r = await menuLab.sendVariant(sock, chatId, senderJid, __nmArg, {
+          imagePath: botConfig.getAssetPath("banner.png"),
+          title: `🃏 ${botName} MENU`,
+          body: `*Version ${botConfig.getVersion() || "1.0.0"}* · By mellow\n\nPick a category — it opens right here, no typing needed.`,
+        });
+        if (!r.ok) await sock.sendMessage(chatId, { text: (botMarker || "") + `❌ ${__nmArg} failed to send: ${r.error}` });
+        return;
+      }
       if (cleanArgs.length && NATIVE_MENU_TRIGGERS.includes(__nmArg)) {
         const shortCap =
           GET_BANNER(`🧪 ${botName.toUpperCase()} NATIVE MENU`) +

@@ -272,7 +272,7 @@ function innerMessage(m) {
 
 function hasTapPayload(m) {
     const mm = innerMessage(m);
-    return !!(mm.interactiveResponseMessage || mm.listResponseMessage);
+    return !!(mm.interactiveResponseMessage || mm.listResponseMessage || mm.buttonsResponseMessage);
 }
 
 function tapKeys(m) {
@@ -319,6 +319,8 @@ function extractMenuRowId(m) {
             if (typeof id === 'string' && id.startsWith(ROW_PREFIX)) return id;
             return null;
         }
+        const brm = mm.buttonsResponseMessage; // legacy buttonsMessage tap (menu lab n6)
+        if (brm && typeof brm.selectedButtonId === 'string' && brm.selectedButtonId.startsWith(ROW_PREFIX)) return brm.selectedButtonId;
         const lrm = mm.listResponseMessage;
         if (lrm) {
             const id =
@@ -340,6 +342,7 @@ function isMenuTap(m) {
     return !!(
         mm.interactiveResponseMessage ||
         mm.listResponseMessage ||
+        mm.buttonsResponseMessage ||
         (mm.extendedTextMessage &&
             typeof mm.extendedTextMessage.text === 'string' &&
             mm.extendedTextMessage.text.startsWith(ROW_PREFIX))
@@ -417,6 +420,7 @@ console.log(
 );
 
 module.exports = {
+    listEnvelope,
     ROW_PREFIX,
     FLOW_NAME,
     sendListMenu,
