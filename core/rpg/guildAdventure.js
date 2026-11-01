@@ -3279,7 +3279,7 @@ function calculateDamage(
 
   // 🌍 WEATHER: Foggy (-15% Accuracy = +15% Evasion)
   const hours = new Date().getHours();
-  if (Math.floor(hours / 6) % 4 === 1) evasionChance += 15;
+  if (Math.floor(hours / 6) % 4 === 1) evasionChance += target.isEnemy ? 7 : 15; // 2026-11-01: halved vs enemies (was a flat 15% miss on every hit 06:00-11:59)
 
   // 🌍 ENVIRONMENT EVASION
   if (chatId) {
