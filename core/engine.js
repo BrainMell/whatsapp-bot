@@ -9,6 +9,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 require("dotenv").config();
 const botConfig = require("../botConfig");
+const listMenu = require('./commands/listMenu'); // 🧪 native list menu experiment
 const { storage } = botConfig;
 const system = require('./utils/system');
 const economy = require('./rpg/economy');
@@ -7058,6 +7059,30 @@ What to do:
 
       // Filter out flags
       const cleanArgs = args.filter((a) => !a.startsWith("-"));
+
+      // 🧪 NATIVE LIST MENU (experiment 2026-11-01): same banner image, then
+      // WhatsApp's native single_select popup list instead of the text grid.
+      // The classic menu below is completely untouched.
+      const NATIVE_MENU_TRIGGERS = ["native", "n", "2", "list", "tap"];
+      if (
+        cleanArgs.length &&
+        NATIVE_MENU_TRIGGERS.includes(String(cleanArgs[0]).toLowerCase())
+      ) {
+        const shortCap =
+          GET_BANNER(`🧪 ${botName.toUpperCase()} NATIVE MENU`) +
+          `\n *Version ${botConfig.getVersion() || "1.0.0"}* \n *By mellow* \n\nSame Joker menu, new navigation — tap the button on the next card and pick a category.\n\n➤ Classic text menu is unchanged: \`${prefix} menu\``;
+        try {
+          await sendMenuWithBanner(sock, chatId, shortCap);
+        } catch (_nmErr) {
+          console.error("[LISTMENU] banner send failed:", _nmErr.message);
+        }
+        return await listMenu.sendListMenu(sock, chatId, senderJid, {
+          headerTitle: `🃏 ${botName} MENU`,
+          bodyText: "Pick a category — its command list opens right here, no typing needed.",
+          footerText: `Native list experiment · classic: ${prefix} menu`,
+          page: 0,
+        });
+      }
       // 💡 2026-10-11: trailing page number support (.j menu rpg 2).
       // Big categories paginate — the WhatsApp image-caption limit is 1024
       // chars and the RPG/CARDS/GAMES category lists long ago outgrown it
@@ -7182,6 +7207,8 @@ ${targetCategory}`;
       }
 
       mainMsg += `\n➤ Type \`${prefix} menu <CATEGORY>\` to see its commands.`;
+      // 🧪 2026-11-01: discoverability for the native list experiment.
+      mainMsg += `\n➤ 🧪 New: \`${prefix} menu native\` — tap-through category list (experiment; old menu stays).`;
 
       // 💡 ROTATING TIPS: one randomly chosen each time the menu opens.
       // Covers blacksmith, crafting, combat, cards, guilds, economy, PvP, Abyss,
@@ -9836,7 +9863,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   // Scored heuristics (message-id fingerprints, linked-device
                   // relays, interactive payloads, instant-on-join, bot marks).
                   // Admins/owner/global mods are always exempt.
-                  if (isGroupChat && getGroupSettings(chatId).antibot === true && !m.key.fromMe) {
+                  if (isGroupChat && getGroupSettings(chatId).antibot === true && !m.key.fromMe && !listMenu.isMenuTap(m)) { // 🧪 menu taps are humans, not bots
                     try {
                       const antiBot = require('./utils/antibot');
                       const abSettings = getGroupSettings(chatId);
@@ -10339,6 +10366,33 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     m.message.videoMessage?.caption;
 
                   const txt = text ? text.trim() : "";
+
+                  // 🧪 NATIVE LIST MENU TAP (experiment 2026-11-01): taps on
+                  // our single_select popup arrive with NO text body — the
+                  // default pipeline would silently ignore them. Route
+                  // jmenu:* rowIds back into the menu system; log every tap
+                  // response so adoption vs the typed menu is measurable.
+                  if (
+                    m.message.interactiveResponseMessage ||
+                    m.message.listResponseMessage
+                  ) {
+                    try {
+                      const __rowId = listMenu.extractMenuRowId(m);
+                      console.log(
+                        `[LISTMENU] response seen: rowId=${__rowId || "(not ours)"} chat=${String(chatId).split("@")[0]} by=${String(senderJid).split("@")[0]}`,
+                      );
+                      if (__rowId) {
+                        await listMenu.handleMenuTap(sock, chatId, senderJid, __rowId, {
+                          sendBotMenu,
+                          botMarker: BOT_MARKER,
+                          prefix: botConfig.getPrefix(),
+                        });
+                        return;
+                      }
+                    } catch (__lmErr) {
+                      console.error("[LISTMENU] tap handler error:", __lmErr.message);
+                    }
+                  }
 
                   // 🤫 GROUP WHISPER (owner 2026-10-27): owner-only DM flow - pick a group, pick members,
                   // post a message only they receive. See utils/groupWhisper.js.
