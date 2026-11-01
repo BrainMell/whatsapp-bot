@@ -26,7 +26,9 @@
 const { randomUUID } = require('crypto');
 const {
     generateWAMessageFromContent,
+    prepareWAMessageMedia,
 } = require('@whiskeysockets/baileys');
+const fs = require('fs');
 const COMMAND_REGISTRY = require('../utils/commandRegistry');
 
 const ROW_PREFIX = 'jmenu:';
@@ -179,14 +181,31 @@ function listEnvelope(opts = {}) {
 // router is variant-agnostic.
 async function sendListMenu(sock, chatId, senderJid, opts = {}) {
     const interactive = listEnvelope(opts);
+    // 2026-11-01: native2 (flow name 'mixed') rendered for the owner, so it is now the
+    // only node shape. opts.imagePath puts the banner INSIDE the card header
+    // (interactiveMessage.header.imageMessage) so the menu is one message.
+    if (opts.imagePath && fs.existsSync(opts.imagePath)) {
+        try {
+            const media = await prepareWAMessageMedia(
+                { image: fs.readFileSync(opts.imagePath) },
+                { upload: sock.waUploadToServer },
+            );
+            if (media && media.imageMessage) {
+                interactive.header.hasMediaAttachment = true;
+                interactive.header.imageMessage = media.imageMessage;
+            }
+        } catch (e) {
+            console.error('[LISTMENU] header image failed, sending without:', e.message);
+        }
+    }
     // 2026-11-01 v5: BOTH earlier variants were half of the recipe that other Baileys
     // bots use for native-flow cards: A (view-once envelope, NO biz nodes) and B (biz
     // nodes, NO view-once envelope) each rendered as nothing. The working shape is the
     // view-once + messageContextInfo envelope AND the biz/interactive/native_flow node
     // (+ bot node in private chats only). native1 = flow name "single_select" on the
     // node, native2 = flow name "mixed" (what multi-button cards use).
-    const variant = opts.variant === "bare" ? "bare" : "viewonce";
-    const nodeFlowName = variant === "bare" ? "mixed" : FLOW_NAME;
+    const variant = "bare";
+    const nodeFlowName = "mixed";
     const generated = generateWAMessageFromContent(
         chatId,
         {
