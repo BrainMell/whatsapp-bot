@@ -655,9 +655,12 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
     const level = charSheet?.level || 1;
     const gp = charSheet?.gp || 0;
     
-    // Update rank
-    economy.updateAdventurerRank(finalJid);
-    const rank = user.adventurerRank || 'F';
+    // Update rank - awaited (audit "rank sheet and captions are
+    // different"): fire-and-forget let the profile card render the OLD
+    // letter while the sheet already moved. Result pre-checked so a
+    // failed check falls back to the doc's rank instead of erroring.
+    const rankRes = await economy.updateAdventurerRank(finalJid).catch(() => null);
+    const rank = (rankRes && rankRes.ranked_up && rankRes.new_rank) || user.adventurerRank || 'F';
     const rankData = classSystem.ADVENTURER_RANKS[rank];
     
     // Handle PFP
