@@ -25,10 +25,8 @@
     "cosmic@MAGE": { "set": "planet_hit", "loop": false },
     "world@lava": { "set": "lava_world" },
     "world@void": { "set": "void_world" },
-    "cinema@ARCHMAGE": { "set": "blackhole_art", "fit": "contain" },
     "cinema@KAGE": { "set": "ink", "fit": "cover", "alpha": 0.94 },
     "cinema@VOIDWALKER": { "set": "gate_blue", "fit": "cover" },
-    "cinema@WARLOCK": { "set": "gate_blood", "fit": "cover" },
-    "blackhole": { "set": "blackhole_art", "w": 240, "add": false }
+    "cinema@WARLOCK": { "set": "gate_blood", "fit": "cover" }
   }
 }

@@ -23064,6 +23064,7 @@ Admins can:
                         lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild` ||
                         lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild base` ||
                         lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild grounds` ||
+                        lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild card` ||
                         lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild hall` ||
                         lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild hq`) {
                       try {
@@ -23109,9 +23110,9 @@ Admins can:
                           if (/ guild (base|hq|grounds)$/.test(lowerTxt)) {
                             // the whole animated GROUNDS card (water, birds, smoke) — owner 2026-10-20: `.j guild` itself is the zoomed hall
                             baseMedia = await gbr.renderGuildBaseImage(_gst, { hint: `${_P} guild upgrade hall • ${_P} guild donate • ${_P} guild perks` });
-                          } else if (/ guild hall$/.test(lowerTxt)) {
+                          } else if (/ guild (hall|info|status)$/.test(lowerTxt) || / guild$/.test(lowerTxt)) {
                             // 🏰 `.j guild hall` = the HALL zoomed in, emblem crowning the keep, the guild's information on the panel
-                            // (owner 2026-10-31: bare `.j guild` goes back to the dedicated guild card; the zoom lives here now)
+                            // (owner 2026-11-02: bare `.j guild` is the NEW zoomed castle again; the old portrait card lives at `.j guild card`)
                             const _hl = _gst.buildings.hall;
                             const _archLbl = { ADVENTURER: 'Adventurer', MERCHANT: 'Merchant', RESEARCH: 'Research' }[_gst.archetype] || 'Adventurer';
                             const _hallNames = ['No hall', ...(((gbr.GUILD_STRUCTS || {}).hall || {}).levels || []).map((l) => l.name)];

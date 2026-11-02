@@ -88,12 +88,41 @@ function classMeta(cls) {
     return S ? { ...m, duration: (m.duration || 2.7) + S, impact: (m.impact || 1.05) + S } : m;
 }
 
+// where the REAL dragon_6.png jaws are (measured from the sprite's alpha: snout = 46.5% of the draw width
+// right of the head centre, 9.7% of the draw height ABOVE it) - the breath must leave THIS point
+// (owner 2026-11-02: "the dragon flies over then the player shoots flames - there should be a connection")
+const dragonMouth = (S) => { const w = 235 * S, h = w * 268 / 228; return [Math.round(0.465 * w), -Math.round(0.097 * h)]; };
+
 function classRecipeBase(cls, p, { IMPACT: I }) {
     const L = (layer, o) => ({ layer, under: GROUND_LAYERS.has(layer), ...o });
     const flash = (c, a = 0.5, at = I, dur = 0.22) => L('wash', { at, dur, color: c, a, add: true });
     const dark = (a = 0.45, at = 0.1, dur = I + 0.4) => L('wash', { at, dur, color: '#05000c', a });
     const casterAura = (col, n = 12) => L('emit', { at: 0.05, dur: 0.8, pos: 'C', box: [60, 20], n, life: 0.6, shape: 'spark', colors: ['#fff', col], v: [0, -80], vr: [50, 30] });
 
+    // 💥 WEIGHT (owner 2026-11-02: "the ninja one doesn't have any weight, the punch feels like random slash effects"):
+    // what a heavy hit LOOKS like in the world - a ground shockwave ring + dust kicked up off the floor + a
+    // flat sonic ring on the target, all landing on the same frame as the cut/strike.
+    function weight(col, at, k = 1) {
+        return [
+            { fx: 'k_sonic', at, pos: 'T', w: 250 * k, add: true, tint: [col, 0.45], spread: 'enemies', fanGap: 0.06 },
+            L('ripple', { at: at + 0.01, pos: 'T', n: 2, gap: 0.07, color: col, r: 150 * k, spread: 'enemies', fanGap: 0.06 }),
+            L('emit', { at, dur: 0.55, pos: 'T', off: [0, 40], box: [60 * k, 12], n: Math.round(20 * k), life: 0.6, shape: 'spark', colors: ['#e8dcc0', '#bfae8a', col], v: [0, -150 * k], vr: [210 * k, 60], g: 380 }),
+        ];
+    }
+    // a PUNCH: the caster closes, then fist-sized impacts land ON the target - each blow bigger than the last
+    // (burst + sonic + dust + a pop of white), the last one cracks the ground. No slash sprites.
+    function blows({ col, mid = '#ffffff', n = 3, gap = 0.15, extra = [] }) {
+        const out = [casterAura(col), L('lunge', { at: I - 0.32, dur: 0.6, color: col })];
+        for (let i = 0; i < n; i++) {
+            const at = I + i * gap, k = 0.8 + i * 0.4;
+            out.push({ fx: 'white_burst', at, pos: 'T', off: [(i % 2 ? 22 : -22), -40 + i * 6], w: 130 + i * 70, add: true, tint: [col, 0.55], alpha: 0.85, spread: 'enemies', fanGap: 0.06 });
+            out.push(...weight(col, at, k));
+            out.push(flash(mid, 0.22 + i * 0.08, at, 0.09));
+        }
+        out.push(L('cracks', { at: I + (n - 1) * gap, pos: 'T', n: 9, r: 150, color: col, dur: 0.9 }));
+        out.push(...extra);
+        return out;
+    }
     // ── physical: cuts happen ON the target, the caster stays put ──────────
     function cutSet({ col, mid = '#ffffff', angles, n, len = 150, w = 11, gap = 0.075, burst = true, sprite = 'claw', extra = [] }) {
         return [
@@ -104,6 +133,7 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
             ...(burst ? [L('slashes', { at: I + n * gap - 0.03, n: 6, gap: 0.01, kind: 'burst', color: col, mid, len: 80 })] : []),
             ...extra,
             { fx: 'white_burst', at: I + n * gap - 0.02, pos: 'T', w: 150, add: true, tint: [col, 0.6], alpha: 0.7 },
+            ...weight(col, I + n * gap - 0.02, 0.9),
             flash('#ffffff', 0.25, I + n * gap - 0.04, 0.12),
         ];
     }
@@ -115,6 +145,7 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
             L('slashes', { at: I2 - 0.02, n: hits, gap: 0.07, color: col, mid, len: 200, w: 12, angles: [-0.9, 0.9, 0.0, -0.45, 1.3, 1.57, 0.5] }),
             L('slashes', { at: I2 + hits * 0.07 - 0.03, n: 12, gap: 0.01, kind: 'burst', color: col, mid, len: 150 }),
             { fx: 'dark_a', at: I2, pos: 'T', w: 240, n: 2, gap: 0.12, jit: [30, 20], add: true, tint: [col, 0.6] },
+            ...weight(col, I2 + hits * 0.07 - 0.02, 1.15),
             flash(col, 0.4, I2 + hits * 0.07 - 0.04, 0.16),
         ];
     }
@@ -262,7 +293,7 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
             flash('#e6c4ff', 0.35),
         ],
         // ── blades: cut ON the target ──────────────────────────────────────
-        FIGHTER: () => cutSet({ col: '#bcd6ff', angles: [-0.8, 0.8, 1.57], n: 3, len: 170, w: 14 }),
+        FIGHTER: () => blows({ col: '#bcd6ff', n: 3 }),
         WARRIOR: () => cutSet({ col: '#ffb070', angles: [-0.85, 0.85, 0.0, 1.57], n: 4, len: 175, w: 14 }),
         SAMURAI: () => cutSet({ col: '#9fd0ff', angles: [-0.95, 0.2, -0.4, 0.8, -0.15, 1.1, 0.5], n: 7, len: 185, w: 7, gap: 0.055, sprite: null }),
         SHOGUN: () => [dark(0.35), ...cutSet({ col: '#ffd27a', mid: '#fff0c0', angles: [-0.7, 0.7, 0.0, 1.57, -1.2], n: 5, len: 190, w: 14, extra: [L('ripple', { at: I + 0.3, pos: 'T', n: 3, gap: 0.12, color: '#ffd27a', r: 200 })] })],
@@ -314,7 +345,16 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
         ],
         // ── fire / arcane ──────────────────────────────────────────────────
         APPRENTICE: () => meteorFall(true, 6, 46, 190, '#ff7a1a'),
-        MAGE: () => meteorFall(true, 0, 78, 280, '#ff7a1a'),
+        // ☄️ MAGE (owner 2026-11-02: "the meteorite one was mid"): a meteor SHOWER heralds ONE colossal boulder that
+        // takes a full second to fall, lands with a triple shockwave, a flash and a burst of flying rock
+        MAGE: () => [
+            L('circle', { at: 0.05, pos: 'C', r: 70, dur: 1.1, color: '#ff7a1a', points: 6, spin: 1.5 }),
+            L('fall', { at: I - 1.0, pos: 'T', kind: 'meteor', n: 10, gap: 0.09, fall: 0.5, spreadX: 440, spreadY: 150, slant: -260, land: 'k_regular', landW: 120, mw: 150, color: '#ff7a1a' }),
+            L('fall', { at: I - 0.8, pos: 'T', kind: 'rock', n: 1, fall: 0.8, spreadX: 0, spreadY: 0, slant: -200, size: 125, land: 'k_regular', landW: 440, color: '#ff7a1a' }),
+            L('rings', { at: I + 0.02, pos: 'T', n: 3, gap: 0.1, color: '#ff7a1a', r: 300 }),
+            L('emit', { at: I, dur: 0.9, pos: 'T', box: [170, 40], n: 46, life: 0.9, shape: 'spark', colors: ['#fff2b0', '#ff7a1a', '#5a3a28'], v: [0, -170], vr: [190, 90], g: 260 }),
+            flash('#ffe2a8', 0.65, I, 0.28),
+        ],
         // fire breath straight from the dragonslayer's face
         DRAGONSLAYER: () => [
             L('emit', { at: 0.05, dur: 0.8, pos: 'C', box: [40, 20], n: 14, life: 0.6, shape: 'spark', colors: ['#ff7a2a', '#ffd27a'], v: [0, -80], vr: [40, 30] }),
@@ -329,8 +369,8 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
         DRAGON_LORD: () => [
             dark(0.4, 0.1, 2.0),
             L('camera', { at: 0.25, dur: 1.0, dz: -0.05 }),
-            L('dragon', { at: 0.3, pos: [0.14, 0.34], s: 1.35, dur: 2.0, set: 'dragon_head_inv', color: '#7a3a2a', belly: '#e8b070', flame: '#ff7a1a' }),
-            L('breath', { at: 0.95, from: [0.14, 0.34], offFrom: [160, 24], to: 'T', offTo: [0, -50], dur: 0.9, n: 120, life: 0.55, w: 92, size: 1.3, spread: 'enemies', fanGap: 0.1 }),
+            L('dragon', { at: 0.3, pos: [0.14, 0.34], s: 1.35, dur: 2.4, slide: [-300, -30], slideDur: 0.5, set: 'dragon_head_inv', color: '#7a3a2a', belly: '#e8b070', flame: '#ff7a1a' }),
+            L('breath', { at: 0.95, from: [0.14, 0.34], offFrom: dragonMouth(1.35), to: 'T', offTo: [0, -50], dur: 0.9, n: 120, life: 0.55, w: 92, size: 1.3, spread: 'enemies', fanGap: 0.1 }),
             { fx: 'fire_blast', at: I, pos: 'T', w: 330, n: 2, jit: [50, 30], gap: 0.12, spread: 'enemies', fanGap: 0.08 },
             L('rings', { at: I + 0.05, pos: 'T', n: 2, gap: 0.12, color: '#ffb050', r: 170, spread: 'enemies', fanGap: 0.08 }),
             flash('#ffc070', 0.35, I, 0.2),
@@ -343,8 +383,8 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
             L('bgfill', { at: 1.05, dur: 1.9, pos: [0.5, 0.5], colors: ['#d8f2ff', '#6fb4e8'], fin: 0.35, fout: 0.45 }),
             L('camera', { at: 1.1, dur: 1.2, dz: -0.1, fin: 0.5 }),
             L('shrink', { at: 1.1, dur: 0.5, to: 0.4, hold: 1.0 }),
-            L('dragon', { at: 1.35, pos: [0.1, 0.3], s: 2.0, dur: 1.9, color: '#27576a', belly: '#9fe0d0', flame: '#ff9a30' }),
-            L('breath', { at: 1.95, from: [0.1, 0.3], offFrom: [236, 40], to: 'T', offTo: [0, -50], dur: 1.1, n: 170, life: 0.6, w: 170, size: 2.0, reach: 1.15, spread: 'enemies', fanGap: 0.08 }),
+            L('dragon', { at: 1.2, pos: [0.12, 0.40], s: 2.0, dur: 2.7, slide: [-420, -60], slideDur: 0.6, color: '#27576a', belly: '#9fe0d0', flame: '#ff9a30' }),
+            L('breath', { at: 1.95, from: [0.12, 0.40], offFrom: dragonMouth(2.0), to: 'T', offTo: [0, -50], dur: 1.1, n: 170, life: 0.6, w: 170, size: 2.0, reach: 1.15, spread: 'enemies', fanGap: 0.08 }),
             L('wash', { at: 2.1, dur: 0.75, color: '#ff8a1a', a: 0.85, curve: 'in' }),
             L('wash', { at: 2.45, dur: 0.6, color: '#fff4d0', a: 0.95, add: true }),
             L('emit', { at: 2.2, dur: 1.0, pos: [0.5, 0.5], box: [560, 300], n: 40, life: 0.8, shape: 'spark', colors: ['#ffd27a', '#ff7a1a'], v: [60, -40], vr: [120, 60] }),

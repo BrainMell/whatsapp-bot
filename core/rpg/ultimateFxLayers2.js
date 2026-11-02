@@ -378,7 +378,11 @@ module.exports = function install(LAYERS, H) {
     // recipe contract (pos/s/dur/open) is unchanged. Envelope/bob/mouth glow kept.
     LAYERS.dragon = (ctx, tr, env) => {
         const t = env.time - tr.at, dur = tr.dur || 1.5; if (t < 0 || t > dur) return;
-        const S = tr.s || 2.2, [x, y] = pt(env, tr.pos || [0.2, 0.42], tr), a = env3(t, dur, 0.35, 0.3);
+        const S = tr.s || 2.2, [x0, y0] = pt(env, tr.pos || [0.2, 0.42], tr), a = env3(t, dur, 0.35, 0.3);
+        // 🐉 FLY-IN (owner 2026-11-02: the dragon must be PART of the strike, not a corner decoration):
+        // tr.slide=[dx,dy] starts the head that far off its mark and glides it home (ease-out) over slideDur
+        const slk = tr.slide ? 1 - easeOut(clamp01(t / (tr.slideDur || 0.55))) : 0;
+        const x = x0 + (tr.slide ? tr.slide[0] * slk : 0), y = y0 + (tr.slide ? tr.slide[1] * slk : 0);
         const open = tr.open === undefined ? easeOut(clamp01((t - 0.25) / 0.3)) : tr.open, bob = Math.sin(t * 5) * 3;
         // tr.set picks a variant set (DRAGON_LORD: 'dragon_head_inv' = color-inverted frames)
         const fr = (env.sets && env.sets[tr.set || 'dragon_head']) || [];
