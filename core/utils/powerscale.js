@@ -460,6 +460,54 @@ async function sendUsageCard(sock, chatId, botMarker) {
 /**
  * Resolve a query into: list mode, or a ready card.
  */
+
+// ---------- whole-article flow (2026-11-02, owner) ----------
+// A search hit that is NOT a character profile (concept / mechanic / verse /
+// item article, e.g. "Conceptual Energy (Dragon Ball)") used to answer with
+// "no standard stat block". Now the WHOLE article is pulled: header bubble
+// + the text split into ~3.3k-char parts on paragraph boundaries (cap 10
+// parts, link for the rest).
+const ARTICLE_CHUNK = 3300;
+const ARTICLE_MAX_CHUNKS = 10;
+function chunkArticle(text) {
+    const chunks = [];
+    let cur = "";
+    const flush = () => { if (cur.trim()) chunks.push(cur.trim()); cur = ""; };
+    for (const para of String(text).split(/\n{2,}/)) {
+        let p = para;
+        while (p.length > ARTICLE_CHUNK) {
+            let cut = p.lastIndexOf(". ", ARTICLE_CHUNK);
+            if (cut < ARTICLE_CHUNK * 0.5) cut = p.lastIndexOf("\n", ARTICLE_CHUNK);
+            if (cut < ARTICLE_CHUNK * 0.5) cut = ARTICLE_CHUNK;
+            else cut += 1;
+            if (cur) flush();
+            chunks.push(p.slice(0, cut).trim());
+            p = p.slice(cut).trim();
+        }
+        if (!p) continue;
+        if (cur && cur.length + p.length + 2 > ARTICLE_CHUNK) flush();
+        cur += (cur ? "\n\n" : "") + p;
+    }
+    flush();
+    return chunks;
+}
+async function buildArticleResult(characters, title, pickedId) {
+    const art = await vsb.parseFullArticle(title).catch(() => null);
+    if (!art) return null;
+    const all = chunkArticle(art.text);
+    const chunks = all.slice(0, ARTICLE_MAX_CHUNKS);
+    const lines = [`📖 *${clip(cosmoDisplayName(art.name).toUpperCase(), 70)}*`, SEP,
+        `_Article page (not a character profile) — full text below${all.length > chunks.length ? `, first ${chunks.length} of ${all.length} parts` : ""}._`,
+        `🔗 ${shortUrl(art.pageUrl)}`];
+    return {
+        success: true, mode: "card", name: art.name, pageUrl: art.pageUrl,
+        imageUrl: art.imageUrl, imageUrls: [], characters, pickedId: pickedId || 1,
+        category: null, message: lines.join("\n"), detail: null, autoPickHint: null,
+        articleChunks: chunks,
+    };
+}
+const isArticleData = (d) => !!(d && d.isVerse && !(d.stats && d.stats.size));
+
 async function resolveFlow(query, category, featsOverview) {
     const characters = await searchWithFallback(query);
     if (!characters.length) {
@@ -480,6 +528,10 @@ async function resolveFlow(query, category, featsOverview) {
     const data = await parseWithFallback(top);
     if (!data) {
         return { success: false, error: `Found *${top.name}* but the page parse failed. Try another result: reply 1-${characters.length}.` };
+    }
+    if (isArticleData(data)) {
+        const art = await buildArticleResult(characters, top.name, top.id);
+        if (art) return art;
     }
     return buildCardResult({ characters, data, category: category || null, featsOverview, pickedId: top.id });
 }
@@ -676,6 +728,14 @@ function buildCardResult({ characters, data, category, featsOverview, pickedId }
 
 // ---------- card sender (image via relay chain) ----------
 
+async function sendArticleChunks(sock, chatId, botMarker, result) {
+    const chunks = result.articleChunks || [];
+    for (let i = 0; i < chunks.length; i++) {
+        await sock.sendMessage(chatId, { text: `${botMarker}${chunks.length > 1 ? `_(${i + 1}/${chunks.length})_\n` : ""}${chunks[i]}` });
+        if (i < chunks.length - 1) await new Promise((r) => setTimeout(r, 700));
+    }
+}
+
 async function sendCard(sock, chatId, botMarker, result) {
     let imagePayload = null;
     const candidates = [result.imageUrl, ...(result.imageUrls || [])].filter(Boolean).slice(0, 3);
@@ -705,6 +765,7 @@ async function sendCard(sock, chatId, botMarker, result) {
             } else if (followUpText) {
                 await sock.sendMessage(chatId, { text: `${botMarker}${followUpText}`.slice(0, 3500) });
             }
+            await sendArticleChunks(sock, chatId, botMarker, result);
             if (result.autoPickHint) {
                 await sock.sendMessage(chatId, { text: `${botMarker}${result.autoPickHint}` });
             }
@@ -718,6 +779,7 @@ async function sendCard(sock, chatId, botMarker, result) {
         ? `${result.message}\n${SEP}\n${result.detail}`
         : result.message;
     await sock.sendMessage(chatId, { text: `${botMarker}${text}`.slice(0, 6000) });
+    await sendArticleChunks(sock, chatId, botMarker, result);
     if (result.autoPickHint) {
         await sock.sendMessage(chatId, { text: `${botMarker}${result.autoPickHint}` });
     }
@@ -839,7 +901,7 @@ async function handlePowerscaleSelection(chatId, selection) {
     }
 
     // already showing this exact character? just re-prompt category usage
-    if (session.phase === "view" && session.data && session.data.name === chosen.name) {
+    if (session.phase === "view" && session.data && !session.data.isVerse && session.data.name === chosen.name) {
         return { success: true, mode: "card", ...buildCardResult(session) };
     }
 
@@ -851,6 +913,10 @@ async function handlePowerscaleSelection(chatId, selection) {
     session.phase = "view";
     session.data = data;
     session.name = chosen.name;
+    if (isArticleData(data)) {
+        const art = await buildArticleResult(session.characters, chosen.name, idx);
+        if (art) return art;
+    }
     return buildCardResult({ characters: session.characters, data, category: session.category, pickedId: idx });
 }
 

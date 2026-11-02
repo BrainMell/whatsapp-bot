@@ -682,6 +682,56 @@ async function parseSectionText(title, sectionIndex) {
     return out;
 }
 
+
+/**
+ * Whole-article fetch for NON-character pages (concept / mechanic / verse /
+ * item articles — e.g. "Conceptual Energy (Dragon Ball)"). One MediaWiki
+ * parse, headings kept as "*Heading*" lines, lists as bullets, infobox /
+ * navbox / tables / references stripped. Cached 30 min.
+ * @returns {Object|null} { name, pageUrl, imageUrl, text }
+ */
+async function parseFullArticle(title) {
+    const key = `fullart::${title}`;
+    const cached = cacheGet(key);
+    if (cached) return cached;
+    const data = await mwRequest({ action: "parse", page: title, prop: "text", redirects: 1 }, 45000);
+    if (!data || !data.parse || !data.parse.text) return null;
+    const html = String(data.parse.text);
+    const imgMatch = html.match(/<figure[^>]*>[\s\S]*?<img[^>]*src="(https:\/\/static\.wikia\.nocookie\.net[^"]+)"[^>]*>/i);
+    let h = html
+        .replace(/<table[\s\S]*?<\/table>/gi, " ")
+        .replace(/<(style|script|noscript|aside)[^>]*>[\s\S]*?<\/\1>/gi, " ")
+        .replace(/<figure[\s\S]*?<\/figure>/gi, " ")
+        .replace(/<div[^>]*class="[^"]*(?:toc|navbox|mw-references|reflist|printfooter|catlinks)[^"]*"[\s\S]*?<\/div>/gi, " ")
+        .replace(/<span class="mw-editsection">[\s\S]*?<\/span>\s*<\/span>/gi, " ")
+        .replace(/<sup[^>]*>[\s\S]*?<\/sup>/gi, "")
+        .replace(/<h[2-4][^>]*>([\s\S]*?)<\/h[2-4]>/gi, (_m, inner) => {
+            const t = decodeEntities(String(inner).replace(/<[^>]+>/g, " ").replace(/\[\s*edit[^\]]*\]/gi, "")).replace(/\s+/g, " ").trim();
+            return t ? `\n\n*${t}*\n` : "";
+        })
+        .replace(/<li[^>]*>/gi, "\n• ")
+        .replace(/<\/p>/gi, "\n\n")
+        .replace(/<\/(div|ul|ol|dd|dt)>/gi, "\n")
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<a[^>]*>([\s\S]*?)<\/a>/gi, "$1")
+        .replace(/<[^>]+>/g, "");
+    const text = decodeEntities(h)
+        .replace(/[ \t\u00a0]+/g, " ")
+        .replace(/ ?\n ?/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+    if (text.length < 40) return null;
+    const title2 = data.parse.title || title;
+    const out = {
+        name: title2,
+        pageUrl: `https://vsbattles.fandom.com/wiki/${encodeURIComponent(title2).replace(/%28/g, "(").replace(/%29/g, ")")}`,
+        imageUrl: imgMatch ? imgMatch[1] : null,
+        text,
+    };
+    cachePut(key, out);
+    return out;
+}
+
 // ---------- image relay ----------
 
 /**
@@ -762,5 +812,6 @@ module.exports = {
     // cosmology sub-search (2026-10-26, owner)
     searchCosmologyPages,
     parsePageWithSections,
+    parseFullArticle,
     parseSectionText,
 };
