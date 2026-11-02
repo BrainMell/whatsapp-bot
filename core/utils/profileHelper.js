@@ -23,9 +23,12 @@ async function buildCardData(userId, userName, pfpUrl = "") {
     const equipment = inventorySystem.getEquipment(userId);
     const equipStats = inventorySystem.getEquipmentStats(userId);
 
- // Update rank
-    economy.updateAdventurerRank(userId);
-    const rank = economyUser.adventurerRank || 'F';
+ // Update rank - awaited (audit "rank sheet and captions are
+ // different"): fire-and-forget let the card snapshot the OLD letter
+ // while the sheet already moved. The result pre-check keeps a failed
+ // check from killing the whole card (falls back to the doc's rank).
+    const rankRes = await economy.updateAdventurerRank(userId).catch(() => null);
+    const rank = (rankRes && rankRes.ranked_up && rankRes.new_rank) || economyUser.adventurerRank || 'F';
 
     return {
         nickname: economyUser.nickname || userName,

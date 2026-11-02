@@ -459,7 +459,12 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
         const allDone = mp.progress.every((o) => o.done);
         return allDone
           ? `⚔️ *${gm.icon || ''} ${gm.name}* - ${parts}\n▫️ Every objective earned - your rank advances the moment you check it.`
-          : `⚔️ *${gm.icon || ''} ${gm.name}* - ${parts}\n▫️ Earn every objective and your rank advances automatically.`;
+ // CAPTION REWORD (audit "rank sheet and captions are different"):
+ // the old line promised the rank "advances automatically", but the
+ // promotion actually lands when a rank check runs (.j rank, dungeon
+ // summary, profile/whoami) - players who never re-checked read an
+ // all-green card and a stuck letter as a broken rank. Say the truth.
+          : `⚔️ *${gm.icon || ''} ${gm.name}* - ${parts}\n▫️ Earn every objective, then check your rank - it advances on your next check.`;
       } catch { return ''; }
     })();
 

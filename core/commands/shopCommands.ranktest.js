@@ -614,9 +614,10 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
     const level = charSheet?.level || 1;
     const gp = charSheet?.gp || 0;
     
- // Update rank
-    economy.updateAdventurerRank(finalJid);
-    const rank = user.adventurerRank || 'F';
+ // Update rank - kept in parity with shopCommands.js (awaited +
+ // result pre-checked so the card shows the post-promotion letter).
+    const rankRes = await economy.updateAdventurerRank(finalJid).catch(() => null);
+    const rank = (rankRes && rankRes.ranked_up && rankRes.new_rank) || user.adventurerRank || 'F';
     const rankData = classSystem.ADVENTURER_RANKS[rank];
     
  // Handle PFP

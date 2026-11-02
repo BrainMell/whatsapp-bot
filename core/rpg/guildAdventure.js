@@ -11487,7 +11487,13 @@ async function endAdventure(sock, sessionKey, victory = true) {
       console.error('[Combat] Summon XP/persist failed:', summonErr.message);
     }
 
-    const rankUpdate = economy.updateAdventurerRank(player.jid);
+ // FIX (audit "rank sheet and captions are different"): this was
+ // fire-and-forget, so `rankUpdate` was a PROMISE - `rankUpdate.ranked_up`
+ // read undefined and the RANK UP line NEVER appeared in the dungeon
+ // summary, while the sheet itself had already moved. Await the real
+ // result; a thrown check is caught by the per-player handler below.
+    let rankUpdate = null;
+    try { rankUpdate = await economy.updateAdventurerRank(player.jid); } catch (e) { rankUpdate = null; }
     if (rankUpdate && rankUpdate.ranked_up) {
       msg += `🎊 *RANK UP!* 🎊\n  ${player.name} is now ${rankUpdate.rank_data.icon} *${rankUpdate.new_rank}*!\n\n`;
     }

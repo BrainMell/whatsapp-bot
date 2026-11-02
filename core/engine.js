@@ -6684,7 +6684,7 @@ What to do:
           const levelDisplay = progression.getLevelDisplay(xpResult.newLevel);
 
           let msg = `🎊 *LEVEL UP!* 🎊\n\n`;
-          msg += `📈 *Rank:* ${levelDisplay}\n`;
+          msg += `📈 *Level:* ${levelDisplay}\n`;
           msg += `✨ *Stat Points:* +${xpResult.statPointsGained}\n`;
           msg += `🔮 *Skill Points:* +${xpResult.skillPointsGained}\n\n`;
           msg += `💡 Use \`${botConfig.getPrefix()} profile\` to see your updated stats!\n`;
@@ -28071,7 +28071,7 @@ ${senderName} said y'all should know:
                             if (xpResult && xpResult.leveledUp) {
                               const levelDisplay = progression.getLevelDisplay(xpResult.newLevel);
                               let msg = `🎊 *LEVEL UP!* 🎊\n\n`;
-                              msg += `📈 *Rank:* ${levelDisplay}\n`;
+                              msg += `📈 *Level:* ${levelDisplay}\n`;
                               msg += `✨ *Stat Points:* +${xpResult.statPointsGained}\n`;
                               msg += `🔮 *Skill Points:* +${xpResult.skillPointsGained}\n\n`;
                               msg += `💡 Use \`${botConfig.getPrefix()} profile\` to see your updated stats!\n`;
