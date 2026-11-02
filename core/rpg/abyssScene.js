@@ -169,6 +169,13 @@ function enemyIdOf(enemy) {
 }
 function resolveEnemyArt(enemy) {
     const id = enemyIdOf(enemy);
+    // 1a) colossal boss art (phase 4): enemies/abyss/colossal/<id>.png, drawn
+    // larger and allowed to crop off the top of the frame. Drop-in; absent
+    // file → everything below behaves as before.
+    if (id && /^[A-Z0-9_'-]+$/.test(id)) {
+        const cp = path.join(ENEMY_ABYSS_DIR, 'colossal', `${id.toLowerCase()}.png`);
+        if (fs.existsSync(cp)) return { dir: path.join(ENEMY_ABYSS_DIR, 'colossal'), file: `${id.toLowerCase()}.png`, colossal: true };
+    }
     // 1) new abyss-native sprite (override map → real file on disk wins)
     if (id && ABYSS_ART_OVERRIDES[id]) {
         if (fs.existsSync(path.join(ENEMY_ABYSS_DIR, ABYSS_ART_OVERRIDES[id]))) {
@@ -299,6 +306,41 @@ function segBarLocal(ctx, cx, cy, w, h, pct, fillFrom, fillTo) {
 // ── scene backdrop: pool image cover-drawn + abyssal grade + vignette ────
 // (canvas-relative dims — the same painter serves 1200x900 scenes AND the
 // 900x1500 floor card)
+
+// ── OPTIONAL layered halls (owner 2026-11-02 visual overhaul, phase 3) ──────
+// environment/abyss/layers/<hall>/{far,mid,near}.png, authored at the 600x450
+// internal grid and drawn cover-fit with NEAREST sampling (2x). `far` is the
+// only required file; without it the hall renders from the single image
+// exactly as before. near = foreground silhouettes drawn after the actors.
+const HALL_LAYERS_DIR = path.join(ENV_ABYSS_DIR, 'layers');
+const _layerCache = new Map();   // hall → {far,mid,near}|null
+async function hallLayers(file) {
+    const hall = String(file || '').replace(/\.png$/i, '');
+    if (!/^[a-z0-9_-]+$/i.test(hall)) return null;
+    if (_layerCache.has(hall)) return _layerCache.get(hall);
+    let out = null;
+    const dir = path.join(HALL_LAYERS_DIR, hall);
+    if (fs.existsSync(path.join(dir, 'far.png'))) {
+        const ld = (n) => loadImage(path.join(dir, `${n}.png`)).catch(() => null);
+        const [far, mid, near] = await Promise.all([ld('far'), ld('mid'), ld('near')]);
+        if (far) out = { far, mid, near };
+    }
+    if (_layerCache.size > 6) _layerCache.clear();   // memory: keep ≤ ~6 halls decoded
+    _layerCache.set(hall, out);
+    return out;
+}
+async function drawNearLayer(ctx, plan) {
+    if (!plan || plan.bgDir !== ENV_ABYSS_DIR || !plan.bg) return;
+    const L = await hallLayers(plan.bg);
+    if (!L || !L.near) return;
+    const CW = ctx.canvas.width, CH = ctx.canvas.height;
+    const s = Math.max(CW / L.near.width, CH / L.near.height);
+    const dw = L.near.width * s, dh = L.near.height * s;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(L.near, (CW - dw) / 2, (CH - dh) / 2, dw, dh);
+    ctx.imageSmoothingEnabled = true;
+}
+
 async function drawBackdrop(ctx, file, dir = ENV_ABYSS_DIR) {
     const CW = ctx.canvas.width, CH = ctx.canvas.height;
     // base wash (also the fallback when no pool art exists)
@@ -307,7 +349,19 @@ async function drawBackdrop(ctx, file, dir = ENV_ABYSS_DIR) {
     g0.addColorStop(0.55, '#161020');
     g0.addColorStop(1, '#0d0a14');
     ctx.fillStyle = g0; ctx.fillRect(0, 0, CW, CH);
-    const img = file ? await loadBg(file, dir) : null;
+    const layers = (file && dir === ENV_ABYSS_DIR) ? await hallLayers(file) : null;
+    const img = layers ? null : (file ? await loadBg(file, dir) : null);
+    if (layers) {
+        // layered hall (far → mid); near is drawn after the actors
+        ctx.imageSmoothingEnabled = false;
+        for (const L of [layers.far, layers.mid]) {
+            if (!L) continue;
+            const s = Math.max(CW / L.width, CH / L.height);
+            const dw = L.width * s, dh = L.height * s;
+            ctx.drawImage(L, (CW - dw) / 2, (CH - dh) / 2, dw, dh);
+        }
+        ctx.imageSmoothingEnabled = true;
+    }
     if (img) {
         // cover-fit crop (backgrounds are ~scene ratio; never squash) — and
         // NEAREST sampling: the pool is real pixel art now, keep it crisp
@@ -704,11 +758,15 @@ async function planCombatLayout(state, opts = {}) {
             art: resolveEnemyArt(enemy),
             cx: W * 0.5,
             gy: BOSS_GY,
-            h: Math.round(perspH(BOSS_GY) * 2.05 * ENEMY_RENDER_SCALE),
+            h: 0,   // set below once art resolves (colossal art draws larger)
             flip: false,
             name: safeName(enemy && enemy.name, 22),
             isBoss: true,
         } : null;
+        if (plan.enemy) {
+            const _big = plan.enemy.art && plan.enemy.art.colossal;
+            plan.enemy.h = Math.round(perspH(BOSS_GY) * 2.05 * ENEMY_RENDER_SCALE * (_big ? 1.4 : 1));
+        }
         plan.player = {
             cx: W * 0.5,
             gy: PLAYER_GY,
@@ -1805,7 +1863,9 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
             const drawn = await drawActorGrounded(ctx, plan.enemy.art, plan.enemy.cx, plan.enemy.gy, plan.enemy.h,
                 { flip: plan.enemy.flip, tint: opts.hitEnemy ? HIT_TINT : null,
                   shadowBoost: 1.45, shadowRyMin: 14, pixelSnap: false });
-            const headTop = plan.enemy.gy - (drawn ? drawn.h : plan.enemy.h);
+            // colossal bosses crop off the top edge — keep plates on-canvas
+            const headTop = Math.max((plan.enemy.art && plan.enemy.art.colossal) ? 110 : -1e9,
+                plan.enemy.gy - (drawn ? drawn.h : plan.enemy.h));
             if (live.enemyAlive) {
                 pillLocal(ctx, plan.enemy.cx, headTop - 14, plan.enemy.name, 'bold 14px sans-serif', 10,
                     plan.enemy.isBoss ? 'rgba(90,20,14,0.95)' : 'rgba(26,21,13,0.95)',
@@ -1831,6 +1891,7 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
                 await roomScene.drawTurnCrystal(ctx, plan.player.cx + 34, headTop, plan.player.h, 14);
             }
         }
+        await drawNearLayer(ctx, plan);
         await drawFloorBanner(ctx, 26, 16, `FLOOR ${plan.floor}`);
         if (turnNum > 0) {
             pillLocal(ctx, W / 2, 34, `TURN ${turnNum}`, 'bold 13px sans-serif', 10,

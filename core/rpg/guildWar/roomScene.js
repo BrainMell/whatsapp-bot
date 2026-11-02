@@ -68,6 +68,38 @@ const roomVariants = require('./roomVariants');
 
 const W = 1200, H = 900;
 const ASSET_DIR = path.join(__dirname, '..', '..', 'rpgasset', 'guildwar', 'ruins');
+
+// ── OPTIONAL prop atlas (owner 2026-11-02 visual overhaul, phase 2) ─────────
+// Drop props_atlas.png + props_atlas.json in guildwar/ruins/atlas/ and rooms
+// grow seeded, themed set-dressing on top of the existing plates. Without
+// the pair nothing changes (zero cost, zero risk). JSON shape:
+//   { "scale": 2, "props": { "torch": {x,y,w,h,slot:"wall|floor|any"} } }
+// Sprites are authored at the half-res internal grid and drawn at `scale`
+// (default 2) with smoothing OFF so every prop shares one pixel size.
+const ATLAS_DIR = path.join(ASSET_DIR, 'atlas');
+let _atlasMeta;           // undefined = not probed, null = absent
+function atlasMeta() {
+    if (_atlasMeta !== undefined) return _atlasMeta;
+    _atlasMeta = null;
+    try {
+        const j = JSON.parse(fs.readFileSync(path.join(ATLAS_DIR, 'props_atlas.json'), 'utf8'));
+        const props = {};
+        for (const [name, r] of Object.entries(j.props || {})) {
+            if (r && [r.x, r.y, r.w, r.h].every((n) => Number.isFinite(n) && n >= 0) && r.w > 0 && r.h > 0) {
+                props[name] = { x: r.x, y: r.y, w: r.w, h: r.h, slot: ['wall', 'floor'].includes(r.slot) ? r.slot : 'any' };
+            }
+        }
+        if (Object.keys(props).length && fs.existsSync(path.join(ATLAS_DIR, 'props_atlas.png'))) {
+            _atlasMeta = { scale: Math.max(1, Math.min(4, Math.floor(Number(j.scale) || 2))), props };
+        }
+    } catch (e) { /* absent or malformed → legacy props only */ }
+    return _atlasMeta;
+}
+let _atlasImg = null;
+function atlasImage() {
+    if (!_atlasImg) _atlasImg = loadImage(path.join(ATLAS_DIR, 'props_atlas.png')).catch(() => null);
+    return _atlasImg;
+}
 const CHAR_DIR = path.join(__dirname, '..', '..', 'rpgasset', 'characters');
 const ENEMY_DIR = path.join(__dirname, '..', '..', 'rpgasset', 'enemies');
 // ⚔️ ENCOUNTER-TYPE PROPS (owner directive 2026-10-05): every encounter kind
@@ -693,6 +725,31 @@ function planFor(eventDoc, player, room, exits) {
         if (Math.hypot(s.x - DOORS.w.cx, s.y - DOORS.w.cy) < 130) continue;
         if (Math.hypot(s.x - DOORS.e.cx, s.y - DOORS.e.cy) < 130) continue;
         plan.props.push({ kind: rng.pick(PROPS), x: s.x + rng.int(-14, 14), y: s.y, s: 0.8 + rng.next() * 0.6 });
+    }
+    // atlas set-dressing (only when an atlas is installed). Seeded, wall slots
+    // along the back wall, floor slots at the flanks; never inside the combat
+    // lane, the hub panel, door approaches or near any actor.
+    const atlas = atlasMeta();
+    plan.atlasProps = [];
+    if (atlas) {
+        const names = Object.keys(atlas.props);
+        const slots = [
+            { x: 150, y: 590, t: 'wall' }, { x: 330, y: 578, t: 'wall' }, { x: 870, y: 578, t: 'wall' },
+            { x: 1050, y: 590, t: 'wall' }, { x: 96, y: 650, t: 'floor' }, { x: 1104, y: 660, t: 'floor' },
+            { x: 250, y: 700, t: 'floor' }, { x: 950, y: 705, t: 'floor' },
+        ];
+        const want = rng.int(3, 6);
+        for (const sl of rng.shuffle(slots)) {
+            if (plan.atlasProps.length >= want) break;
+            if (occupied(sl.x, sl.y)) continue;
+            if (sl.x < HUB_ZONE.x1 && sl.y > HUB_ZONE.y0) continue;
+            if (Math.hypot(sl.x - DOORS.w.cx, sl.y - DOORS.w.cy) < 150) continue;
+            if (Math.hypot(sl.x - DOORS.e.cx, sl.y - DOORS.e.cy) < 150) continue;
+            const pool = names.filter((n) => atlas.props[n].slot === 'any' || atlas.props[n].slot === sl.t);
+            if (!pool.length) continue;
+            plan.atlasProps.push({ name: rng.pick(pool), x: sl.x + rng.int(-12, 12), y: sl.y });
+        }
+        plan.atlasProps.sort((p, q) => p.y - q.y);
     }
     return plan;
 }
@@ -1461,6 +1518,19 @@ async function _renderInProcess(eventDoc, player, room, opts = {}) {
 
     // 2) ambient props (under everything alive)
     for (const prop of plan.props || []) drawProp(ctx, prop.kind, prop.x, prop.y, prop.s);
+    if (plan.atlasProps && plan.atlasProps.length) {
+        const am = atlasMeta(), ai = am ? await atlasImage() : null;
+        if (am && ai) {
+            ctx.imageSmoothingEnabled = false;
+            for (const p of plan.atlasProps) {
+                const r = am.props[p.name];
+                if (!r) continue;
+                const dw = r.w * am.scale, dh = r.h * am.scale;
+                ctx.drawImage(ai, r.x, r.y, r.w, r.h, Math.round(p.x - dw / 2), Math.round(p.y - dh), dw, dh);
+            }
+            ctx.imageSmoothingEnabled = true;
+        }
+    }
 
     // 2b) exit chevrons at the arches (yellow — §9). GROUND LAYER — painted
     // UNDER room content, enemies and the champion so the pointers read as
