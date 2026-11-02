@@ -1,0 +1,187 @@
+{
+ "scale": 2,
+ "props": {
+  "coffin": {
+   "x": 2,
+   "y": 2,
+   "w": 19,
+   "h": 32,
+   "slot": "floor"
+  },
+  "altar_stone": {
+   "x": 23,
+   "y": 2,
+   "w": 32,
+   "h": 32,
+   "slot": "floor"
+  },
+  "fountain_blood": {
+   "x": 57,
+   "y": 2,
+   "w": 31,
+   "h": 32,
+   "slot": "floor"
+  },
+  "fountain_dry": {
+   "x": 90,
+   "y": 2,
+   "w": 31,
+   "h": 32,
+   "slot": "floor"
+  },
+  "bones_a": {
+   "x": 123,
+   "y": 2,
+   "w": 32,
+   "h": 32,
+   "slot": "floor"
+  },
+  "bones_b": {
+   "x": 157,
+   "y": 2,
+   "w": 32,
+   "h": 32,
+   "slot": "floor"
+  },
+  "bones_c": {
+   "x": 191,
+   "y": 2,
+   "w": 32,
+   "h": 32,
+   "slot": "floor"
+  },
+  "torch_lit_b": {
+   "x": 225,
+   "y": 2,
+   "w": 9,
+   "h": 31,
+   "slot": "wall"
+  },
+  "idol_evil": {
+   "x": 236,
+   "y": 2,
+   "w": 31,
+   "h": 31,
+   "slot": "floor"
+  },
+  "idol_hero": {
+   "x": 269,
+   "y": 2,
+   "w": 31,
+   "h": 31,
+   "slot": "floor"
+  },
+  "statue_granite": {
+   "x": 302,
+   "y": 2,
+   "w": 27,
+   "h": 31,
+   "slot": "floor"
+  },
+  "torch_lit_a": {
+   "x": 331,
+   "y": 2,
+   "w": 12,
+   "h": 30,
+   "slot": "wall"
+  },
+  "column_broken_a": {
+   "x": 345,
+   "y": 2,
+   "w": 22,
+   "h": 30,
+   "slot": "wall"
+  },
+  "column_broken_b": {
+   "x": 369,
+   "y": 2,
+   "w": 22,
+   "h": 30,
+   "slot": "wall"
+  },
+  "column_broken_c": {
+   "x": 393,
+   "y": 2,
+   "w": 22,
+   "h": 30,
+   "slot": "wall"
+  },
+  "statue_cat": {
+   "x": 417,
+   "y": 2,
+   "w": 31,
+   "h": 30,
+   "slot": "floor"
+  },
+  "idol_orc": {
+   "x": 450,
+   "y": 2,
+   "w": 28,
+   "h": 30,
+   "slot": "floor"
+  },
+  "mold_patch_b": {
+   "x": 480,
+   "y": 2,
+   "w": 29,
+   "h": 30,
+   "slot": "floor"
+  },
+  "mold_patch_a": {
+   "x": 511,
+   "y": 2,
+   "w": 27,
+   "h": 29,
+   "slot": "floor"
+  },
+  "chest_open": {
+   "x": 540,
+   "y": 2,
+   "w": 32,
+   "h": 28,
+   "slot": "floor"
+  },
+  "banner_red": {
+   "x": 574,
+   "y": 2,
+   "w": 28,
+   "h": 26,
+   "slot": "wall"
+  },
+  "boulder": {
+   "x": 604,
+   "y": 2,
+   "w": 29,
+   "h": 26,
+   "slot": "floor"
+  },
+  "chest_closed": {
+   "x": 635,
+   "y": 2,
+   "w": 32,
+   "h": 23,
+   "slot": "floor"
+  },
+  "crate": {
+   "x": 669,
+   "y": 2,
+   "w": 32,
+   "h": 22,
+   "slot": "floor"
+  },
+  "stump_old": {
+   "x": 703,
+   "y": 2,
+   "w": 27,
+   "h": 18,
+   "slot": "floor"
+  },
+  "pedestal": {
+   "x": 732,
+   "y": 2,
+   "w": 27,
+   "h": 13,
+   "slot": "floor"
+  }
+ }
+}
