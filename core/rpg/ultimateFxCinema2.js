@@ -76,11 +76,12 @@ module.exports = function install(CIN, U) {
         if (t > 0.5) { c.fillStyle = `rgba(0,0,0,${clamp01((t - 0.9) / 0.4) * 0.6})`; c.fillRect(0, 0, W, Hh); } flash(c, W, Hh, t, D, '#ff2a2a', 0.5);
     };
     CIN.SCOUT = (c, t, D, W, Hh, wd, snap) => {
-        const z = easeIn(clamp01(t / 0.9)), s = 1 + z * 0.35; c.save(); c.translate(W / 2, Hh / 2); c.scale(s, s); c.translate(-W / 2, -Hh / 2); c.drawImage(snap, 0, 0, W, Hh); c.restore();
-        const vg = c.createRadialGradient(W / 2, Hh / 2, Hh * 0.18, W / 2, Hh / 2, Hh * 0.62); vg.addColorStop(0, 'rgba(0,20,0,0)'); vg.addColorStop(1, 'rgba(0,10,0,0.92)'); c.fillStyle = vg; c.fillRect(0, 0, W, Hh);
-        c.strokeStyle = '#9fff8a'; c.lineWidth = 2; const R = Hh * 0.3 * (1.6 - 0.6 * easeOut(clamp01(t / 0.7))); c.beginPath(); c.arc(W / 2, Hh / 2, R, 0, TAU); c.stroke(); c.beginPath(); c.arc(W / 2, Hh / 2, R * 0.4, 0, TAU); c.stroke();
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { c.beginPath(); c.moveTo(W / 2 + dx * R * 0.2, Hh / 2 + dy * R * 0.2); c.lineTo(W / 2 + dx * R * 1.5, Hh / 2 + dy * R * 1.5); c.stroke(); }
-        const lk = clamp01((t - 0.8) / 0.2); if (lk > 0) { add(c, () => { glowDot(c, W / 2, Hh / 2, 50 * lk + 10, '#9fff8a', 0.9 * lk); c.strokeStyle = '#ff4a3a'; c.lineWidth = 3; c.beginPath(); c.arc(W / 2, Hh / 2, R * 0.4 * (1.8 - 0.8 * lk), 0, TAU); c.stroke(); }); }
+        const TX = (snap._T || [W / 2, Hh / 2])[0], TY = (snap._T || [W / 2, Hh / 2])[1];   // owner 2026-11-03: the lens sits ON THE ENEMY
+        const z = easeIn(clamp01(t / 0.9)), s = 1 + z * 0.35; c.save(); c.translate(TX, TY); c.scale(s, s); c.translate(-TX, -TY); c.drawImage(snap, 0, 0, W, Hh); c.restore();
+        const vg = c.createRadialGradient(TX, TY, Hh * 0.18, TX, TY, Hh * 0.62); vg.addColorStop(0, 'rgba(0,20,0,0)'); vg.addColorStop(1, 'rgba(0,10,0,0.92)'); c.fillStyle = vg; c.fillRect(0, 0, W, Hh);
+        c.strokeStyle = '#9fff8a'; c.lineWidth = 2; const R = Hh * 0.3 * (1.6 - 0.6 * easeOut(clamp01(t / 0.7))); c.beginPath(); c.arc(TX, TY, R, 0, TAU); c.stroke(); c.beginPath(); c.arc(TX, TY, R * 0.4, 0, TAU); c.stroke();
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { c.beginPath(); c.moveTo(TX + dx * R * 0.2, TY + dy * R * 0.2); c.lineTo(TX + dx * R * 1.5, TY + dy * R * 1.5); c.stroke(); }
+        const lk = clamp01((t - 0.8) / 0.2); if (lk > 0) { add(c, () => { glowDot(c, TX, TY, 50 * lk + 10, '#9fff8a', 0.9 * lk); c.strokeStyle = '#ff4a3a'; c.lineWidth = 3; c.beginPath(); c.arc(TX, TY, R * 0.4 * (1.8 - 0.8 * lk), 0, TAU); c.stroke(); }); }
     };
     CIN.ROGUE = (c, t, D, W, Hh, wd, snap) => {
         c.drawImage(snap, 0, 0, W, Hh); c.fillStyle = `rgba(2,0,8,${easeIn(clamp01(t / 0.35))})`; c.fillRect(0, 0, W, Hh);

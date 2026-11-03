@@ -671,6 +671,63 @@ module.exports = function install(LAYERS, H) {
         if (tr.link) { ctx.save(); ctx.globalAlpha = a * 0.5; ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = tr.color || '#ffe27a'; ctx.lineWidth = 2; const c = list[0]; for (const [ox] of offs) { ctx.beginPath(); ctx.moveTo(c.x + c.w / 2, c.y + c.h * 0.4); ctx.lineTo(c.x + c.w / 2 + ox, c.y + c.h * 0.4); ctx.stroke(); } ctx.restore(); }
     };
 
+    // ── bigmeteor (owner 2026-11-03: "a meteor so large it engulfs the screen even though the view is zoomed out") ──
+    // a burning rock that starts as a speck above the target and swells until it fills the whole frame.
+    LAYERS.bigmeteor = (ctx, tr, env) => {
+        const t = env.time - tr.at, dur = tr.dur || 1.1; if (t < 0 || t > dur + 0.05) return;
+        const u = clamp01(t / dur), g = u * u * u, [tx, ty] = pt(env, tr.pos || 'T', tr);
+        const x = lerp(tx - (tr.slant === undefined ? 150 : tr.slant), tx, easeIn(u)), y = lerp(-40, ty - 40, easeIn(u)), R = 10 + (tr.size || 560) * g;
+        ctx.save();
+        // fire halo + tail streaming up-left (the way it came from)
+        ctx.globalCompositeOperation = 'lighter';
+        glowDot(ctx, x, y, R * 2.1, '#ff6a1a', 0.55 * (0.4 + u)); glowDot(ctx, x, y, R * 1.3, '#ffd28a', 0.5 * u);
+        const tail = ctx.createLinearGradient(x, y, x - (tx - x) * 0 - 150 * (1 - u) - 40, y - R * 3);
+        tail.addColorStop(0, 'rgba(255,160,60,0.7)'); tail.addColorStop(1, 'rgba(255,80,0,0)');
+        ctx.fillStyle = tail; ctx.beginPath(); ctx.moveTo(x - R * 0.9, y); ctx.lineTo(x + R * 0.9, y); ctx.lineTo(x - 60 * (1 - u), y - R * 3.2); ctx.closePath(); ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+        // craggy rock body
+        const rr = mulberry(hashS('bm' + tr.at)); ctx.beginPath();
+        for (let i = 0; i < 22; i++) { const a = i / 22 * TAU, r = R * (0.82 + rr() * 0.28); i ? ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r) : ctx.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r); }
+        ctx.closePath();
+        const g2 = ctx.createRadialGradient(x - R * 0.3, y - R * 0.3, R * 0.1, x, y, R * 1.1); g2.addColorStop(0, '#9a5a30'); g2.addColorStop(0.6, '#4a2410'); g2.addColorStop(1, '#1a0a04');
+        ctx.fillStyle = g2; ctx.fill(); ctx.lineWidth = Math.max(2, R * 0.05); ctx.strokeStyle = '#ff8a2a'; ctx.stroke();
+        // molten cracks
+        ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(255,170,60,0.7)'; ctx.lineWidth = Math.max(1.5, R * 0.025);
+        for (let i = 0; i < 9; i++) { const a = rr() * TAU, r0 = R * 0.15, r1 = R * (0.5 + rr() * 0.4); ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * r0, y + Math.sin(a) * r0); ctx.lineTo(x + Math.cos(a + 0.25) * (r0 + r1) / 2, y + Math.sin(a + 0.25) * (r0 + r1) / 2); ctx.lineTo(x + Math.cos(a) * r1, y + Math.sin(a) * r1); ctx.stroke(); }
+        ctx.restore();
+    };
+
+    // ── planetburst (owner: "a flash, an anime-style planet exploding from a meteor impact") ──
+    // a whole planet cracks open with light, detonates in a white flash, shockwave rings + radial rays race outwards, chunks fly off.
+    LAYERS.planetburst = (ctx, tr, env) => {
+        const t = env.time - tr.at, dur = tr.dur || 1.3; if (t < 0 || t > dur) return;
+        const [x, y0] = pt(env, tr.pos || 'T', tr), y = y0 - 50, R0 = tr.r || 120, col = tr.color || '#ff7a1a', pre = tr.pre || 0.3;
+        ctx.save();
+        if (t < pre) {                       // the planet, fracturing from the inside
+            const k = t / pre;
+            const g = ctx.createRadialGradient(x - R0 * 0.35, y - R0 * 0.35, R0 * 0.1, x, y, R0); g.addColorStop(0, '#d98a52'); g.addColorStop(0.55, '#7a3a24'); g.addColorStop(1, '#2a0e12');
+            ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, R0 * (1 + 0.04 * Math.sin(t * 80)), 0, TAU); ctx.fill();
+            ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = '#fff2b0'; ctx.lineWidth = 3; const rr = mulberry(hashS('pb' + tr.at));
+            for (let i = 0; i < 12; i++) { const a = rr() * TAU, L = R0 * (0.3 + 0.9 * k) * (0.6 + rr() * 0.5); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a + 0.2) * L * 0.5, y + Math.sin(a + 0.2) * L * 0.5); ctx.lineTo(x + Math.cos(a) * L, y + Math.sin(a) * L); ctx.stroke(); }
+            glowDot(ctx, x, y, R0 * (1 + k), '#ffffff', 0.5 * k);
+            ctx.restore(); return;
+        }
+        const s = t - pre, u = clamp01(s / (dur - pre)), Rm = Math.hypot(env.W, env.H);
+        ctx.globalCompositeOperation = 'lighter';
+        // detonation flash that drains
+        ctx.globalAlpha = (1 - easeIn(clamp01(s / 0.35))) * 0.95; ctx.fillStyle = '#ffffff'; ctx.fillRect(-80, -80, env.W + 160, env.H + 160);
+        // anime radial rays
+        ctx.globalAlpha = (1 - u) * 0.8; const rr = mulberry(hashS('pr' + tr.at));
+        for (let i = 0; i < 28; i++) { const a = i / 28 * TAU + rr() * 0.1, w = 0.03 + rr() * 0.05, r1 = Rm * easeOut(clamp01(s / 0.35)) * (0.5 + rr() * 0.6); ctx.fillStyle = i % 2 ? '#fff2b0' : col; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a - w) * r1, y + Math.sin(a - w) * r1); ctx.lineTo(x + Math.cos(a + w) * r1, y + Math.sin(a + w) * r1); ctx.closePath(); ctx.fill(); }
+        // shockwave rings
+        for (let k2 = 0; k2 < 3; k2++) { const rk = easeOut(clamp01((s - k2 * 0.09) / 0.7)); if (rk <= 0) continue; ctx.globalAlpha = (1 - u) * (1 - k2 * 0.25); ctx.strokeStyle = k2 === 0 ? '#ffffff' : col; ctx.lineWidth = 10 * (1 - rk) + 2; ctx.beginPath(); ctx.arc(x, y, Rm * 0.75 * rk, 0, TAU); ctx.stroke(); }
+        glowDot(ctx, x, y, R0 * (1 + 3 * easeOut(clamp01(s / 0.4))), col, 0.6 * (1 - u));
+        // planet chunks flying outward
+        ctx.globalCompositeOperation = 'source-over';
+        for (let i = 0; i < 18; i++) { const a = rr() * TAU, sp = 180 + rr() * 420, d = sp * easeOut(clamp01(s / 0.9)), sz = 8 + rr() * 22; ctx.globalAlpha = 1 - easeIn(clamp01((u - 0.5) / 0.5)); ctx.fillStyle = i % 3 ? '#5a2a1a' : '#ff8a3a'; ctx.beginPath(); ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d + 120 * s * s, sz, 0, TAU); ctx.fill(); }
+        ctx.restore();
+    };
+
     // ── camera: marker track read by the renderer (zoom delta) ─────────────
     LAYERS.camera = () => { };
     LAYERS.hidecaster = () => { };

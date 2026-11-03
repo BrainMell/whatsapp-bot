@@ -307,8 +307,14 @@ module.exports = function install(LAYERS, H, W_OF, stars) {
         const sn = env._cinSn, sx = sc.getContext('2d'), nx = sn.getContext('2d');
         if (t < 1.6) { nx.setTransform(1, 0, 0, 1, 0, 0); nx.clearRect(0, 0, W, Hh); nx.drawImage(ctx.canvas, 0, 0); }   // live frame under us (still pre-cinema)
         sx.setTransform(1, 0, 0, 1, 0, 0); sx.clearRect(0, 0, W, Hh); sx.globalAlpha = 1; sx.globalCompositeOperation = 'source-over'; sx.shadowBlur = 0;
+        if (env.A && env.A.T) sn._T = [env.A.T[0] * W / env.W, (env.A.T[1] - 50) * Hh / env.H]; else sn._T = null;   // the target point, for lens-style intros
+        if (tr.keepCaster && env.casterCut && env.base && t < 1.6) {   // the caster is NOT pulled in: patch him out of the swirled snapshot
+            const cc = env.casterCut, kx = W / env.W, ky = Hh / env.H, b = env.base, bx = b.width / env.W, by = b.height / env.H, px = cc.x * kx - 6, py = cc.y * ky - 6, pw = cc.w * kx + 12, ph = cc.h * ky + 12;
+            nx.save(); nx.beginPath(); nx.rect(px, py, pw, ph); nx.clip(); nx.drawImage(b, (env.W * 0.5 - pw / kx / 2) * bx, (py / ky) * by, (pw / kx) * bx, (ph / ky) * by, px, py, pw, ph); nx.restore();
+        }
         sx.save(); fn(sx, t, D, W, Hh, W_OF(tr.world), sn); sx.restore();
         const a = clamp01(t / 0.1) * (1 - easeIn(clamp01((t - (D - 0.4)) / 0.4)));
         ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = a; ctx.drawImage(sc, 0, 0); ctx.restore();
+        if (tr.keepCaster && env.casterCut) { ctx.save(); ctx.globalAlpha = a; ctx.drawImage(env.casterCut.img, env.casterCut.x, env.casterCut.y, env.casterCut.w, env.casterCut.h); ctx.restore(); }
     };
 };

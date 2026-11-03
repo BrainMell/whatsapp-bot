@@ -22,11 +22,6 @@
     }
   },
   "overrides": {
-    "cosmic@MAGE": { "set": "planet_hit", "loop": false },
-    "world@lava": { "set": "lava_world" },
-    "world@void": { "set": "void_world" },
-    "cinema@KAGE": { "set": "ink", "fit": "cover", "alpha": 0.94 },
-    "cinema@VOIDWALKER": { "set": "gate_blue", "fit": "cover" },
-    "cinema@WARLOCK": { "set": "gate_blood", "fit": "cover" }
+    "world@lava": { "set": "lava_world" }
   }
 }

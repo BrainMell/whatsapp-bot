@@ -15,7 +15,7 @@
 const GROUND_LAYERS = new Set(['world', 'circle', 'rift', 'cracks', 'vortex', 'bgfill', 'eclipse', 'dragon', 'staff', 'rings', 'ripple']);
 
 const META = {
-    MAGE: { duration: 3.0, impact: 1.2, zoom: 0.06 },
+    MAGE: { duration: 3.6, impact: 2.0, zoom: 0.02 },
     DRAGON_GOD: { duration: 4.1, impact: 2.55, zoom: 0.02, flatVeil: true },
     DRAGON_LORD: { duration: 3.5, impact: 1.95, zoom: 0.04 },
     REAPER: { duration: 3.4, impact: 1.75, zoom: 0.03 },
@@ -26,6 +26,9 @@ const META = {
     LICH: { duration: 3.0, impact: 1.2 },
     DEATH_LORD: { duration: 3.1, impact: 1.5 },
     ELEMENTALIST: { duration: 3.0, impact: 1.25 },
+    KAGE: { duration: 3.0, impact: 1.25 },
+    VOIDWALKER: { duration: 3.1, impact: 1.3, zoom: 0.12 },
+    WARLOCK: { duration: 3.0, impact: 1.3 },
     AVATAR: { duration: 3.1, impact: 1.3 },
 };
 // 🌌 WORLD-SHIFT (owner 2026-10-28): the big skills open with a cosmic cinematic (zoom-blur out ->
@@ -33,18 +36,14 @@ const META = {
 // shifted later by SHIFT seconds. planet:false = warp tunnel into another dimension (shorter).
 const WORLD = {
     // arenas are RARE (owner): only the skills that really rewrite the map get one
-    MAGE: { kind: 'lava', planet: true },                                  // asteroid hits a planet -> lava world (LAYERS.cosmic)
-    ARCHMAGE: { kind: 'void', cin: 'ARCHMAGE', debris: true },             // SINGULARITY: a black hole eats reality, the fight is in a void
-    KAGE: { kind: 'void', cin: 'KAGE', sil: true },                        // ink swallows the frame, eyes open, shadow figures throw from everywhere
+    ARCHMAGE: { kind: 'void', cin: 'ARCHMAGE', lights: true, keepCaster: true },             // SINGULARITY: a black hole eats reality, the fight is in a void
     // everyone else: a bespoke intro sequence, then back onto the normal field (no new map)
     TIMELORD: { cin: 'TIMELORD' },                                         // fall into a clock, hands spin backwards
     AVATAR: { cin: 'AVATAR' },                                             // four elements spiral into the glowing eye
     DEATH_LORD: { cin: 'DEATH_LORD' },                                     // moon becomes a skull, bone hands rise
-    VOIDWALKER: { cin: 'VOIDWALKER' },                                     // the screen shatters into inverted shards (+ the colour invert)
     REAPER: { cin: 'REAPER' },                                             // one scythe cut splits the world
     LICH: { cin: 'LICH' },                                                 // frost crystallises the frame
     GRAND_INVENTOR: { cin: 'GRAND_INVENTOR' },                             // blueprint draws itself, becomes metal
-    WARLOCK: { cin: 'WARLOCK' },                                           // pentagram burns in under a blood moon
     ELEMENTALIST: { cin: 'ELEMENTALIST' },                                 // four elements collide
     VIRTUOSO: { cin: 'VIRTUOSO' },                                         // curtains open on a stage with the equaliser
     // short (1.4s) bespoke intros for every remaining class - ultimateFxCinema2.js; no arena swap, they dissolve back onto the normal field
@@ -114,7 +113,7 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
             out.push(...weight(col, at, k));
             out.push(flash(mid, 0.22 + i * 0.08, at, 0.09));
         }
-        out.push(L('cracks', { at: I + (n - 1) * gap, pos: 'T', n: 9, r: 150, color: col, dur: 0.9 }));
+        out.push(L('cracks', { at: I + (n - 1) * gap, pos: 'T', off: [45, 0], n: 9, r: 120, color: col, dur: 0.9 }));
         out.push(L('engulf', { at: I + (n - 1) * gap, pos: 'T', color: col, mid: '#ffffff', r: 430, dur: 0.5, grow: 0.3, a: 0.6 }));
         out.push(L('engulf', { at: I + (n - 1) * gap, pos: 'T', color: col, mid: '#ffffff', r: 430, dur: 0.5, grow: 0.3, a: 0.6 }));
         out.push(...extra);
@@ -339,7 +338,6 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
         ],
         // rogue: two quick stabs and a critical pop (no lunge)
         ROGUE: () => [
-            { fx: 'dark_a', at: 0.05, pos: 'C', w: 130, dur: 0.9, loop: true, alpha: 0.6 },
             L('lunge', { at: I - 0.32, dur: 0.6, color: '#9d86ff' }),
             L('slashes', { at: I - 0.02, n: 2, gap: 0.12, kind: 'stab', color: '#9d86ff', mid: '#e6dcff', len: 150, w: 10, angles: [-0.35, 0.3], jit: [14, 20] }),
             L('slashes', { at: I + 0.22, n: 16, gap: 0.008, kind: 'burst', color: '#b9a6ff', mid: '#ffffff', len: 170 }),
@@ -379,13 +377,18 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
         APPRENTICE: () => meteorFall(true, 6, 46, 190, '#ff7a1a'),
         // ☄️ MAGE (owner 2026-11-02: "the meteorite one was mid"): a meteor SHOWER heralds ONE colossal boulder that
         // takes a full second to fall, lands with a triple shockwave, a flash and a burst of flying rock
+        // MAGE (owner 2026-11-03): the enemy is left alone in void-like space, the view pulls back until everyone is tiny, and a meteor swells until it fills the
+        // whole frame; the hit is a white flash and an anime-style planet detonating
         MAGE: () => [
-            L('circle', { at: 0.05, pos: 'C', r: 70, dur: 1.1, color: '#ff7a1a', points: 6, spin: 1.5 }),
-            L('fall', { at: I - 1.0, pos: 'T', kind: 'meteor', n: 10, gap: 0.09, fall: 0.5, spreadX: 440, spreadY: 150, slant: -260, land: 'k_regular', landW: 120, mw: 150, color: '#ff7a1a' }),
-            L('fall', { at: I - 0.8, pos: 'T', kind: 'rock', n: 1, fall: 0.8, spreadX: 0, spreadY: 0, slant: -200, size: 125, land: 'k_regular', landW: 440, color: '#ff7a1a' }),
-            L('rings', { at: I + 0.02, pos: 'T', n: 3, gap: 0.1, color: '#ff7a1a', r: 300 }),
-            L('emit', { at: I, dur: 0.9, pos: 'T', box: [170, 40], n: 46, life: 0.9, shape: 'spark', colors: ['#fff2b0', '#ff7a1a', '#5a3a28'], v: [0, -170], vr: [190, 90], g: 260 }),
-            flash('#ffe2a8', 0.65, I, 0.28),
+            L('wash', { at: 0.05, dur: I + 0.5, color: '#02020a', a: 0.78 }),
+            L('bgfill', { at: 0.1, dur: I + 0.3, pos: [0.5, 0.45], colors: ['#14092e', '#000000'], fin: 0.6, fout: 0.4 }),
+            L('emit', { at: 0.1, dur: I + 0.2, pos: [0.5, 0.35], box: [600, 260], n: 60, life: 1.4, shape: 'star', colors: ['#ffffff', '#b8c8ff', '#ffd28a'], v: [0, 0], vr: [4, 4], size: 3 }),
+            L('shrink', { at: 0.1, dur: 1.0, to: 0.5 }),
+            L('circle', { at: 0.2, pos: 'C', r: 70, dur: 1.1, color: '#ff7a1a', points: 6, spin: 1.5 }),
+            L('bigmeteor', { at: I - 1.15, dur: 1.15, pos: 'T', size: 640 }),
+            L('planetburst', { at: I, dur: 1.4, pos: 'T', r: 125, color: '#ff7a1a' }),
+            ...weight('#ff7a1a', I + 0.3, 1.6),
+            L('engulf', { at: I + 0.3, pos: 'T', color: '#ff7a1a', mid: '#ffe2a8', dur: 0.9, grow: 0.4, a: 0.7 }),
         ],
         // fire breath straight from the dragonslayer's face
         // DRAGONSLAYER (owner 2026-11-03): no starter - a dragon dives in, the fire comes out of ITS jaws, heavier and with real impact
@@ -471,14 +474,17 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
         ],
         // ── void / time / tinker ───────────────────────────────────────────
         // black holes open on every enemy and swallow them
+        // ARCHMAGE (owner 2026-11-03): the ENEMY (not the caster) is swept up with the world into the singularity; no second black-hole pass;
+        // the fight lands in a world of swirling light
         ARCHMAGE: () => [
-            L('wash', { at: 0.1, dur: I + 0.8, color: '#04000c', a: 0.4 }),
-            L('circle', { at: 0.05, pos: 'C', r: 90, dur: 1.5, color: '#a56bff', points: 6, spin: 2 }),
+            L('wash', { at: 0.1, dur: I + 0.8, color: '#04000c', a: 0.25 }),
             L('emit', { at: 0.1, dur: 1.0, pos: 'C', box: [80, 30], n: 22, life: 0.8, shape: 'star', colors: ['#a56bff', '#e6d4ff'], v: [0, -80], vr: [40, 20], swirl: 4 }),
-            L('blackhole', { at: 0.45, pos: 'T', r: 92, dur: 1.7, spread: 'enemies', fanGap: 0.06 }),
-            L('focus', { at: 0.75, dur: 1.4, mode: 'suck', hit: I + 0.3 }),
-            L('rings', { at: I + 0.35, pos: 'T', n: 3, gap: 0.1, color: '#a56bff', r: 170, spread: 'enemies', fanGap: 0.06 }),
-            flash('#c4a4ff', 0.4, I + 0.4, 0.2),
+            L('affect', { at: I - 0.3, dur: 0.7, curve: 'hold', a: 0.6, add: true, spread: 'enemies' }),
+            L('rings', { at: I, pos: 'T', n: 4, gap: 0.09, color: '#c4a4ff', r: 220, spread: 'enemies', fanGap: 0.06 }),
+            { fx: 'k_sonic', at: I, pos: 'T', w: 320, add: true, tint: ['#a56bff', 0.5], spread: 'enemies', fanGap: 0.06 },
+            ...weight('#a56bff', I, 1.3),
+            L('engulf', { at: I + 0.02, pos: 'T', color: '#a56bff', mid: '#e6d4ff', dur: 0.9, grow: 0.4, a: 0.7 }),
+            flash('#c4a4ff', 0.45, I, 0.2),
         ],
         // colours invert (the caster stays normal), zoom in, the enemy just loses health
         // VOIDWALKER (owner 2026-11-03: starter was trash): no shard cinematic - a gate opens under the target in an inverted world and drags it in
@@ -602,7 +608,7 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
 // energy (a ring + sparks + a brighter flash) but NEVER sky lasers or ground cracks (owner: "the level 3s are
 // spamming lasers where they don't belong"). Timing never changes so hit sync is untouched.
 const SIZE_KEYS = ['w', 'r', 'rx', 'ew', 'eh', 'len'];
-const NOSCALE = new Set(['lunge', 'focus', 'bgfill', 'invert', 'vortex', 'camera', 'hidecaster', 'dragon', 'robohand', 'scythe', 'reticle', 'staff', 'shrink', 'magicClock', 'cosmic', 'world', 'cinema', 'engulf', 'splitcut', 'crumble', 'ghosts']);
+const NOSCALE = new Set(['lunge', 'focus', 'bgfill', 'invert', 'vortex', 'camera', 'hidecaster', 'dragon', 'robohand', 'scythe', 'reticle', 'staff', 'shrink', 'magicClock', 'cosmic', 'world', 'cinema', 'bigmeteor', 'planetburst', 'engulf', 'splitcut', 'crumble', 'ghosts']);
 function classRecipe(cls, p, o) {
     const W = WORLD[cls], S = shiftOf(cls);
     if (!W) return classRecipeBase(cls, p, o);
@@ -612,8 +618,8 @@ function classRecipe(cls, p, o) {
     const moved = base.filter((t) => !drop.has(t.layer)).map((t) => ({ ...t, at: (t.at || 0) + S, ...(t.hit !== undefined ? { hit: t.hit + S } : {}) }));
     const total = ((META[cls] && META[cls].duration) || 2.7) + S, T3 = W.cin ? 1.75 : 1.7, wAt = T3 - 0.1;
     return [
-        W.cin ? { layer: 'cinema', at: 0, dur: W.short ? 1.4 : 2.1, kind: W.cin, world: W.kind } : { layer: 'cosmic', at: 0, dur: 2.0, world: W.kind, planet: W.planet },
-        ...(W.kind ? [{ layer: 'world', under: true, at: wAt, dur: total - wAt - 0.25, kind: W.kind, sil: W.sil, debris: W.debris, fin: 0.25, fout: 0.4 }] : []),
+        W.cin ? { layer: 'cinema', at: 0, dur: W.short ? 1.4 : 2.1, kind: W.cin, world: W.kind, keepCaster: W.keepCaster } : { layer: 'cosmic', at: 0, dur: 2.0, world: W.kind, planet: W.planet },
+        ...(W.kind ? [{ layer: 'world', under: true, at: wAt, dur: total - wAt - 0.25, kind: W.kind, sil: W.sil, debris: W.debris, lights: W.lights, fin: 0.25, fout: 0.4 }] : []),
         ...moved,
     ];
 }

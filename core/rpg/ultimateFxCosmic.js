@@ -307,6 +307,17 @@ module.exports = function install(LAYERS, H) {
             ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = wd.glow + '22';
             for (let i = 0; i < 9; i++) { const ang = -Math.PI + (i / 9) * Math.PI + Math.sin(tt * 0.5 + i) * 0.04; ctx.beginPath(); ctx.moveTo(W / 2, yH); ctx.lineTo(W / 2 + Math.cos(ang - 0.07) * W, yH + Math.sin(ang - 0.07) * W); ctx.lineTo(W / 2 + Math.cos(ang + 0.07) * W, yH + Math.sin(ang + 0.07) * W); ctx.fill(); }
             ctx.restore();
+        } else if (tr.kind === 'void' && tr.lights) {           // 🌀 swirling lights (owner 2026-11-03): ribbons of light spiralling round a bright core, like the erased-timeline void
+            ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+            const cx = W / 2, cy = yH * 0.55, pal = ['#ffffff', '#b8a0ff', '#6fd8ff', '#ffe27a', '#ff8ad8'];
+            for (let i = 0; i < 34; i++) {
+                const rr2 = mulberry(hashS('lt' + i)), a0 = rr2() * TAU, rad = 40 + rr2() * W * 0.62, sp = (0.35 + rr2() * 0.7) * (i % 2 ? 1 : -1), len = 0.5 + rr2() * 1.1;
+                ctx.strokeStyle = pal[i % pal.length]; ctx.globalAlpha = a * (0.25 + 0.4 * rr2()); ctx.lineWidth = 1.5 + rr2() * 4; ctx.beginPath();
+                for (let k = 0; k <= 18; k++) { const q = k / 18, ang = a0 + tt * sp + q * len, r = rad * (1 + 0.12 * Math.sin(tt * 1.3 + i + q * 4)); const px = cx + Math.cos(ang) * r, py = cy + Math.sin(ang) * r * 0.62; k ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+                ctx.stroke();
+            }
+            ctx.globalAlpha = a; const g = ctx.createRadialGradient(cx, cy, 4, cx, cy, W * 0.42); g.addColorStop(0, 'rgba(255,255,255,0.75)'); g.addColorStop(0.3, 'rgba(184,160,255,0.35)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, yH + 60);
+            ctx.restore();
         } else if (tr.kind === 'void') {                        // nebula swirl + mist floor
             ctx.save(); ctx.globalCompositeOperation = 'lighter';
             for (let i = 0; i < 4; i++) {
