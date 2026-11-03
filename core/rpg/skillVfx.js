@@ -959,10 +959,8 @@ async function animateUltimate(options = {}) {
         abort: ultAbort
       }), 30000, () => { ultAbort.flag = true; });   // 🔥 R3: was 12000 (R2 raised 9000) — REAL duels proved 12s still loses: a DRAGON_GOD cast at 16:46:54Z raced out at 12s and silently played the OLD hand-drawn gif (log: "[SkillVFX] gif 117278B in 13804ms"). Profiled the engine (18-22s: breath sprites 40% + full-canvas vortex warp 19%) and made both fast in ultimateFxLayers/2. 26-R5: the FIRST cast of a new geometry also PAINTS + SAVES its plates (~20-25s on the heaviest classes) — 30s keeps that one-time capture from degrading to the legacy gif; every later cast replays plates in ~9-11s.
     } catch (e) { console.warn('[SkillVFX] sprite engine failed:', e?.message || e); }
-    const gif = vid && vid.mp4 ? vid.mp4 : await raceTimeout(
-      renderSignatureGif(state, player, ability, entry, target, options.baseSceneBuffer, null, options.layers || null, options.casterIndex, options.targetSide, options.focusIndex),
-      8000
-    );
+    // legacy hand-drawn GIF fallback PURGED (owner 2026-11-03: old arrow/wing shapes kept popping up when the engine timed out)
+    const gif = vid && vid.mp4 ? vid.mp4 : null;
     if (gif && Buffer.isBuffer(gif) && gif.length > 100) {
       console.log('[SkillVFX] ' + (vid && vid.mp4 ? 'sprite mp4 ' : 'gif ') + gif.length + 'B in ' + (Date.now() - renderT0) + 'ms');
       const mediaResult = await sendGif(gif, '💥 *' + name + '* UNLEASHED!', vid && vid.thumb ? { thumb: vid.thumb } : null);
