@@ -497,6 +497,7 @@ module.exports = function install(LAYERS, H) {
         ctx.beginPath(); ctx.arc(0, 0, r * 0.45, 0, TAU); ctx.stroke();
         for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2; ctx.beginPath(); ctx.moveTo(Math.cos(a) * (r + 14), Math.sin(a) * (r + 14)); ctx.lineTo(Math.cos(a) * (r * 0.3), Math.sin(a) * (r * 0.3)); ctx.stroke(); }
         if (lock > 0.9 && Math.floor(t * 14) % 2 === 0) { ctx.fillStyle = col; ctx.globalAlpha = fade * 0.5; ctx.fillRect(-r, -r, r * 2, r * 2); }
+        if (tr.label && lock > 0.75) { ctx.globalAlpha = fade; ctx.globalCompositeOperation = 'source-over'; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = '#000'; ctx.strokeText(tr.label, 0, -r - 18); ctx.fillStyle = col; ctx.fillText(tr.label, 0, -r - 18); }
         ctx.restore();
         // scan line
         ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.4 * fade; ctx.fillStyle = col; const sy = cy - 90 + ((t * 260) % 180); ctx.fillRect(x - 70, sy, 140, 2); ctx.restore();
@@ -549,24 +550,125 @@ module.exports = function install(LAYERS, H) {
         const cx0 = c.x + c.w / 2, feet0 = c.y + c.h;
         const dx = hitX - cx0, dy = hitY - feet0;
         const prof = (tt) => { const u = clamp01(tt / dur); return u < 0.42 ? easeIn(u / 0.42) : u < 0.6 ? 1 : 1 - easeOut((u - 0.6) / 0.4) * 1; };
-        const SAMPLES = 9, span = 0.05;   // blur length in seconds
+        const SAMPLES = 16, span = 0.085;   // blur length in seconds
         const speed = Math.abs(prof(t) - prof(t - 0.03));
         const blur = Math.min(1, speed * 9);
         for (let k = SAMPLES; k >= 0; k--) {
             const tt = Math.max(0, t - (k / SAMPLES) * span * (0.3 + blur)), p = prof(tt);
-            const a = k === 0 ? 1 : (1 - k / (SAMPLES + 1)) * 0.38 * (0.25 + blur);
+            const a = k === 0 ? 1 : (1 - k / (SAMPLES + 1)) * 0.26 * (0.25 + blur);
             if (a <= 0.01) continue;
             ctx.save(); ctx.globalAlpha = a;
             ctx.drawImage(c.img, c.x + dx * p, c.y + dy * p, c.w * (1 + 0.25 * blur * (k ? 1 : 0.3)), c.h);
             if (k && tr.color) { ctx.globalCompositeOperation = 'source-atop'; }
             ctx.restore();
         }
-        // streaks while moving fast
-        if (blur > 0.25) {
-            const p = prof(t); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = tr.color || '#ffffff'; ctx.lineCap = 'round';
-            for (let i = 0; i < 7; i++) { const yy = feet0 + dy * p - c.h * (0.15 + i * 0.12), xx = cx0 + dx * p, dir = (t / dur) < 0.5 ? -1 : -1; ctx.globalAlpha = 0.5 * blur; ctx.lineWidth = 2 + (i % 3); ctx.beginPath(); ctx.moveTo(xx + dir * 20, yy); ctx.lineTo(xx + dir * (70 + i * 14) * blur, yy + (i % 2 ? 3 : -3)); ctx.stroke(); }
+        // (owner 2026-11-03: speed LINES -> realistic motion blur) no streak lines: the blur is a dense run of ghost samples
+        // smeared along the travel direction plus a faint horizontal stretch while moving fast.
+    };
+
+    // ── engulf (owner 2026-11-03: "all laser from the sky attacks should do the expanding thing that engulfs the screen") ──
+    // a radial bloom that starts at the point of impact and swallows the whole frame, holds white, then drains away.
+    LAYERS.engulf = (ctx, tr, env) => {
+        const t = env.time - tr.at, dur = tr.dur || 0.9; if (t < 0 || t > dur) return;
+        const [x, y] = pt(env, tr.pos || 'T', tr), u = t / dur, col = tr.color || '#fff2b0';
+        const maxR = tr.r || Math.hypot(env.W, env.H) * 1.1, grow = easeOut(clamp01(u / (tr.grow || 0.4))), R = Math.max(4, maxR * grow);
+        const fade = u < 0.55 ? 1 : 1 - easeIn((u - 0.55) / 0.45), cy = y - (tr.rise === undefined ? 40 : tr.rise);
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.max(0, fade) * (tr.a === undefined ? 0.95 : tr.a);
+        const g = ctx.createRadialGradient(x, cy, R * 0.05, x, cy, R);
+        g.addColorStop(0, '#ffffff'); g.addColorStop(0.5, tr.mid || '#ffffff'); g.addColorStop(0.82, col); g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g; ctx.fillRect(-80, -80, env.W + 160, env.H + 160);
+        ctx.globalAlpha = Math.max(0, fade) * (1 - grow * 0.7); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3 + 7 * (1 - grow); ctx.beginPath(); ctx.arc(x, cy, R * 0.96, 0, TAU); ctx.stroke();
+        ctx.restore();
+    };
+
+    // snapshot of whatever is on the canvas right now (sprites + effects so far) - the cut/crumble layers re-draw it in pieces
+    const snapOf = (ctx) => { const cv = ctx.canvas, s = createCanvas(cv.width, cv.height); s.getContext('2d').drawImage(cv, 0, 0); return s; };
+
+    // ── splitcut (owner: ninja / reaper "the whole canvas including the enemy acts as a wall, cut in half, breaking down") ──
+    // one slash crosses the screen edge to edge, then the two halves of the REAL frame slide apart and drop away over a glowing seam.
+    LAYERS.splitcut = (ctx, tr, env) => {
+        const t = env.time - tr.at, dur = tr.dur || 1.3; if (t < 0 || t > dur) return;
+        const W = env.W, H2 = env.H, [cx, cy0] = pt(env, tr.pos || 'T', tr), cy = cy0 - 50, ang = tr.ang === undefined ? -0.32 : tr.ang;
+        const dx = Math.cos(ang), dy = Math.sin(ang), nx = -dy, ny = dx, L = Math.hypot(W, H2) * 1.25, col = tr.color || '#9fd0ff', draw = tr.draw || 0.16;
+        const sx = cx - dx * L / 2, sy = cy - dy * L / 2;
+        ctx.save();
+        if (t < draw) {      // the stroke itself, edge to edge
+            const p = easeOut(t / draw);
+            ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+            for (const [lw, c, a] of [[16, col, 0.5], [6, '#ffffff', 1]]) { ctx.globalAlpha = a; ctx.strokeStyle = c; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + dx * L * p, sy + dy * L * p); ctx.stroke(); }
+            ctx.restore(); return;
+        }
+        const s = t - draw, rest = dur - draw;
+        const out = 1 - easeIn(clamp01((s - rest * 0.72) / (rest * 0.28)));       // halves slide back / fade in the last stretch
+        const sep = (tr.open || 150) * easeOut(clamp01(s / 0.45)) * out, drop = (tr.drop || 90) * s * s * out;
+        const snap = snapOf(ctx), k = snap.width / env.W;
+        // void behind the cut
+        ctx.globalAlpha = Math.min(1, out * 1.2); ctx.fillStyle = tr.void || '#05030c'; ctx.fillRect(-80, -80, W + 160, H2 + 160);
+        // seam glow
+        ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = out; ctx.strokeStyle = col; ctx.lineWidth = 20 + sep * 0.9; ctx.lineCap = 'butt'; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + dx * L, sy + dy * L); ctx.stroke();
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4 + sep * 0.25; ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
+        for (const side of [1, -1]) {
+            ctx.save();
+            ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + dx * L, sy + dy * L); ctx.lineTo(sx + dx * L + nx * L * side, sy + dy * L + ny * L * side); ctx.lineTo(sx + nx * L * side, sy + ny * L * side); ctx.closePath(); ctx.clip();
+            ctx.translate(cx, cy); ctx.rotate(side * 0.045 * (sep / 150)); ctx.translate(-cx, -cy);
+            ctx.translate(nx * sep * side, ny * sep * side + drop * (side > 0 ? 1 : 0.55));
+            ctx.drawImage(snap, 0, 0, snap.width, snap.height, 0, 0, W, H2);
             ctx.restore();
         }
+        ctx.restore();
+    };
+
+    // ── crumble (owner: lich "the canvas should crumble like glass") ──
+    // glass-crack lines spread from the impact point, then the real frame falls away as triangular shards (nearest the crack first).
+    LAYERS.crumble = (ctx, tr, env) => {
+        const t = env.time - tr.at, dur = tr.dur || 1.5; if (t < 0 || t > dur) return;
+        const W = env.W, H2 = env.H, [cx, cy0] = pt(env, tr.pos || 'T', tr), cy = cy0 - 50, hold = tr.hold || 0.28, col = tr.color || '#bfe8ff';
+        if (t < hold) {
+            const p = easeOut(t / hold); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = '#ffffff'; ctx.lineCap = 'round';
+            const rr = mulberry(hashS('cr' + tr.at));
+            for (let i = 0; i < 16; i++) { const a = rr() * TAU, len = (120 + rr() * 380) * p; let x = cx, y = cy; ctx.globalAlpha = 0.9; ctx.lineWidth = 1.5 + rr() * 1.5; ctx.beginPath(); ctx.moveTo(x, y); for (let j = 1; j <= 5; j++) { x = cx + Math.cos(a + (rr() - 0.5) * 0.5) * len * j / 5; y = cy + Math.sin(a + (rr() - 0.5) * 0.5) * len * j / 5; ctx.lineTo(x, y); } ctx.stroke(); }
+            glowDot(ctx, cx, cy, 70 * p, col, 0.6); ctx.restore(); return;
+        }
+        const s = t - hold, back = 0.3, live = 1 - easeIn(clamp01((t - (dur - back)) / back));
+        const snap = snapOf(ctx), cols = 12, rows = 9, cw = W / cols, ch = H2 / rows, maxD = Math.hypot(W, H2);
+        ctx.save();
+        ctx.globalAlpha = live; ctx.fillStyle = tr.void || '#070a16'; ctx.fillRect(-80, -80, W + 160, H2 + 160);
+        glowDot(ctx, W / 2, H2 / 2, 260, col, 0.18 * live);
+        const rr = mulberry(hashS('cs' + tr.at));
+        for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) for (let h = 0; h < 2; h++) {
+            const x0 = c * cw, y0 = r * ch, pts = h ? [[x0 + cw, y0], [x0 + cw, y0 + ch], [x0, y0 + ch]] : [[x0, y0], [x0 + cw, y0], [x0, y0 + ch]];
+            const mx = (pts[0][0] + pts[1][0] + pts[2][0]) / 3, my = (pts[0][1] + pts[1][1] + pts[2][1]) / 3;
+            const delay = Math.hypot(mx - cx, my - cy) / maxD * 0.55 + rr() * 0.12, vx = (rr() - 0.5) * 90 + (mx - cx) * 0.15, rv = (rr() - 0.5) * 3, ts = Math.max(0, s - delay);
+            const px = vx * ts, py = 40 * ts + 420 * ts * ts * 0.5, a = live * (1 - clamp01((ts - 0.45) / 0.5));
+            if (a <= 0.01) continue;
+            ctx.save(); ctx.globalAlpha = a; ctx.translate(mx + px, my + py); ctx.rotate(rv * ts); ctx.translate(-mx, -my);
+            ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); ctx.lineTo(pts[1][0], pts[1][1]); ctx.lineTo(pts[2][0], pts[2][1]); ctx.closePath(); ctx.clip();
+            ctx.drawImage(snap, 0, 0, snap.width, snap.height, 0, 0, W, H2);
+            ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = a * 0.35; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.stroke();
+            ctx.restore();
+        }
+        ctx.restore();
+    };
+
+    // ── ghosts (owner: timelord "a paradox is actually created - two of the opponent, you hit both") ──
+    // translucent doubles of the target (or the caster) offset in time/space; `who:'caster'` clones the caster.
+    LAYERS.ghosts = (ctx, tr, env) => {
+        const t = env.time - tr.at, dur = tr.dur || 1.2; if (t < 0 || t > dur) return;
+        const a = (tr.a === undefined ? 0.75 : tr.a) * env3(t, dur, tr.fin || 0.25, tr.fout || 0.3), offs = tr.offs || [[-70, 0], [70, 0]];
+        if (a <= 0.01) return;
+        const list = tr.who === 'caster' ? (env.casterCut ? [{ x: env.casterCut.x, y: env.casterCut.y, w: env.casterCut.w, h: env.casterCut.h, img: env.casterCut.img }] : []) : (env.affectList || []).filter((c) => c.tinted).map((c) => ({ ...c, img: c.tinted }));
+        if (!list.length) return;
+        const wob = Math.sin(t * 9);
+        offs.forEach(([ox, oy], i) => {
+            for (const c of list) {
+                const near = tr.near && tr.who === 'caster';
+                const x = (near ? env.A.T[0] - c.w * 0.5 - 40 : c.x) + ox, y = (near ? env.A.T[1] - (c.y + c.h) + c.y + 20 : c.y) + oy + wob * 2 * (i ? 1 : -1);
+                ctx.save(); ctx.globalAlpha = a * (i % 2 ? 0.8 : 1); ctx.globalCompositeOperation = tr.add === false ? 'source-over' : 'lighter';
+                ctx.drawImage(c.img, x, y, c.w, c.h); ctx.restore();
+            }
+        });
+        if (tr.link) { ctx.save(); ctx.globalAlpha = a * 0.5; ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = tr.color || '#ffe27a'; ctx.lineWidth = 2; const c = list[0]; for (const [ox] of offs) { ctx.beginPath(); ctx.moveTo(c.x + c.w / 2, c.y + c.h * 0.4); ctx.lineTo(c.x + c.w / 2 + ox, c.y + c.h * 0.4); ctx.stroke(); } ctx.restore(); }
     };
 
     // ── camera: marker track read by the renderer (zoom delta) ─────────────

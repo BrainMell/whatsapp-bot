@@ -57,8 +57,9 @@ module.exports = function install(CIN, U) {
         bg(c, t, snap, W, Hh, '#e8e0d0', '#d8cdb8', '#d8cfc0'); const bar = easeOut(clamp01(t / 0.35)) * Hh * 0.17;
         c.fillStyle = '#c8281e'; c.beginPath(); c.arc(W / 2, Hh * 0.5, Hh * 0.2, 0, TAU); c.fill(); petals(c, t, W, Hh, 40, 'rgba(255,170,190,0.9)');
         c.fillStyle = '#000'; c.fillRect(0, 0, W, bar); c.fillRect(0, Hh - bar, W, bar);
-        const s = clamp01((t - 0.7) / 0.12); if (s > 0) { add(c, () => { c.strokeStyle = '#fff'; c.lineWidth = 6 * (1 - clamp01((t - 0.85) / 0.4)) + 1; c.beginPath(); c.moveTo(0, Hh * 0.62); c.lineTo(W * s, Hh * 0.38); c.stroke(); }); }
-        if (t > 0.85) { c.fillStyle = `rgba(0,0,0,${clamp01((t - 0.85) / 0.2) * 0.8})`; c.fillRect(0, 0, W, Hh); add(c, () => { c.strokeStyle = '#fff'; c.lineWidth = 3; c.beginPath(); c.moveTo(0, Hh * 0.62); c.lineTo(W, Hh * 0.38); c.stroke(); }); }
+        const cuts = [[0.62, 0.38], [0.3, 0.7], [0.5, 0.42], [0.72, 0.3], [0.35, 0.6], [0.6, 0.68], [0.42, 0.3]];   // SEVEN cuts through the sun (owner 2026-11-03)
+        for (let i = 0; i < 7; i++) { const st = 0.35 + i * 0.075, s = clamp01((t - st) / 0.08); if (s <= 0) continue; const [y0, y1] = cuts[i]; add(c, () => { c.strokeStyle = '#fff'; c.lineWidth = 5 * (1 - clamp01((t - st - 0.1) / 0.6)) + 1; c.beginPath(); c.moveTo(0, Hh * y0); c.lineTo(W * s, Hh * (y0 + (y1 - y0) * s)); c.stroke(); }); }
+        if (t > 0.95) c.fillStyle = `rgba(0,0,0,${clamp01((t - 0.95) / 0.2) * 0.8})`, c.fillRect(0, 0, W, Hh);
     };
     CIN.SHOGUN = (c, t, D, W, Hh, wd, snap) => {
         bg(c, t, snap, W, Hh, '#2a0a08', '#ff9a3a');
@@ -149,8 +150,8 @@ module.exports = function install(CIN, U) {
     };
     CIN.ACOLYTE = (c, t, D, W, Hh, wd, snap) => {
         c.drawImage(snap, 0, 0, W, Hh); c.fillStyle = `rgba(4,2,0,${easeIn(clamp01(t / 0.3)) * 0.93})`; c.fillRect(0, 0, W, Hh); const cx = W / 2, cy = Hh * 0.55, g = easeOut(clamp01((t - 0.3) / 0.8));
-        c.fillStyle = '#e8dcc0'; c.fillRect(cx - 10, cy, 20, Hh * 0.25); add(c, () => { glowDot(c, cx, cy - 18, 40 + 460 * g * g, '#ffd98a', 0.55 + 0.3 * g); glowDot(c, cx, cy - 20, 18 + 12 * Math.sin(t * 20), '#fff4d0', 1); rays(c, cx, cy - 20, 16, Hh * 0.9 * g, t * 0.3, 'rgba(255,236,170,0.18)', 0.04); });
-        c.fillStyle = '#ffb24a'; c.beginPath(); c.ellipse(cx, cy - 16, 7, 18 + 3 * Math.sin(t * 22), 0, 0, TAU); c.fill(); flash(c, W, Hh, t, D, '#fff2b0', 0.7);
+        add(c, () => { glowDot(c, cx, cy - 18, 40 + 460 * g * g, '#ffd98a', 0.55 + 0.3 * g); glowDot(c, cx, cy - 20, 18 + 12 * Math.sin(t * 20), '#fff4d0', 1); rays(c, cx, cy - 20, 16, Hh * 0.9 * g, t * 0.3, 'rgba(255,236,170,0.18)', 0.04); });
+        add(c, () => { c.fillStyle = '#fff6d0'; const sl = 14 + 150 * g, sw = 5 + 7 * g; c.beginPath(); c.moveTo(cx, cy - 20 - sl); c.lineTo(cx + sw, cy - 20); c.lineTo(cx, cy - 20 + sl); c.lineTo(cx - sw, cy - 20); c.closePath(); c.fill(); c.beginPath(); c.moveTo(cx - sl, cy - 20); c.lineTo(cx, cy - 20 + sw); c.lineTo(cx + sl, cy - 20); c.lineTo(cx, cy - 20 - sw); c.closePath(); c.fill(); }); flash(c, W, Hh, t, D, '#fff2b0', 0.7);
     };
     CIN.PALADIN = (c, t, D, W, Hh, wd, snap) => {
         bg(c, t, snap, W, Hh, '#0a1228', '#2a4a8a'); for (const s of [-1, 1]) { const f = easeOut(clamp01((t - 0.1) / 0.5)); add(c, () => { const g = c.createLinearGradient(W / 2 + s * W * 0.3, Hh, W / 2 + s * W * 0.3, 0); g.addColorStop(0, 'rgba(255,240,180,0.7)'); g.addColorStop(1, 'rgba(255,240,180,0)'); c.fillStyle = g; c.fillRect(W / 2 + s * W * 0.3 - 26 * f, 0, 52 * f, Hh); }); }

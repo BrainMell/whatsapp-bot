@@ -559,7 +559,8 @@ LAYERS.vines = (ctx, tr, env) => {
     const [x, y] = pt(env, tr.pos || 'T', tr), gy = y + (tr.ground || 58);
     const n = tr.n || 7, fade = 1 - easeIn((t - life * 0.7) / (life * 0.3));
     for (let i = 0; i < n; i++) {
-        const rr = mulberry(hashS('vn' + i + tr.at)), bx = x + (i - (n - 1) / 2) * 26 + (rr() - 0.5) * 18, h = 110 + rr() * 90, lean = (rr() - 0.5) * 90;
+        const rr = mulberry(hashS('vn' + i + tr.at)), h = 110 + rr() * 90, lean = tr.cross ? (i % 2 ? 1 : -1) * (h * (0.7 + rr() * 0.5)) : (rr() - 0.5) * 90;
+        const bx = tr.cross ? x - lean * 0.55 + (rr() - 0.5) * 30 : x + (i - (n - 1) / 2) * 26 + (rr() - 0.5) * 18;
         const g = easeOut((t - i * 0.05) / 0.5); if (g <= 0) continue;
         ctx.save(); ctx.globalAlpha = Math.max(0, fade); ctx.lineCap = 'round';
         for (const [lw, col] of [[11, '#1c3d1a'], [6, tr.color || '#3fbf4a'], [2, '#b6ff8a']]) {

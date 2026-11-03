@@ -21,15 +21,12 @@ const META = {
     REAPER: { duration: 3.4, impact: 1.75, zoom: 0.03 },
     VIRTUOSO: { duration: 3.3, impact: 1.5, zoom: 0.03, flatVeil: true },
     ARCHMAGE: { duration: 3.3, impact: 1.5, zoom: 0.04 },
-    VOIDWALKER: { duration: 3.1, impact: 1.3, zoom: 0.12 },
     GRAND_INVENTOR: { duration: 3.1, impact: 1.45 },
     TIMELORD: { duration: 3.1, impact: 1.3 },
     LICH: { duration: 3.0, impact: 1.2 },
     DEATH_LORD: { duration: 3.1, impact: 1.5 },
-    WARLOCK: { duration: 3.0, impact: 1.3 },
     ELEMENTALIST: { duration: 3.0, impact: 1.25 },
     AVATAR: { duration: 3.1, impact: 1.3 },
-    KAGE: { duration: 3.0, impact: 1.25 },
 };
 // 🌌 WORLD-SHIFT (owner 2026-10-28): the big skills open with a cosmic cinematic (zoom-blur out ->
 // planet + asteroid -> impact -> the arena becomes another world), then play their normal recipe,
@@ -62,7 +59,6 @@ const WORLD = {
     NINJA: { cin: 'NINJA', short: true },
     NIGHTBLADE: { cin: 'NIGHTBLADE', short: true },
     APPRENTICE: { cin: 'APPRENTICE', short: true },
-    DRAGONSLAYER: { cin: 'DRAGONSLAYER', short: true },
     DOOMSLAYER: { cin: 'DOOMSLAYER', short: true },
     WARLORD: { cin: 'WARLORD', short: true },
     CHRONOMANCER: { cin: 'CHRONOMANCER', short: true },
@@ -76,7 +72,6 @@ const WORLD = {
     ZENMASTER: { cin: 'ZENMASTER', short: true },
     TEMPLAR: { cin: 'TEMPLAR', short: true },
     DIVINE_FIST: { cin: 'DIVINE_FIST', short: true },
-    GOD_HAND: { cin: 'GOD_HAND', short: true },
     DRUID: { cin: 'DRUID', short: true },
     ARCHDRUID: { cin: 'ARCHDRUID', short: true },
     MERCHANT: { cin: 'MERCHANT', short: true },
@@ -111,15 +106,17 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
     }
     // a PUNCH: the caster closes, then fist-sized impacts land ON the target - each blow bigger than the last
     // (burst + sonic + dust + a pop of white), the last one cracks the ground. No slash sprites.
-    function blows({ col, mid = '#ffffff', n = 3, gap = 0.15, extra = [] }) {
+    function blows({ col, mid = '#ffffff', n = 3, gap = 0.15, extra = [], scatter = 22, vy = 0 }) {
         const out = [casterAura(col), L('lunge', { at: I - 0.32, dur: 0.6, color: col })];
         for (let i = 0; i < n; i++) {
             const at = I + i * gap, k = 0.8 + i * 0.4;
-            out.push({ fx: 'white_burst', at, pos: 'T', off: [(i % 2 ? 22 : -22), -40 + i * 6], w: 130 + i * 70, add: true, tint: [col, 0.55], alpha: 0.85, spread: 'enemies', fanGap: 0.06 });
+            out.push({ fx: 'white_burst', at, pos: 'T', off: [(scatter > 30 ? (((i * 37) % 11) - 5) / 5 * scatter : (i % 2 ? scatter : -scatter)), -40 + i * 6 + (vy ? (((i * 53) % 9) - 4) / 4 * vy : 0)], w: 130 + i * 70, add: true, tint: [col, 0.55], alpha: 0.85, spread: 'enemies', fanGap: 0.06 });
             out.push(...weight(col, at, k));
             out.push(flash(mid, 0.22 + i * 0.08, at, 0.09));
         }
         out.push(L('cracks', { at: I + (n - 1) * gap, pos: 'T', n: 9, r: 150, color: col, dur: 0.9 }));
+        out.push(L('engulf', { at: I + (n - 1) * gap, pos: 'T', color: col, mid: '#ffffff', r: 430, dur: 0.5, grow: 0.3, a: 0.6 }));
+        out.push(L('engulf', { at: I + (n - 1) * gap, pos: 'T', color: col, mid: '#ffffff', r: 430, dur: 0.5, grow: 0.3, a: 0.6 }));
         out.push(...extra);
         return out;
     }
@@ -160,21 +157,18 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
     }
     function holyBeam(k) {
         return [
-            { fx: 'holy_start', at: 0.05, pos: 'C', w: 120, dur: 0.9, loop: true, add: true },
             L('circle', { at: 0.1, pos: 'T', r: 100 * k, dur: 1.6, color: '#ffe27a', points: 6, spin: 1.2 }),
             L('pillar', { at: I - 0.2, pos: 'T', w: 110 * k, dur: 0.8, color: '#ffe27a', mid: '#fff6c8', spread: 'enemies', fanGap: 0.09 }),
             { fx: 'holy_pillar', at: I - 0.2, pos: 'T', w: 280, off: [0, -120], n: 3, jit: [90, 0], gap: 0.08, spread: 'enemies', fanGap: 0.08 },
             { fx: 'holy_burst', at: I, pos: 'T', w: 380, add: true, spread: 'enemies', fanGap: 0.08 },
             L('emit', { at: I, dur: 0.9, pos: 'T', box: [120, 40], n: 22, life: 1, shape: 'star', colors: ['#fff2b0', '#ffffff'], v: [0, -60], vr: [50, 20] }),
+            L('engulf', { at: I + 0.02, pos: 'T', color: '#ffe27a', mid: '#fff6c8', dur: 1.0, grow: 0.45 }),
             flash('#fff6d0', 0.5),
         ];
     }
     // self buffs: everything happens AROUND the caster (no dash, no wrong-way lunge)
     function auraSelf(col, k, extra = []) {
         return [
-            { fx: 'holy_burst', at: 0.05, pos: 'C', w: 300 * k, add: true, tint: [col, 0.4] },
-            L('circle', { at: 0.05, pos: 'C', r: 90 * k, dur: 1.7, color: col, points: 6 }),
-            { fx: 'holy_loop', at: 0.2, pos: 'C', w: 190 * k, off: [0, -40], dur: 1.6, loop: true, add: true, tint: [col, 0.4] },
             L('emit', { at: 0.2, dur: 1.2, pos: 'C', box: [90, 30], n: 26, life: 1, shape: 'star', colors: [col, '#ffffff'], v: [0, -70], vr: [40, 20] }),
             L('rings', { at: I - 0.1, pos: 'C', n: 3, gap: 0.1, color: col, r: 150 * k }),
             ...extra,
@@ -185,7 +179,7 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
         return [
             L('emit', { at: 0.05, dur: 1.2, pos: 'C', box: [100, 30], n: 22, life: 1, shape: 'leaf', colors: ['#6bd44a', '#a8ff7a', '#3f9a2c'], v: [30, -50], vr: [30, 20], size: 6, swirl: 4 }),
             L('circle', { at: 0.1, pos: 'T', r: 100, dur: 1.5, color: '#8aff6a', points: 5 }),
-            L('vines', { at: I - 0.3, pos: 'T', n, dur: 1.6, color: '#3fa82a', spread: 'enemies', fanGap: 0.08 }),
+            L('vines', { at: I - 0.3, pos: 'T', n, cross: true, dur: 1.6, color: '#3fa82a', spread: 'enemies', fanGap: 0.08 }),
             { fx: 'vine_slash', at: I + 0.1, pos: 'T', w: 300, n: 3, jit: [60, 40], gap: 0.1, rot: [-0.5, 0.4, 0.8], spread: 'enemies', fanGap: 0.08 },
             L('emit', { at: I, dur: 0.8, pos: 'T', box: [100, 30], n: 20, life: 1, shape: 'leaf', colors: ['#6bd44a', '#a8ff7a'], v: [0, -90], vr: [70, 30], size: 6, swirl: 5 }),
             flash('#d4ffb0', 0.35),
@@ -228,19 +222,25 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
             L('emit', { at: 0.1, dur: 0.9, pos: 'C', box: [90, 20], n: 18, life: 0.8, shape: 'soul', colors: ['#9be88a', '#c8ffc0'], v: [0, -70], vr: [20, 20], swirl: 6 }),
             L('rift', { at: 0.35, pos: 'T', rx: 82, dur: 1.75, color: 'rgba(120,255,140,0.35)', lip: '#8dff9c' }),
             L('hands', { at: 0.45, pos: 'T', n: 6, dur: 1.75, sink: true, grab: 0.8, sinkEnd: 1.35, glow: '#8dff9c' }),
+            L('bgfill', { at: 1.25, dur: I + 0.8 - 1.25, pos: [0.5, 0.5], colors: ['#16401f', '#020805'], fin: 0.35, fout: 0.4 }),
+            L('emit', { at: 1.3, dur: I - 1.2, pos: [0.5, 0.5], box: [560, 300], n: 36, life: 1.2, shape: 'soul', colors: ['#9be88a', '#c8ffc0'], v: [0, -40], vr: [30, 30], swirl: 4 }),
             L('emit', { at: I + 0.15, dur: 0.8, pos: 'T', box: [80, 20], n: 20, life: 0.9, shape: 'soul', colors: ['#9be88a', '#ffffff'], v: [0, -90], vr: [30, 20], swirl: 5 }),
             { fx: 'necro3', at: I + 0.1, pos: 'T', w: 260, off: [0, 20], add: true, alpha: 0.9 },
             flash('#b7ffb0', 0.35),
         ],
         // little souls rush in from every direction and strike the enemy
+        // LICH (owner 2026-11-03): the frozen frame crumbles like glass, the cast zooms out until everyone is small, then the nova
         LICH: () => [
-            dark(0.5),
+            dark(0.5, 0.1, I + 0.9),
             L('circle', { at: 0.05, pos: 'C', r: 95, dur: 1.4, color: '#7dffe0', points: 6, spin: 2 }),
-            L('swarm', { at: 0.3, pos: 'T', kind: 'soul', n: 34, inward: true, dur: 0.8, pass: 0.32, from: 360, size: 8, color: '#7dffe0', spread: 'enemies', fanGap: 0.05 }),
-            L('slashes', { at: I - 0.2, n: 14, gap: 0.03, kind: 'burst', color: '#7dffe0', mid: '#ffffff', len: 110 }),
-            L('emit', { at: I, dur: 0.8, pos: 'T', n: 24, life: 0.9, shape: 'soul', colors: ['#7dffe0', '#ffffff'], v: [0, -80], vr: [70, 30], swirl: 4 }),
-            L('rings', { at: I + 0.05, pos: 'T', n: 2, gap: 0.12, color: '#7dffe0', r: 150 }),
-            flash('#9dfff0', 0.35),
+            L('crumble', { at: 0.1, dur: 1.5, pos: 'T', color: '#bfe8ff', hold: 0.3 }),
+            L('shrink', { at: 0.5, dur: 0.7, to: 0.45 }),
+            L('swarm', { at: 0.9, pos: 'T', kind: 'soul', n: 34, inward: true, dur: 0.6, pass: 0.3, from: 360, size: 8, color: '#7dffe0', spread: 'enemies', fanGap: 0.05 }),
+            L('engulf', { at: I - 0.02, pos: 'T', color: '#7dffe0', mid: '#e6fffb', dur: 1.0, grow: 0.35, a: 0.85 }),
+            L('rings', { at: I + 0.02, pos: 'T', n: 4, gap: 0.1, color: '#7dffe0', r: 220 }),
+            ...weight('#7dffe0', I, 1.3),
+            L('emit', { at: I, dur: 0.9, pos: 'T', n: 30, life: 1, shape: 'soul', colors: ['#7dffe0', '#ffffff'], v: [0, -80], vr: [120, 60], swirl: 4 }),
+            flash('#9dfff0', 0.45, I, 0.2),
         ],
         // a chain of souls binds the target to the caster
         DEATH_LORD: () => [
@@ -259,29 +259,30 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
         // (owner round 2: "should be a real syth ... doesn't zoom out enough I want um to
         // became tiny and a gaint syth hits") — the roster shrinks to ~0.45 as the vortex
         // pulls, then the Wenrexa dark scythe (CC0, purple-tinted) sweeps the whole stage.
+        // REAPER (owner 2026-11-03: "rethinking the scythe"): no scythe art - one reaping stroke splits the whole shrunken world, souls pour out
         REAPER: () => [
             dark(0.45, 0.1, 1.6),
             L('vortex', { at: 0.1, pos: 'T', hy: 40, R: 600, twist: 9, pull: 4.2, hole: 5, rim: '#a58bff', dur: 1.15, inFrac: 0.7, outFrom: 0.9 }),
             L('camera', { at: 1.0, dur: 0.7, dz: -0.09 }),
             L('shrink', { at: 0.95, dur: 0.55, to: 0.45 }),
-            L('hidecaster', { at: 1.05, dur: 2.2 }),
             L('emit', { at: 0.2, dur: 0.8, pos: 'T', box: [200, 100], n: 24, life: 0.9, shape: 'soul', colors: ['#c5b3ff'], v: [0, -30], vr: [60, 40], swirl: 5 }),
-            L('scythe', { at: I - 0.55, pos: 'T', R: 470, dur: 1.05, color: '#a58bff', mid: '#efe6ff', a0: 0.15, a1: 3.0, art: 'scythe_art', artW: 1.55 }),
-            L('slashes', { at: I - 0.03, n: 2, gap: 0.05, color: '#a58bff', mid: '#ffffff', len: 300, w: 16, angles: [-0.5, -0.5] }),
-            { fx: 'destroy', at: I + 0.05, pos: 'T', w: 260, n: 2, gap: 0.14, jit: [40, 30], add: true },
-            L('emit', { at: I, dur: 0.8, pos: 'T', n: 18, life: 0.9, shape: 'soul', colors: ['#c5b3ff'], v: [0, -100], vr: [40, 20] }),
-            flash('#c5b3ff', 0.4, I, 0.2),
+            L('splitcut', { at: I - 0.1, dur: 1.5, pos: 'T', ang: -0.7, color: '#a58bff', open: 190, draw: 0.18, void: '#08041a' }),
+            L('emit', { at: I + 0.1, dur: 1.2, pos: 'T', box: [160, 160], n: 36, life: 1.1, shape: 'soul', colors: ['#c5b3ff', '#ffffff'], v: [0, -110], vr: [60, 40] }),
+            ...weight('#a58bff', I + 0.1, 1.2),
+            flash('#c5b3ff', 0.4, I + 0.1, 0.2),
         ],
         // a soul tears out of the target and flows into the warlock (heal)
+        // WARLOCK (owner 2026-11-03: starter was bad): no cinematic - a blood-red night, a huge sigil burns under the target, the soul is torn out
         WARLOCK: () => [
-            dark(0.5),
-            L('circle', { at: 0.05, pos: 'C', r: 85, dur: 1.5, color: '#c04bff', points: 5, spin: 1.8 }),
-            L('rift', { at: 0.3, pos: 'T', rx: 66, dur: 1.4, color: 'rgba(200,60,255,0.4)', lip: '#e08bff' }),
-            L('emit', { at: 0.3, dur: 0.8, pos: 'T', box: [70, 30], n: 14, life: 0.8, shape: 'soul', colors: ['#d79bff', '#ffffff'], v: [0, -70], vr: [30, 20], swirl: 5 }),
+            L('wash', { at: 0.05, dur: I + 0.7, color: '#2a0010', a: 0.55 }),
+            L('circle', { at: 0.1, pos: 'T', r: 150, dur: 1.9, color: '#e0287a', points: 5, spin: 1.2 }),
+            L('rift', { at: 0.3, pos: 'T', rx: 80, dur: 1.4, color: 'rgba(200,40,100,0.45)', lip: '#ff6aa8' }),
+            L('emit', { at: 0.3, dur: 0.8, pos: 'T', box: [70, 30], n: 14, life: 0.8, shape: 'soul', colors: ['#ff9ac8', '#ffffff'], v: [0, -70], vr: [30, 20], swirl: 5 }),
             L('focus', { at: 0.6, dur: 1.0, mode: 'drain', hit: I }),
             L('soulflow', { at: I - 0.15, dur: 0.85, color: '#8dff9c' }),
-            { fx: 'dark_b', at: I - 0.1, pos: 'T', w: 300, n: 2, gap: 0.12, jit: [30, 20], alpha: 0.9, tint: ['#c04bff', 0.4] },
-            flash('#d79bff', 0.35, I - 0.05, 0.2),
+            { fx: 'dark_b', at: I - 0.1, pos: 'T', w: 320, n: 2, gap: 0.12, jit: [30, 20], alpha: 0.9, tint: ['#e0287a', 0.4] },
+            L('engulf', { at: I + 0.05, pos: 'T', color: '#e0287a', mid: '#ffd0e6', dur: 0.9, grow: 0.4, a: 0.7 }),
+            flash('#ff9ac8', 0.35, I - 0.05, 0.2),
         ],
         // the background fades to a stage, music is everywhere
         VIRTUOSO: () => [
@@ -296,25 +297,27 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
         ],
         // ── blades: cut ON the target ──────────────────────────────────────
         FIGHTER: () => blows({ col: '#bcd6ff', n: 3 }),
-        WARRIOR: () => cutSet({ col: '#ffb070', angles: [-0.85, 0.85, 0.0, 1.57], n: 4, len: 175, w: 14 }),
+        WARRIOR: () => blows({ col: '#ffb070', mid: '#fff0d8', n: 4, gap: 0.12 }),
         // 🗡️ SAMURAI (owner 2026-11-02): the intro draws ONE white line across the sun - the strike keeps it: the caster
         // is already past, the line hangs across the target for a beat, THEN the world catches up and the cut lands
+        // SAMURAI (owner 2026-11-03): the intro's slash, many times across the canvas - each cut slices the world off - then the same to the enemy
         SAMURAI: () => [
             casterAura('#9fd0ff'),
-            dark(0.35),
+            dark(0.35, 0.1, I + 1.3),
             L('lunge', { at: I - 0.32, dur: 0.6, color: '#9fd0ff' }),
-            L('slashes', { at: I - 0.02, n: 1, gap: 0.1, color: '#9fd0ff', mid: '#ffffff', len: 620, w: 6, angles: [-0.22] }),
-            L('slashes', { at: I + 0.3, n: 1, gap: 0.1, color: '#ffffff', mid: '#ffffff', len: 560, w: 10, angles: [-0.22] }),
-            L('slashes', { at: I + 0.32, n: 14, gap: 0.006, kind: 'burst', color: '#9fd0ff', mid: '#ffffff', len: 140 }),
-            ...weight('#9fd0ff', I + 0.3, 1.2),
-            flash('#ffffff', 0.45, I + 0.3, 0.14),
+            L('splitcut', { at: I - 0.02, dur: 1.15, pos: 'C', ang: -0.22, color: '#9fd0ff', open: 130, draw: 0.14 }),
+            L('slashes', { at: I + 0.55, n: 7, gap: 0.06, color: '#ffffff', mid: '#ffffff', len: 300, w: 12, angles: [-0.22, 0.4, -0.7, 0.1, 0.9, -0.45, 1.5] }),
+            L('slashes', { at: I + 1.0, n: 14, gap: 0.006, kind: 'burst', color: '#9fd0ff', mid: '#ffffff', len: 150 }),
+            ...weight('#9fd0ff', I + 1.0, 1.3),
+            flash('#ffffff', 0.5, I + 1.0, 0.16),
         ],
         SHOGUN: () => [dark(0.35), ...cutSet({ col: '#ffd27a', mid: '#fff0c0', angles: [-0.7, 0.7, 0.0, 1.57, -1.2], n: 5, len: 190, w: 14, extra: [L('ripple', { at: I + 0.3, pos: 'T', n: 3, gap: 0.12, color: '#ffd27a', r: 200 })] })],
+        // BERSERKER (owner 2026-11-03): not one dash punch - a side-on one-punch-man / JoJo barrage, dozens of fists landing at once
         BERSERKER: () => [
-            L('wash', { at: 0.1, dur: I + 0.5, color: '#3a0000', a: 0.35 }),
+            L('wash', { at: 0.1, dur: I + 0.9, color: '#3a0000', a: 0.35 }),
             L('emit', { at: 0.05, dur: 0.9, pos: 'C', box: [60, 20], n: 24, life: 0.6, shape: 'spark', colors: ['#ff7a2a', '#ffd27a'], v: [0, -120], vr: [60, 30] }),
-            ...cutSet({ col: '#ff4a2a', mid: '#ffd8a0', angles: [-0.9, 0.7, -0.3, 1.2, 0.1, -0.6, 0.95, -1.1, 0.3], n: 9, len: 165, w: 11, gap: 0.05, sprite: 'fire_slash' }),
-            L('wash', { at: I, dur: 0.5, color: '#ff2a0a', a: 0.3, add: true }),
+            L('camera', { at: I - 0.1, dur: 1.0, dz: 0.06 }),
+            ...blows({ col: '#ff4a2a', mid: '#ffd8a0', n: 16, gap: 0.04, scatter: 90, vy: 60 }),
         ],
         // assassinate volley — R3 rework (owner 2026-10-27 "Assassinate doesn't
         // animated"): the old arrow rain had no veil/spotlight and 14 thin
@@ -344,17 +347,33 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
             flash('#c9bcff', 0.45, I + 0.2, 0.14),
         ],
         // ninja / nightblade: an eclipse behind the target, shadow cuts
-        NINJA: () => eclipseCuts('#6fe0ff', '#e6fbff', 5, I),
-        NIGHTBLADE: () => eclipseCuts('#ff5a7a', '#ffe0e6', 6, I),
+        // NINJA (owner 2026-11-03): one pass edge to edge - the whole canvas, enemy included, is a wall that is cut in half and comes apart
+        NINJA: () => [
+            casterAura('#6fe0ff'),
+            dark(0.4, 0.1, I + 1.3),
+            L('splitcut', { at: I, dur: 1.3, pos: 'T', ang: -0.12, color: '#6fe0ff', open: 170, draw: 0.12 }),
+            L('slashes', { at: I + 0.1, n: 10, gap: 0.01, kind: 'burst', color: '#6fe0ff', mid: '#ffffff', len: 190 }),
+            ...weight('#6fe0ff', I + 0.12, 1.4),
+            L('emit', { at: I + 0.15, dur: 1.0, pos: 'T', off: [0, -30], box: [260, 40], n: 40, life: 1.0, shape: 'spark', colors: ['#e6fbff', '#6fe0ff'], v: [0, 20], vr: [120, 60], g: 300 }),
+            flash('#e6fbff', 0.5, I, 0.12),
+        ],
+        // NIGHTBLADE (owner 2026-11-03): no portal - lighting only: the field goes to night under a moon, then a weighted strike barrage
+        NIGHTBLADE: () => [
+            L('wash', { at: 0.05, dur: I + 0.9, color: '#050a28', a: 0.62 }),
+            L('emit', { at: 0.1, dur: I + 0.6, pos: [0.5, 0.3], box: [560, 200], n: 40, life: 1.2, shape: 'star', colors: ['#ffffff', '#b8c8ff'], v: [0, 0], vr: [6, 6], size: 3 }),
+            { fx: 'k_flash', at: 0.1, pos: [0.82, 0.16], w: 120, dur: I + 0.5, loop: true, add: true, tint: ['#cfe0ff', 0.6] },
+            ...blows({ col: '#ff5a7a', mid: '#ffe0e6', n: 5, gap: 0.1 }),
+        ],
         // kage: kunai from every direction, the target is dragged down
+        // KAGE (owner 2026-11-03: worst one): shadow clones of the caster close in on the target from every side and cut together
         KAGE: () => [
-            dark(0.55),
-            L('rift', { at: 0.2, pos: 'T', rx: 70, dur: 2.0, color: 'rgba(90,0,140,0.45)', lip: '#b06bff' }),
-            L('focus', { at: 0.5, dur: 1.9, mode: 'press', depth: 70, downFrac: 0.35, holdTo: 0.8, hit: I }),
-            L('swarm', { at: 0.4, pos: 'T', kind: 'kunai', n: 30, dur: 0.9, pass: 0.2, from: 340, size: 8, color: '#b06bff', rise: 25 }),
-            L('slashes', { at: I - 0.05, n: 12, gap: 0.04, color: '#b06bff', mid: '#f0e0ff', len: 160, w: 8, rise: 25 }),
-            { fx: 'dark_a', at: I, pos: 'T', w: 240, n: 2, gap: 0.1, jit: [30, 20], add: true, tint: ['#b06bff', 0.6] },
-            flash('#b06bff', 0.4, I + 0.2, 0.2),
+            dark(0.6),
+            L('wash', { at: 0.1, dur: I + 0.7, color: '#1a0030', a: 0.4 }),
+            L('ghosts', { at: 0.3, dur: I - 0.3 + 0.9, who: 'caster', near: true, add: false, a: 0.7, offs: [[-190, -10], [-120, 15], [-60, -5], [60, 12], [120, -8], [190, 14]], fin: 0.3, fout: 0.4 }),
+            L('slashes', { at: I - 0.05, n: 14, gap: 0.04, color: '#b06bff', mid: '#f0e0ff', len: 200, w: 9, angles: [-0.9, 0.9, 0, 1.57, -0.45, 0.45, 1.2] }),
+            ...weight('#b06bff', I + 0.4, 1.3),
+            L('engulf', { at: I + 0.45, pos: 'T', color: '#b06bff', mid: '#f0e0ff', dur: 0.9, grow: 0.35, a: 0.8 }),
+            flash('#b06bff', 0.4, I + 0.45, 0.2),
         ],
         // ── fire / arcane ──────────────────────────────────────────────────
         APPRENTICE: () => meteorFall(true, 6, 46, 190, '#ff7a1a'),
@@ -369,13 +388,18 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
             flash('#ffe2a8', 0.65, I, 0.28),
         ],
         // fire breath straight from the dragonslayer's face
+        // DRAGONSLAYER (owner 2026-11-03): no starter - a dragon dives in, the fire comes out of ITS jaws, heavier and with real impact
         DRAGONSLAYER: () => [
-            L('emit', { at: 0.05, dur: 0.8, pos: 'C', box: [40, 20], n: 14, life: 0.6, shape: 'spark', colors: ['#ff7a2a', '#ffd27a'], v: [0, -80], vr: [40, 30] }),
-            L('breath', { at: I - 0.5, from: 'C', offFrom: [26, -88], to: 'T', offTo: [0, -50], dur: 0.9, n: 110, life: 0.5, w: 72, size: 1.15 }),
-            { fx: 'fire_blast', at: I, pos: 'T', w: 320, n: 2, jit: [40, 30], gap: 0.12 },
-            { fx: 'fire_bomb', at: I + 0.15, pos: 'T', w: 260, off: [0, -10], add: true, alpha: 0.85 },
-            L('rings', { at: I + 0.1, pos: 'T', n: 2, gap: 0.12, color: '#ff8a2a', r: 150 }),
-            flash('#ffb05a', 0.35, I, 0.2),
+            dark(0.4, 0.05, 1.8),
+            L('camera', { at: 0.2, dur: 1.0, dz: -0.04 }),
+            L('dragon', { at: 0.15, pos: [0.14, 0.34], s: 1.5, dur: 2.2, slide: [-300, -30], slideDur: 0.45, set: 'dragon_head', color: '#3a6a3a', belly: '#e8c070', flame: '#ff7a1a' }),
+            L('breath', { at: I - 0.55, from: [0.14, 0.34], offFrom: dragonMouth(1.5), to: 'T', offTo: [0, -50], dur: 1.0, n: 240, life: 0.55, w: 120, size: 1.5, spread: 'enemies', fanGap: 0.1 }),
+            { fx: 'fire_blast', at: I, pos: 'T', w: 380, n: 3, jit: [60, 30], gap: 0.1, spread: 'enemies', fanGap: 0.08 },
+            { fx: 'fire_bomb', at: I + 0.1, pos: 'T', w: 320, off: [0, -10], add: true, alpha: 0.9 },
+            ...weight('#ff8a2a', I, 1.5),
+            L('cracks', { at: I, pos: 'T', n: 9, r: 170, color: '#ff8a2a', dur: 0.9 }),
+            L('rings', { at: I + 0.1, pos: 'T', n: 3, gap: 0.1, color: '#ff8a2a', r: 220 }),
+            flash('#ffb05a', 0.5, I, 0.22),
         ],
         // a smaller dragon, a strong but not final blast — owner round 2: "the dragon lord
         // should have the color be inverted" → the wyvern rides the INVERTED frame set
@@ -406,7 +430,9 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
             dark(0.45),
             L('circle', { at: 0.05, pos: 'C', r: 70, dur: 1.1, color: '#ff3a2a' }),
             L('fall', { at: I - 0.42, pos: 'T', kind: 'meteor', n: 8, gap: 0.07, fall: 0.32, spreadX: 240, spreadY: 80, land: 'k_regular', landW: 190, color: '#ff3a2a', spread: 'enemies' }),
+            L('engulf', { at: I + 0.1, pos: 'T', color: '#ff3a2a', mid: '#ffd0c0', dur: 1.0, grow: 0.4, a: 0.9 }),
             L('rings', { at: I + 0.15, pos: 'T', n: 2, gap: 0.12, color: '#ff3a2a', r: 180, spread: 'enemies', fanGap: 0.09 }),
+            ...weight('#ff3a2a', I + 0.1, 1.3),
             flash('#ffb0a0', 0.3, I + 0.1, 0.18),
         ],
         // spears fall from the sky
@@ -436,7 +462,8 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
             L('circle', { at: 0.05, pos: 'C', r: 105, dur: 1.4, color: '#ffffff', points: 6, spin: 2.2 }),
             L('emit', { at: 0.1, dur: 1.0, pos: 'C', box: [80, 30], n: 26, life: 0.9, shape: 'spark', colors: ['#ff6a1a', '#59d2ff', '#ffe84a', '#a8ff7a'], v: [0, -110], vr: [60, 30] }),
             L('elements', { at: 0.2, dur: I - 0.2 + 0.05, pos: 'T', fuseUp: 120, s: 1.5 }),
-            { fx: 'white_burst', at: I, pos: 'T', w: 440, add: true, spread: 'enemies', fanGap: 0.08 },
+            ...['#ff6a1a', '#59d2ff', '#c9a060', '#a8ff7a'].map((c, i) => L('engulf', { at: I + i * 0.16, pos: 'T', color: c, mid: c, dur: 0.7, grow: 0.5, a: 0.55 })),
+            L('engulf', { at: I + 0.7, pos: 'T', color: '#ffffff', mid: '#ffffff', dur: 1.1, grow: 0.4, a: 1 }),
             { fx: 'k_sonic', at: I, pos: 'T', w: 360, spread: 'enemies', fanGap: 0.08 },
             L('rings', { at: I, pos: 'T', n: 4, gap: 0.08, color: '#ffffff', r: 220, spread: 'enemies', fanGap: 0.08 }),
             L('emit', { at: I, dur: 0.8, pos: 'T', box: [160, 50], n: 40, life: 1, shape: 'spark', colors: ['#ff6a1a', '#59d2ff', '#ffe84a', '#a8ff7a'], v: [0, -90], vr: [130, 60], g: 120 }),
@@ -454,34 +481,43 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
             flash('#c4a4ff', 0.4, I + 0.4, 0.2),
         ],
         // colours invert (the caster stays normal), zoom in, the enemy just loses health
+        // VOIDWALKER (owner 2026-11-03: starter was trash): no shard cinematic - a gate opens under the target in an inverted world and drags it in
         VOIDWALKER: () => [
             L('circle', { at: 0.05, pos: 'C', r: 80, dur: 1.3, color: '#7a4cff', points: 5, spin: 2 }),
-            L('emit', { at: 0.1, dur: 0.9, pos: 'C', box: [70, 20], n: 18, life: 0.8, shape: 'star', colors: ['#7a4cff', '#e6d4ff'], v: [0, -80], vr: [40, 20], swirl: 4 }),
-            L('invert', { at: 0.5, dur: I + 0.55, fin: 0.12, fout: 0.3 }),
-            L('camera', { at: 0.5, dur: 1.0, dz: 0.07 }),
-            L('ripple', { at: I - 0.05, pos: 'T', n: 3, gap: 0.1, color: '#ffffff', r: 170 }),
+            L('invert', { at: 0.2, dur: I + 0.6, fin: 0.12, fout: 0.3 }),
+            L('camera', { at: 0.3, dur: 1.0, dz: 0.07 }),
+            L('rift', { at: 0.3, pos: 'T', rx: 95, dur: 1.5, color: 'rgba(90,60,255,0.45)', lip: '#d4c4ff' }),
+            L('focus', { at: 0.5, dur: 1.1, mode: 'suck', hit: I }),
+            L('ripple', { at: I - 0.05, pos: 'T', n: 3, gap: 0.1, color: '#ffffff', r: 190 }),
+            ...weight('#7a4cff', I, 1.2),
             flash('#ffffff', 0.4, I, 0.14),
         ],
         // a giant golden clock locks the enemy: "Locked in Time"
         CHRONOMANCER: () => stopTimeSet('#ffd98a', 105),
         // reality rewinds: contracting rings, a clock, afterimages
+        // TIMELORD (owner 2026-11-03): a PARADOX - the past and future selves of the enemy stand either side of it and a double of you strikes with you; both take the hit
         TIMELORD: () => [
-            L('wash', { at: 0.05, dur: I + 0.2, color: '#1a1204', a: 0.3 }),
+            L('wash', { at: 0.05, dur: I + 0.5, color: '#1a1204', a: 0.3 }),
             L('circle', { at: 0.05, pos: 'T', off: [0, -120], r: 190, dur: I + 0.2, color: '#ffe27a', clock: true, ratio: 0.84, spin: -1.6, ticks: 24 }),
             L('ripple', { at: 0.25, pos: 'T', n: 5, gap: 0.14, color: '#ffe27a', r: 230, inward: true, dur: 0.7, dash: true }),
-            L('focus', { at: 0.5, dur: 1.0, mode: 'echo', hit: I }),
-            L('emit', { at: 0.1, dur: 1.2, pos: 'T', box: [180, 70], n: 24, life: 1, shape: 'star', colors: ['#ffe27a', '#ffffff'], v: [0, -30], vr: [30, 20], swirl: 3 }),
-            L('ripple', { at: I, pos: 'T', n: 3, gap: 0.1, color: '#fff3c4', r: 200 }),
-            flash('#ffe27a', 0.4),
+            L('ghosts', { at: 0.5, dur: I - 0.5 + 0.8, offs: [[-95, 0], [95, 0]], a: 0.8, link: true, color: '#ffe27a' }),
+            L('ghosts', { at: I - 0.5, dur: 1.2, who: 'caster', near: true, add: false, a: 0.75, offs: [[-70, -8]] }),
+            L('rings', { at: I, pos: 'T', off: [-95, 0], n: 3, gap: 0.1, color: '#fff3c4', r: 170 }),
+            L('rings', { at: I, pos: 'T', off: [95, 0], n: 3, gap: 0.1, color: '#fff3c4', r: 170 }),
+            L('slashes', { at: I - 0.02, n: 6, gap: 0.05, color: '#ffe27a', mid: '#ffffff', len: 180, w: 10, jit: [200, 30], angles: [-0.6, 0.6, -0.3, 0.3, 0, 0.9] }),
+            ...weight('#ffe27a', I, 1.3),
+            flash('#ffe27a', 0.45, I, 0.2),
         ],
         // tech: a targeting reticle, then ONE laser from the sky
+        // tech: a targeting reticle that says LOCKED, then ONE laser from the sky that engulfs the screen
         ARTIFICER: () => [
             L('gears', { at: 0.1, pos: 'C', dur: 1.6, color: '#ffb04a', color2: '#8a8a99', glow: '#ffb04a' }),
-            L('reticle', { at: 0.2, pos: 'T', dur: I - 0.2 + 0.1, color: '#ff3a3a' }),
-            L('pillar', { at: I - 0.1, pos: 'T', w: 34, dur: 0.5, color: '#ff6a4a', mid: '#ffffff' }),
+            L('reticle', { at: 0.2, pos: 'T', dur: I - 0.2 + 0.1, color: '#ff3a3a', label: 'LOCKED' }),
+            L('pillar', { at: I - 0.1, pos: 'T', w: 34, dur: 0.6, color: '#ff6a4a', mid: '#ffffff' }),
+            L('engulf', { at: I + 0.05, pos: 'T', color: '#ff6a4a', mid: '#fff0e0', dur: 1.0, grow: 0.42 }),
             { fx: 'white_burst', at: I, pos: 'T', w: 240, add: true },
             { fx: 'k_flash', at: I, pos: 'T', w: 200, add: true },
-            L('emit', { at: I, dur: 0.5, pos: 'T', box: [60, 20], n: 14, life: 0.6, shape: 'spark', colors: ['#ffb04a', '#ffffff'], v: [0, -90], vr: [80, 40] }),
+            ...weight('#ffb04a', I, 1.1),
             flash('#ffe0b0', 0.35, I, 0.14),
         ],
         // a giant robot hand slams down and presses the enemy into the ground
@@ -507,20 +543,20 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
         ACOLYTE: () => holyBeam(0.8),
         // PALADIN: spears of light rain onto the target like the cross on the shield, each landing with weight
         PALADIN: () => [
-            { fx: 'holy_start', at: 0.05, pos: 'C', w: 120, dur: 0.9, loop: true, add: true },
             L('circle', { at: 0.1, pos: 'T', r: 110, dur: 1.5, color: '#ffe27a', points: 4, spin: 0.6 }),
             L('fall', { at: I - 0.45, pos: 'T', kind: 'spear', n: 10, gap: 0.05, fall: 0.3, slant: -30, spreadX: 150, spreadY: 60, land: 'k_regular', landW: 100, color: '#ffe27a', spread: 'enemies', fanGap: 0.06 }),
             L('pillar', { at: I + 0.15, pos: 'T', w: 120, dur: 0.6, color: '#ffe27a', mid: '#fff6c8', spread: 'enemies', fanGap: 0.09 }),
+            L('engulf', { at: I + 0.17, pos: 'T', color: '#ffe27a', mid: '#fff6c8', dur: 1.0, grow: 0.42 }),
             ...weight('#ffe27a', I + 0.15, 1.2),
             flash('#fff6d0', 0.5, I + 0.15, 0.2),
         ],
         // CLERIC: the rose window - five coloured shafts fall in turn, the last one white
         CLERIC: () => [
-            { fx: 'holy_start', at: 0.05, pos: 'C', w: 120, dur: 0.9, loop: true, add: true },
             L('circle', { at: 0.1, pos: 'T', r: 100, dur: 1.6, color: '#ffe27a', points: 6, spin: 1.2 }),
             ...['#ff7a7a', '#ffb870', '#8aff8a', '#7ac8ff', '#c89aff'].map((c, i) => L('pillar', { at: I - 0.2 + i * 0.09, pos: 'T', off: [(i - 2) * 38, 0], w: 70, dur: 0.55, color: c, mid: '#ffffff', spread: 'enemies', fanGap: 0.09 })),
             L('pillar', { at: I + 0.3, pos: 'T', w: 150, dur: 0.6, color: '#ffffff', mid: '#ffffff', spread: 'enemies', fanGap: 0.09 }),
             { fx: 'holy_burst', at: I + 0.3, pos: 'T', w: 380, add: true, spread: 'enemies', fanGap: 0.08 },
+            L('engulf', { at: I + 0.32, pos: 'T', color: '#ffe27a', mid: '#ffffff', dur: 1.0, grow: 0.42 }),
             ...weight('#ffe27a', I + 0.3, 1),
             flash('#fff6d0', 0.5, I + 0.3, 0.2),
         ],
@@ -541,14 +577,15 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
         // DIVINE_FIST: the eight gates - a golden barrage of fists, faster and heavier every strike, last one cracks the ground
         DIVINE_FIST: () => blows({ col: '#ffb84a', mid: '#fff0c0', n: 7, gap: 0.085, extra: [L('rings', { at: I + 0.6, pos: 'T', n: 3, gap: 0.1, color: '#ffb84a', r: 230 })] }),
         // GOD_HAND: the hand from the intro comes down ON the target and presses it into the ground
+        // GOD_HAND (owner 2026-11-03): no meditation starter - the hand comes down ON the target, presses it into the ground
         GOD_HAND: () => [
-            casterAura('#fff2b0', 16),
             L('wash', { at: 0.1, dur: I + 0.8, color: '#1a1200', a: 0.35 }),
             L('robohand', { at: I - 0.45, pos: 'T', dur: 1.5, fall: 0.45, s: 2.0, color: '#ffd27a' }),
             L('focus', { at: I - 0.02, dur: 1.2, mode: 'press', depth: 120, downFrac: 0.12, holdTo: 0.6, hit: I }),
             L('cracks', { at: I, pos: 'T', n: 10, r: 190, color: '#ffd27a', dur: 1.0 }),
             ...weight('#ffd27a', I, 1.5),
             L('rings', { at: I, pos: 'T', n: 3, gap: 0.09, color: '#ffd27a', r: 230 }),
+            L('engulf', { at: I + 0.02, pos: 'T', r: 480, color: '#ffd27a', mid: '#fff6d0', dur: 0.6, grow: 0.3, a: 0.6 }),
             flash('#fff6d0', 0.5, I, 0.2),
         ],
         // ── nature / gold ──────────────────────────────────────────────────
@@ -565,7 +602,7 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
 // energy (a ring + sparks + a brighter flash) but NEVER sky lasers or ground cracks (owner: "the level 3s are
 // spamming lasers where they don't belong"). Timing never changes so hit sync is untouched.
 const SIZE_KEYS = ['w', 'r', 'rx', 'ew', 'eh', 'len'];
-const NOSCALE = new Set(['lunge', 'focus', 'bgfill', 'invert', 'vortex', 'camera', 'hidecaster', 'dragon', 'robohand', 'scythe', 'reticle', 'staff', 'shrink', 'magicClock', 'cosmic', 'world', 'cinema']);
+const NOSCALE = new Set(['lunge', 'focus', 'bgfill', 'invert', 'vortex', 'camera', 'hidecaster', 'dragon', 'robohand', 'scythe', 'reticle', 'staff', 'shrink', 'magicClock', 'cosmic', 'world', 'cinema', 'engulf', 'splitcut', 'crumble', 'ghosts']);
 function classRecipe(cls, p, o) {
     const W = WORLD[cls], S = shiftOf(cls);
     if (!W) return classRecipeBase(cls, p, o);
