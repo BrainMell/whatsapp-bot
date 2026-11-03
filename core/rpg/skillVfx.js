@@ -828,6 +828,39 @@ async function renderSignatureGif(state, player, ability, entry, target, baseSce
   return encodeGif({ width: W, height: H, frames, delayMs: FRAME_DELAY_MS, loop: 1 });
 }
 
+
+// ☠️ DEATH ANIMATIONS (owner 2026-11-03): a dying enemy / boss breaks apart by TYPE - fire explodes, water splashes, earth crumbles to dust,
+// void / dark / undead things spiral into their own centre. Reuses the ultimate video pipeline (LAYERS.dissolve breaks the real sprite).
+const DEATH_RULES = [
+  ['FIRE', /fire|flame|ember|inferno|lava|magma|blaze|ifrit|phoenix|pyro|burn|molten|cinder|hellhound|salamander/i],
+  ['ICE', /ice|frost|glacial|snow|blizzard|frozen|yeti|cryo/i],
+  ['WATER', /water|tide|tidal|aqua|slime|sea|ocean|kraken|drown|hydra|siren|sahuagin|merfolk|coral|storm/i],
+  ['EARTH', /stone|rock|golem|boulder|earth|crystal|titan|hulk|mud|gargoyle|colossus|guardian|obelisk|sand|mountain|ent\b|treant/i],
+  ['VOID', /void|shadow|dark|wraith|ghost|spirit|specter|spectre|phantom|demon|chaos|abyss|reaper|undead|necro|lich|wisp|banshee|blood|corrupt|shade|nightmare|eldritch|skeleton|zombie|vampire|hybrid|mutat/i],
+];
+function classifyDeath(enemy) {
+  const hay = [enemy && enemy.element, enemy && enemy.type, enemy && enemy.id, enemy && enemy.name, enemy && enemy.family, enemy && enemy.category]
+    .filter(Boolean).map(String).join(' ');
+  for (const [kind, re] of DEATH_RULES) if (re.test(hay)) return kind;
+  return 'DUST';
+}
+const DEATH_PALETTE = ['#ffffff', '#ffcb45', '#e85a37'];
+
+/** Render the death clip for one enemy. `layers` = the layered scene payload with the enemy STANDING and focused (see guildAdventure.playEnemyDeaths).
+ *  Returns { mp4, thumb, kind, boss } or null (never throws; the caller races it against a short budget). */
+async function renderDeathVideo({ enemy, targetIndex, layers, abort }) {
+  if (!enemy || !layers) return null;
+  const kind = classifyDeath(enemy), boss = !!(enemy.isBoss || enemy.boss || /boss/i.test(String(enemy.rank || enemy.tier || '')));
+  // the engine draws every cutout of the roster - the dying enemy is owned by LAYERS.dissolve, so drop its own cutout
+  const cuts = Array.isArray(layers.cuts) ? layers.cuts.filter((c) => !(c && String(c.side) === 'enemy' && Math.floor(Number(c.index) || 0) === targetIndex)) : layers.cuts;
+  const vid = await require('./ultimateFx').renderUltimateVideo({
+    classId: 'DEATH_' + kind + (boss ? '_BOSS' : ''), name: '', side: 'enemy', palette: DEATH_PALETTE,
+    skillLevel: 1, maxLevel: 1, intensity: 0, layers: { ...layers, cuts }, casterIndex: 0, targetIndex, focusIndex: undefined,
+    targetSide: 'enemy', aoe: false, targets: [], death: true, abort,
+  });
+  return vid && vid.mp4 ? { mp4: vid.mp4, thumb: vid.thumb || null, kind, boss } : null;
+}
+
 async function animateUltimate(options = {}) {
   const state = options.state;
   const player = options.player;
@@ -1007,6 +1040,8 @@ module.exports = {
   getSignature,
   resolveSignature,
   animateUltimate,
+  renderDeathVideo,
+  classifyDeath,
   makeUltimateSender,
   renderSignatureGif,
   GIF_PLAYBACK_MS,

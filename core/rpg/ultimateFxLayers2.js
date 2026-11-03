@@ -728,6 +728,119 @@ module.exports = function install(LAYERS, H) {
         ctx.restore();
     };
 
+    // ── dissolve (owner 2026-11-03: enemy / boss DEATH animations by type) ──
+    // the dying enemy's REAL sprite (env.focImg) stands for a beat showing its element, then breaks into pieces that behave like its element:
+    //   fire  - white-hot, bursts outward as glowing cinders        water - sags into a puddle shape then flies off as droplets
+    //   earth - cracks, crumbles top-down and falls as rubble        void  - jitters, then every piece spirals into the sprite's own centre
+    //   ice   - frosts over, shatters into shards                    dust  - (default creatures) puffs apart and drifts away
+    // The layer owns the whole sprite from `at` on (the focus overlay is suppressed for death videos); pure function of env.time.
+    const _dsTint = (env, img, col) => {
+        let sc = env._dsc; if (!sc) { sc = env._dsc = createCanvas(env.W, env.H); }
+        const c = sc.getContext('2d'); c.globalCompositeOperation = 'source-over'; c.clearRect(0, 0, env.W, env.H); c.drawImage(img, 0, 0, env.W, env.H);
+        c.globalCompositeOperation = 'source-atop'; c.fillStyle = col; c.fillRect(0, 0, env.W, env.H); c.globalCompositeOperation = 'source-over';
+        return sc;
+    };
+    const _dsPieces = (env, img, rect, tr) => {
+        const key = [Math.round(rect[0]), Math.round(rect[1]), Math.round(rect[2]), Math.round(rect[3]), tr.cells || 520].join('|');
+        if (env._dsKey === key && env._dsPcs) return env._dsPcs;
+        const kx = img.width / env.W, ky = img.height / env.H, cx = rect[0], feet = rect[1], rw = rect[2], rh = rect[3];
+        const x0 = Math.max(0, Math.floor(cx - rw * 0.8)), y0 = Math.max(0, Math.floor(feet - rh * 1.35)), x1 = Math.min(env.W, Math.ceil(cx + rw * 0.8)), y1 = Math.min(env.H, Math.ceil(feet + rh * 0.15));
+        const cs = Math.max(3, Math.round(Math.sqrt(Math.max(1, (x1 - x0) * (y1 - y0)) / (tr.cells || 520))));
+        const tw = Math.max(1, Math.round((x1 - x0) * kx)), th = Math.max(1, Math.round((y1 - y0) * ky));
+        const tc = createCanvas(tw, th), tx = tc.getContext('2d'); tx.drawImage(img, x0 * kx, y0 * ky, (x1 - x0) * kx, (y1 - y0) * ky, 0, 0, tw, th);
+        const d = tx.getImageData(0, 0, tw, th).data, rr = mulberry(hashS('dsp' + key)), pcs = [];
+        const alphaAt = (ex, ey) => { const px = Math.min(tw - 1, Math.max(0, Math.round((ex - x0) * kx))), py = Math.min(th - 1, Math.max(0, Math.round((ey - y0) * ky))); return d[(py * tw + px) * 4 + 3]; };
+        let top = 1e9, bot = -1e9, l = 1e9, r = -1e9;
+        for (let y = y0; y < y1; y += cs) for (let x = x0; x < x1; x += cs) {
+            const a = Math.max(alphaAt(x + cs / 2, y + cs / 2), alphaAt(x + 1, y + 1), alphaAt(x + cs - 1, y + cs - 1));
+            if (a < 40) continue; pcs.push({ x, y, w: cs, h: cs, cx: x + cs / 2, cy: y + cs / 2, r1: rr(), r2: rr(), r3: rr(), sx: (x - x0) * kx + x0 * kx, sy: (y - y0) * ky + y0 * ky, sw: cs * kx, sh: cs * ky });
+            top = Math.min(top, y); bot = Math.max(bot, y + cs); l = Math.min(l, x); r = Math.max(r, x + cs);
+        }
+        const mid = [(l + r) / 2, (top + bot) / 2], span = Math.max(1, bot - top);
+        for (const p of pcs) { p.dx = p.cx - mid[0]; p.dy = p.cy - mid[1]; p.dist = Math.hypot(p.dx, p.dy) || 1; p.top = (p.cy - top) / span; }
+        env._dsKey = key; env._dsPcs = { pcs, mid, top, bot, cs, feet: bot }; return env._dsPcs;
+    };
+    LAYERS.dissolve = (ctx, tr, env) => {
+        const img = env.focImg; if (!img) return;
+        const t = env.time - tr.at; if (t < 0) return;
+        const rect = env.focRect || [env.A.T[0], env.A.T[1], 90, 130], mode = tr.mode || 'dust', pre = tr.pre === undefined ? 0.45 : tr.pre, boom = tr.boom || 1;
+        const P = _dsPieces(env, img, rect, tr), feet = rect[1];
+        // ── pre-roll: the intact sprite shows its element ──
+        if (t < pre) {
+            const k = t / pre; ctx.save();
+            const tintCol = { fire: '#ffb04a', water: '#4aa8ff', earth: '#8a7458', void: '#9a5cff', ice: '#cfeaff', dust: '#d8d0c0' }[mode] || '#ffffff';
+            let ox = 0, sy = 1, sx2 = 1;
+            if (mode === 'earth') ox = Math.sin(t * 90) * 2.2 * k; else if (mode === 'void') ox = Math.sin(t * 70) * 3 * k; else if (mode === 'water') { sy = 1 - 0.14 * easeIn(k); sx2 = 1 + 0.1 * easeIn(k); } else if (mode === 'fire') ox = Math.sin(t * 60) * 1.5 * k;
+            ctx.translate(rect[0] + ox, feet); ctx.scale(sx2, sy); ctx.translate(-rect[0], -feet); ctx.drawImage(img, 0, 0, env.W, env.H);
+            ctx.globalAlpha = (mode === 'void' ? 0.5 : 0.7) * easeIn(k); ctx.drawImage(_dsTint(env, img, tintCol), 0, 0, env.W, env.H);
+            if (mode === 'fire' || mode === 'void') { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.5 * easeIn(k); ctx.drawImage(_dsTint(env, img, mode === 'fire' ? '#ffffff' : '#c8a0ff'), 0, 0, env.W, env.H); }
+            if (mode === 'earth' && k > 0.35) { ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 0.9; ctx.strokeStyle = '#1a120c'; ctx.lineWidth = 1.6; const rr = mulberry(hashS('crk' + tr.at)); for (let i = 0; i < 9; i++) { let x = P.mid[0] + (rr() - 0.5) * rect[2] * 0.7, y = P.top + rr() * (P.bot - P.top); ctx.beginPath(); ctx.moveTo(x, y); for (let j = 0; j < 4; j++) { x += (rr() - 0.5) * 16; y += 6 + rr() * 9; ctx.lineTo(x, y); } ctx.stroke(); } }
+            ctx.restore(); return;
+        }
+        // ── break-up ──
+        const s = t - pre, life = Math.max(0.5, (tr.dur || 2.0) - pre), ground = feet + 4;
+        ctx.save();
+        for (const p of P.pcs) {
+            let px = p.cx, py = p.cy, rot = 0, sc = 1, a = 1, kind = 'img', col = null;
+            if (mode === 'fire') {
+                const sp = (240 + p.r1 * 320) * boom, ang = Math.atan2(p.dy, p.dx) + (p.r2 - 0.5) * 0.9, dd = sp * (1 - Math.exp(-s * 3.2)) / 3.2;
+                px += Math.cos(ang) * dd; py += Math.sin(ang) * dd - 90 * s - 40 * s * s; rot = s * (p.r3 - 0.5) * 14;
+                a = 1 - easeIn(clamp01((s - 0.12 - p.r2 * 0.18) / 0.7)); sc = 1 - 0.5 * clamp01(s / 0.9);
+                if (s < 0.5) col = '#ff9a3a'; else col = '#ff5a1a';
+            } else if (mode === 'water') {
+                const delay = (1 - p.top) * 0.18 + p.r1 * 0.08, ss = s - delay;
+                if (ss < 0) { px += (p.dx) * 0.0; } else {
+                    const vx = (p.r2 - 0.5) * 360 * boom + p.dx * 1.6, vy = -(160 + p.r1 * 330) * boom;
+                    px += vx * ss; py += vy * ss + 640 * ss * ss;
+                    if (py > ground + p.r3 * 10) { a = Math.max(0, 1 - (py - ground) / 14); py = Math.min(py, ground + p.r3 * 10); }
+                    kind = 'drop'; sc = 0.8 + p.r3 * 0.9;
+                    a *= 1 - easeIn(clamp01((ss - life * 0.55) / (life * 0.4)));
+                }
+                if (ss < 0) { py += easeIn(clamp01(s / 0.2)) * 6; }
+            } else if (mode === 'earth') {
+                const delay = p.top * 0.5 + p.r1 * 0.12, ss = s - delay;
+                if (ss > 0) {
+                    px += (p.r2 - 0.5) * 60 * ss * boom; py += 420 * ss * ss * 0.5 + 20 * ss; rot = ss * (p.r3 - 0.5) * 4;
+                    if (py > ground - p.r1 * 8) { py = ground - p.r1 * 8; a = 1 - easeIn(clamp01((ss - 0.55) / 0.7)); }
+                    else a = 1;
+                    a *= 1 - easeIn(clamp01((s - life * 0.75) / (life * 0.25)));
+                }
+                col = ss > 0 ? '#6a5640' : null;
+            } else if (mode === 'void') {
+                const delay = (p.dist / (rect[2] * 0.6 + 1)) * 0.22 + p.r1 * 0.12, ss = s - delay, dur2 = life * 0.55;
+                if (ss > 0) {
+                    const q = easeIn(clamp01(ss / dur2)), ang = Math.atan2(p.dy, p.dx) + ss * (3 + p.r2 * 5) * (0.4 + q), rad = p.dist * (1 - q) * (1 + 0.25 * Math.sin(ss * 8 + p.r3 * 6));
+                    px = P.mid[0] + Math.cos(ang) * rad; py = P.mid[1] + Math.sin(ang) * rad * 0.92; sc = Math.max(0.15, 1 - 0.8 * q); rot = ang; a = 1 - easeIn(clamp01((q - 0.82) / 0.18));
+                    col = '#a56bff';
+                } else { px += (p.r2 - 0.5) * 3 * Math.sin(s * 80); }
+            } else if (mode === 'ice') {
+                const delay = p.r1 * 0.1, ss = s - delay;
+                if (ss > 0) {
+                    const ang = Math.atan2(p.dy, p.dx) + (p.r2 - 0.5) * 0.6, sp = (120 + p.r1 * 220) * boom;
+                    px += Math.cos(ang) * sp * ss; py += Math.sin(ang) * sp * ss - 60 * ss + 480 * ss * ss; rot = ss * (p.r3 - 0.5) * 9;
+                    if (py > ground) { py = ground; a = 1 - easeIn(clamp01((ss - 0.6) / 0.5)); }
+                    a *= 1 - easeIn(clamp01((s - life * 0.7) / (life * 0.3)));
+                }
+                col = '#dff4ff';
+            } else {   // dust
+                const ss = s - p.r1 * 0.15; if (ss > 0) { px += (p.dx * 1.2 + (p.r2 - 0.5) * 40) * ss; py += p.dy * 0.8 * ss - 60 * ss; rot = ss * (p.r3 - 0.5) * 3; a = 1 - easeIn(clamp01(ss / (life * 0.7))); sc = 1 + 0.4 * ss; }
+            }
+            if (a <= 0.01) continue;
+            ctx.save(); ctx.globalAlpha = a; ctx.translate(px, py);
+            if (rot) ctx.rotate(rot);
+            if (kind === 'drop') {
+                const rr = Math.max(1.5, P.cs * 0.55 * sc); ctx.fillStyle = 'rgba(96,172,255,0.9)'; ctx.beginPath(); ctx.ellipse(0, 0, rr * 0.8, rr * 1.15, 0, 0, TAU); ctx.fill();
+                ctx.fillStyle = 'rgba(235,248,255,0.85)'; ctx.beginPath(); ctx.arc(-rr * 0.2, -rr * 0.3, rr * 0.28, 0, TAU); ctx.fill();
+            } else {
+                if (sc !== 1) ctx.scale(sc, sc);
+                ctx.drawImage(img, p.sx, p.sy, p.sw, p.sh, -p.w / 2, -p.h / 2, p.w, p.h);
+                if (col) { ctx.globalCompositeOperation = mode === 'fire' || mode === 'void' ? 'lighter' : 'source-over'; ctx.globalAlpha = a * (mode === 'fire' ? 0.55 : mode === 'void' ? 0.45 : 0.4); ctx.fillStyle = col; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); }
+            }
+            ctx.restore();
+        }
+        ctx.restore();
+    };
+
     // ── camera: marker track read by the renderer (zoom delta) ─────────────
     LAYERS.camera = () => { };
     LAYERS.hidecaster = () => { };

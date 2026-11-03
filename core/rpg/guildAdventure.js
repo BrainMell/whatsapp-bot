@@ -4908,6 +4908,43 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   }, startDelay);
 }
 
+// ☠️ DEATH ANIMATIONS (owner 2026-11-03): every enemy / boss that died this turn breaks apart by type (fire explodes, water splashes,
+// earth crumbles to dust, void/dark things spiral into their own centre). Cosmetic + bounded: a hard 5s budget, never throws, never blocks
+// combat resolution. Standard (Go-rendered) fights only; abyss / ruins scenes keep their static card.
+async function playEnemyDeaths(sock, state) {
+  try {
+    if (!sock || !state || !state.chatId || state.isAbyss === true || (state.mode === 'RUINS' && state.ruinsMeta)) return;
+    const fresh = (state.enemies || []).map((e, i) => ({ e, i })).filter((x) => x.e && x.e.isEnemy !== false && !x.e._deathAnimDone && (x.e.justDied || x.e.isDead || (x.e.stats && x.e.stats.hp <= 0)));
+    if (!fresh.length) return;
+    fresh.forEach((x) => { x.e._deathAnimDone = true; });   // flag first: idempotent across checkCombatEnd / nextTurn
+    const signatureVfx = require('./skillVfx');
+    const combatImageGenerator = require('./combatImageGenerator');
+    for (const { e, i } of fresh.slice(0, 2)) {
+      const t0 = Date.now();
+      // revive a CLONE for the layered render so the Go renderer still draws the standing enemy
+      const roster = (state.enemies || []).map((x, k) => (k === i ? Object.assign({}, x, { isDead: false, justDied: false, currentHP: 1, stats: Object.assign({}, x.stats, { hp: 1 }) }) : x));
+      const layers = await Promise.race([
+        combatImageGenerator.generateCombatLayers(state.players || [], roster, {
+          combatType: 'PVE', rank: state.dungeonRank, floor: 0, backgroundPath: state.backgroundPath || undefined,
+          summons: state.summons || [], hud: 'none', bypassQueue: true, focusSide: 'enemy', focusIndex: i,
+        }),
+        new Promise((r) => setTimeout(() => r(null), 2500)),
+      ]);
+      if (!layers || !layers.success || !layers.focus) continue;
+      const ab = { flag: false };
+      const clip = await Promise.race([
+        signatureVfx.renderDeathVideo({ enemy: e, targetIndex: i, layers, abort: ab }),
+        new Promise((r) => setTimeout(() => { ab.flag = true; r(null); }, Math.max(1500, 5000 - (Date.now() - t0)))),
+      ]);
+      if (!clip || !clip.mp4) continue;
+      const pl = { video: clip.mp4, mimetype: 'video/mp4', caption: `☠️ *${e.name || 'The enemy'}* ${clip.boss ? 'is destroyed!' : 'falls!'}`, gifPlayback: true };
+      if (Buffer.isBuffer(clip.thumb)) pl.jpegThumbnail = clip.thumb;
+      await sendMediaBounded(sock, state.chatId, pl, { label: 'enemyDeathVfx', ms: 12000, grace: 4000, fallbackText: null });
+      console.log(`[DeathFx] ${e.name} kind=${clip.kind} boss=${clip.boss} ${Date.now() - t0}ms`);
+    }
+  } catch (err) { console.warn('[DeathFx] skipped:', err && err.message || err); }
+}
+
 async function checkCombatEnd(sock, state, sessionKey) {
   // 💡 ROUND-19 FIX (owner 2026-10-10 14:06Z quest-skip report): a stale
   // resolution landing BETWEEN fights saw the previous roster (all dead) or
@@ -4922,6 +4959,8 @@ async function checkCombatEnd(sock, state, sessionKey) {
   //   2. victory requires a NON-EMPTY enemy roster — `.every()` on `[]`
   //      is vacuously true and must never read as "all enemies dead".
   if (!state || !state.inCombat) return false;
+  if (!sock) sock = state.sock || state.sock_ref;
+  await playEnemyDeaths(sock, state);
   // 💡 ROUND-19: generation stamp — a resolution from a superseded fight
   // (stale timer / stale turn-loop iteration that kept running after
   // endCombat and re-armed on the NEXT fight's state) must not resolve
@@ -7223,6 +7262,7 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
   // any caller that lost its socket still delivers the battle card +
   // YOUR TURN caption through the state's stored socket.
   if (!sock) sock = state.sock || state.sock_ref;
+  await playEnemyDeaths(sock, state);
 
   // Generate incremental combat image if action just happened
   if (lastTurnInfo) {

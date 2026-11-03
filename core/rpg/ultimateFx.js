@@ -128,7 +128,7 @@ const plates = require('./ultimatePlateCache');
 // compositing chains are associative within a mode, so capture-vs-live stays
 // pixel-faithful except where a painter mixes modes internally (vortex's
 // lighter rim outside its opaque warp disk — bounded, QA-eyeballed).
-const PLATE_LIVE = new Set(['hands', 'focus', 'affect', 'hurt', 'dash']);
+const PLATE_LIVE = new Set(['hands', 'focus', 'affect', 'hurt', 'dash', 'dissolve']);
 const PLATE_NOOP = new Set(['camera', 'hidecaster']);   // logic-only tracks, consumed by the frame loop
 // 🔥 26-R5 blend audit (every painter read line-by-line): only PURE-mode
 // painters are plateable — a painter mixing source-over and lighter strokes
@@ -948,7 +948,8 @@ async function renderUltimateVideo(o) {
         const roster = cutImgs.filter((c) => c.side === (self ? 'player' : tSideAll))
             .filter((c) => self || !(tSideAll === 'player' && c.index === casterIdxAll));
         let affected = [];
-        if (self) affected = o.aoe ? roster.slice() : (findCut('player', casterIdxAll) ? [findCut('player', casterIdxAll)] : []);
+        if (o.death) affected = [];
+        else if (self) affected = o.aoe ? roster.slice() : (findCut('player', casterIdxAll) ? [findCut('player', casterIdxAll)] : []);
         else if (o.aoe) affected = roster.slice();
         else {
             const fc = findCut(tSideAll, focusIdxAll) || cutImgs.find((c) => c.side === tSideAll) || null;
@@ -1022,13 +1023,13 @@ async function renderUltimateVideo(o) {
     // on the fighters AFTER the impact fx fade (a bell at IMP was buried
     // under the explosion sprites and read as invisible; the tail now lingers
     // into the settle for a clear "this fighter was hit by THAT spell" read).
-    if (layers && affectList.length && !tracks.some((t) => t.layer === 'affect')) {
+    if (!o.death && layers && affectList.length && !tracks.some((t) => t.layer === 'affect')) {
         tracks.push({ layer: 'affect', at: IMP, dur: 1.25, curve: 'hold', a: self ? 0.7 : 0.9 });
     }
     // 🔴 HURT FLASH auto-track: fires on every offensive cast that has real
     // victim cutouts - flash + echo land BEFORE the class-colour wash above
     // settles, so the hit reads red first, class colour second.
-    if (layers && hurtList.length && !tracks.some((t) => t.layer === 'hurt')) {
+    if (!o.death && layers && hurtList.length && !tracks.some((t) => t.layer === 'hurt')) {
         tracks.push({ layer: 'hurt', at: IMP + 0.01, dur: 0.5, a: 0.85 });
     }
     const seed = hash((o.classId || '') + (o.name || ''));
@@ -1202,7 +1203,7 @@ async function renderUltimateVideo(o) {
             // isolated focus combatant (scaled with the roster when shrunk — feet stay pinned).
             // With a full cutout roster the loop above already drew the focus at the same
             // anchor — the full-canvas overlay draw here would stack it twice (subtle darkening).
-            if (focImg && !sinkOwnsFocus && !(cutsAll && cutsAll.length)) {
+            if (focImg && !sinkOwnsFocus && !o.death && !(cutsAll && cutsAll.length)) {
                 if (shrinkK >= 0.999 || !focRect) ctx.drawImage(focImg, 0, 0, W, H);
                 else {
                     const [fx0, fy0, fw0, fh0] = focRect, feetY2 = fy0 + fh0, cx2 = fx0 + fw0 / 2;
@@ -1238,7 +1239,8 @@ async function renderUltimateVideo(o) {
         // dim the field while charging so effects pop; lift after the hit
         // (layered: AFTER the combatants so they dim exactly like the flat base)
         const veil = time < IMP ? 0.1 + 0.42 * easeOut(clamp01(time / 0.3)) : 0.52 * (1 - easeOut((sinceHit) / 0.7)) + 0.08;
-        if (o.aoe || meta.flatVeil) { ctx.fillStyle = rgba('#05060f', veil * 0.85); ctx.fillRect(-40, -40, W + 80, H + 80); }
+        if (o.death) { ctx.fillStyle = rgba('#05060f', 0.16 * (time < IMP ? easeOut(clamp01(time / 0.3)) : 1 - easeOut(sinceHit / 1.2))); ctx.fillRect(-40, -40, W + 80, H + 80); }
+        else if (o.aoe || meta.flatVeil) { ctx.fillStyle = rgba('#05060f', veil * 0.85); ctx.fillRect(-40, -40, W + 80, H + 80); }
         else {
             // spotlight: the target stays lit, everything else darkens
             const sp = self ? A.C : A.T, spr = 110;
@@ -1247,7 +1249,7 @@ async function renderUltimateVideo(o) {
             ctx.fillStyle = sg; ctx.fillRect(-40, -40, W + 80, H + 80);
         }
         // charge aura at the caster
-        if (time < IMP + 0.25) {
+        if (!o.death && time < IMP + 0.25) {
             const k = easeIn(time / IMP);
             glow(ctx, A.C[0], A.C[1], 70 + 90 * k + Math.sin(f * 1.7) * 6, rgba(palette[1], 'A'), 0.35 + 0.45 * k);
         }
@@ -1257,23 +1259,23 @@ async function renderUltimateVideo(o) {
         if (plateMeta || plateCap) await paintGroups(ctx, overGroups, Object.assign(po, { under: false }));
         else plateGroupsDirect(ctx, overGroups, Object.assign(po, { under: false }));
         // impact glow
-        if (sinceHit >= 0 && sinceHit < 0.5) glow(ctx, A.T[0], A.T[1], 200 * easeOut(sinceHit / 0.25) + 40, rgba(palette[0], 'A'), 0.85 * (1 - sinceHit / 0.5));
+        if (!o.death && sinceHit >= 0 && sinceHit < 0.5) glow(ctx, A.T[0], A.T[1], 200 * easeOut(sinceHit / 0.25) + 40, rgba(palette[0], 'A'), 0.85 * (1 - sinceHit / 0.5));
         // 🔴 HURT FLASH fallback (no cutouts → no hurtList): same double-pulse
         // timing as LAYERS.hurt, as a red radial burn on the victim anchor so
         // the "that got HIT" read survives the plain-base lane too.
-        if (!self && !hurtList.length && sinceHit >= 0 && sinceHit < 0.45) {
+        if (!o.death && !self && !hurtList.length && sinceHit >= 0 && sinceHit < 0.45) {
             // bell() lives in ultimateFxLayers - inline the sine envelope here
             const k = Math.min(1, Math.sin(Math.PI * clamp01(sinceHit / 0.15)) + 0.62 * Math.sin(Math.PI * clamp01((sinceHit - 0.2) / 0.17)));
             glow(ctx, A.T[0], A.T[1] - 26, 130, rgba('#ff2222', 'A'), 0.5 * k);
         }
-        embers(ctx, A, time, palette, seed);
+        if (!o.death) embers(ctx, A, time, palette, seed);
         ctx.restore();
         // full-screen flash frames (soft, 2 frames) + vignette
-        if (sinceHit >= 0 && sinceHit < 0.07) { ctx.fillStyle = rgba(palette[0], 0.55 * (1 - sinceHit / 0.07)); ctx.fillRect(0, 0, W, H); }
+        if (!o.death && sinceHit >= 0 && sinceHit < 0.07) { ctx.fillStyle = rgba(palette[0], 0.55 * (1 - sinceHit / 0.07)); ctx.fillRect(0, 0, W, H); }
         const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, H * 0.95);
         vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.38)');
         ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
-        banner(ctx, time, o.name, palette[1], o.skillLevel, o.maxLevel);
+        if (!o.death) banner(ctx, time, o.name, palette[1], o.skillLevel, o.maxLevel);
         // 💡 HUD 2026-10-26 round 2: the caster's medieval plate is the LAST
         // pass - above the flash, vignette, banner and every effect, and
         // outside the camera transform, so nothing ever covers or dims it.

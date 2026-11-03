@@ -31,6 +31,9 @@ const META = {
     WARLOCK: { duration: 3.0, impact: 1.3 },
     AVATAR: { duration: 3.1, impact: 1.3 },
 };
+// ☠️ DEATH ANIMATIONS (owner 2026-11-03): enemies / bosses break apart by TYPE (ultimateFxLayers2 `dissolve`)
+const DEATH_KINDS = ['FIRE', 'WATER', 'EARTH', 'VOID', 'ICE', 'DUST'];
+for (const k of DEATH_KINDS) { META['DEATH_' + k] = { duration: 2.1, impact: 0.45, zoom: 0 }; META['DEATH_' + k + '_BOSS'] = { duration: 3.4, impact: 0.7, zoom: 0.03 }; }
 // 🌌 WORLD-SHIFT (owner 2026-10-28): the big skills open with a cosmic cinematic (zoom-blur out ->
 // planet + asteroid -> impact -> the arena becomes another world), then play their normal recipe,
 // shifted later by SHIFT seconds. planet:false = warp tunnel into another dimension (shorter).
@@ -213,7 +216,42 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
             flash(col, 0.35),
         ];
     }
+    // ☠️ death sets: the sprite itself is broken up by LAYERS.dissolve; these are the element's world effects around it
+    function deathSet(kind, boss) {
+        const k = boss ? 1.6 : 1, pre = I, dis = (mode, ex = {}) => L('dissolve', { at: 0, mode, pre, dur: boss ? 2.9 : 1.8, boom: k, cells: boss ? 800 : 420, ...ex });
+        const cam = boss ? [L('camera', { at: pre, dur: 1.3, dz: 0.04 })] : [];
+        if (kind === 'FIRE') return [dis('fire'), L('wash', { at: pre * 0.3, dur: pre, color: '#ff7a1a', a: 0.2, add: true }),
+            { fx: 'fire_blast', at: pre, pos: 'T', off: [0, -45], w: 300 * k, n: boss ? 3 : 2, jit: [40, 30], gap: 0.1, add: true },
+            { fx: 'fire_bomb', at: pre + 0.05, pos: 'T', off: [0, -35], w: 240 * k, add: true, alpha: 0.85 },
+            L('rings', { at: pre, pos: 'T', n: 2, gap: 0.1, color: '#ff8a2a', r: 150 * k }),
+            L('emit', { at: pre, dur: 1.3, pos: 'T', off: [0, -45], box: [60 * k, 60 * k], n: Math.round(44 * k), life: 1.1, shape: 'spark', colors: ['#fff2b0', '#ff7a1a', '#5a2a18'], v: [0, -130], vr: [170 * k, 80], g: -50 }),
+            flash('#ffb05a', 0.32, pre, 0.16), ...cam];
+        if (kind === 'WATER') return [dis('water'), L('wash', { at: pre * 0.3, dur: pre, color: '#2a7ad0', a: 0.16, add: true }),
+            { fx: 'k_sonic', at: pre + 0.2, pos: 'T', off: [0, 8], w: 250 * k, add: true, tint: ['#6cc0ff', 0.6] },
+            L('ripple', { at: pre + 0.15, pos: 'T', n: 3, gap: 0.1, color: '#9bd8ff', r: 170 * k }),
+            { fx: 'k_puff', at: pre + 0.15, pos: 'T', off: [0, -10], w: 230 * k, add: true, tint: ['#9bd8ff', 0.5] },
+            L('emit', { at: pre + 0.1, dur: 1.0, pos: 'T', off: [0, -25], box: [80 * k, 40], n: Math.round(34 * k), life: 0.9, shape: 'glow', colors: ['#bfe6ff', '#ffffff', '#6cb8ff'], v: [0, -180], vr: [160 * k, 60], g: 520, size: 4 }),
+            flash('#bfe6ff', 0.25, pre + 0.15, 0.14), ...cam];
+        if (kind === 'EARTH') return [dis('earth'),
+            { fx: 'k_ground', at: pre, pos: 'T', off: [0, 5], w: 300 * k },
+            { fx: 'k_puff', at: pre + 0.3, pos: 'T', off: [0, -10], w: 300 * k, n: boss ? 3 : 2, jit: [50, 10], gap: 0.12, tint: ['#a08a68', 0.7] },
+            L('cracks', { at: pre + 0.25, pos: 'T', n: 7, r: 130 * k, color: '#c9a060', dur: 1.0 }),
+            L('emit', { at: pre + 0.2, dur: 1.4, pos: 'T', off: [0, -10], box: [90 * k, 30], n: Math.round(40 * k), life: 1.2, shape: 'glow', colors: ['#b9a27a', '#8a7458', '#d8c8a0'], v: [0, -60], vr: [60 * k, 30], g: -10, size: 5 }), ...cam];
+        if (kind === 'VOID') return [dis('void'), L('wash', { at: 0.05, dur: pre + 1.4, color: '#0a0016', a: 0.3 }),
+            L('ripple', { at: pre, pos: 'T', n: 4, gap: 0.12, color: '#a56bff', r: 200 * k, inward: true, dur: 0.7 }),
+            L('swarm', { at: pre, pos: 'T', kind: 'soul', n: Math.round(24 * k), inward: true, dur: 0.9, pass: 0.3, from: 220 * k, size: 6, color: '#c8a0ff' }),
+            { fx: 'k_flash', at: pre + (boss ? 1.25 : 0.95), pos: 'T', off: [0, -45], w: 220 * k, add: true, tint: ['#a56bff', 0.7] },
+            L('rings', { at: pre + (boss ? 1.25 : 0.95), pos: 'T', n: 3, gap: 0.08, color: '#e6d4ff', r: 200 * k }),
+            flash('#e6d4ff', 0.4, pre + (boss ? 1.25 : 0.95), 0.18), ...cam];
+        if (kind === 'ICE') return [dis('ice'), { fx: 'white_burst', at: pre + 0.05, pos: 'T', off: [0, -40], w: 260 * k, add: true, tint: ['#cfeaff', 0.8] },
+            L('rings', { at: pre, pos: 'T', n: 2, gap: 0.1, color: '#cfeaff', r: 150 * k }),
+            L('emit', { at: pre, dur: 1.0, pos: 'T', off: [0, -40], box: [60 * k, 60 * k], n: Math.round(36 * k), life: 1.0, shape: 'star', colors: ['#ffffff', '#bfe6ff'], v: [0, -80], vr: [140 * k, 80], g: 300 }),
+            flash('#e6f6ff', 0.3, pre, 0.14), ...cam];
+        return [dis('dust'), { fx: 'k_puff', at: pre + 0.05, pos: 'T', off: [0, -30], w: 240 * k, n: 2, jit: [30, 20], gap: 0.1, tint: ['#d8d0c0', 0.6] },
+            L('emit', { at: pre, dur: 1.0, pos: 'T', off: [0, -30], box: [60 * k, 60 * k], n: Math.round(26 * k), life: 1.0, shape: 'glow', colors: ['#e8e0d0', '#b8b0a0'], v: [0, -50], vr: [100 * k, 50], size: 4 }), ...cam];
+    }
     const R = {
+        ...Object.fromEntries(DEATH_KINDS.flatMap((dk) => [['DEATH_' + dk, () => deathSet(dk, false)], ['DEATH_' + dk + '_BOSS', () => deathSet(dk, true)]])),
         // ── dark arts ──────────────────────────────────────────────────────
         NECROMANCER: () => [
             dark(0.5),
@@ -608,7 +646,7 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
 // energy (a ring + sparks + a brighter flash) but NEVER sky lasers or ground cracks (owner: "the level 3s are
 // spamming lasers where they don't belong"). Timing never changes so hit sync is untouched.
 const SIZE_KEYS = ['w', 'r', 'rx', 'ew', 'eh', 'len'];
-const NOSCALE = new Set(['lunge', 'focus', 'bgfill', 'invert', 'vortex', 'camera', 'hidecaster', 'dragon', 'robohand', 'scythe', 'reticle', 'staff', 'shrink', 'magicClock', 'cosmic', 'world', 'cinema', 'bigmeteor', 'planetburst', 'engulf', 'splitcut', 'crumble', 'ghosts']);
+const NOSCALE = new Set(['lunge', 'focus', 'bgfill', 'invert', 'vortex', 'camera', 'hidecaster', 'dragon', 'robohand', 'scythe', 'reticle', 'staff', 'shrink', 'magicClock', 'cosmic', 'world', 'cinema', 'dissolve', 'bigmeteor', 'planetburst', 'engulf', 'splitcut', 'crumble', 'ghosts']);
 function classRecipe(cls, p, o) {
     const W = WORLD[cls], S = shiftOf(cls);
     if (!W) return classRecipeBase(cls, p, o);
