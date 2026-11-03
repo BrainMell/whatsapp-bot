@@ -250,7 +250,9 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
             L('tether', { at: 0.4, dur: 1.8, color: '#c43bff' }),
             L('focus', { at: 1.2, dur: 1.2, mode: 'drain', hit: I }),
             L('emit', { at: I, dur: 1.0, pos: 'T', box: [70, 40], n: 22, life: 0.9, shape: 'soul', colors: ['#e9c8ff', '#c43bff'], v: [-70, -40], vr: [30, 30] }),
+            L('pillar', { at: I - 0.1, pos: 'T', w: 110, dur: 0.8, color: '#c43bff', mid: '#f0d0ff', spread: 'enemies', fanGap: 0.09 }),
             { fx: 'dark_a', at: I, pos: 'T', w: 240, n: 2, gap: 0.12, jit: [30, 20], add: true, tint: ['#c43bff', 0.6] },
+            ...weight('#c43bff', I, 1.2),
             flash('#d79bff', 0.4),
         ],
         // the world implodes into a dot; the caster is gone; a GIANT REAL scythe cuts through
@@ -295,7 +297,18 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
         // ── blades: cut ON the target ──────────────────────────────────────
         FIGHTER: () => blows({ col: '#bcd6ff', n: 3 }),
         WARRIOR: () => cutSet({ col: '#ffb070', angles: [-0.85, 0.85, 0.0, 1.57], n: 4, len: 175, w: 14 }),
-        SAMURAI: () => cutSet({ col: '#9fd0ff', angles: [-0.95, 0.2, -0.4, 0.8, -0.15, 1.1, 0.5], n: 7, len: 185, w: 7, gap: 0.055, sprite: null }),
+        // 🗡️ SAMURAI (owner 2026-11-02): the intro draws ONE white line across the sun - the strike keeps it: the caster
+        // is already past, the line hangs across the target for a beat, THEN the world catches up and the cut lands
+        SAMURAI: () => [
+            casterAura('#9fd0ff'),
+            dark(0.35),
+            L('lunge', { at: I - 0.32, dur: 0.6, color: '#9fd0ff' }),
+            L('slashes', { at: I - 0.02, n: 1, gap: 0.1, color: '#9fd0ff', mid: '#ffffff', len: 620, w: 6, angles: [-0.22] }),
+            L('slashes', { at: I + 0.3, n: 1, gap: 0.1, color: '#ffffff', mid: '#ffffff', len: 560, w: 10, angles: [-0.22] }),
+            L('slashes', { at: I + 0.32, n: 14, gap: 0.006, kind: 'burst', color: '#9fd0ff', mid: '#ffffff', len: 140 }),
+            ...weight('#9fd0ff', I + 0.3, 1.2),
+            flash('#ffffff', 0.45, I + 0.3, 0.14),
+        ],
         SHOGUN: () => [dark(0.35), ...cutSet({ col: '#ffd27a', mid: '#fff0c0', angles: [-0.7, 0.7, 0.0, 1.57, -1.2], n: 5, len: 190, w: 14, extra: [L('ripple', { at: I + 0.3, pos: 'T', n: 3, gap: 0.12, color: '#ffd27a', r: 200 })] })],
         BERSERKER: () => [
             L('wash', { at: 0.1, dur: I + 0.5, color: '#3a0000', a: 0.35 }),
@@ -404,15 +417,19 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
             flash('#ffd9a0', 0.3, I + 0.2, 0.16),
         ],
         // four elements fuse into one prismatic blast
+        // ELEMENTALIST: the four elements of the intro arrive from four directions and collide ON the target
         ELEMENTALIST: () => [
             L('circle', { at: 0.05, pos: 'C', r: 80, dur: 1.2, color: '#7ad7ff', points: 6 }),
-            L('elements', { at: 0.2, dur: I - 0.2 + 0.05, pos: 'T', fuseUp: 110, s: 1 }),
+            L('fall', { at: I - 0.5, pos: 'T', kind: 'meteor', n: 1, fall: 0.5, spreadX: 0, spreadY: 0, slant: -260, mw: 170, land: 'k_regular', landW: 130, color: '#ff6a1a' }),
+            L('fall', { at: I - 0.5, pos: 'T', kind: 'shard', n: 5, gap: 0.04, fall: 0.5, spreadX: 40, spreadY: 20, slant: 260, land: 'k_simple', landW: 90, color: '#59d2ff' }),
+            L('fall', { at: I - 0.5, pos: 'T', kind: 'rock', n: 1, fall: 0.5, spreadX: 0, spreadY: 0, slant: 0, size: 60, land: 'k_ground', landW: 150, color: '#c9a060' }),
+            L('fall', { at: I - 0.5, pos: 'T', kind: 'arrow', n: 8, gap: 0.03, fall: 0.5, spreadX: 60, spreadY: 20, slant: -90, land: 'k_simple', landW: 80, color: '#e8ffd0' }),
             { fx: 'white_burst', at: I, pos: 'T', w: 380, add: true, spread: 'enemies', fanGap: 0.08 },
-            { fx: 'k_sonic', at: I, pos: 'T', w: 300, spread: 'enemies', fanGap: 0.08 },
             L('rings', { at: I, pos: 'T', n: 4, gap: 0.08, color: '#ff6a1a', r: 190, spread: 'enemies', fanGap: 0.08 }),
             L('rings', { at: I + 0.04, pos: 'T', n: 3, gap: 0.08, color: '#59d2ff', r: 160, spread: 'enemies', fanGap: 0.08 }),
+            ...weight('#ffe84a', I, 1.4),
             L('emit', { at: I, dur: 0.7, pos: 'T', box: [120, 40], n: 30, life: 0.9, shape: 'spark', colors: ['#ff6a1a', '#59d2ff', '#ffe84a', '#a8ff7a'], v: [0, -80], vr: [100, 50], g: 120 }),
-            flash('#ffffff', 0.5),
+            flash('#ffffff', 0.5, I, 0.2),
         ],
         AVATAR: () => [
             dark(0.4),
@@ -487,22 +504,53 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
             flash('#dff6ff', 0.35),
         ],
         // ── holy (owner: fine) ─────────────────────────────────────────────
-        ACOLYTE: () => holyBeam(0.8), PALADIN: () => holyBeam(1),
-        CLERIC: () => holyBeam(0.9), SAINT: () => [...holyBeam(1.2), L('rings', { at: I + 0.1, pos: 'T', n: 3, gap: 0.1, color: '#fff2b0', r: 200 })],
+        ACOLYTE: () => holyBeam(0.8),
+        // PALADIN: spears of light rain onto the target like the cross on the shield, each landing with weight
+        PALADIN: () => [
+            { fx: 'holy_start', at: 0.05, pos: 'C', w: 120, dur: 0.9, loop: true, add: true },
+            L('circle', { at: 0.1, pos: 'T', r: 110, dur: 1.5, color: '#ffe27a', points: 4, spin: 0.6 }),
+            L('fall', { at: I - 0.45, pos: 'T', kind: 'spear', n: 10, gap: 0.05, fall: 0.3, slant: -30, spreadX: 150, spreadY: 60, land: 'k_regular', landW: 100, color: '#ffe27a', spread: 'enemies', fanGap: 0.06 }),
+            L('pillar', { at: I + 0.15, pos: 'T', w: 120, dur: 0.6, color: '#ffe27a', mid: '#fff6c8', spread: 'enemies', fanGap: 0.09 }),
+            ...weight('#ffe27a', I + 0.15, 1.2),
+            flash('#fff6d0', 0.5, I + 0.15, 0.2),
+        ],
+        // CLERIC: the rose window - five coloured shafts fall in turn, the last one white
+        CLERIC: () => [
+            { fx: 'holy_start', at: 0.05, pos: 'C', w: 120, dur: 0.9, loop: true, add: true },
+            L('circle', { at: 0.1, pos: 'T', r: 100, dur: 1.6, color: '#ffe27a', points: 6, spin: 1.2 }),
+            ...['#ff7a7a', '#ffb870', '#8aff8a', '#7ac8ff', '#c89aff'].map((c, i) => L('pillar', { at: I - 0.2 + i * 0.09, pos: 'T', off: [(i - 2) * 38, 0], w: 70, dur: 0.55, color: c, mid: '#ffffff', spread: 'enemies', fanGap: 0.09 })),
+            L('pillar', { at: I + 0.3, pos: 'T', w: 150, dur: 0.6, color: '#ffffff', mid: '#ffffff', spread: 'enemies', fanGap: 0.09 }),
+            { fx: 'holy_burst', at: I + 0.3, pos: 'T', w: 380, add: true, spread: 'enemies', fanGap: 0.08 },
+            ...weight('#ffe27a', I + 0.3, 1),
+            flash('#fff6d0', 0.5, I + 0.3, 0.2),
+        ],
+        // SAINT: heaven opens - one wide pillar, a drift of falling feathers, a slow wide halo
+        SAINT: () => [
+            ...holyBeam(1.2),
+            L('emit', { at: I - 0.3, dur: 1.4, pos: 'T', off: [0, -170], box: [240, 20], n: 34, life: 1.3, shape: 'glow', colors: ['#ffffff', '#fff2b0'], v: [0, 70], vr: [30, 20], size: 5 }),
+            L('rings', { at: I + 0.1, pos: 'T', n: 3, gap: 0.1, color: '#fff2b0', r: 220 }),
+        ],
         // self buffs: aura around the caster
-        MONK: () => auraSelf('#fff2b0', 0.8),
+        // MONK: two palm strikes, soft then hard (the lotus opens, the palm lands)
+        MONK: () => blows({ col: '#fff2b0', mid: '#fff6d8', n: 2, gap: 0.2 }),
         ZENMASTER: () => auraSelf('#8ae6ff', 1.0, [L('ripple', { at: I - 0.2, pos: 'C', n: 4, gap: 0.12, color: '#8ae6ff', r: 190, rise: 40 })]),
         TEMPLAR: () => [
             ...auraSelf('#fff2b0', 1.1),
             L('ripple', { at: I - 0.3, pos: 'C', n: 2, gap: 0.14, color: '#ffffff', r: 160, rise: 55, ratio: 0.9, dur: 0.9 }),
         ],
-        DIVINE_FIST: () => [
-            ...auraSelf('#ffb84a', 0.95),
-            // the eight gates open one after another
-            L('ripple', { at: 0.3, pos: 'C', n: 8, gap: 0.1, color: '#ffb84a', r: 150, rise: 50, dur: 0.6, lw: 6 }),
-            L('emit', { at: 0.4, dur: 1.0, pos: 'C', box: [70, 20], n: 30, life: 0.9, shape: 'spark', colors: ['#ffb84a', '#fff2b0'], v: [0, -130], vr: [40, 30] }),
+        // DIVINE_FIST: the eight gates - a golden barrage of fists, faster and heavier every strike, last one cracks the ground
+        DIVINE_FIST: () => blows({ col: '#ffb84a', mid: '#fff0c0', n: 7, gap: 0.085, extra: [L('rings', { at: I + 0.6, pos: 'T', n: 3, gap: 0.1, color: '#ffb84a', r: 230 })] }),
+        // GOD_HAND: the hand from the intro comes down ON the target and presses it into the ground
+        GOD_HAND: () => [
+            casterAura('#fff2b0', 16),
+            L('wash', { at: 0.1, dur: I + 0.8, color: '#1a1200', a: 0.35 }),
+            L('robohand', { at: I - 0.45, pos: 'T', dur: 1.5, fall: 0.45, s: 2.0, color: '#ffd27a' }),
+            L('focus', { at: I - 0.02, dur: 1.2, mode: 'press', depth: 120, downFrac: 0.12, holdTo: 0.6, hit: I }),
+            L('cracks', { at: I, pos: 'T', n: 10, r: 190, color: '#ffd27a', dur: 1.0 }),
+            ...weight('#ffd27a', I, 1.5),
+            L('rings', { at: I, pos: 'T', n: 3, gap: 0.09, color: '#ffd27a', r: 230 }),
+            flash('#fff6d0', 0.5, I, 0.2),
         ],
-        GOD_HAND: () => auraSelf('#fff2b0', 1.3, [L('emit', { at: 0.3, dur: 1.2, pos: 'C', box: [90, 30], n: 30, life: 1, shape: 'glow', colors: ['#ffe27a', '#ffffff'], v: [0, -50], vr: [30, 20], size: 6 })]),
         // ── nature / gold ──────────────────────────────────────────────────
         DRUID: () => natureSet(5),
         ARCHDRUID: () => [...natureSet(8), L('rings', { at: I + 0.2, pos: 'T', n: 3, gap: 0.12, color: '#a8ff7a', r: 190 })],
