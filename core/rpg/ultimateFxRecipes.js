@@ -33,7 +33,7 @@ const META = {
 };
 // ☠️ DEATH ANIMATIONS (owner 2026-11-03): enemies / bosses break apart by TYPE (ultimateFxLayers2 `dissolve`)
 const DEATH_KINDS = ['FIRE', 'WATER', 'EARTH', 'VOID', 'ICE', 'DUST'];
-for (const k of DEATH_KINDS) { META['DEATH_' + k] = { duration: 2.1, impact: 0.45, zoom: 0 }; META['DEATH_' + k + '_BOSS'] = { duration: 3.4, impact: 0.7, zoom: 0.03 }; }
+for (const k of DEATH_KINDS) { META['DEATH_' + k] = { duration: 1.8, impact: 0.4, zoom: 0 }; META['DEATH_' + k + '_BOSS'] = { duration: 3.0, impact: 0.65, zoom: 0.03 }; }
 // 🌌 WORLD-SHIFT (owner 2026-10-28): the big skills open with a cosmic cinematic (zoom-blur out ->
 // planet + asteroid -> impact -> the arena becomes another world), then play their normal recipe,
 // shifted later by SHIFT seconds. planet:false = warp tunnel into another dimension (shorter).
@@ -218,7 +218,7 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
     }
     // ☠️ death sets: the sprite itself is broken up by LAYERS.dissolve; these are the element's world effects around it
     function deathSet(kind, boss) {
-        const k = boss ? 1.6 : 1, pre = I, dis = (mode, ex = {}) => L('dissolve', { at: 0, mode, pre, dur: boss ? 2.9 : 1.8, boom: k, cells: boss ? 800 : 420, ...ex });
+        const k = boss ? 1.6 : 1, pre = I, dis = (mode, ex = {}) => L('dissolve', { at: 0, mode, pre, dur: boss ? 2.7 : 1.5, boom: k, cells: boss ? 700 : 340, ...ex });
         const cam = boss ? [L('camera', { at: pre, dur: 1.3, dz: 0.04 })] : [];
         if (kind === 'FIRE') return [dis('fire'), L('wash', { at: pre * 0.3, dur: pre, color: '#ff7a1a', a: 0.2, add: true }),
             { fx: 'fire_blast', at: pre, pos: 'T', off: [0, -45], w: 300 * k, n: boss ? 3 : 2, jit: [40, 30], gap: 0.1, add: true },

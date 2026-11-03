@@ -4908,40 +4908,67 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   }, startDelay);
 }
 
-// ☠️ DEATH ANIMATIONS (owner 2026-11-03): every enemy / boss that died this turn breaks apart by type (fire explodes, water splashes,
-// earth crumbles to dust, void/dark things spiral into their own centre). Cosmetic + bounded: a hard 5s budget, never throws, never blocks
-// combat resolution. Standard (Go-rendered) fights only; abyss / ruins scenes keep their static card.
+// ☠️ DEATH ANIMATIONS (owner 2026-11-03): every enemy / boss that dies breaks apart by type (fire explodes, water splashes, earth crumbles to
+// dust, void/dark things spiral into their own centre). INSTANT BY DESIGN (owner: "instant even for a large group"): the clips are PRE-BAKED in the
+// background while the fight is being played (first turn), through ONE global worker (never starves the bot), so a kill just sends a finished
+// buffer. A kill that beats its bake waits a short, bounded time for the in-flight job; anything slower is skipped - combat is never blocked.
+// Delivery stays a looping WhatsApp GIF-style clip (gifPlayback). Standard (Go-rendered) fights only; abyss / ruins keep the static card.
+const _deathQueue = []; let _deathBusy = false;
+function _deathPump() {
+  if (_deathBusy || !_deathQueue.length) return;
+  _deathBusy = true;
+  const job = _deathQueue.shift();
+  Promise.resolve().then(job.run).then(job.resolve, () => job.resolve(null)).finally(() => { _deathBusy = false; setImmediate(_deathPump); });
+}
+function _deathEnqueue(run) { return new Promise((resolve) => { if (_deathQueue.length > 16) return resolve(null); _deathQueue.push({ run, resolve }); _deathPump(); }); }
+const _deathEligible = (state) => !!(state && state.chatId && state.isAbyss !== true && !(state.mode === 'RUINS' && state.ruinsMeta));
+const _aliveSig = (state) => (state.players || []).filter((p) => p && !p.isDead && (p.stats ? p.stats.hp > 0 : true)).length + '/' + (state.summons || []).filter((s) => s && !s.isDead).length;
+async function _bakeDeathClip(state, e, i) {
+  const signatureVfx = require('./skillVfx'), combatImageGenerator = require('./combatImageGenerator');
+  // revive a CLONE for the layered render so the Go renderer still draws the standing enemy
+  const roster = (state.enemies || []).map((x, k) => (k === i ? Object.assign({}, x, { isDead: false, justDied: false, currentHP: 1, stats: Object.assign({}, x.stats, { hp: 1 }) }) : x));
+  const layers = await Promise.race([
+    combatImageGenerator.generateCombatLayers(state.players || [], roster, {
+      combatType: 'PVE', rank: state.dungeonRank, floor: 0, backgroundPath: state.backgroundPath || undefined,
+      summons: state.summons || [], hud: 'none', bypassQueue: true, focusSide: 'enemy', focusIndex: i,
+    }),
+    new Promise((r) => setTimeout(() => r(null), 8000)),
+  ]);
+  if (!layers || !layers.success || !layers.focus) return null;
+  const clip = await signatureVfx.renderDeathVideo({ enemy: e, targetIndex: i, layers });
+  return clip ? Object.assign(clip, { sig: _aliveSig(state) }) : null;
+}
+// called once per fight (first turn): queue a background bake for every enemy, bosses first
+function startDeathBake(state) {
+  try {
+    if (!_deathEligible(state) || state._deathBake === state.combatGen + ':' + (state.enemies || []).length) return;
+    state._deathBake = state.combatGen + ':' + (state.enemies || []).length;
+    const order = (state.enemies || []).map((e, i) => ({ e, i })).filter((x) => x.e && x.e.isEnemy !== false && !x.e._deathJob).sort((a, b) => (b.e.isBoss ? 1 : 0) - (a.e.isBoss ? 1 : 0)).slice(0, 8);
+    for (const { e, i } of order) e._deathJob = _deathEnqueue(() => _bakeDeathClip(state, e, i));
+  } catch (err) { console.warn('[DeathFx] bake skipped:', err && err.message || err); }
+}
 async function playEnemyDeaths(sock, state) {
   try {
-    if (!sock || !state || !state.chatId || state.isAbyss === true || (state.mode === 'RUINS' && state.ruinsMeta)) return;
+    if (!sock || !_deathEligible(state)) return;
     const fresh = (state.enemies || []).map((e, i) => ({ e, i })).filter((x) => x.e && x.e.isEnemy !== false && !x.e._deathAnimDone && (x.e.justDied || x.e.isDead || (x.e.stats && x.e.stats.hp <= 0)));
     if (!fresh.length) return;
     fresh.forEach((x) => { x.e._deathAnimDone = true; });   // flag first: idempotent across checkCombatEnd / nextTurn
-    const signatureVfx = require('./skillVfx');
-    const combatImageGenerator = require('./combatImageGenerator');
-    for (const { e, i } of fresh.slice(0, 2)) {
-      const t0 = Date.now();
-      // revive a CLONE for the layered render so the Go renderer still draws the standing enemy
-      const roster = (state.enemies || []).map((x, k) => (k === i ? Object.assign({}, x, { isDead: false, justDied: false, currentHP: 1, stats: Object.assign({}, x.stats, { hp: 1 }) }) : x));
-      const layers = await Promise.race([
-        combatImageGenerator.generateCombatLayers(state.players || [], roster, {
-          combatType: 'PVE', rank: state.dungeonRank, floor: 0, backgroundPath: state.backgroundPath || undefined,
-          summons: state.summons || [], hud: 'none', bypassQueue: true, focusSide: 'enemy', focusIndex: i,
-        }),
-        new Promise((r) => setTimeout(() => r(null), 2500)),
-      ]);
-      if (!layers || !layers.success || !layers.focus) continue;
-      const ab = { flag: false };
-      const clip = await Promise.race([
-        signatureVfx.renderDeathVideo({ enemy: e, targetIndex: i, layers, abort: ab }),
-        new Promise((r) => setTimeout(() => { ab.flag = true; r(null); }, Math.max(1500, 5000 - (Date.now() - t0)))),
-      ]);
-      if (!clip || !clip.mp4) continue;
+    const t0 = Date.now();
+    // resolve every dying enemy's clip in PARALLEL (baked = instant); a missing bake gets a short live attempt through the same worker
+    const clips = await Promise.all(fresh.slice(0, 3).map(async ({ e, i }) => {
+      let job = e._deathJob || null;
+      let clip = job ? await Promise.race([job, new Promise((r) => setTimeout(() => r(undefined), 2500))]) : undefined;
+      if (clip && clip.sig !== _aliveSig(state)) clip = null;   // roster changed since the bake (someone fell): stale backdrop, re-render below
+      if (!clip && (clip === null || !job)) clip = await Promise.race([_deathEnqueue(() => _bakeDeathClip(state, e, i)), new Promise((r) => setTimeout(() => r(null), 3500))]);
+      return clip && clip.mp4 ? { e, clip } : null;
+    }));
+    const ready = clips.filter(Boolean);
+    await Promise.all(ready.map(({ e, clip }) => {
       const pl = { video: clip.mp4, mimetype: 'video/mp4', caption: `☠️ *${e.name || 'The enemy'}* ${clip.boss ? 'is destroyed!' : 'falls!'}`, gifPlayback: true };
       if (Buffer.isBuffer(clip.thumb)) pl.jpegThumbnail = clip.thumb;
-      await sendMediaBounded(sock, state.chatId, pl, { label: 'enemyDeathVfx', ms: 12000, grace: 4000, fallbackText: null });
-      console.log(`[DeathFx] ${e.name} kind=${clip.kind} boss=${clip.boss} ${Date.now() - t0}ms`);
-    }
+      return sendMediaBounded(sock, state.chatId, pl, { label: 'enemyDeathVfx', ms: 12000, grace: 4000, fallbackText: null });
+    }));
+    if (ready.length) console.log(`[DeathFx] ${ready.map((r) => r.clip.kind + (r.clip.boss ? '/boss' : '')).join(',')} delivered in ${Date.now() - t0}ms`);
   } catch (err) { console.warn('[DeathFx] skipped:', err && err.message || err); }
 }
 
@@ -7262,6 +7289,7 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
   // any caller that lost its socket still delivers the battle card +
   // YOUR TURN caption through the state's stored socket.
   if (!sock) sock = state.sock || state.sock_ref;
+  startDeathBake(state);   // pre-bake death clips in the background (first turn of the fight)
   await playEnemyDeaths(sock, state);
 
   // Generate incremental combat image if action just happened
