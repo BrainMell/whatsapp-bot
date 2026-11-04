@@ -5077,6 +5077,19 @@ async function _flushHeldDeathClips(sock, state, held) {
     await sendMediaBounded(sock, state.chatId, pl, { label: 'enemyDeathVfx', ms: 12000, grace: 4000, fallbackText: null });
   }
 }
+// consumes THIS fight's held kill clips and plays them as their own messages —
+// used by every no-board path in nextTurn (no turnInfo / render failed /
+// already-animated turn) so the announce is never silently swallowed
+async function _flushHeldTurnClips(sock, state, why) {
+  try {
+    const t = state && state._heldDeathClips;
+    if (t && (t.items || []).length && t.gen === ((state && state.combatGen) || 0)) {
+      state._heldDeathClips = null;
+      console.log(`[DeathFx] held clips flushed as own messages (${why})`);
+      await _flushHeldDeathClips(sock, state, t.items);
+    }
+  } catch (e) { console.warn('[DeathFx] held flush failed:', e && e.message || e); }
+}
 
 // called once per fight (first turn): queue a background bake for every enemy, weakest first
 function startDeathBake(state) {
@@ -5096,13 +5109,17 @@ function startDeathBake(state) {
 async function playEnemyDeaths(sock, state, opts = {}) {
   try {
     if (!sock || !_deathEligible(state)) { if (state && state.inCombat && (state.enemies || []).some((x) => x && x.stats && x.stats.hp <= 0 && !x._deathAnimDone)) console.log(`[DeathFx] skipped: sock=${!!sock} chatId=${!!(state && state.chatId)} isAbyss=${state && state.isAbyss} mode=${state && state.mode}`); return; }
+    // 🧹 stale hold sweep: clips held for a board that never came (fight
+    // superseded, no-board path) must still play — lazily here instead of
+    // racing the next turn's merge.
+    try { const __stale = state._heldDeathClips; if (__stale && (__stale.gen !== (state.combatGen || 0) || Date.now() - (__stale.at || 0) > 45000) && (__stale.items || []).length) { state._heldDeathClips = null; console.log(`[DeathFx] flushing stale held clips (gen=${__stale.gen} vs ${state.combatGen || 0}, age=${Date.now() - (__stale.at || 0)}ms)`); await _flushHeldDeathClips(sock, state, __stale.items); } } catch (se) { console.warn('[DeathFx] stale flush failed:', se && se.message || se); }
     const fresh = (state.enemies || []).map((e, i) => ({ e, i })).filter((x) => x.e && x.e.isEnemy !== false && !x.e._deathAnimDone && (x.e.justDied || x.e.isDead || (x.e.stats && x.e.stats.hp <= 0)));
     if (!fresh.length) return;
     fresh.forEach((x) => { x.e._deathAnimDone = true; });   // flag first: idempotent across checkCombatEnd / nextTurn
     const t0 = Date.now();
-    // ⏱ leash: mid-fight kills keep the tight 12s (combat is never blocked);
-    // a fight-ending kill gets 18s — the settlement sequence follows anyway,
-    // and its clip is the one burned into the merged end card.
+    // ⏱ leash: a held kill waits on the in-flight bake before its board
+    // merge — 18s when a board is coming (the turn flow continues anyway),
+    // 12s when the clips will go out as their own messages.
     const leashMs = opts.hold ? 18000 : 12000;
     // resolve every dying enemy's clip in PARALLEL (baked = instant); a missing bake gets a short live attempt through the same worker
     const clips = await Promise.all(fresh.slice(0, 3).map(async ({ e, i }) => {
@@ -5120,13 +5137,13 @@ async function playEnemyDeaths(sock, state, opts = {}) {
       return clip && clip.mp4 ? { e, clip } : null;
     }));
     const ready = clips.filter(Boolean);
-    // 🎬 MERGED END CARD (owner 2026-11-04): when this kill also ENDS the
-    // fight, hold the clips — endCombat bakes them + the settlement card
-    // into ONE video (gen-stamped so a superseded fight can never leak
-    // clips into the next one). Mid-combat kills (nextTurn) send right away.
+    // 🎬 KILL-TURN CARD (owner 2026-11-04, corrected directive): hold the
+    // clips — the NEXT turn board burns them into ONE video = death
+    // animation + the regular combat message (war-log board). gen-stamped so
+    // a superseded fight can never leak clips into the next one.
     if (opts.hold && ready.length) {
-      state._heldDeathClips = { gen: state.combatGen || 0, items: ready };
-      console.log(`[DeathFx] held ${ready.length} clip(s) for the merged end card`);
+      state._heldDeathClips = { gen: state.combatGen || 0, at: Date.now(), items: ready };
+      console.log(`[DeathFx] held ${ready.length} clip(s) for the kill-turn card`);
       return;
     }
     await Promise.all(ready.map(({ e, clip }) => {
@@ -5161,11 +5178,13 @@ async function checkCombatEnd(sock, state, sessionKey) {
   const combatGen = state.combatGen || 0;
   const playersDead = state.players.every((p) => p.isDead || p.stats.hp <= 0);
   const enemiesDead = state.enemies.length > 0 && state.enemies.every((e) => e.stats.hp <= 0);
-  // 🎬 MERGED END CARD (owner 2026-11-04): a kill that also ENDS the fight
-  // holds its death clips so endCombat can deliver ONE video = death
-  // animation + settlement card (the damage info). Pure reads hoisted above
-  // the call — behavior is identical whenever the fight continues.
-  await playEnemyDeaths(sock, state, { hold: enemiesDead && !playersDead });
+  // 🎬 KILL-TURN CARD (owner 2026-11-04, corrected directive: "the GIF would
+  // simply be attached to the battle log itself" — NOT the win message):
+  // every kill while the party lives holds its clips; the turn board that
+  // follows (nextTurn sends it on the SAME flow — even on the fight-ending
+  // path) burns them into ONE video = death animation + war-log board.
+  // The victory/settlement card goes out plain, exactly as it always did.
+  await playEnemyDeaths(sock, state, { hold: !playersDead });
 
   if (playersDead || enemiesDead) {
     // Clear any pending turn timers to prevent infinite loops
@@ -5180,8 +5199,6 @@ async function checkCombatEnd(sock, state, sessionKey) {
     // party has at least one survivor.
     const victory = enemiesDead && !playersDead;
     await endCombat(sock, victory, sessionKey, combatGen);
-    // safety net: clips held for a merged end card that endCombat never consumed (ruins / abyss / early-return paths) must still play
-    try { const hb = state._heldDeathClips; if (hb) { state._heldDeathClips = null; if (hb.gen === combatGen && Array.isArray(hb.items) && hb.items.length) { console.log('[DeathFx] flushing unconsumed held clips'); await _flushHeldDeathClips(sock, state, hb.items); } } } catch (fe) { console.warn('[DeathFx] held flush failed:', fe && fe.message || fe); }
     return true;
   }
   return false;
@@ -7463,7 +7480,7 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
   // YOUR TURN caption through the state's stored socket.
   if (!sock) sock = state.sock || state.sock_ref;
   startDeathBake(state);   // pre-bake death clips in the background (first turn of the fight)
-  await playEnemyDeaths(sock, state);
+  await playEnemyDeaths(sock, state, { hold: true });   // kills hold for THIS turn's board (merged into it below); no-board paths flush at the end of this function
 
   // Generate incremental combat image if action just happened
   if (lastTurnInfo) {
@@ -7527,10 +7544,39 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
               gifPlayback: false,  // MP4 should play as video, not GIF
             }, { label: 'turnVideo' });
           } else if (scene.buffer) {
-            await sendMediaBounded(sock, state.chatId, {
-              image: scene.buffer,
-              caption: scene.caption,
-            }, { label: 'turnImage' });
+            // 🎬 KILL-TURN CARD (owner 2026-11-04, corrected: the merge target
+            // is the REGULAR combat message — "the GIF would simply be
+            // attached to the battle log itself" — never the win message):
+            // held death clip(s) burn into THIS board → ONE video = shatter,
+            // then the war-log board settles as the closing frame. Caption =
+            // falls lines + the normal turn caption. ANY failure → board as
+            // itself + clips as their own messages (the old pair).
+            const __turnHeld = (() => { const t = state._heldDeathClips; if (t && t.gen === (state.combatGen || 0) && (t.items || []).length) { state._heldDeathClips = null; return t.items; } return null; })();
+            let __killSent = false;
+            if (__turnHeld) {
+              try {
+                const __merged = await _mergeDeathClipsWithCard(__turnHeld.map((h) => h.clip), scene.buffer, 2.2);
+                if (__merged) {
+                  let __deaths = __turnHeld.map((h) => `☠️ *${h.e.name || 'The enemy'}* ${h.clip.boss ? 'is destroyed!' : 'falls!'}`).join('\n');
+                  let __cap = __deaths + '\n' + (scene.caption || '');
+                  if (__cap.length > 900) __cap = (scene.caption || '');   // WA caption cap safety
+                  const __pl = { video: __merged, mimetype: 'video/mp4', gifPlayback: true, caption: __cap };
+                  if (Buffer.isBuffer(__turnHeld[0].clip.thumb)) __pl.jpegThumbnail = __turnHeld[0].clip.thumb;
+                  await sendMediaBounded(sock, state.chatId, __pl, { label: 'killTurnCard', ms: 20000, grace: 6000, fallbackText: null });
+                  __killSent = true;
+                  console.log(`[DeathFx] kill-turn card sent: ${__turnHeld.length} death clip(s) + battle board as ONE video`);
+                }
+              } catch (killErr) {
+                console.warn('[DeathFx] kill-turn merge failed (non-fatal):', killErr.message);
+              }
+              if (!__killSent) await _flushHeldDeathClips(sock, state, __turnHeld);   // merge refused: clips still play, board goes as itself
+            }
+            if (!__killSent) {
+              await sendMediaBounded(sock, state.chatId, {
+                image: scene.buffer,
+                caption: scene.caption,
+              }, { label: 'turnImage' });
+            }
           } else if (scene.imagePath && fs.existsSync(scene.imagePath)) {
             await sendMediaBounded(sock, state.chatId, {
               image: fs.readFileSync(scene.imagePath),
@@ -7592,6 +7638,9 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
       }
     }
   }
+  // 🎬 kill clips held for a board that never came (no turnInfo / render
+  // failed / already-animated turn) still play — never lose the announce.
+  await _flushHeldTurnClips(sock, state, 'no board this turn');
   // Note: checkCombatEnd is called explicitly by performAction and processCombatTurn - not needed here.
 }
 
@@ -9217,52 +9266,18 @@ async function endCombat(sock, victory, sessionKey, expectedGen) {
         ),
         20000, 'endScreen.render',
       );
-      // 🎬 MERGED END CARD (owner 2026-11-04 "no static image AND a gif both
-      // saying the enemy has been defeated"): clips held by checkCombatEnd
-      // for this ending fight are baked INTO the card — one video, death
-      // animation first, settlement card (damage info) as the closing frame.
-      const __heldBox = state._heldDeathClips; state._heldDeathClips = null;
-      const __held = __heldBox && __heldBox.gen === (state.combatGen || 0) ? (__heldBox.items || []) : [];
+      // 🎬 owner correction 2026-11-04: the settlement/VICTORY card is NOT a
+      // merge target ("I never asked" — the GIF belongs on the REGULAR
+      // combat message, which nextTurn now builds as the kill-turn card).
+      // The card goes out plain, exactly as it always did. Held kill clips
+      // are untouched here — the kill-turn board that follows consumes them.
       if (endResult.success && endResult.buffer && endResult.buffer.length > 100) {
-        let __mergedSent = false;
-        if (victory && __held.length) {
-          try {
-            const __merged = await _mergeDeathClipsWithCard(__held.map((h) => h.clip), endResult.buffer);
-            if (__merged) {
-              let __deaths = __held.map((h) => `☠️ *${h.e.name || 'The enemy'}* ${h.clip.boss ? 'is destroyed!' : 'falls!'}`).join('\n');
-              if ((__deaths + '\n' + caption).length > 900) __deaths = '';   // WA caption cap safety
-              const __pl = { video: __merged, mimetype: 'video/mp4', gifPlayback: true, caption: __deaths ? __deaths + '\n' + caption : caption };
-              if (Buffer.isBuffer(__held[0].clip.thumb)) __pl.jpegThumbnail = __held[0].clip.thumb;
-              await sendMediaBounded(sock, state.chatId, __pl, { label: 'endScreenMerged', ms: 20000, grace: 6000, fallbackText: null });
-              endScreenSent = __mergedSent = true; // helper owns the single-fallback contract
-              console.log(`[DeathFx] merged end card sent: ${__held.length} death clip(s) + settlement card as ONE video`);
-            }
-          } catch (mergeErr) {
-            console.warn('[DeathFx] merged end card failed (non-fatal):', mergeErr.message);
-          }
-        }
-        if (!__mergedSent) {
-          // 💡 WATCHDOG: a wedged Baileys send used to stall the whole
-          // end-of-combat flow forever (defeat card "never spawns"). Now the
-          // send is raced; on timeout the text caption below still goes out.
-          // 💡 RPG OPT PASS (2026-10-20, owner "multiple victory messages"):
-          // the old race→fallback produced BOTH messages when the wedged send
-          // drained late (text fired at 20s, image arrived later). The helper
-          // waits a 10s grace for the in-flight send before falling back, so
-          // exactly ONE victory card arrives — image if it settled (even late),
-          // text only if it truly never will.
-          if (__held.length) await _flushHeldDeathClips(sock, state, __held);   // old behavior: clips first, then the card
-          await sendMediaBounded(sock, state.chatId, {
-            image: endResult.buffer,
-            caption: caption,
-            mimetype: 'image/jpeg'
-          }, { label: 'endScreen' });
-          endScreenSent = true; // helper owns the single-fallback contract
-        }
-      } else if (__held.length) {
-        // card render failed: the held clips still go out (old behavior) —
-        // the text caption below carries the result
-        await _flushHeldDeathClips(sock, state, __held);
+        await sendMediaBounded(sock, state.chatId, {
+          image: endResult.buffer,
+          caption: caption,
+          mimetype: 'image/jpeg'
+        }, { label: 'endScreen' });
+        endScreenSent = true; // helper owns the single-fallback contract
       }
       END_DEBUG(`endCombat endScreen done sent=${endScreenSent}`);
     }
