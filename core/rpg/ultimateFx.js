@@ -841,7 +841,7 @@ async function renderUltimateVideo(o) {
     // (rendered before the roster) — the fighters stand ON them, never under them.
     // Stamped here in the engine so recipe-authored tracks AND the auto-added
     // level-up rings both get the z-order, whatever the recipe said.
-    for (const t of tracks) if ((t.layer === 'rings' || t.layer === 'ripple') && !t.under) t.under = true;
+    for (const t of tracks) if ((t.layer === 'rings' || t.layer === 'ripple' || t.layer === 'cracks') && !t.under) t.under = true;
     for (const t of tracks) {
         for (const nm of [t.fx, t.land]) if (nm && SETS[nm] && !sets[nm]) sets[nm] = await loadSet(nm);
     }
@@ -1051,7 +1051,7 @@ async function renderUltimateVideo(o) {
                     if (t.layer === 'camera') { if (camDone) continue; camDone = true; }
                     const c = Object.assign({}, t, { at: (Number(t.at) || 0) + at0, _pt: pt });
                     if (c.layer === 'dissolve') c.who = idx;
-                    if (c.layer === 'rings' || c.layer === 'ripple') c.under = true;
+                    if (c.layer === 'rings' || c.layer === 'ripple' || c.layer === 'cracks') c.under = true;
                     tracks.push(c);
                 }
                 const cv = createCanvas(W, H); cv.getContext('2d').drawImage(cut.img, cut.x, cut.y, cut.w, cut.h);

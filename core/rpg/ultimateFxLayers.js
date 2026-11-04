@@ -541,7 +541,7 @@ LAYERS.cracks = (ctx, tr, env) => {
     const [x, y] = pt(env, tr.pos || 'T', tr);
     const grow = easeOut(t / 0.22), fade = 1 - easeIn((t - life * 0.6) / (life * 0.4));
     const rr = mulberry(hashS('cr' + tr.at));
-    ctx.save(); ctx.translate(x, y + (tr.ground || 50)); ctx.scale(1, 0.4);
+    ctx.save(); ctx.translate(x, y + (tr.ground === undefined ? 6 : tr.ground)); ctx.scale(1, 0.4);
     for (let i = 0; i < (tr.n || 9); i++) {
         const a = (i / (tr.n || 9)) * Math.PI * 2 + rr() * 0.4, L = (tr.r || 170) * (0.6 + rr() * 0.5) * grow;
         const pts = []; let px = 0, py = 0; for (let k = 0; k <= 7; k++) { const kk = k / 7; px = Math.cos(a + (rr() - 0.5) * 0.5) * L * kk; py = Math.sin(a + (rr() - 0.5) * 0.5) * L * kk; pts.push([px, py]); }
