@@ -4637,6 +4637,14 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   state.enemies = encounter.enemies;
   // Stamp dungeon rank on each enemy so calculateDamage can apply SS+ damage floor
   state.enemies.forEach(e => { e.rank = state.dungeonRank; });
+  // ⚡ DEATHFX (owner 2026-11-04 "sometimes there's a death animation and
+  // sometimes there isn't"): bakes used to wait for the FIRST TURN
+  // (nextTurn) — on a solo farm that can be ~30s after the fight actually
+  // started, so a turn-1 kill outraced the cold 17-24s bake and got NO
+  // animation (prod proof: fight 13:52:31, first bake 13:53:02, kill
+  // 13:53:07 → "NO clip" 13:53:19). Start the bake with the fight itself;
+  // every later trigger (nextTurn / kill-time) stays idempotent.
+  try { startDeathBake(state); } catch (err) { console.warn('[DeathFx] fight-start bake skipped:', err && err.message || err); }
   // 💀 FIX 2026-10-11 (owner fight-card audit): honor encounter.background as
   // a fallback so a fight can never render on the Go service's env1.png
   // fallback arena. Classic quests pin backgroundPath at initAdventure; ruins/
@@ -4936,7 +4944,9 @@ function _deathScene(state) {
         combatType: 'PVE', rank: state.dungeonRank, floor: 0, backgroundPath: state.backgroundPath || undefined,
         summons: state.summons || [], hud: 'none', bypassQueue: true, focusSide: 'enemy', focusIndex: 0,
       }),
-      new Promise((r) => setTimeout(() => r(null), 20000)),
+      // 30s: the box's COLD first scene measured 17.2s (14:16:54) — the old
+      // 20s cap was one bad Go round away from killing every first bake.
+      new Promise((r) => setTimeout(() => r(null), 30000)),
     ]);
     return layers && layers.success ? Object.assign({}, layers, { shared: true, focus: null }) : null;   // focus is cut per enemy in renderDeathVideo
   })().catch(() => null);
@@ -5073,8 +5083,14 @@ function startDeathBake(state) {
   try {
     if (!_deathEligible(state) || state._deathBake === state.combatGen + ':' + (state.enemies || []).length) return;
     state._deathBake = state.combatGen + ':' + (state.enemies || []).length;
+    // 🧷 JOB REGISTRY: jobs also live on the STATE keyed by combatGen+index,
+    // because prod proved the kill path can see enemy objects with NO
+    // _deathJob even seconds after startDeathBake queued them (13:53:19
+    // "NO clip (job=false)" while bakes were mid-flight). The registry
+    // survives whatever rebuilds the enemy objects inside a fight.
+    if (!state._deathJobReg || state._deathJobReg.gen !== (state.combatGen || 0)) state._deathJobReg = { gen: state.combatGen || 0, byIdx: {} };
     const order = (state.enemies || []).map((e, i) => ({ e, i })).filter((x) => x.e && x.e.isEnemy !== false && !x.e._deathJob).sort((a, b) => (a.e.isBoss ? 1 : 0) - (b.e.isBoss ? 1 : 0) || (Number(a.e.currentHP ?? a.e.stats?.hp) || 0) - (Number(b.e.currentHP ?? b.e.stats?.hp) || 0)).slice(0, 8);   // weakest first: they fall first
-    for (const { e, i } of order) e._deathJob = _deathEnqueue(() => _bakeDeathClip(state, e, i));
+    for (const { e, i } of order) e._deathJob = state._deathJobReg.byIdx[i] = _deathEnqueue(() => _bakeDeathClip(state, e, i));
   } catch (err) { console.warn('[DeathFx] bake skipped:', err && err.message || err); }
 }
 async function playEnemyDeaths(sock, state, opts = {}) {
@@ -5084,14 +5100,23 @@ async function playEnemyDeaths(sock, state, opts = {}) {
     if (!fresh.length) return;
     fresh.forEach((x) => { x.e._deathAnimDone = true; });   // flag first: idempotent across checkCombatEnd / nextTurn
     const t0 = Date.now();
+    // ⏱ leash: mid-fight kills keep the tight 12s (combat is never blocked);
+    // a fight-ending kill gets 18s — the settlement sequence follows anyway,
+    // and its clip is the one burned into the merged end card.
+    const leashMs = opts.hold ? 18000 : 12000;
     // resolve every dying enemy's clip in PARALLEL (baked = instant); a missing bake gets a short live attempt through the same worker
     const clips = await Promise.all(fresh.slice(0, 3).map(async ({ e, i }) => {
       let job = e._deathJob || null;
+      // 🧷 identity heal: the kill may see an enemy object that lost its
+      // _deathJob (prod 13:53:19) — fall back to the per-fight registry.
+      const __reg = state._deathJobReg;
+      if (!job && __reg && __reg.gen === (state.combatGen || 0) && __reg.byIdx[i]) job = __reg.byIdx[i];
+      if (!job) { try { startDeathBake(state); } catch (bakeErr) {} const __reg2 = state._deathJobReg; if (__reg2 && __reg2.gen === (state.combatGen || 0) && __reg2.byIdx[i]) { job = __reg2.byIdx[i]; console.log(`[DeathFx] ${e.name}: kill beat every bake - bake started at kill time (idx=${i}, gen=${state.combatGen || 0})`); } }
       // a kill on the very first turns can beat the background bake: wait for the in-flight bake (the box is slow, a late clip beats none)
-      let clip = job ? await Promise.race([job, new Promise((r) => setTimeout(() => r(undefined), 12000))]) : undefined;
+      let clip = job ? await Promise.race([job, new Promise((r) => setTimeout(() => r(undefined), leashMs))]) : undefined;
       if (clip && clip.sig !== _aliveSig(state)) { console.log(`[DeathFx] ${e.name}: roster changed since bake (${clip.sig} vs ${_aliveSig(state)}) - re-rendering`); clip = null; }   // stale backdrop
-      if (!clip && (clip === null || !job)) clip = await Promise.race([_deathEnqueue(() => _bakeDeathClip(state, e, i)), new Promise((r) => setTimeout(() => r(null), 12000))]);
-      if (!clip || !clip.mp4) console.warn(`[DeathFx] ${e.name}: NO clip (job=${!!job}) - falling back to the static card`);
+      if (!clip && (clip === null || !job)) clip = await Promise.race([_deathEnqueue(() => _bakeDeathClip(state, e, i)), new Promise((r) => setTimeout(() => r(null), leashMs))]);
+      if (!clip || !clip.mp4) console.warn(`[DeathFx] ${e.name}: NO clip (job=${!!job}, idx=${i}, gen=${state.combatGen || 0}, baked=${Date.now() - t0}ms) - falling back to the static card`);
       return clip && clip.mp4 ? { e, clip } : null;
     }));
     const ready = clips.filter(Boolean);
@@ -14212,7 +14237,7 @@ function getDebuffIcon(debuffType) {
 // ==========================================
 
 module.exports = {
-  _deathTest: { startDeathBake, playEnemyDeaths, _bakeDeathClip, _deathEligible },
+  _deathTest: { startDeathBake, playEnemyDeaths, _bakeDeathClip, _deathEligible, _mergeDeathClipsWithCard, _jpegDims, _flushHeldDeathClips },
   showLore: async (sock, chatId) => {
     const { sendLore } = require('./loreContent');
     return sendLore(sock, chatId, '.');
