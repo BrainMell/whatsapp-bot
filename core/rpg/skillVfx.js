@@ -871,7 +871,9 @@ async function animateUltimate(options = {}) {
   const isCombatContext = state.inCombat === true || String(state.phase || '').toUpperCase() === 'COMBAT';
   if (!entry || !isCombatContext) return false;
 
-  const liveEnemies = (state.enemies || []).filter((e) => e && !e.isDead && Number(e.currentHP ?? e.stats?.hp ?? 1) > 0);
+  // ☠️ MERGED DEATH: when the cast already resolved (guildAdventure wrapper) the victims are judged by their PRE-hit state
+  const preAlive = options.preAlive instanceof Set ? options.preAlive : null;
+  const liveEnemies = (state.enemies || []).filter((e) => e && (preAlive ? preAlive.has(e) : (!e.isDead && Number(e.currentHP ?? e.stats?.hp ?? 1) > 0)));
   const requestedIndex = Number.isFinite(Number(options.targetIndex)) ? Number(options.targetIndex) : -1;
   const target = liveEnemies.find((e) => e && Number(e.index) === requestedIndex)
     || (requestedIndex >= 0 && state.enemies ? state.enemies[requestedIndex] : null)
@@ -888,7 +890,7 @@ async function animateUltimate(options = {}) {
     index: (_tSide === 'player' && _focusIdx !== null && i === 0)
       ? _focusIdx
       : Math.max(0, Math.floor(Number(e.index) || 0)),
-    hp: Math.max(0, Math.floor(Number(e.currentHP ?? e.hp ?? e.stats?.hp ?? 0))),
+    hp: options.preHp instanceof Map && options.preHp.has(e) ? options.preHp.get(e) : Math.max(0, Math.floor(Number(e.currentHP ?? e.hp ?? e.stats?.hp ?? 0))),
     maxHp: Math.max(1, Math.floor(Number(e.stats?.maxHp ?? e.maxHp ?? e.stats?.hp ?? 1))),
   }));
   // ⚔️ FIX 2026-10-24: enemy-side signatures with NO live enemy target would
@@ -954,6 +956,8 @@ async function animateUltimate(options = {}) {
         // 🔴 HIT REACTION (owner: "hurt red flashing overlay + the hp bar drops"):
         // pre-hit per-victim HP for the animated overhead-bar chip
         targets: victimStats,
+        // ☠️ enemies this cast kills: they break apart by type inside the same clip
+        dying: (Array.isArray(options.dying) ? options.dying : []).map((d) => ({ index: Number(d.index) || 0, kind: classifyDeath(d.enemy), boss: !!(d.enemy && (d.enemy.isBoss || d.enemy.boss || /boss/i.test(String(d.enemy.rank || d.enemy.tier || '')))) })),
         // 🔥 26-R5 abort token — the race's timeout flips this so the losing
         // render stops painting instead of zombie-ing through the next casts
         abort: ultAbort

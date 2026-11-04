@@ -47,7 +47,6 @@ const WORLD = {
     REAPER: { cin: 'REAPER' },                                             // one scythe cut splits the world
     LICH: { cin: 'LICH' },                                                 // frost crystallises the frame
     GRAND_INVENTOR: { cin: 'GRAND_INVENTOR' },                             // blueprint draws itself, becomes metal
-    ELEMENTALIST: { cin: 'ELEMENTALIST' },                                 // four elements collide
     VIRTUOSO: { cin: 'VIRTUOSO' },                                         // curtains open on a stage with the equaliser
     // short (1.4s) bespoke intros for every remaining class - ultimateFxCinema2.js; no arena swap, they dissolve back onto the normal field
     NECROMANCER: { cin: 'NECROMANCER', short: true },
@@ -484,16 +483,27 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
             flash('#ffd9a0', 0.3, I + 0.2, 0.16),
         ],
         // four elements fuse into one prismatic blast
-        // ELEMENTALIST: the four elements of the intro arrive from four directions and collide ON the target
+        // ELEMENTALIST (owner 2026-11-04): a SEQUENCE of different elements - rock from the sky, fire from one side, water from the other, then air - each landing in turn, then a final convergence
         ELEMENTALIST: () => [
             L('circle', { at: 0.05, pos: 'C', r: 80, dur: 1.2, color: '#7ad7ff', points: 6 }),
-            L('fall', { at: I - 0.5, pos: 'T', kind: 'meteor', n: 1, fall: 0.5, spreadX: 0, spreadY: 0, slant: -260, mw: 170, land: 'k_regular', landW: 130, color: '#ff6a1a' }),
-            L('fall', { at: I - 0.5, pos: 'T', kind: 'shard', n: 5, gap: 0.04, fall: 0.5, spreadX: 40, spreadY: 20, slant: 260, land: 'k_simple', landW: 90, color: '#59d2ff' }),
-            L('fall', { at: I - 0.5, pos: 'T', kind: 'rock', n: 1, fall: 0.5, spreadX: 0, spreadY: 0, slant: 0, size: 60, land: 'k_ground', landW: 150, color: '#c9a060' }),
-            L('fall', { at: I - 0.5, pos: 'T', kind: 'arrow', n: 8, gap: 0.03, fall: 0.5, spreadX: 60, spreadY: 20, slant: -90, land: 'k_simple', landW: 80, color: '#e8ffd0' }),
+            // 1 - EARTH: a boulder drops straight out of the sky
+            L('fall', { at: I - 1.0, pos: 'T', kind: 'rock', n: 1, fall: 0.38, spreadX: 0, spreadY: 0, slant: 0, size: 70, land: 'k_ground', landW: 190, color: '#c9a060' }),
+            L('rings', { at: I - 0.62, pos: 'T', n: 2, gap: 0.1, color: '#c9a060', r: 150 }),
+            L('cracks', { at: I - 0.62, pos: 'T', n: 6, r: 110, color: '#c9a060', dur: 0.7 }),
+            // 2 - FIRE: meteors streak in from one side
+            L('fall', { at: I - 0.78, pos: 'T', kind: 'meteor', n: 3, gap: 0.07, fall: 0.36, spreadX: 30, spreadY: 20, slant: -300, land: 'k_regular', landW: 150, color: '#ff6a1a' }),
+            { fx: 'fire_blast', at: I - 0.38, pos: 'T', off: [0, -35], w: 280, add: true },
+            L('rings', { at: I - 0.38, pos: 'T', n: 2, gap: 0.1, color: '#ff6a1a', r: 150 }),
+            // 3 - WATER: a lance of water shards from the opposite side
+            L('fall', { at: I - 0.55, pos: 'T', kind: 'shard', n: 7, gap: 0.04, fall: 0.34, spreadX: 40, spreadY: 25, slant: 300, land: 'k_simple', landW: 110, color: '#59d2ff' }),
+            { fx: 'k_sonic', at: I - 0.2, pos: 'T', off: [0, 8], w: 260, add: true, tint: ['#6cc0ff', 0.6] },
+            L('ripple', { at: I - 0.2, pos: 'T', n: 3, gap: 0.09, color: '#9bd8ff', r: 160 }),
+            // 4 - AIR: a cutting gale
+            L('fall', { at: I - 0.32, pos: 'T', kind: 'arrow', n: 9, gap: 0.03, fall: 0.3, spreadX: 70, spreadY: 25, slant: -120, land: 'k_simple', landW: 90, color: '#e8ffd0' }),
+            L('emit', { at: I - 0.45, dur: 0.8, pos: 'T', box: [120, 50], n: 26, life: 0.7, shape: 'spark', colors: ['#e8ffd0', '#ffffff', '#a8ff7a'], v: [0, -40], vr: [120, 40], swirl: 6 }),
+            // finale: all four collide
             { fx: 'white_burst', at: I, pos: 'T', w: 380, add: true, spread: 'enemies', fanGap: 0.08 },
-            L('rings', { at: I, pos: 'T', n: 4, gap: 0.08, color: '#ff6a1a', r: 190, spread: 'enemies', fanGap: 0.08 }),
-            L('rings', { at: I + 0.04, pos: 'T', n: 3, gap: 0.08, color: '#59d2ff', r: 160, spread: 'enemies', fanGap: 0.08 }),
+            ...['#c9a060', '#ff6a1a', '#59d2ff', '#a8ff7a'].map((c, i) => L('engulf', { at: I + i * 0.1, pos: 'T', color: c, mid: c, dur: 0.7, grow: 0.5, a: 0.5 })),
             ...weight('#ffe84a', I, 1.4),
             L('emit', { at: I, dur: 0.7, pos: 'T', box: [120, 40], n: 30, life: 0.9, shape: 'spark', colors: ['#ff6a1a', '#59d2ff', '#ffe84a', '#a8ff7a'], v: [0, -80], vr: [100, 50], g: 120 }),
             flash('#ffffff', 0.5, I, 0.2),
@@ -620,11 +630,15 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
         ],
         // DIVINE_FIST: the eight gates - a golden barrage of fists, faster and heavier every strike, last one cracks the ground
         DIVINE_FIST: () => blows({ col: '#ffb84a', mid: '#fff0c0', n: 7, gap: 0.085, extra: [L('rings', { at: I + 0.6, pos: 'T', n: 3, gap: 0.1, color: '#ffb84a', r: 230 })] }),
-        // GOD_HAND: the hand from the intro comes down ON the target and presses it into the ground
-        // GOD_HAND (owner 2026-11-03): no meditation starter - the hand comes down ON the target, presses it into the ground
+        // GOD_HAND (owner 2026-11-04): a MEDITATION - no hand. The caster sits in stillness, a golden lotus mandala spins and orbs of light gather; enlightenment then crushes the target under its own weight
         GOD_HAND: () => [
             L('wash', { at: 0.1, dur: I + 0.8, color: '#1a1200', a: 0.35 }),
-            L('robohand', { at: I - 0.45, pos: 'T', dur: 1.5, fall: 0.45, s: 2.0, color: '#ffd27a' }),
+            L('circle', { at: 0.05, pos: 'C', r: 95, dur: I + 0.5, color: '#ffd27a', points: 8, spin: 1.1 }),
+            L('circle', { at: 0.25, pos: 'C', r: 62, dur: I + 0.3, color: '#fff2b0', points: 6, spin: -1.6 }),
+            L('rings', { at: 0.3, pos: 'C', n: 3, gap: 0.28, color: '#ffd27a', r: 130 }),
+            L('emit', { at: 0.1, dur: I, pos: 'C', box: [70, 20], n: 44, life: 1.1, shape: 'glow', colors: ['#ffe9a8', '#ffd27a', '#ffffff'], v: [0, -90], vr: [50, 20], size: 5 }),
+            L('emit', { at: I - 0.7, dur: 0.7, pos: 'T', box: [90, 30], n: 22, life: 0.8, shape: 'glow', colors: ['#ffe9a8', '#ffffff'], v: [0, 60], vr: [60, 20], inward: true, size: 4 }),
+            L('pillar', { at: I - 0.25, pos: 'T', w: 120, dur: 0.8, color: '#ffd27a', mid: '#fff6d0' }),
             L('focus', { at: I - 0.02, dur: 1.2, mode: 'press', depth: 120, downFrac: 0.12, holdTo: 0.6, hit: I }),
             L('cracks', { at: I, pos: 'T', n: 10, r: 190, color: '#ffd27a', dur: 1.0 }),
             ...weight('#ffd27a', I, 1.5),

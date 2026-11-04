@@ -735,14 +735,15 @@ module.exports = function install(LAYERS, H) {
     //   ice   - frosts over, shatters into shards                    dust  - (default creatures) puffs apart and drifts away
     // The layer owns the whole sprite from `at` on (the focus overlay is suppressed for death videos); pure function of env.time.
     const _dsTint = (env, img, col) => {
-        let sc = env._dsc; if (!sc) { sc = env._dsc = createCanvas(env.W, env.H); }
+        let sc = img._dsTc; if (!sc) { sc = img._dsTc = createCanvas(env.W, env.H); }   // cached on the image (env is rebuilt every frame)
         const c = sc.getContext('2d'); c.globalCompositeOperation = 'source-over'; c.clearRect(0, 0, env.W, env.H); c.drawImage(img, 0, 0, env.W, env.H);
         c.globalCompositeOperation = 'source-atop'; c.fillStyle = col; c.fillRect(0, 0, env.W, env.H); c.globalCompositeOperation = 'source-over';
         return sc;
     };
     const _dsPieces = (env, img, rect, tr) => {
         const key = [Math.round(rect[0]), Math.round(rect[1]), Math.round(rect[2]), Math.round(rect[3]), tr.cells || 520].join('|');
-        if (env._dsKey === key && env._dsPcs) return env._dsPcs;
+        const store = img._dsStore || (img._dsStore = {});
+        if (store.key === key && store.v) return store.v;
         const kx = img.width / env.W, ky = img.height / env.H, cx = rect[0], feet = rect[1], rw = rect[2], rh = rect[3];
         const x0 = Math.max(0, Math.floor(cx - rw * 0.8)), y0 = Math.max(0, Math.floor(feet - rh * 1.35)), x1 = Math.min(env.W, Math.ceil(cx + rw * 0.8)), y1 = Math.min(env.H, Math.ceil(feet + rh * 0.15));
         const cs = Math.max(3, Math.round(Math.sqrt(Math.max(1, (x1 - x0) * (y1 - y0)) / (tr.cells || 520))));
@@ -758,12 +759,14 @@ module.exports = function install(LAYERS, H) {
         }
         const mid = [(l + r) / 2, (top + bot) / 2], span = Math.max(1, bot - top);
         for (const p of pcs) { p.dx = p.cx - mid[0]; p.dy = p.cy - mid[1]; p.dist = Math.hypot(p.dx, p.dy) || 1; p.top = (p.cy - top) / span; }
-        env._dsKey = key; env._dsPcs = { pcs, mid, top, bot, cs, feet: bot }; return env._dsPcs;
+        store.key = key; store.v = { pcs, mid, top, bot, cs, feet: bot }; return store.v;
     };
     LAYERS.dissolve = (ctx, tr, env) => {
-        const img = env.focImg; if (!img) return;
+        let img = env.focImg, rect0 = env.focRect;
+        if (tr.who !== undefined && env.dyImg && env.dyImg.get(tr.who)) { const d = env.dyImg.get(tr.who); img = d.img; rect0 = d.rect; }   // merged-death victim (ultimate that kills)
+        if (!img) return;
         const t = env.time - tr.at; if (t < 0) return;
-        const rect = env.focRect || [env.A.T[0], env.A.T[1], 90, 130], mode = tr.mode || 'dust', pre = tr.pre === undefined ? 0.45 : tr.pre, boom = tr.boom || 1;
+        const rect = rect0 || [env.A.T[0], env.A.T[1], 90, 130], mode = tr.mode || 'dust', pre = tr.pre === undefined ? 0.45 : tr.pre, boom = tr.boom || 1;
         const P = _dsPieces(env, img, rect, tr), feet = rect[1];
         // ── pre-roll: the intact sprite shows its element ──
         if (t < pre) {

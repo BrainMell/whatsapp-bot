@@ -827,7 +827,7 @@ async function renderUltimateVideo(o) {
     const sets = {};
     // per-class timing (Dragon God etc. run longer); default = the classic 2.7s / 1.05s
     const meta = (RECIPE_PACK && RECIPE_PACK.classMeta && RECIPE_PACK.classMeta(String(o.classId || '').toUpperCase())) || {};
-    const IMP = meta.impact || IMPACT, DUR = meta.duration || DURATION;
+    const IMP = meta.impact || IMPACT; let DUR = meta.duration || DURATION;
     const classTracks = RECIPE_PACK && RECIPE_PACK.classRecipe ? RECIPE_PACK.classRecipe(String(o.classId || '').toUpperCase(), palette, { IMPACT: IMP }) : null;
     let tracks = classTracks || RECIPES[recipeKey](palette);
     // skill level -> intensity (see ultimateFxRecipes.scaleTracks); 0..1, default 0 = the original look (level 1)
@@ -1032,6 +1032,41 @@ async function renderUltimateVideo(o) {
     if (!o.death && layers && hurtList.length && !tracks.some((t) => t.layer === 'hurt')) {
         tracks.push({ layer: 'hurt', at: IMP + 0.01, dur: 0.5, a: 0.85 });
     }
+    // ☠️ MERGED DEATH (owner 2026-11-03: "if enemies die on an ultimate just merge the death animation into the ultimate"):
+    // enemies the cast kills break apart by TYPE right after the hit, inside this same video (no second clip).
+    const dyingMap = new Map(), dyImgs = new Map();
+    if (!o.death && layers && cutsAll && cutsAll.length && Array.isArray(o.dying) && o.dying.length && RECIPE_PACK && RECIPE_PACK.classRecipe) {
+        const deathAt = IMP + 0.5; let endT = DUR, camDone = false;
+        for (const dy of o.dying.slice(0, 6)) {
+            try {
+                const idx = Math.floor(Number(dy.index) || 0);
+                const cut = cutsAll.find((c) => c.side === 'enemy' && c.index === idx); if (!cut) continue;
+                const an = Array.isArray(layers.anchors) ? layers.anchors.find((v) => v && v.side === 'enemy' && v.index === idx) : null;
+                const pt = an ? [an.x * kxL, an.feetY * kyL] : [cut.x + cut.w / 2, cut.y + cut.h];
+                const boss = !!dy.boss, key = 'DEATH_' + String(dy.kind || 'DUST').toUpperCase() + (boss ? '_BOSS' : '');
+                const dt = RECIPE_PACK.classRecipe(key, ['#ffffff', '#ffcb45', '#e85a37'], { IMPACT: 0.18 }); if (!dt) continue;
+                const at0 = deathAt + dyingMap.size * 0.12;
+                for (const t of dt) {
+                    for (const nm of [t.fx, t.land]) if (nm && SETS[nm] && !sets[nm]) sets[nm] = await loadSet(nm);
+                    if (t.layer === 'camera') { if (camDone) continue; camDone = true; }
+                    const c = Object.assign({}, t, { at: (Number(t.at) || 0) + at0, _pt: pt });
+                    if (c.layer === 'dissolve') c.who = idx;
+                    if (c.layer === 'rings' || c.layer === 'ripple') c.under = true;
+                    tracks.push(c);
+                }
+                const cv = createCanvas(W, H); cv.getContext('2d').drawImage(cut.img, cut.x, cut.y, cut.w, cut.h);
+                dyImgs.set(idx, { img: cv, rect: [pt[0], pt[1], cut.w, cut.h] });
+                dyingMap.set(idx, { at: at0, cut });
+                const vv = victims.get(idx); if (vv) vv.p1 = 0;
+                endT = Math.max(endT, at0 + (boss ? 2.7 : 1.5) + 0.15);
+            } catch (e) { console.warn('[UltFx] merged death skipped:', e && e.message || e); }
+        }
+        if (dyingMap.size) {
+            DUR = Math.min(endT, DUR + 3.2);
+            const cutsDying = [...dyingMap.values()].map((d) => d.cut);
+            affectList = affectList.filter((a) => !cutsDying.some((c) => c.x === a.x && c.y === a.y));
+        }
+    }
     const seed = hash((o.classId || '') + (o.name || ''));
     const total = Math.round(DUR * FPS);
     let thumb = null;
@@ -1118,6 +1153,7 @@ async function renderUltimateVideo(o) {
         if (cutList && cutList.length) {
             for (const c of cutList) {
                 if (hide && casterCut && c.side === 'player' && c.index === casterIdxAll) continue;
+                if (dyingMap.size && c.side === 'enemy' && dyingMap.has(c.index) && env.time >= dyingMap.get(c.index).at) continue;   // ☠️ merged death: the dissolve layer owns this sprite now
                 // 🕳️ SINK EXCLUSION (owner 2026-10-28: "the hole the necromancer skill drags
                 // them into is on top of the player sprite and the enemy doesn't get pushed
                 // down"): a hands-sink recipe owns the focus victim — the hands layer draws
@@ -1186,7 +1222,7 @@ async function renderUltimateVideo(o) {
         // recipe owns it (the hands layer draws it, sinking into the rift).
         const env = { A, time, W, H, base, self, seed, sets, spr: (n) => singles.get(n) || null,
             shrinkK, cutsAll,
-            layers: !!layers, sprImg, focImg, focRect, casterRect, affectList, hurtList, casterCut, impact: IMP };
+            layers: !!layers, sprImg, focImg, focRect, casterRect, affectList, hurtList, casterCut, impact: IMP, dyImg: dyImgs };
         if (env.layers) {
             const po = { f, env, sets, A, time, seed, palette, plateMeta, plateKey, plateCap, scratch, imgCache, camM };
             if (plateMeta || plateCap) await paintGroups(ctx, underGroups, Object.assign(po, { under: true }));

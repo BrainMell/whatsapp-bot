@@ -4986,6 +4986,7 @@ async function checkCombatEnd(sock, state, sessionKey) {
   //   2. victory requires a NON-EMPTY enemy roster — `.every()` on `[]`
   //      is vacuously true and must never read as "all enemies dead".
   if (!state || !state.inCombat) return false;
+  if (state._ultHold) return false;   // an ultimate is mid-resolution: its merged clip plays first, performAction ends the fight right after
   if (!sock) sock = state.sock || state.sock_ref;
   await playEnemyDeaths(sock, state);
   // 💡 ROUND-19: generation stamp — a resolution from a superseded fight
@@ -12369,44 +12370,9 @@ async function useAbility(sock, player, abilityIndex, targetIndex, chatId) {
 // 💫 APPLY ABILITY EFFECTS
 // ==========================================
 
-async function applyAbilityEffect(
-  sock,
-  player,
-  ability,
-  effect,
-  targetIndex,
-  chatId,
-) {
-  // Use player.jid to find solo state correctly
-  const state = player?.jid
-    ? getGameState(chatId, player.jid)
-    : getGameState(chatId);
-  if (!state) return;
-  // Derive sessionKey from state for use in checkCombatEnd
-  const sessionKey =
-    state.sessionKey ||
-    (state.solo ? `${state.chatId}_${state.players[0]?.jid}` : state.chatId);
-  const icon = player.class?.icon || "👤";
-  // 💡 POLISH 2026-07-17: guard against undefined effect. If getSkillEffect
-  // returned undefined (e.g. skill has no effect function and no
-  // energyCost/damageMultiplier), the old code would throw "effect is not
-  // defined" or "Cannot read properties of undefined (reading 'type')" -
-  // which propagated up and left pendingActions stuck (the "Action already
-  // chosen!" soft-lock). Now we return a clean error message instead.
-  if (!effect || typeof effect !== 'object') {
-    return {
-      message: `❌ *${ability?.name || 'Unknown'}* has no valid effect definition. This is a skill data bug - report it. (Skill ID: ${ability?.id || 'unknown'})`,
-      damage: 0,
-      healing: 0,
-    };
-  }
-  // ⚔️ CLASS ULTIMATES: play the class signature charge-up + animated GIF
-  // BEFORE changing HP. The usual effect resolution immediately below remains
-  // authoritative; after this animation finishes the normal combat render shows
-  // the real damage/healing result. Non-ultimate skills and render failures
-  // fall straight through without touching combat mechanics. resolveSignature
-  // also animates every ultimate inherited from earlier classes in the
-  // player's lineage (cross-class evolution keeps them castable AND animated).
+// ⚔️ ULTIMATE CAST VFX (extracted 2026-11-03 so it can run AFTER the cast resolves and merge the death of any enemy it kills into the same clip)
+async function _playUltimateVfx(sock, player, ability, effect, targetIndex, chatId, state, extra) {
+  extra = extra || {};
   const isCombatContext = state.inCombat === true || String(state.phase || '').toUpperCase() === 'COMBAT';
   if (isCombatContext && !player.isEnemy && !player.isSummon) {
     try {
@@ -12441,7 +12407,7 @@ async function applyAbilityEffect(
             bypassQueue: true,
           };
           const layered = await Promise.race([
-            combatImageGenerator.generateCombatLayers(state.players || [], state.enemies || [], {
+            combatImageGenerator.generateCombatLayers(state.players || [], extra.roster || state.enemies || [], {
               ...baseOpts,
               focusSide: 'enemy',
               focusIndex: Math.max(0, Number(targetIndex) || 0),
@@ -12453,7 +12419,7 @@ async function applyAbilityEffect(
             ultBaseBuffer = null; // the mp4 lane composites bg+sprites itself; the gif lane flattens them
           } else {
             const freshBase = await Promise.race([
-              combatImageGenerator.generateCombatImage(state.players || [], state.enemies || [], baseOpts),
+              combatImageGenerator.generateCombatImage(state.players || [], extra.roster || state.enemies || [], baseOpts),
               new Promise((resolve) => setTimeout(() => resolve(null), 3500)),
             ]);
             if (freshBase && freshBase.success && Buffer.isBuffer(freshBase.buffer) && freshBase.buffer.length > 1000) {
@@ -12468,6 +12434,7 @@ async function applyAbilityEffect(
           player,
           ability,
           targetIndex,
+          preAlive: extra.preAlive, preHp: extra.preHp, dying: extra.dying,   // ☠️ merged death
           // ⚔️ FIX 2026-10-24: pre-hit GIF reuses the scene already on screen
           baseSceneBuffer: ultBaseBuffer,
           // 💡 VFX LAYERS 2026-10-26: layered payload + caster index for the
@@ -12557,6 +12524,79 @@ async function applyAbilityEffect(
       console.warn('[SkillVFX] combat hook failed; applying skill normally:', vfxError?.message || vfxError);
     }
   }
+}
+
+async function applyAbilityEffect(sock, player, ability, effect, targetIndex, chatId) {
+  let state = null, sig = false;
+  try {
+    state = player && player.jid ? getGameState(chatId, player.jid) : getGameState(chatId);
+    const cc = state && (state.inCombat === true || String(state.phase || '').toUpperCase() === 'COMBAT');
+    if (cc && !player.isEnemy && !player.isSummon && effect && typeof effect === 'object') {
+      const cid = String(player.class?.id || player.classId || (typeof player.class === 'string' ? player.class : '') || '').toUpperCase();
+      sig = !!require('./skillVfx').resolveSignature(cid, ability);
+    }
+  } catch (e) { sig = false; }
+  if (!sig) return _applyAbilityEffectCore(sock, player, ability, effect, targetIndex, chatId);
+  // snapshot who is standing BEFORE the cast, resolve it, then play ONE clip: the ultimate + the deaths it caused
+  const enemies = state.enemies || [];
+  const preAlive = new Set(enemies.filter((e) => e && !e.isDead && Number(e.currentHP ?? e.stats?.hp ?? 1) > 0 && (e.stats ? e.stats.hp > 0 : true)));
+  const preHp = new Map([...preAlive].map((e) => [e, Math.max(0, Math.floor(Number(e.currentHP ?? e.hp ?? e.stats?.hp ?? 0)))]));
+  state._ultHold = true;   // checkCombatEnd must not end the fight / play separate deaths until the merged clip is out
+  let res;
+  try { res = await _applyAbilityEffectCore(sock, player, ability, effect, targetIndex, chatId); }
+  finally { state._ultHold = false; }
+  try {
+    if (res && res.success !== false && !(res.message && /^❌/.test(String(res.message)) && !res.damage)) {
+      const dying = [...preAlive].filter((e) => e.isDead || e.justDied || (e.stats && e.stats.hp <= 0)).map((e) => ({ enemy: e, index: enemies.indexOf(e) })).filter((d) => d.index >= 0);
+      // the layered base must show the victims STANDING: revive clones of the dying (as the death bake does)
+      const dyingSet = new Set(dying.map((d) => d.enemy));
+      const roster = enemies.map((x) => (dyingSet.has(x) ? Object.assign({}, x, { isDead: false, justDied: false, currentHP: preHp.get(x) || 1, stats: Object.assign({}, x.stats, { hp: preHp.get(x) || 1 }) }) : x));
+      await _playUltimateVfx(sock, player, ability, effect, targetIndex, chatId, state, { preAlive, preHp, dying, roster });
+      dying.forEach((d) => { d.enemy._deathAnimDone = true; });   // merged into the ultimate clip: no second death clip
+    }
+  } catch (e) { console.warn('[SkillVFX] post-resolution ultimate hook failed:', e && e.message || e); }
+  return res;
+}
+
+async function _applyAbilityEffectCore(
+  sock,
+  player,
+  ability,
+  effect,
+  targetIndex,
+  chatId,
+) {
+  // Use player.jid to find solo state correctly
+  const state = player?.jid
+    ? getGameState(chatId, player.jid)
+    : getGameState(chatId);
+  if (!state) return;
+  // Derive sessionKey from state for use in checkCombatEnd
+  const sessionKey =
+    state.sessionKey ||
+    (state.solo ? `${state.chatId}_${state.players[0]?.jid}` : state.chatId);
+  const icon = player.class?.icon || "👤";
+  // 💡 POLISH 2026-07-17: guard against undefined effect. If getSkillEffect
+  // returned undefined (e.g. skill has no effect function and no
+  // energyCost/damageMultiplier), the old code would throw "effect is not
+  // defined" or "Cannot read properties of undefined (reading 'type')" -
+  // which propagated up and left pendingActions stuck (the "Action already
+  // chosen!" soft-lock). Now we return a clean error message instead.
+  if (!effect || typeof effect !== 'object') {
+    return {
+      message: `❌ *${ability?.name || 'Unknown'}* has no valid effect definition. This is a skill data bug - report it. (Skill ID: ${ability?.id || 'unknown'})`,
+      damage: 0,
+      healing: 0,
+    };
+  }
+  // ⚔️ CLASS ULTIMATES: play the class signature charge-up + animated GIF
+  // BEFORE changing HP. The usual effect resolution immediately below remains
+  // authoritative; after this animation finishes the normal combat render shows
+  // the real damage/healing result. Non-ultimate skills and render failures
+  // fall straight through without touching combat mechanics. resolveSignature
+  // also animates every ultimate inherited from earlier classes in the
+  // player's lineage (cross-class evolution keeps them castable AND animated).
+  // (ultimate VFX now plays from the applyAbilityEffect wrapper, after resolution - see _playUltimateVfx)
 
   let animation = ability.animation || effect?.animation || "";
   if (animation === "undefined") animation = "";
