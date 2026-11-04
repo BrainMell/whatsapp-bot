@@ -4965,6 +4965,31 @@ async function _bakeDeathClip(state, e, i) {
     return clip ? Object.assign(clip, { sig: _aliveSig(state) }) : null;
   } catch (err) { console.warn(`[DeathFx] bake ${e && e.name} threw:`, err && err.message || err); return null; }
 }
+// JPEG dimensions without a subprocess: walk the marker segments to the SOF
+// (start-of-frame) and read width/height. Works for baseline (SOF0) and
+// progressive (SOF2) — the box's ffprobe 6.1 HANGS on the GoService-rendered
+// settlement card (13:59:35 "card probe failed" after the full 5s timeout),
+// so this is the primary path; ffprobe is only a labelled fallback now.
+function _jpegDims(buf) {
+  try {
+    if (!buf || buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return null;
+    let i = 2;
+    while (i + 9 < buf.length) {
+      if (buf[i] !== 0xff) { i++; continue; }
+      const m = buf[i + 1];
+      if (m === 0xff) { i++; continue; }                       // padding byte
+      if (m === 0xd8 || (m >= 0xd0 && m <= 0xd9)) { i += 2; continue; } // no length field
+      const len = buf.readUInt16BE(i + 2);
+      if (len < 2) return null;
+      if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) {
+        return { h: buf.readUInt16BE(i + 5), w: buf.readUInt16BE(i + 7) };
+      }
+      i += 2 + len;
+    }
+  } catch {}
+  return null;
+}
+
 // 🎬 MERGED END CARD (owner 2026-11-04 "there shouldn't be a static image
 // and a gif both saying the enemy has been defeated"): bake the death
 // clip(s) + the settlement card into ONE WhatsApp video — the enemy
@@ -4988,11 +5013,20 @@ async function _mergeDeathClipsWithCard(clips, cardJpeg, cardHoldSec = 1.8) {
     fs.mkdirSync(dir, { recursive: true });
     const cardPath = path.join(dir, 'card.jpg');
     fs.writeFileSync(cardPath, cardJpeg);
-    // target geometry = the settlement card
-    const probeOut = await run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', cardPath], 5000).catch(() => null);
-    const dims = String(probeOut || '').trim().split(/[,\n]/).map((s) => parseInt(s, 10)).filter((n) => n > 0);
-    if (dims.length < 2) throw new Error('card probe failed');
-    const W = dims[0], H = dims[1];
+    // target geometry = the settlement card. PRIMARY: pure-JS SOF parse
+    // (subprocess-free — ffprobe 6.1 hangs on this exact jpeg). FALLBACK:
+    // ffprobe with an explicit demuxer and a tight 3s leash.
+    let W = 0, H = 0, via = 'sof';
+    const jd = _jpegDims(cardJpeg);
+    if (jd && jd.w > 0 && jd.h > 0) { W = jd.w; H = jd.h; }
+    else {
+      via = 'ffprobe';
+      const probeOut = await run('ffprobe', ['-v', 'error', '-f', 'image2', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', cardPath], 3000).catch(() => null);
+      const dims = String(probeOut || '').trim().split(/[,\n]/).map((s) => parseInt(s, 10)).filter((n) => n > 0);
+      if (dims.length >= 2) { W = dims[0]; H = dims[1]; }
+    }
+    if (!W || !H) throw new Error('card dims unavailable (sof+ffprobe)');
+    console.log(`[DeathFx] merged card canvas ${W}x${H} (via ${via})`);
     // 1) card → held still segment (native size, defines the canvas)
     const cardSeg = path.join(dir, 'cardseg.mp4');
     await run('ffmpeg', ['-y', '-loop', '1', '-i', cardPath, '-t', String(cardHoldSec), '-r', '30', '-vf', 'setsar=1', '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-an', cardSeg], 10000);
