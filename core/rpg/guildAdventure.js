@@ -4924,19 +4924,23 @@ function _deathEnqueue(run) { return new Promise((resolve) => { if (_deathQueue.
 const _deathEligible = (state) => !!(state && state.chatId && state.isAbyss !== true && !(state.mode === 'RUINS' && state.ruinsMeta));
 const _aliveSig = (state) => (state.players || []).filter((p) => p && !p.isDead && (p.stats ? p.stats.hp > 0 : true)).length + '/' + (state.summons || []).filter((s) => s && !s.isDead).length;
 async function _bakeDeathClip(state, e, i) {
-  const signatureVfx = require('./skillVfx'), combatImageGenerator = require('./combatImageGenerator');
-  // revive a CLONE for the layered render so the Go renderer still draws the standing enemy
-  const roster = (state.enemies || []).map((x, k) => (k === i ? Object.assign({}, x, { isDead: false, justDied: false, currentHP: 1, stats: Object.assign({}, x.stats, { hp: 1 }) }) : x));
-  const layers = await Promise.race([
-    combatImageGenerator.generateCombatLayers(state.players || [], roster, {
-      combatType: 'PVE', rank: state.dungeonRank, floor: 0, backgroundPath: state.backgroundPath || undefined,
-      summons: state.summons || [], hud: 'none', bypassQueue: true, focusSide: 'enemy', focusIndex: i,
-    }),
-    new Promise((r) => setTimeout(() => r(null), 8000)),
-  ]);
-  if (!layers || !layers.success || !layers.focus) return null;
-  const clip = await signatureVfx.renderDeathVideo({ enemy: e, targetIndex: i, layers });
-  return clip ? Object.assign(clip, { sig: _aliveSig(state) }) : null;
+  const t0 = Date.now();
+  try {
+    const signatureVfx = require('./skillVfx'), combatImageGenerator = require('./combatImageGenerator');
+    // revive a CLONE for the layered render so the Go renderer still draws the standing enemy
+    const roster = (state.enemies || []).map((x, k) => (k === i ? Object.assign({}, x, { isDead: false, justDied: false, currentHP: 1, stats: Object.assign({}, x.stats, { hp: 1 }) }) : x));
+    const layers = await Promise.race([
+      combatImageGenerator.generateCombatLayers(state.players || [], roster, {
+        combatType: 'PVE', rank: state.dungeonRank, floor: 0, backgroundPath: state.backgroundPath || undefined,
+        summons: state.summons || [], hud: 'none', bypassQueue: true, focusSide: 'enemy', focusIndex: i,
+      }),
+      new Promise((r) => setTimeout(() => r(null), 20000)),
+    ]);
+    if (!layers || !layers.success || !layers.focus) { console.warn(`[DeathFx] bake ${e && e.name}: no layered scene (layers=${!!layers} success=${layers && layers.success} focus=${!!(layers && layers.focus)}) after ${Date.now() - t0}ms`); return null; }
+    const clip = await signatureVfx.renderDeathVideo({ enemy: e, targetIndex: i, layers });
+    console.log(`[DeathFx] bake ${e && e.name} -> ${clip ? clip.kind + (clip.boss ? '/boss' : '') + ' ' + clip.mp4.length + 'B' : 'NULL'} in ${Date.now() - t0}ms`);
+    return clip ? Object.assign(clip, { sig: _aliveSig(state) }) : null;
+  } catch (err) { console.warn(`[DeathFx] bake ${e && e.name} threw:`, err && err.message || err); return null; }
 }
 // called once per fight (first turn): queue a background bake for every enemy, bosses first
 function startDeathBake(state) {
@@ -4949,7 +4953,7 @@ function startDeathBake(state) {
 }
 async function playEnemyDeaths(sock, state) {
   try {
-    if (!sock || !_deathEligible(state)) return;
+    if (!sock || !_deathEligible(state)) { if (state && state.inCombat && (state.enemies || []).some((x) => x && x.stats && x.stats.hp <= 0 && !x._deathAnimDone)) console.log(`[DeathFx] skipped: sock=${!!sock} chatId=${!!(state && state.chatId)} isAbyss=${state && state.isAbyss} mode=${state && state.mode}`); return; }
     const fresh = (state.enemies || []).map((e, i) => ({ e, i })).filter((x) => x.e && x.e.isEnemy !== false && !x.e._deathAnimDone && (x.e.justDied || x.e.isDead || (x.e.stats && x.e.stats.hp <= 0)));
     if (!fresh.length) return;
     fresh.forEach((x) => { x.e._deathAnimDone = true; });   // flag first: idempotent across checkCombatEnd / nextTurn
@@ -4957,9 +4961,11 @@ async function playEnemyDeaths(sock, state) {
     // resolve every dying enemy's clip in PARALLEL (baked = instant); a missing bake gets a short live attempt through the same worker
     const clips = await Promise.all(fresh.slice(0, 3).map(async ({ e, i }) => {
       let job = e._deathJob || null;
-      let clip = job ? await Promise.race([job, new Promise((r) => setTimeout(() => r(undefined), 2500))]) : undefined;
-      if (clip && clip.sig !== _aliveSig(state)) clip = null;   // roster changed since the bake (someone fell): stale backdrop, re-render below
-      if (!clip && (clip === null || !job)) clip = await Promise.race([_deathEnqueue(() => _bakeDeathClip(state, e, i)), new Promise((r) => setTimeout(() => r(null), 3500))]);
+      // a kill on the very first turns can beat the background bake: wait for the in-flight bake (the box is slow, a late clip beats none)
+      let clip = job ? await Promise.race([job, new Promise((r) => setTimeout(() => r(undefined), 12000))]) : undefined;
+      if (clip && clip.sig !== _aliveSig(state)) { console.log(`[DeathFx] ${e.name}: roster changed since bake (${clip.sig} vs ${_aliveSig(state)}) - re-rendering`); clip = null; }   // stale backdrop
+      if (!clip && (clip === null || !job)) clip = await Promise.race([_deathEnqueue(() => _bakeDeathClip(state, e, i)), new Promise((r) => setTimeout(() => r(null), 12000))]);
+      if (!clip || !clip.mp4) console.warn(`[DeathFx] ${e.name}: NO clip (job=${!!job}) - falling back to the static card`);
       return clip && clip.mp4 ? { e, clip } : null;
     }));
     const ready = clips.filter(Boolean);
@@ -14035,6 +14041,7 @@ function getDebuffIcon(debuffType) {
 // ==========================================
 
 module.exports = {
+  _deathTest: { startDeathBake, playEnemyDeaths, _bakeDeathClip, _deathEligible },
   showLore: async (sock, chatId) => {
     const { sendLore } = require('./loreContent');
     return sendLore(sock, chatId, '.');
