@@ -4942,6 +4942,75 @@ async function _bakeDeathClip(state, e, i) {
     return clip ? Object.assign(clip, { sig: _aliveSig(state) }) : null;
   } catch (err) { console.warn(`[DeathFx] bake ${e && e.name} threw:`, err && err.message || err); return null; }
 }
+// 🎬 MERGED END CARD (owner 2026-11-04 "there shouldn't be a static image
+// and a gif both saying the enemy has been defeated"): bake the death
+// clip(s) + the settlement card into ONE WhatsApp video — the enemy
+// shatters, then the card settles on screen with the damage info. The card
+// defines the canvas (it is the final held frame, so it must render
+// full-bleed); clips are scaled/padded into it. Re-encode via ffmpeg
+// libx264 yuv420p +faststart — the same proven arg set as
+// animatedMedia.webmToMp4. ANY failure returns null → the caller falls
+// back to the old clip+card sends.
+async function _mergeDeathClipsWithCard(clips, cardJpeg, cardHoldSec = 1.8) {
+  const t0 = Date.now();
+  const { execFile } = require('child_process');
+  const run = (bin, args, ms) => new Promise((resolve, reject) => {
+    execFile(bin, args, { timeout: ms, maxBuffer: 4 * 1024 * 1024 }, (err, _stdout, stderr) => {
+      if (err) { const tail = String(stderr || '').split('\n').filter(Boolean).slice(-2).join(' | '); reject(new Error(`${bin}: ${err.message}${tail ? ' — ' + tail : ''}`)); }
+      else resolve(_stdout);
+    });
+  });
+  const dir = path.join(require('os').tmpdir(), `deathcard-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const cardPath = path.join(dir, 'card.jpg');
+    fs.writeFileSync(cardPath, cardJpeg);
+    // target geometry = the settlement card
+    const probeOut = await run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', cardPath], 5000).catch(() => null);
+    const dims = String(probeOut || '').trim().split(/[,\n]/).map((s) => parseInt(s, 10)).filter((n) => n > 0);
+    if (dims.length < 2) throw new Error('card probe failed');
+    const W = dims[0], H = dims[1];
+    // 1) card → held still segment (native size, defines the canvas)
+    const cardSeg = path.join(dir, 'cardseg.mp4');
+    await run('ffmpeg', ['-y', '-loop', '1', '-i', cardPath, '-t', String(cardHoldSec), '-r', '30', '-vf', 'setsar=1', '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-an', cardSeg], 10000);
+    // 2) normalize every clip into the card canvas, concat clips→card
+    const args = ['-y'];
+    const chain = [];
+    clips.forEach((c, k) => {
+      const p = path.join(dir, `clip${k}.mp4`);
+      fs.writeFileSync(p, c.mp4);
+      args.push('-i', p);
+      chain.push(`[${k}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30[v${k}]`);
+    });
+    args.push('-i', cardSeg);
+    chain.push(`[${clips.length}:v]setsar=1,fps=30[v${clips.length}]`);
+    chain.push(`${clips.map((_, k) => `[v${k}]`).join('')}[v${clips.length}]concat=n=${clips.length + 1}:v=1:a=0[v]`);
+    const outPath = path.join(dir, 'merged.mp4');
+    args.push('-filter_complex', chain.join(';'), '-map', '[v]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', outPath);
+    await run('ffmpeg', args, 15000);
+    const out = fs.readFileSync(outPath);
+    if (!out || out.length < 1000) throw new Error('merged output empty');
+    if (out.length > 16 * 1024 * 1024) throw new Error(`merged too large for WA (${out.length}B)`);
+    console.log(`[DeathFx] merged card bake: ${clips.length} clip(s)+card ${W}x${H} -> ${out.length}B in ${Date.now() - t0}ms`);
+    return out;
+  } catch (err) {
+    console.warn(`[DeathFx] merged card bake failed after ${Date.now() - t0}ms:`, err.message);
+    return null;
+  } finally {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+  }
+}
+
+// old behavior preserved verbatim: clips as their own messages (merge
+// unavailable / render failed — the enemy-defeat announce must never vanish)
+async function _flushHeldDeathClips(sock, state, held) {
+  for (const { e, clip } of held) {
+    const pl = { video: clip.mp4, mimetype: 'video/mp4', caption: `☠️ *${e.name || 'The enemy'}* ${clip.boss ? 'is destroyed!' : 'falls!'}`, gifPlayback: true };
+    if (Buffer.isBuffer(clip.thumb)) pl.jpegThumbnail = clip.thumb;
+    await sendMediaBounded(sock, state.chatId, pl, { label: 'enemyDeathVfx', ms: 12000, grace: 4000, fallbackText: null });
+  }
+}
+
 // called once per fight (first turn): queue a background bake for every enemy, bosses first
 function startDeathBake(state) {
   try {
@@ -4951,7 +5020,7 @@ function startDeathBake(state) {
     for (const { e, i } of order) e._deathJob = _deathEnqueue(() => _bakeDeathClip(state, e, i));
   } catch (err) { console.warn('[DeathFx] bake skipped:', err && err.message || err); }
 }
-async function playEnemyDeaths(sock, state) {
+async function playEnemyDeaths(sock, state, opts = {}) {
   try {
     if (!sock || !_deathEligible(state)) { if (state && state.inCombat && (state.enemies || []).some((x) => x && x.stats && x.stats.hp <= 0 && !x._deathAnimDone)) console.log(`[DeathFx] skipped: sock=${!!sock} chatId=${!!(state && state.chatId)} isAbyss=${state && state.isAbyss} mode=${state && state.mode}`); return; }
     const fresh = (state.enemies || []).map((e, i) => ({ e, i })).filter((x) => x.e && x.e.isEnemy !== false && !x.e._deathAnimDone && (x.e.justDied || x.e.isDead || (x.e.stats && x.e.stats.hp <= 0)));
@@ -4969,6 +5038,15 @@ async function playEnemyDeaths(sock, state) {
       return clip && clip.mp4 ? { e, clip } : null;
     }));
     const ready = clips.filter(Boolean);
+    // 🎬 MERGED END CARD (owner 2026-11-04): when this kill also ENDS the
+    // fight, hold the clips — endCombat bakes them + the settlement card
+    // into ONE video (gen-stamped so a superseded fight can never leak
+    // clips into the next one). Mid-combat kills (nextTurn) send right away.
+    if (opts.hold && ready.length) {
+      state._heldDeathClips = { gen: state.combatGen || 0, items: ready };
+      console.log(`[DeathFx] held ${ready.length} clip(s) for the merged end card`);
+      return;
+    }
     await Promise.all(ready.map(({ e, clip }) => {
       const pl = { video: clip.mp4, mimetype: 'video/mp4', caption: `☠️ *${e.name || 'The enemy'}* ${clip.boss ? 'is destroyed!' : 'falls!'}`, gifPlayback: true };
       if (Buffer.isBuffer(clip.thumb)) pl.jpegThumbnail = clip.thumb;
@@ -4994,7 +5072,6 @@ async function checkCombatEnd(sock, state, sessionKey) {
   if (!state || !state.inCombat) return false;
   if (state._ultHold) return false;   // an ultimate is mid-resolution: its merged clip plays first, performAction ends the fight right after
   if (!sock) sock = state.sock || state.sock_ref;
-  await playEnemyDeaths(sock, state);
   // 💡 ROUND-19: generation stamp — a resolution from a superseded fight
   // (stale timer / stale turn-loop iteration that kept running after
   // endCombat and re-armed on the NEXT fight's state) must not resolve
@@ -5002,6 +5079,11 @@ async function checkCombatEnd(sock, state, sessionKey) {
   const combatGen = state.combatGen || 0;
   const playersDead = state.players.every((p) => p.isDead || p.stats.hp <= 0);
   const enemiesDead = state.enemies.length > 0 && state.enemies.every((e) => e.stats.hp <= 0);
+  // 🎬 MERGED END CARD (owner 2026-11-04): a kill that also ENDS the fight
+  // holds its death clips so endCombat can deliver ONE video = death
+  // animation + settlement card (the damage info). Pure reads hoisted above
+  // the call — behavior is identical whenever the fight continues.
+  await playEnemyDeaths(sock, state, { hold: enemiesDead && !playersDead });
 
   if (playersDead || enemiesDead) {
     // Clear any pending turn timers to prevent infinite loops
@@ -9051,22 +9133,52 @@ async function endCombat(sock, victory, sessionKey, expectedGen) {
         ),
         20000, 'endScreen.render',
       );
+      // 🎬 MERGED END CARD (owner 2026-11-04 "no static image AND a gif both
+      // saying the enemy has been defeated"): clips held by checkCombatEnd
+      // for this ending fight are baked INTO the card — one video, death
+      // animation first, settlement card (damage info) as the closing frame.
+      const __heldBox = state._heldDeathClips; state._heldDeathClips = null;
+      const __held = __heldBox && __heldBox.gen === (state.combatGen || 0) ? (__heldBox.items || []) : [];
       if (endResult.success && endResult.buffer && endResult.buffer.length > 100) {
-        // 💡 WATCHDOG: a wedged Baileys send used to stall the whole
-        // end-of-combat flow forever (defeat card "never spawns"). Now the
-        // send is raced; on timeout the text caption below still goes out.
-        // 💡 RPG OPT PASS (2026-10-20, owner "multiple victory messages"):
-        // the old race→fallback produced BOTH messages when the wedged send
-        // drained late (text fired at 20s, image arrived later). The helper
-        // waits a 10s grace for the in-flight send before falling back, so
-        // exactly ONE victory card arrives — image if it settled (even late),
-        // text only if it truly never will.
-        await sendMediaBounded(sock, state.chatId, {
-          image: endResult.buffer,
-          caption: caption,
-          mimetype: 'image/jpeg'
-        }, { label: 'endScreen' });
-        endScreenSent = true; // helper owns the single-fallback contract
+        let __mergedSent = false;
+        if (victory && __held.length) {
+          try {
+            const __merged = await _mergeDeathClipsWithCard(__held.map((h) => h.clip), endResult.buffer);
+            if (__merged) {
+              let __deaths = __held.map((h) => `☠️ *${h.e.name || 'The enemy'}* ${h.clip.boss ? 'is destroyed!' : 'falls!'}`).join('\n');
+              if ((__deaths + '\n' + caption).length > 900) __deaths = '';   // WA caption cap safety
+              const __pl = { video: __merged, mimetype: 'video/mp4', gifPlayback: true, caption: __deaths ? __deaths + '\n' + caption : caption };
+              if (Buffer.isBuffer(__held[0].clip.thumb)) __pl.jpegThumbnail = __held[0].clip.thumb;
+              await sendMediaBounded(sock, state.chatId, __pl, { label: 'endScreenMerged', ms: 20000, grace: 6000, fallbackText: null });
+              endScreenSent = __mergedSent = true; // helper owns the single-fallback contract
+              console.log(`[DeathFx] merged end card sent: ${__held.length} death clip(s) + settlement card as ONE video`);
+            }
+          } catch (mergeErr) {
+            console.warn('[DeathFx] merged end card failed (non-fatal):', mergeErr.message);
+          }
+        }
+        if (!__mergedSent) {
+          // 💡 WATCHDOG: a wedged Baileys send used to stall the whole
+          // end-of-combat flow forever (defeat card "never spawns"). Now the
+          // send is raced; on timeout the text caption below still goes out.
+          // 💡 RPG OPT PASS (2026-10-20, owner "multiple victory messages"):
+          // the old race→fallback produced BOTH messages when the wedged send
+          // drained late (text fired at 20s, image arrived later). The helper
+          // waits a 10s grace for the in-flight send before falling back, so
+          // exactly ONE victory card arrives — image if it settled (even late),
+          // text only if it truly never will.
+          if (__held.length) await _flushHeldDeathClips(sock, state, __held);   // old behavior: clips first, then the card
+          await sendMediaBounded(sock, state.chatId, {
+            image: endResult.buffer,
+            caption: caption,
+            mimetype: 'image/jpeg'
+          }, { label: 'endScreen' });
+          endScreenSent = true; // helper owns the single-fallback contract
+        }
+      } else if (__held.length) {
+        // card render failed: the held clips still go out (old behavior) —
+        // the text caption below carries the result
+        await _flushHeldDeathClips(sock, state, __held);
       }
       END_DEBUG(`endCombat endScreen done sent=${endScreenSent}`);
     }
