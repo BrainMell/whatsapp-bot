@@ -766,6 +766,14 @@ function drawVideoHud(ctx, hud, icons) {
 function startMp4Encoder() {
     let rejectOut, resolveOut;
     const done = new Promise((res, rej) => { resolveOut = res; rejectOut = rej; });
+    // 🧯 CRASH FIX (prod 2026-11-04 19:35:04, joker died MID-DUEL — 18th occurrence since 06:24):
+    // ffmpeg killed by signal exits with code null → rejectOut fires while `done`
+    // has NO consumer (the abort path returns before finish(); an OOM-killed
+    // encoder dies before the loop reaches finish()) → unhandledRejection →
+    // process exit → pm2 restart → the duel/turn evaporates. Marking `done`
+    // handled forever changes nothing for real consumers: finish() still
+    // returns this exact promise, callers still see the error and fall back.
+    done.catch(() => {});
     const out = path.join(os.tmpdir(), `ult_${process.pid}_${Date.now()}_${Math.floor(Math.random() * 1e6)}.mp4`);
     const args = ['-y', '-f', 'rawvideo', '-pix_fmt', 'bgra', '-video_size', `${W}x${H}`, '-framerate', String(FPS), '-i', 'pipe:0',
         '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.0', '-pix_fmt', 'yuv420p', '-preset', 'veryfast', '-crf', '22', '-movflags', '+faststart', '-an', out];
@@ -1176,7 +1184,7 @@ async function renderUltimateVideo(o) {
         }
     };
     for (let f = 0; f < total; f++) {
-        if (o.abort && o.abort.flag) { await enc.abort(); return { mp4: null, thumb: null, plates: 'aborted' }; }   // 🔥 26-R5: race lost → stop painting (no zombie renders)
+        if (o.abort && o.abort.flag) { await enc.abort(); await enc.finish().catch(() => ({})); return { mp4: null, thumb: null, plates: 'aborted' }; }   // 🔥 26-R5: race lost → stop painting (no zombie renders); 🧯 drain `done` so the SIGKILL exit can never reject unhandled
         const time = f / FPS;
         const shrinkK = shrinkAt(time);   // 🎥 1 = normal, <1 = roster drawn tiny in place
         ctx.setTransform(1, 0, 0, 1, 0, 0);
