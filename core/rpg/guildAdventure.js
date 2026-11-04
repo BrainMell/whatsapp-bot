@@ -4975,6 +4975,53 @@ async function _bakeDeathClip(state, e, i) {
     return clip ? Object.assign(clip, { sig: _aliveSig(state) }) : null;
   } catch (err) { console.warn(`[DeathFx] bake ${e && e.name} threw:`, err && err.message || err); return null; }
 }
+// 🎬 GROUP DEATH AS ONE UNIT (owner 2026-11-04: "when a group dies you
+// generate them individually and they are all still standing in with the
+// target dying in each gif, why don't you just send one and have them die as
+// a unit?"): several enemies dying on the SAME turn render as ONE clip —
+// every dying sprite breaks apart together in the shared scene, not one at a
+// time with the rest still standing. Returns a held-item { e, clip } where
+// clip.group lists the enemies inside the unit, or null — the caller falls
+// back to the per-enemy clips, which stay baked as solo-kill insurance.
+async function _bakeGroupDeathClip(state, dying) {
+  const t0 = Date.now();
+  try {
+    if (!dying || dying.length < 2) return null;
+    const group = dying.slice(0, 4);
+    const signatureVfx = require('./skillVfx'), combatImageGenerator = require('./combatImageGenerator');
+    // 1) shared scene (all enemies standing); 2) full-roster fallback fetch
+    let layers = await _deathScene(state);
+    const need = group.map((d) => d.i);
+    const hasAll = !!(layers && Array.isArray(layers.cuts) && need.every((i) => layers.cuts.some((c) => c && String(c.side) === 'enemy' && Math.floor(Number(c.index) || 0) === i && c.png)));
+    if (!hasAll) {
+      const roster = (state.enemies || []).map((x) => Object.assign({}, x, { isDead: false, justDied: false, currentHP: Math.max(1, Number(x.currentHP) || 1), stats: Object.assign({}, x.stats, { hp: Math.max(1, Number(x.stats && x.stats.hp) || 1) }) }));
+      layers = await Promise.race([
+        combatImageGenerator.generateCombatLayers(state.players || [], roster, {
+          combatType: 'PVE', rank: state.dungeonRank, floor: 0, backgroundPath: state.backgroundPath || undefined,
+          summons: state.summons || [], hud: 'none', bypassQueue: true, focusSide: 'enemy', focusIndex: need[0],
+        }),
+        new Promise((r) => setTimeout(() => r(null), 20000)),
+      ]);
+    }
+    if (!layers || !layers.success) { console.warn(`[DeathFx] group bake [${need.join(',')}]: no layered scene after ${Date.now() - t0}ms`); return null; }
+    const clip = await signatureVfx.renderDeathVideo({ targets: group.map(({ e, i }) => ({ enemy: e, targetIndex: i })), layers });
+    console.log(`[DeathFx] group bake [${group.map((d) => (d.e && d.e.name) || '?').join(' + ')}] -> ${clip ? clip.kind + (clip.boss ? '/boss' : '') + (clip.group ? ' unit=' + clip.group.length : ' PARTIAL') + ' ' + clip.mp4.length + 'B' : 'NULL'} in ${Date.now() - t0}ms (${hasAll ? 'shared scene' : 'own scene'})`);
+    if (!clip || !clip.mp4) return null;
+    return { e: group[0].e, clip: Object.assign(clip, { sig: _aliveSig(state) }) };
+  } catch (err) { console.warn('[DeathFx] group bake threw:', err && err.message || err); return null; }
+}
+// ☠️ caption for a held death item — a group unit names every member
+// ("☠️ *A*, *B* & *C* fall!"); solo items keep the exact old line
+function _deathCaption(item) {
+  const grp = (item.clip && item.clip.group) || null;
+  if (grp && grp.length > 1) {
+    const names = grp.map((g) => `*${(g && g.name) || 'The enemy'}*`);
+    const last = names.pop();
+    const boss = grp.some((g) => g && (g.isBoss || g.boss || /boss/i.test(String(g.rank || g.tier || ''))));
+    return `☠️ ${names.join(', ')} & ${last} ${boss ? 'are destroyed!' : 'fall!'}`;
+  }
+  return `☠️ *${item.e.name || 'The enemy'}* ${item.clip.boss ? 'is destroyed!' : 'falls!'}`;
+}
 // JPEG dimensions without a subprocess: walk the marker segments to the SOF
 // (start-of-frame) and read width/height. Works for baseline (SOF0) and
 // progressive (SOF2) — the box's ffprobe 6.1 HANGS on the GoService-rendered
@@ -5071,9 +5118,9 @@ async function _mergeDeathClipsWithCard(clips, cardJpeg, cardHoldSec = 1.8) {
 // old behavior preserved verbatim: clips as their own messages (merge
 // unavailable / render failed — the enemy-defeat announce must never vanish)
 async function _flushHeldDeathClips(sock, state, held) {
-  for (const { e, clip } of held) {
-    const pl = { video: clip.mp4, mimetype: 'video/mp4', caption: `☠️ *${e.name || 'The enemy'}* ${clip.boss ? 'is destroyed!' : 'falls!'}`, gifPlayback: true };
-    if (Buffer.isBuffer(clip.thumb)) pl.jpegThumbnail = clip.thumb;
+  for (const item of held) {
+    const pl = { video: item.clip.mp4, mimetype: 'video/mp4', caption: _deathCaption(item), gifPlayback: true };
+    if (Buffer.isBuffer(item.clip.thumb)) pl.jpegThumbnail = item.clip.thumb;
     await sendMediaBounded(sock, state.chatId, pl, { label: 'enemyDeathVfx', ms: 12000, grace: 4000, fallbackText: null });
   }
 }
@@ -5121,8 +5168,21 @@ async function playEnemyDeaths(sock, state, opts = {}) {
     // merge — 18s when a board is coming (the turn flow continues anyway),
     // 12s when the clips will go out as their own messages.
     const leashMs = opts.hold ? 18000 : 12000;
-    // resolve every dying enemy's clip in PARALLEL (baked = instant); a missing bake gets a short live attempt through the same worker
-    const clips = await Promise.all(fresh.slice(0, 3).map(async ({ e, i }) => {
+    let ready = [];
+    if (fresh.length > 1) {
+      // 🎬 GROUP-AS-UNIT: several kills on the same beat render as ONE clip
+      // where the whole dead group breaks apart together. The per-enemy clips
+      // stay as the fallback (a missed unit must never eat the announce).
+      const grp = await Promise.race([
+        _bakeGroupDeathClip(state, fresh),
+        new Promise((r) => setTimeout(() => r(null), leashMs)),
+      ]);
+      if (grp && grp.clip && grp.clip.mp4 && grp.clip.sig === _aliveSig(state)) ready = [grp];
+      else console.warn(`[DeathFx] group unit missed (${fresh.length} dying, ${Date.now() - t0}ms) - per-enemy fallback`);
+    }
+    if (!ready.length) {
+      // resolve every dying enemy's clip in PARALLEL (baked = instant); a missing bake gets a short live attempt through the same worker
+      const clips = await Promise.all(fresh.slice(0, 3).map(async ({ e, i }) => {
       let job = e._deathJob || null;
       // 🧷 identity heal: the kill may see an enemy object that lost its
       // _deathJob (prod 13:53:19) — fall back to the per-fight registry.
@@ -5136,7 +5196,8 @@ async function playEnemyDeaths(sock, state, opts = {}) {
       if (!clip || !clip.mp4) console.warn(`[DeathFx] ${e.name}: NO clip (job=${!!job}, idx=${i}, gen=${state.combatGen || 0}, baked=${Date.now() - t0}ms) - falling back to the static card`);
       return clip && clip.mp4 ? { e, clip } : null;
     }));
-    const ready = clips.filter(Boolean);
+      ready = clips.filter(Boolean);
+    }
     // 🎬 KILL-TURN CARD (owner 2026-11-04, corrected directive): hold the
     // clips — the NEXT turn board burns them into ONE video = death
     // animation + the regular combat message (war-log board). gen-stamped so
@@ -5146,9 +5207,9 @@ async function playEnemyDeaths(sock, state, opts = {}) {
       console.log(`[DeathFx] held ${ready.length} clip(s) for the kill-turn card`);
       return;
     }
-    await Promise.all(ready.map(({ e, clip }) => {
-      const pl = { video: clip.mp4, mimetype: 'video/mp4', caption: `☠️ *${e.name || 'The enemy'}* ${clip.boss ? 'is destroyed!' : 'falls!'}`, gifPlayback: true };
-      if (Buffer.isBuffer(clip.thumb)) pl.jpegThumbnail = clip.thumb;
+    await Promise.all(ready.map((item) => {
+      const pl = { video: item.clip.mp4, mimetype: 'video/mp4', caption: _deathCaption(item), gifPlayback: true };
+      if (Buffer.isBuffer(item.clip.thumb)) pl.jpegThumbnail = item.clip.thumb;
       return sendMediaBounded(sock, state.chatId, pl, { label: 'enemyDeathVfx', ms: 12000, grace: 4000, fallbackText: null });
     }));
     if (ready.length) console.log(`[DeathFx] ${ready.map((r) => r.clip.kind + (r.clip.boss ? '/boss' : '')).join(',')} delivered in ${Date.now() - t0}ms`);
@@ -7557,7 +7618,7 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
               try {
                 const __merged = await _mergeDeathClipsWithCard(__turnHeld.map((h) => h.clip), scene.buffer, 2.2);
                 if (__merged) {
-                  let __deaths = __turnHeld.map((h) => `☠️ *${h.e.name || 'The enemy'}* ${h.clip.boss ? 'is destroyed!' : 'falls!'}`).join('\n');
+                  let __deaths = __turnHeld.map((h) => _deathCaption(h)).join('\n');
                   let __cap = __deaths + '\n' + (scene.caption || '');
                   if (__cap.length > 900) __cap = (scene.caption || '');   // WA caption cap safety
                   const __pl = { video: __merged, mimetype: 'video/mp4', gifPlayback: true, caption: __cap };
@@ -14252,7 +14313,7 @@ function getDebuffIcon(debuffType) {
 // ==========================================
 
 module.exports = {
-  _deathTest: { startDeathBake, playEnemyDeaths, _bakeDeathClip, _deathEligible, _mergeDeathClipsWithCard, _jpegDims, _flushHeldDeathClips },
+  _deathTest: { startDeathBake, playEnemyDeaths, _bakeDeathClip, _bakeGroupDeathClip, _deathCaption, _deathEligible, _mergeDeathClipsWithCard, _jpegDims, _flushHeldDeathClips },
   showLore: async (sock, chatId) => {
     const { sendLore } = require('./loreContent');
     return sendLore(sock, chatId, '.');

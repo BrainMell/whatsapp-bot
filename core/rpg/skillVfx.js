@@ -846,33 +846,74 @@ function classifyDeath(enemy) {
 }
 const DEATH_PALETTE = ['#ffffff', '#ffcb45', '#e85a37'];
 
-/** Render the death clip for one enemy. `layers` = the layered scene payload with the enemy STANDING and focused (see guildAdventure.playEnemyDeaths).
- *  Returns { mp4, thumb, kind, boss } or null (never throws; the caller races it against a short budget). */
-async function renderDeathVideo({ enemy, targetIndex, layers, abort }) {
-  if (!enemy || !layers) return null;
-  const kind = classifyDeath(enemy), boss = !!(enemy.isBoss || enemy.boss || /boss/i.test(String(enemy.rank || enemy.tier || '')));
+/** Render the death clip for one enemy — or, in the GROUP form, for every
+ *  enemy that died on the same turn: `targets: [{ enemy, targetIndex }]`.
+ *  🎬 GROUP-AS-UNIT (owner 2026-11-04: "when a group dies you generate them
+ *  individually ... why don't you just send one and have them die as a
+ *  unit?"): all dying sprites are composited into ONE focus image and the
+ *  target anchor is widened to the group's union box, so ONE dissolve breaks
+ *  the whole group apart together — no more one-per-clip kills where the
+ *  rest of the group just stands there.
+ *  Returns { mp4, thumb, kind, boss, group? } or null (never throws; the caller races it against a short budget). */
+async function renderDeathVideo({ enemy, targetIndex, layers, abort, targets }) {
+  const group = (Array.isArray(targets) && targets.length ? targets : [{ enemy, targetIndex }])
+    .filter((t) => t && t.enemy).slice(0, 4);
+  if (!group.length || !layers) return null;
+  // one element mode for the unit: the most common death kind in the group
+  const kind = (() => { const tally = {}; let best = 'DUST', n = 0; for (const t of group) { const k = classifyDeath(t.enemy); tally[k] = (tally[k] || 0) + 1; if (tally[k] > n) { best = k; n = tally[k]; } } return best; })();
+  const boss = group.some((t) => !!(t.enemy.isBoss || t.enemy.boss || /boss/i.test(String(t.enemy.rank || t.enemy.tier || ''))));
+  let pickedIdx = null;   // which targets actually made it into the composite
   // the engine draws every cutout of the roster - the dying enemy is owned by LAYERS.dissolve, so drop its own cutout
   // ⚡ SHARED SCENE (speed 2026-11-04): ONE layered fetch per fight serves every enemy - the dying enemy's isolated image is cut from its own cutout
   if ((!layers.focus || layers.shared) && Array.isArray(layers.cuts)) {
     try {
-      const { createCanvas } = require('canvas');
-      const c = layers.cuts.find((x) => x && String(x.side) === 'enemy' && Math.floor(Number(x.index) || 0) === targetIndex);
-      if (c && c.png) {
-        const img = await require('canvas').loadImage(Buffer.from(c.png, 'base64'));
-        const cv = createCanvas(Number(layers.w) || 1024, Number(layers.h) || 687);
-        cv.getContext('2d').drawImage(img, Number(c.x) || 0, Number(c.y) || 0, Number(c.w) || img.width, Number(c.h) || img.height);
+      const { createCanvas, loadImage } = require('canvas');
+      const W0 = Number(layers.w) || 1024, H0 = Number(layers.h) || 687;
+      const picks = [];
+      for (const t of group) {
+        const c = layers.cuts.find((x) => x && String(x.side) === 'enemy' && Math.floor(Number(x.index) || 0) === Math.max(0, Math.floor(Number(t.targetIndex) || 0)));
+        if (c && c.png) picks.push({ t, c });
+      }
+      if (picks.length) {
+        // composite EVERY dying sprite onto one full-canvas focus image
+        const cv = createCanvas(W0, H0), cx2 = cv.getContext('2d');
+        let bx0 = 1e9, by0 = 1e9, bx1 = -1e9, ft = -1e9;
+        for (const { c } of picks) {
+          const img = await loadImage(Buffer.from(c.png, 'base64'));
+          const w0 = Number(c.w) || img.width, h0 = Number(c.h) || img.height, x0 = Number(c.x) || 0, y0 = Number(c.y) || 0;
+          cx2.drawImage(img, x0, y0, w0, h0);
+          bx0 = Math.min(bx0, x0); by0 = Math.min(by0, y0); bx1 = Math.max(bx1, x0 + w0); ft = Math.max(ft, y0 + h0);
+        }
         layers = { ...layers, focus: cv.toBuffer('image/png') };
+        layers.cuts = layers.cuts.filter((c) => !picks.some((p) => p.c === c));
+        pickedIdx = picks.map((p) => Math.max(0, Math.floor(Number(p.t.targetIndex) || 0)));
+        // widen the FIRST target's anchor to the group's union box: the
+        // dissolve grid + camera follow focRect/A.T, so they must cover every
+        // dying sprite, not just the first one. CLONE the anchor + array —
+        // the anchors belong to the fight's SHARED scene payload.
+        if (picks.length > 1 && Array.isArray(layers.anchors)) {
+          const ai = layers.anchors.findIndex((v) => v && v.side === 'enemy' && v.index === pickedIdx[0]);
+          if (ai >= 0) {
+            const a = layers.anchors[ai];
+            const patched = Object.assign({}, a, { x: (bx0 + bx1) / 2, feetY: ft, w: Math.max(Number(a.w) || 0, bx1 - bx0), h: Math.max(Number(a.h) || 0, ft - by0) });
+            layers.anchors = layers.anchors.slice(); layers.anchors[ai] = patched;
+          }
+        }
       }
     } catch (e) { /* falls through: no focus -> null clip */ }
   }
   if (!layers.focus) return null;
-  const cuts = Array.isArray(layers.cuts) ? layers.cuts.filter((c) => !(c && String(c.side) === 'enemy' && Math.floor(Number(c.index) || 0) === targetIndex)) : layers.cuts;
+  const dieIdx = new Set((pickedIdx || group.map((t) => Math.max(0, Math.floor(Number(t.targetIndex) || 0)))));
+  const cuts = Array.isArray(layers.cuts) ? layers.cuts.filter((c) => !(c && String(c.side) === 'enemy' && dieIdx.has(Math.floor(Number(c.index) || 0)))) : layers.cuts;
   const vid = await require('./ultimateFx').renderUltimateVideo({
     classId: 'DEATH_' + kind + (boss ? '_BOSS' : ''), name: '', side: 'enemy', palette: DEATH_PALETTE,
-    skillLevel: 1, maxLevel: 1, intensity: 0, layers: { ...layers, cuts }, casterIndex: 0, targetIndex, focusIndex: undefined,
+    skillLevel: 1, maxLevel: 1, intensity: 0, layers: { ...layers, cuts }, casterIndex: 0, targetIndex: Math.max(0, Math.floor(Number(group[0].targetIndex) || 0)), focusIndex: undefined,
     targetSide: 'enemy', aoe: false, targets: [], death: true, abort,
   });
-  return vid && vid.mp4 ? { mp4: vid.mp4, thumb: vid.thumb || null, kind, boss } : null;
+  if (!vid || !vid.mp4) return null;
+  const out = { mp4: vid.mp4, thumb: vid.thumb || null, kind, boss };
+  if (pickedIdx && pickedIdx.length > 1) out.group = pickedIdx.map((i) => { const t = group.find((g) => Math.max(0, Math.floor(Number(g.targetIndex) || 0)) === i); return t && t.enemy; }).filter(Boolean);
+  return out;
 }
 
 async function animateUltimate(options = {}) {
