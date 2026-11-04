@@ -852,6 +852,20 @@ async function renderDeathVideo({ enemy, targetIndex, layers, abort }) {
   if (!enemy || !layers) return null;
   const kind = classifyDeath(enemy), boss = !!(enemy.isBoss || enemy.boss || /boss/i.test(String(enemy.rank || enemy.tier || '')));
   // the engine draws every cutout of the roster - the dying enemy is owned by LAYERS.dissolve, so drop its own cutout
+  // ⚡ SHARED SCENE (speed 2026-11-04): ONE layered fetch per fight serves every enemy - the dying enemy's isolated image is cut from its own cutout
+  if ((!layers.focus || layers.shared) && Array.isArray(layers.cuts)) {
+    try {
+      const { createCanvas } = require('canvas');
+      const c = layers.cuts.find((x) => x && String(x.side) === 'enemy' && Math.floor(Number(x.index) || 0) === targetIndex);
+      if (c && c.png) {
+        const img = await require('canvas').loadImage(Buffer.from(c.png, 'base64'));
+        const cv = createCanvas(Number(layers.w) || 1024, Number(layers.h) || 687);
+        cv.getContext('2d').drawImage(img, Number(c.x) || 0, Number(c.y) || 0, Number(c.w) || img.width, Number(c.h) || img.height);
+        layers = { ...layers, focus: cv.toBuffer('image/png') };
+      }
+    } catch (e) { /* falls through: no focus -> null clip */ }
+  }
+  if (!layers.focus) return null;
   const cuts = Array.isArray(layers.cuts) ? layers.cuts.filter((c) => !(c && String(c.side) === 'enemy' && Math.floor(Number(c.index) || 0) === targetIndex)) : layers.cuts;
   const vid = await require('./ultimateFx').renderUltimateVideo({
     classId: 'DEATH_' + kind + (boss ? '_BOSS' : ''), name: '', side: 'enemy', palette: DEATH_PALETTE,
