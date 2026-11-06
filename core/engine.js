@@ -1022,6 +1022,7 @@ const { getAnikaiBestMatch } = anilist; // compat alias = getWatchLink (anikaiRe
 const runSecurity = require('./utils/security');
 const { fetchPfp: fetchPfpCached } = require('./utils/pfpCache'); // 💡 PERF PATCH 2026-07-27: cached + 8s-timeout PFP fetcher
 const tictactoe = require('./games/tictactoe');
+const tttTourney = require('./games/tictactoeTournament');
 const chess = require('./games/chess');
 const debate = require('./games/debate');
 const ludo = require('./games/ludo');
@@ -32425,6 +32426,26 @@ _(or reply to their message)_
                     return;
                   }
                   // ============================================
+                  // 🏟️ TIC-TAC-TOE TOURNAMENT: `.j tourney create|join|start|bracket|board|top|forfeit|leave|cancel`
+                  // (must sit BEFORE the ttt family below - they match by prefix)
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} tourney` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} tourney `)
+                  ) {
+                    const tArgs = cleanTxt
+                      .replace(/\s+/g, " ")
+                      .substring(`${botConfig.getPrefix().toLowerCase()} tourney`.length)
+                      .trim()
+                      .split(/\s+/)
+                      .filter(Boolean);
+                    try {
+                      await tttTourney.handle(sock, chatId, senderJid, tArgs, m, BOT_MARKER, senderName);
+                    } catch (tErr) {
+                      console.error("[Tourney] handler error:", tErr);
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Tournament error: " + tErr.message }, { quoted: m });
+                    }
+                    return;
+                  }
                   // Handle `${botConfig.getPrefix().toLowerCase()}` ttt (3x3), `${botConfig.getPrefix().toLowerCase()}` tttt (4x4), `${botConfig.getPrefix().toLowerCase()}` ttttt (5x5)
                   if (
                     lowerTxt.startsWith(
@@ -32656,6 +32677,11 @@ _(or reply to their message)_
                         m,
                         BOT_MARKER,
                       );
+                    }
+
+                    // 🏟️ a live tournament match owns the move when the sender is in one
+                    if (tttTourney.hasPlayerMatch(chatId, senderJid)) {
+                      if (await tttTourney.handleMove(sock, chatId, senderJid, move, BOT_MARKER, m)) return;
                     }
 
                     return await tictactoe.handleMove(
@@ -33285,6 +33311,7 @@ _(or reply to their message)_
                   ) {
                     // Ignore valid sub-commands
                     const validPrefixes = [
+                      "tourney",
                       "ttt",
                       "tttt",
                       "ttttt",

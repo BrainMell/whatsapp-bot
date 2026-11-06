@@ -354,6 +354,8 @@ function getBoardText(board, gridSize, lastMoveIndex = null, winPattern = null) 
 // ============================================
 
 module.exports = {
+  // helpers shared with the tournament module (tictactoeTournament.js)
+  _internal: { checkWin, isDrawInevitable, normalizeJid, renderBoard, getBoardText, updateScoreboard, getAllScores },
   getAllScores,
   handleStartGame: async (sock, chatId, senderJid, mentionedJids, botMarker, m, gridSize = 3) => {
     // 💡 FIX: Validate grid size - only 3, 8, and 16 have win patterns defined.
