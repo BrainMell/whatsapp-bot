@@ -251,6 +251,12 @@ const UserSchema = new mongoose.Schema({
   // lastForgedAt kept (generic cooldown field).
   lastForgedAt: { type: Number, default: 0 },
 
+  // Owned summon cards are separate from UserCard collectibles.
+  summonCards: {
+    type: [{ cardId: { type: String, required: true }, grantedAt: { type: Number, default: 0 }, grantedBy: { type: String, default: '' }, source: { type: String, default: 'moderator' } }],
+    default: [],
+  },
+
   // Taming progress per enemy type (Necromancer capture pipeline).
   // Keyed by enemyType ID, value = kill count. At 10 kills, species is "tamed".
   tamingProgress: { type: Map, of: Number, default: {} },

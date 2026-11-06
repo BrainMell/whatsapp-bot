@@ -453,6 +453,22 @@ class GoImageService {
   }
 
   /*
+   * Generate a dedicated summon-card effect as a real GIF. No MP4 transcode.
+   */
+  async generateSummonCardGIF(data) {
+    return this._enqueue(async () => {
+      const response = await this.client.post('/api/combat/summon-card', data, {
+        responseType: 'arraybuffer', timeout: 15000,
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const gif = Buffer.from(response.data);
+      const signature = gif.toString('ascii', 0, 6);
+      if (!gif.length || (signature !== 'GIF87a' && signature !== 'GIF89a')) throw new Error('summon-card renderer returned a non-GIF payload');
+      return gif;
+    }, { priority: true, waitMs: 12000 });
+  }
+
+  /*
    * Generate Hunt Card - NEW 2026-07-29
    * Renders a hunting result image card (player + animal + loot).
    * Payload: { playerName, playerClass, biome, animal, animalSprite, item, itemRarity, xp, zeni, rank }

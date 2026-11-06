@@ -5722,6 +5722,9 @@ async function promptPlayerAction(sock, player, sessionKey) {
     msg += `📋 ${player.statusEffects.map((e) => e.icon).join(" ")}\n`;
   }
 
+  const summonCardTray = require('../summonCards').renderTray(player.jid, state);
+  if (summonCardTray) msg += '\n' + summonCardTray + '\n';
+
   const livingEnemies = (state.enemies || []).filter((e) => !e.isDead);
   if (livingEnemies.length > 0) {
     msg += `\n*ENEMIES:*\n`;
@@ -6099,6 +6102,31 @@ async function performAction(sock, player, action, sessionKey) {
     } else {
       resultMsg += `✨ Uses ability!`;
       turnInfo.action = { name: "Ability" };
+    }
+  } else if (action.type === "summon_card") {
+    const activation = await require('../summonCards').resolveActivation({
+      player, state, action, sessionKey, calculateDamage, applyStatusEffect, recordEnemyKill,
+      generateThreat: (actor, damage) => threatSystem.generateThreat(actor, damage),
+      onBossPhase: (boss) => checkBossPhase(sock, boss, state.chatId),
+    });
+    if (!activation.ok) {
+      resultMsg += activation.message || '❌ Summon-card activation failed.';
+      turnInfo.action = { name: 'Summon Card (failed)' };
+    } else {
+      resultMsg += activation.message;
+      turnInfo.action = { name: activation.card.abilityName };
+      turnInfo.target = activation.target;
+      turnInfo.damage = activation.damage;
+      turnInfo.effects.push(activation.card.element);
+      if (activation.card.status && !activation.wasEvaded && !activation.defeated) turnInfo.effects.push(activation.card.status.type.toUpperCase());
+      try {
+        const goService = require('../../../utils/goImageService');
+        const gif = await goService.generateSummonCardGIF({ cardId: activation.card.id, targetName: activation.target.name, damage: activation.damage });
+        await boundedSend(sock, state.chatId, { document: gif, mimetype: 'image/gif', fileName: activation.card.id + '-summon.gif', caption: '✨ ' + activation.card.abilityName });
+      } catch (gifErr) {
+        console.error('[SummonCards] GIF render/delivery failed:', gifErr.message);
+        resultMsg += '\n🎞️ _The summon animation could not be delivered; the combat effect still resolved._';
+      }
     }
   } else if (action.type === "item") {
     const itemKey = action.itemId;
@@ -6480,7 +6508,7 @@ async function performAction(sock, player, action, sessionKey) {
   }
 
   // 💡 BUG FIX: Check combat end for all action types after the turn messages have been sent.
-  if (action.type === "ability" || action.type === "attack" || action.type === "item") {
+  if (action.type === "ability" || action.type === "attack" || action.type === "item" || action.type === "summon_card") {
     if (await checkCombatEnd(sock, state, sessionKey)) {
       if (state.resolveTurn) {
         const r = state.resolveTurn;
@@ -11982,6 +12010,7 @@ const handleCombatAction = async (
   if (actionType === "atk") normalizedAction = "attack";
   if (actionType === "def") normalizedAction = "defend";
   if (actionType === "skill") normalizedAction = "ability";
+  if (actionType === "summon") normalizedAction = "summon_card";
 
   let action = { type: normalizedAction };
 
@@ -12000,6 +12029,17 @@ const handleCombatAction = async (
     if (action.targetIndex === undefined) {
       action.targetIndex = state.enemies.findIndex((e) => e.stats.hp > 0);
     }
+  }
+
+  if (normalizedAction === "summon_card") {
+    const parts = String(target || '').trim().split(/\s+/).filter(Boolean);
+    const cardId = parts[0];
+    const enemyNumber = parseInt(parts[1], 10);
+    if (!cardId || !Number.isInteger(enemyNumber)) return '❌ Usage: ' + botConfig.getPrefix() + ' combat summon <card> <enemy#>\nExample: ' + botConfig.getPrefix() + ' combat summon ifrit 1';
+    const prepared = require('../summonCards').prepareActivation(senderJid, cardId, state, player, enemyNumber - 1);
+    if (!prepared.ok) return prepared.message;
+    action.cardId = prepared.cardId;
+    action.targetIndex = prepared.targetIndex;
   }
 
   if (normalizedAction === "ability") {

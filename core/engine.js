@@ -1058,6 +1058,7 @@ const P = require("pino");
 const gambling = require("./gambling");
 const progression = require('./rpg/systems/characters/progression');
 const rpgCommands = require('./commands/rpgCommands');
+const summonCards = require('./rpg/systems/summonCards');
 const inventorySystem = require('./rpg/systems/inventory/inventorySystem');
 const lootSystem = require('./rpg/systems/inventory/lootSystem');
 const progressionCommands = require('./commands/progressionCommands');
@@ -10912,7 +10913,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                       const words = lowerTxt.split(' ');
                       const prefixPart = botConfig.getPrefix().toLowerCase();
                       const firstWord = words[0].startsWith(prefixPart) ? words[0].slice(prefixPart.length) : (words[0].startsWith('.') ? words[0].slice(1) : words[0]);
-                      const RPG_CMDS = new Set(['char', 'character', 'stats', 'kills', 'killcount', 'profile', 'me', 'whois', 'cardstyle', 'setdefaultcard', 'status', 'inventory', 'bag', 'inv', 'dismantle', 'equip', 'unequip', 'use', 'enhance', 'blacksmith', 'repair', 'inspect', 'shop', 'buy', 'recipes', 'craft', 'brew', 'forge', 'cook', 'source', 'mine', 'fish', 'fishing', 'cast', 'hunt', 'hunting', 'skill', 'skills', 'skilltree', 'st', 'abilities', 'allocate', 'classes', 'evolve', 'trial', 'quest', 'solo', 'adventure', 'join', 'stop', 'vote', 'raid', 'dungeon', 'abyss', 'world', 'bounty', 'duel', 'challenge', 'pvp', 'combat', 'summon', 'summons', 'dragonlord', 'dglord', 'dragongod', 'rune', 'clinic', 'heal', 'health', 'hospital', 'rank', 'adventurer', 'monster', 'handbook', 'guide', 'lore', 'leaderboard', 'lb', 'upgrade', 'claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'cdeck', 'tokens', 'event', 'setprice', 'esummon', 'fc', 'spawn', 'listitem', 'unlistitem', 'buyitem', 'itemmarket', 'market', 'balance', 'bal', 'daily', 'register', 'deposit', 'withdraw', 'transfer', 'rob', 'bug', 'rich', 'lottery', 'invest', 'investment', 'gamble', 'slots', 'dice', 'coinflip', 'blackjack', 'roulette', 'plinko', 'wheel', 'crash', 'cups', 'scratch', 'rps', 'horse', 'hl', 'mines', 'penalty', 'guess', 'guild', 'reset', 'handbook', 'tutorial']);
+                      const RPG_CMDS = new Set(['char', 'character', 'stats', 'kills', 'killcount', 'profile', 'me', 'whois', 'cardstyle', 'setdefaultcard', 'status', 'inventory', 'bag', 'inv', 'dismantle', 'equip', 'unequip', 'use', 'enhance', 'blacksmith', 'repair', 'inspect', 'shop', 'buy', 'recipes', 'craft', 'brew', 'forge', 'cook', 'source', 'mine', 'fish', 'fishing', 'cast', 'hunt', 'hunting', 'skill', 'skills', 'skilltree', 'st', 'abilities', 'allocate', 'classes', 'evolve', 'trial', 'quest', 'solo', 'adventure', 'join', 'stop', 'vote', 'raid', 'dungeon', 'abyss', 'world', 'bounty', 'duel', 'challenge', 'pvp', 'combat', 'summon', 'summons', 'summoncards', 'dragonlord', 'dglord', 'dragongod', 'rune', 'clinic', 'heal', 'health', 'hospital', 'rank', 'adventurer', 'monster', 'handbook', 'guide', 'lore', 'leaderboard', 'lb', 'upgrade', 'claim', 'coll', 'info', 'deck', 't2deck', 't2cdeck', 't2coll', 't2edeck', 't2ecoll', 'buycard', 'eshop', 'sc', 'auction', 'bid', 'lock', 'mergeall', 'merge', 'cs', 'cg', 'cltr', 'scc', 'maker', 'burn', 'accept', 'decline', 'cdeck', 'tokens', 'event', 'setprice', 'esummon', 'fc', 'spawn', 'listitem', 'unlistitem', 'buyitem', 'itemmarket', 'market', 'balance', 'bal', 'daily', 'register', 'deposit', 'withdraw', 'transfer', 'rob', 'bug', 'rich', 'lottery', 'invest', 'investment', 'gamble', 'slots', 'dice', 'coinflip', 'blackjack', 'roulette', 'plinko', 'wheel', 'crash', 'cups', 'scratch', 'rps', 'horse', 'hl', 'mines', 'penalty', 'guess', 'guild', 'reset', 'handbook', 'tutorial']);
                       const isRpg = RPG_CMDS.has(firstWord.toLowerCase());
                       if (isRpg) {
                         const bypass = await testerSystem.canBypassRpgLock(senderJid, chatId);
@@ -12858,12 +12859,9 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
-                    // 🃏 SUMMONS OVERHAUL (2026-11-06): the old summon system was
-                    // scraped — summons return as special cards (mod-only
-                    // acquisition for now). Keep the route alive so players get
-                    // a clean notice instead of "unknown command".
-                    if (primaryCmd === "summon" || primaryCmd === "summons") {
-                      await sock.sendMessage(chatId, { text: BOT_MARKER + "🐉 *Summons are being rebuilt.*\nThe old summon system has been retired — summons return as special cards with their own abilities. Hang tight. 🃏" });
+                    // 🃏 New owned Summon Cards inventory. No companion/deployment route.
+                    if (primaryCmd === "summon" || primaryCmd === "summons" || primaryCmd === "summoncards") {
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + summonCards.buildInventoryText(senderJid, botConfig.getPrefix()) });
                       return;
                     }
 

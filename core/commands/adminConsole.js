@@ -23,6 +23,7 @@ const classSystem = require('../rpg/systems/characters/classSystem');
 const inventorySystem = require('../rpg/systems/inventory/inventorySystem');
 const lootSystem = require('../rpg/systems/inventory/lootSystem');
 const skillTree = require('../rpg/systems/characters/skillTree');
+const summonCards = require('../rpg/systems/summonCards');
 
 // ─── HELPER: resolve class by name or ID ───────────────────────────────────
 function resolveClass(query) {
@@ -712,7 +713,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         }
         // Block special RPG objects (same as giveitem)
         const SPECIAL_RPG_OBJECTS = new Set([
-            'summon', 'summons', 'rune', 'runes', 'card', 'cards',
+            'summon_card', 'summon_cards', 'rune', 'runes', 'card', 'cards',
             'class', 'classes', 'skill', 'skills', 'guild', 'guilds'
         ]);
         if (SPECIAL_RPG_OBJECTS.has(item.id.toLowerCase())) {
@@ -755,7 +756,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         }
         // 💡 PHASE 7 2026-08-29: Block "special RPG objects" that aren't inventory items.
         const SPECIAL_RPG_OBJECTS = new Set([
-            'summon', 'summons', 'rune', 'runes', 'card', 'cards',
+            'summon_card', 'summon_cards', 'rune', 'runes', 'card', 'cards',
             'class', 'classes', 'skill', 'skills', 'guild', 'guilds'
         ]);
         if (SPECIAL_RPG_OBJECTS.has(item.id.toLowerCase())) {
@@ -772,9 +773,24 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         });
     }
 
-    // ── GIVE SUMMON — retired (summons overhaul 2026-11-06) ─────────────────
-    if (sub === 'givesummon') {
-        return await sock.sendMessage(chatId, { text: BOT_MARKER + '🐉 Summon granting is offline — the summon system is being rebuilt as special cards.' });
+    // ── SUMMON CARD GRANT / REVOKE: initial acquisition is moderator-only ──
+    if (sub === 'grantsummoncard') {
+        const parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!parsed) return;
+        const { target, remaining } = parsed;
+        if (!target || !remaining[0]) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Usage: ' + prefix + ' mod grantsummoncard <@user> <ifrit|leviathan|shiva>' });
+        const result = summonCards.grantCard(target, remaining[0], senderJid);
+        if (!result.success) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ ' + result.message });
+        return await sock.sendMessage(chatId, { text: BOT_MARKER + '✅ *SUMMON CARD GRANTED*\n\n👤 @' + economy.getDisplayName(target) + '\n' + result.card.icon + ' *' + result.card.name + '*\n✦ ' + result.card.abilityName, mentions: [target] });
+    }
+    if (sub === 'revokesummoncard') {
+        const parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!parsed) return;
+        const { target, remaining } = parsed;
+        if (!target) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Usage: ' + prefix + ' mod revokesummoncard <@user> <card|all>' });
+        const result = summonCards.revokeCard(target, remaining[0] || 'all');
+        if (!result.success) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ ' + result.message });
+        return await sock.sendMessage(chatId, { text: BOT_MARKER + '✅ ' + result.message + '\n👤 @' + economy.getDisplayName(target), mentions: [target] });
     }
 
     // ── GIVE RUNE (PHASE 7 2026-08-29) ───────────────────────────────────────
