@@ -38,6 +38,7 @@ jobs:
           node --check core/rpg/systems/homestead/interior3d/index.js
           node --check core/rpg/systems/homestead/homesteadRenderer.js
           node --check core/rpg/systems/summonCards/index.js
+          node --check core/rpg/systems/summonCards/system.js
           node --check core/rpg/systems/combat/combatImageGenerator.js
           node --check core/utils/goImageService.js
           node --check core/commands/adminConsole.js
