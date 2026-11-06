@@ -347,7 +347,7 @@ async function startRun(userId, playerStats, ctx = {}) {
     startMsg += '⚔️ *Floor 1 - ' + encounter.enemy.name + '*\n_HP: ' + (encounter.enemy.stats?.hp ?? encounter.enemy.hp) + '/' + (encounter.enemy.stats?.maxHp ?? encounter.enemy.maxHp) + '_\n\n_Attack with `' + P() + ' combat attack`_\n_Retreat with `' + P() + ' abyss retreat`_';
   } else if (encounter.type === 'wild_summon') {
     const species = encounter.wildSummonSpecies;
-    startMsg += '🐉 *Floor 1 - Wild ' + species + ' appeared!*\n_HP: ' + encounter.enemy.stats.hp + '/' + encounter.enemy.stats.maxHp + '_\n⚠️ _Defeat it to earn Summon Fragments!_\n\n_Attack with `' + P() + ' combat attack`_\n_Retreat with `' + P() + ' abyss retreat`_';
+    startMsg += '🐉 *Floor 1 - Wild ' + species + ' appeared!*\n_HP: ' + encounter.enemy.stats.hp + '/' + encounter.enemy.stats.maxHp + '_\n⚠️ _Defeat it to clear the floor and earn normal Abyss rewards._\n\n_Attack with `' + P() + ' combat attack`_\n_Retreat with `' + P() + ' abyss retreat`_';
   } else if (encounter.type === 'treasure') {
     startMsg += `${encounter.treasure.icon} *Floor 1 - ${encounter.treasure.name}*\n_${encounter.treasure.desc}_\n\n_Collect with \`${P()} abyss collect\`_\n_Skip with \`${P()} abyss skip\`_`;
   } else if (encounter.type === 'event') {
@@ -922,7 +922,7 @@ function applyNextEncounter(run, nextEncounter) {
       species: nextEncounter.wildSummonSpecies,
       rarity: nextEncounter.wildSummonRarity,
     };
-    msg += `\n🐉 *Floor ${run.currentFloor}* - Wild ${nextEncounter.wildSummonSpecies} appeared!\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n⚠️ _Defeat it to earn Summon Fragments!_\n_Attack with \`${P()} combat attack\`_`;
+    msg += `\n🐉 *Floor ${run.currentFloor}* - Wild ${nextEncounter.wildSummonSpecies} appeared!\nHP: ${Math.floor(nextEncounter.enemy.stats?.hp ?? nextEncounter.enemy.hp)}/${Math.floor(nextEncounter.enemy.stats?.maxHp ?? nextEncounter.enemy.maxHp)}\n⚠️ _Defeat it to clear the floor and earn normal Abyss rewards._\n_Attack with \`${P()} combat attack\`_`;
   } else if (nextEncounter.type === 'treasure') {
     run.currentEnemy = null;
     run.currentEncounterType = 'treasure';
