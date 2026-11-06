@@ -361,7 +361,7 @@ function stepMessage(id, prefix, track) {
         case 'ab_loop':
             return `🕳️ *The loop:* every floor spawns a fight. Win and you choose - descend deeper for better loot, or extract with \`${p} abyss retreat\` and keep everything. **Die inside and you lose most of it.** Greed is the real boss.\n\nSend \`next\` to continue.`;
         case 'ab_wilds':
-            return `🕳️ *What's down there:* runes from Floor 21+, fragment drops, and scale-topping gear. Bring potions. Bring humility.\n\nSend \`next\` to finish.`;
+            return `🕳️ *What's down there:* runes from Floor 21+, rare loot, and scale-topping gear. Bring potions. Bring humility.\n\nSend \`next\` to finish.`;
 
         // ══ TRACK: endgame (L25) — Raids & the Deep End ══
         case 'eg_raid':
