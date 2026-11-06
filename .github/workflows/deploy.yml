@@ -30,12 +30,23 @@ jobs:
           node --check core/games/murdermystery/halloweenCards.js
           node --check scripts/qa_murdermystery_halloween.js
           node scripts/qa_murdermystery_halloween.js
-          node --check core/rpg/guildAdventure.js
-          node --check core/rpg/abyssScene.js
-          node --check core/rpg/interior3d/scene.js
-          node --check core/rpg/interior3d/index.js
-          node --check core/rpg/homesteadRenderer.js
-          node --check core/rpg/partyDungeonRank.js
+          node --check core/rpg/systems/adventures/guildAdventure.js
+          node --check core/rpg/systems/adventures/abyssScene.js
+          node --check core/rpg/systems/adventures/abyssSystem.js
+          node --check core/rpg/systems/adventures/partyDungeonRank.js
+          node --check core/rpg/systems/homestead/interior3d/scene.js
+          node --check core/rpg/systems/homestead/interior3d/index.js
+          node --check core/rpg/systems/homestead/homesteadRenderer.js
+          node --check core/rpg/systems/summonCards/index.js
+          node --check core/rpg/systems/combat/combatImageGenerator.js
+          node --check core/utils/goImageService.js
+          node --check core/commands/adminConsole.js
+          node --check core/commands/rpgCommands.js
+          node --check core/commands/shopCommands.js
+          node --check core/rpg/systems/inventory/inventorySystem.js
+          node --check core/rpg/systems/inventory/lootSystem.js
+          node --check scripts/qa_summon_cards.js
+          node scripts/qa_summon_cards.js
           node --check scripts/qa_party_dungeon_rank.js
           node --check scripts/qa_homestead_glb.js
           node --check scripts/abyss_visual_qa.js
