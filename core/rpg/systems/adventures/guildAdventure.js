@@ -4979,8 +4979,14 @@ function _jpegDims(buf) {
 // ANY failure returns null → the caller falls back to the old clip+card sends.
 const MERGE_W = 640, MERGE_H = 480;
 async function _mergeOverlayMaterialsWithCard(clips, cardJpeg, cardHoldSec, t0) {
-  const { spawn } = require('child_process');
+  const { spawn, execFile } = require('child_process');
   const ffmpegBin = () => process.env.FFMPEG_PATH || 'ffmpeg';
+  const run = (bin, a, ms) => new Promise((resolve, reject) => {
+    execFile(bin, a, { timeout: ms, maxBuffer: 4 * 1024 * 1024 }, (err, _o, stderr) => {
+      if (err) { const tail = String(stderr || '').split('\n').filter(Boolean).slice(-2).join(' | '); reject(new Error(`${bin}: ${err.message}${tail ? ' — ' + tail : ''}`)); }
+      else resolve(_o);
+    });
+  });
   const dir = path.join(require('os').tmpdir(), `deathmats-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
   try {
     fs.mkdirSync(dir, { recursive: true });
@@ -4989,6 +4995,36 @@ async function _mergeOverlayMaterialsWithCard(clips, cardJpeg, cardHoldSec, t0) 
     const cardFrames = Math.max(1, Math.round(cardHoldSec * 15));
     const outPath = path.join(dir, 'merged.mp4');
     const deathOverlay = require('../combat/deathOverlay');
+    // ⚡ v6 CONCAT-COPY PRIMARY: the clips are already-encoded H.264 from the
+    // overlay fast path. Encode the card segment to the EXACT same params
+    // (640x480@15, baseline, ultrafast, yuv420p) and remux the sequence —
+    // no re-encode of the animation at all (~50ms copy vs ~600-900ms encode).
+    const allMp4 = clips.every((c) => c && Buffer.isBuffer(c.mp4) && c.mp4.length > 1000);
+    if (allMp4) {
+      try {
+        const cardSeg = path.join(dir, 'cardseg.mp4');
+        await run('ffmpeg', ['-v', 'error', '-y', '-framerate', '15', '-i', cardPath,
+          '-vf', `loop=loop=${cardFrames - 1}:size=1:start=0,setpts=N/(15*TB),scale=${MERGE_W}:${MERGE_H}:force_original_aspect_ratio=decrease,pad=${MERGE_W}:${MERGE_H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p`,
+          '-frames:v', String(cardFrames),
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'baseline', '-crf', '24', '-threads', '2', '-an', cardSeg], 10000);
+        const listPath = path.join(dir, 'list.txt');
+        const entries = clips.map((c, k) => {
+          const p = path.join(dir, `clip${k}.mp4`);
+          fs.writeFileSync(p, c.mp4);
+          return `file '${p}'`;
+        });
+        entries.push(`file '${cardSeg}'`);
+        fs.writeFileSync(listPath, entries.join('\n') + '\n');
+        await run('ffmpeg', ['-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', '-movflags', '+faststart', outPath], 10000);
+        const outC = fs.readFileSync(outPath);
+        if (!outC || outC.length < 1000) throw new Error('concat-copy output empty');
+        if (outC.length > 16 * 1024 * 1024) throw new Error(`concat-copy too large for WA (${outC.length}B)`);
+        console.log(`[DeathFx] kill-turn card merged CONCAT-COPY in ${Date.now() - t0}ms (${clips.length} clip(s)+card, ${outC.length}B)`);
+        return outC;
+      } catch (e) {
+        console.warn(`[DeathFx] concat-copy merge failed after ${Date.now() - t0}ms, falling back to stream merge:`, e.message);
+      }
+    }
     if (clips.length === 1) {
       // ⚡ STREAMING (the common solo kill): raw BGRA frames piped straight
       // into the final concat+card encode — canvas composites while x264
@@ -5023,13 +5059,6 @@ async function _mergeOverlayMaterialsWithCard(clips, cardJpeg, cardHoldSec, t0) 
       return out;
     }
     // N>1 (rare per-enemy fallback): canvas stills + one filter graph
-    const { execFile } = require('child_process');
-    const run = (bin, a, ms) => new Promise((resolve, reject) => {
-      execFile(bin, a, { timeout: ms, maxBuffer: 4 * 1024 * 1024 }, (err, _o, stderr) => {
-        if (err) { const tail = String(stderr || '').split('\n').filter(Boolean).slice(-2).join(' | '); reject(new Error(`${bin}: ${err.message}${tail ? ' — ' + tail : ''}`)); }
-        else resolve(_o);
-      });
-    });
     const args = ['-y'];
     const chain = [];
     const vids = [];
