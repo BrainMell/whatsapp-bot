@@ -252,7 +252,7 @@ async function runStyleJudgeCommand(ctx) {
     // economy is already loaded by the card system — lazy require, display name only
     let displayName = (jid) => String(jid || "").split("@")[0];
     try {
-        const economy = require("../rpg/economy");
+        const economy = require("../rpg/systems/economy/economy");
         if (typeof economy.getDisplayName === "function") displayName = economy.getDisplayName;
     } catch (e) {}
 

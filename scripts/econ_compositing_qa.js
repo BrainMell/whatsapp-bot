@@ -52,7 +52,7 @@ function runSibling(step, jid) {
 (async () => {
     await connectDB();
     const User = require('../core/models/User');
-    const economy = require('../core/rpg/economy');
+    const economy = require('../core/rpg/systems/economy/economy');
 
     // ════ P1 — THE AKON BUG ════
     const jid = '15550001001@s.whatsapp.net';

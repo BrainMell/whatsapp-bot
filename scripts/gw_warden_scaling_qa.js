@@ -22,8 +22,8 @@ function check(name, cond, extra) {
 }
 
 const ROOT = path.join(__dirname, '..');
-const CFG = require('../core/rpg/guildWar/config');
-const mapEngine = require('../core/rpg/guildWar/mapEngine');
+const CFG = require('../core/rpg/systems/guildwar/config');
+const mapEngine = require('../core/rpg/systems/guildwar/mapEngine');
 
 // ── A3/C: config surface ──
 console.log('\n— A/C: config surface —');
@@ -72,7 +72,7 @@ console.log('\n— A1: warden placement —');
     // Call the real spawner (pure placement math, zero DB). Awaited by the
     // main runner before it exits.
     global.__placementP = (async () => {
-        const roomsMod = require('../core/rpg/guildWar/rooms');
+        const roomsMod = require('../core/rpg/systems/guildwar/rooms');
         const res = await roomsMod.spawnFinaleBosses(fakeDoc);
         GuildWarEvent.updateOne = origUpdate;
         GuildWarEvent.findOneAndUpdate = origFindOneAndUpdate;
@@ -118,7 +118,7 @@ console.log('\n— G: source pins —');
 // ── H: rank mission snapshot (pure) ──
 console.log('\n— H: rank card truth —');
 {
-    const classSystem = require('../core/rpg/classSystem');
+    const classSystem = require('../core/rpg/systems/characters/classSystem');
     const userDoc = { stats: { questsWon: 20, bossesDefeated: 2 }, pvpWins: 1 };
     const merged = { ...(userDoc.stats || {}), pvpWins: userDoc.pvpWins ?? (userDoc.stats?.pvpWins ?? 0) };
     const mp = classSystem.checkMissionProgress(1, merged);
@@ -163,9 +163,9 @@ async function connectDB() {
     }
     const mongoose = require('mongoose');
     const GuildWarEvent = require('../core/models/GuildWarEvent');
-    const state = require('../core/rpg/guildWar/state');
-    const roomsMod = require('../core/rpg/guildWar/rooms');
-    const ruinsPvp = require('../core/rpg/guildWar/ruinsPvp');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const roomsMod = require('../core/rpg/systems/guildwar/rooms');
+    const ruinsPvp = require('../core/rpg/systems/guildwar/ruinsPvp');
 
     // ── A2: startEvent spawns the wardens; hourglass + end paths ──
     console.log('\n— A2: wardens at war start (DB) —');
@@ -272,11 +272,11 @@ async function connectDB() {
     check('sweeper has nothing left to resolve (no double concede)', pruned === 0);
 
     // D: an active duel binds the player — challenge refuses
-    const economy = require('../core/rpg/economy');
+    const economy = require('../core/rpg/systems/economy/economy');
     for (const [uj, un] of [['pa@s.whatsapp.net', 'PA'], ['pc@s.whatsapp.net', 'PC']]) {
         if (!economy.isRegistered(uj)) economy.registerUser(uj, un);
     }
-    const pvp = require('../core/rpg/pvpSystem');
+    const pvp = require('../core/rpg/systems/pvp/pvpSystem');
     const begun = pvp.beginRuinsDuel('pa@s.whatsapp.net', 'pc@s.whatsapp.net', { eventId: eventId3, roomKey, virtualChatId: `ruins:qa:${Date.now()}` });
     check('test duel began', begun.success === true, begun.message || '');
     if (begun.success) {
@@ -308,7 +308,7 @@ async function connectDB() {
     });
     const msDoc = await GuildWarEvent.findOne({ eventId: eventId4 }).lean();
     const msPlayer = msDoc.players[0];
-    const encountersMod = require('../core/rpg/guildWar/encounters');
+    const encountersMod = require('../core/rpg/systems/guildwar/encounters');
     await encountersMod.maybeDiscoveryMilestone(msDoc, msPlayer);
     await new Promise((r) => setTimeout(r, 1500)); // feed.queue's DB mirror is async — let it land
     let msAfter = await GuildWarEvent.findOne({ eventId: eventId4 }).lean();

@@ -58,7 +58,7 @@ const start = gaSrc.indexOf('const DUNGEON_ENVIRONMENTS');
 const end = gaSrc.indexOf('};', gaSrc.indexOf('SIMPLE_FOREST', start));
 const envSrc = gaSrc.slice(start, end + 2);
 const DUNGEON_ENVIRONMENTS = eval(envSrc + '\nDUNGEON_ENVIRONMENTS');
-const dwRenderer = require('../core/rpg/deadWorldRenderer');
+const dwRenderer = require('../core/rpg/systems/world/deadWorldRenderer');
 
 const envIds = Object.keys(DUNGEON_ENVIRONMENTS);
 check(envIds.length >= 11, `dungeon environments present (${envIds.length})`);

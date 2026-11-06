@@ -17,7 +17,7 @@ async function main() {
   await mongoose.connect(mongoUri);
   console.log('✅ Connected.\n');
 
-  const runeSystem = require('../core/rpg/runeSystem');
+  const runeSystem = require('../core/rpg/systems/inventory/runeSystem');
   const RUNE_TYPES = runeSystem.RUNE_TYPES;
   const RUNE_TIERS = runeSystem.RUNE_TIERS;
 

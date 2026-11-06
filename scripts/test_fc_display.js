@@ -5,7 +5,7 @@
 //   NEW:     shows the card library ID (e.g. "3-04521") + global Copy #.
 // Pure-function test - no DB connection required.
 
-const cardSystem = require('../core/rpg/cardSystem');
+const cardSystem = require('../core/rpg/systems/cards/cardSystem');
 
 let pass = 0, fail = 0;
 function check(name, cond, detail = '') {

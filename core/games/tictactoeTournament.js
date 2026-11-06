@@ -10,7 +10,7 @@
 // (early rounds 3x3 -> semi-finals 8x8 -> final 16x16).
 // ============================================
 const botConfig = require('../../botConfig');
-const economy = require('../rpg/economy');
+const economy = require('../rpg/systems/economy/economy');
 const system = require('../utils/system');
 const ttt = require('./tictactoe')._internal;
 const render = require('./tourneyRender');

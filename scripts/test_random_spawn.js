@@ -22,7 +22,7 @@ async function setup() {
   conn = await mongoose.connect(MONGO_URI);
   console.log('[+] Connected:', conn.connection.db.databaseName);
   System = require('../core/models/System');
-  cardSystem = require('../core/rpg/cardSystem');
+  cardSystem = require('../core/rpg/systems/cards/cardSystem');
 }
 
 async function cleanup() {

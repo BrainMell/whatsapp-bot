@@ -4,9 +4,9 @@ require('dotenv').config();
 const connectDB = require('../db');
 const Summon = require('../core/models/Summon');
 const User = require('../core/models/User');
-const economy = require('../core/rpg/economy');
-const summonSystem = require('../core/rpg/summonSystem');
-const registry = require('../core/rpg/summonRegistry');
+const economy = require('../core/rpg/systems/economy/economy');
+const summonSystem = require('../core/rpg/systems/summons/summonSystem');
+const registry = require('../core/rpg/systems/summons/summonRegistry');
 const goService = require('../core/utils/goImageService');
 
 (async () => {

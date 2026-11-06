@@ -23,7 +23,7 @@ const { createCanvas, loadImage } = require('canvas');
 
 const OUT = process.argv[2] || '/tmp/qa24';
 fs.mkdirSync(OUT, { recursive: true });
-const dockPov = require('../core/rpg/dockPov');
+const dockPov = require('../core/rpg/systems/world/dockPov');
 const mediaConvert = require('../core/utils/mediaConvert');
 
 let pass = 0, fail = 0;
@@ -136,7 +136,7 @@ const RIBBON_B = { head: 'The Pond', lines: ['3× Pond Minnow — COMMON · sell
         process.env.FFMPEG_PATH = '/nonexistent-ffmpeg';
         const mod = require.resolve('../core/utils/mediaConvert');
         delete require.cache[mod];
-        const dockPov2 = (() => { delete require.cache[require.resolve('../core/rpg/dockPov')]; return require('../core/rpg/dockPov'); })();
+        const dockPov2 = (() => { delete require.cache[require.resolve('../core/rpg/dockPov')]; return require('../core/rpg/systems/world/dockPov'); })();
         const tC = Date.now();
         const cC = await dockPov2.renderFishingGif({ biome: 'isle', lvl: 1, band: 'low', banner: RIBBON_FB, phase: 'day' });
         check('fallback returned a GIF', cC.contentType === 'image/gif' && require('../core/utils/gif89a').isGifBuffer(cC.buffer), `${cC.buffer.length}B`);

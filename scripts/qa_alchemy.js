@@ -10,8 +10,8 @@ const { createCanvas } = require('canvas');
 
 (async () => {
     fs.mkdirSync(OUT, { recursive: true });
-    const K = require('../core/rpg/kingdom3d');
-    const r = require('../core/rpg/homesteadBaseRenderer');
+    const K = require('../core/rpg/systems/world/kingdom3d');
+    const r = require('../core/rpg/systems/homestead/homesteadBaseRenderer');
 
     const orig = K.HexWorld.prototype.put;
     let W = null;

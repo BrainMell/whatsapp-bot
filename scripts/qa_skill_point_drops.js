@@ -22,8 +22,8 @@ process.env.GO_IMAGE_SERVICE_URL = 'http://127.0.0.1:1'; // force portrait-card 
 delete require.cache[require.resolve('../botConfig')];
 
 const botConfig = require('../botConfig');
-const economy = require('../core/rpg/economy');
-const guildAdventure = require('../core/rpg/guildAdventure');
+const economy = require('../core/rpg/systems/economy/economy');
+const guildAdventure = require('../core/rpg/systems/adventures/guildAdventure');
 
 let pass = 0, fail = 0;
 function ok(name, cond, extra) {

@@ -5,8 +5,8 @@ process.env.GW_MOVE_COOLDOWN_MS = '300';
 process.env.GW_SIM_DB = 'gwitemqa' + Math.floor(Math.random() * 100000);
 const L = require('./mp_lib');
 const fs = require('fs');
-const state = require('../core/rpg/guildWar/state');
-const roomScene = require('../core/rpg/guildWar/roomScene');
+const state = require('../core/rpg/systems/guildwar/state');
+const roomScene = require('../core/rpg/systems/guildwar/roomScene');
 const GWE = require('../core/models/GuildWarEvent');
 
 (async () => {

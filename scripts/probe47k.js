@@ -6,9 +6,9 @@
 //   base: the pack cave IS the mine at every level now (struct_mine family retired),
 //   worksite dressing grows (ladder lv2+, ore-hoist scaffold lv3).
 process.env.QA_MODE = '1';
-const K = require('../core/rpg/kingdom3d');
-const g = require('../core/rpg/guildBaseRenderer');
-const r = require('../core/rpg/homesteadBaseRenderer');
+const K = require('../core/rpg/systems/world/kingdom3d');
+const g = require('../core/rpg/systems/guildwar/guildBaseRenderer');
+const r = require('../core/rpg/systems/homestead/homesteadBaseRenderer');
 const orig = K.HexWorld.prototype.put;
 let log = [], hexes = [], W = null;
 K.HexWorld.prototype.put = function (name, c, rr, o) {

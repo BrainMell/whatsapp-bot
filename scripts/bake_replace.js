@@ -12,8 +12,8 @@ const OUT = process.argv[2] || '/tmp/replace';
 process.env.QA_MODE = process.env.QA_MODE || '1';
 (async () => {
     fs.mkdirSync(OUT, { recursive: true });
-    const r = require('../core/rpg/homesteadBaseRenderer');
-    const g = require('../core/rpg/guildBaseRenderer');
+    const r = require('../core/rpg/systems/homestead/homesteadBaseRenderer');
+    const g = require('../core/rpg/systems/guildwar/guildBaseRenderer');
     const L = r.LAYOUT;
     const plots = [{ id: 1, x: 8, y: 1 }, { id: 2, x: 13, y: 7 }, { id: 3, x: 4, y: 5 }].map((p) => ({ ...p, fw: 3, fh: 3 }));
     const mkState = (owner) => ({ owner, guildName: 'Iron Wolves', guild: { continent: 'wildwood' }, continent: 'wildwood',

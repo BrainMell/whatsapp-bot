@@ -4,11 +4,11 @@
 
 const fs = require('fs');
 const path = require('path');
-const economy = require('../rpg/economy');
-const inventorySystem = require('../rpg/inventorySystem');
-const lootSystem = require('../rpg/lootSystem');
-const classSystem = require('../rpg/classSystem');
-const progression = require('../rpg/progression');
+const economy = require('../rpg/systems/economy/economy');
+const inventorySystem = require('../rpg/systems/inventory/inventorySystem');
+const lootSystem = require('../rpg/systems/inventory/lootSystem');
+const classSystem = require('../rpg/systems/characters/classSystem');
+const progression = require('../rpg/systems/characters/progression');
 const botConfig = require('../../botConfig');
 const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
 const profileHelper = require('../utils/profileHelper');
@@ -639,7 +639,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
     // 💡 2026-09-11: styled profile card FIRST (10 owner-approved designs,
     // player-picked via <prefix> cardstyle). Go service stays as fallback.
     try {
-        const profileCardRenderer = require('../rpg/profileCardRenderer');
+        const profileCardRenderer = require('../rpg/systems/meta/profileCardRenderer');
         let pfpBuffer = null;
         if (pfpUrl) {
             try {
@@ -649,7 +649,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
         }
         // 💡 OWNER RULE: "[guild title] of [guild name]" - title falls back to role; empty when no guild
         let _guildCard = { name: '', title: '' };
-        try { _guildCard = require('../rpg/guilds').getCardGuildInfo(finalJid) || _guildCard; } catch (e) {}
+        try { _guildCard = require('../rpg/systems/guildwar/guilds').getCardGuildInfo(finalJid) || _guildCard; } catch (e) {}
         const styledEquipStats = inventorySystem.getEquipmentStats(finalJid);
         const styledBuffer = await profileCardRenderer.renderProfileCard({
             user,

@@ -45,8 +45,8 @@ async function simulateDamageFormula() {
   const connectDB = require('../db');
   await connectDB();
 
-  const economy = require('../core/rpg/economy');
-  const progression = require('../core/rpg/progression');
+  const economy = require('../core/rpg/systems/economy/economy');
+  const progression = require('../core/rpg/systems/characters/progression');
   const User = require('../core/models/User');
 
   // Get a range of real users at different levels
@@ -188,7 +188,7 @@ async function simulateCombatImages() {
 async function simulateMentionDisplay() {
   section('SIMULATION 3: @-mention Display - Nickname Resolution');
 
-  const economy = require('../core/rpg/economy');
+  const economy = require('../core/rpg/systems/economy/economy');
   const connectDB = require('../db');
   await connectDB();
 
@@ -232,7 +232,7 @@ async function simulateMentionDisplay() {
 async function simulatePvPRecovery() {
   section('SIMULATION 4: PvP Stuck-State Recovery');
 
-  const pvpSystem = require('../core/rpg/pvpSystem');
+  const pvpSystem = require('../core/rpg/systems/pvp/pvpSystem');
 
   // Test 1: cancelDuel with no active duel
   const r1 = pvpSystem.cancelDuel('sim-test-chat-empty-' + Date.now());
@@ -333,7 +333,7 @@ async function simulateAbyssDisplay() {
 async function simulateSummonFields() {
   section('SIMULATION 6: Summon Field Compatibility - Go Service Struct');
 
-  const summonSystem = require('../core/rpg/summonSystem');
+  const summonSystem = require('../core/rpg/systems/summons/summonSystem');
 
   // Test with multiple species
   const testSpecies = ['skeleton', 'flame_elemental', 'wolf', 'wargreymon', 'beelzemon'];

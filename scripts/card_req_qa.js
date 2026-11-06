@@ -60,7 +60,7 @@ async function connectDB() {
     // earlier run would pollute the per-group token counts)
     for (const M of [User, CardStat, UserCard, CardDeck, CardMarket, CardSpawn, System]) await M.deleteMany({}).catch(() => {});
 
-    const economy = require('../core/rpg/economy');
+    const economy = require('../core/rpg/systems/economy/economy');
     await economy.loadEconomy();
 
     const J = (n) => `${n}@s.whatsapp.net`;
@@ -74,7 +74,7 @@ async function connectDB() {
     await economy.saveUser(owner).catch(() => {});
     for (const j of [mod, player, other1, other2, victim, buyer, seller]) await economy.saveUser(j).catch(() => {});
 
-    const cardSystem = require('../core/rpg/cardSystem');
+    const cardSystem = require('../core/rpg/systems/cards/cardSystem');
 
     const sent = [];
     const sock = { sendMessage: async (chatId, content) => { sent.push({ chatId, content }); return {}; } };

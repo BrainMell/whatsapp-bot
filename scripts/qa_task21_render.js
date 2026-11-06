@@ -8,9 +8,9 @@ fs.mkdirSync(outDir, { recursive: true });
 const { createCanvas } = require('canvas');
 
 (async () => {
-    const dockPov = require('../core/rpg/dockPov');
-    const huntPov = require('../core/rpg/huntPov');
-    const dayNight = require('../core/rpg/dayNight');
+    const dockPov = require('../core/rpg/systems/world/dockPov');
+    const huntPov = require('../core/rpg/systems/world/huntPov');
+    const dayNight = require('../core/rpg/systems/shared/dayNight');
 
     // 1) pond stills at card scale (like .j base pond) across phases
     for (const phase of ['day', 'dawn', 'golden', 'dusk', 'night']) {
@@ -41,7 +41,7 @@ const { createCanvas } = require('canvas');
     await huntPov.paintStill(hvn2, 960, 720, { biome: 'isle', lvl: 3, phase: 'night' });
     fs.writeFileSync(`${outDir}/hunt_still_night.png`, hvn.toBuffer('image/png'));
     // 5) structure cards day vs night (blacksmith + mines)
-    const ss = require('../core/rpg/structureScenes');
+    const ss = require('../core/rpg/systems/world/structureScenes');
     for (const [t, ph, nm] of [['blacksmith', 'day', 'bs_day'], ['blacksmith', 'night', 'bs_night'], ['mines', 'night', 'mines_night'], ['alchemy', 'dusk', 'alch_dusk'], ['pond', 'day', 'pondview_day'], ['pond', 'night', 'pondview_night'], ['hunting', 'day', 'huntview_day'], ['hunting', 'night', 'huntview_night']]) {
         const r = await ss.renderStructureCard({ type: t, level: 2, biome: 'isle', phase: ph, spec: { title: t.toUpperCase(), subtitle: 'QA' } });
         fs.writeFileSync(`${outDir}/card_${nm}.jpg`, r.buffer);
@@ -50,7 +50,7 @@ const { createCanvas } = require('canvas');
     console.log('WROTE', fs.readdirSync(outDir).length, 'files to', outDir);
 
     // 6) the 3D base map day vs night (homestead renderer)
-    const R = require('../core/rpg/homesteadBaseRenderer');
+    const R = require('../core/rpg/systems/homestead/homesteadBaseRenderer');
     const state = {
         owner: 'QA21', biome: 'isle',
         structures: [
@@ -66,14 +66,14 @@ const { createCanvas } = require('canvas');
         fs.writeFileSync(`${outDir}/base3d_${ph}.jpg`, out.buffer);
     }
     // 7) guild grounds day vs night
-    const G = require('../core/rpg/guildBaseRenderer');
+    const G = require('../core/rpg/systems/guildwar/guildBaseRenderer');
     const gs = { name: 'Iron Wolves', level: 12, archetype: 'ADVENTURER', buildings: { hall: 5, training: 5, treasury: 5 }, memberCount: 12, memberCap: 25, emblemColor: '#a02c3c', emblemIcon: 'W', biome: 'highlands', continent: 'wildwood' };
     for (const ph of ['day', 'night']) {
         const out = await G.renderGuildBaseImage(gs, { static: true, phase: ph });
         fs.writeFileSync(`${outDir}/guild3d_${ph}.jpg`, out.buffer);
     }
     // 8) the world atlas day vs night
-    const atlas = require('../core/rpg/worldAtlasRenderer');
+    const atlas = require('../core/rpg/systems/world/worldAtlasRenderer');
     for (const ph of ['day', 'night']) {
         const buf = await atlas.renderWorldAtlas({ guilds: [{ name: 'Iron Wolves', marker: { x: 0.42, y: 0.4 }, hall: 5, members: 12, color: '#a02c3c', type: 'W', realm: 'wildwood' }], phase: ph });
         if (buf) fs.writeFileSync(`${outDir}/atlas_${ph}.jpg`, buf);

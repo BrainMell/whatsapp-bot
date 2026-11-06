@@ -51,8 +51,8 @@ require.cache[__userModelPath] = {
     },
 };
 
-const encounterFramework = require('../core/rpg/encounterFramework');
-const worldAlignment = require('../core/rpg/worldAlignment');
+const encounterFramework = require('../core/rpg/systems/combat/encounterFramework');
+const worldAlignment = require('../core/rpg/systems/world/worldAlignment');
 
 function mockSock() {
     const sent = [];
@@ -64,7 +64,7 @@ function mockSock() {
 
 (async () => {
     // ── 1. cadence sanity: env-selected period, T0 aligned, exact bounds
-    const cosmology = require('../core/rpg/cosmology');
+    const cosmology = require('../core/rpg/systems/world/cosmology');
     assert.strictEqual(cosmology.ALIGNMENT_PERIOD_MS, parseFloat(process.env.TRIUNE_ALIGNMENT_HOURS) * 3600000, 'period honors env');
     assert.strictEqual(cosmology.isTriuneAligned(cosmology.T0), true, 'T0 is an alignment start');
 

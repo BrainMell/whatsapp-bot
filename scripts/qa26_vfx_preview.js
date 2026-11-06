@@ -16,10 +16,10 @@ const path = require('path');
     const aoe = String(process.argv[5] || '').toLowerCase() === 'aoe';
     fs.mkdirSync(outDir, { recursive: true });
 
-    const skillVfx = require('../core/rpg/skillVfx');
-    const ultFx = require('../core/rpg/ultimateFx');
-    const skillTreeData = require('../core/rpg/skillTree').SKILL_TREES || {};
-    const stage = require('../core/rpg/vfxPreviewStage')(aoe ? 3 : 1);
+    const skillVfx = require('../core/rpg/systems/combat/skillVfx');
+    const ultFx = require('../core/rpg/systems/combat/ultimateFx');
+    const skillTreeData = require('../core/rpg/systems/characters/skillTree').SKILL_TREES || {};
+    const stage = require('../core/rpg/systems/combat/vfxPreviewStage')(aoe ? 3 : 1);
     const sigs = skillVfx.SIGNATURE_SKILLS;
 
     const info = (cid) => {

@@ -21,10 +21,10 @@ require('./core/utils/canvasAutoGate').install();
 // boot+20s so every real haul afterwards pays disk prices (~0.6s fresh
 // plaster / ~80ms repeat). Guarded, once, unref'd — never holds the process.
 setTimeout(() => {
-    try { require('./core/rpg/minePov').warm(); } catch (e) { /* lane optional */ }
+    try { require('./core/rpg/systems/world/minePov').warm(); } catch (e) { /* lane optional */ }
 }, 20000).unref();
 // guild cards: pre-bake every guild x every time of day so `.j guild` is a disk read
-try { require('./core/rpg/guildCardWarmer').schedule(); } catch (e) { /* optional */ }
+try { require('./core/rpg/systems/guildwar/guildCardWarmer').schedule(); } catch (e) { /* optional */ }
 
 /*
  * GLOBAL RAM TRAP - ULTRA AGGRESSIVE
@@ -627,7 +627,7 @@ async function boot() {
     // 3. Schedule weekly wealth tax (Phase 1 - Economy Rebalance)
     // (GLOBAL_SCHEDULERS gate: global-DB scheduler → runs on ONE process only)
     if (RUN_GLOBAL_SCHEDULERS) try {
-      const economy = require('./core/rpg/economy');
+      const economy = require('./core/rpg/systems/economy/economy');
       if (typeof economy.scheduleWealthTax === 'function') {
         economy.scheduleWealthTax();
         console.log("💸 Wealth tax scheduler initialized.");
@@ -642,14 +642,14 @@ async function boot() {
     // 3c. Schedule weekly raid spawn + voting round resolver (Phase 5 - Avatar Raid)
     // (GLOBAL_SCHEDULERS gate: global-DB scheduler → runs on ONE process only)
     if (RUN_GLOBAL_SCHEDULERS) try {
-      const raidSystem = require('./core/rpg/raidSystem');
+      const raidSystem = require('./core/rpg/systems/adventures/raidSystem');
       // Spawn raid boss if it doesn't exist for this week (runs on boot + every hour)
       const checkAndSpawnRaid = async () => {
         try {
           const existing = await raidSystem.getRaidStatus();
           if (!existing) {
             // Estimate active player count from economy
-            const economy = require('./core/rpg/economy');
+            const economy = require('./core/rpg/systems/economy/economy');
             const econInfo = economy.getGlobalEconomyStats ? economy.getGlobalEconomyStats() : { totalUsers: 50 };
             const activeCount = econInfo.totalUsers || 50;
             const result = await raidSystem.spawnWeeklyRaid(activeCount);
@@ -683,7 +683,7 @@ async function boot() {
     // 3d. Schedule daily bounty expiry (Phase 6 - Bounty System)
     // (GLOBAL_SCHEDULERS gate: global-DB scheduler → runs on ONE process only)
     if (RUN_GLOBAL_SCHEDULERS) try {
-      const bountySystem = require('./core/rpg/bountySystem');
+      const bountySystem = require('./core/rpg/systems/adventures/bountySystem');
       const ONE_DAY = 24 * 60 * 60 * 1000;
       // First run in 30 min, then daily
       setTimeout(() => {
@@ -714,10 +714,10 @@ async function boot() {
     //     there's ONE source of truth.
     //   - Non-fatal: any error for one user doesn't break the tick.
     try {
-      const economy = require('./core/rpg/economy');
-      const classSystem = require('./core/rpg/classSystem');
-      const progression = require('./core/rpg/progression');
-      const skillTreeMod = require('./core/rpg/skillTree');
+      const economy = require('./core/rpg/systems/economy/economy');
+      const classSystem = require('./core/rpg/systems/characters/classSystem');
+      const progression = require('./core/rpg/systems/characters/progression');
+      const skillTreeMod = require('./core/rpg/systems/characters/skillTree');
 
       const OUT_OF_COMBAT_TICK_MS = 60 * 1000; // 60s = 1 "turn"
 
@@ -744,11 +744,11 @@ async function boot() {
       //   change). Falls back to a lightweight maxHP estimate if cache miss.
       const maxHPCache = new Map(); // userId → { level, maxHP }
       let guildAdventureRef = null;
-      try { guildAdventureRef = require('./core/rpg/guildAdventure'); } catch (e) {}
+      try { guildAdventureRef = require('./core/rpg/systems/adventures/guildAdventure'); } catch (e) {}
 
       // ⚔️ Guild War boot (overhaul 2026-10-03): combat hooks + recovery
       try {
-        const gw = require('./core/rpg/guildWar');
+        const gw = require('./core/rpg/systems/guildwar/index');
         gw.installCombatHooks();
         gw.state.recoverOnBoot().then((n) => {
           if (n.length) console.log(`⚔️ [GuildWar] recovered in-flight events: ${n.map((e) => `${e.eventId}:${e.state}`).join(', ')}`);
@@ -951,8 +951,8 @@ if (require.main === module) {
     //  fetching the same sprite set simultaneously just burns bandwidth.)
     if ((process.env.GLOBAL_SCHEDULERS || '1') !== '0') setTimeout(() => {
         try {
-            const summonSprites = require('./core/rpg/summonSprites');
-            const registry = require('./core/rpg/summonRegistry');
+            const summonSprites = require('./core/rpg/systems/summons/summonSprites');
+            const registry = require('./core/rpg/systems/summons/summonRegistry');
             summonSprites.warmupCache(registry);
         } catch (e) {
             console.error('[SpriteWarmup] Failed to start (non-fatal):', e.message);

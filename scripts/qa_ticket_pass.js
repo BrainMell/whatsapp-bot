@@ -48,7 +48,7 @@ section('Abyss gate: fail-closed, deduped, staff bypass (#b4c0ec + #b4f5b0)');
   ok(/__gateAlive = false/.test(engine), 'garbage gate state treated as unavailable');
   ok(/worlds are not aligned for the descent right now/.test(engine), 'closed window is surfaced as worlds-not-aligned (#b4f5b0)');
 
-  const cosmology = require('../core/rpg/cosmology');
+  const cosmology = require('../core/rpg/systems/world/cosmology');
   const w = cosmology.abyssWindow();
   ok(w && typeof w.open === 'boolean' && typeof w.label === 'string', 'cosmology.abyssWindow() returns a valid gate state');
   ok(typeof cosmology.isRoutineLink === 'function', 'routine link stays a separate clock (never merged into the schedule)');
@@ -64,7 +64,7 @@ section('Abyss gate: fail-closed, deduped, staff bypass (#b4c0ec + #b4f5b0)');
 // ─── 2. Combat icon normalization (#b4c0ff a) ────────────────────────────────
 section('Combat icons: no message can print "undefined <Name>" (#b4c0ff a)');
 {
-  const ga = require('../core/rpg/guildAdventure');
+  const ga = require('../core/rpg/systems/adventures/guildAdventure');
   ok(typeof ga.combatTargetIcon === 'function', 'combatTargetIcon exported');
   assert.strictEqual(ga.combatTargetIcon({ name: 'MellowDiHOfHeaven', class: { icon: '🧙' } }), '🧙', 'player icon from class');
   assert.strictEqual(ga.combatTargetIcon({ name: 'X', class: null }), '👤', 'player without class falls back to 👤 (never undefined)');
@@ -104,10 +104,10 @@ section('Turn promise always settles (#b4c0ff c)');
 section('Stat points: backend math == preview math, ledger + refunds sane (#b4f78f)');
 {
   // patch economy.getUser so progression works without Mongo
-  const economy = require('../core/rpg/economy');
+  const economy = require('../core/rpg/systems/economy/economy');
   const fakeUsers = {};
   economy.getUser = (jid) => fakeUsers[jid] || null;
-  const progression = require('../core/rpg/progression');
+  const progression = require('../core/rpg/systems/characters/progression');
   const J = 'qauser@s.whatsapp.net';
   fakeUsers[J] = { jid: J, class: 'FIGHTER', nickname: 'QATester' };
   const prog = progression.getUser(J);
@@ -168,7 +168,7 @@ section('Stat points: backend math == preview math, ledger + refunds sane (#b4f7
 // ─── 6. XP curve +20% (#b508e7) ──────────────────────────────────────────────
 section('XP curve: exactly +20% at the single canonical point (#b508e7)');
 {
-  const progression = require('../core/rpg/progression');
+  const progression = require('../core/rpg/systems/characters/progression');
   for (const L of [2, 10, 25, 50, 75, 99, 100]) {
     const now = progression.getXPForLevel(L);
     const old = Math.floor(200 * L * L);
@@ -184,11 +184,11 @@ section('XP curve: exactly +20% at the single canonical point (#b508e7)');
 // ─── 7. Balance: Dragon God + Scout (#b5087a) ────────────────────────────────
 section('Balance: Dragon God fury + MAG growth, Scout Pathfinder (#b5087a)');
 {
-  const progression = require('../core/rpg/progression');
+  const progression = require('../core/rpg/systems/characters/progression');
   assert.strictEqual(progression.STAT_GROWTH.CLASS_MODIFIERS.DRAGON_GOD.mag, 1.8, 'Dragon God MAG growth 1.5 -> 1.8');
   ok(true, 'Dragon God MAG growth raised (still below every mage 2.0-2.2)');
 
-  const classSystem = require('../core/rpg/classSystem');
+  const classSystem = require('../core/rpg/systems/characters/classSystem');
   const scout = classSystem.getClassById('SCOUT');
   assert.strictEqual(scout?.passive?.effect, 'solo_hunter', 'SCOUT has the Pathfinder passive');
   assert.strictEqual(scout?.passive?.value, 25, 'Pathfinder value 25');
@@ -211,7 +211,7 @@ section('Balance: Dragon God fury + MAG growth, Scout Pathfinder (#b5087a)');
 // ─── 8. World all + staff afterlife (#b4f5d2 + #b4f71c) ─────────────────────
 section('world all + afterlife staff access (#b4f5d2 + #b4f71c)');
 {
-  const worldMap = require('../core/rpg/worldMap');
+  const worldMap = require('../core/rpg/systems/world/worldMap');
   const sock = () => { const sent = []; return { sent, async sendMessage(c, m) { sent.push(m); } }; };
 
   // non-staff player: `all` refuses with the unmet list, zero image bytes
@@ -254,7 +254,7 @@ section('world all + afterlife staff access (#b4f5d2 + #b4f71c)');
   assert.ok((s.sent[0].caption || s.sent[0].text || '').includes('dead souls'), 'afterlife: players still refused (requirement text present)');
   assert.ok(s.sent[0].image, 'afterlife: locked refusal renders the refusal CARD (owner 2026-09-21)');
   const __lockedCard = s.sent[0].image;
-  const __realSheet = await require('../core/rpg/worldMapRenderer').renderAfterlifeSheet();
+  const __realSheet = await require('../core/rpg/systems/world/worldMapRenderer').renderAfterlifeSheet();
   assert.ok(!__lockedCard.equals(__realSheet), 'afterlife: the locked card is NOT the map sheet');
   __engineStub.isRpgMod = () => true;
   s = sock();
@@ -307,8 +307,8 @@ section('Numeric admin parsing (#b4f7bd)');
 // ─── 11. createclass sprite end-to-end (#b4fbef) ─────────────────────────────
 section('createclass Sprite field end-to-end (#b4fbef)');
 {
-  const classSystem = require('../core/rpg/classSystem');
-  const skillTree = require('../core/rpg/skillTree');
+  const classSystem = require('../core/rpg/systems/characters/classSystem');
+  const skillTree = require('../core/rpg/systems/characters/skillTree');
   const adminConsole = require('../core/commands/adminConsole');
   // patch persistence (QA must not write Mongo)
   let captured = null;
@@ -352,7 +352,7 @@ section('createclass Sprite field end-to-end (#b4fbef)');
 // ─── 12. Combat sprite parity + summon facing (#b4f7aa + #b4fc58) ───────────
 section('Sprite parity + summon facing (#b4f7aa + #b4fc58)');
 {
-  const cig = require('../core/rpg/combatImageGenerator');
+  const cig = require('../core/rpg/systems/combat/combatImageGenerator');
   const payload = cig._buildPayload(
     [{ name: 'P', class: { id: 'FIGHTER' }, spriteIndex: 0, stats: { maxHp: 100, energy: 50 } }],
     [{ name: 'E', stats: { hp: 50 } }],

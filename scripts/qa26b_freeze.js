@@ -5,7 +5,7 @@
 // for the visual before/after. Needs NODE_PATH=<bot>/node_modules; run anywhere
 // on the box (Go service is a localhost HTTP microservice).
 const fs = require('fs');
-const cig = require('../core/rpg/combatImageGenerator');
+const cig = require('../core/rpg/systems/combat/combatImageGenerator');
 
 function mkPlayer(i, name) {
     return {

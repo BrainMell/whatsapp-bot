@@ -36,10 +36,10 @@ async function setup() {
   Issue = require('../core/models/Issue');
   Rune = require('../core/models/Rune');
   Summon = require('../core/models/Summon');
-  testerSystem = require('../core/rpg/testerSystem');
-  summonSystem = require('../core/rpg/summonSystem');
-  runeSystem = require('../core/rpg/runeSystem');
-  summonRegistry = require('../core/rpg/summonRegistry');
+  testerSystem = require('../core/rpg/systems/meta/testerSystem');
+  summonSystem = require('../core/rpg/systems/summons/summonSystem');
+  runeSystem = require('../core/rpg/systems/inventory/runeSystem');
+  summonRegistry = require('../core/rpg/systems/summons/summonRegistry');
 }
 
 async function cleanup() {

@@ -1,6 +1,6 @@
 const fs = require('fs');
 const botConfig = require('../botConfig');
-const economy = require('./rpg/economy');
+const economy = require('./rpg/systems/economy/economy');
 
 // ============================================
 // GAMBLING SYSTEM - 6 Different Games

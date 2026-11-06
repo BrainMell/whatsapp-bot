@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 
 const OUT = process.argv[2] || '/home/z/my-project/download/ruins_cards';
-const cards = require('../core/rpg/guildWar/encounterCards');
+const cards = require('../core/rpg/systems/guildwar/encounterCards');
 
 async function main() {
     fs.mkdirSync(OUT, { recursive: true });
@@ -25,7 +25,7 @@ async function main() {
         coop:      { body: 'A hungry pack floods the hall - too many to count.', actionHint: 'Type fight to engage - allies share the reward.' },
         core:      { body: 'The heart of this dead world still beats here. A mighty guardian bars the way. First guild to breach it earns lasting glory.', actionHint: 'Type fight to challenge the guardian.' },
     };
-    const CFG = require('../core/rpg/guildWar/config');
+    const CFG = require('../core/rpg/systems/guildwar/config');
     for (const [type, s] of Object.entries(samples)) {
         const variants = (type === 'combat' || type === 'coop')
             ? { SKIRMISH: CFG.COMBAT.VARIANTS.SKIRMISH }
@@ -64,7 +64,7 @@ async function main() {
     })]);
 
     // 4) the two initiation cards
-    const notice = require('../core/rpg/guildWar/noticeCard');
+    const notice = require('../core/rpg/systems/guildwar/noticeCard');
     jobs.push(['init_alignment_organic', notice.renderAlignmentCard({ regMinutes: 45 })]);
     jobs.push(['init_mod_war_called', notice.renderWarCalledCard({ type: 'normal', host: 'Warlord Kaine', regMinutes: 45 })]);
     jobs.push(['init_mod_war_called_align', notice.renderWarCalledCard({ type: 'alignment', host: 'Warlord Kaine', regMinutes: 45 })]);

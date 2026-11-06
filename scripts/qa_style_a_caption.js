@@ -3,7 +3,7 @@
 // Run: node scripts/qa_style_a_caption.js
 let combatIntegration;
 try {
-  combatIntegration = require('../core/rpg/combatIntegration');
+  combatIntegration = require('../core/rpg/systems/combat/combatIntegration');
 } catch (e) {
   console.error('LOAD FAIL:', e.message);
   process.exit(1);

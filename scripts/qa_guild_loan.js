@@ -71,8 +71,8 @@ inject('../core/models/User', UserMock);
 // ─────────────────────────────────────────────────────────────────────────
 // Load the REAL modules against the mocks.
 // ─────────────────────────────────────────────────────────────────────────
-const guilds = require('../core/rpg/guilds');
-const economy = require('../core/rpg/economy');
+const guilds = require('../core/rpg/systems/guildwar/guilds');
+const economy = require('../core/rpg/systems/economy/economy');
 const lidResolver = require('../core/utils/lidResolver');
 const fs = require('fs');
 const path = require('path');

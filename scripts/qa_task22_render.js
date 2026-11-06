@@ -10,9 +10,9 @@ fs.mkdirSync(outDir, { recursive: true });
 const { createCanvas } = require('canvas');
 
 (async () => {
-    const dockPov = require('../core/rpg/dockPov');
-    const huntPov = require('../core/rpg/huntPov');
-    const dayNight = require('../core/rpg/dayNight');
+    const dockPov = require('../core/rpg/systems/world/dockPov');
+    const huntPov = require('../core/rpg/systems/world/huntPov');
+    const dayNight = require('../core/rpg/systems/shared/dayNight');
     const { GifCodec } = require('gifwrap');
     const { PNG } = require('pngjs');
 
@@ -63,7 +63,7 @@ const { createCanvas } = require('canvas');
         fs.writeFileSync(`${outDir}/hunt_biome_${b}.png`, hv.toBuffer('image/png'));
     }
     // 6) REGRESSION: structure card + 3D base + atlas day/night (banner refactor must not change cards)
-    const ss = require('../core/rpg/structureScenes');
+    const ss = require('../core/rpg/systems/world/structureScenes');
     const r = await ss.renderStructureCard({ type: 'mines', level: 2, biome: 'isle', phase: 'day', spec: { title: 'THE MINES', subtitle: 'Lv 2 · pickaxe ready', banner: { head: 'MINING RESULT', lines: ['2× Copper Ore — COMMON · sells 12Z', '+64 ZENI'] } } });
     fs.writeFileSync(`${outDir}/card_mines_result.jpg`, r.buffer);
     console.log('phase sanity:', ['0', '6', '12', '18', '23'].map(h => `${h}h=${dayNight.phaseAt(new Date(Date.UTC(2026, 9, 21, Number(h))))}`).join(' '));

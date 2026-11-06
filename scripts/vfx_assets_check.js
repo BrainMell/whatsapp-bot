@@ -1,9 +1,9 @@
 'use strict';
 // Validate core/rpgasset/vfx/vfx_assets.json and show which classes use which overridable layer.
 //   node scripts/vfx_assets_check.js
-const fx = require('../core/rpg/ultimateFx');
-const { classRecipe } = require('../core/rpg/ultimateFxRecipes');
-const { SIGNATURE_SKILLS } = require('../core/rpg/skillVfx');
+const fx = require('../core/rpg/systems/combat/ultimateFx');
+const { classRecipe } = require('../core/rpg/systems/combat/ultimateFxRecipes');
+const { SIGNATURE_SKILLS } = require('../core/rpg/systems/combat/skillVfx');
 (async () => {
     const A = fx._assets, man = A.loadManifest();
     let bad = 0;

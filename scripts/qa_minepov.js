@@ -30,9 +30,9 @@ async function main() {
     await mongoose.connect(uri, { serverSelectionTimeoutMS: 20000, bufferTimeoutMS: 45000 });
     console.log('[qa] mongoose connected');
 
-    const economy = require('../core/rpg/economy');
-    const progression = require('../core/rpg/progression');
-    const minePov = require('../core/rpg/minePov');
+    const economy = require('../core/rpg/systems/economy/economy');
+    const progression = require('../core/rpg/systems/characters/progression');
+    const minePov = require('../core/rpg/systems/world/minePov');
 
     // 0. seed a minimal user (same shape qa_energy uses)
     economy.economyData.set(jid, {

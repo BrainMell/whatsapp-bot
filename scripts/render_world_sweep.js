@@ -4,8 +4,8 @@
 'use strict';
 const path = require('path');
 const fs = require('fs');
-const renderer = require('../core/rpg/worldMapRenderer');
-const cosmology = require('../core/rpg/cosmology');
+const renderer = require('../core/rpg/systems/world/worldMapRenderer');
+const cosmology = require('../core/rpg/systems/world/cosmology');
 
 (async () => {
     const out = process.argv[2] || path.join(__dirname, 'worldmap_sweep');

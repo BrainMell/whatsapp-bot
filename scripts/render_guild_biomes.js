@@ -8,8 +8,8 @@ const NAMES = (process.argv[3] || 'Iron Wolves,Gilded Ledger,Quiet Archive').spl
 process.env.QA_MODE = process.env.QA_MODE || '1';
 (async () => {
     fs.mkdirSync(OUT, { recursive: true });
-    const g = require('../core/rpg/guildBaseRenderer');
-    const KT = require('../core/rpg/kingdomTerrain');
+    const g = require('../core/rpg/systems/guildwar/guildBaseRenderer');
+    const KT = require('../core/rpg/systems/world/kingdomTerrain');
     for (const biome of KT.BIOMES) for (const [i, name] of NAMES.entries()) {
         const st = { name, level: 8, archetype: ['ADVENTURER', 'MERCHANT', 'RESEARCH'][i % 3], biome, buildings: { hall: 4 + (i % 2), training: 3, treasury: 3 + i }, memberCount: 8, memberCap: 25, emblemColor: '#a02c3c', emblemIcon: 'W' };
         const t0 = Date.now();

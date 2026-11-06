@@ -8,7 +8,7 @@ const fs = require('fs');
 const OUT = process.argv[2] || path.join(__dirname, 'render_out', 'worldcards_v6');
 fs.mkdirSync(OUT, { recursive: true });
 
-const R = require('../core/rpg/worldMapRenderer');
+const R = require('../core/rpg/systems/world/worldMapRenderer');
 
 const JOBS = [
     ['atlas_all', () => R.renderCosmologyAtlasSheet()],

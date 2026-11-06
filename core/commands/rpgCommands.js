@@ -2,26 +2,26 @@
 // 👤 CHARACTER & RPG COMMANDS 
 // ============================================ 
 
-const progression = require('../rpg/progression');
-const inventorySystem = require('../rpg/inventorySystem');
-const lootSystem = require('../rpg/lootSystem');
-const craftingSystem = require('../rpg/craftingSystem');
-const economy = require('../rpg/economy');
-const classSystem = require('../rpg/classSystem');
+const progression = require('../rpg/systems/characters/progression');
+const inventorySystem = require('../rpg/systems/inventory/inventorySystem');
+const lootSystem = require('../rpg/systems/inventory/lootSystem');
+const craftingSystem = require('../rpg/systems/inventory/craftingSystem');
+const economy = require('../rpg/systems/economy/economy');
+const classSystem = require('../rpg/systems/characters/classSystem');
 const botConfig = require('../../botConfig');
 const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
 const fs = require('fs');
 const profileHelper = require('../utils/profileHelper');
 const { fetchPfp: fetchPfpCached } = require('../utils/pfpCache'); // 💡 PERF PATCH 2026-07-27: cached + 8s-timeout PFP fetcher
 // 💡 Visual Overhaul: node-canvas profile card renderer
-const profileCardRenderer = require('../rpg/profileCardRenderer');
+const profileCardRenderer = require('../rpg/systems/meta/profileCardRenderer');
 
 const getPrefix = () => botConfig.getPrefix();
 
 // 💡 OWNER RULE 2026-09-11: cards show "[guild title] of [guild name]" -
 // custom guild title, else the member's guild role; empty when no guild.
 function safeGuildInfo(jid) {
-  try { return require('../rpg/guilds').getCardGuildInfo(jid) || { name: '', title: '' }; }
+  try { return require('../rpg/systems/guildwar/guilds').getCardGuildInfo(jid) || { name: '', title: '' }; }
   catch (e) { return { name: '', title: '' }; }
 }
 const getCurrency = () => botConfig.getCurrency();
@@ -95,7 +95,7 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     }
     // 💡 TUTORIAL: the sheet was opened - advance the tutorial's stats step
     // (no-op unless a tutorial session is active).
-    try { require('../rpg/tutorial').notify(senderJid, 'char', { sock, chatId }).catch(() => {}); } catch (e) { /* non-fatal */ }
+    try { require('../rpg/systems/meta/tutorial').notify(senderJid, 'char', { sock, chatId }).catch(() => {}); } catch (e) { /* non-fatal */ }
     
     const classData = classSystem.getClassById(sheet.class);
     const stats = progression.getBaseStats(senderJid, sheet.class);
@@ -121,7 +121,7 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
         // Fetch active summon(s) for the card
         let activeSummon = null;
         try {
-            const summonSystem = require('../rpg/summonSystem');
+            const summonSystem = require('../rpg/systems/summons/summonSystem');
             const activeSummonDoc = await summonSystem.getActiveSummon(economyUser);
             if (activeSummonDoc) {
               activeSummon = {
@@ -596,7 +596,7 @@ async function sellItem(sock, chatId, senderJid, itemId, quantity = 1) {
     await sock.sendMessage(chatId, { text: msg });
     // 💡 Phase B TUTORIAL: selling lesson advances on a REAL sale
     // (no-op unless a tutorial session is active).
-    try { require('../rpg/tutorial').notify(senderJid, 'sell', { sock, chatId }).catch(() => {}); } catch (e) {}
+    try { require('../rpg/systems/meta/tutorial').notify(senderJid, 'sell', { sock, chatId }).catch(() => {}); } catch (e) {}
 }
 
 // ========================================== 
@@ -630,7 +630,7 @@ async function equipItem(sock, chatId, senderJid, itemId, slot) {
     if (!itemId) { 
         let msg = `🛡️ *EQUIPMENT*\n━━━━━━━━━━━━━━━\n\n`;
         const slots = Object.values(inventorySystem.EQUIPMENT_SLOTS);
-        const durabilitySystem = require('../rpg/durabilitySystem');
+        const durabilitySystem = require('../rpg/systems/inventory/durabilitySystem');
         
         slots.forEach(slotName => { 
             const item = equipment[slotName];
@@ -680,7 +680,7 @@ async function equipItem(sock, chatId, senderJid, itemId, slot) {
     await sock.sendMessage(chatId, { text: `✅ Equipped *${itemInfo.name}* to *${result.slot}* slot!${durStr}` });
     // 💡 TUTORIAL: gear step done - the practice fight fires next
     // (no-op unless a tutorial session is active).
-    try { require('../rpg/tutorial').notify(senderJid, 'equip', { sock, chatId }).catch(() => {}); } catch (e) { /* non-fatal */ }
+    try { require('../rpg/systems/meta/tutorial').notify(senderJid, 'equip', { sock, chatId }).catch(() => {}); } catch (e) { /* non-fatal */ }
 }
 
 async function unequipItem(sock, chatId, senderJid, slot) { 
@@ -909,10 +909,10 @@ async function displayRecipes(sock, chatId, page = 1, categoryFilter = 'CRAFT', 
     try {
         const _cardOk = (c) => c && c.buffer && c.buffer.length > 500;
         if (categoryFilter === 'BREWING') {
-            const c = await require('../rpg/baseBuilder').zoomForCommand({ senderJid, prefix: p }, 'alchemy', { activity: 'browse', banner: { head: 'BREWING LEDGER', lines: ['The cauldron idles, ready', `Brew with \`${p} brew <potion>\``] } });
+            const c = await require('../rpg/systems/homestead/baseBuilder').zoomForCommand({ senderJid, prefix: p }, 'alchemy', { activity: 'browse', banner: { head: 'BREWING LEDGER', lines: ['The cauldron idles, ready', `Brew with \`${p} brew <potion>\``] } });
             if (_cardOk(c)) return void await sock.sendMessage(chatId, { image: c.buffer, caption: msg });
         } else if (categoryFilter === 'FORGE') {
-            const c = await require('../rpg/baseBuilder').zoomForCommand({ senderJid, prefix: p }, 'blacksmith', { activity: 'browse', banner: { head: 'FORGE READY', lines: ['Recipes from the smithy ledger', `Forge with \`${p} forge <item>\``] } });
+            const c = await require('../rpg/systems/homestead/baseBuilder').zoomForCommand({ senderJid, prefix: p }, 'blacksmith', { activity: 'browse', banner: { head: 'FORGE READY', lines: ['Recipes from the smithy ledger', `Forge with \`${p} forge <item>\``] } });
             if (_cardOk(c)) return void await sock.sendMessage(chatId, { image: c.buffer, caption: msg });
         }
     } catch (e) { /* card is a garnish — the menu always ships */ }
@@ -1023,7 +1023,7 @@ async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CR
             // result.loreDrop and arrive as their own message box.
             if (result.loreDrop) {
                 try {
-                    const loreDrops = require('../rpg/loreDrops');
+                    const loreDrops = require('../rpg/systems/shared/loreDrops');
                     await loreDrops.sendOwn(sock, chatId, result.loreDrop);
                 } catch (e) {}
             }
@@ -1033,7 +1033,7 @@ async function craftItem(sock, chatId, senderJid, recipeId, categoryFilter = 'CR
             await sock.sendMessage(chatId, { text: result.message });
             if (result.loreDrop) {
                 try {
-                    const loreDrops = require('../rpg/loreDrops');
+                    const loreDrops = require('../rpg/systems/shared/loreDrops');
                     await loreDrops.sendOwn(sock, chatId, result.loreDrop);
                 } catch (e) {}
             }
@@ -1069,7 +1069,7 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     // §12 (owner spec 2026-10-21): the Mines BUILDING level is the mining
     // level — the separate mining profession is retired (stored data left
     // untouched). No base = Mines Lv.1 (the fixed zone exists for everyone).
-    const _bb = require('../rpg/baseBuilder');
+    const _bb = require('../rpg/systems/homestead/baseBuilder');
     const minesLvl = Math.max(1, await _bb.getStructureLevel(senderJid, 'mines'));
     const minesMult = [1, 1.25, 1.5][minesLvl - 1] || 1;
     const minesDisc = [0, 3, 6, 9][minesLvl] || 0; // percentage points off energy
@@ -1186,7 +1186,7 @@ async function mineOre(sock, chatId, senderJid, locationId) {
     // scene bake at runtime, so spam can't queue renders. Loot rarity picks
     // the loop: rarest ore in the haul = the epic sparkle surge.
     try {
-        const minePov = require('../rpg/minePov');
+        const minePov = require('../rpg/systems/world/minePov');
         const lines = Object.entries(found).map(([id, qty]) => `${qty}× ${lootSystem.getItemInfo(id).name}`);
         if (luckyFinds > 0) lines.push(`+${luckyFinds.toLocaleString()} ZENI (lucky find)`);
         lines.push(`⚡ -${energyCost} energy · Mines Lv.${minesLvl} (×${minesMult})`);
@@ -1272,12 +1272,12 @@ async function useItem(sock, chatId, senderJid, target) {
     // → "❌ You don't have this item!" because useItem doesn't handle eggs.
     // Now it detects egg items and calls summonEggSystem.hatchEgg instead.
     if (itemId.includes('summon_egg') || itemId.includes('_egg')) {
-        const summonEggSystem = require('../rpg/summonEggSystem');
+        const summonEggSystem = require('../rpg/systems/summons/summonEggSystem');
         const result = await summonEggSystem.hatchEgg(senderJid, itemId);
         await sock.sendMessage(chatId, { text: result.message });
         if (result.success) {
             try {
-                const summonSystem = require('../rpg/summonSystem');
+                const summonSystem = require('../rpg/systems/summons/summonSystem');
                 const user = economy.getUser(senderJid);
                 if (user) await summonSystem.refreshUserResonances(user);
             } catch (e) {}
@@ -1292,7 +1292,7 @@ async function useItem(sock, chatId, senderJid, target) {
         // own message box (owner ruling).
         if (result.loreDrop) {
             try {
-                const loreDrops = require('../rpg/loreDrops');
+                const loreDrops = require('../rpg/systems/shared/loreDrops');
                 await loreDrops.sendOwn(sock, chatId, result.loreDrop);
             } catch (e) {}
         }
@@ -1635,7 +1635,7 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
     // succeeds (owner ruling: a drop is a distinct lore event).
     let __craftDrop = null;
     try {
-        const loreDrops = require('../rpg/loreDrops');
+        const loreDrops = require('../rpg/systems/shared/loreDrops');
         __craftDrop = loreDrops.maybeDrop('blacksmith', { userId: senderJid, chatId, chance: 0.08 });
     } catch (e) {}
 
@@ -1707,7 +1707,7 @@ async function handleCraftCommand(sock, chatId, senderJid, args) {
 // 💡 helper: fire-and-forget own-box delivery for the craft lore drop
 async function loreDropsSendOwn(sock, chatId, drop) {
     try {
-        const loreDrops = require('../rpg/loreDrops');
+        const loreDrops = require('../rpg/systems/shared/loreDrops');
         await loreDrops.sendOwn(sock, chatId, drop);
     } catch (e) {}
 }

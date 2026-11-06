@@ -9,7 +9,7 @@ process.env.GO_IMAGE_SERVICE_URL = process.env.GO_IMAGE_SERVICE_URL || 'http://1
 // ../engine - pre-seed the require cache so QA never loads the real engine.
 const __enginePath = require.resolve('../core/engine.js');
 require.cache[__enginePath] = { id: __enginePath, filename: __enginePath, loaded: true, exports: { isBotOwner: () => false, isGlobalMod: () => false, isRpgMod: () => false } };
-const worldMap = require('../core/rpg/worldMap');
+const worldMap = require('../core/rpg/systems/world/worldMap');
 
 const sent = [];
 const mockSock = { sendMessage: async (chatId, msg) => sent.push(msg) };
@@ -29,7 +29,7 @@ function assert(cond, label) {
     await worldMap.showWorld(mockSock, chatId, user, 'abyss', { getLevel: () => 12 });
     assert(sent.length === 1 && !!sent[0].image, 'locked abyss (lvl 12): refusal CARD sent (owner 2026-09-21)');
     assert(/level \*20\*/.test(sent[0].caption || sent[0].text || ''), 'refusal names the CONFIRMED requirement (level 20)');
-    const abyssSheetBuf0 = await require('../core/rpg/worldMapRenderer').renderAbyssSheet();
+    const abyssSheetBuf0 = await require('../core/rpg/systems/world/worldMapRenderer').renderAbyssSheet();
     assert(!sent[0].image.equals(abyssSheetBuf0), 'locked abyss: the card is NOT the abyss sheet');
 
     // 2. unlocked abyss map at level 20 → image + SHORT subtle caption
@@ -62,7 +62,7 @@ function assert(cond, label) {
     await worldMap.showWorld(mockSock, chatId, user, 'beyond', { getRank: () => 'A' });
     assert(sent.length === 1 && !!sent[0].image, 'beyond locked at rank A: refusal CARD sent (owner 2026-09-21)');
     assert(/rank \*S\*/.test(sent[0].caption || sent[0].text || ''), 'beyond refusal names the rank requirement');
-    const wbSheetBuf0 = await require('../core/rpg/worldMapRenderer').renderWorldBeyondSheet();
+    const wbSheetBuf0 = await require('../core/rpg/systems/world/worldMapRenderer').renderWorldBeyondSheet();
     assert(!sent[0].image.equals(wbSheetBuf0), 'locked beyond: the card is NOT the WB sheet');
 
     // 4b. afterlife locked (dead-soul feature absent) → LOCKED CARD + requirement

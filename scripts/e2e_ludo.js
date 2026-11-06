@@ -34,7 +34,7 @@ function fakeSock() {
 async function main() {
   await require('../db')();
   const ludo = require('../core/games/ludo');
-  const economy = require('../core/rpg/economy');
+  const economy = require('../core/rpg/systems/economy/economy');
   const { activeGames, LudoGame } = ludo._internals;
 
   // cleanup any leftovers from prior runs

@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const botConfig = require('../../botConfig');
 const axios = require('axios');
-const economy = require('../rpg/economy');
+const economy = require('../rpg/systems/economy/economy');
 const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
 const { fetchPfp: fetchPfpCached } = require('../utils/pfpCache'); // 💡 PERF PATCH 2026-07-27: cached + 8s-timeout PFP fetcher
 
@@ -515,7 +515,7 @@ function awardWin(winnerJid, game) {
     economy.addMoney(winnerJid, 500);
   } catch (e) {}
   try {
-    const socialSystem = require('../rpg/socialSystem');
+    const socialSystem = require('../rpg/systems/meta/socialSystem');
     const gamePlayers = game.players.map((p) => p.fullJid);
     for (let i = 0; i < gamePlayers.length; i++) {
       for (let j = i + 1; j < gamePlayers.length; j++) {
@@ -678,7 +678,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
         economy.addMoney(player.fullJid, reward);
         message += `👑 *VICTORY!* 👑\n@${economy.getDisplayName(player.fullJid)} wins!\n💰 *Reward:* +${reward} Zeni\n\n🎉 All pieces home! 🎉`;
         try {
-          const socialSystem = require('../rpg/socialSystem');
+          const socialSystem = require('../rpg/systems/meta/socialSystem');
           const gamePlayers = game.players.map(p => p.fullJid);
           for (let i = 0; i < gamePlayers.length; i++) {
             for (let j = i + 1; j < gamePlayers.length; j++) {
@@ -741,7 +741,7 @@ Type \`${botConfig.getPrefix()} ludo roll\` to start!
       economy.addMoney(player.fullJid, reward);
       message += `👑 *VICTORY!* 👑\n@${economy.getDisplayName(player.fullJid)} wins!\n💰 *Reward:* +${reward} Zeni\n\n🎉 All pieces home! 🎉`;
       try {
-        const socialSystem = require('../rpg/socialSystem');
+        const socialSystem = require('../rpg/systems/meta/socialSystem');
         const gamePlayers = game.players.map(p => p.fullJid);
         for (let i = 0; i < gamePlayers.length; i++) {
           for (let j = i + 1; j < gamePlayers.length; j++) {

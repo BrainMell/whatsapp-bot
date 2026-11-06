@@ -41,8 +41,8 @@ async function main() {
 
   // 1. Verify buildCombatEntity returns the Go-expected fields
   console.log(`${CYAN}[Test 1]${RESET} buildCombatEntity returns Go-compatible fields...`);
-  const summonSystem = require('../core/rpg/summonSystem');
-  const registry = require('../core/rpg/summonRegistry');
+  const summonSystem = require('../core/rpg/systems/summons/summonSystem');
+  const registry = require('../core/rpg/systems/summons/summonRegistry');
 
   // Find a valid species from the registry
   const allSpecies = registry.getAllSpecies ? registry.getAllSpecies() : Object.values(registry.SPECIES || {});

@@ -33,11 +33,11 @@ function check(name, cond, detail = '') {
 
 async function main() {
     await connectDB();
-    const guilds = require('../core/rpg/guilds');
+    const guilds = require('../core/rpg/systems/guildwar/guilds');
     for (const name of ['GwTestA', 'GwTestB']) {
         try { await guilds.createGuild(name, `u-${name}`, 'ADVENTURER'); } catch (e) {}
     }
-    const gw = require('../core/rpg/guildWar');
+    const gw = require('../core/rpg/systems/guildwar/index');
     const { state } = gw;
     // QA: bypass the mod/owner gate (mock jids are not the real owner).
     // handleGroupCommand reads engine.isBotOwner dynamically, so patching the
@@ -70,7 +70,7 @@ async function main() {
     const startRes = await state.startEvent(eventIdA, {});
     check('war A started', startRes.ok, startRes.reason || '');
     // seed some points
-    const points = require('../core/rpg/guildWar/points');
+    const points = require('../core/rpg/systems/guildwar/points');
     await points.award(eventIdA, 'qa0@s.whatsapp.net', 25, 'qa');
     await points.award(eventIdA, 'qa2@s.whatsapp.net', 15, 'qa');
 

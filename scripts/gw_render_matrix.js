@@ -7,7 +7,7 @@ const fs = require('fs');
 const OUT = process.argv[2] || '/home/z/my-project/envwork/gw_matrix';
 fs.mkdirSync(OUT, { recursive: true });
 
-const roomScene = require('../core/rpg/guildWar/roomScene');
+const roomScene = require('../core/rpg/systems/guildwar/roomScene');
 
 function mkEvent() {
     return {

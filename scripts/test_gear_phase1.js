@@ -51,7 +51,7 @@ function assertTrue(cond, msg) {
 
 // --- BUG #1: Mythic Enhancement Stone is in ENHANCEMENT_BONUS_MAP with 0.60 ---
 test('BUG #1: mythic_enhancement_stone is in ENHANCEMENT_BONUS_MAP with value 0.60', () => {
-    const inv = require('../core/rpg/inventorySystem');
+    const inv = require('../core/rpg/systems/inventory/inventorySystem');
     assertTrue(inv.ENHANCEMENT_BONUS_MAP, 'ENHANCEMENT_BONUS_MAP should be exported');
     assertEq(inv.ENHANCEMENT_BONUS_MAP.mythic_enhancement_stone, 0.60,
         'mythic_enhancement_stone bonus must be 0.60 (60%), not the 0.05 fallback');
@@ -168,8 +168,8 @@ test('BUG #7: recover_enhancement_stats.js uses relative require path (not hardc
         path.join(__dirname, '..', 'scripts', 'recover_enhancement_stats.js'),
         'utf8'
     );
-    assertTrue(src.includes("require('../core/rpg/lootSystem.js')"),
-        "recover_enhancement_stats.js should use require('../core/rpg/lootSystem.js')");
+    assertTrue(src.includes("require('../core/rpg/systems/inventory/lootSystem.js')"),
+        "recover_enhancement_stats.js should use require('../core/rpg/systems/inventory/lootSystem.js')");
     // Check that no active require() uses an absolute /home/... path.
     // We look for `require('/home/` to catch any hardcoded absolute path in active code.
     const hardcodedRequire = src.match(/require\(['"]\/home\//g) || [];
@@ -179,7 +179,7 @@ test('BUG #7: recover_enhancement_stats.js uses relative require path (not hardc
 
 // --- GAP #1: getRequiredRankForLevel + rankGte helpers ---
 test('GAP #1: getRequiredRankForLevel returns correct rank for level thresholds', () => {
-    const inv = require('../core/rpg/inventorySystem');
+    const inv = require('../core/rpg/systems/inventory/inventorySystem');
     assertTrue(typeof inv.getRequiredRankForLevel === 'function',
         'getRequiredRankForLevel should be exported');
     // Level thresholds: F=1, E=10, D=20, C=30, B=40, A=50, S=60, SS=75, SSS=90, GOD=100
@@ -201,7 +201,7 @@ test('GAP #1: getRequiredRankForLevel returns correct rank for level thresholds'
 });
 
 test('GAP #1 (cont): rankGte correctly compares ranks using RANK_ORDER indices', () => {
-    const inv = require('../core/rpg/inventorySystem');
+    const inv = require('../core/rpg/systems/inventory/inventorySystem');
     assertTrue(typeof inv.rankGte === 'function', 'rankGte should be exported');
     // Equal ranks
     assertTrue(inv.rankGte('F', 'F'), 'F >= F');
@@ -247,7 +247,7 @@ test('INTEGRATION: enhanceItem with Mythic stone gives +60% bonus (not +5%)', ()
     // We can't easily mock the entire economy module, so we verify the math
     // directly: a level-0 item enhanced once with a Mythic stone should get
     // enhancementBonus = 0.60 (not 0.05).
-    const inv = require('../core/rpg/inventorySystem');
+    const inv = require('../core/rpg/systems/inventory/inventorySystem');
     const stoneBonus = inv.ENHANCEMENT_BONUS_MAP.mythic_enhancement_stone;
     assertEq(stoneBonus, 0.60, 'Mythic stone bonus must be 0.60');
     // Simulate: item with baseStats.atk = 100, enhancementLevel 0, bonus 0
@@ -269,7 +269,7 @@ test('INTEGRATION: enhanceItem with Mythic stone gives +60% bonus (not +5%)', ()
 
 // --- Regression: existing stone bonuses unchanged ---
 test('REGRESSION: Minor, Rare, Legendary stone bonuses unchanged', () => {
-    const inv = require('../core/rpg/inventorySystem');
+    const inv = require('../core/rpg/systems/inventory/inventorySystem');
     assertEq(inv.ENHANCEMENT_BONUS_MAP.minor_enhancement_stone, 0.05, 'minor still 5%');
     assertEq(inv.ENHANCEMENT_BONUS_MAP.rare_enhancement_stone, 0.15, 'rare still 15%');
     assertEq(inv.ENHANCEMENT_BONUS_MAP.legendary_enhancement_stone, 0.35, 'legendary still 35%');
@@ -277,7 +277,7 @@ test('REGRESSION: Minor, Rare, Legendary stone bonuses unchanged', () => {
 
 // --- Regression: rarity-aware enhancement caps unchanged ---
 test('REGRESSION: MAX_ENHANCEMENT_BONUS_BY_RARITY caps unchanged', () => {
-    const inv = require('../core/rpg/inventorySystem');
+    const inv = require('../core/rpg/systems/inventory/inventorySystem');
     assertEq(inv.MAX_ENHANCEMENT_BONUS_BY_RARITY.COMMON, 1.75, 'Common cap');
     assertEq(inv.MAX_ENHANCEMENT_BONUS_BY_RARITY.UNCOMMON, 3.50, 'Uncommon cap');
     assertEq(inv.MAX_ENHANCEMENT_BONUS_BY_RARITY.RARE, 5.25, 'Rare cap');
@@ -287,7 +287,7 @@ test('REGRESSION: MAX_ENHANCEMENT_BONUS_BY_RARITY caps unchanged', () => {
 });
 
 test('REGRESSION: MAX_ENHANCEMENT_LEVEL_BY_RARITY level caps unchanged', () => {
-    const inv = require('../core/rpg/inventorySystem');
+    const inv = require('../core/rpg/systems/inventory/inventorySystem');
     assertEq(inv.MAX_ENHANCEMENT_LEVEL_BY_RARITY.COMMON, 5, 'Common level cap');
     assertEq(inv.MAX_ENHANCEMENT_LEVEL_BY_RARITY.UNCOMMON, 10, 'Uncommon level cap');
     assertEq(inv.MAX_ENHANCEMENT_LEVEL_BY_RARITY.RARE, 15, 'Rare level cap');
@@ -298,7 +298,7 @@ test('REGRESSION: MAX_ENHANCEMENT_LEVEL_BY_RARITY level caps unchanged', () => {
 
 // --- Regression: getMaxEnhancementLevel + getMaxEnhancementBonus still work ---
 test('REGRESSION: getMaxEnhancementLevel + getMaxEnhancementBonus resolve rarity correctly', () => {
-    const inv = require('../core/rpg/inventorySystem');
+    const inv = require('../core/rpg/systems/inventory/inventorySystem');
     // Direct item.rarity lookup
     assertEq(inv.getMaxEnhancementLevel({ rarity: 'MYTHIC' }), 30, 'Mythic level via item.rarity');
     assertEq(inv.getMaxEnhancementLevel({ rarity: 'COMMON' }), 5, 'Common level via item.rarity');
@@ -314,7 +314,7 @@ test('REGRESSION: getMaxEnhancementLevel + getMaxEnhancementBonus resolve rarity
 // --- Smoke test: all 4 modified files still parse ---
 test('SMOKE: all 4 modified files parse without syntax errors', () => {
     // require() will throw if there's a syntax error
-    require('../core/rpg/inventorySystem');
+    require('../core/rpg/systems/inventory/inventorySystem');
     require('../core/commands/rpgCommands');
     require('../core/commands/shopCommands');
     // recover_enhancement_stats.js connects to MongoDB on load - don't require it,

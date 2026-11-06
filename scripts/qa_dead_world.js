@@ -37,13 +37,13 @@ require.cache[__enginePath] = {
 };
 
 const botConfig = require('../botConfig');
-const economy = require('../core/rpg/economy');
-const ga = require('../core/rpg/guildAdventure');
-const sequences = require('../core/rpg/deadWorldSequences');
-const deadWorld = require('../core/rpg/deadWorld');
-const dwRenderer = require('../core/rpg/deadWorldRenderer');
-const worldMap = require('../core/rpg/worldMap');
-const wmr = require('../core/rpg/worldMapRenderer');
+const economy = require('../core/rpg/systems/economy/economy');
+const ga = require('../core/rpg/systems/adventures/guildAdventure');
+const sequences = require('../core/rpg/systems/world/deadWorldSequences');
+const deadWorld = require('../core/rpg/systems/world/deadWorld');
+const dwRenderer = require('../core/rpg/systems/world/deadWorldRenderer');
+const worldMap = require('../core/rpg/systems/world/worldMap');
+const wmr = require('../core/rpg/systems/world/worldMapRenderer');
 
 let failures = 0;
 function check(cond, label) {
@@ -316,7 +316,7 @@ const DASH_RE = /[\u2010\u2011\u2012\u2013\u2014\u2015\u2E3A\u2E3B-]/;
 
     // ═══ 6b. .j kills: the owner reads the ledger without the doors ═══
     console.log('\n[6b] soulReader owner bypass (.j kills)');
-    const soulReader = require('../core/rpg/soulReader');
+    const soulReader = require('../core/rpg/systems/adventures/soulReader');
     const sent6d = [];
     const sock6d = mockSock(sent6d);
     economy.economyData.set('qa_dw_owner@s.whatsapp.net', {

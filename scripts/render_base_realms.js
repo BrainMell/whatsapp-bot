@@ -6,8 +6,8 @@ const OUT = process.argv[2] || '/tmp/base_realms';
 process.env.QA_MODE = process.env.QA_MODE || '1';
 (async () => {
     fs.mkdirSync(OUT, { recursive: true });
-    const r = require('../core/rpg/homesteadBaseRenderer');
-    const C = require('../core/rpg/continents');
+    const r = require('../core/rpg/systems/homestead/homesteadBaseRenderer');
+    const C = require('../core/rpg/systems/world/continents');
     const L = r.LAYOUT;
     const structures = [
         { type: 'house', level: 3, x: L.house.x, y: L.house.y }, { type: 'mines', level: 3, x: L.mines.x, y: L.mines.y },

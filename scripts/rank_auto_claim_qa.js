@@ -51,7 +51,7 @@ function check(name, cond, extra) {
     await mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 15000 });
     console.log(`[qa] db: ${mongoose.connection.name}`);
     const User = require('../core/models/User');
-    const economy = require('../core/rpg/economy');
+    const economy = require('../core/rpg/systems/economy/economy');
 
     const mk = (jid, over) => ({
         userId: jid, wallet: 100, registered: true, nickname: jid.slice(0, 8),

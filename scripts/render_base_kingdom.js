@@ -5,7 +5,7 @@ const OUT = process.argv[2] || '/tmp/base_kingdom';
 process.env.QA_MODE = process.env.QA_MODE || '1';
 (async () => {
     fs.mkdirSync(OUT, { recursive: true });
-    const r = require('../core/rpg/homesteadBaseRenderer');
+    const r = require('../core/rpg/systems/homestead/homesteadBaseRenderer');
     const L = r.LAYOUT;
     const fixed = (lv) => [
         { type: 'house', level: lv.house, x: L.house.x, y: L.house.y },

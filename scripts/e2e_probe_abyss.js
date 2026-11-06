@@ -5,9 +5,9 @@ const connectDB = require('../db');
 const P1 = '19998887761@s.whatsapp.net';
 async function main() {
   await connectDB();
-  const abyss = require('../core/rpg/abyssSystem');
-  const prog = require('../core/rpg/progression');
-  const eco = require('../core/rpg/economy');
+  const abyss = require('../core/rpg/systems/adventures/abyssSystem');
+  const prog = require('../core/rpg/systems/characters/progression');
+  const eco = require('../core/rpg/systems/economy/economy');
   eco.registerUser(P1, 'E2EH chilling');
   const cls = eco.getUserClass(P1) || {};
   const bs = prog.getBaseStats(P1, cls.id || 'FIGHTER');

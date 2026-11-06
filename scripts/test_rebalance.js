@@ -30,11 +30,11 @@ async function setup() {
   User = require('../core/models/User');
   Bounty = require('../core/models/Bounty');
   Settlement = require('../core/models/Settlement');
-  economy = require('../core/rpg/economy');
-  inventorySystem = require('../core/rpg/inventorySystem');
-  lootSystem = require('../core/rpg/lootSystem');
-  bountySystem = require('../core/rpg/bountySystem');
-  investmentMod = require('../core/rpg/investment');
+  economy = require('../core/rpg/systems/economy/economy');
+  inventorySystem = require('../core/rpg/systems/inventory/inventorySystem');
+  lootSystem = require('../core/rpg/systems/inventory/lootSystem');
+  bountySystem = require('../core/rpg/systems/adventures/bountySystem');
+  investmentMod = require('../core/rpg/systems/economy/investment');
 }
 
 async function cleanup() {

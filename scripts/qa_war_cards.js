@@ -7,7 +7,7 @@ const path = require('path');
 const fs = require('fs');
 
 async function main() {
-    const notice = require('../core/rpg/guildWar/noticeCard');
+    const notice = require('../core/rpg/systems/guildwar/noticeCard');
     const outDir = '/home/z/my-project/download/ruins_cards';
     fs.mkdirSync(outDir, { recursive: true });
 

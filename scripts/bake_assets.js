@@ -6,8 +6,8 @@ const OUT = process.argv[2] || '/tmp/assets47i';
 process.env.QA_MODE = '1';
 (async () => {
     fs.mkdirSync(OUT, { recursive: true });
-    const r = require('../core/rpg/homesteadBaseRenderer');
-    const g = require('../core/rpg/guildBaseRenderer');
+    const r = require('../core/rpg/systems/homestead/homesteadBaseRenderer');
+    const g = require('../core/rpg/systems/guildwar/guildBaseRenderer');
 
     // LOW-level guild per biome: hall 2 / training 1 / treasury 2 — barracks, drill lawn,
     // market square, postern and the wilderness windmill must all show at LOW level now

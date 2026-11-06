@@ -13,8 +13,8 @@ function log(...a) { console.log(...a); }
     await L.connectDB();
     L.overlaySprites();
 
-    const state = require('../core/rpg/guildWar/state');
-    const mapEngine = require('../core/rpg/guildWar/mapEngine');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const mapEngine = require('../core/rpg/systems/guildwar/mapEngine');
     const GWE = require('../core/models/GuildWarEvent');
 
     const roster = L.makeRoster([

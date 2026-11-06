@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const LidMapping = require('../models/LidMapping');
 let _economy = null; // lazy singleton - avoids circular dep on startup
-function getEconomy() { return _economy || (_economy = require('../rpg/economy')); }
+function getEconomy() { return _economy || (_economy = require('../rpg/systems/economy/economy')); }
 
 // In-memory caches for bi-directional mapping
 const lidCache = new Map();
@@ -311,7 +311,7 @@ function resolveJid(jid, authPath) {
     // Previously this checked in the same order but would fall through to
     // originalJid when neither matched - now also tries @lid ↔ @s.whatsapp.net
     // swap as a last resort.
-    const economy = require('../rpg/economy');
+    const economy = require('../rpg/systems/economy/economy');
     if (lidJid && economy.economyData && economy.economyData.has(lidJid)) {
         return lidJid;
     }

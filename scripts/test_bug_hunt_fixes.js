@@ -31,12 +31,12 @@ async function main() {
   conn = await mongoose.connect(MONGO_URI);
   console.log('[+] Connected:', conn.connection.db.databaseName);
   User = require('../core/models/User');
-  economy = require('../core/rpg/economy');
-  inventorySystem = require('../core/rpg/inventorySystem');
+  economy = require('../core/rpg/systems/economy/economy');
+  inventorySystem = require('../core/rpg/systems/inventory/inventorySystem');
   shopCommands = require('../core/commands/shopCommands');
-  skillTree = require('../core/rpg/skillTree');
-  abyssSystem = require('../core/rpg/abyssSystem');
-  pvpSystem = require('../core/rpg/pvpSystem');
+  skillTree = require('../core/rpg/systems/characters/skillTree');
+  abyssSystem = require('../core/rpg/systems/adventures/abyssSystem');
+  pvpSystem = require('../core/rpg/systems/pvp/pvpSystem');
 
   // Create a test user
   await User.findOneAndUpdate(

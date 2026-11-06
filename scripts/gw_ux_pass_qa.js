@@ -27,11 +27,11 @@ function check(name, cond, extra) {
 
 const fs = require('fs');
 const path = require('path');
-const CFG = require('../core/rpg/guildWar/config');
-const mapEngine = require('../core/rpg/guildWar/mapEngine');
-const puzzles = require('../core/rpg/guildWar/puzzles');
-const encounters = require('../core/rpg/guildWar/encounters');
-const dmRouter = require('../core/rpg/guildWar/dmRouter');
+const CFG = require('../core/rpg/systems/guildwar/config');
+const mapEngine = require('../core/rpg/systems/guildwar/mapEngine');
+const puzzles = require('../core/rpg/systems/guildwar/puzzles');
+const encounters = require('../core/rpg/systems/guildwar/encounters');
+const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
 
 // dead-end share of a map (rooms with exactly 1 open edge / all rooms)
 function deadEndShare(map) {
@@ -123,7 +123,7 @@ console.log('\n═══ PART 2 — puzzle rule cards (#5) + examine feedback (#
     const player = eventDoc.players[0];
 
     // patch DB-touching rooms fns for the puzzle paths
-    const roomsMod = require('../core/rpg/guildWar/rooms');
+    const roomsMod = require('../core/rpg/systems/guildwar/rooms');
     const realStart = roomsMod.startPuzzle, realClaim = roomsMod.claimPuzzleAttempt;
     let claimCalls = 0;
     roomsMod.startPuzzle = async () => {};
@@ -131,7 +131,7 @@ console.log('\n═══ PART 2 — puzzle rule cards (#5) + examine feedback (#
     // stub the full scene renderer — the free-re-examine paths each ride an
     // afterImage, and real canvas renders belong to the visual suites on the
     // boxes (shadow/chest/hub POV). This suite verifies FLOW, not pixels.
-    const roomSceneMod = require('../core/rpg/guildWar/roomScene');
+    const roomSceneMod = require('../core/rpg/systems/guildwar/roomScene');
     const realRender = roomSceneMod.renderRoomScene;
     roomSceneMod.renderRoomScene = async () => Buffer.from('ux-stub');
 
@@ -221,7 +221,7 @@ console.log('\n═══ PART 3 — onboarding primer (#4/#7) + board card ═�
     // 🖼️ portable output: GW_QA_OUT override, repo-relative default
     const outDir = process.env.GW_QA_OUT || path.join(__dirname, '..', '..', 'download', 'gw_qa_ux_1007');
     fs.mkdirSync(outDir, { recursive: true });
-    const buf = await require('../core/rpg/guildWar/puzzleCards').renderPuzzleCard({
+    const buf = await require('../core/rpg/systems/guildwar/puzzleCards').renderPuzzleCard({
         kind: 'levers',
         prompt: '*A=3 B=5 C=9 D=11 E=14*.\nThe mechanism wants a total of *20*. Pull 3 levers (e.g. `A B C`).',
         rules: puzzles.RULE_TEXT.levers,
@@ -229,7 +229,7 @@ console.log('\n═══ PART 3 — onboarding primer (#4/#7) + board card ═�
     });
     check('board card renders WITH the rule line (PNG)', Buffer.isBuffer(buf) && buf.length > 5000);
     if (buf) fs.writeFileSync(path.join(outDir, 'levers_board_rules.png'), buf);
-    const bufNoRules = await require('../core/rpg/guildWar/puzzleCards').renderPuzzleCard({
+    const bufNoRules = await require('../core/rpg/systems/guildwar/puzzleCards').renderPuzzleCard({
         kind: 'riddle', prompt: 'Guardian asks: *What am I?*', rules: null,
         attemptsUsed: 1, attemptsMax: 3, world: 'the ember fields', ring: 1,
     });

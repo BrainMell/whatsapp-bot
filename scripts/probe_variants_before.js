@@ -8,7 +8,7 @@ const fs = require('fs');
 const OUT = process.argv[2] || '/home/z/my-project/download/gw_variants_before';
 fs.mkdirSync(OUT, { recursive: true });
 
-const roomScene = require('../core/rpg/guildWar/roomScene');
+const roomScene = require('../core/rpg/systems/guildwar/roomScene');
 const { ROOM_VARIANTS } = roomScene;
 
 function mkEvent() {

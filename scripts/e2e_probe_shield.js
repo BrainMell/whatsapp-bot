@@ -2,7 +2,7 @@
 /* Probe: why did one ability-shield sample take 1 damage? Dump outliers. */
 try { require('dotenv').config(); } catch (e) {}
 require('../db')();
-const ga = require('../core/rpg/guildAdventure');
+const ga = require('../core/rpg/systems/adventures/guildAdventure');
 const mkAttacker = () => ({ jid: 'e2e-enemy', isEnemy: true, name: 'E2E Brute', stats: { atk: 50, def: 10, mag: 0, spd: 10, luck: 0, hp: 9000, maxHp: 9000 }, statusEffects: [], equipment: {} });
 const mkTarget = (shields) => ({ jid: '19998887761@s.whatsapp.net', isEnemy: false, name: 'E2E Hero', id: 'hero', stats: { atk: 10, def: 5, mag: 0, spd: 10, luck: 0, hp: 5000, maxHp: 5000, dmgReduction: 0, evasion: 0 }, statusEffects: shields, equipment: {} });
 setTimeout(() => {

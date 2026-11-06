@@ -15,18 +15,18 @@
 //
 // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md
 
-const economy = require('../rpg/economy');
+const economy = require('../rpg/systems/economy/economy');
 const botConfig = require('../../botConfig');
-const summonSystem = require('../rpg/summonSystem');
-const summonCapture = require('../rpg/summonCapture');
-const summonForging = require('../rpg/summonForging');
+const summonSystem = require('../rpg/systems/summons/summonSystem');
+const summonCapture = require('../rpg/systems/summons/summonCapture');
+const summonForging = require('../rpg/systems/summons/summonForging');
 // 💡 RETIRED 2026-11-01: summonTrials + summonEvolution removed (dead content -
 // zero trials/evolution chains exist for any of the 26 live species).
-const registry = require('../rpg/summonRegistry');
+const registry = require('../rpg/systems/summons/summonRegistry');
 // 💡 Phase C2: Image-based roster rendering
-const rosterRenderer = require('../rpg/summonRosterRenderer');
-const summonSprites = require('../rpg/summonSprites');
-const codexRenderer = require('../rpg/summonCodexRenderer');
+const rosterRenderer = require('../rpg/systems/summons/summonRosterRenderer');
+const summonSprites = require('../rpg/systems/summons/summonSprites');
+const codexRenderer = require('../rpg/systems/summons/summonCodexRenderer');
 // 💡 FIX 2026-10-10: resilient GIF→MP4 delivery (cache + soft-budget + background
 // follow-through). Root-cause fix for "codex no longer renders animations" and
 // "can't use summons at all": Go GIF renders measured 9-39s, blowing through the
@@ -876,7 +876,7 @@ async function cmdHatch(sock, chatId, senderJid, args) {
   }
 
   // 💡 AUDIT FIX 2026-08-01: use the new summonEggSystem for tiered eggs
-  const summonEggSystem = require('../rpg/summonEggSystem');
+  const summonEggSystem = require('../rpg/systems/summons/summonEggSystem');
   const result = await summonEggSystem.hatchEgg(senderJid, eggId);
   await sock.sendMessage(chatId, { text: result.message });
   if (result.success) {
@@ -1016,7 +1016,7 @@ const SummonModel = require('../models/Summon');
 async function cmdMarket(sock, chatId, senderJid, args) {
   // 💡 UNIFIED PLAYER MARKET (2026-10-11): summon listings live in the same
   // collection as items and runes now. Same verbs, same UX, one market.
-  const playerMarket = require('../rpg/playerMarket');
+  const playerMarket = require('../rpg/systems/economy/playerMarket');
   const pmReply = (text, opts = {}) => sock.sendMessage(chatId, { text, ...(opts && opts.mentions ? { mentions: opts.mentions } : {}) });
   const action = (args[0] || '').toLowerCase();
   const rest = args.slice(1);
@@ -1200,7 +1200,7 @@ async function cmdMarketBuy(sock, chatId, senderJid, args) {
 
   // Alt detection
   try {
-    const altDetection = require('../rpg/altDetection');
+    const altDetection = require('../rpg/systems/meta/altDetection');
     const altCheck = altDetection.checkTransfer(senderJid, listing.sellerId);
     if (altCheck.blocked) {
       await sock.sendMessage(chatId, { text: `❌ ${altCheck.reason}` });
@@ -1368,7 +1368,7 @@ async function cmdDuel(sock, chatId, senderJid, args, m) {
 
   // Alt detection
   try {
-    const altDetection = require('../rpg/altDetection');
+    const altDetection = require('../rpg/systems/meta/altDetection');
     const altCheck = altDetection.checkTransfer(senderJid, targetJid);
     if (altCheck.blocked) {
       await sock.sendMessage(chatId, { text: `❌ ${altCheck.reason}` });
@@ -1386,7 +1386,7 @@ async function cmdDuel(sock, chatId, senderJid, args, m) {
   }
 
   // Issue the challenge via the PvP engine with mode='summon'
-  const pvpSystem = require('../rpg/pvpSystem');
+  const pvpSystem = require('../rpg/systems/pvp/pvpSystem');
   const result = pvpSystem.challengePlayer(chatId, senderJid, targetJid, wager, { mode: 'summon' });
 
   if (!result.success) {
@@ -1466,7 +1466,7 @@ async function cmdSkillTree(sock, chatId, senderJid, args) {
     return;
   }
 
-  const summonSkillTrees = require('../rpg/summonSkillTrees');
+  const summonSkillTrees = require('../rpg/systems/summons/summonSkillTrees');
 
   if (sub === 'choose') {
     const path = (args[2] || '').toUpperCase().trim();
@@ -1485,7 +1485,7 @@ async function cmdSkillTree(sock, chatId, senderJid, args) {
   }
 
   if (sub === 'respec') {
-    const inventorySystem = require('../rpg/inventorySystem');
+    const inventorySystem = require('../rpg/systems/inventory/inventorySystem');
     if (!inventorySystem.hasItem(senderJid, 'skill_respec_scroll', 1)) {
       await sock.sendMessage(chatId, { text: `❌ Need a Skill Respec Scroll. Buy from shop or craft.` });
       return;
@@ -1564,8 +1564,8 @@ async function cmdSummonEquip(sock, chatId, senderJid, args) {
   if (!summon) { await sock.sendMessage(chatId, { text: '❌ Summon not found.' }); return; }
 
   // Resolve gear item - look up in ITEM_DATABASE for type SUMMON_GEAR
-  const lootSystem = require('../rpg/lootSystem');
-  const inventorySystem = require('../rpg/inventorySystem');
+  const lootSystem = require('../rpg/systems/inventory/lootSystem');
+  const inventorySystem = require('../rpg/systems/inventory/inventorySystem');
   const cleanQuery = gearIdQuery.toLowerCase().replace(/_/g, '').replace(/ /g, '');
   const gearId = Object.keys(lootSystem.ITEM_DATABASE).find(id =>
     lootSystem.ITEM_DATABASE[id].type === 'SUMMON_GEAR' &&
@@ -1668,7 +1668,7 @@ async function cmdSummonUnequip(sock, chatId, senderJid, args) {
   }
 
   // Return to inventory
-  const inventorySystem = require('../rpg/inventorySystem');
+  const inventorySystem = require('../rpg/systems/inventory/inventorySystem');
   // 💡 FIX 2026-08-31: await + check - a full bag previously destroyed the
   // gear permanently (slot nulled first, addItem failure ignored).
   const returnResult = await inventorySystem.addItem(senderJid, gear.id, 1);
@@ -1705,7 +1705,7 @@ async function cmdBond(sock, chatId, senderJid, args) {
     return;
   }
 
-  const summonBondTraits = require('../rpg/summonBondTraits');
+  const summonBondTraits = require('../rpg/systems/summons/summonBondTraits');
   const bondDisplay = summonBondTraits.getBondDisplay(summon);
   const species = registry.getSpecies(summon.species);
   let msg = `💖 *BOND - ${summon.nickname || species?.name || summon.species}*\n\n`;
@@ -1736,7 +1736,7 @@ async function cmdTraits(sock, chatId, senderJid, args) {
     return;
   }
 
-  const summonBondTraits = require('../rpg/summonBondTraits');
+  const summonBondTraits = require('../rpg/systems/summons/summonBondTraits');
   const species = registry.getSpecies(summon.species);
   let msg = `🧬 *TRAITS - ${summon.nickname || species?.name || summon.species}*\n\n`;
   msg += `   ${summonBondTraits.getTraitsDisplay(summon)}\n`;
@@ -1766,7 +1766,7 @@ async function cmdAbilities(sock, chatId, senderJid, args) {
   }
 
   const species = registry.getSpecies(summon.species);
-  const monsterSkills = require('../rpg/monsterSkills');
+  const monsterSkills = require('../rpg/systems/combat/monsterSkills');
   const arch = monsterSkills.MONSTER_ARCHETYPES[summon.archetype];
 
   if (!arch) {
@@ -1830,7 +1830,7 @@ async function cmdAIMode(sock, chatId, senderJid, args) {
   const mode = (args[1] || '').toUpperCase().trim();
 
   if (!summonIdQuery) {
-    const summonBondTraits = require('../rpg/summonBondTraits');
+    const summonBondTraits = require('../rpg/systems/summons/summonBondTraits');
     let msg = `🤖 *SUMMON AI MODES*\n\nChoose how your summon behaves in combat:\n\n`;
     msg += summonBondTraits.getAIModesDisplay();
     msg += `\n\n_Usage: \`${getPrefix()} summon ai <id> <mode>\`_`;
@@ -1846,7 +1846,7 @@ async function cmdAIMode(sock, chatId, senderJid, args) {
   }
 
   if (!mode) {
-    const summonBondTraits = require('../rpg/summonBondTraits');
+    const summonBondTraits = require('../rpg/systems/summons/summonBondTraits');
     const currentMode = summonBondTraits.getAIMode(summon.aiMode || 'BALANCED');
     let msg = `🤖 *AI MODE - ${summon.nickname || summon.species}*\n\n`;
     msg += `Current: ${currentMode.icon} ${currentMode.name}\n${currentMode.desc}\n\n`;
@@ -1857,7 +1857,7 @@ async function cmdAIMode(sock, chatId, senderJid, args) {
     return;
   }
 
-  const summonBondTraits = require('../rpg/summonBondTraits');
+  const summonBondTraits = require('../rpg/systems/summons/summonBondTraits');
   const modeData = summonBondTraits.getAIMode(mode);
   if (!summonBondTraits.AI_MODES[mode]) {
     await sock.sendMessage(chatId, { text: `❌ Invalid mode. Use: AGGRESSIVE, DEFENSIVE, PROTECT_OWNER, SUPPORT_ALLY, or BALANCED.` });
@@ -1886,18 +1886,18 @@ async function cmdEggCraft(sock, chatId, senderJid, args) {
   const validTiers = ['rare'];
 
   if (!tier) {
-    const inventorySystem = require('../rpg/inventorySystem');
+    const inventorySystem = require('../rpg/systems/inventory/inventorySystem');
     const p = getPrefix();
     let msg = `💎 *SUMMON EGG CRAFTING*\n\n`;
     msg += `Combine 10 fragments to craft an egg:\n\n`;
     for (const t of validTiers) {
-      const summonEggSystem = require('../rpg/summonEggSystem');
+      const summonEggSystem = require('../rpg/systems/summons/summonEggSystem');
       const tierData = summonEggSystem.EGG_TIERS[t];
       const fragId = tierData.fragmentsRequired.id;
       const fragCount = tierData.fragmentsRequired.count;
       const have = inventorySystem.getItemCount(senderJid, fragId);
-      const eggName = require('../rpg/lootSystem').getItemInfo(tierData.eggId)?.name || tierData.eggId;
-      const fragName = require('../rpg/lootSystem').getItemInfo(fragId)?.name || fragId;
+      const eggName = require('../rpg/systems/inventory/lootSystem').getItemInfo(tierData.eggId)?.name || tierData.eggId;
+      const fragName = require('../rpg/systems/inventory/lootSystem').getItemInfo(fragId)?.name || fragId;
       msg += `• \`${p} summon eggcraft ${t}\` - ${fragCount}x ${fragName} → ${eggName}\n  _You have: ${have}/${fragCount}_\n`;
     }
     msg += `\n_Get fragments by defeating Wild Summons in the Abyss (10% encounter rate per floor)._`;
@@ -1912,7 +1912,7 @@ async function cmdEggCraft(sock, chatId, senderJid, args) {
     return;
   }
 
-  const summonEggSystem = require('../rpg/summonEggSystem');
+  const summonEggSystem = require('../rpg/systems/summons/summonEggSystem');
   const result = await summonEggSystem.craftEgg(senderJid, tier);
   await sock.sendMessage(chatId, { text: result.message });
 }

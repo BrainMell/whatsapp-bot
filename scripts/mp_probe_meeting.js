@@ -6,7 +6,7 @@ const RUN = Math.random().toString(36).slice(2, 6);
 (async () => {
     await L.connectDB();
     L.overlaySprites();
-    const state = require('../core/rpg/guildWar/state');
+    const state = require('../core/rpg/systems/guildwar/state');
     const GWE = require('../core/models/GuildWarEvent');
 
     const roster = L.makeRoster([
@@ -24,7 +24,7 @@ const RUN = Math.random().toString(36).slice(2, 6);
     await state.updatePlayer(ev.eventId, roster[1].jid, {}, { roomId: meet, prevRoomId: meet, lastMoveAt: 0 });
     await GWE.updateOne({ eventId: ev.eventId, 'rooms.key': meet }, { $set: { 'rooms.$.type': 'empty' } });
     // mirror rooms.enterRoom occupants update (what a real move would do)
-    const rooms = require('../core/rpg/guildWar/rooms');
+    const rooms = require('../core/rpg/systems/guildwar/rooms');
     await rooms.enterRoom(ev.eventId, roster[1].jid, roster[1].spawnRoomId || roster[1].roomId, meet);
 
     const doc1 = await state.getEvent(ev.eventId, { fresh: true });
@@ -41,7 +41,7 @@ const RUN = Math.random().toString(36).slice(2, 6);
     await roomsLib.enterRoom(ev.eventId, roster[0].jid, roster[0].prevRoomId, meet);
     const me = { ...doc1.players.find(p => p.jid === roster[0].jid), prevRoomId: roster[0].prevRoomId };
     const ctx2 = await state.getMoveContext(ev.eventId, meet);
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
     await dmRouter.presentRoom(sock, roster[0].jid, '\u200B', ctx2, me, ctx2.room, { prefix: '.j' });
     console.log('--- A received:');
     for (const s of sock.sent) {

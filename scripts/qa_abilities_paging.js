@@ -22,7 +22,7 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
 (async () => {
   require('dotenv').config();
   const skillCommands = require('../core/commands/skillCommands');
-  const economy = require('../core/rpg/economy');
+  const economy = require('../core/rpg/systems/economy/economy');
   const CHAT_ID = '120363000000000000@g.us';
 
   // viewAbilities → economy.getUser reads the IN-MEMORY user map the bot

@@ -13,8 +13,8 @@ console.log('— module load (no DB) —');
 let guildAdventure, abyssSystem;
 
 (async () => {
-  guildAdventure = require('../core/rpg/guildAdventure');
-  abyssSystem = require('../core/rpg/abyssSystem');
+  guildAdventure = require('../core/rpg/systems/adventures/guildAdventure');
+  abyssSystem = require('../core/rpg/systems/adventures/abyssSystem');
 
   console.log('— exports —');
   ok(typeof guildAdventure.saveSoloSnapshot === 'function', 'guildAdventure.saveSoloSnapshot exported');

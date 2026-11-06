@@ -102,8 +102,8 @@ async function main() {
   console.log(`✅ Connected.\n`);
 
   const Summon = mongoose.connection.collection('summons');
-  const registry = require('../core/rpg/summonRegistry');
-  const summonSystem = require('../core/rpg/summonSystem');
+  const registry = require('../core/rpg/systems/summons/summonRegistry');
+  const summonSystem = require('../core/rpg/systems/summons/summonSystem');
 
   // Find all summons with stale species
   const staleSpeciesKeys = Object.keys(SPECIES_MIGRATION_MAP);

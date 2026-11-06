@@ -1,6 +1,6 @@
-const progression = require('../rpg/progression');
-const economy = require('../rpg/economy');
-const guilds = require('../rpg/guilds');
+const progression = require('../rpg/systems/characters/progression');
+const economy = require('../rpg/systems/economy/economy');
+const guilds = require('../rpg/systems/guildwar/guilds');
 const botConfig = require('../../botConfig');
 
 const getPrefix = () => botConfig.getPrefix();
@@ -366,7 +366,7 @@ async function handleRankCommand(sock, chatId, senderJid, m, gateRows = []) {
     const gates = Array.isArray(gateRows) ? gateRows : [];
 
     // ── structured progression bars (Go RANK card) ──
-    const classSystem = require('../rpg/classSystem');
+    const classSystem = require('../rpg/systems/characters/classSystem');
     const userDoc = economy.getUser(senderJid);
     const curRank = String(userDoc?.adventurerRank || rankLetter || 'F').toUpperCase();
     const nextRankInfo = (() => {
@@ -619,7 +619,7 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
         // bake geometry of DUEL/QUEST/TRIAL/RANK (banner ribbon, name plate,
         // THE POINTS/THE ALLOCATION parchment panels, wax seal). Rendered by
         // the Go service; text panel below stays as the fallback.
-        const classSystem = require('../rpg/classSystem');
+        const classSystem = require('../rpg/systems/characters/classSystem');
         const allocUser = economy.getUser(senderJid);
         const allocClass = allocUser ? classSystem.getClassById(allocUser.class) : null;
         const allocTier = allocClass?.tier || 'STARTER';
@@ -712,7 +712,7 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
     await sock.sendMessage(chatId, { text: getBotMarker() + successMsg }, { quoted: m });
     // 💡 Phase B TUTORIAL: allocation lesson advances on a REAL spend
     // (no-op unless a tutorial session is active).
-    try { require('../rpg/tutorial').notify(senderJid, 'allocate', { sock, chatId }).catch(() => {}); } catch (e) {}
+    try { require('../rpg/systems/meta/tutorial').notify(senderJid, 'allocate', { sock, chatId }).catch(() => {}); } catch (e) {}
 
   } catch (err) {
     console.error("Error in handleAllocateCommand:", err.message);
@@ -729,7 +729,7 @@ async function handleAllocateCommand(sock, chatId, senderJid, args, m) {
  */
 async function handleRespecCommand(sock, chatId, senderJid, m) {
   try {
-    const economy = require('../rpg/economy');
+    const economy = require('../rpg/systems/economy/economy');
     const level = progression.getLevel(senderJid);
 
     // Check if there's anything to respec

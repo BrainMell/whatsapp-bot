@@ -12,7 +12,7 @@ const RUN = Math.random().toString(36).slice(2, 6);
     console.log('res:', JSON.stringify(res ? { hasText: !!res.text, hasImage: !!res.image, text: (res.text || '').slice(0, 80) } : String(res)));
     console.log('sock images:', sock.sent.filter(s => s.payload.image).length);
     for (const s of sock.sent) console.log('msg:', s.payload.image ? '[IMG]' : '[txt]', (s.payload.caption || s.payload.text || '').slice(0, 90).replace(/\n/g, ' '));
-    await require('../core/rpg/guildWar/state').abortEvent(ev.eventId, 'probe');
+    await require('../core/rpg/systems/guildwar/state').abortEvent(ev.eventId, 'probe');
     L.restoreSprites();
     await require('mongoose').disconnect();
     process.exit(0);

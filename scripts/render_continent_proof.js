@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const cmr = require('../core/rpg/continentMapRenderer');
+const cmr = require('../core/rpg/systems/world/continentMapRenderer');
 
 (async () => {
     const out = process.argv[2] || path.join(__dirname, 'continent_qa');

@@ -12,8 +12,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const roomScene = require('../core/rpg/guildWar/roomScene');
-const endCard = require('../core/rpg/guildWar/endCard');
+const roomScene = require('../core/rpg/systems/guildwar/roomScene');
+const endCard = require('../core/rpg/systems/guildwar/endCard');
 
 const OUT = '/home/z/my-project/download/gw_qa_1005';
 fs.mkdirSync(OUT, { recursive: true });

@@ -7,8 +7,8 @@
  *   QA_MODE=1 node scripts/qa_fusion_render.js
  */
 process.env.QA_MODE = process.env.QA_MODE || '1';
-const scenes = require('../core/rpg/structureScenes');
-const bb = require('../core/rpg/baseBuilder');
+const scenes = require('../core/rpg/systems/world/structureScenes');
+const bb = require('../core/rpg/systems/homestead/baseBuilder');
 
 let pass = 0, fail = 0;
 const check = (name, cond) => { cond ? (pass++, console.log(`  ✅ ${name}`)) : (fail++, console.log(`  ❌ ${name}`)); };

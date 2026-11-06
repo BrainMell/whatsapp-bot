@@ -13,10 +13,10 @@ async function main() {
   await mongoose.connect(mongoUri);
   console.log('✅ Connected.\n');
 
-  const economy = require('../core/rpg/economy');
-  const summonEggSystem = require('../core/rpg/summonEggSystem');
-  const inventorySystem = require('../core/rpg/inventorySystem');
-  const lootSystem = require('../core/rpg/lootSystem');
+  const economy = require('../core/rpg/systems/economy/economy');
+  const summonEggSystem = require('../core/rpg/systems/summons/summonEggSystem');
+  const inventorySystem = require('../core/rpg/systems/inventory/inventorySystem');
+  const lootSystem = require('../core/rpg/systems/inventory/lootSystem');
 
   // Step 0: Sync user from DB
   console.log('Step 0: Syncing owner user from DB...');

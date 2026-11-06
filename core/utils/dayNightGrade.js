@@ -2,7 +2,7 @@
 // Wear the time of day (shared dayNight cycle) onto a finished card image, e.g. the Go-rendered
 // guild/portrait cards, so they match the grounds/base renders. Never throws: on any problem the
 // original buffer comes back untouched.
-const dayNight = require('../rpg/dayNight');
+const dayNight = require('../rpg/systems/shared/dayNight');
 async function gradeBuffer(buf, opts = {}) {
     try {
         if (!Buffer.isBuffer(buf) || buf.length < 100) return buf;

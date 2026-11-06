@@ -7,7 +7,7 @@ const path = require('path');
 process.chdir(path.join(__dirname, '..'));
 const fs = require('fs');
 const { createCanvas, loadImage } = require('canvas');
-const R = require('../core/rpg/homesteadRenderer');
+const R = require('../core/rpg/systems/homestead/homesteadRenderer');
 
 const TW = 64, TH = 32, OX = 450, OY = 190;
 

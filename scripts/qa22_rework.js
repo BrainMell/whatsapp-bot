@@ -20,10 +20,10 @@ const ok = (cond, label, extra = '') => {
 };
 
 (async () => {
-    const dayNight = require('../core/rpg/dayNight');
-    const dockPov = require('../core/rpg/dockPov');
-    const huntPov = require('../core/rpg/huntPov');
-    const R = require('../core/rpg/worldMapRenderer');
+    const dayNight = require('../core/rpg/systems/shared/dayNight');
+    const dockPov = require('../core/rpg/systems/world/dockPov');
+    const huntPov = require('../core/rpg/systems/world/huntPov');
+    const R = require('../core/rpg/systems/world/worldMapRenderer');
     const { createCanvas } = require('canvas');
 
     // ── 1+2: GIFs — build, sniff, decode ─────────────────────────────────────

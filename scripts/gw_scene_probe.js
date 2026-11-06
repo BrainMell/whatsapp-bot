@@ -14,11 +14,11 @@ async function connectDB() {
     await connectDB();
     const mongoose = require('mongoose');
     for (const c of ['guildwarevents', 'guilds', 'systems', 'users']) { try { await mongoose.connection.db.collection(c).deleteMany({}); } catch (e) {} }
-    const state = require('../core/rpg/guildWar/state');
-    const mapEngine = require('../core/rpg/guildWar/mapEngine');
-    const roomScene = require('../core/rpg/guildWar/roomScene');
-    const encounters = require('../core/rpg/guildWar/encounters');
-    const guilds = require('../core/rpg/guilds');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const mapEngine = require('../core/rpg/systems/guildwar/mapEngine');
+    const roomScene = require('../core/rpg/systems/guildwar/roomScene');
+    const encounters = require('../core/rpg/systems/guildwar/encounters');
+    const guilds = require('../core/rpg/systems/guildwar/guilds');
     await guilds.loadGuilds();
     try { await guilds.createGuild('QAG', 'u-qag', 'ADVENTURER'); } catch (e) {}
     const created = await state.createEvent({ type: 'normal', hostGroupId: 'qa@g.us', initiatedBy: 'x' });

@@ -22,8 +22,8 @@ function check(name, cond, extra) {
 }
 (async () => {
     await connectDB();
-    const state = require('../core/rpg/guildWar/state');
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
     const GWE = require('../core/models/GuildWarEvent');
     const ev0 = await state.createEvent({ type: 'normal', hostGroupId: 'rejoinqa@g.us', initiatedBy: 'owner' });
     await state.registerPlayer(ev0.event.eventId, { jid: 'rj@s.whatsapp.net', name: 'RJ', guildId: 'G', guildName: 'G' });

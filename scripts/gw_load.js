@@ -37,9 +37,9 @@ function pct(arr, p) {
 }
 
 async function runLoad(label, playerCount, opts = {}) {
-    const state = require('../core/rpg/guildWar/state');
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
-    const rooms = require('../core/rpg/guildWar/rooms');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
+    const rooms = require('../core/rpg/systems/guildwar/rooms');
     const GuildWarEvent = require('../core/models/GuildWarEvent');
 
     // DB op counter via mongoose debug
@@ -91,7 +91,7 @@ async function runLoad(label, playerCount, opts = {}) {
     counting = false;
 
     // ── map renders: 12 players concurrently ──
-    const renderer = require('../core/rpg/guildWar/mapRenderer');
+    const renderer = require('../core/rpg/systems/guildwar/mapRenderer');
     const renderT0 = performance.now();
     const fresh = await state.getEvent(created.event.eventId, { fresh: true });
     const renderPlayers = fresh.players.slice(0, 12);
@@ -131,8 +131,8 @@ async function runLoad(label, playerCount, opts = {}) {
     results.push(await runLoad('L2-100', 100));
     results.push(await runLoad('L3-150-align', 150, { alignment: true }));
     // L4: two events at once — run two halves concurrently on separate events
-    const state = require('../core/rpg/guildWar/state');
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
     const mk = async (tag, n) => {
         const created = await state.createEvent({ type: 'normal', hostGroupId: `${tag}@g.us`, initiatedBy: 'load' });
         for (let i = 0; i < n; i++) {

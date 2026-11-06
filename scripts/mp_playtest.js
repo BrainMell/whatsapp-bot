@@ -16,8 +16,8 @@ const MAN = [];
 // ── movement helpers (real grammar, real cooldowns) ──
 const DIR_TOKEN = { n: 'north', e: 'east', s: 'south', w: 'west' };
 function bfsPath(doc, from, to) {
-    const state = require('../core/rpg/guildWar/state');
-    const mapEngine = require('../core/rpg/guildWar/mapEngine');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const mapEngine = require('../core/rpg/systems/guildwar/mapEngine');
     const topo = state.topologyOf(doc);
     const prev = new Map([[from, null]]); const q = [from];
     while (q.length) {
@@ -55,14 +55,14 @@ async function prepWorld(eventId, rooms, clearKeys, meet, meetType = 'empty') {
     await GWE.updateOne({ eventId, 'rooms.key': meet }, { $set: { 'rooms.$.type': meetType } });
 }
 const snap = async (eventId) => {
-    const state = require('../core/rpg/guildWar/state');
+    const state = require('../core/rpg/systems/guildwar/state');
     return state.getEvent(eventId, { fresh: true });
 };
 function dist(a, b) { const [ax, ay] = a.split(',').map(Number), [bx, by] = b.split(',').map(Number); return Math.abs(ax - bx) + Math.abs(ay - by); }
 async function cleanup(eventId, jids) {
-    const ga = require('../core/rpg/guildAdventure');
+    const ga = require('../core/rpg/systems/adventures/guildAdventure');
     for (const j of jids) { try { ga.abortRuinsSession(j); } catch (e) {} }
-    try { await require('../core/rpg/guildWar/state').abortEvent(eventId, 'playtest section done'); } catch (e) {}
+    try { await require('../core/rpg/systems/guildwar/state').abortEvent(eventId, 'playtest section done'); } catch (e) {}
 }
 
 // ════════ S1: SAME-ROOM ENTRIES — different doors, sequential + simultaneous ════════
@@ -83,7 +83,7 @@ async function s1_entries() {
     })(), 'startEvent sets players[].roomId but never seeds rooms[].occupants — a player who has not moved yet is invisible to room-occupant logic (meeting lines, scene co-actors)');
     rep('S1', 'players deploy to distinct spawn rooms', pa0.roomId !== pb.roomId, `A@${pa0.roomId} B@${pb.roomId} (manhattan ${dist(pa0.roomId, pb.roomId)}, side ${doc.side})`);
 
-    const bNbrs = ['n', 'e', 's', 'w'].map(d => ({ d, k: require('../core/rpg/guildWar/mapEngine').step(require('../core/rpg/guildWar/state').topologyOf(doc), pb.roomId, d) })).filter(x => x.k);
+    const bNbrs = ['n', 'e', 's', 'w'].map(d => ({ d, k: require('../core/rpg/systems/guildwar/mapEngine').step(require('../core/rpg/systems/guildwar/state').topologyOf(doc), pb.roomId, d) })).filter(x => x.k);
     let meet = null, dirB = null, pathA = null;
     for (const nb of bNbrs) {
         const pacand = bfsPath(doc, pa0.roomId, nb.k);
@@ -104,7 +104,7 @@ async function s1_entries() {
 
     // SIMULTANEOUS: both step out through different doors, then both re-enter at once
     const stepOutA = bfsPath(doc, meet, meet).length; // noop
-    const exitsMeet = ['n', 'e', 's', 'w'].map(d => ({ d, k: require('../core/rpg/guildWar/mapEngine').step(require('../core/rpg/guildWar/state').topologyOf(doc), meet, d) })).filter(x => x.k);
+    const exitsMeet = ['n', 'e', 's', 'w'].map(d => ({ d, k: require('../core/rpg/systems/guildwar/mapEngine').step(require('../core/rpg/systems/guildwar/state').topologyOf(doc), meet, d) })).filter(x => x.k);
     const doorA = exitsMeet[0], doorB = exitsMeet[1] || exitsMeet[0];
     await L.dm(sockA, A.jid, `.j move ${DIR_TOKEN[doorA.d]}`); await L.sleep(320);
     await L.dm(sockB, B.jid, `.j move ${DIR_TOKEN[doorB.d]}`); await L.sleep(320);
@@ -144,7 +144,7 @@ async function s2_talk(ctx) {
     let doc = await snap(ev.eventId);
     const pa = doc.players.find(p => p.jid === A.jid), pb = doc.players.find(p => p.jid === B.jid);
     // B steps out and back (works around the spawn-occupants seed bug)
-    const bNbrs = ['n', 'e', 's', 'w'].map(d => ({ d, k: require('../core/rpg/guildWar/mapEngine').step(require('../core/rpg/guildWar/state').topologyOf(doc), pb.roomId, d) })).filter(x => x.k);
+    const bNbrs = ['n', 'e', 's', 'w'].map(d => ({ d, k: require('../core/rpg/systems/guildwar/mapEngine').step(require('../core/rpg/systems/guildwar/state').topologyOf(doc), pb.roomId, d) })).filter(x => x.k);
     await L.dm(sockB, B.jid, `.j move ${DIR_TOKEN[bNbrs[0].d]}`); await L.sleep(340);
     await L.dm(sockB, B.jid, `.j move ${DIR_TOKEN[bNbrs[0].d === 'n' ? 's' : bNbrs[0].d === 's' ? 'n' : bNbrs[0].d === 'e' ? 'w' : 'e']}`); await L.sleep(340);
     doc = await snap(ev.eventId);
@@ -190,8 +190,8 @@ async function s3_sharemap() {
     rep('S3', 'sender explored rooms beyond recipient\'s fog', aDisc.length > (bNow.discovered || []).length, `A discovered ${aDisc.length}, B discovered ${bDiscBefore.size}`);
 
     // B also privately discovers one room A has NOT (to prove extend-not-overwrite)
-    const state = require('../core/rpg/guildWar/state');
-    const mapEngine = require('../core/rpg/guildWar/mapEngine');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const mapEngine = require('../core/rpg/systems/guildwar/mapEngine');
     const topo = state.topologyOf(doc);
     const bPrivate = ['n', 'e', 's', 'w'].map(d => mapEngine.step(topo, bNow.roomId, d)).find(k => k && !aDisc.includes(k));
     if (bPrivate) await state.updatePlayer(ev.eventId, B.jid, {}, { discovered: [...(bNow.discovered || []), bPrivate] });
@@ -212,7 +212,7 @@ async function s3_sharemap() {
 // ════════ S4: PVP — challenge, positioning, escape-by-move, timeout yank, duel, settle ════════
 async function s4_pvp() {
     console.log('\n━━━ S4: PvP ━━━');
-    const CFG = require('../core/rpg/guildWar/config');
+    const CFG = require('../core/rpg/systems/guildwar/config');
     const realWindow = CFG.PVP.CHALLENGE_WINDOW_MS;
     CFG.PVP.CHALLENGE_WINDOW_MS = 4000; // shrink for sim
     const roster = L.makeRoster([
@@ -231,7 +231,7 @@ async function s4_pvp() {
     await drive(sockA, A.jid, pathA.slice(0, -1));
     await drive(sockM, M.jid, pathM.slice(0, -1));
     await drive(sockA, A.jid, pathA.slice(-1)); // A walks into B's spawn room (B steps out+back first to register)
-    const bn = ['n', 'e', 's', 'w'].map(d => ({ d, k: require('../core/rpg/guildWar/mapEngine').step(require('../core/rpg/guildWar/state').topologyOf(doc), pb.roomId, d) })).filter(x => x.k);
+    const bn = ['n', 'e', 's', 'w'].map(d => ({ d, k: require('../core/rpg/systems/guildwar/mapEngine').step(require('../core/rpg/systems/guildwar/state').topologyOf(doc), pb.roomId, d) })).filter(x => x.k);
     await L.dm(sockB, B.jid, `.j move ${DIR_TOKEN[bn[0].d]}`); await L.sleep(340);
     await L.dm(sockB, B.jid, `.j move ${DIR_TOKEN[bn[0].d === 'n' ? 's' : bn[0].d === 's' ? 'n' : bn[0].d === 'e' ? 'w' : 'e']}`); await L.sleep(340);
     await drive(sockM, M.jid, pathM.slice(-1)); // Milo walks in too
@@ -251,7 +251,7 @@ async function s4_pvp() {
 
     // ESCAPE BY MOVE: B walks OUT of the challenge room mid-window
     doc = await snap(ev.eventId);
-    const escDirs = ['n', 'e', 's', 'w'].map(d => ({ d, k: require('../core/rpg/guildWar/mapEngine').step(require('../core/rpg/guildWar/state').topologyOf(doc), pb.roomId, d) })).filter(x => x.k && x.k !== bn[0].k);
+    const escDirs = ['n', 'e', 's', 'w'].map(d => ({ d, k: require('../core/rpg/systems/guildwar/mapEngine').step(require('../core/rpg/systems/guildwar/state').topologyOf(doc), pb.roomId, d) })).filter(x => x.k && x.k !== bn[0].k);
     const escTarget = escDirs[0];
     await prepWorld(ev.eventId, doc.rooms, [escTarget.k], pb.roomId);
     const escRes = await L.dm(sockB, B.jid, `.j move ${DIR_TOKEN[escTarget.d]}`);
@@ -263,7 +263,7 @@ async function s4_pvp() {
 
     // ⚔️ TIMEOUT: window expires while B is OUT → does anything happen to him?
     await L.sleep(4300);
-    const ruinsPvp = require('../core/rpg/guildWar/ruinsPvp');
+    const ruinsPvp = require('../core/rpg/systems/guildwar/ruinsPvp');
     const pruned = await ruinsPvp.pruneExpired(ev.eventId);
     doc = await snap(ev.eventId);
     const bAfter = doc.players.find(p => p.jid === B.jid);
@@ -307,8 +307,8 @@ async function s5_occupied() {
     let doc = await snap(ev.eventId);
     const pa = doc.players.find(p => p.jid === A.jid);
     // pick the combat room closest to A's spawn as the meet
-    const mapEngine = require('../core/rpg/guildWar/mapEngine');
-    const state = require('../core/rpg/guildWar/state');
+    const mapEngine = require('../core/rpg/systems/guildwar/mapEngine');
+    const state = require('../core/rpg/systems/guildwar/state');
     const topo = state.topologyOf(doc);
     const nbrs = ['n', 'e', 's', 'w'].map(d => ({ d, k: mapEngine.step(topo, pa.roomId, d) })).filter(x => x.k);
     const meet = nbrs[0].k;
@@ -364,9 +364,9 @@ async function s5_occupied() {
     if (fleeImgs.length) { const f = `${OUT}/s5_A_after_flee.png`; fs.writeFileSync(f, fleeImgs[fleeImgs.length - 1].payload.image); MAN.push({ file: f, who: 'A', caption: (fleeImgs[fleeImgs.length - 1].payload.caption || '').replace(/\n+/g, ' | ').slice(0, 150) }); }
 
     // "wait until it finishes → moved to the appropriate opposite doorway" — does anything reposition?
-    const ga = require('../core/rpg/guildAdventure');
+    const ga = require('../core/rpg/systems/adventures/guildAdventure');
     ga.abortRuinsSession(B.jid); ga.abortRuinsSession(C.jid);
-    await require('../core/rpg/guildWar/rooms').clearRoom(ev.eventId, meet, { jid: 'sim-veteran', guildId: 'Bravo' });
+    await require('../core/rpg/systems/guildwar/rooms').clearRoom(ev.eventId, meet, { jid: 'sim-veteran', guildId: 'Bravo' });
     doc = await snap(ev.eventId);
     const cAfter = doc.players.find(p => p.jid === C.jid);
     rep('S5', '⚠️ SPEC GAP: after the encounter finishes, waiting players are NOT repositioned to the opposite doorway', cAfter.roomId === meet, `Milo still in ${cAfter.roomId}; no mechanic exists to move a waiter anywhere (code grep: no reposition/wait flow)`);
@@ -396,7 +396,7 @@ async function s6_four() {
 
     // everyone paths toward a room adjacent to Brutus's spawn (meet)
     const bs = spawns[2];
-    const bn6 = ['n', 'e', 's', 'w'].map(d => ({ d, k: require('../core/rpg/guildWar/mapEngine').step(require('../core/rpg/guildWar/state').topologyOf(doc), bs, d) })).filter(x => x.k);
+    const bn6 = ['n', 'e', 's', 'w'].map(d => ({ d, k: require('../core/rpg/systems/guildwar/mapEngine').step(require('../core/rpg/systems/guildwar/state').topologyOf(doc), bs, d) })).filter(x => x.k);
     const meet = bn6[0].k;
     const back = bn6[0].d === 'n' ? 's' : bn6[0].d === 's' ? 'n' : bn6[0].d === 'e' ? 'w' : 'e';
     const paths = roster.map(r => bfsPath(doc, doc.players.find(p => p.jid === r.jid).roomId, meet));
@@ -450,20 +450,20 @@ async function s7_world() {
     const ds = [dist(spawns[0].room, spawns[1].room), dist(spawns[0].room, spawns[2].room), dist(spawns[1].room, spawns[2].room)];
     rep('S7', 'spawn separation (why it FEELS like different maps)', Math.min(...ds) >= Math.floor(doc.side / 3) - 2, `spawns ${spawns.map(s => `${s.name}@${s.room}`).join(', ')} — pairwise manhattan ${ds.join('/')} (config SPAWN_MIN_DIST_FRAC=1/3 of side=${doc.side})`);
     // visibility: guild level 9 → mates tier (L5) + detect (L7): A should see Milo anywhere + Brutus if he acted recently
-    const vis = require('../core/rpg/guildWar/visibility');
+    const vis = require('../core/rpg/systems/guildwar/visibility');
     const a = doc.players.find(p => p.jid === roster[0].jid);
     const extras = vis.extrasFor(doc, a, 9);
     rep('S7', 'guild-level 9: mate positions visible on demand', extras.mates.length === 1 && extras.mates[0].jid === roster[1].jid, `mates=[${extras.mates.map(m => m.name + '@' + m.roomId).join(', ')}]`);
     // Brutus acts (moves) → detect within decay window
     const pb = doc.players.find(p => p.jid === roster[2].jid);
-    const bn = ['n', 'e', 's', 'w'].map(d => ({ d, k: require('../core/rpg/guildWar/mapEngine').step(require('../core/rpg/guildWar/state').topologyOf(doc), pb.roomId, d) })).filter(x => x.k);
+    const bn = ['n', 'e', 's', 'w'].map(d => ({ d, k: require('../core/rpg/systems/guildwar/mapEngine').step(require('../core/rpg/systems/guildwar/state').topologyOf(doc), pb.roomId, d) })).filter(x => x.k);
     await L.dm(sockC, roster[2].jid, `.j move ${DIR_TOKEN[bn[0].d]}`); await L.sleep(340);
     const doc2 = await snap(ev.eventId);
     const a2 = doc2.players.find(p => p.jid === roster[0].jid);
     const extras2 = vis.extrasFor(doc2, a2, 9);
     rep('S7', 'recent-enemy detection: Brutus pinged after moving (5-min decay)', extras2.enemyPings.some(e => e.jid === roster[2].jid), `enemyPings=[${extras2.enemyPings.map(e => e.name + '@' + e.roomId).join(', ')}]`);
     // maps: A's chart (mates+pings) vs C's chart (own fog) — different fog, same world
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
     sockA.clear();
     const mapRes = await L.dm(sockA, roster[0].jid, '.j map');
     const aImg = sockA.to(roster[0].jid).filter(s => s.payload.image);

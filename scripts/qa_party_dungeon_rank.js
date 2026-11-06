@@ -1,5 +1,5 @@
 'use strict';
-const { resolvePartyDungeonRank } = require('../core/rpg/partyDungeonRank');
+const { resolvePartyDungeonRank } = require('../core/rpg/systems/adventures/partyDungeonRank');
 let pass = 0, fail = 0;
 function eq(actual, expected, label) {
   if (JSON.stringify(actual) === JSON.stringify(expected)) { pass++; console.log('✅ '+label); }

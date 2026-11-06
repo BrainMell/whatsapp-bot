@@ -32,11 +32,11 @@ function check(name, cond, detail = '') {
 
 async function main() {
     await connectDB();
-    const guilds = require('../core/rpg/guilds');
+    const guilds = require('../core/rpg/systems/guildwar/guilds');
     for (const [name, owner] of [['GwQaOne', 'p1@s.whatsapp.net'], ['GwQaTwo', 'p2@s.whatsapp.net']]) {
         try { await guilds.createGuild(name, owner, 'ADVENTURER'); } catch (e) {}
     }
-    const gw = require('../core/rpg/guildWar');
+    const gw = require('../core/rpg/systems/guildwar/index');
     const { state } = gw;
     const engine = require('../core/engine');
     engine.isBotOwner = () => true;
@@ -77,8 +77,8 @@ async function main() {
     const missing = types.filter((t) => !byType[t]);
     if (missing.length) console.log('[qa] map lacks (weight-based, ok):', missing.join(','));
 
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
-    const mapEngine = require('../core/rpg/guildWar/mapEngine');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
+    const mapEngine = require('../core/rpg/systems/guildwar/mapEngine');
 
     async function go(t, cmd, prep) {
         const r = byType[t];
@@ -99,7 +99,7 @@ async function main() {
 
     // seed a real puzzle into the puzzle room payload
     async function seedPuzzle(r) {
-        const puzzles = require('../core/rpg/guildWar/puzzles');
+        const puzzles = require('../core/rpg/systems/guildwar/puzzles');
         const rng = mapEngine.makeRng(`${ev.seed}:qa-puzzle:${r.key}`);
         const pz = puzzles.genSequence(rng, { ring: r.ring || 0.2 });
         await GuildWarEvent.updateOne({ eventId: ev.eventId, 'rooms.key': r.key },

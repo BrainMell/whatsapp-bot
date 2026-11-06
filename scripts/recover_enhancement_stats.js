@@ -181,7 +181,7 @@ async function main() {
   // 💡 FIX 2026-08-01 (BUG #7): was a hardcoded absolute path that only
   // existed on one specific dev machine. Now uses a relative path so the
   // script works from any clone location (dev box, CI, Oracle server).
-  const lootSystem = require('../core/rpg/lootSystem.js');
+  const lootSystem = require('../core/rpg/systems/inventory/lootSystem.js');
 
   // ── 3. Walk each affected user and compute recovery ops ──────────────
   let totalItemsScanned = 0;

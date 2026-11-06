@@ -6,8 +6,8 @@ const fs = require('fs');
 const OUT = process.argv[2] || '/tmp/coldprobe';
 (async () => {
     fs.mkdirSync(OUT, { recursive: true });
-    const B = require('../core/rpg/homesteadBaseRenderer');
-    const G = require('../core/rpg/guildBaseRenderer');
+    const B = require('../core/rpg/systems/homestead/homesteadBaseRenderer');
+    const G = require('../core/rpg/systems/guildwar/guildBaseRenderer');
     const L = B.LAYOUT;
     const base = {
         owner: 'probeCold',
