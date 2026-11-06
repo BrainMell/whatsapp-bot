@@ -160,10 +160,9 @@ async function waitFor(fn, ms = 3000) {
     // ═══ S6: engine source pins (abortive claim + msg-id dedup) ═══
     console.log('\n══ S6. engine.js routing pins ══');
     const eng = fs.readFileSync(path.join(__dirname, '..', 'core', 'engine.js'), 'utf8');
-    check('S6: GC ownership claim is ABORTIVE (awaited, losers drop the message)', eng.includes('const _won = await claimGcOwnership(chatId);') && eng.includes('if (!_won) return;'));
-    check('S6: concurrent claims share one in-flight promise', eng.includes('_gcClaimInflight'));
+    check('S6: single-owner gate REMOVED (multi-bot mode — every bot serves every group)', !eng.includes('claimGcOwnership') && !eng.includes('_gcClaimInflight') && !eng.includes('"_shared_gc_owner"'));
     check('S6: re-delivery dedup LRU present (Baileys same-id replays dropped)', eng.includes('_processedMsgIds') && eng.includes('_processedMsgIds.size > 800'));
-    const feedSrc = fs.readFileSync(path.join(__dirname, '..', 'core', 'rpg', 'guildWar', 'feed.js'), 'utf8');
+    const feedSrc = fs.readFileSync(path.join(__dirname, '..', 'core', 'rpg', 'systems', 'guildwar', 'feed.js'), 'utf8');
     check('S6: feed flush holds a per-event mutex', feedSrc.includes('if (s.flushing) return;'));
     check('S6: flush awaits the mirror-settled barrier', feedSrc.includes('await s.mirror'));
     check('S6: destination pin is atomic first-writer-wins', feedSrc.includes('feedDestinations: null }, { feedDestinations: { $size: 0 }'));

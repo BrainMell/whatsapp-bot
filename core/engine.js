@@ -3249,16 +3249,10 @@ async function startBot(configInstance) {
     // instance (Jake/Joker/...) enables the bot family in that group.
     if (!global.sharedEnabledGcs) global.sharedEnabledGcs = new Set();
     const enabledGcs = global.sharedEnabledGcs;
-    // 🎯 SINGLE-OWNER GATE (2026-10-05): joker now lives on a different server
-    // from jake/subaru, but every instance still shares ONE Atlas DB - and the
-    // master whitelist above enabled a group for EVERY bot that is a member.
-    // Two/three processes then raced their in-memory views against the same
-    // Mongo docs (war state, economy, encounters) and double-answered every
-    // command - users saw data "keep resetting". From now on every group is
-    // owned by exactly ONE bot instance (lowercase id).
-    if (!global.sharedGcOwner) global.sharedGcOwner = new Map(); // gid → bot id
-    const gcOwner = global.sharedGcOwner;
-    const gcOwnerSkipLog = new Map(); // gid → last "staying silent" log ts
+    // 🤝 MULTI-BOT MODE (2026-11-06 owner spec): the single-owner GC gate
+    // from 2026-10-05 is REMOVED — every enabled group is now served by ALL
+    // bot instances together. Cross-instance write safety relies on the
+    // economy stale-guard three-way merge and idempotent announce stamps.
     const returnByDeathCounters = new Map();
 //~     const returnByDeathCooldowns = new Map();
     const supportUsage = new Map();
@@ -3347,81 +3341,8 @@ async function startBot(configInstance) {
       system.set("_shared_enabled_gcs", Array.from(enabledGcs));
     }
 
-    // ── single-owner gate helpers ──
-    // Mongo forbids '.' in document keys and group JIDs contain one
-    // ("…@g.us") → the owner map is persisted with '|' in place of '.'.
-    const GC_OWNER_KEY = "_shared_gc_owner";
-    const encGid = (gid) => String(gid).replace(/\./g, "|");
-    const decGid = (k) => String(k).replace(/\|/g, ".");
-
-    function loadGcOwners() {
-      try {
-        const data = system.get(GC_OWNER_KEY, {});
-        gcOwner.clear();
-        for (const [k, v] of Object.entries(data || {})) {
-          if (typeof v === "string" && v) gcOwner.set(decGid(k), v.toLowerCase());
-        }
-      } catch (err) {
-        console.error("Error loading GC owners:", err.message);
-      }
-    }
-
-    function saveGcOwners() {
-      const out = {};
-      for (const [gid, bot] of gcOwner) out[encGid(gid)] = bot;
-      system.set(GC_OWNER_KEY, out);
-    }
-
-    // First bot to see traffic in an owner-less enabled group claims it.
-    // Atomic at the Mongo level (findOneAndUpdate on a missing field) so two
-    // instances racing cannot both win; the loser re-reads and stands down.
-    // ⚔️ ABORTIVE CLAIM (owner 2026-10-06 20:01Z: "sometimes even different
-    // bots responding"): this used to be fire-and-forget — the losing bots
-    // STILL processed the very first message of an owner-less group (the
-    // optimistic cache set below made the gate pass for every sibling), so
-    // the same command could be answered by 2-3 bots at once. It now returns
-    // whether THIS instance owns the chat and the caller drops the message
-    // when it lost. Concurrent claims share one in-flight promise per chat.
-    const _gcClaimInflight = new Map();
-    function claimGcOwnership(chatId) {
-      const mine = String(BOT_ID).toLowerCase();
-      const cached = gcOwner.get(chatId);
-      if (cached) return Promise.resolve(cached === mine);
-      const inflight = _gcClaimInflight.get(chatId);
-      if (inflight) return inflight;
-      const p = (async () => {
-        try {
-          const SystemModel = require("../models/System");
-          const claimPath = `value.${encGid(chatId)}`;
-          await SystemModel.findOneAndUpdate(
-            { key: GC_OWNER_KEY, [claimPath]: { $exists: false } },
-            { $set: { [claimPath]: mine } },
-            { upsert: true },
-          );
-        } catch (e) {
-          // lost the race (E11000 duplicate key) or write failed - re-read decides
-        }
-        let winner = null;
-        try {
-          const own = await system.getFresh(GC_OWNER_KEY, {});
-          gcOwner.clear();
-          for (const [k, v] of Object.entries(own || {})) {
-            if (typeof v === "string" && v) gcOwner.set(decGid(k), v.toLowerCase());
-          }
-          winner = gcOwner.get(chatId) || null;
-        } catch (e) {}
-        if (winner && winner !== mine) {
-          console.log(`🤝 [${BOT_ID}] single-owner gate: lost claim for ${chatId} -> '${winner}', standing down`);
-        }
-        // unknown winner (both writes and the re-read failed): fail OPEN —
-        // process the message rather than drop commands on a Mongo blip;
-        // the next message re-claims via the 30s refresh.
-        _gcClaimInflight.delete(chatId);
-        return !winner || winner === mine;
-      })();
-      _gcClaimInflight.set(chatId, p);
-      return p;
-    }
+    // (single-owner gate helpers removed 2026-11-06: multi-bot mode — every
+    // enabled group is served by ALL instances together, nothing to claim.)
 
     // Cross-process freshness (30s): the system KV cache is only populated at
     // boot, so the old interval re-read a frozen cache and toggles made on
@@ -3442,15 +3363,6 @@ async function startBot(configInstance) {
         if (_bad > 0) saveEnabledGcs(); // self-heal: drop malformed entries once
       } catch (err) {
         console.error("Error refreshing enabled GCs:", err.message);
-      }
-      try {
-        const own = await system.getFresh(GC_OWNER_KEY, {});
-        gcOwner.clear();
-        for (const [k, v] of Object.entries(own || {})) {
-          if (typeof v === "string" && v) gcOwner.set(decGid(k), v.toLowerCase());
-        }
-      } catch (err) {
-        console.error("Error refreshing GC owners:", err.message);
       }
     }
 
@@ -9530,20 +9442,12 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     ).trim();
                     const _pfx = (botConfig.getPrefix() || ".j").toLowerCase();
                     const _gateLower = _gateText.toLowerCase();
-                    // `.bot owner [clear|<botId>]` - show / hand over / free
-                    // the single-owner assignment for this group. Handled in
-                    // the pre-gate block so it works even when another bot
-                    // currently owns the group (emergency handover).
-                    const _ownerCmdRest = _gateLower.startsWith(`${_pfx} bot owner`)
-                      ? _gateLower.slice((_pfx + " bot owner").length).trim()
-                      : null;
                     const _isToggleCmd =
                       _gateLower === `${_pfx} bot on` ||
                       _gateLower === `${_pfx} bot enable` ||
                       _gateLower === `${_pfx} bot off` ||
                       _gateLower === `${_pfx} bot disable` ||
-                      _gateLower === `${_pfx} bot status` ||
-                      _ownerCmdRest !== null;
+                      _gateLower === `${_pfx} bot status`;
 
                     if (_isToggleCmd) {
                       // Toggle commands are handled HERE in both enabled and
@@ -9565,61 +9469,19 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                         return;
                       }
                       try {
-                        if (_ownerCmdRest !== null) {
-                          if (_ownerCmdRest === "") {
-                            const _cur = gcOwner.get(chatId) || null;
-                            const _me = String(BOT_ID).toLowerCase();
-                            await sock.sendMessage(chatId, {
-                              text: BOT_MARKER +
-                                `🤖 This group is currently served by: *${_cur || "no owner yet"}*\n` +
-                                (_cur && _cur !== _me
-                                  ? `(I'm \`${BOT_ID}\` - I'm staying silent here; *${_cur}* handles this group.)\n`
-                                  : `(I'm \`${BOT_ID}\` - I'm handling this group.)\n`) +
-                                `Hand it to another bot: \`${_pfx} bot owner <jake|subaru|joker>\`\n` +
-                                `Free it (first bot to act claims it): \`${_pfx} bot owner clear\``,
-                            }, { quoted: m });
-                          } else if (_ownerCmdRest === "clear") {
-                            gcOwner.delete(chatId);
-                            saveGcOwners();
-                            console.log(`🤝 [${BOT_ID}] single-owner gate: owner cleared for ${chatId} by ${realSenderJid}`);
-                            await sock.sendMessage(chatId, {
-                              text: BOT_MARKER + `🤖 Owner cleared. First bot to act here claims the group again.`,
-                            }, { quoted: m });
-                          } else if (/^[a-z0-9_-]{2,24}$/.test(_ownerCmdRest)) {
-                            const _target = _ownerCmdRest;
-                            gcOwner.set(chatId, _target);
-                            saveGcOwners();
-                            console.log(`🤝 [${BOT_ID}] single-owner gate: ${chatId} handed to '${_target}' by ${realSenderJid}`);
-                            const _isMe = _target === String(BOT_ID).toLowerCase();
-                            await sock.sendMessage(chatId, {
-                              text: BOT_MARKER +
-                                (_isMe
-                                  ? `🤖 This group is now served by *me (\`${BOT_ID}\`)*.`
-                                  : `🤖 This group has been handed to *${_target}*. I'll stay silent here from now on - ${_target} picks it up within ~30 seconds.`),
-                            }, { quoted: m });
-                          } else {
-                            await sock.sendMessage(chatId, {
-                              text: BOT_MARKER + `⛔ Unknown bot name \`${_ownerCmdRest}\`. Example: \`${_pfx} bot owner joker\``,
-                            }, { quoted: m });
-                          }
-                        } else if (_gateLower === `${_pfx} bot status`) {
+                        if (_gateLower === `${_pfx} bot status`) {
                           const _on = enabledGcs.has(chatId);
-                          const _cur = gcOwner.get(chatId) || null;
                           await sock.sendMessage(chatId, {
                             text: BOT_MARKER +
-                              `🤖 Bot status in this group: *${_on ? "✅ ENABLED" : "❌ DISABLED (blacklisted)"}*\n` +
-                              `Served by: *${_cur || "no owner yet (first bot to act claims it)"}*\n\n` +
+                              `🤖 Bot status in this group: *${_on ? "✅ ENABLED" : "❌ DISABLED (blacklisted)"}*\n\n` +
                               `All groups are blacklisted by default.\n` +
                               `Use \`${_pfx} bot on\` to enable me here, \`${_pfx} bot off\` to disable me again.\n` +
-                              `One group = one bot: \`${_pfx} bot owner <jake|subaru|joker>\` to choose who serves this group.\n` +
+                              `All bots serve this group together (multi-bot mode).\n` +
                               `(Bot owner / global mods only)`,
                           }, { quoted: m });
                         } else if (_gateLower === `${_pfx} bot on` || _gateLower === `${_pfx} bot enable`) {
                           enabledGcs.add(chatId);
                           saveEnabledGcs();
-                          // enabling via me makes me the owner (one group = one bot)
-                          gcOwner.set(chatId, String(BOT_ID).toLowerCase());
-                          saveGcOwners();
                           console.log(`🟢 [${BOT_ID}] Master GC gate ENABLED for ${chatId} by ${realSenderJid}`);
                           await sock.sendMessage(chatId, {
                             text: BOT_MARKER +
@@ -9647,27 +9509,9 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                       return;
                     }
 
-                    // 🎯 SINGLE-OWNER GATE: a group is served by exactly one
-                    // bot instance. Siblings (same box or the other server)
-                    // stay silent - two processes writing the same war/
-                    // economy docs is what kept resetting shared data.
-                    // ⚔️ ABORTIVE (2026-10-06): in an owner-less group the
-                    // claim is now awaited — exactly ONE instance wins and
-                    // processes this first message; the losers drop it
-                    // silently. Cached owners stay zero-latency.
-                    const _gcOwnerBot = gcOwner.get(chatId);
-                    if (_gcOwnerBot && _gcOwnerBot !== String(BOT_ID).toLowerCase()) {
-                      const _nowTs = Date.now();
-                      if (_nowTs - (gcOwnerSkipLog.get(chatId) || 0) > 60000) {
-                        gcOwnerSkipLog.set(chatId, _nowTs);
-                        console.log(`🤝 [${BOT_ID}] single-owner gate: ${chatId} owned by '${_gcOwnerBot}' - staying silent`);
-                      }
-                      return;
-                    }
-                    if (!_gcOwnerBot) {
-                      const _won = await claimGcOwnership(chatId);
-                      if (!_won) return; // another instance won the first message
-                    }
+                    // 🤝 MULTI-BOT MODE (2026-11-06): the single-owner gate
+                    // that made sibling bots stand down here was removed by
+                    // owner spec — all instances process this group now.
                   }
 
                   // Persist message to MongoDB (1-hour TTL)
