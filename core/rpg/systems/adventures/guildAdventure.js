@@ -5926,7 +5926,20 @@ async function promptPlayerAction(sock, player, sessionKey) {
   }
 
   try {
-    await boundedSend(sock, state.chatId, { text: msg });
+    // 🃏 Summon-card HAND: players who own cards get the fanned hand image with the turn prompt as its caption.
+    let handPng = null;
+    try {
+      const sc = require('../summonCards');
+      if (sc.getOwnedCards(player.jid).length) {
+        handPng = await Promise.race([sc.renderHandImage(player.jid, state, player), new Promise((r) => setTimeout(() => r(null), 5000))]);
+      }
+    } catch (handErr) { handPng = null; }
+    if (handPng) {
+      try { await boundedSend(sock, state.chatId, { image: handPng, caption: msg }); }
+      catch (imgErr) { await boundedSend(sock, state.chatId, { text: msg }); }
+    } else {
+      await boundedSend(sock, state.chatId, { text: msg });
+    }
   } catch (err) {
     console.error(
       "Failed to send player prompt in promptPlayerAction:",
@@ -6292,7 +6305,8 @@ async function performAction(sock, player, action, sessionKey) {
       turnInfo.target = activation.target;
       turnInfo.damage = activation.damage;
       turnInfo.effects.push(activation.card.element);
-      if (activation.card.status && !activation.wasEvaded && !activation.defeated) turnInfo.effects.push(activation.card.status.type.toUpperCase());
+      for (const eff of (activation.card.effects || [])) { if (eff.kind === 'status' && !activation.wasEvaded && !activation.defeated) turnInfo.effects.push(String(eff.type).toUpperCase()); }
+      turnInfo.healing = activation.healing || 0;
       try {
         const goService = require('../../../utils/goImageService');
         const combatImageGen = require('../combat/combatImageGenerator');
@@ -6314,7 +6328,16 @@ async function performAction(sock, player, action, sessionKey) {
           damage: activation.damage,
           missed: activation.wasEvaded,
         });
-        const gif = await goService.generateSummonCardGIF(payload);
+        // Go renders the three legacy signature cards; every other card (and any Go failure) uses the Node card-play GIF.
+        let gif = null;
+        if (['ifrit', 'leviathan', 'shiva'].includes(activation.card.id)) {
+          try { gif = await goService.generateSummonCardGIF(payload); } catch (goErr) { console.warn('[SummonCards] Go GIF failed, using Node renderer:', goErr.message); }
+        }
+        if (!gif) {
+          gif = await require('../summonCards/cardPlayGif').renderCardPlayGif(activation.card, {
+            damage: activation.damage, healing: activation.healing, missed: activation.wasEvaded,
+          });
+        }
         // Keep the renderer's GIF bytes intact: never send this as MP4/video.
         await boundedSend(sock, state.chatId, {
           document: gif,
@@ -12173,10 +12196,10 @@ const handleCombatAction = async (
 
   if (normalizedAction === "summon_card") {
     const parts = String(target || '').trim().split(/\s+/).filter(Boolean);
-    const cardId = parts[0];
-    const enemyNumber = parseInt(parts[1], 10);
-    if (!cardId || !Number.isInteger(enemyNumber)) return '❌ Usage: ' + botConfig.getPrefix() + ' combat summon <card> <enemy#>\nExample: ' + botConfig.getPrefix() + ' combat summon ifrit 1';
-    const prepared = require('../summonCards').prepareActivation(senderJid, cardId, state, player, enemyNumber - 1);
+    const enemyNumber = /^\d+$/.test(parts[parts.length - 1] || '') && parts.length > 1 ? parseInt(parts.pop(), 10) : NaN;
+    const cardId = parts.join(' ');   // number from the hand image, or a (multi-word) card name
+    if (!cardId) return '❌ Usage: ' + botConfig.getPrefix() + ' combat summon <#|name> [enemy#]\nExample: ' + botConfig.getPrefix() + ' combat summon 1 2';
+    const prepared = require('../summonCards').prepareActivation(senderJid, cardId, state, player, Number.isInteger(enemyNumber) ? enemyNumber - 1 : undefined);
     if (!prepared.ok) return prepared.message;
     action.cardId = prepared.cardId;
     action.targetIndex = prepared.targetIndex;

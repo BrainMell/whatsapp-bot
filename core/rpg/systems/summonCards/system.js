@@ -1,30 +1,6 @@
 'use strict';
 
-const CARD_CATALOG = Object.freeze({
-  ifrit: Object.freeze({
-    id: 'ifrit', name: 'Ifrit', icon: '🔥', element: 'FIRE',
-    abilityName: 'Inferno Rend', description: 'A focused flame strike that leaves the target burning.',
-    energyCost: 30, cooldownTurns: 3, damageMultiplier: 1.75,
-    status: { type: 'burn', duration: 2, value: 14 }, vfx: 'Fire-bomb',
-  }),
-  leviathan: Object.freeze({
-    id: 'leviathan', name: 'Leviathan', icon: '🌊', element: 'WATER',
-    abilityName: 'Tidal Prison', description: 'A crushing surge that slows the target.',
-    energyCost: 36, cooldownTurns: 4, damageMultiplier: 1.55,
-    status: { type: 'slow', duration: 2, value: 25 }, vfx: 'Lightning',
-  }),
-  shiva: Object.freeze({
-    id: 'shiva', name: 'Shiva', icon: '❄️', element: 'ICE',
-    abilityName: 'Absolute Zero', description: 'A piercing frost strike that can freeze the target.',
-    energyCost: 42, cooldownTurns: 5, damageMultiplier: 1.45,
-    status: { type: 'freeze', duration: 1, value: 0 }, vfx: 'Holy VFX 02',
-  }),
-});
-const CARD_ALIASES = Object.freeze({
-  flame: 'ifrit', fire: 'ifrit', inferno: 'ifrit',
-  tide: 'leviathan', water: 'leviathan',
-  ice: 'shiva', frost: 'shiva',
-});
+const { CARD_CATALOG, CARD_ALIASES, RARITY } = require('./catalog');
 // Moderator grants are the only enabled acquisition path. Future sources stay
 // explicitly disabled until their own progression/economy design is approved.
 const MODERATOR_GRANTS_ENABLED = true;
@@ -65,7 +41,7 @@ function createSummonCardSystem(economy) {
       grantedAt: Number(entry.grantedAt) || 0,
       grantedBy: entry.grantedBy || null,
       source: entry.source || 'moderator',
-    }));
+    })).sort((x, y) => ((RARITY[y.rarity] || {}).rank || 0) - ((RARITY[x.rarity] || {}).rank || 0) || x.name.localeCompare(y.name));
   }
 
   function grantCard(jid, rawCardId, grantedBy) {
@@ -136,21 +112,64 @@ function createSummonCardSystem(economy) {
     return { ready: readyOnTurn <= turn, turnsLeft: Math.max(0, readyOnTurn - turn), readyOnTurn, currentTurn: turn };
   }
 
+  // ── hand / references ───────────────────────────────────────
+  // Cards are numbered 1..n in HAND ORDER (rarity desc, then name) - the same order the hand image shows.
+  function resolveCardRef(jid, raw) {
+    const text = String(raw == null ? '' : raw).trim();
+    if (/^\d+$/.test(text)) {
+      const owned = getOwnedCards(jid);
+      const card = owned[parseInt(text, 10) - 1];
+      return card ? card.id : null;
+    }
+    return normalizeCardId(text);
+  }
+
+  function handEntries(jid, state, player) {
+    const energy = player && player.stats ? Number(player.stats.energy) : NaN;
+    return getOwnedCards(jid).map((card) => {
+      const cd = cooldownFor(jid, card.id, state || {});
+      return { card, ready: cd.ready, turnsLeft: cd.turnsLeft, affordable: !Number.isFinite(energy) || energy >= card.energyCost };
+    });
+  }
+
+  async function renderHandImage(jid, state, player) {
+    try {
+      const entries = handEntries(jid, state, player);
+      if (!entries.length) return null;
+      const st = player && player.stats ? player.stats : {};
+      return await require('./cardRenderer').renderHandPng(entries, { energy: st.energy, maxEnergy: st.maxEnergy, title: 'SUMMON HAND' });
+    } catch (e) { console.warn('[SummonCards] hand render failed:', e.message); return null; }
+  }
+
+  async function renderCollectionImage(jid) {
+    try {
+      const entries = getOwnedCards(jid).map((card) => ({ card, ready: true, turnsLeft: 0, affordable: true }));
+      if (!entries.length) return null;
+      return await require('./cardRenderer').renderHandPng(entries, { title: 'YOUR SUMMON CARDS', scale: 0.78 });
+    } catch (e) { console.warn('[SummonCards] collection render failed:', e.message); return null; }
+  }
+
   function renderTray(jid, state, prefix) {
     const cards = getOwnedCards(jid);
     if (!cards.length) return '';
-    const bits = cards.map((card) => {
+    const bits = cards.map((card, i) => {
       const cooldown = cooldownFor(jid, card.id, state || {});
-      return card.icon + ' ' + card.name + ' ' + (cooldown.ready ? 'READY' : '⏳ ' + cooldown.turnsLeft + 'T');
+      return (i + 1) + '. ' + card.icon + ' ' + card.name + ' ' + (cooldown.ready ? '✅' : '⏳' + cooldown.turnsLeft + 'T');
     });
-    return '🃏 *SUMMON CARDS*  ' + bits.join('  ·  ') +
-      '\nUse ' + (prefix || (state && state.commandPrefix) || '.j') + ' combat summon <card> <enemy#>';
+    return '🃏 *SUMMON HAND*  ' + bits.join('  ·  ') +
+      '\nPlay: ' + (prefix || (state && state.commandPrefix) || '.j') + ' combat summon <#|name> [enemy#]';
   }
 
-  function prepareActivation(jid, rawCardId, state, player, targetIndex) {
-    const cardId = normalizeCardId(rawCardId);
+  function livingEnemies(state) { return (Array.isArray(state && state.enemies) ? state.enemies : []).filter((e) => e && !e.isDead && Number(e.stats && e.stats.hp) > 0); }
+  function livingPlayers(state) { return (Array.isArray(state && state.players) ? state.players : []).filter((p) => p && !p.isDead && !p.isEnemy && Number(p.stats && p.stats.hp) > 0); }
+
+  function prepareActivation(jid, rawRef, state, player, targetIndex) {
+    const cardId = resolveCardRef(jid, rawRef);
     if (!cardId) {
-      return { ok: false, message: '❌ Unknown summon card. Valid IDs: ' + Object.keys(CARD_CATALOG).join(', ') + '.' };
+      const owned = getOwnedCards(jid);
+      return { ok: false, message: owned.length
+        ? '❌ Unknown card. Use a hand number (1-' + owned.length + ') or a card name.'
+        : '❌ You do not own any summon cards. Ask a moderator to grant one.' };
     }
     const card = CARD_CATALOG[cardId];
     if (!state || !state.inCombat) {
@@ -173,14 +192,27 @@ function createSummonCardSystem(economy) {
     }
 
     const enemies = Array.isArray(state.enemies) ? state.enemies : [];
-    const index = Number(targetIndex);
-    if (!Number.isInteger(index) || index < 0 || index >= enemies.length) {
-      return { ok: false, message: '❌ Choose a valid enemy target. Example: .j combat summon ' + cardId + ' 1' };
-    }
-    const target = enemies[index];
-    const targetHP = Number(target && target.stats && target.stats.hp);
-    if (!target || target.isDead || !Number.isFinite(targetHP) || targetHP <= 0) {
-      return { ok: false, message: '❌ That enemy is no longer a valid target.' };
+    let targets = [];
+    let firstIndex = -1;
+    if (card.target === 'enemy') {
+      let index = Number(targetIndex);
+      if (targetIndex === undefined || targetIndex === null || Number.isNaN(index)) {
+        index = enemies.findIndex((e) => e && !e.isDead && Number(e.stats && e.stats.hp) > 0);   // default: first living enemy
+      }
+      if (!Number.isInteger(index) || index < 0 || index >= enemies.length) {
+        return { ok: false, message: '❌ Choose a valid enemy target. Example: .j combat summon ' + cardId + ' 1' };
+      }
+      const target = enemies[index];
+      if (!target || target.isDead || !(Number(target.stats && target.stats.hp) > 0)) {
+        return { ok: false, message: '❌ That enemy is no longer a valid target.' };
+      }
+      targets = [target]; firstIndex = index;
+    } else if (card.target === 'all') {
+      targets = livingEnemies(state);
+      if (!targets.length) return { ok: false, message: '❌ There are no living enemies.' };
+      firstIndex = enemies.indexOf(targets[0]);
+    } else {
+      firstIndex = enemies.findIndex((e) => e && !e.isDead && Number(e.stats && e.stats.hp) > 0);
     }
     const energy = Number(player.stats && player.stats.energy);
     if (!Number.isFinite(energy) || energy < card.energyCost) {
@@ -193,7 +225,7 @@ function createSummonCardSystem(economy) {
     if (!cooldown.ready) {
       return { ok: false, message: '⏳ ' + card.name + ' is cooling down for ' + cooldown.turnsLeft + ' more of your turns.' };
     }
-    return { ok: true, card, cardId, target, targetIndex: index, energyCost: card.energyCost };
+    return { ok: true, card, cardId, targets, target: targets[0] || null, targetIndex: firstIndex, energyCost: card.energyCost };
   }
 
   async function resolveActivation(args) {
@@ -202,79 +234,118 @@ function createSummonCardSystem(economy) {
       player && player.jid, action && action.cardId, state, player, action && action.targetIndex,
     );
     if (!prepared.ok) return prepared;
-    const { card, cardId, target, targetIndex, energyCost } = prepared;
+    const { card, cardId, targets, energyCost } = prepared;
     if (typeof args.calculateDamage !== 'function' || typeof args.applyStatusEffect !== 'function') {
       return { ok: false, message: 'Summon-card combat adapters are unavailable.' };
     }
+    const stats = player.stats;
+    const magBase = Math.max(1, Number(stats.mag) || Number(stats.atk) || 1);
+    const atkBase = Math.max(1, Number(stats.atk) || Number(stats.mag) || 1);
+    const allies = card.target === 'self' ? [player] : (card.target === 'party' ? livingPlayers(state) : []);
+    const lines = [];
+    let totalDamage = 0, evadedCount = 0, healedTotal = 0;
+    const defeated = [];
+    const hitOne = new Set();
 
-    const baseStat = Math.max(1, Number(player.stats.mag) || Number(player.stats.atk) || 1);
-    const baseDamage = Math.max(1, Math.floor(baseStat * card.damageMultiplier));
-    // This is the shared combat calculator/status pipeline. It does not call
-    // durabilitySystem.applyWear; summon casts must never wear equipped gear.
-    const calc = args.calculateDamage(player, target, baseDamage, 'magic', card.element, args.sessionKey, true) || {};
-    if (calc.noDamageReason) return { ok: false, message: '❌ ' + calc.noDamageReason };
-
-    const wasEvaded = !!calc.wasEvaded;
-    const damage = wasEvaded ? 0 : Math.max(0, Math.floor(Number(calc.damage) || 0));
-    player.stats.energy = Math.max(0, Number(player.stats.energy) - energyCost);
-    player.currentEnergy = player.stats.energy;
-    const beforeHP = Math.max(0, Number(target.stats.hp) || 0);
-    target.stats.hp = Math.max(0, beforeHP - damage);
-    target.currentHP = target.stats.hp;
+    stats.energy = Math.max(0, Number(stats.energy) - energyCost);
+    player.currentEnergy = stats.energy;
     player.combatStats = player.combatStats || {};
-    player.combatStats.damageDealt = (player.combatStats.damageDealt || 0) + damage;
-    target.combatStats = target.combatStats || {};
-    target.combatStats.damageTaken = (target.combatStats.damageTaken || 0) + damage;
 
-    let statusMessage = '';
-    if (!wasEvaded && target.stats.hp > 0 && card.status) {
-      const statusResult = args.applyStatusEffect(target, card.status.type, card.status.duration, card.status.value, 'summon_card');
-      if (statusResult && statusResult.synergyMsg) statusMessage = ' ' + statusResult.synergyMsg;
+    for (const eff of card.effects || []) {
+      if (eff.kind === 'damage') {
+        for (const target of targets) {
+          if (target.isDead) continue;
+          const base = Math.max(1, Math.floor((eff.stat === 'atk' ? atkBase : magBase) * eff.mult));
+          // Shared combat calculator - this path never calls durabilitySystem.applyWear (summons must not wear gear).
+          const calc = args.calculateDamage(player, target, base, eff.dmgType || 'magic', card.element, args.sessionKey, true) || {};
+          if (calc.noDamageReason) { lines.push('🚫 ' + target.name + ': ' + calc.noDamageReason); continue; }
+          if (calc.wasEvaded) { evadedCount++; lines.push('💨 ' + target.name + ' evades!'); continue; }
+          const dmg = Math.max(0, Math.floor(Number(calc.damage) || 0));
+          const before = Math.max(0, Number(target.stats.hp) || 0);
+          target.stats.hp = Math.max(0, before - dmg); target.currentHP = target.stats.hp;
+          player.combatStats.damageDealt = (player.combatStats.damageDealt || 0) + dmg;
+          target.combatStats = target.combatStats || {}; target.combatStats.damageTaken = (target.combatStats.damageTaken || 0) + dmg;
+          totalDamage += dmg; hitOne.add(target);
+          lines.push('💥 ' + target.name + ' takes *' + dmg + '* ' + card.element.toLowerCase() + ' damage');
+        }
+      } else if (eff.kind === 'status') {
+        for (const target of targets) {
+          if (target.isDead || Number(target.stats.hp) <= 0) continue;
+          if ((card.effects || []).some((x) => x.kind === 'damage') && !hitOne.has(target)) continue;   // a miss/evade also dodges the rider
+          const r = args.applyStatusEffect(target, eff.type, eff.duration, eff.value, player.name);
+          if (r && r.synergyMsg) lines.push(String(r.synergyMsg).trim());
+          else if (r && r.applied !== false) lines.push('✨ ' + target.name + ' is afflicted: ' + eff.type);
+        }
+      } else if (eff.kind === 'drain') {
+        const heal = Math.floor(totalDamage * (eff.pct || 0));
+        if (heal > 0) { const b = stats.hp; stats.hp = Math.min(stats.maxHp, stats.hp + heal); player.currentHP = stats.hp; healedTotal += stats.hp - b; lines.push('🩸 You drain *' + (stats.hp - b) + '* HP'); }
+      } else if (eff.kind === 'shield') {
+        for (const ally of allies) {
+          const amount = Math.max(10, Math.floor(((Number(stats.def) || 10) * eff.mult) + magBase * 0.5));
+          args.applyStatusEffect(ally, 'shield', eff.duration || 3, amount, player.name);
+        }
+        lines.push('🛡️ ' + (card.target === 'party' ? 'The party is shielded' : 'You gain a shield'));
+      } else if (eff.kind === 'heal') {
+        let healedAny = 0;
+        for (const ally of allies) {
+          const amt = Math.max(1, Math.floor(magBase * eff.mult)); const b = ally.stats.hp;
+          ally.stats.hp = Math.min(ally.stats.maxHp, ally.stats.hp + amt); ally.currentHP = ally.stats.hp; healedAny += ally.stats.hp - b;
+        }
+        healedTotal += healedAny; lines.push('💚 Restores *' + healedAny + '* HP' + (allies.length > 1 ? ' across the party' : ''));
+      } else if (eff.kind === 'buff') {
+        for (const ally of allies) args.applyStatusEffect(ally, eff.type, eff.duration, eff.value, player.name);
+        lines.push('✨ ' + (card.target === 'party' ? 'Party' : 'You') + ' gain ' + eff.type);
+      } else if (eff.kind === 'taunt') {
+        for (const e of livingEnemies(state)) args.applyStatusEffect(e, 'taunt', eff.duration || 1, 0, player.name);
+        lines.push('😠 Enemies are forced to attack you');
+      } else if (eff.kind === 'energy') {
+        stats.energy = Math.min(Number(stats.maxEnergy) || stats.energy + eff.amount, stats.energy + eff.amount); player.currentEnergy = stats.energy;
+        lines.push('⚡ +' + eff.amount + ' energy refunded');
+      }
     }
 
     if (!state.summonCardCooldowns) state.summonCardCooldowns = {};
-    const currentPlayerTurn = playerTurnFor(player.jid, state);
-    state.summonCardCooldowns[String(player.jid) + ':' + cardId] = currentPlayerTurn + card.cooldownTurns + 1;
+    state.summonCardCooldowns[String(player.jid) + ':' + cardId] = playerTurnFor(player.jid, state) + card.cooldownTurns + 1;
 
-    let defeated = false;
-    if (target.stats.hp <= 0 && !target.isDead) {
-      defeated = true;
-      target.isDead = true;
-      target.justDied = true;
-      target.stats.hp = 0;
-      target.currentHP = 0;
-      player.combatStats.kills = (player.combatStats.kills || 0) + 1;
-      if (typeof args.recordEnemyKill === 'function') args.recordEnemyKill(state, target);
-    } else if (target.isBoss && typeof args.onBossPhase === 'function') {
-      await args.onBossPhase(target);
+    for (const target of targets) {
+      if (target.stats.hp <= 0 && !target.isDead) {
+        target.isDead = true; target.justDied = true; target.stats.hp = 0; target.currentHP = 0;
+        player.combatStats.kills = (player.combatStats.kills || 0) + 1;
+        defeated.push(target);
+        if (typeof args.recordEnemyKill === 'function') args.recordEnemyKill(state, target);
+        lines.push('💀 *' + target.name + '* defeated!');
+      } else if (!target.isDead && target.isBoss && hitOne.has(target) && typeof args.onBossPhase === 'function') {
+        await args.onBossPhase(target);
+      }
     }
-    if (damage > 0 && typeof args.generateThreat === 'function') args.generateThreat(player, damage);
+    if (totalDamage > 0 && typeof args.generateThreat === 'function') args.generateThreat(player, totalDamage);
 
-    const message = wasEvaded
-      ? card.icon + ' *' + card.abilityName + '* misses ' + target.name + '!'
-      : card.icon + ' *' + card.abilityName + '* hits ' + target.name + ' for *' + damage + '* ' +
-        card.element.toLowerCase() + ' damage.' + (statusMessage ? '\n' + statusMessage.trim() : '') +
-        (defeated ? '\n💀 *' + target.name + '* defeated!' : '');
-    return { ok: true, card, target, targetIndex, damage, wasEvaded, defeated, energyCost, message };
+    const damaging = (card.effects || []).some((x) => x.kind === 'damage');
+    const wasEvaded = damaging && targets.length > 0 && evadedCount >= targets.length;
+    const message = card.icon + ' *' + card.name + '* — ' + card.abilityName + '!\n' + lines.join('\n');
+    return {
+      ok: true, card, target: prepared.target, targets, targetIndex: prepared.targetIndex, damage: totalDamage, healing: healedTotal,
+      wasEvaded, defeated: defeated.length > 0, defeatedList: defeated, energyCost, message,
+    };
   }
 
   function buildInventoryText(jid, prefix) {
     const cards = getOwnedCards(jid);
     if (!cards.length) {
-      return '🃏 *SUMMON CARDS*\n\nYou do not own any summon cards yet.\nInitial grants are moderator-only.';
+      return '🃏 *SUMMON CARDS*\n\nYou do not own any summon cards yet.\nCards are special finds - ask a moderator.';
     }
     const lines = cards.map((card, index) =>
-      (index + 1) + '. ' + card.icon + ' *' + card.name + '*\n   ' +
-      card.abilityName + ' · ' + card.energyCost + ' EN · ' + card.cooldownTurns +
-      '-turn cooldown\n   _' + card.description + '_',
+      (index + 1) + '. ' + card.icon + ' *' + card.name + '* _(' + card.rarity.toLowerCase() + ' ' + card.type.toLowerCase() + ')_\n   ' +
+      card.abilityName + ' · ' + card.energyCost + ' EN · ' + card.cooldownTurns + '-turn cooldown\n   _' + card.description + '_',
     );
-    return '🃏 *SUMMON CARDS*\n━━━━━━━━━━━━━━\n' + lines.join('\n\n') +
-      '\n\nDuring PvE combat: ' + (prefix || '.j') + ' combat summon <card> <enemy#>';
+    return '🃏 *SUMMON CARDS* (' + cards.length + ')\n━━━━━━━━━━━━━━\n' + lines.join('\n\n') +
+      '\n\nIn PvE combat: ' + (prefix || '.j') + ' combat summon <#|name> [enemy#]';
   }
 
   return {
     catalog: CARD_CATALOG, getOwnedCards, grantCard, revokeCard, acquireCard,
     prepareActivation, resolveActivation, renderTray, buildInventoryText, cooldownFor,
+    resolveCardRef, renderHandImage, renderCollectionImage, handEntries,
   };
 }
 

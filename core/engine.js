@@ -12705,7 +12705,13 @@ _💡 Reply with another number from your search list!_`.trim();
 
                     // 🃏 New owned Summon Cards inventory. No companion/deployment route.
                     if (primaryCmd === "summon" || primaryCmd === "summons" || primaryCmd === "summoncards") {
-                      await sock.sendMessage(chatId, { text: BOT_MARKER + summonCards.buildInventoryText(senderJid, botConfig.getPrefix()) });
+                      const invText = BOT_MARKER + summonCards.buildInventoryText(senderJid, botConfig.getPrefix());
+                      const invPng = await summonCards.renderCollectionImage(senderJid);
+                      if (invPng) {
+                        // card art first, details as a follow-up (the caption would be too long for 25 cards)
+                        await sock.sendMessage(chatId, { image: invPng, caption: '🃏 *Your Summon Cards*' });
+                      }
+                      await sock.sendMessage(chatId, { text: invText });
                       return;
                     }
 

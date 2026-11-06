@@ -37,3 +37,9 @@ Node calls POST /api/combat/summon-card.gif in BrainMell/Bot_genaration. Go rend
 ## QA
 
 Run node scripts/qa_summon_cards.js for ownership, acquisition gating, target/turn/energy/cooldown validation, independent cooldowns, effects, and no-weapon-wear checks. Run the Go package tests in pkg/combat for GIF encoding and card-to-VFX mapping.
+## Deck-builder layer (2026-11-06)
+- Catalog: `core/rpg/systems/summonCards/catalog.js` - 25 data-driven cards (ATTACK/SKILL/POWER; COMMON..LEGENDARY; targets enemy/all/self/party; effects damage/status/drain/shield/heal/buff/taunt/energy). Add a card = add an entry.
+- Cards are numbered by hand order (rarity desc, then name). Play: `.j combat summon <#|name> [enemy#]` (enemy# optional - defaults to first living enemy; AoE/self/party cards ignore it).
+- Visuals: `cardRenderer.js` draws Slay-the-Spire style cards + fanned hand (sent as the image of the turn prompt) + collection (`.j summon`). Art swap: drop `core/rpgasset/summoncards/<cardId>.png` (see README there); falls back to the legacy sprite, then a glyph.
+- Animation: `cardPlayGif.js` renders a real GIF for every card in Node (Go is still tried first for ifrit/leviathan/shiva).
+- Mods: `.j mod grantsummoncard <@user> <card|all|list>`.

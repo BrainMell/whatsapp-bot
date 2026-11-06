@@ -779,7 +779,12 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!parsed) return;
         const { target, remaining } = parsed;
-        if (!target || !remaining[0]) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Usage: ' + prefix + ' mod grantsummoncard <@user> <ifrit|leviathan|shiva>' });
+        if (!target || !remaining[0]) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Usage: ' + prefix + ' mod grantsummoncard <@user> <card|all|list>\nCards: ' + Object.keys(summonCards.CARD_CATALOG).join(', ') });
+        if (String(remaining[0]).toLowerCase() === 'list') return await sock.sendMessage(chatId, { text: BOT_MARKER + '🃏 *Cards:* ' + Object.keys(summonCards.CARD_CATALOG).join(', ') });
+        if (String(remaining[0]).toLowerCase() === 'all') {
+            const got = Object.keys(summonCards.CARD_CATALOG).filter((id) => summonCards.grantCard(target, id, senderJid).success);
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + '✅ Granted ' + got.length + ' summon cards to @' + economy.getDisplayName(target) });
+        }
         const result = summonCards.grantCard(target, remaining[0], senderJid);
         if (!result.success) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ ' + result.message });
         return await sock.sendMessage(chatId, { text: BOT_MARKER + '✅ *SUMMON CARD GRANTED*\n\n👤 @' + economy.getDisplayName(target) + '\n' + result.card.icon + ' *' + result.card.name + '*\n✦ ' + result.card.abilityName, mentions: [target] });
