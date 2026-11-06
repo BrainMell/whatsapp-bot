@@ -5239,12 +5239,41 @@ async function playEnemyDeaths(sock, state, opts = {}) {
       ready = clips.filter(Boolean);
     }
     // 🎬 KILL-TURN CARD (owner 2026-11-04, corrected directive): hold the
-    // clips — the NEXT turn board burns them into ONE video = death
+    // clips — THIS flow's turn board burns them into ONE video = death
     // animation + the regular combat message (war-log board). gen-stamped so
     // a superseded fight can never leak clips into the next one.
+    // 🔧 FLOW-OVER FIX (owner 2026-11-06), two guards on the hold itself:
+    // (a) superseded-gen holds are flushed before the slot is reused and
+    // same-gen kills APPEND — a second kill must never silently overwrite
+    // the first kill's clip (that is the one-turn-late flow-over);
+    // (b) SELF-DRAIN — a hold no board claims within 11s (render timeout,
+    // early return, superseded flow) flushes itself instead of riding into
+    // the next turn. 11s sits just past the board render's 10s race, so a
+    // healthy merge always wins; the identity check keeps a drained hold
+    // from double-sending after a pickup.
     if (opts.hold && ready.length) {
-      state._heldDeathClips = { gen: state.combatGen || 0, at: Date.now(), items: ready };
-      console.log(`[DeathFx] held ${ready.length} clip(s) for the kill-turn card`);
+      const __prev = state._heldDeathClips;
+      if (__prev && (__prev.items || []).length && __prev.gen !== (state.combatGen || 0)) {
+        state._heldDeathClips = null;
+        if (__prev._drain) clearTimeout(__prev._drain);
+        console.log('[DeathFx] flushing superseded-gen hold before re-hold');
+        try { await _flushHeldDeathClips(sock, state, __prev.items); } catch (pfErr) {}
+      }
+      const __sameGen = __prev && __prev.gen === (state.combatGen || 0) && (__prev.items || []).length;
+      const holdRef = { gen: state.combatGen || 0, at: Date.now(), items: __sameGen ? __prev.items.concat(ready) : ready };
+      state._heldDeathClips = holdRef;
+      console.log(`[DeathFx] held ${holdRef.items.length} clip(s) for the kill-turn card${__sameGen ? ' (appended ' + __prev.items.length + ' earlier hold)' : ''}`);
+      if (holdRef._drain) clearTimeout(holdRef._drain);
+      holdRef._drain = setTimeout(() => {
+        try {
+          if (state._heldDeathClips === holdRef) {
+            state._heldDeathClips = null;
+            console.log('[DeathFx] held clips self-drained after 11s — no board claimed them, playing standalone');
+            _flushHeldDeathClips(state.sock || state.sock_ref, state, holdRef.items).catch(() => {});
+          }
+        } catch (drainErr) {}
+      }, 11000);
+      if (holdRef._drain && holdRef._drain.unref) holdRef._drain.unref();
       return;
     }
     await Promise.all(ready.map((item) => {
@@ -5281,11 +5310,20 @@ async function checkCombatEnd(sock, state, sessionKey) {
   const enemiesDead = state.enemies.length > 0 && state.enemies.every((e) => e.stats.hp <= 0);
   // 🎬 KILL-TURN CARD (owner 2026-11-04, corrected directive: "the GIF would
   // simply be attached to the battle log itself" — NOT the win message):
-  // every kill while the party lives holds its clips; the turn board that
-  // follows (nextTurn sends it on the SAME flow — even on the fight-ending
-  // path) burns them into ONE video = death animation + war-log board.
-  // The victory/settlement card goes out plain, exactly as it always did.
-  await playEnemyDeaths(sock, state, { hold: !playersDead });
+  // mid-fight kills hold their clips; the turn board that follows on THIS
+  // flow burns them into ONE video = death animation + war-log board.
+  // 🔧 FLOW-OVER FIX (owner 2026-11-06: "the first attack never has the
+  // death animation ... it flows over so the next animation shows up on the
+  // next one, along side the next death"): when THIS kill ends the fight, no
+  // regular turn board ever renders — endCombat replaces it with the victory
+  // screen and nextTurn early-returns on !inCombat. Holding on the ending
+  // path orphaned every clip: it sat until the NEXT fight's first kill swept
+  // it out standalone, so the animation was always one turn late. Prod proof
+  // (wa-joker): 'kill-turn card sent' fired 0 times; every 'held N clip(s)'
+  // line is followed the same second by 'endCombat ENTER'. Ending kills now
+  // deliver IMMEDIATELY (the clip is pre-baked, sends in ~1-2s) before the
+  // victory screen; the hold stays only for mid-fight kills.
+  await playEnemyDeaths(sock, state, { hold: !playersDead && !enemiesDead });
 
   if (playersDead || enemiesDead) {
     // Clear any pending turn timers to prevent infinite loops
@@ -7433,7 +7471,15 @@ async function handleDeath(
 
 async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
   const state = gameStates.get(sessionKey);
-  if (!state || !state.inCombat) return;
+  if (!state || !state.inCombat) {
+    // 🔧 FLOW-OVER FIX (owner 2026-11-06): the fight ENDED before this board
+    // could render (endCombat already ran inside checkCombatEnd). Kill clips
+    // still held for THIS gen would orphan on this early return — the tail
+    // flush at the bottom of this function is unreachable from here. Flush
+    // them so the animation still plays at the kill.
+    try { if (state) await _flushHeldTurnClips(sock || state.sock || state.sock_ref, state, 'combat already ended before the board'); } catch (e) {}
+    return;
+  }
   // 🩘 SOCK FALLBACK (2026-10-26): same family as the processVotes heal —
   // any caller that lost its socket still delivers the battle card +
   // YOUR TURN caption through the state's stored socket.
@@ -8914,6 +8960,12 @@ async function endCombat(sock, victory, sessionKey, expectedGen) {
   // resets (victory nextStage timer / defeat cleanup) are unchanged.
   state.isEndingCombat = true; // claim FIRST — no re-entry during the async hook
   const combatGenAtEnd = state.combatGen || 0;
+  // 🔧 FLOW-OVER FIX (owner 2026-11-06): terminal catch-all — any kill clip
+  // still held for THIS fight (a mid-fight hold whose board never rendered)
+  // must play NOW, before the victory/defeat screen, never ride into the
+  // next fight. Ending kills skip the hold entirely (checkCombatEnd sends
+  // them immediately); this only ever catches stragglers.
+  try { await _flushHeldTurnClips(sock || state.sock || state.sock_ref, state, 'combat ending'); } catch (e) {}
   // ⚔️ RUINS: free the frozen battle-scene layout for this session
   try { require('../guildwar/battleScene').clearLayout(sessionKey); } catch (e) {}
   // 🕳️ ABYSS: free the frozen abyss-scene layout for this session
@@ -14325,3 +14377,4 @@ module.exports = {
   // access to the guarded resolution paths. Test-only — no gameplay caller.
   _qa: { checkCombatEnd, endCombat, gameStates, scopedKey },
 };
+
