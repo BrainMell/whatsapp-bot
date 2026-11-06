@@ -1247,13 +1247,6 @@ async function useItem(sock, chatId, senderJid, target) {
         if (item) itemId = item.id;
     }
 
-    // 🃏 SUMMONS OVERHAUL (2026-11-06): eggs no longer hatch — the summon
-    // system is being rebuilt as special cards. Eggs stay sellable.
-    if (itemId.includes('summon_egg') || itemId.includes('_egg')) {
-        await sock.sendMessage(chatId, { text: `🥚 Eggs can't hatch right now — summons are being rebuilt as special cards. You can sell the egg or hold onto it. 🃏` });
-        return;
-    }
-
     const result = inventorySystem.useItem(senderJid, itemId, targetSlot);
     if (result.success) {
         await sock.sendMessage(chatId, { text: `✅ *ITEM USED!*\n━━━━━━━━━━━━━━━\n📦 *Item:* ${itemId}\n✨ *Effect:* ${result.message}\n━━━━━━━━━━━━━━━` });
