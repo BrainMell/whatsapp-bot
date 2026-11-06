@@ -207,7 +207,7 @@ function createSummonCardSystem(economy) {
     const baseDamage = Math.max(1, Math.floor(baseStat * card.damageMultiplier));
     // This is the shared combat calculator/status pipeline. It does not call
     // durabilitySystem.applyWear; summon casts must never wear equipped gear.
-    const calc = args.calculateDamage(player, target, baseDamage, 'magic', card.element, args.sessionKey) || {};
+    const calc = args.calculateDamage(player, target, baseDamage, 'magic', card.element, args.sessionKey, true) || {};
     if (calc.noDamageReason) return { ok: false, message: '❌ ' + calc.noDamageReason };
 
     const wasEvaded = !!calc.wasEvaded;
