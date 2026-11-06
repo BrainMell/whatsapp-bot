@@ -448,8 +448,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 `• \`${prefix} mod revokeskill <@user> <skill_name>\`\n` +
                 `  Removes a skill from the player.\n\n` +
                 `• \`${prefix} mod resetplayer <@user>\`\n` +
-                `  Resets all stats to 0 and revokes all skills. Refunds stat points.\n` +
-                `  Keeps level, wallet, and items.\n\n` +
+                `  ☠️ FULL LIFE RESET: wipes level/rank/class/skills/items/Zeni/\n` +
+                `  cards/runes/quests/history back to fresh-player defaults.\n` +
+                `  Keeps identity, social memory, guild, homestead. Backups logged.\n\n` +
                 `• \`${prefix} mod forceevolve <@user> <class_name>\`\n` +
                 `  Force-evolves to any class, bypassing all requirements.\n` +
                 `  Example: \`${prefix} mod forceevolve @friend Warlord\`\n\n` +
@@ -927,20 +928,64 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         }
         const user = economy.getUser(target);
         if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ User not found.' });
-        // Reset stats
-        if (user.progression) {
-            user.progression.allocatedStats = { hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0 };
-            user.progression.allocatedStatPoints = { hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0 };
-            const level = user.progression.level || 1;
-            // 2026-11-01: was `level * 2` - the pre-b4f78f rate. A Lv100 reset handed back 200
-            // points instead of what 100 levels actually grant (5/level + milestones).
-            user.progression.statPoints = progression.getStatPointsForRange(1, level);
+
+        // 2026-11-06 FULL-LIFE RESET (owner: "we are basically restarting a
+        // player's rpg life"). The old behavior only zeroed allocated stats and
+        // revoked skills — level, rank, class, wallet, inventory, cards and
+        // runes all survived. This rebuilds the user doc from the schema's
+        // fresh-player defaults (the exact template a brand-new user gets) and
+        // purges every per-player side collection. Identity + social memory +
+        // guild membership + homestead survive.
+        const _p0 = user.progression || {};
+        const _s0 = user.stats || {};
+        const _before = `Lv${_p0.level ?? _s0.level ?? '?'} · ${user.adventurerRank || '?'} rank · ${user.class || 'no class'} · ${(user.wallet || 0).toLocaleString()} Zeni · ${_s0.kills || 0} kills · ${user.questsWon || 0}W/${user.questsFailed || 0}L quests · ${user.pvpWins || 0}W/${user.pvpLosses || 0}L PvP`;
+
+        // 1) Purge side collections FIRST (before swapping nested objects, so
+        //    a mid-flight autosave can never persist half-wiped state).
+        const _counts = {};
+        try {
+            const UserCard = require('../models/UserCard');
+            const CardDeck = require('../models/CardDeck');
+            const CardMarket = require('../models/CardMarket');
+            const ItemMarket = require('../models/ItemMarket');
+            const PlayerMarket = require('../models/PlayerMarket');
+            const Rune = require('../models/Rune');
+            const Loan = require('../models/Loan');
+            const Bounty = require('../models/Bounty');
+            _counts.cards = (await UserCard.deleteMany({ userId: target })).deletedCount;
+            _counts.decks = (await CardDeck.deleteMany({ userId: target })).deletedCount;
+            _counts.cardListings = (await CardMarket.deleteMany({ sellerId: target })).deletedCount;
+            _counts.itemListings = (await ItemMarket.deleteMany({ sellerId: target })).deletedCount;
+            _counts.marketListings = (await PlayerMarket.deleteMany({ sellerId: target })).deletedCount;
+            _counts.runes = (await Rune.deleteMany({ ownerJid: target })).deletedCount;
+            _counts.loans = (await Loan.deleteMany({ borrower: target })).deletedCount;
+            const _bountyPaths = Object.keys(Bounty.schema.paths).filter((p) => /jid$/i.test(p));
+            _counts.bounties = (await Bounty.deleteMany(_bountyPaths.length ? { $or: _bountyPaths.map((p) => ({ [p]: target })) } : { targetJid: target })).deletedCount;
+        } catch (_purgeErr) {
+            console.error('[MOD] resetplayer side-purge failed (user doc wipe continues):', _purgeErr.message);
         }
-        // Reset skills
-        user.skills = {};
-        economy.scheduleSave(target);
+
+        // 2) Rebuild the user object from fresh schema defaults, keeping only
+        //    identity/social. Top-level object identity is preserved (the
+        //    economy cache Map entry stays valid); nested objects are replaced
+        //    wholesale. _id/__v are stripped — the stored doc keeps its key.
+        const User = require('../models/User');
+        const _fresh = new User({
+            userId: target,
+            phoneHash: user.phoneHash || null,
+            nickname: user.nickname || 'Adventurer',
+            registered: true, // never lock the target out of econ commands
+            membership: user.membership,
+            profile: user.profile,
+        }).toObject();
+        delete _fresh._id;
+        delete _fresh.__v;
+        Object.assign(user, _fresh);
+
+        economy.saveUser(target);
+        const _purged = Object.entries(_counts).filter(([, v]) => v > 0).map(([k, v]) => `${k}=${v}`);
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `✅ *PLAYER RESET*\n\n👤 @${economy.getDisplayName(target)}\n📊 Stats reset to 0 (refunded ${user.progression ? progression.getStatPointsForRange(1, user.progression.level || 1) : 0} points)\n✨ All skills revoked\n💰 Wallet/level unchanged`,
+            text: BOT_MARKER + `☠️ *FULL LIFE RESET*\n\n👤 @${economy.getDisplayName(target)}\n📊 Before: ${_before}\n🌱 After: Lv1 · F rank · no class · 1,000 Zeni · zero history\n🗑️ Purged: ${_purged.length ? _purged.join(', ') : 'nothing found'}\n\n_Level, rank, class, skills, items, money, cards, runes, quests and history are all gone. Identity, social memory, guild and homestead kept._`,
             mentions: [target]
         });
     }
