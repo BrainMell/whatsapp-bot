@@ -3,7 +3,8 @@
 const assert = require('assert');
 const {
   createSummonCardSystem,
-  ACQUISITION_ENABLED,
+  MODERATOR_GRANTS_ENABLED,
+  AUTOMATIC_ACQUISITION_ENABLED,
   ACQUISITION_SOURCES,
 } = require('../core/rpg/systems/summonCards');
 
@@ -40,7 +41,8 @@ function fixture() {
 
 async function main() {
   const f = fixture();
-  assert.strictEqual(ACQUISITION_ENABLED, true);
+  assert.strictEqual(MODERATOR_GRANTS_ENABLED, true);
+  assert.strictEqual(AUTOMATIC_ACQUISITION_ENABLED, false);
   assert.strictEqual(ACQUISITION_SOURCES.moderator, true);
   assert.strictEqual(ACQUISITION_SOURCES.quest, false);
   assert.strictEqual(f.system.renderTray(f.player.jid, f.state), '');
