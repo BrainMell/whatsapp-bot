@@ -569,12 +569,7 @@ function generateLoot(encounterType, enemyName = null, difficulty = 1.0) {
                 const effectiveChance = specialDrop.dropChance + (rarityBoost * 0.5);
                 if (Math.random() * 100 < effectiveChance) {
                     const dbInfo = ITEM_DATABASE[specialDrop.id];
-                    // 💡 FIX 2026-08-31: normalize array quantities - same fix
-                    // the guaranteed-drop loop got above. ABYSSAL_GOD's
-                    // summon_egg_common uses quantity:[1,2], which was passed
-                    // through RAW, stored as the stack quantity, and bricked
-                    // the inventory slot permanently (NaN math, unremovable
-                    // stack, hasItem always false).
+                    // Normalize array quantities for special boss drops.
                     let specialQty;
                     if (Array.isArray(specialDrop.quantity)) {
                         const [sMin, sMax] = specialDrop.quantity;
@@ -1003,18 +998,18 @@ const ITEM_DATABASE = {
     // ═══════════════════════════════════════════════════════════════
 
     // --- SUMMON EGGS ---
-    'basic_summon_egg':    { name: 'Basic Summon Egg',    description: 'A common egg that hatches one of 4 starter summons. (Tank/DPS/Mage/Support)', rarity: 'COMMON', value: 5000, type: 'ITEM', usable: true },
-    'rare_summon_egg':     { name: 'Rare Summon Egg',     description: 'Hatches a random RARE-tier summon. Crafted from 10 Common Fragments.', rarity: 'RARE', value: 25000, type: 'ITEM', usable: true },
-    'epic_summon_egg':     { name: 'Epic Summon Egg',     description: '(Retired) No EPIC-tier summons exist yet - this egg can no longer hatch. Sell it to recoup its value.', rarity: 'EPIC', value: 80000, type: 'ITEM', usable: false },
-    'legendary_summon_egg':{ name: 'Legendary Summon Egg',description: '(Retired) No LEGENDARY-tier summons exist yet - this egg can no longer hatch. Sell it to recoup its value.', rarity: 'LEGENDARY', value: 250000, type: 'ITEM', usable: false },
-    'mythic_summon_egg':   { name: 'Mythic Summon Egg',   description: '(Retired) No MYTHIC-tier summons exist yet - this egg can no longer hatch. Sell it to recoup its value.', rarity: 'MYTHIC', value: 1000000, type: 'ITEM', usable: false },
+    'basic_summon_egg':    { name: 'Basic Summon Egg',    description: 'Legacy companion egg memento. Hatching is retired; sell or keep it.', rarity: 'COMMON', value: 5000, type: 'ITEM', usable: false },
+    'rare_summon_egg':     { name: 'Rare Summon Egg',     description: 'Legacy companion egg memento. Hatching is retired; sell or keep it.', rarity: 'RARE', value: 25000, type: 'ITEM', usable: false },
+    'epic_summon_egg':     { name: 'Epic Summon Egg',     description: 'Legacy companion egg memento. Hatching is retired; sell or keep it.', rarity: 'EPIC', value: 80000, type: 'ITEM', usable: false },
+    'legendary_summon_egg':{ name: 'Legendary Summon Egg',description: 'Legacy companion egg memento. Hatching is retired; sell or keep it.', rarity: 'LEGENDARY', value: 250000, type: 'ITEM', usable: false },
+    'mythic_summon_egg':   { name: 'Mythic Summon Egg',   description: 'Legacy companion egg memento. Hatching is retired; sell or keep it.', rarity: 'MYTHIC', value: 1000000, type: 'ITEM', usable: false },
 
-    // --- SUMMON FRAGMENTS (dropped by wild summons in the Abyss) ---
-    'common_fragment':     { name: 'Common Summon Fragment',  description: 'A faint soul fragment from a defeated wild summon. Collect 10 to craft a Rare Egg.', rarity: 'COMMON', value: 500, type: 'MATERIAL' },
-    'rare_fragment':       { name: 'Rare Summon Fragment',    description: 'A glowing soul fragment from a stronger wild summon. 10 of these were the old Epic-egg recipe (retired) - now a valuable sell.', rarity: 'RARE', value: 3000, type: 'MATERIAL' },
-    'epic_fragment':       { name: 'Epic Summon Fragment',    description: '(Retired) crafted-egg tier removed. Worth good Zeni to collectors - sell it.', rarity: 'EPIC', value: 12000, type: 'MATERIAL' },
-    'legendary_fragment':  { name: 'Legendary Summon Fragment',description: '(Retired) crafted-egg tier removed. Worth serious Zeni to collectors - sell it.', rarity: 'LEGENDARY', value: 50000, type: 'MATERIAL' },
-    'mythic_fragment':     { name: 'Mythic Summon Fragment',  description: '(Retired) crafted-egg tier removed. A collector\'s trophy - sell it.', rarity: 'MYTHIC', value: 200000, type: 'MATERIAL' },
+    // --- LEGACY COMPANION FRAGMENTS (inert, sellable mementos) ---
+    'common_fragment':     { name: 'Common Summon Fragment',  description: 'Legacy companion fragment memento. No drop or crafting route remains; sell or keep it.', rarity: 'COMMON', value: 500, type: 'MATERIAL' },
+    'rare_fragment':       { name: 'Rare Summon Fragment',    description: 'Legacy companion fragment memento. No drop or crafting route remains; sell or keep it.', rarity: 'RARE', value: 3000, type: 'MATERIAL' },
+    'epic_fragment':       { name: 'Epic Summon Fragment',    description: 'Legacy companion fragment memento. No drop or crafting route remains; sell or keep it.', rarity: 'EPIC', value: 12000, type: 'MATERIAL' },
+    'legendary_fragment':  { name: 'Legendary Summon Fragment',description: 'Legacy companion fragment memento. No drop or crafting route remains; sell or keep it.', rarity: 'LEGENDARY', value: 50000, type: 'MATERIAL' },
+    'mythic_fragment':     { name: 'Mythic Summon Fragment',  description: 'Legacy companion fragment memento. No drop or crafting route remains; sell or keep it.', rarity: 'MYTHIC', value: 200000, type: 'MATERIAL' },
 
     // --- SUMMON EVOLUTION STONES --- 💡 RETIRED 2026-11-01 (kept as sellable
     // mementos - the evolution feature they fed was removed: no live species
@@ -1026,7 +1021,7 @@ const ITEM_DATABASE = {
     // ═══════════════════════════════════════════════════════════════
     // 💡 PHASE 5 (2026-08-01): SUMMON EQUIPMENT
     // Separate from player gear - 5 slots: Claw, Core, Armor, Crest, Relic.
-    // Dropped by wild summons in the Abyss + craftable from fragments.
+    // Legacy companion gear data retained as inert inventory mementos.
     // ═══════════════════════════════════════════════════════════════
 
     // --- CLAWS (ATK bonus) ---
@@ -1095,20 +1090,20 @@ const ITEM_DATABASE = {
     'abyssal_crown':       { name: 'Abyssal Crown',        description: 'A circlet set with a polished abyssal core. Whispers of every defeated boss echo within. (+200 DEF, +200 HP, +40 LUCK, +20 MAG)', rarity: 'MYTHIC', value: 1100000, type: 'EQUIPMENT', stats: { def: 200, hp: 200, luck: 40, mag: 20 }, slot: 'helmet', reqLevel: 90 },
 
     // ── SUMMONER SYSTEM ITEMS (Phase 4) ──────────────────────────
-    // Summon eggs - hatch via `.summon hatch <eggId>`. Drop from bosses, raids, abyss.
+    // Legacy companion eggs retained as inert, sellable mementos. No hatch route.
     // Common egg = random COMMON species. Species-specific eggs = that species.
-    'summon_egg_common':       { name: 'Common Summon Egg',   description: 'A pulsating egg. Hatches into a random common summon. Use `.summon hatch summon_egg_common`.', rarity: 'UNCOMMON', value: 5000, type: 'ITEM', usable: false },
-    'summon_egg_skeleton':     { name: 'Skeleton Egg',         description: 'A bone-white egg. Hatches into a Skeleton summon.', rarity: 'UNCOMMON', value: 8000, type: 'ITEM', usable: false },
-    'summon_egg_flame_elemental': { name: 'Flame Elemental Egg', description: 'A warm, flickering egg. Hatches into a Flame Elemental.', rarity: 'RARE', value: 15000, type: 'ITEM', usable: false },
-    'summon_egg_frost_elemental': { name: 'Frost Elemental Egg', description: 'A cold, crystalline egg. Hatches into a Frost Elemental.', rarity: 'RARE', value: 15000, type: 'ITEM', usable: false },
-    'summon_egg_wolf':         { name: 'Wolf Egg',              description: 'A furry, warm egg. Hatches into a Gray Wolf summon.', rarity: 'UNCOMMON', value: 8000, type: 'ITEM', usable: false },
-    'summon_egg_bear':         { name: 'Bear Egg',              description: 'A heavy, thick-shelled egg. Hatches into a Cave Bear summon.', rarity: 'UNCOMMON', value: 10000, type: 'ITEM', usable: false },
-    'summon_egg_imp':          { name: 'Imp Egg',               description: 'A mischievously quivering egg. Hatches into an Imp summon.', rarity: 'UNCOMMON', value: 8000, type: 'ITEM', usable: false },
-    'summon_egg_void_walker':  { name: 'Void Walker Egg',       description: 'An egg of pure darkness. Hatches into a Void Walker summon.', rarity: 'RARE', value: 18000, type: 'ITEM', usable: false },
-    'summon_egg_wyrmling':     { name: 'Wyrmling Egg',          description: 'A scaled, warm egg. Hatches into a Wyrmling summon.', rarity: 'EPIC', value: 50000, type: 'ITEM', usable: false },
-    'summon_egg_turret_mk1':   { name: 'Turret MK-I Egg',       description: 'A mechanical egg full of gears. Hatches into an Auto-Turret MK-I.', rarity: 'UNCOMMON', value: 10000, type: 'ITEM', usable: false },
-    'summon_egg_lich_minion':  { name: 'Lich Minion Egg',       description: 'A necrotic egg radiating dark energy. Hatches into a Lich Minion.', rarity: 'RARE', value: 20000, type: 'ITEM', usable: false },
-    'summon_egg_storm_elemental': { name: 'Storm Elemental Egg', description: 'A crackling, electric egg. Hatches into a Storm Elemental.', rarity: 'RARE', value: 18000, type: 'ITEM', usable: false },
+    'summon_egg_common':       { name: 'Common Summon Egg',   description: 'Legacy companion egg memento. Hatching is retired; sell or keep it.', rarity: 'UNCOMMON', value: 5000, type: 'ITEM', usable: false },
+    'summon_egg_skeleton':     { name: 'Skeleton Egg',         description: 'Legacy companion egg memento. Hatching is retired; sell or keep it.', rarity: 'UNCOMMON', value: 8000, type: 'ITEM', usable: false },
+    'summon_egg_flame_elemental': { name: 'Flame Elemental Egg', description: 'Legacy companion egg memento. Hatching is retired; sell or keep it.', rarity: 'RARE', value: 15000, type: 'ITEM', usable: false },
+    'summon_egg_frost_elemental': { name: 'Frost Elemental Egg', description: 'Legacy companion egg memento. Hatching is retired; sell or keep it.', rarity: 'RARE', value: 15000, type: 'ITEM', usable: false },
+    'summon_egg_wolf':         { name: 'Wolf Egg',              description: 'Legacy companion egg memento. Hatching is retired; sell or keep it.', rarity: 'UNCOMMON', value: 8000, type: 'ITEM', usable: false },
+    'summon_egg_bear':         { name: 'Bear Egg',              description: 'Legacy companion egg memento. Hatching is retired; sell or keep it.', rarity: 'UNCOMMON', value: 10000, type: 'ITEM', usable: false },
+    'summon_egg_imp':          { name: 'Imp Egg',               description: 'Legacy companion egg memento. Hatching is retired; sell or keep it.', rarity: 'UNCOMMON', value: 8000, type: 'ITEM', usable: false },
+    'summon_egg_void_walker':  { name: 'Void Walker Egg',       description: 'Legacy companion egg memento. Hatching is retired; sell or keep it.', rarity: 'RARE', value: 18000, type: 'ITEM', usable: false },
+    'summon_egg_wyrmling':     { name: 'Wyrmling Egg',          description: 'Legacy companion egg memento. Hatching is retired; sell or keep it.', rarity: 'EPIC', value: 50000, type: 'ITEM', usable: false },
+    'summon_egg_turret_mk1':   { name: 'Turret MK-I Egg',       description: 'Legacy companion egg memento. Hatching is retired; sell or keep it.', rarity: 'UNCOMMON', value: 10000, type: 'ITEM', usable: false },
+    'summon_egg_lich_minion':  { name: 'Lich Minion Egg',       description: 'Legacy companion egg memento. Hatching is retired; sell or keep it.', rarity: 'RARE', value: 20000, type: 'ITEM', usable: false },
+    'summon_egg_storm_elemental': { name: 'Storm Elemental Egg', description: 'Legacy companion egg memento. Hatching is retired; sell or keep it.', rarity: 'RARE', value: 18000, type: 'ITEM', usable: false },
 
     // Summon consumables
     'loyalty_crystal':         { name: 'Loyalty Crystal',       description: 'Restores a summon\'s loyalty to 100. Use via the summon system.', rarity: 'RARE', value: 5000, type: 'CONSUMABLE', usable: false },
