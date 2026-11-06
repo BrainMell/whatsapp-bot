@@ -5,19 +5,19 @@ const CARD_CATALOG = Object.freeze({
     id: 'ifrit', name: 'Ifrit', icon: '🔥', element: 'FIRE',
     abilityName: 'Inferno Rend', description: 'A focused flame strike that leaves the target burning.',
     energyCost: 30, cooldownTurns: 3, damageMultiplier: 1.75,
-    status: { type: 'burn', duration: 2, value: 14 }, sprite: 'ifrit_fire.png', vfx: 'Fire-bomb',
+    status: { type: 'burn', duration: 2, value: 14 }, vfx: 'Fire-bomb',
   }),
   leviathan: Object.freeze({
     id: 'leviathan', name: 'Leviathan', icon: '🌊', element: 'WATER',
     abilityName: 'Tidal Prison', description: 'A crushing surge that slows the target.',
     energyCost: 36, cooldownTurns: 4, damageMultiplier: 1.55,
-    status: { type: 'slow', duration: 2, value: 25 }, sprite: 'leviathan_water.png', vfx: 'Lightning',
+    status: { type: 'slow', duration: 2, value: 25 }, vfx: 'Lightning',
   }),
   shiva: Object.freeze({
     id: 'shiva', name: 'Shiva', icon: '❄️', element: 'ICE',
     abilityName: 'Absolute Zero', description: 'A piercing frost strike that can freeze the target.',
     energyCost: 42, cooldownTurns: 5, damageMultiplier: 1.45,
-    status: { type: 'freeze', duration: 1, value: 0 }, sprite: 'shiva_ice.png', vfx: 'Holy VFX 02',
+    status: { type: 'freeze', duration: 1, value: 0 }, vfx: 'Holy VFX 02',
   }),
 });
 const CARD_ALIASES = Object.freeze({
