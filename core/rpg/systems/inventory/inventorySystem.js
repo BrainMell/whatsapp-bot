@@ -111,14 +111,6 @@ function hasInventorySpace(userId, amount = 1, itemId = null) {
     if (itemId) {
         const itemInfo = lootSystem.getItemInfo(itemId);
 
-    // Legacy companion eggs are retained only as sellable inventory mementos.
-    // There is no hatch command or egg acquisition path in the card system.
-    if (/^(?:basic|rare|epic|legendary|mythic)_summon_egg$|^summon_egg_/.test(itemId)) {
-        return {
-            success: false,
-            message: '🥚 *' + itemInfo.name + '* is a retired companion egg. Hatching is disabled; you can sell it or keep it as a memento.',
-        };
-    }
         if (itemInfo.type === 'MATERIAL') return true;
     }
     
@@ -1228,7 +1220,17 @@ function useItem(userId, rawItemId, targetSlot = null) {
     }
 
     const itemInfo = lootSystem.getItemInfo(itemId);
-    
+    if (!itemInfo) return { success: false, message: '❌ Unknown inventory item.' };
+
+    // Legacy companion eggs are retained only as sellable inventory mementos.
+    // There is no hatch command or egg acquisition path in the card system.
+    if (/^(?:basic|rare|epic|legendary|mythic)_summon_egg$|^summon_egg_/.test(itemId)) {
+        return {
+            success: false,
+            message: '🥚 *' + itemInfo.name + '* is a retired companion egg. Hatching is disabled; you can sell it or keep it as a memento.',
+        };
+    }
+
     // 🆕 Repair Kit Handling
     if (itemId.startsWith('repair_kit')) {
         if (!targetSlot) {
