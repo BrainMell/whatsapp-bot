@@ -42,9 +42,9 @@ TARGET="$BRANCH"
 #      owner-ordered fixes, so no relay (GitHub Action / Box2 cron / external)
 #      can wipe them via a stale origin. See AGENTS.md. ----
 GATE_FAIL=0
-git show "origin/$TARGET:core/rpg/progression.js" 2>/dev/null | grep -q "POST50_LEVEL_START" \
+git show "origin/$TARGET:core/rpg/systems/characters/progression.js" 2>/dev/null | grep -q "POST50_LEVEL_START" \
   || { echo "GATE REFUSAL: origin/$TARGET lacks XP-wall fix (POST50_LEVEL_START)"; GATE_FAIL=1; }
-git show "origin/$TARGET:core/rpg/economy.js" 2>/dev/null | grep -q "flattenLeaves" \
+git show "origin/$TARGET:core/rpg/systems/economy/economy.js" 2>/dev/null | grep -q "flattenLeaves" \
   || { echo "GATE REFUSAL: origin/$TARGET lacks leaf-merge fix (flattenLeaves)"; GATE_FAIL=1; }
 if [ "$GATE_FAIL" != "0" ]; then
   echo "deploy REFUSED: sync the protected fixes to origin first (see AGENTS.md)."
