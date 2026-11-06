@@ -456,16 +456,20 @@ class GoImageService {
    * Generate a dedicated summon-card effect as a real GIF. No MP4 transcode.
    */
   async generateSummonCardGIF(data) {
-    return this._enqueue(async () => {
-      const response = await this.client.post('/api/combat/summon-card', data, {
-        responseType: 'arraybuffer', timeout: 15000,
-        headers: { 'Content-Type': 'application/json' },
-      });
-      const gif = Buffer.from(response.data);
-      const signature = gif.toString('ascii', 0, 6);
-      if (!gif.length || (signature !== 'GIF87a' && signature !== 'GIF89a')) throw new Error('summon-card renderer returned a non-GIF payload');
-      return gif;
-    }, { priority: true, waitMs: 12000 });
+    if (!data || !data.cardId || !data.action) {
+      throw new TypeError("Summon-card GIF requires cardId and combat action data");
+    }
+    const response = await this.client.post("/api/combat/summon-card.gif", data, {
+      responseType: "arraybuffer",
+      timeout: 18000,
+      headers: { "Content-Type": "application/json" },
+    });
+    const gif = Buffer.from(response.data);
+    const signature = gif.length >= 6 ? gif.subarray(0, 6).toString("ascii") : "";
+    if (signature !== "GIF87a" && signature !== "GIF89a") {
+      throw new Error("Go summon-card renderer did not return a valid GIF");
+    }
+    return gif;
   }
 
   /*
@@ -709,27 +713,6 @@ class GoImageService {
     }
   }
 
-  /*
-   * Generate the signature animation for a summon-card combat action.
-   * The Go endpoint returns an actual GIF89a/GIF87a byte stream. Do not
-   * transcode this payload to MP4: WhatsApp receives it as an image/gif
-   * document so the original animated GIF is preserved byte-for-byte.
-   */
-  async generateSummonCardGIF(data) {
-    if (!data || !data.cardId || !data.action) {
-      throw new TypeError("Summon-card GIF requires cardId and combat action data");
-    }
-    const response = await this.client.post("/api/combat/summon-card.gif", data, {
-      responseType: "arraybuffer",
-      timeout: 18000,
-    });
-    const buf = Buffer.from(response.data);
-    const signature = buf.length >= 6 ? buf.subarray(0, 6).toString("ascii") : "";
-    if (signature !== "GIF87a" && signature !== "GIF89a") {
-      throw new Error("Go summon-card renderer did not return a valid GIF");
-    }
-    return buf;
-  }
 
   /*
    * Generate Card Collection/Deck GIF
