@@ -944,18 +944,7 @@ if (require.main === module) {
 
     boot();
 
-    // 💡 SPRITE WARM-UP: fetch all missing Digimon sprites in the background
-    // 30s after boot. This ensures the codex/roster/profile card renderers
-    // have sprites cached before any user views them. Non-blocking, non-fatal.
-    // (GLOBAL_SCHEDULERS gate: one warm-up per fleet is enough - 3 processes
-    //  fetching the same sprite set simultaneously just burns bandwidth.)
-    if ((process.env.GLOBAL_SCHEDULERS || '1') !== '0') setTimeout(() => {
-        try {
-            const summonSprites = require('./core/rpg/systems/summons/summonSprites');
-            const registry = require('./core/rpg/systems/summons/summonRegistry');
-            summonSprites.warmupCache(registry);
-        } catch (e) {
-            console.error('[SpriteWarmup] Failed to start (non-fatal):', e.message);
-        }
-    }, 30000);
+    // 🃏 SUMMONS OVERHAUL (2026-11-06): the Digimon sprite warm-up was removed
+    // with the old summon system (summonSprites/summonRegistry modules deleted;
+    // the asset bank itself stays at core/rpgasset/summons/).
 }
