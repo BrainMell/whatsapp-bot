@@ -2,8 +2,9 @@
 // JOKER TIC-TAC-TOE TOURNAMENT
 // `.j tourney create|join|start|bracket|board|top|forfeit|leave|cancel`
 // Single-elimination bracket, seeded by the TTT leaderboard, byes for odd fields,
-// matches run in PARALLEL (moves go through the normal `.j move <cell>` - the bot finds
-// your live match), best-of series, draws replay, AFK = forfeit, champion ceremony,
+// matches run ONE AT A TIME (a sequential queue - the next match starts only when
+// the current one ends; moves go through the normal `.j move <cell>`), best-of series,
+// draws replay, AFK = forfeit, mid-tournament withdrawals resolve as walkovers, champion ceremony,
 // prize pool + a persistent Hall of Champions.
 // Grids: 3 (classic), 8 (mega, 4-in-a-row), 16 (ultra, 5-in-a-row) or MIXED
 // (early rounds 3x3 -> semi-finals 8x8 -> final 16x16).
@@ -88,6 +89,14 @@ function findLiveMatch(t, jid) {
     return null;
 }
 function stats(t, jid) { const k = norm(jid); return (t.stats[k] = t.stats[k] || { w: 0, l: 0 }); }
+function findPendingSeat(t, jid) {
+    for (const row of t.rounds) for (const m of row) {
+        if (m.status !== 'pending') continue;
+        const s = sideOf(m, jid);
+        if (s) return { m, side: s };
+    }
+    return null;
+}
 
 function armTimer(t, m, sock) {
     clearTimeout(m.timer);
@@ -123,9 +132,23 @@ async function startGame(sock, t, m, announce = true) {
     await send(sock, t.chatId, buf, cap + (buf ? '' : '\n\n' + ttt.getBoardText(m.cur.board, grid)), [xp.jid, op.jid]);
 }
 
-async function launchReadyMatches(sock, t) {
+// both feeder matches of `m` have concluded (round 0 has no feeders)
+function feedersDone(t, m) {
+    if (m.round === 0) return true;
+    return t.rounds[m.round - 1].slice(m.idx * 2, m.idx * 2 + 2).every((f) => f.status === 'done');
+}
+
+// ONE AT A TIME: settle any walkovers left behind by withdrawals, then start the
+// single next match in bracket order. Called after every match ends / withdrawal / start.
+async function launchNextMatch(sock, t) {
+    if (t.rounds.some((row) => row.some((m) => m.status === 'live'))) return; // a match is already running
     for (const row of t.rounds) for (const m of row) {
-        if (m.status === 'pending' && m.a && m.b) await startGame(sock, t, m);
+        if (m.status !== 'pending') continue;
+        if (m.a && m.b) { await startGame(sock, t, m); return; } // next in the queue
+        if ((m.a || m.b) && feedersDone(t, m)) {                 // opponent withdrew before being seated
+            await finishMatch(sock, t, m, (m.a || m.b).jid, 'walkover');
+            return; // finishMatch re-launches the queue
+        }
     }
 }
 
@@ -134,22 +157,25 @@ async function finishMatch(sock, t, m, winnerJid, how) {
     if (m.status === 'done') return;
     m.status = 'done'; m.winner = winnerJid; m.cur = null;
     const wSide = sideOf(m, winnerJid), lSide = wSide === 'a' ? 'b' : 'a', W = m[wSide], L = m[lSide];
-    stats(t, W.jid).w++; stats(t, L.jid).l++;
-    L.out = m.round; // eliminated in this round
+    stats(t, W.jid).w++; if (L) stats(t, L.jid).l++;
+    if (L) L.out = m.round; // eliminated in this round
     const final = m.round === t.rounds.length - 1;
-    const line = `🏁 ${tag(W.jid)} defeats ${tag(L.jid)}` + (t.bestOf > 1 ? ` *${m.wins[wSide]}-${m.wins[lSide]}*` : '') + (how === 'seed' ? ' (seed advantage after repeated draws)' : how === 'forfeit' ? ' (forfeit)' : '');
-    if (final) { await finishTournament(sock, t, m, W, L, line); return; }
+    const howTxt = how === 'seed' ? ' (seed advantage after repeated draws)' : how === 'forfeit' ? ' (forfeit)' : how === 'walkover' ? ' (walkover)' : '';
+    const line = L
+        ? `🏁 ${tag(W.jid)} defeats ${tag(L.jid)}` + (t.bestOf > 1 ? ` *${m.wins[wSide]}-${m.wins[lSide]}*` : '') + howTxt
+        : `🏁 ${tag(W.jid)} advances on a walkover`;
+    if (final) { await finishTournament(sock, t, m, W, L || { jid: '', name: 'withdrawn' }, line); return; }
     // advance the winner
     const next = t.rounds[m.round + 1][Math.floor(m.idx / 2)];
     next[m.idx % 2 === 0 ? 'a' : 'b'] = W;
     const roundDone = t.rounds[m.round].every((x) => x.status === 'done');
-    const waiting = next.a && !next.b ? `Waiting for the other ${render.roundName(m.round + 1, t.rounds.length).toLowerCase()} spot...` : '';
-    await send(sock, t.chatId, null, `${t.tag} ${line}\n➡️ ${tag(W.jid)} advances to the ${render.roundName(m.round + 1, t.rounds.length)}!${waiting ? '\n' + waiting : ''}`, [W.jid, L.jid]);
+    const waiting = next.a && !next.b ? `The next match decides who they face in the ${render.roundName(m.round + 1, t.rounds.length).toLowerCase()}.` : '';
+    await send(sock, t.chatId, null, `${t.tag} ${line}\n➡️ ${tag(W.jid)} advances to the ${render.roundName(m.round + 1, t.rounds.length)}!${waiting ? '\n' + waiting : ''}`, [W.jid, L ? L.jid : W.jid]);
     if (roundDone) {
         const buf = safeRender(render.renderBracket, view(t));
         await send(sock, t.chatId, buf, `${t.tag} 📊 *${render.roundName(m.round, t.rounds.length)} COMPLETE* - next up: *${render.roundName(m.round + 1, t.rounds.length)}* (${t.gridFor(m.round + 1) === 3 ? '3x3' : t.gridFor(m.round + 1) + 'x' + t.gridFor(m.round + 1)})`);
     }
-    await launchReadyMatches(sock, t);
+    await launchNextMatch(sock, t);
 }
 
 async function finishTournament(sock, t, finalMatch, champ, runnerUp, lastLine) {
@@ -273,7 +299,7 @@ function helpText() {
         `\`${p} tourney bracket\` • \`board\` • \`forfeit\` • \`cancel\` (host)\n` +
         `\`${p} tourney top\` — Hall of Champions\n\n` +
         `*Grids:* 3 = classic • 8 = mega (4-in-row) • 16 = ultra (5-in-row) • *mixed* = 3x3 early rounds → 8x8 semis → 16x16 final\n` +
-        `*Play:* matches run side by side — just use \`${p} move <cell>\` when it's your turn.`;
+        `*Play:* matches run one at a time — you'll be tagged when yours starts; use \`${p} move <cell>\` on your turn.`;
 }
 
 async function handle(sock, chatId, senderJid, args, m, botMarker, senderName) {
@@ -306,7 +332,7 @@ async function handle(sock, chatId, senderJid, args, m, botMarker, senderName) {
             grid: o.grid, bestOf: o.bestOf, maxPlayers: o.max, status: 'lobby', players: [], rounds: [], stats: {}, champion: null, createdAt: Date.now(),
         };
         nt.tag = '🏟️';
-        const score = ttt.getAllScores()[norm(senderJid)];
+        const score = (ttt.getAllScores() || {})[norm(senderJid)];
         nt.players.push({ jid: senderJid, name: myName, score: score ? score.score : 0, joined: 1, seed: 0 });
         nt.lobbyTimer = setTimeout(() => { if (tournaments.get(chatId) === nt && nt.status === 'lobby') { tournaments.delete(chatId); sock.sendMessage(chatId, { text: botMarker + `⌛ *${nt.name}* was cancelled — nobody started it within 30 minutes.` }).catch(() => {}); } }, LOBBY_TTL_MS);
         if (nt.lobbyTimer.unref) nt.lobbyTimer.unref();
@@ -323,7 +349,7 @@ async function handle(sock, chatId, senderJid, args, m, botMarker, senderName) {
         if (t.status !== 'lobby') { await reply('❌ Registration is closed — this tournament already started.'); return; }
         if (t.players.some((p) => norm(p.jid) === norm(senderJid))) { await reply('✅ You are already entered.'); return; }
         if (t.players.length >= t.maxPlayers) { await reply('❌ The tournament is full.'); return; }
-        const score = ttt.getAllScores()[norm(senderJid)];
+        const score = (ttt.getAllScores() || {})[norm(senderJid)];
         t.players.push({ jid: senderJid, name: myName, score: score ? score.score : 0, joined: t.players.length + 1, seed: 0 });
         const full = t.players.length >= t.maxPlayers;
         await send(sock, chatId, safeRender(render.renderLobby, view(t)), botMarker + `✅ ${tag(senderJid)} entered! (${t.players.length}/${t.maxPlayers})` + (full ? `\n🔒 Full! Host: \`${px()} tourney start\`` : ''), t.players.map((p) => p.jid));
@@ -344,7 +370,22 @@ async function handle(sock, chatId, senderJid, args, m, botMarker, senderName) {
     if (sub === 'forfeit' || sub === 'ff' || sub === 'leave') {
         if (t.status !== 'running') { await reply('❌ Nothing to forfeit right now.'); return; }
         const lm = findLiveMatch(t, senderJid);
-        if (!lm) { await reply('❌ You have no live match.'); return; }
+        if (!lm) {
+            // waiting on the queue: withdraw from the bracket entirely
+            const seat = findPendingSeat(t, senderJid);
+            if (!seat) { await reply('❌ You have no live or upcoming match.'); return; }
+            const o = opp(seat.m, seat.side);
+            if (o) {
+                await send(sock, chatId, null, `${t.tag} 🏳️ ${tag(senderJid)} withdraws — ${tag(o.jid)} advances.`, [senderJid, o.jid]);
+                seat.m.wins[seat.side === 'a' ? 'b' : 'a'] = Math.ceil(t.bestOf / 2);
+                await finishMatch(sock, t, seat.m, o.jid, 'walkover');
+            } else {
+                seat.m[seat.side] = null; // their future opponent is still undecided; walkover resolves later
+                await send(sock, chatId, null, `${t.tag} 🏳️ ${tag(senderJid)} withdraws from the bracket.`, [senderJid]);
+                await launchNextMatch(sock, t);
+            }
+            return;
+        }
         const side = sideOf(lm, senderJid), o = opp(lm, side);
         await send(sock, chatId, null, `${t.tag} 🏳️ ${tag(senderJid)} forfeits! ${tag(o.jid)} advances.`, [senderJid, o.jid]);
         lm.wins[side === 'a' ? 'b' : 'a'] = Math.ceil(t.bestOf / 2);
@@ -362,12 +403,12 @@ async function handle(sock, chatId, senderJid, args, m, botMarker, senderName) {
         const R = t.rounds.length;
         const buf = safeRender(render.renderBracket, view(t));
         const byes = t.rounds[0].filter((x) => x.bye).map((x) => tag(x.a.jid));
-        await send(sock, chatId, buf, `${t.tag} 🔔 *${t.name.toUpperCase()} BEGINS!*\n\n${t.players.length} contenders • ${R} round${R > 1 ? 's' : ''} • Best of ${t.bestOf}` + (t.grid === 'mixed' ? '\n📈 Escalating grids: 3x3 → 8x8 semis → 16x16 final' : '') + (byes.length ? `\n🎟️ Byes (top seeds): ${byes.join(' ')}` : '') + `\n\nSeeds were set from the TTT leaderboard. Matches start now — play with \`${px()} move <cell>\`.`, t.players.map((p) => p.jid));
+        await send(sock, chatId, buf, `${t.tag} 🔔 *${t.name.toUpperCase()} BEGINS!*\n\n${t.players.length} contenders • ${R} round${R > 1 ? 's' : ''} • Best of ${t.bestOf}` + (t.grid === 'mixed' ? '\n📈 Escalating grids: 3x3 → 8x8 semis → 16x16 final' : '') + (byes.length ? `\n🎟️ Byes (top seeds): ${byes.join(' ')}` : '') + `\n\nSeeds were set from the TTT leaderboard. Matches run *one at a time* — first match is up now, play with \`${px()} move <cell>\`. You'll be tagged when it's your turn.`, t.players.map((p) => p.jid));
         // byes may immediately fill round 2
         for (const bm of t.rounds[0].filter((x) => x.bye)) {
             if (R > 1) t.rounds[1][Math.floor(bm.idx / 2)][bm.idx % 2 === 0 ? 'a' : 'b'] = bm.a;
         }
-        await launchReadyMatches(sock, t);
+        await launchNextMatch(sock, t);
         return;
     }
 
@@ -380,7 +421,15 @@ async function handle(sock, chatId, senderJid, args, m, botMarker, senderName) {
 
     if (sub === 'board') {
         const lm = t.status === 'running' && findLiveMatch(t, senderJid);
-        if (!lm) { await reply('❌ You have no live match.'); return; }
+        if (!lm) {
+            const seat = t.status === 'running' && findPendingSeat(t, senderJid);
+            if (seat && seat.m.a && seat.m.b) {
+                const q = t.rounds.flat().filter((x) => x.status === 'pending' && x.a && x.b).indexOf(seat.m);
+                await reply(q <= 0 ? `⏳ Your match is up next — you'll be tagged when it starts.` : `⏳ ${q} match${q === 1 ? '' : 'es'} before yours — you'll be tagged when it's your turn.`);
+            } else if (seat) await reply(`⏳ Hang tight — your opponent is still being decided in an earlier match.`);
+            else await reply('❌ You have no live or upcoming match.');
+            return;
+        }
         const g = lm.cur, buf = await ttt.renderBoard(g.board, g.grid, g.last);
         await send(sock, chatId, buf, botMarker + `${matchLabel(t, lm)} • ${norm(g.turn) === norm(g.x) ? '❌' : '⭕'} ${tag(g.turn)}'s turn` + (t.bestOf > 1 ? ` • Series ${lm.wins.a}-${lm.wins.b}` : '') + (buf ? '' : '\n\n' + ttt.getBoardText(g.board, g.grid, g.last)), [g.turn], m);
         return;
