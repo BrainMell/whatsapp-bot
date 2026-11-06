@@ -41,9 +41,9 @@ function buildPayload(players, enemies, options = {}) {
                 'APPRENTICE'
             ).trim().toUpperCase(),
             level: Math.floor(Number(p.level) || 1),
-            hp: Math.floor(Number(p.currentHP !== undefined ? p.currentHP : (p.stats?.hp !== undefined ? p.stats.hp : (p.hp || 0)))),
+            hp: Math.floor(Number(p.currentHP ?? p.stats?.hp ?? p.hp ?? 0)),
             maxHp: Math.floor(Number(p.stats?.maxHp || p.maxHp || 100)),
-            currentHP: Math.floor(Number(p.currentHP !== undefined ? p.currentHP : (p.stats?.hp !== undefined ? p.stats.hp : (p.hp || 0))),
+            currentHP: Math.floor(Number(p.currentHP ?? p.stats?.hp ?? p.hp ?? 0)),
             energy: Math.floor(Number(p.stats?.energy || p.energy || 100)),
             maxEnergy: Math.floor(Number(p.stats?.maxEnergy || p.maxEnergy || 100)),
             adventurerRank: String(p.adventurerRank || 'F'),
