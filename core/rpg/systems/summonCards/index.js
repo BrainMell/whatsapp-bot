@@ -27,7 +27,8 @@ const CARD_ALIASES = Object.freeze({
 });
 // Moderator grants are the only enabled acquisition path. Future sources stay
 // explicitly disabled until their own progression/economy design is approved.
-const ACQUISITION_ENABLED = true;
+const MODERATOR_GRANTS_ENABLED = true;
+const AUTOMATIC_ACQUISITION_ENABLED = false;
 const ACQUISITION_SOURCES = Object.freeze({
   moderator: true, quest: false, boss_drop: false, event: false, shop: false, trade: false,
 });
@@ -115,10 +116,13 @@ function createSummonCardSystem(economy) {
 
   function acquireCard(jid, rawCardId, source, actor) {
     const normalizedSource = String(source || '').trim().toLowerCase();
-    if (!ACQUISITION_ENABLED || !ACQUISITION_SOURCES[normalizedSource] || normalizedSource !== 'moderator') {
+    if (normalizedSource === 'moderator' && MODERATOR_GRANTS_ENABLED && ACQUISITION_SOURCES.moderator) {
+      return grantCard(jid, rawCardId, actor);
+    }
+    if (!AUTOMATIC_ACQUISITION_ENABLED || !ACQUISITION_SOURCES[normalizedSource]) {
       return { success: false, message: 'Summon-card acquisition is currently moderator-only.' };
     }
-    return grantCard(jid, rawCardId, actor);
+    return { success: false, message: 'This acquisition source is not implemented.' };
   }
 
   function playerTurnFor(jid, state) {
@@ -276,6 +280,6 @@ function createSummonCardSystem(economy) {
 
 const defaultSystem = createSummonCardSystem(require('../economy/economy'));
 module.exports = {
-  ...defaultSystem, CARD_CATALOG, CARD_ALIASES, ACQUISITION_ENABLED,
-  ACQUISITION_SOURCES, normalizeCardId, createSummonCardSystem,
+  ...defaultSystem, CARD_CATALOG, CARD_ALIASES, MODERATOR_GRANTS_ENABLED,
+  AUTOMATIC_ACQUISITION_ENABLED, ACQUISITION_SOURCES, normalizeCardId, createSummonCardSystem,
 };
