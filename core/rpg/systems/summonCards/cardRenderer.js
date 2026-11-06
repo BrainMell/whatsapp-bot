@@ -106,6 +106,50 @@ async function renderCardPng(card, st = {}) {
   await drawCard(c, card, 0, 0, st); return cvs.toBuffer('image/png');
 }
 
+/** One card as a PNG buffer rendered at `scale` — canvas transform keeps text/frames crisp
+ *  (used by `.j summons <n>` standalone showcase cards). */
+async function renderCardPngScaled(card, st = {}, scale = 2) {
+  const { createCanvas } = cv(); const s = Math.max(1, Math.min(3, Number(scale) || 2));
+  const cvs = createCanvas(Math.round(CW * s), Math.round((CH + 40) * s)); const c = cvs.getContext('2d');
+  c.scale(s, s); await drawCard(c, card, 0, 0, st); return cvs.toBuffer('image/png');
+}
+
+/** 🕯️ Fitting arcane backdrop for the deck showcase (owner 2026-11-07: "revert to the old
+ *  design, but give it a fitting background"): the old fanned-strip painter keeps its layout,
+ *  but the flat pinstriped gradient gives way to a deep dungeon-navy backdrop with a GOLD
+ *  SUMMONING CIRCLE behind the hand — double ring, tick ring, arcane diamond, soft floor
+ *  glow, gold dust and a corner vignette, all in the HUD's own golds (#d4a017/#ffd666). */
+function paintSummonBackdrop(c, W, H) {
+  const bg = c.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#171a26'); bg.addColorStop(1, '#0a0b11'); c.fillStyle = bg; c.fillRect(0, 0, W, H);
+  const glow = c.createRadialGradient(W / 2, H * 0.62, H * 0.08, W / 2, H * 0.62, W * 0.55);
+  glow.addColorStop(0, 'rgba(212,160,23,0.12)'); glow.addColorStop(0.55, 'rgba(212,160,23,0.045)'); glow.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillStyle = glow; c.fillRect(0, 0, W, H);
+  const cx = W / 2, cy = H * 0.58, R = Math.min(W, H) * 0.48;
+  c.save(); c.translate(cx, cy);
+  c.strokeStyle = 'rgba(212,160,23,0.34)'; c.lineWidth = Math.max(2, H * 0.012);
+  c.beginPath(); c.arc(0, 0, R, 0, Math.PI * 2); c.stroke();
+  c.strokeStyle = 'rgba(255,214,102,0.22)'; c.lineWidth = Math.max(1, H * 0.006);
+  c.beginPath(); c.arc(0, 0, R * 0.86, 0, Math.PI * 2); c.stroke();
+  c.beginPath(); c.arc(0, 0, R * 0.62, 0, Math.PI * 2); c.stroke();
+  c.strokeStyle = 'rgba(212,160,23,0.30)'; c.lineWidth = Math.max(1, H * 0.006);
+  for (let i = 0; i < 36; i++) {
+    const a = (i / 36) * Math.PI * 2, r0 = R * 0.86, r1 = R;
+    c.beginPath(); c.moveTo(Math.cos(a) * r0, Math.sin(a) * r0); c.lineTo(Math.cos(a) * r1, Math.sin(a) * r1); c.stroke();
+  }
+  c.strokeStyle = 'rgba(255,214,102,0.15)';
+  c.beginPath(); c.moveTo(0, -R * 0.62); c.lineTo(R * 0.62, 0); c.lineTo(0, R * 0.62); c.lineTo(-R * 0.62, 0); c.closePath(); c.stroke();
+  c.beginPath(); c.moveTo(-R * 0.62, 0); c.lineTo(R * 0.62, 0); c.moveTo(0, -R * 0.62); c.lineTo(0, R * 0.62); c.stroke();
+  c.restore();
+  let sd = 7;
+  const rnd = () => ((sd = (sd * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  c.fillStyle = 'rgba(255,214,102,0.5)';
+  for (let i = 0; i < 46; i++) { const px = rnd() * W, py = rnd() * H, pr = rnd() * 1.6 + 0.4; c.globalAlpha = 0.10 + rnd() * 0.30; c.beginPath(); c.arc(px, py, pr, 0, Math.PI * 2); c.fill(); }
+  c.globalAlpha = 1;
+  const vg = c.createRadialGradient(W / 2, H * 0.55, Math.min(W, H) * 0.35, W / 2, H * 0.55, Math.max(W, H) * 0.78);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(2,3,8,0.55)');
+  c.fillStyle = vg; c.fillRect(0, 0, W, H);
+}
+
 /** Combat hand: fanned row (max 6 per row). entries: [{card, ready, turnsLeft, affordable}] */
 async function renderHandPng(entries, opts = {}) {
   fonts(); const { createCanvas } = cv();
@@ -114,8 +158,7 @@ async function renderHandPng(entries, opts = {}) {
   const cols = Math.min(per, entries.length);
   const W = pad * 2 + cols * w + (cols - 1) * gap, H = 70 + rows * (h + 26) + 22;
   const cvs = createCanvas(W, H), c = cvs.getContext('2d');
-  const bg = c.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#171a26'); bg.addColorStop(1, '#0a0b11'); c.fillStyle = bg; c.fillRect(0, 0, W, H);
-  c.globalAlpha = 0.07; c.strokeStyle = '#fff'; for (let i = -H; i < W; i += 28) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i + H, H); c.stroke(); } c.globalAlpha = 1;
+  paintSummonBackdrop(c, W, H);   // 🕯️ old layout, arcane backdrop (owner: "give it a fitting background")
   c.fillStyle = '#ffd36b'; c.font = 'bold 28px SCCinzel, serif'; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText(opts.title || 'SUMMON HAND', pad, 34);
   if (opts.energy != null) { c.textAlign = 'right'; c.fillStyle = '#7fd1ff'; c.fillText(`ENERGY ${Math.floor(opts.energy)}${opts.maxEnergy ? ' / ' + Math.floor(opts.maxEnergy) : ''}`, W - pad, 34); }
   const tmp = createCanvas(CW, CH + 40);
@@ -130,4 +173,4 @@ async function renderHandPng(entries, opts = {}) {
   return cvs.toBuffer('image/png');
 }
 
-module.exports = { renderCardPng, renderHandPng, drawCard, artFor, CW, CH };
+module.exports = { renderCardPng, renderCardPngScaled, renderHandPng, drawCard, artFor, paintSummonBackdrop, CW, CH };

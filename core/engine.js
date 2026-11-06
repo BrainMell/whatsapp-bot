@@ -12705,13 +12705,37 @@ _💡 Reply with another number from your search list!_`.trim();
 
                     // 🃏 New owned Summon Cards inventory. No companion/deployment route.
                     if (primaryCmd === "summon" || primaryCmd === "summons" || primaryCmd === "summoncards") {
-                      const invText = BOT_MARKER + summonCards.buildInventoryText(senderJid, botConfig.getPrefix());
+                      // 🃏 owner 2026-11-07: the collection reply is the IMAGE CARD ONLY — the second
+                      // ability-summary text message is gone (the cards already say it all). With an
+                      // index/name argument ("all" = the whole collection) it renders ONE big
+                      // standalone card for that summon, stats + abilities in the caption.
+                      const prefix = botConfig.getPrefix();
+                      const arg = String(cmdArgs[1] || '').trim();
+                      if (arg && arg.toLowerCase() !== 'all') {
+                        const cardId = summonCards.resolveCardRef(senderJid, arg);
+                        const full = cardId ? (summonCards.getOwnedCards(senderJid).find((c2) => c2.id === cardId) || summonCards.catalog[String(cardId).toLowerCase()] || null) : null;
+                        if (!full) {
+                          const owned = summonCards.getOwnedCards(senderJid);
+                          const hint = /^\d+$/.test(arg) && owned.length
+                            ? `🃏 You own ${owned.length} summon card${owned.length === 1 ? '' : 's'} — use 1-${owned.length} or a card name (see ${prefix} summons).`
+                            : `🃏 Unknown summon card. Use a hand number or a card name (see ${prefix} summons).`;
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + hint });
+                          return;
+                        }
+                        const ownedIdx = summonCards.getOwnedCards(senderJid).findIndex((c2) => c2.id === full.id);
+                        const png = await summonCards.renderSingleCardImage(full, ownedIdx >= 0 ? { index: ownedIdx + 1 } : {});   // badge = hand number
+                        const cap = BOT_MARKER + summonCards.describeCard(full, ownedIdx >= 0 ? ownedIdx + 1 : null, prefix) +
+                          (ownedIdx < 0 ? '\n_Not in your hand yet — ask a moderator to grant it._' : '');
+                        if (png) await sock.sendMessage(chatId, { image: png, caption: cap });
+                        else await sock.sendMessage(chatId, { text: BOT_MARKER + summonCards.describeCard(full, ownedIdx >= 0 ? ownedIdx + 1 : null, prefix) });
+                        return;
+                      }
                       const invPng = await summonCards.renderCollectionImage(senderJid);
                       if (invPng) {
-                        // card art first, details as a follow-up (the caption would be too long for 25 cards)
-                        await sock.sendMessage(chatId, { image: invPng, caption: '🃏 *Your Summon Cards*' });
+                        await sock.sendMessage(chatId, { image: invPng, caption: BOT_MARKER + '🃏 *Your Summon Cards* — card details: ' + prefix + ' summons <#|name>' });
+                      } else {
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + summonCards.buildInventoryText(senderJid, prefix) });
                       }
-                      await sock.sendMessage(chatId, { text: invText });
                       return;
                     }
 

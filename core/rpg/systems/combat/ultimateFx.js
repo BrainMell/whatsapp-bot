@@ -1052,6 +1052,18 @@ async function renderUltimateVideo(o) {
             victims.set(idx, { pct0, p1 });
         }
     }
+    // ☠️ FATAL-HIT BARS (owner 2026-11-07: "the ultimate animation still has the floating HP
+    // bars visible even after the enemy is dead"): victims the cast KILLS are only reported via
+    // o.dying (targets lists LIVE enemies), and they were skipped above — so their baked full bar
+    // never got repainted and floated over the whole clip. Give every dying victim a full→empty
+    // drain at the impact; the merged-death loop below stamps eraseAt so the bar is PAINTED OVER
+    // with background the moment the dissolve takes the sprite.
+    if (Array.isArray(o.dying)) {
+        for (const dy of o.dying) {
+            const idx = Math.floor(Number(dy && dy.index) || 0);
+            if (!victims.has(idx)) victims.set(idx, { pct0: 1, p1: 0, dead: true });
+        }
+    }
     const dropAll = !!o.aoe;
 
     // every ultimate gets the per-fighter impact unless the recipe ships its
@@ -1094,7 +1106,7 @@ async function renderUltimateVideo(o) {
                 const cv = createCanvas(W, H); cv.getContext('2d').drawImage(cut.img, cut.x, cut.y, cut.w, cut.h);
                 dyImgs.set(idx, { img: cv, rect: [pt[0], pt[1], cut.w, cut.h] });
                 dyingMap.set(idx, { at: at0, cut });
-                const vv = victims.get(idx); if (vv) vv.p1 = 0;
+                const vv = victims.get(idx); if (vv) { vv.p1 = 0; vv.eraseAt = at0; }   // ☠️ stamp when the dissolve owns this sprite → bar erase
                 endT = Math.max(endT, at0 + (boss ? 2.7 : 1.5) + 0.15);
             } catch (e) { console.warn('[UltFx] merged death skipped:', e && e.message || e); }
         }
@@ -1290,7 +1302,12 @@ async function renderUltimateVideo(o) {
             // the impact so the windup shows the untouched baked bar.
             if (victims.size && Array.isArray(layers.anchors)) {
                 const fanAnchors = layers.anchors
-                    .filter((v2) => v2 && v2.side === tSideAll && victims.has(Math.floor(Number(v2.index) || 0)) && (dropAll || Math.floor(Number(v2.index) || 0) === focusIdxAll))
+                    .filter((v2) => {
+                        if (!v2 || v2.side !== tSideAll) return false;
+                        const vv2 = victims.get(Math.floor(Number(v2.index) || 0));
+                        if (!vv2) return false;
+                        return dropAll || Math.floor(Number(v2.index) || 0) === focusIdxAll || !!vv2.dead;   // ☠️ fatal hits drain/erase even off-focus
+                    })
                     .sort((a2, b2) => a2.x - b2.x);
                 let vi = 0;
                 for (const a2 of fanAnchors) {
@@ -1304,6 +1321,21 @@ async function renderUltimateVideo(o) {
                     const at = IMP + vi * 0.06;
                     vi++;
                     if (time < at) continue;
+                    // ☠️ BAR ERASE (owner: bars must die with the enemy): once the merged-death
+                    // dissolve owns the sprite, cover the baked bar with background sampled right
+                    // above it — both rects ride the same camera transform, so src and dst distort
+                    // together and the patch stays glued over the bar. Baked (shrink-independent)
+                    // geometry + generous padding so no rim of the old bar peeks out.
+                    if (v.dead && Number.isFinite(v.eraseAt) && time >= v.eraseAt) {
+                        const ew = 100 * kxL, eh = 12 * kyL, epad = 6 * kyL;
+                        const ex = a2.x * kxL - ew / 2 - epad;
+                        const ey2 = (Number(a2.feetY) - Math.max(24, Number(a2.h) || 0)) * kyL - 15 * kyL - epad;
+                        const epw = ew + epad * 2, eph = eh + epad * 2;
+                        const esy = Math.max(0, ey2 - eph - 2);
+                        const esh = Math.min(eph, Math.max(2, ey2 - esy));
+                        try { ctx.drawImage(base, ex, esy, epw, esh, ex, ey2, epw, eph); } catch (e2) {}
+                        continue;
+                    }
                     const du = clamp01((time - at) / 0.45);
                     const pct = v.pct0 + (v.p1 - v.pct0) * (1 - Math.pow(1 - du, 3));
                     drawVictimHpBar(ctx, bxc, byc, bw, bh, pct, time - at < 2 / FPS ? 1 : 0);

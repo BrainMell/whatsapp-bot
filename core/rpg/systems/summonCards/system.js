@@ -136,21 +136,13 @@ function createSummonCardSystem(economy) {
     try {
       const entries = handEntries(jid, state, player);
       if (!entries.length) return null;
-      // owner 2026-11-07: same deck-builder hand painter as the battle-card tray — ONE design
-      // language, no "SUMMON HAND" strap text. Glass shelf + gold lip, last card raised/glowing.
-      const hud = require('../combat/combatHud');
-      await hud.preload();
-      const { createCanvas } = require('canvas');
-      const W = 1024, H = 236;
-      const cv = createCanvas(W, H), c = cv.getContext('2d');
-      const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#131828'); g.addColorStop(1, '#090c15');
-      c.fillStyle = g; c.fillRect(0, 0, W, H);
-      // faint vignette so the shelf doesn't float in flat nothing
-      const vg = c.createRadialGradient(W / 2, H * 0.62, H * 0.2, W / 2, H * 0.62, W * 0.62);
-      vg.addColorStop(0, 'rgba(255,214,102,0.045)'); vg.addColorStop(1, 'rgba(0,0,0,0.28)');
-      c.fillStyle = vg; c.fillRect(0, 0, W, H);
-      await hud.drawDeckTray(c, entries, 1, 60, H - 118, W - 60);
-      return cv.toBuffer('image/png');
+      // owner 2026-11-07 (showcase round): the standalone deck showcase is REVERTED to the
+      // original fanned-strip painter (renderHandPng — full-size cards, SUMMON HAND strap,
+      // ENERGY readout) now sitting on the arcane summoning-circle backdrop cardRenderer
+      // paints itself (owner: "revert to the old design, but give it a fitting background").
+      // The battle-card tray keeps the v6.1 floating hand — that arrangement stays.
+      const st = player && player.stats ? player.stats : {};
+      return await require('./cardRenderer').renderHandPng(entries, { energy: st.energy, maxEnergy: st.maxEnergy, title: 'SUMMON HAND' });
     } catch (e) { console.warn('[SummonCards] hand render failed:', e.message); return null; }
   }
 
@@ -160,6 +152,29 @@ function createSummonCardSystem(economy) {
       if (!entries.length) return null;
       return await require('./cardRenderer').renderHandPng(entries, { title: 'YOUR SUMMON CARDS', scale: 0.78 });
     } catch (e) { console.warn('[SummonCards] collection render failed:', e.message); return null; }
+  }
+
+  // 🃏 owner 2026-11-07 (".j summons <index>"): ONE big standalone card for a specific summon —
+  // rendered at 2x so the text stays crisp, with the stats + abilities delivered in the caption.
+  async function renderSingleCardImage(card, st = {}) {
+    if (!card) return null;
+    try { return await require('./cardRenderer').renderCardPngScaled(card, st, 2); }
+    catch (e) { console.warn('[SummonCards] single-card render failed:', e.message); return null; }
+  }
+
+  // Caption text for the standalone card: stats line + ability + hand position hint.
+  function describeCard(card, index, prefix) {
+    if (!card) return '';
+    const p = prefix || '.j';
+    const targetNote = card.target === 'all' ? ' · hits ALL enemies'
+      : card.target === 'party' ? ' · affects the whole party'
+      : card.target === 'self' ? ' · self-cast' : '';
+    let txt = card.icon + ' *' + card.name + '* — ' + String(card.rarity || 'COMMON').toLowerCase() + ' ' +
+      String(card.type || 'ATTACK').toLowerCase() + ' (' + String(card.element || 'NEUTRAL').toLowerCase() + ')' + '\n' +
+      '✦ *' + (card.abilityName || 'Ability') + '* — ' + (card.description || '') + '\n' +
+      '⚡ ' + card.energyCost + ' EN · ⏳ ' + card.cooldownTurns + '-turn cooldown' + targetNote;
+    if (index) txt += '\n👉 Hand #' + index + ' — play with ' + p + ' combat summon ' + index + ' [enemy#]';
+    return txt;
   }
 
   function renderTray(jid, state, prefix) {
@@ -359,6 +374,7 @@ function createSummonCardSystem(economy) {
     catalog: CARD_CATALOG, getOwnedCards, grantCard, revokeCard, acquireCard,
     prepareActivation, resolveActivation, renderTray, buildInventoryText, cooldownFor,
     resolveCardRef, renderHandImage, renderCollectionImage, handEntries,
+    renderSingleCardImage, describeCard,
   };
 }
 

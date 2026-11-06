@@ -103,7 +103,31 @@ async function scenePlate(layers, dyingIdx, deadIdx) {
   const W0 = Number(layers.w) || 1024, H0 = Number(layers.h) || 687;
   const kx = VW / W0, ky = VH / H0;
   const cv = createCanvas(VW, VH), c = cv.getContext('2d');
-  c.drawImage(await loadImage(layers.bg), 0, 0, VW, VH);
+  const __bg = await loadImage(layers.bg);
+  c.drawImage(__bg, 0, 0, VW, VH);
+  // ☠️ ERASE THE FALLEN'S BARS (owner 2026-11-07: "the ultimate animation still has the floating
+  // HP bars visible even after the enemy is dead"): Go bakes the overhead HP bars into the scene
+  // bg, so skipping a fallen unit's cutout still leaves its bar floating over the clip. Paint over
+  // each fallen unit's bar with the background sampled right above it (bg pixel space = layers
+  // space, so src and dst line up 1:1 before the plate's kx/ky scaling).
+  {
+    const __gone = new Set();
+    for (const __s of [dyingIdx, deadIdx]) {
+      if (__s instanceof Set || Array.isArray(__s)) for (const __i of __s) __gone.add(Math.floor(Number(__i) || 0));
+    }
+    if (__gone.size && Array.isArray(layers.anchors)) {
+      for (const __a of layers.anchors) {
+        if (!__a || String(__a.side) !== 'enemy' || !__gone.has(Math.floor(Number(__a.index) || 0))) continue;
+        const __bw = 100, __bh = 12, __pad = 6;   // Go enemy-bar geometry (100x12 @ center-50, top-15)
+        const __bx = (Number(__a.x) || 0) - __bw / 2 - __pad;
+        const __by = (Number(__a.feetY) || 0) - Math.max(24, Number(__a.h) || 0) - 15 - __pad;
+        const __sw = __bw + __pad * 2, __sh = __bh + __pad * 2;
+        const __sy = Math.max(0, __by - __sh - 2);
+        const __shh = Math.min(__sh, Math.max(2, __by - __sy));
+        try { c.drawImage(__bg, __bx, __sy, __sw, __shh, __bx * kx, __by * ky, __sw * kx, __sh * ky); } catch (e) {}
+      }
+    }
+  }
   const __dead = deadIdx instanceof Set ? deadIdx : new Set();
   const cuts = (layers.cuts || []).filter((x) => x && x.png && !(String(x.side) === 'enemy' && (dyingIdx.has(Math.floor(Number(x.index) || 0)) || __dead.has(Math.floor(Number(x.index) || 0)))));
   cuts.sort((a, b) => (Number(a.y) + Number(a.h)) - (Number(b.y) + Number(b.h)));
