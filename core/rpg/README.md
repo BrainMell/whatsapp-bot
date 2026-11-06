@@ -1,6 +1,6 @@
 # RPG Subsystem Architecture
 
-The RPG side of the bot is organized as **12 self-contained subsystems** under
+The RPG side of the bot is organized as **13 self-contained subsystems** under
 `core/rpg/systems/`. The goal: **you can overhaul, rewrite, or rip out any one
 subsystem without the rest of the game falling over** — as long as you keep that
 subsystem's `index.js` exports stable.
@@ -32,6 +32,7 @@ core/rpg/
     │                        structureScenes, dockPov/huntPov/minePov
     ├── pvp/               ← pvpSystem (duels)
     ├── cards/             ← cardSystem (gacha, tokens, auctions)
+    ├── summonCards/       ← owned signature-ability cards; separate from UserCard collectibles
     ├── inventory/         ← inventorySystem, lootSystem, durability, runes,
     │                        runeSynergies, weaponSynergy, crafting
     ├── homestead/         ← homestead + rooms, baseBuilder, baseActivities,
@@ -55,7 +56,7 @@ core/rpg/
    either `require('../../registry').use('economy')` or, for legacy code, that
    system's folder path. Never deep-require another system's private files.
 3. **Every subsystem exposes its public API in `systems/<name>/index.js`.**
-   Export keys = module filename stems (`use('summons').summonSystem`).
+   Export keys = module filename stems (`use('summonCards').grantCard`).
    Keep old exports working when you refactor inside; add new ones freely.
 4. **Engine and command routers are consumers, not owners.** `core/engine.js`
    dispatches into subsystems; gameplay state lives inside the subsystem.
@@ -91,7 +92,7 @@ No other subsystem needs to know it happened.
 | world | `_shared_world_alignment_last_event` |
 | adventures | `veil_reading_<userId>` (soulReader) |
 
-Player/profile data itself lives in Mongoose models (`User`, `Summon`, `Guild`,
+Player/profile data itself lives in Mongoose models (`User` (including the separate `summonCards` ownership field), `Guild`,
 `Homestead`, `Base`, `RaidBoss`, `Bounty`, `Loan`, markets, `AbyssRun`…).
 
 ## Schedulers
