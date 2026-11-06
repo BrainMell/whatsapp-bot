@@ -36,7 +36,7 @@ const COLS = 23, ROWS = 31, CC = 11, CR = 15;   // oversized grid: terrain runs 
 const OLD_COLS = 17, OLD_ROWS = 15, OLD_CC = 8, OLD_CR = 7;   // the framing the card was designed around
 const SCALE = parseFloat(process.env.RENDER_GUILD_SCALE || '0.5') || 0.5;
 const PREFIX = '.j'; // display-only default; engine passes real prefix via opts.hint when it matters
-const FONTS = path.join(__dirname, '..', 'rpgasset', 'fonts');
+const FONTS = path.join(__dirname, '..', '..', '..', 'rpgasset', 'fonts');
 
 // ── structure defs (mirror GUILD_UPGRADES visual states in guilds.js) ──
 const GUILD_STRUCTS = {

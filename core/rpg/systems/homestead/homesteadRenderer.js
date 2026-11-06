@@ -60,8 +60,8 @@ const RARITY = {
 };
 
 // ── asset paths ──
-const ASSETS = path.join(__dirname, '..', 'rpgasset', 'homestead');
-const FONTS = path.join(__dirname, '..', 'rpgasset', 'fonts');
+const ASSETS = path.join(__dirname, '..', '..', '..', 'rpgasset', 'homestead');
+const FONTS = path.join(__dirname, '..', '..', '..', 'rpgasset', 'fonts');
 
 // ── fonts ──
 let fontsReady = false;

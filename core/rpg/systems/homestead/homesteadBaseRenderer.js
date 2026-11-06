@@ -34,8 +34,8 @@ const SCALE = parseFloat(process.env.RENDER_BASE_SCALE || '0.44') || 0.44;
 const ANIM_SCALE = parseFloat(process.env.RENDER_BASE_ANIM_SCALE || '0.62') || 0.62;
 const CARD_W = 1960, CARD_H = 1420;   // fixed card; terrain over-covers it (no floating diorama)
 
-const ASSETS = path.join(__dirname, '..', 'rpgasset', 'homestead');
-const FONTS = path.join(__dirname, '..', 'rpgasset', 'fonts');
+const ASSETS = path.join(__dirname, '..', '..', '..', 'rpgasset', 'homestead');
+const FONTS = path.join(__dirname, '..', '..', '..', 'rpgasset', 'fonts');
 
 let STRUCT_DEF = null;
 function structures() {

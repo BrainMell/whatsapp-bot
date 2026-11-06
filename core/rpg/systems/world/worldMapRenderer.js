@@ -75,7 +75,7 @@ function _ensureFonts() {
         const canvas = require('canvas');
         const registerFont = canvas.registerFont || (canvas.GlobalFonts && canvas.GlobalFonts.registerFromPath);
         if (!registerFont) throw new Error('no font registration API in canvas build');
-        const F = path.join(__dirname, '..', 'rpgasset', 'fonts');
+        const F = path.join(__dirname, '..', '..', '..', 'rpgasset', 'fonts');
         const isRealFont = (p) => {
             try {
                 if (!fs.existsSync(p)) return false;
@@ -113,8 +113,8 @@ function _ensureFonts() {
 // the various existing backgrounds, along with new backgrounds for worlds that
 // need them". The guild names a world only after an expedition returns, so the
 // chart uses surveyor field names. Types follow the standing legend.
-const CARD_ART_DIR = path.join(__dirname, '..', 'rpgasset', 'environment', 'cards');
-const ENV_ART_DIR = path.join(__dirname, '..', 'rpgasset', 'environment');
+const CARD_ART_DIR = path.join(__dirname, '..', '..', '..', 'rpgasset', 'environment', 'cards');
+const ENV_ART_DIR = path.join(__dirname, '..', '..', '..', 'rpgasset', 'environment');
 
 const WORLD_CATALOG = [
     { key: 'ember',      name: 'the ember fields', art: 'cards/fire.jpg',    type: 'known' },
@@ -653,7 +653,7 @@ function _drawAbyssDescent(ctx, x, yTop, scale = 1, label = true) {
 // Found icon assets (see core/assets/icons/moon/ credits in CREDITS.md and
 // the sprite dir): sun from "Sun and Moon" (OGA, permissive), 8 moon phases
 // from "2 Moon Phases Sets" by StarNinjas (OGA, CC0).
-const _ICON_DIR = path.join(__dirname, '..', 'assets');
+const _ICON_DIR = path.join(__dirname, '..', '..', '..', 'assets');
 const _celestialIcons = { loaded: false, sun: null, moon: [] };
 function _loadCelestialIcons() {
     if (_celestialIcons.loaded) return _celestialIcons;

@@ -317,7 +317,7 @@ function campAnchors(w, h) {
 //  wildlifePlan's flip semantics are untouched. A flat silhouette stands in
 //  for any row whose source file is ever missing.
 // ╚══════════════════════════════════════════════════════════════════════╝
-const SPRITE_DIR = path.join(__dirname, '..', 'assets', 'sprites');
+const SPRITE_DIR = path.join(__dirname, '..', '..', '..', 'assets', 'sprites');
 const _spriteImgs = new Map();
 function _spriteImg(name) {
     if (_spriteImgs.has(name)) return _spriteImgs.get(name);

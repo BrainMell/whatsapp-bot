@@ -124,7 +124,7 @@ const P          = () => botConfig.getPrefix().toLowerCase();
 //  SECTION 1 - CONSTANTS & TABLES
 // ═══════════════════════════════════════════════════════════════════════════
 
-const CARDS_DB_PATH = path.join(__dirname, '..', 'data', 'cards_data.json');
+const CARDS_DB_PATH = path.join(__dirname, '..', '..', '..', 'data', 'cards_data.json');
 const BASE_MAX   = { '1': 500, '2': 300, '3': 150, '4': 80, '5': 20, '6': 5, 'S': 1, 'E': 1000 };
 const BASE_PRICE = { '1': 10,  '2': 25,  '3': 60, '4': 150, '5': 400, '6': 1200, 'S': 9999, 'E': 500 };
 
@@ -350,7 +350,7 @@ function visibleCardsFor(groupJid) {
 // 💡 ART PENDING placeholder (2026-10-25, Mellow round 2): hidden-set cards
 // without artwork render this committed PNG on discovery surfaces instead of
 // trying to fetch an empty URL (which used to mean "invisible everywhere").
-const ART_PENDING_PATH = path.join(__dirname, '..', 'data', 'art_pending.png');
+const ART_PENDING_PATH = path.join(__dirname, '..', '..', '..', 'data', 'art_pending.png');
 let _artPendingBuf = null;
 function artPendingImage() {
   if (_artPendingBuf !== null) return _artPendingBuf;

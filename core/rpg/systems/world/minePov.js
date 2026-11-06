@@ -28,7 +28,7 @@ const fs = require('fs');
 const path = require('path');
 const mediaCache = require('../shared/mediaCache');
 
-const ASSET_DIR = path.join(__dirname, '..', 'rpgasset', 'minepov');
+const ASSET_DIR = path.join(__dirname, '..', '..', '..', 'rpgasset', 'minepov');
 const GW = 480, GH = 360; // baked scene geometry (same canvas as the fish lane)
 
 const LOCS = new Set([

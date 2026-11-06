@@ -43,7 +43,7 @@ function _ensureFonts() {
         const canvas = require('canvas');
         const registerFont = canvas.registerFont || (canvas.GlobalFonts && canvas.GlobalFonts.registerFromPath);
         if (!registerFont) throw new Error('no font registration API');
-        const F = path.join(__dirname, '..', '..', 'rpgasset', 'fonts');
+        const F = path.join(__dirname, '..', '..', '..', 'rpgasset', 'fonts');
         const isRealFont = (p) => {
             try {
                 if (!fs.existsSync(p)) return false;

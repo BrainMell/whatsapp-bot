@@ -36,9 +36,9 @@ async function getJimp() {
 
 const CACHE_DIR = path.join(__dirname, '..', 'rpgasset', 'summons', 'digimon');
 const FALLBACK_DIR = path.join(__dirname, '..', 'rpgasset', 'summons');
-const RETROMON_DIR = path.join(__dirname, '..', 'rpgasset', 'summons', 'retromon');
+const RETROMON_DIR = path.join(__dirname, '..', '..', '..', 'rpgasset', 'summons', 'retromon');
 // the game's own summon art (one PNG per registry species — see lookup note)
-const SPARKLINLABS_DIR = path.join(__dirname, '..', 'rpgasset', 'summons', 'sparklinlabs');
+const SPARKLINLABS_DIR = path.join(__dirname, '..', '..', '..', 'rpgasset', 'summons', 'sparklinlabs');
 const IMG_BASE = 'https://digi-api.com/images/digimon/w';
 
 // Ensure cache directory exists
