@@ -1,7 +1,10 @@
 'use strict';
-// ⚔️ Node-composed PvE battle card (HUD v4). Go supplies the HUD-less layered scene (bg + sprites + cuts + anchors,
-// hud:"none"); Node paints the turn marker, hit flash, overhead bars, rank ribbon, compact player plate and (only when the
-// active player owns summon cards) the long deck tray. Returns null on ANY problem so the caller falls back to the Go card.
+// ⚔️ Node-composed PvE battle card (HUD v6). Go supplies the HUD-less + BAR-less layered scene
+// (bg + sprites + cuts + anchors, hud:"none-clean" — owner 2026-11-07: the legacy overhead HP
+// bars/nameplates showed alongside the new plate; they are gone from the card entirely, the
+// compact plate is the single HP/MP display). Node paints the turn marker, hit flash, rank chip,
+// compact player plate and (only when the active player owns summon cards) the long deck tray.
+// Returns null on ANY problem so the caller falls back to the Go card.
 const { createCanvas, loadImage } = require('canvas');
 const hud = require('./combatHud');
 
@@ -9,7 +12,7 @@ async function renderNodeCard(players, enemies, options, api) {
   const t0 = Date.now();
   const payload = api.buildPayload(players, enemies, options);
   await hud.preload();
-  const layers = await api.generateCombatLayers(players, enemies, { ...options, hud: 'none' });
+  const layers = await api.generateCombatLayers(players, enemies, { ...options, hud: 'none-clean' });
   if (!layers || !layers.bg || !layers.sprites) return null;
   const W = layers.w || 1024, H = layers.h || 687, s = W / hud.DW;
   const cv = createCanvas(W, H), c = cv.getContext('2d');
@@ -33,15 +36,10 @@ async function renderNodeCard(players, enemies, options, api) {
       } catch (e) { /* cosmetic */ }
     }
   }
-  // overhead bars
-  const pl = payload.players || [], en = payload.enemies || [];
-  for (const a of anchors) {
-    const u = a.side === 'enemy' ? en[a.index] : (a.side === 'player' ? pl[a.index] : null);
-    if (!u) continue;
-    const hp = Number(u.currentHP ?? u.hp ?? 0); if (hp <= 0 || u.justDied) continue;
-    hud.drawUnitBar(c, a, { name: u.name, hp, maxHp: u.maxHp, isBoss: u.isBoss, friendly: a.side === 'player' }, s);
-  }
-  // rank ribbon
+  // (v6: NO overhead unit bars — the plate is the single HP/MP display on the card; Go's legacy
+  // nameplates/bars are stripped server-side via hud:"none-clean")
+  const pl = payload.players || [];
+  // rank chip
   const rank = String(options.rank || (pl[0] && pl[0].adventurerRank) || 'F').toUpperCase();
   hud.drawRankBanner(c, options.floor > 0 ? 'FLOOR ' + options.floor : rank + ' RANK', s);
   // compact player plate (the unit whose turn it is, else the first player)

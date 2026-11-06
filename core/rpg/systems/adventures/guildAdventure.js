@@ -6328,14 +6328,41 @@ async function performAction(sock, player, action, sessionKey) {
             damage: activation.damage, healing: activation.healing, missed: activation.wasEvaded,
           });
         }
-        // owner 2026-11-06: GIFs arrived as downloadable documents 🤣 — send with gifPlayback so WhatsApp
-        // plays them inline (Baileys pattern: raw GIF bytes in the video field + gifPlayback; bytes stay GIF).
-        await boundedSend(sock, state.chatId, {
-          video: gif,
-          mimetype: 'image/gif',
-          gifPlayback: true,
-          caption: '✨ ' + activation.card.abilityName,
-        });
+        // owner 2026-11-06 r2: WhatsApp's GIF-style video lane needs H.264 MP4 bytes — raw GIF
+        // bytes in the video field landed as a downloadable document 🤣, and with an image/gif
+        // mimetype the inline send failed outright (the animation vanished entirely). Convert with
+        // the SAME helper skillVfx uses for ultimates, then send video/mp4 + gifPlayback with a
+        // first-frame JPEG thumbnail. Still-frame fallback so the reply is never dead.
+        let __gifPayload = null;
+        try {
+          const __gif89a = require('../../../utils/gif89a');
+          const __isMp4 = Buffer.isBuffer(gif) && gif.length > 500 && gif.toString('latin1', 4, 8) === 'ftyp';
+          let __mp4 = gif;
+          let __thumb = null;
+          if (!__isMp4) {
+            if (!__gif89a.isGifBuffer(gif)) throw new Error('renderer did not return a valid GIF buffer');
+            const { gifToMp4Even } = require('../../../utils/mediaConvert');
+            __mp4 = await gifToMp4Even(gif);
+            try { __thumb = __gif89a.firstFrameJpeg(gif); } catch (e) {}
+            if (!Buffer.isBuffer(__mp4) || __mp4.length < 500 || __mp4.toString('latin1', 4, 8) !== 'ftyp') throw new Error('GIF conversion did not produce a valid MP4');
+            console.log(`[SummonCards] play GIF ${gif.length}B → MP4 ${__mp4.length}B`);
+          }
+          __gifPayload = { video: __mp4, mimetype: 'video/mp4', gifPlayback: true, caption: '✨ ' + activation.card.abilityName };
+          if (Buffer.isBuffer(__thumb) && __thumb.length > 500) __gifPayload.jpegThumbnail = __thumb;
+        } catch (convErr) {
+          console.warn('[SummonCards] GIF→MP4 failed, sending still frame:', convErr.message);
+        }
+        if (__gifPayload) {
+          await boundedSend(sock, state.chatId, __gifPayload);
+        } else {
+          let __still = null;
+          try { __still = require('../../../utils/gif89a').firstFrameJpeg(gif); } catch (e) {}
+          if (Buffer.isBuffer(__still) && __still.length > 100) {
+            await boundedSend(sock, state.chatId, { image: __still, caption: '✨ ' + activation.card.abilityName + '\n_(Animation unavailable on this server.)_' });
+          } else {
+            await boundedSend(sock, state.chatId, { text: '✨ ' + activation.card.abilityName + ' _(animation could not be encoded)_' });
+          }
+        }
       } catch (gifErr) {
         console.error('[SummonCards] GIF render/delivery failed:', gifErr.message);
         resultMsg += '\n🎞️ _The summon animation could not be delivered; the combat effect still resolved._';

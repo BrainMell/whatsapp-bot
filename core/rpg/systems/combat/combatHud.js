@@ -1,10 +1,15 @@
 'use strict';
-// ⚔️ COMBAT HUD v5 (owner 2026-11-06: "like the new general layout of the player hp and other stuff on the bottom left…
-// just change the assets, same with the cards hud - redesign it, let the last card stand out like in those deck builders,
-// the deck hub having SUMMONS written there is just ugly - research real games, take inspiration, find assets, polish").
-// Deck-builder conventions (Slay the Spire / Balatro / Hearthstone hand studies): no label text on the rail, cards rest in
-// a shallow fanned hand, and the newest/active card is RAISED + SCALED + GLOWING above the rest (visual hierarchy via
-// scale, height and colour). Pure canvas painters used by the static PvE battle card + ultimate/skill video HUD.
+// ⚔️ COMBAT HUD v6 (owner 2026-11-07 round 2: "the board holding the cards looks like actually shit,
+// the rank indicator also looks like shit, and the old hp bars show alongside the new plate - remove it").
+// - Rank chip: cut-corner dark metal plaque + gold bevel + engraved rank letter in its rank colour.
+//   No "RANK" word — real-game chips (Genshin / Hades / Balatro) show just the emblem.
+// - Tray board: low GLASS SHELF — translucent panel fading downward into the scene, hairline gold
+//   lip with a soft glow and twin diamond studs (echoes the plate medallion), soft ground shadow.
+//   The old mustard rail asset is gone. Card fan geometry unchanged (owner liked the arrangement).
+// - Overhead unit bars are deliberately NOT drawn here anymore (Go renderer skips them too via
+//   hud:"none-clean") — the plate is the single HP/MP display on the card.
+// Deck-builder conventions kept (Slay the Spire / Balatro / Hearthstone studies): no label text on
+// the board, shallow fanned hand, newest/active card RAISED + SCALED + GLOWING over the rest.
 // Everything is drawn in a 1024x687 design space; pass `s` to scale.
 const fs = require('fs');
 const path = require('path');
@@ -29,34 +34,72 @@ async function ui(name) {
 function uiSync(name) { return _img.get(name) || null; }
 async function preload() {
   init();
-  await Promise.all(['UI_Flat_Banner02a.png', 'heart.png', 'mana.png', 'hud_tray_rail.png', 'hud_plate_ring.png', 'hud_card_frame.png'].map(ui));
+  await Promise.all(['UI_Flat_Banner02a.png', 'heart.png', 'mana.png', 'hud_plate_ring.png', 'hud_card_frame.png'].map(ui));
 }
 function rr(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
 function shadowText(c, t, x, y, color, align = 'left') { c.textAlign = align; c.fillStyle = 'rgba(0,0,0,0.8)'; c.fillText(t, x + 1.5, y + 1.5); c.fillStyle = color; c.fillText(t, x, y); }
 function fit(c, t, maxW, px, fam, weight = 'bold') { let s = px; while (s > 9) { c.font = `${weight} ${s}px ${fam}`; if (c.measureText(t).width <= maxW) break; s--; } }
+function hexA(hex, a) { const v = parseInt(String(hex || '#000').replace('#', ''), 16); return `rgba(${(v >> 16) & 255},${(v >> 8) & 255},${v & 255},${a})`; }
+function goldGrad(c, x0, x1) { const g = c.createLinearGradient(x0, 0, x1, 0); g.addColorStop(0, 'rgba(214,174,78,0.10)'); g.addColorStop(0.14, 'rgba(230,196,110,0.95)'); g.addColorStop(0.5, 'rgba(255,226,150,1)'); g.addColorStop(0.86, 'rgba(230,196,110,0.95)'); g.addColorStop(1, 'rgba(214,174,78,0.10)'); return g; }
 
 const RANK_COLOR = { F: '#6b6b6b', E: '#5b8a2e', D: '#1f7f9e', C: '#2f55c4', B: '#7a35c4', A: '#c0392b', S: '#c98a00', SS: '#d4a017', SSS: '#e0562b' };
 
-/** Top-left rank ribbon built from the flat pixel banner asset (UI_Flat_Banner02a). text e.g. "S RANK" | "FLOOR 12" | "PVP MATCH" */
+/** Top-left rank chip (v6): cut-corner dark metal plaque, gold bevel frame + inner hairline,
+ * engraved rank letter in its rank colour over a faint colour core, twin gold studs on the
+ * diagonal cuts. No "RANK" word. Non-rank text ("FLOOR 12", "PVP MATCH") renders fitted on
+ * the same chip. text e.g. "S RANK" | "FLOOR 12" | "PVP MATCH" */
 function drawRankBanner(c, text, s = 1) {
   init();
-  const img = uiSync('UI_Flat_Banner02a.png'); const W = 228 * s, H = 71 * s, x = 14 * s, y = 10 * s;
   const m = /^([A-Z]{1,3}) RANK$/.exec(String(text || '').toUpperCase());
-  c.save();
-  c.shadowColor = 'rgba(0,0,0,0.55)'; c.shadowBlur = 8 * s; c.shadowOffsetY = 3 * s;
-  if (img) { c.imageSmoothingEnabled = false; c.drawImage(img, x, y, W, H); }
-  else { rr(c, x, y, W, H * 0.8, 8 * s); c.fillStyle = '#fffdf5'; c.fill(); c.lineWidth = 3 * s; c.strokeStyle = '#ffb35c'; c.stroke(); }
-  c.restore();
-  const cx = x + W * 0.5, cy = y + H * 0.4;
-  c.textBaseline = 'middle';
-  if (m) {
-    const col = RANK_COLOR[m[1]] || '#3b2a14';
-    c.font = `bold ${11 * s}px HudPixel, monospace`; c.fillStyle = '#7a5a30'; c.textAlign = 'left'; c.fillText('RANK', x + W * 0.17, cy);
-    c.font = `bold ${30 * s}px HudPixel, monospace`; c.textAlign = 'center'; c.fillStyle = 'rgba(255,255,255,0.9)'; c.fillText(m[1], cx + W * 0.2 + 1.5 * s, cy + 1.5 * s); c.fillStyle = col; c.fillText(m[1], cx + W * 0.2, cy);
+  const rank = m ? m[1] : null;
+  const label = rank || String(text || '').trim();
+  const W = (rank ? 92 : Math.max(112, 34 + label.length * 15)) * s;
+  const H = 52 * s, x = 14 * s, y = 12 * s, cut = 12 * s;
+  const cx = x + W / 2, cy = y + H / 2 + 1;
+  const plq = () => { c.beginPath(); c.moveTo(x + cut, y); c.lineTo(x + W - cut, y); c.lineTo(x + W, y + cut); c.lineTo(x + W, y + H - cut); c.lineTo(x + W - cut, y + H); c.lineTo(x + cut, y + H); c.lineTo(x, y + H - cut); c.lineTo(x, y + cut); c.closePath(); };
+  // body: dark metal with a vertical brushed gradient
+  c.save(); c.shadowColor = 'rgba(0,0,0,0.6)'; c.shadowBlur = 9 * s; c.shadowOffsetY = 3 * s;
+  plq();
+  const bg = c.createLinearGradient(0, y, 0, y + H);
+  bg.addColorStop(0, '#27324b'); bg.addColorStop(0.45, '#161e30'); bg.addColorStop(1, '#0a0e18');
+  c.fillStyle = bg; c.fill(); c.restore();
+  // faint rank-colour core glow behind the letter
+  if (rank) {
+    c.save(); plq(); c.clip();
+    const cg = c.createRadialGradient(cx, cy, 2, cx, cy, W * 0.62);
+    cg.addColorStop(0, hexA(RANK_COLOR[rank] || '#c98a00', 0.30)); cg.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = cg; c.fillRect(x, y, W, H); c.restore();
+  }
+  // engraved hairline highlight along the top inside the frame
+  c.save(); plq(); c.clip();
+  const tg = c.createLinearGradient(0, y, 0, y + H * 0.55);
+  tg.addColorStop(0, 'rgba(255,255,255,0.14)'); tg.addColorStop(1, 'rgba(255,255,255,0)');
+  c.fillStyle = tg; c.fillRect(x, y, W, H * 0.55); c.restore();
+  // gold bevel frame + inner hairline
+  plq(); c.lineWidth = 2 * s; c.strokeStyle = '#d6ae4e'; c.stroke();
+  plq2(c, x + 3.5 * s, y + 3.5 * s, W - 7 * s, H - 7 * s, Math.max(2, cut - 3.5 * s));
+  c.lineWidth = 0.8 * s; c.strokeStyle = 'rgba(255,226,140,0.42)'; c.stroke();
+  // twin gold studs on the diagonal cuts
+  for (const [sx2, sy2] of [[x + W - cut * 0.55, y + cut * 0.55], [x + cut * 0.55, y + H - cut * 0.55]]) {
+    c.save(); c.translate(sx2, sy2); c.rotate(Math.PI / 4);
+    c.shadowColor = 'rgba(0,0,0,0.5)'; c.shadowBlur = 3 * s;
+    c.fillStyle = '#e7c766'; const r2 = 2.6 * s; c.fillRect(-r2, -r2, r2 * 2, r2 * 2); c.restore();
+  }
+  // text: engraved letter (dark offset under, colour over, faint top light)
+  c.textBaseline = 'middle'; c.textAlign = 'center';
+  if (rank) {
+    const col = RANK_COLOR[rank] || '#c98a00';
+    fit(c, rank, W - 22 * s, 37 * s, 'HudCinzel, serif');
+    c.fillStyle = 'rgba(0,0,0,0.85)'; c.fillText(rank, cx + 1.5 * s, cy + 2 * s);
+    c.fillStyle = col; c.fillText(rank, cx, cy);
+    c.fillStyle = 'rgba(255,255,255,0.22)'; c.fillText(rank, cx, cy - 1.4 * s);
   } else {
-    fit(c, String(text || ''), W * 0.62, 20 * s, 'HudPixel, monospace'); c.textAlign = 'center'; c.fillStyle = '#3b2a14'; c.fillText(String(text || ''), cx, cy);
+    fit(c, label, W - 24 * s, 16 * s, 'HudPixel, monospace');
+    c.fillStyle = 'rgba(0,0,0,0.8)'; c.fillText(label, cx + 1.2 * s, cy + 1.5 * s);
+    c.fillStyle = '#f3ecd8'; c.fillText(label, cx, cy);
   }
 }
+function plq2(c, x, y, w, h, cut) { c.beginPath(); c.moveTo(x + cut, y); c.lineTo(x + w - cut, y); c.lineTo(x + w, y + cut); c.lineTo(x + w, y + h - cut); c.lineTo(x + w - cut, y + h); c.lineTo(x + cut, y + h); c.lineTo(x, y + h - cut); c.lineTo(x, y + cut); c.closePath(); }
 
 /** Compact player plate (layout kept from v4): ornate medallion portrait + capsule HP / mana, no panel box.
  * hud = {name, hp, maxHp, energy, maxEnergy, level, portrait:Image|Canvas|null, color} */
@@ -138,7 +181,9 @@ function capsule(c, x, y, w, h, pct, kind, label, s) {
   c.font = `bold ${Math.max(9, h * 0.62)}px sans-serif`; c.textBaseline = 'middle'; shadowText(c, label, x + w / 2, y + h / 2 + 1, '#fff7e0', 'center');
 }
 
-/** Slim overhead HP bar + name for a battlefield unit (replaces Go's layers-mode omissions). */
+/** Slim overhead HP bar + name for a battlefield unit. Kept for compatibility (ultimate-video
+ * callers may still want it), but the v6 battle card no longer draws overhead bars — the
+ * plate is the single HP/MP display (owner 2026-11-07: old bars removed). */
 function drawUnitBar(c, a, u, s = 1) {
   const w = Math.max(70, Math.min(120, (a.w || 90) * 0.9)) * s, h = (u.isBoss ? 11 : 8) * s, x = a.x * s - w / 2, y = (a.feetY - (a.h || 120)) * s - 16 * s;
   capsuleThin(c, x, y, w, h, u.maxHp > 0 ? u.hp / u.maxHp : 0, u.isBoss ? '#c0392b' : (u.friendly ? '#3fae5a' : '#d2552e'), s);
@@ -150,20 +195,17 @@ function capsuleThin(c, x, y, w, h, pct, col, s) {
   rr(c, x, y, w, h, h / 2); c.lineWidth = 1.3 * s; c.strokeStyle = 'rgba(214,174,78,0.85)'; c.stroke();
 }
 
-/** Long summon-card hand rail along the bottom (ornate asset, NO label text). The LAST card is raised,
- * scaled and glowing above the hand - the deck-builder "newest card" convention. Only call when entries.length > 0.
+/** Long summon-card hand along the bottom (v6 GLASS SHELF board — no rail strap, no label text).
+ * The board: soft ground shadow under the whole hand, a translucent panel that fades downward
+ * into the scene, a hairline gold lip with a soft glow and twin diamond studs at both ends.
+ * The LAST card is raised, scaled and glowing above the hand - the deck-builder "newest card"
+ * convention (Slay the Spire / Balatro / Hearthstone). Only call when entries.length > 0.
  * entries: [{card, ready, turnsLeft, affordable}] */
 async function drawDeckTray(c, entries, s = 1, x0 = 330, y0 = DH - 96, x1 = DW - 18) {
   init();
   const { RARITY, ELEMENT_COLORS } = require('../summonCards/catalog');
   const { artFor } = require('../summonCards/cardRenderer');
-  const rail = uiSync('hud_tray_rail.png');
   const X = x0 * s, Y = y0 * s, W = (x1 - x0) * s, H = 84 * s;
-  // rail (asset has its own gold bevels, studs and end caps - no text)
-  c.save(); c.shadowColor = 'rgba(0,0,0,0.6)'; c.shadowBlur = 10 * s; c.shadowOffsetY = 4 * s;
-  if (rail) c.drawImage(rail, X, Y, W, H);
-  else { rr(c, X, Y, W, H, 14 * s); const g = c.createLinearGradient(0, Y, 0, Y + H); g.addColorStop(0, '#3a2a18'); g.addColorStop(1, '#1a1109'); c.fillStyle = g; c.fill(); }
-  c.restore();
   // hand layout: squeeze together like a held hand, never lose the numbering
   const cw = 52 * s, ch = 70 * s, padL = 26 * s, padR = 16 * s;
   const usable = W - padL - padR;
@@ -173,6 +215,33 @@ async function drawDeckTray(c, entries, s = 1, x0 = 330, y0 = DH - 96, x1 = DW -
   const shown = entries.slice(0, Math.min(n, maxFit));
   const more = n - shown.length;
   const step = shown.length > 1 ? Math.min(cw + 5 * s, Math.max(minStep, (usable - cw) / (shown.length - 1))) : 0;
+  // 1. soft ground shadow under the whole hand (grounds it like a held hand on a table)
+  const midX = X + W / 2, gY = Y + H * 0.94;
+  c.save(); c.translate(midX, gY); c.scale(1, 0.24); c.translate(-midX, -gY);
+  const gs = c.createRadialGradient(midX, gY, 8 * s, midX, gY, W * 0.52);
+  gs.addColorStop(0, 'rgba(0,0,0,0.5)'); gs.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillStyle = gs; c.beginPath(); c.arc(midX, gY, W * 0.52, 0, Math.PI * 2); c.fill(); c.restore();
+  // 2. glass shelf: translucent panel, fades downward - no hard bottom edge, no strap look
+  const top = Y - 6 * s, bot = Y + H + 18 * s;
+  c.save();
+  rr(c, X + 2 * s, top, W - 4 * s, bot - top, 10 * s);
+  const sg = c.createLinearGradient(0, top, 0, bot);
+  sg.addColorStop(0, 'rgba(7,11,22,0.66)');
+  sg.addColorStop(0.5, 'rgba(6,9,18,0.46)');
+  sg.addColorStop(1, 'rgba(5,8,16,0.05)');
+  c.fillStyle = sg; c.fill(); c.restore();
+  // 3. hairline gold lip along the top edge, with a soft glow (the shelf reads as glass + gold)
+  c.save(); c.shadowColor = 'rgba(255,214,102,0.5)'; c.shadowBlur = 7 * s;
+  c.strokeStyle = goldGrad(c, X, X + W); c.lineWidth = 1.6 * s;
+  c.beginPath(); c.moveTo(X + 10 * s, top); c.lineTo(X + W - 10 * s, top); c.stroke(); c.restore();
+  c.save(); c.globalAlpha = 0.30; c.strokeStyle = '#d6ae4e'; c.lineWidth = 0.8 * s;
+  c.beginPath(); c.moveTo(X + 12 * s, top + 3.4 * s); c.lineTo(X + W - 12 * s, top + 3.4 * s); c.stroke(); c.restore();
+  // 4. twin diamond studs at both ends of the lip
+  for (const dx of [X + 16 * s, X + W - 16 * s]) {
+    c.save(); c.translate(dx, top); c.rotate(Math.PI / 4);
+    c.shadowColor = 'rgba(0,0,0,0.5)'; c.shadowBlur = 3 * s;
+    c.fillStyle = '#e7c766'; const r2 = 3.2 * s; c.fillRect(-r2, -r2, r2 * 2, r2 * 2); c.restore();
+  }
   // spotlight pool under the standout (last) card
   const lift = 16 * s, scale = 1.3;
   const lastX = X + padL + (shown.length - 1) * step + cw / 2;
@@ -196,7 +265,7 @@ async function drawDeckTray(c, entries, s = 1, x0 = 330, y0 = DH - 96, x1 = DW -
   }
 }
 
-/** One mini card in the hand rail. num = 1-based play number (position in the FULL hand, stable numbering). */
+/** One mini card in the hand. num = 1-based play number (position in the FULL hand, stable numbering). */
 async function drawMiniCard(c, e, idx, x, y, cw, ch, o) {
   const { s, sc, ang, standout, rar, el, artFor } = o;
   const card = e.card;
@@ -226,10 +295,14 @@ async function drawMiniCard(c, e, idx, x, y, cw, ch, o) {
   const frame = uiSync('hud_card_frame.png');
   if (frame) c.drawImage(frame, 0, 0, cw, ch);
   else { rr(c, 0, 0, cw, ch, 8 * s); c.lineWidth = (standout ? 2.8 : 1.8) * s; c.strokeStyle = rarC; c.stroke(); }
-  // name strip
+  // name strip — measured ellipsis (pixel/Cinzel runs wide at 52px card width)
   c.font = `bold ${8 * s}px HudCinzel, serif`; c.textBaseline = 'middle'; c.textAlign = 'center'; c.fillStyle = '#fff';
-  fit(c, card.name.toUpperCase(), cw - 12 * s, 8 * s, 'HudCinzel, serif');
-  c.fillText(card.name.toUpperCase(), cw / 2, ch * 0.72);
+  let nm = String(card.name || '').toUpperCase();
+  if (c.measureText(nm).width > cw - 14 * s) {
+    while (nm.length > 1 && c.measureText(nm + '…').width > cw - 14 * s) nm = nm.slice(0, -1);
+    nm += '…';
+  }
+  c.fillText(nm, cw / 2, ch * 0.72);
   // energy cost orb (bottom-right, mana-tinted + number)
   const ox2 = cw - 11.5 * s, oy2 = ch - 11.5 * s, or2 = 9 * s;
   c.beginPath(); c.arc(ox2, oy2, or2, 0, Math.PI * 2); c.fillStyle = 'rgba(8,14,30,0.92)'; c.fill();

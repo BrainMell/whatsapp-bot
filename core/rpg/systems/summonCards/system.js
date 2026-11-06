@@ -136,8 +136,21 @@ function createSummonCardSystem(economy) {
     try {
       const entries = handEntries(jid, state, player);
       if (!entries.length) return null;
-      const st = player && player.stats ? player.stats : {};
-      return await require('./cardRenderer').renderHandPng(entries, { energy: st.energy, maxEnergy: st.maxEnergy, title: 'SUMMON HAND' });
+      // owner 2026-11-07: same deck-builder hand painter as the battle-card tray — ONE design
+      // language, no "SUMMON HAND" strap text. Glass shelf + gold lip, last card raised/glowing.
+      const hud = require('../combat/combatHud');
+      await hud.preload();
+      const { createCanvas } = require('canvas');
+      const W = 1024, H = 236;
+      const cv = createCanvas(W, H), c = cv.getContext('2d');
+      const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#131828'); g.addColorStop(1, '#090c15');
+      c.fillStyle = g; c.fillRect(0, 0, W, H);
+      // faint vignette so the shelf doesn't float in flat nothing
+      const vg = c.createRadialGradient(W / 2, H * 0.62, H * 0.2, W / 2, H * 0.62, W * 0.62);
+      vg.addColorStop(0, 'rgba(255,214,102,0.045)'); vg.addColorStop(1, 'rgba(0,0,0,0.28)');
+      c.fillStyle = vg; c.fillRect(0, 0, W, H);
+      await hud.drawDeckTray(c, entries, 1, 60, H - 118, W - 60);
+      return cv.toBuffer('image/png');
     } catch (e) { console.warn('[SummonCards] hand render failed:', e.message); return null; }
   }
 
