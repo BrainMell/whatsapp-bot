@@ -830,6 +830,7 @@ function drawVictimHpBar(ctx, x, y, w, h, pct, flashK) {
 }
 
 async function renderUltimateVideo(o) {
+    const __P = { t0: Date.now() };
     const palette = o.palette && o.palette.length >= 3 ? o.palette : ['#fff1b0', '#ffcb45', '#e85a37'];
     const recipeKey = STYLE_RECIPE[String(o.classId || '').toUpperCase()] || 'fire';
     const sets = {};
@@ -842,6 +843,11 @@ async function renderUltimateVideo(o) {
     const K = Number.isFinite(Number(o.intensity)) ? Math.max(0, Math.min(1, Number(o.intensity))) : 0;
     if (RECIPE_PACK && RECIPE_PACK.scaleTracks) tracks = RECIPE_PACK.scaleTracks(tracks, K, palette, IMP);
     tracks = applyOverrides(tracks, String(o.classId || '').toUpperCase());
+    // ⚡ OVERLAY-ONLY (death clips, 2026-11-06): paint ONLY the effect + the dissolving sprite on a TRANSPARENT frame and hand
+    // back PNG frames (no scene, no camera, no veil/flash, no encode). The caller caches them per enemy sprite+kind and ffmpeg
+    // composites them over any scene in ~0.2s - the heavy painting happens once per enemy type, not once per kill.
+    const OV = !!o.overlayOnly;
+    if (OV) tracks = tracks.filter((t) => !['flash', 'wash', 'camera', 'bgfill', 'veil', 'cinema', 'world', 'dark'].includes(t.layer));
     // 🩶 FLAT GROUND RINGS UNDER THE FIGHTERS (owner 2026-10-28: "some of the skills
     // effects that are supposed to not overlay like the overall flat ring effects are
     // overlaying"): rings/ripple paint perspective-flattened ellipses pinned to a
@@ -1089,12 +1095,12 @@ async function renderUltimateVideo(o) {
     // stay UNDER the fighters and air fx OVER them, exactly as baked.
     const scratch = new Map();   // per-render run-canvas reuse (never shared across concurrent renders)
     const imgCache = new Map();  // unique-plate index → decoded Image (one decode per unique per render)
-    const enc = startMp4Encoder();
+    __P.setup = Date.now() - __P.t0; const enc = OV ? null : startMp4Encoder(); const ovFrames = [];
     let plateMeta = null, plateKey = null, plateCap = null, plateSkip = false;
     const underGroups = buildGroups(tracks.filter((t) => t.under));
     const overGroups = buildGroups(tracks.filter((t) => !t.under));
     try {
-        if (!plates.isDisabled()) {
+        if (!OV && !plates.isDisabled()) {
             const plateBaseBuf = (layers && Buffer.isBuffer(layers.bg) && layers.bg.length > 1000) ? layers.bg
                 : (Buffer.isBuffer(o.baseBuffer) && o.baseBuffer.length > 1000 ? o.baseBuffer : null);
             const anyPlatable = underGroups.some((g) => !g.live) || overGroups.some((g) => !g.live);
@@ -1183,8 +1189,9 @@ async function renderUltimateVideo(o) {
             ctx.drawImage(sprImg, 0, 0, W, H);
         }
     };
+    __P.paintStart = Date.now(); __P.draw = 0; __P.push = 0;
     for (let f = 0; f < total; f++) {
-        if (o.abort && o.abort.flag) { await enc.abort(); await enc.finish().catch(() => ({})); return { mp4: null, thumb: null, plates: 'aborted' }; }   // 🔥 26-R5: race lost → stop painting (no zombie renders); 🧯 drain `done` so the SIGKILL exit can never reject unhandled
+        if (o.abort && o.abort.flag) { if (enc) { await enc.abort(); await enc.finish().catch(() => ({})); } return { mp4: null, thumb: null, plates: 'aborted' }; }   // 🔥 26-R5: race lost → stop painting (no zombie renders); 🧯 drain `done` so the SIGKILL exit can never reject unhandled
         const time = f / FPS;
         const shrinkK = shrinkAt(time);   // 🎥 1 = normal, <1 = roster drawn tiny in place
         ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1206,9 +1213,9 @@ async function renderUltimateVideo(o) {
         const baseZoom = meta.zoom === undefined ? 0.11 : meta.zoom;
         const push = (time < IMP ? easeOut(clamp01(time / 0.35)) * baseZoom : baseZoom * (1 - easeOut((sinceHit - 0.15) / 0.9))) + camDz;
         const punch = sinceHit >= 0 ? Math.max(0, 1 - sinceHit / 0.35) * 0.07 : 0;
-        const zoom = 1 + push + punch;
+        const zoom = OV ? 1 : 1 + push + punch;
         const shk = 1 + 0.6 * K;   // skill level -> camera punch
-        const amp = hitStop ? 0 : (sinceHit >= 0 && sinceHit < 0.7 ? 16 * shk * Math.pow(1 - sinceHit / 0.7, 2) : (time < IMP ? 1.2 * shk * easeIn(time / IMP) : 0));
+        const amp = (OV || hitStop) ? 0 : (sinceHit >= 0 && sinceHit < 0.7 ? 16 * shk * Math.pow(1 - sinceHit / 0.7, 2) : (time < IMP ? 1.2 * shk * easeIn(time / IMP) : 0));
         const sx = Math.sin(f * 2.31 + seed) * amp, sy = Math.cos(f * 3.17 + seed) * amp * 0.6;
         const fx = A.T[0] / W, fy = A.T[1] / H;
         ctx.save();
@@ -1221,7 +1228,7 @@ async function renderUltimateVideo(o) {
         const camM = [zoom, 0, 0, zoom,
             (W * (self ? 0.27 : 0.5 + (fx - 0.5) * 0.18) + sx) - zoom * W * (self ? 0.27 : 0.5 + (fx - 0.5) * 0.18),
             (H * (0.5 + (fy - 0.5) * 0.12) + sy) - zoom * H * (0.5 + (fy - 0.5) * 0.12)];
-        ctx.drawImage(base, 0, 0, W, H);
+        if (OV) ctx.clearRect(-40, -40, W + 80, H + 80); else ctx.drawImage(base, 0, 0, W, H);
         // 💡 VFX LAYERS round (2026-10-26): layered compositing finally matches
         // real game VFX layering -
         //   bg → ground fx (UNDER) → combatants → veil → air fx (OVER).
@@ -1283,7 +1290,8 @@ async function renderUltimateVideo(o) {
         // dim the field while charging so effects pop; lift after the hit
         // (layered: AFTER the combatants so they dim exactly like the flat base)
         const veil = time < IMP ? 0.1 + 0.42 * easeOut(clamp01(time / 0.3)) : 0.52 * (1 - easeOut((sinceHit) / 0.7)) + 0.08;
-        if (o.death) { ctx.fillStyle = rgba('#05060f', 0.16 * (time < IMP ? easeOut(clamp01(time / 0.3)) : 1 - easeOut(sinceHit / 1.2))); ctx.fillRect(-40, -40, W + 80, H + 80); }
+        if (OV) { /* transparent overlay: no veil */ }
+        else if (o.death) { ctx.fillStyle = rgba('#05060f', 0.16 * (time < IMP ? easeOut(clamp01(time / 0.3)) : 1 - easeOut(sinceHit / 1.2))); ctx.fillRect(-40, -40, W + 80, H + 80); }
         else if (o.aoe || meta.flatVeil) { ctx.fillStyle = rgba('#05060f', veil * 0.85); ctx.fillRect(-40, -40, W + 80, H + 80); }
         else {
             // spotlight: the target stays lit, everything else darkens
@@ -1316,17 +1324,19 @@ async function renderUltimateVideo(o) {
         ctx.restore();
         // full-screen flash frames (soft, 2 frames) + vignette
         if (!o.death && sinceHit >= 0 && sinceHit < 0.07) { ctx.fillStyle = rgba(palette[0], 0.55 * (1 - sinceHit / 0.07)); ctx.fillRect(0, 0, W, H); }
-        const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, H * 0.95);
+        if (!OV) { const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, H * 0.95);
         vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.38)');
-        ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H); }
         if (!o.death) banner(ctx, time, o.name, palette[1], o.skillLevel, o.maxLevel);
         // 💡 HUD 2026-10-26 round 2: the caster's medieval plate is the LAST
         // pass - above the flash, vignette, banner and every effect, and
         // outside the camera transform, so nothing ever covers or dims it.
         if (hudIcons) drawVideoHud(ctx, o.hud, hudIcons);
+        if (OV) { ovFrames.push(canvas.toBuffer('image/png')); continue; }
         if (f === Math.round(IMP * FPS) + 1) thumb = canvas.toBuffer('image/jpeg', { quality: 0.8 });
-        await enc.push(canvas.toBuffer('raw'));
+        { const __a = Date.now(); const __b = canvas.toBuffer('raw'); __P.raw = (__P.raw || 0) + Date.now() - __a; const __c = Date.now(); await enc.push(__b); __P.push += Date.now() - __c; }
     }
+    if (OV) return { frames: ovFrames, fps: FPS, w: W, h: H, mp4: null, thumb: null };
     // ── plate persist (background — never delays the send) ────────────────
     // Adaptive: only keys whose platable paint work actually costs (≥1.2s per
     // render) keep plates — cheap-painter classes replay live and never pay
@@ -1369,7 +1379,9 @@ async function renderUltimateVideo(o) {
     } else if (plateMeta) plateState = 'hit';
     else if (plateSkip) plateState = 'skipped';
     if (!thumb) thumb = canvas.toBuffer('image/jpeg', { quality: 0.8 });
+    __P.loop = Date.now() - __P.paintStart; const __f0 = Date.now();
     const mp4 = await enc.finish();
+    if (process.env.ULT_PROF) console.log('[UltProf]', o.classId, 'frames', total, 'setup', __P.setup, 'loop', __P.loop, '(toBuffer', __P.raw, 'pipe', __P.push, ') encodeTail', Date.now() - __f0, 'total', Date.now() - __P.t0);
     return { mp4, thumb, plates: plateState };
 }
 

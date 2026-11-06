@@ -874,6 +874,17 @@ async function renderDeathVideo({ enemy, targetIndex, layers, abort, targets }) 
         const c = layers.cuts.find((x) => x && String(x.side) === 'enemy' && Math.floor(Number(x.index) || 0) === Math.max(0, Math.floor(Number(t.targetIndex) || 0)));
         if (c && c.png) picks.push({ t, c });
       }
+      if (picks.length && process.env.DEATH_FAST !== '0') {
+        // ⚡ overlay-cache fast path (~0.2s once the overlay is cached); any failure falls through to the full engine render
+        try {
+          const fast = await require('./deathOverlay').renderFast({ layers, picks, kind, boss });
+          if (fast && fast.mp4) {
+            const out = { mp4: fast.mp4, thumb: fast.thumb || null, kind, boss };
+            if (picks.length > 1) out.group = picks.map(({ t }) => t.enemy).filter(Boolean);
+            return out;
+          }
+        } catch (e) { console.warn('[DeathOv] fast path skipped:', e && e.message || e); }
+      }
       if (picks.length) {
         // composite EVERY dying sprite onto one full-canvas focus image
         const cv = createCanvas(W0, H0), cx2 = cv.getContext('2d');
