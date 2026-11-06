@@ -132,7 +132,7 @@ function createSummonCardSystem(economy) {
     return { ready: readyOnTurn <= turn, turnsLeft: Math.max(0, readyOnTurn - turn), readyOnTurn, currentTurn: turn };
   }
 
-  function renderTray(jid, state) {
+  function renderTray(jid, state, prefix) {
     const cards = getOwnedCards(jid);
     if (!cards.length) return '';
     const bits = cards.map((card) => {
@@ -140,7 +140,7 @@ function createSummonCardSystem(economy) {
       return card.icon + ' ' + card.name + ' ' + (cooldown.ready ? 'READY' : '⏳ ' + cooldown.turnsLeft + 'T');
     });
     return '🃏 *SUMMON CARDS*  ' + bits.join('  ·  ') +
-      '\nUse ' + ((state && state.commandPrefix) || '.j') + ' combat summon <card> <enemy#>';
+      '\nUse ' + (prefix || (state && state.commandPrefix) || '.j') + ' combat summon <card> <enemy#>';
   }
 
   function prepareActivation(jid, rawCardId, state, player, targetIndex) {
