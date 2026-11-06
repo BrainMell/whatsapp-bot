@@ -5729,7 +5729,7 @@ async function promptPlayerAction(sock, player, sessionKey) {
     msg += `📋 ${player.statusEffects.map((e) => e.icon).join(" ")}\n`;
   }
 
-  const summonCardTray = require('../summonCards').renderTray(player.jid, state);
+  const summonCardTray = require('../summonCards').renderTray(player.jid, state, botConfig.getPrefix());
   if (summonCardTray) msg += '\n' + summonCardTray + '\n';
 
   const livingEnemies = (state.enemies || []).filter((e) => !e.isDead);
