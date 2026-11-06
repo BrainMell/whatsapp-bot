@@ -43,6 +43,8 @@ function buildShopCatalog() {
 
     Object.entries(lootSystem.ITEM_DATABASE).forEach(([id, item]) => {
         if (item.value <= 1) return;
+        // 🃏 SUMMON CARD OVERHAUL (2026-11-06): eggs + fragments are no longer sold - cards are moderator-granted only
+        if (/_egg$|_egg_|_fragment$|summon_essence/.test(id)) return;
 
         // Summon-specific items live in the dedicated summon shop
         // 💡 Only basic_summon_egg is buyable - higher-tier eggs come from crafting fragments
