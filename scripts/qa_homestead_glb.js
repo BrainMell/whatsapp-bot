@@ -34,9 +34,9 @@ const required=[
 'floors/floor_mvm_wooddark','floors/floor_mvm_woodlight','floors/floor_mvm_brick',
 'floors/floor_mvm_redbrick','floors/floor_mvm_unevenbrick'];
 for(const model of required)checkGlb(model,'room model '+model);
-const renderer=fs.readFileSync(path.join(ROOT,'core','rpg','homesteadRenderer.js'),'utf8');
-const scene=fs.readFileSync(path.join(ROOT,'core','rpg','interior3d','scene.js'),'utf8');
-const index=fs.readFileSync(path.join(ROOT,'core','rpg','interior3d','index.js'),'utf8');
+const renderer=fs.readFileSync(path.join(ROOT,'core','rpg','systems','homestead','homesteadRenderer.js'),'utf8');
+const scene=fs.readFileSync(path.join(ROOT,'core','rpg','systems','homestead','interior3d','scene.js'),'utf8');
+const index=fs.readFileSync(path.join(ROOT,'core','rpg','systems','homestead','interior3d','index.js'),'utf8');
 check(renderer.includes("HOMESTEAD_3D_LEGACY_FALLBACK === '1'"),'legacy 2D renderer is opt-in only');
 check(renderer.includes('refusing silent legacy 2D output'),'3D failures do not silently route to old sprites');
 check(scene.includes("loadGLB(path.join(MODELS, sub") && scene.includes("model('furniture', p.item)"),'room scene loads actual GLB furniture models');
