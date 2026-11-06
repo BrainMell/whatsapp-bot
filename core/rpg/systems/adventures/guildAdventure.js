@@ -4663,7 +4663,7 @@ async function startCombat(sock, groq, encounter, sessionKey) {
     if (c.isEnemy || c.isBoss) {
       c.actionGauge = 0; // Enemies start with 0 gauge
     } else {
-      c.actionGauge = Math.floor((c.stats.spd || 10) / 2); // Players + summons get headstart
+      c.actionGauge = Math.floor((c.stats.spd || 10) / 2); // Players get the head start
     }
   });
 
@@ -5373,12 +5373,6 @@ The dungeon collapsed after too many stalled turns. Your slot has been released 
           if (cEffects.some((e) => e.type === "curse" || e.type === "weak"))
             speed *= 0.8;
 
-          // 💡 FIX #3 (2026-08-15): Rubber-band gauge increment - every combatant
-          // gains at least 15% of gaugeThreshold per tick. This prevents low-SPD
-          // summons (SPD 40) from being starved when the party has a high-SPD player
-          // (SPD 500). Before: summon needed 25 ticks/turn (12.5:1 ratio vs player).
-          // After: summon needs max 7 ticks/turn (3.5:1 ratio). Enemies also benefit
-          // so they get turns even when the player is much faster.
           c.actionGauge = (c.actionGauge || 0) + Math.max(gaugeThreshold * 0.15, speed);
         }
         // Pick the combatant with the HIGHEST gauge among those >= threshold.
@@ -5625,7 +5619,7 @@ The dungeon collapsed after too many stalled turns. Your slot has been released 
       }
 
       // 💡 RPG OPT PASS (2026-10-20, owner "enemy turn takes forever"): every
-      // nested await in an enemy/summon action (applyAbilityEffect, handleDeath,
+      // nested await in an enemy action (applyAbilityEffect, handleDeath,
       // loot DB writes in endCombat, Baileys sends) is unbounded — one wedged
       // await used to leave this promise UNRESOLVED and the whole fight froze
       // forever ("enemy turn takes forever" glitch). Race each automated turn
@@ -6598,10 +6592,6 @@ async function performEnemyAction(sock, enemy, sessionKey) {
   return new Promise(async (resolve) => {
     try {
       // 🧠 AI DECISION MAKING
-      // 💡 FIX #1 (2026-08-15): include summons in the target list so enemies
-      // can attack summons. Previously only state.players was passed, making summons
-      // invincible - they attacked but were never targeted. This is the root cause
-      // of "summons don't participate in combat".
       // 💡 FIX 2026-08-31: const -> let - the silence fallback below
       // reassigns `decision`, throwing "Assignment to constant variable"
       // (swallowed by the outer catch) and silently skipping the enemy's
@@ -6699,7 +6689,6 @@ async function performEnemyAction(sock, enemy, sessionKey) {
             enemy.archetype,
             followUpId,
           );
-          // 💡 FIX #1: include summons in charge-release target fallback
         const target =
             enemy.chargeTarget || state.players.find((p) => !p.isDead);
 
@@ -6914,7 +6903,6 @@ async function performEnemyAction(sock, enemy, sessionKey) {
       // --- DEFAULT ATTACK ---
       let target = decision.target;
       if (!target || target.isDead) {
-        // 💡 FIX #1: include summons in the fallback target list
         const alive = state.players.filter((p) => !p.isDead);
         if (alive.length === 0) {
           setTimeout(() => resolve(), turnDelay);
