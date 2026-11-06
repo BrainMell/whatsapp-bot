@@ -33,7 +33,7 @@ Gameplay resolution is in Node through guildAdventure.js and existing damage/sta
 
 ## GIF pipeline
 
-Node calls POST /api/combat/summon-card in BrainMell/Bot_genaration. Go renders a multi-frame GIF from the catalog-approved sprite. Node validates the GIF signature and sends untouched bytes as image/gif; no ffmpeg or MP4 conversion is involved.
+Node calls POST /api/combat/summon-card in BrainMell/Bot_genaration. Go renders the live combat roster and card-specific VFX into a multi-frame GIF using the existing combat animator. Node validates the GIF signature and sends untouched bytes as image/gif; no ffmpeg or MP4 conversion is involved.
 
 ## QA
 
