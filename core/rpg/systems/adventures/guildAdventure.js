@@ -4969,14 +4969,104 @@ function _jpegDims(buf) {
 // 🎬 MERGED END CARD (owner 2026-11-04 "there shouldn't be a static image
 // and a gif both saying the enemy has been defeated"): bake the death
 // clip(s) + the settlement card into ONE WhatsApp video — the enemy
-// shatters, then the card settles on screen with the damage info. The card
-// defines the canvas (it is the final held frame, so it must render
-// full-bleed); clips are scaled/padded into it. Re-encode via ffmpeg
-// libx264 yuv420p +faststart — the same proven arg set as
-// animatedMedia.webmToMp4. ANY failure returns null → the caller falls
-// back to the old clip+card sends.
+// shatters, then the card settles on screen with the damage info.
+// ⚡ 2026-11-06 <1s hammer: three speed stages live here.
+//   1. MATERIALS: clips from the overlay fast path carry raw ingredients —
+//      solo kills stream RAW canvas frames straight into the final encode.
+//   2. Even canvas: x264/yuv420p needs even dims (a 1024x687 card killed
+//      every merge instantly with "height not divisible by 2").
+//   3. Single pass, 15fps, ultrafast, stills decoded once via loop filter.
+// ANY failure returns null → the caller falls back to the old clip+card sends.
+const MERGE_W = 640, MERGE_H = 480;
+async function _mergeOverlayMaterialsWithCard(clips, cardJpeg, cardHoldSec, t0) {
+  const { spawn } = require('child_process');
+  const ffmpegBin = () => process.env.FFMPEG_PATH || 'ffmpeg';
+  const dir = path.join(require('os').tmpdir(), `deathmats-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const cardPath = path.join(dir, 'card.jpg');
+    fs.writeFileSync(cardPath, cardJpeg);
+    const cardFrames = Math.max(1, Math.round(cardHoldSec * 15));
+    const outPath = path.join(dir, 'merged.mp4');
+    const deathOverlay = require('../combat/deathOverlay');
+    if (clips.length === 1) {
+      // ⚡ STREAMING (the common solo kill): raw BGRA frames piped straight
+      // into the final concat+card encode — canvas composites while x264
+      // runs, zero still I/O, no overlay filter.
+      const m = clips[0].mats;
+      const args = ['-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'bgra',
+        '-s', `${MERGE_W}x${MERGE_H}`, '-r', '15', '-i', 'pipe:0',
+        '-framerate', '15', '-i', cardPath,
+        '-filter_complex',
+        `[0:v]format=yuv420p,settb=AVTB[v0];[1:v]scale=${MERGE_W}:${MERGE_H}:force_original_aspect_ratio=decrease,pad=${MERGE_W}:${MERGE_H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,loop=loop=${cardFrames - 1}:size=1:start=0,setpts=N/(15*TB),fps=15,settb=AVTB,format=yuv420p[v1];[v0][v1]concat=n=2:v=1:a=0[v]`,
+        '-map', '[v]', '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-crf', '24', '-threads', '2', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', outPath];
+      const out = await new Promise((resolve, reject) => {
+        const p = spawn(ffmpegBin(), args, { stdio: ['pipe', 'ignore', 'pipe'] });
+        let err = ''; let done = false;
+        const to = setTimeout(() => { try { p.kill('SIGKILL'); } catch (e) {} }, 15000);
+        p.stderr.on('data', (d) => { if (err.length < 4000) err += d; });
+        p.stdin.on('error', () => {});
+        p.on('error', (e) => { if (!done) { done = true; clearTimeout(to); reject(e); } });
+        p.on('close', (code) => {
+          if (done) return; done = true; clearTimeout(to);
+          if (code !== 0) { reject(new Error(`ffmpeg stream merge: code ${code} ${err.slice(-160)}`)); return; }
+          try { resolve(fs.readFileSync(outPath)); } catch (e) { resolve(null); }
+        });
+        deathOverlay.streamComposite(m, p.stdin).then(() => p.stdin.end()).catch((e) => {
+          try { p.stdin.destroy(); } catch (e2) {}
+          if (!done) { done = true; clearTimeout(to); reject(e); }
+        });
+      });
+      if (!out || out.length < 1000) throw new Error('materials merge output empty');
+      if (out.length > 16 * 1024 * 1024) throw new Error(`materials merge too large for WA (${out.length}B)`);
+      console.log(`[DeathFx] kill-turn card merged FROM MATERIALS (raw stream) in ${Date.now() - t0}ms (1 clip, ${MERGE_W}x${MERGE_H}, ${out.length}B)`);
+      return out;
+    }
+    // N>1 (rare per-enemy fallback): canvas stills + one filter graph
+    const { execFile } = require('child_process');
+    const run = (bin, a, ms) => new Promise((resolve, reject) => {
+      execFile(bin, a, { timeout: ms, maxBuffer: 4 * 1024 * 1024 }, (err, _o, stderr) => {
+        if (err) { const tail = String(stderr || '').split('\n').filter(Boolean).slice(-2).join(' | '); reject(new Error(`${bin}: ${err.message}${tail ? ' — ' + tail : ''}`)); }
+        else resolve(_o);
+      });
+    });
+    const args = ['-y'];
+    const chain = [];
+    const vids = [];
+    for (let k = 0; k < clips.length; k++) {
+      const m = clips[k].mats;
+      const compDir = path.join(dir, `comp${k}`);
+      const compN = await deathOverlay.compositeFrames(m, compDir);
+      if (!compN) throw new Error('canvas composite produced no frames');
+      args.push('-framerate', String(m.fps), '-i', path.join(compDir, 'c%03d.jpg'));
+      chain.push(`[${k}:v]fps=15,settb=AVTB,format=yuv420p[v${k}]`);
+      vids.push(`[v${k}]`);
+    }
+    args.push('-framerate', '15', '-i', cardPath);
+    chain.push(`[${clips.length}:v]loop=loop=${cardFrames - 1}:size=1:start=0,setpts=N/(15*TB),scale=${MERGE_W}:${MERGE_H}:force_original_aspect_ratio=decrease,pad=${MERGE_W}:${MERGE_H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=15,settb=AVTB,format=yuv420p[v${clips.length}]`);
+    vids.push(`[v${clips.length}]`);
+    chain.push(`${vids.join('')}concat=n=${vids.length}:v=1:a=0[v]`);
+    args.push('-filter_complex', chain.join(';'), '-map', '[v]', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-threads', '2', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', outPath);
+    await run('ffmpeg', args, 15000);
+    const out = fs.readFileSync(outPath);
+    if (!out || out.length < 1000) throw new Error('materials merge output empty');
+    if (out.length > 16 * 1024 * 1024) throw new Error(`materials merge too large for WA (${out.length}B)`);
+    console.log(`[DeathFx] kill-turn card merged FROM MATERIALS in ${Date.now() - t0}ms (${clips.length} clips, ${MERGE_W}x${MERGE_H}, ${out.length}B)`);
+    return out;
+  } finally {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+  }
+}
+
 async function _mergeDeathClipsWithCard(clips, cardJpeg, cardHoldSec = 1.8) {
   const t0 = Date.now();
+  // ⚡ fast branch: every clip carries overlay materials -> raw-stream merge
+  if (Array.isArray(clips) && clips.length && clips.every((c) => c && c.mats && c.mats.plate && c.mats.framesDir && c.mats.n > 0)) {
+    try {
+      const fast = await _mergeOverlayMaterialsWithCard(clips, cardJpeg, cardHoldSec, t0);
+      if (fast) return fast;
+    } catch (e) { console.warn(`[DeathFx] materials merge failed after ${Date.now() - t0}ms, falling back to mp4 path:`, e.message); }
+  }
   const { execFile } = require('child_process');
   const run = (bin, args, ms) => new Promise((resolve, reject) => {
     execFile(bin, args, { timeout: ms, maxBuffer: 4 * 1024 * 1024 }, (err, _stdout, stderr) => {
@@ -5002,29 +5092,31 @@ async function _mergeDeathClipsWithCard(clips, cardJpeg, cardHoldSec = 1.8) {
       if (dims.length >= 2) { W = dims[0]; H = dims[1]; }
     }
     if (!W || !H) throw new Error('card dims unavailable (sof+ffprobe)');
+    // ⚡ x264/yuv420p needs EVEN dims — a 1024x687 card killed every merge
+    // instantly. Round down; a 1px crop is invisible.
+    if (W % 2 || H % 2) { W -= W % 2; H -= H % 2; }
     console.log(`[DeathFx] merged card canvas ${W}x${H} (via ${via})`);
-    // 1) card → held still segment (native size, defines the canvas)
-    const cardSeg = path.join(dir, 'cardseg.mp4');
-    await run('ffmpeg', ['-y', '-loop', '1', '-i', cardPath, '-t', String(cardHoldSec), '-r', '30', '-vf', 'setsar=1', '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-an', cardSeg], 10000);
-    // 2) normalize every clip into the card canvas, concat clips→card
+    // ⚡ SINGLE PASS: card rides in as a looped still (decoded once via the
+    // loop filter), clips concat in the same graph, ONE x264 encode @15fps.
     const args = ['-y'];
     const chain = [];
     clips.forEach((c, k) => {
       const p = path.join(dir, `clip${k}.mp4`);
       fs.writeFileSync(p, c.mp4);
       args.push('-i', p);
-      chain.push(`[${k}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30[v${k}]`);
+      chain.push(`[${k}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=15,settb=AVTB[v${k}]`);
     });
-    args.push('-i', cardSeg);
-    chain.push(`[${clips.length}:v]setsar=1,fps=30[v${clips.length}]`);
+    const cardFrames = Math.max(1, Math.round(cardHoldSec * 15));
+    args.push('-framerate', '15', '-i', cardPath);
+    chain.push(`[${clips.length}:v]loop=loop=${cardFrames - 1}:size=1:start=0,setpts=N/(15*TB),scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=15,settb=AVTB,format=yuv420p[v${clips.length}]`);
     chain.push(`${clips.map((_, k) => `[v${k}]`).join('')}[v${clips.length}]concat=n=${clips.length + 1}:v=1:a=0[v]`);
     const outPath = path.join(dir, 'merged.mp4');
-    args.push('-filter_complex', chain.join(';'), '-map', '[v]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', outPath);
+    args.push('-filter_complex', chain.join(';'), '-map', '[v]', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-threads', '2', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', outPath);
     await run('ffmpeg', args, 15000);
     const out = fs.readFileSync(outPath);
     if (!out || out.length < 1000) throw new Error('merged output empty');
     if (out.length > 16 * 1024 * 1024) throw new Error(`merged too large for WA (${out.length}B)`);
-    console.log(`[DeathFx] merged card bake: ${clips.length} clip(s)+card ${W}x${H} -> ${out.length}B in ${Date.now() - t0}ms`);
+    console.log(`[DeathFx] merged card bake: ${clips.length} clip(s)+card ${W}x${H} -> ${out.length}B in ${Date.now() - t0}ms (single-pass 15fps ultrafast)`);
     return out;
   } catch (err) {
     console.warn(`[DeathFx] merged card bake failed after ${Date.now() - t0}ms:`, err.message);
@@ -7393,7 +7485,8 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
             let __killSent = false;
             if (__turnHeld) {
               try {
-                const __merged = await _mergeDeathClipsWithCard(__turnHeld.map((h) => h.clip), scene.buffer, 2.2);
+                const __killT0 = Date.now();   // ⏱ kill→chat end-to-end meter
+                const __merged = await _mergeDeathClipsWithCard(__turnHeld.map((h) => h.clip), scene.buffer, 1.0);
                 if (__merged) {
                   let __deaths = __turnHeld.map((h) => _deathCaption(h)).join('\n');
                   let __cap = __deaths + '\n' + (scene.caption || '');
@@ -7402,7 +7495,7 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
                   if (Buffer.isBuffer(__turnHeld[0].clip.thumb)) __pl.jpegThumbnail = __turnHeld[0].clip.thumb;
                   await sendMediaBounded(sock, state.chatId, __pl, { label: 'killTurnCard', ms: 20000, grace: 6000, fallbackText: null });
                   __killSent = true;
-                  console.log(`[DeathFx] kill-turn card sent: ${__turnHeld.length} death clip(s) + battle board as ONE video`);
+                  console.log(`[DeathFx] kill-turn card sent: ${__turnHeld.length} death clip(s) + battle board as ONE video in ${Date.now() - __killT0}ms`);
                 }
               } catch (killErr) {
                 console.warn('[DeathFx] kill-turn merge failed (non-fatal):', killErr.message);

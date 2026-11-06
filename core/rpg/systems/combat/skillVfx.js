@@ -879,7 +879,7 @@ async function renderDeathVideo({ enemy, targetIndex, layers, abort, targets }) 
         try {
           const fast = await require('./deathOverlay').renderFast({ layers, picks, kind, boss });
           if (fast && fast.mp4) {
-            const out = { mp4: fast.mp4, thumb: fast.thumb || null, kind, boss };
+            const out = { mp4: fast.mp4, thumb: fast.thumb || null, kind, boss, mats: fast.mats || null };
             if (picks.length > 1) out.group = picks.map(({ t }) => t.enemy).filter(Boolean);
             return out;
           }

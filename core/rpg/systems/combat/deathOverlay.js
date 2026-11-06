@@ -2,8 +2,20 @@
 // ⚡ DEATH OVERLAY CACHE (2026-11-06, owner: "death animation rendered and set in less than a second").
 // The expensive part of a death clip is PAINTING the dissolve (hundreds of ms locally, 5-8s on the prod boxes). That painting
 // depends only on the dying sprite + element kind + boss flag - NOT on the scene. So we paint it ONCE per (sprite, kind, boss)
-// as transparent PNG frames (disk + memory cache) and every later kill is just: cheap scene plate (bg + survivors) + one
-// ffmpeg overlay pass (~0.2s). Falls back (returns null) on any problem so the caller uses the full engine render.
+// as transparent PNG frames (disk + memory cache) and every later kill is just: cheap scene plate + ONE encode.
+//
+// 2026-11-06 <1s hammer (bench-driven, box2 2-core EPYC):
+//   - v1: the fast path never ran in prod — this file sat in core/rpg/ while
+//     skillVfx requires './deathOverlay' (systems/combat). Fixed by the git mv.
+//   - v3: `-loop 1 -i still.jpg` re-decodes the jpeg EVERY output frame —
+//     stills are now fed once and cloned in-filter (or streamed raw).
+//   - v5: canvas blits the plate+overlay composite and streams RAW BGRA
+//     frames straight into ffmpeg stdin (rawvideo demuxer). No still I/O, no
+//     filter graph for the clip side; canvas blits overlap with x264 encode.
+//     node-canvas 'raw' = premultiplied ARGB32 = bgra on little-endian; the
+//     composite is fully opaque (plate under everything) so premultiplied ==
+//     straight. renderFast returns `mats` so the kill-turn card merge
+//     (guildAdventure) reuses the same streaming trick.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -67,6 +79,7 @@ function getOverlay(picks, kind, boss, W0, H0) {
       classId: 'DEATH_' + kind + (boss ? '_BOSS' : ''), name: '', side: 'enemy', palette: ['#ffffff', '#ffcb45', '#e85a37'],
       skillLevel: 1, maxLevel: 1, intensity: 0, layers, casterIndex: 0, targetIndex: 0, focusIndex: 0,
       targetSide: 'enemy', aoe: false, targets: [], death: true, overlayOnly: true,
+      duration: 1.0,   // ⚡ <1s hammer: 15 painted frames instead of 27 — every future decode+encode of this overlay drops ~45%
     });
     if (!vid || !Array.isArray(vid.frames) || !vid.frames.length) return null;
     fs.mkdirSync(dir, { recursive: true });
@@ -94,7 +107,80 @@ async function scenePlate(layers, dyingIdx) {
   return cv.toBuffer('image/jpeg', { quality: 0.85 });
 }
 
-/** Full fast path. picks = dying cutouts (layers space); layers = the fight's shared scene. Returns { mp4, thumb } | null. */
+/** ⚡ v5 STREAMING COMPOSITE: blit plate + dissolve frames in node canvas
+ *  and push raw BGRA buffers into an ffmpeg rawvideo stdin. Returns the
+ *  number of frames streamed. */
+async function streamComposite(m, stdin) {
+  const { createCanvas, loadImage } = require('canvas');
+  const plate = await loadImage(m.plate);
+  // ⚡ parallel pre-decode: PNG frames decode on the libuv threadpool while
+  // the main thread blits — a serial decode loop stalls the ffmpeg pipe
+  const loaded = await Promise.all(
+    Array.from({ length: m.n }, (_, i) =>
+      loadImage(path.join(m.framesDir, `f${String(i).padStart(3, '0')}.png`)).catch(() => null))
+  );
+  const cv = createCanvas(plate.width, plate.height), c = cv.getContext('2d');
+  let n = 0;
+  for (const f of loaded) {
+    if (!f) break;
+    c.drawImage(plate, 0, 0);
+    c.drawImage(f, m.ox, m.oy);
+    const buf = cv.toBuffer('raw');
+    if (!stdin.write(buf)) await new Promise((r) => stdin.once('drain', r));
+    n++;
+  }
+  return n;
+}
+
+/** Encode a materials composite into a standalone clip mp4 (raw pipe in). */
+function encodeRawClip(m, outPath) {
+  return new Promise((resolve, reject) => {
+    const args = ['-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'bgra',
+      '-s', `${VW}x${VH}`, '-r', String(m.fps), '-i', 'pipe:0',
+      '-vf', 'format=yuv420p',
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'baseline', '-crf', '24', '-threads', '2', '-movflags', '+faststart', '-an', outPath];
+    const p = spawn(ffmpegBin(), args, { stdio: ['pipe', 'ignore', 'pipe'] });
+    let err = ''; let done = false;
+    const to = setTimeout(() => { try { p.kill('SIGKILL'); } catch (e) {} }, 20000);
+    p.stderr.on('data', (d) => { if (err.length < 4000) err += d; });
+    p.stdin.on('error', () => {});   // EPIPE after early exit is fine
+    p.on('error', (e) => { if (!done) { done = true; clearTimeout(to); reject(e); } });
+    p.on('close', (code) => {
+      if (done) return; done = true; clearTimeout(to);
+      if (code === 0) { try { resolve(fs.readFileSync(outPath)); } catch (e) { resolve(null); } }
+      else { console.warn('[DeathOv] encode stderr:', err.slice(0, 200)); resolve(null); }
+    });
+    streamComposite(m, p.stdin).then(() => p.stdin.end()).catch((e) => {
+      try { p.stdin.destroy(); } catch (e2) {}
+      if (!done) { done = true; clearTimeout(to); reject(e); }
+    });
+  });
+}
+
+/** ⚡ CANVAS COMPOSITE (still-frame variant, kept for the N>1 merge fallback):
+ *  blit plate + overlay frames in node canvas. Writes c%03d.jpg into outDir
+ *  and returns the frame count (0 on total failure). */
+async function compositeFrames(m, outDir) {
+  try {
+    const { createCanvas, loadImage } = require('canvas');
+    fs.mkdirSync(outDir, { recursive: true });
+    const plate = await loadImage(m.plate);
+    const cv = createCanvas(plate.width, plate.height), c = cv.getContext('2d');
+    let n = 0;
+    for (let i = 0; i < m.n; i++) {
+      let f = null;
+      try { f = await loadImage(path.join(m.framesDir, `f${String(i).padStart(3, '0')}.png`)); } catch (e) { break; }
+      if (!f) break;
+      c.drawImage(plate, 0, 0);
+      c.drawImage(f, m.ox, m.oy);
+      fs.writeFileSync(path.join(outDir, `c${String(i).padStart(3, '0')}.jpg`), cv.toBuffer('image/jpeg', { quality: 0.88 }));
+      n++;
+    }
+    return n;
+  } catch (e) { console.warn('[DeathOv] canvas composite failed:', e && e.message || e); return 0; }
+}
+
+/** Full fast path. picks = dying cutouts (layers space); layers = the fight's shared scene. Returns { mp4, thumb, mats } | null. */
 async function renderFast({ layers, picks, kind, boss }) {
   const t0 = Date.now();
   if (!layers || !Buffer.isBuffer(layers.bg) || !picks || !picks.length) return null;
@@ -110,20 +196,21 @@ async function renderFast({ layers, picks, kind, boss }) {
   const kx = VW / W0, ky = VH / H0;
   const ox = Math.round(((bx0 + bx1) / 2) * kx - LOCAL.x * (VW / 1024)), oy = Math.round(ft * ky - LOCAL.feet * (VH / 687));
   const plate = await scenePlate(layers, new Set(pk.map((p) => p.idx)));
-  const id = crypto.randomBytes(5).toString('hex');
-  const platePath = path.join(ov.dir, `plate_${id}.jpg`), outPath = path.join(ov.dir, `out_${id}.mp4`);
-  fs.writeFileSync(platePath, plate);
   const tPlate = Date.now() - t0;
-  const r = await run(['-v', 'error', '-y', '-loop', '1', '-framerate', String(ov.fps), '-i', platePath,
-    '-framerate', String(ov.fps), '-i', path.join(ov.dir, 'f%03d.png'),
-    '-filter_complex', `[0:v][1:v]overlay=x=${ox}:y=${oy}:shortest=1,format=yuv420p`,
-    '-frames:v', String(ov.n), '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'baseline', '-crf', '24', '-movflags', '+faststart', '-an', outPath]);
+  const id = crypto.randomBytes(5).toString('hex');
+  const outPath = path.join(ov.dir, `out_${id}.mp4`);
+  // ⚡ v5: canvas blits the composite, raw frames stream into a pure encode
   let mp4 = null;
-  try { if (r.ok) mp4 = fs.readFileSync(outPath); } catch (e) {}
-  try { fs.unlinkSync(platePath); } catch (e) {} try { fs.unlinkSync(outPath); } catch (e) {}
-  if (!mp4 || mp4.length < 1000) { console.warn('[DeathOv] composite failed:', (r.err || '').slice(0, 200)); return null; }
-  console.log(`[DeathOv] ${kind}${boss ? '_BOSS' : ''} ${mp4.length}B overlay ${tOv}ms plate ${tPlate - tOv}ms total ${Date.now() - t0}ms`);
-  return { mp4, thumb: plate };
+  try {
+    mp4 = await encodeRawClip({ plate, framesDir: ov.dir, n: ov.n, fps: ov.fps, ox, oy }, outPath);
+  } catch (e) { console.warn('[DeathOv] stream encode failed:', e && e.message || e); }
+  try { fs.unlinkSync(outPath); } catch (e) {}
+  const tEnc = Date.now() - t0;
+  if (!mp4 || mp4.length < 1000) { console.warn('[DeathOv] composite failed'); return null; }
+  console.log(`[DeathOv] ${kind}${boss ? '_BOSS' : ''} ${mp4.length}B overlay ${tOv}ms plate ${tPlate - tOv}ms enc ${tEnc - tPlate}ms total ${Date.now() - t0}ms`);
+  // ⚡ raw materials for the kill-turn merge: plate + overlay frame dir +
+  // placement lets the card merge re-composite in ONE raw-stream encode.
+  return { mp4, thumb: plate, mats: { plate, framesDir: ov.dir, n: ov.n, fps: ov.fps, ox, oy } };
 }
 
-module.exports = { renderFast, getOverlay, scenePlate, _ROOT: ROOT };
+module.exports = { renderFast, getOverlay, scenePlate, streamComposite, encodeRawClip, compositeFrames, _ROOT: ROOT };

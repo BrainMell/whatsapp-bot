@@ -837,6 +837,8 @@ async function renderUltimateVideo(o) {
     // per-class timing (Dragon God etc. run longer); default = the classic 2.7s / 1.05s
     const meta = (RECIPE_PACK && RECIPE_PACK.classMeta && RECIPE_PACK.classMeta(String(o.classId || '').toUpperCase())) || {};
     const IMP = meta.impact || IMPACT; let DUR = meta.duration || DURATION;
+    // ⚡ overlay-only paints (death clips) may cap their duration — fewer painted frames = cheaper decode+encode forever after
+    if (!!o.overlayOnly && Number.isFinite(Number(o.duration)) && Number(o.duration) > 0.3) DUR = Math.min(DUR, Number(o.duration));
     const classTracks = RECIPE_PACK && RECIPE_PACK.classRecipe ? RECIPE_PACK.classRecipe(String(o.classId || '').toUpperCase(), palette, { IMPACT: IMP }) : null;
     let tracks = classTracks || RECIPES[recipeKey](palette);
     // skill level -> intensity (see ultimateFxRecipes.scaleTracks); 0..1, default 0 = the original look (level 1)
