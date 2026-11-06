@@ -449,8 +449,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 `  Removes a skill from the player.\n\n` +
                 `• \`${prefix} mod resetplayer <@user>\`\n` +
                 `  ☠️ FULL LIFE RESET: wipes level/rank/class/skills/items/Zeni/\n` +
-                `  cards/runes/quests/history back to fresh-player defaults.\n` +
-                `  Keeps identity, social memory, guild, homestead. Backups logged.\n\n` +
+                `  quests/history back to fresh-player defaults.\n` +
+                `  Keeps cards, runes, identity, social memory, guild, homestead.\n\n` +
                 `• \`${prefix} mod forceevolve <@user> <class_name>\`\n` +
                 `  Force-evolves to any class, bypassing all requirements.\n` +
                 `  Example: \`${prefix} mod forceevolve @friend Warlord\`\n\n` +
@@ -940,35 +940,14 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const _s0 = user.stats || {};
         const _before = `Lv${_p0.level ?? _s0.level ?? '?'} · ${user.adventurerRank || '?'} rank · ${user.class || 'no class'} · ${(user.wallet || 0).toLocaleString()} Zeni · ${_s0.kills || 0} kills · ${user.questsWon || 0}W/${user.questsFailed || 0}L quests · ${user.pvpWins || 0}W/${user.pvpLosses || 0}L PvP`;
 
-        // 1) Purge side collections FIRST (before swapping nested objects, so
-        //    a mid-flight autosave can never persist half-wiped state).
-        const _counts = {};
-        try {
-            const UserCard = require('../models/UserCard');
-            const CardDeck = require('../models/CardDeck');
-            const CardMarket = require('../models/CardMarket');
-            const ItemMarket = require('../models/ItemMarket');
-            const PlayerMarket = require('../models/PlayerMarket');
-            const Rune = require('../models/Rune');
-            const Loan = require('../models/Loan');
-            const Bounty = require('../models/Bounty');
-            _counts.cards = (await UserCard.deleteMany({ userId: target })).deletedCount;
-            _counts.decks = (await CardDeck.deleteMany({ userId: target })).deletedCount;
-            _counts.cardListings = (await CardMarket.deleteMany({ sellerId: target })).deletedCount;
-            _counts.itemListings = (await ItemMarket.deleteMany({ sellerId: target })).deletedCount;
-            _counts.marketListings = (await PlayerMarket.deleteMany({ sellerId: target })).deletedCount;
-            _counts.runes = (await Rune.deleteMany({ ownerJid: target })).deletedCount;
-            _counts.loans = (await Loan.deleteMany({ borrower: target })).deletedCount;
-            const _bountyPaths = Object.keys(Bounty.schema.paths).filter((p) => /jid$/i.test(p));
-            _counts.bounties = (await Bounty.deleteMany(_bountyPaths.length ? { $or: _bountyPaths.map((p) => ({ [p]: target })) } : { targetJid: target })).deletedCount;
-        } catch (_purgeErr) {
-            console.error('[MOD] resetplayer side-purge failed (user doc wipe continues):', _purgeErr.message);
-        }
-
-        // 2) Rebuild the user object from fresh schema defaults, keeping only
-        //    identity/social. Top-level object identity is preserved (the
-        //    economy cache Map entry stays valid); nested objects are replaced
-        //    wholesale. _id/__v are stripped — the stored doc keeps its key.
+        // 2026-11-06 (owner: "you deleted their cards, that's a no no"):
+        // collections are NEVER purged by this command — cards, runes, decks,
+        // listings, loans and bounties all survive resets. Only the user doc's
+        // RPG-progression fields are rebuilt below.
+        // Rebuild the user object from fresh schema defaults, keeping only
+        // identity/social. Top-level object identity is preserved (the
+        // economy cache Map entry stays valid); nested objects are replaced
+        // wholesale. _id/__v are stripped — the stored doc keeps its key.
         const User = require('../models/User');
         const _fresh = new User({
             userId: target,
@@ -983,9 +962,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         Object.assign(user, _fresh);
 
         economy.saveUser(target);
-        const _purged = Object.entries(_counts).filter(([, v]) => v > 0).map(([k, v]) => `${k}=${v}`);
         return await sock.sendMessage(chatId, {
-            text: BOT_MARKER + `☠️ *FULL LIFE RESET*\n\n👤 @${economy.getDisplayName(target)}\n📊 Before: ${_before}\n🌱 After: Lv1 · F rank · no class · 1,000 Zeni · zero history\n🗑️ Purged: ${_purged.length ? _purged.join(', ') : 'nothing found'}\n\n_Level, rank, class, skills, items, money, cards, runes, quests and history are all gone. Identity, social memory, guild and homestead kept._`,
+            text: BOT_MARKER + `☠️ *FULL LIFE RESET*\n\n👤 @${economy.getDisplayName(target)}\n📊 Before: ${_before}\n🌱 After: Lv1 · F rank · no class · 1,000 Zeni · zero history\n\n_Level, rank, class, skills, items, money, quests and history are all gone. Cards, runes, identity, social memory, guild and homestead kept._`,
             mentions: [target]
         });
     }
