@@ -459,17 +459,22 @@ class GoImageService {
     if (!data || !data.cardId || !data.action) {
       throw new TypeError("Summon-card GIF requires cardId and combat action data");
     }
-    const response = await this.client.post("/api/combat/summon-card.gif", data, {
-      responseType: "arraybuffer",
-      timeout: 18000,
-      headers: { "Content-Type": "application/json" },
-    });
-    const gif = Buffer.from(response.data);
-    const signature = gif.length >= 6 ? gif.subarray(0, 6).toString("ascii") : "";
-    if (signature !== "GIF87a" && signature !== "GIF89a") {
-      throw new Error("Go summon-card renderer did not return a valid GIF");
+    await this._animAcquire();
+    try {
+      const response = await this.client.post("/api/combat/summon-card.gif", data, {
+        responseType: "arraybuffer",
+        timeout: 18000,
+        headers: { "Content-Type": "application/json" },
+      });
+      const gif = Buffer.from(response.data);
+      const signature = gif.length >= 6 ? gif.subarray(0, 6).toString("ascii") : "";
+      if (signature !== "GIF87a" && signature !== "GIF89a") {
+        throw new Error("Go summon-card renderer did not return a valid GIF");
+      }
+      return gif;
+    } finally {
+      this._animRelease();
     }
-    return gif;
   }
 
   /*
