@@ -855,10 +855,14 @@ const DEATH_PALETTE = ['#ffffff', '#ffcb45', '#e85a37'];
  *  the whole group apart together — no more one-per-clip kills where the
  *  rest of the group just stands there.
  *  Returns { mp4, thumb, kind, boss, group? } or null (never throws; the caller races it against a short budget). */
-async function renderDeathVideo({ enemy, targetIndex, layers, abort, targets }) {
+async function renderDeathVideo({ enemy, targetIndex, layers, abort, targets, deadIndices }) {
   const group = (Array.isArray(targets) && targets.length ? targets : [{ enemy, targetIndex }])
     .filter((t) => t && t.enemy).slice(0, 4);
   if (!group.length || !layers) return null;
+  // 🔧 DEATH-ORDER BACKDROP (owner voice note 2026-11-06): enemy indices that
+  // died on EARLIER turns are dropped from the roster drawing — the backdrop
+  // shows exactly who is still alive plus whoever is shattering right now.
+  const deadIdx = new Set((Array.isArray(deadIndices) ? deadIndices : []).map((n) => Math.floor(Number(n) || 0)).filter((n) => n >= 0));
   // one element mode for the unit: the most common death kind in the group
   const kind = (() => { const tally = {}; let best = 'DUST', n = 0; for (const t of group) { const k = classifyDeath(t.enemy); tally[k] = (tally[k] || 0) + 1; if (tally[k] > n) { best = k; n = tally[k]; } } return best; })();
   const boss = group.some((t) => !!(t.enemy.isBoss || t.enemy.boss || /boss/i.test(String(t.enemy.rank || t.enemy.tier || ''))));
@@ -877,7 +881,7 @@ async function renderDeathVideo({ enemy, targetIndex, layers, abort, targets }) 
       if (picks.length && process.env.DEATH_FAST !== '0') {
         // ⚡ overlay-cache fast path (~0.2s once the overlay is cached); any failure falls through to the full engine render
         try {
-          const fast = await require('./deathOverlay').renderFast({ layers, picks, kind, boss });
+          const fast = await require('./deathOverlay').renderFast({ layers, picks, kind, boss, deadIdx });
           if (fast && fast.mp4) {
             const out = { mp4: fast.mp4, thumb: fast.thumb || null, kind, boss, mats: fast.mats || null };
             if (picks.length > 1) out.group = picks.map(({ t }) => t.enemy).filter(Boolean);
@@ -915,7 +919,7 @@ async function renderDeathVideo({ enemy, targetIndex, layers, abort, targets }) 
   }
   if (!layers.focus) return null;
   const dieIdx = new Set((pickedIdx || group.map((t) => Math.max(0, Math.floor(Number(t.targetIndex) || 0)))));
-  const cuts = Array.isArray(layers.cuts) ? layers.cuts.filter((c) => !(c && String(c.side) === 'enemy' && dieIdx.has(Math.floor(Number(c.index) || 0)))) : layers.cuts;
+  const cuts = Array.isArray(layers.cuts) ? layers.cuts.filter((c) => !(c && String(c.side) === 'enemy' && (dieIdx.has(Math.floor(Number(c.index) || 0)) || deadIdx.has(Math.floor(Number(c.index) || 0))))) : layers.cuts;
   const vid = await require('./ultimateFx').renderUltimateVideo({
     classId: 'DEATH_' + kind + (boss ? '_BOSS' : ''), name: '', side: 'enemy', palette: DEATH_PALETTE,
     skillLevel: 1, maxLevel: 1, intensity: 0, layers: { ...layers, cuts }, casterIndex: 0, targetIndex: Math.max(0, Math.floor(Number(group[0].targetIndex) || 0)), focusIndex: undefined,
@@ -1115,3 +1119,4 @@ module.exports = {
   GIF_PLAYBACK_MS,
   FRAME_COUNT
 };
+

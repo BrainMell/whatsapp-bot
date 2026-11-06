@@ -4850,6 +4850,17 @@ function _deathPump() {
 function _deathEnqueue(run) { return new Promise((resolve) => { if (_deathQueue.length > 16) return resolve(null); _deathQueue.push({ run, resolve }); _deathPump(); }); }
 const _deathEligible = (state) => !!(state && state.chatId && state.isAbyss !== true && !(state.mode === 'RUINS' && state.ruinsMeta));
 const _aliveSig = (state) => (state.players || []).filter((p) => p && !p.isDead && (p.stats ? p.stats.hp > 0 : true)).length;
+// 🔧 DEATH-ORDER BACKDROP (owner voice note 2026-11-06: "the first one is
+// still there inside that death animation"): enemies that died on EARLIER
+// turns must not stand inside a later kill's clip. These helpers list the
+// already-dead enemy indices (array positions), minus whoever is dying in
+// THIS clip's batch — the dying still stand until their own dissolve owns
+// them, and AOE groups shatter together via the group path.
+const _deadEnemyIndices = (state, exclude) => (state.enemies || [])
+  .map((x, k) => ({ x, k }))
+  .filter(({ x, k }) => x && (x.isDead || (x.stats && x.stats.hp <= 0)) && !(exclude || []).includes(k))
+  .map(({ k }) => k).sort((a, b) => a - b);
+const _deadSetSig = (state, exclude) => _deadEnemyIndices(state, exclude).join(',');
 // ⚡ one layered scene per fight (all enemies standing) shared by every death bake - one Go call instead of one per enemy
 function _deathScene(state) {
   const key = (state.combatGen || 0) + ':' + (state.enemies || []).length + ':' + _aliveSig(state);
@@ -4871,7 +4882,7 @@ function _deathScene(state) {
   })().catch(() => null);
   return state._deathSceneP;
 }
-async function _bakeDeathClip(state, e, i) {
+async function _bakeDeathClip(state, e, i, excludeExtra) {
   const t0 = Date.now();
   try {
     const signatureVfx = require('../combat/skillVfx'), combatImageGenerator = require('../combat/combatImageGenerator');
@@ -4889,9 +4900,10 @@ async function _bakeDeathClip(state, e, i) {
       ]);
     }
     if (!layers || !layers.success) { console.warn(`[DeathFx] bake ${e && e.name}: no layered scene after ${Date.now() - t0}ms`); return null; }
-    const clip = await signatureVfx.renderDeathVideo({ enemy: e, targetIndex: i, layers });
-    console.log(`[DeathFx] bake ${e && e.name} -> ${clip ? clip.kind + (clip.boss ? '/boss' : '') + ' ' + clip.mp4.length + 'B' : 'NULL'} in ${Date.now() - t0}ms (${hasCut ? 'shared scene' : 'own scene'})`);
-    return clip ? Object.assign(clip, { sig: _aliveSig(state) }) : null;
+    const __deadIdx = _deadEnemyIndices(state, [i, ...(Array.isArray(excludeExtra) ? excludeExtra : [])]);
+    const clip = await signatureVfx.renderDeathVideo({ enemy: e, targetIndex: i, layers, deadIndices: __deadIdx });
+    console.log(`[DeathFx] bake ${e && e.name} -> ${clip ? clip.kind + (clip.boss ? '/boss' : '') + ' ' + clip.mp4.length + 'B' : 'NULL'} in ${Date.now() - t0}ms (${hasCut ? 'shared scene' : 'own scene'}, dead-in-backdrop ${__deadIdx.join(',') || '-'})`);
+    return clip ? Object.assign(clip, { sig: _aliveSig(state), deadSig: __deadIdx.join(',') }) : null;
   } catch (err) { console.warn(`[DeathFx] bake ${e && e.name} threw:`, err && err.message || err); return null; }
 }
 // 🎬 GROUP DEATH AS ONE UNIT (owner 2026-11-04: "when a group dies you
@@ -4923,10 +4935,13 @@ async function _bakeGroupDeathClip(state, dying) {
       ]);
     }
     if (!layers || !layers.success) { console.warn(`[DeathFx] group bake [${need.join(',')}]: no layered scene after ${Date.now() - t0}ms`); return null; }
-    const clip = await signatureVfx.renderDeathVideo({ targets: group.map(({ e, i }) => ({ enemy: e, targetIndex: i })), layers });
-    console.log(`[DeathFx] group bake [${group.map((d) => (d.e && d.e.name) || '?').join(' + ')}] -> ${clip ? clip.kind + (clip.boss ? '/boss' : '') + (clip.group ? ' unit=' + clip.group.length : ' PARTIAL') + ' ' + clip.mp4.length + 'B' : 'NULL'} in ${Date.now() - t0}ms (${hasAll ? 'shared scene' : 'own scene'})`);
+    // 🔧 DEATH-ORDER BACKDROP: the group's own members are dying TOGETHER (AOE)
+    // — only enemies that fell on EARLIER turns are removed from the backdrop.
+    const __deadIdx = _deadEnemyIndices(state, need);
+    const clip = await signatureVfx.renderDeathVideo({ targets: group.map(({ e, i }) => ({ enemy: e, targetIndex: i })), layers, deadIndices: __deadIdx });
+    console.log(`[DeathFx] group bake [${group.map((d) => (d.e && d.e.name) || '?').join(' + ')}] -> ${clip ? clip.kind + (clip.boss ? '/boss' : '') + (clip.group ? ' unit=' + clip.group.length : ' PARTIAL') + ' ' + clip.mp4.length + 'B' : 'NULL'} in ${Date.now() - t0}ms (${hasAll ? 'shared scene' : 'own scene'}, dead-in-backdrop ${__deadIdx.join(',') || '-'})`);
     if (!clip || !clip.mp4) return null;
-    return { e: group[0].e, clip: Object.assign(clip, { sig: _aliveSig(state) }) };
+    return { e: group[0].e, clip: Object.assign(clip, { sig: _aliveSig(state), deadSig: __deadIdx.join(',') }) };
   } catch (err) { console.warn('[DeathFx] group bake threw:', err && err.message || err); return null; }
 }
 // ☠️ caption for a held death item — a group unit names every member
@@ -5181,16 +5196,20 @@ async function _flushHeldTurnClips(sock, state, why) {
 // called once per fight (first turn): queue a background bake for every enemy, weakest first
 function startDeathBake(state) {
   try {
-    if (!_deathEligible(state) || state._deathBake === state.combatGen + ':' + (state.enemies || []).length) return;
-    state._deathBake = state.combatGen + ':' + (state.enemies || []).length;
+    // 🔧 DEATH-ORDER BACKDROP: the bake round is keyed to the death order too
+    // — after every kill the survivors re-bake against the updated backdrop
+    // (fallen enemy gone), so the NEXT kill's clip is pre-ready at kill time.
+    const __bakeSig = state.combatGen + ':' + (state.enemies || []).length + ':' + _deadSetSig(state, []);
+    if (!_deathEligible(state) || state._deathBake === __bakeSig) return;
+    state._deathBake = __bakeSig;
     // 🧷 JOB REGISTRY: jobs also live on the STATE keyed by combatGen+index,
     // because prod proved the kill path can see enemy objects with NO
     // _deathJob even seconds after startDeathBake queued them (13:53:19
     // "NO clip (job=false)" while bakes were mid-flight). The registry
     // survives whatever rebuilds the enemy objects inside a fight.
     if (!state._deathJobReg || state._deathJobReg.gen !== (state.combatGen || 0)) state._deathJobReg = { gen: state.combatGen || 0, byIdx: {} };
-    const order = (state.enemies || []).map((e, i) => ({ e, i })).filter((x) => x.e && x.e.isEnemy !== false && !x.e._deathJob).sort((a, b) => (a.e.isBoss ? 1 : 0) - (b.e.isBoss ? 1 : 0) || (Number(a.e.currentHP ?? a.e.stats?.hp) || 0) - (Number(b.e.currentHP ?? b.e.stats?.hp) || 0)).slice(0, 8);   // weakest first: they fall first
-    for (const { e, i } of order) e._deathJob = state._deathJobReg.byIdx[i] = _deathEnqueue(() => _bakeDeathClip(state, e, i));
+    const order = (state.enemies || []).map((e, i) => ({ e, i })).filter((x) => x.e && x.e.isEnemy !== false && (!x.e._deathJob || x.e._deathJobSig !== _deadSetSig(state, [x.i]))).sort((a, b) => (a.e.isBoss ? 1 : 0) - (b.e.isBoss ? 1 : 0) || (Number(a.e.currentHP ?? a.e.stats?.hp) || 0) - (Number(b.e.currentHP ?? b.e.stats?.hp) || 0)).slice(0, 8);   // weakest first: they fall first
+    for (const { e, i } of order) { e._deathJobSig = _deadSetSig(state, [i]); e._deathJob = state._deathJobReg.byIdx[i] = _deathEnqueue(() => _bakeDeathClip(state, e, i)); }
   } catch (err) { console.warn('[DeathFx] bake skipped:', err && err.message || err); }
 }
 async function playEnemyDeaths(sock, state, opts = {}) {
@@ -5203,6 +5222,8 @@ async function playEnemyDeaths(sock, state, opts = {}) {
     const fresh = (state.enemies || []).map((e, i) => ({ e, i })).filter((x) => x.e && x.e.isEnemy !== false && !x.e._deathAnimDone && (x.e.justDied || x.e.isDead || (x.e.stats && x.e.stats.hp <= 0)));
     if (!fresh.length) return;
     fresh.forEach((x) => { x.e._deathAnimDone = true; });   // flag first: idempotent across checkCombatEnd / nextTurn
+    const __batchIdx = fresh.map((x) => x.i);
+    const __wantDead = _deadSetSig(state, __batchIdx);   // 🔧 death order: who was ALREADY dead before this batch
     const t0 = Date.now();
     // ⏱ leash: a held kill waits on the in-flight bake before its board
     // merge — 18s when a board is coming (the turn flow continues anyway),
@@ -5231,8 +5252,8 @@ async function playEnemyDeaths(sock, state, opts = {}) {
       if (!job) { try { startDeathBake(state); } catch (bakeErr) {} const __reg2 = state._deathJobReg; if (__reg2 && __reg2.gen === (state.combatGen || 0) && __reg2.byIdx[i]) { job = __reg2.byIdx[i]; console.log(`[DeathFx] ${e.name}: kill beat every bake - bake started at kill time (idx=${i}, gen=${state.combatGen || 0})`); } }
       // a kill on the very first turns can beat the background bake: wait for the in-flight bake (the box is slow, a late clip beats none)
       let clip = job ? await Promise.race([job, new Promise((r) => setTimeout(() => r(undefined), leashMs))]) : undefined;
-      if (clip && clip.sig !== _aliveSig(state)) { console.log(`[DeathFx] ${e.name}: roster changed since bake (${clip.sig} vs ${_aliveSig(state)}) - re-rendering`); clip = null; }   // stale backdrop
-      if (!clip && (clip === null || !job)) clip = await Promise.race([_deathEnqueue(() => _bakeDeathClip(state, e, i)), new Promise((r) => setTimeout(() => r(null), leashMs))]);
+      if (clip && (clip.sig !== _aliveSig(state) || (clip.deadSig || '') !== __wantDead)) { console.log(`[DeathFx] ${e.name}: backdrop stale since bake (dead-in-scene ${clip.deadSig || '-'} vs now ${__wantDead}) - re-rendering`); clip = null; }   // stale backdrop: the death order moved on since the pre-bake
+      if (!clip && (clip === null || !job)) clip = await Promise.race([_deathEnqueue(() => _bakeDeathClip(state, e, i, __batchIdx)), new Promise((r) => setTimeout(() => r(null), leashMs))]);
       if (!clip || !clip.mp4) console.warn(`[DeathFx] ${e.name}: NO clip (job=${!!job}, idx=${i}, gen=${state.combatGen || 0}, baked=${Date.now() - t0}ms) - falling back to the static card`);
       return clip && clip.mp4 ? { e, clip } : null;
     }));
@@ -5274,6 +5295,7 @@ async function playEnemyDeaths(sock, state, opts = {}) {
         } catch (drainErr) {}
       }, 11000);
       if (holdRef._drain && holdRef._drain.unref) holdRef._drain.unref();
+      try { startDeathBake(state); } catch (reErr) {}   // 🔧 death order: survivors re-bake against the updated backdrop
       return;
     }
     await Promise.all(ready.map((item) => {
@@ -5281,7 +5303,10 @@ async function playEnemyDeaths(sock, state, opts = {}) {
       if (Buffer.isBuffer(item.clip.thumb)) pl.jpegThumbnail = item.clip.thumb;
       return sendMediaBounded(sock, state.chatId, pl, { label: 'enemyDeathVfx', ms: 12000, grace: 4000, fallbackText: null });
     }));
-    if (ready.length) console.log(`[DeathFx] ${ready.map((r) => r.clip.kind + (r.clip.boss ? '/boss' : '')).join(',')} delivered in ${Date.now() - t0}ms`);
+    if (ready.length) {
+      console.log(`[DeathFx] ${ready.map((r) => r.clip.kind + (r.clip.boss ? '/boss' : '')).join(',')} delivered in ${Date.now() - t0}ms`);
+      try { startDeathBake(state); } catch (reErr) {}   // 🔧 death order: survivors re-bake against the updated backdrop
+    }
   } catch (err) { console.warn('[DeathFx] skipped:', err && err.message || err); }
 }
 
@@ -14377,4 +14402,5 @@ module.exports = {
   // access to the guarded resolution paths. Test-only — no gameplay caller.
   _qa: { checkCombatEnd, endCombat, gameStates, scopedKey },
 };
+
 

@@ -94,14 +94,18 @@ function getOverlay(picks, kind, boss, W0, H0) {
   return pr;
 }
 
-/** Scene plate (video space JPEG): bg + every surviving combatant cutout. */
-async function scenePlate(layers, dyingIdx) {
+/** Scene plate (video space JPEG): bg + every surviving combatant cutout.
+ *  🔧 DEATH-ORDER BACKDROP (owner voice note 2026-11-06): cutouts of enemies
+ *  that died on EARLIER turns are skipped too — the fallen never stand inside
+ *  a later kill's death animation. */
+async function scenePlate(layers, dyingIdx, deadIdx) {
   const { createCanvas, loadImage } = require('canvas');
   const W0 = Number(layers.w) || 1024, H0 = Number(layers.h) || 687;
   const kx = VW / W0, ky = VH / H0;
   const cv = createCanvas(VW, VH), c = cv.getContext('2d');
   c.drawImage(await loadImage(layers.bg), 0, 0, VW, VH);
-  const cuts = (layers.cuts || []).filter((x) => x && x.png && !(String(x.side) === 'enemy' && dyingIdx.has(Math.floor(Number(x.index) || 0))));
+  const __dead = deadIdx instanceof Set ? deadIdx : new Set();
+  const cuts = (layers.cuts || []).filter((x) => x && x.png && !(String(x.side) === 'enemy' && (dyingIdx.has(Math.floor(Number(x.index) || 0)) || __dead.has(Math.floor(Number(x.index) || 0)))));
   cuts.sort((a, b) => (Number(a.y) + Number(a.h)) - (Number(b.y) + Number(b.h)));
   for (const x of cuts) { try { c.drawImage(await loadImage(Buffer.from(x.png, 'base64')), x.x * kx, x.y * ky, x.w * kx, x.h * ky); } catch (e) {} }
   return cv.toBuffer('image/jpeg', { quality: 0.85 });
@@ -181,7 +185,7 @@ async function compositeFrames(m, outDir) {
 }
 
 /** Full fast path. picks = dying cutouts (layers space); layers = the fight's shared scene. Returns { mp4, thumb, mats } | null. */
-async function renderFast({ layers, picks, kind, boss }) {
+async function renderFast({ layers, picks, kind, boss, deadIdx }) {
   const t0 = Date.now();
   if (!layers || !Buffer.isBuffer(layers.bg) || !picks || !picks.length) return null;
   const W0 = Number(layers.w) || 1024, H0 = Number(layers.h) || 687;
@@ -195,7 +199,7 @@ async function renderFast({ layers, picks, kind, boss }) {
   for (const p of pk) { bx0 = Math.min(bx0, p.x); bx1 = Math.max(bx1, p.x + p.w); ft = Math.max(ft, p.y + p.h); }
   const kx = VW / W0, ky = VH / H0;
   const ox = Math.round(((bx0 + bx1) / 2) * kx - LOCAL.x * (VW / 1024)), oy = Math.round(ft * ky - LOCAL.feet * (VH / 687));
-  const plate = await scenePlate(layers, new Set(pk.map((p) => p.idx)));
+  const plate = await scenePlate(layers, new Set(pk.map((p) => p.idx)), deadIdx);
   const tPlate = Date.now() - t0;
   const id = crypto.randomBytes(5).toString('hex');
   const outPath = path.join(ov.dir, `out_${id}.mp4`);
@@ -214,3 +218,4 @@ async function renderFast({ layers, picks, kind, boss }) {
 }
 
 module.exports = { renderFast, getOverlay, scenePlate, streamComposite, encodeRawClip, compositeFrames, _ROOT: ROOT };
+
