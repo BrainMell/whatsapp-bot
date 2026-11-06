@@ -3,7 +3,7 @@
 // Run: node scripts/qa_facing_contract.js
 const fs = require('fs');
 const path = require('path');
-const src = fs.readFileSync(path.join(__dirname, '..', 'core', 'rpg', 'abyssScene.js'), 'utf8');
+const src = fs.readFileSync(path.join(__dirname, '..', 'core', 'rpg', 'systems', 'adventures', 'abyssScene.js'), 'utf8');
 let pass = 0, fail = 0;
 function check(condition, label) {
   if (condition) { pass++; console.log('✅ ' + label); }
