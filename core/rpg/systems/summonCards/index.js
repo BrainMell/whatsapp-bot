@@ -224,7 +224,7 @@ function createSummonCardSystem(economy) {
 
     let statusMessage = '';
     if (!wasEvaded && target.stats.hp > 0 && card.status) {
-      const statusResult = args.applyStatusEffect(target, card.status.type, card.status.duration, card.status.value, player.name);
+      const statusResult = args.applyStatusEffect(target, card.status.type, card.status.duration, card.status.value, 'summon_card');
       if (statusResult && statusResult.synergyMsg) statusMessage = ' ' + statusResult.synergyMsg;
     }
 
