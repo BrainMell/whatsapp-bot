@@ -1069,8 +1069,6 @@ const opsCheckCommands = require('./commands/opsCheckCommands');
 // 🧑‍🏫 shoob mining dashboard (2026-10-08): window into the Box 1 card miner
 // via the shared Mongo System keys — read-only, promote is owner-only.
 const mentoringCommands = require('./commands/mentoringCommands');
-// 💡 Summoner System (Phase 4) - see download/SUMMONER_SYSTEM_DESIGN.md
-const summonCommands = require('./commands/summonCommands');
 const pvpSystem = require('./rpg/systems/pvp/pvpSystem');
 const cardSystem = require('./rpg/systems/cards/cardSystem');
 const contextEngine = require("./src/context_engine/Engine"); // NEW: Brain system
@@ -7115,7 +7113,7 @@ What to do:
         `Quiz nights run logo challenges, theme songs and dataset trivia - try \`${prefix} quiz logos 15\`.`,
         `Logo rounds come in easy / medium / hard tiers - bigger Zeni for harder brands.`,
         `Sell the gear you never use: \`${prefix} market sell item <bag#> <price>\` lists it on the player market.`,
-        `Browse everything players are selling - items, runes, summons - with \`${prefix} itemmarket\`.`,
+        `Browse everything players are selling - items and runes - with \`${prefix} itemmarket\`.`,
         `Prefer crisp static images? \`${prefix} anim off\` switches collection/deck renders to PNG.`,
         `New here? \`${prefix} tutorial start\` walks you through your first battle hands-on.`,
         `Materials pile up fast - \`${prefix} forge\` and \`${prefix} cook\` turn them into gear and food.`,
@@ -12860,17 +12858,12 @@ _💡 Reply with another number from your search list!_`.trim();
                       return;
                     }
 
-                    // 💡 Summoner System (Phase 4) - .j summon <subcommand> [args]
+                    // 🃏 SUMMONS OVERHAUL (2026-11-06): the old summon system was
+                    // scraped — summons return as special cards (mod-only
+                    // acquisition for now). Keep the route alive so players get
+                    // a clean notice instead of "unknown command".
                     if (primaryCmd === "summon" || primaryCmd === "summons") {
-                      const summonArgs = cmdArgs.slice(1);
-                      await summonCommands.handleCommand(
-                        sock,
-                        chatId,
-                        senderJid,
-                        senderName,
-                        summonArgs,
-                        m,
-                      );
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + "🐉 *Summons are being rebuilt.*\nThe old summon system has been retired — summons return as special cards with their own abilities. Hang tight. 🃏" });
                       return;
                     }
 
@@ -13615,14 +13608,6 @@ _💡 Reply with another number from your search list!_`.trim();
                       msg += `4️⃣ *SKILLS:* ⚠️ You must **UNLOCK** skills first! \`${currentPrefix} skill tree\` → \`${currentPrefix} skill up <name>\`\n\n`;
                       msg += `5️⃣ *COMBAT:* \`${currentPrefix} combat ability 1\` to use skills. \`rest\` to recover energy.\n\n`;
                       msg += `6️⃣ *EVOLVE:* Reach Lv.20 + 30 Quests → \`${currentPrefix} evolve\` for advanced classes!\n\n`;
-                      msg += `━━━━━━━━━━━━━━━\n`;
-                      msg += `🐉 *SUMMON SYSTEM*\n`;
-                      msg += `━━━━━━━━━━━━━━━\n`;
-                      msg += `7️⃣ *BUY EGG:* \`${currentPrefix} shop\` → buy Basic Summon Egg (5K Zeni)\n\n`;
-                      msg += `8️⃣ *HATCH:* \`${currentPrefix} summon hatch <egg_id>\` - get a monster companion!\n\n`;
-                      msg += `9️⃣ *DEPLOY:* \`${currentPrefix} summon deploy <#>\` - equip your summon for combat\n\n`;
-                      msg += `🔟 *SUMMON DUEL:* \`${currentPrefix} summon duel @user\` - monster vs monster PvP!\n\n`;
-                      msg += `━━━━━━━━━━━━━━━\n`;
                       msg += `🕳️ *ABYSS & ENDGAME*\n`;
                       msg += `━━━━━━━━━━━━━━━\n`;
                       msg += `🕳️ \`${currentPrefix} abyss\` - Endless dungeon. HP carries between floors!\n`;

@@ -1,6 +1,6 @@
 # RPG Subsystem Architecture
 
-The RPG side of the bot is organized as **13 self-contained subsystems** under
+The RPG side of the bot is organized as **12 self-contained subsystems** under
 `core/rpg/systems/`. The goal: **you can overhaul, rewrite, or rip out any one
 subsystem without the rest of the game falling over** — as long as you keep that
 subsystem's `index.js` exports stable.
@@ -30,8 +30,6 @@ core/rpg/
     ├── world/             ← worldMap + renderers, continents, cosmology,
     │                        worldAlignment, deadWorld, kingdom3d/terrain, wilds,
     │                        structureScenes, dockPov/huntPov/minePov
-    ├── summons/           ← summonSystem, summonAI, capture, eggs, forging,
-    │                        bondTraits, skillTrees, sprites, codex/roster renderers
     ├── pvp/               ← pvpSystem (duels)
     ├── cards/             ← cardSystem (gacha, tokens, auctions)
     ├── inventory/         ← inventorySystem, lootSystem, durability, runes,
@@ -41,6 +39,13 @@ core/rpg/
     └── meta/              ← socialSystem, interactionTracker, tutorial,
                              testerSystem, altDetection, profileCardRenderer
 ```
+
+> 🃏 **summons/ was removed 2026-11-06** (implementation scraped for the
+> summon-cards overhaul — mod-only acquisition, hub card slot UI, per-card
+> animated abilities). The sprite/asset bank stays at `core/rpgasset/summons/`
+> (7,315 files). See `systems/summons/README.md` for the full pointer + what
+> was removed. The `summons` registry entry is gone (no index.js → the
+> registry no longer discovers it).
 
 ## The rules
 

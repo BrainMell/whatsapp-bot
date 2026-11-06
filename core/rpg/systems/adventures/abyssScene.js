@@ -209,23 +209,10 @@ function resolveEnemyArt(enemy) {
 // through the authorized post-process (pixel-grid normalize → outline
 // recolor to abyssal violet → violet unify → 30-color palette quantize →
 // trim), checked FIRST; the raw set stays as fallback.
-const SUMMON_ABYSS_DIR = path.join(RPGASSET, 'summons', 'sparklinlabs_abyss');
-const _summonAbyssSet = new Set((() => {
-    try { return fs.readdirSync(SUMMON_ABYSS_DIR).filter((f) => f.toLowerCase().endsWith('.png')); } catch (e) { return []; }
-})());
+// 🃏 SUMMONS OVERHAUL (2026-11-06): the summon system was scraped — wild
+// summon stage art resolves to nothing; callers keep their text fallback.
+// In-flight wild_summon floors render without the sprite layer.
 async function resolveSummonArt(species) {
-    try {
-        const summonSprites = require('../summons/summonSprites');
-        const p = summonSprites.getSpritePath(species);
-        if (p && fs.existsSync(p)) {
-            // processed twin first (same basename in sparklinlabs_abyss/)
-            const base = path.basename(p);
-            const twin = _summonAbyssSet.has(base)
-                ? path.join(SUMMON_ABYSS_DIR, base) : null;
-            const img = await loadImage(twin || p).catch(() => null);
-            if (img) return { img, file: path.basename(p), processed: !!twin };
-        }
-    } catch (e) { /* fall through */ }
     return null;
 }
 

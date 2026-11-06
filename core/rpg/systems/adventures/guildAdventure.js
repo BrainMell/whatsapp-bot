@@ -18,13 +18,6 @@ try { require('../combat/ultimateFx').prewarm(); } catch (e) { /* vfx optional a
 // 💡 FIX #6 (2026-08-15): Threat/aggro system for PvE combat
 const threatSystem = require('../combat/threatSystem');
 
-// 💡 FIX #7 (2026-08-15): Summon death cooldown - in-memory map of
-// summonId -> expiry timestamp. When a summon dies in combat, it can't
-// be redeployed for 5 minutes. This gives summon death a consequence
-// (JRPG research: disposable decoy model). In-memory only - resets on
-// bot restart, which is acceptable for a soft penalty.
-const summonDeathCooldowns = new Map();
-const SUMMON_DEATH_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 const path = require("path");
 const botConfig = require('../../../../botConfig');
 const economy = require("../economy/economy");
@@ -42,11 +35,6 @@ const monsterSkills = require("../combat/monsterSkills");
 // (owner-approved design package systems; in-memory only).
 const loreDrops = require("../shared/loreDrops");
 const enemyVariants = require("../combat/enemyVariants");
-// 💡 Summoner System (Phase 2) - see download/SUMMONER_SYSTEM_DESIGN.md
-const summonSystem = require("../summons/summonSystem");
-const summonAI = require("../summons/summonAI");
-// 💡 Phase 3: Necromancer capture pipeline
-const summonCapture = require("../summons/summonCapture");
 const { resolvePartyDungeonRank } = require("./partyDungeonRank");
 
 // ==========================================
@@ -4663,71 +4651,13 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   state.pendingActions = {};
   state.combatHistory = [];
 
-  // 💡 Summoner System (Phase 2): deploy each player's active summon.
-  // Build combat entities from user.activeSummonId, push to state.summons.
-  // Summons are added to turnOrder below (alongside players + enemies).
-  // 💡 RAID SUMMON CAP (2026-09-11 owner directive): only the 3 STRONGEST
-  // summons deploy alongside the 6 players. Candidates are collected first,
-  // ranked by total effective stats, and the top 3 join the battle.
-  const RAID_SUMMON_CAP = 3;
-  const summonCandidates = [];
+  // 🃏 SUMMONS OVERHAUL (2026-11-06): the summon system was scraped —
+  // summons return as special cards. No combat entities are deployed;
+  // state.summons stays an empty array so all structural spreads/checks
+  // below remain safe no-ops.
   state.summons = [];
   // 💡 FIX #6: Reset threat for all players at combat start
   if (state.players) threatSystem.resetThreat(state.players);
-  for (let pi = 0; pi < state.players.length; pi++) {
-    const player = state.players[pi];
-    if (!player.jid || player.isDead) continue;
-    try {
-      const user = economy.getUser(player.jid);
-      if (!user || !user.activeSummonId) continue;
-
-      const summonDoc = await summonSystem.getActiveSummon(user);
-      if (!summonDoc) continue;  // stale activeSummonId - already cleared by getActiveSummon
-
-      // 💡 FIX #7: Check summon death cooldown - if the summon died in a
-      // recent combat, it can't be redeployed yet. Skip silently (the player
-      // will notice their summon isn't there).
-      const cooldownExpiry = summonDeathCooldowns.get(summonDoc.summonId);
-      if (cooldownExpiry && Date.now() < cooldownExpiry) {
-        const remaining = Math.ceil((cooldownExpiry - Date.now()) / 60000);
-        console.log(`[SummonDeploy] ${summonDoc.nickname || summonDoc.species} on death cooldown for ${remaining}min`);
-        continue;
-      } else if (cooldownExpiry) {
-        // Cooldown expired - clean up
-        summonDeathCooldowns.delete(summonDoc.summonId);
-      }
-
-      const summonEntity = summonSystem.buildCombatEntity(summonDoc, player.jid);
-      if (summonEntity) {
-        // 💡 FIX 2026-08-03: Go service expects `ownerIndex` for owner-relative
-        // positioning of summons on the battlefield.
-        summonEntity.ownerIndex = pi;
-        summonEntity.summonerIndex = pi;
-        summonCandidates.push(summonEntity);
-      }
-    } catch (e) {
-      console.error('[Summon] Failed to deploy summon for', player.jid, ':', e?.message || e);
-    }
-  }
-
-  // 💡 Rank by strength (total effective stats incl. tier/loyalty/class bonuses)
-  // and keep only the top 3 for the raid.
-  const summonStrength = (s) => {
-    const st = s.stats || {};
-    return (st.maxHp || st.maxHP || st.hp || 0) + (st.atk || 0) + (st.def || 0) + (st.mag || 0) + (st.spd || 0);
-  };
-  const deployedSummons = summonCandidates
-    .sort((a, b) => summonStrength(b) - summonStrength(a))
-    .slice(0, RAID_SUMMON_CAP);
-  if (summonCandidates.length > RAID_SUMMON_CAP) {
-    console.log(`[SummonDeploy] Raid cap: ${summonCandidates.length} candidates -> top ${RAID_SUMMON_CAP} deployed`);
-  }
-  for (const s of deployedSummons) {
-    // 💡 FIX 2026-08-03: Go service expects `ownerIndex` for owner-relative
-    // positioning of summons on the battlefield.
-    state.summons.push(s);
-  }
-
   // 💡 INITIALIZE ACTION GAUGE
   const allCombatants = [
     ...state.players.filter((p) => !p.isDead),
@@ -5716,15 +5646,6 @@ The dungeon collapsed after too many stalled turns. Your slot has been released 
           90000
         );
         // The loop continues because performEnemyAction resolved
-      } else if (activeActor.isSummon) {
-        // 💡 Phase 2: Summon AI Turn - personality-driven behavior,
-        // loyalty decay, behavior tracking, optional betrayal.
-        await runTurnWithWatchdog(
-          state,
-          `summon turn (${activeActor?.name || '?'})`,
-          () => summonAI.performSummonAction(sock, activeActor, sessionKey),
-          90000
-        );
       } else if (activeActor.isTutorialAlly) {
         // 💡 Phase B (2026-10-04): TUTORIAL GROUP quest - fake party members
         // auto-act after a short beat instead of waiting for input that will
@@ -5747,17 +5668,6 @@ The dungeon collapsed after too many stalled turns. Your slot has been released 
         state.pendingStatusMsg = actionExpireMsgs.join("\n");
       }
 
-      // 💡 Phase 3: tick Necromancer capture windows each round.
-      // Only tick when a PLAYER acts (not enemy/summon) - mirrors how
-      // combatRound is incremented at line 3606. This means the window
-      // lasts 3 of the PLAYER's turns, not 3 of any actor's turns.
-      if (!activeActor.isEnemy && !activeActor.isSummon) {
-        try {
-          summonCapture.tickCaptureWindows(state);
-        } catch (e) {
-          console.error('[Capture] tickCaptureWindows failed:', e?.message || e);
-        }
-      }
     }
   } catch (err) {
     console.error("[Combat] Turn loop error:", err);
@@ -7299,30 +7209,6 @@ function recordEnemyKill(state, entity) {
       console.error('[Passive] applyClassPassiveOnKill failed:', e?.message || e);
     }
 
-    // 💡 Phase 3: Necromancer capture pipeline.
-    // If this player has an active capture window (from army_of_dead ult),
-    // attempt to capture the defeated enemy as a permanent summon.
-    // Fire-and-forget async - result pushed to roundLog.
-    try {
-      const window = summonCapture.getCaptureWindow(state, p.jid);
-      if (window) {
-        // Fire-and-forget - don't block the sync kill tracking
-        summonCapture.attemptCapture(state, entity, p.jid)
-          .then(result => {
-            if (result && result.captured && result.message) {
-              state.roundLog = state.roundLog || [];
-              state.roundLog.push(result.message);
-            } else if (result && result.message) {
-              // Capture failed but has a message (e.g. "soul escapes")
-              state.roundLog = state.roundLog || [];
-              state.roundLog.push(result.message);
-            }
-          })
-          .catch(e => console.error('[Capture] attemptCapture failed:', e?.message || e));
-      }
-    } catch (e) {
-      console.error('[Capture] recordEnemyKill capture branch failed:', e?.message || e);
-    }
 
     if (entity.isBoss) {
       // 💡 QA FIX: Rank-gate boss kills for rank-up missions.
@@ -7412,44 +7298,6 @@ function recordEnemyKill(state, entity) {
       guilds.updateBoardProgress(userGuild, entity.type, 1);
     }
 
-    // 💡 FIX 2026-08-03 (bug report #3): Award summon XP for EVERY enemy kill
-    // in ALL combat types (PvE, Abyss, PvP) - not just at end of guild quest.
-    // Previously summon XP was only awarded in endAdventure() (guild quest end),
-    // so Abyss + PvP + raid summons got ZERO XP despite participating.
-    // This fix fires per-kill, giving 10% of the enemy's XP value to each
-    // deployed summon owned by this player.
-    try {
-      if (state.summons && state.summons.length > 0) {
-        const summonSystem = require('../summons/summonSystem');
-        const summonAI = require('../summons/summonAI');
-        // Estimate enemy XP: base 20 + level*5, bosses 5x
-        const enemyLevel = entity.level || entity.stats?.level || Math.floor((state.abyssFloor || state.dungeonRank || 1));
-        const enemyXpValue = (entity.isBoss ? 100 : 20) + (enemyLevel * 5);
-        const summonXpShare = Math.max(5, Math.floor(enemyXpValue * 0.1));
-        for (const summonEntity of state.summons) {
-          // Only award XP to summons owned by this player + still alive
-          if (summonEntity && !summonEntity.isDead && summonEntity._summonDoc &&
-              summonEntity.summonerJid === p.jid) {
-            const xpResult = summonSystem.addSummonXP(summonEntity._summonDoc, summonXpShare);
-            if (xpResult.leveledUp) {
-              state.roundLog = state.roundLog || [];
-              state.roundLog.push(`✨ ${summonEntity.icon} ${summonEntity.name} leveled up to L${xpResult.newLevel}!`);
-            }
-            // 💡 NEW 2026-08-05: Notify newly unlocked abilities
-            if (xpResult.newlyUnlockedAbilities && xpResult.newlyUnlockedAbilities.length > 0) {
-              state.roundLog = state.roundLog || [];
-              for (const ab of xpResult.newlyUnlockedAbilities) {
-                state.roundLog.push(`🔓 ${summonEntity.icon} ${summonEntity.name} learned *${ab.name}*! (Lv.${ab.levelReq}+)`);
-              }
-            }
-            // Persist async (fire-and-forget - don't block combat)
-            summonAI.persistSummonChanges(summonEntity).catch(() => {});
-          }
-        }
-      }
-    } catch (e) {
-      console.error('[SummonXP] recordEnemyKill award failed:', e.message);
-    }
   });
 }
 
@@ -7469,50 +7317,6 @@ async function handleDeath(
 
   if (entity.isEnemy) {
     recordEnemyKill(state, entity);
-  }
-
-  // 💡 Summoner System (Phase 2): summon death → apply Soul Echo to summoner.
-  // The summon's echo buff is applied to the PLAYER who summoned it.
-  // The summon is removed from state.summons + state.turnOrder.
-  // The summon is NOT permanently lost - it returns to the roster at reduced loyalty.
-  if (entity.isSummon) {
-    try {
-      const summoner = (state.players || []).find(p => p.jid === entity.summonerJid && !p.isDead);
-      if (summoner) {
-        const echoMsg = summonAI.applySoulEcho(summoner, entity);
-        if (echoMsg && chatId) {
-          try {
-            await boundedSend(sock, chatId, { text: echoMsg });
-          } catch (e) {}
-        }
-        // Track echo absorption on user stats
-        try {
-          const user = economy.getUser(summoner.jid);
-          if (user && user.summonStats) {
-            user.summonStats.echoesAbsorbed = (user.summonStats.echoesAbsorbed || 0) + 1;
-          }
-        } catch (e) {}
-      }
-
-      // Remove summon from combat state
-      state.summons = (state.summons || []).filter(s => s.id !== entity.id);
-      state.turnOrder = (state.turnOrder || []).filter(c => c.id !== entity.id);
-
-      // Persist loyalty reduction (summon returns at 50% of current loyalty, min 10)
-      if (entity._summonDoc) {
-        try {
-          const doc = entity._summonDoc;
-          const reducedLoyalty = Math.max(10, Math.floor((doc.loyalty || 100) * 0.5));
-          doc.loyalty = reducedLoyalty;
-          await doc.save();
-        } catch (e) {
-          console.error('[Summon] Failed to persist loyalty reduction:', e?.message || e);
-        }
-      }
-    } catch (e) {
-      console.error('[Summon] handleDeath summon branch failed:', e?.message || e);
-    }
-    return;  // summons don't go through the PERMADEATH logic below
   }
 
   if (!entity.isEnemy) {
@@ -8797,30 +8601,9 @@ async function handleAbyssVictory(sock, sessionKey) {
     } catch (e) {}
   }
 
-  // 💡 SUMMON PROGRESSION SYSTEM (2026-08-01): drop fragments when the
-  // defeated enemy was a wild summon. The encounter type + species data
-  // are stored on the run - check if this was a wild summon encounter.
+  // 🃏 SUMMONS OVERHAUL (2026-11-06): summon fragments no longer drop.
+  // In-flight wild_summon floors still resolve as normal fights.
   let fragmentMsg = '';
-  if (run.currentEncounterType === 'wild_summon' && run.currentEncounterData) {
-    try {
-      const summonEggSystem = require('../summons/summonEggSystem');
-      const wildRarity = run.currentEncounterData.rarity || 'COMMON';
-      const fragDrop = summonEggSystem.getFragmentDrop(state.abyssFloor, wildRarity);
-      if (fragDrop) {
-        const { fragmentId, quantity } = fragDrop;
-        // 💡 FIX 2026-08-31: await the addItem and check the result - a full
-        // inventory silently failed while the message still announced the drop.
-        const fragResult = await inventorySystem.addItem(senderJid, fragmentId, quantity);
-        const fragInfo = lootSystem.getItemInfo(fragmentId);
-        const fragName = fragInfo?.name || fragmentId;
-        fragmentMsg = fragResult && fragResult.success
-          ? `\n💎 *SUMMON FRAGMENT DROP!* +${quantity}x ${fragName}`
-          : `\n⚠️ Summon fragments wouldn't fit in your bag (bag full)!`;
-      }
-    } catch (e) {
-      console.error('[Abyss] Fragment drop failed:', e.message);
-    }
-  }
 
   // 💡 2026-09-17 PACK FIGHTS: queued pack members jump in one after
   // another on the SAME floor - no HP reset, +25% rewards per add. The
@@ -8954,7 +8737,6 @@ async function handleAbyssVictory(sock, sessionKey) {
   } else if (encounter.type === 'wild_summon') {
     msg += `🐉 *Floor ${newFloor}* - Wild ${encounter.wildSummonSpecies} appeared!*\n`;
     msg += `HP: ${Math.floor(encounter.enemy.stats.hp)}/${Math.floor(encounter.enemy.stats.maxHp)}\n`;
-    msg += `⚠️ _Defeat it to earn Summon Fragments!_\n`;
     msg += `_Use \`${botConfig.getPrefix()} combat attack\` to fight!_`;
     try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
     if (run.isCoop) {
@@ -9071,19 +8853,6 @@ async function endCombat(sock, victory, sessionKey, expectedGen) {
     `[Quest] Combat ended. Victory: ${victory}, Encounter: ${state.encounter}/${state.maxEncounters}`,
   );
   state.inCombat = false;
-
-  // 💡 FIX #7: Set death cooldown for any summons that died during combat.
-  // They can't be redeployed for 5 minutes. This gives summon death a
-  // consequence - players can't just throw their summon into every fight
-  // without caring if it dies.
-  if (state.summons) {
-    for (const summon of state.summons) {
-      if (summon.isDead && summon.id) {
-        summonDeathCooldowns.set(summon.id, Date.now() + SUMMON_DEATH_COOLDOWN_MS);
-        console.log(`[SummonCooldown] ${summon.name} died - cooldown set for 5min`);
-      }
-    }
-  }
 
   // 💡 FIX §2.8: Clean up per-player combat state so it doesn't bleed into
   // the next fight. Previously, skillCooldowns, passiveCombo, passiveKillBonus,
@@ -11999,29 +11768,6 @@ async function endAdventure(sock, sessionKey, victory = true) {
       progression.awardXP(player.jid, xpToAward);
     }
 
-    // 💡 PHASE 4 (2026-08-01): Award XP to deployed summons + persist changes.
-    try {
-      const summonAI = require('../summons/summonAI');
-      for (const summonEntity of (state.summons || [])) {
-        if (summonEntity && !summonEntity.isDead && summonEntity._summonDoc) {
-          const summonXP = Math.max(10, Math.floor(xpToAward * 0.1));
-          const summonSystem = require('../summons/summonSystem');
-          const xpResult = summonSystem.addSummonXP(summonEntity._summonDoc, summonXP);
-          if (xpResult.leveledUp) {
-            msg += `${summonEntity.icon} ${summonEntity.name} leveled up to L${xpResult.newLevel}!\n`;
-          }
-          // 💡 NEW 2026-08-05: Notify newly unlocked abilities
-          if (xpResult.newlyUnlockedAbilities && xpResult.newlyUnlockedAbilities.length > 0) {
-            for (const ab of xpResult.newlyUnlockedAbilities) {
-              msg += `🔓 ${summonEntity.icon} ${summonEntity.name} learned *${ab.name}*! (Lv.${ab.levelReq}+)\n`;
-            }
-          }
-          await summonAI.persistSummonChanges(summonEntity);
-        }
-      }
-    } catch (summonErr) {
-      console.error('[Combat] Summon XP/persist failed:', summonErr.message);
-    }
 
  // FIX (audit "rank sheet and captions are different"): this was
  // fire-and-forget, so `rankUpdate` was a PROMISE - `rankUpdate.ranked_up`
@@ -13653,17 +13399,9 @@ async function _applyAbilityEffectCore(
                                effData.unit === 'skeleton_warrior' ||
                                effect.targeting === 'ALL_CORPSES';
           if (isArmyOfDead && !player.isEnemy && player.jid) {
-            // Get the Necromancer's active summon level (for capture bonus)
-            let summonLevel = 1;
-            try {
-              const user = economy.getUser(player.jid);
-              if (user && user.activeSummonId) {
-                const activeSummon = await summonSystem.getActiveSummon(user);
-                if (activeSummon) summonLevel = activeSummon.level || 1;
-              }
-            } catch (e) {}
-            summonCapture.setCaptureWindow(state, player.jid, summonLevel);
-            msg += `🗡️ *Army of the Dead active!* Soul capture window open for ${summonCapture.CAPTURE_CONFIG.CAPTURE_WINDOW_TURNS} turns.\n`;
+            // 🃏 SUMMONS OVERHAUL (2026-11-06): soul-capture window removed
+            // with the old summon system; the ult keeps its drag-down
+            // execution identity below.
 
             // 💀 DRAG-DOWN EXECUTION (owner 2026-10-26: "when the army of death
             // drags down an enemy they instantly die, unless its another player
@@ -14468,14 +14206,10 @@ module.exports = {
   leaveRuinsSession,
   makeRuinsSock,
   _coopIndex,
-  // 💡 Summoner System (Phase 2): export for summonAI.js to access.
-  // summonAI does a lazy require('./guildAdventure') to avoid circular dep,
-  // so these must be on the exports.
   gameStates,
   calculateDamage,
   handleDeath,
   applyTotalAnnihilation,
-  // 💡 NEW 2026-08-07: Export for summonAI to generate combat images + full skill effects
   nextTurn,
   applyAbilityEffect,
   // 💡 TICKET QA (2026-09-21): combat-message/solo-passive helpers, exported

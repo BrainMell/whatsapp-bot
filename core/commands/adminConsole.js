@@ -460,8 +460,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 `  Adds RPG SKILL points (does NOT overwrite).\n\n` +
                 `• \`${prefix} mod fightenemy <bossId|name>\`\n` +
                 `  Fight any boss for testing. Use \`mod enemy list\` to find IDs.\n\n` +
-                `• \`${prefix} mod givesummon <@user> <summon>\` / \`${prefix} mod giverune <@user> <rune>\`\n` +
-                `  Grant a summon or an Abyss rune (partial names OK).\n\n` +
+                `• \`${prefix} mod giverune <@user> <rune>\`\n` +
+                `  Grant an Abyss rune (partial names OK).\n\n` +
                 `• \`${prefix} mod vfx [class|all] [level]\`\n` +
                 `  Preview class ultimate animations (aliases: ultpreview, vfxtest).\n\n` +
                 `• \`${prefix} mod givezeni <@user> <amount>\`\n` +
@@ -666,44 +666,21 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     }
 
     // ── SMART GIVE (PHASE 7 FIX 2026-08-29) ──────────────────────────────────
-    // Auto-detects: if query matches a summon species → givesummon.
-    // If query matches a rune type → giverune. Otherwise → giveitem.
+    // 🃏 Auto-detects rune type → giverune; otherwise → giveitem.
+    // (summon species detection removed with the 2026-11-06 summons overhaul)
     if (sub === 'give' || sub === 'additem') {
         const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
         if (!_parsed) return;
         const { target, remaining } = _parsed;
         if (!target || remaining.length < 1) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod give <@user> <thing> [qty|level|tier]\`\n\nAuto-detects:\n  • Summon species (bat, slime, mushroom, ...) → gives summon\n  • Rune type (POWER, EFFICIENCY, FROST_CONVERSION, ...) → gives rune\n  • Otherwise → gives inventory item\n\nExamples:\n  \`${prefix} mod give @user bat 5\` (bat summon, level 5)\n  \`${prefix} mod give @user POWER GREATER\` (Power rune, Greater tier)\n  \`${prefix} mod give @user health_potion 5\` (5 health potions)` });
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod give <@user> <thing> [qty|level|tier]\`\n\nAuto-detects:\n  • Rune type (POWER, EFFICIENCY, FROST_CONVERSION, ...) → gives rune\n  • Otherwise → gives inventory item\n\nExamples:\n  \`${prefix} mod give @user POWER GREATER\` (Power rune, Greater tier)\n  \`${prefix} mod give @user health_potion 5\` (5 health potions)` });
         }
         const query = remaining[0];
         const extra1 = remaining[1] || '';
         const extra2 = remaining[2] || '';
 
-        // 1. Try summon species
-        let summonSystem, registry;
-        try {
-            summonSystem = require('../rpg/systems/summons/summonSystem');
-            registry = require('../rpg/systems/summons/summonRegistry');
-        } catch (e) {}
-        if (registry && summonSystem) {
-            const speciesData = registry.getSpecies(query.toLowerCase());
-            if (speciesData) {
-                let level = 1;
-                const lvl = parseInt(extra1);
-                if (!isNaN(lvl) && lvl > 0) level = lvl;
-                try {
-                    const summon = await summonSystem.createSummon(target, query.toLowerCase(), {
-                        level, obtainedFrom: 'admin_grant', loyalty: 100
-                    });
-                    return await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + `✅ *SUMMON GIVEN (via smart give)*\n\n👤 @${economy.getDisplayName(target)}\n🐉 ${speciesData.icon || '🐉'} *${speciesData.name}*\n📊 Level: ${level}\n🆔 \`${summon.summonId}\``,
-                        mentions: [target]
-                    });
-                } catch (e) {
-                    return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to give summon: ${e.message}` });
-                }
-            }
-        }
+        // 🃏 SUMMONS OVERHAUL (2026-11-06): the summon system was scraped —
+        // summon granting is offline until summons return as special cards.
 
         // 2. Try rune type
         let runeSystem;
@@ -730,7 +707,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const item = resolveItem(query);
         if (!item) {
             return await sock.sendMessage(chatId, {
-                text: BOT_MARKER + `❌ \`${query}\` is not a summon species, rune type, or inventory item.\n\nUse \`${prefix} summon codex\` to see summon species, or \`${prefix} rune types\` for rune types.`
+                text: BOT_MARKER + `❌ \`${query}\` is not a rune type or inventory item.\n\nUse \`${prefix} rune types\` for rune types.`
             });
         }
         // Block special RPG objects (same as giveitem)
@@ -795,37 +772,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         });
     }
 
-    // ── GIVE SUMMON (PHASE 7 2026-08-29) ─────────────────────────────────────
+    // ── GIVE SUMMON — retired (summons overhaul 2026-11-06) ─────────────────
     if (sub === 'givesummon') {
-        const _parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
-        if (!_parsed) return;
-        const { target, remaining } = _parsed;
-        if (!target || remaining.length < 1) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod givesummon <@user> <species> [level]\`\nExample: \`${prefix} mod givesummon @user bat 5\`\n\nUse \`${prefix} summon codex\` to see all species.` });
-        }
-        let species = remaining[0];
-        let level = 1;
-        if (remaining.length >= 2) {
-            const lvl = parseInt(remaining[1]);
-            if (!isNaN(lvl) && lvl > 0) level = lvl;
-        }
-        const summonSystem = require('../rpg/systems/summons/summonSystem');
-        const registry = require('../rpg/systems/summons/summonRegistry');
-        const speciesData = registry.getSpecies(species.toLowerCase());
-        if (!speciesData) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown summon species: \`${species}\`\nUse \`${prefix} summon codex\` to see all species.` });
-        }
-        try {
-            const summon = await summonSystem.createSummon(target, species.toLowerCase(), {
-                level, obtainedFrom: 'admin_grant', loyalty: 100
-            });
-            return await sock.sendMessage(chatId, {
-                text: BOT_MARKER + `✅ *SUMMON GIVEN*\n\n👤 @${economy.getDisplayName(target)}\n🐉 ${speciesData.icon || '🐉'} *${speciesData.name}*\n📊 Level: ${level}\n🆔 \`${summon.summonId}\`\n\n💡 Recipient can deploy with \`${prefix} summon deploy <#>\`.`,
-                mentions: [target]
-            });
-        } catch (e) {
-            return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Failed to give summon: ${e.message}` });
-        }
+        return await sock.sendMessage(chatId, { text: BOT_MARKER + '🐉 Summon granting is offline — the summon system is being rebuilt as special cards.' });
     }
 
     // ── GIVE RUNE (PHASE 7 2026-08-29) ───────────────────────────────────────

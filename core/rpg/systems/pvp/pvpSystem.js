@@ -347,18 +347,9 @@ function challengePlayer(chatId, challengerJid, targetJid, stake = 0, opts = {})
         return { success: false, message: '❌ The player you challenged is not registered!' };
     }
 
-    // 💡 NEW 2026-08-05: Summon duel mode - both players must have an active summon
-    const mode = opts.mode || 'player';
-    if (mode === 'summon') {
-        const challengerUser = economy.getUser(resolvedChallenger);
-        const targetUser = economy.getUser(resolvedTarget);
-        if (!challengerUser?.activeSummonId) {
-            return { success: false, message: `❌ You need a deployed summon to issue a summon duel! Use \`${botConfig.getPrefix()} summon deploy <#>\` first.` };
-        }
-        if (!targetUser?.activeSummonId) {
-            return { success: false, message: `❌ ${targetUser?.nickname || economy.getDisplayName(resolvedTarget)} doesn't have a deployed summon!` };
-        }
-    }
+    // 🃏 SUMMONS OVERHAUL (2026-11-06): summon duel mode removed with the
+    // old summon system. Only player duels can be issued.
+    const mode = 'player';
 
     if (stake > 0) {
         const user = economy.getUser(resolvedChallenger);
@@ -454,22 +445,10 @@ async function acceptChallenge(sock, chatId, targetJid) {
         return cleanupAndFail('❌ Failed to load player data for the duel!');
     }
 
-    const mode = invite.mode || 'player'; // 💡 NEW: 'player' or 'summon'
+    const mode = 'player'; // 🃏 summon duels removed (2026-11-06)
 
-    // 💡 NEW 2026-08-05: Branch on mode - summon duels use summon entities as
-    // combatants instead of player entities.
     let players;
-    if (mode === 'summon') {
-        const p1Summon = await buildSummonDuelPlayer(invite.challenger, 0);
-        const p2Summon = await buildSummonDuelPlayer(resolvedTarget, 1);
-        if (!p1Summon) {
-            return cleanupAndFail('❌ You no longer have a deployed summon! Deploy one first.');
-        }
-        if (!p2Summon) {
-            return cleanupAndFail('❌ Your opponent no longer has a deployed summon!');
-        }
-        players = [p1Summon, p2Summon];
-    } else {
+    {
         const p1Stats = progression.getBaseStats(invite.challenger, p1Data.class);
         // 💡 FIX 2026-08-31: P2 was built with the RAW targetJid while P1 got
         // the RESOLVED challenger JID - for LID↔phone-mapped users the turn
@@ -514,26 +493,6 @@ async function acceptChallenge(sock, chatId, targetJid) {
 
     activeDuels.set(chatId, duelState);
 
-    // 💡 NEW 2026-08-05: Skip deployPvPSummons in summon mode - the summons
-    // ARE the combatants now, not decorative support units.
-    if (mode !== 'summon') {
-        // 💡 FIX 2026-08-04: Deploy summons for both players BEFORE rendering the
-        // image. Summons are mandatory - the duel image must show them. The 3s
-        // timeout that was here before was too aggressive (DB queries for 2 players
-        // can briefly exceed 3s under load) and caused summons to be silently
-        // skipped, leaving the duel image without them. 8s is a generous safety
-        // net; normal deploy is <1s.
-        try {
-            await Promise.race([
-                deployPvPSummons(duelState),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Summon deploy timeout (8s)')), 8000)),
-            ]);
-        } catch (e) {
-            console.error('[PvP] Summon deploy failed:', e.message);
-            // Continue - duel still works, summons just won't appear in the image.
-        }
-    } // end if (mode !== 'summon')
-
     // 💡 FIX 2026-08-05: Health-gate the image gen. If the Go service is
     // known-down (cached health check), skip image gen entirely - don't waste
     // 10s on an axios timeout. The duel starts text-only immediately.
@@ -553,30 +512,22 @@ async function acceptChallenge(sock, chatId, targetJid) {
     const p1 = duelState.players[0];
     const p2 = duelState.players[1];
 
-    // 💡 NEW 2026-08-05: Summon duel start message - different header + commands
-    const isSummonDuel = duelState.mode === 'summon';
     const isEqualise = duelState.equalise === true;
-    const header = isSummonDuel ? `🐉 *SUMMON DUEL* 🐉` : `🏟️ *PHANTOM STANDOFF* 🏟️`;
+    const header = `🏟️ *PHANTOM STANDOFF* 🏟️`;
     const modeTag = isEqualise ? ` ⚖️ *EQUALISED*` : ``;
-    const fleeWarning = isSummonDuel
-        ? `🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Summon loses 10 loyalty!)*`
-        : `🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Deducts 20% XP, 10% Wallet (max 5K), and 1 random item!)*`;
+    const fleeWarning = `🏃 \`${botConfig.getPrefix()} combat flee\` *(⚠️ Deducts 20% XP, 10% Wallet (max 5K), and 1 random item!)*`;
 
     // 💡 STYLE A WAR LOG (2026-10-20): the duel opens with the mono war-log
     // table (same family as the battle-image captions) — HP/EN grid in a ```
     // fence, '>' on the fighter holding the initiative, order/Lv/class as »
     // flow lines. Replaces the 2026-09-11 raid-style listing.
-    const duelClass = (p) => p.class?.name || (isSummonDuel ? p.archetype : 'Fighter');
+    const duelClass = (p) => p.class?.name || 'Fighter';
     const p1Faster = (p1.stats?.spd || 0) >= (p2.stats?.spd || 0);
     const orderFirst = p1Faster ? p1 : p2;
     const orderSecond = p1Faster ? p2 : p1;
     const acting = duelState.players[duelState.turn];
     const mark = (p) => (p === acting ? '>' : ' ');
 
-    // 💡 STYLE A: summons ride as a » flow line inside the fence.
-    const summonLines = (!isSummonDuel && duelState.summons && duelState.summons.length > 0)
-        ? [`» 🐉 SUMMONS: ` + duelState.summons.map(s => `${warlogClean(s.name)}`).join(', ')] // 💡 owner tweak v2: summon HP totals out of combat text
-        : [];
 
     let startMsg =
         `${header}${modeTag}\n` +
@@ -586,15 +537,12 @@ async function acceptChallenge(sock, chatId, targetJid) {
             WARLOG_DIV,
             `» ${orderFirst.name} (Lv.${orderFirst.level} ${duelClass(orderFirst)}) vs ${orderSecond.name} (Lv.${orderSecond.level} ${duelClass(orderSecond)})`,
             `» Turn order by SPD: ${orderFirst.name} → ${orderSecond.name}`,
-            ...summonLines,
             `» ${acting.name} claims the initiative!`,
         ]) +
         `\n⏳ _Awaiting first action..._\n` +
         `🗡️ \`${botConfig.getPrefix()} combat attack\`\n` +
         `🔮 \`${botConfig.getPrefix()} combat ability <n>\`\n` +
-        (isSummonDuel
-            ? `💊 \`${botConfig.getPrefix()} combat item\` *(Summon Healing Pill)*\n`
-            : `🎒 \`${botConfig.getPrefix()} combat item\`\n`) +
+        `🎒 \`${botConfig.getPrefix()} combat item\`\n` +
         fleeWarning;
 
     return { success: true, duel: duelState, image, message: startMsg };
@@ -639,97 +587,8 @@ function buildDuelPlayer(jid, userData, stats, idx, equalise = false) {
     return player;
 }
 
-// 💡 NEW 2026-08-05: Build a summon-as-duelist entity for summon PvP mode.
-// Wraps summonSystem.buildCombatEntity() so the entity satisfies the
 // handlePvPAction player-entity contract (jid, name, level, class, hp,
 // maxHp, energy, maxEnergy, stats, statusEffects, buffs, cooldowns).
-async function buildSummonDuelPlayer(ownerJid, idx) {
-    const summonSystem = require('../summons/summonSystem');
-    const user = economy.getUser(ownerJid);
-    if (!user?.activeSummonId) return null;
-
-    const summonDoc = await summonSystem.getActiveSummon(user);
-    if (!summonDoc) return null;
-
-    // Reuse the existing builder - produces stats, statusEffects, buffs, etc.
-    const entity = summonSystem.buildCombatEntity(summonDoc, ownerJid);
-    if (!entity) return null;
-
-    const species = require('../summons/summonRegistry').getSpecies(summonDoc.species);
-
-    // Shape it to satisfy handlePvPAction's player-entity contract
-    return {
-        ...entity,
-        jid:         ownerJid,                    // owner is the actor for turn checks
-        name:        entity.name,
-        level:       summonDoc.level || 1,
-        class:       { id: 'summon', name: summonDoc.archetype || 'Summon' },
-        spriteIndex: idx,
-        // Normalize HP/energy fields for handlePvPAction reads
-        hp:          entity.currentHP || entity.maxHp,
-        maxHp:       entity.maxHp,
-        energy:      entity.mana || 100,
-        maxEnergy:   entity.maxMana || 100,
-        // 💡 NEW 2026-08-05: mode + species for Go service sprite rendering
-        mode:        'summon',
-        species:     summonDoc.species,
-        // Summon-specific (for finishDuel rewards + loyalty/CP)
-        _summonDoc:  summonDoc,
-        _isSummon:   true,
-        _speciesIcon: species?.icon || '🐉',
-        _speciesName: species?.name || summonDoc.species,
-    };
-}
-
-// 💡 NEW 2026-08-05: Get abilities for a summon duelist.
-// Uses monsterSkills.getSkillsForMonster(archetype, level) instead of
-// the player's class skill tree.
-function getSummonAbilities(player) {
-    if (!player.archetype) return [];
-    try {
-        const monsterSkills = require('../combat/monsterSkills');
-        const skills = monsterSkills.getSkillsForMonster(player.archetype, player.level || 1);
-        return skills.map(s => ({
-            id:        s.id,
-            name:      s.name,
-            animation: '✨',
-            cooldown:  0,
-            _summonSkill: s,
-        }));
-    } catch (e) {
-        return [];
-    }
-}
-
-// 💡 Deploy summons for both PvP players.
-// Called after buildDuelPlayer - adds each player's active summon to the duel.
-async function deployPvPSummons(duelState) {
-    const summonSystem = require('../summons/summonSystem');
-    duelState.summons = [];
-
-    for (let i = 0; i < duelState.players.length; i++) {
-        const player = duelState.players[i];
-        try {
-            const user = economy.getUser(player.jid);
-            if (!user || !user.activeSummonId) continue;
-
-            const summonDoc = await summonSystem.getActiveSummon(user);
-            if (!summonDoc) continue;
-
-            const summonEntity = summonSystem.buildCombatEntity(summonDoc, player.jid);
-            if (summonEntity) {
-                summonEntity.summonerIndex = i;
-                // 💡 FIX 2026-08-03: Go service's Summon struct expects `ownerIndex`
-                // (not `summonerIndex`). Without this, the Go service can't
-                // position summons relative to their owner.
-                summonEntity.ownerIndex = i;
-                duelState.summons.push(summonEntity);
-            }
-        } catch (e) {
-            console.error('[PvP] Summon deploy failed for', player.jid, ':', e.message);
-        }
-    }
-}
 
 // ==========================================
 // ⚔️ HANDLE PVP ACTION
@@ -948,26 +807,12 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
         }
         const abilityIndex = parseInt(target) - 1;
 
-        // 💡 NEW 2026-08-05: Branch ability lookup on duel mode.
-        // Summon mode: use monsterSkills.getSkillsForMonster(archetype, level).
-        // Player mode: use getLearnedAbilities(jid, classId) as before.
         let learned;
         let effect;
         let energyCost;
         let cooldownVal;
 
-        if (duel.mode === 'summon') {
-            learned = getSummonAbilities(currentPlayer);
-            abilityObj = learned[abilityIndex];
-            if (!abilityObj) return { success: false, message: `❌ Ability #${parseInt(target)} not found! Use \`${require('../../../../botConfig').getPrefix()} summon abilities\` to see your summon's kit.` };
-
-            // Summon skills: effect is in _summonSkill.currentEffect (already computed by getSkillsForMonster)
-            effect = abilityObj._summonSkill?.currentEffect || abilityObj._summonSkill?.effect || {};
-            energyCost = abilityObj._summonSkill?.cost || 20;
-
-            // 💡 Flat 2-turn cooldown on all summon abilities in PvP (prevents spam)
-            cooldownVal = 2;
-        } else {
+        {
             learned = getLearnedAbilities(currentPlayer.jid, currentPlayer.class?.id);
             abilityObj = learned[abilityIndex];
             if (!abilityObj) return { success: false, message: `❌ Ability #${parseInt(target)} not found! Use \`${require('../../../../botConfig').getPrefix()} abilities\` to see your list.` };
@@ -1279,44 +1124,6 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
         }
 
     } else if (action === 'flee') {
-        // 💡 NEW 2026-08-05: Summon duel flee - CP penalty instead of player XP/wallet/item loss.
-        // Fleeing summon loses CP (combat power) rating via temporary loyalty reduction.
-        if (duel.mode === 'summon') {
-            const summonSystem = require('../summons/summonSystem');
-            // CP penalty: reduce summon's effectiveness by dropping loyalty 10 points
-            // (loyalty gates stats: ≥75=100%, ≥50=85%, ≥25=60%, ≥1=30%)
-            const cpPenalty = 10;
-            if (currentPlayer._summonDoc) {
-                currentPlayer._summonDoc.loyalty = Math.max(0, (currentPlayer._summonDoc.loyalty || 0) - cpPenalty);
-                try { await currentPlayer._summonDoc.save(); } catch (e) {}
-            }
-            const oldCP = summonSystem.computeCP(currentPlayer._summonDoc);
-            // 💡 FIX 2026-08-31: pay the staked pot to the winner. Both owners
-            // paid the stake at accept; previously a summon-mode forfeit simply
-            // deleted the duel - the entire pot was destroyed and the stayer
-            // got nothing (player mode pays at the equivalent point below).
-            let stakeMsg = '';
-            if (duel.stake > 0 && opponent?.jid) {
-                const pot = duel.stake * 2;
-                const paid = economy.addMoney(opponent.jid, pot, 'Summon duel won by forfeit (staked pot)');
-                if (paid) {
-                    stakeMsg = `\n💰 *${opponent._speciesName}'s owner* wins the pot: ${botConfig.getCurrency().symbol}${pot.toLocaleString()}!`;
-                } else {
-                    // Winner can't be credited - refund both sides instead of
-                    // destroying the money.
-                    try { economy.addMoney(currentPlayer.jid, duel.stake, 'Summon duel forfeit refund'); } catch (e) {}
-                    try { economy.addMoney(opponent.jid, duel.stake, 'Summon duel forfeit refund'); } catch (e) {}
-                    stakeMsg = `\n💸 Pot could not be paid - stakes refunded to both owners.`;
-                }
-            }
-            const fleeMsg = `🏃 *${currentPlayer._speciesName}* fled the summon duel!\n\n` +
-                           `⚠️ *Flee Penalty:* ${currentPlayer._speciesName} lost *${cpPenalty}* loyalty (CP reduced).\n` +
-                           `Current CP: ${oldCP}\n\n` +
-                           `🏆 *${opponent._speciesName}* wins by forfeit!${stakeMsg}`;
-            activeDuels.delete(duel?.chatId || chatId);
-            return { success: true, finished: true, fled: true, message: fleeMsg };
-        }
-
         // Player who flees gets penalized, opponent wins.
         const fleeingJid = currentPlayer.jid;
         const stayingJid = opponent.jid;
@@ -1499,23 +1306,7 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
             image: fleeImage,
         };
     } else if (action === 'item') {
-        // 💡 NEW 2026-08-05: In summon duel mode, items are disabled (summons
-        // have no inventory). Owner can use a Summon Healing Pill from the
-        // summon store if they have one - handled via 'item summon_pill'.
-        if (duel.mode === 'summon') {
-            // Check for summon healing pill in owner's inventory
-            const inventory = inventorySystem.formatInventory(currentPlayer.jid);
-            const pillItem = inventory.items?.find(it => it.id === 'summon_healing_pill' || it.id === 'summon_pill');
-            if (!pillItem) {
-                return { success: false, message: '❌ Summons have no combat bag. Buy a *Summon Healing Pill* from the summon store to heal mid-battle.\n\nAvailable commands: `attack`, `ability <n>`, `flee`' };
-            }
-            // Use the pill - heal 30% of max HP
-            const healAmount = Math.floor(currentPlayer.maxHp * 0.30);
-            currentPlayer.hp = Math.min(currentPlayer.maxHp, currentPlayer.hp + healAmount);
-            // Consume the pill
-            try { await inventorySystem.removeItem(currentPlayer.jid, pillItem.id, 1); } catch (e) {}
-            actionResult = `💊 ${currentPlayer.name} swallows a *Summon Healing Pill*! Restored *${healAmount}* HP!`;
-        } else {
+        {
         const inventory = inventorySystem.formatInventory(currentPlayer.jid);
         if (inventory.isEmpty) {
             return { success: false, message: '❌ Your combat bag is empty!' };
@@ -1694,43 +1485,13 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
             default:
                 actionResult += `\n(Item effect activated)`;
         }
-        } // end else (non-summon item path)
+        }
     } else {
         return { success: false, message: `❌ Unknown action. Use: \`attack\`, \`ability <n>\`, \`item\`, or \`flee\`` };
     }
 
     if (statusLog.length > 0) {
         actionResult = statusLog.join('\n') + '\n\n' + actionResult;
-    }
-
-    // 💡 FIX #5 (2026-08-15): PvP summon participation - after the player acts,
-    // their summon auto-attacks the opponent. This makes summons actively
-    // participate in PvP instead of being passive stat sticks. The summon
-    // uses a simplified attack formula (not the full PvE summonAI which
-    // depends on gameStates/sock.sendMessage).
-    if (duel.summons && duel.summons.length > 0 && action !== 'flee') {
-        const playerSummon = duel.summons.find(s =>
-            s.summonerIndex === duel.turn && !s.isDead && s.stats?.hp > 0
-        );
-        if (playerSummon && opponent.hp > 0) {
-            // Simplified summon attack: summon ATK vs opponent DEF
-            const summonAtk = playerSummon.stats?.atk || 20;
-            const oppDef = opponent.stats?.def || opponent.def || 10;
-            let summonDmg = Math.max(1, Math.floor(summonAtk * (100 / (100 + oppDef))));
-            // 15% crit chance for summons
-            const summonCrit = Math.random() < 0.15;
-            if (summonCrit) summonDmg = Math.floor(summonDmg * 1.5);
-            // 10% miss chance
-            if (Math.random() < 0.10) {
-                actionResult += `\n🐉 ${playerSummon.icon || '🐲'} ${playerSummon.name} attacks but *MISSES*!`;
-            } else {
-                opponent.hp = Math.max(0, opponent.hp - summonDmg);
-                actionResult += `\n${playerSummon.icon || '🐲'} ${playerSummon.name} attacks *${opponent.name}* for 💥 ${summonDmg} damage${summonCrit ? ' (CRIT!)' : ''}!`;
-                if (opponent.hp <= 0) {
-                    actionResult += `\n💀 ${opponent.name} was defeated by ${playerSummon.name}!`;
-                }
-            }
-        }
     }
 
     // ── Check for win ─────────────────────────────
@@ -1887,110 +1648,8 @@ function getLearnedAbilities(userId, classId) {
 // 🏆 FINISH DUEL
 // ==========================================
 
-// 💡 NEW 2026-08-05: Finish a summon-vs-summon duel.
-// Rewards: summon XP (scaled to opponent level), loyalty cost (winner -1, loser -2),
-// ELO (summonStats.arenaWins/Losses), stakes (owner pays). No player XP/Zeni/bounty.
-async function finishSummonDuel(chatId, duel, winner, loser) {
-    const ZENI = botConfig.getCurrency().symbol;
-    const summonSystem = require('../summons/summonSystem');
-    const summonAI = require('../summons/summonAI');
-
-    let rewardMsg = `🐉 *SUMMON DUEL OVER!*\n`;
-
-    // Stakes (owner pays - same as player PvP)
-    if (duel.stake > 0) {
-        const pot = duel.stake * 2;
-        economy.addMoney(winner.jid, pot);
-        rewardMsg += `💰 ${ZENI}${pot.toLocaleString()} staked pot won by ${winner._speciesName}!\n`;
-    }
-
-    // Summon XP: winner gets XP scaled to loser's level
-    const summonXP = Math.max(20, Math.floor(50 + (loser.level * 10)));
-    try {
-        if (winner._summonDoc) {
-            const xpResult = summonSystem.addSummonXP(winner._summonDoc, summonXP);
-            rewardMsg += `\n✨ ${winner._speciesIcon} ${winner._speciesName} gained *${summonXP}* XP!`;
-            if (xpResult.leveledUp) {
-                rewardMsg += `\n📈 Leveled up to L${xpResult.newLevel}!`;
-            }
-            if (xpResult.newlyUnlockedAbilities && xpResult.newlyUnlockedAbilities.length > 0) {
-                rewardMsg += `\n🔓 *NEW ABILITIES UNLOCKED:*`;
-                for (const ab of xpResult.newlyUnlockedAbilities) {
-                    rewardMsg += `\n   • *${ab.name}* (Lv.${ab.levelReq}+${ab.cost > 0 ? `, ${ab.cost} EN` : ''})`;
-                }
-            }
-            // Persist winner summon
-            summonAI.persistSummonChanges(winner).catch(() => {});
-        }
-    } catch (e) {
-        console.error('[SummonDuel] Winner XP award failed:', e.message);
-    }
-
-    // Loyalty cost: winner -1, loser -2
-    try {
-        if (winner._summonDoc) {
-            winner._summonDoc.loyalty = Math.max(0, (winner._summonDoc.loyalty || 0) - 1);
-        }
-        if (loser._summonDoc) {
-            loser._summonDoc.loyalty = Math.max(0, (loser._summonDoc.loyalty || 0) - 2);
-            // 💡 FIX 2026-08-31: persist the loser's loyalty penalty - only the
-            // winner's doc was ever saved, so "-2 loyalty on loss" never
-            // reached the database.
-            try { await loser._summonDoc.save(); } catch (saveErr) {
-                console.error('[PvP] Failed to persist loser summon loyalty:', saveErr.message);
-            }
-        }
-        rewardMsg += `\n💖 Loyalty: ${winner._speciesName} -1, ${loser._speciesName} -2`;
-    } catch (e) {}
-
-    // ELO: summonStats.arenaWins/Losses
-    try {
-        const winnerUser = economy.getUser(winner.jid);
-        const loserUser = economy.getUser(loser.jid);
-        if (winnerUser) {
-            winnerUser.summonStats = winnerUser.summonStats || {};
-            winnerUser.summonStats.arenaWins = (winnerUser.summonStats.arenaWins || 0) + 1;
-            economy.saveUser(winner.jid);
-        }
-        if (loserUser) {
-            loserUser.summonStats = loserUser.summonStats || {};
-            loserUser.summonStats.arenaLosses = (loserUser.summonStats.arenaLosses || 0) + 1;
-            economy.saveUser(loser.jid);
-        }
-    } catch (e) {}
-
-    activeDuels.delete(duel?.chatId || chatId);
-
-    const finalMsg = `🏆 *${winner._speciesName}* wins the summon duel!\n\n${rewardMsg}`;
-
-    // Send final message
-    try {
-        const engine = require('../../../engine');
-        const sock = engine.getSock();
-        if (sock) {
-            // 💡 FIX 2026-08-31: BOT_MARKER is not defined in this module -
-            // this line threw ReferenceError (swallowed by the catch), making
-            // the direct send dead code. The caller already delivers the
-            // returned message; the marker is engine-side anyway.
-            await sock.sendMessage(chatId, { text: finalMsg });
-        }
-    } catch (e) {}
-
-    return { success: true, finished: true, message: finalMsg };
-}
-
 async function finishDuel(chatId, duel, winner, loser) {
     const ZENI = botConfig.getCurrency().symbol;
-
-    // 💡 NEW 2026-08-05: Summon duel mode - different reward structure.
-    // - Summon gets XP (scaled to opponent summon's level)
-    // - Loyalty: winner -1, loser -2
-    // - ELO: summonStats.arenaWins/Losses
-    // - Stakes: owner pays (same as player PvP)
-    // - Skip: player XP, Zeni prize, bounty, guild war points
-    if (duel.mode === 'summon') {
-        return await finishSummonDuel(chatId, duel, winner, loser);
-    }
 
     // ⚔️ RUINS stakes (GW overhaul): winner earns GP (anti-farmed in
     // points.recordPvpWin) and may claim the loser's carried relics; loser
@@ -2019,39 +1678,6 @@ async function finishDuel(chatId, duel, winner, loser) {
     }
 
     progression.addXP(winner.jid, xpGain, 'PvP Victory');
-
-    // 💡 FIX 2026-08-03 (bug report #3): Award summon XP to the winner's
-    // deployed summon. PvP combat doesn't go through recordEnemyKill (no
-    // 'enemy' entity - both combatants are players), so we award XP here
-    // at duel end based on the loser's level.
-    try {
-        if (duel.summons && duel.summons.length > 0) {
-            const summonSystem = require('../summons/summonSystem');
-            const summonAI = require('../summons/summonAI');
-            // Winner's summon gets XP based on loser's level (same as player XP)
-            const summonXP = Math.max(10, Math.floor(xpGain * 0.5));
-            for (const summonEntity of duel.summons) {
-                if (summonEntity && !summonEntity.isDead && summonEntity._summonDoc &&
-                    summonEntity.summonerJid === winner.jid) {
-                    const xpResult = summonSystem.addSummonXP(summonEntity._summonDoc, summonXP);
-                    if (xpResult.leveledUp) {
-                        rewardMsg += `\n✨ ${summonEntity.icon} ${summonEntity.name} leveled up to L${xpResult.newLevel}!`;
-                    }
-                    // 💡 NEW 2026-08-05: Notify newly unlocked abilities
-                    if (xpResult.newlyUnlockedAbilities && xpResult.newlyUnlockedAbilities.length > 0) {
-                        rewardMsg += `\n🔓 *NEW ABILITIES UNLOCKED* for ${summonEntity.name}:`;
-                        for (const ab of xpResult.newlyUnlockedAbilities) {
-                            rewardMsg += `\n   • *${ab.name}* (Lv.${ab.levelReq}+${ab.cost > 0 ? `, ${ab.cost} EN` : ''})`;
-                        }
-                    }
-                    // Persist async
-                    summonAI.persistSummonChanges(summonEntity).catch(() => {});
-                }
-            }
-        }
-    } catch (e) {
-        console.error('[PvP] Summon XP award failed:', e.message);
-    }
 
     // Update PvP stats
     const winnerUser = economy.getUser(winner.jid);
@@ -2284,7 +1910,6 @@ function beginRuinsDuel(challengerJid, challengedJid, meta = {}) {
     activeDuels.set(virtualId, duelState);
     ruinsByPlayer.set(c, virtualId);
     ruinsByPlayer.set(t, virtualId);
-    deployPvPSummons(duelState).catch(() => {});
     return { success: true, duel: duelState };
 }
 

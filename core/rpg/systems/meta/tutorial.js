@@ -25,12 +25,11 @@
 //   L3  combat     Arms & Combat (loaner dagger, dummy lessons, hospital)
 //   L5  power      Powering Up (skill tree, stat points, rank, daily, sell)
 //   L8  equipment  Forge & Maintenance (durability, repair, enhance, crafting)
-//   L10 summons    Summoning (eggs, fragments, hatch, deck, training)
 //   L12 runes      Runes (types, socketing, removal scrolls)
 //   L15 classes    Class Evolution (paths, evolve gate, trials)
 //   L18 guild      Guilds & Rivals (guilds, duels, bounties)
-//   L20 abyss      The Abyss (gates, extraction loop, wild summons, Floor 21+ runes)
-//   L25 endgame    Raids & the Deep End (Avatar raid, summon duels, resonance, investments)
+//   L20 abyss      The Abyss (gates, extraction loop, Floor 21+ runes)
+//   L25 endgame    Raids & the Deep End (Avatar raid, investments)
 //   L40 sight      The Sight (Soul Reader - hard gate L40)
 //   L50 ascend     Ascension (hard gate L50 requirements)
 //
@@ -73,12 +72,11 @@ const TRACKS = {
     combat:    { title: 'ARMS & COMBAT',        icon: '⚔️', unlockLevel: 3,  blurb: 'fight well: weapons, defense, skills, items, healing' },
     power:     { title: 'POWERING UP',          icon: '📈', unlockLevel: 5,  blurb: 'skill trees, stat points, rank, the daily' },
     equipment: { title: 'FORGE & MAINTENANCE',  icon: '🔨', unlockLevel: 8,  blurb: 'durability, repair, enhancement, crafting' },
-    summons:   { title: 'SUMMONING',            icon: '🐉', unlockLevel: 10, blurb: 'eggs, fragments, hatching, your deck' },
     runes:     { title: 'RUNES',                icon: '💎', unlockLevel: 12, blurb: 'skill augments, socketing, removal scrolls' },
     classes:   { title: 'CLASS EVOLUTION',      icon: '🧬', unlockLevel: 15, blurb: 'evolution paths, the L15 gate, trials' },
     guild:     { title: 'GUILDS & RIVALS',      icon: '🏰', unlockLevel: 18, blurb: 'guilds, duels, bounties' },
     abyss:     { title: 'THE ABYSS',            icon: '🕳️', unlockLevel: 20, blurb: 'the endgame dungeon: descend, loot, extract' },
-    endgame:   { title: 'RAIDS & THE DEEP END', icon: '🌋', unlockLevel: 25, blurb: 'Avatar raid, summon duels, resonance, investments' },
+    endgame:   { title: 'RAIDS & THE DEEP END', icon: '🌋', unlockLevel: 25, blurb: 'Avatar raid, investments, the deep end' },
     sight:     { title: 'THE SIGHT',            icon: '👁️', unlockLevel: 40, blurb: 'Soul Reader ritual (hard gate: level 40)' },
     ascend:    { title: 'ASCENSION',            icon: '👑', unlockLevel: 50, blurb: 'the final class gate (hard gate: level 50)' },
 };
@@ -128,16 +126,6 @@ const FLOWS = {
         },
         nextable: ['eq_repair', 'eq_enhance', 'eq_craft'],
     },
-    summons: {
-        entry: 'sm_intro',
-        steps: ['sm_intro', 'sm_hatch', 'sm_deck', 'sm_train', 'complete_summary'],
-        on: {
-            sm_hatch: { cmds: ['summon', 'summons'], subs: ['hatch', 'eggcraft'] },
-            sm_deck:  { cmds: ['summon', 'summons'], subs: ['list', 'ls', 'backlog', 'storage', 'swap'] },
-            sm_train: { cmds: ['summon', 'summons'], subs: ['train', 'deploy', 'equip', 'allocate'] },
-        },
-        nextable: ['sm_intro', 'sm_hatch', 'sm_deck', 'sm_train'],
-    },
     runes: {
         entry: 'rn_intro',
         steps: ['rn_intro', 'rn_inv', 'rn_socket', 'complete_summary'],
@@ -179,13 +167,12 @@ const FLOWS = {
     },
     endgame: {
         entry: 'eg_raid',
-        steps: ['eg_raid', 'eg_duel', 'eg_invest', 'complete_summary'],
+        steps: ['eg_raid', 'eg_invest', 'complete_summary'],
         on: {
             eg_raid:   { cmds: ['raid'] },
-            eg_duel:   { cmds: ['summon', 'summons'], subs: ['duel', 'resonance'] },
             eg_invest: { cmds: ['invest', 'investment'] },
         },
-        nextable: ['eg_raid', 'eg_duel', 'eg_invest'],
+        nextable: ['eg_raid', 'eg_invest'],
     },
     sight: {
         entry: 'si_intro',
@@ -336,18 +323,6 @@ function stepMessage(id, prefix, track) {
         case 'eq_craft':
             return `🛠️ *Step 3 - crafting.* Materials from quests and dungeons become gear and potions you can't buy. Browse what's craftable: \`${p} recipes\` (and \`${p} craft <id>\` to make one).\n\nSend \`next\` to graduate.`;
 
-        // ══ TRACK: summons (L10) — Summoning ══
-        case 'sm_intro':
-            return `${PREFIX} *SUMMONING*\n\n` +
-                `Summons are permanent battle companions: they fight beside you in dungeons, PvP and the Abyss, level up, and gain their own skills.\n\n` +
-                `*How you get them:* buy a *Basic Summon Egg* from the shop (5K Zeni, hatches 1 of 4 starters), or defeat Wild Summons in dungeons and the Abyss - they drop *Summon Fragments* (10 craft into a higher-tier egg).\n\nSend \`next\` to continue.`;
-        case 'sm_hatch':
-            return `🥚 *Step 1 - hatch.* If you own an egg: \`${p} summon hatch <egg_id>\` (a bought Basic Egg is \`${p} summon hatch basic_summon_egg\`). No egg yet? No problem - send \`next\`.\n\n_Fragments route: \`${p} summon eggcraft <tier>\` turns 10 fragments into an egg._`;
-        case 'sm_deck':
-            return `🐉 *Step 2 - your roster.* Summons live on a Main Deck (5 slots, deployable) plus a Backlog. View it: \`${p} summons\` (or \`${p} summon list\`)\n\n_Move summons between Deck and Backlog with \`${p} summon swap <backlog#> <deckSlot>\`._`;
-        case 'sm_train':
-            return `📊 *Step 3 - grow them.* \`${p} summon train <#>\` grants daily XP; levels raise stats and unlock abilities. Deploy one with \`${p} summon <#> deploy\` so it fights beside you.\n\n_Optional extras: stat points, gear, forging - \`${p} summon help\` shows it all. Trade on the player market: \`${p} market sell summon <#> <price>\`._\n\nSend \`next\` to graduate.`;
-
         // ══ TRACK: runes (L12) — Runes ══
         case 'rn_intro':
             return `${PREFIX} *RUNES*\n\n` +
@@ -386,14 +361,12 @@ function stepMessage(id, prefix, track) {
         case 'ab_loop':
             return `🕳️ *The loop:* every floor spawns a fight. Win and you choose - descend deeper for better loot, or extract with \`${p} abyss retreat\` and keep everything. **Die inside and you lose most of it.** Greed is the real boss.\n\nSend \`next\` to continue.`;
         case 'ab_wilds':
-            return `🐉 *What's down there:* Wild Summons (drop Summon Fragments - 10 craft an egg), runes from Floor 21+, and scale-topping gear. Bring potions. Bring a summon. Bring humility.\n\nSend \`next\` to finish.`;
+            return `🕳️ *What's down there:* runes from Floor 21+, fragment drops, and scale-topping gear. Bring potions. Bring humility.\n\nSend \`next\` to finish.`;
 
         // ══ TRACK: endgame (L25) — Raids & the Deep End ══
         case 'eg_raid':
             return `${PREFIX} *RAIDS & THE DEEP END*\n\n` +
                 `*The Sunday Avatar Raid.* Every Sunday 00:00 UTC a server-wide boss spawns - everyone who joins is merged into one colossal Avatar (class of the majority, stats of the crowd). \`${p} raid\` shows the rotation and how to join.`;
-        case 'eg_duel':
-            return `🐉 *Summon duels.* Your summons can fight each other: \`${p} summon duel @user\`. Loyalty, traits and AI modes matter here.\n\n_Own diverse species for Resonance Web bonuses: \`${p} summon resonance\`._\n\nSend \`next\` to continue.`;
         case 'eg_invest':
             return `🏦 *Money that works.* Fixed investment plans pay out over time: \`${p} invest\`. Safer than carrying everything into the Abyss.\n\nSend \`next\` to graduate.`;
 
@@ -822,7 +795,7 @@ async function graduate(sock, chatId, jid, prefix) {
     if (track === 'basics') {
         summary = `${PREFIX} *BOOT CAMP COMPLETE*\n\n` +
             `You now know the essentials: your sheet (\`${p} char\`), solo quests (\`${p} solo f\`), group quests (\`${p} quest f\`) and the shop (\`${p} shop\` / \`${p} buy\`).\n\n` +
-            `Your real first quest: \`${p} solo f\`. The Academy has more for you - every few levels a new tutorial unlocks (combat, skills, summons, the Abyss and beyond). Check \`${p} tutorial list\` anytime. Good hunting.`;
+            `Your real first quest: \`${p} solo f\`. The Academy has more for you - every few levels a new tutorial unlocks (combat, skills, runes, the Abyss and beyond). Check \`${p} tutorial list\` anytime. Good hunting.`;
     } else {
         const cfg = TRACKS[track] || { title: 'TUTORIAL', icon: '🧭' };
         summary = `${PREFIX} *${cfg.title} - COMPLETE*\n\n` +

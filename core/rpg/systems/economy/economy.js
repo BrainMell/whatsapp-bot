@@ -1071,28 +1071,15 @@ function getUser(userId) {
   if (user.stats.questsWon === undefined) user.stats.questsWon = user.questsWon || 0;
   if (user.stats.bossesDefeated === undefined) user.stats.bossesDefeated = 0;
 
-  // Lazy migration: Summoner System (added 2026-07-28)
-  // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md
-  if (user.summonSlots === undefined) user.summonSlots = 5; // 💡 FIX 2026-08-07: 5 slots (was 3)
-  if (user.activeSummonId === undefined) user.activeSummonId = null;
-  if (!user.unlockedSummonPassives) user.unlockedSummonPassives = [];
-  if (!user.activeResonances) user.activeResonances = [];
-  if (user.lastSummonTrained === undefined) user.lastSummonTrained = 0;
+  // 🃏 SUMMONS OVERHAUL (2026-11-06): summoner-field migrations removed with
+  // the old summon system. lastForgedAt kept (generic cooldown field).
   if (user.lastForgedAt === undefined) user.lastForgedAt = 0;
-  if (!user.summonAchievements) user.summonAchievements = [];
 
   // 💡 Phase 6: Alt detection - ensure phoneHash is set for all users
   try {
     const altDetection = require('../meta/altDetection');
     altDetection.ensurePhoneHash(user);
   } catch (e) {}
-  if (!user.summonStats) {
-    user.summonStats = {
-      captured: 0, forged: 0, evolved: 0,
-      trialsCompleted: 0, echoesAbsorbed: 0,
-      arenaWins: 0, arenaLosses: 0
-    };
-  }
   if (!user.tamingProgress) user.tamingProgress = {};
 
   // 💡 ANTI-INFLATION: clamp wallet/bank/stats on every user load.
@@ -1215,28 +1202,15 @@ function getOrCreateUser(userId, defaultNickname = "Adventurer") {
     };
   }
 
-  // Lazy migration: Summoner System (added 2026-07-28)
-  // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md
-  if (user.summonSlots === undefined) user.summonSlots = 5; // 💡 FIX 2026-08-07: 5 slots (was 3)
-  if (user.activeSummonId === undefined) user.activeSummonId = null;
-  if (!user.unlockedSummonPassives) user.unlockedSummonPassives = [];
-  if (!user.activeResonances) user.activeResonances = [];
-  if (user.lastSummonTrained === undefined) user.lastSummonTrained = 0;
+  // 🃏 SUMMONS OVERHAUL (2026-11-06): summoner-field migrations removed with
+  // the old summon system. lastForgedAt kept (generic cooldown field).
   if (user.lastForgedAt === undefined) user.lastForgedAt = 0;
-  if (!user.summonAchievements) user.summonAchievements = [];
 
   // 💡 Phase 6: Alt detection - ensure phoneHash is set for all users
   try {
     const altDetection = require('../meta/altDetection');
     altDetection.ensurePhoneHash(user);
   } catch (e) {}
-  if (!user.summonStats) {
-    user.summonStats = {
-      captured: 0, forged: 0, evolved: 0,
-      trialsCompleted: 0, echoesAbsorbed: 0,
-      arenaWins: 0, arenaLosses: 0
-    };
-  }
   if (!user.tamingProgress) user.tamingProgress = {};
 
   return user;

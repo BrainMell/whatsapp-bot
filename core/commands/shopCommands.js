@@ -183,37 +183,10 @@ async function displayShop(sock, chatId, category = 'all', senderJid = null) {
     const { rank, query } = parseShopArgs(category);
     const rankTag = rank ? ` • ${RARITY_ICONS[rank]} ${rank}` : '';
 
-    // 💡 DEDICATED SUMMON SHOP: if query is 'summon', show only summon items
+    // 🃏 SUMMONS OVERHAUL (2026-11-06): the summon shop is retired with the
+    // old summon system — summons return as special cards.
     if (query.toLowerCase() === 'summon') {
-        const summonEntries = Object.entries(summonItems).filter(([, i]) => matchRank(i, rank));
-        if (summonEntries.length === 0) {
-            await sock.sendMessage(chatId, { text: '🥚 No summon items available.' });
-            return;
-        }
-        let msg = `🥚 *SUMMON SHOP*${rankTag}\n`;
-        msg += '━━━━━━━━━━━━━━━\n\n';
-        const flat = []; // displayed order - powers `.buy <#>`
-        const renderEntry = (item, statStr) => {
-            flat.push(item);
-            msg += `*${flat.length}.* ${item.icon} *${item.name}* - ${Z}${item.cost.toLocaleString()} · \`${item.id}\`\n`;
-            if (statStr) msg += '   ⚙️ ' + statStr + '\n';
-        };
-        msg += '*EGGS*\n';
-        summonEntries.filter(([,i]) => i.id === 'basic_summon_egg').forEach(([, item]) => renderEntry(item));
-        msg += '\n*SUMMON GEAR*\n';
-        summonEntries.filter(([,i]) => i.id.includes('_claw') || i.id.includes('_core') || i.id.includes('_armor') || i.id.includes('_barding') || i.id.includes('_crest') || i.id.includes('_relic')).forEach(([, item]) => {
-            let statStr = '';
-            if (item.stats) {
-                statStr = Object.entries(item.stats).filter(([,v]) => v !== 0).map(([k,v]) => k.toUpperCase() + (v > 0 ? '+' : '') + v).join(' ');
-            }
-            renderEntry(item, statStr);
-        });
-        msg += '\n*MATERIALS*\n';
-        summonEntries.filter(([,i]) => i.id.includes('_fragment') || i.id.includes('summon_essence') || i.id.includes('skill_respec')).forEach(([, item]) => renderEntry(item));
-        msg += '\n━━━━━━━━━━━━━━━\n';
-        msg += `💡 Buy: \`${p} buy <id>\` or \`${p} buy <#>\` • Higher-tier eggs: craft from Abyss fragments (\`${p} summon eggcraft <tier>\`)`;
-        rememberShopList(chatId, flat);
-        await sock.sendMessage(chatId, { text: msg });
+        await sock.sendMessage(chatId, { text: '🥚 The summon shop is retired — summons are being rebuilt as special cards. Hang tight.' });
         return;
     }
 
@@ -338,10 +311,10 @@ function senderJidOfChat(_sock, chatId) {
 async function buyItem(sock, chatId, senderJid, input) {
     // 💡 2026-09-14: shared catalog - one builder for display + buy (previously
     // this function carried a second, drift-prone copy of the item loop).
-    const { classItems, mainItems, summonItems } = buildShopCatalog();
-    // Full buyable universe: main shop + summon shop + class items.
-    // (displayShop hides summon items from the main views but they stay buyable.)
-    const allItems = { ...classItems, ...mainItems, ...summonItems };
+    const { classItems, mainItems } = buildShopCatalog();
+    // 🃏 SUMMONS OVERHAUL (2026-11-06): summon items are no longer buyable —
+    // the summon system was scraped; summons return as special cards.
+    const allItems = { ...classItems, ...mainItems };
     const allItemsList = Object.values(allItems);
 
     const sanitizedInput = input.toLowerCase().trim().replace(/ /g, '_');

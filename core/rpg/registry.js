@@ -2,8 +2,8 @@
 // RPG SUBSYSTEM REGISTRY
 // The single wiring point between gameplay subsystems.
 //   const { use } = require('../rpg/registry');
-//   const summons = use('summons');          // → systems/summons/index.js exports
-//   summons.summonSystem.captureMonster(...)
+//   const eco = use('economy');              // → systems/economy/index.js exports
+//   eco.economy.addMoney(...)
 //
 // Swap-out contract (see core/rpg/README.md):
 //   a subsystem = one folder under systems/<name>/ + one public API in its index.js.

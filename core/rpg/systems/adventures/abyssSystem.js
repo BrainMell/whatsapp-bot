@@ -576,28 +576,9 @@ function generateFloorEncounter(floor, ctx = {}) {
   // Boss floors are always combat
   if (isBoss) return { type: 'combat', enemy: generateFloorEnemy(floor, ctx) };
 
-  // 💡 SUMMON PROGRESSION SYSTEM (2026-08-01): 10% chance of wild summon encounter.
-  // When triggered, the player fights a wild summon species. Winning drops
-  // summon fragments (tiered by floor depth) which can be crafted into eggs.
-  // This is the primary source of summon fragments - the core progression loop.
-  const WILD_SUMMON_CHANCE = 0.10; // 10% per non-boss floor
-  if (Math.random() < WILD_SUMMON_CHANCE) {
-    try {
-      const summonEggSystem = require('../summons/summonEggSystem');
-      const wildEncounter = summonEggSystem.generateWildSummonEncounter(floor);
-      if (wildEncounter) {
-        return {
-          type: 'wild_summon',
-          enemy: wildEncounter.enemy,
-          wildSummonSpecies: wildEncounter.speciesId,
-          wildSummonRarity: wildEncounter.species.rarity,
-        };
-      }
-    } catch (e) {
-      console.error('[Abyss] Wild summon encounter failed:', e.message);
-    }
-  }
-
+  // 🃏 SUMMONS OVERHAUL (2026-11-06): wild_summon floors retired with the
+  // old summon system (no more wild encounters / fragment farming).
+  // In-flight wild_summon floors already stored on runs still resolve.
   // Non-boss floors: 20% chance of treasure, 10% chance of event, remaining combat
   const roll = Math.random();
   if (roll < 0.20) {

@@ -1,13 +1,12 @@
 // ============================================
 // 💎 SKILL & RUNE ASSET LOADER (2026-10-11, v3 2026-10-12)
 // ============================================
-// Resolves ability/rune/summon/kit artwork:
+// Resolves ability/rune/kit artwork:
 //   v3 pack  core/rpgasset/v3/{hires,true_res}/...  (manifest.json + skill_index.json)
 //     - hires/  (~512px nearest-neighbour upscales — default for card renders)
 //     - true_res/ (native pixel-art size)
 //     - skills/<class>/<skill>.png      (272 skills / 45 classes)
 //     - runes/<category>/<rune>.png     (39 types) + <rune>_<tier>.png tier art (all 39)
-//     - summons/<arch>/<path>_n<1-5>.png (15 paths x 5 nodes) + archetype icons
 //     - monsters/kits/kit_<arch>.png    (12 monster kits) + extras/
 //   legacy flat pack  core/rpgasset/{skills,runes}/*.png (fallback)
 // Loaders return preloaded `Image` objects (node-canvas) with a process-lifetime
@@ -172,34 +171,6 @@ async function getRuneArt(type, tier) {
   }
 }
 
-/** Summon skill-node art: archetype (TANK..), pathKey letter or slug, node 1-5. */
-const PATH_SLUGS = {
-  TANK: ['iron_wall', 'guardian', 'counter'],
-  BRUTE: ['berserker', 'executioner', 'whirlwind'],
-  MAGE: ['elemental', 'arcane', 'temporal'],
-  STALKER: ['shadow', 'venom', 'evasion'],
-  SUPPORT: ['healing', 'blessing', 'nature'],
-};
-function v3SummonNodeSprite(archetype, pathKey, node) {
-  const slugs = PATH_SLUGS[String(archetype || '').toUpperCase()];
-  if (!slugs) return null;
-  const pi = ['A', 'B', 'C'].indexOf(String(pathKey || '').toUpperCase());
-  const slug = pi >= 0 ? slugs[pi] : slugs.find((s) => s === String(pathKey || '').toLowerCase());
-  if (!slug) return null;
-  const n = Math.min(5, Math.max(1, Math.floor(Number(node) || 1)));
-  return `v3/hires/summons/${String(archetype).toLowerCase()}/${slug}_n${n}.png`;
-}
-async function getSummonNodeArt(archetype, pathKey, node) {
-  const rel = v3SummonNodeSprite(archetype, pathKey, node);
-  if (!rel) return null;
-  try {
-    const p = loadImageCached(rel);
-    return p ? await p : null;
-  } catch (e) {
-    return null;
-  }
-}
-
 /** Monster kit art by archetype key (TANK..COLOSSUS). */
 async function getKitArt(archetype) {
   const a = String(archetype || '').toLowerCase();
@@ -223,6 +194,5 @@ function skillArtFile(skillOrId) {
 
 module.exports = {
   getSkillArt, hasSkillArt, getRuneArt, skillArtFile, skillManifest, runeManifest,
-  v3Manifest, v3SkillIndex, v3RuneSprite, v3SkillSprite, v3SummonNodeSprite,
-  getSummonNodeArt, getKitArt, PATH_SLUGS,
+  v3Manifest, v3SkillIndex, v3RuneSprite, v3SkillSprite, getKitArt,
 };

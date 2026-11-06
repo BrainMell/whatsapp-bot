@@ -118,29 +118,9 @@ async function displayCharacterSheet(sock, chatId, senderJid, senderName) {
     // 💡 Visual Overhaul: Try node-canvas profile card FIRST (new design).
     // Falls back to Go service → text if canvas isn't available.
     try {
-        // Fetch active summon(s) for the card
-        let activeSummon = null;
-        try {
-            const summonSystem = require('../rpg/systems/summons/summonSystem');
-            const activeSummonDoc = await summonSystem.getActiveSummon(economyUser);
-            if (activeSummonDoc) {
-              activeSummon = {
-                species: activeSummonDoc.species,
-                nickname: activeSummonDoc.nickname,
-                level: activeSummonDoc.level,
-                rarity: activeSummonDoc.rarity,
-                tier: activeSummonDoc.tier,
-                element: activeSummonDoc.element,
-                archetype: activeSummonDoc.archetype,
-                personality: activeSummonDoc.personality,
-                loyalty: activeSummonDoc.loyalty,
-                echoId: activeSummonDoc.echoId,
-                lineage: activeSummonDoc.lineage
-              };
-            }
-        } catch (summonErr) {
-            console.warn('[displayCharacterSheet] Failed to fetch active summon:', summonErr.message);
-        }
+        // 🃏 SUMMONS OVERHAUL (2026-11-06): no active-summon portrait on the
+        // char card while the summon system is rebuilt as special cards.
+        const activeSummon = null;
 
         // Fetch PFP as buffer (download if URL available)
         let pfpBuffer = null;
@@ -1267,21 +1247,10 @@ async function useItem(sock, chatId, senderJid, target) {
         if (item) itemId = item.id;
     }
 
-    // 💡 FIX 2026-08-07: Redirect summon egg items to the hatch system.
-    // Previously, `.s use <egg>` tried to use the egg as a regular consumable
-    // → "❌ You don't have this item!" because useItem doesn't handle eggs.
-    // Now it detects egg items and calls summonEggSystem.hatchEgg instead.
+    // 🃏 SUMMONS OVERHAUL (2026-11-06): eggs no longer hatch — the summon
+    // system is being rebuilt as special cards. Eggs stay sellable.
     if (itemId.includes('summon_egg') || itemId.includes('_egg')) {
-        const summonEggSystem = require('../rpg/systems/summons/summonEggSystem');
-        const result = await summonEggSystem.hatchEgg(senderJid, itemId);
-        await sock.sendMessage(chatId, { text: result.message });
-        if (result.success) {
-            try {
-                const summonSystem = require('../rpg/systems/summons/summonSystem');
-                const user = economy.getUser(senderJid);
-                if (user) await summonSystem.refreshUserResonances(user);
-            } catch (e) {}
-        }
+        await sock.sendMessage(chatId, { text: `🥚 Eggs can't hatch right now — summons are being rebuilt as special cards. You can sell the egg or hold onto it. 🃏` });
         return;
     }
 

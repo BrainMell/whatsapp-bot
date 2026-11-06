@@ -7,8 +7,8 @@ const registry = `// ============================================
 // RPG SUBSYSTEM REGISTRY
 // The single wiring point between gameplay subsystems.
 //   const { use } = require('../rpg/registry');
-//   const summons = use('summons');          // → systems/summons/index.js exports
-//   summons.summonSystem.captureMonster(...)
+//   const eco = use('economy');              // → systems/economy/index.js exports
+//   eco.economy.addMoney(...)
 //
 // Swap-out contract (see core/rpg/README.md):
 //   a subsystem = one folder under systems/<name>/ + one public API in its index.js.
@@ -70,7 +70,6 @@ const SYS = {
     homestead: ['baseActivities', 'baseBuilder', 'homestead', 'homesteadBaseRenderer', 'homesteadRenderer', 'homesteadRooms', 'interior3d'],
     inventory: ['craftingSystem', 'durabilitySystem', 'inventorySystem', 'lootSystem', 'runeSystem', 'runeSynergies', 'weaponSynergy'],
     cards: ['cardSystem'],
-    summons: ['summonAchievements', 'summonAI', 'summonBondTraits', 'summonCapture', 'summonCodexRenderer', 'summonEggSystem', 'summonForging', 'summonRegistry', 'summonRosterRenderer', 'summonSkillTrees', 'summonSprites', 'summonSystem'],
     pvp: ['pvpSystem'],
 };
 

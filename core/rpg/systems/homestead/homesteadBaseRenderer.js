@@ -808,16 +808,8 @@ function buildWorld(state, cel = null) {
                 if (lvl >= 2) { P('crate_long_A', { dx: -1.9, dz: 0.2 }); P('sack', { dx: 1.7, dz: 0.2 }); P('flag_' + team, { dx: 1.1, dz: -1.0 }); }
                 if (lvl >= 3) { P('building_market_' + team, { dx: -2.3, dz: -0.6, sc: 1.0, flip: true }); P('wheelbarrow', { dx: 0.4, dz: 1.8 }); P('crate_B_big', { dx: 2.0, dz: 1.0 }); }
                 break;
-            case 'barracks': {                                            // OWNER 2026-10-21: green ground + the SUMMON SPRITES (no building)
-                const SS = require('../world/structureScenes');
-                const n = lvl === 1 ? 2 : lvl === 2 ? 3 : 4;
-                const names = SS.pickSummons(hashStr(String(st.uid || st.type) + ':b'), n);
-                const spots = [[-2.1, 0.7], [2.1, 0.5], [0.0, -1.1], [0.0, 2.0]];
+            case 'barracks': {                                            // OWNER 2026-10-21: green muster lawn (🃏 summon sprites removed 2026-11-06)
                 w.overlay((ctx, p, k) => { const rr = 230 * k * 2 / 1.5; const g = ctx.createRadialGradient(p.x, p.y, rr * 0.2, p.x, p.y, rr); g.addColorStop(0, 'rgba(96,170,76,0.95)'); g.addColorStop(0.7, 'rgba(96,170,76,0.8)'); g.addColorStop(1, 'rgba(96,170,76,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(p.x, p.y, rr, rr * 0.5, 0, 0, Math.PI * 2); ctx.fill(); }, 0, 0, { dx: cen.x, dz: cen.z + 0.3 });   // the green lawn under the muster
-                names.forEach((nm, i) => {
-                    const [ox, oz] = spots[i];
-                    w.overlay((ctx, p, k) => { const kk = k * 2 / 1.5; drawSummonPad(ctx, p.x, p.y, 62 * kk); SS.drawSummonSprite(ctx, p.x, p.y + 4 * kk, 150 * kk, nm, i % 2 === 1); }, 0, 0, { dx: cen.x + ox, dz: cen.z + oz });
-                });
                 P('flag_' + team, { dx: -1.9, dz: -0.9, sc: 1.1 });
                 if (lvl >= 2) P('flag_' + team, { dx: 1.9, dz: -0.9, sc: 1.1 });
                 if (lvl >= 3) { P('fence_wood_straight@0', { dx: -0.2, dz: 2.3 }); P('weaponrack', { dx: -1.9, dz: 1.5, sc: 0.9 }); }
@@ -1198,7 +1190,7 @@ const STRUCT_PANEL = {
     medbay: { emoji: '⚕️', flavor: 'Quiet hands and clean linen mend what claws break.', cta: 'clinic — get healed' },
     alchemy: { emoji: '⚗️', flavor: 'Bubbles, powders, recipes best not asked about.', cta: 'brew — the cauldron' },
     market: { emoji: '🏪', flavor: 'Stalls, scales and honest(ish) prices.', cta: 'shop — browse the wares' },
-    barracks: { emoji: '🛡️', flavor: 'Your summons muster here, ready to march.', cta: 'summons — open the roster' },
+    barracks: { emoji: '🛡️', flavor: 'The muster yard — banners up, yard swept.', cta: 'base upgrade barracks — raise the fort' },
 };
 
 function drawStructurePlate(ctx, W, H, def, lv, team, k) {

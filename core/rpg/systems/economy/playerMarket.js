@@ -73,24 +73,6 @@ async function ensureMigrated() {
     } catch (e) {
       console.error('[PlayerMarket] rune migration skipped:', e.message);
     }
-    // 3. summons
-    try {
-      const SummonMarket = require('../../../models/SummonMarket');
-      const count = await SummonMarket.countDocuments({ status: 'active' });
-      if (count > 0) {
-        const summons = await SummonMarket.find({ status: 'active' }).limit(500);
-        for (const l of summons) {
-          await PlayerMarket.create({
-            listingId: newListingId(), kind: 'summon', sellerId: l.sellerId, price: l.price,
-            summonId: l.summonId, summonLabel: l.summonId, listedAt: l.createdAt || new Date(),
-          });
-          l.status = 'migrated';
-          await l.save();
-        }
-      }
-    } catch (e) {
-      console.error('[PlayerMarket] summon migration skipped:', e.message);
-    }
   } catch (e) {
     console.error('[PlayerMarket] migration error (non-fatal, will retry next boot):', e.message);
     _migrated = false; // allow retry
@@ -107,12 +89,16 @@ async function cmdBrowse(senderJid, reply, args = []) {
     const la = String(a).toLowerCase();
     if (['items', 'item', 'gear'].includes(la)) kind = 'item';
     else if (['runes', 'rune'].includes(la)) kind = 'rune';
-    else if (['summons', 'summon'].includes(la)) kind = 'summon';
     else { const n = parseInt(a); if (!isNaN(n) && n > 0) page = n; }
   }
   const pageSize = 10;
   const query = { status: 'active' };
-  if (kind) query.kind = kind;
+  // 🃏 SUMMONS OVERHAUL (2026-11-06): summon listings retired — hidden from
+  // browse-all; explicit `.market summon` gets the retired notice.
+  if (kind === 'summon') {
+    return reply('🐉 Summon trading is retired — summons are being rebuilt as special cards.'), true;
+  }
+  query.kind = kind || { $ne: 'summon' };
   const [active, total] = await Promise.all([
     PlayerMarket.find(query).sort({ listedAt: -1 }).skip((page - 1) * pageSize).limit(pageSize),
     PlayerMarket.countDocuments(query),
@@ -131,7 +117,7 @@ async function cmdBrowse(senderJid, reply, args = []) {
     msg += `*${num}.* ${KIND_ICON[l.kind]} `;
     if (l.kind === 'item') msg += `${l.itemName} ×${l.quantity} (${l.itemRarity})`;
     else if (l.kind === 'rune') msg += `Rune: ${l.runeLabel}`;
-    else msg += `${l.summonLabel} (Lv.${l.summonLevel} ${l.summonRarity})`;
+    else msg += `${l.itemName || 'Legacy listing'}`;
     msg += `\n   💰 ${ZENI()}${l.price.toLocaleString()} · 👤 @${economy.getDisplayName(l.sellerId)} · 🆔 \`${l.listingId}\`\n`;
   });
   msg += `━━━━━━━━━━━━━━━\n💡 Buy: \`market buy <id|#>\` • Filter: \`market runes\` • Your listings: \`market my\``;
@@ -145,18 +131,19 @@ async function cmdBrowse(senderJid, reply, args = []) {
 async function cmdSell(senderJid, reply, args = []) {
   await ensureMigrated();
   const what = String(args[0] || '').toLowerCase();
-  if (!['item', 'rune', 'summon'].includes(what)) {
+  if (!['item', 'rune'].includes(what)) {
+    if (what === 'summon' || what === 'summons') {
+      return reply('🐉 Summon trading is retired — summons are being rebuilt as special cards.'), true;
+    }
     return reply(
       `❌ Usage:\n` +
       `• \`${P()} market sell item <bagSlot#> <price> [qty]\`\n` +
       `• \`${P()} market sell rune <runeId> <price>\`\n` +
-      `• \`${P()} market sell summon <summon#|id> <price>\`\n` +
       `_Slot numbers come from your bag command. 10% tax on sale._`
     ), true;
   }
   if (what === 'item') return sellItem(senderJid, reply, args.slice(1));
-  if (what === 'rune') return sellRune(senderJid, reply, args.slice(1));
-  return sellSummon(senderJid, reply, args.slice(1));
+  return sellRune(senderJid, reply, args.slice(1));
 }
 
 // items: slot-numbered exactly like the bag display (legacy itemMarket logic)
@@ -257,49 +244,6 @@ async function sellRune(senderJid, reply, args) {
   }
 }
 
-async function sellSummon(senderJid, reply, args) {
-  const query = String(args[0] || '').trim();
-  const price = parseInt(args[1]) || 0;
-  if (!query || price < 1000 || price > MAX_LISTING) {
-    return reply(`❌ Usage: \`market sell summon <summon#|id> <price>\` — minimum 1,000 Zeni.`), true;
-  }
-  const summonSystem = require('../summons/summonSystem');
-  const registry = require('../summons/summonRegistry');
-  const user = economy.getUser(senderJid);
-  if (!user) return reply('❌ Not registered.'), true;
-  const summons = await summonSystem.getUserSummons(senderJid);
-  // resolve by position number or id/nickname (same rules as summon commands)
-  let target = null;
-  const num = parseInt(query);
-  if (!isNaN(num) && num >= 1 && num <= summons.length) target = summons[num - 1];
-  if (!target) target = summons.find(s => s.summonId.endsWith(query) || s.summonId === query || (s.nickname && s.nickname.toLowerCase() === query.toLowerCase())) || null;
-  if (!target) return reply(`❌ No summon matching "${query}".`), true;
-  if (target.forSale) return reply('❌ This summon is already listed for sale.'), true;
-  if (target.isLocked) return reply('❌ This summon is locked and cannot be sold.'), true;
-  if (target.soulboundUntil && target.soulboundUntil > new Date()) return reply('❌ This summon is soulbound. Wait for the soulbound period to end.'), true;
-  if (user.activeSummonId === target.summonId) return reply('❌ Cannot sell your active summon. Dismiss it first.'), true;
-
-  const species = registry.getSpecies(target.species);
-  try {
-    await PlayerMarket.create({
-      listingId: newListingId(), kind: 'summon', sellerId: senderJid, price,
-      summonId: target.summonId,
-      summonLabel: target.nickname || (species && species.name) || target.species,
-      summonLevel: target.level || 1, summonRarity: target.rarity || 'COMMON',
-      summonElement: target.element || (species && species.element) || 'neutral',
-    });
-    target.forSale = true;
-    target.salePrice = price;
-    await target.save();
-    try { await summonSystem.refreshUserResonances(user); } catch (e) {}
-    return reply(
-      `🐉 *SUMMON LISTED FOR SALE!*\n\n${(species && species.icon) || '🐉'} *${target.nickname || (species && species.name) || target.species}*\n💰 ${ZENI()}${price.toLocaleString()}\n\n💡 Buyers: \`market buy <id>\` · Cancel: \`market cancel <id>\`\n_10% tax on sale._`
-    ), true;
-  } catch (err) {
-    console.error('[PlayerMarket] summon listing failed:', err);
-    return reply('❌ Listing failed: ' + err.message), true;
-  }
-}
 
 // ───────────────────────────────────────────────────────────
 // Buy: market buy <listingId|#>   (id prefix match, or index in
@@ -329,20 +273,12 @@ async function cmdBuy(senderJid, reply, args = []) {
   if (balance < listing.price) {
     return reply(`❌ Insufficient funds! Need ${ZENI()}${listing.price.toLocaleString()}, have ${ZENI()}${balance.toLocaleString()}.`), true;
   }
-  // Summon kind: extra checks preserved from the legacy summon market
+  // 🃏 SUMMONS OVERHAUL (2026-11-06): summon listings are retired — legacy
+  // active ones can only be cancelled by their seller, not bought.
   if (listing.kind === 'summon') {
-    const summonSystem = require('../summons/summonSystem');
-    const user = economy.getUser(senderJid);
-    if (!user) return reply('❌ Not registered.'), true;
-    try {
-      const altDetection = require('../meta/altDetection');
-      const altCheck = altDetection.checkTransfer(senderJid, listing.sellerId);
-      if (altCheck.blocked) return reply(`❌ ${altCheck.reason}`), true;
-    } catch (e) {}
-    const userSummons = await summonSystem.getUserSummons(senderJid);
-    if (userSummons.length >= (user.summonSlots || 5)) {
-      return reply(`❌ Summon slots full (${userSummons.length}/${user.summonSlots || 5}).`), true;
-    }
+    return reply('🐉 Summon trading is retired — summons are being rebuilt as special cards. Sellers: `market cancel <id>` returns your listing.'), true;
+  }
+  if (false) {
   }
 
   const taxAmount = Math.floor(listing.price * TAX_RATE);
@@ -398,22 +334,7 @@ async function cmdBuy(senderJid, reply, args = []) {
       );
       if (!rune) throw new Error('RUNE_GONE');
     } else {
-      const SummonModel = require('../../../models/Summon');
-      const summonSystem = require('../summons/summonSystem');
-      // 💡 FIX 2026-10-31: guarded transfer - the old update had NO owner/forSale
-      // filter, so any concurrent caller could win the summon away from the sale.
-      const summon = await SummonModel.findOneAndUpdate(
-        { summonId: claimed.summonId, ownerJid: claimed.sellerId, forSale: true },
-        { ownerJid: senderJid, forSale: false, salePrice: null },
-        { new: true },
-      );
-      if (!summon) throw new Error('SUMMON_GONE');
-      try {
-        const seller = economy.getUser(claimed.sellerId);
-        if (seller) await summonSystem.refreshUserResonances(seller);
-        const buyer = economy.getUser(senderJid);
-        if (buyer) await summonSystem.refreshUserResonances(buyer);
-      } catch (e) {}
+      throw new Error('SUMMON_GONE'); // 🃏 summon listings retired (2026-11-06)
     }
   } catch (e) {
     // full rollback (buyer refund + checked seller clawback)
@@ -487,13 +408,9 @@ async function cmdCancel(senderJid, reply, args = []) {
   } else if (listing.kind === 'rune') {
     const Rune = require('../../../models/Rune');
     await Rune.updateOne({ runeId: listing.runeId }, { $set: { onMarket: false, marketPrice: 0 } });
-  } else {
-    const SummonModel = require('../../../models/Summon');
-    const summonSystem = require('../summons/summonSystem');
-    await SummonModel.updateOne({ summonId: listing.summonId }, { $set: { forSale: false, salePrice: null } });
-    const user = economy.getUser(senderJid);
-    if (user) { try { await summonSystem.refreshUserResonances(user); } catch (e) {} }
   }
+  // 🃏 SUMMONS OVERHAUL (2026-11-06): legacy summon listings just release the
+  // listing — the old Summon model is gone, no custody to return.
 
   listing.status = 'cancelled';
   listing.completedAt = new Date();
@@ -508,7 +425,7 @@ async function cmdMy(senderJid, reply) {
   await ensureMigrated();
   const mine = await PlayerMarket.find({ sellerId: senderJid, status: 'active' }).sort({ listedAt: -1 });
   if (mine.length === 0) {
-    return reply('📭 You have no active listings. Sell something: `market sell item|runes|summon ...`'), true;
+    return reply('📭 You have no active listings. Sell something: `market sell item|runes ...`'), true;
   }
   const KIND_ICON = { item: '📦', rune: '💎', summon: '🐉' };
   let msg = `🏷️ *YOUR MARKET LISTINGS*\n\n`;
@@ -516,7 +433,7 @@ async function cmdMy(senderJid, reply) {
     msg += `*${i + 1}.* ${KIND_ICON[l.kind]} `;
     if (l.kind === 'item') msg += `${l.itemName} ×${l.quantity}`;
     else if (l.kind === 'rune') msg += `Rune: ${l.runeLabel}`;
-    else msg += `${l.summonLabel} (Lv.${l.summonLevel})`;
+    else msg += `${l.itemName || 'Legacy listing'}`;
     msg += ` — ${ZENI()}${l.price.toLocaleString()} · 🆔 \`${l.listingId}\`\n`;
   });
   msg += `\n💡 Cancel: \`market cancel <id|#>\``;
@@ -527,9 +444,9 @@ async function cmdMy(senderJid, reply) {
 function unifiedHelp() {
   const p = P();
   return `🏪 *PLAYER MARKET* — one market for everything\n\n` +
-    `• \`${p} market\` - browse all listings\n• \`${p} market items|runes|summons\` - browse by kind\n` +
+    `• \`${p} market\` - browse all listings\n• \`${p} market items|runes\` - browse by kind\n` +
     `• \`${p} market sell item <bag#> <price> [qty]\`\n• \`${p} market sell rune <runeId> <price>\`\n` +
-    `• \`${p} market sell summon <#|id> <price>\`\n• \`${p} market buy <id|#>\` · \`${p} market cancel <id>\` · \`${p} market my\`\n\n_10% tax on sale. Old commands (listitem, rune sell, summon market ...) still work._`;
+    `• \`${p} market buy <id|#>\` · \`${p} market cancel <id>\` · \`${p} market my\`\n\n_10% tax on sale. Old commands (listitem, rune sell ...) still work._`;
 }
 
 module.exports = { cmdBrowse, cmdSell, cmdBuy, cmdCancel, cmdMy, ensureMigrated, unifiedHelp, newListingId };

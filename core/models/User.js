@@ -244,26 +244,12 @@ const UserSchema = new mongoose.Schema({
   // Rank Mission System
   completedRankMissions: { type: [Number], default: [] }, // [1, 2, 3, 4]
 
-  // ── Summoner System ──────────────────────────────────────
-  // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md
-  // Summons are stored in a separate Mongoose collection (Summon model),
-  // referenced by summonId. This keeps the User document lean.
-  summonSlots: { type: Number, default: 3 },                // expandable to 5 via guild perks + rank
-  activeSummonId: { type: String, default: null },          // currently deployed summon
-  unlockedSummonPassives: { type: [String], default: [] },  // from completing summon trials
-  activeResonances: { type: [String], default: [] },        // cached, recomputed on summon changes
-  lastSummonTrained: { type: Number, default: 0 },          // daily training cooldown (shared across all summons)
-  lastForgedAt: { type: Number, default: 0 },                // Soul Forging cooldown (1 forge/day)
-  summonAchievements: { type: [String], default: [] },        // unlocked summon achievements (pilots the achievement system)
-  summonStats: {
-    captured: { type: Number, default: 0 },
-    forged: { type: Number, default: 0 },
-    evolved: { type: Number, default: 0 },
-    trialsCompleted: { type: Number, default: 0 },
-    echoesAbsorbed: { type: Number, default: 0 },
-    arenaWins: { type: Number, default: 0 },
-    arenaLosses: { type: Number, default: 0 }
-  },
+  // 🃏 SUMMONS OVERHAUL (2026-11-06): summoner schema fields removed with the
+  // old summon system (summonSlots, activeSummonId, unlockedSummonPassives,
+  // activeResonances, lastSummonTrained, summonAchievements, summonStats).
+  // Existing Mongo docs keep their old fields harmlessly — nothing reads them.
+  // lastForgedAt kept (generic cooldown field).
+  lastForgedAt: { type: Number, default: 0 },
 
   // Taming progress per enemy type (Necromancer capture pipeline).
   // Keyed by enemyType ID, value = kill count. At 10 kills, species is "tamed".
