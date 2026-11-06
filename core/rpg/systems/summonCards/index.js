@@ -156,7 +156,7 @@ function createSummonCardSystem(economy) {
     if (!state || !state.inCombat) {
       return { ok: false, message: '❌ Summon cards can only be activated during PvE combat.' };
     }
-    if (state.mode === 'PVP' || state.isPvP || String(state.combatType || '').toUpperCase() === 'PVP') {
+    if (String(state.mode || '').toUpperCase().includes('PVP') || state.isPvP || String(state.combatType || '').toUpperCase() === 'PVP') {
       return { ok: false, message: '❌ Summon cards are not enabled in PvP yet.' };
     }
     if (!player || player.isDead || player.isEnemy || String(player.jid || '') !== String(jid || '')) {
