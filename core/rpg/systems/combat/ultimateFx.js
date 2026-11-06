@@ -646,6 +646,7 @@ async function loadHudIcons() {
     const set = { heart: null, mana: null };
     try { set.heart = await loadImage(path.join(__dirname, '..', '..', '..', 'rpgasset', 'ui', 'heart.png')); } catch (e) { /* fallback shape */ }
     try { set.mana = await loadImage(path.join(__dirname, '..', '..', '..', 'rpgasset', 'ui', 'mana.png')); } catch (e) { /* fallback shape */ }
+    try { await require('./combatHud').preload(); } catch (e) { /* legacy plate still works */ }
     _hudIcons.set('set', set);
     return set;
 }
@@ -717,8 +718,17 @@ function hudBarMedieval(ctx, x, y, w, h, pct, kind, label) {
 }
 
 function drawVideoHud(ctx, hud, icons) {
-    if (!hud || typeof hud !== 'object' || !icons) return;
-    const PX = -10, PY = 368, PW = 262, PH = 118; // bottom-left corner bleed, same proportions as the Go plate
+    if (!hud || typeof hud !== 'object') return;
+    // 🎴 HUD v4 (2026-11-06): same compact portrait + capsule plate as the battle card, scaled into the 640x480 video.
+    // Falls back to the legacy medieval plate if the shared painter is unavailable.
+    try {
+        require('./combatHud').drawPlayerHud(ctx, {
+            name: hud.name, hp: hud.hp, maxHp: hud.maxHp, energy: hud.energy, maxEnergy: hud.maxEnergy, level: hud.level, portrait: hud._portrait || null,
+        }, 640 / 1024, 18, 687 - 104);
+        return;
+    } catch (e) { /* legacy plate below */ }
+    if (!icons) return;
+    const PX = -10, PY = 368, PW = 262, PH = 118;
     hudMedievalPanel(ctx, PX, PY, PW, PH);
     const visCx = PX + PW / 2 + 6; // compensate the left bleed like the Go plate
 
@@ -884,6 +894,12 @@ async function renderUltimateVideo(o) {
     if (!base && Buffer.isBuffer(o.baseBuffer) && o.baseBuffer.length > 1000) { try { base = await loadImage(o.baseBuffer); } catch (e) { base = null; } }
     if (!base) base = fallbackBase();
     const hudIcons = o.hud && typeof o.hud === 'object' ? await loadHudIcons() : null;
+    if (hudIcons && !o.hud._portrait) {   // round portrait for the HUD plate: the caster's own cutout (head/shoulders crop happens in the painter)
+        try {
+            const cut = (o.layers && Array.isArray(o.layers.cuts) ? o.layers.cuts : []).find((x) => x.side === (o.side || 'player') && x.index === (Number(o.casterIndex) || 0) && x.png);
+            if (cut) o.hud._portrait = await loadImage(Buffer.from(cut.png, 'base64'));
+        } catch (e) { /* letter fallback */ }
+    }
 
     const self = o.side === 'self';
     const A = { C: [W * 0.27, H * 0.62], T: self ? [W * 0.27, H * 0.58] : [W * 0.72, H * 0.58], F: [W * 0.5, H * 0.55] };

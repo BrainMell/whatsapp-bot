@@ -130,4 +130,4 @@ async function renderHandPng(entries, opts = {}) {
   return cvs.toBuffer('image/png');
 }
 
-module.exports = { renderCardPng, renderHandPng, drawCard, CW, CH };
+module.exports = { renderCardPng, renderHandPng, drawCard, artFor, CW, CH };

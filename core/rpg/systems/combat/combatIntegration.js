@@ -30,6 +30,7 @@ async function renderCombatStart(players, enemies, encounterInfo) {
             backgroundPath: encounterInfo.backgroundPath,
             // 💡 Phase 7: Pass summons through to the Go service
             summons: encounterInfo.summons || [],
+            combatState: encounterInfo.combatState || null,
             // ⚔️ ruins encounter scene: square map panel replaces Options_menu
             encounter: encounterInfo.encounter || undefined,
             // 💡 HUD V2 (2026-10-26 owner: "redesign the hud, attach it to the
@@ -74,6 +75,7 @@ async function renderCombatTurn(players, enemies, turnInfo, options = {}) {
                 floor: options.floor || 0,
                 backgroundPath: options.backgroundPath,
                 summons: options.summons || [],
+                combatState: options.combatState || null,
                 action: animAction,  // null if no actionable attack
                 // 💡 HUD V2 (2026-10-26): same left-rail HUD as battle start.
                 hud: 'v2',
@@ -651,7 +653,8 @@ async function generateCombatScene(players, enemies, phase, options = {}) {
         backgroundPath = null,
         rank = null,
         floor = 0,
-        summons = []  // 💡 Phase 7: summons passed from guildAdventure.js
+        summons = [],  // 💡 Phase 7: summons passed from guildAdventure.js
+        combatState = null   // 🃏 summon-card deck tray cooldowns
     } = options;
 
     let imageResult;
@@ -659,13 +662,13 @@ async function generateCombatScene(players, enemies, phase, options = {}) {
 
     switch (phase) {
         case 'START':
-            imageResult = await renderCombatStart(players, enemies, { ...encounterInfo, floor, summons });
+            imageResult = await renderCombatStart(players, enemies, { ...encounterInfo, floor, summons, combatState });
             caption = generateStartCaption(players, enemies, encounterInfo);
             break;
 
         case 'TURN':
             imageResult = await renderCombatTurn(players, enemies, turnInfo, {
-                backgroundPath, rank, floor, summons,
+                backgroundPath, rank, floor, summons, combatState,
                 // Pass full arrays so buildAnimationAction can resolve actor/target indices
                 _allPlayers: players,
                 _allEnemies: enemies

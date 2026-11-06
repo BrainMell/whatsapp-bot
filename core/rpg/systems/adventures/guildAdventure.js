@@ -4724,6 +4724,7 @@ async function startCombat(sock, groq, encounter, sessionKey) {
       floor: state.isAbyss ? state.abyssFloor : 0,
       backgroundPath: state.backgroundPath,
       summons: [],
+      combatState: state,
       encounterInfo: {
         ...encounter,
         rank: state.dungeonRank,
@@ -7568,6 +7569,7 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
           rank: state.dungeonRank,
           floor: state.isAbyss ? state.abyssFloor : 0,
           summons: [],
+          combatState: state,
         },
       );
       const timeoutPromise = new Promise((_, reject) =>

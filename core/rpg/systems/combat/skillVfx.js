@@ -219,7 +219,8 @@ async function getBattleBackground(state, player, ability, target) {
           backgroundPath: state.backgroundPath || null,
           rank: state.dungeonRank || null,
           floor: state.isAbyss ? state.abyssFloor : 0,
-          summons: state.summons || []
+          summons: state.summons || [],
+          combatState: state
         }),
         5500
       );
