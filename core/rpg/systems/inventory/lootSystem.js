@@ -991,10 +991,8 @@ const ITEM_DATABASE = {
     'dragon_heart':        { name: 'Dragon Heart',        description: 'A still-warm dragon heart. Pumping ancient fire magic.', rarity: 'LEGENDARY', value: 35000, type: 'MATERIAL' },
 
     // ═══════════════════════════════════════════════════════════════
-    // 💡 SUMMON PROGRESSION SYSTEM (2026-08-01): EGGS + FRAGMENTS
-    // Eggs are consumables that hatch into summons. Fragments are
-    // crafting materials dropped by wild summons in the Abyss.
-    // Combine fragments → craft higher-tier eggs → hatch better summons.
+    // Legacy companion eggs and fragments remain only as inert, sellable
+    // inventory mementos. No hatch, drop, or crafting progression is wired.
     // ═══════════════════════════════════════════════════════════════
 
     // --- SUMMON EGGS ---
