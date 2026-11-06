@@ -25,7 +25,12 @@ function init() {
   for (const [f, fam] of [['dogicapixelbold.otf', 'HudPixel'], ['Cinzel-Variable.ttf', 'HudCinzel']]) {
     try { const p = path.join(f === 'dogicapixelbold.otf' ? UI : FONTS, f); const q = fs.existsSync(p) ? p : path.join(FONTS, f); if (fs.existsSync(q)) registerFont(q, { family: fam }); } catch (e) {}
   }
+  // monochrome emoji font for status badges (Noto Emoji exists on box1+box2) — glyphs take
+  // the current fillStyle colour, so badges stay in the HUD's palette. Without it we fall
+  // back to engraved letters.
+  try { const ep = '/usr/share/fonts/truetype/noto/NotoEmoji-Regular.ttf'; if (fs.existsSync(ep)) { registerFont(ep, { family: 'NotoEmoji' }); _emojiOk = true; } } catch (e) {}
 }
+let _emojiOk = false;
 async function ui(name) {
   if (_img.has(name)) return _img.get(name);
   let i = null; try { i = await loadImage(path.join(UI, name)); } catch (e) {}
@@ -333,4 +338,96 @@ async function drawMiniCard(c, e, idx, x, y, cw, ch, o) {
 /** Crop the head/shoulders source for the portrait from a player's cut (base64 PNG) or null. */
 async function portraitFromCut(cut) { if (!cut || !cut.png) return null; try { return await loadImage(Buffer.from(cut.png, 'base64')); } catch (e) { return null; } }
 
-module.exports = { preload, drawRankBanner, drawPlayerHud, drawUnitBar, drawDeckTray, portraitFromCut, DW, DH, RANK_COLOR };
+// ── unit status visuals (owner 2026-11-06: "some summon skills add a shield — make a shield
+// bubble for it; read the skill trees for abilities like that — you're just drawing over the
+// image after all") ────────────────────────────────────────────────────────────────────────
+
+const BUFF_TYPES = new Set(['shield', 'regen', 'haste', 'blessing', 'berserk', 'taunt', 'ccImmune', 'attack_up', 'defense_up', 'aura', 'charge', 'revive_ready']);
+const DEBUFF_TYPES = new Set(['poison', 'burn', 'bleed', 'freeze', 'stun', 'sleep', 'root', 'slow', 'curse', 'blind', 'silence', 'shock', 'drown', 'weak', 'vulnerability', 'wet', 'oil', 'brittle', 'charm', 'locked_in_time', 'doom_timer', 'infect']);
+function ringFor(type) { if (BUFF_TYPES.has(String(type))) return '#e7c766'; if (DEBUFF_TYPES.has(String(type))) return '#e06a5a'; return '#b9c4d8'; }
+function isShieldFx(e) { return e && String(e.type) === 'shield' && (e.value === undefined || Number(e.value) > 0 || Number(e.duration) >= 900); }
+
+/** Translucent shield bubble around a battlefield unit (absorb shield). a = Go layer anchor
+ * {x, feetY, w, h} in design space. Drawn over the sprites; icy-blue glass with a glowing rim,
+ * specular arc and sparkles — matches the mana capsule family. Optional absorb value shown in
+ * a small pill under the unit. */
+function drawShieldBubble(c, a, s = 1, value = 0) {
+  const cx = a.x * s, feetY = a.feetY * s;
+  const h = Math.max(40, (a.h || 120)) * s, w = Math.max(30, (a.w || 90)) * s;
+  const cy = feetY - h * 0.54;
+  // hug the unit's OWN sprite box (a slightly wide big boss must not bubble its neighbours)
+  const rx = Math.max(w * 0.55, 30 * s), ry = Math.max(h * 0.56, 30 * s);
+  c.save();
+  // glass dome fill (light on the upper-left, clear at the feet so the ground stays visible)
+  const g = c.createRadialGradient(cx - rx * 0.25, cy - ry * 0.35, rx * 0.15, cx, cy, rx);
+  g.addColorStop(0, 'rgba(165,215,255,0.30)');
+  g.addColorStop(0.6, 'rgba(100,155,230,0.15)');
+  g.addColorStop(1, 'rgba(70,115,200,0.045)');
+  c.beginPath(); c.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); c.fillStyle = g; c.fill();
+  // glowing rim + outer halo
+  c.lineWidth = 2 * s; c.strokeStyle = 'rgba(160,212,255,0.85)';
+  c.shadowColor = 'rgba(120,190,255,0.65)'; c.shadowBlur = 7 * s;
+  c.beginPath(); c.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); c.stroke();
+  c.shadowBlur = 0;
+  c.lineWidth = 1 * s; c.strokeStyle = 'rgba(195,228,255,0.30)';
+  c.beginPath(); c.ellipse(cx, cy, rx * 1.07, ry * 1.07, 0, 0, Math.PI * 2); c.stroke();
+  // specular arc top-left (glass highlight)
+  c.lineWidth = 2.6 * s; c.strokeStyle = 'rgba(255,255,255,0.55)'; c.lineCap = 'round';
+  c.beginPath(); c.ellipse(cx, cy, rx * 0.85, ry * 0.85, 0, Math.PI * 1.05, Math.PI * 1.45); c.stroke();
+  // sparkles
+  for (const [dx, dy, r] of [[-rx * 0.42, -ry * 0.38, 1.7], [rx * 0.38, ry * 0.1, 1.2], [rx * 0.1, -ry * 0.55, 1.0]]) {
+    c.beginPath(); c.arc(cx + dx, cy + dy, r * s, 0, Math.PI * 2); c.fillStyle = 'rgba(225,242,255,0.85)'; c.fill();
+  }
+  c.restore();
+  // absorb value pill under the unit
+  if (value > 0) {
+    const label = String(Math.floor(value));
+    const pw = Math.max(30 * s, 12 * s + label.length * 7 * s), ph = 15 * s, py = feetY + 4 * s;
+    rr(c, cx - pw / 2, py, pw, ph, ph / 2); c.fillStyle = 'rgba(8,14,30,0.88)'; c.fill();
+    c.lineWidth = 1.3 * s; c.strokeStyle = 'rgba(140,200,255,0.9)'; c.stroke();
+    c.font = `bold ${10 * s}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+    shadowText(c, label, cx, py + ph / 2 + 0.5, '#cfe6ff', 'center');
+  }
+}
+
+/** Status badge row floating above a unit's head: dark circle + category ring (gold = buff,
+ * red = debuff, grey-blue = neutral) + the status's own emoji glyph (monochrome Noto Emoji,
+ * tinted to the palette). Max 5 shown, then a +N pill. a = Go layer anchor. */
+function drawStatusBadges(c, a, effects, s = 1) {
+  if (!Array.isArray(effects) || !effects.length) return;
+  const list = effects.slice(0, 5);
+  const r = 10.5 * s, step = r * 2 + 3 * s;
+  const by = a.feetY * s - Math.max(40, (a.h || 120)) * s - 13 * s;
+  const x0 = a.x * s - ((list.length - 1) * step) / 2;
+  for (let i = 0; i < list.length; i++) {
+    const e = list[i], bx = x0 + i * step;
+    c.save();
+    c.shadowColor = 'rgba(0,0,0,0.55)'; c.shadowBlur = 4 * s; c.shadowOffsetY = 1.5 * s;
+    c.beginPath(); c.arc(bx, by, r, 0, Math.PI * 2); c.fillStyle = 'rgba(8,10,16,0.9)'; c.fill();
+    c.shadowBlur = 0;
+    c.lineWidth = 1.5 * s; c.strokeStyle = ringFor(e && e.type); c.stroke();
+    const icon = String((e && e.icon) || '✨');
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    if (_emojiOk) {
+      c.font = `${11.5 * s}px NotoEmoji`;
+      c.fillStyle = '#f2f6ff';
+      c.fillText(icon, bx, by + 0.5 * s);
+    } else {
+      // no emoji font on this host — engraved first letter of the status name
+      c.font = `bold ${11 * s}px HudCinzel, serif`;
+      c.fillStyle = ringFor(e && e.type);
+      c.fillText(icon[0] || '?', bx, by + 0.5 * s);
+    }
+    c.restore();
+  }
+  const more = effects.length - list.length;
+  if (more > 0) {
+    const px = x0 + list.length * step + 2 * s;
+    rr(c, px, by - 9 * s, 30 * s, 18 * s, 9 * s); c.fillStyle = 'rgba(8,10,16,0.9)'; c.fill();
+    c.lineWidth = 1.2 * s; c.strokeStyle = '#b9c4d8'; c.stroke();
+    c.fillStyle = '#dfe7f5'; c.font = `bold ${10 * s}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText('+' + more, px + 15 * s, by + 0.5 * s);
+  }
+}
+
+module.exports = { preload, drawRankBanner, drawPlayerHud, drawUnitBar, drawDeckTray, drawShieldBubble, drawStatusBadges, portraitFromCut, DW, DH, RANK_COLOR, isShieldFx };

@@ -39,6 +39,21 @@ async function renderNodeCard(players, enemies, options, api) {
   // (v6: NO overhead unit bars — the plate is the single HP/MP display on the card; Go's legacy
   // nameplates/bars are stripped server-side via hud:"none-clean")
   const pl = payload.players || [];
+  // unit status visuals over the sprites: shield bubble (absorb) + floating status badges.
+  // Data comes from the RAW rosters (payload strips statusEffects); anchors map side+index →
+  // the exact sprite position (owner 2026-11-06: "some summon skills add a shield — make a
+  // shield bubble for it; read the skill trees for abilities like that").
+  for (const a of anchors) {
+    if (a.side !== 'player' && a.side !== 'enemy') continue;
+    const u = a.side === 'enemy' ? enemies[a.index] : players[a.index];
+    if (!u || u.isDead || u.justDied) continue;
+    const hp = Number(u.currentHP ?? (u.stats && u.stats.hp) ?? 0); if (hp <= 0) continue;
+    const fx = Array.isArray(u.statusEffects) ? u.statusEffects.filter((e) => e && e.icon) : [];
+    if (!fx.length) continue;
+    const shield = fx.find(hud.isShieldFx);
+    if (shield) hud.drawShieldBubble(c, a, s, Number(shield.value) || 0);
+    hud.drawStatusBadges(c, a, fx, s);
+  }
   // rank chip
   const rank = String(options.rank || (pl[0] && pl[0].adventurerRank) || 'F').toUpperCase();
   hud.drawRankBanner(c, options.floor > 0 ? 'FLOOR ' + options.floor : rank + ' RANK', s);
