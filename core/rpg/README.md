@@ -41,12 +41,12 @@ core/rpg/
                              testerSystem, altDetection, profileCardRenderer
 ```
 
-> 🃏 **summons/ was removed 2026-11-06** (implementation scraped for the
-> summon-cards overhaul — mod-only acquisition, hub card slot UI, per-card
-> animated abilities). The sprite/asset bank stays at `core/rpgasset/summons/`
-> (7,315 files). See `systems/summons/README.md` for the full pointer + what
-> was removed. The `summons` registry entry is gone (no index.js → the
-> registry no longer discovers it).
+> 🃏 **Legacy companion summons were removed 2026-11-06.** The replacement
+> is `summonCards/`: owned signature-ability cards with moderator-only grants,
+> a conditional combat-turn tray, per-player/per-card cooldowns, and a Go-rendered
+> real GIF per activation. It is independent of the `cards/` UserCard economy.
+> `systems/summons/` contains only the removal note; it has no `index.js` and
+> is not discovered by the registry. The legacy sprite archive remains inert.
 
 ## The rules
 
@@ -67,7 +67,7 @@ Example — rebuild PvP:
 
 1. Read `systems/pvp/index.js` — that's the API surface other code depends on.
 2. Grep who consumes it: `grep -rn "use('pvp')\|systems/pvp" core/ --include='*.js'`
-   (today: engine.js routes `.j combat`, summonCommands pulls it, guildwar's
+   (today: engine.js routes `.j combat`; guildwar's
    ruinsPvp bridges into it).
 3. Rewrite everything inside `systems/pvp/` however you like — new files, new
    data model, new rendering — as long as `index.js` keeps exporting the same
