@@ -1,8 +1,8 @@
 'use strict';
 // probe47i.js — log every sprite placement for a guild seed (asset-utilisation audit)
 process.env.QA_MODE = '1';
-const K = require('../core/rpg/kingdom3d');
-const g = require('../core/rpg/guildBaseRenderer');
+const K = require('../core/rpg/systems/world/kingdom3d');
+const g = require('../core/rpg/systems/guildwar/guildBaseRenderer');
 const orig = K.HexWorld.prototype.put;
 const log = [];
 K.HexWorld.prototype.put = function (name, c, r, o) {

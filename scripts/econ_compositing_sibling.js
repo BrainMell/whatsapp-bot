@@ -23,7 +23,7 @@ async function connectDB() {
 
 (async () => {
     await connectDB();
-    const economy = require('../core/rpg/economy');
+    const economy = require('../core/rpg/systems/economy/economy');
     await economy.loadEconomy();
 
     if (process.argv[2] === 'withdraw_and_tokens') {

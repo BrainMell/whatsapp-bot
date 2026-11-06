@@ -54,13 +54,13 @@ const PREFIX = '.jk';
 
 async function main() {
     await connectDB();
-    const economy = require('../core/rpg/economy');
-    const progression = require('../core/rpg/progression');
-    const inventorySystem = require('../core/rpg/inventorySystem');
-    const guildAdventure = require('../core/rpg/guildAdventure');
-    const tutorial = require('../core/rpg/tutorial');
+    const economy = require('../core/rpg/systems/economy/economy');
+    const progression = require('../core/rpg/systems/characters/progression');
+    const inventorySystem = require('../core/rpg/systems/inventory/inventorySystem');
+    const guildAdventure = require('../core/rpg/systems/adventures/guildAdventure');
+    const tutorial = require('../core/rpg/systems/meta/tutorial');
     const gambling = require('../core/gambling');
-    const abyssSystem = require('../core/rpg/abyssSystem');
+    const abyssSystem = require('../core/rpg/systems/adventures/abyssSystem');
     const lidResolver = require('../core/utils/lidResolver');
 
     // fresh player

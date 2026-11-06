@@ -59,7 +59,7 @@ async function waitFor(fn, ms = 3000) {
     await connectDB();
     const mongoose = require('mongoose');
     const GuildWarEvent = require('../core/models/GuildWarEvent');
-    const feed = require('../core/rpg/guildWar/feed');
+    const feed = require('../core/rpg/systems/guildwar/feed');
     const botConfig = require('../botConfig');
     const system = require('../core/utils/system');
     const realGetBotId = botConfig.getBotId;

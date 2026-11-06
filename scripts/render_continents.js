@@ -1,7 +1,7 @@
 'use strict';
 // node scripts/render_continents.js [outDir] — atlas + sample guild pins
 const fs = require('fs'); const out = process.argv[2] || '/tmp/continents'; fs.mkdirSync(out, { recursive: true });
-const R = require('../core/rpg/continentMapRenderer'); const C = require('../core/rpg/continents');
+const R = require('../core/rpg/systems/world/continentMapRenderer'); const C = require('../core/rpg/systems/world/continents');
 (async () => {
     fs.writeFileSync(out + '/atlas.jpg', await R.renderContinentMap());
     for (const [i, c] of C.CONTINENTS.entries()) {

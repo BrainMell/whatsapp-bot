@@ -25,9 +25,9 @@ const { createCanvas, loadImage } = require('canvas');
 
 const OUT = process.argv[2] || '/tmp/qa25';
 fs.mkdirSync(OUT, { recursive: true });
-const scenes = require('../core/rpg/structureScenes');
-const dockPov = require('../core/rpg/dockPov');
-const lootArt = require('../core/rpg/lootArt');
+const scenes = require('../core/rpg/systems/world/structureScenes');
+const dockPov = require('../core/rpg/systems/world/dockPov');
+const lootArt = require('../core/rpg/systems/shared/lootArt');
 
 let pass = 0, fail = 0;
 function check(name, ok, detail = '') {

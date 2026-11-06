@@ -7,8 +7,8 @@
 //      NO enemies and NO boss; startEvent rebakes combat/coop spawn rooms
 //      to 'empty'.
 const path = require('path');
-const roomScene = require('../core/rpg/guildWar/roomScene');
-const encounters = require('../core/rpg/guildWar/encounters');
+const roomScene = require('../core/rpg/systems/guildwar/roomScene');
+const encounters = require('../core/rpg/systems/guildwar/encounters');
 
 let pass = 0, fail = 0;
 function check(name, cond, extra = '') {

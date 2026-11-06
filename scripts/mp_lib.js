@@ -67,7 +67,7 @@ function makeSock(label) {
 // NOTE: mirrors engine.js — a NON-EMPTY router RETURN is sent by the engine
 // (image+caption / text). Verbs that send inside the router return {}.
 async function dm(sock, jid, text) {
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
     const res = await dmRouter.handleDM(sock, jid, jid, text, '\u200B', { prefix: '.j', prefixed: true });
     if (res && (res.image || res.text)) {
         const payload = res.image
@@ -80,8 +80,8 @@ async function dm(sock, jid, text) {
 
 // ── seed economy users + in-memory guilds so sprites/stats resolve ──
 function seedIdentities(roster) {
-    const economy = require('../core/rpg/economy');
-    const guilds = require('../core/rpg/guilds');
+    const economy = require('../core/rpg/systems/economy/economy');
+    const guilds = require('../core/rpg/systems/guildwar/guilds');
     for (const p of roster) {
         if (!economy.isRegistered(p.jid)) {
             try { economy.registerUser(p.jid, p.name); } catch (e) { /* already */ }
@@ -121,7 +121,7 @@ function makeRoster(specs) {
 
 // ── create + start a war with the roster (real map/state pipeline) ──
 async function startWar(roster, { hostGroupId = 'mpsim@g.us', deadWorld = 'ember' } = {}) {
-    const state = require('../core/rpg/guildWar/state');
+    const state = require('../core/rpg/systems/guildwar/state');
     const created = await state.createEvent({ type: 'normal', hostGroupId, initiatedBy: 'owner@s.whatsapp.net' });
     for (const p of roster) {
         const ok = await state.registerPlayer(created.event.eventId, p);

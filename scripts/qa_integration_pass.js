@@ -10,13 +10,13 @@ const assert = require('assert');
 const __enginePath = require.resolve('../core/engine.js');
 require.cache[__enginePath] = { id: __enginePath, filename: __enginePath, loaded: true, exports: { isBotOwner: () => false, isGlobalMod: () => false, isRpgMod: () => false } };
 
-const cosmology = require('../core/rpg/cosmology');
-const loreDrops = require('../core/rpg/loreDrops');
-const enemyVariants = require('../core/rpg/enemyVariants');
-const abyssSystem = require('../core/rpg/abyssSystem');
-const craftingSystem = require('../core/rpg/craftingSystem');
-const worldMap = require('../core/rpg/worldMap');
-const worldMapRenderer = require('../core/rpg/worldMapRenderer');
+const cosmology = require('../core/rpg/systems/world/cosmology');
+const loreDrops = require('../core/rpg/systems/shared/loreDrops');
+const enemyVariants = require('../core/rpg/systems/combat/enemyVariants');
+const abyssSystem = require('../core/rpg/systems/adventures/abyssSystem');
+const craftingSystem = require('../core/rpg/systems/inventory/craftingSystem');
+const worldMap = require('../core/rpg/systems/world/worldMap');
+const worldMapRenderer = require('../core/rpg/systems/world/worldMapRenderer');
 
 // ─── mock sock: captures messages ────────────────────────────────────────────
 function mockSock() {
@@ -231,7 +231,7 @@ function mockSock() {
             assert.ok(HANDLED.has(recipes[id].result.effect), `${id} effect not handled by useItem: ${recipes[id].result.effect}`);
         }
         // ingredients exist in the loot DB
-        const lootSystem = require('../core/rpg/lootSystem');
+        const lootSystem = require('../core/rpg/systems/inventory/lootSystem');
         for (const recipe of [recipes.abyssal_tonic, recipes.warden_broth, recipes.banner_ale]) {
             for (const ingId of Object.keys(recipe.ingredients)) {
                 const info = lootSystem.getItemInfo(ingId);

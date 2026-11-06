@@ -46,7 +46,7 @@ const JID = 'audit@s.whatsapp.net';
 const CHAT = JID;
 
 async function dm(sock, txt, opts = {}) {
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
     return dmRouter.handleDM(sock, JID, CHAT, txt, '', { prefix: PREFIX, prefixed: true, ...opts });
 }
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -58,10 +58,10 @@ async function main() {
     for (const c of ['guildwarevents', 'guilds', 'systems', 'users', 'inventories']) {
         try { await mongoose.connection.db.collection(c).deleteMany({}); } catch (e) {}
     }
-    const state = require('../core/rpg/guildWar/state');
-    const rooms = require('../core/rpg/guildWar/rooms');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const rooms = require('../core/rpg/systems/guildwar/rooms');
     const GuildWarEvent = require('../core/models/GuildWarEvent');
-    const guilds = require('../core/rpg/guilds');
+    const guilds = require('../core/rpg/systems/guildwar/guilds');
     await guilds.loadGuilds();
     try { await guilds.createGuild('AuditG', 'u-auditg', 'ADVENTURER'); } catch (e) {}
 
@@ -72,7 +72,7 @@ async function main() {
     check('event started', s.ok, s.reason || '');
     const sock = makeSock();
 
-    const economy = require('../core/rpg/economy');
+    const economy = require('../core/rpg/systems/economy/economy');
     if (!economy.getUser(JID)) economy.registerUser(JID, 'Auditor');
 
     // ═══ A1: MOVEMENT GRAMMAR (each move made from a SAFE room) ═══
@@ -136,7 +136,7 @@ async function main() {
         await state.updatePlayer(EV, JID, {}, { roomId: puzzleRoom.key, lastMoveAt: Date.now() - 10000 });
         rooms.markActive(EV, puzzleRoom.key);
 
-        const encounters = require('../core/rpg/guildWar/encounters');
+        const encounters = require('../core/rpg/systems/guildwar/encounters');
         economy.setPersistentHP(JID, 100, 100);
         const hpStart = economy.getPersistentHP(JID, 100);
 
@@ -189,8 +189,8 @@ async function main() {
     console.log('\n──── A4: renders ────');
     const renderDir = path.join(ROOT, 'tmp_gw_qa');
     fs.mkdirSync(renderDir, { recursive: true });
-    const mapRenderer = require('../core/rpg/guildWar/mapRenderer');
-    const roomScene = require('../core/rpg/guildWar/roomScene');
+    const mapRenderer = require('../core/rpg/systems/guildwar/mapRenderer');
+    const roomScene = require('../core/rpg/systems/guildwar/roomScene');
     const evR2 = await state.getEvent(EV, { fresh: true });
     const meR = evR2.players.find((x) => x.jid === JID);
     try {
@@ -222,7 +222,7 @@ async function main() {
     const combatRoom = evC.rooms.find((r) => r.type === 'combat' && r.state !== 'CLEARED');
     check('combat room exists', !!combatRoom, combatRoom ? combatRoom.key : 'none');
     if (combatRoom) {
-        const guildAdventure = require('../core/rpg/guildAdventure');
+        const guildAdventure = require('../core/rpg/systems/adventures/guildAdventure');
         const user = economy.getUser(JID);
         if (user && !user.level) { user.level = 20; economy.saveUser(JID); }
         // cleanup: any auto-combat session from A1 exploration must not block A5
@@ -233,7 +233,7 @@ async function main() {
         const meNow = freshC.players.find((x) => x.jid === JID);
         const roomNow = freshC.rooms.find((r) => r.key === combatRoom.key);
         let started = null, err = null;
-        try { started = await require('../core/rpg/guildWar/encounters').startRoomCombat(sock, CHAT, meNow, freshC, roomNow, { groq: null }); } catch (e) { err = e; }
+        try { started = await require('../core/rpg/systems/guildwar/encounters').startRoomCombat(sock, CHAT, meNow, freshC, roomNow, { groq: null }); } catch (e) { err = e; }
         check('combat starts via real pipeline', !err && started && started.success, err ? `THREW: ${err.message}` : JSON.stringify(started));
         check('combat scene sent (Go service)', sock.sent.some((m) => m.hasImage), `${sock.sent.length} messages`);
 
@@ -254,7 +254,7 @@ async function main() {
             const meE = freshE.players.find((x) => x.jid === JID);
             const roomE = freshE.rooms.find((r) => r.key === combat2.key);
             let started2 = null;
-            try { started2 = await require('../core/rpg/guildWar/encounters').startRoomCombat(sock, CHAT, meE, freshE, roomE, { groq: null }); } catch (e) { started2 = { success: false, msg: e.message }; }
+            try { started2 = await require('../core/rpg/systems/guildwar/encounters').startRoomCombat(sock, CHAT, meE, freshE, roomE, { groq: null }); } catch (e) { started2 = { success: false, msg: e.message }; }
             check('combat re-starts after flee (no wedged state)', started2 && started2.success, JSON.stringify(started2));
             await dm(sock, 'flee');
         }
@@ -281,7 +281,7 @@ async function main() {
 
     // accept from the foe's side
     const foeSock = makeSock();
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
     const accRes = await dmRouter.handleDM(foeSock, 'foe@s.whatsapp.net', 'foe@s.whatsapp.net', 'accept', '', { prefix: PREFIX, prefixed: true });
     check('pvp accept begins duel', accRes && /DUEL BEGINS/i.test(accRes.text || ''), (accRes || {}).text?.slice(0, 80));
 

@@ -32,7 +32,7 @@ const PLAYER = {
 };
 
 async function main() {
-    const roomScene = require('../core/rpg/guildWar/roomScene');
+    const roomScene = require('../core/rpg/systems/guildwar/roomScene');
     const ev = fakeEvent();
     const me = { ...PLAYER };
 

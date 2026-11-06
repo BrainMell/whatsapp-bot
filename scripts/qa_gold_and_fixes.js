@@ -3,8 +3,8 @@
 // with a seeded in-memory cache (no DB, no .env needed).
 process.env.GO_IMAGE_SERVICE_URL = process.env.GO_IMAGE_SERVICE_URL || 'http://127.0.0.1:7860';
 
-const economy = require('../core/rpg/economy');
-const progression = require('../core/rpg/progression');
+const economy = require('../core/rpg/systems/economy/economy');
+const progression = require('../core/rpg/systems/characters/progression');
 
 function assert(cond, label) {
     if (!cond) { console.error('✗ FAIL:', label); process.exitCode = 1; }
@@ -116,7 +116,7 @@ seedUser(JID_P);
 
     // ═══ 3. LORE DROPS — own message box ═══
     console.log('\n── lore drops own-box ──');
-    const loreDrops = require('../core/rpg/loreDrops');
+    const loreDrops = require('../core/rpg/systems/shared/loreDrops');
     const ownBoxSends = [];
     const loreSock = { sendMessage: async (cid, msg) => ownBoxSends.push({ cid, msg }) };
 

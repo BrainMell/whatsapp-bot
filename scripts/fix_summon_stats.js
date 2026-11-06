@@ -24,7 +24,7 @@ async function main() {
   // Load models
   require('../core/models/Summon');
   const Summon = mongoose.connection.collection('summons');
-  const registry = require('../core/rpg/summonRegistry');
+  const registry = require('../core/rpg/systems/summons/summonRegistry');
 
   // Find all summons
   const all = await Summon.find({}).toArray();

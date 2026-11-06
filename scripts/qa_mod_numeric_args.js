@@ -14,7 +14,7 @@
 
 process.env.GO_IMAGE_SERVICE_URL = process.env.GO_IMAGE_SERVICE_URL || 'http://127.0.0.1:7860';
 
-const economy = require('../core/rpg/economy');
+const economy = require('../core/rpg/systems/economy/economy');
 const adminConsole = require('../core/commands/adminConsole');
 
 function assert(cond, label) {

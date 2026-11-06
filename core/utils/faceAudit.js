@@ -42,15 +42,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // modules) behave exactly like the lazy requires inside abyssScene itself.
 let _pr = null, _abyss = null, _room = null;
 function spriteSets() {
-    if (!_pr) _pr = require('../rpg/profileCardRenderer').CLASS_SPRITE_SETS;
+    if (!_pr) _pr = require('../rpg/systems/meta/profileCardRenderer').CLASS_SPRITE_SETS;
     return _pr;
 }
 function abyss() {
-    if (!_abyss) _abyss = require('../rpg/abyssScene');
+    if (!_abyss) _abyss = require('../rpg/systems/adventures/abyssScene');
     return _abyss;
 }
 function room() {
-    if (!_room) _room = require('../rpg/guildWar/roomScene');
+    if (!_room) _room = require('../rpg/systems/guildwar/roomScene');
     return _room;
 }
 

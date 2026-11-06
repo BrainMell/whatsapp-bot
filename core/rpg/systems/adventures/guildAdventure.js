@@ -1,0 +1,14490 @@
+// ============================================
+// 🎮 GUILD ADVENTURE V2 - COMPLETE OVERHAUL
+// ============================================
+// A full-featured turn-based RPG system with:
+// - 15+ Classes with unique abilities
+// - Turn-based combat with status effects
+// - Multi-phase boss fights
+// - Equipment and crafting
+// - Branching storylines
+// - Actual challenge and risk
+
+const fs = require("fs");
+// 🔥 VFX PREWARM (Task 26-R2): decode every ultimate-FX sprite set once at boot in the
+// background. The first real cast after a restart used to pay 10-16s of cold PNG decoding,
+// blew the video race and fell back to the old hand-drawn GIF — the "new animations aren't
+// wired into combat" report. No-op after the first call.
+try { require('../combat/ultimateFx').prewarm(); } catch (e) { /* vfx optional at boot */ }
+// 💡 FIX #6 (2026-08-15): Threat/aggro system for PvE combat
+const threatSystem = require('../combat/threatSystem');
+
+// 💡 FIX #7 (2026-08-15): Summon death cooldown - in-memory map of
+// summonId -> expiry timestamp. When a summon dies in combat, it can't
+// be redeployed for 5 minutes. This gives summon death a consequence
+// (JRPG research: disposable decoy model). In-memory only - resets on
+// bot restart, which is acceptable for a soft penalty.
+const summonDeathCooldowns = new Map();
+const SUMMON_DEATH_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+const path = require("path");
+const botConfig = require('../../../../botConfig');
+const economy = require("../economy/economy");
+const progression = require("../characters/progression");
+const skillTree = require("../characters/skillTree");
+const inventorySystem = require("../inventory/inventorySystem");
+const lootSystem = require("../inventory/lootSystem");
+const bossMechanics = require("../combat/bossMechanics");
+const classEncounters = require("../combat/classEncounters");
+const combatIntegration = require("../combat/combatIntegration");
+const guilds = require("../guildwar/guilds");
+const classSystem = require("../characters/classSystem");
+const monsterSkills = require("../combat/monsterSkills");
+// 💡 COSMOLOGY PASS (2026-09-19): lore drops + player-variant enemies
+// (owner-approved design package systems; in-memory only).
+const loreDrops = require("../shared/loreDrops");
+const enemyVariants = require("../combat/enemyVariants");
+// 💡 Summoner System (Phase 2) - see download/SUMMONER_SYSTEM_DESIGN.md
+const summonSystem = require("../summons/summonSystem");
+const summonAI = require("../summons/summonAI");
+// 💡 Phase 3: Necromancer capture pipeline
+const summonCapture = require("../summons/summonCapture");
+const { resolvePartyDungeonRank } = require("./partyDungeonRank");
+
+// ==========================================
+// 📊 GAME CONSTANTS
+// ==========================================
+
+const DUNGEON_RANKS = {
+  F: {
+    name: "F-Rank",
+    encounters: 3,
+    minMobs: 1,
+    maxMobs: 2,
+    difficulty: 0.8,
+    boss: "INFECTED_COLOSSUS",
+    pool: 1,
+    xpMult: 0.8,
+  },
+  E: {
+    name: "E-Rank",
+    encounters: 4,
+    minMobs: 2,
+    maxMobs: 4,
+    difficulty: 1.2,
+    boss: "CORRUPTED_GUARDIAN",
+    pool: 1,
+    xpMult: 1.2,
+  },
+  D: {
+    name: "D-Rank",
+    encounters: 7,
+    minMobs: 2,
+    maxMobs: 4,
+    difficulty: 3.0,
+    boss: "ELEMENTAL_ARCHON",
+    pool: 2,
+    xpMult: 2.0,
+  },
+  C: {
+    name: "C-Rank",
+    encounters: 7,
+    minMobs: 2,
+    maxMobs: 5,
+    difficulty: 5.0,
+    boss: "MUTATION_PRIME",
+    pool: 2,
+    xpMult: 3.5,
+  },
+  B: {
+    name: "B-Rank",
+    encounters: 8,
+    minMobs: 3,
+    maxMobs: 5,
+    difficulty: 10.0,
+    boss: "VOID_CORRUPTED",
+    pool: 3,
+    xpMult: 6.0,
+  },
+  A: {
+    name: "A-Rank",
+    encounters: 9,
+    minMobs: 3,
+    maxMobs: 6,
+    difficulty: 18.0,
+    boss: "PRIMORDIAL_CHAOS",
+    pool: 4,
+    xpMult: 10.0,
+  },
+  S: {
+    name: "S-Rank",
+    encounters: 10,
+    minMobs: 4,
+    maxMobs: 6,
+    difficulty: 35.0,
+    boss: "ELDER_CHAOS",      // FIX: was PRIMORDIAL_CHAOS (same as A) - now distinct
+    pool: 5,
+    xpMult: 50.0,
+  },
+  SS: {
+    name: "SS-Rank",
+    encounters: 11,
+    minMobs: 4,
+    maxMobs: 7,
+    difficulty: 75.0,
+    boss: "VOID_TITAN",       // FIX: was PRIMORDIAL_CHAOS - now distinct
+    pool: 5,
+    xpMult: 70.0,
+  },
+  SSS: {
+    name: "SSS-Rank",
+    encounters: 13,
+    minMobs: 5,
+    maxMobs: 8,
+    difficulty: 80.0,
+    boss: "ABYSSAL_GOD",      // FIX: was PRIMORDIAL_CHAOS - now distinct
+    pool: 5,
+    xpMult: 100.0,
+  },
+  DRAGON: {
+    name: "Dragon’s Lair",
+    encounters: 5,
+    minMobs: 2,
+    maxMobs: 3,
+    difficulty: 10.0,
+    boss: "ANCIENT_DRAGON_BOSS",
+    pool: "DRAGON_LAIR",
+    xpMult: 5.0,
+    isSpecial: true,
+  },
+  // 💡 GOD DUNGEON - boundless, transcendent, lore-heavy
+  // Only GOD-rank players can enter. Extremely hard.
+  GOD: {
+    name: "The Boundless Void",
+    encounters: 7,
+    minMobs: 3,
+    maxMobs: 4,
+    difficulty: 25.0,
+    boss: "ABYSSAL_GOD",
+    pool: "DRAGON_LAIR",
+    xpMult: 10.0,
+    isSpecial: true,
+    requiresGodRank: true,
+    loreIntro: "You step beyond the veil of dimensionality. Reality unravels around you - time flows backward, space folds upon itself, and the very laws of physics dissolve into primordial chaos. Here, in the Boundless Void, only those who have transcended the boundaries of mortal existence can survive. You are a GOD. But even gods can die.",
+    loreFloors: [
+      "Floor 1: The air itself rejects your presence. Shadows move with intent, whispering secrets that predate creation.",
+      "Floor 2: You encounter echoes of fallen adventurers - their last moments replaying eternally. They reach for you, seeking to drag you into their eternal loop.",
+      "Floor 3: The ground beneath you is not ground. It is compressed time. Each step costs you a memory. You feel yourself forgetting... something important.",
+      "Floor 4: A figure appears - it wears your face, but its eyes are void. It speaks: 'I am what you could have been. What you should have been. The version of you that never compromised.' It attacks.",
+      "Floor 5: The Void itself becomes sentient. It has watched you since the moment of your ascension. It is curious. It is hungry. It is everywhere.",
+      "Floor 6: You find the remnants of a previous god who attempted this journey. Their final message, carved into non-existence: 'The Abyssal God is not a creature. It is a concept. You cannot kill a concept. But you can become one.'",
+      "Floor 7: The Abyssal God manifests. It does not speak. It does not need to. It simply IS - the antithesis of existence, the final question with no answer.",
+    ],
+  },
+  // ⚔️ Class Evolution Trial - boss-only single-encounter dungeon
+  TRIAL: {
+    name: "Class Trial",
+    encounters: 1,
+    minMobs: 1,
+    maxMobs: 1,
+    difficulty: 3.5,
+    boss: null,          // Boss is determined dynamically by trialData.trialBoss
+    xpMult: 2.0,
+    isSpecial: true,
+  },
+};
+
+// 💡 OWNER RULING 2026-10-10 (backgrounds, supersedes the 2026-10-09 purge):
+// 1. The 2026-10-09 ruling removed the legacy env flats — that part stands.
+// 2. But the painted halls (ember_depths / void_sanctum / obsidian_throne / …)
+//    are ABYSS-BOSS art — the owner pulled them OUT of the dungeon pools:
+//    "why did you remove all others and use the abyss boss ones.. those are
+//    for Abyss bosses". The cave/field backgrounds (spark_* family) were
+//    never deleted — they are restored here as the dungeon look.
+// 3. "diversify the backgrounds": every environment now carries a themed
+//    bgPool; each RUN rolls one member (startJourney) and keeps it for the
+//    whole run — start card, battles and dead-world art all see the SAME
+//    file, while consecutive runs stop repeating the same backdrop.
+//    Every pool file has a measured standable-ground entry in the Go
+//    service's groundmap.json and exists on BOTH boxes (no stub risk).
+const DUNGEON_ENVIRONMENTS = {
+  DRAGON_LAIR: {
+    id: "DRAGON_LAIR",
+    name: "Dragon’s Lair",
+    asset: "spark_8.png",  // 💡 OWNER RULING 2026-10-10: spark family RESTORED (moonlit peaks read a wyrm's roost); halls (ember_depths) are abyss-boss art — out of the dungeon pool
+    bgPool: ["spark_8.png", "env1.png", "spark_2.png"],  // moonlit peaks / lava cavern / crimson night
+    mobs: ["DRAKE_SCOUT", "FIRE_BREATHER"],
+    bosses: ["ANCIENT_DRAGON_BOSS"],
+    modifier: {
+      type: "DRAGON_FEAR",
+      desc: "-10% ATK due to draconic presence",
+      damage: 0,
+    },
+    enemyBonus: { type: "DEFENSE", value: 0.2 },
+    isSpecial: true,
+  },
+  FIRE_CAVE: {
+    id: "FIRE_CAVE",
+    name: "Fire Cave",
+    asset: "env1.png",  // 💡 ART-FIX 2026-09-11: was spark_2.png (crimson mountains) - env1 IS the lava cave interior (owner 2026-10-09: the lava card is the style he wants)
+    bgPool: ["env1.png", "spark_2.png", "spark_8.png"],  // lava cavern / crimson night / moonlit peaks
+    mobs: ["FLAME", "ELDER_FLAME", "MAGMA_BRUTE", "HELLFIRE_DEMON"],
+    bosses: ["INFERNAL_OVERLORD", "PRIMORDIAL_FLAME"],
+    modifier: {
+      type: "HEAT_EXHAUSTION",
+      desc: "-5% Max HP per turn in lava",
+      damage: 0.05,
+    },
+    enemyBonus: { type: "DAMAGE", value: 0.1, element: "fire" },
+  },
+  ICE_CAVE: {
+    id: "ICE_CAVE",
+    name: "Ice Cave",
+    asset: "env2.png",  // 💡 ART-FIX 2026-09-11: was spark_5.png (a SUNNY BEACH!) - env2 IS the ice cave interior
+    bgPool: ["env2.png", "spark_7.png", "spark_8.png"],  // ice cavern / snowy pines / moonlit peaks
+    mobs: ["FROST_GHOUL", "GLACIAL_BEAST", "BLIZZARD_WRAITH"],
+    bosses: ["PERMAFROST_TITAN"],
+    modifier: {
+      type: "FROSTBITE",
+      desc: "-10% Speed penalty",
+      spdReduction: 0.1,
+    },
+    enemyBonus: { type: "DEFENSE", value: 0.2 },
+  },
+  TOXIC_CAVE: {
+    id: "TOXIC_CAVE",
+    name: "Toxic Cave",
+    asset: "env3.png",  // 💡 ART-FIX 2026-09-11: was spark_6.png (dark ocean) - env3 IS the toxic cave interior
+    bgPool: ["env3.png", "spark_4.png", "spark_1-night.png"],  // toxic cavern / dark mire / blighted night
+    mobs: ["DROWNED_ONE", "TIDE_LURKER", "MIST_WALKER"],
+    bosses: ["LEVIATHAN_SPAWN"],
+    modifier: {
+      type: "TOXIC_MIST",
+      desc: "-30% Healing effectiveness",
+      healReduction: 0.3,
+    },
+    enemyBonus: { type: "DOT", effect: "poison", value: 5 },
+  },
+  VOID_DIMENSION: {
+    id: "VOID_DIMENSION",
+    name: "Void Dimension",
+    asset: "spark_2-night.png",  // 💡 OWNER RULING 2026-10-10: spark family RESTORED (void night plains); halls (void_sanctum) are abyss-boss art — out of the dungeon pool
+    bgPool: ["spark_2-night.png", "spark_6.png", "spark_8.png"],  // void night / drowned coast / moonlit peaks
+    mobs: ["VOID_CORRUPTED", "ABYSSAL_HORROR"],
+    bosses: ["VOID_TITAN", "PRIMORDIAL_CHAOS"],
+    modifier: { type: "TIME_DILATION", desc: "Random turn order manipulation" },
+    enemyBonus: { type: "RANDOM_TP", chance: 0.1 },
+  },
+  SCI_FI_CITY: {
+    id: "SCI_FI_CITY",
+    name: "Sci-Fi City",
+    asset: "spark_10.png",  // 💡 OWNER RULING 2026-10-10: spark family RESTORED (dark stone interior); halls (crystal_vault) are abyss-boss art — out of the dungeon pool
+    bgPool: ["spark_10.png", "spark_15.png", "spark_2-night.png"],  // stone hall / tiled arena / night exterior
+    mobs: ["VOID_SEEKER", "ABYSSAL_HORROR"],  // 💡 was TSUNAMI_WALKER (water mob in a city)
+    bosses: ["KRAKEN_SPAWN"],
+    modifier: { type: "COVER_SYSTEM", desc: "Defense bonus from structures" },
+    enemyBonus: { type: "RANGED", rangeBonus: 1 },
+  },
+  DEMON_CASTLE: {
+    id: "DEMON_CASTLE",
+    name: "Demon Castle",
+    asset: "spark_2.png",  // 💡 OWNER RULING 2026-10-10: spark family RESTORED (crimson demon night — Mutation Prime's home turf); halls (obsidian_throne) are abyss-boss art — out of the dungeon pool
+    bgPool: ["spark_2.png", "spark_2-night.png", "spark_8.png"],  // crimson night / void night / moonlit peaks
+    mobs: ["HELLFIRE_DEMON", "STAR_EATER"],
+    bosses: [
+      "MUTATION_PRIME",
+      "ELEMENTAL_ARCHON",
+      "INFERNAL_OVERLORD",
+      "PRIMORDIAL_FLAME",
+    ],
+    modifier: {
+      type: "CURSED_GROUND",
+      desc: "Healing reduced to 50%",
+      healReduction: 0.5,
+    },
+    enemyBonus: { type: "MAGIC_EMPOWER", value: 0.2 },
+  },
+  DESERT: {
+    id: "DESERT",
+    name: "Desert",
+    asset: "spark_3.png",  // 💡 OWNER RULING 2026-10-10: spark family RESTORED (golden dunes); halls (ossuary_hall) are abyss-boss art — out of the dungeon pool
+    bgPool: ["spark_3.png", "spark_1.png", "spark_8.png"],  // dunes / cracked badlands / moonlit field
+    mobs: ["STONE_HULK", "CRYSTAL_CORRUPTED", "EARTH_WARDEN"],
+    bosses: ["GOLEM_KING", "MOUNTAIN_COLOSSUS"],
+    modifier: {
+      type: "SANDSTORM",
+      desc: "Accuracy penalty",
+      accuracyReduction: 0.15,
+    },
+    enemyBonus: { type: "STAMINA_DRAIN", energyCostInc: 0.1 },
+  },
+  INFECTED_AFTERLIFE: {
+    id: "INFECTED_AFTERLIFE",
+    name: "Infected Afterlife",
+    asset: "spark_1-night.png",  // 💡 OWNER RULING 2026-10-10: spark family RESTORED (corrupted night plains); halls (blood_chapel) are abyss-boss art — out of the dungeon pool
+    bgPool: ["spark_1-night.png", "spark_4.png", "spark_6.png"],  // blighted night / dark mire / drowned coast
+    mobs: ["FLESH_ABOMINATION", "CHIMERA_BEAST"],
+    bosses: ["PERFECT_MUTATION"],
+    modifier: { type: "CORRUPTION", desc: "Damage increases over time" },
+    enemyBonus: { type: "RESURRECTION", chance: 0.1 },
+  },
+  PRE_INFECTED_AFTERLIFE: {
+    id: "PRE_INFECTED_AFTERLIFE",
+    name: "Pre-Infected Afterlife",
+    asset: "spark_7.png",  // 💡 OWNER RULING 2026-10-10: spark family RESTORED (pure snowy peaks = holy ground); halls (frost_reliquary) are abyss-boss art — out of the dungeon pool
+    bgPool: ["spark_7.png", "spark_5.png", "background3.png"],  // snowy pines / sunlit shore / open snowfield
+    mobs: ["FROST_FLAME_WARDEN", "STORM_EARTH_TITAN"],
+    bosses: ["ELEMENTAL_SOVEREIGN"],
+    modifier: { type: "PURITY_AURA", desc: "Cleanses debuffs randomly" },
+    enemyBonus: { type: "HOLY_GROUND", healBonus: 0.5 },
+  },
+  SIMPLE_FOREST: {
+    id: "SIMPLE_FOREST",
+    name: "Simple Forest",
+    asset: "spark_1.png",  // 💡 OWNER RULING 2026-10-10: spark family RESTORED (open meadow); halls (fungal_grotto) are abyss-boss art — out of the dungeon pool
+    bgPool: ["spark_1.png", "forest.png", "spark_5.png"],  // meadow / treeline / sunlit shore
+    mobs: ["OBSIDIAN_JUGGERNAUT", "DIAMOND_SENTINEL"],
+    bosses: ["MOUNTAIN_COLOSSUS"],
+    modifier: { type: "DENSE_FOLIAGE", desc: "Line-of-sight blocked" },
+    enemyBonus: { type: "CAMOUFLAGE", evasionBonus: 0.15 },
+  },
+};
+
+const GAME_CONFIG = {
+  MIN_PLAYERS: 2,
+  MAX_PLAYERS: 6,
+  REGISTRATION_TIME: 120000,
+  SHOP_TIME: 90000,
+  VOTE_TIME: 60000,
+  COMBAT_TURN_TIME: 240000, // 💡 RPG OPT PASS (2026-10-20): was 600000 — a 10-minute group turn window read as "the game froze"; 4 min still gives slow players room (solo stays 120s)
+  BREAK_TIME: 6000, // 💡 RPG OPT PASS (2026-10-20): was 10000
+  ENEMY_TURN_TIME: 2000, // 💡 RPG OPT PASS (2026-10-20): was 5000 — enemy text is roundLog-buffered and flushed as ONE message at the next player prompt, so the old 5s delay was pure dead air per enemy per round
+  PERMADEATH_MULTIPLIER: 2.5,
+};
+
+// ==========================================
+// ⚔️ EXPANDED CLASS SYSTEM (15 Classes)
+// ==========================================
+
+const CLASSES = {
+  // ==========================================
+  // 🌟 STARTER CLASSES (4)
+  // ==========================================
+  FIGHTER: {
+    id: "FIGHTER",
+    name: "Fighter",
+    icon: "⚔️",
+    desc: "Balanced warrior, good at physical combat",
+    role: "STARTER",
+    stats: { hp: 120, atk: 12, def: 10, mag: 4, spd: 8, luck: 6, crit: 8 },
+    abilities: [
+      { name: "Slash", cost: 10, damage: 1.3, effect: "none", cooldown: 1 },
+      {
+        name: "Guard",
+        cost: 8,
+        damage: 0,
+        effect: "shield_self",
+        value: 20,
+        cooldown: 2,
+      },
+    ],
+    passive: { name: "Balanced", effect: "all_stats", value: 5 },
+  },
+
+  SCOUT: {
+    id: "SCOUT",
+    name: "Scout",
+    icon: "🗡️",
+    desc: "Quick and agile, focuses on speed",
+    role: "STARTER",
+    stats: { hp: 90, atk: 10, def: 5, mag: 3, spd: 16, luck: 14, crit: 18 },
+    abilities: [
+      {
+        name: "Quick Strike",
+        cost: 8,
+        damage: 1.2,
+        effect: "speed_bonus",
+        value: 10,
+        cooldown: 1,
+      },
+      { name: "Evade", cost: 10, damage: 0, effect: "dodge_next", cooldown: 2 },
+    ],
+    passive: { name: "Nimble", effect: "dodge_chance", value: 10 },
+  },
+
+  APPRENTICE: {
+    id: "APPRENTICE",
+    name: "Apprentice",
+    icon: "🔮",
+    desc: "Magic beginner with potential",
+    role: "STARTER",
+    stats: { hp: 80, atk: 5, def: 4, mag: 18, spd: 9, luck: 8, crit: 10 },
+    abilities: [
+      {
+        name: "Magic Bolt",
+        cost: 12,
+        damage: 1.5,
+        effect: "magic_damage",
+        cooldown: 1,
+      },
+      {
+        name: "Mana Shield",
+        cost: 15,
+        damage: 0,
+        effect: "shield_self",
+        value: 15,
+        cooldown: 3,
+      },
+    ],
+    passive: { name: "Magic Affinity", effect: "magic_damage", value: 10 },
+  },
+
+  ACOLYTE: {
+    id: "ACOLYTE",
+    name: "Acolyte",
+    icon: "✨",
+    desc: "Supportive novice with healing abilities",
+    role: "STARTER",
+    stats: { hp: 100, atk: 6, def: 8, mag: 14, spd: 10, luck: 12, crit: 6 },
+    abilities: [
+      {
+        name: "Heal",
+        cost: 15,
+        damage: 0,
+        effect: "heal_target",
+        value: 30,
+        cooldown: 2,
+      },
+      {
+        name: "Smite",
+        cost: 10,
+        damage: 1.2,
+        effect: "holy_damage",
+        cooldown: 1,
+      },
+    ],
+    passive: { name: "Blessed", effect: "team_healing", value: 3 },
+  },
+
+  // ==========================================
+  // TANK CLASSES
+  // ==========================================
+  WARRIOR: {
+    id: "WARRIOR",
+    name: "Warrior",
+    icon: "⚔️",
+    desc: "Frontline tank with high HP and defense",
+    role: "TANK",
+    stats: { hp: 200, atk: 12, def: 15, mag: 2, spd: 5, luck: 5, crit: 5 },
+    abilities: [
+      {
+        name: "Shield Bash",
+        cost: 10,
+        damage: 1.2,
+        effect: "stun",
+        chance: 30,
+        cooldown: 2,
+      },
+      {
+        name: "Taunt",
+        cost: 15,
+        damage: 0,
+        effect: "taunt",
+        chance: 100,
+        cooldown: 3,
+      },
+      {
+        name: "Battle Cry",
+        cost: 20,
+        damage: 0,
+        effect: "buff_team_atk",
+        value: 15,
+        cooldown: 4,
+      },
+      {
+        name: "Execute",
+        cost: 25,
+        damage: 2.5,
+        effect: "execute",
+        threshold: 30,
+        cooldown: 5,
+      },
+    ],
+    passive: { name: "Unbreakable", effect: "damage_reduction", value: 15 },
+  },
+
+  PALADIN: {
+    id: "PALADIN",
+    name: "Paladin",
+    icon: "🛡️",
+    desc: "Holy defender with healing and protection",
+    role: "TANK",
+    stats: { hp: 180, atk: 10, def: 18, mag: 8, spd: 4, luck: 7, crit: 3 },
+    abilities: [
+      {
+        name: "Holy Strike",
+        cost: 12,
+        damage: 1.3,
+        effect: "heal_self",
+        value: 15,
+        cooldown: 2,
+      },
+      {
+        name: "Divine Shield",
+        cost: 20,
+        damage: 0,
+        effect: "shield_team",
+        value: 30,
+        duration: 2,
+        cooldown: 4,
+      },
+      {
+        name: "Consecrate",
+        cost: 18,
+        damage: 1.0,
+        effect: "aoe",
+        radius: 3,
+        cooldown: 3,
+      },
+      {
+        name: "Lay on Hands",
+        cost: 30,
+        damage: 0,
+        effect: "heal_target",
+        value: 60,
+        cooldown: 5,
+      },
+    ],
+    passive: { name: "Holy Aura", effect: "team_healing", value: 5 },
+  },
+
+  BERSERKER: {
+    id: "BERSERKER",
+    name: "Berserker",
+    icon: "🪓",
+    desc: "Rage-fueled warrior who gets stronger when low HP",
+    role: "TANK",
+    stats: { hp: 220, atk: 16, def: 10, mag: 1, spd: 6, luck: 4, crit: 12 },
+    abilities: [
+      {
+        name: "Rage Strike",
+        cost: 8,
+        damage: 1.6,
+        effect: "self_damage",
+        value: 5,
+        cooldown: 1,
+      },
+      {
+        name: "Blood Fury",
+        cost: 15,
+        damage: 2.0,
+        effect: "bleed_self",
+        duration: 3,
+        cooldown: 3,
+      },
+      {
+        name: "Rampage",
+        cost: 25,
+        damage: 1.2,
+        effect: "multi_hit",
+        hits: 3,
+        cooldown: 4,
+      },
+      {
+        name: "Last Stand",
+        cost: 30,
+        damage: 3.0,
+        effect: "low_hp_bonus",
+        threshold: 30,
+        cooldown: 6,
+      },
+    ],
+    passive: {
+      name: "Berserker Rage",
+      effect: "damage_when_low_hp",
+      value: 50,
+    },
+  },
+
+  // DPS CLASSES
+  ROGUE: {
+    id: "ROGUE",
+    name: "Rogue",
+    icon: "🗡️",
+    desc: "Agile assassin with high crit and evasion",
+    role: "DPS",
+    stats: { hp: 100, atk: 18, def: 5, mag: 3, spd: 20, luck: 15, crit: 25 },
+    abilities: [
+      {
+        name: "Backstab",
+        cost: 12,
+        damage: 2.2,
+        effect: "crit_bonus",
+        value: 50,
+        cooldown: 2,
+      },
+      {
+        name: "Smoke Bomb",
+        cost: 15,
+        damage: 0.5,
+        effect: "blind",
+        chance: 70,
+        duration: 2,
+        cooldown: 3,
+      },
+      {
+        name: "Shadow Step",
+        cost: 10,
+        damage: 1.0,
+        effect: "dodge_next",
+        cooldown: 2,
+      },
+      {
+        name: "Assassinate",
+        cost: 35,
+        damage: 4.0,
+        effect: "instant_kill",
+        threshold: 20,
+        cooldown: 7,
+      },
+    ],
+    passive: { name: "Evasion", effect: "dodge_chance", value: 20 },
+  },
+
+  MONK: {
+    id: "MONK",
+    name: "Monk",
+    icon: "🥋",
+    desc: "Martial artist with combo attacks",
+    role: "DPS",
+    stats: { hp: 120, atk: 14, def: 8, mag: 6, spd: 18, luck: 10, crit: 15 },
+    abilities: [
+      {
+        name: "Flurry",
+        cost: 10,
+        damage: 0.8,
+        effect: "multi_hit",
+        hits: 4,
+        cooldown: 2,
+      },
+      {
+        name: "Chi Burst",
+        cost: 15,
+        damage: 1.5,
+        effect: "heal_self",
+        value: 10,
+        cooldown: 2,
+      },
+      {
+        name: "Pressure Point",
+        cost: 20,
+        damage: 1.0,
+        effect: "stun",
+        chance: 60,
+        cooldown: 3,
+      },
+      {
+        name: "Final Strike",
+        cost: 30,
+        damage: 2.8,
+        effect: "combo_bonus",
+        cooldown: 5,
+      },
+    ],
+    passive: { name: "Combo Master", effect: "damage_per_hit", value: 5 },
+  },
+
+  // MAGIC DPS
+  MAGE: {
+    id: "MAGE",
+    name: "Mage",
+    icon: "🔮",
+    desc: "Arcane spellcaster with devastating magic",
+    role: "MAGIC_DPS",
+    stats: { hp: 85, atk: 5, def: 4, mag: 25, spd: 8, luck: 10, crit: 12 },
+    abilities: [
+      {
+        name: "Fireball",
+        cost: 15,
+        damage: 2.0,
+        effect: "burn",
+        duration: 3,
+        cooldown: 2,
+      },
+      {
+        name: "Ice Shard",
+        cost: 12,
+        damage: 1.5,
+        effect: "freeze",
+        chance: 40,
+        duration: 1,
+        cooldown: 2,
+      },
+      {
+        name: "Lightning Bolt",
+        cost: 18,
+        damage: 2.3,
+        effect: "chain",
+        targets: 2,
+        cooldown: 3,
+      },
+      {
+        name: "Meteor",
+        cost: 40,
+        damage: 3.5,
+        effect: "aoe",
+        radius: 5,
+        cooldown: 6,
+      },
+    ],
+    passive: { name: "Arcane Mastery", effect: "magic_damage", value: 20 },
+  },
+
+  WARLOCK: {
+    id: "WARLOCK",
+    name: "Warlock",
+    icon: "👹",
+    desc: "Dark caster who drains life",
+    role: "MAGIC_DPS",
+    stats: { hp: 95, atk: 6, def: 5, mag: 22, spd: 7, luck: 8, crit: 10 },
+    abilities: [
+      {
+        name: "Drain Life",
+        cost: 12,
+        damage: 1.5,
+        effect: "lifesteal",
+        value: 50,
+        cooldown: 2,
+      },
+      {
+        name: "Curse",
+        cost: 15,
+        damage: 0.8,
+        effect: "curse",
+        duration: 4,
+        cooldown: 3,
+      },
+      {
+        name: "Shadow Bolt",
+        cost: 18,
+        damage: 2.2,
+        effect: "magic_damage",
+        cooldown: 2,
+      },
+      {
+        name: "Demon Summon",
+        cost: 35,
+        damage: 1.0,
+        effect: "summon_pet",
+        duration: 5,
+        cooldown: 6,
+      },
+    ],
+    passive: { name: "Soul Harvest", effect: "damage_on_kill", value: 15 },
+  },
+
+  ELEMENTALIST: {
+    id: "ELEMENTALIST",
+    name: "Elementalist",
+    icon: "🌪️",
+    desc: "Master of all elements",
+    role: "MAGIC_DPS",
+    stats: { hp: 90, atk: 4, def: 5, mag: 24, spd: 9, luck: 11, crit: 13 },
+    abilities: [
+      {
+        name: "Flame Wave",
+        cost: 14,
+        damage: 1.8,
+        effect: "burn",
+        duration: 2,
+        cooldown: 2,
+      },
+      {
+        name: "Frost Nova",
+        cost: 16,
+        damage: 1.4,
+        effect: "freeze_aoe",
+        radius: 3,
+        cooldown: 3,
+      },
+      {
+        name: "Thunder Storm",
+        cost: 20,
+        damage: 2.0,
+        effect: "shock",
+        duration: 3,
+        cooldown: 3,
+      },
+      {
+        name: "Elemental Fury",
+        cost: 38,
+        damage: 3.0,
+        effect: "all_elements",
+        cooldown: 6,
+      },
+    ],
+    passive: {
+      name: "Elemental Affinity",
+      effect: "rotate_elements",
+      value: 10,
+    },
+  },
+
+  // SUPPORT CLASSES
+  CLERIC: {
+    id: "CLERIC",
+    name: "Cleric",
+    icon: "✨",
+    desc: "Divine healer who keeps the party alive",
+    role: "SUPPORT",
+    stats: { hp: 100, atk: 6, def: 8, mag: 18, spd: 10, luck: 14, crit: 5 },
+    abilities: [
+      {
+        name: "Heal",
+        cost: 15,
+        damage: 0,
+        effect: "heal_target",
+        value: 50,
+        cooldown: 1,
+      },
+      {
+        name: "Prayer",
+        cost: 20,
+        damage: 0,
+        effect: "heal_team",
+        value: 30,
+        cooldown: 3,
+      },
+      {
+        name: "Smite",
+        cost: 12,
+        damage: 1.8,
+        effect: "holy_damage",
+        cooldown: 2,
+      },
+      {
+        name: "Resurrection",
+        cost: 50,
+        damage: 0,
+        effect: "revive",
+        value: 40,
+        cooldown: 8,
+      },
+    ],
+    passive: { name: "Divine Grace", effect: "healing_boost", value: 25 },
+  },
+
+  DRUID: {
+    id: "DRUID",
+    name: "Druid",
+    icon: "🌿",
+    desc: "Nature magic with healing and shapeshifting",
+    role: "SUPPORT",
+    stats: { hp: 115, atk: 10, def: 9, mag: 16, spd: 11, luck: 13, crit: 8 },
+    abilities: [
+      {
+        name: "Rejuvenation",
+        cost: 10,
+        damage: 0,
+        effect: "heal_over_time",
+        value: 15,
+        duration: 3,
+        cooldown: 2,
+      },
+      {
+        name: "Entangle",
+        cost: 14,
+        damage: 1.2,
+        effect: "root",
+        duration: 2,
+        cooldown: 3,
+      },
+      {
+        name: "Bear Form",
+        cost: 20,
+        damage: 1.8,
+        effect: "transform_tank",
+        duration: 3,
+        cooldown: 4,
+      },
+      {
+        name: "Nature's Wrath",
+        cost: 28,
+        damage: 2.5,
+        effect: "nature_damage",
+        cooldown: 5,
+      },
+    ],
+    passive: { name: "Natural Healing", effect: "regen", value: 5 },
+  },
+
+  // HYBRID CLASSES
+  NECROMANCER: {
+    id: "NECROMANCER",
+    name: "Necromancer",
+    icon: "💀",
+    desc: "Dark summoner who raises the dead",
+    role: "HYBRID",
+    stats: { hp: 95, atk: 7, def: 6, mag: 20, spd: 8, luck: 9, crit: 11 },
+    abilities: [
+      {
+        name: "Raise Dead",
+        cost: 20,
+        damage: 0,
+        effect: "summon_skeleton",
+        duration: 4,
+        cooldown: 4,
+      },
+      {
+        name: "Death Coil",
+        cost: 15,
+        damage: 1.8,
+        effect: "lifesteal",
+        value: 40,
+        cooldown: 2,
+      },
+      {
+        name: "Corpse Explosion",
+        cost: 18,
+        damage: 2.2,
+        effect: "aoe_corpse",
+        cooldown: 3,
+      },
+      {
+        name: "Army of Dead",
+        cost: 45,
+        damage: 1.5,
+        effect: "summon_army",
+        duration: 5,
+        cooldown: 7,
+      },
+    ],
+    passive: { name: "Death's Touch", effect: "damage_on_death", value: 30 },
+  },
+
+  MERCHANT: {
+    id: "MERCHANT",
+    name: "Merchant",
+    icon: "💰",
+    desc: "Capitalist who uses gold as power",
+    role: "HYBRID",
+    stats: { hp: 110, atk: 6, def: 6, mag: 8, spd: 10, luck: 25, crit: 12 },
+    abilities: [
+      {
+        name: "Gold Throw",
+        cost: 10,
+        damage: 1.5,
+        effect: "gold_damage",
+        value: 100,
+        cooldown: 1,
+      },
+      {
+        name: "Bribe",
+        cost: 20,
+        damage: 0,
+        effect: "charm",
+        chance: 50,
+        duration: 2,
+        cooldown: 4,
+      },
+      {
+        name: "Investment",
+        cost: 15,
+        damage: 0,
+        effect: "gain_gold",
+        value: 200,
+        cooldown: 3,
+      },
+      {
+        name: "Money Rain",
+        cost: 30,
+        damage: 2.0,
+        effect: "aoe_gold",
+        value: 300,
+        cooldown: 5,
+      },
+    ],
+    passive: { name: "Golden Touch", effect: "gold_find", value: 50 },
+  },
+
+  CHRONOMANCER: {
+    id: "CHRONOMANCER",
+    name: "Chronomancer",
+    icon: "⏰",
+    desc: "Time mage who manipulates turns",
+    role: "HYBRID",
+    stats: { hp: 88, atk: 5, def: 5, mag: 23, spd: 16, luck: 12, crit: 9 },
+    abilities: [
+      {
+        name: "Slow",
+        cost: 14,
+        damage: 1.0,
+        effect: "slow",
+        value: 50,
+        duration: 3,
+        cooldown: 3,
+      },
+      {
+        name: "Haste",
+        cost: 16,
+        damage: 0,
+        effect: "haste_team",
+        value: 30,
+        duration: 2,
+        cooldown: 4,
+      },
+      {
+        name: "Time Skip",
+        cost: 20,
+        damage: 0,
+        effect: "extra_turn",
+        cooldown: 5,
+      },
+      {
+        name: "Temporal Rift",
+        cost: 35,
+        damage: 3.0,
+        effect: "time_damage",
+        cooldown: 6,
+      },
+    ],
+    passive: { name: "Time Dilation", effect: "first_turn_bonus", value: 20 },
+  },
+};
+
+// ==========================================
+// 🎒 MASSIVE ITEM SYSTEM
+// ==========================================
+
+const CONSUMABLES = {
+  // HEALING
+  // 💡 Prices here are synced with the regular shop (lootSystem.js item values)
+  // so items cost the same in both the pre-quest shop and the main shop.
+  minor_potion: {
+    name: "Minor Health Potion",
+    cost: 280,
+    effect: "heal",
+    effectValue: 0.15,
+    desc: "Restores 15% of Max HP. A basic potion for minor wounds.",
+    icon: "🧪",
+  },
+  health_potion: {
+    name: "Health Potion",
+    cost: 700,
+    effect: "heal",
+    effectValue: 0.35,
+    desc: "Restores 35% of Max HP. Standard issue for adventurers.",
+    icon: "💊",
+  },
+  major_potion: {
+    name: "Major Health Potion",
+    cost: 1680,
+    effect: "heal",
+    effectValue: 0.6,
+    desc: "Restores 60% of Max HP. Essential for dangerous raids.",
+    icon: "⚗️",
+  },
+  elixir: {
+    name: "Full Restore Elixir",
+    cost: 4200,
+    effect: "heal",
+    effectValue: 1.0,
+    cureStatus: true,
+    desc: "Fully restores HP and cures all negative status effects. Rare and powerful alchemy.",
+    icon: "🍶",
+  },
+  remedy: {
+    name: "Remedy",
+    cost: 500,   // ✅ Matches lootSystem value: 500
+    effect: "cure_status",
+    desc: "Cures all negative status effects (stun, poison, burn, freeze, etc.).",
+    icon: "🌱",
+  },
+  regen_salve: {
+    name: "Regeneration Salve",
+    cost: 1120,
+    effect: "regen",
+    effectValue: 0.1,
+    duration: 3,
+    desc: "Heals 10% of Max HP per turn for 3 turns.",
+    icon: "🧴",
+  },
+
+  // MANA (for abilities)
+  mana_potion: {
+    name: "Mana Potion",
+    cost: 400,
+    effect: "restore_energy",
+    effectValue: 0.4,
+    desc: "Restores 40% of Max Energy. Refreshes your combat focus.",
+    icon: "💙",
+  },
+  ether: {
+    name: "Ether",
+    cost: 1000,  // ✅ Authoritative price from pre-quest store
+    effect: "restore_energy",
+    effectValue: 1.0,
+    desc: "Fully restores Energy. Pure arcane energy in a bottle.",
+    icon: "🔵",
+  },
+
+  // BUFFS
+  strength_brew: {
+    name: "Strength Brew",
+    cost: 600,
+    effect: "buff_atk",
+    value: 25,
+    duration: 3,
+    desc: "Increases ATK by 25% for 3 turns.",
+    icon: "💪",
+  },
+  defense_tonic: {
+    name: "Defense Tonic",
+    cost: 600,
+    effect: "buff_def",
+    value: 25,
+    duration: 3,
+    desc: "Increases DEF by 25% for 3 turns.",
+    icon: "🛡️",
+  },
+  speed_elixir: {
+    name: "Speed Elixir",
+    cost: 600,
+    effect: "buff_spd",
+    value: 30,
+    duration: 3,
+    desc: "Increases SPD by 30% for 3 turns.",
+    icon: "⚡",
+  },
+  lucky_charm: {
+    name: "Lucky Charm",
+    cost: 800,
+    effect: "buff_luck",
+    value: 40,
+    duration: 3,
+    desc: "Increases LUCK by 40% for 3 turns.",
+    icon: "🍀",
+  },
+  berserker_pill: {
+    name: "Berserker Pill",
+    cost: 1500,
+    effect: "buff_all_damage",
+    value: 50,
+    duration: 2,
+    desc: "Massive damage boost, but lowers defense.",
+    icon: "💥",
+  },
+
+  // UTILITY
+  phoenix_down: {
+    name: "Phoenix Down",
+    cost: 3500,
+    effect: "revive",
+    effectValue: 0.5,
+    desc: "Revives a fallen ally with 50% HP.",
+    icon: "🪶",
+  },
+  smoke_bomb: {
+    name: "Smoke Bomb",
+    cost: 500,
+    effect: "flee",
+    chance: 80,
+    desc: "Allows the party to escape combat (80% chance). Useless in high-tier dungeons and deep Abyss floors.",
+    icon: "💨",
+  },
+  // 💡 2026-10-11 (owner: "add an item called distraction Charm that helps
+  // escape since the smoke bomb shouldn't work in high tier dungeons... the
+  // charm should have a 50% chance of failing"): the deep-content escape
+  // option. Works EVERYWHERE (smoke bomb doesn't), but coin-flip reliability.
+  distraction_charm: {
+    name: "Distraction Charm",
+    cost: 1200,
+    effect: "flee",
+    chance: 50,
+    desc: "Whispers a lie to the dark - 50% chance to escape ANY fight, even high-tier dungeons and the deep Abyss. Fails hilariously.",
+    icon: "🧿",
+  },
+  bomb: {
+    name: "Bomb",
+    cost: 2500,
+    effect: "damage_aoe",
+    value: 80,
+    desc: "Deals 80 area damage to all enemies.",
+    icon: "💣",
+  },
+  abyssal_detonator: {
+    name: "Abyssal Detonator",
+    cost: 150000,
+    effect: "percent_hp_damage",
+    effectValue: 0.25,
+    desc: "Deals 25% of target MAX HP as true damage.",
+    icon: "💥🌀",
+  },
+
+  // BUNDLES
+  bundle_pack: {
+    name: "Explorer Pack",
+    cost: 1400,  // ✅ Updated to match sum of contents: health_potion(700) + mana_potion(400) + minor_potion(280) = 1380, rounded to 1400
+    effect: "bundle",
+    items: ["health_potion", "mana_potion", "minor_potion"],
+    desc: "A bundle containing a Health Potion, Energy Elixir, and Minor Potion.",
+    icon: "🎒",
+  },
+};
+
+const SHOP_LIST = [
+  "minor_potion",
+  "health_potion",
+  "major_potion",
+  "elixir",
+  "remedy",
+  "regen_salve",
+  "mana_potion",
+  "ether",
+  "strength_brew",
+  "defense_tonic",
+  "speed_elixir",
+  "lucky_charm",
+  "berserker_pill",
+  "phoenix_down",
+  "bomb",
+  "smoke_bomb",
+  "distraction_charm",
+  "abyssal_detonator",
+];
+
+const EQUIPMENT = {
+  // WEAPONS
+  rusty_sword: {
+    name: "Rusty Sword",
+    type: "weapon",
+    cost: 1000,
+    stats: { atk: 5 },
+    icon: "🗡️",
+    slot: "weapon",
+  },
+  iron_sword: {
+    name: "Iron Sword",
+    type: "weapon",
+    cost: 3000,
+    stats: { atk: 12 },
+    icon: "⚔️",
+    slot: "weapon",
+  },
+  steel_blade: {
+    name: "Steel Blade",
+    type: "weapon",
+    cost: 7000,
+    stats: { atk: 20, crit: 5 },
+    icon: "🗡️",
+    slot: "weapon",
+  },
+  mythril_sword: {
+    name: "Mythril Sword",
+    type: "weapon",
+    cost: 14000,
+    stats: { atk: 30, crit: 10 },
+    icon: "⚔️",
+    slot: "weapon",
+  },
+  excalibur: {
+    name: "Excalibur",
+    type: "weapon",
+    cost: 30000,
+    stats: { atk: 50, crit: 15, mag: 10 },
+    icon: "🗡️✨",
+    slot: "weapon",
+    special: "holy_damage",
+  },
+
+  wooden_staff: {
+    name: "Wooden Staff",
+    type: "weapon",
+    cost: 1000,
+    stats: { mag: 8 },
+    icon: "🪄",
+    slot: "weapon",
+  },
+  magic_wand: {
+    name: "Magic Wand",
+    type: "weapon",
+    cost: 4000,
+    stats: { mag: 15 },
+    icon: "✨",
+    slot: "weapon",
+  },
+  arcane_staff: {
+    name: "Arcane Staff",
+    type: "weapon",
+    cost: 10000,
+    stats: { mag: 28, atk: 5 },
+    icon: "🔮",
+    slot: "weapon",
+  },
+  staff_of_ages: {
+    name: "Staff of Ages",
+    type: "weapon",
+    cost: 24000,
+    stats: { mag: 45, spd: 10 },
+    icon: "🪄✨",
+    slot: "weapon",
+    special: "spell_power",
+  },
+
+  short_bow: {
+    name: "Short Bow",
+    type: "weapon",
+    cost: 1600,
+    stats: { atk: 10, spd: 5 },
+    icon: "🏹",
+    slot: "weapon",
+  },
+  longbow: {
+    name: "Longbow",
+    type: "weapon",
+    cost: 5000,
+    stats: { atk: 18, spd: 8 },
+    icon: "🏹",
+    slot: "weapon",
+  },
+  hunters_bow: {
+    name: "Hunter's Bow",
+    type: "weapon",
+    cost: 12000,
+    stats: { atk: 28, spd: 12, crit: 12 },
+    icon: "🏹✨",
+    slot: "weapon",
+    special: "piercing",
+  },
+
+  // ARMOR
+  cloth_armor: {
+    name: "Cloth Armor",
+    type: "armor",
+    cost: 800,
+    stats: { def: 5, mag: 3 },
+    icon: "👕",
+    slot: "armor",
+  },
+  leather_armor: {
+    name: "Leather Armor",
+    type: "armor",
+    cost: 2400,
+    stats: { def: 10, spd: 2 },
+    icon: "🧥",
+    slot: "armor",
+  },
+  chainmail: {
+    name: "Chainmail",
+    type: "armor",
+    cost: 6000,
+    stats: { def: 18 },
+    icon: "⛓️",
+    slot: "armor",
+  },
+  plate_armor: {
+    name: "Plate Armor",
+    type: "armor",
+    cost: 12000,
+    stats: { def: 30, hp: 20 },
+    icon: "🛡️",
+    slot: "armor",
+  },
+  dragon_scale: {
+    name: "Dragon Scale Armor",
+    type: "armor",
+    cost: 30000,
+    stats: { def: 50, hp: 40, mag: 10 },
+    icon: "🐉",
+    slot: "armor",
+    special: "fire_resist",
+  },
+
+  // ACCESSORIES
+  ring_str: {
+    name: "Ring of Strength",
+    type: "accessory",
+    cost: 4000,
+    stats: { atk: 10 },
+    icon: "💍",
+    slot: "ring",
+  },
+  ring_int: {
+    name: "Ring of Intelligence",
+    type: "accessory",
+    cost: 4000,
+    stats: { mag: 10 },
+    icon: "💍",
+    slot: "ring",
+  },
+  ring_vit: {
+    name: "Ring of Vitality",
+    type: "accessory",
+    cost: 4000,
+    stats: { hp: 30 },
+    icon: "💍",
+    slot: "ring",
+  },
+  ring_luck: {
+    name: "Ring of Fortune",
+    type: "accessory",
+    cost: 6000,
+    stats: { luck: 20 },
+    icon: "💍",
+    slot: "ring",
+  },
+  ring_crit: {
+    name: "Ring of Precision",
+    type: "accessory",
+    cost: 7000,
+    stats: { crit: 15 },
+    icon: "💍",
+    slot: "ring",
+  },
+
+  amulet_hp: {
+    name: "Amulet of Life",
+    type: "accessory",
+    cost: 5000,
+    stats: { hp: 50 },
+    icon: "📿",
+    slot: "amulet",
+  },
+  amulet_regen: {
+    name: "Amulet of Regeneration",
+    type: "accessory",
+    cost: 7000,
+    stats: { hp: 20 },
+    icon: "📿",
+    slot: "amulet",
+    special: "regen_5",
+  },
+  amulet_elemental: {
+    name: "Elemental Amulet",
+    type: "accessory",
+    cost: 10000,
+    stats: { mag: 15, def: 10 },
+    icon: "📿",
+    slot: "amulet",
+    special: "elemental_resist",
+  },
+
+  boots_speed: {
+    name: "Boots of Speed",
+    type: "accessory",
+    cost: 3600,
+    stats: { spd: 15 },
+    icon: "👢",
+    slot: "boots",
+  },
+  boots_tank: {
+    name: "Iron Boots",
+    type: "accessory",
+    cost: 3600,
+    stats: { def: 12, hp: 15 },
+    icon: "👢",
+    slot: "boots",
+  },
+  winged_boots: {
+    name: "Winged Boots",
+    type: "accessory",
+    cost: 9000,
+    stats: { spd: 25, def: 5 },
+    icon: "👢✨",
+    slot: "boots",
+    special: "first_strike",
+  },
+
+  cloak_stealth: {
+    name: "Cloak of Stealth",
+    type: "accessory",
+    cost: 6000,
+    stats: { spd: 10, luck: 10 },
+    icon: "🧥",
+    slot: "cloak",
+    special: "dodge_15",
+  },
+  cloak_mage: {
+    name: "Mage's Cloak",
+    type: "accessory",
+    cost: 7000,
+    stats: { mag: 20, def: 5 },
+    icon: "🧥",
+    slot: "cloak",
+  },
+  cloak_vampire: {
+    name: "Vampire Cloak",
+    type: "accessory",
+    cost: 12000,
+    stats: { atk: 15, mag: 15 },
+    icon: "🧥",
+    slot: "cloak",
+    special: "lifesteal_10",
+  },
+};
+
+const CRAFTING_MATERIALS = {
+  wood: { name: "Wood", icon: "🪵", rarity: "common" },
+  stone: { name: "Stone", icon: "🪨", rarity: "common" },
+  iron_ore: { name: "Iron Ore", icon: "⛏️", rarity: "common" },
+  leather: { name: "Leather", icon: "🦌", rarity: "common" },
+  herb: { name: "Herb", icon: "🌿", rarity: "common" },
+
+  silver_ore: { name: "Silver Ore", icon: "⛏️", rarity: "uncommon" },
+  gold_ore: { name: "Gold Ore", icon: "⛏️", rarity: "uncommon" },
+  crystal: { name: "Crystal", icon: "💎", rarity: "uncommon" },
+  enchanted_cloth: { name: "Enchanted Cloth", icon: "✨", rarity: "uncommon" },
+
+  mythril_ore: { name: "Mythril Ore", icon: "⛏️", rarity: "rare" },
+  dragon_scale_mat: { name: "Dragon Scale", icon: "🐉", rarity: "rare" },
+  phoenix_feather: { name: "Phoenix Feather", icon: "🪶", rarity: "rare" },
+  demon_horn: { name: "Demon Horn", icon: "👹", rarity: "rare" },
+  angel_wing: { name: "Angel Wing", icon: "🪽", rarity: "rare" },
+
+  adamantite: { name: "Adamantite", icon: "💠", rarity: "legendary" },
+  orichalcum: { name: "Orichalcum", icon: "🌟", rarity: "legendary" },
+  void_essence: { name: "Void Essence", icon: "🌑", rarity: "legendary" },
+};
+
+const ELEMENT_CHART = {
+  PHYSICAL: { weakTo: [], strongVs: [] },
+  FIRE: { weakTo: ["WATER"], strongVs: ["ICE", "NATURE"] },
+  ICE: { weakTo: ["FIRE"], strongVs: ["NATURE"] },
+  WATER: { weakTo: ["LIGHTNING"], strongVs: ["FIRE"] },
+  LIGHTNING: { weakTo: ["EARTH"], strongVs: ["WATER"] },
+  EARTH: { weakTo: ["WIND"], strongVs: ["LIGHTNING"] },
+  WIND: { weakTo: ["EARTH"], strongVs: ["EARTH"] },
+  HOLY: { weakTo: ["DARK"], strongVs: ["DEATH", "DARK"] },
+  DARK: { weakTo: ["HOLY"], strongVs: ["HOLY"] },
+  DEATH: { weakTo: ["HOLY"], strongVs: ["PHYSICAL"] },
+  VOID: { weakTo: [], strongVs: ["FIRE", "ICE", "WATER", "LIGHTNING"] },
+};
+
+// ==========================================
+// 🎲 MONSTER DEFINITIONS
+// ==========================================
+
+// ==========================================
+// 👾 ENEMY SYSTEM
+// ==========================================
+
+// ==========================================
+// 👹 MONSTER ABILITY DATABASE
+// ==========================================
+
+// ==========================================
+// 🎲 CORE GAME FUNCTIONS
+// ==========================================
+function generateCombatEncounter(chatId) {
+  const state = getGameState(chatId);
+  if (!state) return null;
+  const rankData = DUNGEON_RANKS[state.dungeonRank];
+  const env = state.environment || DUNGEON_ENVIRONMENTS.SIMPLE_FOREST;
+
+  // Progressive Environment Mixing Logic
+  const rankIndexMap = {
+    F: 1,
+    E: 2,
+    D: 3,
+    C: 4,
+    B: 5,
+    A: 6,
+    S: 7,
+    SS: 8,
+    SSS: 9,
+  };
+  const rankIdx = rankIndexMap[state.dungeonRank] || 1;
+
+  // 💡 ENVIRONMENT COHERENCE (2026-09-11 owner directive): mixing mobs from
+  // OTHER environments (ice mobs in a fire cave) is only allowed PAST C rank.
+  // F/E/D/C dungeons stay 100% native to their environment's mob pool.
+  let mixRate = 0; // F-E-D-C: native mobs only
+  if (rankIdx >= 5 && rankIdx <= 6) mixRate = 0.5; // B-A Rank
+  else if (rankIdx >= 7) mixRate = 0.7; // S+ Rank
+
+  const encounter = classEncounters.generateEncounter(
+    state.players,
+    "COMBAT",
+    state.difficulty || 1.0,
+    {
+      minMobs: rankData.minMobs,
+      maxMobs: rankData.maxMobs,
+    },
+  );
+
+  // Override enemies with Environment Mixing
+  encounter.enemies = encounter.enemies.map((e) => {
+    const isMixed = Math.random() < mixRate;
+    let selectedMobId;
+
+    if (!isMixed) {
+      // Use native mob
+      selectedMobId = env.mobs[Math.floor(Math.random() * env.mobs.length)];
+    } else {
+      // Pick from ANY environment
+      const allEnvs = Object.values(DUNGEON_ENVIRONMENTS);
+      const randomEnv = allEnvs[Math.floor(Math.random() * allEnvs.length)];
+      selectedMobId =
+        randomEnv.mobs[Math.floor(Math.random() * randomEnv.mobs.length)];
+    }
+
+    // Re-scale the selected mob
+    const baseMob =
+      classEncounters.INFECTED_POOLS.FIRE_LOW.COMMON.find(
+        (m) => m.id === selectedMobId,
+      ) ||
+      Object.values(classEncounters.INFECTED_POOLS)
+        .flatMap((p) => p.COMMON)
+        .find((m) => m.id === selectedMobId);
+
+    if (baseMob) {
+      // Calculate avgSpeed for correct scaling
+      const avgSpeed = Math.floor(
+        state.players.reduce((sum, p) => sum + (p.stats?.spd || 10), 0) /
+          state.players.length,
+      );
+      return classEncounters.scaleEnemyStats(
+        baseMob,
+        state.players.length,
+        state.difficulty,
+        e.enemyIndex,
+        encounter.avgLevel,
+        avgSpeed,
+      );
+    }
+    return e;
+  });
+
+  encounter.theme = {
+    theme: env.name,
+    description: env.modifier.desc,
+  };
+
+  // 💡 GLOBAL WANDERER SWAP (enemy_variants.md §5): a small chance that ONE
+  // mob in any standard dungeon encounter is a WANDERER <CLASS> - a
+  // person-shaped other using player-class naming/behaviour. Data-level
+  // swap (naming, archetype, humanoid sprite); stats untouched.
+  try {
+    const __wClassId = (state.players && state.players[0] && state.players[0].class && state.players[0].class.id) || 'FIGHTER';
+    enemyVariants.maybeSwapWanderer(encounter.enemies, __wClassId);
+  } catch (e) {}
+
+  return encounter;
+}
+
+function generateEliteCombatEncounter(chatId) {
+  const state = getGameState(chatId);
+  if (!state) return null;
+  const rankData = DUNGEON_RANKS[state.dungeonRank];
+  const env = state.environment || DUNGEON_ENVIRONMENTS.SIMPLE_FOREST;
+
+  // Mixing Logic
+  const rankIndexMap = {
+    F: 1,
+    E: 2,
+    D: 3,
+    C: 4,
+    B: 5,
+    A: 6,
+    S: 7,
+    SS: 8,
+    SSS: 9,
+  };
+  const rankIdx = rankIndexMap[state.dungeonRank] || 1;
+  // 💡 ENVIRONMENT COHERENCE (2026-09-11): same rule as normal encounters -
+  // no foreign-environment mobs until PAST C rank (B and above).
+  let mixRate = 0;
+  if (rankIdx >= 5) mixRate = 0.4;
+
+  const encounter = classEncounters.generateEncounter(
+    state.players,
+    "ELITE_COMBAT",
+    (state.difficulty || 1.0) * 1.2,
+    {
+      minMobs: 1,
+      maxMobs: 2,
+    },
+  );
+
+  encounter.enemies = encounter.enemies.map((e) => {
+    const isMixed = Math.random() < mixRate;
+    let selectedMobId;
+
+    if (!isMixed) {
+      // Find an elite from this env's mob list
+      selectedMobId = env.mobs[Math.floor(Math.random() * env.mobs.length)];
+    } else {
+      const allEnvs = Object.values(DUNGEON_ENVIRONMENTS);
+      const randomEnv = allEnvs[Math.floor(Math.random() * allEnvs.length)];
+      selectedMobId =
+        randomEnv.mobs[Math.floor(Math.random() * randomEnv.mobs.length)];
+    }
+
+    // Find the elite version if possible
+    const baseMob =
+      Object.values(classEncounters.INFECTED_POOLS)
+        .flatMap((p) => p.ELITE)
+        .find((m) => m.id.includes(selectedMobId)) ||
+      Object.values(classEncounters.INFECTED_POOLS).flatMap((p) => p.ELITE)[0];
+
+    if (baseMob) {
+      const avgSpeed = Math.floor(
+        state.players.reduce((sum, p) => sum + (p.stats?.spd || 10), 0) /
+          state.players.length,
+      );
+      return classEncounters.scaleEnemyStats(
+        baseMob,
+        state.players.length,
+        state.difficulty * 1.2,
+        e.enemyIndex,
+        encounter.avgLevel,
+        avgSpeed,
+      );
+    }
+    return e;
+  });
+
+  encounter.theme = {
+    theme: `Elite ${env.name}`,
+    description: `Dangerous elites have adapted to the ${env.name}!`,
+  };
+
+  return encounter;
+}
+
+// ==========================================
+// 🎯 STATUS EFFECTS SYSTEM
+// ==========================================
+
+const STATUS_EFFECTS = {
+  poison: {
+    name: "Poison",
+    icon: "🧪",
+    effect: "damage_over_time",
+    value: 10,
+    tickRate: "per_turn",
+  },
+  burn: {
+    name: "Burn",
+    icon: "🔥",
+    effect: "damage_over_time",
+    value: 15,
+    tickRate: "per_turn",
+  },
+  bleed: {
+    name: "Bleed",
+    icon: "🩸",
+    effect: "damage_over_time",
+    value: 12,
+    tickRate: "per_turn",
+  },
+  freeze: {
+    name: "Freeze",
+    icon: "❄️",
+    effect: "skip_turn",
+    duration: 1,
+  },
+  // ⏳ Chronomancer Time Stop (owner 2026-10-27): its own status, NOT the ice freeze
+  locked_in_time: {
+    name: "Locked in Time",
+    icon: "⏳",
+    effect: "skip_turn",
+    duration: 2,
+  },
+  stun: {
+    name: "Stun",
+    icon: "💫",
+    effect: "skip_turn",
+    duration: 1,
+  },
+  sleep: {
+    name: "Sleep",
+    icon: "😴",
+    effect: "skip_turn",
+    wakeOnDamage: true,
+  },
+  root: {
+    name: "Root",
+    icon: "🌿",
+    effect: "cannot_move",
+    canAttack: true,
+  },
+  slow: {
+    name: "Slow",
+    icon: "🐌",
+    effect: "reduce_speed",
+    value: 50,
+  },
+  haste: {
+    name: "Haste",
+    icon: "⚡",
+    effect: "increase_speed",
+    value: 30,
+  },
+  curse: {
+    name: "Curse",
+    icon: "💀",
+    effect: "reduce_stats",
+    value: 20,
+  },
+  shield: {
+    name: "Shield",
+    icon: "🛡️",
+    effect: "absorb_damage",
+    value: 50,
+  },
+  regen: {
+    name: "Regeneration",
+    icon: "💚",
+    effect: "heal_over_time",
+    value: 10,
+    tickRate: "per_turn",
+  },
+  berserk: {
+    name: "Berserk",
+    icon: "😡",
+    effect: "increase_damage",
+    value: 50,
+    penalty: "reduce_defense",
+    penaltyValue: 30,
+  },
+  taunt: {
+    name: "Taunted",
+    icon: "😠",
+    effect: "force_target",
+    target: "taunter",
+  },
+  charm: {
+    name: "Charmed",
+    icon: "💖",
+    effect: "change_side",
+    duration: 2,
+  },
+  blind: {
+    name: "Blind",
+    icon: "👁️",
+    effect: "reduce_accuracy",
+    value: 50,
+  },
+  silence: {
+    name: "Silence",
+    icon: "🤐",
+    effect: "cannot_use_abilities",
+  },
+  shock: {
+    name: "Shock",
+    icon: "⚡",
+    effect: "damage_over_time",
+    value: 15,
+    tickRate: "per_turn",
+  },
+  // 💡 AUDIT FIX 2026-08-01: added `drown` status effect.
+  // Apocalypse Wing's description says "Inflicts Burn, Stun, and Drown"
+  // but no `drown` effect existed, so the drown portion did nothing.
+  // Now defined as a DoT that scales with the caster's MAG via ccValue.
+  drown: {
+    name: "Drown",
+    icon: "🌊",
+    effect: "damage_over_time",
+    value: 20,
+    tickRate: "per_turn",
+  },
+  weak: {
+    name: "Weakened",
+    icon: "😵",
+    effect: "reduce_stats",
+    value: 20,
+  },
+  vulnerability: {
+    name: "Vulnerable",
+    icon: "💔",
+    effect: "reduce_defense",
+    value: 30,
+  },
+  // 💡 FIX-PASS-2 (2026-10-03): removed a duplicate `blessing:` key that held a
+  // mislabeled copy of the SHOCK effect - last-wins made it dead, but it was
+  // one rename away from silently breaking Blessing.
+  blessing: {
+    name: "Blessing",
+    icon: "✨",
+    effect: "increase_stats",
+    value: 20,
+  },
+  wet: {
+    name: "Wet",
+    icon: "💧",
+    effect: "synergy_primer",
+  },
+  oil: {
+    name: "Oiled",
+    icon: "🛢️",
+    effect: "synergy_primer",
+  },
+  brittle: {
+    name: "Brittle",
+    icon: "❄️💔",
+    effect: "increase_physical_damage_taken",
+    value: 50,
+  },
+};
+
+// ==========================================
+// 🗺️ ENCOUNTER TYPES
+// ==========================================
+
+const ENCOUNTER_TYPES = {
+  COMBAT: {
+    weight: 40,
+    name: "Combat",
+    icon: "⚔️",
+    generator: generateCombatEncounter,
+  },
+  ELITE_COMBAT: {
+    weight: 15,
+    name: "Elite Enemy",
+    icon: "💪",
+    generator: generateEliteCombatEncounter,
+  },
+  TRAP: {
+    weight: 10,
+    name: "Trap",
+    icon: "🪤",
+    generator: generateTrapEncounter,
+  },
+  PUZZLE: {
+    weight: 10,
+    name: "Puzzle",
+    icon: "🧩",
+    generator: generatePuzzleEncounter,
+  },
+  MERCHANT: {
+    weight: 8,
+    name: "Merchant",
+    icon: "🏪",
+    generator: generateMerchantEncounter,
+  },
+  TREASURE: {
+    weight: 10,
+    name: "Treasure",
+    icon: "💎",
+    generator: generateTreasureEncounter,
+  },
+  EVENT: {
+    weight: 7,
+    name: "Special Event",
+    icon: "✨",
+    generator: generateEventEncounter,
+  },
+};
+
+// ==========================================
+// 🎮 MULTI-SESSION STATE MANAGEMENT
+// ==========================================
+
+const gameStates = new Map(); // sessionKey -> state
+
+// 💡 CROSS-BOT STATE LEAK FIX 2026-09-20 (owner: ".s combat atk" drove a
+// battle Joker started): Joker and Subaru run in ONE process, so this Map
+// is a shared singleton - and its keys were chat-scoped only. A battle
+// created by one bot was fully visible to the other. Every key is now
+// prefixed with the owning bot's identity (botConfig.getBotId(), the same
+// scoping chess.js / cardSystem.js / murdermystery already use) and every
+// state stamps its botId at creation. Lookups only return THIS bot's
+// battles; the sweeper still iterates both bots' states (memory cleanup).
+function botScope() {
+  try { return botConfig.getBotId() || "global"; } catch (e) { return "global"; }
+}
+const scopedKey = (key) => `${botScope()}|${key}`;
+// 💡 QUEST-START STALL FIX 2026-09-20 (owner: "quests and raids don't even
+// start anymore"): when the scoping fix above landed, every key became
+// "bot|..." - but MANY internal call sites pass an ALREADY-SCOPED key back
+// into the lookup helpers: executeEncounter(sessionKey), selectRandomEncounter
+// (sessionKey), getTargets/getHealTarget/getHealMult (25+ ability sites),
+// deleteGameState(sessionKey) at ~15 cleanup sites, and any helper receiving
+// state.sessionKey. Probing a scoped key through scopedKey() double-prefixes
+// ("Joker|Joker|chat") and the fallback scans compared state.chatId against
+// the prefixed string - so EVERY probe silently missed. Result: the raid
+// registered, the start card went out, then executeEncounter got null and
+// returned - no encounter ever spawned, no enemies, silence. Abilities no-
+// op'ed, cleanup deleted nothing (states leaked). WhatsApp JIDs never contain
+// "|", so stripping everything before the first "|" is unambiguous. A foreign
+// bot's key ("Subaru|chat") strips and then re-scopes under THIS bot - still
+// finds nothing, so cross-bot isolation is preserved.
+// ============================================
+// ⚔️ RUINS COMBAT BRIDGE (Guild War Overhaul 2026-10-03)
+// Lets the Ruins shared-map mode start standard combat encounters with the
+// REAL turn loop/UI, while enforcing Ruins surrounding rules via hooks:
+//   flee  → back to previous room, room forfeited (stays ACTIVE)
+//   end   → victory awards room GP/relic via the Guild War module
+// No parallel combat system: this reuses gameStates/startCombat verbatim.
+// ============================================
+const ruinsHooks = { onFlee: null, onEnd: null, endCard: null, presentAfterBattle: null };
+function setRuinsHooks(h) {
+  if (h.onFlee) ruinsHooks.onFlee = h.onFlee;
+  if (h.onEnd) ruinsHooks.onEnd = h.onEnd;
+  // ⚔️ RUINS end cards: the war module supplies the decree-style
+  // victory/defeat renderer (endCard.js) used INSTEAD of the default Go
+  // end screen for mode RUINS.
+  if (h.endCard) ruinsHooks.endCard = h.endCard;
+  // 🔄 ORDERING (owner 2026-10-05 11:48Z): replays the war module's
+  // navigation visuals AFTER the decree card (see endCombat below).
+  if (h.presentAfterBattle) ruinsHooks.presentAfterBattle = h.presentAfterBattle;
+}
+
+// Build the solo-style player entity (same shape + stat enrichment as the
+// solo auto-join + startJourney enrichment, minus the chat-flow machinery).
+function buildRuinsPlayerEntity(senderJid) {
+  economy.initializeClass(senderJid);
+  const userClass = economy.getUserClass(senderJid);
+  let classData;
+  if (userClass && CLASSES[userClass.id]) classData = CLASSES[userClass.id];
+  else if (userClass) {
+    const csClass = classSystem.getClassById(userClass.id || userClass.name?.toUpperCase());
+    classData = csClass
+      ? { id: csClass.id, name: csClass.name, icon: csClass.icon, passive: csClass.passive, abilities: csClass.abilities || [], stats: csClass.stats || { hp: 100, atk: 10, def: 10, mag: 10, spd: 10, luck: 10, crit: 5 } }
+      : CLASSES['FIGHTER'];
+  } else classData = CLASSES['FIGHTER'];
+
+  const user = economy.getUser(senderJid);
+  const classId = userClass?.id || classData.id || 'FIGHTER';
+  const baseStats = progression.getBaseStats(senderJid, classId);
+  const level = progression.getLevel(senderJid) || 1;
+  const persistHP = economy.getPersistentHP(senderJid, baseStats.hp);
+  const persistEn = economy.getPersistentEnergy(senderJid, baseStats.maxEnergy);
+  return {
+    jid: senderJid,
+    name: user?.nickname || user?.profile?.nickname || economy.getDisplayName(senderJid),
+    class: classData,
+    level,
+    spriteIndex: user?.spriteIndex ?? Math.floor(Math.random() * 100),
+    adventurerRank: user?.adventurerRank || 'F',
+    stats: {
+      hp: persistHP, maxHp: baseStats.hp,
+      energy: Math.max(1, persistEn), maxEnergy: baseStats.maxEnergy,
+      atk: baseStats.atk, def: baseStats.def, mag: baseStats.mag,
+      spd: baseStats.spd, luck: baseStats.luck, crit: baseStats.crit,
+      dmgReduction: baseStats.dmgReduction || 0, evasion: baseStats.evasion || 0,
+    },
+    equipment: inventorySystem.getEquipment(senderJid) || {},
+    inventory: [], statusEffects: [], buffs: [], isDead: false,
+    xpEarned: 0, goldEarned: 0,
+    combatStats: { damageDealt: 0, damageTaken: 0, healed: 0, kills: 0 },
+    currentHP: persistHP, mana: 100, maxMana: 100,
+  };
+}
+
+// Start a Ruins encounter through the REAL combat pipeline.
+// spec: { enemies: [{type, level, name?}], eventId, roomKey, rank?, background?, groq?, greeting? }
+async function startRuinsCombat(sock, chatId, senderJid, spec) {
+  if (isUserInAnyCombat(senderJid)) return { success: false, msg: '❌ You are already in combat.' };
+  const isTutorialGroup = !!spec.tutorialGroup;
+  // 💡 Phase B FIX (2026-10-04): group demo states must live under the GROUP
+  // key (chatId) like every other group adventure. Previously ALL
+  // startRuinsCombat states used the solo key "chat_jid", so once the
+  // tutorial group demo went live, handleCombatAction computed the group
+  // key, performAction got "NO STATE" and silently no-op'd - combat froze
+  // on the player's first action (the exact "stuck tutorial" failure mode).
+  // 🤝 TEAM CO-OP (2026-10-05): real Ruins room fights use a ROOM-SCOPED key
+  // (spec.sessionKey = gwr:<eventId>:<roomKey>) so every same-guild champion
+  // in the room shares ONE battle — quest-style co-op on the Ruins engine.
+  // Solo/tutorial keys are unchanged.
+  let sessionKey;
+  if (spec.sessionKey) {
+    sessionKey = scopedKey(spec.sessionKey);
+  } else {
+    sessionKey = isTutorialGroup ? scopedKey(chatId) : scopedKey(`${chatId}_${senderJid}`);
+  }
+  if (gameStates.has(sessionKey)) {
+    // 🧹 stale room session (fight over, state awaiting the next-stage
+    // cleanup window) → clear it and proceed; a LIVE fight still blocks.
+    const stale = gameStates.get(sessionKey);
+    if (stale && stale.mode === 'RUINS' && !stale.inCombat) {
+      try { if (stale.timers) Object.values(stale.timers).forEach((t) => { if (t) clearTimeout(t); }); } catch (e) {}
+      stale.active = false;
+      gameStates.delete(sessionKey);
+      cleanupCoopIndexForSession(sessionKey);
+    } else {
+      return { success: false, msg: '❌ You already have an active quest!' };
+    }
+  }
+  const isTutorial = !!spec.tutorialMode;
+  // 💡 Phase B: tutorial GROUP demo flags arrive via spec.tutorialGroup
+  // (declared above - it decides the session key before anything else).
+
+  const enemies = (spec.enemies || []).map((e) => {
+    const en = createEnemy(e.type, e.level || 10);
+    if (en && e.name) en.name = e.name;
+    return en;
+  }).filter(Boolean);
+  if (!enemies.length) return { success: false, msg: '❌ Encounter generation failed.' };
+
+  const state = JSON.parse(JSON.stringify(INITIAL_STATE_TEMPLATE));
+  // 🤝 co-op participants: initiator + every same-guild champion seated by
+  // the war router (encounters.startRoomCombat). Each gets a REAL entity —
+  // the raid/quest party shape — so turns, rewards and deaths split properly.
+  const participantJids = [senderJid];
+  if (Array.isArray(spec.participants)) {
+    for (const j of spec.participants) {
+      if (j && j !== senderJid && !participantJids.includes(j)) participantJids.push(j);
+    }
+  }
+  const isCoop = participantJids.length > 1;
+  Object.assign(state, {
+    active: true, chatId,
+    // 💡 TUTORIAL (2026-10-03): the new-player practice fight runs the same
+    // pipeline in mode TUTORIAL - no ruins hooks (no GP, no lives, no room
+    // clears), and endCombat routes the outcome to the tutorial module.
+    // 💡 Phase B: TUTORIAL_QUEST (controlled solo quest) and TUTORIAL_GROUP
+    // (fake-party demo) reuse the same no-ruins safety but keep rewards.
+    mode: isTutorialGroup ? 'TUTORIAL_GROUP' : (isTutorial ? 'TUTORIAL' : (spec.tutorialQuest ? 'TUTORIAL_QUEST' : 'RUINS')),
+    // 💀 FIX 2026-10-11 (owner fight-card audit): pin the fight background at
+    // creation. state.backgroundPath used to stay undefined here, so every
+    // combat render fell back to the Go service's env1.png lava cavern - the
+    // tutorial/ruins fight changed backdrop mid-chat ("background changes on
+    // defend, then returns to normal"). spec.background is the owner-ruled
+    // arena for this fight (tutorial = spark_1 open meadow, ruins = spark_10
+    // cave-stone hall).
+    solo: !isTutorialGroup && !isCoop,
+    dungeonRank: spec.rank || 'C',
+    backgroundPath: spec.background ? `rpgasset/environment/${spec.background}` : undefined,
+    // 💡 Phase B FIX (2026-10-04): this fight IS encounter #1 of #max.
+    // Standard journeys enter combat via nextStage (which increments
+    // encounter 0→1 BEFORE the first fight). startRuinsCombat starts combat
+    // DIRECTLY, so encounter stayed 0 - after victory, nextStage incremented
+    // to 1, "1 > 1" was false, and a SECOND encounter spawned (the Training
+    // Dummy fight was followed by a wild Infected Colossus boss - the exact
+    // bug the owner's tutorial brief forbids). Starting at 1 makes the
+    // post-victory increment overflow into endAdventure: dummy dies →
+    // adventure over, nothing else can ever appear.
+    encounter: 1, maxEncounters: 1,
+    lastActivity: Date.now(), createdAt: Date.now(),
+    groq: spec.groq || null, sock, sessionKey,
+    isProcessing: false, inCombat: false,
+    ruinsMeta: (isTutorial || isTutorialGroup || spec.tutorialQuest) ? null : { eventId: spec.eventId, roomKey: spec.roomKey, coop: isCoop },
+    dungeonName: (isTutorial || isTutorialGroup || spec.tutorialQuest) ? 'Training Hall' : 'The Ruins',
+  });
+  state.botId = botScope();
+  // 🤝 multicast: every combat visual (turn prompts, battle renders, decree
+  // card) reaches EVERY participant's DM. rawSock is kept for per-player
+  // sends (defeat respawn maps differ per player).
+  state.rawSock = sock;
+  if (isCoop) state.sock = makeRuinsSock(sock, sessionKey);
+  for (const jid of participantJids) {
+    state.players.push(buildRuinsPlayerEntity(jid));
+    // seat every participant in the resolver index so their `.combat …`
+    // DMs find this shared room session (see getGameState probe)
+    _coopIndex.set(jid, spec.sessionKey || `${chatId}_${senderJid}`);
+  }
+  // 💡 Phase B: fake guild-mates for the group demo. Synthetic entities with
+  // isTutorialAlly - auto-act in combat, excluded from all payouts/writes.
+  if (isTutorialGroup) {
+    const ALLY_NAMES = (spec.allyNames && spec.allyNames.length >= 3)
+      ? spec.allyNames
+      : ['Rin the Scout', 'Boro the Guard', 'Pia the Healer'];
+    const ALLY_ICONS = ['🏹', '🛡️', '🧪'];
+    for (let i = 0; i < 3; i++) {
+      state.players.push({
+        jid: `tutorial_ally_${i + 1}@tutorial`,
+        name: ALLY_NAMES[i] || `Ally ${i + 1}`,
+        class: { id: 'FIGHTER', name: 'Fighter', icon: ALLY_ICONS[i] || '⚔️' },
+        level: 1,
+        spriteIndex: 10 + i,
+        adventurerRank: 'F',
+        isTutorialAlly: true,
+        stats: {
+          hp: 60, maxHp: 60,
+          energy: 50, maxEnergy: 50,
+          atk: 8, def: 5, mag: 2, spd: 8, luck: 3, crit: 2,
+          dmgReduction: 0, evasion: 0,
+        },
+        equipment: {}, inventory: [], statusEffects: [], buffs: [],
+        isDead: false, xpEarned: 0, goldEarned: 0,
+        combatStats: { damageDealt: 0, damageTaken: 0, healed: 0, kills: 0 },
+        currentHP: 60, mana: 50, maxMana: 50,
+      });
+    }
+  }
+  // ⚔️ §15 #6 FIX (2026-10-03): Ruins ward relics now REALLY apply. The
+  // guildWar router passes spec.ward = { type, value, mode } from the
+  // player's ward_active relic; the buff rides the combat player entity.
+  // Values arrive as fractions (0.25) — engine buffs read PERCENT (25).
+  if (spec.ward && state.players[0]) {
+    const wp = state.players[0];
+    const wVal = Math.round((Number(spec.ward.value) || 0) * 100);
+    if (spec.ward.type === 'attack' && wVal > 0) {
+      wp.buffs.push({ type: 'attack', value: wVal, duration: 999, icon: '🛡️' });
+    } else if (spec.ward.type === 'defense' && wVal > 0) {
+      wp.buffs.push({ type: 'defense', value: wVal, duration: 999, icon: '🛡️' });
+    } else if (spec.ward.type === 'shield') {
+      wp.statusEffects.push({ type: 'shield', duration: 999 });
+    }
+  }
+  gameStates.set(sessionKey, state);
+
+  const encounter = {
+    name: spec.name || 'Ruins Encounter',
+    enemies,
+    theme: 'ruins',
+    background: spec.background || 'spark_10.png',  // 💡 OWNER RULING 2026-10-10: cave-stone hall (owner's liked set) — ruins fights keep the dark stone cave look, env1 legacy flat is out
+    intro: spec.greeting || '',
+    // ⚔️ square map fragment - drawn in the battle scene's bottom-right panel
+    ruinsMap: spec.mapFragment || null,
+  };
+  if (spec.greeting) {
+    try { await sock.sendMessage(chatId, { text: spec.greeting }); } catch (e) {}
+  }
+  await startCombat(sock, spec.groq || state.groq, encounter, sessionKey);
+  return { success: true, sessionKey };
+}
+
+// 💡 TUTORIAL (2026-10-03): public entry for the new-player practice fight.
+// Same combat pipeline, mode TUTORIAL - no ruins hooks, no GP/lives.
+async function startTutorialCombat(sock, chatId, senderJid, spec = {}) {
+  return startRuinsCombat(sock, chatId, senderJid, { ...spec, tutorialMode: true });
+}
+
+// 💡 Phase B (2026-10-04): controlled tutorial SOLO quest - the real combat
+// pipeline with one very weak enemy (Garden Slime), no boss, no surprise
+// rolls, safe parameters. Rewards stay (small, F-rank) - it's a real quest.
+async function startTutorialQuest(sock, chatId, senderJid, spec = {}) {
+  return startRuinsCombat(sock, chatId, senderJid, {
+    enemies: [{ type: spec.enemy || 'GARDEN_SLIME', level: 1 }],
+    rank: 'F',
+    background: spec.background || 'spark_1.png',  // 💡 OWNER RULING 2026-10-10: open meadow for the tutorial fight (spark family restored)
+    name: spec.name,
+    greeting: spec.greeting,
+    groq: spec.groq,
+    tutorialQuest: true,
+  });
+}
+
+// 💡 Phase B (2026-10-04): tutorial GROUP demo - the player + 3 fake guild
+// members (auto-acting, reward-excluded) against one weak enemy. Short,
+// controlled, and shows what group content feels like.
+async function startTutorialGroupQuest(sock, chatId, senderJid, spec = {}) {
+  return startRuinsCombat(sock, chatId, senderJid, {
+    enemies: [{ type: spec.enemy || 'GARDEN_SLIME', level: 1 }],
+    rank: 'F',
+    background: spec.background || 'spark_2.png',  // 💡 OWNER RULING 2026-10-10: crimson night plains for the group tutorial (spark family restored)
+    name: spec.name,
+    greeting: spec.greeting,
+    groq: spec.groq,
+    allyNames: spec.allyNames,
+    tutorialGroup: true,
+  });
+}
+function unscopeKey(key) {
+  if (typeof key === "string") {
+    const idx = key.indexOf("|");
+    if (idx > -1) return key.slice(idx + 1);
+  }
+  return key;
+}
+// STRICT: states created before this fix (no botId) are treated as foreign
+// so the leak cannot survive the deploy. All creation sites stamp botId.
+const sameBot = (state) => !!state && state.botId === botScope();
+
+// 💡 AUDIT FIX 2026-08-01 (Round 4): periodic sweeper for stale game states.
+// If the bot crashes mid-combat or a player abandons a quest, the state
+// stays in the Map forever. On a long-running bot with 3000+ users, this
+// is a slow memory leak. Now a sweeper runs every 5 min and removes any
+// state that hasn't been updated in 30 min (configurable below).
+const STALE_STATE_TIMEOUT_MS = 30 * 60 * 1000; // 30 min
+
+// 💡 END-OF-QUEST WATCHDOGS (2026-10-07 owner voice report via #general:
+// "played an entire quest and it doesn't get counted" + "the defeat combat
+// message doesn't spawn" — observed live on Box2 joker 2026-10-07 19:02:03
+// and Box1 jake 2026-10-05 08:08:54: 'Combat ended 7/7' → 'nextStage
+// triggered 7/7' → TOTAL SILENCE. No card, no error log, no counting, state
+// left wedged until the 30-min sweeper). Root suspicion: one of the awaited
+// end-of-flow calls (Groq narration / end-screen render+send) stalling
+// WITHOUT ever settling — a hung promise defeats every try/catch, so the
+// flow freezes silently. These helpers (a) race every stall-prone await so
+// the flow ALWAYS advances, and (b) breadcrumb every step so the next
+// occurrence pinpoints the exact call in the logs.
+const END_DEBUG = (m) => console.log(`[EndDebug] ${m}`);
+function raceWithTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`watchdog:${label} (${ms}ms)`)), ms);
+  });
+  return Promise.race([Promise.resolve(promise), timeout]).finally(() => clearTimeout(timer));
+}
+
+// 💡 RPG OPTIMISATION PASS (2026-10-20 owner: "multiple victory messages" +
+// "enemy turn takes forever"): a wedged Baileys send used to produce BOTH
+// messages — the race timed out, the TEXT fallback fired immediately, and the
+// original image send completed minutes later = duplicate victory cards.
+// sendMediaBounded races the send; on timeout it waits a GRACE window for the
+// in-flight send to settle (Baileys queues usually drain late, they don't
+// fail). Settled late = image arrived, NO fallback. Still wedged after grace
+// = exactly one text fallback. One message, every time.
+async function sendMediaBounded(sock, chatId, payload, opts = {}) {
+  const ms = opts.ms || 20000;      // fast-ack window
+  const grace = opts.grace || 10000; // extra wait for a late settle
+  const label = opts.label || 'media';
+  // 🩘 SOCK GUARD (2026-10-26): boundedSend skips silently on a missing
+  // socket, but this helper used to dereference it raw — an undefined sock
+  // crashed the TURN image+caption send ("Turn image send failed in
+  // nextTurn: Cannot read properties of undefined (reading 'sendMessage')")
+  // AND its own text fallback (same deref inside the catch), so the player
+  // got NOTHING for the turn. Drop the media, log once, never wedge.
+  if (!sock || !chatId || !payload) {
+    console.warn(`[Quest] ${label} media send skipped — no socket/chat/payload (dropped, never wedges the turn)`);
+    return { ok: false, late: false };
+  }
+  let settled = false; // settled SUCCESSFULLY (image will arrive)
+  const sendP = (async () => {
+    await sock.sendMessage(chatId, payload);
+    settled = true;
+  })();
+  try {
+    await raceWithTimeout(sendP, ms, `send.${label}`);
+    return { ok: true, late: false };
+  } catch (e) {
+    // Wedged (or failed) past the fast-ack window: give the in-flight send
+    // one grace window to drain before falling back (prevents the duplicate
+    // card). A FAST FAILURE resolves this race instantly → fallback fires
+    // immediately (the image is definitively not coming); a hard wedge waits
+    // out the grace in case Baileys drains late.
+    await Promise.race([sendP.catch(() => {}), new Promise((r) => setTimeout(r, grace))]);
+    if (settled) return { ok: true, late: true };
+    console.warn(`[Quest] ${label} send wedged >${(ms + grace) / 1000}s — text fallback`);
+    // 💡 The fallback must NEVER block the caller: if the socket is so dead
+    // that even the text send wedges, awaiting it would re-create the exact
+    // freeze this helper exists to prevent. Fire it, never await it.
+    sock.sendMessage(chatId, { text: opts.fallbackText || captionOf(payload) })
+      .catch(() => {});
+    return { ok: false, late: false };
+  }
+}
+// 💡 SOLO-RAID WEDGE FIX (2026-10-23, Task 9): performAction /
+// performEnemyAction / promptPlayerAction / nextTurn all awaited RAW
+// sock.sendMessage() — one wedged Baileys send (socket stall, congested
+// single-lane send queue, hung media upload) left the turn promise
+// UNRESOLVED forever. The 90s/60s watchdogs then advanced into the next
+// turn, which wedged again: 274 "watchdog fired" events on 2026-10-22,
+// fights zombie-looping for hours, players locked out of solo raids with
+// "❌ You already have an active Solo raid!" while Abyss (separate store)
+// kept working. Every combat-path send now races a budget; a wedged send
+// continues in the background (never re-sent, never awaited) so the turn
+// ALWAYS settles. Same philosophy as sendMediaBounded below.
+const COMBAT_SEND_MS = Math.max(4000, parseInt(process.env.COMBAT_SEND_MS || '12000', 10) || 12000);
+async function boundedSend(sock, chatId, payload, label = 'combat') {
+  if (!sock || !chatId || !payload) return;
+  const sendP = Promise.resolve(sock.sendMessage(chatId, payload));
+  sendP.catch((e) => console.error(`[Quest] ${label} send failed:`, e?.message || e));
+  try {
+    await raceWithTimeout(sendP, COMBAT_SEND_MS, `send.${label}`);
+  } catch (e) {
+    console.warn(`[Quest] ⏱️ ${label} send wedged >${COMBAT_SEND_MS}ms — turn continues (send still draining in background)`);
+  }
+}
+function captionOf(payload) {
+  return (payload && (payload.caption || payload.text)) || '';
+}
+setInterval(() => {
+    const now = Date.now();
+    let swept = 0;
+    for (const [key, state] of gameStates.entries()) {
+        // 💡 TICKET #b4c0ff(c) (2026-09-21): wedged-combat reaping. Active
+        // fights are still skipped - BUT a fight whose turn machinery is
+        // fully dead (no resolveTurn, no timers, nobody processing, no
+        // pending actions) can never advance again and used to be skipped
+        // forever, leaking the state and pinning the "⏳ Next action
+        // loading..." card. If nothing is armed that could ever advance the
+        // fight AND it has been idle >30 min, end and reap it.
+        if (state?.inCombat) {
+            const __hasPending = state.pendingActions && Object.keys(state.pendingActions).length > 0;
+            const __armed = state.resolveTurn || state.combatProcessing || __hasPending ||
+              (state.timers && Object.values(state.timers).some((t) => !!t));
+            if (!__armed) {
+                const __last = state.lastActivity || state.createdAt || 0;
+                if (__last > 0 && (now - __last) > STALE_STATE_TIMEOUT_MS) {
+                    state.inCombat = false;
+                    state.active = false;
+                    if (state.timers) {
+                        Object.values(state.timers).forEach((t) => { if (t) clearTimeout(t); });
+                    }
+                    gameStates.delete(key);
+                    swept++;
+                    console.log(`🧹 [GameStates] Reaped wedged combat ${key} (inCombat but nothing armed, idle >30min).`);
+                }
+            } else if (state.combatProcessing && state.lastLoopTick && (now - state.lastLoopTick) > STALE_STATE_TIMEOUT_MS) {
+                // 💡 RPG OPT PASS (2026-10-20): the turn loop stamps lastLoopTick
+                // every iteration, and a LIVE loop can never go 30min without a
+                // tick (longest single wait = the 4-min player window). If
+                // combatProcessing is stuck true AND no tick for 30min, the
+                // loop is wedged on an unbounded await — it used to leak the
+                // state forever (the __armed check above saw combatProcessing
+                // and skipped). Reap it; the fight is unrecoverable anyway.
+                state.inCombat = false;
+                state.active = false;
+                if (state.timers) {
+                    Object.values(state.timers).forEach((t) => { if (t) clearTimeout(t); });
+                }
+                gameStates.delete(key);
+                swept++;
+                console.log(`🧹 [GameStates] Reaped WEDGED turn-loop ${key} (combatProcessing stuck, no loop tick >30min).`);
+            } else if (
+              state.combatProcessing && state.lastLoopTick &&
+              (now - state.lastLoopTick) < STALE_STATE_TIMEOUT_MS &&
+              state.lastPlayerActionAt && (now - state.lastPlayerActionAt) > 20 * 60 * 1000 &&
+              (state.watchdogStrikes || 0) >= 3
+            ) {
+                // 💡 SOLO-RAID FIX (2026-10-23, Task 9): a LIVE zombie loop —
+                // the turn loop keeps ticking (watchdogs keep it armed, so the
+                // branch above never fired) but every automated turn wedges
+                // and the player has not managed to act for 20min. Used to
+                // cycle forever, pinning "You already have an active Solo
+                // raid!". Collapse it.
+                state.inCombat = false;
+                state.active = false;
+                if (state.timers) {
+                    Object.values(state.timers).forEach((t) => { if (t) clearTimeout(t); });
+                }
+                gameStates.delete(key);
+                swept++;
+                console.log(`🧹 [GameStates] Reaped LIVE zombie loop ${key} (watchdog-driven, no player action >20min).`);
+            }
+            continue;
+        }
+        // Check lastActivity - fall back to createdAt if not set
+        const lastActivity = state?.lastActivity || state?.createdAt || 0;
+        if (lastActivity > 0 && (now - lastActivity) > STALE_STATE_TIMEOUT_MS) {
+            // Clear any timers before deleting
+            if (state.timers) {
+                Object.values(state.timers).forEach((t) => { if (t) clearTimeout(t); });
+            }
+            gameStates.delete(key);
+            swept++;
+        }
+    }
+    if (swept > 0) {
+        console.log(`🧹 [GameStates] Swept ${swept} stale state(s) (inactive >${STALE_STATE_TIMEOUT_MS/60000}min).`);
+    }
+}, 5 * 60 * 1000); // every 5 min
+
+// 💡 CROSS-BOT FIX: "is this player mid-fight on ANY bot?" - used by the
+// out-of-combat passive regen so it can't heal a player during a battle
+// that the other bot instance is running.
+function isUserInAnyCombat(userId) {
+  if (!userId) return false;
+  for (const state of gameStates.values()) {
+    if (state.inCombat && Array.isArray(state.players) && state.players.some((p) => p.jid === userId)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// ⚔️ QA FIX (owner brief §9/§11 "return safely to exploration"): a player who
+// retreats from a Ruins chamber via the DM `flee` verb used to leave their
+// guildAdventure combat session running — the session kept them "in combat",
+// so every later auto-start answered "❌ You are already in combat." until the
+// 30-min sweeper reaped it. abortRuinsSession ends the player's RUINS-mode
+// session cleanly (timers cleared, room left unresolved) and is safe to call
+// when no session exists. Non-ruins modes (tutorial, PvP duels, quests) are
+// deliberately untouched — their owners manage their own lifecycles.
+function abortRuinsSession(userId) {
+  if (!userId) return false;
+  let aborted = false;
+  for (const [key, state] of gameStates.entries()) {
+    if (state?.mode !== 'RUINS') continue;
+    if (!Array.isArray(state.players) || !state.players.some((p) => p.jid === userId)) continue;
+    try {
+      if (state.timers) Object.values(state.timers).forEach((t) => { if (t) clearTimeout(t); });
+      state.inCombat = false;
+      state.active = false;
+      gameStates.delete(key);
+      aborted = true;
+    } catch (e) { /* best-effort cleanup */ }
+  }
+  cleanupCoopIndexFor(userId);
+  return aborted;
+}
+
+// ============================================
+// 🤝 RUINS TEAM CO-OP (owner 2026-10-05 23:09Z: "if multiple members of the
+// same team face off against a boss or an enemy, make it play like the quest
+// version of our current PvE system… using our current PvE system from The
+// Ruins"): every Ruins room fight now runs as a ROOM-SCOPED session — the
+// same turn loop, the same battle pipeline, but keyed per ROOM instead of
+// per player, with every same-guild champion in the room as a real
+// participant. Exactly how raids/quests seat multiple players at one battle,
+// layered on the Ruins combat engine.
+//   • state.sessionKey = scoped(`gwr:<eventId>:<roomKey>`)
+//   • state.players   = one entity per participant (initiator + guildmates)
+//   • state.sock      = multicast wrapper → every visual reaches EVERY
+//                       participant's DM (turn prompts, battle renders,
+//                       decree end card); state.rawSock keeps the original
+//                       for per-player sends (respawn maps differ per player)
+//   • _coopIndex      = jid → raw session key, so each participant's
+//                       `.combat …` resolves to the shared session from
+//                       their own DM (getGameState probe below)
+// ============================================
+const _coopIndex = new Map(); // participant jid → RAW (unscoped) session key
+function cleanupCoopIndexFor(jid) {
+  if (!jid) return;
+  for (const [key, raw] of _coopIndex.entries()) {
+    if (key === jid || raw === jid) _coopIndex.delete(key);
+  }
+}
+function cleanupCoopIndexForSession(sessionKey) {
+  const raw = typeof sessionKey === 'string' && sessionKey.includes('|')
+    ? sessionKey.slice(sessionKey.indexOf('|') + 1)
+    : sessionKey;
+  for (const [jid, r] of _coopIndex.entries()) {
+    if (r === raw || r === sessionKey) _coopIndex.delete(jid);
+  }
+}
+// raw session key for a room fight — stable, room-scoped, bot-agnostic here
+// (scopedKey() adds the bot prefix at use time)
+function ruinsRoomRawKey(eventId, roomKey) {
+  return `gwr:${eventId}:${roomKey}`;
+}
+// the live session for a room fight, or null
+function ruinsRoomSession(eventId, roomKey) {
+  if (!eventId || !roomKey) return null;
+  const st = gameStates.get(scopedKey(ruinsRoomRawKey(eventId, roomKey)));
+  return st || null;
+}
+// Dynamic multicast sock: every send fans out to the session's CURRENT
+// participants (late joiners start receiving the fight immediately). The
+// target argument is intentionally ignored — Ruins combat always DMs.
+function makeRuinsSock(rawSock, sessionKey) {
+  const send = async (_target, payload) => {
+    const st = gameStates.get(sessionKey);
+    const jids = st && Array.isArray(st.players)
+      ? [...new Set(st.players.filter((p) => p.jid && !p.isTutorialAlly).map((p) => p.jid))]
+      : [];
+    if (!jids.length) {
+      const t = typeof _target === 'string' ? _target : null;
+      if (t) jids.push(t);
+    }
+    let first = null;
+    for (const jid of jids) {
+      if (!jid) continue;
+      // ⚔️ COMBAT UI GUARANTEE (owner live-test reports #5/#7/#8, 2026-10-07:
+      // "the image didn't show up" / "There's no prompt for me to attack"):
+      // one silent per-jid failure used to DROP that champion's battle image
+      // AND their turn prompt forever — the fight progressed without them.
+      // Every send now: 1 attempt → on failure a 900ms-backed retry → on
+      // second failure degrade to TEXT (the caption carries the HP/turn
+      // state) so no participant is ever left without a prompt.
+      try {
+        const r = await rawSock.sendMessage(jid, payload);
+        if (!first) first = r;
+      } catch (e1) {
+        try {
+          await new Promise((res) => setTimeout(res, 900));
+          const r2 = await rawSock.sendMessage(jid, payload);
+          if (!first) first = r2;
+        } catch (e2) {
+          const hasMedia = payload && (payload.image || payload.video);
+          if (hasMedia && (payload.caption || payload.text)) {
+            try {
+              const r3 = await rawSock.sendMessage(jid, { text: payload.caption || payload.text });
+              if (!first) first = r3;
+            } catch (e3) { console.error('[RuinsSock] text degrade failed:', e3?.message); }
+          } else {
+            console.error('[RuinsSock] send failed twice:', e2?.message);
+          }
+        }
+      }
+    }
+    return first;
+  };
+  return {
+    sendMessage: send,
+    // pass-throughs some flows probe for
+    groupMetadata: rawSock && rawSock.groupMetadata ? rawSock.groupMetadata.bind(rawSock) : undefined,
+    profilePictureUrl: rawSock && rawSock.profilePictureUrl ? rawSock.profilePictureUrl.bind(rawSock) : undefined,
+  };
+}
+// 🤝 mid-fight join: seat a same-guild champion at the room battle (their
+// entity is appended to players + turnOrder with a fresh gauge, so the gauge
+// scheduler seats them naturally on the next round).
+function joinRuinsSession(eventId, roomKey, playerJid) {
+  const st = ruinsRoomSession(eventId, roomKey);
+  if (!st || !st.inCombat) return { ok: false, reason: 'no-live-session' };
+  if (st.players.some((p) => p.jid === playerJid)) return { ok: false, reason: 'already-seated' };
+  let entity;
+  try { entity = buildRuinsPlayerEntity(playerJid); } catch (e) {
+    return { ok: false, reason: 'entity-failed' };
+  }
+  st.players.push(entity);
+  if (Array.isArray(st.turnOrder)) {
+    entity.actionGauge = 0;
+    st.turnOrder.push(entity);
+  }
+  // rescale party reward math context
+  st.solo = false;
+  for (const p of st.players) _coopIndex.set(p.jid, st.sessionKey?.includes('|') ? st.sessionKey.slice(st.sessionKey.indexOf('|') + 1) : ruinsRoomRawKey(eventId, roomKey));
+  return { ok: true, session: st, entity };
+}
+// ⚔️ CO-OP JOINER PRESENTATION (owner live-test bug report #2/#3, 2026-10-06:
+// "the active combat UI sometimes fails to spawn for some players" — the
+// joiner seated via joinRuinsSession got a TEXT-ONLY ack: no battle image,
+// no turn state, so they had to ask "tell me when it's my turn 😭"). The
+// multicast sock only covers sends AFTER the seat — the joiner missed the
+// START scene entirely. This re-presents the CURRENT battle to ONE
+// participant from THEIR own perspective: live turn state + enemy HP +
+// their own sheet + the TURN battle image (fresh POV plan incl. them).
+// Returns { text, image } or null when the session is gone.
+async function presentRuinsBattleTo(eventId, roomKey, playerJid) {
+  const st = ruinsRoomSession(eventId, roomKey);
+  if (!st || !st.inCombat) return null;
+  const me = (st.players || []).find((p) => p.jid === playerJid);
+  if (!me) return null;
+
+  const hpBar = (cur, max, len = 10) => {
+    const filled = Math.max(0, Math.round((Math.max(0, cur) / max) * len));
+    return '▰'.repeat(filled) + '▱'.repeat(len - filled);
+  };
+  const prefix = botConfig.getPrefix();
+  const actor = st.activeCombatant || null;
+  let turnLine;
+  if (actor && actor.jid === playerJid) {
+    turnLine = `⚔️ *YOUR TURN*`;
+  } else if (actor && actor.isEnemy) {
+    turnLine = `⏳ *The pack is moving* — ${actor.name} acts. Hold fast, your turn is loading.`;
+  } else if (actor) {
+    turnLine = `⏳ *Waiting for: ${actor.name}*`;
+  } else {
+    turnLine = `⏳ *Next action loading...*`;
+  }
+
+  let msg = `🤝 *YOU JOINED THE BATTLE* — chamber ${roomKey}\n${turnLine}\n\n`;
+  msg += `${me.class?.icon || '👤'} *${me.name}*\n`;
+  msg += `❤️ ${Math.floor(me.stats.hp)}/${Math.floor(me.stats.maxHp)} HP\n`;
+  msg += `⚡ ${Math.floor(me.stats.energy)}/${Math.floor(me.stats.maxEnergy)} EN\n`;
+  const livingEnemies = (st.enemies || []).filter((e) => !e.isDead);
+  if (livingEnemies.length) {
+    msg += `\n*ENEMIES:*\n`;
+    for (const e of livingEnemies) {
+      const maxHp = e.stats?.maxHp || e.stats?.hp || 1;
+      const curHp = Math.max(0, Math.floor(e.currentHP ?? e.stats?.hp ?? 0));
+      msg += `👾 ${e.name} [${hpBar(curHp, maxHp)}] ${curHp}/${Math.floor(maxHp)} HP\n`;
+    }
+  }
+  const allies = (st.players || []).filter((p) => p.jid && p.jid !== playerJid && !p.isTutorialAlly && !p.isDead);
+  if (allies.length) msg += `\n🤝 Fighting beside: ${allies.map((p) => p.name).join(', ')}\n`;
+  msg += `\n⚔️ \`${prefix} combat atk\` on your turn · \`${prefix} flee\` retreats you (the fight continues for whoever stays).`;
+
+  let image = null;
+  try {
+    const scene = await require('../guildwar/battleScene').renderBattleImage(st, {
+      phase: 'TURN',
+      turnInfo: { actor, turnNumber: st.round },
+      povJid: playerJid,
+      freshPlan: true,
+    });
+    if (scene && scene.success && scene.buffer) image = scene.buffer;
+  } catch (e) { /* image is best-effort — the text state still lands */ }
+
+  return { text: msg, image };
+}
+
+// 🏃 co-op aware retreat: a co-op participant leaves THE SESSION (their
+// entity is withdrawn; the battle continues for whoever remains), a solo
+// session aborts entirely. Safe on missing sessions.
+function leaveRuinsSession(playerJid) {
+  if (!playerJid) return false;
+  let left = false;
+  for (const [key, st] of gameStates.entries()) {
+    if (st?.mode !== 'RUINS' || !Array.isArray(st.players)) continue;
+    const idx = st.players.findIndex((p) => p.jid === playerJid);
+    if (idx === -1) continue;
+    try {
+      st.players.splice(idx, 1);
+      if (Array.isArray(st.turnOrder)) {
+        const ti = st.turnOrder.findIndex((c) => c.jid === playerJid);
+        if (ti !== -1) st.turnOrder.splice(ti, 1);
+      }
+      if (st.activeCombatant && st.activeCombatant.jid === playerJid) st.activeCombatant = null;
+      delete st.pendingActions?.[playerJid];
+      left = true;
+      // nobody left holding the line → tear the session down
+      const realLeft = st.players.filter((p) => p.jid && !p.isTutorialAlly);
+      if (!realLeft.length) {
+        if (st.timers) Object.values(st.timers).forEach((t) => { if (t) clearTimeout(t); });
+        st.inCombat = false;
+        st.active = false;
+        gameStates.delete(key);
+        cleanupCoopIndexForSession(key);
+      }
+    } catch (e) { /* best-effort */ }
+  }
+  cleanupCoopIndexFor(playerJid);
+  return left;
+}
+
+function getGameState(chatId, senderJid = null) {
+  if (!chatId) return null;
+
+  // 💡 Normalize bot-scoped keys ("Joker|chat[_jid]") to their raw form so
+  // callers that pass state.sessionKey back in resolve correctly. Must run
+  // BEFORE the composed-key split below. See unscopeKey note above.
+  chatId = unscopeKey(chatId);
+
+  // 💡 COMPAT: callers sometimes pass a pre-composed "chat_jid" solo key as
+  // the first argument (chat IDs and JIDs never contain "_"). Split it so
+  // the scoped probes below still hit.
+  let chat = chatId;
+  let player = senderJid;
+  if (!player && typeof chatId === "string" && chatId.includes("_")) {
+    const idx = chatId.indexOf("_");
+    chat = chatId.slice(0, idx);
+    player = chatId.slice(idx + 1);
+  }
+
+  // 1. If senderJid is provided, check for THEIR solo raid first
+  if (player) {
+    const soloKey = scopedKey(`${chat}_${player}`);
+    if (gameStates.has(soloKey)) return gameStates.get(soloKey);
+    // 🤝 TEAM CO-OP: a Ruins room-session participant acts from their OWN DM —
+    // resolve the shared room session through the participant index.
+    const coopRaw = _coopIndex.get(player);
+    if (coopRaw) {
+      const coopKey = scopedKey(coopRaw);
+      if (gameStates.has(coopKey)) return gameStates.get(coopKey);
+    }
+  }
+
+  // 2. Check for group raid (keyed by chatId)
+  const groupKey = scopedKey(chat);
+  if (gameStates.has(groupKey)) return gameStates.get(groupKey);
+
+  // 3. Fallback: If no senderJid but we need the state (e.g. from a timer),
+  // find the FIRST active raid in this chat - THIS BOT's raids only.
+  for (const [, state] of gameStates.entries()) {
+    if (state.chatId === chat && state.active && sameBot(state)) return state;
+  }
+
+  return null;
+}
+
+function isUserInAdventure(sessionKey) {
+  if (gameStates.has(sessionKey)) return true;
+  // 💡 CROSS-BOT FIX: accept raw "chat_jid" keys (skillCommands builds its
+  // own) and probe the scoped solo + group forms for THIS bot.
+  let raw = typeof sessionKey === "string" ? sessionKey : "";
+  if (raw.includes("|")) raw = raw.slice(raw.indexOf("|") + 1);
+  if (!raw) return false;
+  if (gameStates.has(scopedKey(raw))) return true;
+  const parts = raw.split("_");
+  if (parts.length > 1) {
+    const chatId = parts[0];
+    const senderJid = parts[1];
+    const groupState = gameStates.get(scopedKey(chatId));
+    if (groupState && sameBot(groupState) && groupState.active && groupState.players.some(p => p.jid === senderJid)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function deleteGameState(chatId, senderJid = null) {
+  // 💡 Normalize bot-scoped keys first - ~15 call sites pass the SCOPED
+  // state.sessionKey here (quest end, abyss victory/defeat cleanup, stops).
+  // Without stripping, the delete probed "Joker|Joker|..." and matched
+  // nothing: finished quests/raids leaked their state forever and could
+  // wedge a chat with "a raid is already active" until the 30-min sweeper.
+  // See unscopeKey note above.
+  chatId = unscopeKey(chatId);
+  // Determine the key (bot-scoped - see the CROSS-BOT note at gameStates)
+  let key = scopedKey(chatId);
+  if (senderJid) {
+    const soloKey = scopedKey(`${chatId}_${senderJid}`);
+    if (gameStates.has(soloKey)) key = soloKey;
+  }
+
+  let state = gameStates.get(key);
+  if (!state) {
+    // Fallback search - THIS BOT's states only
+    for (const [k, s] of gameStates.entries()) {
+      if (
+        s.chatId === chatId &&
+        sameBot(s) &&
+        (!senderJid || s.players.some((p) => p.jid === senderJid))
+      ) {
+        key = k;
+        break;
+      }
+    }
+  }
+
+  const finalState = gameStates.get(key);
+  if (finalState && finalState.timers) {
+    Object.values(finalState.timers).forEach((t) => {
+      if (t) clearTimeout(t);
+    });
+  }
+  // 💡 CO-OP ABYSS: a deleted shared session releases its participant index
+  // entries (members elsewhere in chat would otherwise keep resolving a ghost).
+  try { cleanupCoopIndexForSession(key); } catch (e) {}
+  gameStates.delete(key);
+}
+
+function checkChatLimits(chatId, isSolo, senderJid) {
+  let soloCount = 0;
+  let groupActive = false;
+  let userHasSolo = false;
+
+  for (const state of gameStates.values()) {
+    if (state.chatId === chatId && state.active && sameBot(state)) {
+      if (state.solo) {
+        soloCount++;
+        if (state.players.some((p) => p.jid === senderJid)) userHasSolo = true;
+      } else {
+        groupActive = true;
+      }
+    }
+  }
+
+  if (isSolo) {
+    if (userHasSolo)
+      return {
+        allowed: false,
+        msg: "❌ You already have an active Solo raid in this chat!",
+      };
+    if (soloCount >= 2)
+      return { allowed: false, msg: "❌ Max 2 Solo raids allowed per chat!" };
+  } else {
+    if (groupActive)
+      return {
+        allowed: false,
+        msg: "❌ A Group raid is already active in this chat!",
+      };
+  }
+
+  return { allowed: true };
+}
+
+// Initial state template (used for creating new sessions)
+const INITIAL_STATE_TEMPLATE = {
+  active: false,
+  isProcessing: false,
+  combatProcessing: false,
+  chatId: null,
+  mode: "NORMAL",
+  difficulty: 1.0,
+  dungeonRank: "F",
+  encounter: 0,
+  maxEncounters: 5,
+  players: [],
+  inCombat: false,
+  enemies: [],
+  // 💡 AUDIT FIX 2026-08-01 (Round 4): lastActivity timestamp for stale-state sweeper.
+  // Updated on every combat action + state access. Sweeper (line 1924) removes
+  // states inactive > 30 min to prevent memory leak.
+  lastActivity: 0,
+  createdAt: 0,
+  // 💡 Summoner System (Phase 2): summons array on combat state.
+  // Summon entities are built at combat start from each player's active
+  // summon (user.activeSummonId) via summonSystem.buildCombatEntity.
+  // Pushed into state.turnOrder alongside players + enemies.
+  summons: [],
+  // 💡 Phase 3: Necromancer capture windows.
+  // Keyed by playerJid, value = { turnsRemaining, captureChance }.
+  // Set when army_of_dead ult is cast, ticked each round, expired at 0.
+  captureWindows: {},
+  turnOrder: [],
+  currentTurn: 0,
+  combatRound: 0,
+  pendingActions: {},
+  combatHistory: [],
+  votes: {},
+  currentScenario: null,
+  timers: {},
+  phase: "IDLE",
+  storyChoices: [],
+  achievementsUnlocked: [],
+  stats: {
+    monstersKilled: 0,
+    bossesDefeated: 0,
+    treasuresFound: 0,
+    trapsTriggered: 0,
+    playersRevived: 0,
+  },
+};
+
+// ==========================================
+// 🎲 CORE GAME FUNCTIONS
+// ==========================================
+
+function getCurrentTier(chatId) {
+  const state = getGameState(chatId);
+  if (!state) return 1;
+  const rankMap = { F: 1, E: 2, D: 3, C: 4, B: 5, A: 6, S: 7, SS: 8, SSS: 9 };
+  return rankMap[state.dungeonRank] || 1;
+}
+
+function rollDice(sides, count = 1) {
+  let total = 0;
+  for (let i = 0; i < count; i++) {
+    total += Math.floor(Math.random() * sides) + 1;
+  }
+  return total;
+}
+
+function rollD20() {
+  return rollDice(20);
+}
+
+function calculateDamage(
+  attacker,
+  target,
+  power,
+  type = "physical",
+  element = "PHYSICAL",
+  chatId = null,
+  isAbility = false,
+) {
+  // 💡 AUDIT FIX 2026-08-01 (Round 2): null-guard attacker + target.
+  // If either is undefined (edge case after a kill or stale state),
+  // accessing .jid or .stats would crash the entire combat round.
+  // Now we bail out with 0 damage instead of crashing.
+  if (!attacker || !target) {
+    console.error('[calculateDamage] null attacker or target', {
+      attacker: !!attacker, target: !!target, power, type
+    });
+    return { damage: 0, isCrit: false, wasEvaded: false };
+  }
+  // 🛡️ Guard against NaN
+  let damage = Number(power) || 0;
+
+  // 💡 GODMODE: if the attacker is a godmode user, deal 99999 damage.
+  // If the TARGET is a godmode user, take 0 damage.
+  if (global.godModeUsers && attacker.jid && global.godModeUsers.has(attacker.jid)) {
+    return { damage: 99999, isCrit: true, wasEvaded: false };
+  }
+  if (global.godModeUsers && target.jid && global.godModeUsers.has(target.jid)) {
+    return { damage: 0, isCrit: false, wasEvaded: false };
+  }
+
+  // 💡 DRAGON SEAL RING REQUIREMENT
+  if (
+    target.id &&
+    (() => { const _id = String(target.id || '').toUpperCase(); return _id.startsWith("DRAKE") || _id.includes("DRAGON"); })()
+  ) {
+    if (!attacker.isEnemy && attacker.jid) {
+      // 💡 FIX: accept ring in inventory OR equipped. Equip removes from
+      // inventory (inventorySystem.js:476), so the old hasItem-only check
+      // made the dragon unkillable if you actually equipped the ring.
+      const hasRingInBag = inventorySystem.hasItem(attacker.jid, "dragon_seal_ring");
+      const hasRingEquipped = attacker.equipment && attacker.equipment.ring && attacker.equipment.ring.id === 'dragon_seal_ring';
+      if (!hasRingInBag && !hasRingEquipped) {
+        return {
+          damage: 0,
+          isCrit: false,
+          wasEvaded: false,
+          noDamageReason:
+            "🛡️ Your attacks slide off the dragon's scales! You need the *Dragon Seal Ring* 💍🐲 to pierce their hide!",
+        };
+      }
+    }
+  }
+
+  // 💡 RANK DAMAGE BONUS (D-rank and up = DOUBLE damage)
+  if (attacker.adventurerRank) {
+    const rankValueMap = {
+      F: 1,
+      E: 2,
+      D: 3,
+      C: 4,
+      B: 5,
+      A: 6,
+      S: 7,
+      SS: 8,
+      SSS: 9,
+    };
+    const rankVal = rankValueMap[attacker.adventurerRank] || 1;
+    // 💡 FIX #3 (2026-08-16): Gradual rank damage scaling.
+    // Was: flat 2.0× for D-rank and above (rankVal >= 3).
+    // Now: 1.0 + (rankVal - 1) × 0.20, scaling from F to SSS.
+    //   F(1)=1.0×, E(2)=1.2×, D(3)=1.4×, C(4)=1.6×, B(5)=1.8×,
+    //   A(6)=2.0×, S(7)=2.2×, SS(8)=2.4×, SSS(9)=2.6×
+    damage *= 1.0 + (rankVal - 1) * 0.20;
+  }
+
+  // 💡 ENVIRONMENT MODIFIERS
+  if (chatId) {
+    const state = getGameState(chatId);
+    const env = state?.environment;
+    if (env) {
+      // Fire Cave: Enemy fire bonus
+      if (
+        env.id === "FIRE_CAVE" &&
+        attacker.isEnemy &&
+        element.toUpperCase() === "FIRE"
+      ) {
+        damage *= 1 + (env.enemyBonus?.value || 0.1);
+      }
+      // Demon Castle: Dark magic empowerment
+      if (env.id === "DEMON_CASTLE" && attacker.isEnemy && type === "magic") {
+        damage *= 1 + (env.enemyBonus?.value || 0.2);
+      }
+    }
+  }
+
+  // Defense mitigation
+  // 💡 FIX 2026-08-06: TRUE damage bypasses ALL defense (def = 0).
+  // Previously, 'true' fell into the else branch and used MAG*0.5 as def -
+  // which is wrong. TRUE damage should ignore mitigation entirely.
+  let def = 0;
+  if (type === "physical") {
+    def = Number(target.stats.def) || 0;
+  } else if (type === "magic") {
+    def = (Number(target.stats.mag) || 0) * 0.5;
+  } else if (type === "true") {
+    def = 0; // TRUE damage ignores all mitigation
+  }
+
+  // Apply attack buffs from attacker.buffs
+  let attackBuffPercent = 0;
+  if (attacker.buffs) {
+    for (const buff of attacker.buffs) {
+      if (buff.type === 'attack') {
+        attackBuffPercent += (buff.value || 0);
+      } else if (buff.type === 'all') {
+        attackBuffPercent += (buff.value || 0);
+      }
+    }
+  }
+  if (attackBuffPercent > 0) {
+    damage *= (1 + attackBuffPercent / 100);
+  }
+
+  // Apply defense buffs from target.buffs
+  let defenseBuffPercent = 0;
+  if (target.buffs) {
+    for (const buff of target.buffs) {
+      if (buff.type === 'defense') {
+        defenseBuffPercent += (buff.value || 0);
+      } else if (buff.type === 'all') {
+        defenseBuffPercent += (buff.value || 0);
+      }
+    }
+  }
+  if (defenseBuffPercent > 0) {
+    def *= (1 + defenseBuffPercent / 100);
+  }
+
+  // 💡 STATUS EFFECT MODIFIERS (Defense)
+  const targetEffects = target.statusEffects || [];
+  if (targetEffects.some((e) => e.type === "shield")) def *= 1.5;
+  if (targetEffects.some((e) => e.type === "vulnerability")) def *= 0.7;
+  if (targetEffects.some((e) => e.type === "brittle") && type === "physical")
+    damage *= 1.5;
+  if (targetEffects.some((e) => e.type === "berserk")) def *= 0.7; // Berserk penalty
+  if (targetEffects.some((e) => e.type === "curse" || e.type === "weak"))
+    def *= 0.8;
+
+  // 💡 STATUS EFFECT MODIFIERS (Attack Power)
+  const attackerEffects = attacker.statusEffects || [];
+  // 💡 REMOVED hardcoded berserk/blessing multipliers - they were double-applying
+  // with the value-based multipliers at lines ~2275-2288. Berserk was dealing
+  // 2.25x (1.5 × 1.5) instead of 1.5x. Blessing was dealing 1.44x instead of 1.2x.
+  if (attackerEffects.some((e) => e.type === "curse" || e.type === "weak"))
+    damage *= 0.8;
+
+  // 💡 FIX P1 #2 (2026-08-16): Effective-HP defense formula - replaces
+  // subtraction. Old: damage -= def * 0.5 (creates "damage wall" at high DEF
+  // where attacks with power ≤ 2×DEF deal 0 damage). New: damage *= 100/(100+def)
+  // (smooth scaling - 100 DEF halves damage, 300 DEF = 25%, 900 DEF = 10%).
+  // This is the standard JRPG approach (FF10, Dragon Quest, Persona).
+  // Fixes ABYSSAL_GOD 0% solo win rate and VOID_TITAN 22-turn TTK - both
+  // were caused by the subtraction formula making high-DEF bosses unkillable.
+  damage = damage * (100 / (100 + def));
+
+  // 💡 FIX: dmgReduction buffs (e.g. Null Field from Nemesis AI) were
+  // applied to target.buffs but never read here. Only the permanent
+  // target.stats.dmgReduction was being used. Enemies that buffed
+  // themselves with dmgReduction showed "+X% dmgReduction!" in combat
+  // log but took full damage anyway - the buff was visual-only.
+  // Now we sum the permanent stat + all active dmgReduction buffs.
+  let totalDmgReduction = Number(target.stats.dmgReduction) || 0;
+  if (target.buffs) {
+    for (const buff of target.buffs) {
+      if (buff.type === 'dmgReduction') {
+        totalDmgReduction += (buff.value || 0);
+      } else if (buff.type === 'all') {
+        // 'all' buffs also grant dmgReduction (in addition to defense,
+        // which is already applied above as def multiplier).
+        totalDmgReduction += (buff.value || 0);
+      }
+    }
+  }
+  // 💡 FIX #4 (2026-08-15): Save DR total for combined cap application
+  // below. Don't apply to damage yet - the passive DR will be folded in
+  // and the combined 75% cap applied after. Was: cap 90 here + separate
+  // passive multiplier = 95% effective DR. Now: all sources summed, 75% cap.
+  // (totalDmgReduction is used below in the passive block)
+
+  // 💡 CLASS PASSIVE WIRE-UP (inline damage): apply attacker's outgoing
+  // damage multiplier from damage_when_low_hp, damage_per_hit,
+  // first_turn_bonus, rotate_elements passives. Also fold in one-shot
+  // passiveKillBonus from damage_on_kill if present (consumed after this hit).
+  if (!attacker.isEnemy) {
+    try {
+      const passiveMult = getClassPassiveDamageMult(attacker, target, isAbility, { solo: _isSoloFighter(attacker, chatId) });
+      if (passiveMult !== 1) damage = Math.floor(damage * passiveMult);
+      // One-shot kill bonus (consumed on use)
+      if (attacker.passiveKillBonus && attacker.passiveKillBonus > 1) {
+        damage = Math.floor(damage * attacker.passiveKillBonus);
+        attacker.passiveKillBonus = 1;  // reset
+      }
+    } catch (e) {
+      console.error('[Passive] getClassPassiveDamageMult failed:', e?.message || e);
+    }
+  }
+
+  // 💡 FIX #4 (2026-08-15): Apply combined 75% DR cap.
+  // Sum stat+buff DR (computed above) + class passive DR, cap at 75%,
+  // then apply to damage. Previously: stat+buff capped at 90% + passive
+  // as SEPARATE multiplier (also 90%) = 95% effective. Now: all sources
+  // summed, single 75% cap. Also moved OUTSIDE if(!attacker.isEnemy)
+  // so player defensive passives actually work when being attacked.
+  try {
+    const passiveReduction = getClassPassiveDamageReduction(target) || 0;
+    const combinedDR = Math.min(75, Math.max(0, totalDmgReduction) + passiveReduction);
+    if (combinedDR > 0) {
+      damage = damage * (1 - combinedDR / 100);
+    }
+  } catch (e) {
+    console.error('[Passive] getClassPassiveDamageReduction failed:', e?.message || e);
+    // Fallback: apply stat+buff DR with 75% cap
+    const fallbackDR = Math.min(75, Math.max(0, totalDmgReduction));
+    if (fallbackDR > 0) damage = damage * (1 - fallbackDR / 100);
+  }
+
+  // 💡 STATUS EFFECT: Shield - absorb incoming damage from the shield's
+  // value pool first, then any overflow hits HP. Previously shield was
+  // defined but only halved DoT damage - direct attacks ignored it
+  // completely, making skills like Mana Shield / Golden Barrier / Force
+  // Field useless. Now we consume the shield value before HP takes a hit.
+  //
+  // 💡 POLISH 2026-07-17: removed the `!effect?.bypassShield` check from
+  // this condition. calculateDamage() does NOT have an `effect` parameter
+  // - referencing `effect` here threw `ReferenceError: effect is not defined`
+  // on EVERY call to calculateDamage (every attack, every ability), which
+  // is the root cause of the "only defensive skills work" bug. The
+  // bypassShield flag is on the effect object in applyAbilityEffect, not
+  // here. Shield bypass for BARRAGE runes will be handled by the caller
+  // (applyAbilityEffect) before calling calculateDamage, not inside it.
+  if (damage > 0) {
+    const shields = (target.statusEffects || []).filter(e => e.type === 'shield' && e.value > 0);
+    if (shields.length > 0) {
+      let remaining = Math.floor(damage);
+      // 2026-09-15 (owner: "combat def should let some damage hit, very very small"):
+      // defend-stance shields are no longer full blocks - ~2% (min 1) of the hit
+      // always leaks through to HP. Ability shields (Mana Shield, Golden Barrier,
+      // Force Field, ...) keep their full absorb.
+      const _defendLeak = shields.some(s => s.source === 'defend')
+        ? Math.max(1, Math.floor(remaining * 0.02))
+        : 0;
+      remaining -= _defendLeak;
+      for (const shield of shields) {
+        if (remaining <= 0) break;
+        const absorbed = Math.min(shield.value, remaining);
+        shield.value -= absorbed;
+        remaining -= absorbed;
+        if (shield.value <= 0) {
+          // Mark for removal (will be cleaned up by processStatusEffects)
+          shield.duration = 0;
+        }
+      }
+      damage = remaining + _defendLeak;
+    }
+  }
+
+  // 💡 STATUS EFFECT: Berserk - attacker deals +value% damage while berserk.
+  // Previously berserk was applied as a status but never read at damage time.
+  if (attacker.statusEffects && attacker.statusEffects.length > 0) {
+    const berserk = attacker.statusEffects.find(e => e.type === 'berserk');
+    if (berserk && berserk.value > 0) {
+      damage = Math.floor(damage * (1 + berserk.value / 100));
+    }
+    // 💡 STATUS EFFECT: Blessing - attacker has +value% to all stats.
+    // Approximated as a flat damage boost.
+    const blessing = attacker.statusEffects.find(e => e.type === 'blessing');
+    if (blessing && blessing.value > 0) {
+      damage = Math.floor(damage * (1 + blessing.value / 100));
+    }
+  }
+
+  // 💡 STATUS EFFECT: Blind - attacker has reduced accuracy.
+  // Translated to an additional miss chance = blind.value (e.g. 50% blind =
+  // +50% chance to miss on top of the target's evasion).
+  if (attacker.statusEffects && attacker.statusEffects.length > 0) {
+    const blind = attacker.statusEffects.find(e => e.type === 'blind' && e.value > 0);
+    if (blind && Math.random() * 100 < blind.value) {
+      return { damage: 0, isCrit: false, wasEvaded: true };
+    }
+  }
+
+  // Random variance (±10%)
+  const variance = 0.9 + Math.random() * 0.2;
+  damage *= variance;
+
+  // 💡 ELEMENTAL MODIFIER
+  // 💡 FIX 2026-08-31: enemies define element in LOWERCASE ('fire') while
+  // ELEMENT_CHART uses UPPERCASE keys - without normalizing the TARGET's
+  // element, strongVs/weakTo .includes() never matched and the entire
+  // 1.5x/0.75x elemental affinity system was dead in PvE.
+  const targetElement = (target.element || "PHYSICAL").toUpperCase();
+  const chart = ELEMENT_CHART[element.toUpperCase()] || ELEMENT_CHART.PHYSICAL;
+
+  if (chart.strongVs.includes(targetElement)) {
+    damage *= 1.5;
+  } else if (chart.weakTo.includes(targetElement)) {
+    damage *= 0.75;
+  }
+
+  // Critical hit
+  // 💡 FIX #5 (2026-08-16): Crit cap 60% + overflow to crit damage.
+  // Was: no cap - crit above 100% was wasted. KAGE L100 had 1297% crit.
+  // Now: cap at 60%, overflow × 0.5 adds to crit damage multiplier.
+  //   e.g. 1200% crit → 60% chance × (1.5 + (1200-60)*0.5/100) = 60% × 7.2×
+  let isCrit = false;
+  const rawCrit = Number(attacker.stats.crit) || 0;
+  const cappedCrit = Math.min(60, rawCrit);
+  const critOverflow = Math.max(0, rawCrit - 60);
+  if (Math.random() * 100 < cappedCrit) {
+    const targetCloak = target.equipment?.cloak?.id || target.equipment?.cloak;
+    if (targetCloak === "mantlet_of_chaos") {
+      isCrit = false;
+    } else {
+      let critMult = 1.5 + (critOverflow * 0.5 / 100); // overflow → crit damage
+      const ringId = attacker.equipment?.ring?.id || attacker.equipment?.ring;
+      if (ringId === "loop_of_forever" || ringId === "entropy_loop") {
+        critMult = 2.0 + (critOverflow * 0.5 / 100); // Double crit damage multiplier
+      }
+      damage *= critMult;
+      isCrit = true;
+    }
+  }
+
+  damage = Math.max(0, Math.floor(damage));
+
+  // 💡 EVASION CHECK (Secondary Stat)
+  let evasionChance = Number(target.stats.evasion) || 0;
+
+  // 💡 EQUIPMENT EVASION MODIFIERS
+  const targetArmor = target.equipment?.armor?.id || target.equipment?.armor;
+  const targetCloak = target.equipment?.cloak?.id || target.equipment?.cloak;
+  if (targetArmor === "voidstrand_robes") evasionChance += 15;
+  if (targetCloak === "veil_of_the_void") evasionChance += 10;
+  if (targetCloak === "cloak_of_shifting_realities") evasionChance += 10;
+
+  // 🌍 WEATHER: Foggy (-15% Accuracy = +15% Evasion)
+  const hours = new Date().getHours();
+  if (Math.floor(hours / 6) % 4 === 1) evasionChance += target.isEnemy ? 7 : 15; // 2026-11-01: halved vs enemies (was a flat 15% miss on every hit 06:00-11:59)
+
+  // 🌍 ENVIRONMENT EVASION
+  if (chatId) {
+    const state = getGameState(chatId);
+    const env = state?.environment;
+    if (env) {
+      // Desert: Sandstorm (accuracy penalty)
+      if (env.id === "DESERT") {
+        evasionChance += env.modifier.accuracyReduction * 100;
+      }
+      // Forest: Camouflage (evasion bonus for enemies)
+      if (env.id === "SIMPLE_FOREST" && target.isEnemy) {
+        evasionChance += env.enemyBonus.evasionBonus * 100;
+      }
+    }
+  }
+
+  // 💡 FIX #6 (2026-08-15): Global evasion cap at 50%. Previously there
+  // was no cap - KAGE L100 with Mirror Image + veil_of_the_void + foggy
+  // weather could reach 185% (guaranteed dodge). Now capped at 50%.
+  // 2026-11-01 owner: "enemies evade too much". Enemies have 0 base evasion, so everything
+  // here was stacked flat bonuses (fog +15 for a quarter of the day, forest camouflage +15,
+  // desert sandstorm, evasion-buff skills) rolled on EVERY hit incl. each AoE target -
+  // up to the 50% player cap. Enemy targets now cap at 25% so a normal fight isn't a miss-fest.
+  evasionChance = Math.min(target.isEnemy ? 25 : 50, Math.max(0, evasionChance));
+
+  if (Math.random() * 100 < evasionChance) {
+    return { damage: 0, isCrit: false, wasEvaded: true };
+  }
+
+  // 💡 SS+ DUNGEON ENEMY MINIMUM DAMAGE FLOOR
+  // Enemies in SS/SSS dungeons must always deal at least 3% (or 5% for abilities) of target's max HP per hit,
+  // regardless of how high the player's DEF/dmgReduction is.
+  if (attacker.isEnemy && !target.isEnemy) {
+    const dungeonRankOfAttacker = attacker.dungeonRank || attacker.rank || null;
+    const highRankSet = ['SS', 'SSS'];
+    if (highRankSet.includes(dungeonRankOfAttacker)) {
+      const targetMaxHp = target.stats.maxHp || target.stats.hp;
+      const minDmgPct = isAbility ? 0.05 : 0.03;
+      const minDmg = Math.floor(targetMaxHp * minDmgPct);
+      if (damage < minDmg) damage = minDmg;
+    }
+    
+    // One-shot protection (Sturdy): if the hit deals >= maxHp OR would kill from full health
+    if (damage >= target.stats.hp && target.stats.hp >= target.stats.maxHp * 0.9) {
+      const hpLeft = Math.floor(Math.random() * 9) + 2; // leaves 2 to 10 HP
+      damage = target.stats.hp - hpLeft;
+    }
+  }
+
+  return {
+    damage: Math.max(1, Math.floor(damage)),
+    isCrit,
+    wasEvaded: false,
+  };
+}
+function applyStatusEffect(
+  target,
+  effectType,
+  duration = 3,
+  value = 0,
+  source = null,
+) {
+  if (!target) return { applied: false };
+  if (!target.statusEffects) target.statusEffects = [];
+
+  // 💡 FIX (BUG 6: "Status effect ignored by boss"):
+  // Some bosses (e.g., IMMOVABLE archetype) grant themselves a `ccImmune`
+  // buff via the monster skill `immovable`. Previously this buff did
+  // NOTHING - applyStatusEffect never checked for it, so freeze/stun/etc.
+  // were applied anyway. Now we respect it: if the target has ccImmune
+  // AND the incoming effect is a CC type (freeze, stun, sleep, charm,
+  // slow, shock), the application is blocked and a message is returned
+  // so the player understands why their CC didn't land.
+  // Non-CC effects (burn, poison, bleed, bless, shield, regen, etc.)
+  // are NOT blocked - ccImmune only blocks crowd control.
+  // 💡 BUG-10 fix: added 'silence' to CC_TYPES so the ccImmune buff now
+  // blocks silence too. Previously silence bypassed ccImmune entirely.
+  // Also added a DR (diminishing returns) immunity window: after a CC
+  // expires, the target is immune to the same CC type for 2 of their
+  // turns. Prevents chaining (e.g. Spellbreaker casting arcane_silence
+  // every turn to permanently lock a player out of abilities).
+  const CC_TYPES = ['freeze', 'stun', 'sleep', 'charm', 'slow', 'shock', 'petrify', 'silence', 'locked_in_time'];
+
+  // 💡 BUG-10 fix: DR check - if this CC type was recently applied and
+  // expired, the target is immune for 2 of their turns.
+  if (CC_TYPES.includes(effectType) && target.ccImmuneUntil && target.ccImmuneUntil[effectType] > (target._turnCount || 0)) {
+    return {
+      applied: false,
+      blockedByDR: true,
+      synergyMsg: `🛡️ ${target.name} recently recovered from ${effectType} - immune for now!`,
+    };
+  }
+
+  if (CC_TYPES.includes(effectType) && target.statusEffects.some(e => e.type === 'ccImmune')) {
+    return {
+      applied: false,
+      blockedByImmune: true,
+      synergyMsg: `🛡️ ${target.name} is CC-IMMUNE - ${effectType} was blocked!`,
+    };
+  }
+
+  // 💡 FIX 2026-08-01: Dragon God "Dragon Heart" passive - full status immunity.
+  // Checks player.statusImmune flag (set by applyClassPassiveAtCombatStart).
+  // Blocks ALL status effects, not just CC types.
+  if (target.statusImmune) {
+    return {
+      applied: false,
+      blockedByImmune: true,
+      synergyMsg: `🛡️ ${target.name} is IMMUNE to all status effects!`,
+    };
+  }
+
+  // 💡 AUDIT FIX 2026-08-01: Skill-tree status immunity (Soul of the Deep).
+  // Soul of the Deep's passiveEffects.statusImmunity = ['DROWN','FREEZE','POISON'].
+  // applySkillPassivesAtCombatStart stores this as target.skillStatusImmunity
+  // (array of uppercase types). Check it here - only blocks the listed types.
+  if (Array.isArray(target.skillStatusImmunity) && target.skillStatusImmunity.length > 0) {
+    const effectUpper = String(effectType).toUpperCase();
+    if (target.skillStatusImmunity.includes(effectUpper)) {
+      return {
+        applied: false,
+        blockedByImmune: true,
+        synergyMsg: `🌊 ${target.name} is immune to ${effectType}! (Soul of the Deep)`,
+      };
+    }
+  }
+
+  // 🧪 SYNERGY LOGIC
+  const currentTypes = target.statusEffects.map((s) => s.type);
+  let finalType = effectType;
+  let finalDuration = duration;
+  let finalValue = value;
+  let synergyMsg = "";
+
+  // 1. WET + SHOCK = ELECTROCUTED (Stun)
+  if (effectType === "shock" && currentTypes.includes("wet")) {
+    target.statusEffects = target.statusEffects.filter((s) => s.type !== "wet");
+    finalType = "stun";
+    finalDuration = 1;
+    synergyMsg = `⚡💧 *ELECTRO-CHARGE!* The water amplifies the shock, STUNNING ${target.name}!`;
+  }
+  // 2. WET + FREEZE = DEEP FREEZE
+  else if (effectType === "freeze" && currentTypes.includes("wet")) {
+    target.statusEffects = target.statusEffects.filter((s) => s.type !== "wet");
+    finalDuration = 2;
+    synergyMsg = `❄️💧 *DEEP FREEZE!* ${target.name} is frozen solid!`;
+  }
+  // 3. OIL + FIRE = EXPLOSION
+  else if (effectType === "burn" && currentTypes.includes("oil")) {
+    target.statusEffects = target.statusEffects.filter((s) => s.type !== "oil");
+    const explosionDmg = Math.floor(target.stats.maxHp * 0.15);
+    target.stats.hp -= explosionDmg;
+    target.currentHP = Math.max(0, target.stats.hp);
+    synergyMsg = `🔥🛢️ *BOOM!* The oil ignites, dealing ${explosionDmg} explosive damage!`;
+  }
+
+  // Check if already has this effect
+  const existing = target.statusEffects.find((e) => e.type === finalType);
+  if (existing) {
+    existing.duration = Math.max(existing.duration, finalDuration);
+    existing.value = Math.max(existing.value || 0, finalValue);
+    return { applied: true, synergyMsg };
+  }
+
+  // Default if unknown to prevent crashes
+  const def = STATUS_EFFECTS[finalType] || {
+    name: finalType,
+    icon: "❓",
+    effect: "unknown",
+    value: 0,
+  };
+
+  target.statusEffects.push({
+    type: finalType,
+    name: def.name,
+    duration: finalDuration,
+    value: finalValue || def.value || 0,
+    icon: def.icon,
+    source: source,
+    effect: def.effect,
+    tickRate: def.tickRate,
+    // 💡 BUG-08/09 fix: justApplied prevents the effect from ticking on the
+    // same turn it was applied. Without this, a self-buff cast on turn N
+    // would tick down at the end of turn N, effectively losing 1 turn of
+    // duration. The flag is cleared by tickDurations() on the next turn.
+    justApplied: true,
+  });
+
+  return { applied: true, synergyMsg };
+}
+
+// 💡 BUG-07/08/09 fix: processStatusEffects was split into two functions.
+// The old function applied DoT/HoT AND ticked durations in one call, which
+// meant any CC with duration:1 (e.g. Elementalist's Blizzard freeze) was
+// removed BEFORE the skip-turn check ran - so the enemy appeared frozen
+// but still acted normally. Same for buffs: a duration:1 buff_team cast
+// on a teammate expired before the teammate's turn came around.
+//
+// Now:
+//   - applyEffectTicks(entity) runs at the START of the actor's turn
+//     (applies DoT/HoT damage, does NOT decrement durations)
+//   - tickDurations(entity) runs at the END of the actor's turn
+//     (decrements status + buff durations, removes expired)
+// This way a duration:1 effect is active for exactly one of the victim's
+// turns before expiring, instead of zero.
+//
+// processStatusEffects is kept as a backward-compat wrapper that calls
+// both in sequence (replicating the old behavior) for any external caller.
+
+function applyEffectTicks(entity) {
+  let messages = [];
+
+  if (!entity.statusEffects) {
+    entity.statusEffects = [];
+  }
+
+  for (let i = entity.statusEffects.length - 1; i >= 0; i--) {
+    const effect = entity.statusEffects[i];
+    const template = STATUS_EFFECTS[effect.type] || {};
+
+    const name = effect.name || template.name || effect.type;
+    const icon = effect.icon || template.icon || "✨";
+    const value =
+      Number(effect.value !== undefined ? effect.value : template.value) || 0;
+
+    // Process effect based on type (DoT / HoT / stat-reduce - NO duration--)
+    if (
+      effect.effect === "damage_over_time" ||
+      template.effect === "damage_over_time"
+    ) {
+      let damage = Math.floor(value);
+      // DoTs intentionally bypass DEF (persistent burn/poison) but should
+      // respect damage-reduction stat and vulnerability/shield status modifiers.
+      const dr = Number(entity.stats.dmgReduction) || 0;
+      if (dr > 0) damage = Math.floor(damage * (1 - dr / 100));
+      const entityEffects = entity.statusEffects || [];
+      if (entityEffects.some((e) => e.type === "vulnerability")) damage = Math.floor(damage * 1.3);
+      if (entityEffects.some((e) => e.type === "shield")) damage = Math.floor(damage * 0.5);
+      damage = Math.max(1, damage);
+      entity.stats.hp -= damage;
+      messages.push(
+        `🩸 *${name.toUpperCase()} TICK:* ${icon} ${entity.name} takes **${damage}** damage!`,
+      );
+    } else if (
+      effect.effect === "heal_over_time" ||
+      template.effect === "heal_over_time"
+    ) {
+      // 💡 QA FIX: validate heal value + maxHp + current HP to prevent NaN HP
+      // (infinite HP bug). If current HP is already NaN (from an upstream bug),
+      // adding a finite heal would still produce NaN. We reset NaN HP to 0
+      // before healing so the entity becomes killable again.
+      const safeHealValue = Number.isFinite(value) ? value : 0;
+      const safeMaxHp = Number.isFinite(entity.stats.maxHp) ? entity.stats.maxHp
+        : (Number.isFinite(entity.stats.hp) ? entity.stats.hp : 100);
+      const safeCurrentHp = Number.isFinite(entity.stats.hp) ? entity.stats.hp : 0;
+      const heal = Math.max(0, Math.min(
+        safeHealValue,
+        safeMaxHp - safeCurrentHp,
+      ));
+      entity.stats.hp = safeCurrentHp + heal;
+      messages.push(
+        `💚 *REGENERATION:* ${icon} ${entity.name} recovers **${Math.floor(heal)}** HP!`,
+      );
+    } else if (
+      effect.effect === "reduce_stats" ||
+      template.effect === "reduce_stats" ||
+      effect.effect === "reduce_defense" ||
+      template.effect === "reduce_defense"
+    ) {
+      // Stat reduction doesn't tick damage, but we show it's active
+      // messages.push(`${icon} ${entity.name} is struggling under ${name}...`);
+    }
+
+    // Sync HP for V2 (combat Integration expects currentHP)
+    entity.currentHP = entity.stats.hp;
+  }
+
+  return messages;
+}
+
+// 💡 NERF (2026-09-12): TOTAL ANNIHILATION rework - pure helper (unit-testable,
+// exported below). Mutates state; returns { fizzled, wiped, msg }.
+// OLD behavior: every living player was instantly set to HP 0 the first boss
+// turn after turnCount 30 - a guaranteed, undodgeable party wipe.
+// NEW behavior:
+//   • damage = 70% of maxHp per cast (survivable from full HP - healing and
+//     shields now matter; players already below 70% HP can still die)
+//   • crowd control on the boss (freeze/stun/sleep/charm) FIZZLES the cast -
+//     CC is now real counterplay against the doom clock
+//   • the caller re-arms casts 10 turns apart (lastAnnihilationTurn) and a
+//     telegraph warning fires at turnCount 28 (see the turn loop)
+// Anti-stall pressure is kept: the party still cannot turtle forever.
+function applyTotalAnnihilation(state) {
+  const boss = state.activeCombatant || { name: "The Boss", statusEffects: [] };
+  const res = { fizzled: false, wiped: false, msg: "" };
+  const cc = (boss.statusEffects || []).find((e) =>
+    ["freeze", "stun", "sleep", "charm", "locked_in_time"].includes(e.type),
+  );
+  // The attempt is consumed whether it casts or fizzles (re-arm window).
+  state.lastAnnihilationTurn = state.turnCount;
+  if (cc) {
+    res.fizzled = true;
+    res.msg =
+      `🛡️ *${boss.name}* staggers mid-cast - TOTAL ANNIHILATION FIZZLES! ` +
+      `(${String(cc.name || cc.type || "crowd control").toUpperCase()} interrupted it)`;
+    return res;
+  }
+  let msg = `💀 *${boss.name}* UNLEASHING TOTAL ANNIHILATION!\n\n`;
+  let survivors = 0;
+  (state.players || []).forEach((p) => {
+    if (!p.stats || p.stats.hp <= 0) return; // already dead
+    // 💡 was: damage = hp + 50% maxHp overkill, hp forced to 0 (instant death).
+    // Now: 70% of maxHp - full-HP parties survive at 30%.
+    const damage = Math.max(1, Math.floor((p.stats.maxHp || 1) * 0.7));
+    p.stats.hp -= damage;
+    if (p.stats.hp <= 0) {
+      p.stats.hp = 0;
+      p.isDead = true;
+      msg += `💥 ${p.name} takes *${damage}* damage - SLAIN! (HP: 0)\n`;
+    } else {
+      survivors++;
+      msg += `💥 ${p.name} takes *${damage}* damage! (HP: ${p.stats.hp}/${p.stats.maxHp})\n`;
+    }
+  });
+  if (survivors > 0) {
+    msg +=
+      `\n🩸 ${survivors} ${survivors === 1 ? "adventurer survives" : "adventurers survive"} the blast - barely.`;
+  }
+  res.msg = msg;
+  res.wiped = !(state.players || []).some((p) => p.stats && p.stats.hp > 0);
+  return res;
+}
+
+function tickDurations(entity) {
+  let messages = [];
+
+  if (!entity.statusEffects) {
+    entity.statusEffects = [];
+  }
+
+  // 💡 BUG-10 fix: increment per-entity turn counter for DR tracking.
+  // Used by applyStatusEffect to check if the target is within the
+  // post-expiry immunity window for a CC type.
+  entity._turnCount = (entity._turnCount || 0) + 1;
+
+  // Tick down status effect durations
+  for (let i = entity.statusEffects.length - 1; i >= 0; i--) {
+    const effect = entity.statusEffects[i];
+    const template = STATUS_EFFECTS[effect.type] || {};
+    const name = effect.name || template.name || effect.type;
+
+    // 💡 BUG-08/09 fix: skip justApplied effects (applied THIS turn).
+    // Clear the flag so the effect ticks normally on the NEXT turn.
+    // Without this, a self-buff cast on turn N would tick down at the
+    // end of turn N, losing 1 turn of duration.
+    if (effect.justApplied) {
+      effect.justApplied = false;
+      continue;
+    }
+
+    effect.duration--;
+    if (effect.duration <= 0) {
+      entity.statusEffects.splice(i, 1);
+      messages.push(`✨ *EXPIRED:* ${entity.name}'s **${name}** has worn off.`);
+
+      // 💡 BUG-10 fix: set DR immunity window for CC types.
+      // After a CC expires, the target is immune to the same CC type
+      // for 2 of their turns. Prevents chaining (e.g. Silence lock).
+      // _turnCount was just incremented above, so ccImmuneUntil = current + 2
+      // means "immune until 2 more of the target's turns have passed."
+      const CC_TYPES_FOR_DR = ['freeze', 'stun', 'sleep', 'charm', 'slow', 'shock', 'petrify', 'silence', 'locked_in_time'];
+      if (CC_TYPES_FOR_DR.includes(effect.type)) {
+        if (!entity.ccImmuneUntil) entity.ccImmuneUntil = {};
+        entity.ccImmuneUntil[effect.type] = entity._turnCount + 2;
+      }
+    }
+  }
+
+  // Tick down buff durations
+  if (entity.buffs && entity.buffs.length > 0) {
+    for (let i = entity.buffs.length - 1; i >= 0; i--) {
+      const buff = entity.buffs[i];
+
+      // 💡 BUG-08/09 fix: skip justApplied buffs (applied THIS turn).
+      if (buff.justApplied) {
+        buff.justApplied = false;
+        continue;
+      }
+
+      buff.duration--;
+      if (buff.duration <= 0) {
+        const buffName = buff.type.charAt(0).toUpperCase() + buff.type.slice(1);
+        const icon = buff.icon || "✨";
+        messages.push(`✨ *EXPIRED:* ${entity.name}'s **${buffName} Buff** (${icon}) has worn off.`);
+        entity.buffs.splice(i, 1);
+      }
+    }
+  }
+
+  return messages;
+}
+
+// Backward-compat wrapper - applies ticks then durations in one call.
+// Used to replicate the old behavior for any external caller. The main
+// combat loop (processCombatTurn) now calls applyEffectTicks and
+// tickDurations separately to fix BUG-07/08/09.
+function processStatusEffects(entity) {
+  const tickMsgs = applyEffectTicks(entity);
+  const expireMsgs = tickDurations(entity);
+  return [...tickMsgs, ...expireMsgs];
+}
+function getAvailableEnemies(poolId) {
+  // poolId is 1-indexed, convert to avgLevel for classEncounters
+  const levelMap = { 1: 5, 2: 25, 3: 45, 4: 65, 5: 85 };
+  const avgLevel = levelMap[poolId] || 5;
+
+  const poolData = classEncounters.getEnemyPoolByLevel(avgLevel);
+  if (!poolData) return ["DROWNED_ONE"]; // Fallback
+
+  // Flatten all categories (COMMON, ELITE, etc.) into a simple list of IDs
+  const enemyPool = [];
+  if (poolData.COMMON) poolData.COMMON.forEach((e) => enemyPool.push(e.id));
+  if (poolData.ELITE) poolData.ELITE.forEach((e) => enemyPool.push(e.id));
+
+  return enemyPool.length > 0 ? enemyPool : ["DROWNED_ONE"];
+}
+
+function createEnemy(enemyType, level = 1) {
+  // 💡 FIX 2026-10-02: ENEMY_TYPES was referenced but never defined anywhere -
+  // every ruins/quest enemy creation crashed with ReferenceError. Templates
+  // now resolve through classEncounters pools (single source of truth).
+  const classEncounters = require('../combat/classEncounters');
+  const template = classEncounters.findEnemyTemplate
+    ? classEncounters.findEnemyTemplate(enemyType)
+    : null;
+  if (!template) return null;
+
+  const enemy = {
+    id: `enemy_${Date.now()}_${Math.random()}`,
+    type: enemyType,
+    name: template.name,
+    icon: template.icon,
+    level: level,
+    stats: {
+      hp: Math.floor(template.stats.hp * (1 + (level - 1) * 0.2)),
+      maxHp: Math.floor(template.stats.hp * (1 + (level - 1) * 0.2)),
+      energy: 100,
+      maxEnergy: 100,
+      atk: Math.floor(template.stats.atk * (1 + (level - 1) * 0.15)),
+      def: Math.floor(template.stats.def * (1 + (level - 1) * 0.15)),
+      mag: Math.floor(template.stats.mag * (1 + (level - 1) * 0.15)),
+      spd: template.stats.spd,
+      luck: template.stats.luck,
+      crit: 5,
+    },
+    abilities: template.abilities,
+    statusEffects: [],
+    isEnemy: true,
+    // 💀 FIX 2026-10-11 (owner fight-card audit): enemies MUST carry currentHP
+    // from birth. It used to be set only on the first damage event, so the
+    // TURN-image filter (`e.currentHP > 0 || e.justDied`) dropped EVERY enemy
+    // on every turn card — the tutorial/ruins fight rendered an empty
+    // battlefield after its start card ("enemy disappears entirely").
+    currentHP: Math.floor(template.stats.hp * (1 + (level - 1) * 0.2)),
+    // 💡 OWNER BRIEF 2026-10-09 §2 (enemy sprite swap): per-instance stable
+    // seed for the Go renderer's rotation/dedupe (1..99; 0 = legacy fallback)
+    spriteIndex: 1 + Math.floor(Math.random() * 99),
+    loot: template.loot,
+    xp: Math.floor(template.xp * (1 + (level - 1) * 0.3)),
+    gold: Math.floor(template.gold * 3 * (1 + (level - 1) * 0.8)),
+  };
+  return enemy;
+}
+
+// ==========================================
+// 📝 ENCOUNTER GENERATORS
+// ==========================================
+
+function generateTrapEncounter(chatId) {
+  const tier = getCurrentTier(chatId);
+
+  const traps = [
+    {
+      name: "Poison Dart Trap",
+      icon: "🎯",
+      damage: 25 + tier * 15,
+      difficulty: 12 + tier,
+    },
+    {
+      name: "Pit Trap",
+      icon: "🕳️",
+      damage: 40 + tier * 20,
+      difficulty: 14 + tier,
+    },
+    {
+      name: "Fire Trap",
+      icon: "🔥",
+      damage: 35 + tier * 18,
+      difficulty: 13 + tier,
+    },
+  ];
+
+  const trap = traps[Math.floor(Math.random() * traps.length)];
+
+  return {
+    type: "TRAP",
+    trap: trap,
+    name: trap.name,
+    icon: trap.icon,
+    description: `You trigger a ${trap.name}!`,
+    choices: [
+      {
+        id: "1",
+        text: "Try to dodge (SPD check)",
+        stat: "spd",
+        difficulty: trap.difficulty,
+        success: {
+          description: "You jump out of the way just in time!",
+          gold: 10,
+        },
+        failure: {
+          description: `You were too slow!`,
+          damage: trap.trap?.damage || trap.damage,
+        },
+      },
+      {
+        id: "2",
+        text: "Shield the party (DEF check)",
+        stat: "def",
+        difficulty: trap.difficulty - 2,
+        success: {
+          description: "You block the worst of it!",
+          damage: Math.floor(trap.damage / 4),
+        },
+        failure: {
+          description: `Your shield wasn't enough!`,
+          damage: Math.floor(trap.damage * 0.8),
+        },
+      },
+      {
+        id: "3",
+        text: "Disable mechanism (LUCK check)",
+        stat: "luck",
+        difficulty: trap.difficulty + 2,
+        success: {
+          description:
+            "You successfully disarmed the trap! Found some scrap gold.",
+          gold: 40,
+        },
+        failure: {
+          description: `It blew up in your face!`,
+          damage: trap.damage,
+        },
+      },
+    ],
+  };
+}
+
+function generatePuzzleEncounter(chatId) {
+  const tier = getCurrentTier(chatId);
+  const puzzles = [
+    {
+      name: "Ancient Riddle",
+      icon: "📜",
+      reward: 60 + tier * 30,
+      difficulty: 15 + tier,
+    },
+    {
+      name: "Magic Lock",
+      icon: "🔐",
+      reward: 100 + tier * 40,
+      difficulty: 16 + tier,
+    },
+  ];
+
+  const puzzle = puzzles[Math.floor(Math.random() * puzzles.length)];
+
+  return {
+    type: "PUZZLE",
+    puzzle: puzzle,
+    name: puzzle.name,
+    icon: puzzle.icon,
+    description: `You discover a ${puzzle.name}!`,
+    choices: [
+      {
+        id: "1",
+        text: "Decode symbols (MAG check)",
+        stat: "mag",
+        difficulty: puzzle.difficulty,
+        success: {
+          description: "The runes reveal their secrets!",
+          gold: puzzle.reward,
+        },
+        failure: {
+          description: "A magical feedback pulse hits the party!",
+          damage: 30 + tier * 5,
+        },
+      },
+      {
+        id: "2",
+        text: "Brute force (ATK check)",
+        stat: "atk",
+        difficulty: puzzle.difficulty + 4,
+        success: {
+          description: "You smashed it open! Found some gold.",
+          gold: Math.floor(puzzle.reward * 0.6),
+        },
+        failure: {
+          description: "You hurt yourself trying to break it!",
+          damage: 50 + tier * 10,
+        },
+      },
+    ],
+  };
+}
+
+function generateMerchantEncounter(chatId) {
+  return {
+    type: "MERCHANT",
+    description: "A traveling merchant appears!",
+    shopItems: [
+      "health_potion",
+      "mana_potion",
+      "strength_brew",
+      "defense_tonic",
+      "phoenix_down",
+      "bomb",
+    ],
+  };
+}
+
+function generateTreasureEncounter(chatId) {
+  const tier = getCurrentTier(chatId);
+  const treasureTypes = [
+    { name: "Ancient Chest", gold: 200 + tier * 100, damage: 50 + tier * 10 },
+    { name: "Cursed Relic", gold: 1000 + tier * 200, damage: 100 + tier * 20 },
+  ];
+
+  const treasure =
+    treasureTypes[Math.floor(Math.random() * treasureTypes.length)];
+
+  return {
+    type: "TREASURE",
+    treasure: treasure,
+    name: treasure.name,
+    icon: "💎",
+    description: `You found a ${treasure.name}! It pulses with strange energy.`,
+    choices: [
+      {
+        id: "1",
+        text: "Open carefully (LUCK check)",
+        stat: "luck",
+        difficulty: 12 + tier,
+        success: { description: "You safely opened it!", gold: treasure.gold },
+        failure: {
+          description: "A magical trap triggers!",
+          damage: treasure.damage,
+        },
+      },
+      {
+        id: "2",
+        text: "Smash it open",
+        outcome: {
+          description:
+            "You broke the mechanism but some contents were destroyed.",
+          gold: Math.floor(treasure.gold / 3),
+          damage: Math.floor(treasure.damage / 2),
+        },
+      },
+    ],
+  };
+}
+
+function generateEventEncounter(chatId) {
+  const events = [
+    {
+      name: "Mysterious Altar",
+      choices: [
+        {
+          id: "1",
+          text: "Offer Blood",
+          outcome: {
+            description: "The altar drinks your life force and grants power.",
+            damage: 50,
+            gold: 200,
+          },
+        },
+        {
+          id: "2",
+          text: "Pray (LUCK check)",
+          stat: "luck",
+          difficulty: 15,
+          success: {
+            description: "The gods smile upon you.",
+            heal: 100,
+            gold: 100,
+          },
+          failure: { description: "The gods are silent.", damage: 20 },
+        },
+        {
+          id: "3",
+          text: "Leave",
+          outcome: { description: "You leave the altar alone." },
+        },
+      ],
+    },
+  ];
+
+  const event = events[Math.floor(Math.random() * events.length)];
+
+  return {
+    type: "EVENT",
+    event: event,
+    name: event.name,
+    icon: "✨",
+    description: `You come across a ${event.name}.`,
+    choices: event.choices,
+  };
+}
+
+// ==========================================
+// ⚔️ COMBAT SYSTEM
+// ==========================================
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🛡️ CLASS PASSIVE SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════
+// Wire-up for class passives defined in CLASSES above. Previously, every
+// class declared a `passive: { name, effect, value }` field, but NO CODE
+// EVER READ IT. Passives were dead data. This function applies each
+// passive effect at the appropriate time:
+//
+//   • Combat-start passives (called from startCombat):
+//       all_stats, dodge_chance, magic_damage, damage_reduction,
+//       healing_boost, gold_find
+//   • Per-turn passives (called from processCombatTurn):
+//       team_healing, regen, first_turn_bonus, rotate_elements
+//   • Inline damage passives (called from calculateDamage / kill paths):
+//       damage_when_low_hp, damage_per_hit, damage_on_kill, damage_on_death
+//
+// Passives are idempotent - calling this function twice on the same player
+// won't double-apply combat-start passives because we stamp p.passivesApplied
+// after the first run.
+// ═══════════════════════════════════════════════════════════════════════════
+// 💡 FIX 2026-08-31: added `state` parameter - the party_* passive cases
+// referenced a `state` that was never in this function's scope, throwing
+// ReferenceError (swallowed by the caller's try/catch) so SHOGUN's
+// Commander's Will (+20% party ATK) and BARD's Inspiring Song (+10% party
+// stats) NEVER applied.
+function applyClassPassiveAtCombatStart(player, state) {
+  if (!player || !player.class || !player.class.passive) return;
+  if (player.passivesApplied) return;  // idempotent
+
+  const passive = player.class.passive;
+  const value = Number(passive.value) || 0;
+  if (!player.stats) player.stats = {};
+
+  switch (passive.effect) {
+    case 'all_stats':
+      // +value% to all stats. Apply as a one-time permanent buff to base stats.
+      for (const stat of ['hp', 'atk', 'def', 'mag', 'spd', 'luck', 'crit']) {
+        if (typeof player.stats[stat] === 'number') {
+          player.stats[stat] = Math.floor(player.stats[stat] * (1 + value / 100));
+        }
+      }
+      if (player.stats.maxHp) {
+        player.stats.maxHp = Math.floor(player.stats.maxHp * (1 + value / 100));
+        player.stats.hp = Math.min(player.stats.hp * (1 + value / 100), player.stats.maxHp);
+      }
+      break;
+
+    case 'dodge_chance':
+      // +value% evasion (additive)
+      player.stats.evasion = Math.min(75, (Number(player.stats.evasion) || 0) + value);
+      break;
+
+    case 'magic_damage':
+      // +value% magic damage. Stored as a multiplier the damage calc can read.
+      player.passiveMagBonus = (player.passiveMagBonus || 1) + value / 100;
+      break;
+
+    case 'damage_reduction':
+      // -value% damage taken. Stored as a percentage the damage calc can read.
+      player.passiveDmgReduction = (player.passiveDmgReduction || 0) + value;
+      // 💡 FIX 2026-08-01: Dragon God's "Dragon Heart" passive says "Immune to
+      // all status effects" - the description includes both damage_reduction
+      // AND status immunity. Since the classSystem only allows one effect type,
+      // we check if the description mentions immunity and grant it here.
+      //
+      // 💡 AUDIT FIX 2026-08-01 (this pass): the previous code referenced
+      // `classData?.passive?.desc` and `msgs.push(...)` - both UNDEFINED in
+      // this scope (classData is not a variable here; msgs is not declared).
+      // That made the if-condition always falsy, so player.statusImmune was
+      // NEVER set. Dragon God players were still getting burned / silenced /
+      // stunned / etc. Now reads from player.class.passive.desc directly.
+      if (player?.class?.passive?.desc && /immune to all status/i.test(player.class.passive.desc)) {
+        player.statusImmune = true;
+        console.log(`🛡️ [Passive] ${player.name || 'Player'} has Dragon Heart - full status immunity active.`);
+      }
+      break;
+
+    case 'healing_boost':
+      // +value% healing received.
+      player.passiveHealingBoost = (player.passiveHealingBoost || 1) + value / 100;
+      break;
+
+    case 'gold_find':
+      // +value% gold at end of combat. Stored for endAdventure to read.
+      player.passiveGoldFind = (player.passiveGoldFind || 0) + value;
+      break;
+
+    // Per-turn / inline passives are wired below - nothing to do at combat start.
+    case 'team_healing':
+    case 'regen':
+    case 'first_turn_bonus':
+    case 'rotate_elements':
+    case 'damage_when_low_hp':
+    case 'damage_per_hit':
+    case 'damage_on_kill':
+
+    // 💡 P4 Item 6 (2026-08-16): New effect types for fixed passives
+    case 'energy_regen':      // MAGE Arcane Well - handled per-turn
+    case 'energy_cost_reduction': // ARCHMAGE Infinity Flow
+      player.passiveEnergyCostReduction = value / 100; // 0.5 = 50% reduction
+      break;
+    case 'lifesteal':         // WARLOCK Soul Siphon - handled inline in damage
+      player.passiveLifestealPct = value; // 8 = 8% of damage dealt
+      break;
+    case 'dragon_3x':         // DRAGONSLAYER Dragon Bane - handled inline
+      player.passiveDragonMult = value; // 3 = 3× damage to dragons
+      break;
+    case 'party_physical_buff': // SHOGUN Commander's Will
+      if (state && state.players) {
+        for (const p of state.players) {
+          if (!p.isDead && p.stats) {
+            p.stats.atk = Math.floor((p.stats.atk || 0) * (1 + value / 100));
+          }
+        }
+      }
+      break;
+    case 'crit_when_low':     // BERSERKER Bloodlust - handled inline in crit calc
+      player.passiveCritWhenLow = value; // max +20% crit when low HP
+      break;
+    case 'scaling_damage':    // DOOMSLAYER Hell-Walker - handled inline
+      player.passiveScalingDmg = value; // 2% per 1% missing HP
+      break;
+
+    // 💡 P4 Item 6 (2026-08-16): Remaining class passives
+    case 'revive':            // LICH Phylactery, VIRTUOSO Grand Finale
+      player.passiveRevive = { hpPct: value, used: false };
+      break;
+    case 'cooldown_reduction': // CHRONOMANCER Temporal Flow
+      player.passiveCooldownReduction = value; // flat turns reduced
+      break;
+    case 'extra_action':      // TIMELORD Temporal Mastery
+      player.passiveExtraAction = value; // 1 = 2 actions per turn
+      break;
+    case 'summon_buff':       // NECROMANCER Death's Apprentice
+      player.passiveSummonBuff = value; // +30% summon stats
+      break;
+    case 'enemy_debuff':      // VOIDWALKER Abyssal Aura
+      player.passiveEnemyDebuff = value; // -15% enemy ATK/DEF
+      break;
+    case 'party_all_buff':    // BARD Inspiring Song
+      if (state && state.players) {
+        for (const p of state.players) {
+          if (!p.isDead && p.stats) {
+            for (const stat of ['hp', 'atk', 'def', 'mag', 'spd', 'luck', 'crit']) {
+              if (typeof p.stats[stat] === 'number') {
+                p.stats[stat] = Math.floor(p.stats[stat] * (1 + value / 100));
+              }
+            }
+          }
+        }
+      }
+      break;
+
+    case 'damage_on_death':
+      // Mark passive as available; per-turn / inline code will read it.
+      player.class.passiveActive = true;
+      break;
+  }
+
+  player.passivesApplied = true;
+}
+
+// 💡 AUDIT FIX 2026-08-01: Skill-tree passive processor.
+//
+// Skill-tree passives (e.g. Dragon God's "Soul of the Deep") define their
+// effects on the SKILL object via `passiveEffects: { hpRegenPerTurn,
+// manaRegenPerTurn, statusImmunity }`. The previous code only applied the
+// CLASS passive (player.class.passive) - skill-tree passives were silently
+// dead. Soul of the Deep regen + status immunity did nothing.
+//
+// This function iterates over the player's learned passive skills and
+// applies their passiveEffects at combat start. Per-turn effects (regen)
+// are stored on the player for `applySkillPassivesPerTurn` to apply each
+// round. Status immunity is stored as `player.skillStatusImmunity` (array
+// of uppercase status types) and checked in `applyStatusEffect`.
+function applySkillPassivesAtCombatStart(player) {
+  if (!player || !player.jid) return;
+  if (player.skillPassivesApplied) return;  // idempotent
+
+  const economy = require('../economy/economy');
+  const classSystem = require('../characters/classSystem');
+  const skillTreeMod = require('../characters/skillTree');
+
+  const user = economy.getUser(player.jid);
+  if (!user || !user.skills) return;
+
+  const userClass = economy.getUserClass(player.jid);
+  if (!userClass) return;
+  const lineage = classSystem.getLineage(userClass.id);
+
+  player.skillStatusImmunity = player.skillStatusImmunity || [];
+  player.skillHpRegenPct = player.skillHpRegenPct || 0;  // % of maxHp per turn
+  player.skillManaRegenPct = player.skillManaRegenPct || 0;  // % of maxMana per turn
+
+  const seen = new Set();
+  for (const cId of lineage) {
+    const tree = skillTreeMod.SKILL_TREES[cId.toUpperCase()];
+    if (!tree) continue;
+    for (const [, treeData] of Object.entries(tree.trees || {})) {
+      for (const [skillId, skill] of Object.entries(treeData.skills || {})) {
+        if (!skill.passive) continue;
+        const level = user.skills[skillId] || 0;
+        if (level < 1) continue;
+        if (seen.has(skillId)) continue;
+        seen.add(skillId);
+
+        const pe = skill.passiveEffects;
+        if (!pe) continue;
+
+        // Status immunity (Soul of the Deep: ['DROWN','FREEZE','POISON'])
+        if (Array.isArray(pe.statusImmunity)) {
+          for (const statusType of pe.statusImmunity) {
+            const upper = String(statusType).toUpperCase();
+            if (!player.skillStatusImmunity.includes(upper)) {
+              player.skillStatusImmunity.push(upper);
+            }
+          }
+        }
+
+        // Per-turn regen - store the highest tier the player has unlocked
+        const getVal = (val, lvl) =>
+          Array.isArray(val) ? val[Math.min(lvl - 1, val.length - 1)] : val;
+        const hpRegen = getVal(pe.hpRegenPerTurn, level);
+        const manaRegen = getVal(pe.manaRegenPerTurn, level);
+        if (typeof hpRegen === 'number' && hpRegen > player.skillHpRegenPct) {
+          player.skillHpRegenPct = hpRegen;
+        }
+        if (typeof manaRegen === 'number' && manaRegen > player.skillManaRegenPct) {
+          player.skillManaRegenPct = manaRegen;
+        }
+      }
+    }
+  }
+
+  player.skillPassivesApplied = true;
+  if (player.skillStatusImmunity.length > 0) {
+    console.log(`🌊 [SkillPassive] ${player.name || 'Player'} status immunity: ${player.skillStatusImmunity.join(', ')}`);
+  }
+  if (player.skillHpRegenPct > 0 || player.skillManaRegenPct > 0) {
+    console.log(`🌊 [SkillPassive] ${player.name || 'Player'} regen: +${(player.skillHpRegenPct*100).toFixed(0)}% HP/turn, +${(player.skillManaRegenPct*100).toFixed(0)}% MP/turn`);
+  }
+}
+
+// 💡 AUDIT FIX 2026-08-01: Per-turn skill-tree passive processor.
+// Called once per combat round (per player). Applies the stored regen
+// percentages. Returns an array of message strings for the combat log.
+function applySkillPassivesPerTurn(player, state) {
+  if (!player || player.isDead) return [];
+  if (!player.skillPassivesApplied) return [];
+
+  const msgs = [];
+  const maxHp = player.stats?.maxHp || player.stats?.hp || 1;
+  const maxMp = player.maxMana || 100;
+
+  if (player.skillHpRegenPct > 0 && player.stats.hp < maxHp) {
+    const heal = Math.min(Math.floor(maxHp * player.skillHpRegenPct), maxHp - player.stats.hp);
+    if (heal > 0) {
+      player.stats.hp += heal;
+      player.currentHP = player.stats.hp;
+      msgs.push(`🌊 Soul of the Deep: +${heal} HP regen`);
+    }
+  }
+  if (player.skillManaRegenPct > 0 && (player.mana || 0) < maxMp) {
+    const restore = Math.min(Math.floor(maxMp * player.skillManaRegenPct), maxMp - (player.mana || 0));
+    if (restore > 0) {
+      player.mana = (player.mana || 0) + restore;
+      msgs.push(`🌊 Soul of the Deep: +${restore} MP regen`);
+    }
+  }
+  return msgs;
+}
+
+// Apply per-turn passive effects. Called once per combat round (per player).
+// Returns an array of message strings to append to the combat log.
+function applyClassPassivePerTurn(player, state) {
+  if (!player || !player.class || !player.class.passive) return [];
+  if (player.isDead) return [];
+
+  // 💡 FIX: reset passiveCombo each round so damage_per_hit doesn't stack
+  // infinitely across turns. Was never reset - the combo counter grew
+  // unboundedly (though the mult was capped at 5 stacks, the counter itself
+  // was never cleared, meaning the first hit of each round already had a
+  // huge combo count).
+  player.passiveCombo = 0;
+
+  const passive = player.class.passive;
+  const value = Number(passive.value) || 0;
+  const msgs = [];
+
+  switch (passive.effect) {
+    case 'team_healing': {
+      // Heal all living teammates by value HP per turn
+      const teammates = (state.players || []).filter(p => !p.isDead);
+      let totalHealed = 0;
+      for (const t of teammates) {
+        if (t.stats.hp < t.stats.maxHp) {
+          const heal = Math.min(value, t.stats.maxHp - t.stats.hp);
+          t.stats.hp += heal;
+          totalHealed += heal;
+        }
+      }
+      if (totalHealed > 0) {
+        msgs.push(`✨ ${player.class.passive.name}: +${totalHealed} HP to team`);
+      }
+      break;
+    }
+
+    case 'regen': {
+      // Self-heal value HP per turn
+      if (player.stats.hp < player.stats.maxHp) {
+        const heal = Math.min(value, player.stats.maxHp - player.stats.hp);
+        player.stats.hp += heal;
+        msgs.push(`✨ ${player.class.passive.name}: +${heal} HP regen`);
+      }
+      break;
+    }
+
+    // 💡 P4 Item 6: MAGE Arcane Well - restore energy per turn
+    case 'energy_regen': {
+      if (player.stats.energy !== undefined && player.stats.maxEnergy) {
+        const restore = Math.min(value, player.stats.maxEnergy - player.stats.energy);
+        if (restore > 0) {
+          player.stats.energy += restore;
+          msgs.push(`⚡ ${player.class.passive.name}: +${restore} Energy`);
+        }
+      }
+      break;
+    }
+
+    case 'first_turn_bonus': {
+      // +value% damage on first turn only
+      if (state.combatRound === 0) {
+        player.passiveDamageBonus = (player.passiveDamageBonus || 1) + value / 100;
+        msgs.push(`✨ ${player.class.passive.name}: +${value}% damage this turn`);
+      } else {
+        player.passiveDamageBonus = 1;  // reset
+      }
+      break;
+    }
+
+    case 'rotate_elements': {
+      // Rotate element each turn, +value% elemental damage
+      const elements = ['FIRE', 'WATER', 'EARTH', 'ICE', 'WIND', 'LIGHTNING'];
+      player.passiveElement = elements[state.combatRound % elements.length];
+      player.passiveMagBonus = (player.passiveMagBonus || 1) + value / 100;
+      // Reset next turn so it doesn't stack permanently
+      // (applyClassPassivePerTurn runs each round, so this is correct)
+      break;
+    }
+
+    // damage_when_low_hp, damage_per_hit, damage_on_kill, damage_on_death
+    // are handled inline in calculateDamage / recordEnemyKill / onPlayerDeath.
+    case 'damage_when_low_hp':
+    case 'damage_per_hit':
+    case 'damage_on_kill':
+    case 'damage_on_death':
+      // No per-turn action - handled inline.
+      break;
+  }
+
+  return msgs;
+}
+
+// Get a damage multiplier (1.0 = no change) from inline damage passives.
+// Called from calculateDamage when computing outgoing damage.
+// 💡 TICKET #b4c0ff companion: one icon resolver for every combat message
+// that prints a target icon. Players never carry `.icon` (their emoji lives
+// on `.class.icon`) and some raw enemy entities reach message builders
+// without an icon fallback - both produced literal
+// "undefined MellowDiHOfHeaven takes 30 damage!" lines. Every target-icon
+// template now goes through this, so no combat message can print `undefined`.
+function combatTargetIcon(target) {
+  if (!target) return "👤";
+  if (target.isEnemy || target.isSummon) return target.icon || "👾";
+  return target.class?.icon || "👤";
+}
+
+// 💡 TICKET #b5087a (2026-09-21): Pathfinder XP. A Scout (solo_hunter
+// passive) hunting with NO living allies earns +25% XP - which offsets the
+// global +20% XP-curve increase (#b508e7) specifically on the Scout solo
+// leveling path, so the harder curve does not make the existing solo
+// problem worse. Party play gains nothing from it.
+function _soloHunterXpMult(player, state) {
+  try {
+    if (!player || player.isDead || player.isEnemy || player._isSummon || player.isSummon) return 1;
+    const passive = player.class?.passive;
+    if (!passive || passive.effect !== 'solo_hunter') return 1;
+    const alive = (state?.players || []).filter((p) => p && !p.isDead && !p._isSummon && !p.isSummon);
+    if (alive.length !== 1) return 1;
+    const value = Number(passive.value) || 25;
+    return 1 + value / 100;
+  } catch (e) {
+    return 1;
+  }
+}
+
+// 💡 TICKET #b5087a (2026-09-21): is the attacker the ONLY living human in
+// this fight? Used by the Scout Pathfinder passive (solo_hunter). Duels and
+// PvP keep their own storage, so a missing state simply means "not solo".
+function _isSoloFighter(attacker, sessionKey) {
+  try {
+    if (!attacker || attacker.isEnemy || attacker._isSummon || !sessionKey) return false;
+    const st = gameStates.get(sessionKey);
+    if (!st || !Array.isArray(st.players)) return false;
+    const alive = st.players.filter((p) => p && !p.isDead && !p._isSummon && !p.isSummon);
+    return alive.length === 1 && (alive[0] === attacker || alive[0].jid === attacker.jid);
+  } catch (e) {
+    return false;
+  }
+}
+
+function getClassPassiveDamageMult(attacker, target, isAbility, ctx = {}) {
+  if (!attacker || !attacker.class || !attacker.class.passive) return 1;
+  if (attacker.isEnemy) return 1;  // passives are for players only
+
+  const passive = attacker.class.passive;
+  const value = Number(passive.value) || 0;
+  let mult = 1;
+
+  // 💡 TICKET #b5087a (2026-09-21): DRAGON'S FURY. Dragon God lost ALL
+  // offensive passives on evolution - Dragonslayer's dragon_3x (3x vs
+  // dragonkind) was replaced by the purely defensive Dragon Heart, while
+  // the mage ASCENDED line kept magic_damage/energy passives and bigger
+  // MAG scaling. Formula audit: Dragon God's ult scales off its weakest
+  // stat (MAG mod 1.5 vs mages 2.0-2.2), its energy pool is the smallest
+  // (3x MAG term), and as a TANK it draws 1.5x threat. Dragon Heart now
+  // also carries the dragon's wrath: +25% outgoing damage on everything,
+  // and the dragon-slaying bane carries over (3x vs dragon-kind).
+  if (attacker.class.id === 'DRAGON_GOD') {
+    mult *= 1.25;
+    if (target && target.id && String(target.id).toUpperCase().includes('DRAGON')) {
+      mult *= 3;
+    }
+  }
+
+  // 💡 TICKET #b5087a: SCOUT PATHFINDER - Scouts had no passive at all and
+  // the worst solo-leveling kit (ATK growth 1.1, HP 0.9, def 0.8 against
+  // solo-scaled enemies). +25% damage while fighting with no allies keeps
+  // the solo path practical (matches the Pathfinder XP bonus).
+  if (passive.effect === 'solo_hunter' && ctx && ctx.solo) {
+    mult *= 1 + (value > 0 ? value : 25) / 100;
+  }
+
+  switch (passive.effect) {
+    case 'damage_when_low_hp':
+      // +value% damage when attacker HP < 30%
+      if (attacker.stats && attacker.stats.maxHp) {
+        const hpPct = attacker.stats.hp / attacker.stats.maxHp;
+        if (hpPct < 0.30) {
+          mult *= (1 + value / 100);
+        }
+      }
+      break;
+
+    case 'damage_per_hit':
+      // +value% damage per consecutive hit (resets on miss/turn end).
+      // Stack tracked on attacker.passiveCombo.
+      if (!attacker.passiveCombo) attacker.passiveCombo = 0;
+      attacker.passiveCombo += 1;
+      mult *= (1 + (value / 100) * Math.min(attacker.passiveCombo, 5));  // cap at 5 stacks
+      break;
+
+    case 'first_turn_bonus':
+      // Already applied via applyClassPassivePerTurn as passiveDamageBonus
+      if (attacker.passiveDamageBonus && attacker.passiveDamageBonus > 1) {
+        mult *= attacker.passiveDamageBonus;
+      }
+      break;
+
+    case 'rotate_elements':
+      // Already applied via applyClassPassivePerTurn as passiveMagBonus
+      if (attacker.passiveMagBonus && attacker.passiveMagBonus > 1 && isAbility) {
+        mult *= attacker.passiveMagBonus;
+      }
+      break;
+
+    // 💡 BUG-11 fix: magic_damage passive was SET at combat start (line 2994)
+    // but never READ here - so Mage/Archmage/Warlock/Voidwalker/Necromancer/
+    // Chronomancer all got ZERO bonus magic damage from their passive.
+    // Now applies passiveMagBonus to ability damage (basic attacks rarely
+    // use MAG, so isAbility gate is appropriate).
+    case 'magic_damage':
+      if (isAbility && attacker.passiveMagBonus && attacker.passiveMagBonus > 1) {
+        mult *= attacker.passiveMagBonus;
+      }
+      break;
+
+    // 💡 P4 Item 6 (2026-08-16): New inline damage passives
+    case 'dragon_3x':
+      // DRAGONSLAYER Dragon Bane: 3× damage to dragon-type enemies
+      if (target && target.id && String(target.id).toUpperCase().includes('DRAGON')) {
+        mult *= (Number(passive.value) || 3);
+      }
+      break;
+
+    case 'scaling_damage':
+      // DOOMSLAYER Hell-Walker: +2% damage per 1% HP missing (no cap)
+      if (attacker.stats && attacker.stats.maxHp) {
+        const hpPct = attacker.stats.hp / attacker.stats.maxHp;
+        const missingPct = Math.max(0, 1 - hpPct);
+        const bonusPer = Number(passive.value) || 2;
+        mult *= (1 + (bonusPer / 100) * missingPct * 100); // 2% per 1% missing = up to +200%
+      }
+      break;
+
+    case 'crit_when_low':
+      // BERSERKER Bloodlust: handled in crit calc, not damage mult
+      break;
+
+    case 'lifesteal':
+      // WARLOCK Soul Siphon: heal after damage, not a damage mult
+      // Handled in calculateDamage after damage is applied
+      break;
+  }
+
+  return mult;
+}
+
+// Get a damage reduction multiplier (1.0 = no change) from inline passives.
+// Called from calculateDamage when computing incoming damage to a player.
+function getClassPassiveDamageReduction(target) {
+  if (!target || !target.class || !target.class.passive) return 0;
+  if (target.isEnemy) return 0;
+
+  // damage_reduction passive was already applied at combat start as
+  // passiveDmgReduction. Read it here.
+  return Number(target.passiveDmgReduction) || 0;
+}
+
+// Apply on-kill passive effects. Called from recordEnemyKill.
+function applyClassPassiveOnKill(killer, victim) {
+  if (!killer || !killer.class || !killer.class.passive) return [];
+  if (killer.isEnemy) return [];
+
+  const passive = killer.class.passive;
+  const value = Number(passive.value) || 0;
+  const msgs = [];
+
+  switch (passive.effect) {
+    case 'damage_on_kill':
+      // +value% damage on next hit only. Stored as a one-shot multiplier.
+      killer.passiveKillBonus = (killer.passiveKillBonus || 1) + value / 100;
+      msgs.push(`✨ ${killer.class.passive.name}: kill bonus +${value}% next attack`);
+      break;
+
+    case 'damage_per_hit':
+      // Reset combo counter on kill (encourages spreading damage)
+      // Actually no - combo should keep building. Leave it alone.
+      break;
+  }
+
+  return msgs;
+}
+
+// Apply on-death passive effects. Called when a player dies.
+// Returns { damage, target, msgs } - caller applies the damage to the killer.
+function applyClassPassiveOnDeath(victim, killer) {
+  if (!victim || !victim.class || !victim.class.passive) return null;
+  if (victim.isEnemy) return null;
+
+  const passive = victim.class.passive;
+  const value = Number(passive.value) || 0;
+
+  if (passive.effect === 'damage_on_death') {
+    // Deal value% of victim's max HP as damage to the killer
+    if (killer && killer.stats && victim.stats?.maxHp) {
+      const dmg = Math.floor(victim.stats.maxHp * value / 100);
+      return {
+        damage: dmg,
+        target: killer,
+        msgs: [`✨ ${passive.name}: ${victim.name} deals ${dmg} revenge damage on death!`],
+      };
+    }
+  }
+
+  return null;
+}
+
+async function startCombat(sock, groq, encounter, sessionKey) {
+  const state = gameStates.get(sessionKey);
+  if (!state) return;
+  const chatId = state.chatId;
+  if (!groq) groq = state.groq;
+  // 🩘 SOCK FALLBACK (2026-10-26): the combatStart timer below closes over
+  // THIS sock for the whole fight — a socketless caller here used to doom
+  // every subsequent turn send (watchdog train → invisible fight).
+  if (!sock) sock = state.sock || state.sock_ref;
+  // Stamp it for late callers — but NEVER stomp the RUINS co-op multicast
+  // wrapper (makeRuinsSock): a raw sock here would collapse every seat's
+  // visuals back to a single chat.
+  if (!state.sock) state.sock = sock;
+  state.inCombat = true;
+  // 💡 ROUND-19: generation stamp + guard re-arm. Every fight gets a fresh
+  // combatGen; stale resolutions carrying the previous gen are refused in
+  // checkCombatEnd/endCombat (the ghost-victory quest-skip fix). A fresh
+  // fight must also never inherit the previous fight's claimed end-guard.
+  state.combatGen = (state.combatGen || 0) + 1;
+  state.isEndingCombat = false;
+  state.combatProcessing = false;
+
+  // 💡 FIX 2026-08-31: re-apply combat-start class passives. endCombat resets
+  // p.passivesApplied=false + p.passiveMagBonus=1 intending re-application at
+  // the next encounter, but this function never called the appliers - so
+  // MAGE/APPRENTICE magic_damage (+20%/+10%) and every other combat-start
+  // passive was active ONLY during encounter 1 of multi-encounter dungeons.
+  // Both calls are idempotent (guarded by passivesApplied/skillPassivesApplied).
+  if (state.players) {
+    for (const p of state.players) {
+      // 💡 FIX 2026-10-03 (owner elixir report): an active Full Restore
+      // effect auto-tops the player up at the START of every fight too -
+      // the effect's lifecycle is its own 60-minute timer, not the quest.
+      try {
+        if (p.jid && !p.isDead && p.stats && p.stats.maxHp &&
+            economy.hasActiveEffect(p.jid, 'full_restore')) {
+          p.stats.hp = p.stats.maxHp;
+          p.currentHP = p.stats.maxHp;
+          economy.setPersistentHP(p.jid, p.stats.maxHp, p.stats.maxHp);
+        }
+      } catch (fxErr) { /* non-fatal */ }
+      try { applyClassPassiveAtCombatStart(p, state); } catch (e) {
+        console.error('[Passive] re-apply at startCombat failed:', e?.message || e);
+      }
+      try { applySkillPassivesAtCombatStart(p); } catch (e) {
+        console.error('[Passive] re-apply skill passives at startCombat failed:', e?.message || e);
+      }
+    }
+  }
+
+  // Restore catalog enemies
+  state.enemies = encounter.enemies;
+  // Stamp dungeon rank on each enemy so calculateDamage can apply SS+ damage floor
+  state.enemies.forEach(e => { e.rank = state.dungeonRank; });
+  // ⚡ DEATHFX (owner 2026-11-04 "sometimes there's a death animation and
+  // sometimes there isn't"): bakes used to wait for the FIRST TURN
+  // (nextTurn) — on a solo farm that can be ~30s after the fight actually
+  // started, so a turn-1 kill outraced the cold 17-24s bake and got NO
+  // animation (prod proof: fight 13:52:31, first bake 13:53:02, kill
+  // 13:53:07 → "NO clip" 13:53:19). Start the bake with the fight itself;
+  // every later trigger (nextTurn / kill-time) stays idempotent.
+  try { startDeathBake(state); } catch (err) { console.warn('[DeathFx] fight-start bake skipped:', err && err.message || err); }
+  // 💀 FIX 2026-10-11 (owner fight-card audit): honor encounter.background as
+  // a fallback so a fight can never render on the Go service's env1.png
+  // fallback arena. Classic quests pin backgroundPath at initAdventure; ruins/
+  // tutorial fights pin it in startRuinsCombat — this covers any other flow
+  // whose encounter carries an explicit background but no state-level one.
+  if (!state.backgroundPath && encounter.background) {
+    state.backgroundPath = encounter.background.startsWith('rpgasset/')
+      ? encounter.background
+      : `rpgasset/environment/${encounter.background}`;
+  }
+  state.currentEncounterType = encounter.type || "COMBAT";
+  // ⚔️ ruins encounter scene payload (square map panel, bottom-right)
+  state.ruinsMap = encounter.ruinsMap || null;
+
+  state.combatRound = 0;
+  state.pendingActions = {};
+  state.combatHistory = [];
+
+  // 💡 Summoner System (Phase 2): deploy each player's active summon.
+  // Build combat entities from user.activeSummonId, push to state.summons.
+  // Summons are added to turnOrder below (alongside players + enemies).
+  // 💡 RAID SUMMON CAP (2026-09-11 owner directive): only the 3 STRONGEST
+  // summons deploy alongside the 6 players. Candidates are collected first,
+  // ranked by total effective stats, and the top 3 join the battle.
+  const RAID_SUMMON_CAP = 3;
+  const summonCandidates = [];
+  state.summons = [];
+  // 💡 FIX #6: Reset threat for all players at combat start
+  if (state.players) threatSystem.resetThreat(state.players);
+  for (let pi = 0; pi < state.players.length; pi++) {
+    const player = state.players[pi];
+    if (!player.jid || player.isDead) continue;
+    try {
+      const user = economy.getUser(player.jid);
+      if (!user || !user.activeSummonId) continue;
+
+      const summonDoc = await summonSystem.getActiveSummon(user);
+      if (!summonDoc) continue;  // stale activeSummonId - already cleared by getActiveSummon
+
+      // 💡 FIX #7: Check summon death cooldown - if the summon died in a
+      // recent combat, it can't be redeployed yet. Skip silently (the player
+      // will notice their summon isn't there).
+      const cooldownExpiry = summonDeathCooldowns.get(summonDoc.summonId);
+      if (cooldownExpiry && Date.now() < cooldownExpiry) {
+        const remaining = Math.ceil((cooldownExpiry - Date.now()) / 60000);
+        console.log(`[SummonDeploy] ${summonDoc.nickname || summonDoc.species} on death cooldown for ${remaining}min`);
+        continue;
+      } else if (cooldownExpiry) {
+        // Cooldown expired - clean up
+        summonDeathCooldowns.delete(summonDoc.summonId);
+      }
+
+      const summonEntity = summonSystem.buildCombatEntity(summonDoc, player.jid);
+      if (summonEntity) {
+        // 💡 FIX 2026-08-03: Go service expects `ownerIndex` for owner-relative
+        // positioning of summons on the battlefield.
+        summonEntity.ownerIndex = pi;
+        summonEntity.summonerIndex = pi;
+        summonCandidates.push(summonEntity);
+      }
+    } catch (e) {
+      console.error('[Summon] Failed to deploy summon for', player.jid, ':', e?.message || e);
+    }
+  }
+
+  // 💡 Rank by strength (total effective stats incl. tier/loyalty/class bonuses)
+  // and keep only the top 3 for the raid.
+  const summonStrength = (s) => {
+    const st = s.stats || {};
+    return (st.maxHp || st.maxHP || st.hp || 0) + (st.atk || 0) + (st.def || 0) + (st.mag || 0) + (st.spd || 0);
+  };
+  const deployedSummons = summonCandidates
+    .sort((a, b) => summonStrength(b) - summonStrength(a))
+    .slice(0, RAID_SUMMON_CAP);
+  if (summonCandidates.length > RAID_SUMMON_CAP) {
+    console.log(`[SummonDeploy] Raid cap: ${summonCandidates.length} candidates -> top ${RAID_SUMMON_CAP} deployed`);
+  }
+  for (const s of deployedSummons) {
+    // 💡 FIX 2026-08-03: Go service expects `ownerIndex` for owner-relative
+    // positioning of summons on the battlefield.
+    state.summons.push(s);
+  }
+
+  // 💡 INITIALIZE ACTION GAUGE
+  const allCombatants = [
+    ...state.players.filter((p) => !p.isDead),
+    ...state.summons,  // 💡 Phase 2: summons in turn order
+    ...state.enemies,
+  ];
+
+  // 💡 FIRST-TURN GUARANTEE: Give players a head start so they always get
+  // at least 1 turn before any enemy acts. Players get full speed as
+  // initial gauge, enemies get 0. This means the fastest player will
+  // always reach the threshold first, giving them a chance to buff,
+  // heal, or attack before the boss responds.
+  allCombatants.forEach((c) => {
+    if (c.isEnemy || c.isBoss) {
+      c.actionGauge = 0; // Enemies start with 0 gauge
+    } else {
+      c.actionGauge = Math.floor((c.stats.spd || 10) / 2); // Players + summons get headstart
+    }
+  });
+
+  state.turnOrder = allCombatants;
+
+  // 💡 CRITICAL FIX (P1 follow-up): Dynamic gauge threshold based on max
+  // base speed in combat. With a hardcoded threshold of 100, any combatant
+  // with speed >= 100 reaches the threshold every single tick. Since
+  // turnOrder = [...players, ...enemies] (players first), the player is
+  // ALWAYS checked first and ALWAYS selected - enemies NEVER get a turn.
+  //
+  // This was the REAL root cause of "monsters not attacking": not the
+  // "highest gauge" selection logic (which the previous fix addressed), but
+  // the fact that high speed values made the gauge system meaningless.
+  //
+  // Dynamic threshold = max(100, 2 * maxBaseSpeed) ensures:
+  //   - The fastest combatant needs at least 2 ticks to act (not 1)
+  //   - Slower combatants accumulate gauge while the fast one is resetting
+  //   - Turn ratio approximates speed ratio (spd 500 vs 50 → ~10:1 turns)
+  //   - Low-speed combat (spd 10-50) is unaffected (threshold stays 100)
+  const maxBaseSpeed = Math.max(...allCombatants.map(c => c.stats.spd || 10));
+  state.gaugeThreshold = Math.max(100, maxBaseSpeed * 2);
+
+  // Build the turn order string to put in the first message's image caption
+  const orderList = state.turnOrder
+    .slice(0, 6)
+    .map((c) => {
+      const icon = c.isEnemy ? c.icon : c.class?.icon || "👤";
+      return `${icon} ${c.name}`;
+    })
+    .join(" → ");
+  const turnOrderStr = `⚔️ *Order:* ${orderList}${state.turnOrder.length > 6 ? " ..." : ""}`;
+
+  // NEW: Generate combat image and caption (with Turn Order merged)
+  // 💡 FIX 2026-07-31: 10s timeout - if Go service is slow, skip image
+  // 💡 FIX 2026-08-15: Pass floor so Abyss renders "FLOOR N" banner, not rank.
+  // ⚔️ RUINS (owner directive 2026-10-05 23:39Z): the battle happens IN the
+  // room — NO scene jump to the Go service's arena render (no banner, no
+  // map panel, no sprite swap). The image is the SAME roomScene render the
+  // player was just shown, with the live combat pools layered on top.
+  const isRuinsFight = state.mode === 'RUINS' && state.ruinsMeta;
+  // 🕳️ ABYSS OVERHAUL (owner brief abyss_overhaul_agent_brief.md 2026-10-09):
+  // abyss fights render through the node-canvas abyssScene (Ruins toolkit:
+  // content-measured sprites, contact shadows, frozen per-fight layout, the
+  // default HUD panel) — new forward-facing composition per the reference,
+  // not the Go arena render. Same return shape, same timeout + fallbacks.
+  const isAbyssFight = state.isAbyss === true;
+  const scenePromise = isRuinsFight
+    ? require('../guildwar/battleScene').renderBattleImage(state, { phase: 'START', turnOrderStr })
+    : isAbyssFight
+      ? require('./abyssScene').renderAbyssCombat(state, { phase: 'START', turnOrderStr })
+      : combatIntegration.generateCombatScene(
+    state.players,
+    state.enemies,
+    "START",
+    {
+      rank: state.dungeonRank,
+      floor: state.isAbyss ? state.abyssFloor : 0,
+      backgroundPath: state.backgroundPath,
+      summons: state.summons || [],
+      encounterInfo: {
+        ...encounter,
+        rank: state.dungeonRank,
+        floor: state.isAbyss ? state.abyssFloor : 0,
+        backgroundPath: state.backgroundPath,
+        turnOrderStr: turnOrderStr,
+        // ⚔️ ruins square map panel (bottom-right) - only for the START scene
+        encounter: state.ruinsMap ? { type: 'combat', map: state.ruinsMap } : undefined,
+        theme: encounter.theme || {
+          theme: "Battle",
+          description: "A fierce fight breaks out!",
+        },
+      },
+    },
+  );
+  const startTimeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Combat start image timeout (10s)')), 10000)
+  );
+  const scene = await Promise.race([scenePromise, startTimeoutPromise]);
+
+  // Store background for consistency
+  if (scene.backgroundPath) {
+    state.backgroundPath = scene.backgroundPath;
+  }
+  // ⚔️ FIX 2026-10-24: stash the scene the player is CURRENTLY looking at so
+  // the class-ultimate VFX (skillVfx) can reuse it as the pre-hit GIF base
+  // instead of racing a fresh Go render mid-cast (which blew its 8s budget on
+  // busy boxes and silently degraded the ultimate to a text line).
+  if (scene.success) {
+    state.lastCombatScene = scene.buffer
+      || (scene.imagePath && fs.existsSync(scene.imagePath) ? fs.readFileSync(scene.imagePath) : null);
+    // 💡 RPG OPT PASS (2026-10-20): bounded send — the old mediaError catch
+    // fired a text fallback immediately on a send error; a wedged-then-drained
+    // send made the image AND the text both arrive (duplicate battle-start
+    // messages). sendMediaBounded = one message, every time.
+    const startCap = scene.caption || "⚔️ Combat Started!";
+    try {
+      if (scene.buffer) {
+        await sendMediaBounded(sock, state.chatId, {
+          image: scene.buffer,
+          caption: scene.caption,
+        }, { label: 'combatStart', fallbackText: startCap });
+      } else if (scene.imagePath && fs.existsSync(scene.imagePath)) {
+        await sendMediaBounded(sock, state.chatId, {
+          image: fs.readFileSync(scene.imagePath),
+          caption: scene.caption,
+        }, { label: 'combatStart', fallbackText: startCap });
+        // Clean up temp file
+        setTimeout(() => {
+          if (fs.existsSync(scene.imagePath)) fs.unlinkSync(scene.imagePath);
+        }, 10000);
+      } else {
+        await sock.sendMessage(state.chatId, {
+          text: startCap,
+        });
+      }
+    } catch (mediaError) {
+      console.error("Media upload failed in startCombat:", mediaError.message);
+      try {
+        await sock.sendMessage(state.chatId, {
+          text: startCap,
+        });
+      } catch (err) {
+        console.error("Fallback text failed in startCombat:", err.message);
+      }
+    }
+  } else {
+    // Fallback to text if image fails
+    try {
+      await sock.sendMessage(state.chatId, {
+        text: scene.caption || "⚔️ Combat Started!",
+      });
+    } catch (err) {
+      console.error(
+        "Fallback text failed in startCombat (image failed):",
+        err.message,
+      );
+    }
+  }
+
+  // Wait before starting first turn.
+  // 💡 FIX 2026-10-03 (owner quest report "enemy takes too long to respond"):
+  // this was 120000ms for group quests - a copy-paste of REGISTRATION_TIME
+  // that left the party staring at the "Combat Started" scene for TWO FULL
+  // MINUTES before the first turn (enemy or player) was processed. That was
+  // the entire bottleneck in the quest-start -> encounter -> enemy-response
+  // pipeline; every other combat cadence constant is 2.5-10s. A short
+  // beat (4s) gives players a moment to read the scene without feeling
+  // like the enemy went AFK.
+  // 💡 DUNGEON FAST-LANE (2026-10-20): first-turn beat 4000 -> 2500 for group
+  // fights. Still a readable pause after the scene lands, but the party no
+  // longer stares at the START card an extra 1.5s before anything moves.
+  const startDelay = state.solo ? 0 : 2500;
+  // 💡 COMBAT RESUME (2026-10-14: group + auto extension of the 2026-10-11
+  // solo contract): snapshot the fight the moment it starts so a restart
+  // mid-first-turn still leaves a resume point (refreshed every action below).
+  // saveCombatSnapshot routes SOLO fights to SoloCombatSnapshot and GROUP
+  // party fights to GroupCombatSnapshot (dispatchers near resumeGroupCombat).
+  saveCombatSnapshot(sessionKey).catch(() => {});
+  state.timers.combatStart = setTimeout(async () => {
+    try {
+      if (!state.inCombat) return; // Safety check
+
+      // Simply process combat turn without sending a second turnMsg
+      await processCombatTurn(sock, sessionKey);
+    } catch (err) {
+      console.error("[Quest] combatStart timer error:", err?.message || err);
+    }
+  }, startDelay);
+}
+
+// ☠️ DEATH ANIMATIONS (owner 2026-11-03): every enemy / boss that dies breaks apart by type (fire explodes, water splashes, earth crumbles to
+// dust, void/dark things spiral into their own centre). INSTANT BY DESIGN (owner: "instant even for a large group"): the clips are PRE-BAKED in the
+// background while the fight is being played (first turn), through ONE global worker (never starves the bot), so a kill just sends a finished
+// buffer. A kill that beats its bake waits a short, bounded time for the in-flight job; anything slower is skipped - combat is never blocked.
+// Delivery stays a looping WhatsApp GIF-style clip (gifPlayback). Standard (Go-rendered) fights only; abyss / ruins keep the static card.
+const _deathQueue = []; let _deathBusy = false;
+function _deathPump() {
+  if (_deathBusy || !_deathQueue.length) return;
+  _deathBusy = true;
+  const job = _deathQueue.shift();
+  Promise.resolve().then(job.run).then(job.resolve, () => job.resolve(null)).finally(() => { _deathBusy = false; setImmediate(_deathPump); });
+}
+function _deathEnqueue(run) { return new Promise((resolve) => { if (_deathQueue.length > 16) return resolve(null); _deathQueue.push({ run, resolve }); _deathPump(); }); }
+const _deathEligible = (state) => !!(state && state.chatId && state.isAbyss !== true && !(state.mode === 'RUINS' && state.ruinsMeta));
+const _aliveSig = (state) => (state.players || []).filter((p) => p && !p.isDead && (p.stats ? p.stats.hp > 0 : true)).length + '/' + (state.summons || []).filter((s) => s && !s.isDead).length;
+// ⚡ one layered scene per fight (all enemies standing) shared by every death bake - one Go call instead of one per enemy
+function _deathScene(state) {
+  const key = (state.combatGen || 0) + ':' + (state.enemies || []).length + ':' + _aliveSig(state);
+  if (state._deathSceneP && state._deathSceneKey === key) return state._deathSceneP;
+  state._deathSceneKey = key;
+  state._deathSceneP = (async () => {
+    const combatImageGenerator = require('../combat/combatImageGenerator');
+    const roster = (state.enemies || []).map((x) => Object.assign({}, x, { isDead: false, justDied: false, currentHP: Math.max(1, Number(x.currentHP) || 1), stats: Object.assign({}, x.stats, { hp: Math.max(1, Number(x.stats && x.stats.hp) || 1) }) }));
+    const layers = await Promise.race([
+      combatImageGenerator.generateCombatLayers(state.players || [], roster, {
+        combatType: 'PVE', rank: state.dungeonRank, floor: 0, backgroundPath: state.backgroundPath || undefined,
+        summons: state.summons || [], hud: 'none', bypassQueue: true, focusSide: 'enemy', focusIndex: 0,
+      }),
+      // 30s: the box's COLD first scene measured 17.2s (14:16:54) — the old
+      // 20s cap was one bad Go round away from killing every first bake.
+      new Promise((r) => setTimeout(() => r(null), 30000)),
+    ]);
+    return layers && layers.success ? Object.assign({}, layers, { shared: true, focus: null }) : null;   // focus is cut per enemy in renderDeathVideo
+  })().catch(() => null);
+  return state._deathSceneP;
+}
+async function _bakeDeathClip(state, e, i) {
+  const t0 = Date.now();
+  try {
+    const signatureVfx = require('../combat/skillVfx'), combatImageGenerator = require('../combat/combatImageGenerator');
+    // 1) shared scene (cutouts include every enemy); 2) per-enemy fallback fetch if the shared one is unusable
+    let layers = await _deathScene(state);
+    const hasCut = !!(layers && Array.isArray(layers.cuts) && layers.cuts.some((c) => c && String(c.side) === 'enemy' && Math.floor(Number(c.index) || 0) === i && c.png));
+    if (!hasCut) {
+      const roster = (state.enemies || []).map((x, k) => (k === i ? Object.assign({}, x, { isDead: false, justDied: false, currentHP: 1, stats: Object.assign({}, x.stats, { hp: 1 }) }) : x));
+      layers = await Promise.race([
+        combatImageGenerator.generateCombatLayers(state.players || [], roster, {
+          combatType: 'PVE', rank: state.dungeonRank, floor: 0, backgroundPath: state.backgroundPath || undefined,
+          summons: state.summons || [], hud: 'none', bypassQueue: true, focusSide: 'enemy', focusIndex: i,
+        }),
+        new Promise((r) => setTimeout(() => r(null), 20000)),
+      ]);
+    }
+    if (!layers || !layers.success) { console.warn(`[DeathFx] bake ${e && e.name}: no layered scene after ${Date.now() - t0}ms`); return null; }
+    const clip = await signatureVfx.renderDeathVideo({ enemy: e, targetIndex: i, layers });
+    console.log(`[DeathFx] bake ${e && e.name} -> ${clip ? clip.kind + (clip.boss ? '/boss' : '') + ' ' + clip.mp4.length + 'B' : 'NULL'} in ${Date.now() - t0}ms (${hasCut ? 'shared scene' : 'own scene'})`);
+    return clip ? Object.assign(clip, { sig: _aliveSig(state) }) : null;
+  } catch (err) { console.warn(`[DeathFx] bake ${e && e.name} threw:`, err && err.message || err); return null; }
+}
+// 🎬 GROUP DEATH AS ONE UNIT (owner 2026-11-04: "when a group dies you
+// generate them individually and they are all still standing in with the
+// target dying in each gif, why don't you just send one and have them die as
+// a unit?"): several enemies dying on the SAME turn render as ONE clip —
+// every dying sprite breaks apart together in the shared scene, not one at a
+// time with the rest still standing. Returns a held-item { e, clip } where
+// clip.group lists the enemies inside the unit, or null — the caller falls
+// back to the per-enemy clips, which stay baked as solo-kill insurance.
+async function _bakeGroupDeathClip(state, dying) {
+  const t0 = Date.now();
+  try {
+    if (!dying || dying.length < 2) return null;
+    const group = dying.slice(0, 4);
+    const signatureVfx = require('../combat/skillVfx'), combatImageGenerator = require('../combat/combatImageGenerator');
+    // 1) shared scene (all enemies standing); 2) full-roster fallback fetch
+    let layers = await _deathScene(state);
+    const need = group.map((d) => d.i);
+    const hasAll = !!(layers && Array.isArray(layers.cuts) && need.every((i) => layers.cuts.some((c) => c && String(c.side) === 'enemy' && Math.floor(Number(c.index) || 0) === i && c.png)));
+    if (!hasAll) {
+      const roster = (state.enemies || []).map((x) => Object.assign({}, x, { isDead: false, justDied: false, currentHP: Math.max(1, Number(x.currentHP) || 1), stats: Object.assign({}, x.stats, { hp: Math.max(1, Number(x.stats && x.stats.hp) || 1) }) }));
+      layers = await Promise.race([
+        combatImageGenerator.generateCombatLayers(state.players || [], roster, {
+          combatType: 'PVE', rank: state.dungeonRank, floor: 0, backgroundPath: state.backgroundPath || undefined,
+          summons: state.summons || [], hud: 'none', bypassQueue: true, focusSide: 'enemy', focusIndex: need[0],
+        }),
+        new Promise((r) => setTimeout(() => r(null), 20000)),
+      ]);
+    }
+    if (!layers || !layers.success) { console.warn(`[DeathFx] group bake [${need.join(',')}]: no layered scene after ${Date.now() - t0}ms`); return null; }
+    const clip = await signatureVfx.renderDeathVideo({ targets: group.map(({ e, i }) => ({ enemy: e, targetIndex: i })), layers });
+    console.log(`[DeathFx] group bake [${group.map((d) => (d.e && d.e.name) || '?').join(' + ')}] -> ${clip ? clip.kind + (clip.boss ? '/boss' : '') + (clip.group ? ' unit=' + clip.group.length : ' PARTIAL') + ' ' + clip.mp4.length + 'B' : 'NULL'} in ${Date.now() - t0}ms (${hasAll ? 'shared scene' : 'own scene'})`);
+    if (!clip || !clip.mp4) return null;
+    return { e: group[0].e, clip: Object.assign(clip, { sig: _aliveSig(state) }) };
+  } catch (err) { console.warn('[DeathFx] group bake threw:', err && err.message || err); return null; }
+}
+// ☠️ caption for a held death item — a group unit names every member
+// ("☠️ *A*, *B* & *C* fall!"); solo items keep the exact old line
+function _deathCaption(item) {
+  const grp = (item.clip && item.clip.group) || null;
+  if (grp && grp.length > 1) {
+    const names = grp.map((g) => `*${(g && g.name) || 'The enemy'}*`);
+    const last = names.pop();
+    const boss = grp.some((g) => g && (g.isBoss || g.boss || /boss/i.test(String(g.rank || g.tier || ''))));
+    return `☠️ ${names.join(', ')} & ${last} ${boss ? 'are destroyed!' : 'fall!'}`;
+  }
+  return `☠️ *${item.e.name || 'The enemy'}* ${item.clip.boss ? 'is destroyed!' : 'falls!'}`;
+}
+// JPEG dimensions without a subprocess: walk the marker segments to the SOF
+// (start-of-frame) and read width/height. Works for baseline (SOF0) and
+// progressive (SOF2) — the box's ffprobe 6.1 HANGS on the GoService-rendered
+// settlement card (13:59:35 "card probe failed" after the full 5s timeout),
+// so this is the primary path; ffprobe is only a labelled fallback now.
+function _jpegDims(buf) {
+  try {
+    if (!buf || buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return null;
+    let i = 2;
+    while (i + 9 < buf.length) {
+      if (buf[i] !== 0xff) { i++; continue; }
+      const m = buf[i + 1];
+      if (m === 0xff) { i++; continue; }                       // padding byte
+      if (m === 0xd8 || (m >= 0xd0 && m <= 0xd9)) { i += 2; continue; } // no length field
+      const len = buf.readUInt16BE(i + 2);
+      if (len < 2) return null;
+      if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) {
+        return { h: buf.readUInt16BE(i + 5), w: buf.readUInt16BE(i + 7) };
+      }
+      i += 2 + len;
+    }
+  } catch {}
+  return null;
+}
+
+// 🎬 MERGED END CARD (owner 2026-11-04 "there shouldn't be a static image
+// and a gif both saying the enemy has been defeated"): bake the death
+// clip(s) + the settlement card into ONE WhatsApp video — the enemy
+// shatters, then the card settles on screen with the damage info. The card
+// defines the canvas (it is the final held frame, so it must render
+// full-bleed); clips are scaled/padded into it. Re-encode via ffmpeg
+// libx264 yuv420p +faststart — the same proven arg set as
+// animatedMedia.webmToMp4. ANY failure returns null → the caller falls
+// back to the old clip+card sends.
+async function _mergeDeathClipsWithCard(clips, cardJpeg, cardHoldSec = 1.8) {
+  const t0 = Date.now();
+  const { execFile } = require('child_process');
+  const run = (bin, args, ms) => new Promise((resolve, reject) => {
+    execFile(bin, args, { timeout: ms, maxBuffer: 4 * 1024 * 1024 }, (err, _stdout, stderr) => {
+      if (err) { const tail = String(stderr || '').split('\n').filter(Boolean).slice(-2).join(' | '); reject(new Error(`${bin}: ${err.message}${tail ? ' — ' + tail : ''}`)); }
+      else resolve(_stdout);
+    });
+  });
+  const dir = path.join(require('os').tmpdir(), `deathcard-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const cardPath = path.join(dir, 'card.jpg');
+    fs.writeFileSync(cardPath, cardJpeg);
+    // target geometry = the settlement card. PRIMARY: pure-JS SOF parse
+    // (subprocess-free — ffprobe 6.1 hangs on this exact jpeg). FALLBACK:
+    // ffprobe with an explicit demuxer and a tight 3s leash.
+    let W = 0, H = 0, via = 'sof';
+    const jd = _jpegDims(cardJpeg);
+    if (jd && jd.w > 0 && jd.h > 0) { W = jd.w; H = jd.h; }
+    else {
+      via = 'ffprobe';
+      const probeOut = await run('ffprobe', ['-v', 'error', '-f', 'image2', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', cardPath], 3000).catch(() => null);
+      const dims = String(probeOut || '').trim().split(/[,\n]/).map((s) => parseInt(s, 10)).filter((n) => n > 0);
+      if (dims.length >= 2) { W = dims[0]; H = dims[1]; }
+    }
+    if (!W || !H) throw new Error('card dims unavailable (sof+ffprobe)');
+    console.log(`[DeathFx] merged card canvas ${W}x${H} (via ${via})`);
+    // 1) card → held still segment (native size, defines the canvas)
+    const cardSeg = path.join(dir, 'cardseg.mp4');
+    await run('ffmpeg', ['-y', '-loop', '1', '-i', cardPath, '-t', String(cardHoldSec), '-r', '30', '-vf', 'setsar=1', '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-an', cardSeg], 10000);
+    // 2) normalize every clip into the card canvas, concat clips→card
+    const args = ['-y'];
+    const chain = [];
+    clips.forEach((c, k) => {
+      const p = path.join(dir, `clip${k}.mp4`);
+      fs.writeFileSync(p, c.mp4);
+      args.push('-i', p);
+      chain.push(`[${k}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30[v${k}]`);
+    });
+    args.push('-i', cardSeg);
+    chain.push(`[${clips.length}:v]setsar=1,fps=30[v${clips.length}]`);
+    chain.push(`${clips.map((_, k) => `[v${k}]`).join('')}[v${clips.length}]concat=n=${clips.length + 1}:v=1:a=0[v]`);
+    const outPath = path.join(dir, 'merged.mp4');
+    args.push('-filter_complex', chain.join(';'), '-map', '[v]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', outPath);
+    await run('ffmpeg', args, 15000);
+    const out = fs.readFileSync(outPath);
+    if (!out || out.length < 1000) throw new Error('merged output empty');
+    if (out.length > 16 * 1024 * 1024) throw new Error(`merged too large for WA (${out.length}B)`);
+    console.log(`[DeathFx] merged card bake: ${clips.length} clip(s)+card ${W}x${H} -> ${out.length}B in ${Date.now() - t0}ms`);
+    return out;
+  } catch (err) {
+    console.warn(`[DeathFx] merged card bake failed after ${Date.now() - t0}ms:`, err.message);
+    return null;
+  } finally {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+  }
+}
+
+// old behavior preserved verbatim: clips as their own messages (merge
+// unavailable / render failed — the enemy-defeat announce must never vanish)
+async function _flushHeldDeathClips(sock, state, held) {
+  for (const item of held) {
+    const pl = { video: item.clip.mp4, mimetype: 'video/mp4', caption: _deathCaption(item), gifPlayback: true };
+    if (Buffer.isBuffer(item.clip.thumb)) pl.jpegThumbnail = item.clip.thumb;
+    await sendMediaBounded(sock, state.chatId, pl, { label: 'enemyDeathVfx', ms: 12000, grace: 4000, fallbackText: null });
+  }
+}
+// consumes THIS fight's held kill clips and plays them as their own messages —
+// used by every no-board path in nextTurn (no turnInfo / render failed /
+// already-animated turn) so the announce is never silently swallowed
+async function _flushHeldTurnClips(sock, state, why) {
+  try {
+    const t = state && state._heldDeathClips;
+    if (t && (t.items || []).length && t.gen === ((state && state.combatGen) || 0)) {
+      state._heldDeathClips = null;
+      console.log(`[DeathFx] held clips flushed as own messages (${why})`);
+      await _flushHeldDeathClips(sock, state, t.items);
+    }
+  } catch (e) { console.warn('[DeathFx] held flush failed:', e && e.message || e); }
+}
+
+// called once per fight (first turn): queue a background bake for every enemy, weakest first
+function startDeathBake(state) {
+  try {
+    if (!_deathEligible(state) || state._deathBake === state.combatGen + ':' + (state.enemies || []).length) return;
+    state._deathBake = state.combatGen + ':' + (state.enemies || []).length;
+    // 🧷 JOB REGISTRY: jobs also live on the STATE keyed by combatGen+index,
+    // because prod proved the kill path can see enemy objects with NO
+    // _deathJob even seconds after startDeathBake queued them (13:53:19
+    // "NO clip (job=false)" while bakes were mid-flight). The registry
+    // survives whatever rebuilds the enemy objects inside a fight.
+    if (!state._deathJobReg || state._deathJobReg.gen !== (state.combatGen || 0)) state._deathJobReg = { gen: state.combatGen || 0, byIdx: {} };
+    const order = (state.enemies || []).map((e, i) => ({ e, i })).filter((x) => x.e && x.e.isEnemy !== false && !x.e._deathJob).sort((a, b) => (a.e.isBoss ? 1 : 0) - (b.e.isBoss ? 1 : 0) || (Number(a.e.currentHP ?? a.e.stats?.hp) || 0) - (Number(b.e.currentHP ?? b.e.stats?.hp) || 0)).slice(0, 8);   // weakest first: they fall first
+    for (const { e, i } of order) e._deathJob = state._deathJobReg.byIdx[i] = _deathEnqueue(() => _bakeDeathClip(state, e, i));
+  } catch (err) { console.warn('[DeathFx] bake skipped:', err && err.message || err); }
+}
+async function playEnemyDeaths(sock, state, opts = {}) {
+  try {
+    if (!sock || !_deathEligible(state)) { if (state && state.inCombat && (state.enemies || []).some((x) => x && x.stats && x.stats.hp <= 0 && !x._deathAnimDone)) console.log(`[DeathFx] skipped: sock=${!!sock} chatId=${!!(state && state.chatId)} isAbyss=${state && state.isAbyss} mode=${state && state.mode}`); return; }
+    // 🧹 stale hold sweep: clips held for a board that never came (fight
+    // superseded, no-board path) must still play — lazily here instead of
+    // racing the next turn's merge.
+    try { const __stale = state._heldDeathClips; if (__stale && (__stale.gen !== (state.combatGen || 0) || Date.now() - (__stale.at || 0) > 45000) && (__stale.items || []).length) { state._heldDeathClips = null; console.log(`[DeathFx] flushing stale held clips (gen=${__stale.gen} vs ${state.combatGen || 0}, age=${Date.now() - (__stale.at || 0)}ms)`); await _flushHeldDeathClips(sock, state, __stale.items); } } catch (se) { console.warn('[DeathFx] stale flush failed:', se && se.message || se); }
+    const fresh = (state.enemies || []).map((e, i) => ({ e, i })).filter((x) => x.e && x.e.isEnemy !== false && !x.e._deathAnimDone && (x.e.justDied || x.e.isDead || (x.e.stats && x.e.stats.hp <= 0)));
+    if (!fresh.length) return;
+    fresh.forEach((x) => { x.e._deathAnimDone = true; });   // flag first: idempotent across checkCombatEnd / nextTurn
+    const t0 = Date.now();
+    // ⏱ leash: a held kill waits on the in-flight bake before its board
+    // merge — 18s when a board is coming (the turn flow continues anyway),
+    // 12s when the clips will go out as their own messages.
+    const leashMs = opts.hold ? 18000 : 12000;
+    let ready = [];
+    if (fresh.length > 1) {
+      // 🎬 GROUP-AS-UNIT: several kills on the same beat render as ONE clip
+      // where the whole dead group breaks apart together. The per-enemy clips
+      // stay as the fallback (a missed unit must never eat the announce).
+      const grp = await Promise.race([
+        _bakeGroupDeathClip(state, fresh),
+        new Promise((r) => setTimeout(() => r(null), leashMs)),
+      ]);
+      if (grp && grp.clip && grp.clip.mp4 && grp.clip.sig === _aliveSig(state)) ready = [grp];
+      else console.warn(`[DeathFx] group unit missed (${fresh.length} dying, ${Date.now() - t0}ms) - per-enemy fallback`);
+    }
+    if (!ready.length) {
+      // resolve every dying enemy's clip in PARALLEL (baked = instant); a missing bake gets a short live attempt through the same worker
+      const clips = await Promise.all(fresh.slice(0, 3).map(async ({ e, i }) => {
+      let job = e._deathJob || null;
+      // 🧷 identity heal: the kill may see an enemy object that lost its
+      // _deathJob (prod 13:53:19) — fall back to the per-fight registry.
+      const __reg = state._deathJobReg;
+      if (!job && __reg && __reg.gen === (state.combatGen || 0) && __reg.byIdx[i]) job = __reg.byIdx[i];
+      if (!job) { try { startDeathBake(state); } catch (bakeErr) {} const __reg2 = state._deathJobReg; if (__reg2 && __reg2.gen === (state.combatGen || 0) && __reg2.byIdx[i]) { job = __reg2.byIdx[i]; console.log(`[DeathFx] ${e.name}: kill beat every bake - bake started at kill time (idx=${i}, gen=${state.combatGen || 0})`); } }
+      // a kill on the very first turns can beat the background bake: wait for the in-flight bake (the box is slow, a late clip beats none)
+      let clip = job ? await Promise.race([job, new Promise((r) => setTimeout(() => r(undefined), leashMs))]) : undefined;
+      if (clip && clip.sig !== _aliveSig(state)) { console.log(`[DeathFx] ${e.name}: roster changed since bake (${clip.sig} vs ${_aliveSig(state)}) - re-rendering`); clip = null; }   // stale backdrop
+      if (!clip && (clip === null || !job)) clip = await Promise.race([_deathEnqueue(() => _bakeDeathClip(state, e, i)), new Promise((r) => setTimeout(() => r(null), leashMs))]);
+      if (!clip || !clip.mp4) console.warn(`[DeathFx] ${e.name}: NO clip (job=${!!job}, idx=${i}, gen=${state.combatGen || 0}, baked=${Date.now() - t0}ms) - falling back to the static card`);
+      return clip && clip.mp4 ? { e, clip } : null;
+    }));
+      ready = clips.filter(Boolean);
+    }
+    // 🎬 KILL-TURN CARD (owner 2026-11-04, corrected directive): hold the
+    // clips — the NEXT turn board burns them into ONE video = death
+    // animation + the regular combat message (war-log board). gen-stamped so
+    // a superseded fight can never leak clips into the next one.
+    if (opts.hold && ready.length) {
+      state._heldDeathClips = { gen: state.combatGen || 0, at: Date.now(), items: ready };
+      console.log(`[DeathFx] held ${ready.length} clip(s) for the kill-turn card`);
+      return;
+    }
+    await Promise.all(ready.map((item) => {
+      const pl = { video: item.clip.mp4, mimetype: 'video/mp4', caption: _deathCaption(item), gifPlayback: true };
+      if (Buffer.isBuffer(item.clip.thumb)) pl.jpegThumbnail = item.clip.thumb;
+      return sendMediaBounded(sock, state.chatId, pl, { label: 'enemyDeathVfx', ms: 12000, grace: 4000, fallbackText: null });
+    }));
+    if (ready.length) console.log(`[DeathFx] ${ready.map((r) => r.clip.kind + (r.clip.boss ? '/boss' : '')).join(',')} delivered in ${Date.now() - t0}ms`);
+  } catch (err) { console.warn('[DeathFx] skipped:', err && err.message || err); }
+}
+
+async function checkCombatEnd(sock, state, sessionKey) {
+  // 💡 ROUND-19 FIX (owner 2026-10-10 14:06Z quest-skip report): a stale
+  // resolution landing BETWEEN fights saw the previous roster (all dead) or
+  // an empty `state.enemies` and `.every()` returned TRUE on the vacuous
+  // roster — declaring an instant victory for a boss that was never fought.
+  // Screenshot proof: Mutation Prime splash → stale VICTORY card (+7000/
+  // +25892, the PREVIOUS fight's numbers) → BATTLE COMMENCES → tally with
+  // BOSSES DEFEATED: 0 → "🎉 QUEST COMPLETE!" the boss never earned, and
+  // questsCompleted never moved (no boss-kill progress → "didn't get counted
+  // as a quest"). Two hard gates now:
+  //   1. combat must be LIVE — between-fight windows are dead to resolutions;
+  //   2. victory requires a NON-EMPTY enemy roster — `.every()` on `[]`
+  //      is vacuously true and must never read as "all enemies dead".
+  if (!state || !state.inCombat) return false;
+  if (state._ultHold) return false;   // an ultimate is mid-resolution: its merged clip plays first, performAction ends the fight right after
+  if (!sock) sock = state.sock || state.sock_ref;
+  // 💡 ROUND-19: generation stamp — a resolution from a superseded fight
+  // (stale timer / stale turn-loop iteration that kept running after
+  // endCombat and re-armed on the NEXT fight's state) must not resolve
+  // this one. Every startCombat bumps combatGen.
+  const combatGen = state.combatGen || 0;
+  const playersDead = state.players.every((p) => p.isDead || p.stats.hp <= 0);
+  const enemiesDead = state.enemies.length > 0 && state.enemies.every((e) => e.stats.hp <= 0);
+  // 🎬 KILL-TURN CARD (owner 2026-11-04, corrected directive: "the GIF would
+  // simply be attached to the battle log itself" — NOT the win message):
+  // every kill while the party lives holds its clips; the turn board that
+  // follows (nextTurn sends it on the SAME flow — even on the fight-ending
+  // path) burns them into ONE video = death animation + war-log board.
+  // The victory/settlement card goes out plain, exactly as it always did.
+  await playEnemyDeaths(sock, state, { hold: !playersDead });
+
+  if (playersDead || enemiesDead) {
+    // Clear any pending turn timers to prevent infinite loops
+    if (state.timers.turn) {
+      clearTimeout(state.timers.turn);
+      state.timers.turn = null;
+    }
+    // 💡 FIX: if BOTH sides die on the same turn (mutual destruction),
+    // the original code passed `enemiesDead=true` as victory - treating
+    // a party wipe as a win. Now: if the party is also dead, it's a
+    // defeat regardless of enemy state. Only count as victory if the
+    // party has at least one survivor.
+    const victory = enemiesDead && !playersDead;
+    await endCombat(sock, victory, sessionKey, combatGen);
+    return true;
+  }
+  return false;
+}
+
+// Race one automated turn against a watchdog without leaving a live timeout
+// behind after success. The old Promise.race timers were never cleared, so a
+// perfectly successful turn could increment watchdogStrikes 60/90 seconds
+// later. Several of those delayed callbacks could collapse an actively played
+// dungeon. A timeout counts once; a late completion cannot undo that strike.
+async function runTurnWithWatchdog(state, label, work, timeoutMs, resetOnSuccess = true) {
+  let timer = null;
+  let settled = false;
+  const timeoutResult = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      state.watchdogStrikes = (state.watchdogStrikes || 0) + 1;
+      console.warn(`[Quest] ⏱️ ${label} watchdog fired for ${state.sessionKey || state.chatId || '?'} — advancing`);
+      resolve({ timedOut: true });
+    }, timeoutMs);
+  });
+
+  const workResult = Promise.resolve()
+    .then(work)
+    .then((value) => {
+      if (!settled) {
+        settled = true;
+        if (timer) clearTimeout(timer);
+        if (resetOnSuccess) state.watchdogStrikes = 0;
+      }
+      return { timedOut: false, value };
+    }, (error) => {
+      if (!settled) {
+        settled = true;
+        if (timer) clearTimeout(timer);
+      }
+      throw error;
+    });
+
+  return Promise.race([workResult, timeoutResult]);
+}
+
+async function processCombatTurn(sock, sessionKey) {
+  // 🫀 liveness v2: automated combat turn = a match is LIVE. The canary holds
+  // its stall-kill for this grace window instead of SIGKILLing mid-quest
+  // (2026-10-11: a recovering 78s memory stall ate a player's quest turn).
+  try { require('../../../utils/livenessCanary').noteBattleActivity(); } catch (e) {}
+  const state = gameStates.get(sessionKey);
+  if (!state || !state.inCombat) return;
+
+  // 💡 ROUND-19: capture this fight's generation. If a NEWER fight starts
+  // while this loop is still draining (awaited sends can outlive endCombat
+  // by seconds), the loop must die instead of re-arming on the next
+  // fight's state — that stale-armed loop calling checkCombatEnd was the
+  // trigger path of the ghost-victory boss skip.
+  const combatGenAtLoopStart = state.combatGen || 0;
+
+  // Prevent overlapping turn processing
+  if (state.combatProcessing) return;
+  state.combatProcessing = true;
+
+  try {
+    while (state.inCombat) {
+      // 💡 ROUND-19: a newer fight owns this state — stop immediately.
+      if ((state.combatGen || 0) !== combatGenAtLoopStart) {
+        console.warn(
+          `[Quest] turn loop aborted: combat gen moved (${combatGenAtLoopStart} → ${state.combatGen || 0}) for ${sessionKey}`,
+        );
+        return;
+      }
+      // 💡 SOLO-RAID CIRCUIT BREAKER (2026-10-23, Task 9): watchdog
+      // advances are counted per session (see the enemy/summon/AFK race
+      // sites). 5 consecutive advances with NO real player action means
+      // every automated turn is wedging — a zombie loop that used to pin
+      // "You already have an active Solo raid!" until a restart. Collapse
+      // the fight cleanly and release the slot.
+      if ((state.watchdogStrikes || 0) >= 5) {
+        console.error(`[Quest] 💥 circuit breaker: ${state.watchdogStrikes} watchdog advances without player action for ${sessionKey} — collapsing zombie fight`);
+        state.inCombat = false;
+        state.active = false;
+        state.phase = "IDLE";
+        state.watchdogStrikes = 0;
+        if (state.timers) Object.values(state.timers).forEach((t) => { if (t) clearTimeout(t); });
+        try { clearCombatSnapshot(state).catch(() => {}); } catch (e) {}
+        try { cleanupCoopIndexForSession(sessionKey); } catch (e) {}
+        gameStates.delete(sessionKey);
+        boundedSend(sock, state.chatId, {
+          text: `☠️ *THE RAID DESTABILIZED*
+
+The dungeon collapsed after too many stalled turns. Your slot has been released — start fresh with \`${botConfig.getPrefix()} solo <rank>\`.`,
+        }, 'collapse').catch(() => {});
+        return;
+      }
+      // 💡 RPG OPT PASS (2026-10-20): liveness stamp for the state reaper —
+      // a LIVE loop can never go 30min without ticking (longest single wait
+      // = the 4-min player window), so a stale stamp + combatProcessing stuck
+      // = wedged loop the reaper can now safely reap (see the sweeper).
+      state.lastLoopTick = Date.now();
+      // Reset justDied flags
+      state.players.forEach((p) => (p.justDied = false));
+      state.enemies.forEach((e) => (e.justDied = false));
+
+      // 💡 FIX: tick down enemy cooldowns each turn so monster skills
+      // actually go on cooldown (previously cooldowns were checked by
+      // monsterSkills.js:553 but never decremented - so once a cooldown
+      // was set, it stayed set forever, blocking the skill permanently).
+      // We decrement by 1 each round and delete when it reaches 0.
+      state.enemies.forEach((e) => {
+        if (!e.cooldowns) return;
+        for (const k of Object.keys(e.cooldowns)) {
+          e.cooldowns[k] = Math.max(0, (e.cooldowns[k] || 0) - 1);
+          if (e.cooldowns[k] <= 0) delete e.cooldowns[k];
+        }
+      });
+
+      // 💡 FIX #36: Also tick down PLAYER skill cooldowns each turn.
+      // Previously player cooldowns were never tracked or decremented,
+      // so once a skill was used it stayed on "cooldown" forever (or
+      // was never enforced at all). Now we track and decrement them.
+      state.players.forEach((p) => {
+        if (!p.skillCooldowns) return;
+        for (const k of Object.keys(p.skillCooldowns)) {
+          p.skillCooldowns[k] = Math.max(0, (p.skillCooldowns[k] || 0) - 1);
+          if (p.skillCooldowns[k] <= 0) delete p.skillCooldowns[k];
+        }
+      });
+
+      // 💡 CLASS PASSIVE WIRE-UP (per-turn): fire team_healing, regen,
+      // first_turn_bonus, rotate_elements at the start of each combat round.
+      // Messages are accumulated and appended to the combat log below.
+      const passiveMsgsThisRound = [];
+      state.players.forEach((p) => {
+        try {
+          const msgs = applyClassPassivePerTurn(p, state);
+          if (msgs && msgs.length > 0) passiveMsgsThisRound.push(...msgs);
+        } catch (e) {
+          console.error('[Passive] applyClassPassivePerTurn failed:', e?.message || e);
+        }
+        // 💡 AUDIT FIX 2026-08-01: also apply skill-tree per-turn passives
+        // (Soul of the Deep regen). Was previously dead code.
+        try {
+          const msgs = applySkillPassivesPerTurn(p, state);
+          if (msgs && msgs.length > 0) passiveMsgsThisRound.push(...msgs);
+        } catch (e) {
+          console.error('[Passive] applySkillPassivesPerTurn failed:', e?.message || e);
+        }
+      });
+      if (passiveMsgsThisRound.length > 0) {
+        // Stash for nextTurn message composition - see usage further down
+        state.pendingPassiveMsgs = passiveMsgsThisRound;
+      } else {
+        state.pendingPassiveMsgs = null;
+      }
+
+      let activeActor = null;
+      let ticks = 0;
+      const maxTicks = 1000;
+
+      // 💡 QA FIX: turn order - was "pick highest gauge > 99", which meant
+      // fast players ALWAYS had a higher gauge than enemies and enemies
+      // NEVER got a turn. The first fix changed to "first in turnOrder with
+      // gauge >= threshold" - but that caused turn STARVATION in multi-combatant
+      // fights: when several combatants reached the threshold on the same tick,
+      // the one earliest in turnOrder was always picked, and later combatants
+      // (especially the last enemy) never got a turn.
+      //
+      // 💡 FINAL FIX: "highest gauge among those >= threshold" + dynamic
+      // threshold + reset to 0. This is the correct gauge-based turn scheduler:
+      //   - Dynamic threshold (2 * maxBaseSpeed) prevents any combatant from
+      //     acting every single tick
+      //   - "Highest gauge" selection prioritizes combatants who have been
+      //     waiting the longest (accumulated the most excess gauge)
+      //   - Reset to 0 (not -= threshold) discards excess, so slower
+      //     combatants can catch up and eventually out-accumulate faster ones
+      //   - Turn ratio approximates speed ratio (spd 500 vs 50 → ~10:1 turns)
+      //   - No starvation: every combatant gets turns proportional to speed
+      const gaugeThreshold = state.gaugeThreshold || 100;
+      while (!activeActor && ticks < maxTicks) {
+        ticks++;
+        // Increment every living combatant's gauge this tick
+        for (const c of state.turnOrder) {
+          if (c.stats.hp <= 0) continue;
+
+          let speed = c.stats.spd || 10;
+          if (state.environment?.id === "ICE_CAVE" && !c.isEnemy)
+            speed = Math.floor(speed * 0.9);
+
+          const cEffects = c.statusEffects || [];
+          if (cEffects.some((e) => e.type === "haste")) speed *= 1.3;
+          if (cEffects.some((e) => e.type === "slow")) speed *= 0.5;
+          if (cEffects.some((e) => e.type === "curse" || e.type === "weak"))
+            speed *= 0.8;
+
+          // 💡 FIX #3 (2026-08-15): Rubber-band gauge increment - every combatant
+          // gains at least 15% of gaugeThreshold per tick. This prevents low-SPD
+          // summons (SPD 40) from being starved when the party has a high-SPD player
+          // (SPD 500). Before: summon needed 25 ticks/turn (12.5:1 ratio vs player).
+          // After: summon needs max 7 ticks/turn (3.5:1 ratio). Enemies also benefit
+          // so they get turns even when the player is much faster.
+          c.actionGauge = (c.actionGauge || 0) + Math.max(gaugeThreshold * 0.15, speed);
+        }
+        // Pick the combatant with the HIGHEST gauge among those >= threshold.
+        // Ties are broken by turnOrder position (earlier combatant wins).
+        let highestGauge = -1;
+        for (const c of state.turnOrder) {
+          if (c.stats.hp <= 0) continue;
+          if (c.actionGauge >= gaugeThreshold && c.actionGauge > highestGauge) {
+            activeActor = c;
+            highestGauge = c.actionGauge;
+          }
+        }
+      }
+
+      if (!activeActor) break;
+
+      // 💡 FIX #37: Prevent same actor from acting twice in a row. After
+      // acting, the actor's gauge resets to 0. But if their speed is high
+      // enough, they can re-qualify on the very next tick before any other
+      // combatant reaches the threshold. This is especially common for
+      // high-speed bosses (S+ rank at 126%+ of player speed). The fix:
+      // if the same actor was just selected, skip them and let the gauge
+      // loop continue until a DIFFERENT combatant qualifies.
+      //
+      // 💡 FIX (Item #3 - "boss attacks twice per player"): the original
+      // fix #37 had a hole. When the same actor was selected again and
+      // NO other combatant was close to qualifying (c.actionGauge + cSpeed
+      // < threshold for all), the code fell through and let the same
+      // actor act again. For a boss with speed 100 vs player speed 10
+      // and threshold 200, the boss would re-qualify every 2 ticks while
+      // the player's gauge crawled - causing the boss to attack 10x for
+      // every 1 player turn. Now: in the "no alternative close" case,
+      // we force `activeActor = null` and continue the gauge loop. The
+      // boss's gauge keeps accumulating (not reset since they didn't
+      // act), so eventually the player WILL qualify and get a turn.
+      // The maxTicks=1000 safety limit prevents infinite loops in
+      // degenerate cases (e.g. player speed 0).
+      if (state.lastActorId && activeActor.id === state.lastActorId) {
+        // Same actor would act again - check if ANY other combatant also
+        // qualifies. If yes, let them go instead. If no, allow the repeat
+        // (otherwise combat could soft-lock with only one qualifying actor).
+        let alternativeFound = false;
+        for (const c of state.turnOrder) {
+          if (c.stats.hp <= 0) continue;
+          if (c.id === activeActor.id) continue;
+          if (c.actionGauge >= gaugeThreshold) {
+            alternativeFound = true;
+            activeActor = c;
+            break;
+          }
+        }
+        // If no alternative qualifies, check if any other combatant is
+        // close to qualifying. If so, give them this tick. If NOT close,
+        // STILL force a tick - don't let the same actor act twice in a
+        // row just because others are far behind. The gauge loop will
+        // keep ticking until someone else qualifies or maxTicks is hit.
+        if (!alternativeFound) {
+          // 💡 FIX (Item #3): previously only set activeActor=null if
+          // someone was close. Now ALWAYS set null and re-tick. This is
+          // the core fix for "boss attacks twice per player."
+          activeActor = null;
+          continue; // Re-enter the while loop for another tick
+        }
+      }
+      state.lastActorId = activeActor.id;
+
+      // 💡 QA FIX: reset gauge to 0 (was -= 100). With -= 100, a fast
+      // player's gauge stayed above 100 permanently, preventing enemies
+      // from ever being picked. Reset to 0 gives slower combatants a
+      // window to act before the fast combatant builds up again.
+      activeActor.actionGauge = 0;
+      state.activeCombatant = activeActor;
+      state.turnCount = (state.turnCount || 0) + 1;
+      // 💡 FIX: increment combatRound so first_turn_bonus and rotate_elements
+      // passives work correctly. Was never incremented - first_turn_bonus
+      // applied every turn, rotate_elements always picked element[0].
+      if (activeActor && !activeActor.isEnemy) {
+        // Increment round when a PLAYER acts (not enemy) so round = player turns
+        state.combatRound = (state.combatRound || 0) + 1;
+      }
+
+      if (activeActor.isBoss) {
+        if (
+          state.turnCount === 15 ||
+          state.turnCount === 20 ||
+          state.turnCount === 25
+        ) {
+          activeActor.stats.atk = Math.floor(activeActor.stats.atk * 1.05);
+          state.pendingStatusMsg =
+            (state.pendingStatusMsg ? state.pendingStatusMsg + "\n" : "") +
+            `⚠️ *${activeActor.name}* grows more violent!`;
+        }
+        // 💡 RAID-ONLY (2026-09-12, owner directive): Total Annihilation was
+        // designed as a RAID-boss mechanic - a party survival puzzle (healers
+        // top up, CC the boss, spread the 70% hit). It should NEVER have been
+        // reachable by SOLO bosses: a lone player has no healer, no meat
+        // shields and no revive buffer. Gate the whole package (telegraph +
+        // cast) on group dungeons (state.solo === false). Solo quests and
+        // Abyss (both state.solo === true) keep only the +5% ATK enrage.
+        if (!state.solo && state.turnCount === 28) {
+          state.pendingStatusMsg =
+            (state.pendingStatusMsg ? state.pendingStatusMsg + "\n" : "") +
+            `☠️ *${activeActor.name}* is channeling TOTAL ANNIHILATION - brace yourselves!`;
+        }
+        if (!state.solo && state.turnCount > 30) {
+          // 💡 NERF (2026-09-12): TOTAL ANNIHILATION reworked - see the
+          // applyTotalAnnihilation helper. Casts re-arm 10 turns apart.
+          const castDue =
+            !state.lastAnnihilationTurn ||
+            state.turnCount - state.lastAnnihilationTurn >= 10;
+          if (castDue) {
+            const ann = applyTotalAnnihilation(state);
+            try {
+              await sock.sendMessage(state.chatId, { text: ann.msg });
+            } catch (e) {}
+            if (ann.wiped) {
+              await endCombat(sock, false, sessionKey);
+              return;
+            }
+            // The cast (or fizzle) consumes the boss's turn - mirror the
+            // normal turn housekeeping: effect ticks, death check, duration
+            // ticks, then advance without a normal boss action.
+            const annStatusMsgs = applyEffectTicks(activeActor);
+            if (annStatusMsgs.length > 0) {
+              state.pendingStatusMsg = state.pendingStatusMsg
+                ? state.pendingStatusMsg + "\n" + annStatusMsgs.join("\n")
+                : annStatusMsgs.join("\n");
+            }
+            if (activeActor.stats.hp <= 0) {
+              await handleDeath(sock, activeActor, sessionKey);
+              if (await checkCombatEnd(sock, state, sessionKey)) return;
+              continue;
+            }
+            const annExpireMsgs = tickDurations(activeActor);
+            if (annExpireMsgs.length > 0) {
+              state.pendingStatusMsg = annExpireMsgs.join("\n");
+            }
+            await nextTurn(sock, null, sessionKey);
+            // 💡 DUNGEON FAST-LANE (2026-10-20): AI-turn pacing 1000/2500 -> 800/1500.
+            // The gap exists so consecutive AI/skip turns don't flood the chat;
+            // 1500ms keeps that guarantee while cutting ~40% dead time per
+            // boss-cast round in group fights.
+            await new Promise((r) => setTimeout(r, state.solo ? 800 : 1500));
+            continue;
+          }
+        }
+      }
+
+      // 💡 BUG-07/08/09 fix: apply DoT/HoT damage at the START of the turn,
+      // but do NOT tick durations yet. Duration tick happens AFTER the
+      // action (skip or perform) so a duration:1 effect is active for
+      // exactly one of the victim's turns before expiring.
+      const statusMessages = applyEffectTicks(activeActor);
+
+      // Start of Turn Equipment Triggers
+      if (activeActor && !activeActor.isEnemy) {
+        const armorId = activeActor.equipment?.armor?.id || activeActor.equipment?.armor;
+        if (armorId === "chrono_weaver_vestments") {
+          if (Math.random() < 0.20) {
+            const hasHasteAlready = (activeActor.statusEffects || []).some(e => e.type === "haste");
+            if (!hasHasteAlready) {
+              applyStatusEffect(activeActor, "haste", 2, 30);
+              statusMessages.push(`⏳ *Chrono Slip:* Time warping around ${activeActor.name} grants Haste!`);
+            }
+          }
+        }
+      }
+      if (state.environment?.id === "FIRE_CAVE") {
+        const heatDmg = Math.floor(activeActor.stats.maxHp * 0.05);
+        activeActor.stats.hp -= heatDmg;
+        activeActor.currentHP = Math.max(0, activeActor.stats.hp);
+        statusMessages.push(
+          `🌋 *Heat Exhaustion:* ${activeActor.name} takes ${heatDmg} fire damage!`,
+        );
+      }
+
+      // Buffer status messages - they'll be prepended to the next action output.
+      // 💡 BUG-08/09 fix: MERGE with any pending expiry messages from the
+      // previous turn (set by tickDurations after the previous actor's
+      // action). The old code OVERWROTE pendingStatusMsg, which lost expiry
+      // notifications when the current actor had no DoT/HoT messages.
+      if (statusMessages.length > 0) {
+        state.pendingStatusMsg = state.pendingStatusMsg
+          ? state.pendingStatusMsg + "\n" + statusMessages.join("\n")
+          : statusMessages.join("\n");
+      }
+
+      if (activeActor.stats.hp <= 0) {
+        await handleDeath(sock, activeActor, sessionKey);
+        if (await checkCombatEnd(sock, state, sessionKey)) return;
+        continue;
+      }
+
+      // 💡 STATUS EFFECT: Charm - charmed actors are confused and skip their
+      // turn (simpler than full side-swapping, which would require rewriting
+      // all targeting logic). The charm status still ticks down each turn
+      // and expires naturally. Previously charm was applied but had zero
+      // effect - Bribe (Merchant / Tycoon skill) was effectively useless.
+      const skipEffects = ["freeze", "stun", "sleep", "charm", "locked_in_time"];
+      const activeEffect = (activeActor.statusEffects || []).find((e) =>
+        skipEffects.includes(e.type),
+      );
+      if (activeEffect) {
+        const statusPrefix = state.pendingStatusMsg
+          ? state.pendingStatusMsg + "\n\n"
+          : "";
+        state.pendingStatusMsg = null;
+
+        const effectIcon = activeEffect.icon || "⏳";
+        const effectName = activeEffect.name || activeEffect.type;
+        const stylishMsg = `${statusPrefix}❄️ *STATUS EFFECT ACTIVE* ❄️\n━━━━━━━━━━━━━━━━\n${activeActor.icon || activeActor.class?.icon || "👤"} *${activeActor.name}* is **${effectName.toUpperCase()}**!\n\n${effectIcon} _Unable to act this turn._\n━━━━━━━━━━━━━━━━`;
+
+        try {
+          await sock.sendMessage(state.chatId, {
+            text: stylishMsg,
+          });
+        } catch (msgErr) {
+          console.error("Failed to send skip status message:", msgErr.message);
+        }
+        // 💡 BUG-07/08/09 fix: tick durations AFTER the skip decision.
+        // The CC effect was active for this turn (causing the skip), and
+        // now expires. Without this, duration:1 CC would never tick down.
+        const skipExpireMsgs = tickDurations(activeActor);
+        if (skipExpireMsgs.length > 0) {
+          state.pendingStatusMsg = skipExpireMsgs.join("\n");
+        }
+        await nextTurn(
+          sock,
+          null, // skip round image generation
+          sessionKey,
+        );
+        // Wait a brief moment so skipped turns don't spam instantly and crash
+        // 💡 DUNGEON FAST-LANE (2026-10-20): skip-turn pacing 1000/2500 -> 800/1500
+        // (same anti-spam guarantee, less dead air — see the boss-cast site).
+        await new Promise((r) => setTimeout(r, state.solo ? 800 : 1500));
+        continue;
+      }
+
+      // 💡 RPG OPT PASS (2026-10-20, owner "enemy turn takes forever"): every
+      // nested await in an enemy/summon action (applyAbilityEffect, handleDeath,
+      // loot DB writes in endCombat, Baileys sends) is unbounded — one wedged
+      // await used to leave this promise UNRESOLVED and the whole fight froze
+      // forever ("enemy turn takes forever" glitch). Race each automated turn
+      // with a 90s watchdog: a legit turn finishes in <20s worst-case; on
+      // watchdog the fight ADVANCES instead of freezing. A late-resolving
+      // zombie turn at most applies its own effects once — same risk the
+      // old code had, minus the permanent freeze.
+      if (activeActor.isEnemy) {
+        // AI Turn
+        await runTurnWithWatchdog(
+          state,
+          `enemy turn (${activeActor?.name || '?'})`,
+          () => performEnemyAction(sock, activeActor, sessionKey),
+          90000
+        );
+        // The loop continues because performEnemyAction resolved
+      } else if (activeActor.isSummon) {
+        // 💡 Phase 2: Summon AI Turn - personality-driven behavior,
+        // loyalty decay, behavior tracking, optional betrayal.
+        await runTurnWithWatchdog(
+          state,
+          `summon turn (${activeActor?.name || '?'})`,
+          () => summonAI.performSummonAction(sock, activeActor, sessionKey),
+          90000
+        );
+      } else if (activeActor.isTutorialAlly) {
+        // 💡 Phase B (2026-10-04): TUTORIAL GROUP quest - fake party members
+        // auto-act after a short beat instead of waiting for input that will
+        // never come. Only reachable in tutorial_group demo sessions.
+        await new Promise((r) => setTimeout(r, 1200));
+        await performAction(sock, activeActor, { type: "attack" }, sessionKey);
+      } else {
+        // Player Turn - Wait for action
+        await promptPlayerAction(sock, activeActor, sessionKey);
+        // The loop continues because promptPlayerAction resolved (via performAction)
+      }
+
+      // 💡 BUG-07/08/09 fix: tick durations AFTER the action completes.
+      // Effect/buff durations now decrement at the END of the actor's turn
+      // instead of the beginning, so duration:1 effects (freeze, stun,
+      // buff_team, etc.) actually take effect for one full turn before
+      // expiring. Expiry messages are buffered for the next actor's output.
+      const actionExpireMsgs = tickDurations(activeActor);
+      if (actionExpireMsgs.length > 0) {
+        state.pendingStatusMsg = actionExpireMsgs.join("\n");
+      }
+
+      // 💡 Phase 3: tick Necromancer capture windows each round.
+      // Only tick when a PLAYER acts (not enemy/summon) - mirrors how
+      // combatRound is incremented at line 3606. This means the window
+      // lasts 3 of the PLAYER's turns, not 3 of any actor's turns.
+      if (!activeActor.isEnemy && !activeActor.isSummon) {
+        try {
+          summonCapture.tickCaptureWindows(state);
+        } catch (e) {
+          console.error('[Capture] tickCaptureWindows failed:', e?.message || e);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[Combat] Turn loop error:", err);
+  } finally {
+    state.combatProcessing = false;
+  }
+}
+
+async function promptPlayerAction(sock, player, sessionKey) {
+  const state = gameStates.get(sessionKey);
+  if (!state) return;
+  // 🩘 SOCK FALLBACK (2026-10-26): the YOUR TURN prompt must never die to a
+  // socketless caller (10-19: "Failed to send player prompt ... reading
+  // 'sendMessage'" — boundedSend silently skipped, player sat promptless).
+  if (!sock) sock = state.sock || state.sock_ref;
+  const chatId = state.chatId;
+  const icon = player.class?.icon || "👤";
+  const inventory = inventorySystem.formatInventory(player.jid);
+  const usableItems = !inventory.isEmpty
+    ? inventory.items.filter((item) => {
+        const info = lootSystem.getItemInfo(item.id);
+        // Accept items that are usable in lootSystem OR are in the pre-quest shop CONSUMABLES
+        return (info && info.usable) || !!CONSUMABLES[item.id];
+      })
+    : [];
+
+  // Flush enemy round log
+  if (state.roundLog && state.roundLog.length > 0) {
+    const roundSummary = state.roundLog.join('\n─────────\n');
+    try {
+      await boundedSend(sock, state.chatId, { text: roundSummary });
+    } catch (e) {}
+    state.roundLog = [];
+  }
+
+  const hpBar = (cur, max, len = 10) => {
+    const filled = Math.max(0, Math.round((Math.max(0, cur) / max) * len));
+    return '▰'.repeat(filled) + '▱'.repeat(len - filled);
+  };
+
+  const statusPrefix = state.pendingStatusMsg
+    ? state.pendingStatusMsg + "\n\n"
+    : "";
+  state.pendingStatusMsg = null;
+  let msg = statusPrefix + `⚔️ *YOUR TURN*\n`;
+
+  msg += `${icon} *${player.name}*\n`;
+  msg += `❤️ ${Math.floor(player.stats.hp)}/${Math.floor(player.stats.maxHp)} HP\n`;
+  msg += `⚡ ${Math.floor(player.stats.energy)}/${Math.floor(player.stats.maxEnergy)} EN\n`;
+
+  if (player.statusEffects && player.statusEffects.length > 0) {
+    msg += `📋 ${player.statusEffects.map((e) => e.icon).join(" ")}\n`;
+  }
+
+  const livingEnemies = (state.enemies || []).filter((e) => !e.isDead);
+  if (livingEnemies.length > 0) {
+    msg += `\n*ENEMIES:*\n`;
+    livingEnemies.forEach((e) => {
+      const maxHp = e.stats.maxHp || e.stats.hp;
+      const curHp = Math.max(0, e.stats.hp);
+      msg += `👾 ${e.name} [${hpBar(curHp, maxHp)}] ${Math.floor(curHp)}/${Math.floor(maxHp)} HP\n`;
+    });
+  }
+
+  // 💡 TOGGLE-AWARE PROMPT (owner fix round 4, 2026-10-20): the Task-7
+  // "veteran prompt" stripped ACTIONS+BAG for EVERYONE — wrong. .j combat
+  // log IS the noob/veteran switch: log ON (noob mode, default) KEEPS the
+  // command hints + BAG so new players can learn the commands; log OFF
+  // (veteran) gets the stripped prompt (header, own HP/EN, statuses, enemies).
+  if (!combatIntegration.isWarLogOff(state.chatId)) {
+    const bagItems = usableItems.map((item) => {
+      const info = {
+        ...lootSystem.getItemInfo(item.id),
+        ...(CONSUMABLES[item.id] || {})
+      };
+      return { name: info.name, quantity: item.quantity };
+    });
+    msg += combatIntegration.buildTurnHints(botConfig.getPrefix(), bagItems);
+  }
+
+  try {
+    await boundedSend(sock, state.chatId, { text: msg });
+  } catch (err) {
+    console.error(
+      "Failed to send player prompt in promptPlayerAction:",
+      err.message,
+    );
+  }
+
+  // 💡 NEW TURN WAITING LOGIC
+  // Create a promise that resolves when the player takes an action
+  return new Promise((resolve) => {
+    const turnTime = state.solo
+      ? 120000
+      : state.actionJustTaken
+        ? 120000
+        : GAME_CONFIG.COMBAT_TURN_TIME;
+    state.actionJustTaken = false;
+
+    // Save resolve function to the state so handleCombatAction can call it
+    state.resolveTurn = resolve;
+
+    state.timers.combat = setTimeout(async () => {
+      if (
+        state.inCombat &&
+        state.activeCombatant?.jid === player.jid &&
+        !state.pendingActions[player.jid]
+      ) {
+        try {
+          // 💡 RPG OPT PASS (2026-10-20): race the auto-defend with a 60s
+          // watchdog — performAction contains unbounded awaits (sends, loot
+          // DB, endCombat hooks) and if it wedged, resolve() below never ran
+          // and the whole fight froze (same family as the enemy-turn freeze).
+          await runTurnWithWatchdog(
+            state,
+            `AFK auto-defend (${player?.name || '?'})`,
+            () => performAction(sock, player, { type: "defend" }, sessionKey),
+            60000,
+            false
+          );
+        } catch (err) {
+          console.error("Error in combat timeout defend:", err.message);
+        }
+        resolve(); // Resolve promise after auto-defend
+      }
+    }, turnTime);
+  });
+}
+
+async function performAction(sock, player, action, sessionKey) {
+  const state = gameStates.get(sessionKey);
+  if (!state) return;
+
+  const chatId = state.chatId;
+
+  // 💡 POLISH 2026-07-17: wrap the ENTIRE performAction body in try/finally
+  // so that state.pendingActions[player.jid] is ALWAYS cleared, even if
+  // something throws mid-action. Previously, if calculateDamage or any
+  // downstream call threw, pendingActions stayed set - and the player got
+  // stuck with "❌ Action already chosen!" on every subsequent command,
+  // unable to act for the rest of combat. This was the root cause of the
+  // "only defensive skills work" complaint (defend happens to not call
+  // calculateDamage, so it never hit the throw path).
+  try {
+    // === ORIGINAL BODY BELOW ===
+
+  // Clear the turn timer
+  if (state.timers.combat) {
+    clearTimeout(state.timers.combat);
+    state.timers.combat = null;
+  }
+
+  const icon = player.class?.icon || "👤";
+  let resultMsg = `${icon} ${player.name}: `;
+  let turnInfo = {
+    turnNumber: state.turnCount,
+    actor: player,
+    action: { name: "Basic Attack" },
+    target: null,
+    damage: 0,
+    healing: 0,
+    effects: [],
+    // 💡 WAR LOG toggle (2026-10-20): .j combat log per-chat preference rides
+    // the turnInfo into every renderer (regular + abyss + RUINS share this
+    // object via nextTurn's lastTurnInfo) — false ⇒ premium minimal caption.
+    warLog: !combatIntegration.isWarLogOff(state.chatId),
+  };
+
+  if (action.type === "attack") {
+    // Default to first alive enemy if no explicit target given
+    if (
+      action.targetIndex === undefined ||
+      action.targetIndex === null ||
+      action.targetIndex < 0
+    ) {
+      action.targetIndex = state.enemies.findIndex((e) => e.stats.hp > 0);
+    }
+    const target = state.enemies[action.targetIndex];
+    if (!target || target.stats.hp <= 0) {
+      // Auto-redirect to first alive enemy
+      const aliveIdx = state.enemies.findIndex((e) => e.stats.hp > 0);
+      if (aliveIdx >= 0) action.targetIndex = aliveIdx;
+    }
+    const resolvedTarget = state.enemies[action.targetIndex];
+    if (!resolvedTarget || resolvedTarget.stats.hp <= 0) {
+      resultMsg += `❌ No valid targets!`;
+    } else {
+      // 💡 Get weapon element
+      const mainHand = player.equipment?.main_hand;
+      const element = mainHand
+        ? lootSystem.getItemInfo(mainHand.id)?.element || "PHYSICAL"
+        : "PHYSICAL";
+
+      const { damage, isCrit, wasEvaded, noDamageReason } = calculateDamage(
+        player,
+        resolvedTarget,
+        player.stats.atk,
+        "physical",
+        element,
+        sessionKey,
+      );
+
+      if (noDamageReason) {
+        resultMsg += noDamageReason;
+        turnInfo.action = { name: "Failed Attack" };
+      } else if (wasEvaded) {
+        resultMsg += `💨 *MISS!* ${combatTargetIcon(resolvedTarget)} ${resolvedTarget.name} evaded the attack.`;
+        turnInfo.action = { name: "Missed Attack" };
+      } else {
+        resolvedTarget.stats.hp -= damage;
+        resolvedTarget.currentHP = Math.max(0, resolvedTarget.stats.hp);
+
+        // 💡 FIX #6 (2026-08-15): Generate threat for the attacker.
+        // Tanks generate 1.5× threat, DPS 1.0×, mages 0.8×, healers 0.6×.
+        // Enemies use threat to decide who to attack (see monsterSkills.js).
+        threatSystem.generateThreat(player, damage);
+
+        const durabilitySystem = require('../inventory/durabilitySystem');
+        durabilitySystem.applyWear(player, 'main_hand', { combatHistory: state.combatHistory });
+        if (player.equipment?.off_hand) {
+            const offHandInfo = lootSystem.getItemInfo(player.equipment.off_hand.id);
+            if (offHandInfo && offHandInfo.type === 'EQUIPMENT' && (offHandInfo.slot === 'weapon' || offHandInfo.slot === 'main_hand' || offHandInfo.slot === 'off_hand')) {
+                durabilitySystem.applyWear(player, 'off_hand', { combatHistory: state.combatHistory });
+            }
+        }
+
+        if (resolvedTarget.stats.hp > 0 && resolvedTarget.isBoss) {
+          await checkBossPhase(sock, resolvedTarget, state.chatId);
+        }
+
+        if (resolvedTarget.stats.hp <= 0) resolvedTarget.justDied = true;
+
+        player.combatStats.damageDealt += damage;
+        resolvedTarget.combatStats = resolvedTarget.combatStats || {
+          damageTaken: 0,
+        };
+        resolvedTarget.combatStats.damageTaken += damage;
+
+        resultMsg += `${isCrit ? "💥 CRITICAL! " : ""}Strikes ${combatTargetIcon(resolvedTarget)} ${resolvedTarget.name} for *${damage}* damage!`;
+
+        // ⚔️ Weapon & Equipment Passive Triggers on Hit
+        const weaponId = player.equipment?.main_hand?.id || player.equipment?.main_hand;
+        const glovesId = player.equipment?.gloves?.id || player.equipment?.gloves;
+
+        if (weaponId === "void_kraken_harpoon" || weaponId === "void_kraken_cleaver") {
+          if (Math.random() < 0.25) {
+            applyStatusEffect(resolvedTarget, "curse", 3, 20);
+            resultMsg += `\n🌌 *Void Kraken Reality Warp:* ${resolvedTarget.name} is cursed by the abyss! (-20% stats)`;
+          }
+        } else if (weaponId === "hellfire_greatmaul") {
+          if (Math.random() < 0.30) {
+            applyStatusEffect(resolvedTarget, "burn", 3, 15);
+            resultMsg += `\n🔥 *Hellfire Impact:* Sulfur explodes, setting ${resolvedTarget.name} on fire!`;
+          }
+        } else if (weaponId === "worldender_lance") {
+          if (Math.random() < 0.20) {
+            applyStatusEffect(resolvedTarget, "burn", 2, 15);
+            applyStatusEffect(resolvedTarget, "slow", 2, 50);
+            resultMsg += `\n☄️ *World-Ender Cataclysm:* ${resolvedTarget.name} is set on fire and slowed!`;
+          }
+        } else if (weaponId === "dragonfang_claymore" || weaponId === "dragon_fang_dagger" || weaponId === "wyrmtail_greatsword") {
+          if (isCrit || Math.random() < 0.30) {
+            applyStatusEffect(resolvedTarget, "bleed", 3, 12);
+            resultMsg += `\n🩸 *Dragon-Fang Rip:* The jagged edge causes ${resolvedTarget.name} to bleed!`;
+          }
+        } else if (weaponId === "mirroredged_rapier") {
+          if (Math.random() < 0.25) {
+            const extraDmg = Math.max(1, Math.floor(damage * 0.5));
+            resolvedTarget.stats.hp -= extraDmg;
+            resolvedTarget.currentHP = Math.max(0, resolvedTarget.stats.hp);
+            player.combatStats.damageDealt += extraDmg;
+            resultMsg += `\n⚡ *Mirror Double Strike:* An invisible second strike deals *${extraDmg}* extra damage!`;
+            if (resolvedTarget.stats.hp <= 0) resolvedTarget.justDied = true;
+          }
+        } else if (weaponId === "rusty_dagger") {
+          if (Math.random() < 0.10) {
+            applyStatusEffect(resolvedTarget, "bleed", 1, 5);
+            resultMsg += `\n🩸 *Rusty Scratch:* ${resolvedTarget.name} starts bleeding slightly!`;
+          }
+        } else if (weaponId === "iron_sword") {
+          if (Math.random() < 0.15) {
+            applyStatusEffect(resolvedTarget, "bleed", 2, 8);
+            resultMsg += `\n🩸 *Laceration:* ${resolvedTarget.name} is bleeding!`;
+          }
+        } else if (weaponId === "steel_sabre") {
+          if (Math.random() < 0.20) {
+            applyStatusEffect(player, "haste", 2, 30);
+            resultMsg += `\n⚡ *Sabre Flow:* Player gains Haste! (+30% Speed)`;
+          }
+        } else if (weaponId === "crystal_staff" || weaponId === "arcane_wand") {
+          if (Math.random() < 0.20) {
+            const safeMaxEn = Number.isFinite(player.stats.maxEnergy) ? player.stats.maxEnergy : 100;
+            const safeCurEn = Number.isFinite(player.stats.energy) ? player.stats.energy : 0;
+            player.stats.energy = Math.min(safeMaxEn, safeCurEn + 15);
+            resultMsg += `\n✨ *Mana Siphon:* Restored 15 energy!`;
+          }
+        } else if (weaponId === "greatsword") {
+          if (Math.random() < 0.15) {
+            applyStatusEffect(resolvedTarget, "stun", 1);
+            resultMsg += `\n💫 *Heavy Impact:* ${resolvedTarget.name} is stunned!`;
+          }
+        }
+
+        // Glove status effects
+        if (glovesId === "voidtouched_grips") {
+          if (Math.random() < 0.15) {
+            applyStatusEffect(resolvedTarget, "slow", 2, 30);
+            resultMsg += `\n🌌 *Void Phase:* ${resolvedTarget.name} is slowed by abyssal cold!`;
+          }
+        } else if (glovesId === "eelspike_gauntlets") {
+          if (Math.random() < 0.15) {
+            applyStatusEffect(resolvedTarget, "stun", 1);
+            resultMsg += `\n⚡ *Eel-Spike Shock:* Static discharges, stunning ${resolvedTarget.name}!`;
+          }
+        }
+
+        turnInfo.action = { name: "Basic Attack" };
+        turnInfo.target = resolvedTarget;
+        turnInfo.damage = damage;
+        if (isCrit) turnInfo.effects.push("CRITICAL");
+
+        if (resolvedTarget.stats.hp <= 0) {
+          // 💡 OVERKILL EXECUTION BONUS
+          const overkillThreshold = resolvedTarget.stats.hp + damage;
+          if (damage > overkillThreshold * 2.0) {
+            const bonusGold = Math.floor(resolvedTarget.goldReward * 0.1) || 50;
+            player.goldEarned = (player.goldEarned || 0) + bonusGold;
+            resultMsg += `\n⚡ *OVERKILL!* +${bonusGold} Zeni bonus!`;
+          }
+
+          resolvedTarget.isDead = true;
+          resolvedTarget.stats.hp = 0;
+          resolvedTarget.currentHP = 0;
+          resultMsg += `\n💀 *${resolvedTarget.name}* defeated!`;
+          player.combatStats.kills = (player.combatStats.kills || 0) + 1;
+          recordEnemyKill(state, resolvedTarget);
+
+          state.combatHistory.push(resultMsg);
+          delete state.pendingActions[player.jid];
+
+          if (await checkCombatEnd(sock, state, sessionKey)) {
+            // 💡 MERGE 2026-10-20: the standalone kill-text send is gone — the
+            // kill narration (OVERKILL bonus + defeated lines) rides the
+            // kill-turn image caption via turnInfo.actionLog (Style C).
+            // Order seen by the chat: victory card → kill image w/ caption.
+            try {
+              turnInfo.actionLog = String(resultMsg || '').split('\n').map(s => s.trim()).filter(Boolean);
+              await nextTurn(sock, turnInfo, sessionKey);
+            } catch (e) {}
+
+            // Combat ended - resolve the turn promise so the loop can clean up
+            if (state.resolveTurn) {
+              const r = state.resolveTurn;
+              state.resolveTurn = null;
+              r();
+            }
+            return;
+          }
+        }
+      }
+    }
+  } else if (action.type === "rest") {
+    const energyRegen = 15;
+    player.stats.energy = Math.min(
+      player.stats.maxEnergy,
+      player.stats.energy + energyRegen,
+    );
+    resultMsg += `🧘 *RESTED* and recovered ⚡ ${energyRegen} Energy.`;
+    turnInfo.action = { name: "Rest" };
+    turnInfo.effects.push("REGEN");
+  } else if (action.type === "flee") {
+    // 2026-09-15 (owner: "remove .j combat flee from the Abyss commands"):
+    // the Abyss offers no escape - attempting flee wastes the turn and the
+    // party still eats the enemy's attacks. Extraction happens BETWEEN
+    // floors via the abyss retreat command, never mid-battle.
+    if (state.isAbyss) {
+      resultMsg += `🚫 *NO ESCAPE!* The Abyss devours deserters - use \`${botConfig.getPrefix()} abyss retreat\` to extract (you keep 100% loot).`;
+      turnInfo.action = { name: "Flee (blocked)" };
+    } else {
+    const avgPlayerSpd =
+      state.players.reduce((s, p) => s + (p.stats.spd || 10), 0) /
+      state.players.length;
+    const avgEnemySpd =
+      state.enemies.reduce((s, e) => s + (e.stats.spd || 10), 0) /
+      state.enemies.length;
+
+    const successChance = (avgPlayerSpd / avgEnemySpd) * 60;
+    if (Math.random() * 100 < successChance) {
+      resultMsg += `🏃 Party successfully escaped from combat!`;
+      state.inCombat = false;
+      state.active = false;
+      // ⚔️ RUINS RULE (GW overhaul): fleeing retreats to the PREVIOUS room and
+      // forfeits whatever was in the room to the enemy. The room stays ACTIVE
+      // (encounter intact for the next player), unclaimed rewards stay with it.
+      if (state.mode === 'RUINS' && ruinsHooks.onFlee) {
+        // 🤝 co-op: identify WHO fled so the war module can unseat exactly
+        // that champion (solo sessions keep their old shape).
+        const __fleeJid = (state.activeCombatant && state.activeCombatant.jid)
+          || (state.players && state.players[0] && state.players[0].jid) || null;
+        try { ruinsHooks.onFlee(state, __fleeJid); } catch (e) { console.error('[Ruins] onFlee hook:', e?.message); }
+      }
+    } else {
+      resultMsg += `❌ *FLEE FAILED!* The party stumbled and lost their turns.`;
+    }
+    turnInfo.action = { name: state.isAbyss ? "Flee (blocked)" : "Flee" };
+    }
+  } else if (action.type === "defend") {
+    // 2026-09-15 (owner: "combat def should let some damage hit, very very small"):
+    // the defend shield is tagged source:'defend' so calculateDamage lets a tiny
+    // ~2% of every hit leak through to HP (a full block was too strong).
+    applyStatusEffect(player, "shield", 1, Math.floor(player.stats.def * 1.5), "defend");
+    resultMsg += `🛡️ Takes a defensive stance!`;
+    turnInfo.action = { name: "Defend" };
+    turnInfo.effects.push("SHIELD");
+  } else if (action.type === "ability") {
+    if (action.result) {
+      resultMsg = action.result.message;
+      if (action.result.damage)
+        player.combatStats.damageDealt =
+          (player.combatStats.damageDealt || 0) + action.result.damage;
+      if (action.result.healing)
+        player.combatStats.healed =
+          (player.combatStats.healed || 0) + action.result.healing;
+
+      turnInfo.action = { name: action.result.abilityName || "Ability" };
+      turnInfo.damage = action.result.damage || 0;
+      turnInfo.healing = action.result.healing || 0;
+      turnInfo.target = action.result.target || null; // 🔴 hit-flash: real damaged entity rides to the Go renderer
+    } else {
+      resultMsg += `✨ Uses ability!`;
+      turnInfo.action = { name: "Ability" };
+    }
+  } else if (action.type === "item") {
+    const itemKey = action.itemId;
+    const itemInfo = lootSystem.getItemInfo(itemKey);
+    const shopInfo = CONSUMABLES[itemKey];
+
+    // Merge item properties with CONSUMABLES to resolve usable status and details for shop-only items
+    const item = {
+      ...itemInfo,
+      ...(shopInfo || {}),
+      usable: (itemInfo && itemInfo.usable) || !!shopInfo
+    };
+
+    if (!item || !item.usable) {
+      resultMsg += `❌ Invalid item!`;
+    } else {
+      // 💡 FIX 2026-08-31 (item consumption order): removeItem used to run
+      // BEFORE target validation - a Phoenix Down (3500g) was consumed even
+      // when the revive could never work (positive-item targets were filtered
+      // with `!p.isDead`, so a dead ally was unreachable: "Target not found"
+      // or "(Target was already alive)" - item gone either way). Now the
+      // target is resolved and validated FIRST; the item is only consumed
+      // when the effect can actually fire.
+      let target;
+      const isNegative = [
+        "damage_aoe",
+        "apply_poison",
+        "freeze_enemy",
+        "flee",
+        "bribe",
+        "percent_hp_damage",
+      ].includes(item.effect);
+      const isRevive = item.effect === "revive" || item.effect === "team_revive";
+      if (action.targetIndex !== undefined) {
+        target = isNegative
+          ? state.enemies[action.targetIndex]
+          // Revive items must be able to reach DEAD allies (that's their
+          // whole purpose) - only filter the dead for non-revive items.
+          : state.players.find(
+              (p) =>
+                state.players.indexOf(p) === action.targetIndex && (isRevive || !p.isDead),
+            );
+      } else {
+        target = isNegative
+          ? state.enemies.find((e) => e.stats.hp > 0)
+          : player;
+      }
+
+      // Negative items with an explicit target must hit a LIVING enemy -
+      // using one on a corpse (or out-of-range index) wastes the item.
+      if (isNegative && action.targetIndex !== undefined) {
+        const enemyTarget = state.enemies[action.targetIndex];
+        if (!enemyTarget || (enemyTarget.stats && enemyTarget.stats.hp <= 0) || enemyTarget.isDead) {
+          target = null;
+        }
+      }
+
+      if (
+        !target &&
+        item.effect !== "damage_aoe" &&
+        !isRevive
+      ) {
+        resultMsg += `❌ Target not found!`;
+      } else if (isRevive && !target) {
+        // No dead ally reachable - do NOT consume the revive item.
+        resultMsg += `❌ No fallen ally to revive - item not used.`;
+      } else if (
+        isRevive &&
+        target &&
+        !target.isDead &&
+        action.targetIndex !== undefined
+      ) {
+        // Explicitly targeted ally is alive - do NOT consume the item.
+        resultMsg += `❌ ${target.name} is still alive - save the revive for a fallen ally!`;
+      } else {
+        // Target is valid - NOW consume the item.
+        const consumed = inventorySystem.removeItem(player.jid, itemKey, 1);
+        if (!consumed || !consumed.success) {
+          resultMsg += `❌ You don't have that item anymore!`;
+        } else {
+        resultMsg += `🎒 Uses *${item.name}*! `;
+        turnInfo.action = { name: item.name };
+
+        switch (item.effect) {
+          case "heal":
+            const hMult = getHealMult(sessionKey);
+            const healVal = (item.effectValue || 0.3) * hMult; // Adjusted by environment
+            const healAmt = Math.floor(target.stats.maxHp * healVal);
+            const actualHeal = Math.min(
+              healAmt,
+              target.stats.maxHp - target.stats.hp,
+            );
+            target.stats.hp += actualHeal;
+            target.currentHP = target.stats.hp; // Sync
+            resultMsg += `\n💖 Restored ${actualHeal} HP to ${target.name}! (${Math.round(healVal * 100)}%)${hMult < 1 ? " (Healing Reduced)" : ""}`;
+            turnInfo.healing = actualHeal;
+
+            // 💡 FIX 2026-10-03 (owner elixir report): the Full Restore Elixir
+            // now ALSO grants its 60-minute persistent effect when used in
+            // combat - same lifecycle as out-of-combat use (timestamp on the
+            // user doc, never cleared by quest end).
+            if (itemKey === "elixir" && target.jid) {
+              try {
+                const fxMsg = economy.grantFullRestore(target.jid);
+                if (fxMsg) resultMsg += `\n${fxMsg}`;
+              } catch (fxErr) {
+                console.error("[Elixir] effect grant failed:", fxErr?.message);
+              }
+            }
+
+            if (itemKey === "elixir" || item.cureStatus) {
+              const beforeCount = target.statusEffects ? target.statusEffects.length : 0;
+              if (beforeCount > 0) {
+                const negativeEffects = ["poison", "burn", "bleed", "freeze", "stun", "sleep", "locked_in_time", "root", "slow", "curse", "weak", "vulnerability"];
+                target.statusEffects = target.statusEffects.filter(s => !negativeEffects.includes(s.type));
+                const clearedCount = beforeCount - target.statusEffects.length;
+                if (clearedCount > 0) {
+                  resultMsg += `\n✨ Cured ${clearedCount} negative status effect(s)!`;
+                }
+              }
+            }
+            break;
+          case "cure_status":
+            if (target) {
+              const beforeCount = target.statusEffects ? target.statusEffects.length : 0;
+              if (beforeCount > 0) {
+                const negativeEffects = ["poison", "burn", "bleed", "freeze", "stun", "sleep", "locked_in_time", "root", "slow", "curse", "weak", "vulnerability"];
+                target.statusEffects = target.statusEffects.filter(s => !negativeEffects.includes(s.type));
+                const clearedCount = beforeCount - target.statusEffects.length;
+                if (clearedCount > 0) {
+                  resultMsg += `\n✨ Cured all negative status effects on ${target.name}! (Cleared: ${clearedCount})`;
+                } else {
+                  resultMsg += `\n(No negative status effects to cure on ${target.name})`;
+                }
+              } else {
+                resultMsg += `\n(No negative status effects to cure on ${target.name})`;
+              }
+            }
+            break;
+          case "regen":
+            const regVal = item.effectValue || 0.1;
+            const regAmt = Math.floor(target.stats.maxHp * regVal);
+            applyStatusEffect(target, "regen", item.duration || 3, regAmt);
+            resultMsg += `\n🧴 Applied regeneration salve to ${target.name}! (+${regAmt} HP/turn)`;
+            break;
+          case "restore_energy":
+            const enVal = item.effectValue || 0.4;
+            const maxEn = target.stats.maxEnergy || 100;
+            const enAmt = Math.floor(maxEn * enVal);
+            const safeMaxEn2 = Number.isFinite(target.stats.maxEnergy) ? target.stats.maxEnergy : 100;
+            const safeCurEn2 = Number.isFinite(target.stats.energy) ? target.stats.energy : 0;
+            target.stats.energy = Math.min(safeMaxEn2, safeCurEn2 + enAmt);
+            target.currentEnergy = target.stats.energy;
+            resultMsg += `\n⚡ Restored ${enAmt} energy to ${target.name}! (${Math.round(enVal * 100)}%)`;
+            break;
+          case "buff_atk":
+            applyStatusEffect(target, "blessing", 3, item.effectValue || 0);
+            resultMsg += `\n💪 Buffed ${target.name}'s attack!`;
+            break;
+          case "buff_def":
+            applyStatusEffect(target, "shield", 3, item.effectValue || 0);
+            resultMsg += `\n🛡️ Buffed ${target.name}'s defense!`;
+            break;
+          case "buff_spd":
+            applyStatusEffect(target, "haste", 3, item.effectValue || 0);
+            resultMsg += `\n⚡ Buffed ${target.name}'s speed!`;
+            break;
+          case "buff_luck":
+            applyStatusEffect(target, "blessing", 3, item.effectValue || 0);
+            resultMsg += `\n🍀 Buffed ${target.name}'s luck!`;
+            break;
+          case "buff_all":
+            applyStatusEffect(
+              target,
+              "blessing",
+              item.duration || 3,
+              item.effectValue || 20,
+            );
+            applyStatusEffect(target, "haste", item.duration || 3, 20);
+            resultMsg += `\n✨ ${target.name} is overflowing with power! (+All Stats)`;
+            break;
+          case "buff_all_damage":
+            applyStatusEffect(target, "berserk", 2, item.effectValue || 50);
+            resultMsg += `\n💥 ${target.name} enters a BERSERKER RAGE! (+Damage, -Defense)`;
+            break;
+          case "shield_max":
+            applyStatusEffect(target, "shield", 5, 100); // Massive shield
+            resultMsg += `\n🛡️ ${target.name} is encased in a massive energy barrier!`;
+            break;
+          case "damage_aoe":
+          case "aoe_damage":
+            for (const e of state.enemies) {
+              if (e.stats.hp > 0) {
+                const dmg = item.effectValue || 80;
+                e.stats.hp -= dmg;
+                e.currentHP = e.stats.hp; // Sync
+                player.combatStats.damageDealt =
+                  (player.combatStats.damageDealt || 0) + dmg;
+                resultMsg += `\n💥 ${e.name} takes ${dmg} damage!`;
+                if (e.stats.hp <= 0) {
+                  await handleDeath(sock, e, sessionKey, player.name);
+                  resultMsg += `\n💀 ${e.name} has fallen!`;
+                }
+              }
+            }
+            turnInfo.damage = item.effectValue || 80;
+            turnInfo.target = state.enemies.find((e) => e.stats.hp > 0) || null; // 🔴 hit-flash: real damaged entity rides to the Go renderer
+            break;
+          case "aoe_debuff_damage":
+            for (const e of state.enemies) {
+              if (e.stats.hp > 0) {
+                const dmg = item.effectValue || 150;
+                e.stats.hp -= dmg;
+                e.currentHP = e.stats.hp;
+                applyStatusEffect(e, "vulnerability", 3, 20);
+                resultMsg += `\n💥 ${e.name} takes ${dmg} damage and is weakened!`;
+                if (e.stats.hp <= 0) {
+                  await handleDeath(sock, e, sessionKey, player.name);
+                }
+              }
+            }
+            turnInfo.damage = item.effectValue || 150;
+            turnInfo.target = state.enemies.find((e) => e.stats.hp > 0) || null; // 🔴 hit-flash: real damaged entity rides to the Go renderer
+            break;
+          case "percent_hp_damage":
+            // True damage based on % of Max HP (ignores defense)
+            const rawDmg = Math.floor(
+              target.stats.maxHp * (item.effectValue || 0.25),
+            );
+            // Counterplay: Bomb resistance check
+            const finalDmg = target.stats.bomb_resistance
+              ? Math.floor(rawDmg * 0.5)
+              : rawDmg;
+            target.stats.hp -= finalDmg;
+            target.currentHP = target.stats.hp;
+            player.combatStats.damageDealt =
+              (player.combatStats.damageDealt || 0) + finalDmg;
+            resultMsg += `\n💥 The Abyssal Detonator consumes ${target.name}! Dealt ${finalDmg} TRUE damage!`;
+            turnInfo.damage = finalDmg;
+            turnInfo.target = target; // 🔴 hit-flash: real damaged entity rides to the Go renderer
+            if (target.stats.hp <= 0) {
+              await handleDeath(sock, target, sessionKey, player.name);
+              resultMsg += `\n💀 ${target.name} has fallen!`;
+            }
+            break;
+          case "flee": {
+            // 💡 REWORK 2026-10-11 (owner: "the smoke bomb doesn't work at all"):
+            // ROOT CAUSE for the Abyss — the old code called endAdventure(),
+            // which knows NOTHING about abyss runs: the AbyssRun doc stayed
+            // 'active' mid-floor with no combat state, so the enemy came back
+            // at full HP on the next command and the spent bomb did nothing.
+            // Now: Abyss flees run the REAL extraction path (abyssSystem.retreat
+            // — same as .j abyss retreat: run ends, 100% loot paid out).
+            // Also implements the owner's design: smoke bomb is USELESS in
+            // high-tier content (deep Abyss floor 21+ / S-rank+ dungeons), the
+            // Distraction Charm works everywhere but fails 50% of the time.
+            const _fleeIsAbyss = !!state.isAbyss;
+            const _fleeFloor = Number(state.abyssFloor) || 0;
+            const _fleeRank =
+              typeof state.dungeonRank === "string"
+                ? state.dungeonRank.toUpperCase()
+                : "";
+            const _fleeHighTier =
+              (_fleeIsAbyss && _fleeFloor >= 21) ||
+              (!_fleeIsAbyss && ["S", "SS", "SSS", "DRAGON", "GOD"].includes(_fleeRank));
+            if (itemKey === "smoke_bomb" && _fleeHighTier) {
+              // (belt-and-braces: the parse layer blocks this BEFORE consuming
+              // — this branch only catches legacy pendingActions built before
+              // that gate shipped)
+              resultMsg += `\n💨 The smoke bomb pops... and the ${_fleeIsAbyss ? `void pressure (floor ${_fleeFloor})` : `dungeon's density (${_fleeRank}-rank)`} snuffs it instantly. There is no hiding here!`;
+              break;
+            }
+            const _chancePct = Number(item.chance) || 100;
+            if (Math.random() * 100 >= _chancePct) {
+              resultMsg += `\n✨ The ${item.name} ${itemKey === "distraction_charm" ? "shatters into useless glitter" : "puffs out harmlessly"}! (_${Math.round(_chancePct)}% escape chance_) The enemies close in!`;
+              break; // escape failed - item spent, the turn is wasted
+            }
+            if (_fleeIsAbyss) {
+              // 💡 CO-OP: a MEMBER using an escape item slips out of the PARTY
+              // only — the shared run and the fight continue for everyone else.
+              // The HOST (or a solo runner) extracts the whole run.
+              const _fleer =
+                state.players.find((p) => p.jid === player.jid) ||
+                state.players[0];
+              const _isCoopRun = !!(state.abyssRun && state.abyssRun.isCoop);
+              const _isMember = _isCoopRun && state.abyssRun.hostJid && _fleer.jid !== state.abyssRun.hostJid;
+              if (_isMember) {
+                resultMsg += `\n💨 A diversion! ${_fleer.name} slips out of the Abyss — the party fights on!`;
+                // (message itself is delivered by the generic post-switch send —
+                // no early send here, this path FALLS THROUGH to the normal
+                // turn flow so the fight continues without the leaver)
+                try {
+                  const abyssSystem = require("./abyssSystem");
+                  await abyssSystem.leaveCoopRun(_fleer.jid);
+                } catch (_leaveErr) {
+                  console.error("[Abyss] member flee failed:", _leaveErr.message);
+                }
+                // Remove from the live fight + participant index
+                state.players = state.players.filter((p) => p.jid !== _fleer.jid);
+                delete state.pendingActions[_fleer.jid];
+                cleanupCoopIndexFor(_fleer.jid);
+              } else {
+                resultMsg += `\n💨 A diversion! You slip out of the Abyss with your loot!`;
+                try {
+                  await boundedSend(sock, state.chatId, { text: resultMsg });
+                } catch (e) {}
+                const abyssSystem = require("./abyssSystem");
+                try {
+                  const _retreatResult = await abyssSystem.retreat(_fleer.jid);
+                  if (_retreatResult && _retreatResult.message) {
+                    await boundedSend(sock, state.chatId, {
+                      text: _retreatResult.message,
+                    });
+                  }
+                } catch (_retreatErr) {
+                  console.error("[Abyss] smoke-bomb retreat failed:", _retreatErr.message);
+                }
+                if (_isCoopRun) cleanupCoopIndexForSession(state.sessionKey || sessionKey);
+                state.active = false;
+                deleteGameState(sessionKey);
+                return;
+              }
+            } else {
+            resultMsg += `\n💨 The smoke bomb creates a diversion! The party escapes!`;
+            try {
+              await boundedSend(sock, state.chatId, { text: resultMsg });
+            } catch (e) {}
+            return endAdventure(sock, sessionKey, false); // End without victory but alive
+            }
+          }
+          case "revive":
+            if (target.isDead) {
+              target.isDead = false;
+              const revivePct = item.effectValue || 0.5;
+              target.stats.hp = Math.floor(target.stats.maxHp * revivePct);
+              target.currentHP = target.stats.hp; // Sync
+              resultMsg += `\n🪶 Revived ${target.name}! (${Math.round(revivePct * 100)}% HP)`;
+              turnInfo.healing = target.stats.hp;
+            } else {
+              resultMsg += `\n(Target was already alive)`;
+            }
+            break;
+          default:
+            resultMsg += `\n(Item effect activated)`;
+        }
+        // 💡 2026-08-31: closes the `consumed.success` else
+        }
+        // 💡 2026-08-31: closes the valid-target else (item consumption fix)
+      }
+    }
+  }
+
+  // 💡 MERGE 2026-10-20 (owner: "what if the first message is gone and it's
+  // just the image with the caption? But with a lil more data?"): the separate
+  // narration text send is GONE. The lines ride into the battle-image caption
+  // via turnInfo.actionLog → combatIntegration.generateTurnCaption (Style A
+  // WAR LOG: ``` mono HP grid + » action log). The "always visible"
+  // guarantee still holds: render failure degrades to the caption text
+  // (nextTurn fallbacks) and send wedges degrade to captionOf(payload)
+  // (sendMediaBounded) — same enriched data, now one message instead of two.
+  state.combatHistory.push(resultMsg);
+
+  // Clear action after it is executed
+  delete state.pendingActions[player.jid];
+
+  // Set flag for next turn timer adjustment
+  if (!state.solo) {
+    state.actionJustTaken = true;
+  }
+
+  // Process the turn image update BEFORE resolving so state is consistent
+  // 💡 MERGE 2026-10-20: attach the narration before rendering so the caption
+  // carries the full action log (Style C).
+  turnInfo.actionLog = String(resultMsg || '').split('\n').map(s => s.trim()).filter(Boolean);
+  try {
+    await nextTurn(sock, turnInfo, sessionKey);
+  } catch (err) {
+    console.error("[Combat] nextTurn failed in performAction:", err.message);
+  }
+
+  // 💡 BUG FIX: Check combat end for all action types after the turn messages have been sent.
+  if (action.type === "ability" || action.type === "attack" || action.type === "item") {
+    if (await checkCombatEnd(sock, state, sessionKey)) {
+      if (state.resolveTurn) {
+        const r = state.resolveTurn;
+        state.resolveTurn = null;
+        r();
+      }
+      return;
+    }
+  }
+
+  // NOW resolve - safe to advance the loop since current turn is fully processed
+  if (state.resolveTurn) {
+    const resolve = state.resolveTurn;
+    state.resolveTurn = null;
+    resolve();
+  }
+  } catch (err) {
+    // 💡 POLISH 2026-07-17: catch any error that escaped the inner try blocks.
+    // Log it so we can diagnose, but don't let it leave the player stuck.
+    console.error('[Combat] performAction threw - cleaning up state:', err?.message || err, err?.stack || '');
+    try {
+      await boundedSend(sock, state.chatId, { text: '⚠️ Action failed (error: ' + (err?.message || 'unknown') + '). Your turn has been reset - try again.' }).catch(() => {});
+    } catch (e) {}
+    // 💡 TICKET #b4c0ff(c) (2026-09-21): the failed action used to leave the
+    // turn promise UNRESOLVED forever - the turn timer was already cleared at
+    // the top of performAction, nothing re-armed it, and the round loop blocked
+    // on the promise with the last turn card stuck on "⏳ Next action loading..."
+    // indefinitely. The failed action now counts as a skipped turn: resolve the
+    // promise so the round always advances (pendingActions is cleared in the
+    // finally below, so the player's next action starts a fresh turn).
+    try {
+      if (state && state.inCombat && state.resolveTurn) {
+        const __resolveFailedTurn = state.resolveTurn;
+        state.resolveTurn = null;
+        __resolveFailedTurn();
+      }
+    } catch (resolveErr) {
+      console.error('[Combat] failed to resolve hung turn:', resolveErr?.message || resolveErr);
+    }
+  } finally {
+    // 💡 GUARANTEE: always clear pendingActions, even if we threw somewhere.
+    // This is the fix for the "Action already chosen!" soft-lock bug.
+    // (Note: do NOT clear combatProcessing here - that's managed by
+    // processCombatTurn's own finally block. Prematurely clearing it could
+    // cause overlapping turn processing.)
+    if (state && player) {
+      try { delete state.pendingActions[player.jid]; } catch (e) {}
+    }
+    // 💡 SOLO RESUME: refresh the resume point after every completed action so
+    // a restart mid-fight always restores the CURRENT turn state. Skipped when
+    // the action ended the fight (endAdventure already cleared the snapshot and
+    // inCombat is false by then).
+    if (state && state.inCombat) {
+      // 💡 COMBAT RESUME: solo -> SoloCombatSnapshot, group -> GroupCombatSnapshot
+      saveCombatSnapshot(sessionKey).catch(() => {});
+    }
+  }
+}
+async function performEnemyAction(sock, enemy, sessionKey) {
+  const state = gameStates.get(sessionKey);
+  if (!state || !state.inCombat) return;
+
+  const chatId = state.chatId;
+  const turnDelay = state.solo ? 0 : GAME_CONFIG.ENEMY_TURN_TIME;
+
+  return new Promise(async (resolve) => {
+    try {
+      // 🧠 AI DECISION MAKING
+      // 💡 FIX #1 (2026-08-15): include summons in the target list so enemies
+      // can attack summons. Previously only state.players was passed, making summons
+      // invincible - they attacked but were never targeted. This is the root cause
+      // of "summons don't participate in combat".
+      // 💡 FIX 2026-08-31: const -> let - the silence fallback below
+      // reassigns `decision`, throwing "Assignment to constant variable"
+      // (swallowed by the outer catch) and silently skipping the enemy's
+      // turn whenever a silenced enemy picked a skill.
+      let decision = monsterSkills.evaluateAction(
+        enemy,
+        [...state.players, ...(state.summons || [])],
+        state.enemies,
+      );
+
+      let turnInfo = {
+        actor: enemy,
+        action: { name: "Action" },
+        target: null,
+        damage: 0,
+        effects: [],
+        turnNumber: state?.turnCount || 0,
+      };
+
+      // --- CHARGE ACTION (P2 Fix: boss ultimate telegraph) ---
+      // 💡 FIX P2 (2026-08-15): When a boss decides to use a skill with
+      // chargeTime, it enters charging mode instead of firing immediately.
+      // The skill fires on the next turn via release_charge. This gives
+      // players a warning window to prepare.
+      if (decision.action === "charge" && decision.skill) {
+        enemy.isCharging = true;
+        enemy.chargingSkill = decision.skill.id;
+        enemy.chargeTarget = decision.target;
+        try {
+          await boundedSend(sock, chatId, {
+            text: decision.skill.msg || `⚠️ *${enemy.name}* is CHARGING UP a devastating attack!`,
+          });
+        } catch (err) {}
+        turnInfo.action.name = "Charging";
+        turnInfo.target = decision.target;
+        // 💡 FIX 2026-08-31 (TDZ crash): this block previously did
+        // `resultMsg += ...` - but `resultMsg` is declared with `let` at
+        // line ~5183 (AFTER this point), so every boss charge threw
+        // `ReferenceError: Cannot access 'resultMsg' before initialization`,
+        // silently consumed the boss's turn (outer catch), and spammed the
+        // error log. The charge telegraph is ALREADY sent above - the
+        // duplicated send is removed entirely.
+        state.roundLog = state.roundLog || [];
+        state.roundLog.push(`⚠️ *${enemy.name}* is charging *${decision.skill.name}* - brace yourselves!`);
+        setTimeout(() => resolve(), turnDelay);
+        return;
+      }
+
+      // --- RELEASE CHARGE ---
+      if (decision.action === "release_charge") {
+        const skillId = decision.skillId;
+        const skillData = monsterSkills.getSkillById(enemy.archetype, skillId);
+
+        // 💡 FIX P2 (2026-08-15): If the charged skill has NO nextSkill
+        // (e.g. BOSS ultimate), fire the skill directly instead of looking
+        // for a follow-up. This handles the chargeTime pattern where the
+        // same skill fires after a delay.
+        if (skillData && !skillData.nextSkill) {
+          const target = enemy.chargeTarget || [...state.players, ...(state.summons || [])].find((p) => !p.isDead);
+          try {
+            await boundedSend(sock, chatId, {
+              text: `💥 *${enemy.name}* UNLEASHES *${skillData.name}*!`,
+            });
+          } catch (err) {}
+          const effect = skillData.currentEffect || skillData.effect(enemy.level || 1);
+          const abilityRes = await applyAbilityEffect(
+            sock, enemy, skillData, effect,
+            state.players.indexOf(target), chatId,
+          );
+          enemy.isCharging = false;
+          enemy.chargingSkill = null;
+          enemy.chargeTarget = null;
+          if (await checkCombatEnd(sock, state, sessionKey)) { resolve(); return; }
+          turnInfo.action.name = skillData.name;
+          turnInfo.target = target;
+          turnInfo.damage = Math.max(0, Math.floor(Number(abilityRes && abilityRes.damage) || 0)); // 🔴 hit-flash: real damaged entity rides to the Go renderer
+          const statusPrefix = state.pendingStatusMsg ? state.pendingStatusMsg + '\n' : '';
+          state.pendingStatusMsg = null;
+          if (abilityRes && abilityRes.message) {
+            // 💡 TICKET #b4c0ff: the "UNLEASHES" telegraph above already
+            // announced the enemy + skill once - don't repeat it here.
+            // 💡 Owner tweak v2: log-OFF ⇒ compress to damage + effects.
+            const fullMsg = combatIntegration.isWarLogOff(chatId)
+                ? combatIntegration.compactCombatText(statusPrefix + abilityRes.message.trim())
+                : statusPrefix + abilityRes.message.trim();
+            try { await boundedSend(sock, chatId, { text: fullMsg }); } catch (e) {}
+          }
+          setTimeout(() => resolve(), turnDelay);
+          return;
+        }
+
+        if (skillData && skillData.nextSkill) {
+          const followUpId = skillData.nextSkill;
+          const followUpSkill = monsterSkills.getSkillById(
+            enemy.archetype,
+            followUpId,
+          );
+          // 💡 FIX #1: include summons in charge-release target fallback
+        const target =
+            enemy.chargeTarget || [...state.players, ...(state.summons || [])].find((p) => !p.isDead);
+
+          try {
+            await boundedSend(sock, chatId, {
+              text: `💥 *${enemy.name}* UNLEASHES THE CHARGE!`,
+            });
+          } catch (err) {}
+
+          const effect =
+            followUpSkill.currentEffect ||
+            followUpSkill.effect(enemy.level || 1);
+          const abilityRes = await applyAbilityEffect(
+            sock,
+            enemy,
+            followUpSkill,
+            effect,
+            state.players.indexOf(target),
+            chatId,
+          );
+          if (await checkCombatEnd(sock, state, sessionKey)) {
+            resolve();
+            return;
+          }
+
+          turnInfo.action.name = followUpSkill.name;
+          turnInfo.target = target;
+          turnInfo.damage = Math.max(0, Math.floor(Number(abilityRes && abilityRes.damage) || 0)); // 🔴 hit-flash: real damaged entity rides to the Go renderer
+          enemy.isCharging = false;
+          enemy.chargingSkill = null;
+          enemy.chargeTarget = null;
+
+          // 💡 BUG FIX (same as skill flow): send the charge-release damage
+          // breakdown immediately instead of only queueing it in roundLog.
+          const statusPrefix = state.pendingStatusMsg ? state.pendingStatusMsg + '\n' : '';
+          state.pendingStatusMsg = null;
+          state.roundLog = state.roundLog || [];
+          if (abilityRes && abilityRes.message) {
+            // 💡 TICKET #b4c0ff: single announcement - the charge-release
+            // telegraph above already named the enemy, so this is the
+            // breakdown only.
+            // 💡 Owner tweak v2: log-OFF ⇒ compress to damage + effects.
+            const fullMsg = combatIntegration.isWarLogOff(chatId)
+                ? combatIntegration.compactCombatText(statusPrefix + abilityRes.message.trim())
+                : statusPrefix + abilityRes.message.trim();
+            let sentImmediately = false;
+            try {
+              await boundedSend(sock, chatId, { text: fullMsg });
+              sentImmediately = true;
+            } catch (err) {}
+            if (!sentImmediately) {
+              state.roundLog.push(fullMsg);
+            }
+          } else {
+            // No damage message (e.g. buff) - just log the charge release
+            state.roundLog.push(statusPrefix + `💥 *${enemy.name}* UNLEASHES THE CHARGE!`);
+          }
+          setTimeout(() => resolve(), turnDelay);
+          return;
+        }
+        // 💡 FIX: skillData missing or no nextSkill - clear charging state so
+        // the enemy doesn't soft-lock in "isCharging=true" forever (which
+        // caused performEnemyAction to keep returning release_charge, fall
+        // through to default-attack, and never clear isCharging).
+        console.warn(`[performEnemyAction] enemy ${enemy.id} was charging skill ${skillId} but no follow-up exists - clearing charge state`);
+        enemy.isCharging = false;
+        enemy.chargingSkill = null;
+        enemy.chargeTarget = null;
+        // Fall through to default attack below.
+      }
+
+      // --- USE SKILL ---
+      // 💡 FIX 2026-08-06: Silence status effect - enemies silenced can't use
+      // abilities, fall back to basic attack. Previously silence was only
+      // checked for players (useAbility at line ~8244), never for enemies.
+      if (decision.action === "skill" && (enemy.statusEffects || []).some(e => e.type === 'silence')) {
+        state.roundLog = state.roundLog || [];
+        state.roundLog.push(`🤐 ${enemy.name} is SILENCED - cannot use abilities, falls back to a basic attack!`);
+        decision = { action: 'attack', target: decision.target };
+      }
+
+      if (decision.action === "skill") {
+        const skill = decision.skill;
+        const target = decision.target;
+
+        // 💡 FIX: actually consume mana + set cooldown. Previously monsterSkills
+        // checked these (monsterSkills.js:553-557) but performEnemyAction
+        // never decremented them - so monsters had infinite mana AND never
+        // put their own skills on cooldown, allowing ult spam every turn.
+        if (typeof skill.cost === 'number' && skill.cost > 0) {
+          enemy.mana = Math.max(0, (enemy.mana ?? 0) - skill.cost);
+        }
+        if (typeof skill.cooldown === 'number' && skill.cooldown > 0) {
+          enemy.cooldowns = enemy.cooldowns || {};
+          enemy.cooldowns[skill.id] = skill.cooldown;
+        }
+
+        if (skill.type === "charge") {
+          enemy.isCharging = true;
+          enemy.chargingSkill = skill.id;
+          enemy.chargeTarget = target;
+          try {
+            await boundedSend(sock, chatId, {
+              text: `⚠️ *${enemy.name}* ${skill.msg}`,
+            });
+          } catch (err) {}
+
+          turnInfo.action.name = "Charging";
+          // No image per enemy charge - push to roundLog
+          const chargeStatusPrefix = state.pendingStatusMsg ? state.pendingStatusMsg + '\n' : '';
+          state.pendingStatusMsg = null;
+          state.roundLog = state.roundLog || [];
+          state.roundLog.push(chargeStatusPrefix + `⚠️ *${enemy.name}* is charging up!`);
+          setTimeout(() => resolve(), turnDelay);
+          return;
+        }
+
+        const effect =
+          skill.currentEffect ||
+          (typeof skill.effect === "function"
+            ? skill.effect(enemy.level || 1)
+            : skill.effect);
+        let targetIdx =
+          decision.targetType === "ally" || decision.targetType === "self"
+            ? state.enemies.indexOf(target)
+            : state.players.indexOf(target);
+
+        const abilityRes = await applyAbilityEffect(sock, enemy, skill, effect, targetIdx, chatId);
+        if (await checkCombatEnd(sock, state, sessionKey)) {
+          resolve();
+          return;
+        }
+
+        turnInfo.action.name = skill.name;
+        turnInfo.target = target;
+        turnInfo.damage = Math.max(0, Math.floor(Number(abilityRes && abilityRes.damage) || 0)); // 🔴 hit-flash: real damaged entity rides to the Go renderer
+
+        // 💡 BUG FIX: Send the enemy's full ability message (including damage
+        // breakdown) IMMEDIATELY as a standalone message. Previously this was
+        // only pushed to roundLog (flushed at the start of the player's next
+        // turn), which caused users to see "Enemy uses X!" then the turn
+        // prompt, then the damage log later - making it look like enemy
+        // damage wasn't being shown.
+        state.roundLog = state.roundLog || [];
+        if (abilityRes && abilityRes.message) {
+          // 💡 TICKET #b4c0ff (2026-09-21): this used to prepend ANOTHER
+          // "⚡ *enemy* uses *skill*!" line even though applyAbilityEffect
+          // already opens its message with "<icon> <enemy> uses *<ability>*!"
+          // - so the enemy name AND the ability name appeared twice in one
+          // message (the "Abyssal Singularity displayed twice" report).
+          // The breakdown message is now sent as-is: one announcement, then
+          // the damage lines.
+          // 💡 Owner tweak v2: log-OFF ⇒ compress to damage + effects.
+          const fullMsg = combatIntegration.isWarLogOff(chatId)
+              ? combatIntegration.compactCombatText(abilityRes.message.trim())
+              : abilityRes.message.trim();
+          let sentImmediately = false;
+          try {
+            await boundedSend(sock, chatId, { text: fullMsg });
+            sentImmediately = true;
+          } catch (err) {}
+          // Only push to roundLog if the immediate send failed (avoids
+          // duplicate display when the round summary flushes at turn start).
+          if (!sentImmediately) {
+            state.roundLog.push(fullMsg);
+          }
+        }
+
+        // No image per enemy skill - push to roundLog and resolve
+        setTimeout(() => resolve(), turnDelay);
+        return;
+      }
+
+      // --- FLEE (reactive mob AI - Phase 1) ---
+      // When a regular mob is alone and critical HP, it may try to flee.
+      // 50% chance of success - if successful, mob escapes (removed from
+      // combat, no XP/gold for that mob). If failed, mob wastes its turn.
+      if (decision.action === 'flee') {
+        const fleeSuccess = Math.random() < 0.50;
+        if (fleeSuccess) {
+          try {
+            await boundedSend(sock, chatId, {
+              text: `💨 *${enemy.name}* FLEES from combat!\n_The enemy escaped - no rewards for this kill._`,
+            });
+          } catch (e) {}
+          enemy.isDead = true;
+          enemy.currentHP = 0;
+          enemy.fled = true;
+          // 💡 QA FIX: must also set enemy.stats.hp = 0 - checkCombatEnd
+          // and the action-gauge loop check `c.stats.hp <= 0`, not
+          // `c.isDead`. Without this, a "fled" mob keeps gaining action
+          // gauge and taking turns (attacking, healing, fleeing again).
+          if (enemy.stats) enemy.stats.hp = 0;
+          // Check if combat should end (all enemies dead)
+          if (await checkCombatEnd(sock, state, sessionKey)) {
+            resolve();
+            return;
+          }
+          setTimeout(() => resolve(), turnDelay);
+          return;
+        } else {
+          try {
+            await boundedSend(sock, chatId, {
+              text: `💨 *${enemy.name}* tries to flee but FAILS!\n_The enemy wasted its turn in panic._`,
+            });
+          } catch (e) {}
+          setTimeout(() => resolve(), turnDelay);
+          return;
+        }
+      }
+
+      // --- DEFAULT ATTACK ---
+      let target = decision.target;
+      if (!target || target.isDead) {
+        // 💡 FIX #1: include summons in the fallback target list
+        const alive = [...state.players, ...(state.summons || [])].filter((p) => !p.isDead);
+        if (alive.length === 0) {
+          setTimeout(() => resolve(), turnDelay);
+          return;
+        }
+        target = alive[0];
+      }
+
+      const { damage, isCrit, wasEvaded } = calculateDamage(
+        enemy,
+        target,
+        enemy.stats.atk,
+        "physical",
+        "PHYSICAL",
+        sessionKey,
+      );
+
+      let resultMsg = `${enemy.icon} *${enemy.name}* `;
+      if (wasEvaded) {
+        resultMsg += `attacks ${target.name} but 💨 MISSES!`;
+      } else {
+        // 💡 POLISH 2026-07-17: EVASION BUFF - check target's evasion buff
+        // (set by NINJA.shadow_clone_jutsu, DIVINE_FIST.heavenly_step, etc.).
+        // This is separate from the base evasion stat - it's a temporary
+        // percentage boost that gives a chance to fully evade.
+        const evasionBuff = (target.buffs || []).find(b => b.type === 'evasion' && b.value > 0);
+        if (evasionBuff && Math.random() * 100 < evasionBuff.value) {
+          resultMsg += `attacks ${target.name} but 💨 EVADES (buff)!`;
+          // 💡 CRITICAL FIX: was `return;` which exited the Promise executor
+          // without calling resolve(), hanging combat forever. Now sends the
+          // message and resolves properly.
+          try {
+            await boundedSend(sock, chatId, { text: resultMsg });
+          } catch (e) {}
+          setTimeout(() => resolve(), turnDelay);
+          return;
+        }
+
+        // 💡 FIX #2 (2026-08-15): Summon guard/intercept - if the target is being
+        // guarded by a summon (guardedBy flag set by summonAI.js:244), redirect
+        // guardInterceptPct% of the damage to the summon. This wires up what was
+        // previously dead code: summonAI set the flags but nothing read them.
+        let actualDamage = damage;
+        let interceptMsg = '';
+        if (target.guardedBy && state.summons) {
+          const guardian = state.summons.find(s =>
+            s.id === target.guardedBy && !s.isDead && s.stats?.hp > 0
+          );
+          if (guardian && target.guardInterceptPct > 0) {
+            const intercepted = Math.floor(damage * target.guardInterceptPct / 100);
+            if (intercepted > 0) {
+              guardian.stats.hp = Math.max(0, (guardian.stats.hp || 0) - intercepted);
+              guardian.currentHP = guardian.stats.hp;
+              actualDamage = damage - intercepted;
+              interceptMsg = `\n🛡️ ${guardian.icon || '🐉'} ${guardian.name} intercepts ${intercepted} damage for ${target.name}!`;
+              if (guardian.stats.hp <= 0) {
+                guardian.isDead = true;
+                guardian.justDied = true;
+                interceptMsg += `\n💀 ${guardian.name} falls protecting ${target.name}!`;
+              }
+            }
+          }
+        }
+
+        // 💡 FIX #4 (2026-08-15): AI auto-intercept - protective summons
+        // automatically jump in front of attacks when their owner is below
+        // 30% HP. This makes summons feel "alive" without player input.
+        // Unlike the committed guard (Fix #2), this is reactive and free -
+        // it doesn't consume the summon's turn. The 30% chance prevents
+        // it from triggering every attack.
+        //
+        // Conditions: no active guard, target is a player, HP < 30%,
+        // summon is PROTECTIVE with loyalty >= 50 and HP > 50%.
+        if (!target.guardedBy && !target.isSummon && !target.isEnemy &&
+            target.jid && state.summons && actualDamage > 0) {
+          const targetMaxHp = target.maxHp || target.stats?.maxHp || 1;
+          if (target.currentHP / targetMaxHp < 0.30) {
+            const protector = state.summons.find(s =>
+              !s.isDead &&
+              s.stats?.hp > 0 &&
+              s.summonerJid === target.jid &&
+              s.personality === 'PROTECTIVE' &&
+              (s.loyalty || 0) >= 50 &&
+              s.stats.hp > (s.maxHp || s.stats?.maxHp || 1) * 0.5 &&
+              s.id !== target.guardedBy  // don't double-intercept
+            );
+            if (protector && Math.random() < 0.30) {
+              // Summon takes the FULL hit
+              const intercepted = actualDamage;
+              protector.stats.hp = Math.max(0, (protector.stats.hp || 0) - intercepted);
+              protector.currentHP = protector.stats.hp;
+              actualDamage = 0;
+              interceptMsg += `\n🛡️ ${protector.icon || '🐉'} ${protector.name} jumps in front of ${target.name}, taking the full blow (${intercepted} damage)!`;
+              if (protector.stats.hp <= 0) {
+                protector.isDead = true;
+                protector.justDied = true;
+                interceptMsg += `\n💀 ${protector.name} sacrifices itself to save ${target.name}!`;
+              }
+            }
+          }
+        }
+
+        target.stats.hp -= actualDamage;
+        target.currentHP = Math.max(0, target.stats.hp);
+
+        const durabilitySystem = require('../inventory/durabilitySystem');
+        durabilitySystem.applyWear(target, 'ARMOR_PIECES', { combatHistory: state.combatHistory, amount: 0.5 });
+        resultMsg += `attacks ${target.name} for 💥 ${actualDamage} damage!${isCrit ? " (CRIT!)" : ""}${interceptMsg}`;
+        turnInfo.damage = damage;
+        turnInfo.target = target;
+
+        // 💡 POLISH 2026-07-17: THORNS BUFF - reflect melee damage back to attacker.
+        // Set by WARLOCK.demon_armor and similar.
+        const thornsBuff = (target.buffs || []).find(b => b.type === 'thorns' && b.value > 0);
+        if (thornsBuff && !enemy.isEnemy === false) {  // enemy attacked player
+          const reflect = Math.floor(damage * thornsBuff.value / 100);
+          if (reflect > 0) {
+            enemy.stats.hp = Math.max(0, (enemy.stats.hp || 0) - reflect);
+            enemy.currentHP = enemy.stats.hp;
+            resultMsg += `\n🌵 THORNS! ${target.name} reflects ${reflect} damage back!`;
+          }
+        }
+
+        // 💡 POLISH 2026-07-17: COUNTERATTACK BUFF - chance to retaliate.
+        // Set by NINJA.shadow_clone_jutsu and SAMURAI.mindful_stance.
+        const counterBuff = (target.buffs || []).find(b => b.type === 'counterattack');
+        if (counterBuff && Math.random() * 100 < (counterBuff.chance || 25)) {
+          const counterDmg = Math.floor((target.stats.atk || 20) * (counterBuff.value || 1.0));
+          enemy.stats.hp = Math.max(0, (enemy.stats.hp || 0) - counterDmg);
+          enemy.currentHP = enemy.stats.hp;
+          resultMsg += `\n⚔️↩️ COUNTER! ${target.name} retaliates for ${counterDmg} damage!`;
+          if (enemy.stats.hp <= 0) {
+            enemy.isDead = true;
+            enemy.justDied = true;
+            resultMsg += `\n💀 ${enemy.name} is slain by the counterattack!`;
+            recordEnemyKill(state, enemy);
+          }
+        }
+
+        // 🛡️ Player Equipment Passive Triggers on Hit (Defensive)
+        const targetArmor = target.equipment?.armor?.id || target.equipment?.armor;
+        const targetShield = target.equipment?.off_hand?.id || target.equipment?.off_hand;
+        const targetHelm = target.equipment?.helmet?.id || target.equipment?.helmet;
+
+        if (targetShield === "aegis_of_the_abyss" || targetShield === "abyssal_bulwark" || targetShield === "mirror_shield_of_tartarus") {
+          if (Math.random() < 0.20) {
+            applyStatusEffect(target, "shield", 1, 50);
+            resultMsg += `\n🛡️ *Aegis Core Pulse:* ${target.name} absorbs energy into a Shield! (+50 Shield)`;
+          }
+        } else if (targetShield === "colossal_titan_shield" || targetShield === "dragonscale_kite_shield" || targetShield === "aegis_of_the_golem_king") {
+          if (Math.random() < 0.20) {
+            applyStatusEffect(target, "shield", 1, 35);
+            resultMsg += `\n🛡️ *Titan Shielding:* ${target.name} gains a Shield! (+35 Shield)`;
+          }
+        } else if (targetShield === "aegis_of_eternal_fire") {
+          if (Math.random() < 0.25) {
+            applyStatusEffect(enemy, "burn", 2, 15);
+            resultMsg += `\n🔥 *Melting Shield:* Heat radiating from Aegis of Eternal Fire sets *${enemy.name}* on fire!`;
+          }
+        }
+
+        if (targetArmor === "eelskin_hazard_suit") {
+          if (Math.random() < 0.20) {
+            applyStatusEffect(enemy, "stun", 1);
+            resultMsg += `\n⚡ *Static Discharge:* Electrical current cycles into *${enemy.name}*, stunning them!`;
+          }
+        } else if (targetArmor === "dragon_scale_armor" || targetArmor === "dragon_scale_mail") {
+          if (Math.random() < 0.20) {
+            const healAmt = Math.floor(damage * 0.25);
+            if (healAmt > 0) {
+              target.stats.hp = Math.min(target.stats.maxHp, target.stats.hp + healAmt);
+              target.currentHP = target.stats.hp;
+              resultMsg += `\n🩸 *Draconic Retribution:* Dragon scales convert kinetic energy, healing ${target.name} for *${healAmt}* HP!`;
+            }
+          }
+        }
+
+        if (targetHelm === "dragon_helm" || targetHelm === "great_wyrm_helm" || targetHelm === "helm_of_ancient_blood") {
+          if (Math.random() < 0.15) {
+            applyStatusEffect(enemy, "weak", 2, 20);
+            resultMsg += `\n😱 *Dragon Fear:* The terrifying helm weakens *${enemy.name}*!`;
+          }
+        }
+
+        if (target.stats.hp <= 0) {
+          await handleDeath(sock, target, sessionKey, enemy.name);
+          if (await checkCombatEnd(sock, state, sessionKey)) {
+            resolve();
+            return;
+          }
+          resultMsg += `\n💀 ${target.name} has fallen!`;
+        }
+      }
+
+      const enemyStatusPrefix = state.pendingStatusMsg
+        ? state.pendingStatusMsg + "\n"
+        : "";
+      state.pendingStatusMsg = null;
+      // 💡 Owner tweak v2 (2026-10-20): .j combat log OFF ⇒ the enemy attack
+      // collapses to the damage + effect lines ("leave the damage done —
+      // total damage done from both enemies when they make an action").
+      const rawEnemyMsg = (enemyStatusPrefix ? enemyStatusPrefix + '\n' : '') + resultMsg;
+      const fullEnemyMsg = combatIntegration.isWarLogOff(chatId)
+          ? combatIntegration.compactCombatText(rawEnemyMsg)
+          : rawEnemyMsg;
+
+      // 💡 BUG FIX: Send the enemy's default-attack message IMMEDIATELY.
+      // Previously this was only pushed to roundLog (flushed at the start
+      // of the player's next turn), so the user would see the enemy attack
+      // result delayed - appearing AFTER the turn prompt instead of before
+      // it. This made it look like enemy damage wasn't being shown.
+      state.roundLog = state.roundLog || [];
+      let sentImmediately = false;
+      try {
+        await boundedSend(sock, chatId, { text: fullEnemyMsg });
+        sentImmediately = true;
+      } catch (err) {}
+      // Fallback: push to roundLog only if the immediate send failed.
+      if (!sentImmediately) {
+        state.roundLog.push(fullEnemyMsg);
+      }
+
+      // No image per enemy attack - roundLog is flushed before player's next prompt
+      setTimeout(() => resolve(), turnDelay);
+    } catch (error) {
+      console.error(
+        `[Combat] Critical error in performEnemyAction for ${enemy.name}:`,
+        error,
+      );
+      setTimeout(() => resolve(), 1000);
+    }
+  });
+}
+async function checkBossPhase(sock, boss, chatId) {
+  if (!boss.isBoss || !boss.phases) return null;
+
+  const hpPct = (boss.stats.hp / (boss.stats.maxHp || boss.stats.hp)) * 100;
+  const nextPhaseIdx = (boss.currentPhase || 0) + 1;
+  const nextPhase = boss.phases[nextPhaseIdx];
+
+  if (nextPhase && hpPct <= nextPhase.threshold) {
+    boss.currentPhase = nextPhaseIdx;
+    boss.abilities = nextPhase.abilities || boss.abilities;
+
+    // Visual/Audio Feedback
+    let msg = `🌟 *BOSS PHASE TRANSITION* 🌟\n\n`;
+    msg += `${boss.icon} *${boss.name}*: ${nextPhase.message}\n`;
+
+    // 💡 FIX P0 Commit B (2026-08-16): Stat boosts now apply ADDITIVELY
+    // against the boss's base stat, not multiplicatively against the
+    // current (already-boosted) stat. Previously, +30/+50/+80 stacked
+    // as: base × 1.30 × 1.50 × 1.80 = base × 3.51 (compounding).
+    // Now: base × (1 + 0.30 + 0.50 + 0.80) = base × 2.60 (additive).
+    // This prevents late-phase bosses from becoming unkillable.
+    //
+    // Implementation: on first phase transition, snapshot the base stats
+    // into boss._baseStats. On every transition, sum ALL accumulated
+    // stat_boost effects from phases 1..currentPhaseIdx and apply the
+    // total to the base stat.
+    if (!boss._baseStats) {
+      boss._baseStats = { ...boss.stats };
+    }
+    // Sum all stat_boost effects from phases 1 through currentPhaseIdx
+    const accumulatedBoosts = {}; // stat -> total % boost
+    for (let i = 1; i <= nextPhaseIdx; i++) {
+      const phase = boss.phases[i];
+      if (phase && phase.effects) {
+        for (const eff of phase.effects) {
+          if (eff.type === "stat_boost") {
+            accumulatedBoosts[eff.stat] = (accumulatedBoosts[eff.stat] || 0) + eff.value;
+          }
+        }
+      }
+    }
+    // Apply accumulated boosts additively to base stats
+    for (const [stat, totalBoost] of Object.entries(accumulatedBoosts)) {
+      if (boss._baseStats[stat] !== undefined) {
+        boss.stats[stat] = Math.floor(boss._baseStats[stat] * (1 + totalBoost / 100));
+      }
+    }
+
+    // Apply phase effects (heal still applies normally - not a stat boost)
+    if (nextPhase.effects) {
+      nextPhase.effects.forEach((eff) => {
+        if (eff.type === "stat_boost") {
+          // Already handled above via accumulated boosts - just log the message
+          msg += `\n📈 ${boss.name}'s ${eff.stat.toUpperCase()} increased! (total +${accumulatedBoosts[eff.stat]}%)`;
+        }
+        if (eff.type === "heal") {
+          boss.stats.hp = Math.min(boss.stats.maxHp, boss.stats.hp + eff.value);
+          boss.currentHP = boss.stats.hp;
+          msg += `\n💖 ${boss.name} recovered health!`;
+        }
+      });
+    }
+
+    try {
+      await boundedSend(sock, chatId, { text: msg });
+    } catch (err) {
+      console.error(
+        `[Combat] Failed to send boss phase message: ${err.message}`,
+      );
+    }
+    return true;
+  }
+  return false;
+}
+
+// 💡 Helper: record an enemy kill across all tracking systems.
+// Used by every kill path (handleDeath, basic attack, single-target ability,
+// AOE sweep, multi-hit) so boss/dragon/undead/guild-board tracking can never
+// drift out of sync again. (Previously only handleDeath called trackMissionStat,
+// so 4 of 5 kill paths silently skipped rank-mission progress.)
+// 💡 Rank order for boss kill gating - only bosses at your rank or 2 ranks below count
+const RANK_ORDER_FOR_GATE = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'GOD'];
+
+function recordEnemyKill(state, entity) {
+  if (!state || !entity || !entity.isEnemy) return;
+  // 💡 FIX 2026-07-30: Defensive init - Abyss combat states (startAbyssCombat
+  // at line 5294) and possibly other state-creation paths don't include the
+  // `stats` object from INITIAL_STATE_TEMPLATE. This caused a crash:
+  //   TypeError: Cannot read properties of undefined (reading 'monstersKilled')
+  // whenever a kill happened in Abyss combat or any state missing `stats`.
+  // Now we ensure state.stats exists before incrementing.
+  if (!state.stats) state.stats = { monstersKilled: 0, bossesDefeated: 0, treasuresFound: 0, trapsTriggered: 0, playersRevived: 0 };
+  state.stats.monstersKilled = (state.stats.monstersKilled || 0) + 1;
+  if (entity.isBoss) state.stats.bossesDefeated = (state.stats.bossesDefeated || 0) + 1;
+
+  state.players.forEach((p) => {
+    if (!p.jid || p.isDead) return;
+
+    // 💡 CLASS PASSIVE WIRE-UP (on-kill): fire damage_on_kill, etc.
+    // Passives return flavor messages to push into the round log.
+    try {
+      const killMsgs = applyClassPassiveOnKill(p, entity);
+      if (killMsgs && killMsgs.length > 0) {
+        state.roundLog = state.roundLog || [];
+        state.roundLog.push(...killMsgs);
+      }
+    } catch (e) {
+      console.error('[Passive] applyClassPassiveOnKill failed:', e?.message || e);
+    }
+
+    // 💡 Phase 3: Necromancer capture pipeline.
+    // If this player has an active capture window (from army_of_dead ult),
+    // attempt to capture the defeated enemy as a permanent summon.
+    // Fire-and-forget async - result pushed to roundLog.
+    try {
+      const window = summonCapture.getCaptureWindow(state, p.jid);
+      if (window) {
+        // Fire-and-forget - don't block the sync kill tracking
+        summonCapture.attemptCapture(state, entity, p.jid)
+          .then(result => {
+            if (result && result.captured && result.message) {
+              state.roundLog = state.roundLog || [];
+              state.roundLog.push(result.message);
+            } else if (result && result.message) {
+              // Capture failed but has a message (e.g. "soul escapes")
+              state.roundLog = state.roundLog || [];
+              state.roundLog.push(result.message);
+            }
+          })
+          .catch(e => console.error('[Capture] attemptCapture failed:', e?.message || e));
+      }
+    } catch (e) {
+      console.error('[Capture] recordEnemyKill capture branch failed:', e?.message || e);
+    }
+
+    if (entity.isBoss) {
+      // 💡 QA FIX: Rank-gate boss kills for rank-up missions.
+      // Only bosses from dungeons at your rank or up to 2 ranks below count.
+      // This prevents F-rank bosses from counting for S-rank players.
+      const dungeonRank = state.dungeonRank || 'F';
+      const dungeonRankIdx = RANK_ORDER_FOR_GATE.indexOf(dungeonRank === 'DRAGON' ? 'SSS' : dungeonRank);
+      const user = economy.getUser(p.jid);
+      const playerRank = user?.adventurerRank || 'F';
+      const playerRankIdx = RANK_ORDER_FOR_GATE.indexOf(playerRank);
+      const rankDiff = playerRankIdx - dungeonRankIdx;
+
+      if (rankDiff > 2) {
+        // Boss is too far below player's rank - doesn't count for missions
+        // Still award guild XP + war points + rune drops, just not mission stat
+        state.roundLog = state.roundLog || [];
+        state.roundLog.push(`⚠️ Boss kill didn't count for rank missions (dungeon ${dungeonRank} is more than 2 ranks below your ${playerRank} rank).`);
+      } else {
+        economy.trackMissionStat(p.jid, 'bossesDefeated', 1);
+      }
+
+      // 💡 Phase 2: Award guild XP for boss kills (more than regular mobs)
+      try {
+        const guildPerks = require('../guildwar/guildPerks');
+        guildPerks.awardGuildXp(p.jid, 10, `Boss kill: ${entity.name || entity.id}`);
+      } catch (e) {}
+
+      // 💡 Phase 3: Roll for rune drop on S+ bosses
+      // ⚠️ DISABLED 2026-07-17 - Runes are now Abyss-exclusive. The boss-drop
+      // path was the only non-Abyss source of runes from regular dungeons.
+      // Abyss-floor rune drops (around line 4565, gated on state.abyssFloor
+      // >= 21) still fire as before. Existing runes in player inventories
+      // are untouched - only new boss-drop rolls are skipped.
+      //
+      // To re-enable: uncomment the block below.
+      /*
+      try {
+        const runeSystem = require('../inventory/runeSystem');
+        const bossLevel = entity.level || entity.stats?.level || 1;
+        let runeDropChance = 0;
+        if (entity.id && entity.id.toUpperCase().includes('DRAGON')) {
+          runeDropChance = 0.20;
+        } else if (bossLevel >= 100) {
+          runeDropChance = 0.25; // SSS-rank
+        } else if (bossLevel >= 90) {
+          runeDropChance = 0.15; // SS-rank
+        } else if (bossLevel >= 80) {
+          runeDropChance = 0.10; // S-rank
+        }
+        if (runeDropChance > 0) {
+          const drop = runeSystem.rollRuneDrop(runeDropChance);
+          if (drop) {
+            // awardRune is async but recordEnemyKill is sync - fire and forget,
+            // log result to console. The rune will appear in the player's
+            // inventory on next check; we can't display inline because this
+            // function is called from sync kill paths.
+            runeSystem.awardRune(p.jid, drop.type, drop.tier, 'boss_drop')
+              .then(runeResult => {
+                if (runeResult.success) {
+                  console.log(`[RuneDrop] Awarded ${drop.type} (${drop.tier}) to ${p.jid} from boss drop`);
+                }
+              })
+              .catch(e => console.error('[RuneDrop] Failed to award rune:', e.message));
+          }
+        }
+      } catch (e) {
+        console.error('[RuneDrop] Failed to roll rune drop:', e.message);
+      }
+      */
+    }
+    // Total lifetime kills - required for DOOMSLAYER (req.kills: 500)
+    economy.trackMissionStat(p.jid, 'kills', 1);
+    // Dragon tracking - case-insensitive to handle the lowercase id bug
+    // (bossMechanics has 'ancient_dragon_boss' lowercase, classEncounters
+    // expects uppercase 'DRAGON' substring). Both forms now match.
+    const eid = String(entity.id || '').toUpperCase();
+    if (eid.startsWith('DRAKE') || eid.includes('DRAGON')) {
+      economy.incrementDragonKills(p.jid, 1);
+    }
+    // Undead tracking - required for TEMPLAR ascension (req.undeadKills: 200)
+    if (eid.includes('UNDEAD') || eid.includes('SKELETON') || eid.includes('ZOMBIE') || eid.includes('GHOUL') || eid.includes('WIGHT') || eid.includes('LICH') || eid.includes('NECRO')) {
+      economy.trackMissionStat(p.jid, 'undeadKills', 1);
+    }
+    // Guild board progress for all kills
+    const userGuild = guilds.getUserGuild(p.jid);
+    if (userGuild) {
+      guilds.updateBoardProgress(userGuild, entity.type, 1);
+    }
+
+    // 💡 FIX 2026-08-03 (bug report #3): Award summon XP for EVERY enemy kill
+    // in ALL combat types (PvE, Abyss, PvP) - not just at end of guild quest.
+    // Previously summon XP was only awarded in endAdventure() (guild quest end),
+    // so Abyss + PvP + raid summons got ZERO XP despite participating.
+    // This fix fires per-kill, giving 10% of the enemy's XP value to each
+    // deployed summon owned by this player.
+    try {
+      if (state.summons && state.summons.length > 0) {
+        const summonSystem = require('../summons/summonSystem');
+        const summonAI = require('../summons/summonAI');
+        // Estimate enemy XP: base 20 + level*5, bosses 5x
+        const enemyLevel = entity.level || entity.stats?.level || Math.floor((state.abyssFloor || state.dungeonRank || 1));
+        const enemyXpValue = (entity.isBoss ? 100 : 20) + (enemyLevel * 5);
+        const summonXpShare = Math.max(5, Math.floor(enemyXpValue * 0.1));
+        for (const summonEntity of state.summons) {
+          // Only award XP to summons owned by this player + still alive
+          if (summonEntity && !summonEntity.isDead && summonEntity._summonDoc &&
+              summonEntity.summonerJid === p.jid) {
+            const xpResult = summonSystem.addSummonXP(summonEntity._summonDoc, summonXpShare);
+            if (xpResult.leveledUp) {
+              state.roundLog = state.roundLog || [];
+              state.roundLog.push(`✨ ${summonEntity.icon} ${summonEntity.name} leveled up to L${xpResult.newLevel}!`);
+            }
+            // 💡 NEW 2026-08-05: Notify newly unlocked abilities
+            if (xpResult.newlyUnlockedAbilities && xpResult.newlyUnlockedAbilities.length > 0) {
+              state.roundLog = state.roundLog || [];
+              for (const ab of xpResult.newlyUnlockedAbilities) {
+                state.roundLog.push(`🔓 ${summonEntity.icon} ${summonEntity.name} learned *${ab.name}*! (Lv.${ab.levelReq}+)`);
+              }
+            }
+            // Persist async (fire-and-forget - don't block combat)
+            summonAI.persistSummonChanges(summonEntity).catch(() => {});
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[SummonXP] recordEnemyKill award failed:', e.message);
+    }
+  });
+}
+
+async function handleDeath(
+  sock,
+  entity,
+  sessionKey,
+  lastKiller = "The Infection",
+) {
+  const state = gameStates.get(sessionKey);
+  if (!state) return;
+  const chatId = state.chatId;
+  entity.isDead = true;
+  entity.stats.hp = 0;
+  entity.currentHP = 0; // Sync
+  entity.justDied = true;
+
+  if (entity.isEnemy) {
+    recordEnemyKill(state, entity);
+  }
+
+  // 💡 Summoner System (Phase 2): summon death → apply Soul Echo to summoner.
+  // The summon's echo buff is applied to the PLAYER who summoned it.
+  // The summon is removed from state.summons + state.turnOrder.
+  // The summon is NOT permanently lost - it returns to the roster at reduced loyalty.
+  if (entity.isSummon) {
+    try {
+      const summoner = (state.players || []).find(p => p.jid === entity.summonerJid && !p.isDead);
+      if (summoner) {
+        const echoMsg = summonAI.applySoulEcho(summoner, entity);
+        if (echoMsg && chatId) {
+          try {
+            await boundedSend(sock, chatId, { text: echoMsg });
+          } catch (e) {}
+        }
+        // Track echo absorption on user stats
+        try {
+          const user = economy.getUser(summoner.jid);
+          if (user && user.summonStats) {
+            user.summonStats.echoesAbsorbed = (user.summonStats.echoesAbsorbed || 0) + 1;
+          }
+        } catch (e) {}
+      }
+
+      // Remove summon from combat state
+      state.summons = (state.summons || []).filter(s => s.id !== entity.id);
+      state.turnOrder = (state.turnOrder || []).filter(c => c.id !== entity.id);
+
+      // Persist loyalty reduction (summon returns at 50% of current loyalty, min 10)
+      if (entity._summonDoc) {
+        try {
+          const doc = entity._summonDoc;
+          const reducedLoyalty = Math.max(10, Math.floor((doc.loyalty || 100) * 0.5));
+          doc.loyalty = reducedLoyalty;
+          await doc.save();
+        } catch (e) {
+          console.error('[Summon] Failed to persist loyalty reduction:', e?.message || e);
+        }
+      }
+    } catch (e) {
+      console.error('[Summon] handleDeath summon branch failed:', e?.message || e);
+    }
+    return;  // summons don't go through the PERMADEATH logic below
+  }
+
+  if (!entity.isEnemy) {
+    // Player death
+    if (state.mode === "PERMADEATH" || state.mode === "HARDCORE") {
+      // Callback to index.js to record in graveyard
+      if (state.onHardcoreDeath) {
+        state.onHardcoreDeath(
+          entity.jid,
+          entity.level,
+          entity.class?.name || "Unknown",
+          lastKiller,
+        );
+      }
+      // Remove from game permanently
+      state.players = state.players.filter((p) => p.jid !== entity.jid);
+    }
+  }
+}
+
+async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
+  const state = gameStates.get(sessionKey);
+  if (!state || !state.inCombat) return;
+  // 🩘 SOCK FALLBACK (2026-10-26): same family as the processVotes heal —
+  // any caller that lost its socket still delivers the battle card +
+  // YOUR TURN caption through the state's stored socket.
+  if (!sock) sock = state.sock || state.sock_ref;
+  startDeathBake(state);   // pre-bake death clips in the background (first turn of the fight)
+  await playEnemyDeaths(sock, state, { hold: true });   // kills hold for THIS turn's board (merged into it below); no-board paths flush at the end of this function
+
+  // Generate incremental combat image if action just happened
+  if (lastTurnInfo) {
+    try {
+      // 💡 INSURANCE v3 (2026-10-20): the warLog flag is stamped at the
+      // turnInfo build site (5452) — but any turnInfo that reaches here
+      // without it (rebuilt/partial paths) would render the FULL log even
+      // for .j combat log OFF chats. Stamp it if missing.
+      if (lastTurnInfo.warLog === undefined && state.chatId) {
+        lastTurnInfo.warLog = !combatIntegration.isWarLogOff(state.chatId);
+      }
+      // 💡 FIX 2026-07-31: Race the combat image generation against a 10s
+      // timeout. If the Go service is slow/unresponsive, skip the image
+      // and just send the text caption. This prevents one slow image
+      // render from blocking the entire bot's event loop.
+      // ⚔️ RUINS: same room-scene path as the START render (owner directive
+      // 2026-10-05 23:39Z) — the fight never leaves the room image.
+      const scenePromise = (state.mode === 'RUINS' && state.ruinsMeta)
+        ? require('../guildwar/battleScene').renderBattleImage(state, { phase: 'TURN', turnInfo: lastTurnInfo })
+        : (state.isAbyss === true)
+          // 🕳️ ABYSS OVERHAUL (2026-10-09): TURN renders reuse the frozen
+          // START layout — only HP/energy/turn badge change (pixel-stable,
+          // battleScene pattern)
+          ? require('./abyssScene').renderAbyssCombat(state, { phase: 'TURN', turnInfo: lastTurnInfo })
+          : combatIntegration.generateCombatScene(
+        state.players,
+        state.enemies,
+        "TURN",
+        {
+          turnInfo: lastTurnInfo,
+          backgroundPath: state.backgroundPath,
+          rank: state.dungeonRank,
+          floor: state.isAbyss ? state.abyssFloor : 0,
+          summons: state.summons || [],
+        },
+      );
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Combat image timeout (10s)')), 10000)
+      );
+      const scene = await Promise.race([scenePromise, timeoutPromise]);
+      if (scene.success) {
+        // ⚔️ FIX 2026-10-24: stash the freshest battle card for the class-ultimate
+        // VFX base (see startCombat stash note) — the player is looking at THIS.
+        state.lastCombatScene = scene.buffer
+          || (scene.imagePath && fs.existsSync(scene.imagePath) ? fs.readFileSync(scene.imagePath) : null);
+        try {
+          // 💡 NEW 2026-07-29: Detect MP4 vs PNG and send accordingly.
+          // The animated combat endpoint returns video/mp4 with VFX + sprite reactions.
+          // 💡 RPG OPT PASS (2026-10-20): sends are BOUNDED via sendMediaBounded —
+          // a wedged Baileys send used to hang the turn loop forever, and the
+          // msgErr catch below then fired a text DUPLICATE when the send
+          // finally drained. Now: late settle = image only, no dup; hard
+          // wedge >30s = exactly one text fallback inside the helper.
+          const mimeType = scene.mimeType || 'image/png';
+          if (scene.buffer && mimeType === 'video/mp4') {
+            // Send as WhatsApp video (mp4 H.264, plays inline)
+            await sendMediaBounded(sock, state.chatId, {
+              video: scene.buffer,
+              caption: scene.caption,
+              mimetype: 'video/mp4',
+              gifPlayback: false,  // MP4 should play as video, not GIF
+            }, { label: 'turnVideo' });
+          } else if (scene.buffer) {
+            // 🎬 KILL-TURN CARD (owner 2026-11-04, corrected: the merge target
+            // is the REGULAR combat message — "the GIF would simply be
+            // attached to the battle log itself" — never the win message):
+            // held death clip(s) burn into THIS board → ONE video = shatter,
+            // then the war-log board settles as the closing frame. Caption =
+            // falls lines + the normal turn caption. ANY failure → board as
+            // itself + clips as their own messages (the old pair).
+            const __turnHeld = (() => { const t = state._heldDeathClips; if (t && t.gen === (state.combatGen || 0) && (t.items || []).length) { state._heldDeathClips = null; return t.items; } return null; })();
+            let __killSent = false;
+            if (__turnHeld) {
+              try {
+                const __merged = await _mergeDeathClipsWithCard(__turnHeld.map((h) => h.clip), scene.buffer, 2.2);
+                if (__merged) {
+                  let __deaths = __turnHeld.map((h) => _deathCaption(h)).join('\n');
+                  let __cap = __deaths + '\n' + (scene.caption || '');
+                  if (__cap.length > 900) __cap = (scene.caption || '');   // WA caption cap safety
+                  const __pl = { video: __merged, mimetype: 'video/mp4', gifPlayback: true, caption: __cap };
+                  if (Buffer.isBuffer(__turnHeld[0].clip.thumb)) __pl.jpegThumbnail = __turnHeld[0].clip.thumb;
+                  await sendMediaBounded(sock, state.chatId, __pl, { label: 'killTurnCard', ms: 20000, grace: 6000, fallbackText: null });
+                  __killSent = true;
+                  console.log(`[DeathFx] kill-turn card sent: ${__turnHeld.length} death clip(s) + battle board as ONE video`);
+                }
+              } catch (killErr) {
+                console.warn('[DeathFx] kill-turn merge failed (non-fatal):', killErr.message);
+              }
+              if (!__killSent) await _flushHeldDeathClips(sock, state, __turnHeld);   // merge refused: clips still play, board goes as itself
+            }
+            if (!__killSent) {
+              await sendMediaBounded(sock, state.chatId, {
+                image: scene.buffer,
+                caption: scene.caption,
+              }, { label: 'turnImage' });
+            }
+          } else if (scene.imagePath && fs.existsSync(scene.imagePath)) {
+            await sendMediaBounded(sock, state.chatId, {
+              image: fs.readFileSync(scene.imagePath),
+              caption: scene.caption,
+            }, { label: 'turnImage' });
+            setTimeout(() => {
+              if (fs.existsSync(scene.imagePath))
+                fs.unlinkSync(scene.imagePath);
+            }, 5000);
+          } else {
+            await boundedSend(sock, state.chatId, { text: scene.caption });
+          }
+        } catch (msgErr) {
+          // 💡 RPG OPT PASS (2026-10-20): NO text fallback here anymore —
+          // sendMediaBounded already handled the wedge with its own single
+          // fallback (and suppresses it when the image settles late). The
+          // old immediate text send produced the "double victory/turn
+          // message" reports when the image drained late.
+          console.error(
+            "Turn image send failed in nextTurn:",
+            msgErr.message,
+          );
+        }
+      } else {
+        // ⚔️ PROMPT GUARANTEE (owner live-test reports #5/#7/#8, 2026-10-07:
+        // "some people's battle images with the hp and caption don't spawn" +
+        // "There's no prompt for me to attack"): a FAILED render used to send
+        // NOTHING AT ALL — no image, no text — while the fight carried on in
+        // the background. The battle state advanced, players sat staring at
+        // an old screen with no turn prompt. A failed TURN render now
+        // degrades to the TEXT caption (HP/turn state + the verb grammar),
+        // so the authoritative state and the player-facing prompt can never
+        // silently diverge again.
+        try {
+          const caption = (scene && scene.caption)
+            || (combatIntegration.generateTurnCaption
+              ? combatIntegration.generateTurnCaption(state.players, state.enemies, lastTurnInfo || {})
+              : null)
+            || `🎮 *TURN ${(lastTurnInfo && lastTurnInfo.turnNumber) || '?'}* — the battle moves on.`;
+          await boundedSend(sock, state.chatId, { text: caption });
+        } catch (e) {
+          console.error('nextTurn text fallback failed:', e.message);
+        }
+      }
+    } catch (err) {
+      console.error(
+        "Critical error in nextTurn image generation:",
+        err.message,
+      );
+      // 💡 FIX 2026-07-31: If image generation timed out or failed,
+      // send the text caption so the user isn't left hanging.
+      if (lastTurnInfo) {
+        try {
+          const caption = combatIntegration.generateTurnCaption
+            ? combatIntegration.generateTurnCaption(state.players, state.enemies, lastTurnInfo)
+            : `🎮 *TURN ${lastTurnInfo.turnNumber || '?'}*`;
+          await boundedSend(sock, state.chatId, { text: caption });
+        } catch (e) {}
+      }
+    }
+  }
+  // 🎬 kill clips held for a board that never came (no turnInfo / render
+  // failed / already-animated turn) still play — never lose the announce.
+  await _flushHeldTurnClips(sock, state, 'no board this turn');
+  // Note: checkCombatEnd is called explicitly by performAction and processCombatTurn - not needed here.
+}
+
+// ==========================================
+// 🕳️ ABYSS COMBAT INTEGRATION
+// ==========================================
+
+/**
+ * Start an Abyss combat encounter using the real combat engine.
+ */
+async function startAbyssCombat(sock, chatId, senderJid, enemy, abyssRun, floor) {
+  const sessionKey = scopedKey(`${chatId}_${senderJid}`);
+
+  if (gameStates.has(sessionKey)) {
+    const existing = gameStates.get(sessionKey);
+    if (existing.inCombat) {
+      return { success: false, message: '❌ You are already in combat.' };
+    }
+  }
+
+  const user = economy.getUser(senderJid);
+  if (!user) return { success: false, message: '❌ You need to register first.' };
+
+  const userClass = economy.getUserClass(senderJid) || { id: 'FIGHTER', name: 'Fighter', icon: '⚔️' };
+  const classIdForAbyss = userClass?.id || (typeof user.class === 'string' ? user.class : 'FIGHTER');
+  const baseStats = progression.getBaseStats(senderJid, classIdForAbyss);
+
+  const player = {
+    jid: senderJid,
+    name: user.nickname || user.profile?.nickname || economy.getDisplayName(senderJid),
+    class: userClass,
+    isDead: false,
+    stats: {
+      hp: baseStats.hp,
+      maxHp: baseStats.hp,
+      atk: baseStats.atk,
+      def: baseStats.def,
+      mag: baseStats.mag,
+      spd: baseStats.spd,
+      luck: baseStats.luck,
+      crit: baseStats.crit,
+      dmgReduction: baseStats.dmgReduction || 0,
+      evasion: baseStats.evasion || 0,
+      energy: baseStats.maxEnergy || 100,
+      maxEnergy: baseStats.maxEnergy || 100,
+    },
+    equipment: inventorySystem.getEquipment(senderJid) || {},
+    adventurerRank: user.adventurerRank || 'F',
+    level: progression.getLevel(senderJid),
+    currentHP: baseStats.hp,
+    mana: 100,
+    maxMana: 100,
+    xpEarned: 0,
+    goldEarned: 0,
+    combatStats: { damageDealt: 0, damageTaken: 0, turnsTaken: 0 },
+    pendingActions: {},
+    buffs: [],
+    statusEffects: [],
+    actionGauge: 0,
+  };
+
+  // Carry over HP/energy from Abyss run
+  if (abyssRun.currentHp) {
+    player.stats.hp = Math.max(1, abyssRun.currentHp);
+    player.currentHP = player.stats.hp;
+  }
+  if (abyssRun.currentEnergy) {
+    player.stats.energy = Math.max(0, abyssRun.currentEnergy);
+  }
+  // 💡 FIX: sync the Abyss snapshot with the REAL max values from getBaseStats.
+  // This ensures the Abyss status/victory display shows correct max HP/EN
+  // instead of the stale snapshot from run start.
+  abyssRun.playerSnapshot.maxHp = player.stats.maxHp;
+  abyssRun.playerSnapshot.maxEnergy = player.stats.maxEnergy;
+
+  // 💡 FIX 2026-08-04: Handle BOTH enemy structures:
+  // - Regular Abyss enemies: hp/maxHp/atk/def at TOP LEVEL (enemy.hp)
+  // - Wild summon enemies: hp/maxHp/atk/def INSIDE enemy.stats (enemy.stats.hp)
+  // Without this, wild summon enemies get NaN HP because enemy.hp is undefined.
+  const enemyHp = enemy.stats?.hp ?? enemy.hp;
+  const enemyMaxHp = enemy.stats?.maxHp ?? enemy.maxHp;
+  const enemyAtk = enemy.stats?.atk ?? enemy.atk;
+  const enemyDef = enemy.stats?.def ?? enemy.def;
+  const enemySpd = enemy.stats?.spd ?? enemy.spd;
+  const enemyMag = enemy.stats?.mag ?? enemy.atk; // fallback to atk if no mag
+
+  const combatEnemy = {
+    id: enemy.id || `abyss_${floor}`,
+    name: enemy.name,
+    icon: enemy.icon || (enemy.isBoss ? '👹' : '👾'),
+    isEnemy: true,
+    isBoss: enemy.isBoss || false,
+    isWildSummon: enemy.isWildSummon || false,
+    level: enemy.level || floor,
+    // 💡 SPRITE PASS-THROUGH (UI-CB-15 fix): abyss enemies now carry a real
+    // spriteIndex (element-family sheet) + bossId so the Go service renders
+    // the right body instead of sheet slot 0 for everything.
+    spriteIndex: Math.max(0, Math.floor(Number(enemy.spriteIndex) || 0)),
+    bossId: enemy.bossId || '',
+    // 💡 PLAYER-VARIANT ENEMIES: tags ride along for lore routing + barks.
+    humanoid: enemy.humanoid || false,
+    variantTag: enemy.variantTag || null,
+    variantKind: enemy.variantKind || null,
+    dialogueFirst: enemy.dialogueFirst || false,
+    stats: {
+      hp: enemyHp,
+      maxHp: enemyMaxHp,
+      atk: enemyAtk,
+      def: enemyDef,
+      spd: enemySpd,
+      mag: enemyMag,
+    },
+    currentHP: enemyHp,
+    maxHP: enemyMaxHp,
+    mana: 100,
+    maxMana: 100,
+    archetype: enemy.archetype || (enemy.isBoss ? 'BOSS' : 'BRUTE'),
+    abilities: enemy.abilities || [],
+    statusEffects: [],
+    cooldowns: {},
+    actionGauge: 0,
+    xpReward: enemy.xpReward || 0,
+    goldReward: enemy.goldReward || 0,
+    isDead: false,
+    justDied: false,
+  };
+
+  const state = {
+    chatId,
+    players: [player],
+    enemies: [combatEnemy],
+    inCombat: false,
+    combatProcessing: false,
+    active: true,
+    phase: 'COMBAT',
+    solo: true,
+    mode: 'ABYSS',
+    isAbyss: true,
+    abyssRun: abyssRun,
+    abyssFloor: floor,
+    encounter: 1,
+    maxEncounters: 1,
+    currentEncounterType: 'COMBAT',
+    combatRound: 0,
+    turnCount: 0,
+    pendingActions: {},
+    combatHistory: [],
+    // 💡 AUDIT FIX 2026-08-01: Abyss combat was missing backgroundPath,
+    // causing the same random-background bug as regular dungeons (Go
+    // service picks random .png when the requested file doesn't exist).
+    // Abyss is void-themed → use background1.png (same as VOID_DIMENSION).
+    backgroundPath: 'rpgasset/environment/spark_1-night.png',
+    // 💡 AUDIT FIX 2026-08-01: also missing stats object (onboarding rule #24).
+    // recordEnemyKill has a defensive init, but let's be explicit.
+    stats: { monstersKilled: 0, bossesDefeated: 0, treasuresFound: 0, trapsTriggered: 0, playersRevived: 0 },
+    roundLog: [],
+    timers: {},
+    groq: null,
+    sock: sock, sock_ref: sock,
+    dungeonRank: 0,
+    difficulty: 0,
+    isProcessing: false,
+    isEndingCombat: false,
+  };
+
+  state.botId = botScope(); // 💡 CROSS-BOT LEAK FIX: stamp the owning bot
+  // 🕳️ ABYSS OVERHAUL: the scene renderer keys its frozen layout on this
+  // (same contract as the ruins battleScene)
+  state.sessionKey = sessionKey;
+  gameStates.set(sessionKey, state);
+
+  await startCombat(sock, null, { enemies: [combatEnemy], type: 'COMBAT' }, sessionKey);
+
+  return { success: true };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 💡 CO-OP ABYSS COMBAT (2026-10-11, owner: "add a co-op mode for the abyss")
+// Multi-player variant of startAbyssCombat: builds a combat player entity for
+// EVERY party member (host first), scales the enemy for the party size, marks
+// the state solo=false, and registers each member in _coopIndex so their
+// `.j combat …` commands resolve to the SHARED session from anywhere.
+// ═══════════════════════════════════════════════════════════════════════
+async function startAbyssCoopCombat(sock, chatId, hostJid, enemy, abyssRun, floor) {
+  const sessionKey = scopedKey(`${chatId}_${hostJid}`);
+
+  if (gameStates.has(sessionKey)) {
+    const existing = gameStates.get(sessionKey);
+    if (existing.inCombat) {
+      return { success: false, message: '❌ The party is already in combat.' };
+    }
+  }
+
+  const party = (abyssRun.party || []).filter((m) => m && m.jid);
+  if (party.length === 0) {
+    // Degenerate party (everyone left) — fall back to a host-only fight
+    party.push({ jid: hostJid, hp: abyssRun.currentHp || 0, energy: abyssRun.currentEnergy || 0 });
+  }
+
+  const players = [];
+  for (const member of party) {
+    const user = economy.getUser(member.jid);
+    if (!user) continue; // unregistered party member skips the fight
+    const userClass = economy.getUserClass(member.jid) || { id: 'FIGHTER', name: 'Fighter', icon: '⚔️' };
+    const classId = userClass?.id || (typeof user.class === 'string' ? user.class : 'FIGHTER');
+    const baseStats = progression.getBaseStats(member.jid, classId);
+    const hp = Math.max(1, Number(member.hp) || baseStats.hp);
+    const energy = Math.max(0, Number(member.energy) || baseStats.maxEnergy || 100);
+    players.push({
+      jid: member.jid,
+      name: user.nickname || user.profile?.nickname || economy.getDisplayName(member.jid),
+      class: userClass,
+      isDead: false,
+      stats: {
+        hp, maxHp: baseStats.hp,
+        atk: baseStats.atk, def: baseStats.def, mag: baseStats.mag,
+        spd: baseStats.spd, luck: baseStats.luck, crit: baseStats.crit,
+        dmgReduction: baseStats.dmgReduction || 0, evasion: baseStats.evasion || 0,
+        energy, maxEnergy: baseStats.maxEnergy || 100,
+      },
+      equipment: inventorySystem.getEquipment(member.jid) || {},
+      adventurerRank: user.adventurerRank || 'F',
+      level: progression.getLevel(member.jid),
+      currentHP: hp,
+      mana: 100, maxMana: 100,
+      xpEarned: 0, goldEarned: 0,
+      combatStats: { damageDealt: 0, damageTaken: 0, turnsTaken: 0 },
+      pendingActions: {},
+      buffs: [],
+      statusEffects: [],
+      actionGauge: 0,
+    });
+  }
+  if (players.length === 0) {
+    return { success: false, message: '❌ No registered party members found for the co-op fight.' };
+  }
+
+  // Enemy scales with party size so 4 players ≠ free win:
+  // HP +60% per extra player, ATK/DEF/MAG +15% per extra player.
+  const n = players.length;
+  const enemyHp = (enemy.stats?.hp ?? enemy.hp) * (1 + 0.6 * (n - 1));
+  const enemyMaxHp = (enemy.stats?.maxHp ?? enemy.maxHp) * (1 + 0.6 * (n - 1));
+  const scale = 1 + 0.15 * (n - 1);
+  const combatEnemy = {
+    id: enemy.id || `abyss_${floor}`,
+    name: enemy.name,
+    icon: enemy.icon || (enemy.isBoss ? '👹' : '👾'),
+    isEnemy: true,
+    isBoss: enemy.isBoss || false,
+    isWildSummon: enemy.isWildSummon || false,
+    level: enemy.level || floor,
+    spriteIndex: Math.max(0, Math.floor(Number(enemy.spriteIndex) || 0)),
+    bossId: enemy.bossId || '',
+    humanoid: enemy.humanoid || false,
+    variantTag: enemy.variantTag || null,
+    variantKind: enemy.variantKind || null,
+    dialogueFirst: enemy.dialogueFirst || false,
+    stats: {
+      hp: Math.floor(enemyHp),
+      maxHp: Math.floor(enemyMaxHp),
+      atk: Math.floor((enemy.stats?.atk ?? enemy.atk ?? 10) * scale),
+      def: Math.floor((enemy.stats?.def ?? enemy.def ?? 5) * scale),
+      spd: enemy.stats?.spd ?? enemy.spd ?? 5,
+      mag: Math.floor((enemy.stats?.mag ?? enemy.atk ?? 10) * scale),
+    },
+    currentHP: Math.floor(enemyHp),
+    maxHP: Math.floor(enemyMaxHp),
+    mana: 100, maxMana: 100,
+    archetype: enemy.archetype || (enemy.isBoss ? 'BOSS' : 'BRUTE'),
+    abilities: enemy.abilities || [],
+    statusEffects: [],
+    cooldowns: {},
+    actionGauge: 0,
+    xpReward: enemy.xpReward || 0,
+    goldReward: enemy.goldReward || 0,
+    isDead: false,
+    justDied: false,
+  };
+
+  const state = {
+    chatId,
+    players,
+    enemies: [combatEnemy],
+    inCombat: false,
+    combatProcessing: false,
+    active: true,
+    phase: 'COMBAT',
+    solo: false,
+    mode: 'ABYSS',
+    isAbyss: true,
+    abyssRun: abyssRun,
+    abyssFloor: floor,
+    encounter: 1,
+    maxEncounters: 1,
+    currentEncounterType: 'COMBAT',
+    combatRound: 0,
+    turnCount: 0,
+    pendingActions: {},
+    combatHistory: [],
+    backgroundPath: 'rpgasset/environment/spark_1-night.png',
+    stats: { monstersKilled: 0, bossesDefeated: 0, treasuresFound: 0, trapsTriggered: 0, playersRevived: 0 },
+    roundLog: [],
+    timers: {},
+    groq: null,
+    sock: sock, sock_ref: sock,
+    dungeonRank: 0,
+    difficulty: 0,
+    isProcessing: false,
+    isEndingCombat: false,
+    isCoopAbyss: true,
+  };
+  state.botId = botScope();
+  state.sessionKey = sessionKey;
+  gameStates.set(sessionKey, state);
+
+  // 💡 Register every member in the co-op participant index so their
+  // `.j combat …` commands resolve this shared session (same pattern the
+  // ruins room sessions use).
+  const rawKey = unscopeKey(sessionKey);
+  for (const p of players) _coopIndex.set(p.jid, rawKey);
+
+  await startCombat(sock, null, { enemies: [combatEnemy], type: 'COMBAT' }, sessionKey);
+
+  return { success: true };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 💡 SOLO COMBAT RESUME (2026-10-11, owner: "add a .j solo resume, like
+// the abyss resume just incase combat cuts")
+// A restart (deploy/crash/watchdog) wipes the in-memory gameStates Map and
+// a solo quest fight died with it — the Abyss had a resume path (its run
+// doc persists) but regular solo fights had nothing. These three functions
+// give solo fights the same contract:
+//   • saveSoloSnapshot  — upserted at fight start + after EVERY player action
+//   • resumeSoloCombat  — `.j solo resume` rebuilds the fight from the doc
+//   • clearSoloSnapshot — fired when the quest/fight ends (all end paths)
+// Solo-only by design: abyss runs already have `.j abyss resume`, co-op
+// parties and ruins rooms share live state with other players.
+// ═══════════════════════════════════════════════════════════════════════
+const SOLO_SNAPSHOT_STALE_MS = 2 * 60 * 60 * 1000; // 2h — older than this is a dead fight
+
+function _soloSnapshotEligible(state) {
+  return !!(
+    state &&
+    state.solo === true &&
+    !state.isAbyss &&
+    state.mode !== 'TUTORIAL' &&
+    state.mode !== 'RUINS' &&
+    Array.isArray(state.enemies) && state.enemies.length > 0 &&
+    Array.isArray(state.players) && state.players.length > 0 &&
+    typeof state.sessionKey === 'string'
+  );
+}
+
+async function saveSoloSnapshot(sessionKey) {
+  try {
+    const state = gameStates.get(sessionKey);
+    if (!_soloSnapshotEligible(state) || !state.inCombat) return;
+    const player = state.players[0];
+    if (!player || !player.jid) return;
+    const SoloCombatSnapshot = require('../../../models/SoloCombatSnapshot');
+    let botId = null;
+    try { botId = botScope(); } catch (e) {}
+    await SoloCombatSnapshot.findOneAndUpdate(
+      { userId: player.jid },
+      {
+        userId: player.jid,
+        botId,
+        chatId: state.chatId,
+        sessionKey: unscopeKey(state.sessionKey),
+        mode: state.mode || 'QUEST',
+        dungeonRank: state.dungeonRank ?? 0,
+        difficulty: state.difficulty || 0,
+        encounter: state.encounter || 1,
+        maxEncounters: state.maxEncounters || 1,
+        currentEncounterType: state.currentEncounterType || 'COMBAT',
+        backgroundPath: state.backgroundPath || '',
+        combatRound: state.combatRound || 0,
+        enemies: state.enemies.map((e) => ({
+          id: e.id, name: e.name, icon: e.icon || '👾', isEnemy: true,
+          isBoss: !!e.isBoss, level: e.level || 1, spriteIndex: e.spriteIndex || 0,
+          bossId: e.bossId || '', archetype: e.archetype || 'BRUTE',
+          abilities: e.abilities || [], rank: e.rank || state.dungeonRank,
+          stats: {
+            hp: e.stats?.hp, maxHp: e.stats?.maxHp, atk: e.stats?.atk,
+            def: e.stats?.def, spd: e.stats?.spd, mag: e.stats?.mag,
+          },
+          currentHP: e.currentHP ?? e.stats?.hp, maxHP: e.maxHP ?? e.stats?.maxHp,
+          xpReward: e.xpReward || 0, goldReward: e.goldReward || 0,
+          isDead: !!e.isDead, statusEffects: e.statusEffects || [],
+        })),
+        playerJid: player.jid,
+        playerHp: player.stats.hp,
+        playerMaxHp: player.stats.maxHp,
+        playerEnergy: player.stats.energy || 0,
+        playerMaxEnergy: player.stats.maxEnergy || 100,
+      },
+      { upsert: true, setDefaultsOnInsert: true },
+    );
+  } catch (e) {
+    // Snapshot failures must NEVER break the live fight
+    console.error('[SoloResume] save failed:', e.message);
+  }
+}
+
+async function clearSoloSnapshot(sessionKeyOrUserId) {
+  try {
+    const SoloCombatSnapshot = require('../../../models/SoloCombatSnapshot');
+    // Accept a raw session key ("chat_jid") or a user JID directly
+    if (sessionKeyOrUserId.includes('@')) {
+      await SoloCombatSnapshot.deleteOne({ userId: sessionKeyOrUserId });
+      return;
+    }
+    const raw = unscopeKey(sessionKeyOrUserId);
+    const jid = raw.includes('_') ? raw.slice(raw.indexOf('_') + 1) : null;
+    if (jid) await SoloCombatSnapshot.deleteOne({ userId: jid });
+  } catch (e) {
+    console.error('[SoloResume] clear failed:', e.message);
+  }
+}
+
+async function resumeSoloCombat(sock, chatId, senderJid) {
+  const SoloCombatSnapshot = require('../../../models/SoloCombatSnapshot');
+  const sessionKey = scopedKey(`${chatId}_${senderJid}`);
+
+  if (gameStates.has(sessionKey)) {
+    const existing = gameStates.get(sessionKey);
+    if (existing.inCombat) {
+      return { success: false, message: '⚔️ You are already in combat! Use the fight commands.' };
+    }
+  }
+
+  let snap;
+  try {
+    snap = await SoloCombatSnapshot.findOne({ userId: senderJid }).sort({ updatedAt: -1 });
+  } catch (e) {
+    return { success: false, message: '❌ Failed to look up your last fight: ' + e.message };
+  }
+  if (!snap) {
+    return { success: false, message: `❌ No interrupted solo fight found.\n_Only fights that were cut by a restart leave a resume point._` };
+  }
+  if (snap.botId && snap.botId !== botScope()) {
+    return { success: false, message: `❌ Your interrupted fight belongs to another bot (${snap.botId}). Resume it there.` };
+  }
+  const age = Date.now() - new Date(snap.updatedAt).getTime();
+  if (age > SOLO_SNAPSHOT_STALE_MS) {
+    await clearSoloSnapshot(senderJid);
+    return { success: false, message: '⌛ That fight is too old to resume (over 2 hours stale). Start a fresh quest with `.j solo <rank>`.' };
+  }
+
+  const user = economy.getUser(senderJid);
+  if (!user) return { success: false, message: '❌ You need to register first.' };
+
+  const userClass = economy.getUserClass(senderJid) || { id: 'FIGHTER', name: 'Fighter', icon: '⚔️' };
+  const classId = userClass?.id || (typeof user.class === 'string' ? user.class : 'FIGHTER');
+  const baseStats = progression.getBaseStats(senderJid, classId);
+
+  const player = {
+    jid: senderJid,
+    name: user.nickname || user.profile?.nickname || economy.getDisplayName(senderJid),
+    class: userClass,
+    isDead: false,
+    stats: {
+      hp: Math.max(1, Number(snap.playerHp) || baseStats.hp),
+      maxHp: baseStats.hp,
+      atk: baseStats.atk,
+      def: baseStats.def,
+      mag: baseStats.mag,
+      spd: baseStats.spd,
+      luck: baseStats.luck,
+      crit: baseStats.crit,
+      dmgReduction: baseStats.dmgReduction || 0,
+      evasion: baseStats.evasion || 0,
+      energy: Math.max(0, Number(snap.playerEnergy) || baseStats.maxEnergy || 100),
+      maxEnergy: baseStats.maxEnergy || 100,
+    },
+    equipment: inventorySystem.getEquipment(senderJid) || {},
+    adventurerRank: user.adventurerRank || 'F',
+    level: progression.getLevel(senderJid),
+    currentHP: Math.max(1, Number(snap.playerHp) || baseStats.hp),
+    mana: 100,
+    maxMana: 100,
+    xpEarned: 0,
+    goldEarned: 0,
+    combatStats: { damageDealt: 0, damageTaken: 0, turnsTaken: 0 },
+    pendingActions: {},
+    buffs: [],
+    statusEffects: [],
+    actionGauge: 0,
+  };
+
+  // Rebuild enemies EXACTLY as they were (current HP, dead flags, statuses)
+  const restoredEnemies = (snap.enemies || []).map((e, idx) => ({
+    id: e.id || `resumed_${idx}`,
+    name: e.name || 'Enemy',
+    icon: e.icon || '👾',
+    isEnemy: true,
+    isBoss: !!e.isBoss,
+    level: e.level || 1,
+    spriteIndex: Math.max(0, Math.floor(Number(e.spriteIndex) || 0)),
+    bossId: e.bossId || '',
+    humanoid: !!e.humanoid,
+    archetype: e.archetype || 'BRUTE',
+    abilities: e.abilities || [],
+    rank: e.rank || snap.dungeonRank,
+    stats: {
+      hp: e.stats?.hp ?? e.currentHP ?? 1,
+      maxHp: e.stats?.maxHp ?? e.maxHP ?? 1,
+      atk: e.stats?.atk ?? 10,
+      def: e.stats?.def ?? 5,
+      spd: e.stats?.spd ?? 5,
+      mag: e.stats?.mag ?? 10,
+    },
+    currentHP: e.currentHP ?? e.stats?.hp ?? 1,
+    maxHP: e.maxHP ?? e.stats?.maxHp ?? 1,
+    mana: 100,
+    maxMana: 100,
+    statusEffects: e.statusEffects || [],
+    cooldowns: {},
+    actionGauge: 0,
+    xpReward: e.xpReward || 0,
+    goldReward: e.goldReward || 0,
+    isDead: !!e.isDead,
+    justDied: false,
+  }));
+  if (restoredEnemies.length === 0) {
+    await clearSoloSnapshot(senderJid);
+    return { success: false, message: '❌ The saved fight has no enemies left — start a fresh quest.' };
+  }
+
+  const state = {
+    chatId,
+    players: [player],
+    enemies: restoredEnemies,
+    inCombat: false,
+    combatProcessing: false,
+    active: true,
+    phase: 'COMBAT',
+    solo: true,
+    mode: snap.mode || 'QUEST',
+    dungeonRank: snap.dungeonRank ?? 0,
+    difficulty: snap.difficulty || 0,
+    encounter: snap.encounter || 1,
+    maxEncounters: snap.maxEncounters || 1,
+    currentEncounterType: snap.currentEncounterType || 'COMBAT',
+    combatRound: snap.combatRound || 0,
+    turnCount: 0,
+    pendingActions: {},
+    combatHistory: [],
+    backgroundPath: snap.backgroundPath || '',
+    stats: { monstersKilled: 0, bossesDefeated: 0, treasuresFound: 0, trapsTriggered: 0, playersRevived: 0 },
+    roundLog: [],
+    timers: {},
+    groq: null,
+    sock: sock, sock_ref: sock,
+    isProcessing: false,
+    isEndingCombat: false,
+    // 💡 flag the rebuild so the start scene says RESUMED, not BATTLE COMMENCES
+    _resumedFromSnapshot: true,
+  };
+  state.botId = botScope();
+  state.sessionKey = sessionKey;
+  gameStates.set(sessionKey, state);
+
+  await startCombat(sock, null, { enemies: restoredEnemies, type: snap.currentEncounterType || 'COMBAT', background: snap.backgroundPath || undefined }, sessionKey);
+
+  return { success: true, message: `⚔️ *SOLO FIGHT RESUMED* — round ${snap.combatRound || 0}, ${restoredEnemies.filter((e) => !e.isDead).length} enemy(ies) still standing.` };
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// 🤝 GROUP COMBAT RESUME + BOOT AUTO-CONTINUE (2026-10-14, owner: "Add a
+// continue command for group quests. In fact if the bot restarts the game
+// should automatically continue even if the command isn't sent - it's
+// usually for solo but make it for group quests too")
+// The solo contract above (2026-10-11) only covered state.solo===true, so a
+// restart mid-GROUP-quest (`.j quest <rank>`, solo:false, state under the
+// GROUP chat key) killed the party fight with no way back. This block gives
+// group quests the same contract AND the owner's auto-continue:
+//   • _groupSnapshotEligible / saveGroupSnapshot — group twin of the solo
+//     snapshot: WHOLE party (hp/energy/dead flags/statuses/xp tally) + full
+//     enemy roster + quest context, one doc per group chat, upserted at
+//     fight start + after every completed action, deleted at quest end/stop.
+//   • resumeGroupCombat — `.j quest resume` / `.j quest continue` rebuilds
+//     the party fight exactly as it stood (whole party + enemies restored).
+//   • saveCombatSnapshot / clearCombatSnapshot — dispatchers wired into the
+//     SAME 4 hook points the solo snapshot uses (fight start, after every
+//     completed action, quest stop, quest end); they route solo vs group by
+//     state. clearCombatSnapshot takes the STATE object — it clears via the
+//     bare player jid / chat id, which also fixes the pre-existing solo
+//     clear bug where a bot-scoped "bot|chat_jid" key hit the '@' shortcut
+//     branch and silently deleted NOTHING (stopped/finished solo quests
+//     left a resurrectable snapshot behind).
+//   • autoResumeAfterRestart — engine calls this ~25s after WhatsApp
+//     connects; it sweeps BOTH collections for this botId and continues
+//     every interrupted fight (solo AND group) ON ITS OWN, no command.
+// Abyss runs keep their own AbyssRun resume; tutorials / ruins rooms keep
+// their live-shared-state exclusions (same rules as solo eligibility).
+// ═══════════════════════════════════════════════════════════════════════
+const GROUP_SNAPSHOT_STALE_MS = 2 * 60 * 60 * 1000; // 2h — same grading as solo
+const AUTO_RESUME_STALE_MS = SOLO_SNAPSHOT_STALE_MS; // boot sweep shares the 2h cut
+const AUTO_RESUME_MAX = 6; // boot sweep batch cap — paced, memory-friendly
+
+function _groupSnapshotEligible(state) {
+  return !!(
+    state &&
+    state.solo === false &&
+    !state.isAbyss &&
+    state.mode !== 'TUTORIAL' &&
+    state.mode !== 'TUTORIAL_GROUP' &&
+    state.mode !== 'TUTORIAL_QUEST' &&
+    state.mode !== 'RUINS' &&
+    Array.isArray(state.enemies) && state.enemies.length > 0 &&
+    Array.isArray(state.players) && state.players.length > 0 &&
+    typeof state.sessionKey === 'string'
+  );
+}
+
+async function saveGroupSnapshot(sessionKey) {
+  try {
+    const state = gameStates.get(sessionKey);
+    if (!_groupSnapshotEligible(state) || !state.inCombat) return;
+    const GroupCombatSnapshot = require('../../../models/GroupCombatSnapshot');
+    let botId = null;
+    try { botId = botScope(); } catch (e) {}
+    await GroupCombatSnapshot.findOneAndUpdate(
+      { chatId: state.chatId },
+      {
+        chatId: state.chatId,
+        botId,
+        sessionKey: unscopeKey(state.sessionKey),
+        mode: state.mode || 'QUEST',
+        dungeonRank: state.dungeonRank ?? 0,
+        difficulty: state.difficulty || 0,
+        encounter: state.encounter || 1,
+        maxEncounters: state.maxEncounters || 1,
+        currentEncounterType: state.currentEncounterType || 'COMBAT',
+        backgroundPath: state.backgroundPath || '',
+        combatRound: state.combatRound || 0,
+        enemies: state.enemies.map((e) => ({
+          id: e.id, name: e.name, icon: e.icon || '👾', isEnemy: true,
+          isBoss: !!e.isBoss, level: e.level || 1, spriteIndex: e.spriteIndex || 0,
+          bossId: e.bossId || '', archetype: e.archetype || 'BRUTE',
+          humanoid: !!e.humanoid, isWildSummon: !!e.isWildSummon,
+          abilities: e.abilities || [], rank: e.rank || state.dungeonRank,
+          stats: {
+            hp: e.stats?.hp, maxHp: e.stats?.maxHp, atk: e.stats?.atk,
+            def: e.stats?.def, spd: e.stats?.spd, mag: e.stats?.mag,
+          },
+          currentHP: e.currentHP ?? e.stats?.hp, maxHP: e.maxHP ?? e.stats?.maxHp,
+          xpReward: e.xpReward || 0, goldReward: e.goldReward || 0,
+          isDead: !!e.isDead, statusEffects: e.statusEffects || [],
+        })),
+        players: state.players.map((p) => ({
+          jid: p.jid,
+          name: p.name || 'Hero',
+          class: p.class || null,
+          level: p.level || 1,
+          adventurerRank: p.adventurerRank || 'F',
+          isDead: !!p.isDead,
+          stats: {
+            hp: p.stats?.hp, maxHp: p.stats?.maxHp, atk: p.stats?.atk,
+            def: p.stats?.def, mag: p.stats?.mag, spd: p.stats?.spd,
+            luck: p.stats?.luck, crit: p.stats?.crit,
+            dmgReduction: p.stats?.dmgReduction || 0,
+            evasion: p.stats?.evasion || 0,
+            energy: p.stats?.energy || 0, maxEnergy: p.stats?.maxEnergy || 100,
+          },
+          currentHP: p.currentHP ?? p.stats?.hp,
+          equipment: p.equipment || {},
+          statusEffects: p.statusEffects || [],
+          xpEarned: p.xpEarned || 0,
+          goldEarned: p.goldEarned || 0,
+          combatStats: p.combatStats || {},
+        })),
+        playerJids: state.players.map((p) => p.jid).filter(Boolean),
+      },
+      { upsert: true, setDefaultsOnInsert: true },
+    );
+  } catch (e) {
+    // Snapshot failures must NEVER break the live fight
+    console.error('[GroupResume] save failed:', e.message);
+  }
+}
+
+async function clearGroupSnapshot(sessionKeyOrChatId) {
+  try {
+    const GroupCombatSnapshot = require('../../../models/GroupCombatSnapshot');
+    let chatId = sessionKeyOrChatId;
+    if (typeof chatId !== 'string' || !chatId.includes('@')) {
+      // Accept a (possibly bot-scoped) session key: "bot|chatId" / "chatId"
+      chatId = unscopeKey(String(sessionKeyOrChatId));
+    }
+    await GroupCombatSnapshot.deleteOne({ chatId });
+  } catch (e) {
+    console.error('[GroupResume] clear failed:', e.message);
+  }
+}
+
+// 💡 Dispatchers: the shared hook points (fight start, after every completed
+// action, quest stop, quest end) call THESE — one call site covers solo AND
+// group fights with zero duplicated wiring.
+//
+// 💡 DUNGEON FAST-LANE (2026-10-20 owner: "dungeons are very inconsistent,
+// make it fast and lightweight"): snapshot saves used to stack — every player
+// action fired an un-coalesced fire-and-forget findOneAndUpdate, so a fast
+// 6-player fight kept several parallel Mongo writes per session alive at once
+// (wasted connections + racing last-write wins). Now: while one write drains
+// for a sessionKey, new requests only mark that session dirty; exactly ONE
+// tail save (250ms later) captures whatever landed meanwhile. State is always
+// re-read at write time, so the tail save can never persist stale data.
+const _snapshotInFlight = new Set();
+const _snapshotDirty = new Set();
+async function saveCombatSnapshot(sessionKey) {
+  const state = gameStates.get(sessionKey);
+  if (!state) return;
+  const isSoloFight = _soloSnapshotEligible(state);
+  if (!isSoloFight && !_groupSnapshotEligible(state)) return;
+  if (_snapshotInFlight.has(sessionKey)) {
+    _snapshotDirty.add(sessionKey);
+    return;
+  }
+  _snapshotInFlight.add(sessionKey);
+  try {
+    if (isSoloFight) await saveSoloSnapshot(sessionKey);
+    else await saveGroupSnapshot(sessionKey);
+  } finally {
+    _snapshotInFlight.delete(sessionKey);
+  }
+  if (_snapshotDirty.has(sessionKey)) {
+    _snapshotDirty.delete(sessionKey);
+    // Tail save: capture any action that landed while the first write drained.
+    setTimeout(() => { saveCombatSnapshot(sessionKey).catch(() => {}); }, 250);
+  }
+}
+
+async function clearCombatSnapshot(stateOrKey) {
+  try {
+    if (stateOrKey && typeof stateOrKey === 'object') {
+      // STATE form (preferred): clear via the exact ids the docs are keyed by.
+      const state = stateOrKey;
+      if (_soloSnapshotEligible(state)) {
+        const jid = state.players?.[0]?.jid;
+        if (jid) { await clearSoloSnapshot(jid).catch(() => {}); }
+        return;
+      }
+      if (_groupSnapshotEligible(state)) {
+        await clearGroupSnapshot(state.chatId || unscopeKey(state.sessionKey)).catch(() => {});
+        return;
+      }
+      return;
+    }
+    // KEY form (best effort): clear both stores for this key.
+    await Promise.all([
+      clearSoloSnapshot(stateOrKey).catch(() => {}),
+      clearGroupSnapshot(stateOrKey).catch(() => {}),
+    ]);
+  } catch (e) {}
+}
+
+async function resumeGroupCombat(sock, chatId, senderJid) {
+  const GroupCombatSnapshot = require('../../../models/GroupCombatSnapshot');
+  const sessionKey = scopedKey(chatId);
+
+  if (gameStates.has(sessionKey)) {
+    const existing = gameStates.get(sessionKey);
+    if (existing.inCombat) {
+      return { success: false, message: '⚔️ The party is already in combat! Use the fight commands.' };
+    }
+  }
+
+  let snap;
+  try {
+    snap = await GroupCombatSnapshot.findOne({ chatId }).sort({ updatedAt: -1 });
+  } catch (e) {
+    return { success: false, message: '❌ Failed to look up the last party fight: ' + e.message };
+  }
+  if (!snap) {
+    return { success: false, message: `❌ No interrupted group fight found in this chat.\n_Only fights cut by a restart leave a resume point. Solo fights resume with \`.j solo resume\`._` };
+  }
+  if (snap.botId && snap.botId !== botScope()) {
+    return { success: false, message: `❌ That interrupted fight belongs to another bot (${snap.botId}). Resume it there.` };
+  }
+  const age = Date.now() - new Date(snap.updatedAt).getTime();
+  if (age > GROUP_SNAPSHOT_STALE_MS) {
+    await clearGroupSnapshot(chatId);
+    return { success: false, message: '⌛ That fight is too old to resume (over 2 hours stale). Start a fresh quest with `.j quest <rank>`.' };
+  }
+  if (!Array.isArray(snap.players) || snap.players.length === 0) {
+    await clearGroupSnapshot(chatId);
+    return { success: false, message: '❌ The saved fight has no party members left — start a fresh quest.' };
+  }
+
+  // Rebuild the WHOLE party exactly as it stood (hp/energy/dead flags/statuses
+  // restored; class/equipment fall back to live reads if the snapshot lacks them).
+  const restoredPlayers = (snap.players || []).map((p) => {
+    let cls = p.class || null;
+    if (!cls) { try { cls = economy.getUserClass(p.jid) || null; } catch (e) { cls = null; } }
+    if (!cls) cls = { id: 'FIGHTER', name: 'Fighter', icon: '⚔️' };
+    let eq = (p.equipment && Object.keys(p.equipment).length) ? p.equipment : null;
+    if (!eq) { try { eq = inventorySystem.getEquipment(p.jid) || {}; } catch (e) { eq = {}; } }
+    const dead = !!p.isDead;
+    const hp = Math.max(0, Number(p.stats?.hp) || 0);
+    return {
+      jid: p.jid,
+      id: `player_${p.jid}`,
+      name: p.name || 'Hero',
+      class: cls,
+      isDead: dead,
+      adventurerRank: p.adventurerRank || 'F',
+      level: p.level || 1,
+      stats: {
+        hp: dead ? 0 : Math.max(1, hp),
+        maxHp: Number(p.stats?.maxHp) || Math.max(1, hp) || 100,
+        atk: Number(p.stats?.atk) || 10,
+        def: Number(p.stats?.def) || 10,
+        mag: Number(p.stats?.mag) || 10,
+        spd: Number(p.stats?.spd) || 10,
+        luck: Number(p.stats?.luck) || 10,
+        crit: Number(p.stats?.crit) || 5,
+        dmgReduction: Number(p.stats?.dmgReduction) || 0,
+        evasion: Number(p.stats?.evasion) || 0,
+        energy: Math.max(0, Number(p.stats?.energy) || 0),
+        maxEnergy: Number(p.stats?.maxEnergy) || 100,
+      },
+      equipment: eq,
+      inventory: [],
+      currentHP: dead ? 0 : Math.max(1, Number(p.currentHP) || hp),
+      mana: 100,
+      maxMana: 100,
+      xpEarned: Number(p.xpEarned) || 0,
+      goldEarned: Number(p.goldEarned) || 0,
+      combatStats: p.combatStats || { damageDealt: 0, damageTaken: 0, healed: 0, kills: 0 },
+      pendingActions: {},
+      buffs: [],
+      statusEffects: Array.isArray(p.statusEffects) ? p.statusEffects : [],
+      actionGauge: 0,
+    };
+  });
+
+  // Rebuild enemies EXACTLY as they were (current HP, dead flags, statuses).
+  const restoredEnemies = (snap.enemies || []).map((e, idx) => ({
+    id: e.id || `resumed_${idx}`,
+    name: e.name || 'Enemy',
+    icon: e.icon || '👾',
+    isEnemy: true,
+    isBoss: !!e.isBoss,
+    level: e.level || 1,
+    spriteIndex: Math.max(0, Math.floor(Number(e.spriteIndex) || 0)),
+    bossId: e.bossId || '',
+    humanoid: !!e.humanoid,
+    isWildSummon: !!e.isWildSummon,
+    archetype: e.archetype || 'BRUTE',
+    abilities: e.abilities || [],
+    rank: e.rank || snap.dungeonRank,
+    stats: {
+      hp: e.stats?.hp ?? e.currentHP ?? 1,
+      maxHp: e.stats?.maxHp ?? e.maxHP ?? 1,
+      atk: e.stats?.atk ?? 10,
+      def: e.stats?.def ?? 5,
+      spd: e.stats?.spd ?? 5,
+      mag: e.stats?.mag ?? 10,
+    },
+    currentHP: e.currentHP ?? e.stats?.hp ?? 1,
+    maxHP: e.maxHP ?? e.stats?.maxHp ?? 1,
+    mana: 100,
+    maxMana: 100,
+    statusEffects: e.statusEffects || [],
+    cooldowns: {},
+    actionGauge: 0,
+    xpReward: e.xpReward || 0,
+    goldReward: e.goldReward || 0,
+    isDead: !!e.isDead,
+    justDied: false,
+  }));
+  if (restoredEnemies.length === 0) {
+    await clearGroupSnapshot(chatId);
+    return { success: false, message: '❌ The saved fight has no enemies left — start a fresh quest.' };
+  }
+
+  const state = {
+    chatId,
+    players: restoredPlayers,
+    enemies: restoredEnemies,
+    summons: [],
+    captureWindows: {},
+    turnOrder: [],
+    currentTurn: 0,
+    inCombat: false,
+    combatProcessing: false,
+    active: true,
+    phase: 'COMBAT',
+    solo: false,
+    mode: snap.mode || 'QUEST',
+    dungeonRank: snap.dungeonRank ?? 0,
+    difficulty: snap.difficulty || 0,
+    encounter: snap.encounter || 1,
+    maxEncounters: snap.maxEncounters || 1,
+    currentEncounterType: snap.currentEncounterType || 'COMBAT',
+    combatRound: snap.combatRound || 0,
+    turnCount: 0,
+    pendingActions: {},
+    combatHistory: [],
+    votes: {},
+    backgroundPath: snap.backgroundPath || '',
+    stats: { monstersKilled: 0, bossesDefeated: 0, treasuresFound: 0, trapsTriggered: 0, playersRevived: 0 },
+    roundLog: [],
+    timers: {},
+    groq: null,
+    sock: sock, sock_ref: sock,
+    isProcessing: false,
+    isEndingCombat: false,
+    // 💡 flag the rebuild so the start scene says RESUMED, not BATTLE COMMENCES
+    _resumedFromSnapshot: true,
+  };
+  state.botId = botScope();
+  state.sessionKey = sessionKey;
+  gameStates.set(sessionKey, state);
+
+  await startCombat(sock, null, { enemies: restoredEnemies, type: snap.currentEncounterType || 'COMBAT', background: snap.backgroundPath || undefined }, sessionKey);
+
+  const alive = restoredPlayers.filter((p) => !p.isDead).length;
+  return { success: true, message: `⚔️ *GROUP FIGHT RESUMED* — round ${snap.combatRound || 0}, ${restoredEnemies.filter((e) => !e.isDead).length} enemy(ies) still standing, ${alive}/${restoredPlayers.length} party members up.` };
+}
+
+// 💡 BOOT AUTO-CONTINUE: called by engine.js ~25s after the WhatsApp socket
+// opens. Sweeps BOTH snapshot collections for fights THIS bot owned when the
+// process died and continues every one of them in its original chat — solo
+// and group party fights — without anyone typing a command. Once per process
+// (a reconnect keeps its in-memory states; only a fresh boot needs a sweep).
+let _autoResumeDone = false;
+async function autoResumeAfterRestart(sock) {
+  if (_autoResumeDone) return { skipped: true };
+  _autoResumeDone = true;
+  const out = { solo: 0, group: 0, failed: 0, staleCleared: 0 };
+  try {
+    const SoloCombatSnapshot = require('../../../models/SoloCombatSnapshot');
+    const GroupCombatSnapshot = require('../../../models/GroupCombatSnapshot');
+    let botId = null;
+    try { botId = botScope(); } catch (e) {}
+    const cutoff = new Date(Date.now() - AUTO_RESUME_STALE_MS);
+
+    // Housekeeping: snapshots older than 2h are dead fights — drop them so
+    // they never block a future resume.
+    try {
+      const sr = await SoloCombatSnapshot.deleteMany({ botId, updatedAt: { $lt: cutoff } });
+      const gr = await GroupCombatSnapshot.deleteMany({ botId, updatedAt: { $lt: cutoff } });
+      out.staleCleared = (sr.deletedCount || 0) + (gr.deletedCount || 0);
+      if (out.staleCleared > 0) console.log(`[AutoResume] cleared ${out.staleCleared} stale snapshot(s)`);
+    } catch (e) {}
+
+    const [soloSnaps, groupSnaps] = await Promise.all([
+      SoloCombatSnapshot.find({ botId }).sort({ updatedAt: 1 }).limit(12).lean(),
+      GroupCombatSnapshot.find({ botId }).sort({ updatedAt: 1 }).limit(12).lean(),
+    ]);
+    const batch = [
+      ...soloSnaps.map((s) => ({ kind: 'solo', snap: s })),
+      ...groupSnaps.map((g) => ({ kind: 'group', snap: g })),
+    ].slice(0, AUTO_RESUME_MAX);
+
+    for (const item of batch) {
+      try {
+        if (item.kind === 'solo') {
+          const r = await resumeSoloCombat(sock, item.snap.chatId, item.snap.userId);
+          if (r?.success) {
+            out.solo++;
+            console.log(`[AutoResume] solo fight continued in ${item.snap.chatId}`);
+          } else {
+            console.log(`[AutoResume] solo skip (${item.snap.chatId}): ${r?.message || 'no detail'}`);
+          }
+        } else {
+          const jid = (Array.isArray(item.snap.playerJids) && item.snap.playerJids[0]) ||
+            (Array.isArray(item.snap.players) && item.snap.players[0]?.jid);
+          const r = await resumeGroupCombat(sock, item.snap.chatId, jid);
+          if (r?.success) {
+            out.group++;
+            console.log(`[AutoResume] group fight continued in ${item.snap.chatId}`);
+          } else {
+            console.log(`[AutoResume] group skip (${item.snap.chatId}): ${r?.message || 'no detail'}`);
+          }
+        }
+      } catch (e) {
+        out.failed++;
+        console.error('[AutoResume] resume failed:', e?.message);
+      }
+      await new Promise((r) => setTimeout(r, 8000)); // pace the render/DB burst
+    }
+    console.log(`[AutoResume] boot sweep done: ${out.solo} solo + ${out.group} group continued, ${out.failed} failed`);
+    return out;
+  } catch (e) {
+    console.error('[AutoResume] sweep error:', e?.message);
+    return out;
+  }
+}
+
+/**
+ * Handle Abyss victory - advance to next floor with new encounter.
+ */
+async function handleAbyssVictory(sock, sessionKey) {
+  const state = gameStates.get(sessionKey);
+  if (!state || !state.isAbyss) return;
+
+  const senderJid = state.players[0]?.jid;
+  if (!senderJid) return;
+
+  const abyssSystem = require('./abyssSystem');
+  const run = state.abyssRun;
+  if (!run) { deleteGameState(sessionKey); return; }
+
+  // 💡 AUDIT FIX 2026-08-01 (Round 2): guard against empty players array.
+  // If state.players is somehow empty (shouldn't happen but defensive),
+  // accessing player.stats.hp would crash. Now we bail out safely.
+  const player = state.players[0];
+  if (!player || !player.stats) {
+    console.error('[Abyss] handleAbyssVictory: no player in state');
+    deleteGameState(sessionKey);
+    return;
+  }
+  run.currentHp = Math.max(1, player.stats.hp);
+  run.currentEnergy = player.stats.energy || 0;
+  // 💡 FIX: update the snapshot with REAL max values from the combat state.
+  // Previously the snapshot kept whatever maxHp was set at run start (often
+  // wrong - e.g. 100 instead of 37000). Now it syncs with the actual
+  // player stats after each combat, so the Abyss status/victory display
+  // shows the correct max HP.
+  if (player.stats.maxHp) run.playerSnapshot.maxHp = player.stats.maxHp;
+  if (player.stats.maxEnergy) run.playerSnapshot.maxEnergy = player.stats.maxEnergy;
+  run.monstersKilled = (run.monstersKilled || 0) + 1;
+  if (state.enemies[0]?.isBoss) run.bossesKilled = (run.bossesKilled || 0) + 1;
+
+  // Award rewards
+  // 💡 XP RESTORED + PARTY-SCALED (owner 2026-10-11: "add experience as a
+  // reward back into the abyss it was removed a couple of commits ago
+  // investigate removal and undo" — chat 19:24Z: "I turned it off to add
+  // coop"). Co-op scales the enemy +60%HP/+15%atk per extra player but left
+  // rewards FLAT, so each member effectively earned 1/n of a solo floor's
+  // XP — players read that as "XP removed". Undo: rewardMult = 1 + 0.5 per
+  // extra party member, paid per member (solo stays exactly rewardMult=1).
+  const __partyN = run.isCoop
+    ? Math.max(1, Math.max((run.party || []).length, (state.players || []).length))
+    : 1;
+  const rewards = abyssSystem.getFloorRewards(
+    state.abyssFloor, state.enemies[0]?.isBoss, 1 + 0.5 * (__partyN - 1));
+  // 💡 CO-OP: loot is paid PER FLOOR to EVERY party member immediately and the
+  // shared accumulator stays zeroed (retreat/death paths can't double-pay).
+  let coopPayoutMsg = '';
+  if (run.isCoop) {
+    const progression = require('../characters/progression');
+    for (const p of state.players) {
+      try {
+        if (rewards.xp > 0) progression.awardXP(p.jid, rewards.xp, `Abyss co-op F${state.abyssFloor}`);
+        if (rewards.gold > 0) economy.addMoney(p.jid, rewards.gold, `Abyss co-op F${state.abyssFloor}`, 'abyss');
+      } catch (payErr) {
+        console.error('[Abyss] co-op per-floor payout failed for', p.jid, payErr.message);
+      }
+    }
+    // Sync every member's HP/energy back into the run doc for the next floor
+    run.lootAccumulator = { xp: 0, gold: 0, runes: [], items: [] };
+    const _party = run.party || [];
+    for (const p of state.players) {
+      const m = _party.find((x) => x.jid === p.jid);
+      if (m) { m.hp = Math.max(1, p.stats.hp); m.energy = p.stats.energy || 0; }
+    }
+    run.markModified?.('party');
+    // carry-over HP for the HOST fields (used by status display + solo fallback)
+    run.currentHp = Math.max(1, state.players[0].stats.hp);
+    run.currentEnergy = state.players[0].stats.energy || 0;
+    coopPayoutMsg = `👥 Party split: each member earned +${rewards.xp} XP, +${rewards.gold} Zeni\n`;
+  } else {
+    run.lootAccumulator.xp += rewards.xp;
+    run.lootAccumulator.gold += rewards.gold;
+  }
+
+  try {
+    economy.trackMissionStat(senderJid, 'kills', 1);
+    if (state.enemies[0]?.isBoss) economy.trackMissionStat(senderJid, 'bossesDefeated', 1);
+  } catch (e) {}
+
+  // Rune drop
+  let runeMsg = '';
+  if (state.enemies[0]?.isBoss && state.abyssFloor >= 21) {
+    try {
+      const runeSystem = require('../inventory/runeSystem');
+      const dropChance = state.abyssFloor >= 50 ? 0.30 : 0.15;
+      const drop = runeSystem.rollRuneDrop(dropChance);
+      if (drop) {
+        const runeResult = await runeSystem.awardRune(senderJid, drop.type, drop.tier, `abyss_floor_${state.abyssFloor}`);
+        if (runeResult.success) {
+          run.lootAccumulator.runes.push(runeResult.rune.runeId);
+          runeMsg = '\n' + runeResult.message;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 💡 SUMMON PROGRESSION SYSTEM (2026-08-01): drop fragments when the
+  // defeated enemy was a wild summon. The encounter type + species data
+  // are stored on the run - check if this was a wild summon encounter.
+  let fragmentMsg = '';
+  if (run.currentEncounterType === 'wild_summon' && run.currentEncounterData) {
+    try {
+      const summonEggSystem = require('../summons/summonEggSystem');
+      const wildRarity = run.currentEncounterData.rarity || 'COMMON';
+      const fragDrop = summonEggSystem.getFragmentDrop(state.abyssFloor, wildRarity);
+      if (fragDrop) {
+        const { fragmentId, quantity } = fragDrop;
+        // 💡 FIX 2026-08-31: await the addItem and check the result - a full
+        // inventory silently failed while the message still announced the drop.
+        const fragResult = await inventorySystem.addItem(senderJid, fragmentId, quantity);
+        const fragInfo = lootSystem.getItemInfo(fragmentId);
+        const fragName = fragInfo?.name || fragmentId;
+        fragmentMsg = fragResult && fragResult.success
+          ? `\n💎 *SUMMON FRAGMENT DROP!* +${quantity}x ${fragName}`
+          : `\n⚠️ Summon fragments wouldn't fit in your bag (bag full)!`;
+      }
+    } catch (e) {
+      console.error('[Abyss] Fragment drop failed:', e.message);
+    }
+  }
+
+  // 💡 2026-09-17 PACK FIGHTS: queued pack members jump in one after
+  // another on the SAME floor - no HP reset, +25% rewards per add. The
+  // floor only advances once the whole pack is down (bosses/wild summons
+  // never have packs).
+  if (Array.isArray(run.packQueue) && run.packQueue.length > 0 && run.currentEncounterType === 'combat') {
+    const addRewards = abyssSystem.getFloorRewards(state.abyssFloor, false, 0.25);
+    run.lootAccumulator.xp += addRewards.xp;
+    run.lootAccumulator.gold += addRewards.gold;
+    run.monstersKilled = (run.monstersKilled || 0) + 1;
+    try { economy.trackMissionStat(senderJid, 'kills', 1); } catch (e) {}
+
+    const nextPackEnemy = run.packQueue.shift();
+    run.currentEnemy = nextPackEnemy;
+    run.currentEncounterType = 'combat';
+    run.currentEncounterData = null;
+    await run.save();
+
+    const packLeft = run.packQueue.length;
+    let pmsg = `🧸 *Pack fight! ${nextPackEnemy.name || 'Another enemy'} rushes in!*\n`;
+    pmsg += `❤️ Your HP carries over: ${Math.floor(run.currentHp)}/${Math.floor(run.playerSnapshot?.maxHp || 0)}\n`;
+    pmsg += `🎁 +${addRewards.xp} XP, +${addRewards.gold} Zeni (pack share)\n`;
+    pmsg += packLeft > 0 ? `👥 ${packLeft} more pack member(s) waiting after this one!\n\n` : '\n';
+    pmsg += `_Use \`${botConfig.getPrefix()} combat attack\` to fight!_`;
+    // 💡 LORE DROP (abyss.md §4 pack-fight moment): "another one steps out"
+    // - creature pool, low chance, delivered as its OWN message (owner
+    // ruling 2026-09-20: a drop is a distinct lore event, not a tacked line).
+    let __packDrop = null;
+    try {
+      __packDrop = loreDrops.maybeDrop('abyss_unknown_creature', { userId: senderJid, chatId: state.chatId, chance: 0.10 });
+    } catch (e) {}
+    try { await sock.sendMessage(state.chatId, { text: pmsg }); } catch (e) {}
+    await loreDrops.sendOwn(sock, state.chatId, __packDrop);
+
+    deleteGameState(sessionKey);
+    if (run.isCoop) {
+      await startAbyssCoopCombat(sock, state.chatId, run.hostJid || senderJid, nextPackEnemy, run, state.abyssFloor);
+    } else {
+      await startAbyssCombat(sock, state.chatId, senderJid, nextPackEnemy, run, state.abyssFloor);
+    }
+    return;
+  }
+
+  // Advance floor
+  run.currentFloor = (run.currentFloor || state.abyssFloor) + 1;
+  const newFloor = run.currentFloor;
+  run.currentEnergy = Math.min(run.playerSnapshot?.maxEnergy || 100, run.currentEnergy + 20);
+
+  // Generate next encounter
+  // 💡 PLAYER VARIANTS: pass the player's class so MIRROR/WANDERER variants
+  // can roll on floors 31+ (enemy_variants.md §5).
+  const __playerClassId = (player.class && player.class.id) || 'FIGHTER';
+  const encounter = abyssSystem.generateFloorEncounter(newFloor, { playerClassId: __playerClassId });
+  if (encounter.type === 'combat' || encounter.type === 'wild_summon') {
+    run.currentEnemy = encounter.enemy;
+    run.currentEncounterType = encounter.type;
+    // 💡 2026-09-17: carry the pack queue onto the run (empty for wilds)
+    run.packQueue = Array.isArray(encounter.packQueue) ? encounter.packQueue : [];
+    if (encounter.type === 'wild_summon') {
+      run.currentEncounterData = {
+        species: encounter.wildSummonSpecies,
+        rarity: encounter.wildSummonRarity,
+      };
+    } else {
+      run.currentEncounterData = null;
+    }
+  } else {
+    run.currentEnemy = null;
+    run.currentEncounterType = encounter.type;
+    run.currentEncounterData = encounter.treasure || encounter.event;
+  }
+  await run.save();
+
+  // Clean up old state
+  deleteGameState(sessionKey);
+
+  // Build and send message
+  let msg = `✅ *Floor ${state.abyssFloor} cleared!*\n`;
+  if (run.isCoop) {
+    msg += `${coopPayoutMsg}`;
+  } else {
+    msg += `🎁 +${rewards.xp} XP, +${rewards.gold} Zeni${runeMsg}${fragmentMsg}\n`;
+  }
+  msg += `❤️ HP: ${Math.floor(run.currentHp)}/${Math.floor(run.playerSnapshot?.maxHp || 0)}\n\n`;
+
+  // 💡 LORE DROP (victory attach point, abyss.md §4): ONE drop keyed by the
+  // DEFEATED encounter - abyss pools by variant tag / depth escalation, or an
+  // environmental observation. Never on wild_summon (they are friendly
+  // faces), never two drops in one reply, never on failure. Delivered as
+  // its OWN message after the floor-clear text (owner ruling 2026-09-20).
+  let __victoryDrop = null;
+  try {
+    const __defeated = state.enemies[0];
+    if (__defeated && run.currentEncounterType === 'combat' && !__defeated.isWildSummon) {
+      if (__defeated.humanoid && Math.random() < 0.15) {
+        __victoryDrop = loreDrops.maybeDrop('encounters_bark', { userId: senderJid, chatId: state.chatId, chance: 1 });
+      } else {
+        const __pool = loreDrops.routeAbyssCategory(__defeated, state.abyssFloor);
+        __victoryDrop = loreDrops.maybeDrop(__pool, { userId: senderJid, chatId: state.chatId, chance: 0.12 });
+      }
+    }
+  } catch (e) {}
+  const __victoryDropped = !!__victoryDrop;
+
+  // 💡 OPENER: roll a next-floor opener only when the victory block did not
+  // already drop (never two drops in one reply). Sent as its own message.
+  let __openerDrop = null;
+  if (!__victoryDropped && encounter.type === 'combat') {
+    try {
+      __openerDrop = loreDrops.maybeDrop(
+        encounter.enemy && encounter.enemy.humanoid ? 'encounters_bark' : 'encounters_opener',
+        { userId: senderJid, chatId: state.chatId, chance: encounter.enemy && encounter.enemy.humanoid ? 1 : 0.10 }
+      );
+    } catch (e) {}
+  }
+
+  if (encounter.type === 'combat') {
+    msg += `🕳️ *Floor ${newFloor}* - ${encounter.enemy.name}\n`;
+    msg += `HP: ${Math.floor(encounter.enemy.stats?.hp ?? encounter.enemy.hp)}/${Math.floor(encounter.enemy.stats?.maxHp ?? encounter.enemy.maxHp)}\n`;
+    if (Array.isArray(encounter.packQueue) && encounter.packQueue.length) {
+      msg += `👥 *PACK FIGHT* - ${encounter.packQueue.length + 1} enemies, one after another (no HP reset between them)!\n`;
+    }
+    msg += `_Use \`${botConfig.getPrefix()} combat attack\` to fight!_`;
+    try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
+    await loreDrops.sendOwn(sock, state.chatId, __victoryDrop || __openerDrop);
+    if (run.isCoop) {
+      await startAbyssCoopCombat(sock, state.chatId, run.hostJid || senderJid, encounter.enemy, run, newFloor);
+    } else {
+      await startAbyssCombat(sock, state.chatId, senderJid, encounter.enemy, run, newFloor);
+    }
+  } else if (encounter.type === 'wild_summon') {
+    msg += `🐉 *Floor ${newFloor}* - Wild ${encounter.wildSummonSpecies} appeared!*\n`;
+    msg += `HP: ${Math.floor(encounter.enemy.stats.hp)}/${Math.floor(encounter.enemy.stats.maxHp)}\n`;
+    msg += `⚠️ _Defeat it to earn Summon Fragments!_\n`;
+    msg += `_Use \`${botConfig.getPrefix()} combat attack\` to fight!_`;
+    try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e) {}
+    if (run.isCoop) {
+      await startAbyssCoopCombat(sock, state.chatId, run.hostJid || senderJid, encounter.enemy, run, newFloor);
+    } else {
+      await startAbyssCombat(sock, state.chatId, senderJid, encounter.enemy, run, newFloor);
+    }
+  } else if (encounter.type === 'treasure') {
+    msg += `${encounter.treasure.icon} *Floor ${newFloor}* - ${encounter.treasure.name}\n`;
+    msg += `_${encounter.treasure.desc}_\n\n`;
+    msg += `_Collect with \`${botConfig.getPrefix()} abyss collect\` | Skip with \`${botConfig.getPrefix()} abyss skip\`_`;
+    // 🕳️ ABYSS OVERHAUL (2026-10-09): the descent gets a VISUAL — floor
+    // card with the ring stack highlighting the new floor (was plain text)
+    try {
+      const __eco = require('../economy/economy');
+      const __u = __eco.getUser(senderJid) || {};
+      const __fc = await require('./abyssScene').renderAbyssFloorCard({
+        floor: newFloor,
+        tier: abyssSystem.getFloorTier(newFloor),
+        mult: abyssSystem.getFloorMultiplier(newFloor),
+        encounterType: 'treasure',
+        playerName: __eco.getDisplayName(senderJid),
+        playerClassId: __u.class || 'FIGHTER',
+        playerSpriteIndex: Number(__u.spriteIndex) || 0,
+      });
+      if (__fc && __fc.length > 100) {
+        await sock.sendMessage(state.chatId, { image: __fc, gifPlayback: require('./abyssScene').isAnimatedCard(__fc), caption: msg });
+      } else {
+        await sock.sendMessage(state.chatId, { text: msg });
+      }
+    } catch (e) { try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e2) {} }
+    await loreDrops.sendOwn(sock, state.chatId, __victoryDrop || __openerDrop);
+  } else if (encounter.type === 'event') {
+    msg += `${encounter.event.icon} *Floor ${newFloor}* - ${encounter.event.name}\n`;
+    msg += `_${encounter.event.desc}_\n\n`;
+    encounter.event.choices.forEach(c => { msg += `\`${c.id}\` - ${c.text}\n`; });
+    msg += `\n_Choose with \`${botConfig.getPrefix()} abyss choose <1/2>\`_`;
+    // 🕳️ ABYSS OVERHAUL (2026-10-09): event floors get the floor card too
+    try {
+      const __eco = require('../economy/economy');
+      const __u = __eco.getUser(senderJid) || {};
+      const __fc = await require('./abyssScene').renderAbyssFloorCard({
+        floor: newFloor,
+        tier: abyssSystem.getFloorTier(newFloor),
+        mult: abyssSystem.getFloorMultiplier(newFloor),
+        encounterType: 'event',
+        playerName: __eco.getDisplayName(senderJid),
+        playerClassId: __u.class || 'FIGHTER',
+        playerSpriteIndex: Number(__u.spriteIndex) || 0,
+      });
+      if (__fc && __fc.length > 100) {
+        await sock.sendMessage(state.chatId, { image: __fc, gifPlayback: require('./abyssScene').isAnimatedCard(__fc), caption: msg });
+      } else {
+        await sock.sendMessage(state.chatId, { text: msg });
+      }
+    } catch (e) { try { await sock.sendMessage(state.chatId, { text: msg }); } catch (e2) {} }
+    await loreDrops.sendOwn(sock, state.chatId, __victoryDrop || __openerDrop);
+  }
+}
+
+async function endCombat(sock, victory, sessionKey, expectedGen) {
+  END_DEBUG(`endCombat ENTER key=${sessionKey} victory=${victory}`);
+  const state = gameStates.get(sessionKey);
+  if (!state || state.isEndingCombat) return;
+  // 💡 ROUND-19 (ghost-victory quest-skip fix): refuse resolutions that
+  // belong to a superseded fight. A stale turn-loop iteration or enemy-turn
+  // promise from encounter N can land on encounter N+1's freshly-built
+  // state (the boss fight) and — before any real action — end it as a
+  // "victory" with recycled rewards. Callers that captured a combatGen
+  // (checkCombatEnd) get verified here; mismatched gens are dropped.
+  if (expectedGen !== undefined && (state.combatGen || 0) !== expectedGen) {
+    console.warn(
+      `[Quest] endCombat REFUSED stale resolution (expected gen ${expectedGen}, live gen ${state.combatGen || 0}) for ${sessionKey}`,
+    );
+    return;
+  }
+  // ⚔️ RACE FIX 2026-10-04 (owner spec §18/§21 — "one evaluation per event"):
+  // the guard used to be claimed AFTER the awaited onEnd hook below, so a
+  // second combat action landing inside that async window re-entered
+  // endCombat and ran the defeat/victory hook TWICE (double war-feed death
+  // events, life-count races, inconsistent final states — observed directly
+  // by the defeat-path QA probe: "[Quest] Combat ended" logged twice per
+  // death). Claim the flag SYNCHRONOUSLY before any await; the existing
+  // resets (victory nextStage timer / defeat cleanup) are unchanged.
+  state.isEndingCombat = true; // claim FIRST — no re-entry during the async hook
+  const combatGenAtEnd = state.combatGen || 0;
+  // ⚔️ RUINS: free the frozen battle-scene layout for this session
+  try { require('../guildwar/battleScene').clearLayout(sessionKey); } catch (e) {}
+  // 🕳️ ABYSS: free the frozen abyss-scene layout for this session
+  try { require('./abyssScene').clearLayout(sessionKey); } catch (e) {}
+  // 🤝 TEAM CO-OP: the room session is over — drop every participant's
+  // resolver entry so later fights seat them fresh.
+  cleanupCoopIndexForSession(sessionKey);
+  // ⚔️ RUINS: report the outcome to the Guild War module (GP + relic award /
+  // defeat respawn). Standard rewards below still apply. sock is passed so
+  // the hook can DM post-combat visuals (navigation card).
+  let ruinsEndDesc = null;
+  if (state.mode === 'RUINS' && ruinsHooks.onEnd) {
+    // 🔄 onEnd returns a presentation descriptor (kind: victory / respawn /
+    // final) and NO LONGER sends the map/encounter itself — presentAfterBattle
+    // replays those AFTER the end card below (owner ordering rule
+    // 2026-10-05 11:48Z: "the defeat or victory image card should come in
+    // before the map and new encounter one").
+    try { ruinsEndDesc = await ruinsHooks.onEnd(state, !!victory, sessionKey, sock); } catch (e) { console.error('[Ruins] onEnd hook:', e?.message); }
+  }
+  // 💡 TUTORIAL: route the practice-fight outcome to the tutorial module.
+  // 💡 Phase B: also routes the tutorial solo-quest and group-demo fights.
+  if (state.mode === 'TUTORIAL' || state.mode === 'TUTORIAL_QUEST' || state.mode === 'TUTORIAL_GROUP') {
+    try { require('../meta/tutorial').notifyCombatEnd(state, sock); } catch (e) { console.error('[Tutorial] combat end notify:', e?.message); }
+  }
+
+  const chatId = state.chatId;
+  console.log(
+    `[Quest] Combat ended. Victory: ${victory}, Encounter: ${state.encounter}/${state.maxEncounters}`,
+  );
+  state.inCombat = false;
+
+  // 💡 FIX #7: Set death cooldown for any summons that died during combat.
+  // They can't be redeployed for 5 minutes. This gives summon death a
+  // consequence - players can't just throw their summon into every fight
+  // without caring if it dies.
+  if (state.summons) {
+    for (const summon of state.summons) {
+      if (summon.isDead && summon.id) {
+        summonDeathCooldowns.set(summon.id, Date.now() + SUMMON_DEATH_COOLDOWN_MS);
+        console.log(`[SummonCooldown] ${summon.name} died - cooldown set for 5min`);
+      }
+    }
+  }
+
+  // 💡 FIX §2.8: Clean up per-player combat state so it doesn't bleed into
+  // the next fight. Previously, skillCooldowns, passiveCombo, passiveKillBonus,
+  // and passiveDamageBonus persisted across encounters within the same dungeon
+  // run because they were only cleared on gameState deletion (which happens at
+  // the end of the entire dungeon, not per-encounter).
+  if (state.players) {
+    state.players.forEach(p => {
+      // 💡 Phase B: tutorial allies are synthetic entities - never write
+      // their combat state back to the economy (would fabricate users).
+      if (p.isTutorialAlly) return;
+      if (p.skillCooldowns) p.skillCooldowns = {};
+      p.passiveCombo = 0;
+      p.passiveKillBonus = 1;
+      p.passiveDamageBonus = 1;
+      p.passiveMagBonus = 1;
+      // 💡 FIX 2026-08-01: Reset passivesApplied so combat-start passives
+      // (including magic_damage) re-apply on the next encounter. Previously
+      // passiveMagBonus was reset to 1 but passivesApplied stayed true,
+      // preventing re-application - Mages lost their +20% magic damage
+      // after the first encounter in multi-encounter dungeons.
+      p.passivesApplied = false;
+
+      // 💡 PERSISTENT HP SYSTEM (2026-07-31): Save current HP back to the
+      // User document so damage persists after combat ends. HP is clamped
+      // to 0..maxHP. On next combat start, getPersistentHP() will restore
+      // to 1 if HP was 0 (defeated).
+      if (p.jid && p.stats && p.stats.maxHp) {
+        let finalHP = p.currentHP !== undefined ? p.currentHP : p.stats.hp;
+        // 💡 FIX 2026-10-03 (owner elixir report): an active Full Restore
+        // effect auto-tops the player up at combat end - the effect runs on
+        // its own timer and is NOT cleared by the quest ending.
+        try {
+          if (economy.hasActiveEffect(p.jid, 'full_restore')) finalHP = p.stats.maxHp;
+        } catch (fxErr) { /* non-fatal */ }
+        economy.setPersistentHP(p.jid, finalHP, p.stats.maxHp);
+      }
+      // PERSISTENT ENERGY WRITE-BACK (2026-09-17): energy spent in combat
+      // stays spent - one canonical pool shared by mining/quests/duels,
+      // mirroring exactly how persistent HP works.
+      if (p.jid && p.stats && p.stats.maxEnergy) {
+        const finalEn = Number.isFinite(p.stats.energy) ? p.stats.energy : p.stats.maxEnergy;
+        economy.setPersistentEnergy(p.jid, finalEn, p.stats.maxEnergy);
+      }
+    });
+  }
+
+  // Calculate rewards
+  const totalXP = state.enemies.reduce((sum, e) => {
+    const xpVal = Number(e.xp || e.xpReward || 0);
+    return sum + (isNaN(xpVal) ? 0 : xpVal);
+  }, 0);
+
+  // 💡 P4 Item 4 (2026-08-16): Rank-based zeni reward table.
+  // 💡 ECONOMY RETUNE 2026-10-03 (owner progression report): S+ runs dumped
+  // 200-650K Zeni per player per run, which trivialized every shop price and
+  // made carried low-ranks instantly rich. Mid/high tiers rebalanced so a
+  // full S run nets ~120K per player (still the best income in the game,
+  // ~50x a daily claim), F-D unchanged for the early curve.
+  const RANK_GOLD_TABLE = {
+    F:   [800, 1200],     // avg ~1K
+    E:   [2500, 3500],    // avg ~3K
+    D:   [4000, 5500],    // avg ~4.8K (was 5-7K)
+    C:   [5000, 7000],    // avg ~6K (was 8-10K)
+    B:   [6500, 9000],    // avg ~7.8K (was 11-15K)
+    A:   [8000, 11000],   // avg ~9.5K (was 16-20K)
+    S:   [10000, 14000],  // avg ~12K (was 21-30K)
+    SS:  [12000, 16000],  // avg ~14K (was 31-40K)
+    SSS: [14000, 18000],  // avg ~16K (was 41-50K)
+    GOD: [16000, 22000],  // avg ~19K (was 51-60K)
+  };
+  const rankKey = state.dungeonRank || 'F';
+  const goldRange = RANK_GOLD_TABLE[rankKey] || RANK_GOLD_TABLE.F;
+  // Scale within range based on enemy count (more enemies = higher reward)
+  const enemyCount = Math.max(1, state.enemies.length);
+  const isBossFight = state.enemies.some(e => e.isBoss);
+  const contributionFactor = Math.min(1, enemyCount / 4); // 1 enemy = 25%, 4+ = 100%
+  const minGold = goldRange[0];
+  const maxGold = goldRange[1];
+  // Boss fights get the max, regular fights scale by contribution
+  const baseGold = isBossFight
+    ? maxGold
+    : Math.floor(minGold + (maxGold - minGold) * contributionFactor);
+
+  // Distribute rewards
+  const alivePlayers = state.players.filter((p) => !p.isDead);
+  // 💡 Phase B (2026-10-04): fake tutorial party members never count toward
+  // payouts (they don't exist in the economy) and TUTORIAL practice fights
+  // (the repeatable Training Dummy) pay nothing at all.
+  const isTutorialPractice = state.mode === 'TUTORIAL';
+  const rewardPlayers = alivePlayers.filter((p) => !p.isTutorialAlly);
+  const playerCount = Math.max(1, isTutorialPractice ? 1 : rewardPlayers.length);
+  // Total gold = base × player count (boss fights don't multiply by player count)
+  const totalGold = isTutorialPractice ? 0 : baseGold * (isBossFight ? 1 : playerCount);
+  let xpPerPlayer = Math.floor(totalXP / playerCount);
+  // 💡 ECONOMY RETUNE 2026-10-03 (owner progression report): enemy XP scales
+  // as xpReward x (1 + rankIndex^exponent) with exponents up to 1.55, which
+  // put a single S boss at ~14.9M XP - six times the entire L1->100 curve
+  // (2.4M) - so one carried S/SS run instant-100'd low-ranks. Hard per-fight
+  // ceiling per rank, calibrated so a FULL run lands ~250-800K XP per player
+  // (a healthy chunk of the curve, never the whole thing in one fight):
+  const XP_CAP_BY_RANK = {
+    F: 300, E: 800, D: 1800, C: 4000, B: 8000, A: 15000,
+    S: 28000, SS: 42000, SSS: 60000, DRAGON: 80000, GOD: 80000,
+  };
+  const xpCap = XP_CAP_BY_RANK[(state.dungeonRank || 'F').toUpperCase()] ?? 5000;
+  if (xpPerPlayer > xpCap) xpPerPlayer = xpCap;
+  // 💡 TICKET #b5087a: solo Scout Pathfinder XP bonus (see helper above).
+  if (playerCount === 1 && alivePlayers.length === 1) {
+    xpPerPlayer = Math.floor(xpPerPlayer * _soloHunterXpMult(alivePlayers[0], state));
+  }
+  const goldPerPlayer = Math.floor(totalGold / playerCount);
+
+  const encounterType = state.currentEncounterType || "COMBAT";
+  const bossName = state.enemies[0]?.type || state.enemies[0]?.id || null;
+
+  // Distribute rewards - only when we have alive players (prevents jid crash on defeat)
+  // 💡 FIX P4: Skip loot distribution for Abyss - rewards go to lootAccumulator instead
+  // 💡 Phase B (2026-10-04): TUTORIAL practice fights (mode TUTORIAL, the
+  // Training Dummy) pay NOTHING - the fight is repeatable practice, so real
+  // payouts would be a zero-risk farm. Tutorial QUEST modes keep their small
+  // controlled rewards, but fake party members (isTutorialAlly) never receive
+  // any (they don't exist - paying them would fabricate economy users).
+  let lootResults = { items: [], gold: totalGold, announcements: [] };
+  if (victory && rewardPlayers.length > 0 && !state.isAbyss && !isTutorialPractice) {
+    try {
+      lootResults = await lootSystem.distributeLoot(
+        rewardPlayers,
+        encounterType,
+        bossName,
+        state.difficulty,
+        totalGold,
+      );
+    } catch (lootErr) {
+      console.error("Loot distribution failed:", lootErr.message);
+    }
+  }
+
+  const rewards = {
+    gold: totalGold,
+    // 💡 XP RECONCILE (owner 2026-10-25 "xp gained from individual bosses is
+    // high but the actual xp you get at the end doesn't register it"): the
+    // victory card used to advertise the RAW encounter XP (totalXP) while
+    // players were CREDITED the rank-capped, party-split, solo-multiplied
+    // xpPerPlayer - so a F-rank boss card said 5,537 XP and the run summary
+    // later said combat: 900. The card now shows the number that actually
+    // lands on the player, keeping every card and the final summary equal.
+    xp: victory ? xpPerPlayer : 0,
+    items: (lootResults.items || []).map((item) => ({
+      name: item.name || item.id,
+    })),
+  };
+
+  // Generate end-of-combat message.
+  // 💡 NEW 2026-07-29: Render an end-screen image (VICTORY/DEFEATED) via the
+  // Go service. Falls back to text-only on any failure (preserves old behavior).
+  let caption = victory ? "✅ Victory!" : "💀 Defeat...";
+  try {
+    if (combatIntegration && combatIntegration.generateEndCaption) {
+      caption = combatIntegration.generateEndCaption(state.players, state.enemies, victory, rewards);
+    }
+  } catch (sceneErr) {
+    console.error("End combat caption generation failed:", sceneErr.message);
+  }
+
+  // Try to render end-screen image
+  // ⚔️ RUINS (owner 2026-10-05): the war's end image is the ROYAL-DECREE
+  // parchment card themed to the Ruins (guildWar endCard hook) — the
+  // default Go VICTORY/DEFEAT portrait stays for every non-war mode.
+  let endScreenSent = false;
+  if (state.mode === 'RUINS' && ruinsHooks.endCard) {
+    try {
+      const card = await ruinsHooks.endCard(state, !!victory);
+      if (card && card.length > 100) {
+        // the war card is the Go royal-bake decree (JPEG) or the node
+        // fallback (PNG) — sniff the magic bytes instead of guessing.
+        const isJpeg = card[0] === 0xff && card[1] === 0xd8;
+        await sock.sendMessage(state.chatId, {
+          image: card,
+          caption: caption,
+          mimetype: isJpeg ? 'image/jpeg' : 'image/png',
+        });
+        endScreenSent = true;
+      }
+    } catch (ruinsCardErr) {
+      console.error('[Ruins] decree end card failed (non-fatal):', ruinsCardErr.message);
+    }
+  }
+  try {
+    // 🕳️ 2026-10-10 round-12 (owner, 01:56Z: "the old victory and defeat
+    // cards are being used for the abyss"): abyss battles end on the
+    // abyss-scene result card family, NEVER the Go VICTORY/DEFEAT portrait.
+    //   victory → CLEARED result card (floor reward ledger, same painter as
+    //             EXTRACTED/FALLEN — gold beam, ring stack, descender)
+    //   defeat  → the FALLEN card already renders in the abyss death path
+    //             below; the old DEFEATED portrait is skipped entirely.
+    if (state.isAbyss) {
+      try {
+        if (victory && state.abyssRun) {
+          const __run = state.abyssRun;
+          // party-scaled ledger (must match the actual handleAbyssVictory payout)
+          const __partyN = __run.isCoop
+            ? Math.max(1, Math.max((__run.party || []).length, (state.players || []).length))
+            : 1;
+          const __rewards = require('./abyssSystem').getFloorRewards(
+            state.abyssFloor, state.enemies[0]?.isBoss, 1 + 0.5 * (__partyN - 1));
+          const __eco = require('../economy/economy');
+          const __u = __eco.getUser(state.players[0]?.jid) || {};
+          const __clrBuf = await require('./abyssScene').renderAbyssResultCard({
+            outcome: 'CLEARED',
+            floor: state.abyssFloor || 1,
+            // same formula the leaderboard uses (floor*100 + kills*5), +1 for
+            // the kill that just landed (handleAbyssVictory increments later)
+            score: (state.abyssFloor || 1) * 100 + ((__run.monstersKilled || 0) + 1) * 5,
+            keptXp: Number(__rewards.xp) || 0,
+            keptGold: Number(__rewards.gold) || 0,
+            runes: Array.isArray(__run.lootAccumulator?.runes) ? __run.lootAccumulator.runes.length : 0,
+            monstersKilled: (__run.monstersKilled || 0) + 1,
+            bossesKilled: (__run.bossesKilled || 0) + (state.enemies[0]?.isBoss ? 1 : 0),
+            playerClassId: String((state.players[0].class && state.players[0].class.id) || state.players[0].class || 'FIGHTER').toUpperCase(),
+            playerSpriteIndex: Math.max(0, Math.floor(Number(state.players[0].spriteIndex) || 0)),
+          });
+          if (__clrBuf && __clrBuf.length > 100) {
+            // 💡 RPG OPT PASS (2026-10-20): bounded send with late-settle
+            // detection — the old race+catch let a drained-late image AND the
+            // bottom text fallback BOTH arrive (duplicate CLEARED cards).
+            await sendMediaBounded(sock, state.chatId, { image: __clrBuf, caption }, { label: 'abyssCleared' });
+            endScreenSent = true; // helper owns the single-fallback contract
+          }
+        }
+        // abyss defeat: no image here — FALLEN card comes from the death path
+      } catch (abyssCardErr) {
+        console.error('[Abyss] cleared card failed (non-fatal):', abyssCardErr.message);
+      }
+    } else if (!endScreenSent && combatIntegration && combatIntegration.renderCombatEnd) {
+      END_DEBUG(`endCombat key=${sessionKey} victory=${victory} endScreen render+send start`);
+      const endResult = await raceWithTimeout(
+        combatIntegration.renderCombatEnd(
+          state.players, state.enemies, victory, rewards,
+          { rank: state.dungeonRank, backgroundPath: state.backgroundPath }
+        ),
+        20000, 'endScreen.render',
+      );
+      // 🎬 owner correction 2026-11-04: the settlement/VICTORY card is NOT a
+      // merge target ("I never asked" — the GIF belongs on the REGULAR
+      // combat message, which nextTurn now builds as the kill-turn card).
+      // The card goes out plain, exactly as it always did. Held kill clips
+      // are untouched here — the kill-turn board that follows consumes them.
+      if (endResult.success && endResult.buffer && endResult.buffer.length > 100) {
+        await sendMediaBounded(sock, state.chatId, {
+          image: endResult.buffer,
+          caption: caption,
+          mimetype: 'image/jpeg'
+        }, { label: 'endScreen' });
+        endScreenSent = true; // helper owns the single-fallback contract
+      }
+      END_DEBUG(`endCombat endScreen done sent=${endScreenSent}`);
+    }
+  } catch (endImgErr) {
+    console.error('[EndScreen] Image render failed (non-fatal):', endImgErr.message);
+  }
+
+  if (!endScreenSent) {
+    try {
+      await sock.sendMessage(state.chatId, { text: caption });
+    } catch (err) {
+      console.error("Failed to send end combat text:", err.message);
+    }
+  }
+
+  // ⚔️ RUINS ORDERING (owner 2026-10-05 11:48Z: "the defeat or victory
+  // image card should come in before the map and new encounter one"): the
+  // decree card above now goes out FIRST; the war module's navigation
+  // visuals (victory return map / respawn map + room encounter) replay
+  // here via presentAfterBattle — onEnd no longer sends them itself.
+  if (state.mode === 'RUINS' && ruinsHooks.presentAfterBattle) {
+    try { await ruinsHooks.presentAfterBattle(state, !!victory, sessionKey, sock, ruinsEndDesc); } catch (e) { console.error('[Ruins] presentAfterBattle hook:', e?.message); }
+  }
+
+  if (victory) {
+    // Clear flags for next stage
+    state.isProcessing = false;
+
+    // 💡 FIX P4 (2026-08-16): Abyss reward mismatch - skip immediate
+    // XP/gold distribution for Abyss combat. Abyss rewards are accumulated
+    // in run.lootAccumulator by handleAbyssVictory and paid out on
+    // retreat/death. Without this guard, endCombat pays XP/gold
+    // immediately AND handleAbyssVictory adds to lootAccumulator -
+    // double payment. The floor-by-floor messages showed only the
+    // lootAccumulator total, not the immediate payment, causing the
+    // "rewards don't match" discrepancy reported in the system report.
+    if (!state.isAbyss && !isTutorialPractice) {
+      for (const player of rewardPlayers) {
+        player.xpEarned += xpPerPlayer;
+        player.goldEarned += goldPerPlayer;
+        // Gold and Items are now handled inside lootSystem.distributeLoot
+
+        const levelUpResult = progression.addXP(player.jid, xpPerPlayer, "Quest");
+
+        // Fractional quest progress
+        let progress = 0.05;
+        if (state.enemies.some((e) => e.isBoss)) progress = 1.0;
+        else if (state.enemies.some((e) => e.name.includes("Elite")))
+          progress = 0.2;
+
+        // 💡 QA FIX: was passing won=true per-combat, which incremented
+        // questsWon by 1 for EVERY combat encounter in the dungeon.
+        // Combined with the final-act call, a 5-encounter dungeon
+        // incremented questsWon by 6. Now: pass won=false per-combat
+        // (only progress is tracked), and the final-act call at
+        // endAdventure passes won=true once.
+        economy.addQuestProgress(player.jid, progress, false);
+      }
+    } else {
+      // Abyss mode: only track quest progress (no immediate XP/gold).
+      // Rewards are handled by handleAbyssVictory → lootAccumulator.
+      for (const player of alivePlayers) {
+        let progress = 0.05;
+        if (state.enemies.some((e) => e.isBoss)) progress = 1.0;
+        else if (state.enemies.some((e) => e.name.includes("Elite")))
+          progress = 0.2;
+        economy.addQuestProgress(player.jid, progress, false);
+      }
+    }
+
+    // 🟢 CLEAR all enemies and their states
+    state.enemies.forEach((e) => {
+      e.justDied = false;
+    });
+
+    // 💡 GUILD BOARD TRACKING
+    // 💡 Phase B: tutorial fights never count toward guild boards (the
+    // Training Dummy / Garden Slime are not real hunt targets).
+    if (!isTutorialPractice && state.mode !== 'TUTORIAL_GROUP' && state.mode !== 'TUTORIAL_QUEST') {
+      const guilds_mod = require("../guildwar/guilds");
+      const firstPlayerGuild = guilds_mod.getUserGuild(alivePlayers[0]?.jid);
+      if (firstPlayerGuild) {
+        state.enemies.forEach((enemy) => {
+          guilds_mod.updateBoardProgress(
+            firstPlayerGuild,
+            enemy.type || enemy.id,
+            1,
+          );
+        });
+      }
+    }
+
+    setTimeout(
+      () => {
+        END_DEBUG(`break timer FIRED key=${sessionKey} → nextStage`);
+        // 💡 ROUND-19 (ghost-victory quest-skip fix): if a NEWER fight owns
+        // the state by now, this victory's flow must NOT advance the
+        // dungeon — that is exactly the boss-skip race (stale break timer
+        // marching the quest past a boss that is still alive).
+        if ((state.combatGen || 0) !== combatGenAtEnd) {
+          console.warn(
+            `[Quest] break timer aborted: combat gen moved (${combatGenAtEnd} → ${state.combatGen || 0}) for ${sessionKey}`,
+          );
+          return; // the newer fight's own endCombat will schedule progression
+        }
+        state.isEndingCombat = false; // Reset guard BEFORE calling nextStage
+
+        // 💡 ABYSS MODE: On victory, advance Abyss floor instead of nextStage
+        if (state.isAbyss) {
+          handleAbyssVictory(sock, sessionKey).catch(e =>
+            console.error('[Abyss] victory handler error:', e?.message || e)
+          );
+          return;
+        }
+
+        nextStage(sock, state.groq, sessionKey).catch((e) =>
+          console.error("[Quest] nextStage error:", e?.message || e),
+        );
+      },
+      state.solo ? 1000 : GAME_CONFIG.BREAK_TIME,
+    ); // Added 1s delay for solo
+  } else {
+    state.isEndingCombat = false;
+    END_DEBUG(`endCombat DEFEAT path key=${sessionKey} — bookkeeping + cleanup start`);
+
+    // 💡 ABYSS MODE: On defeat, call Abyss processDeath instead of just
+    // cleaning up. The Abyss has its own death handling (lose 90% loot,
+    // update leaderboard, set cooldown).
+    if (state.isAbyss) {
+      try {
+        const abyssSystem = require('./abyssSystem');
+        // Build a death message from the combat state
+        const deathMsg = `💀 Defeated on Abyss floor ${state.abyssFloor || 1}!`;
+        // 💡 CO-OP: a whole-party wipe fails the SHARED run and records a
+        // leaderboard entry per member (loot was paid per floor, nothing to lose).
+        const __dr = (state.abyssRun && state.abyssRun.isCoop)
+          ? await abyssSystem.processCoopDeath(state.abyssRun, deathMsg)
+          : await abyssSystem.processDeath(state.players[0]?.jid, state.abyssRun, deathMsg);
+        // 2026-10-09 14:07Z (owner: "the abyss retreat still used the old
+        // image card style"): FALLEN joins the abyss-scene result card family
+        // (same painter as EXTRACTED + the descent card). Text fallback kept.
+        try {
+          if (__dr && __dr.card && state.players[0] && state.players[0].jid) {
+            const __c = __dr.card;
+            const __eco = require('../economy/economy');
+            const __fallBuf = await require('./abyssScene').renderAbyssResultCard({
+              outcome: 'FALLEN',
+              floor: __c.floor,
+              score: Number(__c.score || 0),
+              keptXp: Number(__c.keptXp || 0),
+              keptGold: Number(__c.keptGold || 0),
+              runes: Number(__c.runes || 0),
+              monstersKilled: Number(__c.monstersKilled || 0),
+              bossesKilled: Number(__c.bossesKilled || 0),
+              playerClassId: String((state.players[0].class && state.players[0].class.id) || state.players[0].class || 'FIGHTER').toUpperCase(),
+              playerSpriteIndex: Math.max(0, Math.floor(Number(state.players[0].spriteIndex) || 0)),
+            });
+            if (__fallBuf && __fallBuf.length > 100) {
+              await sock.sendMessage(state.chatId, { image: __fallBuf, caption: __dr.message });
+            } else {
+              await sock.sendMessage(state.chatId, { text: __dr.message });
+            }
+          } else if (__dr && __dr.message) {
+            await sock.sendMessage(state.chatId, { text: __dr.message });
+          }
+        } catch (__cardErr) {
+          console.error('[Abyss] death card failed:', __cardErr.message);
+          try {
+            if (__dr && __dr.message) await sock.sendMessage(state.chatId, { text: __dr.message });
+          } catch {}
+        }
+      } catch (e) {
+        console.error('[Abyss] processDeath after combat failed:', e.message);
+      }
+      if (state.abyssRun && state.abyssRun.isCoop) {
+        cleanupCoopIndexForSession(state.sessionKey || sessionKey);
+      }
+      deleteGameState(sessionKey);
+      return;
+    }
+
+    // 💡 FIX #3: Genuine combat defeat (party wipe in combat) was never
+    // incrementing questsFailed - the code just cleaned up the game state
+    // without calling addQuestProgress. So the displayed "❌ Failed"
+    // counter never moved for real combat deaths, only for event-wipes
+    // and dead-but-carried (which was itself a bug). Now we record the
+    // fail for every player in the party so the counter is accurate.
+    // Skip TRIAL mode (it has its own fail handling in endAdventure).
+    if (state.mode !== 'TRIAL') {
+      for (const p of state.players) {
+        try {
+          economy.addQuestProgress(p.jid, 0, false);
+        } catch (e) {
+          console.error('[endCombat] Failed to record quest fail for', p.jid, ':', e.message);
+        }
+      }
+    }
+
+    state.active = false;
+    state.phase = "IDLE";
+    deleteGameState(sessionKey); // Full cleanup on defeat
+    END_DEBUG(`endCombat DEFEAT cleanup done key=${sessionKey}`);
+  }
+}
+
+// ==========================================
+// 🎬 MAIN GAME FLOW
+// ==========================================
+
+const getDungeonMenu = (isSolo, senderJid = null) => {
+  let msg = `┏━━━━━━━━━━━━┓\n`;
+  msg += `┃ 🏰 DUNGEONS ┃\n`;
+  msg += `┗━━━━━━━━━━━━┛\n\n`;
+
+  msg += `Pick your rank:\n\n`;
+
+  // 💡 FIX 2026-09-11: include GOD so GOD-rank players don't get indexOf() = -1
+  // (which locked every C+ dungeon in the menu display for them)
+  const ranks = ["F", "E", "D", "C", "B", "A", "S", "SS", "SSS", "GOD"];
+  let userRankIndex = 0;
+
+  if (senderJid) {
+    const user = economy.getUser(senderJid);
+    const userRank = user?.adventurerRank || "F";
+    userRankIndex = ranks.indexOf(userRank);
+  }
+
+  const bossNames = {
+    INFECTED_COLOSSUS: "Infected Colossus",
+    CORRUPTED_GUARDIAN: "Corrupted Guardian",
+    ELEMENTAL_ARCHON: "Elemental Archon",
+    MUTATION_PRIME: "Mutation Prime",
+    VOID_CORRUPTED: "Void-Corrupted",
+    PRIMORDIAL_CHAOS: "Primordial Chaos",
+  };
+
+  for (const [key, data] of Object.entries(DUNGEON_RANKS)) {
+    if (data.isSpecial) continue;
+    const dungeonIndex = ranks.indexOf(key);
+    const isLocked = isSolo && dungeonIndex > userRankIndex + 3;
+
+    if (isLocked) {
+      msg += `🔒 *${key}-Rank* (Locked)\n`;
+      continue;
+    }
+
+    const bName = data.boss ? bossNames[data.boss] || "Boss" : "None";
+    msg += `*${key}-Rank* | Diff:${data.difficulty}x | ${data.encounters}stg\n`;
+    msg += `  👹 ${bName} | Mobs:${data.minMobs}-${data.maxMobs}\n\n`;
+  }
+
+  msg += `━━━━━━━━━━━━\n`;
+  // 💡 GOD dungeon entry in the menu
+  const godRank = DUNGEON_RANKS.GOD;
+  if (godRank) {
+    const user = senderJid ? economy.getUser(senderJid) : null;
+    const playerRank = user?.adventurerRank || 'F';
+    if (playerRank === 'GOD') {
+      msg += `🌌 *GOD-Rank* | The Boundless Void | ${godRank.encounters}stg | Diff:${godRank.difficulty}x\n`;
+      msg += `  👹 Abyssal God | _Only the transcendent may enter_\n\n`;
+    } else {
+      msg += `🔒 *GOD-Rank* (Locked - transcend to GOD rank)\n\n`;
+    }
+  }
+  msg += `👉 \`${botConfig.getPrefix()} ${isSolo ? "solo" : "quest"} <Rank>\`\n`;
+  msg += `Ex: \`${botConfig.getPrefix()} ${isSolo ? "solo" : "quest"} D\`\n`;
+  msg += `Ex: \`${botConfig.getPrefix()} ${isSolo ? "solo" : "quest"} GOD\` (GOD rank only)`;
+  if (isSolo) {
+    // 💡 2026-09-14 owner: ".solo f -s" - documented in the menu
+    msg += `\n⚡ Add \`-s\` to skip the 90s pre-raid shop (solo only). Ex: \`${botConfig.getPrefix()} solo f -s\``;
+  }
+
+  return msg;
+};
+
+const initAdventure = async (
+  sock,
+  chatId,
+  groq,
+  mode = "NORMAL",
+  solo = false,
+  rankInput = null,
+  senderJid = null,
+  smartGroqCall = null,
+  trialData = null,
+  opts = {},
+) => {
+  // Check limits
+  const limitCheck = checkChatLimits(chatId, solo, senderJid);
+  if (!limitCheck.allowed) return { success: false, msg: limitCheck.msg };
+
+  const sessionKey = solo ? scopedKey(`${chatId}_${senderJid}`) : scopedKey(chatId);
+  // 🧹 STALE-SESSION SELF-HEAL (2026-10-26, owner screenshot: "You already have
+  // an active Solo raid!" while ".j end" said "No active adventure found" and
+  // ".j abyss resume" said nothing to resume): a state left in the map with
+  // active=false / phase IDLE is a corpse — it blocked every new solo until a
+  // restart. Reap it here instead of refusing the player.
+  if (gameStates.has(sessionKey)) {
+    const _stale = gameStates.get(sessionKey);
+    if (_stale && (!_stale.active || String(_stale.phase || '').toUpperCase() === 'IDLE')) {
+      console.warn(`[Quest] 🧹 reaping stale session ${sessionKey} (active=${_stale.active} phase=${_stale.phase}) so a new run can start`);
+      try { if (_stale.timers) Object.values(_stale.timers).forEach((t) => { if (t) clearTimeout(t); }); } catch (e) {}
+      try { _stale.inCombat = false; _stale.combatGen = (_stale.combatGen || 0) + 1; if (_stale.resolveTurn) { const r = _stale.resolveTurn; _stale.resolveTurn = null; r(); } } catch (e) {}
+      try { clearCombatSnapshot(_stale).catch(() => {}); } catch (e) {}
+      try { cleanupCoopIndexForSession(sessionKey); } catch (e) {}
+      gameStates.delete(sessionKey);
+    }
+  }
+  if (gameStates.has(sessionKey)) {
+    return {
+      success: false,
+      msg: solo
+        ? "❌ You already have an active Solo raid!"
+        : "❌ A Group raid is already active in this chat!",
+    };
+  }
+
+  if (!rankInput && mode !== "TRIAL") {
+    return {
+      success: true,
+      isMenu: true,
+      msg: getDungeonMenu(solo, senderJid),
+    };
+  }
+
+  let upperRank = rankInput ? rankInput.toUpperCase() : "F";
+  let rankData = DUNGEON_RANKS[upperRank];
+
+  if (mode === "TRIAL" && trialData) {
+    // ⚔️ Scale trial difficulty based on evolution tier:
+    // T2 Evolution trials (STARTER → EVOLVED): difficulty 1.5 - moderate challenge
+    // T3 Ascension trials (EVOLVED → ASCENDED): difficulty 4.0 - boss-level threat
+    const targetClass = classSystem.getClassById(trialData.targetClass);
+    const isAscensionTrial = targetClass?.tier === 'ASCENDED';
+    const trialDifficulty = isAscensionTrial ? 4.0 : 1.5;
+    upperRank = "TRIAL";
+    rankData = { name: isAscensionTrial ? "Ascension Trial" : "Evolution Trial", difficulty: trialDifficulty, encounters: 1, minMobs: 1, maxMobs: 1, xpMult: isAscensionTrial ? 5.0 : 2.0, isSpecial: true };
+  } else if (!rankData) {
+    return {
+      success: false,
+      msg: `❌ Invalid Dungeon Rank: ${rankInput}.\n\n` + getDungeonMenu(solo),
+    };
+  }
+
+  // Special Dungeon Key & Lineage Check
+  if (rankData.isSpecial && senderJid) {
+    // 💡 GOD DUNGEON - only GOD-rank players can enter
+    if (rankData.requiresGodRank) {
+      const user = economy.getUser(senderJid);
+      const playerRank = user?.adventurerRank || 'F';
+      if (playerRank !== 'GOD') {
+        return {
+          success: false,
+          msg: `❌ *THE BOUNDLESS VOID REJECTS YOU*\n\nYou are not yet ready. Only a GOD - one who has transcended the very bounds of dimensionality - may step beyond the veil.\n\n_Your current rank: ${playerRank}. Required: GOD._\n\n_Complete the Trial of Divinity (Mission 4) and reach GOD rank to enter._`,
+        };
+      }
+      // Send lore intro
+      try {
+        if (sock && rankData.loreIntro) {
+          await sock.sendMessage(chatId, { text: `\n🌌 *${rankData.name}* 🌌\n\n${rankData.loreIntro}\n` });
+        }
+      } catch (e) {}
+    }
+
+    if (upperRank === "DRAGON") {
+      // 💡 QA FIX: Removed Fighter lineage restriction - multiple class
+      // evolution paths require dragon kills (DRAGONSLAYER, DRAGON_GOD).
+      // Locking non-Fighter classes out makes those evolutions impossible.
+      // All classes can now enter the Dragon Dungeon (with a dragon key).
+
+      // 💡 DRAGON KEY CHECK: Key is consumed on entry UNLESS the player
+      // has a Dragon Seal Ring equipped (reusable - the ring's magic
+      // reforms the key after each use). Also check if they have the
+      // new "dragon_key_reusable" item (master key, never consumed).
+      const equip = inventorySystem.getEquipment(senderJid) || {};
+      const hasSealRingEquipped = equip?.ring?.id === 'dragon_seal_ring' || equip?.ring === 'dragon_seal_ring';
+      const hasReusableKey = inventorySystem.hasItem(senderJid, 'dragon_key_reusable');
+
+      if (hasSealRingEquipped) {
+        // Ring equipped - free entry, no key consumed
+      } else if (hasReusableKey) {
+        // Master key - never consumed
+      } else if (!inventorySystem.hasItem(senderJid, "dragon_key")) {
+        return {
+          success: false,
+          msg: `❌ You need a *Dragon Hunter Key* 🔑🐲 to enter this special dungeon!\n\n💡 Options:\n• Buy one from the shop\n• Craft one: \`${botConfig.getPrefix()} craft dragon_key\` (2x Dragon Scale + 3x Iron Shard + 1x Refined Steel + 5,000 Zeni)\n• Equip a *Dragon Seal Ring* for free entry`,
+        };
+      } else {
+        // Consume Key
+        inventorySystem.removeItem(senderJid, "dragon_key", 1);
+      }
+    }
+  }
+
+  // Rank Restriction Logic (Skip for Special Dungeons or apply specific ones)
+  // 💡 P4 Item 5 (2026-08-16): Daily quest cap - raised to 8 quests/raids per day (owner request 2026-09-12).
+  // Check BEFORE rank restriction so players get a clear "cap reached" message.
+  if (senderJid && !rankData.isSpecial) {
+    const capCheck = economy.checkDailyQuestCap(senderJid);
+    if (!capCheck.allowed) {
+      return { success: false, msg: capCheck.message };
+    }
+  }
+
+  if (solo && senderJid && !rankData.isSpecial) {
+    const user = economy.getUser(senderJid);
+    const adventurerRank = user?.adventurerRank || "F";
+    // 💡 FIX 2026-09-11: GOD was missing here → indexOf('GOD') = -1 →
+    // maxSoloRankIndex = 0 → GOD players were capped at F-rank solo dungeons.
+    const ranks = ["F", "E", "D", "C", "B", "A", "S", "SS", "SSS", "GOD"];
+
+    const userRankIndex = ranks.indexOf(adventurerRank);
+    const dungeonRankIndex = ranks.indexOf(upperRank);
+
+    // 💡 FIX P2 (2026-08-16): L1 F-rank dungeon gate - cap at rankIndex+1
+    // instead of +3. Was: F-rank could solo up to D-rank (3 above), making
+    // early game trivial. Now: F-rank can solo up to E-rank (1 above).
+    const maxSoloRankIndex = userRankIndex + 1;
+
+    if (dungeonRankIndex > maxSoloRankIndex) {
+      const maxRank = ranks[Math.min(maxSoloRankIndex, ranks.length - 1)];
+      return {
+        success: false,
+        msg: `⚠️ Your Adventurer Rank is *${adventurerRank}*. You can only solo up to *${maxRank}-Rank* dungeons.\n\n💡 Rank up or join a group to enter higher dungeons!`,
+      };
+    }
+  }
+
+  // Set game state
+
+  // Select Environment (Specific for special, Random for others)
+  let environment;
+  if (
+    rankData.isSpecial &&
+    rankData.pool &&
+    DUNGEON_ENVIRONMENTS[rankData.pool]
+  ) {
+    environment = DUNGEON_ENVIRONMENTS[rankData.pool];
+  } else {
+    const envKeys = Object.keys(DUNGEON_ENVIRONMENTS).filter(
+      (k) => !DUNGEON_ENVIRONMENTS[k].isSpecial,
+    );
+    const randomEnvKey = envKeys[Math.floor(Math.random() * envKeys.length)];
+    environment = DUNGEON_ENVIRONMENTS[randomEnvKey];
+  }
+
+  // 💡 OWNER RULING 2026-10-10 (diversify backgrounds): roll ONE member of
+  // the environment's bgPool for this run and freeze it into the env object
+  // that travels with the state. start card (envAsset), every battle
+  // (backgroundPath) and the dead-world card art (deadWorld.js reads
+  // state.environment.asset) all key off the SAME file, so the encounter
+  // background stays stable end-to-end while runs stop repeating backdrops.
+  const bgRoll =
+    environment.bgPool && environment.bgPool.length
+      ? environment.bgPool[Math.floor(Math.random() * environment.bgPool.length)]
+      : environment.asset;
+  const chosenEnv =
+    bgRoll === environment.asset
+      ? environment
+      : Object.assign({}, environment, { asset: bgRoll });
+
+  const state = JSON.parse(JSON.stringify(INITIAL_STATE_TEMPLATE));
+  Object.assign(state, {
+    active: true,
+    phase: "REGISTRATION",
+    chatId,
+    sessionKey, // 🔑 Store the session key for callbacks
+    mode,
+    solo,
+    sock,
+    groq,
+    smartGroqCall,
+    // 💡 AUDIT FIX 2026-08-01 (Round 4): set timestamps for stale-state sweeper
+    createdAt: Date.now(),
+    lastActivity: Date.now(),
+    dungeonRank: upperRank,
+    difficulty: rankData.difficulty,
+    environment: chosenEnv,
+    backgroundPath: `rpgasset/environment/${chosenEnv.asset}`,
+    encounter: 0,
+    maxEncounters: rankData.encounters,
+    players: [],
+    votes: {},
+    timers: {},
+    trialData, // ⚔️ Special trial payload
+    trialTarget: trialData ? trialData.trialBoss : null,
+    // 💡 2026-09-14 owner: ".solo f -s" - skip the 90s pre-raid shop
+    // (honored in startJourney for solo quests only).
+    skipShop: !!(opts && opts.skipShop),
+    // 💡 DEAD WORLD (2026-09-21 owner ticket): card chrome + the test flag
+    // for ".j solo f -d" (forces the Dead World encounter on the first
+    // regular combat encounter; the normal ".j solo f" flow is untouched).
+    dungeonName: rankData.name,
+    deadWorldForced: !!(opts && opts.forceDeadWorld),
+  });
+  state.botId = botScope(); // 💡 CROSS-BOT LEAK FIX: stamp the owning bot
+  gameStates.set(sessionKey, state);
+
+  // 💡 FIX 2026-10-03 (owner quest report): the INITIATOR of a quest is a
+  // participant from the moment they create it. Previously only solo quests
+  // auto-joined their creator, so group initiators had to type ".j join"
+  // separately - they were missing from state.players entirely, which broke
+  // (a) the pre-quest shop player count (the shop's player list IS
+  // state.players, so the initiator could not buy while everyone else
+  // could) and (b) the MIN_PLAYERS check could cancel a quest the
+  // initiator obviously wanted. Auto-join now applies to BOTH modes; the
+  // join handler still dedupes if the initiator also types ".j join".
+  if (senderJid && !state.players.some((p) => p.jid === senderJid)) {
+    const user = economy.getUser(senderJid);
+    const name =
+      user?.nickname || user?.profile?.nickname || economy.getDisplayName(senderJid);
+    state.players.push({
+      jid: senderJid,
+      name: name,
+      class: null,
+      level: progression.getLevel(senderJid) || 1,
+      stats: {
+        hp: 100,
+        maxHp: 100,
+        energy: 100,
+        maxEnergy: 100,
+        atk: 10,
+        def: 10,
+        mag: 10,
+        spd: 10,
+        luck: 10,
+        crit: 5,
+      },
+      equipment: {
+        weapon: null,
+        armor: null,
+        ring: null,
+        amulet: null,
+        boots: null,
+        cloak: null,
+      },
+      inventory: [],
+      statusEffects: [],
+      buffs: [],
+      isDead: false,
+      xpEarned: 0,
+      goldEarned: 0,
+      combatStats: { damageDealt: 0, damageTaken: 0, healed: 0, kills: 0 },
+    });
+  }
+
+  const regTime = solo ? 0 : GAME_CONFIG.REGISTRATION_TIME;
+  state.timers.reg = setTimeout(() => {
+    startJourney(sock, sessionKey).catch((e) =>
+      console.error("[Quest] startJourney timer error:", e?.message || e),
+    );
+  }, regTime);
+
+  const modeEmoji = mode === "PERMADEATH" ? "💀" : "🗺️";
+  let msg = `
+   *${upperRank}-RANK* 🏰
+
+📜 *Mode:* ${mode === "PERMADEATH" ? "PERMADEATH" : "NORMAL"}
+🏰 *Rank:* ${rankData.name}
+⚔️ *Length:* ${rankData.encounters} Encounters
+⏱️ *Starts in:* ${solo ? "0s" : "2m"}
+
+${solo ? `👤 *Solo Quest:* Starting now...` : `👉 Type \`${botConfig.getPrefix()} join\` to enter!`}
+`;
+  return {
+    success: true,
+    msg,
+    // 2026-09-14: card data for the QUESTSTART/RAID start card (engine.js)
+    card: {
+      dungeonName: rankData.name,
+      dungeonRank: upperRank,
+      encounters: rankData.encounters,
+      environment: environment.name,
+      envAsset: chosenEnv.asset,  // 💡 OWNER RULING 2026-10-10: same rolled bg as the battles (start card matches the run)
+      joinMs: GAME_CONFIG.REGISTRATION_TIME,
+      minPlayers: GAME_CONFIG.MIN_PLAYERS,
+    },
+  };
+};
+
+const joinAdventure = (chatId, senderJid, senderName) => {
+  const state = getGameState(chatId);
+  if (!state || !state.active || state.phase !== "REGISTRATION") {
+    return "❌ Registration is closed!";
+  }
+
+  if (state.solo && state.players.length >= 1) {
+    return "❌ This is a solo quest! You cannot join.";
+  }
+
+  if (state.players.length >= GAME_CONFIG.MAX_PLAYERS) {
+    return "❌ Party is full!";
+  }
+
+  if (state.players.some((p) => p.jid === senderJid)) {
+    return "⚠️ You're already in the party!";
+  }
+
+  const user = economy.getUser(senderJid);
+  const adventurerRank = user?.adventurerRank || "F";
+
+  // Initialize player with default stats (class assigned later)
+  state.players.push({
+    jid: senderJid,
+    // 💡 FIX 2026-08-31: players had no `id` - the back-to-back-turn guard
+    // (`activeActor.id === state.lastActorId`, line ~4023) compares
+    // undefined === undefined and NEVER fires for players, letting a
+    // high-SPD player act many times consecutively (the exact bug the guard
+    // was written to prevent for bosses). No other code reads player.id
+    // (grep-verified), so this is purely additive.
+    id: `player_${senderJid}`,
+    name: senderName || "Unknown Hero",
+    class: null,
+    level: 1,
+    adventurerRank: adventurerRank,
+    stats: {
+      hp: 100,
+      maxHp: 100,
+      energy: 100,
+      maxEnergy: 100,
+      atk: 10,
+      def: 10,
+      mag: 10,
+      spd: 10,
+      luck: 10,
+      crit: 5,
+    },
+    equipment: {
+      weapon: null,
+      armor: null,
+      ring: null,
+      amulet: null,
+      boots: null,
+      cloak: null,
+    },
+    inventory: [],
+    statusEffects: [],
+    buffs: [],
+    isDead: false,
+    xpEarned: 0,
+    goldEarned: 0,
+    combatStats: {
+      damageDealt: 0,
+      damageTaken: 0,
+      healed: 0,
+      kills: 0,
+    },
+  });
+
+  const joined = `✅ *${senderName}* has joined the adventure! (${state.players.length}/${state.solo ? 1 : GAME_CONFIG.MAX_PLAYERS})`;
+
+  // Recalculate as each member joins, not only after registration closes.
+  // This immediately caps mixed-tier parties to one rank above the lowest
+  // normal rank, and makes the join response explain the new selected tier.
+  const recal = recalibratePartyRank(state);
+  if (recal && recal.mixed) {
+    state.rankNote =
+      `⚠️ *Mixed-tier party:* ${recal.lowestRank}-rank to ${recal.highestRank}-rank. ` +
+      `This run is now capped at *${recal.newRank}-rank* based on the lowest-ranked member.`;
+    return joined + `\n\n` + state.rankNote;
+  }
+  if (recal && recal.newRank !== recal.oldRank) {
+    state.rankNote =
+      `🎯 *Party rank recalibrated:* ${recal.commonRank}-rank heroes -> *${recal.newRank}-rank* dungeon.`;
+    return joined + `\n\n` + state.rankNote;
+  }
+  return joined;
+};
+
+// ============================================
+// 🎯 PARTY RANK RECALIBRATION (2026-10-24 safety correction)
+// ============================================
+// The roster is read fresh after it locks and BEFORE the shop, encounters or
+// rewards are generated. Mixed-rank parties are capped to one rank above the
+// LOWEST-ranked member. A high-rank carrier must never drag low-rank members
+// into dangerous content. Uniform parties still run one rank above their
+// common rank (capped at SSS). DRAGON/GOD and other special ranks are excluded.
+const PARTY_RANK_LADDER = ["F", "E", "D", "C", "B", "A", "S", "SS", "SSS"];
+
+function recalibratePartyRank(state) {
+  if (state.solo) return null;
+
+  const playerRanks = state.players.map((p) => {
+    const u = p.jid ? economy.getUser(p.jid) : null;
+    return String((u && u.adventurerRank) || p.adventurerRank || "F")
+      .trim()
+      .toUpperCase();
+  });
+  const resolved = resolvePartyDungeonRank(playerRanks, {
+    ladder: PARTY_RANK_LADDER,
+    total: state.players.length,
+  });
+  if (!resolved) return null;
+
+  const rankData = DUNGEON_RANKS[resolved.newRank];
+  if (!rankData) return null;
+
+  const oldRank = state.dungeonRank;
+  state.dungeonRank = resolved.newRank;
+  state.difficulty = rankData.difficulty;
+  state.maxEncounters = rankData.encounters;
+  state.dungeonName = rankData.name;
+  if (state.trialTarget) state.trialTarget = null;
+
+  return { ...resolved, oldRank, total: state.players.length };
+}
+
+async function startJourney(sock, sessionKey) {
+  const state = gameStates.get(sessionKey);
+  if (!state) return;
+
+  const chatId = state.chatId;
+  const minPlayers = state.solo ? 1 : GAME_CONFIG.MIN_PLAYERS;
+
+  if (state.players.length < minPlayers) {
+    state.active = false;
+    await sock.sendMessage(chatId, {
+      text: `❌ Quest cancelled. Need at least ${minPlayers} hero${minPlayers > 1 ? "es" : ""}!`,
+    });
+    deleteGameState(sessionKey);
+    return;
+  }
+
+  // 💡 PROGRESSION OVERHAUL (owner directive): recalibrate the raid's rank
+  // from the FINAL party roster before anything is generated or priced.
+  // Runs after the min-player check (roster locked) and before SHOPPING.
+  if (!state.solo && !state.isRankRecalibrated) {
+    state.isRankRecalibrated = true; // never recalibrate twice on a session
+    const recal = recalibratePartyRank(state);
+    if (recal && recal.mixed) {
+      state.rankNote =
+        `⚠️ *Mixed-tier party warning:* members range from ${recal.lowestRank} to ${recal.highestRank} rank.` +
+        ` This dungeon is set to *${recal.newRank}-rank* based on the lowest-ranked member (${recal.lowestRank}),` +
+        ` not the highest-ranked player, so lower-tier heroes aren't forced into dangerous content.`;
+    } else if (recal && recal.newRank !== recal.oldRank) {
+      state.rankNote =
+        `🎯 *Raid rank set by the party:* ${recal.commonCount}/${recal.rankedCount} ranked heroes are ${recal.commonRank}-rank` +
+        ` -> this raid runs at *${recal.newRank}-rank* (one above the party rank).`;
+    } else if (recal) {
+      state.rankNote =
+        `🎯 *Raid rank set by the party:* ${recal.commonRank}-rank heroes -> *${recal.newRank}-rank* dungeon.`;
+    }
+  }
+  state.phase = "SHOPPING";
+
+  state.players.forEach((p) => {
+    // Use economy class instead of random
+    economy.initializeClass(p.jid);
+    const userClass = economy.getUserClass(p.jid);
+
+    let classData;
+    if (userClass && CLASSES[userClass.id]) {
+      classData = CLASSES[userClass.id];
+    } else if (userClass) {
+      // 💡 FIX 2026-08-01: Ascended classes (DRAGON_GOD, DRAGON_LORD, etc.)
+      // are NOT in the guildAdventure CLASSES object (only 17 base classes are).
+      // Previously fell through to a RANDOM class - ascended players lost
+      // their class stats, abilities, AND passive on every dungeon.
+      // Now: build a classData from classSystem.js so the player keeps
+      // their actual class identity. Use FIGHTER stats as the base since
+      // classSystem doesn't have combat stats for ascended classes.
+      const classSystem = require('../characters/classSystem');
+      const csClass = classSystem.getClassById(userClass.id || userClass.name?.toUpperCase());
+      if (csClass) {
+        classData = {
+          id: csClass.id,
+          name: csClass.name,
+          icon: csClass.icon,
+          passive: csClass.passive,
+          abilities: csClass.abilities || [],
+          stats: csClass.stats || { hp: 100, atk: 10, def: 10, mag: 10, spd: 10, luck: 10, crit: 5 },
+        };
+      } else {
+        // Final fallback: use FIGHTER (not random!)
+        classData = CLASSES['FIGHTER'];
+      }
+    } else {
+      // No userClass at all - use FIGHTER (not random!)
+      classData = CLASSES['FIGHTER'];
+    }
+
+    p.class = classData;
+
+    // Ensure user has a persistent sprite assigned in economy
+    const user = economy.getUser(p.jid);
+    if (user) {
+      if (user.spriteIndex === undefined || user.spriteIndex === null) {
+        user.spriteIndex = Math.floor(Math.random() * 100);
+        economy.saveUser(p.jid);
+      }
+      p.spriteIndex = user.spriteIndex;
+      p.adventurerRank = user.adventurerRank || "F";
+    } else {
+      p.spriteIndex = Math.floor(Math.random() * 100);
+      p.adventurerRank = "F";
+    }
+
+    // Use user stats including progression, bonuses AND equipment
+    const classId = userClass?.id || p.class.id || p.class.name.toUpperCase();
+    const baseStats = progression.getBaseStats(p.jid, classId);
+    const equipStats = inventorySystem.getEquipmentStats(p.jid);
+    const level = progression.getLevel(p.jid);
+
+    p.equipment = inventorySystem.getEquipment(p.jid) || {};
+
+    p.stats.hp = baseStats.hp; // getBaseStats already includes equipStats
+    p.stats.maxHp = p.stats.hp;
+    p.stats.maxEnergy = baseStats.maxEnergy;
+    // PERSISTENT ENERGY SYSTEM (2026-09-17, owner directive): energy spent
+    // out of combat (mining) CARRIES INTO COMBAT - same contract as the
+    // persistent HP system. No artificial 50% floor: enter with what you
+    // have (min 1 so you are never hard-locked), recover via in-combat
+    // regen. The session writes back to the pool when combat ends.
+    const persistEn = economy.getPersistentEnergy(p.jid, baseStats.maxEnergy);
+    p.stats.energy = Math.max(1, persistEn);
+    p.stats.atk = baseStats.atk;
+    p.stats.def = baseStats.def;
+    p.stats.mag = baseStats.mag;
+    p.stats.spd = baseStats.spd;
+    p.stats.luck = baseStats.luck;
+    p.stats.crit = baseStats.crit;
+    p.stats.dmgReduction = baseStats.dmgReduction || 0;
+    p.stats.evasion = baseStats.evasion || 0;
+
+    // 💡 PERSISTENT HP SYSTEM (2026-07-31): Use persistent HP instead of
+    // resetting to max. HP carries over from previous combat. If the player
+    // was defeated (HP=0), restore to 1 so they can fight. Full heal only
+    // via .g hospital.
+    const persistentHP = economy.getPersistentHP(p.jid, p.stats.maxHp);
+    p.stats.hp = persistentHP;
+    p.currentHP = persistentHP;
+    p.mana = 100;
+    p.maxMana = 100;
+
+    p.level = progression.getLevel(p.jid);
+
+    // 💡 CLASS PASSIVE WIRE-UP: apply combat-start passives (all_stats,
+    // dodge_chance, magic_damage, damage_reduction, healing_boost, gold_find)
+    // now that stats are set. Per-turn passives fire from processCombatTurn.
+    // Inline passives (damage_when_low_hp, etc.) are read from
+    // calculateDamage / recordEnemyKill. Idempotent via p.passivesApplied.
+    try {
+      applyClassPassiveAtCombatStart(p, state);
+    } catch (e) {
+      console.error('[Passive] applyClassPassiveAtCombatStart failed:', e?.message || e);
+    }
+    // 💡 AUDIT FIX 2026-08-01: also apply skill-tree passives (Soul of the
+    // Deep, etc.). These were previously NEVER applied - only the class
+    // passive was. Soul of the Deep's hpRegen/manaRegen/statusImmunity
+    // were silently dead. Now wired in alongside the class passive.
+    try {
+      applySkillPassivesAtCombatStart(p);
+    } catch (e) {
+      console.error('[Passive] applySkillPassivesAtCombatStart failed:', e?.message || e);
+    }
+  });
+
+  // Shopping phase - Skip entirely for TRIAL mode (solo boss fight, no prep needed)
+  // Instant for solo, 1s delay for group
+  if (state.mode === "TRIAL") {
+    // For class trials, skip shopping and go straight to the boss fight
+    // 💡 FIX (Item #1 - "evolution trial hangs after shop"): defensively
+    // clear isProcessing + isEndingCombat before calling nextStage. If a
+    // prior crash or stuck-state left these flags dirty on the same
+    // sessionKey, nextStage would silently return early (line 5895-5906)
+    // and the trial would never start - the user sees "TRIAL-RANK"
+    // then nothing. Clearing here guarantees nextStage proceeds.
+    state.isProcessing = false;
+    state.isEndingCombat = false;
+    state.lastProcessTime = 0;
+
+    // 💡 FIX: send a "preparing boss fight" message so the user knows
+    // the trial is progressing. Without this, the user sees the
+    // "TRIAL-RANK" initAdventure message, then a long silence while
+    // the boss splash renders - perceiving it as a hang.
+    try {
+      await sock.sendMessage(chatId, {
+        text: `⚔️ *Boss fight starting...*\n\n_The arena materializes around you._`,
+      });
+    } catch (e) {
+      console.error('[Trial] preparatory message send failed:', e.message);
+    }
+
+    setTimeout(() => {
+      state.phase = "PLAYING";
+      nextStage(sock, state.groq, sessionKey).catch((e) =>
+        console.error("[Quest] Trial nextStage error:", e?.message || e),
+      );
+    }, 0);
+  } else if (state.solo && state.skipShop) {
+    // 💡 2026-09-14 owner: ".solo f -s" - solo heroes who pass -s go
+    // straight into the dungeon instead of waiting out the 90s shop.
+    state.phase = "PLAYING";
+    try {
+      await sock.sendMessage(chatId, {
+        text: `⏩ *Pre-raid shop skipped* - straight into the dungeon!`,
+      });
+    } catch (e) {}
+    setTimeout(() => {
+      nextStage(sock, state.groq, sessionKey).catch((e) =>
+        console.error("[Quest] nextStage error:", e?.message || e),
+      );
+    }, 1200);
+  } else {
+    // 💡 2026-09-14 owner: "the shop text comes before the image" - the
+    // QUESTSTART card is rendered by the Go service (2-8s) upstream in
+    // engine.js while this shop timer fired immediately for solo quests,
+    // so the shop menu kept landing BEFORE the quest start card. Solo now
+    // holds the shop until the card has actually been sent
+    // (state.startCardSent is flipped by engine.js after the send) with a
+    // 12s safety cap so a failed render can never stall the shop. Group
+    // raids keep the original 1s delay - their card goes out minutes
+    // before startJourney even runs.
+    const openShopNow = () => {
+      openShop(sock, sessionKey).catch((e) =>
+        console.error("[Quest] openShop timer error:", e?.message || e),
+      );
+    };
+    if (state.solo && !state.startCardSent) {
+      const cardWaitStart = Date.now();
+      const cardWait = setInterval(() => {
+        if (state.startCardSent || Date.now() - cardWaitStart > 12000) {
+          clearInterval(cardWait);
+          openShopNow();
+        }
+      }, 250);
+    } else {
+      setTimeout(openShopNow, 1000);
+    }
+  }
+
+  // 💡 HIVE MIND WHISPERS (5% chance)
+  if (Math.random() < 0.05) {
+    const whispers = [
+      "...join us...",
+      "...it is so cold in the dark...",
+      "...we see you, little spark...",
+      "...why do you resist the inevitable?...",
+      "...the hive only wants to protect you...",
+    ];
+    const whisper = whispers[Math.floor(Math.random() * whispers.length)];
+    setTimeout(() => {
+      sock
+        .sendMessage(chatId, { text: `_「 ${whisper} 」_` })
+        .catch((e) =>
+          console.error("[Quest] whisper send error:", e?.message || e),
+        );
+    }, 5000);
+  }
+}
+
+const stopQuest = (chatId, senderJid = null, isAdmin = false) => {
+  // 1. If admin, check for ANY active quest in this chat
+  if (isAdmin) {
+    let stoppedAny = false;
+    let wasSolo = false;
+
+    // Search all states for ANY quest in this chatId (THIS BOT only -
+    // the other bot's admin handles their own states)
+    for (const [key, state] of gameStates.entries()) {
+      if (state.chatId === chatId && state.active && sameBot(state)) {
+        wasSolo = state.solo;
+        state.active = false;
+        state.phase = "IDLE";
+        // 💡 SOLO-RAID FIX (2026-10-23, Task 9): stopping a mid-combat fight
+        // used to leave state.inCombat true — the still-running turn loop
+        // kept cycling on this detached state object (watchdog advances,
+        // auto-defends) forever after the Map delete. Kill the loop: bump
+        // the gen, drop inCombat, wake the blocked turn promise.
+        state.inCombat = false;
+        try { state.combatGen = (state.combatGen || 0) + 1; } catch (e) {}
+        try { if (state.resolveTurn) { const __r = state.resolveTurn; state.resolveTurn = null; __r(); } } catch (e) {}
+        // 💡 COMBAT RESUME: a stopped quest drops its resume point (solo + group).
+        // State-object form — also fixes the old bug where the bot-scoped
+        // "bot|chat_jid" key hit clearSoloSnapshot's '@' shortcut and deleted nothing.
+        clearCombatSnapshot(state).catch(() => {});
+        if (state.timers) {
+          Object.values(state.timers).forEach((timer) => {
+            if (timer) clearTimeout(timer);
+          });
+        }
+        gameStates.delete(key);
+        stoppedAny = true;
+      }
+    }
+
+    if (stoppedAny)
+      return "🛡️ *Admin Override:* All active quests in this chat have been cancelled.";
+  }
+
+  // 2. Standard user check (their own solo or the group quest)
+  const state = getGameState(chatId, senderJid);
+  if (state && !state.active) {
+    // stale corpse (see initAdventure note): ".j end" / ".j unstick" now clears it
+    try { if (state.timers) Object.values(state.timers).forEach((t) => { if (t) clearTimeout(t); }); } catch (e) {}
+    try { state.combatGen = (state.combatGen || 0) + 1; if (state.resolveTurn) { const r = state.resolveTurn; state.resolveTurn = null; r(); } } catch (e) {}
+    try { clearCombatSnapshot(state).catch(() => {}); } catch (e) {}
+    deleteGameState(chatId, senderJid);
+    return "🧹 Cleared a stuck session — you can start a new run now.";
+  }
+  if (!state)
+    return "❌ No active adventure found for you in this chat!";
+
+  const wasSolo = state.solo;
+  state.active = false;
+  state.phase = "IDLE";
+
+  // 💡 SOLO-RAID FIX (2026-10-23, Task 9): kill the turn loop too — see the
+  // admin-branch note above. Without this, ".j end" freed the session key
+  // but the detached loop kept cycling (and the fight could even keep
+  // auto-defending) until the process restarted.
+  state.inCombat = false;
+  try { state.combatGen = (state.combatGen || 0) + 1; } catch (e) {}
+  try { if (state.resolveTurn) { const __r = state.resolveTurn; state.resolveTurn = null; __r(); } } catch (e) {}
+
+  // Clear all active timers
+  if (state.timers) {
+    Object.values(state.timers).forEach((timer) => {
+      if (timer) clearTimeout(timer);
+    });
+  }
+
+  // 💡 COMBAT RESUME (2026-10-14): a stopped quest drops its resume point —
+  // this player-initiated path never cleared the solo snapshot before, which
+  // could let a restart auto-continue a quest the player CANCELLED.
+  try { clearCombatSnapshot(state).catch(() => {}); } catch (e) {}
+
+  deleteGameState(chatId, senderJid);
+
+  return wasSolo ? "✅ Solo quest cancelled!" : "✅ Raid quest cancelled!";
+};
+
+async function openShop(sock, sessionKey) {
+  const state = gameStates.get(sessionKey);
+  if (!state) return;
+
+  const chatId = state.chatId;
+  let msg = `┏━━━━━━━━━━━━┓\n`;
+  msg += `┃ 🏪 PRE-RAID  ┃\n`;
+  msg += `┗━━━━━━━━━━━━┛\n\n`;
+
+  msg += `Shop closes in 90s!\n\n`;
+
+  SHOP_LIST.forEach((key, i) => {
+    const item = CONSUMABLES[key];
+    msg += `${i + 1}. ${item.icon} *${item.name}*\n`;
+    msg += `   💰 ${botConfig.getCurrency().symbol}${item.cost} | ${item.effect}\n\n`;
+  });
+
+  msg += `━━━━━━━━━━━━\n`;
+  msg += `💬 \`${botConfig.getPrefix()} buy <#>\` to purchase`;
+  // 💡 Party-rank recalibration notice (owner progression overhaul) - rides
+  // on the shop menu, the first message after the roster locks.
+  if (state.rankNote) msg += `\n\n${state.rankNote}`;
+
+  // 2026-09-14 r6 (owner: "why is there a second image card saying Guild
+  // Shop with the dual-card UI? We don't need that - send the quest starting
+  // image card, then the shop as normal text"): the SUPPLY image card is
+  // GONE. The flow is now: QUESTSTART card (sent upstream at dungeon start)
+  // → this plain text shop menu. The -s skip path never reaches openShop,
+  // so it is untouched.
+  try {
+    await sock.sendMessage(state.chatId, { text: msg });
+  } catch (err) {
+    console.error("Failed to send shop menu in openShop:", err.message);
+  }
+
+  const shopTime = GAME_CONFIG.SHOP_TIME;
+  state.timers.shop = setTimeout(() => {
+    state.phase = "PLAYING";
+    nextStage(sock, state.groq, sessionKey).catch((e) =>
+      console.error("[Quest] nextStage error:", e?.message || e),
+    );
+  }, shopTime);
+}
+
+async function nextStage(sock, groq, sessionKey) {
+  const state = gameStates.get(sessionKey);
+  if (!state) return;
+
+  const chatId = state.chatId;
+  console.log(
+    `[Quest] nextStage triggered for ${sessionKey}. isProcessing: ${state.isProcessing}, Encounter: ${state.encounter}/${state.maxEncounters}`,
+  );
+
+  // 💡 ROUND-19 (ghost-victory quest-skip fix): the dungeon flow must NEVER
+  // advance while a fight is live. A stale endCombat/break-timer firing
+  // nextStage mid-boss-fight is the exact mechanism that skipped the boss,
+  // printed an unearned QUEST COMPLETE, and left a dangling
+  // "Awaiting first action..." battle behind.
+  if (state.inCombat) {
+    console.warn(`[Quest] nextStage BLOCKED: combat is live for ${sessionKey}`);
+    return;
+  }
+
+  if (state.isProcessing) {
+    console.warn(`[Quest] nextStage blocked: already processing for ${chatId}`);
+    // Safety: if stuck for more than 30s, force clear
+    if (state.lastProcessTime && Date.now() - state.lastProcessTime > 30000) {
+      console.error(
+        `[Quest] EMERGENCY: Clearing stuck isProcessing for ${chatId}`,
+      );
+      state.isProcessing = false;
+    } else {
+      return;
+    }
+  }
+
+  state.isProcessing = true;
+  state.lastProcessTime = Date.now();
+
+  try {
+    if (!groq) groq = state.groq;
+    state.encounter++;
+
+    // 💡 GOD DUNGEON: send lore message for each floor
+    const godRankData = DUNGEON_RANKS.GOD;
+    if (state.dungeonRank === 'GOD' && godRankData && godRankData.loreFloors) {
+      const loreIdx = state.encounter - 1;
+      if (loreIdx >= 0 && loreIdx < godRankData.loreFloors.length) {
+        try {
+          await sock.sendMessage(chatId, { text: `\n🌌 _${godRankData.loreFloors[loreIdx]}_\n` });
+        } catch (e) {}
+      }
+    }
+
+    // Check if dungeon is complete
+    if (state.encounter > state.maxEncounters) {
+      state.isProcessing = false;
+      END_DEBUG(`FINAL STAGE reached enc=${state.encounter}/${state.maxEncounters} → endAdventure key=${sessionKey}`);
+      // 💡 FORCE-RELEASE WATCHDOG (2026-10-07): the live incident showed the
+      // wrap-up can stall with ZERO output (no card, no error, no counting)
+      // while the state stays wedged until the 30-min sweeper. If
+      // endAdventure is still pending after 120s, release the chat with a
+      // visible notice (no fake counting — mods can compensate manually) so
+      // players aren't locked out of new quests.
+      const __endT0 = Date.now();
+      const __endP = endAdventure(sock, sessionKey);
+      const __endWd = setTimeout(() => {
+        const __st = gameStates.get(sessionKey);
+        if (__st) {
+          console.error(`[EndDebug] WATCHDOG endAdventure pending >120s — force-releasing ${sessionKey}`);
+          try {
+            sock.sendMessage(__st.chatId, { text: "⚠️ *Quest wrap-up stalled* server-side after the final fight. The quest slot has been released - ping a mod if your completion rewards/count didn't land." }).catch(() => {});
+          } catch (_) {}
+          deleteGameState(sessionKey);
+        }
+      }, 120000);
+      return __endP.finally(() => {
+        clearTimeout(__endWd);
+        END_DEBUG(`endAdventure observed settled total=${Date.now() - __endT0}ms key=${sessionKey}`);
+      });
+    }
+
+    // 💡 BRANCHING PATHS SYSTEM
+    // Every 3 stages (except boss), let the party vote
+    if (
+      state.encounter > 1 &&
+      state.encounter % 3 === 0 &&
+      state.encounter < state.maxEncounters
+    ) {
+      let msg = `┏━━━━━━━━━━━━┓\n`;
+      msg += `┃ 📂 CROSSROAD ┃\n`;
+      msg += `┗━━━━━━━━━━━━┛\n\n`;
+      msg += `🔴 *Door 1: Riches*\n   Elite Combat - 2x Loot\n\n`;
+      msg += `🔵 *Door 2: Safety*\n   Rest - Heal 30% HP/EN\n\n`;
+      msg += `Vote: \`${botConfig.getPrefix()} vote 1\` or \`${botConfig.getPrefix()} vote 2\`\n`;
+      msg += `⏱️ 30 seconds!`;
+
+      state.votes = {};
+      state.currentEncounter = null; // Clear stale encounter
+      state.isBranching = true; // Set flag
+      state.voteProcessing = false; // 💡 fresh window accepts votes again
+      // 💡 OWNER BRIEF 2026-10-09 §3 (overlapping voting encounters): clear
+      // any pending vote timer BEFORE opening a new window, and stamp this
+      // window with a generation id. Previously a vote opening while another
+      // window was still pending OVERWROTE the timer handle (old timer
+      // unfireable → fired later) — two vote prompts went live at once and
+      // both processed the same .j vote bag. Stale timers are now no-ops.
+      if (state.timers.vote) clearTimeout(state.timers.vote);
+      state.voteGen = (state.voteGen || 0) + 1;
+      const voteGen = state.voteGen;
+      try {
+        await sock.sendMessage(state.chatId, { text: msg });
+      } catch (err) {
+        console.error(
+          "Failed to send split path message in nextStage:",
+          err.message,
+        );
+      }
+
+      const voteTime = 30000; // 30s for both solo and group (matches message)
+      state.timers.vote = setTimeout(() => {
+        if (state.voteGen !== voteGen) return; // stale window — superseded
+        const v1 = Object.values(state.votes).filter((v) => v === "1").length;
+        const v2 = Object.values(state.votes).filter((v) => v === "2").length;
+
+        const winner = v2 > v1 ? "REST" : "ELITE_COMBAT";
+        state.isProcessing = false;
+        state.isBranching = false; // Clear flag
+        processBranchChoice(sock, winner, sessionKey).catch((e) =>
+          console.error("[Quest] processBranchChoice error:", e?.message || e),
+        );
+      }, voteTime);
+      return;
+    }
+
+    // ... (rest of standard encounter logic)
+    // 💡 TRIAL mode uses a virtual rank entry - guard against missing rankData
+    const rankData = DUNGEON_RANKS[state.dungeonRank] || { name: "Class Trial", difficulty: 1.5, encounters: 1, minMobs: 1, maxMobs: 1, xpMult: 2.0 };
+    const isLowRank = ["F", "E", "D"].includes(state.dungeonRank);
+    const isBossEncounter =
+      state.mode === "TRIAL" || (state.encounter === state.maxEncounters && rankData.boss);
+
+    let encounterType;
+    if (isBossEncounter) {
+      encounterType = "BOSS";
+    } else if (isLowRank) {
+      encounterType = "COMBAT";
+    } else {
+      const roll = Math.random();
+      if (roll < 0.5) encounterType = "COMBAT";
+      else if (roll < 0.7) encounterType = "ELITE_COMBAT";
+      else if (roll < 0.85) encounterType = "REST";
+      else encounterType = "NON_COMBAT";
+    }
+
+    await executeEncounter(sock, groq, encounterType, sessionKey);
+  } finally {
+    state.isProcessing = false;
+  }
+}
+
+async function processBranchChoice(sock, type, sessionKey) {
+  const state = gameStates.get(sessionKey);
+  if (!state) return;
+  state.isProcessing = true;
+  await executeEncounter(sock, state.groq, type, sessionKey);
+  state.isProcessing = false;
+}
+
+async function executeEncounter(sock, groq, encounterType, sessionKey) {
+  const state = getGameState(sessionKey);
+  if (!state) return;
+
+  const durabilitySystem = require('../inventory/durabilitySystem');
+  for (const player of state.players) {
+      durabilitySystem.applySelfRepair(player);
+  }
+  const rankData = DUNGEON_RANKS[state.dungeonRank];
+  let encounter;
+
+  if (state.mode === "TRIAL") {
+    encounter = classEncounters.generateEncounter(
+      state.players,
+      "BOSS",
+      state.difficulty,
+      { forceBossId: state.trialTarget },
+    );
+  } else if (encounterType === "REST") {
+    encounter = {
+      type: "REST",
+      name: "Quiet Campfire",
+      description:
+        "The party finds a safe spot to rest and recover. The crackling fire brings comfort.",
+    };
+  } else if (encounterType === "NON_COMBAT") {
+    encounter = selectRandomEncounter(sessionKey);
+  } else {
+    // 💡 DEAD WORLD (2026-09-21 owner ticket): a regular COMBAT encounter has
+    // a 5% chance to spawn nothing at all. The dungeon behaves completely
+    // normally until this spawn point; then no monsters are generated - the
+    // Dead World sequence plays instead (empty scene card, ten separate
+    // thought boxes, a regular victory card with a Dead World congratulation
+    // caption). Bosses, elites, rests, non combat events and trials are never
+    // touched; once per run; no combat rewards because nothing was fought.
+    if (encounterType === "COMBAT") {
+      const deadWorld = require("../world/deadWorld");
+      if (deadWorld.shouldTrigger(state)) {
+        state.currentEncounter = deadWorld.marker(state.encounter);
+        state.currentEncounterType = "DEAD_WORLD";
+        await deadWorld.runEncounter(sock, state);
+        // 💡 OWNER RULING (2026-09-21): the Dead World encounter is TERMINAL.
+        // The encounter ends after the sequence and the run does NOT continue
+        // into the normal dungeon flow - the victory card is the closing
+        // beat. No QUEST COMPLETE banner, no completion rewards, no win
+        // credit (nothing was fought); the run closes out cleanly instead:
+        // persistent HP/energy are written back (same contract as every
+        // other ending) and the state is deleted.
+        try {
+          for (const dwPlayer of state.players) {
+            if (dwPlayer.jid && dwPlayer.stats && dwPlayer.stats.maxHp) {
+              const dwHP = dwPlayer.currentHP !== undefined ? dwPlayer.currentHP : dwPlayer.stats.hp;
+              economy.setPersistentHP(dwPlayer.jid, dwHP, dwPlayer.stats.maxHp);
+            }
+            if (dwPlayer.jid && dwPlayer.stats && dwPlayer.stats.maxEnergy) {
+              const dwEn = Number.isFinite(dwPlayer.stats.energy) ? dwPlayer.stats.energy : dwPlayer.stats.maxEnergy;
+              economy.setPersistentEnergy(dwPlayer.jid, dwEn, dwPlayer.stats.maxEnergy);
+            }
+          }
+        } catch (dwErr) {
+          console.error("[DeadWorld] persistent HP/energy write-back failed:", dwErr?.message || dwErr);
+        }
+        state.active = false;
+        state.phase = "IDLE";
+        deleteGameState(sessionKey);
+        return;
+      }
+    }
+    encounter = classEncounters.generateEncounter(
+      state.players,
+      encounterType,
+      state.difficulty || 1.0,
+      {
+        minMobs: rankData.minMobs,
+        maxMobs: rankData.maxMobs,
+        // 💡 Pass environment so special dungeons (DRAGON_LAIR) spawn their
+        // dedicated mob pool instead of generic level-based enemies.
+        environment: state.environment || null,
+        // Pin the boss to the one defined for this rank so HP stays sane
+        ...(encounterType === 'BOSS' && rankData.boss ? { forceBossId: rankData.boss } : {}),
+      },
+    );
+  }
+
+  if (!encounter) {
+    console.error(`❌ Failed to generate encounter of type: ${encounterType}`);
+    // Try to recover by skipping or ending
+    setTimeout(() => {
+      nextStage(sock, groq, sessionKey).catch((e) =>
+        console.error("[Quest] nextStage recovery error:", e?.message || e),
+      );
+    }, 1000);
+    return;
+  }
+
+  state.currentEncounter = encounter;
+  state.currentEncounterType = encounter.type;
+
+  if (
+    encounter.type === "COMBAT" ||
+    encounter.type === "BOSS" ||
+    encounter.type === "ELITE_COMBAT"
+  ) {
+    // Elite combat from branch choice gives 2x difficulty for THIS encounter
+    // only. Previously this mutated state.difficulty in place, which compounded
+    // across every elite-combat at encounter index 3/6/9/12 without ever
+    // resetting - three elite-combats in an S-rank dungeon pushed difficulty
+    // 35 → 70 → 140 → 280, breaking both loot-table routing (jumped to
+    // SSS_RANK_COMMON) and boss HP scaling (quadratic via rankIndex^2 in
+    // scaleBossStats). Fix: stash the original difficulty and restore it
+    // after startCombat resolves. (audit bug #3)
+    let difficultyOverride = null;
+    if (encounter.type === "ELITE_COMBAT" && state.encounter % 3 === 0) {
+      difficultyOverride = state.difficulty * 2.0;
+    }
+    if (difficultyOverride !== null) {
+      state._preEliteDifficulty = state.difficulty;
+      state.difficulty = difficultyOverride;
+    }
+
+    // 💡 BOSS SPLASH (Phase 0): render a full-screen boss intro image
+    // before combat starts. Non-fatal - if the Go service fails or times
+    // out, combat proceeds normally. Only fires for BOSS encounters (not
+    // COMBAT or ELITE_COMBAT) to keep splash impactful + avoid spam.
+    if (encounter.type === "BOSS") {
+      try {
+        const bossEnemy = encounter.enemies && encounter.enemies[0];
+        if (bossEnemy) {
+          // Determine tier label for color theme
+          // 💡 FIX: default was "S" - every rank below S (F, E, D, C, B, A)
+          // that didn't match the if/else chain showed "S-RANK BOSS". Now
+          // defaults to the actual dungeon rank, falling back to "F" if
+          // somehow missing.
+          let tierLabel = state.dungeonRank || "F";
+          if (state.mode === "TRIAL") {
+            tierLabel = "TRIAL";
+          } else if (state.dungeonRank === "DRAGON") {
+            tierLabel = "DRAGON";
+          } else if (state.dungeonRank === "SSS") {
+            tierLabel = "SSS";
+          } else if (state.dungeonRank === "SS") {
+            tierLabel = "SS";
+          } else if (state.dungeonRank === "S") {
+            tierLabel = "S";
+          }
+
+          // Pick a flavor text line based on boss name
+          const flavorTexts = {
+            "ELDER CHAOS": "An ancient chaos awakens, twisting reality itself...",
+            "VOID TITAN": "The void between worlds takes form. Reality trembles.",
+            "ABYSSAL GOD": "The divine entity of the deepest abyss stirs. Pray.",
+            "PRIMORDIAL CHAOS": "The source of all corruption turns its gaze upon you.",
+            "IGNEEL THE FIRE KING": "The dragon's roar scorches the heavens. Steel yourself.",
+            "ANCIENT DRAGON": "Scales harder than diamond. Bring your seal ring.",
+            "DEMON LORD": "The lord of demons grins. Your soul smells sweet.",
+            "LEVIATHAN": "From the abyssal depths, a titanic serpent rises.",
+            "ETERNAL DRAGON": "Time itself bends around this eternal wyrm.",
+            "SHADOW LORD": "Darkness given form. Light fears this name.",
+            "PRIMORDIAL EVIL": "The first evil. The origin of all sin.",
+            "GRAVEYARD LORD": "Bone and shadow. The dead obey his every word.",
+            "ELDER FLAME": "Ancient fire given will. Burn, or be burned.",
+          };
+          const bossNameUpper = (bossEnemy.name || "").toUpperCase();
+          const flavor = flavorTexts[bossNameUpper] ||
+            `A legendary foe stands before you. ${bossEnemy.name || "The boss"} prepares to strike.`;
+
+          // Resolve sprite filename - mirror the Go BossNameSprites map
+          // so the splash shows the same image the combat scene will use.
+          // 💡 ROUND-21 (owner 2026-10-20: "purge all the A.I generated
+          // enemies you made"): the round-13 dusk bestiary was AI-generated
+          // art — it is GONE (files deleted from both repos + renderer
+          // assets). The map now draws from the owner's OWN collected
+          // sprite packs (calamaties / midlevelbosses / highlevelbosses /
+          // mutated / hybrides / earth / fire / ice / water singles) with
+          // THEMATIC assignments that keep round-19's diversity ruling:
+          // fire bosses burn red, wraiths haunt frost, golems take earth,
+          // leviathans swim — and ONLY the genuinely mechanical bosses
+          // (CLOCKWORK TITAN, MECH GOD) keep robot art. Zero AI art.
+          // Values mirror pkg/combat/sprites.go BossNameSprites 1:1 (combat
+          // scene is the source of truth) — one audit, both pipelines.
+          const BOSS_SPLASH_SPRITES = {
+            // ═══ S/SS/SSS-rank dungeon bosses ═══
+            "PRIMORDIAL CHAOS": "calamaties (2).png",
+            "ELDER CHAOS": "calamaties (1).png",
+            "VOID TITAN": "calamaties (3).png",
+            "ABYSSAL GOD": "calamaties (5).png",
+            "MUTATION PRIME": "mutated (2).png",
+            "ELEMENTAL ARCHON": "highlevelbosses (10).png",
+            // ═══ Mid-level bosses ═══
+            "THE INFECTED COLOSSUS": "midlevelbosses (1).png",
+            "INFECTED COLOSSUS": "midlevelbosses (1).png",
+            "MUTATED OVERSEER": "mutated (4).png",
+            "CORRUPTED GUARDIAN": "midlevelbosses (2).png",
+            "STONE HULK": "earth (1).png",
+            "CRYSTAL CORRUPTED": "hybrides (3).png",
+            "EARTH WARDEN": "earth (2).png",
+            "FROST GHOUL": "ice (1).png",
+            "GLACIAL BEAST": "ice (2).png",
+            // ═══ High-level bosses ═══
+            "MAGMA BRUTE": "fire (5).png",
+            "HELLFIRE DEMON": "fire (7).png",
+            "ABYSSAL HORROR": "hybrides (2).png",
+            "TSUNAMI WALKER": "water (4).png",
+            "BLIZZARD WRAITH": "ice (3).png",
+            "GRAVEYARD LORD": "mutated (3).png",
+            "SHADOW LORD": "hybrides (1).png",
+            // ═══ Dragon bosses ═══
+            "IGNEEL THE FIRE KING": "fire (8).png",
+            "ANCIENT DRAGON": "fire (11).png",
+            "ETERNAL DRAGON": "water (6).png",
+            "ELDER FLAME": "fire (6).png",
+            // ═══ Trial bosses ═══
+            "ARCANE SENTINEL": "highlevelbosses (11).png",
+            "LICH KING": "mutated (5).png",
+            "SHADOW STALKER": "hybrides (1).png",
+            "VOID ASSASSIN": "hybrides (4).png",
+            "IRON BODY GRANDMASTER": "midlevelbosses (3).png",
+            "ANCIENT WURM": "earth (3).png",
+            "SOUL EATER": "mutated (6).png",
+            "ABYSSAL WHISPER": "highlevelbosses (12).png",
+            "ELEMENTAL PRIMORDIAL": "highlevelbosses (10).png",
+            "PRIME ELEMENT": "highlevelbosses (13).png",
+            "VOID NECROMANCER": "hybrides (5).png",
+            "CHRONOS WARDEN": "highlevelbosses (7).png",
+            "TIME EATER": "midlevelbosses (4).png",
+            "HEAVENLY GUARDIAN": "midlevelbosses (5).png",
+            "SERAPHIM PRIME": "midlevelbosses (6).png",
+            "FOREST ANCESTOR": "earth (4).png",
+            "GAIA SENTINEL": "earth (5).png",
+            "GOLDEN GOLEM": "midlevelbosses (7).png",
+            "TREASURE HOARDER": "calamaties (6).png",
+            "SOUND REAPER": "mutated (7).png",
+            "MAESTRO OF VOID": "hybrides (6).png",
+            // genuinely mechanical bosses keep the mecha family
+            "CLOCKWORK TITAN": "boss_0_S.png",
+            "MECH GOD": "boss_3_S.png",
+            "DEMON LORD": "hybrides (7).png",
+            "PRIMORDIAL EVIL": "calamaties (2).png",
+            "LEVIATHAN": "water (7).png",
+            "LEVIATHAN SPAWN ALPHA": "water (4).png",
+            "INFERNAL OVERLORD": "fire (5).png",
+            "PRIMORDIAL FLAME": "fire (8).png",
+            "PERMAFROST TITAN": "ice (2).png",
+          };
+          const splashSprite = BOSS_SPLASH_SPRITES[bossNameUpper] || "calamaties (1).png";
+
+          const splashPayload = {
+            name: bossEnemy.name || "Unknown Boss",
+            spriteFilename: splashSprite,
+            flavorText: flavor,
+            tier: tierLabel,
+          };
+
+          // Try to render splash
+          // 💡 FIX (Item #1 - "evolution trial hangs after shop"): the splash
+          // request goes through goImageService._enqueue, a SEQUENTIAL queue.
+          // If a heavy op (card spawn, 60s timeout) is ahead in the queue,
+          // the splash wait could exceed 60s - blocking executeEncounter,
+          // blocking nextStage, and freezing the trial. The user sees the
+          // "TRIAL-RANK" message from initAdventure, then nothing for a
+          // minute+, perceiving it as a hang after the (skipped) shop phase.
+          //
+          // Fix: race the splash generation against a hard 5s wall-clock
+          // timeout. If it loses, skip the splash and proceed to combat.
+          // Splash is cosmetic - combat must never wait on it.
+          const goServiceSingleton = require('../../../utils/goImageService');
+          let splashBuf = null;
+          try {
+            const splashPromise = goServiceSingleton.generateBossSplash(splashPayload);
+            const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve('__TIMEOUT__'), 5000));
+            const raceResult = await Promise.race([splashPromise, timeoutPromise]);
+            if (raceResult !== '__TIMEOUT__') {
+              splashBuf = raceResult;
+            } else {
+              console.warn('[BossSplash] Skipped - total time exceeded 5s (queue or render slow). Combat will proceed without splash.');
+            }
+          } catch (splashGenErr) {
+            console.error('[BossSplash] Generation threw (non-fatal):', splashGenErr.message);
+          }
+          if (splashBuf && splashBuf.length > 100) {
+            try {
+              await sock.sendMessage(state.chatId, {
+                image: splashBuf,
+                caption: `⚔️ *${bossEnemy.name}* - ${tierLabel === "TRIAL" ? "TRIAL" : tierLabel + "-RANK"} BOSS\n_${flavor}_`,
+                // 2026-09-15 PERF: splash renders via ?fmt=jpeg now - keep the
+                // mimetype in sync with the actual bytes.
+                mimetype: "image/jpeg",
+              });
+              // Brief pause so players see the splash before combat starts
+              await new Promise((r) => setTimeout(r, 2500));
+            } catch (splashSendErr) {
+              console.error("[BossSplash] Failed to send splash image:", splashSendErr.message);
+            }
+          }
+        }
+      } catch (splashErr) {
+        console.error("[BossSplash] Render failed (non-fatal):", splashErr.message);
+      }
+    }
+
+    try {
+      await startCombat(sock, groq, encounter, sessionKey);
+    } finally {
+      if (difficultyOverride !== null && state._preEliteDifficulty !== undefined) {
+        state.difficulty = state._preEliteDifficulty;
+        delete state._preEliteDifficulty;
+      }
+    }
+  } else if (encounter.type === "REST") {
+    await handleRestEncounter(sock, encounter, sessionKey);
+  } else {
+    await handleNonCombatEncounter(sock, encounter, sessionKey);
+  }
+}
+
+async function handleRestEncounter(sock, encounter, sessionKey) {
+  const state = gameStates.get(sessionKey);
+  if (!state) return;
+  let msg = `🔥 *${encounter.name}* 🔥\n\n`;
+  msg += `${encounter.description}\n\n`;
+
+  msg += `The party takes time to recover:\n`;
+
+  for (const player of state.players) {
+    if (player.isDead) continue;
+
+    const hpGain = Math.floor(player.stats.maxHp * 0.3);
+    const energyGain = 30;
+
+    player.stats.hp = Math.min(player.stats.maxHp, player.stats.hp + hpGain);
+    player.currentHP = player.stats.hp;
+    player.stats.energy = Math.min(
+      player.stats.maxEnergy,
+      player.stats.energy + energyGain,
+    );
+
+    msg += `💖 ${player.name}: +${hpGain} HP, +${energyGain} Energy\n`;
+  }
+
+  msg += `\n⏰ Continuing journey in ${GAME_CONFIG.BREAK_TIME / 1000}s...`;
+
+  try {
+    await sock.sendMessage(state.chatId, { text: msg });
+  } catch (err) {
+    console.error("Failed to send rest encounter message:", err.message);
+  }
+
+  setTimeout(
+    () => {
+      nextStage(sock, state.groq, sessionKey).catch((e) =>
+        console.error("[Quest] nextStage error:", e?.message || e),
+      );
+    },
+    state.solo ? 0 : GAME_CONFIG.BREAK_TIME,
+  );
+}
+
+function selectRandomEncounter(chatId) {
+  const state = getGameState(chatId);
+  if (!state) return null;
+  const types = ["TRAP", "PUZZLE", "MERCHANT", "TREASURE", "EVENT"];
+  const type = types[Math.floor(Math.random() * types.length)];
+
+  switch (type) {
+    case "TRAP":
+      return generateTrapEncounter(chatId);
+    case "PUZZLE":
+      return generatePuzzleEncounter(chatId);
+    case "MERCHANT":
+      return generateMerchantEncounter(chatId);
+    case "TREASURE":
+      return generateTreasureEncounter(chatId);
+    case "EVENT":
+      return generateEventEncounter(chatId);
+    default:
+      return generateTrapEncounter(chatId);
+  }
+}
+
+async function handleMerchantEncounter(sock, encounter, sessionKey) {
+  const state = gameStates.get(sessionKey);
+  if (!state) return;
+
+  let msg = `💰 *${encounter.description}* 💰\n\n`;
+  msg += `The merchant offers the following items for your journey:\n\n`;
+
+  encounter.shopItems.forEach((itemKey, i) => {
+    const item = CONSUMABLES[itemKey];
+    if (item) {
+      msg += `${i + 1}. ${item.icon} *${item.name}* - 💰 ${item.cost}\n`;
+      msg += `   _${item.desc}_\n\n`;
+    }
+  });
+
+  msg += `💬 Type \`${botConfig.getPrefix()} buy <#>\` to purchase an item.\n`;
+  msg += `⏰ The merchant will leave in ${GAME_CONFIG.VOTE_TIME / 1000}s...`;
+
+  try {
+    await sock.sendMessage(state.chatId, { text: msg });
+  } catch (err) {
+    console.error("Failed to send merchant encounter message:", err.message);
+  }
+
+  state.currentEncounter = encounter;
+  state.phase = "PLAYING"; // Ensure they can buy
+  state.isMerchantActive = true;
+
+  const merchantTime = state.solo ? 30000 : GAME_CONFIG.VOTE_TIME || 30000;
+  state.timers.merchant = setTimeout(() => {
+    if (state.active) {
+      state.isMerchantActive = false;
+      nextStage(sock, state.groq, sessionKey).catch((e) =>
+        console.error("[Quest] nextStage error:", e?.message || e),
+      );
+    }
+  }, merchantTime);
+}
+async function handleNonCombatEncounter(sock, encounter, sessionKey) {
+  const state = gameStates.get(sessionKey);
+  if (!state) return;
+
+  if (encounter.type === "MERCHANT") {
+    return handleMerchantEncounter(sock, encounter, sessionKey);
+  }
+
+  // Defensive fallback: if a generator forgets to expose name/icon at the top
+  // level (older generators nest them inside type-specific sub-objects), fall
+  // back through those sub-objects before giving up. Fixes the long-standing
+  // 'undefined *undefined*' header bug on TRAP/PUZZLE/TREASURE/EVENT encounters.
+  const encName = encounter.name || encounter.trap?.name || encounter.puzzle?.name ||
+                  encounter.treasure?.name || encounter.event?.name || "Unknown Event";
+  const encIcon = encounter.icon || encounter.trap?.icon || encounter.puzzle?.icon ||
+                  encounter.treasure?.icon || encounter.event?.icon || "🎲";
+  let msg = `${encIcon} *${encName}*\n\n`;
+  msg += `${encounter.description}\n\n`;
+
+  msg += `The party must decide what to do:\n\n`;
+
+  encounter.choices.forEach((choice, i) => {
+    msg += `${i + 1}. ${choice.text} (${choice.stat} Check)\n`;
+  });
+
+  msg += `\n💬 Type: \`${botConfig.getPrefix()} vote <#>\` to choose!`;
+
+  try {
+    await sock.sendMessage(state.chatId, { text: msg });
+  } catch (err) {
+    console.error("Failed to send non-combat choice message:", err.message);
+  }
+
+  state.currentEncounter = encounter;
+  state.votes = {};
+  state.voteProcessing = false;
+
+  // Auto-timeout if no one votes
+  // 💡 OWNER BRIEF 2026-10-09 §3: clear-before-set + generation stamp (see
+  // crossroad opener) — stale vote timers can no longer double-fire.
+  if (state.timers.vote) clearTimeout(state.timers.vote);
+  state.voteGen = (state.voteGen || 0) + 1;
+  const voteGen = state.voteGen;
+  let timer;
+  if (state.solo) {
+    timer = 15000; // Reduced to 15s for solo
+  } else if (state.actionJustTaken) {
+    timer = 120000;
+    state.actionJustTaken = false;
+  } else {
+    timer = GAME_CONFIG.VOTE_TIME || 30000;
+  }
+
+  state.timers.vote = setTimeout(() => {
+    if (state.voteGen !== voteGen) return; // stale window — superseded
+    if (state.active && !state.voteProcessing) {
+      processVotes(sock, encounter, sessionKey).catch((e) =>
+        console.error("[Quest] processVotes error:", e?.message || e),
+      );
+    }
+  }, timer);
+}
+async function processVotes(sock, encounter, sessionKey) {
+  const state = gameStates.get(sessionKey);
+  if (!state) return;
+  // 🩘 SOCK FALLBACK (2026-10-26): state.sock is ONLY ever set for RUINS
+  // co-op (makeRuinsSock) — every other mode stores the live socket on
+  // state.sock_ref. A bare `sock = state.sock` here handed the whole
+  // vote→encounter→next-fight chain a undefined socket: every send died
+  // ("Cannot read properties of undefined (reading 'sendMessage')"), the
+  // rest message / next fight's battle card / YOUR TURN caption all went
+  // silent, and the fight zombied on invisibly until the breaker collapsed
+  // it. Read the real socket before driving the chain.
+  if (!sock) sock = state.sock || state.sock_ref;
+  clearTimeout(state.timers.vote);
+
+  const chatId = state.chatId;
+
+  // 🛡️ ENCOUNTER SAFETY GUARD: Recover if state is lost or invalid
+  if (!encounter || !encounter.choices) {
+    console.warn(
+      `⚠️️ [Quest][${sessionKey}] Recovering from null encounter or missing choices. (Phase: ${state.phase}, Type: ${state.currentEncounterType})`,
+    );
+    state.votes = {};
+    state.voteProcessing = false;
+    // Force next stage after a brief delay
+    setTimeout(() => {
+      nextStage(sock, state.groq, sessionKey).catch((e) =>
+        console.error("[Quest] nextStage recovery error:", e?.message || e),
+      );
+    }, 1000);
+    return;
+  }
+
+  const voteCounts = {};
+  for (const vote of Object.values(state.votes)) {
+    voteCounts[vote] = (voteCounts[vote] || 0) + 1;
+  }
+  let winningChoiceIdx = "1";
+  let maxVotes = 0;
+  for (const [choice, count] of Object.entries(voteCounts)) {
+    if (count > maxVotes) {
+      maxVotes = count;
+      winningChoiceIdx = choice;
+    }
+  }
+
+  // Note: The second check below is now mostly redundant but kept for extra safety
+  if (!encounter || !encounter.choices) {
+    console.error(
+      "❌ processVotes: encounter or encounter.choices is missing!",
+    );
+    setTimeout(
+      () => {
+        nextStage(sock, state.groq, sessionKey).catch((e) =>
+          console.error("[Quest] nextStage error:", e?.message || e),
+        );
+      },
+      state.solo ? 0 : GAME_CONFIG.BREAK_TIME,
+    );
+    return;
+  }
+
+  const choice = encounter.choices[parseInt(winningChoiceIdx) - 1];
+  if (!choice) {
+    try {
+      await sock.sendMessage(state.chatId, {
+        text: "❌ Invalid choice! Moving on...",
+      });
+    } catch (err) {
+      console.error(
+        "Failed to send invalid choice message in processVotes:",
+        err.message,
+      );
+    }
+    setTimeout(
+      () => {
+        nextStage(sock, state.groq, sessionKey).catch((e) =>
+          console.error("[Quest] nextStage error:", e?.message || e),
+        );
+      },
+      state.solo ? 0 : GAME_CONFIG.BREAK_TIME,
+    );
+    return;
+  }
+
+  let msg = `📊 *Vote Result:* ${choice.text}\n\n`;
+  let finalOutcome =
+    choice.outcome || (choice.success && !choice.stat ? choice.success : null);
+
+  // D20 STAT CHECK
+  if (choice.stat) {
+    const roll = Math.floor(Math.random() * 20) + 1;
+    // Get highest party stat for the check
+    const rawBestStat = Math.max(
+      ...state.players.map((p) => p.stats[choice.stat.toLowerCase()] || 0),
+    );
+    // ⚠️ FIX (#44): previously stat bonus was capped at +10 (1 per 20 stat
+    // points), making high stats irrelevant. With difficulty values of 12-25+
+    // and a d20 roll, max total was 30 - but low rolls (1-5) + 10 bonus = 6-15,
+    // failing against difficulty 19+ at high ranks.
+    // Now: stat bonus scales at 1 per 10 stat points, capped at +25.
+    //   stat 0-9   → +0 bonus (pure d20 roll)
+    //   stat 10-19 → +1 bonus
+    //   stat 50    → +5 bonus
+    //   stat 100   → +10 bonus
+    //   stat 250+  → +25 bonus (capped)
+    // This makes high stats feel meaningful while keeping the d20 relevant.
+    const statBonus = Math.min(25, Math.floor(rawBestStat / 10));
+    const total = roll + statBonus;
+    const success = total >= choice.difficulty;
+
+    msg += `🎲 *ROLL:* ${roll} + ${statBonus} (stat ${rawBestStat} → +${statBonus} cap) = *${total}* (Req: ${choice.difficulty})\n`;
+    msg += success ? `✅ *SUCCESS!*\n` : `❌ *FAILURE!*\n`;
+
+    finalOutcome = success ? choice.success : choice.failure;
+  }
+
+  if (finalOutcome) {
+    msg += finalOutcome.description || "";
+
+    // Track treasure finds
+    if (encounter.type === "TREASURE") state.stats.treasuresFound++;
+
+    // Apply rewards/penalties to all LIVING players
+    for (const player of state.players) {
+      if (player.isDead) continue;  // 💡 FIX: dead players don't receive encounter rewards
+      if (finalOutcome.gold) {
+        // 💡 FIX 2026-09-19: fire-and-forget payout - a false return (market
+        // cap, unregistered account) vanished silently. Log it loudly so
+        // reports like "quest money not increasing" can be diagnosed.
+        const _encPaid = economy.addMoney(player.jid, finalOutcome.gold);
+        if (_encPaid === false) {
+          console.error(`[QuestPayout] Encounter gold FAILED: ${player.jid} +${finalOutcome.gold} (market cap / unregistered account).`);
+        }
+      }
+      if (finalOutcome.damage) {
+        player.stats.hp = Math.max(0, player.stats.hp - finalOutcome.damage);
+      }
+      if (finalOutcome.heal) {
+        player.stats.hp = Math.min(
+          player.stats.maxHp,
+          player.stats.hp + finalOutcome.heal,
+        );
+      }
+    }
+
+    if (finalOutcome.gold)
+      msg += `\n💰 ${finalOutcome.gold > 0 ? "+" : ""}${finalOutcome.gold} gold!`;
+    if (finalOutcome.damage)
+      msg += `\n💔 ${finalOutcome.damage} damage to party!`;
+    if (finalOutcome.heal) msg += `\n💚 ${finalOutcome.heal} HP restored!`;
+  }
+
+  try {
+    await sock.sendMessage(state.chatId, { text: msg });
+  } catch (err) {
+    console.error("Failed to send vote result in processVotes:", err.message);
+  }
+
+  // Check for deaths
+  const deadPlayers = state.players.filter((p) => p.stats.hp <= 0 && !p.isDead);
+  if (deadPlayers.length > 0) {
+    let deathMsg = "💀 *CASUALTIES* 💀\n\n";
+    deadPlayers.forEach((p) => {
+      p.isDead = true;
+      deathMsg += `${p.name} has fallen!\n`;
+
+      // 💡 CLASS PASSIVE WIRE-UP (on-death): fire damage_on_death passive
+      // (e.g. Monk's Death's Touch - deal 30% of victim's max HP as revenge
+      // damage to the killer, if we can identify them).
+      try {
+        // Find the last enemy that attacked this player this round
+        const killer = (state.enemies || []).find(e =>
+          !e.isDead && e.lastTarget === p.jid
+        ) || (state.enemies || []).find(e => !e.isDead);
+        const revenge = applyClassPassiveOnDeath(p, killer);
+        if (revenge && revenge.damage > 0 && revenge.target) {
+          revenge.target.stats.hp = Math.max(0, (revenge.target.stats.hp || 0) - revenge.damage);
+          deathMsg += `${revenge.msgs[0]}\n`;
+          if (revenge.target.stats.hp <= 0 && !revenge.target.isDead) {
+            revenge.target.isDead = true;
+            deathMsg += `💥 ${revenge.target.name} is destroyed by the revenge blast!\n`;
+          }
+        }
+      } catch (e) {
+        console.error('[Passive] applyClassPassiveOnDeath failed:', e?.message || e);
+      }
+    });
+    try {
+      await sock.sendMessage(state.chatId, { text: deathMsg });
+    } catch (err) {
+      console.error(
+        "Failed to send death message in processVotes:",
+        err.message,
+      );
+    }
+    if (state.players.every((p) => p.isDead))
+      return endAdventure(sock, sessionKey, false);
+  }
+
+  state.votes = {};
+  state.voteProcessing = false;
+  setTimeout(
+    () => {
+      nextStage(sock, state.groq, sessionKey).catch((e) =>
+        console.error("[Quest] nextStage error:", e?.message || e),
+      );
+    },
+    state.solo ? 0 : GAME_CONFIG.BREAK_TIME,
+  );
+}
+
+// ==========================================
+// 🔮 SKILL POINT DROPS (dungeon victory)
+// ==========================================
+
+// 💡 OWNER ORDER 2026-10-17 21:51Z: "increase drop rates of skill points
+// because they seem to have decreased, you used to get 3 to 5 from high tier
+// dungeons and you want that drop rate back".
+// ROOT CAUSE of the decrease: SP historically flowed ONLY through level-ups
+// (1/level + 2 per 10th level in progression.addXP), so the post-50 XP wall
+// (49ce670, 2026-10-15, owner-ordered "harder after level 50") gutted per-run
+// SP income — an S/SSS clear that used to level a player 3-5 times now levels
+// 0-1, and SP income collapsed with it.
+// FIX: restore the income as a DIRECT victory drop, decoupled from the level
+// curve. The wall stays (the late game stays slower, as ordered), but a
+// high-tier clear pays 3-5 SP again — straight into user.skillPoints, the
+// same wallet the skill tree spends from (additive-safe: the reset refund
+// adds spent points and ensureSkillPointsInitialized only fires when the
+// field is undefined, so nothing overwrites the drop).
+//   2026-10-20 OWNER ORDER: "make it an average of 5 to 10 per High
+//   ranking dungeons" -> S/SS/SSS = 5/7/10 (avg 7.3, inside the band)
+//   GOD = 10 (endgame vault stays above SSS), DRAGON = 2 (special mid-tier lair)
+//   F/E = 0 (low ranks level fast — 1 SP/level already flows there)
+//   2026-10-26 OWNER ORDER: "+50% for B rank and above" -> B/A 2→3,
+//   S 5→8, SS 7→11, SSS 10→15, GOD 10→15 (halves rounded up so every
+//   bumped rank pays ≥1.5x the old rate; the DRAGON special lair stays
+//   mid-tier at 2 — flag to owner if it should ride the ladder too)
+const DUNGEON_SKILL_POINT_DROPS = {
+  F: 0, E: 0, D: 1, C: 1, B: 3, A: 3, S: 8, SS: 11, SSS: 15, DRAGON: 2, GOD: 15,
+};
+
+const SP_LADDER = ["F", "E", "D", "C", "B", "A", "S", "SS", "SSS"];
+const SP_RANK_BASE = { F: 2, E: 2, D: 2, C: 3, B: 4, A: 5 };
+const SP_RANK_UP = { F: 3, E: 4, D: 4, C: 5, B: 6, A: 7 };
+
+/**
+ * Skill points dropped by a dungeon clear. Pure + exported for QA.
+ * @param {string} rank dungeon rank (F..GOD, DRAGON)
+ * @param {Object} opts { victory, isDead, isAbyss, mode }
+ */
+function getDungeonSkillPointDrop(rank, opts = {}) {
+  if (!opts.victory) return 0;          // fleeing/wipe pays nothing — a DROP is for CLEARING
+  if (opts.isDead) return 0;            // carried corpses get the consolation XP, not SP (same rule as GP)
+  if (opts.isAbyss) return 0;           // Abyss runs its own per-floor economy (separately tuned)
+  const mode = String(opts.mode || "NORMAL").toUpperCase();
+  if (mode === "TUTORIAL" || mode === "TUTORIAL_GROUP") return 0; // practice fights never pay
+  const dr = String(rank || "").toUpperCase();
+  // OWNER 2026-10-22 (rank-relative SP): a clear of your OWN rank's dungeon pays that rank's base; stepping UP one
+  // dungeon rank pays the "up" value. F:2/3 E:2/4 D:2/4 C:3/5 B:4/6 A:5/7 (D is interpolated — owner gave no D line).
+  const pr = String(opts.playerRank || "").toUpperCase();
+  const pi = SP_LADDER.indexOf(pr), di = SP_LADDER.indexOf(dr);
+  if (pi >= 0 && pi < SP_LADDER.indexOf("S") && di >= 0) {
+    if (di <= pi) return SP_RANK_BASE[SP_LADDER[Math.min(di, pi)]];          // own rank (or below): that dungeon's base
+    return SP_RANK_UP[pr] + (di - pi - 1);                                    // above: "up" value, +1 per extra rank beyond one
+  }
+  if (pi < 0 && di >= 0 && di < SP_LADDER.indexOf("S")) return SP_RANK_BASE[dr];  // unknown player rank: dungeon base
+  return DUNGEON_SKILL_POINT_DROPS[dr] || 0;                                  // S+ players / S+ lairs keep the high-tier ladder
+}
+
+async function endAdventure(sock, sessionKey, victory = true) {
+  const state = gameStates.get(sessionKey);
+  if (!state) { END_DEBUG(`endAdventure ABORT: no state for ${sessionKey}`); return; }
+  // 💡 COMBAT RESUME: the quest is over (any ending) — drop the resume point
+  // so resume can't resurrect a finished fight (solo + group, 2026-10-14).
+  // State-object form: keys the delete by the bare player jid / chat id —
+  // the old scoped-key call silently matched nothing (see clearCombatSnapshot).
+  clearCombatSnapshot(state).catch(() => {});
+  const __endT0 = Date.now();
+  END_DEBUG(`endAdventure ENTER key=${sessionKey} victory=${victory} mode=${state.mode} rank=${state.dungeonRank} players=${state.players?.length} abyss=${!!state.isAbyss}`);
+
+  const chatId = state.chatId;
+  // AI Narration of the journey's end
+  const prompt = `
+    Context: Fantasy RPG. The party has successfully completed all 5 acts of their epic quest and returned as legends.
+
+    Write a triumphant, grand narration (2-3 sentences) about their return and the glory they have earned.
+    `;
+
+  let narration = "";
+  const __narrT0 = Date.now();
+  try {
+    if (state.smartGroqCall) {
+      END_DEBUG(`endAdventure narration via smartGroqCall (6s watchdog)`);
+      // 💡 WATCHDOG 2026-10-07: the raw narration call can stall far longer
+      // than any user cares to wait (groq-sdk = 60s timeout x3 SDK retries,
+      // then engine retries x3 keys = up to 9 MINUTES of dead silence, and
+      // a fully hung socket defeats even that). Race it; on timeout use the
+      // standard fallback narration so the completion card still goes out.
+      // 💡 DUNGEON FAST-LANE (2026-10-20): 20s -> 6s. The narration is FLAVOR
+      // text gating the completion card — Groq answers in 1-3s normally, so a
+      // 6s watchdog keeps the real narration in the fast path while the
+      // quest finale can no longer sit 20s in dead air on a stall.
+      const completion = await raceWithTimeout(
+        state.smartGroqCall({
+          messages: [{ role: "system", content: prompt }],
+          model: "openai/gpt-oss-120b",
+        }),
+        6000, 'endAdventure.narration',
+      );
+      narration = completion.choices[0].message.content;
+    } else if (state.groq) {
+      END_DEBUG(`endAdventure narration via raw groq client (6s watchdog)`);
+      const completion = await raceWithTimeout(
+        state.groq.chat.completions.create({
+          messages: [{ role: "system", content: prompt }],
+          model: "openai/gpt-oss-120b",
+        }),
+        6000, 'endAdventure.narration',
+      );
+      narration = completion.choices[0].message.content;
+    } else {
+      END_DEBUG(`endAdventure narration skipped (no groq on state)`);
+    }
+  } catch (e) {
+    // 💡 FIX §3.2: multiple fallback variants instead of one repeated string.
+    END_DEBUG(`endAdventure narration did NOT settle cleanly after ${Date.now() - __narrT0}ms (${e.message}) — fallback`);
+    const fallbacks = [
+      "The heroes return from the depths of the void, their names etched in history forever.",
+      "As dawn breaks, the party emerges victorious, their legend spreading across the realm like wildfire.",
+      "The adventurers stand triumphant atop the fallen ruins, bathed in the golden light of victory.",
+      "Songs will be sung of this day - the day the party conquered the impossible and returned as legends.",
+      "With one final strike, the last challenge falls. The party walks into the sunset, heroes of the realm.",
+      "The echoes of battle fade as the party claims their hard-won victory. Their names shall not be forgotten.",
+    ];
+    narration = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+  }
+
+  // 💡 FIX: branch on TRIAL mode BEFORE building the "QUEST COMPLETE!" header.
+  // Previously, a defeated trial would still show "🎉 QUEST COMPLETE! The
+  // party has conquered all challenges!" + reward gold/XP - extremely
+  // confusing for the player who actually lost their class trial.
+  if (state.mode === "TRIAL" && !victory) {
+    let trialFailMsg = `┏━━━━━━━━━━━━━━━━┓\n`;
+    trialFailMsg += `┃ ⚔️ *TRIAL FAILED* ⚔️ ┃\n`;
+    trialFailMsg += `┗━━━━━━━━━━━━━━━━┛\n\n`;
+    trialFailMsg += `You have not proven your worth.\n`;
+    trialFailMsg += `Class evolution has been *denied*.\n\n`;
+    trialFailMsg += `📊 *RUN STATS:*\n`;
+    trialFailMsg += `☠️ Monsters Slain: ${state.stats.monstersKilled}\n`;
+    trialFailMsg += `👑 Bosses Defeated: ${state.stats.bossesDefeated}\n\n`;
+    trialFailMsg += `Try again when you're stronger. 🗡️`;
+
+    try {
+      await sock.sendMessage(state.chatId, { text: trialFailMsg });
+    } catch (err) {
+      console.error("Failed to send trial-fail message:", err.message);
+    }
+
+    state.active = false;
+    deleteGameState(sessionKey);
+    return;
+  }
+
+  let msg = '';
+  // 💡 FIX: branch the header on `victory` for ALL modes (was only TRIAL).
+  // Previously, fleeing (victory=false) and event-wipe (victory=false)
+  // both showed "🎉 QUEST COMPLETE! The party has conquered all challenges!"
+  // which was confusingly wrong.
+  if (victory) {
+    msg += `\n🎉 *QUEST COMPLETE!* 🎉\n\n`;
+    msg += `📜 ${narration}\n\n`;
+    msg += `The party has conquered all challenges!\n\n`;
+  } else {
+    msg += `\n💨 *QUEST ENDED* 💨\n\n`;
+    msg += `📜 ${narration}\n\n`;
+    msg += `The party did not complete the quest.\n\n`;
+  }
+  msg += `📊 *FINAL STATS:*\n`;
+  msg += `☠️ Monsters Slain: ${state.stats.monstersKilled}\n`;
+  msg += `👑 Bosses Defeated: ${state.stats.bossesDefeated}\n`;
+  msg += `💎 Treasures Found: ${state.stats.treasuresFound}\n`;
+
+  // Aggregate party stats
+  const totalDamage = state.players.reduce(
+    (sum, p) => sum + (p.combatStats.damageDealt || 0),
+    0,
+  );
+  const totalHealed = state.players.reduce(
+    (sum, p) => sum + (p.combatStats.healed || 0),
+    0,
+  );
+
+  msg += `💥 Total Damage Dealt: ${totalDamage.toLocaleString()}\n`;
+  msg += `💖 Total Healing Done: ${totalHealed.toLocaleString()}\n\n`;
+
+  // === SPECIAL MODE HANDLING: TRIAL ===
+  if (state.mode === "TRIAL" && victory) {
+    const player = state.players[0]; // Trials are always solo
+    // 💡 AUDIT FIX 2026-08-01 (Round 2): guard against empty players array.
+    // If state.players is empty (edge case after a crash), bail out instead
+    // of crashing on player.jid.
+    if (!player) {
+      console.error('[Trial] victory handler: no player in state');
+      state.active = false;
+      state.phase = 'IDLE';
+      deleteGameState(sessionKey);
+      return;
+    }
+    const trialData = state.trialData;
+    const user = economy.getUser(player.jid);
+    const classSystem = require("../characters/classSystem");
+    const nextClass = classSystem.getClassById(trialData.targetClass);
+
+    // ─────────────────────────────────────────────────────────────────────
+    //  💡 DRAGON GOD UNIQUENESS - last-line defense.
+    //  The check in skillCommands.handleEvolve should have already blocked
+    //  latecomers before the trial started. But we ALSO check here, after
+    //  the boss is dead, because:
+    //    1. Two players could have started the Leviathan trial in parallel
+    //       before either won - only the FIRST to win should get the title.
+    //    2. We can't trust the pre-check alone; the trial takes time.
+    //
+    //  Atomic crown via findOneAndUpdate({upsert:true, $setOnInsert}) -
+    //  Mongoose's unique index on bossId guarantees only one insert wins
+    //  even under concurrent racing. If we lose the race, we redirect the
+    //  player to DRAGON_LORD instead (resources are NOT consumed).
+    // ─────────────────────────────────────────────────────────────────────
+    if (trialData.targetClass === 'DRAGON_GOD') {
+      try {
+        const DragonGod = require('../../../models/DragonGod');
+        // Try to resolve the player's display name for the historical record.
+        let displayName = player.name || player.pushName || economy.getDisplayName(player.jid);
+        if (!displayName || displayName === 'Unknown') {
+          // 💡 PERF PATCH 2026-07-27: previously called
+          // sock.profilePictureUrl?.(player.jid) with NO timeout - could
+          // hang for 90s on LID jids. The result was only used in a ternary
+          // whose two branches returned the SAME value (player.jid.split('@')[0]),
+          // making the entire call dead code that just blocked the event loop.
+          // Removed the call; displayName is assigned by the line below.
+          displayName = displayName || economy.getDisplayName(player.jid);
+        }
+        // Also try to fetch the actual WhatsApp pushName from the message
+        // (sock might have it cached). Fall back to JID phone number.
+        try {
+          const pushName = player.pushName || (state.pushNames && state.pushNames[player.jid]);
+          if (pushName) displayName = pushName;
+        } catch {}
+
+        // 💡 Atomic check-and-crown. If two players race, the unique index
+        // on `bossId` ensures only ONE upsert actually inserts. The second
+        // findOneAndUpdate will simply return the existing record (because
+        // the filter matches the just-inserted doc) without modifying it.
+        const crowned = await DragonGod.crown(player.jid, displayName, sessionKey);
+        if (crowned.dragonGodJid !== player.jid) {
+          // We lost the race. Another player was crowned first.
+          // Roll back: do NOT deduct resources, do NOT change class.
+          // Tell the player they will become a Dragon Lord instead.
+          const winnerName = crowned.dragonGodName || economy.getDisplayName(crowned.dragonGodJid);
+          let raceLostMsg = `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
+          raceLostMsg    += `┃  🌊 *THE LEVIATHAN HAS FALLEN*  🌊 ┃\n`;
+          raceLostMsg    += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+          raceLostMsg    += `You defeated the Leviathan - but you were not the first.\n\n`;
+          raceLostMsg    += `Its soul recognized *${winnerName}*, who slew it moments before you. The title of Dragon God has been claimed.\n\n`;
+          raceLostMsg    += `Your resources have *not* been consumed. Your class has *not* changed.\n\n`;
+          raceLostMsg    += `Those who seek the Leviathan's power may instead ascend as a *Dragon Lord*. Use \`${botConfig.getPrefix()} evolve\` and pick the Dragon Lord path to face its surviving spawn.`;
+
+          try { await sock.sendMessage(chatId, { text: raceLostMsg }); } catch (e) {}
+
+          state.active = false;
+          deleteGameState(sessionKey);
+          return;
+        }
+        // We won the race! We are now the one true Dragon God.
+        // Continue with normal evolution flow below, but flag this so we
+        // can add a global announcement after the success message.
+        state.isFirstDragonGod = true;
+      } catch (e) {
+        console.error('[DragonGod] Crown check failed:', e.message, e.stack);
+        // Fail-closed: do NOT grant Dragon God if we can't verify uniqueness.
+        try {
+          await sock.sendMessage(chatId, {
+            text: `❌ *EVOLUTION BLOCKED*\n\nYou defeated the Leviathan, but the Dragon God uniqueness check failed: ${e.message}\n\nYour resources have *not* been consumed. Please contact an admin - this is a rare error and your victory will be honored manually if needed.`
+          });
+        } catch {}
+        state.active = false;
+        deleteGameState(sessionKey);
+        return;
+      }
+    }
+
+    if (user && nextClass) {
+      const oldClassName =
+        classSystem.getClassById(user.class)?.name || "Unknown";
+      const oldClassId = user.class; // for rollback
+
+      // Calculate HP ratio before changing class to scale it properly
+      const oldMaxHp = progression.getBaseStats(player.jid, user.class).hp;
+      const currentHp = user.stats?.hp || oldMaxHp;
+      const ratio = Math.min(1, currentHp / oldMaxHp);
+
+      // 💡 FIX: deduct resources BEFORE mutating user.class. The old order
+      // (mutate class → deduct → save) meant a player could spend their
+      // Zeni during the 5-second pre-trial wait, win the trial, and evolve
+      // for free. Now if either deduction fails, we abort the evolution.
+      const inventorySystem = require("../inventory/inventorySystem");
+      const stoneRemoved = inventorySystem.removeItem(player.jid, trialData.stoneId, 1);
+      // 💡 FIX: 17 T2 classes have evolutionCost: 0 (Warrior, Berserker,
+      // Paladin, Rogue, Monk, Samurai, Ninja, Mage, Warlock, Elementalist,
+      // Necromancer, Chronomancer, Cleric, Druid, Merchant, Bard, Artificer).
+      // economy.removeMoney returns FALSE when amount <= 0 (line 449 of
+      // economy.js: `if (!Number.isFinite(val) || val <= 0) return false;`).
+      // So every free T2 evolution was being aborted after the trial boss
+      // was defeated - "Required: 0 Zeni + 1× evolution stone". Skip the
+      // money deduction entirely when cost is 0; nothing to deduct.
+      const needsMoney = Number(trialData.cost) > 0;
+      let moneyRemoved = true; // default true - no deduction needed
+      if (needsMoney) {
+        moneyRemoved = economy.removeMoney(
+          player.jid,
+          trialData.cost,
+          `Evolved to ${nextClass.name}`,
+        );
+      }
+
+      // Verify both deductions actually succeeded
+      // 💡 QA FIX: removeItem returns {success: true/false, ...}, not a
+      // count or false. The old check `stoneRemoved !== false && !== undefined`
+      // was always true (objects are neither false nor undefined), allowing
+      // free evolutions and stone duplication on rollback.
+      const stoneOk = stoneRemoved && stoneRemoved.success === true;
+      const moneyOk = needsMoney ? (moneyRemoved === true || moneyRemoved === undefined) : true;
+
+      if (!stoneOk || !moneyOk) {
+        // Rollback - re-add what we did remove
+        if (stoneOk) {
+          try { inventorySystem.addItem(player.jid, trialData.stoneId, 1); } catch (e) {}
+        }
+        if (moneyOk) {
+          try { economy.addMoney(player.jid, trialData.cost); } catch (e) {}
+        }
+        economy.saveUser(player.jid);
+
+        let failMsg = `❌ *EVOLUTION ABORTED*\n\n`;
+        failMsg += `You defeated the trial boss, but resource deduction failed.\n`;
+        failMsg += `Required: ${trialData.cost} Zeni + 1× ${trialData.stoneId.replace(/_/g, ' ')}\n\n`;
+        failMsg += `Your class has *not* changed. Try again with the required items.`;
+        try {
+          await sock.sendMessage(chatId, { text: failMsg });
+        } catch (e) {}
+
+        state.active = false;
+        deleteGameState(sessionKey);
+        return;
+      }
+
+      // Now safe to mutate class
+      user.class = trialData.targetClass;
+
+      // Update actual User base stats in the database
+      if (!user.stats) user.stats = { hp: 100, maxHp: 100, level: 1, xp: 0 };
+      Object.assign(user.stats, nextClass.stats);
+
+      // Scale current and max HP based on level growth
+      const newMaxHp = progression.getBaseStats(player.jid, nextClass.id).hp;
+      user.stats.hp = Math.round(newMaxHp * ratio);
+      user.stats.maxHp = newMaxHp;
+
+      // Preserve skills structure
+      if (!user.skills) user.skills = {};
+
+      // Record completed trials
+      if (!user.completedTrials) user.completedTrials = [];
+      if (trialData.trialBoss && !user.completedTrials.includes(trialData.trialBoss)) {
+        user.completedTrials.push(trialData.trialBoss);
+      }
+      // 💡 FIX #40: Explicitly save immediately so completedTrials is
+      // persisted before any subsequent evolution attempt reads it.
+      // The debounced scheduleSave (500ms) could lose the data if the
+      // bot restarts or the user queries before the save fires.
+      economy.saveUser(player.jid);
+
+      const level = progression.getLevel(player.jid);
+
+      // Initialize skill points if undefined/null
+      skillTree.ensureSkillPointsInitialized(user, trialData.targetClass, level);
+
+      // Grant Bonus Points
+      const bonusPoints = nextClass.tier === "ASCENDED" ? 10 : 5;
+      user.skillPoints = (user.skillPoints || 0) + bonusPoints;
+
+      // Evolution history
+      user.evolvedAt = level;
+      if (!user.evolutionHistory) user.evolutionHistory = [];
+      user.evolutionHistory.push({
+        from: oldClassName,
+        to: nextClass.name,
+        level,
+        timestamp: Date.now(),
+      });
+
+      economy.saveUser(player.jid);
+
+      let trialSuccessMsg = `┏━━━━━━━━━━━━┓\n`;
+      trialSuccessMsg += `┃ ✨ EVOLVED! ✨ ┃\n`;
+      trialSuccessMsg += `┗━━━━━━━━━━━━┛\n\n`;
+      trialSuccessMsg += `You have proven your worth by defeating the **${trialData.trialBoss.replace("_", " ")}**!\n\n`;
+      trialSuccessMsg += `*${oldClassName}* ──▶ *${nextClass.name}* ${nextClass.icon}\n\n`;
+      trialSuccessMsg += `📊 *New Base Stats:*\n`;
+      Object.entries(nextClass.stats).forEach(([stat, val]) => {
+        trialSuccessMsg += `• ${stat.toUpperCase()}: ${val}\n`;
+      });
+      trialSuccessMsg += `\n✅ *Skills Preserved!*\n`;
+      trialSuccessMsg += `🎁 *Tier Bonus:* +${bonusPoints} Skill Points\n\n`;
+      trialSuccessMsg += `🌳 \`${botConfig.getPrefix()} skill tree\` to continue your path!`;
+
+      // 🎴 2026-09-12: TRIAL portrait card (kind=TRIAL, bg_TRIAL bake - same
+      // lamoot assets, portrait orientation, owner directive). Non-fatal -
+      // the plain text message below is the fallback.
+      let trialCardSent = false;
+      try {
+        const goServiceTrial = require('../../../utils/goImageService');
+        if (await goServiceTrial.isHealthy()) {
+          const trialBuf = await goServiceTrial.generatePortraitCard({
+            kind: 'TRIAL',
+            // 🧩 SPRITE CONSISTENCY 2026-09-17: show the NEW class sprite.
+            playerClass: String((nextClass && nextClass.id) || '').toUpperCase(),
+            playerIndex: Math.max(0, Math.floor(Number((player && player.spriteIndex != null) ? player.spriteIndex : (user && user.spriteIndex)) || 0)),
+            nickname: player.name || economy.getDisplayName(player.jid),
+            caption: 'proven in the crucible of trial',
+            sealText: String(nextClass.tier || 'E').slice(0, 3),
+            ledger: [
+              { label: 'Was', value: oldClassName },
+              { label: 'Now', value: nextClass.name },
+              { label: 'Tier', value: nextClass.tier || 'EVOLVED' },
+            ],
+            players: [
+              { name: 'Skill Points', xp: `+${bonusPoints}`, zeni: '' },
+              ...(user?.adventurerRank
+                ? [{ name: 'Guild Rank', xp: user.adventurerRank, zeni: '' }]
+                : []),
+            ],
+          });
+          if (trialBuf) {
+            await sock.sendMessage(chatId, {
+              image: trialBuf,
+              caption: trialSuccessMsg,
+              mimetype: 'image/jpeg',
+            });
+            trialCardSent = true;
+          }
+        }
+      } catch (trialCardErr) {
+        console.error('[Trial] Portrait trial card failed (non-fatal):', trialCardErr.message);
+      }
+      if (!trialCardSent) {
+        await sock.sendMessage(chatId, { text: trialSuccessMsg });
+      }
+
+      // ─────────────────────────────────────────────────────────────────
+      //  💡 GLOBAL ANNOUNCEMENT - first Dragon God ascension.
+      //  Broadcast to the chat where it happened + (if available) the
+      //  bot's primary community chat. This is a once-per-server event.
+      // ─────────────────────────────────────────────────────────────────
+      if (state.isFirstDragonGod) {
+        try {
+          const DragonGod = require('../../../models/DragonGod');
+          const record = await DragonGod.getCurrent();
+          const godName = (record && record.dragonGodName) || player.name || economy.getDisplayName(player.jid);
+
+          let announce = `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
+          announce    += `┃  🌊🐲 *THE LEVIATHAN HAS FALLEN* 🐲🌊  ┃\n`;
+          announce    += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+          announce    += `*${godName}* has slain the Leviathan and ascended as the *one true Dragon God* 🐲👑.\n\n`;
+          announce    += `The age of mortals ends. The age of the Dragon God begins.\n\n`;
+          announce    += `The path to Dragon God is now closed forever. Future seekers of draconic power must walk the path of the *Dragon Lord* 🐉⚔️ - command the Leviathan's surviving children, for the original is no more.\n\n`;
+          announce    += `_This title is held by one, and one alone. There will never be another._`;
+
+          // Announce in the chat where the trial happened.
+          try { await sock.sendMessage(chatId, { text: announce }); } catch {}
+        } catch (e) {
+          console.error('[DragonGod] Announcement failed:', e.message);
+        }
+      }
+
+      state.active = false;
+      deleteGameState(sessionKey);
+      return;
+    }
+  }
+
+  // Default individual rewards
+  const multiplier =
+    state.mode === "PERMADEATH" ? GAME_CONFIG.PERMADEATH_MULTIPLIER : 1;
+  // 💡 FIX: Completion XP now scales by xpMult² (quadratic) instead of
+  // xpMult (linear). Previously S-rank completion gave only 5,000 XP -
+  // just 0.43% of the run's total XP, making the "completion moment"
+  // statistically irrelevant. With quadratic scaling, S-rank completion
+  // gives 250,000 XP (~5% of total), SSS gives 1,000,000 XP.
+  // 💡 ECONOMY RETUNE 2026-10-03 (owner progression report): quadratic
+  // completion XP blew up with the xpMult table (S=250K, SSS=1M in one
+  // lump). Completion now scales LINEARLY with a damped multiplier:
+  //   F=240, E=360, D=900, C=1050, B=1800, A=3000,
+  //   S=10500, SS=21000, SSS=30000
+  // - a meaningful bonus, never a whole day's grinding in one line.
+  const _completionRankData =
+    DUNGEON_RANKS[state.dungeonRank] || DUNGEON_RANKS["F"];
+  const _baseCompletionXP = Math.floor((_completionRankData.xpMult || 1) * 300);
+
+  // 💡 ECONOMY REBALANCE (Phase 1): Cut S/SS/SSS completion bonus gold by
+  // 60% to combat Zeni inflation. Original values were:
+  //   S=50000, SS=70000, SSS=100000
+  // New values:
+  //   S=20000, SS=28000, SSS=40000
+  // 💡 ECONOMY RETUNE 2026-10-03: second pass alongside the per-fight gold
+  // table cut - S/SS/SSS completion bonuses now 8K/11K/14K so a full high
+  // run's Zeni lands ~6-8x a daily claim instead of ~100x.
+  const rankGoldMap = {
+    F: 800, E: 1200, D: 2000, C: 3500, B: 6000, A: 10000,
+    S: 8000, SS: 11000, SSS: 14000, DRAGON: 5000
+  };
+  const _baseBonusGold = rankGoldMap[state.dungeonRank] || 800;
+
+  // 💡 ECONOMY REBALANCE: Per-dungeon gold cap. Prevents absurd luck
+  // streaks where a single SSS run dumps 5M+ Zeni into the economy.
+  // Cap scales by rank - high ranks can still earn more, just not infinitely.
+  // Caps (total gold per run, including bonus + boss + monsters):
+  //   F-A: 500K (mostly hit by A-rank lucky streaks)
+  //   S: 1M, SS: 2M, SSS: 3M, DRAGON: 800K
+  const rankGoldCapMap = {
+    F: 500000, E: 500000, D: 500000, C: 500000, B: 500000, A: 500000,
+    S: 1000000, SS: 2000000, SSS: 3000000, DRAGON: 800000
+  };
+  const _runGoldCap = rankGoldCapMap[state.dungeonRank] || 500000;
+
+  // 💡 FIX: Award GP from dungeons. Previously dungeons gave ZERO GP,
+  // which meant the GP requirements in ADVENTURER_RANKS (50 → 25,000)
+  // could only be earned via chat-spam (1 GP per command). Now each
+  // dungeon clear awards GP scaled by rank.
+  const rankGpMap = {
+    F: 1, E: 2, D: 4, C: 7, B: 12, A: 20, S: 35, SS: 60, SSS: 100, DRAGON: 10
+  };
+  const _baseGp = rankGpMap[state.dungeonRank] || 1;
+  // 🔮 SP drops: table + rules live in getDungeonSkillPointDrop() (module
+  // scope, below) — rank ladder, victory-only, alive-only, abyss/tutorial-free.
+
+  // 💡 NEW 2026-09-12: per-player rows for the PORTRAIT quest-complete card
+  // (bg_QUEST family). Collected in the reward loop below; empty → text-only.
+  const portraitPlayers = [];
+  END_DEBUG(`endAdventure reward loop start (${state.players.length} players)`);
+  for (const player of state.players) {
+   try {
+    const finalXP = Math.floor(_baseCompletionXP * multiplier);
+    // 💡 TICKET #b5087a: solo Scout Pathfinder XP bonus applies to quest
+    // completion XP as well as per-combat XP.
+    const __soloXpMult = _soloHunterXpMult(player, state);
+    const __finalXPBase = Math.floor(finalXP * __soloXpMult);
+    // 2026-11-01 hammer: declared at loop scope - it was `let` inside the alive-only block but read
+    // below it, so EVERY player threw ReferenceError -> 'Reward calculation failed'.
+    let __completionXPCredited = false;
+    let finalGold = Math.floor(player.goldEarned * multiplier * (1 + (player.passiveGoldFind || 0) / 100));
+    let bonusGold = player.isDead ? 0 : _baseBonusGold;
+    const gpGain = player.isDead ? 0 : _baseGp;
+    // 🔮 SP drop: victory clears only, alive players only, never the Abyss
+    // (its economy is a separately-tuned floor ladder) and never tutorials.
+    const spGain = getDungeonSkillPointDrop(state.dungeonRank, {
+      victory,
+      isDead: player.isDead,
+      isAbyss: state.isAbyss,
+      mode: state.mode,
+      playerRank: (() => { try { const _u = economy.getUser(player.jid); return (_u && _u.adventurerRank) || "F"; } catch (e) { return ""; } })(),
+    });
+
+    // Update stats and rank
+    if (!player.isDead) {
+      // 💡 Phase 2: Apply guild gold multiplier (MERCHANT +10%, treasury building, etc.)
+      let guildGoldMult = 1.0;
+      let guildXpMult = 1.0;
+      try {
+        const guildPerks = require('../guildwar/guildPerks');
+        guildGoldMult = guildPerks.getGoldMultiplier(player.jid);
+        guildXpMult = guildPerks.getXpMultiplier(player.jid);
+      } catch (e) {}
+
+      // 💡 FIX: Calculate guild bonuses that were completely missing!
+      let guildBonusGold = 0;
+      let guildBonusXp = 0;
+      if (guildGoldMult > 1.0) guildBonusGold = Math.floor((finalGold + bonusGold) * (guildGoldMult - 1.0));
+      if (guildXpMult > 1.0) guildBonusXp = Math.floor(__finalXPBase * (guildXpMult - 1.0));
+
+      // 💡 QA FIX: apply guild bonus BEFORE the gold cap, not after.
+      // Previously the cap applied to base gold, then guild bonus was
+      // added on top - allowing the total to exceed the cap.
+      // 💡 FIX: Display TOTAL XP (per-combat XP + completion bonus).
+      // Previously only showed completion bonus, making it look like the
+      // player earned way less XP than they actually did. The per-combat
+      // XP was already awarded via progression.addXP during each fight,
+      // but never shown in the final summary.
+      const totalXpEarned = (player.xpEarned || 0) + __finalXPBase + guildBonusXp;
+      let totalGoldThisRun = finalGold + bonusGold + guildBonusGold;
+      // 💡 OWNER RULE (2026-09-12): if a lucky run blows past the per-run
+      // gold cap, silently scale the payout to the cap - NEVER tell the
+      // player they "lost" money or that a bigger amount was rejected.
+      // The displayed gold IS the gold they received.
+      if (totalGoldThisRun > _runGoldCap) {
+        const ratio = _runGoldCap / totalGoldThisRun;
+        finalGold = Math.floor(finalGold * ratio);
+        bonusGold = Math.floor(bonusGold * ratio);
+        totalGoldThisRun = finalGold + bonusGold; // recalculate without guild bonus (it's absorbed)
+      }
+      msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${totalXpEarned.toLocaleString()} _(combat: ${(player.xpEarned || 0).toLocaleString()} + bonus: ${(__finalXPBase + guildBonusXp).toLocaleString()})_\n  💰 Gold: ${totalGoldThisRun.toLocaleString()}\n  🏅 GP: +${gpGain}\n${spGain > 0 ? `  🔮 Skill Points: +${spGain}\n` : ""}  ${player.isDead ? "💀 Fallen" : "✅ Survived"}\n\n`;
+      portraitPlayers.push({ name: player.name, xp: `+${totalXpEarned.toLocaleString()} XP`, zeni: `+${totalGoldThisRun.toLocaleString()} ${economy.getZENI ? economy.getZENI() : 'Z'}` });
+
+      // 💡 FIX 2026-09-19 (tester re-report): addMoney returns false when the
+      // payout cannot be delivered (market-cap circuit breaker, unregistered
+      // economy account, unresolved LID) - and the summary still printed
+      // "Gold: X" while the wallet never moved. Surface delivery failures.
+      const _delivered = economy.addMoney(player.jid, totalGoldThisRun, 'Quest completion reward');
+      if (_delivered === false) {
+        console.error(`[QuestPayout] FAILED: ${player.jid} did not receive ${totalGoldThisRun} Zeni (market cap / unregistered account / JID resolution).`);
+        msg += `  ⚠️ _Gold delivery FAILED (${totalGoldThisRun.toLocaleString()} Zeni). Your account could not be credited - tell a mod you saw this._\n\n`;
+      }
+      // 💡 FIX (tester issue a332f1): quest rewards vanish silently when the
+      // player carries a system debt - addMoney's auto-debt deduction eats
+      // the ENTIRE payout, but the summary still shows "Gold: X". Tell the
+      // player where their gold went instead of leaving them confused.
+      const _rewardUser = economy.getUser(player.jid);
+      if (_rewardUser && _rewardUser.debt && _rewardUser.debt.amount > 0) {
+        msg += `  💸 _Your earnings went to debt repayment. Remaining debt: ${Number(_rewardUser.debt.amount).toLocaleString()} Zeni._\n\n`;
+      }
+      // 💡 FIX (tester issue a332f1): quest-end HP was never written back to
+      // the persistent pool (only per-encounter combat ends were). Potions
+      // used after the last fight - or ending the quest between floors -
+      // were lost, and players kept spawning new quests at 1 HP. Same
+      // contract as the per-encounter write-back: clamp 0..max.
+      if (player.jid && player.stats && player.stats.maxHp) {
+        const finalHP = player.currentHP !== undefined ? player.currentHP : player.stats.hp;
+        economy.setPersistentHP(player.jid, finalHP, player.stats.maxHp);
+      }
+      if (player.jid && player.stats && player.stats.maxEnergy) {
+        const finalEn = Number.isFinite(player.stats.energy) ? player.stats.energy : player.stats.maxEnergy;
+        economy.setPersistentEnergy(player.jid, finalEn, player.stats.maxEnergy);
+      }
+      // 💡 P4 Item 5: Increment daily quest count when quest completes
+      if (victory) {
+        economy.incrementDailyQuestCount(player.jid);
+      }
+      // 💡 FIX #2: Fleeing (victory=false) was hitting this alive path and
+      // calling addQuestProgress(jid, 0.2, true) → questsWon++ - so fleeing
+      // a dungeon counted as a WIN. Players could farm the Trial of Combat
+      // "Win 20 quests" objective by just fleeing 20 dungeons. Now only
+      // counts as a win if the party actually won.
+      if (victory) {
+        economy.addQuestProgress(player.jid, 0.2, true); // Final act victory
+      } else {
+        // Party fled or was wiped by event - alive but no win credit.
+        // Don't increment questsWon OR questsFailed (fleeing is neither).
+      }
+      // Award GP - adventurer rank progression needs this
+      if (gpGain > 0) {
+        try { progression.awardGP(player.jid, gpGain); } catch (e) {}
+      }
+
+      // 🔮 SKILL POINT DROP (owner 2026-10-17: high-tier dungeons pay 3-5 SP
+      // per clear again). Credited straight to user.skillPoints + saved here,
+      // same pattern as the evolution trial's tier bonus (guildAdventure
+      // bonusPoints). 0 → no write, no extra DB round-trip.
+      if (spGain > 0) {
+        const _spUser = economy.getUser(player.jid);
+        if (_spUser) {
+          _spUser.skillPoints = (Number(_spUser.skillPoints) || 0) + spGain;
+          economy.saveUser(player.jid);
+        } else {
+          console.error(`[QuestPayout] SP drop skipped: no economy user for ${player.jid}`);
+        }
+      }
+
+      // 💡 XP RECONCILE (owner 2026-10-25 "I like the xp you actually get at
+      // the end but why is it missing from the player?"): the completion
+      // bonus was DISPLAYED in the summary but never credited - addXP only
+      // ran per-combat. The end-of-quest XP the summary promises (base +
+      // guild bonus) now lands on the player, so the final card's number is
+      // the number they actually received.
+      if (__finalXPBase + guildBonusXp > 0) {
+        try {
+          progression.addXP(player.jid, __finalXPBase + guildBonusXp, "Quest completion");
+          __completionXPCredited = true;
+        } catch (xpErr) {
+          console.error(`[QuestPayout] completion XP credit failed for ${player.jid}:`, xpErr.message);
+        }
+      }
+
+      // 💡 Phase 2: Award guild XP from dungeon clear
+      // Scaled by dungeon rank: F=5, E=10, D=15, C=20, B=30, A=40, S=60, SS=80, SSS=100
+      try {
+        const guildPerks = require('../guildwar/guildPerks');
+        const rankXpMap = { F: 5, E: 10, D: 15, C: 20, B: 30, A: 40, S: 60, SS: 80, SSS: 100, DRAGON: 25 };
+        const guildXpAward = rankXpMap[state.dungeonRank] || 5;
+        guildPerks.awardGuildXp(player.jid, guildXpAward, `Dungeon clear (${state.dungeonRank})`);
+        // Also award war points for Phase 7
+      } catch (e) {}
+
+      // Add guild bonus to display message if applicable
+      if (guildBonusGold > 0 || guildBonusXp > 0) {
+        msg += `🏰 *Guild Bonus:* +${guildBonusGold.toLocaleString()} gold, +${guildBonusXp.toLocaleString()} XP\n`;
+      }
+    } else {
+      // Dead player - no gold, no guild bonus
+      msg += `${player.class.icon} *${player.name}*\n  ⭐ XP: ${finalXP}\n  💰 Gold: 0\n  🏅 GP: +0\n  💀 Fallen\n\n`;
+      portraitPlayers.push({ name: `${player.name} (fallen)`, xp: `+${Number(finalXP || 0).toLocaleString()} XP`, zeni: `+0 ${economy.getZENI ? economy.getZENI() : 'Z'}` });
+      // 💡 FIX #1 (PRIMARY BUG): Dead-but-carried player was ALWAYS getting
+      // questsFailed++ here - even when the party WON. A player who died
+      // in encounter 2 but was carried to victory by their party would
+      // log in to find their questsFailed counter had gone up on a WIN.
+      // This is the "falsely calculates failed quests" bug.
+      // Now: only count as a fail if the party actually LOST. If the party
+      // won but this player died, they were carried - neither won nor
+      // failed (they get partial XP/gold above as a consolation).
+      if (!victory) {
+        economy.addQuestProgress(player.jid, 0, false); // Genuine fail
+      }
+      // If victory=true and player is dead: carried to victory, no fail.
+    }
+
+    // 💡 Phase 2: Apply guild XP multiplier to the XP award
+    // (base includes the solo Scout Pathfinder bonus - see __finalXPBase)
+    let xpToAward = __finalXPBase;
+    try {
+      const guildPerks = require('../guildwar/guildPerks');
+      const guildXpMult = guildPerks.getXpMultiplier(player.jid);
+      xpToAward = Math.floor(__finalXPBase * guildXpMult);
+    } catch (e) {}
+    // 💡 AUDIT FIX 2026-11-01 (P0 double-pay): alive players were paid
+    // completion XP TWICE — the 2026-10-25 "XP reconcile" credit above AND
+    // this Phase-4 award (which also ran for survivors). Now this only pays
+    // players who did NOT get the reconcile credit (the fallen — their
+    // consolation XP, matching what their summary row displays).
+    if (!__completionXPCredited) {
+      progression.awardXP(player.jid, xpToAward);
+    }
+
+    // 💡 PHASE 4 (2026-08-01): Award XP to deployed summons + persist changes.
+    try {
+      const summonAI = require('../summons/summonAI');
+      for (const summonEntity of (state.summons || [])) {
+        if (summonEntity && !summonEntity.isDead && summonEntity._summonDoc) {
+          const summonXP = Math.max(10, Math.floor(xpToAward * 0.1));
+          const summonSystem = require('../summons/summonSystem');
+          const xpResult = summonSystem.addSummonXP(summonEntity._summonDoc, summonXP);
+          if (xpResult.leveledUp) {
+            msg += `${summonEntity.icon} ${summonEntity.name} leveled up to L${xpResult.newLevel}!\n`;
+          }
+          // 💡 NEW 2026-08-05: Notify newly unlocked abilities
+          if (xpResult.newlyUnlockedAbilities && xpResult.newlyUnlockedAbilities.length > 0) {
+            for (const ab of xpResult.newlyUnlockedAbilities) {
+              msg += `🔓 ${summonEntity.icon} ${summonEntity.name} learned *${ab.name}*! (Lv.${ab.levelReq}+)\n`;
+            }
+          }
+          await summonAI.persistSummonChanges(summonEntity);
+        }
+      }
+    } catch (summonErr) {
+      console.error('[Combat] Summon XP/persist failed:', summonErr.message);
+    }
+
+ // FIX (audit "rank sheet and captions are different"): this was
+ // fire-and-forget, so `rankUpdate` was a PROMISE - `rankUpdate.ranked_up`
+ // read undefined and the RANK UP line NEVER appeared in the dungeon
+ // summary, while the sheet itself had already moved. Await the real
+ // result; a thrown check is caught by the per-player handler below.
+    let rankUpdate = null;
+    try { rankUpdate = await economy.updateAdventurerRank(player.jid); } catch (e) { rankUpdate = null; }
+    if (rankUpdate && rankUpdate.ranked_up) {
+      msg += `🎊 *RANK UP!* 🎊\n  ${player.name} is now ${rankUpdate.rank_data.icon} *${rankUpdate.new_rank}*!\n\n`;
+    }
+   } catch (playerRewardErr) {
+    // 💡 FIX: Root cause of "combat doesn't end" bug - if ANYTHING in this
+    // per-player reward loop throws (e.g. the guildBonusXp ReferenceError,
+    // or any future undefined-var/null-access bug), the exception used to
+    // propagate straight out of endAdventure(), skipping the cleanup below
+    // (state.active = false; deleteGameState(sessionKey)). That left a
+    // stale gameStates entry: inCombat was already false (set earlier in
+    // endCombat), but active was still true and the entry was never
+    // deleted. Symptom: `.g combat <x>` says "Not in combat!" (inCombat
+    // false) while starting a new solo raid says "You already have an
+    // active Solo raid!" (active still true) - both contradictory messages
+    // pointing at the same leftover state object. Catching here guarantees
+    // we always reach the cleanup at the bottom of this function, even if
+    // one player's reward math blows up.
+    console.error(`[Quest] endAdventure reward error for ${player.jid}:`, playerRewardErr.message, playerRewardErr.stack);
+    msg += `${player.class?.icon || ''} *${player.name}*\n  ⚠️ _Reward calculation failed - contact an admin if this persists._\n\n`;
+   }
+  }
+  END_DEBUG(`endAdventure reward loop done in ${Date.now() - __endT0}ms`);
+
+  if (state.mode === "PERMADEATH") {
+    msg += `\n🏅 *PERMADEATH MODE CONQUERED!*\n`;
+  }
+
+  // 💡 NEW 2026-09-12: PORTRAIT quest-complete card (lamoot parchment family,
+  // 600x1000 - bg_QUEST + /api/cards/portrait). Victory runs only; Abyss and
+  // reward-loop failures fall back to the classic text summary below.
+  let questCardSent = false;
+  if (victory && !state.isAbyss && portraitPlayers.length > 0) {
+    try {
+      END_DEBUG(`endAdventure portrait card render start`);
+      const goService = require('../../../utils/goImageService');
+      const fmt = (n) => Number(n || 0).toLocaleString();
+      const ZS = economy.getZENI ? economy.getZENI() : 'Z';
+      const buf = await goService.generatePortraitCard({
+        kind: 'QUEST',
+        nickname: state.players[0]?.name || 'The Party',
+        caption: narration || '',
+        sealText: String(state.dungeonRank || 'F'),
+        ledger: [
+          { label: 'Monsters Slain', value: fmt(state.stats?.monstersKilled) },
+          { label: 'Bosses Defeated', value: fmt(state.stats?.bossesDefeated) },
+          { label: 'Treasures Found', value: fmt(state.stats?.treasuresFound) },
+          { label: 'Damage Dealt', value: fmt(totalDamage) },
+          { label: 'Healing Done', value: fmt(totalHealed) },
+        ],
+        players: portraitPlayers.slice(0, 4),
+      });
+      if (buf) {
+        await raceWithTimeout(
+          sock.sendMessage(state.chatId, { image: buf, caption: msg, mimetype: 'image/jpeg' }),
+          20000, 'questCard.send',
+        );
+        questCardSent = true;
+      }
+    } catch (cardErr) {
+      console.error('[Quest] Portrait quest card failed (non-fatal):', cardErr.message);
+    }
+    END_DEBUG(`endAdventure portrait card done sent=${questCardSent}`);
+  }
+
+  if (!questCardSent) {
+    try {
+      await sock.sendMessage(state.chatId, { text: msg });
+    } catch (err) {
+      console.error("Failed to send adventure end message:", err.message);
+    }
+  }
+
+  state.active = false;
+  deleteGameState(sessionKey); // Full cleanup
+  END_DEBUG(`endAdventure COMPLETE total=${Date.now() - __endT0}ms key=${sessionKey}`);
+}
+
+// ==========================================
+// 🛒 SHOP SYSTEM
+// ==========================================
+
+const handleBuy = async (chatId, senderJid, itemIndex) => {
+  const state = getGameState(chatId, senderJid);
+  if (!state) return "❌ No active adventure!";
+
+  const isShoppingPhase = state.phase === "SHOPPING";
+  const isMerchantActive =
+    state.isMerchantActive && state.currentEncounter?.type === "MERCHANT";
+
+  if (!isShoppingPhase && !isMerchantActive) {
+    return "❌ Shop is closed!";
+  }
+
+  const player = state.players.find((p) => p.jid === senderJid);
+  if (!player) {
+    return "❌ You're not in the party!";
+  }
+
+  const index = parseInt(itemIndex) - 1;
+  let itemKey;
+
+  if (isMerchantActive) {
+    itemKey = state.currentEncounter.shopItems[index];
+  } else {
+    itemKey = SHOP_LIST[index];
+  }
+
+  if (!itemKey || !CONSUMABLES[itemKey]) {
+    return "❌ Invalid item number!";
+  }
+
+  const item = CONSUMABLES[itemKey];
+  const balance = economy.getBalance(senderJid);
+  if (balance < item.cost) {
+    return `❌ Insufficient funds! Need ${botConfig.getCurrency().symbol}${item.cost}`;
+  }
+
+  economy.removeMoney(senderJid, item.cost);
+
+  if (item.effect === "bundle" && item.items) {
+    for (const subKey of item.items) {
+      const subInfo = lootSystem.getItemInfo(subKey);
+      await inventorySystem.addItem(senderJid, subKey, 1, {
+        name: subInfo.name,
+        value: subInfo.value,
+        rarity: subInfo.rarity || "COMMON",
+        source: "QUEST_SHOP_BUNDLE",
+      });
+    }
+    return `✅ Purchased bundle ${item.icon} *${item.name}*! Items added to bag.`;
+  }
+
+  // Get item info from loot database for persistence
+  const itemInfo = lootSystem.getItemInfo(itemKey);
+
+  await inventorySystem.addItem(senderJid, itemKey, 1, {
+    name: itemInfo.name,
+    value: itemInfo.value,
+    rarity: itemInfo.rarity || "COMMON",
+    source: "QUEST_SHOP",
+  });
+
+  return `✅ Purchased ${item.icon} *${item.name}*!`;
+};
+
+// ==========================================
+// 🎯 COMBAT COMMAND HANDLER
+// ==========================================
+
+const handleCombatAction = async (
+  sock,
+  chatId,
+  senderJid,
+  actionType,
+  target,
+) => {
+  // 🫀 liveness v2: a player acted in a live match - feed the canary's
+  // battle-grace window (quest / ruins / tutorial / abyss-scene combat all
+  // route through here + processCombatTurn).
+  try { require('../../../utils/livenessCanary').noteBattleActivity(); } catch (e) {}
+  const state = getGameState(chatId, senderJid);
+  if (!state || !state.inCombat) {
+    return "❌ Not in combat!";
+  }
+  // 🤝 TEAM CO-OP: route this participant's sends through the session's
+  // multicast sock so turn results / battle renders reach EVERY seat (the
+  // engine's 40+ send sites all target state.chatId with this sock).
+  if (state.ruinsMeta && state.sock && state.rawSock && state.sock !== sock) {
+    sock = state.sock;
+  }
+
+  const player = state.players.find((p) => p.jid === senderJid);
+  if (!player || player.isDead) {
+    // If solo and player is dead but state wasn't cleaned up (checkCombatEnd failed
+    // silently after an enemy kill), force-end combat so the player isn't stuck.
+    if (state.solo && state.inCombat) {
+      state.inCombat = false;
+      state.combatProcessing = false;
+      // 💡 KEY-SCOPING FIX: state.sessionKey is the key this state actually
+      // lives under (bot-scoped since the cross-bot fix). Rebuilding the key
+      // unscoped here ("chat_jid") made gameStates.get() MISS, so the
+      // dead-solo-player force-end silently no-op'ed and combat stayed
+      // inCombat forever.
+      const sessionKey = state.sessionKey || scopedKey(`${chatId}_${senderJid}`);
+      endCombat(sock, false, sessionKey).catch(() => {});
+      return "💀 *You have fallen!* Quest ended.";
+    }
+    return player?.isDead
+      ? "💀 *You have fallen in battle!* Wait for your allies or the battle to end."
+      : "❌ You can't act!";
+  }
+
+  const current = state.activeCombatant;
+  if (!current || current.jid !== senderJid) {
+    const turnName = current ? current.name : "Enemy";
+    return `⏳ *IT'S NOT YOUR TURN!* \n\nWaiting for: *${turnName}*`;
+  }
+
+  if (state.pendingActions[senderJid]) {
+    return "❌ Action already chosen!";
+  }
+
+  let normalizedAction = actionType;
+  if (actionType === "atk") normalizedAction = "attack";
+  if (actionType === "def") normalizedAction = "defend";
+  if (actionType === "skill") normalizedAction = "ability";
+
+  let action = { type: normalizedAction };
+
+  if (normalizedAction === "attack") {
+    if (target !== undefined && target !== "") {
+      const targetIndex = parseInt(target) - 1;
+      if (
+        !isNaN(targetIndex) &&
+        targetIndex >= 0 &&
+        targetIndex < state.enemies.length
+      ) {
+        action.targetIndex = targetIndex;
+      }
+    }
+    // Default to first alive enemy if not specified or invalid
+    if (action.targetIndex === undefined) {
+      action.targetIndex = state.enemies.findIndex((e) => e.stats.hp > 0);
+    }
+  }
+
+  if (normalizedAction === "ability") {
+    // Parse target string "1 2" -> index=1, target=2
+    const parts = (target || "").toString().split(" ");
+    const abilityIndex = parts[0];
+    const abilityTarget = parts[1];
+
+    if (!abilityIndex) {
+      return `❌ Specify ability number!\n\nExample: \`${botConfig.getPrefix()} combat ability 1\` or \`${botConfig.getPrefix()} combat ability 1 2\``;
+    }
+
+    // Check ability validity first
+    const result = await useAbility(
+      sock,
+      player,
+      abilityIndex,
+      abilityTarget,
+      chatId,
+    );
+
+    if (!result.success) {
+      return result.message;
+    }
+
+    action.abilityIndex = abilityIndex;
+    action.targetIndex = parseInt(abilityTarget) - 1;
+    if (isNaN(action.targetIndex)) action.targetIndex = 0; // Default to first enemy
+    action.result = result;
+  }
+
+  if (normalizedAction === "item") {
+    const inventory = inventorySystem.formatInventory(player.jid);
+    if (inventory.isEmpty) return "❌ Your bag is empty!";
+
+    const usableItems = inventory.items.filter((item) => {
+      const info = lootSystem.getItemInfo(item.id);
+      return (info && info.usable) || !!CONSUMABLES[item.id];
+    });
+
+    if (usableItems.length === 0) {
+      return "❌ You have no usable items in your bag!";
+    }
+
+    if (!target || target.trim() === "") {
+      let msg = `🎒 *USABLE COMBAT ITEMS* 🎒\n━━━━━━━━━━━━━━━━\n`;
+      usableItems.forEach((item, i) => {
+        const info = {
+          ...lootSystem.getItemInfo(item.id),
+          ...(CONSUMABLES[item.id] || {})
+        };
+        msg += `*${i + 1}.* ${info.name} ×${item.quantity}\n`;
+      });
+      msg += `━━━━━━━━━━━━━━━━\n💡 *Usage:* \`${botConfig.getPrefix()} combat item <number>\` (e.g. \`combat item 1\`)`;
+      return msg;
+    }
+
+    const itemIndex = parseInt(target) - 1;
+    if (isNaN(itemIndex) || itemIndex < 0 || itemIndex >= usableItems.length) {
+      return `❌ Invalid item number! Type \`${botConfig.getPrefix()} combat item\` to see all usable items and their numbers.`;
+    }
+
+    const selectedItem = usableItems[itemIndex];
+
+    // 💡 2026-10-11 (owner: "the smoke bomb shouldn't work in high tier
+    // dungeons"): block the smoke bomb at PARSE time so the item is NOT
+    // consumed and the player's turn is not wasted — they get an immediate
+    // explanation + the Distraction Charm alternative. The Distraction Charm
+    // (50% escape) is the intended tool for these fights.
+    if (selectedItem.id === "smoke_bomb") {
+      const _pIsAbyss = !!state.isAbyss;
+      const _pFloor = Number(state.abyssFloor) || 0;
+      const _pRank =
+        typeof state.dungeonRank === "string" ? state.dungeonRank.toUpperCase() : "";
+      const _pHighTier =
+        (_pIsAbyss && _pFloor >= 21) ||
+        (!_pIsAbyss && ["S", "SS", "SSS", "DRAGON", "GOD"].includes(_pRank));
+      if (_pHighTier) {
+        return `💨 The smoke bomb is useless here — ${_pIsAbyss ? `the void pressure on floor ${_pFloor} snuffs it instantly` : `this ${_pRank}-rank dungeon is too dense for any smoke to spread`}.\n\n🧿 Use a *Distraction Charm* instead (\`${botConfig.getPrefix()} combat item\` — 50% escape chance, works anywhere).`;
+      }
+    }
+
+    action.itemId = selectedItem.id;
+    // Optional second target for items
+    const parts = (target || "").toString().split(" ");
+    if (parts[1]) {
+      action.targetIndex = parseInt(parts[1]) - 1;
+    } else {
+      action.targetIndex = 0;
+    }
+  }
+
+  state.pendingActions[senderJid] = action;
+
+  // 💡 SOLO-RAID WEDGE FIX (2026-10-23, Task 9): a REAL player action was
+  // just accepted — this fight is alive. Reset the zombie-breaker counter
+  // and stamp the time so the sweeper can tell a live fight from a loop
+  // that only advances via watchdogs.
+  state.lastPlayerActionAt = Date.now();
+  state.watchdogStrikes = 0;
+
+  // 💡 TUTORIAL: the action was ACCEPTED - tell the tutorial module so the
+  // next lesson step fires (no-op unless a tutorial session is active).
+  // 💡 Phase B: added 'defend' (the defense lesson) and the bot's REAL
+  // prefix (the tutorial used to fall back to "." regardless of .jk/.j).
+  try {
+    const tutEvent = { attack: 'combat_attack', defend: 'combat_defend', ability: 'combat_ability', item: 'combat_item', rest: 'combat_rest' }[normalizedAction];
+    if (tutEvent && state.mode === 'TUTORIAL') {
+      require('../meta/tutorial').notify(senderJid, tutEvent, { sock, chatId, prefix: botConfig.getPrefix() }).catch(() => {});
+    }
+  } catch (e) { /* non-fatal */ }
+  // 💡 AUDIT FIX 2026-08-01 (Round 4): update lastActivity so the stale-state
+  // sweeper doesn't clean up an active combat session.
+  state.lastActivity = Date.now();
+
+  // ⚔️ KEY FIX (2026-10-05, found by the full-game sims): the key was
+  // RECOMPUTED here (solo → "chat_jid", party → "chat") — correct for
+  // legacy quests but WRONG for room-scoped Ruins co-op sessions
+  // ("gwr:event:room"), so performAction got "NO STATE" and silently
+  // no-op'd (the exact tutorial freeze shape). state.sessionKey is the
+  // authoritative key this session actually lives under.
+  const sessionKey = state.sessionKey
+    || (state.solo ? scopedKey(`${chatId}_${senderJid}`) : scopedKey(chatId));
+  await performAction(sock, player, action, sessionKey);
+
+  return null; // Action processed
+};
+
+// ==========================================
+// 🎯 USE ABILITY IN COMBAT
+// ==========================================
+
+// 💡 Helper: resolve ability index (from .g abilities list) to skill object.
+// Used by .g rune socket <runeId> <#> so players can socket by number.
+function getAbilityByIndex(userId, index) {
+  const economy = require('../economy/economy');
+  const classSystem = require('../characters/classSystem');
+  const skillTree = require('../characters/skillTree');
+  const userClass = economy.getUserClass(userId);
+  if (!userClass) return null;
+  const lineage = classSystem.getLineage(userClass.id);
+  const user = economy.getUser(userId);
+  if (!user || !user.skills) return null;
+  const learnedAbilities = [];
+  const seen = new Set();
+  for (const cId of lineage) {
+    const tree = skillTree.SKILL_TREES[cId.toUpperCase()];
+    if (!tree) continue;
+    for (const [, treeData] of Object.entries(tree.trees)) {
+      for (const [skillId, skill] of Object.entries(treeData.skills)) {
+        const level = user.skills[skillId] || 0;
+        if (level > 0 && !seen.has(skillId)) {
+          seen.add(skillId);
+          learnedAbilities.push({ ...skill, id: skillId, level });
+        }
+      }
+    }
+  }
+  // Also check all trees as fallback
+  for (const [, tree] of Object.entries(skillTree.SKILL_TREES)) {
+    for (const [, treeData] of Object.entries(tree.trees || {})) {
+      for (const [skillId, skill] of Object.entries(treeData.skills || {})) {
+        const level = user.skills[skillId] || 0;
+        if (level > 0 && !seen.has(skillId)) {
+          seen.add(skillId);
+          learnedAbilities.push({ ...skill, id: skillId, level });
+        }
+      }
+    }
+  }
+  if (index >= 0 && index < learnedAbilities.length) {
+    return learnedAbilities[index];
+  }
+  return null;
+}
+
+async function useAbility(sock, player, abilityIndex, targetIndex, chatId) {
+  const user = economy.getUser(player.jid);
+  const userClass = economy.getUserClass(player.jid);
+
+  if (!user || !user.skills) {
+    return {
+      success: false,
+      message: `${player.name} has no abilities learned!`,
+    };
+  }
+
+  // 💡 STATUS EFFECT: Silence - player cannot use abilities.
+  // Previously the silence status was defined in STATUS_EFFECTS but had no
+  // handler, so silenced players could still cast freely. Now we block at
+  // the entry point and tell the player why.
+  if ((player.statusEffects || []).some(e => e.type === 'silence')) {
+    return {
+      success: false,
+      message: `🤐 *${player.name}* is SILENCED and cannot use abilities! Use a basic attack instead.`,
+    };
+  }
+
+  // Get all learned abilities from lineage (to match PvP order and de-duplicate)
+  const learnedAbilities = [];
+  const classSystem = require('../characters/classSystem');
+  const lineage = classSystem.getLineage(userClass.id);
+  const seen = new Set();
+  
+  for (const cId of lineage) {
+    const tree = skillTree.SKILL_TREES[cId.toUpperCase()];
+    if (!tree) continue;
+    for (const [, treeData] of Object.entries(tree.trees)) {
+      for (const [skillId, skill] of Object.entries(treeData.skills)) {
+        const level = user.skills[skillId] || 0;
+        if (level > 0 && !seen.has(skillId)) {
+          seen.add(skillId);
+          const getVal = (val, lvl) =>
+            Array.isArray(val) ? val[Math.min(lvl - 1, val.length - 1)] : val;
+          const energyCost = skill.cost || getVal(skill.energyCost, level) || 0;
+
+          learnedAbilities.push({
+            ...skill,
+            id: skillId,
+            level,
+            cost: energyCost,
+            skillLevel: level,
+          });
+        }
+      }
+    }
+  }
+
+  if (learnedAbilities.length === 0) {
+    return {
+      success: false,
+      message: `${player.name} has no abilities learned!`,
+    };
+  }
+
+  // Get all mirrored abilities
+  if (user.borrowedSkills && user.borrowedSkills.length > 0) {
+    user.borrowedSkills.forEach((s) => {
+      if (!seen.has(s.id)) {
+        seen.add(s.id);
+        // 💡 FIX: handle both scalar `cost` and array `energyCost` (skillTree uses
+        // arrays for advanced classes). The old `s.cost || s.energyCost || 0` form
+        // coerced the array to a string, then *1.5 → NaN, which corrupted
+        // player.stats.energy permanently and produced infinite mana.
+        const rawCost = typeof s.cost === 'number'
+          ? s.cost
+          : Array.isArray(s.energyCost)
+            ? (s.energyCost[0] || 0)
+            : (typeof s.energyCost === 'number' ? s.energyCost : 0);
+        const mirroredCost = Math.floor(rawCost * 1.5); // 50% more energy for mirrored
+        learnedAbilities.push({
+          ...s,
+          level: 1,
+          skillLevel: 1,
+          cost: mirroredCost,
+          isMirrored: true,
+        });
+      }
+    });
+  }
+
+  // 💡 FIX #39: Deduplicate borrowed skills against learned abilities.
+  // If a player mirrored 'cleave' from WARRIOR but already has 'cleave'
+  // from FIGHTER, the mirrored copy would appear as a duplicate in the
+  // abilities list. Filter them out here.
+  const dedupedAbilities = learnedAbilities.filter((a, idx, arr) => 
+    arr.findIndex(x => x.id === a.id) === idx
+  );
+
+  // Get the ability
+  const index = parseInt(abilityIndex) - 1;
+  const ability = dedupedAbilities[index];
+
+  if (!ability) {
+    return {
+      success: false,
+      message: `Invalid ability! Use \`${botConfig.getPrefix()} abilities\` to see your abilities.`,
+    };
+  }
+
+  // Check if passive
+  // 💡 AUDIT FIX 2026-11-01: gate on the passive FLAG, not cost === 0.
+  // Several genuine actives (ZENMASTER perfect_strike / one_with_universe /
+  // focused_meditation, ARCHMAGE mana_surge, GOD_HAND meditation) have
+  // 0-cost energy arrays and were PERMANENTLY uncastable in PvE with this
+  // misleading "passive" error (PvP charged them 20 and cast them fine).
+  const __isPassive = ability.passive === true ||
+    (ability.effect && (ability.effect.passive === true || ability.effect.type === 'passive')) ||
+    String(ability.targeting || '').toUpperCase() === 'PASSIVE';
+  if (__isPassive) {
+    return {
+      success: false,
+      message: `❌ *${ability.name}* is a passive ability and cannot be manually activated!`,
+    };
+  }
+
+  // Get effect
+  const effect = skillTree.getSkillEffect(ability, ability.skillLevel);
+
+  // 💡 Phase 3: Apply socketed rune modifiers to the skill effect.
+  // Loads any runes the user has socketed into this skill from MongoDB
+  // and applies their modifiers (damage mult, energy cost, target bonus, etc.)
+  // 💡 QA FIX: moved this block BEFORE the energy check so rune-modified
+  // energy costs are actually enforced. Previously the energy check used
+  // the base ability.cost, ignoring POWER (+10-20% cost) and EFFICIENCY
+  // (-20-40% cost) runes entirely.
+  let runeModifiedEffect = effect;
+  try {
+    const runeSystem = require('../inventory/runeSystem');
+    const socketedRunes = await runeSystem.getSocketedRunes(player.jid, ability.id);
+    if (socketedRunes && socketedRunes.length > 0) {
+      runeModifiedEffect = runeSystem.applyRuneModifiers(effect, socketedRunes);
+    }
+  } catch (e) {
+    // Rune system is optional - fall through with unmodified effect
+  }
+
+  // 💡 FIX #36: Check and enforce skill cooldowns. Previously cooldowns
+  // were defined in skill data but never tracked or checked - players
+  // could spam any skill every turn. Now we track per-player cooldowns.
+  //
+  // 💡 COOLDOWN RUNE: apply runeModifiedEffect.cooldownMult if a COOLDOWN
+  // rune is socketed in this skill. cooldownMult of 0 = no cooldown at all
+  // (ABYSSAL tier), 0.5 = half cooldown (NORMAL tier), etc. Falls back to
+  // 1.0 (unchanged) if no cooldown rune is socketed.
+  const cooldownMult = Number(runeModifiedEffect.cooldownMult) || 1;
+  const cooldownFlatReduction = Number(runeModifiedEffect.cooldownFlatReduction) || 0;
+  const effectiveCooldown = ability.cooldown && ability.cooldown > 0
+    ? Math.max(0, Math.ceil(ability.cooldown * cooldownMult) - cooldownFlatReduction)
+    : 0;
+  if (effectiveCooldown > 0) {
+    if (!player.skillCooldowns) player.skillCooldowns = {};
+    const cd = player.skillCooldowns[ability.id];
+    if (cd && cd > 0) {
+      return {
+        success: false,
+        message: `❌ *${ability.name}* is on cooldown! (${cd} turn${cd > 1 ? 's' : ''} remaining)`,
+      };
+    }
+  }
+
+  // 💡 QA FIX: use runeModifiedEffect.cost (if available) instead of ability.cost
+  // so POWER/EFFICIENCY runes actually affect energy consumption.
+  const effectiveCost = Number.isFinite(runeModifiedEffect.cost) ? runeModifiedEffect.cost
+    : (Number.isFinite(ability.cost) ? ability.cost : Infinity);
+  const safeEnergy = Number.isFinite(player.stats.energy) ? player.stats.energy : 0;
+  if (safeEnergy < effectiveCost) {
+    return {
+      success: false,
+      message: `Not enough energy! Need ${effectiveCost}, have ${Math.floor(safeEnergy)}`,
+    };
+  }
+
+  // Consume energy (clamped to 0 - never let NaN/Infinity sneak through)
+  player.stats.energy = Math.max(0, (player.stats.energy || 0) - (effectiveCost === Infinity ? 0 : effectiveCost));
+
+  // 💡 FIX #36: Set skill cooldown after use (already multiplied by any
+  // socketed COOLDOWN rune via effectiveCooldown computed above).
+  if (effectiveCooldown > 0) {
+    if (!player.skillCooldowns) player.skillCooldowns = {};
+    player.skillCooldowns[ability.id] = effectiveCooldown;
+  }
+
+  // Apply ability effect (using rune-modified effect if runes are socketed)
+  // 💡 FIX 2026-08-31 (target off-by-one): `targetIndex` here is the RAW
+  // 1-based user input ("combat ability 1 2" → "2"), but getTargets indexes
+  // arrays 0-based - player abilities hit the enemy AFTER the one selected.
+  // The enemy AI path (performEnemyAction) passes 0-based indexOf() results
+  // directly, so we normalize ONLY string input here.
+  let normalizedTargetIndex = targetIndex;
+  if (typeof targetIndex === 'string' && targetIndex.trim() !== '' && !isNaN(parseInt(targetIndex))) {
+    normalizedTargetIndex = parseInt(targetIndex) - 1;
+  }
+
+  const result = await applyAbilityEffect(
+    sock,
+    player,
+    ability,
+    runeModifiedEffect,
+    normalizedTargetIndex,
+    chatId,
+  );
+
+  return {
+    success: true,
+    abilityName: ability.name,
+    ...result,
+  };
+}
+
+// ==========================================
+// 💫 APPLY ABILITY EFFECTS
+// ==========================================
+
+// ⚔️ ULTIMATE CAST VFX (extracted 2026-11-03 so it can run AFTER the cast resolves and merge the death of any enemy it kills into the same clip)
+async function _playUltimateVfx(sock, player, ability, effect, targetIndex, chatId, state, extra) {
+  extra = extra || {};
+  const isCombatContext = state.inCombat === true || String(state.phase || '').toUpperCase() === 'COMBAT';
+  if (isCombatContext && !player.isEnemy && !player.isSummon) {
+    try {
+      const signatureVfx = require('../combat/skillVfx');
+      const classId = String(player.class?.id || player.classId || (typeof player.class === 'string' ? player.class : '') || '').toUpperCase();
+      if (signatureVfx.resolveSignature(classId, ability)) {
+        // 💡 HUD 2026-10-26 (owner: "the vfx was initially overlaying the hub"):
+        // the video base must be a HUD-FREE battlefield. The cached scene has
+        // the rail baked in, so race a fresh hud:"none" render (express lane,
+        // 1-3s) and fall back to the cache when the box is busy - the sprite
+        // engine paints its own HUD as the FINAL pass over the finished video,
+        // so VFX can never cover the panel again either way.
+        // 💡 VFX LAYERS 2026-10-26 (owner: "summons circle under the player /
+        // army of dead hole under the monster but heads over / translucent
+        // rectangle where the monster was / spell origins not on the players"):
+        // request the LAYERED render (bg + combatants overlay + isolated focus
+        // target + real feet anchors) so the video can draw ground fx UNDER the
+        // fighters and air fx OVER them with exact origins. Falls back to the
+        // plain hud:"none" render, then to the cached scene, exactly as before.
+        let ultBaseBuffer = state.lastCombatScene || null;
+        let ultLayers = null;
+        const ultCasterIndex = Math.max(0, (state.players || []).indexOf(player));
+        try {
+          const combatImageGenerator = require('../combat/combatImageGenerator');
+          const baseOpts = {
+            combatType: 'PVE',
+            rank: state.dungeonRank,
+            floor: state.isAbyss ? state.abyssFloor : 0,
+            backgroundPath: state.backgroundPath || undefined,
+            summons: state.summons || [],
+            hud: 'none',
+            bypassQueue: true,
+          };
+          const layered = await Promise.race([
+            combatImageGenerator.generateCombatLayers(state.players || [], extra.roster || state.enemies || [], {
+              ...baseOpts,
+              focusSide: 'enemy',
+              focusIndex: Math.max(0, Number(targetIndex) || 0),
+            }),
+            new Promise((resolve) => setTimeout(() => resolve(null), 4000)),
+          ]);
+          if (layered && layered.success) {
+            ultLayers = layered;
+            ultBaseBuffer = null; // the mp4 lane composites bg+sprites itself; the gif lane flattens them
+          } else {
+            const freshBase = await Promise.race([
+              combatImageGenerator.generateCombatImage(state.players || [], extra.roster || state.enemies || [], baseOpts),
+              new Promise((resolve) => setTimeout(() => resolve(null), 3500)),
+            ]);
+            if (freshBase && freshBase.success && Buffer.isBuffer(freshBase.buffer) && freshBase.buffer.length > 1000) {
+              ultBaseBuffer = freshBase.buffer;
+            }
+          }
+        } catch (baseErr) {
+          console.warn('[UltFx] hud:none base render failed, using cached scene:', baseErr?.message || baseErr);
+        }
+        await signatureVfx.animateUltimate({
+          state,
+          player,
+          ability,
+          targetIndex,
+          preAlive: extra.preAlive, preHp: extra.preHp, dying: extra.dying,   // ☠️ merged death
+          // ⚔️ FIX 2026-10-24: pre-hit GIF reuses the scene already on screen
+          baseSceneBuffer: ultBaseBuffer,
+          // 💡 VFX LAYERS 2026-10-26: layered payload + caster index for the
+          // exact spell origins
+          layers: ultLayers,
+          casterIndex: ultCasterIndex,
+          // 💡 MULTI-TARGET (2026-10-26, owner: "grab the individual or
+          // multiple enemy sprites and affect them"): AoE ultimates fan their
+          // impact tracks per enemy anchor and tint the whole enemy roster
+          aoe: effect?.type === 'aoe',
+          // 💡 HUD 2026-10-26: real combatant data for the video HUD rail
+          hudData: {
+            name: String(player.name || 'The Champion'),
+            class: classId,
+            level: Math.floor(Number(player.level) || 0),
+            rank: String(player.adventurerRank || player.rank || 'F').toUpperCase(),
+            hp: Math.max(0, Math.floor(Number(player.currentHP ?? player.hp ?? 0))),
+            maxHp: Math.max(1, Math.floor(Number(player.stats?.maxHp ?? player.maxHp ?? 100))),
+            energy: Math.max(0, Math.floor(Number(player.stats?.energy ?? player.energy ?? 0))),
+            maxEnergy: Math.max(1, Math.floor(Number(player.stats?.maxEnergy ?? player.maxEnergy ?? 100))),
+          },
+          sendText: (text) => boundedSend(sock, chatId, { text }, 'ultimateCharge'),
+          sendGif: async (buffer, caption, extra) => {
+            // sprite engine hands over a finished H.264 MP4 (+ JPEG thumb): send as-is
+            if (Buffer.isBuffer(buffer) && buffer.length > 500 && buffer.toString('latin1', 4, 8) === 'ftyp') {
+              const pl = { video: buffer, mimetype: 'video/mp4', caption, gifPlayback: true };
+              if (extra && Buffer.isBuffer(extra.thumb)) pl.jpegThumbnail = extra.thumb;
+              return sendMediaBounded(sock, chatId, pl, { label: 'classUltimateVfx', ms: 15000, grace: 5000, fallbackText: caption });
+            }
+            // WhatsApp's GIF-style video lane requires H.264 MP4 bytes, not
+            // a raw GIF in the video field. Reuse the shared, production-used
+            // converter that the summon/reaction/fishing animations already use.
+            const gif89a = require('../../../utils/gif89a');
+            const { gifToMp4Even } = require('../../../utils/mediaConvert');
+            try {
+              if (!gif89a.isGifBuffer(buffer)) throw new Error('renderer did not return a valid GIF buffer');
+              const mp4Buffer = await gifToMp4Even(buffer);
+              const jpegThumbnail = gif89a.firstFrameJpeg(buffer);
+              if (!Buffer.isBuffer(mp4Buffer) || mp4Buffer.length < 500 ||
+                  mp4Buffer.toString('latin1', 4, 8) !== 'ftyp') {
+                throw new Error('GIF conversion did not produce a valid MP4');
+              }
+              const payload = {
+                video: mp4Buffer,
+                mimetype: 'video/mp4',
+                caption,
+                gifPlayback: true,
+              };
+              // Match the repo's working animation paths: a real frame-0
+              // thumbnail prevents WhatsApp's broken/gray video preview.
+              if (Buffer.isBuffer(jpegThumbnail) && jpegThumbnail.length > 500) {
+                payload.jpegThumbnail = jpegThumbnail;
+              }
+              console.log(`[SkillVFX] converted ultimate GIF ${buffer.length}B → MP4 ${mp4Buffer.length}B`);
+              return sendMediaBounded(sock, chatId, payload, {
+                label: 'classUltimateVfx',
+                ms: 15000,
+                grace: 5000,
+                fallbackText: caption,
+              });
+            } catch (convertError) {
+              console.error('[SkillVFX] GIF→MP4 failed:', convertError?.message || convertError);
+              // Still show the rendered first frame if transcoding fails.
+              const still = gif89a.firstFrameJpeg(buffer);
+              if (Buffer.isBuffer(still) && still.length > 100) {
+                return sendMediaBounded(sock, chatId, {
+                  image: still,
+                  caption: caption + '\n_(Animation unavailable on this server.)_',
+                }, {
+                  label: 'classUltimateVfxStill',
+                  ms: 10000,
+                  grace: 3000,
+                  fallbackText: caption,
+                });
+              }
+              await boundedSend(sock, chatId, {
+                text: '⚠️ The ultimate animation could not be encoded. The skill will still resolve normally.',
+              }, 'ultimateVfxFallback');
+              return { ok: false };
+            }
+          },
+        });
+      } else {
+        console.log(`[SkillVFX] no signature mapped for ${classId}/${ability?.id} — normal resolution`);
+      }
+    } catch (vfxError) {
+      console.warn('[SkillVFX] combat hook failed; applying skill normally:', vfxError?.message || vfxError);
+    }
+  }
+}
+
+async function applyAbilityEffect(sock, player, ability, effect, targetIndex, chatId) {
+  let state = null, sig = false;
+  try {
+    state = player && player.jid ? getGameState(chatId, player.jid) : getGameState(chatId);
+    const cc = state && (state.inCombat === true || String(state.phase || '').toUpperCase() === 'COMBAT');
+    if (cc && !player.isEnemy && !player.isSummon && effect && typeof effect === 'object') {
+      const cid = String(player.class?.id || player.classId || (typeof player.class === 'string' ? player.class : '') || '').toUpperCase();
+      sig = !!require('../combat/skillVfx').resolveSignature(cid, ability);
+    }
+  } catch (e) { sig = false; }
+  if (!sig) return _applyAbilityEffectCore(sock, player, ability, effect, targetIndex, chatId);
+  // snapshot who is standing BEFORE the cast, resolve it, then play ONE clip: the ultimate + the deaths it caused
+  const enemies = state.enemies || [];
+  const preAlive = new Set(enemies.filter((e) => e && !e.isDead && Number(e.currentHP ?? e.stats?.hp ?? 1) > 0 && (e.stats ? e.stats.hp > 0 : true)));
+  const preHp = new Map([...preAlive].map((e) => [e, Math.max(0, Math.floor(Number(e.currentHP ?? e.hp ?? e.stats?.hp ?? 0)))]));
+  state._ultHold = true;   // checkCombatEnd must not end the fight / play separate deaths until the merged clip is out
+  let res;
+  try { res = await _applyAbilityEffectCore(sock, player, ability, effect, targetIndex, chatId); }
+  finally { state._ultHold = false; }
+  try {
+    if (res && res.success !== false && !(res.message && /^❌/.test(String(res.message)) && !res.damage)) {
+      const dying = [...preAlive].filter((e) => e.isDead || e.justDied || (e.stats && e.stats.hp <= 0)).map((e) => ({ enemy: e, index: enemies.indexOf(e) })).filter((d) => d.index >= 0);
+      // the layered base must show the victims STANDING: revive clones of the dying (as the death bake does)
+      const dyingSet = new Set(dying.map((d) => d.enemy));
+      const roster = enemies.map((x) => (dyingSet.has(x) ? Object.assign({}, x, { isDead: false, justDied: false, currentHP: preHp.get(x) || 1, stats: Object.assign({}, x.stats, { hp: preHp.get(x) || 1 }) }) : x));
+      await _playUltimateVfx(sock, player, ability, effect, targetIndex, chatId, state, { preAlive, preHp, dying, roster });
+      dying.forEach((d) => { d.enemy._deathAnimDone = true; });   // merged into the ultimate clip: no second death clip
+    }
+  } catch (e) { console.warn('[SkillVFX] post-resolution ultimate hook failed:', e && e.message || e); }
+  return res;
+}
+
+async function _applyAbilityEffectCore(
+  sock,
+  player,
+  ability,
+  effect,
+  targetIndex,
+  chatId,
+) {
+  // Use player.jid to find solo state correctly
+  const state = player?.jid
+    ? getGameState(chatId, player.jid)
+    : getGameState(chatId);
+  if (!state) return;
+  // Derive sessionKey from state for use in checkCombatEnd
+  const sessionKey =
+    state.sessionKey ||
+    (state.solo ? `${state.chatId}_${state.players[0]?.jid}` : state.chatId);
+  const icon = player.class?.icon || "👤";
+  // 💡 POLISH 2026-07-17: guard against undefined effect. If getSkillEffect
+  // returned undefined (e.g. skill has no effect function and no
+  // energyCost/damageMultiplier), the old code would throw "effect is not
+  // defined" or "Cannot read properties of undefined (reading 'type')" -
+  // which propagated up and left pendingActions stuck (the "Action already
+  // chosen!" soft-lock). Now we return a clean error message instead.
+  if (!effect || typeof effect !== 'object') {
+    return {
+      message: `❌ *${ability?.name || 'Unknown'}* has no valid effect definition. This is a skill data bug - report it. (Skill ID: ${ability?.id || 'unknown'})`,
+      damage: 0,
+      healing: 0,
+    };
+  }
+  // ⚔️ CLASS ULTIMATES: play the class signature charge-up + animated GIF
+  // BEFORE changing HP. The usual effect resolution immediately below remains
+  // authoritative; after this animation finishes the normal combat render shows
+  // the real damage/healing result. Non-ultimate skills and render failures
+  // fall straight through without touching combat mechanics. resolveSignature
+  // also animates every ultimate inherited from earlier classes in the
+  // player's lineage (cross-class evolution keeps them castable AND animated).
+  // (ultimate VFX now plays from the applyAbilityEffect wrapper, after resolution - see _playUltimateVfx)
+
+  let animation = ability.animation || effect?.animation || "";
+  if (animation === "undefined") animation = "";
+  const animStr = animation ? `${animation} ` : "";
+  let msg = `${icon} ${player.name} uses ${animStr}*${ability.name}*!\n\n`;
+  let totalDamage = 0;
+  let totalHealing = 0;
+  // 🔴 HIT FLASH (owner 2026-10-23: red aura in dungeons/raids too): first entity
+  // actually damaged or healed this cast, returned to the caller so the turn
+  // render payload can flash the right sprite red. Null for pure buffs/CC.
+  let hitTarget = null;
+
+  // DAMAGE ABILITIES
+  // 💡 QA FIX: removed "multi_hit" from damageKeywords - it caused multi-hit
+  // abilities to run BOTH the generic single-target damage block AND the
+  // dedicated multi_hit block, dealing damage twice and double-counting kills.
+  const damageKeywords = ["damage", "attack", "execute", "stun", "chain", "smite_evil", "ignore_armor", "hybrid", "dot", "cc", "guaranteed_crit"];
+  const isDamageType = damageKeywords.some((t) => effect.type && typeof effect.type === 'string' && effect.type.includes(t));
+  if (isDamageType && !(typeof effect.type === 'string' && effect.type.includes("heal_team"))) {
+    if (!player.isEnemy) {
+        const durabilitySystem = require('../inventory/durabilitySystem');
+        durabilitySystem.applyWear(player, 'main_hand', { combatHistory: state.combatHistory });
+        if (player.equipment?.off_hand) {
+            const lootSystem = require('../inventory/lootSystem');
+            const offHandInfo = lootSystem.getItemInfo(player.equipment.off_hand.id);
+            if (offHandInfo && offHandInfo.type === 'EQUIPMENT' && (offHandInfo.slot === 'weapon' || offHandInfo.slot === 'main_hand' || offHandInfo.slot === 'off_hand')) {
+                durabilitySystem.applyWear(player, 'off_hand', { combatHistory: state.combatHistory });
+            }
+        }
+    }
+    const targets = getTargets(player, effect, targetIndex, sessionKey);
+    for (let _tIdx = 0; _tIdx < targets.length; _tIdx++) {
+      const target = targets[_tIdx];
+      if (target.stats.hp <= 0) continue;
+
+      // 💡 AOE CRIT DIMINISHING RETURNS: each successive hit in one cast loses 15% crit chance
+      // so full-wave crits require 70%+ crit to be common, not 50%.
+      const _critPenalty = _tIdx * 15;
+      const _originalCrit = player.stats.crit;
+      if (_tIdx > 0 && _critPenalty > 0) {
+        player.stats.crit = Math.max(0, (_originalCrit || 0) - _critPenalty);
+      }
+
+      // 💡 DRAGON SEAL RING REQUIREMENT
+      if (
+        target.id &&
+        (() => { const _id = String(target.id || '').toUpperCase(); return _id.startsWith("DRAKE") || _id.includes("DRAGON"); })()
+      ) {
+        if (!player.isEnemy && player.jid) {
+          // 💡 FIX: accept equipped ring too (see calculateDamage for full comment)
+          const hasRingInBag = inventorySystem.hasItem(player.jid, "dragon_seal_ring");
+          const hasRingEquipped = player.equipment && player.equipment.ring && player.equipment.ring.id === 'dragon_seal_ring';
+          if (!hasRingInBag && !hasRingEquipped) {
+            msg += `🛡️ Your attacks slide off ${target.name}'s scales! You need the *Dragon Seal Ring* 💍🐲 to pierce their hide!\n`;
+            continue;
+          }
+        }
+      }
+
+      const lvl = player.level || 1;
+      // 💡 POLISH 2026-07-17: normalize damageType to lowercase for comparison.
+      // Skill definitions use 'MAGICAL'/'PHYSICAL'/'TRUE' (uppercase) but the
+      // old check compared to "magic" (lowercase) - meaning ALL magical skills
+      // were silently treated as physical and used ATK instead of MAG. This
+      // was a pre-existing bug that made MAGE / WARLOCK / etc. stats useless.
+      const rawDmgType = String(effect.damageType || 'PHYSICAL').toUpperCase();
+      const damageTypeStr =
+        rawDmgType === 'MAGICAL' || rawDmgType === 'MAGIC' ? 'magic' :
+        rawDmgType === 'TRUE' ? 'true' :
+        'physical';
+      const baseStat =
+        damageTypeStr === 'magic'
+          ? (player.stats.mag || player.stats.atk || lvl * 10)
+          : (player.stats.atk || lvl * 8);
+      let mult = Number(effect.multiplier) || 1.0;
+      if (!player.isEnemy && player.equipment?.main_hand) {
+          try {
+              const weaponSynergy = require('../inventory/weaponSynergy');
+              const synergyMult = weaponSynergy.getSkillSynergyMultiplier(player, effect, player.equipment.main_hand);
+              mult *= synergyMult;
+          } catch (e) {}
+      }
+      // Bug 2 fix: compute raw power then route through calculateDamage() for
+      // proper DEF mitigation, buffs, status modifiers, rank bonuses, variance.
+      const rawPower = Math.floor(baseStat * mult);
+      const dmgResult = calculateDamage(player, target, rawPower, damageTypeStr, damageTypeStr.toUpperCase(), chatId, true);
+      // Restore crit stat after the AOE crit penalty was applied for this hit
+      if (_tIdx > 0) player.stats.crit = _originalCrit;
+
+      // Check dragon-seal block
+      if (dmgResult.noDamageReason) {
+        msg += `${dmgResult.noDamageReason}\n`;
+        continue;
+      }
+
+      // Evasion check - 💡 QA FIX: PIERCE rune (effect.cannotEvade) bypasses evasion
+      if (dmgResult.wasEvaded) {
+        if (effect.cannotEvade) {
+          msg += `⚔️ ${target.name} tried to evade but the attack PIERCES through!\n`;
+          // Recalculate with evasion disabled - deal minimum damage
+          dmgResult.wasEvaded = false;
+          dmgResult.damage = Math.max(1, Math.floor((player.stats.atk || 10) * (effect.multiplier || 1) * 0.5));
+        } else {
+          const targetIcon2 = target.isEnemy ? target.icon : target.class?.icon || "👤";
+          msg += `💨 ${targetIcon2} ${target.name} *evades* the attack!\n`;
+          continue;
+        }
+      }
+      let damage = dmgResult.damage;
+      let isCrit = dmgResult.isCrit || false;
+
+      // Extra crit override (guaranteedCrit / critBonus)
+      if (effect.guaranteedCrit && !isCrit) {
+        isCrit = true;
+        damage = Math.floor(damage * 2.0);
+      } else if (effect.critBonus && !isCrit) {
+        const extraCrit = effect.critBonus;
+        if (Math.random() * 100 < extraCrit) {
+          isCrit = true;
+          damage = Math.floor(damage * 2.0);
+        }
+      }
+
+      // 💡 FIX: ignoreDefense now REDUCES the defense mitigation that was
+      // already applied by calculateDamage(), instead of adding bonus damage.
+      // The old code added def*(ignoreDefense/100) as BONUS damage, which
+      // meant a skill with ignoreDefense:60 against a target with 8000 DEF
+      // would deal MORE damage than against a target with 0 DEF. That's
+      // backwards - ignoreDefense should reduce how much defense matters,
+      // not punish high-DEF targets.
+      //
+      // calculateDamage already subtracted def*0.5. We add back a fraction
+      // of that subtraction proportional to ignoreDefense:
+      //   ignoreDefense:50 → adds back 50% of what DEF subtracted
+      //   ignoreDefense:100 → adds back 100% (full defense bypass)
+      if (effect.ignoreDefense) {
+        const defSubtracted = Math.floor((target.stats.def || 0) * 0.5);
+        const refund = Math.floor(defSubtracted * (effect.ignoreDefense / 100));
+        damage += refund;
+      }
+
+      // Execute mechanics
+      if (effect.type === "execute") {
+        const hpPercent = (target.stats.hp / target.stats.maxHp) * 100;
+        if (hpPercent <= effect.threshold) {
+          damage = Math.floor(damage * 2.5);
+          msg += `⚡ *EXECUTE THRESHOLD!* ⚡\n`;
+        }
+      }
+
+      damage = Math.max(1, Math.floor(damage));
+
+      // Apply damage
+      target.stats.hp -= damage;
+      target.currentHP = target.stats.hp; // Sync V2
+      totalDamage += damage;
+      if (!hitTarget) hitTarget = target;
+
+      if (!target.isEnemy) {
+          const durabilitySystem = require('../inventory/durabilitySystem');
+          durabilitySystem.applyWear(target, 'ARMOR_PIECES', { combatHistory: state.combatHistory, amount: 0.5 });
+      }
+
+      if (target.stats.hp > 0 && target.isBoss) {
+        await checkBossPhase(sock, target, chatId);
+      }
+
+      if (target.stats.hp <= 0) {
+        target.justDied = true;
+      }
+      const targetIcon = combatTargetIcon(target);
+      msg += `💥 ${targetIcon} ${target.name} takes ${damage} damage!`;
+      if (isCrit) msg += ` 💥 *CRITICAL HIT!*`;
+      msg += `\n`;
+
+      // Death check
+      if (target.stats.hp <= 0) {
+        // 💡 OVERKILL EXECUTION BONUS
+        const overkillThreshold = target.stats.hp + damage;
+        if (damage > overkillThreshold * 2.0) {
+          const bonusGold = Math.floor((target.goldReward || target.gold || 500) * 0.1) || 50;
+          if (!player.isEnemy) {
+            player.goldEarned = (player.goldEarned || 0) + bonusGold;
+          }
+          msg += `⚡ *OVERKILL!* +${bonusGold} Zeni execution bonus!\n`;
+        }
+
+        msg += `💀 ${target.name} has been defeated!\n`;
+        target.isDead = true;
+        target.currentHP = 0; // Sync
+        if (player.combatStats) {
+          player.combatStats.kills = (player.combatStats.kills || 0) + 1;
+        }
+        // 💡 Track quest stats (moved out of checkCombatEnd so abilities are counted)
+        recordEnemyKill(state, target);
+        // Note: checkCombatEnd is called by performAction AFTER the full ability message
+        // is sent, so the damage text always shows before the victory screen.
+      }
+
+      // Apply DoT (Damage over Time)
+      if (effect.dot) {
+        const sRes = applyStatusEffect(
+          target,
+          effect.dot,
+          effect.dotDuration,
+          effect.dotDamage,
+          player.name,
+        );
+        msg += `🔥 Applied ${effect.dot}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ""}\n`;
+      }
+
+      // Apply CC (Crowd Control)
+      // 💡 FIX (tester issue 526f3b): AOE CC was full-strength against a
+      // SINGLE target - solo players ate a 40% stun chance on every slam
+      // (bosses slammed 95% of turns), which read as a stun-lock. Real-RPG
+      // rule: area CC is diluted when it only ever hits one victim.
+      // 💡 FIX 2026-09-19 (live report): this line referenced `opponentSide`,
+      // which only exists inside the AOE branch below - EVERY cc-carrying
+      // damage skill (player or boss) threw "opponentSide is not defined"
+      // and the whole ability died mid-cast. Count the caster's living
+      // opposition locally instead.
+      const _livingOpponents = player.isEnemy
+        ? state.players.filter((p) => !p.isDead)
+        : state.enemies.filter((e) => e.stats.hp > 0);
+      const _ccChanceBase = effect.ccChance || 100;
+      const _ccChance = _livingOpponents.length === 1 ? _ccChanceBase * 0.5 : _ccChanceBase;
+      if (effect.cc && Math.random() * 100 < _ccChance) {
+        const sRes = applyStatusEffect(
+          target,
+          effect.cc,
+          effect.ccDuration,
+          0,
+          player.name,
+        );
+        // 💡 FIX (BUG 6): surface the ccImmune block message so players
+        // understand why their CC didn't land on a boss.
+        if (sRes.blockedByImmune) {
+          msg += `${sRes.synergyMsg}\n`;
+        } else if (sRes.applied) {
+          msg += `💫 Applied ${effect.cc}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ""}\n`;
+        }
+      }
+    }
+
+    if (player.combatStats) {
+      player.combatStats.damageDealt =
+        (player.combatStats.damageDealt || 0) + totalDamage;
+    }
+  }
+
+  // AOE ABILITIES
+  if (effect.type === "aoe") {
+    const opponentSide = player.isEnemy
+      ? state.players.filter((p) => !p.isDead)
+      : state.enemies.filter((e) => e.stats.hp > 0);
+    const numTargets = Math.min(effect.targets || 99, opponentSide.length);
+
+    for (let i = 0; i < numTargets; i++) {
+      const target = opponentSide[i];
+      if (!target) continue;
+
+      // 💡 DRAGON SEAL RING REQUIREMENT
+      if (
+        target.id &&
+        (() => { const _id = String(target.id || '').toUpperCase(); return _id.startsWith("DRAKE") || _id.includes("DRAGON"); })()
+      ) {
+        if (!player.isEnemy && player.jid) {
+          // 💡 FIX: accept equipped ring too (see calculateDamage for full comment)
+          const hasRingInBag = inventorySystem.hasItem(player.jid, "dragon_seal_ring");
+          const hasRingEquipped = player.equipment && player.equipment.ring && player.equipment.ring.id === 'dragon_seal_ring';
+          if (!hasRingInBag && !hasRingEquipped) {
+            msg += `🛡️ AOE slides off ${target.name}'s scales!\n`;
+            continue;
+          }
+        }
+      }
+
+      // Bug 2 fix (AOE block): route through calculateDamage() for DEF mitigation.
+      // 💡 POLISH 2026-07-17: same normalization as single-target path above.
+      const aoeRawDmgType = String(effect.damageType || 'PHYSICAL').toUpperCase();
+      const aoeDmgTypeStr =
+        aoeRawDmgType === 'MAGICAL' || aoeRawDmgType === 'MAGIC' ? 'magic' :
+        aoeRawDmgType === 'TRUE' ? 'true' :
+        'physical';
+      const aoeBaseStat = aoeDmgTypeStr === 'magic' ? (player.stats.mag || player.stats.atk) : player.stats.atk;
+      let aoeMult = effect.multiplier || 1.0;
+      if (!player.isEnemy && player.equipment?.main_hand) {
+          try {
+              const weaponSynergy = require('../inventory/weaponSynergy');
+              const synergyMult = weaponSynergy.getSkillSynergyMultiplier(player, effect, player.equipment.main_hand);
+              aoeMult *= synergyMult;
+          } catch (e) {}
+      }
+      const aoeRawPower = Math.floor((aoeBaseStat || 0) * aoeMult);
+      const aoeDmgResult = calculateDamage(player, target, aoeRawPower, aoeDmgTypeStr, aoeDmgTypeStr.toUpperCase(), chatId, true);
+
+      if (aoeDmgResult.noDamageReason) {
+        msg += `🛡️ AOE slides off ${target.name}'s scales!\n`;
+        continue;
+      }
+
+      // Evasion check - 💡 QA FIX: PIERCE rune bypasses evasion for AOE too
+      if (aoeDmgResult.wasEvaded) {
+        if (effect.cannotEvade) {
+          msg += `⚔️ ${target.name} tried to evade but the AOE PIERCES through!\n`;
+          aoeDmgResult.wasEvaded = false;
+          aoeDmgResult.damage = Math.max(1, Math.floor((player.stats.atk || 10) * (effect.multiplier || 1) * 0.5));
+        } else {
+          msg += `💨 ${target.name} *evades* the AOE!\n`;
+          continue;
+        }
+      }
+      let damage = aoeDmgResult.damage;
+      let isCrit = aoeDmgResult.isCrit || false;
+
+      // 💡 QA FIX: FOCUS rune critBonus for AOE (was missing - only applied to single-target)
+      if (effect.critBonus && !isCrit) {
+        if (Math.random() * 100 < effect.critBonus) {
+          isCrit = true;
+          damage = Math.floor(damage * 2.0);
+        }
+      }
+
+      // Ignore defense bonus
+      if (effect.ignoreDefense) {
+        const defReduction = Math.floor(
+          target.stats.def * (effect.ignoreDefense / 100),
+        );
+        damage += defReduction;
+      }
+
+      damage = Math.max(1, Math.floor(damage));
+
+      // ☠️ EXECUTE REGULARS (owner 2026-10-27: Soul Harvest / Apocalypse Wing one-shot regular enemies,
+      // never bosses or players). Soul Harvest also returns the soul as healing.
+      let _soulExecuted = false;
+      if (effect.executeRegular && !player.isEnemy && !target.isBoss && !target.isPlayer && !target.jid && target.stats.hp > 0) {
+        damage = Math.max(damage, Math.floor(target.stats.hp));
+        _soulExecuted = true;
+      }
+
+      target.stats.hp -= damage;
+      target.currentHP = target.stats.hp; // Sync V2
+      totalDamage += damage;
+      if (!hitTarget) hitTarget = target;
+      if (_soulExecuted && effect.soulHealPct && player.stats) {
+        const _maxHp = player.stats.maxHp || player.maxHp || player.stats.hp;
+        const _heal = Math.max(1, Math.floor(_maxHp * effect.soulHealPct / 100));
+        player.stats.hp = Math.min(_maxHp, (player.stats.hp || 0) + _heal);
+        player.currentHP = player.stats.hp;
+        msg += `🩸 A soul tears free of ${target.name} and flows into ${player.name} (+${_heal} HP)!\n`;
+      }
+
+      if (!target.isEnemy) {
+          const durabilitySystem = require('../inventory/durabilitySystem');
+          durabilitySystem.applyWear(target, 'ARMOR_PIECES', { combatHistory: state.combatHistory, amount: 0.5 });
+      }
+
+      if (target.stats.hp > 0 && target.isBoss) {
+        await checkBossPhase(sock, target, chatId);
+      }
+
+      if (target.stats.hp <= 0) {
+        target.justDied = true;
+      }
+      // 💡 TICKET #b4c0ff: players have no `.icon` - the raw `${target.icon}`
+      // printed "undefined" in every enemy AOE. combatTargetIcon resolves the
+      // right emoji for players, summons and enemies alike.
+      msg += `💥 ${combatTargetIcon(target)} ${target.name} takes ${damage} damage!`;
+      if (isCrit) msg += ` 💥 *CRITICAL HIT!*`;
+      msg += `\n`;
+
+      // Apply DoT (Damage over Time)
+      if (effect.dot) {
+        const sRes = applyStatusEffect(
+          target,
+          effect.dot,
+          effect.dotDuration,
+          effect.dotDamage,
+          player.name,
+        );
+        msg += `🔥 Applied ${effect.dot} to ${target.name}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ""}\n`;
+      }
+
+      // Apply CC (Crowd Control)
+      // 💡 FIX (526f3b completion, 2026-09-19): the solo-victim dilution
+      // originally only existed in the damage branch (and crashed there -
+      // see the _livingOpponents fix). AOE slams now dilute too: full
+      // chance while the wave has several targets, halved when only one
+      // opponent is left standing.
+      const _aoeCcChance = opponentSide.length === 1
+        ? (effect.ccChance || 100) * 0.5
+        : (effect.ccChance || 100);
+      if (effect.cc && Math.random() * 100 < _aoeCcChance) {
+        const sRes = applyStatusEffect(
+          target,
+          effect.cc,
+          effect.ccDuration,
+          effect.ccValue || 0,  // 💡 FIX 2026-08-01: was hard-coded 0, ignoring ccValue
+          player.name,
+        );
+        if (sRes.blockedByImmune) {
+          msg += `${sRes.synergyMsg}\n`;
+        } else if (sRes.applied) {
+          msg += `💫 Applied ${effect.cc} to ${target.name}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ""}\n`;
+        }
+      }
+      // 💡 FIX 2026-08-01: Apply stun from effect.stun (Apocalypse Wing)
+      if (effect.stun && Math.random() * 100 < (effect.stunChance || 100)) {
+        const sRes = applyStatusEffect(target, 'stun', effect.stunDuration || 1, 0, player.name);
+        if (sRes.applied) msg += `⚡ Stunned ${target.name}!\n`;
+        else if (sRes.blockedByImmune) msg += `${sRes.synergyMsg}\n`;
+      }
+      // 💡 FIX 2026-08-01: Apply silence from effect.silence (Dragon God's Decree)
+      if (effect.silence && Math.random() * 100 < (effect.silenceChance || 100)) {
+        const sRes = applyStatusEffect(target, 'silence', effect.silenceDuration || 2, 0, player.name);
+        if (sRes.applied) msg += `🤐 Silenced ${target.name}!\n`;
+        else if (sRes.blockedByImmune) msg += `${sRes.synergyMsg}\n`;
+      }
+      // 💡 AUDIT FIX 2026-08-01: Apply drown DoT from effect.drown (Apocalypse Wing).
+      // Description says "Burn, Stun, and Drown" - drown was previously missing.
+      if (effect.drown && Math.random() * 100 < (effect.drownChance || 100)) {
+        const sRes = applyStatusEffect(target, 'drown', effect.drownDuration || 2, effect.drownValue || 30, player.name);
+        if (sRes.applied) msg += `🌊 Drowning ${target.name}! (${effect.drownValue || 30}/turn)\n`;
+        else if (sRes.blockedByImmune) msg += `${sRes.synergyMsg}\n`;
+      }
+      // 💡 FIX 2026-08-01: Strip buffs (Dragon God's Decree)
+      if (effect.stripBuffs && target.buffs) {
+        const buffCount = target.buffs.length;
+        target.buffs = [];  // strip all buffs
+        if (buffCount > 0) msg += `✨ Stripped ${buffCount} buff(s) from ${target.name}!\n`;
+      }
+      // Apply Specific Debuffs (Slow, etc found in keys)
+      ["slow", "stun", "freeze", "burn", "shock", "poison"].forEach(
+        (debuff) => {
+          if (effect[debuff] !== undefined && typeof effect[debuff] !== 'boolean') {
+            const val = effect[debuff];
+            const dur = effect[debuff + "Duration"] || 2;
+            const sRes = applyStatusEffect(
+              target,
+              debuff,
+              dur,
+              val,
+              player.name,
+            );
+            msg += `📉 Applied ${debuff} to ${target.name}!${sRes.synergyMsg ? `\n✨ ${sRes.synergyMsg}` : ""}\n`;
+          }
+        },
+      );
+      if (target.stats.hp <= 0) {
+        // 💡 OVERKILL EXECUTION BONUS
+        const overkillThreshold = target.stats.hp + damage;
+        if (damage > overkillThreshold * 2.0) {
+          const bonusGold = Math.floor((target.goldReward || target.gold || 500) * 0.1) || 50;
+          if (!player.isEnemy) {
+            player.goldEarned = (player.goldEarned || 0) + bonusGold;
+          }
+          msg += `⚡ *OVERKILL!* +${bonusGold} Zeni execution bonus!\n`;
+        }
+
+        msg += `💀 ${target.name} defeated!\n`;
+        target.isDead = true;
+        target.currentHP = 0; // Sync
+        if (player.combatStats) {
+          player.combatStats.kills = (player.combatStats.kills || 0) + 1;
+        }
+        // 💡 Track quest stats for every kill in the AOE sweep
+        recordEnemyKill(state, target);
+        // Note: checkCombatEnd called by performAction after full message is sent.
+      }
+    }
+    if (player.combatStats) {
+      player.combatStats.damageDealt =
+        (player.combatStats.damageDealt || 0) + totalDamage;
+    }
+  }
+
+  // 🧪 PROCESS RESOLVED EFFECTS (Structured multiple effects support)
+  if (effect.resolvedEffects) {
+    for (const [effId, effData] of Object.entries(effect.resolvedEffects)) {
+      if (effId === "heal") {
+        const target = getHealTarget(player, targetIndex, sessionKey);
+        if (target) {
+          // 💡 BUG-11 fix: apply healer's passiveHealingBoost (Cleric +25%, Saint +50%, etc.)
+          // Was set at combat start but never read - healing classes got zero bonus.
+          const chatHealMult = getHealMult(sessionKey);
+          const hMult = chatHealMult * (player.passiveHealingBoost || 1);
+          const rawHeal = Number(effData.value) || 0;
+          const maxHpVal = target.stats.maxHp || target.stats.hp || 100;
+          // 💡 FIX #9 (2026-08-16): Heal cap 30% max HP per turn
+          const healAmount = Math.max(0, Math.min(
+            Math.floor(rawHeal * hMult),
+            Math.floor(maxHpVal * 0.30),
+            maxHpVal - target.stats.hp,
+          ));
+          target.stats.hp += healAmount;
+          target.currentHP = target.stats.hp;
+          totalHealing += healAmount;
+          if (!hitTarget) hitTarget = target;
+
+          const targetIcon = target.class?.icon || "👤";
+          // Display label uses chatHealMult only (so passive boost doesn't
+          // falsely show "(Holy Ground!)" when only the passive is active)
+          msg += `💚 ${targetIcon} ${target.name} healed for ${healAmount} HP!${chatHealMult < 1 ? " (Healing Reduced)" : chatHealMult > 1 ? " (Holy Ground!)" : ""}\n`;
+        }
+      }
+      else if (effId === "heal_team") {
+        const friendlySide = player.isEnemy
+          ? state.enemies.filter((e) => e.stats.hp > 0)
+          : state.players.filter((p) => !p.isDead);
+        // 💡 BUG-11 fix: apply healer's passiveHealingBoost to team heals too
+        const hMult = getHealMult(sessionKey) * (player.passiveHealingBoost || 1);
+        for (const ally of friendlySide) {
+          const rawHealT = Number(effData.value) || 0;
+          const maxHpT = ally.stats.maxHp || ally.stats.hp || 100;
+          // 💡 FIX #9: Heal cap 30% max HP per turn
+          const healAmount = Math.max(0, Math.min(
+            Math.floor(rawHealT * hMult),
+            Math.floor(maxHpT * 0.30),
+            maxHpT - ally.stats.hp,
+          ));
+          ally.stats.hp += healAmount;
+          ally.currentHP = ally.stats.hp;
+          totalHealing += healAmount;
+
+          const allyIcon = ally.isEnemy ? ally.icon : ally.class?.icon || "👤";
+          msg += `💚 ${allyIcon} ${ally.name} +${healAmount} HP${hMult < 1 ? " (Reduced)" : ""}\n`;
+        }
+      }
+      else if (effId === "buff_self") {
+        applyBuff(player, effData.stat, effData.value, effData.duration);
+        msg += `✨ ${player.name} gains +${effData.value}% ${effData.stat}!\n`;
+      }
+      else if (effId === "buff_team") {
+        const friendlySide = player.isEnemy
+          ? state.enemies.filter((e) => e.stats.hp > 0)
+          : state.players.filter((p) => !p.isDead);
+        for (const ally of friendlySide) {
+          applyBuff(ally, effData.stat, effData.value, effData.duration);
+        }
+        msg += `✨ ${player.isEnemy ? "Enemy" : "Player"} team gains +${effData.value}% ${effData.stat} for ${effData.duration} turns!\n`;
+      }
+      // 💡 POLISH 2026-07-17: buff_team_atk / buff_team_def - convenience
+      // variants for skills that buff multiple stats at once (e.g. WARRIOR's
+      // Battle Cry buffs both ATK and DEF). Each one is just buff_team with
+      // a fixed stat. Avoids the object-key-collision problem (can't have
+      // two 'buff_team' keys in the same effects object).
+      else if (effId === "buff_team_atk") {
+        const friendlySide = player.isEnemy
+          ? state.enemies.filter((e) => e.stats.hp > 0)
+          : state.players.filter((p) => !p.isDead);
+        for (const ally of friendlySide) {
+          applyBuff(ally, 'attack', effData.value, effData.duration);
+        }
+        msg += `✨ Team gains +${effData.value}% ATK for ${effData.duration} turns!\n`;
+      }
+      else if (effId === "buff_team_def") {
+        const friendlySide = player.isEnemy
+          ? state.enemies.filter((e) => e.stats.hp > 0)
+          : state.players.filter((p) => !p.isDead);
+        for (const ally of friendlySide) {
+          applyBuff(ally, 'defense', effData.value, effData.duration);
+        }
+        msg += `✨ Team gains +${effData.value}% DEF for ${effData.duration} turns!\n`;
+      }
+      else if (effId === "buff_target") {
+        const target = getHealTarget(player, targetIndex, sessionKey);
+        if (target) {
+          applyBuff(target, effData.stat, effData.value, effData.duration);
+          msg += `✨ ${target.name} gains +${effData.value}% ${effData.stat}!\n`;
+        }
+      }
+      else if (effId === "debuff_target") {
+        const targets = getTargets(player, effect, targetIndex, sessionKey);
+        const target = targets[0];
+        if (target) {
+          applyDebuff(target, effData.stat, effData.value, effData.duration);
+          msg += `💀 ${target.name} receives -${effData.value}% ${effData.stat}!\n`;
+        }
+      }
+      else if (effId === "debuff_enemies") {
+        const opponentSide = player.isEnemy
+          ? state.players.filter((p) => !p.isDead)
+          : state.enemies.filter((e) => e.stats.hp > 0);
+        for (const target of opponentSide) {
+          applyDebuff(target, effData.stat, effData.value, effData.duration);
+        }
+        msg += `💀 All enemies receive -${effData.value}% ${effData.stat}!\n`;
+      }
+      else if (effId === "stun" || effId === "freeze" || effId === "sleep" || effId === "locked_in_time") {
+        const targets = getTargets(player, effect, targetIndex, sessionKey);
+        for (const target of targets) {
+          if (Math.random() * 100 < (effData.chance || 100)) {
+            applyStatusEffect(target, effId, effData.duration || 1);
+            msg += effId === 'locked_in_time'
+              ? `⏳ ${target.name} is *LOCKED IN TIME* for ${effData.duration || 1} turn(s)!\n`
+              : `💫 ${target.name} is ${effId.toUpperCase()}NED for ${effData.duration || 1} turn(s)!\n`;
+          }
+        }
+      }
+      else if (effId === "haste") {
+        const targets = getTargets(player, effect, targetIndex, sessionKey);
+        for (const target of targets) {
+          applyStatusEffect(target, "haste", effData.duration || 3, effData.value || 30);
+          msg += `⚡ ${target.name} gains Haste!\n`;
+        }
+      }
+      else if (effId === "haste_team") {
+        const friendlySide = player.isEnemy
+          ? state.enemies.filter((e) => e.stats.hp > 0)
+          : state.players.filter((p) => !p.isDead);
+        for (const ally of friendlySide) {
+          applyStatusEffect(ally, "haste", effData.duration || 3, effData.value || 30);
+        }
+        msg += `⚡ Friendly team gains Haste!\n`;
+      }
+      // 💡 FIX: energyRestore was declared by mana_drain (skillTree.js:1176)
+      // but had no handler - Mana Drain dealt damage but never restored energy.
+      else if (effId === "energyRestore") {
+        if (!player.isEnemy) {
+          // 💡 FIX #51: Validate all inputs to prevent NaN energy (infinite mana).
+          // Same bug class as P2 (infinite HP via NaN propagation).
+          const safeMaxEnergy = Number.isFinite(player.stats.maxEnergy) ? player.stats.maxEnergy : 100;
+          const safeCurrentEnergy = Number.isFinite(player.stats.energy) ? player.stats.energy : 0;
+          const safeValue = Number.isFinite(effData.value) ? effData.value : 0;
+          const restore = Math.min(
+            Math.floor(safeValue),
+            safeMaxEnergy - safeCurrentEnergy,
+          );
+          if (restore > 0) {
+            player.stats.energy = safeCurrentEnergy + restore;
+            msg += `⚡ ${player.name} restores ${restore} energy!\n`;
+          }
+        }
+      }
+      // 💡 FIX: magDebuff was declared by mana_drain (skillTree.js:1177)
+      // but had no handler - Magick defense was never reduced on target.
+      else if (effId === "magDebuff") {
+        const targets = getTargets(player, effect, targetIndex, sessionKey);
+        for (const target of targets) {
+          applyDebuff(target, 'mag', effData.value, effData.duration || 2);
+        }
+        msg += `📉 Targets lose -${effData.value}% MAG for ${effData.duration || 2} turns!\n`;
+      }
+      // 💡 POLISH 2026-07-17: handlers for effect fields used by Phase 2
+      // new skills that were previously missing.
+
+      // CLEANSE - remove all negative status effects from target(s).
+      // Used by CLERIC.cleanse and DIVINE_FIST.heavenly_step.
+      else if (effId === "cleanse") {
+        const targets = getTargets(player, effect, targetIndex, sessionKey);
+        // For self-targeting skills, target the caster
+        const cleanseTargets = (effect.targeting || '').toUpperCase() === 'SELF'
+          ? [player]
+          : targets.length > 0 ? targets : [player];
+        const negativeEffects = ['poison', 'burn', 'bleed', 'freeze', 'stun', 'sleep', 'locked_in_time',
+                                  'root', 'slow', 'curse', 'weak', 'vulnerability',
+                                  'blind', 'silence', 'shock', 'charm', 'fear'];
+        let totalCleansed = 0;
+        for (const t of cleanseTargets) {
+          if (!t.statusEffects) continue;
+          const before = t.statusEffects.length;
+          t.statusEffects = t.statusEffects.filter(e => !negativeEffects.includes(e.type));
+          totalCleansed += before - t.statusEffects.length;
+        }
+        msg += `💧 Purified ${totalCleansed} negative effect${totalCleansed !== 1 ? 's' : ''}!\n`;
+      }
+
+      // SELF_DAMAGE - caster takes a percentage of their max HP as recoil.
+      // Used by DIVINE_FIST.eight_gates (10-15% maxHp per turn while active).
+      else if (effId === "selfDamage") {
+        const recoilPct = Number(effData.value) || 10;
+        const maxHpVal = player.stats.maxHp || player.stats.hp || 100;
+        const recoil = Math.floor(maxHpVal * recoilPct / 100);
+        player.stats.hp = Math.max(1, (player.stats.hp || 0) - recoil);
+        player.currentHP = player.stats.hp;
+        msg += `💢 ${player.name} takes ${recoil} recoil damage from their technique!\n`;
+      }
+
+      // LIFESTEAL_PERCENT (as skill effect) - heal caster for X% of damage
+      // dealt this cast. Different from the rune lifestealPercent (which is
+      // a top-level effect field); this is a skill-declared effect that
+      // reads value from effects.lifestealPercent.value.
+      // Used by DEATH_LORD.soul_tether.
+      else if (effId === "lifestealPercent") {
+        const lsPct = Number(effData.value) || 0;
+        if (lsPct > 0 && totalDamage > 0) {
+          const healAmount = Math.floor(totalDamage * lsPct / 100);
+          if (healAmount > 0) {
+            const maxHpVal = player.stats.maxHp || player.stats.hp || 100;
+            player.stats.hp = Math.min(maxHpVal, (player.stats.hp || 0) + healAmount);
+            player.currentHP = player.stats.hp;
+            totalHealing += healAmount;
+            msg += `🩸💚 ${player.name} drains ${healAmount} HP!\n`;
+          }
+        }
+      }
+
+      // COUNTERATTACK - set a flag on the player that the damage-taken code
+      // reads. When struck, the player has a chance to retaliate.
+      // Used by NINJA.shadow_clone_jutsu and SAMURAI.mindful_stance.
+      else if (effId === "counterattack") {
+        if (!player.buffs) player.buffs = [];
+        player.buffs.push({
+          type: 'counterattack',
+          chance: effData.chance || 25,
+          value: effData.value || 1.0,
+          duration: effData.duration || 3,
+          icon: '⚔️↩️',
+        });
+        msg += `⚔️ ${player.name} readies a counterattack!\n`;
+      }
+
+      // THORNS - set a flag on the player that reflects melee damage.
+      // Used by WARLOCK.demon_armor.
+      else if (effId === "thorns") {
+        if (!player.buffs) player.buffs = [];
+        player.buffs.push({
+          type: 'thorns',
+          value: effData.value || 20,
+          duration: effData.duration || 3,
+          icon: '🌵',
+        });
+        msg += `🌵 ${player.name}'s armor sprouts damaging thorns!\n`;
+      }
+
+      // IGNORE_DEFENSE (as skill effect) - set flag on effect that
+      // calculateDamage reads to bypass target DEF.
+      // Used by SAMURAI.frontal_cut.
+      else if (effId === "ignoreDefense") {
+        effect.ignoreDefense = (effect.ignoreDefense || 0) + (effData.value || 30);
+        // No msg here - the damage calc will reflect it
+      }
+
+      // EVASION (as skill effect) - boost evasion stat temporarily.
+      // Used by NINJA.shadow_clone_jutsu, DIVINE_FIST.heavenly_step,
+      // KAGE.phantom_step (existing), and others.
+      else if (effId === "evasion") {
+        const boostValue = Number(effData.value) || 20;
+        if (!player.buffs) player.buffs = [];
+        player.buffs.push({
+          type: 'evasion',
+          value: boostValue,
+          duration: effData.duration || 2,
+          icon: '💨',
+        });
+        msg += `💨 ${player.name} becomes harder to hit (+${boostValue}% evasion)!\n`;
+      }
+
+      // SUMMON - placeholder. Full summoning system is complex (would need
+      // to spawn allied combatants, manage their turns, etc.). For now,
+      // give the player a temporary damage-mitigation buff that represents
+      // the summoned allies drawing aggro. Marked as TODO for full impl.
+      // Used by DEATH_LORD.raise_dead.
+      else if (effId === "summon") {
+        const atkPct = Number(effData.atkPercent) || 30;
+        const count = Number(effData.count) || 1;
+        if (count > 0) {
+          // Approximate the summon's contribution as a one-time bonus damage
+          // proc equal to count × atkPct% of player's ATK.
+          const summonDmg = Math.floor((player.stats.atk || 50) * atkPct / 100) * count;
+          msg += `💀 ${player.name} raises ${count} skeleton all${count > 1 ? 'ies' : 'y'} dealing ${summonDmg} bonus damage!\n`;
+          // Add to total damage dealt this cast - will be applied via existing
+          // damage-dealt processing below
+          totalDamage += summonDmg;
+        }
+
+        // 💡 Phase 3: Necromancer capture pipeline.
+        // If this is the Necromancer's army_of_dead ult (identified by the
+        // 'ALL_CORPSES' targeting + 'skeleton_warrior' unit), set a capture
+        // window for the caster. During the window, killing enemies has a
+        // chance to capture them as permanent summons.
+        try {
+          const skillId = effect.skillId || effect.id || '';
+          const isArmyOfDead = skillId === 'army_of_dead' ||
+                               effData.unit === 'skeleton_warrior' ||
+                               effect.targeting === 'ALL_CORPSES';
+          if (isArmyOfDead && !player.isEnemy && player.jid) {
+            // Get the Necromancer's active summon level (for capture bonus)
+            let summonLevel = 1;
+            try {
+              const user = economy.getUser(player.jid);
+              if (user && user.activeSummonId) {
+                const activeSummon = await summonSystem.getActiveSummon(user);
+                if (activeSummon) summonLevel = activeSummon.level || 1;
+              }
+            } catch (e) {}
+            summonCapture.setCaptureWindow(state, player.jid, summonLevel);
+            msg += `🗡️ *Army of the Dead active!* Soul capture window open for ${summonCapture.CAPTURE_CONFIG.CAPTURE_WINDOW_TURNS} turns.\n`;
+
+            // 💀 DRAG-DOWN EXECUTION (owner 2026-10-26: "when the army of death
+            // drags down an enemy they instantly die, unless its another player
+            // or a boss, so it drugs down and insta kills regular mobs"). The
+            // ult's whole identity is the earth swallowing the enemy — so the
+            // gameplay now matches the animation: every LIVING non-boss enemy
+            // on the field is dragged under and killed outright. Bosses (and
+            // any boss-flagged abyss floor guardian) are too heavy for the
+            // hands; players can never be touched (PvP duels resolve through
+            // pvpSystem and never reach this PvE effect path — and this sweep
+            // only iterates state.enemies). Kills go through the REAL kill
+            // pipeline (recordEnemyKill) so on-kill passives, kill stats and
+            // the capture window opened one line above all fire normally —
+            // dragged souls are exactly what the capture roll wants.
+            try {
+              let dragged = 0;
+              for (const victim of (state.enemies || [])) {
+                // living regular mobs only — bosses are too heavy for the hands
+                if (!victim || victim.isDead || victim.isBoss || victim.bossId) continue;
+                if (!victim.stats || !(Number(victim.stats.hp) > 0)) continue;
+                victim.stats.hp = 0;
+                victim.currentHP = 0;
+                victim.isDead = true;
+                victim.justDied = true;
+                msg += `🕸️ *${victim.name}* is dragged screaming under the earth!\n`;
+                recordEnemyKill(state, victim);
+                dragged++;
+              }
+              if (dragged > 0) {
+                console.log(`[Capture] army_of_dead drag-down executed on ${dragged} regular mob(s) (${chatId})`);
+              }
+            } catch (dragErr) {
+              console.error('[Capture] drag-down sweep failed:', dragErr?.message || dragErr);
+            }
+          }
+        } catch (captureErr) {
+          console.error('[Capture] setCaptureWindow failed:', captureErr?.message || captureErr);
+        }
+      }
+    }
+    if (!player.isEnemy) {
+      player.combatStats.healed = (player.combatStats.healed || 0) + totalHealing;
+    }
+  } else {
+    // HEALING ABILITIES
+
+    // 💡 RUNE: splitIntoHits (FRAGMENT/BARRAGE runes) - split one hit into
+    // multiple weaker hits. Each hit goes through calculateDamage separately,
+    // so crit/evasion/DEF apply per-hit. bypassShield (BARRAGE) skips shields.
+    if (effect.splitIntoHits && effect.splitIntoHits > 0) {
+      const targets = getTargets(player, effect, targetIndex, sessionKey);
+      const target = targets[0];
+      if (target && target.stats.hp > 0) {
+        const splitMult = effect.splitDamageMult || 0.4;
+        const numHits = effect.splitIntoHits;
+        const rawDmgType = String(effect.damageType || 'PHYSICAL').toUpperCase();
+        const dType = rawDmgType === 'MAGICAL' || rawDmgType === 'MAGIC' ? 'magic' :
+                      rawDmgType === 'TRUE' ? 'true' : 'physical';
+        const baseStat = dType === 'magic' ? (player.stats.mag || 10) : (player.stats.atk || 10);
+        const element = effect.element || 'PHYSICAL';
+        let totalSplitDmg = 0;
+        msg += `💎 Hits ${numHits} times!\n`;
+        for (let i = 0; i < numHits; i++) {
+          if (target.stats.hp <= 0) break;
+          const perHitPower = Math.floor(baseStat * (effect.multiplier || 1) * splitMult);
+          const dmgResult = calculateDamage(player, target, perHitPower, dType, element, chatId, true);
+          if (dmgResult.wasEvaded) {
+            msg += `  ${i+1}. 💨 Miss!\n`;
+            continue;
+          }
+          if (dmgResult.noDamageReason) {
+            msg += `  ${i+1}. ${dmgResult.noDamageReason}\n`;
+            continue;
+          }
+          // 💡 bypassShield: skip shield absorption (BARRAGE rune)
+          if (!effect.bypassShield) {
+            const shields = (target.statusEffects || []).filter(e => e.type === 'shield' && e.value > 0);
+            if (shields.length > 0) {
+              let remaining = dmgResult.damage;
+              for (const shield of shields) {
+                if (remaining <= 0) break;
+                const absorbed = Math.min(shield.value, remaining);
+                shield.value -= absorbed;
+                remaining -= absorbed;
+                if (shield.value <= 0) shield.duration = 0;
+              }
+              dmgResult.damage = remaining;
+            }
+          }
+          target.stats.hp = Math.max(0, target.stats.hp - dmgResult.damage);
+          target.currentHP = target.stats.hp;
+          totalSplitDmg += dmgResult.damage;
+          if (!hitTarget) hitTarget = target;
+          msg += `  ${i+1}. 💥 ${dmgResult.damage}${dmgResult.isCrit ? ' (CRIT!)' : ''}\n`;
+          if (target.stats.hp <= 0) {
+            target.isDead = true;
+            target.justDied = true;
+            msg += `  💀 ${target.name} defeated!\n`;
+            if (state) recordEnemyKill(state, target);
+            break;
+          }
+        }
+        totalDamage += totalSplitDmg;
+        if (player.combatStats) {
+          player.combatStats.damageDealt = (player.combatStats.damageDealt || 0) + totalSplitDmg;
+        }
+      }
+    }
+
+    // 💡 RUNE: chainBounces (CHAIN_BOUNCE rune) - hit primary target, then
+    // arc to nearby enemies with decay. Each bounce deals less damage.
+    if (effect.chainBounces && effect.chainBounces > 0) {
+      const targets = getTargets(player, effect, targetIndex, sessionKey);
+      const primaryTarget = targets[0];
+      if (primaryTarget && primaryTarget.stats.hp > 0) {
+        const rawDmgType = String(effect.damageType || 'PHYSICAL').toUpperCase();
+        const dType = rawDmgType === 'MAGICAL' || rawDmgType === 'MAGIC' ? 'magic' : 'physical';
+        const baseStat = dType === 'magic' ? (player.stats.mag || 10) : (player.stats.atk || 10);
+        const element = effect.element || 'LIGHTNING';
+        const decay = effect.chainDecayPerBounce || 0.75;
+        const maxBounces = effect.chainBounces;
+        // Get all living enemies for bouncing
+        const opponentSide = player.isEnemy
+          ? state.players.filter(p => !p.isDead)
+          : state.enemies.filter(e => e.stats.hp > 0);
+        const bounceTargets = [primaryTarget, ...opponentSide.filter(t => t !== primaryTarget)];
+        let currentMult = effect.multiplier || 1.0;
+        let totalChainDmg = 0;
+        msg += `⚡ Chains to ${maxBounces + 1} targets!\n`;
+        for (let i = 0; i <= maxBounces && i < bounceTargets.length; i++) {
+          const t = bounceTargets[i];
+          if (!t || t.stats.hp <= 0) continue;
+          const power = Math.floor(baseStat * currentMult);
+          const dmgResult = calculateDamage(player, t, power, dType, element, chatId, true);
+          if (dmgResult.wasEvaded) {
+            msg += `  ${i+1}. 💨 ${t.name} evades!\n`;
+          } else {
+            t.stats.hp = Math.max(0, t.stats.hp - dmgResult.damage);
+            t.currentHP = t.stats.hp;
+            totalChainDmg += dmgResult.damage;
+            msg += `  ${i+1}. ⚡ ${t.name} -${dmgResult.damage}${dmgResult.isCrit ? ' (CRIT!)' : ''}\n`;
+            if (t.stats.hp <= 0) {
+              t.isDead = true;
+              t.justDied = true;
+              msg += `  💀 ${t.name} defeated!\n`;
+              if (state) recordEnemyKill(state, t);
+            }
+          }
+          currentMult *= decay;
+        }
+        totalDamage += totalChainDmg;
+        if (player.combatStats) {
+          player.combatStats.damageDealt = (player.combatStats.damageDealt || 0) + totalChainDmg;
+        }
+      }
+    }
+    // 💡 FIX: was `effect.type === "heal" || effect.type.includes("heal")` which
+    // matched "heal_team" too, causing the caster to be healed twice (once here
+    // as single-target, once in the heal_team block below). Changed to strict
+    // equality so only pure "heal" type triggers this block.
+    if (effect.type === "heal") {
+      const target = getHealTarget(player, targetIndex, sessionKey);
+      if (target) {
+        // 💡 BUG-11 fix: apply healer's passiveHealingBoost
+        const chatHealMult = getHealMult(sessionKey);
+        const hMult = chatHealMult * (player.passiveHealingBoost || 1);
+        const rawHealE = Number(effect.value) || 0;
+        const maxHpE = target.stats.maxHp || target.stats.hp || 100;
+        const healAmount = Math.max(0, Math.min(
+          Math.floor(rawHealE * hMult),
+          Math.floor(maxHpE * 0.30), // FIX #9: heal cap 30% maxHp
+          maxHpE - target.stats.hp,
+        ));
+        target.stats.hp += healAmount;
+        target.currentHP = target.stats.hp;
+        totalHealing += healAmount;
+        if (!hitTarget) hitTarget = target;
+
+        const targetIcon = target.class?.icon || "👤";
+        msg += `💚 ${targetIcon} ${target.name} healed for ${healAmount} HP!${chatHealMult < 1 ? " (Healing Reduced)" : chatHealMult > 1 ? " (Holy Ground!)" : ""}\n`;
+        if (!player.isEnemy && player.combatStats) {
+          player.combatStats.healed = (player.combatStats.healed || 0) + healAmount;
+        }
+      }
+    }
+
+    // TEAM HEAL
+    if (effect.type === "heal_team") {
+      const friendlySide = player.isEnemy
+        ? state.enemies.filter((e) => e.stats.hp > 0)
+        : state.players.filter((p) => !p.isDead);
+      // 💡 BUG-11 fix: apply healer's passiveHealingBoost to team heals too
+      const hMult = getHealMult(sessionKey) * (player.passiveHealingBoost || 1);
+      for (const ally of friendlySide) {
+        const rawHealET = Number(effect.value) || 0;
+        const maxHpET = ally.stats.maxHp || ally.stats.hp || 100;
+        const healAmount = Math.max(0, Math.min(
+          Math.floor(rawHealET * hMult),
+          Math.floor(maxHpET * 0.30), // FIX #9: heal cap 30% maxHp
+          maxHpET - ally.stats.hp,
+        ));
+        ally.stats.hp += healAmount;
+        ally.currentHP = ally.stats.hp;
+        totalHealing += healAmount;
+
+        const allyIcon = ally.isEnemy ? ally.icon : ally.class?.icon || "👤";
+        msg += `💚 ${allyIcon} ${ally.name} +${healAmount} HP${hMult < 1 ? " (Reduced)" : ""}\n`;
+      }
+      if (!player.isEnemy)
+        player.combatStats.healed =
+          (player.combatStats.healed || 0) + totalHealing;
+    }
+
+    // BUFF ABILITIES
+    if (effect.type.includes("buff")) {
+      if (effect.type === "buff_self") {
+        if (effect.buffType) {
+          applyBuff(player, effect.buffType, effect.value, effect.duration);
+          msg += `✨ ${player.name} gains +${effect.value}% ${effect.buffType}!\n`;
+        }
+        // Handle specific self buffs (Mirror Image etc)
+        if (effect.evasion) {
+          applyBuff(
+            player,
+            "evasion",
+            effect.evasion,
+            effect.evasionDuration || 2,
+          );
+          msg += `✨ ${player.name} gains Evasion!\n`;
+        }
+        if (effect.critBuff) {
+          applyBuff(
+            player,
+            "crit",
+            effect.critBuff,
+            effect.critBuffDuration || 2,
+          );
+          msg += `✨ ${player.name} gains Crit Chance!\n`;
+        }
+      } else if (effect.type === "buff_team") {
+        const friendlySide = player.isEnemy
+          ? state.enemies.filter((e) => e.stats.hp > 0)
+          : state.players.filter((p) => !p.isDead);
+        for (const ally of friendlySide) {
+          applyBuff(ally, effect.buffType, effect.value, effect.duration);
+        }
+        msg += `✨ ${player.isEnemy ? "Enemy" : "Player"} team gains +${effect.value}% ${effect.buffType} for ${effect.duration} turns!\n`;
+      } else if (effect.type === "buff_target") {
+        const target = getHealTarget(player, targetIndex, sessionKey);
+        if (target) {
+          applyBuff(target, effect.buffType, effect.value, effect.duration);
+          msg += `✨ ${target.name} gains +${effect.value}% ${effect.buffType}!\n`;
+        }
+      }
+    }
+
+    // DEBUFF ABILITIES
+    if (effect.type.includes("debuff")) {
+      if (effect.type === "debuff_target") {
+        const targets = getTargets(player, effect, targetIndex, sessionKey);
+        const target = targets[0];
+        if (target) {
+          applyDebuff(target, effect.debuffType, effect.value, effect.duration);
+          msg += `💀 ${target.name} receives -${effect.value}% ${effect.debuffType}!\n`;
+        }
+      } else if (effect.type === "debuff_enemies") {
+        const opponentSide = player.isEnemy
+          ? state.players.filter((p) => !p.isDead)
+          : state.enemies.filter((e) => e.stats.hp > 0);
+        for (const target of opponentSide) {
+          applyDebuff(target, effect.debuffType, effect.value, effect.duration);
+        }
+        msg += `💀 All enemies receive -${effect.value}% ${effect.debuffType}!\n`;
+      }
+    }
+
+    // REVIVE
+    if (effect.type === "revive") {
+      const deadFriendly = player.isEnemy
+        ? state.enemies.filter((e) => e.stats.hp <= 0)
+        : state.players.filter((p) => p.isDead);
+      if (deadFriendly.length > 0) {
+        const target = deadFriendly[0];
+        target.isDead = false;
+        target.stats.hp = Math.floor(
+          (target.stats.maxHp || target.stats.hp) *
+            ((effect.hpPercent || 50) / 100),
+        );
+        target.currentHP = target.stats.hp;
+        msg += `👼 ${target.name} has been resurrected with ${target.stats.hp} HP!\n`;
+        if (!player.isEnemy)
+          player.combatStats.healed =
+            (player.combatStats.healed || 0) + target.stats.hp;
+      } else {
+        msg += `(No fallen allies to revive)\n`;
+      }
+    }
+
+    // MULTI-HIT
+    if (effect.type === "multi_hit") {
+      const targets = getTargets(player, effect, targetIndex, sessionKey);
+      const target = targets[0];
+      if (target) {
+        let totalMultiDamage = 0;
+        const baseStat =
+          effect.damageType === "magic"
+            ? player.stats.mag || 10
+            : player.stats.atk || 10;
+        const dType = effect.damageType === "magic" ? "magic" : "physical";
+        const element = effect.element || "PHYSICAL";
+
+        for (let i = 0; i < effect.hits; i++) {
+          const { damage, isCrit, wasEvaded } = calculateDamage(
+            player,
+            target,
+            baseStat * effect.multiplier,
+            dType,
+            element,
+            chatId,
+            true,
+          );
+          if (!wasEvaded) {
+            target.stats.hp -= damage;
+            totalMultiDamage += damage;
+          }
+        }
+        target.currentHP = Math.max(0, target.stats.hp);
+        if (!hitTarget) hitTarget = target;
+
+        if (target.stats.hp > 0 && target.isBoss) {
+          await checkBossPhase(sock, target, chatId);
+        }
+
+        if (target.stats.hp <= 0) {
+          target.justDied = true;
+        }
+        msg += `⚡ Hit ${effect.hits} times for ${totalMultiDamage} total damage!\n`;
+        // 💡 FIX: guard combatStats - enemies don't have it and would crash here
+        if (player.combatStats) {
+          player.combatStats.damageDealt =
+            (player.combatStats.damageDealt || 0) + totalMultiDamage;
+        }
+
+        if (target.stats.hp <= 0) {
+          msg += `💀 ${target.name} defeated!\n`;
+          target.isDead = true;
+          target.currentHP = 0;
+          if (player.combatStats) {
+            player.combatStats.kills = (player.combatStats.kills || 0) + 1;
+          }
+          // 💡 Track quest stats - was entirely missing for multi-hit kill path
+          recordEnemyKill(state, target);
+
+          // 💡 CRITICAL FIX: Check if combat should end immediately
+          if (await checkCombatEnd(sock, state, sessionKey))
+            return { message: msg, damage: totalMultiDamage, healing: 0 };
+        }
+      }
+    }
+
+    // 🧪 NEW FORMAT SUPPORT (effects object)
+    if (effect.effects) {
+      for (const [effType, effData] of Object.entries(effect.effects)) {
+        const dur = effData.duration || 3;
+        const val = Array.isArray(effData.value)
+          ? effData.value[
+              Math.min((player.level || 1) - 1, effData.value.length - 1)
+            ]
+          : effData.value || 0;
+
+        const opponentSide = player.isEnemy
+          ? state.players.filter((p) => !p.isDead)
+          : state.enemies.filter((e) => e.stats.hp > 0);
+        const friendlySide = player.isEnemy
+          ? state.enemies.filter((e) => e.stats.hp > 0)
+          : state.players.filter((p) => !p.isDead);
+
+        // Determine targets based on the skill's overall targeting
+        let targets = [];
+        const targeting = (effect.targeting || "").toUpperCase();
+        if (
+          targeting.includes("AOE") ||
+          targeting === "ALL_ENEMIES" ||
+          targeting === "CHAIN"
+        ) {
+          targets = opponentSide;
+        } else if (targeting === "TEAM" || targeting === "ALL_ALLIES") {
+          targets = friendlySide;
+        } else if (targeting === "SELF") {
+          targets = [player];
+        } else {
+          targets = [getHealTarget(player, targetIndex, sessionKey)];
+        }
+
+        for (const target of targets) {
+          const statusResult = applyStatusEffect(
+            target,
+            effType,
+            dur,
+            val,
+            player.name,
+          );
+          if (statusResult.synergyMsg) msg += `\n✨ ${statusResult.synergyMsg}`;
+        }
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 💡 PHASE 4 RUNE POST-PROCESSING
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Apply behavior-modifying rune effects that need to fire AFTER all damage
+  // has been dealt. These come from socketed runes via applyRuneModifiers,
+  // which sets fields on the `effect` object that we read here.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // 💡 RUNE: LIFESTEAL - heal attacker for X% of damage dealt this cast
+  if (effect.lifestealPercent && totalDamage > 0 && !player.isDead) {
+    const healAmount = Math.floor(totalDamage * effect.lifestealPercent / 100);
+    if (healAmount > 0) {
+      const maxHpVal = player.stats.maxHp || player.stats.hp || 100;
+      player.stats.hp = Math.min(maxHpVal, (player.stats.hp || 0) + healAmount);
+      player.currentHP = player.stats.hp;
+      totalHealing += healAmount;
+      msg += `🩸💚 ${player.name} drains ${healAmount} HP from the damage dealt!\n`;
+    }
+  }
+
+  // 💡 RUNE: MANA_DRAIN / energyRestore - restore energy on hit
+  if (effect.energyRestore && effect.energyRestore > 0 && !player.isEnemy) {
+    const safeMaxEnergy = Number.isFinite(player.stats.maxEnergy) ? player.stats.maxEnergy : 100;
+    const safeCurrentEnergy = Number.isFinite(player.stats.energy) ? player.stats.energy : 0;
+    const restore = Math.min(effect.energyRestore, safeMaxEnergy - safeCurrentEnergy);
+    if (restore > 0) {
+      player.stats.energy = safeCurrentEnergy + restore;
+      msg += `🔵 ${player.name} drains ${restore} energy from the target!\n`;
+    }
+  }
+
+  // 💡 RUNE: SOUL_RIP execute - if target HP below executeThreshold %, boost damage
+  // (Applied retroactively as bonus damage since we already dealt damage -
+  // simpler than rewriting the damage loop. This gives a follow-up true-damage
+  // proc when the target is execution-eligible.)
+  if (effect.executeThreshold && effect.executeBonus > 1) {
+    const targets = getTargets(player, effect, targetIndex, sessionKey);
+    for (const target of targets) {
+      if (!target || target.isDead || !target.stats || !target.stats.maxHp) continue;
+      const hpPct = (target.stats.hp / target.stats.maxHp) * 100;
+      if (hpPct > 0 && hpPct <= effect.executeThreshold) {
+        const executeDmg = Math.floor(totalDamage * (effect.executeBonus - 1));
+        target.stats.hp = Math.max(0, target.stats.hp - executeDmg);
+        target.currentHP = target.stats.hp;
+        if (!hitTarget) hitTarget = target;
+        msg += `💀⚔️ SOUL RIP! ${target.name} is executed for ${executeDmg} bonus true damage!\n`;
+        if (target.stats.hp <= 0 && !target.isDead) {
+          target.isDead = true;
+          msg += `💀 ${target.name} is destroyed by Soul Rip!\n`;
+          if (state) recordEnemyKill(state, target);
+        }
+      }
+    }
+  }
+
+  // 💡 RUNE: addStatuses - apply extra status effects from infusion runes
+  // (POISON_INFUSION, BLEED_INFUSION, BURN_INFUSION, FREEZE_INFUSION, etc.)
+  if (effect.addStatuses && effect.addStatuses.length > 0) {
+    const targets = getTargets(player, effect, targetIndex, sessionKey);
+    for (const statusDef of effect.addStatuses) {
+      // Roll chance if defined
+      if (statusDef.chance !== undefined && Math.random() * 100 >= statusDef.chance) continue;
+      for (const target of targets) {
+        if (!target || target.isDead) continue;
+        const sRes = applyStatusEffect(target, statusDef.type, statusDef.duration || 1, statusDef.value || 0, player.name);
+        if (sRes.synergyMsg) msg += `\n✨ ${sRes.synergyMsg}`;
+        msg += `✨ ${target.name} is afflicted with ${statusDef.type.toUpperCase()}!\n`;
+      }
+    }
+  }
+
+  // 💡 RUNE: GROUND_EFFECT - leave a damaging ground effect on the battlefield
+  // (simplified: applies the status to all living enemies as if they walked
+  // into it. A full ground-effect system would track tiles/positions, but
+  // this gives the same gameplay effect with minimal code changes.)
+  if (effect.groundEffect) {
+    const ge = effect.groundEffect;
+    const opponentSide = player.isEnemy
+      ? state.players.filter((p) => !p.isDead)
+      : state.enemies.filter((e) => e.stats.hp > 0);
+    for (const target of opponentSide) {
+      const sRes = applyStatusEffect(target, ge.type, ge.duration || 2, ge.value || 10, player.name);
+      if (sRes.synergyMsg) msg += `\n✨ ${sRes.synergyMsg}`;
+    }
+    msg += `🌪️ A ${ge.type} ground effect spreads across the battlefield!\n`;
+  }
+
+  // 💡 RUNE: convertBurnToFreeze - if skill applied burn and rune converts it,
+  // swap burn → freeze on all targets
+  if (effect.convertBurnToFreeze) {
+    const opponentSide = player.isEnemy
+      ? state.players.filter((p) => !p.isDead)
+      : state.enemies.filter((e) => e.stats.hp > 0);
+    for (const target of opponentSide) {
+      if (!target.statusEffects) continue;
+      for (let i = target.statusEffects.length - 1; i >= 0; i--) {
+        if (target.statusEffects[i].type === 'burn') {
+          target.statusEffects.splice(i, 1);
+          applyStatusEffect(target, 'freeze', 1, 0, player.name);
+          msg += `❄️🔥 ${target.name}'s burn flash-freezes into Frostbite!\n`;
+          break;
+        }
+      }
+    }
+  }
+
+  // 💡 RUNE: applyWet - prime targets for SHOCK synergy (WET + SHOCK = STUN)
+  if (effect.applyWet) {
+    const targets = getTargets(player, effect, targetIndex, sessionKey);
+    for (const target of targets) {
+      if (!target || target.isDead) continue;
+      applyStatusEffect(target, 'wet', 2, 0, player.name);
+    }
+    msg += `💧 Targets are soaked - primed for SHOCK synergy!\n`;
+  }
+
+  return { message: msg, damage: totalDamage, healing: totalHealing, target: hitTarget || null };
+}
+// ==========================================
+// 🎯 TARGET SELECTION HELPERS
+// ==========================================
+
+function getTargets(attacker, effect, targetIndex, chatId) {
+  const state = getGameState(chatId);
+  if (!state) return [];
+
+  const opponentSide = attacker.isEnemy
+    ? state.players.filter((p) => !p.isDead)
+    : state.enemies.filter((e) => e.stats.hp > 0);
+
+  const targeting = (effect.targeting || "").toUpperCase();
+  if (
+    effect.type === "aoe" ||
+    targeting.includes("AOE") ||
+    targeting === "ALL_ENEMIES" ||
+    targeting === "CHAIN"
+  ) {
+    // Bug 4 fix: cap to actual living opponents - never use a hardcoded 99 fallback
+    // that would hit non-existent enemies. effect.targets undefined = hit all living.
+    const maxTargets = (effect.targets != null) ? effect.targets : opponentSide.length;
+    return opponentSide.slice(0, maxTargets);
+  }
+
+  const index = parseInt(targetIndex);
+  const target = isNaN(index)
+    ? opponentSide[0]
+    : attacker.isEnemy
+      ? state.players[index]
+      : state.enemies[index];
+
+  if (!target || target.isDead || (target.stats && target.stats.hp <= 0)) {
+    return opponentSide.length > 0 ? [opponentSide[0]] : [];
+  }
+
+  return [target];
+}
+
+function getHealTarget(attacker, targetIndex, chatId) {
+  const state = getGameState(chatId);
+  if (!state) return attacker;
+
+  const friendlySide = attacker.isEnemy
+    ? state.enemies.filter((e) => e.stats.hp > 0)
+    : state.players.filter((p) => !p.isDead);
+
+  if (targetIndex === undefined || targetIndex === null) {
+    return attacker; // Self by default
+  }
+
+  const index = parseInt(targetIndex);
+  const target = attacker.isEnemy ? state.enemies[index] : state.players[index];
+
+  return target && !target.isDead ? target : attacker;
+}
+function getHealMult(chatId) {
+  const state = getGameState(chatId);
+  const env = state?.environment;
+  if (!env) return 1.0;
+
+  if (env.id === "TOXIC_CAVE") return 0.7;
+  if (env.id === "DEMON_CASTLE") return 0.5;
+  if (env.id === "PRE_INFECTED_AFTERLIFE") return 1.5;
+
+  return 1.0;
+}
+function applyBuff(target, buffType, value, duration) {
+  if (!target.buffs) target.buffs = [];
+
+  target.buffs.push({
+    type: buffType,
+    value: value,
+    duration: duration,
+    icon: getBuffIcon(buffType),
+    // 💡 BUG-08/09 fix: justApplied prevents the buff from ticking on the
+    // same turn it was applied (would otherwise lose 1 turn of duration).
+    justApplied: true,
+  });
+}
+
+function applyDebuff(target, debuffType, value, duration) {
+  if (!target.statusEffects) target.statusEffects = [];
+
+  target.statusEffects.push({
+    type: debuffType,
+    value: value,
+    duration: duration,
+    icon: getDebuffIcon(debuffType),
+    // 💡 BUG-08/09 fix: justApplied prevents the debuff from ticking on the
+    // same turn it was applied.
+    justApplied: true,
+  });
+}
+
+function getBuffIcon(buffType) {
+  const icons = {
+    attack: "⚔️",
+    defense: "🛡️",
+    speed: "💨",
+    magic: "✨",
+    evasion: "💫",
+    shield: "🔷",
+    crit: "🎯",
+  };
+  return icons[buffType] || "✨";
+}
+
+function getDebuffIcon(debuffType) {
+  const icons = {
+    vulnerability: "💀",
+    blind: "🌫️",
+    slow: "🐌",
+    weak: "😵",
+  };
+  return icons[debuffType] || "💀";
+}
+
+// ==========================================
+// 📤 EXPORTS
+// ==========================================
+
+module.exports = {
+  _deathTest: { startDeathBake, playEnemyDeaths, _bakeDeathClip, _bakeGroupDeathClip, _deathCaption, _deathEligible, _mergeDeathClipsWithCard, _jpegDims, _flushHeldDeathClips },
+  showLore: async (sock, chatId) => {
+    const { sendLore } = require('../shared/loreContent');
+    return sendLore(sock, chatId, '.');
+  },
+  initAdventure,
+  joinAdventure,
+  // 💡 CO-OP ABYSS (2026-10-11)
+  startAbyssCoopCombat,
+  // 💡 SOLO RESUME (2026-10-11): snapshot save/restore for restart-cut fights
+  saveSoloSnapshot,
+  resumeSoloCombat,
+  clearSoloSnapshot,
+  // 💡 GROUP RESUME + BOOT AUTO-CONTINUE (2026-10-14): group twin of the solo
+  // snapshot contract, plus the boot sweep that continues interrupted fights
+  // (solo AND group) without anyone typing a command.
+  saveGroupSnapshot,
+  clearGroupSnapshot,
+  resumeGroupCombat,
+  saveCombatSnapshot,
+  clearCombatSnapshot,
+  autoResumeAfterRestart,
+  // exported for qa_quest_flow.js (registration-window expiry simulation)
+  startJourney,
+  // 🔮 exported for qa_skill_point_drops.js — seed a finished-run state and
+  // drive the REAL endAdventure payout path (SP drop e2e)
+  endAdventure,
+  gameStates,
+  // 🔮 exported for qa_skill_point_drops.js (dungeon SP drop ladder/rules)
+  getDungeonSkillPointDrop,
+  DUNGEON_SKILL_POINT_DROPS,
+  getDungeonMenu,
+  stopQuest,
+  handleBuy,
+  handleCombatAction,
+  getAbilityByIndex,
+  handleVote: (chatId, jid, vote) => {
+    const state = getGameState(chatId, jid);
+    if (!state) return "❌ No active adventure!";
+
+    // 🗳️ CHECK VOTE AVAILABILITY FIRST (before phase/combat checks so crossroads always works)
+    const isStandardVote = !!(
+      state.currentEncounter && state.currentEncounter.choices
+    );
+    const isBranchingVote = !!(state.isBranching || state.timers?.vote); // timers.vote = crossroads/vote window is open
+
+    if (!isStandardVote && !isBranchingVote) {
+      return "❌ No active voting choices at the moment.";
+    }
+
+    // Now check if player is eligible to vote
+    if (state.voteProcessing) {
+      return "❌ Votes are already being processed.";
+    }
+    if (!state.players.find((p) => p.jid === jid)) {
+      return "❌ Not in party.";
+    }
+
+    state.votes[jid] = vote;
+
+    // Set flag for next timer adjustment (group only)
+    if (!state.solo) {
+      state.actionJustTaken = true;
+    }
+
+    // Check if all players have voted
+    const allVoted = state.players.every((p) => state.votes[p.jid]);
+
+    if (allVoted && state.isBranching) {
+      // 💡 OWNER BRIEF 2026-10-09 §4 (vote → battle → boss chain): without a
+      // re-entry guard, EVERY vote landing after "all voted" re-scheduled
+      // processBranchChoice — the branch resolved twice+ (elite fight AND the
+      // dungeon flow racing ahead into the boss fight). One resolution per
+      // window: voteProcessing blocks further .j vote input, and the next
+      // window opener resets it.
+      if (state.voteProcessing) return "❌ Votes are already being processed.";
+      state.voteProcessing = true;
+      clearTimeout(state.timers.vote);
+      const sock = state.sock || state.sock_ref; // 🩘 sock_ref fallback — state.sock is RUINS-only (see processVotes)
+      const sessionKey = state.sessionKey;
+      setTimeout(
+        () => {
+          const v1 = Object.values(state.votes).filter((v) => v === "1").length;
+          const v2 = Object.values(state.votes).filter((v) => v === "2").length;
+          const winner = v2 > v1 ? "REST" : "ELITE_COMBAT";
+          state.isProcessing = false;
+          state.isBranching = false;
+          processBranchChoice(sock, winner, sessionKey).catch((e) =>
+            console.error(
+              "[Quest] processBranchChoice error:",
+              e?.message || e,
+            ),
+          );
+        },
+        state.solo ? 0 : 1000,
+      );
+      return `🗳️ All votes in! Branching to *${Object.values(state.votes).filter((v) => v === "2").length > Object.values(state.votes).filter((v) => v === "1").length ? "Safe Path" : "Danger Path"}*...`;
+    }
+
+    if (allVoted && state.currentEncounter && !state.isBranching) {
+      // All players voted - process immediately
+      const currentEnc = state.currentEncounter; // Capture to prevent race conditions
+      const sessionKey = state.sessionKey;
+      state.voteProcessing = true;
+      clearTimeout(state.timers.vote);
+
+      // Use setTimeout to avoid blocking
+      const sock = state.sock || state.sock_ref; // 🩘 sock_ref fallback — state.sock is RUINS-only (see processVotes)
+      setTimeout(
+        () => {
+          processVotes(sock, currentEnc, sessionKey).catch((e) =>
+            console.error("[Quest] processVotes error:", e?.message || e),
+          );
+        },
+        state.solo ? 0 : 2000,
+      ); // 0s for solo, 2s for group
+
+      return `🗳️ Vote cast! ${state.solo ? "Processing..." : "All votes in! Processing..."}`;
+    }
+
+    return "🗳️ Vote cast!";
+  },
+  getGameState,
+  isUserInAdventure,
+  deleteGameState,
+  checkChatLimits,
+  // 💡 CROSS-BOT FIX: index.js passive regen must skip players fighting on
+  // EITHER bot (the old shared-state lookup did that by accident).
+  isUserInAnyCombat,
+  // 💡 CROSS-BOT FIX: safe accessor for callers holding a possibly-raw key.
+  getScopedState(key) {
+    if (gameStates.has(key)) return gameStates.get(key);
+    return gameStates.get(scopedKey(key));
+  },
+  // Export for use in index.js
+  CLASSES,
+  CONSUMABLES,
+  EQUIPMENT,
+  GAME_CONFIG,
+  startAbyssCombat,
+  startRuinsCombat,
+  startTutorialCombat,
+  startTutorialQuest,
+  startTutorialGroupQuest,
+  setRuinsHooks,
+  abortRuinsSession,
+  // 🤝 TEAM CO-OP (owner 2026-10-05): room-scoped Ruins sessions — the war
+  // router seats guildmates at one shared battle and resolves their DMs.
+  ruinsRoomSession,
+  ruinsRoomRawKey,
+  joinRuinsSession,
+  presentRuinsBattleTo,
+  leaveRuinsSession,
+  makeRuinsSock,
+  _coopIndex,
+  // 💡 Summoner System (Phase 2): export for summonAI.js to access.
+  // summonAI does a lazy require('./guildAdventure') to avoid circular dep,
+  // so these must be on the exports.
+  gameStates,
+  calculateDamage,
+  handleDeath,
+  applyTotalAnnihilation,
+  // 💡 NEW 2026-08-07: Export for summonAI to generate combat images + full skill effects
+  nextTurn,
+  applyAbilityEffect,
+  // 💡 TICKET QA (2026-09-21): combat-message/solo-passive helpers, exported
+  // so qa_ticket_pass.js can pin their behavior (icon normalization +
+  // Pathfinder solo math) without going through the full combat loop.
+  combatTargetIcon,
+  _soloHunterXpMult,
+  _isSoloFighter,
+  // 💡 ROUND-19 QA hooks (ghost-victory boss-skip regression): deterministic
+  // access to the guarded resolution paths. Test-only — no gameplay caller.
+  _qa: { checkCombatEnd, endCombat, gameStates, scopedKey },
+};

@@ -111,7 +111,7 @@ async function main() {
   console.log(`\n${CYAN}[Test 3]${RESET} pvpSystem.cancelDuel() clears stuck duel state...`);
   let pvpSystem;
   try {
-    pvpSystem = require('../core/rpg/pvpSystem');
+    pvpSystem = require('../core/rpg/systems/pvp/pvpSystem');
     if (typeof pvpSystem.cancelDuel !== 'function') {
       fail('cancelDuel:exported', 'cancelDuel is not exported from pvpSystem');
     } else {
@@ -172,9 +172,9 @@ async function main() {
 
   // ── TEST 6: Abyss startRun uses player's real stats ──
   console.log(`\n${CYAN}[Test 6]${RESET} Abyss loads player's REAL stats (not flat 100 defaults)...`);
-  const abyssSystem = require('../core/rpg/abyssSystem');
-  const economy = require('../core/rpg/economy');
-  const progression = require('../core/rpg/progression');
+  const abyssSystem = require('../core/rpg/systems/adventures/abyssSystem');
+  const economy = require('../core/rpg/systems/economy/economy');
+  const progression = require('../core/rpg/systems/characters/progression');
   const connectDB = require('../db');
   await connectDB(); // uses MONGO_URI from .env
 

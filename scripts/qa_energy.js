@@ -21,8 +21,8 @@ async function main() {
   await mongoose.connect(uri, { serverSelectionTimeoutMS: 20000 });
   console.log('[qa] mongoose connected');
 
-  const economy = require('../core/rpg/economy');
-  const progression = require('../core/rpg/progression');
+  const economy = require('../core/rpg/systems/economy/economy');
+  const progression = require('../core/rpg/systems/characters/progression');
 
   // 0. seed a minimal user (register path ensures schema-shaped doc)
   economy.economyData.set(jid, {

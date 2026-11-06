@@ -6,7 +6,7 @@ const path = require('path');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const { createCanvas } = require('canvas');
-const skillVfx = require('../core/rpg/skillVfx');
+const skillVfx = require('../core/rpg/systems/combat/skillVfx');
 const gif89a = require('../core/utils/gif89a');
 const { gifToMp4Even } = require('../core/utils/mediaConvert');
 

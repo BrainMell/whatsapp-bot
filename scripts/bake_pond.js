@@ -14,7 +14,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 const fs = require('fs');
 const path = require('path');
-const dockPov = require('../core/rpg/dockPov');
+const dockPov = require('../core/rpg/systems/world/dockPov');
 
 (async () => {
     const { createCanvas } = require('canvas');

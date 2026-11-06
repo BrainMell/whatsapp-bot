@@ -4,8 +4,8 @@ const fs = require('fs');
 const OUT = process.argv[2] || '/tmp/atlas', N = parseInt(process.argv[3] || '14', 10);
 (async () => {
     fs.mkdirSync(OUT, { recursive: true });
-    const { renderWorldAtlas } = require('../core/rpg/worldAtlasRenderer');
-    const C = require('../core/rpg/continents');
+    const { renderWorldAtlas } = require('../core/rpg/systems/world/worldAtlasRenderer');
+    const C = require('../core/rpg/systems/world/continents');
     const names = ['Iron Wolves', 'Dune Walkers', 'Frost Kin', 'Ember Court', 'Gull Watch', 'Amber Oaks', 'The Last Lantern', 'Slag Smiths', 'Salt Marchers', 'Bone Road Riders', 'Whitefast Wardens', 'Millrace Union', 'Cinder Pact', 'Mirage Guild', 'Thunderhead', 'Hundred Oaks'];
     const icons = ['W', '🐺', '❄', '🔥', '⚓', '🍂', '🕯', '⚒', '🌊', '💀', '🛡', '🌾', '🌋', '☀', '⚡', '🌳'];
     const colors = ['#a02c3c', '#d9a441', '#3a78c4', '#e0561e', '#2a8f8a', '#b8651e', '#8b5aa8', '#5a5a66'];

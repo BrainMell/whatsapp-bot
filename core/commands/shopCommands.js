@@ -4,11 +4,11 @@
 
 const fs = require('fs');
 const path = require('path');
-const economy = require('../rpg/economy');
-const inventorySystem = require('../rpg/inventorySystem');
-const lootSystem = require('../rpg/lootSystem');
-const classSystem = require('../rpg/classSystem');
-const progression = require('../rpg/progression');
+const economy = require('../rpg/systems/economy/economy');
+const inventorySystem = require('../rpg/systems/inventory/inventorySystem');
+const lootSystem = require('../rpg/systems/inventory/lootSystem');
+const classSystem = require('../rpg/systems/characters/classSystem');
+const progression = require('../rpg/systems/characters/progression');
 const botConfig = require('../../botConfig');
 const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
 const profileHelper = require('../utils/profileHelper');
@@ -164,7 +164,7 @@ const matchRank = (item, rank) => !rank || (item.rarity || 'COMMON').toUpperCase
 // any failure so the caller falls back to the plain text flow.
 async function marketCard(senderJid, banner, activity = 'shopping') {
     try {
-        return await require('../rpg/baseBuilder').zoomForCommand({ senderJid, prefix: getPrefix() }, 'shop', { activity, banner });
+        return await require('../rpg/systems/homestead/baseBuilder').zoomForCommand({ senderJid, prefix: getPrefix() }, 'shop', { activity, banner });
     } catch (e) { return null; }
 }
 const _cardOk = (c) => c && c.buffer && c.buffer.length > 500;
@@ -468,7 +468,7 @@ async function buyItem(sock, chatId, senderJid, input) {
         // 💡 LORE DROP: trading voice (8% on shop buy) - own message box
         let __shopDrop = null;
         try {
-            const loreDrops = require('../rpg/loreDrops');
+            const loreDrops = require('../rpg/systems/shared/loreDrops');
             __shopDrop = loreDrops.maybeDrop('trading', { userId: senderJid, chatId, chance: 0.08 });
         } catch (e) {}
         const buyTxt = `✅ *PURCHASE SUCCESSFUL!*\n\n${result.message}\n\n💸 Paid: ${getZENI()}${item.cost.toLocaleString()}`;
@@ -484,9 +484,9 @@ async function buyItem(sock, chatId, senderJid, input) {
         await sock.sendMessage(chatId, { text: buyTxt });
         // 💡 Phase B TUTORIAL: buying lesson advances on a REAL purchase
         // (no-op unless a tutorial session is active).
-        try { require('../rpg/tutorial').notify(senderJid, 'buy', { sock, chatId }).catch(() => {}); } catch (e) {}
+        try { require('../rpg/systems/meta/tutorial').notify(senderJid, 'buy', { sock, chatId }).catch(() => {}); } catch (e) {}
         try {
-            const loreDrops = require('../rpg/loreDrops');
+            const loreDrops = require('../rpg/systems/shared/loreDrops');
             await loreDrops.sendOwn(sock, chatId, __shopDrop);
         } catch (e) {}
     } else {
@@ -679,7 +679,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
     // 💡 2026-09-11: styled profile card FIRST (10 owner-approved designs,
     // player-picked via <prefix> cardstyle). Go service stays as fallback.
     try {
-        const profileCardRenderer = require('../rpg/profileCardRenderer');
+        const profileCardRenderer = require('../rpg/systems/meta/profileCardRenderer');
         let pfpBuffer = null;
         if (pfpUrl) {
             try {
@@ -689,7 +689,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
         }
         // 💡 OWNER RULE: "[guild title] of [guild name]" - title falls back to role; empty when no guild
         let _guildCard = { name: '', title: '' };
-        try { _guildCard = require('../rpg/guilds').getCardGuildInfo(finalJid) || _guildCard; } catch (e) {}
+        try { _guildCard = require('../rpg/systems/guildwar/guilds').getCardGuildInfo(finalJid) || _guildCard; } catch (e) {}
         const styledEquipStats = inventorySystem.getEquipmentStats(finalJid);
         const styledBuffer = await profileCardRenderer.renderProfileCard({
             user,
@@ -697,7 +697,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
             stats,
             equipStats: styledEquipStats,
             // 💡 SILVER VEIL: level renders as "??" when the charm is active
-            level: require('../rpg/economy').displayLevel(finalJid, charSheet?.level) ?? '??',
+            level: require('../rpg/systems/economy/economy').displayLevel(finalJid, charSheet?.level) ?? '??',
             rank: rank,
             xpPercent: charSheet?.progressPercent || 0,
             // 💡 Owner rule 2026-09-14: cards show the XP requirement itself,
@@ -711,7 +711,7 @@ async function displayCharacter(sock, chatId, senderJid, senderName, targetJid =
             guildTitle: _guildCard.title
         });
         if (styledBuffer && styledBuffer.length > 0) {
-            const styledCaption = `👤 *${user.nickname || finalName}* - ${classData?.icon || '🛡️'} ${classData?.name || 'Adventurer'}\n⭐ Lv.${require('../rpg/economy').displayLevel(finalJid, charSheet?.level) ?? '??'} | 🏆 ${rank}-Rank | 💰 ${getZENI()}${(user.wallet || 0).toLocaleString()}\n\n🎨 Card style: *#${user.cardStyle || profileCardRenderer.getDefaultStyle()}* - change with \`${getPrefix()} cardstyle\``;
+            const styledCaption = `👤 *${user.nickname || finalName}* - ${classData?.icon || '🛡️'} ${classData?.name || 'Adventurer'}\n⭐ Lv.${require('../rpg/systems/economy/economy').displayLevel(finalJid, charSheet?.level) ?? '??'} | 🏆 ${rank}-Rank | 💰 ${getZENI()}${(user.wallet || 0).toLocaleString()}\n\n🎨 Card style: *#${user.cardStyle || profileCardRenderer.getDefaultStyle()}* - change with \`${getPrefix()} cardstyle\``;
             await sock.sendMessage(chatId, {
                 image: styledBuffer,
                 caption: styledCaption,

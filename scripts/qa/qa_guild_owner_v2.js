@@ -7,7 +7,7 @@ process.env.CARD_DIAG = '1';
 const mongoose = require('mongoose');
 mongoose.set('bufferTimeoutMS', 45000);
 const connectDB = require('../../db');
-const guilds = require('../../core/rpg/guilds');
+const guilds = require('../../core/rpg/systems/guildwar/guilds');
 const lidResolver = require('../../core/utils/lidResolver');
 
 let pass = 0, fail = 0;

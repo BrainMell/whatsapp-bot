@@ -1,6 +1,6 @@
 'use strict';
 // qa_continents.js — invariants for the realm layer:  node scripts/qa_continents.js
-const C = require('../core/rpg/continents');
+const C = require('../core/rpg/systems/world/continents');
 let fail = 0; const ok = (c, m) => { if (!c) { fail++; console.log('FAIL', m); } };
 const names = Array.from({ length: 300 }, (_, i) => `Guild ${i} ${(i * 7919).toString(36)}`);
 const seen = new Set();

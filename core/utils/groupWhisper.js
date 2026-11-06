@@ -25,7 +25,7 @@ const num = (jid) => String(jid || '').split('@')[0].split(':')[0];
 
 function nameOf(p) {
     try {
-        const econ = require('../rpg/economy');
+        const econ = require('../rpg/systems/economy/economy');
         const pn = p.phoneNumber || p.jid || p.id;
         const n = econ.getDisplayName && econ.getDisplayName(String(pn).replace(/:\d+@/, '@'));
         if (n && !/^\d{6,}$/.test(String(n))) return String(n);

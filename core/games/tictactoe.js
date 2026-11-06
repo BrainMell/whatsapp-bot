@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const botConfig = require('../../botConfig');
-const economy = require('../rpg/economy');
+const economy = require('../rpg/systems/economy/economy');
 const system = require('../utils/system'); // NEW: Database System Module
 const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
 
@@ -416,7 +416,7 @@ module.exports = {
       economy.addMoney(result.game.winner, moneyReward);
 
       try {
-        const socialSystem = require('../rpg/socialSystem');
+        const socialSystem = require('../rpg/systems/meta/socialSystem');
         socialSystem.incrementRelationship(result.game.playerA, result.game.playerB, 4);
       } catch (socialErr) {}
 
@@ -429,7 +429,7 @@ module.exports = {
       updateScoreboard(result.game.playerB, 'Player', 0);
 
       try {
-        const socialSystem = require('../rpg/socialSystem');
+        const socialSystem = require('../rpg/systems/meta/socialSystem');
         socialSystem.incrementRelationship(result.game.playerA, result.game.playerB, 3);
       } catch (socialErr) {}
 

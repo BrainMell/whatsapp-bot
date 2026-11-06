@@ -29,7 +29,7 @@ const axios = require('axios');
 const { execSync, execFile } = require('child_process');
 
 const System = require('../models/System');
-const cardSystem = require('../rpg/cardSystem');
+const cardSystem = require('../rpg/systems/cards/cardSystem');
 const botConfig = require('../../botConfig');
 const goService = require('../utils/goImageService');
 

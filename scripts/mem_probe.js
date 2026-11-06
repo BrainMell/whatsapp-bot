@@ -16,7 +16,7 @@ const MB = (kb) => (kb / 1024).toFixed(1) + 'MB';
     let r = rss();
     console.log(`[probe] start rss=${MB(r.rss)} hwm=${MB(r.hwm)}`);
 
-    const guild = require('../core/rpg/guildBaseRenderer');
+    const guild = require('../core/rpg/systems/guildwar/guildBaseRenderer');
     const gState = (n) => ({
         name: n, level: 5, archetype: 'ADVENTURER',
         buildings: { hall: 5, training: 3, treasury: 5 },
@@ -29,7 +29,7 @@ const MB = (kb) => (kb / 1024).toFixed(1) + 'MB';
     r = rss();
     console.log(`[probe] guild static: ${g.contentType} ${(g.buffer.length / 1048576).toFixed(2)}MB in ${((Date.now() - t) / 1000).toFixed(1)}s | rss=${MB(r.rss)} hwm=${MB(r.hwm)}`);
 
-    const base = require('../core/rpg/homesteadBaseRenderer');
+    const base = require('../core/rpg/systems/homestead/homesteadBaseRenderer');
     const bState = {
         owner: 'MemProbeB3',
         structures: [
@@ -44,7 +44,7 @@ const MB = (kb) => (kb / 1024).toFixed(1) + 'MB';
     r = rss();
     console.log(`[probe] base anim: ${b.contentType} ${(b.buffer.length / 1048576).toFixed(2)}MB in ${((Date.now() - t) / 1000).toFixed(1)}s | rss=${MB(r.rss)} hwm=${MB(r.hwm)}`);
 
-    const room = require('../core/rpg/homesteadRenderer');
+    const room = require('../core/rpg/systems/homestead/homesteadRenderer');
     const rState = { owner: 'MemProbeR3', theme: 'oakhaven', placed: [] };
     t = Date.now();
     const rm = await room.renderRoomImage(rState, {});

@@ -2,9 +2,9 @@
 // 🌳 SKILL TREE COMMANDS
 // ============================================ 
 
-const economy = require('../rpg/economy');
-const progression = require('../rpg/progression');
-const skillTree = require('../rpg/skillTree');
+const economy = require('../rpg/systems/economy/economy');
+const progression = require('../rpg/systems/characters/progression');
+const skillTree = require('../rpg/systems/characters/skillTree');
 const botConfig = require('../../botConfig');
 
 const getPrefix = () => botConfig.getPrefix();
@@ -19,7 +19,7 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
     const user = economy.getUser(senderJid);
     const userClass = economy.getUserClass(senderJid);
     const level = progression.getLevel(senderJid);
-    const classSystem = require('../rpg/classSystem');
+    const classSystem = require('../rpg/systems/characters/classSystem');
 
     if (!userClass) {
         await sock.sendMessage(chatId, {
@@ -61,7 +61,7 @@ async function displaySkillTree(sock, chatId, senderJid, senderName) {
                         // 🎨 2026-10-11 asset overhaul: node artwork filename
                         // (Go loads core/rpgasset/skills/<icon>.png; absent on
                         // older binaries -> medallion initials as before).
-                        icon: (() => { try { return require('../rpg/skillAssets').skillArtFile(skillId); } catch (e) { return null; } })() || undefined,
+                        icon: (() => { try { return require('../rpg/systems/characters/skillAssets').skillArtFile(skillId); } catch (e) { return null; } })() || undefined,
                     });
                 }
                 branches.push({ name: String(treeData.name || 'Path'), skills });
@@ -188,7 +188,7 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
     const user = economy.getUser(senderJid);
     const userClass = economy.getUserClass(senderJid);
     const level = progression.getLevel(senderJid);
-    const classSystem = require('../rpg/classSystem');
+    const classSystem = require('../rpg/systems/characters/classSystem');
     
     if (!userClass) {
         await sock.sendMessage(chatId, { text: '❌ No class assigned!' });
@@ -382,7 +382,7 @@ async function upgradeSkill(sock, chatId, senderJid, skillId) {
             // 🎨 2026-10-11 asset overhaul: per-skill artwork inside the
             // medallion (Go service loads core/rpgasset/skills/<icon>.png).
             // Older Go binaries ignore the field - graceful degradation.
-            icon: (() => { try { return require('../rpg/skillAssets').skillArtFile(targetSkill); } catch (e) { return null; } })() || undefined,
+            icon: (() => { try { return require('../rpg/systems/characters/skillAssets').skillArtFile(targetSkill); } catch (e) { return null; } })() || undefined,
             // 🧩 SPRITE CONSISTENCY 2026-09-17: hero sprite fields.
             playerClass: String((userClass && userClass.id) || '').toUpperCase(),
             playerIndex: Math.max(0, Math.floor(Number(user && user.spriteIndex) || 0)),
@@ -613,11 +613,11 @@ function abilityEffectText(effect) {
 //    `.j abilities <number|id|name>` -> stylised skill card with artwork,
 //    tier, stats and the skill's REAL rune sockets (runeSystem slot rules).
 // ==========================================
-const _abilityCards = () => require('../rpg/abilityCards');
+const _abilityCards = () => require('../rpg/systems/characters/abilityCards');
 
 async function sendAbilityInspection(sock, chatId, senderJid, senderName, ctx0) {
     const { user, userClass, ability } = ctx0;
-    const runeSystem = require('../rpg/runeSystem');
+    const runeSystem = require('../rpg/systems/inventory/runeSystem');
     const skillId = String(ability.id || '');
     let socketed = [];
     let slotCount = 1;
@@ -644,7 +644,7 @@ async function sendAbilityInspection(sock, chatId, senderJid, senderName, ctx0) 
     try {
         const req = ability.requires || (ability.skill && ability.skill.requires);
         if (req && typeof req === 'object' && Object.keys(req).length) {
-            const st = require('../rpg/skillTree');
+            const st = require('../rpg/systems/characters/skillTree');
             const parts = [];
             for (const [rsId, rsLvl] of Object.entries(req)) {
                 let nm = null;
@@ -727,8 +727,8 @@ async function getSocketBoardData(senderJid) {
     const user = economyMod.getUser(senderJid);
     const userClass = economyMod.getUserClass(senderJid);
     if (!user || !userClass) return null;
-    const classSystem = require('../rpg/classSystem');
-    const runeSystem = require('../rpg/runeSystem');
+    const classSystem = require('../rpg/systems/characters/classSystem');
+    const runeSystem = require('../rpg/systems/inventory/runeSystem');
     const lineage = classSystem.getLineage(userClass.id);
     const seen = new Set();
     const rows = [];
@@ -828,7 +828,7 @@ async function viewAbilities(sock, chatId, senderJid, senderName, pageArg, opts 
     economy.initializeClass(senderJid);
     const user = economy.getUser(senderJid);
     const userClass = economy.getUserClass(senderJid);
-    const classSystem = require('../rpg/classSystem');
+    const classSystem = require('../rpg/systems/characters/classSystem');
     // r6 fix: the card payload used `level` but this function never defined
     // it - every .j abilities card render threw "level is not defined" and
     // silently fell back to the text list.
@@ -1185,7 +1185,7 @@ async function learnSkill(sock, chatId, senderJid, skillId) {
         return;
     }
 
-    const classSystem = require('../rpg/classSystem');
+    const classSystem = require('../rpg/systems/characters/classSystem');
     const userClass = economy.getUserClass(senderJid);
     const lineage = classSystem.getLineage(userClass?.id || '');
 
@@ -1281,7 +1281,7 @@ async function learnSkill(sock, chatId, senderJid, skillId) {
 // ==========================================
 
 async function handleEvolve(sock, chatId, senderJid, senderName, args) {
-    const classSystem = require('../rpg/classSystem');
+    const classSystem = require('../rpg/systems/characters/classSystem');
     const user = economy.getUser(senderJid);
     
     if (!user) {
@@ -1368,7 +1368,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
         });
     }
 
-    const inventorySystem = require('../rpg/inventorySystem');
+    const inventorySystem = require('../rpg/systems/inventory/inventorySystem');
     
     if (!inventorySystem.hasItem(senderJid, requiredStone)) {
         return sock.sendMessage(chatId, { text: `❌ You need a *${stoneName}* to evolve! Buy one from the shop.` });
@@ -1387,7 +1387,7 @@ async function handleEvolve(sock, chatId, senderJid, senderName, args) {
 
     // === TRIALS SYSTEM: Trigger Boss Fight if required ===
     if (chosen.requirement?.trialBoss && !(user.completedTrials || []).includes(chosen.requirement.trialBoss)) {
-        const guildAdventure = require('../rpg/guildAdventure');
+        const guildAdventure = require('../rpg/systems/adventures/guildAdventure');
         const sessionKey = `${chatId}_${senderJid}`;
 
         if (guildAdventure.isUserInAdventure(sessionKey)) {

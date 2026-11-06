@@ -11,8 +11,8 @@ const check = (name, cond) => { cond ? pass++ : fail++; console.log(`  ${cond ? 
 
 (async () => {
     fs.rmSync(QA, { recursive: true, force: true });
-    const B = require('../core/rpg/homesteadBaseRenderer');
-    const G = require('../core/rpg/guildBaseRenderer');
+    const B = require('../core/rpg/systems/homestead/homesteadBaseRenderer');
+    const G = require('../core/rpg/systems/guildwar/guildBaseRenderer');
     const L = B.LAYOUT;
     const baseState = {
         owner: 'warmerQA',
@@ -40,14 +40,14 @@ const check = (name, cond) => { cond ? pass++ : fail++; console.log(`  ${cond ? 
     fs.writeFileSync(path.join(QA, 'base', `${CV}_4444.data`), 'fresh-bytes');
 
     console.log('— listJournal —');
-    const mediaCache = require('../core/rpg/mediaCache');
+    const mediaCache = require('../core/rpg/systems/shared/mediaCache');
     const lj = mediaCache.listJournal('base');
     check('listJournal finds 3 base journals (2 stale + 1 fresh)', lj.length === 3);
     check('fresh flag correct', lj.filter((e) => e.fresh).length === 1 && lj.filter((e) => !e.fresh).length === 2);
     check('newest-first ordering', lj[0].fresh === true);   // fresh entry seeded last → newest mtime
 
     console.log('— warmOnce —');
-    const W = require('../core/rpg/renderWarmer');
+    const W = require('../core/rpg/systems/shared/renderWarmer');
     await W.warmOnce();
 
     // replay re-hashes the journaled state, so new data lands under the REAL hash —

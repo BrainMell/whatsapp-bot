@@ -2,13 +2,13 @@
 // 🔨 REPAIR SYSTEM COMMANDS
 // ============================================
 
-const inventorySystem = require('../rpg/inventorySystem');
-const durabilitySystem = require('../rpg/durabilitySystem');
-const economy = require('../rpg/economy');
+const inventorySystem = require('../rpg/systems/inventory/inventorySystem');
+const durabilitySystem = require('../rpg/systems/inventory/durabilitySystem');
+const economy = require('../rpg/systems/economy/economy');
 const botConfig = require('../../botConfig');
 // 💡 COSMOLOGY PASS: occasional blacksmith lore drops (plain text, never on
 // failure, 30-min per-user cooldown handled inside the module).
-const loreDrops = require('../rpg/loreDrops');
+const loreDrops = require('../rpg/systems/shared/loreDrops');
 
 const getZENI = () => botConfig.getCurrency().symbol;
 const getPrefix = () => botConfig.getPrefix();
@@ -24,7 +24,7 @@ const CONDITION_ICONS = {
 // returns null on any failure so the caller falls back to the text flow.
 async function smithCard(userId, banner, activity = 'browse') {
     try {
-        return await require('../rpg/baseBuilder').zoomForCommand({ userId, prefix: getPrefix() }, 'blacksmith', { activity, banner });
+        return await require('../rpg/systems/homestead/baseBuilder').zoomForCommand({ userId, prefix: getPrefix() }, 'blacksmith', { activity, banner });
     } catch (e) { return null; }
 }
 const _cardOk = (c) => c && c.buffer && c.buffer.length > 500;
@@ -250,8 +250,8 @@ async function inspectItem(sock, chatId, userId, target) {
     
     const inventory = inventorySystem.formatInventory(userId);
     const equipment = inventorySystem.getEquipment(userId);
-    const lootSystem = require('../rpg/lootSystem');
-    const weaponSynergy = require('../rpg/weaponSynergy');
+    const lootSystem = require('../rpg/systems/inventory/lootSystem');
+    const weaponSynergy = require('../rpg/systems/inventory/weaponSynergy');
     
     let item = null;
     let isEquipped = false;

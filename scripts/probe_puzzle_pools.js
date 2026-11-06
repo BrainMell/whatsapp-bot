@@ -7,9 +7,9 @@ process.env.GW_TEST = '1';
 process.env.GW_MOVE_COOLDOWN_MS = '300';
 process.env.GW_SIM_DB = 'gwpuzzleqa' + Math.floor(Math.random() * 100000);
 const L = require('./mp_lib');
-const mapEngine = require('../core/rpg/guildWar/mapEngine');
-const puzzles = require('../core/rpg/guildWar/puzzles');
-const state = require('../core/rpg/guildWar/state');
+const mapEngine = require('../core/rpg/systems/guildwar/mapEngine');
+const puzzles = require('../core/rpg/systems/guildwar/puzzles');
+const state = require('../core/rpg/systems/guildwar/state');
 const GWE = require('../core/models/GuildWarEvent');
 
 let pass = 0, fail = 0;
@@ -69,7 +69,7 @@ function check(name, cond, extra) {
     // force the champion's room into a rune-lock puzzle
     await GWE.updateOne({ eventId: ev.eventId, 'rooms.key': me.roomId }, { $set: { 'rooms.$.type': 'puzzle', 'rooms.$.state': 'ACTIVE' } });
     // generate the puzzle the way room building does, then persist it
-    const mapEngine2 = require('../core/rpg/guildWar/mapEngine');
+    const mapEngine2 = require('../core/rpg/systems/guildwar/mapEngine');
     const map = { rooms: new Map() };
     const generated = puzzles.genSequence(mapEngine2.makeRng('qa-seq:' + ev.eventId), { ring: 1, key: me.roomId });
     await GWE.updateOne({ eventId: ev.eventId, 'rooms.key': me.roomId }, {
@@ -77,7 +77,7 @@ function check(name, cond, extra) {
             'rooms.$.payload.puzzle': { kind: generated.kind, prompt: generated.prompt, answer: generated.answer, altAnswers: [], normalize: generated.normalize(generated.answer), maxAttempts: 3, symbols: generated.symbols },
         },
     });
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
     const sock = L.makeSock('A');
     await dmRouter.handleDM(sock, me.jid, me.jid, '.j examine', '\u200B', { prefix: '.j', prefixed: true });
     const msgs = sock.to(me.jid);

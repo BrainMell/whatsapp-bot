@@ -26,7 +26,7 @@ function check(name, cond, extra) {
 
 const fs = require('fs');
 const path = require('path');
-const CFG = require('../core/rpg/guildWar/config').COMBAT;
+const CFG = require('../core/rpg/systems/guildwar/config').COMBAT;
 const B = CFG.BANDS;
 
 // ── fixture helpers (mirrors gw_bands_qa) ─────────────────────────────
@@ -56,7 +56,7 @@ function eventFixture(id, players, exploration = 0) {
 }
 
 function stubLevels() {
-    const progression = require('../core/rpg/progression');
+    const progression = require('../core/rpg/systems/characters/progression');
     if (realGetLevel === null) realGetLevel = progression.getLevel;
     progression.getLevel = (jid) => (fakeLevels[jid] !== undefined ? fakeLevels[jid] : 1);
 }
@@ -71,7 +71,7 @@ function rollFor(band) {
 
 async function main() {
     stubLevels();
-    const encounters = require('../core/rpg/guildWar/encounters');
+    const encounters = require('../core/rpg/systems/guildwar/encounters');
 
     // ═════════ PART 1 — MATRIX SWEEP ═════════
     console.log('\n════ PART 1: matrix sweep — hard guarantees ════');
@@ -217,10 +217,10 @@ async function main() {
 
         // ⚠️ restore the REAL getLevel — Part 1's stub must not poison the
         // real-chain verification (a stale stub reads as a mapping miss)
-        const progression0 = require('../core/rpg/progression');
+        const progression0 = require('../core/rpg/systems/characters/progression');
         progression0.getLevel = realGetLevel;
 
-        const economy = require('../core/rpg/economy');
+        const economy = require('../core/rpg/systems/economy/economy');
         // build a registered user directly in the DB, then warm the cache
         const User = require('../core/models/User');
         const lidJid = '25519998877@lid';
@@ -238,7 +238,7 @@ async function main() {
         const cached = economy.getUser(phoneJid);
         check('R1 economy cache warmed from DB (phone key)', !!cached && cached.registered === true);
         // resolveJidHelper LID→phone fallback should land on the same cache entry
-        const progression = require('../core/rpg/progression');
+        const progression = require('../core/rpg/systems/characters/progression');
         const realGapLvl = progression.getLevel(lidJid);
         check(`R2 progression.getLevel resolves through LID→phone fallback (25, got ${realGapLvl})`, realGapLvl === 25);
         // engage through the REAL chain: solo roster, LID jid, expected p50=p80=max=25

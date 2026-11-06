@@ -8,8 +8,8 @@ const OUT = '/tmp/rebuild_previews';
 fs.mkdirSync(OUT, { recursive: true });
 
 async function main() {
-    const baseR = require('../core/rpg/homesteadBaseRenderer');
-    const roomR = require('../core/rpg/homesteadRenderer');
+    const baseR = require('../core/rpg/systems/homestead/homesteadBaseRenderer');
+    const roomR = require('../core/rpg/systems/homestead/homesteadRenderer');
 
     // ── 1) NEW BASE VIEW — v2 layout, scaled structures, margin world ──
     const baseState = {

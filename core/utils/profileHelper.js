@@ -1,8 +1,8 @@
-const economy = require('../rpg/economy');
-const inventorySystem = require('../rpg/inventorySystem');
-const lootSystem = require('../rpg/lootSystem');
-const classSystem = require('../rpg/classSystem');
-const progression = require('../rpg/progression');
+const economy = require('../rpg/systems/economy/economy');
+const inventorySystem = require('../rpg/systems/inventory/inventorySystem');
+const lootSystem = require('../rpg/systems/inventory/lootSystem');
+const classSystem = require('../rpg/systems/characters/classSystem');
+const progression = require('../rpg/systems/characters/progression');
 const botConfig = require('../../botConfig');
 
 async function buildCardData(userId, userName, pfpUrl = "") {
@@ -47,7 +47,7 @@ async function buildCardData(userId, userName, pfpUrl = "") {
         // any sprite-drawing consumer resolves the same variant as combat.
         playerClass: String(classData?.id || classData?.name || '').toUpperCase(),
         playerIndex: Math.max(0, Math.floor(Number(economyUser && economyUser.spriteIndex) || 0)),
-        guildName: require('../rpg/guilds').getUserGuild(userId) || "",
+        guildName: require('../rpg/systems/guildwar/guilds').getUserGuild(userId) || "",
         wallet: economyUser.wallet || 0,
         bank: economyUser.bank || 0,
         zeniSymbol: botConfig.getCurrency().symbol,

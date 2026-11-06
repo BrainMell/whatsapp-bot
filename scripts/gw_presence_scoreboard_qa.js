@@ -49,7 +49,7 @@ async function connectDB() {
 }
 
 async function freshEvent(host) {
-    const state = require('../core/rpg/guildWar/state');
+    const state = require('../core/rpg/systems/guildwar/state');
     await require('../core/models/GuildWarEvent').updateMany(
         { state: { $in: ['INITIATED', 'REGISTRATION', 'ACTIVE'] } },
         { $set: { state: 'COMPLETED' } });
@@ -67,12 +67,12 @@ async function freshEvent(host) {
 
 (async () => {
     await connectDB();
-    const state = require('../core/rpg/guildWar/state');
-    const feed = require('../core/rpg/guildWar/feed');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const feed = require('../core/rpg/systems/guildwar/feed');
     const GuildWarEvent = require('../core/models/GuildWarEvent');
-    const ga = require('../core/rpg/guildAdventure');
+    const ga = require('../core/rpg/systems/adventures/guildAdventure');
     const botConfig = require('../botConfig');
-    const economy = require('../core/rpg/economy');
+    const economy = require('../core/rpg/systems/economy/economy');
 
     // economy users so the duel pipeline resolves real players
     economy.economyData.set('pp0@s.whatsapp.net', {
@@ -159,7 +159,7 @@ async function freshEvent(host) {
     const dm0 = (txt) => dmRouterHandleDM(sockC, 'pp0@s.whatsapp.net', txt);
     const dm1 = (txt) => dmRouterHandleDM(sockC, 'pp1@s.whatsapp.net', txt);
     function dmRouterHandleDM(sock, jid, txt) {
-        const dmRouter = require('../core/rpg/guildWar/dmRouter');
+        const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
         return dmRouter.handleDM(sock, jid, jid, txt, '\u200B', { prefix: '.j', prefixed: true });
     }
     await sleep(60);
@@ -182,7 +182,7 @@ async function freshEvent(host) {
     const evA = await freshEvent('arrqa@g.us');
     const docA = await state.getEvent(evA.eventId, { fresh: true });
     const roomA = docA.players.find((p) => p.jid === 'pp1@s.whatsapp.net').roomId;
-    const rooms = require('../core/rpg/guildWar/rooms');
+    const rooms = require('../core/rpg/systems/guildwar/rooms');
     // seat pp1 in roomA via the REAL enterRoom (fromKey=null → pure push branch)
     await state.updatePlayer(evA.eventId, 'pp1@s.whatsapp.net', {}, { roomId: roomA, prevRoomId: docA.players.find((p) => p.jid === 'pp1@s.whatsapp.net').spawnRoomId || roomA, protectedUntil: 0 });
     await rooms.enterRoom(evA.eventId, 'pp1@s.whatsapp.net', null, roomA);
@@ -190,7 +190,7 @@ async function freshEvent(host) {
     const roomA2 = docA2.rooms.find((r) => r.key === roomA);
     const logA = [];
     const sockA = mockSock(logA);
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
     await dmRouter.announceArrival(sockA, docA2, { jid: 'pp0@s.whatsapp.net', name: 'Alpha' }, roomA2, { prefix: '.j' });
     const arrived = logA.find((s) => s.chatId === 'pp1@s.whatsapp.net' && /strides into your chamber/.test(s.text));
     check('P4 occupant notified of the arrival', !!arrived, JSON.stringify(logA).slice(0, 200));

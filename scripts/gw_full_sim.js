@@ -29,10 +29,10 @@ const R = [];
 const MAN = [];
 const rep = (section, name, pass, detail) => { R.push({ section, name, pass, detail }); console.log(`${pass ? 'PASS' : 'FAIL'} [${section}] ${name}${detail ? ' — ' + detail : ''}`); };
 
-const state = require('../core/rpg/guildWar/state');
-const mapEngine = require('../core/rpg/guildWar/mapEngine');
+const state = require('../core/rpg/systems/guildwar/state');
+const mapEngine = require('../core/rpg/systems/guildwar/mapEngine');
 const GWE = require('../core/models/GuildWarEvent');
-const ga = require('../core/rpg/guildAdventure');
+const ga = require('../core/rpg/systems/adventures/guildAdventure');
 const DIR_TOKEN = { n: 'north', e: 'east', s: 'south', w: 'west' };
 
 const sleep = L.sleep;
@@ -514,7 +514,7 @@ async function scenarioBig() {
     // ⚔️ load guildWar/index.js — it self-installs the ruins combat hooks
     // (onEnd: room clears, GP, warden ledger). Production boots it via
     // engine.js; the sims bypass the engine, so load it here.
-    require('../core/rpg/guildWar/index');
+    require('../core/rpg/systems/guildwar/index');
     console.log('╔═══════════════════════════════════════════╗');
     console.log('║  GUILD WAR FULL-GAME SIMS (duo + 10p)     ║');
     console.log('╚═══════════════════════════════════════════╝');

@@ -12,9 +12,9 @@ const botConfig = require("../botConfig");
 const listMenu = require('./commands/listMenu'); // 🧪 native list menu experiment
 const { storage } = botConfig;
 const system = require('./utils/system');
-const economy = require('./rpg/economy');
+const economy = require('./rpg/systems/economy/economy');
 const lidResolver = require('./utils/lidResolver');
-const loans = require('./rpg/loans');
+const loans = require('./rpg/systems/economy/loans');
 const ChatMessage = require("./models/ChatMessage");
 const ErrorLog = require("./models/ErrorLog");
 const Metric = require("./models/Metric");
@@ -57,17 +57,17 @@ const styleJudge = require('./utils/styleJudge');
 // title/author/length list; a numeric reply plays that exact video via the
 // Go service URL-mode. Legacy single-shot chain stays as fallback.
 const audioPicker = require('./utils/audioPicker');
-const classSystem = require('./rpg/classSystem');
+const classSystem = require('./rpg/systems/characters/classSystem');
 
 // Global map to track connection health of bot instances
 const botInstancesHealth = new Map();
 // ═══════════════════════════════════════════════════════════════════════════
 // RPG SYSTEMS - guilds, skills, bosses etc
 // ═══════════════════════════════════════════════════════════════════════════
-const guilds = require('./rpg/guilds');
-const guildAdventure = require('./rpg/guildAdventure');
-const skillTree = require('./rpg/skillTree');
-const bossMechanics = require('./rpg/bossMechanics');
+const guilds = require('./rpg/systems/guildwar/guilds');
+const guildAdventure = require('./rpg/systems/adventures/guildAdventure');
+const skillTree = require('./rpg/systems/characters/skillTree');
+const bossMechanics = require('./rpg/systems/combat/bossMechanics');
 // ═══════════════════════════════════════════════════════════════════════════
 // LIBS + MEDIA TOOLS - qr, ai, ffmpeg, scraping, stickers
 // ═══════════════════════════════════════════════════════════════════════════
@@ -272,7 +272,7 @@ function isBlocked(userId) {
     try { authPath = botConfig.getAuthPath ? botConfig.getAuthPath() : null; } catch (_) {}
     const phone = resolveToPhone(userId, authPath);
     if (phone && blockedUsers.has(jidNormalizedUser(phone))) return true;
-    const loans = require('./rpg/loans');
+    const loans = require('./rpg/systems/economy/loans');
     if (loans.isLoanBlocked(userId)) return true;
     return false;
   } catch (err) {
@@ -554,7 +554,7 @@ async function saveRpgMods() {
 // ═══════════════════════════════════════════════════════════════════════
 // 💡 PHASE 7 2026-08-29: Game Tester role (delegates to testerSystem)
 // ═══════════════════════════════════════════════════════════════════════
-const testerSystem = require('./rpg/testerSystem');
+const testerSystem = require('./rpg/systems/meta/testerSystem');
 
 // PHASE 7 FIX 2026-08-29: engine.js owns the gameTesters Set (mirrors rpgMods pattern).
 // testerSystem is now used only for tester GC + test mode + issue storage.
@@ -1053,13 +1053,13 @@ try {
 const stockChart = require('./utils/stockChart'); // 📈 real-world market charts - Yahoo Finance (2026-09-25)
 const trendsChart = require('./utils/trendsChart'); // 📊 Google Trends comparisons - got-scraping dance (2026-09-25)
 const news = require('./utils/news'); // ✅ Added news module
-const stockMarket = require('./rpg/stockMarket'); // ✅ Added stock market module
+const stockMarket = require('./rpg/systems/economy/stockMarket'); // ✅ Added stock market module
 const P = require("pino");
 const gambling = require("./gambling");
-const progression = require('./rpg/progression');
+const progression = require('./rpg/systems/characters/progression');
 const rpgCommands = require('./commands/rpgCommands');
-const inventorySystem = require('./rpg/inventorySystem');
-const lootSystem = require('./rpg/lootSystem');
+const inventorySystem = require('./rpg/systems/inventory/inventorySystem');
+const lootSystem = require('./rpg/systems/inventory/lootSystem');
 const progressionCommands = require('./commands/progressionCommands');
 const shopCommands = require('./commands/shopCommands');
 const repairCommands = require('./commands/repairCommands');
@@ -1071,8 +1071,8 @@ const opsCheckCommands = require('./commands/opsCheckCommands');
 const mentoringCommands = require('./commands/mentoringCommands');
 // 💡 Summoner System (Phase 4) - see download/SUMMONER_SYSTEM_DESIGN.md
 const summonCommands = require('./commands/summonCommands');
-const pvpSystem = require('./rpg/pvpSystem');
-const cardSystem = require('./rpg/cardSystem');
+const pvpSystem = require('./rpg/systems/pvp/pvpSystem');
+const cardSystem = require('./rpg/systems/cards/cardSystem');
 const contextEngine = require("./src/context_engine/Engine"); // NEW: Brain system
 const NodeCache = require("node-cache");
 const REACTIONS = require("../reactions/config");
@@ -1115,7 +1115,7 @@ function isSandboxJid(jid) {
 // Initialize sandbox: back up real user, load sandbox data into cache
 async function enableSandbox(realJid, senderName) {
   const AdminSandbox = require('./models/AdminSandbox');
-  const economy = require('./rpg/economy');
+  const economy = require('./rpg/systems/economy/economy');
 
   // 💡 FIX: strip sandbox_ prefix in case this is called with an already-swapped JID
   realJid = stripSandboxPrefix(realJid);
@@ -1270,7 +1270,7 @@ async function enableSandbox(realJid, senderName) {
 // 💡 FIX: accept both real and sandbox JIDs (strip prefix).
 async function disableSandbox(jid) {
   const AdminSandbox = require('./models/AdminSandbox');
-  const economy = require('./rpg/economy');
+  const economy = require('./rpg/systems/economy/economy');
 
   // 💡 FIX: the admin console passes senderJid which may already be swapped
   // to sandbox_<realJid>. Strip the prefix to get the real JID.
@@ -1342,7 +1342,7 @@ async function disableSandbox(jid) {
 // 💡 Save all active sandbox data to MongoDB (called on bot shutdown/restart)
 async function saveAllSandboxes() {
   const AdminSandbox = require('./models/AdminSandbox');
-  const economy = require('./rpg/economy');
+  const economy = require('./rpg/systems/economy/economy');
 
   for (const [realJid, entry] of sandboxMode.entries()) {
     try {
@@ -5057,7 +5057,7 @@ What to do:
         // DM encounter once per triune alignment window (~4-day cadence).
         // Cheap no-op unless the alignment window is live.
         if (sock) {
-          require("./rpg/worldAlignment")
+          require("./rpg/systems/world/worldAlignment")
             .tick(sock, BOT_MARKER)
             .catch(() => {});
         }
@@ -5068,7 +5068,7 @@ What to do:
         // 'started' event AGAIN on the same instance — champions got each
         // start card twice even on a single bot.
         if (sock) {
-          require("./rpg/guildWar")
+          require("./rpg/systems/guildwar/index")
             .state.tick(sock, BOT_MARKER)
             .catch((e) => console.error("[GuildWar] sweeper:", e?.message));
         }
@@ -5676,7 +5676,7 @@ What to do:
       // 2) JID resolution now also matches by user part across the economy
       //    cache (@lid ↔ @s.whatsapp.net), so LID-privacy groups can't
       //    break targeting either.
-      const economy = require('./rpg/economy');
+      const economy = require('./rpg/systems/economy/economy');
       const findByUserPart = (jid) => {
         if (typeof jid !== 'string' || !jid.includes('@')) return null;
         const userPart = jid.split('@')[0].split(':')[0];
@@ -6519,7 +6519,7 @@ What to do:
           groupTranscript += "------------------------------------\n\n";
           
           // Fetch relationships between sender and active group participants
-          const socialSystem = require('./rpg/socialSystem');
+          const socialSystem = require('./rpg/systems/meta/socialSystem');
           const relationshipText = socialSystem.getRelationshipsText([...activeParticipants], senderJid);
           
           if (groupTranscript) systemPrompt += groupTranscript;
@@ -6855,7 +6855,7 @@ What to do:
         // the cards go out on the player's next interaction - this hook fires
         // on every player message, so delivery is at most one message late.
         try {
-          await require('./rpg/tutorial').deliverPendingUnlocks(userId, sock, chatId);
+          await require('./rpg/systems/meta/tutorial').deliverPendingUnlocks(userId, sock, chatId);
         } catch (e) { /* never break the interaction path */ }
 
         // 4. 💡 2026-09-12: adventurer RANK-UP → ROYAL DECREE parchment card
@@ -7333,7 +7333,7 @@ ${targetCategory}`;
       let __menuLoreDrop = null;
       if (Math.random() < 1 / 6) {
         try {
-          const loreDrops = require('./rpg/loreDrops');
+          const loreDrops = require('./rpg/systems/shared/loreDrops');
           __menuLoreDrop = loreDrops.maybeDrop('general_world', { userId: senderJid || 'menu', chatId, force: true });
         } catch (e) { __menuLoreDrop = null; }
       }
@@ -7343,7 +7343,7 @@ ${targetCategory}`;
       await sendMenuWithBanner(sock, chatId, mainMsg);
       if (__menuLoreDrop) {
         try {
-          const loreDrops = require('./rpg/loreDrops');
+          const loreDrops = require('./rpg/systems/shared/loreDrops');
           await loreDrops.sendOwn(sock, chatId, __menuLoreDrop);
         } catch (e) {}
       }
@@ -8187,7 +8187,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               try {
                 setTimeout(() => {
                   try {
-                    require('./rpg/guildAdventure')
+                    require('./rpg/systems/adventures/guildAdventure')
                       .autoResumeAfterRestart(sock)
                       .catch((e) => console.error("[AutoResume] boot sweep failed:", e?.message));
                   } catch (e) {
@@ -9372,7 +9372,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   // reply-targets per pair for the ship Match Meter.
                   // Registered users only, in-memory + 5-min batched flush.
                   try {
-                    require('./rpg/interactionTracker').recordMessage(m, senderJid, chatId, {
+                    require('./rpg/systems/meta/interactionTracker').recordMessage(m, senderJid, chatId, {
                       isGroup: isGroupChat,
                       botJid,
                       botLid,
@@ -10549,7 +10549,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                       /^(?:look|l|where|whereami|paths|map|mark|anchor|teleport|tp|recall|share\s+map|challenge|accept|flee|handin|rejoin|return|quit|talk|say)\b/.test(_gwVerb);
                     if (isWarVerb) {
                       try {
-                        const gwResult = await require("./rpg/guildWar/dmRouter").handleDM(
+                        const gwResult = await require("./rpg/systems/guildwar/dmRouter").handleDM(
                           sock, senderJid, chatId, txt, BOT_MARKER, { prefix: botConfig.getPrefix(), prefixed: true },
                         );
                         if (gwResult) {
@@ -10592,7 +10592,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                       // relics, challenges). Returns null when not a Ruins action.
                       // NOTE: `prefix` const is declared further down this scope
                       // (TDZ) - NEVER reference it here. Use botConfig directly.
-                      const gwResult = await require("./rpg/guildWar/dmRouter").handleDM(
+                      const gwResult = await require("./rpg/systems/guildwar/dmRouter").handleDM(
                         sock, senderJid, chatId, txt, BOT_MARKER, { prefix: botConfig.getPrefix() },
                       );
                       if (gwResult) {
@@ -10607,7 +10607,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                       console.error("[GuildWar] DM router error:", e.message);
                     }
                     try {
-                      const consumed = await require("./rpg/encounterFramework").handleDM(
+                      const consumed = await require("./rpg/systems/combat/encounterFramework").handleDM(
                         sock,
                         senderJid,
                         chatId,
@@ -10621,7 +10621,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                     // 💡 NEW PLAYER TUTORIAL (2026-10-03): DM verbs for the
                     // interactive tutorial (start/skip/next/finish/retry).
                     try {
-                      const tutResult = await require("./rpg/tutorial").handleDM(
+                      const tutResult = await require("./rpg/systems/meta/tutorial").handleDM(
                         sock, senderJid, chatId, txt, BOT_MARKER, { prefix: botConfig.getPrefix() },
                       );
                       if (tutResult) {
@@ -10845,7 +10845,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   // work without any instance prefix; one sibling replies.
                   if (lowerTxt === '.lore') {
                     if (electOnce('lore', (m && m.key && m.key.id) || String(Date.now()))) {
-                      const { sendLore } = require('./rpg/loreContent');
+                      const { sendLore } = require('./rpg/systems/shared/loreContent');
                       await sendLore(sock, chatId, botConfig.getPrefix());
                     }
                     return;
@@ -11303,7 +11303,7 @@ _💡 Reply with another number from your search list!_`.trim();
                     // redirect. No-op when no session exists (zero overhead for
                     // normal gameplay).
                     try {
-                      require('./rpg/tutorial').notifyAction(senderJid, primaryCmd, {
+                      require('./rpg/systems/meta/tutorial').notifyAction(senderJid, primaryCmd, {
                         sock, chatId, sub: cmdArgs[1], prefix: botConfig.getPrefix(),
                       }).catch(() => {});
                     } catch (e) { /* tutorial must never break commands */ }
@@ -12638,7 +12638,7 @@ _💡 Reply with another number from your search list!_`.trim();
                           return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} trial info <bossId>\`\nExample: \`${botConfig.getPrefix()} trial info LEVIATHAN\`` });
                         }
                         try {
-                          const classEncounters = require('./rpg/classEncounters');
+                          const classEncounters = require('./rpg/systems/combat/classEncounters');
                           const selectBoss = classEncounters.selectBoss;
                           const boss = selectBoss ? selectBoss(50, bossId) : null;
                           if (!boss) {
@@ -12654,7 +12654,7 @@ _💡 Reply with another number from your search list!_`.trim();
                             }
                           }
                           // Find which class(es) require this boss
-                          const classSystem = require('./rpg/classSystem');
+                          const classSystem = require('./rpg/systems/characters/classSystem');
                           const allClasses = classSystem.getAllClasses ? classSystem.getAllClasses() : Object.values(classSystem.CLASSES || {});
                           const requires = (Array.isArray(allClasses) ? allClasses : []).filter(c => c && c.requirement && c.requirement.trialBoss === boss.id);
                           if (requires.length > 0) {
@@ -12705,7 +12705,7 @@ _💡 Reply with another number from your search list!_`.trim();
                         if (!userClass) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You don't have a class yet. Use \`${botConfig.getPrefix()} class\` to pick one.` });
                         }
-                        const classSystem = require('./rpg/classSystem');
+                        const classSystem = require('./rpg/systems/characters/classSystem');
                         const currentClass = classSystem.getClassById(userClass);
                         if (!currentClass) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Could not find your current class.' });
@@ -12890,7 +12890,7 @@ _💡 Reply with another number from your search list!_`.trim();
                       // `.j combat log on` and it turned the log OFF. Explicit
                       // args now set the state directly; bare = flip.
                       if (action === "log") {
-                        const ci = require('./rpg/combatIntegration');
+                        const ci = require('./rpg/systems/combat/combatIntegration');
                         const logArg = String(combatTarget || '').trim().toLowerCase();
                         let nowOn;
                         if (["off", "false", "0", "no"].includes(logArg)) {
@@ -13075,14 +13075,14 @@ _💡 Reply with another number from your search list!_`.trim();
                         if (currentHP >= maxHP) {
                           // 💡 Phase B TUTORIAL: already-full still counts as a
                           // hospital visit for the lesson (no-op unless active).
-                          try { require('./rpg/tutorial').notify(senderJid, 'hospital', { sock, chatId, prefix: botConfig.getPrefix() }).catch(() => {}); } catch (e) {}
+                          try { require('./rpg/systems/meta/tutorial').notify(senderJid, 'hospital', { sock, chatId, prefix: botConfig.getPrefix() }).catch(() => {}); } catch (e) {}
                           // ⚗️ §16: the visit still collects any ready Med Bay potions.
                           let __potFull = { qty: 0 };
-                          try { __potFull = await require('./rpg/baseBuilder').collectMedbayPotions(senderJid); } catch (e) {}
+                          try { __potFull = await require('./rpg/systems/homestead/baseBuilder').collectMedbayPotions(senderJid); } catch (e) {}
                           const potTxtFull = __potFull.qty > 0 ? `\n\n⚗️ Med Bay stock collected: +${__potFull.qty}× ${__potFull.name}` : '';
                           // ⚕️ §11: the visit plays on the Med Bay close-up (text fallback preserved)
                           try {
-                            const card = await require('./rpg/baseBuilder').zoomForCommand({ senderJid, prefix: botConfig.getPrefix() }, 'medbay', { activity: 'healing', banner: { head: 'ALREADY AT FULL HEALTH', lines: [`HP ${maxHP}/${maxHP}`].concat(__potFull.qty > 0 ? [`Collected: +${__potFull.qty}× ${__potFull.name}`] : []) } });
+                            const card = await require('./rpg/systems/homestead/baseBuilder').zoomForCommand({ senderJid, prefix: botConfig.getPrefix() }, 'medbay', { activity: 'healing', banner: { head: 'ALREADY AT FULL HEALTH', lines: [`HP ${maxHP}/${maxHP}`].concat(__potFull.qty > 0 ? [`Collected: +${__potFull.qty}× ${__potFull.name}`] : []) } });
                             if (card && card.buffer && card.buffer.length > 500)
                               return sock.sendMessage(chatId, { image: card.buffer, caption: BOT_MARKER + `🏥 You're already at full health!${potTxtFull}` });
                           } catch (e) {}
@@ -13105,10 +13105,10 @@ _💡 Reply with another number from your search list!_`.trim();
                           const cdStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
                           // ⚗️ §16: potions keep brewing while healing is on cooldown.
                           let __potCd = { qty: 0 };
-                          try { __potCd = await require('./rpg/baseBuilder').collectMedbayPotions(senderJid); } catch (e) {}
+                          try { __potCd = await require('./rpg/systems/homestead/baseBuilder').collectMedbayPotions(senderJid); } catch (e) {}
                           const cdLines = [`The healers rest — next full heal in ${cdStr}`, `HP ${currentHP}/${maxHP}`].concat(__potCd.qty > 0 ? [`Collected: +${__potCd.qty}× ${__potCd.name}`] : []);
                           try {
-                            const card = await require('./rpg/baseBuilder').zoomForCommand({ senderJid, prefix: botConfig.getPrefix() }, 'medbay', { activity: 'healing', banner: { head: 'THE HEALERS ARE RESTING', lines: cdLines } });
+                            const card = await require('./rpg/systems/homestead/baseBuilder').zoomForCommand({ senderJid, prefix: botConfig.getPrefix() }, 'medbay', { activity: 'healing', banner: { head: 'THE HEALERS ARE RESTING', lines: cdLines } });
                             if (card && card.buffer && card.buffer.length > 500)
                               return sock.sendMessage(chatId, { image: card.buffer, caption: BOT_MARKER + `🏥 *HOSPITAL COOLDOWN*\n\nThe hospital can only fully heal you once every 12 hours.\n\n⏳ Time remaining: *${cdStr}*\n\n💡 Your passive regen still works out of combat - your HP will slowly recover over time. Use \`${botConfig.getPrefix()} char\` to check your HP.${__potCd.qty > 0 ? `\n\n⚗️ Med Bay stock collected: +${__potCd.qty}× ${__potCd.name}` : ''}` });
                           } catch (e) {}
@@ -13121,28 +13121,28 @@ _💡 Reply with another number from your search list!_`.trim();
                         // own message box after the main reply
                         let __healDrop = null;
                         try {
-                          const loreDrops = require('./rpg/loreDrops');
+                          const loreDrops = require('./rpg/systems/shared/loreDrops');
                           __healDrop = loreDrops.maybeDrop('healing', { userId: senderJid, chatId, chance: 0.10 });
                         } catch (e) {}
                         // ⚗️ §16: the visit collects any ready Med Bay potions
                         // (grant happens server-side BEFORE the reply; no grant
                         // unless the inventory write succeeded).
                         let __pot = { qty: 0 };
-                        try { __pot = await require('./rpg/baseBuilder').collectMedbayPotions(senderJid); } catch (e) {}
+                        try { __pot = await require('./rpg/systems/homestead/baseBuilder').collectMedbayPotions(senderJid); } catch (e) {}
                         const healTxt = `🏥 *HOSPITAL*\n\n❤️ HP restored: +${healed}\n📊 HP: ${maxHP}/${maxHP}\n\n_You are now at full health._\n\n⏳ _Next hospital visit available in 12 hours. Out-of-combat passive regen will keep you topped up between visits._${__pot.qty > 0 ? `\n\n⚗️ Med Bay stock collected: +${__pot.qty}× ${__pot.name}` : ''}`;
                         // ⚕️ §11: the heal plays on the Med Bay close-up — actual
                         // +HP/HP numbers in the ribbon; plain text if render fails
                         try {
-                          const card = await require('./rpg/baseBuilder').zoomForCommand({ senderJid, prefix: botConfig.getPrefix() }, 'medbay', { activity: 'healing', spotlight: true, banner: { head: 'YOU WERE HEALED', lines: [`+${healed} HP`, `HP ${maxHP}/${maxHP}`].concat(__pot.qty > 0 ? [`Collected: +${__pot.qty}× ${__pot.name}`] : []) } });
+                          const card = await require('./rpg/systems/homestead/baseBuilder').zoomForCommand({ senderJid, prefix: botConfig.getPrefix() }, 'medbay', { activity: 'healing', spotlight: true, banner: { head: 'YOU WERE HEALED', lines: [`+${healed} HP`, `HP ${maxHP}/${maxHP}`].concat(__pot.qty > 0 ? [`Collected: +${__pot.qty}× ${__pot.name}`] : []) } });
                           if (card && card.buffer && card.buffer.length > 500)
                             return sock.sendMessage(chatId, { image: card.buffer, caption: BOT_MARKER + healTxt });
                         } catch (e) {}
                         await sock.sendMessage(chatId, { text: BOT_MARKER + healTxt });
                         // 💡 Phase B TUTORIAL: hospital lesson advances on a real heal
-                        try { require('./rpg/tutorial').notify(senderJid, 'hospital', { sock, chatId, prefix: botConfig.getPrefix() }).catch(() => {}); } catch (e) {}
+                        try { require('./rpg/systems/meta/tutorial').notify(senderJid, 'hospital', { sock, chatId, prefix: botConfig.getPrefix() }).catch(() => {}); } catch (e) {}
                         if (__healDrop) {
                           try {
-                            const loreDrops = require('./rpg/loreDrops');
+                            const loreDrops = require('./rpg/systems/shared/loreDrops');
                             await loreDrops.sendOwn(sock, chatId, __healDrop);
                           } catch (e) {}
                         }
@@ -13161,7 +13161,7 @@ _💡 Reply with another number from your search list!_`.trim();
                     if (primaryCmd === "fish" || primaryCmd === "fishing" || primaryCmd === "cast" || primaryCmd === "hunt" || primaryCmd === "hunting") {
                         if (!economy.isRegistered(senderJid))
                             return sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Register first!" });
-                        const bb = require('./rpg/baseBuilder');
+                        const bb = require('./rpg/systems/homestead/baseBuilder');
                         const actCtx = { sock, chatId, senderJid, m, reply: (t) => sock.sendMessage(chatId, { text: BOT_MARKER + t }), prefix: botConfig.getPrefix() };
                         await bb.runActivity(actCtx, primaryCmd === 'hunt' || primaryCmd === 'hunting' ? 'hunt' : 'fish');
                         return;
@@ -13179,7 +13179,7 @@ _💡 Reply with another number from your search list!_`.trim();
                     // — locked sight / reader's fee / ledger card — replaces
                     // the interim plain text ledger. Aliases kept.)
                     if (primaryCmd === "kills" || primaryCmd === "killcount" || primaryCmd === "slain") {
-                      const soulReader = require('./rpg/soulReader');
+                      const soulReader = require('./rpg/systems/adventures/soulReader');
                       await soulReader.viewKills(sock, chatId, senderJid, cmdArgs.slice(1));
                       return;
                     }
@@ -13342,8 +13342,8 @@ _💡 Reply with another number from your search list!_`.trim();
                       try {
                         const __wArg = cmdArgs.slice(1).join(" ").trim().toLowerCase();
                         if (!__wArg) {
-                          const cmr = require('./rpg/continentMapRenderer');
-                          const continentsLib = require('./rpg/continents');
+                          const cmr = require('./rpg/systems/world/continentMapRenderer');
+                          const continentsLib = require('./rpg/systems/world/continents');
                           const __buf = await cmr.renderContinentMap({});
                           const __cap = BOT_MARKER +
                             `🌍 *ALDAFOLD* — the mortal world of the First World.\n` +
@@ -13352,8 +13352,8 @@ _💡 Reply with another number from your search list!_`.trim();
                           else await sock.sendMessage(chatId, { text: __cap }, { quoted: m });
                           return;
                         }
-                        const worldMap = require('./rpg/worldMap');
-                        const progressionForWorld = require('./rpg/progression');
+                        const worldMap = require('./rpg/systems/world/worldMap');
+                        const progressionForWorld = require('./rpg/systems/characters/progression');
                         const __wUser = economy.getUser(senderJid) || {};
                         await worldMap.showWorld(sock, chatId, senderJid, cmdArgs.slice(1).join(" "), {
                           getLevel: (uid) => {
@@ -13591,7 +13591,7 @@ _💡 Reply with another number from your search list!_`.trim();
                       // string - `tutorial <track>`, `tutorial list`,
                       // `tutorial start <track>` all route into the track machine.
                       try {
-                        const tut = require("./rpg/tutorial");
+                        const tut = require("./rpg/systems/meta/tutorial");
                         const tutArgStr = cmdArgs.slice(1).filter(a => a !== "silent").join(" ");
                         const res = await tut.handleDM(sock, senderJid, chatId, "tutorial " + tutArgStr, BOT_MARKER, { prefix: botConfig.getPrefix() });
                         if (res && res.text) await sock.sendMessage(chatId, { text: BOT_MARKER + res.text });
@@ -14010,7 +14010,7 @@ _💡 Reply with another number from your search list!_`.trim();
                     // so both the grant and the card caption share one value.)
                     const xpReward = Math.max(5, Math.floor(sellValue / 5));
                     try {
-                      require('./rpg/progression').addXP(senderJid, xpReward, 'Hunt');
+                      require('./rpg/systems/characters/progression').addXP(senderJid, xpReward, 'Hunt');
                     } catch (xpErr) {
                       console.error('[Hunt] XP grant failed (non-fatal):', xpErr.message);
                     }
@@ -14019,7 +14019,7 @@ _💡 Reply with another number from your search list!_`.trim();
                     // (replaces the text-only banner). Falls back to text on failure.
                     let huntCardSent = false;
                     try {
-                      const combatImageGen = require('./rpg/combatImageGenerator');
+                      const combatImageGen = require('./rpg/systems/combat/combatImageGenerator');
                       // Determine animal name + biome from context
                       const animalName = (selected.id === 'rabbit_hide') ? 'Rabbit'
                         : (selected.id === 'deer_antler') ? 'Deer'
@@ -14967,7 +14967,7 @@ Usage: ${newUsage}/5${warningText}`;
                   // replies like `2`, `bed`, `left`, or `4 5` control the editor.
                   // The module consumes messages only while that sender's edit mode is active.
                   try {
-                    const __homeEditor = require("./rpg/homestead");
+                    const __homeEditor = require("./rpg/systems/homestead/homestead");
                     const __quickHandled = await __homeEditor.handleQuickInput({
                       sock, chatId, senderJid, m, reply,
                       text: lowerTxt, rawText: txt, prefix: botConfig.getPrefix(),
@@ -14992,7 +14992,7 @@ Usage: ${newUsage}/5${warningText}`;
                     lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} homestead `)
                   ) {
                     try {
-                      await require("./rpg/homestead").handleCommand({
+                      await require("./rpg/systems/homestead/homestead").handleCommand({
                         sock,
                         chatId,
                         senderJid,
@@ -16917,7 +16917,7 @@ Usage: ${newUsage}/5${warningText}`;
                     await delRpgMod(target);
                     await delCardsMod(target);
                     try {
-                      const cardSystem = require('./rpg/cardSystem');
+                      const cardSystem = require('./rpg/systems/cards/cardSystem');
                       const inst = cardSystem.getInst();
                       if (inst && inst.modJids) {
                         inst.modJids.delete(target);
@@ -17008,7 +17008,7 @@ Usage: ${newUsage}/5${warningText}`;
                     await delRpgMod(target);
                     // Also clean cardSystem modJids for full cleanup
                     try {
-                      const cardSystem = require('./rpg/cardSystem');
+                      const cardSystem = require('./rpg/systems/cards/cardSystem');
                       const inst = cardSystem.getInst();
                       if (inst && inst.modJids) {
                         inst.modJids.delete(target);
@@ -17053,7 +17053,7 @@ Usage: ${newUsage}/5${warningText}`;
                     // ALSO add to cardSystem's modJids so the two systems
                     // stay in sync.
                     try {
-                      const cardSystem = require('./rpg/cardSystem');
+                      const cardSystem = require('./rpg/systems/cards/cardSystem');
                       const inst = cardSystem.getInst();
                       if (inst && inst.modJids) {
                         inst.modJids.add(target);
@@ -17100,7 +17100,7 @@ Usage: ${newUsage}/5${warningText}`;
                     // (inst.modJids.has() check) even after delcardsmod
                     // removed them from the engine's cardsMods.
                     try {
-                      const cardSystem = require('./rpg/cardSystem');
+                      const cardSystem = require('./rpg/systems/cards/cardSystem');
                       const inst = cardSystem.getInst();
                       if (inst && inst.modJids) {
                         inst.modJids.delete(target);
@@ -17495,7 +17495,7 @@ Usage: ${newUsage}/5${warningText}`;
                       // Also reload card system roles
                       let cardModCount = 0;
                       try {
-                        const cardSystem = require('./rpg/cardSystem');
+                        const cardSystem = require('./rpg/systems/cards/cardSystem');
                         const inst = cardSystem.getInst();
                         if (inst && inst.modJids) {
                           inst.modJids.clear();
@@ -17542,7 +17542,7 @@ Usage: ${newUsage}/5${warningText}`;
                       await refreshSharedModSets();
                       let cardModCount = 0;
                       try {
-                        const cardSystem = require('./rpg/cardSystem');
+                        const cardSystem = require('./rpg/systems/cards/cardSystem');
                         const inst = cardSystem.getInst();
                         if (inst && inst.modJids) {
                           inst.modJids.clear();
@@ -17555,7 +17555,7 @@ Usage: ${newUsage}/5${warningText}`;
                       // 2) bot-side: drop profile-card asset + health caches
                       let assetCacheCleared = false;
                       try {
-                        const pcr = require('./rpg/profileCardRenderer');
+                        const pcr = require('./rpg/systems/meta/profileCardRenderer');
                         if (typeof pcr.clearCaches === 'function') { pcr.clearCaches(); assetCacheCleared = true; }
                       } catch (e) {}
                       try { require('./utils/goImageService').resetHealthCache?.(); } catch (e) {}
@@ -21712,7 +21712,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                         const parts = guildName.split("|");
                         const name = parts[0].trim();
                         // remaining parts: a guild path (ADVENTURER/MERCHANT/RESEARCH) and/or a realm, in any order
-                        const continentsLib = require("./rpg/continents");
+                        const continentsLib = require("./rpg/systems/world/continents");
                         let archetype = "ADVENTURER";
                         let realm = null;
                         for (const part of parts.slice(1).map((x) => x.trim()).filter(Boolean)) {
@@ -21837,7 +21837,7 @@ if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} lore`) {
                         const result = guilds.leaveGuild(senderJid);
                         if (_preLeaveGuild) {
                           try {
-                            const _loanSettle = await require('./rpg/guildWar/bankLoans').handleGuildLeave(senderJid, _preLeaveGuild);
+                            const _loanSettle = await require('./rpg/systems/guildwar/bankLoans').handleGuildLeave(senderJid, _preLeaveGuild);
                           } catch (e) { /* loan settle best-effort */ }
                         }
                         await sock.sendMessage(chatId, {
@@ -22110,7 +22110,7 @@ Admins can:
                           // forever with the Zeni already in your wallet.
                           let _kickLoanNote = '';
                           try {
-                            const _loanSettle = await require('./rpg/guildWar/bankLoans').handleGuildLeave(result.targetJid, result.guildName);
+                            const _loanSettle = await require('./rpg/systems/guildwar/bankLoans').handleGuildLeave(result.targetJid, result.guildName);
                             if (_loanSettle?.action === 'deducted') _kickLoanNote = `\n💳 Outstanding guild loan (*${_loanSettle.amount.toLocaleString()}*) settled from their wallet.`;
                             else if (_loanSettle?.action === 'debt') _kickLoanNote = `\n📉 Unpaid guild loan (*${_loanSettle.amount.toLocaleString()}*) converted to personal debt.`;
                           } catch (_loanErr) { console.error('[GuildKick] loan settlement failed:', _loanErr.message); }
@@ -22796,7 +22796,7 @@ Admins can:
                           const _ug = guilds.getUserGuild(senderJid);
                           const _g = _ug ? guilds.getGuild(_ug) : null;
                           if (_ug && _g) {
-                            const gbr = require('./rpg/guildBaseRenderer');
+                            const gbr = require('./rpg/systems/guildwar/guildBaseRenderer');
                             const _media = await gbr.renderGuildBaseImage({
                               name: _ug,
                               level: _g.level || 1,
@@ -22835,7 +22835,7 @@ Admins can:
                     // `.g guild perks` - show active perks for your guild
                     if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild perks`) {
                       try {
-                        const guildPerks = require('./rpg/guildPerks');
+                        const guildPerks = require('./rpg/systems/guildwar/guildPerks');
                         const userGuild = guilds.getUserGuild(senderJid);
                         if (!userGuild) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You are not in a guild.' });
@@ -22916,7 +22916,7 @@ Admins can:
                         if (!guild) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Guild not found.' });
                         }
-                        const economy = require('./rpg/economy');
+                        const economy = require('./rpg/systems/economy/economy');
 
                         // Money-critical: pull fresh state from the shared DB
                         // before moving anything (same discipline as the loan
@@ -22975,7 +22975,7 @@ Admins can:
                     // approve|reject @player → funds move bank→wallet → repay <amt>.
                     if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} guild loan` ||
                         lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} guild loan `)) {
-                      const bankLoans = require('./rpg/guildWar/bankLoans');
+                      const bankLoans = require('./rpg/systems/guildwar/bankLoans');
                       const loanArgs = txt.trim().split(/\s+/).slice(2); // [guild, loan, ...args]
                       const loanSub = (loanArgs[1] || 'list').toLowerCase();
                       const ug = guilds.getUserGuild(senderJid);
@@ -23023,8 +23023,8 @@ Admins can:
                       const _isAtlas = lowerTxt === `${_pf} realms` || lowerTxt === `${_pf} continents`;
                       if (_isMine || _isAtlas) {
                         try {
-                          const continentsLib = require('./rpg/continents');
-                          const cmr = require('./rpg/continentMapRenderer');
+                          const continentsLib = require('./rpg/systems/world/continents');
+                          const cmr = require('./rpg/systems/world/continentMapRenderer');
                           let gName = null, gRec = null;
                           if (_isMine) {
                             gName = guilds.getUserGuild(senderJid);
@@ -23077,7 +23077,7 @@ Admins can:
                         if (!guild) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Guild not found.' });
                         }
-                        const guildPerks = require('./rpg/guildPerks');
+                        const guildPerks = require('./rpg/systems/guildwar/guildPerks');
                         const memberCap = guildPerks.getMemberCap(guild);
                         const interestRate = guildPerks.getBankInterestRate(guild);
 
@@ -23089,7 +23089,7 @@ Admins can:
                         // ── guild base grounds (primary visual) ──
                         let baseMedia = null;
                         try {
-                          const gbr = require('./rpg/guildBaseRenderer');
+                          const gbr = require('./rpg/systems/guildwar/guildBaseRenderer');
                           const _gst = {
                             name: userGuild,
                             level: guildLevel,
@@ -23120,12 +23120,12 @@ Admins can:
                             baseMedia = await gbr.renderGuildHallCard(_gst, {
                               title: String(userGuild).slice(0, 20),
                               subtitle: `${_hallNames[Math.min(_hallNames.length - 1, _hl)] || 'Guild Hall'} · ${_archLbl} Guild Lv ${guildLevel}`,
-                              note: guild.motto ? `“${String(guild.motto).slice(0, 80)}”` : `${_archLbl} guild of ${require('./rpg/continents').continentOf({ name: userGuild, continent: guild.continent }).name.replace(/^The /, '')}`,
+                              note: guild.motto ? `“${String(guild.motto).slice(0, 80)}”` : `${_archLbl} guild of ${require('./rpg/systems/world/continents').continentOf({ name: userGuild, continent: guild.continent }).name.replace(/^The /, '')}`,
                               rows: [
                                 ['Members', `${_gst.memberCount} / ${memberCap}`],
                                 ['Guild hall', `Lv ${_hl}`],
                                 ['Bank', `${(guild.balance || 0).toLocaleString()}`],
-                                ['Realm', require('./rpg/continents').continentOf({ name: userGuild, continent: guild.continent }).name.replace(/^The /, '')],
+                                ['Realm', require('./rpg/systems/world/continents').continentOf({ name: userGuild, continent: guild.continent }).name.replace(/^The /, '')],
                                 ['Training', `Lv ${_gst.buildings.training}`],
                                 ['Treasury', `Lv ${_gst.buildings.treasury}`],
                               ],
@@ -23144,7 +23144,7 @@ Admins can:
                           const capB = BOT_MARKER +
                             `🏰 *${userGuild}* — Lv ${guildLevel} · XP ${guildPoints.toLocaleString()}/${guildXpNeed.toLocaleString()}\n` +
                             `🏷️ Archetype: ${String(guild.type || 'ADVENTURER').toUpperCase()}\n` +
-                            `🌍 Realm: ${require('./rpg/continents').continentOf({ name: userGuild, continent: guild.continent }).name}\n` +
+                            `🌍 Realm: ${require('./rpg/systems/world/continents').continentOf({ name: userGuild, continent: guild.continent }).name}\n` +
                             `👤 Leader: ${guild.owner ? '@' + guild.owner.split('@')[0] : 'unknown'}\n` +
                             `👥 Members: ${(guild.members || []).length}/${memberCap}\n` +
                             `💰 Bank: ${(guild.balance || 0).toLocaleString()} Zeni\n` +
@@ -23174,7 +23174,7 @@ Admins can:
                         // guildCardWarmer pre-bakes every guild, so this is normally a disk read.
                         let cardBuf = null;
                         try {
-                          const _gcm = await require('./rpg/guildCard').render(userGuild, guild, { style: (() => { try { return (economy.getUser(senderJid) || {}).cardStyle || 0; } catch (e) { return 0; } })() });
+                          const _gcm = await require('./rpg/systems/guildwar/guildCard').render(userGuild, guild, { style: (() => { try { return (economy.getUser(senderJid) || {}).cardStyle || 0; } catch (e) { return 0; } })() });
                           cardBuf = _gcm && _gcm.buffer;
                         } catch (e) {
                           console.error('[guild] info card failed:', e?.message || e);
@@ -23290,7 +23290,7 @@ Admins can:
                         // leader-only via the gate right below this branch.
                         if (!sub && !srcImg && (guild.emblem?.img || guild.emblem?.icon)) {
                           try {
-                            const gbr = require('./rpg/guildBaseRenderer');
+                            const gbr = require('./rpg/systems/guildwar/guildBaseRenderer');
                             const _em = await gbr.renderGuildEmblemCard({
                               name: userGuild,
                               level: guild.level || 1,
@@ -23529,13 +23529,13 @@ Admins can:
                     if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} dragonkills` ||
                         lowerTxt === `${botConfig.getPrefix().toLowerCase()} dragonkills`) {
                       try {
-                        const economy = require('./rpg/economy');
+                        const economy = require('./rpg/systems/economy/economy');
                         const user = economy.getUser(senderJid);
                         if (!user) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to register first.' });
                         }
                         const kills = user.stats?.dragonsKilled || 0;
-                        const classSystem = require('./rpg/classSystem');
+                        const classSystem = require('./rpg/systems/characters/classSystem');
                         const userClass = economy.getUserClass(senderJid);
                         const allClasses = classSystem.getAllClasses();
                         let nextRequirement = null;
@@ -23656,7 +23656,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                     if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} rune`)) {
                       const runeArgs = txt.trim().split(/\s+/).slice(2); // skip prefix + "rune"
                       const runeSub = runeArgs[0]?.toLowerCase();
-                      const runeSystem = require('./rpg/runeSystem');
+                      const runeSystem = require('./rpg/systems/inventory/runeSystem');
 
                       // .g rune - show inventory + help
                       if (!runeSub || runeSub === 'help') {
@@ -23679,7 +23679,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
 
                       // .g rune sell <runeId> <price> → UNIFIED PLAYER MARKET (2026-10-11)
                       if (runeSub === 'sell') {
-                        const __pm = require('./rpg/playerMarket');
+                        const __pm = require('./rpg/systems/economy/playerMarket');
                         const __pmReply = (text, opts = {}) => sock.sendMessage(chatId, { text: BOT_MARKER + text, ...(opts && opts.mentions ? { mentions: opts.mentions } : {}) });
                         await __pm.cmdSell(senderJid, __pmReply, ['rune', ...runeArgs.slice(1)]);
                         return;
@@ -23687,7 +23687,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
 
                       // .g rune market → UNIFIED PLAYER MARKET browse (2026-10-11)
                       if (runeSub === 'market') {
-                        const __pm = require('./rpg/playerMarket');
+                        const __pm = require('./rpg/systems/economy/playerMarket');
                         const __pmReply = (text, opts = {}) => sock.sendMessage(chatId, { text: BOT_MARKER + text, ...(opts && opts.mentions ? { mentions: opts.mentions } : {}) });
                         await __pm.cmdBrowse(senderJid, __pmReply, ['runes', ...runeArgs.slice(1)]);
                         return;
@@ -23695,7 +23695,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
 
                       // .g rune buy <listingId> → UNIFIED PLAYER MARKET (2026-10-11)
                       if (runeSub === 'buy') {
-                        const __pm = require('./rpg/playerMarket');
+                        const __pm = require('./rpg/systems/economy/playerMarket');
                         const __pmReply = (text, opts = {}) => sock.sendMessage(chatId, { text: BOT_MARKER + text, ...(opts && opts.mentions ? { mentions: opts.mentions } : {}) });
                         await __pm.cmdBuy(senderJid, __pmReply, runeArgs.slice(1));
                         return;
@@ -23703,7 +23703,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
 
                       // .g rune unsell <runeId> → UNIFIED PLAYER MARKET cancel (2026-10-11)
                       if (runeSub === 'unsell') {
-                        const __pm = require('./rpg/playerMarket');
+                        const __pm = require('./rpg/systems/economy/playerMarket');
                         const __pmReply = (text, opts = {}) => sock.sendMessage(chatId, { text: BOT_MARKER + text, ...(opts && opts.mentions ? { mentions: opts.mentions } : {}) });
                         await __pm.cmdCancel(senderJid, __pmReply, runeArgs.slice(1));
                         return;
@@ -23766,10 +23766,10 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         const slice = allTypes.slice((pageNum - 1) * RUNES_PER_PAGE, pageNum * RUNES_PER_PAGE);
                         let cardBuf = null;
                         try {
-                          const v3man = require('./rpg/skillAssets').v3Manifest();
+                          const v3man = require('./rpg/systems/characters/skillAssets').v3Manifest();
                           const runeRows = new Map((v3man.runes || []).map((r) => [(r.id || '').toUpperCase(), r]));
                           const tiered = new Set((v3man.runes || []).filter((r) => r.tiered_art).map((r) => (r.id || '').toUpperCase()));
-                          cardBuf = await require('./rpg/abilityCards').renderRuneListCard({
+                          cardBuf = await require('./rpg/systems/characters/abilityCards').renderRuneListCard({
                             page: pageNum,
                             totalPages,
                             totalRunes: allTypes.length,
@@ -23815,7 +23815,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         // 💡 FIX: accept skill index number (from .g abilities list)
                         if (!isNaN(parseInt(skillId))) {
                           try {
-                            const guildAdventure = require('./rpg/guildAdventure');
+                            const guildAdventure = require('./rpg/systems/adventures/guildAdventure');
                             const resolved = guildAdventure.getAbilityByIndex(senderJid, parseInt(skillId) - 1);
                             if (resolved) {
                               skillId = resolved.id;
@@ -23833,7 +23833,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           const result = await runeSystem.socketRune(senderJid, rune.runeId, skillId);
                           await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           // 💡 2026-09-20: drop arrives as its own message box
-                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                          try { const loreDrops = require('./rpg/systems/shared/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                           return;
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
@@ -23853,7 +23853,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           const result = await runeSystem.fuseRunesByName(senderJid, typeQuery, countQuery);
                           await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           // 💡 2026-09-20: drop arrives as its own message box
-                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                          try { const loreDrops = require('./rpg/systems/shared/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                           return;
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Fusion failed: ' + e.message });
@@ -23868,7 +23868,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         }
                         try {
                           // Check for scroll in inventory
-                          const inventorySystem = require('./rpg/inventorySystem');
+                          const inventorySystem = require('./rpg/systems/inventory/inventorySystem');
                           const hasScroll = inventorySystem.hasItem(senderJid, 'rune_removal_scroll');
                           const result = await runeSystem.removeRune(senderJid, runeId, hasScroll);
                           if (result.success && hasScroll) {
@@ -23876,7 +23876,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           }
                           await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           // 💡 2026-09-20: drop arrives as its own message box
-                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                          try { const loreDrops = require('./rpg/systems/shared/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                           return;
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
@@ -23893,7 +23893,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           const result = await runeSystem.destroyRune(senderJid, runeId);
                           await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           // 💡 2026-09-20: drop arrives as its own message box
-                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                          try { const loreDrops = require('./rpg/systems/shared/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                           return;
                         } catch (e) {
                           return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Failed: ' + e.message });
@@ -23908,12 +23908,12 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                         }
                         try {
                           // Look up the skill in the user's class skill tree
-                          const economy = require('./rpg/economy');
+                          const economy = require('./rpg/systems/economy/economy');
                           const user = economy.getUser(senderJid);
                           if (!user || !user.class) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need a class first. Use `${botConfig.getPrefix()} class`.' });
                           }
-                          const skillTree = require('./rpg/skillTree');
+                          const skillTree = require('./rpg/systems/characters/skillTree');
                           const allClasses = skillTree.SKILL_TREES || {};
                           let skill = null;
                           for (const [classId, classTree] of Object.entries(allClasses)) {
@@ -23962,7 +23962,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           if (!board || !board.rows.length) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '💎 *Rune Socket Board*\n\n_No learned skills with rune slots yet. Learn skills via `' + botConfig.getPrefix() + ' skill up <name>` first._' });
                           }
-                          const economyMod = require('./rpg/economy');
+                          const economyMod = require('./rpg/systems/economy/economy');
                           const userB = economyMod.getUser(senderJid);
                           const userClassB = economyMod.getUserClass(senderJid);
                           const anySocketed = board.totalSocketed > 0;
@@ -24034,7 +24034,7 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                     if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} bounty `) || lowerTxt === `${botConfig.getPrefix().toLowerCase()} bounty`) { // 💡 2026-11-01: word boundary — .j bountyfoo did not open the bounty help
                       const bountyArgs = txt.trim().split(/\s+/).slice(2);
                       const bountySub = bountyArgs[0]?.toLowerCase();
-                      const bountySystem = require('./rpg/bountySystem');
+                      const bountySystem = require('./rpg/systems/adventures/bountySystem');
 
                       // .g bounty - help
                       if (!bountySub || bountySub === 'help') {
@@ -24072,8 +24072,8 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                           return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${botConfig.getPrefix()} bounty place @target <amount>\`` });
                         }
                         try {
-                          const economy = require('./rpg/economy');
-                          const progression = require('./rpg/progression');
+                          const economy = require('./rpg/systems/economy/economy');
+                          const progression = require('./rpg/systems/characters/progression');
                           const targetUser = economy.getUser(targetJid);
                           if (!targetUser) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Target user not found. They must be registered.' });
@@ -24210,8 +24210,8 @@ _Remaining bank: ${(guild.balance || 0).toLocaleString()} Zeni_` });
                     if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} abyss `) || lowerTxt === `${botConfig.getPrefix().toLowerCase()} abyss`) { // 💡 2026-11-01: word boundary
                       const abyssArgs = txt.trim().split(/\s+/).slice(2);
                       const abyssSub = abyssArgs[0]?.toLowerCase();
-                      const abyssSystem = require('./rpg/abyssSystem');
-const broadcastHelpers = require('./rpg/broadcastHelpers');
+                      const abyssSystem = require('./rpg/systems/adventures/abyssSystem');
+const broadcastHelpers = require('./rpg/systems/shared/broadcastHelpers');
 
                       // 💡 FIX 2026-07-31 Bug #3: Block Abyss sub-commands during
                       // active combat to prevent state corruption. Players in combat
@@ -24293,8 +24293,8 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                       // .j abyss join joins the newest open run.
                       if (abyssSub === 'coop' || abyssSub === 'party') {
                         try {
-                          const economy = require('./rpg/economy');
-                          const progression = require('./rpg/progression');
+                          const economy = require('./rpg/systems/economy/economy');
+                          const progression = require('./rpg/systems/characters/progression');
                           const user = economy.getUser(senderJid);
                           if (!user) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to register first! Type `.j register <nickname>`.' });
@@ -24335,7 +24335,7 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
 
                       if (abyssSub === 'join') {
                         try {
-                          const economy = require('./rpg/economy');
+                          const economy = require('./rpg/systems/economy/economy');
                           const user = economy.getUser(senderJid);
                           if (!user) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to register first! Type `.j register <nickname>`.' });
@@ -24353,7 +24353,7 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                           if (live && live.isAbyss && live.inCombat && !live.players.some((p) => p.jid === senderJid)) {
                             const userClassObj2 = economy.getUserClass(senderJid);
                             const classId2 = userClassObj2?.id || user.class || 'FIGHTER';
-                            const baseStats2 = require('./rpg/progression').getBaseStats(senderJid, classId2);
+                            const baseStats2 = require('./rpg/systems/characters/progression').getBaseStats(senderJid, classId2);
                             live.players.push({
                               jid: senderJid,
                               name: user.nickname || economy.getDisplayName(senderJid),
@@ -24366,9 +24366,9 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                                 dmgReduction: baseStats2.dmgReduction || 0, evasion: baseStats2.evasion || 0,
                                 energy: baseStats2.maxEnergy || 100, maxEnergy: baseStats2.maxEnergy || 100,
                               },
-                              equipment: require('./rpg/inventorySystem').getEquipment(senderJid) || {},
+                              equipment: require('./rpg/systems/inventory/inventorySystem').getEquipment(senderJid) || {},
                               adventurerRank: user.adventurerRank || 'F',
-                              level: require('./rpg/progression').getLevel(senderJid),
+                              level: require('./rpg/systems/characters/progression').getLevel(senderJid),
                               currentHP: baseStats2.hp,
                               mana: 100, maxMana: 100,
                               xpEarned: 0, goldEarned: 0,
@@ -24389,8 +24389,8 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                       // .g abyss enter - start a run
                       if (abyssSub === 'enter' || abyssSub === 'start') {
                         try {
-                          const economy = require('./rpg/economy');
-                          const progression = require('./rpg/progression');
+                          const economy = require('./rpg/systems/economy/economy');
+                          const progression = require('./rpg/systems/characters/progression');
                           const user = economy.getUser(senderJid);
                           if (!user) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + `❌ You need to register first. Use \`${botConfig.getPrefix()} register\`.` });
@@ -24435,7 +24435,7 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
                             let __w = null;
                             let __gateAlive = true;
                             try {
-                              const cosmology = require('./rpg/cosmology');
+                              const cosmology = require('./rpg/systems/world/cosmology');
                               __w = cosmology.abyssWindow();
                               if (!__w || typeof __w.open !== 'boolean' || typeof __w.label !== 'string') {
                                 __gateAlive = false;
@@ -24457,7 +24457,7 @@ const broadcastHelpers = require('./rpg/broadcastHelpers');
 The alignment of the worlds cannot be read right now - and the abyss does not open on a maybe.
 _Try again soon; those already below are not pulled out._`;
                               try {
-                                const __gateBuf = await (require('./rpg/worldMapRenderer')).renderAbyssMisalignedCard({ mode: 'unreadable' });
+                                const __gateBuf = await (require('./rpg/systems/world/worldMapRenderer')).renderAbyssMisalignedCard({ mode: 'unreadable' });
                                 if (__gateBuf && __gateBuf.length > 100) {
                                   return sock.sendMessage(chatId, { image: __gateBuf, caption: __sealedTxt });
                                 }
@@ -24476,7 +24476,7 @@ The worlds are not aligned for the descent right now - the abyss admits new desc
 ⏳ The gate opens in *${__w.label.replace('locked ', '')}*.
 _Those already below are not pulled out by the closing - only entry is gated._`;
                               try {
-                                const __gateBuf = await (require('./rpg/worldMapRenderer')).renderAbyssMisalignedCard({ mode: 'closed', opensInLabel: String(__w.label || '') });
+                                const __gateBuf = await (require('./rpg/systems/world/worldMapRenderer')).renderAbyssMisalignedCard({ mode: 'closed', opensInLabel: String(__w.label || '') });
                                 if (__gateBuf && __gateBuf.length > 100) {
                                   return sock.sendMessage(chatId, { image: __gateBuf, caption: __closedTxt });
                                 }
@@ -24515,7 +24515,7 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                             const abyssTier = abyssSystem.getFloorTier(run.currentFloor || 1);
                             const abyssMult = Number(abyssSystem.getFloorMultiplier(run.currentFloor || 1).toFixed(1));
                             const __entryUser = economy.getUser(senderJid) || {};
-                            const __entryBuf = await (require('./rpg/abyssScene')).renderAbyssFloorCard({
+                            const __entryBuf = await (require('./rpg/systems/adventures/abyssScene')).renderAbyssFloorCard({
                               floor: run.currentFloor || 1,
                               tier: abyssTier,
                               mult: abyssMult,
@@ -24534,7 +24534,7 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                               ],
                             });
                             if (__entryBuf && __entryBuf.length > 100) {
-                              await sock.sendMessage(chatId, { image: __entryBuf, gifPlayback: (require('./rpg/abyssScene')).isAnimatedCard(__entryBuf), caption: BOT_MARKER + result.message });
+                              await sock.sendMessage(chatId, { image: __entryBuf, gifPlayback: (require('./rpg/systems/adventures/abyssScene')).isAnimatedCard(__entryBuf), caption: BOT_MARKER + result.message });
                             } else {
                               await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                             }
@@ -24543,7 +24543,7 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                             await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           }
                           // 💡 2026-09-20: lore drop arrives as its own message box
-                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                          try { const loreDrops = require('./rpg/systems/shared/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                           // 💡 FIX 2026-08-31: wild_summon floors (10% of floors)
                           // were never combat-started from `enter` - the run
                           // soft-locked with "Not in combat!" on attack.
@@ -24686,9 +24686,9 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                           try {
                             if (result.card) {
                               const __c = result.card;
-                              const __eco = require('./rpg/economy');
+                              const __eco = require('./rpg/systems/economy/economy');
                               const __u = __eco.getUser(senderJid) || {};
-                              const __exBuf = await (require('./rpg/abyssScene')).renderAbyssResultCard({
+                              const __exBuf = await (require('./rpg/systems/adventures/abyssScene')).renderAbyssResultCard({
                                 outcome: 'EXTRACTED',
                                 floor: __c.floor,
                                 score: Number(__c.score || 0),
@@ -24727,7 +24727,7 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                           if (result.run && !__nextIsFight) {
                             try {
                               const __u = economy.getUser(senderJid) || {};
-                              const __fc = await (require('./rpg/abyssScene')).renderAbyssFloorCard({
+                              const __fc = await (require('./rpg/systems/adventures/abyssScene')).renderAbyssFloorCard({
                                 floor: result.run.currentFloor,
                                 tier: abyssSystem.getFloorTier(result.run.currentFloor),
                                 mult: abyssSystem.getFloorMultiplier(result.run.currentFloor),
@@ -24737,14 +24737,14 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                                 playerSpriteIndex: Number(__u.spriteIndex) || 0,
                               });
                               if (__fc && __fc.length > 100) {
-                                await sock.sendMessage(chatId, { image: __fc, gifPlayback: (require('./rpg/abyssScene')).isAnimatedCard(__fc), caption: BOT_MARKER + result.message });
+                                await sock.sendMessage(chatId, { image: __fc, gifPlayback: (require('./rpg/systems/adventures/abyssScene')).isAnimatedCard(__fc), caption: BOT_MARKER + result.message });
                                 __floorCardSent = true;
                               }
                             } catch (e) { console.error('[Abyss] floor card failed:', e.message); }
                           }
                           if (!__floorCardSent) await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           // 💡 2026-09-20: lore drop arrives as its own message box
-                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                          try { const loreDrops = require('./rpg/systems/shared/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                           // 💡 FIX 2026-08-15: Start combat if next floor is combat.
                           // 💡 FIX 2026-08-31: wild_summon floors too, and RETURN -
                           // previously fell through to "Unknown Abyss command: collect"
@@ -24770,7 +24770,7 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                           if (result.run && !__nextIsFight) {
                             try {
                               const __u = economy.getUser(senderJid) || {};
-                              const __fc = await (require('./rpg/abyssScene')).renderAbyssFloorCard({
+                              const __fc = await (require('./rpg/systems/adventures/abyssScene')).renderAbyssFloorCard({
                                 floor: result.run.currentFloor,
                                 tier: abyssSystem.getFloorTier(result.run.currentFloor),
                                 mult: abyssSystem.getFloorMultiplier(result.run.currentFloor),
@@ -24780,14 +24780,14 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                                 playerSpriteIndex: Number(__u.spriteIndex) || 0,
                               });
                               if (__fc && __fc.length > 100) {
-                                await sock.sendMessage(chatId, { image: __fc, gifPlayback: (require('./rpg/abyssScene')).isAnimatedCard(__fc), caption: BOT_MARKER + result.message });
+                                await sock.sendMessage(chatId, { image: __fc, gifPlayback: (require('./rpg/systems/adventures/abyssScene')).isAnimatedCard(__fc), caption: BOT_MARKER + result.message });
                                 __floorCardSent = true;
                               }
                             } catch (e) { console.error('[Abyss] floor card failed:', e.message); }
                           }
                           if (!__floorCardSent) await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           // 💡 2026-09-20: lore drop arrives as its own message box
-                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                          try { const loreDrops = require('./rpg/systems/shared/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                           // 💡 FIX 2026-08-15: If the next floor is combat, start it!
                           // Previously processEventChoice advanced the floor and said "Attack with .s combat atk"
                           // but never actually started combat - so the player got "Not in combat!" when they tried.
@@ -24813,7 +24813,7 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                           if (result.run && !__nextIsFight) {
                             try {
                               const __u = economy.getUser(senderJid) || {};
-                              const __fc = await (require('./rpg/abyssScene')).renderAbyssFloorCard({
+                              const __fc = await (require('./rpg/systems/adventures/abyssScene')).renderAbyssFloorCard({
                                 floor: result.run.currentFloor,
                                 tier: abyssSystem.getFloorTier(result.run.currentFloor),
                                 mult: abyssSystem.getFloorMultiplier(result.run.currentFloor),
@@ -24823,14 +24823,14 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                                 playerSpriteIndex: Number(__u.spriteIndex) || 0,
                               });
                               if (__fc && __fc.length > 100) {
-                                await sock.sendMessage(chatId, { image: __fc, gifPlayback: (require('./rpg/abyssScene')).isAnimatedCard(__fc), caption: BOT_MARKER + result.message });
+                                await sock.sendMessage(chatId, { image: __fc, gifPlayback: (require('./rpg/systems/adventures/abyssScene')).isAnimatedCard(__fc), caption: BOT_MARKER + result.message });
                                 __floorCardSent = true;
                               }
                             } catch (e) { console.error('[Abyss] floor card failed:', e.message); }
                           }
                           if (!__floorCardSent) await sock.sendMessage(chatId, { text: BOT_MARKER + result.message });
                           // 💡 2026-09-20: lore drop arrives as its own message box
-                          try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                          try { const loreDrops = require('./rpg/systems/shared/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                           // 💡 FIX 2026-08-15: Same fix as choose - start combat if next floor is combat.
                           // 💡 FIX 2026-08-31: wild_summon floors too, and RETURN -
                           // previously fell through to "Unknown Abyss command: skip".
@@ -24979,7 +24979,7 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                     if (lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} raid `) || lowerTxt === `${botConfig.getPrefix().toLowerCase()} raid`) { // 💡 2026-11-01: word boundary
                       const raidArgs = txt.trim().split(/\s+/).slice(2);
                       const raidSub = raidArgs[0]?.toLowerCase();
-                      const raidSystem = require('./rpg/raidSystem');
+                      const raidSystem = require('./rpg/systems/adventures/raidSystem');
 
                       // .g raid - show status or help
                       if (!raidSub || raidSub === 'help') {
@@ -25062,8 +25062,8 @@ _Those already below are not pulled out by the closing - only entry is gated._`;
                       // .s raid join
                       if (raidSub === 'join') {
                         try {
-                          const economy = require('./rpg/economy');
-                          const progression = require('./rpg/progression');
+                          const economy = require('./rpg/systems/economy/economy');
+                          const progression = require('./rpg/systems/characters/progression');
                           const user = economy.getUser(senderJid);
                           if (!user) {
                             return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You need to register first.' });
@@ -26601,7 +26601,7 @@ _💡 Reply with another number from your search list!_`.trim();
                       });
 
                       try {
-                        const shipCards = require('./rpg/shipCardRenderer');
+                        const shipCards = require('./rpg/systems/shared/shipCardRenderer');
 
                         let jid1 = null, jid2 = null, p1 = null, p2 = null;
                         let name1, name2;
@@ -26766,7 +26766,7 @@ Write ONE witty verdict line (max 90 chars) about their compatibility. Roast the
                       });
 
                       try {
-                        const interactionTracker = require('./rpg/interactionTracker');
+                        const interactionTracker = require('./rpg/systems/meta/interactionTracker');
                         const histOut = interactionTracker.renderPairHistory(hj1, hj2);
                         await sock.sendMessage(chatId, {
                           text: BOT_MARKER + histOut.text,
@@ -29103,8 +29103,8 @@ ${senderName} said y'all should know:
                     `${botConfig.getPrefix().toLowerCase()} economy`
                   ) {
                     const stats = economy.getGlobalEconomyStats();
-                    const loans = require('./rpg/loans');
-                    const stockMarket = require('./rpg/stockMarket');
+                    const loans = require('./rpg/systems/economy/loans');
+                    const stockMarket = require('./rpg/systems/economy/stockMarket');
                     const totalDebt = loans.getTotalDebt();
                     const marketCap = stockMarket.getMarketCap();
 
@@ -29139,7 +29139,7 @@ ${senderName} said y'all should know:
                       `${botConfig.getPrefix().toLowerCase()} sell stock `,
                     )
                   ) {
-                    const stockMarket = require('./rpg/stockMarket');
+                    const stockMarket = require('./rpg/systems/economy/stockMarket');
                     const isBuy = lowerTxt.includes("buy");
                     const parts = lowerTxt.split(" ");
                     const symbol = parts[3]?.toUpperCase();
@@ -29166,7 +29166,7 @@ ${senderName} said y'all should know:
                   if (
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} invest`
                   ) {
-                    const invest = require('./rpg/investment');
+                    const invest = require('./rpg/systems/economy/investment');
                     let msg = `🏦 *INVESTMENT PROGRAMS* 🏦\n\n`;
                     for (const [id, plan] of Object.entries(
                       invest.INVESTMENT_PLANS,
@@ -29183,7 +29183,7 @@ ${senderName} said y'all should know:
                       `${botConfig.getPrefix().toLowerCase()} invest `,
                     )
                   ) {
-                    const invest = require('./rpg/investment');
+                    const invest = require('./rpg/systems/economy/investment');
                     const parts = lowerTxt.split(" ");
                     const action = parts[2];
 
@@ -29219,7 +29219,7 @@ ${senderName} said y'all should know:
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} claim`
                   ) {
                     try {
-                      const invest = require('./rpg/investment');
+                      const invest = require('./rpg/systems/economy/investment');
                       const result = invest.claimInvestment(senderJid);
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + result.message,
@@ -29359,8 +29359,8 @@ ${senderName} said y'all should know:
                     lowerTxt ===
                       `${botConfig.getPrefix().toLowerCase()} monsters`
                   ) {
-                    const monsterSkills = require('./rpg/monsterSkills');
-                    const bossMechanics = require('./rpg/bossMechanics');
+                    const monsterSkills = require('./rpg/systems/combat/monsterSkills');
+                    const bossMechanics = require('./rpg/systems/combat/bossMechanics');
 
                     let msg = monsterSkills.formatMonsterGuide();
 
@@ -29761,7 +29761,7 @@ ${senderName} said y'all should know:
                     if (result.success) {
                       try {
                         const isDM = typeof chatId === 'string' && !chatId.endsWith('@g.us');
-                        const tutLine = require('./rpg/tutorial').offerLine(botConfig.getPrefix());
+                        const tutLine = require('./rpg/systems/meta/tutorial').offerLine(botConfig.getPrefix());
                         await sock.sendMessage(chatId, {
                           text: BOT_MARKER + (isDM ? tutLine : tutLine.replace(/\n\n/g, ' ')),
                         });
@@ -29998,7 +29998,7 @@ ${senderName} said y'all should know:
                     // Card system handles card claims via cardSystem.handleCommand above
                     // If we get here, try investment claim
                     try {
-                      const invest = require('./rpg/investment');
+                      const invest = require('./rpg/systems/economy/investment');
                       const result = invest.claimInvestment(senderJid);
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + result.message,
@@ -30025,7 +30025,7 @@ ${senderName} said y'all should know:
                     // Award guild points for daily claim
                     if (result.success) {
                       try {
-                        const guilds = require('./rpg/guilds'); // 💡 QA FIX: was `./guilds` (wrong path - MODULE_NOT_FOUND silently swallowed)
+                        const guilds = require('./rpg/systems/guildwar/guilds'); // 💡 QA FIX: was `./guilds` (wrong path - MODULE_NOT_FOUND silently swallowed)
                         guilds.awardPointsForActivity(
                           senderJid,
                           "daily_claimed",
@@ -30290,7 +30290,7 @@ Examples:
                         });
                       }
                       // 💡 2026-09-20: trading lore drop arrives as its own message box
-                      try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                      try { const loreDrops = require('./rpg/systems/shared/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                     } else {
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + result.message,
@@ -30412,7 +30412,7 @@ Examples:
                     // moved from wallet to bank. Bounty targets could bypass
                     // the bank block entirely.
                     try {
-                      const bountySystem = require('./rpg/bountySystem');
+                      const bountySystem = require('./rpg/systems/adventures/bountySystem');
                       const hasBounty = await bountySystem.hasActiveBounty(senderJid);
                       if (hasBounty) {
                         return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You have an active bounty on your head - you cannot deposit Zeni to the bank while hunted.\n\n_Get yourself killed in PvP to clear the bounty, or wait for it to expire (7 days)._' });
@@ -30450,7 +30450,7 @@ Examples:
                         });
                       }
                       // 💡 2026-09-20: trading lore drop arrives as its own message box
-                      try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                      try { const loreDrops = require('./rpg/systems/shared/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                     } else {
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + result.message,
@@ -30512,7 +30512,7 @@ Examples:
                     // the bounty (win PvP, wait 7 days, or placer cancels)
                     // before accessing the bank again.
                     try {
-                      const bountySystem = require('./rpg/bountySystem');
+                      const bountySystem = require('./rpg/systems/adventures/bountySystem');
                       const hasBounty = await bountySystem.hasActiveBounty(senderJid);
                       if (hasBounty) {
                         return sock.sendMessage(chatId, { text: BOT_MARKER + '❌ You have an active bounty on your head - you cannot access the bank while hunted.\n\n_Get yourself killed in PvP to clear the bounty, or wait for it to expire (7 days)._' });
@@ -30550,7 +30550,7 @@ Examples:
                         });
                       }
                       // 💡 2026-09-20: trading lore drop arrives as its own message box
-                      try { const loreDrops = require('./rpg/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
+                      try { const loreDrops = require('./rpg/systems/shared/loreDrops'); await loreDrops.sendOwn(sock, chatId, result.loreDrop); } catch (e) {}
                     } else {
                       await sock.sendMessage(chatId, {
                         text: BOT_MARKER + result.message,
@@ -31666,8 +31666,8 @@ ${guildName ? `🏰 Guild: *${guildName}*` : ""}
                       let profileCardSent = false;
                       try {
                         const userForCard = economy.getUser(targetJid);
-                        const progression = require('./rpg/progression');
-                        const classSystem = require('./rpg/classSystem');
+                        const progression = require('./rpg/systems/characters/progression');
+                        const classSystem = require('./rpg/systems/characters/classSystem');
                         const userLevel = progression.getLevel(targetJid);
                         const userXP = progression.getXP
                           ? progression.getXP(targetJid)
@@ -33237,7 +33237,7 @@ _(or reply to their message)_
                     try {
                       let _gwName = "A champion";
                       try { _gwName = economy.getDisplayName(senderJid) || _gwName; } catch (e) {}
-                      const handled = await require("./rpg/guildWar/dmRouter").handleGroupWarVerb(
+                      const handled = await require("./rpg/systems/guildwar/dmRouter").handleGroupWarVerb(
                         sock, chatId, senderJid, _gwName, _gwVerbProbe, prefix,
                       );
                       if (handled) return;
@@ -33259,7 +33259,7 @@ _(or reply to their message)_
                     let gwSenderName = 'Champion';
                     try { gwSenderName = economy.getDisplayName(senderJid) || gwSenderName; } catch (e) {}
                     try {
-                      await require('./rpg/guildWar').handleGroupCommand(
+                      await require('./rpg/systems/guildwar/index').handleGroupCommand(
                         sock, chatId, senderJid, gwSenderName, gwArgs, { m, prefix },
                       );
                     } catch (gwErr) {

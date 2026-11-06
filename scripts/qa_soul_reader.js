@@ -15,9 +15,9 @@
 
 process.env.GO_IMAGE_SERVICE_URL = process.env.GO_IMAGE_SERVICE_URL || 'http://127.0.0.1:7860';
 
-const economy = require('../core/rpg/economy');
-const soulReader = require('../core/rpg/soulReader');
-const soulReaderRenderer = require('../core/rpg/soulReaderRenderer');
+const economy = require('../core/rpg/systems/economy/economy');
+const soulReader = require('../core/rpg/systems/adventures/soulReader');
+const soulReaderRenderer = require('../core/rpg/systems/adventures/soulReaderRenderer');
 
 function assert(cond, label) {
     if (!cond) { console.error('✗ FAIL:', label); process.exitCode = 1; }
@@ -45,10 +45,10 @@ const CHAT = 'qa@g.us';
 const last = () => sent[sent.length - 1];
 
 // Level control through the REAL progression API
-const progression = require('../core/rpg/progression');
+const progression = require('../core/rpg/systems/characters/progression');
 
 // Abyss best floor control: stub getPlayerBest via require cache
-const abyssSystem = require('../core/rpg/abyssSystem');
+const abyssSystem = require('../core/rpg/systems/adventures/abyssSystem');
 const realGetPlayerBest = abyssSystem.getPlayerBest;
 let mockBestFloor = 0;
 abyssSystem.getPlayerBest = async () => ({ deepestFloor: mockBestFloor });

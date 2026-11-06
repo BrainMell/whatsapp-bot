@@ -14,10 +14,10 @@ async function main() {
   await mongoose.connect(mongoUri);
   console.log('✅ Connected.\n');
 
-  const summonSystem = require('../core/rpg/summonSystem');
-  const summonAI = require('../core/rpg/summonAI');
-  const monsterSkills = require('../core/rpg/monsterSkills');
-  const registry = require('../core/rpg/summonRegistry');
+  const summonSystem = require('../core/rpg/systems/summons/summonSystem');
+  const summonAI = require('../core/rpg/systems/summons/summonAI');
+  const monsterSkills = require('../core/rpg/systems/combat/monsterSkills');
+  const registry = require('../core/rpg/systems/summons/summonRegistry');
 
   // Build a summon combat entity
   const fakeSummonDoc = {

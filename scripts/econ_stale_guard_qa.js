@@ -55,7 +55,7 @@ function runSibling(step, jid) {
 (async () => {
     await connectDB();
     const User = require('../core/models/User');
-    const economy = require('../core/rpg/economy');
+    const economy = require('../core/rpg/systems/economy/economy');
     const jid = '15550000999@s.whatsapp.net';
 
     // ── seed: a user BOTH processes will soon hold in their caches ──

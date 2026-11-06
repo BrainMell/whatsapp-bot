@@ -5,7 +5,7 @@ const fs = require('fs');
 const OUT = process.argv[2] || '/tmp/baseqa';
 (async () => {
     fs.mkdirSync(OUT, { recursive: true });
-    const R = require('../core/rpg/homesteadBaseRenderer');
+    const R = require('../core/rpg/systems/homestead/homesteadBaseRenderer');
     const L = R.LAYOUT;
     const mk = (levels) => ({
         owner: 'QA47k8',

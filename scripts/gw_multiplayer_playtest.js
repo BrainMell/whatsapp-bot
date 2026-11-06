@@ -73,7 +73,7 @@ async function connectDB() {
 // duel engine are recorded, not executed (their internals have their own suites)
 const combatLog = [], duelLog = [];
 function installStubs() {
-    const ga = require('../core/rpg/guildAdventure');
+    const ga = require('../core/rpg/systems/adventures/guildAdventure');
     ga.startRuinsCombat = async (sock, chatId, jid, spec) => {
         combatLog.push({ jid, room: spec.roomKey, eventId: spec.eventId, at: Date.now() });
         return { success: true, sessionKey: `sim:${jid}` };
@@ -95,13 +95,13 @@ function installStubs() {
         }
         return { ok: true };
     };
-    const pvp = require('../core/rpg/pvpSystem');
+    const pvp = require('../core/rpg/systems/pvp/pvpSystem');
     pvp.beginRuinsDuel = (a, b, meta) => {
         duelLog.push({ a, b, meta, at: Date.now() });
         return { success: true, duel: { players: [{ jid: a, name: 'Challenger' }, { jid: b, name: 'Challenged' }], ruins: meta } };
     };
     // 🔎 trace the PvP resolution paths (who concedes/voids, and when)
-    const rp = require('../core/rpg/guildWar/ruinsPvp');
+    const rp = require('../core/rpg/systems/guildwar/ruinsPvp');
     const origForfeit = rp.forfeitToRoom, origResolve = rp.resolveTimeout, origPrune = rp.pruneExpired;
     rp.forfeitToRoom = async (...a) => {
         console.log(`  🔎 [trace] forfeitToRoom loser=${a[1]?.name} roomId=${a[1]?.roomId} prev=${a[1]?.prevRoomId} stack=${(new Error().stack || '').split('\n')[2]?.trim().slice(0, 90)}`);
@@ -123,7 +123,7 @@ const NAMES = ['Alpha', 'Bravo', 'Charlie', 'Delta'];
 const GUILDS = ['Storm', 'Storm', 'Ember', 'Ember'];
 
 async function freshEvent() {
-    const state = require('../core/rpg/guildWar/state');
+    const state = require('../core/rpg/systems/guildwar/state');
     await require('../core/models/GuildWarEvent').updateMany(
         { state: { $in: ['INITIATED', 'REGISTRATION', 'ACTIVE'] } },
         { $set: { state: 'COMPLETED' } });
@@ -140,14 +140,14 @@ async function freshEvent() {
 
 const playerOf = (doc, jid) => doc.players.find((p) => p.jid === jid);
 const roomOfDoc = (doc, key) => doc.rooms.find((r) => r.key === key);
-const eventOf = async (eventId) => require('../core/rpg/guildWar/state').getEvent(eventId, { fresh: true });
+const eventOf = async (eventId) => require('../core/rpg/systems/guildwar/state').getEvent(eventId, { fresh: true });
 
 // direct placement (scenario setup only — the MOVE itself is always driven
 // through the real dmRouter grammar so entry doors/facing derive naturally).
 // Clean slate: the jid is pulled from EVERY room's occupants, then added to
 // the target room only. prevRoomId is metadata for entryDirOf/facing.
 async function place(eventId, jid, roomId, prevRoomId) {
-    await require('../core/rpg/guildWar/state').updatePlayer(eventId, jid, {}, {
+    await require('../core/rpg/systems/guildwar/state').updatePlayer(eventId, jid, {}, {
         roomId, prevRoomId: prevRoomId || roomId, lastMoveAt: 0, protectedUntil: 0,
     });
     await require('../core/models/GuildWarEvent').updateOne({ eventId }, [
@@ -171,7 +171,7 @@ async function renderView(eventId, jid, label) {
     const doc = await eventOf(eventId);
     const me = playerOf(doc, jid);
     const room = roomOfDoc(doc, me.roomId);
-    const roomScene = require('../core/rpg/guildWar/roomScene');
+    const roomScene = require('../core/rpg/systems/guildwar/roomScene');
     try {
         const buf = await roomScene.renderRoomScene(doc, me, room, { prefix: '.' });
         savePng(label, buf);
@@ -181,9 +181,9 @@ async function renderView(eventId, jid, label) {
 // ═════════ S1: SAME ROOM FROM DIFFERENT DOORS ═════════
 async function s1(eventId) {
     console.log('\n── S1: two players enter the same room from different doors ──');
-    const state = require('../core/rpg/guildWar/state');
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
-    const mapEngine = require('../core/rpg/guildWar/mapEngine');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
+    const mapEngine = require('../core/rpg/systems/guildwar/mapEngine');
 
     let doc = await eventOf(eventId);
     const topo = state.topologyOf(doc);
@@ -239,7 +239,7 @@ function roomSceneEntry(playerRow) {
 // ═════════ S2: .j TALK RELAY ═════════
 async function s2(eventId) {
     console.log('\n── S2: ".j talk <text>" relays to co-located players\' DMs ──');
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
     const sockA = mockSock('alpha'), sockC = mockSock('charlie');
     const dmA = (t) => dmRouter.handleDM(sockA, JIDS[0], JIDS[0], t, '\u200B', { prefix: '.j', prefixed: true });
     // Alpha and Charlie are still co-located from S1's simultaneous entry
@@ -258,8 +258,8 @@ async function s2(eventId) {
 // ═════════ S3: SHARE MAP EXTENDS ═════════
 async function s3(eventId) {
     console.log('\n── S3: "share map" extends the recipient\'s chart (never overwrites) ──');
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
-    const state = require('../core/rpg/guildWar/state');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
+    const state = require('../core/rpg/systems/guildwar/state');
     const GuildWarEvent = require('../core/models/GuildWarEvent');
     const sockA = mockSock('alpha'), sockC = mockSock('charlie');
     const dmA = (t) => dmRouter.handleDM(sockA, JIDS[0], JIDS[0], t, '\u200B', { prefix: '.j', prefixed: true });
@@ -296,13 +296,13 @@ async function s3(eventId) {
     const aAfter = new Set(playerOf(doc, JIDS[0]).discovered || []);
     check('rival-guild share is refused (design: mates only)', !aDisc.some((k) => !aAfter.has(k)) || sockC.sent.some((s) => /No guildmate/.test(s.text)));
 }
-function mapStep(topo, key, dir) { return require('../core/rpg/guildWar/mapEngine').step(topo, key, dir); }
+function mapStep(topo, key, dir) { return require('../core/rpg/systems/guildwar/mapEngine').step(topo, key, dir); }
 
 // ═════════ S4: PVP CHALLENGE + POSITIONING ═════════
 async function s4(eventId) {
     console.log('\n── S4: PvP challenge → accept, and per-player positioning renders ──');
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
-    const state = require('../core/rpg/guildWar/state');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
+    const state = require('../core/rpg/systems/guildwar/state');
     let doc = await eventOf(eventId);
     const empty = doc.rooms.find((r) => r.type === 'empty');
     await place(eventId, JIDS[0], empty.key);
@@ -336,11 +336,11 @@ async function s4(eventId) {
 // ═════════ S5: ESCAPE BY MOVE BEFORE WINDOW CLOSES ═════════
 async function s5(eventId) {
     console.log('\n── S5: challenged player escapes by moving out BEFORE the window closes ──');
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
-    const state = require('../core/rpg/guildWar/state');
-    const CFG = require('../core/rpg/guildWar/config');
-    const ruinsPvp = require('../core/rpg/guildWar/ruinsPvp');
-    const mapEngine = require('../core/rpg/guildWar/mapEngine');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const CFG = require('../core/rpg/systems/guildwar/config');
+    const ruinsPvp = require('../core/rpg/systems/guildwar/ruinsPvp');
+    const mapEngine = require('../core/rpg/systems/guildwar/mapEngine');
     const oldWin = CFG.PVP.CHALLENGE_WINDOW_MS;
     // ⏱️ fast window for the sim — must outlast 2-3 PROD-DB round-trips:
     // the 1500ms original expired mid-check on Box2/Atlas (~300-500ms per
@@ -426,12 +426,12 @@ async function s5(eventId) {
 
 // ═════════ S6/S7: JOINING A ROOM WITH A LIVE ENCOUNTER ═════════
 async function s6s7(eventId) {
-    const ga = require('../core/rpg/guildAdventure'); // for the seeded live sessions
+    const ga = require('../core/rpg/systems/adventures/guildAdventure'); // for the seeded live sessions
     console.log('\n── S6/S7: entering a room where someone is ALREADY in an encounter ──');
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
-    const state = require('../core/rpg/guildWar/state');
-    const mapEngine = require('../core/rpg/guildWar/mapEngine');
-    const rooms = require('../core/rpg/guildWar/rooms');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const mapEngine = require('../core/rpg/systems/guildwar/mapEngine');
+    const rooms = require('../core/rpg/systems/guildwar/rooms');
     let doc = await eventOf(eventId);
     const topo = state.topologyOf(doc);
     // a combat room with an open west door, plus an empty staging room west of it
@@ -479,7 +479,7 @@ async function s6s7(eventId) {
     await sleep(320);
     const arr2 = await dmC('.j move east'); await sleep(250);   // Charlie waits at the edge again
     check('re-arrival gated again (room still contested)', arr2 && /This chamber is OCCUPIED/.test(arr2.text || ''), JSON.stringify((arr2 && arr2.text || '').slice(0, 60)));
-    const enc = require('../core/rpg/guildWar/encounters');
+    const enc = require('../core/rpg/systems/guildwar/encounters');
     const resumed = await enc.notifyRoomResolved(eventId, CR.key, JIDS[0], sockC, { prefix: '.', kind: 'victory' });
     check('S6 FIXED: waiter gets the resume notice + room replay on victory', resumed === 1 && sockC.sent.some((s) => /The fight is over/.test(s.text)), `notified=${resumed}`);
     const replayImages = sockC.sent.filter((s) => s.hasImage).length;
@@ -515,9 +515,9 @@ async function s6s7(eventId) {
 // ═════════ S8: 3-4 PLAYERS IN ONE ROOM ═════════
 async function s8(eventId) {
     console.log('\n── S8: four players share one room (2 Storm + 2 Ember) ──');
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
-    const state = require('../core/rpg/guildWar/state');
-    const mapEngine = require('../core/rpg/guildWar/mapEngine');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const mapEngine = require('../core/rpg/systems/guildwar/mapEngine');
     let doc = await eventOf(eventId);
     const topo = state.topologyOf(doc);
     // a room with as many open doors as possible
@@ -575,8 +575,8 @@ async function s8(eventId) {
 // ═════════ S9: SHARED WORLD / COORDINATES / VISIBILITY ═════════
 async function s9(eventId) {
     console.log('\n── S9: are players on the same map/world? coordinates + detection ──');
-    const state = require('../core/rpg/guildWar/state');
-    const visibility = require('../core/rpg/guildWar/visibility');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const visibility = require('../core/rpg/systems/guildwar/visibility');
     const doc = await eventOf(eventId);
     const keys = new Set(doc.rooms.map((r) => r.key));
     const allInside = doc.players.every((p) => keys.has(p.roomId));

@@ -53,7 +53,7 @@ const { decryptPollVote, jidNormalizedUser } = require('@whiskeysockets/baileys'
 // Optional by design: if the economy module is unavailable the manor
 // simply doesn't post a purse rather than refusing to open.
 let economy = null;
-try { economy = require('../../rpg/economy'); } catch (e) { economy = null; }
+try { economy = require('../../rpg/systems/economy/economy'); } catch (e) { economy = null; }
 
 // ---------- tunables ----------
 const MIN_PLAYERS = 4;

@@ -30,8 +30,8 @@ const ok = (c, l) => { if (c) { pass++; console.log('  ok -', l); } else { fail+
   await mongoose.connect(uri, { serverSelectionTimeoutMS: 15000 });
   console.log('[db] connected');
 
-  const cardSystem = require('../core/rpg/cardSystem');
-  const economy = require('../core/rpg/economy');
+  const cardSystem = require('../core/rpg/systems/cards/cardSystem');
+  const economy = require('../core/rpg/systems/economy/economy');
   const botConfig = require('../botConfig');
   const BOT_ID = botConfig.getBotId();
   const CHAT_ID = '120363000000000000@g.us'; // same proven-safe synthetic group as card_e2e.js

@@ -8,9 +8,9 @@ let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) { pass++; console.log('  ok - ' + msg); } else { fail++; console.error('  FAIL - ' + msg); } };
 
 (async () => {
-    const r = require('../core/rpg/homesteadBaseRenderer');
-    const g = require('../core/rpg/guildBaseRenderer');
-    const amb = require('../core/rpg/ambient');
+    const r = require('../core/rpg/systems/homestead/homesteadBaseRenderer');
+    const g = require('../core/rpg/systems/guildwar/guildBaseRenderer');
+    const amb = require('../core/rpg/systems/shared/ambient');
 
     const state = {
         owner: 'Mellow', biome: 'isle',                  // isle → ocean + lake

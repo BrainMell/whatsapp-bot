@@ -49,9 +49,9 @@ async function main() {
   const connectDB = require('../db');
   await connectDB();
 
-  const economy = require('../core/rpg/economy');
-  const progression = require('../core/rpg/progression');
-  const inventorySystem = require('../core/rpg/inventorySystem');
+  const economy = require('../core/rpg/systems/economy/economy');
+  const progression = require('../core/rpg/systems/characters/progression');
+  const inventorySystem = require('../core/rpg/systems/inventory/inventorySystem');
   const User = require('../core/models/User');
 
   // Get 5 real users at different levels

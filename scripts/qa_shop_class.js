@@ -4,8 +4,8 @@
  */
 process.env.GO_IMAGE_SERVICE_URL = process.env.GO_IMAGE_SERVICE_URL || 'http://127.0.0.1:7860';
 
-const classSystem = require('../core/rpg/classSystem');
-const skillTree = require('../core/rpg/skillTree');
+const classSystem = require('../core/rpg/systems/characters/classSystem');
+const skillTree = require('../core/rpg/systems/characters/skillTree');
 
 // capture sendMessages instead of sending
 const sent = [];

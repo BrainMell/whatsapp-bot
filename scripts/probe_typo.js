@@ -13,8 +13,8 @@ async function connectDB() {
 }
 (async () => {
     await connectDB();
-    const state = require('../core/rpg/guildWar/state');
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
     const GWE = require('../core/models/GuildWarEvent');
     await GWE.updateMany({ state: { $in: ['INITIATED', 'REGISTRATION', 'ACTIVE'] } }, { $set: { state: 'COMPLETED' } });
     const created = await state.createEvent({ type: 'normal', hostGroupId: 'typoqa@g.us', initiatedBy: 'owner' });

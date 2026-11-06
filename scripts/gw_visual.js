@@ -3,9 +3,9 @@ process.env.GW_TEST = '1';
 const path = require('path');
 const fs = require('fs');
 (async () => {
-    const mapEngine = require('../core/rpg/guildWar/mapEngine');
-    const renderer = require('../core/rpg/guildWar/mapRenderer');
-    const notice = require('../core/rpg/guildWar/noticeCard');
+    const mapEngine = require('../core/rpg/systems/guildwar/mapEngine');
+    const renderer = require('../core/rpg/systems/guildwar/mapRenderer');
+    const notice = require('../core/rpg/systems/guildwar/noticeCard');
     const outDir = path.join(__dirname, 'render_out');
     fs.mkdirSync(outDir, { recursive: true });
 

@@ -102,18 +102,18 @@ async function main() {
   await step('S0 db+modules load', async () => {
     const connectDB = require('../db');
     await connectDB();
-    ga = require('../core/rpg/guildAdventure');
-    abyss = require('../core/rpg/abyssSystem');
-    prog = require('../core/rpg/progression');
-    eco = require('../core/rpg/economy');
-    inv = require('../core/rpg/inventorySystem');
-    loot = require('../core/rpg/lootSystem');
-    skills = require('../core/rpg/skillTree');
-    craft = require('../core/rpg/craftingSystem');
-    runes = require('../core/rpg/runeSystem');
-    pvp = require('../core/rpg/pvpSystem');
-    summons = require('../core/rpg/summonSystem');
-    dur = require('../core/rpg/durabilitySystem');
+    ga = require('../core/rpg/systems/adventures/guildAdventure');
+    abyss = require('../core/rpg/systems/adventures/abyssSystem');
+    prog = require('../core/rpg/systems/characters/progression');
+    eco = require('../core/rpg/systems/economy/economy');
+    inv = require('../core/rpg/systems/inventory/inventorySystem');
+    loot = require('../core/rpg/systems/inventory/lootSystem');
+    skills = require('../core/rpg/systems/characters/skillTree');
+    craft = require('../core/rpg/systems/inventory/craftingSystem');
+    runes = require('../core/rpg/systems/inventory/runeSystem');
+    pvp = require('../core/rpg/systems/pvp/pvpSystem');
+    summons = require('../core/rpg/systems/summons/summonSystem');
+    dur = require('../core/rpg/systems/inventory/durabilitySystem');
     const mongoose = require('mongoose');
     if (mongoose.connection.readyState !== 1) throw new Error(`mongo readyState=${mongoose.connection.readyState}`);
     return 'mongo connected, 12 modules required';
@@ -400,7 +400,7 @@ async function main() {
   await step('S14 summon create+deploy', async () => {
     let speciesId = null;
     try {
-      const reg = require('../core/rpg/summonRegistry');
+      const reg = require('../core/rpg/systems/summons/summonRegistry');
       const keys = Object.keys(reg);
       const pool = reg.SPECIES || reg.SPECIES_REGISTRY || reg.registry || reg;
       const arr = Array.isArray(pool) ? pool : Object.values(pool).filter(v => v && v.id);

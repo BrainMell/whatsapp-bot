@@ -52,8 +52,8 @@ function strangerSock() {
     await connectDB();
     const mongoose = require('mongoose');
     const GuildWarEvent = require('../core/models/GuildWarEvent');
-    const state = require('../core/rpg/guildWar/state');
-    const feed = require('../core/rpg/guildWar/feed');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const feed = require('../core/rpg/systems/guildwar/feed');
 
     // ── seed a minimal event doc ──
     const eventId = `gw_isoqa_${Date.now().toString(36)}`;
@@ -157,7 +157,7 @@ function strangerSock() {
 
     // ═══ 5. start-card DM fires exactly once per instance ═══
     console.log('\n══ 5. single-source start cards ══');
-    const gwIndex = require('../core/rpg/guildWar');
+    const gwIndex = require('../core/rpg/systems/guildwar/index');
     check('dmWarStartCards exists on guildWar index', typeof gwIndex.dmWarStartCards === 'function');
     // the dedupe is structural: engine.js no longer re-DMs. verify by source scan:
     const engineSrc = fs.readFileSync(path.join(__dirname, '..', 'core', 'engine.js'), 'utf8');

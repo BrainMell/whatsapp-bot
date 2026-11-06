@@ -11,7 +11,7 @@
 const fs = require('fs');
 const path = require('path');
 const { createCanvas, loadImage } = require('canvas');
-const roomScene = require('../core/rpg/guildWar/roomScene');
+const roomScene = require('../core/rpg/systems/guildwar/roomScene');
 
 const OUT = process.env.GW_QA_OUT || '/home/z/my-project/download/gw_qa_1005d';
 fs.mkdirSync(OUT, { recursive: true });

@@ -27,9 +27,9 @@ const FRAMES = (cid) => {
 (async () => {
     const outDir = process.argv[2] || '/tmp/vfxqa26b';
     fs.mkdirSync(outDir, { recursive: true });
-    const skillVfx = require('../core/rpg/skillVfx');
-    const ultFx = require('../core/rpg/ultimateFx');
-    const stage = require('../core/rpg/vfxPreviewStage')(1);
+    const skillVfx = require('../core/rpg/systems/combat/skillVfx');
+    const ultFx = require('../core/rpg/systems/combat/ultimateFx');
+    const stage = require('../core/rpg/systems/combat/vfxPreviewStage')(1);
     const sigs = skillVfx.SIGNATURE_SKILLS;
 
     const manifest = [];

@@ -59,7 +59,7 @@ async function makeGuild(guilds, name) {
 
 // ── helpers ──
 async function freshEvent({ players = 2, host = 'pres@g.us' } = {}) {
-    const state = require('../core/rpg/guildWar/state');
+    const state = require('../core/rpg/systems/guildwar/state');
     const created = await state.createEvent({ type: 'normal', hostGroupId: host, initiatedBy: 'owner' });
     for (let i = 0; i < players; i++) {
         await state.registerPlayer(created.event.eventId, {
@@ -76,7 +76,7 @@ function playerOf(doc, jid) { return doc.players.find((p) => p.jid === jid); }
 
 // ═════════ S1: DEPLOYMENT FLOW (§1/§2) ═════════
 async function s1_deploy() {
-    const gw = require('../core/rpg/guildWar');
+    const gw = require('../core/rpg/systems/guildwar/index');
     const ev = await freshEvent({ players: 2 });
     const sock = mockSock();
     const n = await gw.dmWarStartCards(sock, '\u200B', ev, '.');
@@ -90,9 +90,9 @@ async function s1_deploy() {
 
 // ═════════ S2: PREFIXED GRAMMAR (§11 — the ".j left unknown" fix) ═════════
 async function s2_prefixed() {
-    const state = require('../core/rpg/guildWar/state');
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
-    const ga = require('../core/rpg/guildAdventure');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
+    const ga = require('../core/rpg/systems/adventures/guildAdventure');
     const ev = await freshEvent({ players: 1 });
     const sock = mockSock();
 
@@ -129,10 +129,10 @@ async function s2_prefixed() {
 
 // ═════════ S3: AUTO-ENCOUNTER (§14) ═════════
 async function s3_auto_encounter() {
-    const state = require('../core/rpg/guildWar/state');
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
     const GuildWarEvent = require('../../whatsapp-bot/core/models/GuildWarEvent'.replace('../../whatsapp-bot', '..'));
-    const ga = require('../core/rpg/guildAdventure');
+    const ga = require('../core/rpg/systems/adventures/guildAdventure');
     const ev = await freshEvent({ players: 1 });
 
     let combatStarts = 0, lastSpec = null;
@@ -180,9 +180,9 @@ async function s3_auto_encounter() {
 
 // ═════════ S4: COMBAT HOOKS (§22 shadowing fix verification) ═════════
 async function s4_hooks() {
-    const state = require('../core/rpg/guildWar/state');
-    const gw = require('../core/rpg/guildWar');
-    const ga = require('../core/rpg/guildAdventure');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const gw = require('../core/rpg/systems/guildwar/index');
+    const ga = require('../core/rpg/systems/adventures/guildAdventure');
 
     // capture the hooks the same way the combat engine does
     let captured = null;
@@ -256,8 +256,8 @@ async function s4_hooks() {
 
 // ═════════ S5: TELEPORT ANCHOR (§16) ═════════
 async function s5_teleport() {
-    const state = require('../core/rpg/guildWar/state');
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
     const GuildWarEvent = require('../core/models/GuildWarEvent');
     const ev = await freshEvent({ players: 1 });
     const dm = (txt, sock) => dmRouter.handleDM(sock, 'pp0@s.whatsapp.net', 'pp0@s.whatsapp.net', txt, '\u200B', { prefix: '.j', prefixed: true });
@@ -292,7 +292,7 @@ async function s5_teleport() {
     // fight (flee sessions are cleaned properly now, so nothing blocks the
     // start). §16 teleport must refuse a live fight — that's separately
     // checked below — so settle any live session before testing the anchor.
-    require('../core/rpg/guildAdventure').abortRuinsSession('pp0@s.whatsapp.net');
+    require('../core/rpg/systems/adventures/guildAdventure').abortRuinsSession('pp0@s.whatsapp.net');
     sock = mockSock();
     res = await dm('teleport', sock);
     doc = await state.getEvent(doc.eventId, { fresh: true });
@@ -319,7 +319,7 @@ async function s5_teleport() {
 
 // ═════════ S6: PLATE VARIANT SELECTION (§8) ═════════
 async function s6_plates() {
-    const roomScene = require('../core/rpg/guildWar/roomScene');
+    const roomScene = require('../core/rpg/systems/guildwar/roomScene');
     const ex = (dirs) => dirs.map((d) => ({ dir: d, edge: true }));
     const cases = [
         [['n', 'e', 's', 'w'], 'LFR'], [['n', 'e', 'w'], 'LFR'], [['n', 'e', 's'], 'FR'],
@@ -338,14 +338,14 @@ async function s6_plates() {
 
 // ═════════ S7: RETURN MAP + EXPLORE MAP (§3/§4) ═════════
 async function s7_maps() {
-    const state = require('../core/rpg/guildWar/state');
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
     const ev = await freshEvent({ players: 1 });
     const doc = await state.getEvent(ev.eventId, { fresh: true });
     const me = playerOf(doc, 'pp0@s.whatsapp.net');
     const ret = await dmRouter.returnMapFor(doc, me, doc.rooms.find((r) => r.key === me.roomId));
     check('return map renders (post-encounter style)', Buffer.isBuffer(ret) && ret.length > 10000, `${ret && ret.length}`);
-    const dmRouter2 = require('../core/rpg/guildWar/dmRouter');
+    const dmRouter2 = require('../core/rpg/systems/guildwar/dmRouter');
     const sock = mockSock();
     const res = await dmRouter2.handleDM(sock, me.jid, me.jid, 'paths', '\u200B', { prefix: '.' });
     check('.j paths returns the RETURN map image', res && Buffer.isBuffer(res.image) && res.image.length > 10000);
@@ -353,9 +353,9 @@ async function s7_maps() {
 
 // ═════════ S8: FEED MAJORS (§17) ═════════
 async function s8_feed() {
-    const state = require('../core/rpg/guildWar/state');
-    const gw = require('../core/rpg/guildWar');
-    const ga = require('../core/rpg/guildAdventure');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const gw = require('../core/rpg/systems/guildwar/index');
+    const ga = require('../core/rpg/systems/adventures/guildAdventure');
     const GuildWarEvent = require('../core/models/GuildWarEvent'); // scope fix: my poll below uses it
     let captured = null;
     const orig = ga.setRuinsHooks;
@@ -374,7 +374,7 @@ async function s8_feed() {
     await state.updatePlayer(doc.eventId, me.jid, {}, { roomId: core.key, prevRoomId: core.key });
     const sock = mockSock();
     await captured.onEnd({ ruinsMeta: { eventId: doc.eventId, roomKey: core.key }, players: [{ jid: me.jid, name: me.name, lives: 3, spawnRoomId: me.spawnRoomId, roomId: core.key }] }, true, 'k', sock);
-    const feed = require('../core/rpg/guildWar/feed');
+    const feed = require('../core/rpg/systems/guildwar/feed');
     // ⚔️ mirror-ack aware (2026-10-06 feed dedup): the queued item may have
     // drained from the local mirror into the doc — check both, briefly.
     let queued = feed.st(doc.eventId).queue;
@@ -389,9 +389,9 @@ async function s8_feed() {
 
 // ═════════ S9: PARTICIPATION GP (§22 inversion) ═════════
 async function s9_participation() {
-    const state = require('../core/rpg/guildWar/state');
-    const points = require('../core/rpg/guildWar/points');
-    const guilds = require('../core/rpg/guilds');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const points = require('../core/rpg/systems/guildwar/points');
+    const guilds = require('../core/rpg/systems/guildwar/guilds');
     const ev = await freshEvent({ players: 4 });
     let doc = await state.getEvent(ev.eventId, { fresh: true });
     const GuildWarEvent = require('../core/models/GuildWarEvent');
@@ -414,9 +414,9 @@ async function s9_participation() {
 
 // ═════════ S10: §22 FIELD SURVIVAL (ring / lastMoveAt / ward) ═════════
 async function s22_fields() {
-    const state = require('../core/rpg/guildWar/state');
-    const encounters = require('../core/rpg/guildWar/encounters');
-    const ga = require('../core/rpg/guildAdventure');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const encounters = require('../core/rpg/systems/guildwar/encounters');
+    const ga = require('../core/rpg/systems/adventures/guildAdventure');
     const ev = await freshEvent({ players: 2 });
     const doc = await state.getEvent(ev.eventId, { fresh: true });
     check('§22 ring survived the schema (no NaN)', doc.rooms.every((r) => Number.isFinite(r.ring)), doc.rooms.find((r) => !Number.isFinite(r.ring))?.key || 'all finite');
@@ -443,10 +443,10 @@ async function s22_fields() {
 (async function main() {
     const filter = process.argv[2] || '';
     await connectDB();
-    const guilds = require('../core/rpg/guilds');
+    const guilds = require('../core/rpg/systems/guildwar/guilds');
     try { await makeGuild(guilds, 'GwTestA'); } catch (e) {}
     try { await guilds.loadGuilds(); } catch (e) {}
-    const stateRef0 = require('../core/rpg/guildWar/state');
+    const stateRef0 = require('../core/rpg/systems/guildwar/state');
     const suites = [
         ['S1 deploy', s1_deploy],
         ['S2 prefixed grammar', s2_prefixed],

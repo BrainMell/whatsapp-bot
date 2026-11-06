@@ -14,16 +14,16 @@ async function connectDB() {
     await connectDB();
     const mongoose = require('mongoose');
     for (const c of ['guildwarevents', 'guilds', 'systems', 'users']) { try { await mongoose.connection.db.collection(c).deleteMany({}); } catch (e) {} }
-    const state = require('../core/rpg/guildWar/state');
-    const encounters = require('../core/rpg/guildWar/encounters');
-    const puzzleCards = require('../core/rpg/guildWar/puzzleCards');
-    const CFG = require('../core/rpg/guildWar/config');
-    const roomScene = require('../core/rpg/guildWar/roomScene');
-    const mapEngine = require('../core/rpg/guildWar/mapEngine');
-    const guilds = require('../core/rpg/guilds');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const encounters = require('../core/rpg/systems/guildwar/encounters');
+    const puzzleCards = require('../core/rpg/systems/guildwar/puzzleCards');
+    const CFG = require('../core/rpg/systems/guildwar/config');
+    const roomScene = require('../core/rpg/systems/guildwar/roomScene');
+    const mapEngine = require('../core/rpg/systems/guildwar/mapEngine');
+    const guilds = require('../core/rpg/systems/guildwar/guilds');
     await guilds.loadGuilds();
     try { await guilds.createGuild('QAG', 'u-qag', 'ADVENTURER'); } catch (e) {}
-    const economy = require('../core/rpg/economy');
+    const economy = require('../core/rpg/systems/economy/economy');
     if (!economy.getUser('qa@s.whatsapp.net')) economy.registerUser('qa@s.whatsapp.net', 'QA');
     const u = economy.getUser('qa@s.whatsapp.net'); u.level = 24; u.class = 'WARRIOR'; u.spriteIndex = 0; economy.saveUser('qa@s.whatsapp.net');
 
@@ -39,7 +39,7 @@ async function connectDB() {
     // 1) puzzle room WITH the board overlay riding the scene
     const pzRoom = ev.rooms.find((r) => r.type === 'puzzle');
     if (pzRoom) {
-        await require('../core/rpg/guildWar/rooms').markActive(ev.eventId, pzRoom.key);
+        await require('../core/rpg/systems/guildwar/rooms').markActive(ev.eventId, pzRoom.key);
         const pz = encounters.payloadGet(pzRoom.payload, 'puzzle');
         const board = await puzzleCards.renderPuzzleCard({
             kind: pz.kind, prompt: pz.prompt, attemptsUsed: 1, attemptsMax: CFG.PUZZLE.ATTEMPTS,
@@ -52,7 +52,7 @@ async function connectDB() {
     // 2) World Core boss scene
     const coreRoom = ev.rooms.find((r) => r.type === 'core');
     if (coreRoom) {
-        await require('../core/rpg/guildWar/rooms').markActive(ev.eventId, coreRoom.key);
+        await require('../core/rpg/systems/guildwar/rooms').markActive(ev.eventId, coreRoom.key);
         const buf = await roomScene.renderRoomScene(ev, { ...me, roomId: coreRoom.key }, coreRoom, { prefix: '.j' });
         fs.writeFileSync(path.join(outDir, 'core_boss.png'), buf);
         console.log('core boss rendered');
@@ -60,7 +60,7 @@ async function connectDB() {
     // 3) secret boss
     const secretRoom = ev.rooms.find((r) => r.type === 'secret' && encounters.payloadGet(r.payload, 'boss'));
     if (secretRoom) {
-        await require('../core/rpg/guildWar/rooms').markActive(ev.eventId, secretRoom.key);
+        await require('../core/rpg/systems/guildwar/rooms').markActive(ev.eventId, secretRoom.key);
         const buf = await roomScene.renderRoomScene(ev, { ...me, roomId: secretRoom.key }, secretRoom, { prefix: '.j' });
         fs.writeFileSync(path.join(outDir, 'secret_boss.png'), buf);
         console.log('secret boss rendered');

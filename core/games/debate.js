@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const botConfig = require('../../botConfig');
 const system = require('../utils/system'); // NEW: Database System Module
-const economy = require('../rpg/economy');
+const economy = require('../rpg/systems/economy/economy');
 
 // Active debates storage
 let activeDebates = {};

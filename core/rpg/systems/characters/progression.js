@@ -1,0 +1,695 @@
+// ============================================
+// 📊 COMPLETE RPG PROGRESSION SYSTEM
+// ============================================
+// Handles XP, leveling, stat growth, and character progression
+
+const economy = require('../economy/economy'); // Integrated with MongoDB
+
+// ==========================================
+// 📈 XP AND LEVELING CONFIGURATION
+// ==========================================
+
+const XP_CONFIG = {
+    BASE_XP: 250,           // Base XP per level (used as floor for the exponential curve)
+    SCALING_FACTOR: 1.18,   // XP increases by 18% per level
+    MAX_LEVEL: 100,         // Level cap
+
+    // XP Sources
+    QUEST_BASE_XP: 100,     // Base XP per quest encounter
+    QUEST_COMPLETION: 300,  // Bonus for completing a full quest
+
+    // Level Milestones - these are TIERED REPLACEMENTS, not stacks.
+    // At level 75, only the 1.8x multiplier applies (not 1.2*1.3*1.5*1.8=4.21x).
+    // Previously the multipliers stacked, making late-game XP requirements
+    // astronomical (220M XP for L75->L76) and effectively unobtainable.
+    MILESTONES: {
+        10: 1.2,  // 20% more XP needed per level from L10 onward
+        25: 1.3,  // 30% more XP needed per level from L25 onward (replaces 1.2x)
+        50: 1.5,  // 50% more XP needed per level from L50 onward (replaces 1.3x)
+        75: 1.8   // 80% more XP needed per level from L75 onward (replaces 1.5x)
+    }
+};
+
+// ==========================================
+// 💪 STAT GROWTH PER LEVEL
+// ==========================================
+
+const STAT_GROWTH = {
+    // Base values that scale up at higher levels
+    getBaseGrowth: (level) => {
+        const factor = 1 + Math.floor(level / 15); // Increase base growth every 15 levels
+        return {
+            hp: 15 * factor, 
+            atk: 2.5 * factor, 
+            def: 2.0 * factor, 
+            mag: 2.5 * factor, 
+            spd: 1.5 * factor, 
+            luck: 1.2 * factor, 
+            crit: 0.6 * factor
+        };
+    },
+    CLASS_MODIFIERS: {
+        FIGHTER: { hp: 1.5, atk: 1.3, def: 1.2, mag: 0.5, spd: 1.0, luck: 1.0, crit: 1.0 },
+        SCOUT: { hp: 0.9, atk: 1.1, def: 0.8, mag: 0.6, spd: 1.5, luck: 1.3, crit: 1.5 },
+        APPRENTICE: { hp: 0.7, atk: 0.6, def: 0.7, mag: 1.6, spd: 1.0, luck: 1.1, crit: 1.0 },
+        ACOLYTE: { hp: 1.0, atk: 0.8, def: 1.0, mag: 1.3, spd: 1.0, luck: 1.2, crit: 0.8 },
+        WARRIOR: { hp: 1.7, atk: 1.4, def: 1.5, mag: 0.4, spd: 0.8, luck: 1.0, crit: 0.9 },
+        BERSERKER: { hp: 1.8, atk: 1.6, def: 1.0, mag: 0.3, spd: 1.1, luck: 0.9, crit: 1.4 },
+        PALADIN: { hp: 1.6, atk: 1.2, def: 1.7, mag: 1.1, spd: 0.7, luck: 1.1, crit: 0.7 },
+        ROGUE: { hp: 1.0, atk: 1.8, def: 0.5, mag: 0.3, spd: 2.0, luck: 1.5, crit: 2.5 },
+        MONK: { hp: 1.2, atk: 1.4, def: 0.8, mag: 0.6, spd: 1.8, luck: 1.0, crit: 1.5 },
+        MAGE: { hp: 0.6, atk: 0.5, def: 0.6, mag: 1.8, spd: 1.0, luck: 1.2, crit: 1.1 },
+        WARLOCK: { hp: 0.7, atk: 0.6, def: 0.7, mag: 1.7, spd: 1.1, luck: 1.0, crit: 1.2 },
+        ELEMENTALIST: { hp: 0.8, atk: 0.7, def: 0.8, mag: 1.6, spd: 1.2, luck: 1.1, crit: 1.0 },
+        CLERIC: { hp: 1.2, atk: 0.7, def: 1.1, mag: 1.4, spd: 1.0, luck: 1.3, crit: 0.8 },
+        DRUID: { hp: 1.1, atk: 1.0, def: 1.0, mag: 1.3, spd: 1.1, luck: 1.2, crit: 0.9 },
+        NECROMANCER: { hp: 0.9, atk: 0.8, def: 0.9, mag: 1.5, spd: 0.9, luck: 1.0, crit: 1.3 },
+        MERCHANT: { hp: 1.0, atk: 1.0, def: 1.0, mag: 1.0, spd: 1.0, luck: 2.0, crit: 1.0 },
+        CHRONOMANCER: { hp: 0.8, atk: 0.9, def: 0.8, mag: 1.4, spd: 1.6, luck: 1.3, crit: 1.2 },
+        DRAGONSLAYER: { hp: 1.7, atk: 1.8, def: 1.4, mag: 0.6, spd: 1.0, luck: 1.2, crit: 1.5 },
+        SAMURAI: { hp: 1.2, atk: 1.7, def: 1.0, mag: 0.4, spd: 1.4, luck: 1.2, crit: 1.8 },
+        NINJA: { hp: 0.9, atk: 1.6, def: 0.7, mag: 1.0, spd: 2.2, luck: 1.4, crit: 2.0 },
+        BARD: { hp: 1.1, atk: 0.8, def: 0.9, mag: 1.2, spd: 1.3, luck: 1.8, crit: 1.0 },
+        ARTIFICER: { hp: 1.2, atk: 1.1, def: 1.3, mag: 1.1, spd: 0.9, luck: 1.4, crit: 0.8 },
+        // --- ASCENDED CLASSES ---
+        ARCHMAGE: { hp: 1.0, atk: 0.8, def: 1.2, mag: 2.2, spd: 1.2, luck: 1.5, crit: 1.5 },
+        WARLORD: { hp: 2.0, atk: 1.6, def: 2.0, mag: 0.5, spd: 0.9, luck: 1.2, crit: 1.2 },
+        DOOMSLAYER: { hp: 2.2, atk: 2.0, def: 1.2, mag: 0.4, spd: 1.2, luck: 1.0, crit: 1.8 },
+        TEMPLAR: { hp: 1.8, atk: 1.4, def: 2.2, mag: 1.2, spd: 0.8, luck: 1.3, crit: 1.0 },
+        NIGHTBLADE: { hp: 1.2, atk: 2.0, def: 0.8, mag: 0.8, spd: 2.5, luck: 1.8, crit: 2.8 },
+        ZENMASTER: { hp: 1.5, atk: 1.6, def: 1.2, mag: 1.2, spd: 2.0, luck: 1.5, crit: 1.8 },
+        VOIDWALKER: { hp: 1.2, atk: 1.0, def: 1.2, mag: 2.0, spd: 1.2, luck: 1.2, crit: 1.5 },
+        AVATAR: { hp: 1.4, atk: 1.2, def: 1.4, mag: 2.0, spd: 1.4, luck: 1.4, crit: 1.6 },
+        LICH: { hp: 1.5, atk: 1.0, def: 1.5, mag: 2.1, spd: 1.0, luck: 1.2, crit: 1.5 },
+        TIMELORD: { hp: 1.2, atk: 1.2, def: 1.2, mag: 1.8, spd: 2.5, luck: 1.5, crit: 1.5 },
+        SAINT: { hp: 1.8, atk: 1.0, def: 1.8, mag: 1.8, spd: 1.2, luck: 1.8, crit: 1.2 },
+        ARCHDRUID: { hp: 1.8, atk: 1.4, def: 1.6, mag: 1.8, spd: 1.4, luck: 1.5, crit: 1.4 },
+        TYCOON: { hp: 1.5, atk: 1.5, def: 1.5, mag: 1.5, spd: 1.5, luck: 3.5, crit: 1.5 },
+        // 💡 TICKET #b5087a (2026-09-21): mag growth 1.5 → 1.8. Formula audit:
+        // Apocalypse Wing (the ult) scales off MAG, and maxEnergy's 3×MAG term
+        // makes Dragon God's pool the smallest of the ASCENDED line - while
+        // mages sit at 2.0-2.2 MAG growth. 1.8 keeps Dragon God a bruiser
+        // (still below every mage) but stops its signature ability from
+        // scaling off its weakest stat. Combined with Dragon's Fury (+25% all
+        // damage) and the carried-over dragon bane, the class lands in the
+        // viable end-game band without homogenizing it.
+        DRAGON_GOD: { hp: 2.5, atk: 2.2, def: 2.2, mag: 1.8, spd: 1.5, luck: 1.8, crit: 1.8 },
+        SHOGUN: { hp: 1.8, atk: 2.0, def: 1.5, mag: 0.8, spd: 1.8, luck: 1.5, crit: 2.2 },
+        KAGE: { hp: 1.4, atk: 2.2, def: 1.0, mag: 1.2, spd: 2.8, luck: 2.0, crit: 3.0 },
+        VIRTUOSO: { hp: 1.4, atk: 1.2, def: 1.2, mag: 1.8, spd: 1.6, luck: 2.5, crit: 1.5 },
+        GRAND_INVENTOR: { hp: 1.6, atk: 1.4, def: 1.8, mag: 1.5, spd: 1.2, luck: 1.8, crit: 1.2 }
+    },
+    STAT_POINTS_PER_LEVEL: 5, // Restored from 3
+    MILESTONE_BONUSES: { 10: 10, 25: 20, 50: 40, 75: 60, 100: 100 } // Restored bonuses
+};
+
+// ==========================================
+// 💾 DATA MANAGEMENT
+// ==========================================
+
+function loadProgression() {} // Managed by economy.js
+
+function saveProgression(userId) {
+    if (userId) economy.saveUser(userId);
+}
+
+function getUser(userId) {
+    const mainUser = economy.getUser(userId);
+    if (!mainUser) return null;
+
+    if (!mainUser.progression) {
+        mainUser.progression = {
+            xp: 0, level: 1, gp: 0, totalGP: 0, commandsUsed: 0, statPoints: 0,
+            allocatedStats: { hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0 },
+            totalXPEarned: 0, totalLevelsGained: 0, achievements: []
+        };
+        economy.saveUser(userId);
+    }
+    
+    const p = mainUser.progression;
+    if (!p.allocatedStats) p.allocatedStats = { hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0 };
+    if (p.statPoints === undefined) p.statPoints = 0;
+    if (p.gp === undefined) p.gp = 0;
+    if (p.totalGP === undefined) p.totalGP = 0;
+    if (p.commandsUsed === undefined) p.commandsUsed = 0;
+    if (!p.achievements) p.achievements = [];
+
+    // --- LEGACY XP FIX ---
+    // If formula changed and user has negative progress, boost their total XP to match their level
+    const minXPForLevel = getXPForLevel(p.level);
+    const xpForNext = getXPForLevel(p.level + 1) - minXPForLevel;
+    
+    if ((p.xp || 0) < minXPForLevel) {
+        // Boost them to 5% progress into their current level so they see a positive number
+        const adjustment = (minXPForLevel + Math.floor(xpForNext * 0.05)) - (p.xp || 0);
+        console.log(`[Progression] Legacy XP adjustment for ${userId} (Lv.${p.level}): +${adjustment}`);
+        p.xp = (p.xp || 0) + adjustment;
+        p.totalXPEarned = (p.totalXPEarned || 0) + adjustment;
+        // ⚠️ FIX (audit Task 3 Q3 root cause #2): drop the redundant fire-and-forget
+        // save here. The forward level-up sync below will save once after all
+        // mutations are applied. The previous save captured PRE-sync state and
+        // could race with the post-sync save in addXP, reverting level on restart.
+    }
+
+    // --- FORWARD LEVEL-UP SYNC (audit Task ID 3 BUG 1) ---
+    // If the user's XP is enough for one or more level-ups but level hasn't
+    // been bumped (e.g. an out-of-band write set progression.level=63 while
+    // leaving progression.xp=103M, or a fire-and-forget save race reverted
+    // the post-loop level), reconcile here. This makes the bug SELF-HEALING:
+    // the next time the user opens their profile (.g me, .g stats, etc.),
+    // getUser() runs and the level is corrected. Awards the same stat +
+    // skill points the regular addXP path would have.
+    //
+    // Coerce to numbers first - defense against type-coercion bugs where
+    // level/xp was written as a string (e.g. via .lean() skipping Mongoose
+    // type casting on cache load - audit Task 3 Q3 root cause #3).
+    p.level = Number(p.level) || 1;
+    p.xp = Number(p.xp) || 0;
+    if (p.level < 1) p.level = 1;
+    if (p.level >= XP_CONFIG.MAX_LEVEL) {
+        // At cap - clamp XP to the cap's threshold so the "416% progress"
+        // display stops showing for max-level players.
+        const capXP = getXPForLevel(XP_CONFIG.MAX_LEVEL);
+        if (p.xp > capXP) p.xp = capXP;
+    } else if (p.xp >= getXPForLevel(p.level + 1)) {
+        const oldLevel = p.level;
+        const levelUps = [];
+        while (p.level < XP_CONFIG.MAX_LEVEL && p.xp >= getXPForLevel(p.level + 1)) {
+            p.level++;
+            levelUps.push(p.level);
+        }
+        if (levelUps.length > 0) {
+            let statPointsGained = levelUps.length * STAT_GROWTH.STAT_POINTS_PER_LEVEL;
+            let skillPointsGained = levelUps.length;
+            for (const level of levelUps) {
+                if (STAT_GROWTH.MILESTONE_BONUSES[level]) statPointsGained += STAT_GROWTH.MILESTONE_BONUSES[level];
+                if (level % 10 === 0) skillPointsGained += 2;
+            }
+            p.statPoints = (p.statPoints || 0) + statPointsGained;
+            p.totalLevelsGained = (p.totalLevelsGained || 0) + levelUps.length;
+            const mainUser2 = economy.getUser(userId);
+            if (mainUser2) {
+                mainUser2.skillPoints = (mainUser2.skillPoints || 0) + skillPointsGained;
+            }
+            console.log(`[Progression] Forward level-up sync for ${userId}: Lv.${oldLevel} → Lv.${p.level} (+${levelUps.length} levels, +${statPointsGained} stat pts, +${skillPointsGained} skill pts)`);
+            // 💡 Phase C: milestone tutorial track unlocks (self-healing path)
+            try { require('../meta/tutorial').recordLevelUps(userId, levelUps); } catch (e) { /* non-fatal */ }
+            economy.saveUser(userId);
+        }
+    }
+
+    return p;
+}
+
+// ==========================================
+// 📊 XP CALCULATIONS
+// ==========================================
+
+// 💡 POST-50 WALL (2026-10-15, owner order: "make the progression level wise
+// the same, but we make it harder after level 50" — after a player hit Lv100
+// still at rank B with skills locked): levels 1-50 keep the EXACT 240×L² curve
+// (L50 = 600,000, untouched). From 51 onward each level's cost is the normal
+// 240×(2L−1) increment multiplied by a compounding POST50_RAMP^(L−50), so the
+// late game stops outrunning adventurer ranks and rank-gated skills (rank A
+// sits at L50 in classSystem.ADVENTURER_RANKS and tier-4/ascended skills need
+// rank A in skillCommands.js — an XP rusher could blitz to Lv100 at rank B).
+// Exact totals (cumulative XP to reach the level):
+//   L50:    600,000     (same as before, 1.00×)
+//   L60:    972,062     (was 864,000,    1.13×)
+//   L75:  2,426,435     (was 1,350,000,  1.80×)
+//   L90:  6,674,328     (was 1,944,000,  3.43×)
+//   L100: 13,260,407    (was 2,400,000,  5.53×)
+// Per-level: L51→52 27,776 (was 24,720) … L99→100 879,747 (was 47,760).
+// History of the base curve: 2026-08-16 80×L² → 2026-09-14 400×L² →
+// 2026-09-15 200×L² (owner: ×5 felt too heavy) → 2026-09-21 240×L² (exact
+// +20% on the 200 baseline) → 2026-10-15 post-50 compounding wall (this).
+// Single insertion point by design: EVERY source (quests, completion, raids,
+// abyss, PvP, trivia) and every display derives from this one function, so
+// the wall cannot double-stack with any modifier. Existing players above 50
+// are protected by the LEGACY XP FIX in getUser() (topped up to their current
+// level floor, never de-leveled) — same mechanism as the 2026-09-21 rebalance.
+const POST50_LEVEL_START = 50;
+const POST50_RAMP = 1.06;
+const XP_CURVE_TABLE = (() => {
+    const t = new Array(301).fill(0); // L2..300 precomputed; 300 stays far inside safe-integer range
+    for (let L = 2; L <= 300; L++) {
+        t[L] = L <= POST50_LEVEL_START
+            ? Math.floor(240 * L * L)
+            : t[L - 1] + Math.ceil(240 * (2 * L - 1) * Math.pow(POST50_RAMP, L - POST50_LEVEL_START));
+    }
+    return t;
+})();
+
+function getXPForLevel(level) {
+    if (level <= 1) return 0;
+    const lv = Math.floor(level);
+    if (lv < XP_CURVE_TABLE.length) return XP_CURVE_TABLE[lv];
+    // Defensive extension beyond the table (unreachable via MAX_LEVEL=100 paths,
+    // setlevel clamps 1-100): keep accumulating the same post-50 ramp formula.
+    let total = XP_CURVE_TABLE[XP_CURVE_TABLE.length - 1];
+    for (let L = XP_CURVE_TABLE.length; L <= lv; L++) {
+        total += Math.ceil(240 * (2 * L - 1) * Math.pow(POST50_RAMP, L - POST50_LEVEL_START));
+    }
+    return total;
+}
+function getXPForNextLevel(userId) {
+    const user = getUser(userId);
+    if (!user) return 100;
+    return getXPForLevel(user.level + 1) - getXPForLevel(user.level);
+}
+
+function getLevel(userId) {
+    const user = getUser(userId);
+    return user ? user.level : 1;
+}
+
+function getGP(userId) {
+    const user = getUser(userId);
+    return user ? (user.gp || 0) : 0;
+}
+
+function awardGP(userId, gpGainOrIsGuild = false, isGuildMember = true) {
+    // 💡 AUDIT FIX 2026-11-01: amount-aware overload. guildAdventure.js pays
+    // rank-scaled GP via awardGP(jid, gpGain) where gpGain is a NUMBER (1-100);
+    // the old boolean-only signature coerced it to truthiness so every clear
+    // paid exactly 5 GP while the summary card printed the real gpGain.
+    let amount = 5;
+    if (typeof gpGainOrIsGuild === 'number' && Number.isFinite(gpGainOrIsGuild) && gpGainOrIsGuild > 0) {
+        amount = Math.floor(gpGainOrIsGuild);
+    } else if (gpGainOrIsGuild === false) {
+        return { awarded: false };
+    }
+    const user = getUser(userId);
+    if (!user) return { awarded: false };
+    user.gp = (user.gp || 0) + amount;
+    user.totalGP = (user.totalGP || 0) + amount;
+    saveProgression(userId);
+    return { awarded: true, gpGained: amount };
+}
+
+// ==========================================
+// ⬆️ LEVEL UP SYSTEM
+// ==========================================
+
+function addXP(userId, amount = 10, source = 'Unknown') {
+    const user = getUser(userId);
+    if (!user) return { leveledUp: false, xpGained: 0 };
+
+    // 2026-10-31 fuzz: a NaN/Infinity/string reward (bad multiplier upstream) used to
+    // be written straight into xp - NaN/"05" stuck on the player forever. Floor to a
+    // finite non-negative whole number; anything else grants nothing.
+    amount = Math.floor(Number(amount));
+    if (!Number.isFinite(amount) || amount < 0) amount = 0;
+
+    const oldLevel = user.level;
+    user.xp += amount;
+    user.totalXPEarned += amount;
+    user.commandsUsed = (user.commandsUsed || 0) + 1;
+    
+    const levelUps = [];
+    while (user.level < XP_CONFIG.MAX_LEVEL) {
+        if (user.xp >= getXPForLevel(user.level + 1)) {
+            user.level++;
+            levelUps.push(user.level);
+        } else break;
+    }
+    
+    // 💡 AUDIT FIX 2026-11-01: the old order persisted the new LEVEL first
+    // and granted the points after — a crash between the two writes
+    // permanently lost the points (level already bumped, no re-award).
+    if (levelUps.length > 0) {
+        let statPointsGained = levelUps.length * STAT_GROWTH.STAT_POINTS_PER_LEVEL;
+        let skillPointsGained = levelUps.length;
+        for (const level of levelUps) {
+            if (STAT_GROWTH.MILESTONE_BONUSES[level]) statPointsGained += STAT_GROWTH.MILESTONE_BONUSES[level];
+            if (level % 10 === 0) skillPointsGained += 2;
+        }
+        user.statPoints += statPointsGained;
+        user.totalLevelsGained += levelUps.length;
+        saveProgression(userId); // 💡 single save now covers level + points
+        
+        const mainUser = economy.getUser(userId);
+        if (mainUser) {
+            mainUser.skillPoints = (mainUser.skillPoints || 0) + skillPointsGained;
+            economy.saveUser(userId);
+        }
+        
+        // 💡 Phase C (2026-10-11): milestone tutorial track unlocks. Pure state
+        // mutation (no I/O beyond the save) - can never break the XP path.
+        try { require('../meta/tutorial').recordLevelUps(userId, levelUps); } catch (e) { /* non-fatal */ }
+        
+        return { leveledUp: true, oldLevel, newLevel: user.level, levelsGained: levelUps.length, statPointsGained, skillPointsGained, xpGained: amount, source };
+    }
+    saveProgression(userId);
+    return { leveledUp: false, xpGained: amount, source };
+}
+
+const ACHIEVEMENTS = {
+    BEGINNER: { id: 'lvl_1', name: 'Newbie', icon: '🐣', desc: 'Reached Level 1' }
+};
+
+function checkLevelAchievements(userId, level) { return []; }
+function checkCommandAchievements(userId) { return []; }
+function checkGPAchievements(userId) { return []; }
+
+// ==========================================
+// 💪 STAT CALCULATION & ALLOCATION
+// ==========================================
+
+function getBaseStats(userId, classId) {
+    const user = getUser(userId);
+    const classSystem = require('./classSystem');
+    const inventorySystem = require('../inventory/inventorySystem');
+    
+    if (!user) return { hp: 100, atk: 10, def: 10, mag: 10, spd: 10, luck: 10, crit: 5 };
+
+    const classData = classSystem.getClassById(classId);
+    if (!classData) return { hp: 100, atk: 10, def: 10, mag: 10, spd: 10, luck: 10, crit: 5 };
+    
+    const baseStats = { ...classData.stats };
+    const classModifier = STAT_GROWTH.CLASS_MODIFIERS[classId] || STAT_GROWTH.CLASS_MODIFIERS.FIGHTER;
+    const levelsGained = user.level - 1;
+    
+    // NEW: Non-linear base growth
+    const currentBaseGrowth = STAT_GROWTH.getBaseGrowth(user.level);
+    for (const [stat, baseVal] of Object.entries(currentBaseGrowth)) {
+        baseStats[stat] = (baseStats[stat] || 0) + Math.floor(baseVal * (classModifier[stat] || 1.0) * levelsGained);
+    }
+    
+    const allocated = user.allocatedStats || {};
+    for (const [stat, points] of Object.entries(allocated)) baseStats[stat] = (baseStats[stat] || 0) + points;
+    
+    const mainUser = economy.getUser(userId);
+    if (mainUser && mainUser.statBonuses) {
+        for (const [stat, bonus] of Object.entries(mainUser.statBonuses)) baseStats[stat] = (baseStats[stat] || 0) + bonus;
+    }
+
+    const equipStats = inventorySystem.getEquipmentStats(userId);
+    for (const [stat, bonus] of Object.entries(equipStats)) {
+        if (typeof baseStats[stat] !== 'undefined') baseStats[stat] += bonus;
+    }
+
+    // 💡 RETIRED 2026-11-01: summon trial passives removed with the trials
+    // feature (dead content - no live species has a trial, so
+    // computePassiveBonuses() could never return anything non-empty).
+
+    baseStats.maxHp = baseStats.hp;
+    baseStats.maxEnergy = 100 + (levelsGained * 15) + (Math.floor(baseStats.mag * 3));
+    baseStats.evasion = Math.min(45, (baseStats.spd * 0.12)); // Increased evasion cap
+    baseStats.dmgReduction = Math.min(65, (baseStats.def * 0.55)); // Cap reduced from 80 → 65 to stop DEF over-stacking making enemies irrelevant
+    baseStats.rareDropRate = (baseStats.luck * 0.06);
+    
+    return baseStats;
+}
+
+// 💡 HP allocation synergy (2026-09-15): growing Max HP by allocating HP
+// also restores the same amount of persistent current HP, so investing in
+// HP never widens your injury gap. Skipped for full-HP players (their
+// currentHP is the migrated/-unset sentinel) and clamped to the new max.
+function bumpPersistentHPWithStatGain(userId, gainedValue) {
+    try {
+        const eUser = economy.getUser(userId);
+        if (!eUser || !eUser.stats) return;
+        const cur = Number(eUser.stats.currentHP);
+        if (!Number.isFinite(cur) || cur < 0) return;
+        const rawClass = eUser.class;
+        const classId = typeof rawClass === 'object'
+            ? (rawClass?.id || rawClass?.name || 'FIGHTER')
+            : (rawClass || 'FIGHTER');
+        const newMax = getBaseStats(userId, classId).hp;
+        if (cur < newMax) {
+            eUser.stats.currentHP = Math.min(newMax, cur + gainedValue);
+            economy.saveUser(userId);
+        }
+    } catch (e) {}
+}
+
+function allocateStatPoint(userId, stat, amount = 1) {
+    const user = getUser(userId);
+    if (!user) return { success: false, message: "User not found" };
+    if (typeof stat !== 'string' || !stat) return { success: false, message: "Pick a stat to allocate!" };
+
+    // Validate amount: must be a positive finite integer. Previously a
+    // negative `amount` would slip past the `user.statPoints < amount`
+    // check (e.g. statPoints=0, amount=-5: 0 < -5 is false, so it passes),
+    // then `user.statPoints -= amount` would ADD stat points (0 - -5 = 5)
+    // while `user.allocatedStats[s] += gainedValue` would SUBTRACT stats
+    // (gainedValue = 3 * 1 * -5 = -15). The user could then reallocate
+    // those free stat points elsewhere - a stat-point duplication exploit.
+    const amt = Math.floor(Number(amount));
+    if (!Number.isFinite(amt) || amt <= 0) {
+        return { success: false, message: "Amount must be a positive whole number!" };
+    }
+    amount = amt;
+
+    if (user.statPoints < amount) return { success: false, message: `Not enough stat points! Have: ${user.statPoints}, Need: ${amount}` };
+    
+    const validStats = ['hp', 'atk', 'def', 'mag', 'spd', 'luck', 'crit'];
+    const s = stat.toLowerCase();
+    if (!validStats.includes(s)) return { success: false, message: `Invalid stat!` };
+    
+    // 💡 OWNER FIX 2026-09-20 ("the Allocate card is not fixed yet"): the old
+    // soft cap halved gains past 20 + level/5 points in one stat, so the
+    // card advertised "+3/pt, allocate ATK 5 -> +15" while the system paid
+    // 1.5/pt - and Math.floor(1.5) rounded SINGLE-point allocs down to +1/pt
+    // (a 67% silent loss). Players allocated in 1-point increments because
+    // that is what the command example teaches. Owner ruling: the card is
+    // the contract - every point delivers exactly base × tier, integer
+    // per-point (bases are 1/2/3/15, tiers are ×1 or ×2), so the advertised
+    // math and the paid math can never diverge again. Min-max discouragement
+    // now lives in respec costs and reward tables, not in silent halving.
+    //
+    // 💡 TICKET #b4f78f (2026-09-21): the value math still lives in ONE place
+    // - previewAllocation() - which mirrors EXACTLY this owner contract
+    // (base × tier per point, no soft cap). The UI reads the same function,
+    // so the displayed per-point rate can never disagree with what the
+    // backend pays.
+    const preview = previewAllocation(userId, s, amount);
+    const gainedValue = preview.gainedValue;
+    
+    // Track points spent per stat so resetStats can refund correctly
+    if (!user.allocatedStatPoints) user.allocatedStatPoints = {};
+    user.allocatedStatPoints[s] = (user.allocatedStatPoints[s] || 0) + amount;
+    
+    user.allocatedStats[s] = (user.allocatedStats[s] || 0) + gainedValue;
+    user.statPoints -= amount;
+    if (s === 'hp') bumpPersistentHPWithStatGain(userId, gainedValue);
+    saveProgression(userId);
+    return { success: true, stat: stat.toUpperCase(), pointsSpent: amount, valueGained: gainedValue, remainingPoints: user.statPoints };
+}
+
+function resetStats(userId) {
+    const user = getUser(userId);
+    if (!user) return { success: false, message: "User not found" };
+
+    // 💡 FIX: Use tracked points spent (allocatedStatPoints) for accurate
+    // refund. The old fallback divided allocatedStats values by 3, but the
+    // actual conversion rate varies per stat (hp=15, atk=3, def=2, mag=3,
+    // spd=2, luck=2, crit=1). Dividing by 3 massively undercounted HP
+    // (15/3=5 instead of 1) and overcounted crit (1/3=0).
+    //
+    // If allocatedStatPoints is missing (legacy user), reconstruct it from
+    // allocatedStats using the CORRECT reverse conversion rates.
+    //
+    // 💡 TICKET #b4f78f (2026-09-21): the legacy fallback now accounts for
+    // the class TIER multiplier (EVOLVED/ASCENDED = 2.0). The old fallback
+    // divided by the base value only, so a tier-2 allocation (e.g. 6 ATK
+    // from 3 points) refunded DOUBLE the points actually spent. The inverse
+    // uses points = value / (base × tier) and never returns more points than
+    // could have produced the stored value. (Soft-cap halving is deliberately
+    // NOT assumed - it would under-refund legacy users whose allocation
+    // predates the cap.)
+    const BASE_STAT_VALUES = { hp: 15, atk: 3, def: 2, mag: 3, spd: 2, luck: 2, crit: 1 };
+    let tierMult = 1.0;
+    try {
+        const classSystem = require('./classSystem');
+        const mainUser = economy.getUser(userId);
+        const classData = mainUser ? classSystem.getClassById(mainUser.class) : null;
+        if (classData?.tier === 'EVOLVED' || classData?.tier === 'ASCENDED') tierMult = 2.0;
+    } catch (e) {}
+
+    let totalPointsSpent = 0;
+    if (user.allocatedStatPoints) {
+        totalPointsSpent = Object.values(user.allocatedStatPoints).reduce((sum, v) => sum + (Number(v) || 0), 0);
+    } else if (user.allocatedStats) {
+        // Legacy fallback: reverse-calculate points from stat values
+        for (const [stat, value] of Object.entries(user.allocatedStats)) {
+            const baseVal = BASE_STAT_VALUES[stat] || 3;
+            totalPointsSpent += Math.floor((Number(value) || 0) / (baseVal * tierMult));
+        }
+    }
+
+    user.allocatedStats = { hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0 };
+    user.allocatedStatPoints = { hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0 };
+    user.statPoints += totalPointsSpent;
+    saveProgression(userId);
+    return { success: true, pointsRefunded: totalPointsSpent, totalPoints: user.statPoints };
+}
+
+// ==========================================
+// 📈 LEADERBOARDS & RANKINGS
+// ==========================================
+
+function getLeaderboard(type = 'level', limit = 10) {
+    // 💡 OWNER 2026-10-07: staff (owner/mods) never appear on competitive
+    // boards. Lazy require avoids the progression<->engine load cycle - by
+    // request time engine is fully cached.
+    const _notStaff = (u) => {
+        try {
+            const engine = require('../../../engine');
+            return !(typeof engine.isStaff === 'function' && engine.isStaff(u.userId));
+        } catch (e) {
+            return true;
+        }
+    };
+    const allUsers = Array.from(economy.economyData.values()).filter(_notStaff);
+    if (type === 'pvp') {
+        const leaderboard = allUsers.map(u => ({
+            userId: u.userId,
+            pvpWins: u.pvpWins || 0,
+            pvpLosses: u.pvpLosses || 0
+        }));
+        leaderboard.sort((a, b) => (b.pvpWins || 0) - (a.pvpWins || 0));
+        return leaderboard.slice(0, limit);
+    }
+    const leaderboard = allUsers.filter(u => u.progression).map(u => ({ userId: u.userId, ...u.progression }));
+    const sortField = type === 'level' ? 'level' : 'totalXPEarned';
+    leaderboard.sort((a, b) => (b[sortField] || 0) - (a[sortField] || 0));
+    return leaderboard.slice(0, limit);
+}
+
+function getCharacterSheet(userId) {
+    const user = getUser(userId);
+    const mainUser = economy.getUser(userId);
+    if (!user || !mainUser) return null;
+    const stats = getBaseStats(userId, mainUser.class);
+    const xpProgress = user.xp - getXPForLevel(user.level);
+    const xpForThisLevel = getXPForLevel(user.level + 1) - getXPForLevel(user.level);
+    return {
+        level: user.level, xp: user.xp, xpNeeded: getXPForLevel(user.level + 1) - user.xp,
+        xpProgress, xpForThisLevel, progressPercent: Math.floor((xpProgress / xpForThisLevel) * 100),
+        stats, statPoints: user.statPoints, totalXPEarned: user.totalXPEarned,
+        totalLevelsGained: user.totalLevelsGained,
+        // 💡 FIX 2026-10-03 (owner "Adventurer" class bug): emit a normalized
+        // class ID string - some legacy docs store an object here, and raw
+        // passthrough made card renderers fall back to "Adventurer".
+        class: (mainUser.class && typeof mainUser.class === 'object')
+            ? (mainUser.class.id || mainUser.class.name || null)
+            : (mainUser.class || null),
+        adventurerRank: mainUser.adventurerRank || 'F',
+        gp: user.gp || 0, totalGP: user.totalGP || 0
+    };
+}
+
+function getLevelDisplay(level) {
+    const icons = ['🌑', '🌘', '🌗', '🌖', '🌕', '☀️', '⭐', '🌟', '✨', '👑'];
+    return `${icons[Math.min(Math.floor(level / 10), icons.length - 1)]} Level ${level}`;
+}
+
+function getProgressBar(percent, length = 10) {
+    const filled = Math.floor((Math.max(0, Math.min(100, percent)) / 100) * length);
+    return `[${'█'.repeat(filled)}${'░'.repeat(Math.max(0, length - filled))}]`;
+}
+
+function getUserStats(userId) {
+    const user = getUser(userId);
+    const sheet = getCharacterSheet(userId);
+    if (!sheet) return { level: 1, xp: { current: 0, required: 100, total: 0, progress: 0, nextLevel: 100 }, gp: { current: 0, total: 0 }, commands: 0, achievements: [] };
+    return {
+        level: sheet.level,
+        xp: { current: sheet.xpProgress, required: sheet.xpForThisLevel, total: sheet.xp, progress: sheet.progressPercent, nextLevel: sheet.xpNeeded },
+        gp: { current: user.gp || 0, total: user.totalGP || 0 },
+        commands: user.commandsUsed || 0, achievements: user.achievements || []
+    };
+}
+
+function getUserRank(userId) {
+    const leaderboard = getLeaderboard('xp', 1000);
+    const index = leaderboard.findIndex(u => u.userId === userId);
+    const totalUsers = economy.economyData.size || 1;
+    const rank = index === -1 ? totalUsers : index + 1;
+    return { rank, totalUsers, percentile: Math.floor(((totalUsers - rank) / totalUsers) * 100) };
+}
+
+function getRankEmoji(rank) { return rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '🏅'; }
+
+function getGPLeaderboard(limit = 10) {
+    // Previously this was a stub returning []. Now it actually queries the economy
+    // cache and returns the top users by lifetime GP (totalGP).
+    const allUsers = Array.from(economy.economyData.values());
+    const leaderboard = allUsers
+        .filter(u => u.registered && u.progression)
+        .map(u => ({
+            userId: u.userId,
+            nickname: u.nickname || economy.getDisplayName(u.userId),
+            level: u.progression.level || 1, // 💡 AUDIT FIX 2026-11-01: gptop printed 'undefined Level undefined' — the map had no level
+            gp: u.progression.gp || 0,
+            totalGP: u.progression.totalGP || 0,
+        }))
+        .sort((a, b) => (b.totalGP || 0) - (a.totalGP || 0))
+        .slice(0, limit);
+    return leaderboard;
+}
+
+// 💡 TICKET #b508e7 companion (#b4f78f): stat points a player earns for
+// climbing from `fromLevel` to `toLevel` - the EXACT formula the level-up
+// paths use (5/level + milestone bonuses). adminConsole setlevel now uses
+// this instead of its old hardcoded 2/level, so granted points always match
+// the same levels earned through play.
+function getStatPointsForRange(fromLevel, toLevel) {
+    const from = Math.max(1, Math.floor(Number(fromLevel) || 1));
+    const to = Math.max(from, Math.floor(Number(toLevel) || from));
+    let points = 0;
+    for (let level = from + 1; level <= to; level++) {
+        points += STAT_GROWTH.STAT_POINTS_PER_LEVEL;
+        if (STAT_GROWTH.MILESTONE_BONUSES[level]) points += STAT_GROWTH.MILESTONE_BONUSES[level];
+    }
+    return points;
+}
+
+// 💡 TICKET #b4f78f: allocation preview - SINGLE source of truth for "how
+// much VALUE do N points buy right now on this stat". Mirrors the owner
+// contract (2026-09-20): every point delivers exactly base × tier - the soft
+// cap was REMOVED by owner ruling ("the card is the contract"), so there is
+// no partial/halving math to diverge from. allocateStatPoint and the
+// .j allocate UI both read this.
+function previewAllocation(userId, stat, amount = 1) {
+    const user = getUser(userId);
+    if (!user) return { gainedValue: 0, perPoint: 0, tierMultiplier: 1, pointsAlreadyInStat: 0 };
+    const validStats = ['hp', 'atk', 'def', 'mag', 'spd', 'luck', 'crit'];
+    const s = String(stat || '').toLowerCase();
+    if (!validStats.includes(s)) {
+        return { gainedValue: 0, perPoint: 0, tierMultiplier: 1, pointsAlreadyInStat: 0 };
+    }
+    const amt = Math.max(1, Math.floor(Number(amount) || 1));
+
+    const mainUser = economy.getUser(userId);
+    const classSystem = require('./classSystem');
+    const classData = mainUser ? classSystem.getClassById(mainUser.class) : null;
+    let tierMultiplier = 1.0;
+    if (classData?.tier === 'EVOLVED') tierMultiplier = 2.0;
+    if (classData?.tier === 'ASCENDED') tierMultiplier = 2.0;
+
+    const baseStatValues = { hp: 15, atk: 3, def: 2, mag: 3, spd: 2, luck: 2, crit: 1 };
+    const perPoint = Math.floor(baseStatValues[s] * tierMultiplier);
+    return {
+        gainedValue: perPoint * amt,
+        perPoint,
+        nextSinglePointValue: perPoint,
+        tierMultiplier,
+        pointsAlreadyInStat: (user.allocatedStatPoints?.[s] || 0),
+    };
+}
+
+module.exports = {
+    loadProgression, saveProgression, getUser, addXP, awardXP: addXP, awardGP,
+    getLevel, getGP, getXPForLevel, getXPForNextLevel,
+    getBaseStats, allocateStatPoint, resetStats, getUserStats, getUserRank,
+    getStatPointsForRange, previewAllocation,
+    ACHIEVEMENTS, checkLevelAchievements, checkCommandAchievements, checkGPAchievements,
+    getCharacterSheet, getLeaderboard,
+    getXPLeaderboard: (limit) => getLeaderboard('xp', limit),
+    getGPLeaderboard,
+    getLevelDisplay, getProgressBar, getRankEmoji,
+    XP_CONFIG, STAT_GROWTH
+};

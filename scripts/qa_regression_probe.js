@@ -9,10 +9,10 @@ function ok(cond, label) {
 }
 
 // ── 1. XP curve: exact +20% (200L^2 -> 240L^2) at the canonical source ──────
-const economy = require('../core/rpg/economy');
+const economy = require('../core/rpg/systems/economy/economy');
 const fakeUsers = {};
 economy.getUser = (jid) => fakeUsers[jid] || null;
-const progression = require('../core/rpg/progression');
+const progression = require('../core/rpg/systems/characters/progression');
 console.log('[1] XP curve + stat points');
 ok(progression.getXPForLevel(1) === 0, 'getXPForLevel(1) === 0 (level 1 is the start, by design)');
 for (const L of [2, 5, 10, 25, 50, 77, 100]) {
@@ -40,7 +40,7 @@ const pv1 = progression.previewAllocation(J, 'atk', 1);
 ok(Number(pv1.gainedValue) > 0, 'single point preview pays base x tier (soft cap removed)');
 
 // ── 4. Cosmology gate seams (abyss window + triune + status lines) ──────────
-const cosmology = require('../core/rpg/cosmology');
+const cosmology = require('../core/rpg/systems/world/cosmology');
 console.log('[2] cosmology gate seams');
 const w = cosmology.abyssWindow();
 ok(w && typeof w.open === 'boolean' && typeof w.label === 'string', 'abyssWindow() returns {open,label} shape');
@@ -57,7 +57,7 @@ ok(lockedAt && cosmology.abyssWindow(lockedAt).open === false, 'a locked window 
 ok(typeof cosmology.isTriuneAligned === 'function' && typeof cosmology.triuneWindow === 'function', 'triune state is checked, never auto-scheduled');
 
 // ── 5. combatTargetIcon resolver (undefined-name class of bugs) ─────────────
-const ga = require('../core/rpg/guildAdventure');
+const ga = require('../core/rpg/systems/adventures/guildAdventure');
 console.log('[3] combat icon resolver');
 ok(ga.combatTargetIcon({ name: 'MellowDiHOfHeaven', class: { icon: '🧙' } }) === '🧙', 'player icon resolves from class');
 ok(ga.combatTargetIcon({ name: 'X', class: null }) === '👤', 'missing icon never renders undefined');

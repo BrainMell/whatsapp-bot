@@ -27,9 +27,9 @@ async function setup() {
   User = require('../core/models/User');
   ItemMarket = require('../core/models/ItemMarket');
   Settlement = require('../core/models/Settlement');
-  economy = require('../core/rpg/economy');
-  inventorySystem = require('../core/rpg/inventorySystem');
-  itemMarket = require('../core/rpg/itemMarket');
+  economy = require('../core/rpg/systems/economy/economy');
+  inventorySystem = require('../core/rpg/systems/inventory/inventorySystem');
+  itemMarket = require('../core/rpg/systems/economy/itemMarket');
 }
 
 async function cleanup() {

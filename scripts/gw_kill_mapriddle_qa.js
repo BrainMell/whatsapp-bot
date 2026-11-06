@@ -55,7 +55,7 @@ const rooms = require(`..${GW}/rooms`);
 const puzzles = require(`..${GW}/puzzles`);
 const mapEngine = require(`..${GW}/mapEngine`);
 const dmRouter = require(`..${GW}/dmRouter`);
-const economy = require('../core/rpg/economy');
+const economy = require('../core/rpg/systems/economy/economy');
 
 const playerOf = (doc, jid) => doc.players.find((p) => p.jid === jid);
 const roomOf = async (eventId, roomKey) => {

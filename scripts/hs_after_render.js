@@ -4,7 +4,7 @@
 const path = require('path');
 process.chdir(path.join(__dirname, '..'));
 const fs = require('fs');
-const R = require('../core/rpg/homesteadRenderer');
+const R = require('../core/rpg/systems/homestead/homesteadRenderer');
 
 const ITEMS = [
     { item: 'rug_royal',  x: 3, y: 6, fw: 3, fh: 2 },

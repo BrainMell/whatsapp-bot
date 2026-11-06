@@ -10,7 +10,7 @@ const TEST_JID = 'test_award_rune_debug@s.whatsapp.net';
 async function main() {
   await mongoose.connect(uri);
   console.log('Connected to:', mongoose.connection.db.databaseName);
-  const runeSystem = require('../core/rpg/runeSystem');
+  const runeSystem = require('../core/rpg/systems/inventory/runeSystem');
   const Rune = require('../core/models/Rune');
   await Rune.deleteMany({ ownerJid: TEST_JID });
   try {

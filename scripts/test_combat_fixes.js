@@ -28,9 +28,9 @@ async function setup() {
   conn = await mongoose.connect(MONGO_URI, { dbName: 'whatsapp_rpg' });
   console.log('[+] Connected to MongoDB');
   User = require('../core/models/User');
-  economy = require('../core/rpg/economy');
-  inventorySystem = require('../core/rpg/inventorySystem');
-  lootSystem = require('../core/rpg/lootSystem');
+  economy = require('../core/rpg/systems/economy/economy');
+  inventorySystem = require('../core/rpg/systems/inventory/inventorySystem');
+  lootSystem = require('../core/rpg/systems/inventory/lootSystem');
 }
 
 async function cleanup() {

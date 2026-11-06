@@ -6,7 +6,7 @@ const OUT = process.argv[2] || '/tmp/guild_kingdom';
 process.env.QA_MODE = process.env.QA_MODE || '1';
 (async () => {
     fs.mkdirSync(OUT, { recursive: true });
-    const g = require('../core/rpg/guildBaseRenderer');
+    const g = require('../core/rpg/systems/guildwar/guildBaseRenderer');
     const shots = [
         ['l5_adventurer', { name: 'Iron Wolves', level: 12, archetype: 'ADVENTURER', buildings: { hall: 5, training: 5, treasury: 5 }, memberCount: 12, memberCap: 25, emblemColor: '#a02c3c', emblemIcon: 'W', motto: 'Steel and mead' }],
         ['l3_merchant', { name: 'Gilded Ledger', level: 6, archetype: 'MERCHANT', buildings: { hall: 3, training: 2, treasury: 4 }, memberCount: 7, memberCap: 20, emblemColor: '#b8862e', emblemIcon: 'M' }],

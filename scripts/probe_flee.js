@@ -13,9 +13,9 @@ async function connectDB() {
 }
 (async () => {
     await connectDB();
-    const state = require('../core/rpg/guildWar/state');
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
-    const ga = require('../core/rpg/guildAdventure');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
+    const ga = require('../core/rpg/systems/adventures/guildAdventure');
     ga.startRuinsCombat = async () => ({ success: true, sessionKey: 'sim' });
     const created = await state.createEvent({ type: 'normal', hostGroupId: 'fleeqa2@g.us', initiatedBy: 'owner' });
     await state.registerPlayer(created.event.eventId, { jid: 'pz@s.whatsapp.net', name: 'PZ', guildId: 'G', guildName: 'G' });

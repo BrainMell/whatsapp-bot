@@ -4,7 +4,7 @@
 // (already-seeded events) — the drawn pack must cap at 3.
 const fs = require('fs');
 const path = require('path');
-const roomScene = require('../core/rpg/guildWar/roomScene');
+const roomScene = require('../core/rpg/systems/guildwar/roomScene');
 
 const OUT = '/home/z/my-project/download/gw_qa_1005';
 fs.mkdirSync(OUT, { recursive: true });

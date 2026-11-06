@@ -2,9 +2,9 @@
 // probe47j.js — the pack's own mine (walkway-into-rocks) must show on every guild card
 // and join the player-base mines plot from lv2. Audit + px projection.
 process.env.QA_MODE = '1';
-const K = require('../core/rpg/kingdom3d');
-const g = require('../core/rpg/guildBaseRenderer');
-const r = require('../core/rpg/homesteadBaseRenderer');
+const K = require('../core/rpg/systems/world/kingdom3d');
+const g = require('../core/rpg/systems/guildwar/guildBaseRenderer');
+const r = require('../core/rpg/systems/homestead/homesteadBaseRenderer');
 const orig = K.HexWorld.prototype.put;
 const log = [];
 let W = null;

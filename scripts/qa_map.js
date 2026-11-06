@@ -30,7 +30,7 @@ function fakeEvent(side) {
 }
 
 async function main() {
-    const renderer = require('../core/rpg/guildWar/mapRenderer');
+    const renderer = require('../core/rpg/systems/guildwar/mapRenderer');
     const ev = fakeEvent(12);
     const player = {
         jid: 'qa@x', name: 'QA', guildName: 'Iron Vanguards', score: 145, lives: 2,

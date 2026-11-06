@@ -3,7 +3,7 @@
 const path = require('path');
 const fs = require('fs');
 
-const renderer = require('../core/rpg/worldMapRenderer');
+const renderer = require('../core/rpg/systems/world/worldMapRenderer');
 
 (async () => {
     const out = process.argv[2] || path.join(__dirname, 'worldmap_qa');

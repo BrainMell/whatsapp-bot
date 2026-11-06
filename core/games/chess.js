@@ -4,7 +4,7 @@
 // ============================================
 
 const { Chess } = require('chess.js');
-const economy = require('../rpg/economy');
+const economy = require('../rpg/systems/economy/economy');
 const system = require('../utils/system');
 const botConfig = require('../../botConfig');
 const goService = require('../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
@@ -469,7 +469,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         updateChessScore(currentPlayer, 'win');
         updateChessScore(!isWhiteTurn ? state.playerB : state.playerW, 'loss');
         try {
-            const socialSystem = require('../rpg/socialSystem');
+            const socialSystem = require('../rpg/systems/meta/socialSystem');
             socialSystem.incrementRelationship(state.playerW, state.playerB, 6);
         } catch (socialErr) {}
     } else if (state.chess.isDraw()) {
@@ -478,7 +478,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         updateChessScore(state.playerW, 'draw');
         updateChessScore(state.playerB, 'draw');
         try {
-            const socialSystem = require('../rpg/socialSystem');
+            const socialSystem = require('../rpg/systems/meta/socialSystem');
             socialSystem.incrementRelationship(state.playerW, state.playerB, 4);
         } catch (socialErr) {}
     } else if (state.chess.isCheck()) {
@@ -603,7 +603,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         updateChessScore(winner, 'win');
         updateChessScore(loser, 'loss');
         try {
-            const socialSystem = require('../rpg/socialSystem');
+            const socialSystem = require('../rpg/systems/meta/socialSystem');
             socialSystem.incrementRelationship(state.playerW, state.playerB, 4);
         } catch (socialErr) {}
         deleteGame(chatId);

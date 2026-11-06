@@ -54,8 +54,8 @@ async function makeGuild(guilds, name) {
 
 // ═════════ S1: map generation invariants ═════════
 async function s1_mapgen() {
-    const mapEngine = require('../core/rpg/guildWar/mapEngine');
-    const CFG = require('../core/rpg/guildWar/config');
+    const mapEngine = require('../core/rpg/systems/guildwar/mapEngine');
+    const CFG = require('../core/rpg/systems/guildwar/config');
     let emptyTotals = 0, runs = 0;
     for (const seed of Array.from({ length: 12 }, (_, i) => `s1-${i}`)) {
         for (const players of [3, 10, 30, 100]) {
@@ -102,13 +102,13 @@ async function s1_mapgen() {
 
 // ═════════ S2: event lifecycle E2E (real DB) ═════════
 async function s2_lifecycle() {
-    const state = require('../core/rpg/guildWar/state');
-    const rooms = require('../core/rpg/guildWar/rooms');
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
-    const feed = require('../core/rpg/guildWar/feed');
-    const points = require('../core/rpg/guildWar/points');
-    const guilds = require('../core/rpg/guilds');
-    const CFG = require('../core/rpg/guildWar/config');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const rooms = require('../core/rpg/systems/guildwar/rooms');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
+    const feed = require('../core/rpg/systems/guildwar/feed');
+    const points = require('../core/rpg/systems/guildwar/points');
+    const guilds = require('../core/rpg/systems/guildwar/guilds');
+    const CFG = require('../core/rpg/systems/guildwar/config');
 
     // guilds for GP distribution
     try { await makeGuild(guilds, 'GwTestA'); } catch (e) {}
@@ -223,8 +223,8 @@ async function s2_lifecycle() {
 
 // ═════════ S3: room race (atomic clear) ═════════
 async function s3_race() {
-    const state = require('../core/rpg/guildWar/state');
-    const rooms = require('../core/rpg/guildWar/rooms');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const rooms = require('../core/rpg/systems/guildwar/rooms');
     const created = await state.createEvent({ type: 'normal', hostGroupId: 'race@g.us', initiatedBy: 'owner' });
     const ev = created.event;
     for (let i = 0; i < 6; i++) await state.registerPlayer(ev.eventId, { jid: `r${i}@s.whatsapp.net`, name: `R${i}`, guildId: 'GwTestA', guildName: 'GwTestA' });
@@ -247,9 +247,9 @@ async function s3_race() {
 
 // ═════════ S4: pvp settle + anti-farm ═════════
 async function s4_pvp() {
-    const state = require('../core/rpg/guildWar/state');
-    const points = require('../core/rpg/guildWar/points');
-    const ruinsPvp = require('../core/rpg/guildWar/ruinsPvp');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const points = require('../core/rpg/systems/guildwar/points');
+    const ruinsPvp = require('../core/rpg/systems/guildwar/ruinsPvp');
     const created = await state.createEvent({ type: 'normal', hostGroupId: 'pvp@g.us', initiatedBy: 'owner' });
     await state.registerPlayer(created.event.eventId, { jid: 'pw@s.whatsapp.net', name: 'Winner', guildId: 'GwTestA', guildName: 'GwTestA' });
     await state.registerPlayer(created.event.eventId, { jid: 'pl@s.whatsapp.net', name: 'Loser', guildId: 'GwTestB', guildName: 'GwTestB' });
@@ -290,14 +290,14 @@ function CFG_DEFAULTS() { return 2; }
 
 // ═════════ S5: loans ═════════
 async function s5_loans() {
-    const bankLoans = require('../core/rpg/guildWar/bankLoans');
-    const guilds = require('../core/rpg/guilds');
+    const bankLoans = require('../core/rpg/systems/guildwar/bankLoans');
+    const guilds = require('../core/rpg/systems/guildwar/guilds');
     const g = guilds.getGuild('GwTestA');
     // seed the bank
     g.balance = (g.balance || 0) + 1000000;
     await guilds.syncGuild('GwTestA');
 
-    const economy = require('../core/rpg/economy');
+    const economy = require('../core/rpg/systems/economy/economy');
     if (!economy.getUser('loaner@s.whatsapp.net')) economy.registerUser('loaner@s.whatsapp.net', 'Loaner');
     economy.addMoney('loaner@s.whatsapp.net', 100000, 'sim wallet topup');
     if ((economy.getGold('loaner@s.whatsapp.net') || 0) < 60000) {
@@ -323,8 +323,8 @@ async function s5_loans() {
 
 // ═════════ S6: feed batching ═════════
 async function s6_feed() {
-    const feed = require('../core/rpg/guildWar/feed');
-    const CFG = require('../core/rpg/guildWar/config');
+    const feed = require('../core/rpg/systems/guildwar/feed');
+    const CFG = require('../core/rpg/systems/guildwar/config');
     const created = await stateRef().createEvent({ type: 'normal', hostGroupId: 'feed@g.us', initiatedBy: 'owner' });
     await stateRef().registerPlayer(created.event.eventId, { jid: 'f1@s.whatsapp.net', name: 'F1', guildId: 'GwTestA', guildName: 'GwTestA' });
     await stateRef().startEvent(created.event.eventId);
@@ -339,12 +339,12 @@ async function s6_feed() {
     const digest = groupMsgs.find((s) => /Ruins digest/.test(s.text));
     check('miners merged into digest', !!digest);
 }
-function stateRef() { return require('../core/rpg/guildWar/state'); }
+function stateRef() { return require('../core/rpg/systems/guildwar/state'); }
 
 // ═════════ S7: balance across 30 seeded events ═════════
 async function s7_balance() {
-    const mapEngine = require('../core/rpg/guildWar/mapEngine');
-    const CFG = require('../core/rpg/guildWar/config');
+    const mapEngine = require('../core/rpg/systems/guildwar/mapEngine');
+    const CFG = require('../core/rpg/systems/guildwar/config');
     const tally = { perGuild: {}, perActivity: {}, events: 0, giniSamples: [] };
     for (let run = 0; run < 30; run++) {
         const players = 8 + (run % 4) * 8;
@@ -373,7 +373,7 @@ async function s7_balance() {
 
 // ═════════ S8: restart recovery mid-event ═════════
 async function s8_recovery() {
-    const state = require('../core/rpg/guildWar/state');
+    const state = require('../core/rpg/systems/guildwar/state');
     const created = await state.createEvent({ type: 'normal', hostGroupId: 'rec@g.us', initiatedBy: 'owner' });
     await state.registerPlayer(created.event.eventId, { jid: 'rc@s.whatsapp.net', name: 'Rc', guildId: 'GwTestA', guildName: 'GwTestA' });
     await state.startEvent(created.event.eventId);
@@ -410,11 +410,11 @@ async function s8_recovery() {
     for (const c of ['guildwarevents', 'guildloans', 'guilds', 'systems']) {
         try { await mongoose.connection.db.collection(c).deleteMany({}); } catch (e) {}
     }
-    const guilds = require('../core/rpg/guilds');
+    const guilds = require('../core/rpg/systems/guildwar/guilds');
     await guilds.loadGuilds();
 
     // abort any leftovers before each suite (cap bypass handled via GW_TEST too)
-    const stateRef0 = require('../core/rpg/guildWar/state');
+    const stateRef0 = require('../core/rpg/systems/guildwar/state');
     const suites = [
         ['S1 mapgen', s1_mapgen],
         ['S2 lifecycle', s2_lifecycle],

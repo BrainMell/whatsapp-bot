@@ -4,7 +4,7 @@
 const path = require('path');
 process.chdir(path.join(__dirname, '..'));
 const { createCanvas, loadImage } = require('canvas');
-const R = require('../core/rpg/homesteadRenderer');
+const R = require('../core/rpg/systems/homestead/homesteadRenderer');
 
 (async () => {
     const emptyBuf = await R.renderFrame({ owner: 'probe', theme: 'oakhaven', placed: [] }, 0, {});

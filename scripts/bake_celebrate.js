@@ -6,8 +6,8 @@ const OUT = process.argv[2] || '/tmp/celebrate';
 process.env.QA_MODE = process.env.QA_MODE || '1';
 (async () => {
     fs.mkdirSync(OUT, { recursive: true });
-    const r = require('../core/rpg/homesteadBaseRenderer');
-    const g = require('../core/rpg/guildBaseRenderer');
+    const r = require('../core/rpg/systems/homestead/homesteadBaseRenderer');
+    const g = require('../core/rpg/systems/guildwar/guildBaseRenderer');
     const ids = r.structures().structures.map((s) => s.id).filter((id) => ['house', 'farm', 'blacksmith', 'mines', 'pond'].includes(id));
     const state = {
         owner: 'Mellow',

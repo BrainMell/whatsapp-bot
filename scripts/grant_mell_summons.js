@@ -56,7 +56,7 @@ const crypto = require('crypto');
     },
   ];
 
-  const registry = require('../core/rpg/summonRegistry');
+  const registry = require('../core/rpg/systems/summons/summonRegistry');
 
   for (const starter of STARTER_SPECIES) {
     const species = registry.getSpecies(starter.species);

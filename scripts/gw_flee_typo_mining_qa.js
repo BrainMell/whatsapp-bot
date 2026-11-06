@@ -49,7 +49,7 @@ async function connectDB() {
 function playerOf(doc, jid) { return doc.players.find((p) => p.jid === jid); }
 
 async function freshEvent() {
-    const state = require('../core/rpg/guildWar/state');
+    const state = require('../core/rpg/systems/guildwar/state');
     // the router resolves a player to their OLDEST active event — sections must
     // never leave events behind, or the next section's DMs land in the OLD war
     await require('../core/models/GuildWarEvent').updateMany(
@@ -67,9 +67,9 @@ async function freshEvent() {
 // ═════════ T1: TYPO ROUTING ═════════
 async function t1_typo() {
     console.log('\n── T1: ".j move lwft" routes like ".j move left" ──');
-    const state = require('../core/rpg/guildWar/state');
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
-    const ga = require('../core/rpg/guildAdventure');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
+    const ga = require('../core/rpg/systems/adventures/guildAdventure');
 
     // stub the combat pipeline: auto-encounters must not explode the sim
     ga.startRuinsCombat = async () => ({ success: true, sessionKey: 'sim' });
@@ -121,9 +121,9 @@ async function t1_typo() {
 // ═════════ T2: FLEE PRESENTATION ═════════
 async function t2_flee() {
     console.log('\n── T2: flee replays retreat text → map → scene; war stays ACTIVE ──');
-    const state = require('../core/rpg/guildWar/state');
-    const dmRouter = require('../core/rpg/guildWar/dmRouter');
-    const ga = require('../core/rpg/guildAdventure');
+    const state = require('../core/rpg/systems/guildwar/state');
+    const dmRouter = require('../core/rpg/systems/guildwar/dmRouter');
+    const ga = require('../core/rpg/systems/adventures/guildAdventure');
     ga.startRuinsCombat = async () => ({ success: true, sessionKey: 'sim' });
 
     const ev = await freshEvent();

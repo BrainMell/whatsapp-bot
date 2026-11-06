@@ -1,0 +1,3754 @@
+// yo this is the economy file, handles all the bread and getZENI()
+const fs = require('fs');
+const botConfig = require('../../../../botConfig');
+const classSystem = require('../characters/classSystem');
+// 💡 P4 (2026-08-16): Settlement record system - canonical audit log
+// for every currency-moving action. Lazy-loaded to avoid circular dep.
+let _Settlement = null;
+function getSettlementModel() {
+  if (!_Settlement) _Settlement = require('../../../models/Settlement');
+  return _Settlement;
+}
+
+// NEW: Database Imports
+const mongoose = require('mongoose');
+const { isDeepStrictEqual } = require('util');
+const User = require('../../../models/User');
+const connectDB = require('../../../../db');
+// 💡 FIX 2026-08-06: Removed self-require `const economy = require('./economy')`.
+// This created a circular dependency: at require time, module.exports was
+// still the default empty {}, so the `economy` variable pointed to that
+// empty object. When module.exports was reassigned later (line ~1987),
+// the `economy` variable still pointed to the OLD empty object.
+// Result: economy.getDisplayName was undefined → TypeError on rob/transfer
+// → misreported as "0.0s timeout".
+// Fix: call getDisplayName() directly (it's a hoisted function declaration).
+
+// currency shi
+const getCurrency = () => botConfig.getCurrency();
+const getZENI = () => getCurrency().symbol;
+const getPlaceholderPFP = () => botConfig.getAssetPath("placeholder.png");
+const STARTING_BALANCE = 1000;
+const DAILY_REWARD = 2000; // 💡 Rebalanced 2026-08-17: 500 was below common-item floor; 2K = 2× common potion, fits daily bonus band.
+
+function getTodayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// 💡 P4 Item 5 (2026-08-16): Daily quest cap - was 5, raised to 8 per owner request (2026-09-12),
+// then to 17 per owner request (2026-10-04).
+// Enforced server-side at quest entry. Resets at UTC midnight.
+const DAILY_QUEST_CAP = 17; // default; runtime override via .j questcap (owner 2026-10-13 23:18Z "Add a mod command to edit the dungeon limit")
+// 💡 2026-10-13: mod-editable cap. Override persists in the shared System
+// collection (key rpg_daily_quest_cap) so both instances converge; the hot
+// quest-entry path stays DB-free via a 60s lazy re-read.
+const QUEST_CAP_SYSTEM_KEY = 'rpg_daily_quest_cap';
+let _questCapOverride = null;
+let _questCapCheckedAt = 0;
+function getDailyQuestCap() {
+  return (Number.isFinite(_questCapOverride) && _questCapOverride >= 1) ? _questCapOverride : DAILY_QUEST_CAP;
+}
+function setDailyQuestCapOverride(n) {
+  const v = Number(n);
+  if (Number.isFinite(v) && v >= 1) { _questCapOverride = Math.floor(v); _questCapCheckedAt = Date.now(); }
+  return getDailyQuestCap();
+}
+async function loadDailyQuestCapOverride() {
+  try {
+    const System = require('../../../models/System');
+    const doc = await System.findOne({ key: QUEST_CAP_SYSTEM_KEY }).lean();
+    const v = doc ? Number(doc.value) : NaN;
+    _questCapOverride = (Number.isFinite(v) && v >= 1) ? Math.floor(v) : null;
+  } catch (e) { /* DB hiccup -> keep current value */ }
+  _questCapCheckedAt = Date.now();
+  return getDailyQuestCap();
+}
+async function persistDailyQuestCap(n) {
+  const System = require('../../../models/System');
+  await System.updateOne({ key: QUEST_CAP_SYSTEM_KEY }, { $set: { value: Math.floor(Number(n)) } }, { upsert: true });
+}
+function refreshDailyQuestCapLazy() {
+  if (Date.now() - _questCapCheckedAt > 60000) {
+    _questCapCheckedAt = Date.now();
+    loadDailyQuestCapOverride().catch(function () {});
+  }
+}
+function checkDailyQuestCap(userId) {
+  const user = getUser(userId);
+  if (!user) return { allowed: true }; // fail open if user not loaded yet
+
+  refreshDailyQuestCapLazy();
+  const cap = getDailyQuestCap();
+  const today = getTodayKey();
+  if (!user.dailyQuests || user.dailyQuests.date !== today) {
+    user.dailyQuests = { date: today, count: 0 };
+  }
+  if (user.dailyQuests.count >= cap) {
+    return {
+      allowed: false,
+      count: user.dailyQuests.count,
+      cap: cap,
+      message: `❌ *DAILY QUEST CAP REACHED*\n\nYou've completed ${user.dailyQuests.count} quests/raids today (cap: ${cap}).\n📊 Cap resets at UTC midnight.\n\n💡 Come back tomorrow or play other game modes (PvP, Abyss, Cards).`
+    };
+  }
+  return { allowed: true, count: user.dailyQuests.count, cap: cap };
+}
+
+function incrementDailyQuestCount(userId) {
+  const user = getUser(userId);
+  if (!user) return;
+  const today = getTodayKey();
+  if (!user.dailyQuests || user.dailyQuests.date !== today) {
+    user.dailyQuests = { date: today, count: 0 };
+  }
+  user.dailyQuests.count += 1;
+  scheduleSave(userId);
+  return user.dailyQuests.count;
+}
+
+// CACHE: Stores all active user data in memory for instant access
+const economyData = new Map();
+
+// Debounced saving to prevent MongoDB flooding
+const pendingSaves = new Set();
+let saveTimer = null;
+
+function scheduleSave(userId) {
+  // 💡 SANDBOX: skip sandbox JIDs - they're not in the User collection
+  if (typeof userId === 'string' && userId.startsWith('sandbox_')) {
+    return;
+  }
+  // 💡 FIX (tester issue a335e9): resolve to the canonical cache key here
+  // too - pendingSaves + saveUser both operate on raw jids otherwise, and
+  // an unresolved jid would silently no-op inside saveUser.
+  let saveKey = userId;
+  try { saveKey = resolveJidHelper(userId) || userId; } catch (e) { saveKey = userId; }
+  pendingSaves.add(saveKey);
+  if (!saveTimer) {
+    saveTimer = setTimeout(async () => {
+      const toSave = [...pendingSaves];
+      pendingSaves.clear();
+      saveTimer = null;
+      for (const id of toSave) {
+        await saveUser(id);
+      }
+    }, 500); // flush every 500ms
+  }
+}
+
+//==================this part handles all the data loading and saving==================
+async function loadEconomy() {
+  try {
+    await connectDB();
+    const users = await User.find({}).lean();
+    
+    for (const user of users) {
+      // With lean() it's already a plain object.
+      // Convert Map fields to plain objects if they are somehow still Maps.
+      if (user.inventory && user.inventory instanceof Map) {
+          user.inventory = Object.fromEntries(user.inventory);
+      }
+      if (user.skills && user.skills instanceof Map) {
+          user.skills = Object.fromEntries(user.skills);
+      }
+      if (user.portfolio && user.portfolio instanceof Map) {
+          user.portfolio = Object.fromEntries(user.portfolio);
+      }
+
+      economyData.set(user.userId, user);
+      // stale-guard baseline: this boot snapshot is what OUR process knows
+      stampSyncMeta(user.userId, user);
+    }
+    console.log(`✅ Loaded ${users.length} users from MongoDB`);
+    // 💡 FIX 2026-08-31: warm the market-cap cache at startup. addMoney() gates
+    // rewards on _marketCap, which was ONLY initialized by getMarketCap() -
+    // and getMarketCap has zero runtime callers, so _marketCap stayed null
+    // forever and the 500M anti-inflation circuit breaker never armed.
+    try {
+      await getMarketCap();
+      console.log(`💰 Market cap circuit breaker armed: ${_marketCap !== null ? getZENI() + _marketCap.toLocaleString() : 'default ' + getZENI() + DEFAULT_MARKET_CAP.toLocaleString()}`);
+    } catch (capErr) {
+      console.warn('⚠️ Could not load market cap (breaker uses default):', capErr.message);
+    }
+  } catch (err) {
+    console.error("Error loading economy from DB:", err.message);
+  }
+}
+
+// Deprecated: No longer writes to file. Used as a placeholder for old calls.
+function saveEconomy() {
+    // No-op: We now save specific users asynchronously
+}
+
+// ── CROSS-INSTANCE STALE-WRITE GUARD (owner report 2026-10-05) ──────────
+// Two bot processes share ONE MongoDB (Box1: jake + subaru). Each loads a
+// full in-memory copy of every user at boot and flushes WHOLE documents
+// ({$set: data}) on a 500ms debounce — so a process holding a stale
+// snapshot silently rewrote a player back to older quests, money and
+// actions ("things reverting"). Owner rule: ALWAYS KEEP THE NEWEST DATA.
+// Mechanism: every cache entry carries a sync stamp (the DB updatedAt it
+// was loaded from) + a JSON snapshot of that loaded doc, kept in a SIDE
+// TABLE so user objects never grow keys that could leak into DM output.
+// saveUser() compares the LIVE doc's updatedAt against our stamp:
+//   • live.updatedAt <= stamp → nobody wrote since we synced → our copy IS
+//     the newest → write wholesale (previous behavior, fast path).
+//   • live.updatedAt >  stamp → a sibling wrote NEWER data while our copy
+//     aged → THREE-WAY MERGE: the live DB doc is the base, then only the
+//     fields this process actually changed since its snapshot are
+//     overlaid. Untouched fields keep the sibling's newer values.
+// updatedAt is set explicitly on every write (single-host clocks match),
+// so sibling writes are always visible to this compare.
+const syncMeta = new Map(); // cacheKey -> { syncedAt: Date|null, baseJson: string }
+const META_STRIP = ['_id', '__v', 'createdAt', 'updatedAt'];
+// ── 47-l1 COMPOSITING COUNTER LEAVES ──
+// These three top-level scalars are mutated concurrently by EVERY bot
+// instance sharing the DB (joker buys/withdraws on box2 while subaru/jake
+// pay quiz rewards on box1 — Settlement ledger shows both bots interleaved
+// on the same wallets). A plain leaf $set from a stale snapshot reverts a
+// sibling's newer balance (owner 2026-10-20: Akon's withdraw credit
+// evaporated, wallet 6,500 -> 1,500 while the bank debit stuck). These
+// leaves move as DELTAS ($inc) instead of absolute $set so concurrent
+// credits/debits compose exactly the way the money moved in the real world.
+const COMPOSITING_COUNTER_LEAVES = ['wallet', 'bank', 'eventTokens'];
+
+// ── 47-l3 COUNTER LEDGER (self-healing deltas) ──
+// 2026-10-26 (owner: "pink dildo got 100k from S but her wallet had only 1"):
+// a fresh wallet delta vanished between the in-memory credit and the debounced
+// write while history/stats.totalEarned from the SAME reward DID persist —
+// the in-memory cache object had its wallet snapped back to the baseline
+// value mid-flight (the stale-guard merge-refresh Object.assign adopts the
+// sibling's counter for leaves it thinks we didn't move; under multi-writer
+// + DB-stall concurrency that "we didn't move it" judgment can be wrong).
+// Fix: every currency mutator records its delta on a WeakMap keyed by the
+// cache object; saveUserInner compares cache counters against baseline +
+// ledger and RESTORES the ledger truth before the payload snapshot, so a
+// reverted counter can no longer silently drop the delta. Covers wallet,
+// bank and eventTokens (all COMPOSITING_COUNTER_LEAVES) on every box.
+const counterLedger = new WeakMap(); // userCacheObj -> { wallet, bank, eventTokens }
+function ledgerMove(user, field, delta) {
+    if (!user || typeof user !== 'object') return;
+    const k = String(field);
+    if (!COMPOSITING_COUNTER_LEAVES.includes(k)) return;
+    const d = Number(delta) || 0;
+    if (!d) return;
+    let led = counterLedger.get(user);
+    if (!led) { led = {}; counterLedger.set(user, led); }
+    led[k] = (Number(led[k]) || 0) + d;
+}
+function ledgerReset(user) {
+    if (!user || typeof user !== 'object') return;
+    counterLedger.delete(user);
+}
+
+// ── 2026-11-01 AUDIT: ATOMIC CROSS-TENANT DEBIT GATE ──
+// The 3 tenants share one Mongo DB and each holds a stale-prone cache, so an
+// in-memory `wallet >= amount` check can pass on two tenants at once; both
+// debits then land as $inc deltas and the counterparty credit is never rolled
+// back (Zeni printed from nothing). This gate moves the debit into a
+// conditional atomic findOneAndUpdate, then REBASES this process's baseline
+// and adopts the DB truth into the cache so the debounced composited-counter
+// save cannot $inc the same debit a second time.
+async function atomicWalletDebit(userCacheObj, amount) {
+    try {
+        if (!userCacheObj || !Number.isFinite(Number(amount)) || amount <= 0) return { ok: false };
+        const resolvedId = resolveJidHelper(userCacheObj.userId);
+        const canonicalId = (typeof userCacheObj.userId === 'string' && userCacheObj.userId) ? userCacheObj.userId : resolvedId;
+        const gate = await User.findOneAndUpdate(
+            { userId: canonicalId, wallet: { $gte: amount } },
+            { $inc: { wallet: -amount } },
+            { returnDocument: 'after' }
+        );
+        if (!gate) return { ok: false }; // DB truth: insufficient funds
+        const dbWallet = Number(gate.wallet);
+        if (!Number.isFinite(dbWallet)) return { ok: false };
+        // pending same-process moves (a reward may land mid-transfer)
+        const led = counterLedger.get(userCacheObj);
+        const pending = Math.round(Number(led && led.wallet) || 0);
+        // 1. adopt DB truth, keeping our pending moves visible in the cache
+        userCacheObj.wallet = dbWallet + pending;
+        // 2. rebase baseline(s) so the next save diffs from the post-gate DB
+        //    → save's counterDeltas = cache − base = pending (the gate debit is
+        //    already IN the DB, so it must not ride the next $inc)
+        for (const key of new Set([resolvedId, canonicalId].filter(Boolean))) {
+            const meta = syncMeta.get(key);
+            if (!meta || !meta.baseJson) continue;
+            try {
+                const b = JSON.parse(meta.baseJson);
+                if (Number.isFinite(Number(b.wallet))) {
+                    b.wallet = dbWallet;
+                    meta.baseJson = JSON.stringify(b);
+                }
+            } catch (e) { /* unparseable baseline → leave as-is */ }
+        }
+        // 3. ledger untouched: self-heal expects cache = rebased base + pending
+        //    = dbWallet + pending ✓ (the gate debit is deliberately NOT in it)
+        return { ok: true, dbWallet };
+    } catch (e) {
+        // DB hiccup → fail OPEN to the legacy in-memory path (old behaviour)
+        console.error('[economy] atomicWalletDebit failed, failing open:', e.message);
+        return { ok: true, failOpen: true };
+    }
+}
+function stripMeta(doc) {
+    const out = {};
+    for (const k of Object.keys(doc)) {
+        if (!META_STRIP.includes(k)) out[k] = doc[k];
+    }
+    return out;
+}
+function stampSyncMeta(cacheKey, doc) {
+    if (!cacheKey) return;
+    try {
+        syncMeta.set(cacheKey, {
+            syncedAt: (doc && doc.updatedAt instanceof Date) ? doc.updatedAt : null,
+            baseJson: JSON.stringify(doc ? stripMeta(doc) : {}),
+        });
+    } catch (e) {
+        // unserializable cache object (circular ref) → no baseline → guard
+        // stays off for this user and saveUser behaves exactly as before
+        syncMeta.delete(cacheKey);
+    }
+}
+function jsonNorm(v) {
+    if (v === undefined) return null;
+    try { return JSON.parse(JSON.stringify(v)); } catch (e) { return String(v); }
+}
+// 🧯 2026-10-17 (owner: "bag upgrade bug"): the MongoDB driver serializes
+// undefined as NULL (ignoreUndefined defaults false). A single $set of a
+// field whose value is undefined plants a null into the doc — and a null
+// ANCESTOR then makes every nested leaf write fail forever with
+// "Cannot create field 'x' in element {stats: null}", killing the WHOLE
+// saveUser for that player (live: equipped items with stats:null → every
+// bag view / enhance / hp-tick save for 3 users failed, gear showed 0
+// stats). Producer family (pre-c68dba4 flattenLeaves emitted undefined
+// leaves; whole-doc $set of partial users) is dead, but strip ANY
+// undefined that still reaches an update document — belt and braces.
+// Plain-object values only; Dates/Maps/Buffers are passed through.
+function deepStripUndefined(v) {
+    if (v === null || typeof v !== 'object' || v instanceof Date || v instanceof Map
+        || typeof Buffer !== 'undefined' && v instanceof Buffer
+        || (v && typeof v === 'object' && typeof v._bsontype === 'string')) return v;
+    if (Array.isArray(v)) {
+        for (let i = 0; i < v.length; i++) if (v[i] !== undefined) v[i] = deepStripUndefined(v[i]);
+        return v;
+    }
+    if (Object.getPrototypeOf(v) !== Object.prototype && Object.getPrototypeOf(v) !== null) return v;
+    for (const k of Object.keys(v)) {
+        if (v[k] === undefined) delete v[k];
+        else v[k] = deepStripUndefined(v[k]);
+    }
+    return v;
+}
+
+// ── LEAF-LEVEL MERGE (2026-10-15, owner: "crafted items keeps going backwards") ──
+// The 10-05 guard merged at TOP-LEVEL field granularity and the 10-11 fix
+// diffed writes at TOP-LEVEL too. That still let a sibling's whole `stats`
+// object (mutated every 60s regen tick / hospital bookkeeping) overwrite
+// ANOTHER instance's mission-counter increments inside the same object:
+// thefirstloser's itemsCrafted snapped back to 5 on every craft while
+// jake/subaru ping-ponged whole-doc stats with joker (merge logs 11:11 /
+// 11:25 / 11:30 overlay: [.. stats]). Fix: merge + diff PLAIN-OBJECT fields
+// at LEAF (dot-path) granularity — each side's changed leaves coexist.
+// Scalars / arrays / Dates / Maps / Buffer / ObjectId stay WHOLE-FIELD
+// leaves exactly as before (a changed Map still overlays wholesale).
+function isMergeLeaf(v) {
+    return v === null || typeof v !== 'object' || Array.isArray(v)
+        || v instanceof Date || v instanceof Map || typeof Buffer !== 'undefined' && v instanceof Buffer
+        || (v && typeof v === 'object' && typeof v._bsontype === 'string');
+}
+function isPlainEmpty(v) {
+    return v !== null && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date)
+        && !(v instanceof Map) && Object.getPrototypeOf(v) === Object.prototype && Object.keys(v).length === 0;
+}
+// flatten a plain-object tree into dot-path leaves; arrays/Dates/Maps/etc
+// become single leaves at their own path; an EMPTY plain object becomes an
+// explicit leaf ({} so "we cleared this object" survives the merge)
+// 2026-10-17: undefined-valued keys are SKIPPED, not emitted. JSON baselines
+// (baseJson) drop undefined keys, so an emitted undefined leaf could never
+// match its baseline — leafDiff re-emitted it on EVERY save ("inventory.
+// strength_brew.slot" churn: thousands of non-converging writes, every save
+// forced onto the slow merge path because our own debounced writes kept
+// bumping updatedAt). Skipping undefined = "not set"; a real clear (value in
+// base, undefined now) already falls out as $unset via the deletion loops.
+function flattenLeaves(v, prefix, out) {
+    if (v === undefined) return out;
+    if (isMergeLeaf(v)) { if (prefix) out[prefix] = v; return out; }
+    const keys = Object.keys(v);
+    if (!keys.length) { if (prefix) out[prefix] = {}; return out; }
+    for (const k of keys) flattenLeaves(v[k], prefix ? prefix + '.' + k : k, out);
+    return out;
+}
+// rebuild a nested doc from dot-path leaves; deeper paths win over shallower
+// scalars (shape-drift guard) by applying shallow paths first
+function unflattenLeaves(flat) {
+    const root = {};
+    const paths = Object.keys(flat).sort((a, b) => a.split('.').length - b.split('.').length);
+    for (const path of paths) {
+        const segs = path.split('.');
+        let cur = root;
+        for (let i = 0; i < segs.length - 1; i++) {
+            const nxt = cur[segs[i]];
+            if (nxt === null || typeof nxt !== 'object' || Array.isArray(nxt) || nxt instanceof Date) cur[segs[i]] = {};
+            cur = cur[segs[i]];
+        }
+        cur[segs[segs.length - 1]] = flat[path];
+    }
+    return root;
+}
+// theirs (live DB doc) is the base — it holds the newest data by
+// definition; overlay only the LEAVES we changed since the shared sync point.
+function threeWayMerge(ours, base, theirs) {
+    const flatT = flattenLeaves(stripMeta(theirs), '', {});
+    const flatB = flattenLeaves(stripMeta(base), '', {});
+    const flatO = flattenLeaves(stripMeta(ours), '', {});
+    const mergedFlat = { ...flatT };
+    for (const path of Object.keys(flatO)) {
+        if (!Object.prototype.hasOwnProperty.call(flatB, path)) { mergedFlat[path] = flatO[path]; continue; }
+        let same = false;
+        try { same = isDeepStrictEqual(jsonNorm(flatO[path]), jsonNorm(flatB[path])); } catch (e) { same = false; }
+        if (!same) mergedFlat[path] = flatO[path]; // genuinely changed by us → ours wins
+    }
+    // empty-object clears by us: ours.p = {} wipes theirs' p.* leaves
+    // 47-l1: ONLY A REAL CLEAR wipes — ours must differ from the baseline.
+    // A born-empty object (baseline {} too) is not "we cleared this" — the
+    // old wipe erased a sibling's additions from a cache that simply had
+    // nothing yet (QA A5: activeEffects full_restore vanished on refresh).
+    for (const path of Object.keys(flatO)) {
+        if (isPlainEmpty(flatO[path])) {
+            // 47-l1: baseline was empty too → born-empty object, not a clear
+            // → leave theirs' subleaves alone
+            if (isPlainEmpty(flatB[path])) continue;
+            for (const tp of Object.keys(mergedFlat)) if (tp.startsWith(path + '.')) delete mergedFlat[tp];
+            mergedFlat[path] = {};
+        }
+    }
+    // subfield deletions by us: leaf known to base, gone from ours, while the
+    // parent object still exists in ours (a real delete, not a "sibling added
+    // this after our sync" — the latter never appears in base). After flattening,
+    // intermediate objects only appear as keys when EMPTY, so "parent still
+    // present" = any flatO key equal to the parent or nested under it.
+    for (const path of Object.keys(flatB)) {
+        if (path in flatO) continue;
+        const idx = path.lastIndexOf('.');
+        const parent = idx === -1 ? '' : path.slice(0, idx);
+        const hasParent = parent === '' || Object.keys(flatO).some(k => k === parent || k.startsWith(parent + '.'));
+        if (hasParent) delete mergedFlat[path];
+    }
+    return unflattenLeaves(mergedFlat);
+}
+// leaf diff of OUR payload vs OUR baseline → dot-path $set / $unset for a
+// minimal, sibling-safe write (extends the 2026-10-11 top-level diff)
+function leafDiff(ours, base) {
+    const flatP = flattenLeaves(stripMeta(ours), '', {});
+    const flatB = flattenLeaves(stripMeta(base), '', {});
+    const writeSet = {};
+    for (const path of Object.keys(flatP)) {
+        if (!Object.prototype.hasOwnProperty.call(flatB, path)) { writeSet[path] = flatP[path]; continue; }
+        let same = false;
+        try { same = isDeepStrictEqual(jsonNorm(flatP[path]), jsonNorm(flatB[path])); } catch (e) { same = false; }
+        if (!same) writeSet[path] = flatP[path];
+    }
+    // 🧯 2026-10-17 NULL-ANCESTOR PROMOTION (owner: "bag upgrade bug" —
+    // "Cannot create field 'def' in element {stats: null}"): if a baseline
+    // leaf on our write path is null (or a scalar), Mongo refuses to create
+    // fields INSIDE it — and the old conflict loop even deleted the $unset
+    // that could have cleared the null ("best effort shape drift"), so the
+    // whole $set failed and the ENTIRE saveUser died, every time, forever.
+    // Fix: promote the write — $set the null/scalar ANCESTOR to the whole
+    // payload subtree (replaces the poison in one atomic write). Next saves
+    // go back to normal leaf granularity (self-healing, no ops script needed
+    // for future cases).
+    const promoted = new Set();
+    for (const path of Object.keys(writeSet)) {
+        const segs = path.split('.');
+        for (let i = segs.length - 1; i >= 1; i--) {
+            const anc = segs.slice(0, i).join('.');
+            if (!Object.prototype.hasOwnProperty.call(flatB, anc)) continue;
+            const bv = flatB[anc];
+            if (bv === null || typeof bv !== 'object') {
+                // rebuild the whole subtree at the ancestor from our leaves
+                const sub = {};
+                for (const p of Object.keys(flatP)) {
+                    if (p.startsWith(anc + '.')) sub[p.slice(anc.length + 1)] = flatP[p];
+                }
+                writeSet[anc] = deepStripUndefined(unflattenLeaves(sub));
+                promoted.add(anc);
+            }
+            break; // deepest blocker wins; shallower ones are superseded
+        }
+    }
+    for (const anc of promoted) {
+        for (const p of Object.keys(writeSet)) {
+            if (p.startsWith(anc + '.')) delete writeSet[p];
+        }
+    }
+    const unsetSet = {};
+    for (const path of Object.keys(flatB)) {
+        if (path in flatP) continue;
+        if (path in writeSet) continue; // 🧯 2026-10-17: a promoted/whole write on the SAME path replaces it — $set+$unset on one path = Mongo conflict = whole save fails
+        const idx = path.lastIndexOf('.');
+        const parent = idx === -1 ? '' : path.slice(0, idx);
+        const hasParent = parent === '' || Object.keys(flatP).some(k => k === parent || k.startsWith(parent + '.'));
+        if (hasParent) unsetSet[path] = "";
+    }
+    // mongo rejects a single update that touches a path AND its ancestor
+    // (e.g. $set skillSpend:{} + $unset skillSpend.final_eclipse => "would
+    // create a conflict" => EVERY save for that user fails until restart).
+    // Keep only the shortest path per family: a parent write supersedes
+    // descendant unsets (the parent write replaces the whole subtree, so the
+    // unsets are redundant), and a descendant write supersedes an ancestor
+    // unset (best effort for rare scalar->object shape drift).
+    for (const w of Object.keys(writeSet)) {
+        for (const u of Object.keys(unsetSet)) {
+            if (u.startsWith(w + '.') || w.startsWith(u + '.')) delete unsetSet[u];
+        }
+    }
+    return { writeSet, unsetSet };
+}
+
+// NEW: Save specific user to MongoDB (Background Sync)
+// ── 47-l1 SAVE MUTEX ── concurrent saveUser() calls for the SAME user
+// (explicit save + the scheduleSave debounce flush, or two queued flushes)
+// used to interleave at their await points; with composited counters both
+// would diff against the same not-yet-stamped baseline and $inc the delta
+// TWICE ($set was idempotent, $inc is not). Serialize per resolved user:
+// every save re-reads the freshest baseline the previous one stamped.
+const saveChains = new Map(); // resolvedUserId -> promise tail
+async function saveUser(userId) {
+    let key;
+    try { key = resolveJidHelper(userId); } catch (e) { key = String(userId); }
+    const prev = saveChains.get(key) || Promise.resolve();
+    const run = prev.then(() => {}, () => {}).then(() => saveUserInner(userId));
+    saveChains.set(key, run);
+    try {
+        await run;
+    } finally {
+        if (saveChains.get(key) === run) saveChains.delete(key);
+    }
+}
+async function saveUserInner(userId) {
+    // 💡 FIX (tester issue a335e9): saveUser never resolved the JID, while
+    // getUser DOES. For LID/phone JID mismatches, getUser returned the
+    // canonical cached object (so in-memory edits like cardStyle worked)
+    // but saveUser looked the RAW jid up in the cache, found nothing and
+    // SILENTLY DROPPED the save. Style/settings persisted only until the
+    // cache reloaded, then "reset". Resolve at this choke point so every
+    // save path (direct + scheduleSave) persists to the canonical doc.
+    const resolvedId = resolveJidHelper(userId);
+    const data = economyData.get(resolvedId);
+    if (!data) return;
+
+    // 💡 SANDBOX: never persist sandbox users to the User collection -
+    // they're stored in the AdminSandbox collection instead. Without this
+    // guard, every economy.saveUser('sandbox_...') call creates a junk
+    // document in the users collection that pollutes the cache on restart.
+    if (typeof resolvedId === 'string' && resolvedId.startsWith('sandbox_')) {
+        return;
+    }
+
+    // ── 47-l3 COUNTER LEDGER SELF-HEAL — MUST run BEFORE the payload snapshot ──
+    // (payload = stripMeta(data) below is a shallow copy; healing after it would
+    // leave the stale counter inside the payload and the diff would skip the write).
+    const canonicalIdEarly = (typeof data.userId === 'string' && data.userId) ? data.userId : resolvedId;
+    const metaEarly = syncMeta.get(resolvedId) || syncMeta.get(canonicalIdEarly) || null;
+    if (metaEarly && metaEarly.syncedAt) {
+        let baseEarly = {};
+        try { baseEarly = JSON.parse(metaEarly.baseJson || '{}'); } catch (e) { baseEarly = {}; }
+        const __ledger = counterLedger.get(data);
+        if (__ledger) {
+            for (const k of COMPOSITING_COUNTER_LEAVES) {
+                const moved = Math.round(Number(__ledger[k]) || 0);
+                if (!moved) continue;
+                const baseVal = Number(baseEarly[k]);
+                if (!Number.isFinite(baseVal)) continue;
+                const expected = Math.round(baseVal) + moved;
+                if (Math.round(Number(data[k])) !== expected) {
+                    console.warn(`🔧 [economy] counter self-heal for ${canonicalIdEarly}: ${k} cache=${data[k]} expected=${expected} (base ${baseVal} + ledger ${moved}) — in-memory counter diverged from our own recorded movement (merge-refresh adoption / sibling clobber); restoring ledger truth so the delta survives the write`);
+                    data[k] = expected;
+                }
+            }
+        }
+    }
+
+    try {
+        // 💡 LOAN-BUG FIX 2026-09-20: after a cross-format heal (LID incoming,
+        // account stored under phone, or vice versa) the cache holds the doc
+        // under BOTH keys, but the account's CANONICAL key is data.userId -
+        // the key the User collection actually knows. Upserting under the
+        // resolved (incoming-format) key birthed a SECOND account document
+        // for the same player, splitting their wallet across two docs
+        // depending on which bot/prefix they typed at.
+        const canonicalId = (typeof data.userId === 'string' && data.userId) ? data.userId : resolvedId;
+
+        // ── STALE-WRITE GUARD (see block comment above) ──
+        let payload = stripMeta(data);
+        let merged = false;
+        const meta = syncMeta.get(resolvedId) || syncMeta.get(canonicalId) || null;
+        // ── 47-l1 COMPOSITED COUNTERS: capture OUR OWN deltas BEFORE the ──
+        // three-way merge. Post-merge payload carries the sibling's live
+        // values for leaves we never touched — diffing those against the
+        // baseline would read as "we moved it" and double-apply the
+        // sibling's movement. Deltas must come from the pre-merge cache.
+        const counterDeltas = {};
+        if (meta && meta.syncedAt) {
+            let base0 = {};
+            try { base0 = JSON.parse(meta.baseJson || '{}'); } catch (e) { base0 = {}; }
+            for (const k of COMPOSITING_COUNTER_LEAVES) {
+                const ours = Number(data ? data[k] : undefined);
+                const was = Number(base0[k]);
+                if (Number.isFinite(ours) && Number.isFinite(was) && ours !== was) {
+                    counterDeltas[k] = Math.round(ours) - Math.round(was);
+                }
+            }
+        }
+        if (meta && meta.syncedAt) {
+            const live = await User.findOne({ userId: canonicalId }).lean();
+            if (live && live.updatedAt instanceof Date && live.updatedAt.getTime() > meta.syncedAt.getTime()) {
+                let base = {};
+                try { base = JSON.parse(meta.baseJson || '{}'); } catch (e) { base = {}; }
+                payload = threeWayMerge(payload, base, live);
+                merged = true;
+                // 2026-10-15: log at LEAF granularity so the forensic trail
+                // shows exactly which dot-paths our side kept (was top-level
+                // fields like "stats" — hid sibling-clobber damage)
+                const flatLive = flattenLeaves(stripMeta(live), '', {});
+                const flatPayload = flattenLeaves(stripMeta(payload), '', {});
+                const oursKept = Object.keys(flatPayload).filter((k) => !(k in flatLive) || !isDeepStrictEqual(jsonNorm(flatLive[k] === undefined ? null : flatLive[k]), jsonNorm(flatPayload[k] === undefined ? null : flatPayload[k])));
+                console.log(`🔀 [economy] stale-guard merge for ${canonicalId}: sibling wrote newer doc (${live.updatedAt.toISOString()} > sync ${meta.syncedAt.toISOString()}) — DB kept as base, our changed leaves overlay: [${oursKept.slice(0, 12).join(', ')}${oursKept.length > 12 ? ', …' : ''}]`);
+            }
+        }
+
+        const now = new Date();
+        // 💡 FIX 2026-10-11 (owner: "equipped items revert to old gear —
+        // Hive-Core Band -> Iron Ring, Grips of the Forgotten -> Dark Matter
+        // Gauntlets, wand -> Necrotic Carver, amulet stuck on Lucky Charm"):
+        // the stale-guard merge PROTECTED the DB on the merge path, but the
+        // write itself was still a WHOLE-DOCUMENT $set. Any process whose
+        // cache was stale could therefore revert fields it never touched
+        // (jake/subaru hold full user copies; their 60s regen ticks saved
+        // whole docs). Verified live: wa-joker's 10:38 merge log showed
+        // "overlay: [equipment, history, ...]" — after that, the player's
+        // freshly equipped items were gone from the DB AND from her inventory
+        // (equip removes the new item, so the reversion DESTROYED them).
+        //
+        // THE FIX: write ONLY the fields this process actually changed since
+        // its baseline (diff-based field-level $set). A process with a stale
+        // cache now writes an EMPTY diff for untouched fields — it can no
+        // longer revert anything it didn't modify. Untouched fields simply
+        // are not in the update. Deletions (e.g. the equipment.weapon
+        // migration) become $unset operations.
+        let writeSet;
+        let unsetSet = {};
+        let base = {};
+        const incSet = {}; // 47-l1: composited counter deltas ($inc)
+        if (meta) {
+            try { base = JSON.parse(meta.baseJson || '{}'); } catch (e) { base = {}; }
+            // 2026-10-15: leaf-level diff — write ONLY the dot-paths this
+            // process actually changed since its baseline. A stale cache now
+            // writes an EMPTY diff for untouched fields even INSIDE shared
+            // objects like stats/progression, so it can never revert a leaf
+            // it didn't modify (the itemsCrafted snap-back class).
+            const ld = leafDiff(payload, base);
+            writeSet = ld.writeSet;
+            unsetSet = ld.unsetSet;
+        } else {
+            // no baseline (runtime-created user / unserializable snapshot):
+            // behave exactly as before (whole doc). New users have no
+            // sibling contention, so this stays safe.
+            writeSet = deepStripUndefined(payload); // 🧯 2026-10-17: never let undefined reach $set (Mongo stores it as null — see deepStripUndefined note)
+        }
+        // ── 47-l1: COMPOSITED COUNTERS — delta, not absolute ──
+        // A counter we moved may ALSO have been moved by a sibling between
+        // our baseline and now. $set would plant OUR stale absolute (the
+        // evaporation class); $inc(ours − base) applies just our movement on
+        // top of whatever is live in the DB. counterDeltas was captured from
+        // the pre-merge cache, so adoption values can never leak into it.
+        for (const k of COMPOSITING_COUNTER_LEAVES) {
+            if (!(k in writeSet)) continue;
+            if (k in counterDeltas) {
+                delete writeSet[k];
+                if (counterDeltas[k] !== 0) incSet[k] = counterDeltas[k];
+            } else if (merged
+                       && Object.prototype.hasOwnProperty.call(base, k)
+                       && Number.isFinite(Number(base[k]))
+                       && Number.isFinite(Number(payload[k]))) {
+                // changed only via merge-adoption of the sibling's live
+                // value → the $set would be a no-op anyway; skip the write
+                // so the live value (plus any sibling delta racing us) stands.
+                // ⚠️ gated on `merged`: without a real merge there IS no
+                // adoption — a plain fast-path save (e.g. runtime-created
+                // user with a null syncedAt baseline) must keep its $set,
+                // else the edit is silently dropped (QA A7 regression).
+                delete writeSet[k];
+            } // else: no numeric baseline for k → keep the plain $set
+        }
+        const updateDoc = { $set: { ...writeSet, updatedAt: now } };
+        if (Object.keys(incSet).length) updateDoc.$inc = incSet;
+        if (Object.keys(unsetSet).length) updateDoc.$unset = unsetSet;
+        const after = await User.findOneAndUpdate(
+            { userId: canonicalId },
+            updateDoc,
+            { upsert: true, returnDocument: 'after' }
+        );
+        // 47-l1: the DB truth for composited counters = live value + every
+        // sibling's delta — which can differ from our payload. Adopt the
+        // post-write values for the cache and the next baseline so both
+        // track the DB instead of our snapshot.
+        const counterTruth = {};
+        if (after && typeof after === 'object') {
+            for (const k of Object.keys(incSet)) {
+                const v = after[k];
+                if (Number.isFinite(v)) {
+                    if (v < 0) {
+                        // concurrent $inc raced a spend below zero — clamp
+                        await User.updateOne({ userId: canonicalId }, { $set: { [k]: 0 } });
+                        counterTruth[k] = 0;
+                        console.log(`⚠️ [economy] composited counter ${k} went negative for ${canonicalId} — clamped to 0`);
+                    } else {
+                        counterTruth[k] = v;
+                    }
+                }
+            }
+        }
+        const stampDoc = { ...payload, ...counterTruth, updatedAt: (after && after.updatedAt instanceof Date) ? after.updatedAt : now };
+        // our next save's baseline = the doc AS WRITTEN, so a later sibling
+        // write is detected against THIS point and our own writes never
+        // register as "stale" to ourselves
+        stampSyncMeta(resolvedId, stampDoc);
+        if (canonicalId !== resolvedId) stampSyncMeta(canonicalId, stampDoc);
+        // 47-l3: the deltas just persisted — the freshly stamped baseline is the
+        // new zero point, so drop the ledger (prevents double-counting on the
+        // next save of this object).
+        ledgerReset(data);
+
+        if (merged) {
+            // refresh the cache IN PLACE (object identity preserved —
+            // in-flight handlers keep their references) so subsequent
+            // reads and the next save start from the merged state
+            for (const k of Object.keys(data)) {
+                if (k in payload || k === '_id' || k === '__v') continue;
+                delete data[k];
+            }
+            Object.assign(data, payload);
+        }
+        // 47-l1: cache adopt — even on the fast path (no merge) the $inc may
+        // have landed on a live value a sibling moved between our read and
+        // write; adopt DB truth so balance reads never lie about money.
+        for (const k of Object.keys(counterTruth)) {
+            data[k] = counterTruth[k];
+        }
+    } catch (err) {
+        console.error(`❌ Failed to save user ${resolvedId}:`, err.message);
+    }
+}
+
+// 💡 Force-reload a user from MongoDB, overwriting the in-memory cache.
+// Used when an external script modifies the DB directly (e.g. stat point
+// grants, enhancement recovery) and the bot's in-memory cache is stale.
+// Without this, any saveUser() call would overwrite the DB change with
+// the stale in-memory value.
+async function reloadUserFromDB(userId) {
+    const resolvedId = resolveJidHelper(userId);
+    try {
+        // 💡 LOAN-BUG FIX 2026-09-20: single-key lookup missed users stored
+        // under the OTHER jid format (lid vs phone). Use the shared variant
+        // lookup (incl. LidMapping-resolved numbers) - see jidLookupVariants.
+        let dbUser = null;
+        for (const variant of jidLookupVariants(userId)) {
+            dbUser = await User.findOne({ userId: variant });
+            if (dbUser) break;
+        }
+        if (!dbUser) return false;
+        const userData = dbUser.toObject();
+        economyData.set(resolvedId, userData);
+        stampSyncMeta(resolvedId, userData);
+        // 💡 Also alias under the account's own DB key so later lookups in
+        // either format hit the same cached object (same as syncUserFromDB).
+        if (userData.userId && userData.userId !== resolvedId) {
+            economyData.set(userData.userId, userData);
+            stampSyncMeta(userData.userId, userData);
+        }
+        console.log(`🔄 Reloaded user ${resolvedId} from DB (statPoints: ${userData?.progression?.statPoints})`);
+        return true;
+    } catch (err) {
+        console.error(`❌ Failed to reload user ${resolvedId} from DB:`, err.message);
+        return false;
+    }
+}
+//========================================
+
+//==================this part handles new players and thier classes==================
+function resolveJidHelper(userId) {
+  if (!userId) return userId;
+  try {
+    const lidResolver = require('../../../utils/lidResolver');
+    const resolved = lidResolver.resolveJid(userId);
+    // 💡 FIX: if resolveJid returned the original (mapping miss), try the
+    // OTHER format directly in the economy cache. This fixes PvP after
+    // Oracle migration where LID mapping files may be incomplete - when
+    // someone tags a user in a group, WhatsApp sends a LID JID, but the
+    // user may have registered with a phone JID (or vice versa).
+    if (resolved === userId || !economyData.has(resolved)) {
+      // Try converting between LID and phone formats
+      if (typeof userId === 'string') {
+        if (userId.endsWith('@lid')) {
+          // LID → try phone format
+          const phoneJid = userId.replace('@lid', '@s.whatsapp.net');
+          if (economyData.has(phoneJid)) return phoneJid;
+        } else if (userId.endsWith('@s.whatsapp.net')) {
+          // Phone → try LID format
+          const lidJid = userId.replace('@s.whatsapp.net', '@lid');
+          if (economyData.has(lidJid)) return lidJid;
+        }
+      }
+    }
+    return resolved;
+  } catch (e) {
+    console.error("Error resolving JID in resolveJidHelper:", e.message);
+    return userId;
+  }
+}
+
+function isRegistered(userId) {
+  const resolvedId = resolveJidHelper(userId);
+  const user = economyData.get(resolvedId);
+  return user && user.registered === true;
+}
+
+function registerUser(userId, nickname) {
+  const resolvedId = resolveJidHelper(userId);
+  if (isRegistered(resolvedId)) {
+    return { success: false, message: `❌ *ALREADY REGISTERED*\n\n🎮 You're already in the game, ${nickname}!` };
+  }
+
+  // pick a random class for the newbie
+  const classSystem = require('../characters/classSystem');
+  const starterClass = classSystem.getRandomStarterClass();
+
+  const existingUser = economyData.get(resolvedId);
+  const profile = existingUser?.profile || {
+    whatsappName: null,
+    nickname: nickname,
+    notes: [],
+    memories: {
+      likes: [],
+      dislikes: [],
+      hobbies: [],
+      personal: [],
+      other: []
+    },
+    stats: {
+      firstSeen: new Date().toISOString(),
+      lastSeen: new Date().toISOString(),
+      messageCount: 0
+    },
+    relationships: {}
+  };
+  profile.nickname = nickname;
+
+  const userData = {
+    userId: resolvedId, // Ensure userId is stored in the object
+    wallet: STARTING_BALANCE,
+    bank: 0,
+    lastDaily: 0,
+    lastRob: 0,
+    jailUntil: 0,
+    prisonUntil: 0,
+    robberyStrikes: 0,
+    lastClassChange: 0,
+    registered: true,
+    nickname: nickname,
+    
+    // quest gold
+    questGold: 0,
+    
+    // rpg stats and shi
+    class: starterClass.id,
+    adventurerRank: 'F',
+    questsCompleted: 0,
+    questsWon: 0,
+    questsFailed: 0,
+    pvpWins: 0,
+    pvpLosses: 0,
+    borrowedSkills: [],
+    
+    // buffs from the shop
+    statBonuses: {
+      hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0
+    },
+    
+    // NEW: Proper inventory system
+            inventory: {},
+            equipment: {
+                main_hand: null,
+                off_hand: null,
+                armor: null,
+                helmet: null,
+                boots: null,
+                ring: null,
+                amulet: null,
+                cloak: null,
+                gloves: null
+            },
+            // 💡 FINANCIAL & PROFESSION SYSTEM
+            professions: {
+                mining: { level: 1, xp: 0 },
+                crafting: { level: 1, xp: 0 }
+            },
+            completedTrials: [],
+            portfolio: {}, // Stocks
+            investments: [], // Fixed Deposits
+            membership: {
+                tier: 'BASIC', // BASIC, PREMIUM, DIAMOND
+                expires: 0
+            },
+            gamblingProfile: {
+              dayKey: getTodayKey(),
+              roundsToday: 0,
+              entryWalletToday: STARTING_BALANCE,
+              withdrawnToday: 0,
+              netToday: 0
+            },
+            skills: {},
+            profile: profile,
+    
+    // NEW: Sprite assignment
+    spriteIndex: Math.floor(Math.random() * 100)
+  };
+  
+  economyData.set(resolvedId, userData);
+  // 💡 REGISTRATION-PERSISTENCE FIX (2026-10-22, owner: "players keep having to
+  // double register — their registration just got botched"): stamping the
+  // baseline WITH the fresh doc made the debounced saveUser() see
+  // baseline === payload → leafDiff emitted NOTHING → only {updatedAt} reached
+  // MongoDB. registered:true, class, wallet, the whole account lived in RAM
+  // and evaporated on every restart — players had to register again after each
+  // deploy/restart (DB proof: zero registered:true docs created since the
+  // Oct-15 leaf-diff commit 4e3f77e; composited $inc counters DID land, so
+  // money/tokens moved on a doc that still said registered:false — the
+  // franken-doc signature). Drop the baseline so the register save takes the
+  // no-baseline path (whole-account $set, safe: brand-new identity has no
+  // sibling contention); the stale-guard re-stamps after the write.
+  syncMeta.delete(resolvedId);
+
+  // log the bonus
+  logTransaction(resolvedId, "Registration Bonus", STARTING_BALANCE, userData.wallet);
+
+  scheduleSave(resolvedId);
+  
+  return {
+    success: true,
+    message: `🌌 *WELCOME, ${nickname.toUpperCase()}* 🌌
+
+The Divine Architect has awakened you as one of the chosen *Adventurers* of the Realms.
+
+${starterClass.icon} *Class:* ${starterClass.name} - ${starterClass.desc}
+💰 *Starter Zeni:* ${getZENI()}${STARTING_BALANCE.toLocaleString()}
+🏆 *Rank:* F-Rank Adventurer
+
+🚀 *Try these first:*
+• \`${botConfig.getPrefix()} quest\` - fight enemies, earn XP & Zeni
+• \`${botConfig.getPrefix()} shop\` - buy your first gear
+• \`${botConfig.getPrefix()} daily\` - free daily reward
+• \`${botConfig.getPrefix()} menu\` - see everything else
+
+📜 Want the story of this world? \`${botConfig.getPrefix()} lore\``
+  };
+}
+//========================================
+
+//==================this part is for getZENI() and gold transactions==================
+function logTransaction(userId, description, amount, newBalance) {
+  const user = getUser(userId);
+  if (!user) return;
+  
+  if (!user.history) user.history = [];
+  
+  const entry = {
+    desc: description,
+    amount: amount,
+    balance: newBalance,
+    time: Date.now()
+  };
+  
+  user.history.unshift(entry);
+  
+  // only keep last 50, dont want the file to be huge
+  if (user.history.length > 50) {
+    user.history = user.history.slice(0, 50);
+  }
+}
+
+// 💡 P4 (2026-08-16): Canonical settlement record - persists to MongoDB.
+// Every currency-moving function should call this AFTER updating balances.
+//
+// @param {string} userId - The user whose balance changed
+// @param {string} type - 'source' (reward), 'sink' (spent/lost), 'transfer' (P2P)
+// @param {string} category - e.g. 'quest', 'tax', 'gambling', 'card_sale', 'deposit'
+// @param {number} amount - Positive if user gained, negative if lost
+// @param {object} opts - { counterpartyId, description, preWallet, postWallet, preBank, postBank, chatId }
+function recordSettlement(userId, type, category, amount, opts = {}) {
+  try {
+    const Settlement = getSettlementModel();
+    const entry = new Settlement({
+      userId,
+      counterpartyId: opts.counterpartyId || null,
+      type,
+      category,
+      description: opts.description || '',
+      amount,
+      preWallet: opts.preWallet ?? null,
+      postWallet: opts.postWallet ?? null,
+      preBank: opts.preBank ?? null,
+      postBank: opts.postBank ?? null,
+      botId: botConfig.getBotId ? botConfig.getBotId() : null,
+      chatId: opts.chatId || null,
+    });
+    // Fire-and-forget - don't block the calling function
+    entry.save().catch(e => console.error('[Settlement] save failed:', e.message));
+  } catch (e) {
+    // Non-fatal - settlement logging should never break a transaction
+    console.error('[Settlement] recordSettlement error:', e.message);
+  }
+}
+
+function getUser(userId) {
+  const resolvedId = resolveJidHelper(userId);
+  if (!economyData.has(resolvedId)) {
+    return null;
+  }
+  const user = economyData.get(resolvedId);
+  if (user && user.registered !== true) {
+    return null;
+  }
+  healAdventurerNickname(user);
+  
+  // 💡 Ensure all fields exist (Lazy Migration)
+  if (!user.stats) {
+    user.stats = {
+      totalEarned: user.wallet || 0,
+      totalSpent: 0,
+      gamesPlayed: 0,
+      gamesWon: 0,
+      questsCompleted: user.questsCompleted || 0
+    };
+  }
+  if (user.bank === undefined) user.bank = 0;
+  if (user.jailUntil === undefined) user.jailUntil = 0;
+  if (user.prisonUntil === undefined) user.prisonUntil = 0;
+  if (user.robberyStrikes === undefined) user.robberyStrikes = 0;
+  if (!user.gamblingProfile) {
+    user.gamblingProfile = {
+      dayKey: getTodayKey(),
+      roundsToday: 0,
+      entryWalletToday: user.wallet || 0,
+      withdrawnToday: 0,
+      netToday: 0
+    };
+  }
+  const today = getTodayKey();
+  if (user.gamblingProfile.dayKey !== today) {
+    user.gamblingProfile.dayKey = today;
+    user.gamblingProfile.roundsToday = 0;
+    user.gamblingProfile.entryWalletToday = user.wallet || 0;
+    user.gamblingProfile.withdrawnToday = 0;
+    user.gamblingProfile.netToday = 0;
+  }
+  if (!user.frozenAssets) {
+    user.frozenAssets = {
+      wallet: 0,
+      bank: 0,
+      reason: ""
+    };
+  }
+
+  // Lazy migration: eventTokens (added for token event system)
+  if (user.eventTokens === undefined) user.eventTokens = 0;
+
+  // Lazy migration: rank mission tracking
+  if (!user.completedRankMissions) user.completedRankMissions = [];
+  if (!user.stats) user.stats = {};
+  if (user.stats.questsWon === undefined) user.stats.questsWon = user.questsWon || 0;
+  if (user.stats.bossesDefeated === undefined) user.stats.bossesDefeated = 0;
+
+  // Lazy migration: Summoner System (added 2026-07-28)
+  // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md
+  if (user.summonSlots === undefined) user.summonSlots = 5; // 💡 FIX 2026-08-07: 5 slots (was 3)
+  if (user.activeSummonId === undefined) user.activeSummonId = null;
+  if (!user.unlockedSummonPassives) user.unlockedSummonPassives = [];
+  if (!user.activeResonances) user.activeResonances = [];
+  if (user.lastSummonTrained === undefined) user.lastSummonTrained = 0;
+  if (user.lastForgedAt === undefined) user.lastForgedAt = 0;
+  if (!user.summonAchievements) user.summonAchievements = [];
+
+  // 💡 Phase 6: Alt detection - ensure phoneHash is set for all users
+  try {
+    const altDetection = require('../meta/altDetection');
+    altDetection.ensurePhoneHash(user);
+  } catch (e) {}
+  if (!user.summonStats) {
+    user.summonStats = {
+      captured: 0, forged: 0, evolved: 0,
+      trialsCompleted: 0, echoesAbsorbed: 0,
+      arenaWins: 0, arenaLosses: 0
+    };
+  }
+  if (!user.tamingProgress) user.tamingProgress = {};
+
+  // 💡 ANTI-INFLATION: clamp wallet/bank/stats on every user load.
+  // This catches any inflated values from past exploits or bugs.
+  clampWallet(user);
+  clampStats(user);
+  if (user.stats.itemsCrafted === undefined) user.stats.itemsCrafted = 0;
+  if (user.stats.itemsEquipped === undefined) user.stats.itemsEquipped = 0;
+
+  return user;
+}
+
+// 💡 OWNER FIX 2026-09-11: never show the placeholder name "Adventurer" when
+// we know the player's real WhatsApp name (pushName is stored on every
+// message). Self-heals legacy users on load, so unregistered players' cards
+// and captions show THEIR username instead of "Adventurer".
+function healAdventurerNickname(user) {
+  try {
+    if (!user) return;
+    const wa = user.profile && user.profile.whatsappName;
+    if (wa && (!user.nickname || user.nickname === "Adventurer")) {
+      user.nickname = wa;
+      if (user.profile) user.profile.nickname = wa;
+      scheduleSave(user.userId);
+    }
+  } catch (e) {}
+}
+
+function getOrCreateUser(userId, defaultNickname = "Adventurer") {
+  const resolvedId = resolveJidHelper(userId);
+  if (!economyData.has(resolvedId)) {
+    const newUser = {
+      userId: resolvedId,
+      wallet: 0,
+      bank: 0,
+      registered: false,
+      nickname: defaultNickname,
+      profile: {
+        whatsappName: null,
+        nickname: defaultNickname,
+        notes: [],
+        memories: {
+          likes: [],
+          dislikes: [],
+          hobbies: [],
+          personal: [],
+          other: []
+        },
+        stats: {
+          firstSeen: new Date().toISOString(),
+          lastSeen: new Date().toISOString(),
+          messageCount: 0
+        },
+        relationships: {}
+      }
+    };
+    economyData.set(resolvedId, newUser);
+    stampSyncMeta(resolvedId, newUser);
+    scheduleSave(resolvedId);
+  }
+  const user = economyData.get(resolvedId);
+  healAdventurerNickname(user);
+  
+  // 💡 Ensure all fields exist (Lazy Migration)
+  if (!user.profile) {
+    user.profile = {
+      whatsappName: null,
+      nickname: user.nickname || defaultNickname,
+      notes: [],
+      memories: {
+        likes: [],
+        dislikes: [],
+        hobbies: [],
+        personal: [],
+        other: []
+      },
+      stats: {
+        firstSeen: new Date().toISOString(),
+        lastSeen: new Date().toISOString(),
+        messageCount: 0
+      },
+      relationships: {}
+    };
+  }
+  if (!user.stats) {
+    user.stats = {
+      totalEarned: user.wallet || 0,
+      totalSpent: 0,
+      gamesPlayed: 0,
+      gamesWon: 0,
+      questsCompleted: user.questsCompleted || 0
+    };
+  }
+  if (user.bank === undefined) user.bank = 0;
+  if (user.jailUntil === undefined) user.jailUntil = 0;
+  if (user.prisonUntil === undefined) user.prisonUntil = 0;
+  if (user.robberyStrikes === undefined) user.robberyStrikes = 0;
+  if (!user.gamblingProfile) {
+    user.gamblingProfile = {
+      dayKey: getTodayKey(),
+      roundsToday: 0,
+      entryWalletToday: user.wallet || 0,
+      withdrawnToday: 0,
+      netToday: 0
+    };
+  }
+  const today = getTodayKey();
+  if (user.gamblingProfile.dayKey !== today) {
+    user.gamblingProfile.dayKey = today;
+    user.gamblingProfile.roundsToday = 0;
+    user.gamblingProfile.entryWalletToday = user.wallet || 0;
+    user.gamblingProfile.withdrawnToday = 0;
+    user.gamblingProfile.netToday = 0;
+  }
+  if (!user.frozenAssets) {
+    user.frozenAssets = {
+      wallet: 0,
+      bank: 0,
+      reason: ""
+    };
+  }
+
+  // Lazy migration: Summoner System (added 2026-07-28)
+  // See: /home/z/my-project/download/SUMMONER_SYSTEM_DESIGN.md
+  if (user.summonSlots === undefined) user.summonSlots = 5; // 💡 FIX 2026-08-07: 5 slots (was 3)
+  if (user.activeSummonId === undefined) user.activeSummonId = null;
+  if (!user.unlockedSummonPassives) user.unlockedSummonPassives = [];
+  if (!user.activeResonances) user.activeResonances = [];
+  if (user.lastSummonTrained === undefined) user.lastSummonTrained = 0;
+  if (user.lastForgedAt === undefined) user.lastForgedAt = 0;
+  if (!user.summonAchievements) user.summonAchievements = [];
+
+  // 💡 Phase 6: Alt detection - ensure phoneHash is set for all users
+  try {
+    const altDetection = require('../meta/altDetection');
+    altDetection.ensurePhoneHash(user);
+  } catch (e) {}
+  if (!user.summonStats) {
+    user.summonStats = {
+      captured: 0, forged: 0, evolved: 0,
+      trialsCompleted: 0, echoesAbsorbed: 0,
+      arenaWins: 0, arenaLosses: 0
+    };
+  }
+  if (!user.tamingProgress) user.tamingProgress = {};
+
+  return user;
+}
+
+function getBalance(userId) {
+  const user = getUser(userId);
+  return user ? user.wallet : 0;
+}
+
+// 💡 ANTI-INFLATION CAPS: hard ceilings on wallet, bank, and stat values.
+// 💡 OWNER REQUEST 2026-09-12: wallet & bank caps REMOVED - both set to
+// Infinity so every `> MAX_WALLET` / `> MAX_BANK` comparison (clampWallet,
+// addMoney clamp, transfer clamp, deposit cap, withdraw cap) is naturally
+// false and the balances grow unbounded. MAX_STAT_VALUE stays in force.
+const MAX_WALLET = Infinity; // 💡 2026-09-12: cap removed by owner (was 5M)
+const MAX_BANK = Infinity;   // 💡 2026-09-12: cap removed by owner (was 100M)
+const MAX_STAT_VALUE = 1_000_000;  // 1 million per individual stat
+
+function clampWallet(user) {
+    if (!user) return;
+    if (typeof user.wallet === 'number' && user.wallet > MAX_WALLET) {
+        console.log(`[AntiInflation] Clamped wallet from ${user.wallet} to ${MAX_WALLET} for ${user.userId}`);
+        user.wallet = MAX_WALLET;
+    }
+    if (typeof user.bank === 'number' && user.bank > MAX_BANK) {
+        console.log(`[AntiInflation] Clamped bank from ${user.bank} to ${MAX_BANK} for ${user.userId}`);
+        user.bank = MAX_BANK;
+    }
+}
+
+function clampStats(user) {
+    if (!user || !user.progression || !user.progression.allocatedStats) return;
+    for (const stat of ['hp', 'atk', 'def', 'mag', 'spd', 'luck', 'crit']) {
+        const val = user.progression.allocatedStats[stat];
+        if (typeof val === 'number' && val > MAX_STAT_VALUE) {
+            console.log(`[AntiInflation] Clamped ${stat} from ${val} to ${MAX_STAT_VALUE} for ${user.userId}`);
+            user.progression.allocatedStats[stat] = MAX_STAT_VALUE;
+        }
+    }
+}
+
+function addMoney(userId, amount, description = "Money Added") {
+  const user = getUser(userId);
+  if (!user) return false;
+
+  // Floor to integer - Zeni doesn't have fractional units, and floating-point
+  // math would otherwise accumulate rounding errors over many transactions.
+  let val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return false;
+
+  // 💡 P4 Item 5: Market cap circuit breaker.
+  // 💡 ROOT-CAUSE FIX 2026-09-20 (owner: "Gold delivery failed, your account
+  // could not be credited"): this breaker used to RETURN false here, and it
+  // was the real killer behind "quest money not increasing". Two facts made
+  // it a permanent economy-wide freeze:
+  //   1. DEFAULT_MARKET_CAP (500M) was calibrated to the size of the CURRENT
+  //      economy ("~3700 players × ~135K avg = ~500M"), so a grown economy
+  //      sits at/over the cap at all times.
+  //   2. Wallet/bank caps were REMOVED by owner request (2026-09-12), so the
+  //      total only ever grows.
+  // Once total >= cap, EVERY addMoney failed forever - quest payouts, shop
+  // sales, bounties, refunds, dailies - while the balance display stayed
+  // frozen. A hard freeze that eats players' earnings is not anti-inflation,
+  // it's a game-breaking bug. The breaker is now ADVISORY: it logs loudly
+  // (throttled) so the operator can raise the cap, but it NEVER blocks a
+  // payout. Reward-table tuning is the correct anti-inflation lever.
+  if (_marketCap !== null) {
+    let quickTotal = 0;
+    for (const [jid, u] of economyData) {
+      quickTotal += (u.wallet || 0) + (u.bank || 0);
+      if (quickTotal >= _marketCap) break;
+    }
+    if (quickTotal >= _marketCap && Date.now() - _capAlertLast > 60000) {
+      _capAlertLast = Date.now();
+      console.warn(`[MarketCap] ⚠️ ECONOMY AT CAP: total ~${Math.round(quickTotal).toLocaleString()} >= cap ${Number(_marketCap).toLocaleString()} - payouts still deliver (breaker is advisory). Raise the cap via economy.setMarketCap() if this is unexpected.`);
+    }
+  }
+
+  // 💡 P4 (2026-08-16): Auto-debt deduction - if the player has an active
+  // debt, ALL money they earn is automatically deducted to pay it off.
+  // This replaces the old P2P loan system with a simpler debt-to-system
+  // model. When a player earns 1000 zeni and has 5000 debt, they receive
+  // 0 zeni and the debt drops to 4000. When debt reaches 0, normal
+  // earnings resume. This prevents debt-dodging - players can't just
+  // ignore the debt and keep earning.
+  if (user.debt && user.debt.amount > 0) {
+    const deducted = Math.min(val, user.debt.amount);
+    user.debt.amount -= deducted;
+    const remainingEarned = val - deducted;
+    if (deducted > 0) {
+      console.log(`[Debt] Auto-deducted ${deducted} from ${userId} (debt: ${user.debt.amount} remaining)`);
+      recordSettlement(userId, 'sink', 'debt_repayment', -deducted, {
+        preWallet: user.wallet, postWallet: user.wallet,
+        description: `Auto-debt repayment (debt: ${user.debt.amount} remaining)`
+      });
+    }
+    // If there's still earned money left after debt, add it to wallet
+    // 💡 FIX 2026-09-20: this path returned user.wallet - which is 0 when the
+    // wallet is empty, a FALSY value every caller reads as "delivery failed"
+    // (e.g. raidSystem paid = addMoney(...) -> "reward failed"). The money
+    // WAS delivered (to debt). Return an unambiguous truthy success.
+    if (remainingEarned <= 0) {
+      scheduleSave(userId);
+      return true; // All earnings went to debt - payout did happen
+    }
+    // Partial - add remaining to wallet
+    val = remainingEarned;
+  }
+
+  const preWallet = user.wallet;
+  user.wallet += val;
+  // 💡 ANTI-INFLATION: clamp wallet to hard ceiling
+  if (user.wallet > MAX_WALLET) user.wallet = MAX_WALLET;
+  ledgerMove(user, 'wallet', user.wallet - preWallet); // 47-l3
+  user.stats.totalEarned = (Number(user.stats.totalEarned) || 0) + (Number(val) || 0);
+
+  logTransaction(userId, description, val, user.wallet);
+  // 💡 P4: Record canonical settlement (source = zeni created from nothing)
+  recordSettlement(userId, 'source', description.toLowerCase().replace(/\s+/g, '_'), val, {
+    preWallet, postWallet: user.wallet, description
+  });
+
+  scheduleSave(userId);
+  return user.wallet;
+}
+
+function removeMoney(userId, amount, description = "Money Removed") {
+  const user = getUser(userId);
+  if (!user) return false;
+
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return false;
+  if (user.wallet < val) return false;
+
+  const preWallet = user.wallet;
+  user.wallet -= val;
+  ledgerMove(user, 'wallet', -val); // 47-l3
+  user.stats.totalSpent += val;
+
+  logTransaction(userId, description, -val, user.wallet);
+  // 💡 P4: Record canonical settlement (sink = zeni destroyed)
+  recordSettlement(userId, 'sink', description.toLowerCase().replace(/\s+/g, '_'), -val, {
+    preWallet, postWallet: user.wallet, description
+  });
+
+  scheduleSave(userId);
+  return true;
+}
+
+function getGold(userId) {
+  // 💡 QA FIX: was returning user.questGold (always 0) instead of user.wallet.
+  // This broke bounty placement, crafting costs, guild donations, guild loan
+  // repayments, rune market purchases, and loan auto-processing.
+  const user = getUser(userId);
+  return user ? (user.wallet || 0) : 0;
+}
+
+function addGold(userId, amount) {
+  const user = getUser(userId);
+  if (!user) return false;
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return false;
+  user.questGold = (user.questGold || 0) + val;
+  scheduleSave(userId);
+  return true;
+}
+
+function removeGold(userId, amount) {
+  const user = getUser(userId);
+  if (!user) return false;
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return false;
+  if ((user.questGold || 0) < val) return false;
+  user.questGold -= val;
+  scheduleSave(userId);
+  return true;
+}
+
+// ================== EVENT TOKENS ==================
+// Token currency for the token event system. Earned by claiming cards
+// (1 token per ~2 card claims), spent in the eShop to buy event cards.
+
+function getTokens(userId) {
+  const user = getUser(userId);
+  return user ? (user.eventTokens || 0) : 0;
+}
+
+function addTokens(userId, amount) {
+  const user = getUser(userId);
+  if (!user) return false;
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return false;
+  user.eventTokens = (user.eventTokens || 0) + val;
+  ledgerMove(user, 'eventTokens', val); // 47-l3
+  scheduleSave(userId);
+  return true;
+}
+
+function removeTokens(userId, amount) {
+  const user = getUser(userId);
+  if (!user) return false;
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return false;
+  if ((user.eventTokens || 0) < val) return false;
+  user.eventTokens -= val;
+  ledgerMove(user, 'eventTokens', -val); // 47-l3
+  scheduleSave(userId);
+  return true;
+}
+
+// 💡 47-l2 (owner 2026-10-21: "haven't seen anyone get an event token even
+// when they claimed alot of cards"): eventTokens are the CARD-EVENT
+// sub-economy — earned by claiming spawns, spent at the card eShop — and
+// neither requires RPG registration. The strict getTokens/addTokens/
+// removeTokens gate on registered===true, and only 129 of 2739 users are
+// registered, so the claim-path grant silently no-op'd for most players and
+// the claim message still said "+1 Event Token! (Total: 0)". These variants
+// keep every other guard (doc via getOrCreateUser, amount floor, balance
+// check, scheduled save) minus the registration gate. Wallet/bank stay gated.
+function getEventTokens(userId) {
+  const resolvedId = resolveJidHelper(userId);
+  const user = economyData.get(resolvedId);
+  return user ? (user.eventTokens || 0) : 0;
+}
+
+function addEventTokens(userId, amount) {
+  const user = getOrCreateUser(userId);
+  if (!user) return false;
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return false;
+  user.eventTokens = (user.eventTokens || 0) + val;
+  ledgerMove(user, 'eventTokens', val); // 47-l3
+  scheduleSave(userId);
+  return true;
+}
+
+function removeEventTokens(userId, amount) {
+  const resolvedId = resolveJidHelper(userId);
+  const user = economyData.get(resolvedId);
+  if (!user) return false;
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return false;
+  if ((user.eventTokens || 0) < val) return false;
+  user.eventTokens -= val;
+  ledgerMove(user, 'eventTokens', -val); // 47-l3
+  scheduleSave(userId);
+  return true;
+}
+
+// 💡 2026-10-08 requirements doc §1/§11: GLOBAL event-token wipe.
+// economy users live in an in-memory Map with scheduled saves - a bare
+// User.updateMany would be silently resurrected by the next pending save
+// of any user holding tokens. This resets BOTH layers atomically:
+//   1) every in-memory cached user → eventTokens = 0
+//   2) every DB document → eventTokens = 0 (covers users not in cache)
+// Returns the number of in-memory users that actually held tokens.
+async function resetAllTokens() {
+  let memoryHolders = 0;
+  for (const user of economyData.values()) {
+    if (!user || typeof user !== 'object') continue;
+    if ((user.eventTokens || 0) !== 0) {
+      ledgerReset(user); // 47-l3: the wipe IS the new truth — never heal it back
+      user.eventTokens = 0;
+      memoryHolders++;
+    }
+  }
+  await User.updateMany({ eventTokens: { $ne: 0 } }, { $set: { eventTokens: 0 } });
+  return memoryHolders;
+}
+//========================================
+
+//==================this part handles the inventory and items==================
+const ITEMS = {
+    'gold': { name: 'Gold', icon: '💰', value: 15, type: 'currency' },
+    'herb': { name: 'Medicinal Herb', icon: '🌿', value: 50, type: 'common' },
+    'wood': { name: 'Ironwood Log', icon: '🪵', value: 80, type: 'common' },
+    'stone': { name: 'Runestone', icon: '🪨', value: 100, type: 'common' },
+    'dagger': { name: 'Rusted Dagger', icon: '🗡️', value: 250, type: 'uncommon' },
+    'map': { name: 'Treasure Map', icon: '📜', value: 400, type: 'uncommon' },
+    'pottery': { name: 'Ancient Vase', icon: '⚱️', value: 600, type: 'uncommon' },
+    'sapphire': { name: 'Deep Sapphire', icon: '💎', value: 1500, type: 'rare' },
+    'goldbar': { name: 'Gold Bar', icon: '🥇', value: 3000, type: 'rare' },
+    'scale': { name: 'Dragon Scale', icon: '🐉', value: 5000, type: 'rare' },
+    'crown': { name: 'Lost King\'s Crown', icon: '👑', value: 15000, type: 'legendary' },
+    'orb': { name: 'Void Orb', icon: '🔮', value: 25000, type: 'legendary' }
+};
+
+// add item to inventory
+function addItem(userId, itemId, quantity = 1) {
+    const user = getUser(userId);
+    if (!user) return false;
+    const qty = Math.floor(Number(quantity));
+    if (!Number.isFinite(qty) || qty <= 0) return false;
+    
+    if (!user.inventory) user.inventory = {};
+    
+    // Get base item data if it exists in the registry
+    const baseItem = ITEMS[itemId] || {};
+    
+    // Check if it's the new structure (object) or old (number)
+    if (user.inventory[itemId]) {
+        if (typeof user.inventory[itemId] === 'number') {
+             // Migrate on the fly
+             user.inventory[itemId] = {
+                 id: itemId,
+                 quantity: user.inventory[itemId] + qty,
+                 acquiredAt: Date.now(),
+                 ...baseItem
+             };
+        } else {
+             user.inventory[itemId].quantity = (Number(user.inventory[itemId].quantity) || 0) + qty;
+             // Ensure base properties are present
+             Object.assign(user.inventory[itemId], { ...baseItem, id: itemId });
+        }
+    } else {
+        user.inventory[itemId] = {
+            id: itemId,
+            quantity: qty,
+            acquiredAt: Date.now(),
+            ...baseItem
+        };
+    }
+    
+    scheduleSave(userId);
+    return true;
+}
+
+// remove item from inventory
+function removeItem(userId, itemId, quantity = 1) {
+    const user = getUser(userId);
+    if (!user || !user.inventory || !user.inventory[itemId]) return false;
+
+    // 💡 FIX: reject negative/zero/NaN quantity - was exploitable to GAIN items
+    // by passing quantity=-N (the < check would pass, then -= would ADD)
+    const qty = Math.floor(Number(quantity));
+    if (!Number.isFinite(qty) || qty <= 0) return false;
+
+    let currentQty = 0;
+    if (typeof user.inventory[itemId] === 'number') {
+        currentQty = user.inventory[itemId];
+    } else {
+        currentQty = user.inventory[itemId].quantity || 0;
+    }
+
+    if (currentQty < qty) return false;
+
+    if (typeof user.inventory[itemId] === 'number') {
+        user.inventory[itemId] -= qty;
+        if (user.inventory[itemId] <= 0) delete user.inventory[itemId];
+    } else {
+        user.inventory[itemId].quantity -= qty;
+        if (user.inventory[itemId].quantity <= 0) delete user.inventory[itemId];
+    }
+    
+    scheduleSave(userId);
+    return true;
+}
+
+// sell items for bread
+function sellItem(userId, itemId, quantity = 1) {
+    const user = getUser(userId);
+    if (!user || !Object.prototype.hasOwnProperty.call(ITEMS, itemId) || !ITEMS[itemId]) return { success: false, msg: "❌ Invalid item." };
+
+    // 💡 FIX: reject negative/zero/NaN quantity - was exploitable to gain items
+    // AND drain money by passing quantity=-N
+    const qty = Math.floor(Number(quantity));
+    if (!Number.isFinite(qty) || qty <= 0) return { success: false, msg: '❌ Invalid quantity.' };
+    
+    if (itemId === 'all') {
+        if (!user.inventory || Object.keys(user.inventory).length === 0) return { success: false, msg: "❌ Inventory is empty!" };
+        
+        let total = 0;
+        let count = 0;
+        for (const [id, item] of Object.entries(user.inventory)) {
+            let qty = 0;
+            if (typeof item === 'number') qty = item;
+            else qty = item.quantity || 0;
+            
+            if (ITEMS[id] && qty > 0) {
+                const val = ITEMS[id].value * qty;
+                total += val;
+                count += qty;
+                delete user.inventory[id];
+            }
+        }
+        user.wallet += total;
+        ledgerMove(user, 'wallet', total); // 47-l3
+        user.stats.totalEarned = (Number(user.stats.totalEarned) || 0) + (Number(total) || 0);
+        scheduleSave(userId);
+        return { success: true, msg: `💰 Sold ${count} items for ${getZENI()}${total.toLocaleString()}` };
+    }
+
+    if (!user.inventory || !user.inventory[itemId]) {
+        return { success: false, msg: "❌ You don't have that item!" };
+    }
+
+    let currentQty = 0;
+    if (typeof user.inventory[itemId] === 'number') {
+        currentQty = user.inventory[itemId];
+    } else {
+        currentQty = user.inventory[itemId].quantity || 0;
+    }
+
+    if (currentQty < qty) {
+        return { success: false, msg: "❌ You don't have enough of that item!" };
+    }
+
+    // 💡 Phase 2: Apply guild MERCHANT sell bonus (+10% if in a MERCHANT guild)
+    let sellMult = 1.0;
+    try {
+      const guildPerks = require('../guildwar/guildPerks');
+      sellMult = guildPerks.getSellMultiplier(userId);
+    } catch (e) {}
+    const value = Math.floor(ITEMS[itemId].value * qty * sellMult);
+    user.wallet += value;
+    ledgerMove(user, 'wallet', value); // 47-l3
+    user.stats.totalEarned = (Number(user.stats.totalEarned) || 0) + (Number(value) || 0);
+    
+    // 💡 GUILD CONTRIBUTION
+    const guilds = require('../guildwar/guilds');
+    const userGuild = guilds.getUserGuild(userId);
+    let guildMsg = "";
+    if (userGuild) {
+        // 💡 GW-OVERHAUL 2026-10-03: money→guild-XP conversion REMOVED (owner ban:
+        // Guild Points are earned, not bought). Sales still contribute 0.05% of
+        // value to the guild bank as passive support.
+        const bankCut = Math.floor(value * 0.0005);
+        guilds.addGuildBalance(userGuild, bankCut);
+        guilds.updateBoardProgress(userGuild, 'EARN_ZENI', value); // Track earning progress
+        guildMsg = `\n🏛️ *${userGuild}* bought your loot for the guild house!`;
+    }
+
+    if (typeof user.inventory[itemId] === 'number') {
+        user.inventory[itemId] -= qty;
+        if (user.inventory[itemId] <= 0) delete user.inventory[itemId];
+    } else {
+        user.inventory[itemId].quantity -= qty;
+        if (user.inventory[itemId].quantity <= 0) delete user.inventory[itemId];
+    }
+    
+    scheduleSave(userId);
+    return { success: true, msg: `💰 Sold ${qty}x ${ITEMS[itemId].icon} ${ITEMS[itemId].name} for ${getZENI()}${value.toLocaleString()}${guildMsg}` };
+}
+
+// get user's bag
+function getInventory(userId) {
+    const user = getUser(userId);
+    if (!user || !user.inventory) return [];
+    
+    return Object.entries(user.inventory).map(([id, qty]) => {
+        return { id, qty, ...ITEMS[id] };
+    }).filter(i => i.name); 
+}
+//========================================
+
+//==================this part handles the bank and daily bread==================
+async function transferMoney(fromUserId, toUserId, amount) {
+  const sender = getUser(fromUserId);
+  const receiver = getUser(toUserId);
+  
+  if (!sender || !receiver) {
+    return { success: false, message: `❌ *TRANSFER FAILED*\n\n⚠️ Both users must be registered to transfer money!` };
+  }
+  
+  // 💡 Phase 6: Alt-account detection - block transfers between same-phone accounts
+  try {
+    const altDetection = require('../meta/altDetection');
+    const altCheck = altDetection.checkTransfer(fromUserId, toUserId);
+    if (altCheck.blocked) {
+      return { success: false, message: `❌ *TRANSFER BLOCKED*\n\n${altCheck.reason}` };
+    }
+  } catch (e) {
+    console.error('[AltDetection] checkTransfer failed:', e?.message || e);
+    // Fail open - allow transfer if alt detection module is broken
+  }
+  
+  // 2026-10-31 fuzz: floor to whole Zeni (fractional/Infinity amounts used to
+  // leave non-integer wallets), same rule as addMoney/removeMoney.
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) {
+    return { success: false, message: `❌ *INVALID AMOUNT*\n\n💢 Amount must be a valid positive number.` };
+  }
+  
+  if (sender.wallet < val) {
+    return { success: false, message: `❌ *INSUFFICIENT FUNDS*\n\n💰 Your wallet: ${getZENI()}${sender.wallet.toLocaleString()}\n📊 Needed: ${getZENI()}${val.toLocaleString()}\n⚠️ Short by: ${getZENI()}${(val - sender.wallet).toLocaleString()}` };
+  }
+
+  // 💡 AUDIT FIX 2026-11-01: cross-tenant double-spend gate. The in-memory
+  // check above passes on EVERY tenant with a stale cache; this atomic DB
+  // debit is authoritative — only one tenant can win it. On success the
+  // cache + baseline were rebased inside the helper, so the debounced
+  // composited-counter save will NOT $inc this debit a second time.
+  const __spendGate = await atomicWalletDebit(sender, val);
+  if (!__spendGate.ok) {
+    return { success: false, message: `❌ *INSUFFICIENT FUNDS*\n\n💰 Your wallet: ${getZENI()}${sender.wallet.toLocaleString()}\n📊 Needed: ${getZENI()}${val.toLocaleString()}\n⚠️ Short by: ${getZENI()}${(val - sender.wallet).toLocaleString()}` };
+  }
+  // (failOpen: the legacy in-memory debit is applied below in the mutation
+  // block — applied exactly once, never here)
+
+  // 💡 P4 Item 6 (2026-08-16): Universal 10% tax on all currency movement.
+  // Sender pays 100, receiver gets 90, 10 evaporates from circulation (genuine sink).
+  const taxRate = 0.10;
+  const taxAmount = Math.floor(val * taxRate);
+  const receiverGets = val - taxAmount;
+
+  const senderPreWallet = sender.wallet;
+  const receiverPreWallet = receiver.wallet;
+
+  receiver.wallet += receiverGets;
+  // Clamp receiver to MAX_WALLET
+  if (receiver.wallet > MAX_WALLET) receiver.wallet = MAX_WALLET;
+  if (!__spendGate || __spendGate.failOpen) {
+    // legacy path: the sender debit was NOT applied by the DB gate
+    sender.wallet -= val;
+    ledgerMove(sender, 'wallet', -val); // 47-l3
+  } // else: sender debit already landed atomically in the DB (gate)
+  ledgerMove(receiver, 'wallet', receiver.wallet - receiverPreWallet); // 47-l3 (exact post-clamp delta)
+
+  logTransaction(fromUserId, `Transfer to @${getDisplayName(toUserId)}`, -val, sender.wallet);
+  logTransaction(toUserId, `Transfer from @${getDisplayName(fromUserId)}`, receiverGets, receiver.wallet);
+
+  // 💡 P4: Settlement records (3 entries: sender transfer, tax sink, receiver transfer)
+  recordSettlement(fromUserId, 'transfer', 'p2p_transfer', -val, {
+    counterpartyId: toUserId,
+    preWallet: senderPreWallet, postWallet: sender.wallet,
+    description: `Transfer to ${getDisplayName(toUserId)}`
+  });
+  if (taxAmount > 0) {
+    recordSettlement(fromUserId, 'sink', 'transfer_tax', -taxAmount, {
+      preWallet: sender.wallet, postWallet: sender.wallet,
+      description: `10% tax on ${val} zeni transfer`
+    });
+  }
+  recordSettlement(toUserId, 'transfer', 'p2p_transfer', receiverGets, {
+    counterpartyId: fromUserId,
+    preWallet: receiverPreWallet, postWallet: receiver.wallet,
+    description: `Transfer from ${getDisplayName(fromUserId)}`
+  });
+
+  scheduleSave(fromUserId);
+  scheduleSave(toUserId);
+  
+  // 💡 LORE DROP: trading voice (10%) - out-of-band on result.loreDrop
+  // (owner 2026-09-20: a drop is its own message box, never baked into
+  // the transfer summary text). The economy layer has no socket, so the
+  // command handler delivers it.
+  let __trDrop = null;
+  try {
+    const loreDrops = require('../shared/loreDrops');
+    __trDrop = loreDrops.maybeDrop('trading', { userId: fromUserId, chance: 0.10 });
+  } catch (e) {}
+
+  return {
+    success: true,
+    message: `✅ *TRANSFER SUCCESSFUL!*
+
+━━━━━━━━━━━━━━━━
+💸 *Sent:* ${getZENI()}${val.toLocaleString()}
+👤 *To:* @${getDisplayName(toUserId)}
+📊 *Tax (10%):* ${getZENI()}${taxAmount.toLocaleString()}
+💵 *Received by ${getDisplayName(toUserId)}:* ${getZENI()}${receiverGets.toLocaleString()}
+━━━━━━━━━━━━━━━━
+
+💰 *Your New Balance:* ${getZENI()}${sender.wallet.toLocaleString()}`,
+    loreDrop: __trDrop,
+    receiver: toUserId,
+    amount: val,
+    taxAmount,
+    receiverGets,
+    wallet: sender.wallet,
+    bank: sender.bank,
+    nickname: sender.nickname || getDisplayName(sender.userId)
+  };
+}
+
+function deposit(userId, amount) {
+  const user = getUser(userId);
+  if (!user) return { success: false, message: `❌ *NOT REGISTERED*\n\n🎮 Join the game first!\n💡 Use: _${botConfig.getPrefix()} register <nickname>_` };
+
+  // Coerce amount: non-numeric input would slip past `amount <= 0` (NaN
+  // comparisons are always false) and then `user.wallet -= amount` would
+  // produce NaN, permanently corrupting the wallet.
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) {
+    return { success: false, message: `❌ *INVALID AMOUNT*\n\n💢 Amount must be a positive whole number greater than ${getZENI()}0` };
+  }
+
+  if (user.wallet < val) {
+    return { success: false, message: `❌ *INSUFFICIENT FUNDS*\n\n💰 Wallet balance: ${getZENI()}${user.wallet.toLocaleString()}\n📊 Attempting to deposit: ${getZENI()}${val.toLocaleString()}` };
+  }
+
+  // 💡 FIX P4 (2026-08-16): Deposit cap bug - check MAX_BANK BEFORE
+  // deducting from wallet. Previously, deposit added to bank without
+  // checking the cap, then clampWallet() ran on next user load and
+  // silently clamped the bank down - the wallet was already deducted
+  // but the bank excess vanished. Now we reject the deposit if it
+  // would exceed the cap, or partial-deposit up to the cap.
+  const newBankTotal = user.bank + val;
+  if (newBankTotal > MAX_BANK) {
+    const canDeposit = MAX_BANK - user.bank;
+    if (canDeposit <= 0) {
+      return {
+        success: false,
+        message: `❌ *BANK CAP REACHED*\n\n🏦 Your bank is at the maximum capacity of ${getZENI()}${MAX_BANK.toLocaleString()}.\n💡 Withdraw some funds first or keep zeni in your wallet.`
+      };
+    }
+    // Partial deposit - only deposit up to the cap
+    user.wallet -= canDeposit;
+    user.bank += canDeposit;
+    ledgerMove(user, 'wallet', -canDeposit); // 47-l3
+    ledgerMove(user, 'bank', canDeposit); // 47-l3
+    logTransaction(userId, "Bank Deposit (capped)", -canDeposit, user.wallet);
+    scheduleSave(userId);
+    return {
+      success: true,
+      message: `⚠️ *PARTIAL DEPOSIT (BANK CAP)*\n\n━━━━━━━━━━━━━━━\n💵 *Deposited:* ${getZENI()}${canDeposit.toLocaleString()} (of ${getZENI()}${val.toLocaleString()} requested)\n━━━━━━━━━━━━━━━\n\n💰 *Wallet:* ${getZENI()}${user.wallet.toLocaleString()}\n🏦 *Bank:* ${getZENI()}${user.bank.toLocaleString()} (MAX)\n📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}\n\n💡 Your bank is now at maximum capacity. The remaining ${getZENI()}${(val - canDeposit).toLocaleString()} stayed in your wallet.`,
+      amount: canDeposit,
+      wallet: user.wallet,
+      bank: user.bank,
+      nickname: user.nickname || getDisplayName(user.userId)
+    };
+  }
+
+  user.wallet -= val;
+  user.bank += val;
+  ledgerMove(user, 'wallet', -val); // 47-l3
+  ledgerMove(user, 'bank', val); // 47-l3
+
+  logTransaction(userId, "Bank Deposit", -val, user.wallet);
+  // 💡 P4: Settlement record for deposit (transfer between wallet↔bank, same user)
+  recordSettlement(userId, 'transfer', 'deposit', -val, {
+    preWallet: user.wallet + val, postWallet: user.wallet,
+    preBank: user.bank - val, postBank: user.bank, description: 'Bank Deposit'
+  });
+
+  scheduleSave(userId);
+
+  // 💡 LORE DROP: trading voice (10%) - out-of-band on result.loreDrop
+  let __depDrop = null;
+  try {
+    const loreDrops = require('../shared/loreDrops');
+    __depDrop = loreDrops.maybeDrop('trading', { userId, chance: 0.10 });
+  } catch (e) {}
+
+  return {
+    success: true,
+    message: `✅ *DEPOSIT SUCCESSFUL!*
+
+━━━━━━━━━━━━━━━
+💵 *Deposited:* ${getZENI()}${val.toLocaleString()}
+━━━━━━━━━━━━━━━
+
+💰 *Wallet:* ${getZENI()}${user.wallet.toLocaleString()}
+🏦 *Bank:* ${getZENI()}${user.bank.toLocaleString()}
+📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}`,
+    loreDrop: __depDrop,
+    amount: val,
+    wallet: user.wallet,
+    bank: user.bank,
+    nickname: user.nickname || getDisplayName(user.userId)
+  };
+}
+
+function withdraw(userId, amount) {
+  const user = getUser(userId);
+  if (!user) return { success: false, message: `❌ *NOT REGISTERED*\n\n🎮 Join the game first!\n💡 Use: _${botConfig.getPrefix()} register <nickname>_` };
+
+  // Same coercion as deposit - protects against NaN corruption.
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) {
+    return { success: false, message: `❌ *INVALID AMOUNT*\n\n💢 Amount must be a positive whole number greater than ${getZENI()}0` };
+  }
+
+  if (user.bank < val) {
+    return { success: false, message: `❌ *INSUFFICIENT FUNDS*\n\n🏦 Bank balance: ${getZENI()}${user.bank.toLocaleString()}\n📊 Attempting to withdraw: ${getZENI()}${val.toLocaleString()}` };
+  }
+
+  // 💡 FIX P4 (2026-08-16): Withdraw cap bug - same as deposit cap but
+  // for wallet. Check MAX_WALLET before withdrawing. If withdrawal would
+  // exceed wallet cap, partial-withdraw up to the cap.
+  const newWalletTotal = user.wallet + val;
+  if (newWalletTotal > MAX_WALLET) {
+    const canWithdraw = MAX_WALLET - user.wallet;
+    if (canWithdraw <= 0) {
+      return {
+        success: false,
+        message: `❌ *WALLET CAP REACHED*\n\n💰 Your wallet is at the maximum capacity of ${getZENI()}${MAX_WALLET.toLocaleString()}.\n💡 Deposit some funds to your bank first.`
+      };
+    }
+    user.bank -= canWithdraw;
+    user.wallet += canWithdraw;
+    ledgerMove(user, 'bank', -canWithdraw); // 47-l3
+    ledgerMove(user, 'wallet', canWithdraw); // 47-l3
+    logTransaction(userId, "Bank Withdrawal (capped)", canWithdraw, user.wallet);
+    scheduleSave(userId);
+    return {
+      success: true,
+      message: `⚠️ *PARTIAL WITHDRAWAL (WALLET CAP)*\n\n━━━━━━━━━━━━━━━\n💵 *Withdrawn:* ${getZENI()}${canWithdraw.toLocaleString()} (of ${getZENI()}${val.toLocaleString()} requested)\n━━━━━━━━━━━━━━━\n\n💰 *Wallet:* ${getZENI()}${user.wallet.toLocaleString()} (MAX)\n🏦 *Bank:* ${getZENI()}${user.bank.toLocaleString()}\n📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}\n\n💡 Your wallet is at maximum capacity. The remaining ${getZENI()}${(val - canWithdraw).toLocaleString()} stayed in your bank.`,
+      amount: canWithdraw,
+      wallet: user.wallet,
+      bank: user.bank,
+      nickname: user.nickname || getDisplayName(user.userId)
+    };
+  }
+
+  user.bank -= val;
+  user.wallet += val;
+  ledgerMove(user, 'bank', -val); // 47-l3
+  ledgerMove(user, 'wallet', val); // 47-l3
+
+  const today = getTodayKey();
+  if (!user.gamblingProfile) {
+    user.gamblingProfile = {
+      dayKey: today,
+      roundsToday: 0,
+      entryWalletToday: user.wallet || 0,
+      withdrawnToday: 0,
+      netToday: 0
+    };
+  }
+  if (user.gamblingProfile.dayKey !== today) {
+    user.gamblingProfile.dayKey = today;
+    user.gamblingProfile.roundsToday = 0;
+    user.gamblingProfile.entryWalletToday = user.wallet || 0;
+    user.gamblingProfile.withdrawnToday = 0;
+    user.gamblingProfile.netToday = 0;
+  }
+  user.gamblingProfile.withdrawnToday = (user.gamblingProfile.withdrawnToday || 0) + val;
+
+  logTransaction(userId, "Bank Withdrawal", val, user.wallet);
+  // 💡 P4: Settlement record for withdrawal (transfer between bank↔wallet, same user)
+  recordSettlement(userId, 'transfer', 'withdrawal', val, {
+    preWallet: user.wallet - val, postWallet: user.wallet,
+    preBank: user.bank + val, postBank: user.bank, description: 'Bank Withdrawal'
+  });
+
+  scheduleSave(userId);
+
+  // 💡 LORE DROP: trading voice (10%) - out-of-band on result.loreDrop
+  let __wdDrop = null;
+  try {
+    const loreDrops = require('../shared/loreDrops');
+    __wdDrop = loreDrops.maybeDrop('trading', { userId, chance: 0.10 });
+  } catch (e) {}
+
+  return {
+    success: true,
+    message: `✅ *WITHDRAWAL SUCCESSFUL!*
+
+━━━━━━━━━━━━━━━
+💵 *Withdrew:* ${getZENI()}${val.toLocaleString()}
+━━━━━━━━━━━━━━━
+
+💰 *Wallet:* ${getZENI()}${user.wallet.toLocaleString()}
+🏦 *Bank:* ${getZENI()}${user.bank.toLocaleString()}
+📊 *Total:* ${getZENI()}${(user.wallet + user.bank).toLocaleString()}`,
+    loreDrop: __wdDrop,
+    amount: val,
+    wallet: user.wallet,
+    bank: user.bank,
+    nickname: user.nickname || getDisplayName(user.userId)
+  };
+}
+
+function getBankBalance(userId) {
+  const user = getUser(userId);
+  if (!user) return { wallet: 0, bank: 0, total: 0 };
+  
+  return {
+    wallet: user.wallet,
+    bank: user.bank,
+    total: user.wallet + user.bank
+  };
+}
+
+async function claimDaily(userId) {
+  const user = getUser(userId);
+  if (!user) return { success: false, message: `❌ *NOT REGISTERED*\n\n🎮 Join the game first!\n💡 Use: _${botConfig.getPrefix()} register <nickname>_` };
+
+  const now = Date.now();
+  const dayInMs = 86400000;
+
+  if (now - user.lastDaily < dayInMs) {
+    const timeLeft = dayInMs - (now - user.lastDaily);
+    const hoursLeft = Math.floor(timeLeft / 3600000);
+    const minsLeft = Math.floor((timeLeft % 3600000) / 60000);
+
+    return {
+      success: false,
+      message: `⏰ *DAILY ALREADY CLAIMED!*
+
+━━━━━━━━━━━━━━━
+🕐 Come back in:
+   *${hoursLeft}h ${minsLeft}m*
+━━━━━━━━━━━━━━━
+
+💡 _Check back tomorrow for your reward!_`
+    };
+  }
+
+  // 💡 MEMBERSHIP DAILY BONUS - previously the membership tiers defined
+  // a `dailyBonus` field (1000 for PREMIUM, 5000 for DIAMOND) but it was
+  // never actually granted. Players paid 50k-250k for membership and got
+  // the same daily reward as free players.
+  // 💡 AUDIT FIX 2026-11-01: cross-tenant double-claim gate. The in-memory
+  // lastDaily check above reads this process's cache; with 3 tenants on one
+  // users collection a player could claim on every stale tenant (2-3x reward
+  // via composited $inc). Claim atomically first: exactly one tenant's
+  // findOneAndUpdate flips lastDaily inside the window.
+  {
+    const __resolved = resolveJidHelper(userId);
+    const __canonical = (typeof user.userId === 'string' && user.userId) ? user.userId : __resolved;
+    let __dailyGate;
+    try {
+      __dailyGate = await User.findOneAndUpdate(
+        { userId: __canonical, lastDaily: { $lt: now - dayInMs + 1 } },
+        { $set: { lastDaily: now } },
+        { returnDocument: 'after' }
+      );
+    } catch (e) {
+      __dailyGate = 'ERR'; // DB hiccup → fail open to legacy behaviour
+      console.error('[economy] daily claim gate failed, failing open:', e.message);
+    }
+    if (__dailyGate === null) {
+      // Another tenant already claimed — read the DB's fresh timestamp so
+      // the countdown is honest instead of the stale cache value.
+      let __fresh = user.lastDaily;
+      try {
+        const __doc = await User.findOne({ userId: __canonical }, { lastDaily: 1 }).lean();
+        if (__doc && Number.isFinite(Number(__doc.lastDaily))) __fresh = Number(__doc.lastDaily);
+      } catch (e) { /* keep cache value */ }
+      const timeLeft = Math.max(0, dayInMs - (now - __fresh));
+      const hoursLeft = Math.floor(timeLeft / 3600000);
+      const minsLeft = Math.floor((timeLeft % 3600000) / 60000);
+      return {
+        success: false,
+        message: `⏰ *DAILY ALREADY CLAIMED!*\n\n━━━━━━━━━━━━━━━\n🕐 Come back in:\n   *${hoursLeft}h ${minsLeft}m*\n━━━━━━━━━━━━━━━\n\n💡 _Check back tomorrow for your reward!_`
+      };
+    }
+    user.lastDaily = now; // keep cache in sync with what the gate wrote
+  }
+
+  let bonus = 0;
+  let membershipLabel = '';
+  if (user.membership && user.membership.expires > now) {
+    const tier = MEMBERSHIP_TIERS[user.membership.tier];
+    if (tier) {
+      bonus = tier.dailyBonus || 0;
+      membershipLabel = ` (${tier.name})`;
+    }
+  } else if (user.membership) {
+    // Membership expired - reset to BASIC
+    user.membership.tier = 'BASIC';
+    user.membership.expires = 0;
+  }
+
+  const totalReward = DAILY_REWARD + bonus;
+  user.wallet += totalReward;
+  ledgerMove(user, 'wallet', totalReward); // 47-l3
+  user.lastDaily = now;
+  user.stats.totalEarned = (Number(user.stats.totalEarned) || 0) + (Number(totalReward) || 0);
+
+  logTransaction(userId, `Daily Reward${membershipLabel}`, totalReward, user.wallet);
+
+  scheduleSave(userId);
+
+  const bonusLine = bonus > 0
+    ? `💰 *Base:* +${getZENI()}${DAILY_REWARD.toLocaleString()}\n💎 *Membership Bonus:* +${getZENI()}${bonus.toLocaleString()}${membershipLabel}`
+    : `💰 *Reward:* +${getZENI()}${DAILY_REWARD.toLocaleString()}`;
+
+  return {
+    success: true,
+    message: `🎁 *DAILY REWARD CLAIMED!*
+
+━━━━━━━━━━━━━━━
+${bonusLine}
+*Total:* +${getZENI()}${totalReward.toLocaleString()}
+━━━━━━━━━━━━━━━
+
+💵 *New Balance:* ${getZENI()}${user.wallet.toLocaleString()}
+
+✨ _Come back in 24 hours for another reward!_`
+  };
+}
+//========================================
+
+//==================this part handles class and rank integration==================
+function initializeClass(userId) {
+  const user = getUser(userId);
+  if (!user) return false;
+  
+  if (!user.class) {
+    const starterClass = classSystem.getRandomStarterClass();
+    user.class = starterClass.id;
+    user.questGold = user.questGold || 0;
+    user.adventurerRank = 'F';
+    user.questsCompleted = user.questsCompleted || 0;
+    user.questsWon = user.questsWon || 0;
+    user.questsFailed = user.questsFailed || 0;
+    user.spriteIndex = Math.floor(Math.random() * 100);
+    user.statBonuses = user.statBonuses || {
+      hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0
+    };
+    scheduleSave(userId);
+    return true;
+  }
+  return false;
+}
+
+function getUserClass(userId) {
+  const user = getUser(userId);
+  if (!user || !user.class) return null;
+  
+  const classData = classSystem.getClassById(user.class);
+  return classData;
+}
+
+function addProfessionXP(userId, profession, amount) {
+    const user = getUser(userId);
+    if (!user || !user.professions) return null;
+    const val = Math.floor(Number(amount));
+    if (!Number.isFinite(val) || val <= 0) return null;
+    
+    const prof = user.professions[profession];
+    if (!prof) return null;
+    
+    prof.xp += val;
+    
+    // Leveling logic: 100 * level^1.5
+    const nextLevelXP = Math.floor(100 * Math.pow(prof.level, 1.5));
+    let leveledUp = false;
+    
+    if (prof.xp >= nextLevelXP) {
+        prof.level++;
+        prof.xp -= nextLevelXP;
+        leveledUp = true;
+    }
+    
+    scheduleSave(userId);
+    return { leveledUp, newLevel: prof.level };
+}
+
+function getProfessionLevel(userId, profession) {
+    const user = getUser(userId);
+    return user?.professions?.[profession]?.level || 1;
+}
+
+const MEMBERSHIP_TIERS = {
+    'PREMIUM': { name: 'Premium Adventurer', cost: 50000, durationDays: 30, dailyBonus: 1000, bankTax: 0.02 },
+    'DIAMOND': { name: 'Diamond Legend', cost: 250000, durationDays: 30, dailyBonus: 5000, bankTax: 0 }
+};
+
+function buyMembership(userId, tierId) {
+    const user = getUser(userId);
+    // 💡 FIX 2026-08-31: unregistered users crashed with TypeError (user is
+    // null) instead of getting the standard register-first message.
+    if (!user) return { success: false, message: `❌ You need to register first!` };
+    const tier = MEMBERSHIP_TIERS[tierId.toUpperCase()];
+
+    if (!tier) return { success: false, message: "❌ Invalid membership tier!" };
+    if (user.wallet < tier.cost) return { success: false, message: `❌ Need ${getZENI()}${tier.cost.toLocaleString()} to upgrade!` };
+    
+    removeMoney(userId, tier.cost, `Bought ${tier.name}`);
+    
+    const now = Date.now();
+    const durationMs = tier.durationDays * 24 * 60 * 60 * 1000;
+    
+    if (!user.membership) user.membership = { tier: 'BASIC', expires: 0 };
+    
+    // Extend or replace
+    if (user.membership.tier === tierId.toUpperCase() && user.membership.expires > now) {
+        user.membership.expires += durationMs;
+    } else {
+        user.membership.tier = tierId.toUpperCase();
+        user.membership.expires = now + durationMs;
+    }
+    
+    scheduleSave(userId);
+    return { success: true, message: `💎 *UPGRADED!*\n\nYou are now a *${tier.name}*!\nExpires: ${new Date(user.membership.expires).toLocaleDateString()}` };
+}
+
+function getUserStats(userId) {
+  const user = getUser(userId);
+  if (!user) return null;
+  
+  const classData = getUserClass(userId);
+  if (!classData) return null;
+  
+  const bonuses = user.statBonuses || {};
+  
+  return {
+    hp: (classData.stats.hp || 0) + (bonuses.hp || 0),
+    atk: (classData.stats.atk || 0) + (bonuses.atk || 0),
+    def: (classData.stats.def || 0) + (bonuses.def || 0),
+    mag: (classData.stats.mag || 0) + (bonuses.mag || 0),
+    spd: (classData.stats.spd || 0) + (bonuses.spd || 0),
+    luck: (classData.stats.luck || 0) + (bonuses.luck || 0),
+    crit: (classData.stats.crit || 0) + (bonuses.crit || 0)
+  };
+}
+
+function changeClass(userId) {
+  const user = getUser(userId);
+  if (!user) return { success: false, message: '❌ User not found!' };
+  
+  const currentClass = getUserClass(userId);
+  
+  if (currentClass && (currentClass.tier === 'EVOLVED' || currentClass.tier === 'ASCENDED')) {
+    return { success: false, message: '❌ Cannot reroll an evolved or ascended class! Use Skill Reset Scroll first.' };
+  }
+  
+  const newClass = classSystem.getRandomStarterClass();
+  user.class = newClass.id;
+  user.spriteIndex = Math.floor(Math.random() * 100);
+  user.lastClassChange = Date.now();
+  scheduleSave(userId);
+  
+  return {
+    success: true,
+    message: `✅ Class changed!\n\n${newClass.icon} *New Class:* ${newClass.name}\n📝 ${newClass.desc}`
+  };
+}
+
+// 💡 DELETED: evolveClass(userId, evolutionId) - was dead code (zero callers
+// in the entire codebase). The actual evolution logic lives inline in
+// skillCommands.handleEvolve (non-trial path) and guildAdventure.endAdventure
+// (trial path), both of which were hardened in prior commits. Keeping this
+// orphan function around was a maintenance hazard - anyone reading economy.js
+// might assume it was the canonical evolution entry point.
+
+function resetClass(userId) {
+  const user = getUser(userId);
+  if (!user) return { success: false, message: '❌ User not found!' };
+  
+  const currentClass = getUserClass(userId);
+  if (!currentClass) {
+    return { success: false, message: '❌ No class assigned!' };
+  }
+  
+  if (currentClass.tier !== 'EVOLVED') {
+    return { success: false, message: '❌ Already a starter class!' };
+  }
+  
+  const originalStarter = currentClass.evolvedFrom;
+  const starterClass = classSystem.getClassById(originalStarter);
+  
+  if (!starterClass) {
+    return { success: false, message: '❌ Error finding starter class!' };
+  }
+  
+  const refund = Math.floor(currentClass.evolutionCost * 0.5);
+  user.wallet += refund;
+  ledgerMove(user, 'wallet', refund); // 47-l3
+  user.class = starterClass.id;
+  user.spriteIndex = Math.floor(Math.random() * 100);
+  scheduleSave(userId);
+  
+  return {
+    success: true,
+    message: `♻️ *CLASS RESET!*
+
+${starterClass.icon} Back to *${starterClass.name}*
+💰 Refunded: ${getZENI()}${refund.toLocaleString()}`
+  };
+}
+
+async function updateAdventurerRank(userId) {
+  const user = getUser(userId);
+  if (!user) return null;
+
+  const progression = require('../characters/progression');
+  const level = progression.getLevel(userId);
+  const gp = progression.getGP(userId);
+  const questsCompleted = user.questsCompleted || 0;
+
+  const calculatedRank = classSystem.calculateAdventurerRank(level, questsCompleted, gp);
+  const oldRank = user.adventurerRank || 'F';
+
+  // 💡 CRITICAL FIX: NEVER downgrade an existing rank.
+  const rankOrder = ['F', 'E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'GOD'];
+  const oldIdx = rankOrder.indexOf(oldRank);
+  const newIdx = rankOrder.indexOf(calculatedRank);
+
+  if (newIdx > oldIdx) {
+    // 💡 RANK MISSION GATE: Check if the promotion from oldRank requires
+    // a rank mission to be completed. If it does and the player hasn't
+    // completed it yet, DON'T promote - they need to finish the mission first.
+    const completedMissions = user.completedRankMissions || [];
+    let eligibility = classSystem.checkRankPromotionEligibility(oldRank, completedMissions);
+
+    // 🎯 AUTO-CLAIM (owner live-test report #12, 2026-10-07: "you arent
+    // moving from D rank even tho you've meet the requirements"): the gate
+    // trial used to require the player to discover and run
+    // `rank mission claim` — a hidden manual step nothing advertised — so a
+    // champion who had ALREADY earned every objective (20 quest wins, 5
+    // bosses, 3 duel wins) stayed pinned at D forever with an all-green
+    // card. If every objective of the gate trial is met, complete the
+    // mission RIGHT HERE and let the promotion proceed in the same call.
+    // `rank mission claim` still works (idempotent) for the celebration.
+    // Stats read the MERGED view: rank-mission objectives live in
+    // user.stats, but pvpSystem writes duel wins to the TOP LEVEL
+    // (user.pvpWins) and quest wins also mirror to the top level.
+    if (!eligibility.canPromote && eligibility.mission) {
+      // ⚖️ MAX-MERGE (QA R3): the User schema defaults pvpWins/questsWon to
+      // 0, so `??` never fell through to the alternate shape — a duel count
+      // living in user.stats.pvpWins read as 0. Lifetime counters are
+      // monotonic, so taking the max of both doc shapes is always safe.
+      const st = user.stats || {};
+      const missionStats = {
+        ...st,
+        questsWon: Math.max(st.questsWon || 0, user.questsWon || 0),
+        pvpWins: Math.max(st.pvpWins || 0, user.pvpWins || 0),
+      };
+      const trial = classSystem.checkMissionProgress(eligibility.mission.id, missionStats);
+      if (trial.complete) {
+        if (!user.completedRankMissions) user.completedRankMissions = [];
+        if (!user.completedRankMissions.includes(eligibility.mission.id)) {
+          user.completedRankMissions.push(eligibility.mission.id);
+          // FIX #50 pattern: immediate write — a restart must never eat a
+          // claimed trial (same rationale as the promotion save below).
+          await saveUser(userId);
+        }
+        eligibility = { canPromote: true, blockedByMission: null, mission: eligibility.mission };
+      }
+    }
+
+    if (!eligibility.canPromote) {
+      // Player meets level/quest requirements but hasn't completed the
+      // rank mission. Don't promote - they need to finish the mission.
+      return {
+        ranked_up: false,
+        rank: oldRank,
+        blocked_by_mission: eligibility.mission,
+        mission_id: eligibility.blockedByMission,
+      };
+    }
+
+    // Mission completed (or no mission required) → promote!
+    user.adventurerRank = calculatedRank;
+    // 💡 FIX #50: Use saveUser (immediate MongoDB write) instead of
+    // scheduleSave (debounced 500ms). If the bot restarts before the
+    // debounced save fires, the rank promotion is lost.
+    await saveUser(userId);
+
+    // 💡 AUDIT FIX (Item #5): Implement the L7 guild perk - "Guild L7+
+    // grants +1 skill point (GP) on adventurer rank-up". Previously the
+    // perk was declared in guildPerks.GUILD_LEVEL_PERKS[7] and shown in
+    // `.g guild info` / `.g guild perks`, but nothing actually awarded
+    // the GP. Now: if the user is in a guild whose level >= 7, they
+    // receive +1 GP on every rank promotion.
+    let guildBonusGP = 0;
+    try {
+      const guilds = require('../guildwar/guilds');
+      const userGuildName = guilds.getUserGuild(userId);
+      if (userGuildName) {
+        const userGuild = guilds.getGuild(userGuildName);
+        if (userGuild && (userGuild.level || 1) >= 7) {
+          const progression = require('../characters/progression');
+          const gpUser = progression.getUser ? progression.getUser(userId) : null;
+          // Use the same shape as progression.awardGP: bump gp + totalGP.
+          // We touch the user object directly here because progression
+          // caches its own copy and we already have `user` from this
+          // module's getUser - but GP lives in the progression cache.
+          if (gpUser) {
+            gpUser.gp = (gpUser.gp || 0) + 1;
+            gpUser.totalGP = (gpUser.totalGP || 0) + 1;
+            if (typeof progression.saveProgression === 'function') {
+              progression.saveProgression(userId);
+            }
+            guildBonusGP = 1;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[economy] L7 guild perk GP award failed:', e.message);
+    }
+
+    const rankData = classSystem.ADVENTURER_RANKS[calculatedRank];
+    return {
+      ranked_up: true,
+      old_rank: oldRank,
+      new_rank: calculatedRank,
+      rank_data: rankData,
+      guild_bonus_gp: guildBonusGP
+    };
+  }
+
+  // No upgrade (rank stays the same, or calculated rank is lower -
+  // in which case we PRESERVE the existing rank, not downgrade).
+  return { ranked_up: false, rank: oldRank };
+}
+
+/**
+ * Get the player's current rank mission status - what mission they need
+ * to complete next, their progress on each objective, and whether they
+ * can claim it.
+ */
+function getRankMissionStatus(userId) {
+  const user = getUser(userId);
+  if (!user) return null;
+
+  const currentRank = user.adventurerRank || 'F';
+  const gateMission = classSystem.getGateMissionForRank(currentRank);
+
+  if (!gateMission) {
+    return {
+      hasGate: false,
+      mission: null,
+      progress: [],
+      canClaim: false,
+      message: 'No rank mission required for your next promotion. Keep leveling up!',
+    };
+  }
+
+  // Check if already completed
+  const completed = (user.completedRankMissions || []).includes(gateMission.id);
+  if (completed) {
+    return {
+      hasGate: true,
+      mission: gateMission,
+      progress: [],
+      canClaim: false,
+      alreadyCompleted: true,
+      message: `You have already completed the ${gateMission.name}! Your next promotion is unlocked.`,
+    };
+  }
+
+  // Check progress
+  const playerStats = {
+    questsWon: user.stats?.questsWon || user.questsWon || 0,
+    bossesDefeated: user.stats?.bossesDefeated || 0,
+    pvpWins: user.pvpWins || 0,
+    dragonsKilled: user.stats?.dragonsKilled || 0,
+    itemsCrafted: user.stats?.itemsCrafted || 0,
+    itemsEquipped: user.stats?.itemsEquipped || 0,
+  };
+
+  const { complete, progress } = classSystem.checkMissionProgress(gateMission.id, playerStats);
+
+  return {
+    hasGate: true,
+    mission: gateMission,
+    progress,
+    canClaim: complete,
+    alreadyCompleted: false,
+    message: complete
+      ? `✅ You have completed all objectives for the ${gateMission.name}! Use \`${botConfig.getPrefix()} rank mission claim\` to claim your reward and unlock promotion.`
+      : `📊 Progress for ${gateMission.name}:`,
+  };
+}
+
+/**
+ * Claim a completed rank mission. Marks it as completed on the user
+ * and triggers a rank update check.
+ */
+async function claimRankMission(userId) {
+  const user = getUser(userId);
+  if (!user) return { success: false, message: 'User not found.' };
+
+  const currentRank = user.adventurerRank || 'F';
+  const gateMission = classSystem.getGateMissionForRank(currentRank);
+
+  if (!gateMission) {
+    return { success: false, message: '❌ No rank mission required for your current rank. Keep leveling up!' };
+  }
+
+  if (!user.completedRankMissions) user.completedRankMissions = [];
+  if (user.completedRankMissions.includes(gateMission.id)) {
+    return { success: false, message: `❌ You have already completed the ${gateMission.name}.` };
+  }
+
+  // Verify all objectives are actually met
+  const playerStats = {
+    questsWon: user.stats?.questsWon || user.questsWon || 0,
+    bossesDefeated: user.stats?.bossesDefeated || 0,
+    pvpWins: user.pvpWins || 0,
+    dragonsKilled: user.stats?.dragonsKilled || 0,
+    itemsCrafted: user.stats?.itemsCrafted || 0,
+    itemsEquipped: user.stats?.itemsEquipped || 0,
+  };
+  const { complete, progress } = classSystem.checkMissionProgress(gateMission.id, playerStats);
+
+  if (!complete) {
+    let msg = `❌ You haven't completed all objectives for the ${gateMission.name} yet!\n\n📊 Progress:\n`;
+    progress.forEach(p => {
+      msg += `${p.done ? '✅' : '❌'} ${p.label} (${p.current}/${p.target})\n`;
+    });
+    return { success: false, message: msg };
+  }
+
+  // Mark mission as completed
+  user.completedRankMissions.push(gateMission.id);
+  // 💡 FIX #50: immediate save, same as rank promotion
+  await saveUser(userId);
+
+  // Now try to promote (this will check mission eligibility - which should pass now)
+  const rankResult = await updateAdventurerRank(userId);
+
+  let msg = `🎉 *MISSION COMPLETE!* 🎉\n\n`;
+  msg += `${gateMission.icon} *${gateMission.name}*\n`;
+  msg += `All objectives cleared!\n\n`;
+
+  if (rankResult.ranked_up) {
+    msg += `⬆️ *RANK UP!* ${rankResult.old_rank} → ${rankResult.new_rank}\n`;
+    msg += `You are now ${rankResult.rank_data?.name || rankResult.new_rank + '-Rank'}!`;
+  } else if (rankResult.blocked_by_mission) {
+    msg += `✅ Mission complete, but you still need to meet the level/quest requirements for the next rank.`;
+  } else {
+    msg += `✅ Mission recorded! You'll rank up when you meet the level/quest requirements.`;
+  }
+
+  return { success: true, message: msg, rankResult };
+}
+
+/**
+ * Track a stat for rank mission progress.
+ * Called by various game systems (quest completion, boss kills, etc.)
+ */
+function trackMissionStat(userId, statKey, amount = 1) {
+  const user = getUser(userId);
+  if (!user || !user.stats) return;
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return;
+  user.stats[statKey] = (user.stats[statKey] || 0) + val;
+  // 💡 FIX: was scheduleSave(userId) - debounced 500ms. If the bot
+  // restarted within 500ms of the stat increment, the DB write was
+  // lost and the player's progress vanished on next load. Rank-mission
+  // stats (itemsCrafted, itemsEquipped, bossesDefeated, etc.) are
+  // high-stakes - losing them means re-doing the work. Use immediate
+  // saveUser (which is async but we don't need to await it here - the
+  // in-memory mutation is already done, the DB write is just persistence).
+  saveUser(userId).catch(e => console.error(`[trackMissionStat] saveUser failed for ${userId}:`, e.message));
+}
+
+function addStatBonus(userId, stat, value) {
+  const user = getUser(userId);
+  if (!user) return false;
+
+  // Validate inputs. Without this, a non-numeric `value` would concatenate
+  // as a string (0 + "5" = "05"), and an invalid `stat` would create a
+  // garbage property on statBonuses that progression.getBaseStats wouldn't
+  // read (so the bonus would silently do nothing).
+  const validStats = ['hp', 'atk', 'def', 'mag', 'spd', 'luck', 'crit'];
+  const s = String(stat || '').toLowerCase();
+  if (!validStats.includes(s)) {
+    console.warn(`[economy.addStatBonus] Invalid stat: ${stat}`);
+    return false;
+  }
+  const v = Number(value);
+  if (!Number.isFinite(v)) {
+    console.warn(`[economy.addStatBonus] Non-numeric value: ${value}`);
+    return false;
+  }
+
+  if (!user.statBonuses) {
+    user.statBonuses = { hp: 0, atk: 0, def: 0, mag: 0, spd: 0, luck: 0, crit: 0 };
+  }
+
+  user.statBonuses[s] = (user.statBonuses[s] || 0) + v;
+  scheduleSave(userId);
+  return true;
+}
+
+function incrementQuestCounter(userId, won = true) {
+  return addQuestProgress(userId, 1.0, won);
+}
+
+function incrementDragonKills(userId, amount = 1) {
+  const user = getUser(userId);
+  if (!user) return;
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val <= 0) return;
+  if (!user.stats) user.stats = {};
+  user.stats.dragonsKilled = (user.stats.dragonsKilled || 0) + val;
+  scheduleSave(userId);
+}
+
+async function addQuestProgress(userId, amount, won = true) {
+  const user = getUser(userId);
+  if (!user) return;
+  const val = Number(amount);
+  if (!Number.isFinite(val)) return;
+
+  // 💡 FIX #41: Use Math.round instead of Math.ceil for fractional
+  // quest progress. Math.ceil(0.05) = 1, meaning every combat
+  // encounter in a dungeon added 1 to questsCompleted - the same
+  // as completing a full quest. This caused inconsistent rank
+  // calculations between players who did the same dungeon but had
+  // different numbers of combat encounters (more encounters = more
+  // questsCompleted = higher calculated rank).
+  //
+  // ⚠️ NOTE: Because the rounded value is written back to
+  // user.questsCompleted each call, the running total is ALWAYS an
+  // integer. Each call recomputes Math.round(integer + 0.05) = integer.
+  // The fractional part is discarded every call - it does NOT
+  // accumulate. 20 × addQuestProgress(0.05) yields 0, not 1. Only
+  // calls with amount >= 0.5 (e.g. 1.0 for boss kills, 0.2 doesn't
+  // round up) actually move the counter. This is under-counting
+  // fractional progress, which is acceptable - questsCompleted is
+  // meant to track COMPLETED quests, not partial progress. The
+  // questsWon counter (incremented by 1 on every win) is the
+  // authoritative metric for rank missions.
+  user.questsCompleted = Math.round((parseFloat(user.questsCompleted) || 0) + amount);
+  if (won) {
+    user.questsWon = (user.questsWon || 0) + 1;
+    // 💡 Track for rank missions
+    if (user.stats) {
+      user.stats.questsWon = (user.stats.questsWon || 0) + 1;
+    }
+  }
+  // 💡 QA FIX: only increment questsFailed on actual failures (amount <= 0),
+  // not on successful combat encounters that pass won=false for XP-tracking
+  // purposes. Previously, every combat encounter with won=false incremented
+  // questsFailed, making the counter meaningless.
+  if (!won && amount <= 0) {
+    user.questsFailed = (user.questsFailed || 0) + 1;
+  }
+
+  scheduleSave(userId);
+  
+  return await updateAdventurerRank(userId);
+}
+
+function hasItem(userId, itemId) {
+  const user = getUser(userId);
+  if (!user || !user.inventory || !user.inventory[itemId]) return false;
+  // Inventory items can be either a plain number (legacy) or an object with
+  // a `quantity` field (current shape). Handle both.
+  const entry = user.inventory[itemId];
+  const qty = typeof entry === 'number' ? entry : (entry?.quantity || 0);
+  return qty > 0;
+}
+
+//==================this part handles leaderboards and user profiles==================
+// 💡 OWNER 2026-10-07: staff (owner/mods) never appear on the money board.
+// Lazy require of engine is safe here: economy.js is loaded BY engine.js, but
+// this only runs at request time when engine is fully cached in require.cache.
+function _isStaffJid(userId) {
+  try {
+    const engine = require('../../../engine');
+    return typeof engine.isStaff === 'function' && engine.isStaff(userId);
+  } catch (e) {
+    return false;
+  }
+}
+function getMoneyLeaderboard(limit = 10) {
+  return Array.from(economyData.entries())
+    .filter(([userId, data]) => data.registered && !_isStaffJid(userId))
+    .map(([userId, data]) => ({
+      userId,
+      nickname: data.nickname || getDisplayName(userId),
+      wallet: data.wallet || 0,
+      bank: data.bank || 0,
+      total: (data.wallet || 0) + (data.bank || 0)
+    }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, limit);
+}
+
+function getGlobalEconomyStats() {
+  const users = Array.from(economyData.values());
+  const totalUsers = users.length;
+  
+  let totalWallet = 0;
+  let totalBank = 0;
+  let totalFrozen = 0;
+  let premiumMembers = 0;
+  let diamondMembers = 0;
+  
+  users.forEach(u => {
+    totalWallet += (u.wallet || 0);
+    totalBank += (u.bank || 0);
+    totalFrozen += (u.frozenAssets?.wallet || 0) + (u.frozenAssets?.bank || 0);
+    
+    if (u.adventurerRank === 'S' || u.adventurerRank === 'SS') premiumMembers++;
+    if (u.adventurerRank === 'SSS') diamondMembers++;
+  });
+
+  const totalWealth = totalWallet + totalBank;
+  const avgWealth = totalUsers > 0 ? Math.floor(totalWealth / totalUsers) : 0;
+  
+  const sorted = [...users].sort((a, b) => ((b.wallet||0)+(b.bank||0)) - ((a.wallet||0)+(a.bank||0)));
+  const richest = sorted[0];
+  
+  const top1Count = Math.max(1, Math.ceil(totalUsers * 0.01));
+  const top1Wealth = sorted.slice(0, top1Count).reduce((s, u) => s + (u.wallet||0) + (u.bank||0), 0);
+  const top1Share = totalWealth > 0 ? (top1Wealth / totalWealth * 100).toFixed(1) : 0;
+
+  const top10Count = Math.max(1, Math.ceil(totalUsers * 0.1));
+  const top10Wealth = sorted.slice(0, top10Count).reduce((s, u) => s + (u.wallet||0) + (u.bank||0), 0);
+  const top10Share = totalWealth > 0 ? (top10Wealth / totalWealth * 100).toFixed(1) : 0;
+
+  return {
+    totalUsers,
+    totalWealth,
+    totalWallet,
+    totalBank,
+    totalFrozen,
+    premiumMembers,
+    diamondMembers,
+    avgWealth,
+    top1Share,
+    top10Share,
+    richest: richest ? { name: richest.nickname, amount: (richest.wallet||0)+(richest.bank||0) } : null
+  };
+}
+
+function getGamblingLeaderboard(limit = 10) {
+  return Array.from(economyData.entries())
+    .filter(([_, data]) => data.registered && data.stats)
+    .map(([userId, data]) => ({
+      userId,
+      nickname: data.nickname || getDisplayName(userId),
+      stats: data.stats
+    }))
+    .sort((a, b) => (b.stats.gamesWon || 0) - (a.stats.gamesWon || 0))
+    .slice(0, limit);
+}
+
+function getUserProfile(userId) {
+  const user = getUser(userId);
+  if (!user) return null;
+  
+  return {
+    nickname: user.nickname,
+    wallet: user.wallet,
+    bank: user.bank,
+    frozenAssets: user.frozenAssets || { wallet: 0, bank: 0, reason: "" },
+    total: (user.wallet || 0) + (user.bank || 0),
+    stats: user.stats,
+    history: user.history || []
+  };
+}
+
+function robUser(thiefId, victimId) {
+  const thief = getUser(thiefId);
+  const victim = getUser(victimId);
+  
+  if (!thief || !victim) return { success: false, message: `❌ Both users must be registered!` };
+  
+  const now = Date.now();
+  const cooldown = 30 * 60 * 1000;
+  const jailDuration = 30 * 60 * 1000;
+  const prisonDuration = 24 * 60 * 60 * 1000;
+
+  if (thief.prisonUntil && thief.prisonUntil > now) {
+    const mins = Math.ceil((thief.prisonUntil - now) / 60000);
+    return { success: false, message: `⛓️ *PRISON BAN*\n\nYou are banned from bot commands for ${mins} minute(s).` };
+  }
+
+  if (thief.jailUntil && thief.jailUntil > now) {
+    const mins = Math.ceil((thief.jailUntil - now) / 60000);
+    return { success: false, message: `🚔 *JAIL BAN*\n\nYou are banned from bot commands for ${mins} minute(s).` };
+  }
+
+  if (thief.lastRob && (now - thief.lastRob < cooldown)) {
+    const timeLeft = cooldown - (now - thief.lastRob);
+    const mins = Math.ceil(timeLeft / 60000);
+    return { success: false, message: `👮 *POLICE ALERT*\n\nYou're laying low! Wait ${mins} minutes before robbing again.` };
+  }
+  
+  if (victim.wallet < 500) {
+    return { success: false, message: `❌ They are too poor to rob!` };
+  }
+
+  const success = Math.random() < 0.4;
+  thief.lastRob = now;
+
+  try {
+    const socialSystem = require('../meta/socialSystem');
+    socialSystem.incrementRelationship(thiefId, victimId, -15);
+  } catch (socialErr) {}
+  
+  if (success) {
+    const percent = Math.floor(Math.random() * 20) + 10;
+    const amount = Math.floor(victim.wallet * (percent / 100));
+    
+    victim.wallet -= amount;
+    thief.wallet += amount;
+    // 💡 FIX 2026-10-31: record ledger movement. wallet is a composited counter
+    // leaf (47-l3) - direct writes without ledgerMove() get silently reverted by
+    // the save-time self-heal whenever any ledgered delta (daily/deposit/transfer)
+    // is pending for the same user in the same save window (stolen Zeni restored
+    // while the thief keeps the gain = Zeni printed from nothing).
+    ledgerMove(thief, 'wallet', amount);
+    ledgerMove(victim, 'wallet', -amount);
+    
+    logTransaction(thiefId, `Robbed @${getDisplayName(victimId)}`, amount, thief.wallet);
+    logTransaction(victimId, `Robbed by @${getDisplayName(thiefId)}`, -amount, victim.wallet);
+
+    scheduleSave(thiefId);
+    scheduleSave(victimId);
+    return { 
+      success: true, 
+      message: `🥷 *ROBBERY SUCCESSFUL*\n\nYou stole ${getZENI()}${amount.toLocaleString()} from @${getDisplayName(victimId)}!` 
+    };
+  } else {
+    const fine = Math.max(500, Math.floor(thief.wallet * 0.01));
+    const preFineWallet = thief.wallet;
+    thief.wallet = Math.max(0, thief.wallet - fine);
+    ledgerMove(thief, 'wallet', thief.wallet - preFineWallet); // 💡 FIX 2026-10-31: ledger the fine (see above)
+
+    thief.robberyStrikes = (thief.robberyStrikes || 0) + 1;
+
+    let penaltyLine = `💸 Fine paid: ${getZENI()}${fine.toLocaleString()}.`;
+    if (thief.robberyStrikes === 1) {
+      penaltyLine += `\n⚠️ First offense: fine only.`;
+    } else if (thief.robberyStrikes === 2) {
+      thief.jailUntil = now + jailDuration;
+      penaltyLine += `\n🚔 Second offense: 30-minute jail ban.`;
+    } else {
+      thief.prisonUntil = now + prisonDuration;
+      thief.jailUntil = 0;
+      thief.robberyStrikes = 0;
+      penaltyLine += `\n⛓️ Third offense: 1-day prison ban.`;
+    }
+    
+    logTransaction(thiefId, "Robbery Fine (Police)", -fine, thief.wallet);
+
+    scheduleSave(thiefId);
+    return { 
+      success: false, 
+      message: `🚓 *BUSTED*\n\nThe police caught you!\n${penaltyLine}` 
+    };
+  }
+}
+
+// ============================================
+// ☠️ POISON PILL ATTACK (2026-10-09, owner spec: `.j bug @victim`)
+// ============================================
+// Second player-vs-player attack, sitting next to robUser with the same
+// guardrails (both registered, jail/prison bans, cooldown, relationship
+// damage) - but the payload is BIOLOGICAL. The victim takes an instant HP
+// drain plus a 30-minute toxin that SUPPRESSES out-of-combat HP regen
+// (enforced inside getPersistentHP). The only cure is the hospital:
+// healToFull purges the toxin when it fires. The attack itself is
+// deterministic - the pill always goes down - the price is the 500 cost,
+// the 15-minute attacker cooldown, and the victim knowing exactly who did it.
+const POISON_PILL = {
+  COST: 500,                      // shadow-broker price per pill (ZENI)
+  COOLDOWN_MS: 15 * 60 * 1000,    // attacker cooldown, activeEffects 'bug_cd'
+  DURATION_MS: 30 * 60 * 1000,    // toxin lifetime on the victim
+  DRAIN_RATIO: 0.4,               // instant drain: 40% of max HP (min 10)
+  SOCIAL_HIT: -10,                // rob uses -15; poison is sneakier
+};
+
+function poisonPillAttack(attackerId, victimId) {
+  const attacker = getUser(attackerId);
+  const victim = getUser(victimId);
+  const z = getZENI();
+
+  if (!attacker || !victim) {
+    return { success: false, message: `❌ Both users must be registered!` };
+  }
+
+  const now = Date.now();
+  if (attacker.prisonUntil && attacker.prisonUntil > now) {
+    const mins = Math.ceil((attacker.prisonUntil - now) / 60000);
+    return { success: false, message: `⛓️ *PRISON BAN*\n\nYou are banned from bot commands for ${mins} minute(s).` };
+  }
+  if (attacker.jailUntil && attacker.jailUntil > now) {
+    const mins = Math.ceil((attacker.jailUntil - now) / 60000);
+    return { success: false, message: `🚔 *JAIL BAN*\n\nYou are banned from bot commands for ${mins} minute(s).` };
+  }
+
+  // Attacker cooldown lives in activeEffects (no schema change needed) -
+  // getActiveEffect prunes expired entries on read, so it never grows.
+  const cdLeft = getActiveEffect(attackerId, 'bug_cd');
+  if (cdLeft > now) {
+    const mins = Math.ceil((cdLeft - now) / 60000);
+    return { success: false, message: `🧪 *HANDS STILL WET*\n\nThe shadow broker needs ${mins} more minute(s) before selling you another pill.` };
+  }
+
+  if ((attacker.wallet || 0) < POISON_PILL.COST) {
+    return { success: false, message: `❌ A poison pill costs ${z}${POISON_PILL.COST.toLocaleString()} - you can't afford it. Come back wealthier.` };
+  }
+
+  // Max HP of the VICTIM (drain scales to their pool): same derivation the
+  // hospital command uses, with a lazy progression require so this module
+  // never drags progression into economy's load order (see jidLookupVariants).
+  let maxHP = (victim.stats && (victim.stats.maxHp || victim.stats.hp)) || 100;
+  try {
+    const progression = require('../characters/progression');
+    const classId = victim.class?.id || victim.class?.name?.toUpperCase() || 'FIGHTER';
+    maxHP = progression.getBaseStats(victimId, classId)?.hp || maxHP;
+  } catch (e) { /* keep the stats fallback */ }
+  maxHP = Math.max(1, Math.floor(maxHP));
+
+  // ── the strike: instant drain, then the lingering toxin ──
+  const before = getPersistentHP(victimId, maxHP);
+  const drain = Math.max(10, Math.floor(maxHP * POISON_PILL.DRAIN_RATIO));
+  const after = Math.max(1, before - drain); // floor at 1: the pill maims, combat delivers the kill
+  if (after < before) setPersistentHP(victimId, after, maxHP);
+  const toxinExpiresAt = grantEffect(victimId, 'poison_pill', POISON_PILL.DURATION_MS);
+
+  // ── the bill: payment + attacker cooldown ──
+  const prePillWallet = attacker.wallet;
+  attacker.wallet = Math.max(0, attacker.wallet - POISON_PILL.COST);
+  ledgerMove(attacker, 'wallet', attacker.wallet - prePillWallet); // 💡 FIX 2026-10-31: ledger the drain (self-heal otherwise reverts it)
+  logTransaction(attackerId, `Poison pill → @${getDisplayName(victimId)}`, -POISON_PILL.COST, attacker.wallet);
+  scheduleSave(attackerId);
+  grantEffect(attackerId, 'bug_cd', POISON_PILL.COOLDOWN_MS);
+
+  // Poisoning someone is hostile: same relationship channel rob uses.
+  try { require('../meta/socialSystem').incrementRelationship(attackerId, victimId, POISON_PILL.SOCIAL_HIT); } catch (e) {}
+
+  const mins = Math.max(1, Math.round((toxinExpiresAt - now) / 60000));
+  const drained = before - after;
+  const victimName = getDisplayName(victimId);
+  const attackerName = getDisplayName(attackerId);
+  const prefix = botConfig.getPrefix();
+
+  const message =
+    `☠️ *POISON PILL — DELIVERED*\n\n` +
+    `You paid ${z}${POISON_PILL.COST.toLocaleString()} to the shadow broker and slipped the pill into @${victimName}'s drink.\n\n` +
+    `🩸 *Drain:* -${drained} HP (@${victimName} is at ${after}/${maxHP})\n` +
+    `⏳ *Toxin:* regeneration suppressed for ${mins} minute(s)\n` +
+    `🏥 *Cure:* \`${prefix} hospital\` - if its cooldown lets them in`;
+
+  const dmText =
+    `☠️ *POISON PILL STRIKE*\n\n` +
+    `Something bitter dissolves on your tongue. The drink was laced.\n\n` +
+    `@${attackerName} just hit you with a *poison pill*:\n` +
+    `🩸 *HP sapped:* -${drained} (now ${after}/${maxHP})\n` +
+    `🚫 *Out-of-combat regeneration suppressed* for ${mins} minute(s)\n` +
+    `🏥 *The only cure:* \`${prefix} hospital\` - pray its 12h cooldown is up\n\n` +
+    `_The toxin runs its course in ${mins} minutes. If it lets you._`;
+
+  return {
+    success: true,
+    drained,
+    hpNow: after,
+    hpMax: maxHP,
+    toxinMins: mins,
+    cost: POISON_PILL.COST,
+    victimJid: victimId,
+    attackerJid: attackerId,
+    dmText,
+    message,
+  };
+}
+
+function getPunishmentStatus(userId) {
+  const user = getUser(userId);
+  if (!user) return { blocked: false };
+
+  const now = Date.now();
+  if (user.prisonUntil && user.prisonUntil > now) {
+    return { blocked: true, type: 'prison', msLeft: user.prisonUntil - now };
+  }
+  if (user.jailUntil && user.jailUntil > now) {
+    return { blocked: true, type: 'jail', msLeft: user.jailUntil - now };
+  }
+  return { blocked: false };
+}
+
+// 💡 LOAN-BUG FIX 2026-09-20 (ROOT CAUSE of "could not credit your wallet"):
+// the DB-heal lookups only swapped the JID DOMAIN (@lid <-> @s.whatsapp.net)
+// and never consulted the LidMapping for the OTHER NUMBER. A player
+// registered as `2348012345678@s.whatsapp.net` whose messages arrive as
+// `105712667648066@lid` was looked up as: <lid>@lid, <lid>@s.whatsapp.net -
+// but NEVER as the mapped phone `2348012345678@s.whatsapp.net`. The heal
+// missed, getUser stayed null, addMoney returned false - the loan/wallet
+// "registration or JID issue". This builds every sensible variant,
+// INCLUDING the LidMapping-resolved ones, in priority order.
+function jidLookupVariants(userId) {
+  const variants = [];
+  const push = (v) => { if (v && !variants.includes(v)) variants.push(v); };
+  let resolvedId = userId;
+  try { resolvedId = resolveJidHelper(userId) || userId; } catch (e) { resolvedId = userId; }
+  push(resolvedId);
+  push(userId);
+  const lidResolver = (() => { try { return require('../../../utils/lidResolver'); } catch (e) { return null; } })();
+  const expand = (jid) => {
+    if (typeof jid !== 'string' || !jid.includes('@')) return;
+    const num = jid.split('@')[0].split(':')[0];
+    if (!num) return;
+    push(`${num}@s.whatsapp.net`);
+    push(`${num}@lid`);
+    if (lidResolver) {
+      try {
+        if (lidResolver.lidCache.has(num)) push(`${lidResolver.lidCache.get(num)}@s.whatsapp.net`);
+        if (lidResolver.phoneCache.has(num)) push(`${lidResolver.phoneCache.get(num)}@lid`);
+      } catch (e) { /* cache unavailable - variants above still apply */ }
+    }
+  };
+  expand(userId);
+  expand(resolvedId);
+  return variants;
+}
+
+async function syncUserFromDB(userId) {
+  const resolvedId = resolveJidHelper(userId);
+  const cachedUser = economyData.get(resolvedId);
+  if (cachedUser && cachedUser.registered === true) {
+    return;
+  }
+
+  try {
+    // 💡 LOAN-BUG FIX 2026-09-20: query the User collection under EVERY
+    // jid variant (resolved, raw, domain-swapped, LidMapping-resolved).
+    // The old queries missed users stored under the mapped number.
+    let user = null;
+    for (const variant of jidLookupVariants(userId)) {
+      user = await User.findOne({ userId: variant }).lean();
+      if (user) break;
+    }
+    if (user) {
+      if (user.inventory && user.inventory instanceof Map) {
+          user.inventory = Object.fromEntries(user.inventory);
+      }
+      if (user.skills && user.skills instanceof Map) {
+          user.skills = Object.fromEntries(user.skills);
+      }
+      if (user.portfolio && user.portfolio instanceof Map) {
+          user.portfolio = Object.fromEntries(user.portfolio);
+      }
+      // 💡 Store under the user's actual userId from DB, not the resolved ID
+      // (which might be a different format). This ensures future lookups
+      // with either JID format will find the user in cache.
+      economyData.set(user.userId, user);
+      stampSyncMeta(user.userId, user);
+      // Also store under the resolved ID as an alias
+      if (user.userId !== resolvedId) {
+        economyData.set(resolvedId, user);
+        stampSyncMeta(resolvedId, user);
+      }
+    }
+  } catch (err) {
+    console.error("Error syncing user from DB:", err.message);
+  }
+}
+
+//========================================
+// 💡 WEALTH TAX (Phase 1 - Economy Rebalance)
+//========================================
+// Weekly auto-deduction on bank balances to combat Zeni inflation.
+// - 1% on bank balances over 10M
+// - 2% on bank balances over 50M
+// Wallet (cash on hand) is NOT taxed - only bank. This encourages spending
+// or investing rather than hoarding. Tax revenue is deleted from the economy
+// (not redistributed) - it's a pure sink.
+//
+// Runs automatically every Monday 00:00 UTC via the scheduler in index.js.
+// Can also be triggered manually by the owner via `.g wealthtax run` for
+// testing or catch-up after downtime.
+
+const WEALTH_TAX_BRACKETS = [
+  { threshold: 50000000, rate: 0.02 },  // 2% over 50M
+  { threshold: 10000000, rate: 0.01 },  // 1% over 10M
+];
+
+async function runWealthTax() {
+  console.log('[WealthTax] Running weekly wealth tax...');
+  let totalTaxed = 0;
+  let playersTaxed = 0;
+  const report = [];
+
+  for (const [userId, user] of economyData.entries()) {
+    if (!user) continue;
+    // 💡 AUDIT FIX 2026-08-01 (Round 3): tax TOTAL wealth (wallet + bank),
+    // not just bank. Previously players could avoid the wealth tax entirely
+    // by keeping everything in wallet - defeating the purpose of a "hoarded
+    // wealth" tax. Now both wallet and bank are included.
+    const walletBalance = user.wallet || 0;
+    const bankBalance = user.bank || 0;
+    const totalBalance = walletBalance + bankBalance;
+    if (totalBalance < 10000000) continue; // below first bracket
+
+    // Find applicable bracket (highest first)
+    let tax = 0;
+    let bracketLabel = '';
+    for (const bracket of WEALTH_TAX_BRACKETS) {
+      if (totalBalance >= bracket.threshold) {
+        tax = Math.floor(totalBalance * bracket.rate);
+        bracketLabel = `${(bracket.rate * 100).toFixed(0)}% over ${bracket.threshold.toLocaleString()}`;
+        break;
+      }
+    }
+
+    if (tax <= 0) continue;
+
+    // Deduct proportionally from wallet first, then bank
+    // (wallet is "liquid" - easier to tax. Bank is "hoarded" - harder.)
+    let remaining = tax;
+    const walletTax = Math.min(walletBalance, remaining);
+    if (walletTax > 0) {
+      const preWallet = user.wallet;
+      user.wallet = Math.max(0, walletBalance - walletTax);
+      remaining -= walletTax;
+      ledgerMove(user, 'wallet', user.wallet - preWallet); // 💡 FIX 2026-10-31: ledger the tax (self-heal otherwise reverts it)
+    }
+    if (remaining > 0) {
+      const preBank = user.bank;
+      user.bank = Math.max(0, bankBalance - remaining);
+      ledgerMove(user, 'bank', user.bank - preBank); // 💡 FIX 2026-10-31: bank is also a composited counter leaf
+    }
+    scheduleSave(userId);
+    totalTaxed += tax;
+    playersTaxed++;
+
+    if (playersTaxed <= 10) {
+      report.push(`  ${user.nickname || userId}: -${tax.toLocaleString()} (${bracketLabel})`);
+    }
+  }
+
+  console.log(`[WealthTax] Done. Taxed ${playersTaxed} players, removed ${totalTaxed.toLocaleString()} Zeni from economy.`);
+  return {
+    playersTaxed,
+    totalTaxed,
+    report: report.slice(0, 10),
+  };
+}
+
+// Schedule the weekly tax - call from index.js on bot startup.
+// Runs every Monday at 00:00 UTC.
+function scheduleWealthTax() {
+  const now = new Date();
+  const nextMonday = new Date(now);
+  const daysUntilMonday = (1 + 7 - now.getDay()) % 7; // 1 = Monday
+  nextMonday.setDate(now.getDate() + (daysUntilMonday === 0 ? 7 : daysUntilMonday));
+  nextMonday.setHours(0, 0, 0, 0);
+
+  const msUntilNext = nextMonday.getTime() - now.getTime();
+  console.log(`[WealthTax] Scheduled. Next run: ${nextMonday.toISOString()} (in ${Math.round(msUntilNext / 3600000)}h)`);
+
+  setTimeout(() => {
+    runWealthTax().catch(e => console.error('[WealthTax] Run failed:', e.message));
+    // Re-schedule for next week (7 days = 604800000 ms)
+    setInterval(() => {
+      runWealthTax().catch(e => console.error('[WealthTax] Run failed:', e.message));
+    }, 7 * 24 * 60 * 60 * 1000);
+  }, msUntilNext);
+}
+//========================================
+
+// ════════════════════════════════════════════════════════════════
+// 💡 FIX 2026-08-03: MENTION DISPLAY HELPERS
+// ════════════════════════════════════════════════════════════════
+// Problem: @-mentions showed raw LID numbers (e.g., "@251453323092189")
+// instead of readable names. LID JIDs are 17-18 digit random numbers
+// that nobody recognizes - broken UX.
+//
+// Solution: these helpers resolve LID→phone JID and use the user's
+// nickname from the economy cache when available.
+//
+// Usage in bot messages:
+//   `@${getDisplayName(jid)} has been blocked.`
+//   mentions: [economy.getMentionJid(jid)]
+//
+// getDisplayName returns the NICKNAME (without @) if available,
+// otherwise the phone number (without @), otherwise the raw ID.
+// The caller should prepend "@" in the template string.
+//
+// getMentionJid returns the resolved phone JID for the mentions array.
+// ════════════════════════════════════════════════════════════════
+
+function getDisplayName(jid) {
+  if (!jid) return 'Unknown';
+  try {
+    // Step 1: resolve to the economy cache key (handles LID↔phone swap)
+    const resolvedId = resolveJidHelper(jid);
+    const user = economyData.get(resolvedId);
+    if (user && user.nickname && user.nickname !== 'Adventurer') return user.nickname;
+    if (user && user.profile && user.profile.whatsappName) return user.profile.whatsappName;
+  } catch (e) {}
+  // Step 2: fall back to phone number (resolve LID → phone)
+  try {
+    const lidResolver = require('../../../utils/lidResolver');
+    const phoneJid = lidResolver.resolveToPhone(jid);
+    if (phoneJid && phoneJid !== jid) {
+      return phoneJid.split('@')[0];
+    }
+  } catch (e) {}
+  // Step 3: last resort - raw ID part (could be LID or phone)
+  return String(jid).split('@')[0];
+}
+
+function getMentionJid(jid) {
+  if (!jid) return jid;
+  try {
+    // 💡 FIX: Return the JID format the user is REGISTERED as in the economy
+    // cache. In LID-privacy groups, users register as @lid - WhatsApp matches
+    // LID mentions in those groups. In regular groups, users register as
+    // @s.whatsapp.net - WhatsApp matches phone mentions there.
+    //
+    // Using the economy cache key ensures the mention JID matches the format
+    // WhatsApp expects for that user's group context.
+    const resolvedId = resolveJidHelper(jid);
+    if (resolvedId && economyData.has(resolvedId)) {
+      return resolvedId;
+    }
+    // Fallback: try phone resolution (for non-LID groups)
+    const lidResolver = require('../../../utils/lidResolver');
+    const phoneJid = lidResolver.resolveToPhone(jid);
+    if (phoneJid) return phoneJid;
+  } catch (e) {}
+  return jid;
+}
+
+// 💡 P4 Items 10-11 (2026-08-16): Economy monitoring + market cap circuit breaker.
+// Default cap: 500 million total zeni across all players.
+// Reasoning: ~3700 players × ~135K avg wallet = ~500M. The new rank-based
+// reward table (F=1K, SSS=50K) means a player doing 8 quests/day at SSS
+// earns ~250K/day (quest cap raised to 17/day in Oct 2026 → ~530K/day max).
+// With 3700 active players, that's ~925M/day if everyone
+// maxes out - the cap prevents runaway inflation. Admin can adjust live.
+const DEFAULT_MARKET_CAP = 500_000_000;
+let _marketCap = null; // cached from DB
+let _marketCapChecked = 0; // timestamp of last check
+let _capAlertLast = 0; // 💡 2026-09-20: throttle for the advisory cap warning (1/min)
+
+async function getMarketCap() {
+  // Cache for 60 seconds to avoid hitting MongoDB on every reward
+  if (_marketCap !== null && Date.now() - _marketCapChecked < 60000) {
+    return _marketCap;
+  }
+  try {
+    const System = require('../../../models/System');
+    const doc = await System.findOne({ key: 'economy_market_cap' }).lean();
+    _marketCap = doc?.value || DEFAULT_MARKET_CAP;
+    _marketCapChecked = Date.now();
+    return _marketCap;
+  } catch (e) {
+    return DEFAULT_MARKET_CAP;
+  }
+}
+
+async function setMarketCap(amount) {
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val < 1) return { success: false, message: '❌ Invalid amount.' };
+  try {
+    const System = require('../../../models/System');
+    await System.findOneAndUpdate(
+      { key: 'economy_market_cap' },
+      { value: val },
+      { upsert: true }
+    );
+    _marketCap = val;
+    _marketCapChecked = Date.now();
+    return { success: true, message: `✅ Market cap set to ${getZENI()}${val.toLocaleString()}` };
+  } catch (e) {
+    return { success: false, message: `❌ Failed: ${e.message}` };
+  }
+}
+
+// 💡 QA hook (2026-09-20): arm/disarm the in-memory breaker without touching
+// the DB, so tests can simulate the tripped-breaker state that froze payouts.
+function _testSetMarketCap(val) {
+  _marketCap = (val === null || val === undefined) ? null : Math.floor(Number(val));
+  _marketCapChecked = Date.now();
+}
+
+// Check if the economy is at the cap. Called at reward-grant time.
+// Returns true if rewards should be BLOCKED (cap reached).
+async function isMarketCapReached() {
+  const cap = await getMarketCap();
+  let totalZeni = 0;
+  for (const [jid, user] of economyData) {
+    totalZeni += (user.wallet || 0) + (user.bank || 0);
+  }
+  return { reached: totalZeni >= cap, total: totalZeni, cap };
+}
+
+// Get total community zeni across all players
+function getTotalCommunityZeni() {
+  let totalWallet = 0, totalBank = 0, playerCount = 0;
+  for (const [jid, user] of economyData) {
+    totalWallet += (user.wallet || 0);
+    totalBank += (user.bank || 0);
+    playerCount++;
+  }
+  return {
+    totalWallet,
+    totalBank,
+    total: totalWallet + totalBank,
+    playerCount,
+  };
+}
+
+// 💡 P4 (2026-08-16): Debt management functions.
+// Replaces the old P2P loan system. Admins can set debt on a player;
+// all earnings auto-deduct until debt is cleared.
+function setDebt(userId, amount, reason = '') {
+  const user = getUser(userId);
+  if (!user) return { success: false, message: '❌ User not found.' };
+  const val = Math.floor(Number(amount));
+  if (!Number.isFinite(val) || val < 0) return { success: false, message: '❌ Invalid amount.' };
+  const oldDebt = user.debt?.amount || 0;
+  user.debt = { amount: val, reason: reason || 'Admin-set debt', setAt: Date.now() };
+  scheduleSave(userId);
+  return {
+    success: true,
+    message: `✅ Debt set for ${getDisplayName(userId)}: ${getZENI()}${val.toLocaleString()}\n📊 Previous: ${getZENI()}${oldDebt.toLocaleString()}\n💡 All future earnings will auto-deduct until debt is cleared.`
+  };
+}
+
+function getDebt(userId) {
+  const user = getUser(userId);
+  if (!user) return { amount: 0, reason: '' };
+  return user.debt || { amount: 0, reason: '' };
+}
+
+function clearDebt(userId) {
+  const user = getUser(userId);
+  if (!user) return { success: false, message: '❌ User not found.' };
+  const oldDebt = user.debt?.amount || 0;
+  user.debt = { amount: 0, reason: '', setAt: 0 };
+  scheduleSave(userId);
+  return {
+    success: true,
+    message: `✅ Debt cleared for ${getDisplayName(userId)}. Was: ${getZENI()}${oldDebt.toLocaleString()}`
+  };
+}
+
+//========================================
+
+module.exports = {
+  // 💡 2026-10-15: leaf-level merge/diff helpers exported for the stale-guard
+  // QA harness (scripts/qa_leaf_merge.js) — pure functions, no side effects
+  threeWayMerge,
+  leafDiff,
+  flattenLeaves,
+  unflattenLeaves,
+  deepStripUndefined, // 🧯 2026-10-17 QA harness (bag upgrade / null-poison round)
+  getZENI,
+  STARTING_BALANCE,
+  getPlaceholderPFP,
+  // 💡 2026-08-31: exported so callers (e.g. raidSystem reward retry) can
+  // canonicalize JIDs before paying - addMoney fails silently for
+  // wrong-format JIDs.
+  resolveJid: resolveJidHelper,
+
+  isRegistered,
+  registerUser,
+  syncUserFromDB,
+  
+  loadEconomy,
+  saveUser,
+  reloadUserFromDB,
+  clampWallet,
+  clampStats,
+  MAX_WALLET,
+  MAX_BANK,
+  MAX_STAT_VALUE,
+  scheduleSave,
+  getUser,
+  getOrCreateUser,
+  logTransaction,
+  recordSettlement,
+  ledgerMove, // 47-l3: counter ledger for modules that mutate wallet/bank/eventTokens directly
+  ledgerReset, // 47-l3
+  checkDailyQuestCap,
+  incrementDailyQuestCount,
+  getDailyQuestCap,
+  setDailyQuestCapOverride,
+  loadDailyQuestCapOverride,
+  persistDailyQuestCap,
+  DAILY_QUEST_CAP,
+  getMarketCap,
+  setMarketCap,
+  _testSetMarketCap,
+  isMarketCapReached,
+  getTotalCommunityZeni,
+  DEFAULT_MARKET_CAP,
+  setDebt,
+  getDebt,
+  clearDebt,
+  
+  getBalance,
+  addMoney,
+  removeMoney,
+  transferMoney,
+  robUser,
+  poisonPillAttack, // ☠️ 2026-10-09: .j bug @victim
+  getPunishmentStatus,
+  getGold,
+  addGold,
+  removeGold,
+  
+  deposit,
+  withdraw,
+  getBankBalance,
+  
+  claimDaily,
+  
+  getMoneyLeaderboard,
+  getGlobalEconomyStats,
+  buyMembership,
+  MEMBERSHIP_TIERS,
+  getGamblingLeaderboard,
+  
+  getUserProfile,
+  economyData,
+
+  // 💡 Wealth tax (Phase 1)
+  runWealthTax,
+  scheduleWealthTax,
+
+  ITEMS,
+  addItem,
+  removeItem,
+  sellItem,
+  getInventory,
+
+  initializeClass,
+  getUserClass,
+      addProfessionXP,
+      getProfessionLevel,
+      getUserStats,  changeClass,
+  // 💡 evolveClass removed - was dead code (zero callers)
+  resetClass,
+  updateAdventurerRank,
+  addStatBonus,
+  incrementQuestCounter,
+  incrementDragonKills,
+  addQuestProgress,
+  hasItem,
+  getCurrency,
+
+  // Event Tokens
+  getTokens,
+  addTokens,
+  removeTokens,
+  getEventTokens,   // 💡 47-l2: token sub-economy (no registration gate)
+  addEventTokens,
+  removeEventTokens,
+  resetAllTokens,
+
+  // Rank Mission System
+  getRankMissionStatus,
+  claimRankMission,
+  trackMissionStat,
+
+  // 💡 Persistent HP System (2026-07-31)
+  getPersistentHP,
+  setPersistentHP,
+  getPersistentEnergy,
+  setPersistentEnergy,
+  healToFull,
+
+  // 💡 Persistent temp effects (2026-10-03, elixir lifecycle fix)
+  grantEffect,
+  getActiveEffect,
+  hasActiveEffect,
+  grantFullRestore,
+
+  // 💡 Silver Veil (2026-10-03, level hiding)
+  displayLevel,
+
+  // 💡 FIX 2026-08-03: Mention display helpers - resolve LID→phone, use nicknames
+  getDisplayName,
+  getMentionJid,
+};
+
+// ════════════════════════════════════════════════════════════════
+// 💡 PERSISTENT HP SYSTEM (2026-07-31)
+// HP persists across combat. Lost HP remains after combat ends.
+// Players heal via .g hospital (free) or rest events.
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * Get the player's persistent current HP.
+ * If currentHP is -1 (uninitialized), sets it to maxHP and returns maxHP.
+ * @param {string} userId - Player JID
+ * @param {number} maxHP - The player's max HP (from getBaseStats)
+ * @returns {number} Current HP (1 to maxHP)
+ */
+function getPersistentHP(userId, maxHP) {
+  const user = getUser(userId);
+  if (!user) return maxHP; // fallback for unregistered users
+
+  const max = Math.max(1, Math.floor(Number(maxHP) || 100));
+  const now = Date.now();
+
+  // Lazy migration: if currentHP is -1 (default), initialize to maxHP
+  if (user.stats.currentHP === undefined || user.stats.currentHP === -1) {
+    user.stats.currentHP = max;
+    user.stats.hpTs = now;
+    scheduleSave(userId);
+    return max;
+  }
+
+  // Defeated / invalid HP: restore to 1 so players can always act (0 HP =
+  // defeated, handled by combat) and re-anchor the regen clock.
+  const raw = Math.floor(Number(user.stats.currentHP) || 0);
+  if (raw < 1) {
+    user.stats.currentHP = 1;
+    user.stats.hpTs = now;
+    scheduleSave(userId);
+    return 1;
+  }
+
+  // 💡 PASSIVE HP REGEN (2026-10-02, owner bug #fec95c): the hospital
+  // cooldown message promises out-of-combat regen, but NO such system
+  // existed - hurt players had ZERO healing for the whole 12h hospital
+  // cooldown ("some players cannot regain HP"). Time regen like energy:
+  // a full bar recharges in 24h, scaled to max, fractional progress
+  // accumulates via stats.hpTs. Damage re-anchors via setPersistentHP.
+  let hp = raw;
+  const last = Number(user.stats.hpTs) || now;
+  const elapsed = Math.max(0, now - last);
+  if (hp >= max) {
+    hp = max;
+    user.stats.hpTs = now;
+  } else if (elapsed > 0) {
+    // ☠️ POISON PILL (2026-10-09): the toxin suppresses out-of-combat regen
+    // for its whole duration. The regen clock re-anchors on every read while
+    // poisoned, so no progress banks up for a post-cure burst - the victim
+    // heals again only after the cure (or after the toxin burns out).
+    const toxinUntil = user.activeEffects && typeof user.activeEffects === 'object' && !Array.isArray(user.activeEffects)
+      ? (Number(user.activeEffects.poison_pill) || 0) : 0;
+    if (toxinUntil > now) {
+      user.stats.hpTs = now;
+      user.stats.currentHP = hp;
+      scheduleSave(userId);
+      return hp;
+    }
+    const regen = Math.floor((elapsed / HP_REGEN_FULL_MS) * max);
+    if (regen > 0) {
+      hp = Math.min(max, hp + regen);
+      user.stats.hpTs = now;
+    }
+    // regen === 0: keep hpTs so fractional regen keeps accumulating
+  }
+  user.stats.currentHP = hp;
+  scheduleSave(userId);
+  return hp;
+}
+
+/**
+ * Save the player's current HP back to the persistent store.
+ * Called after combat ends (victory or defeat) to persist damage taken.
+ * @param {string} userId - Player JID
+ * @param {number} hp - The HP value to save
+ * @param {number} maxHP - The player's max HP (for clamping)
+ */
+function setPersistentHP(userId, hp, maxHP) {
+  const user = getUser(userId);
+  if (!user) return;
+
+  // Clamp: 0 to maxHP. 0 means defeated (will be restored to 1 on next access).
+  user.stats.currentHP = Math.max(0, Math.min(maxHP, Math.floor(hp)));
+  user.stats.hpTs = Date.now(); // damage re-anchors the passive regen clock
+  scheduleSave(userId);
+}
+
+// ============================================
+// ⏳ PERSISTENT TEMP EFFECTS (2026-10-03)
+// ============================================
+// 💡 FIX (owner class-change / elixir report): timed effects now have ONE
+// clearly defined lifecycle on the player document: granted with an absolute
+// expiry, validated by timestamp on every read, pruned lazily. They are
+// NEVER cleared or preserved because of quest/raid/class state changes -
+// a Full Restore Elixir bought before a raid keeps working (and keeps
+// auto-restoring) until its timer runs out, exactly what players expect.
+const FULL_RESTORE_EFFECT_MS = 60 * 60 * 1000; // 60 minutes of auto-full-heal
+
+function grantEffect(userId, effectId, durationMs) {
+  const user = getUser(userId);
+  if (!user) return 0;
+  if (!user.activeEffects || typeof user.activeEffects !== 'object' || Array.isArray(user.activeEffects)) {
+    user.activeEffects = {};
+  }
+  const expiresAt = Date.now() + Math.max(1000, Math.floor(Number(durationMs) || 0));
+  user.activeEffects[effectId] = expiresAt;
+  scheduleSave(userId);
+  return expiresAt;
+}
+
+// Returns the expiry timestamp (ms) of an active effect, or 0 if absent/expired.
+// Expired entries are pruned on read so the object never grows unbounded.
+function getActiveEffect(userId, effectId) {
+  const user = getUser(userId);
+  if (!user) return 0;
+  const fx = user.activeEffects;
+  if (!fx || typeof fx !== 'object' || Array.isArray(fx)) return 0;
+  const expiresAt = Number(fx[effectId]) || 0;
+  if (!expiresAt) return 0;
+  if (expiresAt <= Date.now()) {
+    delete fx[effectId];
+    scheduleSave(userId);
+    return 0;
+  }
+  return expiresAt;
+}
+
+function hasActiveEffect(userId, effectId) {
+  return getActiveEffect(userId, effectId) > 0;
+}
+
+// Convenience for the Full Restore Elixir: grants (or tops up) the 60-minute
+// auto-restore window and returns a player-facing description.
+function grantFullRestore(userId) {
+  const expiresAt = grantEffect(userId, 'full_restore', FULL_RESTORE_EFFECT_MS);
+  if (!expiresAt) return null;
+  const mins = Math.max(1, Math.round((expiresAt - Date.now()) / 60000));
+  return `✨ *Full Restore active!* HP auto-restores to full at the start and end of every fight for the next *${mins} minute${mins === 1 ? '' : 's'}* (survives quest ends - it runs on its own timer).`;
+}
+
+// 💡 SILVER VEIL (2026-10-03): single source of truth for "is this player's
+// level hidden?" - every caption/card/image renderer calls this instead of
+// improvising. Returns the level to DISPLAY, or null when veiled (renderers
+// show "??").
+function displayLevel(userId, level) {
+  const u = getUser(userId);
+  if (u && u.levelVeil) return null;
+  const n = Number(level);
+  return Number.isFinite(n) ? n : 1;
+}
+
+/**
+ * PERSISTENT ENERGY SYSTEM (2026-09-17): the canonical energy pool, mirroring
+ * the persistent-HP helpers above.
+ * - Lazy migration: -1/undefined initializes to FULL maxEnergy (same rule as
+ *   adventures, which always started players at full energy).
+ * - Time regen: a full bar recharges in 6h, scaled to max, so every rank
+ *   refills at the same pace. Fractional regen accumulates via energyTs.
+ * - Mining drains this pool; adventures read it at start (floor 50%).
+ */
+const ENERGY_REGEN_FULL_MS = 6 * 60 * 60 * 1000; // full recharge in 6 hours
+
+function getPersistentEnergy(userId, maxEnergy) {
+  const user = getUser(userId);
+  if (!user || !user.stats) return maxEnergy; // fallback for unregistered users
+  const max = Math.max(1, Math.floor(Number(maxEnergy) || 100));
+  const now = Date.now();
+
+  if (user.stats.currentEnergy === undefined || user.stats.currentEnergy === -1) {
+    user.stats.currentEnergy = max;
+    user.stats.energyTs = now;
+    scheduleSave(userId);
+    return max;
+  }
+
+  let energy = Math.floor(Number(user.stats.currentEnergy) || 0);
+  const last = Number(user.stats.energyTs) || now;
+  const elapsed = Math.max(0, now - last);
+  if (energy >= max) {
+    energy = max;
+    user.stats.energyTs = now;
+  } else if (elapsed > 0) {
+    const regen = Math.floor((elapsed / ENERGY_REGEN_FULL_MS) * max);
+    if (regen > 0) {
+      energy = Math.min(max, energy + regen);
+      user.stats.energyTs = now;
+    }
+    // regen === 0: keep energyTs so fractional regen keeps accumulating
+  }
+  user.stats.currentEnergy = energy;
+  scheduleSave(userId);
+  return energy;
+}
+
+function setPersistentEnergy(userId, energy, maxEnergy) {
+  const user = getUser(userId);
+  if (!user || !user.stats) return;
+  const max = Math.max(1, Math.floor(Number(maxEnergy) || 100));
+  const val = Math.max(0, Math.min(max, Math.floor(Number(energy) || 0)));
+  user.stats.currentEnergy = val;
+  user.stats.energyTs = Date.now();
+  scheduleSave(userId);
+  return val;
+}
+
+/**
+ * Heal the player to full HP.
+ * Called by the .g hospital command.
+ * 💡 AUDIT FIX 2026-08-01: added 12-hour cooldown. Without a cooldown, the
+ * persistent HP system was meaningless - players could spam .g hospital
+ * after every fight for free full heals. Now: 12h cooldown, tracked on
+ * user.lastHospitalUse. Out-of-combat passive regen (Soul of the Deep,
+ * Druid regen, etc.) handles healing between hospital visits.
+ * @param {string} userId - Player JID
+ * @param {number} maxHP - The player's max HP
+ * @returns {{healed: number, onCooldown: boolean, cooldownRemainingMs?: number}}
+ */
+const HOSPITAL_COOLDOWN_MS = 12 * 60 * 60 * 1000; // 12 hours
+const HP_REGEN_FULL_MS = 24 * 60 * 60 * 1000; // passive regen: full bar in 24h
+function healToFull(userId, maxHP) {
+  const user = getUser(userId);
+  if (!user) return { healed: 0, onCooldown: false };
+
+  // Cooldown check
+  const lastUse = user.lastHospitalUse ? new Date(user.lastHospitalUse).getTime() : 0;
+  const elapsed = Date.now() - lastUse;
+  if (elapsed < HOSPITAL_COOLDOWN_MS) {
+    return {
+      healed: 0,
+      onCooldown: true,
+      cooldownRemainingMs: HOSPITAL_COOLDOWN_MS - elapsed,
+    };
+  }
+
+  const currentHP = getPersistentHP(userId, maxHP);
+  const healed = maxHP - currentHP;
+  user.stats.currentHP = maxHP;
+  user.stats.hpTs = Date.now(); // full heal re-anchors the regen clock
+  user.lastHospitalUse = new Date();
+  // ☠️ POISON PILL (2026-10-09): the hospital drip purges the toxin. The
+  // pill's teeth are the 12h hospital cooldown - if it hasn't elapsed, the
+  // patient is turned away above and the poison keeps biting.
+  try {
+    if (user.activeEffects && typeof user.activeEffects === 'object' && !Array.isArray(user.activeEffects) && user.activeEffects.poison_pill) {
+      delete user.activeEffects.poison_pill;
+    }
+  } catch (e) {}
+  scheduleSave(userId);
+  return { healed, onCooldown: false };
+}
+
+// Auto-load disabled - now called by index.js startBot()
+// loadEconomy();
+

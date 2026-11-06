@@ -78,13 +78,13 @@ function rngForRoll(band) {
     await connectDB();
     const mongoose = require('mongoose');
     const GuildWarEvent = require('../core/models/GuildWarEvent');
-    const encounters = require('../core/rpg/guildWar/encounters');
-    const classEncounters = require('../core/rpg/classEncounters');
-    const CFG = require('../core/rpg/guildWar/config');
+    const encounters = require('../core/rpg/systems/guildwar/encounters');
+    const classEncounters = require('../core/rpg/systems/combat/classEncounters');
+    const CFG = require('../core/rpg/systems/guildwar/config');
 
     // ── stub progression levels (roster levels without touching user DB) ──
     const fakeLevels = {};
-    const progression = require('../core/rpg/progression');
+    const progression = require('../core/rpg/systems/characters/progression');
     progression.getLevel = (jid) => (fakeLevels[jid] !== undefined ? fakeLevels[jid] : 1);
 
     const MIXED = [1, 2, 3, 3, 3, 5, 25, 31, 51, 100];
@@ -253,7 +253,7 @@ function rngForRoll(band) {
 
     // ═══ 7. FULL generation chain (real paths, real templates, real scaling) ═══
     console.log('\n══ 7. full chain: buildRoomPayload → resolve → selectRandomEnemy → createEnemy ══');
-    const mapEngine = require('../core/rpg/guildWar/mapEngine');
+    const mapEngine = require('../core/rpg/systems/guildwar/mapEngine');
     const map = mapEngine.generate(`qa-chain-${Date.now()}`, 10, {});
     const mapRooms = Array.from(map.rooms.values());
     const combatRoom = mapRooms.find((r) => r.type === 'combat' && !map.spawns.includes(r.key));
@@ -268,7 +268,7 @@ function rngForRoll(band) {
     check('real template pool resolves at band level', !!template && !!template.id, template && template.id);
     let createEnemy = null;
     try {
-        const ga = require('../core/rpg/guildAdventure');
+        const ga = require('../core/rpg/systems/adventures/guildAdventure');
         createEnemy = ga.createEnemy;
     } catch (e) { console.log('  ⚠️ guildAdventure unavailable (non-fatal):', e.message); }
     if (createEnemy) {
@@ -290,7 +290,7 @@ function rngForRoll(band) {
     check('LOW → C', RB[rLowRank.band] === 'C');
     check('HIGH → A', RB[rHighRank.band] === 'A');
     check('boss → S', CFG.COMBAT.BANDS.RANK_BOSS === 'S');
-    const gaRanks = (() => { try { return require('../core/rpg/guildAdventure').DUNGEON_RANKS; } catch (e) { return null; } })();
+    const gaRanks = (() => { try { return require('../core/rpg/systems/adventures/guildAdventure').DUNGEON_RANKS; } catch (e) { return null; } })();
     if (gaRanks) {
         check('DUNGEON_RANKS supports C/B/A/S (no crash path)', ['C', 'B', 'A', 'S'].every((k) => !!gaRanks[k]));
     } else {

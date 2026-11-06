@@ -5,7 +5,7 @@ process.env.NODE_ENV = 'test';
 const assert = require('assert');
 
 // ─── cosmology ──────────────────────────────────────────────────────────────
-const cosmology = require('../core/rpg/cosmology');
+const cosmology = require('../core/rpg/systems/world/cosmology');
 const MS_H = 3600_000, MS_D = 24 * MS_H;
 
 // invariant: phases are pure functions of wall time, restart-stable
@@ -59,7 +59,7 @@ assert.strictEqual(typeof cosmology.isRoutineLink(cosmology.T0 + 5 * MS_H), 'boo
 console.log('✓ cosmology: four clocks separate, phases stable, gates correct, geometry invariants hold');
 
 // ─── loreDrops ──────────────────────────────────────────────────────────────
-const loreDrops = require('../core/rpg/loreDrops');
+const loreDrops = require('../core/rpg/systems/shared/loreDrops');
 
 // pool sizes (pools ship with 10+ lines each)
 {
@@ -108,7 +108,7 @@ for (const [pool, lines] of Object.entries(loreDrops.POOLS)) {
 console.log('✓ loreDrops: format ╒ *line* ╛, cooldown, routing, pool sizes, canon discipline');
 
 // ─── enemyVariants ──────────────────────────────────────────────────────────
-const enemyVariants = require('../core/rpg/enemyVariants');
+const enemyVariants = require('../core/rpg/systems/combat/enemyVariants');
 
 // spawn policy: no variants below floor 31 on non-boss floors
 for (let i = 0; i < 200; i++) {
@@ -172,7 +172,7 @@ console.log('✓ enemyVariants: spawn policy by depth, MIRROR/DRIFTER rules, dat
 // ../engine - pre-seed the require cache so QA never loads the real engine.
 const __enginePath = require.resolve('../core/engine.js');
 require.cache[__enginePath] = { id: __enginePath, filename: __enginePath, loaded: true, exports: { isBotOwner: () => false, isGlobalMod: () => false, isRpgMod: () => false } };
-const worldMap = require('../core/rpg/worldMap');
+const worldMap = require('../core/rpg/systems/world/worldMap');
 assert.strictEqual(worldMap.ABYSS_MAP_UNLOCK, 20); // CONFIRMED by owner (2026-09-19)
 {
     const ref = worldMap._refuseBeyond('A');

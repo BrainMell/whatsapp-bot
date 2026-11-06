@@ -17,12 +17,12 @@
 const { randomUUID } = require('crypto');
 const { generateWAMessageFromContent } = require('@whiskeysockets/baileys');
 const { handleProtoLab } = require('./protoLab');
-const economy = require('../rpg/economy');
-const progression = require('../rpg/progression');
-const classSystem = require('../rpg/classSystem');
-const inventorySystem = require('../rpg/inventorySystem');
-const lootSystem = require('../rpg/lootSystem');
-const skillTree = require('../rpg/skillTree');
+const economy = require('../rpg/systems/economy/economy');
+const progression = require('../rpg/systems/characters/progression');
+const classSystem = require('../rpg/systems/characters/classSystem');
+const inventorySystem = require('../rpg/systems/inventory/inventorySystem');
+const lootSystem = require('../rpg/systems/inventory/lootSystem');
+const skillTree = require('../rpg/systems/characters/skillTree');
 
 // ─── HELPER: resolve class by name or ID ───────────────────────────────────
 function resolveClass(query) {
@@ -682,8 +682,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         // 1. Try summon species
         let summonSystem, registry;
         try {
-            summonSystem = require('../rpg/summonSystem');
-            registry = require('../rpg/summonRegistry');
+            summonSystem = require('../rpg/systems/summons/summonSystem');
+            registry = require('../rpg/systems/summons/summonRegistry');
         } catch (e) {}
         if (registry && summonSystem) {
             const speciesData = registry.getSpecies(query.toLowerCase());
@@ -707,7 +707,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
 
         // 2. Try rune type
         let runeSystem;
-        try { runeSystem = require('../rpg/runeSystem'); } catch (e) {}
+        try { runeSystem = require('../rpg/systems/inventory/runeSystem'); } catch (e) {}
         if (runeSystem && runeSystem.RUNE_TYPES[query.toUpperCase()]) {
             let tier = 'NORMAL';
             if (extra1 && runeSystem.RUNE_TIERS[extra1.toUpperCase()]) tier = extra1.toUpperCase();
@@ -809,8 +809,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             const lvl = parseInt(remaining[1]);
             if (!isNaN(lvl) && lvl > 0) level = lvl;
         }
-        const summonSystem = require('../rpg/summonSystem');
-        const registry = require('../rpg/summonRegistry');
+        const summonSystem = require('../rpg/systems/summons/summonSystem');
+        const registry = require('../rpg/systems/summons/summonRegistry');
         const speciesData = registry.getSpecies(species.toLowerCase());
         if (!speciesData) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown summon species: \`${species}\`\nUse \`${prefix} summon codex\` to see all species.` });
@@ -839,7 +839,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         let type = remaining[0].toUpperCase();
         let tier = 'NORMAL';
         if (remaining.length >= 2) tier = remaining[1].toUpperCase();
-        const runeSystem = require('../rpg/runeSystem');
+        const runeSystem = require('../rpg/systems/inventory/runeSystem');
         if (!runeSystem.RUNE_TYPES[type]) {
             const valid = Object.keys(runeSystem.RUNE_TYPES).join(', ');
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Unknown rune type: \`${type}\`\nValid types: ${valid}` });
@@ -1071,9 +1071,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     // ── UNSTICK (clear stuck combat state) ─────────────────────────────────
     // ── VFX PREVIEW (owner 2026-10-26: check every class's animated skill + levels instantly) ──
     if (sub === 'vfx' || sub === 'vfxtest' || sub === 'ultpreview') {
-        const skillVfx = require('../rpg/skillVfx');
-        const ultFx = require('../rpg/ultimateFx');
-        const skillTreeData = require('../rpg/skillTree').SKILL_TREES || {};
+        const skillVfx = require('../rpg/systems/combat/skillVfx');
+        const ultFx = require('../rpg/systems/combat/ultimateFx');
+        const skillTreeData = require('../rpg/systems/characters/skillTree').SKILL_TREES || {};
         const sigs = skillVfx.SIGNATURE_SKILLS;
         const info = (cid) => {
             const entry = sigs[cid]; if (!entry) return null;
@@ -1118,7 +1118,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 try {
                     const k = x.max <= 1 ? 1 : (lv - 1) / (x.max - 1);
                     const pal = skillVfx.PALETTE[x.cid];
-                    const stage = require('../rpg/vfxPreviewStage')(aoePrev ? 3 : 1);
+                    const stage = require('../rpg/systems/combat/vfxPreviewStage')(aoePrev ? 3 : 1);
                     const vid = await ultFx.renderUltimateVideo({ classId: x.cid, name: x.name, side: x.entry.side, palette: pal, skillLevel: lv, maxLevel: x.max, intensity: k, layers: stage, casterIndex: 0, targetIndex: 0, focusIndex: 0, targetSide: 'enemy', aoe: aoePrev, targets: [{ index: 0, hp: 800, maxHp: 1000 }] });
                     if (vid && vid.mp4) {
                         await sock.sendMessage(chatId, { video: vid.mp4, mimetype: 'video/mp4', gifPlayback: true, jpegThumbnail: vid.thumb || undefined, caption: `🎞️ *${x.cid}* — ${x.name}  ·  Lv ${lv}/${x.max}${aoePrev ? '  ·  AoE' : ''}` });
@@ -1141,7 +1141,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         if (!target) {
             return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Usage: \`${prefix} mod unstick <@user>\`` });
         }
-        const guildAdventure = require('../rpg/guildAdventure');
+        const guildAdventure = require('../rpg/systems/adventures/guildAdventure');
         const chatIdState = chatId;
         const soloKey = `${chatIdState}_${target}`;
         let cleared = 0;
@@ -1318,7 +1318,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     //   admin enemy setgold <bossId> <min> <max> - set gold reward range
     //   admin enemy reset                  - reset all edits (reload from source)
     if (sub === 'enemy') {
-        const classEncounters = require('../rpg/classEncounters');
+        const classEncounters = require('../rpg/systems/combat/classEncounters');
         const enemySub = (args[1] || '').toLowerCase();
         const bossId = args[2]?.toUpperCase();
         const { BOSS_ENCOUNTERS } = classEncounters;
@@ -1470,7 +1470,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
     // .g admin enemyskill reset
     // ═══════════════════════════════════════════════════════════════════════
     if (sub === 'enemyskills' || sub === 'enemyskill') {
-        const monsterSkills = require('../rpg/monsterSkills');
+        const monsterSkills = require('../rpg/systems/combat/monsterSkills');
         const { MONSTER_ARCHETYPES } = monsterSkills;
 
         // ── enemyskills [archetype] - list all skills ──
@@ -1632,8 +1632,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         }
 
         try {
-            const classEncounters = require('../rpg/classEncounters');
-            const guildAdventure = require('../rpg/guildAdventure');
+            const classEncounters = require('../rpg/systems/combat/classEncounters');
+            const guildAdventure = require('../rpg/systems/adventures/guildAdventure');
 
             // Find the boss by ID or name
             let bossId = null;
@@ -1652,7 +1652,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             // Also check bossMechanics registry (lowercase IDs)
             if (!bossId) {
                 try {
-                    const bossMechanics = require('../rpg/bossMechanics');
+                    const bossMechanics = require('../rpg/systems/combat/bossMechanics');
                     if (bossMechanics.BOSS_REGISTRY) {
                         for (const key of Object.keys(bossMechanics.BOSS_REGISTRY)) {
                             if (key.toLowerCase() === query.toLowerCase() || key.toUpperCase() === queryUpper) {
@@ -1781,7 +1781,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 if (!sandboxJid) {
                     return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox mode is not active. Use \`${prefix} mod sandbox on\` first.` });
                 }
-                const economy = require('../rpg/economy');
+                const economy = require('../rpg/systems/economy/economy');
                 const sandboxUser = economy.economyData.get(sandboxJid);
                 if (!sandboxUser) {
                     return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox user data not found in cache.` });
@@ -1848,9 +1848,9 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 if (!sandboxJid) {
                     return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox mode is not active. Use \`${prefix} mod sandbox on\` first.` });
                 }
-                const economy = require('../rpg/economy');
-                const inventorySystem = require('../rpg/inventorySystem');
-                const lootSystem = require('../rpg/lootSystem');
+                const economy = require('../rpg/systems/economy/economy');
+                const inventorySystem = require('../rpg/systems/inventory/inventorySystem');
+                const lootSystem = require('../rpg/systems/inventory/lootSystem');
 
                 // Grant all enhancement stones
                 const stones = ['minor_enhancement_stone', 'rare_enhancement_stone', 'legendary_enhancement_stone'];
@@ -1892,7 +1892,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 }
                 const className = args.slice(2).join(' ').trim();
                 if (!className) {
-                    const classSystem = require('../rpg/classSystem');
+                    const classSystem = require('../rpg/systems/characters/classSystem');
                     const all = classSystem.getAllClasses();
                     const classList = Object.values(all)
                         .filter(c => c.tier !== 'STARTER')
@@ -1906,7 +1906,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 if (!targetClass) {
                     return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Class "${className}" not found.` });
                 }
-                const economy = require('../rpg/economy');
+                const economy = require('../rpg/systems/economy/economy');
                 const user = economy.getUser(sandboxJid);
                 if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Sandbox user not found.' });
                 const oldClassName = user.class || 'None';
@@ -1932,7 +1932,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
                 if (!sandboxJid) {
                     return await sock.sendMessage(chatId, { text: BOT_MARKER + `❌ Sandbox mode is not active.` });
                 }
-                const economy = require('../rpg/economy');
+                const economy = require('../rpg/systems/economy/economy');
                 const user = economy.getUser(sandboxJid);
                 if (!user) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Sandbox user not found.' });
                 user.statBonuses = { hp: 99999, atk: 9999, def: 9999, mag: 9999, spd: 9999, luck: 9999, crit: 999 };
@@ -1954,7 +1954,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
             }
             try {
                 await AdminSandbox.getOrCreate(senderJid, senderName);
-                const progression = require('../rpg/progression');
+                const progression = require('../rpg/systems/characters/progression');
                 const xpForLevel = progression.getXPForLevel(level);
                 const sb = await AdminSandbox.patch(senderJid, {
                     'progression.level': level,

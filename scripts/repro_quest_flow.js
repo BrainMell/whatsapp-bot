@@ -3,8 +3,8 @@
 process.env.GO_IMAGE_SERVICE_URL = process.env.GO_IMAGE_SERVICE_URL || 'http://127.0.0.1:7860';
 
 const botConfig = require('../botConfig');
-const economy = require('../core/rpg/economy');
-const guildAdventure = require('../core/rpg/guildAdventure');
+const economy = require('../core/rpg/systems/economy/economy');
+const guildAdventure = require('../core/rpg/systems/adventures/guildAdventure');
 
 function cfgFor(botId) {
     return {

@@ -20,8 +20,8 @@ async function main() {
   await mongoose.connect(mongoUri);
   console.log('✅ Connected.\n');
 
-  const registry = require('../core/rpg/summonRegistry');
-  const summonSystem = require('../core/rpg/summonSystem');
+  const registry = require('../core/rpg/systems/summons/summonRegistry');
+  const summonSystem = require('../core/rpg/systems/summons/summonSystem');
   const Summon = mongoose.connection.collection('summons');
 
   // Check what owner already has

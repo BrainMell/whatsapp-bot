@@ -4,8 +4,8 @@ process.env.GW_MOVE_COOLDOWN_MS = '300';
 process.env.GW_NORMAL_DURATION_MS = '75000';
 const L = require('./mp_lib');
 const RUN = Math.random().toString(36).slice(2, 6);
-const state = require('../core/rpg/guildWar/state');
-const mapEngine = require('../core/rpg/guildWar/mapEngine');
+const state = require('../core/rpg/systems/guildwar/state');
+const mapEngine = require('../core/rpg/systems/guildwar/mapEngine');
 const GWE = require('../core/models/GuildWarEvent');
 const DIR_TOKEN = { n: 'north', e: 'east', s: 'south', w: 'west' };
 
