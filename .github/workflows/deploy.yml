@@ -1,12 +1,13 @@
-name: Deploy to Oracle Cloud
+name: Audit branch preflight / manual deploy
 
 on:
   push:
     branches:
       - audit/fix-pass-1
+  workflow_dispatch:
 
-# Every push may restart all tenants. Cancel older runs so only the newest
-# fully-checked audit commit is deployed.
+# Pushes validate the audit branch only. The owner can explicitly dispatch
+# this workflow when ready to deploy the branch to the Oracle box.
 concurrency:
   group: deploy-audit-fix-pass-1
   cancel-in-progress: true
@@ -56,6 +57,7 @@ jobs:
           node scripts/qa_facing_contract.js
 
       - name: SSH and Deploy (smart auth precedence)
+        if: github.event_name == 'workflow_dispatch'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.ORACLE_HOST }}
