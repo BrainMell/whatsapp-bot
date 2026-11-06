@@ -6,7 +6,7 @@ const {
   MODERATOR_GRANTS_ENABLED,
   AUTOMATIC_ACQUISITION_ENABLED,
   ACQUISITION_SOURCES,
-} = require('../core/rpg/systems/summonCards');
+} = require('../core/rpg/systems/summonCards/system');
 
 function fixture() {
   const users = new Map();
