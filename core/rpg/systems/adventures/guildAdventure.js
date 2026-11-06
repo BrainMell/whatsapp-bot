@@ -2867,11 +2867,6 @@ const INITIAL_STATE_TEMPLATE = {
   // states inactive > 30 min to prevent memory leak.
   lastActivity: 0,
   createdAt: 0,
-  // 💡 Summoner System (Phase 2): summons array on combat state.
-  // Summon entities are built at combat start from each player's active
-  // summon (user.activeSummonId) via summonSystem.buildCombatEntity.
-  // Pushed into state.turnOrder alongside players + enemies.
-  summons: [],
   // 💡 Phase 3: Necromancer capture windows.
   // Keyed by playerJid, value = { turnsRemaining, captureChance }.
   // Set when army_of_dead ult is cast, ticked each round, expired at 0.
@@ -4651,17 +4646,11 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   state.pendingActions = {};
   state.combatHistory = [];
 
-  // 🃏 SUMMONS OVERHAUL (2026-11-06): the summon system was scraped —
-  // summons return as special cards. No combat entities are deployed;
-  // state.summons stays an empty array so all structural spreads/checks
-  // below remain safe no-ops.
-  state.summons = [];
   // 💡 FIX #6: Reset threat for all players at combat start
   if (state.players) threatSystem.resetThreat(state.players);
   // 💡 INITIALIZE ACTION GAUGE
   const allCombatants = [
     ...state.players.filter((p) => !p.isDead),
-    ...state.summons,  // 💡 Phase 2: summons in turn order
     ...state.enemies,
   ];
 
@@ -4734,7 +4723,7 @@ async function startCombat(sock, groq, encounter, sessionKey) {
       rank: state.dungeonRank,
       floor: state.isAbyss ? state.abyssFloor : 0,
       backgroundPath: state.backgroundPath,
-      summons: state.summons || [],
+      summons: [],
       encounterInfo: {
         ...encounter,
         rank: state.dungeonRank,
@@ -4860,7 +4849,7 @@ function _deathPump() {
 }
 function _deathEnqueue(run) { return new Promise((resolve) => { if (_deathQueue.length > 16) return resolve(null); _deathQueue.push({ run, resolve }); _deathPump(); }); }
 const _deathEligible = (state) => !!(state && state.chatId && state.isAbyss !== true && !(state.mode === 'RUINS' && state.ruinsMeta));
-const _aliveSig = (state) => (state.players || []).filter((p) => p && !p.isDead && (p.stats ? p.stats.hp > 0 : true)).length + '/' + (state.summons || []).filter((s) => s && !s.isDead).length;
+const _aliveSig = (state) => (state.players || []).filter((p) => p && !p.isDead && (p.stats ? p.stats.hp > 0 : true)).length;
 // ⚡ one layered scene per fight (all enemies standing) shared by every death bake - one Go call instead of one per enemy
 function _deathScene(state) {
   const key = (state.combatGen || 0) + ':' + (state.enemies || []).length + ':' + _aliveSig(state);
@@ -4872,7 +4861,7 @@ function _deathScene(state) {
     const layers = await Promise.race([
       combatImageGenerator.generateCombatLayers(state.players || [], roster, {
         combatType: 'PVE', rank: state.dungeonRank, floor: 0, backgroundPath: state.backgroundPath || undefined,
-        summons: state.summons || [], hud: 'none', bypassQueue: true, focusSide: 'enemy', focusIndex: 0,
+        summons: [], hud: 'none', bypassQueue: true, focusSide: 'enemy', focusIndex: 0,
       }),
       // 30s: the box's COLD first scene measured 17.2s (14:16:54) — the old
       // 20s cap was one bad Go round away from killing every first bake.
@@ -4894,7 +4883,7 @@ async function _bakeDeathClip(state, e, i) {
       layers = await Promise.race([
         combatImageGenerator.generateCombatLayers(state.players || [], roster, {
           combatType: 'PVE', rank: state.dungeonRank, floor: 0, backgroundPath: state.backgroundPath || undefined,
-          summons: state.summons || [], hud: 'none', bypassQueue: true, focusSide: 'enemy', focusIndex: i,
+          summons: [], hud: 'none', bypassQueue: true, focusSide: 'enemy', focusIndex: i,
         }),
         new Promise((r) => setTimeout(() => r(null), 20000)),
       ]);
@@ -4928,7 +4917,7 @@ async function _bakeGroupDeathClip(state, dying) {
       layers = await Promise.race([
         combatImageGenerator.generateCombatLayers(state.players || [], roster, {
           combatType: 'PVE', rank: state.dungeonRank, floor: 0, backgroundPath: state.backgroundPath || undefined,
-          summons: state.summons || [], hud: 'none', bypassQueue: true, focusSide: 'enemy', focusIndex: need[0],
+          summons: [], hud: 'none', bypassQueue: true, focusSide: 'enemy', focusIndex: need[0],
         }),
         new Promise((r) => setTimeout(() => r(null), 20000)),
       ]);
@@ -6619,7 +6608,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
       // turn whenever a silenced enemy picked a skill.
       let decision = monsterSkills.evaluateAction(
         enemy,
-        [...state.players, ...(state.summons || [])],
+        state.players,
         state.enemies,
       );
 
@@ -6671,7 +6660,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
         // for a follow-up. This handles the chargeTime pattern where the
         // same skill fires after a delay.
         if (skillData && !skillData.nextSkill) {
-          const target = enemy.chargeTarget || [...state.players, ...(state.summons || [])].find((p) => !p.isDead);
+          const target = enemy.chargeTarget || state.players.find((p) => !p.isDead);
           try {
             await boundedSend(sock, chatId, {
               text: `💥 *${enemy.name}* UNLEASHES *${skillData.name}*!`,
@@ -6712,7 +6701,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
           );
           // 💡 FIX #1: include summons in charge-release target fallback
         const target =
-            enemy.chargeTarget || [...state.players, ...(state.summons || [])].find((p) => !p.isDead);
+            enemy.chargeTarget || state.players.find((p) => !p.isDead);
 
           try {
             await boundedSend(sock, chatId, {
@@ -6926,7 +6915,7 @@ async function performEnemyAction(sock, enemy, sessionKey) {
       let target = decision.target;
       if (!target || target.isDead) {
         // 💡 FIX #1: include summons in the fallback target list
-        const alive = [...state.players, ...(state.summons || [])].filter((p) => !p.isDead);
+        const alive = state.players.filter((p) => !p.isDead);
         if (alive.length === 0) {
           setTimeout(() => resolve(), turnDelay);
           return;
@@ -6964,76 +6953,12 @@ async function performEnemyAction(sock, enemy, sessionKey) {
           return;
         }
 
-        // 💡 FIX #2 (2026-08-15): Summon guard/intercept - if the target is being
-        // guarded by a summon (guardedBy flag set by summonAI.js:244), redirect
-        // guardInterceptPct% of the damage to the summon. This wires up what was
-        // previously dead code: summonAI set the flags but nothing read them.
-        let actualDamage = damage;
-        let interceptMsg = '';
-        if (target.guardedBy && state.summons) {
-          const guardian = state.summons.find(s =>
-            s.id === target.guardedBy && !s.isDead && s.stats?.hp > 0
-          );
-          if (guardian && target.guardInterceptPct > 0) {
-            const intercepted = Math.floor(damage * target.guardInterceptPct / 100);
-            if (intercepted > 0) {
-              guardian.stats.hp = Math.max(0, (guardian.stats.hp || 0) - intercepted);
-              guardian.currentHP = guardian.stats.hp;
-              actualDamage = damage - intercepted;
-              interceptMsg = `\n🛡️ ${guardian.icon || '🐉'} ${guardian.name} intercepts ${intercepted} damage for ${target.name}!`;
-              if (guardian.stats.hp <= 0) {
-                guardian.isDead = true;
-                guardian.justDied = true;
-                interceptMsg += `\n💀 ${guardian.name} falls protecting ${target.name}!`;
-              }
-            }
-          }
-        }
-
-        // 💡 FIX #4 (2026-08-15): AI auto-intercept - protective summons
-        // automatically jump in front of attacks when their owner is below
-        // 30% HP. This makes summons feel "alive" without player input.
-        // Unlike the committed guard (Fix #2), this is reactive and free -
-        // it doesn't consume the summon's turn. The 30% chance prevents
-        // it from triggering every attack.
-        //
-        // Conditions: no active guard, target is a player, HP < 30%,
-        // summon is PROTECTIVE with loyalty >= 50 and HP > 50%.
-        if (!target.guardedBy && !target.isSummon && !target.isEnemy &&
-            target.jid && state.summons && actualDamage > 0) {
-          const targetMaxHp = target.maxHp || target.stats?.maxHp || 1;
-          if (target.currentHP / targetMaxHp < 0.30) {
-            const protector = state.summons.find(s =>
-              !s.isDead &&
-              s.stats?.hp > 0 &&
-              s.summonerJid === target.jid &&
-              s.personality === 'PROTECTIVE' &&
-              (s.loyalty || 0) >= 50 &&
-              s.stats.hp > (s.maxHp || s.stats?.maxHp || 1) * 0.5 &&
-              s.id !== target.guardedBy  // don't double-intercept
-            );
-            if (protector && Math.random() < 0.30) {
-              // Summon takes the FULL hit
-              const intercepted = actualDamage;
-              protector.stats.hp = Math.max(0, (protector.stats.hp || 0) - intercepted);
-              protector.currentHP = protector.stats.hp;
-              actualDamage = 0;
-              interceptMsg += `\n🛡️ ${protector.icon || '🐉'} ${protector.name} jumps in front of ${target.name}, taking the full blow (${intercepted} damage)!`;
-              if (protector.stats.hp <= 0) {
-                protector.isDead = true;
-                protector.justDied = true;
-                interceptMsg += `\n💀 ${protector.name} sacrifices itself to save ${target.name}!`;
-              }
-            }
-          }
-        }
-
-        target.stats.hp -= actualDamage;
+        target.stats.hp -= damage;
         target.currentHP = Math.max(0, target.stats.hp);
 
         const durabilitySystem = require('../inventory/durabilitySystem');
         durabilitySystem.applyWear(target, 'ARMOR_PIECES', { combatHistory: state.combatHistory, amount: 0.5 });
-        resultMsg += `attacks ${target.name} for 💥 ${actualDamage} damage!${isCrit ? " (CRIT!)" : ""}${interceptMsg}`;
+        resultMsg += `attacks ${target.name} for 💥 ${damage} damage!${isCrit ? " (CRIT!)" : ""}`;
         turnInfo.damage = damage;
         turnInfo.target = target;
 
@@ -7439,7 +7364,7 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
           backgroundPath: state.backgroundPath,
           rank: state.dungeonRank,
           floor: state.isAbyss ? state.abyssFloor : 0,
-          summons: state.summons || [],
+          summons: [],
         },
       );
       const timeoutPromise = new Promise((_, reject) =>
@@ -8661,10 +8586,6 @@ async function handleAbyssVictory(sock, sessionKey) {
     } catch (e) {}
   }
 
-  // 🃏 SUMMONS OVERHAUL (2026-11-06): summon fragments no longer drop.
-  // In-flight wild_summon floors still resolve as normal fights.
-  let fragmentMsg = '';
-
   // 💡 2026-09-17 PACK FIGHTS: queued pack members jump in one after
   // another on the SAME floor - no HP reset, +25% rewards per add. The
   // floor only advances once the whole pack is down (bosses/wild summons
@@ -8745,7 +8666,7 @@ async function handleAbyssVictory(sock, sessionKey) {
   if (run.isCoop) {
     msg += `${coopPayoutMsg}`;
   } else {
-    msg += `🎁 +${rewards.xp} XP, +${rewards.gold} Zeni${runeMsg}${fragmentMsg}\n`;
+    msg += `🎁 +${rewards.xp} XP, +${rewards.gold} Zeni${runeMsg}\n`;
   }
   msg += `❤️ HP: ${Math.floor(run.currentHp)}/${Math.floor(run.playerSnapshot?.maxHp || 0)}\n\n`;
 
@@ -12498,7 +12419,7 @@ async function _playUltimateVfx(sock, player, ability, effect, targetIndex, chat
             rank: state.dungeonRank,
             floor: state.isAbyss ? state.abyssFloor : 0,
             backgroundPath: state.backgroundPath || undefined,
-            summons: state.summons || [],
+            summons: [],
             hud: 'none',
             bypassQueue: true,
           };
