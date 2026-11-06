@@ -19,7 +19,6 @@ Ownership is stored in User.summonCards, separate from UserCard. Only moderators
 - .j mod grantsummoncard @user ifrit
 - .j mod revokesummoncard @user leviathan
 - .j mod revokesummoncard @user all
-- .j summon / .j summoncards lists owned cards.
 
 Future acquisition adapters are reserved, but automatic acquisition is disabled. No drops, shop, trading, or event acquisition are wired.
 
@@ -33,8 +32,8 @@ Gameplay resolution is in Node through guildAdventure.js and existing damage/sta
 
 ## GIF pipeline
 
-Node calls POST /api/combat/summon-card in BrainMell/Bot_genaration. Go renders the live combat roster and card-specific VFX into a multi-frame GIF using the existing combat animator. Node validates the GIF signature and sends untouched bytes as image/gif; no ffmpeg or MP4 conversion is involved.
+Node calls POST /api/combat/summon-card.gif in BrainMell/Bot_genaration. Go renders the live combat roster and card-specific VFX into a multi-frame GIF using the existing combat animator. Node validates the GIF signature and sends untouched bytes as image/gif; no ffmpeg or MP4 conversion is involved.
 
 ## QA
 
-Run node scripts/qa_summon_cards.js for ownership, acquisition gating, target/turn/energy/cooldown validation, independent cooldowns, effects, and no-weapon-wear checks.
+Run node scripts/qa_summon_cards.js for ownership, acquisition gating, target/turn/energy/cooldown validation, independent cooldowns, effects, and no-weapon-wear checks. Run the Go package tests in pkg/combat for GIF encoding and card-to-VFX mapping.
