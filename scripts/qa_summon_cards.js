@@ -47,8 +47,10 @@ async function main() {
 
   assert.strictEqual(f.system.grantCard(f.player.jid, 'ifrit', 'moderator-1').success, true);
   assert.strictEqual(f.system.grantCard(f.player.jid, 'ifrit', 'moderator-1').success, false);
-  assert.strictEqual(f.system.getOwnedCards(f.player.jid).length, 1);
+  assert.strictEqual(f.system.grantCard(f.player.jid, 'leviathan', 'moderator-1').success, true);
+  assert.strictEqual(f.system.getOwnedCards(f.player.jid).length, 2);
   assert.match(f.system.renderTray(f.player.jid, f.state, '.e'), /Ifrit READY/);
+  assert.match(f.system.renderTray(f.player.jid, f.state, '.e'), /Leviathan READY/);
   assert.match(f.system.renderTray(f.player.jid, f.state, '.e'), /\.e combat summon/);
   assert.strictEqual(f.system.acquireCard(f.player.jid, 'shiva', 'quest', 'system').success, false);
 
@@ -56,6 +58,8 @@ async function main() {
   assert.strictEqual(f.system.prepareActivation('other@s.whatsapp.net', 'ifrit', f.state, f.player, 0).ok, false);
   assert.strictEqual(f.system.prepareActivation(f.player.jid, 'ifrit', f.state, f.player, 9).ok, false);
   assert.strictEqual(f.system.prepareActivation(f.player.jid, 'shiva', f.state, f.player, 0).ok, false);
+  const lowEnergyPlayer = { ...f.player, stats: { ...f.player.stats, energy: 1 } };
+  assert.strictEqual(f.system.prepareActivation(f.player.jid, 'ifrit', f.state, lowEnergyPlayer, 0).ok, false);
   assert.strictEqual(f.system.prepareActivation(f.player.jid, 'ifrit', { ...f.state, isPvP: true }, f.player, 0).ok, false);
   assert.strictEqual(f.system.prepareActivation(f.player.jid, 'ifrit', { ...f.state, activeCombatant: { jid: 'other' } }, f.player, 0).ok, false);
 
@@ -76,6 +80,9 @@ async function main() {
 
   f.state.summonCardTurnCounts[f.player.jid] = 2;
   assert.strictEqual(f.system.cooldownFor(f.player.jid, 'ifrit', f.state).turnsLeft, 3);
+  assert.strictEqual(f.system.cooldownFor(f.player.jid, 'leviathan', f.state).ready, true);
+  assert.match(f.system.renderTray(f.player.jid, f.state, '.e'), /Ifrit ⏳ 3T/);
+  assert.match(f.system.renderTray(f.player.jid, f.state, '.e'), /Leviathan READY/);
   f.state.summonCardTurnCounts[f.player.jid] = 4;
   assert.strictEqual(f.system.cooldownFor(f.player.jid, 'ifrit', f.state).ready, false);
   f.state.summonCardTurnCounts[f.player.jid] = 5;
@@ -87,7 +94,7 @@ async function main() {
   f.state.mode = 'PVE';
 
   assert.ok(f.saved.includes(f.player.jid), 'moderator grant should persist ownership');
-  assert.strictEqual(f.system.revokeCard(f.player.jid, 'all').removed, 1);
+  assert.strictEqual(f.system.revokeCard(f.player.jid, 'all').removed, 2);
   assert.strictEqual(f.system.renderTray(f.player.jid, f.state), '');
   console.log('summon-card QA: PASS');
 }
