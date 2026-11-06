@@ -5897,8 +5897,8 @@ async function promptPlayerAction(sock, player, sessionKey) {
     msg += `📋 ${player.statusEffects.map((e) => e.icon).join(" ")}\n`;
   }
 
-  const summonCardTray = require('../summonCards').renderTray(player.jid, state, botConfig.getPrefix());
-  if (summonCardTray) msg += '\n' + summonCardTray + '\n';
+  // 🃏 owner 2026-11-06: no deck list text on the per-turn prompt — the hand lives on the battle card tray,
+  // and the fanned hand image ships only with .j combat summon replies (short caption).
 
   const livingEnemies = (state.enemies || []).filter((e) => !e.isDead);
   if (livingEnemies.length > 0) {
@@ -5927,20 +5927,9 @@ async function promptPlayerAction(sock, player, sessionKey) {
   }
 
   try {
-    // 🃏 Summon-card HAND: players who own cards get the fanned hand image with the turn prompt as its caption.
-    let handPng = null;
-    try {
-      const sc = require('../summonCards');
-      if (sc.getOwnedCards(player.jid).length) {
-        handPng = await Promise.race([sc.renderHandImage(player.jid, state, player), new Promise((r) => setTimeout(() => r(null), 5000))]);
-      }
-    } catch (handErr) { handPng = null; }
-    if (handPng) {
-      try { await boundedSend(sock, state.chatId, { image: handPng, caption: msg }); }
-      catch (imgErr) { await boundedSend(sock, state.chatId, { text: msg }); }
-    } else {
-      await boundedSend(sock, state.chatId, { text: msg });
-    }
+    // 🃏 owner 2026-11-06: the per-turn prompt is TEXT ONLY again — the fanned hand image was shipping
+    // with the whole prompt as its caption every single turn. It now goes out only on .j combat summon.
+    await boundedSend(sock, state.chatId, { text: msg });
   } catch (err) {
     console.error(
       "Failed to send player prompt in promptPlayerAction:",
@@ -6339,11 +6328,12 @@ async function performAction(sock, player, action, sessionKey) {
             damage: activation.damage, healing: activation.healing, missed: activation.wasEvaded,
           });
         }
-        // Keep the renderer's GIF bytes intact: never send this as MP4/video.
+        // owner 2026-11-06: GIFs arrived as downloadable documents 🤣 — send with gifPlayback so WhatsApp
+        // plays them inline (Baileys pattern: raw GIF bytes in the video field + gifPlayback; bytes stay GIF).
         await boundedSend(sock, state.chatId, {
-          document: gif,
+          video: gif,
           mimetype: 'image/gif',
-          fileName: activation.card.id + '-summon.gif',
+          gifPlayback: true,
           caption: '✨ ' + activation.card.abilityName,
         });
       } catch (gifErr) {
@@ -12200,9 +12190,21 @@ const handleCombatAction = async (
     const parts = String(target || '').trim().split(/\s+/).filter(Boolean);
     const enemyNumber = /^\d+$/.test(parts[parts.length - 1] || '') && parts.length > 1 ? parseInt(parts.pop(), 10) : NaN;
     const cardId = parts.join(' ');   // number from the hand image, or a (multi-word) card name
-    if (!cardId) return '❌ Usage: ' + botConfig.getPrefix() + ' combat summon <#|name> [enemy#]\nExample: ' + botConfig.getPrefix() + ' combat summon 1 2';
+    // 🃏 owner 2026-11-06: the fanned hand image ships ONLY with .j combat summon replies (short caption, never per-turn).
+    const usageLine = '❌ Usage: ' + botConfig.getPrefix() + ' combat summon <#|name> [enemy#]\nExample: ' + botConfig.getPrefix() + ' combat summon 1 2';
+    const sendHand = async (caption) => {
+      try {
+        const sc = require('../summonCards');
+        if (!sc.getOwnedCards(senderJid).length) return false;
+        const hand = await Promise.race([sc.renderHandImage(senderJid, state, player), new Promise((r) => setTimeout(() => r(null), 5000))]);
+        if (!hand) return false;
+        await boundedSend(sock, chatId, { image: hand, caption });
+        return true;
+      } catch (handErr) { return false; }
+    };
+    if (!cardId) return (await sendHand('🃏 Your hand — play with ' + botConfig.getPrefix() + ' combat summon <#|name> [enemy#]')) ? '' : usageLine;
     const prepared = require('../summonCards').prepareActivation(senderJid, cardId, state, player, Number.isInteger(enemyNumber) ? enemyNumber - 1 : undefined);
-    if (!prepared.ok) return prepared.message;
+    if (!prepared.ok) return (await sendHand(prepared.message)) ? '' : prepared.message;
     action.cardId = prepared.cardId;
     action.targetIndex = prepared.targetIndex;
   }
