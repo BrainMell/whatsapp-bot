@@ -896,7 +896,12 @@ async function renderUltimateVideo(o) {
     const hudIcons = o.hud && typeof o.hud === 'object' ? await loadHudIcons() : null;
     if (hudIcons && !o.hud._portrait) {   // round portrait for the HUD plate: the caster's own cutout (head/shoulders crop happens in the painter)
         try {
-            const cut = (o.layers && Array.isArray(o.layers.cuts) ? o.layers.cuts : []).find((x) => x.side === (o.side || 'player') && x.index === (Number(o.casterIndex) || 0) && x.png);
+            // 🧠 v6.1 FIX (owner 2026-11-07: "the player info at the bottom left, the image is of
+            // the enemy and not of the player"): o.side is the EFFECT-ORIGIN side — every offensive
+            // signature has side 'enemy' because the VFX erupts on the target's side of the field.
+            // The HUD plate is the CASTER'S info panel, so the portrait must always come from the
+            // caster's own roster slot (player side + casterIndex), never from the effect side.
+            const cut = (o.layers && Array.isArray(o.layers.cuts) ? o.layers.cuts : []).find((x) => x.side === 'player' && x.index === (Number(o.casterIndex) || 0) && x.png);
             if (cut) o.hud._portrait = await loadImage(Buffer.from(cut.png, 'base64'));
         } catch (e) { /* letter fallback */ }
     }

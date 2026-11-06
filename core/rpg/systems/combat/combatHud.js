@@ -186,11 +186,11 @@ function capsule(c, x, y, w, h, pct, kind, label, s) {
   c.font = `bold ${Math.max(9, h * 0.62)}px sans-serif`; c.textBaseline = 'middle'; shadowText(c, label, x + w / 2, y + h / 2 + 1, '#fff7e0', 'center');
 }
 
-/** Slim overhead HP bar + name for a battlefield unit. Kept for compatibility (ultimate-video
- * callers may still want it), but the v6 battle card no longer draws overhead bars — the
- * plate is the single HP/MP display (owner 2026-11-07: old bars removed). */
+/** Slim overhead HP bar + name for a battlefield unit. v6.1: BACK on the battle card (owner:
+ * "keep the one where the players is green and the enemies is red"). Green capsule on the player
+ * roster, red on enemies, crimson on bosses. u.yOff lifts the bar above a status-badge row. */
 function drawUnitBar(c, a, u, s = 1) {
-  const w = Math.max(70, Math.min(120, (a.w || 90) * 0.9)) * s, h = (u.isBoss ? 11 : 8) * s, x = a.x * s - w / 2, y = (a.feetY - (a.h || 120)) * s - 16 * s;
+  const w = Math.max(70, Math.min(120, (a.w || 90) * 0.9)) * s, h = (u.isBoss ? 11 : 8) * s, x = a.x * s - w / 2, y = (a.feetY - (a.h || 120)) * s - 16 * s - (Number(u.yOff) || 0) * s;
   capsuleThin(c, x, y, w, h, u.maxHp > 0 ? u.hp / u.maxHp : 0, u.isBoss ? '#c0392b' : (u.friendly ? '#3fae5a' : '#d2552e'), s);
   c.font = `bold ${12 * s}px sans-serif`; c.textBaseline = 'bottom'; shadowText(c, String(u.name || ''), a.x * s, y - 2 * s, '#fbf4e2', 'center');
 }
@@ -200,12 +200,13 @@ function capsuleThin(c, x, y, w, h, pct, col, s) {
   rr(c, x, y, w, h, h / 2); c.lineWidth = 1.3 * s; c.strokeStyle = 'rgba(214,174,78,0.85)'; c.stroke();
 }
 
-/** Long summon-card hand along the bottom (v6 GLASS SHELF board — no rail strap, no label text).
- * The board: soft ground shadow under the whole hand, a translucent panel that fades downward
- * into the scene, a hairline gold lip with a soft glow and twin diamond studs at both ends.
- * The LAST card is raised, scaled and glowing above the hand - the deck-builder "newest card"
- * convention (Slay the Spire / Balatro / Hearthstone). Only call when entries.length > 0.
- * entries: [{card, ready, turnsLeft, affordable}] */
+/** Long summon-card hand along the bottom (v6.1 FLOATING HAND — owner 2026-11-07: the shelf/board
+ * chrome still "looks like shit, look up others design"). Reference decks (Slay the Spire,
+ * Hearthstone, Balatro) float the hand over the scene with NO board: readability comes from a
+ * soft dark scrim behind the band and a per-card contact shadow, not from panel chrome — so the
+ * glass shelf, gold lip and studs are retired. All cards sit LEVEL; the always-raised glowing
+ * last card is gone (owner: "why is the one card at the far right always the only one lifted up??").
+ * Only call when entries.length > 0. entries: [{card, ready, turnsLeft, affordable}] */
 async function drawDeckTray(c, entries, s = 1, x0 = 330, y0 = DH - 96, x1 = DW - 18) {
   init();
   const { RARITY, ELEMENT_COLORS } = require('../summonCards/catalog');
@@ -219,50 +220,39 @@ async function drawDeckTray(c, entries, s = 1, x0 = 330, y0 = DH - 96, x1 = DW -
   const maxFit = Math.max(1, Math.floor((usable - cw) / minStep) + 1);
   const shown = entries.slice(0, Math.min(n, maxFit));
   const more = n - shown.length;
-  const step = shown.length > 1 ? Math.min(cw + 5 * s, Math.max(minStep, (usable - cw) / (shown.length - 1))) : 0;
-  // 1. soft ground shadow under the whole hand (grounds it like a held hand on a table)
-  const midX = X + W / 2, gY = Y + H * 0.94;
-  c.save(); c.translate(midX, gY); c.scale(1, 0.24); c.translate(-midX, -gY);
-  const gs = c.createRadialGradient(midX, gY, 8 * s, midX, gY, W * 0.52);
-  gs.addColorStop(0, 'rgba(0,0,0,0.5)'); gs.addColorStop(1, 'rgba(0,0,0,0)');
-  c.fillStyle = gs; c.beginPath(); c.arc(midX, gY, W * 0.52, 0, Math.PI * 2); c.fill(); c.restore();
-  // 2. glass shelf: translucent panel, fades downward - no hard bottom edge, no strap look
-  const top = Y - 6 * s, bot = Y + H + 18 * s;
+  const step = shown.length > 1 ? Math.min(cw + 12 * s, Math.max(minStep, (usable - cw) / (shown.length - 1))) : 0;
+  // centre the hand inside the band (with no board chrome a left-bunched hand reads as broken —
+  // the old spotlight used to soak up the slack on the right)
+  const handW = (shown.length > 1 ? (shown.length - 1) * step : 0) + cw;
+  const startX = X + padL + Math.max(0, (usable - handW) / 2);
+  // 1. soft ground pool behind the hand — RADIAL, so there are no hard edges on any stage
+  //    (battle card scene or the flat hand-image backdrop); readability without board chrome
+  const cxm = startX + handW / 2, cym = Y + H * 0.52;
+  const poolRx = Math.max(handW * 0.78, 340 * s), poolRy = H * 0.95;
   c.save();
-  rr(c, X + 2 * s, top, W - 4 * s, bot - top, 10 * s);
-  const sg = c.createLinearGradient(0, top, 0, bot);
-  sg.addColorStop(0, 'rgba(7,11,22,0.66)');
-  sg.addColorStop(0.5, 'rgba(6,9,18,0.46)');
-  sg.addColorStop(1, 'rgba(5,8,16,0.05)');
-  c.fillStyle = sg; c.fill(); c.restore();
-  // 3. hairline gold lip along the top edge, with a soft glow (the shelf reads as glass + gold)
-  c.save(); c.shadowColor = 'rgba(255,214,102,0.5)'; c.shadowBlur = 7 * s;
-  c.strokeStyle = goldGrad(c, X, X + W); c.lineWidth = 1.6 * s;
-  c.beginPath(); c.moveTo(X + 10 * s, top); c.lineTo(X + W - 10 * s, top); c.stroke(); c.restore();
-  c.save(); c.globalAlpha = 0.30; c.strokeStyle = '#d6ae4e'; c.lineWidth = 0.8 * s;
-  c.beginPath(); c.moveTo(X + 12 * s, top + 3.4 * s); c.lineTo(X + W - 12 * s, top + 3.4 * s); c.stroke(); c.restore();
-  // 4. twin diamond studs at both ends of the lip
-  for (const dx of [X + 16 * s, X + W - 16 * s]) {
-    c.save(); c.translate(dx, top); c.rotate(Math.PI / 4);
-    c.shadowColor = 'rgba(0,0,0,0.5)'; c.shadowBlur = 3 * s;
-    c.fillStyle = '#e7c766'; const r2 = 3.2 * s; c.fillRect(-r2, -r2, r2 * 2, r2 * 2); c.restore();
-  }
-  // spotlight pool under the standout (last) card
-  const lift = 16 * s, scale = 1.3;
-  const lastX = X + padL + (shown.length - 1) * step + cw / 2;
-  const sp = c.createRadialGradient(lastX, Y + H / 2, 4, lastX, Y + H / 2, cw * 1.7);
-  sp.addColorStop(0, 'rgba(255,214,102,0.30)'); sp.addColorStop(1, 'rgba(255,214,102,0)');
-  c.save(); c.beginPath(); c.ellipse(lastX, Y + H / 2 + 6 * s, cw * 1.8, ch * 0.95, 0, 0, Math.PI * 2); c.fillStyle = sp; c.fill(); c.restore();
+  c.translate(cxm, cym); c.scale(1, poolRy / poolRx); c.translate(-cxm, -cym);
+  const pool = c.createRadialGradient(cxm, cym, 10 * s, cxm, cym, poolRx);
+  pool.addColorStop(0, 'rgba(2,4,9,0.52)');
+  pool.addColorStop(0.6, 'rgba(2,4,9,0.30)');
+  pool.addColorStop(1, 'rgba(2,4,9,0)');
+  c.fillStyle = pool; c.beginPath(); c.arc(cxm, cym, poolRx, 0, Math.PI * 2); c.fill();
+  c.restore();
+  // 2. the hand: every card LEVEL, each grounded by its own contact shadow (Slay-the-Spire
+  //    grounding — a squashed radial pool under the card's bottom edge)
   for (let i = 0; i < shown.length; i++) {
-    const isLast = i === shown.length - 1;
-    const sc2 = isLast ? scale : 1;
-    const ang = isLast ? 0 : (i - (shown.length - 1) / 2) * 1.1 * Math.PI / 180;
-    const x = X + padL + i * step;
-    const y = Y + (H - ch) / 2 - (isLast ? lift : 0);
-    await drawMiniCard(c, shown[i], i, x, y, cw, ch, { s, sc: sc2, ang, standout: isLast, rar: RARITY, el: ELEMENT_COLORS, artFor });
+    const ang = (i - (shown.length - 1) / 2) * 1.1 * Math.PI / 180;
+    const x = startX + i * step;
+    const y = Y + (H - ch) / 2;
+    c.save();
+    c.translate(x + cw / 2, y + ch + 3 * s); c.scale(1, 0.2);
+    const sh = c.createRadialGradient(0, 0, 2 * s, 0, 0, cw * 0.62);
+    sh.addColorStop(0, 'rgba(0,0,0,0.5)'); sh.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = sh; c.beginPath(); c.arc(0, 0, cw * 0.62, 0, Math.PI * 2); c.fill();
+    c.restore();
+    await drawMiniCard(c, shown[i], i, x, y, cw, ch, { s, sc: 1, ang, standout: false, rar: RARITY, el: ELEMENT_COLORS, artFor });
   }
   if (more > 0) {
-    const px = X + padL + shown.length * step + 4 * s, py = Y + H / 2;
+    const px = startX + (shown.length - 1) * step + cw + 6 * s, py = Y + H / 2;
     rr(c, px, py - 13 * s, 40 * s, 26 * s, 13 * s); c.fillStyle = 'rgba(12,10,6,0.9)'; c.fill();
     c.lineWidth = 1.6 * s; c.strokeStyle = '#c9a13b'; c.stroke();
     c.fillStyle = '#e7c766'; c.font = `bold ${15 * s}px HudCinzel, serif`; c.textAlign = 'center'; c.textBaseline = 'middle';

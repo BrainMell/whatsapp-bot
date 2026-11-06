@@ -983,7 +983,9 @@ async function animateUltimate(options = {}) {
   try {
     for (let i = 0; i < messages.length; i++) {
       await sendText(messages[i]);
-      if (i < messages.length - 1) await wait(i === 0 ? 400 : 450);
+      // owner 2026-11-07: "the 3 messages before the card should be well spaced like 2 seconds
+      // apart, not instantly after the other" — a real channel cadence instead of a burst
+      if (i < messages.length - 1) await wait(2000);
     }
     const cacheHit = Buffer.isBuffer(options.baseSceneBuffer) && options.baseSceneBuffer.length > 1000;
     console.log('[SkillVFX] cast ' + classId + '/' + ability.id + ' entry=' + entry.style + ' cache=' + (cacheHit ? 'hit' : 'miss') + ' target=' + (target && (target.name || target.id) || 'enemy'));

@@ -1,10 +1,10 @@
 'use strict';
-// ⚔️ Node-composed PvE battle card (HUD v6). Go supplies the HUD-less + BAR-less layered scene
-// (bg + sprites + cuts + anchors, hud:"none-clean" — owner 2026-11-07: the legacy overhead HP
-// bars/nameplates showed alongside the new plate; they are gone from the card entirely, the
-// compact plate is the single HP/MP display). Node paints the turn marker, hit flash, rank chip,
-// compact player plate and (only when the active player owns summon cards) the long deck tray.
-// Returns null on ANY problem so the caller falls back to the Go card.
+// ⚔️ Node-composed PvE battle card (HUD v6.1). Go supplies the HUD-less + nameplate-less layered
+// scene (bg + sprites + cuts + anchors, hud:"none-clean"). Node paints: the slim OVERHEAD HP BARS
+// (v6.1 RESTORED — owner: "keep the one where the players is green and the enemies is red"; Go's
+// legacy red bars + name pills stay stripped), turn marker, hit flash, unit status visuals (shield
+// bubbles + badges), rank chip, compact player plate and (when the active player owns summon
+// cards) the floating deck hand. Returns null on ANY problem so the caller falls back to the Go card.
 const { createCanvas, loadImage } = require('canvas');
 const hud = require('./combatHud');
 
@@ -36,9 +36,21 @@ async function renderNodeCard(players, enemies, options, api) {
       } catch (e) { /* cosmetic */ }
     }
   }
-  // (v6: NO overhead unit bars — the plate is the single HP/MP display on the card; Go's legacy
-  // nameplates/bars are stripped server-side via hud:"none-clean")
-  const pl = payload.players || [];
+  // overhead unit bars — v6.1 RESTORED (owner 2026-11-07: "both are gone now instead of the one,
+  // keep the one where the players is green and the enemies is red"). These slim Node bars ARE
+  // that display: green fill on the player roster, red on enemies / crimson on bosses. Go's
+  // legacy nameplate pills stay stripped server-side via hud:"none-clean". A unit with status
+  // badges lifts its bar above the badge row so the two never collide. Raw rosters feed the bars
+  // (payload strips statusEffects, and HP lives on the same live objects).
+  for (const a of anchors) {
+    if (a.side !== 'player' && a.side !== 'enemy') continue;
+    const u = a.side === 'enemy' ? enemies[a.index] : players[a.index];
+    if (!u || u.isDead || u.justDied) continue;
+    const hp = Number(u.currentHP ?? (u.stats && u.stats.hp) ?? 0); if (hp <= 0) continue;
+    const maxHp = Number(u.maxHp ?? (u.stats && u.stats.maxHp) ?? 0);
+    const fxCount = Array.isArray(u.statusEffects) ? u.statusEffects.filter((e) => e && e.icon).length : 0;
+    hud.drawUnitBar(c, a, { name: u.name, hp, maxHp, isBoss: u.isBoss, friendly: a.side === 'player', yOff: fxCount ? 26 : 0 }, s);
+  }
   // unit status visuals over the sprites: shield bubble (absorb) + floating status badges.
   // Data comes from the RAW rosters (payload strips statusEffects); anchors map side+index →
   // the exact sprite position (owner 2026-11-06: "some summon skills add a shield — make a
@@ -55,6 +67,7 @@ async function renderNodeCard(players, enemies, options, api) {
     hud.drawStatusBadges(c, a, fx, s);
   }
   // rank chip
+  const pl = payload.players || [];
   const rank = String(options.rank || (pl[0] && pl[0].adventurerRank) || 'F').toUpperCase();
   hud.drawRankBanner(c, options.floor > 0 ? 'FLOOR ' + options.floor : rank + ' RANK', s);
   // compact player plate (the unit whose turn it is, else the first player)

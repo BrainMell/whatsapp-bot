@@ -4946,16 +4946,29 @@ async function _bakeGroupDeathClip(state, dying) {
   } catch (err) { console.warn('[DeathFx] group bake threw:', err && err.message || err); return null; }
 }
 // ☠️ caption for a held death item — a group unit names every member
-// ("☠️ *A*, *B* & *C* fall!"); solo items keep the exact old line
-function _deathCaption(item) {
+// ("☠️ *A*, *B* & *C* fall!"); solo items keep the exact old line.
+// v6.1 (owner 2026-11-07: "the caption of the death animation for regular enemies still
+// doesn't list the combat logs"): when the caller passes the fight state, the turn's combat
+// log lines ride the caption (the same narration the war-log board prints). Standalone sends
+// (fight-ending kill, self-drain, stale flush) get the logs; the kill-turn MERGE path passes
+// NO state because the merged board caption already carries the full war log.
+function _deathCaption(item, state) {
+  let cap;
   const grp = (item.clip && item.clip.group) || null;
   if (grp && grp.length > 1) {
     const names = grp.map((g) => `*${(g && g.name) || 'The enemy'}*`);
     const last = names.pop();
     const boss = grp.some((g) => g && (g.isBoss || g.boss || /boss/i.test(String(g.rank || g.tier || ''))));
-    return `☠️ ${names.join(', ')} & ${last} ${boss ? 'are destroyed!' : 'fall!'}`;
+    cap = `☠️ ${names.join(', ')} & ${last} ${boss ? 'are destroyed!' : 'fall!'}`;
+  } else {
+    cap = `☠️ *${item.e.name || 'The enemy'}* ${item.clip.boss ? 'is destroyed!' : 'falls!'}`;
   }
-  return `☠️ *${item.e.name || 'The enemy'}* ${item.clip.boss ? 'is destroyed!' : 'falls!'}`;
+  const logs = state && Array.isArray(state._lastTurnLog) ? state._lastTurnLog.filter(Boolean) : [];
+  if (logs.length) {
+    const shown = logs.slice(-6);
+    cap += '\n📜 *COMBAT LOG*\n' + shown.map((l) => '» ' + String(l)).join('\n');
+  }
+  return cap;
 }
 // JPEG dimensions without a subprocess: walk the marker segments to the SOF
 // (start-of-frame) and read width/height. Works for baseline (SOF0) and
@@ -5175,7 +5188,7 @@ async function _mergeDeathClipsWithCard(clips, cardJpeg, cardHoldSec = 1.8) {
 // unavailable / render failed — the enemy-defeat announce must never vanish)
 async function _flushHeldDeathClips(sock, state, held) {
   for (const item of held) {
-    const pl = { video: item.clip.mp4, mimetype: 'video/mp4', caption: _deathCaption(item), gifPlayback: true };
+    const pl = { video: item.clip.mp4, mimetype: 'video/mp4', caption: _deathCaption(item, state), gifPlayback: true };
     if (Buffer.isBuffer(item.clip.thumb)) pl.jpegThumbnail = item.clip.thumb;
     await sendMediaBounded(sock, state.chatId, pl, { label: 'enemyDeathVfx', ms: 12000, grace: 4000, fallbackText: null });
   }
@@ -5300,7 +5313,7 @@ async function playEnemyDeaths(sock, state, opts = {}) {
       return;
     }
     await Promise.all(ready.map((item) => {
-      const pl = { video: item.clip.mp4, mimetype: 'video/mp4', caption: _deathCaption(item), gifPlayback: true };
+      const pl = { video: item.clip.mp4, mimetype: 'video/mp4', caption: _deathCaption(item, state), gifPlayback: true };
       if (Buffer.isBuffer(item.clip.thumb)) pl.jpegThumbnail = item.clip.thumb;
       return sendMediaBounded(sock, state.chatId, pl, { label: 'enemyDeathVfx', ms: 12000, grace: 4000, fallbackText: null });
     }));
@@ -6195,6 +6208,7 @@ async function performAction(sock, player, action, sessionKey) {
             // Order seen by the chat: victory card → kill image w/ caption.
             try {
               turnInfo.actionLog = String(resultMsg || '').split('\n').map(s => s.trim()).filter(Boolean);
+              state._lastTurnLog = turnInfo.actionLog;   // 📜 death-clip captions read the latest combat log
               await nextTurn(sock, turnInfo, sessionKey);
             } catch (e) {}
 
@@ -6741,6 +6755,7 @@ async function performAction(sock, player, action, sessionKey) {
   // 💡 MERGE 2026-10-20: attach the narration before rendering so the caption
   // carries the full action log (Style C).
   turnInfo.actionLog = String(resultMsg || '').split('\n').map(s => s.trim()).filter(Boolean);
+  state._lastTurnLog = turnInfo.actionLog;   // 📜 death-clip captions read the latest combat log
   try {
     await nextTurn(sock, turnInfo, sessionKey);
   } catch (err) {
