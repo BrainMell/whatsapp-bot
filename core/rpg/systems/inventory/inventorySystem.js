@@ -110,6 +110,15 @@ function getInventoryCount(userId) {
 function hasInventorySpace(userId, amount = 1, itemId = null) {
     if (itemId) {
         const itemInfo = lootSystem.getItemInfo(itemId);
+
+    // Legacy companion eggs are retained only as sellable inventory mementos.
+    // There is no hatch command or egg acquisition path in the card system.
+    if (/^(?:basic|rare|epic|legendary|mythic)_summon_egg$|^summon_egg_/.test(itemId)) {
+        return {
+            success: false,
+            message: '🥚 *' + itemInfo.name + '* is a retired companion egg. Hatching is disabled; you can sell it or keep it as a memento.',
+        };
+    }
         if (itemInfo.type === 'MATERIAL') return true;
     }
     
@@ -1268,23 +1277,13 @@ function useItem(userId, rawItemId, targetSlot = null) {
         // are exactly the ones the effect chain has no branch for.
         return {
             success: false,
-            message: `⚔️ *${itemInfo.name}* is used by its own dedicated system, not from the bag.${itemInfo.summonItem ? `\n\nIn a summon duel, use \`${botConfig.getPrefix()} combat item\` to have your summon swallow it mid-battle.` : ''}`
+            message: itemInfo.summonItem
+                ? '⚔️ *' + itemInfo.name + '* belongs to the retired companion system and cannot be used. You can sell it or keep it as a memento.'
+                : `⚔️ *${itemInfo.name}* is used by its own dedicated system, not from the bag.`
         };
     }
 
     if (itemInfo.type !== 'CONSUMABLE' && itemInfo.type !== 'POTION') {
-        // 💡 SUMMON EGGS: hatchable items - use triggers the egg spin
-        if (itemId.endsWith('_summon_egg')) {
-            // Eggs are async (createSummon is async) but useItem is sync.
-            // Return a special marker so the caller (rpgCommands.useItem)
-            // can handle it async. We can't hatch here because createSummon
-            // is async.
-            return {
-                success: false,
-                isEgg: true,
-                message: `🥚 *${itemInfo.name}* - use \`${botConfig.getPrefix()} summon hatch\` to hatch it!`
-            };
-        }
         // Give specific guidance based on item type
         if (itemId === 'ascension_stone' || itemId === 'evolution_stone') {
             const stoneTier = itemId === 'ascension_stone' ? 'T3 Ascension' : 'T2 Evolution';
