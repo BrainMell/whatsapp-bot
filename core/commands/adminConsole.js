@@ -680,8 +680,8 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const extra1 = remaining[1] || '';
         const extra2 = remaining[2] || '';
 
-        // 🃏 SUMMONS OVERHAUL (2026-11-06): the summon system was scraped —
-        // summon granting is offline until summons return as special cards.
+        // Summon cards are owned RPG objects, not inventory items; use the
+        // moderator-only grantsummoncard / revokesummoncard commands.
 
         // 2. Try rune type
         let runeSystem;
@@ -761,7 +761,7 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         ]);
         if (SPECIAL_RPG_OBJECTS.has(item.id.toLowerCase())) {
             return await sock.sendMessage(chatId, {
-                text: BOT_MARKER + `❌ Cannot give special RPG object \`${item.id}\` via giveitem.\n\nUse the dedicated command instead:\n  • \`${prefix} mod givesummon <@user> <species> [level]\`\n  • \`${prefix} mod giverune <@user> <type> [tier]\`\n  • \`${prefix} mod forceevolve <@user> <class>\`\n  • \`${prefix} mod giveskill <@user> <skill> [level]\``
+                text: BOT_MARKER + `❌ Cannot give special RPG object \`${item.id}\` via giveitem.\n\nUse the dedicated command instead:\n  • \`${prefix} mod grantsummoncard <@user> <ifrit|leviathan|shiva>\`\n  • \`${prefix} mod revokesummoncard <@user> <card|all>\`\n  • \`${prefix} mod giverune <@user> <type> [tier]\`\n  • \`${prefix} mod forceevolve <@user> <class>\`\n  • \`${prefix} mod giveskill <@user> <skill> [level]\``
             });
         }
         const result = economy.addItem(target, item.id, qty);
