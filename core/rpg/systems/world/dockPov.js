@@ -48,7 +48,7 @@ const hashStr = (s) => K.hashStr(String(s || ''));
 
 const GW = 480, GH = 360, FRAMES = 16, DELAY_MS = 120;   // 1.92s loop
 const CONTAINER_MAGIC = 'PONDPOV2';
-const ASSET_DIR = path.join(__dirname, '..', 'assets', 'scenes');
+const ASSET_DIR = path.join(__dirname, '..', '..', '..', 'assets', 'scenes');
 const ASSET_VER = 'v2';
 
 // ── the float (Task 20 geometry verbatim — owner approved this bob) ────────

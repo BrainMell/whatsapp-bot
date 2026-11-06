@@ -32,7 +32,7 @@ let _glints = null;
 async function glints() {
     if (_glints) return _glints;
     const { createCanvas, loadImage } = require('canvas');
-    const ASSETS = path.join(__dirname, '..', 'rpgasset', 'homestead');
+    const ASSETS = path.join(__dirname, '..', '..', '..', 'rpgasset', 'homestead');
     const out = [];
     for (const f of ['base_water_0.png', 'base_water_1.png']) {
         try {

@@ -28,7 +28,7 @@ const registry = require('./summonRegistry');
 const { emojiFont, fillTextMixed } = require('../shared/emojiFont');   // 2026-10-20: emoji glyphs (owner 'number boxes' bug)
 
 // Register fonts
-const FONTS_DIR = path.join(__dirname, '..', 'rpgasset', 'fonts');
+const FONTS_DIR = path.join(__dirname, '..', '..', '..', 'rpgasset', 'fonts');
 const FONT_REG = 'Pixeloid Sans';
 const FONT_BOLD = 'Dogica Pixel Bold';
 
@@ -171,10 +171,10 @@ async function renderRoster(user, summons, options = {}) {
 
   // ── 1. Load sparklinlabs background ──
   const bgPaths = [
-    path.join(__dirname, '..', 'rpgasset', 'environment', 'spark_7.png'),
-    path.join(__dirname, '..', 'rpgasset', 'environment', 'spark_10.png'),
+    path.join(__dirname, '..', '..', '..', 'rpgasset', 'environment', 'spark_7.png'),
+    path.join(__dirname, '..', '..', '..', 'rpgasset', 'environment', 'spark_10.png'),
     path.join(__dirname, '..', 'rpgasset', 'environment', 'spark_8.png'),
-    path.join(__dirname, '..', 'rpgasset', 'backgrounds', 'background1.png'),
+    path.join(__dirname, '..', '..', '..', 'rpgasset', 'backgrounds', 'background1.png'),
   ];
   let bgLoaded = false;
   for (const bgPath of bgPaths) {

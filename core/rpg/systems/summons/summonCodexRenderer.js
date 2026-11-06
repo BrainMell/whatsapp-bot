@@ -16,7 +16,7 @@ const { emojiFont, fillTextMixed } = require('../shared/emojiFont');   // 2026-1
 let _canvas = null;
 function getCanvas() { if (!_canvas) _canvas = require('canvas'); return _canvas; }
 
-const FONTS_DIR = path.join(__dirname, '..', 'rpgasset', 'fonts');
+const FONTS_DIR = path.join(__dirname, '..', '..', '..', 'rpgasset', 'fonts');
 const FONT_REG = 'Pixeloid Sans';
 const FONT_BOLD = 'Dogica Pixel Bold';
 

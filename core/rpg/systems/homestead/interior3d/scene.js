@@ -9,7 +9,7 @@ const { loadGLB } = require('./glb');
 const { Scene } = require('./raster');
 const rooms = require('../homesteadRooms');
 
-const MODELS = path.join(__dirname, '..', '..', 'rpgasset', 'interior3d', 'models');
+const MODELS = path.join(__dirname, '..', '..', '..', '..', 'rpgasset', 'interior3d', 'models');
 const catalog = require('../../../../rpgasset/homestead/catalog.json');
 const DEFS = new Map((catalog.items || []).map((d) => [d.id, d]));
 

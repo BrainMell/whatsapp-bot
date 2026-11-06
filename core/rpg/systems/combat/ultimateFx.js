@@ -19,7 +19,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { createCanvas, loadImage } = require('canvas');
 
-const DIR = path.join(__dirname, '..', 'rpgasset', 'vfx');
+const DIR = path.join(__dirname, '..', '..', '..', 'rpgasset', 'vfx');
 const W = 640, H = 480, FPS = 15;
 const DURATION = 2.7;                 // seconds (incl. settle hold)
 const IMPACT = 1.05;                  // seconds: the hit lands
@@ -644,8 +644,8 @@ const _hudIcons = new Map();
 async function loadHudIcons() {
     if (_hudIcons.has('set')) return _hudIcons.get('set');
     const set = { heart: null, mana: null };
-    try { set.heart = await loadImage(path.join(__dirname, '..', 'rpgasset', 'ui', 'heart.png')); } catch (e) { /* fallback shape */ }
-    try { set.mana = await loadImage(path.join(__dirname, '..', 'rpgasset', 'ui', 'mana.png')); } catch (e) { /* fallback shape */ }
+    try { set.heart = await loadImage(path.join(__dirname, '..', '..', '..', 'rpgasset', 'ui', 'heart.png')); } catch (e) { /* fallback shape */ }
+    try { set.mana = await loadImage(path.join(__dirname, '..', '..', '..', 'rpgasset', 'ui', 'mana.png')); } catch (e) { /* fallback shape */ }
     _hudIcons.set('set', set);
     return set;
 }

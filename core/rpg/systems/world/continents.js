@@ -113,11 +113,11 @@ const biomeOf = (entity) => continentOf(entity).biome;
 // (scripts/kingdom3d/make_realm_mask.py) marks which cells are land of which realm.
 const fs = require('fs');
 const path = require('path');
-const CHART = path.join(__dirname, '..', 'rpgasset', 'continents', 'five_realms.jpg');
+const CHART = path.join(__dirname, '..', '..', '..', 'rpgasset', 'continents', 'five_realms.jpg');
 let _mask = null;
 function mask() {
     if (_mask) return _mask;
-    const j = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'rpgasset', 'continents', 'realm_mask.json'), 'utf8'));
+    const j = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'rpgasset', 'continents', 'realm_mask.json'), 'utf8'));
     const byId = Object.fromEntries(Object.entries(j.ids).map(([k, v]) => [v, k]));
     const gh = j.rows.length, gw = j.rows[0].length;
     // distance (in grid cells) from each land cell to the nearest non-land cell of its realm — chamfer pass

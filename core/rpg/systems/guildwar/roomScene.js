@@ -43,7 +43,7 @@ function ensureFonts() {
         const canvas = require('canvas');
         const registerFont = canvas.registerFont || (canvas.GlobalFonts && canvas.GlobalFonts.registerFromPath);
         if (!registerFont) return false;
-        const F = path.join(__dirname, '..', '..', 'rpgasset', 'fonts');
+        const F = path.join(__dirname, '..', '..', '..', 'rpgasset', 'fonts');
         const regs = [
             ['CinzelDecorative-Black.ttf', { family: 'Cinzel Deco' }],
             ['Cinzel-Variable.ttf', { family: 'Cinzel' }],
@@ -67,7 +67,7 @@ const mapEngine = require('./mapEngine');
 const roomVariants = require('./roomVariants');
 
 const W = 1200, H = 900;
-const ASSET_DIR = path.join(__dirname, '..', '..', 'rpgasset', 'guildwar', 'ruins');
+const ASSET_DIR = path.join(__dirname, '..', '..', '..', 'rpgasset', 'guildwar', 'ruins');
 
 // ── OPTIONAL prop atlas (owner 2026-11-02 visual overhaul, phase 2) ─────────
 // Drop props_atlas.png + props_atlas.json in guildwar/ruins/atlas/ and rooms
@@ -100,8 +100,8 @@ function atlasImage() {
     if (!_atlasImg) _atlasImg = loadImage(path.join(ATLAS_DIR, 'props_atlas.png')).catch(() => null);
     return _atlasImg;
 }
-const CHAR_DIR = path.join(__dirname, '..', '..', 'rpgasset', 'characters');
-const ENEMY_DIR = path.join(__dirname, '..', '..', 'rpgasset', 'enemies');
+const CHAR_DIR = path.join(__dirname, '..', '..', '..', 'rpgasset', 'characters');
+const ENEMY_DIR = path.join(__dirname, '..', '..', '..', 'rpgasset', 'enemies');
 // ⚔️ ENCOUNTER-TYPE PROPS (owner directive 2026-10-05): every encounter kind
 // shows a real, style-matched sprite — discovery rooms show the RUBBLE the
 // caption talks about, and after `dig` the rubble is gone and the gold
@@ -1019,7 +1019,7 @@ function segRow(ctx, x, y, w, h, pct, from, to) {
 // anchored bottom-left with the same crops. Segment fill follows
 // renderer.go's drawBar exactly: each 1/3-of-max segment picks sprite
 // clamp(round(pct*4)+1, 1, 5).
-const UI_DIR = path.join(__dirname, '..', '..', 'rpgasset', 'ui');
+const UI_DIR = path.join(__dirname, '..', '..', '..', 'rpgasset', 'ui');
 const HUB_SCALE = W / 1024;                        // 1.171875 (Go canvas → room canvas)
 const _hubAssets = { state: 0, imgs: null };       // 0=untried 1=ready -1=failed
 function hubAssets() {

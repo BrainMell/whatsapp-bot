@@ -28,8 +28,8 @@ const fs = require('fs');
 const path = require('path');
 const eb = require('./emojiBitmap');
 
-const FONT_PATH = path.join(__dirname, '..', 'rpgasset', 'fonts', 'NotoEmoji-Regular.ttf');
-const COLOR_FONT_PATH = path.join(__dirname, '..', 'rpgasset', 'fonts', 'NotoColorEmoji.ttf');
+const FONT_PATH = path.join(__dirname, '..', '..', '..', 'rpgasset', 'fonts', 'NotoEmoji-Regular.ttf');
+const COLOR_FONT_PATH = path.join(__dirname, '..', '..', '..', 'rpgasset', 'fonts', 'NotoColorEmoji.ttf');
 const FAMILY = 'Noto Emoji';
 // Extended_Pictographic covers every emoji base char; VS16 / ZWJ / keycap cap
 // are forced into the emoji run so multi-codepoint sequences stay together.

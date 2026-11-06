@@ -14,8 +14,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const DIR = path.join(__dirname, '..', 'rpgasset', 'kingdom3d');
-const DIR_ISO = path.join(__dirname, '..', 'rpgasset', 'kingdom3d_iso');
+const DIR = path.join(__dirname, '..', '..', '..', 'rpgasset', 'kingdom3d');
+const DIR_ISO = path.join(__dirname, '..', '..', '..', 'rpgasset', 'kingdom3d_iso');
 const SQ3 = Math.sqrt(3);
 
 // Two camera views share one hex engine: 'top' (guild kingdom, pitch 40, yaw 0) and 'iso'

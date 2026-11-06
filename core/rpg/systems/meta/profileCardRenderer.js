@@ -20,9 +20,9 @@ const fs = require('fs');
 let _canvas = null;
 function getCanvas() { if (!_canvas) _canvas = require('canvas'); return _canvas; }
 
-const FONTS_DIR = path.join(__dirname, '..', 'rpgasset', 'fonts');
-const STYLES_DIR = path.join(__dirname, '..', 'rpgasset', 'ui', 'styles');
-const CHAR_DIR = path.join(__dirname, '..', 'rpgasset', 'characters');
+const FONTS_DIR = path.join(__dirname, '..', '..', '..', 'rpgasset', 'fonts');
+const STYLES_DIR = path.join(__dirname, '..', '..', '..', 'rpgasset', 'ui', 'styles');
+const CHAR_DIR = path.join(__dirname, '..', '..', '..', 'rpgasset', 'characters');
 const FONT_REG = 'Pixeloid Sans';
 const FONT_BOLD = 'Dogica Pixel Bold';
 

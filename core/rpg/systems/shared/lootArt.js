@@ -19,8 +19,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const LOOT_DIR = path.join(__dirname, '..', 'assets', 'loot');
-const SPRITE_DIR = path.join(__dirname, '..', 'assets', 'sprites');
+const LOOT_DIR = path.join(__dirname, '..', '..', '..', 'assets', 'loot');
+const SPRITE_DIR = path.join(__dirname, '..', '..', '..', 'assets', 'sprites');
 
 const LOOT_FILES = {
     raw_fish: 'fish_pond_minnow.png',
