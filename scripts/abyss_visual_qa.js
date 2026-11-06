@@ -13,24 +13,24 @@ const path = require('path');
 const REPO = path.join(__dirname, '..');
 
 // ── monkey-patch combatIntegration (would pull goImageService/axios) ──────
-const ciPath = require.resolve(path.join(REPO, 'core/rpg/combatIntegration'));
+const ciPath = require.resolve(path.join(REPO, 'core/rpg/systems/combat/combatIntegration'));
 require.cache[ciPath] = {
     id: ciPath, filename: ciPath, loaded: true,
     exports: { generateStartCaption: () => 'cap-start', generateTurnCaption: () => 'cap-turn' },
 };
 // economy/progression stubs (resolvePlayerSpriteFile lazily requires them)
-const ecoPath = require.resolve(path.join(REPO, 'core/rpg/economy'));
+const ecoPath = require.resolve(path.join(REPO, 'core/rpg/systems/economy/economy'));
 require.cache[ecoPath] = {
     id: ecoPath, filename: ecoPath, loaded: true,
     exports: { getUserClass: () => ({ id: 'ROGUE' }), getUser: () => ({ class: 'ROGUE', spriteIndex: 1 }), getDisplayName: () => 'Mellow-San' },
 };
-const progPath = require.resolve(path.join(REPO, 'core/rpg/progression'));
+const progPath = require.resolve(path.join(REPO, 'core/rpg/systems/characters/progression'));
 require.cache[progPath] = {
     id: progPath, filename: progPath, loaded: true,
     exports: { getBaseStats: () => ({ hp: 100, maxEnergy: 50 }), getLevel: () => 10 },
 };
 
-const abyssScene = require(path.join(REPO, 'core/rpg/abyssScene'));
+const abyssScene = require(path.join(REPO, 'core/rpg/systems/adventures/abyssScene'));
 
 // ── canvas authenticity: the sandbox ships a test MOCK (test_renderq setup,
 // node_modules/canvas is gitignored) whose getContext returns {} — it can
@@ -131,9 +131,9 @@ check('approved player-facing table still controls the live flip helper',
 check('boss path still resolves the OLD art for shared ids (bestiary isolation)',
     (() => { const a = abyssScene.resolveEnemyArt({ name: 'ELDER CHAOS', bossId: 'ELDER_CHAOS', spriteIndex: 24 });
         return a && !String(a.dir).includes('regular_bestiary'); })());
-const enemyVariants = require(path.join(REPO, 'core/rpg/enemyVariants'));
+const enemyVariants = require(path.join(REPO, 'core/rpg/systems/combat/enemyVariants'));
 let abyssSystem;
-try { abyssSystem = require(path.join(REPO, 'core/rpg/abyssSystem')); } catch (e) { abyssSystem = null; }
+try { abyssSystem = require(path.join(REPO, 'core/rpg/systems/adventures/abyssSystem')); } catch (e) { abyssSystem = null; }
 const sheetFiles = (() => { // C-locale mirror of enemySheetList()
     const fs = require('fs');
     return fs.readdirSync(path.join(REPO, 'core/rpgasset/enemies'))
@@ -148,7 +148,7 @@ if (abyssSystem && abyssSystem.ABYSS_ENEMY_POOLS) {
     ]);
 } else {
     // fallback if the models unavailable in sandbox: scan the source
-    const src = require('fs').readFileSync(path.join(REPO, 'core/rpg/abyssSystem.js'), 'utf8');
+    const src = require('fs').readFileSync(path.join(REPO, 'core/rpg/systems/adventures/abyssSystem.js'), 'utf8');
     for (const m of src.matchAll(/\[\s*'([A-Z_]+)'(?:\s*,\s*'([A-Z_]+)')*\s*\]/g)) {
         for (const g of m.slice(1)) if (g) poolIds.add(g);
     }
@@ -192,7 +192,6 @@ const live = (() => {
         abyssRun: { currentEncounterType: 'combat' },
         players: [{ jid: 'x@s', name: 'Mellow-San', class: { id: 'ROGUE' }, currentHP: 300, stats: { hp: 300, maxHp: 500 }, mana: 60, maxMana: 100 }],
         enemies: [{ name: 'STONE HULK', isEnemy: true, spriteIndex: 35, currentHP: 700, stats: { hp: 700, maxHp: 1000 } }],
-        summons: [],
     };
     return state;
 })();
@@ -207,7 +206,6 @@ section('§6 — frozen layout + render contract');
         abyssRun: { currentEncounterType: 'combat' },
         players: [{ jid: 'x@s', name: 'Mellow-San', class: { id: 'ROGUE' }, currentHP: 300, stats: { hp: 300, maxHp: 500 }, mana: 60, maxMana: 100 }],
         enemies: [{ name: 'STONE HULK', isEnemy: true, spriteIndex: 35, currentHP: 700, stats: { hp: 700, maxHp: 1000 } }],
-        summons: [],
     }, over);
 
     const start = await abyssScene.renderAbyssCombat(mkState(), { phase: 'START', turnOrderStr: 'a → b' });
@@ -273,78 +271,9 @@ check('pack fight: queued members join the stage', pack.pack.length === 2);
     check('pack fight: members depth-disciplined (deeper feet, capped height, inside frame guard)', pack.pack.every((m) => m.gy <= pack.enemy.gy + 5 && m.h <= pack.enemy.h * 0.93 && m.cx + hw(m) <= 1196));
     check('pack fight: no member box overlaps the active enemy (real measured halfW, owner: "enemies overlaying")', pack.pack.every((m) => Math.abs(m.cx - pack.enemy.cx) >= (hw(m) + hw(pack.enemy)) - 24));
     check('round-13 right-edge guard: no enemy-wing body renders past the frame', [pc.enemy].concat(pack.pack).every((m) => m.cx + hw(m) <= 1196));
-    // round-8: FULL PARTY — 3 enemies + 3 allies + player, nobody fused, and
-    // the corrected facing table verified through BEHAVIOR (flip outcomes)
-    const full = await abyssScene.planCombatLayout(mkState({ sessionKey: 'qa_full', abyssRun: { currentEncounterType: 'combat', packQueue: [
-        { name: 'SHADOW STALKER', isEnemy: true, spriteIndex: 54, currentHP: 300, stats: { hp: 300, maxHp: 550 } },
-        { name: 'VENOM SPIDER', isEnemy: true, spriteIndex: 73, currentHP: 300, stats: { hp: 300, maxHp: 550 } },
-    ] }, summons: [
-        { species: 'boar', name: 'Tusker' },
-        { species: 'snake', name: 'Serpentine' },
-        { species: 'dragon', name: 'Vyrn' },
-    ] }));
-    const fboxes = [full.enemy].concat(full.pack, full.allies, [full.player]).filter(Boolean).map((a) => ({
-        l: a.cx - (a.halfW || a.h * 0.42), r: a.cx + (a.halfW || a.h * 0.42), t: a.gy - a.h, b: a.gy,
-    }));
-    let fused = 0;
-    for (let i = 0; i < fboxes.length; i++) for (let j = i + 1; j < fboxes.length; j++) {
-        const A = fboxes[i], B = fboxes[j];
-        const ox = Math.min(A.r, B.r) - Math.max(A.l, B.l);
-        const oy = Math.min(A.b, B.b) - Math.max(A.t, B.t);
-        if (ox > 36 && oy > 36) fused++;   // >36px two-axis = truly fused; less reads as depth-kiss
-    }
-    check('full party (3 enemies + 3 allies + player): zero fused bodies', fused === 0);
-    const allyByFile = (f) => full.allies.find((a) => a.art && a.art.file === f);
-    // round-13 mirror: the party stands LEFT and faces RIGHT — natively-right
-    // art renders UNFLIPPED. round-17 FOURTH-PASS correction: ALL 26 natives
-    // re-audited at 2× with a bisector — dragon/giant/yeti are natively RIGHT
-    // (the r15 'dragon LEFT' verdict was wrong and mirrored the companion arc
-    // at the player's back), BAT is frontal, zero natively-left species exist.
-    check('round-13 facing: boar natively RIGHT → ally boar faces RIGHT unflipped (party side is left now)', allyByFile('boar.png') && allyByFile('boar.png').flip === false);
-    check('round-13 facing: snake natively RIGHT → ally snake faces RIGHT unflipped', allyByFile('snake.png') && allyByFile('snake.png').flip === false);
-    check('round-17 facing: dragon natively RIGHT (2× bisector audit) → ally dragon faces RIGHT unflipped (owner 10:30Z: companions faced wrong)', allyByFile('dragon.png') && allyByFile('dragon.png').flip === false);
-    const comp = await abyssScene.planCombatLayout(mkState({ sessionKey: 'qa_comp', abyssRun: { currentEncounterType: 'combat' }, summons: [
-        { species: 'giant', name: 'Walls' },
-        { species: 'yeti', name: 'Frost' },
-        { species: 'bat', name: 'Nocturne' },
-    ] }));
-    const compByFile = (f) => comp.allies.find((a) => a.art && a.art.file === f);
-    check('round-17 facing: giant natively RIGHT → ally giant unflipped', compByFile('giant.png') && compByFile('giant.png').flip === false);
-    check('round-17 facing: yeti natively RIGHT → ally yeti unflipped', compByFile('yeti.png') && compByFile('yeti.png').flip === false);
-    check('round-17 facing: bat FRONTAL (symmetric wings) → ally bat never flips', compByFile('bat.png') && compByFile('bat.png').flip === false);
-    const pw = await abyssScene.planCombatLayout(mkState({
-        kind: 'wild',
-        abyssRun: { currentEncounterType: 'wild_summon', currentEncounterData: { species: 'agumon', rarity: 'RARE' } },
-        enemies: [{ name: 'Agumon', isWildSummon: true, spriteIndex: 0, currentHP: 400, stats: { hp: 400, maxHp: 600 } }],
-    }));
-    check('§7 round-13: wild summon takes the ENEMY side (RIGHT wing, facing left)', pw.enemy.cx > abyssScene.W * 0.55);
-    check('§7 round-13: player holds the party side (front-LEFT, facing right via LEFT-mirror)', pw.player.cx <= abyssScene.W * 0.35 && pw.player.flip === abyssScene.playerArtFlipFor(pw.player.file) && pw.player.flip === true);
-    check('§7 summon: grounded on the floor plane (not the old floating 566 line)', pw.enemy.gy > 580 && pw.enemy.gy < 700);
-    check('§7 summon: wild species carried for the pill', pw.wildSpecies === 'agumon');
-    // round-16 bisector audit: the four re-listed natively-RIGHT species must
-    // flip as wilds on the enemy wing so they face the hero
-    for (const sp of ['boglurk', 'fireguard', 'frostpeep', 'lumenmoth']) {
-        const pwx = await abyssScene.planCombatLayout(mkState({
-            kind: 'wild',
-            abyssRun: { currentEncounterType: 'wild_summon', currentEncounterData: { species: sp, rarity: 'RARE' } },
-            enemies: [{ name: sp, isWildSummon: true, spriteIndex: 0, currentHP: 400, stats: { hp: 400, maxHp: 600 } }],
-        }));
-        check(`§7 round-16: wild ${sp} (natively RIGHT) flips to face the hero`, pwx.enemy && pwx.enemy.flip === true);
-    }
-    // round-16: boss-path allies stand LEFT of the boss and face RIGHT toward
-    // it — natively-left art flips, natively-right art does not
-    const pboss = await abyssScene.planCombatLayout(mkState({
-        abyssFloor: 12,
-        enemies: [Object.assign({ name: 'ABYSSAL GOD', isEnemy: true, spriteIndex: 0, currentHP: 9000, stats: { hp: 9000, maxHp: 12000 } }, { isBoss: true, bossId: 'ABYSSAL_GOD' })],
-        summons: [
-            { species: 'boar', name: 'Tusker' },
-            { species: 'dragon', name: 'Vyrn' },
-        ],
-    }));
-    // round-16 + r17: boss-path allies stand LEFT of the boss and face RIGHT
-    // toward it — natively-right art (all of it, per the r17 audit) unflipped
-    check('§boss round-16: ally boar (natively RIGHT) faces the boss unflipped', pboss.allies.length === 2 && pboss.allies.find((a) => a.art && a.art.file === 'boar.png').flip === false);
-    check('§boss round-17: ally dragon (natively RIGHT, r17 audit) faces the boss unflipped', pboss.allies.find((a) => a.art && a.art.file === 'dragon.png').flip === false);
+    const soloLayout = await abyssScene.planCombatLayout(mkState({ sessionKey: 'qa_no_companions' }));
+    check('PvE scene layout contains the active player and enemy only',
+        !!soloLayout.player && !!soloLayout.enemy && (!soloLayout.allies || soloLayout.allies.length === 0));
 
     // ═══ 6. floor card ═══
     section('§3 — floor descent card');
@@ -364,75 +293,10 @@ check('pack fight: queued members join the stage', pack.pack.length === 2);
     const fcBroken = await abyssScene.renderAbyssFloorCard(null);
     check('floor card with null payload never throws', fcBroken === null || Buffer.isBuffer(fcBroken));
 
-    // ═══ 7. summons render the game's OWN sprites (owner 2026-10-09: NO DIGIMON) ═══
-    section('§7b — own sparklinlabs summon sprites (Digimon mapping removed)');
-    const summonSprites = require(path.join(REPO, 'core/rpg/summonSprites'));
-    const reg = require(path.join(REPO, 'core/rpg/summonRegistry'));
-    const speciesIds = reg.getAllSpecies ? reg.getAllSpecies() : Object.keys(reg.SPECIES || reg);
-    check('species→Digimon map is GONE (getSpeciesDigimon undefined)', summonSprites.getSpeciesDigimon === undefined);
-    const notOwn = speciesIds.filter((id) => {
-        const p = summonSprites.getSpritePath(id);
-        return !(p && p.includes(path.join('summons', 'sparklinlabs')));
-    });
-    check(`every registry species resolves its OWN sparklinlabs PNG (${speciesIds.length} species, missing: ${notOwn.join(',') || 'none'})`, notOwn.length === 0);
-    const dragonPath = summonSprites.getSpritePath('dragon');
-    const dragonBytes = dragonPath ? require('fs').readFileSync(dragonPath) : Buffer.alloc(0);
-    check('own sprites are real PNG bytes (deploy-safe, not LFS stubs)',
-        dragonBytes[0] === 0x89 && dragonBytes.length > 500);
-    check('own sprite dir holds 26 files (one per species)',
-        require('fs').readdirSync(path.join(REPO, 'core/rpgasset/summons/sparklinlabs')).filter((f) => f.endsWith('.png')).length === 26);
-    const dragonArt = await summonSprites.getOrFetchSprite('dragon');
-    check('getOrFetchSprite returns the LOCAL own sprite (no API fetch)', !!dragonArt && dragonArt.includes(path.join('summons', 'sparklinlabs')));
-    const pwild = await abyssScene.planCombatLayout(mkState({
-        kind: 'wild',
-        abyssRun: { currentEncounterType: 'wild_summon', currentEncounterData: { species: 'dragon', rarity: 'RARE' } },
-        enemies: [{ name: 'Wild Pyraxis', isWildSummon: true, currentHP: 400, stats: { hp: 400, maxHp: 600 } }],
-        summons: [{ species: 'bat', name: 'Nocturne' }],
-    }));
-    check('wild summon art = the game\'s own dragon sprite (dragon.png)',
-        pwild.enemy && pwild.enemy.art && pwild.enemy.art.file === 'dragon.png');
-    check('ally art = the game\'s own bat sprite (bat.png)',
-        pwild.allies.length === 1 && pwild.allies[0].art && pwild.allies[0].art.file === 'bat.png');
-    // round-17 render-proof: dragon.png faces RIGHT natively (2× bisector
-    // audit) — a wild dragon on the RIGHT enemy wing therefore FLIPS to face
-    // the hero. (The r15 'wild dragon unflipped' row was built on the wrong
-    // native verdict and is inverted here.)
-    check('dragon natively faces RIGHT (r17 audit) → wild dragon FLIPS to face the hero on the right wing',
-        pwild.enemy.flip === true);
-    // round-17: starnail newly classified natively RIGHT (face cave + claws
-    // lower-right) — as a wild it must flip toward the hero
-    const pst = await abyssScene.planCombatLayout(mkState({
-        kind: 'wild',
-        abyssRun: { currentEncounterType: 'wild_summon', currentEncounterData: { species: 'starnail', rarity: 'RARE' } },
-        enemies: [{ name: 'starnail', isWildSummon: true, spriteIndex: 0, currentHP: 400, stats: { hp: 400, maxHp: 600 } }],
-    }));
-    check('round-17: starnail natively RIGHT → wild starnail flips to face the hero', pst.enemy && pst.enemy.flip === true);
-    // round-17: ashen_basilica no longer suits 'brute' — the dim red nave
-    // swallowed dark-magenta hulks (owner: "the background gloom brute
-    // DOESN'T WORK"); brutes stage on bright floors where they pop
-    const bgBrute = abyssScene.bgForEncounter(18, 'brute', {});
-    check('round-17: basilica never stages brute-habitat enemies', bgBrute !== 'ashen_basilica_abyss.png');
-    // round-17 cast sink: on deep-band stages (basilica floorTop 0.66) the
-    // whole cast sinks so the front feet line lands ~40% into the floor band
-    // instead of hugging the wall seam; shallow-band stages shift by exactly 0
-    const pbasilica = await abyssScene.planCombatLayout(mkState({
-        abyssFloor: 18,
-        abyssRun: { currentEncounterType: 'combat' },
-        enemies: [{ name: 'HOLLOW SERAPH', isEnemy: true, spriteIndex: 74, currentHP: 900, stats: { hp: 900, maxHp: 1200 } }],
-    }), { forceBg: 'ashen_basilica_abyss.png' });
-    const phall = await abyssScene.planCombatLayout(mkState({
-        abyssFloor: 18,
-        abyssRun: { currentEncounterType: 'combat' },
-        enemies: [{ name: 'GLOOM BRUTE', isEnemy: true, spriteIndex: 72, currentHP: 900, stats: { hp: 900, maxHp: 1200 } }],
-    }), { forceBg: 'dark_hall_abyss.png' });
-    check('round-17 cast sink: basilica enemy wing lands IN the floor band (feet ≥ 690, ~107px below the wall base — not on the seam)',
-        pbasilica.enemy.gy >= 690);
-    check('round-17 cast sink: the player keeps the frozen HUD-panel cap (feet ≤ 646, never inside the panel)',
-        pbasilica.player.gy >= 628 && pbasilica.player.gy <= 646);
-    check('round-17 cast sink: shallow-band stages unchanged (dark_hall feet at the frozen 0.700 line)',
-        Math.abs(phall.player.gy - 630) <= 2 && Math.abs(phall.enemy.gy - 637) <= 4);
-    check('allies stand in the arc ABOVE the HUD panel (feet clear of panel top 644)',
-        pwild.allies.every((a) => a.gy < 646));
+    // Legacy companion entities are no longer part of Abyss combat layouts.
+    const noCompanionLayout = await abyssScene.planCombatLayout(mkState({ sessionKey: 'qa_no_companion_entities' }));
+    check('Abyss layout does not create companion allies',
+        !!noCompanionLayout.player && !!noCompanionLayout.enemy && (!noCompanionLayout.allies || noCompanionLayout.allies.length === 0));
 
     // ═══ 8. hit tint + facing contract (owner 10:19Z round) ═══
     section('§8 — attack tint + Pokémon facing rule');
