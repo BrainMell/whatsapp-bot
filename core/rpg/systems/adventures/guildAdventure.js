@@ -5467,8 +5467,15 @@ The dungeon collapsed after too many stalled turns. Your slot has been released 
       // passives work correctly. Was never incremented - first_turn_bonus
       // applied every turn, rotate_elements always picked element[0].
       if (activeActor && !activeActor.isEnemy) {
-        // Increment round when a PLAYER acts (not enemy) so round = player turns
+        // Increment round when a PLAYER acts (not enemy) so round = player turns.
         state.combatRound = (state.combatRound || 0) + 1;
+        // Summon-card cooldowns are measured in THIS player's turns, not the
+        // global actor counter (which also advances for every enemy/boss).
+        if (activeActor.jid) {
+          if (!state.summonCardTurnCounts) state.summonCardTurnCounts = {};
+          state.summonCardTurnCounts[String(activeActor.jid)] =
+            (Number(state.summonCardTurnCounts[String(activeActor.jid)]) || 0) + 1;
+        }
       }
 
       if (activeActor.isBoss) {
@@ -6121,8 +6128,33 @@ async function performAction(sock, player, action, sessionKey) {
       if (activation.card.status && !activation.wasEvaded && !activation.defeated) turnInfo.effects.push(activation.card.status.type.toUpperCase());
       try {
         const goService = require('../../../utils/goImageService');
-        const gif = await goService.generateSummonCardGIF({ cardId: activation.card.id, targetName: activation.target.name, damage: activation.damage });
-        await boundedSend(sock, state.chatId, { document: gif, mimetype: 'image/gif', fileName: activation.card.id + '-summon.gif', caption: '✨ ' + activation.card.abilityName });
+        const combatImageGen = require('../combat/combatImageGenerator');
+        const payload = combatImageGen._buildPayload(state.players || [player], state.enemies || [], {
+          rank: state.dungeonRank,
+          floor: state.isAbyss ? state.abyssFloor : 0,
+          backgroundPath: state.backgroundPath,
+          combatType: 'PVE',
+        });
+        payload.cardId = activation.card.id;
+        payload.action = combatImageGen._buildActionPayload({
+          attackerSide: 'player',
+          attackerIndex: Math.max(0, (state.players || [player]).indexOf(player)),
+          targetSide: 'enemy',
+          targetIndex: activation.targetIndex,
+          skillName: activation.card.abilityName,
+          element: activation.card.element.toLowerCase(),
+          vfx: activation.card.vfx,
+          damage: activation.damage,
+          missed: activation.wasEvaded,
+        });
+        const gif = await goService.generateSummonCardGIF(payload);
+        // Keep the renderer's GIF bytes intact: never send this as MP4/video.
+        await boundedSend(sock, state.chatId, {
+          document: gif,
+          mimetype: 'image/gif',
+          fileName: activation.card.id + '-summon.gif',
+          caption: '✨ ' + activation.card.abilityName,
+        });
       } catch (gifErr) {
         console.error('[SummonCards] GIF render/delivery failed:', gifErr.message);
         resultMsg += '\n🎞️ _The summon animation could not be delivered; the combat effect still resolved._';
