@@ -11363,7 +11363,9 @@ async function endAdventure(sock, sessionKey, victory = true) {
   let narration = "";
   const __narrT0 = Date.now();
   try {
-    if (state.smartGroqCall) {
+    if (process.env.QUEST_NARRATION !== '1') {
+      // owner 2026-11-07: the long lore paragraph on the QUEST COMPLETE card/message is removed (saves the LLM call too; QUEST_NARRATION=1 restores it)
+    } else if (state.smartGroqCall) {
       END_DEBUG(`endAdventure narration via smartGroqCall (6s watchdog)`);
       // 💡 WATCHDOG 2026-10-07: the raw narration call can stall far longer
       // than any user cares to wait (groq-sdk = 60s timeout x3 SDK retries,
@@ -11441,12 +11443,11 @@ async function endAdventure(sock, sessionKey, victory = true) {
   // both showed "🎉 QUEST COMPLETE! The party has conquered all challenges!"
   // which was confusingly wrong.
   if (victory) {
+    // owner 2026-11-07: the long lore/narration paragraph under the QUEST COMPLETE header is gone - header, one line, stats.
     msg += `\n🎉 *QUEST COMPLETE!* 🎉\n\n`;
-    msg += `📜 ${narration}\n\n`;
     msg += `The party has conquered all challenges!\n\n`;
   } else {
     msg += `\n💨 *QUEST ENDED* 💨\n\n`;
-    msg += `📜 ${narration}\n\n`;
     msg += `The party did not complete the quest.\n\n`;
   }
   msg += `📊 *FINAL STATS:*\n`;
@@ -12060,7 +12061,7 @@ async function endAdventure(sock, sessionKey, victory = true) {
       const buf = await goService.generatePortraitCard({
         kind: 'QUEST',
         nickname: state.players[0]?.name || 'The Party',
-        caption: narration || '',
+        caption: '',
         sealText: String(state.dungeonRank || 'F'),
         ledger: [
           { label: 'Monsters Slain', value: fmt(state.stats?.monstersKilled) },

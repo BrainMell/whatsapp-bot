@@ -106,16 +106,7 @@ async function renderNodePvpCard(players, enemies, options, api) {
   if (turn >= 0 && aOf(turn)) { const a = aOf(turn); c.save(); c.translate(a.x * s, a.feetY * s); c.scale(1, 0.28); const g = c.createRadialGradient(0, 0, 4, 0, 0, 62 * s); g.addColorStop(0, 'rgba(255,214,102,0.85)'); g.addColorStop(1, 'rgba(255,214,102,0)'); c.fillStyle = g; c.beginPath(); c.arc(0, 0, 62 * s, 0, Math.PI * 2); c.fill(); c.restore(); }
   for (const a of anchors) { const fx = unitFx(a.side, a.index, players, []); if (fx) auras.drawAuras(c, a, fx, s, 'ground'); }
   c.drawImage(await loadImage(layers.sprites), 0, 0, W, H);
-  if (act && act.targetSide === 'player' && !act.heal && !act.missed && Array.isArray(layers.cuts)) {
-    const cut = layers.cuts.find((x) => x.side === 'player' && x.index === (Number(act.targetIndex) || 0));
-    if (cut && cut.png) {
-      try {
-        const im = await loadImage(Buffer.from(cut.png, 'base64')), t = createCanvas(cut.w, cut.h), tc = t.getContext('2d');
-        tc.drawImage(im, 0, 0, cut.w, cut.h); tc.globalCompositeOperation = 'source-atop'; tc.fillStyle = 'rgba(255,40,30,0.5)'; tc.fillRect(0, 0, cut.w, cut.h);
-        c.drawImage(t, cut.x * s, cut.y * s, cut.w * s, cut.h * s);
-      } catch (e) { /* cosmetic */ }
-    }
-  }
+  try { await require('./hitFx').drawHitReaction(c, layers, anchors, act && act.targetSide ? { ...act, targetSide: 'player' } : null, s); } catch (e) { /* cosmetic */ }
   for (const a of anchors) {
     if (a.side !== 'player') continue;
     const u = players[a.index]; if (!u || u.isDead) continue;

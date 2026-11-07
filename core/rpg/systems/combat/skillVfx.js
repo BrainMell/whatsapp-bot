@@ -840,8 +840,14 @@ const DEATH_RULES = [
   ['VOID', /void|shadow|dark|wraith|ghost|spirit|specter|spectre|phantom|demon|chaos|abyss|reaper|undead|necro|lich|wisp|banshee|blood|corrupt|shade|nightmare|eldritch|skeleton|zombie|vampire|hybrid|mutat/i],
 ];
 function classifyDeath(enemy) {
-  const hay = [enemy && enemy.element, enemy && enemy.type, enemy && enemy.id, enemy && enemy.name, enemy && enemy.family, enemy && enemy.category]
-    .filter(Boolean).map(String).join(' ');
+  // 🔧 owner 2026-11-07: a VOID boss died as crumbling stone because its NAME matched the earth words ("guardian", "crystal"...) before its
+  // real element was ever considered. Explicit data (element, then type) now wins; the name/id keyword sweep is only the fallback.
+  for (const field of [enemy && enemy.element, enemy && enemy.type, enemy && enemy.family, enemy && enemy.category]) {
+    if (!field) continue;
+    const f = String(field);
+    for (const [kind, re] of DEATH_RULES) if (re.test(f)) return kind;
+  }
+  const hay = [enemy && enemy.id, enemy && enemy.name].filter(Boolean).map(String).join(' ');
   for (const [kind, re] of DEATH_RULES) if (re.test(hay)) return kind;
   return 'DUST';
 }
