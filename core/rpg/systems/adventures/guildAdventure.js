@@ -6465,17 +6465,24 @@ async function performAction(sock, player, action, sessionKey) {
             const __sc = require('../summonCards');
             const __players = state.players || [player];
             const __entries = __sc.handEntries(player.jid, state, player);
-            gif = await Promise.race([
-              require('../summonCards/cardPlayScene').renderCardPlayScene({
+            const __sceneP = require('../summonCards/cardPlayScene').renderCardPlayScene({
                 card: activation.card, players: __players, enemies: state.enemies || [],
                 playerIndex: Math.max(0, __players.indexOf(player)), targetIndex: activation.targetIndex || 0,
                 enemiesPre: __preSnap.map((x) => (x.e.isDead || x.e.justDied || x.hp !== (Number(x.e.stats && x.e.stats.hp) || 0)) ? { ...x.e, isDead: x.dead, justDied: x.jd, stats: { ...x.e.stats, hp: x.hp }, currentHP: x.hp } : x.e),
                 entries: __entries, info: { damage: activation.damage, healing: activation.healing, missed: activation.wasEvaded, mergeDeath: !!(activation.defeatedList && activation.defeatedList.length && _deathEligible(state)) },
                 sceneOptions: { rank: state.dungeonRank, floor: state.isAbyss ? state.abyssFloor : 0, backgroundPath: state.backgroundPath, combatState: state },
                 api: { buildPayload: combatImageGen._buildPayload, generateCombatLayers: combatImageGen._generateCombatLayers },
-              }),
-              new Promise((resolve) => setTimeout(() => resolve(null), 12000)),
-            ]);
+            });
+            // ⚠️ round 11 (owner: "the summon animated card used the old trash animation instead of the
+            // new one", prod 17:40:12): the 12s leash DISCARDED the scene while it was still rendering
+            // (a busy box — death bakes hogging the encoders — pushed it to 17.9s) and served the old
+            // generic Node GIF. The scene's 12s of work is not thrown away anymore: on leash expiry we
+            // keep awaiting the SAME promise on a grace leash before the generic GIF gets a turn.
+            gif = await Promise.race([__sceneP.catch(() => null), new Promise((resolve) => setTimeout(() => resolve(null), 12000))]);
+            if (!gif) {
+              gif = await Promise.race([__sceneP.catch(() => null), new Promise((resolve) => setTimeout(() => resolve(null), 11000))]);
+              if (gif) console.log('[SummonCards] card-play scene landed on the grace leash (+11s) — generic GIF not needed');
+            }
           } catch (sceneErr) { gif = null; console.warn('[SummonCards] scene animation failed, falling back:', sceneErr.message); }
         }
         // ☠️ the card killed something: append the enemy's real death dissolve to THIS clip (one message, not two)

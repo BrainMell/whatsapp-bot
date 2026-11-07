@@ -1504,15 +1504,18 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
                 const sc = require('../summonCards');
                 const pIdx = duel.players.indexOf(currentPlayer), tIdx = duel.players.indexOf(opponent);
                 const entries = sc.handEntries(currentPlayer.jid, duel, { stats: { energy: currentPlayer.energy + r.card.energyCost, maxEnergy: currentPlayer.maxEnergy } });
-                const mp4 = await Promise.race([
-                    require('../summonCards/cardPlayScene').renderCardPlayScene({
+                const __sceneP = require('../summonCards/cardPlayScene').renderCardPlayScene({
                         pvp: true, card: r.card, players: duel.players, enemies: [], playerIndex: pIdx, targetIndex: tIdx, entries,
                         info: { damage: r.damage, healing: r.healing, missed: r.missed },
                         sceneOptions: { backgroundPath: duel.ruinsBackground ? `rpgasset/environment/${duel.ruinsBackground}` : undefined, combatState: duel, summons: duel.summons || [] },
                         api: { buildPayload: combatImageGenerator._buildPayload, generateCombatLayers: combatImageGenerator._generateCombatLayers },
-                    }),
-                    new Promise((res) => setTimeout(() => res(null), 12000)),
-                ]);
+                });
+                // ⚠️ round 11: leash expiry no longer discards the scene — grace leash before giving up.
+                let mp4 = await Promise.race([__sceneP.catch(() => null), new Promise((res) => setTimeout(() => res(null), 12000))]);
+                if (!mp4) {
+                    mp4 = await Promise.race([__sceneP.catch(() => null), new Promise((res) => setTimeout(() => res(null), 11000))]);
+                    if (mp4) console.log('[PvP] card scene landed on the grace leash (+11s)');
+                }
                 if (Buffer.isBuffer(mp4) && mp4.length > 500) cardVideo = mp4;
             }
         } catch (sceneErr) { console.warn('[PvP] card scene skipped:', sceneErr.message); }
