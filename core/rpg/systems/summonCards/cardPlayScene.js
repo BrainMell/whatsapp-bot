@@ -14,7 +14,7 @@ const { createCanvas } = require('canvas');
 const { ELEMENT_COLORS } = require('./catalog');
 const { drawCard, artFor, CW, CH } = require('./cardRenderer');
 
-const FPS = 20, N = 44, OUT_W = 768;
+const FPS = 20, N = 64, OUT_W = 768;
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const seg = (t, a, b) => clamp((t - a) / (b - a));
 const easeOut = (k) => 1 - Math.pow(1 - k, 3);
@@ -189,7 +189,7 @@ async function renderCardPlayScene(a) {
     fs.writeFileSync(path.join(dir, `f${String(f).padStart(3, '0')}.jpg`), fc.toBuffer('image/jpeg', { quality: 0.86 }));
   }
   // hold the last frame a beat so the result is readable
-  for (let h = 0; h < 8; h++) fs.copyFileSync(path.join(dir, `f${String(N - 1).padStart(3, '0')}.jpg`), path.join(dir, `f${String(N + h).padStart(3, '0')}.jpg`));
+  for (let h = 0; h < 16; h++) fs.copyFileSync(path.join(dir, `f${String(N - 1).padStart(3, '0')}.jpg`), path.join(dir, `f${String(N + h).padStart(3, '0')}.jpg`));
   try { const mp4 = await encode(dir); console.log(`[CardScene] ${card.id} ${fromPile ? 'pile' : 'slot ' + (handIdx + 1)} ${mp4.length}B in ${Date.now() - t0}ms`); return mp4; }
   finally { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { /* tmp */ } }
 }
