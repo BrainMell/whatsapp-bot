@@ -11,7 +11,7 @@ commit `0f0496ada` (branch `audit/fix-pass-1`), live on wa-joker / wa-jake / wa-
 | --- | --- | --- |
 | HUD painters (all card + video HUD art) | `core/rpg/systems/combat/combatHud.js` | pure canvas, 1024×687 design space, scale factor `s` |
 | Node battle-card compositor | `core/rpg/systems/combat/combatCardNode.js` | Go supplies HUD-less layers (`hud:"none"`), Node paints HUD on top |
-| Routing + fallback | `core/rpg/systems/combat/combatImageGenerator.js` | `hud:'v2'` + non-PvP + no `encounter` → Node card; **6s race**, any failure → old Go card |
+| Routing + fallback | `core/rpg/systems/combat/combatImageGenerator.js` | `hud:'v2'` + no `encounter` → Node card (PvE **and** PvP since 2026-11-07; PvP = `renderNodePvpCard` mirrored layout); **6s race**, any failure → old Go card |
 | Call sites | `core/rpg/systems/combat/combatIntegration.js:39,81` | `renderCombatStart` and `renderCombatTurn` both pass `hud:'v2'`, `bypassQueue:true` |
 | Ultimate/skill videos | `core/rpg/systems/combat/ultimateFx.js` (`drawVideoHud` ~L720) | same plate painters drawn over video frames |
 | Deck tray data | `core/rpg/systems/summonCards/system.js` (`handEntries`) | tray renders only when the player's owned-card list is non-empty |
@@ -33,9 +33,18 @@ the Go service is involved; the Node path is inside the bot process.
 
 ## Known limitations (owner test list, 2026-11-06)
 
-1. **PvP cards** still render through the old Go renderer (explicit exclusion in the v2 gate).
-2. **Ruins / encounter cards** (`options.encounter` set — square-map scenes) still Go-rendered.
-3. **Abyss** cards still Go-rendered (same family as encounter scenes).
+1. **PvP cards** are Node-composed now (`renderNodePvpCard`: P1 hub bottom-left, P2 top-right
+   mirrored, no rank banner). Verified live 2026-11-07: Go's layers endpoint returns BOTH
+   duelists (`side:'player'`, index 0/1) with aligned per-fighter cuts under `hud:none-clean`,
+   and the P2 sprite (top ≈ y295) clears the top-right hub (y ≤ 110) — no Go change needed.
+2. **Ruins / encounter cards** (`options.encounter` set — square-map room scenes) are still
+   Go-rendered. Porting them to the Node card first needs the Go ENCOUNTER scene composer to
+   route its sprites through `drawCombatant` (layers anchors + per-combatant cuts) and honour
+   `none-clean` — today only the classic battlefield paths do. Until then the v2 gate keeps
+   them on the Go card BY DESIGN (renderNodeCard would draw zero unit bars with empty anchors).
+3. **Abyss** turn cards are NOT Go-rendered — they flow through the Node-side
+   `abyssScene.renderAbyssCombat` (frozen START layout, battleScene pattern). Only an
+   abyss START/base that still calls `generateCombatImage` would hit the Go card.
 4. Any Node-path failure (layers unavailable, canvas error, >6s) silently falls back to the Go
    card — logs `[CombatHud] node card failed, using Go card:` on error, `[CombatHud] node card
    NB in Xms` on success. Warm renders ≈50–70ms; cold (first card after boot) ≈1.5–2s
@@ -49,6 +58,11 @@ the Go service is involved; the Node path is inside the bot process.
   Moon Tribe Studio Fantasy RPG UI Pack; GitHub CC0 kits): owner wants richer, non-chibi,
   "identity + confidence" styling.
 - Rank-coloured banner variants (asset already has 02a/03a/04a in `core/rpgasset/ui/`).
-- Match Ruins / abyss / PvP cards to the new HUD once owner signs off on the PvE look.
+- Match Ruins / encounter cards to the new HUD once the Go encounter composer emits layers
+  (anchors + cuts + none-clean); abyss already paints Node-side.
+- Mini hand cards now wear the parchment deck-builder frame (400×544 master in
+  `core/rpgasset/ui/hud_card_frame.png`, transparent art window at the drawMiniCard ratios).
+- Summon-card ART swap: drop `core/rpgasset/summoncards/<cardId>.png` (transparent, 256px+) —
+  cards, hand tray and the flight animation pick it up automatically.
 - Heart/mana icons are code-drawn fallbacks today (PNG transparency issues); vector-polish pass
   if owner wants crisper glyphs.
