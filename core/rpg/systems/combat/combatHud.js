@@ -149,7 +149,11 @@ function drawPlayerHud(c, hud, s = 1, ox = 18, oy = DH - 104, opts = {}) {
   if (hud.portrait) {
     const p = hud.portrait, pw = p.width, ph = p.height, sh = Math.min(ph, pw * 1.1);   // head+shoulders: top slice of the sprite
     const k = (R * 2.05) / Math.max(pw, sh);
-    try { c.imageSmoothingEnabled = pw > 200; c.save(); if (flip) { c.translate(pcx * 2, 0); c.scale(-1, 1); } c.drawImage(p, 0, 0, pw, sh, pcx - (pw * k) / 2, pcy - R + 3 * s, pw * k, sh * k); c.restore(); } catch (e) {}
+    // 🔧 round 10 (owner: "the hub portrait faces right while the opponent faces left"): the
+    // PvP P2 portrait comes from the duelist's own FIELD cutout — Go already drew that sprite
+    // facing the field (left). Mirroring it here made the medallion contradict the arena. The
+    // mirror is now opt-in via opts.mirrorPortrait for sources that natively face right.
+    try { c.imageSmoothingEnabled = pw > 200; c.save(); if (flip && opts.mirrorPortrait) { c.translate(pcx * 2, 0); c.scale(-1, 1); } c.drawImage(p, 0, 0, pw, sh, pcx - (pw * k) / 2, pcy - R + 3 * s, pw * k, sh * k); c.restore(); } catch (e) {}
   } else { c.fillStyle = '#f3ecd8'; c.font = `bold ${34 * s}px HudCinzel, serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(hud.name || '?')[0].toUpperCase(), pcx, pcy); }
   c.restore();
   // ornate engraved medallion ring (asset; socket ratio 86/110 -> A = R*2.56)

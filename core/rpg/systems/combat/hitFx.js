@@ -204,6 +204,30 @@ function glow(c, x, y, r, col, a) { const g = c.createRadialGradient(x, y, 4, x,
 function rr(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
 function crossStar(c, x, y, r) { c.beginPath(); c.moveTo(x, y - r); c.lineTo(x, y + r); c.moveTo(x - r, y); c.lineTo(x + r, y); c.moveTo(x - r * 0.6, y - r * 0.6); c.lineTo(x + r * 0.6, y + r * 0.6); c.moveTo(x - r * 0.6, y + r * 0.6); c.lineTo(x + r * 0.6, y - r * 0.6); c.stroke(); }
 
+// 🌪️ dust puff for dodges/footfalls (soft overlapping puffs, quick vertical fade)
+function dustPuff(c, x, y, k, s) {
+  c.save(); c.translate(x, y); c.scale(k, k);
+  c.fillStyle = 'rgba(214,196,164,0.5)';
+  for (const [dx, dy, r] of [[-9, -2, 7], [4, -5, 9], [13, 0, 6], [-2, 2, 8], [8, 4, 5]]) { c.beginPath(); c.arc(dx * s, dy * s, r * s, 0, TAU); c.fill(); }
+  c.fillStyle = 'rgba(240,230,208,0.4)';
+  for (const [dx, dy, r] of [[0, -8, 5], [10, -7, 4], [-7, -6, 3.6]]) { c.beginPath(); c.arc(dx * s, dy * s, r * s, 0, TAU); c.fill(); }
+  c.restore();
+}
+// 🪧 bevelled MISS plaque (stencilled plate, double pinstripe, slight skew) — shared by the
+// still card and the turn animator.
+function missPlaque(c, x, y, s) {
+  c.save(); c.translate(x, y); c.rotate(-0.05); c.transform(1, 0, -0.08, 1, 0, 0);
+  c.shadowColor = 'rgba(0,0,0,0.6)'; c.shadowBlur = 8 * s; c.shadowOffsetY = 3 * s;
+  const w = 108 * s, h = 34 * s;
+  rr(c, -w / 2, -h / 2, w, h, 6 * s); c.fillStyle = 'rgba(16,12,18,0.88)'; c.fill(); c.shadowBlur = 0;
+  rr(c, -w / 2, -h / 2, w, h, 6 * s); c.lineWidth = 1.6 * s; c.strokeStyle = 'rgba(214,174,78,0.9)'; c.stroke();
+  rr(c, -w / 2 + 3 * s, -h / 2 + 3 * s, w - 6 * s, h - 6 * s, 4 * s); c.lineWidth = 0.8 * s; c.strokeStyle = 'rgba(255,226,140,0.4)'; c.stroke();
+  c.font = `bold ${17 * s}px HudCinzel, serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.lineWidth = 3 * s; c.strokeStyle = 'rgba(0,0,0,0.8)'; c.strokeText('MISS', 0, 1 * s);
+  c.fillStyle = '#e8e2d2'; c.fillText('MISS', 0, 1 * s);
+  c.restore();
+}
+
 /** act = {attackerSide, attackerIndex, targetSide, targetIndex, damage, isCrit, missed, heal, element, attackSeed, itemKind}. */
 async function drawHitReaction(c, layers, anchors, act, s) {
   if (!act || !act.targetSide) return;
@@ -244,19 +268,30 @@ async function drawHitReaction(c, layers, anchors, act, s) {
     } else if (act.damage > 0) { drawCut(tint('rgba(255,40,30,0.42)'), dir * 15 * s, -2 * s, dir * 0.075, 0.95); }
   } else if (heal) { const g = c.createRadialGradient(cx, cy, 6 * s, cx, cy, h * 0.8); g.addColorStop(0, 'rgba(120,255,170,0.42)'); g.addColorStop(1, 'rgba(120,255,170,0)'); c.fillStyle = g; c.fillRect(cx - h, cy - h, h * 2, h * 2); }
   else if (miss) {
-    // ── #2 the DODGE: target leans away, ghost trail at the old spot, the
-    // attacker's blade whiffs through the vacated space, MISS plaque pops ──
-    drawCut(im, dir * -4 * s, 0, 0, 0.16);                                    // fading ghost where the body WAS
-    drawCut(im, -dir * 26 * s, -3 * s, -dir * 0.14, 0.96);                    // the dodge itself: leaning off the line
+    // ── #2 the DODGE — round 10 redesign (owner: "the miss attack looks like shit").
+    // What was wrong: the old still left Go's sprite standing ON the swing line with the
+    // whiff arcs crossing its body (a 26px lean INTO the blade + an invisible 0.16 ghost),
+    // so the card read "hit, but labelled MISS". A dodge must VISUALLY vacate the line:
+    // erase the body from the spot Go painted it (bg patch — bg is the bare scene),
+    // drop the dodger OUTSIDE the arc with a hop, pin a strong double afterimage where
+    // the body was, sweep the whiff through that EMPTY spot, kick dust at both
+    // footfalls, and stamp a bevelled MISS plaque on the vacated air. ──
     const oldX = cx, oldY = cy;
+    try { if (layers && layers.bg) { const __bg = await loadImage(layers.bg); c.drawImage(__bg, cut.x, cut.y, cut.w, cut.h, cut.x, cut.y, cut.w, cut.h); } } catch (e) {}
+    drawCut(im, dir * -10 * s, 0, 0, 0.34);                                   // strong ghost: where the body WAS
+    drawCut(im, dir * -22 * s, -2 * s, dir * 0.05, 0.14);                     // trailing ghost behind it
+    drawCut(im, dir * 46 * s, -10 * s, -dir * 0.10, 0.98);                    // the dodge: OFF the line, away from the blade, hopping
+    dustPuff(c, oldX + dir * 8 * s, an.feetY * s - 4 * s, 1.0, s);            // launch footfall dust
+    dustPuff(c, oldX + dir * 52 * s, an.feetY * s - 2 * s, 0.72, s);          // landing footfall dust
     const ang = dir * 0.5 + (dir > 0 ? 0.0 : Math.PI);
-    for (let i = 0; i < 2; i++) {                                             // the whiff: two pale arcs through empty air
-      c.save(); c.translate(oldX + (i - 0.5) * 16 * s * dir, oldY - 10 * s * (i ? -1 : 1)); c.rotate(ang + (i - 0.5) * 0.22);
-      c.globalAlpha = 0.62; slash(c, Math.max(h * 1.1, 100 * s), 8 * s, '#ffffff', a2(el || '#cfd8e8', 0.75)); c.restore();
+    for (let i = 0; i < 2; i++) {                                             // the whiff: arcs sweep the VACATED spot only
+      c.save(); c.translate(oldX + (i - 0.5) * 14 * s * dir, oldY - 8 * s * (i ? -1 : 1)); c.rotate(ang + (i - 0.5) * 0.2);
+      c.globalAlpha = 0.55; slash(c, Math.max(h * 1.05, 100 * s), 7 * s, '#ffffff', a2(el || '#cfd8e8', 0.7)); c.restore();
     }
-    for (let i = 0; i < 3; i++) streak(c, oldX + dir * (34 + i * 26) * s, oldY - 18 * s + i * 16 * s, (70 + i * 18) * s, 4 * s, el || '#cfd8e8', 0.5 - i * 0.12);
-    c.fillStyle = a2(el || '#cfd8e8', 0.8);                                   // a few deflected spark chips
+    for (let i = 0; i < 4; i++) streak(c, oldX + dir * (30 + i * 30) * s, oldY - 22 * s + i * 14 * s, (76 + i * 16) * s, 4.5 * s, el || '#cfd8e8', 0.55 - i * 0.11);
+    c.fillStyle = a2(el || '#cfd8e8', 0.8);                                   // deflected spark chips off the swing
     for (let i = 0; i < 6; i++) { const a = -0.6 + i * 0.42, r = (30 + (i * 23 % 26)) * s; c.fillRect(oldX + Math.cos(a) * r * dir, oldY + Math.sin(a) * r * 0.6, 2.4 * s, 2.4 * s); }
+    missPlaque(c, oldX, an.feetY * s - h - 40 * s, s);                        // bevelled MISS plaque on the empty air
   } else {
     const variant = pickVariant(act);
     drawCut(tint('rgba(255,235,225,0.55)'), 0, 0, 0, 0.35);                               // white-hot flash on the original
@@ -277,4 +312,4 @@ async function drawHitReaction(c, layers, anchors, act, s) {
   }
 }
 
-module.exports = { drawHitReaction, slashPattern, impactBurst, slash, star, a2, streak, pickVariant, drawItemEmblem, VARIANTS };
+module.exports = { drawHitReaction, slashPattern, impactBurst, slash, star, a2, streak, pickVariant, drawItemEmblem, dustPuff, missPlaque, VARIANTS };

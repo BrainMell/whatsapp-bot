@@ -145,33 +145,63 @@ async function renderNodePvpCard(players, enemies, options, api) {
     hud.drawStatusBadges(c, a, fx, s);
   }
   const pl = payload.players || [];
-  for (let i = 0; i < 2; i++) {
-    const p = pl[i]; if (!p) continue;
-    const cut = (layers.cuts || []).find((x) => x.side === 'player' && x.index === i), flip = i === 1, col = i === 0 ? '#d8b04a' : '#8f5bd6';
-    if (i === turn) { // active duelist: warm glow behind their hub
-      const gx = flip ? W - 18 * s - 165 * s : 18 * s + 165 * s, gy = (flip ? 12 : hud.DH - 104) * s + 49 * s;
-      const g = c.createRadialGradient(gx, gy, 10 * s, gx, gy, 230 * s); g.addColorStop(0, 'rgba(255,214,102,0.30)'); g.addColorStop(1, 'rgba(255,214,102,0)'); c.fillStyle = g; c.fillRect(gx - 240 * s, gy - 120 * s, 480 * s, 240 * s);
+  // 🎬 round 10: status badges + hubs + trays = the FRONT CHROME. Painted through one
+  // async painter so the still board AND the turn animation's chrome plate are pixel-identical.
+  const paintFrontLayer = async (g) => {
+    for (const a of anchors) {
+      if (a.side !== 'player') continue;
+      const u = players[a.index]; if (!u || u.isDead) continue;
+      const fx = Array.isArray(u.statusEffects) ? u.statusEffects.filter((e) => e && e.icon) : [];
+      if (!fx.length) continue;
+      auras.drawAuras(g, a, u.statusEffects, s, 'front');
+      hud.drawStatusBadges(g, a, fx, s);
     }
-    hud.drawPlayerHud(c, { name: p.name, hp: p.currentHP ?? p.hp, maxHp: p.maxHp, energy: p.energy, maxEnergy: p.maxEnergy, level: p.level, portrait: await hud.portraitFromCut(cut), color: col },
-      s, 18, flip ? 12 : hud.DH - 104, { flip, seed: 11 + i * 5 });
-  }
+    for (let i = 0; i < 2; i++) {
+      const p = pl[i]; if (!p) continue;
+      const cut = (layers.cuts || []).find((x) => x.side === 'player' && x.index === i), flip = i === 1, col = i === 0 ? '#d8b04a' : '#8f5bd6';
+      if (i === turn) { // active duelist: warm glow behind their hub
+        const gx = flip ? W - 18 * s - 165 * s : 18 * s + 165 * s, gy = (flip ? 12 : hud.DH - 104) * s + 49 * s;
+        const rg = g.createRadialGradient(gx, gy, 10 * s, gx, gy, 230 * s); rg.addColorStop(0, 'rgba(255,214,102,0.30)'); rg.addColorStop(1, 'rgba(255,214,102,0)'); g.fillStyle = rg; g.fillRect(gx - 240 * s, gy - 120 * s, 480 * s, 240 * s);
+      }
+      hud.drawPlayerHud(g, { name: p.name, hp: p.currentHP ?? p.hp, maxHp: p.maxHp, energy: p.energy, maxEnergy: p.maxEnergy, level: p.level, portrait: await hud.portraitFromCut(cut), color: col },
+        s, 18, flip ? 12 : hud.DH - 104, { flip, seed: 11 + i * 5 });
+    }
+    // 🃏 summon deck trays: every duelist who owns cards gets one (P1 bottom strip beside the hub, P2 top strip left of the mirrored hub)
+    if (options._skipTray !== true) try {
+      const sc = require('../summonCards');
+      for (let i = 0; i < 2; i++) {
+        const src = players[i]; if (!src || !src.jid) continue;
+        // duelists keep energy flat (src.energy) — handEntries reads player.stats.energy, so shim it
+        // or every card badges as affordable regardless of the duelist's real energy.
+        const entries = sc.handEntries(src.jid, options.combatState || {}, { stats: { energy: src.energy, maxEnergy: src.maxEnergy } });
+        if (!entries.length) continue;
+        if (i === 0) await hud.drawDeckTray(g, entries, s, 330, hud.DH - 96, hud.DW - 18);
+        else await hud.drawDeckTray(g, entries, s, 18, 8, hud.DW - 340);
+      }
+    } catch (e) { /* tray is optional */ }
+  };
+  await paintFrontLayer(c);
   if (options._sceneOut) { Object.assign(options._sceneOut, { canvas: cv, anchors, s, hi: turn, layers, players, enemies: [] }); }
   if (options._skipTray) return { success: true, buffer: cv.toBuffer('image/jpeg', { quality: 0.8 }), mimeType: 'image/jpeg' };
-  // 🃏 summon deck trays: every duelist who owns cards gets one (P1 bottom strip beside the hub, P2 top strip left of the mirrored hub)
-  try {
-    const sc = require('../summonCards');
-    for (let i = 0; i < 2; i++) {
-      const src = players[i]; if (!src || !src.jid) continue;
-      // duelists keep energy flat (src.energy) — handEntries reads player.stats.energy, so shim it
-      // or every card badges as affordable regardless of the duelist's real energy.
-      const entries = sc.handEntries(src.jid, options.combatState || {}, { stats: { energy: src.energy, maxEnergy: src.maxEnergy } });
-      if (!entries.length) continue;
-      if (i === 0) await hud.drawDeckTray(c, entries, s, 330, hud.DH - 96, hud.DW - 18);
-      else await hud.drawDeckTray(c, entries, s, 18, 8, hud.DW - 340);
-    }
-  } catch (e) { /* tray is optional */ }
   const buffer = cv.toBuffer('image/jpeg', { quality: 0.88 });
   console.log(`[CombatHud] node PvP card ${buffer.length}B in ${Date.now() - t0}ms`);
+  // ⚔️ round 10 (owner: "the cards aren't animated"): an actionable turn plays a short
+  // Node-composed clip that settles on THIS exact board. Static jpeg stays the fallback.
+  if (act && act.targetSide && (Number(act.damage) > 0 || act.missed) &&
+      String(process.env.PVP_TURN_ANIM || '') !== '0' && !options._skipTray) {
+    try {
+      const chrome = createCanvas(W, H);
+      await paintFrontLayer(chrome.getContext('2d'));
+      const mp4 = await Promise.race([
+        require('./turnVfx').animatePvpTurn({ cv, layers, act, players, s, W, H, chrome }),
+        new Promise((r) => setTimeout(() => r(null), 9500)),
+      ]);
+      if (mp4 && mp4.length > 5000) {
+        console.log(`[CombatHud] node PvP turn video ${mp4.length}B total ${Date.now() - t0}ms`);
+        return { success: true, buffer: mp4, mimeType: 'video/mp4' };
+      }
+    } catch (e) { console.warn('[CombatHud] turn anim skipped:', e && e.message); }
+  }
   return { success: true, buffer, mimeType: 'image/jpeg' };
 }
 module.exports = { renderNodeCard, renderNodePvpCard, paintChrome };

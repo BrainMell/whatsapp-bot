@@ -12831,7 +12831,14 @@ _💡 Reply with another number from your search list!_`.trim();
                             try { await sock.sendMessage(chatId, { video: result.cardVideo, gifPlayback: true, mimetype: 'video/mp4' }); } catch (cvErr) {}
                           }
                           if (result.image?.success) {
-                            await sock.sendMessage(chatId, {
+                            const __isVid = result.image.mimeType === 'video/mp4';
+                            await sock.sendMessage(chatId, __isVid ? {
+                              video: result.image.buffer,
+                              gifPlayback: true,
+                              mimetype: 'video/mp4',
+                              caption: BOT_MARKER + result.message,
+                              mentions: result.mentions || [],
+                            } : {
                               image: result.image.buffer,
                               caption: BOT_MARKER + result.message,
                               mentions: result.mentions || [],
@@ -28523,7 +28530,13 @@ ${senderName} said y'all should know:
                         );
                         if (result.success) {
                           if (result.image?.success) {
-                            await sock.sendMessage(chatId, {
+                            const __isVid = result.image.mimeType === 'video/mp4';
+                            await sock.sendMessage(chatId, __isVid ? {
+                              video: result.image.buffer,
+                              gifPlayback: true,
+                              mimetype: 'video/mp4',
+                              caption: BOT_MARKER + result.message,
+                            } : {
                               image: result.image.buffer,
                               caption: BOT_MARKER + result.message,
                               mimetype: 'image/jpeg',
@@ -28831,10 +28844,18 @@ ${senderName} said y'all should know:
                       );
                       if (result.success) {
                         if (result.image?.success) {
-                          await sock.sendMessage(chatId, {
+                          const __isVid = result.image.mimeType === 'video/mp4';
+                          await sock.sendMessage(chatId, __isVid ? {
+                            video: result.image.buffer,
+                            gifPlayback: true,
+                            mimetype: 'video/mp4',
+                            caption: BOT_MARKER + result.message,
+                            mentions: result.mentions || [],
+                          } : {
                             image: result.image.buffer,
                             caption: BOT_MARKER + result.message,
                             mentions: result.mentions || [],
+                            mimetype: 'image/jpeg',
                           });
                         } else {
                           await sock.sendMessage(chatId, {
