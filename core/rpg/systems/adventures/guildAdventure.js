@@ -4899,7 +4899,7 @@ async function _concatMp4(bufs) {
     const args = ['-y', '-loglevel', 'error'];
     bufs.forEach((b, i) => { const f = pathx.join(dir, `in${i}.mp4`); fsx.writeFileSync(f, b); args.push('-i', f); });
     const W = 768, H = 516;
-    let filt = bufs.map((_, i) => `[${i}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=20,format=yuv420p[v${i}]`).join(';');
+    let filt = bufs.map((_, i) => `[${i}:v]scale=${W}:${H}:flags=bicubic,setsar=1,fps=20,format=yuv420p[v${i}]`).join(';');
     // 🎞️ ONE CONTINUOUS CLIP (owner 2026-11-07: "card animation + death feel like two videos stitched"):
     // a dissolve between segments (xfade) instead of a hard cut, so the card's impact flows into the shatter.
     let xf = false;
@@ -5073,7 +5073,7 @@ function _jpegDims(buf) {
 //   3. Single pass, 15fps, ultrafast, stills decoded once via loop filter.
 // ANY failure returns null → the caller falls back to the old clip+card sends.
 const MERGE_W = 640, MERGE_H = 480;
-async function _mergeOverlayMaterialsWithCard(clips, cardJpeg, cardHoldSec, t0) {
+async function _mergeOverlayMaterialsWithCardRaw(clips, cardJpeg, cardHoldSec, t0) {
   const { spawn, execFile } = require('child_process');
   const ffmpegBin = () => process.env.FFMPEG_PATH || 'ffmpeg';
   const run = (bin, a, ms) => new Promise((resolve, reject) => {
@@ -5095,11 +5095,11 @@ async function _mergeOverlayMaterialsWithCard(clips, cardJpeg, cardHoldSec, t0) 
     // (640x480@15, baseline, ultrafast, yuv420p) and remux the sequence —
     // no re-encode of the animation at all (~50ms copy vs ~600-900ms encode).
     const allMp4 = clips.every((c) => c && Buffer.isBuffer(c.mp4) && c.mp4.length > 1000);
-    if (allMp4) {
+    if (allMp4 && process.env.DEATH_RESTORE_ASPECT === '0') {   // (clips are 768x516 now; stream merge below restores aspect once at the end)
       try {
         const cardSeg = path.join(dir, 'cardseg.mp4');
         await run('ffmpeg', ['-v', 'error', '-y', '-framerate', '15', '-i', cardPath,
-          '-vf', `loop=loop=${cardFrames - 1}:size=1:start=0,setpts=N/(15*TB),scale=${MERGE_W}:${MERGE_H}:force_original_aspect_ratio=decrease,pad=${MERGE_W}:${MERGE_H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p`,
+          '-vf', `loop=loop=${cardFrames - 1}:size=1:start=0,setpts=N/(15*TB),scale=${MERGE_W}:${MERGE_H},setsar=1,format=yuv420p`,
           '-frames:v', String(cardFrames),
           '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'baseline', '-crf', '24', '-threads', '2', '-an', cardSeg], 10000);
         const listPath = path.join(dir, 'list.txt');
@@ -5129,7 +5129,7 @@ async function _mergeOverlayMaterialsWithCard(clips, cardJpeg, cardHoldSec, t0) 
         '-s', `${MERGE_W}x${MERGE_H}`, '-r', '15', '-i', 'pipe:0',
         '-framerate', '15', '-i', cardPath,
         '-filter_complex',
-        `[0:v]format=yuv420p,settb=AVTB[v0];[1:v]scale=${MERGE_W}:${MERGE_H}:force_original_aspect_ratio=decrease,pad=${MERGE_W}:${MERGE_H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,loop=loop=${cardFrames - 1}:size=1:start=0,setpts=N/(15*TB),fps=15,settb=AVTB,format=yuv420p[v1];[v0][v1]concat=n=2:v=1:a=0[v]`,
+        `[0:v]format=yuv420p,settb=AVTB[v0];[1:v]scale=${MERGE_W}:${MERGE_H},setsar=1,loop=loop=${cardFrames - 1}:size=1:start=0,setpts=N/(15*TB),fps=15,settb=AVTB,format=yuv420p[v1];[v0][v1]concat=n=2:v=1:a=0[v]`,
         '-map', '[v]', '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-crf', '24', '-threads', '2', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', outPath];
       const out = await new Promise((resolve, reject) => {
         const p = spawn(ffmpegBin(), args, { stdio: ['pipe', 'ignore', 'pipe'] });
@@ -5167,7 +5167,7 @@ async function _mergeOverlayMaterialsWithCard(clips, cardJpeg, cardHoldSec, t0) 
       vids.push(`[v${k}]`);
     }
     args.push('-framerate', '15', '-i', cardPath);
-    chain.push(`[${clips.length}:v]loop=loop=${cardFrames - 1}:size=1:start=0,setpts=N/(15*TB),scale=${MERGE_W}:${MERGE_H}:force_original_aspect_ratio=decrease,pad=${MERGE_W}:${MERGE_H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=15,settb=AVTB,format=yuv420p[v${clips.length}]`);
+    chain.push(`[${clips.length}:v]loop=loop=${cardFrames - 1}:size=1:start=0,setpts=N/(15*TB),scale=${MERGE_W}:${MERGE_H},setsar=1,fps=15,settb=AVTB,format=yuv420p[v${clips.length}]`);
     vids.push(`[v${clips.length}]`);
     chain.push(`${vids.join('')}concat=n=${vids.length}:v=1:a=0[v]`);
     args.push('-filter_complex', chain.join(';'), '-map', '[v]', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-threads', '2', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', outPath);
@@ -5180,6 +5180,24 @@ async function _mergeOverlayMaterialsWithCard(clips, cardJpeg, cardHoldSec, t0) 
   } finally {
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
   }
+}
+
+// 📐 dimension parity: the materials pipeline works in the 4:3 (640x480) ultimate space where the scene is vertically squashed AND the
+// card used to be letter-boxed into it (black bars). It now fills the frame (same squash) and one final pass stretches the whole clip
+// back to the true 768x516 (1.49:1) so kill-turn videos match the card scenes and death clips.
+async function _mergeOverlayMaterialsWithCard(clips, cardJpeg, cardHoldSec, t0) {
+  const out = await _mergeOverlayMaterialsWithCardRaw(clips, cardJpeg, cardHoldSec, t0);
+  if (!out || process.env.DEATH_RESTORE_ASPECT === '0') return out;
+  try {
+    const dir = path.join(require('os').tmpdir(), `deathar-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
+    fs.mkdirSync(dir, { recursive: true });
+    try {
+      fs.writeFileSync(path.join(dir, 'in.mp4'), out);
+      await new Promise((resolve, reject) => require('child_process').execFile(process.env.FFMPEG_PATH || 'ffmpeg', ['-v', 'error', '-y', '-i', path.join(dir, 'in.mp4'), '-vf', 'scale=768:516:flags=bicubic,setsar=1,format=yuv420p', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-threads', '2', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', path.join(dir, 'out.mp4')], { timeout: 10000 }, (e) => (e ? reject(e) : resolve())));
+      const o2 = fs.readFileSync(path.join(dir, 'out.mp4'));
+      return o2 && o2.length > 1000 ? o2 : out;
+    } finally { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {} }
+  } catch (e) { console.warn('[DeathFx] aspect restore skipped:', e.message); return out; }
 }
 
 async function _mergeDeathClipsWithCard(clips, cardJpeg, cardHoldSec = 1.8) {

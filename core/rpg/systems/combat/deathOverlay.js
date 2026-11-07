@@ -148,7 +148,10 @@ async function scenePlate(layers, dyingIdx, deadIdx, chrome) {
   if (chrome && process.env.DEATH_CHROME !== '0') {
     try {
       const hide = new Set([...dyingIdx, ...__dead].map((n) => Math.floor(Number(n) || 0)));
-      await require('./combatCardNode').paintChrome(c, VW / 1024, { ...chrome, layers, hide });
+      // paint in 1024x687 layer space through the SAME anisotropic mapping as the bg (kx,ky) so the HUD matches the card scene once the clip is stretched back to 768x516
+      c.save(); c.scale(kx, ky);
+      await require('./combatCardNode').paintChrome(c, 1024 / 1024, { ...chrome, layers, hide });
+      c.restore();
     } catch (e) {}
   }
   return cv.toBuffer('image/jpeg', { quality: 0.85 });
@@ -184,7 +187,9 @@ function encodeRawClip(m, outPath) {
   return new Promise((resolve, reject) => {
     const args = ['-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'bgra',
       '-s', `${VW}x${VH}`, '-r', String(m.fps), '-i', 'pipe:0',
-      '-vf', 'format=yuv420p',
+      // 📐 the 4:3 (640x480) ultimate/death space is a vertically-squashed 1024x687 scene; restore the true 768x516 (1.49:1) frame
+      // so death clips match the card scene's dimensions (no letterbox bars, no squash)
+      '-vf', process.env.DEATH_RESTORE_ASPECT === '0' ? 'format=yuv420p' : 'scale=768:516:flags=bicubic,format=yuv420p',
       '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'baseline', '-crf', '24', '-threads', '2', '-movflags', '+faststart', '-an', outPath];
     const p = spawn(ffmpegBin(), args, { stdio: ['pipe', 'ignore', 'pipe'] });
     let err = ''; let done = false;
