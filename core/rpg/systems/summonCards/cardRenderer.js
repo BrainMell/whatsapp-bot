@@ -15,7 +15,7 @@ function cv() { if (!_cv) _cv = require('canvas'); return _cv; }
 function fonts() {
   if (_fonts) return; _fonts = true;
   const { registerFont } = cv();
-  for (const [f, fam] of [['Cinzel-Variable.ttf', 'SCCinzel'], ['IMFellEnglish-Regular.ttf', 'SCFell'], ['PressStart2P-Regular.ttf', 'SCPixel']]) {
+  for (const [f, fam] of [['Cinzel-Variable.ttf', 'SCCinzel'], ['IMFellEnglish-Regular.ttf', 'SCFell'], ['PressStart2P-Regular.ttf', 'SCPixel'], ['CinzelDecorative-Bold.ttf', 'SCCinzelD'], ['IMFellEnglish-Italic.ttf', 'SCFellI']]) {
     try { const p = path.join(ASSET, 'fonts', f); if (fs.existsSync(p)) registerFont(p, { family: fam }); } catch (e) {}
   }
 }
@@ -38,64 +38,139 @@ function wrap(c, text, maxW) {
 }
 function hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
 
+// ── 📜 Parchment deck-builder card (owner 2026-11-07: "redesign, put soul into it"). Aged paper body, riveted metal frame by
+// rarity (iron / verdigris / steel / gold-leaf), arched art window with element sunburst, wax cost seal, hourglass cooldown shield,
+// swallowtail title + type ribbons, rule box with italic flavour text, gem pips and an element sigil. Same 300x440 box + signature.
+const P = require('../shared/parchment');
+const METAL = {
+  COMMON:    ['#d3d6dc', '#858b95', '#3a3e46'], UNCOMMON: ['#b6efc9', '#4aa36f', '#1d4f34'],
+  RARE:      ['#cbe6ff', '#5392dc', '#1c3c78'], LEGENDARY: ['#fff6bd', '#e3aa2a', '#744508'],
+};
+const FLAVOR = {
+  ifrit: 'Born where the forge-wind never sleeps.', leviathan: 'The tide remembers every ship it has taken.', shiva: 'Silence, then frost, then nothing at all.',
+  pyraxis: 'Its wings write letters in the sky. All of them are goodbyes.', colossus: 'It has been standing since before the mountain was named.',
+  frostbeard: 'Old, loud, and never once cold.', nauticus: 'Lightning travels farthest through still water.', starnail: 'A fallen star, still arguing with gravity.',
+  fireguard: 'Sworn to the flame. The flame has not sworn back.', tidalmaw: 'Patient as the sea floor, hungry as the sea.', lumenmoth: 'Follow the glow. Ignore where it leads.',
+  rexor: 'Small arms. Large opinions.', krakenling: 'Still growing into its many opinions.', trickbox: 'Do not open. It knows you want to.',
+  emberwick: 'One small flame, held against the whole night.', skitterswarm: 'You will hear them long before you do not.', nocturne: 'It drinks the dark, and the dark is not enough.',
+  tuskgore: 'Subtlety was never bred into the line.', wraithveil: 'A whisper in a cold room. It knows your name.', sporelord: 'Everything blooms eventually. Preferably on you.',
+  vipertongue: 'Quick words. Quicker fangs.', gelatrix: 'Soft. Stubborn. Surprisingly dense.', frostpeep: 'Adorable right up until the pecking.', plaguefang: 'The bite is not the worst part.', boglurk: 'Roots drink deep. So does patience.',
+};
+function seal(c, x, y, r, col, fn) { P.waxSeal(c, x, y, r, col, (cc, cx, cy) => { cc.save(); cc.translate(cx, cy); fn(cc); cc.restore(); }); }
+function hash(str) { let h = 7; for (const ch of String(str)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h || 1; }
+function metalGrad(c, m, y0, y1) { const g = c.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, m[0]); g.addColorStop(0.45, m[1]); g.addColorStop(0.55, m[0]); g.addColorStop(1, m[2]); return g; }
+function archPath(c, x, y, w, h, top, bot) {
+  c.beginPath(); c.moveTo(x, y + top); c.quadraticCurveTo(x, y, x + top, y); c.lineTo(x + w - top, y); c.quadraticCurveTo(x + w, y, x + w, y + top);
+  c.lineTo(x + w, y + h - bot); c.quadraticCurveTo(x + w, y + h, x + w - bot, y + h); c.lineTo(x + bot, y + h); c.quadraticCurveTo(x, y + h, x, y + h - bot); c.closePath();
+}
+function ribbon(c, x, y, w, h, n) { // swallowtail-notched ribbon path
+  c.beginPath(); c.moveTo(x + n, y); c.lineTo(x + w - n, y); c.lineTo(x + w, y + h / 2); c.lineTo(x + w - n, y + h); c.lineTo(x + n, y + h); c.lineTo(x, y + h / 2); c.closePath();
+}
+/** Little vector sigils so no card relies on emoji fonts. */
+function sigil(c, el, cx, cy, r, col) {
+  c.save(); c.translate(cx, cy); c.fillStyle = col; c.strokeStyle = col; c.lineWidth = Math.max(1.4, r * 0.16); c.lineCap = 'round'; c.lineJoin = 'round';
+  const L = (...p) => { c.beginPath(); c.moveTo(p[0] * r, p[1] * r); for (let i = 2; i < p.length; i += 2) c.lineTo(p[i] * r, p[i + 1] * r); };
+  switch (el) {
+    case 'FIRE': c.beginPath(); c.moveTo(0, -r); c.bezierCurveTo(r * 0.9, -r * 0.2, r * 0.8, r * 0.9, 0, r); c.bezierCurveTo(-r * 0.8, r * 0.9, -r * 0.9, -r * 0.1, -r * 0.2, -r * 0.45); c.bezierCurveTo(-r * 0.1, -r * 0.2, 0, -r * 0.2, 0, -r); c.fill(); break;
+    case 'WATER': case 'POISON': c.beginPath(); c.moveTo(0, -r); c.bezierCurveTo(r * 0.95, r * 0.15, r * 0.7, r, 0, r); c.bezierCurveTo(-r * 0.7, r, -r * 0.95, r * 0.15, 0, -r); c.fill(); break;
+    case 'ICE': for (let i = 0; i < 3; i++) { c.save(); c.rotate(i * Math.PI / 3); L(0, -1, 0, 1); c.stroke(); L(-0.3, -0.7, 0, -0.4, 0.3, -0.7); c.stroke(); L(-0.3, 0.7, 0, 0.4, 0.3, 0.7); c.stroke(); c.restore(); } break;
+    case 'EARTH': L(-1, 0.8, -0.35, -0.5, 0, 0.1, 0.4, -0.9, 1, 0.8); c.closePath(); c.fill(); break;
+    case 'LIGHT': c.beginPath(); c.arc(0, 0, r * 0.42, 0, 7); c.fill(); for (let i = 0; i < 8; i++) { c.save(); c.rotate(i * Math.PI / 4); L(0, -0.62, 0, -1); c.stroke(); c.restore(); } break;
+    case 'LIGHTNING': L(0.25, -1, -0.55, 0.1, -0.05, 0.1, -0.3, 1, 0.6, -0.2, 0.05, -0.2); c.closePath(); c.fill(); break;
+    case 'SHADOW': c.beginPath(); c.arc(0, 0, r, 0.45 * Math.PI, 1.55 * Math.PI, false); c.arc(r * 0.45, 0, r * 0.82, 1.4 * Math.PI, 0.6 * Math.PI, true); c.closePath(); c.fill(); break;
+    case 'NATURE': c.beginPath(); c.moveTo(-r * 0.9, r * 0.9); c.bezierCurveTo(-r, -r * 0.5, r * 0.2, -r, r, -r); c.bezierCurveTo(r, r * 0.1, -r * 0.1, r, -r * 0.9, r * 0.9); c.fill(); c.strokeStyle = 'rgba(0,0,0,0.35)'; L(-0.8, 0.8, 0.5, -0.5); c.stroke(); break;
+    case 'PLAGUE': for (const [x, y, k] of [[0, -0.4, 0.5], [-0.5, 0.45, 0.4], [0.5, 0.45, 0.4]]) { c.beginPath(); c.arc(x * r, y * r, k * r, 0, 7); c.fill(); } break;
+    case 'BEAST': for (const x of [-0.55, 0, 0.55]) { c.beginPath(); c.moveTo((x - 0.18) * r, -r); c.quadraticCurveTo((x + 0.35) * r, 0, (x - 0.1) * r, r); c.quadraticCurveTo((x + 0.05) * r, 0, (x - 0.18) * r, -r); c.fill(); } break;
+    default: for (let i = 0; i < 4; i++) { c.save(); c.rotate(i * Math.PI / 4); L(0, -1, 0.16, -0.16, 1, 0, 0.16, 0.16, 0, 1, -0.16, 0.16, -1, 0, -0.16, -0.16); c.closePath(); c.fill(); c.restore(); if (i === 1) break; }
+  }
+  c.restore();
+}
+function typeEmblem(c, type, cx, cy, r, col) {
+  c.save(); c.translate(cx, cy); c.strokeStyle = col; c.fillStyle = col; c.lineWidth = r * 0.22; c.lineCap = 'round';
+  if (type === 'ATTACK') { for (const d of [1, -1]) { c.beginPath(); c.moveTo(-r * d, r); c.lineTo(r * d, -r); c.stroke(); c.beginPath(); c.moveTo((-r * 0.1 * d) - r * 0.45, r * 0.2 * d + r * 0.1); c.lineTo(r * 0.45 - r * 0.1 * d, -r * 0.2 * d - r * 0.1); } c.restore(); return; }
+  if (type === 'SKILL') { c.beginPath(); c.moveTo(0, r); c.bezierCurveTo(-r * 1.1, r * 0.3, -r, -r * 0.5, -r, -r * 0.8); c.lineTo(0, -r); c.lineTo(r, -r * 0.8); c.bezierCurveTo(r, -r * 0.5, r * 1.1, r * 0.3, 0, r); c.fill(); c.restore(); return; }
+  c.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, k = i % 2 ? 0.45 : 1; c.lineTo(Math.cos(a) * r * k, Math.sin(a) * r * k); } c.closePath(); c.fill(); c.restore();
+}
+
 /** state: { ready:boolean, turnsLeft:number, affordable:boolean, index:number|null, locked:boolean } */
 async function drawCard(c, card, x, y, st = {}) {
   fonts();
   const rar = RARITY[card.rarity] || RARITY.COMMON, ty = TYPE_STYLE[card.type] || TYPE_STYLE.ATTACK, el = ELEMENT_COLORS[card.element] || '#cccccc';
-  c.save(); c.translate(x, y);
-  // outer glow + frame
-  c.shadowColor = rar.glow; c.shadowBlur = card.rarity === 'LEGENDARY' ? 26 : 14;
-  rr(c, 6, 6, CW - 12, CH - 12, 22); const fg = c.createLinearGradient(0, 0, 0, CH); fg.addColorStop(0, rar.color); fg.addColorStop(1, rar.glow); c.fillStyle = fg; c.fill(); c.shadowBlur = 0;
-  rr(c, 14, 14, CW - 28, CH - 28, 16); const bg = c.createLinearGradient(0, 0, 0, CH); bg.addColorStop(0, '#20232e'); bg.addColorStop(1, '#101219'); c.fillStyle = bg; c.fill();
-  // art window
-  const ax = 26, ay = 62, aw = CW - 52, ah = 186;
-  c.save(); rr(c, ax, ay, aw, ah, 10); c.clip();
-  const ag = c.createRadialGradient(CW / 2, ay + ah * 0.55, 8, CW / 2, ay + ah * 0.55, aw * 0.8); ag.addColorStop(0, hexA(el, 0.75)); ag.addColorStop(0.6, hexA(el, 0.25)); ag.addColorStop(1, '#0b0d12');
-  c.fillStyle = ag; c.fillRect(ax, ay, aw, ah);
-  c.globalAlpha = 0.18; c.fillStyle = '#fff'; for (let i = 0; i < 14; i++) { const px = ax + ((i * 67) % aw), py = ay + ((i * 41) % ah); c.fillRect(px, py, 2, 2); } c.globalAlpha = 1;
+  const M = METAL[card.rarity] || METAL.COMMON, seed = hash(card.id), ink = '#2c1a0c', gold = card.rarity === 'LEGENDARY';
+  const afford = st.affordable !== false;
+  c.save(); c.translate(x, y); c.textBaseline = 'middle'; c.textAlign = 'center';
+  // 1. backing + metal frame
+  c.save(); c.shadowColor = hexA(rar.glow, gold ? 0.9 : 0.55); c.shadowBlur = gold ? 24 : 12; c.shadowOffsetY = 3;
+  rr(c, 6, 6, CW - 12, CH - 12, 20); c.fillStyle = metalGrad(c, M, 6, CH); c.fill(); c.restore();
+  rr(c, 11, 11, CW - 22, CH - 22, 16); c.fillStyle = '#1b120a'; c.fill();
+  // 2. parchment body (deckled)
+  const px = 15, py = 15, pw = CW - 30, ph = CH - 30;
+  c.save(); P.tornPath(c, px, py, pw, ph, { amp: 1.3, step: 9, seed: seed % 97 }); c.clip();
+  c.drawImage(P.makePaper(pw, ph, { seed: seed % 53 + 1, tone: card.rarity === 'COMMON' ? 'warm' : 'cream', stains: 0 }), px, py);
+  const vg = c.createRadialGradient(CW / 2, CH / 2, 90, CW / 2, CH / 2, 280); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(60,30,8,0.34)'); c.fillStyle = vg; c.fillRect(px, py, pw, ph);
+  c.restore();
+  // inner ink keyline + stitching
+  rr(c, 18, 18, CW - 36, CH - 36, 11); c.lineWidth = 1.4; c.strokeStyle = 'rgba(44,26,12,0.55)'; c.stroke();
+  P.stitch(c, 22, 22, CW - 44, CH - 44, 8, 'rgba(60,34,14,0.38)', 1, [4, 4]);
+  // 3. arched art window
+  const ax = 28, ay = 58, aw = CW - 56, ah = 162;
+  c.save(); archPath(c, ax, ay, aw, ah, 54, 8); c.clip();
+  const bgG = c.createLinearGradient(0, ay, 0, ay + ah); bgG.addColorStop(0, '#0d0f16'); bgG.addColorStop(1, hexA(el, 0.45)); c.fillStyle = bgG; c.fillRect(ax, ay, aw, ah);
+  const cxA = CW / 2, cyA = ay + ah * 0.62;
+  c.save(); c.translate(cxA, cyA); c.fillStyle = hexA(el, 0.17); for (let i = 0; i < 14; i++) { const a = i * Math.PI / 7; c.beginPath(); c.moveTo(0, 0); c.arc(0, 0, 230, a, a + Math.PI / 14); c.closePath(); c.fill(); } c.restore();
+  const og = c.createRadialGradient(cxA, cyA, 6, cxA, cyA, aw * 0.62); og.addColorStop(0, hexA(el, 0.85)); og.addColorStop(0.5, hexA(el, 0.28)); og.addColorStop(1, 'rgba(8,10,16,0.0)'); c.fillStyle = og; c.fillRect(ax, ay, aw, ah);
+  c.strokeStyle = hexA(el, 0.5); c.lineWidth = 1.2; c.beginPath(); c.arc(cxA, cyA, 62, 0, 7); c.stroke(); c.setLineDash([3, 5]); c.beginPath(); c.arc(cxA, cyA, 74, 0, 7); c.stroke(); c.setLineDash([]);
+  const rn = P.rng(seed); c.fillStyle = '#fff'; for (let i = 0; i < 22; i++) { c.globalAlpha = 0.12 + rn() * 0.4; c.fillRect(ax + rn() * aw, ay + rn() * ah, 1.6, 1.6); } c.globalAlpha = 1;
   const art = await artFor(card);
   if (art) {
-    const k = Math.min((aw - 16) / art.width, (ah - 12) / art.height) * (art.width <= 200 ? 1 : 1);
-    const iw = art.width * k, ih = art.height * k;
-    c.imageSmoothingEnabled = art.width > 256; c.shadowColor = 'rgba(0,0,0,0.6)'; c.shadowBlur = 12;
-    c.drawImage(art, ax + (aw - iw) / 2, ay + (ah - ih) / 2 + 4, iw, ih); c.shadowBlur = 0;
-  } else {
-    c.fillStyle = hexA('#ffffff', 0.85); c.font = 'bold 84px SCCinzel, serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(card.name[0], CW / 2, ay + ah / 2);
+    const k = Math.min((aw - 14) / art.width, (ah - 14) / art.height), iw = art.width * k, ih = art.height * k;
+    c.imageSmoothingEnabled = art.width > 256; c.shadowColor = 'rgba(0,0,0,0.65)'; c.shadowBlur = 12; c.shadowOffsetY = 4;
+    c.drawImage(art, ax + (aw - iw) / 2, ay + (ah - ih) / 2 + 6, iw, ih); c.shadowBlur = 0; c.shadowOffsetY = 0;
+  } else { c.fillStyle = 'rgba(255,255,255,0.88)'; c.font = '84px SCCinzelD, SCCinzel, serif'; c.fillText(card.name[0], CW / 2, cyA - 6); }
+  const ig = c.createLinearGradient(0, ay, 0, ay + ah); ig.addColorStop(0, 'rgba(0,0,0,0.35)'); ig.addColorStop(0.25, 'rgba(0,0,0,0)'); ig.addColorStop(0.8, 'rgba(0,0,0,0)'); ig.addColorStop(1, 'rgba(0,0,0,0.4)'); c.fillStyle = ig; c.fillRect(ax, ay, aw, ah);
+  c.restore();
+  archPath(c, ax, ay, aw, ah, 54, 8); c.lineWidth = 5; c.strokeStyle = metalGrad(c, M, ay, ay + ah); c.stroke();
+  archPath(c, ax + 3, ay + 3, aw - 6, ah - 6, 51, 6); c.lineWidth = 1; c.strokeStyle = 'rgba(20,10,2,0.8)'; c.stroke();
+  for (const [rx, ry] of [[ax + 6, ay + ah - 6], [ax + aw - 6, ay + ah - 6]]) { c.beginPath(); c.arc(rx, ry, 3.2, 0, 7); c.fillStyle = metalGrad(c, M, ry - 3, ry + 3); c.fill(); }
+  // 4. title ribbon
+  ribbon(c, 40, 20, CW - 80, 30, 12); c.save(); c.shadowColor = 'rgba(0,0,0,0.5)'; c.shadowBlur = 5; c.shadowOffsetY = 2; c.fillStyle = '#2a190b'; c.fill(); c.restore();
+  ribbon(c, 40, 20, CW - 80, 30, 12); c.lineWidth = 1.6; c.strokeStyle = metalGrad(c, M, 20, 50); c.stroke();
+  let f0 = 19; const nm = card.name.toUpperCase(); c.font = `${f0}px SCCinzelD, SCCinzel, serif`;
+  while (c.measureText(nm).width > CW - 120 && f0 > 11) { f0--; c.font = `${f0}px SCCinzelD, SCCinzel, serif`; }
+  c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillText(nm, CW / 2 + 1, 36); c.fillStyle = gold ? '#ffe9a0' : '#f4e6c4'; c.fillText(nm, CW / 2, 35);
+  // cost wax seal (top-left) + cooldown shield (top-right)
+  seal(c, 36, 41, 22, afford ? '#9b1d1a' : '#4a4a52', (cc) => { cc.fillStyle = '#fff3d0'; cc.font = (String(card.energyCost).length > 1 ? '18px' : '24px') + ' SCCinzelD, SCCinzel, serif'; cc.textAlign = 'center'; cc.textBaseline = 'middle'; cc.fillText(String(card.energyCost), 0, -3); cc.font = '6px SCCinzel, serif'; cc.fillText('ENERGY', 0, 11); });
+  c.save(); c.translate(CW - 36, 41); c.beginPath(); c.moveTo(-17, -19); c.lineTo(17, -19); c.lineTo(17, 6); c.quadraticCurveTo(17, 17, 0, 23); c.quadraticCurveTo(-17, 17, -17, 6); c.closePath();
+  c.fillStyle = '#2a190b'; c.fill(); c.lineWidth = 3; c.strokeStyle = metalGrad(c, M, -19, 23); c.stroke();
+  c.fillStyle = '#f4e6c4'; c.font = '19px SCCinzelD, SCCinzel, serif'; c.fillText(String(card.cooldownTurns), 0, -3); c.font = '7px SCCinzel, serif'; c.fillStyle = '#d8b04a'; c.fillText('TURNS', 0, 12); c.restore();
+  // 5. type ribbon over the art foot
+  const tyY = ay + ah - 13; ribbon(c, CW / 2 - 64, tyY, 128, 26, 10); c.save(); c.shadowColor = 'rgba(0,0,0,0.55)'; c.shadowBlur = 5; c.shadowOffsetY = 2; const tg = c.createLinearGradient(0, tyY, 0, tyY + 26); tg.addColorStop(0, ty.a); tg.addColorStop(1, ty.b); c.fillStyle = tg; c.fill(); c.restore();
+  ribbon(c, CW / 2 - 64, tyY, 128, 26, 10); c.lineWidth = 1.5; c.strokeStyle = metalGrad(c, M, tyY, tyY + 26); c.stroke();
+  typeEmblem(c, card.type, CW / 2 - 44, tyY + 13, 6, '#fff3d0'); c.fillStyle = '#fff3d0'; c.font = '13px SCCinzelD, SCCinzel, serif'; c.fillText(ty.label, CW / 2 + 6, tyY + 14);
+  // 6. rule box
+  const ry0 = tyY + 36; c.fillStyle = ink; c.font = '16px SCCinzelD, SCCinzel, serif'; c.fillText(card.abilityName, CW / 2, ry0);
+  const dv = ry0 + 14; c.strokeStyle = 'rgba(44,26,12,0.5)'; c.lineWidth = 1; c.beginPath(); c.moveTo(48, dv); c.lineTo(CW / 2 - 9, dv); c.moveTo(CW / 2 + 9, dv); c.lineTo(CW - 48, dv); c.stroke();
+  c.save(); c.translate(CW / 2, dv); c.rotate(Math.PI / 4); c.fillStyle = M[1]; c.fillRect(-3.5, -3.5, 7, 7); c.restore();
+  c.fillStyle = ink; c.font = '15px SCFell, serif'; const lines = wrap(c, card.description, CW - 74).slice(0, 4);
+  lines.forEach((l, i) => c.fillText(l, CW / 2, dv + 17 + i * 17));
+  const te = dv + 17 + (lines.length - 1) * 17 + 9, fy = Math.round((te + (CH - 50)) / 2 - 3);
+  c.fillStyle = 'rgba(70,40,16,0.85)'; c.font = '12.5px SCFellI, SCFell, serif';
+  wrap(c, '“' + (FLAVOR[card.id] || 'A bond sealed in ink and ember.') + '”', CW - 80).slice(0, 2).forEach((l, i) => c.fillText(l, CW / 2, fy + i * 14));
+  // 7. footer: element sigil medallion, rarity gems, element name
+  const fyy = CH - 33; c.beginPath(); c.arc(42, fyy, 14, 0, 7); c.fillStyle = '#2a190b'; c.fill(); c.lineWidth = 2; c.strokeStyle = metalGrad(c, M, fyy - 14, fyy + 14); c.stroke(); sigil(c, card.element, 42, fyy, 8, el);
+  c.fillStyle = ink; c.font = '11px SCCinzel, serif'; c.textAlign = 'left'; c.fillText(card.element, 62, fyy + 1); c.textAlign = 'center';
+  const pips = rar.rank + 1; for (let i = 0; i < pips; i++) { const gx = CW - 40 - (pips - 1 - i) * 15, gy = fyy; c.save(); c.translate(gx, gy); c.rotate(Math.PI / 4); c.fillStyle = metalGrad(c, M, -5, 5); c.fillRect(-5, -5, 10, 10); c.lineWidth = 1; c.strokeStyle = 'rgba(20,10,2,0.8)'; c.strokeRect(-5, -5, 10, 10); c.restore(); }
+  if (gold) { // gold-leaf sheen sweep + sparkle
+    c.save(); rr(c, 6, 6, CW - 12, CH - 12, 20); c.clip(); const sh = c.createLinearGradient(0, 0, CW, CH * 0.6); sh.addColorStop(0.35, 'rgba(255,236,160,0)'); sh.addColorStop(0.5, 'rgba(255,236,160,0.16)'); sh.addColorStop(0.65, 'rgba(255,236,160,0)'); c.fillStyle = sh; c.fillRect(0, 0, CW, CH); c.restore();
   }
-  c.restore(); rr(c, ax, ay, aw, ah, 10); c.lineWidth = 3; c.strokeStyle = rar.color; c.stroke();
-  // title banner
-  rr(c, 40, 22, CW - 80, 34, 8); const tg = c.createLinearGradient(0, 22, 0, 56); tg.addColorStop(0, '#2c3140'); tg.addColorStop(1, '#171a24'); c.fillStyle = tg; c.fill(); c.lineWidth = 2; c.strokeStyle = rar.color; c.stroke();
-  c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle'; let fs0 = 21; c.font = `bold ${fs0}px SCCinzel, serif`;
-  while (c.measureText(card.name.toUpperCase()).width > CW - 108 && fs0 > 12) { fs0--; c.font = `bold ${fs0}px SCCinzel, serif`; }
-  c.fillText(card.name.toUpperCase(), CW / 2 + 8, 40);
-  // type ribbon
-  rr(c, CW / 2 - 52, ay + ah - 12, 104, 24, 6); const rg = c.createLinearGradient(0, 0, 0, 1); c.fillStyle = ty.a; c.fill(); c.lineWidth = 2; c.strokeStyle = '#0b0d12'; c.stroke();
-  c.fillStyle = '#fff'; c.font = 'bold 13px SCCinzel, serif'; c.fillText(ty.label, CW / 2, ay + ah); 
-  // ability name + description
-  c.fillStyle = rar.color; c.font = 'bold 17px SCCinzel, serif'; c.fillText(card.abilityName, CW / 2, ay + ah + 30);
-  c.fillStyle = '#dfe3ee'; c.font = '16px SCFell, serif'; const lines = wrap(c, card.description, CW - 76);
-  lines.slice(0, 4).forEach((l, i) => c.fillText(l, CW / 2, ay + ah + 56 + i * 20));
-  // footer chips
-  c.font = 'bold 12px SCCinzel, serif'; c.textAlign = 'left';
-  c.fillStyle = hexA(el, 0.9); rr(c, 28, CH - 52, 82, 22, 6); c.fill(); c.fillStyle = '#0b0d12'; c.textAlign = 'center'; c.fillText(card.element, 69, CH - 41);
-  c.fillStyle = '#2a2f3d'; rr(c, CW - 118, CH - 52, 90, 22, 6); c.fill(); c.fillStyle = '#cfd5e6'; c.fillText(`⏱ CD ${card.cooldownTurns}`.replace('⏱', 'CD:').replace('CD: CD', 'CD'), CW - 73, CH - 41);
-  // cost orb
-  const afford = st.affordable !== false;
-  const og = c.createRadialGradient(40, 36, 2, 40, 36, 26); og.addColorStop(0, afford ? '#7fd1ff' : '#ff8a8a'); og.addColorStop(1, afford ? '#1b5fa8' : '#8a1f1f');
-  c.beginPath(); c.arc(38, 40, 25, 0, Math.PI * 2); c.fillStyle = og; c.fill(); c.lineWidth = 4; c.strokeStyle = rar.color; c.stroke();
-  c.fillStyle = '#fff'; c.font = 'bold 22px SCCinzel, serif'; c.textAlign = 'center'; c.fillText(String(card.energyCost), 38, 41);
-  c.font = 'bold 9px SCCinzel, serif'; c.fillText('EN', 38, 56);
-  // state overlays
+  // 8. state overlays
   if (st.ready === false) {
-    c.save(); rr(c, 6, 6, CW - 12, CH - 12, 22); c.clip(); c.fillStyle = 'rgba(8,10,16,0.72)'; c.fillRect(0, 0, CW, CH); c.restore();
-    c.fillStyle = '#ffd36b'; c.font = 'bold 70px SCCinzel, serif'; c.textAlign = 'center'; c.fillText(String(st.turnsLeft || 1), CW / 2, CH / 2 - 10);
-    c.font = 'bold 15px SCCinzel, serif'; c.fillText(st.turnsLeft === 1 ? 'TURN LEFT' : 'TURNS LEFT', CW / 2, CH / 2 + 38);
-  } else if (!afford) {
-    c.save(); rr(c, 6, 6, CW - 12, CH - 12, 22); c.clip(); c.fillStyle = 'rgba(8,10,16,0.38)'; c.fillRect(0, 0, CW, CH); c.restore();
-  }
-  if (st.index != null) { // play-by-number badge
-    c.beginPath(); c.arc(CW / 2, CH + 14, 18, 0, Math.PI * 2); c.fillStyle = st.ready === false ? '#59606f' : '#ffd36b'; c.fill(); c.lineWidth = 3; c.strokeStyle = '#0b0d12'; c.stroke();
-    c.fillStyle = '#0b0d12'; c.font = 'bold 20px SCCinzel, serif'; c.fillText(String(st.index), CW / 2, CH + 15);
+    c.save(); rr(c, 6, 6, CW - 12, CH - 12, 20); c.clip(); c.fillStyle = 'rgba(14,9,4,0.74)'; c.fillRect(0, 0, CW, CH); c.restore();
+    c.fillStyle = '#ffd36b'; c.font = '70px SCCinzelD, SCCinzel, serif'; c.fillText(String(st.turnsLeft || 1), CW / 2, CH / 2 - 10);
+    c.font = '15px SCCinzel, serif'; c.fillText(st.turnsLeft === 1 ? 'TURN LEFT' : 'TURNS LEFT', CW / 2, CH / 2 + 38);
+  } else if (!afford) { c.save(); rr(c, 6, 6, CW - 12, CH - 12, 20); c.clip(); c.fillStyle = 'rgba(14,9,4,0.34)'; c.fillRect(0, 0, CW, CH); c.restore(); }
+  if (st.index != null) { // play-by-number badge: wax disc
+    seal(c, CW / 2, CH + 14, 18, st.ready === false ? '#59606f' : '#b08a1c', (cc) => { cc.fillStyle = '#1b120a'; cc.font = '20px SCCinzelD, SCCinzel, serif'; cc.textAlign = 'center'; cc.textBaseline = 'middle'; cc.fillText(String(st.index), 0, 0); });
   }
   c.restore();
 }
