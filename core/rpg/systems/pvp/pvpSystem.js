@@ -778,6 +778,7 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
     let isCrit = false;
     let missed = false;
     let abilityObj = null;
+    let cardVideo = null;   // 🃏 PvP summon card-play scene (mp4), sent before the duel board
 
     if (action === 'attack') {
         const result = resolveBasicAttack(currentPlayer, opponent);
@@ -1497,6 +1498,24 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
         if (!r.ok) return { success: false, message: r.message };
         actionResult = r.message; damage = r.damage; healing = r.healing; missed = r.missed; isCrit = false;
         abilityObj = { id: r.card.id, name: r.card.abilityName, element: String(r.card.element || 'physical').toLowerCase() };
+        // 🎬 same slot -> caster -> effect scene as PvE, rendered on the duel arena (both duelists are side 'player'); any failure = board only
+        try {
+            if (process.env.SUMMON_CARD_VIDEO !== '0' && process.env.PVP_CARD_SCENE !== '0') {
+                const sc = require('../summonCards');
+                const pIdx = duel.players.indexOf(currentPlayer), tIdx = duel.players.indexOf(opponent);
+                const entries = sc.handEntries(currentPlayer.jid, duel, { stats: { energy: currentPlayer.energy + r.card.energyCost, maxEnergy: currentPlayer.maxEnergy } });
+                const mp4 = await Promise.race([
+                    require('../summonCards/cardPlayScene').renderCardPlayScene({
+                        pvp: true, card: r.card, players: duel.players, enemies: [], playerIndex: pIdx, targetIndex: tIdx, entries,
+                        info: { damage: r.damage, healing: r.healing, missed: r.missed },
+                        sceneOptions: { backgroundPath: duel.ruinsBackground ? `rpgasset/environment/${duel.ruinsBackground}` : undefined, combatState: duel, summons: duel.summons || [] },
+                        api: { buildPayload: combatImageGenerator._buildPayload, generateCombatLayers: combatImageGenerator._generateCombatLayers },
+                    }),
+                    new Promise((res) => setTimeout(() => res(null), 12000)),
+                ]);
+                if (Buffer.isBuffer(mp4) && mp4.length > 500) cardVideo = mp4;
+            }
+        } catch (sceneErr) { console.warn('[PvP] card scene skipped:', sceneErr.message); }
     } else {
         return { success: false, message: `❌ Unknown action. Use: \`attack\`, \`ability <n>\`, \`summon <#|name>\`, \`item\`, or \`flee\`` };
     }
@@ -1588,6 +1607,7 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
         finished: false,
         message: statusMsg,
         image: imageResult,
+        cardVideo,
         mentions: [nextPlayer.jid],
     };
 }

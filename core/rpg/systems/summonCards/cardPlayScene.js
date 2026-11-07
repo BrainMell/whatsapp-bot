@@ -44,7 +44,9 @@ function encode(dir) {
 async function renderCardPlayScene(a) {
   const t0 = Date.now();
   const hud = require('../combat/combatHud');
-  const { renderNodeCard } = require('../combat/combatCardNode');
+  const cardNode = require('../combat/combatCardNode');
+  const renderNodeCard = a.pvp ? cardNode.renderNodePvpCard : cardNode.renderNodeCard;   // PvP duels reuse the whole scene (both duelists are side 'player')
+  const tgtSide = a.pvp ? 'player' : 'enemy';
   const { card, players, enemies, entries = [], info = {} } = a;
   const pIdx = Math.max(0, a.playerIndex || 0), tIdx = Math.max(0, a.targetIndex || 0);
   const attack = card.type === 'ATTACK' || (info.damage || 0) > 0;
@@ -55,7 +57,7 @@ async function renderCardPlayScene(a) {
   // it died, the final frames cross-fade to the real post-hit scene so you see it fall.
   const preEnemies = Array.isArray(a.enemiesPre) ? a.enemiesPre : enemies;
   const base = await renderNodeCard(players, preEnemies, {
-    ...(a.sceneOptions || {}), hud: 'v2', combatType: 'PVE', _sceneOut: sceneOut, _skipTray: true,
+    ...(a.sceneOptions || {}), hud: 'v2', combatType: a.pvp ? 'PVP' : 'PVE', _sceneOut: sceneOut, _skipTray: true,
     action: { attackerSide: 'player', attackerIndex: pIdx },
   }, a.api);
   if (!base || !sceneOut.canvas) return null;
@@ -77,8 +79,8 @@ async function renderCardPlayScene(a) {
   const slot = !fromPile ? layout.slots[Math.min(handIdx, layout.slots.length - 1)] : null;
   const find = (side, idx) => anchors.find((x) => x.side === side && x.index === idx) || anchors.find((x) => x.side === side) || null;
   const caster = find('player', pIdx) || { x: W / (2 * s), feetY: H / s * 0.7, w: 120, h: 160 };
-  const anyEnemy = anchors.find((x) => x.side === 'enemy');
-  const targ = attack ? (find('enemy', tIdx) || anyEnemy || { x: W * 0.72 / s, feetY: H * 0.7 / s, w: 120, h: 160 }) : caster;
+  const anyEnemy = anchors.find((x) => x.side === tgtSide && !(a.pvp && x.index === pIdx));
+  const targ = attack ? (find(tgtSide, tIdx) || anyEnemy || { x: W * 0.72 / s, feetY: H * 0.7 / s, w: 120, h: 160 }) : caster;
   const cp = { x: caster.x * s, y: (caster.feetY - (caster.h || 160) * 0.5) * s }, tp = { x: targ.x * s, y: (targ.feetY - (targ.h || 160) * 0.5) * s };
   // card sprite (pre-rendered once) + summon art
   const cardImg0 = createCanvas(CW, CH + 10); await drawCard(cardImg0.getContext('2d'), card, 0, 0, { ready: true, affordable: true });

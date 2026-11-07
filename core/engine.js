@@ -12827,6 +12827,9 @@ _💡 Reply with another number from your search list!_`.trim();
                           m,
                         );
                         if (result.success) {
+                          if (result.cardVideo) {
+                            try { await sock.sendMessage(chatId, { video: result.cardVideo, gifPlayback: true, mimetype: 'video/mp4' }); } catch (cvErr) {}
+                          }
                           if (result.image?.success) {
                             await sock.sendMessage(chatId, {
                               image: result.image.buffer,
