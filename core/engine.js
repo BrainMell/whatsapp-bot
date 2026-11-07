@@ -12946,6 +12946,19 @@ _💡 Reply with another number from your search list!_`.trim();
                       try {
                         if (!economy.isRegistered(senderJid))
                           return sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Register first!" });
+                        // 🏥 Hospital is out-of-combat only (adventure/abyss fight or live duel)
+                        try {
+                          const __gs = guildAdventure.getGameState(chatId, senderJid);
+                          let __inFight = !!(__gs && __gs.inCombat);
+                          if (!__inFight) {
+                            try {
+                              const __d = require('./rpg/systems/pvp/pvpSystem').getDuel(chatId);
+                              if (__d && Array.isArray(__d.players) && __d.players.some((x) => x && x.jid === senderJid)) __inFight = true;
+                            } catch (e) {}
+                          }
+                          if (__inFight)
+                            return sock.sendMessage(chatId, { text: BOT_MARKER + "🏥 *Hospital services are only available outside combat.*\n\nFinish or flee your current fight first, then visit the hospital." });
+                        } catch (e) {}
                         const user = economy.getUser(senderJid);
                         const userClass = user.class || { id: 'FIGHTER', name: 'Fighter' };
                         const classId = userClass?.id || userClass?.name?.toUpperCase() || 'FIGHTER';
