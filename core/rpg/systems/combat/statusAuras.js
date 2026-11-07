@@ -83,11 +83,11 @@ const FRONT = {
     c.save(); c.translate(b.cx, b.top - 6 * s); c.scale(1, 0.32); c.strokeStyle = '#ffe9a0'; c.lineWidth = 4.5 * s; c.shadowColor = '#ffd666'; c.shadowBlur = 10 * s; c.beginPath(); c.arc(0, 0, b.w * 0.26, 0, TAU); c.stroke(); c.restore();
   },
   taunt(c, b, s) { c.save(); c.translate(b.cx, b.top - 22 * s); c.fillStyle = '#ff6a4a'; c.strokeStyle = '#1a0a06'; c.lineWidth = 3 * s; c.font = `bold ${22 * s}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.strokeText('!', 0, 0); c.fillText('!', 0, 0); c.restore(); },
-  burn(c, b, s, R) { // flame tongues licking up the body + embers
-    for (let i = 0; i < 6; i++) { const x = b.cx + (i - 2.5) * b.w * 0.17, h = b.h * (0.28 + R() * 0.28), w = 10 * s + R() * 8 * s, y = b.fy - 2 * s;
+  burn(c, b, s, R) { // flame tongues licking the LEGS (owner-agent TODO box check: 6 tall tongues to 56% of the sprite read as engulfing the unit — kept to 4 short ones at the feet + sparser embers)
+    for (let i = 0; i < 4; i++) { const x = b.cx + (i - 1.5) * b.w * 0.2, h = b.h * (0.14 + R() * 0.16), w = 8 * s + R() * 5 * s, y = b.fy - 2 * s;
       const g = c.createLinearGradient(0, y, 0, y - h); g.addColorStop(0, 'rgba(255,200,60,0.85)'); g.addColorStop(0.5, 'rgba(255,110,30,0.65)'); g.addColorStop(1, 'rgba(220,40,10,0)'); c.fillStyle = g;
       c.beginPath(); c.moveTo(x - w, y); c.quadraticCurveTo(x - w * 0.5, y - h * 0.55, x + (R() - 0.5) * 6 * s, y - h); c.quadraticCurveTo(x + w * 0.5, y - h * 0.5, x + w, y); c.closePath(); c.fill(); }
-    c.fillStyle = 'rgba(255,190,70,0.9)'; for (let i = 0; i < 10; i++) { c.beginPath(); c.arc(b.cx + (R() - 0.5) * b.w, b.fy - b.h * (0.2 + R() * 0.9), (1 + R() * 1.8) * s, 0, TAU); c.fill(); }
+    c.fillStyle = 'rgba(255,190,70,0.85)'; for (let i = 0; i < 6; i++) { c.beginPath(); c.arc(b.cx + (R() - 0.5) * b.w * 0.9, b.fy - b.h * (0.1 + R() * 0.5), (1 + R() * 1.6) * s, 0, TAU); c.fill(); }
   },
   poison(c, b, s, R) { // rising toxic bubbles + green tint at the feet
     for (let i = 0; i < 9; i++) { const x = b.cx + (R() - 0.5) * b.w * 0.9, y = b.fy - b.h * (0.1 + R() * 0.9), r = (2.5 + R() * 5) * s; c.fillStyle = 'rgba(150,215,50,0.25)'; c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill(); c.strokeStyle = 'rgba(190,240,90,0.8)'; c.lineWidth = 1.2 * s; c.stroke(); c.fillStyle = 'rgba(255,255,255,0.55)'; c.beginPath(); c.arc(x - r * 0.3, y - r * 0.3, r * 0.22, 0, TAU); c.fill(); }
