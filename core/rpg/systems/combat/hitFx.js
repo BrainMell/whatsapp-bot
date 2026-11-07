@@ -206,17 +206,25 @@ function crossStar(c, x, y, r) { c.beginPath(); c.moveTo(x, y - r); c.lineTo(x, 
 
 /** act = {attackerSide, attackerIndex, targetSide, targetIndex, damage, isCrit, missed, heal, element, attackSeed, itemKind}. */
 async function drawHitReaction(c, layers, anchors, act, s) {
-  if (!act || !act.targetSide || !Array.isArray(layers.cuts)) return;
-  const tIdx = Number(act.targetIndex) || 0, cut = layers.cuts.find((x) => x.side === act.targetSide && x.index === tIdx);
+  if (!act || !act.targetSide) return;
+  const tIdx = Number(act.targetIndex) || 0;
+  let cut = Array.isArray(layers && layers.cuts) ? layers.cuts.find((x) => x.side === act.targetSide && x.index === tIdx) : null;
   const an = anchors.find((x) => x.side === act.targetSide && x.index === tIdx);
-  if (!cut || !cut.png || !an) return;
+  if (!an) return;
+  // 🔧 "sometimes the attack effect doesn't show": a missing cutout (target just died / sprite sheet gap) used to skip the WHOLE
+  // reaction. Now the slash, impact burst and number still land on the anchor; only the body-ghost tint is skipped.
+  let __noBody = false;
+  if (!cut || !cut.png) {
+    const bw = Math.max(40, Number(an.w) || 100), bh = Math.max(60, Number(an.h) || 150);
+    cut = { x: an.x - bw / 2, y: an.feetY - bh, w: bw, h: bh, png: null }; __noBody = true;
+  }
   const att = anchors.find((x) => x.side === (act.attackerSide || 'player') && x.index === (Number(act.attackerIndex) || 0));
   const dir = att ? Math.sign(an.x - att.x) || 1 : (act.attackerSide === 'enemy' ? -1 : 1);   // knock-back direction (away from attacker)
   const el = ELEMENT_COLORS[String(act.element || '').toUpperCase()] || null, col = el || '#ffffff';
   const dmg = Math.floor(Number(act.damage) || 0), crit = !!act.isCrit, miss = !!act.missed, heal = !!act.heal;
   const itemKind = act.itemKind || '';
   const cx = an.x * s, cy = (an.feetY - (an.h || cut.h) * 0.52) * s, w = (an.w || cut.w) * s, h = (an.h || cut.h) * s;
-  let im; try { im = await loadImage(Buffer.from(cut.png, 'base64')); } catch (e) { return; }
+  let im; try { im = __noBody ? createCanvas(Math.max(1, Math.floor(cut.w)), Math.max(1, Math.floor(cut.h))) : await loadImage(Buffer.from(cut.png, 'base64')); } catch (e) { return; }
   const tint = (rgba) => { const t = createCanvas(cut.w, cut.h), tc = t.getContext('2d'); tc.drawImage(im, 0, 0, cut.w, cut.h); tc.globalCompositeOperation = 'source-atop'; tc.fillStyle = rgba; tc.fillRect(0, 0, cut.w, cut.h); return t; };
   const drawCut = (img, dx, dy, rot, alpha) => { c.save(); c.globalAlpha = alpha; c.translate(cut.x * s + cut.w * s / 2 + dx, cut.y * s + cut.h * s + dy); c.rotate(rot); c.drawImage(img, -cut.w * s / 2, -cut.h * s, cut.w * s, cut.h * s); c.restore(); };
 

@@ -23,4 +23,6 @@ Everything below needs the real boxes, real sprites or your decision. Code is on
 
 ## 2026-11-07 late additions (Go side)
 - **Side-scroller shadows**: `docs/go_patches/side_scroller_shadow.patch` replaces the round radial `utils.DrawShadow` blob with a flat contact oval (rx 0.78r, ry 0.16r). Apply in the Go repo, rebuild, redeploy; all PvE/summon/death plates pick it up because the shadow is baked into the Go layers.
-- **Death-clip HUD parity**: the death plate (`deathOverlay.scenePlate`) is Go bg + cutouts with no Node hub; card-play scenes carry the Node hub. Card+death is now a 0.35s xfade (`CLIP_XFADE=0` to disable). Full parity needs the Node hub painted on the plate.
+- **Death-clip HUD parity (DONE in Node)**: death plates now carry the same chrome as card scenes (`combatCardNode.paintChrome`: survivor bars, rank chip, player hub); card+death is a 0.35s xfade. Kill switches `DEATH_CHROME=0`, `CLIP_XFADE=0`. Death clips whose baked HP snapshot differs are re-rendered at kill time (~1s, overlay cache).
+
+- **PvP card-play scene (DONE)**: `PVP_CARD_SCENE=0` disables. **Hit effect without a cutout (DONE)**: slash/impact/number now draw on the anchor even if the target cutout is missing.
