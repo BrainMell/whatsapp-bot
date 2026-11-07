@@ -20,3 +20,7 @@ Everything below needs the real boxes, real sprites or your decision. Code is on
 ## Design decisions I left to you
 - Dash / lunge animations for basic attacks (needs clips, 1-3s render per turn, chat spam) — recommend NOT doing it; the still hit reaction covers the feel. If you want it later: redraw bg + all cuts except the attacker, slide the attacker, flash target.
 - Final card art (`core/rpgasset/summoncards/<id>.png`) and a parchment frame asset for the mini hand cards.
+
+## 2026-11-07 late additions (Go side)
+- **Side-scroller shadows**: `docs/go_patches/side_scroller_shadow.patch` replaces the round radial `utils.DrawShadow` blob with a flat contact oval (rx 0.78r, ry 0.16r). Apply in the Go repo, rebuild, redeploy; all PvE/summon/death plates pick it up because the shadow is baked into the Go layers.
+- **Death-clip HUD parity**: the death plate (`deathOverlay.scenePlate`) is Go bg + cutouts with no Node hub; card-play scenes carry the Node hub. Card+death is now a 0.35s xfade (`CLIP_XFADE=0` to disable). Full parity needs the Node hub painted on the plate.

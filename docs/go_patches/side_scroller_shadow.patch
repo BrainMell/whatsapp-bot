@@ -1,0 +1,40 @@
+--- /tmp/orig_shadow.go	2026-11-07 16:34:12.596217477 +0000
++++ pkg/utils/utils.go	2026-11-07 16:34:12.628710571 +0000
+@@ -133,17 +133,26 @@
+ 
+ // DrawShadow draws a radial shadow
+ func DrawShadow(dc *gg.Context, x, y, radius float64, alpha float64) {
+-        // 💡 FIX 2026-08-07: Changed shadow from pure black to dark warm brown
+-        // so it's visible against the dark overlay background. Pure black
+-        // shadows were invisible on the 31% black overlay, making dark-colored
+-        // sprites (wolf, bat) appear "floating" to viewers.
+-        grad := gg.NewRadialGradient(x, y, 0, x, y, radius)
+-        grad.AddColorStop(0, color.RGBA{20, 10, 0, uint8(alpha * 255)})
+-        grad.AddColorStop(0.5, color.RGBA{15, 8, 0, uint8(alpha * 128)})
+-        grad.AddColorStop(1, color.RGBA{0, 0, 0, 0})
+-        dc.SetFillStyle(grad)
+-        dc.DrawCircle(x, y, radius)
+-        dc.Fill()
++	// 2026-11-07 (owner: "shadows don't fit the 2.5D side-scroller style"): the old shadow was a big
++	// round radial blob (radius = 0.6 x sprite width, circular) that read as a dark halo behind the feet.
++	// A side-scroller contact shadow is a FLAT oval hugging the ground line: wide, very short, dense at
++	// the core and feathered at the rim, with a small tight core directly under the feet.
++	rx := radius * 0.78
++	ry := radius * 0.16
++	if ry < 5 {
++		ry = 5
++	}
++	dc.Push()
++	dc.Translate(x, y)
++	dc.Scale(1, ry/rx) // squash a circular gradient into a flat oval
++	grad := gg.NewRadialGradient(0, 0, 0, 0, 0, rx)
++	grad.AddColorStop(0, color.RGBA{10, 6, 0, uint8(alpha * 0.82 * 255)})
++	grad.AddColorStop(0.55, color.RGBA{10, 6, 0, uint8(alpha * 0.45 * 255)})
++	grad.AddColorStop(1, color.RGBA{0, 0, 0, 0})
++	dc.SetFillStyle(grad)
++	dc.DrawCircle(0, 0, rx)
++	dc.Fill()
++	dc.Pop()
+ }
+ 
+ // DrawShadowEllipse draws a wide, flat elliptical shadow (ground shadow).

@@ -4897,7 +4897,26 @@ async function _concatMp4(bufs) {
     const args = ['-y', '-loglevel', 'error'];
     bufs.forEach((b, i) => { const f = pathx.join(dir, `in${i}.mp4`); fsx.writeFileSync(f, b); args.push('-i', f); });
     const W = 768, H = 516;
-    const filt = bufs.map((_, i) => `[${i}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=20,format=yuv420p[v${i}]`).join(';') + ';' + bufs.map((_, i) => `[v${i}]`).join('') + `concat=n=${bufs.length}:v=1:a=0[v]`;
+    let filt = bufs.map((_, i) => `[${i}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=20,format=yuv420p[v${i}]`).join(';');
+    // 🎞️ ONE CONTINUOUS CLIP (owner 2026-11-07: "card animation + death feel like two videos stitched"):
+    // a dissolve between segments (xfade) instead of a hard cut, so the card's impact flows into the shatter.
+    let xf = false;
+    if (bufs.length >= 2 && process.env.CLIP_XFADE !== '0') {
+      try {
+        const { execFileSync } = require('child_process');
+        const durs = bufs.map((_, i) => parseFloat(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', pathx.join(dir, `in${i}.mp4`)]).toString()));
+        if (durs.every((d) => d > 0.8)) {
+          const X = 0.35; let acc = durs[0], prev = 'v0', chain = '';
+          for (let i = 1; i < bufs.length; i++) {
+            const lab = i === bufs.length - 1 ? 'v' : `x${i}`;
+            chain += `;[${prev}][v${i}]xfade=transition=fade:duration=${X}:offset=${(acc - X).toFixed(3)}[${lab}]`;
+            acc += durs[i] - X; prev = lab;
+          }
+          filt += chain; xf = true;
+        }
+      } catch (e) { xf = false; }
+    }
+    if (!xf) filt += ';' + bufs.map((_, i) => `[v${i}]`).join('') + `concat=n=${bufs.length}:v=1:a=0[v]`;
     const out = pathx.join(dir, 'out.mp4');
     args.push('-filter_complex', filt, '-map', '[v]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '24', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out);
     await new Promise((resolve, reject) => { const p = spawn('ffmpeg', args); let err = ''; p.stderr.on('data', (d) => { err += d; }); p.on('error', reject); p.on('close', (c) => (c === 0 ? resolve() : reject(new Error('ffmpeg ' + c + ' ' + err.slice(0, 200))))); });
