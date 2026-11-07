@@ -221,7 +221,15 @@ async function drawHitReaction(c, layers, anchors, act, s) {
 
   if (itemKind) {
     // ── #3 consumable turn: emblem + glow over the target, no slash language ──
-    const gcol = drawItemEmblem(c, itemKind, cx, cy, s);
+    // 🔧 visual pass (r8 verify render): a bare emblem vanished against the sprites
+    // (the MAGE literally holds two green bottles). Seat it on a dark medallion disc
+    // with a gold ring, raised to upper-chest height, so it reads on ANY sprite.
+    const icy = an.feetY * s - (an.h || cut.h) * s * 0.58;
+    c.save(); c.shadowColor = 'rgba(0,0,0,0.65)'; c.shadowBlur = 7 * s; c.shadowOffsetY = 2 * s;
+    c.beginPath(); c.arc(cx, icy, 34 * s, 0, TAU); c.fillStyle = 'rgba(10,8,14,0.84)'; c.fill(); c.restore();
+    c.lineWidth = 2 * s; c.strokeStyle = 'rgba(214,174,78,0.9)'; c.beginPath(); c.arc(cx, icy, 34 * s, 0, TAU); c.stroke();
+    c.lineWidth = 0.8 * s; c.strokeStyle = 'rgba(255,226,140,0.4)'; c.beginPath(); c.arc(cx, icy, 31 * s, 0, TAU); c.stroke();
+    const gcol = drawItemEmblem(c, itemKind, cx, icy, s);
     if (heal) { // keep the green field glow + number for healing items
       const g = c.createRadialGradient(cx, cy, 6 * s, cx, cy, h * 0.8); g.addColorStop(0, 'rgba(120,255,170,0.42)'); g.addColorStop(1, 'rgba(120,255,170,0)'); c.fillStyle = g; c.fillRect(cx - h, cy - h, h * 2, h * 2);
     } else if (act.damage > 0) { drawCut(tint('rgba(255,40,30,0.42)'), dir * 15 * s, -2 * s, dir * 0.075, 0.95); }
@@ -248,7 +256,9 @@ async function drawHitReaction(c, layers, anchors, act, s) {
     impactBurst(variant, c, cx, cy, dir, el, crit, s);
   }
   // damage / miss / heal number floating above the head
-  const label = miss ? 'MISS' : (heal ? '+' + dmg : (dmg > 0 ? String(dmg) : ''));
+  // 🔧 heals read the HEAL amount (act.heal) — using act.damage showed "+0" on heal turns
+  const healAmt = Math.floor(Number(act.heal) || 0);
+  const label = miss ? 'MISS' : (heal ? '+' + healAmt : (dmg > 0 ? String(dmg) : ''));
   if (label) {
     const fy = an.feetY * s - h - 46 * s, size = (crit ? 40 : 30) * s;
     c.save(); c.translate(cx + dir * 6 * s, fy); c.rotate(crit ? -0.05 : 0); c.font = `bold ${size}px HudCinzel, serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round'; c.lineWidth = 6 * s; c.strokeStyle = '#1b0f05';
