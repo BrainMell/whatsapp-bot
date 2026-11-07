@@ -377,6 +377,7 @@ function isShieldFx(e) { return e && String(e.type) === 'shield' && (e.value ===
  * specular arc and sparkles — matches the mana capsule family. Optional absorb value shown in
  * a small pill under the unit. */
 function drawShieldBubble(c, a, s = 1, value = 0) {
+  if (process.env.LEGACY_SHIELD_BUBBLE !== '1') { require('./statusAuras').drawAuras(c, a, [{ type: 'shield', value: value || 1 }], s, 'ground'); require('./statusAuras').drawAuras(c, a, [{ type: 'shield', value: value || 1 }], s, 'front'); return; }
   const cx = a.x * s, feetY = a.feetY * s;
   const h = Math.max(40, (a.h || 120)) * s, w = Math.max(30, (a.w || 90)) * s;
   const cy = feetY - h * 0.54;

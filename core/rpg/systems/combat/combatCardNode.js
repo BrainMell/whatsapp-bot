@@ -7,6 +7,8 @@
 // cards) the floating deck hand. Returns null on ANY problem so the caller falls back to the Go card.
 const { createCanvas, loadImage } = require('canvas');
 const hud = require('./combatHud');
+const auras = require('./statusAuras');
+const unitFx = (side, idx, players, enemies) => { const u = side === 'enemy' ? enemies[idx] : players[idx]; if (!u || u.isDead || u.justDied) return null; return Array.isArray(u.statusEffects) ? u.statusEffects : null; };
 
 async function renderNodeCard(players, enemies, options, api) {
   const t0 = Date.now();
@@ -24,6 +26,7 @@ async function renderNodeCard(players, enemies, options, api) {
     const a = anchors.find((x) => x.side === (act.attackerSide || 'player') && x.index === (Number(act.attackerIndex) || 0));
     if (a) { c.save(); c.translate(a.x * s, a.feetY * s); c.scale(1, 0.28); const g = c.createRadialGradient(0, 0, 4, 0, 0, 62 * s); g.addColorStop(0, 'rgba(255,214,102,0.85)'); g.addColorStop(1, 'rgba(255,214,102,0)'); c.fillStyle = g; c.beginPath(); c.arc(0, 0, 62 * s, 0, Math.PI * 2); c.fill(); c.restore(); }
   }
+  for (const a of anchors) { const fx = unitFx(a.side, a.index, players, enemies); if (fx) auras.drawAuras(c, a, fx, s, 'ground'); }
   c.drawImage(await loadImage(layers.sprites), 0, 0, W, H);
   // red hit flash on the target (from its cut)
   if (act && act.targetSide && Array.isArray(layers.cuts)) {
@@ -62,8 +65,7 @@ async function renderNodeCard(players, enemies, options, api) {
     const hp = Number(u.currentHP ?? (u.stats && u.stats.hp) ?? 0); if (hp <= 0) continue;
     const fx = Array.isArray(u.statusEffects) ? u.statusEffects.filter((e) => e && e.icon) : [];
     if (!fx.length) continue;
-    const shield = fx.find(hud.isShieldFx);
-    if (shield) hud.drawShieldBubble(c, a, s, Number(shield.value) || 0);
+    auras.drawAuras(c, a, u.statusEffects, s, 'front');
     hud.drawStatusBadges(c, a, fx, s);
   }
   // rank chip
@@ -111,6 +113,7 @@ async function renderNodePvpCard(players, enemies, options, api) {
   const act = options.action || null, turn = act ? Math.max(0, Number(act.attackerIndex) || 0) : -1;
   const aOf = (i) => anchors.find((x) => x.side === 'player' && x.index === i);
   if (turn >= 0 && aOf(turn)) { const a = aOf(turn); c.save(); c.translate(a.x * s, a.feetY * s); c.scale(1, 0.28); const g = c.createRadialGradient(0, 0, 4, 0, 0, 62 * s); g.addColorStop(0, 'rgba(255,214,102,0.85)'); g.addColorStop(1, 'rgba(255,214,102,0)'); c.fillStyle = g; c.beginPath(); c.arc(0, 0, 62 * s, 0, Math.PI * 2); c.fill(); c.restore(); }
+  for (const a of anchors) { const fx = unitFx(a.side, a.index, players, []); if (fx) auras.drawAuras(c, a, fx, s, 'ground'); }
   c.drawImage(await loadImage(layers.sprites), 0, 0, W, H);
   if (act && act.targetSide === 'player' && !act.heal && !act.missed && Array.isArray(layers.cuts)) {
     const cut = layers.cuts.find((x) => x.side === 'player' && x.index === (Number(act.targetIndex) || 0));
@@ -127,7 +130,7 @@ async function renderNodePvpCard(players, enemies, options, api) {
     const u = players[a.index]; if (!u || u.isDead) continue;
     const fx = Array.isArray(u.statusEffects) ? u.statusEffects.filter((e) => e && e.icon) : [];
     if (!fx.length) continue;
-    const shield = fx.find(hud.isShieldFx); if (shield) hud.drawShieldBubble(c, a, s, Number(shield.value) || 0);
+    auras.drawAuras(c, a, u.statusEffects, s, 'front');
     hud.drawStatusBadges(c, a, fx, s);
   }
   const pl = payload.players || [];
