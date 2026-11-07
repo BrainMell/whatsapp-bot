@@ -1827,6 +1827,40 @@ function resolvePlateCollisions(ctx, plates) {
 }
 
 // ── THE ENCOUNTER SCENE (§6) ──────────────────────────────────────────────
+// 🕑 round 10 (abyss dodge parity with the PvP miss redesign): resolve WHICH unit is
+// dodging this turn so drawCombatScene can visually pull it off the swing line.
+function _resolveAbyssDodge(plan, turnInfo) {
+    try {
+        if (!turnInfo || !turnInfo.missed || !plan) return null;
+        const t = turnInfo.target || null;
+        let u = null, attackerX = null;
+        if (t && plan.enemy && ((t.isEnemy && String(t.name || '') === String(plan.enemy.name || '')) || t === plan.enemy.ref)) u = plan.enemy;
+        if (!u && t && t.isEnemy && Array.isArray(plan.pack)) u = (plan.pack || []).find((p) => String(t.name || '') === String(p.plateName || p.name || '')) || null;
+        const tIsPlayer = !u;
+        if (tIsPlayer) { if (!plan.player || !plan.player.file) return null; u = plan.player; attackerX = plan.enemy ? plan.enemy.cx : u.cx + 200; }
+        else attackerX = plan.player ? plan.player.cx : u.cx - 200;
+        const dir = Math.sign(u.cx - attackerX) || (tIsPlayer ? -1 : 1);
+        return { u, dir, dx: dir * 46, dy: -10 };
+    } catch (e) { return null; }
+}
+
+// 🕑 round 10 (abyss dodge parity with the PvP miss redesign): resolve WHICH unit is
+// dodging this turn so drawCombatScene can visually pull it off the swing line.
+function _resolveAbyssDodge(plan, turnInfo) {
+    try {
+        if (!turnInfo || !turnInfo.missed || !plan) return null;
+        const t = turnInfo.target || null;
+        let u = null, attackerX = null;
+        if (t && plan.enemy && ((t.isEnemy && String(t.name || '') === String(plan.enemy.name || '')) || t === plan.enemy.ref)) u = plan.enemy;
+        if (!u && t && t.isEnemy && Array.isArray(plan.pack)) u = (plan.pack || []).find((p) => String(t.name || '') === String(p.plateName || p.name || '')) || null;
+        const tIsPlayer = !u;
+        if (tIsPlayer) { if (!plan.player || !plan.player.file) return null; u = plan.player; attackerX = plan.enemy ? plan.enemy.cx : u.cx + 200; }
+        else attackerX = plan.player ? plan.player.cx : u.cx - 200;
+        const dir = Math.sign(u.cx - attackerX) || (tIsPlayer ? -1 : 1);
+        return { u, dir, dx: dir * Math.max(46, Math.min(170, Math.round((u.h || 150) * 0.45))), dy: -10 };
+    } catch (e) { return null; }
+}
+
 async function drawCombatScene(ctx, plan, live, opts = {}) {
     const turnNum = opts.turnNumber || 0;
     await drawBackdrop(ctx, plan.bg, plan.bgDir);
@@ -1935,20 +1969,32 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
     // audit §4 z-order rule: sort EVERY actor by foot Y (lower draws later),
     // sprites first in one pass, plates after — plates can never be covered.
     ctx.imageSmoothingEnabled = false;   // audit §F: no mixed smoothing
+    const __dodge = _resolveAbyssDodge(plan, opts.turnInfo || null);   // 🕑 round 10
+    const __ghost = async (art, u, alpha, off) => drawActorGrounded(ctx, art, u.cx + (off || 0), u.gy, u.h,
+        { flip: u.flip, alpha: alpha * (u.alpha == null ? 1 : u.alpha), shadowBoost: alpha > 0.2 ? 2.05 : 0, shadowRyMin: 16, shadowWide: true, pixelSnap: true });
     const spritePass = [];
     for (const p of plan.pack || []) {
         if (!p.art) continue;
         spritePass.push({ gy: p.gy, run: async () => {
-            const d = await drawActorGrounded(ctx, p.art, p.cx, p.gy, p.h,
+            if (__dodge && __dodge.u === p) {   // 🕑 dodge: afterimages pinned where the body was, dust at the launch
+                await __ghost(p.art, p, 0.30, 0); await __ghost(p.art, p, 0.13, -__dodge.dir * 12);
+                require('../combat/hitFx').dustPuff(ctx, p.cx + __dodge.dir * 8, p.gy - 4, 1.0, 1);
+            }
+            const d = await drawActorGrounded(ctx, p.art, p.cx + (__dodge && __dodge.u === p ? __dodge.dx : 0), p.gy + (__dodge && __dodge.u === p ? __dodge.dy : 0), p.h,
                 { flip: p.flip, alpha: p.alpha, shadowBoost: 2.05, shadowRyMin: 16, shadowWide: true, pixelSnap: true });
             if (d) p.drawnH = d.h;
         } });
     }
     if (plan.enemy && plan.enemy.art) {
         spritePass.push({ gy: plan.enemy.gy, run: async () => {
+            const __dg = __dodge && __dodge.u === plan.enemy;   // 🕑 round 10
+            if (__dg) {
+                await __ghost(plan.enemy.art, plan.enemy, 0.30, 0); await __ghost(plan.enemy.art, plan.enemy, 0.13, -__dodge.dir * 12);
+                require('../combat/hitFx').dustPuff(ctx, plan.enemy.cx + __dodge.dir * 8, plan.enemy.gy - 4, 1.0, 1);
+            }
             // owner 2026-10-09 14:07Z: a player hit flashes the target RED for
             // that turn render (opts.hitEnemy — per-turn, never frozen)
-            const d = await drawActorGrounded(ctx, plan.enemy.art, plan.enemy.cx, plan.enemy.gy, plan.enemy.h,
+            const d = await drawActorGrounded(ctx, plan.enemy.art, plan.enemy.cx + (__dg ? __dodge.dx : 0), plan.enemy.gy + (__dg ? __dodge.dy : 0), plan.enemy.h,
                 { flip: plan.enemy.flip, tint: opts.hitEnemy ? HIT_TINT : null,
                   shadowBoost: plan.kind === 'summon' ? 2.05 : 2.1, shadowRyMin: 16, shadowWide: true, pixelSnap: true });
             if (d) plan.enemy.drawnH = d.h;
@@ -1993,7 +2039,12 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
         } catch (e) { /* sample fails → default veil */ }
         const art = await gradedPlayerArt(plan.player.file, ambient);
         spritePass.push({ gy: plan.player.gy, run: async () => {
-            const d = await drawActorGrounded(ctx, art, plan.player.cx, plan.player.gy, plan.player.h,
+            const __dg = __dodge && __dodge.u === plan.player;   // 🕑 round 10
+            if (__dg) {
+                await __ghost(art, plan.player, 0.30, 0); await __ghost(art, plan.player, 0.13, -__dodge.dir * 12);
+                require('../combat/hitFx').dustPuff(ctx, plan.player.cx + __dodge.dir * 8, plan.player.gy - 4, 1.0, 1);
+            }
+            const d = await drawActorGrounded(ctx, art, plan.player.cx + (__dg ? __dodge.dx : 0), plan.player.gy + (__dg ? __dodge.dy : 0), plan.player.h,
                 { flip: !!plan.player.flip, shadowBoost: 1.85, shadowRyMin: 14, shadowWide: true, pixelSnap: true });
             if (d) plan.player.drawnH = d.h;
         } });
@@ -2147,6 +2198,7 @@ async function renderAbyssCombat(state, { phase = 'START', turnInfo = null, turn
         const __qfx = (((state.abyssRun || {}).packQueue) || []).map((m) => (m && m.statusEffects) || null);
         await drawCombatScene(ctx, plan, live, {
             turnNumber: (turnInfo && turnInfo.turnNumber) || 1,
+            turnInfo: phase === 'TURN' ? turnInfo : null,
             activeActor,
             hitEnemy,
             playerName: (state.players && state.players[0] && state.players[0].name) || 'You',
@@ -2721,6 +2773,11 @@ function _paintHitFx(ctx, plan, turnInfo) {
             ctx.fillStyle = g; ctx.fillRect(cx - h, cy - h, h * 2, h * 2);
         } else if (missed) {
             // #13 miss = the whiff: two pale arcs through the vacated space + MISS plaque
+            // (round 10: the dodging unit now physically leaves the line — see _resolveAbyssDodge —
+            // so these arcs sweep EMPTY air; plaque + dust finish the JRPG dodge read)
+            hit.dustPuff(ctx, cx + dir * 8, feetY - 4, 1.0, 1);
+            hit.dustPuff(ctx, cx + dir * 52, feetY - 2, 0.72, 1);
+            hit.missPlaque(ctx, cx, feetY - h - 40, 1);
             const ang = dir * 0.5 + (dir > 0 ? 0.0 : Math.PI);
             for (let i = 0; i < 2; i++) {
                 ctx.save(); ctx.translate(cx + (i - 0.5) * 16 * dir, cy - 10 * (i ? -1 : 1)); ctx.rotate(ang + (i - 0.5) * 0.22);
@@ -2736,7 +2793,7 @@ function _paintHitFx(ctx, plan, turnInfo) {
             hit.impactBurst(variant, ctx, cx, cy, dir, el, crit, 1);
         } else return;
         // floating number / plaque
-        const label = missed ? 'MISS' : (heal ? '+' + Math.floor(Number(turnInfo.healing) || 0) : (dmg > 0 ? String(dmg) : ''));
+        const label = missed ? '' : (heal ? '+' + Math.floor(Number(turnInfo.healing) || 0) : (dmg > 0 ? String(dmg) : ''));   // round 10: MISS rides the plaque
         if (label) {
             const fy = feetY - h - 34, size = crit ? 38 : 28;
             ctx.save(); ctx.translate(cx + dir * 6, fy); ctx.rotate(crit ? -0.05 : 0);
