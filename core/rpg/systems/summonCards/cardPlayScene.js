@@ -60,7 +60,7 @@ async function renderCardPlayScene(a) {
   }, a.api);
   if (!base || !sceneOut.canvas) return null;
   let A2 = null;
-  if (preEnemies !== enemies) {
+  if (preEnemies !== enemies && !info.mergeDeath) {   // mergeDeath: the real death clip is appended after this scene, so the target must still be standing at the end
     try { const so2 = {}; const r2 = await renderNodeCard(players, enemies, { ...(a.sceneOptions || {}), hud: 'v2', combatType: 'PVE', _sceneOut: so2, _skipTray: true, action: { attackerSide: 'player', attackerIndex: pIdx } }, a.api); if (r2 && so2.canvas) A2 = so2.canvas; } catch (e) { A2 = null; }
   }
   const W = sceneOut.canvas.width, H = sceneOut.canvas.height, s = sceneOut.s, anchors = sceneOut.anchors || [];

@@ -4883,6 +4883,37 @@ function _deathScene(state) {
   })().catch(() => null);
   return state._deathSceneP;
 }
+// 🎬 owner 2026-11-07: "why don't we just bake the death animation into the card clip instead of sending 2 different clips".
+// Concatenate N mp4 buffers (card flight + the enemy's death dissolve) into ONE 768x516 H.264 clip. null on any failure.
+async function _concatMp4(bufs) {
+  const fsx = require('fs'), osx = require('os'), pathx = require('path'), { spawn } = require('child_process');
+  const dir = fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'cat-'));
+  try {
+    const args = ['-y', '-loglevel', 'error'];
+    bufs.forEach((b, i) => { const f = pathx.join(dir, `in${i}.mp4`); fsx.writeFileSync(f, b); args.push('-i', f); });
+    const W = 768, H = 516;
+    const filt = bufs.map((_, i) => `[${i}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=20,format=yuv420p[v${i}]`).join(';') + ';' + bufs.map((_, i) => `[v${i}]`).join('') + `concat=n=${bufs.length}:v=1:a=0[v]`;
+    const out = pathx.join(dir, 'out.mp4');
+    args.push('-filter_complex', filt, '-map', '[v]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '24', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out);
+    await new Promise((resolve, reject) => { const p = spawn('ffmpeg', args); let err = ''; p.stderr.on('data', (d) => { err += d; }); p.on('error', reject); p.on('close', (c) => (c === 0 ? resolve() : reject(new Error('ffmpeg ' + c + ' ' + err.slice(0, 200))))); });
+    return fsx.readFileSync(out);
+  } catch (e) { console.warn('[SummonCards] concat failed:', e.message); return null; }
+  finally { try { fsx.rmSync(dir, { recursive: true, force: true }); } catch (e) {} }
+}
+// Bake the death clip for the enemies a summon card just killed and flag them done so playEnemyDeaths does NOT send a second clip.
+async function _deathClipForCardKill(state, defeated) {
+  try {
+    if (!_deathEligible(state) || !Array.isArray(defeated) || !defeated.length) return null;
+    const dying = defeated.map((e) => ({ e, i: (state.enemies || []).indexOf(e) })).filter((d) => d.i >= 0 && d.e && d.e.isEnemy !== false && !d.e._deathAnimDone);
+    if (!dying.length) return null;
+    let item = null;
+    if (dying.length > 1) item = await _bakeGroupDeathClip(state, dying);
+    else { const clip = await _bakeDeathClip(state, dying[0].e, dying[0].i); item = clip && clip.mp4 ? { e: dying[0].e, clip } : null; }
+    if (!item || !item.clip || !item.clip.mp4) return null;
+    dying.forEach((d) => { d.e._deathAnimDone = true; });
+    return item;
+  } catch (e) { console.warn('[SummonCards] death merge bake failed:', e && e.message || e); return null; }
+}
 async function _bakeDeathClip(state, e, i, excludeExtra) {
   const t0 = Date.now();
   try {
@@ -6348,13 +6379,24 @@ async function performAction(sock, player, action, sessionKey) {
                 card: activation.card, players: __players, enemies: state.enemies || [],
                 playerIndex: Math.max(0, __players.indexOf(player)), targetIndex: activation.targetIndex || 0,
                 enemiesPre: __preSnap.map((x) => (x.e.isDead || x.e.justDied || x.hp !== (Number(x.e.stats && x.e.stats.hp) || 0)) ? { ...x.e, isDead: x.dead, justDied: x.jd, stats: { ...x.e.stats, hp: x.hp }, currentHP: x.hp } : x.e),
-                entries: __entries, info: { damage: activation.damage, healing: activation.healing, missed: activation.wasEvaded },
+                entries: __entries, info: { damage: activation.damage, healing: activation.healing, missed: activation.wasEvaded, mergeDeath: !!(activation.defeatedList && activation.defeatedList.length && _deathEligible(state)) },
                 sceneOptions: { rank: state.dungeonRank, floor: state.isAbyss ? state.abyssFloor : 0, backgroundPath: state.backgroundPath, combatState: state },
                 api: { buildPayload: combatImageGen._buildPayload, generateCombatLayers: combatImageGen._generateCombatLayers },
               }),
               new Promise((resolve) => setTimeout(() => resolve(null), 12000)),
             ]);
           } catch (sceneErr) { gif = null; console.warn('[SummonCards] scene animation failed, falling back:', sceneErr.message); }
+        }
+        // ☠️ the card killed something: append the enemy's real death dissolve to THIS clip (one message, not two)
+        let __deathCaption = null;
+        if (gif && Buffer.isBuffer(gif) && gif.length > 500 && gif.toString('latin1', 4, 8) === 'ftyp' && activation.defeatedList && activation.defeatedList.length) {
+          try {
+            const __dItem = await Promise.race([_deathClipForCardKill(state, activation.defeatedList), new Promise((r) => setTimeout(() => r(null), 9000))]);
+            if (__dItem) {
+              const __cat = await _concatMp4([gif, __dItem.clip.mp4]);
+              if (__cat) { gif = __cat; __deathCaption = _deathCaption(__dItem, null); console.log('[SummonCards] card + death merged into one clip'); }
+            }
+          } catch (mergeErr) { console.warn('[SummonCards] death merge skipped:', mergeErr.message); }
         }
         if (!gif && ['ifrit', 'leviathan', 'shiva'].includes(activation.card.id)) {
           try { gif = await goService.generateSummonCardGIF(payload); } catch (goErr) { console.warn('[SummonCards] Go GIF failed, using Node renderer:', goErr.message); }
@@ -6383,7 +6425,7 @@ async function performAction(sock, player, action, sessionKey) {
             if (!Buffer.isBuffer(__mp4) || __mp4.length < 500 || __mp4.toString('latin1', 4, 8) !== 'ftyp') throw new Error('GIF conversion did not produce a valid MP4');
             console.log(`[SummonCards] play GIF ${gif.length}B → MP4 ${__mp4.length}B`);
           }
-          __gifPayload = { video: __mp4, mimetype: 'video/mp4', gifPlayback: true, caption: '✨ ' + activation.card.abilityName };
+          __gifPayload = { video: __mp4, mimetype: 'video/mp4', gifPlayback: true, caption: '✨ ' + activation.card.abilityName + (__deathCaption ? '\n' + __deathCaption : '') };
           if (Buffer.isBuffer(__thumb) && __thumb.length > 500) __gifPayload.jpegThumbnail = __thumb;
         } catch (convErr) {
           console.warn('[SummonCards] GIF→MP4 failed, sending still frame:', convErr.message);
