@@ -4919,7 +4919,7 @@ async function _deathClipForCardKill(state, defeated) {
     return item;
   } catch (e) { console.warn('[SummonCards] death merge bake failed:', e && e.message || e); return null; }
 }
-async function _bakeDeathClip(state, e, i, excludeExtra) {
+async function _bakeDeathClip(state, e, i, excludeExtra, wantAtk) {
   const t0 = Date.now();
   try {
     const signatureVfx = require('../combat/skillVfx'), combatImageGenerator = require('../combat/combatImageGenerator');
@@ -4938,8 +4938,8 @@ async function _bakeDeathClip(state, e, i, excludeExtra) {
     }
     if (!layers || !layers.success) { console.warn(`[DeathFx] bake ${e && e.name}: no layered scene after ${Date.now() - t0}ms`); return null; }
     const __deadIdx = _deadEnemyIndices(state, [i, ...(Array.isArray(excludeExtra) ? excludeExtra : [])]);
-    const clip = await signatureVfx.renderDeathVideo({ enemy: e, targetIndex: i, layers, deadIndices: __deadIdx });
-    console.log(`[DeathFx] bake ${e && e.name} -> ${clip ? clip.kind + (clip.boss ? '/boss' : '') + ' ' + clip.mp4.length + 'B' : 'NULL'} in ${Date.now() - t0}ms (${hasCut ? 'shared scene' : 'own scene'}, dead-in-backdrop ${__deadIdx.join(',') || '-'})`);
+    const clip = await signatureVfx.renderDeathVideo({ enemy: e, targetIndex: i, layers, deadIndices: __deadIdx, atkOverride: wantAtk === undefined ? undefined : !!wantAtk });
+    console.log(`[DeathFx] bake ${e && e.name} -> ${clip ? (wantAtk ? 'ATK+' : '') + clip.kind + (clip.boss ? '/boss' : '') + ' ' + clip.mp4.length + 'B' : 'NULL'} in ${Date.now() - t0}ms (${hasCut ? 'shared scene' : 'own scene'}, dead-in-backdrop ${__deadIdx.join(',') || '-'})`);
     return clip ? Object.assign(clip, { sig: _aliveSig(state), deadSig: __deadIdx.join(',') }) : null;
   } catch (err) { console.warn(`[DeathFx] bake ${e && e.name} threw:`, err && err.message || err); return null; }
 }
@@ -5264,9 +5264,23 @@ function startDeathBake(state) {
     // _deathJob even seconds after startDeathBake queued them (13:53:19
     // "NO clip (job=false)" while bakes were mid-flight). The registry
     // survives whatever rebuilds the enemy objects inside a fight.
-    if (!state._deathJobReg || state._deathJobReg.gen !== (state.combatGen || 0)) state._deathJobReg = { gen: state.combatGen || 0, byIdx: {} };
+    if (!state._deathJobReg || state._deathJobReg.gen !== (state.combatGen || 0)) state._deathJobReg = { gen: state.combatGen || 0, byIdx: {}, byAtkIdx: {} };
     const order = (state.enemies || []).map((e, i) => ({ e, i })).filter((x) => x.e && x.e.isEnemy !== false && (!x.e._deathJob || x.e._deathJobSig !== _deadSetSig(state, [x.i]))).sort((a, b) => (a.e.isBoss ? 1 : 0) - (b.e.isBoss ? 1 : 0) || (Number(a.e.currentHP ?? a.e.stats?.hp) || 0) - (Number(b.e.currentHP ?? b.e.stats?.hp) || 0)).slice(0, 8);   // weakest first: they fall first
-    for (const { e, i } of order) { e._deathJobSig = _deadSetSig(state, [i]); e._deathJob = state._deathJobReg.byIdx[i] = _deathEnqueue(() => _bakeDeathClip(state, e, i)); }
+    for (const { e, i } of order) {
+      e._deathJobSig = _deadSetSig(state, [i]);
+      e._deathJob = state._deathJobReg.byIdx[i] = _deathEnqueue(() => _bakeDeathClip(state, e, i).then((clip) => {
+        // ⚔️ #5 round 9: the plain pre-bake cannot know the killing blow — warm the
+        // DEATHATTACK variant right after, so a basic-attack kill still delivers fast
+        // (the overlay paint is the expensive part; delivery then needs plate+encode only).
+        try {
+          state._deathJobReg.byAtkIdx = state._deathJobReg.byAtkIdx || {};
+          const atkP = _bakeDeathClip(state, e, i, null, true);
+          e._deathAtkJob = atkP; state._deathJobReg.byAtkIdx[i] = atkP;
+          atkP.catch(() => {});
+        } catch (wErr) {}
+        return clip;
+      }));
+    }
   } catch (err) { console.warn('[DeathFx] bake skipped:', err && err.message || err); }
 }
 async function playEnemyDeaths(sock, state, opts = {}) {
@@ -5301,17 +5315,34 @@ async function playEnemyDeaths(sock, state, opts = {}) {
     if (!ready.length) {
       // resolve every dying enemy's clip in PARALLEL (baked = instant); a missing bake gets a short live attempt through the same worker
       const clips = await Promise.all(fresh.slice(0, 3).map(async ({ e, i }) => {
-      let job = e._deathJob || null;
+      // ⚔️ #5 round 9: a basic-attack kill must deliver the DEATHATTACK clip (animated
+      // slash intro), never the plain dissolve the fight-start pre-bake laid down. The
+      // kill site stamps _killedBy (mirrored into state._killedByReg because prod
+      // rebuilds enemy objects mid-fight); delivery picks the variant here.
+      const __wantAtk = !!((e._killedBy && e._killedBy.kind === 'basic') || (state._killedByReg && state._killedByReg.gen === (state.combatGen || 0) && state._killedByReg.byIdx && state._killedByReg.byIdx[i] === 'basic'));
+      const __reg = state._deathJobReg;
+      const __leash = new Promise((r) => setTimeout(() => r(undefined), leashMs));
+      let job = null, clip = null;
+      if (__wantAtk) {
+        // prefer the warmed DEATHATTACK bake (queued right after the plain one); fall
+        // back to a live atk bake — the warmed overlay cache keeps it to plate+encode
+        job = e._deathAtkJob || (__reg && __reg.gen === (state.combatGen || 0) && __reg.byAtkIdx && __reg.byAtkIdx[i]) || null;
+        if (job) clip = await Promise.race([job.catch(() => null), __leash]);
+        if (clip && (clip.sig !== _aliveSig(state) || (clip.deadSig || '') !== __wantDead)) { console.log(`[DeathFx] ${e.name}: atk backdrop stale since bake (${clip.deadSig || '-'} vs ${__wantDead}) - re-rendering`); clip = null; }
+        if (!clip || !clip.mp4) clip = await Promise.race([_deathEnqueue(() => _bakeDeathClip(state, e, i, __batchIdx, true)).catch(() => null), __leash]);
+        if (!clip || !clip.mp4) { clip = null; const __pj = e._deathJob || (__reg && __reg.gen === (state.combatGen || 0) && __reg.byIdx[i]) || null; if (__pj) clip = await Promise.race([__pj.catch(() => null), __leash]); console.warn(`[DeathFx] ${e.name}: atk clip missed the leash - plain fallback ${clip && clip.mp4 ? 'ok' : 'failed'}`); }   // never swallow the announce
+      } else {
+      job = e._deathJob || null;
       // 🧷 identity heal: the kill may see an enemy object that lost its
       // _deathJob (prod 13:53:19) — fall back to the per-fight registry.
-      const __reg = state._deathJobReg;
       if (!job && __reg && __reg.gen === (state.combatGen || 0) && __reg.byIdx[i]) job = __reg.byIdx[i];
       if (!job) { try { startDeathBake(state); } catch (bakeErr) {} const __reg2 = state._deathJobReg; if (__reg2 && __reg2.gen === (state.combatGen || 0) && __reg2.byIdx[i]) { job = __reg2.byIdx[i]; console.log(`[DeathFx] ${e.name}: kill beat every bake - bake started at kill time (idx=${i}, gen=${state.combatGen || 0})`); } }
       // a kill on the very first turns can beat the background bake: wait for the in-flight bake (the box is slow, a late clip beats none)
-      let clip = job ? await Promise.race([job, new Promise((r) => setTimeout(() => r(undefined), leashMs))]) : undefined;
+      clip = job ? await Promise.race([job, __leash]) : undefined;
       if (clip && (clip.sig !== _aliveSig(state) || (clip.deadSig || '') !== __wantDead)) { console.log(`[DeathFx] ${e.name}: backdrop stale since bake (dead-in-scene ${clip.deadSig || '-'} vs now ${__wantDead}) - re-rendering`); clip = null; }   // stale backdrop: the death order moved on since the pre-bake
-      if (!clip && (clip === null || !job)) clip = await Promise.race([_deathEnqueue(() => _bakeDeathClip(state, e, i, __batchIdx)), new Promise((r) => setTimeout(() => r(null), leashMs))]);
-      if (!clip || !clip.mp4) console.warn(`[DeathFx] ${e.name}: NO clip (job=${!!job}, idx=${i}, gen=${state.combatGen || 0}, baked=${Date.now() - t0}ms) - falling back to the static card`);
+      if (!clip && (clip === null || !job)) clip = await Promise.race([_deathEnqueue(() => _bakeDeathClip(state, e, i, __batchIdx)), __leash]);
+      }
+      if (!clip || !clip.mp4) console.warn(`[DeathFx] ${e.name}: NO clip (job=${!!job}, wantAtk=${__wantAtk}, idx=${i}, gen=${state.combatGen || 0}, baked=${Date.now() - t0}ms) - falling back to the static card`);
       return clip && clip.mp4 ? { e, clip } : null;
     }));
       ready = clips.filter(Boolean);
@@ -6241,6 +6272,9 @@ async function performAction(sock, player, action, sessionKey) {
           // that actually killed the enemy"): basic-attack kills bake the animated slash into
           // the death clip (DEATHATTACK recipes) instead of opening on an unrelated dissolve.
           resolvedTarget._killedBy = { kind: 'basic', element: 'physical' };
+          // 🧷 mirror into a gen-keyed registry: prod rebuilds enemy objects mid-fight
+          // (the _deathJob registry exists for the same reason) — delivery reads both.
+          try { const __kr = (state._killedByReg && state._killedByReg.gen === (state.combatGen || 0)) ? state._killedByReg : (state._killedByReg = { gen: state.combatGen || 0, byIdx: {} }); const __ki = (state.enemies || []).indexOf(resolvedTarget); if (__ki >= 0) __kr.byIdx[__ki] = 'basic'; } catch (kErr) {}
           resultMsg += `\n💀 *${resolvedTarget.name}* defeated!`;
           player.combatStats.kills = (player.combatStats.kills || 0) + 1;
           recordEnemyKill(state, resolvedTarget);
