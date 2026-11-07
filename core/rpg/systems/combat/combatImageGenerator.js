@@ -163,6 +163,17 @@ function sniffMediaMime(buf) {
 async function generateCombatImage(players, enemies, options = {}) {
     // 🎴 HUD v4 (2026-11-06): classic PvE battle cards are composed in Node from Go's HUD-less layers (new rank ribbon,
     // compact portrait + capsule plate, summon deck tray). Any failure/timeout falls straight through to the Go card.
+    if (options.hud === 'v2' && String(options.combatType || '').toUpperCase() === 'PVP' && !options.encounter &&
+        Array.isArray(players) && players.length === 2 && process.env.COMBAT_HUD_NODE !== '0' && process.env.PVP_HUD_NODE !== '0') {
+        // ⚔️ PvP duel card: P1 hub bottom-left, P2 hub top-right (mirrored), no rank banner; falls back to the Go card.
+        try {
+            const nodePvp = await Promise.race([
+                require('./combatCardNode').renderNodePvpCard(players, enemies, options, { buildPayload, generateCombatLayers }),
+                new Promise((resolve) => setTimeout(() => resolve(null), 6000)),
+            ]);
+            if (nodePvp && nodePvp.success) return nodePvp;
+        } catch (hudErr) { console.warn('[CombatHud] node PvP card failed, using Go card:', hudErr.message); }
+    }
     if (options.hud === 'v2' && !options.encounter && String(options.combatType || 'PVE').toUpperCase() !== 'PVP' &&
         process.env.COMBAT_HUD_NODE !== '0') {
         try {

@@ -93,4 +93,55 @@ async function renderNodeCard(players, enemies, options, api) {
   console.log(`[CombatHud] node card ${buffer.length}B in ${Date.now() - t0}ms`);
   return { success: true, buffer, mimeType: 'image/jpeg' };
 }
-module.exports = { renderNodeCard };
+/** ⚔️ PvP duel card (owner 2026-11-07): no rank banner; P1's hub bottom-left, P2's hub TOP-RIGHT, mirrored (portrait on the right,
+ * bars grow right-to-left). players = [p1, p2] in fixed slot order. Same fallback contract as renderNodeCard. */
+async function renderNodePvpCard(players, enemies, options, api) {
+  const t0 = Date.now();
+  if (!Array.isArray(players) || players.length < 2) return null;
+  const payload = api.buildPayload(players, [], options);
+  await hud.preload();
+  const layers = await api.generateCombatLayers(players, [], { ...options, hud: 'none-clean' });
+  if (!layers || !layers.bg || !layers.sprites) return null;
+  const W = layers.w || 1024, H = layers.h || 687, s = W / hud.DW;
+  const cv = createCanvas(W, H), c = cv.getContext('2d');
+  c.drawImage(await loadImage(layers.bg), 0, 0, W, H);
+  const anchors = Array.isArray(layers.anchors) ? layers.anchors : [];
+  const act = options.action || null, turn = act ? Math.max(0, Number(act.attackerIndex) || 0) : -1;
+  const aOf = (i) => anchors.find((x) => x.side === 'player' && x.index === i);
+  if (turn >= 0 && aOf(turn)) { const a = aOf(turn); c.save(); c.translate(a.x * s, a.feetY * s); c.scale(1, 0.28); const g = c.createRadialGradient(0, 0, 4, 0, 0, 62 * s); g.addColorStop(0, 'rgba(255,214,102,0.85)'); g.addColorStop(1, 'rgba(255,214,102,0)'); c.fillStyle = g; c.beginPath(); c.arc(0, 0, 62 * s, 0, Math.PI * 2); c.fill(); c.restore(); }
+  c.drawImage(await loadImage(layers.sprites), 0, 0, W, H);
+  if (act && act.targetSide === 'player' && !act.heal && !act.missed && Array.isArray(layers.cuts)) {
+    const cut = layers.cuts.find((x) => x.side === 'player' && x.index === (Number(act.targetIndex) || 0));
+    if (cut && cut.png) {
+      try {
+        const im = await loadImage(Buffer.from(cut.png, 'base64')), t = createCanvas(cut.w, cut.h), tc = t.getContext('2d');
+        tc.drawImage(im, 0, 0, cut.w, cut.h); tc.globalCompositeOperation = 'source-atop'; tc.fillStyle = 'rgba(255,40,30,0.5)'; tc.fillRect(0, 0, cut.w, cut.h);
+        c.drawImage(t, cut.x * s, cut.y * s, cut.w * s, cut.h * s);
+      } catch (e) { /* cosmetic */ }
+    }
+  }
+  for (const a of anchors) {
+    if (a.side !== 'player') continue;
+    const u = players[a.index]; if (!u || u.isDead) continue;
+    const fx = Array.isArray(u.statusEffects) ? u.statusEffects.filter((e) => e && e.icon) : [];
+    if (!fx.length) continue;
+    const shield = fx.find(hud.isShieldFx); if (shield) hud.drawShieldBubble(c, a, s, Number(shield.value) || 0);
+    hud.drawStatusBadges(c, a, fx, s);
+  }
+  const pl = payload.players || [];
+  for (let i = 0; i < 2; i++) {
+    const p = pl[i]; if (!p) continue;
+    const cut = (layers.cuts || []).find((x) => x.side === 'player' && x.index === i), flip = i === 1, col = i === 0 ? '#d8b04a' : '#8f5bd6';
+    if (i === turn) { // active duelist: warm glow behind their hub
+      const gx = flip ? W - 18 * s - 165 * s : 18 * s + 165 * s, gy = (flip ? 12 : hud.DH - 104) * s + 49 * s;
+      const g = c.createRadialGradient(gx, gy, 10 * s, gx, gy, 230 * s); g.addColorStop(0, 'rgba(255,214,102,0.30)'); g.addColorStop(1, 'rgba(255,214,102,0)'); c.fillStyle = g; c.fillRect(gx - 240 * s, gy - 120 * s, 480 * s, 240 * s);
+    }
+    hud.drawPlayerHud(c, { name: p.name, hp: p.currentHP ?? p.hp, maxHp: p.maxHp, energy: p.energy, maxEnergy: p.maxEnergy, level: p.level, portrait: await hud.portraitFromCut(cut), color: col },
+      s, 18, flip ? 12 : hud.DH - 104, { flip, seed: 11 + i * 5 });
+  }
+  const buffer = cv.toBuffer('image/jpeg', { quality: 0.88 });
+  console.log(`[CombatHud] node PvP card ${buffer.length}B in ${Date.now() - t0}ms`);
+  return { success: true, buffer, mimeType: 'image/jpeg' };
+}
+module.exports = { renderNodeCard, renderNodePvpCard };
+

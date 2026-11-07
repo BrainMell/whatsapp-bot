@@ -106,13 +106,40 @@ function drawRankBanner(c, text, s = 1) {
 }
 function plq2(c, x, y, w, h, cut) { c.beginPath(); c.moveTo(x + cut, y); c.lineTo(x + w - cut, y); c.lineTo(x + w, y + cut); c.lineTo(x + w, y + h - cut); c.lineTo(x + w - cut, y + h); c.lineTo(x + cut, y + h); c.lineTo(x, y + h - cut); c.lineTo(x, y + cut); c.closePath(); }
 
-/** Compact player plate (layout kept from v4): ornate medallion portrait + capsule HP / mana, no panel box.
- * hud = {name, hp, maxHp, energy, maxEnergy, level, portrait:Image|Canvas|null, color} */
-function drawPlayerHud(c, hud, s = 1, ox = 18, oy = DH - 104) {
+/** Parchment banner hung behind the hub plate (owner 2026-11-07: "a nicely designed banner behind it ... the old-RPG rough-paper
+ * feel"). Torn-edge aged paper with a swallowtail on the far end, stitched inset, ink rules and a wax seal. Rect is canvas px. */
+function drawHubBanner(c, x, y, w, h, s, o = {}) {
+  const { makePaper, tornPath, stitch, waxSeal } = require('../shared/parchment');
+  const flip = !!o.flip, accent = o.accent || '#a3201c', tail = 20 * s;
+  const paper = makePaper(w, h, { seed: o.seed || 11, tone: 'warm', burn: 0.7, stains: 1 });
+  c.save(); c.shadowColor = 'rgba(0,0,0,0.6)'; c.shadowBlur = 14 * s; c.shadowOffsetY = 5 * s;
+  tornPath(c, x, y, w, h, { amp: 2.4 * s, step: 8 * s, seed: o.seed || 11, notch: flip ? 0 : tail, notchLeft: flip ? tail : 0 }); c.fillStyle = '#b89a62'; c.fill(); c.restore();
+  c.save(); tornPath(c, x, y, w, h, { amp: 2.4 * s, step: 8 * s, seed: o.seed || 11, notch: flip ? 0 : tail, notchLeft: flip ? tail : 0 }); c.clip(); c.drawImage(paper, x, y);
+  // soft top light + bottom shade for thickness
+  const lg = c.createLinearGradient(0, y, 0, y + h); lg.addColorStop(0, 'rgba(255,248,225,0.28)'); lg.addColorStop(0.25, 'rgba(255,248,225,0)'); lg.addColorStop(0.8, 'rgba(60,34,14,0)'); lg.addColorStop(1, 'rgba(60,34,14,0.3)'); c.fillStyle = lg; c.fillRect(x, y, w, h);
+  c.restore();
+  tornPath(c, x, y, w, h, { amp: 2.4 * s, step: 8 * s, seed: o.seed || 11, notch: flip ? 0 : tail, notchLeft: flip ? tail : 0 }); c.lineWidth = 1.5 * s; c.strokeStyle = 'rgba(54,30,12,0.75)'; c.stroke();
+  // ink rules + stitch
+  const ix = x + (flip ? tail + 6 * s : 8 * s), iw = w - (tail + 14 * s);
+  stitch(c, ix, y + 7 * s, iw, h - 14 * s, 4 * s, 'rgba(60,34,14,0.55)', 1.1 * s, [4 * s, 3.5 * s]);
+  // diamond fleurons in the stitched corners
+  for (const fx of [ix + 8 * s, ix + iw - 8 * s]) for (const fy of [y + 12 * s, y + h - 12 * s]) { c.save(); c.translate(fx, fy); c.rotate(Math.PI / 4); c.fillStyle = 'rgba(40,22,8,0.7)'; c.fillRect(-2.2 * s, -2.2 * s, 4.4 * s, 4.4 * s); c.restore(); }
+  // wax seal at the tail
+  const sx = flip ? x + tail + 8 * s : x + w - tail - 8 * s;
+  waxSeal(c, sx, y + h - 11 * s, 9 * s, accent, (cc, cx, cy, r) => { cc.fillStyle = 'rgba(255,230,190,0.85)'; cc.font = `bold ${r * 1.15}px HudCinzel, serif`; cc.textAlign = 'center'; cc.textBaseline = 'middle'; cc.fillText('J', cx, cy + r * 0.06); });
+}
+
+/** Compact player plate. Portrait medallion + capsule HP / mana on a parchment banner.
+ * hud = {name, hp, maxHp, energy, maxEnergy, level, portrait:Image|Canvas|null, color}
+ * opts.flip = mirrored layout for the TOP-RIGHT (PvP opponent): portrait on the right, bars grow right-to-left. opts.banner=false drops the paper. */
+function drawPlayerHud(c, hud, s = 1, ox = 18, oy = DH - 104, opts = {}) {
   init();
+  const flip = !!opts.flip, banner = opts.banner !== false, PW = 330;
   const ring = uiSync('hud_plate_ring.png');
-  const X = ox * s, Y = oy * s, R = 38 * s;
-  const pcx = X + 60 * s, pcy = Y + 49 * s;
+  const X0 = (flip ? DW - ox - PW : ox) * s, Y = oy * s, R = 38 * s;
+  const L = (d, w = 0) => (flip ? X0 + (PW - d - w) * s : X0 + d * s);   // local left edge -> canvas x
+  const pcx = flip ? X0 + (PW - 60) * s : X0 + 60 * s, pcy = Y + 49 * s;
+  if (banner) drawHubBanner(c, L(46, 284), Y + 7 * s, 284 * s, 84 * s, s, { flip, accent: hud.color && hud.color !== '#d8b04a' ? hud.color : '#a3201c', seed: opts.seed || 11 });
   // portrait socket
   c.save();
   c.shadowColor = 'rgba(0,0,0,0.6)'; c.shadowBlur = 8 * s; c.shadowOffsetY = 3 * s;
@@ -122,7 +149,7 @@ function drawPlayerHud(c, hud, s = 1, ox = 18, oy = DH - 104) {
   if (hud.portrait) {
     const p = hud.portrait, pw = p.width, ph = p.height, sh = Math.min(ph, pw * 1.1);   // head+shoulders: top slice of the sprite
     const k = (R * 2.05) / Math.max(pw, sh);
-    try { c.imageSmoothingEnabled = pw > 200; c.drawImage(p, 0, 0, pw, sh, pcx - (pw * k) / 2, pcy - R + 3 * s, pw * k, sh * k); } catch (e) {}
+    try { c.imageSmoothingEnabled = pw > 200; c.save(); if (flip) { c.translate(pcx * 2, 0); c.scale(-1, 1); } c.drawImage(p, 0, 0, pw, sh, pcx - (pw * k) / 2, pcy - R + 3 * s, pw * k, sh * k); c.restore(); } catch (e) {}
   } else { c.fillStyle = '#f3ecd8'; c.font = `bold ${34 * s}px HudCinzel, serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(hud.name || '?')[0].toUpperCase(), pcx, pcy); }
   c.restore();
   // ornate engraved medallion ring (asset; socket ratio 86/110 -> A = R*2.56)
@@ -132,27 +159,30 @@ function drawPlayerHud(c, hud, s = 1, ox = 18, oy = DH - 104) {
     c.beginPath(); c.arc(pcx, pcy, R - 2 * s, 0, Math.PI * 2); c.lineWidth = 4 * s; c.strokeStyle = ringCol; c.stroke();
     c.beginPath(); c.arc(pcx, pcy, R + 1 * s, 0, Math.PI * 2); c.lineWidth = 2 * s; c.strokeStyle = 'rgba(8,5,2,0.95)'; c.stroke();
   }
-  if (hud.level) { // diamond level pip
-    const lx = pcx + R * 0.80, ly = pcy + R * 0.80, r = 14 * s;
+  if (hud.level) { // diamond level pip (always on the outer-bottom corner of the medallion)
+    const lx = pcx + (flip ? -1 : 1) * R * 0.80, ly = pcy + R * 0.80, r = 14 * s;
     c.save(); c.translate(lx, ly); c.rotate(Math.PI / 4);
-    c.shadowColor = 'rgba(0,0,0,0.6)'; c.shadowBlur = 5 * s;
+    c.shadowColor = 'rgba(0,0,0,0.6)'; c.shadowBlur = 5 * s; c.shadowOffsetY = 2 * s;
     rr(c, -r * 0.72, -r * 0.72, r * 1.44, r * 1.44, 3 * s); c.fillStyle = '#1b1208'; c.fill(); c.shadowBlur = 0;
     c.lineWidth = 2.2 * s; c.strokeStyle = hud.color || '#d8b04a'; c.stroke();
     c.restore();
     c.fillStyle = '#f3ecd8'; c.font = `bold ${11 * s}px HudCinzel, serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(hud.level), lx, ly + 1);
   }
-  // name (floating text, no box)
-  const bx = X + 116 * s;
+  // name: dark ink on the paper (floating cream text when the banner is off)
+  const hpW = 184, enW = 144, bxL = 116;                  // local left edge of the bars
+  const hpX = L(bxL, hpW), enX = L(bxL, enW) + (flip ? (hpW - enW) * s : 0) * 0;
   c.textBaseline = 'middle'; fit(c, String(hud.name || 'Champion'), 150 * s, 19 * s, 'HudCinzel, serif');
-  shadowText(c, String(hud.name || 'Champion'), bx, Y + 14 * s, '#f6efdc');
+  const nameX = flip ? hpX + hpW * s : hpX, nameAlign = flip ? 'right' : 'left', nm = String(hud.name || 'Champion');
+  if (banner) { c.textAlign = nameAlign; c.fillStyle = 'rgba(255,246,220,0.75)'; c.fillText(nm, nameX + 0.9 * s, Y + 14.9 * s); c.fillStyle = '#2c1a0c'; c.fillText(nm, nameX, Y + 14 * s); }
+  else shadowText(c, nm, nameX, Y + 14 * s, '#f6efdc', nameAlign);
   // HP capsule
-  const hpW = 184 * s, hpH = 19 * s, hy = Y + 27 * s;
-  capsule(c, bx, hy, hpW, hpH, hud.maxHp > 0 ? hud.hp / hud.maxHp : 0, 'hp', `${Math.max(0, Math.floor(hud.hp || 0))}/${Math.max(1, Math.floor(hud.maxHp || 1))}`, s);
-  heartIcon(c, bx - 1 * s, hy + hpH / 2, 13 * s);
-  // mana capsule (slimmer + shorter)
-  const enW = 144 * s, enH = 13 * s, ey = hy + hpH + 6 * s;
-  capsule(c, bx, ey, enW, enH, hud.maxEnergy > 0 ? hud.energy / hud.maxEnergy : 0, 'en', `${Math.max(0, Math.floor(hud.energy || 0))}/${Math.max(1, Math.floor(hud.maxEnergy || 1))}`, s);
-  dropIcon(c, bx - 1 * s, ey + enH / 2, 10 * s);
+  const hpH = 19 * s, hy = Y + 27 * s;
+  capsule(c, hpX, hy, hpW * s, hpH, hud.maxHp > 0 ? hud.hp / hud.maxHp : 0, 'hp', `${Math.max(0, Math.floor(hud.hp || 0))}/${Math.max(1, Math.floor(hud.maxHp || 1))}`, s, flip);
+  heartIcon(c, flip ? hpX + hpW * s + 1 * s : hpX - 1 * s, hy + hpH / 2, 13 * s);
+  // mana capsule (slimmer + shorter), hugging the portrait side
+  const enH = 13 * s, ey = hy + hpH + 6 * s, enXr = flip ? hpX + (hpW - enW) * s : hpX;
+  capsule(c, enXr, ey, enW * s, enH, hud.maxEnergy > 0 ? hud.energy / hud.maxEnergy : 0, 'en', `${Math.max(0, Math.floor(hud.energy || 0))}/${Math.max(1, Math.floor(hud.maxEnergy || 1))}`, s, flip);
+  dropIcon(c, flip ? enXr + enW * s + 1 * s : enXr - 1 * s, ey + enH / 2, 10 * s);
 }
 function heartIcon(c, cx, cy, r) {
   c.save(); c.translate(cx, cy); c.beginPath(); c.moveTo(0, r * 0.95);
@@ -165,7 +195,7 @@ function dropIcon(c, cx, cy, r) {
   const g = c.createLinearGradient(0, -r, 0, r); g.addColorStop(0, '#9bd0ff'); g.addColorStop(1, '#2457b8'); c.fillStyle = g; c.fill(); c.lineWidth = r * 0.22; c.strokeStyle = '#08142e'; c.stroke();
   c.fillStyle = 'rgba(255,255,255,0.6)'; c.beginPath(); c.arc(-r * 0.3, 0, r * 0.18, 0, Math.PI * 2); c.fill(); c.restore();
 }
-function capsule(c, x, y, w, h, pct, kind, label, s) {
+function capsule(c, x, y, w, h, pct, kind, label, s, rtl) {
   pct = Math.max(0, Math.min(1, pct)); const r = h / 2;
   c.save(); c.shadowColor = 'rgba(0,0,0,0.55)'; c.shadowBlur = 5 * s; c.shadowOffsetY = 2 * s;
   rr(c, x, y, w, h, r); c.fillStyle = 'rgba(14,9,5,0.92)'; c.fill(); c.restore();
@@ -173,8 +203,8 @@ function capsule(c, x, y, w, h, pct, kind, label, s) {
     const fw = Math.max(h, w * pct), g = c.createLinearGradient(0, y, 0, y + h);
     if (kind === 'hp') { if (pct < 0.25) { g.addColorStop(0, '#ff5a45'); g.addColorStop(1, '#8f1a10'); } else { g.addColorStop(0, '#f0623a'); g.addColorStop(0.55, '#c8321c'); g.addColorStop(1, '#7a170c'); } }
     else { g.addColorStop(0, '#6fb2ff'); g.addColorStop(0.55, '#3a73d1'); g.addColorStop(1, '#1b3a82'); }
-    c.save(); rr(c, x + 1.5 * s, y + 1.5 * s, w - 3 * s, h - 3 * s, r); c.clip(); rr(c, x, y, fw, h, r); c.fillStyle = g; c.fill();
-    const gl = c.createLinearGradient(0, y, 0, y + h * 0.55); gl.addColorStop(0, 'rgba(255,255,255,0.32)'); gl.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = gl; c.fillRect(x, y, fw, h * 0.55); c.restore();
+    c.save(); rr(c, x + 1.5 * s, y + 1.5 * s, w - 3 * s, h - 3 * s, r); c.clip(); rr(c, rtl ? x + w - fw : x, y, fw, h, r); c.fillStyle = g; c.fill();
+    const gl = c.createLinearGradient(0, y, 0, y + h * 0.55); gl.addColorStop(0, 'rgba(255,255,255,0.32)'); gl.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = gl; c.fillRect(rtl ? x + w - fw : x, y, fw, h * 0.55); c.restore();
     // engraved quarter ticks over the fill
     c.save(); rr(c, x, y, w, h, r); c.clip(); c.strokeStyle = 'rgba(0,0,0,0.32)'; c.lineWidth = 1 * s;
     for (const t of [0.25, 0.5, 0.75]) { const tx = x + w * t; c.beginPath(); c.moveTo(tx, y + 2 * s); c.lineTo(tx, y + h - 2 * s); c.stroke(); }
@@ -420,4 +450,4 @@ function drawStatusBadges(c, a, effects, s = 1) {
   }
 }
 
-module.exports = { preload, drawRankBanner, drawPlayerHud, drawUnitBar, drawDeckTray, drawShieldBubble, drawStatusBadges, portraitFromCut, DW, DH, RANK_COLOR, isShieldFx };
+module.exports = { preload, drawRankBanner, drawHubBanner, drawPlayerHud, drawUnitBar, drawDeckTray, drawShieldBubble, drawStatusBadges, portraitFromCut, DW, DH, RANK_COLOR, isShieldFx };
