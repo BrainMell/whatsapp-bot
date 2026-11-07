@@ -1865,6 +1865,12 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
     const turnNum = opts.turnNumber || 0;
     await drawBackdrop(ctx, plan.bg, plan.bgDir);
 
+    // 🕑 round 10: dodge resolution lives ABOVE the style branches (boss style draws
+    // its own sprites and returns early) — the dodging unit visually leaves the line.
+    const __dodge = _resolveAbyssDodge(plan, opts.turnInfo || null);
+    const __ghost = async (art, u, alpha, off) => drawActorGrounded(ctx, art, u.cx + (off || 0), u.gy, u.h,
+        { flip: u.flip, alpha: alpha * (u.alpha == null ? 1 : u.alpha), shadowBoost: alpha > 0.2 ? 2.05 : 0, shadowRyMin: 16, shadowWide: true, pixelSnap: true });
+
     // ── BOSS STYLE: the approved composition, drawn in the approved order,
     // pixel-identical to the round the owner green-lit ("Do not change boss
     // scenes"). Kept as its own branch on purpose. ──
@@ -1890,7 +1896,12 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
             }
         }
         if (plan.enemy && plan.enemy.art) {
-            const drawn = await drawActorGrounded(ctx, plan.enemy.art, plan.enemy.cx, plan.enemy.gy, plan.enemy.h,
+            const __dg = __dodge && __dodge.u === plan.enemy;   // 🕑 round 10: boss dodges too
+            if (__dg) {
+                await __ghost(plan.enemy.art, plan.enemy, 0.30, 0); await __ghost(plan.enemy.art, plan.enemy, 0.13, -__dodge.dir * 12);
+                require('../combat/hitFx').dustPuff(ctx, plan.enemy.cx + __dodge.dir * 8, plan.enemy.gy - 4, 1.0, 1);
+            }
+            const drawn = await drawActorGrounded(ctx, plan.enemy.art, plan.enemy.cx + (__dg ? __dodge.dx : 0), plan.enemy.gy + (__dg ? __dodge.dy : 0), plan.enemy.h,
                 { flip: plan.enemy.flip, tint: opts.hitEnemy ? HIT_TINT : null,
                   shadowBoost: 1.45, shadowRyMin: 14, pixelSnap: false });
             // colossal bosses crop off the top edge — keep plates on-canvas
@@ -1969,9 +1980,6 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
     // audit §4 z-order rule: sort EVERY actor by foot Y (lower draws later),
     // sprites first in one pass, plates after — plates can never be covered.
     ctx.imageSmoothingEnabled = false;   // audit §F: no mixed smoothing
-    const __dodge = _resolveAbyssDodge(plan, opts.turnInfo || null);   // 🕑 round 10
-    const __ghost = async (art, u, alpha, off) => drawActorGrounded(ctx, art, u.cx + (off || 0), u.gy, u.h,
-        { flip: u.flip, alpha: alpha * (u.alpha == null ? 1 : u.alpha), shadowBoost: alpha > 0.2 ? 2.05 : 0, shadowRyMin: 16, shadowWide: true, pixelSnap: true });
     const spritePass = [];
     for (const p of plan.pack || []) {
         if (!p.art) continue;
