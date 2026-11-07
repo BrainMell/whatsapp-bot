@@ -184,8 +184,9 @@ function emblemBomb(c, cx, cy, s, kind) {                     // black-powder bo
   const col = ice ? '#7dd8ff' : poison ? '#a86bff' : '#ff7a5a';
   glow(c, cx, cy, 60 * s, col, 0.42);
   c.save(); c.translate(cx, cy);
-  c.fillStyle = '#1a1418'; c.beginPath(); c.arc(0, 4 * s, 20 * s, 0, TAU); c.fill();
-  c.strokeStyle = a2(col, 0.9); c.lineWidth = 2.2 * s; c.stroke();
+  c.fillStyle = '#2e2632'; c.beginPath(); c.arc(0, 4 * s, 20 * s, 0, TAU); c.fill();
+  c.strokeStyle = a2(col, 0.95); c.lineWidth = 2.6 * s; c.stroke();
+  c.strokeStyle = a2('#ffffff', 0.35); c.lineWidth = 1.2 * s; c.beginPath(); c.arc(0, 4 * s, 15.5 * s, 0, TAU); c.stroke();
   c.fillStyle = a2('#8a5a2a', 0.95); rr(c, -5 * s, -22 * s, 10 * s, 7 * s, 2 * s); c.fill();
   c.strokeStyle = '#ffd24a'; c.lineWidth = 2.2 * s; c.beginPath(); c.moveTo(4 * s, -22 * s); c.quadraticCurveTo(14 * s, -30 * s, 9 * s, -36 * s); c.stroke();
   star(c, 5 * s, a2('#ffe9b0', 0.95)); c.save(); c.translate(9 * s, -36 * s); star(c, 5 * s, '#fff'); c.restore();
