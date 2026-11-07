@@ -237,24 +237,28 @@ function capsuleThin(c, x, y, w, h, pct, col, s) {
  * glass shelf, gold lip and studs are retired. All cards sit LEVEL; the always-raised glowing
  * last card is gone (owner: "why is the one card at the far right always the only one lifted up??").
  * Only call when entries.length > 0. entries: [{card, ready, turnsLeft, affordable}] */
+/** Hand geometry shared by the tray painter and the card-play animation (so a card visibly leaves ITS slot). */
+function deckLayout(entries, s = 1, x0 = 330, y0 = DH - 96, x1 = DW - 18) {
+  const X = x0 * s, Y = y0 * s, W = (x1 - x0) * s, H = 84 * s;
+  const cw = 52 * s, ch = 70 * s, padL = 26 * s, padR = 16 * s, usable = W - padL - padR, n = entries.length, minStep = cw * 0.66;
+  const maxFit = Math.max(1, Math.floor((usable - cw) / minStep) + 1);
+  const shownN = Math.min(n, maxFit), more = n - shownN;
+  const step = shownN > 1 ? Math.min(cw + 12 * s, Math.max(minStep, (usable - cw) / (shownN - 1))) : 0;
+  const handW = (shownN > 1 ? (shownN - 1) * step : 0) + cw;
+  const startX = X + padL + Math.max(0, (usable - handW) / 2);
+  const slots = [];
+  for (let i = 0; i < shownN; i++) slots.push({ x: startX + i * step, y: Y + (H - ch) / 2, w: cw, h: ch, ang: (i - (shownN - 1) / 2) * 1.1 * Math.PI / 180 });
+  const chip = more > 0 ? { x: startX + (shownN - 1) * step + cw + 6 * s, y: Y + H / 2 - 13 * s, w: 40 * s, h: 26 * s } : null;
+  return { X, Y, W, H, cw, ch, startX, step, handW, shownN, more, slots, chip };
+}
+
 async function drawDeckTray(c, entries, s = 1, x0 = 330, y0 = DH - 96, x1 = DW - 18) {
   init();
   const { RARITY, ELEMENT_COLORS } = require('../summonCards/catalog');
   const { artFor } = require('../summonCards/cardRenderer');
-  const X = x0 * s, Y = y0 * s, W = (x1 - x0) * s, H = 84 * s;
-  // hand layout: squeeze together like a held hand, never lose the numbering
-  const cw = 52 * s, ch = 70 * s, padL = 26 * s, padR = 16 * s;
-  const usable = W - padL - padR;
-  const n = entries.length;
-  const minStep = cw * 0.66;
-  const maxFit = Math.max(1, Math.floor((usable - cw) / minStep) + 1);
-  const shown = entries.slice(0, Math.min(n, maxFit));
-  const more = n - shown.length;
-  const step = shown.length > 1 ? Math.min(cw + 12 * s, Math.max(minStep, (usable - cw) / (shown.length - 1))) : 0;
-  // centre the hand inside the band (with no board chrome a left-bunched hand reads as broken —
-  // the old spotlight used to soak up the slack on the right)
-  const handW = (shown.length > 1 ? (shown.length - 1) * step : 0) + cw;
-  const startX = X + padL + Math.max(0, (usable - handW) / 2);
+  const L = deckLayout(entries, s, x0, y0, x1);
+  const { X, Y, W, H, cw, ch, startX, step, handW } = L;
+  const shown = entries.slice(0, L.shownN), more = L.more;
   // 1. soft ground pool behind the hand — RADIAL, so there are no hard edges on any stage
   //    (battle card scene or the flat hand-image backdrop); readability without board chrome
   const cxm = startX + handW / 2, cym = Y + H * 0.52;
@@ -273,6 +277,7 @@ async function drawDeckTray(c, entries, s = 1, x0 = 330, y0 = DH - 96, x1 = DW -
     const ang = (i - (shown.length - 1) / 2) * 1.1 * Math.PI / 180;
     const x = startX + i * step;
     const y = Y + (H - ch) / 2;
+    if (shown[i].hidden) continue;   // card-play animation: this card is in the air
     c.save();
     c.translate(x + cw / 2, y + ch + 3 * s); c.scale(1, 0.2);
     const sh = c.createRadialGradient(0, 0, 2 * s, 0, 0, cw * 0.62);
@@ -450,4 +455,5 @@ function drawStatusBadges(c, a, effects, s = 1) {
   }
 }
 
-module.exports = { preload, drawRankBanner, drawHubBanner, drawPlayerHud, drawUnitBar, drawDeckTray, drawShieldBubble, drawStatusBadges, portraitFromCut, DW, DH, RANK_COLOR, isShieldFx };
+module.exports = {
+  deckLayout, preload, drawRankBanner, drawHubBanner, drawPlayerHud, drawUnitBar, drawDeckTray, drawShieldBubble, drawStatusBadges, portraitFromCut, DW, DH, RANK_COLOR, isShieldFx };

@@ -6334,7 +6334,26 @@ async function performAction(sock, player, action, sessionKey) {
         });
         // Go renders the three legacy signature cards; every other card (and any Go failure) uses the Node card-play GIF.
         let gif = null;
-        if (['ifrit', 'leviathan', 'shiva'].includes(activation.card.id)) {
+        // 🎴 owner 2026-11-07: the card physically leaves its hand slot (or the +N pile), flies in front of the caster, then fires its
+        // effect in the real battle scene. Returns an MP4; null/any failure falls through to the Go / generic Node GIF below.
+        if (process.env.CARD_SCENE_ANIM !== '0') {
+          try {
+            const __sc = require('../summonCards');
+            const __players = state.players || [player];
+            const __entries = __sc.handEntries(player.jid, state, player);
+            gif = await Promise.race([
+              require('../summonCards/cardPlayScene').renderCardPlayScene({
+                card: activation.card, players: __players, enemies: state.enemies || [],
+                playerIndex: Math.max(0, __players.indexOf(player)), targetIndex: activation.targetIndex || 0,
+                entries: __entries, info: { damage: activation.damage, healing: activation.healing, missed: activation.wasEvaded },
+                sceneOptions: { rank: state.dungeonRank, floor: state.isAbyss ? state.abyssFloor : 0, backgroundPath: state.backgroundPath, combatState: state },
+                api: { buildPayload: combatImageGen._buildPayload, generateCombatLayers: combatImageGen._generateCombatLayers },
+              }),
+              new Promise((resolve) => setTimeout(() => resolve(null), 12000)),
+            ]);
+          } catch (sceneErr) { gif = null; console.warn('[SummonCards] scene animation failed, falling back:', sceneErr.message); }
+        }
+        if (!gif && ['ifrit', 'leviathan', 'shiva'].includes(activation.card.id)) {
           try { gif = await goService.generateSummonCardGIF(payload); } catch (goErr) { console.warn('[SummonCards] Go GIF failed, using Node renderer:', goErr.message); }
         }
         if (!gif) {

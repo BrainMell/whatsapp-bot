@@ -80,7 +80,9 @@ async function renderNodeCard(players, enemies, options, api) {
       portrait: await hud.portraitFromCut(cut),
     }, s);
   }
+  if (options._sceneOut) { Object.assign(options._sceneOut, { canvas: cv, anchors, s, hi, layers, players, enemies }); }
   // summon deck tray - ONLY for players who own cards
+  if (options._skipTray) { const buf0 = cv.toBuffer('image/jpeg', { quality: 0.8 }); return { success: true, buffer: buf0, mimeType: 'image/jpeg' }; }
   try {
     const src = players[hi] || players[0];
     if (src && src.jid) {

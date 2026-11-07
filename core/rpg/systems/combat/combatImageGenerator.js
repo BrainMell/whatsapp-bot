@@ -426,5 +426,6 @@ module.exports = {
     applyTimeFreezeDim,
     // Exported for testing
     _buildPayload: buildPayload,
+    _generateCombatLayers: generateCombatLayers,
     _buildActionPayload: buildActionPayload
 };
