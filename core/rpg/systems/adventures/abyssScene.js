@@ -33,7 +33,7 @@ const roomScene = require('../guildwar/roomScene');
 const { drawGroundedSprite, drawContactShadow, contentBox, perspH,
         resolvePlayerSpriteFile, ensureFonts } = roomScene;
 
-const RPGASSET = path.join(__dirname, '..', 'rpgasset');   // core/rpg/ → core/rpgasset/
+const RPGASSET = path.join(__dirname, '..', '..', '..', 'rpgasset');   // core/rpg/systems/adventures → core/rpgasset (2026-11-07: stale '..' after the refactor)
 const ENEMY_DIR = path.join(RPGASSET, 'enemies');
 const ENEMY_ABYSS_DIR = path.join(ENEMY_DIR, 'abyss');          // new sprites, by NAME
 const ENV_ABYSS_DIR = path.join(RPGASSET, 'environment', 'abyss'); // boss-room hall pool

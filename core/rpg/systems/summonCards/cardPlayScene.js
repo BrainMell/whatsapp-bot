@@ -81,8 +81,14 @@ async function renderCardPlayScene(a) {
   const targ = attack ? (find('enemy', tIdx) || anyEnemy || { x: W * 0.72 / s, feetY: H * 0.7 / s, w: 120, h: 160 }) : caster;
   const cp = { x: caster.x * s, y: (caster.feetY - (caster.h || 160) * 0.5) * s }, tp = { x: targ.x * s, y: (targ.feetY - (targ.h || 160) * 0.5) * s };
   // card sprite (pre-rendered once) + summon art
-  const cardImg = createCanvas(CW, CH + 10); await drawCard(cardImg.getContext('2d'), card, 0, 0, { ready: true, affordable: true });
-  const art = await artFor(card).catch(() => null);
+  const cardImg0 = createCanvas(CW, CH + 10); await drawCard(cardImg0.getContext('2d'), card, 0, 0, { ready: true, affordable: true });
+  const idle0 = await require('./summonIdle').getIdle(card).catch(() => null);
+  // one pre-rendered card per idle frame so the summon is ALREADY animating inside the card while it flies, then lifts out of it
+  const cardVariants = [];
+  if (idle0) for (const fr of idle0.frames) { const cc = createCanvas(CW, CH + 10); await drawCard(cc.getContext('2d'), card, 0, 0, { ready: true, affordable: true, artOverride: fr }); cardVariants.push(cc); }
+  let cardImg = cardImg0;
+  const art0 = await artFor(card).catch(() => null);
+  const idle = await require('./summonIdle').getIdle(card).catch(() => null);   // the summon's own idle animation (owner: reuse it)
   // geometry (all in 1024-scaled px)
   const fw = 150 * s, fh = fw * (CH / CW);                                    // flight size
   const startC = fromPile
@@ -155,6 +161,8 @@ async function renderCardPlayScene(a) {
       if (kOut > 0) for (const p of sparks) { const k = clamp((kOut - p.d) * 1.5); c.fillStyle = rgba(el, (1 - k) * 0.9); c.fillRect(pos.x + Math.cos(p.a) * p.v * k * s * 0.7 - p.r * s / 2, pos.y + Math.sin(p.a) * p.v * k * s * 0.7 - p.up * 90 * k * s, p.r * s, p.r * s); }
     }
     // --- the summon rises out of the card art ---
+    const art = idle ? require('./summonIdle').frameAt(idle, f / FPS) : art0;
+    if (cardVariants.length) cardImg = cardVariants[Math.floor((f / FPS) * idle0.fps) % cardVariants.length];
     if (kReveal > 0 && art && kFx < 1.01) {
       const k = easeOut(kReveal), fade = 1 - seg(t, 0.78, 0.9), sz = (art.height > 0 ? 150 : 150) * s * (0.8 + 0.3 * k), asp = art.width / art.height;
       const ah = sz, aw = sz * asp, ay = hover.y - fh * 0.2 - k * 60 * s, ax = hover.x + (tp.x > cp.x ? -1 : 1) * 0;

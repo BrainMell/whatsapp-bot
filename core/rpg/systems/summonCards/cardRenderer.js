@@ -121,11 +121,11 @@ async function drawCard(c, card, x, y, st = {}) {
   const og = c.createRadialGradient(cxA, cyA, 6, cxA, cyA, aw * 0.62); og.addColorStop(0, hexA(el, 0.85)); og.addColorStop(0.5, hexA(el, 0.28)); og.addColorStop(1, 'rgba(8,10,16,0.0)'); c.fillStyle = og; c.fillRect(ax, ay, aw, ah);
   c.strokeStyle = hexA(el, 0.5); c.lineWidth = 1.2; c.beginPath(); c.arc(cxA, cyA, 62, 0, 7); c.stroke(); c.setLineDash([3, 5]); c.beginPath(); c.arc(cxA, cyA, 74, 0, 7); c.stroke(); c.setLineDash([]);
   const rn = P.rng(seed); c.fillStyle = '#fff'; for (let i = 0; i < 22; i++) { c.globalAlpha = 0.12 + rn() * 0.4; c.fillRect(ax + rn() * aw, ay + rn() * ah, 1.6, 1.6); } c.globalAlpha = 1;
-  const art = await artFor(card);
+  const art = st.artOverride || await artFor(card);
   if (art) {
     const k = Math.min((aw - 14) / art.width, (ah - 14) / art.height), iw = art.width * k, ih = art.height * k;
     c.imageSmoothingEnabled = art.width > 256; c.shadowColor = 'rgba(0,0,0,0.65)'; c.shadowBlur = 12; c.shadowOffsetY = 4;
-    c.drawImage(art, ax + (aw - iw) / 2, ay + (ah - ih) / 2 + 6, iw, ih); c.shadowBlur = 0; c.shadowOffsetY = 0;
+    c.drawImage(art, ax + (aw - iw) / 2, ay + (ah - ih) / 2 + 6 + (st.artBob || 0), iw, ih); c.shadowBlur = 0; c.shadowOffsetY = 0;
   } else { c.fillStyle = 'rgba(255,255,255,0.88)'; c.font = '84px SCCinzelD, SCCinzel, serif'; c.fillText(card.name[0], CW / 2, cyA - 6); }
   const ig = c.createLinearGradient(0, ay, 0, ay + ah); ig.addColorStop(0, 'rgba(0,0,0,0.35)'); ig.addColorStop(0.25, 'rgba(0,0,0,0)'); ig.addColorStop(0.8, 'rgba(0,0,0,0)'); ig.addColorStop(1, 'rgba(0,0,0,0.4)'); c.fillStyle = ig; c.fillRect(ax, ay, aw, ah);
   c.restore();
@@ -248,4 +248,26 @@ async function renderHandPng(entries, opts = {}) {
   return cvs.toBuffer('image/png');
 }
 
-module.exports = { renderCardPng, renderCardPngScaled, renderHandPng, drawCard, artFor, paintSummonBackdrop, CW, CH };
+/** 🎞️ `.j summons <n>` showcase: the card with its summon doing its IDLE animation inside the art window (looping MP4 for gifPlayback).
+ *  Cards with no idle gif get a gentle float. Returns an mp4 Buffer or null. */
+async function renderCardIdleVideo(card, st = {}, scale = 1.5) {
+  const { createCanvas } = cv(); const idle = await require('./summonIdle').getIdle(card).catch(() => null);
+  const os = require('os'), fsx = require('fs'), pathx = require('path'), { spawn } = require('child_process');
+  const s = Math.max(1, Math.min(2, scale)), Wc = Math.round(CW * s / 2) * 2, Hc = Math.round((CH + 40) * s / 2) * 2, FPS = 12, N = 36;
+  const dir = fsx.mkdtempSync(pathx.join(os.tmpdir(), 'cidle-'));
+  try {
+    const cvs = createCanvas(Wc, Hc), c = cvs.getContext('2d');
+    for (let f = 0; f < N; f++) {
+      c.clearRect(0, 0, Wc, Hc); c.fillStyle = '#12100c'; c.fillRect(0, 0, Wc, Hc); c.save(); c.scale(s, s);
+      const sec = f / FPS;
+      await drawCard(c, card, 0, 0, { ...st, artOverride: idle ? require('./summonIdle').frameAt(idle, sec) : null, artBob: idle ? 0 : Math.round(Math.sin(f / N * Math.PI * 2) * 3) });
+      c.restore(); fsx.writeFileSync(pathx.join(dir, `f${String(f).padStart(3, '0')}.png`), cvs.toBuffer('image/png'));
+    }
+    const out = pathx.join(dir, 'o.mp4');
+    await new Promise((res, rej) => { const p = spawn(process.env.FFMPEG_PATH || 'ffmpeg', ['-v', 'error', '-y', '-framerate', String(FPS), '-stream_loop', '2', '-i', pathx.join(dir, 'f%03d.png'), '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out]); p.on('error', rej); p.on('close', (k) => (k === 0 ? res() : rej(new Error('ffmpeg ' + k)))); });
+    return fsx.readFileSync(out);
+  } catch (e) { console.warn('[SummonCards] idle video failed:', e.message); return null; }
+  finally { try { fsx.rmSync(dir, { recursive: true, force: true }); } catch (e) {} }
+}
+
+module.exports = { renderCardIdleVideo, renderCardPng, renderCardPngScaled, renderHandPng, drawCard, artFor, paintSummonBackdrop, CW, CH };

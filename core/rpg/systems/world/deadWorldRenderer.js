@@ -35,7 +35,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const ASSETS = path.join(__dirname, '..', 'rpgasset');
+const ASSETS = path.join(__dirname, '..', '..', '..', 'rpgasset');   // 2026-11-07: was '..' only - broken by the systems/<name>/ refactor (fonts+art never loaded -> Node card returned null -> old Go UI)
 const ENV_DIR = path.join(ASSETS, 'environment');
 const CARD_DIR = path.join(ENV_DIR, 'cards');
 const FONT_DIR = path.join(ASSETS, 'fonts');
@@ -238,6 +238,34 @@ function _plate(ctx, dungeonName, rank, opts = {}) {
     ctx.fillText(sub, 38, 66);
 }
 
+
+// crop a sprite sheet image to its visible pixels (the hub portrait takes the top slice, like a Go layer cut)
+function _tightCrop(img) {
+    if (!img) return null;
+    const { createCanvas } = require('canvas');
+    const c0 = createCanvas(img.width, img.height), x0 = c0.getContext('2d'); x0.drawImage(img, 0, 0);
+    const d = x0.getImageData(0, 0, img.width, img.height).data;
+    let minX = img.width, minY = img.height, maxX = -1, maxY = -1;
+    for (let y = 0; y < img.height; y++) for (let x = 0; x < img.width; x++) if (d[(y * img.width + x) * 4 + 3] > 24) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+    if (maxX < 0) return img;
+    const w = maxX - minX + 1, h = maxY - minY + 1, c1 = createCanvas(w, h); c1.getContext('2d').drawImage(c0, minX, minY, w, h, 0, 0, w, h); return c1;
+}
+
+// 🎴 owner 2026-11-07: "the old dead world still has the old UI" - both cards now wear the SAME HUD as every regular encounter card:
+// top-left rank chip + the parchment-banner hub plate (portrait, HP, mana) bottom-left. Old dungeon plate / name tag are gone.
+async function _newHud(ctx, opts, tone) {
+    try {
+        const hud = require('../combat/combatHud');
+        await hud.preload();
+        const s = W / hud.DW, oy = H / s - 104;
+        let portrait = null;
+        try { portrait = _tightCrop(await _loadPlayerSprite(opts.playerClass, opts.spriteIndex)); } catch (e) { portrait = null; }
+        hud.drawRankBanner(ctx, `${String(_safeText(opts.rank) || 'F').toUpperCase()} RANK`, s);
+        hud.drawPlayerHud(ctx, { name: _safeText(opts.playerName) || 'You', hp: opts.hp, maxHp: opts.maxHp, energy: opts.energy, maxEnergy: opts.maxEnergy, level: opts.level, portrait, color: tone || '#d8b04a' }, s, 18, oy);
+        return true;
+    } catch (e) { try { console.error('[deadWorldRenderer] new HUD failed, using legacy plate:', e.message); } catch (_) {} return false; }
+}
+
 // Small dust motes - the only "movement" in a world that stopped moving.
 function _motes(ctx, w, h, seed, color) {
     let a = seed >>> 0;
@@ -411,7 +439,6 @@ async function renderDeadWorldScene(opts = {}) {
 
         // the player, alive in a floor that is not
         await _drawPlayer(ctx, opts);
-        _nameTag(ctx, opts.playerName);
         _motes(ctx, W, H, 20260921, 'rgba(210,214,226,1)');
         _vignette(ctx, W, H, 0.62);
 
@@ -423,9 +450,10 @@ async function renderDeadWorldScene(opts = {}) {
         ctx.fillStyle = cold;
         ctx.fillRect(W * 0.55, 0, W * 0.45, H);
 
-        _plate(ctx, opts.dungeonName, opts.rank, {
-            plateBg: 'rgba(8,10,16,0.78)', plateEdge: 'rgba(150,160,180,0.45)',
-        });
+        if (!(await _newHud(ctx, opts, '#9aa8c8'))) {
+            _nameTag(ctx, opts.playerName);
+            _plate(ctx, opts.dungeonName, opts.rank, { plateBg: 'rgba(8,10,16,0.78)', plateEdge: 'rgba(150,160,180,0.45)' });
+        }
         _frame(ctx, W, H, 'rgba(12,14,20,0.85)');
 
         return cv.toBuffer('image/png');
@@ -470,13 +498,13 @@ async function renderDeadWorldVictory(opts = {}) {
         ctx.fillRect(0, 0, W, H);
 
         await _drawPlayer(ctx, opts);
-        _nameTag(ctx, opts.playerName);
         _motes(ctx, W, H, 20260922, 'rgba(255,232,190,1)');
         _vignette(ctx, W, H, 0.42);
 
-        _plate(ctx, opts.dungeonName, opts.rank, {
-            plateBg: 'rgba(20,16,10,0.7)', plateEdge: 'rgba(230,200,140,0.55)',
-        });
+        if (!(await _newHud(ctx, opts, '#d8b04a'))) {
+            _nameTag(ctx, opts.playerName);
+            _plate(ctx, opts.dungeonName, opts.rank, { plateBg: 'rgba(20,16,10,0.7)', plateEdge: 'rgba(230,200,140,0.55)' });
+        }
         _seal(ctx, opts.sealText || 'SURVIVED', W * 0.74, H * 0.42, 74);
         _frame(ctx, W, H, 'rgba(60,44,20,0.85)');
 

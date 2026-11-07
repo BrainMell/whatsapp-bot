@@ -42,7 +42,7 @@ let VER = 'v1';
 try {
     const rpg = __dirname;
     const files = ['ultimateFx.js', 'ultimateFxRecipes.js', 'ultimateFxLayers.js', 'ultimateFxLayers2.js', 'ultimatePlateCache.js']
-        .map((f) => path.join(rpg, f)).concat([path.join(rpg, '..', 'rpgasset', 'vfx', 'vfx_assets.json')]);
+        .map((f) => path.join(rpg, f)).concat([path.join(rpg, '..', '..', '..', 'rpgasset', 'vfx', 'vfx_assets.json')]);
     const h = crypto.createHash('sha1');
     for (const f of files) { try { h.update(fs.readFileSync(f)); } catch (e) { /* optional */ } }
     VER = `p${h.digest('hex').slice(0, 10)}`;

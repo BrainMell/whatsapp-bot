@@ -162,6 +162,12 @@ function createSummonCardSystem(economy) {
     catch (e) { console.warn('[SummonCards] single-card render failed:', e.message); return null; }
   }
 
+  // 🎞️ the same card as a looping video: the summon plays its idle animation inside the art window (null -> caller uses the PNG)
+  async function renderSingleCardVideo(card, st = {}) {
+    try { return await require('./cardRenderer').renderCardIdleVideo(card, st, 1.5); }
+    catch (e) { console.warn('[SummonCards] single-card video failed:', e.message); return null; }
+  }
+
   // Caption text for the standalone card: stats line + ability + hand position hint.
   function describeCard(card, index, prefix) {
     if (!card) return '';
@@ -374,7 +380,7 @@ function createSummonCardSystem(economy) {
     catalog: CARD_CATALOG, getOwnedCards, grantCard, revokeCard, acquireCard,
     prepareActivation, resolveActivation, renderTray, buildInventoryText, cooldownFor,
     resolveCardRef, renderHandImage, renderCollectionImage, handEntries,
-    renderSingleCardImage, describeCard,
+    renderSingleCardImage, renderSingleCardVideo, describeCard,
   };
 }
 

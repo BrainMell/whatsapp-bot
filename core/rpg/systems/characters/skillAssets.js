@@ -20,7 +20,7 @@
 const path = require('path');
 const fs = require('fs');
 
-const ASSET_DIR = path.join(__dirname, '..', 'rpgasset');
+const ASSET_DIR = path.join(__dirname, '..', '..', '..', 'rpgasset');   // 2026-11-07: was '..' - stale after the systems/<name>/ refactor (skill tree + skill-up art stopped loading)
 const V3_DIR = path.join(ASSET_DIR, 'v3');
 
 let _canvas = null;

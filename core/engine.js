@@ -12726,7 +12726,10 @@ _💡 Reply with another number from your search list!_`.trim();
                         const png = await summonCards.renderSingleCardImage(full, ownedIdx >= 0 ? { index: ownedIdx + 1 } : {});   // badge = hand number
                         const cap = BOT_MARKER + summonCards.describeCard(full, ownedIdx >= 0 ? ownedIdx + 1 : null, prefix) +
                           (ownedIdx < 0 ? '\n_Not in your hand yet — ask a moderator to grant it._' : '');
-                        if (png) await sock.sendMessage(chatId, { image: png, caption: cap });
+                        let __vid = null;
+                        if (process.env.SUMMON_CARD_VIDEO !== '0') { try { __vid = await summonCards.renderSingleCardVideo(full, ownedIdx >= 0 ? { index: ownedIdx + 1 } : {}); } catch (e) { __vid = null; } }
+                        if (__vid) await sock.sendMessage(chatId, { video: __vid, mimetype: 'video/mp4', gifPlayback: true, caption: cap });
+                        else if (png) await sock.sendMessage(chatId, { image: png, caption: cap });
                         else await sock.sendMessage(chatId, { text: BOT_MARKER + summonCards.describeCard(full, ownedIdx >= 0 ? ownedIdx + 1 : null, prefix) });
                         return;
                       }
