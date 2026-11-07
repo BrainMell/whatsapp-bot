@@ -28,17 +28,8 @@ async function renderNodeCard(players, enemies, options, api) {
   }
   for (const a of anchors) { const fx = unitFx(a.side, a.index, players, enemies); if (fx) auras.drawAuras(c, a, fx, s, 'ground'); }
   c.drawImage(await loadImage(layers.sprites), 0, 0, W, H);
-  // red hit flash on the target (from its cut)
-  if (act && act.targetSide && Array.isArray(layers.cuts)) {
-    const cut = layers.cuts.find((x) => x.side === act.targetSide && x.index === (Number(act.targetIndex) || 0));
-    if (cut && cut.png && !act.heal) {
-      try {
-        const im = await loadImage(Buffer.from(cut.png, 'base64')), t = createCanvas(cut.w, cut.h), tc = t.getContext('2d');
-        tc.drawImage(im, 0, 0, cut.w, cut.h); tc.globalCompositeOperation = 'source-atop'; tc.fillStyle = 'rgba(255,40,30,0.5)'; tc.fillRect(0, 0, cut.w, cut.h);
-        c.drawImage(t, cut.x * s, cut.y * s, cut.w * s, cut.h * s);
-      } catch (e) { /* cosmetic */ }
-    }
-  }
+  // JRPG-style hit reaction on the target: knock-back red double image + slash + impact star + damage number
+  try { await require('./hitFx').drawHitReaction(c, layers, anchors, act, s); } catch (e) { /* cosmetic */ }
   // overhead unit bars — v6.1 RESTORED (owner 2026-11-07: "both are gone now instead of the one,
   // keep the one where the players is green and the enemies is red"). These slim Node bars ARE
   // that display: green fill on the player roster, red on enemies / crimson on bosses. Go's
