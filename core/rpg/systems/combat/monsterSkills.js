@@ -573,6 +573,20 @@ function evaluateAction(enemy, players, allies = []) {
     // the lowest-HP path (CC'd targets often have lower HP from taking hits).
     let defaultTarget = threatSystem.selectTargetByThreat(livePlayers);
 
+    // 🛡️ TAUNT ENFORCEMENT (owner 2026-11-07: "I think the shield the colossus somehow affected
+    // them?? Idk I'm confused"): the Colossus summon card ('Stone Bulwark') stamps a 'taunt'
+    // status on EVERY enemy and the battle card honestly wears the 😠 badge — but nothing below
+    // ever read it back, so the AI kept picking its own target and the badge lied. An enemy
+    // carrying 'taunt' MUST aim at the taunter (status.source) while it lasts. Self-buffs /
+    // AoE tracks keep their own targets; everything aimed at defaultTarget now lands on the tank.
+    const _tauntFx = (enemy.statusEffects || []).find((e) => e && e.type === 'taunt');
+    if (_tauntFx) {
+        const _srcName = String(_tauntFx.source || '');
+        const _taunter = livePlayers.find((p) => p && String(p.name || '') === _srcName)
+            || (_srcName && livePlayers.find((p) => p && _srcName.includes(String(p.name || ''))));
+        if (_taunter) defaultTarget = _taunter;
+    }
+
     // ── COUNTERMAGE (SPELLBREAKER) AI ────────────────
     if (aiType === 'COUNTERMAGE') {
         // Priority 1: Silence the player if they have high energy (ready to cast)

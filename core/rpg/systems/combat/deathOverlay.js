@@ -60,7 +60,7 @@ function keyOf(picks, kind, boss) {
   let bx0 = 1e9, by0 = 1e9;
   for (const p of picks) { bx0 = Math.min(bx0, p.x); by0 = Math.min(by0, p.y); }
   for (const p of picks) { h.update(p.png); h.update(`|${Math.round(p.x - bx0)},${Math.round(p.y - by0)},${Math.round(p.w)},${Math.round(p.h)};`); }
-  h.update(`${kind}:${boss ? 1 : 0}:v2`);
+  h.update(`${kind}:${boss ? 1 : 0}:v2`);   // 💡 v2: full-length dissolve overlays (v1 keys hold 1.0s truncated bakes)
   return h.digest('hex').slice(0, 20);
 }
 
@@ -79,15 +79,12 @@ function getOverlay(picks, kind, boss, W0, H0) {
       classId: 'DEATH_' + kind + (boss ? '_BOSS' : ''), name: '', side: 'enemy', palette: ['#ffffff', '#ffcb45', '#e85a37'],
       skillLevel: 1, maxLevel: 1, intensity: 0, layers, casterIndex: 0, targetIndex: 0, focusIndex: 0,
       targetSide: 'enemy', aoe: false, targets: [], death: true, overlayOnly: true,
-      // ⏱ FULL-LENGTH OVERLAYS (owner 2026-11-07: death clips "stop half way
-      // through", last frame freezes on the board): the old <1s hammer capped
-      // the bake at 1.0s while the crumble tracks run 1.8s (3.0s bosses) — every
-      // fast-path clip ended 30-55% into the break-apart and the frozen
-      // half-dissolved board read as "the last frame is the current state of
-      // combat". Bake the FULL recipe duration (same META table the engine
-      // reads); it is painted once per kind+boss and disk-cached, so later
-      // kills keep the cheap composite.
-      duration: (require('./ultimateFxRecipes').classMeta('DEATH_' + kind + (boss ? '_BOSS' : '')) || {}).duration || (boss ? 3.0 : 1.8),
+      // 💡 OWNER FIX round 5 (2026-11-07: "the stone type animation … stops half way through"):
+      // the overlay used to paint only the FIRST 1.0s of the death recipe — the dissolve runs
+      // 0.4→1.9s (regular) / 0.65→3.35s (boss), so every fast-path clip ended with the sprite
+      // still mid-crumble (bosses cut at ~30%). Paint the FULL recipe instead: the bake stays a
+      // one-time per-sprite cache cost; every future decode+encode replays it complete.
+      duration: boss ? 3.5 : 2.0,
     });
     if (!vid || !Array.isArray(vid.frames) || !vid.frames.length) return null;
     fs.mkdirSync(dir, { recursive: true });

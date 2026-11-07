@@ -138,10 +138,16 @@ module.exports = function install(LAYERS, H) {
         }
     };
 
-    // ── bgfill: gradient replaces the bg (under pass) ──────────────────────
+    // ── bgfill: gradient wash over the bg (under pass) ─────────────────────
+    // 💡 OWNER FIX round 5 (2026-11-07: "the attack is literally black"): the
+    // wash used to run at FULL alpha, so dark recipes (Voidwalker #000000)
+    // blanked the battlefield to a black screen and pale ones (Dragon God sky)
+    // blanked it to flat white for ~2s — the fight disappeared inside its own
+    // VFX. Capped at 0.6 so the battlefield stays readable underneath; a
+    // recipe that really wants the flood can still pass an explicit tr.a.
     LAYERS.bgfill = (ctx, tr, env) => {
         const t = env.time - tr.at, dur = tr.dur || 1; if (t < 0 || t > dur) return;
-        const a = (tr.a === undefined ? 1 : tr.a) * env3(t, dur, tr.fin || 0.3, tr.fout || 0.3);
+        const a = (tr.a === undefined ? 0.6 : tr.a) * env3(t, dur, tr.fin || 0.3, tr.fout || 0.3);
         if (a < 0.01) return;
         const [cx, cy] = pt(env, tr.pos || [0.5, 0.5], tr);
         const g = ctx.createRadialGradient(cx, cy, 10, cx, cy, Math.max(env.W, env.H) * 0.8);

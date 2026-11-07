@@ -832,12 +832,19 @@ async function renderSignatureGif(state, player, ability, entry, target, baseSce
 
 // ☠️ DEATH ANIMATIONS (owner 2026-11-03): a dying enemy / boss breaks apart by TYPE - fire explodes, water splashes, earth crumbles to dust,
 // void / dark / undead things spiral into their own centre. Reuses the ultimate video pipeline (LAYERS.dissolve breaks the real sprite).
+// 💡 OWNER FIX round 5 (2026-11-07: "the f rank boss is supposed to be a void type but it has been
+// doing the stone type animation"): INFECTED_COLOSSUS — the classic F-tier abyss boss — matched the
+// EARTH rule on the word "colossus" before the VOID rule saw "infected". Infection/plague words now
+// classify VOID so the abyss amalgamation family breaks apart in its own element.
 const DEATH_RULES = [
   ['FIRE', /fire|flame|ember|inferno|lava|magma|blaze|ifrit|phoenix|pyro|burn|molten|cinder|hellhound|salamander/i],
   ['ICE', /ice|frost|glacial|snow|blizzard|frozen|yeti|cryo/i],
   ['WATER', /water|tide|tidal|aqua|slime|sea|ocean|kraken|drown|hydra|siren|sahuagin|merfolk|coral|storm/i],
+  // 💡 VOID now outranks EARTH: the abyss amalgamation family ("Infected Colossus",
+  // "Corrupted Guardian", "Mutated Overseer") carries BOTH an infection word and a stone word,
+  // and EARTH used to win the first-match race — the owner's F-tier void boss died like a rock.
+  ['VOID', /void|shadow|dark|wraith|ghost|spirit|specter|spectre|phantom|demon|chaos|abyss|reaper|undead|necro|lich|wisp|banshee|blood|corrupt|shade|nightmare|eldritch|skeleton|zombie|vampire|hybrid|mutat|infect|plague|blight/i],
   ['EARTH', /stone|rock|golem|boulder|earth|crystal|titan|hulk|mud|gargoyle|colossus|guardian|obelisk|sand|mountain|ent\b|treant/i],
-  ['VOID', /void|shadow|dark|wraith|ghost|spirit|specter|spectre|phantom|demon|chaos|abyss|reaper|undead|necro|lich|wisp|banshee|blood|corrupt|shade|nightmare|eldritch|skeleton|zombie|vampire|hybrid|mutat/i],
 ];
 function classifyDeath(enemy) {
   // 🕳️ ABYSS = VOID (owner 2026-11-07: "the f rank boss is supposed to be a

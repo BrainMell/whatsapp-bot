@@ -4873,7 +4873,12 @@ function _deathScene(state) {
     const layers = await Promise.race([
       combatImageGenerator.generateCombatLayers(state.players || [], roster, {
         combatType: 'PVE', rank: state.dungeonRank, floor: 0, backgroundPath: state.backgroundPath || undefined,
-        summons: [], hud: 'none', bypassQueue: true, focusSide: 'enemy', focusIndex: 0,
+        // 💡 OWNER FIX round 5 (2026-11-07: "the death animation has the old floating hp bar"):
+        // hud 'none' still bakes the Go legacy nameplate pills (name + red bar) into the scene bg,
+        // so a dying sprite dissolved but its plate kept floating over the empty spot. 'none-clean'
+        // strips the pills server-side (the battle card has used it since v6.1) — the video paths
+        // paint their own slim bars instead, and nothing Go-baked survives the death.
+        summons: [], hud: 'none-clean', bypassQueue: true, focusSide: 'enemy', focusIndex: 0,
       }),
       // 30s: the box's COLD first scene measured 17.2s (14:16:54) — the old
       // 20s cap was one bad Go round away from killing every first bake.
@@ -4926,7 +4931,7 @@ async function _bakeDeathClip(state, e, i, excludeExtra) {
       layers = await Promise.race([
         combatImageGenerator.generateCombatLayers(state.players || [], roster, {
           combatType: 'PVE', rank: state.dungeonRank, floor: 0, backgroundPath: state.backgroundPath || undefined,
-          summons: [], hud: 'none', bypassQueue: true, focusSide: 'enemy', focusIndex: i,
+          summons: [], hud: 'none-clean', bypassQueue: true, focusSide: 'enemy', focusIndex: i,
         }),
         new Promise((r) => setTimeout(() => r(null), 20000)),
       ]);
@@ -4961,7 +4966,7 @@ async function _bakeGroupDeathClip(state, dying) {
       layers = await Promise.race([
         combatImageGenerator.generateCombatLayers(state.players || [], roster, {
           combatType: 'PVE', rank: state.dungeonRank, floor: 0, backgroundPath: state.backgroundPath || undefined,
-          summons: [], hud: 'none', bypassQueue: true, focusSide: 'enemy', focusIndex: need[0],
+          summons: [], hud: 'none-clean', bypassQueue: true, focusSide: 'enemy', focusIndex: need[0],
         }),
         new Promise((r) => setTimeout(() => r(null), 20000)),
       ]);
@@ -4983,6 +4988,13 @@ async function _bakeGroupDeathClip(state, dying) {
 // log lines ride the caption (the same narration the war-log board prints). Standalone sends
 // (fight-ending kill, self-drain, stale flush) get the logs; the kill-turn MERGE path passes
 // NO state because the merged board caption already carries the full war log.
+// 📜 UNIFORM KILL CAPTIONS (owner 2026-11-07: "some of them have the regular war log thing …
+// but others have the combat log … Just make it uniform"): BOTH death-clip surfaces — the
+// standalone sends AND the kill-turn merged videos — close with the same light
+// `📜 *COMBAT LOG*` list (» lines, *bold* numbers, no mono fence). Round 5 first tried the
+// board's WAR LOG fence here, but a kill announcement is an event, not a grid, and the bold
+// list is the v6.1 look the owner asked for ("the caption of the death animation for regular
+// enemies still doesn't list the combat logs").
 function _deathCaption(item, state) {
   let cap;
   const grp = (item.clip && item.clip.group) || null;
@@ -12281,7 +12293,10 @@ const handleCombatAction = async (
   let normalizedAction = actionType;
   if (actionType === "atk") normalizedAction = "attack";
   if (actionType === "def") normalizedAction = "defend";
-  if (actionType === "skill") normalizedAction = "ability";
+  // 💡 OWNER FIX round 5 (2026-11-07: "when someone uses the command combat skills with an s"):
+  // players type the natural plural and got NOTHING back (no list, no attack, turn silently
+  // burned). "skills" now behaves exactly like "skill".
+  if (actionType === "skill" || actionType === "skills") normalizedAction = "ability";
   if (actionType === "summon") normalizedAction = "summon_card";
 
   let action = { type: normalizedAction };
@@ -12751,7 +12766,10 @@ async function _playUltimateVfx(sock, player, ability, effect, targetIndex, chat
             floor: state.isAbyss ? state.abyssFloor : 0,
             backgroundPath: state.backgroundPath || undefined,
             summons: [],
-            hud: 'none',
+            // 💡 OWNER FIX round 5 (2026-11-07): 'none' bakes Go nameplate pills into the bg —
+            // after a merged death the victim's plate kept floating over the empty spot for the
+            // rest of the clip. 'none-clean' strips them; the ult paints its own slim bars.
+            hud: 'none-clean',
             bypassQueue: true,
           };
           const layered = await Promise.race([

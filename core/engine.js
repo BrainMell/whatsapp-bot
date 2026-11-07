@@ -12801,7 +12801,9 @@ _💡 Reply with another number from your search list!_`.trim();
                       if (isSenderInPvP) {
                         let pvpAction = action;
                         if (pvpAction === "atk") pvpAction = "attack";
-                        if (pvpAction === "skill") pvpAction = "ability";
+                        // 💡 OWNER FIX round 5 (2026-11-07): the natural plural "skills" used to
+                        // fall through PvP too — same alias as the adventure path.
+                        if (pvpAction === "skill" || pvpAction === "skills") pvpAction = "ability";
                         if (pvpAction === "use") pvpAction = "item";
 
                         if (!pvpAction) {

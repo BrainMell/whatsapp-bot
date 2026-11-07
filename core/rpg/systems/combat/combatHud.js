@@ -367,8 +367,12 @@ async function portraitFromCut(cut) { if (!cut || !cut.png) return null; try { r
 // bubble for it; read the skill trees for abilities like that — you're just drawing over the
 // image after all") ────────────────────────────────────────────────────────────────────────
 
-const BUFF_TYPES = new Set(['shield', 'regen', 'haste', 'blessing', 'berserk', 'taunt', 'ccImmune', 'attack_up', 'defense_up', 'aura', 'charge', 'revive_ready']);
-const DEBUFF_TYPES = new Set(['poison', 'burn', 'bleed', 'freeze', 'stun', 'sleep', 'root', 'slow', 'curse', 'blind', 'silence', 'shock', 'drown', 'weak', 'vulnerability', 'wet', 'oil', 'brittle', 'charm', 'locked_in_time', 'doom_timer', 'infect']);
+// 💡 OWNER FIX round 5 (2026-11-07: "I think the shield the colossus somehow affected them??"):
+// 'taunt' wore a GOLD buff ring even on the ENEMIES it is a debuff for — after a Colossus-card
+// Stone Bulwark the enemy roster sprouted gold circles that read like the shield had jumped to
+// THEM. Taunt is always bad for its holder (forced target) → red debuff ring on either side.
+const BUFF_TYPES = new Set(['shield', 'regen', 'haste', 'blessing', 'berserk', 'ccImmune', 'attack_up', 'defense_up', 'aura', 'charge', 'revive_ready']);
+const DEBUFF_TYPES = new Set(['poison', 'burn', 'bleed', 'freeze', 'stun', 'sleep', 'root', 'slow', 'curse', 'blind', 'silence', 'shock', 'drown', 'weak', 'vulnerability', 'wet', 'oil', 'brittle', 'charm', 'locked_in_time', 'doom_timer', 'infect', 'taunt']);
 function ringFor(type) { if (BUFF_TYPES.has(String(type))) return '#e7c766'; if (DEBUFF_TYPES.has(String(type))) return '#e06a5a'; return '#b9c4d8'; }
 function isShieldFx(e) { return e && String(e.type) === 'shield' && (e.value === undefined || Number(e.value) > 0 || Number(e.duration) >= 900); }
 

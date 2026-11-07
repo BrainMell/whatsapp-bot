@@ -32,8 +32,12 @@ const META = {
     AVATAR: { duration: 3.1, impact: 1.3 },
 };
 // ☠️ DEATH ANIMATIONS (owner 2026-11-03): enemies / bosses break apart by TYPE (ultimateFxLayers2 `dissolve`)
+// 💡 OWNER FIX round 5 (2026-11-07: "the stone type animation … stops half way through"): the
+// dissolve runs impact→impact+1.5s (regular) / impact→impact+2.7s (boss) — 0.4+1.5=1.9 and
+// 0.65+2.7=3.35 — but the clip DUR capped at 1.8/3.0, so the crumble was cut 0.1/0.35s before
+// the sprite finished breaking apart. Durations now outlast every death track.
 const DEATH_KINDS = ['FIRE', 'WATER', 'EARTH', 'VOID', 'ICE', 'DUST'];
-for (const k of DEATH_KINDS) { META['DEATH_' + k] = { duration: 1.8, impact: 0.4, zoom: 0 }; META['DEATH_' + k + '_BOSS'] = { duration: 3.0, impact: 0.65, zoom: 0.03 }; }
+for (const k of DEATH_KINDS) { META['DEATH_' + k] = { duration: 2.0, impact: 0.4, zoom: 0 }; META['DEATH_' + k + '_BOSS'] = { duration: 3.5, impact: 0.65, zoom: 0.03 }; }
 // 🌌 WORLD-SHIFT (owner 2026-10-28): the big skills open with a cosmic cinematic (zoom-blur out ->
 // planet + asteroid -> impact -> the arena becomes another world), then play their normal recipe,
 // shifted later by SHIFT seconds. planet:false = warp tunnel into another dimension (shorter).

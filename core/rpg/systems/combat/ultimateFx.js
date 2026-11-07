@@ -1300,13 +1300,19 @@ async function renderUltimateVideo(o) {
             // ones (exact Go geometry via anchors) BEFORE the veil so they dim
             // and shake exactly like the base scene they cover. Hidden until
             // the impact so the windup shows the untouched baked bar.
+            // 💡 OWNER FIX round 5 (2026-11-07: "the death animation has the old
+            // floating hp bar and the last frame is of the current state of
+            // combat"): video layers now come in hud:"none-clean" (Go legacy
+            // nameplate pills STRIPPED server-side), so the pipeline paints its
+            // OWN slim bars for EVERY fighter on the target side from frame 0 —
+            // windup shows the bar, the impact drains it, and a dying fighter's
+            // bar is painted over the moment the dissolve takes the sprite.
+            // Nothing Go-baked floats over the settle any more.
             if (victims.size && Array.isArray(layers.anchors)) {
                 const fanAnchors = layers.anchors
                     .filter((v2) => {
                         if (!v2 || v2.side !== tSideAll) return false;
-                        const vv2 = victims.get(Math.floor(Number(v2.index) || 0));
-                        if (!vv2) return false;
-                        return dropAll || Math.floor(Number(v2.index) || 0) === focusIdxAll || !!vv2.dead;   // ☠️ fatal hits drain/erase even off-focus
+                        return victims.has(Math.floor(Number(v2.index) || 0));   // every target-side fighter, not just focus/AoE
                     })
                     .sort((a2, b2) => a2.x - b2.x);
                 let vi = 0;
@@ -1318,27 +1324,32 @@ async function renderUltimateVideo(o) {
                     const bw = (isPlayerSide ? 80 : 100) * kxL * shrinkK, bh = (isPlayerSide ? 10 : 12) * kyL * shrinkK;
                     const bxc = (Number(a2.x)) * kxL - bw / 2;
                     const byc = (Number(a2.feetY) - Math.max(24, (Number(a2.h) || 0) * shrinkK)) * kyL - (isPlayerSide ? 12 : 15) * kyL * shrinkK;
-                    const at = IMP + vi * 0.06;
-                    vi++;
-                    if (time < at) continue;
+                    // only the struck fighters drain at the impact fan; bystanders hold their pre-hit fill
+                    const drains = dropAll || Math.floor(Number(a2.index) || 0) === focusIdxAll || !!v.dead;   // ☠️ fatal hits drain/erase even off-focus
+                    const at = drains ? IMP + vi * 0.06 : 0;
+                    if (drains) vi++;
+                    // 💡 none-clean stripped the baked pill, so the pipeline OWNS every overhead
+                    // bar now: pre-impact every fighter shows its pre-hit fill (windup keeps the
+                    // "bar is there" read the owner asked for in the previous round).
+                    if (time < at) { drawVictimHpBar(ctx, bxc, byc, bw, bh, v.pct0, 0); continue; }
                     // ☠️ BAR ERASE (owner: bars must die with the enemy): once the merged-death
                     // dissolve owns the sprite, cover the baked bar with background sampled right
                     // above it — both rects ride the same camera transform, so src and dst distort
-                    // together and the patch stays glued over the bar. Baked (shrink-independent)
-                    // geometry + generous padding so no rim of the old bar peeks out.
+                    // together and the patch stays glued over the bar. Geometry covers the FULL
+                    // Go nameplate pill (name label + bar, feetY-h-40 … feetY-h+4) so even a
+                    // stale hud:"none" fallback base loses the whole floating plate, not just the sliver.
                     if (v.dead && Number.isFinite(v.eraseAt) && time >= v.eraseAt) {
-                        const ew = 100 * kxL, eh = 12 * kyL, epad = 6 * kyL;
-                        const ex = a2.x * kxL - ew / 2 - epad;
-                        const ey2 = (Number(a2.feetY) - Math.max(24, Number(a2.h) || 0)) * kyL - 15 * kyL - epad;
-                        const epw = ew + epad * 2, eph = eh + epad * 2;
-                        const esy = Math.max(0, ey2 - eph - 2);
-                        const esh = Math.min(eph, Math.max(2, ey2 - esy));
-                        try { ctx.drawImage(base, ex, esy, epw, esh, ex, ey2, epw, eph); } catch (e2) {}
+                        const ew = 116 * kxL, eh = 44 * kyL, epad = 8 * kyL;
+                        const eTop = (Number(a2.feetY) - Math.max(24, Number(a2.h) || 0)) * kyL - 40 * kyL;
+                        const ex = a2.x * kxL - ew / 2;
+                        const esy = Math.max(0, eTop - epad - 2);
+                        const esh = Math.min(eh, Math.max(2, eTop - esy));
+                        try { ctx.drawImage(base, ex, esy, ew, esh, ex, eTop, ew, eh); } catch (e2) {}
                         continue;
                     }
                     const du = clamp01((time - at) / 0.45);
-                    const pct = v.pct0 + (v.p1 - v.pct0) * (1 - Math.pow(1 - du, 3));
-                    drawVictimHpBar(ctx, bxc, byc, bw, bh, pct, time - at < 2 / FPS ? 1 : 0);
+                    const pct = drains ? v.pct0 + (v.p1 - v.pct0) * (1 - Math.pow(1 - du, 3)) : v.pct0;
+                    drawVictimHpBar(ctx, bxc, byc, bw, bh, pct, drains && time - at < 2 / FPS ? 1 : 0);
                 }
             }
         }
