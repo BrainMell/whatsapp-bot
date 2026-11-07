@@ -486,10 +486,24 @@ function leafDiff(ours, base) {
     for (const path of Object.keys(flatB)) {
         if (path in flatP) continue;
         if (path in writeSet) continue; // 🧯 2026-10-17: a promoted/whole write on the SAME path replaces it — $set+$unset on one path = Mongo conflict = whole save fails
-        const idx = path.lastIndexOf('.');
-        const parent = idx === -1 ? '' : path.slice(0, idx);
-        const hasParent = parent === '' || Object.keys(flatP).some(k => k === parent || k.startsWith(parent + '.'));
-        if (hasParent) unsetSet[path] = "";
+        // 🔧 2026-11-07 INVENTORY DUPE ROOT CAUSE ("sold enough items and they reappear"; same for quest consumption): an object stack
+        // like inventory.potion = {quantity, name, ...} is flattened to LEAVES (inventory.potion.quantity ...). When the stack hit 0 the
+        // whole key was deleted, so EVERY leaf was missing from our payload, and the old code only $unset a leaf whose immediate PARENT
+        // still existed - but the parent (inventory.potion) was the thing that got deleted. Result: nothing was unset, the stack stayed in
+        // MongoDB with its old quantity and came back on the next reload / sibling merge. Fix: unset the HIGHEST removed ancestor (the
+        // first path segment whose subtree no longer exists in our payload, under a parent that still does), i.e. $unset inventory.potion.
+        const segs = path.split('.');
+        let target = null;
+        for (let i = 1; i <= segs.length; i++) {
+            const anc = segs.slice(0, i).join('.');
+            const alive = Object.keys(flatP).some((k) => k === anc || k.startsWith(anc + '.'));
+            if (alive) continue;
+            const parent = i === 1 ? '' : segs.slice(0, i - 1).join('.');
+            const parentAlive = parent === '' || Object.keys(flatP).some((k) => k === parent || k.startsWith(parent + '.'));
+            if (parentAlive) target = anc;
+            break;
+        }
+        if (target) unsetSet[target] = "";
     }
     // mongo rejects a single update that touches a path AND its ancestor
     // (e.g. $set skillSpend:{} + $unset skillSpend.final_eclipse => "would
