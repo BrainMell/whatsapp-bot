@@ -10,6 +10,35 @@ const hud = require('./combatHud');
 const auras = require('./statusAuras');
 const unitFx = (side, idx, players, enemies) => { const u = side === 'enemy' ? enemies[idx] : players[idx]; if (!u || u.isDead || u.justDied) return null; return Array.isArray(u.statusEffects) ? u.statusEffects : null; };
 
+/** 🎞️ Shared "chrome" painter (owner 2026-11-07: death clips vs card scenes showed different UI): the overhead
+ *  unit bars + rank chip + compact player hub, drawn onto ANY plate canvas so death clips, kill-turn merges and
+ *  card scenes all carry the identical HUD. hide = Set of enemy indices that are dying/dead (no bar). Never throws. */
+async function paintChrome(c, s, o) {
+  try {
+    await hud.preload();
+    const layers = o.layers || {}, players = o.players || [], enemies = o.enemies || [], hide = o.hide || new Set();
+    const anchors = Array.isArray(layers.anchors) ? layers.anchors : [];
+    for (const a of anchors) {
+      if (a.side !== 'player' && a.side !== 'enemy') continue;
+      if (a.side === 'enemy' && hide.has(Math.floor(Number(a.index) || 0))) continue;
+      const u = a.side === 'enemy' ? enemies[a.index] : players[a.index];
+      if (!u || u.isDead || u.justDied) continue;
+      const hp = Number(u.currentHP ?? (u.stats && u.stats.hp) ?? 0); if (hp <= 0) continue;
+      const maxHp = Number(u.maxHp ?? (u.stats && u.stats.maxHp) ?? 0);
+      const fxCount = Array.isArray(u.statusEffects) ? u.statusEffects.filter((e) => e && e.icon).length : 0;
+      hud.drawUnitBar(c, a, { name: u.name, hp, maxHp, isBoss: u.isBoss, friendly: a.side === 'player', yOff: fxCount ? 26 : 0 }, s);
+    }
+    const rank = String(o.rank || 'F').toUpperCase();
+    hud.drawRankBanner(c, o.floor > 0 ? 'FLOOR ' + o.floor : rank + ' RANK', s);
+    const p = players[0];
+    if (p) {
+      const cut = (layers.cuts || []).find((x) => x.side === 'player' && x.index === 0);
+      const st = p.stats || {};
+      hud.drawPlayerHud(c, { name: p.name, hp: p.currentHP ?? st.hp, maxHp: p.maxHp ?? st.maxHp, energy: p.energy ?? st.energy, maxEnergy: p.maxEnergy ?? st.maxEnergy, level: p.level, portrait: await hud.portraitFromCut(cut) }, s);
+    }
+  } catch (e) { /* cosmetic */ }
+}
+
 async function renderNodeCard(players, enemies, options, api) {
   const t0 = Date.now();
   const payload = api.buildPayload(players, enemies, options);
@@ -143,5 +172,5 @@ async function renderNodePvpCard(players, enemies, options, api) {
   console.log(`[CombatHud] node PvP card ${buffer.length}B in ${Date.now() - t0}ms`);
   return { success: true, buffer, mimeType: 'image/jpeg' };
 }
-module.exports = { renderNodeCard, renderNodePvpCard };
+module.exports = { renderNodeCard, renderNodePvpCard, paintChrome };
 

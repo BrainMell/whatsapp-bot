@@ -877,7 +877,7 @@ const DEATH_PALETTE = ['#ffffff', '#ffcb45', '#e85a37'];
  *  the whole group apart together — no more one-per-clip kills where the
  *  rest of the group just stands there.
  *  Returns { mp4, thumb, kind, boss, group? } or null (never throws; the caller races it against a short budget). */
-async function renderDeathVideo({ enemy, targetIndex, layers, abort, targets, deadIndices, atkOverride }) {
+async function renderDeathVideo({ enemy, targetIndex, layers, abort, targets, deadIndices, atkOverride, chrome }) {
   const group = (Array.isArray(targets) && targets.length ? targets : [{ enemy, targetIndex }])
     .filter((t) => t && t.enemy).slice(0, 4);
   if (!group.length || !layers) return null;
@@ -908,7 +908,7 @@ async function renderDeathVideo({ enemy, targetIndex, layers, abort, targets, de
           // cannot know the killing blow (it bakes while everyone is alive), so it bakes
           // plain + warms the DEATHATTACK variant, and playEnemyDeaths picks at kill time.
           const atk = atkOverride !== undefined ? !!atkOverride : group.some((t) => t && t.enemy && t.enemy._killedBy && t.enemy._killedBy.kind === 'basic');
-          const fast = await require('./deathOverlay').renderFast({ layers, picks, kind, boss, deadIdx, atk });
+          const fast = await require('./deathOverlay').renderFast({ layers, picks, kind, boss, deadIdx, atk, chrome });
           if (fast && fast.mp4) {
             const out = { mp4: fast.mp4, thumb: fast.thumb || null, kind, boss, mats: fast.mats || null };
             if (picks.length > 1) out.group = picks.map(({ t }) => t.enemy).filter(Boolean);

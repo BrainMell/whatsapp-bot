@@ -110,7 +110,7 @@ function getOverlay(picks, kind, boss, W0, H0, atk) {
  *  🔧 DEATH-ORDER BACKDROP (owner voice note 2026-11-06): cutouts of enemies
  *  that died on EARLIER turns are skipped too — the fallen never stand inside
  *  a later kill's death animation. */
-async function scenePlate(layers, dyingIdx, deadIdx) {
+async function scenePlate(layers, dyingIdx, deadIdx, chrome) {
   const { createCanvas, loadImage } = require('canvas');
   const W0 = Number(layers.w) || 1024, H0 = Number(layers.h) || 687;
   const kx = VW / W0, ky = VH / H0;
@@ -144,6 +144,13 @@ async function scenePlate(layers, dyingIdx, deadIdx) {
   const cuts = (layers.cuts || []).filter((x) => x && x.png && !(String(x.side) === 'enemy' && (dyingIdx.has(Math.floor(Number(x.index) || 0)) || __dead.has(Math.floor(Number(x.index) || 0)))));
   cuts.sort((a, b) => (Number(a.y) + Number(a.h)) - (Number(b.y) + Number(b.h)));
   for (const x of cuts) { try { c.drawImage(await loadImage(Buffer.from(x.png, 'base64')), x.x * kx, x.y * ky, x.w * kx, x.h * ky); } catch (e) {} }
+  // 🎞️ same HUD chrome as the card scenes (bars of the survivors, rank chip, player hub) — uniform in every death clip
+  if (chrome && process.env.DEATH_CHROME !== '0') {
+    try {
+      const hide = new Set([...dyingIdx, ...__dead].map((n) => Math.floor(Number(n) || 0)));
+      await require('./combatCardNode').paintChrome(c, VW / 1024, { ...chrome, layers, hide });
+    } catch (e) {}
+  }
   return cv.toBuffer('image/jpeg', { quality: 0.85 });
 }
 
@@ -222,7 +229,7 @@ async function compositeFrames(m, outDir) {
 
 /** Full fast path. picks = dying cutouts (layers space); layers = the fight's shared scene.
  *  ⚔️ atk = the dying unit was killed by a basic attack → overlay opens on the slash intro. */
-async function renderFast({ layers, picks, kind, boss, deadIdx, atk }) {
+async function renderFast({ layers, picks, kind, boss, deadIdx, atk, chrome }) {
   const t0 = Date.now();
   if (!layers || !Buffer.isBuffer(layers.bg) || !picks || !picks.length) return null;
   const W0 = Number(layers.w) || 1024, H0 = Number(layers.h) || 687;
@@ -236,7 +243,7 @@ async function renderFast({ layers, picks, kind, boss, deadIdx, atk }) {
   for (const p of pk) { bx0 = Math.min(bx0, p.x); bx1 = Math.max(bx1, p.x + p.w); ft = Math.max(ft, p.y + p.h); }
   const kx = VW / W0, ky = VH / H0;
   const ox = Math.round(((bx0 + bx1) / 2) * kx - LOCAL.x * (VW / 1024)), oy = Math.round(ft * ky - LOCAL.feet * (VH / 687));
-  const plate = await scenePlate(layers, new Set(pk.map((p) => p.idx)), deadIdx);
+  const plate = await scenePlate(layers, new Set(pk.map((p) => p.idx)), deadIdx, chrome);
   const tPlate = Date.now() - t0;
   const id = crypto.randomBytes(5).toString('hex');
   const outPath = path.join(ov.dir, `out_${id}.mp4`);

@@ -4850,6 +4850,8 @@ function _deathPump() {
 }
 function _deathEnqueue(run) { return new Promise((resolve) => { if (_deathQueue.length > 16) return resolve(null); _deathQueue.push({ run, resolve }); _deathPump(); }); }
 const _deathEligible = (state) => !!(state && state.chatId && state.isAbyss !== true && !(state.mode === 'RUINS' && state.ruinsMeta));
+// HP snapshot baked into a death plate's HUD chrome: a clip whose bars show stale HP is re-rendered at kill time (overlay cache makes that ~1s)
+const _hpSig = (state) => process.env.DEATH_CHROME === '0' ? '' : [...(state.players || []), ...(state.enemies || [])].map((u) => Math.max(0, Math.floor(Number(u && (u.currentHP ?? (u.stats && u.stats.hp))) || 0))).join(',');
 const _aliveSig = (state) => (state.players || []).filter((p) => p && !p.isDead && (p.stats ? p.stats.hp > 0 : true)).length;
 // 🔧 DEATH-ORDER BACKDROP (owner voice note 2026-11-06: "the first one is
 // still there inside that death animation"): enemies that died on EARLIER
@@ -4938,6 +4940,8 @@ async function _deathClipForCardKill(state, defeated) {
     return item;
   } catch (e) { console.warn('[SummonCards] death merge bake failed:', e && e.message || e); return null; }
 }
+// HUD data painted onto every death plate (see combatCardNode.paintChrome)
+function _deathChrome(state) { return { players: state.players || [], enemies: state.enemies || [], rank: state.dungeonRank, floor: state.isAbyss ? state.abyssFloor : 0 }; }
 async function _bakeDeathClip(state, e, i, excludeExtra, wantAtk) {
   const t0 = Date.now();
   try {
@@ -4957,9 +4961,9 @@ async function _bakeDeathClip(state, e, i, excludeExtra, wantAtk) {
     }
     if (!layers || !layers.success) { console.warn(`[DeathFx] bake ${e && e.name}: no layered scene after ${Date.now() - t0}ms`); return null; }
     const __deadIdx = _deadEnemyIndices(state, [i, ...(Array.isArray(excludeExtra) ? excludeExtra : [])]);
-    const clip = await signatureVfx.renderDeathVideo({ enemy: e, targetIndex: i, layers, deadIndices: __deadIdx, atkOverride: wantAtk === undefined ? undefined : !!wantAtk });
+    const clip = await signatureVfx.renderDeathVideo({ enemy: e, targetIndex: i, layers, deadIndices: __deadIdx, atkOverride: wantAtk === undefined ? undefined : !!wantAtk, chrome: _deathChrome(state) });
     console.log(`[DeathFx] bake ${e && e.name} -> ${clip ? (wantAtk ? 'ATK+' : '') + clip.kind + (clip.boss ? '/boss' : '') + ' ' + clip.mp4.length + 'B' : 'NULL'} in ${Date.now() - t0}ms (${hasCut ? 'shared scene' : 'own scene'}, dead-in-backdrop ${__deadIdx.join(',') || '-'})`);
-    return clip ? Object.assign(clip, { sig: _aliveSig(state), deadSig: __deadIdx.join(',') }) : null;
+    return clip ? Object.assign(clip, { sig: _aliveSig(state), deadSig: __deadIdx.join(','), hpSig: _hpSig(state) }) : null;
   } catch (err) { console.warn(`[DeathFx] bake ${e && e.name} threw:`, err && err.message || err); return null; }
 }
 // 🎬 GROUP DEATH AS ONE UNIT (owner 2026-11-04: "when a group dies you
@@ -4994,10 +4998,10 @@ async function _bakeGroupDeathClip(state, dying) {
     // 🔧 DEATH-ORDER BACKDROP: the group's own members are dying TOGETHER (AOE)
     // — only enemies that fell on EARLIER turns are removed from the backdrop.
     const __deadIdx = _deadEnemyIndices(state, need);
-    const clip = await signatureVfx.renderDeathVideo({ targets: group.map(({ e, i }) => ({ enemy: e, targetIndex: i })), layers, deadIndices: __deadIdx });
+    const clip = await signatureVfx.renderDeathVideo({ targets: group.map(({ e, i }) => ({ enemy: e, targetIndex: i })), layers, deadIndices: __deadIdx, chrome: _deathChrome(state) });
     console.log(`[DeathFx] group bake [${group.map((d) => (d.e && d.e.name) || '?').join(' + ')}] -> ${clip ? clip.kind + (clip.boss ? '/boss' : '') + (clip.group ? ' unit=' + clip.group.length : ' PARTIAL') + ' ' + clip.mp4.length + 'B' : 'NULL'} in ${Date.now() - t0}ms (${hasAll ? 'shared scene' : 'own scene'}, dead-in-backdrop ${__deadIdx.join(',') || '-'})`);
     if (!clip || !clip.mp4) return null;
-    return { e: group[0].e, clip: Object.assign(clip, { sig: _aliveSig(state), deadSig: __deadIdx.join(',') }) };
+    return { e: group[0].e, clip: Object.assign(clip, { sig: _aliveSig(state), deadSig: __deadIdx.join(','), hpSig: _hpSig(state) }) };
   } catch (err) { console.warn('[DeathFx] group bake threw:', err && err.message || err); return null; }
 }
 // ☠️ caption for a held death item — a group unit names every member
@@ -5328,7 +5332,7 @@ async function playEnemyDeaths(sock, state, opts = {}) {
         _bakeGroupDeathClip(state, fresh),
         new Promise((r) => setTimeout(() => r(null), leashMs)),
       ]);
-      if (grp && grp.clip && grp.clip.mp4 && grp.clip.sig === _aliveSig(state)) ready = [grp];
+      if (grp && grp.clip && grp.clip.mp4 && grp.clip.sig === _aliveSig(state) && (grp.clip.hpSig || '') === _hpSig(state)) ready = [grp];
       else console.warn(`[DeathFx] group unit missed (${fresh.length} dying, ${Date.now() - t0}ms) - per-enemy fallback`);
     }
     if (!ready.length) {
@@ -5347,7 +5351,7 @@ async function playEnemyDeaths(sock, state, opts = {}) {
         // back to a live atk bake — the warmed overlay cache keeps it to plate+encode
         job = e._deathAtkJob || (__reg && __reg.gen === (state.combatGen || 0) && __reg.byAtkIdx && __reg.byAtkIdx[i]) || null;
         if (job) clip = await Promise.race([job.catch(() => null), __leash]);
-        if (clip && (clip.sig !== _aliveSig(state) || (clip.deadSig || '') !== __wantDead)) { console.log(`[DeathFx] ${e.name}: atk backdrop stale since bake (${clip.deadSig || '-'} vs ${__wantDead}) - re-rendering`); clip = null; }
+        if (clip && (clip.sig !== _aliveSig(state) || (clip.deadSig || '') !== __wantDead || (clip.hpSig || '') !== _hpSig(state))) { console.log(`[DeathFx] ${e.name}: atk backdrop stale since bake (${clip.deadSig || '-'} vs ${__wantDead}) - re-rendering`); clip = null; }
         if (!clip || !clip.mp4) clip = await Promise.race([_deathEnqueue(() => _bakeDeathClip(state, e, i, __batchIdx, true)).catch(() => null), __leash]);
         if (!clip || !clip.mp4) { clip = null; const __pj = e._deathJob || (__reg && __reg.gen === (state.combatGen || 0) && __reg.byIdx[i]) || null; if (__pj) clip = await Promise.race([__pj.catch(() => null), __leash]); console.warn(`[DeathFx] ${e.name}: atk clip missed the leash - plain fallback ${clip && clip.mp4 ? 'ok' : 'failed'}`); }   // never swallow the announce
       } else {
@@ -5358,7 +5362,7 @@ async function playEnemyDeaths(sock, state, opts = {}) {
       if (!job) { try { startDeathBake(state); } catch (bakeErr) {} const __reg2 = state._deathJobReg; if (__reg2 && __reg2.gen === (state.combatGen || 0) && __reg2.byIdx[i]) { job = __reg2.byIdx[i]; console.log(`[DeathFx] ${e.name}: kill beat every bake - bake started at kill time (idx=${i}, gen=${state.combatGen || 0})`); } }
       // a kill on the very first turns can beat the background bake: wait for the in-flight bake (the box is slow, a late clip beats none)
       clip = job ? await Promise.race([job, __leash]) : undefined;
-      if (clip && (clip.sig !== _aliveSig(state) || (clip.deadSig || '') !== __wantDead)) { console.log(`[DeathFx] ${e.name}: backdrop stale since bake (dead-in-scene ${clip.deadSig || '-'} vs now ${__wantDead}) - re-rendering`); clip = null; }   // stale backdrop: the death order moved on since the pre-bake
+      if (clip && (clip.sig !== _aliveSig(state) || (clip.deadSig || '') !== __wantDead || (clip.hpSig || '') !== _hpSig(state))) { console.log(`[DeathFx] ${e.name}: backdrop stale since bake (dead-in-scene ${clip.deadSig || '-'} vs now ${__wantDead}) - re-rendering`); clip = null; }   // stale backdrop: the death order moved on since the pre-bake
       if (!clip && (clip === null || !job)) clip = await Promise.race([_deathEnqueue(() => _bakeDeathClip(state, e, i, __batchIdx)), __leash]);
       }
       if (!clip || !clip.mp4) console.warn(`[DeathFx] ${e.name}: NO clip (job=${!!job}, wantAtk=${__wantAtk}, idx=${i}, gen=${state.combatGen || 0}, baked=${Date.now() - t0}ms) - falling back to the static card`);
