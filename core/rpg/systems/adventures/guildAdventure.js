@@ -6295,6 +6295,8 @@ async function performAction(sock, player, action, sessionKey) {
       turnInfo.action = { name: "Ability" };
     }
   } else if (action.type === "summon_card") {
+    // pre-hit roster snapshot (hp / dead flags) so the card-play animation can show the target standing before the card lands
+    const __preSnap = (state.enemies || []).map((e) => ({ e, hp: Number(e && e.stats && e.stats.hp) || 0, dead: !!(e && e.isDead), jd: !!(e && e.justDied) }));
     const activation = await require('../summonCards').resolveActivation({
       player, state, action, sessionKey, calculateDamage, applyStatusEffect, recordEnemyKill,
       generateThreat: (actor, damage) => threatSystem.generateThreat(actor, damage),
@@ -6345,6 +6347,7 @@ async function performAction(sock, player, action, sessionKey) {
               require('../summonCards/cardPlayScene').renderCardPlayScene({
                 card: activation.card, players: __players, enemies: state.enemies || [],
                 playerIndex: Math.max(0, __players.indexOf(player)), targetIndex: activation.targetIndex || 0,
+                enemiesPre: __preSnap.map((x) => (x.e.isDead || x.e.justDied || x.hp !== (Number(x.e.stats && x.e.stats.hp) || 0)) ? { ...x.e, isDead: x.dead, justDied: x.jd, stats: { ...x.e.stats, hp: x.hp }, currentHP: x.hp } : x.e),
                 entries: __entries, info: { damage: activation.damage, healing: activation.healing, missed: activation.wasEvaded },
                 sceneOptions: { rank: state.dungeonRank, floor: state.isAbyss ? state.abyssFloor : 0, backgroundPath: state.backgroundPath, combatState: state },
                 api: { buildPayload: combatImageGen._buildPayload, generateCombatLayers: combatImageGen._generateCombatLayers },

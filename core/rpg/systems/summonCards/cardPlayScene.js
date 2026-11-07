@@ -49,11 +49,20 @@ async function renderCardPlayScene(a) {
   const pIdx = Math.max(0, a.playerIndex || 0), tIdx = Math.max(0, a.targetIndex || 0);
   const attack = card.type === 'ATTACK' || (info.damage || 0) > 0;
   const sceneOut = {};
-  const base = await renderNodeCard(players, enemies, {
+  // 🔧 owner 2026-11-07: "in some of these the enemy isn't even on the card and the attack hits the player". The card had ALREADY resolved,
+  // so a killed target was dead/hp 0 and dropped from the layered scene -> no enemy anchor -> the old code fell back to the CASTER as the
+  // target. The base scene is now rendered from the PRE-hit roster (a.enemiesPre) so the enemy is standing there when the card lands; if
+  // it died, the final frames cross-fade to the real post-hit scene so you see it fall.
+  const preEnemies = Array.isArray(a.enemiesPre) ? a.enemiesPre : enemies;
+  const base = await renderNodeCard(players, preEnemies, {
     ...(a.sceneOptions || {}), hud: 'v2', combatType: 'PVE', _sceneOut: sceneOut, _skipTray: true,
     action: { attackerSide: 'player', attackerIndex: pIdx },
   }, a.api);
   if (!base || !sceneOut.canvas) return null;
+  let A2 = null;
+  if (preEnemies !== enemies) {
+    try { const so2 = {}; const r2 = await renderNodeCard(players, enemies, { ...(a.sceneOptions || {}), hud: 'v2', combatType: 'PVE', _sceneOut: so2, _skipTray: true, action: { attackerSide: 'player', attackerIndex: pIdx } }, a.api); if (r2 && so2.canvas) A2 = so2.canvas; } catch (e) { A2 = null; }
+  }
   const W = sceneOut.canvas.width, H = sceneOut.canvas.height, s = sceneOut.s, anchors = sceneOut.anchors || [];
   const el = ELEMENT_COLORS[card.element] || '#ffd36b';
   // A = scene without hand; B = scene with hand. Frames draw B and erase the played slot back to A.
@@ -68,7 +77,8 @@ async function renderCardPlayScene(a) {
   const slot = !fromPile ? layout.slots[Math.min(handIdx, layout.slots.length - 1)] : null;
   const find = (side, idx) => anchors.find((x) => x.side === side && x.index === idx) || anchors.find((x) => x.side === side) || null;
   const caster = find('player', pIdx) || { x: W / (2 * s), feetY: H / s * 0.7, w: 120, h: 160 };
-  const targ = attack ? (find('enemy', tIdx) || caster) : caster;
+  const anyEnemy = anchors.find((x) => x.side === 'enemy');
+  const targ = attack ? (find('enemy', tIdx) || anyEnemy || { x: W * 0.72 / s, feetY: H * 0.7 / s, w: 120, h: 160 }) : caster;
   const cp = { x: caster.x * s, y: (caster.feetY - (caster.h || 160) * 0.5) * s }, tp = { x: targ.x * s, y: (targ.feetY - (targ.h || 160) * 0.5) * s };
   // card sprite (pre-rendered once) + summon art
   const cardImg = createCanvas(CW, CH + 10); await drawCard(cardImg.getContext('2d'), card, 0, 0, { ready: true, affordable: true });
@@ -97,6 +107,10 @@ async function renderCardPlayScene(a) {
     const shx = Math.sin(f * 7.3) * 7 * s * impact, shy = Math.cos(f * 5.1) * 5 * s * impact;
     c.save(); c.clearRect(0, 0, W, H); c.translate(shx, shy);
     c.drawImage(t > 0.05 ? B1 : B, 0, 0);
+    if (A2 && attack) { // the target fell: fade its area over to the post-hit scene right after the impact
+      const kD = seg(t, 0.74, 0.86);
+      if (kD > 0) { const bw = ((targ.w || 120) * 1.5) * s, bh = ((targ.h || 160) * 1.5) * s; c.save(); c.globalAlpha = kD; c.beginPath(); c.rect(tp.x - bw / 2, tp.y - bh * 0.62, bw, bh); c.clip(); c.drawImage(A2, 0, 0); c.restore(); }
+    }
     // erase the played slot (the card is "in the air") — repaint scene-without-hand there
     // darken the scene slightly while the card is the star
     const dim = 0.28 * Math.min(seg(t, 0.14, 0.30), 1 - seg(t, 0.80, 0.95));
