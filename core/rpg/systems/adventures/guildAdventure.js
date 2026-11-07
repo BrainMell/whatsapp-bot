@@ -7665,7 +7665,17 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
                 const __merged = await _mergeDeathClipsWithCard(__turnHeld.map((h) => h.clip), scene.buffer, 1.0);
                 if (__merged) {
                   let __deaths = __turnHeld.map((h) => _deathCaption(h)).join('\n');
-                  let __cap = __deaths + '\n' + (scene.caption || '');
+                  // 📜 UNIFORM KILL CAPTIONS (owner 2026-11-07: "some have the regular war
+                  // log thing but others have the combat log — just make it uniform"):
+                  // kill-turn merged videos close with the same 📜 COMBAT LOG block the
+                  // standalone death clips use (» lines, *bold* numbers) instead of the
+                  // WAR LOG mono grid. The board itself still settles as the video's final
+                  // frame — the grid remains on non-kill turn boards only. Missing logs
+                  // (rebuilt/partial paths) fall back to the old board caption.
+                  const __killLogs = Array.isArray(state._lastTurnLog) ? state._lastTurnLog.filter(Boolean).slice(-6) : [];
+                  let __cap = __deaths + (__killLogs.length
+                    ? '\n📜 *COMBAT LOG*\n' + __killLogs.map((l) => '» ' + String(l)).join('\n')
+                    : '\n' + (scene.caption || ''));
                   if (__cap.length > 900) __cap = (scene.caption || '');   // WA caption cap safety
                   const __pl = { video: __merged, mimetype: 'video/mp4', gifPlayback: true, caption: __cap };
                   if (Buffer.isBuffer(__turnHeld[0].clip.thumb)) __pl.jpegThumbnail = __turnHeld[0].clip.thumb;

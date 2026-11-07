@@ -60,7 +60,7 @@ function keyOf(picks, kind, boss) {
   let bx0 = 1e9, by0 = 1e9;
   for (const p of picks) { bx0 = Math.min(bx0, p.x); by0 = Math.min(by0, p.y); }
   for (const p of picks) { h.update(p.png); h.update(`|${Math.round(p.x - bx0)},${Math.round(p.y - by0)},${Math.round(p.w)},${Math.round(p.h)};`); }
-  h.update(`${kind}:${boss ? 1 : 0}:v1`);
+  h.update(`${kind}:${boss ? 1 : 0}:v2`);
   return h.digest('hex').slice(0, 20);
 }
 
@@ -79,7 +79,15 @@ function getOverlay(picks, kind, boss, W0, H0) {
       classId: 'DEATH_' + kind + (boss ? '_BOSS' : ''), name: '', side: 'enemy', palette: ['#ffffff', '#ffcb45', '#e85a37'],
       skillLevel: 1, maxLevel: 1, intensity: 0, layers, casterIndex: 0, targetIndex: 0, focusIndex: 0,
       targetSide: 'enemy', aoe: false, targets: [], death: true, overlayOnly: true,
-      duration: 1.0,   // ⚡ <1s hammer: 15 painted frames instead of 27 — every future decode+encode of this overlay drops ~45%
+      // ⏱ FULL-LENGTH OVERLAYS (owner 2026-11-07: death clips "stop half way
+      // through", last frame freezes on the board): the old <1s hammer capped
+      // the bake at 1.0s while the crumble tracks run 1.8s (3.0s bosses) — every
+      // fast-path clip ended 30-55% into the break-apart and the frozen
+      // half-dissolved board read as "the last frame is the current state of
+      // combat". Bake the FULL recipe duration (same META table the engine
+      // reads); it is painted once per kind+boss and disk-cached, so later
+      // kills keep the cheap composite.
+      duration: (require('./ultimateFxRecipes').classMeta('DEATH_' + kind + (boss ? '_BOSS' : '')) || {}).duration || (boss ? 3.0 : 1.8),
     });
     if (!vid || !Array.isArray(vid.frames) || !vid.frames.length) return null;
     fs.mkdirSync(dir, { recursive: true });

@@ -12741,7 +12741,18 @@ _💡 Reply with another number from your search list!_`.trim();
 
                     // .j combat <action> [target]
                     if (primaryCmd === "combat") {
-                      const action = cmdArgs[1];
+                      // 🔤 PLURAL-TOLERANT SUBCOMMANDS (owner 2026-11-07: "combat skills
+                      // with an s ... the attack is literally black"): the raw plural fell
+                      // through every action branch as a junk type:'skills' turn and rode a
+                      // legacy render path — black attack frames, the pre-v6 death clip with
+                      // floating HP bars, last frame stuck on the current board. Normalize the
+                      // obvious plurals to the canonical singulars at this single entry point
+                      // so every combat family (solo/guild, ruins, abyss, PvP duel) takes the
+                      // tested flow.
+                      const action = ({
+                        skills: 'skill', abilities: 'ability', items: 'item',
+                        attacks: 'attack', summons: 'summon', flees: 'flee',
+                      }[String(cmdArgs[1] || '').toLowerCase()] || cmdArgs[1]);
                       const combatTarget = cmdArgs.slice(2).join(" ");
 
                       // ⚔️ WAR LOG toggle (owner 2026-10-20): `.j combat log`

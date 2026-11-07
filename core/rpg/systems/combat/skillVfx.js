@@ -840,6 +840,14 @@ const DEATH_RULES = [
   ['VOID', /void|shadow|dark|wraith|ghost|spirit|specter|spectre|phantom|demon|chaos|abyss|reaper|undead|necro|lich|wisp|banshee|blood|corrupt|shade|nightmare|eldritch|skeleton|zombie|vampire|hybrid|mutat/i],
 ];
 function classifyDeath(enemy) {
+  // 🕳️ ABYSS = VOID (owner 2026-11-07: "the f rank boss is supposed to be a
+  // void type but it has been doing the stone type animation"): abyss ids
+  // carry no element/type, so the name regexes decided — the F-tier boss
+  // pool's INFECTED_COLOSSUS / CORRUPTED_GUARDIAN matched the EARTH words
+  // colossus/guardian and crumbled like stone. The abyss pools were pruned
+  // to the void amalgamation family, so everything spawning from the abyss
+  // (id prefix abyss_) breaks apart as VOID — spiral into its own centre.
+  if (/^abyss_/i.test(String((enemy && enemy.id) || ''))) return 'VOID';
   // 🔧 owner 2026-11-07: a VOID boss died as crumbling stone because its NAME matched the earth words ("guardian", "crystal"...) before its
   // real element was ever considered. Explicit data (element, then type) now wins; the name/id keyword sweep is only the fallback.
   for (const field of [enemy && enemy.element, enemy && enemy.type, enemy && enemy.family, enemy && enemy.category]) {
