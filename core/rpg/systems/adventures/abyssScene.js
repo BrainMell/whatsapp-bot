@@ -410,6 +410,15 @@ const SIDE_PLAYER_X = 890;
 // ember halo (see drawActorGrounded) so it reads unmistakably on every body
 // color, including the purple amalgamation family.
 const HIT_TINT = 'rgba(122,16,12,0.58)';
+// 🕳️ #13 ABYSS VISUAL PARITY (owner work-order 2026-11-07 "integrate the new combat visuals,
+// styles and relevant assets ... consistent across Abyss encounters, enemy turns, attacks,
+// deaths"): the abyss boards now speak the SAME battle-card language — green player bars /
+// red enemy bars (the v6.1 rule), the JRPG hit reaction (slash + impact + damage number) on
+// turn boards, and the floating status-badge row. #13 helper painters live at the bottom of
+// this file (_paintHitFx, _badgesRow); the bars just swap their fills to the palette the
+// regular cards use.
+const ABYSS_HP_PLAYER = ['#1fae5e', '#5fd88a'];    // same green as the regular cards' player bars
+const ABYSS_HP_ENEMY = ['#d63c14', '#f59d2a'];     // enemy red / crimson stays
 const HIT_GLOW = 'rgba(255,64,32,0.88)';
 
 // ── native facing of the pool art (RE-VERIFIED on processed contact sheet,
@@ -1858,7 +1867,9 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
                     plan.enemy.isBoss ? 'rgba(90,20,14,0.95)' : 'rgba(26,21,13,0.95)',
                     plan.enemy.isBoss ? 'rgba(255,196,87,0.95)' : 'rgba(61,48,19,0.95)', '#FFFFFF');
                 segBarLocal(ctx, plan.enemy.cx, headTop + 2, 150, 11,
-                    live.enemyHp / live.enemyMaxHp, '#d63c14', '#f59d2a');
+                    live.enemyHp / live.enemyMaxHp, ABYSS_HP_ENEMY[0], ABYSS_HP_ENEMY[1]);
+                // #13 status badges over the boss's head, same as the battle cards
+                _badgesRow(ctx, plan.enemy.cx, headTop - 38, opts.enemyFx);
                 if (opts.activeActor === 'enemy') {
                     await roomScene.drawTurnCrystal(ctx, plan.enemy.cx, headTop - 40, plan.enemy.h, 14);
                 }
@@ -1872,8 +1883,10 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
             const headTop = plan.player.gy - (drawn ? drawn.h : plan.player.h);
             pillLocal(ctx, plan.player.cx, plan.player.gy + 22, safeName(opts.playerName || 'You', 16),
                 'bold 13px sans-serif', 10, 'rgba(26,21,13,0.95)', 'rgba(61,48,19,0.95)', '#FFFFFF');
-            segBarLocal(ctx, plan.player.cx, plan.player.gy + 40, 112, 11, live.hp / live.maxHp, '#d63c14', '#f59d2a');
+            segBarLocal(ctx, plan.player.cx, plan.player.gy + 40, 112, 11, live.hp / live.maxHp, ABYSS_HP_PLAYER[0], ABYSS_HP_PLAYER[1]);
             segBarLocal(ctx, plan.player.cx, plan.player.gy + 56, 92, 8, live.energy / live.maxEnergy, '#12d7f5', '#0a86c8');
+            // #13 status badges float over the player's head, same as the battle cards
+            _badgesRow(ctx, plan.player.cx, (plan.player.gy - (plan.player.drawnH || plan.player.h)) - 16, opts.playerFx);
             if (opts.activeActor === 'player') {
                 await roomScene.drawTurnCrystal(ctx, plan.player.cx + 34, headTop, plan.player.h, 14);
             }
@@ -2003,10 +2016,11 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
             x: plan.enemy.cx, nameCy: top - PLATE.name, barCy: top - PLATE.bar,
             badgeCy: isWild ? top - PLATE.badge : null,
             badge: isWild ? 'WILD SUMMON' : null,
+            fx: opts.enemyFx || null,   // #13 status badges render above the name pill
             name: label, nameFont: 'bold 14px sans-serif', padX: 10,
             nameBg: 'rgba(26,21,13,0.95)', nameBorder: 'rgba(61,48,19,0.95)',
             hp: e.hp, maxHp: e.maxHp, barW: 150, barH: 11,
-            fill: ['#d63c14', '#f59d2a'], rect: nameRect,
+            fill: ABYSS_HP_ENEMY, rect: nameRect,
             active: opts.activeActor === 'enemy', prio: 0,
         });
     }
@@ -2019,6 +2033,7 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
         plates.push({
             x: p.cx, nameCy: top - PLATE.name + 2, barCy: top - PLATE.bar + 2,
             name: p.plateName || p.name || '???', nameFont: 'bold 12px sans-serif', padX: 8,
+            fx: (opts.packFx && opts.packFx[i]) || null,   // #13 pack status badges
             nameBg: 'rgba(24,20,14,0.92)', nameBorder: 'rgba(56,44,20,0.9)',
             hp: e.hp, maxHp: e.maxHp, barW: 116, barH: 9,
             fill: ['#c44418', '#e8873a'], rect: nameRect, active: false, prio: 1,
@@ -2045,6 +2060,8 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
             pillLocal(ctx, p.x, p.badgeCy, p.badge, 'bold 10px sans-serif', 8,
                 'rgba(88,34,120,0.94)', 'rgba(216,150,255,0.9)', '#EFD9FF');
         }
+        // #13 status badge row floats ABOVE the name pill (the WILD badge keeps its own slot)
+        if (p.fx && Array.isArray(p.fx) && p.fx.length) _badgesRow(ctx, p.x, p.nameCy - 24, p.fx);
         pillLocal(ctx, p.x, p.nameCy, p.name, p.nameFont, p.padX, p.nameBg, p.nameBorder, '#FFFFFF');
         segBarLocal(ctx, p.x, p.barCy, p.barW, p.barH, p.maxHp ? p.hp / p.maxHp : 0, p.fill[0], p.fill[1]);
         if (p.active) {
@@ -2062,8 +2079,10 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
         const label = safeName(opts.playerName || 'You', 16);
         pillLocal(ctx, plan.player.cx, top - 52, label,
             'bold 13px sans-serif', 10, 'rgba(26,21,13,0.95)', 'rgba(61,48,19,0.95)', '#FFFFFF');
-        segBarLocal(ctx, plan.player.cx, top - 12, 112, 11, live.hp / live.maxHp, '#d63c14', '#f59d2a');
+        segBarLocal(ctx, plan.player.cx, top - 12, 112, 11, live.hp / live.maxHp, ABYSS_HP_PLAYER[0], ABYSS_HP_PLAYER[1]);
         segBarLocal(ctx, plan.player.cx, top - 30, 92, 8, live.energy / live.maxEnergy, '#12d7f5', '#0a86c8');
+        // #13 status badges over the player's head (same row painter as the enemies)
+        _badgesRow(ctx, plan.player.cx, top - 76, opts.playerFx);
         if (opts.activeActor === 'player') {
             const pw = pillSize(ctx, label, 'bold 13px sans-serif', 10);
             await roomScene.drawTurnCrystal(ctx, plan.player.cx + pw.w / 2 + 18, top - 40, 78, 0);
@@ -2122,13 +2141,20 @@ async function renderAbyssCombat(state, { phase = 'START', turnInfo = null, turn
         const c = createCanvas(W, H);
         const ctx = c.getContext('2d');
         // the reference always shows the TURN badge — START renders as TURN 1
+        // #13: live status effects ride into the painter for the badge rows
+        const __pfx = ((state.players || [])[0] || {}).statusEffects || null;
+        const __efx = ((state.enemies || [])[0] || {}).statusEffects || null;
+        const __qfx = (((state.abyssRun || {}).packQueue) || []).map((m) => (m && m.statusEffects) || null);
         await drawCombatScene(ctx, plan, live, {
             turnNumber: (turnInfo && turnInfo.turnNumber) || 1,
             activeActor,
             hitEnemy,
             playerName: (state.players && state.players[0] && state.players[0].name) || 'You',
             hudState: phase === 'START' ? 'ABYSS' : `TURN ${(turnInfo && turnInfo.turnNumber) || ''}`.trim(),
+            playerFx: __pfx, enemyFx: __efx, packFx: __qfx,
         });
+        // #13: TURN boards speak the battle-card hit language (slash + impact + number / whiff / heal)
+        if (phase === 'TURN' && turnInfo) _paintHitFx(ctx, plan, turnInfo);
         const buffer = c.toBuffer('image/png');
 
         const combatIntegration = require('../combat/combatIntegration');
@@ -2617,6 +2643,111 @@ async function renderAbyssFloorCard(payload = {}) {
         console.error('[AbyssScene] animated floor card fell back to PNG:', e?.message);
         return renderAbyssFloorCardPng(payload);
     }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// #13 ABYSS VISUAL PARITY helpers (owner work-order 2026-11-07)
+// ══════════════════════════════════════════════════════════════════════════
+
+// Status badge row — the SAME look as combatHud.drawStatusBadges (dark circle +
+// category ring + the status's emoji glyph), positioned in abyss canvas px.
+function _badgesRow(ctx, x, cy, effects) {
+    try {
+        if (!Array.isArray(effects) || !effects.length) return;
+        const list = effects.filter(Boolean).slice(0, 5);
+        if (!list.length) return;
+        const r = 10, step = r * 2 + 3;
+        const x0 = x - ((list.length - 1) * step) / 2;
+        const ringFor = (t) => (['poison', 'burn', 'bleed', 'curse', 'weak', 'vulnerability', 'slow', 'freeze', 'stun', 'sleep', 'charm', 'root', 'locked_in_time'].includes(t) ? 'rgba(255,110,90,0.95)'
+            : (['shield', 'blessing', 'regen', 'haste', 'berserk'].includes(t) ? 'rgba(255,214,102,0.95)' : 'rgba(150,180,220,0.9)'));
+        for (let i = 0; i < list.length; i++) {
+            const e = list[i], bx = x0 + i * step;
+            ctx.save();
+            ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 1.5;
+            ctx.beginPath(); ctx.arc(bx, cy, r, 0, Math.PI * 2); ctx.fillStyle = 'rgba(8,10,16,0.9)'; ctx.fill();
+            ctx.shadowBlur = 0;
+            ctx.lineWidth = 1.5; ctx.strokeStyle = ringFor(e && e.type); ctx.stroke();
+            const icon = String((e && e.icon) || '✨');
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            let emojiOk = false;
+            try { emojiOk = require('../shared/emojiFont').isEmojiReady && require('../shared/emojiFont').isEmojiReady(); } catch (err) { emojiOk = false; }
+            if (emojiOk) { ctx.font = '11.5px NotoEmoji'; ctx.fillStyle = '#f2f6ff'; ctx.fillText(icon, bx, cy + 0.5); }
+            else { ctx.font = 'bold 11px "Cinzel", serif'; ctx.fillStyle = ringFor(e && e.type); ctx.fillText(String(icon)[0] || '?', bx, cy + 0.5); }
+            ctx.restore();
+        }
+        const more = effects.length - list.length;
+        if (more > 0) {
+            pillLocal(ctx, x0 + list.length * step + 14, cy, `+${more}`, 'bold 10px sans-serif', 6, 'rgba(8,10,16,0.9)', 'rgba(150,180,220,0.9)', '#f2f6ff');
+        }
+    } catch (e) { /* cosmetic */ }
+}
+
+// The JRPG hit reaction from the regular battle cards (hitFx language), painted over
+// the abyss board for TURN renders: slash composition + impact burst + damage number,
+// the dodge/whiff MISS look, or the heal glow — matched to the frozen layout's units.
+function _paintHitFx(ctx, plan, turnInfo) {
+    try {
+        if (!turnInfo || !plan) return;
+        const hit = require('../combat/hitFx');
+        const t = turnInfo.target || null;
+        const dmg = Math.max(0, Math.floor(Number(turnInfo.damage) || 0));
+        const crit = !!turnInfo.isCrit, missed = !!turnInfo.missed;
+        const actName = String((turnInfo.action && turnInfo.action.name) || '');
+        const heal = (Number(turnInfo.healing) > 0) || (!dmg && !missed && /heal|cure|mend|regen|salve|potion|elixir/i.test(actName));
+        // locate the target on the frozen layout: enemy first, then pack, else the player
+        let u = null, attackerX = null;
+        if (t && plan.enemy && ((t.isEnemy && String(t.name || '') === String(plan.enemy.name || '')) || t === plan.enemy.ref)) u = plan.enemy;
+        if (!u && t && t.isEnemy && Array.isArray(plan.pack)) u = (plan.pack || []).find((p) => String(t.name || '') === String(p.plateName || p.name || '')) || null;
+        const tIsPlayer = !u;
+        if (tIsPlayer) {
+            if (!plan.player || !plan.player.file) return;
+            u = plan.player;
+            attackerX = plan.enemy ? plan.enemy.cx : u.cx + 200;
+        } else attackerX = plan.player ? plan.player.cx : u.cx - 200;
+        const cx = u.cx, gy = u.gy, h = u.drawnH || u.h, feetY = gy;
+        const cy = feetY - h * 0.52;
+        const dir = Math.sign(cx - attackerX) || (tIsPlayer ? -1 : 1);
+        // element sniff (same grammar as combatIntegration.buildAnimationAction)
+        let element = 'physical';
+        if (/fire|flame|burn|inferno|meteor|fireball/i.test(actName)) element = 'fire';
+        else if (/ice|frost|freeze|blizzard|snow/i.test(actName)) element = 'ice';
+        else if (/lightning|thunder|shock|bolt|zap/i.test(actName)) element = 'lightning';
+        else if (/dark|shadow|void|necro|curse|decay/i.test(actName)) element = 'dark';
+        else if (/holy|light|smite|divine|sanctif/i.test(actName)) element = 'holy';
+        const el = require('../summonCards/catalog').ELEMENT_COLORS[String(element).toUpperCase()] || null;
+        if (heal) {
+            const g = ctx.createRadialGradient(cx, cy, 6, cx, cy, h * 0.8);
+            g.addColorStop(0, 'rgba(120,255,170,0.42)'); g.addColorStop(1, 'rgba(120,255,170,0)');
+            ctx.fillStyle = g; ctx.fillRect(cx - h, cy - h, h * 2, h * 2);
+        } else if (missed) {
+            // #13 miss = the whiff: two pale arcs through the vacated space + MISS plaque
+            const ang = dir * 0.5 + (dir > 0 ? 0.0 : Math.PI);
+            for (let i = 0; i < 2; i++) {
+                ctx.save(); ctx.translate(cx + (i - 0.5) * 16 * dir, cy - 10 * (i ? -1 : 1)); ctx.rotate(ang + (i - 0.5) * 0.22);
+                ctx.globalAlpha = 0.55; hit.slash(ctx, Math.max(h * 1.05, 100), 8, '#ffffff', hit.a2(el || '#cfd8e8', 0.7)); ctx.restore();
+            }
+        } else if (dmg > 0) {
+            const variant = Math.abs(Math.floor(Number(turnInfo.turnNumber) || 0)) % (hit.VARIANTS || 4);
+            // red hit flash over the sprite region (abyss has no cutout for a double image — the flash + slash carry it)
+            const g = ctx.createRadialGradient(cx, cy, 4, cx, cy, h * 0.66);
+            g.addColorStop(0, 'rgba(255,40,30,0.4)'); g.addColorStop(1, 'rgba(255,40,30,0)');
+            ctx.fillStyle = g; ctx.fillRect(cx - h, cy - h, h * 2, h * 2);
+            hit.slashPattern(variant, ctx, cx, cy, h, dir, el, crit, 1);
+            hit.impactBurst(variant, ctx, cx, cy, dir, el, crit, 1);
+        } else return;
+        // floating number / plaque
+        const label = missed ? 'MISS' : (heal ? '+' + Math.floor(Number(turnInfo.healing) || 0) : (dmg > 0 ? String(dmg) : ''));
+        if (label) {
+            const fy = feetY - h - 34, size = crit ? 38 : 28;
+            ctx.save(); ctx.translate(cx + dir * 6, fy); ctx.rotate(crit ? -0.05 : 0);
+            ctx.font = `bold ${size}px "Cinzel", serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.lineJoin = 'round'; ctx.lineWidth = 6; ctx.strokeStyle = '#140b04';
+            ctx.strokeText(label, 0, 0);
+            ctx.fillStyle = missed ? '#e6e2d6' : (heal ? '#8ff0ad' : (crit ? '#ffd24a' : '#ff8a70'));
+            ctx.fillText(label, 0, 0);
+            ctx.restore();
+        }
+    } catch (e) { console.warn('[AbyssScene] hit fx skipped:', e.message); }
 }
 
 module.exports = {

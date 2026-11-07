@@ -55,18 +55,22 @@ async function localLayers(picks, W0, H0) {
   return { layers, ux, ft, bw: bx1 - bx0, bh: ft - by0 };
 }
 
-function keyOf(picks, kind, boss) {
+function keyOf(picks, kind, boss, atk) {
   const h = crypto.createHash('sha1');
   let bx0 = 1e9, by0 = 1e9;
   for (const p of picks) { bx0 = Math.min(bx0, p.x); by0 = Math.min(by0, p.y); }
   for (const p of picks) { h.update(p.png); h.update(`|${Math.round(p.x - bx0)},${Math.round(p.y - by0)},${Math.round(p.w)},${Math.round(p.h)};`); }
-  h.update(`${kind}:${boss ? 1 : 0}:v2`);   // 💡 v2: full-length dissolve overlays (v1 keys hold 1.0s truncated bakes)
+  // 💡 v2: full-length dissolve overlays (v1 keys hold 1.0s truncated bakes) · ⚔️ v3: atk —
+  // basic-attack kills bake the animated slash intro (DEATHATTACK_* recipes), so the same
+  // sprite now has TWO distinct overlays per (kind, boss).
+  h.update(`${kind}:${boss ? 1 : 0}:${atk ? 'atk' : 'plain'}:v3`);
   return h.digest('hex').slice(0, 20);
 }
 
-/** Paint (or fetch) the transparent overlay frames. */
-function getOverlay(picks, kind, boss, W0, H0) {
-  const key = keyOf(picks, kind, boss);
+/** Paint (or fetch) the transparent overlay frames. ⚔️ atk = killed by a basic attack → the
+ * clip opens on the animated basic attack (2 slashes + impact sparks) before the dissolve. */
+function getOverlay(picks, kind, boss, W0, H0, atk) {
+  const key = keyOf(picks, kind, boss, atk);
   if (mem.has(key)) return mem.get(key);
   const pr = (async () => {
     const dir = path.join(ROOT, key);
@@ -76,7 +80,8 @@ function getOverlay(picks, kind, boss, W0, H0) {
     } catch (e) { /* not on disk yet */ }
     const { layers } = await localLayers(picks, W0, H0);
     const vid = await require('./ultimateFx').renderUltimateVideo({
-      classId: 'DEATH_' + kind + (boss ? '_BOSS' : ''), name: '', side: 'enemy', palette: ['#ffffff', '#ffcb45', '#e85a37'],
+      // ⚔️ #5: DEATHATTACK_* recipes open on the animated basic attack before the dissolve
+      classId: (atk ? 'DEATHATTACK_' : 'DEATH_') + kind + (boss ? '_BOSS' : ''), name: '', side: 'enemy', palette: ['#ffffff', '#ffcb45', '#e85a37'],
       skillLevel: 1, maxLevel: 1, intensity: 0, layers, casterIndex: 0, targetIndex: 0, focusIndex: 0,
       targetSide: 'enemy', aoe: false, targets: [], death: true, overlayOnly: true,
       // 💡 OWNER FIX round 5 (2026-11-07: "the stone type animation … stops half way through"):
@@ -84,7 +89,9 @@ function getOverlay(picks, kind, boss, W0, H0) {
       // 0.4→1.9s (regular) / 0.65→3.35s (boss), so every fast-path clip ended with the sprite
       // still mid-crumble (bosses cut at ~30%). Paint the FULL recipe instead: the bake stays a
       // one-time per-sprite cache cost; every future decode+encode replays it complete.
-      duration: boss ? 3.5 : 2.0,
+      // ⚔️ #5: attack kills add the 0.9s slash intro — durations 2.9 / 4.4 so the dissolve
+      // (impact 1.3 / 1.55 + 1.5 / 2.7) still finishes inside the bake.
+      duration: (atk ? 0.9 : 0) + (boss ? 3.5 : 2.0),
     });
     if (!vid || !Array.isArray(vid.frames) || !vid.frames.length) return null;
     fs.mkdirSync(dir, { recursive: true });
@@ -213,15 +220,16 @@ async function compositeFrames(m, outDir) {
   } catch (e) { console.warn('[DeathOv] canvas composite failed:', e && e.message || e); return 0; }
 }
 
-/** Full fast path. picks = dying cutouts (layers space); layers = the fight's shared scene. Returns { mp4, thumb, mats } | null. */
-async function renderFast({ layers, picks, kind, boss, deadIdx }) {
+/** Full fast path. picks = dying cutouts (layers space); layers = the fight's shared scene.
+ *  ⚔️ atk = the dying unit was killed by a basic attack → overlay opens on the slash intro. */
+async function renderFast({ layers, picks, kind, boss, deadIdx, atk }) {
   const t0 = Date.now();
   if (!layers || !Buffer.isBuffer(layers.bg) || !picks || !picks.length) return null;
   const W0 = Number(layers.w) || 1024, H0 = Number(layers.h) || 687;
   const pk = [];
   for (const p of picks) pk.push({ png: Buffer.from(p.c.png, 'base64'), x: Number(p.c.x) || 0, y: Number(p.c.y) || 0, w: Number(p.c.w) || 0, h: Number(p.c.h) || 0, idx: Math.max(0, Math.floor(Number(p.c.index) || 0)) });
   if (pk.some((p) => !p.w || !p.h)) return null;
-  const ov = await getOverlay(pk, kind, boss, W0, H0);
+  const ov = await getOverlay(pk, kind, boss, W0, H0, atk);
   if (!ov) return null;
   const tOv = Date.now() - t0;
   let bx0 = 1e9, bx1 = -1e9, ft = -1e9;
@@ -240,7 +248,7 @@ async function renderFast({ layers, picks, kind, boss, deadIdx }) {
   try { fs.unlinkSync(outPath); } catch (e) {}
   const tEnc = Date.now() - t0;
   if (!mp4 || mp4.length < 1000) { console.warn('[DeathOv] composite failed'); return null; }
-  console.log(`[DeathOv] ${kind}${boss ? '_BOSS' : ''} ${mp4.length}B overlay ${tOv}ms plate ${tPlate - tOv}ms enc ${tEnc - tPlate}ms total ${Date.now() - t0}ms`);
+  console.log(`[DeathOv] ${atk ? 'ATK+' : ''}${kind}${boss ? '_BOSS' : ''} ${mp4.length}B overlay ${tOv}ms plate ${tPlate - tOv}ms enc ${tEnc - tPlate}ms total ${Date.now() - t0}ms`);
   // ⚡ raw materials for the kill-turn merge: plate + overlay frame dir +
   // placement lets the card merge re-composite in ONE raw-stream encode.
   return { mp4, thumb: plate, mats: { plate, framesDir: ov.dir, n: ov.n, fps: ov.fps, ox, oy } };

@@ -226,6 +226,10 @@ function buildAnimationAction(turnInfo, options = {}) {
     const isCrit = Boolean(turnInfo.isCrit);
     const missed = Boolean(turnInfo.missed) || actionName.includes('miss');
 
+    // 🎒 #3 (owner work-order 2026-11-07): consumable turns ride the item's effect
+    // family so the card painter can give every consumable type its own emblem.
+    // ⚔️ #4: attackSeed = the turn counter — the slash composition cycles per turn.
+    const itemEffect = String((turnInfo.action && turnInfo.action.itemEffect) || '');
     return {
         attackerSide,
         attackerIndex,
@@ -237,7 +241,9 @@ function buildAnimationAction(turnInfo, options = {}) {
         damage,
         isCrit,
         missed,
-        heal
+        heal,
+        itemKind: itemEffect || undefined,
+        attackSeed: Math.max(0, Math.floor(Number(turnInfo.turnNumber) || 0)),
     };
 }
 

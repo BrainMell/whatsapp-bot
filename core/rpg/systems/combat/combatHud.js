@@ -169,18 +169,23 @@ function drawPlayerHud(c, hud, s = 1, ox = 18, oy = DH - 104, opts = {}) {
     c.fillStyle = '#f3ecd8'; c.font = `bold ${11 * s}px HudCinzel, serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(hud.level), lx, ly + 1);
   }
   // name: dark ink on the paper (floating cream text when the banner is off)
+  // 🔧 OWNER FIX 2026-11-07 ("the player username on the new hub looks slightly off"):
+  // the name row sat at Y+14 — its glyph tops were eaten by the banner's torn top edge and
+  // it rode the dashed stitch line, while the HP/energy block left ~26s px of dead parchment
+  // at the bottom. Drop the whole text block so the name clears the tear + stitch and the
+  // block centers against the medallion (portrait stays at Y+49).
   const hpW = 184, enW = 144, bxL = 116;                  // local left edge of the bars
   const hpX = L(bxL, hpW), enX = L(bxL, enW) + (flip ? (hpW - enW) * s : 0) * 0;
-  c.textBaseline = 'middle'; fit(c, String(hud.name || 'Champion'), 150 * s, 19 * s, 'HudCinzel, serif');
+  c.textBaseline = 'middle'; fit(c, String(hud.name || 'Champion'), 168 * s, 20 * s, 'HudCinzel, serif');
   const nameX = flip ? hpX + hpW * s : hpX, nameAlign = flip ? 'right' : 'left', nm = String(hud.name || 'Champion');
-  if (banner) { c.textAlign = nameAlign; c.fillStyle = 'rgba(255,246,220,0.75)'; c.fillText(nm, nameX + 0.9 * s, Y + 14.9 * s); c.fillStyle = '#2c1a0c'; c.fillText(nm, nameX, Y + 14 * s); }
-  else shadowText(c, nm, nameX, Y + 14 * s, '#f6efdc', nameAlign);
+  if (banner) { c.textAlign = nameAlign; c.fillStyle = 'rgba(255,246,220,0.75)'; c.fillText(nm, nameX + 0.9 * s, Y + 21.9 * s); c.fillStyle = '#2c1a0c'; c.fillText(nm, nameX, Y + 21 * s); }
+  else shadowText(c, nm, nameX, Y + 21 * s, '#f6efdc', nameAlign);
   // HP capsule
-  const hpH = 19 * s, hy = Y + 27 * s;
+  const hpH = 19 * s, hy = Y + 33 * s;
   capsule(c, hpX, hy, hpW * s, hpH, hud.maxHp > 0 ? hud.hp / hud.maxHp : 0, 'hp', `${Math.max(0, Math.floor(hud.hp || 0))}/${Math.max(1, Math.floor(hud.maxHp || 1))}`, s, flip);
   heartIcon(c, flip ? hpX + hpW * s + 1 * s : hpX - 1 * s, hy + hpH / 2, 13 * s);
   // mana capsule (slimmer + shorter), hugging the portrait side
-  const enH = 13 * s, ey = hy + hpH + 6 * s, enXr = flip ? hpX + (hpW - enW) * s : hpX;
+  const enH = 13 * s, ey = hy + hpH + 6 * s, enXr = flip ? hpX + (hpW - enW) * s : hpX;   // Y+58..Y+71 — bottom margin ~20s px, balanced against the top
   capsule(c, enXr, ey, enW * s, enH, hud.maxEnergy > 0 ? hud.energy / hud.maxEnergy : 0, 'en', `${Math.max(0, Math.floor(hud.energy || 0))}/${Math.max(1, Math.floor(hud.maxEnergy || 1))}`, s, flip);
   dropIcon(c, flip ? enXr + enW * s + 1 * s : enXr - 1 * s, ey + enH / 2, 10 * s);
 }

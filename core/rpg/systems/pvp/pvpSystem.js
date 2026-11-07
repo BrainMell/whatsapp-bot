@@ -1486,6 +1486,10 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
             default:
                 actionResult += `\n(Item effect activated)`;
         }
+        // 🎒 #3 (owner work-order 2026-11-07): consumable turns ride the item's effect family
+        // through lastHit so the duel card paints that consumable's emblem (potion flask,
+        // energy crystal, buff tonic, bomb, ...). element 'none' keeps the slash off.
+        abilityObj = { id: 'item:' + itemKey, name: item.name, element: 'none', itemKind: String(item.effect || '') };
         }
     } else if (action === 'summon_card') {
         // 🃏 SUMMON CARDS IN PvP (2026-11-07): same catalog / ownership / energy / cooldown rules as PvE, adapted to the duel model.
@@ -1530,8 +1534,10 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
     // 🔴 HIT FLASH (owner 2026-10-20): carry THIS action's hit into the static
     // duel card — the Go renderer flashes the hit receiver red when damage > 0.
     // duel.lastHit is cleared on no-hit turns so a flash never lingers.
-    duel.lastHit = (damage > 0 || missed)
-        ? { damage, isCrit, missed, heal: healing, skillName: abilityObj ? abilityObj.name : 'attack', element: (abilityObj && abilityObj.element) || 'physical' }
+    // 🎒 #3: heal-only item turns ALSO carry (heal + itemKind) so the card shows the
+    // consumable emblem instead of nothing. #4: attackSeed cycles slash variants.
+    duel.lastHit = (damage > 0 || missed || healing > 0)
+        ? { damage, isCrit, missed, heal: healing, skillName: abilityObj ? abilityObj.name : 'attack', element: (abilityObj && abilityObj.element) || 'physical', itemKind: (abilityObj && abilityObj.itemKind) || undefined, attackSeed: (Number(duel.round) || 0) }
         : null;
 
     // Energy regen for attacker
@@ -1914,6 +1920,9 @@ async function generateDuelImage(duel) {
                 isCrit: Boolean(duel.lastHit && duel.lastHit.isCrit),
                 missed: Boolean(duel.lastHit && duel.lastHit.missed),
                 heal: Math.max(0, Math.floor(Number((duel.lastHit && duel.lastHit.heal) || 0))),
+                // 🎒 #3 / ⚔️ #4: consumable emblem + slash-variant cycling ride to the Node card
+                itemKind: (duel.lastHit && duel.lastHit.itemKind) || undefined,
+                attackSeed: Math.max(0, Math.floor(Number(duel.lastHit && duel.lastHit.attackSeed) || 0)),
             },
         }
     );

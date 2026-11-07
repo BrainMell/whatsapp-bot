@@ -38,6 +38,12 @@ const META = {
 // the sprite finished breaking apart. Durations now outlast every death track.
 const DEATH_KINDS = ['FIRE', 'WATER', 'EARTH', 'VOID', 'ICE', 'DUST'];
 for (const k of DEATH_KINDS) { META['DEATH_' + k] = { duration: 2.0, impact: 0.4, zoom: 0 }; META['DEATH_' + k + '_BOSS'] = { duration: 3.5, impact: 0.65, zoom: 0.03 }; }
+// ⚔️ #5 (owner work-order 2026-11-07 "the death animation should reflect the attack that actually
+// killed the enemy"): basic-attack kills open on the ANIMATED BASIC ATTACK — two wind-up slashes +
+// an impact burst + the damage-number glow land on the standing sprite during [0, impact), then the
+// same element dissolve takes it apart. Regular gains 0.9s (impact 0.4→1.3), boss 0.9s (0.65→1.55).
+const ATK = 0.9;
+for (const k of DEATH_KINDS) { META['DEATHATTACK_' + k] = { duration: 2.0 + ATK, impact: 0.4 + ATK, zoom: 0 }; META['DEATHATTACK_' + k + '_BOSS'] = { duration: 3.5 + ATK, impact: 0.65 + ATK, zoom: 0.03 }; }
 // 🌌 WORLD-SHIFT (owner 2026-10-28): the big skills open with a cosmic cinematic (zoom-blur out ->
 // planet + asteroid -> impact -> the arena becomes another world), then play their normal recipe,
 // shifted later by SHIFT seconds. planet:false = warp tunnel into another dimension (shorter).
@@ -253,8 +259,20 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
         return [dis('dust'), { fx: 'k_puff', at: pre + 0.05, pos: 'T', off: [0, -30], w: 240 * k, n: 2, jit: [30, 20], gap: 0.1, tint: ['#d8d0c0', 0.6] },
             L('emit', { at: pre, dur: 1.0, pos: 'T', off: [0, -30], box: [60 * k, 60 * k], n: Math.round(26 * k), life: 1.0, shape: 'glow', colors: ['#e8e0d0', '#b8b0a0'], v: [0, -50], vr: [100 * k, 50], size: 4 }), ...cam];
     }
+    // ⚔️ #5: the SAME element death, opened by the animated basic attack — the killing blow
+    // (two fast slashes + impact sparks + a white hit-wash) lands on the standing sprite during
+    // [0.05, I) — for DEATHATTACK_* recipes I (IMPACT from META) is 1.3 regular / 1.55 boss, so
+    // there is room — then the element dissolve takes the sprite apart exactly as before.
+    function deathAttackSet(kind, boss) {
+        const intro = [
+            L('slashes', { at: 0.05, n: 2, gap: 0.14, color: '#ffffff', mid: '#ffffff', len: 170, w: 12, angles: [-0.62, 0.5] }),
+            L('emit', { at: 0.3, dur: 0.55, pos: 'T', box: [70, 60], n: 16, life: 0.55, shape: 'spark', colors: ['#ffffff', '#ffe9b0'], v: [0, -110], vr: [150, 60], g: 220 }),
+        ];   // (no wash track here — overlayOnly bakes strip wash/flash layers)
+        return [...intro, ...deathSet(kind, boss)];
+    }
     const R = {
-        ...Object.fromEntries(DEATH_KINDS.flatMap((dk) => [['DEATH_' + dk, () => deathSet(dk, false)], ['DEATH_' + dk + '_BOSS', () => deathSet(dk, true)]])),
+        ...Object.fromEntries(DEATH_KINDS.flatMap((dk) => [['DEATH_' + dk, () => deathSet(dk, false)], ['DEATH_' + dk + '_BOSS', () => deathSet(dk, true)],
+          ['DEATHATTACK_' + dk, () => deathAttackSet(dk, false)], ['DEATHATTACK_' + dk + '_BOSS', () => deathAttackSet(dk, true)]].map(([key, fn]) => [key, fn]))),
         // ── dark arts ──────────────────────────────────────────────────────
         NECROMANCER: () => [
             dark(0.5),

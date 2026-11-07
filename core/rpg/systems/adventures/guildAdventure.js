@@ -6237,6 +6237,10 @@ async function performAction(sock, player, action, sessionKey) {
           resolvedTarget.isDead = true;
           resolvedTarget.stats.hp = 0;
           resolvedTarget.currentHP = 0;
+          // ⚔️ #5 (owner work-order 2026-11-07 "the death animation should reflect the attack
+          // that actually killed the enemy"): basic-attack kills bake the animated slash into
+          // the death clip (DEATHATTACK recipes) instead of opening on an unrelated dissolve.
+          resolvedTarget._killedBy = { kind: 'basic', element: 'physical' };
           resultMsg += `\n💀 *${resolvedTarget.name}* defeated!`;
           player.combatStats.kills = (player.combatStats.kills || 0) + 1;
           recordEnemyKill(state, resolvedTarget);
@@ -6538,7 +6542,10 @@ async function performAction(sock, player, action, sessionKey) {
           resultMsg += `❌ You don't have that item anymore!`;
         } else {
         resultMsg += `🎒 Uses *${item.name}*! `;
-        turnInfo.action = { name: item.name };
+        // 🎒 #3 (owner work-order 2026-11-07 "each consumable type should have its own
+        // recognisable visual treatment"): the effect family rides the turnInfo so the
+        // card painter (hitFx.drawItemEmblem) can draw that consumable's emblem.
+        turnInfo.action = { name: item.name, itemEffect: item.effect || '', itemId: itemKey };
 
         switch (item.effect) {
           case "heal":
@@ -6802,6 +6809,9 @@ async function performAction(sock, player, action, sessionKey) {
           default:
             resultMsg += `\n(Item effect activated)`;
         }
+        // 🎒 #3: every consumable turn carries its target (self-heals / buffs default to the
+        // user) so the card painter drops that item's emblem on the right unit.
+        if (!turnInfo.target) turnInfo.target = target || player;
         // 💡 2026-08-31: closes the `consumed.success` else
         }
         // 💡 2026-08-31: closes the valid-target else (item consumption fix)
@@ -6898,6 +6908,44 @@ async function performAction(sock, player, action, sessionKey) {
     }
   }
 }
+// 🛑 #6 LETHAL ENEMY TURN CARD (owner work-order 2026-11-07: "if an enemy's attack is about
+// to kill the player, its turn image card must be displayed. The card should include the
+// enemy's turn introduction, attack effect and other relevant combat presentation before the
+// player's death is shown."): enemy turns normally skip their own board (perf). A LETHAL turn
+// never does — the card (same renderer as nextTurn's board) goes out with the attack narration
+// as the caption BEFORE any death presentation. Returns true when the card was sent.
+async function _sendLethalEnemyCard(sock, state, turnInfo, caption) {
+  try {
+    const scene = await Promise.race([
+      (state.mode === 'RUINS' && state.ruinsMeta)
+        ? require('../guildwar/battleScene').renderBattleImage(state, { phase: 'TURN', turnInfo })
+        : (state.isAbyss === true)
+          ? require('./abyssScene').renderAbyssCombat(state, { phase: 'TURN', turnInfo })
+          : combatIntegration.generateCombatScene(
+              state.players, state.enemies, "TURN",
+              {
+                turnInfo,
+                backgroundPath: state.backgroundPath,
+                rank: state.dungeonRank,
+                floor: state.isAbyss ? state.abyssFloor : 0,
+                summons: [],
+                combatState: state,
+              },
+            ),
+      new Promise((r) => setTimeout(() => r(null), 9000)),
+    ]);
+    if (scene && scene.success && scene.buffer) {
+      await sendMediaBounded(sock, state.chatId, {
+        image: scene.buffer,
+        caption: caption || scene.caption,
+      }, { label: 'lethalEnemyCard' });
+      console.log('[LethalCard] enemy lethal turn card sent');
+      return true;
+    }
+  } catch (e) { console.warn('[LethalCard] lethal enemy card failed:', e.message); }
+  return false;
+}
+
 async function performEnemyAction(sock, enemy, sessionKey) {
   const state = gameStates.get(sessionKey);
   if (!state || !state.inCombat) return;
@@ -7141,6 +7189,8 @@ async function performEnemyAction(sock, enemy, sessionKey) {
         turnInfo.action.name = skill.name;
         turnInfo.target = target;
         turnInfo.damage = Math.max(0, Math.floor(Number(abilityRes && abilityRes.damage) || 0)); // 🔴 hit-flash: real damaged entity rides to the Go renderer
+        // 🛑 #6: did this ability just KILL a player? Its turn card must be shown.
+        const __killedPlayer = state.players.some((p) => p && p.justDied && !p.isEnemy);
 
         // 💡 BUG FIX: Send the enemy's full ability message (including damage
         // breakdown) IMMEDIATELY as a standalone message. Previously this was
@@ -7162,7 +7212,12 @@ async function performEnemyAction(sock, enemy, sessionKey) {
               ? combatIntegration.compactCombatText(abilityRes.message.trim())
               : abilityRes.message.trim();
           let sentImmediately = false;
-          try {
+          if (__killedPlayer) {
+            // 🛑 #6 lethal skill: the enemy's turn card (intro + attack effect) goes out
+            // first, with the ability narration as the caption. Text only as fallback.
+            sentImmediately = await _sendLethalEnemyCard(sock, state, turnInfo, fullMsg);
+          }
+          if (!sentImmediately) try {
             await boundedSend(sock, chatId, { text: fullMsg });
             sentImmediately = true;
           } catch (err) {}
@@ -7345,6 +7400,8 @@ async function performEnemyAction(sock, enemy, sessionKey) {
             resolve();
             return;
           }
+          // 🛑 #6: this basic attack just KILLED a player — its turn card must be shown.
+          var __killedPlayer = true;
           resultMsg += `\n💀 ${target.name} has fallen!`;
         }
       }
@@ -7368,7 +7425,12 @@ async function performEnemyAction(sock, enemy, sessionKey) {
       // it. This made it look like enemy damage wasn't being shown.
       state.roundLog = state.roundLog || [];
       let sentImmediately = false;
-      try {
+      if (typeof __killedPlayer !== 'undefined' && __killedPlayer) {
+        // 🛑 #6 lethal attack: the enemy's turn card (intro + attack effect + hit reaction on
+        // the dying player) goes out FIRST, narration as caption — never skip this moment.
+        sentImmediately = await _sendLethalEnemyCard(sock, state, turnInfo, fullEnemyMsg);
+      }
+      if (!sentImmediately) try {
         await boundedSend(sock, chatId, { text: fullEnemyMsg });
         sentImmediately = true;
       } catch (err) {}

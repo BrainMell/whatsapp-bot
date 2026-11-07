@@ -903,7 +903,9 @@ async function renderDeathVideo({ enemy, targetIndex, layers, abort, targets, de
       if (picks.length && process.env.DEATH_FAST !== '0') {
         // ⚡ overlay-cache fast path (~0.2s once the overlay is cached); any failure falls through to the full engine render
         try {
-          const fast = await require('./deathOverlay').renderFast({ layers, picks, kind, boss, deadIdx });
+          // ⚔️ #5: a basic-attack kill opens the death clip on the animated basic attack
+          const atk = group.some((t) => t && t.enemy && t.enemy._killedBy && t.enemy._killedBy.kind === 'basic');
+          const fast = await require('./deathOverlay').renderFast({ layers, picks, kind, boss, deadIdx, atk });
           if (fast && fast.mp4) {
             const out = { mp4: fast.mp4, thumb: fast.thumb || null, kind, boss, mats: fast.mats || null };
             if (picks.length > 1) out.group = picks.map(({ t }) => t.enemy).filter(Boolean);

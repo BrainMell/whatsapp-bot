@@ -131,7 +131,9 @@ async function renderNodePvpCard(players, enemies, options, api) {
     const sc = require('../summonCards');
     for (let i = 0; i < 2; i++) {
       const src = players[i]; if (!src || !src.jid) continue;
-      const entries = sc.handEntries(src.jid, options.combatState || {}, src);
+      // duelists keep energy flat (src.energy) — handEntries reads player.stats.energy, so shim it
+      // or every card badges as affordable regardless of the duelist's real energy.
+      const entries = sc.handEntries(src.jid, options.combatState || {}, { stats: { energy: src.energy, maxEnergy: src.maxEnergy } });
       if (!entries.length) continue;
       if (i === 0) await hud.drawDeckTray(c, entries, s, 330, hud.DH - 96, hud.DW - 18);
       else await hud.drawDeckTray(c, entries, s, 18, 8, hud.DW - 340);
