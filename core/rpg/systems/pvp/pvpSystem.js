@@ -732,6 +732,7 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
         }
         
         // Advance turn
+        _bumpCardTurn(duel, currentPlayer);
         duel.turn = 1 - duel.turn;
         if (duel.turn === 0) duel.round++;
         duel.lastAction = Date.now();
@@ -1486,8 +1487,14 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
                 actionResult += `\n(Item effect activated)`;
         }
         }
+    } else if (action === 'summon_card') {
+        // 🃏 SUMMON CARDS IN PvP (2026-11-07): same catalog / ownership / energy / cooldown rules as PvE, adapted to the duel model.
+        const r = _resolveSummonCardPvp(duel, currentPlayer, opponent, target);
+        if (!r.ok) return { success: false, message: r.message };
+        actionResult = r.message; damage = r.damage; healing = r.healing; missed = r.missed; isCrit = false;
+        abilityObj = { id: r.card.id, name: r.card.abilityName, element: String(r.card.element || 'physical').toLowerCase() };
     } else {
-        return { success: false, message: `❌ Unknown action. Use: \`attack\`, \`ability <n>\`, \`item\`, or \`flee\`` };
+        return { success: false, message: `❌ Unknown action. Use: \`attack\`, \`ability <n>\`, \`summon <#|name>\`, \`item\`, or \`flee\`` };
     }
 
     if (statusLog.length > 0) {
@@ -1515,6 +1522,7 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
     }
 
     // ── Advance turn ──────────────────────────────
+    _bumpCardTurn(duel, currentPlayer);
     duel.turn = 1 - duel.turn;
     if (duel.turn === 0) duel.round++;
     duel.lastAction = Date.now();
@@ -1576,6 +1584,82 @@ async function _handlePvPActionInner(sock, chatId, senderJid, action, target, m)
         image: imageResult,
         mentions: [nextPlayer.jid],
     };
+}
+
+
+// ==========================================
+// 🃏 SUMMON CARDS (PvP adapter)
+// ==========================================
+function _bumpCardTurn(duel, p) {
+    if (!duel || !p) return;
+    if (!duel.summonCardTurnCounts) duel.summonCardTurnCounts = {};
+    duel.summonCardTurnCounts[String(p.jid)] = (Number(duel.summonCardTurnCounts[String(p.jid)]) || 0) + 1;
+}
+
+/** Plays a summon card from the duelist's hand. Rules: your turn only, owned card, energy + cooldown, one card per turn (it uses the turn),
+ * damage goes through the same DEF/evasion maths as basic attacks (x PVP_DAMAGE_MULT, 15 floor) and is capped at 35% of the target's max HP;
+ * hard CC obeys stun-immunity; taunt has no PvP meaning. */
+function _resolveSummonCardPvp(duel, me, foe, rawRef) {
+    const sc = require('../summonCards');
+    const ref = String(rawRef == null ? '' : rawRef).trim();
+    if (!ref) {
+        const owned = sc.getOwnedCards(me.jid);
+        return { ok: false, message: owned.length
+            ? `🃏 Pick a card from your hand: \`${botConfig.getPrefix()} combat summon <#|name>\`\n` + sc.buildInventoryText(me.jid, botConfig.getPrefix())
+            : '❌ You do not own any summon cards.' };
+    }
+    const cardId = sc.resolveCardRef(me.jid, ref);
+    if (!cardId) return { ok: false, message: '❌ Unknown card. Use a hand number or a card name.' };
+    const card = sc.catalog[cardId];
+    if (!sc.getOwnedCards(me.jid).some((c) => c.id === cardId)) return { ok: false, message: `❌ You do not own ${card.name}.` };
+    if ((me.statusEffects || []).some((e) => e.type === 'silence')) return { ok: false, message: `🤐 *${me.name}* is SILENCED and cannot call summons!` };
+    if (!(Number(me.energy) >= card.energyCost)) return { ok: false, message: `❌ ${card.name} needs ${card.energyCost} energy; you have ${Math.max(0, Math.floor(me.energy))}.` };
+    const cd = sc.cooldownFor(me.jid, cardId, duel);
+    if (!cd.ready) return { ok: false, message: `⏳ ${card.name} is cooling down for ${cd.turnsLeft} more of your turns.` };
+
+    me.energy = Math.max(0, me.energy - card.energyCost);
+    const lines = [], mine = getEffectiveStats(me), theirs = getEffectiveStats(foe);
+    const magBase = Math.max(1, Number(mine.mag) || Number(mine.atk) || 1), atkBase = Math.max(1, Number(mine.atk) || Number(mine.mag) || 1);
+    const onFoe = card.target === 'enemy' || card.target === 'all';
+    let damage = 0, healing = 0, evaded = false, hit = false;
+    const dmgCap = Math.max(50, Math.floor(foe.maxHp * 0.35));
+    for (const eff of card.effects || []) {
+        if (eff.kind === 'damage') {
+            if (Math.random() * 100 < (theirs.evasion || 0)) { evaded = true; lines.push(`💨 ${foe.name} evades!`); continue; }
+            let d = Math.floor((eff.stat === 'atk' ? atkBase : magBase) * eff.mult * PVP_DAMAGE_MULT);
+            d = Math.max(15, d - Math.min(Math.floor((theirs.def || 0) * 0.25), Math.floor(d * PVP_DEFENSE_CAP)));
+            d = Math.min(d, dmgCap);
+            foe.hp = Math.max(0, foe.hp - d); damage += d; hit = true;
+            lines.push(`💥 ${foe.name} takes *${d}* ${String(card.element).toLowerCase()} damage`);
+        } else if (eff.kind === 'status') {
+            if (!onFoe) continue;
+            if ((card.effects || []).some((x) => x.kind === 'damage') && !hit) continue;
+            if (applyStatusEffect(foe, eff.type, eff.duration, eff.value)) {
+                const e = foe.statusEffects[foe.statusEffects.length - 1];
+                if (['poison', 'burn', 'bleed'].includes(eff.type)) e.dotDamage = Math.max(1, Math.floor(eff.value || 10));
+                lines.push(`✨ ${foe.name} is afflicted: ${eff.type}`);
+            } else lines.push(`🛡️ ${foe.name} resists ${eff.type} (stun immunity)`);
+        } else if (eff.kind === 'drain') {
+            const h = Math.min(me.maxHp - me.hp, Math.floor(damage * (eff.pct || 0)));
+            if (h > 0) { me.hp += h; healing += h; lines.push(`🩸 You drain *${h}* HP`); }
+        } else if (eff.kind === 'shield') {
+            applyStatusEffect(me, 'shield', eff.duration || 3, Math.max(10, Math.floor((mine.def || 10) * eff.mult + magBase * 0.5)));
+            lines.push('🛡️ You gain a shield');
+        } else if (eff.kind === 'heal') {
+            const h = Math.min(me.maxHp - me.hp, Math.max(1, Math.floor(magBase * eff.mult * PVP_DAMAGE_MULT)));
+            me.hp += h; healing += h; lines.push(`💚 Restores *${h}* HP`);
+        } else if (eff.kind === 'buff') {
+            applyStatusEffect(me, eff.type, eff.duration, eff.value);
+            const e = me.statusEffects[me.statusEffects.length - 1];
+            if (eff.type === 'regen') e.value = eff.value;
+            lines.push(`✨ You gain ${eff.type}`);
+        } else if (eff.kind === 'energy') {
+            me.energy = Math.min(me.maxEnergy, me.energy + eff.amount); lines.push(`⚡ +${eff.amount} energy refunded`);
+        } // taunt: no PvP meaning
+    }
+    if (!duel.summonCardCooldowns) duel.summonCardCooldowns = {};
+    duel.summonCardCooldowns[`${me.jid}:${cardId}`] = (Number(duel.summonCardTurnCounts && duel.summonCardTurnCounts[String(me.jid)]) || 0) + card.cooldownTurns + 1;
+    return { ok: true, card, damage, healing, missed: evaded && !hit, message: `${card.icon} *${me.name}* summons *${card.name}* — ${card.abilityName}!\n${lines.join('\n')}` };
 }
 
 // ==========================================
@@ -1813,10 +1897,13 @@ async function generateDuelImage(duel) {
                 ? `rpgasset/environment/${duel.ruinsBackground}`
                 : undefined,
             summons: duel.summons || [],
+            combatState: duel,
             action: {
                 attackerSide: 'player',
                 attackerIndex: duel.turn || 0,
-                targetSide: 'player',
+                // 🛑 No target until a hit has actually landed: the opening image
+                // must not paint a slash/flash on whoever acts first.
+                targetSide: duel.lastHit ? 'player' : undefined,
                 // 🔴 HIT FLASH: after the turn advance, duel.turn holds the
                 // duelist who just TOOK the hit — that's who flashes red.
                 // (attackerIndex above stays the next actor for the crystal.)
@@ -1928,4 +2015,5 @@ module.exports = {
     declineChallenge,
     cancelDuel,
     handlePvPAction,
+    _resolveSummonCardPvp,
 };

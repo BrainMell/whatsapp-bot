@@ -126,6 +126,17 @@ async function renderNodePvpCard(players, enemies, options, api) {
     hud.drawPlayerHud(c, { name: p.name, hp: p.currentHP ?? p.hp, maxHp: p.maxHp, energy: p.energy, maxEnergy: p.maxEnergy, level: p.level, portrait: await hud.portraitFromCut(cut), color: col },
       s, 18, flip ? 12 : hud.DH - 104, { flip, seed: 11 + i * 5 });
   }
+  // 🃏 summon deck trays: every duelist who owns cards gets one (P1 bottom strip beside the hub, P2 top strip left of the mirrored hub)
+  try {
+    const sc = require('../summonCards');
+    for (let i = 0; i < 2; i++) {
+      const src = players[i]; if (!src || !src.jid) continue;
+      const entries = sc.handEntries(src.jid, options.combatState || {}, src);
+      if (!entries.length) continue;
+      if (i === 0) await hud.drawDeckTray(c, entries, s, 330, hud.DH - 96, hud.DW - 18);
+      else await hud.drawDeckTray(c, entries, s, 18, 8, hud.DW - 340);
+    }
+  } catch (e) { /* tray is optional */ }
   const buffer = cv.toBuffer('image/jpeg', { quality: 0.88 });
   console.log(`[CombatHud] node PvP card ${buffer.length}B in ${Date.now() - t0}ms`);
   return { success: true, buffer, mimeType: 'image/jpeg' };

@@ -12808,12 +12808,13 @@ _💡 Reply with another number from your search list!_`.trim();
                         // fall through PvP too — same alias as the adventure path.
                         if (pvpAction === "skill" || pvpAction === "skills") pvpAction = "ability";
                         if (pvpAction === "use") pvpAction = "item";
+                        if (pvpAction === "summon" || pvpAction === "card" || pvpAction === "summons") pvpAction = "summon_card";
 
                         if (!pvpAction) {
                           return await sock.sendMessage(chatId, {
                             text:
                               BOT_MARKER +
-                              `❌ Usage: \`${botConfig.getPrefix()} combat <attack | ability <n> | item | flee>\``,
+                              `❌ Usage: \`${botConfig.getPrefix()} combat <attack | ability <n> | summon <#|name> | item | flee>\``,
                           });
                         }
 
