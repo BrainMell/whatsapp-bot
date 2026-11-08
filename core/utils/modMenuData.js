@@ -305,6 +305,8 @@ const MOD_MENU = {
       { cmd: "unhardban", usage: "unhardban @user", desc: "Reverse a hard-ban." },
       { cmd: "hardmute", usage: "hardmute @user", desc: "Global no-expiry mute." },
       { cmd: "unhardmute", usage: "unhardmute @user", desc: "Reverse a hard-mute." },
+      { cmd: "mutelist", usage: "mutelist", desc: "List everyone muted (timed + hard-mutes)." },
+      { cmd: "unmuteall", usage: "unmuteall [here]", desc: "Lift ALL timed mutes (and, owner only, all hard-mutes). `here` = this chat only." },
       { cmd: "endauction", usage: "endauction", desc: "Force-close the card auction early." },
       { cmd: "setauctiongc", usage: "setauctiongc <gc_id|here>", desc: "Designate the auction group." },
     ],

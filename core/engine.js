@@ -14753,6 +14753,48 @@ Usage: ${newUsage}/5${warningText}`;
                     });
                   }
 
+                  // .g mutelist - who is muted (this bot's timed mutes + the shared hard-mutes). Owner / global mods.
+                  if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} mutelist`) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only the owner or global mods can view the mute list." });
+                    }
+                    const now = Date.now(), names = [], mentions = [];
+                    const line = (u) => { mentions.push(u); return `@${economy.getDisplayName(u)}`; };
+                    const timed = [];
+                    for (const [key, d] of mutedUsers) {
+                      if (!d || !d.userId || now > d.until) continue;
+                      let gname = d.chatId;
+                      try { const md = groupMetadataCache.get(d.chatId); if (md && md.subject) gname = md.subject; } catch (e) {}
+                      timed.push(`• ${line(d.userId)} — ${formatDuration(d.until - now)} left _(${String(gname).replace('@g.us', '').slice(0, 28)})_`);
+                    }
+                    const hard = Array.from(hardMutedUsers).map((u) => `• ${line(u)}`);
+                    const body = [`🔇 *MUTED (${BOT_NAME || 'this bot'})*`, '', `⏱️ *Timed mutes:* ${timed.length}`, ...(timed.length ? timed : ['_none_']), '', `⛔ *Hard-mutes (all chats):* ${hard.length}`, ...(hard.length ? hard : ['_none_']), '', `Undo: \`${botConfig.getPrefix()} unmuteall\``].join('\n');
+                    return await sock.sendMessage(chatId, { text: BOT_MARKER + body, mentions });
+                  }
+
+                  // .g unmuteall [here] - lift every timed mute (and, owner only, every hard-mute). `here` = only this chat's timed mutes.
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} unmuteall` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} unmuteall `)
+                  ) {
+                    if (!isOwner && !isGlobalMod(senderJid)) {
+                      return await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Only the owner or global mods can clear mutes in bulk." });
+                    }
+                    const hereOnly = /\bhere\b/.test(lowerTxt);
+                    let timedCleared = 0;
+                    for (const [key, d] of Array.from(mutedUsers)) {
+                      if (hereOnly && (!d || d.chatId !== chatId)) continue;
+                      mutedUsers.delete(key); timedCleared++;
+                    }
+                    saveMutedUsers();
+                    let hardCleared = 0;
+                    if (!hereOnly && isOwner) { hardCleared = hardMutedUsers.size; hardMutedUsers.clear(); saveHardMutedUsers(); }
+                    console.log(`🔊 [unmuteall] ${senderJid}: ${timedCleared} timed${hereOnly ? ' (this chat)' : ''}, ${hardCleared} hard`);
+                    return await sock.sendMessage(chatId, {
+                      text: BOT_MARKER + `🔊 *Mutes cleared*${hereOnly ? ' _(this chat)_' : ''}\n⏱️ Timed mutes lifted: *${timedCleared}*` + (hereOnly ? '' : isOwner ? `\n⛔ Hard-mutes lifted: *${hardCleared}*` : `\n⛔ Hard-mutes untouched _(owner only)_`) + `\n_Run it on each bot (\`.j\` and \`.s\`) — timed mutes are stored per bot._`,
+                    });
+                  }
+
                   // .g banlist
                   if (lowerTxt === `${botConfig.getPrefix().toLowerCase()} banlist`) {
                     if (!isOwner && !isGlobalMod(senderJid) && !isRpgMod(senderJid) && !isCardsMod(senderJid)) {
