@@ -6,7 +6,7 @@ const pick = process.argv.slice(2).length ? process.argv.slice(2) : ['characters
 (async () => {
   const cols = 6, cw = 220, ch = 260, rows = Math.ceil(pick.length / cols), W = cols * cw, H = rows * ch;
   const cv = createCanvas(W, H), c = cv.getContext('2d'); c.fillStyle = '#d7b46a'; c.fillRect(0, 0, W, H);
-  const cuts = [], draws = [], anchors = [], floatSet = new Set([4, 7]);   // units 4 and 7 hover 55px above the ground line (anchor keeps the true ground)
+  const cuts = [], draws = [], anchors = [], floatSet = new Set();   // units 4 and 7 hover 55px above the ground line (anchor keeps the true ground)
   for (let i = 0; i < pick.length; i++) {
     const im = await loadImage(A + pick[i]); const r = i / cols | 0, col = i % cols, ground = r * ch + 215, cx = col * cw + cw / 2;
     const k = Math.min(170 / im.height, 150 / im.width), w = Math.round(im.width * k), h = Math.round(im.height * k);
