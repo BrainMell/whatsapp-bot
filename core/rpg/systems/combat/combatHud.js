@@ -314,34 +314,43 @@ async function drawMiniCard(c, e, idx, x, y, cw, ch, o) {
   c.translate(x + cw / 2, y + ch);          // pivot: bottom-center
   c.rotate(ang || 0); c.scale(sc, sc);
   c.translate(-cw / 2, -ch);
-  // body + glow
+  // body + glow, then the REAL parchment card face (cached, step-downscaled) — old frame/art-window painter retired
   if (standout) { c.shadowColor = '#ffd36b'; c.shadowBlur = 18 * s; }
   else if (e.ready !== false) { c.shadowColor = 'rgba(255,211,107,0.8)'; c.shadowBlur = 10 * s; }
+  let faced = false;
+  if (process.env.TRAY_OLD_CARD !== '1') {
+    try {
+      const face = await require('../summonCards/cardRenderer').faceCanvas(card, cw * 2, ch * 2);   // 2x backing so the tray stays sharp when the board is upscaled
+      rr(c, 1 * s, 1 * s, cw - 2 * s, ch - 2 * s, 7 * s); c.fillStyle = '#12151d'; c.fill();
+      c.shadowBlur = 0; c.imageSmoothingEnabled = true; c.drawImage(face, 0, 0, cw, ch); faced = true;
+    } catch (e0) { faced = false; }
+  }
+  if (!faced) {
   rr(c, 1 * s, 1 * s, cw - 2 * s, ch - 2 * s, 8 * s); c.fillStyle = '#12151d'; c.fill();
   c.shadowBlur = 0;
-  // art window (frame asset proportions: 200x272 -> window 14..185 x, 14..163 y) - LOCAL coords
+  // (legacy painter — only when the new face fails to render)
   c.save(); c.beginPath();
   const wx = 0.07 * cw, wy = 0.0515 * ch, ww = 0.855 * cw, wh = 0.5485 * ch;
   c.rect(wx, wy, ww, wh); c.clip();
   const ag = c.createLinearGradient(0, 0, 0, ch * 0.62); ag.addColorStop(0, elC); ag.addColorStop(1, '#0c0e14');
   c.globalAlpha = 0.5; c.fillStyle = ag; c.fillRect(wx, wy, ww, wh); c.globalAlpha = 1;
-  try {
-    const art = await artFor(card);
-    if (art) { const k = Math.min(ww / art.width, wh / art.height); c.imageSmoothingEnabled = art.width > 256; c.drawImage(art, wx + (ww - art.width * k) / 2, wy + (wh - art.height * k) / 2, art.width * k, art.height * k); }
-  } catch (e2) { /* art optional */ }
+  try { const art = await artFor(card); if (art) { const k = Math.min(ww / art.width, wh / art.height); c.drawImage(art, wx + (ww - art.width * k) / 2, wy + (wh - art.height * k) / 2, art.width * k, art.height * k); } } catch (e2) {}
   c.restore();
-  // gold frame asset over everything structural
   const frame = uiSync('hud_card_frame.png');
   if (frame) c.drawImage(frame, 0, 0, cw, ch);
   else { rr(c, 0, 0, cw, ch, 8 * s); c.lineWidth = (standout ? 2.8 : 1.8) * s; c.strokeStyle = rarC; c.stroke(); }
-  // name strip — measured ellipsis (pixel/Cinzel runs wide at 52px card width)
   c.font = `bold ${8 * s}px HudCinzel, serif`; c.textBaseline = 'middle'; c.textAlign = 'center'; c.fillStyle = '#fff';
-  let nm = String(card.name || '').toUpperCase();
-  if (c.measureText(nm).width > cw - 14 * s) {
-    while (nm.length > 1 && c.measureText(nm + '…').width > cw - 14 * s) nm = nm.slice(0, -1);
-    nm += '…';
+  c.fillText(String(card.name || '').toUpperCase().slice(0, 9), cw / 2, ch * 0.72);
   }
-  c.fillText(nm, cw / 2, ch * 0.72);
+  c.textBaseline = 'middle'; c.textAlign = 'center';
+  if (faced) {   // readable name ribbon (the printed name is a few px tall at tray size)
+    const ry = ch * 0.585, rh = 11 * s;
+    c.save(); rr(c, 3 * s, ry, cw - 6 * s, rh, 3 * s); c.fillStyle = 'rgba(20,12,6,0.82)'; c.fill(); c.lineWidth = 1 * s; c.strokeStyle = rarC; c.stroke();
+    c.font = `bold ${7 * s}px HudCinzel, serif`; c.fillStyle = '#f3e6c4';
+    let nm = String(card.name || '').toUpperCase();
+    if (c.measureText(nm).width > cw - 12 * s) { while (nm.length > 1 && c.measureText(nm + '…').width > cw - 12 * s) nm = nm.slice(0, -1); nm += '…'; }
+    c.fillText(nm, cw / 2, ry + rh / 2 + 0.5 * s); c.restore();
+  }
   // energy cost orb (bottom-right, mana-tinted + number)
   const ox2 = cw - 11.5 * s, oy2 = ch - 11.5 * s, or2 = 9 * s;
   c.beginPath(); c.arc(ox2, oy2, or2, 0, Math.PI * 2); c.fillStyle = 'rgba(8,14,30,0.92)'; c.fill();

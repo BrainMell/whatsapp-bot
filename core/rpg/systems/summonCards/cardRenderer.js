@@ -175,6 +175,30 @@ async function drawCard(c, card, x, y, st = {}) {
   c.restore();
 }
 
+// 🃏 Tray faces (owner 2026-11-08: "the hub for the deck still uses the old card — generate one with the new cards"):
+// the REAL parchment card, rendered once, cached per (card, size) and stepped down in halves so a 300px card stays crisp at ~60px.
+const _face = new Map();
+async function faceCanvas(card, w, h) {
+  w = Math.ceil(w / 8) * 8; h = Math.ceil(h / 8) * 8;   // quantised: fewer distinct sizes = more cache hits across layouts
+  const key = `${card.id}|${card.art || ''}|${w}x${h}`;
+  if (_face.has(key)) return _face.get(key);
+  const { createCanvas } = cv();
+  let cur = createCanvas(CW, CH), c = cur.getContext('2d');
+  await drawCard(c, card, 0, 0, { affordable: true });
+  // crop the transparent glow margin so the card fills its slot (drawCard paints into 6..CW-6 / 6..CH-6)
+  const sx = 4, sy = 4, sw = CW - 8, sh = CH - 8;
+  let cw0 = sw, ch0 = sh, src = cur, ox = sx, oy = sy;
+  const W = Math.max(8, Math.round(w)), H = Math.max(8, Math.round(h));
+  while (cw0 / 2 > W * 1.3) {
+    const nx = createCanvas(Math.round(cw0 / 2), Math.round(ch0 / 2)), nc = nx.getContext('2d'); nc.imageSmoothingEnabled = true; nc.imageSmoothingQuality = 'high';
+    nc.drawImage(src, ox, oy, cw0, ch0, 0, 0, nx.width, nx.height); src = nx; ox = 0; oy = 0; cw0 = nx.width; ch0 = nx.height;
+  }
+  const out = createCanvas(W, H), oc = out.getContext('2d'); oc.imageSmoothingEnabled = true; oc.imageSmoothingQuality = 'high';
+  oc.drawImage(src, ox, oy, cw0, ch0, 0, 0, W, H);
+  if (_face.size > 160) _face.delete(_face.keys().next().value);
+  _face.set(key, out); return out;
+}
+
 /** One card as a PNG buffer. */
 async function renderCardPng(card, st = {}) {
   const { createCanvas } = cv(); const cvs = createCanvas(CW, CH + 40); const c = cvs.getContext('2d');
@@ -270,4 +294,4 @@ async function renderCardIdleVideo(card, st = {}, scale = 1.5) {
   finally { try { fsx.rmSync(dir, { recursive: true, force: true }); } catch (e) {} }
 }
 
-module.exports = { renderCardIdleVideo, renderCardPng, renderCardPngScaled, renderHandPng, drawCard, artFor, paintSummonBackdrop, CW, CH };
+module.exports = { faceCanvas, renderCardIdleVideo, renderCardPng, renderCardPngScaled, renderHandPng, drawCard, artFor, paintSummonBackdrop, CW, CH };
