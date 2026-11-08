@@ -163,7 +163,7 @@ function sniffMediaMime(buf) {
 // 🐢 2026-11-08 (owner: "effects missing, wasn't an issue earlier"): the Node card used to be abandoned after a hard 6s and the plain Go card
 // (which has NO hit/miss/heal fx) was sent instead — on a busy/slow box every turn fell through. The fallback is a second Go call that is just as
 // slow, so waiting is strictly better. Budget matches the layers request ceiling; env-tunable.
-const NODE_CARD_BUDGET_MS = Math.max(6000, Number(process.env.NODE_CARD_BUDGET_MS) || 28000);
+const NODE_CARD_BUDGET_MS = Math.max(6000, Number(process.env.NODE_CARD_BUDGET_MS) || 14000);   // + Go fallback (<=10s) stays well under the engine's 45s command ceiling
 
 async function generateCombatImage(players, enemies, options = {}) {
     // 🎴 HUD v4 (2026-11-06): classic PvE battle cards are composed in Node from Go's HUD-less layers (new rank ribbon,
@@ -254,7 +254,8 @@ async function generateAnimatedCombatImage(players, enemies, options = {}) {
 // ⚡ Layers cache (2026-11-08 speed pass). In layers mode Go draws NO bars: HP only decides alive/dead, so the sprite/bg layers are identical for
 // every turn of a fight until someone dies/joins. Keying on the payload with HP/energy collapsed to an alive flag turns every repeat turn into a
 // 0ms hit instead of a 1-5s (10x slower box: 10-50s) Go render. In-flight identical requests share one promise. Kill switch: LAYERS_CACHE=0.
-const _layerCache = new Map(); const LAYER_CACHE_MAX = 24, LAYER_CACHE_TTL = 15 * 60 * 1000;
+const _layerCache = new Map(); const LAYER_CACHE_MAX = 6, LAYER_CACHE_TTL = 6 * 60 * 1000;   // small on purpose: the boxes have ~1GB RAM
+const _lowMem = () => process.memoryUsage().rss > (Number(process.env.LAYERS_CACHE_RSS_MB) || 620) * 1048576;
 // callers (skillVfx) reassign layers.cuts/anchors: hand each caller its own shell + array copies so the cached entry stays pristine
 const _cloneLayers = (r) => (r ? { ...r, anchors: (r.anchors || []).slice(), cuts: (r.cuts || []).slice() } : r);
 function _layerKey(payload) {
@@ -270,6 +271,7 @@ async function generateCombatLayers(players, enemies, options = {}) {
     if (process.env.LAYERS_CACHE === '0') return _fetchCombatLayers(payload);
     const key = _layerKey(payload), now = Date.now(), hit = _layerCache.get(key);
     if (hit && now - hit.at < LAYER_CACHE_TTL) { _layerCache.delete(key); _layerCache.set(key, hit); return hit.p.then(_cloneLayers); }   // LRU touch (resolved or in-flight)
+    if (_lowMem()) { _layerCache.clear(); return _fetchCombatLayers(payload); }   // memory pressure: serve uncached, drop everything held
     const p = _fetchCombatLayers(payload);
     const entry = { at: now, p }; _layerCache.set(key, entry);
     p.then((r) => { if (!r) _layerCache.delete(key); }, () => _layerCache.delete(key));
@@ -279,8 +281,14 @@ async function generateCombatLayers(players, enemies, options = {}) {
 async function _fetchCombatLayers(payload) {
     try {
         let body;
+        const t0 = Date.now();
         try { body = await goService.generateCombatLayers(payload); }
-        catch (e1) { await new Promise((r) => setTimeout(r, 400)); body = await goService.generateCombatLayers(payload); }   // one retry: a single slow/aborted render must not cost the fx card
+        catch (e1) {
+            // retry ONLY a fast failure (connection reset, 5xx). A timeout means the renderer is saturated: a second request just piles on and
+            // pushes the whole command past the engine's 45s ceiling (owner 2026-11-08: solo start timing out at 47-59s on a loaded box).
+            if (Date.now() - t0 > 3000 || /timeout|timed out|ECONNABORTED/i.test(String(e1 && e1.message))) throw e1;
+            await new Promise((r) => setTimeout(r, 400)); body = await goService.generateCombatLayers(payload);
+        }
         if (!body || !body.image || !body.sprites) return null;
         return {
             success: true,

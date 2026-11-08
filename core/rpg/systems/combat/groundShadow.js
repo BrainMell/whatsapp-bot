@@ -6,7 +6,7 @@
 // Needs only layers.cuts, so it works with the live Go renderer unchanged. Kill switch: NODE_SHADOW=0.
 const crypto = require('crypto');
 const { createCanvas, loadImage } = require('canvas');
-const cache = new Map(); const CACHE_MAX = 80;
+const cache = new Map(); const CACHE_MAX = 60;   // tiny records (a few numbers each)
 
 async function measure(cut, s) {
   const key = crypto.createHash('md5').update(cut.png).digest('hex') + ':' + Math.round(s * 100) + ':' + Math.round(cut.w) + 'x' + Math.round(cut.h);
