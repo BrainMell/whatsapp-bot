@@ -61,12 +61,22 @@ async function paintShadows(c, layers, s, skip) {
   if (process.env.NODE_SHADOW === '0' || !layers) return;
   const cuts = Array.isArray(layers.cuts) ? layers.cuts : [], anchors = Array.isArray(layers.anchors) ? layers.anchors : [];
   const done = new Set();
+  const anchorOf = (side, index) => anchors.find((x) => x && x.side === side && Number(x.index) === Number(index));
   for (const cut of cuts) {
     if (!cut || !cut.png || skip && skip(cut.side, cut.index)) continue;
     try {
-      const rec = await silhouette(cut, s), fx = (cut.x + cut.w / 2) * s + rec.footX, fy = (cut.y + cut.h) * s + rec.footY - 1 * s;
-      contact(c, fx, fy, cut.w * s, s);
-      c.save(); c.globalAlpha = MAX_ALPHA; c.drawImage(rec.cv, fx - rec.ox, fy - rec.oy); c.restore();
+      const rec = await silhouette(cut, s), an = anchorOf(cut.side, cut.index);
+      const fx = (cut.x + cut.w / 2) * s + rec.footX, feetY = (cut.y + cut.h) * s + rec.footY;
+      // ground line: Go's anchor feetY when present. A sprite whose lowest pixel sits well ABOVE that line is airborne (bat, ghost, flier):
+      // a cast silhouette would hang under the body, so it gets a small soft contact ellipse ON the ground, fainter the higher it floats.
+      const ground = an && Number.isFinite(Number(an.feetY)) ? Number(an.feetY) * s : feetY;
+      const air = ground - feetY, airborne = air > Math.max(14 * s, cut.h * s * 0.12);
+      if (airborne) contact(c, fx, ground - 1 * s, cut.w * s * 0.8, s, Math.max(0.35, 0.85 - air / (cut.h * s * 1.2)));
+      else {
+        const fy = feetY - 1 * s;   // grounded: trust the sprite's real soles
+        contact(c, fx, fy, cut.w * s, s);
+        c.save(); c.globalAlpha = MAX_ALPHA; c.drawImage(rec.cv, fx - rec.ox, fy - rec.oy); c.restore();
+      }
       done.add(cut.side + ':' + cut.index);
     } catch (e) { /* cosmetic */ }
   }
