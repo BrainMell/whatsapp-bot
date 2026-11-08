@@ -463,7 +463,7 @@ class GoImageService {
     try {
       const response = await this.client.post("/api/combat/summon-card.gif", data, {
         responseType: "arraybuffer",
-        timeout: 18000,
+        timeout: 90000, // summon GIF render needs 17-35s+ server-side; 18s aborted before the GIF existed
         headers: { "Content-Type": "application/json" },
       });
       const gif = Buffer.from(response.data);

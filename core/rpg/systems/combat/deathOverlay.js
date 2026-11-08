@@ -194,7 +194,7 @@ function encodeRawClip(m, outPath) {
       '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'baseline', '-crf', '24', '-threads', '2', '-movflags', '+faststart', '-an', outPath];
     const p = spawn(ffmpegBin(), args, { stdio: ['pipe', 'ignore', 'pipe'] });
     let err = ''; let done = false;
-    const to = setTimeout(() => { try { p.kill('SIGKILL'); } catch (e) {} }, 20000);
+    const to = setTimeout(() => { try { p.kill('SIGKILL'); } catch (e) {} }, 45000);
     p.stderr.on('data', (d) => { if (err.length < 4000) err += d; });
     p.stdin.on('error', () => {});   // EPIPE after early exit is fine
     p.on('error', (e) => { if (!done) { done = true; clearTimeout(to); reject(e); } });
