@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const { createCanvas, loadImage } = require('canvas');
 
 const SHEAR = 0.82;      // horizontal throw per unit of sprite height (light from upper-left → shadows fall right)
-const SQUASH = 0.17;     // ground-plane foreshortening: head lands this fraction of height below/in front of the feet line
+const LIFT = 0.075;      // shadow falls BEHIND the fighter: the head lands this fraction of height ABOVE the feet line (never below it — that read as floating)
 const MAX_ALPHA = 0.76;
 const cache = new Map(); const CACHE_MAX = 40;
 
@@ -23,19 +23,19 @@ async function silhouette(cut, s) {
   for (; bottom > 0; bottom--) { let hit = false; for (let x = 0; x < w; x += 2) if (px[(bottom * w + x) * 4 + 3] > 48) { hit = true; break; } if (hit) break; }
   let sx = 0, n = 0; for (let y = Math.max(0, bottom - Math.round(h * 0.05)); y <= bottom; y++) for (let x = 0; x < w; x++) if (px[(y * w + x) * 4 + 3] > 48) { sx += x; n++; }
   const footX = n ? sx / n - w / 2 : 0, footY = bottom + 1 - h;   // offsets from the cut's bottom-centre (footY<=0)
-  const padL = Math.ceil(w * 0.25), throwX = Math.ceil(h * SHEAR), padB = Math.ceil(h * SQUASH) + 14;
-  const SW = padL + w / 2 + throwX + w * 0.5 + 16, SH = Math.ceil(h * SQUASH) + padB + 8;
-  const sw = Math.ceil(SW), sh = Math.ceil(SH), ox = padL + Math.ceil(w / 2), oy = 8;   // feet origin inside the shadow sprite
-  // 1) project the silhouette onto the ground: X = u + SHEAR*|v|, Y = SQUASH*|v|  (u across, v up from the feet)
+  const padL = Math.ceil(w * 0.25), throwX = Math.ceil(h * SHEAR), padB = 14;
+  const SW = padL + w / 2 + throwX + w * 0.5 + 16, SH = Math.ceil(h * LIFT) + padB + 12;
+  const sw = Math.ceil(SW), sh = Math.ceil(SH), ox = padL + Math.ceil(w / 2), oy = Math.ceil(h * LIFT) + 6;   // feet origin inside the shadow sprite
+  // 1) project the silhouette onto the ground: X = u + SHEAR*|v|, Y = -LIFT*|v|  (u across, v up from the feet)
   const sil = createCanvas(sw, sh), sc = sil.getContext('2d');
-  // affine map [a b c d e f]: X = a*u + c*v + e ; Y = b*u + d*v + f  with v<0 above the feet → c=-SHEAR, d=-SQUASH
-  sc.setTransform(1, 0, -SHEAR, -SQUASH, ox, oy);
+  // affine map [a b c d e f]: X = a*u + c*v + e ; Y = b*u + d*v + f  with v<0 above the feet → c=-SHEAR, d=+LIFT
+  sc.setTransform(1, 0, -SHEAR, LIFT, ox, oy);
   sc.drawImage(img, -w / 2 - footX, -h - footY, w, h);   // feet (not the padded box edge) sit on the shadow origin
   sc.setTransform(1, 0, 0, 1, 0, 0);
   sc.globalCompositeOperation = 'source-in'; sc.fillStyle = 'rgb(10,6,16)'; sc.fillRect(0, 0, sw, sh);
   // 2) fade along the throw direction (dense at the feet → gone at the tip)
   sc.globalCompositeOperation = 'destination-in';
-  const gx = ox + h * SHEAR, gy = oy + h * SQUASH;
+  const gx = ox + h * SHEAR, gy = oy - h * LIFT;
   const g = sc.createLinearGradient(ox, oy, gx, gy);
   g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.55, 'rgba(0,0,0,0.62)'); g.addColorStop(1, 'rgba(0,0,0,0)');
   sc.fillStyle = g; sc.fillRect(0, 0, sw, sh);
@@ -49,10 +49,10 @@ async function silhouette(cut, s) {
 }
 
 function contact(c, fx, fy, w, s, alpha = 1) {
-  const rx = Math.max(16 * s, w * 0.42), ry = Math.max(4 * s, w * 0.075);
-  c.save(); c.translate(fx, fy); c.scale(1, ry / rx);
+  const rx = Math.max(18 * s, w * 0.46), ry = Math.max(6 * s, w * 0.095);
+  c.save(); c.translate(fx, fy - ry * 0.25); c.scale(1, ry / rx);
   const g = c.createRadialGradient(0, 0, 0, 0, 0, rx);
-  g.addColorStop(0, `rgba(8,5,12,${0.62 * alpha})`); g.addColorStop(0.5, `rgba(8,5,12,${0.34 * alpha})`); g.addColorStop(1, 'rgba(8,5,12,0)');
+  g.addColorStop(0, `rgba(8,5,12,${0.78 * alpha})`); g.addColorStop(0.5, `rgba(8,5,12,${0.46 * alpha})`); g.addColorStop(1, 'rgba(8,5,12,0)');
   c.fillStyle = g; c.beginPath(); c.arc(0, 0, rx, 0, Math.PI * 2); c.fill(); c.restore();
 }
 
