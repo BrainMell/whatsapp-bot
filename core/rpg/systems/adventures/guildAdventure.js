@@ -4743,17 +4743,27 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   const startTimeoutPromise = new Promise((_, reject) =>
     setTimeout(() => reject(new Error('Combat start image timeout (10s)')), 10000)
   );
-  const scene = await Promise.race([scenePromise, startTimeoutPromise]);
+  // 🔧 2026-11-08 (owner: solo quest froze twice after the restart — "already have an active
+  // Solo raid" zombie): the 10s start-scene guard REJECTED out of startCombat and killed
+  // nextStage mid-transition — first-turn timer never armed, watchdog never armed, the raid
+  // sat frozen and blocked the chat. The image is cosmetic: catch the guard, send the text
+  // intro below, and let the run continue.
+  let scene = null;
+  try {
+    scene = await Promise.race([scenePromise, startTimeoutPromise]);
+  } catch (startSceneErr) {
+    console.warn(`[Quest] ⚠️ combat start scene unavailable (${startSceneErr?.message || startSceneErr}) — text intro, run continues`);
+  }
 
   // Store background for consistency
-  if (scene.backgroundPath) {
+  if (scene && scene.backgroundPath) {
     state.backgroundPath = scene.backgroundPath;
   }
   // ⚔️ FIX 2026-10-24: stash the scene the player is CURRENTLY looking at so
   // the class-ultimate VFX (skillVfx) can reuse it as the pre-hit GIF base
   // instead of racing a fresh Go render mid-cast (which blew its 8s budget on
   // busy boxes and silently degraded the ultimate to a text line).
-  if (scene.success) {
+  if (scene && scene.success) {
     state.lastCombatScene = scene.buffer
       || (scene.imagePath && fs.existsSync(scene.imagePath) ? fs.readFileSync(scene.imagePath) : null);
     // 💡 RPG OPT PASS (2026-10-20): bounded send — the old mediaError catch
@@ -4795,7 +4805,7 @@ async function startCombat(sock, groq, encounter, sessionKey) {
     // Fallback to text if image fails
     try {
       await sock.sendMessage(state.chatId, {
-        text: scene.caption || "⚔️ Combat Started!",
+        text: (scene && scene.caption) || "⚔️ Combat Started!",
       });
     } catch (err) {
       console.error(
