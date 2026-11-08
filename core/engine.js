@@ -8667,6 +8667,23 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               console.log('🔪 [MurderMystery] leaver hook error (non-fatal):', _mmLeaveErr.message);
             }
 
+            // 🛡️ OWNER ADMIN SHIELD (2026-11-08): the bot owner can only be demoted by the group's creator. Anyone else demoting them is undone
+            // at once by every admin bot in the group. Fire-and-forget so the rest of the handler is never delayed. Kill switch OWNER_ADMIN_SHIELD=0.
+            if (action === "demote") {
+              try {
+                const { enforceOwnerAdmin } = require('./utils/ownerAdminGuard');
+                const { canonicalRankKey } = require('./utils/lidResolver');
+                const _same = (a, b) => {
+                  if (!a || !b) return false;
+                  const na = jidNormalizedUser(a), nb = jidNormalizedUser(b);
+                  if (na === nb) return true;
+                  try { const ka = canonicalRankKey(a), kb = canonicalRankKey(b); if (ka && kb && ka === kb) return true; } catch (e) { /* fall through */ }
+                  return false;
+                };
+                void enforceOwnerAdmin(sock, { id, participants, action, author }, groupMetadata, { isOwner: (j) => _isBotOwner(jidNormalizedUser(j)), same: _same });
+              } catch (e) { console.log('[ownerShield] hook failed:', e?.message || e); }
+            }
+
             // AUTO-UNDO MANUAL ACTIONS
             if (author && typeof author === 'string' && (action === "promote" || action === "demote" || action === "remove")) {
               const authorNormalized = jidNormalizedUser(author);
