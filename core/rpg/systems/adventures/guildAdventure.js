@@ -4941,7 +4941,7 @@ async function _deathClipForCardKill(state, defeated) {
   } catch (e) { console.warn('[SummonCards] death merge bake failed:', e && e.message || e); return null; }
 }
 // HUD data painted onto every death plate (see combatCardNode.paintChrome)
-function _deathChrome(state) { return { players: state.players || [], enemies: state.enemies || [], rank: state.dungeonRank, floor: state.isAbyss ? state.abyssFloor : 0 }; }
+function _deathChrome(state) { return { players: state.players || [], enemies: state.enemies || [], rank: state.dungeonRank, floor: state.isAbyss ? state.abyssFloor : 0, atkSeed: Number(state.turnCount) || 0, atkDir: 1 }; }
 async function _bakeDeathClip(state, e, i, excludeExtra, wantAtk) {
   const t0 = Date.now();
   try {

@@ -264,10 +264,10 @@ function classRecipeBase(cls, p, { IMPACT: I }) {
     // [0.05, I) — for DEATHATTACK_* recipes I (IMPACT from META) is 1.3 regular / 1.55 boss, so
     // there is room — then the element dissolve takes the sprite apart exactly as before.
     function deathAttackSet(kind, boss) {
-        const intro = [
-            L('slashes', { at: 0.05, n: 2, gap: 0.14, color: '#ffffff', mid: '#ffffff', len: 170, w: 12, angles: [-0.62, 0.5] }),
-            L('emit', { at: 0.3, dur: 0.55, pos: 'T', box: [70, 60], n: 16, life: 0.55, shape: 'spark', colors: ['#ffffff', '#ffe9b0'], v: [0, -110], vr: [150, 60], g: 220 }),
-        ];   // (no wash track here — overlayOnly bakes strip wash/flash layers)
+        // ⚔️ 2026-11-08: the multi-claw 'slashes' intro is GONE (owner: "made a new weird attack instead of building on the basic attack").
+        // The intro window is kept as dead air here — deathOverlay paints the REAL basic-attack animation (hitFx.drawStrikeAnim,
+        // same variant/colour as the static card) onto those first frames, so the death opens on the attack that actually killed it.
+        const intro = [];
         return [...intro, ...deathSet(kind, boss)];
     }
     const R = {

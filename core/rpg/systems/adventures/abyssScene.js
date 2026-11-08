@@ -1942,12 +1942,7 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
             pillLocal(ctx, W / 2, 34, `TURN ${turnNum}`, 'bold 13px sans-serif', 10,
                 'rgba(139,26,43,0.94)', 'rgba(245,240,225,0.85)', '#F5F0E1');
         }
-        await roomScene.drawHudPanel(ctx, {
-            name: opts.playerName || 'You',
-            hp: live.hp, maxHp: live.maxHp,
-            energy: live.energy, maxEnergy: live.maxEnergy,
-            state: opts.hudState || 'ABYSS',
-        });
+        await drawAbyssHub(ctx, plan, live, opts);
         return;
     }
 
@@ -2157,12 +2152,34 @@ async function drawCombatScene(ctx, plan, live, opts = {}) {
     }
 
     // ── the default-encounter HUD panel (bottom-left, real ui assets) ──
-    await roomScene.drawHudPanel(ctx, {
-        name: opts.playerName || 'You',
-        hp: live.hp, maxHp: live.maxHp,
-        energy: live.energy, maxEnergy: live.maxEnergy,
-        state: opts.hudState || 'ABYSS',
-    });
+    await drawAbyssHub(ctx, plan, live, opts);
+}
+
+// 🎴 NEW HUB (owner brief #13): the Abyss now wears the same parchment player hub as the battle cards instead of the legacy
+// player_state.png panel. Portrait = the player's own sprite, mirrored ONLY if the scene draws it mirrored (same orientation as
+// the on-field character). ABYSS_HUD_NEW=0 restores the old panel.
+async function drawAbyssHub(ctx, plan, live, opts) {
+    if (process.env.ABYSS_HUD_NEW === '0') {
+        return roomScene.drawHudPanel(ctx, { name: opts.playerName || 'You', hp: live.hp, maxHp: live.maxHp, energy: live.energy, maxEnergy: live.maxEnergy, state: opts.hudState || 'ABYSS' });
+    }
+    try {
+        const hud = require('../combat/combatHud');
+        await hud.preload();
+        const s = W / hud.DW;
+        let portrait = null;
+        const file = plan && plan.player && plan.player.file;
+        if (file) {
+            let img = await loadBg(file, path.join(RPGASSET, 'characters', 'clean')).catch(() => null);
+            if (!img) img = await loadBg(file, path.join(RPGASSET, 'characters')).catch(() => null);
+            if (img) {
+                if (plan.player.flip) { const m = createCanvas(img.width, img.height), mc = m.getContext('2d'); mc.translate(img.width, 0); mc.scale(-1, 1); mc.drawImage(img, 0, 0); portrait = m; }
+                else portrait = img;
+            }
+        }
+        hud.drawPlayerHud(ctx, { name: safeName(opts.playerName || 'You', 16), hp: live.hp, maxHp: live.maxHp, energy: live.energy, maxEnergy: live.maxEnergy, level: opts.playerLevel, portrait }, s, 18, H / s - 104);
+    } catch (e) {
+        await roomScene.drawHudPanel(ctx, { name: opts.playerName || 'You', hp: live.hp, maxHp: live.maxHp, energy: live.energy, maxEnergy: live.maxEnergy, state: opts.hudState || 'ABYSS' });
+    }
 }
 
 // ── render entry: START | TURN — same return shape as the Go path so the
@@ -2210,6 +2227,7 @@ async function renderAbyssCombat(state, { phase = 'START', turnInfo = null, turn
             activeActor,
             hitEnemy,
             playerName: (state.players && state.players[0] && state.players[0].name) || 'You',
+            playerLevel: (state.players && state.players[0] && state.players[0].level) || undefined,
             hudState: phase === 'START' ? 'ABYSS' : `TURN ${(turnInfo && turnInfo.turnNumber) || ''}`.trim(),
             playerFx: __pfx, enemyFx: __efx, packFx: __qfx,
         });

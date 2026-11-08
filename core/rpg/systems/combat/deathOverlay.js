@@ -63,7 +63,7 @@ function keyOf(picks, kind, boss, atk) {
   // 💡 v2: full-length dissolve overlays (v1 keys hold 1.0s truncated bakes) · ⚔️ v3: atk —
   // basic-attack kills bake the animated slash intro (DEATHATTACK_* recipes), so the same
   // sprite now has TWO distinct overlays per (kind, boss).
-  h.update(`${kind}:${boss ? 1 : 0}:${atk ? 'atk' : 'plain'}:v3`);
+  h.update(`${kind}:${boss ? 1 : 0}:${atk ? 'atk' : 'plain'}:v4`);
   return h.digest('hex').slice(0, 20);
 }
 
@@ -174,6 +174,7 @@ async function streamComposite(m, stdin) {
   for (const f of loaded) {
     if (!f) break;
     c.drawImage(plate, 0, 0);
+    if (m.intro) { try { require('./hitFx').drawStrikeAnim(c, m.intro, n / (m.fps || 15)); } catch (e) {} }   // ⚔️ real basic-attack animation, then the dissolve
     c.drawImage(f, m.ox, m.oy);
     const buf = cv.toBuffer('raw');
     if (!stdin.write(buf)) await new Promise((r) => stdin.once('drain', r));
@@ -224,6 +225,7 @@ async function compositeFrames(m, outDir) {
       try { f = await loadImage(path.join(m.framesDir, `f${String(i).padStart(3, '0')}.png`)); } catch (e) { break; }
       if (!f) break;
       c.drawImage(plate, 0, 0);
+      if (m.intro) { try { require('./hitFx').drawStrikeAnim(c, m.intro, i / (m.fps || 15)); } catch (e) {} }
       c.drawImage(f, m.ox, m.oy);
       fs.writeFileSync(path.join(outDir, `c${String(i).padStart(3, '0')}.jpg`), cv.toBuffer('image/jpeg', { quality: 0.88 }));
       n++;
@@ -249,13 +251,24 @@ async function renderFast({ layers, picks, kind, boss, deadIdx, atk, chrome }) {
   const kx = VW / W0, ky = VH / H0;
   const ox = Math.round(((bx0 + bx1) / 2) * kx - LOCAL.x * (VW / 1024)), oy = Math.round(ft * ky - LOCAL.feet * (VH / 687));
   const plate = await scenePlate(layers, new Set(pk.map((p) => p.idx)), deadIdx, chrome);
+  // ⚔️ strike spec: the killing basic attack, same variant / element / crit as the static card (seed = the turn counter)
+  let intro = null;
+  if (atk && process.env.DEATH_STRIKE_ANIM !== '0') {
+    try {
+      let t0y = 1e9; for (const p of pk) t0y = Math.min(t0y, p.y);
+      const cs = chrome || {}, hitFx = require('./hitFx');
+      const bodyH = (ft - t0y) * ky, sc = VW / 1024;
+      intro = { variant: hitFx.pickVariant({ attackSeed: cs.atkSeed, attackerIndex: 0, targetIndex: pk[0].idx, damage: 0 }), cx: ((bx0 + bx1) / 2) * kx, cy: (ft - (ft - t0y) * 0.5) * ky,
+        h: bodyH, dir: cs.atkDir || 1, el: cs.atkElement && cs.atkElement !== 'physical' ? cs.atkElement : null, crit: !!cs.atkCrit, s: sc };
+    } catch (e) { intro = null; }
+  }
   const tPlate = Date.now() - t0;
   const id = crypto.randomBytes(5).toString('hex');
   const outPath = path.join(ov.dir, `out_${id}.mp4`);
   // ⚡ v5: canvas blits the composite, raw frames stream into a pure encode
   let mp4 = null;
   try {
-    mp4 = await encodeRawClip({ plate, framesDir: ov.dir, n: ov.n, fps: ov.fps, ox, oy }, outPath);
+    mp4 = await encodeRawClip({ plate, framesDir: ov.dir, n: ov.n, fps: ov.fps, ox, oy, intro }, outPath);
   } catch (e) { console.warn('[DeathOv] stream encode failed:', e && e.message || e); }
   try { fs.unlinkSync(outPath); } catch (e) {}
   const tEnc = Date.now() - t0;
@@ -263,7 +276,7 @@ async function renderFast({ layers, picks, kind, boss, deadIdx, atk, chrome }) {
   console.log(`[DeathOv] ${atk ? 'ATK+' : ''}${kind}${boss ? '_BOSS' : ''} ${mp4.length}B overlay ${tOv}ms plate ${tPlate - tOv}ms enc ${tEnc - tPlate}ms total ${Date.now() - t0}ms`);
   // ⚡ raw materials for the kill-turn merge: plate + overlay frame dir +
   // placement lets the card merge re-composite in ONE raw-stream encode.
-  return { mp4, thumb: plate, mats: { plate, framesDir: ov.dir, n: ov.n, fps: ov.fps, ox, oy } };
+  return { mp4, thumb: plate, mats: { plate, framesDir: ov.dir, n: ov.n, fps: ov.fps, ox, oy, intro } };
 }
 
 module.exports = { renderFast, getOverlay, scenePlate, streamComposite, encodeRawClip, compositeFrames, _ROOT: ROOT };

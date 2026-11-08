@@ -63,9 +63,10 @@ function slashPattern(variant, c, cx, cy, h, dir, el, crit, s) {
 }
 function impactBurst(variant, c, cx, cy, dir, el, crit, s) {
   const col = el || '#ffffff';
-  const r1 = (variant === 1 ? 58 : variant === 3 ? 66 : crit ? 62 : 40) * s, r2 = (crit ? 36 : 22) * s;
+  // (PvP playtest 2026-11-07: the burst swallowed the whole sprite — trimmed so the knock-back double image stays readable)
+  const r1 = (variant === 1 ? 40 : variant === 3 ? 46 : crit ? 46 : 28) * s, r2 = (crit ? 24 : 13) * s;
   c.save(); c.translate(cx - dir * (variant === 2 ? 10 : 0) * s, cy + (variant === 3 ? 6 : 0) * s);
-  c.globalCompositeOperation = 'lighter'; star(c, r1, a2(col, 0.55)); star(c, r2, 'rgba(255,255,255,0.9)'); c.globalCompositeOperation = 'source-over';
+  c.globalCompositeOperation = 'lighter'; star(c, r1, a2(col, 0.55)); star(c, r2, 'rgba(255,255,255,0.78)'); c.globalCompositeOperation = 'source-over';
   c.fillStyle = a2(col, 0.95);
   const n = variant === 3 ? 18 : 12;
   for (let i = 0; i < n; i++) { const a = i / n * TAU + 0.2, r = ((variant === 3 ? 58 : 46) + (i * 37 % 40)) * s; c.fillRect(Math.cos(a) * r - 1.5 * s, Math.sin(a) * r - 1.5 * s, (2 + (i % 3)) * s, (2 + (i % 3)) * s); }
@@ -304,7 +305,7 @@ async function drawHitReaction(c, layers, anchors, act, s) {
   const healAmt = Math.floor(Number(act.heal) || 0);
   const label = miss ? 'MISS' : (heal ? '+' + healAmt : (dmg > 0 ? String(dmg) : ''));
   if (label) {
-    const fy = an.feetY * s - h - 46 * s, size = (crit ? 40 : 30) * s;
+    const fy = an.feetY * s - h - 46 * s, size = (crit ? 46 : miss ? 40 : 38) * s;
     c.save(); c.translate(cx + dir * 6 * s, fy); c.rotate(crit ? -0.05 : 0); c.font = `bold ${size}px HudCinzel, serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round'; c.lineWidth = 6 * s; c.strokeStyle = '#1b0f05';
     c.strokeText(label, 0, 0); c.fillStyle = miss ? '#e6e2d6' : (heal ? '#8ff0ad' : (crit ? '#ffd24a' : '#ff8a70')); c.fillText(label, 0, 0);
     if (crit && !miss && !heal) { c.font = `bold ${13 * s}px HudCinzel, serif`; c.lineWidth = 4 * s; c.strokeText('CRITICAL', 0, -size * 0.72); c.fillStyle = '#fff2b0'; c.fillText('CRITICAL', 0, -size * 0.72); }
@@ -312,4 +313,28 @@ async function drawHitReaction(c, layers, anchors, act, s) {
   }
 }
 
-module.exports = { drawHitReaction, slashPattern, impactBurst, slash, star, a2, streak, pickVariant, drawItemEmblem, dustPuff, missPlaque, VARIANTS };
+/** ⚔️ ANIMATED basic attack for death clips: the SAME slash composition + impact burst the static hit card uses
+ *  (variant = pickVariant(seed), element colour, crit size), driven by an envelope over t seconds.
+ *  spec = {variant, cx, cy, h, dir, el, crit, s}. Draws nothing once t is past the window. */
+function drawStrikeAnim(c, spec, t) {
+  const T0 = 0.05, GROW = 0.16, HOLD = 0.42, END = 0.8;
+  if (t < T0 || t > END) return;
+  const k = t < T0 + GROW ? (t - T0) / GROW : 1;
+  const ease = 1 - Math.pow(1 - k, 3);
+  const fade = t < HOLD ? 1 : Math.max(0, 1 - (t - HOLD) / (END - HOLD));
+  c.save();
+  c.translate(spec.cx, spec.cy); c.scale(0.72 + 0.33 * ease, 0.72 + 0.33 * ease); c.translate(-spec.cx, -spec.cy);   // swings in
+  c.globalAlpha = Math.min(1, ease * 1.1) * fade;
+  slashPattern(spec.variant, c, spec.cx, spec.cy, spec.h, spec.dir, spec.el, spec.crit, spec.s);
+  c.restore();
+  const bt = t - (T0 + 0.1);
+  if (bt > 0) {          // impact burst lands just after the blade
+    const bk = Math.min(1, bt / 0.14);
+    c.save(); c.translate(spec.cx, spec.cy); c.scale(0.5 + 0.7 * bk, 0.5 + 0.7 * bk); c.translate(-spec.cx, -spec.cy);
+    c.globalAlpha = Math.max(0, 1 - bt / 0.42);
+    impactBurst(spec.variant, c, spec.cx, spec.cy, spec.dir, spec.el, spec.crit, spec.s);
+    c.restore();
+  }
+}
+
+module.exports = { drawHitReaction, slashPattern, impactBurst, slash, star, a2, streak, drawStrikeAnim, pickVariant, drawItemEmblem, dustPuff, missPlaque, VARIANTS };
