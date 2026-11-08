@@ -188,6 +188,21 @@ function buildAnimationAction(turnInfo, options = {}) {
         }
     }
     if (targetIndex < 0) targetSide = null;
+    // 🔧 side-agnostic retry: a target object missing its isEnemy/isSummon flag was searched on the wrong side and dropped, which
+    // silently removed the hit / miss effect. Look the same object up on every roster before giving up.
+    if (target && targetSide === null) {
+      for (const [side, arr] of [['enemy', enemies], ['player', players], ['summon', summons]]) {
+        const ix = arr.findIndex((e) => e === target || (e && e.name === target.name));
+        if (ix >= 0) { targetSide = side; targetIndex = ix; break; }
+      }
+    }
+    // a MISS that still has no resolvable target: dodge on the first living unit of the opposite side so the miss is always shown
+    if (!targetSide && (turnInfo.missed || actionName.includes('miss'))) {
+      const alive = (arr) => arr.findIndex((e) => e && !e.isDead && !e.justDied && ((e.currentHP ?? e.stats?.hp ?? 0) > 0));
+      const opp = attackerSide === 'enemy' ? players : enemies, oppSide = attackerSide === 'enemy' ? 'player' : 'enemy';
+      const vi = alive(opp);
+      if (vi >= 0) { targetSide = oppSide; targetIndex = vi; }
+    }
 
     // 🔴 HIT FLASH FALLBACK (owner 2026-10-23: "the red aura should be in regular
     // dungeons and raids too"): the turn dealt real damage but no explicit target
@@ -708,6 +723,7 @@ async function generateCombatScene(players, enemies, phase, options = {}) {
 }
 
 module.exports = {
+    buildAnimationAction,
     renderCombatStart,
     renderCombatTurn,
     renderCombatEnd,

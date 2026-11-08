@@ -6181,9 +6181,14 @@ async function performAction(sock, player, action, sessionKey) {
       if (noDamageReason) {
         resultMsg += noDamageReason;
         turnInfo.action = { name: "Failed Attack" };
+        turnInfo.target = resolvedTarget;
       } else if (wasEvaded) {
         resultMsg += `💨 *MISS!* ${combatTargetIcon(resolvedTarget)} ${resolvedTarget.name} evaded the attack.`;
         turnInfo.action = { name: "Missed Attack" };
+        // 🔧 2026-11-08 (owner: "the miss effect is just gone"): a miss never set a target, so buildAnimationAction
+        // had nobody to draw the dodge on and returned null -> plain board. The evader rides to the renderer now.
+        turnInfo.target = resolvedTarget;
+        turnInfo.missed = true;
       } else {
         resolvedTarget.stats.hp -= damage;
         resolvedTarget.currentHP = Math.max(0, resolvedTarget.stats.hp);
