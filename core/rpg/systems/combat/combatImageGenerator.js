@@ -160,6 +160,11 @@ function sniffMediaMime(buf) {
     return 'image/png';
 }
 
+// 🐢 2026-11-08 (owner: "effects missing, wasn't an issue earlier"): the Node card used to be abandoned after a hard 6s and the plain Go card
+// (which has NO hit/miss/heal fx) was sent instead — on a busy/slow box every turn fell through. The fallback is a second Go call that is just as
+// slow, so waiting is strictly better. Budget matches the layers request ceiling; env-tunable.
+const NODE_CARD_BUDGET_MS = Math.max(6000, Number(process.env.NODE_CARD_BUDGET_MS) || 28000);
+
 async function generateCombatImage(players, enemies, options = {}) {
     // 🎴 HUD v4 (2026-11-06): classic PvE battle cards are composed in Node from Go's HUD-less layers (new rank ribbon,
     // compact portrait + capsule plate, summon deck tray). Any failure/timeout falls straight through to the Go card.
@@ -169,7 +174,7 @@ async function generateCombatImage(players, enemies, options = {}) {
         try {
             const nodePvp = await Promise.race([
                 require('./combatCardNode').renderNodePvpCard(players, enemies, options, { buildPayload, generateCombatLayers }),
-                new Promise((resolve) => setTimeout(() => resolve(null), 6000)),
+                new Promise((resolve) => setTimeout(() => resolve(null), NODE_CARD_BUDGET_MS)),
             ]);
             if (nodePvp && nodePvp.success) return nodePvp;
         } catch (hudErr) { console.warn('[CombatHud] node PvP card failed, using Go card:', hudErr.message); }
@@ -179,7 +184,7 @@ async function generateCombatImage(players, enemies, options = {}) {
         try {
             const node = await Promise.race([
                 require('./combatCardNode').renderNodeCard(players, enemies, options, { buildPayload, generateCombatLayers }),
-                new Promise((resolve) => setTimeout(() => resolve(null), 6000)),
+                new Promise((resolve) => setTimeout(() => resolve(null), NODE_CARD_BUDGET_MS)),
             ]);
             if (node && node.success) return node;
         } catch (hudErr) { console.warn('[CombatHud] node card failed, using Go card:', hudErr.message); }
@@ -246,16 +251,36 @@ async function generateAnimatedCombatImage(players, enemies, options = {}) {
  * @param {Array} enemies
  * @param {object} options - { combatType, summons, backgroundPath, rank, floor, hud, focusSide, focusIndex }
  */
+// ⚡ Layers cache (2026-11-08 speed pass). In layers mode Go draws NO bars: HP only decides alive/dead, so the sprite/bg layers are identical for
+// every turn of a fight until someone dies/joins. Keying on the payload with HP/energy collapsed to an alive flag turns every repeat turn into a
+// 0ms hit instead of a 1-5s (10x slower box: 10-50s) Go render. In-flight identical requests share one promise. Kill switch: LAYERS_CACHE=0.
+const _layerCache = new Map(); const LAYER_CACHE_MAX = 24, LAYER_CACHE_TTL = 15 * 60 * 1000;
+// callers (skillVfx) reassign layers.cuts/anchors: hand each caller its own shell + array copies so the cached entry stays pristine
+const _cloneLayers = (r) => (r ? { ...r, anchors: (r.anchors || []).slice(), cuts: (r.cuts || []).slice() } : r);
+function _layerKey(payload) {
+    const alive = (u) => ({ ...u, hp: undefined, currentHP: (Number(u.currentHP) > 0 ? 1 : 0), maxHp: undefined, energy: undefined, maxEnergy: undefined });
+    return JSON.stringify({ ...payload, players: payload.players.map(alive), enemies: payload.enemies.map(alive), summons: (payload.summons || []).map(alive) });
+}
 async function generateCombatLayers(players, enemies, options = {}) {
+    let payload;
+    try { payload = buildPayload(players, enemies, options); } catch (e) { return null; }
+    payload.hud = String(options.hud || 'none');
+    payload.vfx = 'layers';
+    if (options.focusSide) { payload.focusSide = String(options.focusSide); payload.focusIndex = Math.floor(Number(options.focusIndex) || 0); }
+    if (process.env.LAYERS_CACHE === '0') return _fetchCombatLayers(payload);
+    const key = _layerKey(payload), now = Date.now(), hit = _layerCache.get(key);
+    if (hit && now - hit.at < LAYER_CACHE_TTL) { _layerCache.delete(key); _layerCache.set(key, hit); return hit.p.then(_cloneLayers); }   // LRU touch (resolved or in-flight)
+    const p = _fetchCombatLayers(payload);
+    const entry = { at: now, p }; _layerCache.set(key, entry);
+    p.then((r) => { if (!r) _layerCache.delete(key); }, () => _layerCache.delete(key));
+    while (_layerCache.size > LAYER_CACHE_MAX) _layerCache.delete(_layerCache.keys().next().value);
+    return p.then(_cloneLayers);
+}
+async function _fetchCombatLayers(payload) {
     try {
-        const payload = buildPayload(players, enemies, options);
-        payload.hud = String(options.hud || 'none');
-        payload.vfx = 'layers';
-        if (options.focusSide) {
-            payload.focusSide = String(options.focusSide);
-            payload.focusIndex = Math.floor(Number(options.focusIndex) || 0);
-        }
-        const body = await goService.generateCombatLayers(payload);
+        let body;
+        try { body = await goService.generateCombatLayers(payload); }
+        catch (e1) { await new Promise((r) => setTimeout(r, 400)); body = await goService.generateCombatLayers(payload); }   // one retry: a single slow/aborted render must not cost the fx card
         if (!body || !body.image || !body.sprites) return null;
         return {
             success: true,

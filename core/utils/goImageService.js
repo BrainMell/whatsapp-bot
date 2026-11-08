@@ -371,7 +371,7 @@ class GoImageService {
       const baseURL = this.client.defaults.baseURL;
       const response = await axios.post(baseURL + '/api/combat?fmt=jpeg', data, {
         responseType: 'json',
-        timeout: 20000,
+        timeout: Math.max(10000, Number(process.env.LAYERS_TIMEOUT_MS) || 25000),   // slow-box headroom (was 20s)
         headers: { 'Content-Type': 'application/json' },
       });
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
