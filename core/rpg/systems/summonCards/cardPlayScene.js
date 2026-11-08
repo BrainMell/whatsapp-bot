@@ -203,11 +203,11 @@ async function renderCardPlayScene(a) {
     // ability banner: parchment ribbon slides in at the top during the hover
     const kB = Math.min(seg(t, 0.30, 0.40), 1 - seg(t, 0.74, 0.84));
     if (kB > 0) {
-      const bw = 330 * s, bh = 38 * s, bx = W / 2 - bw / 2, by = 22 * s - (1 - easeOut(kB)) * 70 * s;
+      const bw = 286 * s, bh = 38 * s, bx = W / 2 - bw / 2 - 24 * s, by = 22 * s - (1 - easeOut(kB)) * 70 * s;
       c.save(); c.globalAlpha = clamp(kB * 1.5); const P = require('../shared/parchment');
       c.shadowColor = 'rgba(0,0,0,0.5)'; c.shadowBlur = 8 * s; c.shadowOffsetY = 3 * s; P.tornPath(c, bx, by, bw, bh, { amp: 1.6 * s, step: 9 * s, seed: 5, notch: 14 * s, notchLeft: 14 * s }); c.fillStyle = '#e6d19b'; c.fill(); c.shadowBlur = 0;
       c.clip(); c.drawImage(P.makePaper(bw, bh, { seed: 21, tone: 'cream', stains: 0 }), bx, by); c.restore();
-      c.save(); c.globalAlpha = clamp(kB * 1.5); c.fillStyle = '#2c1a0c'; c.font = `${19 * s}px SCCinzelD, SCCinzel, serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(card.abilityName || card.name).toUpperCase(), W / 2, by + bh / 2 + 1 * s); c.restore();
+      c.save(); c.globalAlpha = clamp(kB * 1.5); c.fillStyle = '#2c1a0c'; c.font = `${19 * s}px SCCinzelD, SCCinzel, serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(card.abilityName || card.name).toUpperCase(), W / 2 - 24 * s, by + bh / 2 + 1 * s); c.restore();
     }
     c.restore();
     fs.writeFileSync(path.join(dir, `f${String(f).padStart(3, '0')}.jpg`), fc.toBuffer('image/jpeg', { quality: 0.86 }));
