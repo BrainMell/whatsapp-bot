@@ -25,15 +25,22 @@ const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${
 const rnd = (seed) => { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); };
 function bez(p0, p1, p2, k) { const u = 1 - k; return { x: u * u * p0.x + 2 * u * k * p1.x + k * k * p2.x, y: u * u * p0.y + 2 * u * k * p1.y + k * k * p2.y }; }
 
-function encode(dir) {
-  return new Promise((resolve, reject) => {
-    const out = path.join(dir, 'out.mp4');
-    const p = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', String(FPS), '-i', path.join(dir, 'f%03d.jpg'),
-      '-vf', `scale=${OUT_W}:-2:flags=lanczos`, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '24', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out]);
-    let err = ''; p.stderr.on('data', (d) => { err += d; });
+/** Raw BGRA frames are piped straight into ffmpeg (no per-frame JPEG encode / disk round-trip) so x264 runs in parallel with drawing. */
+function startEncoder(dir, W, H) {
+  const out = path.join(dir, 'out.mp4');
+  const p = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'bgra', '-s', `${W}x${H}`, '-framerate', String(FPS), '-i', 'pipe:0',
+    '-vf', `scale=${OUT_W}:-2:flags=bicubic`, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '24', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out]);
+  let err = ''; p.stderr.on('data', (d) => { err += d; });
+  const done = new Promise((resolve, reject) => {
     p.on('error', reject);
+    p.stdin.on('error', () => { /* surfaced through the close code */ });
     p.on('close', (code) => (code === 0 ? resolve(fs.readFileSync(out)) : reject(new Error('ffmpeg ' + code + ' ' + err.slice(0, 200)))));
   });
+  done.catch(() => {});
+  return {
+    async write(buf) { if (!p.stdin.write(buf)) await new Promise((r) => p.stdin.once('drain', r)); },
+    end() { p.stdin.end(); return done; },
+  };
 }
 
 /**
@@ -105,7 +112,9 @@ async function renderCardPlayScene(a) {
   const label = info.missed ? 'MISS' : (dmg > 0 ? '-' + dmg : (heal > 0 ? '+' + heal : String(card.abilityName || '').toUpperCase()));
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cps-'));
   const fc = createCanvas(W, H), c = fc.getContext('2d');
+  const enc = startEncoder(dir, W, H);
 
+  let lastRaw = null, ribbon = null, cardShadow = null;
   for (let f = 0; f < N; f++) {
     const t = f / (N - 1);
     // phases
@@ -154,7 +163,11 @@ async function renderCardPlayScene(a) {
       // card burns away (kOut): shrink + fade, sparks emitted below
       const burn = easeOut(kOut); alpha *= 1 - burn; sc *= 1 + 0.08 * burn;
       c.save(); c.globalAlpha = clamp(alpha); c.translate(pos.x, pos.y); c.rotate(ang); c.scale(sc, sc);
-      c.shadowColor = 'rgba(0,0,0,0.6)'; c.shadowBlur = 16 * s; c.shadowOffsetY = 8 * s;
+      if (!cardShadow) {   // blurred drop shadow baked once (canvas shadowBlur on every frame was the hottest line of the clip)
+        const pd = Math.ceil(30 * s), SW = Math.ceil(fw + pd * 2), SH = Math.ceil(fh + pd * 2), big = SW + 40; cardShadow = createCanvas(SW, SH); const sc2 = cardShadow.getContext('2d');
+        sc2.shadowColor = 'rgba(0,0,0,0.6)'; sc2.shadowBlur = 16 * s; sc2.shadowOffsetX = big; sc2.shadowOffsetY = 8 * s; sc2.drawImage(cardImg0, pd - big, pd, fw, fh); cardShadow._pd = pd;
+      }
+      c.drawImage(cardShadow, -fw / 2 - cardShadow._pd, -fh / 2 - cardShadow._pd);
       c.drawImage(cardImg, -fw / 2, -fh / 2, fw, fh);
       if (kOut > 0) { c.globalCompositeOperation = 'lighter'; c.fillStyle = rgba(el, 0.5 * kOut); c.fillRect(-fw / 2, -fh / 2, fw, fh); }
       c.restore();
@@ -168,7 +181,7 @@ async function renderCardPlayScene(a) {
     if (kReveal > 0 && art && kFx < 1.01) {
       const k = easeOut(kReveal), fade = 1 - seg(t, 0.78, 0.9), sz = (art.height > 0 ? 150 : 150) * s * (0.8 + 0.3 * k), asp = art.width / art.height;
       const ah = sz, aw = sz * asp, ay = hover.y - fh * 0.2 - k * 60 * s, ax = hover.x + (tp.x > cp.x ? -1 : 1) * 0;
-      c.save(); c.globalAlpha = clamp(k * fade); c.shadowColor = rgba(el, 0.9); c.shadowBlur = 24 * s; c.imageSmoothingEnabled = art.width > 256; c.drawImage(art, ax - aw / 2, ay - ah / 2, aw, ah); c.restore();
+      c.save(); c.globalAlpha = clamp(k * fade); { const gr = c.createRadialGradient(ax, ay, Math.min(aw, ah) * 0.15, ax, ay, Math.max(aw, ah) * 0.75); gr.addColorStop(0, rgba(el, 0.55)); gr.addColorStop(1, rgba(el, 0)); c.fillStyle = gr; c.fillRect(ax - aw, ay - ah, aw * 2, ah * 2); } c.imageSmoothingEnabled = art.width > 256; c.drawImage(art, ax - aw / 2, ay - ah / 2, aw, ah); c.restore();
     }
     // --- the effect ---
     if (kFx > 0) {
@@ -204,17 +217,21 @@ async function renderCardPlayScene(a) {
     const kB = Math.min(seg(t, 0.30, 0.40), 1 - seg(t, 0.74, 0.84));
     if (kB > 0) {
       const bw = 286 * s, bh = 38 * s, bx = W / 2 - bw / 2 - 24 * s, by = 22 * s - (1 - easeOut(kB)) * 70 * s;
-      c.save(); c.globalAlpha = clamp(kB * 1.5); const P = require('../shared/parchment');
-      c.shadowColor = 'rgba(0,0,0,0.5)'; c.shadowBlur = 8 * s; c.shadowOffsetY = 3 * s; P.tornPath(c, bx, by, bw, bh, { amp: 1.6 * s, step: 9 * s, seed: 5, notch: 14 * s, notchLeft: 14 * s }); c.fillStyle = '#e6d19b'; c.fill(); c.shadowBlur = 0;
-      c.clip(); c.drawImage(P.makePaper(bw, bh, { seed: 21, tone: 'cream', stains: 0 }), bx, by); c.restore();
-      c.save(); c.globalAlpha = clamp(kB * 1.5); c.fillStyle = '#2c1a0c'; c.font = `${19 * s}px SCCinzelD, SCCinzel, serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(card.abilityName || card.name).toUpperCase(), W / 2 - 24 * s, by + bh / 2 + 1 * s); c.restore();
+      if (!ribbon) {   // torn parchment ribbon + title are static: paint once, blit per frame (was rebuilt every frame)
+        const pad = 14 * s; ribbon = createCanvas(Math.ceil(bw + pad * 2), Math.ceil(bh + pad * 2)); const rc = ribbon.getContext('2d'); const P = require('../shared/parchment');
+        rc.save(); rc.shadowColor = 'rgba(0,0,0,0.5)'; rc.shadowBlur = 8 * s; rc.shadowOffsetY = 3 * s; P.tornPath(rc, pad, pad, bw, bh, { amp: 1.6 * s, step: 9 * s, seed: 5, notch: 14 * s, notchLeft: 14 * s }); rc.fillStyle = '#e6d19b'; rc.fill(); rc.shadowBlur = 0;
+        rc.clip(); rc.drawImage(P.makePaper(bw, bh, { seed: 21, tone: 'cream', stains: 0 }), pad, pad); rc.restore();
+        rc.fillStyle = '#2c1a0c'; rc.font = `${19 * s}px SCCinzelD, SCCinzel, serif`; rc.textAlign = 'center'; rc.textBaseline = 'middle'; rc.fillText(String(card.abilityName || card.name).toUpperCase(), pad + bw / 2, pad + bh / 2 + 1 * s);
+        ribbon._pad = pad;
+      }
+      c.save(); c.globalAlpha = clamp(kB * 1.5); c.drawImage(ribbon, bx - ribbon._pad, by - ribbon._pad); c.restore();
     }
     c.restore();
-    fs.writeFileSync(path.join(dir, `f${String(f).padStart(3, '0')}.jpg`), fc.toBuffer('image/jpeg', { quality: 0.86 }));
+    lastRaw = fc.toBuffer('raw'); await enc.write(lastRaw);
   }
   // hold the last frame a beat so the result is readable
-  for (let h = 0; h < 8; h++) fs.copyFileSync(path.join(dir, `f${String(N - 1).padStart(3, '0')}.jpg`), path.join(dir, `f${String(N + h).padStart(3, '0')}.jpg`));
-  try { const mp4 = await encode(dir); console.log(`[CardScene] ${card.id} ${fromPile ? 'pile' : 'slot ' + (handIdx + 1)} ${mp4.length}B in ${Date.now() - t0}ms`); return mp4; }
+  for (let h = 0; h < 8; h++) await enc.write(lastRaw);
+  try { const mp4 = await enc.end(); console.log(`[CardScene] ${card.id} ${fromPile ? 'pile' : 'slot ' + (handIdx + 1)} ${mp4.length}B in ${Date.now() - t0}ms`); return mp4; }
   finally { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { /* tmp */ } }
 }
 
