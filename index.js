@@ -479,6 +479,47 @@ app.post('/notify-deploy', async (req, res) => {
     }
 });
 
+// ============================================================
+// 🧪 QA send endpoint (2026-11-08 speed test, owner-sanctioned).
+// Token-guarded; file-path based so heavy rendering stays out of
+// the bot process. POST { jid, kind: image|video|text, path, caption }
+// with header x-qa-token.
+app.post('/qa-send', async (req, res) => {
+    try {
+        if ((req.headers['x-qa-token'] || '') !== 'qa-oat-2026-x7') {
+            return res.status(403).json({ ok: false, reason: 'bad-token' });
+        }
+        const efs = require('fs');
+        const engine = require('./core/engine');
+        const sock = engine.getSock ? engine.getSock() : null;
+        if (!sock) return res.status(503).json({ ok: false, reason: 'socket-not-ready' });
+        const { jid, kind, path: fp, caption } = req.body || {};
+        if (!jid || !String(jid).endsWith('@g.us')) return res.status(400).json({ ok: false, reason: 'bad-jid' });
+        if (!['image', 'video', 'text'].includes(kind)) return res.status(400).json({ ok: false, reason: 'bad-kind' });
+        let content;
+        let bytes = 0;
+        if (kind === 'text') {
+            content = { text: String(caption || '[QA]').slice(0, 300) };
+        } else {
+            if (!fp || !efs.existsSync(fp)) return res.status(400).json({ ok: false, reason: 'no-file' });
+            const buf = efs.readFileSync(fp);
+            bytes = buf.length;
+            if (bytes > 30 * 1024 * 1024) return res.status(413).json({ ok: false, reason: 'too-big' });
+            content = kind === 'image'
+                ? { image: buf, caption: String(caption || '').slice(0, 160) }
+                : { video: buf, caption: String(caption || '').slice(0, 160) };
+        }
+        const t0 = Date.now();
+        await sock.sendMessage(jid, content);
+        const sendMs = Date.now() - t0;
+        console.log(`🧪 [QASend] kind=${kind} bytes=${bytes} sendMs=${sendMs}`);
+        return res.json({ ok: true, sendMs, bytes });
+    } catch (e) {
+        console.error('QA send error:', e.message);
+        return res.status(500).json({ ok: false, error: e.message });
+    }
+});
+
 app.listen(port, '0.0.0.0', () => {
   console.log(`📡 Keep-alive server listening on port ${port}`);
 });
