@@ -454,16 +454,122 @@ class GoImageService {
 
   /*
    * Generate a dedicated summon-card effect as a real GIF. No MP4 transcode.
+   *
+   * ⚡ 2026-11-08 SUMMON GIF CACHE (owner forwarded the Claude hand-off note:
+   * "The summon GIF takes 17-35s to render on the Go side. A per-card cache would
+   * make repeat summons instant"): disk + in-flight cache in front of the Go render,
+   * the same proven pattern as convertCardImage's _cardConvCache. KEY = sha1 over the
+   * FULL canonical request (cardId + the whole CombatRequest this endpoint receives):
+   * the rendered frames BAKE IN the target's HP-drain animation, the caster's HP/energy
+   * bars, every sprite and the damage flash — so only a pixel-identical combat state may
+   * hit the cache. A coarser per-card key would serve another fight's HP bars, sprites
+   * and names, and we don't ship fake pixels. What this buys: repeat summons in the SAME
+   * state are instant (disk survives restarts), concurrent identical requests share ONE
+   * render instead of stacking on the render semaphore, and QA/retest loops stop paying
+   * 17-35s every time. Cache is version-stamped (bump SUMMON_GIF_CACHE_VERSION when the
+   * Go art changes) and size-capped (evict-oldest). Kill switch: SUMMON_GIF_CACHE=0.
    */
   async generateSummonCardGIF(data) {
     if (!data || !data.cardId || !data.action) {
       throw new TypeError("Summon-card GIF requires cardId and combat action data");
     }
+    if (String(process.env.SUMMON_GIF_CACHE || "") === "0") {
+      return this._renderSummonCardGIFRemote(data);
+    }
+    const crypto = require("crypto");
+    const fs = require("fs");
+    const path = require("path");
+    if (!global._summonGifCache) {
+      global._summonGifCache = {
+        dir: path.resolve(process.cwd(), "tmp", "summongif"),
+        inflight: new Map(), // cachePath -> Promise<Buffer>
+        hits: 0,
+        misses: 0,
+        // keep the directory under ~200MB by evicting oldest files first
+        // (GIFs are ~1.4MB → ~140 states cached; the legacy trio is ifrit/leviathan/shiva)
+        evictOld(dirPath) {
+          try {
+            const files = fs
+              .readdirSync(dirPath)
+              .filter((f) => f.endsWith(".gif"))
+              .map((f) => {
+                const p = path.join(dirPath, f);
+                const st = fs.statSync(p);
+                return { p, size: st.size, mtime: st.mtimeMs };
+              });
+            let total = files.reduce((s, f) => s + f.size, 0);
+            const CAP = 200 * 1024 * 1024;
+            if (total <= CAP) return;
+            files.sort((a, b) => a.mtime - b.mtime);
+            for (const f of files) {
+              if (total <= CAP) break;
+              try {
+                fs.unlinkSync(f.p);
+                total -= f.size;
+              } catch {}
+            }
+          } catch {}
+        },
+      };
+      try {
+        fs.mkdirSync(global._summonGifCache.dir, { recursive: true });
+      } catch {}
+    }
+    const cs = global._summonGifCache;
+    const keySrc = JSON.stringify({ v: 2, cardId: data.cardId, req: data });
+    const cachePath = path.join(cs.dir, crypto.createHash("sha1").update(keySrc).digest("hex") + ".gif");
+
+    // 1) disk cache hit -> instant (GIF magic re-checked so a corrupt file never ships)
+    try {
+      const st = fs.statSync(cachePath);
+      if (st.size > 1024) {
+        const buf = fs.readFileSync(cachePath);
+        const sig = buf.length >= 6 ? buf.subarray(0, 6).toString("ascii") : "";
+        if (buf.length > 1024 && (sig === "GIF87a" || sig === "GIF89a")) {
+          cs.hits++;
+          console.log(`[GoService] summon GIF cache HIT: ${buf.length}B instant (${cs.hits}H/${cs.misses}M)`);
+          return buf;
+        }
+      }
+    } catch {}
+
+    // 2) in-flight dedupe -> concurrent identical requests share ONE render
+    if (cs.inflight.has(cachePath)) {
+      console.log("[GoService] summon GIF cache: joining in-flight render");
+      return cs.inflight.get(cachePath);
+    }
+
+    const t0 = Date.now();
+    const job = (async () => {
+      const gif = await this._renderSummonCardGIFRemote(data);
+      try {
+        fs.writeFileSync(cachePath, gif);
+        cs.evictOld(cs.dir);
+      } catch {}
+      cs.misses++;
+      console.log(
+        `[GoService] summon GIF cache MISS: rendered ${gif.length}B in ${((Date.now() - t0) / 1000).toFixed(1)}s (${cs.hits}H/${cs.misses}M)`,
+      );
+      return gif;
+    })();
+    cs.inflight.set(cachePath, job);
+    try {
+      return await job;
+    } finally {
+      cs.inflight.delete(cachePath);
+    }
+  }
+
+  /*
+   * The uncached remote render (90s ceiling — the GIF needs 17-35s+ server-side;
+   * the old 18s client timeout aborted before the GIF ever existed).
+   */
+  async _renderSummonCardGIFRemote(data) {
     await this._animAcquire();
     try {
       const response = await this.client.post("/api/combat/summon-card.gif", data, {
         responseType: "arraybuffer",
-        timeout: 90000, // summon GIF render needs 17-35s+ server-side; 18s aborted before the GIF existed
+        timeout: 90000,
         headers: { "Content-Type": "application/json" },
       });
       const gif = Buffer.from(response.data);
