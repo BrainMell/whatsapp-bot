@@ -268,6 +268,23 @@ async function drawHitReaction(c, layers, anchors, act, s) {
       const g = c.createRadialGradient(cx, cy, 6 * s, cx, cy, h * 0.8); g.addColorStop(0, 'rgba(120,255,170,0.42)'); g.addColorStop(1, 'rgba(120,255,170,0)'); c.fillStyle = g; c.fillRect(cx - h, cy - h, h * 2, h * 2);
     } else if (act.damage > 0) { drawCut(tint('rgba(255,40,30,0.42)'), dir * 15 * s, -2 * s, dir * 0.075, 0.95); }
   } else if (heal) { const g = c.createRadialGradient(cx, cy, 6 * s, cx, cy, h * 0.8); g.addColorStop(0, 'rgba(120,255,170,0.42)'); g.addColorStop(1, 'rgba(120,255,170,0)'); c.fillStyle = g; c.fillRect(cx - h, cy - h, h * 2, h * 2); }
+  else if (act.kind === 'guard') {
+    // 🛡️ FX-PASS 2026-11-08 (owner: "Guard → shield glow on the guarder"): the defend turn paints
+    // the statusAuras ward — arcane floor ring + rim-lit hex ward over the body — plus a DEFENDING
+    // tag so the stance reads even on a crowded board.
+    try {
+      const auras = require('./statusAuras');
+      const gw = Math.max(30, Number(an.w) || 90) * s, gh = Math.max(40, Number(an.h) || 120) * s;
+      const gb = { cx: cx, fy: an.feetY * s, w: gw, h: gh, top: an.feetY * s - gh, mid: an.feetY * s - gh * 0.5 };
+      auras.GROUND.shield(c, gb, s);
+      auras.FRONT.shield(c, gb, s, Math.random, { value: 0 });
+      c.save(); c.translate(cx, an.feetY * s - gh - 40 * s); c.rotate(-0.04);
+      c.font = `bold ${15 * s}px HudCinzel, serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
+      c.lineWidth = 4 * s; c.strokeStyle = 'rgba(0,0,0,0.8)'; c.strokeText('DEFENDING', 0, 0);
+      c.fillStyle = '#bfe0ff'; c.fillText('DEFENDING', 0, 0);
+      c.restore();
+    } catch (e) { /* cosmetic */ }
+  }
   else if (miss) {
     // ── #2 the DODGE — round 10 redesign (owner: "the miss attack looks like shit").
     // What was wrong: the old still left Go's sprite standing ON the swing line with the
@@ -299,13 +316,24 @@ async function drawHitReaction(c, layers, anchors, act, s) {
     drawCut(tint('rgba(255,40,30,0.42)'), dir * 15 * s, -2 * s, dir * 0.075, 0.95);       // knocked-back red copy (double image)
     slashPattern(variant, c, cx, cy, h, dir, el, crit, s);                                // #4 the cycled composition
     impactBurst(variant, c, cx, cy, dir, el, crit, s);
+    if (act.ult) {
+      // 💀 FX-PASS 2026-11-08: enemy ultimate impact flair (owner: "Enemy ults (Annihilation) →
+      // proper impact flair") — dark nova ring + wider second burst + streak fan so an ult turn
+      // never reads like a basic hit. Colours follow the element (Annihilation resolves 'dark').
+      const ucol = el || '#b78af0';
+      c.save(); c.globalCompositeOperation = 'lighter'; star(c, (crit ? 64 : 52) * s, a2(ucol, 0.5)); c.restore();
+      c.save(); c.strokeStyle = a2(ucol, 0.85); c.lineWidth = 3.5 * s; c.shadowColor = a2(ucol, 0.9); c.shadowBlur = 12 * s;
+      c.beginPath(); c.ellipse(cx, an.feetY * s, Math.max(60, an.w || cut.w) * s * 1.35, Math.max(60, an.w || cut.w) * s * 0.42, 0, 0, TAU); c.stroke(); c.restore();
+      for (let i = 0; i < 5; i++) streak(c, cx + (i - 2) * 26 * s * dir, cy - 34 * s + i * 16 * s, (110 + i * 18) * s, 5 * s, ucol, 0.7 - i * 0.1);
+      for (let i = 0; i < 10; i++) { const ua = -0.4 + i * 0.35, ur = (52 + ((i * 29) % 44)) * s; c.fillStyle = a2(ucol, 0.9); c.fillRect(cx + Math.cos(ua) * ur * dir, cy + Math.sin(ua) * ur * 0.7, 2.6 * s, 2.6 * s); }
+    }
   }
   // damage / miss / heal number floating above the head
   // 🔧 heals read the HEAL amount (act.heal) — using act.damage showed "+0" on heal turns
   const healAmt = Math.floor(Number(act.heal) || 0);
   const label = miss ? 'MISS' : (heal ? '+' + healAmt : (dmg > 0 ? String(dmg) : ''));
   if (label) {
-    const fy = an.feetY * s - h - 46 * s, size = (crit ? 46 : miss ? 40 : 38) * s;
+    const fy = an.feetY * s - h - 46 * s, size = (crit ? 46 : miss ? 40 : act.ult ? 44 : 38) * s;
     c.save(); c.translate(cx + dir * 6 * s, fy); c.rotate(crit ? -0.05 : 0); c.font = `bold ${size}px HudCinzel, serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round'; c.lineWidth = 6 * s; c.strokeStyle = '#1b0f05';
     c.strokeText(label, 0, 0); c.fillStyle = miss ? '#e6e2d6' : (heal ? '#8ff0ad' : (crit ? '#ffd24a' : '#ff8a70')); c.fillText(label, 0, 0);
     if (crit && !miss && !heal) { c.font = `bold ${13 * s}px HudCinzel, serif`; c.lineWidth = 4 * s; c.strokeText('CRITICAL', 0, -size * 0.72); c.fillStyle = '#fff2b0'; c.fillText('CRITICAL', 0, -size * 0.72); }

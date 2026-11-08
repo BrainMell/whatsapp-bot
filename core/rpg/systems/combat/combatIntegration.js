@@ -147,10 +147,13 @@ function buildAnimationAction(turnInfo, options = {}) {
     if (!turnInfo || !turnInfo.action) return null;
     const actionName = String(turnInfo.action.name || '').toLowerCase();
 
-    // Skip non-actionable turns
-    if (['rest', 'flee', 'defend', 'charging', 'charge'].some(s => actionName.includes(s))) {
-        return null;
-    }
+    // Skip non-actionable turns. 🔧 FX-PASS 2026-11-08 (owner: "static effects missing"): the old
+    // substring filter killed every skill whose NAME merely CONTAINED a keyword — "Full Rest|ore"
+    // matched 'rest', so Full Restore heals silently lost the green glow, the +number and even the
+    // turn marker. Word-boundary match now; Defend is no longer skipped — it becomes a guard action
+    // (kind:'guard') so the card paints the shield ward on the guarder.
+    if (/\b(rest|flee|charging|charge)\b/.test(actionName)) return null;
+    const isGuard = /\b(defend|defends|defending|guard|guards|guarding)\b/.test(actionName);
 
     // Resolve attacker side + index
     const actor = turnInfo.actor;
@@ -171,6 +174,21 @@ function buildAnimationAction(turnInfo, options = {}) {
         attackerIndex = players.findIndex(p => p === actor || p.name === actor.name);
     }
     if (attackerIndex < 0) attackerSide = null;
+
+    // 🛡️ FX-PASS 2026-11-08: a Defend turn IS actionable for the card painter — the shield ward
+    // lands on the guarder themself (owner: "Guard → shield glow on the guarder").
+    if (isGuard) {
+        if (!attackerSide || attackerIndex < 0) return null;
+        return {
+            attackerSide, attackerIndex,
+            targetSide: attackerSide, targetIndex: attackerIndex,
+            skillName: String(turnInfo.action.name || 'Defend'),
+            element: 'none', vfx: '',
+            damage: 0, isCrit: false, missed: false, heal: 0,
+            kind: 'guard',
+            attackSeed: Math.max(0, Math.floor(Number(turnInfo.turnNumber) || 0)),
+        };
+    }
 
     // Resolve target side + index
     const target = turnInfo.target;
@@ -235,11 +253,21 @@ function buildAnimationAction(turnInfo, options = {}) {
     else if (/holy|light|smite|divine|sanctif/i.test(nameLower)) element = 'holy';
     else if (/heal|cure|mend|regen/i.test(nameLower)) element = 'none';
 
+    // 💀 FX-PASS 2026-11-08: enemy ULTIMATE flair (owner: "Enemy ults (Annihilation) → proper
+    // impact flair"). Monster ults ride action.name (monsterSkills 'ultimate' = "Annihilation");
+    // tag them so the card painter scales the impact up and paints the nova ring.
+    const isUlt = /annihilat|obliterat|cataclysm|apocalyps|devour|judgement|judgment/i.test(actionName);
+    if (isUlt && element === 'physical') element = 'dark';
+
     // Determine damage/heal
     const damage = Math.max(0, Math.floor(Number(turnInfo.damage) || 0));
     const heal = Math.max(0, Math.floor(Number(turnInfo.healing) || 0));
     const isCrit = Boolean(turnInfo.isCrit);
-    const missed = Boolean(turnInfo.missed) || actionName.includes('miss');
+    // 🔧 FX-PASS 2026-11-08 (owner: T52/T54/T38 misses showed no dodge): some miss turns carry the
+    // miss only in the war-log text (the action name stays "Quick Shot" etc.) — read actionLog too,
+    // word-boundary safe ("dismiss" can never match).
+    const missed = Boolean(turnInfo.missed) || /\bmiss(es|ed)?\b|\bdodge(d|s|ing)?\b/.test(actionName) ||
+        (Array.isArray(turnInfo.actionLog) && turnInfo.actionLog.some((l) => /\bmiss(es|ed)?\b|\bdodge(d|s|ing)?\b/.test(String(l))));
 
     // 🎒 #3 (owner work-order 2026-11-07): consumable turns ride the item's effect
     // family so the card painter can give every consumable type its own emblem.
@@ -256,6 +284,7 @@ function buildAnimationAction(turnInfo, options = {}) {
         damage,
         isCrit,
         missed,
+        ult: isUlt,
         heal,
         itemKind: itemEffect || undefined,
         attackSeed: Math.max(0, Math.floor(Number(turnInfo.turnNumber) || 0)),
