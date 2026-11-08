@@ -143,6 +143,7 @@ async function scenePlate(layers, dyingIdx, deadIdx, chrome) {
   const __dead = deadIdx instanceof Set ? deadIdx : new Set();
   const cuts = (layers.cuts || []).filter((x) => x && x.png && !(String(x.side) === 'enemy' && (dyingIdx.has(Math.floor(Number(x.index) || 0)) || __dead.has(Math.floor(Number(x.index) || 0)))));
   cuts.sort((a, b) => (Number(a.y) + Number(a.h)) - (Number(b.y) + Number(b.h)));
+  try { c.save(); c.scale(kx, ky); await require('./groundShadow').paintShadows(c, { cuts, anchors: [] }, 1); c.restore(); } catch (e) { /* cosmetic */ }   // 2.5D cast shadows under the survivors (same painter as the cards)
   for (const x of cuts) { try { c.drawImage(await loadImage(Buffer.from(x.png, 'base64')), x.x * kx, x.y * ky, x.w * kx, x.h * ky); } catch (e) {} }
   // 🎞️ same HUD chrome as the card scenes (bars of the survivors, rank chip, player hub) — uniform in every death clip
   if (chrome && process.env.DEATH_CHROME !== '0') {

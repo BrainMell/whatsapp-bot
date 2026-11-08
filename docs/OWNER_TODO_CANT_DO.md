@@ -26,3 +26,10 @@ Everything below needs the real boxes, real sprites or your decision. Code is on
 - **Death-clip HUD parity (DONE in Node)**: death plates now carry the same chrome as card scenes (`combatCardNode.paintChrome`: survivor bars, rank chip, player hub); card+death is a 0.35s xfade. Kill switches `DEATH_CHROME=0`, `CLIP_XFADE=0`. Death clips whose baked HP snapshot differs are re-rendered at kill time (~1s, overlay cache).
 
 - **PvP card-play scene (DONE)**: `PVP_CARD_SCENE=0` disables. **Hit effect without a cutout (DONE)**: slash/impact/number now draw on the anchor even if the target cutout is missing.
+
+## 2026-11-08 speed + fx + shadow pass (Claude)
+- **Why fx cards vanished on a slow box:** `generateCombatImage` abandoned the Node card after a hard 6s and sent the plain Go card (no hit/miss/heal fx). Budget is now `NODE_CARD_BUDGET_MS` (default 28s); layers axios timeout `LAYERS_TIMEOUT_MS` (default 25s); one retry on a failed layers call.
+- **Layers cache** (`LAYERS_CACHE=0` disables): sprites/bg layers don't depend on HP (Go draws no bars in layers mode), so the key collapses HP/energy to an alive flag. Repeat turns = 0ms; identical in-flight requests share one render. QA: `scripts/qa_layers_cache.js`.
+- **2.5D shadows now painted in Node** (`core/rpg/systems/combat/groundShadow.js`, `NODE_SHADOW=0` disables): silhouette projected onto the ground (flattened, sheared away from an upper-left light, faded to the tip, contact patch at the true feet). Used by PvE card, PvP card and death plates. Works with the live Go renderer unchanged — **no Go deploy needed**. If a Go build still bakes the old round blob into `bg`, apply `docs/go_patches/side_scroller_shadow.patch` or drop the Go shadow so they don't double. Harness: `scripts/qa_ground_shadow.js`.
+- **Card-play scene** ~1385ms -> ~950ms locally (raw-pipe ffmpeg, cached ribbon + card shadow sprite).
+- **Not done / can't from here:** WhatsApp upload time (box1 uplink ~2x slower than box2) is the dominant live cost per the speed test — that is network, not code. Summon GIF Go render is 17-35s server-side; per-card result caching is the lever if you want it instant.

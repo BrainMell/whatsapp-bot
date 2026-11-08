@@ -48,6 +48,7 @@ async function renderNodeCard(players, enemies, options, api) {
   const W = layers.w || 1024, H = layers.h || 687, s = W / hud.DW;
   const cv = createCanvas(W, H), c = cv.getContext('2d');
   c.drawImage(await loadImage(layers.bg), 0, 0, W, H);
+  try { await require('./groundShadow').paintShadows(c, layers, s); } catch (e) { /* cosmetic */ }   // 2.5D cast shadows (owner: not round blobs)
   const anchors = Array.isArray(layers.anchors) ? layers.anchors : [];
   const act = options.action || null;
   // turn marker (golden ellipse under the acting unit, under the sprites)
@@ -162,6 +163,7 @@ async function renderNodePvpCard(players, enemies, options, api) {
   const W = layers.w || 1024, H = layers.h || 687, s = W / hud.DW;
   const cv = createCanvas(W, H), c = cv.getContext('2d');
   c.drawImage(await loadImage(layers.bg), 0, 0, W, H);
+  try { await require('./groundShadow').paintShadows(c, layers, s); } catch (e) { /* cosmetic */ }
   const anchors = Array.isArray(layers.anchors) ? layers.anchors : [];
   const act = options.action || null, turn = act ? Math.max(0, Number(act.attackerIndex) || 0) : -1;
   const aOf = (i) => anchors.find((x) => x.side === 'player' && x.index === i);
