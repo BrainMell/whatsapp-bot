@@ -20,10 +20,16 @@ async function measure(cut, s) {
   const span = (y0, y1) => { let lo = w, hi = -1; for (let y = Math.max(0, y0); y <= Math.min(h - 1, y1); y++) for (let x = 0; x < w; x++) if (A(x, y)) { if (x < lo) lo = x; if (x > hi) hi = x; } return hi >= lo ? [lo, hi] : null; };
   const feet = span(bottom - Math.max(3, Math.round(h * 0.10)), bottom) || [0, w - 1];
   const body = span(Math.round(h * 0.25), Math.round(h * 0.7)) || feet;
+  // centre of mass of the whole sprite (alpha-weighted x): where the weight actually is. A lopsided stance (one foot out, one raised) must not drag
+  // the shadow sideways, so the centre is the mass centre clamped INTO the feet span, and the half-width grows just enough to cover both feet.
+  let mx = 0, mn = 0; for (let y = 0; y <= bottom; y += 2) for (let x = 0; x < w; x += 2) if (A(x, y)) { mx += x; mn++; }
+  const mass = mn ? mx / mn : (feet[0] + feet[1]) / 2;
+  const cx = Math.min(feet[1], Math.max(feet[0], mass));
+  const reach = Math.max(cx - feet[0], feet[1] - cx) * 2 + 1;
   const rec = {
-    footX: (feet[0] + feet[1]) / 2 - w / 2,          // centre of the STANCE (offset from the cut's centre line)
+    footX: cx - w / 2,                               // shadow centre (offset from the cut's centre line)
     footY: bottom + 1 - h,                           // lowest visible pixel (<=0 offset from the cut's bottom edge)
-    stance: Math.max(8, feet[1] - feet[0] + 1),      // width the feet cover
+    stance: Math.max(8, reach),                      // width needed to cover both feet from that centre
     bodyW: Math.max(8, body[1] - body[0] + 1),
   };
   cache.set(key, rec); while (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value);
