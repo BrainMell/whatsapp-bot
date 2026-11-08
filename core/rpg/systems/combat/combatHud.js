@@ -231,7 +231,26 @@ function capsule(c, x, y, w, h, pct, kind, label, s, rtl) {
 function drawUnitBar(c, a, u, s = 1) {
   const w = Math.max(70, Math.min(120, (a.w || 90) * 0.9)) * s, h = (u.isBoss ? 11 : 8) * s, x = a.x * s - w / 2, y = (a.feetY - (a.h || 120)) * s - 16 * s - (Number(u.yOff) || 0) * s;
   capsuleThin(c, x, y, w, h, u.maxHp > 0 ? u.hp / u.maxHp : 0, u.isBoss ? '#c0392b' : (u.friendly ? '#3fae5a' : '#d2552e'), s);
-  c.font = `bold ${12 * s}px sans-serif`; c.textBaseline = 'bottom'; shadowText(c, String(u.name || ''), a.x * s, y - 2 * s, '#fbf4e2', 'center');
+  // 💀 fresh-wound segment (round 2 "Fix it": the reference clip's dead giveaway was "neither HP bar
+  // visibly moves") — paint the chunk the current turn just carved out of THIS bar as a hatched hot
+  // segment over [hp, hp+justLost], so a single glance shows the bar dropping. justLost = 0 → nothing.
+  const lost = Math.max(0, Math.floor(Number(u.justLost) || 0));
+  if (lost > 0 && u.maxHp > 0) {
+    const pctNow = Math.max(0, Math.min(1, u.hp / u.maxHp)), pctOld = Math.max(0, Math.min(1, (u.hp + lost) / u.maxHp));
+    const x1 = x + w * pctNow, x2 = x + w * pctOld;
+    if (x2 - x1 > 1.5 * s) {
+      c.save(); rr(c, x, y, w, h, h / 2); c.clip();
+      c.fillStyle = 'rgba(255,120,60,0.85)'; c.fillRect(x1, y, x2 - x1, h);
+      c.strokeStyle = 'rgba(255,224,170,0.9)'; c.lineWidth = 1 * s;
+      for (let hx = x1; hx < x2; hx += 3.2 * s) { c.beginPath(); c.moveTo(hx, y + h); c.lineTo(hx + h * 0.7, y); c.stroke(); }
+      c.restore();
+    }
+  }
+  if (u.hitFlash) {  // 🌊 AoE victim rim pulse — "this bar was hit this turn"
+    rr(c, x - 1.6 * s, y - 1.6 * s, w + 3.2 * s, h + 3.2 * s, (h + 3.2 * s) / 2);
+    c.save(); c.lineWidth = 2 * s; c.strokeStyle = 'rgba(255,255,255,0.75)'; c.shadowColor = 'rgba(255,255,255,0.8)'; c.shadowBlur = 6 * s; c.stroke(); c.restore();
+  }
+  if (u.noName !== true) { c.font = `bold ${12 * s}px sans-serif`; c.textBaseline = 'bottom'; shadowText(c, String(u.name || ''), a.x * s, y - 2 * s, '#fbf4e2', 'center'); }  // round 2b: skipped when it would collide with the neighbouring bar's name
 }
 function capsuleThin(c, x, y, w, h, pct, col, s) {
   pct = Math.max(0, Math.min(1, pct)); rr(c, x, y, w, h, h / 2); c.fillStyle = 'rgba(12,8,4,0.85)'; c.fill();

@@ -56,7 +56,21 @@ async function renderNodeCard(players, enemies, options, api) {
     if (a) { c.save(); c.translate(a.x * s, a.feetY * s); c.scale(1, 0.28); const g = c.createRadialGradient(0, 0, 4, 0, 0, 62 * s); g.addColorStop(0, 'rgba(255,214,102,0.85)'); g.addColorStop(1, 'rgba(255,214,102,0)'); c.fillStyle = g; c.beginPath(); c.arc(0, 0, 62 * s, 0, Math.PI * 2); c.fill(); c.restore(); }
   }
   for (const a of anchors) { const fx = unitFx(a.side, a.index, players, enemies); if (fx) auras.drawAuras(c, a, fx, s, 'ground'); }
+  // 💀 ULT AOE SPLASH — round 2 (owner 2026-11-08 "Fix it" on the orb-blast reference): a monster
+  // ultimate (Annihilation, type:'aoe') hits the WHOLE party, so the card shows it. Cinematic split:
+  // the far blast field floods the scene UNDER the sprites (units stay solid — the reference's
+  // flaw 4 "unit vanishes under the blast" can't happen), then the blast energy (rings, debris,
+  // streaks) crosses OVER the field, and every OTHER living unit on the target side takes its own
+  // splash. Everything paints UNDER the overhead bars and the player plate, so HUD text stays crisp
+  // (the reference's double-exposed ghosting can't happen here), and everything is strictly gated
+  // on act.ult + real damage (no stray glows without a backing event).
+  if (act && act.ult) {
+    try { require('./hitFx').drawUltNova(c, W, H, act, anchors, s, 'back'); } catch (e) { /* cosmetic */ }
+  }
   c.drawImage(await loadImage(layers.sprites), 0, 0, W, H);
+  if (act && act.ult) {
+    try { const __fx = require('./hitFx'); await __fx.drawAoeSplash(c, layers, anchors, act, players, enemies, s); __fx.drawUltNova(c, W, H, act, anchors, s, 'front'); } catch (e) { /* cosmetic */ }
+  }
   // JRPG-style hit reaction on the target: knock-back red double image + slash + impact star + damage number
   try { await require('./hitFx').drawHitReaction(c, layers, anchors, act, s); } catch (e) { /* cosmetic */ }
   // overhead unit bars — v6.1 RESTORED (owner 2026-11-07: "both are gone now instead of the one,
@@ -65,14 +79,33 @@ async function renderNodeCard(players, enemies, options, api) {
   // legacy nameplate pills stay stripped server-side via hud:"none-clean". A unit with status
   // badges lifts its bar above the badge row so the two never collide. Raw rosters feed the bars
   // (payload strips statusEffects, and HP lives on the same live objects).
+  // 💀 round 2: bars VISIBLY move — the primary target's bar carries the fresh-wound segment
+  // (hp -> hp+damage, hatched hot), and every AoE victim's bar pulses a white rim this turn.
+  // Round 2b: nameplates never collide on crowded rosters — same-side bars paint left→right and
+  // a name that would overlap the previous one is skipped (the bar itself always draws).
+  const __rows = [];
   for (const a of anchors) {
     if (a.side !== 'player' && a.side !== 'enemy') continue;
     const u = a.side === 'enemy' ? enemies[a.index] : players[a.index];
     if (!u || u.isDead || u.justDied) continue;
-    const hp = Number(u.currentHP ?? (u.stats && u.stats.hp) ?? 0); if (hp <= 0) continue;
+    if ((Number(u.currentHP ?? (u.stats && u.stats.hp) ?? 0)) <= 0) continue;
+    __rows.push({ a, u });
+  }
+  __rows.sort((p, q) => (p.a.side === q.a.side ? p.a.x - q.a.x : p.a.side === 'player' ? -1 : 1));
+  const __nameEnd = { player: -1e9, enemy: -1e9 };
+  for (const { a, u } of __rows) {
+    const hp = Number(u.currentHP ?? (u.stats && u.stats.hp) ?? 0);
     const maxHp = Number(u.maxHp ?? (u.stats && u.stats.maxHp) ?? 0);
     const fxCount = Array.isArray(u.statusEffects) ? u.statusEffects.filter((e) => e && e.icon).length : 0;
-    hud.drawUnitBar(c, a, { name: u.name, hp, maxHp, isBoss: u.isBoss, friendly: a.side === 'player', yOff: fxCount ? 26 : 0 }, s);
+    const realDmg = act && !act.missed ? Math.floor(Number(act.damage) || 0) : 0;
+    const isT = realDmg > 0 && a.side === act.targetSide && a.index === (Number(act.targetIndex) || 0);
+    const isAoEV = act && act.ult && act.aoe && realDmg > 0 && a.side === act.targetSide;
+    c.font = `bold ${12 * s}px sans-serif`;   // measure with the EXACT font drawUnitBar draws with
+    const nameW = c.measureText(String(u.name || '')).width;
+    const noName = a.x * s - nameW / 2 < __nameEnd[a.side] - 2 * s;   // any kiss = skip
+    __nameEnd[a.side] = Math.max(__nameEnd[a.side], a.x * s + nameW / 2);
+    hud.drawUnitBar(c, a, { name: u.name, hp, maxHp, isBoss: u.isBoss, friendly: a.side === 'player', yOff: fxCount ? 26 : 0,
+      justLost: isT ? realDmg : 0, hitFlash: !!isAoEV, noName }, s);
   }
   // unit status visuals over the sprites: shield bubble (absorb) + floating status badges.
   // Data comes from the RAW rosters (payload strips statusEffects); anchors map side+index →

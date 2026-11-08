@@ -285,6 +285,10 @@ function buildAnimationAction(turnInfo, options = {}) {
         isCrit,
         missed,
         ult: isUlt,
+        // 🌊 ULT AOE SPLASH round 2: the splash-everyone treatment only fires when the skill is a
+        // REAL AoE (monsterSkills ultimate = type:'aoe') — a single-target skill that merely sounds
+        // big keeps the big nova but never paints hits on units it did not damage.
+        aoe: isUlt && String((turnInfo.action && turnInfo.action.type) || '') === 'aoe',
         heal,
         itemKind: itemEffect || undefined,
         attackSeed: Math.max(0, Math.floor(Number(turnInfo.turnNumber) || 0)),

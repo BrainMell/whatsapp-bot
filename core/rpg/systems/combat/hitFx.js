@@ -365,4 +365,107 @@ function drawStrikeAnim(c, spec, t) {
   }
 }
 
-module.exports = { drawHitReaction, slashPattern, impactBurst, slash, star, a2, streak, drawStrikeAnim, pickVariant, drawItemEmblem, dustPuff, missPlaque, VARIANTS };
+
+// ── 💀 ULT NOVA (round 2, owner "Fix it" on the orb-blast reference): a screen-filling
+// element-coloured blast for enemy ultimates. The reference clip's orb was the one thing worth
+// stealing — this is that feel, locked to OUR rules: the epicentre is the real impact anchor,
+// everything is seeded (stable renders), and it only ever paints on a LANDED ult (damage>0,
+// not missed) so no glow can ever appear without a backing event.
+// TWO PHASES (round 2b, after the first render proved the single-pass wash dissolves bystanders
+// into the fog — the reference's flaw 4 "unit vanishes under the blast"):
+//   phase 'back'  → far blast field UNDER the units (units re-paste solid on top of it);
+//   phase 'front' → the blast ENERGY over the scene: white-hot core, shockwave rings that run
+//                   off the frame, seeded debris storm, long streak fan, dark edge vignette.
+function drawUltNova(c, W, H, act, anchors, s, phase) {
+  if (!act || !act.ult || act.missed) return;
+  if (!(Math.floor(Number(act.damage) || 0) > 0)) return;
+  const col = ELEMENT_COLORS[String(act.element || '').toUpperCase()] || '#b78af0';
+  const arr = Array.isArray(anchors) ? anchors : [];
+  const t = arr.find((a) => a && a.side === act.targetSide && a.index === (Number(act.targetIndex) || 0));
+  const ex = (t ? t.x : W / 2 / s) * s, ey = t ? (t.feetY - (t.h || 150) * 0.55) * s : H * 0.45;
+  const R = Math.sqrt(W * W + H * H) * 0.74;                // past the far corner = SCREEN-FILLING
+  let seed = Number(act.attackSeed); if (!Number.isFinite(seed)) seed = 17;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) >>> 0; return seed / 4294967296; };
+  if (phase !== 'front') {
+    // BACK: the far field — element flood across the whole scene, gentler at the core so the
+    // fog reads as DEPTH behind the roster, never as a curtain the units drown in.
+    let g = c.createRadialGradient(ex, ey, 10 * s, ex, ey, R);
+    g.addColorStop(0, a2(col, 0.44)); g.addColorStop(0.3, a2(col, 0.34)); g.addColorStop(0.65, a2(col, 0.16)); g.addColorStop(1, a2(col, 0));
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    g = c.createRadialGradient(ex, ey, 8 * s, ex, ey, R * 0.5);
+    g.addColorStop(0, a2(col, 0.2)); g.addColorStop(1, a2(col, 0));
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    return;
+  }
+  // FRONT: white-hot core at the impact point
+  c.save(); c.globalCompositeOperation = 'lighter';
+  let g = c.createRadialGradient(ex, ey, 6 * s, ex, ey, R * 0.55);
+  g.addColorStop(0, 'rgba(255,255,255,0.42)'); g.addColorStop(0.25, a2(col, 0.34)); g.addColorStop(1, a2(col, 0));
+  c.fillStyle = g; c.fillRect(0, 0, W, H);
+  // shockwave rings that RUN OFF the frame
+  for (let i = 0; i < 3; i++) {
+    const rg = R * (0.36 + i * 0.25), lw = (5 - i * 1.4) * s;
+    c.strokeStyle = a2(i === 0 ? '#ffffff' : col, 0.5 - i * 0.13); c.lineWidth = lw;
+    c.shadowColor = a2(col, 0.9); c.shadowBlur = 14 * s;
+    c.beginPath(); c.arc(ex, ey, rg, 0, TAU); c.stroke();
+  }
+  c.restore();
+  // seeded debris storm across the whole scene
+  c.save(); c.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 30; i++) {
+    const ua = rnd() * TAU, ur = 70 * s + rnd() * R * 0.6, sz = (1.6 + rnd() * 2.6) * s;
+    c.fillStyle = rnd() < 0.3 ? 'rgba(255,255,255,0.9)' : a2(col, 0.85);
+    c.fillRect(ex + Math.cos(ua) * ur - sz / 2, ey + Math.sin(ua) * ur * 0.82 - sz / 2, sz, sz);
+  }
+  c.restore();
+  // long streak fan spanning half the scene
+  for (let i = 0; i < 6; i++) {
+    const ua = -0.9 + i * 0.36 + (rnd() - 0.5) * 0.1, len = W * (0.42 + rnd() * 0.22);
+    c.save(); c.translate(ex + Math.cos(ua) * R * 0.3, ey + Math.sin(ua) * R * 0.28); c.rotate(ua);
+    streak(c, 0, 0, len, Math.max(1.6, 4.5 - i * 0.4) * s, i < 2 ? '#ffffff' : col, 0.55 - i * 0.06); c.restore();
+  }
+  // dark edge vignette so the blast reads DEEP, not washed out
+  const vg = c.createRadialGradient(ex, ey, R * 0.42, ex, ey, R * 1.02);
+  vg.addColorStop(0, 'rgba(8,4,16,0)'); vg.addColorStop(1, 'rgba(8,4,16,0.42)');
+  c.fillStyle = vg; c.fillRect(0, 0, W, H);
+}
+
+// ── 🌊 AOE SPLASH (round 2): an AoE ult damages EVERY living unit on the target side — the card
+// must show that. Each non-primary victim gets its own knock tint + element burst + ground scorch.
+// No invented numbers (only the engine's real damage floats), no fx on the dead, primary target
+// keeps the full drawHitReaction treatment. Gated on act.aoe so single-target skills stay honest.
+async function drawAoeSplash(c, layers, anchors, act, players, enemies, s) {
+  if (!act || !act.ult || !act.aoe || act.missed) return;
+  if (!(Math.floor(Number(act.damage) || 0) > 0)) return;
+  const roster = act.targetSide === 'enemy' ? (enemies || []) : (players || []);
+  const col = ELEMENT_COLORS[String(act.element || '').toUpperCase()] || '#b78af0';
+  const arr = Array.isArray(anchors) ? anchors : [];
+  const att = arr.find((a) => a && a.side === (act.attackerSide || 'enemy') && a.index === (Number(act.attackerIndex) || 0));
+  for (const a of arr) {
+    if (!a || a.side !== act.targetSide) continue;
+    if (a.index === (Number(act.targetIndex) || 0)) continue;         // primary: full reaction already
+    const u = roster[a.index];
+    if (!u || u.isDead || u.justDied) continue;
+    if ((Number(u.currentHP ?? (u.stats && u.stats.hp) ?? 0)) <= 0) continue;
+    const dir = att ? (Math.sign(a.x - att.x) || 1) : -1;
+    const cx = a.x * s, cy = (a.feetY - (a.h || 150) * 0.52) * s, h = (a.h || 150) * s;
+    const cut = (Array.isArray(layers && layers.cuts) ? layers.cuts : []).find((x) => x && x.side === act.targetSide && x.index === a.index);
+    if (cut && cut.png) {
+      try {                                                            // the knock the blast gives them
+        const im = await loadImage(Buffer.from(cut.png, 'base64'));
+        const mk = (rgba) => { const t = createCanvas(Math.max(1, cut.w), Math.max(1, cut.h)), tc = t.getContext('2d'); tc.drawImage(im, 0, 0, cut.w, cut.h); tc.globalCompositeOperation = 'source-atop'; tc.fillStyle = rgba; tc.fillRect(0, 0, cut.w, cut.h); return t; };
+        const put = (cnv, dx, rot, al) => { c.save(); c.globalAlpha = al; c.translate(cut.x * s + cut.w * s / 2 + dx, (cut.y + cut.h) * s); c.rotate(rot); c.drawImage(cnv, -cut.w * s / 2, -cut.h * s, cut.w * s, cut.h * s); c.restore(); };
+        put(mk('rgba(255,40,30,0.42)'), dir * 10 * s, dir * 0.05, 0.8);
+      } catch (e) { /* cosmetic */ }
+    }
+    c.save(); c.translate(cx, cy); c.globalCompositeOperation = 'lighter';
+    star(c, 34 * s, a2(col, 0.5)); star(c, 18 * s, 'rgba(255,255,255,0.8)'); c.globalCompositeOperation = 'source-over';
+    c.fillStyle = a2(col, 0.9);
+    for (let i = 0; i < 8; i++) { const ua = i / 8 * TAU + 0.3, ur = (30 + (i * 31 % 22)) * s; c.fillRect(cx + Math.cos(ua) * ur - 1.2 * s, cy + Math.sin(ua) * ur * 0.8 - 1.2 * s, 2.4 * s, 2.4 * s); }
+    c.restore();
+    c.save(); c.strokeStyle = a2(col, 0.6); c.lineWidth = 2.2 * s;     // scorch ring under their feet
+    c.beginPath(); c.ellipse(cx, a.feetY * s, Math.max(40, a.w || 90) * s, Math.max(40, a.w || 90) * s * 0.32, 0, 0, TAU); c.stroke(); c.restore();
+  }
+}
+
+module.exports = { drawHitReaction, slashPattern, impactBurst, slash, star, a2, streak, drawStrikeAnim, pickVariant, drawItemEmblem, dustPuff, missPlaque, drawUltNova, drawAoeSplash, VARIANTS };
