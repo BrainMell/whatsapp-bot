@@ -8086,6 +8086,8 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               });
               console.log(`✅ [${BOT_ID}] WhatsApp connected (open).`);
               isRekeying = false; // BOT IS STABLE
+              // 🤝 owner-shield: tell the sibling bots which accounts are ours (so they re-promote us if we are demoted by a non-owner/non-creator)
+              try { void require('./utils/ownerAdminGuard').registerSelf(sock, BOT_ID); } catch (e) { /* best-effort */ }
 
               // 💡 AUTO-CONTINUE (2026-10-14, owner: "if the bot restarts the game
               // should automatically continue even if the command isn't sent - it's
@@ -8680,7 +8682,14 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   try { const ka = canonicalRankKey(a), kb = canonicalRankKey(b); if (ka && kb && ka === kb) return true; } catch (e) { /* fall through */ }
                   return false;
                 };
-                void enforceOwnerAdmin(sock, { id, participants, action, author }, groupMetadata, { isOwner: (j) => _isBotOwner(jidNormalizedUser(j)), same: _same });
+                const _og = require('./utils/ownerAdminGuard');
+                (async () => {
+                  const _bots = await _og.loadBotNums();   // sibling bots registered on connect (shared KV, 60s cache)
+                  await enforceOwnerAdmin(sock, { id, participants, action, author }, groupMetadata, {
+                    isOwner: (j) => _isBotOwner(jidNormalizedUser(j)), same: _same,
+                    isBot: (j) => _og.isRegisteredBot(j, _bots) || (sock?.user?.id && _same(j, sock.user.id)),
+                  });
+                })().catch(() => {});
               } catch (e) { console.log('[ownerShield] hook failed:', e?.message || e); }
             }
 
