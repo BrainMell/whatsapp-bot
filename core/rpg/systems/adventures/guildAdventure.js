@@ -4957,6 +4957,25 @@ function _deathCaption(item, state) {
 // used by every no-board path in nextTurn (no turnInfo / render failed /
 // already-animated turn) so the announce is never silently swallowed
 
+// 🧯 ENDING-KILL SAFETY NET (2026-11-09 prod lesson): on the fight-ending
+// turn there is NO board after this — endCombat replaces it with the victory
+// card, so the old "the board carries the kill" excuse was a lie on exactly
+// this path (owner: `.j combat atk` → straight to VICTORY, zero kill
+// visuals). If the still can't be delivered on an ENDING turn, the kill
+// announce rides a plain text line (☠️ + 📜 combat log) so the defeat is
+// never silent. Mid-fight failures stay quiet — the turn board really does
+// follow and shows the kill itself.
+async function _deathTextFallback(sock, state, fresh) {
+  try {
+    if (!sock || !state || !state.chatId || !Array.isArray(fresh) || !fresh.length) return;
+    const group = fresh.map((x) => x && x.e).filter(Boolean);
+    if (!group.length) return;
+    const item = { e: group[0], group };
+    await boundedSend(sock, state.chatId, { text: _deathCaption(item, state) });
+    console.log(`[DeathStill] text fallback delivered (${group.length} dead, ending path)`);
+  } catch (err) { console.warn('[DeathStill] text fallback failed:', err && err.message || err); }
+}
+
 async function playEnemyDeaths(sock, state, opts = {}) {
   try {
     if (!sock || !_deathEligible(state)) { if (state && state.inCombat && (state.enemies || []).some((x) => x && x.stats && x.stats.hp <= 0 && !x._deathAnimDone)) console.log(`[DeathStill] skipped: sock=${!!sock} chatId=${!!(state && state.chatId)} isAbyss=${state && state.isAbyss} mode=${state && state.mode}`); return; }
@@ -4973,18 +4992,25 @@ async function playEnemyDeaths(sock, state, opts = {}) {
       // bookkeeping (warm stamp cache ≈ 0.1-0.25s vs 18-24s mp4 bakes).
       const deathStill = require('../combat/deathStill');
       const layers = await _deathScene(state);
-      if (!layers) { console.warn(`[DeathStill] no layered scene (${Date.now() - t0}ms) — the board carries the kill`); return; }
+      if (!layers) { console.warn(`[DeathStill] no layered scene (${Date.now() - t0}ms)${opts.ending ? ' — ENDING kill: text fallback' : ' — the turn board carries the kill'}`); if (opts.ending) await _deathTextFallback(sock, state, fresh); return; }
       const still = await deathStill.renderDeathStill({
         layers,
-        picks: fresh,
+        // 🔧 SHAPE FIX (2026-11-09 prod incident, wa-joker 16:27:34 + 16:28:17
+        // "[DeathStill] render null — the board carries the kill"): fresh is
+        // {e, i} but renderDeathStill filtered t.enemy — EVERY pick was
+        // silently dropped, EVERY kill still returned null, and on the
+        // fight-ending turn nothing showed the kill at all (owner: ".j
+        // combat atk" → straight to VICTORY, no card, no death image).
+        // Pass the documented {enemy, targetIndex} shape.
+        picks: fresh.map((x) => ({ enemy: x.e, targetIndex: x.i })),
         deadIdx: new Set(_deadEnemyIndices(state, fresh.map((x) => x.i))),
         chrome: _deathChrome(state),
       });
-      if (!still || !still.image) { console.warn('[DeathStill] render null — the board carries the kill'); return; }
+      if (!still || !still.image) { console.warn(`[DeathStill] render null${opts.ending ? ' — ENDING kill: text fallback' : ' — the turn board carries the kill'}`); if (opts.ending) await _deathTextFallback(sock, state, fresh); return; }
       const item = { e: fresh[0].e, kind: still.kind, boss: still.boss, group: still.group };
       await sendMediaBounded(sock, state.chatId, { image: still.image, caption: _deathCaption(item, state) }, { label: 'enemyDeathStill', ms: 12000, grace: 4000, fallbackText: null });
       console.log(`[DeathStill] ${still.kind}${still.boss ? '/boss' : ''}${still.group && still.group.length > 1 ? ' x' + still.group.length : ''} delivered in ${Date.now() - t0}ms`);
-    } catch (err) { console.warn('[DeathStill] failed:', err && err.message || err); }
+    } catch (err) { console.warn('[DeathStill] failed:', err && err.message || err); if (opts.ending) await _deathTextFallback(sock, state, fresh); }
   } catch (err) { console.warn('[DeathStill] skipped:', err && err.message || err); }
 }
 
@@ -5026,7 +5052,7 @@ async function checkCombatEnd(sock, state, sessionKey) {
   // line is followed the same second by 'endCombat ENTER'. Ending kills now
   // deliver IMMEDIATELY (the clip is pre-baked, sends in ~1-2s) before the
   // victory screen; the hold stays only for mid-fight kills.
-  await playEnemyDeaths(sock, state, {});   // ☠️ death stills — sent immediately, no hold
+  await playEnemyDeaths(sock, state, { ending: !!(playersDead || enemiesDead) });   // ☠️ death stills — sent immediately, no hold; ending=true arms the text safety net
 
   if (playersDead || enemiesDead) {
     // Clear any pending turn timers to prevent infinite loops

@@ -321,7 +321,14 @@ function drawDefeatChip(plate, a, kx, ky) {
  *  Returns { image, kind, boss, group } or null. Never throws. */
 async function renderDeathStill({ layers, picks, deadIndices, deadIdx, chrome }) {
     try {
-        const group = (Array.isArray(picks) ? picks : []).filter((t) => t && t.enemy).slice(0, 4);
+        // 🛡️ SHAPE-NORMALIZE (2026-11-09 prod lesson: the one prod caller
+        // passed {e, i} while this filter read t.enemy — every pick was
+        // silently dropped and every kill still returned null; ending kills
+        // showed nothing but the victory card). Accept both shapes; a pick
+        // may never be silently lost.
+        const group = (Array.isArray(picks) ? picks : [])
+            .map((t) => (t && (t.enemy || t.e)) ? { enemy: t.enemy || t.e, targetIndex: Number(t.targetIndex ?? t.i) || 0 } : null)
+            .filter(Boolean).slice(0, 4);
         if (!group.length || !layers) return null;
         const dyingIdx = new Set(group.map((t) => Math.max(0, Math.floor(Number(t.targetIndex) || 0))));
         const __dead = deadIdx instanceof Set ? deadIdx : new Set((Array.isArray(deadIndices) ? deadIndices : []).map((n) => Math.floor(Number(n) || 0)).filter((n) => n >= 0));
