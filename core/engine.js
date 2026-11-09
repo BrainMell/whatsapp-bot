@@ -9345,6 +9345,30 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   // 4. Diagnostic Log
                   console.log(`📩 [${botConfig.getBotId()}] Message received from ${senderJid} in ${chatId}`);
 
+                  // 🧪 [qa-recv-tap] 2026-11-09 owner-sanctioned latency audit:
+                  // append a receive receipt when the message lands in the QA GC.
+                  try {
+                    const __qaJid = require('fs').readFileSync('/tmp/qa_recv_jid', 'utf8').trim();
+                    if (chatId === __qaJid) {
+                      const __qaMsg = m.message || {};
+                      const __qaSnip = __qaMsg.conversation
+                        || (__qaMsg.extendedTextMessage && __qaMsg.extendedTextMessage.text)
+                        || (__qaMsg.imageMessage && __qaMsg.imageMessage.caption)
+                        || (__qaMsg.videoMessage && __qaMsg.videoMessage.caption)
+                        || '';
+                      require('fs').appendFileSync('/tmp/qa_recv.jsonl', JSON.stringify({
+                        t: Date.now(),
+                        bot: botConfig.getBotId(),
+                        id: m.key && m.key.id,
+                        from: senderJid,
+                        fromMe: !!(m.key && m.key.fromMe),
+                        type: Object.keys(__qaMsg)[0] || '?',
+                        snip: String(__qaSnip || '').slice(0, 90),
+                      }) + '\n');
+                    }
+                  } catch (_qaTapErr) { /* diagnostics never break the pipeline */ }
+
+
                   // 🧪 [msgtype] 2026-11-01: log the envelope of messages that carry
                   // none of the standard content keys (taps, poll votes, oddities).
                   // Makes silent drop points — like the native-menu tap — debuggable.
@@ -21300,6 +21324,139 @@ ${memberList}`;
                         text:
                           BOT_MARKER +
                           "❌ Failed to send hidden tag message.",
+                      });
+                    }
+
+                    await awardProgression(senderJid, chatId);
+                    return;
+                  }
+
+                  // `${botConfig.getPrefix().toLowerCase()}` admintag - silently tag all group admins with a stylised announcement
+                  if (
+                    (lowerTxt ===
+                      `${botConfig.getPrefix().toLowerCase()} admintag` ||
+                      lowerTxt.startsWith(
+                        `${botConfig.getPrefix().toLowerCase()} admintag `,
+                      )) &&
+                    isGroupChat
+                  ) {
+                    if (!canUseAdminCommands) {
+                      await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          `you need to be an admin to use this command.`,
+                      });
+                      return;
+                    }
+
+                    // Ensure we have group metadata (cold cache fallback)
+                    if (!groupMetadata) {
+                      try {
+                        groupMetadata = await getGroupMetadata(chatId);
+                      } catch (_) {}
+                    }
+                    if (!groupMetadata) {
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ Couldn't load group info. Try again in a moment.",
+                      });
+                      return;
+                    }
+
+                    // Mention list = group admins only
+                    const atagAdminJids = (groupMetadata.participants || [])
+                      .filter(
+                        (pa) =>
+                          pa.admin === "admin" || pa.admin === "superadmin",
+                      )
+                      .map((pa) => pa.id);
+                    if (!atagAdminJids.length) {
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + "❌ No admins found in this group.",
+                      });
+                      return;
+                    }
+
+                    const atagCustom = txt
+                      .substring(
+                        `${botConfig.getPrefix().toLowerCase()} admintag`.length,
+                      )
+                      .trim();
+
+                    const atagCtx = m.message?.extendedTextMessage?.contextInfo;
+                    const atagQuoted = atagCtx?.quotedMessage;
+                    const atagQuotedKey = atagCtx?.stanzaId;
+                    const atagQuotedParticipant = atagCtx?.participant;
+
+                    // No typed text? Repeat the replied-to text instead.
+                    let atagContent = atagCustom;
+                    if (!atagContent && atagQuoted) {
+                      atagContent =
+                        atagQuoted.conversation ||
+                        atagQuoted.extendedTextMessage?.text ||
+                        "";
+                    }
+
+                    if (!atagContent) {
+                      return await sendUsage(
+                        sock,
+                        chatId,
+                        BOT_MARKER,
+                        "🛡️ ADMINTAG",
+                        "admintag <text>",
+                        "admintag Server maintenance tonight at 10pm",
+                        "Silently tags all group admins with a stylised announcement. You can also reply to a message to repeat it.",
+                      );
+                    }
+
+                    const atagAnnouncement = `┏━━━━━━━━━━━━━━┓
+┃ 🛡️ *ADMIN NOTICE* 🛡️
+┗━━━━━━━━━━━━━━┛
+
+${atagContent}
+
+━━━━━━━━━━━━━━━━`;
+
+                    try {
+                      await sock.sendMessage(chatId, {
+                        text: BOT_MARKER + atagAnnouncement,
+                        contextInfo: { mentionedJid: atagAdminJids },
+                      });
+
+                      // Delete the original command message
+                      try {
+                        await sock.sendMessage(chatId, {
+                          delete: m.key,
+                        });
+                      } catch (delErr) {
+                        console.log(
+                          `⚠️ Couldn't delete original admintag message: ${delErr.message}`,
+                        );
+                      }
+
+                      // If replying to a message, delete that too
+                      if (atagQuotedKey && atagQuotedParticipant) {
+                        try {
+                          await sock.sendMessage(chatId, {
+                            delete: {
+                              remoteJid: chatId,
+                              fromMe: false,
+                              id: atagQuotedKey,
+                              participant: atagQuotedParticipant,
+                            },
+                          });
+                        } catch (delErr2) {
+                          console.log(
+                            "⚠️ Couldn't delete quoted message:",
+                            delErr2.message,
+                          );
+                        }
+                      }
+                    } catch (err) {
+                      console.error("❌ Admintag send error:", err);
+                      await sock.sendMessage(chatId, {
+                        text:
+                          BOT_MARKER +
+                          "❌ Failed to send admin announcement.",
                       });
                     }
 
@@ -33449,6 +33606,7 @@ _(or reply to their message)_
                       "unmute",
                       "tagall",
                       "hidetag",
+                      "admintag",
                       "glock",
                       "gunlock",
                       "pin",
@@ -33602,6 +33760,7 @@ _(or reply to their message)_
                       "unmute",
                       "tagall",
                       "hidetag",
+                      "admintag",
                       "guild create",
                       "guild delete",
                       "guild join",

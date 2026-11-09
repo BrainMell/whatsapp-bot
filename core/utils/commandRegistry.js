@@ -73,6 +73,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'unmute', desc: 'Unmute a user immediately.', usage: 'unmute @user' },
     { cmd: 'tagall', desc: 'Mention every single person in the group.', usage: 'tagall' },
     { cmd: 'hidetag', desc: 'Send a message that tags everyone invisibly.', usage: 'hidetag <msg>' },
+    { cmd: 'admintag', desc: 'Silently tag all group admins with a stylised announcement. Admins only.', usage: 'admintag <msg>' },
     { cmd: 'glock', desc: 'Lock the group (Admins-only or Rank-locked with "glock rank <level>").', usage: 'glock OR glock rank <level> OR glock open' },
     { cmd: 'gunlock', desc: 'Unlock the group, allowing everyone to send messages.', usage: 'gunlock OR open' },
     { cmd: 'rank setup', desc: 'Initialize default rank ladder (Overlord to Wanderer).', usage: 'rank setup' },
