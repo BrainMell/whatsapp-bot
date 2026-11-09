@@ -86,3 +86,15 @@ changes every fight, so plates almost never replay.
 ## 4. Results (agent fills)
 | Item | before cold | before warm | after cold | after warm | notes |
 |---|---|---|---|---|---|
+
+## 5. AGENT WORK ORDER (do all of this, in order, without asking)
+Scope: sections 1 and 2 above FIRST, then every remaining row of `docs/GENERATION_BLUEPRINT.md` (Abyss hub/room/scene,
+boss splash/endscreen prewarm, profile/shop/inventory/menu/deck cards, homestead/world/guildwar, basic-attack combos).
+For each row: time cold/warm -> find finite key -> implement with `core/utils/assetBake.js` -> parity test -> kill switch -> fill the results table.
+1. `git pull --rebase` before starting and before every push (another agent pushes concurrently). Work on branch `audit/fix-pass-1`.
+2. Order: (a) ult early-render + plate split + prewarm, (b) card/summon bake + single scene path + parallel death merge,
+   (c) remaining blueprint rows by player-visible latency. One commit per step, each with its test script in `scripts/`.
+3. Never change output dimensions/fps/frame counts or lower quality. Parity assertions are mandatory.
+4. Every feature gets an env kill switch, documented in `docs/OWNER_TODO_CANT_DO.md`. Caches outside git, size-capped.
+5. You cannot deploy or test on the live boxes: say so, and leave the live test plan (section 3) for the owner / `qa-send`.
+6. Finish by filling section 4 (results), listing anything not done and why, and pushing. Do not stop at the first row.
