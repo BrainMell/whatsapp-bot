@@ -42,9 +42,16 @@ try { require('../../../utils/prebaked').seed('ult-plates', ROOT); } catch (e) {
 let VER = 'v1';
 try {
     const rpg = __dirname;
-    const files = ['ultimateFx.js', 'ultimateFxRecipes.js', 'ultimateFxLayers.js', 'ultimateFxLayers2.js', 'ultimatePlateCache.js']
-        .map((f) => path.join(rpg, f)).concat([path.join(rpg, '..', '..', '..', 'rpgasset', 'vfx', 'vfx_assets.json')]);
+    // 2026-11-09 BAKE ONCE: the key used to hash ALL the ultimateFx*.js source, so ANY code edit/deploy invalidated every
+    // saved plate and forced a full rebake (owner: "I thought this was done once and saved"). Now the version is a manual
+    // PLATE_SCHEMA + the art manifest only. BUMP PLATE_SCHEMA whenever you change how a plate LOOKS (painters/recipes);
+    // unrelated deploys keep every baked plate (and anything in prebaked/ stays valid). ULT_PLATE_HASH_CODE=1 restores old behaviour.
+    const PLATE_SCHEMA = 'schema-1';
+    const files = (process.env.ULT_PLATE_HASH_CODE === '1'
+        ? ['ultimateFx.js', 'ultimateFxRecipes.js', 'ultimateFxLayers.js', 'ultimateFxLayers2.js', 'ultimatePlateCache.js'].map((f) => path.join(rpg, f))
+        : []).concat([path.join(rpg, '..', '..', '..', 'rpgasset', 'vfx', 'vfx_assets.json')]);
     const h = crypto.createHash('sha1');
+    h.update(PLATE_SCHEMA);
     for (const f of files) { try { h.update(fs.readFileSync(f)); } catch (e) { /* optional */ } }
     VER = `p${h.digest('hex').slice(0, 10)}`;
 } catch (e) { /* keeps 'v1' */

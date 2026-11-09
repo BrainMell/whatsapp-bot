@@ -119,3 +119,8 @@ Mechanism is in: `core/utils/prebaked.js` seeds `prebaked/{ult-plates,cardfx-v1,
 AGENT TODO: after prewarm finishes on a live box (all 360 plate keys baked), run `node scripts/export_prebaked.js`, commit `prebaked/`
 (budget 60MB). Plate keys embed a code hash -> re-export after the LAST change to `ultimateFx*.js`/`ultimatePlateCache.js`, or they are dead weight.
 Add the same seed+export for every new cache the blueprint rows create (subfolder name = cache ns-version).
+
+## 7. BAKE ONCE rule (owner 2026-11-09)
+Plate keys no longer hash the VFX source code. Version = `PLATE_SCHEMA` (in `ultimatePlateCache.js`) + art manifest. **Bump `PLATE_SCHEMA`
+whenever you change how a plate looks**; ordinary deploys keep every baked plate. Same rule for every new cache: key on content + a manual schema
+string, never on a hash of source files. Prewarm must skip keys already on disk (make `bakePlates` check `plates.loadMeta(key)` BEFORE rendering).
