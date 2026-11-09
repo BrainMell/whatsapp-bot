@@ -10,11 +10,46 @@ const phoneCache = new Map();
 const watchedPaths = new Set();
 
 // Load all mappings from MongoDB and scan local auth files for any unsaved ones
-async function loadLidMappings() {
+async function loadLidMappings(opts = {}) {
     try {
+        // ⚡ RECONNECT SKIP (2026-11-09): initSocket re-runs on every reconnect and
+        // the full pull (9,968 rows ≈ 7 s throttled) used to re-run with it. The
+        // caches are live in memory and the delta background-sync refreshes them
+        // every 5 min anyway.
+        if (lidCache.size > 0 && phoneCache.size > 0) {
+            console.log(`✅ [LID Resolver] caches already populated (${lidCache.size}) — skipping re-load`);
+            return;
+        }
+        // ⚡ BOOT SNAPSHOT (2026-11-09): the full pull is 9,968 rows (~7 s on the
+        // throttled Atlas M0) and boot used to WAIT for it before WhatsApp
+        // connected. Restore from the instance disk dump; the 5-min background
+        // sync below (now delta-based) refreshes anything new within minutes.
+        if (opts.snapshot !== false && lidCache.size === 0) {
+            const bs = require('./bootSnapshot');
+            const dir = global.WA_INSTANCE_DIR;
+            if (dir) {
+                const snap = bs.loadSnapshot(dir, 'lid');
+                if (snap.ok && snap.data && Array.isArray(snap.data.pairs) && snap.data.pairs.length) {
+                    for (const [l, p] of snap.data.pairs) {
+                        lidCache.set(l, p);
+                        phoneCache.set(p, l);
+                    }
+                    console.log(`✅ [LID Resolver] Loaded ${snap.data.pairs.length} LID mappings from SNAPSHOT (age ${snap.ageMin}m)`);
+                    return;
+                }
+                if (snap.reason && snap.reason !== 'disabled') {
+                    console.log(`⏳ [LID Resolver] snapshot unusable (${snap.reason}) — loading from MongoDB`);
+                }
+            }
+        }
         console.log(`📥 [LID Resolver] Loading LID mappings from MongoDB...`);
-        // 1. Load from MongoDB
-        const mappings = await LidMapping.find({}).lean();
+        // 1. Load from MongoDB (sorted by _id so the delta-sync high-water mark
+        // below starts at the true newest ObjectId)
+        const mappings = await LidMapping.find({}).sort({ _id: 1 }).lean();
+        // ⚡ remember the newest _id so the 5-min background sync only fetches DELTAS
+        try {
+            if (mappings.length) global.__lidMaxOid = String(mappings[mappings.length - 1]._id || '');
+        } catch (e) { /* best effort */ }
         for (const m of mappings) {
             lidCache.set(m.lid, m.phone);
             phoneCache.set(m.phone, m.lid);
@@ -197,12 +232,20 @@ function watchAuthPath(authPath) {
 }
 
 // Periodically sync delta mappings from MongoDB in the background to sync other servers/instances
+// ⚡ 2026-11-09: was a FULL find({}) every 5 min per process (9,968 rows ≈ 7 s of
+// throttled Atlas M0 bandwidth × every bot × every 5 min). ObjectId._id is
+// time-sortable, so fetch ONLY rows newer than the last one we saw. First run
+// without a high-water mark still does one full pull (same as before).
 setInterval(async () => {
     try {
-        const mappings = await LidMapping.find({}).lean();
-        for (const m of mappings) {
-            lidCache.set(m.lid, m.phone);
-            phoneCache.set(m.phone, m.lid);
+        const q = global.__lidMaxOid ? { _id: { $gt: global.__lidMaxOid } } : {};
+        const mappings = await LidMapping.find(q).sort({ _id: 1 }).limit(50000).lean();
+        if (mappings.length) {
+            for (const m of mappings) {
+                lidCache.set(m.lid, m.phone);
+                phoneCache.set(m.phone, m.lid);
+            }
+            global.__lidMaxOid = String(mappings[mappings.length - 1]._id || global.__lidMaxOid);
         }
     } catch (e) {
         // silent background error
@@ -392,7 +435,21 @@ function canonicalRankKey(jid) {
     return originalJid;
 }
 
+// ⚡ BOOT SNAPSHOT dump (2026-11-09): engine.js calls this on the snapshot
+// cadence so the next boot skips the throttled Mongo pull.
+async function dumpLidSnapshot() {
+    try {
+        if (lidCache.size === 0) return;
+        const bs = require('./bootSnapshot');
+        const dir = global.WA_INSTANCE_DIR;
+        if (!dir) return;
+        const r = await bs.saveSnapshot(dir, 'lid', { pairs: Array.from(lidCache.entries()) });
+        if (r.err && r.err !== 'disabled') console.warn('⚠️ LID snapshot dump failed:', r.err);
+    } catch (e) { /* never throw into the caller */ }
+}
+
 module.exports = {
+    dumpLidSnapshot,
     loadLidMappings,
     saveLidMapping,
     watchAuthPath,

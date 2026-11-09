@@ -4500,7 +4500,21 @@ What to do:
 
     const sendQueue = (() => {
       const queue = [];
-      let processing = false;
+      // ⚡ 2026-11-09 TEXT FAST-LANE: the old queue was ONE strict FIFO — a slow
+      // media upload (big mp4/GIF, 60 s race budget) blocked every message
+      // behind it, including plain texts (owner: "even regular text messages
+      // seem slow"). Now two lanes run over ONE queue array:
+      //   · TEXT lane: FIFO among texts, 15 s race budget — NEVER waits behind
+      //     a media upload.
+      //   · MEDIA lane: ONE in-flight slot, FIFO among medias, 60 s race
+      //     budget — multi-card turns keep their relative order.
+      // A media never starts while an OLDER text is still queued (texts are
+      // quick, and media must never overtake them), but a text no longer
+      // waits for a media upload. Cross-lane reorder (the next turn's text
+      // lands while the previous turn's clip uploads) is deliberate —
+      // responsiveness beats strict global ordering here.
+      let processingText = false;
+      let processingMedia = false;
 
       // Updated on every (re)connect
       let boundSock = null;
@@ -4510,6 +4524,7 @@ What to do:
       const MSG_TTL_MS = 5 * 60 * 1000; // 5 minutes
       const MAX_RETRIES = 3;
       const SEND_GAP_MS = 350;
+      const TEXT_GAP_MS = 250;
 
       const isWsOpen = () => {
         const ws = boundSock?.ws;
@@ -4530,13 +4545,8 @@ What to do:
         rawSend = newSock.sendMessage.bind(newSock);
       };
 
-      const kick = () => {
-        if (processing) return;
-        processing = true;
-        processQueue().finally(() => {
-          processing = false;
-        });
-      };
+      const isMediaContent = (content) =>
+        Boolean(content && (content.image || content.video || content.audio || content.sticker || content.document));
 
       const enqueue = (jid, content, options = {}) => {
         return new Promise((resolve, reject) => {
@@ -4553,6 +4563,7 @@ What to do:
             options,
             ts: Date.now(),
             retries: 0,
+            kind: isMediaContent(content) ? "media" : "text",
             resolve,
             reject,
           });
@@ -4561,118 +4572,161 @@ What to do:
         });
       };
 
-      const processQueue = async () => {
-        while (queue.length > 0) {
-          // Don't spin when disconnected
-          if (!canSendNow()) return;
+      const kick = () => {
+        pumpText();
+        pumpMedia();
+      };
 
-          const item = queue[0];
+      // earliest non-in-flight TEXT in the queue
+      const pickText = () => {
+        for (const it of queue) {
+          if (it.inFlight) continue;
+          if (it.kind === "text") return it;
+        }
+        return null;
+      };
 
-          // Drop expired messages
-          if (Date.now() - item.ts > MSG_TTL_MS) {
-            console.error(`⏰ [${BOT_ID}] Send queue: TTL EXPIRED for message to ${item.jid?.split('@')[0]} (age: ${Math.floor((Date.now() - item.ts) / 1000)}s). Content preview: ${JSON.stringify(item.content?.text || item.content?.caption || '[non-text]').slice(0, 80)}`);
-            queue.shift();
-            item.reject(new Error("Send queue TTL expired"));
-            continue;
-          }
+      // earliest non-in-flight MEDIA, but only when no older text is still
+      // waiting in the queue (texts are quick; media must never overtake them)
+      const pickMedia = () => {
+        let olderTextWaiting = false;
+        for (const it of queue) {
+          if (it.inFlight) continue;
+          if (it.kind === "text") olderTextWaiting = true;
+          else if (!olderTextWaiting) return it;
+        }
+        return null;
+      };
 
-          // per-item flag shared by the try/catch below: did the race
-          // timeout drop this send while Baileys was still working on it?
-          let __droppedByTimeout = false;
-          try {
-            // 💡 ROOT CAUSE FIX (owner 2026-09-21: "a command fails with
-            // rawSend timed out - fix the timeout, don't hide the error").
-            // The old race gave EVERY send 15s while Baileys' own media
-            // upload budget is 20s (mediaUploadTimeoutMs on the socket) and
-            // the relay/ACK phase adds more. Any upload needing 15-20s was
-            // GUARANTEED to be dropped mid-flight by this queue and reported
-            // as "rawSend timed out after 15s" even though Baileys was about
-            // to succeed - the queue was manufacturing the very timeout it
-            // was guarding against. Now:
-            //   · MEDIA (image/video/audio/sticker/document) gets a 60s race
-            //     budget - the same upload budget the status-post path uses
-            //     (#b4fa05), comfortably above Baileys' 20s abort + relay.
-            //   · TEXT keeps the tight 15s (it rides the WebSocket; slow
-            //     text means the connection is already broken).
-            //   · The race timer is CLEARED when the send settles (the old
-            //     code leaked one 15s timer per message forever).
-            //   · The losing promise is guarded - a late Baileys rejection
-            //     can never surface as an unhandledRejection, and a late
-            //     RESOLUTION is logged as "delivered after the drop" so the
-            //     log tells the truth instead of hiding the outcome.
-            const __isMediaSend = !!(item.content && (item.content.image || item.content.video || item.content.audio || item.content.sticker || item.content.document));
-            const SEND_TIMEOUT_MS = __isMediaSend ? 60000 : 15000;
-            const tSend0 = Date.now();
-            const sendPromise = rawSend(item.jid, item.content, item.options);
-            // the race loser must never become an unhandledRejection
-            sendPromise.catch(() => {});
-            sendPromise
-              .then(() => {
-                if (__droppedByTimeout) {
-                  console.log(`📨 [${BOT_ID}] send to ${item.jid?.split("@")[0]} completed AFTER the timeout drop - the message WAS likely delivered`);
-                }
-              })
-              .catch(() => {});
-            let __raceTimer = null;
-            let res;
+      const spliceOut = (item) => {
+        const idx = queue.indexOf(item);
+        if (idx >= 0) queue.splice(idx, 1);
+      };
+
+      const pump = async (kind) => {
+        const isText = kind === "text";
+        if (isText ? processingText : processingMedia) return;
+        if (isText) processingText = true;
+        else processingMedia = true;
+        try {
+          while (queue.length > 0) {
+            // Don't spin when disconnected
+            if (!canSendNow()) return;
+
+            const item = isText ? pickText() : pickMedia();
+            if (!item) return;
+
+            // Drop expired messages
+            if (Date.now() - item.ts > MSG_TTL_MS) {
+              spliceOut(item);
+              console.error(`⏰ [${BOT_ID}] Send queue: TTL EXPIRED for message to ${item.jid?.split('@')[0]} (age: ${Math.floor((Date.now() - item.ts) / 1000)}s). Content preview: ${JSON.stringify(item.content?.text || item.content?.caption || '[non-text]').slice(0, 80)}`);
+              item.reject(new Error("Send queue TTL expired"));
+              continue;
+            }
+
+            item.inFlight = true;
             try {
-              res = await Promise.race([
-                sendPromise,
-                new Promise((_, reject) => {
-                  __raceTimer = setTimeout(
-                    () => reject(new Error(`rawSend timed out after ${SEND_TIMEOUT_MS / 1000}s (media upload hung - queue was blocked)`)),
-                    SEND_TIMEOUT_MS,
-                  );
-                }),
-              ]);
+              await sendItem(item);
             } finally {
-              if (__raceTimer) clearTimeout(__raceTimer);
+              item.inFlight = false;
             }
-            queue.shift();
-            item.resolve(res);
-            // 💡 2026-09-15 PERF: per-send timing - makes WhatsApp media-upload
-            // latency visible in the pm2 log so "images are slow" reports can
-            // be split into render vs thumbnail vs upload vs relay.
-            const sendMs = Date.now() - tSend0;
-            const mediaKind = item.content?.image ? "image" : item.content?.video ? "video" : item.content?.audio ? "audio" : item.content?.document ? "document" : "text";
-            if (mediaKind !== "text" || sendMs > 1000) {
-              console.log(`📨 [${BOT_ID}] send ${mediaKind} ok in ${sendMs}ms → ${item.jid?.split("@")[0]}`);
-            }
-            await sleep(SEND_GAP_MS);
-          } catch (err) {
-            item.retries += 1;
-
-            // 💡 Timeout errors are NOT connection errors - don't retry.
-            // The send is stuck beyond its race budget. Drop the message
-            // so the queue can process subsequent sends.
-            if (err.message?.includes('timed out')) {
-              __droppedByTimeout = true; // a late completion will be logged as delivered
-              console.error(`⏰ [${BOT_ID}] Send queue: TIMEOUT for message to ${item.jid?.split('@')[0]}. Content preview: ${JSON.stringify(item.content?.text || item.content?.caption || '[non-text]').slice(0, 80)}. DROPPING to unblock queue.`);
-              queue.shift();
-              item.reject(err);
-              continue;
-            }
-
-            // Connection issues: pause and wait for reconnect; keep message at front
-            if (isConnError(err)) {
-              console.log(`📨 [${BOT_ID}] Send queue: connection error (retry ${item.retries}), pausing. Error: ${err.message?.slice(0, 100)}`);
-              await sleep(Math.min(1000 * Math.pow(2, item.retries - 1), 5000));
-              return;
-            }
-
-            // Non-connection error: retry a little then drop
-            console.log(`⚠️ [${BOT_ID}] Send queue: non-connection error (retry ${item.retries}/${MAX_RETRIES}) to ${item.jid?.split('@')[0]}: ${err.message?.slice(0, 150)}`);
-
-            if (item.retries < MAX_RETRIES) {
-              await sleep(Math.min(500 * item.retries, 1500));
-              continue;
-            }
-
-            // 💡 DIAGNOSTIC: log when a message is permanently dropped
-            console.error(`❌ [${BOT_ID}] Send queue: DROPPED message to ${item.jid?.split('@')[0]} after ${MAX_RETRIES} retries. Error: ${err.message?.slice(0, 200)}. Content preview: ${JSON.stringify(item.content?.text || item.content?.caption || '[non-text]').slice(0, 80)}`);
-            queue.shift();
-            item.reject(err);
+            await sleep(isText ? TEXT_GAP_MS : SEND_GAP_MS);
           }
+        } finally {
+          if (isText) processingText = false;
+          else processingMedia = false;
+        }
+      };
+
+      const pumpText = () => pump("text");
+      const pumpMedia = () => pump("media");
+
+      // One message through Baileys with the timeout race + retry policy.
+      // Resolves when the item has been DELIVERED, or REMOVED from the queue.
+      const sendItem = async (item) => {
+        // per-item flag shared by the try/catch below: did the race
+        // timeout drop this send while Baileys was still working on it?
+        let __droppedByTimeout = false;
+        try {
+          // 💡 ROOT CAUSE FIX (owner 2026-09-21: "a command fails with
+          // rawSend timed out - fix the timeout, don't hide the error").
+          // MEDIA gets a 60s race budget (Baileys' own media upload budget is
+          // 20s + relay), TEXT keeps the tight 15s (it rides the WebSocket).
+          // The race timer is CLEARED when the send settles and the losing
+          // promise is guarded - a late rejection can never surface as an
+          // unhandledRejection, and a late RESOLUTION is logged as "delivered
+          // after the drop" so the log tells the truth.
+          const __isMediaSend = item.kind === "media";
+          const SEND_TIMEOUT_MS = __isMediaSend ? 60000 : 15000;
+          const tSend0 = Date.now();
+          const sendPromise = rawSend(item.jid, item.content, item.options);
+          // the race loser must never become an unhandledRejection
+          sendPromise.catch(() => {});
+          sendPromise
+            .then(() => {
+              if (__droppedByTimeout) {
+                console.log(`📨 [${BOT_ID}] send to ${item.jid?.split("@")[0]} completed AFTER the timeout drop - the message WAS likely delivered`);
+              }
+            })
+            .catch(() => {});
+          let __raceTimer = null;
+          let res;
+          try {
+            res = await Promise.race([
+              sendPromise,
+              new Promise((_, reject) => {
+                __raceTimer = setTimeout(
+                  () => reject(new Error(`rawSend timed out after ${SEND_TIMEOUT_MS / 1000}s (media upload hung - queue was blocked)`)),
+                  SEND_TIMEOUT_MS,
+                );
+              }),
+            ]);
+          } finally {
+            if (__raceTimer) clearTimeout(__raceTimer);
+          }
+          spliceOut(item);
+          item.resolve(res);
+          // 💡 2026-09-15 PERF: per-send timing - makes WhatsApp media-upload
+          // latency visible in the pm2 log so "images are slow" reports can
+          // be split into render vs thumbnail vs upload vs relay.
+          const sendMs = Date.now() - tSend0;
+          const mediaKind = item.content?.image ? "image" : item.content?.video ? "video" : item.content?.audio ? "audio" : item.content?.document ? "document" : "text";
+          if (mediaKind !== "text" || sendMs > 1000) {
+            console.log(`📨 [${BOT_ID}] send ${mediaKind} ok in ${sendMs}ms → ${item.jid?.split("@")[0]}`);
+          }
+        } catch (err) {
+          item.retries += 1;
+
+          // 💡 Timeout errors are NOT connection errors - don't retry.
+          // The send is stuck beyond its race budget. Drop the message
+          // so the queue can process subsequent sends.
+          if (err.message?.includes('timed out')) {
+            __droppedByTimeout = true; // a late completion will be logged as delivered
+            console.error(`⏰ [${BOT_ID}] Send queue: TIMEOUT for message to ${item.jid?.split('@')[0]}. Content preview: ${JSON.stringify(item.content?.text || item.content?.caption || '[non-text]').slice(0, 80)}. DROPPING to unblock queue.`);
+            spliceOut(item);
+            item.reject(err);
+            return;
+          }
+
+          // Connection issues: pause and wait for reconnect; keep message queued
+          if (isConnError(err)) {
+            console.log(`📨 [${BOT_ID}] Send queue: connection error (retry ${item.retries}), pausing. Error: ${err.message?.slice(0, 100)}`);
+            await sleep(Math.min(1000 * Math.pow(2, item.retries - 1), 5000));
+            return; // item stays queued; next kick / pump cycle retries
+          }
+
+          // Non-connection error: retry a little then drop
+          console.log(`⚠️ [${BOT_ID}] Send queue: non-connection error (retry ${item.retries}/${MAX_RETRIES}) to ${item.jid?.split('@')[0]}: ${err.message?.slice(0, 150)}`);
+
+          if (item.retries < MAX_RETRIES) {
+            await sleep(Math.min(500 * item.retries, 1500));
+            return; // item stays queued; the pump loop retries it
+          }
+
+          // 💡 DIAGNOSTIC: log when a message is permanently dropped
+          console.error(`❌ [${BOT_ID}] Send queue: DROPPED message to ${item.jid?.split('@')[0]} after ${MAX_RETRIES} retries. Error: ${err.message?.slice(0, 200)}. Content preview: ${JSON.stringify(item.content?.text || item.content?.caption || '[non-text]').slice(0, 80)}`);
+          spliceOut(item);
+          item.reject(err);
         }
       };
 
@@ -7697,6 +7751,10 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
       botStarting = true;
       try {
         const authPath = configInstance.getAuthPath();
+        // ⚡ BOOT SNAPSHOT (2026-11-09): the instance dir hosts cache/boot/*.json.gz
+        // — the disk dumps system.js / economy.js / lidResolver.js restore from at
+        // boot instead of the 125-170 s throttled Atlas pulls (see bootSnapshot.js)
+        global.WA_INSTANCE_DIR = require('path').dirname(authPath);
         const { state, saveCreds } = await useMultiFileAuthState(authPath);
         lidResolver.watchAuthPath(authPath);
 
@@ -7711,24 +7769,54 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
           // that loadSystemData populates. If mods load first, the cache is
           // empty → system.get returns null → no mods loaded → they appear
           // "reset" on every bot restart.
+          const __bootT0 = Date.now();
           await system.loadSystemData();
           try { murderMystery.init(); } catch (e) { console.error('murder init failed:', e.message); } // 🔪 rehydrate running mysteries after boot
-          await economy.loadEconomy();
-          await guilds.loadGuilds();
-          await loans.loadLoans();
-          await lidResolver.loadLidMappings();
+          // ⚡ FAST BOOT (2026-11-09): these loads measured 125 s (users) + 38 s
+          // (system KV) + 7 s (LID) on the throttled Atlas M0 and used to run
+          // SERIALLY before the WhatsApp socket connected — 3.2 min of dead air
+          // on every boot AND every reconnect (owner logs 2026-11-09 07:20-07:24:
+          // pings answered 80-110 s late). Now: system first (mod loaders read the
+          // systemCache), then economy + guilds + loans + LID in PARALLEL. Each
+          // loader restores from the instance's disk snapshot (~1-2 s, see
+          // bootSnapshot.js) and skips the pull entirely on reconnect when its
+          // in-memory cache is already live.
+          await Promise.all([
+            economy.loadEconomy(),
+            guilds.loadGuilds(),
+            loans.loadLoans(),
+            lidResolver.loadLidMappings(),
+          ]);
 
-          // NOW load mods (system cache is populated)
-          await loadGlobalMods();
-          await loadRpgMods();
-    try { await loadGameTesters(); } catch(e) { console.error('Game Tester load failed:', e.message); }
-          await loadCardsMods();
-          try { await loadQuizMods(); } catch(e) { console.error('Quiz Mods load failed:', e.message); }
-          try { await loadGcOwners(); } catch(e) { console.error("GC owner load failed:", e.message); }
-          await loadBlockedUsers();
-          await loadBannedUsers();
-          await loadHardBannedUsers();
-          await loadHardMutedUsers();
+          // NOW load mods (system cache is populated) — independent of each
+          // other, so parallelize them too
+          await Promise.all([
+            loadGlobalMods().catch((e) => console.error('Global mod load failed:', e.message)),
+            loadRpgMods().catch((e) => console.error('RPG mod load failed:', e.message)),
+            loadGameTesters().catch((e) => console.error('Game Tester load failed:', e.message)),
+            loadCardsMods().catch((e) => console.error('Cards mod load failed:', e.message)),
+            loadQuizMods().catch((e) => console.error('Quiz Mods load failed:', e.message)),
+            loadGcOwners().catch((e) => console.error('GC owner load failed:', e.message)),
+            loadBlockedUsers().catch((e) => console.error('Blocked users load failed:', e.message)),
+            loadBannedUsers().catch((e) => console.error('Banned users load failed:', e.message)),
+            loadHardBannedUsers().catch((e) => console.error('Hard-banned load failed:', e.message)),
+            loadHardMutedUsers().catch((e) => console.error('Hard-muted load failed:', e.message)),
+          ]);
+          console.log(`⚡ [${BOT_ID}] boot data ready in ${((Date.now() - __bootT0) / 1000).toFixed(1)}s (snapshot restore + parallel loads)`);
+          // ⚡ boot-snapshot dumps: one ~90 s after boot, then every 5 min
+          // (unref'd — never holds the process open). initSocket re-enters on
+          // reconnect; the global flag keeps exactly ONE timer per process.
+          if (!global.__bootSnapTimers) {
+            global.__bootSnapTimers = true;
+            const __dumpAll = async () => {
+              try { await system.dumpSystemSnapshot(); } catch (e) { /* never */ }
+              try { await economy.dumpEconomySnapshot(); } catch (e) { /* never */ }
+              try { await lidResolver.dumpLidSnapshot(); } catch (e) { /* never */ }
+            };
+            setTimeout(() => { __dumpAll().catch(() => {}); }, 90 * 1000).unref?.();
+            setInterval(() => { __dumpAll().catch(() => {}); }, 5 * 60 * 1000).unref?.();
+            console.log(`📸 [${BOT_ID}] boot-snapshot dumps armed (90 s post-boot, then every 5 min)`);
+          }
 
           // 💡 FIX 2026-09-11: keep shared mod lists in sync across instances.
           // The Sets above are a boot snapshot; without this timer a mod added
@@ -8244,23 +8332,42 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               if (isFreshLogin) {
                 console.log(`📦 [${BOT_ID}] Loading data post-QR login...`);
                 // 💡 FIX: system.loadSystemData MUST run BEFORE mod loading.
+                // ⚡ FAST BOOT (2026-11-09): same parallelization as the main boot
+                // block (snapshot restore + parallel loaders).
+                const __bootT0 = Date.now();
                 await system.loadSystemData();
                 try { murderMystery.init(); } catch (e) { console.error('murder init failed:', e.message); } // 🔪 rehydrate running mysteries after boot
-                await economy.loadEconomy();
-                await guilds.loadGuilds();
-                await loans.loadLoans();
-                await lidResolver.loadLidMappings();
+                await Promise.all([
+                  economy.loadEconomy(),
+                  guilds.loadGuilds(),
+                  loans.loadLoans(),
+                  lidResolver.loadLidMappings(),
+                ]);
 
                 // NOW load mods (system cache is populated)
-                await loadGlobalMods();
-                await loadRpgMods();
-                await loadCardsMods();
-                try { await loadQuizMods(); } catch(e) { console.error("Quiz Mods load failed:", e.message); }
-                try { await loadGcOwners(); } catch(e) { console.error("GC owner load failed:", e.message); }
-                await loadBlockedUsers();
-                await loadBannedUsers();
-                await loadHardBannedUsers();
-                await loadHardMutedUsers();
+                await Promise.all([
+                  loadGlobalMods().catch((e) => console.error('Global mod load failed:', e.message)),
+                  loadRpgMods().catch((e) => console.error('RPG mod load failed:', e.message)),
+                  loadCardsMods().catch((e) => console.error('Cards mod load failed:', e.message)),
+                  loadQuizMods().catch((e) => console.error('Quiz Mods load failed:', e.message)),
+                  loadGcOwners().catch((e) => console.error('GC owner load failed:', e.message)),
+                  loadBlockedUsers().catch((e) => console.error('Blocked users load failed:', e.message)),
+                  loadBannedUsers().catch((e) => console.error('Banned users load failed:', e.message)),
+                  loadHardBannedUsers().catch((e) => console.error('Hard-banned load failed:', e.message)),
+                  loadHardMutedUsers().catch((e) => console.error('Hard-muted load failed:', e.message)),
+                ]);
+                console.log(`⚡ [${BOT_ID}] boot data ready in ${((Date.now() - __bootT0) / 1000).toFixed(1)}s (snapshot restore + parallel loads)`);
+                if (!global.__bootSnapTimers) {
+                  global.__bootSnapTimers = true;
+                  const __dumpAll = async () => {
+                    try { await system.dumpSystemSnapshot(); } catch (e) { /* never */ }
+                    try { await economy.dumpEconomySnapshot(); } catch (e) { /* never */ }
+                    try { await lidResolver.dumpLidSnapshot(); } catch (e) { /* never */ }
+                  };
+                  setTimeout(() => { __dumpAll().catch(() => {}); }, 90 * 1000).unref?.();
+                  setInterval(() => { __dumpAll().catch(() => {}); }, 5 * 60 * 1000).unref?.();
+                  console.log(`📸 [${BOT_ID}] boot-snapshot dumps armed (90 s post-boot, then every 5 min)`);
+                }
 
                 chess.loadActiveGames();
                 loadEnabledChats();

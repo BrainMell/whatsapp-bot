@@ -129,17 +129,75 @@ function scheduleSave(userId) {
       const toSave = [...pendingSaves];
       pendingSaves.clear();
       saveTimer = null;
-      for (const id of toSave) {
-        await saveUser(id);
-      }
+      // ⚡ 2026-11-09: parallel flush. Atlas round trip measures ~270 ms; the
+      // serial loop cost ~540 ms PER USER (findOne + write), so a burst that
+      // touched 20 users held the flush open ~10 s (owner-visible as "even
+      // text replies lag"). saveUser() chains per key (saveChains), so
+      // per-user write order is preserved — only cross-user parallelism
+      // changes.
+      await Promise.all(toSave.map((id) => saveUser(id)));
     }, 500); // flush every 500ms
   }
 }
 
 //==================this part handles all the data loading and saving==================
-async function loadEconomy() {
+// ⚡ BOOT SNAPSHOT (2026-11-09): the full users pull measures 125 s on Atlas M0
+// (3,938 docs / ~11 MB throttled to ~70-100 KB/s) and boot used to WAIT for it
+// before the WhatsApp socket connected — 3 min of dead air every restart.
+// Restore the in-memory cache from the instance's disk dump (~1-2 s) instead.
+// SAFETY: each restored user is stamped with its snapshot updatedAt (real Date,
+// revived by the snapshot loader) and the stale-guard three-way merge in
+// saveUser() protects sibling writes — the exact scenario that guard was built
+// for. The 5-min dump cadence bounds staleness; BOOT_SNAPSHOT=0 reverts.
+async function loadEconomy(opts = {}) {
   try {
     await connectDB();
+    if (opts.snapshot !== false) {
+      // ⚡ RECONNECT SKIP (2026-11-09): initSocket re-runs on every reconnect and
+      // the full Mongo re-pull (125 s throttled) used to re-run with it — the bot
+      // was effectively OFFLINE for minutes on every reconnect. The in-memory
+      // cache is the NEWEST state (flushes hit Mongo within ~1 s of any change),
+      // so when it is already populated we skip the reload entirely; the
+      // per-user stale-guard keeps sibling writes correct either way.
+      if (economyData.size > 0) {
+        console.log(`✅ [economy] cache already populated (${economyData.size} users) — reconnect: skipping re-load`);
+        return;
+      }
+      const bs = require('../../../utils/bootSnapshot');
+      const dir = global.WA_INSTANCE_DIR;
+      if (dir) {
+        const snap = bs.loadSnapshot(dir, 'economy');
+        if (snap.ok && snap.data && Array.isArray(snap.data.users) && snap.data.users.length > 50) {
+          const t0 = Date.now();
+          for (const u of snap.data.users) {
+            if (!u || !u.userId) continue;
+            // revive top-level timestamps as real Dates — stampSyncMeta gates the
+            // whole stale-guard on `updatedAt instanceof Date`
+            if (typeof u.updatedAt === 'string') u.updatedAt = new Date(u.updatedAt);
+            if (u.createdAt && typeof u.createdAt === 'string') u.createdAt = new Date(u.createdAt);
+            // Map fields come back as plain objects via the dump replacer, but
+            // guard anyway (same normalisation the Mongo path does)
+            if (u.inventory && u.inventory instanceof Map) u.inventory = Object.fromEntries(u.inventory);
+            if (u.skills && u.skills instanceof Map) u.skills = Object.fromEntries(u.skills);
+            if (u.portfolio && u.portfolio instanceof Map) u.portfolio = Object.fromEntries(u.portfolio);
+            economyData.set(u.userId, u);
+            stampSyncMeta(u.userId, u);
+          }
+          console.log(`✅ Loaded ${snap.data.users.length} users from SNAPSHOT (age ${snap.ageMin}m) in ${Date.now() - t0}ms`);
+          // 💡 same breaker-arming warm-up as the Mongo path
+          try {
+            await getMarketCap();
+            console.log(`💰 Market cap circuit breaker armed: ${_marketCap !== null ? getZENI() + _marketCap.toLocaleString() : 'default ' + getZENI() + DEFAULT_MARKET_CAP.toLocaleString()}`);
+          } catch (capErr) {
+            console.warn('⚠️ Could not load market cap (breaker uses default):', capErr.message);
+          }
+          return;
+        }
+        if (snap.reason && snap.reason !== 'disabled') {
+          console.log(`⏳ economy snapshot unusable (${snap.reason}) — falling back to MongoDB load`);
+        }
+      }
+    }
     const users = await User.find({}).lean();
     
     for (const user of users) {
@@ -3343,7 +3401,26 @@ function clearDebt(userId) {
 
 //========================================
 
+// ⚡ BOOT SNAPSHOT dump (2026-11-09): called by engine.js on the snapshot
+// cadence. Dumps the WHOLE in-memory cache to the instance's cache/boot dir.
+// Writes go to Mongo within ~1 s of any mutation, so this dump is the
+// freshest state available; boot restores it and the stale-guard reconciles.
+async function dumpEconomySnapshot() {
+  try {
+    const bs = require('../../../utils/bootSnapshot');
+    const dir = global.WA_INSTANCE_DIR;
+    if (!dir || economyData.size === 0) return;
+    const users = Array.from(economyData.values());
+    const r = await bs.saveSnapshot(dir, 'economy', { users, ts: new Date().toISOString() });
+    if (r.err && r.err !== 'disabled') console.warn('⚠️ economy snapshot dump failed:', r.err);
+    else if (!r.err) console.log(`📸 economy snapshot: ${users.length} users in ${r.ms}ms (${(r.bytes / 1024 / 1024).toFixed(1)}MB gz)`);
+  } catch (e) {
+    console.warn('⚠️ economy snapshot dump error:', e.message);
+  }
+}
+
 module.exports = {
+  dumpEconomySnapshot,
   // 💡 2026-10-15: leaf-level merge/diff helpers exported for the stale-guard
   // QA harness (scripts/qa_leaf_merge.js) — pure functions, no side effects
   threeWayMerge,
