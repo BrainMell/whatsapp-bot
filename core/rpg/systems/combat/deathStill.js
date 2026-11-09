@@ -412,26 +412,23 @@ async function scenePlateCanvas(layers, dyingIdx, deadIdx, chrome) {
     return cv;
 }
 
-// ── the KO'd body: a GHOST at the exact fall position ────────────────────
-// 💡 v3 (owner directive 2026-11-09: "remove the sprites sleeping on the
-// floor fully — leave the position as is, just make it sooo transparent
-// that it's barely noticeable"): the body is a ~14%-alpha ghost at the
-// exact fall spot — no contact shadow, no desaturation pass. The kill is
-// told by the element stamp + ✖ DEFEATED chip; the body only whispers
-// where it fell. (v2 kept the corpse at 97% "still THE monster" — owner
-// rejected it: still reads as a sprite napping on the floor.)
+// ── the KO'd body: a barely-visible ghost STANDING at its battle spot ────
+// 💡 v5 (owner clarification 2026-11-09: "why are the transparent assets
+// still on the ground and not standing up... like I said"): the dead unit
+// stays UPRIGHT in its stance, feet on its own ground line, at its exact
+// battle position — a ~14%-alpha ghost of where it stood. No rotation, no
+// lying pose, no shadow. (v3 ghosted the fall-rotated corpse — the owner
+// never wanted the lying pose at all; "leave the position as is" meant its
+// stance position.) DEATH_GHOST_DEBUG=1 renders the ghost at 0.9 alpha so
+// the pose can be eyeballed in QA sheets.
 function drawDeadSprite(plate, cutImg, a, kx, ky) {
     const c = plate.getContext('2d');
     const w = Number(a.w) || cutImg.width, h = Number(a.h) || cutImg.height;
     const ax = (Number(a.x) || 0) * kx, feetY = (Number(a.feetY) || (Number(a.y) || 0) + h) * ky;
     const dw = w * kx, dh = h * ky;
-    // fall backward around the feet (enemies face the players), sink to the
-    // ground line — position/rotation/scale UNCHANGED from v2, only opacity
     c.save();
-    c.globalAlpha = 0.14;
-    c.translate(ax, feetY);
-    c.rotate(Math.PI * 0.56);
-    try { c.drawImage(cutImg, -dw * 0.46, -dh * 0.34, dw * 0.92, dh * 0.92); } catch (e) {}
+    c.globalAlpha = process.env.DEATH_GHOST_DEBUG ? 0.9 : 0.14;
+    try { c.drawImage(cutImg, ax - dw / 2, feetY - dh, dw, dh); } catch (e) {}
     c.restore();
 }
 

@@ -20,7 +20,7 @@ Any one alone is ambiguous; together they are unmistakable:
 
 | Signal | Convention | Why it works |
 | --- | --- | --- |
-| **The body** | OWNER DIRECTIVE v3 (2026-11-09): the KO'd sprite is a barely-noticeable GHOST at its exact fall position (α≈0.14, no contact shadow, no desaturation). v2's readable corpse (α≈0.97 + 0.38 shadow) read as "a sprite sleeping on the floor" and was rejected | The element stamp + ☠ DEFEATED chip carry the kill; the ghost only whispers where it fell |
+| **The body** | OWNER DIRECTIVE v5 (2026-11-09, clarified): the KO'd sprite STAYS STANDING UPRIGHT in its stance at its exact battle position, as a barely-noticeable GHOST (α≈0.14, no contact shadow) — never a lying/fallen pose (v3's fall-rotated ghost was rejected: "why are the transparent assets still on the ground and not standing up") | The element stamp + ☠ DEFEATED chip carry the kill; the standing ghost only whispers where it stood |
 | **The world reacts** | Element breakup art engulfing/replaceing the body: explosion, shards, splash, rubble, dissolve | The cause of death is visible in the corpse's state |
 | **The UI confirms** | Zeroed/erased HP bar, ☠ DEFEATED chip where the bar was | System-level confirmation, zero ambiguity at a glance |
 | **Absence of motion cues** | Nothing mid-swing; effects frozen at their PEAK frame, settled debris on the ground | A still frozen at the "after", not the "during", reads as concluded |
@@ -65,11 +65,12 @@ deaths) and in every failure v2 shipped:
    "always visually inspect").
 
 Universal layer on every kind: ☠ **DEFEATED** chip where the erased HP bar
-was; the fallen body as a GHOST (rotated ~100° around its feet, sunk to the
-ground line, α≈0.14 — position/rotation/scale UNCHANGED from v2, owner
-directive 2026-11-09). The v1/v2 white flash ring was removed in the art
-pass (it washed the frame toward white). Group kills composite every fallen
-body into the ONE still (group-as-unit, same rule the clips had).
+was; the dead unit's sprite as a STANDING GHOST (upright in its stance, feet
+on its own ground line, α≈0.14, no shadow, no rotation — owner directive
+2026-11-09, clarified: never lying on the ground). The v1/v2 white flash ring
+was removed in the art pass (it washed the frame toward white). Group kills
+composite every standing ghost into the ONE still (group-as-unit, same rule
+the clips had).
 
 ## 3. Architecture
 
@@ -115,6 +116,9 @@ delivery time because it is cheaper than the old machinery's bookkeeping.
 ## 5. Env / QA
 
 - `DEATH_STILL_CHROME=0` skips the HUD chrome on the still (debug).
+- `DEATH_GHOST_DEBUG=1` renders the standing ghost at α≈0.9 instead of 0.14
+  so the pose/position can be eyeballed in `qa_death_visual.js` sheets
+  (the ship look stays at 0.14).
 - `qa_death_stills.js`: synthetic-layer end-to-end — all 6 kinds render, stamp
   cache hits on second call, group still composites, JPEG validates, dead
   sprite provably present (pixel diff at the anchor).
