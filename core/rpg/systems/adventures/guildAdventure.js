@@ -6555,7 +6555,24 @@ async function performAction(sock, player, action, sessionKey) {
           console.warn('[SummonCards] GIF→MP4 failed, sending still frame:', convErr.message);
         }
         if (__gifPayload) {
-          await boundedSend(sock, state.chatId, __gifPayload);
+          // ⚡ BLUEPRINT Upload row (UPLOAD_STILL_FIRST=0 reverts): kill-turn merged
+          // clips (card scene + death) can take ~10s of render+concat — deliver the
+          // FIRST FRAME of the SAME mp4 as an image instantly so the player sees the
+          // outcome, then the clip as the follow-up message. No re-render, no
+          // quality change; non-kill clips keep the old single-message flow.
+          if (__deathCaption && process.env.UPLOAD_STILL_FIRST !== '0') {
+            try {
+              const { mp4FirstFrameJpeg } = require('../../../utils/mediaConvert');
+              const __stillJ = await mp4FirstFrameJpeg(__gifPayload.video);
+              if (Buffer.isBuffer(__stillJ) && __stillJ.length > 100) {
+                await boundedSend(sock, state.chatId, { image: __stillJ });
+                console.log('[SummonCards] still-first sent before clip (' + __stillJ.length + 'B)');
+                await boundedSend(sock, state.chatId, __gifPayload);
+                __gifPayload = null;   // clip already delivered
+              }
+            } catch (sfErr) { console.warn('[SummonCards] still-first skipped:', sfErr.message); }
+          }
+          if (__gifPayload) await boundedSend(sock, state.chatId, __gifPayload);
         } else {
           let __still = null;
           try { __still = require('../../../utils/gif89a').firstFrameJpeg(gif); } catch (e) {}
@@ -11098,13 +11115,28 @@ async function executeEncounter(sock, groq, encounterType, sessionKey) {
           const goServiceSingleton = require('../../../utils/goImageService');
           let splashBuf = null;
           try {
-            const splashPromise = goServiceSingleton.generateBossSplash(splashPayload);
-            const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve('__TIMEOUT__'), 5000));
-            const raceResult = await Promise.race([splashPromise, timeoutPromise]);
-            if (raceResult !== '__TIMEOUT__') {
-              splashBuf = raceResult;
+            // ⚡ BLUEPRINT Boss splash row (BOSS_SPLASH_BAKE=0 reverts): the splash is
+            // finite art per (name, sprite, flavor, tier) — disk-baked via assetBake
+            // (size-capped, outside git). Repeat boss encounters with the same
+            // payload are a disk read; on a cold 5s-timeout miss the bake CONTINUES
+            // in the background so the next encounter of this boss is instant.
+            const __splashBake = global.__bossSplashBake || (global.__bossSplashBake = require('../../../utils/assetBake').makeBakeCache({ ns: 'bosssplash', version: 'v1', maxMB: 60, ext: 'jpg' }));
+            const __spKey = __splashBake.key(splashPayload.name, splashPayload.spriteFilename, splashPayload.flavorText, splashPayload.tier);
+            const __bakedSplash = process.env.BOSS_SPLASH_BAKE !== '0' ? __splashBake.get(__spKey) : null;
+            if (__bakedSplash) {
+              splashBuf = __bakedSplash;
+              console.log('[BossSplash] disk bake HIT ' + __bakedSplash.length + 'B');
             } else {
-              console.warn('[BossSplash] Skipped - total time exceeded 5s (queue or render slow). Combat will proceed without splash.');
+              const splashPromise = process.env.BOSS_SPLASH_BAKE !== '0'
+                ? __splashBake.getOrBake(__spKey, () => goServiceSingleton.generateBossSplash(splashPayload))
+                : goServiceSingleton.generateBossSplash(splashPayload);
+              const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve('__TIMEOUT__'), 5000));
+              const raceResult = await Promise.race([splashPromise, timeoutPromise]);
+              if (raceResult !== '__TIMEOUT__') {
+                splashBuf = raceResult;
+              } else {
+                console.warn('[BossSplash] Skipped - total time exceeded 5s (queue or render slow). Combat will proceed without splash. (bake continues in background for next time)');
+              }
             }
           } catch (splashGenErr) {
             console.error('[BossSplash] Generation threw (non-fatal):', splashGenErr.message);

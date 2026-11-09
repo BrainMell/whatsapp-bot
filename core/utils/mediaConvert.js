@@ -105,4 +105,26 @@ async function mp4ToMp4Overlaid(mp4Buf, pngBuf) {
     } finally { _clean(mi, pi, mo); }
 }
 
-module.exports = { gifToMp4Even, gifToMp4Overlaid, mp4ToMp4Overlaid };
+// ⚡ BLUEPRINT Upload row: first frame of an H.264 MP4 as JPEG — used by the
+// still-first delivery path (send the frame instantly, the clip follows).
+function mp4FirstFrameJpeg(mp4Buf) {
+  return new Promise((resolve, reject) => {
+    if (!Buffer.isBuffer(mp4Buf) || mp4Buf.length < 500 || mp4Buf.toString('latin1', 4, 8) !== 'ftyp') return reject(new Error('not an mp4 buffer'));
+    const { spawn } = require('child_process');
+    const p = spawn(process.env.FFMPEG_PATH || 'ffmpeg', ['-y', '-loglevel', 'error', '-i', 'pipe:0', '-frames:v', '1', '-q:v', '4', '-f', 'image2', 'pipe:1'], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const chunks = [];
+    let err = '';
+    p.stdout.on('data', (d) => chunks.push(d));
+    p.stderr.on('data', (d) => { err += d; if (err.length > 2000) err = err.slice(-1000); });
+    p.on('error', reject);
+    p.on('close', (code) => {
+      const out = Buffer.concat(chunks);
+      if (code !== 0 || out.length < 100) return reject(new Error('ffmpeg first-frame ' + code + ' ' + err.slice(-160)));
+      resolve(out);
+    });
+    p.stdin.on('error', () => {});
+    p.stdin.end(mp4Buf);
+  });
+}
+
+module.exports = { gifToMp4Even, gifToMp4Overlaid, mp4ToMp4Overlaid, mp4FirstFrameJpeg };

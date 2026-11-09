@@ -47,3 +47,14 @@ Never change output dimensions or lower quality; verify parity (same W×H, same 
 1. Joker alone in a GC: run each row's command cold, then again; log `[GoService]`/bake timings.
 2. Add Subaru; have each bot's `qa-send` trigger the other's commands to watch timing from outside.
 3. Acceptance: warm path < 1.5s for stills, < 3s for clips (10× slower box budget: < 15s).
+
+## 2026-11-09 wave-2 rows (agent measurements, box1 QA)
+| Row | Implementation | Cold | Warm | Kill switch |
+|---|---|---|---|---|
+| Upload: still-first, clip after | kill-turn merged clips send frame 0 of the SAME mp4 instantly, clip follows; helper `mp4FirstFrameJpeg` in mediaConvert (237ms) | n/a | n/a | `UPLOAD_STILL_FIRST=0` |
+| Boss splash / endscreen | disk bake per (name,sprite,flavor,tier) via assetBake ns bosssplash (60MB cap); 5s combat race kept — a timed-out bake continues in background so the NEXT encounter hits | 4.19s (Go) | **69ms disk hit** | `BOSS_SPLASH_BAKE=0` |
+| Profile / shop / inventory / menu cards | whole-card disk bake keyed by FULL payload hash (incl. pfp buffer bytes) + 10-min freshness bucket, ns profilecards (250MB); render queue unchanged on bake-miss path | 5.84s | **0ms (disk read)** | `PROFILE_BAKE=0` |
+| Skill VFX (non-ult) | covered by the recipe §1 work: same plate engine + prewarm (see RECIPE doc §4) | — | — | — |
+| Abyss hub/room/scene | NOT DONE this wave: backgrounds are local files already LRU-decode-cached (`_bgCache`); the real win needs the composed tile-layer extraction in abyssScene (2848 lines) — queued | — | — | — |
+| Homestead / world / guildwar | NOT DONE this wave: markers are drawn into the same canvas as the tile layer, so whole-output caching would freeze markers — needs the bake-tile-layer/draw-markers-live split — queued | — | — | — |
+| Basic attack→death prewarm | NOT DONE: overlay keys hash the actual cut PNG bytes; prebaking synthetic fights only helps if cuts are byte-stable across rosters (mandate step-2 verification) — queued behind that verification | — | — | — |

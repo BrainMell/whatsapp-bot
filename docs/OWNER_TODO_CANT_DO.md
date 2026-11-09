@@ -51,3 +51,9 @@ Implemented per docs/RECIPE_SKILLS_ULTS_SUMMONS.md §1-§2; measured results in 
 - §2.6 **Cold/warm logging** — `[CardScene] ... cold|warm` per play for live verification.
 - QA: `scripts/qa_ult_plates_prewarm.js` (pure-key parity: same geometry + different scene must HIT), `scripts/qa_cardfx_bake.js` (cold/warm per card).
 - Still not doable from code: WhatsApp upload bandwidth (network), Groq daily token quota (needs dev tier or a second key/org).
+
+## 2026-11-09 Blueprint wave-2 (still-first + boss splash + profile cards)
+- **Still-first clip delivery** on kill turns: the merged card+death clip sends frame 0 of the same mp4 as an instant image, then the clip (`UPLOAD_STILL_FIRST=0` reverts; helper `mp4FirstFrameJpeg` in core/utils/mediaConvert.js).
+- **Boss splash disk bake**: repeat boss encounters with the same (name,sprite,flavor,tier) are a 69ms disk read instead of a 4-5s Go render; a 5s-timeout miss keeps baking in background (`BOSS_SPLASH_BAKE=0`).
+- **Profile/allocate card disk bake**: same payload view within 10 min = 0ms disk read instead of a 5.8s canvas re-render; keys hash the full payload incl. pfp bytes (`PROFILE_BAKE=0`).
+- QA: `scripts/qa_blueprint_rows.js`. Still queued: abyss tile-layer extraction, homestead/world/guildwar marker split, bestiary overlay prewarm (needs cut byte-stability verification).

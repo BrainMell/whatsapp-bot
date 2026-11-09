@@ -1063,7 +1063,44 @@ async function renderAllocateCard(params) {
 // OWNER QUEUE RULE (2026-10-08): profile renders take the shared render slot
 // (serialized + memory-gated). No cache — cards are per-user by design.
 const _renderQ = require('../../../utils/renderQueue');
+
+// ⚡ BLUEPRINT Profile/menu row (PROFILE_BAKE=0 reverts): whole-card disk cache
+// keyed by a hash of the FULL payload (name, stats, equipment, level, xp, and
+// the pfp BUFFER bytes) plus a 10-minute freshness bucket — repeated views of
+// the same card state are a disk read instead of a full canvas re-render.
+// Renders still flow through the serial render queue whenever a bake is needed;
+// callers receive the same PNG buffer as before.
+const __pcBake = require('../../../utils/assetBake').makeBakeCache({ ns: 'profilecards', version: 'v1', maxMB: 250, ext: 'png' });
+function __pcKey(kind, args) {
+  const crypto = require('crypto');
+  const h = crypto.createHash('sha1');
+  const walk = (v, d) => {
+    if (v === null || v === undefined || d > 6) { h.update(':' + String(v)); return; }
+    if (Buffer.isBuffer(v)) { h.update('|buf' + crypto.createHash('sha1').update(v).digest('hex')); return; }
+    if (Array.isArray(v)) { v.forEach((x) => walk(x, d + 1)); return; }
+    if (typeof v === 'object') { for (const k of Object.keys(v).sort()) { h.update('.' + k); walk(v[k], d + 1); } return; }
+    h.update('=' + String(v));
+  };
+  walk(args, 0);
+  h.update('#b' + Math.floor(Date.now() / 600000));   // 10-min freshness bucket
+  return __pcBake.key(kind, h.digest('hex'));
+}
+async function __bakedRender(kind, fn, args) {
+  if (process.env.PROFILE_BAKE === '0') return _renderQ.run(kind, () => fn(...args));
+  try {
+    const k = __pcKey(kind, args);
+    const buf = await __pcBake.getOrBake(k, async () => {
+      const out = await _renderQ.run(kind, () => fn(...args));
+      if (Buffer.isBuffer(out) && out.length > 500) return out;
+      if (out && typeof out.toBuffer === 'function') return out.toBuffer('image/png');
+      throw new Error('not-cacheable-output');
+    });
+    if (Buffer.isBuffer(buf) && buf.length > 500) return buf;
+    return _renderQ.run(kind, () => fn(...args));
+  } catch (e) { return _renderQ.run(kind, () => fn(...args)); }
+}
+
 module.exports = {
-  renderProfileCard: (...args) => _renderQ.run('profileCard', () => renderProfileCard(...args)),
-  renderAllocateCard: (...args) => _renderQ.run('allocateCard', () => renderAllocateCard(...args)),
+  renderProfileCard: (...args) => __bakedRender('profileCard', renderProfileCard, args),
+  renderAllocateCard: (...args) => __bakedRender('allocateCard', renderAllocateCard, args),
   renderStyleSheet, clearCaches, DEFAULT_STYLE, getDefaultStyle, RANK_COLORS, RANK_GRADIENTS, STAT_COLORS, EQUIP_RARITY, EQUIPMENT_SLOTS, CLASS_SPRITE_SETS };
