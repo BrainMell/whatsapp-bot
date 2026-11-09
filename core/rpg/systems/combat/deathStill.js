@@ -138,7 +138,7 @@ function putArt(c, img, cx, cy, w, h, opts = {}) {
 // lands mid-body. v2 uses the real big art; NO white flash wash (v1's stamps
 // measured avg RGB 255,254,254 — literally white rectangles).
 const STAMP_SIZE = 480;
-const STAMP_DIR = path.join(os.tmpdir(), 'death_stamps_v5');
+const STAMP_DIR = path.join(os.tmpdir(), 'death_stamps_v7');
 const _stampMemo = new Map();
 
 function speck(rnd, c, x, y, r, col, a) {
@@ -301,36 +301,55 @@ async function paintStamp(kind, boss) {
             rubbleChip(c, cx + (rnd() - 0.5) * 280 * A, gy + 6 + rnd() * 40, 5 + rnd() * 12, rnd() * Math.PI, rnd, pal[Math.floor(rnd() * pal.length)]);
         }
     } else if (kind === 'WATER') {
-        // 💡 v4 full rework: v2 drew a stroked pancake + a stretched sprite-
-        // SHEET smear (attack3 is a 3-frame strip — never draw a sheet whole)
-        // + a floating thin ring = the "offensive" soap bubble. Now: soft
-        // gradient puddle (no outline) + a real CROWN splash — tapered spouts
-        // with a 3-stop value ramp, tall centre → short flanks — highlighted
-        // droplets arcing outward, foam and mist kept subtle.
-        const foam = tinted(await art('kenney', /^puff_([1-9]|1[0-3])\.png$/, 0.3), '#eaf7ff');
-        const mist = tinted(await art('kenney', /^puff_([1-9]|1[0-3])\.png$/, 0.4), '#9fd4ff');
-        // puddle: layered soft gradients, NO stroke outline
-        softBlob(c, cx, gy + 8, 178 * A, 33 * A, [[0, 'rgba(24,80,148,0.88)'], [0.5, 'rgba(45,112,188,0.55)'], [1, 'rgba(45,112,188,0)']]);
-        softBlob(c, cx - 45 * A, gy + 4, 72 * A, 12 * A, [[0, 'rgba(196,232,255,0.55)'], [1, 'rgba(196,232,255,0)']]);
-        // central burst column
-        softBlob(c, cx, gy - 52 * A, 58 * A, 88 * A, [[0, 'rgba(214,242,255,0.8)'], [0.55, 'rgba(120,190,240,0.4)'], [1, 'rgba(120,190,240,0)']]);
-        // crown: 9 tapered spouts, parabolic heights, leaning outward
-        const nS = 9;
-        for (let i = 0; i < nS; i++) {
-            const t = i / (nS - 1), dx = (t - 0.5) * 2;
-            spout(c, cx + dx * 98 * A, gy + 5, (56 + 70 * (1 - dx * dx)) * A, dx * 36 * A, 12.5 * A,
-                [[0, 'rgba(26,82,146,0.95)'], [0.55, 'rgba(70,160,222,0.92)'], [1, 'rgba(238,250,255,0.95)']]);
+        // 💧 v7 (owner 2026-11-09 "the water looks like shit"): v4's tapered spouts read as ICE SPIKES. Real water-burst
+        // language: a translucent water BALL that has just popped (volume from a 3-stop radial + dark rim + specular
+        // crescents), TEARDROPS flung radially (round head, tail toward the centre), a rippling puddle, rising foam.
+        const foam = tinted(await art('kenney', /^puff_([1-9]|1[0-3])\.png$/, 0.3), '#f4fbff');
+        // puddle + 3 expanding ripples (thin, soft, light) on the ground plane
+        softBlob(c, cx, gy + 8, 190 * A, 34 * A, [[0, 'rgba(20,74,142,0.9)'], [0.55, 'rgba(40,110,190,0.55)'], [1, 'rgba(40,110,190,0)']]);
+        softBlob(c, cx - 40 * A, gy + 3, 80 * A, 11 * A, [[0, 'rgba(206,238,255,0.6)'], [1, 'rgba(206,238,255,0)']]);
+        for (let r = 0; r < 3; r++) {
+            c.save(); c.strokeStyle = 'rgba(214,242,255,' + (0.7 - r * 0.18) + ')'; c.lineWidth = 3.2 - r * 0.7;
+            c.beginPath(); c.ellipse(cx, gy + 9, (92 + r * 46) * A, (15 + r * 8) * A, 0, 0, Math.PI * 2); c.stroke(); c.restore();
         }
-        putArt(c, foam, cx, gy - 26 * A, 135 * A, 78 * A, { alpha: 0.5 });
-        putArt(c, mist, cx - 58 * A, gy - 195 * A, 150 * A, 118 * A, { alpha: 0.3 });
-        // droplets with a highlight dot, arcing outward and falling
-        for (let i = 0; i < 15 * A; i++) {
-            const dx = (rnd() - 0.5) * 2;
-            const x = cx + dx * (100 + rnd() * 85) * A;
-            const y = gy - (26 + (1 - Math.abs(dx)) * 120 * rnd()) * A + rnd() * 46;
-            const r = 1.8 + rnd() * 3.2;
-            speck(rnd, c, x, y, r, ['rgba(186,228,255,0.95)', 'rgba(116,182,238,0.92)', 'rgba(255,255,255,0.95)'][Math.floor(rnd() * 3)], 0.9);
-            speck(rnd, c, x - r * 0.34, y - r * 0.34, r * 0.34, 'rgba(255,255,255,0.95)', 0.95);
+        const by = gy - 110 * A, R0 = 78 * A;
+        // the popped water ball: overlapping lobes -> organic silhouette, volume via radial ramp, rim + spec
+        const lobes = [[0, 0, 1], [-0.42, 0.18, 0.62], [0.46, 0.14, 0.66], [0.05, -0.5, 0.58], [-0.2, -0.34, 0.5], [0.3, -0.36, 0.48]];
+        c.save();
+        c.beginPath(); for (const [lx, ly, lr] of lobes) { c.moveTo(cx + lx * R0 + lr * R0, by + ly * R0); c.arc(cx + lx * R0, by + ly * R0, lr * R0, 0, Math.PI * 2); }
+        const bg = c.createRadialGradient(cx - R0 * 0.25, by - R0 * 0.3, R0 * 0.1, cx, by, R0 * 1.25);
+        bg.addColorStop(0, 'rgba(226,246,255,0.92)'); bg.addColorStop(0.45, 'rgba(110,190,244,0.8)'); bg.addColorStop(1, 'rgba(24,84,170,0.88)');
+        c.lineWidth = 7; c.strokeStyle = 'rgba(14,58,128,0.8)'; c.stroke();   // dark rim first...
+        c.fillStyle = bg; c.fill('nonzero');                                   // ...fill on top hides every inner lobe seam, leaving ONE silhouette outline
+        c.restore();
+        // specular crescents + bright core flash so it reads as WET and just burst
+        c.save(); c.strokeStyle = 'rgba(255,255,255,0.95)'; c.lineCap = 'round'; c.lineWidth = 6 * A;
+        c.beginPath(); c.arc(cx - R0 * 0.1, by - R0 * 0.05, R0 * 0.72, Math.PI * 1.08, Math.PI * 1.45); c.stroke();
+        c.lineWidth = 3; c.beginPath(); c.arc(cx + R0 * 0.1, by + R0 * 0.05, R0 * 0.82, Math.PI * 0.12, Math.PI * 0.3); c.stroke(); c.restore();
+        softBlob(c, cx - R0 * 0.2, by - R0 * 0.25, R0 * 0.38, R0 * 0.3, [[0, 'rgba(255,255,255,0.85)'], [1, 'rgba(255,255,255,0)']]);
+        // teardrops flung radially (head outward, tail toward the burst centre), bigger above, a few skimming the ground
+        const drop = (x, y, len, wid, ang) => {
+            c.save(); c.translate(x, y); c.rotate(ang);
+            const g = c.createLinearGradient(0, 0, len, 0); g.addColorStop(0, 'rgba(40,120,200,0.55)'); g.addColorStop(0.55, 'rgba(120,200,250,0.95)'); g.addColorStop(1, 'rgba(226,247,255,0.98)');
+            c.fillStyle = g; c.strokeStyle = 'rgba(16,64,140,0.7)'; c.lineWidth = 1.6;
+            c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(len * 0.35, -wid * 0.95, len * 0.78, -wid * 0.62);
+            c.arc(len * 0.78, 0, wid * 0.62, -Math.PI / 2, Math.PI / 2, false);
+            c.quadraticCurveTo(len * 0.35, wid * 0.95, 0, 0); c.closePath(); c.fill(); c.stroke();
+            c.fillStyle = 'rgba(255,255,255,0.95)'; c.beginPath(); c.arc(len * 0.8, -wid * 0.22, wid * 0.2, 0, Math.PI * 2); c.fill();
+            c.restore();
+        };
+        const nD = Math.round(9 * A);
+        for (let i = 0; i < nD; i++) {
+            const t = i / (nD - 1), ang = Math.PI * (1.04 + t * 0.92) + (rnd() - 0.5) * 0.12;   // upper fan, left -> right
+            const d0 = R0 * (0.95 + rnd() * 0.15), len = (38 + rnd() * 36 + Math.sin(t * Math.PI) * 30) * A, wid = (10 + rnd() * 6) * A;
+            drop(cx + Math.cos(ang) * d0, by + Math.sin(ang) * d0 * 0.92, len, wid, ang);
+        }
+        for (let i = 0; i < 4; i++) { const side = i % 2 ? 1 : -1; drop(cx + side * R0 * 0.9, by + R0 * 0.55, (26 + rnd() * 22) * A, (6 + rnd() * 3) * A, side > 0 ? 0.25 + rnd() * 0.3 : Math.PI - 0.25 - rnd() * 0.3); }
+        putArt(c, foam, cx, gy - 10 * A, 190 * A, 60 * A, { alpha: 0.6 });
+        for (let i = 0; i < 22 * A; i++) {   // fine airborne droplets + a few falling back
+            const ang = Math.PI * (1.02 + rnd() * 0.96), d = R0 * (1.5 + rnd() * 1.1), x = cx + Math.cos(ang) * d, y = by + Math.sin(ang) * d * 0.85 + rnd() * 40, r = 1.6 + rnd() * 3;
+            speck(rnd, c, x, y, r, ['rgba(176,226,255,0.95)', 'rgba(110,180,240,0.92)', 'rgba(255,255,255,0.95)'][Math.floor(rnd() * 3)], 0.92);
+            speck(rnd, c, x - r * 0.3, y - r * 0.3, r * 0.32, 'rgba(255,255,255,1)', 0.95);
         }
     } else if (kind === 'ICE') {
         const pane = tinted(await art('kenney', /^p_window_01\.png$/, 0.5), '#cfeeff');
