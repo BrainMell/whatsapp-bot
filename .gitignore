@@ -88,3 +88,4 @@ core/rpgasset/kingdom3d/lm_castle_*
 
 # generated artefacts (untracked 2026-10-28 cleanup)
 scripts/render_out/
+tmp/summongif/

@@ -122,7 +122,8 @@ async function renderCardPlayScene(a) {
   const __cardBake2 = _cardBake();
   let __bakeCold = false;
   const bakedCard = async (variantKey, artOverride) => {
-    const k = __cardBake2.key(card.id, variantKey, String(card.image || card.art || card.artUrl || '').slice(-64));
+    let __cardSig = ''; try { __cardSig = JSON.stringify(card); } catch (e) { __cardSig = String(card.id); }   // any card field (cost/level/text) changes the face -> new key, never stale
+  const k = __cardBake2.key(card.id, variantKey, __cardSig);
     if (process.env.CARDFX_BAKE !== '0') {
       try { if (!__cardBake2.get(k)) __bakeCold = true; } catch (e) {}
       const buf = await __cardBake2.getOrBake(k, async () => {

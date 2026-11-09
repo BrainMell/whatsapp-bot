@@ -1015,6 +1015,7 @@ async function animateUltimate(options = {}) {
     // serially. Same 30s race + abort token; a rejection behaves exactly like
     // the old path (text fallback below).
     const __early = String(process.env.ULT_RENDER_EARLY || '') !== '0';
+    const renderT0 = Date.now();   // measured from render START (early render overlaps the texts)
     let __earlyRenderP = null;
     const startUltRender = () => {
       // 🔥 26-R5: when the race fires, the LOSING render must stop painting
@@ -1066,7 +1067,6 @@ async function animateUltimate(options = {}) {
     }
     const cacheHit = Buffer.isBuffer(options.baseSceneBuffer) && options.baseSceneBuffer.length > 1000;
     console.log('[SkillVFX] cast ' + classId + '/' + ability.id + ' entry=' + entry.style + ' cache=' + (cacheHit ? 'hit' : 'miss') + ' target=' + (target && (target.name || target.id) || 'enemy'));
-    const renderT0 = Date.now();
     // 2026-10-25: sprite-sheet engine first (real VFX frames, 15fps MP4); the
     // legacy hand-drawn GIF renderer stays as the fallback.
     let vid = null;
