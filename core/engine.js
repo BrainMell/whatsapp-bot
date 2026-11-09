@@ -9205,6 +9205,14 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
               try {
                 require("./utils/fx").fxSniff(m, sock).catch(() => {});
               } catch (_fxSniffErr) { /* never block the pipeline */ }
+              // 🎯 ANIME QUIZ SNIPER (owner 2026-11-09 21:50Z: omniverse quiz —
+              // subaru answers the quiz host instantly; joker untouched).
+              // Fire-and-forget like fxSniff: never blocks, never throws into
+              // the command pipeline. Self-gated: subaru only, @g.us only,
+              // /omniverse/i subject only, strict Q#/A-D shape only, one
+              // answer per question number (Baileys replay-safe).
+              try { require("./animeQuizSniper.js").snipe(m, sock, BOT_ID).catch(() => {}); }
+              catch (_quizSniperErr) { /* never block the pipeline */ }
 
               // ⚖️ MM poll ballots (owner 2026-10-13 17:45Z): WhatsApp poll taps
               // become murdermystery day-vote ballots. baileys rc14 ships the
