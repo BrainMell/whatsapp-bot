@@ -435,7 +435,7 @@ function drawUltNova(c, W, H, act, anchors, s, phase) {
 // No invented numbers (only the engine's real damage floats), no fx on the dead, primary target
 // keeps the full drawHitReaction treatment. Gated on act.aoe so single-target skills stay honest.
 async function drawAoeSplash(c, layers, anchors, act, players, enemies, s) {
-  if (!act || !act.ult || !act.aoe || act.missed) return;
+  if (!act || !act.aoe || act.missed) return;      // 2026-11-09: any real AoE (ult or not) paints the collective hit on every living unit
   if (!(Math.floor(Number(act.damage) || 0) > 0)) return;
   const roster = act.targetSide === 'enemy' ? (enemies || []) : (players || []);
   const col = ELEMENT_COLORS[String(act.element || '').toUpperCase()] || '#b78af0';

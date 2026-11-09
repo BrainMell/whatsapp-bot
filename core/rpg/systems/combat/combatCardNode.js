@@ -69,8 +69,8 @@ async function renderNodeCard(players, enemies, options, api) {
     try { require('./hitFx').drawUltNova(c, W, H, act, anchors, s, 'back'); } catch (e) { /* cosmetic */ }
   }
   c.drawImage(await loadImage(layers.sprites), 0, 0, W, H);
-  if (act && act.ult) {
-    try { const __fx = require('./hitFx'); await __fx.drawAoeSplash(c, layers, anchors, act, players, enemies, s); __fx.drawUltNova(c, W, H, act, anchors, s, 'front'); } catch (e) { /* cosmetic */ }
+  if (act && (act.ult || act.aoe)) {
+    try { const __fx = require('./hitFx'); await __fx.drawAoeSplash(c, layers, anchors, act, players, enemies, s); if (act.ult) __fx.drawUltNova(c, W, H, act, anchors, s, 'front'); } catch (e) { /* cosmetic */ }
   }
   // JRPG-style hit reaction on the target: knock-back red double image + slash + impact star + damage number
   try { await require('./hitFx').drawHitReaction(c, layers, anchors, act, s); } catch (e) { /* cosmetic */ }
@@ -100,7 +100,7 @@ async function renderNodeCard(players, enemies, options, api) {
     const fxCount = Array.isArray(u.statusEffects) ? u.statusEffects.filter((e) => e && e.icon).length : 0;
     const realDmg = act && !act.missed ? Math.floor(Number(act.damage) || 0) : 0;
     const isT = realDmg > 0 && a.side === act.targetSide && a.index === (Number(act.targetIndex) || 0);
-    const isAoEV = act && act.ult && act.aoe && realDmg > 0 && a.side === act.targetSide;
+    const isAoEV = act && act.aoe && realDmg > 0 && a.side === act.targetSide;
     c.font = `bold ${12 * s}px sans-serif`;   // measure with the EXACT font drawUnitBar draws with
     const nameW = c.measureText(String(u.name || '')).width;
     const noName = a.x * s - nameW / 2 < __nameEnd[a.side] - 2 * s;   // any kiss = skip

@@ -261,13 +261,22 @@ function buildAnimationAction(turnInfo, options = {}) {
 
     // Determine damage/heal
     const damage = Math.max(0, Math.floor(Number(turnInfo.damage) || 0));
-    const heal = Math.max(0, Math.floor(Number(turnInfo.healing) || 0));
+    // 🔧 AUDIT 2026-11-09 ("basic attacks sometimes don't show the new basic attack effect"): a damaging turn that ALSO healed the
+    // attacker (lifesteal / vampiric) carried heal>0, and the card painter's heal branch outranks the slash branch, so the hit
+    // painted a green glow and no slash/impact. A damage turn is a HIT; the lifesteal heal rides the war log, not the target.
+    const __healRaw = Math.max(0, Math.floor(Number(turnInfo.healing) || 0));
+    const heal = (damage > 0 && !(turnInfo.action && turnInfo.action.itemEffect)) ? 0 : __healRaw;
     const isCrit = Boolean(turnInfo.isCrit);
     // 🔧 FX-PASS 2026-11-08 (owner: T52/T54/T38 misses showed no dodge): some miss turns carry the
     // miss only in the war-log text (the action name stays "Quick Shot" etc.) — read actionLog too,
     // word-boundary safe ("dismiss" can never match).
-    const missed = Boolean(turnInfo.missed) || /\bmiss(es|ed)?\b|\bdodge(d|s|ing)?\b/.test(actionName) ||
-        (Array.isArray(turnInfo.actionLog) && turnInfo.actionLog.some((l) => /\bmiss(es|ed)?\b|\bdodge(d|s|ing)?\b/.test(String(l))));
+    // 🔧 AUDIT 2026-11-09 ("miss and other attacks seem mismatched"): the text sniff below used to flip ANY turn to MISS when
+    // ANY line of its actionLog said "missed"/"dodged" — e.g. an AoE where one target dodged, or a log carrying another
+    // unit's dodge — so a turn that dealt real damage painted a MISS plaque instead of the hit. The sniff is now only a
+    // fallback for turns that dealt NO damage and healed nothing; an explicit turnInfo.missed always wins.
+    const __missText = /\bmiss(es|ed)?\b|\bdodge(d|s|ing)?\b/;
+    const missed = Boolean(turnInfo.missed) || (damage <= 0 && heal <= 0 && (__missText.test(actionName) ||
+        (Array.isArray(turnInfo.actionLog) && turnInfo.actionLog.some((l) => __missText.test(String(l))))));
 
     // 🎒 #3 (owner work-order 2026-11-07): consumable turns ride the item's effect
     // family so the card painter can give every consumable type its own emblem.
@@ -288,7 +297,17 @@ function buildAnimationAction(turnInfo, options = {}) {
         // 🌊 ULT AOE SPLASH round 2: the splash-everyone treatment only fires when the skill is a
         // REAL AoE (monsterSkills ultimate = type:'aoe') — a single-target skill that merely sounds
         // big keeps the big nova but never paints hits on units it did not damage.
-        aoe: isUlt && String((turnInfo.action && turnInfo.action.type) || '') === 'aoe',
+        // 🔧 AUDIT 2026-11-09 ("skill attacks no longer trigger the collective red overlay for aoe"): the flag was gated on
+        // isUlt, so a PLAYER AoE skill (skillTree: effect.type 'aoe' / targeting AOE*, or the PvP/boss aoe flag) never marked the
+        // turn AoE and only the primary target got a reaction. Any real AoE now paints every living unit on the target side;
+        // only the screen-filling nova stays ult-only (combatCardNode / hitFx gate on act.ult for that).
+        aoe: !missed && (() => {
+            const a = turnInfo.action || {}; let eff = a.effect;
+            try { if (typeof eff === 'function') eff = eff(Number(a.level) || 1); } catch (e) { eff = null; }
+            return String(a.type || '') === 'aoe' || String((eff && eff.type) || '') === 'aoe' || turnInfo.aoe === true ||
+                /^AOE/i.test(String(a.targeting || '')) || String(a.target || a.targetType || '').toLowerCase() === 'all_enemies' ||
+                (Array.isArray(turnInfo.targets) && turnInfo.targets.length > 1);
+        })(),
         heal,
         itemKind: itemEffect || undefined,
         attackSeed: Math.max(0, Math.floor(Number(turnInfo.turnNumber) || 0)),
