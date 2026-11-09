@@ -14,11 +14,20 @@
 //
 // The legacy single-shot chain (Deezer → JioSaavn → YouTube → SoundCloud)
 // remains the fallback for two cases:
-//   1. yt-search finds no candidates (the Go chain can still match via
-//      Deezer/Saavn/SoundCloud — YouTube-only lists must not hide those).
+//   1. yt-search AND the Deezer fallback list both find nothing (the Go
+//      chain can still match via Saavn/SoundCloud — those songs must play).
 //   2. the user pastes a YouTube URL directly (v3.1 URL bypass, no list).
+//
+// 2026-11-09 fallback-list fix: a bare yt-miss used to silently drop to the
+// legacy chain, which AUTO-SENDS its top match — violating the owner brief
+// ("a search must NEVER auto-send the top match") and serving wrong songs
+// (live case 2026-11-09 10:09Z: meme-sound query -> unrelated JioSaavn
+// track). Now a yt-miss first tries Deezer's public API and shows the SAME
+// numbered list; only when Deezer is empty too does the legacy chain run,
+// behind a transparent notice.
 
 const yts = require("yt-search");
+const axios = require("axios");
 
 const pendingAudio = new Map(); // chatId -> { phase, query, results[], ts }
 const TTL_MS = 3 * 60 * 1000; // 3 minutes to pick (powerscale parity)
@@ -34,6 +43,29 @@ function clip(s, n) {
 function fmtDur(v) {
     const t = v && v.duration && v.duration.timestamp;
     return t && t !== "0:00" ? t : "?";
+}
+
+// Deezer public search (2026-11-09 fallback list). api.deezer.com needs no
+// auth and returns title / artist / duration; candidates reuse the yt list
+// shape so resolveAudioPick + the numbered reply flow work unchanged.
+const DEEZER_TIMEOUT_MS = 8 * 1000;
+async function deezerSearch(query) {
+    const r = await axios.get("https://api.deezer.com/search", {
+        params: { q: query, limit: 12 },
+        timeout: DEEZER_TIMEOUT_MS,
+    });
+    const tracks = (r.data && r.data.data) || [];
+    return tracks
+        .filter((t) => t && t.duration >= MIN_SECONDS && t.duration <= MAX_SECONDS)
+        .slice(0, MAX_RESULTS)
+        .map((t) => ({
+            videoId: null,
+            deezerQuery: `${(t.artist && t.artist.name) || ""} ${t.title || ""}`.trim(),
+            title: t.title || "unknown",
+            author: (t.artist && t.artist.name) || "unknown",
+            dur: `${Math.floor(t.duration / 60)}:${String(t.duration % 60).padStart(2, "0")}`,
+            seconds: t.duration,
+        }));
 }
 
 function expired(session) {
@@ -57,6 +89,9 @@ function hasPendingAudioSelection(chatId) {
 
 // Resolve a numeric reply against the pending session.
 //   {ok:true, videoUrl, title, author}      -> engine plays it (Go URL-mode)
+//   {ok:true, pinnedQuery, title, author}   -> engine plays the pinned
+//                                              "<artist> <title>" re-query
+//                                              (Deezer-backed list pick)
 //   {ok:false, reason:"expired"}            -> list died
 //   {ok:false, reason:"searching"}          -> pick raced the search
 //   {ok:false, reason:"range", max}         -> out-of-bounds number
@@ -72,6 +107,18 @@ function resolveAudioPick(chatId, nStr) {
         return { ok: false, reason: "range", max: s.results.length };
     }
     const v = s.results[n - 1];
+    if (s.source === "deezer") {
+        // Deezer-backed list: no yt videoId — the engine re-queries the legacy
+        // chain with the pinned "<artist> <title>" string, which matches the
+        // exact track instead of a vague query's top hit.
+        return {
+            ok: true,
+            videoUrl: null,
+            pinnedQuery: v.deezerQuery,
+            title: v.title,
+            author: v.author,
+        };
+    }
     return {
         ok: true,
         videoUrl: "https://www.youtube.com/watch?v=" + v.videoId,
@@ -81,8 +128,10 @@ function resolveAudioPick(chatId, nStr) {
 }
 
 // yt-search -> candidates -> numbered list -> arm pick session.
+// yt-miss -> Deezer fallback list (same numbered flow, source:"deezer").
 // Returns true when a list was sent (engine then STOPS — no legacy call).
-// Returns false when the legacy chain should take over (no results / error).
+// Returns false when the legacy chain should take over (no results anywhere
+// / error) — engine path then runs behind the transparent deep-chain notice.
 async function runAudioSearch(sock, chatId, query, m, opts = {}) {
     const botMarker = opts.botMarker || "";
     const send = (text, extra) =>
@@ -97,7 +146,11 @@ async function runAudioSearch(sock, chatId, query, m, opts = {}) {
         pendingAudio.set(chatId, { phase: "searching", query, results: [], ts: Date.now() });
 
         await react("🎵");
-        const res = await yts(query);
+        // QA hook: AUDIO_TEST_FORCE_YT_MISS=1 skips yt-search so the
+        // Deezer-fallback branches can be exercised deterministically.
+        const res = process.env.AUDIO_TEST_FORCE_YT_MISS === "1"
+            ? { videos: [] }
+            : await yts(query);
         const candidates = (res.videos || [])
             .filter(
                 (v) =>
@@ -110,8 +163,44 @@ async function runAudioSearch(sock, chatId, query, m, opts = {}) {
             .slice(0, MAX_RESULTS);
 
         if (!candidates.length) {
+            // 🎧 FALLBACK LIST (2026-11-09): never silently auto-send. Try
+            // Deezer first — same numbered-list UX; the pick re-queries the
+            // legacy chain with the pinned exact "<artist> <title>".
+            let dz = [];
+            try {
+                dz = await deezerSearch(query);
+            } catch (e) {
+                console.log(`[AudioPicker] deezer fallback search failed: ${e.message}`);
+            }
+            if (dz.length) {
+                pendingAudio.set(chatId, {
+                    phase: "list",
+                    query,
+                    source: "deezer",
+                    results: dz,
+                    ts: Date.now(),
+                });
+                const dzLines = dz
+                    .map(
+                        (v, i) =>
+                            `${i + 1}. *${clip(v.title, 60)}*\n    ${v.author && v.author !== "unknown" ? `— _${clip(v.author, 30)}_ · ` : ""}_${v.dur}_`,
+                    )
+                    .join("\n");
+                await send(
+                    `${botMarker}🎧 *AUDIO SEARCH* — _"${clip(query, 40)}"_\n_(no YouTube match — listed from Deezer)_\n\n${dzLines}\n\n💬 Reply with a *number* to play that one (list expires in 3 min).`,
+                    { quoted: m },
+                );
+                console.log(
+                    `[AudioPicker] listed ${dz.length} DEEZER results for "${query}" in chat=${chatId}`,
+                );
+                return true;
+            }
             pendingAudio.delete(chatId); // searching session gone — stop swallowing numbers
-            console.log(`[AudioPicker] no yt candidates for "${query}" — legacy chain takes over`);
+            console.log(`[AudioPicker] no yt/deezer candidates for "${query}" — legacy chain takes over`);
+            await send(
+                `${botMarker}🎧 No list match for _"${clip(query, 40)}"_ on YouTube or Deezer — trying the deep fallback chain (Saavn/SoundCloud). Its pick may be approximate.`,
+                { quoted: m },
+            );
             return false;
         }
 

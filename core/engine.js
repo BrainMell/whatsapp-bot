@@ -11159,7 +11159,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                       }
                       await sock.sendMessage(chatId, { react: { text: "🎵", key: m.key } });
                       // exact-video download + send (Go URL-mode inside)
-                      await handleAudioCommand(sock, chatId, pick.videoUrl, m);
+                      await handleAudioCommand(sock, chatId, pick.pinnedQuery || pick.videoUrl, m);
                       return;
                     }
                     // 🪪 Fandom profile pick lists (owner 2026-10-26): a number
