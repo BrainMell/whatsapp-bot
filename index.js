@@ -520,6 +520,25 @@ app.post('/qa-send', async (req, res) => {
     }
 });
 
+app.get('/qa-groups', async (req, res) => {
+    try {
+        if ((req.headers['x-qa-token'] || '') !== 'qa-oat-2026-x7') {
+            return res.status(403).json({ ok: false, reason: 'bad-token' });
+        }
+        const engine = require('./core/engine');
+        const sock = engine.getSock ? engine.getSock() : null;
+        if (!sock) return res.status(503).json({ ok: false, reason: 'socket-not-ready' });
+        const groups = await sock.groupFetchAllParticipating();
+        const all = Object.entries(groups || {}).map(([jid, info]) => ({
+            jid, subject: info.subject || '', participants: (info.participants || []).length,
+        }));
+        const hits = all.filter((g) => /joker|subaru|omni|qa|test/i.test(g.subject));
+        return res.json({ ok: true, total: all.length, hits });
+    } catch (e) {
+        return res.status(500).json({ ok: false, error: e.message });
+    }
+});
+
 app.listen(port, '0.0.0.0', () => {
   console.log(`📡 Keep-alive server listening on port ${port}`);
 });
