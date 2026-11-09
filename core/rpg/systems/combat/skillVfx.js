@@ -1007,26 +1007,21 @@ async function animateUltimate(options = {}) {
     '💥 *ALMOST READY* 💥\n*' + name + '* is about to be unleashed!\n_Prepare for impact._'
   ];
   try {
-    for (let i = 0; i < messages.length; i++) {
-      await sendText(messages[i]);
-      // owner 2026-11-07: "the 3 messages before the card should be well spaced like 2 seconds
-      // apart, not instantly after the other" — a real channel cadence instead of a burst
-      if (i < messages.length - 1) await wait(2000);
-    }
-    const cacheHit = Buffer.isBuffer(options.baseSceneBuffer) && options.baseSceneBuffer.length > 1000;
-    console.log('[SkillVFX] cast ' + classId + '/' + ability.id + ' entry=' + entry.style + ' cache=' + (cacheHit ? 'hit' : 'miss') + ' target=' + (target && (target.name || target.id) || 'enemy'));
-    const renderT0 = Date.now();
-    // 2026-10-25: sprite-sheet engine first (real VFX frames, 15fps MP4); the
-    // legacy hand-drawn GIF renderer stays as the fallback.
-    let vid = null;
     // ⚔️ inherited ults render with the OWNING class's recipe + palette
     const fxClass = String(entry.ownerClass || classId).toUpperCase();
-    try {
-      // 🔥 26-R5: when the 22s race fires, the LOSING render must stop painting
+    // ⚡ RECIPE §1.1 (docs/RECIPE_SKILLS_ULTS_SUMMONS.md; ULT_RENDER_EARLY=0 disables):
+    // start the render BEFORE the 3 charging texts and await it after — the ≥4s
+    // channeling cadence hides the first ~4s of painting instead of paying it
+    // serially. Same 30s race + abort token; a rejection behaves exactly like
+    // the old path (text fallback below).
+    const __early = String(process.env.ULT_RENDER_EARLY || '') !== '0';
+    let __earlyRenderP = null;
+    const startUltRender = () => {
+      // 🔥 26-R5: when the race fires, the LOSING render must stop painting
       // (otherwise it zombies on in the background and drags every following
       // cast past the floor with it)
       const ultAbort = { flag: false };
-      vid = await raceTimeout(require('./ultimateFx').renderUltimateVideo({
+      return raceTimeout(require('./ultimateFx').renderUltimateVideo({
         baseBuffer: options.baseSceneBuffer, classId: fxClass, name, side: entry.side, palette: PALETTE[fxClass] || PALETTE[classId],
         // 💡 HUD 2026-10-26: the video draws its own left HUD rail as the FINAL
         // pass (above every effect) from the caster's live combat data.
@@ -1061,7 +1056,27 @@ async function animateUltimate(options = {}) {
         // render stops painting instead of zombie-ing through the next casts
         abort: ultAbort
       }), 30000, () => { ultAbort.flag = true; });   // 🔥 R3: was 12000 (R2 raised 9000) — REAL duels proved 12s still loses: a DRAGON_GOD cast at 16:46:54Z raced out at 12s and silently played the OLD hand-drawn gif (log: "[SkillVFX] gif 117278B in 13804ms"). Profiled the engine (18-22s: breath sprites 40% + full-canvas vortex warp 19%) and made both fast in ultimateFxLayers/2. 26-R5: the FIRST cast of a new geometry also PAINTS + SAVES its plates (~20-25s on the heaviest classes) — 30s keeps that one-time capture from degrading to the legacy gif; every later cast replays plates in ~9-11s.
-    } catch (e) { console.warn('[SkillVFX] sprite engine failed:', e?.message || e); }
+    };
+    if (__early) __earlyRenderP = startUltRender().catch((e) => { console.warn('[SkillVFX] sprite engine failed:', e?.message || e); return null; });
+    for (let i = 0; i < messages.length; i++) {
+      await sendText(messages[i]);
+      // owner 2026-11-07: "the 3 messages before the card should be well spaced like 2 seconds
+      // apart, not instantly after the other" — a real channel cadence instead of a burst
+      if (i < messages.length - 1) await wait(2000);
+    }
+    const cacheHit = Buffer.isBuffer(options.baseSceneBuffer) && options.baseSceneBuffer.length > 1000;
+    console.log('[SkillVFX] cast ' + classId + '/' + ability.id + ' entry=' + entry.style + ' cache=' + (cacheHit ? 'hit' : 'miss') + ' target=' + (target && (target.name || target.id) || 'enemy'));
+    const renderT0 = Date.now();
+    // 2026-10-25: sprite-sheet engine first (real VFX frames, 15fps MP4); the
+    // legacy hand-drawn GIF renderer stays as the fallback.
+    let vid = null;
+    if (__earlyRenderP) {
+      // ⚡ RECIPE §1.1: the render started BEFORE the charging texts and ran
+      // concurrently with them — collect the finished video now.
+      vid = await __earlyRenderP;
+    } else {
+      try { vid = await startUltRender(); } catch (e) { console.warn('[SkillVFX] sprite engine failed:', e?.message || e); }
+    }
     // legacy hand-drawn GIF fallback PURGED (owner 2026-11-03: old arrow/wing shapes kept popping up when the engine timed out)
     const gif = vid && vid.mp4 ? vid.mp4 : null;
     if (gif && Buffer.isBuffer(gif) && gif.length > 100) {

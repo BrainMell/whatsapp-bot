@@ -265,6 +265,15 @@ const RECIPE_PACK = (() => { try { return require('./ultimateFxRecipes'); } catc
 // chained duel casts) starve the render loop and pushed a NECROMANCER capture
 // to 114s in QA. Serializing keeps at most one save's encode on the loop.
 let plateSaveChain = Promise.resolve();
+// ⚡ RECIPE §1.2: painters whose OUTPUT samples the base-scene pixels — their
+// plates must stay keyed WITH the base-pixel hash. Everything else (rings,
+// bursts, beams, sprite-sheet fx, particles, breath…) is scene-INDEPENDENT and
+// keyed 'pure', so one bake replays in every fight with the same quantised
+// geometry (the base hash was the #1 hit-rate killer: the scene changes every
+// duel, so plates almost never replayed).
+const SCENE_LAYERS = new Set(['vortex', 'invert', 'sink', 'dash']);
+let __lastPlateSceneDep = false;
+let __lastLiveRender = 0;
 const _singles = new Map();
 async function loadSingles() {
     if (_singles.size) return _singles;
@@ -841,6 +850,7 @@ function drawVictimHpBar(ctx, x, y, w, h, pct, flashK) {
 
 async function renderUltimateVideo(o) {
     const __P = { t0: Date.now() };
+    __lastLiveRender = Date.now();   // ⚡ §1.3: prewarm yields while a live cast ran recently
     const palette = o.palette && o.palette.length >= 3 ? o.palette : ['#fff1b0', '#ffcb45', '#e85a37'];
     const recipeKey = STYLE_RECIPE[String(o.classId || '').toUpperCase()] || 'fire';
     const sets = {};
@@ -1147,11 +1157,18 @@ async function renderUltimateVideo(o) {
                     if (c._ptTo) c._ptTo = [q4(c._ptTo[0]), q4(c._ptTo[1])];
                     return c;
                 });
+                // ⚡ RECIPE §1.2: scene-sampling painters keep the base hash in the
+                // key; all other plates key WITHOUT scene bytes and replay across
+                // fights (same recipe + quantised anchors ⇒ same plate).
+                const __sceneCandidates = tracks.some((t) => SCENE_LAYERS.has(String(t.layer || '')));
+                const __sceneDep = __sceneCandidates && !(layers && Buffer.isBuffer(layers.sprites));
                 plateKey = plates.keyFor({
                     cls: String(o.classId || ''), dur: DUR, imp: IMP, k: K, side: o.side || '', aoe: !!o.aoe,
                     pal: palette, ac: [q4(A.C[0]), q4(A.C[1])], at: [q4(A.T[0]), q4(A.T[1])],
-                    base: basePixelHash(base), tracks: tracksSig, sd: String(seed),
+                    base: __sceneDep ? basePixelHash(base) : 'pure',
+                    tracks: tracksSig, sd: String(seed),
                 });
+                __lastPlateSceneDep = __sceneDep;
                 plateMeta = plates.loadMeta(plateKey);
                 if (plateMeta && plateMeta.skip) { plateMeta = null; plateSkip = true; }   // known-cheap key → direct path forever, zero capture overhead
                 else if (plateMeta) {
@@ -1451,4 +1468,75 @@ async function renderUltimateVideo(o) {
     return { mp4, thumb, plates: plateState };
 }
 
-module.exports = { renderUltimateVideo, _assets: { SETS, loadSet, loadManifest, OVERRIDABLE }, RECIPES, STYLE_RECIPE, W, H, FPS, DURATION, prewarm };
+// ── ⚡ RECIPE §1.3: PLATE PREWARM (ULT_PREWARM=0 disables) ────────────────────
+// Bakes the common PURE plate geometries at boot: every class signature ×
+// intensity {level 1,3} × {single, aoe} × Go roster fixture 1..4. Uses REAL
+// Go layers (HP-insensitive cache) so the quantised anchors match live fights;
+// a flat synthetic scene would also be valid because pure plates never hash
+// the scene. Yields to live casts (15s quiet window) and low RAM. Scene-
+// dependent classes (SCENE_LAYERS) are skipped — their keys need the real fight.
+let __layersFixtureM = new Map();
+async function __layersFixture(n) {
+    if (__layersFixtureM.has(n)) return __layersFixtureM.get(n);
+    const p = (async () => {
+        const gen = require('./combatImageGenerator');
+        const mk = (side, i) => ({ name: side + '_' + i, isEnemy: side === 'enemy', isSummon: false, index: i,
+            stats: { hp: 500, maxHp: 500, energy: 50, maxEnergy: 100 }, currentHP: 500, level: 5,
+            class: { id: side === 'enemy' ? 'GOBLIN' : 'FIGHTER', name: side === 'enemy' ? 'Goblin' : 'Fighter', icon: '⚔️' } });
+        const players = [mk('player', 0)];
+        const enemies = Array.from({ length: n }, (_, i) => mk('enemy', i));
+        return await gen.generateCombatLayers(players, enemies, { rank: 'F', floor: 0, combatType: 'PVE' });
+    })();
+    __layersFixtureM.set(n, p);
+    p.catch(() => __layersFixtureM.delete(n));
+    return p;
+}
+async function bakePlates(spec) {
+    if (Date.now() - __lastLiveRender < 15000) throw new Error('live render active');
+    const ab = require('../../../utils/assetBake');
+    if (ab.lowMem()) throw new Error('lowmem');
+    const { PALETTE } = require('./skillVfx');
+    const cls = String(spec.classId || '').toUpperCase();
+    const recipe = RECIPE_PACK && RECIPE_PACK.classRecipe ? RECIPE_PACK.classRecipe(cls, PALETTE[cls] || ['#fff1b0', '#ffcb45', '#e85a37'], { IMPACT: IMPACT }) : null;
+    if (!recipe) return 'no-recipe';
+    const layers = await __layersFixture(spec.rosterN || 1);
+    if (!layers || !Buffer.isBuffer(layers.bg)) throw new Error('no layers fixture');
+    const vid = await renderUltimateVideo({
+        baseBuffer: layers.bg, layers, classId: cls,
+        name: String(spec.classId || '').toLowerCase().replace(/_/g, ' '),
+        side: spec.side || 'player', palette: PALETTE[cls] || undefined,
+        skillLevel: spec.level || 1, maxLevel: 3,
+        intensity: (spec.level || 1) <= 1 ? 0 : Math.min(1, ((spec.level || 1) - 1) / 2),
+        casterIndex: 0, targetIndex: 0, targetSide: 'enemy', aoe: !!spec.aoe,
+        targets: [], dying: [], abort: { flag: false },
+    });
+    if (!vid) return 'null';
+    return __lastPlateSceneDep ? 'scene-dep' : (vid.plates || 'off');
+}
+function prewarmKeys() {
+    try {
+        const { SIGNATURE_SKILLS, PALETTE } = require('./skillVfx');
+        const keys = [];
+        for (const [cls, entry] of Object.entries(SIGNATURE_SKILLS || {})) {
+            // aoe:true combos are left to organic capture (pure keys make every
+            // capture reusable across fights, so the first AoE cast per geometry
+            // fills its key for all later ones — keeps the boot bake ~360 jobs).
+            for (const lvl of [1, 3]) for (const aoe of [false]) for (const n of [1, 2, 3, 4]) {
+                keys.push({ classId: cls, side: entry.side || 'player', level: lvl, aoe, rosterN: n });
+            }
+        }
+        return keys;
+    } catch (e) { return []; }
+}
+if (String(process.env.ULT_PREWARM || '') !== '0' && !plates.isDisabled()) {
+    const __pt = setTimeout(() => {
+        try {
+            const ab = require('../../../utils/assetBake');
+            ab.registerPrewarm('ultplates', { keys: async () => prewarmKeys(), bake: bakePlates });
+            ab.prewarmAll({ gapMs: 700 }).then((r) => console.log('[UltFx] plate prewarm done:', JSON.stringify(r))).catch((e) => console.warn('[UltFx] plate prewarm:', e.message));
+        } catch (e) { console.warn('[UltFx] prewarm init failed:', e.message); }
+    }, 30000);
+    if (__pt.unref) __pt.unref();
+}
+
+module.exports = { renderUltimateVideo, _assets: { SETS, loadSet, loadManifest, OVERRIDABLE }, RECIPES, STYLE_RECIPE, W, H, FPS, DURATION, prewarm, bakePlates, prewarmKeys };

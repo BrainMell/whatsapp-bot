@@ -10,9 +10,19 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
-const { createCanvas } = require('canvas');
+const { createCanvas, loadImage } = require('canvas');
 const { ELEMENT_COLORS } = require('./catalog');
 const { drawCard, artFor, CW, CH } = require('./cardRenderer');
+
+// ⚡ RECIPE §2.1/§2.6 (CARDFX_BAKE=0 disables): the card face + every idle-frame
+// variant are FINITE art (cardId + art version) — baked once to the shared disk
+// cache (assetBake, capped) and decoded per play, instead of re-running the full
+// drawCard N-idle-frames times on every clip. Cold = bake+play, warm = instant.
+let __cardBake = null;
+function _cardBake() {
+  if (!__cardBake) __cardBake = require('../../../utils/assetBake').makeBakeCache({ ns: 'cardfx', version: 'v1', maxMB: 120, ext: 'png' });
+  return __cardBake;
+}
 
 const FPS = 20, N = 44, OUT_W = 768;
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
@@ -63,10 +73,28 @@ async function renderCardPlayScene(a) {
   // target. The base scene is now rendered from the PRE-hit roster (a.enemiesPre) so the enemy is standing there when the card lands; if
   // it died, the final frames cross-fade to the real post-hit scene so you see it fall.
   const preEnemies = Array.isArray(a.enemiesPre) ? a.enemiesPre : enemies;
-  const base = await renderNodeCard(players, preEnemies, {
+  let base = await renderNodeCard(players, preEnemies, {
     ...(a.sceneOptions || {}), hud: 'v2', combatType: a.pvp ? 'PVP' : 'PVE', _sceneOut: sceneOut, _skipTray: true,
     action: { attackerSide: 'player', attackerIndex: pIdx },
   }, a.api);
+  if (!base || !sceneOut.canvas) {
+    // ⚡ RECIPE §2.3: ONE code path — when the Go layers (and therefore the Node
+    // scene card) fail, build a flat plate instead of returning null, so the
+    // card-play scene still runs (generic GIF/Go fallbacks stay as last resort).
+    try {
+      const SW = 1024, SH = 687;
+      const flat = createCanvas(SW, SH), fcx = flat.getContext('2d');
+      const g = fcx.createLinearGradient(0, 0, 0, SH); g.addColorStop(0, '#1a1f2e'); g.addColorStop(0.6, '#232b3d'); g.addColorStop(1, '#151a26');
+      fcx.fillStyle = g; fcx.fillRect(0, 0, SW, SH);
+      const elC = ELEMENT_COLORS[card.element] || '#ffd36b';
+      fcx.save(); fcx.globalAlpha = 0.14; fcx.fillStyle = elC; fcx.fillRect(0, 0, SW, SH); fcx.restore();
+      sceneOut.canvas = flat; sceneOut.s = 1;
+      sceneOut.anchors = [{ side: 'player', index: pIdx, x: 300, feetY: 560, w: 120, h: 160 }].concat(
+        Array.from({ length: Math.max(1, (preEnemies || []).length) }, (_, i) => ({ side: tgtSide, index: i, x: 660 + i * 70, feetY: 560, w: 120, h: 160 })));
+      base = flat;
+      console.warn('[CardScene] layers failed — flat plate fallback for ' + card.id);
+    } catch (e) { return null; }
+  }
   if (!base || !sceneOut.canvas) return null;
   let A2 = null;
   if (preEnemies !== enemies && !info.mergeDeath) {   // mergeDeath: the real death clip is appended after this scene, so the target must still be standing at the end
@@ -89,12 +117,29 @@ async function renderCardPlayScene(a) {
   const anyEnemy = anchors.find((x) => x.side === tgtSide && !(a.pvp && x.index === pIdx));
   const targ = attack ? (find(tgtSide, tIdx) || anyEnemy || { x: W * 0.72 / s, feetY: H * 0.7 / s, w: 120, h: 160 }) : caster;
   const cp = { x: caster.x * s, y: (caster.feetY - (caster.h || 160) * 0.5) * s }, tp = { x: targ.x * s, y: (targ.feetY - (targ.h || 160) * 0.5) * s };
-  // card sprite (pre-rendered once) + summon art
-  const cardImg0 = createCanvas(CW, CH + 10); await drawCard(cardImg0.getContext('2d'), card, 0, 0, { ready: true, affordable: true });
+  // ⚡ RECIPE §2.1: card face + idle variants from the disk bake (finite art);
+  // `warm` = every variant hit the cache, `cold` = at least one had to bake.
+  const __cardBake2 = _cardBake();
+  let __bakeCold = false;
+  const bakedCard = async (variantKey, artOverride) => {
+    const k = __cardBake2.key(card.id, variantKey, String(card.image || card.art || card.artUrl || '').slice(-64));
+    if (process.env.CARDFX_BAKE !== '0') {
+      try { if (!__cardBake2.get(k)) __bakeCold = true; } catch (e) {}
+      const buf = await __cardBake2.getOrBake(k, async () => {
+        const cc = createCanvas(CW, CH + 10); await drawCard(cc.getContext('2d'), card, 0, 0, { ready: true, affordable: true, ...(artOverride ? { artOverride } : {}) });
+        return cc.toBuffer('image/png', { compressionLevel: 1 });
+      });
+      try { return await loadImage(buf); } catch (e) { /* fall through to live draw */ }
+    }
+    __bakeCold = true;
+    const cc = createCanvas(CW, CH + 10); await drawCard(cc.getContext('2d'), card, 0, 0, { ready: true, affordable: true, ...(artOverride ? { artOverride } : {}) });
+    return cc;
+  };
+  const cardImg0 = await bakedCard('base', null);
   const idle0 = await require('./summonIdle').getIdle(card).catch(() => null);
   // one pre-rendered card per idle frame so the summon is ALREADY animating inside the card while it flies, then lifts out of it
   const cardVariants = [];
-  if (idle0) for (const fr of idle0.frames) { const cc = createCanvas(CW, CH + 10); await drawCard(cc.getContext('2d'), card, 0, 0, { ready: true, affordable: true, artOverride: fr }); cardVariants.push(cc); }
+  if (idle0) for (let fi = 0; fi < idle0.frames.length; fi++) cardVariants.push(await bakedCard('idle' + fi, idle0.frames[fi]));
   let cardImg = cardImg0;
   const art0 = await artFor(card).catch(() => null);
   const idle = await require('./summonIdle').getIdle(card).catch(() => null);   // the summon's own idle animation (owner: reuse it)
@@ -231,7 +276,7 @@ async function renderCardPlayScene(a) {
   }
   // hold the last frame a beat so the result is readable
   for (let h = 0; h < 8; h++) await enc.write(lastRaw);
-  try { const mp4 = await enc.end(); console.log(`[CardScene] ${card.id} ${fromPile ? 'pile' : 'slot ' + (handIdx + 1)} ${mp4.length}B in ${Date.now() - t0}ms`); return mp4; }
+  try { const mp4 = await enc.end(); console.log(`[CardScene] ${card.id} ${fromPile ? 'pile' : 'slot ' + (handIdx + 1)} ${mp4.length}B in ${Date.now() - t0}ms ${__bakeCold ? 'cold' : 'warm'}`); return mp4; }
   finally { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) { /* tmp */ } }
 }
 

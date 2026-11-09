@@ -6475,6 +6475,13 @@ async function performAction(sock, player, action, sessionKey) {
         let gif = null;
         // 🎴 owner 2026-11-07: the card physically leaves its hand slot (or the +N pile), flies in front of the caster, then fires its
         // effect in the real battle scene. Returns an MP4; null/any failure falls through to the Go / generic Node GIF below.
+        // ⚡ RECIPE §2.5: kick the death clip off IN PARALLEL with the card scene —
+        // the death overlay is already baked, so it doesn't need the scene's
+        // output; both keep their old leashes and concat when both are done
+        // (a kill turn no longer pays scene + death serially, ≤9s saved).
+        const __deathClipP = (activation.defeatedList && activation.defeatedList.length && _deathEligible(state))
+          ? Promise.race([_deathClipForCardKill(state, activation.defeatedList).catch(() => null), new Promise((r) => setTimeout(() => r(null), 9000))])
+          : null;
         if (process.env.CARD_SCENE_ANIM !== '0') {
           try {
             const __sc = require('../summonCards');
@@ -6504,14 +6511,18 @@ async function performAction(sock, player, action, sessionKey) {
         let __deathCaption = null;
         if (gif && Buffer.isBuffer(gif) && gif.length > 500 && gif.toString('latin1', 4, 8) === 'ftyp' && activation.defeatedList && activation.defeatedList.length) {
           try {
-            const __dItem = await Promise.race([_deathClipForCardKill(state, activation.defeatedList), new Promise((r) => setTimeout(() => r(null), 9000))]);
+            const __dItem = __deathClipP ? await __deathClipP : null;   // ⚡ §2.5: started before the scene await
             if (__dItem) {
               const __cat = await _concatMp4([gif, __dItem.clip.mp4]);
               if (__cat) { gif = __cat; __deathCaption = _deathCaption(__dItem, null); console.log('[SummonCards] card + death merged into one clip'); }
             }
           } catch (mergeErr) { console.warn('[SummonCards] death merge skipped:', mergeErr.message); }
         }
-        if (!gif && ['ifrit', 'leviathan', 'shiva'].includes(activation.card.id)) {
+        // ⚡ RECIPE §2.4: the 17-35s Go summon GIF is OUT of the hot path — the
+        // Node card-play scene covers every card (flat-plate fallback when the
+        // layers fail), so Go only runs behind SUMMON_GO_GIF=1. Its disk cache
+        // stays available for QA.
+        if (!gif && process.env.SUMMON_GO_GIF === '1' && ['ifrit', 'leviathan', 'shiva'].includes(activation.card.id)) {
           try { gif = await goService.generateSummonCardGIF(payload); } catch (goErr) { console.warn('[SummonCards] Go GIF failed, using Node renderer:', goErr.message); }
         }
         if (!gif) {

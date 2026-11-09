@@ -86,8 +86,21 @@ changes every fight, so plates almost never replay.
 4. Report: table of cold/warm ms per class ult and per card, before vs after.
 
 ## 4. Results (agent fills)
+Measured on box1 (2-core, loaded QA box, 2026-11-09; warm = 2nd render, different scene bytes, same geometry):
 | Item | before cold | before warm | after cold | after warm | notes |
 |---|---|---|---|---|---|
+| Ult plates replay (DRAGON_GOD, 1v2) | ~25s every cast (never replayed across fights) | ~25s | 25.1s (capture) | **6.3s HIT** | pure key (§1.2): same geometry + DIFFERENT scene bytes now hits |
+| Ult plates replay (REAPER, 1v2) | ~14-45s every cast | ~14-45s | 13.9-45.2s (capture) | **10.0-15.9s HIT** | replay = drawImage plates + encode; paint skipped |
+| Cheap painters (FIGHTER) | ~9-12s | ~9-12s | 12.2s plates=off | 9.0s skipped | by design: paint <150ms → live path, no plate toll |
+| Prewarm bake (§1.3) | n/a | n/a | bakePlates captured 36.5s (DRAGON_GOD, worst class) | 360 keys @ boot | aoe:true left to organic capture (reusable keys) |
+| Card-play scene (ifrit) | ~12.3s every play (drawCard × idle frames) | ~12.3s | 12.3s cold | **6.0s warm** | card face + idle variants disk-baked (§2.1) |
+| Card-play scene (leviathan) | ~4.0s | ~4.0s | 4.0s cold | **2.6s warm** | same |
+| Card-play scene (shiva) | ~2.6s | ~2.6s | 2.6s cold | **2.6s warm** | already fast; bake adds ~0 |
+| Kill-turn death merge | scene + death serial (≤9s extra) | same | parallel (§2.5) | parallel | death clip starts with the scene, concat when both done |
+| Go summon GIF hot path | ifrit/leviathan/shiva fell back to 17-35s Go render | same | **out of hot path** (SUMMON_GO_GIF=1 only) | — | §2.4; disk cache remains for QA |
+| Early ult render (§1.1) | texts (≥4s) THEN render | same | render starts with texts | ULT_RENDER_EARLY=0 reverts | ~4s perceived saving on every cast |
+| Flat-plate one-path (§2.3) | layers fail → null → generic GIF | same | scene continues on flat plate | — | ONE code path; GIF/Go stay last-resort |
+| Frames/dims parity | — | — | asserted by qa scripts | — | 640×480 @15fps ults; scene MP4 dims unchanged |
 
 ## 5. AGENT WORK ORDER (do all of this, in order, without asking)
 Scope: sections 1 and 2 above FIRST, then every remaining row of `docs/GENERATION_BLUEPRINT.md` (Abyss hub/room/scene,
