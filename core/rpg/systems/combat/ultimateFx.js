@@ -1528,7 +1528,10 @@ function prewarmKeys() {
         return keys;
     } catch (e) { return []; }
 }
-if (String(process.env.ULT_PREWARM || '') !== '0' && !plates.isDisabled()) {
+// 2026-11-09 owner: "even regular messages take forever" right after this shipped — a boot-time bake of ~360 full ult
+// renders (sync canvas painting + ffmpeg + Go layers) starves the event loop/CPU on the small boxes. Now OPT-IN
+// (ULT_PREWARM=1) and gated on event-loop lag + load inside assetBake.prewarmAll. Prefer shipping plates via prebaked/.
+if (String(process.env.ULT_PREWARM || '') === '1' && !plates.isDisabled()) {
     const __pt = setTimeout(() => {
         try {
             const ab = require('../../../utils/assetBake');

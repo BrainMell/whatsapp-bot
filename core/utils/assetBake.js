@@ -59,6 +59,18 @@ function encodeBgraFrames({ w, h, fps = 20, outW = w, outH = h, frames, crf = 24
 
 // Low-priority background prewarm. Never competes with a live request: yields between jobs,
 // stops when RAM is high. Call prewarmAll() once after boot (setTimeout 30s) and after content changes.
+
+// Prewarm must never compete with live chat: wait until the event loop is responsive AND the box is not loaded.
+let _lagH = null;
+function _lagMs() { try { if (!_lagH) { _lagH = require('perf_hooks').monitorEventLoopDelay({ resolution: 20 }); _lagH.enable(); } const v = _lagH.max / 1e6; _lagH.reset(); return v; } catch (_) { return 0; } }
+async function waitForIdle() {
+  const cpus = Math.max(1, os.cpus().length);
+  for (let i = 0; i < 600; i++) {   // give up waiting after ~10 min and just retry the next job later
+    const lag = _lagMs(), load = os.loadavg()[0] / cpus;
+    if (lag < 120 && load < 0.6) return;
+    await new Promise(r => setTimeout(r, 1000));
+  }
+}
 const registry = new Map();
 function registerPrewarm(name, spec) { registry.set(name, spec); }
 async function prewarmAll({ gapMs = 400 } = {}) {
@@ -68,6 +80,7 @@ async function prewarmAll({ gapMs = 400 } = {}) {
     let keys = []; try { keys = await spec.keys(); } catch (_) {}
     for (const k of keys) {
       if (lowMem()) return { baked, stopped: 'lowmem' };
+      await waitForIdle();
       try { await spec.bake(k); baked++; } catch (e) { console.warn('[prewarm]', name, e.message); }
       await new Promise(r => setTimeout(r, gapMs));
     }
