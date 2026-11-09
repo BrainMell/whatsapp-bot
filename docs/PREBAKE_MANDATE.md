@@ -31,3 +31,7 @@
 
 ## Verification checklist
 identical dimensions · frame diff vs live render · visual review of frames · dual-bot load test · RSS under load · docs updated.
+
+## 2026-11-09 coverage pass: generic static-render memo
+`goImageService.js` now wraps every pure-payload Go still (boss splash, end screen, economy/transaction/portrait/profile cards, eShop deck, chess/ttt boards, card grid, hunt card) with a content-hash memo + in-flight dedupe (TTL 120s, 24MB cap, `GO_STATIC_MEMO=0` to disable). Identical JSON => identical bytes, instantly; concurrent identical requests share one render.
+Still NOT covered (need live profiling): skill/ult clips, Go summon GIF cold path, Node-only menu/homestead/world/guildwar canvases (already serialized by renderQueue), WhatsApp upload time.

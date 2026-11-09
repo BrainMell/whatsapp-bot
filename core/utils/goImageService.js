@@ -1488,6 +1488,54 @@ class GoImageService {
 // their own instance with a custom overrideUrl.
 const _sharedInstance = new GoImageService();
 
+// ⚡ 2026-11-09 GENERIC STATIC-RENDER MEMO (speed pass "cover everything").
+// Pure-payload Go endpoints (boss splash, end screen, economy/transaction/portrait/
+// profile cards, eShop deck, board images) return the SAME pixels for the SAME JSON.
+// Wrap them with: content hash of the payload -> Buffer, in-flight dedupe (concurrent
+// identical requests share ONE render), short TTL and a byte cap with oldest-first
+// eviction. Only non-null Buffers are cached; each caller gets its own Buffer copy so
+// nobody can mutate a shared one. Dimensions/quality untouched: identical bytes out.
+// Kill switch: GO_STATIC_MEMO=0. Tunables: GO_STATIC_MEMO_TTL_MS (120000),
+// GO_STATIC_MEMO_MB (24). Not applied to animated/layers endpoints (own caches).
+(function installStaticMemo() {
+  if (process.env.GO_STATIC_MEMO === '0') return;
+  const crypto = require('crypto');
+  const TTL = Math.max(5000, Number(process.env.GO_STATIC_MEMO_TTL_MS) || 120000);
+  const MAX = Math.max(4, Number(process.env.GO_STATIC_MEMO_MB) || 24) * 1048576;
+  const store = new Map();   // key -> {buf, at}
+  const inflight = new Map();
+  let bytes = 0;
+  const evict = () => {
+    const now = Date.now();
+    for (const [k, v] of store) if (now - v.at > TTL) { bytes -= v.buf.length; store.delete(k); }
+    for (const [k, v] of store) { if (bytes <= MAX) break; bytes -= v.buf.length; store.delete(k); }
+  };
+  const NAMES = ['generateBossSplash', 'generateCombatEndScreen', 'generateEconomyCard',
+    'generateTransactionCard', 'generatePortraitCard', 'generateProfileCard',
+    'generateEShopDeck', 'generateChessBoard', 'renderTicTacToeBoard',
+    'renderTicTacToeLeaderboard', 'generateCardGrid', 'generateHuntCard'];
+  for (const name of NAMES) {
+    const orig = GoImageService.prototype[name];
+    if (typeof orig !== 'function') continue;
+    GoImageService.prototype[name] = function memoized(...args) {
+      let key;
+      try { key = name + ':' + crypto.createHash('sha1').update(JSON.stringify(args)).digest('hex'); }
+      catch (_) { return orig.apply(this, args); }
+      const hit = store.get(key);
+      if (hit && Date.now() - hit.at <= TTL) return Promise.resolve(Buffer.from(hit.buf));
+      if (inflight.has(key)) return inflight.get(key).then(b => (Buffer.isBuffer(b) ? Buffer.from(b) : b));
+      const p = Promise.resolve(orig.apply(this, args)).then(b => {
+        if (Buffer.isBuffer(b) && b.length > 100 && b.length < MAX / 4) {
+          store.set(key, { buf: b, at: Date.now() }); bytes += b.length; evict();
+        }
+        return b;
+      }).finally(() => inflight.delete(key));
+      inflight.set(key, p);
+      return p.then(b => (Buffer.isBuffer(b) ? Buffer.from(b) : b));
+    };
+  }
+})();
+
 module.exports = _sharedInstance;
 module.exports.GoImageService = GoImageService;
 module.exports.getShared = () => _sharedInstance;
