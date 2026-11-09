@@ -24,6 +24,7 @@ const { spawn } = require('child_process');
 
 const VW = 640, VH = 480, LOCAL = { x: 512, feet: 560 };   // local anchor in the 1024x687 layers space
 const ROOT = process.env.DEATH_OV_DIR || path.join(os.tmpdir(), 'joker_deathov');
+try { require('../../../utils/prebaked').seed('deathov', ROOT); } catch (e) { /* seed is optional */ }
 const mem = new Map();   // key -> Promise<{dir, n, fps}|null>
 
 // 🧹 CACHE CAP (2026-11-09 speed/RAM pass): the overlay frame dirs lived in os.tmpdir() with NO size limit — forever-growing disk, and RAM itself

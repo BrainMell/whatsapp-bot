@@ -19,6 +19,7 @@ function makeBakeCache({ ns, version = 'v1', maxMB = 150, ext = 'bin' }) {
   const dir = path.join(ROOT, ns + '-' + version);
   const inflight = new Map();
   try { fs.mkdirSync(dir, { recursive: true }); } catch (_) {}
+  try { require('./prebaked').seed(ns + '-' + version, dir); } catch (_) {}   // repo seed (prebaked/)
   const key = (...parts) => crypto.createHash('sha1').update(JSON.stringify(parts)).digest('hex');
   const file = (k) => path.join(dir, k + '.' + ext);
   const get = (k) => { try { const f = file(k); const b = fs.readFileSync(f); const t = new Date(); fs.utimes(f, t, t, () => {}); return b; } catch (_) { return null; } };

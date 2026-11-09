@@ -34,6 +34,7 @@ const crypto = require('crypto');
 const ROOT = process.env.ULT_PLATE_DIR || path.join(os.homedir(), '.cache', 'ult-plates');
 const CAP_BYTES = Math.max(64, Number(process.env.ULT_PLATE_CAP_MB) || 1536) * 1024 * 1024;
 let disabled = process.env.ULT_PLATES === '0';
+try { require('../../../utils/prebaked').seed('ult-plates', ROOT); } catch (e) { /* seed is optional */ }
 
 // VER: content-hash of the VFX render code + the asset-swap manifest — any
 // code/art deploy invalidates every plate automatically (mediaCache CODE_VER

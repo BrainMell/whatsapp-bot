@@ -113,3 +113,9 @@ For each row: time cold/warm -> find finite key -> implement with `core/utils/as
 4. Every feature gets an env kill switch, documented in `docs/OWNER_TODO_CANT_DO.md`. Caches outside git, size-capped.
 5. You cannot deploy or test on the live boxes: say so, and leave the live test plan (section 3) for the owner / `qa-send`.
 6. Finish by filling section 4 (results), listing anything not done and why, and pushing. Do not stop at the first row.
+
+## 6. prebaked/ folder (owner asked for baked assets to live ON THE REPO)
+Mechanism is in: `core/utils/prebaked.js` seeds `prebaked/{ult-plates,cardfx-v1,deathov}` into the live caches on boot (copy-missing, no overwrite).
+AGENT TODO: after prewarm finishes on a live box (all 360 plate keys baked), run `node scripts/export_prebaked.js`, commit `prebaked/`
+(budget 60MB). Plate keys embed a code hash -> re-export after the LAST change to `ultimateFx*.js`/`ultimatePlateCache.js`, or they are dead weight.
+Add the same seed+export for every new cache the blueprint rows create (subfolder name = cache ns-version).
