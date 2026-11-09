@@ -16,11 +16,12 @@ look, but by giving every death type its own static visual language.
 ## 1. Research: how a static image communicates death
 
 Classic turn-based RPGs read a kill in a still through four stacked signals.
-Any one alone is ambiguous; together they are unmistakable:
+Any one alone is ambiguous; together they are unmistakable. **v6 ships THREE of
+them — the owner removed the body signal outright** (first row below):
 
 | Signal | Convention | Why it works |
 | --- | --- | --- |
-| **The body** | OWNER DIRECTIVE v5 (2026-11-09, clarified): the KO'd sprite STAYS STANDING UPRIGHT in its stance at its exact battle position, as a barely-noticeable GHOST (α≈0.14, no contact shadow) — never a lying/fallen pose (v3's fall-rotated ghost was rejected: "why are the transparent assets still on the ground and not standing up") | The element stamp + ☠ DEFEATED chip carry the kill; the standing ghost only whispers where it stood |
+| **The body** | OWNER DIRECTIVE v6 (2026-11-09): **REMOVED ENTIRELY** — "just use only the effects minus the enemy". No corpse, no ghost, no sprite of the dead unit is drawn at all. (v2 readable corpse → v3 lying ghost → v5 standing ghost each kept reading as "a png on the floor" or risked edge-clipped "partly cut off png" artifacts; no sprite removes that entire failure class) | The element stamp frozen at the kill spot IS the death; nothing competes with it |
 | **The world reacts** | Element breakup art engulfing/replaceing the body: explosion, shards, splash, rubble, dissolve | The cause of death is visible in the corpse's state |
 | **The UI confirms** | Zeroed/erased HP bar, ☠ DEFEATED chip where the bar was | System-level confirmation, zero ambiguity at a glance |
 | **Absence of motion cues** | Nothing mid-swing; effects frozen at their PEAK frame, settled debris on the ground | A still frozen at the "after", not the "during", reads as concluded |
@@ -65,12 +66,12 @@ deaths) and in every failure v2 shipped:
    "always visually inspect").
 
 Universal layer on every kind: ☠ **DEFEATED** chip where the erased HP bar
-was; the dead unit's sprite as a STANDING GHOST (upright in its stance, feet
-on its own ground line, α≈0.14, no shadow, no rotation — owner directive
-2026-11-09, clarified: never lying on the ground). The v1/v2 white flash ring
-was removed in the art pass (it washed the frame toward white). Group kills
-composite every standing ghost into the ONE still (group-as-unit, same rule
-the clips had).
+was. **v6 (owner 2026-11-09: "just use only the effects minus the enemy"): the
+dead unit's sprite is NOT drawn — the v5 standing ghost, the v3 lying ghost
+and the v2 readable corpse are all retired; the stamp + chip carry the kill
+alone.** The v1/v2 white flash ring was removed in the art pass (it washed the
+frame toward white). Group kills composite every kill's stamp + chip into the
+ONE still (group-as-unit, same rule the clips had).
 
 ## 3. Architecture
 
@@ -81,7 +82,9 @@ playEnemyDeaths(state)                        guildAdventure.js — now trivial
        layers, picks, deadIdx, chrome })
        ├─ scenePlateCanvas()                  survivors + erased bars + HUD (moved
        │                                      from deathOverlay.scenePlate, returns canvas)
-       ├─ dead-state cutout per pick          rotate + ghost α≈0.14 (node canvas)
+       ├─ dead unit geometry per pick         anchor (or cut fallback) — NO sprite is
+       │                                      drawn (v6: effects only, owner directive;
+       │                                      drawDeadSprite deleted)
        ├─ death stamp per kind                PRE-PAINTED ONCE per (kind, boss) into a
        │                                      transparent PNG, disk+memory cached
        │                                      (os.tmpdir/death_stamps_v1) — the "premade"
@@ -116,16 +119,16 @@ delivery time because it is cheaper than the old machinery's bookkeeping.
 ## 5. Env / QA
 
 - `DEATH_STILL_CHROME=0` skips the HUD chrome on the still (debug).
-- `DEATH_GHOST_DEBUG=1` renders the standing ghost at α≈0.9 instead of 0.14
-  so the pose/position can be eyeballed in `qa_death_visual.js` sheets
-  (the ship look stays at 0.14).
+- `DEATH_GHOST_DEBUG` RETIRED in v6 — there is no ghost anymore; the render
+  path no longer reads the flag (kept here so old notes don't confuse).
 - `qa_death_stills.js`: synthetic-layer end-to-end — all 6 kinds render, stamp
-  cache hits on second call, group still composites, JPEG validates, dead
-  sprite provably present (pixel diff at the anchor).
+  cache hits on second call, group still composites, JPEG validates, kill
+  stamp present (pixel diff at the anchor), and T5: the dead unit's cut
+  swapped for a magenta slab must produce a BYTE-IDENTICAL still — proving
+  dead-sprite pixels can never reach the canvas (v6 regression gate).
 - `qa_death_visual.js`: EYES-ON gate — renders all 6 kinds + a group kill
   through the REAL Go renderer into `/tmp/deathqa/sheet.png`. **No death-still
   change ships without visually inspecting the sheet panel by panel**
   (owner rule, 2026-11-09: "always visually inspect").
-- `qa_ghost_probe.js`: liveness probe for the ghost pass — renders the same
-  kill with the real cut vs a magenta stand-in cut; the fall region must
-  pixel-diff, proving the α≈0.14 body pass is not a silent no-op.
+- `qa_ghost_probe.js`: OBSOLETE since v6 (it probed the ghost body pass;
+  there is no body pass anymore). Kept for history only.

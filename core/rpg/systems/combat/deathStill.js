@@ -7,19 +7,24 @@
 // and all the different types for the different enemy types."
 //
 // Full research + type table: docs/DEATH_STILLS_SPEC.md. Short version — a
-// still reads as a kill through four stacked signals: (1) the body is KO'd
-// (rotated off its stance, grounded, STILL READABLE — v2 keeps ~45% of the
-// sprite's color; the v1 full-gray wash read as "random gray trash on the
-// floor", owner meltdown 16:51Z), (2) premade element art frozen at its PEAK
-// frame, BIG and bottom-anchored at the body's feet (v2: real 384px blasts +
-// crater decals — v1 picked 64px 1%-visible pixies and misspelled every
-// Kenney filename, so stamps rendered as white glints), (3) a ☠ DEFEATED chip
-// sits where the HP bar was, (4) debris is SETTLED — the "after", not the "during".
+// still reads as a kill through three stacked signals: (1) premade element
+// art frozen at its PEAK frame, BIG and bottom-anchored where the body stood
+// (real 384px blasts + craters — v1 picked 64px 1%-visible pixies and
+// misspelled every Kenney filename, so stamps rendered as white glints),
+// (2) a ☠ DEFEATED chip sits where the HP bar was, (3) debris is SETTLED —
+// the "after", not the "during".
+//
+// 💀 v6 (owner directive 2026-11-09: "just use only the effects minus the
+// enemy"): the dead unit's sprite is NOT drawn at all — no corpse, no ghost,
+// no standing pose, nothing. Every body treatment shipped so far (v2 readable
+// corpse, v3 lying ghost, v5 standing ghost) produced or risked "partly cut
+// off clearly a png" artifacts at the plate edges; removing the sprite
+// removes that entire failure class. The element stamp carries the kill alone.
 //
 // Architecture: the expensive part (premade art composition) is painted ONCE
 // per (kind, boss) into a transparent "death stamp" PNG (disk + memory cache)
-// — every kill is then scenePlate + stamp-behind + dead-sprite + stamp-front
-// + chip blits, warm in ~0.1-0.25s. Replaces the 18-24s animated mp4 pipeline.
+// — every kill is then scenePlate + stamp-behind + stamp-front + chip blits,
+// warm in ~0.1-0.25s. Replaces the 18-24s animated mp4 pipeline.
 //
 // premade sources: core/rpgasset/vfx (CC0 — fire2 blasts, kenney explosion/
 // smoke/crater sets, meteor boulders, magic bolts, clock mandalas; CREDITS.md).
@@ -388,7 +393,8 @@ async function getStamp(kind, boss) {
 // ── scene plate (moved from deathOverlay.scenePlate — returns CANVAS) ────
 // 💡 PROBED 2026-11-09: Go's layers bg is a CLEAN scene (no combatants baked)
 // and DEAD combatants get NO cut/anchor at all — so the plate is bg + survivor
-// cuts + chrome, and the dying appear ONLY via the KO'd body we draw.
+// cuts + chrome, and the dying appear ONLY via the element stamp + DEFEATED
+// chip we draw on top (v6: the dead unit's sprite is never rendered).
 async function scenePlateCanvas(layers, dyingIdx, deadIdx, chrome) {
     const W0 = Number(layers.w) || 1024, H0 = Number(layers.h) || 687;
     const kx = VW / W0, ky = VH / H0;
@@ -412,25 +418,10 @@ async function scenePlateCanvas(layers, dyingIdx, deadIdx, chrome) {
     return cv;
 }
 
-// ── the KO'd body: a barely-visible ghost STANDING at its battle spot ────
-// 💡 v5 (owner clarification 2026-11-09: "why are the transparent assets
-// still on the ground and not standing up... like I said"): the dead unit
-// stays UPRIGHT in its stance, feet on its own ground line, at its exact
-// battle position — a ~14%-alpha ghost of where it stood. No rotation, no
-// lying pose, no shadow. (v3 ghosted the fall-rotated corpse — the owner
-// never wanted the lying pose at all; "leave the position as is" meant its
-// stance position.) DEATH_GHOST_DEBUG=1 renders the ghost at 0.9 alpha so
-// the pose can be eyeballed in QA sheets.
-function drawDeadSprite(plate, cutImg, a, kx, ky) {
-    const c = plate.getContext('2d');
-    const w = Number(a.w) || cutImg.width, h = Number(a.h) || cutImg.height;
-    const ax = (Number(a.x) || 0) * kx, feetY = (Number(a.feetY) || (Number(a.y) || 0) + h) * ky;
-    const dw = w * kx, dh = h * ky;
-    c.save();
-    c.globalAlpha = process.env.DEATH_GHOST_DEBUG ? 0.9 : 0.14;
-    try { c.drawImage(cutImg, ax - dw / 2, feetY - dh, dw, dh); } catch (e) {}
-    c.restore();
-}
+// (v6: drawDeadSprite is GONE — owner 2026-11-09 "just use only the effects
+// minus the enemy". The KO'd body is not drawn at all; no sprite = no more
+// edge-clipped "partly cut off png" artifacts. The element stamp + DEFEATED
+// chip carry the kill.)
 
 // ── ☠ DEFEATED chip where the HP bar was ─────────────────────────────────
 function drawDefeatChip(plate, a, kx, ky, off = { dx: 0, dy: 0 }) {
@@ -490,38 +481,33 @@ async function renderDeathStill({ layers, picks, deadIndices, deadIdx, chrome })
         let chipI = 0;
         for (const t of group) {
             const i = Math.max(0, Math.floor(Number(t.targetIndex) || 0));
-            const cut = (layers.cuts || []).find((x) => x && String(x.side) === 'enemy' && Math.floor(Number(x.index) || 0) === i && x.png);
+            // v6: the dying's cut is used ONLY as a geometry fallback when Go
+            // sent no anchor — its pixels are never drawn.
             const a = (layers.anchors || []).find((v) => v && String(v.side) === 'enemy' && Math.floor(Number(v.index) || 0) === i) || null;
-            if (cut && cut.png) {
-                let img = null;
-                try { img = await loadImage(Buffer.from(cut.png, 'base64')); } catch (e) {}
-                if (img) {
-                    const aa = a || { x: cut.x, y: cut.y, w: cut.w, h: cut.h, feetY: (Number(cut.y) || 0) + (Number(cut.h) || 0), index: i, side: 'enemy' };
-                    const bodyW = (Number(aa.w) || 200) * kx;
-                    const feetY = (Number(aa.feetY) || (Number(aa.y) || 0) + (Number(aa.h) || 0)) * ky;
-                    // 💥 STAMP v2: BIG, bottom-anchored at the feet — layers baked
-                    // low in the stamp (crater) land ON the ground line, the core
-                    // blast lands mid-body. v1 drew a 1.5x-bodybox stamp wherever
-                    // and it measured pure white on prod.
-                    let sw = 0, sx = 0, sy = 0;
-                    if (stamp) {
-                        sw = Math.max(275, Math.min(450, bodyW * 2.5));
-                        sx = (Number(aa.x) || 0) * kx - sw / 2;
-                        sy = feetY - sw * 0.86;   // 86% of the blast above the ground line
-                        c.drawImage(stamp, sx, sy, sw, sw);
-                    }
-                    drawDeadSprite(plate, img, aa, kx, ky);
-                    // light front pass: a few embers/motes OVER the body for depth
-                    if (stamp) {
-                        c.save(); c.globalAlpha = 0.28;
-                        c.drawImage(stamp, sx, sy, sw * 0.82, sw * 0.82);
-                        c.restore();
-                    }
-                    // group kills: stagger the chips so they don't stack into one blob
-                    const gN = group.length;
-                    drawDefeatChip(plate, aa, kx, ky, { dx: gN > 1 ? (chipI - (gN - 1) / 2) * 26 : 0, dy: gN > 2 ? -(chipI % 2) * 22 : 0 });
-                    chipI++;
+            const cut = (layers.cuts || []).find((x) => x && String(x.side) === 'enemy' && Math.floor(Number(x.index) || 0) === i);
+            if (a || cut) {
+                const aa = a || { x: cut.x, y: cut.y, w: cut.w, h: cut.h, feetY: (Number(cut.y) || 0) + (Number(cut.h) || 0), index: i, side: 'enemy' };
+                const bodyW = (Number(aa.w) || 200) * kx;
+                const feetY = (Number(aa.feetY) || (Number(aa.y) || 0) + (Number(aa.h) || 0)) * ky;
+                // 💥 STAMP v2: BIG, bottom-anchored at the feet — layers baked
+                // low in the stamp (crater) land ON the ground line, the core
+                // blast lands where the body stood. v1 drew a 1.5x-bodybox
+                // stamp wherever and it measured pure white on prod.
+                let sw = 0, sx = 0, sy = 0;
+                if (stamp) {
+                    sw = Math.max(275, Math.min(450, bodyW * 2.5));
+                    sx = (Number(aa.x) || 0) * kx - sw / 2;
+                    sy = feetY - sw * 0.86;   // 86% of the blast above the ground line
+                    c.drawImage(stamp, sx, sy, sw, sw);
+                    // light front pass: a few embers/motes OVER the spot for depth
+                    c.save(); c.globalAlpha = 0.28;
+                    c.drawImage(stamp, sx, sy, sw * 0.82, sw * 0.82);
+                    c.restore();
                 }
+                // group kills: stagger the chips so they don't stack into one blob
+                const gN = group.length;
+                drawDefeatChip(plate, aa, kx, ky, { dx: gN > 1 ? (chipI - (gN - 1) / 2) * 26 : 0, dy: gN > 2 ? -(chipI % 2) * 22 : 0 });
+                chipI++;
             }
         }
         const image = plate.toBuffer('image/jpeg', { quality: 0.85 });

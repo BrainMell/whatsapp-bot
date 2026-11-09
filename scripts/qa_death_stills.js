@@ -1,7 +1,8 @@
 // QA: death stills (2026-11-09) — synthetic-layer end-to-end.
 // Covers: all 6 death kinds render, stamp cache hits, group still composites,
-// JPEG validates, KO'd sprite provably present (pixel diff at the anchor),
-// defeat chip present. Run from repo root: node scripts/qa_death_stills.js
+// JPEG validates, kill stamp provably present (pixel diff at the anchor),
+// defeat chip present, and (v6) the dead unit's sprite provably NEVER drawn.
+// Run from repo root: node scripts/qa_death_stills.js
 const { createCanvas } = require('canvas');
 const ds = require('../core/rpg/systems/combat/deathStill');
 
@@ -95,7 +96,8 @@ async function regionMean(cvBuf, x, y, w, h) {
   const stamp = await ds._getStamp('VOID', true);
   assert('T2 boss stamp distinct file', !!stamp && stamp.length > 500);
 
-  // T3: KO'd sprite provably present — pixel mean at the dying anchor changes
+  // T3: kill art provably present — pixel mean at the dying anchor changes
+  // (v6: this is the STAMP's footprint; no dead sprite is drawn anymore)
   {
     const layers = makeLayers();
     const bare = await ds._scenePlateCanvas(layers, new Set([1, 2]), new Set([3]), chrome);
@@ -110,7 +112,7 @@ async function regionMean(cvBuf, x, y, w, h) {
     const ay = Math.round((687 - 180) * (480 / 687));   // feet/ground zone — where the fallen body + stamp land
     const mBare = await regionMean(bareBuf, ax, ay, 100, 80);
     const mStill = await regionMean(still.image, ax, ay, 100, 80);
-    assert('T3 anchor region changed (KO sprite + art present)', Math.abs(mBare - mStill) > 6, `bare=${mBare.toFixed(1)} still=${mStill.toFixed(1)}`);
+    assert('T3 anchor region changed (kill stamp present)', Math.abs(mBare - mStill) > 6, `bare=${mBare.toFixed(1)} still=${mStill.toFixed(1)}`);
     assert('T3 group still returns 2 members', still.group.length === 2);
   }
 
@@ -123,6 +125,24 @@ async function regionMean(cvBuf, x, y, w, h) {
     let colored = 0;
     for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - d[i + 1]) > 12 || Math.abs(d[i + 1] - d[i + 2]) > 12) colored++;
     assert('T4 non-batch dying enemy stays visible', colored > 30, `colored=${colored}`);
+  }
+
+  // T5: v6 owner directive "just use only the effects minus the enemy" — the
+  // dead unit's cut pixels must be UNABLE to reach the canvas. Render the same
+  // kill twice, second time with the dying's cut swapped for a screaming
+  // magenta slab: outputs must be byte-identical (any body/ghost draw would
+  // tint the frame and break the equality).
+  {
+    const layersA = makeLayers();
+    const layersB = makeLayers();
+    const mc = createCanvas(140, 220);
+    const mcx = mc.getContext('2d');
+    mcx.fillStyle = '#ff00ff'; mcx.fillRect(0, 0, 140, 220);
+    layersB.cuts.find((x) => x.index === 1).png = mc.toBuffer('image/png').toString('base64');
+    const opts = { picks: [{ enemy: enemies[1], targetIndex: 1 }], deadIdx: new Set([3]), chrome };
+    const ra = await ds.renderDeathStill({ layers: layersA, ...opts });
+    const rb = await ds.renderDeathStill({ layers: layersB, ...opts });
+    assert('T5 dead sprite never drawn (magenta cut → byte-identical output)', !!ra && !!rb && ra.image.equals(rb.image), `${ra ? ra.image.length : 0}B vs ${rb ? rb.image.length : 0}B`);
   }
 
   console.log(failures ? `QA FAILED (${failures})` : 'QA death stills done — all PASS');
