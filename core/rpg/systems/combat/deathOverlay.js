@@ -26,6 +26,35 @@ const VW = 640, VH = 480, LOCAL = { x: 512, feet: 560 };   // local anchor in th
 const ROOT = process.env.DEATH_OV_DIR || path.join(os.tmpdir(), 'joker_deathov');
 const mem = new Map();   // key -> Promise<{dir, n, fps}|null>
 
+// 🧹 CACHE CAP (2026-11-09 speed/RAM pass): the overlay frame dirs lived in os.tmpdir() with NO size limit — forever-growing disk, and RAM itself
+// if /tmp is tmpfs on the 1GB boxes. LRU-by-last-use eviction keeps it under DEATH_OV_MAX_MB (default 320). Dirs used in the last 10 minutes are
+// never evicted (an in-flight clip may be reading them). Hits `touch` their meta.json so hot enemies stay cached.
+const OV_MAX_BYTES = Math.max(40, Number(process.env.DEATH_OV_MAX_MB) || 320) * 1048576;
+let _pruneAt = 0;
+function pruneOverlayCache(force) {
+  try {
+    const now = Date.now(); if (!force && now - _pruneAt < 30000) return { removed: 0 }; _pruneAt = now;
+    const dirs = [];
+    for (const name of fs.readdirSync(ROOT)) {
+      const d = path.join(ROOT, name); let st; try { st = fs.statSync(d); } catch (e) { continue; } if (!st.isDirectory()) continue;
+      let bytes = 0, last = st.mtimeMs;
+      for (const f of fs.readdirSync(d)) { try { const fs2 = fs.statSync(path.join(d, f)); bytes += fs2.size; if (f === 'meta.json') last = Math.max(last, fs2.mtimeMs); } catch (e) { /* raced */ } }
+      dirs.push({ d, bytes, last });
+    }
+    let total = dirs.reduce((a, x) => a + x.bytes, 0), removed = 0;
+    if (total <= OV_MAX_BYTES) return { removed, total };
+    dirs.sort((a, b) => a.last - b.last);
+    for (const x of dirs) {
+      if (total <= OV_MAX_BYTES * 0.85) break;   // evict down to 85% so we are not pruning every bake
+      if (now - x.last < 10 * 60 * 1000) continue;
+      try { fs.rmSync(x.d, { recursive: true, force: true }); total -= x.bytes; removed++; mem.delete(path.basename(x.d)); /* key == dir name: a stale memo would point at a deleted dir */ } catch (e) { /* best effort */ }
+    }
+    if (removed) console.log(`[DeathOv] cache pruned: ${removed} overlay(s) removed, ~${Math.round(total / 1048576)}MB kept (cap ${Math.round(OV_MAX_BYTES / 1048576)}MB)`);
+    return { removed, total };
+  } catch (e) { return { removed: 0 }; }
+}
+
+
 function ffmpegBin() { return process.env.FFMPEG_PATH || 'ffmpeg'; }
 function run(args, timeoutMs = 20000) {
   return new Promise((resolve) => {
@@ -76,7 +105,7 @@ function getOverlay(picks, kind, boss, W0, H0, atk) {
     const dir = path.join(ROOT, key);
     try {
       const meta = JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8'));
-      if (meta && meta.n > 0 && fs.existsSync(path.join(dir, `f${String(meta.n - 1).padStart(3, '0')}.png`))) return Object.assign({ dir }, meta);
+      if (meta && meta.n > 0 && fs.existsSync(path.join(dir, `f${String(meta.n - 1).padStart(3, '0')}.png`))) { try { const t = new Date(); fs.utimesSync(path.join(dir, 'meta.json'), t, t); } catch (e) {} return Object.assign({ dir }, meta); }
     } catch (e) { /* not on disk yet */ }
     const { layers } = await localLayers(picks, W0, H0);
     const vid = await require('./ultimateFx').renderUltimateVideo({
@@ -98,6 +127,7 @@ function getOverlay(picks, kind, boss, W0, H0, atk) {
     vid.frames.forEach((b, i) => fs.writeFileSync(path.join(dir, `f${String(i).padStart(3, '0')}.png`), b));
     const meta = { n: vid.frames.length, fps: vid.fps || 15 };
     fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify(meta));
+    setImmediate(() => pruneOverlayCache());
     return Object.assign({ dir }, meta);
   })().catch((e) => { console.warn('[DeathOv] overlay paint failed:', e && e.message || e); return null; });
   mem.set(key, pr);
@@ -280,5 +310,5 @@ async function renderFast({ layers, picks, kind, boss, deadIdx, atk, chrome }) {
   return { mp4, thumb: plate, mats: { plate, framesDir: ov.dir, n: ov.n, fps: ov.fps, ox, oy, intro } };
 }
 
-module.exports = { renderFast, getOverlay, scenePlate, streamComposite, encodeRawClip, compositeFrames, _ROOT: ROOT };
+module.exports = { pruneOverlayCache, renderFast, getOverlay, scenePlate, streamComposite, encodeRawClip, compositeFrames, _ROOT: ROOT };
 
