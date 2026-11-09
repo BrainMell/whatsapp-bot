@@ -36,12 +36,33 @@ sweep is the fallback, `abyss_` id prefix forces VOID, everything else DUST.
 
 | Kind | Premade art (core/rpgasset/vfx, all CC0 — see CREDITS.md) | Composition on the still |
 | --- | --- | --- |
-| **FIRE** | `magic/Fire-bomb*.png` peak + `fire2/blast_*.png` + Kenney `p_scorch`, `bsmoke` | Fireball peak engulfing the body, scorch mark at the feet, ember specks, smoke wisp rising |
+| **FIRE** | `fire2/blast_*` + `fire2/jet_*` + Kenney `sexp` smoke, `flash` core | Blast core mid-body, SOFT radial scorch + cinders (procedural — the kenney `ground_*` flat-bottom decal is banned, it read as "partly cut off clearly a png"), ember motes, smoke |
 | **ICE** | procedural (no ice set in repo), painted once + cached | Shard spray around the body, frost patch on the ground, sparkle crosses |
-| **WATER** | Kenney `puff` tinted + procedural | Splash ring, droplet spray, ground puddle under the body |
+| **WATER** | Kenney `puff` tinted (foam/mist) + procedural crown | Soft-gradient puddle (no outline), CROWN splash of 9 tapered spouts with a 3-stop value ramp (tall centre → short flanks), highlighted droplets — no drawn rings, no pancake, never a sprite-sheet strip drawn whole |
 | **VOID** | `magic/Dark-Bolt*.png` peak + Kenney `gas` | Dark implosion frame, purple motes spiraling INWARD to the body's centre, dark wisps |
-| **EARTH** | Kenney `p_dirt`, `bsmoke` + procedural rubble | Dirt/debris chunks settled around the body, dust cloud, ground cracks |
+| **EARTH** | meteor `boulder_*` (partial tint keeps shading) + Kenney `p_dirt`, `bsmoke` + procedural | Flying chunks frozen at their ballistic peak, settled boulders sunk past the ground line, gradient polygon rubble, lit-edge radiating cracks + impact burst star |
 | **DUST** | Kenney `bsmoke`, `puff` | Gray dissolve motes drifting up, settled puffs — the generic fallback |
+
+### 2.5 Stamp design rules (v4 — written after the owner's third rejection)
+
+Grounded in standard game-VFX practice (shape language first, value ranges,
+color ramps, composition — the standard artistic VFX principles; crown-splash
+construction for water; "explode into a cloud that resembles their shape" for
+deaths) and in every failure v2 shipped:
+
+1. **Silhouette first** — one dominant focal shape per kind (fireball, crown,
+   rock burst); supports stay small and quiet.
+2. **Ground marks are soft radial gradients, NEVER pasted decals.** The
+   kenney `ground_*` sprites are flat-bottomed icon art — pasted raw they read
+   as a cut-off PNG. Scorch, puddles, dirt shadows = `softBlob()` gradients.
+3. **3-stop value ramps** on every drawn shape (core → mid → rim).
+4. **Never draw a sprite sheet whole** — `attack*.png` are multi-frame strips;
+   drawing one whole was the cyan smear.
+5. **Partial tint only** (`source-atop` overlay) — full `source-in` tint
+   flattens premades into donut blobs (the v2 earth boulders).
+6. **Eyes-on gate**: full-res inspection of every panel of the
+   `qa_death_visual.js` sheet before anything ships (owner rule:
+   "always visually inspect").
 
 Universal layer on every kind: ☠ **DEFEATED** chip where the erased HP bar
 was; the fallen body as a GHOST (rotated ~100° around its feet, sunk to the

@@ -133,7 +133,7 @@ function putArt(c, img, cx, cy, w, h, opts = {}) {
 // lands mid-body. v2 uses the real big art; NO white flash wash (v1's stamps
 // measured avg RGB 255,254,254 — literally white rectangles).
 const STAMP_SIZE = 480;
-const STAMP_DIR = path.join(os.tmpdir(), 'death_stamps_v2');
+const STAMP_DIR = path.join(os.tmpdir(), 'death_stamps_v5');
 const _stampMemo = new Map();
 
 function speck(rnd, c, x, y, r, col, a) {
@@ -147,6 +147,67 @@ function motes(rnd, c, cx, cy, n, rMin, rMax, spread, colors, rise, aMin, aMax) 
     }
 }
 
+// ── v4 design helpers — grounded in real VFX practice (shape language first,
+// 3-stop value ramps, soft edges). NO pasted decals with straight canvas cuts.
+// soft radial-gradient ellipse — every ground mark (scorch, puddle, dirt shadow)
+function softBlob(c, x, y, rx, ry, stops) {
+    c.save(); c.translate(x, y); c.scale(rx, ry);
+    const g = c.createRadialGradient(0, 0, 0.05, 0, 0, 1);
+    for (const [o, col] of stops) g.addColorStop(o, col);
+    c.fillStyle = g; c.fillRect(-1, -1, 2, 2);
+    c.restore();
+}
+// partial tint — keeps the premade's internal shading (v2's full source-in
+// tint flattened the soot boulders into flat beige donuts — the "blobs")
+function tintedSoft(img, color, a) {
+    if (!img) return null;
+    const cv = createCanvas(img.width, img.height);
+    const c2 = cv.getContext('2d');
+    c2.drawImage(img, 0, 0);
+    c2.globalCompositeOperation = 'source-atop';
+    c2.globalAlpha = a; c2.fillStyle = color; c2.fillRect(0, 0, cv.width, cv.height);
+    return cv;
+}
+// tapered curved spout (water crown) with a 3-stop value ramp base→tip
+function spout(c, x, y, hgt, lean, w0, stops) {
+    c.save();
+    const g = c.createLinearGradient(x, y, x + lean, y - hgt);
+    for (const [o, col] of stops) g.addColorStop(o, col);
+    c.fillStyle = g;
+    c.beginPath();
+    c.moveTo(x - w0, y);
+    c.quadraticCurveTo(x - w0 * 0.35 + lean * 0.35, y - hgt * 0.62, x + lean, y - hgt);
+    c.quadraticCurveTo(x + w0 * 0.3 + lean * 0.5, y - hgt * 0.5, x + w0 * 0.55, y);
+    c.closePath(); c.fill();
+    c.restore();
+}
+// irregular gradient-shaded rubble chip — polygons, never fillRect squares
+function rubbleChip(c, x, y, r, rot, rnd, pal) {
+    c.save(); c.translate(x, y); c.rotate(rot);
+    const n = 5 + Math.floor(rnd() * 3), pts = [];
+    for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2, rr = r * (0.7 + rnd() * 0.5); pts.push([Math.cos(a) * rr, Math.sin(a) * rr * 0.72]); }
+    const g = c.createLinearGradient(-r, -r, r, r);
+    g.addColorStop(0, pal[0]); g.addColorStop(1, pal[1]);
+    c.beginPath(); pts.forEach(([px, py], i) => (i ? c.lineTo(px, py) : c.moveTo(px, py))); c.closePath();
+    c.fillStyle = g; c.fill();
+    c.strokeStyle = 'rgba(30,22,14,0.5)'; c.lineWidth = 1.5; c.stroke();
+    c.restore();
+}
+// jagged ground crack with tapering width + occasional branch
+function crackLine(c, x0, y0, ang, len, rnd) {
+    c.save(); c.strokeStyle = 'rgba(38,28,18,0.7)'; c.lineCap = 'round';
+    let x = x0, y = y0, w = 3 + rnd() * 2;
+    const segs = 3 + Math.floor(rnd() * 3);
+    for (let i = 0; i < segs; i++) {
+        const a2 = ang + (rnd() - 0.5) * 0.7, l2 = (len / segs) * (0.6 + rnd() * 0.8);
+        const nx = x + Math.cos(a2) * l2, ny = y + Math.sin(a2) * l2 * 0.35;
+        c.lineWidth = Math.max(0.8, w); c.beginPath(); c.moveTo(x, y); c.lineTo(nx, ny); c.stroke();
+        if (rnd() < 0.4) { c.lineWidth = 1; c.beginPath(); c.moveTo(nx, ny); c.lineTo(nx + (rnd() - 0.5) * 30, ny + 6 + rnd() * 12); c.stroke(); }
+        x = nx; y = ny; w *= 0.72;
+    }
+    c.restore();
+}
+
 async function paintStamp(kind, boss) {
     const S = STAMP_SIZE, cv = createCanvas(S, S), c = cv.getContext('2d');
     const cx = S / 2, gy = S - 78;   // gy = the ground line inside the stamp (craters sit here)
@@ -154,20 +215,25 @@ async function paintStamp(kind, boss) {
     const A = boss ? 1.15 : 1;   // bosses die louder
 
     if (kind === 'FIRE') {
-        // the money shot: fire2 blasts are 384px saturated orange explosions
-        const crater = await art('kenney', /^ground_[1-6]\.png$/, 0.5);
+        // 💡 v4: same hero (fire2 blast + flash core + jet + smoke — that part
+        // worked), but the scorch is now a SOFT PROCEDURAL radial mark. The
+        // kenney ground_* decal is a flat-bottomed icon sprite — pasted raw at
+        // 95% it read as "partly cut off clearly a png" (owner, third strike).
         const smoke = await art('kenney', /^sexp_[1-5]\.png$/, 0.25);
         const blast = await art('fire2', /^blast_[1-6]\.png$/, 0.5);
         const blast2 = await art('fire2', /^blast_[1-6]\.png$/, 0.33);
         const jet = await art('fire2', /^jet_[1-4]\.png$/, 0.75);
         const core = await art('kenney', /^flash_[1-5]\.png$/, 0.5);
-        putArt(c, crater, cx, gy, 330 * A, 150 * A, { alpha: 0.95 });                        // scorched crater at the feet
-        putArt(c, smoke, cx, gy - 150 * A, 310 * A, 265 * A, { alpha: 0.85 });               // explosion smoke behind
-        putArt(c, blast, cx, gy - 175 * A, 345 * A, 345 * A, { alpha: 1 });                  // THE peak fireball
-        putArt(c, blast2, cx - 60 * A, gy - 225 * A, 235 * A, 235 * A, { alpha: 0.9, rot: 0.35 });
-        putArt(c, jet, cx + 78 * A, gy - 300 * A, 120 * A, 120 * A, { alpha: 0.85 });        // flame tongue breaking off
-        putArt(c, core, cx, gy - 175 * A, 130 * A, 130 * A, { alpha: 0.9 });                 // hot core INSIDE the blast
-        motes(rnd, c, cx, gy - 160 * A, 22 * A, 1.5, 3.5, 175 * A, ['#ffcb45', '#e85a37', '#fff3c0', '#ffffff'], 46, 0.5, 0.95);  // embers
+        // scorch: dark soft ellipse + ember-hot inner rim + settled cinders
+        softBlob(c, cx, gy + 6, 200 * A, 36 * A, [[0, 'rgba(20,11,5,0.92)'], [0.5, 'rgba(38,19,7,0.6)'], [1, 'rgba(38,19,7,0)']]);
+        softBlob(c, cx, gy + 4, 118 * A, 19 * A, [[0, 'rgba(122,42,10,0.55)'], [1, 'rgba(122,42,10,0)']]);
+        for (let i = 0; i < 7; i++) speck(rnd, c, cx + (rnd() - 0.5) * 300 * A, gy + 10 + rnd() * 14, 1.4 + rnd() * 2.2, i % 2 ? '#ff9c40' : '#e85a37', 0.45 + rnd() * 0.4);
+        putArt(c, smoke, cx, gy - 150 * A, 300 * A, 260 * A, { alpha: 0.8 });
+        putArt(c, blast, cx, gy - 175 * A, 345 * A, 345 * A, { alpha: 1 });
+        putArt(c, blast2, cx - 60 * A, gy - 225 * A, 230 * A, 230 * A, { alpha: 0.9, rot: 0.35 });
+        putArt(c, jet, cx + 82 * A, gy - 300 * A, 115 * A, 115 * A, { alpha: 0.85 });
+        putArt(c, core, cx, gy - 175 * A, 130 * A, 130 * A, { alpha: 0.9 });
+        motes(rnd, c, cx, gy - 160 * A, 22 * A, 1.5, 3.5, 175 * A, ['#ffcb45', '#e85a37', '#fff3c0', '#ffffff'], 46, 0.5, 0.95);
     } else if (kind === 'VOID') {
         const mass1 = tinted(await art('meteor', /^boulder_[1-8]\.png$/, 0.4), '#150820');
         const mass2 = tinted(await art('meteor', /^boulder_[1-8]\.png$/, 0.75), '#241035');
@@ -187,51 +253,80 @@ async function paintStamp(kind, boss) {
             speck(rnd, c, cx + Math.cos(ang) * d, (gy - 160 * A) + Math.sin(ang) * d * 0.8, 1.5 + rnd() * 3, ['#7b4dff', '#2a1240', '#b18cff', '#12081f'][Math.floor(rnd() * 4)], 0.55 + rnd() * 0.4);
         }
     } else if (kind === 'EARTH') {
-        const crater = await art('kenney', /^ground_[1-6]\.png$/, 0.75);
-        const b1 = tinted(await art('meteor', /^boulder_[1-8]\.png$/, 0.12), '#6e5b44');     // 💡 v3: source boulders are ~RGB(31,31,31) — near-black soot on the dark floor; tinted earth-brown they read as rubble
-        const b2 = tinted(await art('meteor', /^boulder_[1-8]\.png$/, 0.6), '#7a6a52');
-        const b3 = tinted(await art('meteor', /^boulder_[1-8]\.png$/, 0.88), '#5f4f3c');
-        const dirt1 = tinted(await art('kenney', /^p_dirt_0[12]\.png$/, 0.2), '#6b5136');
-        const dirt2 = tinted(await art('kenney', /^p_dirt_0[12]\.png$/, 0.8), '#57432c');
-        const dust = tinted(await art('kenney', /^bsmoke_([1-9]|1[0-3])\.png$/, 0.55), '#8a7458');
-        putArt(c, dust, cx, gy - 165 * A, 275 * A, 230 * A, { alpha: 0.4 });
-        putArt(c, crater, cx, gy, 340 * A, 160 * A, { alpha: 0.95 });                        // shattered ground
-        putArt(c, dirt1, cx - 80 * A, gy - 95 * A, 210 * A, 210 * A, { alpha: 0.8 });
-        putArt(c, dirt2, cx + 70 * A, gy - 70 * A, 185 * A, 185 * A, { alpha: 0.75 });
-        putArt(c, b1, cx - 104 * A, gy - 44 * A, 122 * A, 122 * A, { alpha: 0.95, rot: -0.3 }); // REAL boulder chunks, kept OFF the body
-        putArt(c, b2, cx + 78 * A, gy - 36 * A, 102 * A, 102 * A, { alpha: 0.95, rot: 0.5 });
-        putArt(c, b3, cx - 128 * A, gy - 108 * A, 84 * A, 84 * A, { alpha: 0.9, rot: 0.9 });
-        // settled rubble chips + ground cracks
+        // 💡 v4b iteration (full-res eyes on v4): earth read as murky lumps —
+        // cracks were invisible on the dark floor, nothing was mid-air, two
+        // giant boulders dominated. Now: a frozen ballistic arc of flying
+        // chunks at the peak, lit-edge radiating cracks that actually SHOW,
+        // smaller sunk ground boulders, lighter dust.
+        const b1 = await art('meteor', /^boulder_[1-8]\.png$/, 0.12);
+        const b2 = await art('meteor', /^boulder_[1-8]\.png$/, 0.6);
+        const b3 = await art('meteor', /^boulder_[1-8]\.png$/, 0.88);
+        const b4 = await art('meteor', /^boulder_[1-8]\.png$/, 0.3);
+        const dirt1 = tintedSoft(await art('kenney', /^p_dirt_0[12]\.png$/, 0.2), '#6b5136', 0.5);
+        const dirt2 = tintedSoft(await art('kenney', /^p_dirt_0[12]\.png$/, 0.8), '#57432c', 0.45);
+        const dust = tinted(await art('kenney', /^bsmoke_([1-9]|1[0-3])\.png$/, 0.55), '#9a8062');
+        softBlob(c, cx, gy + 6, 195 * A, 34 * A, [[0, 'rgba(24,16,9,0.8)'], [1, 'rgba(24,16,9,0)']]);   // dirt shadow
+        putArt(c, dust, cx, gy - 175 * A, 240 * A, 195 * A, { alpha: 0.34 });
+        putArt(c, dirt1, cx - 80 * A, gy - 70 * A, 170 * A, 170 * A, { alpha: 0.7 });
+        putArt(c, dirt2, cx + 72 * A, gy - 55 * A, 150 * A, 150 * A, { alpha: 0.65 });
+        // frozen ballistic arc — chunks caught mid-air at their peak (still = frozen at the "after")
+        putArt(c, tintedSoft(b3, '#5f4f3c', 0.45), cx - 34 * A, gy - 205 * A, 62 * A, 62 * A, { alpha: 0.95, rot: 0.9 });
+        putArt(c, tintedSoft(b4, '#6e5b44', 0.5), cx - 118 * A, gy - 148 * A, 46 * A, 46 * A, { alpha: 0.95, rot: -0.5 });
+        putArt(c, tintedSoft(b3, '#7a664c', 0.5), cx + 64 * A, gy - 150 * A, 40 * A, 40 * A, { alpha: 0.95, rot: 2.1 });
+        // settled boulders — smaller than v4, spread, sunk past the ground line
+        putArt(c, tintedSoft(b1, '#7a664c', 0.55), cx - 108 * A, gy - 30 * A, 92 * A, 92 * A, { alpha: 0.96, rot: -0.3 });
+        putArt(c, tintedSoft(b2, '#6e5b44', 0.5), cx + 96 * A, gy - 24 * A, 76 * A, 76 * A, { alpha: 0.96, rot: 0.5 });
+        // impact burst star + lit-edge radiating cracks (dark core, light lip)
         c.save();
-        for (let i = 0; i < 9 * A; i++) {
-            const x = cx + (rnd() - 0.5) * 270 * A, y = gy + 10 + rnd() * 55;
-            const w = 8 + rnd() * 22, h = 6 + rnd() * 14, rot = rnd() * Math.PI;
-            c.translate(x, y); c.rotate(rot);
-            c.fillStyle = ['#6b5b45', '#57493a', '#7d6d55'][Math.floor(rnd() * 3)];
-            c.globalAlpha = 0.95; c.fillRect(-w / 2, -h / 2, w, h);
-            c.setTransform(1, 0, 0, 1, 0, 0);
-        }
-        c.strokeStyle = 'rgba(60,48,36,0.55)'; c.lineWidth = 2;
-        for (let i = 0; i < 4; i++) {
-            const x0 = cx + (rnd() - 0.5) * 210 * A, y0 = gy + 18 + rnd() * 26;
-            c.beginPath(); c.moveTo(x0, y0);
-            c.lineTo(x0 + (rnd() - 0.5) * 90, y0 + 12 + rnd() * 18); c.stroke();
+        c.lineCap = 'round';
+        for (let i = 0; i < 7; i++) {
+            const ang = (i / 7) * Math.PI * 2 + 0.3;
+            const r0 = 8 + rnd() * 8, r1 = 30 + rnd() * 26;
+            const y0 = (gy + 12) + Math.sin(ang) * r0 * 0.4, y1 = (gy + 12) + Math.sin(ang) * r1 * 0.4;
+            c.strokeStyle = 'rgba(16,10,6,0.85)'; c.lineWidth = 3.2;
+            c.beginPath(); c.moveTo(cx + Math.cos(ang) * r0, y0); c.lineTo(cx + Math.cos(ang) * r1, y1); c.stroke();
+            c.strokeStyle = 'rgba(190,170,140,0.3)'; c.lineWidth = 1.2;
+            c.beginPath(); c.moveTo(cx + Math.cos(ang) * r0 + 1.5, y0 + 1.5); c.lineTo(cx + Math.cos(ang) * r1 + 1.5, y1 + 1.5); c.stroke();
         }
         c.restore();
+        for (let i = 0; i < 4; i++) crackLine(c, cx + (rnd() - 0.5) * 60, gy + 14 + rnd() * 10, (rnd() < 0.5 ? Math.PI : 0) + (rnd() - 0.5) * 0.9, 70 + rnd() * 70, rnd);
+        // gradient-shaded polygon rubble settled on the ground
+        const pal = [['#8a7658', '#4e3f2e'], ['#7d6d55', '#443728'], ['#93805f', '#574834']];
+        for (let i = 0; i < 11 * A; i++) {
+            rubbleChip(c, cx + (rnd() - 0.5) * 280 * A, gy + 6 + rnd() * 40, 5 + rnd() * 12, rnd() * Math.PI, rnd, pal[Math.floor(rnd() * pal.length)]);
+        }
     } else if (kind === 'WATER') {
-        const wave = await art('attack', /^attack[1-7]\.png$/, 0.45);                        // 384px cyan splash art
-        const ring = tinted(await art('kenney', /^p_circle_0[235]\.png$/, 0.5), '#bfe3ff');  // 💡 v3: THIN circle (sonic_* are filled discs → read as a giant ball)
+        // 💡 v4 full rework: v2 drew a stroked pancake + a stretched sprite-
+        // SHEET smear (attack3 is a 3-frame strip — never draw a sheet whole)
+        // + a floating thin ring = the "offensive" soap bubble. Now: soft
+        // gradient puddle (no outline) + a real CROWN splash — tapered spouts
+        // with a 3-stop value ramp, tall centre → short flanks — highlighted
+        // droplets arcing outward, foam and mist kept subtle.
+        const foam = tinted(await art('kenney', /^puff_([1-9]|1[0-3])\.png$/, 0.3), '#eaf7ff');
         const mist = tinted(await art('kenney', /^puff_([1-9]|1[0-3])\.png$/, 0.4), '#9fd4ff');
-        // ground puddle
-        c.save(); c.globalAlpha = 0.45; c.fillStyle = '#3f7fd6';
-        c.beginPath(); c.ellipse(cx, gy + 8, 165 * A, 30 * A, 0, 0, Math.PI * 2); c.fill();
-        c.globalAlpha = 0.55; c.strokeStyle = '#9fd0ff'; c.lineWidth = 3;
-        c.beginPath(); c.ellipse(cx, gy + 8, 165 * A, 30 * A, 0, 0, Math.PI * 2); c.stroke(); c.restore();
-        putArt(c, wave, cx, gy - 42, 380 * A, 95 * A, { alpha: 0.95 });                      // splash wall at the ground line
-        putArt(c, ring, cx, gy - 120 * A, 265 * A, 265 * A, { alpha: 0.65 });                // expanding ring
-        putArt(c, mist, cx - 52 * A, gy - 205 * A, 190 * A, 170 * A, { alpha: 0.32 });       // rising mist (v3: two light puffs, not one solid orb)
-        putArt(c, mist, cx + 66 * A, gy - 165 * A, 150 * A, 135 * A, { alpha: 0.28 });
-        motes(rnd, c, cx, gy - 110 * A, 22 * A, 1.5, 4, 150 * A, ['#bfe3ff', '#7fb8ff', '#ffffff'], 70, 0.5, 0.9);  // droplets
+        // puddle: layered soft gradients, NO stroke outline
+        softBlob(c, cx, gy + 8, 178 * A, 33 * A, [[0, 'rgba(24,80,148,0.88)'], [0.5, 'rgba(45,112,188,0.55)'], [1, 'rgba(45,112,188,0)']]);
+        softBlob(c, cx - 45 * A, gy + 4, 72 * A, 12 * A, [[0, 'rgba(196,232,255,0.55)'], [1, 'rgba(196,232,255,0)']]);
+        // central burst column
+        softBlob(c, cx, gy - 52 * A, 58 * A, 88 * A, [[0, 'rgba(214,242,255,0.8)'], [0.55, 'rgba(120,190,240,0.4)'], [1, 'rgba(120,190,240,0)']]);
+        // crown: 9 tapered spouts, parabolic heights, leaning outward
+        const nS = 9;
+        for (let i = 0; i < nS; i++) {
+            const t = i / (nS - 1), dx = (t - 0.5) * 2;
+            spout(c, cx + dx * 98 * A, gy + 5, (56 + 70 * (1 - dx * dx)) * A, dx * 36 * A, 12.5 * A,
+                [[0, 'rgba(26,82,146,0.95)'], [0.55, 'rgba(70,160,222,0.92)'], [1, 'rgba(238,250,255,0.95)']]);
+        }
+        putArt(c, foam, cx, gy - 26 * A, 135 * A, 78 * A, { alpha: 0.5 });
+        putArt(c, mist, cx - 58 * A, gy - 195 * A, 150 * A, 118 * A, { alpha: 0.3 });
+        // droplets with a highlight dot, arcing outward and falling
+        for (let i = 0; i < 15 * A; i++) {
+            const dx = (rnd() - 0.5) * 2;
+            const x = cx + dx * (100 + rnd() * 85) * A;
+            const y = gy - (26 + (1 - Math.abs(dx)) * 120 * rnd()) * A + rnd() * 46;
+            const r = 1.8 + rnd() * 3.2;
+            speck(rnd, c, x, y, r, ['rgba(186,228,255,0.95)', 'rgba(116,182,238,0.92)', 'rgba(255,255,255,0.95)'][Math.floor(rnd() * 3)], 0.9);
+            speck(rnd, c, x - r * 0.34, y - r * 0.34, r * 0.34, 'rgba(255,255,255,0.95)', 0.95);
+        }
     } else if (kind === 'ICE') {
         const pane = tinted(await art('kenney', /^p_window_01\.png$/, 0.5), '#cfeeff');
         const ring = tinted(await art('kenney', /^p_circle_0[235]\.png$/, 0.8), '#dff4ff');
