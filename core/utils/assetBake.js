@@ -11,7 +11,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 
-const ROOT = process.env.BAKE_DIR || path.join(os.tmpdir(), 'bot_bake'); // keep OUTSIDE git
+const ROOT = process.env.BAKE_DIR || path.join(os.homedir(), '.cache', 'bot_bake'); // keep OUTSIDE git
 const OFF = process.env.ASSET_BAKE === '0';
 const lowMem = () => process.memoryUsage().rss / 1048576 > (Number(process.env.BAKE_RSS_MB) || 620);
 
