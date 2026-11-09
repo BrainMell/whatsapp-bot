@@ -8,19 +8,21 @@
 //
 // Full research + type table: docs/DEATH_STILLS_SPEC.md. Short version — a
 // still reads as a kill through four stacked signals: (1) the body is KO'd
-// (rotated off its stance, grounded, desaturated), (2) premade element art
-// frozen at its PEAK frame engulfs the body (fire bomb / dark implosion /
-// shards / splash / rubble / dust — never one effect for everything), (3) a
-// ☠ DEFEATED chip sits where the HP bar was, (4) debris is SETTLED — the
-// "after", not the "during".
+// (rotated off its stance, grounded, STILL READABLE — v2 keeps ~45% of the
+// sprite's color; the v1 full-gray wash read as "random gray trash on the
+// floor", owner meltdown 16:51Z), (2) premade element art frozen at its PEAK
+// frame, BIG and bottom-anchored at the body's feet (v2: real 384px blasts +
+// crater decals — v1 picked 64px 1%-visible pixies and misspelled every
+// Kenney filename, so stamps rendered as white glints), (3) a ☠ DEFEATED chip
+// sits where the HP bar was, (4) debris is SETTLED — the "after", not the "during".
 //
 // Architecture: the expensive part (premade art composition) is painted ONCE
 // per (kind, boss) into a transparent "death stamp" PNG (disk + memory cache)
-// — every kill is then scenePlate + dead-sprite transform + 2 blits, warm in
-// ~0.1-0.25s. Replaces the 18-24s animated DeathFx mp4 pipeline wholesale.
+// — every kill is then scenePlate + stamp-behind + dead-sprite + stamp-front
+// + chip blits, warm in ~0.1-0.25s. Replaces the 18-24s animated mp4 pipeline.
 //
-// premade sources: core/rpgasset/vfx (CC0 — kenney explosion/smoke/particles,
-// magic fire-bomb/lightning/dark-bolt, fire2 blasts; see vfx/CREDITS.md).
+// premade sources: core/rpgasset/vfx (CC0 — fire2 blasts, kenney explosion/
+// smoke/crater sets, meteor boulders, magic bolts, clock mandalas; CREDITS.md).
 
 const fs = require('fs');
 const os = require('os');
@@ -64,26 +66,74 @@ function mulberry32(seed) {
 function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 
 // ── premade art loading (repo CC0 sets) ──────────────────────────────────
-const VFX_DIR = path.join(__dirname, '..', '..', 'rpgasset', 'vfx');
-function loadFrame(rel, pickFrac) {
-    try {
-        const p = path.join(VFX_DIR, rel);
-        if (!fs.existsSync(p)) return null;
-        return loadImage(p);
-    } catch (e) { return null; }
+// 💡 v2: files are looked up by GLOBBING the real directory (the sets use
+// inconsistent names — bsmoke_1..13, p_dirt_01, "Dark VFX 1 (40x32)3.png" —
+// v1 hardcoded wrong names and EVERY Kenney load silently 404'd).
+// 💡 v2 FIX: THREE ups (combat → systems → rpg → core) — v1 used two and
+// pointed at core/rpg/rpgasset/vfx which DOESN'T EXIST, so every premade load
+// silently 404'd since yesterday and every stamp rendered as a white glint.
+const VFX_DIR = path.join(__dirname, '..', '..', '..', 'rpgasset', 'vfx');
+const _dirMemo = new Map();
+function dirFiles(sub) {
+    if (_dirMemo.has(sub)) return _dirMemo.get(sub);
+    let list = [];
+    try { list = fs.readdirSync(path.join(VFX_DIR, sub)).filter((f) => /\.png$/i.test(f)).sort(); } catch (e) {}
+    _dirMemo.set(sub, list);
+    return list;
 }
-// sorted numeric frames of a set like "Fire-bomb1..12.png" — pick the PEAK
-// (visually fullest ≈ 60-75% through the sequence; frame 1 is the wind-up).
-function peakFrame(prefix, suffix, count, frac = 0.66) {
-    const idx = Math.max(0, Math.min(count - 1, Math.floor(count * frac)));
-    return loadFrame(`${prefix}${idx + 1}${suffix}`);
+const _missingWarned = new Set();
+function pickFile(sub, re, frac) {
+    const files = dirFiles(sub).filter((f) => re.test(f));
+    if (!files.length) {
+        const key = sub + '::' + String(re);
+        if (!_missingWarned.has(key)) { _missingWarned.add(key); console.warn(`[DeathStill] vfx set missing: ${sub}/${re} (stamp will lose a layer)`); }
+        return null;
+    }
+    const idx = Math.max(0, Math.min(files.length - 1, Math.floor(files.length * frac)));
+    return path.join(VFX_DIR, sub, files[idx]);
 }
-function kenney(name, frac = 0.5) { return peakFrame(`kenney/${name}`, '.png', 8, frac); }
+async function art(sub, re, frac = 0.6) {
+    const p = pickFile(sub, re, frac);
+    if (!p) return null;
+    try { return await loadImage(p); } catch (e) { return null; }
+}
+
+// tint a (usually grayscale) premade sprite — returns a canvas
+const _tintMemo = new Map();
+function tinted(img, color) {
+    if (!img) return null;
+    const key = (img._tintKey || (img._tintKey = Math.random().toString(36).slice(2))) + '|' + color;
+    if (_tintMemo.has(key)) return _tintMemo.get(key);
+    const cv = createCanvas(img.width, img.height);
+    const c = cv.getContext('2d');
+    c.drawImage(img, 0, 0);
+    c.globalCompositeOperation = 'source-in';
+    c.fillStyle = color;
+    c.fillRect(0, 0, cv.width, cv.height);
+    _tintMemo.set(key, cv);
+    return cv;
+}
+
+// centered draw helper (v1's corner math kept mis-placing layers)
+function putArt(c, img, cx, cy, w, h, opts = {}) {
+    if (!img) return;
+    const { alpha = 1, rot = 0, smooth = true } = opts;
+    c.save();
+    c.globalAlpha = alpha;
+    c.imageSmoothingEnabled = smooth;
+    c.translate(cx, cy);
+    if (rot) c.rotate(rot);
+    c.drawImage(img, -w / 2, -h / 2, w, h);
+    c.restore();
+}
 
 // ── the death stamp: per (kind, boss) transparent PNG painted ONCE ───────
-// Art box 480x480 — the caller scales/blits it centered on the fallen body.
+// Art box 480x480 — the caller blits it BOTTOM-ANCHORED at the body's feet,
+// so layers baked low (craters) land on the ground line and the core blast
+// lands mid-body. v2 uses the real big art; NO white flash wash (v1's stamps
+// measured avg RGB 255,254,254 — literally white rectangles).
 const STAMP_SIZE = 480;
-const STAMP_DIR = path.join(os.tmpdir(), 'death_stamps_v1');
+const STAMP_DIR = path.join(os.tmpdir(), 'death_stamps_v2');
 const _stampMemo = new Map();
 
 function speck(rnd, c, x, y, r, col, a) {
@@ -99,104 +149,128 @@ function motes(rnd, c, cx, cy, n, rMin, rMax, spread, colors, rise, aMin, aMax) 
 
 async function paintStamp(kind, boss) {
     const S = STAMP_SIZE, cv = createCanvas(S, S), c = cv.getContext('2d');
-    const cx = S / 2, cy = S / 2;
+    const cx = S / 2, gy = S - 78;   // gy = the ground line inside the stamp (craters sit here)
     const rnd = mulberry32(hashStr(kind + (boss ? ':boss' : '')));
-    const A = boss ? 1.18 : 1;   // bosses die louder
-    const put = (img, x, y, w, h, alpha = 1) => { if (img) { try { c.save(); c.globalAlpha = alpha; c.drawImage(img, x, y, w, h); c.restore(); } catch (e) {} } };
+    const A = boss ? 1.15 : 1;   // bosses die louder
 
     if (kind === 'FIRE') {
-        const bomb = await peakFrame('magic/Fire-bomb', '.png', 12, 0.66);
-        const blast = await peakFrame('fire2/blast_', '.png', 6, 0.7);
-        const scorch = await kenney('p_scorch', 0.6);
-        const smoke = await kenney('bsmoke', 0.35);
-        if (scorch) put(scorch, cx - 150 * A, S - 96, 300 * A, 74, 0.8);                       // scorch at the feet
-        put(blast, cx - 130 * A, cy - 120 * A, 260 * A, 260 * A, 0.55);                        // under-blast
-        put(bomb, cx - 150 * A, cy - 170 * A, 300 * A, 300 * A);                               // the peak fireball
-        put(smoke, cx - 70 * A, cy - 230 * A, 140 * A, 150 * A, 0.5);                          // wisp rising
-        motes(rnd, c, cx, cy, 16 * A, 1.5, 3.5, 150 * A, ['#ffcb45', '#e85a37', '#ffffff'], 26, 0.5, 0.95);  // embers
+        // the money shot: fire2 blasts are 384px saturated orange explosions
+        const crater = await art('kenney', /^ground_[1-6]\.png$/, 0.5);
+        const smoke = await art('kenney', /^sexp_[1-5]\.png$/, 0.25);
+        const blast = await art('fire2', /^blast_[1-6]\.png$/, 0.5);
+        const blast2 = await art('fire2', /^blast_[1-6]\.png$/, 0.33);
+        const jet = await art('fire2', /^jet_[1-4]\.png$/, 0.75);
+        const core = await art('kenney', /^flash_[1-5]\.png$/, 0.5);
+        putArt(c, crater, cx, gy, 330 * A, 150 * A, { alpha: 0.95 });                        // scorched crater at the feet
+        putArt(c, smoke, cx, gy - 150 * A, 310 * A, 265 * A, { alpha: 0.85 });               // explosion smoke behind
+        putArt(c, blast, cx, gy - 175 * A, 345 * A, 345 * A, { alpha: 1 });                  // THE peak fireball
+        putArt(c, blast2, cx - 60 * A, gy - 225 * A, 235 * A, 235 * A, { alpha: 0.9, rot: 0.35 });
+        putArt(c, jet, cx + 78 * A, gy - 300 * A, 120 * A, 120 * A, { alpha: 0.85 });        // flame tongue breaking off
+        putArt(c, core, cx, gy - 175 * A, 130 * A, 130 * A, { alpha: 0.9 });                 // hot core INSIDE the blast
+        motes(rnd, c, cx, gy - 160 * A, 22 * A, 1.5, 3.5, 175 * A, ['#ffcb45', '#e85a37', '#fff3c0', '#ffffff'], 46, 0.5, 0.95);  // embers
     } else if (kind === 'VOID') {
-        const bolt = await peakFrame('magic/Dark-Bolt', '.png', 12, 0.6);
-        const gas = await kenney('gas', 0.55);
-        put(gas, cx - 140 * A, cy - 140 * A, 280 * A, 280 * A, 0.5);
-        put(bolt, cx - 150 * A, cy - 165 * A, 300 * A, 300 * A, 0.9);
+        const mass1 = tinted(await art('meteor', /^boulder_[1-8]\.png$/, 0.4), '#150820');
+        const mass2 = tinted(await art('meteor', /^boulder_[1-8]\.png$/, 0.75), '#241035');
+        const boltA = await art('magic', /^Dark-Bolt([1-9]|1[0-2])\.png$/, 0.83);            // deep purple frames
+        const boltB = await art('magic', /^Dark-Bolt([1-9]|1[0-2])\.png$/, 0.66);
+        const ring = await art('clock', /^mandala_[1-7]\.png$/, 0.4);
+        const gas = tinted(await art('kenney', /^gas_[1-5]\.png$/, 0.4), '#4a1a66');
+        putArt(c, gas, cx, gy - 170 * A, 300 * A, 250 * A, { alpha: 0.55 });
+        putArt(c, mass1, cx, gy - 160 * A, 300 * A, 300 * A, { alpha: 0.92 });               // dark implosion mass
+        putArt(c, mass2, cx, gy - 235 * A, 230 * A, 230 * A, { alpha: 0.85 });
+        putArt(c, ring, cx, gy - 165 * A, 285 * A, 285 * A, { alpha: 0.6 });                 // arcane collapse ring
+        putArt(c, boltA, cx, gy - 185 * A, 235 * A, 325 * A, { alpha: 0.95, smooth: false }); // pixel-crisp bolts
+        putArt(c, boltB, cx + 55 * A, gy - 150 * A, 190 * A, 265 * A, { alpha: 0.8, rot: Math.PI / 2, smooth: false });
         // inward implosion: motes denser NEAR the centre (pulled in), purple/black
-        for (let i = 0; i < 22 * A; i++) {
-            const ang = rnd() * Math.PI * 2, d = (10 + 150 * A * rnd() * rnd()) ;
-            speck(rnd, c, cx + Math.cos(ang) * d, cy + Math.sin(ang) * d * 0.8, 1.5 + rnd() * 3, ['#7b4dff', '#2a1240', '#b18cff', '#12081f'][Math.floor(rnd() * 4)], 0.55 + rnd() * 0.4);
+        for (let i = 0; i < 24 * A; i++) {
+            const ang = rnd() * Math.PI * 2, d = (10 + 150 * A * rnd() * rnd());
+            speck(rnd, c, cx + Math.cos(ang) * d, (gy - 160 * A) + Math.sin(ang) * d * 0.8, 1.5 + rnd() * 3, ['#7b4dff', '#2a1240', '#b18cff', '#12081f'][Math.floor(rnd() * 4)], 0.55 + rnd() * 0.4);
         }
     } else if (kind === 'EARTH') {
-        const dirt1 = await kenney('p_dirt', 0.4), dirt2 = await kenney('p_dirt', 0.75);
-        const dust = await kenney('bsmoke', 0.3);
-        put(dust, cx - 130 * A, cy - 150 * A, 260 * A, 220 * A, 0.55);
-        put(dirt1, cx - 150 * A, cy - 40 * A, 190 * A, 140 * A, 0.9);
-        put(dirt2, cx - 20 * A, cy - 10 * A, 170 * A, 120 * A, 0.85);
-        // settled rubble chunks + ground cracks
+        const crater = await art('kenney', /^ground_[1-6]\.png$/, 0.75);
+        const b1 = tinted(await art('meteor', /^boulder_[1-8]\.png$/, 0.12), '#6e5b44');     // 💡 v3: source boulders are ~RGB(31,31,31) — near-black soot on the dark floor; tinted earth-brown they read as rubble
+        const b2 = tinted(await art('meteor', /^boulder_[1-8]\.png$/, 0.6), '#7a6a52');
+        const b3 = tinted(await art('meteor', /^boulder_[1-8]\.png$/, 0.88), '#5f4f3c');
+        const dirt1 = tinted(await art('kenney', /^p_dirt_0[12]\.png$/, 0.2), '#6b5136');
+        const dirt2 = tinted(await art('kenney', /^p_dirt_0[12]\.png$/, 0.8), '#57432c');
+        const dust = tinted(await art('kenney', /^bsmoke_([1-9]|1[0-3])\.png$/, 0.55), '#8a7458');
+        putArt(c, dust, cx, gy - 165 * A, 275 * A, 230 * A, { alpha: 0.4 });
+        putArt(c, crater, cx, gy, 340 * A, 160 * A, { alpha: 0.95 });                        // shattered ground
+        putArt(c, dirt1, cx - 80 * A, gy - 95 * A, 210 * A, 210 * A, { alpha: 0.8 });
+        putArt(c, dirt2, cx + 70 * A, gy - 70 * A, 185 * A, 185 * A, { alpha: 0.75 });
+        putArt(c, b1, cx - 104 * A, gy - 44 * A, 122 * A, 122 * A, { alpha: 0.95, rot: -0.3 }); // REAL boulder chunks, kept OFF the body
+        putArt(c, b2, cx + 78 * A, gy - 36 * A, 102 * A, 102 * A, { alpha: 0.95, rot: 0.5 });
+        putArt(c, b3, cx - 128 * A, gy - 108 * A, 84 * A, 84 * A, { alpha: 0.9, rot: 0.9 });
+        // settled rubble chips + ground cracks
         c.save();
         for (let i = 0; i < 9 * A; i++) {
-            const x = cx + (rnd() - 0.5) * 260 * A, y = cy + 40 + rnd() * 90;
+            const x = cx + (rnd() - 0.5) * 270 * A, y = gy + 10 + rnd() * 55;
             const w = 8 + rnd() * 22, h = 6 + rnd() * 14, rot = rnd() * Math.PI;
             c.translate(x, y); c.rotate(rot);
             c.fillStyle = ['#6b5b45', '#57493a', '#7d6d55'][Math.floor(rnd() * 3)];
             c.globalAlpha = 0.95; c.fillRect(-w / 2, -h / 2, w, h);
             c.setTransform(1, 0, 0, 1, 0, 0);
         }
-        c.strokeStyle = 'rgba(60,48,36,0.5)'; c.lineWidth = 2;
+        c.strokeStyle = 'rgba(60,48,36,0.55)'; c.lineWidth = 2;
         for (let i = 0; i < 4; i++) {
-            const x0 = cx + (rnd() - 0.5) * 200 * A, y0 = S - 60 + rnd() * 30;
+            const x0 = cx + (rnd() - 0.5) * 210 * A, y0 = gy + 18 + rnd() * 26;
             c.beginPath(); c.moveTo(x0, y0);
-            c.lineTo(x0 + (rnd() - 0.5) * 90, y0 + 14 + rnd() * 20); c.stroke();
+            c.lineTo(x0 + (rnd() - 0.5) * 90, y0 + 12 + rnd() * 18); c.stroke();
         }
         c.restore();
     } else if (kind === 'WATER') {
-        const puff = await kenney('puff', 0.5);
+        const wave = await art('attack', /^attack[1-7]\.png$/, 0.45);                        // 384px cyan splash art
+        const ring = tinted(await art('kenney', /^p_circle_0[235]\.png$/, 0.5), '#bfe3ff');  // 💡 v3: THIN circle (sonic_* are filled discs → read as a giant ball)
+        const mist = tinted(await art('kenney', /^puff_([1-9]|1[0-3])\.png$/, 0.4), '#9fd4ff');
         // ground puddle
-        c.save(); c.globalAlpha = 0.4; c.fillStyle = '#3f7fd6';
-        c.beginPath(); c.ellipse(cx, S - 78, 150 * A, 26 * A, 0, 0, Math.PI * 2); c.fill();
-        c.globalAlpha = 0.5; c.strokeStyle = '#9fd0ff'; c.lineWidth = 3;
-        c.beginPath(); c.ellipse(cx, S - 78, 150 * A, 26 * A, 0, 0, Math.PI * 2); c.stroke(); c.restore();
-        // splash arcs
-        c.save(); c.strokeStyle = 'rgba(190,230,255,0.9)'; c.lineWidth = 5;
-        c.beginPath(); c.arc(cx, S - 80, 90 * A, Math.PI * 1.15, Math.PI * 1.85); c.stroke();
-        c.lineWidth = 3; c.beginPath(); c.arc(cx, S - 80, 120 * A, Math.PI * 1.25, Math.PI * 1.75); c.stroke(); c.restore();
-        put(puff, cx - 90 * A, cy - 120 * A, 180 * A, 160 * A, 0.35);   // mist
-        motes(rnd, c, cx, S - 120, 18 * A, 1.5, 4, 130 * A, ['#bfe3ff', '#7fb8ff', '#ffffff'], 60, 0.5, 0.9);  // droplets
+        c.save(); c.globalAlpha = 0.45; c.fillStyle = '#3f7fd6';
+        c.beginPath(); c.ellipse(cx, gy + 8, 165 * A, 30 * A, 0, 0, Math.PI * 2); c.fill();
+        c.globalAlpha = 0.55; c.strokeStyle = '#9fd0ff'; c.lineWidth = 3;
+        c.beginPath(); c.ellipse(cx, gy + 8, 165 * A, 30 * A, 0, 0, Math.PI * 2); c.stroke(); c.restore();
+        putArt(c, wave, cx, gy - 42, 380 * A, 95 * A, { alpha: 0.95 });                      // splash wall at the ground line
+        putArt(c, ring, cx, gy - 120 * A, 265 * A, 265 * A, { alpha: 0.65 });                // expanding ring
+        putArt(c, mist, cx - 52 * A, gy - 205 * A, 190 * A, 170 * A, { alpha: 0.32 });       // rising mist (v3: two light puffs, not one solid orb)
+        putArt(c, mist, cx + 66 * A, gy - 165 * A, 150 * A, 135 * A, { alpha: 0.28 });
+        motes(rnd, c, cx, gy - 110 * A, 22 * A, 1.5, 4, 150 * A, ['#bfe3ff', '#7fb8ff', '#ffffff'], 70, 0.5, 0.9);  // droplets
     } else if (kind === 'ICE') {
+        const pane = tinted(await art('kenney', /^p_window_01\.png$/, 0.5), '#cfeeff');
+        const ring = tinted(await art('kenney', /^p_circle_0[235]\.png$/, 0.8), '#dff4ff');
+        const sparkle = tinted(await art('kenney', /^p_light_0[12]\.png$/, 0.3), '#ffffff');
         // frost patch
-        c.save(); c.globalAlpha = 0.35; c.fillStyle = '#bfe8ff';
-        c.beginPath(); c.ellipse(cx, S - 78, 140 * A, 30 * A, 0, 0, Math.PI * 2); c.fill(); c.restore();
-        // shard spray
+        c.save(); c.globalAlpha = 0.45; c.fillStyle = '#bfe8ff';
+        c.beginPath(); c.ellipse(cx, gy + 6, 155 * A, 32 * A, 0, 0, Math.PI * 2); c.fill(); c.restore();
+        putArt(c, pane, cx, gy - 150 * A, 250 * A, 250 * A, { alpha: 0.35 });                // frost pane behind
+        putArt(c, ring, cx, gy - 130 * A, 250 * A, 250 * A, { alpha: 0.5 });
+        putArt(c, sparkle, cx + 60 * A, gy - 235 * A, 150 * A, 150 * A, { alpha: 0.5 });
+        // shard spray — BIG shards
         c.save();
-        for (let i = 0; i < 11 * A; i++) {
-            const x = cx + (rnd() - 0.5) * 240 * A, y = cy + (rnd() - 0.3) * 200 * A;
-            const len = 16 + rnd() * 40, w = 5 + rnd() * 10, rot = (rnd() - 0.5) * 2.4;
+        for (let i = 0; i < 15 * A; i++) {
+            const x = cx + (rnd() - 0.5) * 260 * A, y = gy - 60 * A + (rnd() - 0.55) * 210 * A;
+            const len = 22 + rnd() * 46, w = 6 + rnd() * 11, rot = (rnd() - 0.5) * 2.4;
             c.translate(x, y); c.rotate(rot);
-            c.fillStyle = `rgba(${150 + Math.floor(rnd() * 60)},${215 + Math.floor(rnd() * 40)},255,${0.75 + rnd() * 0.25})`;
+            c.fillStyle = `rgba(${150 + Math.floor(rnd() * 60)},${215 + Math.floor(rnd() * 40)},255,${0.78 + rnd() * 0.22})`;
             c.beginPath(); c.moveTo(0, -len); c.lineTo(w, len * 0.35); c.lineTo(0, len * 0.6); c.lineTo(-w, len * 0.35); c.closePath(); c.fill();
-            c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineWidth = 1.2; c.stroke();
+            c.strokeStyle = 'rgba(255,255,255,0.9)'; c.lineWidth = 1.4; c.stroke();
             c.setTransform(1, 0, 0, 1, 0, 0);
         }
         c.restore();
         // sparkle crosses
-        c.save(); c.strokeStyle = 'rgba(255,255,255,0.9)'; c.lineWidth = 2;
-        for (let i = 0; i < 5; i++) {
-            const x = cx + (rnd() - 0.5) * 220 * A, y = cy + (rnd() - 0.4) * 180 * A, r = 5 + rnd() * 8;
+        c.save(); c.strokeStyle = 'rgba(255,255,255,0.95)'; c.lineWidth = 2;
+        for (let i = 0; i < 6; i++) {
+            const x = cx + (rnd() - 0.5) * 230 * A, y = gy - 60 * A + (rnd() - 0.5) * 190 * A, r = 5 + rnd() * 9;
             c.beginPath(); c.moveTo(x - r, y); c.lineTo(x + r, y); c.moveTo(x, y - r); c.lineTo(x, y + r); c.stroke();
         }
         c.restore();
     } else {   // DUST — the generic fallback
-        const smoke = await kenney('bsmoke', 0.4);
-        const puff = await kenney('puff', 0.65);
-        put(smoke, cx - 120 * A, cy - 140 * A, 240 * A, 210 * A, 0.5);
-        put(puff, cx - 90 * A, cy - 40 * A, 180 * A, 150 * A, 0.6);
-        motes(rnd, c, cx, cy, 20 * A, 1.2, 3, 160 * A, ['#cfc8bd', '#a89f92', '#847c71'], 60, 0.35, 0.8);   // dissolve motes rising
+        const puff1 = await art('kenney', /^puff_([1-9]|1[0-3])\.png$/, 0.15);
+        const puff2 = await art('kenney', /^puff_([1-9]|1[0-3])\.png$/, 0.7);
+        const smoke = await art('kenney', /^p_smoke_0[15]\.png$/, 0.3);
+        putArt(c, puff1, cx, gy - 160 * A, 300 * A, 265 * A, { alpha: 0.62 });
+        putArt(c, puff2, cx - 20 * A, gy - 90 * A, 255 * A, 235 * A, { alpha: 0.68 });
+        putArt(c, smoke, cx + 45 * A, gy - 205 * A, 185 * A, 185 * A, { alpha: 0.5 });
+        motes(rnd, c, cx, gy - 120 * A, 22 * A, 1.2, 3.2, 170 * A, ['#cfc8bd', '#a89f92', '#847c71', '#e8e2d8'], 70, 0.4, 0.85);   // dissolve motes rising
     }
 
-    // universal: soft white impact-flash ring at the body's centre
-    c.save();
-    const g = c.createRadialGradient(cx, cy, 6, cx, cy, 120 * A);
-    g.addColorStop(0, 'rgba(255,255,255,0.55)'); g.addColorStop(1, 'rgba(255,255,255,0)');
-    c.fillStyle = g; c.beginPath(); c.arc(cx, cy, 120 * A, 0, Math.PI * 2); c.fill();
-    c.restore();
     return cv.toBuffer('image/png');
 }
 
@@ -207,7 +281,7 @@ async function getStamp(kind, boss) {
         if (!fs.existsSync(STAMP_DIR)) fs.mkdirSync(STAMP_DIR, { recursive: true });
         const f = path.join(STAMP_DIR, `${key}.png`);
         let buf;
-        if (fs.existsSync(f) && fs.statSync(f).size > 500) buf = fs.readFileSync(f);
+        if (fs.existsSync(f) && fs.statSync(f).size > 2000) buf = fs.readFileSync(f);
         else { buf = await paintStamp(kind, boss); fs.writeFileSync(f, buf); }
         _stampMemo.set(key, buf);
         return buf;
@@ -217,32 +291,15 @@ async function getStamp(kind, boss) {
 }
 
 // ── scene plate (moved from deathOverlay.scenePlate — returns CANVAS) ────
+// 💡 PROBED 2026-11-09: Go's layers bg is a CLEAN scene (no combatants baked)
+// and DEAD combatants get NO cut/anchor at all — so the plate is bg + survivor
+// cuts + chrome, and the dying appear ONLY via the KO'd body we draw.
 async function scenePlateCanvas(layers, dyingIdx, deadIdx, chrome) {
     const W0 = Number(layers.w) || 1024, H0 = Number(layers.h) || 687;
     const kx = VW / W0, ky = VH / H0;
     const cv = createCanvas(VW, VH), c = cv.getContext('2d');
     const __bg = await loadImage(layers.bg);
     c.drawImage(__bg, 0, 0, VW, VH);
-    // ☠️ erase the fallen's bars: Go bakes overhead HP bars into the scene bg — paint
-    // over each fallen unit's bar with the background sampled right above it.
-    {
-        const __gone = new Set();
-        for (const __s of [dyingIdx, deadIdx]) {
-            if (__s instanceof Set || Array.isArray(__s)) for (const __i of __s) __gone.add(Math.floor(Number(__i) || 0));
-        }
-        if (__gone.size && Array.isArray(layers.anchors)) {
-            for (const __a of layers.anchors) {
-                if (!__a || String(__a.side) !== 'enemy' || !__gone.has(Math.floor(Number(__a.index) || 0))) continue;
-                const __bw = 100, __bh = 12, __pad = 6;   // Go enemy-bar geometry (100x12 @ center-50, top-15)
-                const __bx = (Number(__a.x) || 0) - __bw / 2 - __pad;
-                const __by = (Number(__a.feetY) || 0) - Math.max(24, Number(__a.h) || 0) - 15 - __pad;
-                const __sw = __bw + __pad * 2, __sh = __bh + __pad * 2;
-                const __sy = Math.max(0, __by - __sh - 2);
-                const __shh = Math.min(__sh, Math.max(2, __by - __sy));
-                try { c.drawImage(__bg, __bx, __sy, __sw, __shh, __bx * kx, __by * ky, __sw * kx, __sh * ky); } catch (e) {}
-            }
-        }
-    }
     const __dead = deadIdx instanceof Set ? deadIdx : new Set();
     const cuts = (layers.cuts || []).filter((x) => x && x.png && !(String(x.side) === 'enemy' && (dyingIdx.has(Math.floor(Number(x.index) || 0)) || __dead.has(Math.floor(Number(x.index) || 0)))));
     cuts.sort((a, b) => (Number(a.y) + Number(a.h)) - (Number(b.y) + Number(b.h)));
@@ -260,40 +317,49 @@ async function scenePlateCanvas(layers, dyingIdx, deadIdx, chrome) {
     return cv;
 }
 
-// ── the KO'd body: rotated off its stance, grounded, desaturated ─────────
+// ── the KO'd body: rotated off its stance, grounded, STILL READABLE ──────
+// 💡 v2: v1 desaturated to ZERO (saturation blend with a gray fill) — the
+// body rendered as a gray smear ("is that a plain image lying on the ground
+// with gray shading??????"). Now the sprite keeps 45% saturation + a light
+// darken: clearly THE same monster, clearly dead. Grounded with a shadow.
 function drawDeadSprite(plate, cutImg, a, kx, ky) {
     const c = plate.getContext('2d');
     const w = Number(a.w) || cutImg.width, h = Number(a.h) || cutImg.height;
     const ax = (Number(a.x) || 0) * kx, feetY = (Number(a.feetY) || (Number(a.y) || 0) + h) * ky;
     const dw = w * kx, dh = h * ky;
-    // desaturate + darken on an offscreen canvas
+    // grounded contact shadow UNDER the fallen body
+    c.save();
+    c.globalAlpha = 0.38; c.fillStyle = '#000';
+    c.beginPath(); c.ellipse(ax, feetY + 3, dw * 0.52, Math.max(6, dh * 0.1), 0, 0, Math.PI * 2); c.fill();
+    c.restore();
+    // partial desaturate + slight darken on an offscreen canvas
     const off = createCanvas(Math.max(2, Math.round(dw)), Math.max(2, Math.round(dh)));
     const oc = off.getContext('2d');
     oc.drawImage(cutImg, 0, 0, off.width, off.height);
     try {
         oc.globalCompositeOperation = 'saturation';
-        oc.fillStyle = 'hsl(0,0%,35%)'; oc.fillRect(0, 0, off.width, off.height);
+        oc.fillStyle = 'hsl(0,55%,50%)'; oc.fillRect(0, 0, off.width, off.height);   // KEEP 55% color — the monster must stay recognizable
         oc.globalCompositeOperation = 'source-atop';
-        oc.fillStyle = 'rgba(8,6,20,0.30)'; oc.fillRect(0, 0, off.width, off.height);
+        oc.fillStyle = 'rgba(10,8,22,0.16)'; oc.fillRect(0, 0, off.width, off.height);
         oc.globalCompositeOperation = 'source-over';
-    } catch (e) {   // older canvas build without blend modes: gray veil
+    } catch (e) {   // older canvas build without blend modes: light gray veil
         oc.globalCompositeOperation = 'source-atop';
-        oc.fillStyle = 'rgba(90,90,100,0.45)'; oc.fillRect(0, 0, off.width, off.height);
+        oc.fillStyle = 'rgba(120,120,130,0.22)'; oc.fillRect(0, 0, off.width, off.height);
     }
     // fall backward around the feet (enemies face the players), sink to the ground line
     c.save();
-    c.globalAlpha = 0.92;
+    c.globalAlpha = 0.97;
     c.translate(ax, feetY);
     c.rotate(Math.PI * 0.56);
-    try { c.drawImage(off, -dw * 0.42, -dh * 0.30, dw * 0.84, dh * 0.84); } catch (e) {}
+    try { c.drawImage(off, -dw * 0.46, -dh * 0.34, dw * 0.92, dh * 0.92); } catch (e) {}
     c.restore();
 }
 
 // ── ☠ DEFEATED chip where the HP bar was ─────────────────────────────────
-function drawDefeatChip(plate, a, kx, ky) {
+function drawDefeatChip(plate, a, kx, ky, off = { dx: 0, dy: 0 }) {
     const c = plate.getContext('2d');
-    const ax = (Number(a.x) || 0) * kx;
-    const topY = ((Number(a.feetY) || 0) - Math.max(24, Number(a.h) || 0) - 15) * ky;
+    const ax = (Number(a.x) || 0) * kx + (off.dx || 0);
+    const topY = ((Number(a.feetY) || 0) - Math.max(24, Number(a.h) || 0) - 15) * ky + (off.dy || 0);
     const W = 108, H = 20, x = ax - W / 2, y = Math.max(6, topY - H - 3);
     c.save();
     c.globalAlpha = 0.92;
@@ -317,7 +383,7 @@ function drawDefeatChip(plate, a, kx, ky) {
 /** Render ONE death still for every enemy that died on the same beat.
  *  layers: shared per-fight Go layers (bg + cuts + anchors, hud none-clean)
  *  picks:  [{ enemy, targetIndex }] — the dying, in roster order
- *  deadIdx: Set of enemy indices that died on EARLIER turns (bars erased, absent)
+ *  deadIdx: Set of enemy indices that died on EARLIER turns (absent from scene)
  *  Returns { image, kind, boss, group } or null. Never throws. */
 async function renderDeathStill({ layers, picks, deadIndices, deadIdx, chrome }) {
     try {
@@ -342,9 +408,9 @@ async function renderDeathStill({ layers, picks, deadIndices, deadIdx, chrome })
         const kx = VW / W0, ky = VH / H0;
         const c = plate.getContext('2d');
 
-        // the dying's own cutouts — grabbed straight from layers.cuts
         const stampBuf = await getStamp(kind, boss);
         const stamp = stampBuf ? await loadImage(stampBuf) : null;   // node-canvas drawImage wants Image/Canvas, not Buffer
+        let chipI = 0;
         for (const t of group) {
             const i = Math.max(0, Math.floor(Number(t.targetIndex) || 0));
             const cut = (layers.cuts || []).find((x) => x && String(x.side) === 'enemy' && Math.floor(Number(x.index) || 0) === i && x.png);
@@ -354,13 +420,30 @@ async function renderDeathStill({ layers, picks, deadIndices, deadIdx, chrome })
                 try { img = await loadImage(Buffer.from(cut.png, 'base64')); } catch (e) {}
                 if (img) {
                     const aa = a || { x: cut.x, y: cut.y, w: cut.w, h: cut.h, feetY: (Number(cut.y) || 0) + (Number(cut.h) || 0), index: i, side: 'enemy' };
-                    drawDeadSprite(plate, img, aa, kx, ky);
-                    // premade stamp engulfing the body — scaled to ~1.5x its box
+                    const bodyW = (Number(aa.w) || 200) * kx;
+                    const feetY = (Number(aa.feetY) || (Number(aa.y) || 0) + (Number(aa.h) || 0)) * ky;
+                    // 💥 STAMP v2: BIG, bottom-anchored at the feet — layers baked
+                    // low in the stamp (crater) land ON the ground line, the core
+                    // blast lands mid-body. v1 drew a 1.5x-bodybox stamp wherever
+                    // and it measured pure white on prod.
+                    let sw = 0, sx = 0, sy = 0;
                     if (stamp) {
-                        const sw = Math.max(180, (Number(aa.w) || 200) * kx * 1.5);
-                        c.drawImage(stamp, (Number(aa.x) || 0) * kx - sw / 2, ((Number(aa.feetY) || 0) * ky) - sw * 0.62, sw, sw);
+                        sw = Math.max(275, Math.min(450, bodyW * 2.5));
+                        sx = (Number(aa.x) || 0) * kx - sw / 2;
+                        sy = feetY - sw * 0.86;   // 86% of the blast above the ground line
+                        c.drawImage(stamp, sx, sy, sw, sw);
                     }
-                    drawDefeatChip(plate, aa, kx, ky);
+                    drawDeadSprite(plate, img, aa, kx, ky);
+                    // light front pass: a few embers/motes OVER the body for depth
+                    if (stamp) {
+                        c.save(); c.globalAlpha = 0.28;
+                        c.drawImage(stamp, sx, sy, sw * 0.82, sw * 0.82);
+                        c.restore();
+                    }
+                    // group kills: stagger the chips so they don't stack into one blob
+                    const gN = group.length;
+                    drawDefeatChip(plate, aa, kx, ky, { dx: gN > 1 ? (chipI - (gN - 1) / 2) * 26 : 0, dy: gN > 2 ? -(chipI % 2) * 22 : 0 });
+                    chipI++;
                 }
             }
         }
