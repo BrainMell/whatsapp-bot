@@ -20,7 +20,7 @@ Any one alone is ambiguous; together they are unmistakable:
 
 | Signal | Convention | Why it works |
 | --- | --- | --- |
-| **The body** | KO'd pose: knocked off its stance, lying on the ground line, desaturated/darkened | Pose does most of the work — a standing sprite can never read as dead (JRPG faint convention) |
+| **The body** | OWNER DIRECTIVE v3 (2026-11-09): the KO'd sprite is a barely-noticeable GHOST at its exact fall position (α≈0.14, no contact shadow, no desaturation). v2's readable corpse (α≈0.97 + 0.38 shadow) read as "a sprite sleeping on the floor" and was rejected | The element stamp + ☠ DEFEATED chip carry the kill; the ghost only whispers where it fell |
 | **The world reacts** | Element breakup art engulfing/replaceing the body: explosion, shards, splash, rubble, dissolve | The cause of death is visible in the corpse's state |
 | **The UI confirms** | Zeroed/erased HP bar, ☠ DEFEATED chip where the bar was | System-level confirmation, zero ambiguity at a glance |
 | **Absence of motion cues** | Nothing mid-swing; effects frozen at their PEAK frame, settled debris on the ground | A still frozen at the "after", not the "during", reads as concluded |
@@ -43,11 +43,12 @@ sweep is the fallback, `abyss_` id prefix forces VOID, everything else DUST.
 | **EARTH** | Kenney `p_dirt`, `bsmoke` + procedural rubble | Dirt/debris chunks settled around the body, dust cloud, ground cracks |
 | **DUST** | Kenney `bsmoke`, `puff` | Gray dissolve motes drifting up, settled puffs — the generic fallback |
 
-Universal layer on every kind: soft white impact flash ring at the body's
-centre; ☠ **DEFEATED** chip where the erased HP bar was; the fallen body
-(rotated ~100° around its feet, sunk to the ground line, desaturated ~65%,
-darkened, α≈0.92). Group kills composite every fallen body into the ONE still
-(group-as-unit, same rule the clips had).
+Universal layer on every kind: ☠ **DEFEATED** chip where the erased HP bar
+was; the fallen body as a GHOST (rotated ~100° around its feet, sunk to the
+ground line, α≈0.14 — position/rotation/scale UNCHANGED from v2, owner
+directive 2026-11-09). The v1/v2 white flash ring was removed in the art
+pass (it washed the frame toward white). Group kills composite every fallen
+body into the ONE still (group-as-unit, same rule the clips had).
 
 ## 3. Architecture
 
@@ -58,7 +59,7 @@ playEnemyDeaths(state)                        guildAdventure.js — now trivial
        layers, picks, deadIdx, chrome })
        ├─ scenePlateCanvas()                  survivors + erased bars + HUD (moved
        │                                      from deathOverlay.scenePlate, returns canvas)
-       ├─ dead-state cutout per pick          rotate/desaturate/darken (node canvas)
+       ├─ dead-state cutout per pick          rotate + ghost α≈0.14 (node canvas)
        ├─ death stamp per kind                PRE-PAINTED ONCE per (kind, boss) into a
        │                                      transparent PNG, disk+memory cached
        │                                      (os.tmpdir/death_stamps_v1) — the "premade"
@@ -96,3 +97,10 @@ delivery time because it is cheaper than the old machinery's bookkeeping.
 - `qa_death_stills.js`: synthetic-layer end-to-end — all 6 kinds render, stamp
   cache hits on second call, group still composites, JPEG validates, dead
   sprite provably present (pixel diff at the anchor).
+- `qa_death_visual.js`: EYES-ON gate — renders all 6 kinds + a group kill
+  through the REAL Go renderer into `/tmp/deathqa/sheet.png`. **No death-still
+  change ships without visually inspecting the sheet panel by panel**
+  (owner rule, 2026-11-09: "always visually inspect").
+- `qa_ghost_probe.js`: liveness probe for the ghost pass — renders the same
+  kill with the real cut vs a magenta stand-in cut; the fall region must
+  pixel-diff, proving the α≈0.14 body pass is not a silent no-op.

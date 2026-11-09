@@ -317,41 +317,26 @@ async function scenePlateCanvas(layers, dyingIdx, deadIdx, chrome) {
     return cv;
 }
 
-// ── the KO'd body: rotated off its stance, grounded, STILL READABLE ──────
-// 💡 v2: v1 desaturated to ZERO (saturation blend with a gray fill) — the
-// body rendered as a gray smear ("is that a plain image lying on the ground
-// with gray shading??????"). Now the sprite keeps 45% saturation + a light
-// darken: clearly THE same monster, clearly dead. Grounded with a shadow.
+// ── the KO'd body: a GHOST at the exact fall position ────────────────────
+// 💡 v3 (owner directive 2026-11-09: "remove the sprites sleeping on the
+// floor fully — leave the position as is, just make it sooo transparent
+// that it's barely noticeable"): the body is a ~14%-alpha ghost at the
+// exact fall spot — no contact shadow, no desaturation pass. The kill is
+// told by the element stamp + ✖ DEFEATED chip; the body only whispers
+// where it fell. (v2 kept the corpse at 97% "still THE monster" — owner
+// rejected it: still reads as a sprite napping on the floor.)
 function drawDeadSprite(plate, cutImg, a, kx, ky) {
     const c = plate.getContext('2d');
     const w = Number(a.w) || cutImg.width, h = Number(a.h) || cutImg.height;
     const ax = (Number(a.x) || 0) * kx, feetY = (Number(a.feetY) || (Number(a.y) || 0) + h) * ky;
     const dw = w * kx, dh = h * ky;
-    // grounded contact shadow UNDER the fallen body
+    // fall backward around the feet (enemies face the players), sink to the
+    // ground line — position/rotation/scale UNCHANGED from v2, only opacity
     c.save();
-    c.globalAlpha = 0.38; c.fillStyle = '#000';
-    c.beginPath(); c.ellipse(ax, feetY + 3, dw * 0.52, Math.max(6, dh * 0.1), 0, 0, Math.PI * 2); c.fill();
-    c.restore();
-    // partial desaturate + slight darken on an offscreen canvas
-    const off = createCanvas(Math.max(2, Math.round(dw)), Math.max(2, Math.round(dh)));
-    const oc = off.getContext('2d');
-    oc.drawImage(cutImg, 0, 0, off.width, off.height);
-    try {
-        oc.globalCompositeOperation = 'saturation';
-        oc.fillStyle = 'hsl(0,55%,50%)'; oc.fillRect(0, 0, off.width, off.height);   // KEEP 55% color — the monster must stay recognizable
-        oc.globalCompositeOperation = 'source-atop';
-        oc.fillStyle = 'rgba(10,8,22,0.16)'; oc.fillRect(0, 0, off.width, off.height);
-        oc.globalCompositeOperation = 'source-over';
-    } catch (e) {   // older canvas build without blend modes: light gray veil
-        oc.globalCompositeOperation = 'source-atop';
-        oc.fillStyle = 'rgba(120,120,130,0.22)'; oc.fillRect(0, 0, off.width, off.height);
-    }
-    // fall backward around the feet (enemies face the players), sink to the ground line
-    c.save();
-    c.globalAlpha = 0.97;
+    c.globalAlpha = 0.14;
     c.translate(ax, feetY);
     c.rotate(Math.PI * 0.56);
-    try { c.drawImage(off, -dw * 0.46, -dh * 0.34, dw * 0.92, dh * 0.92); } catch (e) {}
+    try { c.drawImage(cutImg, -dw * 0.46, -dh * 0.34, dw * 0.92, dh * 0.92); } catch (e) {}
     c.restore();
 }
 
