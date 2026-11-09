@@ -97,3 +97,6 @@ bash /home/ubuntu/agentctl.sh release <your-name>
 `/home/ubuntu/AGENT_ALERTS.log` (+ empty `.flag` when unread). Check it at
 session start. If the guard repaired something while you were mid-deploy, your
 deploy base changed — re-run `agentctl status` and rebase on the box state.
+
+## Speed/generation work (owner mandate)
+Read docs/RECIPE_SKILLS_ULTS_SUMMONS.md (esp. section 5 work order) and docs/GENERATION_BLUEPRINT.md before touching any image/animation generator.

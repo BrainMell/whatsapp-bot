@@ -1,3 +1,5 @@
+> **AGENT: if you started before reading section 5 (WORK ORDER, bottom of this file), re-read it now: finish your current step, then follow it. After sections 1 and 2, continue through every row of docs/GENERATION_BLUEPRINT.md. Do not stop at the first row.**
+
 # RECIPE — Skill clips, Ultimate clips, Summon/card clips (agent: read fully, then implement + test)
 Foundation to use: `core/utils/assetBake.js` (`makeBakeCache`, `encodeBgraFrames`, `registerPrewarm/prewarmAll`).
 Rules: **same output size/fps/frame count, no quality loss, kill switch per feature, caches outside git with size caps,
