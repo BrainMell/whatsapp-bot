@@ -130,6 +130,8 @@ const SIGNATURE_SKILLS = Object.freeze({
   DEATH_LORD: { id: 'soul_tether', style: 'death_lord_tether', side: 'enemy' }
 });
 
+const { classifyDeath } = require('./deathStill');   // ☠️ death-type rules live in deathStill.js (single source of truth)
+
 function getSignature(classId, skillId) {
   const entry = SIGNATURE_SKILLS[String(classId || '').toUpperCase()];
   return entry && entry.id === String(skillId || '').toLowerCase() ? entry : null;
@@ -830,134 +832,6 @@ async function renderSignatureGif(state, player, ability, entry, target, baseSce
 }
 
 
-// ☠️ DEATH ANIMATIONS (owner 2026-11-03): a dying enemy / boss breaks apart by TYPE - fire explodes, water splashes, earth crumbles to dust,
-// void / dark / undead things spiral into their own centre. Reuses the ultimate video pipeline (LAYERS.dissolve breaks the real sprite).
-// 💡 OWNER FIX round 5 (2026-11-07: "the f rank boss is supposed to be a void type but it has been
-// doing the stone type animation"): INFECTED_COLOSSUS — the classic F-tier abyss boss — matched the
-// EARTH rule on the word "colossus" before the VOID rule saw "infected". Infection/plague words now
-// classify VOID so the abyss amalgamation family breaks apart in its own element.
-const DEATH_RULES = [
-  ['FIRE', /fire|flame|ember|inferno|lava|magma|blaze|ifrit|phoenix|pyro|burn|molten|cinder|hellhound|salamander/i],
-  ['ICE', /ice|frost|glacial|snow|blizzard|frozen|yeti|cryo/i],
-  ['WATER', /water|tide|tidal|aqua|slime|sea|ocean|kraken|drown|hydra|siren|sahuagin|merfolk|coral|storm/i],
-  // 💡 VOID now outranks EARTH: the abyss amalgamation family ("Infected Colossus",
-  // "Corrupted Guardian", "Mutated Overseer") carries BOTH an infection word and a stone word,
-  // and EARTH used to win the first-match race — the owner's F-tier void boss died like a rock.
-  ['VOID', /void|shadow|dark|wraith|ghost|spirit|specter|spectre|phantom|demon|chaos|abyss|reaper|undead|necro|lich|wisp|banshee|blood|corrupt|shade|nightmare|eldritch|skeleton|zombie|vampire|hybrid|mutat|infect|plague|blight/i],
-  ['EARTH', /stone|rock|golem|boulder|earth|crystal|titan|hulk|mud|gargoyle|colossus|guardian|obelisk|sand|mountain|ent\b|treant/i],
-];
-function classifyDeath(enemy) {
-  // 🕳️ ABYSS = VOID (owner 2026-11-07: "the f rank boss is supposed to be a
-  // void type but it has been doing the stone type animation"): abyss ids
-  // carry no element/type, so the name regexes decided — the F-tier boss
-  // pool's INFECTED_COLOSSUS / CORRUPTED_GUARDIAN matched the EARTH words
-  // colossus/guardian and crumbled like stone. The abyss pools were pruned
-  // to the void amalgamation family, so everything spawning from the abyss
-  // (id prefix abyss_) breaks apart as VOID — spiral into its own centre.
-  if (/^abyss_/i.test(String((enemy && enemy.id) || ''))) return 'VOID';
-  // 🔧 owner 2026-11-07: a VOID boss died as crumbling stone because its NAME matched the earth words ("guardian", "crystal"...) before its
-  // real element was ever considered. Explicit data (element, then type) now wins; the name/id keyword sweep is only the fallback.
-  for (const field of [enemy && enemy.element, enemy && enemy.type, enemy && enemy.family, enemy && enemy.category]) {
-    if (!field) continue;
-    const f = String(field);
-    for (const [kind, re] of DEATH_RULES) if (re.test(f)) return kind;
-  }
-  const hay = [enemy && enemy.id, enemy && enemy.name].filter(Boolean).map(String).join(' ');
-  for (const [kind, re] of DEATH_RULES) if (re.test(hay)) return kind;
-  return 'DUST';
-}
-const DEATH_PALETTE = ['#ffffff', '#ffcb45', '#e85a37'];
-
-/** Render the death clip for one enemy — or, in the GROUP form, for every
- *  enemy that died on the same turn: `targets: [{ enemy, targetIndex }]`.
- *  🎬 GROUP-AS-UNIT (owner 2026-11-04: "when a group dies you generate them
- *  individually ... why don't you just send one and have them die as a
- *  unit?"): all dying sprites are composited into ONE focus image and the
- *  target anchor is widened to the group's union box, so ONE dissolve breaks
- *  the whole group apart together — no more one-per-clip kills where the
- *  rest of the group just stands there.
- *  Returns { mp4, thumb, kind, boss, group? } or null (never throws; the caller races it against a short budget). */
-async function renderDeathVideo({ enemy, targetIndex, layers, abort, targets, deadIndices, atkOverride, chrome }) {
-  const group = (Array.isArray(targets) && targets.length ? targets : [{ enemy, targetIndex }])
-    .filter((t) => t && t.enemy).slice(0, 4);
-  if (!group.length || !layers) return null;
-  // 🔧 DEATH-ORDER BACKDROP (owner voice note 2026-11-06): enemy indices that
-  // died on EARLIER turns are dropped from the roster drawing — the backdrop
-  // shows exactly who is still alive plus whoever is shattering right now.
-  const deadIdx = new Set((Array.isArray(deadIndices) ? deadIndices : []).map((n) => Math.floor(Number(n) || 0)).filter((n) => n >= 0));
-  // one element mode for the unit: the most common death kind in the group
-  const kind = (() => { const tally = {}; let best = 'DUST', n = 0; for (const t of group) { const k = classifyDeath(t.enemy); tally[k] = (tally[k] || 0) + 1; if (tally[k] > n) { best = k; n = tally[k]; } } return best; })();
-  const boss = group.some((t) => !!(t.enemy.isBoss || t.enemy.boss || /boss/i.test(String(t.enemy.rank || t.enemy.tier || ''))));
-  let pickedIdx = null;   // which targets actually made it into the composite
-  // the engine draws every cutout of the roster - the dying enemy is owned by LAYERS.dissolve, so drop its own cutout
-  // ⚡ SHARED SCENE (speed 2026-11-04): ONE layered fetch per fight serves every enemy - the dying enemy's isolated image is cut from its own cutout
-  if ((!layers.focus || layers.shared) && Array.isArray(layers.cuts)) {
-    try {
-      const { createCanvas, loadImage } = require('canvas');
-      const W0 = Number(layers.w) || 1024, H0 = Number(layers.h) || 687;
-      const picks = [];
-      for (const t of group) {
-        const c = layers.cuts.find((x) => x && String(x.side) === 'enemy' && Math.floor(Number(x.index) || 0) === Math.max(0, Math.floor(Number(t.targetIndex) || 0)));
-        if (c && c.png) picks.push({ t, c });
-      }
-      if (picks.length && process.env.DEATH_FAST !== '0') {
-        // ⚡ overlay-cache fast path (~0.2s once the overlay is cached); any failure falls through to the full engine render
-        try {
-          // ⚔️ #5: a basic-attack kill opens the death clip on the animated basic attack.
-          // Round 9: atkOverride lets delivery force the variant — the fight-start pre-bake
-          // cannot know the killing blow (it bakes while everyone is alive), so it bakes
-          // plain + warms the DEATHATTACK variant, and playEnemyDeaths picks at kill time.
-          const atk = atkOverride !== undefined ? !!atkOverride : group.some((t) => t && t.enemy && t.enemy._killedBy && t.enemy._killedBy.kind === 'basic');
-          const fast = await require('./deathOverlay').renderFast({ layers, picks, kind, boss, deadIdx, atk, chrome });
-          if (fast && fast.mp4) {
-            const out = { mp4: fast.mp4, thumb: fast.thumb || null, kind, boss, mats: fast.mats || null };
-            if (picks.length > 1) out.group = picks.map(({ t }) => t.enemy).filter(Boolean);
-            return out;
-          }
-        } catch (e) { console.warn('[DeathOv] fast path skipped:', e && e.message || e); }
-      }
-      if (picks.length) {
-        // composite EVERY dying sprite onto one full-canvas focus image
-        const cv = createCanvas(W0, H0), cx2 = cv.getContext('2d');
-        let bx0 = 1e9, by0 = 1e9, bx1 = -1e9, ft = -1e9;
-        for (const { c } of picks) {
-          const img = await loadImage(Buffer.from(c.png, 'base64'));
-          const w0 = Number(c.w) || img.width, h0 = Number(c.h) || img.height, x0 = Number(c.x) || 0, y0 = Number(c.y) || 0;
-          cx2.drawImage(img, x0, y0, w0, h0);
-          bx0 = Math.min(bx0, x0); by0 = Math.min(by0, y0); bx1 = Math.max(bx1, x0 + w0); ft = Math.max(ft, y0 + h0);
-        }
-        layers = { ...layers, focus: cv.toBuffer('image/png') };
-        layers.cuts = layers.cuts.filter((c) => !picks.some((p) => p.c === c));
-        pickedIdx = picks.map((p) => Math.max(0, Math.floor(Number(p.t.targetIndex) || 0)));
-        // widen the FIRST target's anchor to the group's union box: the
-        // dissolve grid + camera follow focRect/A.T, so they must cover every
-        // dying sprite, not just the first one. CLONE the anchor + array —
-        // the anchors belong to the fight's SHARED scene payload.
-        if (picks.length > 1 && Array.isArray(layers.anchors)) {
-          const ai = layers.anchors.findIndex((v) => v && v.side === 'enemy' && v.index === pickedIdx[0]);
-          if (ai >= 0) {
-            const a = layers.anchors[ai];
-            const patched = Object.assign({}, a, { x: (bx0 + bx1) / 2, feetY: ft, w: Math.max(Number(a.w) || 0, bx1 - bx0), h: Math.max(Number(a.h) || 0, ft - by0) });
-            layers.anchors = layers.anchors.slice(); layers.anchors[ai] = patched;
-          }
-        }
-      }
-    } catch (e) { /* falls through: no focus -> null clip */ }
-  }
-  if (!layers.focus) return null;
-  const dieIdx = new Set((pickedIdx || group.map((t) => Math.max(0, Math.floor(Number(t.targetIndex) || 0)))));
-  const cuts = Array.isArray(layers.cuts) ? layers.cuts.filter((c) => !(c && String(c.side) === 'enemy' && (dieIdx.has(Math.floor(Number(c.index) || 0)) || deadIdx.has(Math.floor(Number(c.index) || 0))))) : layers.cuts;
-  const vid = await require('./ultimateFx').renderUltimateVideo({
-    classId: 'DEATH_' + kind + (boss ? '_BOSS' : ''), name: '', side: 'enemy', palette: DEATH_PALETTE,
-    skillLevel: 1, maxLevel: 1, intensity: 0, layers: { ...layers, cuts }, casterIndex: 0, targetIndex: Math.max(0, Math.floor(Number(group[0].targetIndex) || 0)), focusIndex: undefined,
-    targetSide: 'enemy', aoe: false, targets: [], death: true, abort,
-  });
-  if (!vid || !vid.mp4) return null;
-  const out = { mp4: vid.mp4, thumb: vid.thumb || null, kind, boss };
-  if (pickedIdx && pickedIdx.length > 1) out.group = pickedIdx.map((i) => { const t = group.find((g) => Math.max(0, Math.floor(Number(g.targetIndex) || 0)) === i); return t && t.enemy; }).filter(Boolean);
-  return out;
-}
-
 async function animateUltimate(options = {}) {
   const state = options.state;
   const player = options.player;
@@ -1156,8 +1030,6 @@ module.exports = {
   getSignature,
   resolveSignature,
   animateUltimate,
-  renderDeathVideo,
-  classifyDeath,
   makeUltimateSender,
   renderSignatureGif,
   GIF_PLAYBACK_MS,

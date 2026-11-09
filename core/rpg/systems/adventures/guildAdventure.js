@@ -4627,7 +4627,6 @@ async function startCombat(sock, groq, encounter, sessionKey) {
   // animation (prod proof: fight 13:52:31, first bake 13:53:02, kill
   // 13:53:07 → "NO clip" 13:53:19). Start the bake with the fight itself;
   // every later trigger (nextTurn / kill-time) stays idempotent.
-  try { startDeathBake(state); } catch (err) { console.warn('[DeathFx] fight-start bake skipped:', err && err.message || err); }
   // 💀 FIX 2026-10-11 (owner fight-card audit): honor encounter.background as
   // a fallback so a fight can never render on the Go service's env1.png
   // fallback arena. Classic quests pin backgroundPath at initAdventure; ruins/
@@ -4851,17 +4850,8 @@ async function startCombat(sock, groq, encounter, sessionKey) {
 // background while the fight is being played (first turn), through ONE global worker (never starves the bot), so a kill just sends a finished
 // buffer. A kill that beats its bake waits a short, bounded time for the in-flight job; anything slower is skipped - combat is never blocked.
 // Delivery stays a looping WhatsApp GIF-style clip (gifPlayback). Standard (Go-rendered) fights only; abyss / ruins keep the static card.
-const _deathQueue = []; let _deathBusy = false;
-function _deathPump() {
-  if (_deathBusy || !_deathQueue.length) return;
-  _deathBusy = true;
-  const job = _deathQueue.shift();
-  Promise.resolve().then(job.run).then(job.resolve, () => job.resolve(null)).finally(() => { _deathBusy = false; setImmediate(_deathPump); });
-}
-function _deathEnqueue(run) { return new Promise((resolve) => { if (_deathQueue.length > 16) return resolve(null); _deathQueue.push({ run, resolve }); _deathPump(); }); }
+ let _deathBusy = false;
 const _deathEligible = (state) => !!(state && state.chatId && state.isAbyss !== true && !(state.mode === 'RUINS' && state.ruinsMeta));
-// HP snapshot baked into a death plate's HUD chrome: a clip whose bars show stale HP is re-rendered at kill time (overlay cache makes that ~1s)
-const _hpSig = (state) => process.env.DEATH_CHROME === '0' ? '' : [...(state.players || []), ...(state.enemies || [])].map((u) => Math.max(0, Math.floor(Number(u && (u.currentHP ?? (u.stats && u.stats.hp))) || 0))).join(',');
 const _aliveSig = (state) => (state.players || []).filter((p) => p && !p.isDead && (p.stats ? p.stats.hp > 0 : true)).length;
 // 🔧 DEATH-ORDER BACKDROP (owner voice note 2026-11-06: "the first one is
 // still there inside that death animation"): enemies that died on EARLIER
@@ -4896,86 +4886,12 @@ function _deathScene(state) {
       // 20s cap was one bad Go round away from killing every first bake.
       new Promise((r) => setTimeout(() => r(null), 30000)),
     ]);
-    return layers && layers.success ? Object.assign({}, layers, { shared: true, focus: null }) : null;   // focus is cut per enemy in renderDeathVideo
+    return layers && layers.success ? Object.assign({}, layers, { shared: true, focus: null }) : null;   // the dying's cutout is taken per pick by deathStill
   })().catch(() => null);
   return state._deathSceneP;
 }
-// 🎬 owner 2026-11-07: "why don't we just bake the death animation into the card clip instead of sending 2 different clips".
-// Concatenate N mp4 buffers (card flight + the enemy's death dissolve) into ONE 768x516 H.264 clip. null on any failure.
-async function _concatMp4(bufs) {
-  const fsx = require('fs'), osx = require('os'), pathx = require('path'), { spawn } = require('child_process');
-  const dir = fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'cat-'));
-  try {
-    const args = ['-y', '-loglevel', 'error'];
-    bufs.forEach((b, i) => { const f = pathx.join(dir, `in${i}.mp4`); fsx.writeFileSync(f, b); args.push('-i', f); });
-    const W = 768, H = 516;
-    let filt = bufs.map((_, i) => `[${i}:v]scale=${W}:${H}:flags=bicubic,setsar=1,fps=20,format=yuv420p[v${i}]`).join(';');
-    // 🎞️ ONE CONTINUOUS CLIP (owner 2026-11-07: "card animation + death feel like two videos stitched"):
-    // a dissolve between segments (xfade) instead of a hard cut, so the card's impact flows into the shatter.
-    let xf = false;
-    if (bufs.length >= 2 && process.env.CLIP_XFADE !== '0') {
-      try {
-        const { execFileSync } = require('child_process');
-        const durs = bufs.map((_, i) => parseFloat(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', pathx.join(dir, `in${i}.mp4`)]).toString()));
-        if (durs.every((d) => d > 0.8)) {
-          const X = 0.35; let acc = durs[0], prev = 'v0', chain = '';
-          for (let i = 1; i < bufs.length; i++) {
-            const lab = i === bufs.length - 1 ? 'v' : `x${i}`;
-            chain += `;[${prev}][v${i}]xfade=transition=fade:duration=${X}:offset=${(acc - X).toFixed(3)}[${lab}]`;
-            acc += durs[i] - X; prev = lab;
-          }
-          filt += chain; xf = true;
-        }
-      } catch (e) { xf = false; }
-    }
-    if (!xf) filt += ';' + bufs.map((_, i) => `[v${i}]`).join('') + `concat=n=${bufs.length}:v=1:a=0[v]`;
-    const out = pathx.join(dir, 'out.mp4');
-    args.push('-filter_complex', filt, '-map', '[v]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '24', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out);
-    await new Promise((resolve, reject) => { const p = spawn('ffmpeg', args); let err = ''; p.stderr.on('data', (d) => { err += d; }); p.on('error', reject); p.on('close', (c) => (c === 0 ? resolve() : reject(new Error('ffmpeg ' + c + ' ' + err.slice(0, 200))))); });
-    return fsx.readFileSync(out);
-  } catch (e) { console.warn('[SummonCards] concat failed:', e.message); return null; }
-  finally { try { fsx.rmSync(dir, { recursive: true, force: true }); } catch (e) {} }
-}
-// Bake the death clip for the enemies a summon card just killed and flag them done so playEnemyDeaths does NOT send a second clip.
-async function _deathClipForCardKill(state, defeated) {
-  try {
-    if (!_deathEligible(state) || !Array.isArray(defeated) || !defeated.length) return null;
-    const dying = defeated.map((e) => ({ e, i: (state.enemies || []).indexOf(e) })).filter((d) => d.i >= 0 && d.e && d.e.isEnemy !== false && !d.e._deathAnimDone);
-    if (!dying.length) return null;
-    let item = null;
-    if (dying.length > 1) item = await _bakeGroupDeathClip(state, dying);
-    else { const clip = await _bakeDeathClip(state, dying[0].e, dying[0].i); item = clip && clip.mp4 ? { e: dying[0].e, clip } : null; }
-    if (!item || !item.clip || !item.clip.mp4) return null;
-    dying.forEach((d) => { d.e._deathAnimDone = true; });
-    return item;
-  } catch (e) { console.warn('[SummonCards] death merge bake failed:', e && e.message || e); return null; }
-}
 // HUD data painted onto every death plate (see combatCardNode.paintChrome)
 function _deathChrome(state) { return { players: state.players || [], enemies: state.enemies || [], rank: state.dungeonRank, floor: state.isAbyss ? state.abyssFloor : 0, atkSeed: Number(state.turnCount) || 0, atkDir: 1 }; }
-async function _bakeDeathClip(state, e, i, excludeExtra, wantAtk) {
-  const t0 = Date.now();
-  try {
-    const signatureVfx = require('../combat/skillVfx'), combatImageGenerator = require('../combat/combatImageGenerator');
-    // 1) shared scene (cutouts include every enemy); 2) per-enemy fallback fetch if the shared one is unusable
-    let layers = await _deathScene(state);
-    const hasCut = !!(layers && Array.isArray(layers.cuts) && layers.cuts.some((c) => c && String(c.side) === 'enemy' && Math.floor(Number(c.index) || 0) === i && c.png));
-    if (!hasCut) {
-      const roster = (state.enemies || []).map((x, k) => (k === i ? Object.assign({}, x, { isDead: false, justDied: false, currentHP: 1, stats: Object.assign({}, x.stats, { hp: 1 }) }) : x));
-      layers = await Promise.race([
-        combatImageGenerator.generateCombatLayers(state.players || [], roster, {
-          combatType: 'PVE', rank: state.dungeonRank, floor: 0, backgroundPath: state.backgroundPath || undefined,
-          summons: [], hud: 'none-clean', bypassQueue: true, focusSide: 'enemy', focusIndex: i,
-        }),
-        new Promise((r) => setTimeout(() => r(null), 20000)),
-      ]);
-    }
-    if (!layers || !layers.success) { console.warn(`[DeathFx] bake ${e && e.name}: no layered scene after ${Date.now() - t0}ms`); return null; }
-    const __deadIdx = _deadEnemyIndices(state, [i, ...(Array.isArray(excludeExtra) ? excludeExtra : [])]);
-    const clip = await signatureVfx.renderDeathVideo({ enemy: e, targetIndex: i, layers, deadIndices: __deadIdx, atkOverride: wantAtk === undefined ? undefined : !!wantAtk, chrome: _deathChrome(state) });
-    console.log(`[DeathFx] bake ${e && e.name} -> ${clip ? (wantAtk ? 'ATK+' : '') + clip.kind + (clip.boss ? '/boss' : '') + ' ' + clip.mp4.length + 'B' : 'NULL'} in ${Date.now() - t0}ms (${hasCut ? 'shared scene' : 'own scene'}, dead-in-backdrop ${__deadIdx.join(',') || '-'})`);
-    return clip ? Object.assign(clip, { sig: _aliveSig(state), deadSig: __deadIdx.join(','), hpSig: _hpSig(state) }) : null;
-  } catch (err) { console.warn(`[DeathFx] bake ${e && e.name} threw:`, err && err.message || err); return null; }
-}
 // 🎬 GROUP DEATH AS ONE UNIT (owner 2026-11-04: "when a group dies you
 // generate them individually and they are all still standing in with the
 // target dying in each gif, why don't you just send one and have them die as
@@ -4984,36 +4900,6 @@ async function _bakeDeathClip(state, e, i, excludeExtra, wantAtk) {
 // time with the rest still standing. Returns a held-item { e, clip } where
 // clip.group lists the enemies inside the unit, or null — the caller falls
 // back to the per-enemy clips, which stay baked as solo-kill insurance.
-async function _bakeGroupDeathClip(state, dying) {
-  const t0 = Date.now();
-  try {
-    if (!dying || dying.length < 2) return null;
-    const group = dying.slice(0, 4);
-    const signatureVfx = require('../combat/skillVfx'), combatImageGenerator = require('../combat/combatImageGenerator');
-    // 1) shared scene (all enemies standing); 2) full-roster fallback fetch
-    let layers = await _deathScene(state);
-    const need = group.map((d) => d.i);
-    const hasAll = !!(layers && Array.isArray(layers.cuts) && need.every((i) => layers.cuts.some((c) => c && String(c.side) === 'enemy' && Math.floor(Number(c.index) || 0) === i && c.png)));
-    if (!hasAll) {
-      const roster = (state.enemies || []).map((x) => Object.assign({}, x, { isDead: false, justDied: false, currentHP: Math.max(1, Number(x.currentHP) || 1), stats: Object.assign({}, x.stats, { hp: Math.max(1, Number(x.stats && x.stats.hp) || 1) }) }));
-      layers = await Promise.race([
-        combatImageGenerator.generateCombatLayers(state.players || [], roster, {
-          combatType: 'PVE', rank: state.dungeonRank, floor: 0, backgroundPath: state.backgroundPath || undefined,
-          summons: [], hud: 'none-clean', bypassQueue: true, focusSide: 'enemy', focusIndex: need[0],
-        }),
-        new Promise((r) => setTimeout(() => r(null), 20000)),
-      ]);
-    }
-    if (!layers || !layers.success) { console.warn(`[DeathFx] group bake [${need.join(',')}]: no layered scene after ${Date.now() - t0}ms`); return null; }
-    // 🔧 DEATH-ORDER BACKDROP: the group's own members are dying TOGETHER (AOE)
-    // — only enemies that fell on EARLIER turns are removed from the backdrop.
-    const __deadIdx = _deadEnemyIndices(state, need);
-    const clip = await signatureVfx.renderDeathVideo({ targets: group.map(({ e, i }) => ({ enemy: e, targetIndex: i })), layers, deadIndices: __deadIdx, chrome: _deathChrome(state) });
-    console.log(`[DeathFx] group bake [${group.map((d) => (d.e && d.e.name) || '?').join(' + ')}] -> ${clip ? clip.kind + (clip.boss ? '/boss' : '') + (clip.group ? ' unit=' + clip.group.length : ' PARTIAL') + ' ' + clip.mp4.length + 'B' : 'NULL'} in ${Date.now() - t0}ms (${hasAll ? 'shared scene' : 'own scene'}, dead-in-backdrop ${__deadIdx.join(',') || '-'})`);
-    if (!clip || !clip.mp4) return null;
-    return { e: group[0].e, clip: Object.assign(clip, { sig: _aliveSig(state), deadSig: __deadIdx.join(','), hpSig: _hpSig(state) }) };
-  } catch (err) { console.warn('[DeathFx] group bake threw:', err && err.message || err); return null; }
-}
 // ☠️ caption for a held death item — a group unit names every member
 // ("☠️ *A*, *B* & *C* fall!"); solo items keep the exact old line.
 // v6.1 (owner 2026-11-07: "the caption of the death animation for regular enemies still
@@ -5030,14 +4916,15 @@ async function _bakeGroupDeathClip(state, dying) {
 // enemies still doesn't list the combat logs").
 function _deathCaption(item, state) {
   let cap;
-  const grp = (item.clip && item.clip.group) || null;
+  // ☠️ DEATH STILLS (2026-11-09): item is the still shape { e, kind, boss, group }.
+  const grp = item.group || null;
   if (grp && grp.length > 1) {
     const names = grp.map((g) => `*${(g && g.name) || 'The enemy'}*`);
     const last = names.pop();
     const boss = grp.some((g) => g && (g.isBoss || g.boss || /boss/i.test(String(g.rank || g.tier || ''))));
     cap = `☠️ ${names.join(', ')} & ${last} ${boss ? 'are destroyed!' : 'fall!'}`;
   } else {
-    cap = `☠️ *${item.e.name || 'The enemy'}* ${item.clip.boss ? 'is destroyed!' : 'falls!'}`;
+    cap = `☠️ *${item.e.name || 'The enemy'}* ${item.boss ? 'is destroyed!' : 'falls!'}`;
   }
   const logs = state && Array.isArray(state._lastTurnLog) ? state._lastTurnLog.filter(Boolean) : [];
   if (logs.length) {
@@ -5045,30 +4932,6 @@ function _deathCaption(item, state) {
     cap += '\n📜 *COMBAT LOG*\n' + shown.map((l) => '» ' + String(l)).join('\n');
   }
   return cap;
-}
-// JPEG dimensions without a subprocess: walk the marker segments to the SOF
-// (start-of-frame) and read width/height. Works for baseline (SOF0) and
-// progressive (SOF2) — the box's ffprobe 6.1 HANGS on the GoService-rendered
-// settlement card (13:59:35 "card probe failed" after the full 5s timeout),
-// so this is the primary path; ffprobe is only a labelled fallback now.
-function _jpegDims(buf) {
-  try {
-    if (!buf || buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return null;
-    let i = 2;
-    while (i + 9 < buf.length) {
-      if (buf[i] !== 0xff) { i++; continue; }
-      const m = buf[i + 1];
-      if (m === 0xff) { i++; continue; }                       // padding byte
-      if (m === 0xd8 || (m >= 0xd0 && m <= 0xd9)) { i += 2; continue; } // no length field
-      const len = buf.readUInt16BE(i + 2);
-      if (len < 2) return null;
-      if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) {
-        return { h: buf.readUInt16BE(i + 5), w: buf.readUInt16BE(i + 7) };
-      }
-      i += 2 + len;
-    }
-  } catch {}
-  return null;
 }
 
 // 🎬 MERGED END CARD (owner 2026-11-04 "there shouldn't be a static image
@@ -5082,371 +4945,47 @@ function _jpegDims(buf) {
 //      every merge instantly with "height not divisible by 2").
 //   3. Single pass, 15fps, ultrafast, stills decoded once via loop filter.
 // ANY failure returns null → the caller falls back to the old clip+card sends.
-const MERGE_W = 640, MERGE_H = 480;
-async function _mergeOverlayMaterialsWithCardRaw(clips, cardJpeg, cardHoldSec, t0) {
-  const { spawn, execFile } = require('child_process');
-  const ffmpegBin = () => process.env.FFMPEG_PATH || 'ffmpeg';
-  const run = (bin, a, ms) => new Promise((resolve, reject) => {
-    execFile(bin, a, { timeout: ms, maxBuffer: 4 * 1024 * 1024 }, (err, _o, stderr) => {
-      if (err) { const tail = String(stderr || '').split('\n').filter(Boolean).slice(-2).join(' | '); reject(new Error(`${bin}: ${err.message}${tail ? ' — ' + tail : ''}`)); }
-      else resolve(_o);
-    });
-  });
-  const dir = path.join(require('os').tmpdir(), `deathmats-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
-  try {
-    fs.mkdirSync(dir, { recursive: true });
-    const cardPath = path.join(dir, 'card.jpg');
-    fs.writeFileSync(cardPath, cardJpeg);
-    const cardFrames = Math.max(1, Math.round(cardHoldSec * 15));
-    const outPath = path.join(dir, 'merged.mp4');
-    const deathOverlay = require('../combat/deathOverlay');
-    // ⚡ v6 CONCAT-COPY PRIMARY: the clips are already-encoded H.264 from the
-    // overlay fast path. Encode the card segment to the EXACT same params
-    // (640x480@15, baseline, ultrafast, yuv420p) and remux the sequence —
-    // no re-encode of the animation at all (~50ms copy vs ~600-900ms encode).
-    const allMp4 = clips.every((c) => c && Buffer.isBuffer(c.mp4) && c.mp4.length > 1000);
-    if (allMp4 && process.env.DEATH_RESTORE_ASPECT === '0') {   // (clips are 768x516 now; stream merge below restores aspect once at the end)
-      try {
-        const cardSeg = path.join(dir, 'cardseg.mp4');
-        await run('ffmpeg', ['-v', 'error', '-y', '-framerate', '15', '-i', cardPath,
-          '-vf', `loop=loop=${cardFrames - 1}:size=1:start=0,setpts=N/(15*TB),scale=${MERGE_W}:${MERGE_H},setsar=1,format=yuv420p`,
-          '-frames:v', String(cardFrames),
-          '-c:v', 'libx264', '-preset', 'ultrafast', '-profile:v', 'baseline', '-crf', '24', '-threads', '2', '-an', cardSeg], 10000);
-        const listPath = path.join(dir, 'list.txt');
-        const entries = clips.map((c, k) => {
-          const p = path.join(dir, `clip${k}.mp4`);
-          fs.writeFileSync(p, c.mp4);
-          return `file '${p}'`;
-        });
-        entries.push(`file '${cardSeg}'`);
-        fs.writeFileSync(listPath, entries.join('\n') + '\n');
-        await run('ffmpeg', ['-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', '-movflags', '+faststart', outPath], 10000);
-        const outC = fs.readFileSync(outPath);
-        if (!outC || outC.length < 1000) throw new Error('concat-copy output empty');
-        if (outC.length > 16 * 1024 * 1024) throw new Error(`concat-copy too large for WA (${outC.length}B)`);
-        console.log(`[DeathFx] kill-turn card merged CONCAT-COPY in ${Date.now() - t0}ms (${clips.length} clip(s)+card, ${outC.length}B)`);
-        return outC;
-      } catch (e) {
-        console.warn(`[DeathFx] concat-copy merge failed after ${Date.now() - t0}ms, falling back to stream merge:`, e.message);
-      }
-    }
-    if (clips.length === 1) {
-      // ⚡ STREAMING (the common solo kill): raw BGRA frames piped straight
-      // into the final concat+card encode — canvas composites while x264
-      // runs, zero still I/O, no overlay filter.
-      const m = clips[0].mats;
-      const args = ['-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'bgra',
-        '-s', `${MERGE_W}x${MERGE_H}`, '-r', '15', '-i', 'pipe:0',
-        '-framerate', '15', '-i', cardPath,
-        '-filter_complex',
-        `[0:v]format=yuv420p,settb=AVTB[v0];[1:v]scale=${MERGE_W}:${MERGE_H},setsar=1,loop=loop=${cardFrames - 1}:size=1:start=0,setpts=N/(15*TB),fps=15,settb=AVTB,format=yuv420p[v1];[v0][v1]concat=n=2:v=1:a=0[v]`,
-        '-map', '[v]', '-c:v', 'libx264', '-preset', 'ultrafast', '-tune', 'zerolatency', '-crf', '24', '-threads', '2', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', outPath];
-      const out = await new Promise((resolve, reject) => {
-        const p = spawn(ffmpegBin(), args, { stdio: ['pipe', 'ignore', 'pipe'] });
-        let err = ''; let done = false;
-        const to = setTimeout(() => { try { p.kill('SIGKILL'); } catch (e) {} }, 15000);
-        p.stderr.on('data', (d) => { if (err.length < 4000) err += d; });
-        p.stdin.on('error', () => {});
-        p.on('error', (e) => { if (!done) { done = true; clearTimeout(to); reject(e); } });
-        p.on('close', (code) => {
-          if (done) return; done = true; clearTimeout(to);
-          if (code !== 0) { reject(new Error(`ffmpeg stream merge: code ${code} ${err.slice(-160)}`)); return; }
-          try { resolve(fs.readFileSync(outPath)); } catch (e) { resolve(null); }
-        });
-        deathOverlay.streamComposite(m, p.stdin).then(() => p.stdin.end()).catch((e) => {
-          try { p.stdin.destroy(); } catch (e2) {}
-          if (!done) { done = true; clearTimeout(to); reject(e); }
-        });
-      });
-      if (!out || out.length < 1000) throw new Error('materials merge output empty');
-      if (out.length > 16 * 1024 * 1024) throw new Error(`materials merge too large for WA (${out.length}B)`);
-      console.log(`[DeathFx] kill-turn card merged FROM MATERIALS (raw stream) in ${Date.now() - t0}ms (1 clip, ${MERGE_W}x${MERGE_H}, ${out.length}B)`);
-      return out;
-    }
-    // N>1 (rare per-enemy fallback): canvas stills + one filter graph
-    const args = ['-y'];
-    const chain = [];
-    const vids = [];
-    for (let k = 0; k < clips.length; k++) {
-      const m = clips[k].mats;
-      const compDir = path.join(dir, `comp${k}`);
-      const compN = await deathOverlay.compositeFrames(m, compDir);
-      if (!compN) throw new Error('canvas composite produced no frames');
-      args.push('-framerate', String(m.fps), '-i', path.join(compDir, 'c%03d.jpg'));
-      chain.push(`[${k}:v]fps=15,settb=AVTB,format=yuv420p[v${k}]`);
-      vids.push(`[v${k}]`);
-    }
-    args.push('-framerate', '15', '-i', cardPath);
-    chain.push(`[${clips.length}:v]loop=loop=${cardFrames - 1}:size=1:start=0,setpts=N/(15*TB),scale=${MERGE_W}:${MERGE_H},setsar=1,fps=15,settb=AVTB,format=yuv420p[v${clips.length}]`);
-    vids.push(`[v${clips.length}]`);
-    chain.push(`${vids.join('')}concat=n=${vids.length}:v=1:a=0[v]`);
-    args.push('-filter_complex', chain.join(';'), '-map', '[v]', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-threads', '2', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', outPath);
-    await run('ffmpeg', args, 15000);
-    const out = fs.readFileSync(outPath);
-    if (!out || out.length < 1000) throw new Error('materials merge output empty');
-    if (out.length > 16 * 1024 * 1024) throw new Error(`materials merge too large for WA (${out.length}B)`);
-    console.log(`[DeathFx] kill-turn card merged FROM MATERIALS in ${Date.now() - t0}ms (${clips.length} clips, ${MERGE_W}x${MERGE_H}, ${out.length}B)`);
-    return out;
-  } finally {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-  }
-}
 
 // 📐 dimension parity: the materials pipeline works in the 4:3 (640x480) ultimate space where the scene is vertically squashed AND the
 // card used to be letter-boxed into it (black bars). It now fills the frame (same squash) and one final pass stretches the whole clip
 // back to the true 768x516 (1.49:1) so kill-turn videos match the card scenes and death clips.
-async function _mergeOverlayMaterialsWithCard(clips, cardJpeg, cardHoldSec, t0) {
-  const out = await _mergeOverlayMaterialsWithCardRaw(clips, cardJpeg, cardHoldSec, t0);
-  if (!out || process.env.DEATH_RESTORE_ASPECT === '0') return out;
-  try {
-    const dir = path.join(require('os').tmpdir(), `deathar-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
-    fs.mkdirSync(dir, { recursive: true });
-    try {
-      fs.writeFileSync(path.join(dir, 'in.mp4'), out);
-      await new Promise((resolve, reject) => require('child_process').execFile(process.env.FFMPEG_PATH || 'ffmpeg', ['-v', 'error', '-y', '-i', path.join(dir, 'in.mp4'), '-vf', 'scale=768:516:flags=bicubic,setsar=1,format=yuv420p', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-threads', '2', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', path.join(dir, 'out.mp4')], { timeout: 10000 }, (e) => (e ? reject(e) : resolve())));
-      const o2 = fs.readFileSync(path.join(dir, 'out.mp4'));
-      return o2 && o2.length > 1000 ? o2 : out;
-    } finally { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {} }
-  } catch (e) { console.warn('[DeathFx] aspect restore skipped:', e.message); return out; }
-}
 
-async function _mergeDeathClipsWithCard(clips, cardJpeg, cardHoldSec = 1.8) {
-  const t0 = Date.now();
-  // ⚡ fast branch: every clip carries overlay materials -> raw-stream merge
-  if (Array.isArray(clips) && clips.length && clips.every((c) => c && c.mats && c.mats.plate && c.mats.framesDir && c.mats.n > 0)) {
-    try {
-      const fast = await _mergeOverlayMaterialsWithCard(clips, cardJpeg, cardHoldSec, t0);
-      if (fast) return fast;
-    } catch (e) { console.warn(`[DeathFx] materials merge failed after ${Date.now() - t0}ms, falling back to mp4 path:`, e.message); }
-  }
-  const { execFile } = require('child_process');
-  const run = (bin, args, ms) => new Promise((resolve, reject) => {
-    execFile(bin, args, { timeout: ms, maxBuffer: 4 * 1024 * 1024 }, (err, _stdout, stderr) => {
-      if (err) { const tail = String(stderr || '').split('\n').filter(Boolean).slice(-2).join(' | '); reject(new Error(`${bin}: ${err.message}${tail ? ' — ' + tail : ''}`)); }
-      else resolve(_stdout);
-    });
-  });
-  const dir = path.join(require('os').tmpdir(), `deathcard-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
-  try {
-    fs.mkdirSync(dir, { recursive: true });
-    const cardPath = path.join(dir, 'card.jpg');
-    fs.writeFileSync(cardPath, cardJpeg);
-    // target geometry = the settlement card. PRIMARY: pure-JS SOF parse
-    // (subprocess-free — ffprobe 6.1 hangs on this exact jpeg). FALLBACK:
-    // ffprobe with an explicit demuxer and a tight 3s leash.
-    let W = 0, H = 0, via = 'sof';
-    const jd = _jpegDims(cardJpeg);
-    if (jd && jd.w > 0 && jd.h > 0) { W = jd.w; H = jd.h; }
-    else {
-      via = 'ffprobe';
-      const probeOut = await run('ffprobe', ['-v', 'error', '-f', 'image2', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', cardPath], 3000).catch(() => null);
-      const dims = String(probeOut || '').trim().split(/[,\n]/).map((s) => parseInt(s, 10)).filter((n) => n > 0);
-      if (dims.length >= 2) { W = dims[0]; H = dims[1]; }
-    }
-    if (!W || !H) throw new Error('card dims unavailable (sof+ffprobe)');
-    // ⚡ x264/yuv420p needs EVEN dims — a 1024x687 card killed every merge
-    // instantly. Round down; a 1px crop is invisible.
-    if (W % 2 || H % 2) { W -= W % 2; H -= H % 2; }
-    console.log(`[DeathFx] merged card canvas ${W}x${H} (via ${via})`);
-    // ⚡ SINGLE PASS: card rides in as a looped still (decoded once via the
-    // loop filter), clips concat in the same graph, ONE x264 encode @15fps.
-    const args = ['-y'];
-    const chain = [];
-    clips.forEach((c, k) => {
-      const p = path.join(dir, `clip${k}.mp4`);
-      fs.writeFileSync(p, c.mp4);
-      args.push('-i', p);
-      chain.push(`[${k}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=15,settb=AVTB[v${k}]`);
-    });
-    const cardFrames = Math.max(1, Math.round(cardHoldSec * 15));
-    args.push('-framerate', '15', '-i', cardPath);
-    chain.push(`[${clips.length}:v]loop=loop=${cardFrames - 1}:size=1:start=0,setpts=N/(15*TB),scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=15,settb=AVTB,format=yuv420p[v${clips.length}]`);
-    chain.push(`${clips.map((_, k) => `[v${k}]`).join('')}[v${clips.length}]concat=n=${clips.length + 1}:v=1:a=0[v]`);
-    const outPath = path.join(dir, 'merged.mp4');
-    args.push('-filter_complex', chain.join(';'), '-map', '[v]', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-threads', '2', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', outPath);
-    await run('ffmpeg', args, 15000);
-    const out = fs.readFileSync(outPath);
-    if (!out || out.length < 1000) throw new Error('merged output empty');
-    if (out.length > 16 * 1024 * 1024) throw new Error(`merged too large for WA (${out.length}B)`);
-    console.log(`[DeathFx] merged card bake: ${clips.length} clip(s)+card ${W}x${H} -> ${out.length}B in ${Date.now() - t0}ms (single-pass 15fps ultrafast)`);
-    return out;
-  } catch (err) {
-    console.warn(`[DeathFx] merged card bake failed after ${Date.now() - t0}ms:`, err.message);
-    return null;
-  } finally {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-  }
-}
 
 // old behavior preserved verbatim: clips as their own messages (merge
 // unavailable / render failed — the enemy-defeat announce must never vanish)
-async function _flushHeldDeathClips(sock, state, held) {
-  for (const item of held) {
-    const pl = { video: item.clip.mp4, mimetype: 'video/mp4', caption: _deathCaption(item, state), gifPlayback: true };
-    if (Buffer.isBuffer(item.clip.thumb)) pl.jpegThumbnail = item.clip.thumb;
-    await sendMediaBounded(sock, state.chatId, pl, { label: 'enemyDeathVfx', ms: 12000, grace: 4000, fallbackText: null });
-  }
-}
 // consumes THIS fight's held kill clips and plays them as their own messages —
 // used by every no-board path in nextTurn (no turnInfo / render failed /
 // already-animated turn) so the announce is never silently swallowed
-async function _flushHeldTurnClips(sock, state, why) {
-  try {
-    const t = state && state._heldDeathClips;
-    if (t && (t.items || []).length && t.gen === ((state && state.combatGen) || 0)) {
-      state._heldDeathClips = null;
-      console.log(`[DeathFx] held clips flushed as own messages (${why})`);
-      await _flushHeldDeathClips(sock, state, t.items);
-    }
-  } catch (e) { console.warn('[DeathFx] held flush failed:', e && e.message || e); }
-}
 
-// called once per fight (first turn): queue a background bake for every enemy, weakest first
-function startDeathBake(state) {
-  try {
-    // 🔧 DEATH-ORDER BACKDROP: the bake round is keyed to the death order too
-    // — after every kill the survivors re-bake against the updated backdrop
-    // (fallen enemy gone), so the NEXT kill's clip is pre-ready at kill time.
-    const __bakeSig = state.combatGen + ':' + (state.enemies || []).length + ':' + _deadSetSig(state, []);
-    if (!_deathEligible(state) || state._deathBake === __bakeSig) return;
-    state._deathBake = __bakeSig;
-    // 🧷 JOB REGISTRY: jobs also live on the STATE keyed by combatGen+index,
-    // because prod proved the kill path can see enemy objects with NO
-    // _deathJob even seconds after startDeathBake queued them (13:53:19
-    // "NO clip (job=false)" while bakes were mid-flight). The registry
-    // survives whatever rebuilds the enemy objects inside a fight.
-    if (!state._deathJobReg || state._deathJobReg.gen !== (state.combatGen || 0)) state._deathJobReg = { gen: state.combatGen || 0, byIdx: {}, byAtkIdx: {} };
-    const order = (state.enemies || []).map((e, i) => ({ e, i })).filter((x) => x.e && x.e.isEnemy !== false && (!x.e._deathJob || x.e._deathJobSig !== _deadSetSig(state, [x.i]))).sort((a, b) => (a.e.isBoss ? 1 : 0) - (b.e.isBoss ? 1 : 0) || (Number(a.e.currentHP ?? a.e.stats?.hp) || 0) - (Number(b.e.currentHP ?? b.e.stats?.hp) || 0)).slice(0, 8);   // weakest first: they fall first
-    for (const { e, i } of order) {
-      e._deathJobSig = _deadSetSig(state, [i]);
-      e._deathJob = state._deathJobReg.byIdx[i] = _deathEnqueue(() => _bakeDeathClip(state, e, i).then((clip) => {
-        // ⚔️ #5 round 9: the plain pre-bake cannot know the killing blow — warm the
-        // DEATHATTACK variant right after, so a basic-attack kill still delivers fast
-        // (the overlay paint is the expensive part; delivery then needs plate+encode only).
-        try {
-          state._deathJobReg.byAtkIdx = state._deathJobReg.byAtkIdx || {};
-          const atkP = _bakeDeathClip(state, e, i, null, true);
-          e._deathAtkJob = atkP; state._deathJobReg.byAtkIdx[i] = atkP;
-          atkP.catch(() => {});
-        } catch (wErr) {}
-        return clip;
-      }));
-    }
-  } catch (err) { console.warn('[DeathFx] bake skipped:', err && err.message || err); }
-}
 async function playEnemyDeaths(sock, state, opts = {}) {
   try {
-    if (!sock || !_deathEligible(state)) { if (state && state.inCombat && (state.enemies || []).some((x) => x && x.stats && x.stats.hp <= 0 && !x._deathAnimDone)) console.log(`[DeathFx] skipped: sock=${!!sock} chatId=${!!(state && state.chatId)} isAbyss=${state && state.isAbyss} mode=${state && state.mode}`); return; }
-    // 🧹 stale hold sweep: clips held for a board that never came (fight
-    // superseded, no-board path) must still play — lazily here instead of
-    // racing the next turn's merge.
-    try { const __stale = state._heldDeathClips; if (__stale && (__stale.gen !== (state.combatGen || 0) || Date.now() - (__stale.at || 0) > 45000) && (__stale.items || []).length) { state._heldDeathClips = null; console.log(`[DeathFx] flushing stale held clips (gen=${__stale.gen} vs ${state.combatGen || 0}, age=${Date.now() - (__stale.at || 0)}ms)`); await _flushHeldDeathClips(sock, state, __stale.items); } } catch (se) { console.warn('[DeathFx] stale flush failed:', se && se.message || se); }
+    if (!sock || !_deathEligible(state)) { if (state && state.inCombat && (state.enemies || []).some((x) => x && x.stats && x.stats.hp <= 0 && !x._deathAnimDone)) console.log(`[DeathStill] skipped: sock=${!!sock} chatId=${!!(state && state.chatId)} isAbyss=${state && state.isAbyss} mode=${state && state.mode}`); return; }
     const fresh = (state.enemies || []).map((e, i) => ({ e, i })).filter((x) => x.e && x.e.isEnemy !== false && !x.e._deathAnimDone && (x.e.justDied || x.e.isDead || (x.e.stats && x.e.stats.hp <= 0)));
     if (!fresh.length) return;
     fresh.forEach((x) => { x.e._deathAnimDone = true; });   // flag first: idempotent across checkCombatEnd / nextTurn
-    const __batchIdx = fresh.map((x) => x.i);
-    const __wantDead = _deadSetSig(state, __batchIdx);   // 🔧 death order: who was ALREADY dead before this batch
     const t0 = Date.now();
-    // ⏱ leash: a held kill waits on the in-flight bake before its board
-    // merge — 18s when a board is coming (the turn flow continues anyway),
-    // 12s when the clips will go out as their own messages.
-    const leashMs = opts.hold ? 18000 : 12000;
-    let ready = [];
-    if (fresh.length > 1) {
-      // 🎬 GROUP-AS-UNIT: several kills on the same beat render as ONE clip
-      // where the whole dead group breaks apart together. The per-enemy clips
-      // stay as the fallback (a missed unit must never eat the announce).
-      const grp = await Promise.race([
-        _bakeGroupDeathClip(state, fresh),
-        new Promise((r) => setTimeout(() => r(null), leashMs)),
-      ]);
-      if (grp && grp.clip && grp.clip.mp4 && grp.clip.sig === _aliveSig(state) && (grp.clip.hpSig || '') === _hpSig(state)) ready = [grp];
-      else console.warn(`[DeathFx] group unit missed (${fresh.length} dying, ${Date.now() - t0}ms) - per-enemy fallback`);
-    }
-    if (!ready.length) {
-      // resolve every dying enemy's clip in PARALLEL (baked = instant); a missing bake gets a short live attempt through the same worker
-      const clips = await Promise.all(fresh.slice(0, 3).map(async ({ e, i }) => {
-      // ⚔️ #5 round 9: a basic-attack kill must deliver the DEATHATTACK clip (animated
-      // slash intro), never the plain dissolve the fight-start pre-bake laid down. The
-      // kill site stamps _killedBy (mirrored into state._killedByReg because prod
-      // rebuilds enemy objects mid-fight); delivery picks the variant here.
-      const __wantAtk = !!((e._killedBy && e._killedBy.kind === 'basic') || (state._killedByReg && state._killedByReg.gen === (state.combatGen || 0) && state._killedByReg.byIdx && state._killedByReg.byIdx[i] === 'basic'));
-      const __reg = state._deathJobReg;
-      const __leash = new Promise((r) => setTimeout(() => r(undefined), leashMs));
-      let job = null, clip = null;
-      if (__wantAtk) {
-        // prefer the warmed DEATHATTACK bake (queued right after the plain one); fall
-        // back to a live atk bake — the warmed overlay cache keeps it to plate+encode
-        job = e._deathAtkJob || (__reg && __reg.gen === (state.combatGen || 0) && __reg.byAtkIdx && __reg.byAtkIdx[i]) || null;
-        if (job) clip = await Promise.race([job.catch(() => null), __leash]);
-        if (clip && (clip.sig !== _aliveSig(state) || (clip.deadSig || '') !== __wantDead || (clip.hpSig || '') !== _hpSig(state))) { console.log(`[DeathFx] ${e.name}: atk backdrop stale since bake (${clip.deadSig || '-'} vs ${__wantDead}) - re-rendering`); clip = null; }
-        if (!clip || !clip.mp4) clip = await Promise.race([_deathEnqueue(() => _bakeDeathClip(state, e, i, __batchIdx, true)).catch(() => null), __leash]);
-        if (!clip || !clip.mp4) { clip = null; const __pj = e._deathJob || (__reg && __reg.gen === (state.combatGen || 0) && __reg.byIdx[i]) || null; if (__pj) clip = await Promise.race([__pj.catch(() => null), __leash]); console.warn(`[DeathFx] ${e.name}: atk clip missed the leash - plain fallback ${clip && clip.mp4 ? 'ok' : 'failed'}`); }   // never swallow the announce
-      } else {
-      job = e._deathJob || null;
-      // 🧷 identity heal: the kill may see an enemy object that lost its
-      // _deathJob (prod 13:53:19) — fall back to the per-fight registry.
-      if (!job && __reg && __reg.gen === (state.combatGen || 0) && __reg.byIdx[i]) job = __reg.byIdx[i];
-      if (!job) { try { startDeathBake(state); } catch (bakeErr) {} const __reg2 = state._deathJobReg; if (__reg2 && __reg2.gen === (state.combatGen || 0) && __reg2.byIdx[i]) { job = __reg2.byIdx[i]; console.log(`[DeathFx] ${e.name}: kill beat every bake - bake started at kill time (idx=${i}, gen=${state.combatGen || 0})`); } }
-      // a kill on the very first turns can beat the background bake: wait for the in-flight bake (the box is slow, a late clip beats none)
-      clip = job ? await Promise.race([job, __leash]) : undefined;
-      if (clip && (clip.sig !== _aliveSig(state) || (clip.deadSig || '') !== __wantDead || (clip.hpSig || '') !== _hpSig(state))) { console.log(`[DeathFx] ${e.name}: backdrop stale since bake (dead-in-scene ${clip.deadSig || '-'} vs now ${__wantDead}) - re-rendering`); clip = null; }   // stale backdrop: the death order moved on since the pre-bake
-      if (!clip && (clip === null || !job)) clip = await Promise.race([_deathEnqueue(() => _bakeDeathClip(state, e, i, __batchIdx)), __leash]);
-      }
-      if (!clip || !clip.mp4) console.warn(`[DeathFx] ${e.name}: NO clip (job=${!!job}, wantAtk=${__wantAtk}, idx=${i}, gen=${state.combatGen || 0}, baked=${Date.now() - t0}ms) - falling back to the static card`);
-      return clip && clip.mp4 ? { e, clip } : null;
-    }));
-      ready = clips.filter(Boolean);
-    }
-    // 🎬 KILL-TURN CARD (owner 2026-11-04, corrected directive): hold the
-    // clips — THIS flow's turn board burns them into ONE video = death
-    // animation + the regular combat message (war-log board). gen-stamped so
-    // a superseded fight can never leak clips into the next one.
-    // 🔧 FLOW-OVER FIX (owner 2026-11-06), two guards on the hold itself:
-    // (a) superseded-gen holds are flushed before the slot is reused and
-    // same-gen kills APPEND — a second kill must never silently overwrite
-    // the first kill's clip (that is the one-turn-late flow-over);
-    // (b) SELF-DRAIN — a hold no board claims within 11s (render timeout,
-    // early return, superseded flow) flushes itself instead of riding into
-    // the next turn. 11s sits just past the board render's 10s race, so a
-    // healthy merge always wins; the identity check keeps a drained hold
-    // from double-sending after a pickup.
-    if (opts.hold && ready.length) {
-      const __prev = state._heldDeathClips;
-      if (__prev && (__prev.items || []).length && __prev.gen !== (state.combatGen || 0)) {
-        state._heldDeathClips = null;
-        if (__prev._drain) clearTimeout(__prev._drain);
-        console.log('[DeathFx] flushing superseded-gen hold before re-hold');
-        try { await _flushHeldDeathClips(sock, state, __prev.items); } catch (pfErr) {}
-      }
-      const __sameGen = __prev && __prev.gen === (state.combatGen || 0) && (__prev.items || []).length;
-      const holdRef = { gen: state.combatGen || 0, at: Date.now(), items: __sameGen ? __prev.items.concat(ready) : ready };
-      state._heldDeathClips = holdRef;
-      console.log(`[DeathFx] held ${holdRef.items.length} clip(s) for the kill-turn card${__sameGen ? ' (appended ' + __prev.items.length + ' earlier hold)' : ''}`);
-      if (holdRef._drain) clearTimeout(holdRef._drain);
-      holdRef._drain = setTimeout(() => {
-        try {
-          if (state._heldDeathClips === holdRef) {
-            state._heldDeathClips = null;
-            console.log('[DeathFx] held clips self-drained after 11s — no board claimed them, playing standalone');
-            _flushHeldDeathClips(state.sock || state.sock_ref, state, holdRef.items).catch(() => {});
-          }
-        } catch (drainErr) {}
-      }, 11000);
-      if (holdRef._drain && holdRef._drain.unref) holdRef._drain.unref();
-      try { startDeathBake(state); } catch (reErr) {}   // 🔧 death order: survivors re-bake against the updated backdrop
-      return;
-    }
-    await Promise.all(ready.map((item) => {
-      const pl = { video: item.clip.mp4, mimetype: 'video/mp4', caption: _deathCaption(item, state), gifPlayback: true };
-      if (Buffer.isBuffer(item.clip.thumb)) pl.jpegThumbnail = item.clip.thumb;
-      return sendMediaBounded(sock, state.chatId, pl, { label: 'enemyDeathVfx', ms: 12000, grace: 4000, fallbackText: null });
-    }));
-    if (ready.length) {
-      console.log(`[DeathFx] ${ready.map((r) => r.clip.kind + (r.clip.boss ? '/boss' : '')).join(',')} delivered in ${Date.now() - t0}ms`);
-      try { startDeathBake(state); } catch (reErr) {}   // 🔧 death order: survivors re-bake against the updated backdrop
-    }
-  } catch (err) { console.warn('[DeathFx] skipped:', err && err.message || err); }
+    try {
+      // ☠️ DEATH STILLS (owner 2026-11-09): one static image per kill turn —
+      // premade per-element breakup art (CC0 vfx sets) frozen at its peak
+      // frame around the KO'd body. Replaces the animated clip pipeline
+      // wholesale: no pre-bakes, no leashes, no held clips, no merges — the
+      // still renders at delivery time because it is CHEAPER than that
+      // bookkeeping (warm stamp cache ≈ 0.1-0.25s vs 18-24s mp4 bakes).
+      const deathStill = require('../combat/deathStill');
+      const layers = await _deathScene(state);
+      if (!layers) { console.warn(`[DeathStill] no layered scene (${Date.now() - t0}ms) — the board carries the kill`); return; }
+      const still = await deathStill.renderDeathStill({
+        layers,
+        picks: fresh,
+        deadIdx: new Set(_deadEnemyIndices(state, fresh.map((x) => x.i))),
+        chrome: _deathChrome(state),
+      });
+      if (!still || !still.image) { console.warn('[DeathStill] render null — the board carries the kill'); return; }
+      const item = { e: fresh[0].e, kind: still.kind, boss: still.boss, group: still.group };
+      await sendMediaBounded(sock, state.chatId, { image: still.image, caption: _deathCaption(item, state) }, { label: 'enemyDeathStill', ms: 12000, grace: 4000, fallbackText: null });
+      console.log(`[DeathStill] ${still.kind}${still.boss ? '/boss' : ''}${still.group && still.group.length > 1 ? ' x' + still.group.length : ''} delivered in ${Date.now() - t0}ms`);
+    } catch (err) { console.warn('[DeathStill] failed:', err && err.message || err); }
+  } catch (err) { console.warn('[DeathStill] skipped:', err && err.message || err); }
 }
 
 async function checkCombatEnd(sock, state, sessionKey) {
@@ -5487,7 +5026,7 @@ async function checkCombatEnd(sock, state, sessionKey) {
   // line is followed the same second by 'endCombat ENTER'. Ending kills now
   // deliver IMMEDIATELY (the clip is pre-baked, sends in ~1-2s) before the
   // victory screen; the hold stays only for mid-fight kills.
-  await playEnemyDeaths(sock, state, { hold: !playersDead && !enemiesDead });
+  await playEnemyDeaths(sock, state, {});   // ☠️ death stills — sent immediately, no hold
 
   if (playersDead || enemiesDead) {
     // Clear any pending turn timers to prevent infinite loops
@@ -6475,13 +6014,8 @@ async function performAction(sock, player, action, sessionKey) {
         let gif = null;
         // 🎴 owner 2026-11-07: the card physically leaves its hand slot (or the +N pile), flies in front of the caster, then fires its
         // effect in the real battle scene. Returns an MP4; null/any failure falls through to the Go / generic Node GIF below.
-        // ⚡ RECIPE §2.5: kick the death clip off IN PARALLEL with the card scene —
-        // the death overlay is already baked, so it doesn't need the scene's
-        // output; both keep their old leashes and concat when both are done
-        // (a kill turn no longer pays scene + death serially, ≤9s saved).
-        const __deathClipP = (activation.defeatedList && activation.defeatedList.length && _deathEligible(state))
-          ? Promise.race([_deathClipForCardKill(state, activation.defeatedList).catch(() => null), new Promise((r) => setTimeout(() => r(null), 9000))])
-          : null;
+        // ☠️ DEATH STILLS (2026-11-09): card kills no longer bake a parallel
+        // death clip — the normal death delivery sends the still after the card.
         if (process.env.CARD_SCENE_ANIM !== '0') {
           try {
             const __sc = require('../summonCards');
@@ -6507,17 +6041,9 @@ async function performAction(sock, player, action, sessionKey) {
             }
           } catch (sceneErr) { gif = null; console.warn('[SummonCards] scene animation failed, falling back:', sceneErr.message); }
         }
-        // ☠️ the card killed something: append the enemy's real death dissolve to THIS clip (one message, not two)
+        // ☠️ DEATH STILLS (2026-11-09): the card clip stays death-free; the
+        // enemy's death still arrives as its own image right after the card.
         let __deathCaption = null;
-        if (gif && Buffer.isBuffer(gif) && gif.length > 500 && gif.toString('latin1', 4, 8) === 'ftyp' && activation.defeatedList && activation.defeatedList.length) {
-          try {
-            const __dItem = __deathClipP ? await __deathClipP : null;   // ⚡ §2.5: started before the scene await
-            if (__dItem) {
-              const __cat = await _concatMp4([gif, __dItem.clip.mp4]);
-              if (__cat) { gif = __cat; __deathCaption = _deathCaption(__dItem, null); console.log('[SummonCards] card + death merged into one clip'); }
-            }
-          } catch (mergeErr) { console.warn('[SummonCards] death merge skipped:', mergeErr.message); }
-        }
         // ⚡ RECIPE §2.4: the 17-35s Go summon GIF is OUT of the hot path — the
         // Node card-play scene covers every card (flat-plate fallback when the
         // layers fail), so Go only runs behind SUMMON_GO_GIF=1. Its disk cache
@@ -7817,19 +7343,13 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
   const state = gameStates.get(sessionKey);
   if (!state || !state.inCombat) {
     // 🔧 FLOW-OVER FIX (owner 2026-11-06): the fight ENDED before this board
-    // could render (endCombat already ran inside checkCombatEnd). Kill clips
-    // still held for THIS gen would orphan on this early return — the tail
-    // flush at the bottom of this function is unreachable from here. Flush
-    // them so the animation still plays at the kill.
-    try { if (state) await _flushHeldTurnClips(sock || state.sock || state.sock_ref, state, 'combat already ended before the board'); } catch (e) {}
     return;
   }
   // 🩘 SOCK FALLBACK (2026-10-26): same family as the processVotes heal —
   // any caller that lost its socket still delivers the battle card +
   // YOUR TURN caption through the state's stored socket.
   if (!sock) sock = state.sock || state.sock_ref;
-  startDeathBake(state);   // pre-bake death clips in the background (first turn of the fight)
-  await playEnemyDeaths(sock, state, { hold: true });   // kills hold for THIS turn's board (merged into it below); no-board paths flush at the end of this function
+  await playEnemyDeaths(sock, state, {});   // ☠️ death stills — delivered immediately (the board follows as itself)
 
   // Generate incremental combat image if action just happened
   if (lastTurnInfo) {
@@ -7894,50 +7414,12 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
               gifPlayback: false,  // MP4 should play as video, not GIF
             }, { label: 'turnVideo' });
           } else if (scene.buffer) {
-            // 🎬 KILL-TURN CARD (owner 2026-11-04, corrected: the merge target
-            // is the REGULAR combat message — "the GIF would simply be
-            // attached to the battle log itself" — never the win message):
-            // held death clip(s) burn into THIS board → ONE video = shatter,
-            // then the war-log board settles as the closing frame. Caption =
-            // falls lines + the normal turn caption. ANY failure → board as
-            // itself + clips as their own messages (the old pair).
-            const __turnHeld = (() => { const t = state._heldDeathClips; if (t && t.gen === (state.combatGen || 0) && (t.items || []).length) { state._heldDeathClips = null; return t.items; } return null; })();
-            let __killSent = false;
-            if (__turnHeld) {
-              try {
-                const __killT0 = Date.now();   // ⏱ kill→chat end-to-end meter
-                const __merged = await _mergeDeathClipsWithCard(__turnHeld.map((h) => h.clip), scene.buffer, 1.0);
-                if (__merged) {
-                  let __deaths = __turnHeld.map((h) => _deathCaption(h)).join('\n');
-                  // 📜 UNIFORM KILL CAPTIONS (owner 2026-11-07: "some have the regular war
-                  // log thing but others have the combat log — just make it uniform"):
-                  // kill-turn merged videos close with the same 📜 COMBAT LOG block the
-                  // standalone death clips use (» lines, *bold* numbers) instead of the
-                  // WAR LOG mono grid. The board itself still settles as the video's final
-                  // frame — the grid remains on non-kill turn boards only. Missing logs
-                  // (rebuilt/partial paths) fall back to the old board caption.
-                  const __killLogs = Array.isArray(state._lastTurnLog) ? state._lastTurnLog.filter(Boolean).slice(-6) : [];
-                  let __cap = __deaths + (__killLogs.length
-                    ? '\n📜 *COMBAT LOG*\n' + __killLogs.map((l) => '» ' + String(l)).join('\n')
-                    : '\n' + (scene.caption || ''));
-                  if (__cap.length > 900) __cap = (scene.caption || '');   // WA caption cap safety
-                  const __pl = { video: __merged, mimetype: 'video/mp4', gifPlayback: true, caption: __cap };
-                  if (Buffer.isBuffer(__turnHeld[0].clip.thumb)) __pl.jpegThumbnail = __turnHeld[0].clip.thumb;
-                  await sendMediaBounded(sock, state.chatId, __pl, { label: 'killTurnCard', ms: 20000, grace: 6000, fallbackText: null });
-                  __killSent = true;
-                  console.log(`[DeathFx] kill-turn card sent: ${__turnHeld.length} death clip(s) + battle board as ONE video in ${Date.now() - __killT0}ms`);
-                }
-              } catch (killErr) {
-                console.warn('[DeathFx] kill-turn merge failed (non-fatal):', killErr.message);
-              }
-              if (!__killSent) await _flushHeldDeathClips(sock, state, __turnHeld);   // merge refused: clips still play, board goes as itself
-            }
-            if (!__killSent) {
-              await sendMediaBounded(sock, state.chatId, {
-                image: scene.buffer,
-                caption: scene.caption,
-              }, { label: 'turnImage' });
-            }
+            // ☠️ DEATH STILLS (2026-11-09): deaths ride their own still image
+            // (sent by playEnemyDeaths) — this board sends as itself again.
+            await sendMediaBounded(sock, state.chatId, {
+              image: scene.buffer,
+              caption: scene.caption,
+            }, { label: 'turnImage' });
           } else if (scene.imagePath && fs.existsSync(scene.imagePath)) {
             await sendMediaBounded(sock, state.chatId, {
               image: fs.readFileSync(scene.imagePath),
@@ -7999,9 +7481,6 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
       }
     }
   }
-  // 🎬 kill clips held for a board that never came (no turnInfo / render
-  // failed / already-animated turn) still play — never lose the announce.
-  await _flushHeldTurnClips(sock, state, 'no board this turn');
   // Note: checkCombatEnd is called explicitly by performAction and processCombatTurn - not needed here.
 }
 
@@ -9315,12 +8794,6 @@ async function endCombat(sock, victory, sessionKey, expectedGen) {
   // resets (victory nextStage timer / defeat cleanup) are unchanged.
   state.isEndingCombat = true; // claim FIRST — no re-entry during the async hook
   const combatGenAtEnd = state.combatGen || 0;
-  // 🔧 FLOW-OVER FIX (owner 2026-11-06): terminal catch-all — any kill clip
-  // still held for THIS fight (a mid-fight hold whose board never rendered)
-  // must play NOW, before the victory/defeat screen, never ride into the
-  // next fight. Ending kills skip the hold entirely (checkCombatEnd sends
-  // them immediately); this only ever catches stragglers.
-  try { await _flushHeldTurnClips(sock || state.sock || state.sock_ref, state, 'combat ending'); } catch (e) {}
   // ⚔️ RUINS: free the frozen battle-scene layout for this session
   try { require('../guildwar/battleScene').clearLayout(sessionKey); } catch (e) {}
   // 🕳️ ABYSS: free the frozen abyss-scene layout for this session
@@ -14595,7 +14068,7 @@ function getDebuffIcon(debuffType) {
 // ==========================================
 
 module.exports = {
-  _deathTest: { startDeathBake, playEnemyDeaths, _bakeDeathClip, _bakeGroupDeathClip, _deathCaption, _deathEligible, _mergeDeathClipsWithCard, _jpegDims, _flushHeldDeathClips },
+  _deathTest: { playEnemyDeaths, _deathCaption, _deathEligible, _deathScene, _deathChrome },
   showLore: async (sock, chatId) => {
     const { sendLore } = require('../shared/loreContent');
     return sendLore(sock, chatId, '.');
