@@ -288,6 +288,8 @@ function buildAnimationAction(turnInfo, options = {}) {
         targetSide,
         targetIndex,
         skillName: String(turnInfo.action.name || 'Attack'),
+        // 🎯 skill metadata for the signature painter (skillStaticFx): damageType + effect kind from the real skill record
+        damageType: (() => { const a = turnInfo.action || {}; let eff = a.effect; try { if (typeof eff === 'function') eff = eff(Number(a.level) || 1); } catch (e) { eff = null; } return String((eff && eff.damageType) || a.damageType || a.element || ''); })(),
         element,
         vfx: '',  // let Go service pick based on element
         damage,

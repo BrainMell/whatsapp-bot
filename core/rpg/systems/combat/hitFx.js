@@ -314,8 +314,14 @@ async function drawHitReaction(c, layers, anchors, act, s) {
     const variant = pickVariant(act);
     drawCut(tint('rgba(255,235,225,0.55)'), 0, 0, 0, 0.35);                               // white-hot flash on the original
     drawCut(tint('rgba(255,40,30,0.42)'), dir * 15 * s, -2 * s, dir * 0.075, 0.95);       // knocked-back red copy (double image)
+    // 🎯 regular SKILLS paint their own signature (fire/ice/lightning/void/holy/venom/wind/water/earth/blood/arcane/arrow/impact/stun/ward);
+    // basic attacks, ults and items keep the original slash + burst. SKILL_FX=0 reverts.
+    let __skillPainted = false;
+    if (process.env.SKILL_FX !== '0') { try { __skillPainted = require('./skillStaticFx').paintSkillFx(c, act, cx, cy, h, dir, s, crit); } catch (e) { __skillPainted = false; } }
+    if (!__skillPainted) {
     slashPattern(variant, c, cx, cy, h, dir, el, crit, s);                                // #4 the cycled composition
     impactBurst(variant, c, cx, cy, dir, el, crit, s);
+    }
     if (act.ult) {
       // 💀 FX-PASS 2026-11-08: enemy ultimate impact flair (owner: "Enemy ults (Annihilation) →
       // proper impact flair") — dark nova ring + wider second burst + streak fan so an ult turn

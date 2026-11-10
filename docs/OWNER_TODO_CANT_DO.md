@@ -63,3 +63,6 @@ Implemented per docs/RECIPE_SKILLS_ULTS_SUMMONS.md §1-§2; measured results in 
 - `PASSIVE_FX_ANIM=0` disables only the trigger clip (≤1 per turn, 8s leash, skipped on failure). Effects live in `core/rpg/systems/passiveCards/fxScene.js` (`FX` map: one primitive+colour per card).
 - Hand band: equipped passive tiles sit LEFT of the summon hand with a gold divider (`combatHud.drawPassiveGroup`). QA: `scripts/qa_passive_hand.js`, `scripts/qa_passive_fx.js`.
 - Death stills: fire/earth/air/ice/dust = agent's stamps, VOID = Claude's premade layers, WATER = `deathWater.js` splash crown (stamp cache `death_stamps_v8`).
+
+## Static skill FX
+- Regular skills (not basic attack / ult / item) paint a signature from `combat/skillStaticFx.js` (19 families chosen from skill name + damageType; per-skill seed varies size/tilt/spray). `SKILL_FX=0` reverts to the old slash+burst. QA: `scripts/qa_skill_fx.js` (coverage over all skills + contact sheet). Add a keyword to `RULES` to move a skill between families.
