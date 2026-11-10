@@ -11,6 +11,11 @@
 //   C. fire: cards move, copy numbers preserved, deck pulled, flags reset,
 //      listing cancelled, auction copy stays, money untouched, DST account created
 //   D. state machine: single-fire, 60s expiry, nothing-armed, same-account, usage
+//   E. direction fix (2026-11-10 live bug: WhatsApp delivered mentionedJid
+//      [new, old] for a text that typed @old @new → cards moved backwards;
+//      text-order override + flip + FEWER-cards warning)
+//
+// NOTE: paths updated 2026-11-10 — cardSystem moved to core/rpg/systems/cards/
 //
 // Safety model:
 //   - mock sock: ZERO WhatsApp traffic
@@ -41,8 +46,8 @@ function check(name, cond, extra) {
     const BOT = path.join(__dirname, '..');
     const INSTANCE = process.argv[2] || 'Joker';
     const botConfig = require(path.join(BOT, 'botConfig'));
-    const cardSystem = require(path.join(BOT, 'core', 'rpg', 'cardSystem'));
-    const economy = require(path.join(BOT, 'core', 'rpg', 'economy'));
+    const cardSystem = require(path.join(BOT, 'core', 'rpg', 'systems', 'cards', 'cardSystem'));
+    const economy = require(path.join(BOT, 'core', 'rpg', 'systems', 'economy', 'economy'));
     await economy.loadEconomy().catch(e => console.log(`[qa] economy warn: ${e.message}`));
 
     const SRC   = '234000000011111@s.whatsapp.net';
@@ -81,7 +86,7 @@ function check(name, cond, extra) {
         check('Mahxee is a cardmod on this instance (real roster)', inst.modJids.has(CARDMOD));
 
         // source assertions
-        const srcTxt = fs.readFileSync(path.join(BOT, 'core', 'rpg', 'cardSystem.js'), 'utf8');
+        const srcTxt = fs.readFileSync(path.join(BOT, 'core', 'rpg', 'systems', 'cards', 'cardSystem.js'), 'utf8');
         check('source: dispatcher gates movecards on isCardMod', /case 'movecards':\s*\n\s*case 'mc':\s*\n\s*if \(!isCardMod\)/.test(srcTxt));
         check('source: movecards+mc token-cmd-excluded', /'movecards', 'mc',/.test(srcTxt));
 
@@ -184,6 +189,52 @@ function check(name, cond, extra) {
                 m: mentionMsg([SRC, DST]), economy, isOwner: false, senderIsAdmin: false, isMod: false,
             });
             check('alias: .mc reaches the movecards case (gate fires)', lastText().includes('Only card moderators, global mods, or the owner'), lastText().slice(0, 90) || 'NO REPLY');
+
+            // ── E. direction fix (2026-11-10: mentionedJid array ≠ text order) ──
+            const textMentionMsg = (mentions, text) => ({ message: { extendedTextMessage: { text, contextInfo: { mentionedJid: mentions } } } });
+
+            // unit: digits anchor — reversed array corrected to text order
+            const unitOrd = cardSystem.textualMentionOrder(
+                textMentionMsg([DST, SRC], `${P} movecards @234000000011111 @234000000022222`), [DST, SRC]);
+            check('dirfix unit: digits anchor corrects reversed array', !!unitOrd && unitOrd[0] === SRC && unitOrd[1] === DST, JSON.stringify(unitOrd));
+
+            // unit: names we've never seen (sender's contact-book render) → unprovable
+            const ghostOrd = cardSystem.textualMentionOrder(
+                textMentionMsg([SRC, DST], `${P} movecards @Ghost @Target`), [SRC, DST]);
+            check('dirfix unit: unknown names → unprovable (null)', ghostOrd === null, JSON.stringify(ghostOrd));
+
+            // unit: mention-only message (no body text) → unprovable
+            check('dirfix unit: no body text → unprovable (null)',
+                cardSystem.textualMentionOrder(mentionMsg([SRC, DST]), [SRC, DST]) === null);
+
+            // integration: reversed ARRAY + correct TEXT → preview/arming take text order
+            await cardSystem.cmdMoveCards(RANDOM, fakeReply, [],
+                textMentionMsg([DST, SRC], `${P} movecards @234000000011111 @234000000022222`), CHAT);
+            const revPrev = lastText();
+            check('dirfix: reversed array → preview From=SRC (text order wins)',
+                revPrev.includes('MOVE CARDS — PREVIEW') && revPrev.includes('📤 ⟢ *From:* _@234000000011111'), revPrev.slice(0, 160));
+            const revArmed = cardSystem.moveCardsArmed.get(CHAT);
+            check('dirfix: armed src/dst from text order', !!revArmed && revArmed.src === SRC && revArmed.dst === DST, JSON.stringify(revArmed || {}));
+            check('dirfix: preview notes the reversal', revPrev.includes('tags reversed'), revPrev.slice(0, 140));
+
+            // flip: swap the armed direction before firing (zero-risk correction)
+            await cardSystem.cmdMoveCards(RANDOM, fakeReply, ['flip'], mentionMsg([]), CHAT);
+            const flipped = cardSystem.moveCardsArmed.get(CHAT);
+            check('flip: armed direction swapped', !!flipped && flipped.src === DST && flipped.dst === SRC, JSON.stringify(flipped || {}));
+            check('flip: reply card shown', lastText().includes('DIRECTION FLIPPED'), lastText().slice(0, 80));
+
+            // flip+confirm fires the OTHER way: DST's card lands on SRC
+            const flipCard = await UserCard.create({ userId: DST, cardId: inst.ALL_CARDS[6].id, copyNumber: 900 });
+            await cardSystem.cmdMoveCards(RANDOM, fakeReply, ['confirm'], mentionMsg([]), CHAT);
+            const flipDone = await UserCard.findOne({ _id: flipCard._id }).lean();
+            check('flip: confirm executes the swapped direction', !!flipDone && String(flipDone.userId) === SRC, flipDone ? String(flipDone.userId) : 'card gone');
+
+            // direction sanity warning: source has FEWER cards than destination
+            await UserCard.create({ userId: DST, cardId: inst.ALL_CARDS[7].id, copyNumber: 901 });
+            await cardSystem.cmdMoveCards(RANDOM, fakeReply, [], mentionMsg([DST, SRC]), CHAT);
+            const warnPrev = lastText();
+            check('dirfix: FEWER-cards warning fires (1 vs 6)', warnPrev.includes('FEWER cards than the destination') && warnPrev.includes('movecards flip'), warnPrev.slice(0, 200));
+            cardSystem.moveCardsArmed.delete(CHAT);
         } finally {
             await cleanup();
             const left = (await UserCard.countDocuments({ userId: { $in: [SRC, DST] } }))

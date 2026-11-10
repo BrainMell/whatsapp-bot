@@ -7529,9 +7529,54 @@ function getTaggedJids(m) {
   return out;
 }
 
+// 💡 2026-11-10 DIRECTION FIX — owner live case 2026-11-10 19:29Z:
+// ".j movecards @oldAccount @newAccount" reached the bot with
+// contextInfo.mentionedJid = [new, old] (reversed vs. the typed text) —
+// WhatsApp does NOT guarantee the mention array matches textual tag order
+// (compose-order varies by client / LID migration / edits). The old code
+// trusted the array blindly → cards moved the WRONG way (new→old).
+// Fix: when EVERY tagged account can be anchored to its own @token in the
+// message body (first word / full form of a known display name, or raw
+// digits), the TEXT order wins. Returns null when the order cannot be
+// PROVEN (any tag unanchorable — e.g. the sender's contact book shows a
+// name we've never seen — or both tags map to the same token): the caller
+// then keeps WhatsApp's array order and leans on preview + `flip`.
+function textualMentionOrder(m, candidates) {
+  try {
+    if (!Array.isArray(candidates) || candidates.length !== 2 || candidates[0] === candidates[1]) return null;
+    const msg = m?.message || {};
+    const body = msg.conversation || msg.extendedTextMessage?.text
+      || msg.imageMessage?.caption || msg.videoMessage?.caption
+      || msg.documentMessage?.caption || '';
+    if (typeof body !== 'string' || !body.includes('@')) return null;
+    const tokens = (body.match(/@([^\s@]+)/g) || []).map((t) => t.slice(1));
+    if (tokens.length < 2) return null;
+    const norm = (s) => String(s || '').normalize('NFKC').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const anchor = (jid) => {
+      const digits = norm(String(jid).split('@')[0].split(':')[0]);
+      const names = [];
+      try { const n = economy.getDisplayName(jid); if (n) names.push(n); } catch (e) { /* no name */ }
+      for (let ti = 0; ti < tokens.length; ti++) {
+        const tok = norm(tokens[ti]);
+        if (!tok) continue;
+        if (tok === digits) return ti; // client rendered the mention as @<number>
+        for (const nm of names) {
+          if (tok === norm(nm) || tok === norm(String(nm).split(/\s+/)[0])) return ti;
+        }
+      }
+      return -1;
+    };
+    const p0 = anchor(candidates[0]);
+    const p1 = anchor(candidates[1]);
+    if (p0 < 0 || p1 < 0 || p0 === p1) return null;
+    return p0 < p1 ? [candidates[0], candidates[1]] : [candidates[1], candidates[0]];
+  } catch (e) { return null; }
+}
+
 /**
  * cmdMoveCards - move ALL cards from one account to another.
  *   .j movecards @oldAccount @newAccount  → preview (arms the chat)
+ *   .j movecards flip                     → swap an armed direction (zero-risk)
  *   .j movecards confirm                  → execute (60s window, single-fire)
  * What moves: every UserCard copy that is NOT in an active auction.
  * What's cleaned (2026-10-08 vanishing-cards transfer rules): copies are
@@ -7613,6 +7658,29 @@ async function cmdMoveCards(senderJid, reply, args = [], m = {}, chatId = '') {
     );
   }
 
+  // ── FLIP PATH (2026-11-10 direction fix) — swap an armed preview before
+  // it fires. Zero-risk correction when the parsed direction reads wrong:
+  // no cards move until `confirm`, and flip re-arms with a fresh 60s window.
+  if (sub === 'flip') {
+    const pending = chatId ? moveCardsArmed.get(chatId) : null;
+    if (!pending) {
+      return reply(`❌  *NOTHING ARMED*\n\n⌨️ ⟢ _Use \`${p} movecards @oldAccount @newAccount\` first — it shows a preview._`);
+    }
+    if (Date.now() - pending.armedAt > MOVECARDS_CONFIRM_WINDOW_MS) {
+      moveCardsArmed.delete(chatId);
+      return reply(`⌛  *PREVIEW EXPIRED*\n\n⌨️ ⟢ _More than 60 seconds passed. Run \`${p} movecards @oldAccount @newAccount\` again._`);
+    }
+    const fsrc = pending.dst, fdst = pending.src;
+    moveCardsArmed.set(chatId, { src: fsrc, dst: fdst, armedAt: Date.now() });
+    return reply(
+      `🔁  *DIRECTION FLIPPED*\n\n` +
+      `📤 ⟢ *From:* _@${economy.getDisplayName(fsrc)}_\n` +
+      `📥 ⟢ *To:* _@${economy.getDisplayName(fdst)}_\n` +
+      `➡️ ⟢ _Reply \`${p} movecards confirm\` within 60 seconds to execute — or flip again._`,
+      { mentions: [fsrc, fdst] }
+    );
+  }
+
   // ── ARM PATH (preview) ──
   // Tagged accounts in order: @mentions, then reply/quote participant, then
   // raw JID text args. First candidate = source, second = destination.
@@ -7628,10 +7696,18 @@ async function cmdMoveCards(senderJid, reply, args = [], m = {}, chatId = '') {
       `🃏  *MOVE CARDS BETWEEN ACCOUNTS*\n\n` +
       `⌨️ ⟢ *Usage:* _\`${p} movecards @oldAccount @newAccount\`_\n` +
       `🧭 ⟢ _First tag = the account LOSING its cards, second tag = the account receiving them._\n` +
+      `🔁 ⟢ _Wrong direction in the preview?_ \`${p} movecards flip\` _swaps it before you confirm._\n` +
       `➡️ ⟢ _Then \`${p} movecards confirm\` within 60 seconds to execute._`
     );
   }
-  const [src, dst] = candidates;
+  // 💡 2026-11-10 direction fix: proven TEXT order beats WhatsApp's mention
+  // array order (they diverged live — cards once moved the wrong way).
+  let ordered = null;
+  try { ordered = textualMentionOrder(m, candidates); } catch (e) { ordered = null; }
+  const orderNote = (ordered && ordered[0] !== candidates[0])
+    ? `🔁 ⟢ _Tag order taken from the message text — WhatsApp delivered the tags reversed._\n`
+    : '';
+  const [src, dst] = ordered || candidates;
   if (src === dst) {
     return reply(`❌  *SAME ACCOUNT*\n\n🚫 ⟢ _Both tags resolved to the same account — nothing to move._`);
   }
@@ -7652,10 +7728,12 @@ async function cmdMoveCards(senderJid, reply, args = [], m = {}, chatId = '') {
 
   return reply(
     `⚠️  *MOVE CARDS — PREVIEW*\n\n` +
+    orderNote +
     `📤 ⟢ *From:* _@${economy.getDisplayName(src)}_ — *${totalCards}* card${totalCards === 1 ? '' : 's'}\n` +
     `📥 ⟢ *To:* _@${economy.getDisplayName(dst)}_ — currently *${dstCards}* card${dstCards === 1 ? '' : 's'}\n` +
     `🏪 ⟢ *Market listings to cancel:* _${listings}_\n` +
     (auctionCards > 0 ? `🔨 ⟢ *In active auction:* _${auctionCards} — stays on the old account_\n` : '') +
+    (totalCards < dstCards ? `⚠️ ⟢ _Heads-up: the SOURCE has FEWER cards than the destination (*${totalCards}* vs *${dstCards}*). If the direction looks wrong, reply \`${p} movecards flip\`._\n` : '') +
     `\n⚠️ ⟢ _Cards only — wallet, bank, tokens and auctions stay on the source account._\n` +
     `➡️ ⟢ _Reply \`${p} movecards confirm\` within 60 seconds to execute._`,
     { mentions: [src, dst] }
@@ -7668,6 +7746,8 @@ module.exports = {
   buildFcResultsMessage,
   // 💡 2026-10-23 movecards export (QA harness + future admin tooling)
   cmdMoveCards, moveCardsArmed,
+  // 💡 2026-11-10 direction fix export (QA harness)
+  textualMentionOrder,
   // 💡 Token event & eShop exports
   isTokenEventActive, startTokenEvent, stopTokenEvent,
   eshopAddCard, eshopRemoveCard, eshopSetPrice, eshopBuy,
