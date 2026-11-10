@@ -116,4 +116,5 @@ function onKill(state, player, enemy) {
   if (has(st, 'second_wind')) { const e = energyBy(player, PASSIVE_CATALOG.second_wind.v.energy); if (e) out.push(ev(state, st, 'second_wind', `the kill restores ${e} energy`, { value: e })); }
   return out;
 }
-module.exports = { setLoadoutResolver, resetBattle, drainFx, onTurnStart, onOutgoing, onIncoming, onKill, stateOf, SYNERGIES };
+function loadoutOf(p) { return (_resolver(p) || []).filter((id) => PASSIVE_CATALOG[id]); }
+module.exports = { loadoutOf, setLoadoutResolver, resetBattle, drainFx, onTurnStart, onOutgoing, onIncoming, onKill, stateOf, SYNERGIES };

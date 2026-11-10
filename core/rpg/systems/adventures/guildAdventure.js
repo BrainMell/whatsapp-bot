@@ -7385,6 +7385,29 @@ async function handleDeath(
   }
 }
 
+
+// 🃏 PASSIVE CARD TRIGGER ANIMATION: one short clip per turn for the first non-quiet passive trigger (kill switch PASSIVE_FX_ANIM=0).
+// Failure/timeout just skips it — the 🃏 line is already in the war log.
+async function playPassiveFx(sock, state) {
+  try {
+    const engine = require('../passiveCards/engine');
+    const fx = engine.drainFx(state).filter((e) => e && !e.quiet);
+    if (!fx.length || process.env.PASSIVE_FX_ANIM === '0' || process.env.PASSIVE_CARDS === '0') return;
+    const seen = new Set(); const evs = fx.filter((e) => (seen.has(e.cardId) ? false : (seen.add(e.cardId), true)));
+    const players = state.players || []; const owner = players.find((p) => p && p.jid === evs[0].jid) || players[0]; if (!owner) return;
+    let entries = []; try { entries = require('../summonCards').handEntries(owner.jid, state, owner); } catch (e) {}
+    const combatImageGen = require('../combat/combatImageGenerator');
+    const p = require('../passiveCards/fxScene').renderPassivePop({
+      events: evs, players, enemies: state.enemies || [], playerIndex: Math.max(0, players.indexOf(owner)), entries,
+      sceneOptions: { rank: state.dungeonRank, floor: state.isAbyss ? state.abyssFloor : 0, backgroundPath: state.backgroundPath, combatState: state },
+      api: { buildPayload: combatImageGen._buildPayload, generateCombatLayers: combatImageGen._generateCombatLayers },
+    });
+    const mp4 = await Promise.race([p.catch(() => null), new Promise((r) => setTimeout(() => r(null), 8000))]);
+    if (!Buffer.isBuffer(mp4) || mp4.length < 500) return;
+    await sendMediaBounded(sock, state.chatId, { video: mp4, mimetype: 'video/mp4', gifPlayback: true, caption: `🃏 *${evs[0].name}* — ${evs[0].text}` }, { label: 'passiveFx', ms: 10000, grace: 3000, fallbackText: null });
+  } catch (err) { console.warn('[PassiveFx] skipped:', err && err.message || err); }
+}
+
 async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
   const state = gameStates.get(sessionKey);
   if (!state || !state.inCombat) {
@@ -7396,6 +7419,7 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
   // YOUR TURN caption through the state's stored socket.
   if (!sock) sock = state.sock || state.sock_ref;
   await playEnemyDeaths(sock, state, {});   // ☠️ death stills — delivered immediately (the board follows as itself)
+  await playPassiveFx(sock, state);          // 🃏 passive card trigger clip (≤1/turn)
 
   // Generate incremental combat image if action just happened
   if (lastTurnInfo) {

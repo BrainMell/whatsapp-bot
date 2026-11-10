@@ -57,3 +57,9 @@ Implemented per docs/RECIPE_SKILLS_ULTS_SUMMONS.md §1-§2; measured results in 
 - **Boss splash disk bake**: repeat boss encounters with the same (name,sprite,flavor,tier) are a 69ms disk read instead of a 4-5s Go render; a 5s-timeout miss keeps baking in background (`BOSS_SPLASH_BAKE=0`).
 - **Profile/allocate card disk bake**: same payload view within 10 min = 0ms disk read instead of a 5.8s canvas re-render; keys hash the full payload incl. pfp bytes (`PROFILE_BAKE=0`).
 - QA: `scripts/qa_blueprint_rows.js`. Still queued: abyss tile-layer extraction, homestead/world/guildwar marker split, bestiary overlay prewarm (needs cut byte-stability verification).
+
+## Passive (relic) cards — switches
+- `PASSIVE_CARDS=0` disables the whole system (hooks, hand tiles, animation). `PASSIVE_SLOT3_LEVEL` (default 40) = level for the 3rd slot.
+- `PASSIVE_FX_ANIM=0` disables only the trigger clip (≤1 per turn, 8s leash, skipped on failure). Effects live in `core/rpg/systems/passiveCards/fxScene.js` (`FX` map: one primitive+colour per card).
+- Hand band: equipped passive tiles sit LEFT of the summon hand with a gold divider (`combatHud.drawPassiveGroup`). QA: `scripts/qa_passive_hand.js`, `scripts/qa_passive_fx.js`.
+- Death stills: fire/earth/air/ice/dust = agent's stamps, VOID = Claude's premade layers, WATER = `deathWater.js` splash crown (stamp cache `death_stamps_v8`).

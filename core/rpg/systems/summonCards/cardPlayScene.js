@@ -104,11 +104,12 @@ async function renderCardPlayScene(a) {
   const el = ELEMENT_COLORS[card.element] || '#ffd36b';
   // A = scene without hand; B = scene with hand. Frames draw B and erase the played slot back to A.
   const A = sceneOut.canvas, B = createCanvas(W, H), bc = B.getContext('2d'); bc.drawImage(A, 0, 0);
-  const layout = hud.deckLayout(entries, s);
+  const __pids = hud.passiveIdsFor(players[pIdx]);
+  const layout = hud.deckLayout(entries, s, 330, hud.DH - 96, hud.DW - 18, __pids);
   const B1 = createCanvas(W, H), b1 = B1.getContext('2d'); b1.drawImage(A, 0, 0);
-  if (entries.length) await hud.drawDeckTray(bc, entries, s);
+  if (entries.length) await hud.drawDeckTray(bc, entries, s, 330, hud.DH - 96, hud.DW - 18, __pids);
   const hi0 = Math.max(0, entries.findIndex((e) => e.card && e.card.id === card.id));
-  if (entries.length) await hud.drawDeckTray(b1, entries.map((e, i) => (i === hi0 ? { ...e, hidden: true } : e)), s);
+  if (entries.length) await hud.drawDeckTray(b1, entries.map((e, i) => (i === hi0 ? { ...e, hidden: true } : e)), s, 330, hud.DH - 96, hud.DW - 18, __pids);
   const handIdx = Math.max(0, entries.findIndex((e) => e.card && e.card.id === card.id));
   const fromPile = handIdx >= layout.shownN && !!layout.chip;
   const slot = !fromPile ? layout.slots[Math.min(handIdx, layout.slots.length - 1)] : null;

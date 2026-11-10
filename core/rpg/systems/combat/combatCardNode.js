@@ -144,7 +144,8 @@ async function renderNodeCard(players, enemies, options, api) {
     if (src && src.jid) {
       const sc = require('../summonCards');
       const entries = sc.handEntries(src.jid, options.combatState || {}, src);
-      if (entries.length) await hud.drawDeckTray(c, entries, s);
+      const pids = hud.passiveIdsFor(src);
+      if (entries.length || pids.length) await hud.drawDeckTray(c, entries, s, 330, hud.DH - 96, hud.DW - 18, pids, options.passiveFx);
     }
   } catch (e) { /* tray is optional */ }
   const buffer = cv.toBuffer('image/jpeg', { quality: 0.88 });

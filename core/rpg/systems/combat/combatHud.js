@@ -265,8 +265,57 @@ function capsuleThin(c, x, y, w, h, pct, col, s) {
  * glass shelf, gold lip and studs are retired. All cards sit LEVEL; the always-raised glowing
  * last card is gone (owner: "why is the one card at the far right always the only one lifted up??").
  * Only call when entries.length > 0. entries: [{card, ready, turnsLeft, affordable}] */
+
+// ───────── PASSIVE (RELIC) CARD GROUP — left of the summon hand, split off by a divider line ─────────
+const PASSIVE_FAM = { DEFENSE: '#4aa3ff', OFFENSE: '#ef5350', TACTICAL: '#4cc96b' };
+const PT_W = 40, PT_H = 54, PT_GAP = 7;   // design px
+function passiveBandW(n) { return n > 0 ? n * PT_W + (n - 1) * PT_GAP + 22 : 0; }   // tiles + divider gutter
+function passiveGlyph(c, fam, cx, cy, r, col) {
+  c.save(); c.translate(cx, cy); c.fillStyle = col; c.strokeStyle = 'rgba(255,255,255,0.9)'; c.lineWidth = Math.max(1, r * 0.1); c.beginPath();
+  if (fam === 'DEFENSE') { c.moveTo(0, -r); c.lineTo(r * 0.85, -r * 0.55); c.lineTo(r * 0.7, r * 0.3); c.quadraticCurveTo(0, r * 1.15, 0, r * 1.1); c.quadraticCurveTo(0, r * 1.15, -r * 0.7, r * 0.3); c.lineTo(-r * 0.85, -r * 0.55); }
+  else if (fam === 'OFFENSE') { c.moveTo(0, -r * 1.1); c.lineTo(r * 0.45, r * 0.1); c.lineTo(r * 0.14, r * 0.1); c.lineTo(r * 0.14, r * 0.9); c.lineTo(-r * 0.14, r * 0.9); c.lineTo(-r * 0.14, r * 0.1); c.lineTo(-r * 0.45, r * 0.1); }
+  else { for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3 + Math.PI / 6; c.lineTo(Math.cos(a) * r, Math.sin(a) * r); } }
+  c.closePath(); c.fill(); c.stroke(); c.restore();
+}
+/** Draws the equipped passive tiles starting at x0 (design coords), vertically centred in the hand band, plus the
+ * divider line when a summon hand follows. fxIds = ids currently flashing (trigger animation). */
+async function drawPassiveGroup(c, ids, s, x0, y0, withDivider, fxIds) {
+  const { PASSIVE_CATALOG } = require('../passiveCards/catalog');
+  const RC = { COMMON: '#b8b8b8', RARE: '#4aa3ff', EPIC: '#b66bff', LEGENDARY: '#ffc94a' };
+  const X = x0 * s, Y = y0 * s, H = 84 * s, tw = PT_W * s, th = PT_H * s, gap = PT_GAP * s, ty = Y + (H - th) / 2;
+  const n = ids.length, bandW = passiveBandW(n) * s;
+  c.save();
+  const pool = c.createRadialGradient(X + bandW / 2, Y + H / 2, 4 * s, X + bandW / 2, Y + H / 2, bandW * 0.8);
+  pool.addColorStop(0, 'rgba(2,4,9,0.45)'); pool.addColorStop(1, 'rgba(2,4,9,0)'); c.translate(X + bandW / 2, Y + H / 2); c.scale(1, 0.55); c.translate(-(X + bandW / 2), -(Y + H / 2)); c.fillStyle = pool; c.beginPath(); c.arc(X + bandW / 2, Y + H / 2, bandW * 0.8, 0, Math.PI * 2); c.fill();
+  c.restore();
+  for (let i = 0; i < n; i++) {
+    const card = PASSIVE_CATALOG[ids[i]]; if (!card) continue;
+    const x = X + i * (tw + gap), fam = PASSIVE_FAM[card.family] || '#cccccc', rar = RC[card.rarity] || '#b8b8b8', flash = !!(fxIds && fxIds.includes(card.id));
+    c.save();
+    if (flash) { c.shadowColor = fam; c.shadowBlur = 20 * s; }
+    rr(c, x, ty, tw, th, 7 * s); const g = c.createLinearGradient(x, ty, x, ty + th); g.addColorStop(0, '#1b2230'); g.addColorStop(1, '#0c1018'); c.fillStyle = g; c.fill();
+    c.shadowBlur = 0; c.lineWidth = (flash ? 3 : 2) * s; c.strokeStyle = rar; c.stroke();
+    rr(c, x + 3 * s, ty + 3 * s, tw - 6 * s, 5 * s, 2.5 * s); c.fillStyle = fam; c.fill();                 // family colour band
+    passiveGlyph(c, card.family, x + tw / 2, ty + th * 0.42, 11 * s, fam);
+    c.font = `bold ${5 * s}px HudCinzel, serif`; c.fillStyle = '#f3e6c4'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    let nm = String(card.name).toUpperCase(); while (nm.length > 2 && c.measureText(nm).width > tw - 4 * s) nm = nm.slice(0, -1);
+    c.fillText(nm, x + tw / 2, ty + th - 9 * s);
+    c.restore();
+  }
+  if (withDivider) {   // the line that splits regular (passive) cards from summon cards
+    const dx = X + bandW - 9 * s, d0 = Y + 4 * s, d1 = Y + H - 4 * s;
+    c.save(); const lg = c.createLinearGradient(0, d0, 0, d1); lg.addColorStop(0, 'rgba(231,199,102,0.15)'); lg.addColorStop(0.2, 'rgba(255,225,130,1)'); lg.addColorStop(0.8, 'rgba(255,225,130,1)'); lg.addColorStop(1, 'rgba(231,199,102,0.15)');
+    c.shadowColor = 'rgba(0,0,0,0.7)'; c.shadowBlur = 4 * s; c.strokeStyle = lg; c.lineWidth = 3 * s; c.beginPath(); c.moveTo(dx, d0); c.lineTo(dx, d1); c.stroke();
+    c.fillStyle = '#e7c766'; c.beginPath(); c.moveTo(dx, Y + H / 2 - 4 * s); c.lineTo(dx + 3.5 * s, Y + H / 2); c.lineTo(dx, Y + H / 2 + 4 * s); c.lineTo(dx - 3.5 * s, Y + H / 2); c.closePath(); c.fill();
+    c.restore();
+  }
+}
+/** Equipped passive ids for a battle player (empty when disabled / none equipped). */
+function passiveIdsFor(player) { try { if (process.env.PASSIVE_CARDS === '0') return []; return require('../passiveCards/engine').loadoutOf(player); } catch (e) { return []; } }
+
 /** Hand geometry shared by the tray painter and the card-play animation (so a card visibly leaves ITS slot). */
-function deckLayout(entries, s = 1, x0 = 330, y0 = DH - 96, x1 = DW - 18) {
+function deckLayout(entries, s = 1, x0 = 330, y0 = DH - 96, x1 = DW - 18, pids) {
+  if (pids && pids.length) x0 += passiveBandW(pids.length);
   const X = x0 * s, Y = y0 * s, W = (x1 - x0) * s, H = 84 * s;
   const cw = 52 * s, ch = 70 * s, padL = 26 * s, padR = 16 * s, usable = W - padL - padR, n = entries.length, minStep = cw * 0.66;
   const maxFit = Math.max(1, Math.floor((usable - cw) / minStep) + 1);
@@ -280,11 +329,12 @@ function deckLayout(entries, s = 1, x0 = 330, y0 = DH - 96, x1 = DW - 18) {
   return { X, Y, W, H, cw, ch, startX, step, handW, shownN, more, slots, chip };
 }
 
-async function drawDeckTray(c, entries, s = 1, x0 = 330, y0 = DH - 96, x1 = DW - 18) {
+async function drawDeckTray(c, entries, s = 1, x0 = 330, y0 = DH - 96, x1 = DW - 18, pids, fxIds) {
   init();
+  if (pids && pids.length) { await drawPassiveGroup(c, pids, s, x0, y0, entries.length > 0, fxIds); if (!entries.length) return; }
   const { RARITY, ELEMENT_COLORS } = require('../summonCards/catalog');
   const { artFor } = require('../summonCards/cardRenderer');
-  const L = deckLayout(entries, s, x0, y0, x1);
+  const L = deckLayout(entries, s, x0, y0, x1, pids);
   const { X, Y, W, H, cw, ch, startX, step, handW } = L;
   const shown = entries.slice(0, L.shownN), more = L.more;
   // 1. soft ground pool behind the hand — RADIAL, so there are no hard edges on any stage
@@ -498,4 +548,4 @@ function drawStatusBadges(c, a, effects, s = 1) {
 }
 
 module.exports = {
-  deckLayout, preload, drawRankBanner, drawHubBanner, drawPlayerHud, drawUnitBar, drawDeckTray, drawShieldBubble, drawStatusBadges, portraitFromCut, DW, DH, RANK_COLOR, isShieldFx };
+  deckLayout, passiveIdsFor, drawPassiveGroup, passiveBandW, preload, drawRankBanner, drawHubBanner, drawPlayerHud, drawUnitBar, drawDeckTray, drawShieldBubble, drawStatusBadges, portraitFromCut, DW, DH, RANK_COLOR, isShieldFx };
