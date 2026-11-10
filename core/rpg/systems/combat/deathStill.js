@@ -138,7 +138,7 @@ function putArt(c, img, cx, cy, w, h, opts = {}) {
 // lands mid-body. v2 uses the real big art; NO white flash wash (v1's stamps
 // measured avg RGB 255,254,254 — literally white rectangles).
 const STAMP_SIZE = 480;
-const STAMP_DIR = path.join(os.tmpdir(), 'death_stamps_v7');
+const STAMP_DIR = path.join(os.tmpdir(), 'death_stamps_v8');
 const _stampMemo = new Map();
 
 function speck(rnd, c, x, y, r, col, a) {
@@ -240,23 +240,12 @@ async function paintStamp(kind, boss) {
         putArt(c, core, cx, gy - 175 * A, 130 * A, 130 * A, { alpha: 0.9 });
         motes(rnd, c, cx, gy - 160 * A, 22 * A, 1.5, 3.5, 175 * A, ['#ffcb45', '#e85a37', '#fff3c0', '#ffffff'], 46, 0.5, 0.95);
     } else if (kind === 'VOID') {
-        const mass1 = tinted(await art('meteor', /^boulder_[1-8]\.png$/, 0.4), '#150820');
-        const mass2 = tinted(await art('meteor', /^boulder_[1-8]\.png$/, 0.75), '#241035');
-        const boltA = await art('magic', /^Dark-Bolt([1-9]|1[0-2])\.png$/, 0.83);            // deep purple frames
-        const boltB = await art('magic', /^Dark-Bolt([1-9]|1[0-2])\.png$/, 0.66);
-        const ring = await art('clock', /^mandala_[1-7]\.png$/, 0.4);
-        const gas = tinted(await art('kenney', /^gas_[1-5]\.png$/, 0.4), '#4a1a66');
-        putArt(c, gas, cx, gy - 170 * A, 300 * A, 250 * A, { alpha: 0.55 });
-        putArt(c, mass1, cx, gy - 160 * A, 300 * A, 300 * A, { alpha: 0.92 });               // dark implosion mass
-        putArt(c, mass2, cx, gy - 235 * A, 230 * A, 230 * A, { alpha: 0.85 });
-        putArt(c, ring, cx, gy - 165 * A, 285 * A, 285 * A, { alpha: 0.6 });                 // arcane collapse ring
-        putArt(c, boltA, cx, gy - 185 * A, 235 * A, 325 * A, { alpha: 0.95, smooth: false }); // pixel-crisp bolts
-        putArt(c, boltB, cx + 55 * A, gy - 150 * A, 190 * A, 265 * A, { alpha: 0.8, rot: Math.PI / 2, smooth: false });
-        // inward implosion: motes denser NEAR the centre (pulled in), purple/black
-        for (let i = 0; i < 24 * A; i++) {
-            const ang = rnd() * Math.PI * 2, d = (10 + 150 * A * rnd() * rnd());
-            speck(rnd, c, cx + Math.cos(ang) * d, (gy - 160 * A) + Math.sin(ang) * d * 0.8, 1.5 + rnd() * 3, ['#7b4dff', '#2a1240', '#b18cff', '#12081f'][Math.floor(rnd() * 4)], 0.55 + rnd() * 0.4);
-        }
+        // owner 2026-11-10: keep CLAUDE's void (spiral rings + implosion core), agent's art for fire/earth/air
+        const cl = require('./deathStillClaude');
+        const back = await cl.getPremade('VOID', !!boss, 'back'), front = await cl.getPremade('VOID', !!boss, 'front');
+        const span = 420 * A, vy = gy - 150 * A;
+        c.drawImage(back, cx - span / 2, vy - span / 2, span, span);
+        c.drawImage(front, cx - span / 2, vy - span / 2, span, span);
     } else if (kind === 'EARTH') {
         // 💡 v4b iteration (full-res eyes on v4): earth read as murky lumps —
         // cracks were invisible on the dark floor, nothing was mid-air, two
@@ -301,56 +290,7 @@ async function paintStamp(kind, boss) {
             rubbleChip(c, cx + (rnd() - 0.5) * 280 * A, gy + 6 + rnd() * 40, 5 + rnd() * 12, rnd() * Math.PI, rnd, pal[Math.floor(rnd() * pal.length)]);
         }
     } else if (kind === 'WATER') {
-        // 💧 v7 (owner 2026-11-09 "the water looks like shit"): v4's tapered spouts read as ICE SPIKES. Real water-burst
-        // language: a translucent water BALL that has just popped (volume from a 3-stop radial + dark rim + specular
-        // crescents), TEARDROPS flung radially (round head, tail toward the centre), a rippling puddle, rising foam.
-        const foam = tinted(await art('kenney', /^puff_([1-9]|1[0-3])\.png$/, 0.3), '#f4fbff');
-        // puddle + 3 expanding ripples (thin, soft, light) on the ground plane
-        softBlob(c, cx, gy + 8, 190 * A, 34 * A, [[0, 'rgba(20,74,142,0.9)'], [0.55, 'rgba(40,110,190,0.55)'], [1, 'rgba(40,110,190,0)']]);
-        softBlob(c, cx - 40 * A, gy + 3, 80 * A, 11 * A, [[0, 'rgba(206,238,255,0.6)'], [1, 'rgba(206,238,255,0)']]);
-        for (let r = 0; r < 3; r++) {
-            c.save(); c.strokeStyle = 'rgba(214,242,255,' + (0.7 - r * 0.18) + ')'; c.lineWidth = 3.2 - r * 0.7;
-            c.beginPath(); c.ellipse(cx, gy + 9, (92 + r * 46) * A, (15 + r * 8) * A, 0, 0, Math.PI * 2); c.stroke(); c.restore();
-        }
-        const by = gy - 110 * A, R0 = 78 * A;
-        // the popped water ball: overlapping lobes -> organic silhouette, volume via radial ramp, rim + spec
-        const lobes = [[0, 0, 1], [-0.42, 0.18, 0.62], [0.46, 0.14, 0.66], [0.05, -0.5, 0.58], [-0.2, -0.34, 0.5], [0.3, -0.36, 0.48]];
-        c.save();
-        c.beginPath(); for (const [lx, ly, lr] of lobes) { c.moveTo(cx + lx * R0 + lr * R0, by + ly * R0); c.arc(cx + lx * R0, by + ly * R0, lr * R0, 0, Math.PI * 2); }
-        const bg = c.createRadialGradient(cx - R0 * 0.25, by - R0 * 0.3, R0 * 0.1, cx, by, R0 * 1.25);
-        bg.addColorStop(0, 'rgba(226,246,255,0.92)'); bg.addColorStop(0.45, 'rgba(110,190,244,0.8)'); bg.addColorStop(1, 'rgba(24,84,170,0.88)');
-        c.lineWidth = 7; c.strokeStyle = 'rgba(14,58,128,0.8)'; c.stroke();   // dark rim first...
-        c.fillStyle = bg; c.fill('nonzero');                                   // ...fill on top hides every inner lobe seam, leaving ONE silhouette outline
-        c.restore();
-        // specular crescents + bright core flash so it reads as WET and just burst
-        c.save(); c.strokeStyle = 'rgba(255,255,255,0.95)'; c.lineCap = 'round'; c.lineWidth = 6 * A;
-        c.beginPath(); c.arc(cx - R0 * 0.1, by - R0 * 0.05, R0 * 0.72, Math.PI * 1.08, Math.PI * 1.45); c.stroke();
-        c.lineWidth = 3; c.beginPath(); c.arc(cx + R0 * 0.1, by + R0 * 0.05, R0 * 0.82, Math.PI * 0.12, Math.PI * 0.3); c.stroke(); c.restore();
-        softBlob(c, cx - R0 * 0.2, by - R0 * 0.25, R0 * 0.38, R0 * 0.3, [[0, 'rgba(255,255,255,0.85)'], [1, 'rgba(255,255,255,0)']]);
-        // teardrops flung radially (head outward, tail toward the burst centre), bigger above, a few skimming the ground
-        const drop = (x, y, len, wid, ang) => {
-            c.save(); c.translate(x, y); c.rotate(ang);
-            const g = c.createLinearGradient(0, 0, len, 0); g.addColorStop(0, 'rgba(40,120,200,0.55)'); g.addColorStop(0.55, 'rgba(120,200,250,0.95)'); g.addColorStop(1, 'rgba(226,247,255,0.98)');
-            c.fillStyle = g; c.strokeStyle = 'rgba(16,64,140,0.7)'; c.lineWidth = 1.6;
-            c.beginPath(); c.moveTo(0, 0); c.quadraticCurveTo(len * 0.35, -wid * 0.95, len * 0.78, -wid * 0.62);
-            c.arc(len * 0.78, 0, wid * 0.62, -Math.PI / 2, Math.PI / 2, false);
-            c.quadraticCurveTo(len * 0.35, wid * 0.95, 0, 0); c.closePath(); c.fill(); c.stroke();
-            c.fillStyle = 'rgba(255,255,255,0.95)'; c.beginPath(); c.arc(len * 0.8, -wid * 0.22, wid * 0.2, 0, Math.PI * 2); c.fill();
-            c.restore();
-        };
-        const nD = Math.round(9 * A);
-        for (let i = 0; i < nD; i++) {
-            const t = i / (nD - 1), ang = Math.PI * (1.04 + t * 0.92) + (rnd() - 0.5) * 0.12;   // upper fan, left -> right
-            const d0 = R0 * (0.95 + rnd() * 0.15), len = (38 + rnd() * 36 + Math.sin(t * Math.PI) * 30) * A, wid = (10 + rnd() * 6) * A;
-            drop(cx + Math.cos(ang) * d0, by + Math.sin(ang) * d0 * 0.92, len, wid, ang);
-        }
-        for (let i = 0; i < 4; i++) { const side = i % 2 ? 1 : -1; drop(cx + side * R0 * 0.9, by + R0 * 0.55, (26 + rnd() * 22) * A, (6 + rnd() * 3) * A, side > 0 ? 0.25 + rnd() * 0.3 : Math.PI - 0.25 - rnd() * 0.3); }
-        putArt(c, foam, cx, gy - 10 * A, 190 * A, 60 * A, { alpha: 0.6 });
-        for (let i = 0; i < 22 * A; i++) {   // fine airborne droplets + a few falling back
-            const ang = Math.PI * (1.02 + rnd() * 0.96), d = R0 * (1.5 + rnd() * 1.1), x = cx + Math.cos(ang) * d, y = by + Math.sin(ang) * d * 0.85 + rnd() * 40, r = 1.6 + rnd() * 3;
-            speck(rnd, c, x, y, r, ['rgba(176,226,255,0.95)', 'rgba(110,180,240,0.92)', 'rgba(255,255,255,0.95)'][Math.floor(rnd() * 3)], 0.92);
-            speck(rnd, c, x - r * 0.3, y - r * 0.3, r * 0.32, 'rgba(255,255,255,1)', 0.95);
-        }
+        require('./deathWater').paintWater(c, cx, gy, A, rnd);   // v8 splash crown (owner 2026-11-10)
     } else if (kind === 'ICE') {
         const pane = tinted(await art('kenney', /^p_window_01\.png$/, 0.5), '#cfeeff');
         const ring = tinted(await art('kenney', /^p_circle_0[235]\.png$/, 0.8), '#dff4ff');
