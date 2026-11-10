@@ -28,12 +28,58 @@ const RULES = [
   ['impact', /smash|bash|slam|punch|bludgeon|hammer|maul|stomp|charge|bull|tackle|ram\b|kick|headbutt|pummel|crush|stomp|quake|devastat|overpower|cleave|execute|crash|colossal|titan|brutal|fist|strike/i],
 ];
 const DT = { fire: 'fire', ice: 'ice', frost: 'ice', lightning: 'lightning', shock: 'lightning', dark: 'dark', shadow: 'dark', holy: 'holy', light: 'holy', poison: 'poison', nature: 'poison', earth: 'earth', wind: 'wind', air: 'wind', water: 'water', arcane: 'arcane', magic: 'arcane', magical: 'arcane', blood: 'blood' };
+// Hand-checked per-skill overrides (owner 2026-11-10: effects must make sense for the skill's NAME and ABILITY). Exact lowercase name -> family.
+const OVERRIDES = {
+  'shield bash': 'impact',
+  'whirlwind': 'blade',
+  'rage strike': 'impact',
+  'death bolt': 'dark',
+  'shadow bolt': 'dark',
+  'void bolt': 'dark',
+  'time bolt': 'arcane',
+  'kunai storm': 'arrow',
+  'corpse explosion': 'dark',
+  'rewind': 'arcane',
+  'treasure hunt': 'coins',
+  'market crash': 'impact',
+  'zeni storm': 'coins',
+  'money rain': 'coins',
+  'golden barrier': 'buff',
+  'seven cuts of heaven': 'blade',
+  'shadow clone jutsu': 'smoke',
+  'shadow clone': 'smoke',
+  'shadow dance': 'smoke',
+  'thousand shadows': 'blade',
+  'shadow assassination': 'blade',
+  'paradox wave': 'arcane',
+  'arcane rain': 'arcane',
+  'scale storm': 'wind',
+  'flight of the wyrms': 'wind',
+  'wyrm call': 'sound',
+  "leviathan's bane": 'water',
+  'apocalypse wing': 'wind',
+  'elemental bolt': 'arcane',
+  'daimyo’s authority': 'buff',
+  'banner charge': 'impact',
+  'crucible': 'fire',
+  'plasma cannon': 'arcane',
+  'battle hymn': 'sound',
+  "gaia's judgment": 'nature',
+  'soul bind': 'dark',
+  'phylactery': 'dark',
+  'death aura': 'dark',
+  'mana drain': 'arcane',
+  'one with universe': 'buff',
+  'assassinate': 'blade',
+  'backstab': 'blade'
+};
 function hash(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 /** Resolve a skill act to a signature family, or null for plain attacks / ults / items (those keep their own looks). */
 function classify(act) {
   if (!act || act.ult || act.itemKind || act.kind === 'guard') return null;
   const name = String(act.skillName || '');
   if (!name || /^(basic )?attack$|^action$|^defend|^quick attack$/i.test(name.trim())) return null;
+  const ov = OVERRIDES[name.trim().toLowerCase()]; if (ov) return ov;
   for (const [k, re] of RULES) if (re.test(name)) return k;
   const dt = DT[String(act.damageType || act.element || '').toLowerCase()];
   if (dt) return dt;
