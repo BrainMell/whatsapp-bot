@@ -158,44 +158,6 @@ const SKILL_TREES = {
                             animation: '⚡🗣️'
                         })
                     },
-                    war_stomp: {
-                        id: 'war_stomp',
-                        name: 'War Stomp',
-                        tier: 2,
-                        maxLevel: 5,
-                        cost: 18,
-                        cooldown: 1,
-                        desc: 'Stomp the ground, damaging all enemies',
-                        requires: { rally: 3 },
-                        effect: (level) => ({
-                            type: 'aoe',
-                            multiplier: 0.8 + (level * 0.1),
-                            targets: 99, // All enemies
-                            cc: 'slow',
-                            ccChance: 50,
-                            ccDuration: 2,
-                            damageType: 'physical',
-                            animation: '⚡🦶'
-                        })
-                    },
-                    warriors_resolve: {
-                        id: 'warriors_resolve',
-                        name: "Warrior's Resolve",
-                        tier: 3,
-                        maxLevel: 3,
-                        cost: 0, // Passive
-                        cooldown: 0,
-                        desc: 'Passive: Gain bonus damage when below 50% HP',
-                        requires: { war_stomp: 3 },
-                        effect: (level) => ({
-                            type: 'passive',
-                            trigger: 'low_hp',
-                            threshold: 50,
-                            buffType: 'attack',
-                            value: 15 + (level * 10), // 25-45% bonus
-                            animation: '⚡💪'
-                        })
-                    }
                 }
             }
         }
@@ -349,39 +311,6 @@ const SKILL_TREES = {
                             animation: '🎯💥'
                         })
                     },
-                    marked_for_death: {
-                        id: 'marked_for_death',
-                        name: 'Marked for Death',
-                        tier: 2,
-                        maxLevel: 5,
-                        cost: 15,
-                        cooldown: 1,
-                        desc: 'Mark enemy, increasing damage taken',
-                        requires: { vital_strike: 3 },
-                        effect: (level) => ({
-                            type: 'debuff_target',
-                            debuffType: 'vulnerability',
-                            value: 15 + (level * 5), // +20-40% damage taken
-                            duration: 3,
-                            animation: '🎯☠️'
-                        })
-                    },
-                    deadly_precision: {
-                        id: 'deadly_precision',
-                        name: 'Deadly Precision',
-                        tier: 3,
-                        maxLevel: 3,
-                        cost: 0, // Passive
-                        cooldown: 0,
-                        desc: 'Passive: Critical hits deal 50% more damage',
-                        requires: { marked_for_death: 3 },
-                        effect: (level) => ({
-                            type: 'passive',
-                            trigger: 'crit',
-                            critMultiplier: 1.3 + (level * 0.2), // 1.5x-1.9x
-                            animation: '🎯✨'
-                        })
-                    }
                 }
             }
         }
@@ -545,24 +474,6 @@ const SKILL_TREES = {
                             animation: '✨🛡️'
                         })
                     },
-                    arcane_missiles: {
-                        id: 'arcane_missiles',
-                        name: 'Arcane Missiles',
-                        tier: 2,
-                        maxLevel: 5,
-                        cost: 20,
-                        cooldown: 1,
-                        desc: 'Multiple magic missiles',
-                        requires: { mana_shield: 3 },
-                        effect: (level) => ({
-                            type: 'multi_hit',
-                            multiplier: 0.6 + (level * 0.1),
-                            hits: 3 + Math.floor(level / 2), // 3-5 hits
-                            damageType: 'magic',
-                            element: 'arcane',
-                            animation: '✨🎆'
-                        })
-                    },
                     time_warp: {
                         id: 'time_warp',
                         name: 'Time Warp',
@@ -571,7 +482,7 @@ const SKILL_TREES = {
                         cost: 25,
                         cooldown: 1,
                         desc: 'Slow time, team gets extra turns',
-                        requires: { arcane_missiles: 3 },
+                        requires: { mana_shield: 3 },
                         effect: (level) => ({
                             type: 'buff_team',
                             buffType: 'speed',
@@ -730,40 +641,6 @@ const SKILL_TREES = {
                             animation: '🛡️✨'
                         })
                     },
-                    divine_shield: {
-                        id: 'divine_shield',
-                        name: 'Divine Shield',
-                        tier: 2,
-                        maxLevel: 5,
-                        cost: 20,
-                        cooldown: 1,
-                        desc: 'Protect team with holy barrier',
-                        requires: { blessing: 3 },
-                        effect: (level) => ({
-                            type: 'buff_team',
-                            buffType: 'damage_reduction',
-                            value: 20 + (level * 5), // 25-45% reduction
-                            duration: 2,
-                            animation: '🛡️💫'
-                        })
-                    },
-                    martyrdom: {
-                        id: 'martyrdom',
-                        name: 'Martyrdom',
-                        tier: 3,
-                        maxLevel: 3,
-                        cost: 0, // Passive
-                        cooldown: 60,
-                        desc: 'Passive: Survive fatal damage once per battle',
-                        requires: { divine_shield: 3 },
-                        effect: (level) => ({
-                            type: 'passive',
-                            trigger: 'death',
-                            surviveHp: 1,
-                            cooldown: 60 - (level * 10), // Can trigger every 40-50s
-                            animation: '🛡️👼'
-                        })
-                    }
                 }
             }
         }
@@ -867,25 +744,6 @@ const SKILL_TREES = {
                         effects: { bleed: { chance: [28, 35, 42, 49, 57], duration: 3, value: [15, 18, 21, 24, 28] } },
                         description: 'Spin attack hitting all enemies with bleed',
                         animation: '🌪️⚔️',
-                        skillPointCost: [3, 4, 5, 6, 7]
-                    },
-                    iron_will: {
-                        id: 'iron_will',
-                        name: 'Iron Will',
-                        tier: 3,
-                        requiredLevel: 5,
-                        maxLevel: 5,
-                        prerequisite: ['battle_cry'],
-                        energyCost: [49, 45, 42, 39, 36],
-                        cooldown: 1,
-                        targeting: 'SELF',
-                        effects: {
-                            defBuff: { value: [50, 60, 70, 80, 100], duration: 2 },
-                            immunity: { status: ['stun', 'freeze'], duration: 2 },
-                            taunt: { duration: 2 }
-                        },
-                        description: 'Become unstoppable, taunt all enemies',
-                        animation: '💪🛡️',
                         skillPointCost: [3, 4, 5, 6, 7]
                     },
                     execute: {
@@ -1088,23 +946,6 @@ const SKILL_TREES = {
                         animation: '⚡🔗',
                         skillPointCost: [2, 3, 4, 5, 6]
                     },
-                    arcane_missiles: {
-                        id: 'arcane_missiles',
-                        name: 'Arcane Missiles',
-                        tier: 2,
-                        requiredLevel: 3,
-                        maxLevel: 5,
-                        prerequisite: ['frost_bolt'],
-                        energyCost: [42, 39, 36, 33, 31],
-                        cooldown: 1,
-                        damageMultiplier: [1.5, 1.7, 1.9, 2.1, 2.4], // 5 hits total
-                        damageType: 'MAGICAL',
-                        targeting: 'SINGLE',
-                        multiHit: 5,
-                        description: '5 homing arcane missiles',
-                        animation: '🔮✨✨✨✨',
-                        skillPointCost: [2, 3, 4, 5, 6]
-                    },
                     blizzard: {
                         id: 'blizzard',
                         name: 'Blizzard',
@@ -1180,25 +1021,6 @@ const SKILL_TREES = {
                         animation: '🔮🌀💧',
                         skillPointCost: [2, 3, 4, 5, 6]
                     },
-                    prismatic_burst: {
-                        id: 'prismatic_burst',
-                        name: 'Prismatic Burst',
-                        tier: 2,
-                        requiredLevel: 5,
-                        maxLevel: 5,
-                        prerequisite: ['fireball'],
-                        energyCost: [49, 44, 40, 36, 32],
-                        cooldown: 1,
-                        damageMultiplier: [2.2, 2.4, 2.6, 2.8, 3.0],
-                        damageType: 'MAGICAL',
-                        targeting: 'SINGLE',
-                        effects: { 
-                            randomDebuff: { duration: 2, types: ['burn', 'freeze', 'shock', 'poison'] } 
-                        },
-                        description: 'Unleash a burst of unstable elemental energy',
-                        animation: '🌈💥✨',
-                        skillPointCost: [2, 3, 4, 5, 6]
-                    },
                     mirror_image: {
                         id: 'mirror_image',
                         name: 'Mirror Image',
@@ -1217,26 +1039,6 @@ const SKILL_TREES = {
                         animation: '🔮👥✨',
                         skillPointCost: [3, 4, 5, 6, 7]
                     },
-                    gravity_well: {
-                        id: 'gravity_well',
-                        name: 'Gravity Well',
-                        tier: 3,
-                        requiredLevel: 9,
-                        maxLevel: 5,
-                        prerequisite: ['blizzard'],
-                        energyCost: [76, 70, 64, 58, 53],
-                        cooldown: 1,
-                        damageMultiplier: [1.8, 2.0, 2.2, 2.4, 2.6],
-                        damageType: 'MAGICAL',
-                        targeting: 'AOE_LARGE',
-                        effects: { 
-                            slow: { value: [40, 50, 60, 70, 80], duration: 2 },
-                            stun: { chance: [14, 18, 21, 25, 28], duration: 1 }
-                        },
-                        description: 'Crush enemies with intense gravitational force',
-                        animation: '🌑🌀💥',
-                        skillPointCost: [3, 4, 5, 6, 7]
-                    }
                 }
             }
         }
@@ -1306,26 +1108,6 @@ const SKILL_TREES = {
                         effects: { rageStack: { value: 2 } },
                         description: '4 random strikes gaining rage',
                         animation: '🪓🪓🪓🪓',
-                        skillPointCost: [2, 3, 4, 5, 6]
-                    },
-                    warcry: {
-                        id: 'warcry',
-                        name: 'Warcry',
-                        tier: 2,
-                        requiredLevel: 3,
-                        maxLevel: 5,
-                        prerequisite: ['blood_frenzy'],
-                        energyCost: [30, 27, 24, 21, 18],
-                        cooldown: 1,
-                        targeting: 'SELF',
-                        effects: {
-                            berserk: { duration: 3 },
-                            atkBuff: { value: [60, 70, 80, 90, 100], duration: 3 },
-                            defDebuff: { value: [30, 25, 20, 15, 10], duration: 3 },
-                            immunity: { status: ['fear', 'charm'], duration: 3 }
-                        },
-                        description: 'Enter berserker rage',
-                        animation: '😡🔥',
                         skillPointCost: [2, 3, 4, 5, 6]
                     },
                     reckless_assault: {
@@ -2226,22 +2008,6 @@ const SKILL_TREES = {
                         animation: '⚔️🌀',
                         skillPointCost: [3, 4, 5, 6, 7]
                     },
-                    slayers_focus: {
-                        id: 'slayers_focus',
-                        name: 'Slayer’s Focus',
-                        tier: 3,
-                        requiredLevel: 7,
-                        maxLevel: 5,
-                        energyCost: [32, 29, 26, 23, 19],
-                        cooldown: 1,
-                        targeting: 'SELF',
-                        effects: {
-                            critBuff: { value: [20, 30, 40, 50, 60], duration: 3 }
-                        },
-                        description: 'Sharpen your senses, greatly increasing critical hit chance.',
-                        animation: '🎯✨',
-                        skillPointCost: [2, 3, 4, 5, 6]
-                    },
                     dragonfall: {
                         id: 'dragonfall',
                         name: 'Dragonfall',
@@ -2296,38 +2062,6 @@ const SKILL_TREES = {
                         description: 'Hardens skin to mimic dragon scales.',
                         animation: '🛡️🐉',
                         skillPointCost: [1, 2, 3, 4, 5]
-                    },
-                    fire_resistance: {
-                        id: 'fire_resistance',
-                        name: 'Dragon Breath Res',
-                        tier: 2,
-                        requiredLevel: 4,
-                        maxLevel: 5,
-                        energyCost: [34, 31, 27, 24, 21],
-                        cooldown: 1,
-                        targeting: 'SELF',
-                        effects: {
-                            buff_self: { stat: 'mag_def', value: [30, 45, 60, 75, 90], duration: 4 }
-                        },
-                        description: 'Greatly reduces damage from dragon breath.',
-                        animation: '🧊🔥',
-                        skillPointCost: [2, 3, 4, 5, 6]
-                    },
-                    hunter_roar: {
-                        id: 'hunter_roar',
-                        name: 'Hunter’s Roar',
-                        tier: 3,
-                        requiredLevel: 6,
-                        maxLevel: 5,
-                        energyCost: [68, 65, 62, 58, 55],
-                        cooldown: 1,
-                        targeting: 'TEAM',
-                        effects: {
-                            buff_team: { stat: 'attack', value: [15, 20, 25, 30, 40], duration: 3 }
-                        },
-                        description: 'A terrifying roar that inspires allies, boosting team ATK.',
-                        animation: '🦁📢',
-                        skillPointCost: [3, 4, 5, 6, 7]
                     },
                     piercing_shout: {
                         id: 'piercing_shout',
@@ -2499,22 +2233,6 @@ const SKILL_TREES = {
                         description: 'Inspire your team, restoring health and boosting attack.',
                         animation: '📢✨⚔️',
                         skillPointCost: [3, 4, 5, 6, 7]
-                    },
-                    strategic_maneuver: {
-                        id: 'strategic_maneuver',
-                        name: 'Strategic Maneuver',
-                        tier: 3,
-                        requiredLevel: 37,
-                        maxLevel: 5,
-                        energyCost: [43, 39, 36, 32, 28],
-                        cooldown: 1,
-                        targeting: 'TEAM',
-                        effects: {
-                            haste: { value: [20, 25, 30, 35, 45], duration: 3 }
-                        },
-                        description: 'Reposition allies for maximum efficiency, increasing party speed.',
-                        animation: '🏃‍♂️📋⚡',
-                        skillPointCost: [4, 5, 6, 7, 8]
                     },
                     total_war: {
                         id: 'total_war',
@@ -3363,22 +3081,6 @@ const SKILL_TREES = {
                         animation: '💀💨🌑',
                         skillPointCost: [4, 5, 6, 7, 8]
                     },
-                    spectral_shroud: {
-                        id: 'spectral_shroud',
-                        name: 'Spectral Shroud',
-                        tier: 3,
-                        requiredLevel: 37,
-                        maxLevel: 5,
-                        energyCost: [51, 48, 45, 41, 38],
-                        cooldown: 1,
-                        targeting: 'SELF',
-                        effects: {
-                            evasion: { value: [30, 40, 50, 60, 80], duration: 3 }
-                        },
-                        description: 'Become semi-ethereal, greatly increasing your evasion.',
-                        animation: '👻✨🌑',
-                        skillPointCost: [4, 5, 6, 7, 8]
-                    },
                     soul_bind: {
                         id: 'soul_bind',
                         name: 'Soul Bind',
@@ -3910,22 +3612,6 @@ const SKILL_TREES = {
                         animation: '🔮✨',
                         skillPointCost: [2, 3, 4, 5, 6]
                     },
-                    time_dilation: {
-                        id: 'time_dilation',
-                        name: 'Time Dilation',
-                        tier: 2,
-                        requiredLevel: 32,
-                        maxLevel: 5,
-                        energyCost: [49, 45, 42, 39, 36],
-                        cooldown: 1,
-                        targeting: 'SELF',
-                        effects: {
-                            haste: { value: [20, 25, 30, 35, 40], duration: 3 }
-                        },
-                        description: 'Slowing time for yourself, acting more often.',
-                        animation: '⏳✨',
-                        skillPointCost: [3, 4, 5, 6, 7]
-                    },
                     spell_shield: {
                         id: 'spell_shield',
                         name: 'Mana Shield',
@@ -4113,21 +3799,6 @@ const SKILL_TREES = {
                         animation: '🌑🤝💀',
                         skillPointCost: [4, 5, 6, 7, 8]
                     },
-                    entropy_wave: {
-                        id: 'entropy_wave',
-                        name: 'Entropy Wave',
-                        tier: 3,
-                        requiredLevel: 39,
-                        maxLevel: 5,
-                        energyCost: [94, 89, 84, 79, 74],
-                        cooldown: 1,
-                        damageMultiplier: [2.8, 3.2, 3.6, 4.0, 4.5],
-                        damageType: 'MAGICAL',
-                        targeting: 'AOE_LARGE',
-                        description: 'Release a wave of pure entropy that ravages everything.',
-                        animation: '🌑🌊📉💥',
-                        skillPointCost: [5, 6, 7, 8, 10]
-                    },
                     oblivion: {
                         id: 'oblivion',
                         name: 'Oblivion',
@@ -4219,22 +3890,6 @@ const SKILL_TREES = {
                         description: 'Radiate a holy aura that protects the entire party.',
                         animation: '⛪✨🛡️',
                         skillPointCost: [4, 5, 6, 7, 8]
-                    },
-                    retribution_aura: {
-                        id: 'retribution_aura',
-                        name: 'Retribution Aura',
-                        tier: 3,
-                        requiredLevel: 38,
-                        maxLevel: 5,
-                        energyCost: [49, 45, 42, 39, 36],
-                        cooldown: 1,
-                        targeting: 'TEAM',
-                        effects: {
-                            buff_team: { stat: 'attack', value: [15, 20, 25, 30, 40], duration: 3 }
-                        },
-                        description: 'Surround allies with an aura that punishes enemies for attacking.',
-                        animation: '⛪✨⚔️',
-                        skillPointCost: [3, 4, 5, 6, 7]
                     },
                     sacred_ground: {
                         id: 'sacred_ground',
@@ -4658,21 +4313,6 @@ const SKILL_TREES = {
                         animation: '🐲🛡️✨',
                         skillPointCost: [3, 4, 5, 6, 7]
                     },
-                    soul_of_the_deep: {
-                        id: 'soul_of_the_deep',
-                        name: 'Soul of the Deep',
-                        tier: 2,
-                        requiredLevel: 55,
-                        maxLevel: 5,
-                        passive: true,
-                        passiveEffects: {
-                            hpRegenPerTurn: [0.02, 0.03, 0.04, 0.05, 0.06],
-                            manaRegenPerTurn: [0.05, 0.07, 0.09, 0.11, 0.13],
-                            statusImmunity: ['DROWN', 'FREEZE', 'POISON'],
-                        },
-                        description: 'Passive: The Leviathan\'s soul sustains you. Regen 2-6% HP and 5-13% MP per turn. Immune to Drown/Freeze/Poison.',
-                        skillPointCost: [5, 6, 7, 8, 9]
-                    },
                     dragon_gods_decree: {
                         id: 'dragon_gods_decree',
                         name: "Dragon God's Decree",
@@ -4823,37 +4463,6 @@ const SKILL_TREES = {
                 name: 'Broodmother',
                 icon: '🥚',
                 skills: {
-                    draconic_vitality: {
-                        id: 'draconic_vitality',
-                        name: 'Draconic Vitality',
-                        tier: 1,
-                        requiredLevel: 35,
-                        maxLevel: 5,
-                        passive: true,
-                        passiveEffects: {
-                            maxHpBonus: [0.10, 0.15, 0.20, 0.25, 0.30],
-                            hpRegenPerTurn: [0.03, 0.04, 0.05, 0.06, 0.07],
-                            summonHpBonus: [0.15, 0.20, 0.25, 0.30, 0.35],
-                        },
-                        description: 'Passive: +10-30% Max HP, regen 3-7% HP/turn, your summons gain +15-35% HP. The bloodline runs deep.',
-                        skillPointCost: [3, 4, 5, 6, 7]
-                    },
-                    empathic_scales: {
-                        id: 'empathic_scales',
-                        name: 'Empathic Scales',
-                        tier: 2,
-                        requiredLevel: 55,
-                        maxLevel: 5,
-                        energyCost: [45, 42, 39, 36, 33],
-                        cooldown: 1,
-                        buffType: 'DAMAGE_SHARE',
-                        buffDuration: [2, 2, 3, 3, 4],
-                        damageRedirection: [0.30, 0.35, 0.40, 0.45, 0.50],
-                        targeting: 'PARTY',
-                        description: 'For 2-4 turns, 30-50% of damage dealt to party members is redirected to your wyrmlings instead. The Lord protects.',
-                        animation: '🐉🛡️✨',
-                        skillPointCost: [5, 6, 7, 8, 9]
-                    },
                     dragon_lords_aegis: {
                         id: 'dragon_lords_aegis',
                         name: "Dragon Lord's Aegis",
@@ -6014,14 +5623,60 @@ function calculateSpentPoints(user, userClassId) {
     return totalSpent;
 }
 
+// ==========================================
+// ✂️ 2026-11-10 SKILL TREE TRIM (owner: "surgically remove passive skills, reduce skills a bit"):
+// the 5 passive skills moved to Passive Cards (systems/passiveCards) and 18 overlapping skills were cut.
+// Any player who had points in a removed skill gets them REFUNDED the next time skills are touched
+// (ensureSkillPointsInitialized runs on every skills screen). Idempotent: the skill leaves user.skills.
+// ==========================================
+const REMOVED_SKILL_IDS = Object.freeze([
+    'warriors_resolve', 'war_stomp', 'deadly_precision', 'marked_for_death', 'arcane_missiles', 'martyrdom', 'divine_shield',
+    'iron_will', 'prismatic_burst', 'gravity_well', 'warcry', 'fire_resistance', 'hunter_roar', 'slayers_focus',
+    'strategic_maneuver', 'spectral_shroud', 'time_dilation', 'entropy_wave', 'retribution_aura', 'soul_of_the_deep',
+    'draconic_vitality', 'empathic_scales',
+]);
+function _skillInLineage(id, classId) {
+    // A removed id can still exist for ANOTHER class (shared ids like divine_shield). Only keep the player's level if the
+    // skill is still reachable through THEIR lineage; otherwise it is a ghost level with no UI and must be refunded.
+    try {
+        const lineage = classId ? require('./classSystem').getLineage(classId) : null;
+        const pool = lineage && lineage.length ? lineage.map((c) => SKILL_TREES[String(c).toUpperCase()]).filter(Boolean) : Object.values(SKILL_TREES);
+        for (const tree of pool) for (const t of Object.values((tree && tree.trees) || {})) if (t && t.skills && t.skills[id]) return true;
+    } catch (e) { /* fall through: treat as gone */ }
+    return false;
+}
+/** Refund + drop removed skills from a user. Returns { refunded, skills: [ids] } (refunded 0 when nothing to do). */
+function migrateRemovedSkills(user, classId) {
+    const out = { refunded: 0, skills: [] };
+    if (!user || !user.skills || typeof user.skills !== 'object') return out;
+    for (const id of REMOVED_SKILL_IDS) {
+        const lvl = Number(user.skills[id]) || 0;
+        if (!(id in user.skills)) continue;
+        if (_skillInLineage(id, classId)) continue;             // still a real skill in THIS player's lineage -> keep
+        let refund = lvl;
+        if (user.skillSpend && Number.isFinite(Number(user.skillSpend[id]))) refund = Number(user.skillSpend[id]);
+        delete user.skills[id];
+        if (user.skillSpend) delete user.skillSpend[id];
+        if (user.equippedSkills && Array.isArray(user.equippedSkills)) user.equippedSkills = user.equippedSkills.filter((x) => x !== id);
+        out.refunded += Math.max(0, refund); out.skills.push(id);
+    }
+    if (out.refunded > 0) {
+        user.skillPoints = (Number(user.skillPoints) || 0) + out.refunded;
+        user.skillTrimRefunded = (Number(user.skillTrimRefunded) || 0) + out.refunded;
+    }
+    return out;
+}
+
 function ensureSkillPointsInitialized(user, userClassId, level) {
     if (!user) return false;
+    let __migrated = false;
+    try { __migrated = migrateRemovedSkills(user, userClassId).refunded > 0; } catch (e) { /* never block the skills screen */ }
     if (user.skillPoints === undefined || user.skillPoints === null) {
         const spent = calculateSpentPoints(user, userClassId);
         user.skillPoints = Math.max(0, calculateSkillPoints(level) - spent);
         return true;
     }
-    return false;
+    return __migrated;
 }
 
 // ==========================================
@@ -6103,6 +5758,8 @@ async function saveCustomSkill(classId, treeName, skillId, skill) {
 
 module.exports = {
     SKILL_TREES,
+    REMOVED_SKILL_IDS,
+    migrateRemovedSkills,
     EVOLUTION_SYSTEM,
     ABILITY_MECHANICS,
     COMBO_ABILITIES,
