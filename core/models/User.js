@@ -256,6 +256,14 @@ const UserSchema = new mongoose.Schema({
     type: [{ cardId: { type: String, required: true }, grantedAt: { type: Number, default: 0 }, grantedBy: { type: String, default: '' }, source: { type: String, default: 'moderator' } }],
     default: [],
   },
+  // 🃏 Passive (relic) cards: owned list + equipped loadout (2 slots, 3rd at level 40). See systems/passiveCards.
+  passiveCards: {
+    type: [{ cardId: { type: String, required: true }, grantedAt: { type: Number, default: 0 }, grantedBy: { type: String, default: '' }, source: { type: String, default: 'moderator' }, _id: false }],
+    default: [],
+  },
+  passiveLoadout: { type: [String], default: [] },
+  skillTrimRefunded: { type: Number, default: 0 },
+
 
   // Taming progress per enemy type (Necromancer capture pipeline).
   // Keyed by enemyType ID, value = kill count. At 10 kills, species is "tamed".
