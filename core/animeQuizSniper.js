@@ -177,12 +177,7 @@ async function snipe(m, sock, botId) {
     const qm = text.match(QUIZ_RE);
     if (!qm) return;
     const subject = await subjectOf(sock, jid).catch(() => "");
-    if (!SUBJECT_RE.test(subject)) {
-      // (gate diagnostics: a quiz-shaped message blocked here is a silent
-      // miss unless we LOG it — then it's a one-line regex fix away)
-      console.log(`🎯 [quiz-sniper] quiz-shaped msg in ${jid} subject="${subject}" — GATE BLOCKED (subject not /omniverse/i)`);
-      return;                                                         // omniverse only
-    }
+    if (!SUBJECT_RE.test(subject)) return;                          // omniverse only
     key = `${jid}:${qm[1]}`;
     if (answered.has(key) || inflight.has(key)) return;
     inflight.add(key);
