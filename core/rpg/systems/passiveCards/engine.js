@@ -10,6 +10,9 @@
 const { PASSIVE_CATALOG, SYNERGIES } = require('./catalog');
 const NEG = new Set(['burn', 'poison', 'bleed', 'stun', 'freeze', 'slow', 'weak', 'silence', 'shock', 'sleep', 'charm', 'curse', 'drown', 'petrify']);
 let _resolver = (p) => (p && Array.isArray(p.passiveLoadout) ? p.passiveLoadout : []);
+let _slotsResolver = () => 2;
+function setSlotsResolver(fn) { if (typeof fn === 'function') _slotsResolver = fn; }
+function slotsOf(p) { try { return Math.max(1, Math.min(5, Number(_slotsResolver(p)) || 2)); } catch (e) { return 2; } }
 function setLoadoutResolver(fn) { if (typeof fn === 'function') _resolver = fn; }
 
 const num = (x, d = 0) => (Number.isFinite(Number(x)) ? Number(x) : d);
@@ -117,4 +120,4 @@ function onKill(state, player, enemy) {
   return out;
 }
 function loadoutOf(p) { return (_resolver(p) || []).filter((id) => PASSIVE_CATALOG[id]); }
-module.exports = { loadoutOf, setLoadoutResolver, resetBattle, drainFx, onTurnStart, onOutgoing, onIncoming, onKill, stateOf, SYNERGIES };
+module.exports = { setSlotsResolver, slotsOf, loadoutOf, setLoadoutResolver, resetBattle, drainFx, onTurnStart, onOutgoing, onIncoming, onKill, stateOf, SYNERGIES };

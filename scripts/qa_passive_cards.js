@@ -51,11 +51,14 @@ ok('20 cards, all have family+trigger+desc', Object.keys(PASSIVE_CATALOG).length
 // fx queue + silent
 { const s = S(), p = mk(["berserkers_oath", 'thorn_mantle']); E.onIncoming(s, en(50), p, { damage: 40 }); const fx = E.drainFx(s); ok('fx queue has thorn event only (oath is silent), drains to empty', fx.length === 1 && fx[0].cardId === 'thorn_mantle' && E.drainFx(s).length === 0); }
 // ownership system
-{ const users = { a: { level: 10 } }; const eco = { getUser: (j) => users[j] || null, scheduleSave() {} }; const sys = pc.createPassiveCardSystem(eco);
+{ const users = { a: { level: 10, adventurerRank: 'F' } }; const eco = { getUser: (j) => users[j] || null, scheduleSave() {} }; const sys = pc.createPassiveCardSystem(eco);
   for (const id of ['mirror_guard', 'static_charge', 'thorn_mantle']) sys.grant('a', id, 'mod');
   ok('grant rejects duplicates', !sys.grant('a', 'mirror guard', 'mod').success);
-  ok('equip 2 slots at level 10', sys.equip('a', 'mirror_guard').success && sys.equip('a', 'static').success && !sys.equip('a', 'thorn').success);
-  users.a.level = 40; ok('3rd slot at level 40', sys.equip('a', 'thorn').success && sys.getLoadout('a').length === 3);
+  ok('rank F = 2 slots', sys.equip('a', 'mirror_guard').success && sys.equip('a', 'static').success && !sys.equip('a', 'thorn').success);
+  users.a.adventurerRank = 'D'; ok('3rd slot at rank D', sys.equip('a', 'thorn').success && sys.getLoadout('a').length === 3);
+  users.a.adventurerRank = 'S'; ['last_stand', 'iron_will', 'frost_barrier'].forEach((c) => sys.grant('a', c)); ['blood_debt', 'last_stand'].forEach((c) => sys.grant('a', c)); sys.equip('a', 'last_stand'); sys.equip('a', 'iron_will'); ok('rank S = 5 slots, 6th refused', sys.getLoadout('a').length === 5 && !sys.equip('a', 'frost_barrier').success && sys.slotsFor('a') === 5);
+  users.a.adventurerRank = 'D'; ok('rank drop trims loadout to 3', sys.getLoadout('a').length === 3);
+  users.a.adventurerRank = 'S'; sys.unequip('a', 'last_stand'); sys.unequip('a', 'iron_will'); users.a.adventurerRank = 'D';
   ok('no equip changes in combat', !sys.equip('a', 'thorn', { inCombat: true }).success && !sys.unequip('a', '1', { inCombat: true }).success);
   ok('unequip by slot + synergy text', sys.unequip('a', '3').success && sys.activeSynergies('a').length === 1);
   ok('revoke removes from loadout too', sys.revoke('a', 'mirror_guard').success && !sys.getLoadout('a').includes('mirror_guard')); }

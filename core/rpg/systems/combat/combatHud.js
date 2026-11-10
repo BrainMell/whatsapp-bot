@@ -289,7 +289,12 @@ async function drawPassiveGroup(c, ids, s, x0, y0, withDivider, fxIds) {
   pool.addColorStop(0, 'rgba(2,4,9,0.45)'); pool.addColorStop(1, 'rgba(2,4,9,0)'); c.translate(X + bandW / 2, Y + H / 2); c.scale(1, 0.55); c.translate(-(X + bandW / 2), -(Y + H / 2)); c.fillStyle = pool; c.beginPath(); c.arc(X + bandW / 2, Y + H / 2, bandW * 0.8, 0, Math.PI * 2); c.fill();
   c.restore();
   for (let i = 0; i < n; i++) {
-    const card = PASSIVE_CATALOG[ids[i]]; if (!card) continue;
+    const x0t = X + i * (tw + gap);
+    if (!PASSIVE_CATALOG[ids[i]]) {   // AVAILABLE slot, nothing equipped: dashed outline
+      c.save(); c.setLineDash([5 * s, 4 * s]); c.lineWidth = 1.6 * s; c.strokeStyle = 'rgba(231,199,102,0.55)'; rr(c, x0t, ty, tw, th, 7 * s); c.stroke(); c.setLineDash([]);
+      c.fillStyle = 'rgba(231,199,102,0.55)'; c.font = `bold ${18 * s}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('+', x0t + tw / 2, ty + th / 2); c.restore(); continue;
+    }
+    const card = PASSIVE_CATALOG[ids[i]];
     const x = X + i * (tw + gap), fam = PASSIVE_FAM[card.family] || '#cccccc', rar = RC[card.rarity] || '#b8b8b8', flash = !!(fxIds && fxIds.includes(card.id));
     c.save();
     if (flash) { c.shadowColor = fam; c.shadowBlur = 20 * s; }
@@ -311,21 +316,34 @@ async function drawPassiveGroup(c, ids, s, x0, y0, withDivider, fxIds) {
   }
 }
 /** Equipped passive ids for a battle player (empty when disabled / none equipped). */
-function passiveIdsFor(player) { try { if (process.env.PASSIVE_CARDS === '0') return []; return require('../passiveCards/engine').loadoutOf(player); } catch (e) { return []; } }
+function passiveIdsFor(player) {
+  try {
+    if (process.env.PASSIVE_CARDS === '0') return [];
+    const lo = require('../passiveCards/engine').loadoutOf(player); if (!lo.length) return [];
+    const slots = require('../passiveCards/engine').slotsOf(player);   // empty (available) slots show as dashed tiles
+    const out = lo.slice(0, 5); while (out.length < Math.max(lo.length, slots)) out.push(null); return out;
+  } catch (e) { return []; }
+}
 
 /** Hand geometry shared by the tray painter and the card-play animation (so a card visibly leaves ITS slot). */
 function deckLayout(entries, s = 1, x0 = 330, y0 = DH - 96, x1 = DW - 18, pids) {
   if (pids && pids.length) x0 += passiveBandW(pids.length);
   const X = x0 * s, Y = y0 * s, W = (x1 - x0) * s, H = 84 * s;
   const cw = 52 * s, ch = 70 * s, padL = 26 * s, padR = 16 * s, usable = W - padL - padR, n = entries.length, minStep = cw * 0.66;
-  const maxFit = Math.max(1, Math.floor((usable - cw) / minStep) + 1);
-  const shownN = Math.min(n, maxFit), more = n - shownN;
-  const step = shownN > 1 ? Math.min(cw + 12 * s, Math.max(minStep, (usable - cw) / (shownN - 1))) : 0;
+  let maxFit = Math.max(1, Math.floor((usable - cw) / minStep) + 1);
+  // "+N" pile chip: width grows with the digit count (was a fixed 40px => "+12"/"+120" overflowed) and is RESERVED out of the
+  // hand's width so it can never run past the band or overlap the passive group.
+  const chipWFor = (m) => (22 + 9.5 * String(m).length) * s;
+  let shownN = Math.min(n, maxFit), more = n - shownN;
+  if (more > 0) { const reserve = chipWFor(more) + 10 * s; maxFit = Math.max(1, Math.floor((usable - reserve - cw) / minStep) + 1); shownN = Math.min(n, maxFit); more = n - shownN; }
+  const handAvail = usable - (more > 0 ? chipWFor(more) + 10 * s : 0);
+  const step = shownN > 1 ? Math.min(cw + 12 * s, Math.max(minStep, (handAvail - cw) / (shownN - 1))) : 0;
   const handW = (shownN > 1 ? (shownN - 1) * step : 0) + cw;
-  const startX = X + padL + Math.max(0, (usable - handW) / 2);
+  const totalW = handW + (more > 0 ? 6 * s + chipWFor(more) : 0);   // hand + its +N chip are centred as ONE unit
+  const startX = X + padL + Math.max(0, (usable - totalW) / 2);
   const slots = [];
   for (let i = 0; i < shownN; i++) slots.push({ x: startX + i * step, y: Y + (H - ch) / 2, w: cw, h: ch, ang: (i - (shownN - 1) / 2) * 1.1 * Math.PI / 180 });
-  const chip = more > 0 ? { x: startX + (shownN - 1) * step + cw + 6 * s, y: Y + H / 2 - 13 * s, w: 40 * s, h: 26 * s } : null;
+  const chip = more > 0 ? { x: startX + (shownN - 1) * step + cw + 6 * s, y: Y + H / 2 - 13 * s, w: chipWFor(more), h: 26 * s } : null;
   return { X, Y, W, H, cw, ch, startX, step, handW, shownN, more, slots, chip };
 }
 
@@ -364,12 +382,12 @@ async function drawDeckTray(c, entries, s = 1, x0 = 330, y0 = DH - 96, x1 = DW -
     c.restore();
     await drawMiniCard(c, shown[i], i, x, y, cw, ch, { s, sc: 1, ang, standout: false, rar: RARITY, el: ELEMENT_COLORS, artFor });
   }
-  if (more > 0) {
-    const px = startX + (shown.length - 1) * step + cw + 6 * s, py = Y + H / 2;
-    rr(c, px, py - 13 * s, 40 * s, 26 * s, 13 * s); c.fillStyle = 'rgba(12,10,6,0.9)'; c.fill();
+  if (more > 0 && L.chip) {
+    const { x: px, y: py0, w: pw } = L.chip, py = py0 + 13 * s;
+    rr(c, px, py - 13 * s, pw, 26 * s, 13 * s); c.fillStyle = 'rgba(12,10,6,0.9)'; c.fill();
     c.lineWidth = 1.6 * s; c.strokeStyle = '#c9a13b'; c.stroke();
     c.fillStyle = '#e7c766'; c.font = `bold ${15 * s}px HudCinzel, serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText('+' + more, px + 20 * s, py + 1);
+    c.fillText('+' + more, px + pw / 2, py + 1);
   }
 }
 

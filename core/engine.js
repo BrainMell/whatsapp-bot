@@ -12870,8 +12870,19 @@ _💡 Reply with another number from your search list!_`.trim();
                       let out;
                       if (sub === 'equip') { const r = passiveCards.equip(senderJid, rest, { inCombat }); out = r.success ? `✅ Equipped ${r.card.icon} *${r.card.name}* (${passiveCards.getLoadout(senderJid).length}/${r.slots})` : '❌ ' + r.message; }
                       else if (sub === 'unequip' || sub === 'remove') { const r = passiveCards.unequip(senderJid, rest, { inCombat }); out = r.success ? `✅ Unequipped ${r.card.icon} *${r.card.name}*` : '❌ ' + r.message; }
-                      else if (sub === 'info' && rest) { const id = passiveCards.resolveRef(senderJid, rest); const c = id && passiveCards.catalog[id]; out = c ? passiveCards.describe(c) : '❌ Unknown passive card.'; }
-                      else out = passiveCards.buildText(senderJid, prefix);
+                      else if (sub === 'info' && rest) {
+                        const id = passiveCards.resolveRef(senderJid, rest); const c = id && passiveCards.catalog[id]; out = c ? passiveCards.describe(c) : '❌ Unknown passive card.';
+                        if (c) { try { const img = await passiveCards.renderCardImage(senderJid, id); await sock.sendMessage(chatId, { image: img, caption: BOT_MARKER + out }, { quoted: m }); return; } catch (e1) { /* text fallback */ } }
+                      }
+                      else {
+                        // 🃏 the collection is a CARD SHEET now (text list stays as the fallback)
+                        try {
+                          const img = await passiveCards.renderCollectionImage(senderJid);
+                          const lo = passiveCards.getLoadout(senderJid), slots = passiveCards.slotsFor(senderJid);
+                          await sock.sendMessage(chatId, { image: img, caption: BOT_MARKER + `🃏 *Passive Cards* — equipped ${lo.length}/${slots}\n_${prefix}passive equip <#|name> · ${prefix}passive unequip <slot|name> · ${prefix}passive info <#|name>_` }, { quoted: m });
+                          return;
+                        } catch (imgErr) { console.warn('[Passive] collection image failed:', imgErr && imgErr.message); out = passiveCards.buildText(senderJid, prefix); }
+                      }
                       await sock.sendMessage(chatId, { text: BOT_MARKER + out }, { quoted: m });
                       return;
                     }

@@ -19,7 +19,7 @@ const FX = {
   iron_will: ['chain', '#c9d3e6'], thorn_mantle: ['thorns', '#6fd16f'], emergency_draught: ['potion', '#7df0a0'],
   blood_debt: ['blood', '#c0152b'], static_charge: ['bolt', '#ffe45c'], predators_instinct: ['mark', '#ff6a4a'], combo_master: ['combo', '#ffb15c'],
   vampiric_charm: ['drain', '#d13a6a'], hunters_mark: ['cross', '#ff4a4a'],
-  second_wind: ['swirl', '#8ff0d8'], grave_robber: ['coins', '#ffd24a'], overcharge: ['rings', '#6fc3ff'], focus_loop: ['orbit', '#b79cff'], battle_hymn: ['notes', '#ffe9a0'], lucky_charm: ['stars', '#5fe08a'],
+  second_wind: ['swirl', '#8ff0d8'], grave_robber: ['coins', '#ffd24a'], overcharge: ['rings', '#6fc3ff'], focus_loop: ['orbit', '#b79cff'], battle_hymn: ['notes', '#ffe9a0'], lucky_charm: ['stars', '#5fe08a'], berserkers_oath: ['feather', '#ff3b2f'],
 };
 function startEncoder(dir, W, H) {
   const out = path.join(dir, 'out.mp4');
