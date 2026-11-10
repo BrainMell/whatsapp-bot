@@ -280,6 +280,7 @@ function passiveGlyph(c, fam, cx, cy, r, col) {
 /** Draws the equipped passive tiles starting at x0 (design coords), vertically centred in the hand band, plus the
  * divider line when a summon hand follows. fxIds = ids currently flashing (trigger animation). */
 async function drawPassiveGroup(c, ids, s, x0, y0, withDivider, fxIds) {
+  try { await require('../passiveCards/cardRenderer').preloadIcons(); } catch (e) {}
   const { PASSIVE_CATALOG } = require('../passiveCards/catalog');
   const RC = { COMMON: '#b8b8b8', RARE: '#4aa3ff', EPIC: '#b66bff', LEGENDARY: '#ffc94a' };
   const X = x0 * s, Y = y0 * s, H = 84 * s, tw = PT_W * s, th = PT_H * s, gap = PT_GAP * s, ty = Y + (H - th) / 2;
@@ -301,7 +302,7 @@ async function drawPassiveGroup(c, ids, s, x0, y0, withDivider, fxIds) {
     rr(c, x, ty, tw, th, 7 * s); const g = c.createLinearGradient(x, ty, x, ty + th); g.addColorStop(0, '#1b2230'); g.addColorStop(1, '#0c1018'); c.fillStyle = g; c.fill();
     c.shadowBlur = 0; c.lineWidth = (flash ? 3 : 2) * s; c.strokeStyle = rar; c.stroke();
     rr(c, x + 3 * s, ty + 3 * s, tw - 6 * s, 5 * s, 2.5 * s); c.fillStyle = fam; c.fill();                 // family colour band
-    passiveGlyph(c, card.family, x + tw / 2, ty + th * 0.42, 11 * s, fam);
+    { let used = false; try { const cr = require('../passiveCards/cardRenderer'); used = cr.drawIcon(c, cr.iconSync(card.id), x + tw / 2, ty + th * 0.42, 27 * s, '#ffffff', fam); } catch (e) {} if (!used) passiveGlyph(c, card.family, x + tw / 2, ty + th * 0.42, 11 * s, fam); }
     c.font = `bold ${5 * s}px HudCinzel, serif`; c.fillStyle = '#f3e6c4'; c.textAlign = 'center'; c.textBaseline = 'middle';
     let nm = String(card.name).toUpperCase(); while (nm.length > 2 && c.measureText(nm).width > tw - 4 * s) nm = nm.slice(0, -1);
     c.fillText(nm, x + tw / 2, ty + th - 9 * s);

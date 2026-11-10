@@ -9,6 +9,16 @@ const FAM = { DEFENSE: '#4aa3ff', OFFENSE: '#ef5350', TACTICAL: '#4cc96b' };
 const FAM_NAME = { DEFENSE: 'DEFENSE', OFFENSE: 'OFFENSE', TACTICAL: 'TACTICAL' };
 const RARC = { COMMON: ['#d7dbe3', '#7d8594'], RARE: ['#8cc8ff', '#2d6fb8'], EPIC: ['#d9a8ff', '#7a3fc4'], LEGENDARY: ['#fff0a8', '#c8901c'] };
 const CW = 200, CH = 284;
+// game-icons.net icons (CC BY 3.0 — see core/rpgasset/passive_icons/CREDITS.md). White glyphs, tinted per use. Cached; null => glyph fallback.
+const path = require('path'); const { loadImage } = require('canvas');
+const ICON_DIR = path.join(__dirname, '..', '..', '..', 'rpgasset', 'passive_icons'); const _icons = new Map();
+async function loadIcon(id) { if (_icons.has(id)) return _icons.get(id); let img = null; try { img = await loadImage(path.join(ICON_DIR, id + '.svg')); } catch (e) { img = null; } _icons.set(id, img); return img; }
+function iconSync(id) { return _icons.get(id) || null; }
+/** draw the white icon tinted with `col` (solid) centred at cx,cy size px, with a soft glow */
+function drawIcon(c, img, cx, cy, size, col, glowCol) {
+  if (!img) return false; const t = createCanvas(256, 256), tc = t.getContext('2d'); tc.drawImage(img, 0, 0, 256, 256); tc.globalCompositeOperation = 'source-in'; tc.fillStyle = col; tc.fillRect(0, 0, 256, 256);
+  c.save(); if (glowCol) { c.shadowColor = glowCol; c.shadowBlur = size * 0.22; } c.drawImage(t, cx - size / 2, cy - size / 2, size, size); c.restore(); return true;
+}
 const TRIG = { incoming_hit: 'WHEN HIT', lethal_hit: 'ON LETHAL HIT', low_hp: 'AT LOW HP', outgoing_hit: 'ON ATTACK', crit: 'ON CRIT', miss: 'ON MISS', kill: 'ON KILL', combo: 'ON COMBO', first_ability: 'FIRST ABILITY', always: 'ALWAYS ON' };
 const trigText = (c) => (c.trigger === 'turn_counter' && c.v && c.v.every ? `EVERY ${c.v.every} TURNS` : (TRIG[c.trigger] || 'PASSIVE'));
 const rr = (c, x, y, w, h, r) => { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); };
@@ -36,7 +46,8 @@ function drawPassiveCard(c, card, x, y, w, h, state = 'owned', o = {}) {
   c.save(); rr(c, ax, ay, aw, ah, 8); c.clip();
   const ag = c.createRadialGradient(ax + aw / 2, ay + ah * 0.55, 6, ax + aw / 2, ay + ah * 0.55, aw * 0.75); ag.addColorStop(0, fam + 'aa'); ag.addColorStop(0.55, fam + '33'); ag.addColorStop(1, '#06080d'); c.fillStyle = ag; c.fillRect(ax, ay, aw, ah);
   c.strokeStyle = 'rgba(255,255,255,0.05)'; c.lineWidth = 1; for (let i = -ah; i < aw; i += 14) { c.beginPath(); c.moveTo(ax + i, ay + ah); c.lineTo(ax + i + ah, ay); c.stroke(); }   // engraved hatch
-  try { const fx = FX[card.id]; if (fx) { const R = (() => { let s = card.id.length * 977 + 13; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); })(); paintFx(c, fx[0], fx[1], 0.42, { x: ax + aw * 0.42, y: ay + ah * 0.55 }, { x: ax + aw * 0.78, y: ay + ah * 0.5 }, (['shell', 'dome', 'rings', 'swirl'].includes(fx[0]) ? 0.46 : 0.62), R, 0); } } catch (e) { /* art optional */ }
+  { const ic = iconSync(card.id); if (ic) { drawIcon(c, ic, ax + aw / 2, ay + ah / 2 + 2, ah * 0.86, '#ffffff', fam); } }
+  try { const fx = FX[card.id]; if (fx) { const R = (() => { let s = card.id.length * 977 + 13; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); })(); c.globalAlpha = iconSync(card.id) ? 0.55 : 1; paintFx(c, fx[0], fx[1], 0.42, { x: ax + aw * 0.42, y: ay + ah * 0.55 }, { x: ax + aw * 0.78, y: ay + ah * 0.5 }, (['shell', 'dome', 'rings', 'swirl'].includes(fx[0]) ? 0.46 : 0.62), R, 0); c.globalAlpha = 1; } } catch (e) { /* art optional */ }
   c.restore(); rr(c, ax, ay, aw, ah, 8); c.lineWidth = 2; c.strokeStyle = rc1; c.stroke();
   // trigger chip straddling the art edge
   c.font = 'bold 9.5px HudCinzel, serif'; const tt = trigText(card), tw = c.measureText(tt).width + 18; rr(c, CW / 2 - tw / 2, ay + ah - 9, tw, 18, 9); c.fillStyle = '#0b0e15'; c.fill(); c.lineWidth = 1.6; c.strokeStyle = fam; c.stroke(); c.fillStyle = '#ffe9a8'; c.fillText(tt, CW / 2, ay + ah + 0.5);
@@ -59,9 +70,11 @@ function drawPassiveCard(c, card, x, y, w, h, state = 'owned', o = {}) {
   }
   c.restore();
 }
+async function preloadIcons() { await Promise.all(Object.keys(PASSIVE_CATALOG).map(loadIcon)); }
 /** Whole-collection sheet for `.j passive`. info = { owned:[card], loadout:[id], slots, maxSlots, rankForSlot(n), rank, synergies:[{text}] , name } */
 async function renderCollection(info) {
   try { await require('../combat/combatHud').preload(); } catch (e) {}
+  await preloadIcons();
   const all = Object.values(PASSIVE_CATALOG).filter((p) => !p.silent || true);
   const ownedIds = new Set(info.owned.map((p) => p.id)); const unowned = all.filter((p) => !ownedIds.has(p.id));
   const cols = 5, cw = CW, ch = CH, gap = 16, pad = 28, W = pad * 2 + cols * cw + (cols - 1) * gap;
@@ -88,4 +101,4 @@ async function renderCollection(info) {
   list.forEach((e, i) => { const x = pad + (i % cols) * (cw + gap), y = headH + Math.floor(i / cols) * (ch + gap + 14); drawPassiveCard(c, e.p, x, y, cw, ch, e.st, { num: e.n || 0, slot: info.loadout.indexOf(e.p.id) + 1 }); });
   return cv.toBuffer('image/jpeg', { quality: 0.9 });
 }
-module.exports = { drawPassiveCard, renderCollection, CW, CH, trigText };
+module.exports = { loadIcon, iconSync, drawIcon, preloadIcons, drawPassiveCard, renderCollection, CW, CH, trigText };

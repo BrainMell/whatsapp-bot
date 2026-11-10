@@ -66,7 +66,7 @@ function createPassiveCardSystem(economy) {
   async function renderCollectionImage(jid) { return require('./cardRenderer').renderCollection(collectionInfo(jid)); }
   async function renderCardImage(jid, id) {
     const { createCanvas } = require('canvas'); const cr = require('./cardRenderer'); try { await require('../combat/combatHud').preload(); } catch (e) {}
-    const lo = getLoadout(jid), has = owned(jid).some((e) => e.cardId === id); const sc = 2, cv = createCanvas(cr.CW * sc + 60, cr.CH * sc + 70), c = cv.getContext('2d');
+    await require('./cardRenderer').preloadIcons(); const lo = getLoadout(jid), has = owned(jid).some((e) => e.cardId === id); const sc = 2, cv = createCanvas(cr.CW * sc + 60, cr.CH * sc + 70), c = cv.getContext('2d');
     c.fillStyle = '#0c0f17'; c.fillRect(0, 0, cv.width, cv.height);
     cr.drawPassiveCard(c, PASSIVE_CATALOG[id], 30, 24, cr.CW * sc, cr.CH * sc, lo.includes(id) ? 'active' : (has ? 'owned' : 'unowned'), { slot: lo.indexOf(id) + 1 });
     return cv.toBuffer('image/jpeg', { quality: 0.92 });
