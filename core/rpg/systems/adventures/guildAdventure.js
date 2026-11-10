@@ -2914,7 +2914,24 @@ function rollD20() {
   return rollDice(20);
 }
 
-function calculateDamage(
+// 🃏 PASSIVE CARDS (2026-11-10): every hit in the game funnels through calculateDamage, so the passive-card engine
+// hooks here ONCE: player->enemy hits run onOutgoing (damage mods, crit/miss/combo/lifesteal), enemy->player hits run
+// onIncoming (deflect, shield, lethal save, reflect, reduction). Cards cost no turn. Kill switch: PASSIVE_CARDS=0.
+// PvE/dungeons/abyss only for now (owner/ChatGPT plan: balance in PvE before PvP).
+function calculateDamage(attacker, target, power, type = "physical", element = "PHYSICAL", chatId = null, isAbility = false) {
+  const res = _calculateDamageCore(attacker, target, power, type, element, chatId, isAbility);
+  if (process.env.PASSIVE_CARDS === '0' || !res || !attacker || !target || !chatId) return res;
+  try {
+    const state = getGameState(chatId);
+    if (state) {
+      const PC = require('../passiveCards').engine;
+      if (!attacker.isEnemy && !attacker._isSummon && !attacker.isSummon && target.isEnemy) PC.onOutgoing(state, attacker, target, res, { isAbility: !!isAbility });
+      else if (attacker.isEnemy && !target.isEnemy && !target._isSummon && !target.isSummon) PC.onIncoming(state, attacker, target, res);
+    }
+  } catch (e) { console.error('[PassiveCards] hook failed (hit unaffected):', e && e.message); }
+  return res;
+}
+function _calculateDamageCore(
   attacker,
   target,
   power,
@@ -4569,6 +4586,7 @@ function applyClassPassiveOnDeath(victim, killer) {
 async function startCombat(sock, groq, encounter, sessionKey) {
   const state = gameStates.get(sessionKey);
   if (!state) return;
+  try { require('../passiveCards').engine.resetBattle(state); } catch (e) { /* optional */ }
   const chatId = state.chatId;
   if (!groq) groq = state.groq;
   // 🩘 SOCK FALLBACK (2026-10-26): the combatStart timer below closes over
@@ -5342,6 +5360,7 @@ The dungeon collapsed after too many stalled turns. Your slot has been released 
         state.combatRound = (state.combatRound || 0) + 1;
         // Summon-card cooldowns are measured in THIS player's turns, not the
         // global actor counter (which also advances for every enemy/boss).
+        if (process.env.PASSIVE_CARDS !== '0') { try { require('../passiveCards').engine.onTurnStart(state, activeActor); } catch (e) { console.error('[PassiveCards] turnStart failed:', e && e.message); } }
         if (activeActor.jid) {
           if (!state.summonCardTurnCounts) state.summonCardTurnCounts = {};
           state.summonCardTurnCounts[String(activeActor.jid)] =
@@ -7225,6 +7244,7 @@ function recordEnemyKill(state, entity) {
   state.players.forEach((p) => {
     if (!p.jid || p.isDead) return;
 
+    if (process.env.PASSIVE_CARDS !== '0') { try { require('../passiveCards').engine.onKill(state, p, entity); } catch (e) { /* cosmetic */ } }
     // 💡 CLASS PASSIVE WIRE-UP (on-kill): fire damage_on_kill, etc.
     // Passives return flavor messages to push into the round log.
     try {
@@ -14093,7 +14113,14 @@ function getDebuffIcon(debuffType) {
 // 📤 EXPORTS
 // ==========================================
 
+/** true while this player is inside a live combat (loadout changes are blocked then) */
+function isPlayerInCombat(jid) {
+  try { for (const st of gameStates.values()) if (st && st.inCombat && Array.isArray(st.players) && st.players.some((p) => p && p.jid === jid)) return true; } catch (e) {}
+  return false;
+}
 module.exports = {
+  isPlayerInCombat,
+  _passiveTest: { calculateDamage, gameStates, scopedKey },
   _deathTest: { playEnemyDeaths, _deathCaption, _deathEligible, _deathScene, _deathChrome },
   showLore: async (sock, chatId) => {
     const { sendLore } = require('../shared/loreContent');

@@ -1059,6 +1059,7 @@ const gambling = require("./gambling");
 const progression = require('./rpg/systems/characters/progression');
 const rpgCommands = require('./commands/rpgCommands');
 const summonCards = require('./rpg/systems/summonCards');
+const passiveCards = require('./rpg/systems/passiveCards').createPassiveCardSystem(require('./rpg/systems/economy/economy'));   // 🃏 relic cards (auto-trigger)
 const inventorySystem = require('./rpg/systems/inventory/inventorySystem');
 const lootSystem = require('./rpg/systems/inventory/lootSystem');
 const progressionCommands = require('./commands/progressionCommands');
@@ -12857,6 +12858,21 @@ _💡 Reply with another number from your search list!_`.trim();
                         senderName,
                         cmdArgs.slice(1)[0],
                       );
+                      return;
+                    }
+
+                    // 🃏 PASSIVE (RELIC) CARDS: `.j passive` | `.j passive equip <n|name>` | `.j passive unequip <slot|name>` | `.j passive info <n|name>`
+                    if (primaryCmd === "passive" || primaryCmd === "passives" || primaryCmd === "relic" || primaryCmd === "relics") {
+                      const prefix = botConfig.getPrefix();
+                      const sub = String(cmdArgs[1] || '').toLowerCase();
+                      const rest = cmdArgs.slice(2).join(' ');
+                      const inCombat = (() => { try { return require('./rpg/systems/adventures/guildAdventure').isPlayerInCombat(senderJid); } catch (e) { return false; } })();
+                      let out;
+                      if (sub === 'equip') { const r = passiveCards.equip(senderJid, rest, { inCombat }); out = r.success ? `✅ Equipped ${r.card.icon} *${r.card.name}* (${passiveCards.getLoadout(senderJid).length}/${r.slots})` : '❌ ' + r.message; }
+                      else if (sub === 'unequip' || sub === 'remove') { const r = passiveCards.unequip(senderJid, rest, { inCombat }); out = r.success ? `✅ Unequipped ${r.card.icon} *${r.card.name}*` : '❌ ' + r.message; }
+                      else if (sub === 'info' && rest) { const id = passiveCards.resolveRef(senderJid, rest); const c = id && passiveCards.catalog[id]; out = c ? passiveCards.describe(c) : '❌ Unknown passive card.'; }
+                      else out = passiveCards.buildText(senderJid, prefix);
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + out }, { quoted: m });
                       return;
                     }
 

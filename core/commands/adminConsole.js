@@ -24,6 +24,8 @@ const inventorySystem = require('../rpg/systems/inventory/inventorySystem');
 const lootSystem = require('../rpg/systems/inventory/lootSystem');
 const skillTree = require('../rpg/systems/characters/skillTree');
 const summonCards = require('../rpg/systems/summonCards');
+const passiveCardsLib = require('../rpg/systems/passiveCards');
+const passiveCards = passiveCardsLib.createPassiveCardSystem(require('../rpg/systems/economy/economy'));
 
 // ─── HELPER: resolve class by name or ID ───────────────────────────────────
 function resolveClass(query) {
@@ -795,6 +797,32 @@ async function handleAdmin(sock, chatId, senderJid, args, m, BOT_MARKER, prefix,
         const { target, remaining } = parsed;
         if (!target) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Usage: ' + prefix + ' mod revokesummoncard <@user> <card|all>' });
         const result = summonCards.revokeCard(target, remaining[0] || 'all');
+        if (!result.success) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ ' + result.message });
+        return await sock.sendMessage(chatId, { text: BOT_MARKER + '✅ ' + result.message + '\n👤 @' + economy.getDisplayName(target), mentions: [target] });
+    }
+
+    // ── PASSIVE (RELIC) CARD GRANT / REVOKE (moderator-only acquisition, like summon cards) ──
+    if (sub === 'grantpassive') {
+        const parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!parsed) return;
+        const { target, remaining } = parsed;
+        const want = String(remaining[0] || '').toLowerCase();
+        if (!target || !want) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Usage: ' + prefix + ' mod grantpassive <@user> <card|all|list>' });
+        if (want === 'list') return await sock.sendMessage(chatId, { text: BOT_MARKER + '🃏 *Passive cards:* ' + Object.keys(passiveCards.catalog).join(', ') });
+        if (want === 'all') {
+            const got = Object.keys(passiveCards.catalog).filter((id) => passiveCards.grant(target, id, senderJid).success);
+            return await sock.sendMessage(chatId, { text: BOT_MARKER + '✅ Granted ' + got.length + ' passive cards to @' + economy.getDisplayName(target), mentions: [target] });
+        }
+        const result = passiveCards.grant(target, remaining[0], senderJid);
+        if (!result.success) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ ' + result.message });
+        return await sock.sendMessage(chatId, { text: BOT_MARKER + '✅ *PASSIVE CARD GRANTED*\n\n👤 @' + economy.getDisplayName(target) + '\n' + result.card.icon + ' *' + result.card.name + '* [' + result.card.rarity + ']', mentions: [target] });
+    }
+    if (sub === 'revokepassive') {
+        const parsed = await parseAdminArgs(getMentionOrReply, m, senderJid, args.slice(1));
+        if (!parsed) return;
+        const { target, remaining } = parsed;
+        if (!target) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ Usage: ' + prefix + ' mod revokepassive <@user> <card|all>' });
+        const result = passiveCards.revoke(target, remaining[0] || 'all');
         if (!result.success) return await sock.sendMessage(chatId, { text: BOT_MARKER + '❌ ' + result.message });
         return await sock.sendMessage(chatId, { text: BOT_MARKER + '✅ ' + result.message + '\n👤 @' + economy.getDisplayName(target), mentions: [target] });
     }

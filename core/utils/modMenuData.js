@@ -50,6 +50,8 @@ const MOD_MENU = {
       { cmd: "givezeni", usage: "mod givezeni [@user] <amount>", desc: "Grant Zeni directly.", console: true },
       { cmd: "giverune", usage: "mod giverune [@user] <rune>", desc: "Grant an Abyss rune by name/tier.", console: true },
       { cmd: "grantsummoncard", usage: "mod grantsummoncard [@user] <ifrit|leviathan|shiva>", desc: "Grant a summon card (moderator-only acquisition).", console: true },
+      { cmd: "grantpassive", usage: "mod grantpassive [@user] <card|all|list>", desc: "Grant a passive (relic) card (moderator-only acquisition).", console: true },
+      { cmd: "revokepassive", usage: "mod revokepassive [@user] <card|all>", desc: "Revoke a passive card (also unequips it).", console: true },
       { cmd: "revokesummoncard", usage: "mod revokesummoncard [@user] <card|all>", desc: "Revoke one or all summon cards.", console: true },
       { cmd: "setrank", usage: "mod setrank [@user] <E-SSS>", desc: "Set a player's RPG rank.", console: true },
       { cmd: "forceevolve", usage: "mod forceevolve [@user] <class>", desc: "Force a class evolution, no requirements.", console: true },
