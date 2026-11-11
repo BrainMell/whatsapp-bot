@@ -492,6 +492,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'spawnset', desc: 'Set per-bot card spawn interval (Mod+).', usage: 'spawnset <minutes> | reset' },
     { cmd: 'spawninfo', desc: 'View current spawn configuration.', usage: 'spawninfo' },
     { cmd: 'cardmod', desc: 'Manage Card Moderators (Owner/Mod only).', usage: 'cardmod <add/del/list> @user' },
+    { cmd: 'updatebot', desc: 'Pull the latest commits and restart this bot (Owner only).', usage: 'updatebot' },
     { cmd: 'eshop deck approve', desc: 'Approve a pending deck listing.', usage: 'eshop deck approve <id>' },
     { cmd: 'eshop deck reject', desc: 'Reject a pending deck listing.', usage: 'eshop deck reject <id>' },
     { cmd: 'eshop deck pending', desc: 'View all decks awaiting approval.', usage: 'eshop deck pending' },

@@ -14,6 +14,7 @@ const path    = require('path');
 const axios   = require('axios');
 const animatedMedia = require('../../../utils/animatedMedia'); // webm→mp4 remux (WhatsApp can't render webm)
 const goService = require('../../../utils/goImageService'); // 💡 singleton (PERF PATCH 2026-07-27)
+const updatebot = require('./updatebot'); // 💡 owner self-update (.j updatebot) + boot announce (2026-11-11)
 
 // BUILD MARKER (47-k5, 2026-10-19): proves which build the RUNNING process
 // loaded. Incident 47-k5: a pm2 restart fired inside a git-reset window
@@ -1336,6 +1337,7 @@ const TOKEN_CMD_EXCLUDED = new Set([
   'unsrc', 'restorecards', // Task 15c: backup restore (mod management, never token-eligible)
   'hiddenset', // Task 31 2026-10-25: per-group hidden-set toggle (mod management)
   'movecards', 'mc', // 💡 2026-10-23: mod-level card mover — never farms tokens
+  'updatebot', // 💡 2026-11-11: owner bot-update — never token-eligible
 ]);
 
 // MongoDB field names can't contain '.' or '$' on old versions - sanitize JIDs
@@ -6067,6 +6069,14 @@ async function handleCommand({ lowerTxt, txt, senderJid, chatId, m, economy, isO
     case 'hiddenset':
       if (!isCardMod) return reply('❌ Only card moderators and above can toggle hidden card sets.'), true;
       await cmdHiddenSet(senderJid, reply, args, m);
+      return true;
+
+    // 💡 UPDATEBOT (2026-11-11, Mellow): owner-only self-update for the box
+    // this process runs on — fetch latest branch, syntax-gate changed JS,
+    // pm2 restart itself, boot announce reports back in the requesting chat.
+    case 'updatebot':
+      if (!isOwner) return reply('❌ Only the bot owner can run bot updates.'), true;
+      await updatebot.cmdUpdateBot(senderJid, reply, m);
       return true;
 
     // §5: event-token leaderboard. Public. (hide/unhide/hidden/sync =
