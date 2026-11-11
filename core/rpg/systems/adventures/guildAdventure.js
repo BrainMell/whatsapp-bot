@@ -7393,6 +7393,7 @@ async function playPassiveFx(sock, state) {
     const engine = require('../passiveCards/engine');
     const fx = engine.drainFx(state).filter((e) => e && !e.quiet);
     if (!fx.length || process.env.PASSIVE_FX_ANIM === '0' || process.env.PASSIVE_CARDS === '0') return;
+    console.log('[PassiveFx] playing', fx.map((e) => e.cardId).join(','));
     const seen = new Set(); const evs = fx.filter((e) => (seen.has(e.cardId) ? false : (seen.add(e.cardId), true)));
     const players = state.players || []; const owner = players.find((p) => p && p.jid === evs[0].jid) || players[0]; if (!owner) return;
     let entries = []; try { entries = require('../summonCards').handEntries(owner.jid, state, owner); } catch (e) {}
@@ -7402,8 +7403,12 @@ async function playPassiveFx(sock, state) {
       sceneOptions: { rank: state.dungeonRank, floor: state.isAbyss ? state.abyssFloor : 0, backgroundPath: state.backgroundPath, combatState: state },
       api: { buildPayload: combatImageGen._buildPayload, generateCombatLayers: combatImageGen._generateCombatLayers },
     });
-    const mp4 = await Promise.race([p.catch(() => null), new Promise((r) => setTimeout(() => r(null), 8000))]);
-    if (!Buffer.isBuffer(mp4) || mp4.length < 500) return;
+    const t0 = Date.now(); const pp = p.catch((e) => { console.warn('[PassiveFx] render error:', e && e.message || e); return null; });
+    // same two-stage leash the summon card scene uses (12s, then +11s grace on the SAME promise) — a busy box must not eat the clip
+    let mp4 = await Promise.race([pp, new Promise((r) => setTimeout(() => r(null), 12000))]);
+    if (!mp4) mp4 = await Promise.race([pp, new Promise((r) => setTimeout(() => r(null), 11000))]);
+    if (!Buffer.isBuffer(mp4) || mp4.length < 500) { console.warn(`[PassiveFx] no clip for ${evs[0].cardId} after ${Date.now() - t0}ms — text line only`); return; }
+    console.log(`[PassiveFx] ${evs[0].cardId} clip ${mp4.length}B in ${Date.now() - t0}ms`);
     await sendMediaBounded(sock, state.chatId, { video: mp4, mimetype: 'video/mp4', gifPlayback: true, caption: `🃏 *${evs[0].name}* — ${evs[0].text}` }, { label: 'passiveFx', ms: 10000, grace: 3000, fallbackText: null });
   } catch (err) { console.warn('[PassiveFx] skipped:', err && err.message || err); }
 }
