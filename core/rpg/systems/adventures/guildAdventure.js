@@ -7417,6 +7417,8 @@ async function nextTurn(sock, lastTurnInfo = null, sessionKey) {
   const state = gameStates.get(sessionKey);
   if (!state || !state.inCombat) {
     // 🔧 FLOW-OVER FIX (owner 2026-11-06): the fight ENDED before this board
+    // 🃏 killing-blow passives (Second Wind, Grave Robber…) queued their clip on the final hit — play it before bailing.
+    try { if (state && state.passiveFx && state.passiveFx.length) { if (!sock) sock = state.sock || state.sock_ref; if (sock) await playPassiveFx(sock, state); } } catch (e) { /* optional */ }
     return;
   }
   // 🩘 SOCK FALLBACK (2026-10-26): same family as the processVotes heal —
