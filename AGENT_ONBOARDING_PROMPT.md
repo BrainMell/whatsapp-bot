@@ -667,3 +667,6 @@ departure/kick (`group-participants.update` → `ludo.handleParticipantLeave`), 
 timeout (dissolved, no contest). Win-by-forfeit pays normal rewards. Game state is always
 fully cleaned (`activeGames` delete + timer clear). Apply the same audit to any future
 multiplayer game.
+
+## 2026-11-11
+- .j updatebot shipped: owner-only per-box self-update (fetch + syntax gate + pm2 restart + boot announce DM). Run `.j updatebot` on each box to pull the latest and restart.
