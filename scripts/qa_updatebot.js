@@ -79,34 +79,51 @@ const fakeM = { key: { remoteJid: OWNER } };
     delete process.env.UPDATEBOT_DRYRUN;
   }
 
-  console.log('== T4 tracked change blocks ==');
+  console.log('== T4 tracked change blocks the reset path ==');
   {
-    const tracked = path.join(ROOT, 'AGENT_ONBOARDING_PROMPT.md');
-    const orig = fs.readFileSync(tracked, 'utf8');
-    fs.writeFileSync(tracked, orig + '\nqa-dirty-marker');
+    // Point the check at origin/main (behind/different from what boxes run)
+    // so the command reaches the dirty-tree rail instead of short-circuiting
+    // on up-to-date.
+    process.env.UPDATEBOT_BRANCH = process.env.QA_ALT_BRANCH || 'main';
     process.env.UPDATEBOT_DRYRUN = '1';
     const { replies, reply } = collectReply();
     await UB.cmdUpdateBot(OWNER, reply, fakeM);
-    check('tracked change triggers DIRTY TREE', replies.some(t => /DIRTY TREE/.test(t)), replies.join('|').slice(0, 160));
-    fs.writeFileSync(tracked, orig);
+    const joined = replies.join('|');
+    if (/ALREADY UP TO DATE/.test(joined)) {
+      console.log('  \u2139 QA_ALT_BRANCH matches HEAD \u2014 set QA_ALT_BRANCH to a divergent branch; skipped');
+    } else {
+      check('clean tree passes the rail (proceeds past dirty check)', !/DIRTY TREE/.test(joined), joined.slice(0, 160));
+      const tracked = path.join(ROOT, 'AGENT_ONBOARDING_PROMPT.md');
+      const orig = fs.readFileSync(tracked, 'utf8');
+      fs.writeFileSync(tracked, orig + '\nqa-dirty-marker');
+      const r2 = collectReply();
+      await UB.cmdUpdateBot(OWNER, r2.reply, fakeM);
+      check('tracked change triggers DIRTY TREE', r2.replies.some(t => /DIRTY TREE/.test(t)), r2.replies.join('|').slice(0, 160));
+      fs.writeFileSync(tracked, orig);
+    }
+    delete process.env.UPDATEBOT_BRANCH;
     delete process.env.UPDATEBOT_DRYRUN;
   }
 
   console.log('== T5 in-progress guard ==');
   {
+    process.env.UPDATEBOT_DRYRUN = '1';
     fs.writeFileSync(UB.STATE_PATH, JSON.stringify({ chatId: OWNER, from: 'aaaaaaa', to: 'bbbbbbb', at: Date.now() }));
     const { replies, reply } = collectReply();
     await UB.cmdUpdateBot(OWNER, reply, fakeM);
     check('in-progress guard fires', replies.some(t => /ALREADY IN PROGRESS/.test(t)), replies.join('|').slice(0, 160));
     UB.clearState();
+    delete process.env.UPDATEBOT_DRYRUN;
   }
 
   console.log('== T6 stale state cleaned on up-to-date run ==');
   {
+    process.env.UPDATEBOT_DRYRUN = '1';
     fs.writeFileSync(UB.STATE_PATH, JSON.stringify({ chatId: OWNER, from: 'aaaaaaa', to: 'bbbbbbb', at: Date.now() - 40 * 60 * 1000 }));
     const { replies, reply } = collectReply();
     await UB.cmdUpdateBot(OWNER, reply, fakeM);
     check('stale state gone', !fs.existsSync(UB.STATE_PATH));
+    delete process.env.UPDATEBOT_DRYRUN;
   }
 
   console.log(`\nQA: ${pass} passed, ${fail} failed`);

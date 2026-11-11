@@ -127,6 +127,13 @@ function announcePendingUpdate() {
 async function cmdUpdateBot(senderJid, reply, m = {}) {
   const dry = process.env.UPDATEBOT_DRYRUN === '1';
 
+  // In-flight check first: if an update is being applied, the owner rerunning
+  // the command should hear "in progress", not the 5-min cooldown.
+  const pending = readState();
+  if (pending && pending.to && Date.now() - (pending.at || 0) < STALE_MS) {
+    return reply(`🔄 *UPDATE ALREADY IN PROGRESS*\n\n🌀 ⟢ _\`${short(pending.from)}\` → \`${short(pending.to)}\` is being applied. I'll confirm in this chat when I'm back online._`);
+  }
+
   // Dry-run bypasses the cooldown so the QA harness can fire several legs
   // back to back; real runs keep the 5-min throttle.
   if (!dry && Date.now() - _lastRunAt < COOLDOWN_MS) {
@@ -134,11 +141,6 @@ async function cmdUpdateBot(senderJid, reply, m = {}) {
     return reply(`⏳ *UPDATE COOLDOWN*\n\n🌀 ⟢ _I checked for updates ${mins} min ago. Try again in a bit._`);
   }
   _lastRunAt = Date.now();
-
-  const pending = readState();
-  if (pending && pending.to && Date.now() - (pending.at || 0) < STALE_MS) {
-    return reply(`🔄 *UPDATE ALREADY IN PROGRESS*\n\n🌀 ⟢ _\`${short(pending.from)}\` → \`${short(pending.to)}\` is being applied. I'll confirm in this chat when I'm back online._`);
-  }
 
   const branch = process.env.UPDATEBOT_BRANCH
     || (await sh('git', ['rev-parse', '--abbrev-ref', 'HEAD'])).out
