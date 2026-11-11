@@ -896,7 +896,7 @@ async function animateUltimate(options = {}) {
       // (otherwise it zombies on in the background and drags every following
       // cast past the floor with it)
       const ultAbort = { flag: false };
-      return raceTimeout(require('./ultimateFx').renderUltimateVideo({
+      const __rp = require('./ultimateFx').renderUltimateVideo({
         baseBuffer: options.baseSceneBuffer, classId: fxClass, name, side: entry.side, palette: PALETTE[fxClass] || PALETTE[classId],
         // 💡 HUD 2026-10-26: the video draws its own left HUD rail as the FINAL
         // pass (above every effect) from the caster's live combat data.
@@ -930,7 +930,15 @@ async function animateUltimate(options = {}) {
         // 🔥 26-R5 abort token — the race's timeout flips this so the losing
         // render stops painting instead of zombie-ing through the next casts
         abort: ultAbort
-      }), Math.max(15000, Number(process.env.ULT_RENDER_TIMEOUT_MS) || 45000), () => { ultAbort.flag = true; console.warn('[SkillVFX] ult render LEASH expired (' + classId + '/' + ability.id + ') — set ULT_RENDER_TIMEOUT_MS higher or check box load'); });   // 🔥 R3: was 12000 (R2 raised 9000) — REAL duels proved 12s still loses: a DRAGON_GOD cast at 16:46:54Z raced out at 12s and silently played the OLD hand-drawn gif (log: "[SkillVFX] gif 117278B in 13804ms"). Profiled the engine (18-22s: breath sprites 40% + full-canvas vortex warp 19%) and made both fast in ultimateFxLayers/2. 26-R5: the FIRST cast of a new geometry also PAINTS + SAVES its plates (~20-25s on the heaviest classes) — 30s keeps that one-time capture from degrading to the legacy gif; every later cast replays plates in ~9-11s.
+      });
+      // 🔥 COLD-LAYOUT LOOP FIX (owner 2026-11-11 "ult as an image AGAIN"): a roster layout never rendered before (5+ enemies, crowd layout, new
+      // boss mix) paints ~5x slower (plate capture 20-30s) and only the FINISHED render fills the plate cache. Aborting at the leash meant it
+      // never finished -> the NEXT cast of that layout was cold too -> text forever. Now the first leash expiry lets the render finish in the
+      // background (one at a time, ULT_BG_FINISH=0 restores abort) so the following cast is a ~3s cache hit.
+      return raceTimeout(__rp, Math.max(15000, Number(process.env.ULT_RENDER_TIMEOUT_MS) || 45000), () => {
+        if (process.env.ULT_BG_FINISH !== '0' && (global.__ultBgRenders || 0) < 1) { global.__ultBgRenders = (global.__ultBgRenders || 0) + 1; Promise.resolve(__rp).catch(() => null).finally(() => { global.__ultBgRenders = Math.max(0, (global.__ultBgRenders || 1) - 1); console.log('[SkillVFX] background ult render finished (' + classId + ') — plate cached for the next cast'); }); }
+        else ultAbort.flag = true;
+        console.warn('[SkillVFX] ult render LEASH expired (' + classId + '/' + ability.id + ') — set ULT_RENDER_TIMEOUT_MS higher or check box load'); });   // 🔥 R3: was 12000 (R2 raised 9000) — REAL duels proved 12s still loses: a DRAGON_GOD cast at 16:46:54Z raced out at 12s and silently played the OLD hand-drawn gif (log: "[SkillVFX] gif 117278B in 13804ms"). Profiled the engine (18-22s: breath sprites 40% + full-canvas vortex warp 19%) and made both fast in ultimateFxLayers/2. 26-R5: the FIRST cast of a new geometry also PAINTS + SAVES its plates (~20-25s on the heaviest classes) — 30s keeps that one-time capture from degrading to the legacy gif; every later cast replays plates in ~9-11s.
     };
     if (__early) __earlyRenderP = startUltRender().catch((e) => { console.warn('[SkillVFX] sprite engine failed:', e?.message || e); return null; });
     for (let i = 0; i < messages.length; i++) {
