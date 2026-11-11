@@ -48,14 +48,14 @@ function onTurnStart(state, player) {
   const st = stateOf(state, player); const out = []; if (!st || !st.ids.length || (player && player.isDead)) return out;
   st.turns++;
   const every = (id) => { const v = PASSIVE_CATALOG[id].v.every; return has(st, id) && st.turns % v === 0; };
-  if (every('mirror_guard')) { st.armed = true; ev(state, st, 'mirror_guard', 'a mirror ward forms — the next hit will be deflected', { phase: 'armed', quiet: true }); }
+  if (every('mirror_guard')) { st.armed = true; ev(state, st, 'mirror_guard', 'a mirror ward forms — the next hit will be deflected', { phase: 'armed' }); }
   if (every('frost_barrier')) {
     const sh = Math.max(1, Math.round(maxHpOf(player) * PASSIVE_CATALOG.frost_barrier.v.shieldPct / 100)); addShield(player, sh);
     out.push(ev(state, st, 'frost_barrier', `a frost shield absorbs ${sh} damage`, { value: sh }));
     if (synergy(st, 'frost_barrier', 'iron_will')) { const n = shave(player, true); if (n) out.push(ev(state, st, 'iron_will', `Frost Barrier cleansed ${n} debuff turn(s)`, { synergy: true })); }
   }
   if (every('battle_hymn')) { const c = PASSIVE_CATALOG.battle_hymn.v; const e = energyBy(player, c.energy), h = healBy(player, Math.round(maxHpOf(player) * c.healPct / 100)); out.push(ev(state, st, 'battle_hymn', `+${e} energy, +${h} HP`, { value: e })); }
-  if (every('lucky_charm')) { st.nextBonus = PASSIVE_CATALOG.lucky_charm.v.bonusPct; ev(state, st, 'lucky_charm', 'fortune smiles — your next attack lands +50%', { phase: 'armed', quiet: true }); }
+  if (every('lucky_charm')) { st.nextBonus = PASSIVE_CATALOG.lucky_charm.v.bonusPct; ev(state, st, 'lucky_charm', 'fortune smiles — your next attack lands +50%', { phase: 'armed' }); }
   if (has(st, 'iron_will') && !synergy(st, 'frost_barrier', 'iron_will')) { const n = shave(player, false); if (n) out.push(ev(state, st, 'iron_will', `shaved ${n} turn(s) off your debuffs`, { value: n })); }
   else if (has(st, 'iron_will')) shave(player, false);
   return out;
