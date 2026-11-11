@@ -41,9 +41,13 @@ let _lastRunAt = 0;
 
 function short(sha) { return String(sha || '').slice(0, 7); }
 
-function prefix() {
-  try { return String(require('../../../../botConfig').getPrefix() || '.j').toLowerCase(); }
-  catch (e) { return '.j'; }
+// Context-independent process identity (BOT_INSTANCE env, one tenant per pm2
+// app). botConfig.getBotId() only resolves inside per-message ALS scopes —
+// the boot announce runs with no store, so it must use this instead (same
+// helper the /notify-deploy endpoint uses).
+function processBotId() {
+  try { return require(path.join(ROOT, 'core', 'utils', 'botInstance')).resolveBotId(); }
+  catch (e) { return 'global'; }
 }
 
 // Promise-wrapped execFile against the repo (git by default).
@@ -94,8 +98,7 @@ function announcePendingUpdate() {
   // Only the bot that ran the command announces for it (jake/subaru/joker
   // all load this module at boot; without this the fastest boot would steal
   // the announce and clear the file before the updating bot is even up).
-  let myBotId = '';
-  try { myBotId = require('../../../../botConfig').getBotId(); } catch (e) {}
+  const myBotId = processBotId();
   if (st.bot && myBotId && st.bot !== myBotId) return;
   if (Date.now() - (st.at || 0) > STALE_MS) { clearState(); return; }
   let tries = 0;
@@ -176,9 +179,7 @@ async function cmdUpdateBot(senderJid, reply, m = {}) {
   }
 
   const chatId = (m && m.key && m.key.remoteJid) || senderJid;
-  let botId = '';
-  try { botId = require('../../../../botConfig').getBotId(); } catch (e) {}
-  if (!writeState({ chatId, requester: senderJid, bot: botId, from: cur, to: next, branch, commits: logLines.length, subjects: logLines, at: Date.now() })) {
+  if (!writeState({ chatId, requester: senderJid, bot: processBotId(), from: cur, to: next, branch, commits: logLines.length, subjects: logLines, at: Date.now() })) {
     return reply(`❌ *UPDATE FAILED*\n\n🌀 ⟢ _Could not write the update state file — aborting before restart._`);
   }
 

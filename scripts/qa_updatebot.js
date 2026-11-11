@@ -81,7 +81,7 @@ const fakeM = { key: { remoteJid: OWNER } };
 
   console.log('== T4 tracked change blocks ==');
   {
-    const tracked = path.join(ROOT, 'CHANGES.md');
+    const tracked = path.join(ROOT, 'AGENT_ONBOARDING_PROMPT.md');
     const orig = fs.readFileSync(tracked, 'utf8');
     fs.writeFileSync(tracked, orig + '\nqa-dirty-marker');
     process.env.UPDATEBOT_DRYRUN = '1';
