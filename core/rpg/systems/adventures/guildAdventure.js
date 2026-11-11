@@ -7412,7 +7412,10 @@ async function playPassiveFx(sock, state) {
     if (!mp4) mp4 = await Promise.race([pp, new Promise((r) => setTimeout(() => r(null), 11000))]);
     if (!Buffer.isBuffer(mp4) || mp4.length < 500) { console.warn(`[PassiveFx] no clip for ${evs[0].cardId} after ${Date.now() - t0}ms — text line only`); return; }
     console.log(`[PassiveFx] ${evs[0].cardId} clip ${mp4.length}B in ${Date.now() - t0}ms`);
-    await sendMediaBounded(sock, state.chatId, { video: mp4, mimetype: 'video/mp4', gifPlayback: true, caption: `🃏 *${evs[0].name}* — ${evs[0].text}` }, { label: 'passiveFx', ms: 10000, grace: 3000, fallbackText: null });
+    const __sent = await sendMediaBounded(sock, state.chatId, { video: mp4, mimetype: 'video/mp4', gifPlayback: true, caption: `🃏 *${evs[0].name}* — ${evs[0].text}` }, { label: 'passiveFx', ms: 10000, grace: 3000, fallbackText: null });
+    // ONE message per trigger (owner 2026-11-11): the clip's caption already says it, so drop the matching war-log text line.
+    // (Only reached when the clip was actually sent — a failed render keeps the text line as the fallback.)
+    try { if (__sent && __sent.ok && Array.isArray(state.roundLog)) { const L = new Set(evs.map((e) => e && e.line).filter(Boolean)); if (L.size) state.roundLog = state.roundLog.filter((l) => !L.has(l)); } } catch (e) { /* ignore */ }
   } catch (err) { console.warn('[PassiveFx] skipped:', err && err.message || err); }
 }
 

@@ -37,7 +37,7 @@ function stateOf(state, player) {
 const has = (st, id) => !!st && st.ids.includes(id);
 function ev(state, st, id, text, extra) {
   const c = PASSIVE_CATALOG[id]; const e = Object.assign({ jid: st.jid, cardId: id, family: c.family, name: c.name, icon: c.icon, text }, extra || {});
-  if (state) { if (!state.passiveFx) state.passiveFx = []; if (!c.silent) state.passiveFx.push(e); if (state.roundLog && Array.isArray(state.roundLog) && text) state.roundLog.push(`🃏 ${c.icon} *${c.name}* — ${text}`); }
+  if (state) { if (!state.passiveFx) state.passiveFx = []; if (!c.silent) state.passiveFx.push(e); if (state.roundLog && Array.isArray(state.roundLog) && text) { e.line = `🃏 ${c.icon} *${c.name}* — ${text}`; state.roundLog.push(e.line); } }
   return e;
 }
 function resetBattle(state) { if (state) { state.passiveCards = {}; state.passiveFx = []; } }
