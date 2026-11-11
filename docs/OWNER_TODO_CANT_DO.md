@@ -66,3 +66,10 @@ Implemented per docs/RECIPE_SKILLS_ULTS_SUMMONS.md §1-§2; measured results in 
 
 ## Static skill FX
 - Regular skills (not basic attack / ult / item) paint a signature from `combat/skillStaticFx.js` (19 families chosen from skill name + damageType; per-skill seed varies size/tilt/spray). `SKILL_FX=0` reverts to the old slash+burst. QA: `scripts/qa_skill_fx.js` (coverage over all skills + contact sheet). Add a keyword to `RULES` to move a skill between families.
+
+## Aldafold registration cinematic (2026-11-11)
+- Plays once after a player's first successful `register` (fire-and-forget, silent on any failure). Pre-rendered: `core/rpgasset/intro/aldafold_intro.mp4` (97s, 854x480, ~6.4MB, H.264+AAC with score).
+- Rebuild after tweaking art/timing/audio: `node scripts/build_aldafold_intro.js` (needs python3+numpy/scipy, ffmpeg; ~2.5 min). Spot-check frames: `node scripts/qa_aldafold_frames.js out.png 5 28 60 ...`.
+- Seen-list: `core/data/aldafold_intro_seen.json` (written only after a confirmed send). Kill switch `ALDAFOLD_INTRO=0`; send timeout `ALDAFOLD_INTRO_TIMEOUT_MS` (default 120000).
+- No voice-over on purpose (no genuinely convincing free narrator available). Audio credits: `core/rpgasset/intro/CREDITS.md` (CC0).
+- Untested live: WhatsApp playback of a 6.4MB mp4 on slow links, and the first-registration call site in `core/engine.js`.

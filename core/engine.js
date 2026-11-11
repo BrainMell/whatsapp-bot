@@ -30029,6 +30029,8 @@ ${senderName} said y'all should know:
                     // 💡 NEW PLAYER TUTORIAL (2026-10-03): invite every fresh
                     // registration to the hands-on walkthrough.
                     if (result.success) {
+                      // 🎬 First-time registration cinematic (fire-and-forget, once per player, silent on any failure).
+                      try { require('./rpg/systems/intro').playAfterRegistration(sock, chatId, senderJid, BOT_MARKER); } catch (e) { /* non-fatal */ }
                       try {
                         const isDM = typeof chatId === 'string' && !chatId.endsWith('@g.us');
                         const tutLine = require('./rpg/systems/meta/tutorial').offerLine(botConfig.getPrefix());
