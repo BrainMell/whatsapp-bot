@@ -290,7 +290,7 @@ async function _fetchCombatLayers(payload) {
             await new Promise((r) => setTimeout(r, 400)); body = await goService.generateCombatLayers(payload);
         }
         if (!body || !body.image || !body.sprites) return null;
-        return {
+        return require('./crowdLayout').relayout({
             success: true,
             w: Math.floor(Number(body.w) || 1024),
             h: Math.floor(Number(body.h) || 687),
@@ -304,7 +304,7 @@ async function _fetchCombatLayers(payload) {
             // + its crop rect, so the video can tint/flash REAL sprites
             // instead of rectangle patches of the flattened frame.
             cuts: Array.isArray(body.cuts) ? body.cuts : [],
-        };
+        }, payload);   // 🏛️ 3+ enemies: re-staged into staggered rows (crowdLayout.js; CROWD_LAYOUT=0 disables)
     } catch (error) {
         console.warn('⚠️ Combat layers generation failed (falling back to plain base):', error.message);
         return null;
