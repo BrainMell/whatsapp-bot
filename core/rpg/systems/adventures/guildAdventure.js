@@ -5580,6 +5580,9 @@ async function promptPlayerAction(sock, player, sessionKey) {
   // socketless caller (10-19: "Failed to send player prompt ... reading
   // 'sendMessage'" — boundedSend silently skipped, player sat promptless).
   if (!sock) sock = state.sock || state.sock_ref;
+  // 🃏 passives that fired during the ENEMY phase / turn start (Mirror Guard deflect/arm, Thorn Mantle...) queued AFTER nextTurn's own
+  // playPassiveFx had already run, so their clip only surfaced after the player's next command. Play it here, right before YOUR TURN.
+  try { if (state.passiveFx && state.passiveFx.length && sock) await playPassiveFx(sock, state); } catch (e) { /* optional */ }
   const chatId = state.chatId;
   const icon = player.class?.icon || "👤";
   const inventory = inventorySystem.formatInventory(player.jid);
