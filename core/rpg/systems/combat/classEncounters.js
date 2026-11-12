@@ -1239,6 +1239,39 @@ function generateEncounter(players, encounterType = 'COMBAT', difficulty = 1.0, 
     };
 }
 
+
+// ── Enemy balance v2 helpers (see enemyBalance.js) ──────────────────────────────────────────────
+const EB = require('./enemyBalance');
+const _tierMeanCache = {};
+function _tierMeans(enemy) {            // mean atk/hp of the template list this enemy belongs to (so per-template variety survives)
+    if (_tierMeanCache[enemy.id]) return _tierMeanCache[enemy.id];
+    let out = { atk: enemy.stats.atk || 1, hp: enemy.stats.hp || 1 };
+    for (const pool of Object.values(INFECTED_POOLS)) for (const tier of Object.values(pool)) {
+        if (!Array.isArray(tier) || !tier.some((e) => e && e.id === enemy.id)) continue;
+        const n = tier.length; out = { atk: tier.reduce((s, e) => s + (e.stats.atk || 0), 0) / n || 1, hp: tier.reduce((s, e) => s + (e.stats.hp || 0), 0) / n || 1 };
+        break;
+    }
+    return (_tierMeanCache[enemy.id] = out);
+}
+function _applyBalanceV2(scaled, enemy, kind, partySize, difficulty, avgLevel) {
+    const ri = EB.rankIndexFor(difficulty);
+    // F/E were the hand-tuned reference ("even regular enemies can kill you, bosses one-shot the unprepared") — untouched.
+    if (ri < 2) return;
+    const lvl = EB.effLevel(avgLevel, ri);
+    let relAtk = 1, relHp = 1;
+    if (kind !== 'BOSS') { const m = _tierMeans(enemy); relAtk = EB.clampRel((enemy.stats.atk || 1) / m.atk); relHp = EB.clampRel((enemy.stats.hp || 1) / m.hp); }
+    const hpV2 = Math.max(10, Math.round(EB.hpFor(lvl, EB.actionsFor(kind), ri, scaled.stats.def) * relHp * EB.partyHp(partySize)));
+    // HP is only ever TRIMMED (sponges), never raised. Hit strength is then derived from the fight length that HP actually gives,
+    // so the per-fight attrition target holds even when legacy HP was already lower than the v2 target.
+    const hp = Math.min(scaled.stats.hp, hpV2), kScale = hp / hpV2;
+    const atk = Math.max(1, Math.round(EB.atkFor(lvl, EB.hitFrac(kind, ri, partySize, kScale)) * relAtk));
+    const magRatio = (enemy.stats.atk > 0 && enemy.stats.mag > 0) ? Math.max(0.3, Math.min(2.5, enemy.stats.mag / enemy.stats.atk)) : 1;
+    scaled.stats.atk = Math.max(scaled.stats.atk || 0, atk);                    // never softer than legacy
+    scaled.stats.mag = Math.max(scaled.stats.mag || 0, Math.max(1, Math.round(atk * magRatio)));
+    scaled.stats.hp = hp; scaled.stats.maxHp = hp;
+    scaled._balanceV2 = { kind, rankIdx: ri, lvl };
+}
+
 function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel = 1, avgPlayerSpeed = 10) {
     const scaled = { ...enemy };
     const rankIndex = difficulty;
@@ -1332,6 +1365,8 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
 
     // Defense scaling (linear, slightly lower than dmg to avoid damage immunity)
     scaled.stats.def = Math.floor(baseDef * partyFactor * (1 + (rankIndex * 0.07)));
+
+    if (EB.enabled()) _applyBalanceV2(scaled, enemy, isElite ? 'ELITE' : 'COMMON', partySize, difficulty, avgLevel);
 
     // Set maxHp in stats for rendering consistency
     scaled.stats.maxHp = scaled.stats.hp;
@@ -1478,6 +1513,8 @@ function scaleBossStats(boss, partySize, difficulty, avgLevel = 1, avgPlayerSpee
     scaled.maxMana = 200;
 
     scaled.stats.def = Math.floor(boss.stats.def * partyFactor * (1 + (rankIndex * 0.1)));
+
+    if (EB.enabled()) _applyBalanceV2(scaled, boss, 'BOSS', partySize, difficulty, avgLevel);
     
     scaled.stats.maxHp = scaled.stats.hp;
     scaled.currentHP = scaled.stats.hp;
