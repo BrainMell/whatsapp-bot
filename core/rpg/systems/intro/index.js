@@ -26,7 +26,7 @@ function playAfterRegistration(sock, chatId, jid, marker = '') {
     try {
       const buf = fs.readFileSync(VIDEO);
       await Promise.race([
-        sock.sendMessage(chatId, { video: buf, mimetype: 'video/mp4', caption: marker + '🏰 *Welcome to Aldafold.*' }),
+        sock.sendMessage(chatId, { video: buf, mimetype: 'video/mp4', caption: marker + '🏰 *Welcome to Aldafold.*\n_Music: "Bombastic Opening" by 0xabad1dea (CC BY 4.0). Engravings: Gustave Doré._' }),
         new Promise((_, rej) => setTimeout(() => rej(new Error('intro send timed out')), SEND_TIMEOUT_MS)),
       ]);
       markSeen(jid);                                          // only after a confirmed send, so a failed delivery can retry next time

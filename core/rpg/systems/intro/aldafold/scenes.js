@@ -48,6 +48,27 @@ class Stage {
   pt(x, y, par) { const c = this.cam, s = 1 + (c.z - 1) * par; return [CX + (x - CX - c.x * par) * s, CY + (y - CY - c.y * par) * s, s]; }
 }
 
+// ---- real engravings (Gustave Doré, public domain originals; layers from jumpjack/divina-commedia-animata) ------------------
+// "Moonlit etching": engraving luminance becomes opacity of a pale tint, so the ink drops out onto our sky and only the lit lines remain.
+const ART_DIR = path.join(__dirname, '..', '..', '..', '..', 'rpgasset', 'intro', 'art');
+function etch(img, w, tint, gain = 1.15, feather = 0.18, keepAlpha = false, duo = null) {
+  const h = Math.round(w * img.height / img.width), c = createCanvas(w, h), g = c.getContext('2d'); g.drawImage(img, 0, 0, w, h);
+  const im = g.getImageData(0, 0, w, h), d = im.data, T = K.hex(tint);
+  for (let i = 0; i < d.length; i += 4) {
+    const L = (d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11) / 255, al = keepAlpha ? d[i + 3] / 255 : 1;
+    if (duo) { const D = K.hex(duo); d[i] = D[0] + (T[0] - D[0]) * L; d[i + 1] = D[1] + (T[1] - D[1]) * L; d[i + 2] = D[2] + (T[2] - D[2]) * L; d[i + 3] = Math.round(255 * al); continue; }   // solid duotone (ink -> tint)
+    d[i] = T[0]; d[i + 1] = T[1]; d[i + 2] = T[2]; d[i + 3] = Math.round(255 * Math.min(1, Math.pow(L, 1.5) * gain) * al);
+  }
+  g.putImageData(im, 0, 0);
+  if (feather > 0) {                                                            // soft vignette so the plate melts into the scene instead of showing a rectangle
+    g.globalCompositeOperation = 'destination-in'; const m = createCanvas(w, h), mg = m.getContext('2d'); mg.fillStyle = '#000'; mg.fillRect(0, 0, w, h);
+    mg.globalCompositeOperation = 'destination-out';
+    for (const [x0, y0, x1, y1] of [[0, 0, w * feather, 0], [w, 0, w * (1 - feather), 0], [0, 0, 0, h * feather], [0, h, 0, h * (1 - feather)]]) { const gr = mg.createLinearGradient(x0, y0, x1, y1); gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); mg.fillStyle = gr; mg.fillRect(0, 0, w, h); }
+    g.drawImage(m, 0, 0); g.globalCompositeOperation = 'source-over';
+  }
+  return { canvas: c, w, h, ax: w / 2, ay: h };
+}
+
 // ---- asset bank (built once) --------------------------------------------------------------------------------------------
 function buildAssets() {
   fonts();
@@ -83,7 +104,11 @@ function buildAssets() {
   a.horizon = [0, 1, 2, 3, 4, 5, 6].map((i) => A.ridge(1800, 110 - i * 6, 80 + i, { color: mix('#0f0c24', '#4a4390', i / 6), top: mix('#17133a', '#6a63b4', i / 6), base: 0.5, rough: 14 - i, peaks: i > 3 ? 0.1 : 0.04, peakH: 36 }));
   a.colossus = A.colossus({ scale: 1.5, color: '#1a1540', top: '#2c2460' });
   a.crag = A.rocks(620, 150, 90, { color: '#04030a', top: '#0b0919' });
-  a.logo = null;
+  a.logo = null; a.charon = null; a.winged = null;
+  a.artPromise = Promise.all([
+    loadImage(path.join(ART_DIR, 'dore_charon.jpg')).then((im) => { a.charon = etch(im, 600, '#c9bdf2', 1.25, 0.22); }),
+    loadImage(path.join(ART_DIR, 'dore_winged.png')).then((im) => { a.winged = etch(im, 700, '#d2c2fa', 1, 0, true, '#3a2c78'); }),
+  ]).catch(() => {});                                                           // missing art just falls back to the hand-cut pieces
   a.logoPromise = loadImage(path.join(__dirname, '..', '..', '..', '..', 'rpgasset', 'intro', 'aldafold_logo.png')).then((im) => { a.logo = im; });
   a.dust = new Particles(46, 5, { vy: -8, vx: 6, size: 1.3 }); a.embers = new Particles(70, 6, { vy: -42, vx: 16, size: 1.9, halo: true });
   a.ash = new Particles(80, 7, { vy: 22, vx: -14, size: 1.5 }); a.motes = new Particles(60, 8, { vy: -16, vx: 4, size: 1.4, halo: true });
@@ -290,6 +315,7 @@ function sceneQuestion(ctx, a, t) {
     ctx.save(); ctx.globalAlpha = wrong * 0.9; ctx.strokeStyle = '#2d1f55'; ctx.lineCap = 'round'; ctx.lineWidth = 7;                                  // antlers on the shadow's head
     const ax = sxp - 3 * sc, ay = ground + 20 - 92 * 1.22 * sc * 2.1 * (1 + wrong * 0.38) * 0.98; for (const sgn of [-1, 1]) { ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(ax + sgn * 34, ay - 40, ax + sgn * 26, ay - 90); ctx.moveTo(ax + sgn * 22, ay - 44); ctx.lineTo(ax + sgn * 56, ay - 62); ctx.stroke(); } ctx.restore();
   }
+  if (a.charon) { const rv = smooth(seg(t, t0 + 0.8, t0 + 4)), pan = lerp(0, 0.5, n), pc = a.charon; ctx.save(); ctx.globalAlpha = 0.62 * rv * (1 - 0.25 * wrong); drawPiece(ctx, pc, 640 - cam.x * 0.2, 60 + pc.h * (0.68 + pan * 0.0) - pan * (pc.h - 400) * 0.9 + 20, { s: 1.0 + 0.06 * n }); ctx.restore(); glow(ctx, 640, 330, 220, '#7a5ad0', 0.12 * rv); }
   st.put(a.fieldRidge, -420, 470, 0.5, { seed: 82, alpha: 0.85 });
   // the hero, alone, haloed
   const rise = easeOut(seg(t, t0 + 0.5, t0 + 2.6)), flicker = flick(t, 3);
@@ -314,8 +340,10 @@ function sceneFate(ctx, a, t) {
   drawStars(ctx, a, t, cam, 0.8, 0.03);
   const hy = 318 - cam.y * 0.1; glow(ctx, CX, hy, 520, '#b48ad8', 0.3 + 0.3 * lt);
   // colossus behind the far ridges: rises as the fog parts
-  st.put(a.colossus, 560, 360 + (1 - reveal) * 170, 0.1, { seed: 91, alpha: 0.95, nojit: true, s: 1.1 });
-  { const [ex, ey, es] = st.pt(560, 360 + (1 - reveal) * 170, 0.1), kk = 1.5 * es; for (const sg of [-1, 1]) { glow(ctx, ex + sg * 13 * kk, ey - 150 * kk, 26 * es, '#a070ff', 0.95 * eyes); ctx.save(); ctx.globalAlpha = eyes; ctx.fillStyle = '#efe4ff'; ctx.fillRect(ex + sg * 13 * kk - 7 * es, ey - 151 * kk, 14 * es, 3.4 * es); ctx.restore(); } }
+  if (a.winged) { const [wx, wy, ws] = st.pt(CX + 40, 400 + (1 - reveal) * 230, 0.1); ctx.save(); ctx.globalAlpha = 0.85 * reveal + 0.1; drawPiece(ctx, a.winged, wx, wy, { s: 0.92 * ws }); ctx.restore(); glow(ctx, wx, wy - 150 * ws, 160 * ws, '#8a5ae0', 0.18 * reveal);
+    for (const sg of [-1, 1]) { const ex = wx + sg * 13 * ws, ey = wy - 0.5 * a.winged.h * 0.92 * ws; glow(ctx, ex, ey, 22 * ws, '#a070ff', 0.95 * eyes); ctx.save(); ctx.globalAlpha = eyes; ctx.fillStyle = '#efe4ff'; ctx.fillRect(ex - 5 * ws, ey - 1.6 * ws, 10 * ws, 3 * ws); ctx.restore(); } }
+  else st.put(a.colossus, 560, 360 + (1 - reveal) * 170, 0.1, { seed: 91, alpha: 0.95, nojit: true, s: 1.1 });
+  if (!a.winged) { const [ex, ey, es] = st.pt(560, 360 + (1 - reveal) * 170, 0.1), kk = 1.5 * es; for (const sg of [-1, 1]) { glow(ctx, ex + sg * 13 * kk, ey - 150 * kk, 26 * es, '#a070ff', 0.95 * eyes); ctx.save(); ctx.globalAlpha = eyes; ctx.fillStyle = '#efe4ff'; ctx.fillRect(ex + sg * 13 * kk - 7 * es, ey - 151 * kk, 14 * es, 3.4 * es); ctx.restore(); } }
   a.horizon.slice().reverse().forEach((r, i) => { const k = 6 - i, par = 0.1 + k * 0.1, y = 330 + k * 22 + 60; st.put(r, -450 + (k % 2) * 40, y, par, { seed: 92 + k, nojit: k < 3 }); fog(ctx, y - 70, 32, mix('#6a5aa8', '#a090d0', k / 6), 0.18 + 0.05 * (6 - k)); });
   // the watchers: our warriors, tiny, at the edge of the known world
   st.put(a.crag, -140, 560, 1.0, { seed: 99 });

@@ -6,7 +6,7 @@ const TL = require('./timeline');
 const S = require('./scenes');
 
 async function renderIntro({ audioPath, outPath, crf = 25, onProgress, maxSeconds }) {
-  const a = S.buildAssets(); await a.logoPromise;
+  const a = S.buildAssets(); await a.logoPromise; await a.artPromise;
   const { W, H, FPS } = TL, total = Math.round((maxSeconds || TL.DURATION) * FPS);
   const args = ['-y', '-v', 'error', '-f', 'rawvideo', '-pix_fmt', 'bgra', '-s', `${W}x${H}`, '-r', String(FPS), '-i', '-'];
   if (audioPath) args.push('-i', audioPath);

@@ -8,7 +8,7 @@ TL = json.loads(subprocess.check_output(['node', '-e', "console.log(JSON.stringi
 M, S, DUR = TL['moments'], TL['scenes'], TL['DURATION']
 N = int((DUR + 4) * SR); rng = np.random.default_rng(7)
 def load(name):
-    p = next(os.path.join(SRC, name + e) for e in ('.flac', '.ogg') if os.path.exists(os.path.join(SRC, name + e)))
+    p = next(os.path.join(SRC, name + e) for e in ('.flac', '.ogg', '.mp3') if os.path.exists(os.path.join(SRC, name + e)))
     raw = subprocess.check_output(['ffmpeg', '-v', 'error', '-i', p, '-f', 'f32le', '-ac', '2', '-ar', str(SR), '-'])
     return np.frombuffer(raw, np.float32).reshape(-1, 2).T.copy()
 def pitch(x, semis):                                   # resample pitch shift (changes length)
@@ -32,7 +32,7 @@ def ir(sec, tilt=3500, seed=1):                        # synthetic hall impulse 
 def reverb(x, sec=3.5, wet=0.4, tilt=3500, seed=1):
     h = ir(sec, tilt, seed); w = np.stack([signal.fftconvolve(x[i], h[i])[:x.shape[1] + h.shape[1] - 1] for i in range(2)])
     w *= np.abs(x).max() / (np.abs(w).max() + 1e-9) * 1.6; out = np.zeros((2, max(x.shape[1], w.shape[1]))); out[:, :x.shape[1]] += x * (1 - wet); out[:, :w.shape[1]] += w * wet; return out
-bus = {k: np.zeros((2, N), np.float32) for k in ['amb', 'pad', 'choir', 'perc', 'fx', 'hit']}
+bus = {k: np.zeros((2, N), np.float32) for k in ['amb', 'pad', 'choir', 'perc', 'fx', 'hit', 'music']}
 def put(b, x, t, g=1.0, pan=0.0):
     i = int(t * SR); 
     if i < 0: x = x[:, -i:]; i = 0
@@ -151,8 +151,16 @@ cine_hit(M['flash'], 0, 1.0, 6.0); put('hit', reverb(pitch(boom, -3), 4.0, 0.4),
 put('fx', reverb(pitch(bell, -5), 8.0, 0.7, 5000), M['logo'], 0.95); put('fx', reverb(pitch(bell2, 2), 8.0, 0.7, 5000), M['logo'] + 0.8, 0.6); put('fx', reverb(pitch(glass, 12), 6.0, 0.6, 5000), M['logo'] + 0.3, 0.8)
 put('fx', reverb(pitch(glass, 19), 6.0, 0.6, 6000, 6), M['logo'] + 2.4, 0.5)
 
+# ---------- REAL MUSIC: Glorytales 'Bombastic Opening' (CC BY 4.0, A minor), fitted so its final chord lands on the flash ----------
+mus = load('glorytales_bombastic_opening'); mlen = mus.shape[1] / SR; mstart = M['flash'] - 77.0            # track's closing chord is at ~77.0s of the file
+put('music', mus, mstart, 1.0)
+bus['music'] *= fade_env([(0, 0), (mstart - 0.1, 0), (mstart + 3.0, 0.8), (22, 0.85), (24, 1.0), (50, 1.0), (53, 0.42), (63.5, 0.42), (66.5, 0.8), (75.5, 0.95), (77, 1.0), (86.0, 1.0), (88.2, 0.0)])
+
+bus['pad'] *= fade_env([(0, 3.2), (8.5, 3.2), (13, 1.0), (86.0, 1.0), (88, 2.2), (97, 2.2)])     # synth pads cover only the bare intro and the logo tail
+bus['amb'] *= fade_env([(0, 1.0), (9, 1.0), (13, 0.8), (97, 0.8)])
+
 # ---------- MIX ----------
-gains = {'amb': 0.85, 'pad': 0.62, 'choir': 0.7, 'perc': 0.85, 'fx': 0.85, 'hit': 0.95}
+gains = {'amb': 0.6, 'pad': 0.16, 'choir': 0.3, 'perc': 0.7, 'fx': 0.85, 'hit': 0.9, 'music': 1.0}   # real score leads; synth pads/choir are only a faint underlay (key-safe)
 mix = sum(bus[k] * gains[k] for k in bus)
 duck = fade_env([(0, 1), (85.55, 1), (86.0, 0.15), (86.28, 0.15), (86.34, 1)])                                 # breath of near-silence before the flash
 mix = mix * duck
