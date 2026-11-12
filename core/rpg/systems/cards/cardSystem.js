@@ -950,7 +950,7 @@ function buildCardDetailCaption(card, uc, stat, location = 'Collection', index =
     locStr = location;
   }
 
-  const copyLine  = uc ? `\n📋 ⟢ *Copy:* _#${uc.copyNumber} / ${stat?.maxCopies || '?'}_` : '';
+  const copyLine  = uc ? `\n📋 ⟢ *Copy:* _#${uc.copyNumber} / ${stat?.maxCopies || '?'}_${uc.stars > 0 ? `\n⭐ ⟢ *Merged:* _${starBar(uc.stars)}  (${uc.stars}/${STAR_MAX})_` : ''}` : '';
   const ownerLine = uc ? `\n👤 ⟢ *Owner:* _@${economy.getDisplayName(uc.userId)}_` : '';
 
   // 💡 artPending note (2026-10-25): browsable preview while artwork is missing
@@ -1017,10 +1017,40 @@ function buildSpawnCaption(card, copyNumber, maxCopies, price) {
   );
 }
 
+// ── ★ STAR MERGE SYSTEM (owner 2026-11-12) ──────────────────────────────────────────────────────────────
+// "Copies are not worthless": merging a T4 with a plain copy of the same card adds a ★ (max 4). Merging a 4★ T4 with one more
+// copy PROMOTES it to a T5 of the same character; if that character has no T5, a T5 from the same anime; if the anime has none
+// either, a random T5. So the ladder is: copy1 + copy2 -> 1★, +copy -> 2★, +copy -> 3★, +copy -> 4★, +copy -> T5 (6 copies total).
+// Tune: STAR_MAX (merges that add a star before the promotion merge). Kill switch: CARD_STARS=0 (legacy 500-Zeni merge for everything).
+const STAR_TIER = '4';
+const STAR_MAX = 4;
+const starsOn = () => process.env.CARD_STARS !== '0';
+const starBar = (n) => '★'.repeat(Math.max(0, Math.min(STAR_MAX, n || 0))) + '☆'.repeat(Math.max(0, STAR_MAX - (n || 0)));
+const starSuffix = (uc) => (uc && uc.stars > 0 ? ` ${'★'.repeat(uc.stars)}` : '');
+
+// Pick the T5 a promoted card becomes. Returns { card, scope: 'character'|'anime'|'any' } or null.
+function pickPromotionCard(card) {
+  const ok = (c) => String(c.tier) === '5' && !c.hidden && !isEventCard(c) && !(c.artPending && !c.imageUrl);
+  const all = ALL_CARDS().filter(ok);
+  const pickRand = (a) => a[Math.floor(Math.random() * a.length)];
+  const sameChar = all.filter((c) => c.animeName === card.animeName && c.cardName === card.cardName);
+  if (sameChar.length) return { card: pickRand(sameChar), scope: 'character' };
+  const sameAnime = all.filter((c) => c.animeName === card.animeName);
+  if (sameAnime.length) return { card: pickRand(sameAnime), scope: 'anime' };
+  return all.length ? { card: pickRand(all), scope: 'any' } : null;
+}
+async function grantCardCopy(userId, card) {
+  const stat = await getOrInitStat(card.id, card.tier);
+  const upd = await CardStat.findOneAndUpdate({ _id: stat._id }, { $inc: { totalCirculation: 1 } }, { new: true });
+  const copyNumber = (upd && upd.totalCirculation) || (stat.totalCirculation + 1);
+  await UserCard.create({ userId, cardId: card.id, copyNumber });
+  return copyNumber;
+}
+
 function cardLine(index, card, uc, stat) {
   const tier   = String(card.tier);
   const rarity = getRarityLabel(uc.copyNumber, stat?.maxCopies || BASE_MAX[tier] || 200);
-  return `  #${index} ⟢ ${TIER_STARS[tier]} ${card.cardName} _(${card.animeName})_ ${rarity.emoji}`;
+  return `  #${index} ⟢ ${TIER_STARS[tier]} ${card.cardName}${starSuffix(uc)} _(${card.animeName})_ ${rarity.emoji}`;
 }
 
 async function getOrInitStat(cardId, tier) {
@@ -4681,14 +4711,48 @@ async function cmdLock(senderJid, reply, args = []) {
 async function cmdMerge(senderJid, reply, args = []) {
   const p = P();
   const query = args.join('').trim();
-  if (!query) return sendUsage(reply, `${p} merge`, `${p} merge <card_id>`, `${p} merge 3-04521`);
+  if (!query) return sendUsage(reply, `${p} merge`, `${p} merge <card_id>`, `${p} merge 4-00001`);
 
   // 💡 FIX 2026-10-08 (vanishing cards): the filter missed inCustomDeck and
   // inAuction, so "merging duplicates" silently DELETED custom-deck copies
   // and cards committed to an auction. Both are now protected.
   const owned = await UserCard.find({ ...(await ownerOf(senderJid)), cardId: query, inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false, isLocked: false });
-  if (owned.length < 2) return reply(`🧬  *NOT ENOUGH COPIES*\n\n🔢 ⟢ _You need at least 2 unlocked copies of_ _${query}_`);
+  const card = CARD_INDEX()[query];
 
+  // ── ★ T4 star ladder ──
+  if (starsOn() && card && String(card.tier) === STAR_TIER) {
+    // The card being upgraded may sit in a deck or be locked (your best copy usually is); only the consumed copy must be a free, plain one.
+    const pool = await UserCard.find({ ...(await ownerOf(senderJid)), cardId: query, forSale: false, inAuction: false });
+    if (pool.length < 2) return reply(`🧬  *NOT ENOUGH COPIES*\n\n🔢 ⟢ _You need at least 2 copies of_ _${query}_ _(not listed for sale or in an auction)_`);
+    const sorted = [...pool].sort((x, y) => (y.stars || 0) - (x.stars || 0) || (x.copyNumber || 0) - (y.copyNumber || 0));
+    const target = sorted[0];
+    const free = new Set(owned.map((c) => String(c._id)));
+    const fodder = sorted.slice(1).find((c) => !(c.stars > 0) && free.has(String(c._id)));
+    if (!fodder) return reply(`⭐  *NEED A PLAIN COPY*\n\n🃏 ⟢ _${card.cardName}_\n📍 ⟢ _You need a spare plain copy that isn't in a deck or locked — a star is only built by merging in a plain copy, so nothing was merged_`);
+    try {
+      const own = await ownerOf(senderJid);
+      const gone = await UserCard.findOneAndDelete({ _id: fodder._id, ...own });
+      if (!gone) return reply(`🧬  *ALREADY MERGED*\n\n🔢 ⟢ _That copy is gone — nothing was changed_`);
+      const cur = target.stars || 0;
+      if (cur < STAR_MAX) {
+        const upd = await UserCard.findOneAndUpdate({ _id: target._id, ...own, stars: cur }, { $inc: { stars: 1 } }, { new: true });
+        if (!upd) { await UserCard.create({ userId: gone.userId, cardId: gone.cardId, copyNumber: gone.copyNumber }); return reply(`🧬  *MERGE RETRY*\n\n📍 ⟢ _Your cards changed mid-merge — nothing was lost, try again_`); }
+        const left = Math.max(0, pool.length - 2);
+        const next = upd.stars < STAR_MAX ? `${STAR_MAX - upd.stars} more merge${STAR_MAX - upd.stars === 1 ? '' : 's'} to ${STAR_MAX}★, then 1 more → *T5*` : `*one more merge → T5!*`;
+        return reply(`⭐  *MERGE SUCCESSFUL!*\n\n🃏 ⟢ *Card:* _${card.cardName}_ (T4)\n✨ ⟢ *Stars:* ${starBar(upd.stars)}  _(${upd.stars}/${STAR_MAX})_\n🔢 ⟢ *Spare copies:* _${left}_\n\n🎯 ⟢ _${next}_`);
+      }
+      // promotion merge: 4★ T4 + 1 plain copy -> a T5
+      const promo = pickPromotionCard(card);
+      if (!promo) { await UserCard.create({ userId: gone.userId, cardId: gone.cardId, copyNumber: gone.copyNumber }); return reply(`❌  *PROMOTION UNAVAILABLE*\n\n📍 ⟢ _No T5 card is available right now — nothing was merged_`); }
+      const del = await UserCard.findOneAndDelete({ _id: target._id, ...own, stars: cur });
+      if (!del) { await UserCard.create({ userId: gone.userId, cardId: gone.cardId, copyNumber: gone.copyNumber }); return reply(`🧬  *MERGE RETRY*\n\n📍 ⟢ _Your cards changed mid-merge — nothing was lost, try again_`); }
+      let n; try { n = await grantCardCopy(del.userId, promo.card); } catch (e) { await UserCard.create({ userId: del.userId, cardId: del.cardId, copyNumber: del.copyNumber, stars: cur }); await UserCard.create({ userId: gone.userId, cardId: gone.cardId, copyNumber: gone.copyNumber }); throw e; }
+      const how = promo.scope === 'character' ? `the T5 of the same character` : promo.scope === 'anime' ? `a T5 from *${promo.card.animeName}* (this character has no T5)` : `a random T5 (this anime has none)`;
+      return reply(`🌟  *ASCENSION!*  🌟\n\n🃏 ⟢ _${card.cardName}_ ★★★★ *T4* → *T5*\n🏷️ ⟢ *You received:* _${promo.card.cardName}_\n📺 ⟢ _${promo.card.animeName}_\n📋 ⟢ _Copy #${n}_  •  ${how}\n\n🆔 ⟢ _${promo.card.id}_`);
+    } catch (err) { console.error('[CardSystem] star merge failed:', err); return reply(`❌  *MERGE FAILED*\n\n📍 ⟢ _Could not merge the cards — try again_`); }
+  }
+
+  if (owned.length < 2) return reply(`🧬  *NOT ENOUGH COPIES*\n\n🔢 ⟢ _You need at least 2 unlocked copies of_ _${query}_`);
   try {
     const toDelete = owned[0];
     // 💡 AUDIT FIX 2026-11-01: delete-then-pay guard — a concurrent merge
@@ -4698,7 +4762,6 @@ async function cmdMerge(senderJid, reply, args = []) {
     if (!deleted) return reply(`🧬  *ALREADY MERGED*\n\n🔢 ⟢ _That copy is gone — nothing was charged_`);
     const reward = 500;
     economy.addMoney(senderJid, reward);
-    const card = CARD_INDEX()[query];
     return reply(`🧬  *MERGE SUCCESSFUL!*\n\n🃏 ⟢ *Card:* _${card?.cardName || query}_\n🔢 ⟢ *Merged:* _2 copies → 1_\n\n💰 ⟢ *Reward:* ${ZENI()}${reward.toLocaleString()} Zeni`);
   } catch (err) { return reply(`❌  *MERGE FAILED*\n\n📍 ⟢ _Could not merge the cards — try again_`); }
 }
@@ -4709,7 +4772,10 @@ async function cmdMergeAll(senderJid, reply) {
     // mass-merge used to eat custom-deck copies and auction-committed cards.
     const owned = await UserCard.find({ ...(await ownerOf(senderJid)), inMainDeck: false, inCustomDeck: false, forSale: false, inAuction: false, isLocked: false });
     const groups = {};
+    let keptT4 = 0;
     owned.forEach(uc => {
+      // ★ T4 copies are never mass-merged for Zeni: they are star-ladder material (use .merge <card_id>); starred copies are never touched.
+      if (starsOn() && ((uc.stars || 0) > 0 || String(CARD_INDEX()[uc.cardId]?.tier) === STAR_TIER)) { keptT4++; return; }
       if (!groups[uc.cardId]) groups[uc.cardId] = [];
       groups[uc.cardId].push(uc);
     });
@@ -4731,10 +4797,11 @@ async function cmdMergeAll(senderJid, reply) {
       }
     }
 
-    if (totalMerged === 0) return reply(`✨  *NOTHING TO MERGE*\n\n📭 ⟢ _No duplicates found in your collection_`);
+    const __t4Note = keptT4 ? `\n\n⭐ ⟢ _T4 copies were kept — merge them one card at a time with_ _${P()} merge <card_id>_ _to build ★ and ascend to T5_` : '';
+    if (totalMerged === 0) return reply(`✨  *NOTHING TO MERGE*\n\n📭 ⟢ _No duplicates found in your collection_${__t4Note}`);
 
     economy.addMoney(senderJid, totalReward);
-    return reply(`🧬  *MASS MERGE COMPLETE!*\n\n🔢 ⟢ *Merged:* _${totalMerged} duplicate cards_\n\n💰 ⟢ *Total Reward:* ${ZENI()}${totalReward.toLocaleString()} Zeni`);
+    return reply(`🧬  *MASS MERGE COMPLETE!*\n\n🔢 ⟢ *Merged:* _${totalMerged} duplicate cards_\n\n💰 ⟢ *Total Reward:* ${ZENI()}${totalReward.toLocaleString()} Zeni${__t4Note}`);
   } catch (err) { return reply(`❌  *MASS MERGE FAILED*\n\n📍 ⟢ _Something broke mid-merge — check your collection_`); }
 }
 
@@ -7783,7 +7850,7 @@ module.exports = {
 // 💡 OWNER BRIEF 2026-10-09 §1 diagnostics: env-guarded hook so QA harnesses
 // can drive the card search internals without the full bot runtime.
 if (process.env.CARD_DIAG === '1') {
-  module.exports.__diag = { cmdInfo, cmdCS, cmdCi, cmdSeries, cmdMySeries, cmdSeriesColl, loadCardsDB, getNumberedCollection, _nameTokens, _cardMatchesTokens, _cardRelevance };
+  module.exports.__diag = { cmdMerge, cmdMergeAll, pickPromotionCard, cmdInfo, cmdCS, cmdCi, cmdSeries, cmdMySeries, cmdSeriesColl, loadCardsDB, getNumberedCollection, _nameTokens, _cardMatchesTokens, _cardRelevance };
 }
 
 // 💡 47-l2: env-guarded QA surface for the token-rate counter machinery

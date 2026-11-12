@@ -38,6 +38,9 @@ const UserCardSchema = new mongoose.Schema({
   // Is this card locked (cannot be sold/traded)?
   isLocked: { type: Boolean, default: false },
 
+  // ★ Star merges (T4 -> T5 ladder, 0..4). Each .merge of a T4 with a plain copy adds a star; at 4 stars the next merge promotes it to a T5.
+  stars: { type: Number, default: 0, min: 0, max: 4 },
+
 }, { collection: 'userCards', timestamps: true });
 
 // Compound index so we can quickly find all cards of a user
