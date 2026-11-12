@@ -20,10 +20,10 @@
 // Re-run `node scripts/sim_enemy_balance.js` after touching any constant here.
 
 const T = {
-  LOSS_TRASH: 0.12, LOSS_ELITE: 0.18, LOSS_BOSS: 0.9,
-  MOB_ACTIONS: 2.0, ELITE_ACTIONS: 4, BOSS_ACTIONS: 10,
+  LOSS_TRASH: 0.2, LOSS_ELITE: 0.32, LOSS_BOSS: 1.45,
+  MOB_ACTIONS: 1.0, ELITE_ACTIONS: 1.8, BOSS_ACTIONS: 6,
   SKILL_MOB: 1.3, SKILL_BOSS: 2.3,   // average enemy skill multiplier (mobs mostly basic-attack, bosses mix big skills)
-  BOSS_ATTACKS_PER_ROUND: 1.2, BOSS_HIT_CAP: 0.12,
+  BOSS_ATTACKS_PER_ROUND: 1.2, BOSS_HIT_CAP: 0.14,
   ACTION_MULT: 2.0,            // reference player's average skill multiplier vs a basic ATK hit
   MIN_REL: 0.6, MAX_REL: 1.7,  // template-to-template variety kept within this band
 };
@@ -41,12 +41,12 @@ function effLevel(avgLevel, rankIdx) { return Math.max(avgLevel || 1, RANK_MIN_L
 const RANK_FIGHTS = [2, 3, 6, 6, 7, 8, 9, 10, 12];          // regular fights before the boss (DUNGEON_RANKS encounters - 1)
 const RANK_MOBS = [1.5, 3, 3, 3.5, 4, 4.5, 5, 5.5, 6.5];   // avg mobs per regular fight (DUNGEON_RANKS min/max)
 const peff = (p) => Math.pow(Math.max(1, p), 0.85);              // a bigger party kills faster and spreads the damage; this keeps per-player danger ~constant (slightly kinder)
-const partyHp = (p) => 1 + (Math.max(1, p) - 1) * 0.45;         // ...and enemies are tankier per extra player (was +20%)
+const partyHp = (p) => 1 + (Math.max(1, p) - 1) * 0.7;          // ...and enemies are tankier per extra player (was +20%)
 // basic-hit fraction of reference max HP so the FIGHT costs the targeted share of HP
 function hitFrac(kind, rankIdx, partySize = 1, kScale = 1) {   // kScale<1: enemy HP was already lower than target, fights are shorter -> hit harder
   const p = peff(partySize), ph = partyHp(partySize), ramp = 1 + RANK_RAMP * rankIdx;
   if (kind === 'BOSS') { const pb = Math.max(1, partySize), rounds = T.BOSS_ACTIONS * kScale * ph / pb; return Math.min(T.BOSS_HIT_CAP + 0.02 * (pb - 1), (T.LOSS_BOSS * pb) / (rounds * T.SKILL_BOSS * T.BOSS_ATTACKS_PER_ROUND) * ramp); }   // cap: a x4.5 skill stays under ~55% of a reference player's HP — spikes, not one-shots
-  const n = kind === 'ELITE' ? 2 : RANK_MOBS[rankIdx] || 3;
+  const n = kind === 'ELITE' ? Math.min(4, RANK_MOBS[rankIdx] || 3) : RANK_MOBS[rankIdx] || 3;   // live elite fights spawn up to 4 elites
   // live fights are short: players cleave (AoE, summons, passives), so a fight lasts ~2 + n/4 rounds with ~70% of the mobs still swinging on average
   const rounds = (2 + 0.25 * n) * ph / p * kScale * (kind === 'ELITE' ? 1.5 : 1), attacks = n * rounds * 0.7 / p;
   const loss = kind === 'ELITE' ? T.LOSS_ELITE : Math.min(T.LOSS_TRASH, 0.85 / (RANK_FIGHTS[rankIdx] || 6));   // long dungeons shave per-fight loss so full-run attrition stays survivable
@@ -84,6 +84,10 @@ function hpFor(level, actions, rankIdx, enemyDef = 0) {
   const action = ref.atk * T.ACTION_MULT * RANK_BONUS(rankIdx) * (100 / (100 + (enemyDef || 0)));
   return Math.max(10, Math.round(action * actions));
 }
+// Soft blend toward the party's real toughness so squishy builds are not hit as if they were average and tanks are not coasting:
+// enemy ATK x sqrt(clamp(avg party maxHP / reference maxHP, 0.6..1.5)). Set per generateEncounter() call (synchronous).
+const ctx = { tough: 1 };
+function setParty(avgMaxHp, level) { const ref = reference(level).hp; ctx.tough = Number.isFinite(avgMaxHp) && avgMaxHp > 0 ? Math.sqrt(Math.max(0.6, Math.min(1.5, avgMaxHp / ref))) : 1; }
 const clampRel = (r) => Math.max(T.MIN_REL, Math.min(T.MAX_REL, r || 1));
 
-module.exports = { T, peff, partyHp, rankIndexFor, effLevel, hitFrac, actionsFor, enabled, reference, passRate, atkFor, hpFor, clampRel, RANK_BONUS };
+module.exports = { ctx, setParty, T, peff, partyHp, rankIndexFor, effLevel, hitFrac, actionsFor, enabled, reference, passRate, atkFor, hpFor, clampRel, RANK_BONUS };

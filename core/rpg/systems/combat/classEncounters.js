@@ -1178,6 +1178,7 @@ function generateEncounter(players, encounterType = 'COMBAT', difficulty = 1.0, 
     // Calculate average player level and speed
     const avgLevel = Math.floor(players.reduce((sum, p) => sum + (p.level || 1), 0) / players.length);
     const avgSpeed = Math.floor(players.reduce((sum, p) => sum + (p.stats?.spd || 10), 0) / players.length);
+    try { const hps = players.map((p) => Number(p.stats?.maxHp || p.maxHp || p.stats?.hp)).filter((x) => x > 0); EB.setParty(hps.length ? hps.reduce((a, b) => a + b, 0) / hps.length : NaN, avgLevel); } catch (e) { EB.ctx.tough = 1; }
 
     const enemies = [];
 
@@ -1199,7 +1200,7 @@ function generateEncounter(players, encounterType = 'COMBAT', difficulty = 1.0, 
         const eliteCount = options.maxMobs ? Math.min(options.maxMobs, 4) : Math.min(1 + Math.floor(players.length / 2), 4);
         for (let i = 0; i < eliteCount; i++) {
             const elite = selectRandomEnemy(avgLevel, 'ELITE', options.environment);
-            enemies.push(scaleEnemyStats(elite, players.length, difficulty, i, avgLevel, avgSpeed));
+            enemies.push(scaleEnemyStats(elite, players.length, difficulty, i, avgLevel, avgSpeed, 'ELITE'));
         }
     } else {
         // Regular combat
@@ -1261,10 +1262,10 @@ function _applyBalanceV2(scaled, enemy, kind, partySize, difficulty, avgLevel) {
     let relAtk = 1, relHp = 1;
     if (kind !== 'BOSS') { const m = _tierMeans(enemy); relAtk = EB.clampRel((enemy.stats.atk || 1) / m.atk); relHp = EB.clampRel((enemy.stats.hp || 1) / m.hp); }
     const hpV2 = Math.max(10, Math.round(EB.hpFor(lvl, EB.actionsFor(kind), ri, scaled.stats.def) * relHp * EB.partyHp(partySize)));
-    // HP is only ever TRIMMED (sponges), never raised. Hit strength is then derived from the fight length that HP actually gives,
-    // so the per-fight attrition target holds even when legacy HP was already lower than the v2 target.
-    const hp = Math.min(scaled.stats.hp, hpV2), kScale = hp / hpV2;
-    const atk = Math.max(1, Math.round(EB.atkFor(lvl, EB.hitFrac(kind, ri, partySize, kScale)) * relAtk));
+    // HP is set from the reference adventurer's damage output (D-rank up), so fights are a consistent, short length at every rank:
+    // sponges are trimmed AND soft D/C mobs that died to a single hit get a little body.
+    const hp = hpV2, kScale = 1;
+    const atk = Math.max(1, Math.round(EB.atkFor(lvl, EB.hitFrac(kind, ri, partySize, kScale)) * relAtk * EB.ctx.tough));
     const magRatio = (enemy.stats.atk > 0 && enemy.stats.mag > 0) ? Math.max(0.3, Math.min(2.5, enemy.stats.mag / enemy.stats.atk)) : 1;
     scaled.stats.atk = Math.max(scaled.stats.atk || 0, atk);                    // never softer than legacy
     scaled.stats.mag = Math.max(scaled.stats.mag || 0, Math.max(1, Math.round(atk * magRatio)));
@@ -1272,7 +1273,7 @@ function _applyBalanceV2(scaled, enemy, kind, partySize, difficulty, avgLevel) {
     scaled._balanceV2 = { kind, rankIdx: ri, lvl };
 }
 
-function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel = 1, avgPlayerSpeed = 10) {
+function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel = 1, avgPlayerSpeed = 10, tier = null) {
     const scaled = { ...enemy };
     const rankIndex = difficulty;
 
@@ -1366,7 +1367,7 @@ function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel 
     // Defense scaling (linear, slightly lower than dmg to avoid damage immunity)
     scaled.stats.def = Math.floor(baseDef * partyFactor * (1 + (rankIndex * 0.07)));
 
-    if (EB.enabled()) _applyBalanceV2(scaled, enemy, isElite ? 'ELITE' : 'COMMON', partySize, difficulty, avgLevel);
+    if (EB.enabled()) _applyBalanceV2(scaled, enemy, (isElite || tier === 'ELITE') ? 'ELITE' : 'COMMON', partySize, difficulty, avgLevel);
 
     // Set maxHp in stats for rendering consistency
     scaled.stats.maxHp = scaled.stats.hp;
