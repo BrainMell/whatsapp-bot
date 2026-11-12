@@ -31,7 +31,7 @@ function fight(party, foes, ri, isBoss, st) {
     for (const f of foes) {
       if (f.hp <= 0) continue; const alive = party.filter((p) => p.hp > 0); if (!alive.length) return false;
       const t = alive[Math.floor(Math.random() * alive.length)], roll = Math.random();
-      const skill = isBoss ? (roll < 0.35 ? rnd(2.5, 4.5) : roll < 0.7 ? rnd(1.3, 2.0) : 1) : (roll < 0.3 ? rnd(1.5, 2.5) : 1), magic = Math.random() < 0.4;
+      const skill = isBoss ? (roll < 0.35 ? rnd(2.5, 4.5) : roll < 0.7 ? rnd(1.3, 2.0) : 1) : (roll < 0.4 ? rnd(2, 4.5) : 1), magic = Math.random() < 0.4;
       t.hp -= (magic ? f.mag : f.atk) * skill * pass(t, magic);
     }
     for (const p of party) if (p.hp > 0) st.minFrac = Math.min(st.minFrac, p.hp / p.maxHp);

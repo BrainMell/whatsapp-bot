@@ -534,7 +534,30 @@ const MONSTER_ARCHETYPES = {
 // 🧠 MONSTER AI ENGINE
 // ==========================================
 
+const _UTILITY = new Set(['buff_self', 'buff_team', 'debuff_target', 'debuff_team', 'buff', 'shield']);
+const _hasFx = (u, type) => [...(u?.statusEffects || []), ...(u?.buffs || []), ...(u?.debuffs || [])].some((e) => e && (e.type === type || e.buffType === type || e.debuffType === type));
+
+// Anti-stall wrapper: after a non-damaging skill an enemy must hurt someone for the next 2 turns. (A-rank log: 17 minutes, 0 damage.)
 function evaluateAction(enemy, players, allies = []) {
+    const act = _evaluateActionInner(enemy, players, allies);
+    try {
+        const isUtil = act && act.action === 'skill' && act.skill && (_UTILITY.has(act.skill.type) || _UTILITY.has(act.skill.currentEffect?.type));
+        if (isUtil && (enemy._sinceUtil ?? 9) < 2) {
+            const live = (players || []).filter((p) => p && !p.isDead && p.currentHP > 0);
+            const hpPct = enemy.currentHP / Math.max(1, enemy.maxHP);
+            const dmg = getSkillsForMonster(enemy.archetype, enemy.level || 1)
+                .filter((s) => ['attack', 'aoe'].includes(s.type) && !enemy.cooldowns?.[s.id] && (enemy.mana ?? 100) >= s.cost && (!s.condition || s.condition(hpPct, 0.15, allies)))
+                .sort((a, b) => (b.currentEffect?.multiplier || 1) - (a.currentEffect?.multiplier || 1));
+            const tgt = live.length ? live[Math.floor(Math.random() * live.length)] : players[0];
+            enemy._sinceUtil = (enemy._sinceUtil ?? 9) + 1;
+            return dmg.length ? { action: 'skill', skill: dmg[0], target: act.target && act.target !== enemy ? act.target : tgt } : { action: 'attack', target: tgt };
+        }
+        enemy._sinceUtil = isUtil ? 0 : (enemy._sinceUtil ?? 9) + 1;
+    } catch (e) { /* never let the guard break combat */ }
+    return act;
+}
+
+function _evaluateActionInner(enemy, players, allies = []) {
     // 1. Resolve pending charges first
     if (enemy.isCharging) {
         return { action: 'release_charge', skillId: enemy.chargingSkill };
@@ -597,7 +620,7 @@ function evaluateAction(enemy, players, allies = []) {
         }, livePlayers[0]);
         const silenceSkill = available.find(s => s.id === 'arcane_silence');
         const highEnergyRatio = (highEnergyTarget.stats?.energy || 0) / Math.max(1, highEnergyTarget.stats?.maxEnergy || 100);
-        if (silenceSkill && highEnergyRatio > 0.6 && Math.random() > 0.15) {
+        if (silenceSkill && highEnergyRatio > 0.6 && !_hasFx(highEnergyTarget, 'silence') && Math.random() > 0.15) {
             return { action: 'skill', skill: silenceSkill, target: highEnergyTarget };
         }
 
@@ -781,7 +804,7 @@ function evaluateAction(enemy, players, allies = []) {
 
         // Iron Rebuke reflect
         const rebukeSkill = available.find(s => s.id === 'iron_rebuke');
-        if (rebukeSkill && !enemy.statusEffects?.some(e => e.type === 'reflect') && Math.random() > 0.15) {
+        if (rebukeSkill && !_hasFx(enemy, 'reflect') && Math.random() > 0.15) {
             return { action: 'skill', skill: rebukeSkill, target: enemy, targetType: 'self' };
         }
 
@@ -883,7 +906,7 @@ function evaluateAction(enemy, players, allies = []) {
 
         // Priority 2: Thornwall reflect when low HP
         const thornwall = available.find(s => s.id === 'thornwall');
-        if (thornwall && hpPct < 0.5 && !enemy.statusEffects?.some(e => e.type === 'reflect') && Math.random() > 0.15) {
+        if (thornwall && hpPct < 0.5 && !_hasFx(enemy, 'reflect') && Math.random() > 0.15) {
             return { action: 'skill', skill: thornwall, target: enemy, targetType: 'self' };
         }
 

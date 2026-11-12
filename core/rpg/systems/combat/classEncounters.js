@@ -1276,6 +1276,11 @@ function _applyBalanceV2(scaled, enemy, kind, partySize, difficulty, avgLevel) {
 function scaleEnemyStats(enemy, partySize, difficulty, enemyIndex = 0, avgLevel = 1, avgPlayerSpeed = 10, tier = null) {
     const scaled = { ...enemy };
     const rankIndex = difficulty;
+    // 🐛 FIX (owner log 2026-11-12, A-rank solo): regular/elite enemies never got a `level`, so evaluateAction() unlocked only
+    // level-1 skills — Kraken Spawn (COLOSSUS) had nothing but Iron Rebuke (a reflect BUFF) and Abyssal Horror (SPELLBREAKER) only
+    // Silence/Counterspell, so they cast utility every turn and dealt 0 damage for 17 minutes. Kits now unlock with party level
+    // (capped at 20: skill multipliers grow with level, and every kit is fully unlocked by 18).
+    if (!(scaled.level > 0)) scaled.level = Math.max(1, Math.min(20, Math.floor(avgLevel || 1)));
 
     // =========================================================
     // 🎯 PER-RANK BALANCED SCALING - Target: ~60% player WR

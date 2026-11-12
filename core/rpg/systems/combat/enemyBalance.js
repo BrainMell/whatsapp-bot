@@ -22,7 +22,7 @@
 const T = {
   LOSS_TRASH: 0.2, LOSS_ELITE: 0.32, LOSS_BOSS: 1.45,
   MOB_ACTIONS: 1.0, ELITE_ACTIONS: 1.8, BOSS_ACTIONS: 6,
-  SKILL_MOB: 1.3, SKILL_BOSS: 2.3,   // average enemy skill multiplier (mobs mostly basic-attack, bosses mix big skills)
+  SKILL_MOB: 1.9, SKILL_BOSS: 2.3,   // average enemy skill multiplier (mobs mostly basic-attack, bosses mix big skills)
   BOSS_ATTACKS_PER_ROUND: 1.2, BOSS_HIT_CAP: 0.14,
   ACTION_MULT: 2.0,            // reference player's average skill multiplier vs a basic ATK hit
   MIN_REL: 0.6, MAX_REL: 1.7,  // template-to-template variety kept within this band

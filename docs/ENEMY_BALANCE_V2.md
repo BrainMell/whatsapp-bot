@@ -29,3 +29,7 @@ Legacy for comparison: D/C were 100% walkovers, B/A took 62/127 rounds of sponge
 `node scripts/sim_dungeon_runs.js --runs 300 [--party 3] [--build tank|glass] [--kit 0|1|2] [--legacy] [--T KEY=val,...]` (full-dungeon Monte-Carlo with potions/rests; `--T` overrides constants for quick tuning) and `scripts/sim_enemy_balance.js` (per-fight attrition, no healing).
 
 **Not changed / known:** boss phase mechanics in `bossMechanics.js` still use small flat damage numbers (30–200) that are irrelevant at high rank; Abyss/Guild War use separate scaling; the sim's reference player has no heals/shields/dodge, so real players should land a bit better than the sim. **Not verified on the live boxes.**
+
+## Pass 3 — "enemies do no damage" bug (owner log 2026-11-12)
+An A-rank solo run showed 17 minutes with the player at full HP. Root cause: regular/elite enemies had no `level`, so `evaluateAction()` only unlocked level-1 skills — Kraken Spawn (COLOSSUS) had only Iron Rebuke (a reflect buff) and Abyssal Horror (SPELLBREAKER) only Silence/Counterspell. Plus the AI re-cast Silence on an already-silenced target and re-cast Iron Rebuke every turn (it only looked in `statusEffects`, the buff lives in `buffs`).
+Fixes: enemies get `level = min(20, party level)` so full kits unlock; `_hasFx()` checks statusEffects+buffs+debuffs; anti-stall wrapper (after any non-damaging skill the enemy must deal damage for 2 turns). `SKILL_MOB` re-calibrated 1.3→1.9 because mobs now actually use their big skills (sim distribution unchanged). Not verified on the live boxes.
