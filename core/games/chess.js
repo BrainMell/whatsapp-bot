@@ -221,7 +221,9 @@ function parseMove(chess, raw) {
     const castle = s.toLowerCase().replace(/0/g, 'o');
     if (/^o-o(-o)?[+#]?$/.test(castle)) return tryMove(chess, castle.toUpperCase().replace(/[+#]$/, ''));
 
-    const uci = s.replace(/[\s-]/g, '').toLowerCase().match(/^([a-h][1-8])([a-h][1-8])([qrbn])?$/);
+    const uciRe = /^([a-h][1-8])([a-h][1-8])([qrbn])?$/;
+    const flat = s.replace(/[\s-]/g, '').toLowerCase();
+    const uci = flat.match(uciRe) || flat.replace(/x/g, '').match(uciRe); // "b7xa8q" -> "b7a8q"
     if (uci) {
         const base = { from: uci[1], to: uci[2] };
         let m = uci[3] ? tryMove(chess, { ...base, promotion: uci[3] }) : tryMove(chess, base);
@@ -232,9 +234,19 @@ function parseMove(chess, raw) {
     const variants = [compact];
     // "nf3" -> "Nf3" ONLY after the as-typed form failed, so "bxc3" stays a pawn capture
     if (/^[nbrqk]/i.test(compact) && compact.length >= 3) variants.push(compact[0].toUpperCase() + compact.slice(1));
+    // the dispatcher lowercases input before it reaches us, which kills the promotion piece ("=Q" arrives as "=q"): restore it
+    if (/[a-h][18]/i.test(compact)) {
+        const fixed = compact.replace(/=?[qrbn]$/i, (m0, c) => '=' + c.toUpperCase());
+        if (fixed !== compact) variants.push(fixed);
+    }
     variants.push(compact.toLowerCase());
     for (const v of variants) { const m = tryMove(chess, v); if (m) return m; }
     if (/[a-h][18]$/i.test(compact)) { const m = tryMove(chess, `${compact}=Q`); if (m) return m; }
+    // fuzzy safety net: compare against the legal list ignoring case, "=", and check/mate suffixes (pawn form wins ties)
+    const key = (x) => String(x).replace(/[=\s+#]+/g, '').toLowerCase();
+    const wanted = key(compact);
+    const hits = chess.moves({ verbose: true }).filter((mv) => key(mv.san) === wanted);
+    if (hits.length) return hits.find((mv) => mv.piece === 'p') || hits[0];
     return null;
 }
 

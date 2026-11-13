@@ -1,12 +1,76 @@
 'use strict';
-// ♟️ Chess engine for the bot's AI mode (negamax + alpha-beta + quiescence + iterative deepening).
+// ♟️ Chess engine for the bot's AI mode.
+// hard/insane run a REAL UCI engine (Stockfish binary, spawn-per-move, Skill Level mapped) when installed;
+// easy/medium and any stockfish failure use the built-in engine:
+// negamax + alpha-beta + quiescence + iterative deepening (~150 lines, classic textbook recipe).
 // Runs in a worker thread so a long think never blocks the WhatsApp event loop.
-//   bestMoveAsync(fen, level, opts) -> Promise<{san, from, to, promotion, score, depth}>
+//   bestMoveAsync(fen, level, opts) -> Promise<{san, from, to, promotion, score, depth, engine}>
 // Levels: easy / medium / hard / insane (depth, time budget and deliberate imprecision differ).
 
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
+const { spawn } = require('child_process');
+const fs = require('fs');
 const { Chess } = require('chess.js');
 
+// ── Stockfish (real UCI engine) for hard/insane ──────────────────────────────────────────
+const SF = {
+    hard:   { skill: 10, ms: 1200 },
+    insane: { skill: 20, ms: 2000 },
+};
+function sfBin() {
+    if (process.env.STOCKFISH_BIN) return process.env.STOCKFISH_BIN;
+    // pm2's PATH often lacks /usr/games (Ubuntu apt installs stockfish there) - prefer the absolute path
+    try { if (fs.existsSync('/usr/games/stockfish')) return '/usr/games/stockfish'; } catch (e) {}
+    return 'stockfish';
+}
+
+function stockfishMove(fen, level) {
+    const cfg = SF[level];
+    return new Promise((resolve, reject) => {
+        let p;
+        try { p = spawn(sfBin(), [], { stdio: ['pipe', 'pipe', 'ignore'] }); }
+        catch (e) { return reject(e); }
+        let out = '', settled = false;
+        const finish = (fn, arg) => { if (settled) return; settled = true; clearTimeout(timer); try { p.kill('SIGKILL'); } catch (e) {} fn(arg); };
+        const timer = setTimeout(() => finish(reject, new Error('stockfish timeout')), cfg.ms + 8000);
+        p.on('error', (e) => finish(reject, e));
+        p.stdout.on('data', (d) => {
+            out += d.toString();
+            let i;
+            while ((i = out.indexOf('\n')) >= 0) {
+                const line = out.slice(0, i); out = out.slice(i + 1);
+                const bm = line.match(/^bestmove (\S+)/);
+                if (bm) finish(resolve, bm[1]); // UCI form: e2e4 / b7a8q
+            }
+        });
+        p.stdin.write(`uci\nsetoption name Skill Level value ${cfg.skill}\nisready\nposition fen ${fen}\ngo movetime ${cfg.ms}\n`);
+    });
+}
+
+function stockfishPing(ms = 4000) {
+    return new Promise((resolve, reject) => {
+        let p;
+        try { p = spawn(sfBin(), [], { stdio: ['pipe', 'pipe', 'ignore'] }); }
+        catch (e) { return reject(e); }
+        let out = '', settled = false;
+        const finish = (fn, arg) => { if (settled) return; settled = true; clearTimeout(t); try { p.kill('SIGKILL'); } catch (e) {} fn(arg); };
+        const t = setTimeout(() => finish(reject, new Error('no uciok')), ms);
+        p.on('error', (e) => finish(reject, e));
+        p.stdout.on('data', (d) => {
+            out += d.toString();
+            if (/uciok/.test(out)) finish(resolve, true);
+        });
+        p.stdin.write('uci\n');
+    });
+}
+
+// one-shot availability log at startup (main thread only - workers also load this module)
+if (isMainThread) {
+    stockfishPing().then(() => console.log('[Chess][AI] Stockfish available - hard/insane use it (classic engine stays on easy/medium + fallback)'))
+        .catch((e) => console.log(`[Chess][AI] Stockfish NOT available (${e.message}) - hard/insane fall back to the built-in engine`));
+}
+
+// ── built-in classic engine (easy/medium + fallback) ────────────────────────────────────
 const LEVELS = {
   easy:   { depth: 1, ms: 500,  margin: 220, qd: 0 },
   medium: { depth: 2, ms: 1500,  margin: 60,  qd: 2 },
@@ -133,7 +197,7 @@ if (!isMainThread && workerData && workerData.__chessAI) {
   catch (e) { parentPort.postMessage({ ok: false, err: String(e && e.message || e) }); }
 }
 
-function bestMoveAsync(fen, level = 'medium') {
+function classicBestMoveAsync(fen, level = 'medium') {
   return new Promise((resolve, reject) => {
     const cfg = LEVELS[level] || LEVELS.medium;
     let done = false;
@@ -144,4 +208,19 @@ function bestMoveAsync(fen, level = 'medium') {
   });
 }
 
-module.exports = { findBestMove, bestMoveAsync, evaluate, LEVELS };
+async function bestMoveAsync(fen, level = 'medium') {
+    // hard/insane: real Stockfish when present, built-in engine as fallback (missing binary, crash, timeout)
+    if (SF[level]) {
+        try {
+            const uci = await stockfishMove(fen, level);
+            const g = new Chess(fen);
+            const mv = g.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || undefined });
+            return { san: mv.san, from: mv.from, to: mv.to, promotion: mv.promotion, score: 0, depth: SF[level].skill, engine: 'stockfish' };
+        } catch (e) {
+            console.error(`[Chess][AI] stockfish path failed (${e.message}); falling back to built-in engine`);
+        }
+    }
+    return classicBestMoveAsync(fen, level);
+}
+
+module.exports = { findBestMove, bestMoveAsync, classicBestMoveAsync, stockfishPing, evaluate, LEVELS };
