@@ -231,14 +231,19 @@ function parseMove(chess, raw) {
         if (m) return m;
     }
     const compact = s.replace(/\s+/g, '');
-    // piece-letter input: pick by piece type ourselves (chess.js 1.4 move() is case-insensitive and
-    // prefers pawns, so "Bxc3" can wrongly resolve to a pawn capture when both are legal)
+    // piece-letter inputs: pick by piece type ourselves (chess.js 1.4 move() is case-insensitive and
+    // prefers pawns, so "Bxc3" can wrongly resolve to a pawn capture and vice versa).
+    // Convention: UPPERCASE piece letter -> the piece wins; lowercase -> pawn wins (bxc3 stays a pawn capture).
     if (/^[nbrqk][a-h1-8x]*=?[qrbn]?[+#]?$/i.test(compact)) {
         const pc = compact[0].toLowerCase();
         const norm = (x) => String(x).replace(/[=\s+#]+/g, '').toLowerCase();
         const wanted = norm(compact);
-        const byPiece = chess.moves({ verbose: true }).filter((mv) => mv.piece === pc && norm(mv.san) === wanted);
-        if (byPiece.length) return byPiece[0];
+        const legal = chess.moves({ verbose: true });
+        const pieceForm = legal.filter((mv) => mv.piece === pc && norm(mv.san) === wanted);
+        const pawnForm = legal.filter((mv) => mv.piece === 'p' && norm(mv.san) === wanted);
+        if (/^[NBRQK]/.test(compact) && pieceForm.length) return pieceForm[0];
+        if (pawnForm.length) return pawnForm[0];
+        if (pieceForm.length) return pieceForm[0];
     }
     const variants = [compact];
     // "nf3" -> "Nf3" ONLY after the as-typed form failed, so "bxc3" stays a pawn capture
