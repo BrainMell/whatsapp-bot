@@ -8,14 +8,30 @@
 // yes all 2 boxes."
 //
 // Per-box flow (each pm2 process updates itself):
-//   1. git fetch origin <branch-the-box-runs>
+//   1. git fetch origin <branch-the-box-runs>  (self-heals a dead embedded
+//      credential in the remote URL by rewriting it to the plain public URL)
 //   2. HEAD == FETCH_HEAD ? "already up to date" : plan the update
-//   3. Safety rails: dirty-tree abort, syntax gate on every changed .js,
-//      5-min cooldown, single in-flight update
+//   3. Safety rails: dirty-tree abort, syntax gate on every incoming blob,
+//      5-min cooldown, single in-flight update, ancestry + canary gates
 //   4. Write core/data/updatebot_state.json (who asked, from -> to)
-//   5. Reply the commit list, then pm2 restart this process
+//   5. Reply the commit list, then pm2 restart the box's bot set
+//      (RESTART_APPS from ../git_guard.conf, fallback wa-* pm2 apps)
 //   6. On boot, announcePendingUpdate() polls until the WA socket is back
 //      and reports "UPDATE COMPLETE" in the chat that ran the command.
+//
+// 2026-11-13 v2 (Oatmeal, after the "says up to date but isn't" incident):
+//   - fetch failure is a HARD abort (never trust a stale origin ref) — Claude
+//     shipped that in 0d88b6fc; v2 additionally SELF-HEALS the remote URL so
+//     the dead-credential class of failure disappears instead of just reporting
+//   - restart ALL bots on the box, not just self: jake/subaru share one work
+//     tree, so a jake-run update must reload subaru too (and vice versa)
+//   - restart set comes from ../git_guard.conf RESTART_APPS (ops-owned list,
+//     excludes wa-miner/bot-generation on purpose); fallback: pm2 apps ^wa-
+//   - npm install scrub: box1's nested sharp revives on every npm install and
+//     crash-loops jake/subaru — after npm install, any nested sharp* is
+//     renamed <dir>.disabled-updatebot and the owner is told
+//   - announce bot match treats 'global' as wildcard so QA/standalone runs
+//     still get their UPDATE COMPLETE
 //
 // QA: UPDATEBOT_DRYRUN=1 does everything except the actual restart.
 //     UPDATEBOT_BRANCH=<name> overrides the branch (QA harness only).
@@ -32,6 +48,7 @@ const { execFile } = require('child_process');
 
 const ROOT = path.join(__dirname, '..', '..', '..', '..');
 const STATE_PATH = path.join(ROOT, 'core', 'data', 'updatebot_state.json');
+const GUARD_CONF = path.join(ROOT, '..', 'git_guard.conf');
 const STALE_MS = 30 * 60 * 1000;     // pending state older than this = dead run
 const COOLDOWN_MS = 5 * 60 * 1000;   // min gap between update checks per process
 const MAX_LOG_LINES = 12;            // commit subjects shown in messages
@@ -63,6 +80,124 @@ function sh(bin, args, opts = {}) {
   });
 }
 
+// ── v2: remote self-heal ────────────────────────────────────────────────────
+// The 2026-11-13 incident root cause: boxes' origin URLs carried an embedded
+// GitHub token that GitHub had rejected, so `git fetch` failed and the old
+// code reported "already up to date" off a stale origin ref. The repo is
+// publicly fetchable, so the cure is to strip the userinfo from the URL.
+// Pure helper (exported for QA): https://user:pass@host/... -> https://host/...
+// Anything that isn't an https URL with userinfo returns null (nothing to heal).
+function plainRemoteUrl(url) {
+  const m = String(url || '').trim().match(/^(https?:\/\/)([^\/\s]+@)(.+)$/);
+  return m ? m[1] + m[3] : null;
+}
+
+// If origin embeds credentials, rewrite it to the plain URL and say so.
+// Returns a human note when a rewrite happened, else null.
+async function healRemoteOrigin() {
+  const cur = await sh('git', ['remote', 'get-url', 'origin'], { timeout: 10000 });
+  if (!cur.ok) return null;
+  const plain = plainRemoteUrl(cur.out);
+  if (!plain || plain === cur.out) return null;
+  const set = await sh('git', ['remote', 'set-url', 'origin', plain], { timeout: 10000 });
+  return set.ok ? `removed the dead embedded credential from origin (plain public URL)` : null;
+}
+
+// ── v2: which pm2 apps does this box restart after a tree update? ───────────
+// 1. RESTART_APPS from ../git_guard.conf (ops-owned, per-box, excludes the
+//    miner/scraper side apps on purpose)
+// 2. fallback: every pm2 app named ^wa- (the bots)
+// 3. last resort: this process only (pm_id / name env)
+// Pure helper (exported for QA).
+function parseRestartApps(confText) {
+  const m = String(confText || '').match(/^\s*RESTART_APPS\s*=\s*"?([^"\n]*)"?\s*$/m);
+  if (!m) return [];
+  return m[1].trim().split(/\s+/).filter(Boolean);
+}
+
+async function resolveRestartTargets() {
+  // 1. guard conf
+  try {
+    const apps = parseRestartApps(fs.readFileSync(GUARD_CONF, 'utf8'));
+    if (apps.length) return { apps, via: 'git_guard.conf' };
+  } catch (e) { /* no conf on this machine */ }
+  // 2. pm2 jlist, names starting wa-
+  const jl = await sh('pm2', ['jlist'], { timeout: 15000 });
+  if (jl.ok) {
+    try {
+      const apps = JSON.parse(jl.out).map(a => String(a.name)).filter(n => /^wa-/i.test(n));
+      if (apps.length) return { apps, via: 'pm2 wa-*' };
+    } catch (e) { /* fall through */ }
+  }
+  // 3. self
+  return { apps: [process.env.pm_id ? String(process.env.pm_id) : (process.env.name || 'wa-bot')], via: 'self' };
+}
+
+// Resolve target app names (or ids) to pm2 ids and restart them all in one go.
+// Returns {ok, ids, err}.
+async function restartPm2Apps(targetApps) {
+  const jl = await sh('pm2', ['jlist'], { timeout: 15000 });
+  const byName = new Map();
+  if (jl.ok) {
+    try { for (const a of JSON.parse(jl.out)) byName.set(String(a.name), a.pm_id); } catch (e) { /* names unresolved */ }
+  }
+  const ids = [];
+  for (const t of targetApps) {
+    const id = byName.has(String(t)) ? byName.get(String(t)) : (/^\d+$/.test(String(t)) ? Number(t) : undefined);
+    if (id !== undefined && !ids.includes(id)) ids.push(id);
+  }
+  if (!ids.length) return { ok: false, ids: [], err: 'no pm2 ids resolved for: ' + targetApps.join(',') };
+  const r = await sh('pm2', ['restart', ...ids.map(String), '--update-env'], { timeout: 30000 });
+  return { ok: r.ok, ids, err: r.ok ? '' : r.err };
+}
+
+// ── v2: nested-sharp scrub (box1 hazard) ────────────────────────────────────
+// npm install on box1 historically revived a nested sharp 0.30.7; the running
+// bot (sharp 0.35.3 at top level) then resolved the nested binding against the
+// wrong libvips soname and crash-looped. package.json overrides now cover the
+// known wsf path — this scan is the belt-and-braces for any OTHER nested copy.
+// Pure helper (exported for QA): returns repo-relative paths of sharp* dirs
+// that live inside a nested node_modules. Top-level node_modules/sharp and
+// node_modules/@img/* are the real install and are never flagged. Already-
+// disabled copies (name contains .disabled) are skipped.
+function findNestedSharp(root, maxDepth = 4) {
+  const out = [];
+  const walkNm = (nmDir, depth) => {
+    let entries;
+    try { entries = fs.readdirSync(nmDir, { withFileTypes: true }); } catch (e) { return; }
+    for (const ent of entries) {
+      if (!ent.isDirectory() || ent.name.startsWith('.')) continue;
+      const p = path.join(nmDir, ent.name);
+      if (ent.name === 'node_modules') { walkNm(p, depth); continue; }
+      // depth >= 1: only sharp* NESTED inside another package's node_modules.
+      // depth 0 children (node_modules/sharp, node_modules/@img/...) are the
+      // real install and must never be disabled.
+      if (depth >= 1 && /^sharp/i.test(ent.name) && !ent.name.includes('.disabled')) {
+        out.push(path.relative(root, p));
+        continue;
+      }
+      if (depth >= maxDepth) continue;
+      const sub = path.join(p, 'node_modules');
+      try { if (fs.statSync(sub).isDirectory()) walkNm(sub, depth + 1); } catch (e) { /* no nested nm */ }
+    }
+  };
+  walkNm(path.join(root, 'node_modules'), 0);
+  return out.sort();
+}
+
+// Rename any nested sharp copies out of require() reach. Returns the list
+// actually disabled (empty when the tree was already clean).
+function scrubNestedSharp() {
+  const disabled = [];
+  for (const rel of findNestedSharp(ROOT)) {
+    try {
+      fs.renameSync(path.join(ROOT, rel), path.join(ROOT, rel + '.disabled-updatebot'));
+      disabled.push(rel);
+    } catch (e) { console.error('[updatebot] sharp scrub failed for', rel, e.message); }
+  }
+  return disabled;
+}
+
 function readState() {
   try { return JSON.parse(fs.readFileSync(STATE_PATH, 'utf8')); } catch (e) { return null; }
 }
@@ -85,6 +220,8 @@ function buildAnnounceText(st) {
   return `✅ *UPDATE COMPLETE*\n\n`
     + `🔄 ⟢ _\`${short(st.from)}\` → \`${short(st.to)}\` on \`${st.branch || 'origin'}\` (${n} commit${n === 1 ? '' : 's'})_\n`
     + (lines ? `\n${lines}\n` : '')
+    + (Array.isArray(st.apps) && st.apps.length ? `\n🤖 ⟢ _restarted: ${st.apps.join(', ')}_` : '')
+    + (Array.isArray(st.scrubbed) && st.scrubbed.length ? `\n🧼 ⟢ _nested sharp disabled: ${st.scrubbed.join(', ')}_` : '')
     + `\n🟢 ⟢ _Back online — thanks for waiting._`;
 }
 
@@ -98,8 +235,10 @@ function announcePendingUpdate() {
   // Only the bot that ran the command announces for it (jake/subaru/joker
   // all load this module at boot; without this the fastest boot would steal
   // the announce and clear the file before the updating bot is even up).
+  // 'global' (QA/standalone runs with no BOT_INSTANCE) is a wildcard: any
+  // boot on this box may deliver it.
   const myBotId = processBotId();
-  if (st.bot && myBotId && st.bot !== myBotId) return;
+  if (st.bot && myBotId && st.bot !== 'global' && st.bot !== myBotId) return;
   if (Date.now() - (st.at || 0) > STALE_MS) { clearState(); return; }
   let tries = 0;
   const tick = async () => {
@@ -146,9 +285,22 @@ async function cmdUpdateBot(senderJid, reply, m = {}) {
     || (await sh('git', ['rev-parse', '--abbrev-ref', 'HEAD'])).out
     || 'audit/fix-pass-1';
 
-  const fetched = await sh('git', ['fetch', 'origin', branch], { timeout: 90000 });
+  let fetched = await sh('git', ['fetch', 'origin', branch], { timeout: 90000 });
+  let healNote = null;
   if (!fetched.ok) {
-    return reply(`❌ *UPDATE FAILED*\n\n🌀 ⟢ _git fetch for \`${branch}\` didn't make it:_\n\`${fetched.err}\`\n🛡️ ⟢ _Still running the old version._`);
+    // v2: a failed fetch is a HARD abort — but first try the known cure for
+    // the dead-embedded-credential remote (repo is publicly fetchable).
+    healNote = await healRemoteOrigin();
+    if (healNote) {
+      console.log('[updatebot] remote healed:', healNote);
+      fetched = await sh('git', ['fetch', 'origin', branch], { timeout: 90000 });
+    }
+  }
+  if (!fetched.ok) {
+    const healed = healNote
+      ? `\n🔧 ⟢ _Tried self-heal (${healNote}) — fetch still failed._`
+      : `\n🔧 ⟢ _If this keeps happening, the origin URL may need fixing (plain https URL, no embedded token)._`;
+    return reply(`❌ *UPDATE FAILED*\n\n🌀 ⟢ _git fetch for \`${branch}\` didn't make it:_\n\`${fetched.err}\`${healed}\n🛡️ ⟢ _Still running the old version._`);
   }
 
   const cur = (await sh('git', ['rev-parse', 'HEAD'])).out;
@@ -202,8 +354,10 @@ async function cmdUpdateBot(senderJid, reply, m = {}) {
     }
   }
 
+  const { apps: restartApps, via: viaLabel } = await resolveRestartTargets();
+
   const chatId = (m && m.key && m.key.remoteJid) || senderJid;
-  if (!writeState({ chatId, requester: senderJid, bot: processBotId(), from: cur, to: next, branch, commits: logLines.length, subjects: logLines, at: Date.now() })) {
+  if (!writeState({ chatId, requester: senderJid, bot: processBotId(), from: cur, to: next, branch, commits: logLines.length, subjects: logLines, apps: restartApps, at: Date.now() })) {
     return reply(`❌ *UPDATE FAILED*\n\n🌀 ⟢ _Could not write the update state file — aborting before restart._`);
   }
 
@@ -212,6 +366,8 @@ async function cmdUpdateBot(senderJid, reply, m = {}) {
   await reply(`🛠️ *BOT UPDATE*\n\n`
     + `🔄 ⟢ _\`${short(cur)}\` → \`${short(next)}\` on \`${branch}\` (${logLines.length} commit${logLines.length === 1 ? '' : 's'})_\n`
     + (statLine ? `📦 ⟢ _${statLine}_\n` : '')
+    + (healNote ? `🔧 ⟢ _${healNote}_\n` : '')
+    + `🤖 ⟢ _will restart: ${restartApps.join(', ')} (${viaLabel})_\n`
     + `\n${shown}${more}\n`
     + `\n⏳ ⟢ _Pulling and restarting in a few seconds — I'll confirm here when I'm back online._`);
 
@@ -226,27 +382,32 @@ async function cmdUpdateBot(senderJid, reply, m = {}) {
     if (depsChanged) {
       const npm = await sh('npm', ['install', '--no-audit', '--no-fund', '--omit=dev'], { timeout: 240000 });
       if (!npm.ok) await reply(`⚠️ _package.json changed and \`npm install\` failed: \`${npm.err}\` — restarting anyway, check the box if something's missing._`);
-    }
-  }
-
-  if (dry) {
-    clearState();
-    return reply('🧪 _Dry-run: everything checked out, restart skipped (UPDATEBOT_DRYRUN=1)._');
-  }
-
-  // Give the reply a moment to flush, then bounce this pm2 process.
-  setTimeout(() => {
-    const pmId = process.env.pm_id;
-    const args = ['restart', pmId ? String(pmId) : (process.env.name || 'wa-bot'), '--update-env'];
-    execFile('pm2', args, { timeout: 30000 }, (err) => {
-      if (err) {
-        console.error('[updatebot] pm2 restart failed, falling back to process.exit:', err.message);
-        setTimeout(() => process.exit(0), 1000);
-      } else {
-        console.log(`[updatebot] pm2 restart issued (${args.slice(1).join(' ')})`);
+      // v2: nested sharp revives on npm install and crash-loops the bots —
+      // disable any copy that just came back before the restart puts it in play.
+      const scrubbed = scrubNestedSharp();
+      if (scrubbed.length) {
+        console.log('[updatebot] nested sharp disabled:', scrubbed.join(', '));
+        try {
+          const st = readState();
+          if (st) { st.scrubbed = scrubbed; writeState(st); }
+        } catch (e) { /* announce will just omit the scrub line */ }
+        await reply(`🧼 ⟢ _npm install brought back nested sharp — disabled it: ${scrubbed.join(', ')}. Bot stays on top-level sharp._`);
       }
-    });
-  }, 3500);
+    }
+    // v2: restart EVERY bot on this box (shared work tree — a jake-run update
+    // must reload subaru too, not just the process that ran the command).
+    const rr = await restartPm2Apps(restartApps);
+    if (!rr.ok) {
+      console.error('[updatebot] pm2 restart failed, falling back to process.exit:', rr.err);
+      setTimeout(() => process.exit(0), 1000);
+    } else {
+      console.log(`[updatebot] pm2 restart issued for [${rr.ids.join(', ')}] (${restartApps.join(', ')} via ${viaLabel})`);
+    }
+    return; // restart handles the rest; the boot poll delivers the announce
+  }
+
+  clearState();
+  return reply('🧪 _Dry-run: everything checked out, restart skipped (UPDATEBOT_DRYRUN=1)._');
 }
 
 // Boot poll: cardSystem requires this module at load on every boot.
@@ -254,4 +415,4 @@ setTimeout(() => {
   try { announcePendingUpdate(); } catch (e) { console.error('[updatebot] boot announce check failed:', e.message); }
 }, 8000);
 
-module.exports = { cmdUpdateBot, announcePendingUpdate, buildAnnounceText, readState, clearState, STATE_PATH };
+module.exports = { cmdUpdateBot, announcePendingUpdate, buildAnnounceText, readState, clearState, STATE_PATH, plainRemoteUrl, parseRestartApps, findNestedSharp, scrubNestedSharp, resolveRestartTargets };

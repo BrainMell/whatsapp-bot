@@ -91,6 +91,12 @@ const fakeM = { key: { remoteJid: OWNER } };
     const joined = replies.join('|');
     if (/ALREADY UP TO DATE/.test(joined)) {
       console.log('  \u2139 QA_ALT_BRANCH matches HEAD \u2014 set QA_ALT_BRANCH to a divergent branch; skipped');
+    } else if (/NOTHING TO PULL|DIVERGED|PROTECTED FIX MISSING|UPDATE FAILED|UPDATE ABORTED/.test(joined)) {
+      // The alt branch short-circuits before the dirty rail (e.g. groomed
+      // public branches lack the canaries — that refusal is itself correct).
+      // The rail itself is exercised by T2/T3 paths and on-box real runs.
+      console.log('  \u2139 alt branch refused upstream of the dirty rail (expected on groomed branches); rail not re-asserted here');
+      check('gate replies never leak a false success', !/ALREADY UP TO DATE|BOT UPDATE/.test(joined), joined.slice(0, 160));
     } else {
       check('clean tree passes the rail (proceeds past dirty check)', !/DIRTY TREE/.test(joined), joined.slice(0, 160));
       const tracked = path.join(ROOT, 'AGENT_ONBOARDING_PROMPT.md');
@@ -123,6 +129,57 @@ const fakeM = { key: { remoteJid: OWNER } };
     const { replies, reply } = collectReply();
     await UB.cmdUpdateBot(OWNER, reply, fakeM);
     check('stale state gone', !fs.existsSync(UB.STATE_PATH));
+    delete process.env.UPDATEBOT_DRYRUN;
+  }
+
+  console.log('== T7 restart-apps parsing (git_guard.conf) ==');
+  {
+    const apps = UB.parseRestartApps('# c\nRESTART_APPS="wa-jake wa-subaru"\nPEER_APPS="wa-joker"\n');
+    check('parses quoted two apps', apps.length === 2 && apps[0] === 'wa-jake' && apps[1] === 'wa-subaru', JSON.stringify(apps));
+    check('parses unquoted one app', UB.parseRestartApps('RESTART_APPS=wa-joker\n').join() === 'wa-joker');
+    check('missing conf is empty', UB.parseRestartApps('nothing here at all').length === 0);
+    check('peer apps never leak in', !JSON.stringify(UB.parseRestartApps('RESTART_APPS="wa-joker"\nPEER_APPS="wa-jake wa-subaru"')).includes('wa-jake'));
+  }
+
+  console.log('== T8 plainRemoteUrl (self-heal URL math) ==');
+  {
+    check('strips userinfo', UB.plainRemoteUrl('https://user:ghp_x@github.com/BrainMell/whatsapp-bot.git') === 'https://github.com/BrainMell/whatsapp-bot.git');
+    check('plain url untouched (null)', UB.plainRemoteUrl('https://github.com/BrainMell/whatsapp-bot.git') === null);
+    check('ssh url untouched (null)', UB.plainRemoteUrl('git@github.com:BrainMell/whatsapp-bot.git') === null);
+    check('no cred (null)', UB.plainRemoteUrl('') === null);
+  }
+
+  console.log('== T9 nested-sharp scan (box1 npm hazard) ==');
+  {
+    const os = require('os');
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qa_sharp_'));
+    const mk = (rel) => { fs.mkdirSync(path.join(tmpRoot, rel), { recursive: true }); };
+    mk('node_modules/pkg1/node_modules/sharp');           // nested copy — MUST be found
+    mk('node_modules/sharp');                             // top-level real install — must NOT
+    mk('node_modules/@img/sharp-linux-x64');              // official platform pkg — must NOT
+    mk('node_modules/pkg2/node_modules/sharp.disabled-old'); // already disabled — must NOT
+    mk('node_modules/a/node_modules/b/node_modules/sharp');  // deep nested — MUST be found
+    const found = UB.findNestedSharp(tmpRoot);
+    check('finds nested sharp', found.includes('node_modules/pkg1/node_modules/sharp'), JSON.stringify(found));
+    check('finds deep nested sharp', found.includes('node_modules/a/node_modules/b/node_modules/sharp'), JSON.stringify(found));
+    check('never flags top-level sharp', !found.includes('node_modules/sharp'), JSON.stringify(found));
+    check('never flags @img pkgs', !found.some(f => f.includes('@img')), JSON.stringify(found));
+    check('skips .disabled copies', !found.some(f => f.includes('.disabled')), JSON.stringify(found));
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  }
+
+  console.log('== T10 fetch failure is a loud abort ==');
+  {
+    process.env.UPDATEBOT_BRANCH = 'audit/fix-pass-1-does-not-exist';
+    process.env.UPDATEBOT_DRYRUN = '1';
+    try { fs.unlinkSync(UB.STATE_PATH); } catch (e) {}
+    const { replies } = collectReply();
+    await UB.cmdUpdateBot(OWNER, (t) => replies.push(String(t)), fakeM);
+    const joined = replies.join(' | ');
+    check('says UPDATE FAILED', /UPDATE FAILED/.test(joined), joined.slice(0, 180));
+    check('names the fetch', /git fetch/.test(joined));
+    check('no state written on failed fetch', !fs.existsSync(UB.STATE_PATH));
+    delete process.env.UPDATEBOT_BRANCH;
     delete process.env.UPDATEBOT_DRYRUN;
   }
 
