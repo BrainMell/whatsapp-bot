@@ -706,7 +706,7 @@ showLeaderboard: async (sock, chatId, botMarker, m) => {
   message += "└───────────────\n\n";
   message += leaderboard + "\n\n";
   message += "┌───────────────\n";
-  message += "🟢 Easy = 1pt | 🟡 Medium = 2pts | 🔴 Hard = 10pts\n";
+  message += "🟢 Easy = 1pt | 🟡 Medium = 2pts | 🔴 Hard = 5pts\n";
   message += "└───────────────";
 
   try {
