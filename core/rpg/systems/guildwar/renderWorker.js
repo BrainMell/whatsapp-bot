@@ -8,9 +8,13 @@
 // (the error propagates to the parent as a failed render -> text fallback).
 require('../../../utils/canvasAutoGate').install();
 process.on('message', async (msg) => {
-    if (!msg || !['render', 'room'].includes(msg.type)) return;
+    if (!msg || !['render', 'room', 'conquest'].includes(msg.type)) return;
     try {
-        if (msg.type === 'room') {
+        if (msg.type === 'conquest') {
+            const r = require('./conquest/render');
+            const buf = msg.what === 'siege' ? r.siegeInProcess(msg.data) : msg.what === 'card' ? r.envCardInProcess(msg.data.id) : r.mapInProcess(msg.data);
+            process.send({ id: msg.id, kind: 'conquest', png: buf.toString('base64') });
+        } else if (msg.type === 'room') {
             const roomScene = require('./roomScene');
             const buf = await roomScene._renderInProcess(msg.doc, msg.player, msg.room, msg.opts || {});
             process.send({ id: msg.id, kind: 'room', png: buf.toString('base64') });
@@ -20,6 +24,6 @@ process.on('message', async (msg) => {
             process.send({ id: msg.id, kind: 'map', png: buf.toString('base64') });
         }
     } catch (e) {
-        process.send({ id: msg.id, kind: msg.type === 'room' ? 'room' : 'map', error: e.message });
+        process.send({ id: msg.id, kind: msg.type === 'room' ? 'room' : msg.type === 'conquest' ? 'conquest' : 'map', error: e.message });
     }
 });

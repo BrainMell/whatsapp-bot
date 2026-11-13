@@ -28,5 +28,8 @@ Wall = gate 40% / left tower 20% / right tower 20% / curtain 20%. Each round (75
 ## Load model
 One Mongo doc per war, optimistic version retry; ~30-40 KB at end of a 6-guild sim. No rendering in the hot path (text interface). Tick runs under the existing flow lease.
 
+## Art & images (`art.js`, `render.js`)
+All procedural node-canvas (no external assets, no licences). Siege scene per round (env-card sky/weather/ground for all 29 cards, textured wood/stone/runed wall with cracks, fire, rubble, weak-point reticle, mines, turret and golem sprites, party HP strip), collectible-style environment cards (`cq card <id>`, `cq cards`), realm war map image (`cq map`). Rendered in the existing renderWorker child (`type:'conquest'`), memory-gated; failure falls back to text.
+
 ## Not built yet (planned)
-Rendered map/siege/environment-card images, golem/turret sprites (asset pack licence check needed), Titan art, research tree, pacts/tribute, scouts/decoys, an in-war "war room" image, group announcements. Balance numbers are unplaytested live (sims only): see `CFG`.
+Research tree, pacts/tribute, scouts/decoys, group announcements, hand-painted Titan/golem art (current sprites are procedural blocks). Balance numbers are unplaytested live (sims only): see `CFG`.

@@ -38,6 +38,11 @@ function gridText(s, guild, jid) {
     const rows = []; for (let y = Math.max(0, v.y - 3); y <= Math.min(map.H - 1, v.y + 3); y++) { let r = ''; for (let x = Math.max(0, v.x - 5); x <= Math.min(map.W - 1, v.x + 5); x++) { const id = map.tileId(v.realm, x, y); const t = E.view(s, id); r += id === p.at ? '🧍' : t.owner ? owners[t.owner] : ({ gem_vein: '💎', fortress: '🏰', titan: '☠️', ruins: '🏛️', shrine: '⛩️', ley_gate: '🌀', village: '🏘️', forest: '🌲', pass: '⛰️', keep: '👑' }[t.kind] || '⬜'); } rows.push(r); }
     return `🗺️ *${v.provName}* — ${label(s, p.at)}\n` + rows.join('\n') + '\n' + Object.entries(owners).map(([n, e]) => `${e} ${n}`).join('  ');
 }
+function mapSnap(s, guild, jid) {
+    const p = s.players[jid]; const realm = map.parse(p.at).realm; const tiles = Object.entries(s.overlays).filter(([id]) => id.startsWith(realm + ':')).map(([id, o]) => ({ id, owner: o.owner || null, shield: (o.shieldUntil || 0) > Date.now() }));
+    const ms = Object.values(s.marches).filter((m) => m.guild === guild).map((m) => ({ from: m.from, to: m.to }));
+    return { seed: s.seed, realm, tiles, guilds: Object.values(s.guilds).map((g) => ({ name: g.name, score: Math.round(g.score), tiles: g.tiles.length })).sort((a, b) => b.score - a.score), me: { at: p.at }, marches: ms, title: guild, sub: Math.max(0, Math.round((s.endsAt - Date.now()) / 60000)) + ' min left' };
+}
 function status(s, guild, jid) {
     const g = s.guilds[guild]; const p = s.players[jid]; const mins = Math.max(0, Math.round((s.endsAt - Date.now()) / 60000));
     return [`🏰 *${guild}* — ${g.tiles.length} tiles · score ${Math.round(g.score)}`, `📦 Supplies ${Math.floor(g.supplies)} · 📜 War Writs ${Math.floor(g.writs)} · 💎 Treasury ${g.treasury} · ☄️ Skyfall ${g.skyfalls}`, `🧍 ${p.status}${p.status === 'transit' && s.marches[p.marchId] ? ' → ' + label(s, s.marches[p.marchId].to) + ' in ' + fmtSec(s.marches[p.marchId].arrive - Date.now()) : ''} · at ${label(s, p.at)}`, `⛏️ Carrying ${p.carried || 0} ore · banked this war ${p.banked || 0}`, `⏳ ${mins} min left`].join('\n');
@@ -66,6 +71,7 @@ async function handle({ jid, text, prefix = '.', eventDoc }) {
         E.tick(s, now, events);
     }, createFor(eventDoc));
     if (out && out.afterApply) { try { out.afterApply(); } catch (e) { console.warn('[conquest] afterApply', e.message); } }
+    if (out && out.render) { const rr = require('./render'); const img = out.render.what === 'map' ? await rr.renderMap(out.render.data) : out.render.what === 'card' ? await rr.renderEnvCard(out.render.data.id) : await rr.renderSiege(out.render.data); if (img) return { image: img, text: out.render.what === 'map' ? (out.imageText || '').split('\n')[0] : out.text }; return { text: out.imageText || out.text }; }
     return out || { text: '…' };
 }
 function run(s, { jid, guildName, verb, args, rest, now, L, events }) {
@@ -80,7 +86,10 @@ function run(s, { jid, guildName, verb, args, rest, now, L, events }) {
     // fight verbs
     if (FIGHT_VERBS.has(verb)) { const b = s.breaches[p.breachId]; if (!b) return { text: 'You are not in a fight. `cq targets` → `cq march <#>`.' }; const r = breach.submit(b, jid, verb, args[0]); const extra = r.ok ? '\n' + breach.statusText(b) : ''; if (r.ok && breach.allSubmitted(b)) { const ev = []; E.tick(s, now, ev); events.push(...ev); } return { text: (r.ok ? `✔ ${r.action}${r.target ? ' → ' + r.target : ''}` : '❌ ' + r.msg) + extra }; }
     switch (verb) {
-        case 'map': case 'm': return { text: gridText(s, guildName, jid) };
+        case 'map': case 'm': return { text: gridText(s, guildName, jid), render: { what: 'map', data: mapSnap(s, guildName, jid) }, imageText: gridText(s, guildName, jid) };
+        case 'cards': return { text: '🃏 Environment cards: ' + envCards.CARDS.map((c) => c.id).join(', ') + '\nSee one: `cq card <id>`' };
+        case 'card': { const c = envCards.BY_ID[(args[0] || '').toLowerCase()]; if (!c) return { text: 'Unknown card. `cq cards` lists them.' }; return { text: `${c.name}: ${c.text}`, render: { what: 'card', data: { id: c.id } } }; }
+        case 'siege': { const b = s.breaches[p.breachId]; if (!b) return { text: 'You are not in a siege.' }; return { text: breach.statusText(b), render: { what: 'siege', data: JSON.parse(JSON.stringify(b)) } }; }
         case 'targets': case 't': return { text: targetsText(s, guildName, jid) };
         case 'tile': { const v = E.view(s, T(args[0]) || p.at); return { text: `${label(s, v.id)}\n${map.KINDS[v.kind].label} · claim: ${map.KINDS[v.kind].claim}${v.wall ? `\n🧱 ${v.wall.type} wall ${v.wall.hp}/${v.wall.max}` : ''}${v.golems.length ? '\n🗿 ' + v.golems.map((g) => `${g.kind} L${g.lvl}`).join(', ') : ''}${v.turrets.length ? '\n🏹 ' + v.turrets.map((g) => `${g.kind} L${g.lvl}`).join(', ') : ''}${v.veinLeft ? `\n💎 vein ${v.veinLeft} left` : ''}` }; }
         case 'status': case 's': return { text: status(s, guildName, jid) };
