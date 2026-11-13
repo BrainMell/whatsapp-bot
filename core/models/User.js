@@ -138,6 +138,11 @@ const UserSchema = new mongoose.Schema({
     crit: { type: Number, default: 0 }
   },
   
+  // Aether Gems (guild-war conquest currency; distinct from the rare_gem item). Spent in the summon shop.
+  gems: { type: Number, default: 0, min: 0 },
+  gemsWarKey: { type: String, default: '' },
+  gemsWarBanked: { type: Number, default: 0 },
+
   professions: {
     mining: { level: { type: Number, default: 1 }, xp: { type: Number, default: 0 } },
     crafting: { level: { type: Number, default: 1 }, xp: { type: Number, default: 0 } }

@@ -1153,7 +1153,17 @@ async function mineOre(sock, chatId, senderJid, locationId) {
         }
     }
 
-    Object.entries(found).forEach(([id, qty]) => { msg += `- ${qty}x ${lootSystem.getItemInfo(id).name}\n`; });
+    // 💎 Aether seam (GW_CONQUEST): a very rare hidden gem seam; deeper Mines find it a little more often.
+    try {
+        const _gc = require('../rpg/systems/guildwar/conquest/config');
+        if (_gc.enabled()) {
+            const _gm = require('../rpg/systems/guildwar/conquest/gems');
+            const _seam = _gm.rollSeam(minesLvl);
+            if (_seam > 0) { const _u = economy.getUser(senderJid); _gm.credit(_u, _seam); if (economy.scheduleSave) economy.scheduleSave(senderJid); found.__gems = _seam; }
+        }
+    } catch (_e) { /* gems are a bonus — never break mining */ }
+    Object.entries(found).filter(([id]) => id !== '__gems').forEach(([id, qty]) => { msg += `- ${qty}x ${lootSystem.getItemInfo(id).name}\n`; });
+    if (found.__gems) msg += `\n💎 *AETHER SEAM!* A glowing vein yields ${found.__gems} Aether Gems!\n`;
     if (luckyFinds > 0) msg += `\n💰 *LUCKY FIND!* You found a lost pouch containing ${economy.getZENI()}${luckyFinds.toLocaleString()}!\n`;
     const energyLeft = economy.getPersistentEnergy(senderJid, maxEn);
     msg += `\n⚡ Energy Left: ${energyLeft}/${maxEn} (-${energyCost})\n⛏️ Mines Lv.${minesLvl} · yield ×${minesMult}`;

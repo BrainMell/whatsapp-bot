@@ -6,7 +6,7 @@ const { CARD_CATALOG, CARD_ALIASES, RARITY } = require('./catalog');
 const MODERATOR_GRANTS_ENABLED = true;
 const AUTOMATIC_ACQUISITION_ENABLED = false;
 const ACQUISITION_SOURCES = Object.freeze({
-  moderator: true, quest: false, boss_drop: false, event: false, shop: false, trade: false,
+  moderator: true, gem_shop: true, quest: false, boss_drop: false, event: false, shop: false, trade: false,
 });
 
 function normalizeCardId(value) {
@@ -44,7 +44,7 @@ function createSummonCardSystem(economy) {
     })).sort((x, y) => ((RARITY[y.rarity] || {}).rank || 0) - ((RARITY[x.rarity] || {}).rank || 0) || x.name.localeCompare(y.name));
   }
 
-  function grantCard(jid, rawCardId, grantedBy) {
+  function grantCard(jid, rawCardId, grantedBy, source) {
     const cardId = normalizeCardId(rawCardId);
     if (!cardId) {
       return { success: false, message: 'Unknown card. Valid IDs: ' + Object.keys(CARD_CATALOG).join(', ') + '.' };
@@ -56,7 +56,7 @@ function createSummonCardSystem(economy) {
       return { success: false, message: CARD_CATALOG[cardId].name + ' is already owned.' };
     }
     user.summonCards = cards.concat([{
-      cardId, grantedAt: Date.now(), grantedBy: String(grantedBy || 'moderator'), source: 'moderator',
+      cardId, grantedAt: Date.now(), grantedBy: String(grantedBy || 'moderator'), source: source === 'gem_shop' ? 'gem_shop' : 'moderator',
     }]);
     save(jid);
     return { success: true, card: CARD_CATALOG[cardId] };
@@ -94,6 +94,9 @@ function createSummonCardSystem(economy) {
     const normalizedSource = String(source || '').trim().toLowerCase();
     if (normalizedSource === 'moderator' && MODERATOR_GRANTS_ENABLED && ACQUISITION_SOURCES.moderator) {
       return grantCard(jid, rawCardId, actor);
+    }
+    if (normalizedSource === 'gem_shop' && ACQUISITION_SOURCES.gem_shop) {
+      return grantCard(jid, rawCardId, actor || 'gem_shop', 'gem_shop');
     }
     if (!AUTOMATIC_ACQUISITION_ENABLED || !ACQUISITION_SOURCES[normalizedSource]) {
       return { success: false, message: 'Summon-card acquisition is currently moderator-only.' };

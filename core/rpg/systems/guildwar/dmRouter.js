@@ -325,6 +325,10 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
     if (prefixed && !lower.startsWith(prefix.toLowerCase())) norm = norm.replace(/^j\s+/, '');
     else if (prefixed && /^j\s+[a-z]/.test(norm) && !/^(join|j)$/.test(norm)) norm = norm.replace(/^j\s+/, '');
 
+    // ⚔️ conquest layer (GW_CONQUEST=1): all verbs start with "cq"
+    if (/^cq\b|^conquest\b/.test(norm)) {
+        try { const cq = require('./conquest'); if (cq.enabled()) { const evc = await getEventForPlayer(senderJid); const r = await cq.handle({ jid: senderJid, text: norm, prefix, eventDoc: evc }); if (r) return r; } } catch (e) { console.warn('[conquest] dm failed:', e.message); return { text: '⚠️ Conquest hiccup — try again.' }; }
+    }
     // prefixed generic commands are NEVER war verbs — hand them back early
     if (opts.prefixed && GENERIC_PREFIXED_RE.test(norm)) return null;
 

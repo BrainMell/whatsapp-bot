@@ -351,6 +351,8 @@ async function tick(sock, BOT_MARKER) {
         // DM start cards and mutate state atomically.
         // flow lease: exactly ONE instance runs the proactive blocks
         if (!(await claimFlow(ev.eventId))) continue;
+        // ⚔️ conquest layer (GW_CONQUEST=1): resolves marches + siege rounds, DMs participants. Never blocks the legacy flow.
+        try { await require('./conquest/ticker').tickWar(ev, sock); } catch (e) { console.warn('[conquest] tick failed:', e.message); }
         // registration expiry → force start
         if (ev.state === 'REGISTRATION' && ev.registrationEndsAt && Date.now() > ev.registrationEndsAt) {
             if (ev.players.length >= 2) {
