@@ -378,3 +378,12 @@ let rawArgs = lowerTxt.startsWith(`${prefix} chess`)
 **How it works here**: Conditional operators are used to make decisions based on conditions. The `?` operator is used to provide a value if the condition is true, and the `:` operator is used to provide a value if the condition is false.
 **Why it's used**: Conditional operators are used to make decisions based on conditions, making it easier to write more concise code.
 **If you change/remove it**: If you remove the conditional operator, the code will not be able to make decisions based on conditions. If you change the conditional operator, the code will produce different results.
+
+---
+
+## v2 (2026-11-13) — what changed
+- **Renderer (Go, `bot_genaration/pkg/chess`)**: 7 board themes (`classic` = redesigned original and default, `walnut`, `marble`, `midnight`, `dungeon` RPG, `inferno` RPG, `sakura`), 6 piece sets (`classic`, `chessnut`, `fantasy`, `celtic`, `spatial`, `rhosgfx`), check glow, legal-move dots, flip. New endpoints `/api/chess/themes` (preview sheets) and `/api/chess/leaderboard`. Old `{fen,lastMove}` requests still work.
+- **Commands**: `chess theme [name|#]`, `chess pieces [name|#]` (saved per player), `chess ai [easy|medium|hard|insane] [white|black]`, `chess accept|decline|cancel`, `chess hint`, `chess moves [square]`.
+- **AI** (`core/games/chessAI.js`): negamax + alpha-beta + quiescence in a worker thread. Old PST tables were upside-down for both colours; fixed. AI games never touch Elo.
+- **Leaderboard**: real Elo (K=32, PvP only), image output, bot excluded, names instead of raw-number mentions.
+- **Glitch fixes**: `bxc3`-style pawn captures were turned into bishop moves; `o-o` typed in lowercase never reached the chess handler; AI could play a ghost move after `stop`; AI search blocked the event loop; challenges (and bets) started without the opponent's consent; `undo` was unilateral (now needs opponent consent, disabled in bet games); undo/restart lost repetition + 50-move history (state now stores SAN moves); stalemate/repetition all reported as a generic draw; abandoned games blocked the chat forever (24h expiry, 30-min idle stop); concurrent moves are serialised per chat. Moves also accept coordinates (`e2e4`, `e2 e4`).

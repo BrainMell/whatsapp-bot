@@ -32938,7 +32938,7 @@ _(or reply to their message)_
                     if (
                       chessGame &&
                       (/^[a-hKQRBNP]/i.test(move) ||
-                        move.includes("O-O") ||
+                        /^[o0]-[o0]/i.test(move) ||
                         move.includes("x"))
                     ) {
                       return await chess.handleChess(

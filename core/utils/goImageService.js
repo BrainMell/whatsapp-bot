@@ -709,6 +709,22 @@ class GoImageService {
     });
   }
 
+  /* Chess board-theme / piece-set preview sheet (2026-11-13) */
+  async generateChessThemes(data) {
+    return this._enqueue(async () => {
+      const response = await this.client.post("/api/chess/themes?fmt=jpeg", data, { responseType: "arraybuffer", timeout: 15000 });
+      return Buffer.from(response.data);
+    });
+  }
+
+  /* Chess Elo leaderboard image (2026-11-13) */
+  async generateChessLeaderboard(data) {
+    return this._enqueue(async () => {
+      const response = await this.client.post("/api/chess/leaderboard?fmt=jpeg", data, { responseType: "arraybuffer", timeout: 15000 });
+      return Buffer.from(response.data);
+    });
+  }
+
   /*
    * Generate Chess Board
    */
