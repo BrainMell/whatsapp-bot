@@ -1,6 +1,6 @@
 // ============================================
 // ♟️ GOTEN-BOT CHESS SYSTEM  (v2 - 2026-11-13)
-// PvP + bets (with accept), real AI (4 levels, worker-thread engine), board themes + piece sets,
+// PvP + bets (with accept), real AI (4 levels, worker-thread engine), board themes + piece sets (per chat),
 // beginner helpers (hint / show legal moves / coordinate moves), real Elo leaderboard.
 // ============================================
 
@@ -106,7 +106,7 @@ function newId() { return `${Date.now().toString(36)}${Math.random().toString(36
 
 function createGame(playerW, playerB, chatId, opts = {}) {
     const game = new Chess();
-    const prefs = getPrefs(opts.styleOwner || playerW);
+    const prefs = getPrefs(chatId); // style is the chat's (group-wide), not the starting player's
     const state = {
         id: newId(), chess: game, playerW, playerB, bet: opts.bet || 0, chatId,
         startTime: Date.now(), lastActivity: Date.now(), lastMove: null, status: 'active',
@@ -136,17 +136,17 @@ function getGame(chatId) {
 function deleteGame(chatId) { getActiveGames().delete(chatId); saveActiveGames(); }
 
 // ============================================
-// PREFERENCES (board theme + piece set, per player)
+// PREFERENCES (board theme + piece set, per chat: one shared look per GC; DMs key on the DM chat id)
 // ============================================
 const DEFAULT_PREFS = { board: 'classic', pieces: 'classic' };
-function getPrefs(jid) {
+function getPrefs(chatId) {
     const all = system.get('chess_prefs', {});
-    const p = all[cleanJid(jid)] || {};
+    const p = all[String(chatId)] || {};
     return { board: BOARDS.includes(p.board) ? p.board : DEFAULT_PREFS.board, pieces: PIECES.includes(p.pieces) ? p.pieces : DEFAULT_PREFS.pieces };
 }
-function setPref(jid, field, value) {
+function setPref(chatId, field, value) {
     const all = system.get('chess_prefs', {});
-    const k = cleanJid(jid);
+    const k = String(chatId);
     all[k] = { ...(all[k] || {}), [field]: value };
     system.set('chess_prefs', all);
 }
@@ -408,7 +408,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
     // ── 0. THEMES / PIECES (work any time, no game needed) ────────────────────
     if (cmd === 'theme' || cmd === 'themes' || cmd === 'board-theme' || cmd === 'pieces' || cmd === 'style') {
         const isPieces = cmd === 'pieces';
-        const prefs = getPrefs(senderJid);
+        const prefs = getPrefs(chatId);
         const g = live && (sameJid(senderJid, live.playerW) || sameJid(senderJid, live.playerB)) ? live : null;
         const cur = g ? g.style : prefs;
         const arg = args.slice(1).join(' ');
@@ -425,11 +425,11 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         }
         const choice = isPieces ? resolveChoice(arg, PIECES, PIECE_ALIAS) : resolveChoice(arg, BOARDS, BOARD_ALIAS);
         if (!choice) return send(`❌ Unknown ${isPieces ? 'piece set' : 'theme'} _${arg}_. Send \`${prefix} chess ${isPieces ? 'pieces' : 'theme'}\` to see the list.`);
-        setPref(senderJid, isPieces ? 'pieces' : 'board', choice);
+        setPref(chatId, isPieces ? 'pieces' : 'board', choice);
         if (g) { g.style[isPieces ? 'pieces' : 'board'] = choice; saveActiveGames(); }
         const label = isPieces ? PIECE_LABEL[choice] : BOARD_LABEL[choice];
         const preview = g || { chess: new Chess(), lastMove: '', style: { ...prefs, [isPieces ? 'pieces' : 'board']: choice } };
-        return sendBoard(sock, chatId, preview, botMarker + `✅ ${isPieces ? 'Pieces' : 'Board'} set to *${label}*${g ? ' (this game updated too)' : ''}\n_Saved - your future games will use it._`);
+        return sendBoard(sock, chatId, preview, botMarker + `✅ ${isPieces ? 'Pieces' : 'Board'} set to *${label}*${g ? ' (this game updated too)' : ''}\n_Saved for this chat - games here will use it._`);
     }
 
     // ── 1. LEADERBOARD ────────────────────────────────────────────────────────
@@ -459,13 +459,13 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         const games = s.wins + s.losses + s.draws;
         const ranked = Object.entries(scores).filter(([k, x]) => cleanJid(k) !== cleanJid(botJid) && (x.wins + x.losses + x.draws) > 0).sort(([, a], [, b]) => (b.elo || 1200) - (a.elo || 1200));
         const pos = ranked.findIndex(([k]) => cleanJid(k) === cleanJid(target));
-        const prefs = getPrefs(target);
+        const prefs = getPrefs(chatId);
         const ai = s.ai || { wins: 0, losses: 0, draws: 0 };
         return send(`🏆 *${sameJid(target, senderJid) ? 'YOUR' : `@${cleanJid(target)}'S`} CHESS STATS*\n\n` +
             `📈 Elo: *${s.elo}*${pos >= 0 ? `  (rank #${pos + 1})` : ''}\n` +
             `⚔️ PvP: ${s.wins}W · ${s.losses}L · ${s.draws}D${games ? `  (${Math.round((s.wins / games) * 100)}% wins)` : ''}\n` +
             `🤖 vs AI: ${ai.wins}W · ${ai.losses}L · ${ai.draws}D\n` +
-            `🎨 Style: ${BOARD_LABEL[prefs.board]} / ${PIECE_LABEL[prefs.pieces]}`, [target]);
+            `🎨 Chat style: ${BOARD_LABEL[prefs.board]} / ${PIECE_LABEL[prefs.pieces]}`, [target]);
     }
 
     // ── 3. HELP / GUIDE ───────────────────────────────────────────────────────
@@ -504,7 +504,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
         }
         const white = Math.random() < 0.5 ? ch.from : ch.to; // fair colours
         const black = white === ch.from ? ch.to : ch.from;
-        const state = createGame(white, black, chatId, { bet: ch.bet, styleOwner: ch.from });
+        const state = createGame(white, black, chatId, { bet: ch.bet });
         return sendBoard(sock, chatId, state, botMarker + `♟️ *CHESS MATCH START!* ♟️\n\n⚪ *White:* @${cleanJid(white)}\n⚫ *Black:* @${cleanJid(black)}\n💰 *Bet:* ${ch.bet.toLocaleString()} Zeni\n🎨 ${BOARD_LABEL[state.style.board]}\n\n👉 @${cleanJid(white)} to move!\nUse \`${prefix} move e2e4\` or \`${prefix} move e4\` - new? send \`${prefix} chess guide\``, [white, black]);
     }
 
@@ -522,7 +522,7 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
             let side = rest.find((a) => ['white', 'black', 'random', 'w', 'b'].includes(a)) || 'white';
             if (side === 'random') side = Math.random() < 0.5 ? 'white' : 'black';
             const humanWhite = side === 'white' || side === 'w';
-            const state = createGame(humanWhite ? senderJid : botJid, humanWhite ? botJid : senderJid, chatId, { ai: { level, color: humanWhite ? 'b' : 'w' }, styleOwner: senderJid });
+            const state = createGame(humanWhite ? senderJid : botJid, humanWhite ? botJid : senderJid, chatId, { ai: { level, color: humanWhite ? 'b' : 'w' } });
             const cap = botMarker + `♟️ *CHESS vs AI* 🤖\n\n⚪ *White:* ${humanWhite ? `@${cleanJid(senderJid)}` : '🤖 AI'}\n⚫ *Black:* ${humanWhite ? '🤖 AI' : `@${cleanJid(senderJid)}`}\n🧠 *Level:* ${level}  _(${levelLine()})_\n🎨 ${BOARD_LABEL[state.style.board]}\n\n` + (humanWhite ? `👉 You move first! \`${prefix} move e2e4\` or \`${prefix} move e4\`\nStuck? \`${prefix} chess hint\` · New? \`${prefix} chess guide\`` : '🤖 AI opens...');
             await sendBoard(sock, chatId, state, cap, [senderJid]);
             if (isAiTurn(state)) scheduleAI(sock, chatId, state, botMarker);
