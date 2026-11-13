@@ -186,3 +186,6 @@ const fakeM = { key: { remoteJid: OWNER } };
   console.log(`\nQA: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('QA crashed:', e); process.exit(2); });
+
+// 2026-11-13: real-run markers — QA_REAL fired this end to end on both boxes
+// (box2 joker 09:xx, box1 jake+subaru right after; both announced UPDATE COMPLETE).
