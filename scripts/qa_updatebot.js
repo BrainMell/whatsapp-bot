@@ -189,3 +189,4 @@ const fakeM = { key: { remoteJid: OWNER } };
 
 // 2026-11-13: real-run markers — QA_REAL fired this end to end on both boxes
 // (box2 joker 09:xx, box1 jake+subaru right after; both announced UPDATE COMPLETE).
+// 2026-11-13: QA_REAL re-proof via box1 primary Subaru (jake stays unpaired).
