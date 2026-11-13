@@ -58,13 +58,27 @@ function withLock(chatId, fn) {
 const getChessKey = () => `active_chess_games_${botConfig.getBotId() || 'global'}`;
 
 // Rebuild a Chess from stored SAN history so threefold-repetition / 50-move counters survive restarts and undo.
+// If the tail of the history no longer replays (34e: "phantom" moves that were echoed but never applied),
+// fall back to the longest prefix that still replays and matches the stored FEN, and trim state.moves to it.
 function rebuildChess(state) {
-    if (Array.isArray(state.moves) && state.moves.length) {
+    const moves = Array.isArray(state.moves) ? state.moves : [];
+    if (moves.length) {
         try {
             const c = new Chess();
-            for (const san of state.moves) c.move(san);
+            for (const san of moves) c.move(san);
             return c;
-        } catch (e) { /* fall through to FEN */ }
+        } catch (e) { /* corrupted tail - try to repair below */ }
+        for (let n = moves.length - 1; n > 0; n--) {
+            try {
+                const c = new Chess();
+                for (const san of moves.slice(0, n)) c.move(san);
+                if (!state.fen || c.fen() === state.fen) {
+                    console.log(`[Chess] repaired game ${state.id || '?'}: dropped ${moves.length - n} phantom move(s) from history`);
+                    state.moves = moves.slice(0, n);
+                    return c;
+                }
+            } catch (e) { /* keep trimming */ }
+        }
     }
     return new Chess(state.fen || START_FEN);
 }
@@ -230,6 +244,10 @@ function parseMove(chess, raw) {
         if (!m && !uci[3]) m = tryMove(chess, { ...base, promotion: 'q' }); // pawn reaching the last rank: default queen
         if (m) return m;
     }
+    // play a move picked from the legal list: parseMove MUST only ever return a move that is
+    // already on the board (applyMove trusts that). 34e lesson: returning raw legal-list entries
+    // made every lowercase piece move echo but never move a piece - AI never got its turn.
+    const playPicked = (mv) => (mv ? tryMove(chess, { from: mv.from, to: mv.to, promotion: mv.promotion }) : null);
     const compact = s.replace(/\s+/g, '');
     // piece-letter inputs: pick by piece type ourselves (chess.js 1.4 move() is case-insensitive and
     // prefers pawns, so "Bxc3" can wrongly resolve to a pawn capture and vice versa).
@@ -241,9 +259,9 @@ function parseMove(chess, raw) {
         const legal = chess.moves({ verbose: true });
         const pieceForm = legal.filter((mv) => mv.piece === pc && norm(mv.san) === wanted);
         const pawnForm = legal.filter((mv) => mv.piece === 'p' && norm(mv.san) === wanted);
-        if (/^[NBRQK]/.test(compact) && pieceForm.length) return pieceForm[0];
-        if (pawnForm.length) return pawnForm[0];
-        if (pieceForm.length) return pieceForm[0];
+        if (/^[NBRQK]/.test(compact)) { const m = playPicked(pieceForm[0]); if (m) return m; }
+        const pawn = playPicked(pawnForm[0]); if (pawn) return pawn;
+        const piece = playPicked(pieceForm[0]); if (piece) return piece;
     }
     const variants = [compact];
     // "nf3" -> "Nf3" ONLY after the as-typed form failed, so "bxc3" stays a pawn capture
@@ -260,7 +278,7 @@ function parseMove(chess, raw) {
     const key = (x) => String(x).replace(/[=\s+#]+/g, '').toLowerCase();
     const wanted = key(compact);
     const hits = chess.moves({ verbose: true }).filter((mv) => key(mv.san) === wanted);
-    if (hits.length) return hits.find((mv) => mv.piece === 'p') || hits[0];
+    if (hits.length) { const m = playPicked(hits.find((mv) => mv.piece === 'p') || hits[0]); if (m) return m; }
     return null;
 }
 
@@ -344,6 +362,18 @@ const isAiTurn = (state) => !!state.ai && state.chess.turn() === state.ai.color;
 // APPLY A MOVE (shared by humans and the AI)
 // ============================================
 async function applyMove(sock, chatId, state, move, botMarker) {
+    // 34e safety net: applyMove must always run on a board the move is already on.
+    // If it is not the last move played, play it here; refuse loudly if even that fails
+    // (an unapplied move used to echo nicely while the position silently never changed).
+    const last = state.chess.history({ verbose: true }).slice(-1)[0];
+    if (!last || last.san !== move.san || last.from !== move.from || last.to !== move.to) {
+        const applied = tryMove(state.chess, { from: move.from, to: move.to, promotion: move.promotion });
+        if (!applied) {
+            console.error(`[Chess] applyMove: refusing unplayable move ${move.san} (game ${state.id} chat ${chatId})`);
+            return;
+        }
+        move = applied;
+    }
     state.moves.push(move.san);
     state.fen = state.chess.fen();
     state.lastMove = move.from + move.to;
@@ -397,7 +427,7 @@ function scheduleAI(sock, chatId, state, botMarker) {
             // ghost-move guard: the game was stopped / replaced / moved on while the engine was thinking
             if (cur !== state || state.id !== id || state.moves.length !== ply || !isAiTurn(state) || !pick) return;
             const move = tryMove(state.chess, pick.san);
-            if (!move) return;
+            if (!move) { console.error(`[Chess][AI] engine pick ${pick.san} unplayable in game ${id} - skipping AI move`); return; }
             await applyMove(sock, chatId, state, move, botMarker);
         });
     })().catch((e) => { state.aiThinking = false; console.error('[Chess][AI] turn failed:', e); });
