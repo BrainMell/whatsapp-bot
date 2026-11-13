@@ -2388,13 +2388,24 @@ async function startBot(configInstance) {
     async function handleImgCommand(sock, chatId, query, m) {
       await sock.sendMessage(chatId, { react: { text: "🔍", key: m.key } });
       try {
-        const data = await goService.searchPinterest(query, 5);
+        // 💡 FIX 2026-11-13: usage says `img [count] <query>` but the count was
+        // never parsed — "img 5 goku" searched Pinterest for the literal text
+        // "5 goku" (random pins) and always sent 5. Strip a leading count.
+        let imgCount = 5;
+        let imgQuery = String(query || "").trim();
+        const cm = imgQuery.match(/^(\d{1,2})\s+(\S.*)$/);
+        if (cm) {
+          imgCount = Math.min(10, Math.max(1, parseInt(cm[1], 10)));
+          imgQuery = cm[2].trim();
+        }
+        const data = await goService.searchPinterest(imgQuery, imgCount);
         const images = data.images || [];
+        console.log(`🔍 [img] "${imgQuery}" x${imgCount} -> ${images.length} result(s)`);
         if (!images.length)
           return await sock.sendMessage(chatId, {
             text: BOT_MARKER + "❌ No results found.",
           });
-        for (const img of images.slice(0, 5)) {
+        for (const img of images.slice(0, imgCount)) {
           // 💡 FIX: route through sendImageSafe (passes jpegThumbnail to
           // skip Baileys' sharp/jimp thumbnail generation, has fallbacks)
           await sendImageSafe(sock, chatId, img, "", m);
