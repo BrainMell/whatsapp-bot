@@ -229,16 +229,28 @@ function buildAnnounceText(st) {
 // cardSystem requires this module at boot; 8s later we start polling for the
 // WA socket and deliver any pending update announce. Runs in THIS process
 // only, so the announce goes out from the same bot that handled the command.
+// v2.1: if the command's bot can't deliver (unpaired / socket down), a SIBLING
+// bot on the same box takes over after a 2-min grace period — the box shares
+// one work tree, so the update is just as done for it. Claim-before-send (the
+// state is cleared first) keeps a primary/sibling race from double-posting.
+const ANNOUNCE_FALLBACK_MS = 2 * 60 * 1000;
 function announcePendingUpdate() {
   const st = readState();
   if (!st || !st.chatId || !st.to) return;
-  // Only the bot that ran the command announces for it (jake/subaru/joker
-  // all load this module at boot; without this the fastest boot would steal
-  // the announce and clear the file before the updating bot is even up).
-  // 'global' (QA/standalone runs with no BOT_INSTANCE) is a wildcard: any
-  // boot on this box may deliver it.
+  // Prefer the bot that ran the command (jake/subaru/joker all load this
+  // module at boot; without a preference the fastest boot would steal the
+  // announce and clear the file before the updating bot is even up).
+  // 'global' (QA/standalone runs with no BOT_INSTANCE) is a wildcard.
   const myBotId = processBotId();
-  if (st.bot && myBotId && st.bot !== 'global' && st.bot !== myBotId) return;
+  const primaryStale = Date.now() - (st.at || 0) > ANNOUNCE_FALLBACK_MS;
+  const mine = !st.bot || st.bot === 'global' || st.bot === myBotId;
+  if (!mine && !primaryStale) {
+    // Not my announce and the primary still has grace time left — re-check
+    // once the grace expires (this boot-only poll has no other trigger).
+    setTimeout(() => { try { announcePendingUpdate(); } catch (e) { /* next boot */ } },
+      Math.max(30000, ANNOUNCE_FALLBACK_MS - (Date.now() - (st.at || 0)) + 30000));
+    return;
+  }
   if (Date.now() - (st.at || 0) > STALE_MS) { clearState(); return; }
   let tries = 0;
   const tick = async () => {
@@ -248,9 +260,11 @@ function announcePendingUpdate() {
       const engine = require('../../../engine');
       const sock = engine.getSock ? engine.getSock() : null;
       if (sock && sock.user) {
-        await sock.sendMessage(st.chatId, { text: buildAnnounceText(st) });
-        clearState();
-        console.log(`[updatebot] update announce delivered to ${st.chatId}`);
+        const payload = buildAnnounceText(st);
+        const deliver = `${st.bot || 'global'}${primaryStale && st.bot !== myBotId ? ' (via ' + myBotId + ' fallback)' : ''}`;
+        clearState(); // claim: any other boot/race now sees no pending state
+        await sock.sendMessage(st.chatId, { text: payload });
+        console.log(`[updatebot] update announce delivered to ${st.chatId} (${deliver})`);
         return;
       }
     } catch (e) {
