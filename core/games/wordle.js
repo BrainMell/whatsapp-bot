@@ -195,7 +195,7 @@ function updateScoreboard(playerJid, playerName, won, attempts, difficulty = 'me
     scores[normalizedJid].points = 0;
   }
 
-  const pointsMap = { easy: 1, medium: 2, hard: 10 }; // owner 2026-10-31: hard mode wins are worth a lot more
+  const pointsMap = { easy: 1, medium: 2, hard: 5 }; // owner 2026-10-31: hard worth more; 2026-11-13: reduced 10 -> 5
   const earnedPoints = pointsMap[difficulty] || 2;
 
   if (won) {
