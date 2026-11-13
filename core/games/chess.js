@@ -236,7 +236,7 @@ function parseMove(chess, raw) {
     if (/^[nbrqk]/i.test(compact) && compact.length >= 3) variants.push(compact[0].toUpperCase() + compact.slice(1));
     // the dispatcher lowercases input before it reaches us, which kills the promotion piece ("=Q" arrives as "=q"): restore it
     if (/[a-h][18]/i.test(compact)) {
-        const fixed = compact.replace(/=?[qrbn]$/i, (m0, c) => '=' + c.toUpperCase());
+        const fixed = compact.replace(/=?([qrbn])$/i, (m0, c) => '=' + c.toUpperCase());
         if (fixed !== compact) variants.push(fixed);
     }
     variants.push(compact.toLowerCase());

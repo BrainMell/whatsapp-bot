@@ -47,7 +47,7 @@ function stockfishMove(fen, level) {
     });
 }
 
-function stockfishPing(ms = 4000) {
+function stockfishPing(ms = 6000) {
     return new Promise((resolve, reject) => {
         let p;
         try { p = spawn(sfBin(), [], { stdio: ['pipe', 'pipe', 'ignore'] }); }
