@@ -537,7 +537,7 @@ module.exports = {
     // Difficulty display
     const difficultyEmoji = { easy: '🟢', medium: '🟡', hard: '🔴' };
     const difficultyName = difficulty.toUpperCase();
-    const pointsEarned = { easy: '1pt', medium: '2pts', hard: '10pts' };
+    const pointsEarned = { easy: '1pt', medium: '2pts', hard: '5pts' };
     
     let message = botMarker + "┌───────────────┐\n";
     message += "🔤 *WORDLE STARTED!* 🔤\n";
