@@ -5,9 +5,14 @@
 // Same machinery as the regular preplanned pack (pinned logos from the verified
 // dataset, pinned typed/mc trivia, pinned theme songs) - only the content differs.
 //
-//   event1 = the preplanned pack's 30 logos (text-only logos swapped for text-free ones), 20 harder
-//            hand-written franchise questions, 6 theme songs.
-//   event2 = finale: 10 video game questions + obscure comic character / team picture rounds.
+//   event1 = the preplanned pack's 30 logos (text-only logos swapped for text-free ones), a 16-portrait
+//            "Name the Anime" picture round, 20 harder hand-written franchise questions, 6 theme songs.
+//   event2 = finale: 10 video game questions + a 12-portrait "Which Game?" picture round + obscure
+//            comic character / team picture rounds.
+//
+// 2026-11-14 (bake-time fetch round): the two portrait rounds ship BUNDLED art under assets/gn-quiz/
+// (anime/<slug>.jpg, games/<slug>.jpg) - every file was visually verified at bake time, so the quiz
+// never live-fetches these and can't ship a wrong image.
 //
 // Every logo name below exists in data/logoDataset.json (live + modern), so
 // images come from the audited dataset path, not live search. Decoys are
@@ -98,6 +103,29 @@ const E1_TRIVIA = [
   T("e1-gow-hercules", "God of War", "medium", "Which half-brother of Kratos does he beat to death in God of War III, taking the Nemean Cestus?", "Hercules", ["Heracles"]),
 ];
 
+// "Name the Anime" picture round - one iconic character portrait per franchise, bundled art
+// (assets/gn-quiz/anime/<slug>.jpg), visually verified at bake time. Typed answers; the v8 matcher
+// handles romaji/EN variants via alts.
+const AN = (slug, answer, alts = []) => ({ id: `e1-an-${slug}`, file: `anime/${slug}.jpg`, fmt: "typed", q: "Which anime is this character from?", answer, alts, difficulty: "easy", topic: "Name the Anime" });
+const E1_ANIME = [
+  AN("naruto", "Naruto", ["Naruto Shippuden", "Naruto Shippuuden", "Naruto Shippūden"]),
+  AN("onepiece", "One Piece"),
+  AN("dragonball", "Dragon Ball", ["Dragon Ball Z", "Dragon Ball Super", "DBZ"]),
+  AN("deathnote", "Death Note"),
+  AN("demonslayer", "Demon Slayer", ["Kimetsu no Yaiba"]),
+  AN("attackontitan", "Attack on Titan", ["Shingeki no Kyojin", "AoT"]),
+  AN("jujutsukaisen", "Jujutsu Kaisen", ["JJK"]),
+  AN("myheroacademia", "My Hero Academia", ["Boku no Hero Academia", "MHA", "BNHA"]),
+  AN("fma", "Fullmetal Alchemist", ["FMA", "Fullmetal Alchemist Brotherhood", "FMAB"]),
+  AN("bleach", "Bleach"),
+  AN("hxh", "Hunter x Hunter", ["Hunter Hunter", "HunterxHunter", "HxH"]),
+  AN("onepunchman", "One Punch Man", ["One-Punch Man", "OPM", "One Punch"]),
+  AN("spyxfamily", "Spy x Family", ["Spy Family", "Spy×Family", "SPY x FAMILY"]),
+  AN("chainsawman", "Chainsaw Man"),
+  AN("sailormoon", "Sailor Moon", ["Sailor Moon Crystal", "Bishoujo Senshi Sailor Moon"]),
+  AN("solo-leveling", "Solo Leveling", ["Na Honjaman Level Up", "Only I Level Up"]),
+];
+
 // 3 game + 3 anime theme songs (all six already proven in the regular pack) - audio unchanged
 const E1_THEMES = () => {
   const all = preplanned.PACK.themes;
@@ -122,7 +150,25 @@ const E2_GAMES = [
   T("e2-g-melina", "Video Games", "hard", "In Elden Ring, which mysterious maiden offers to accompany the Tarnished and lets them level up at Sites of Grace?", "Melina"),
 ];
 
-// Picture rounds - art from the open-source superhero-api dataset (github.com/akabab/superhero-api, MIT),
+// "Which Game?" picture round - iconic video game characters, bundled art (assets/gn-quiz/games/<slug>.jpg),
+// visually verified at bake time. Typed answer = the game (franchise-level alts accepted).
+const GM = (slug, answer, alts = []) => ({ id: `e2-gm-${slug}`, file: `games/${slug}.jpg`, fmt: "typed", q: "Which game is this character from?", answer, alts, difficulty: "easy", topic: "Which Game?" });
+const E2_GAMECHARS = [
+  GM("godofwar", "God of War", ["God of War 2018", "God of War Ragnarok", "GoW"]),
+  GM("zelda", "The Legend of Zelda", ["Zelda", "Breath of the Wild", "Tears of the Kingdom", "LoZ"]),
+  GM("mario", "Super Mario", ["Mario", "Super Mario Bros", "Super Mario Brothers", "Super Mario Bros U"]),
+  GM("sonic", "Sonic the Hedgehog", ["Sonic", "Sonic Mania"]),
+  GM("halo", "Halo", ["Halo Infinite", "Halo Combat Evolved", "Halo 5"]),
+  GM("finalfantasy", "Final Fantasy", ["Final Fantasy VII", "Final Fantasy 7", "FF7", "FFVII"]),
+  GM("metroid", "Metroid", ["Metroid Prime", "Super Metroid"]),
+  GM("tombraider", "Tomb Raider", ["Tomb Raider 2013", "Rise of the Tomb Raider"]),
+  GM("witcher", "The Witcher", ["The Witcher 3", "Witcher 3", "The Witcher 3 Wild Hunt"]),
+  GM("doom", "DOOM", ["Doom", "Doom Eternal", "Doom 2016", "Doomguy"]),
+  GM("kirby", "Kirby", ["Kirby's Dream Land", "Kirby Star Allies"]),
+  GM("nier", "NieR: Automata", ["Nier Automata", "NieR Automata", "NieR", "Nier"]),
+];
+
+// Obscure comic rounds - art from the open-source superhero-api dataset (github.com/akabab/superhero-api, MIT),
 // bundled under assets/gn-quiz/comics/<id>.jpg. Characters picked on purpose to be obscure.
 const CH = (id, pub, answer, alts = []) => ({ id: `e2-ch-${id}`, file: `comics/${id}.jpg`, fmt: "typed", q: `Name this comic book character (${pub}).`, answer, alts, difficulty: "hard", topic: "Comic Characters" });
 const E2_CHARS = [
@@ -153,7 +199,7 @@ const PACKS = {
   event1: {
     key: "event1",
     title: "Game Night Round 1: Mega Quiz",
-    counts: { logos: 30, trivia: 20, music: 6 },
+    counts: { logos: 30, pictures: E1_ANIME.length, trivia: 20, music: 6 },
     plan() {
       const th = E1_THEMES();
       const by = (f) => E1_TRIVIA.filter((t) => t.franchise === f);
@@ -161,6 +207,7 @@ const PACKS = {
         { name: "Logo Round 1/3", domain: "logos", perSection: 10, pinnedBrands: E1_BRANDS.slice(0, 10) },
         { name: "Logo Round 2/3", domain: "logos", perSection: 10, pinnedBrands: E1_BRANDS.slice(10, 20) },
         { name: "Logo Round 3/3", domain: "logos", perSection: 10, pinnedBrands: E1_BRANDS.slice(20, 30) },
+        { name: "Name the Anime", domain: "pictures", perSection: E1_ANIME.length, pinnedPictures: E1_ANIME, timeLimit: 30 },
         { name: "Dragon Ball", domain: "preplanned", perSection: 5, pinnedTrivia: by("Dragon Ball") },
         { name: "Solo Leveling", domain: "preplanned", perSection: 5, pinnedTrivia: by("Solo Leveling") },
         { name: "Devil May Cry", domain: "preplanned", perSection: 5, pinnedTrivia: by("Devil May Cry") },
@@ -170,25 +217,26 @@ const PACKS = {
       ];
     },
     head(prefix) {
-      return `🗺 3 acts • 56 rounds:\n  🏢 30 brand logos (tougher set)\n  🧠 20 trivia - Dragon Ball / Solo Leveling / Devil May Cry / God of War\n  🎵 6 theme songs - 3 games + 3 anime\n`;
+      return `🗺 4 acts • ${30 + E1_ANIME.length + 20 + 6} rounds:\n  🏢 30 brand logos (tougher set)\n  🎴 ${E1_ANIME.length} name-the-anime portraits\n  🧠 20 trivia - Dragon Ball / Solo Leveling / Devil May Cry / God of War\n  🎵 6 theme songs - 3 games + 3 anime\n`;
     },
-    minBuilt: 40,
+    minBuilt: 45,
   },
   event2: {
     key: "event2",
     title: "Game Night Finale: Comics & Games",
-    counts: { logos: 0, trivia: 10, pictures: 16, music: 0 },
+    counts: { logos: 0, trivia: 10, pictures: E2_GAMECHARS.length + E2_CHARS.length + E2_TEAMS.length, music: 0 },
     plan() {
       return [
         { name: "Video Games", domain: "preplanned", perSection: E2_GAMES.length, pinnedTrivia: E2_GAMES },
+        { name: "Which Game?", domain: "pictures", perSection: E2_GAMECHARS.length, pinnedPictures: E2_GAMECHARS, timeLimit: 30 },
         { name: "Comic Characters", domain: "pictures", perSection: E2_CHARS.length, pinnedPictures: E2_CHARS, timeLimit: 40 },
         { name: "Comic Teams", domain: "pictures", perSection: E2_TEAMS.length, pinnedPictures: E2_TEAMS, timeLimit: 40 },
       ];
     },
     head(prefix) {
-      return `🗺 3 acts • 26 rounds:\n  🎮 10 video game questions\n  💥 8 obscure comic characters (name them)\n  🦸 8 obscure comic teams (pick the team)\n`;
+      return `🗺 4 acts • ${10 + E2_GAMECHARS.length + E2_CHARS.length + E2_TEAMS.length} rounds:\n  🎮 10 video game questions\n  🕹 ${E2_GAMECHARS.length} which-game portraits\n  💥 8 obscure comic characters (name them)\n  🦸 8 obscure comic teams (pick the team)\n`;
     },
-    minBuilt: 20,
+    minBuilt: 24,
   },
 };
 
@@ -197,4 +245,4 @@ function get(key) {
   return PACKS[k] || null;
 }
 
-module.exports = { PACKS, get, E1_BRANDS, E1_TRIVIA, E2_GAMES, E2_CHARS, E2_TEAMS, E2_BRANDS };
+module.exports = { PACKS, get, E1_BRANDS, E1_TRIVIA, E1_ANIME, E2_GAMES, E2_GAMECHARS, E2_CHARS, E2_TEAMS, E2_BRANDS };

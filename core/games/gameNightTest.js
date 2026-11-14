@@ -23,7 +23,7 @@ const bake = require("./gameNightBake");
 const emojiCard = require("./emojiCard");
 
 const STATE = new Map(); // chatId -> { step, results: [] }
-const STEPS = ["Preflight", "Logo images", "Trivia samples", "Tournament bracket", "Chess blitz board", "Emoji + Wordle", "Scoreboard + restart sim"];
+const STEPS = ["Preflight", "Logo images", "Trivia + picture samples", "Tournament bracket", "Chess blitz board", "Emoji + Wordle", "Scoreboard + restart sim"];
 const FAKE = ["233200000001@s.whatsapp.net", "233200000002@s.whatsapp.net", "233200000003@s.whatsapp.net", "233200000004@s.whatsapp.net", "233200000005@s.whatsapp.net", "233200000006@s.whatsapp.net"];
 const NAMES = ["Ama", "Kofi", "Esi", "Kwame", "Abena", "Yaw"];
 const px = () => botConfig.getPrefix();
@@ -91,6 +91,10 @@ async function buildOne(brand) {
   if (bq) return bq;
   return quizMedia.buildLogosQuestion(brand, others, "medium").catch(() => null);
 }
+// total rounds a pack advertises (pinned logos + trivia + pictures + themes)
+function packTotal(p) {
+  return p.plan().reduce((a, s) => a + (s.pinnedBrands || s.pinnedPictures || s.pinnedTrivia || s.pinnedThemes || []).length, 0);
+}
 async function stepLogos(ctx, all) {
   const e1 = packs.E1_BRANDS, e2 = packs.E2_BRANDS;
   if (all) {
@@ -100,7 +104,7 @@ async function stepLogos(ctx, all) {
       const res = await Promise.all(list.slice(i, i + 5).map(buildOne));
       res.forEach((q, j) => { if (!q || !q._cachedAsset) failed.push(list[i + j].name); });
     }
-    await sendText(ctx.sock, ctx.chatId, `*LOGO FETCH CHECK*\n\n${ok(!failed.length)} ${list.length - failed.length}/${list.length} logos fetched${failed.length ? `\n❌ Failed: ${failed.join(", ")}` : ""}\n\nPacks need >= ${packs.get("event1").minBuilt}/56 (round 1) and >= ${packs.get("event2").minBuilt}/37 (finale) to start.`);
+    await sendText(ctx.sock, ctx.chatId, `*LOGO FETCH CHECK*\n\n${ok(!failed.length)} ${list.length - failed.length}/${list.length} logos fetched${failed.length ? `\n❌ Failed: ${failed.join(", ")}` : ""}\n\nPacks need >= ${packs.get("event1").minBuilt}/${packTotal(packs.get("event1"))} (round 1) and >= ${packs.get("event2").minBuilt}/${packTotal(packs.get("event2"))} (finale) to start.`);
     return failed.length === 0;
   }
   const sample = [e1[0], e1[e1.length - 1], e1.find((b) => b.bundled), e2[0], e2[e2.length - 1]].filter(Boolean);
@@ -117,7 +121,7 @@ async function stepLogos(ctx, all) {
   return good === sample.length;
 }
 
-// ---- step 3: trivia samples ----
+// ---- step 3: trivia + picture samples ----
 async function stepTrivia(ctx) {
   const pick = [packs.E1_TRIVIA[3], packs.E1_TRIVIA[13], packs.E2_GAMES[2], packs.E2_GAMES[5]].filter(Boolean);
   const out = pick.map((t) => {
@@ -126,7 +130,18 @@ async function stepTrivia(ctx) {
     return `*${t.topic}* [${t.difficulty}]\n${t.q}${opts}\n_answer: ${ans}_`;
   });
   await sendText(ctx.sock, ctx.chatId, `*STEP 3/7 - TRIVIA SAMPLES*\n\n${out.join("\n\n")}\n\nThe real quiz asks these in-game with timers, speed bonus and typo tolerance. Full dry run: \`${px()} quiz -preplanned event1\` in a test group.`);
-  return true;
+  // bundled picture rounds: one sample each from the two portrait sections
+  const picBad = [...packs.E1_ANIME, ...packs.E2_GAMECHARS, ...packs.E2_CHARS, ...packs.E2_TEAMS].filter((p) => !bake.bundledBuf(p.file)).map((p) => p.id);
+  const sample = (list, label) => {
+    const p = list[Math.floor(Math.random() * list.length)];
+    const q = p && bake.pictureQuestion(p, "easy");
+    if (q && q._cachedAsset) return sendImg(ctx.sock, ctx.chatId, q._cachedAsset.buf, `*${label} sample*\n${q.q}\n\n_(answer: ${p.answer} - accepts ${p.alts && p.alts.length ? p.alts.length : 0} aliases, plain typed text)_`);
+    return sendText(ctx.sock, ctx.chatId, `❌ ${label}: could not build a sample question.`);
+  };
+  await sample(packs.E1_ANIME, "Name the Anime");
+  await sample(packs.E2_GAMECHARS, "Which Game?");
+  await sendText(ctx.sock, ctx.chatId, `${ok(!picBad.length)} ${packs.E1_ANIME.length + packs.E2_GAMECHARS.length + packs.E2_CHARS.length + packs.E2_TEAMS.length} picture questions bundled${picBad.length ? `\n❌ Missing art: ${picBad.join(", ")}` : " (every file ships in assets/gn-quiz, zero live fetching)"}.`);
+  return !picBad.length;
 }
 
 // ---- step 4: tourney bracket ----
