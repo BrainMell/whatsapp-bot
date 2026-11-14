@@ -12,7 +12,7 @@ process.on('message', async (msg) => {
     try {
         if (msg.type === 'conquest') {
             const r = require('./conquest/render');
-            const buf = msg.what === 'siege' ? r.siegeInProcess(msg.data) : msg.what === 'card' ? r.envCardInProcess(msg.data.id) : r.mapInProcess(msg.data);
+            const buf = await (msg.what === 'siege' ? r.siegeInProcess(msg.data) : msg.what === 'card' ? r.envCardInProcess(msg.data.id) : r.mapInProcess(msg.data));
             process.send({ id: msg.id, kind: 'conquest', png: buf.toString('base64') });
         } else if (msg.type === 'room') {
             const roomScene = require('./roomScene');

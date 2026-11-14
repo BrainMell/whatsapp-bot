@@ -21,7 +21,7 @@ const maxHpFor = (p) => Math.round(100 + 18 * Math.sqrt(Math.max(0, p)));
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 
 /** tile: {kind, defence:{wall:{type,hp,max}, golems:[], turrets:[], buffs:{atk,hp}}, biome}; party: [{jid,name,power}] */
-function create({ id, tileId, biome, tileName, attacker, defender, party, defence, now = Date.now() }) {
+function create({ id, tileId, biome, tileName, attacker, defender, party, defence, now = Date.now(), isTitan = false }) {
     const wall = defence.wall;
     const sections = {};
     if (wall && wall.hp > 0) for (const s of SECTIONS) { const mx = Math.max(1, Math.round(wall.max * SHARE[s])); sections[s] = { hp: Math.min(mx, Math.round(wall.hp * SHARE[s])), max: mx }; }
@@ -31,9 +31,9 @@ function create({ id, tileId, biome, tileName, attacker, defender, party, defenc
         wallType: wall ? wall.type : null, sections, weak: null, burning: {}, mines: [], status: { slow: 0, golemSurge: 0, ward: 0 },
         party: {}, env: null, envHistory: [], turrets: (defence.turrets || []).map((t, i) => ({ id: 't' + i, kind: t.kind, lvl: t.lvl || 1, mount: ['towerL', 'towerR', 'gate'][i % 3] })),
         golems: (defence.golems || []).map((g, i) => { const base = CFG.GOLEM_BASE[g.kind] || CFG.GOLEM_BASE.clay; const lv = 1 + 0.3 * ((g.lvl || 1) - 1); const hp = Math.round(base.hp * lv * (1 + (buffs.hp || 0))); return { id: 'g' + i, kind: g.kind, lvl: g.lvl || 1, hp, max: hp, atk: Math.round(base.atk * lv * (1 + (buffs.atk || 0))) }; }),
-        outcome: null, entry: null, climbed: false, log: [],
+        outcome: null, entry: null, climbed: false, log: [], isTitan: !!isTitan,
     };
-    for (const p of party) { const mx = maxHpFor(p.power); b.party[p.jid] = { jid: p.jid, name: p.name || p.jid.split('@')[0], power: p.power, hp: mx, max: mx, action: null, target: null, lastAction: null }; }
+    for (const p of party) { const mx = maxHpFor(p.power); b.party[p.jid] = { jid: p.jid, name: p.name || p.jid.split('@')[0], power: p.power, sprite: p.sprite || null, hp: mx, max: mx, action: null, target: null, lastAction: null }; }
     if (b.phase === 'golems' && !b.golems.length) { b.phase = 'won'; b.outcome = 'won'; }
     return b;
 }

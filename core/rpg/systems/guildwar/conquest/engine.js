@@ -183,7 +183,7 @@ function arrive(state, m, now, events) {
 function titanDefence(state, v) { const lv = 3 + Math.floor(map.hashStr(v.realm) % 3); return { wall: null, golems: [{ kind: 'iron', lvl: lv }, { kind: 'rune', lvl: lv }, { kind: 'iron', lvl: lv }], turrets: [], buffs: { atk: 0.1, hp: 0.4 } }; }
 function startBreach(state, m, v, now, events) {
     const def = v.kind === 'titan' && !v.owner ? titanDefence(state, v) : { wall: v.wall ? { type: v.wall.type, hp: v.wall.hp, max: v.wall.max || v.wall.hp } : null, golems: v.golems, turrets: v.turrets, buffs: v.buffs };
-    const id = uid(state, 'B'); const b = breach.create({ id, tileId: v.id, biome: v.biome, tileName: v.name, attacker: m.guild, defender: v.owner, party: m.members.map((j) => ({ jid: j, name: state.players[j].name, power: state.players[j].power })), defence: def, now });
+    const id = uid(state, 'B'); const b = breach.create({ id, tileId: v.id, biome: v.biome, tileName: v.name, attacker: m.guild, defender: v.owner, party: m.members.map((j) => ({ jid: j, name: state.players[j].name, power: state.players[j].power, sprite: state.players[j].sprite })), defence: def, now, isTitan: v.kind === 'titan' });
     state.breaches[id] = b; for (const j of m.members) { const p = state.players[j]; p.status = 'breach'; p.breachId = id; }
     if (b.outcome) return finishBreach(state, b, now, events); breach.startRound(b, now); events.push({ type: 'breach_start', id, guild: m.guild, tile: v.id, defender: v.owner });
 }

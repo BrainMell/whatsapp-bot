@@ -10,8 +10,10 @@ assert(!E.marchSolo(s, { guild: 'A', by: 'a', to, now: 1e12 }).ok, 'locked while
 const b = B.create({ id: 'x', tileId: to, biome: 'desert', tileName: 'T', attacker: 'A', party: [{ jid: 'a', name: 'a', power: 900 }], defence: { wall: { type: 'wood', hp: 300, max: 300 }, golems: [], turrets: [] } });
 B.startRound(b); B.submit(b, 'a', 'ram', 'gate'); B.resolveRound(b); assert(b.sections.gate.hp < 120);
 assert(G.rate(1).sec > G.rate(10).sec); console.log('conquest selftest ok');
-// render smoke (in-process)
-process.env.CONQUEST_RENDER_INPROC = '1';
-const R = require('./render'); const png = R.siegeInProcess(b); assert(png.length > 5000 && png.slice(1, 4).toString() === 'PNG');
-assert(R.envCardInProcess('rain').length > 5000); for (const c of require('./envCards').CARDS) assert(R.envCardInProcess(c.id).length > 3000, c.id);
-console.log('render smoke ok');
+// render smoke (in-process, real assets)
+const R = require('./render');
+(async () => {
+    const png = await R.siegeInProcess(b); assert(png.length > 20000 && png.slice(1, 4).toString() === 'PNG');
+    for (const c of require('./envCards').CARDS) assert((await R.envCardInProcess(c.id)).length > 10000, c.id);
+    console.log('render smoke ok');
+})().catch((e) => { console.error(e); process.exit(1); });

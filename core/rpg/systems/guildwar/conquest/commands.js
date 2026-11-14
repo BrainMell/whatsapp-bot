@@ -16,6 +16,7 @@ const FIGHT_VERBS = new Set([...breach.WALL_ACTIONS, ...breach.GOLEM_ACTIONS]);
 
 function lazy() { return { guilds: require('./../guilds'), economy: require('../../economy/economy'), summons: require('../../summonCards') }; }
 function powerOf(jid) { try { const sh = require('../../characters/progression').getCharacterSheet(jid); if (!sh) return 100; const s = sh.stats || {}; return Math.max(50, Math.round((s.atk || 0) + (s.mag || 0) * 0.8 + (s.def || 0) * 0.5 + (s.hp || 0) / 8 + (sh.level || 1) * 8)); } catch (e) { return 100; } }
+function spriteOf(jid) { try { return require('../roomScene').resolvePlayerSpriteFile({ jid }); } catch (e) { return 'apprentice1.png'; } }
 function nameOf(jid) { try { return require('../../economy/economy').getDisplayName(jid) || jid.split('@')[0]; } catch (e) { return jid.split('@')[0]; } }
 function minesLevel(jid) { try { return Math.max(1, require('../../homestead/baseBuilder').getStructureLevel(jid, 'mines')); } catch (e) { return 1; } }
 
@@ -41,7 +42,7 @@ function gridText(s, guild, jid) {
 function mapSnap(s, guild, jid) {
     const p = s.players[jid]; const realm = map.parse(p.at).realm; const tiles = Object.entries(s.overlays).filter(([id]) => id.startsWith(realm + ':')).map(([id, o]) => ({ id, owner: o.owner || null, shield: (o.shieldUntil || 0) > Date.now() }));
     const ms = Object.values(s.marches).filter((m) => m.guild === guild).map((m) => ({ from: m.from, to: m.to }));
-    return { seed: s.seed, realm, tiles, guilds: Object.values(s.guilds).map((g) => ({ name: g.name, score: Math.round(g.score), tiles: g.tiles.length })).sort((a, b) => b.score - a.score), me: { at: p.at }, marches: ms, title: guild, sub: Math.max(0, Math.round((s.endsAt - Date.now()) / 60000)) + ' min left' };
+    return { seed: s.seed, realm, tiles, guilds: Object.values(s.guilds).map((g) => ({ name: g.name, score: Math.round(g.score), tiles: g.tiles.length })).sort((a, b) => b.score - a.score), me: { at: p.at, sprite: p.sprite }, marches: ms, title: guild, sub: Math.max(0, Math.round((s.endsAt - Date.now()) / 60000)) + ' min left' };
 }
 function status(s, guild, jid) {
     const g = s.guilds[guild]; const p = s.players[jid]; const mins = Math.max(0, Math.round((s.endsAt - Date.now()) / 60000));
@@ -78,7 +79,7 @@ function run(s, { jid, guildName, verb, args, rest, now, L, events }) {
     if (s.status !== 'active') return { text: '🏁 The conquest has ended. ' + JSON.stringify(E.standings(s)) };
     if (!s.guilds[guildName]) return { text: '❌ Your guild did not enter this war.' };
     const role = rolesFor(guildName); s.guilds[guildName].roles = role;
-    E.registerPlayer(s, guildName, jid, nameOf(jid), powerOf(jid)); const p = s.players[jid];
+    E.registerPlayer(s, guildName, jid, nameOf(jid), powerOf(jid)); const p = s.players[jid]; p.sprite = spriteOf(jid);
     const T = (n) => (targetsCache.get(jid) || [])[parseInt(n, 10) - 1];
     const roster = () => Object.values(s.players).filter((x) => x.guild === guildName);
     const R = (n) => (roster()[parseInt(n, 10) - 1] || {}).jid;
