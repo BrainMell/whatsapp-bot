@@ -1,27 +1,5605 @@
 {
-  "_readme": "See README_SWAP.md. Add sprite sets under 'sets', then point effect layers at them under 'overrides'. Empty = built-in procedural effects.",
-  "sets": {
-    "planet_hit": {
-      "files": ["packs/planets/planet_hit_1.png", "packs/planets/planet_hit_2.png", "packs/planets/planet_hit_3.png", "packs/planets/planet_hit_4.png", "packs/planets/planet_hit_5.png", "packs/planets/planet_hit_6.png"],
-      "fps": 3
-    },
-    "lava_world": { "files": ["packs/planets/lava_world.png"], "fps": 1 },
-    "void_world": { "files": ["packs/planets/void_world.png"], "fps": 1 },
-    "blackhole_art": { "files": ["packs/void/blackhole.png"], "fps": 1 },
-    "ink": {
-      "files": ["packs/void/ink_1.png", "packs/void/ink_2.png", "packs/void/ink_3.png", "packs/void/ink_4.png", "packs/void/ink_5.png", "packs/void/ink_6.png", "packs/void/ink_7.png", "packs/void/ink_8.png"],
-      "fps": 12
-    },
-    "gate_blue": {
-      "files": ["packs/void/gate_blue_1.png", "packs/void/gate_blue_2.png", "packs/void/gate_blue_3.png", "packs/void/gate_blue_4.png", "packs/void/gate_blue_5.png", "packs/void/gate_blue_6.png", "packs/void/gate_blue_7.png", "packs/void/gate_blue_8.png"],
-      "fps": 12
-    },
-    "gate_blood": {
-      "files": ["packs/void/gate_blood_1.png", "packs/void/gate_blood_2.png", "packs/void/gate_blood_3.png", "packs/void/gate_blood_4.png", "packs/void/gate_blood_5.png", "packs/void/gate_blood_6.png", "packs/void/gate_blood_7.png", "packs/void/gate_blood_8.png"],
-      "fps": 12
-    }
+ "_readme": "See README_SWAP.md. Add sprite sets under 'sets', then point effect layers at them under 'overrides'. Empty = built-in procedural effects.",
+ "sets": {
+  "planet_hit": {
+   "files": [
+    "packs/planets/planet_hit_1.png",
+    "packs/planets/planet_hit_2.png",
+    "packs/planets/planet_hit_3.png",
+    "packs/planets/planet_hit_4.png",
+    "packs/planets/planet_hit_5.png",
+    "packs/planets/planet_hit_6.png"
+   ],
+   "fps": 3
   },
-  "overrides": {
-    "world@lava": { "set": "lava_world" }
+  "lava_world": {
+   "files": [
+    "packs/planets/lava_world.png"
+   ],
+   "fps": 1
+  },
+  "void_world": {
+   "files": [
+    "packs/planets/void_world.png"
+   ],
+   "fps": 1
+  },
+  "blackhole_art": {
+   "files": [
+    "packs/void/blackhole.png"
+   ],
+   "fps": 1
+  },
+  "ink": {
+   "files": [
+    "packs/void/ink_1.png",
+    "packs/void/ink_2.png",
+    "packs/void/ink_3.png",
+    "packs/void/ink_4.png",
+    "packs/void/ink_5.png",
+    "packs/void/ink_6.png",
+    "packs/void/ink_7.png",
+    "packs/void/ink_8.png"
+   ],
+   "fps": 12
+  },
+  "gate_blue": {
+   "files": [
+    "packs/void/gate_blue_1.png",
+    "packs/void/gate_blue_2.png",
+    "packs/void/gate_blue_3.png",
+    "packs/void/gate_blue_4.png",
+    "packs/void/gate_blue_5.png",
+    "packs/void/gate_blue_6.png",
+    "packs/void/gate_blue_7.png",
+    "packs/void/gate_blue_8.png"
+   ],
+   "fps": 12
+  },
+  "gate_blood": {
+   "files": [
+    "packs/void/gate_blood_1.png",
+    "packs/void/gate_blood_2.png",
+    "packs/void/gate_blood_3.png",
+    "packs/void/gate_blood_4.png",
+    "packs/void/gate_blood_5.png",
+    "packs/void/gate_blood_6.png",
+    "packs/void/gate_blood_7.png",
+    "packs/void/gate_blood_8.png"
+   ],
+   "fps": 12
+  },
+  "pv_fire_ground_flames": {
+   "files": [
+    "packs/newvfx/pv_fire_ground_flames/00.png",
+    "packs/newvfx/pv_fire_ground_flames/01.png",
+    "packs/newvfx/pv_fire_ground_flames/02.png",
+    "packs/newvfx/pv_fire_ground_flames/03.png",
+    "packs/newvfx/pv_fire_ground_flames/04.png",
+    "packs/newvfx/pv_fire_ground_flames/05.png",
+    "packs/newvfx/pv_fire_ground_flames/06.png",
+    "packs/newvfx/pv_fire_ground_flames/07.png",
+    "packs/newvfx/pv_fire_ground_flames/08.png",
+    "packs/newvfx/pv_fire_ground_flames/09.png",
+    "packs/newvfx/pv_fire_ground_flames/10.png",
+    "packs/newvfx/pv_fire_ground_flames/11.png",
+    "packs/newvfx/pv_fire_ground_flames/12.png",
+    "packs/newvfx/pv_fire_ground_flames/13.png",
+    "packs/newvfx/pv_fire_ground_flames/14.png",
+    "packs/newvfx/pv_fire_ground_flames/15.png"
+   ],
+   "fps": 13
+  },
+  "pv_fire_fire_pillar": {
+   "files": [
+    "packs/newvfx/pv_fire_fire_pillar/00.png",
+    "packs/newvfx/pv_fire_fire_pillar/01.png",
+    "packs/newvfx/pv_fire_fire_pillar/02.png",
+    "packs/newvfx/pv_fire_fire_pillar/03.png",
+    "packs/newvfx/pv_fire_fire_pillar/04.png",
+    "packs/newvfx/pv_fire_fire_pillar/05.png",
+    "packs/newvfx/pv_fire_fire_pillar/06.png",
+    "packs/newvfx/pv_fire_fire_pillar/07.png",
+    "packs/newvfx/pv_fire_fire_pillar/08.png",
+    "packs/newvfx/pv_fire_fire_pillar/09.png",
+    "packs/newvfx/pv_fire_fire_pillar/10.png",
+    "packs/newvfx/pv_fire_fire_pillar/11.png",
+    "packs/newvfx/pv_fire_fire_pillar/12.png",
+    "packs/newvfx/pv_fire_fire_pillar/13.png",
+    "packs/newvfx/pv_fire_fire_pillar/14.png",
+    "packs/newvfx/pv_fire_fire_pillar/15.png",
+    "packs/newvfx/pv_fire_fire_pillar/16.png",
+    "packs/newvfx/pv_fire_fire_pillar/17.png",
+    "packs/newvfx/pv_fire_fire_pillar/18.png",
+    "packs/newvfx/pv_fire_fire_pillar/19.png",
+    "packs/newvfx/pv_fire_fire_pillar/20.png",
+    "packs/newvfx/pv_fire_fire_pillar/21.png",
+    "packs/newvfx/pv_fire_fire_pillar/22.png"
+   ],
+   "fps": 14
+  },
+  "pv_explosions_fire_nova": {
+   "files": [
+    "packs/newvfx/pv_explosions_fire_nova/00.png",
+    "packs/newvfx/pv_explosions_fire_nova/01.png",
+    "packs/newvfx/pv_explosions_fire_nova/02.png",
+    "packs/newvfx/pv_explosions_fire_nova/03.png",
+    "packs/newvfx/pv_explosions_fire_nova/04.png",
+    "packs/newvfx/pv_explosions_fire_nova/05.png",
+    "packs/newvfx/pv_explosions_fire_nova/06.png",
+    "packs/newvfx/pv_explosions_fire_nova/07.png",
+    "packs/newvfx/pv_explosions_fire_nova/08.png",
+    "packs/newvfx/pv_explosions_fire_nova/09.png",
+    "packs/newvfx/pv_explosions_fire_nova/10.png",
+    "packs/newvfx/pv_explosions_fire_nova/11.png",
+    "packs/newvfx/pv_explosions_fire_nova/12.png",
+    "packs/newvfx/pv_explosions_fire_nova/13.png",
+    "packs/newvfx/pv_explosions_fire_nova/14.png",
+    "packs/newvfx/pv_explosions_fire_nova/15.png",
+    "packs/newvfx/pv_explosions_fire_nova/16.png",
+    "packs/newvfx/pv_explosions_fire_nova/17.png"
+   ],
+   "fps": 17
+  },
+  "pv_impacts_shockwave_ring": {
+   "files": [
+    "packs/newvfx/pv_impacts_shockwave_ring/00.png",
+    "packs/newvfx/pv_impacts_shockwave_ring/01.png",
+    "packs/newvfx/pv_impacts_shockwave_ring/02.png",
+    "packs/newvfx/pv_impacts_shockwave_ring/03.png",
+    "packs/newvfx/pv_impacts_shockwave_ring/04.png",
+    "packs/newvfx/pv_impacts_shockwave_ring/05.png",
+    "packs/newvfx/pv_impacts_shockwave_ring/06.png",
+    "packs/newvfx/pv_impacts_shockwave_ring/07.png",
+    "packs/newvfx/pv_impacts_shockwave_ring/08.png",
+    "packs/newvfx/pv_impacts_shockwave_ring/09.png",
+    "packs/newvfx/pv_impacts_shockwave_ring/10.png",
+    "packs/newvfx/pv_impacts_shockwave_ring/11.png",
+    "packs/newvfx/pv_impacts_shockwave_ring/12.png",
+    "packs/newvfx/pv_impacts_shockwave_ring/13.png"
+   ],
+   "fps": 14
+  },
+  "pv_fire_lava_burst": {
+   "files": [
+    "packs/newvfx/pv_fire_lava_burst/00.png",
+    "packs/newvfx/pv_fire_lava_burst/01.png",
+    "packs/newvfx/pv_fire_lava_burst/02.png",
+    "packs/newvfx/pv_fire_lava_burst/03.png",
+    "packs/newvfx/pv_fire_lava_burst/04.png",
+    "packs/newvfx/pv_fire_lava_burst/05.png",
+    "packs/newvfx/pv_fire_lava_burst/06.png",
+    "packs/newvfx/pv_fire_lava_burst/07.png",
+    "packs/newvfx/pv_fire_lava_burst/08.png",
+    "packs/newvfx/pv_fire_lava_burst/09.png",
+    "packs/newvfx/pv_fire_lava_burst/10.png",
+    "packs/newvfx/pv_fire_lava_burst/11.png",
+    "packs/newvfx/pv_fire_lava_burst/12.png",
+    "packs/newvfx/pv_fire_lava_burst/13.png",
+    "packs/newvfx/pv_fire_lava_burst/14.png",
+    "packs/newvfx/pv_fire_lava_burst/15.png",
+    "packs/newvfx/pv_fire_lava_burst/16.png",
+    "packs/newvfx/pv_fire_lava_burst/17.png",
+    "packs/newvfx/pv_fire_lava_burst/18.png",
+    "packs/newvfx/pv_fire_lava_burst/19.png",
+    "packs/newvfx/pv_fire_lava_burst/20.png"
+   ],
+   "fps": 14
+  },
+  "pv_fire_meteor_strike": {
+   "files": [
+    "packs/newvfx/pv_fire_meteor_strike/00.png",
+    "packs/newvfx/pv_fire_meteor_strike/01.png",
+    "packs/newvfx/pv_fire_meteor_strike/02.png",
+    "packs/newvfx/pv_fire_meteor_strike/03.png",
+    "packs/newvfx/pv_fire_meteor_strike/04.png",
+    "packs/newvfx/pv_fire_meteor_strike/05.png",
+    "packs/newvfx/pv_fire_meteor_strike/06.png",
+    "packs/newvfx/pv_fire_meteor_strike/07.png",
+    "packs/newvfx/pv_fire_meteor_strike/08.png",
+    "packs/newvfx/pv_fire_meteor_strike/09.png",
+    "packs/newvfx/pv_fire_meteor_strike/10.png",
+    "packs/newvfx/pv_fire_meteor_strike/11.png",
+    "packs/newvfx/pv_fire_meteor_strike/12.png",
+    "packs/newvfx/pv_fire_meteor_strike/13.png",
+    "packs/newvfx/pv_fire_meteor_strike/14.png",
+    "packs/newvfx/pv_fire_meteor_strike/15.png",
+    "packs/newvfx/pv_fire_meteor_strike/16.png",
+    "packs/newvfx/pv_fire_meteor_strike/17.png",
+    "packs/newvfx/pv_fire_meteor_strike/18.png",
+    "packs/newvfx/pv_fire_meteor_strike/19.png",
+    "packs/newvfx/pv_fire_meteor_strike/20.png",
+    "packs/newvfx/pv_fire_meteor_strike/21.png",
+    "packs/newvfx/pv_fire_meteor_strike/22.png",
+    "packs/newvfx/pv_fire_meteor_strike/23.png"
+   ],
+   "fps": 17
+  },
+  "pv_fire_fire_tornado": {
+   "files": [
+    "packs/newvfx/pv_fire_fire_tornado/00.png",
+    "packs/newvfx/pv_fire_fire_tornado/01.png",
+    "packs/newvfx/pv_fire_fire_tornado/02.png",
+    "packs/newvfx/pv_fire_fire_tornado/03.png",
+    "packs/newvfx/pv_fire_fire_tornado/04.png",
+    "packs/newvfx/pv_fire_fire_tornado/05.png",
+    "packs/newvfx/pv_fire_fire_tornado/06.png",
+    "packs/newvfx/pv_fire_fire_tornado/07.png",
+    "packs/newvfx/pv_fire_fire_tornado/08.png",
+    "packs/newvfx/pv_fire_fire_tornado/09.png",
+    "packs/newvfx/pv_fire_fire_tornado/10.png",
+    "packs/newvfx/pv_fire_fire_tornado/11.png",
+    "packs/newvfx/pv_fire_fire_tornado/12.png",
+    "packs/newvfx/pv_fire_fire_tornado/13.png",
+    "packs/newvfx/pv_fire_fire_tornado/14.png",
+    "packs/newvfx/pv_fire_fire_tornado/15.png"
+   ],
+   "fps": 14
+  },
+  "pv_melee_sword_combo": {
+   "files": [
+    "packs/newvfx/pv_melee_sword_combo/00.png",
+    "packs/newvfx/pv_melee_sword_combo/01.png",
+    "packs/newvfx/pv_melee_sword_combo/02.png",
+    "packs/newvfx/pv_melee_sword_combo/03.png",
+    "packs/newvfx/pv_melee_sword_combo/04.png",
+    "packs/newvfx/pv_melee_sword_combo/05.png",
+    "packs/newvfx/pv_melee_sword_combo/06.png",
+    "packs/newvfx/pv_melee_sword_combo/07.png",
+    "packs/newvfx/pv_melee_sword_combo/08.png",
+    "packs/newvfx/pv_melee_sword_combo/09.png",
+    "packs/newvfx/pv_melee_sword_combo/10.png",
+    "packs/newvfx/pv_melee_sword_combo/11.png",
+    "packs/newvfx/pv_melee_sword_combo/12.png"
+   ],
+   "fps": 14
+  },
+  "pv_fire_flamethrower": {
+   "files": [
+    "packs/newvfx/pv_fire_flamethrower/00.png",
+    "packs/newvfx/pv_fire_flamethrower/01.png",
+    "packs/newvfx/pv_fire_flamethrower/02.png",
+    "packs/newvfx/pv_fire_flamethrower/03.png",
+    "packs/newvfx/pv_fire_flamethrower/04.png",
+    "packs/newvfx/pv_fire_flamethrower/05.png",
+    "packs/newvfx/pv_fire_flamethrower/06.png",
+    "packs/newvfx/pv_fire_flamethrower/07.png",
+    "packs/newvfx/pv_fire_flamethrower/08.png",
+    "packs/newvfx/pv_fire_flamethrower/09.png",
+    "packs/newvfx/pv_fire_flamethrower/10.png",
+    "packs/newvfx/pv_fire_flamethrower/11.png",
+    "packs/newvfx/pv_fire_flamethrower/12.png",
+    "packs/newvfx/pv_fire_flamethrower/13.png",
+    "packs/newvfx/pv_fire_flamethrower/14.png",
+    "packs/newvfx/pv_fire_flamethrower/15.png"
+   ],
+   "fps": 17
+  },
+  "pv_explosions_big_explosion": {
+   "files": [
+    "packs/newvfx/pv_explosions_big_explosion/00.png",
+    "packs/newvfx/pv_explosions_big_explosion/01.png",
+    "packs/newvfx/pv_explosions_big_explosion/02.png",
+    "packs/newvfx/pv_explosions_big_explosion/03.png",
+    "packs/newvfx/pv_explosions_big_explosion/04.png",
+    "packs/newvfx/pv_explosions_big_explosion/05.png",
+    "packs/newvfx/pv_explosions_big_explosion/06.png",
+    "packs/newvfx/pv_explosions_big_explosion/07.png",
+    "packs/newvfx/pv_explosions_big_explosion/08.png",
+    "packs/newvfx/pv_explosions_big_explosion/09.png",
+    "packs/newvfx/pv_explosions_big_explosion/10.png",
+    "packs/newvfx/pv_explosions_big_explosion/11.png",
+    "packs/newvfx/pv_explosions_big_explosion/12.png",
+    "packs/newvfx/pv_explosions_big_explosion/13.png",
+    "packs/newvfx/pv_explosions_big_explosion/14.png",
+    "packs/newvfx/pv_explosions_big_explosion/15.png",
+    "packs/newvfx/pv_explosions_big_explosion/16.png"
+   ],
+   "fps": 14
+  },
+  "pv_holy_resurrect": {
+   "files": [
+    "packs/newvfx/pv_holy_resurrect/00.png",
+    "packs/newvfx/pv_holy_resurrect/01.png",
+    "packs/newvfx/pv_holy_resurrect/02.png",
+    "packs/newvfx/pv_holy_resurrect/03.png",
+    "packs/newvfx/pv_holy_resurrect/04.png",
+    "packs/newvfx/pv_holy_resurrect/05.png",
+    "packs/newvfx/pv_holy_resurrect/06.png",
+    "packs/newvfx/pv_holy_resurrect/07.png",
+    "packs/newvfx/pv_holy_resurrect/08.png",
+    "packs/newvfx/pv_holy_resurrect/09.png",
+    "packs/newvfx/pv_holy_resurrect/10.png",
+    "packs/newvfx/pv_holy_resurrect/11.png",
+    "packs/newvfx/pv_holy_resurrect/12.png",
+    "packs/newvfx/pv_holy_resurrect/13.png",
+    "packs/newvfx/pv_holy_resurrect/14.png",
+    "packs/newvfx/pv_holy_resurrect/15.png",
+    "packs/newvfx/pv_holy_resurrect/16.png",
+    "packs/newvfx/pv_holy_resurrect/17.png",
+    "packs/newvfx/pv_holy_resurrect/18.png",
+    "packs/newvfx/pv_holy_resurrect/19.png"
+   ],
+   "fps": 14
+  },
+  "pv_holy_holy_smite": {
+   "files": [
+    "packs/newvfx/pv_holy_holy_smite/00.png",
+    "packs/newvfx/pv_holy_holy_smite/01.png",
+    "packs/newvfx/pv_holy_holy_smite/02.png",
+    "packs/newvfx/pv_holy_holy_smite/03.png",
+    "packs/newvfx/pv_holy_holy_smite/04.png",
+    "packs/newvfx/pv_holy_holy_smite/05.png",
+    "packs/newvfx/pv_holy_holy_smite/06.png",
+    "packs/newvfx/pv_holy_holy_smite/07.png",
+    "packs/newvfx/pv_holy_holy_smite/08.png",
+    "packs/newvfx/pv_holy_holy_smite/09.png",
+    "packs/newvfx/pv_holy_holy_smite/10.png",
+    "packs/newvfx/pv_holy_holy_smite/11.png",
+    "packs/newvfx/pv_holy_holy_smite/12.png"
+   ],
+   "fps": 12
+  },
+  "pv_holy_regen_aura": {
+   "files": [
+    "packs/newvfx/pv_holy_regen_aura/00.png",
+    "packs/newvfx/pv_holy_regen_aura/01.png",
+    "packs/newvfx/pv_holy_regen_aura/02.png",
+    "packs/newvfx/pv_holy_regen_aura/03.png",
+    "packs/newvfx/pv_holy_regen_aura/04.png",
+    "packs/newvfx/pv_holy_regen_aura/05.png",
+    "packs/newvfx/pv_holy_regen_aura/06.png",
+    "packs/newvfx/pv_holy_regen_aura/07.png",
+    "packs/newvfx/pv_holy_regen_aura/08.png",
+    "packs/newvfx/pv_holy_regen_aura/09.png",
+    "packs/newvfx/pv_holy_regen_aura/10.png",
+    "packs/newvfx/pv_holy_regen_aura/11.png",
+    "packs/newvfx/pv_holy_regen_aura/12.png",
+    "packs/newvfx/pv_holy_regen_aura/13.png",
+    "packs/newvfx/pv_holy_regen_aura/14.png",
+    "packs/newvfx/pv_holy_regen_aura/15.png"
+   ],
+   "fps": 12
+  },
+  "pv_holy_divine_beam": {
+   "files": [
+    "packs/newvfx/pv_holy_divine_beam/00.png",
+    "packs/newvfx/pv_holy_divine_beam/01.png",
+    "packs/newvfx/pv_holy_divine_beam/02.png",
+    "packs/newvfx/pv_holy_divine_beam/03.png",
+    "packs/newvfx/pv_holy_divine_beam/04.png",
+    "packs/newvfx/pv_holy_divine_beam/05.png",
+    "packs/newvfx/pv_holy_divine_beam/06.png",
+    "packs/newvfx/pv_holy_divine_beam/07.png",
+    "packs/newvfx/pv_holy_divine_beam/08.png",
+    "packs/newvfx/pv_holy_divine_beam/09.png",
+    "packs/newvfx/pv_holy_divine_beam/10.png",
+    "packs/newvfx/pv_holy_divine_beam/11.png",
+    "packs/newvfx/pv_holy_divine_beam/12.png",
+    "packs/newvfx/pv_holy_divine_beam/13.png",
+    "packs/newvfx/pv_holy_divine_beam/14.png",
+    "packs/newvfx/pv_holy_divine_beam/15.png",
+    "packs/newvfx/pv_holy_divine_beam/16.png",
+    "packs/newvfx/pv_holy_divine_beam/17.png"
+   ],
+   "fps": 14
+  },
+  "pv_holy_angel_feathers": {
+   "files": [
+    "packs/newvfx/pv_holy_angel_feathers/00.png",
+    "packs/newvfx/pv_holy_angel_feathers/01.png",
+    "packs/newvfx/pv_holy_angel_feathers/02.png",
+    "packs/newvfx/pv_holy_angel_feathers/03.png",
+    "packs/newvfx/pv_holy_angel_feathers/04.png",
+    "packs/newvfx/pv_holy_angel_feathers/05.png",
+    "packs/newvfx/pv_holy_angel_feathers/06.png",
+    "packs/newvfx/pv_holy_angel_feathers/07.png",
+    "packs/newvfx/pv_holy_angel_feathers/08.png",
+    "packs/newvfx/pv_holy_angel_feathers/09.png",
+    "packs/newvfx/pv_holy_angel_feathers/10.png",
+    "packs/newvfx/pv_holy_angel_feathers/11.png",
+    "packs/newvfx/pv_holy_angel_feathers/12.png",
+    "packs/newvfx/pv_holy_angel_feathers/13.png",
+    "packs/newvfx/pv_holy_angel_feathers/14.png",
+    "packs/newvfx/pv_holy_angel_feathers/15.png",
+    "packs/newvfx/pv_holy_angel_feathers/16.png",
+    "packs/newvfx/pv_holy_angel_feathers/17.png",
+    "packs/newvfx/pv_holy_angel_feathers/18.png",
+    "packs/newvfx/pv_holy_angel_feathers/19.png"
+   ],
+   "fps": 14
+  },
+  "pv_ice_frost_nova": {
+   "files": [
+    "packs/newvfx/pv_ice_frost_nova/00.png",
+    "packs/newvfx/pv_ice_frost_nova/01.png",
+    "packs/newvfx/pv_ice_frost_nova/02.png",
+    "packs/newvfx/pv_ice_frost_nova/03.png",
+    "packs/newvfx/pv_ice_frost_nova/04.png",
+    "packs/newvfx/pv_ice_frost_nova/05.png",
+    "packs/newvfx/pv_ice_frost_nova/06.png",
+    "packs/newvfx/pv_ice_frost_nova/07.png",
+    "packs/newvfx/pv_ice_frost_nova/08.png",
+    "packs/newvfx/pv_ice_frost_nova/09.png",
+    "packs/newvfx/pv_ice_frost_nova/10.png",
+    "packs/newvfx/pv_ice_frost_nova/11.png",
+    "packs/newvfx/pv_ice_frost_nova/12.png",
+    "packs/newvfx/pv_ice_frost_nova/13.png",
+    "packs/newvfx/pv_ice_frost_nova/14.png",
+    "packs/newvfx/pv_ice_frost_nova/15.png"
+   ],
+   "fps": 12
+  },
+  "pv_ice_ice_spike": {
+   "files": [
+    "packs/newvfx/pv_ice_ice_spike/00.png",
+    "packs/newvfx/pv_ice_ice_spike/01.png",
+    "packs/newvfx/pv_ice_ice_spike/02.png",
+    "packs/newvfx/pv_ice_ice_spike/03.png",
+    "packs/newvfx/pv_ice_ice_spike/04.png",
+    "packs/newvfx/pv_ice_ice_spike/05.png",
+    "packs/newvfx/pv_ice_ice_spike/06.png",
+    "packs/newvfx/pv_ice_ice_spike/07.png",
+    "packs/newvfx/pv_ice_ice_spike/08.png",
+    "packs/newvfx/pv_ice_ice_spike/09.png",
+    "packs/newvfx/pv_ice_ice_spike/10.png",
+    "packs/newvfx/pv_ice_ice_spike/11.png",
+    "packs/newvfx/pv_ice_ice_spike/12.png",
+    "packs/newvfx/pv_ice_ice_spike/13.png",
+    "packs/newvfx/pv_ice_ice_spike/14.png",
+    "packs/newvfx/pv_ice_ice_spike/15.png",
+    "packs/newvfx/pv_ice_ice_spike/16.png",
+    "packs/newvfx/pv_ice_ice_spike/17.png",
+    "packs/newvfx/pv_ice_ice_spike/18.png",
+    "packs/newvfx/pv_ice_ice_spike/19.png",
+    "packs/newvfx/pv_ice_ice_spike/20.png",
+    "packs/newvfx/pv_ice_ice_spike/21.png",
+    "packs/newvfx/pv_ice_ice_spike/22.png",
+    "packs/newvfx/pv_ice_ice_spike/23.png"
+   ],
+   "fps": 14
+  },
+  "pv_ice_freeze_encase": {
+   "files": [
+    "packs/newvfx/pv_ice_freeze_encase/00.png",
+    "packs/newvfx/pv_ice_freeze_encase/01.png",
+    "packs/newvfx/pv_ice_freeze_encase/02.png",
+    "packs/newvfx/pv_ice_freeze_encase/03.png",
+    "packs/newvfx/pv_ice_freeze_encase/04.png",
+    "packs/newvfx/pv_ice_freeze_encase/05.png",
+    "packs/newvfx/pv_ice_freeze_encase/06.png",
+    "packs/newvfx/pv_ice_freeze_encase/07.png",
+    "packs/newvfx/pv_ice_freeze_encase/08.png",
+    "packs/newvfx/pv_ice_freeze_encase/09.png",
+    "packs/newvfx/pv_ice_freeze_encase/10.png",
+    "packs/newvfx/pv_ice_freeze_encase/11.png",
+    "packs/newvfx/pv_ice_freeze_encase/12.png",
+    "packs/newvfx/pv_ice_freeze_encase/13.png",
+    "packs/newvfx/pv_ice_freeze_encase/14.png",
+    "packs/newvfx/pv_ice_freeze_encase/15.png",
+    "packs/newvfx/pv_ice_freeze_encase/16.png",
+    "packs/newvfx/pv_ice_freeze_encase/17.png",
+    "packs/newvfx/pv_ice_freeze_encase/18.png"
+   ],
+   "fps": 14
+  },
+  "pv_ice_ice_wall": {
+   "files": [
+    "packs/newvfx/pv_ice_ice_wall/00.png",
+    "packs/newvfx/pv_ice_ice_wall/01.png",
+    "packs/newvfx/pv_ice_ice_wall/02.png",
+    "packs/newvfx/pv_ice_ice_wall/03.png",
+    "packs/newvfx/pv_ice_ice_wall/04.png",
+    "packs/newvfx/pv_ice_ice_wall/05.png",
+    "packs/newvfx/pv_ice_ice_wall/06.png",
+    "packs/newvfx/pv_ice_ice_wall/07.png",
+    "packs/newvfx/pv_ice_ice_wall/08.png",
+    "packs/newvfx/pv_ice_ice_wall/09.png",
+    "packs/newvfx/pv_ice_ice_wall/10.png",
+    "packs/newvfx/pv_ice_ice_wall/11.png",
+    "packs/newvfx/pv_ice_ice_wall/12.png",
+    "packs/newvfx/pv_ice_ice_wall/13.png",
+    "packs/newvfx/pv_ice_ice_wall/14.png",
+    "packs/newvfx/pv_ice_ice_wall/15.png",
+    "packs/newvfx/pv_ice_ice_wall/16.png",
+    "packs/newvfx/pv_ice_ice_wall/17.png",
+    "packs/newvfx/pv_ice_ice_wall/18.png",
+    "packs/newvfx/pv_ice_ice_wall/19.png"
+   ],
+   "fps": 14
+  },
+  "pv_projectiles_ice_shard": {
+   "files": [
+    "packs/newvfx/pv_projectiles_ice_shard/00.png",
+    "packs/newvfx/pv_projectiles_ice_shard/01.png",
+    "packs/newvfx/pv_projectiles_ice_shard/02.png",
+    "packs/newvfx/pv_projectiles_ice_shard/03.png",
+    "packs/newvfx/pv_projectiles_ice_shard/04.png",
+    "packs/newvfx/pv_projectiles_ice_shard/05.png",
+    "packs/newvfx/pv_projectiles_ice_shard/06.png",
+    "packs/newvfx/pv_projectiles_ice_shard/07.png",
+    "packs/newvfx/pv_projectiles_ice_shard/08.png",
+    "packs/newvfx/pv_projectiles_ice_shard/09.png",
+    "packs/newvfx/pv_projectiles_ice_shard/10.png",
+    "packs/newvfx/pv_projectiles_ice_shard/11.png",
+    "packs/newvfx/pv_projectiles_ice_shard/12.png",
+    "packs/newvfx/pv_projectiles_ice_shard/13.png",
+    "packs/newvfx/pv_projectiles_ice_shard/14.png",
+    "packs/newvfx/pv_projectiles_ice_shard/15.png",
+    "packs/newvfx/pv_projectiles_ice_shard/16.png",
+    "packs/newvfx/pv_projectiles_ice_shard/17.png"
+   ],
+   "fps": 14
+  },
+  "pv_ice_blizzard": {
+   "files": [
+    "packs/newvfx/pv_ice_blizzard/00.png",
+    "packs/newvfx/pv_ice_blizzard/01.png",
+    "packs/newvfx/pv_ice_blizzard/02.png",
+    "packs/newvfx/pv_ice_blizzard/03.png",
+    "packs/newvfx/pv_ice_blizzard/04.png",
+    "packs/newvfx/pv_ice_blizzard/05.png",
+    "packs/newvfx/pv_ice_blizzard/06.png",
+    "packs/newvfx/pv_ice_blizzard/07.png",
+    "packs/newvfx/pv_ice_blizzard/08.png",
+    "packs/newvfx/pv_ice_blizzard/09.png",
+    "packs/newvfx/pv_ice_blizzard/10.png",
+    "packs/newvfx/pv_ice_blizzard/11.png",
+    "packs/newvfx/pv_ice_blizzard/12.png",
+    "packs/newvfx/pv_ice_blizzard/13.png",
+    "packs/newvfx/pv_ice_blizzard/14.png",
+    "packs/newvfx/pv_ice_blizzard/15.png"
+   ],
+   "fps": 14
+  },
+  "pv_ice_frost_breath": {
+   "files": [
+    "packs/newvfx/pv_ice_frost_breath/00.png",
+    "packs/newvfx/pv_ice_frost_breath/01.png",
+    "packs/newvfx/pv_ice_frost_breath/02.png",
+    "packs/newvfx/pv_ice_frost_breath/03.png",
+    "packs/newvfx/pv_ice_frost_breath/04.png",
+    "packs/newvfx/pv_ice_frost_breath/05.png",
+    "packs/newvfx/pv_ice_frost_breath/06.png",
+    "packs/newvfx/pv_ice_frost_breath/07.png",
+    "packs/newvfx/pv_ice_frost_breath/08.png",
+    "packs/newvfx/pv_ice_frost_breath/09.png",
+    "packs/newvfx/pv_ice_frost_breath/10.png",
+    "packs/newvfx/pv_ice_frost_breath/11.png",
+    "packs/newvfx/pv_ice_frost_breath/12.png",
+    "packs/newvfx/pv_ice_frost_breath/13.png"
+   ],
+   "fps": 15
+  },
+  "pv_ice_snowball_impact": {
+   "files": [
+    "packs/newvfx/pv_ice_snowball_impact/00.png",
+    "packs/newvfx/pv_ice_snowball_impact/01.png",
+    "packs/newvfx/pv_ice_snowball_impact/02.png",
+    "packs/newvfx/pv_ice_snowball_impact/03.png",
+    "packs/newvfx/pv_ice_snowball_impact/04.png",
+    "packs/newvfx/pv_ice_snowball_impact/05.png",
+    "packs/newvfx/pv_ice_snowball_impact/06.png",
+    "packs/newvfx/pv_ice_snowball_impact/07.png",
+    "packs/newvfx/pv_ice_snowball_impact/08.png",
+    "packs/newvfx/pv_ice_snowball_impact/09.png",
+    "packs/newvfx/pv_ice_snowball_impact/10.png",
+    "packs/newvfx/pv_ice_snowball_impact/11.png",
+    "packs/newvfx/pv_ice_snowball_impact/12.png",
+    "packs/newvfx/pv_ice_snowball_impact/13.png",
+    "packs/newvfx/pv_ice_snowball_impact/14.png",
+    "packs/newvfx/pv_ice_snowball_impact/15.png",
+    "packs/newvfx/pv_ice_snowball_impact/16.png",
+    "packs/newvfx/pv_ice_snowball_impact/17.png",
+    "packs/newvfx/pv_ice_snowball_impact/18.png"
+   ],
+   "fps": 15
+  },
+  "pv_lightning_static_burst": {
+   "files": [
+    "packs/newvfx/pv_lightning_static_burst/00.png",
+    "packs/newvfx/pv_lightning_static_burst/01.png",
+    "packs/newvfx/pv_lightning_static_burst/02.png",
+    "packs/newvfx/pv_lightning_static_burst/03.png",
+    "packs/newvfx/pv_lightning_static_burst/04.png",
+    "packs/newvfx/pv_lightning_static_burst/05.png",
+    "packs/newvfx/pv_lightning_static_burst/06.png",
+    "packs/newvfx/pv_lightning_static_burst/07.png",
+    "packs/newvfx/pv_lightning_static_burst/08.png",
+    "packs/newvfx/pv_lightning_static_burst/09.png",
+    "packs/newvfx/pv_lightning_static_burst/10.png"
+   ],
+   "fps": 17
+  },
+  "pv_lightning_lightning_strike": {
+   "files": [
+    "packs/newvfx/pv_lightning_lightning_strike/00.png",
+    "packs/newvfx/pv_lightning_lightning_strike/01.png",
+    "packs/newvfx/pv_lightning_lightning_strike/02.png",
+    "packs/newvfx/pv_lightning_lightning_strike/03.png",
+    "packs/newvfx/pv_lightning_lightning_strike/04.png",
+    "packs/newvfx/pv_lightning_lightning_strike/05.png",
+    "packs/newvfx/pv_lightning_lightning_strike/06.png",
+    "packs/newvfx/pv_lightning_lightning_strike/07.png",
+    "packs/newvfx/pv_lightning_lightning_strike/08.png",
+    "packs/newvfx/pv_lightning_lightning_strike/09.png",
+    "packs/newvfx/pv_lightning_lightning_strike/10.png",
+    "packs/newvfx/pv_lightning_lightning_strike/11.png",
+    "packs/newvfx/pv_lightning_lightning_strike/12.png",
+    "packs/newvfx/pv_lightning_lightning_strike/13.png",
+    "packs/newvfx/pv_lightning_lightning_strike/14.png",
+    "packs/newvfx/pv_lightning_lightning_strike/15.png"
+   ],
+   "fps": 12
+  },
+  "pv_lightning_chain_lightning": {
+   "files": [
+    "packs/newvfx/pv_lightning_chain_lightning/00.png",
+    "packs/newvfx/pv_lightning_chain_lightning/01.png",
+    "packs/newvfx/pv_lightning_chain_lightning/02.png",
+    "packs/newvfx/pv_lightning_chain_lightning/03.png",
+    "packs/newvfx/pv_lightning_chain_lightning/04.png",
+    "packs/newvfx/pv_lightning_chain_lightning/05.png",
+    "packs/newvfx/pv_lightning_chain_lightning/06.png",
+    "packs/newvfx/pv_lightning_chain_lightning/07.png",
+    "packs/newvfx/pv_lightning_chain_lightning/08.png",
+    "packs/newvfx/pv_lightning_chain_lightning/09.png",
+    "packs/newvfx/pv_lightning_chain_lightning/10.png",
+    "packs/newvfx/pv_lightning_chain_lightning/11.png",
+    "packs/newvfx/pv_lightning_chain_lightning/12.png"
+   ],
+   "fps": 14
+  },
+  "pv_lightning_thunder_cloud": {
+   "files": [
+    "packs/newvfx/pv_lightning_thunder_cloud/00.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/01.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/02.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/03.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/04.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/05.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/06.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/07.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/08.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/09.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/10.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/11.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/12.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/13.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/14.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/15.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/16.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/17.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/18.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/19.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/20.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/21.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/22.png",
+    "packs/newvfx/pv_lightning_thunder_cloud/23.png"
+   ],
+   "fps": 14
+  },
+  "pv_lightning_ball_lightning": {
+   "files": [
+    "packs/newvfx/pv_lightning_ball_lightning/00.png",
+    "packs/newvfx/pv_lightning_ball_lightning/01.png",
+    "packs/newvfx/pv_lightning_ball_lightning/02.png",
+    "packs/newvfx/pv_lightning_ball_lightning/03.png",
+    "packs/newvfx/pv_lightning_ball_lightning/04.png",
+    "packs/newvfx/pv_lightning_ball_lightning/05.png",
+    "packs/newvfx/pv_lightning_ball_lightning/06.png",
+    "packs/newvfx/pv_lightning_ball_lightning/07.png",
+    "packs/newvfx/pv_lightning_ball_lightning/08.png",
+    "packs/newvfx/pv_lightning_ball_lightning/09.png",
+    "packs/newvfx/pv_lightning_ball_lightning/10.png",
+    "packs/newvfx/pv_lightning_ball_lightning/11.png",
+    "packs/newvfx/pv_lightning_ball_lightning/12.png",
+    "packs/newvfx/pv_lightning_ball_lightning/13.png",
+    "packs/newvfx/pv_lightning_ball_lightning/14.png",
+    "packs/newvfx/pv_lightning_ball_lightning/15.png",
+    "packs/newvfx/pv_lightning_ball_lightning/16.png",
+    "packs/newvfx/pv_lightning_ball_lightning/17.png"
+   ],
+   "fps": 17
+  },
+  "pv_shadow_curse": {
+   "files": [
+    "packs/newvfx/pv_shadow_curse/00.png",
+    "packs/newvfx/pv_shadow_curse/01.png",
+    "packs/newvfx/pv_shadow_curse/02.png",
+    "packs/newvfx/pv_shadow_curse/03.png",
+    "packs/newvfx/pv_shadow_curse/04.png",
+    "packs/newvfx/pv_shadow_curse/05.png",
+    "packs/newvfx/pv_shadow_curse/06.png",
+    "packs/newvfx/pv_shadow_curse/07.png",
+    "packs/newvfx/pv_shadow_curse/08.png",
+    "packs/newvfx/pv_shadow_curse/09.png",
+    "packs/newvfx/pv_shadow_curse/10.png",
+    "packs/newvfx/pv_shadow_curse/11.png",
+    "packs/newvfx/pv_shadow_curse/12.png",
+    "packs/newvfx/pv_shadow_curse/13.png",
+    "packs/newvfx/pv_shadow_curse/14.png",
+    "packs/newvfx/pv_shadow_curse/15.png",
+    "packs/newvfx/pv_shadow_curse/16.png",
+    "packs/newvfx/pv_shadow_curse/17.png",
+    "packs/newvfx/pv_shadow_curse/18.png",
+    "packs/newvfx/pv_shadow_curse/19.png",
+    "packs/newvfx/pv_shadow_curse/20.png",
+    "packs/newvfx/pv_shadow_curse/21.png",
+    "packs/newvfx/pv_shadow_curse/22.png",
+    "packs/newvfx/pv_shadow_curse/23.png"
+   ],
+   "fps": 12
+  },
+  "pv_shadow_soul_drain": {
+   "files": [
+    "packs/newvfx/pv_shadow_soul_drain/00.png",
+    "packs/newvfx/pv_shadow_soul_drain/01.png",
+    "packs/newvfx/pv_shadow_soul_drain/02.png",
+    "packs/newvfx/pv_shadow_soul_drain/03.png",
+    "packs/newvfx/pv_shadow_soul_drain/04.png",
+    "packs/newvfx/pv_shadow_soul_drain/05.png",
+    "packs/newvfx/pv_shadow_soul_drain/06.png",
+    "packs/newvfx/pv_shadow_soul_drain/07.png",
+    "packs/newvfx/pv_shadow_soul_drain/08.png",
+    "packs/newvfx/pv_shadow_soul_drain/09.png",
+    "packs/newvfx/pv_shadow_soul_drain/10.png",
+    "packs/newvfx/pv_shadow_soul_drain/11.png",
+    "packs/newvfx/pv_shadow_soul_drain/12.png",
+    "packs/newvfx/pv_shadow_soul_drain/13.png",
+    "packs/newvfx/pv_shadow_soul_drain/14.png",
+    "packs/newvfx/pv_shadow_soul_drain/15.png",
+    "packs/newvfx/pv_shadow_soul_drain/16.png",
+    "packs/newvfx/pv_shadow_soul_drain/17.png",
+    "packs/newvfx/pv_shadow_soul_drain/18.png",
+    "packs/newvfx/pv_shadow_soul_drain/19.png",
+    "packs/newvfx/pv_shadow_soul_drain/20.png",
+    "packs/newvfx/pv_shadow_soul_drain/21.png"
+   ],
+   "fps": 15
+  },
+  "pv_shadow_void_implosion": {
+   "files": [
+    "packs/newvfx/pv_shadow_void_implosion/00.png",
+    "packs/newvfx/pv_shadow_void_implosion/01.png",
+    "packs/newvfx/pv_shadow_void_implosion/02.png",
+    "packs/newvfx/pv_shadow_void_implosion/03.png",
+    "packs/newvfx/pv_shadow_void_implosion/04.png",
+    "packs/newvfx/pv_shadow_void_implosion/05.png",
+    "packs/newvfx/pv_shadow_void_implosion/06.png",
+    "packs/newvfx/pv_shadow_void_implosion/07.png",
+    "packs/newvfx/pv_shadow_void_implosion/08.png",
+    "packs/newvfx/pv_shadow_void_implosion/09.png",
+    "packs/newvfx/pv_shadow_void_implosion/10.png",
+    "packs/newvfx/pv_shadow_void_implosion/11.png",
+    "packs/newvfx/pv_shadow_void_implosion/12.png",
+    "packs/newvfx/pv_shadow_void_implosion/13.png",
+    "packs/newvfx/pv_shadow_void_implosion/14.png",
+    "packs/newvfx/pv_shadow_void_implosion/15.png",
+    "packs/newvfx/pv_shadow_void_implosion/16.png",
+    "packs/newvfx/pv_shadow_void_implosion/17.png",
+    "packs/newvfx/pv_shadow_void_implosion/18.png",
+    "packs/newvfx/pv_shadow_void_implosion/19.png"
+   ],
+   "fps": 14
+  },
+  "pv_shadow_shadow_tendrils": {
+   "files": [
+    "packs/newvfx/pv_shadow_shadow_tendrils/00.png",
+    "packs/newvfx/pv_shadow_shadow_tendrils/01.png",
+    "packs/newvfx/pv_shadow_shadow_tendrils/02.png",
+    "packs/newvfx/pv_shadow_shadow_tendrils/03.png",
+    "packs/newvfx/pv_shadow_shadow_tendrils/04.png",
+    "packs/newvfx/pv_shadow_shadow_tendrils/05.png",
+    "packs/newvfx/pv_shadow_shadow_tendrils/06.png",
+    "packs/newvfx/pv_shadow_shadow_tendrils/07.png",
+    "packs/newvfx/pv_shadow_shadow_tendrils/08.png",
+    "packs/newvfx/pv_shadow_shadow_tendrils/09.png",
+    "packs/newvfx/pv_shadow_shadow_tendrils/10.png",
+    "packs/newvfx/pv_shadow_shadow_tendrils/11.png",
+    "packs/newvfx/pv_shadow_shadow_tendrils/12.png",
+    "packs/newvfx/pv_shadow_shadow_tendrils/13.png",
+    "packs/newvfx/pv_shadow_shadow_tendrils/14.png",
+    "packs/newvfx/pv_shadow_shadow_tendrils/15.png",
+    "packs/newvfx/pv_shadow_shadow_tendrils/16.png",
+    "packs/newvfx/pv_shadow_shadow_tendrils/17.png",
+    "packs/newvfx/pv_shadow_shadow_tendrils/18.png",
+    "packs/newvfx/pv_shadow_shadow_tendrils/19.png"
+   ],
+   "fps": 14
+  },
+  "pv_shadow_shadow_bolt": {
+   "files": [
+    "packs/newvfx/pv_shadow_shadow_bolt/00.png",
+    "packs/newvfx/pv_shadow_shadow_bolt/01.png",
+    "packs/newvfx/pv_shadow_shadow_bolt/02.png",
+    "packs/newvfx/pv_shadow_shadow_bolt/03.png",
+    "packs/newvfx/pv_shadow_shadow_bolt/04.png",
+    "packs/newvfx/pv_shadow_shadow_bolt/05.png",
+    "packs/newvfx/pv_shadow_shadow_bolt/06.png",
+    "packs/newvfx/pv_shadow_shadow_bolt/07.png",
+    "packs/newvfx/pv_shadow_shadow_bolt/08.png",
+    "packs/newvfx/pv_shadow_shadow_bolt/09.png",
+    "packs/newvfx/pv_shadow_shadow_bolt/10.png",
+    "packs/newvfx/pv_shadow_shadow_bolt/11.png",
+    "packs/newvfx/pv_shadow_shadow_bolt/12.png",
+    "packs/newvfx/pv_shadow_shadow_bolt/13.png",
+    "packs/newvfx/pv_shadow_shadow_bolt/14.png",
+    "packs/newvfx/pv_shadow_shadow_bolt/15.png",
+    "packs/newvfx/pv_shadow_shadow_bolt/16.png",
+    "packs/newvfx/pv_shadow_shadow_bolt/17.png"
+   ],
+   "fps": 14
+  },
+  "pv_melee_shadow_claw": {
+   "files": [
+    "packs/newvfx/pv_melee_shadow_claw/00.png",
+    "packs/newvfx/pv_melee_shadow_claw/01.png",
+    "packs/newvfx/pv_melee_shadow_claw/02.png",
+    "packs/newvfx/pv_melee_shadow_claw/03.png",
+    "packs/newvfx/pv_melee_shadow_claw/04.png",
+    "packs/newvfx/pv_melee_shadow_claw/05.png",
+    "packs/newvfx/pv_melee_shadow_claw/06.png",
+    "packs/newvfx/pv_melee_shadow_claw/07.png",
+    "packs/newvfx/pv_melee_shadow_claw/08.png",
+    "packs/newvfx/pv_melee_shadow_claw/09.png",
+    "packs/newvfx/pv_melee_shadow_claw/10.png"
+   ],
+   "fps": 20
+  },
+  "pv_arcane_magic_circle": {
+   "files": [
+    "packs/newvfx/pv_arcane_magic_circle/00.png",
+    "packs/newvfx/pv_arcane_magic_circle/01.png",
+    "packs/newvfx/pv_arcane_magic_circle/02.png",
+    "packs/newvfx/pv_arcane_magic_circle/03.png",
+    "packs/newvfx/pv_arcane_magic_circle/04.png",
+    "packs/newvfx/pv_arcane_magic_circle/05.png",
+    "packs/newvfx/pv_arcane_magic_circle/06.png",
+    "packs/newvfx/pv_arcane_magic_circle/07.png",
+    "packs/newvfx/pv_arcane_magic_circle/08.png",
+    "packs/newvfx/pv_arcane_magic_circle/09.png",
+    "packs/newvfx/pv_arcane_magic_circle/10.png",
+    "packs/newvfx/pv_arcane_magic_circle/11.png",
+    "packs/newvfx/pv_arcane_magic_circle/12.png",
+    "packs/newvfx/pv_arcane_magic_circle/13.png",
+    "packs/newvfx/pv_arcane_magic_circle/14.png",
+    "packs/newvfx/pv_arcane_magic_circle/15.png",
+    "packs/newvfx/pv_arcane_magic_circle/16.png",
+    "packs/newvfx/pv_arcane_magic_circle/17.png",
+    "packs/newvfx/pv_arcane_magic_circle/18.png"
+   ],
+   "fps": 12
+  },
+  "pv_arcane_arcane_beam": {
+   "files": [
+    "packs/newvfx/pv_arcane_arcane_beam/00.png",
+    "packs/newvfx/pv_arcane_arcane_beam/01.png",
+    "packs/newvfx/pv_arcane_arcane_beam/02.png",
+    "packs/newvfx/pv_arcane_arcane_beam/03.png",
+    "packs/newvfx/pv_arcane_arcane_beam/04.png",
+    "packs/newvfx/pv_arcane_arcane_beam/05.png",
+    "packs/newvfx/pv_arcane_arcane_beam/06.png",
+    "packs/newvfx/pv_arcane_arcane_beam/07.png"
+   ],
+   "fps": 13
+  },
+  "pv_explosions_arcane_burst": {
+   "files": [
+    "packs/newvfx/pv_explosions_arcane_burst/00.png",
+    "packs/newvfx/pv_explosions_arcane_burst/01.png",
+    "packs/newvfx/pv_explosions_arcane_burst/02.png",
+    "packs/newvfx/pv_explosions_arcane_burst/03.png",
+    "packs/newvfx/pv_explosions_arcane_burst/04.png",
+    "packs/newvfx/pv_explosions_arcane_burst/05.png",
+    "packs/newvfx/pv_explosions_arcane_burst/06.png",
+    "packs/newvfx/pv_explosions_arcane_burst/07.png",
+    "packs/newvfx/pv_explosions_arcane_burst/08.png",
+    "packs/newvfx/pv_explosions_arcane_burst/09.png",
+    "packs/newvfx/pv_explosions_arcane_burst/10.png",
+    "packs/newvfx/pv_explosions_arcane_burst/11.png",
+    "packs/newvfx/pv_explosions_arcane_burst/12.png",
+    "packs/newvfx/pv_explosions_arcane_burst/13.png",
+    "packs/newvfx/pv_explosions_arcane_burst/14.png",
+    "packs/newvfx/pv_explosions_arcane_burst/15.png",
+    "packs/newvfx/pv_explosions_arcane_burst/16.png",
+    "packs/newvfx/pv_explosions_arcane_burst/17.png"
+   ],
+   "fps": 15
+  },
+  "pv_arcane_shield_shatter": {
+   "files": [
+    "packs/newvfx/pv_arcane_shield_shatter/00.png",
+    "packs/newvfx/pv_arcane_shield_shatter/01.png",
+    "packs/newvfx/pv_arcane_shield_shatter/02.png",
+    "packs/newvfx/pv_arcane_shield_shatter/03.png",
+    "packs/newvfx/pv_arcane_shield_shatter/04.png",
+    "packs/newvfx/pv_arcane_shield_shatter/05.png",
+    "packs/newvfx/pv_arcane_shield_shatter/06.png",
+    "packs/newvfx/pv_arcane_shield_shatter/07.png",
+    "packs/newvfx/pv_arcane_shield_shatter/08.png",
+    "packs/newvfx/pv_arcane_shield_shatter/09.png",
+    "packs/newvfx/pv_arcane_shield_shatter/10.png",
+    "packs/newvfx/pv_arcane_shield_shatter/11.png",
+    "packs/newvfx/pv_arcane_shield_shatter/12.png",
+    "packs/newvfx/pv_arcane_shield_shatter/13.png",
+    "packs/newvfx/pv_arcane_shield_shatter/14.png",
+    "packs/newvfx/pv_arcane_shield_shatter/15.png"
+   ],
+   "fps": 17
+  },
+  "pv_arcane_rune_trap": {
+   "files": [
+    "packs/newvfx/pv_arcane_rune_trap/00.png",
+    "packs/newvfx/pv_arcane_rune_trap/01.png",
+    "packs/newvfx/pv_arcane_rune_trap/02.png",
+    "packs/newvfx/pv_arcane_rune_trap/03.png",
+    "packs/newvfx/pv_arcane_rune_trap/04.png",
+    "packs/newvfx/pv_arcane_rune_trap/05.png",
+    "packs/newvfx/pv_arcane_rune_trap/06.png",
+    "packs/newvfx/pv_arcane_rune_trap/07.png",
+    "packs/newvfx/pv_arcane_rune_trap/08.png",
+    "packs/newvfx/pv_arcane_rune_trap/09.png",
+    "packs/newvfx/pv_arcane_rune_trap/10.png",
+    "packs/newvfx/pv_arcane_rune_trap/11.png",
+    "packs/newvfx/pv_arcane_rune_trap/12.png",
+    "packs/newvfx/pv_arcane_rune_trap/13.png",
+    "packs/newvfx/pv_arcane_rune_trap/14.png",
+    "packs/newvfx/pv_arcane_rune_trap/15.png",
+    "packs/newvfx/pv_arcane_rune_trap/16.png",
+    "packs/newvfx/pv_arcane_rune_trap/17.png"
+   ],
+   "fps": 15
+  },
+  "pv_arcane_arcane_orb_projectile": {
+   "files": [
+    "packs/newvfx/pv_arcane_arcane_orb_projectile/00.png",
+    "packs/newvfx/pv_arcane_arcane_orb_projectile/01.png",
+    "packs/newvfx/pv_arcane_arcane_orb_projectile/02.png",
+    "packs/newvfx/pv_arcane_arcane_orb_projectile/03.png",
+    "packs/newvfx/pv_arcane_arcane_orb_projectile/04.png",
+    "packs/newvfx/pv_arcane_arcane_orb_projectile/05.png",
+    "packs/newvfx/pv_arcane_arcane_orb_projectile/06.png",
+    "packs/newvfx/pv_arcane_arcane_orb_projectile/07.png",
+    "packs/newvfx/pv_arcane_arcane_orb_projectile/08.png",
+    "packs/newvfx/pv_arcane_arcane_orb_projectile/09.png",
+    "packs/newvfx/pv_arcane_arcane_orb_projectile/10.png",
+    "packs/newvfx/pv_arcane_arcane_orb_projectile/11.png",
+    "packs/newvfx/pv_arcane_arcane_orb_projectile/12.png",
+    "packs/newvfx/pv_arcane_arcane_orb_projectile/13.png",
+    "packs/newvfx/pv_arcane_arcane_orb_projectile/14.png",
+    "packs/newvfx/pv_arcane_arcane_orb_projectile/15.png",
+    "packs/newvfx/pv_arcane_arcane_orb_projectile/16.png",
+    "packs/newvfx/pv_arcane_arcane_orb_projectile/17.png",
+    "packs/newvfx/pv_arcane_arcane_orb_projectile/18.png",
+    "packs/newvfx/pv_arcane_arcane_orb_projectile/19.png",
+    "packs/newvfx/pv_arcane_arcane_orb_projectile/20.png",
+    "packs/newvfx/pv_arcane_arcane_orb_projectile/21.png"
+   ],
+   "fps": 17
+  },
+  "pv_arcane_portal_summon": {
+   "files": [
+    "packs/newvfx/pv_arcane_portal_summon/00.png",
+    "packs/newvfx/pv_arcane_portal_summon/01.png",
+    "packs/newvfx/pv_arcane_portal_summon/02.png",
+    "packs/newvfx/pv_arcane_portal_summon/03.png",
+    "packs/newvfx/pv_arcane_portal_summon/04.png",
+    "packs/newvfx/pv_arcane_portal_summon/05.png",
+    "packs/newvfx/pv_arcane_portal_summon/06.png",
+    "packs/newvfx/pv_arcane_portal_summon/07.png",
+    "packs/newvfx/pv_arcane_portal_summon/08.png",
+    "packs/newvfx/pv_arcane_portal_summon/09.png",
+    "packs/newvfx/pv_arcane_portal_summon/10.png",
+    "packs/newvfx/pv_arcane_portal_summon/11.png",
+    "packs/newvfx/pv_arcane_portal_summon/12.png",
+    "packs/newvfx/pv_arcane_portal_summon/13.png",
+    "packs/newvfx/pv_arcane_portal_summon/14.png",
+    "packs/newvfx/pv_arcane_portal_summon/15.png",
+    "packs/newvfx/pv_arcane_portal_summon/16.png",
+    "packs/newvfx/pv_arcane_portal_summon/17.png",
+    "packs/newvfx/pv_arcane_portal_summon/18.png",
+    "packs/newvfx/pv_arcane_portal_summon/19.png",
+    "packs/newvfx/pv_arcane_portal_summon/20.png"
+   ],
+   "fps": 12
+  },
+  "pv_arcane_blink_dash": {
+   "files": [
+    "packs/newvfx/pv_arcane_blink_dash/00.png",
+    "packs/newvfx/pv_arcane_blink_dash/01.png",
+    "packs/newvfx/pv_arcane_blink_dash/02.png",
+    "packs/newvfx/pv_arcane_blink_dash/03.png",
+    "packs/newvfx/pv_arcane_blink_dash/04.png",
+    "packs/newvfx/pv_arcane_blink_dash/05.png",
+    "packs/newvfx/pv_arcane_blink_dash/06.png",
+    "packs/newvfx/pv_arcane_blink_dash/07.png",
+    "packs/newvfx/pv_arcane_blink_dash/08.png",
+    "packs/newvfx/pv_arcane_blink_dash/09.png",
+    "packs/newvfx/pv_arcane_blink_dash/10.png",
+    "packs/newvfx/pv_arcane_blink_dash/11.png",
+    "packs/newvfx/pv_arcane_blink_dash/12.png",
+    "packs/newvfx/pv_arcane_blink_dash/13.png",
+    "packs/newvfx/pv_arcane_blink_dash/14.png",
+    "packs/newvfx/pv_arcane_blink_dash/15.png",
+    "packs/newvfx/pv_arcane_blink_dash/16.png",
+    "packs/newvfx/pv_arcane_blink_dash/17.png",
+    "packs/newvfx/pv_arcane_blink_dash/18.png",
+    "packs/newvfx/pv_arcane_blink_dash/19.png"
+   ],
+   "fps": 17
+  },
+  "pv_nature_bloom_heal": {
+   "files": [
+    "packs/newvfx/pv_nature_bloom_heal/00.png",
+    "packs/newvfx/pv_nature_bloom_heal/01.png",
+    "packs/newvfx/pv_nature_bloom_heal/02.png",
+    "packs/newvfx/pv_nature_bloom_heal/03.png",
+    "packs/newvfx/pv_nature_bloom_heal/04.png",
+    "packs/newvfx/pv_nature_bloom_heal/05.png",
+    "packs/newvfx/pv_nature_bloom_heal/06.png",
+    "packs/newvfx/pv_nature_bloom_heal/07.png",
+    "packs/newvfx/pv_nature_bloom_heal/08.png",
+    "packs/newvfx/pv_nature_bloom_heal/09.png",
+    "packs/newvfx/pv_nature_bloom_heal/10.png",
+    "packs/newvfx/pv_nature_bloom_heal/11.png",
+    "packs/newvfx/pv_nature_bloom_heal/12.png",
+    "packs/newvfx/pv_nature_bloom_heal/13.png",
+    "packs/newvfx/pv_nature_bloom_heal/14.png",
+    "packs/newvfx/pv_nature_bloom_heal/15.png",
+    "packs/newvfx/pv_nature_bloom_heal/16.png",
+    "packs/newvfx/pv_nature_bloom_heal/17.png",
+    "packs/newvfx/pv_nature_bloom_heal/18.png",
+    "packs/newvfx/pv_nature_bloom_heal/19.png",
+    "packs/newvfx/pv_nature_bloom_heal/20.png"
+   ],
+   "fps": 14
+  },
+  "pv_nature_earth_spike": {
+   "files": [
+    "packs/newvfx/pv_nature_earth_spike/00.png",
+    "packs/newvfx/pv_nature_earth_spike/01.png",
+    "packs/newvfx/pv_nature_earth_spike/02.png",
+    "packs/newvfx/pv_nature_earth_spike/03.png",
+    "packs/newvfx/pv_nature_earth_spike/04.png",
+    "packs/newvfx/pv_nature_earth_spike/05.png",
+    "packs/newvfx/pv_nature_earth_spike/06.png",
+    "packs/newvfx/pv_nature_earth_spike/07.png",
+    "packs/newvfx/pv_nature_earth_spike/08.png",
+    "packs/newvfx/pv_nature_earth_spike/09.png",
+    "packs/newvfx/pv_nature_earth_spike/10.png",
+    "packs/newvfx/pv_nature_earth_spike/11.png",
+    "packs/newvfx/pv_nature_earth_spike/12.png",
+    "packs/newvfx/pv_nature_earth_spike/13.png",
+    "packs/newvfx/pv_nature_earth_spike/14.png",
+    "packs/newvfx/pv_nature_earth_spike/15.png",
+    "packs/newvfx/pv_nature_earth_spike/16.png",
+    "packs/newvfx/pv_nature_earth_spike/17.png",
+    "packs/newvfx/pv_nature_earth_spike/18.png",
+    "packs/newvfx/pv_nature_earth_spike/19.png",
+    "packs/newvfx/pv_nature_earth_spike/20.png"
+   ],
+   "fps": 14
+  },
+  "pv_nature_spore_burst": {
+   "files": [
+    "packs/newvfx/pv_nature_spore_burst/00.png",
+    "packs/newvfx/pv_nature_spore_burst/01.png",
+    "packs/newvfx/pv_nature_spore_burst/02.png",
+    "packs/newvfx/pv_nature_spore_burst/03.png",
+    "packs/newvfx/pv_nature_spore_burst/04.png",
+    "packs/newvfx/pv_nature_spore_burst/05.png",
+    "packs/newvfx/pv_nature_spore_burst/06.png",
+    "packs/newvfx/pv_nature_spore_burst/07.png",
+    "packs/newvfx/pv_nature_spore_burst/08.png",
+    "packs/newvfx/pv_nature_spore_burst/09.png",
+    "packs/newvfx/pv_nature_spore_burst/10.png",
+    "packs/newvfx/pv_nature_spore_burst/11.png",
+    "packs/newvfx/pv_nature_spore_burst/12.png",
+    "packs/newvfx/pv_nature_spore_burst/13.png",
+    "packs/newvfx/pv_nature_spore_burst/14.png",
+    "packs/newvfx/pv_nature_spore_burst/15.png",
+    "packs/newvfx/pv_nature_spore_burst/16.png",
+    "packs/newvfx/pv_nature_spore_burst/17.png",
+    "packs/newvfx/pv_nature_spore_burst/18.png"
+   ],
+   "fps": 14
+  },
+  "pv_nature_fissure": {
+   "files": [
+    "packs/newvfx/pv_nature_fissure/00.png",
+    "packs/newvfx/pv_nature_fissure/01.png",
+    "packs/newvfx/pv_nature_fissure/02.png",
+    "packs/newvfx/pv_nature_fissure/03.png",
+    "packs/newvfx/pv_nature_fissure/04.png",
+    "packs/newvfx/pv_nature_fissure/05.png",
+    "packs/newvfx/pv_nature_fissure/06.png",
+    "packs/newvfx/pv_nature_fissure/07.png",
+    "packs/newvfx/pv_nature_fissure/08.png",
+    "packs/newvfx/pv_nature_fissure/09.png",
+    "packs/newvfx/pv_nature_fissure/10.png",
+    "packs/newvfx/pv_nature_fissure/11.png",
+    "packs/newvfx/pv_nature_fissure/12.png",
+    "packs/newvfx/pv_nature_fissure/13.png",
+    "packs/newvfx/pv_nature_fissure/14.png",
+    "packs/newvfx/pv_nature_fissure/15.png",
+    "packs/newvfx/pv_nature_fissure/16.png",
+    "packs/newvfx/pv_nature_fissure/17.png",
+    "packs/newvfx/pv_nature_fissure/18.png",
+    "packs/newvfx/pv_nature_fissure/19.png"
+   ],
+   "fps": 17
+  },
+  "pv_nature_boulder_toss": {
+   "files": [
+    "packs/newvfx/pv_nature_boulder_toss/00.png",
+    "packs/newvfx/pv_nature_boulder_toss/01.png",
+    "packs/newvfx/pv_nature_boulder_toss/02.png",
+    "packs/newvfx/pv_nature_boulder_toss/03.png",
+    "packs/newvfx/pv_nature_boulder_toss/04.png",
+    "packs/newvfx/pv_nature_boulder_toss/05.png",
+    "packs/newvfx/pv_nature_boulder_toss/06.png",
+    "packs/newvfx/pv_nature_boulder_toss/07.png",
+    "packs/newvfx/pv_nature_boulder_toss/08.png",
+    "packs/newvfx/pv_nature_boulder_toss/09.png",
+    "packs/newvfx/pv_nature_boulder_toss/10.png",
+    "packs/newvfx/pv_nature_boulder_toss/11.png",
+    "packs/newvfx/pv_nature_boulder_toss/12.png",
+    "packs/newvfx/pv_nature_boulder_toss/13.png",
+    "packs/newvfx/pv_nature_boulder_toss/14.png",
+    "packs/newvfx/pv_nature_boulder_toss/15.png",
+    "packs/newvfx/pv_nature_boulder_toss/16.png",
+    "packs/newvfx/pv_nature_boulder_toss/17.png",
+    "packs/newvfx/pv_nature_boulder_toss/18.png",
+    "packs/newvfx/pv_nature_boulder_toss/19.png",
+    "packs/newvfx/pv_nature_boulder_toss/20.png"
+   ],
+   "fps": 15
+  },
+  "pv_nature_leaf_storm": {
+   "files": [
+    "packs/newvfx/pv_nature_leaf_storm/00.png",
+    "packs/newvfx/pv_nature_leaf_storm/01.png",
+    "packs/newvfx/pv_nature_leaf_storm/02.png",
+    "packs/newvfx/pv_nature_leaf_storm/03.png",
+    "packs/newvfx/pv_nature_leaf_storm/04.png",
+    "packs/newvfx/pv_nature_leaf_storm/05.png",
+    "packs/newvfx/pv_nature_leaf_storm/06.png",
+    "packs/newvfx/pv_nature_leaf_storm/07.png",
+    "packs/newvfx/pv_nature_leaf_storm/08.png",
+    "packs/newvfx/pv_nature_leaf_storm/09.png",
+    "packs/newvfx/pv_nature_leaf_storm/10.png",
+    "packs/newvfx/pv_nature_leaf_storm/11.png",
+    "packs/newvfx/pv_nature_leaf_storm/12.png",
+    "packs/newvfx/pv_nature_leaf_storm/13.png",
+    "packs/newvfx/pv_nature_leaf_storm/14.png",
+    "packs/newvfx/pv_nature_leaf_storm/15.png",
+    "packs/newvfx/pv_nature_leaf_storm/16.png"
+   ],
+   "fps": 15
+  },
+  "pv_nature_vine_snare": {
+   "files": [
+    "packs/newvfx/pv_nature_vine_snare/00.png",
+    "packs/newvfx/pv_nature_vine_snare/01.png",
+    "packs/newvfx/pv_nature_vine_snare/02.png",
+    "packs/newvfx/pv_nature_vine_snare/03.png",
+    "packs/newvfx/pv_nature_vine_snare/04.png",
+    "packs/newvfx/pv_nature_vine_snare/05.png",
+    "packs/newvfx/pv_nature_vine_snare/06.png",
+    "packs/newvfx/pv_nature_vine_snare/07.png",
+    "packs/newvfx/pv_nature_vine_snare/08.png",
+    "packs/newvfx/pv_nature_vine_snare/09.png",
+    "packs/newvfx/pv_nature_vine_snare/10.png",
+    "packs/newvfx/pv_nature_vine_snare/11.png",
+    "packs/newvfx/pv_nature_vine_snare/12.png",
+    "packs/newvfx/pv_nature_vine_snare/13.png",
+    "packs/newvfx/pv_nature_vine_snare/14.png",
+    "packs/newvfx/pv_nature_vine_snare/15.png",
+    "packs/newvfx/pv_nature_vine_snare/16.png",
+    "packs/newvfx/pv_nature_vine_snare/17.png"
+   ],
+   "fps": 14
+  },
+  "pv_nature_poison_cloud": {
+   "files": [
+    "packs/newvfx/pv_nature_poison_cloud/00.png",
+    "packs/newvfx/pv_nature_poison_cloud/01.png",
+    "packs/newvfx/pv_nature_poison_cloud/02.png",
+    "packs/newvfx/pv_nature_poison_cloud/03.png",
+    "packs/newvfx/pv_nature_poison_cloud/04.png",
+    "packs/newvfx/pv_nature_poison_cloud/05.png",
+    "packs/newvfx/pv_nature_poison_cloud/06.png",
+    "packs/newvfx/pv_nature_poison_cloud/07.png",
+    "packs/newvfx/pv_nature_poison_cloud/08.png",
+    "packs/newvfx/pv_nature_poison_cloud/09.png",
+    "packs/newvfx/pv_nature_poison_cloud/10.png",
+    "packs/newvfx/pv_nature_poison_cloud/11.png",
+    "packs/newvfx/pv_nature_poison_cloud/12.png",
+    "packs/newvfx/pv_nature_poison_cloud/13.png",
+    "packs/newvfx/pv_nature_poison_cloud/14.png",
+    "packs/newvfx/pv_nature_poison_cloud/15.png",
+    "packs/newvfx/pv_nature_poison_cloud/16.png",
+    "packs/newvfx/pv_nature_poison_cloud/17.png",
+    "packs/newvfx/pv_nature_poison_cloud/18.png",
+    "packs/newvfx/pv_nature_poison_cloud/19.png",
+    "packs/newvfx/pv_nature_poison_cloud/20.png",
+    "packs/newvfx/pv_nature_poison_cloud/21.png",
+    "packs/newvfx/pv_nature_poison_cloud/22.png",
+    "packs/newvfx/pv_nature_poison_cloud/23.png"
+   ],
+   "fps": 12
+  },
+  "pv_wind_whirlwind": {
+   "files": [
+    "packs/newvfx/pv_wind_whirlwind/00.png",
+    "packs/newvfx/pv_wind_whirlwind/01.png",
+    "packs/newvfx/pv_wind_whirlwind/02.png",
+    "packs/newvfx/pv_wind_whirlwind/03.png",
+    "packs/newvfx/pv_wind_whirlwind/04.png",
+    "packs/newvfx/pv_wind_whirlwind/05.png",
+    "packs/newvfx/pv_wind_whirlwind/06.png",
+    "packs/newvfx/pv_wind_whirlwind/07.png",
+    "packs/newvfx/pv_wind_whirlwind/08.png",
+    "packs/newvfx/pv_wind_whirlwind/09.png",
+    "packs/newvfx/pv_wind_whirlwind/10.png",
+    "packs/newvfx/pv_wind_whirlwind/11.png",
+    "packs/newvfx/pv_wind_whirlwind/12.png",
+    "packs/newvfx/pv_wind_whirlwind/13.png"
+   ],
+   "fps": 15
+  },
+  "pv_impacts_ground_slam": {
+   "files": [
+    "packs/newvfx/pv_impacts_ground_slam/00.png",
+    "packs/newvfx/pv_impacts_ground_slam/01.png",
+    "packs/newvfx/pv_impacts_ground_slam/02.png",
+    "packs/newvfx/pv_impacts_ground_slam/03.png",
+    "packs/newvfx/pv_impacts_ground_slam/04.png",
+    "packs/newvfx/pv_impacts_ground_slam/05.png",
+    "packs/newvfx/pv_impacts_ground_slam/06.png",
+    "packs/newvfx/pv_impacts_ground_slam/07.png",
+    "packs/newvfx/pv_impacts_ground_slam/08.png",
+    "packs/newvfx/pv_impacts_ground_slam/09.png",
+    "packs/newvfx/pv_impacts_ground_slam/10.png",
+    "packs/newvfx/pv_impacts_ground_slam/11.png",
+    "packs/newvfx/pv_impacts_ground_slam/12.png",
+    "packs/newvfx/pv_impacts_ground_slam/13.png",
+    "packs/newvfx/pv_impacts_ground_slam/14.png",
+    "packs/newvfx/pv_impacts_ground_slam/15.png",
+    "packs/newvfx/pv_impacts_ground_slam/16.png"
+   ],
+   "fps": 14
+  },
+  "pv_melee_hammer_smash": {
+   "files": [
+    "packs/newvfx/pv_melee_hammer_smash/00.png",
+    "packs/newvfx/pv_melee_hammer_smash/01.png",
+    "packs/newvfx/pv_melee_hammer_smash/02.png",
+    "packs/newvfx/pv_melee_hammer_smash/03.png",
+    "packs/newvfx/pv_melee_hammer_smash/04.png",
+    "packs/newvfx/pv_melee_hammer_smash/05.png",
+    "packs/newvfx/pv_melee_hammer_smash/06.png",
+    "packs/newvfx/pv_melee_hammer_smash/07.png",
+    "packs/newvfx/pv_melee_hammer_smash/08.png",
+    "packs/newvfx/pv_melee_hammer_smash/09.png",
+    "packs/newvfx/pv_melee_hammer_smash/10.png",
+    "packs/newvfx/pv_melee_hammer_smash/11.png",
+    "packs/newvfx/pv_melee_hammer_smash/12.png",
+    "packs/newvfx/pv_melee_hammer_smash/13.png"
+   ],
+   "fps": 17
+  },
+  "pv_wind_wind_blade": {
+   "files": [
+    "packs/newvfx/pv_wind_wind_blade/00.png",
+    "packs/newvfx/pv_wind_wind_blade/01.png",
+    "packs/newvfx/pv_wind_wind_blade/02.png",
+    "packs/newvfx/pv_wind_wind_blade/03.png",
+    "packs/newvfx/pv_wind_wind_blade/04.png",
+    "packs/newvfx/pv_wind_wind_blade/05.png",
+    "packs/newvfx/pv_wind_wind_blade/06.png",
+    "packs/newvfx/pv_wind_wind_blade/07.png",
+    "packs/newvfx/pv_wind_wind_blade/08.png",
+    "packs/newvfx/pv_wind_wind_blade/09.png",
+    "packs/newvfx/pv_wind_wind_blade/10.png",
+    "packs/newvfx/pv_wind_wind_blade/11.png",
+    "packs/newvfx/pv_wind_wind_blade/12.png",
+    "packs/newvfx/pv_wind_wind_blade/13.png"
+   ],
+   "fps": 17
+  },
+  "pv_impacts_crit_hit": {
+   "files": [
+    "packs/newvfx/pv_impacts_crit_hit/00.png",
+    "packs/newvfx/pv_impacts_crit_hit/01.png",
+    "packs/newvfx/pv_impacts_crit_hit/02.png",
+    "packs/newvfx/pv_impacts_crit_hit/03.png",
+    "packs/newvfx/pv_impacts_crit_hit/04.png",
+    "packs/newvfx/pv_impacts_crit_hit/05.png",
+    "packs/newvfx/pv_impacts_crit_hit/06.png",
+    "packs/newvfx/pv_impacts_crit_hit/07.png",
+    "packs/newvfx/pv_impacts_crit_hit/08.png",
+    "packs/newvfx/pv_impacts_crit_hit/09.png"
+   ],
+   "fps": 14
+  },
+  "pv_status_power_up_aura": {
+   "files": [
+    "packs/newvfx/pv_status_power_up_aura/00.png",
+    "packs/newvfx/pv_status_power_up_aura/01.png",
+    "packs/newvfx/pv_status_power_up_aura/02.png",
+    "packs/newvfx/pv_status_power_up_aura/03.png",
+    "packs/newvfx/pv_status_power_up_aura/04.png",
+    "packs/newvfx/pv_status_power_up_aura/05.png",
+    "packs/newvfx/pv_status_power_up_aura/06.png",
+    "packs/newvfx/pv_status_power_up_aura/07.png",
+    "packs/newvfx/pv_status_power_up_aura/08.png",
+    "packs/newvfx/pv_status_power_up_aura/09.png",
+    "packs/newvfx/pv_status_power_up_aura/10.png",
+    "packs/newvfx/pv_status_power_up_aura/11.png",
+    "packs/newvfx/pv_status_power_up_aura/12.png",
+    "packs/newvfx/pv_status_power_up_aura/13.png"
+   ],
+   "fps": 14
+  },
+  "pv_impacts_punch_hit": {
+   "files": [
+    "packs/newvfx/pv_impacts_punch_hit/00.png",
+    "packs/newvfx/pv_impacts_punch_hit/01.png",
+    "packs/newvfx/pv_impacts_punch_hit/02.png",
+    "packs/newvfx/pv_impacts_punch_hit/03.png",
+    "packs/newvfx/pv_impacts_punch_hit/04.png",
+    "packs/newvfx/pv_impacts_punch_hit/05.png",
+    "packs/newvfx/pv_impacts_punch_hit/06.png",
+    "packs/newvfx/pv_impacts_punch_hit/07.png",
+    "packs/newvfx/pv_impacts_punch_hit/08.png",
+    "packs/newvfx/pv_impacts_punch_hit/09.png"
+   ],
+   "fps": 17
   }
+ },
+ "overrides": {
+  "world@lava": {
+   "set": "lava_world"
+  },
+  "circle@DRAGONSLAYER": {
+   "set": "pv_fire_ground_flames",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@DRAGONSLAYER": {
+   "set": "pv_fire_fire_pillar",
+   "w": 260,
+   "loop": true
+  },
+  "rings@DRAGONSLAYER": {
+   "set": "pv_explosions_fire_nova",
+   "w": 420
+  },
+  "ripple@DRAGONSLAYER": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@DRAGONSLAYER": {
+   "set": "pv_fire_lava_burst",
+   "w": 300
+  },
+  "fall@DRAGONSLAYER": {
+   "set": "pv_fire_meteor_strike",
+   "w": 240
+  },
+  "rift@DRAGONSLAYER": {
+   "set": "pv_fire_fire_tornado",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@DRAGONSLAYER": {
+   "set": "pv_melee_sword_combo",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@DRAGONSLAYER": {
+   "set": "pv_fire_flamethrower",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@DRAGONSLAYER": {
+   "set": "pv_explosions_big_explosion",
+   "w": 300
+  },
+  "fx:k_sonic@DRAGONSLAYER": {
+   "set": "pv_explosions_fire_nova",
+   "w": 360
+  },
+  "fx:holy_burst@DRAGONSLAYER": {
+   "set": "pv_explosions_big_explosion",
+   "w": 300
+  },
+  "fx:fire_bomb@DRAGONSLAYER": {
+   "set": "pv_explosions_big_explosion",
+   "w": 300
+  },
+  "fx:k_flash@DRAGONSLAYER": {
+   "set": "pv_explosions_big_explosion",
+   "w": 280
+  },
+  "fx:holy_pillar@DRAGONSLAYER": {
+   "set": "pv_fire_fire_pillar",
+   "w": 280
+  },
+  "fx:fire_blast@DRAGONSLAYER": {
+   "set": "pv_fire_flamethrower",
+   "w": 400
+  },
+  "fx:dark_a@DRAGONSLAYER": {
+   "set": "pv_fire_fire_tornado",
+   "w": 300
+  },
+  "fx:dark_b@DRAGONSLAYER": {
+   "set": "pv_fire_fire_tornado",
+   "w": 300
+  },
+  "fx:necro3@DRAGONSLAYER": {
+   "set": "pv_fire_fire_tornado",
+   "w": 320
+  },
+  "fx:claw@DRAGONSLAYER": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:vine_slash@DRAGONSLAYER": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:k_ground@DRAGONSLAYER": {
+   "set": "pv_fire_lava_burst",
+   "w": 320
+  },
+  "circle@DRAGON_LORD": {
+   "set": "pv_fire_ground_flames",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@DRAGON_LORD": {
+   "set": "pv_fire_fire_pillar",
+   "w": 260,
+   "loop": true
+  },
+  "rings@DRAGON_LORD": {
+   "set": "pv_explosions_fire_nova",
+   "w": 420
+  },
+  "ripple@DRAGON_LORD": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@DRAGON_LORD": {
+   "set": "pv_fire_lava_burst",
+   "w": 300
+  },
+  "fall@DRAGON_LORD": {
+   "set": "pv_fire_meteor_strike",
+   "w": 240
+  },
+  "rift@DRAGON_LORD": {
+   "set": "pv_fire_fire_tornado",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@DRAGON_LORD": {
+   "set": "pv_melee_sword_combo",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@DRAGON_LORD": {
+   "set": "pv_fire_flamethrower",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@DRAGON_LORD": {
+   "set": "pv_explosions_big_explosion",
+   "w": 300
+  },
+  "fx:k_sonic@DRAGON_LORD": {
+   "set": "pv_explosions_fire_nova",
+   "w": 360
+  },
+  "fx:holy_burst@DRAGON_LORD": {
+   "set": "pv_explosions_big_explosion",
+   "w": 300
+  },
+  "fx:fire_bomb@DRAGON_LORD": {
+   "set": "pv_explosions_big_explosion",
+   "w": 300
+  },
+  "fx:k_flash@DRAGON_LORD": {
+   "set": "pv_explosions_big_explosion",
+   "w": 280
+  },
+  "fx:holy_pillar@DRAGON_LORD": {
+   "set": "pv_fire_fire_pillar",
+   "w": 280
+  },
+  "fx:fire_blast@DRAGON_LORD": {
+   "set": "pv_fire_flamethrower",
+   "w": 400
+  },
+  "fx:dark_a@DRAGON_LORD": {
+   "set": "pv_fire_fire_tornado",
+   "w": 300
+  },
+  "fx:dark_b@DRAGON_LORD": {
+   "set": "pv_fire_fire_tornado",
+   "w": 300
+  },
+  "fx:necro3@DRAGON_LORD": {
+   "set": "pv_fire_fire_tornado",
+   "w": 320
+  },
+  "fx:claw@DRAGON_LORD": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:vine_slash@DRAGON_LORD": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:k_ground@DRAGON_LORD": {
+   "set": "pv_fire_lava_burst",
+   "w": 320
+  },
+  "circle@DRAGON_GOD": {
+   "set": "pv_fire_ground_flames",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@DRAGON_GOD": {
+   "set": "pv_fire_fire_pillar",
+   "w": 260,
+   "loop": true
+  },
+  "rings@DRAGON_GOD": {
+   "set": "pv_explosions_fire_nova",
+   "w": 420
+  },
+  "ripple@DRAGON_GOD": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@DRAGON_GOD": {
+   "set": "pv_fire_lava_burst",
+   "w": 300
+  },
+  "fall@DRAGON_GOD": {
+   "set": "pv_fire_meteor_strike",
+   "w": 240
+  },
+  "rift@DRAGON_GOD": {
+   "set": "pv_fire_fire_tornado",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@DRAGON_GOD": {
+   "set": "pv_melee_sword_combo",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@DRAGON_GOD": {
+   "set": "pv_fire_flamethrower",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@DRAGON_GOD": {
+   "set": "pv_explosions_big_explosion",
+   "w": 300
+  },
+  "fx:k_sonic@DRAGON_GOD": {
+   "set": "pv_explosions_fire_nova",
+   "w": 360
+  },
+  "fx:holy_burst@DRAGON_GOD": {
+   "set": "pv_explosions_big_explosion",
+   "w": 300
+  },
+  "fx:fire_bomb@DRAGON_GOD": {
+   "set": "pv_explosions_big_explosion",
+   "w": 300
+  },
+  "fx:k_flash@DRAGON_GOD": {
+   "set": "pv_explosions_big_explosion",
+   "w": 280
+  },
+  "fx:holy_pillar@DRAGON_GOD": {
+   "set": "pv_fire_fire_pillar",
+   "w": 280
+  },
+  "fx:fire_blast@DRAGON_GOD": {
+   "set": "pv_fire_flamethrower",
+   "w": 400
+  },
+  "fx:dark_a@DRAGON_GOD": {
+   "set": "pv_fire_fire_tornado",
+   "w": 300
+  },
+  "fx:dark_b@DRAGON_GOD": {
+   "set": "pv_fire_fire_tornado",
+   "w": 300
+  },
+  "fx:necro3@DRAGON_GOD": {
+   "set": "pv_fire_fire_tornado",
+   "w": 320
+  },
+  "fx:claw@DRAGON_GOD": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:vine_slash@DRAGON_GOD": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:k_ground@DRAGON_GOD": {
+   "set": "pv_fire_lava_burst",
+   "w": 320
+  },
+  "circle@ELEMENTALIST": {
+   "set": "pv_fire_ground_flames",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@ELEMENTALIST": {
+   "set": "pv_fire_fire_pillar",
+   "w": 260,
+   "loop": true
+  },
+  "rings@ELEMENTALIST": {
+   "set": "pv_explosions_fire_nova",
+   "w": 420
+  },
+  "ripple@ELEMENTALIST": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@ELEMENTALIST": {
+   "set": "pv_fire_lava_burst",
+   "w": 300
+  },
+  "fall@ELEMENTALIST": {
+   "set": "pv_fire_meteor_strike",
+   "w": 240
+  },
+  "rift@ELEMENTALIST": {
+   "set": "pv_fire_fire_tornado",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@ELEMENTALIST": {
+   "set": "pv_melee_sword_combo",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@ELEMENTALIST": {
+   "set": "pv_fire_flamethrower",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@ELEMENTALIST": {
+   "set": "pv_explosions_big_explosion",
+   "w": 300
+  },
+  "fx:k_sonic@ELEMENTALIST": {
+   "set": "pv_explosions_fire_nova",
+   "w": 360
+  },
+  "fx:holy_burst@ELEMENTALIST": {
+   "set": "pv_explosions_big_explosion",
+   "w": 300
+  },
+  "fx:fire_bomb@ELEMENTALIST": {
+   "set": "pv_explosions_big_explosion",
+   "w": 300
+  },
+  "fx:k_flash@ELEMENTALIST": {
+   "set": "pv_explosions_big_explosion",
+   "w": 280
+  },
+  "fx:holy_pillar@ELEMENTALIST": {
+   "set": "pv_fire_fire_pillar",
+   "w": 280
+  },
+  "fx:fire_blast@ELEMENTALIST": {
+   "set": "pv_fire_flamethrower",
+   "w": 400
+  },
+  "fx:dark_a@ELEMENTALIST": {
+   "set": "pv_fire_fire_tornado",
+   "w": 300
+  },
+  "fx:dark_b@ELEMENTALIST": {
+   "set": "pv_fire_fire_tornado",
+   "w": 300
+  },
+  "fx:necro3@ELEMENTALIST": {
+   "set": "pv_fire_fire_tornado",
+   "w": 320
+  },
+  "fx:claw@ELEMENTALIST": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:vine_slash@ELEMENTALIST": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:k_ground@ELEMENTALIST": {
+   "set": "pv_fire_lava_burst",
+   "w": 320
+  },
+  "circle@MAGE": {
+   "set": "pv_fire_ground_flames",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@MAGE": {
+   "set": "pv_fire_fire_pillar",
+   "w": 260,
+   "loop": true
+  },
+  "rings@MAGE": {
+   "set": "pv_explosions_fire_nova",
+   "w": 420
+  },
+  "ripple@MAGE": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@MAGE": {
+   "set": "pv_fire_lava_burst",
+   "w": 300
+  },
+  "fall@MAGE": {
+   "set": "pv_fire_meteor_strike",
+   "w": 240
+  },
+  "rift@MAGE": {
+   "set": "pv_fire_fire_tornado",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@MAGE": {
+   "set": "pv_melee_sword_combo",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@MAGE": {
+   "set": "pv_fire_flamethrower",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@MAGE": {
+   "set": "pv_explosions_big_explosion",
+   "w": 300
+  },
+  "fx:k_sonic@MAGE": {
+   "set": "pv_explosions_fire_nova",
+   "w": 360
+  },
+  "fx:holy_burst@MAGE": {
+   "set": "pv_explosions_big_explosion",
+   "w": 300
+  },
+  "fx:fire_bomb@MAGE": {
+   "set": "pv_explosions_big_explosion",
+   "w": 300
+  },
+  "fx:k_flash@MAGE": {
+   "set": "pv_explosions_big_explosion",
+   "w": 280
+  },
+  "fx:holy_pillar@MAGE": {
+   "set": "pv_fire_fire_pillar",
+   "w": 280
+  },
+  "fx:fire_blast@MAGE": {
+   "set": "pv_fire_flamethrower",
+   "w": 400
+  },
+  "fx:dark_a@MAGE": {
+   "set": "pv_fire_fire_tornado",
+   "w": 300
+  },
+  "fx:dark_b@MAGE": {
+   "set": "pv_fire_fire_tornado",
+   "w": 300
+  },
+  "fx:necro3@MAGE": {
+   "set": "pv_fire_fire_tornado",
+   "w": 320
+  },
+  "fx:claw@MAGE": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:vine_slash@MAGE": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:k_ground@MAGE": {
+   "set": "pv_fire_lava_burst",
+   "w": 320
+  },
+  "circle@DOOMSLAYER": {
+   "set": "pv_fire_ground_flames",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@DOOMSLAYER": {
+   "set": "pv_fire_fire_pillar",
+   "w": 260,
+   "loop": true
+  },
+  "rings@DOOMSLAYER": {
+   "set": "pv_explosions_fire_nova",
+   "w": 420
+  },
+  "ripple@DOOMSLAYER": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@DOOMSLAYER": {
+   "set": "pv_fire_lava_burst",
+   "w": 300
+  },
+  "fall@DOOMSLAYER": {
+   "set": "pv_fire_meteor_strike",
+   "w": 240
+  },
+  "rift@DOOMSLAYER": {
+   "set": "pv_fire_fire_tornado",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@DOOMSLAYER": {
+   "set": "pv_melee_sword_combo",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@DOOMSLAYER": {
+   "set": "pv_fire_flamethrower",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@DOOMSLAYER": {
+   "set": "pv_explosions_big_explosion",
+   "w": 300
+  },
+  "fx:k_sonic@DOOMSLAYER": {
+   "set": "pv_explosions_fire_nova",
+   "w": 360
+  },
+  "fx:holy_burst@DOOMSLAYER": {
+   "set": "pv_explosions_big_explosion",
+   "w": 300
+  },
+  "fx:fire_bomb@DOOMSLAYER": {
+   "set": "pv_explosions_big_explosion",
+   "w": 300
+  },
+  "fx:k_flash@DOOMSLAYER": {
+   "set": "pv_explosions_big_explosion",
+   "w": 280
+  },
+  "fx:holy_pillar@DOOMSLAYER": {
+   "set": "pv_fire_fire_pillar",
+   "w": 280
+  },
+  "fx:fire_blast@DOOMSLAYER": {
+   "set": "pv_fire_flamethrower",
+   "w": 400
+  },
+  "fx:dark_a@DOOMSLAYER": {
+   "set": "pv_fire_fire_tornado",
+   "w": 300
+  },
+  "fx:dark_b@DOOMSLAYER": {
+   "set": "pv_fire_fire_tornado",
+   "w": 300
+  },
+  "fx:necro3@DOOMSLAYER": {
+   "set": "pv_fire_fire_tornado",
+   "w": 320
+  },
+  "fx:claw@DOOMSLAYER": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:vine_slash@DOOMSLAYER": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:k_ground@DOOMSLAYER": {
+   "set": "pv_fire_lava_burst",
+   "w": 320
+  },
+  "circle@WARLORD": {
+   "set": "pv_fire_ground_flames",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@WARLORD": {
+   "set": "pv_fire_fire_pillar",
+   "w": 260,
+   "loop": true
+  },
+  "rings@WARLORD": {
+   "set": "pv_explosions_fire_nova",
+   "w": 420
+  },
+  "ripple@WARLORD": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@WARLORD": {
+   "set": "pv_fire_lava_burst",
+   "w": 300
+  },
+  "fall@WARLORD": {
+   "set": "pv_fire_meteor_strike",
+   "w": 240
+  },
+  "rift@WARLORD": {
+   "set": "pv_fire_fire_tornado",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@WARLORD": {
+   "set": "pv_melee_sword_combo",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@WARLORD": {
+   "set": "pv_fire_flamethrower",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@WARLORD": {
+   "set": "pv_explosions_big_explosion",
+   "w": 300
+  },
+  "fx:k_sonic@WARLORD": {
+   "set": "pv_explosions_fire_nova",
+   "w": 360
+  },
+  "fx:holy_burst@WARLORD": {
+   "set": "pv_explosions_big_explosion",
+   "w": 300
+  },
+  "fx:fire_bomb@WARLORD": {
+   "set": "pv_explosions_big_explosion",
+   "w": 300
+  },
+  "fx:k_flash@WARLORD": {
+   "set": "pv_explosions_big_explosion",
+   "w": 280
+  },
+  "fx:holy_pillar@WARLORD": {
+   "set": "pv_fire_fire_pillar",
+   "w": 280
+  },
+  "fx:fire_blast@WARLORD": {
+   "set": "pv_fire_flamethrower",
+   "w": 400
+  },
+  "fx:dark_a@WARLORD": {
+   "set": "pv_fire_fire_tornado",
+   "w": 300
+  },
+  "fx:dark_b@WARLORD": {
+   "set": "pv_fire_fire_tornado",
+   "w": 300
+  },
+  "fx:necro3@WARLORD": {
+   "set": "pv_fire_fire_tornado",
+   "w": 320
+  },
+  "fx:claw@WARLORD": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:vine_slash@WARLORD": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:k_ground@WARLORD": {
+   "set": "pv_fire_lava_burst",
+   "w": 320
+  },
+  "circle@ACOLYTE": {
+   "set": "pv_holy_resurrect",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@ACOLYTE": {
+   "set": "pv_holy_holy_smite",
+   "w": 260,
+   "loop": true
+  },
+  "rings@ACOLYTE": {
+   "set": "pv_holy_regen_aura",
+   "w": 420
+  },
+  "ripple@ACOLYTE": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@ACOLYTE": {
+   "set": "pv_holy_divine_beam",
+   "w": 300
+  },
+  "fall@ACOLYTE": {
+   "set": "pv_holy_holy_smite",
+   "w": 240
+  },
+  "rift@ACOLYTE": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@ACOLYTE": {
+   "set": "pv_melee_sword_combo",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@ACOLYTE": {
+   "set": "pv_holy_divine_beam",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@ACOLYTE": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:k_sonic@ACOLYTE": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 360
+  },
+  "fx:holy_burst@ACOLYTE": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:fire_bomb@ACOLYTE": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:k_flash@ACOLYTE": {
+   "set": "pv_holy_regen_aura",
+   "w": 280
+  },
+  "fx:holy_pillar@ACOLYTE": {
+   "set": "pv_holy_holy_smite",
+   "w": 280
+  },
+  "fx:fire_blast@ACOLYTE": {
+   "set": "pv_holy_divine_beam",
+   "w": 400
+  },
+  "fx:dark_a@ACOLYTE": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300
+  },
+  "fx:dark_b@ACOLYTE": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300
+  },
+  "fx:necro3@ACOLYTE": {
+   "set": "pv_holy_angel_feathers",
+   "w": 320
+  },
+  "fx:claw@ACOLYTE": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:vine_slash@ACOLYTE": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:k_ground@ACOLYTE": {
+   "set": "pv_holy_divine_beam",
+   "w": 320
+  },
+  "circle@CLERIC": {
+   "set": "pv_holy_resurrect",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@CLERIC": {
+   "set": "pv_holy_holy_smite",
+   "w": 260,
+   "loop": true
+  },
+  "rings@CLERIC": {
+   "set": "pv_holy_regen_aura",
+   "w": 420
+  },
+  "ripple@CLERIC": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@CLERIC": {
+   "set": "pv_holy_divine_beam",
+   "w": 300
+  },
+  "fall@CLERIC": {
+   "set": "pv_holy_holy_smite",
+   "w": 240
+  },
+  "rift@CLERIC": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@CLERIC": {
+   "set": "pv_melee_sword_combo",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@CLERIC": {
+   "set": "pv_holy_divine_beam",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@CLERIC": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:k_sonic@CLERIC": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 360
+  },
+  "fx:holy_burst@CLERIC": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:fire_bomb@CLERIC": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:k_flash@CLERIC": {
+   "set": "pv_holy_regen_aura",
+   "w": 280
+  },
+  "fx:holy_pillar@CLERIC": {
+   "set": "pv_holy_holy_smite",
+   "w": 280
+  },
+  "fx:fire_blast@CLERIC": {
+   "set": "pv_holy_divine_beam",
+   "w": 400
+  },
+  "fx:dark_a@CLERIC": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300
+  },
+  "fx:dark_b@CLERIC": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300
+  },
+  "fx:necro3@CLERIC": {
+   "set": "pv_holy_angel_feathers",
+   "w": 320
+  },
+  "fx:claw@CLERIC": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:vine_slash@CLERIC": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:k_ground@CLERIC": {
+   "set": "pv_holy_divine_beam",
+   "w": 320
+  },
+  "circle@SAINT": {
+   "set": "pv_holy_resurrect",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@SAINT": {
+   "set": "pv_holy_holy_smite",
+   "w": 260,
+   "loop": true
+  },
+  "rings@SAINT": {
+   "set": "pv_holy_regen_aura",
+   "w": 420
+  },
+  "ripple@SAINT": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@SAINT": {
+   "set": "pv_holy_divine_beam",
+   "w": 300
+  },
+  "fall@SAINT": {
+   "set": "pv_holy_holy_smite",
+   "w": 240
+  },
+  "rift@SAINT": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@SAINT": {
+   "set": "pv_melee_sword_combo",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@SAINT": {
+   "set": "pv_holy_divine_beam",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@SAINT": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:k_sonic@SAINT": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 360
+  },
+  "fx:holy_burst@SAINT": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:fire_bomb@SAINT": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:k_flash@SAINT": {
+   "set": "pv_holy_regen_aura",
+   "w": 280
+  },
+  "fx:holy_pillar@SAINT": {
+   "set": "pv_holy_holy_smite",
+   "w": 280
+  },
+  "fx:fire_blast@SAINT": {
+   "set": "pv_holy_divine_beam",
+   "w": 400
+  },
+  "fx:dark_a@SAINT": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300
+  },
+  "fx:dark_b@SAINT": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300
+  },
+  "fx:necro3@SAINT": {
+   "set": "pv_holy_angel_feathers",
+   "w": 320
+  },
+  "fx:claw@SAINT": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:vine_slash@SAINT": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:k_ground@SAINT": {
+   "set": "pv_holy_divine_beam",
+   "w": 320
+  },
+  "circle@PALADIN": {
+   "set": "pv_holy_resurrect",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@PALADIN": {
+   "set": "pv_holy_holy_smite",
+   "w": 260,
+   "loop": true
+  },
+  "rings@PALADIN": {
+   "set": "pv_holy_regen_aura",
+   "w": 420
+  },
+  "ripple@PALADIN": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@PALADIN": {
+   "set": "pv_holy_divine_beam",
+   "w": 300
+  },
+  "fall@PALADIN": {
+   "set": "pv_holy_holy_smite",
+   "w": 240
+  },
+  "rift@PALADIN": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@PALADIN": {
+   "set": "pv_melee_sword_combo",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@PALADIN": {
+   "set": "pv_holy_divine_beam",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@PALADIN": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:k_sonic@PALADIN": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 360
+  },
+  "fx:holy_burst@PALADIN": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:fire_bomb@PALADIN": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:k_flash@PALADIN": {
+   "set": "pv_holy_regen_aura",
+   "w": 280
+  },
+  "fx:holy_pillar@PALADIN": {
+   "set": "pv_holy_holy_smite",
+   "w": 280
+  },
+  "fx:fire_blast@PALADIN": {
+   "set": "pv_holy_divine_beam",
+   "w": 400
+  },
+  "fx:dark_a@PALADIN": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300
+  },
+  "fx:dark_b@PALADIN": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300
+  },
+  "fx:necro3@PALADIN": {
+   "set": "pv_holy_angel_feathers",
+   "w": 320
+  },
+  "fx:claw@PALADIN": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:vine_slash@PALADIN": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:k_ground@PALADIN": {
+   "set": "pv_holy_divine_beam",
+   "w": 320
+  },
+  "circle@TEMPLAR": {
+   "set": "pv_holy_resurrect",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@TEMPLAR": {
+   "set": "pv_holy_holy_smite",
+   "w": 260,
+   "loop": true
+  },
+  "rings@TEMPLAR": {
+   "set": "pv_holy_regen_aura",
+   "w": 420
+  },
+  "ripple@TEMPLAR": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@TEMPLAR": {
+   "set": "pv_holy_divine_beam",
+   "w": 300
+  },
+  "fall@TEMPLAR": {
+   "set": "pv_holy_holy_smite",
+   "w": 240
+  },
+  "rift@TEMPLAR": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@TEMPLAR": {
+   "set": "pv_melee_sword_combo",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@TEMPLAR": {
+   "set": "pv_holy_divine_beam",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@TEMPLAR": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:k_sonic@TEMPLAR": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 360
+  },
+  "fx:holy_burst@TEMPLAR": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:fire_bomb@TEMPLAR": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:k_flash@TEMPLAR": {
+   "set": "pv_holy_regen_aura",
+   "w": 280
+  },
+  "fx:holy_pillar@TEMPLAR": {
+   "set": "pv_holy_holy_smite",
+   "w": 280
+  },
+  "fx:fire_blast@TEMPLAR": {
+   "set": "pv_holy_divine_beam",
+   "w": 400
+  },
+  "fx:dark_a@TEMPLAR": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300
+  },
+  "fx:dark_b@TEMPLAR": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300
+  },
+  "fx:necro3@TEMPLAR": {
+   "set": "pv_holy_angel_feathers",
+   "w": 320
+  },
+  "fx:claw@TEMPLAR": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:vine_slash@TEMPLAR": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:k_ground@TEMPLAR": {
+   "set": "pv_holy_divine_beam",
+   "w": 320
+  },
+  "circle@AVATAR": {
+   "set": "pv_holy_resurrect",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@AVATAR": {
+   "set": "pv_holy_holy_smite",
+   "w": 260,
+   "loop": true
+  },
+  "rings@AVATAR": {
+   "set": "pv_holy_regen_aura",
+   "w": 420
+  },
+  "ripple@AVATAR": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@AVATAR": {
+   "set": "pv_holy_divine_beam",
+   "w": 300
+  },
+  "fall@AVATAR": {
+   "set": "pv_holy_holy_smite",
+   "w": 240
+  },
+  "rift@AVATAR": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@AVATAR": {
+   "set": "pv_melee_sword_combo",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@AVATAR": {
+   "set": "pv_holy_divine_beam",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@AVATAR": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:k_sonic@AVATAR": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 360
+  },
+  "fx:holy_burst@AVATAR": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:fire_bomb@AVATAR": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:k_flash@AVATAR": {
+   "set": "pv_holy_regen_aura",
+   "w": 280
+  },
+  "fx:holy_pillar@AVATAR": {
+   "set": "pv_holy_holy_smite",
+   "w": 280
+  },
+  "fx:fire_blast@AVATAR": {
+   "set": "pv_holy_divine_beam",
+   "w": 400
+  },
+  "fx:dark_a@AVATAR": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300
+  },
+  "fx:dark_b@AVATAR": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300
+  },
+  "fx:necro3@AVATAR": {
+   "set": "pv_holy_angel_feathers",
+   "w": 320
+  },
+  "fx:claw@AVATAR": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:vine_slash@AVATAR": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:k_ground@AVATAR": {
+   "set": "pv_holy_divine_beam",
+   "w": 320
+  },
+  "circle@GOD_HAND": {
+   "set": "pv_holy_resurrect",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@GOD_HAND": {
+   "set": "pv_holy_holy_smite",
+   "w": 260,
+   "loop": true
+  },
+  "rings@GOD_HAND": {
+   "set": "pv_holy_regen_aura",
+   "w": 420
+  },
+  "ripple@GOD_HAND": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@GOD_HAND": {
+   "set": "pv_holy_divine_beam",
+   "w": 300
+  },
+  "fall@GOD_HAND": {
+   "set": "pv_holy_holy_smite",
+   "w": 240
+  },
+  "rift@GOD_HAND": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@GOD_HAND": {
+   "set": "pv_melee_sword_combo",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@GOD_HAND": {
+   "set": "pv_holy_divine_beam",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@GOD_HAND": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:k_sonic@GOD_HAND": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 360
+  },
+  "fx:holy_burst@GOD_HAND": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:fire_bomb@GOD_HAND": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:k_flash@GOD_HAND": {
+   "set": "pv_holy_regen_aura",
+   "w": 280
+  },
+  "fx:holy_pillar@GOD_HAND": {
+   "set": "pv_holy_holy_smite",
+   "w": 280
+  },
+  "fx:fire_blast@GOD_HAND": {
+   "set": "pv_holy_divine_beam",
+   "w": 400
+  },
+  "fx:dark_a@GOD_HAND": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300
+  },
+  "fx:dark_b@GOD_HAND": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300
+  },
+  "fx:necro3@GOD_HAND": {
+   "set": "pv_holy_angel_feathers",
+   "w": 320
+  },
+  "fx:claw@GOD_HAND": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:vine_slash@GOD_HAND": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:k_ground@GOD_HAND": {
+   "set": "pv_holy_divine_beam",
+   "w": 320
+  },
+  "circle@DIVINE_FIST": {
+   "set": "pv_holy_resurrect",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@DIVINE_FIST": {
+   "set": "pv_holy_holy_smite",
+   "w": 260,
+   "loop": true
+  },
+  "rings@DIVINE_FIST": {
+   "set": "pv_holy_regen_aura",
+   "w": 420
+  },
+  "ripple@DIVINE_FIST": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@DIVINE_FIST": {
+   "set": "pv_holy_divine_beam",
+   "w": 300
+  },
+  "fall@DIVINE_FIST": {
+   "set": "pv_holy_holy_smite",
+   "w": 240
+  },
+  "rift@DIVINE_FIST": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@DIVINE_FIST": {
+   "set": "pv_melee_sword_combo",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@DIVINE_FIST": {
+   "set": "pv_holy_divine_beam",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@DIVINE_FIST": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:k_sonic@DIVINE_FIST": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 360
+  },
+  "fx:holy_burst@DIVINE_FIST": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:fire_bomb@DIVINE_FIST": {
+   "set": "pv_holy_regen_aura",
+   "w": 300
+  },
+  "fx:k_flash@DIVINE_FIST": {
+   "set": "pv_holy_regen_aura",
+   "w": 280
+  },
+  "fx:holy_pillar@DIVINE_FIST": {
+   "set": "pv_holy_holy_smite",
+   "w": 280
+  },
+  "fx:fire_blast@DIVINE_FIST": {
+   "set": "pv_holy_divine_beam",
+   "w": 400
+  },
+  "fx:dark_a@DIVINE_FIST": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300
+  },
+  "fx:dark_b@DIVINE_FIST": {
+   "set": "pv_holy_angel_feathers",
+   "w": 300
+  },
+  "fx:necro3@DIVINE_FIST": {
+   "set": "pv_holy_angel_feathers",
+   "w": 320
+  },
+  "fx:claw@DIVINE_FIST": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:vine_slash@DIVINE_FIST": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:k_ground@DIVINE_FIST": {
+   "set": "pv_holy_divine_beam",
+   "w": 320
+  },
+  "circle@ZENMASTER": {
+   "set": "pv_ice_frost_nova",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@ZENMASTER": {
+   "set": "pv_ice_ice_spike",
+   "w": 260,
+   "loop": true
+  },
+  "rings@ZENMASTER": {
+   "set": "pv_ice_frost_nova",
+   "w": 420
+  },
+  "ripple@ZENMASTER": {
+   "set": "pv_ice_freeze_encase",
+   "w": 380
+  },
+  "cracks@ZENMASTER": {
+   "set": "pv_ice_ice_wall",
+   "w": 300
+  },
+  "fall@ZENMASTER": {
+   "set": "pv_projectiles_ice_shard",
+   "w": 240
+  },
+  "rift@ZENMASTER": {
+   "set": "pv_ice_blizzard",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@ZENMASTER": {
+   "set": "pv_ice_ice_spike",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@ZENMASTER": {
+   "set": "pv_ice_frost_breath",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@ZENMASTER": {
+   "set": "pv_ice_snowball_impact",
+   "w": 300
+  },
+  "fx:k_sonic@ZENMASTER": {
+   "set": "pv_ice_frost_nova",
+   "w": 360
+  },
+  "fx:holy_burst@ZENMASTER": {
+   "set": "pv_ice_snowball_impact",
+   "w": 300
+  },
+  "fx:fire_bomb@ZENMASTER": {
+   "set": "pv_ice_snowball_impact",
+   "w": 300
+  },
+  "fx:k_flash@ZENMASTER": {
+   "set": "pv_ice_snowball_impact",
+   "w": 280
+  },
+  "fx:holy_pillar@ZENMASTER": {
+   "set": "pv_ice_ice_spike",
+   "w": 280
+  },
+  "fx:fire_blast@ZENMASTER": {
+   "set": "pv_ice_frost_breath",
+   "w": 400
+  },
+  "fx:dark_a@ZENMASTER": {
+   "set": "pv_ice_blizzard",
+   "w": 300
+  },
+  "fx:dark_b@ZENMASTER": {
+   "set": "pv_ice_blizzard",
+   "w": 300
+  },
+  "fx:necro3@ZENMASTER": {
+   "set": "pv_ice_blizzard",
+   "w": 320
+  },
+  "fx:claw@ZENMASTER": {
+   "set": "pv_ice_ice_spike",
+   "w": 300
+  },
+  "fx:vine_slash@ZENMASTER": {
+   "set": "pv_ice_ice_spike",
+   "w": 300
+  },
+  "fx:k_ground@ZENMASTER": {
+   "set": "pv_ice_ice_wall",
+   "w": 320
+  },
+  "circle@SCOUT": {
+   "set": "pv_ice_frost_nova",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@SCOUT": {
+   "set": "pv_ice_ice_spike",
+   "w": 260,
+   "loop": true
+  },
+  "rings@SCOUT": {
+   "set": "pv_ice_frost_nova",
+   "w": 420
+  },
+  "ripple@SCOUT": {
+   "set": "pv_ice_freeze_encase",
+   "w": 380
+  },
+  "cracks@SCOUT": {
+   "set": "pv_ice_ice_wall",
+   "w": 300
+  },
+  "fall@SCOUT": {
+   "set": "pv_projectiles_ice_shard",
+   "w": 240
+  },
+  "rift@SCOUT": {
+   "set": "pv_ice_blizzard",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@SCOUT": {
+   "set": "pv_ice_ice_spike",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@SCOUT": {
+   "set": "pv_ice_frost_breath",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@SCOUT": {
+   "set": "pv_ice_snowball_impact",
+   "w": 300
+  },
+  "fx:k_sonic@SCOUT": {
+   "set": "pv_ice_frost_nova",
+   "w": 360
+  },
+  "fx:holy_burst@SCOUT": {
+   "set": "pv_ice_snowball_impact",
+   "w": 300
+  },
+  "fx:fire_bomb@SCOUT": {
+   "set": "pv_ice_snowball_impact",
+   "w": 300
+  },
+  "fx:k_flash@SCOUT": {
+   "set": "pv_ice_snowball_impact",
+   "w": 280
+  },
+  "fx:holy_pillar@SCOUT": {
+   "set": "pv_ice_ice_spike",
+   "w": 280
+  },
+  "fx:fire_blast@SCOUT": {
+   "set": "pv_ice_frost_breath",
+   "w": 400
+  },
+  "fx:dark_a@SCOUT": {
+   "set": "pv_ice_blizzard",
+   "w": 300
+  },
+  "fx:dark_b@SCOUT": {
+   "set": "pv_ice_blizzard",
+   "w": 300
+  },
+  "fx:necro3@SCOUT": {
+   "set": "pv_ice_blizzard",
+   "w": 320
+  },
+  "fx:claw@SCOUT": {
+   "set": "pv_ice_ice_spike",
+   "w": 300
+  },
+  "fx:vine_slash@SCOUT": {
+   "set": "pv_ice_ice_spike",
+   "w": 300
+  },
+  "fx:k_ground@SCOUT": {
+   "set": "pv_ice_ice_wall",
+   "w": 320
+  },
+  "circle@ARTIFICER": {
+   "set": "pv_lightning_static_burst",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@ARTIFICER": {
+   "set": "pv_lightning_lightning_strike",
+   "w": 260,
+   "loop": true
+  },
+  "rings@ARTIFICER": {
+   "set": "pv_lightning_static_burst",
+   "w": 420
+  },
+  "ripple@ARTIFICER": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@ARTIFICER": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 300
+  },
+  "fall@ARTIFICER": {
+   "set": "pv_lightning_lightning_strike",
+   "w": 240
+  },
+  "rift@ARTIFICER": {
+   "set": "pv_lightning_thunder_cloud",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@ARTIFICER": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@ARTIFICER": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@ARTIFICER": {
+   "set": "pv_lightning_ball_lightning",
+   "w": 300
+  },
+  "fx:k_sonic@ARTIFICER": {
+   "set": "pv_lightning_static_burst",
+   "w": 360
+  },
+  "fx:holy_burst@ARTIFICER": {
+   "set": "pv_lightning_ball_lightning",
+   "w": 300
+  },
+  "fx:fire_bomb@ARTIFICER": {
+   "set": "pv_lightning_ball_lightning",
+   "w": 300
+  },
+  "fx:k_flash@ARTIFICER": {
+   "set": "pv_lightning_ball_lightning",
+   "w": 280
+  },
+  "fx:holy_pillar@ARTIFICER": {
+   "set": "pv_lightning_lightning_strike",
+   "w": 280
+  },
+  "fx:fire_blast@ARTIFICER": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 400
+  },
+  "fx:dark_a@ARTIFICER": {
+   "set": "pv_lightning_thunder_cloud",
+   "w": 300
+  },
+  "fx:dark_b@ARTIFICER": {
+   "set": "pv_lightning_thunder_cloud",
+   "w": 300
+  },
+  "fx:necro3@ARTIFICER": {
+   "set": "pv_lightning_thunder_cloud",
+   "w": 320
+  },
+  "fx:claw@ARTIFICER": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 300
+  },
+  "fx:vine_slash@ARTIFICER": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 300
+  },
+  "fx:k_ground@ARTIFICER": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 320
+  },
+  "circle@GRAND_INVENTOR": {
+   "set": "pv_lightning_static_burst",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@GRAND_INVENTOR": {
+   "set": "pv_lightning_lightning_strike",
+   "w": 260,
+   "loop": true
+  },
+  "rings@GRAND_INVENTOR": {
+   "set": "pv_lightning_static_burst",
+   "w": 420
+  },
+  "ripple@GRAND_INVENTOR": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@GRAND_INVENTOR": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 300
+  },
+  "fall@GRAND_INVENTOR": {
+   "set": "pv_lightning_lightning_strike",
+   "w": 240
+  },
+  "rift@GRAND_INVENTOR": {
+   "set": "pv_lightning_thunder_cloud",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@GRAND_INVENTOR": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@GRAND_INVENTOR": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@GRAND_INVENTOR": {
+   "set": "pv_lightning_ball_lightning",
+   "w": 300
+  },
+  "fx:k_sonic@GRAND_INVENTOR": {
+   "set": "pv_lightning_static_burst",
+   "w": 360
+  },
+  "fx:holy_burst@GRAND_INVENTOR": {
+   "set": "pv_lightning_ball_lightning",
+   "w": 300
+  },
+  "fx:fire_bomb@GRAND_INVENTOR": {
+   "set": "pv_lightning_ball_lightning",
+   "w": 300
+  },
+  "fx:k_flash@GRAND_INVENTOR": {
+   "set": "pv_lightning_ball_lightning",
+   "w": 280
+  },
+  "fx:holy_pillar@GRAND_INVENTOR": {
+   "set": "pv_lightning_lightning_strike",
+   "w": 280
+  },
+  "fx:fire_blast@GRAND_INVENTOR": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 400
+  },
+  "fx:dark_a@GRAND_INVENTOR": {
+   "set": "pv_lightning_thunder_cloud",
+   "w": 300
+  },
+  "fx:dark_b@GRAND_INVENTOR": {
+   "set": "pv_lightning_thunder_cloud",
+   "w": 300
+  },
+  "fx:necro3@GRAND_INVENTOR": {
+   "set": "pv_lightning_thunder_cloud",
+   "w": 320
+  },
+  "fx:claw@GRAND_INVENTOR": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 300
+  },
+  "fx:vine_slash@GRAND_INVENTOR": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 300
+  },
+  "fx:k_ground@GRAND_INVENTOR": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 320
+  },
+  "circle@VIRTUOSO": {
+   "set": "pv_lightning_static_burst",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@VIRTUOSO": {
+   "set": "pv_lightning_lightning_strike",
+   "w": 260,
+   "loop": true
+  },
+  "rings@VIRTUOSO": {
+   "set": "pv_lightning_static_burst",
+   "w": 420
+  },
+  "ripple@VIRTUOSO": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@VIRTUOSO": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 300
+  },
+  "fall@VIRTUOSO": {
+   "set": "pv_lightning_lightning_strike",
+   "w": 240
+  },
+  "rift@VIRTUOSO": {
+   "set": "pv_lightning_thunder_cloud",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@VIRTUOSO": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@VIRTUOSO": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@VIRTUOSO": {
+   "set": "pv_lightning_ball_lightning",
+   "w": 300
+  },
+  "fx:k_sonic@VIRTUOSO": {
+   "set": "pv_lightning_static_burst",
+   "w": 360
+  },
+  "fx:holy_burst@VIRTUOSO": {
+   "set": "pv_lightning_ball_lightning",
+   "w": 300
+  },
+  "fx:fire_bomb@VIRTUOSO": {
+   "set": "pv_lightning_ball_lightning",
+   "w": 300
+  },
+  "fx:k_flash@VIRTUOSO": {
+   "set": "pv_lightning_ball_lightning",
+   "w": 280
+  },
+  "fx:holy_pillar@VIRTUOSO": {
+   "set": "pv_lightning_lightning_strike",
+   "w": 280
+  },
+  "fx:fire_blast@VIRTUOSO": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 400
+  },
+  "fx:dark_a@VIRTUOSO": {
+   "set": "pv_lightning_thunder_cloud",
+   "w": 300
+  },
+  "fx:dark_b@VIRTUOSO": {
+   "set": "pv_lightning_thunder_cloud",
+   "w": 300
+  },
+  "fx:necro3@VIRTUOSO": {
+   "set": "pv_lightning_thunder_cloud",
+   "w": 320
+  },
+  "fx:claw@VIRTUOSO": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 300
+  },
+  "fx:vine_slash@VIRTUOSO": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 300
+  },
+  "fx:k_ground@VIRTUOSO": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 320
+  },
+  "circle@BARD": {
+   "set": "pv_lightning_static_burst",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@BARD": {
+   "set": "pv_lightning_lightning_strike",
+   "w": 260,
+   "loop": true
+  },
+  "rings@BARD": {
+   "set": "pv_lightning_static_burst",
+   "w": 420
+  },
+  "ripple@BARD": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@BARD": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 300
+  },
+  "fall@BARD": {
+   "set": "pv_lightning_lightning_strike",
+   "w": 240
+  },
+  "rift@BARD": {
+   "set": "pv_lightning_thunder_cloud",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@BARD": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@BARD": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@BARD": {
+   "set": "pv_lightning_ball_lightning",
+   "w": 300
+  },
+  "fx:k_sonic@BARD": {
+   "set": "pv_lightning_static_burst",
+   "w": 360
+  },
+  "fx:holy_burst@BARD": {
+   "set": "pv_lightning_ball_lightning",
+   "w": 300
+  },
+  "fx:fire_bomb@BARD": {
+   "set": "pv_lightning_ball_lightning",
+   "w": 300
+  },
+  "fx:k_flash@BARD": {
+   "set": "pv_lightning_ball_lightning",
+   "w": 280
+  },
+  "fx:holy_pillar@BARD": {
+   "set": "pv_lightning_lightning_strike",
+   "w": 280
+  },
+  "fx:fire_blast@BARD": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 400
+  },
+  "fx:dark_a@BARD": {
+   "set": "pv_lightning_thunder_cloud",
+   "w": 300
+  },
+  "fx:dark_b@BARD": {
+   "set": "pv_lightning_thunder_cloud",
+   "w": 300
+  },
+  "fx:necro3@BARD": {
+   "set": "pv_lightning_thunder_cloud",
+   "w": 320
+  },
+  "fx:claw@BARD": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 300
+  },
+  "fx:vine_slash@BARD": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 300
+  },
+  "fx:k_ground@BARD": {
+   "set": "pv_lightning_chain_lightning",
+   "w": 320
+  },
+  "circle@DEATH_LORD": {
+   "set": "pv_shadow_curse",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@DEATH_LORD": {
+   "set": "pv_shadow_soul_drain",
+   "w": 260,
+   "loop": true
+  },
+  "rings@DEATH_LORD": {
+   "set": "pv_shadow_void_implosion",
+   "w": 420
+  },
+  "ripple@DEATH_LORD": {
+   "set": "pv_shadow_void_implosion",
+   "w": 380
+  },
+  "cracks@DEATH_LORD": {
+   "set": "pv_shadow_shadow_tendrils",
+   "w": 300
+  },
+  "fall@DEATH_LORD": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 240
+  },
+  "rift@DEATH_LORD": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@DEATH_LORD": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@DEATH_LORD": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@DEATH_LORD": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:k_sonic@DEATH_LORD": {
+   "set": "pv_shadow_void_implosion",
+   "w": 360
+  },
+  "fx:holy_burst@DEATH_LORD": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:fire_bomb@DEATH_LORD": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:k_flash@DEATH_LORD": {
+   "set": "pv_shadow_void_implosion",
+   "w": 280
+  },
+  "fx:holy_pillar@DEATH_LORD": {
+   "set": "pv_shadow_soul_drain",
+   "w": 280
+  },
+  "fx:fire_blast@DEATH_LORD": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 400
+  },
+  "fx:dark_a@DEATH_LORD": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:dark_b@DEATH_LORD": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:necro3@DEATH_LORD": {
+   "set": "pv_shadow_void_implosion",
+   "w": 320
+  },
+  "fx:claw@DEATH_LORD": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300
+  },
+  "fx:vine_slash@DEATH_LORD": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300
+  },
+  "fx:k_ground@DEATH_LORD": {
+   "set": "pv_shadow_shadow_tendrils",
+   "w": 320
+  },
+  "circle@LICH": {
+   "set": "pv_shadow_curse",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@LICH": {
+   "set": "pv_shadow_soul_drain",
+   "w": 260,
+   "loop": true
+  },
+  "rings@LICH": {
+   "set": "pv_shadow_void_implosion",
+   "w": 420
+  },
+  "ripple@LICH": {
+   "set": "pv_shadow_void_implosion",
+   "w": 380
+  },
+  "cracks@LICH": {
+   "set": "pv_shadow_shadow_tendrils",
+   "w": 300
+  },
+  "fall@LICH": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 240
+  },
+  "rift@LICH": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@LICH": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@LICH": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@LICH": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:k_sonic@LICH": {
+   "set": "pv_shadow_void_implosion",
+   "w": 360
+  },
+  "fx:holy_burst@LICH": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:fire_bomb@LICH": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:k_flash@LICH": {
+   "set": "pv_shadow_void_implosion",
+   "w": 280
+  },
+  "fx:holy_pillar@LICH": {
+   "set": "pv_shadow_soul_drain",
+   "w": 280
+  },
+  "fx:fire_blast@LICH": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 400
+  },
+  "fx:dark_a@LICH": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:dark_b@LICH": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:necro3@LICH": {
+   "set": "pv_shadow_void_implosion",
+   "w": 320
+  },
+  "fx:claw@LICH": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300
+  },
+  "fx:vine_slash@LICH": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300
+  },
+  "fx:k_ground@LICH": {
+   "set": "pv_shadow_shadow_tendrils",
+   "w": 320
+  },
+  "circle@NECROMANCER": {
+   "set": "pv_shadow_curse",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@NECROMANCER": {
+   "set": "pv_shadow_soul_drain",
+   "w": 260,
+   "loop": true
+  },
+  "rings@NECROMANCER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 420
+  },
+  "ripple@NECROMANCER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 380
+  },
+  "cracks@NECROMANCER": {
+   "set": "pv_shadow_shadow_tendrils",
+   "w": 300
+  },
+  "fall@NECROMANCER": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 240
+  },
+  "rift@NECROMANCER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@NECROMANCER": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@NECROMANCER": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@NECROMANCER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:k_sonic@NECROMANCER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 360
+  },
+  "fx:holy_burst@NECROMANCER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:fire_bomb@NECROMANCER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:k_flash@NECROMANCER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 280
+  },
+  "fx:holy_pillar@NECROMANCER": {
+   "set": "pv_shadow_soul_drain",
+   "w": 280
+  },
+  "fx:fire_blast@NECROMANCER": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 400
+  },
+  "fx:dark_a@NECROMANCER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:dark_b@NECROMANCER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:necro3@NECROMANCER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 320
+  },
+  "fx:claw@NECROMANCER": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300
+  },
+  "fx:vine_slash@NECROMANCER": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300
+  },
+  "fx:k_ground@NECROMANCER": {
+   "set": "pv_shadow_shadow_tendrils",
+   "w": 320
+  },
+  "circle@REAPER": {
+   "set": "pv_shadow_curse",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@REAPER": {
+   "set": "pv_shadow_soul_drain",
+   "w": 260,
+   "loop": true
+  },
+  "rings@REAPER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 420
+  },
+  "ripple@REAPER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 380
+  },
+  "cracks@REAPER": {
+   "set": "pv_shadow_shadow_tendrils",
+   "w": 300
+  },
+  "fall@REAPER": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 240
+  },
+  "rift@REAPER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@REAPER": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@REAPER": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@REAPER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:k_sonic@REAPER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 360
+  },
+  "fx:holy_burst@REAPER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:fire_bomb@REAPER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:k_flash@REAPER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 280
+  },
+  "fx:holy_pillar@REAPER": {
+   "set": "pv_shadow_soul_drain",
+   "w": 280
+  },
+  "fx:fire_blast@REAPER": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 400
+  },
+  "fx:dark_a@REAPER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:dark_b@REAPER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:necro3@REAPER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 320
+  },
+  "fx:claw@REAPER": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300
+  },
+  "fx:vine_slash@REAPER": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300
+  },
+  "fx:k_ground@REAPER": {
+   "set": "pv_shadow_shadow_tendrils",
+   "w": 320
+  },
+  "circle@VOIDWALKER": {
+   "set": "pv_shadow_curse",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@VOIDWALKER": {
+   "set": "pv_shadow_soul_drain",
+   "w": 260,
+   "loop": true
+  },
+  "rings@VOIDWALKER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 420
+  },
+  "ripple@VOIDWALKER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 380
+  },
+  "cracks@VOIDWALKER": {
+   "set": "pv_shadow_shadow_tendrils",
+   "w": 300
+  },
+  "fall@VOIDWALKER": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 240
+  },
+  "rift@VOIDWALKER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@VOIDWALKER": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@VOIDWALKER": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@VOIDWALKER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:k_sonic@VOIDWALKER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 360
+  },
+  "fx:holy_burst@VOIDWALKER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:fire_bomb@VOIDWALKER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:k_flash@VOIDWALKER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 280
+  },
+  "fx:holy_pillar@VOIDWALKER": {
+   "set": "pv_shadow_soul_drain",
+   "w": 280
+  },
+  "fx:fire_blast@VOIDWALKER": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 400
+  },
+  "fx:dark_a@VOIDWALKER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:dark_b@VOIDWALKER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:necro3@VOIDWALKER": {
+   "set": "pv_shadow_void_implosion",
+   "w": 320
+  },
+  "fx:claw@VOIDWALKER": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300
+  },
+  "fx:vine_slash@VOIDWALKER": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300
+  },
+  "fx:k_ground@VOIDWALKER": {
+   "set": "pv_shadow_shadow_tendrils",
+   "w": 320
+  },
+  "circle@WARLOCK": {
+   "set": "pv_shadow_curse",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@WARLOCK": {
+   "set": "pv_shadow_soul_drain",
+   "w": 260,
+   "loop": true
+  },
+  "rings@WARLOCK": {
+   "set": "pv_shadow_void_implosion",
+   "w": 420
+  },
+  "ripple@WARLOCK": {
+   "set": "pv_shadow_void_implosion",
+   "w": 380
+  },
+  "cracks@WARLOCK": {
+   "set": "pv_shadow_shadow_tendrils",
+   "w": 300
+  },
+  "fall@WARLOCK": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 240
+  },
+  "rift@WARLOCK": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@WARLOCK": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@WARLOCK": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@WARLOCK": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:k_sonic@WARLOCK": {
+   "set": "pv_shadow_void_implosion",
+   "w": 360
+  },
+  "fx:holy_burst@WARLOCK": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:fire_bomb@WARLOCK": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:k_flash@WARLOCK": {
+   "set": "pv_shadow_void_implosion",
+   "w": 280
+  },
+  "fx:holy_pillar@WARLOCK": {
+   "set": "pv_shadow_soul_drain",
+   "w": 280
+  },
+  "fx:fire_blast@WARLOCK": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 400
+  },
+  "fx:dark_a@WARLOCK": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:dark_b@WARLOCK": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:necro3@WARLOCK": {
+   "set": "pv_shadow_void_implosion",
+   "w": 320
+  },
+  "fx:claw@WARLOCK": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300
+  },
+  "fx:vine_slash@WARLOCK": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300
+  },
+  "fx:k_ground@WARLOCK": {
+   "set": "pv_shadow_shadow_tendrils",
+   "w": 320
+  },
+  "circle@NIGHTBLADE": {
+   "set": "pv_shadow_curse",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@NIGHTBLADE": {
+   "set": "pv_shadow_soul_drain",
+   "w": 260,
+   "loop": true
+  },
+  "rings@NIGHTBLADE": {
+   "set": "pv_shadow_void_implosion",
+   "w": 420
+  },
+  "ripple@NIGHTBLADE": {
+   "set": "pv_shadow_void_implosion",
+   "w": 380
+  },
+  "cracks@NIGHTBLADE": {
+   "set": "pv_shadow_shadow_tendrils",
+   "w": 300
+  },
+  "fall@NIGHTBLADE": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 240
+  },
+  "rift@NIGHTBLADE": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@NIGHTBLADE": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@NIGHTBLADE": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@NIGHTBLADE": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:k_sonic@NIGHTBLADE": {
+   "set": "pv_shadow_void_implosion",
+   "w": 360
+  },
+  "fx:holy_burst@NIGHTBLADE": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:fire_bomb@NIGHTBLADE": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:k_flash@NIGHTBLADE": {
+   "set": "pv_shadow_void_implosion",
+   "w": 280
+  },
+  "fx:holy_pillar@NIGHTBLADE": {
+   "set": "pv_shadow_soul_drain",
+   "w": 280
+  },
+  "fx:fire_blast@NIGHTBLADE": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 400
+  },
+  "fx:dark_a@NIGHTBLADE": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:dark_b@NIGHTBLADE": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:necro3@NIGHTBLADE": {
+   "set": "pv_shadow_void_implosion",
+   "w": 320
+  },
+  "fx:claw@NIGHTBLADE": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300
+  },
+  "fx:vine_slash@NIGHTBLADE": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300
+  },
+  "fx:k_ground@NIGHTBLADE": {
+   "set": "pv_shadow_shadow_tendrils",
+   "w": 320
+  },
+  "circle@KAGE": {
+   "set": "pv_shadow_curse",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@KAGE": {
+   "set": "pv_shadow_soul_drain",
+   "w": 260,
+   "loop": true
+  },
+  "rings@KAGE": {
+   "set": "pv_shadow_void_implosion",
+   "w": 420
+  },
+  "ripple@KAGE": {
+   "set": "pv_shadow_void_implosion",
+   "w": 380
+  },
+  "cracks@KAGE": {
+   "set": "pv_shadow_shadow_tendrils",
+   "w": 300
+  },
+  "fall@KAGE": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 240
+  },
+  "rift@KAGE": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@KAGE": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@KAGE": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@KAGE": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:k_sonic@KAGE": {
+   "set": "pv_shadow_void_implosion",
+   "w": 360
+  },
+  "fx:holy_burst@KAGE": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:fire_bomb@KAGE": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:k_flash@KAGE": {
+   "set": "pv_shadow_void_implosion",
+   "w": 280
+  },
+  "fx:holy_pillar@KAGE": {
+   "set": "pv_shadow_soul_drain",
+   "w": 280
+  },
+  "fx:fire_blast@KAGE": {
+   "set": "pv_shadow_shadow_bolt",
+   "w": 400
+  },
+  "fx:dark_a@KAGE": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:dark_b@KAGE": {
+   "set": "pv_shadow_void_implosion",
+   "w": 300
+  },
+  "fx:necro3@KAGE": {
+   "set": "pv_shadow_void_implosion",
+   "w": 320
+  },
+  "fx:claw@KAGE": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300
+  },
+  "fx:vine_slash@KAGE": {
+   "set": "pv_melee_shadow_claw",
+   "w": 300
+  },
+  "fx:k_ground@KAGE": {
+   "set": "pv_shadow_shadow_tendrils",
+   "w": 320
+  },
+  "circle@ARCHMAGE": {
+   "set": "pv_arcane_magic_circle",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@ARCHMAGE": {
+   "set": "pv_arcane_arcane_beam",
+   "w": 260,
+   "loop": true
+  },
+  "rings@ARCHMAGE": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 420
+  },
+  "ripple@ARCHMAGE": {
+   "set": "pv_arcane_shield_shatter",
+   "w": 380
+  },
+  "cracks@ARCHMAGE": {
+   "set": "pv_arcane_rune_trap",
+   "w": 300
+  },
+  "fall@ARCHMAGE": {
+   "set": "pv_arcane_arcane_orb_projectile",
+   "w": 240
+  },
+  "rift@ARCHMAGE": {
+   "set": "pv_arcane_portal_summon",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@ARCHMAGE": {
+   "set": "pv_arcane_blink_dash",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@ARCHMAGE": {
+   "set": "pv_arcane_arcane_beam",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@ARCHMAGE": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 300
+  },
+  "fx:k_sonic@ARCHMAGE": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 360
+  },
+  "fx:holy_burst@ARCHMAGE": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 300
+  },
+  "fx:fire_bomb@ARCHMAGE": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 300
+  },
+  "fx:k_flash@ARCHMAGE": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 280
+  },
+  "fx:holy_pillar@ARCHMAGE": {
+   "set": "pv_arcane_arcane_beam",
+   "w": 280
+  },
+  "fx:fire_blast@ARCHMAGE": {
+   "set": "pv_arcane_arcane_beam",
+   "w": 400
+  },
+  "fx:dark_a@ARCHMAGE": {
+   "set": "pv_arcane_portal_summon",
+   "w": 300
+  },
+  "fx:dark_b@ARCHMAGE": {
+   "set": "pv_arcane_portal_summon",
+   "w": 300
+  },
+  "fx:necro3@ARCHMAGE": {
+   "set": "pv_arcane_portal_summon",
+   "w": 320
+  },
+  "fx:claw@ARCHMAGE": {
+   "set": "pv_arcane_blink_dash",
+   "w": 300
+  },
+  "fx:vine_slash@ARCHMAGE": {
+   "set": "pv_arcane_blink_dash",
+   "w": 300
+  },
+  "fx:k_ground@ARCHMAGE": {
+   "set": "pv_arcane_rune_trap",
+   "w": 320
+  },
+  "circle@APPRENTICE": {
+   "set": "pv_arcane_magic_circle",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@APPRENTICE": {
+   "set": "pv_arcane_arcane_beam",
+   "w": 260,
+   "loop": true
+  },
+  "rings@APPRENTICE": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 420
+  },
+  "ripple@APPRENTICE": {
+   "set": "pv_arcane_shield_shatter",
+   "w": 380
+  },
+  "cracks@APPRENTICE": {
+   "set": "pv_arcane_rune_trap",
+   "w": 300
+  },
+  "fall@APPRENTICE": {
+   "set": "pv_arcane_arcane_orb_projectile",
+   "w": 240
+  },
+  "rift@APPRENTICE": {
+   "set": "pv_arcane_portal_summon",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@APPRENTICE": {
+   "set": "pv_arcane_blink_dash",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@APPRENTICE": {
+   "set": "pv_arcane_arcane_beam",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@APPRENTICE": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 300
+  },
+  "fx:k_sonic@APPRENTICE": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 360
+  },
+  "fx:holy_burst@APPRENTICE": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 300
+  },
+  "fx:fire_bomb@APPRENTICE": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 300
+  },
+  "fx:k_flash@APPRENTICE": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 280
+  },
+  "fx:holy_pillar@APPRENTICE": {
+   "set": "pv_arcane_arcane_beam",
+   "w": 280
+  },
+  "fx:fire_blast@APPRENTICE": {
+   "set": "pv_arcane_arcane_beam",
+   "w": 400
+  },
+  "fx:dark_a@APPRENTICE": {
+   "set": "pv_arcane_portal_summon",
+   "w": 300
+  },
+  "fx:dark_b@APPRENTICE": {
+   "set": "pv_arcane_portal_summon",
+   "w": 300
+  },
+  "fx:necro3@APPRENTICE": {
+   "set": "pv_arcane_portal_summon",
+   "w": 320
+  },
+  "fx:claw@APPRENTICE": {
+   "set": "pv_arcane_blink_dash",
+   "w": 300
+  },
+  "fx:vine_slash@APPRENTICE": {
+   "set": "pv_arcane_blink_dash",
+   "w": 300
+  },
+  "fx:k_ground@APPRENTICE": {
+   "set": "pv_arcane_rune_trap",
+   "w": 320
+  },
+  "circle@CHRONOMANCER": {
+   "set": "pv_arcane_magic_circle",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@CHRONOMANCER": {
+   "set": "pv_arcane_arcane_beam",
+   "w": 260,
+   "loop": true
+  },
+  "rings@CHRONOMANCER": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 420
+  },
+  "ripple@CHRONOMANCER": {
+   "set": "pv_arcane_shield_shatter",
+   "w": 380
+  },
+  "cracks@CHRONOMANCER": {
+   "set": "pv_arcane_rune_trap",
+   "w": 300
+  },
+  "fall@CHRONOMANCER": {
+   "set": "pv_arcane_arcane_orb_projectile",
+   "w": 240
+  },
+  "rift@CHRONOMANCER": {
+   "set": "pv_arcane_portal_summon",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@CHRONOMANCER": {
+   "set": "pv_arcane_blink_dash",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@CHRONOMANCER": {
+   "set": "pv_arcane_arcane_beam",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@CHRONOMANCER": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 300
+  },
+  "fx:k_sonic@CHRONOMANCER": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 360
+  },
+  "fx:holy_burst@CHRONOMANCER": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 300
+  },
+  "fx:fire_bomb@CHRONOMANCER": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 300
+  },
+  "fx:k_flash@CHRONOMANCER": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 280
+  },
+  "fx:holy_pillar@CHRONOMANCER": {
+   "set": "pv_arcane_arcane_beam",
+   "w": 280
+  },
+  "fx:fire_blast@CHRONOMANCER": {
+   "set": "pv_arcane_arcane_beam",
+   "w": 400
+  },
+  "fx:dark_a@CHRONOMANCER": {
+   "set": "pv_arcane_portal_summon",
+   "w": 300
+  },
+  "fx:dark_b@CHRONOMANCER": {
+   "set": "pv_arcane_portal_summon",
+   "w": 300
+  },
+  "fx:necro3@CHRONOMANCER": {
+   "set": "pv_arcane_portal_summon",
+   "w": 320
+  },
+  "fx:claw@CHRONOMANCER": {
+   "set": "pv_arcane_blink_dash",
+   "w": 300
+  },
+  "fx:vine_slash@CHRONOMANCER": {
+   "set": "pv_arcane_blink_dash",
+   "w": 300
+  },
+  "fx:k_ground@CHRONOMANCER": {
+   "set": "pv_arcane_rune_trap",
+   "w": 320
+  },
+  "circle@TIMELORD": {
+   "set": "pv_arcane_magic_circle",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@TIMELORD": {
+   "set": "pv_arcane_arcane_beam",
+   "w": 260,
+   "loop": true
+  },
+  "rings@TIMELORD": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 420
+  },
+  "ripple@TIMELORD": {
+   "set": "pv_arcane_shield_shatter",
+   "w": 380
+  },
+  "cracks@TIMELORD": {
+   "set": "pv_arcane_rune_trap",
+   "w": 300
+  },
+  "fall@TIMELORD": {
+   "set": "pv_arcane_arcane_orb_projectile",
+   "w": 240
+  },
+  "rift@TIMELORD": {
+   "set": "pv_arcane_portal_summon",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@TIMELORD": {
+   "set": "pv_arcane_blink_dash",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@TIMELORD": {
+   "set": "pv_arcane_arcane_beam",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@TIMELORD": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 300
+  },
+  "fx:k_sonic@TIMELORD": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 360
+  },
+  "fx:holy_burst@TIMELORD": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 300
+  },
+  "fx:fire_bomb@TIMELORD": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 300
+  },
+  "fx:k_flash@TIMELORD": {
+   "set": "pv_explosions_arcane_burst",
+   "w": 280
+  },
+  "fx:holy_pillar@TIMELORD": {
+   "set": "pv_arcane_arcane_beam",
+   "w": 280
+  },
+  "fx:fire_blast@TIMELORD": {
+   "set": "pv_arcane_arcane_beam",
+   "w": 400
+  },
+  "fx:dark_a@TIMELORD": {
+   "set": "pv_arcane_portal_summon",
+   "w": 300
+  },
+  "fx:dark_b@TIMELORD": {
+   "set": "pv_arcane_portal_summon",
+   "w": 300
+  },
+  "fx:necro3@TIMELORD": {
+   "set": "pv_arcane_portal_summon",
+   "w": 320
+  },
+  "fx:claw@TIMELORD": {
+   "set": "pv_arcane_blink_dash",
+   "w": 300
+  },
+  "fx:vine_slash@TIMELORD": {
+   "set": "pv_arcane_blink_dash",
+   "w": 300
+  },
+  "fx:k_ground@TIMELORD": {
+   "set": "pv_arcane_rune_trap",
+   "w": 320
+  },
+  "circle@ARCHDRUID": {
+   "set": "pv_nature_bloom_heal",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@ARCHDRUID": {
+   "set": "pv_nature_earth_spike",
+   "w": 260,
+   "loop": true
+  },
+  "rings@ARCHDRUID": {
+   "set": "pv_nature_spore_burst",
+   "w": 420
+  },
+  "ripple@ARCHDRUID": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@ARCHDRUID": {
+   "set": "pv_nature_fissure",
+   "w": 300
+  },
+  "fall@ARCHDRUID": {
+   "set": "pv_nature_boulder_toss",
+   "w": 240
+  },
+  "rift@ARCHDRUID": {
+   "set": "pv_nature_leaf_storm",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@ARCHDRUID": {
+   "set": "pv_nature_vine_snare",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@ARCHDRUID": {
+   "set": "pv_nature_poison_cloud",
+   "w": 380,
+   "loop": true
+  },
+  "vines@ARCHDRUID": {
+   "set": "pv_nature_vine_snare",
+   "w": 300
+  },
+  "fx:white_burst@ARCHDRUID": {
+   "set": "pv_nature_spore_burst",
+   "w": 300
+  },
+  "fx:k_sonic@ARCHDRUID": {
+   "set": "pv_nature_spore_burst",
+   "w": 360
+  },
+  "fx:holy_burst@ARCHDRUID": {
+   "set": "pv_nature_spore_burst",
+   "w": 300
+  },
+  "fx:fire_bomb@ARCHDRUID": {
+   "set": "pv_nature_spore_burst",
+   "w": 300
+  },
+  "fx:k_flash@ARCHDRUID": {
+   "set": "pv_nature_spore_burst",
+   "w": 280
+  },
+  "fx:holy_pillar@ARCHDRUID": {
+   "set": "pv_nature_earth_spike",
+   "w": 280
+  },
+  "fx:fire_blast@ARCHDRUID": {
+   "set": "pv_nature_poison_cloud",
+   "w": 400
+  },
+  "fx:dark_a@ARCHDRUID": {
+   "set": "pv_nature_leaf_storm",
+   "w": 300
+  },
+  "fx:dark_b@ARCHDRUID": {
+   "set": "pv_nature_leaf_storm",
+   "w": 300
+  },
+  "fx:necro3@ARCHDRUID": {
+   "set": "pv_nature_leaf_storm",
+   "w": 320
+  },
+  "fx:claw@ARCHDRUID": {
+   "set": "pv_nature_vine_snare",
+   "w": 300
+  },
+  "fx:vine_slash@ARCHDRUID": {
+   "set": "pv_nature_vine_snare",
+   "w": 300
+  },
+  "fx:k_ground@ARCHDRUID": {
+   "set": "pv_nature_fissure",
+   "w": 320
+  },
+  "circle@DRUID": {
+   "set": "pv_nature_bloom_heal",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@DRUID": {
+   "set": "pv_nature_earth_spike",
+   "w": 260,
+   "loop": true
+  },
+  "rings@DRUID": {
+   "set": "pv_nature_spore_burst",
+   "w": 420
+  },
+  "ripple@DRUID": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@DRUID": {
+   "set": "pv_nature_fissure",
+   "w": 300
+  },
+  "fall@DRUID": {
+   "set": "pv_nature_boulder_toss",
+   "w": 240
+  },
+  "rift@DRUID": {
+   "set": "pv_nature_leaf_storm",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@DRUID": {
+   "set": "pv_nature_vine_snare",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@DRUID": {
+   "set": "pv_nature_poison_cloud",
+   "w": 380,
+   "loop": true
+  },
+  "vines@DRUID": {
+   "set": "pv_nature_vine_snare",
+   "w": 300
+  },
+  "fx:white_burst@DRUID": {
+   "set": "pv_nature_spore_burst",
+   "w": 300
+  },
+  "fx:k_sonic@DRUID": {
+   "set": "pv_nature_spore_burst",
+   "w": 360
+  },
+  "fx:holy_burst@DRUID": {
+   "set": "pv_nature_spore_burst",
+   "w": 300
+  },
+  "fx:fire_bomb@DRUID": {
+   "set": "pv_nature_spore_burst",
+   "w": 300
+  },
+  "fx:k_flash@DRUID": {
+   "set": "pv_nature_spore_burst",
+   "w": 280
+  },
+  "fx:holy_pillar@DRUID": {
+   "set": "pv_nature_earth_spike",
+   "w": 280
+  },
+  "fx:fire_blast@DRUID": {
+   "set": "pv_nature_poison_cloud",
+   "w": 400
+  },
+  "fx:dark_a@DRUID": {
+   "set": "pv_nature_leaf_storm",
+   "w": 300
+  },
+  "fx:dark_b@DRUID": {
+   "set": "pv_nature_leaf_storm",
+   "w": 300
+  },
+  "fx:necro3@DRUID": {
+   "set": "pv_nature_leaf_storm",
+   "w": 320
+  },
+  "fx:claw@DRUID": {
+   "set": "pv_nature_vine_snare",
+   "w": 300
+  },
+  "fx:vine_slash@DRUID": {
+   "set": "pv_nature_vine_snare",
+   "w": 300
+  },
+  "fx:k_ground@DRUID": {
+   "set": "pv_nature_fissure",
+   "w": 320
+  },
+  "circle@NINJA": {
+   "set": "pv_wind_whirlwind",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@NINJA": {
+   "set": "pv_impacts_ground_slam",
+   "w": 260,
+   "loop": true
+  },
+  "rings@NINJA": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 420
+  },
+  "ripple@NINJA": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@NINJA": {
+   "set": "pv_impacts_ground_slam",
+   "w": 300
+  },
+  "fall@NINJA": {
+   "set": "pv_melee_hammer_smash",
+   "w": 240
+  },
+  "rift@NINJA": {
+   "set": "pv_wind_whirlwind",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@NINJA": {
+   "set": "pv_melee_sword_combo",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@NINJA": {
+   "set": "pv_wind_wind_blade",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@NINJA": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:k_sonic@NINJA": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 360
+  },
+  "fx:holy_burst@NINJA": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:fire_bomb@NINJA": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:k_flash@NINJA": {
+   "set": "pv_impacts_crit_hit",
+   "w": 280
+  },
+  "fx:holy_pillar@NINJA": {
+   "set": "pv_impacts_ground_slam",
+   "w": 280
+  },
+  "fx:fire_blast@NINJA": {
+   "set": "pv_wind_wind_blade",
+   "w": 400
+  },
+  "fx:dark_a@NINJA": {
+   "set": "pv_wind_whirlwind",
+   "w": 300
+  },
+  "fx:dark_b@NINJA": {
+   "set": "pv_wind_whirlwind",
+   "w": 300
+  },
+  "fx:necro3@NINJA": {
+   "set": "pv_wind_whirlwind",
+   "w": 320
+  },
+  "fx:claw@NINJA": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:vine_slash@NINJA": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:k_ground@NINJA": {
+   "set": "pv_impacts_ground_slam",
+   "w": 320
+  },
+  "circle@SAMURAI": {
+   "set": "pv_wind_whirlwind",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@SAMURAI": {
+   "set": "pv_impacts_ground_slam",
+   "w": 260,
+   "loop": true
+  },
+  "rings@SAMURAI": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 420
+  },
+  "ripple@SAMURAI": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@SAMURAI": {
+   "set": "pv_impacts_ground_slam",
+   "w": 300
+  },
+  "fall@SAMURAI": {
+   "set": "pv_melee_hammer_smash",
+   "w": 240
+  },
+  "rift@SAMURAI": {
+   "set": "pv_wind_whirlwind",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@SAMURAI": {
+   "set": "pv_melee_sword_combo",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@SAMURAI": {
+   "set": "pv_wind_wind_blade",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@SAMURAI": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:k_sonic@SAMURAI": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 360
+  },
+  "fx:holy_burst@SAMURAI": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:fire_bomb@SAMURAI": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:k_flash@SAMURAI": {
+   "set": "pv_impacts_crit_hit",
+   "w": 280
+  },
+  "fx:holy_pillar@SAMURAI": {
+   "set": "pv_impacts_ground_slam",
+   "w": 280
+  },
+  "fx:fire_blast@SAMURAI": {
+   "set": "pv_wind_wind_blade",
+   "w": 400
+  },
+  "fx:dark_a@SAMURAI": {
+   "set": "pv_wind_whirlwind",
+   "w": 300
+  },
+  "fx:dark_b@SAMURAI": {
+   "set": "pv_wind_whirlwind",
+   "w": 300
+  },
+  "fx:necro3@SAMURAI": {
+   "set": "pv_wind_whirlwind",
+   "w": 320
+  },
+  "fx:claw@SAMURAI": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:vine_slash@SAMURAI": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:k_ground@SAMURAI": {
+   "set": "pv_impacts_ground_slam",
+   "w": 320
+  },
+  "circle@SHOGUN": {
+   "set": "pv_wind_whirlwind",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@SHOGUN": {
+   "set": "pv_impacts_ground_slam",
+   "w": 260,
+   "loop": true
+  },
+  "rings@SHOGUN": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 420
+  },
+  "ripple@SHOGUN": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@SHOGUN": {
+   "set": "pv_impacts_ground_slam",
+   "w": 300
+  },
+  "fall@SHOGUN": {
+   "set": "pv_melee_hammer_smash",
+   "w": 240
+  },
+  "rift@SHOGUN": {
+   "set": "pv_wind_whirlwind",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@SHOGUN": {
+   "set": "pv_melee_sword_combo",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@SHOGUN": {
+   "set": "pv_wind_wind_blade",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@SHOGUN": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:k_sonic@SHOGUN": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 360
+  },
+  "fx:holy_burst@SHOGUN": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:fire_bomb@SHOGUN": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:k_flash@SHOGUN": {
+   "set": "pv_impacts_crit_hit",
+   "w": 280
+  },
+  "fx:holy_pillar@SHOGUN": {
+   "set": "pv_impacts_ground_slam",
+   "w": 280
+  },
+  "fx:fire_blast@SHOGUN": {
+   "set": "pv_wind_wind_blade",
+   "w": 400
+  },
+  "fx:dark_a@SHOGUN": {
+   "set": "pv_wind_whirlwind",
+   "w": 300
+  },
+  "fx:dark_b@SHOGUN": {
+   "set": "pv_wind_whirlwind",
+   "w": 300
+  },
+  "fx:necro3@SHOGUN": {
+   "set": "pv_wind_whirlwind",
+   "w": 320
+  },
+  "fx:claw@SHOGUN": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:vine_slash@SHOGUN": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:k_ground@SHOGUN": {
+   "set": "pv_impacts_ground_slam",
+   "w": 320
+  },
+  "circle@ROGUE": {
+   "set": "pv_wind_whirlwind",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@ROGUE": {
+   "set": "pv_impacts_ground_slam",
+   "w": 260,
+   "loop": true
+  },
+  "rings@ROGUE": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 420
+  },
+  "ripple@ROGUE": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@ROGUE": {
+   "set": "pv_impacts_ground_slam",
+   "w": 300
+  },
+  "fall@ROGUE": {
+   "set": "pv_melee_hammer_smash",
+   "w": 240
+  },
+  "rift@ROGUE": {
+   "set": "pv_wind_whirlwind",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@ROGUE": {
+   "set": "pv_melee_sword_combo",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@ROGUE": {
+   "set": "pv_wind_wind_blade",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@ROGUE": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:k_sonic@ROGUE": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 360
+  },
+  "fx:holy_burst@ROGUE": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:fire_bomb@ROGUE": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:k_flash@ROGUE": {
+   "set": "pv_impacts_crit_hit",
+   "w": 280
+  },
+  "fx:holy_pillar@ROGUE": {
+   "set": "pv_impacts_ground_slam",
+   "w": 280
+  },
+  "fx:fire_blast@ROGUE": {
+   "set": "pv_wind_wind_blade",
+   "w": 400
+  },
+  "fx:dark_a@ROGUE": {
+   "set": "pv_wind_whirlwind",
+   "w": 300
+  },
+  "fx:dark_b@ROGUE": {
+   "set": "pv_wind_whirlwind",
+   "w": 300
+  },
+  "fx:necro3@ROGUE": {
+   "set": "pv_wind_whirlwind",
+   "w": 320
+  },
+  "fx:claw@ROGUE": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:vine_slash@ROGUE": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:k_ground@ROGUE": {
+   "set": "pv_impacts_ground_slam",
+   "w": 320
+  },
+  "circle@MERCHANT": {
+   "set": "pv_wind_whirlwind",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@MERCHANT": {
+   "set": "pv_impacts_ground_slam",
+   "w": 260,
+   "loop": true
+  },
+  "rings@MERCHANT": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 420
+  },
+  "ripple@MERCHANT": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@MERCHANT": {
+   "set": "pv_impacts_ground_slam",
+   "w": 300
+  },
+  "fall@MERCHANT": {
+   "set": "pv_melee_hammer_smash",
+   "w": 240
+  },
+  "rift@MERCHANT": {
+   "set": "pv_wind_whirlwind",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@MERCHANT": {
+   "set": "pv_melee_sword_combo",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@MERCHANT": {
+   "set": "pv_wind_wind_blade",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@MERCHANT": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:k_sonic@MERCHANT": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 360
+  },
+  "fx:holy_burst@MERCHANT": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:fire_bomb@MERCHANT": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:k_flash@MERCHANT": {
+   "set": "pv_impacts_crit_hit",
+   "w": 280
+  },
+  "fx:holy_pillar@MERCHANT": {
+   "set": "pv_impacts_ground_slam",
+   "w": 280
+  },
+  "fx:fire_blast@MERCHANT": {
+   "set": "pv_wind_wind_blade",
+   "w": 400
+  },
+  "fx:dark_a@MERCHANT": {
+   "set": "pv_wind_whirlwind",
+   "w": 300
+  },
+  "fx:dark_b@MERCHANT": {
+   "set": "pv_wind_whirlwind",
+   "w": 300
+  },
+  "fx:necro3@MERCHANT": {
+   "set": "pv_wind_whirlwind",
+   "w": 320
+  },
+  "fx:claw@MERCHANT": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:vine_slash@MERCHANT": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:k_ground@MERCHANT": {
+   "set": "pv_impacts_ground_slam",
+   "w": 320
+  },
+  "circle@TYCOON": {
+   "set": "pv_wind_whirlwind",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@TYCOON": {
+   "set": "pv_impacts_ground_slam",
+   "w": 260,
+   "loop": true
+  },
+  "rings@TYCOON": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 420
+  },
+  "ripple@TYCOON": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@TYCOON": {
+   "set": "pv_impacts_ground_slam",
+   "w": 300
+  },
+  "fall@TYCOON": {
+   "set": "pv_melee_hammer_smash",
+   "w": 240
+  },
+  "rift@TYCOON": {
+   "set": "pv_wind_whirlwind",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@TYCOON": {
+   "set": "pv_melee_sword_combo",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@TYCOON": {
+   "set": "pv_wind_wind_blade",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@TYCOON": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:k_sonic@TYCOON": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 360
+  },
+  "fx:holy_burst@TYCOON": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:fire_bomb@TYCOON": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:k_flash@TYCOON": {
+   "set": "pv_impacts_crit_hit",
+   "w": 280
+  },
+  "fx:holy_pillar@TYCOON": {
+   "set": "pv_impacts_ground_slam",
+   "w": 280
+  },
+  "fx:fire_blast@TYCOON": {
+   "set": "pv_wind_wind_blade",
+   "w": 400
+  },
+  "fx:dark_a@TYCOON": {
+   "set": "pv_wind_whirlwind",
+   "w": 300
+  },
+  "fx:dark_b@TYCOON": {
+   "set": "pv_wind_whirlwind",
+   "w": 300
+  },
+  "fx:necro3@TYCOON": {
+   "set": "pv_wind_whirlwind",
+   "w": 320
+  },
+  "fx:claw@TYCOON": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:vine_slash@TYCOON": {
+   "set": "pv_melee_sword_combo",
+   "w": 300
+  },
+  "fx:k_ground@TYCOON": {
+   "set": "pv_impacts_ground_slam",
+   "w": 320
+  },
+  "circle@BERSERKER": {
+   "set": "pv_status_power_up_aura",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@BERSERKER": {
+   "set": "pv_impacts_ground_slam",
+   "w": 260,
+   "loop": true
+  },
+  "rings@BERSERKER": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 420
+  },
+  "ripple@BERSERKER": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@BERSERKER": {
+   "set": "pv_impacts_ground_slam",
+   "w": 300
+  },
+  "fall@BERSERKER": {
+   "set": "pv_melee_hammer_smash",
+   "w": 240
+  },
+  "rift@BERSERKER": {
+   "set": "pv_status_power_up_aura",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@BERSERKER": {
+   "set": "pv_impacts_punch_hit",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@BERSERKER": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@BERSERKER": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:k_sonic@BERSERKER": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 360
+  },
+  "fx:holy_burst@BERSERKER": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:fire_bomb@BERSERKER": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:k_flash@BERSERKER": {
+   "set": "pv_impacts_crit_hit",
+   "w": 280
+  },
+  "fx:holy_pillar@BERSERKER": {
+   "set": "pv_impacts_ground_slam",
+   "w": 280
+  },
+  "fx:fire_blast@BERSERKER": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 400
+  },
+  "fx:dark_a@BERSERKER": {
+   "set": "pv_status_power_up_aura",
+   "w": 300
+  },
+  "fx:dark_b@BERSERKER": {
+   "set": "pv_status_power_up_aura",
+   "w": 300
+  },
+  "fx:necro3@BERSERKER": {
+   "set": "pv_status_power_up_aura",
+   "w": 320
+  },
+  "fx:claw@BERSERKER": {
+   "set": "pv_impacts_punch_hit",
+   "w": 300
+  },
+  "fx:vine_slash@BERSERKER": {
+   "set": "pv_impacts_punch_hit",
+   "w": 300
+  },
+  "fx:k_ground@BERSERKER": {
+   "set": "pv_impacts_ground_slam",
+   "w": 320
+  },
+  "circle@FIGHTER": {
+   "set": "pv_status_power_up_aura",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@FIGHTER": {
+   "set": "pv_impacts_ground_slam",
+   "w": 260,
+   "loop": true
+  },
+  "rings@FIGHTER": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 420
+  },
+  "ripple@FIGHTER": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@FIGHTER": {
+   "set": "pv_impacts_ground_slam",
+   "w": 300
+  },
+  "fall@FIGHTER": {
+   "set": "pv_melee_hammer_smash",
+   "w": 240
+  },
+  "rift@FIGHTER": {
+   "set": "pv_status_power_up_aura",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@FIGHTER": {
+   "set": "pv_impacts_punch_hit",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@FIGHTER": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@FIGHTER": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:k_sonic@FIGHTER": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 360
+  },
+  "fx:holy_burst@FIGHTER": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:fire_bomb@FIGHTER": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:k_flash@FIGHTER": {
+   "set": "pv_impacts_crit_hit",
+   "w": 280
+  },
+  "fx:holy_pillar@FIGHTER": {
+   "set": "pv_impacts_ground_slam",
+   "w": 280
+  },
+  "fx:fire_blast@FIGHTER": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 400
+  },
+  "fx:dark_a@FIGHTER": {
+   "set": "pv_status_power_up_aura",
+   "w": 300
+  },
+  "fx:dark_b@FIGHTER": {
+   "set": "pv_status_power_up_aura",
+   "w": 300
+  },
+  "fx:necro3@FIGHTER": {
+   "set": "pv_status_power_up_aura",
+   "w": 320
+  },
+  "fx:claw@FIGHTER": {
+   "set": "pv_impacts_punch_hit",
+   "w": 300
+  },
+  "fx:vine_slash@FIGHTER": {
+   "set": "pv_impacts_punch_hit",
+   "w": 300
+  },
+  "fx:k_ground@FIGHTER": {
+   "set": "pv_impacts_ground_slam",
+   "w": 320
+  },
+  "circle@WARRIOR": {
+   "set": "pv_status_power_up_aura",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@WARRIOR": {
+   "set": "pv_impacts_ground_slam",
+   "w": 260,
+   "loop": true
+  },
+  "rings@WARRIOR": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 420
+  },
+  "ripple@WARRIOR": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@WARRIOR": {
+   "set": "pv_impacts_ground_slam",
+   "w": 300
+  },
+  "fall@WARRIOR": {
+   "set": "pv_melee_hammer_smash",
+   "w": 240
+  },
+  "rift@WARRIOR": {
+   "set": "pv_status_power_up_aura",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@WARRIOR": {
+   "set": "pv_impacts_punch_hit",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@WARRIOR": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@WARRIOR": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:k_sonic@WARRIOR": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 360
+  },
+  "fx:holy_burst@WARRIOR": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:fire_bomb@WARRIOR": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:k_flash@WARRIOR": {
+   "set": "pv_impacts_crit_hit",
+   "w": 280
+  },
+  "fx:holy_pillar@WARRIOR": {
+   "set": "pv_impacts_ground_slam",
+   "w": 280
+  },
+  "fx:fire_blast@WARRIOR": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 400
+  },
+  "fx:dark_a@WARRIOR": {
+   "set": "pv_status_power_up_aura",
+   "w": 300
+  },
+  "fx:dark_b@WARRIOR": {
+   "set": "pv_status_power_up_aura",
+   "w": 300
+  },
+  "fx:necro3@WARRIOR": {
+   "set": "pv_status_power_up_aura",
+   "w": 320
+  },
+  "fx:claw@WARRIOR": {
+   "set": "pv_impacts_punch_hit",
+   "w": 300
+  },
+  "fx:vine_slash@WARRIOR": {
+   "set": "pv_impacts_punch_hit",
+   "w": 300
+  },
+  "fx:k_ground@WARRIOR": {
+   "set": "pv_impacts_ground_slam",
+   "w": 320
+  },
+  "circle@MONK": {
+   "set": "pv_status_power_up_aura",
+   "w": 330,
+   "loop": false
+  },
+  "pillar@MONK": {
+   "set": "pv_impacts_ground_slam",
+   "w": 260,
+   "loop": true
+  },
+  "rings@MONK": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 420
+  },
+  "ripple@MONK": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380
+  },
+  "cracks@MONK": {
+   "set": "pv_impacts_ground_slam",
+   "w": 300
+  },
+  "fall@MONK": {
+   "set": "pv_melee_hammer_smash",
+   "w": 240
+  },
+  "rift@MONK": {
+   "set": "pv_status_power_up_aura",
+   "w": 300,
+   "loop": true
+  },
+  "slashes@MONK": {
+   "set": "pv_impacts_punch_hit",
+   "w": 300,
+   "n": 2,
+   "gap": 0.09
+  },
+  "breath@MONK": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 380,
+   "loop": true
+  },
+  "fx:white_burst@MONK": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:k_sonic@MONK": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 360
+  },
+  "fx:holy_burst@MONK": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:fire_bomb@MONK": {
+   "set": "pv_impacts_crit_hit",
+   "w": 300
+  },
+  "fx:k_flash@MONK": {
+   "set": "pv_impacts_crit_hit",
+   "w": 280
+  },
+  "fx:holy_pillar@MONK": {
+   "set": "pv_impacts_ground_slam",
+   "w": 280
+  },
+  "fx:fire_blast@MONK": {
+   "set": "pv_impacts_shockwave_ring",
+   "w": 400
+  },
+  "fx:dark_a@MONK": {
+   "set": "pv_status_power_up_aura",
+   "w": 300
+  },
+  "fx:dark_b@MONK": {
+   "set": "pv_status_power_up_aura",
+   "w": 300
+  },
+  "fx:necro3@MONK": {
+   "set": "pv_status_power_up_aura",
+   "w": 320
+  },
+  "fx:claw@MONK": {
+   "set": "pv_impacts_punch_hit",
+   "w": 300
+  },
+  "fx:vine_slash@MONK": {
+   "set": "pv_impacts_punch_hit",
+   "w": 300
+  },
+  "fx:k_ground@MONK": {
+   "set": "pv_impacts_ground_slam",
+   "w": 320
+  }
+ }
 }

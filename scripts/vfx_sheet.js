@@ -4,13 +4,13 @@
 //   env VFX_FPS=4 (frames per second sampled)  VFX_LEVEL=3 (skill level, 1-5)
 const path = require('path'), fs = require('fs'), { execSync } = require('child_process');
 const REPO = path.join(__dirname, '..');
-const ult = require(path.join(REPO, 'core/rpg/ultimateFx'));
-const sv = require(path.join(REPO, 'core/rpg/skillVfx'));
+const ult = require(path.join(REPO, 'core/rpg/systems/combat/ultimateFx'));
+const sv = require(path.join(REPO, 'core/rpg/systems/combat/skillVfx'));
 const OUT = path.join(__dirname, 'render_out', 'vfx_sheet');
 fs.mkdirSync(OUT, { recursive: true });
 const fps = Number(process.env.VFX_FPS) || 4, lv = Number(process.env.VFX_LEVEL) || 3;
 (async () => {
-    const stage = require(path.join(REPO, 'core/rpg/vfxPreviewStage'))(1);
+    const stage = require(path.join(REPO, 'core/rpg/systems/combat/vfxPreviewStage'))(1);
     for (const cls of process.argv.slice(2).map((c) => c.toUpperCase())) {
         const v = await ult.renderUltimateVideo({ classId: cls, name: cls, side: 'player', palette: sv.PALETTE[cls], skillLevel: lv, maxLevel: 5, intensity: (lv - 1) / 4, layers: stage, casterIndex: 0, targetIndex: 0, focusIndex: 0, targetSide: 'enemy', aoe: false, targets: [{ index: 0, hp: 800, maxHp: 1000 }] });
         if (!v || !v.mp4) { console.log(cls, 'NO VIDEO'); continue; }

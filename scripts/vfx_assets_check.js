@@ -20,6 +20,7 @@ const { SIGNATURE_SKILLS } = require('../core/rpg/systems/combat/skillVfx');
             if (!o.set || !A.SETS[o.set]) { bad++; console.log(`  ✗ override "${k}": unknown set "${o.set}"`); } else console.log(`  ✓ override "${k}" -> ${o.set} (full-screen)`);
             continue;
         }
+        if (layer.startsWith('fx:')) { if (!o.set || !A.SETS[o.set]) { bad++; console.log(`  ✗ override "${k}": unknown set "${o.set}"`); } continue; }   // direct set track swap
         if (!A.OVERRIDABLE.has(layer)) { bad++; console.log(`  ✗ override "${k}": layer "${layer}" is not overridable`); }
         else if (!o.set || !A.SETS[o.set]) { bad++; console.log(`  ✗ override "${k}": unknown set "${o.set}"`); }
         else console.log(`  ✓ override "${k}" -> ${o.set}`);

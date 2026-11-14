@@ -313,6 +313,12 @@ function applyOverrides(tracks, cls) {
             if (!o || !o.set || !SETS[o.set]) return t;
             return { layer: 'backdrop', fx: o.set, at: t.at, dur: t.dur, under: t.layer === 'world', fit: o.fit || 'cover', fps: o.fps || SETS[o.set].fps, loop: o.loop !== false, a: o.alpha, fin: t.layer === 'world' ? (t.fin || 0.25) : 0.1, fout: t.layer === 'world' ? (t.fout || 0.4) : 0.4 };
         }
+        // direct set tracks (k_sonic, white_burst, claw ...) can be swapped with  "fx:<name>@CLASS" / "fx:<name>"  (new VFX packs)
+        if (t.fx && !t.layer) {
+            const fo = ov['fx:' + t.fx + '@' + cls] || ov['fx:' + t.fx];
+            if (!fo || !fo.set || !SETS[fo.set]) return t;
+            return Object.assign({}, t, { fx: fo.set, w: fo.w || t.w, alpha: fo.alpha !== undefined ? fo.alpha : t.alpha, tint: fo.tint || t.tint, add: fo.add !== undefined ? fo.add : t.add });
+        }
         if (!t.layer || !OVERRIDABLE.has(t.layer)) return t;
         const o = ov[t.layer + '@' + cls] || ov[t.layer];
         if (!o || !o.set || !SETS[o.set]) return t;
