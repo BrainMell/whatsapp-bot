@@ -39,3 +39,18 @@ provenance anyway.
 - The DCSS torch flames + zot pillar keep the artists' native semi-alpha
   pixels (glow), and the demon statue keeps its native soft shading — these
   are source-art alpha, not resize fringe; every other prop edge is hard.
+
+## vfx_static/ (2026-11-14) — static VFX library for skill / ultimate / basic-attack cards
+Built by `scripts/vfx/build_static_vfx.py` from `New Assets/vfx/*` (best single frame per effect, cropped). Per-pack terms live in each source folder's README.
+| Pack folder | Source | Terms |
+|---|---|---|
+| `aw/` | artistworld — AW VFX Mega Pack (free) | personal + commercial, modify/recolor OK |
+| `pvfx/` | nerijs — PVFX Foundry | CC0 1.0 |
+| `pimen/` | Pimen — Dark/Holy/Ice spell effects, Battle VFX smears | use + modify, personal + commercial |
+| `frostwindz/` | Frostwindz — Pixel Art VFX Slashes, Animated Portal | personal + commercial, modification OK |
+| `pipoya/` | Pipoya — HEX Shield, Light Pillar, Time Magic | commercial + personal |
+| `pixogen/` | Pixogen — Pixel Art RPG VFX Lite | CC0 |
+| `slashfx/` | Jason Tomlee — Slash FX (demo) | CC BY 4.0 — credit "Jason Tomlee" |
+| `sangoro/` | Sangoro — Anime Attack Effects | CC BY-SA 4.0 — credit "Sangoro" |
+| `pixelspells/` | The Pixel Game — Pixel Spells starter | commercial + non-commercial |
+| `gothicvania/` | Ansimuz — Gothicvania Magic Pack 9 | not stated on the page — confirm before public release |

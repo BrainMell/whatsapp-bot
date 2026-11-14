@@ -3,7 +3,8 @@
 // SIGNATURE (fire burst, ice shards, lightning strike, void tendrils, holy pillar, venom cloud, gale arcs, rock spikes, wave crash,
 // blood rend, arcane rune, arrow pierce, shockwave, stun stars, ward/buff aura, curse sigil) chosen from the skill's NAME + its
 // damageType/effect type + element, with a per-skill seed so two skills of one family still differ (size, rotation, spray).
-// Painted over the target in design-scaled px just like hitFx.slashPattern; pure canvas, no assets, ~1-3 ms.
+// 2026-11-14: families now paint REAL sprites from core/rpgasset/vfx_static (built from New Assets/vfx by scripts/vfx/build_static_vfx.py);
+// the procedural painters below stay only as a fallback if a sprite is missing. Each skill picks its own primary + accent from the family pool.
 const TAU = Math.PI * 2;
 const RULES = [
   ['coins', /bribe|invest|hire|mercenar|wealth|gold|loot|plunder|tribute|merchant|bounty/i],
@@ -112,14 +113,96 @@ const P = {
   stun(c, x, y, h, d, s, R, [c0, c1]) { const hy = y - h * 0.62; for (let i = 0; i < 5; i++) { const a = i * TAU / 5 + 0.4, px = x + Math.cos(a) * 34 * s, py = hy + Math.sin(a) * 11 * s; c.fillStyle = a2(i % 2 ? c0 : c1, 0.98); c.strokeStyle = '#7a5a10'; c.lineWidth = 1.2 * s; c.beginPath(); for (let j = 0; j < 10; j++) { const q = j * Math.PI / 5 - Math.PI / 2, r = (j % 2 ? 5 : 11) * s; c.lineTo(px + Math.cos(q) * r, py + Math.sin(q) * r); } c.closePath(); c.fill(); c.stroke(); } c.strokeStyle = a2(c0, 0.6); c.lineWidth = 2 * s; c.beginPath(); c.ellipse(x, hy, 34 * s, 11 * s, 0, 0, TAU); c.stroke(); for (let i = 0; i < 3; i++) { c.strokeStyle = a2(c1, 0.8 - i * 0.2); c.lineWidth = (4 - i) * s; c.beginPath(); c.arc(x, y, (30 + i * 20) * s, -0.8, 0.8); c.stroke(); } },
   buff(c, x, y, h, d, s, R, [c0, c1]) { glow(c, x, y, h * 0.8, c1, 0.4); c.strokeStyle = a2(c0, 0.95); c.lineWidth = 3.5 * s; c.beginPath(); c.ellipse(x, y + h * 0.42, h * 0.38, h * 0.1, 0, 0, TAU); c.stroke(); for (let i = 0; i < 6; i++) { const bx = x + (i - 2.5) * 20 * s, by = y + h * 0.3 - R() * h * 0.7; c.fillStyle = a2(i % 2 ? c0 : c1, 0.9); c.beginPath(); c.moveTo(bx, by - 14 * s); c.lineTo(bx + 9 * s, by); c.lineTo(bx + 3.5 * s, by); c.lineTo(bx + 3.5 * s, by + 10 * s); c.lineTo(bx - 3.5 * s, by + 10 * s); c.lineTo(bx - 3.5 * s, by); c.lineTo(bx - 9 * s, by); c.closePath(); c.fill(); } c.strokeStyle = a2(c0, 0.85); c.lineWidth = 3 * s; c.beginPath(); c.moveTo(x, y - h * 0.5); c.lineTo(x + h * 0.3, y - h * 0.3); c.lineTo(x + h * 0.26, y + h * 0.1); c.quadraticCurveTo(x, y + h * 0.4, x, y + h * 0.4); c.quadraticCurveTo(x, y + h * 0.4, x - h * 0.26, y + h * 0.1); c.lineTo(x - h * 0.3, y - h * 0.3); c.closePath(); c.stroke(); },
 };
+
+// ── static sprite library ────────────────────────────────────────────────────────────────────
+const fs = require('fs'); const path = require('path');
+const LIB = path.join(__dirname, '..', '..', '..', 'rpgasset', 'vfx_static');
+let _idx = null; const _img = new Map();
+function libIndex() { if (_idx) return _idx; _idx = {}; try { for (const m of JSON.parse(fs.readFileSync(path.join(LIB, 'manifest.json'), 'utf8'))) _idx[m.id + '__' + m.frame] = m.file; } catch (e) { /* no library → procedural fallback */ } return _idx; }
+function sprite(id, frame) { // sync decode (node-canvas Image.src = Buffer)
+  const k = id + '__' + (frame || 'peak'); if (_img.has(k)) return _img.get(k);
+  let im = null; try { const f = libIndex()[k] || libIndex()[id + '__peak']; if (f) { const { Image } = require('canvas'); im = new Image(); im.src = fs.readFileSync(path.join(LIB, f)); } } catch (e) { im = null; }
+  _img.set(k, im); return im;
+}
+// pool entry: 'id:mode:size' — modes c=centre, g=ground (bottom at feet), s=sky column (bottom at feet), a=aura (behind/around), p=projectile (faces dir), h=above head, w=wide ground band.  size = target height as a fraction of body height.
+const POOLS = {
+  fire: ['explosion_ground_a_large:c:1.15', 'fire_impact_large:c:1', 'fireball_impact:c:1.1', 'meteor_strike:g:1.2', 'fire_pillar:s:1.7', 'fire_tornado:g:1.5', 'lava_burst:g:1.4', 'ground_flames:w:0.7', 'fire_chargeburst_max_large:c:1.1', 'explosion_ground_b_large:c:1.2', 'fire_nova:w:0.8', 'burning_aura:a:1.3', 'big_explosion:c:1.1', 'explosion_air_large:c:1.1', 'fire_bomb:c:0.9', '32x48_side_scroller_td_pillars_skyfalls_fire_column_effect:s:1.7'],
+  ice: ['ice_impact_large:c:1', 'freeze_encase:g:1.25', 'blizzard:c:1.1', 'ice_spike:g:1.3', 'ice_wall:w:0.9', 'frost_nova:w:0.7', 'snowball_impact:c:0.9', 'ice_chargeshatter_large:c:1.15', 'ice_spikewave_large:w:0.7', 'ice_chargehold_large:a:1.2', 'frost_breath:p:0.6', 'ice_castfrost_large:c:0.9', 'ice_effect_01_ice_vfx_1_separated_frames:c:1', 'ice_effect_01_ice_vfx_2_separated_frames:c:1'],
+  lightning: ['lightning_strike_large:s:1.9', 'lightning_orb_large:c:1', 'explosion_electric_large:c:1.2', 'ball_lightning:c:1', 'chain_lightning:p:0.8', 'lightning_arc_large:p:0.6', 'thunder_cloud:h:0.9', 'static_burst:c:1', 'lightning_charge_large:c:1', 'shock_sparks_large:a:1.1', 'lightning_strike:s:1.9', '32x48_side_scroller_td_pillars_skyfalls_blue_lightning_effect:s:1.8', 'lightning:c:1.2'],
+  dark: ['explosion_dark_large:c:1.2', 'shadow_spikes_large:w:0.8', 'curse:c:1', 'shadow_bolt:c:1', 'shadow_tendrils:g:1.2', 'void_implosion:c:1.1', 'soul_drain:p:0.7', 'implosion:c:1.1', 'dark_vfx_2_separated_frames:c:1', 'dark_bolt:p:0.8', 'shadow_claw:c:1', 'dark_vfx_1_separeted_frames:c:0.9', 'arcane_burst:c:1.1'],
+  holy: ['holy_pillar_large:s:1.8', 'divine_beam:s:2', 'holy_smite:s:1.9', 'resurrect:s:1.9', 'holy_heal:s:1.6', 'angel_feathers:c:1.1', 'pipoya_light_pillar_pipo_mapeffect013a:s:1.7', 'pipoya_light_pillar_pipo_mapeffect013b:s:1.7', 'pipoya_light_pillar_pipo_mapeffect013c:s:1.7', 'holy_vfx_02_separated_frames:c:1', 'holy_vfx_01_separated_frames:c:0.9', 'level_up_large:s:1.8'],
+  poison: ['poison_splash_large:g:0.9', 'poison_glob_large:p:0.7', 'poison_cloud:g:1.1', 'spore_burst:c:1', 'acid_splash:g:1', 'acid_spit:p:0.8', 'explosion_toxic_large:c:1', 'poisoned:a:1.3', 'poison_bubbles_large:a:1.1', 'poison_dart:p:0.7'],
+  blood: ['blood_splat:c:1', 'claw_swipe_large:c:0.95', 'bleed_drips_large:a:1.1', 'bleeding:a:1.1', 'crit_hit:c:1', 'slash_x_large:c:1', 'slashfx_combo2_sheet:c:0.9'],
+  wind: ['wind_tornado_large:g:1.6', 'wind_blade:c:1', 'wind_gust:p:0.7', 'dash_wind_large:p:0.55', 'slash_wave_large:p:0.8', 'whirlwind:g:1.6', 'slash_spin_large:w:0.5', 'dust_dash_large:w:0.4', 'windground_lite:w:0.5'],
+  water: ['water_splash_large:g:1', 'tidal_wave:g:1.2', 'water_geyser:s:1.5', 'whirlpool:w:0.6', 'bubble_burst:c:1', 'waterwave_lite:w:0.6'],
+  earth: ['earth_rockspike_large:g:1.4', 'fissure:w:0.5', 'boulder_toss:g:1.1', 'rock_shatter:c:1', 'ground_slam:c:1', 'explosion_debris_large:g:1.1', 'earth_spike:w:0.8'],
+  arcane: ['arcane_impact_large:c:1.1', 'arcane_burst:c:1.1', 'arcane_charge_large:c:1.1', 'magic_missile:p:0.6', 'arcane_beam:p:0.5', 'portal_summon:s:1.5', 'explosion_energy_large:c:1.2', 'pipoya_time_magic_pipo_btleffect209_192:c:1.1', 'pipoya_time_magic_pipo_btleffect211_192:c:1.2', 'pipoya_time_magic_pipo_btleffect214_192:c:1.2', 'pipoya_time_magic_pipo_btleffect213_192:c:1', 'magic_sparkle_burst_large:c:1', 'arcane_missile_large:p:0.55'],
+  arrow: ['thrust_stab_large:p:0.5', 'arrow_impact:c:1', 'spear_thrust:p:0.7', 'poison_dart:p:0.6', 'ice_shard:p:0.8', 'hit_directional_large:c:0.9', 'ice_spear_large:p:0.55', 'punchimp1:p:0.5'],
+  impact: ['hit_heavy_large:c:1', 'hit_critical_large:c:1.1', 'punch_hit:c:1', 'hammer_smash:c:1.1', 'ground_slam:c:1', 'shockwave_ring:w:0.8', 'hit_blunt_large:c:0.9', 'crit_hit:c:1', 'hit_spark_medium_large:c:0.9', 'explosion_small_large:c:1', 'punch_swoosh_large:c:0.9', 'axe_smear:c:1', 'fire_muzzleshockwave_large:c:1'],
+  blade: ['slash_diagonal_large:c:1.1', 'slash_heavy_large:c:1.1', 'slash_x_large:c:1', 'slash_horizontal_large:c:1.1', 'slash_vertical_large:c:1.3', 'sword_combo:c:1', 'axe_smear:c:1.1', '64x64_slash_1_color1:c:1.3', '64x64_slash_1_color2:c:1.3', '64x64_slash_1_color3:c:1.3', '64x64_slash_1_color4:c:1.3', '64x64_slash_1_color5:c:1.3', '64x64_slash_2_color1:c:1.3', '64x64_slash_2_color2:c:1.3', '64x64_slash_2_color3:c:1.3', '64x64_slash_2_color4:c:1.3', '64x64_slash_2_color5:c:1.3', '64x64_slash_3_color1:c:1.3', '64x64_slash_3_color2:c:1.3', '64x64_slash_3_color3:c:1.3', '64x64_slash_3_color4:c:1.3', '64x64_slash_3_color5:c:1.3', 'slashfx_simplecombo1_sheet:c:1', 'vslash1:c:1.2', 'bigslashv:c:1.2'],
+  sound: ['shockwave_ring:w:0.9', 'collect_ring_large:w:0.6', 'hit_parry_large:c:1', 'slash_wave_large:p:0.9', 'level_up_large:s:1.4', 'pipoya_time_magic_pipo_btleffect212_192:c:1.1'],
+  smoke: ['smoke_bomb:c:1', 'dust_puff:c:1', 'smoke_puff_large:c:1', 'spawn_poof_large:c:1.1', 'steam_vent:s:1.2', 'teleport_out_large:s:1.4', 'smoke_pop_large:c:0.8', 'blink_out:s:1.4', 'blink_dash:p:0.6'],
+  nature: ['bloom_heal:g:1.2', 'vine_snare:g:1.3', 'leaf_storm:c:1.1', 'spore_burst:c:1', 'regen_aura:a:1.3'],
+  stun: ['stun_stars_large:h:0.7', 'sleep_zzz_large:h:0.8', 'confuse_spiral_large:h:0.7', 'stun_stars:h:0.7', 'sleep:h:0.8', 'charm_hearts_large:h:0.8'],
+  buff: ['shield_bubble_large:a:1.2', 'power_up_aura:a:1.3', 'buff_up_large:a:1.3', 'heal_aura_large:a:1.2', 'regen_aura:a:1.3', 'barrier_block:a:1.2', 'pipoya_hex_shield_pipo_btleffect206_192:a:1.25', 'pipoya_hex_shield_pipo_btleffect207_192:a:1.25', 'pipoya_hex_shield_pipo_btleffect208_192:a:1.25', 'shield_hit_large:a:1.1', 'level_up_large:s:1.6', 'heal_burst_large:s:1.5'],
+  coins: ['coin_pickup:c:0.9', 'treasure_glint:c:1', 'star_burst_pickup:c:1', 'chest_burst_large:c:1', 'confetti_burst_large:c:1.2', 'coin_sparkle_large:c:0.8', 'firework_large:c:1.2'],
+};
+// a second, smaller sprite layered on top so skills of one family still differ (impact spark / ring / glint)
+const ACCENT = { default: ['hit_spark_medium_large:c:0.55', 'hit_critical_large:c:0.6', 'crit_hit:c:0.6', 'hit_spark_small_large:c:0.5', 'static_burst:c:0.55', 'parry:c:0.6'], fire: ['fire_impact_large:c:0.55', 'hit_heavy_large:c:0.6'], ice: ['ice_impact_large:c:0.6', 'frozen_chill:a:0.9'], holy: ['magic_sparkle_burst_large:c:0.8', 'star_burst_pickup:c:0.5'], dark: ['void_implosion:c:0.6', 'shock_sparks_large:c:0.5'], poison: ['poison_bubbles_large:a:0.9'], arcane: ['magic_sparkle_burst_large:c:0.8', 'arcane_impact_large:c:0.6'] };
+function drawSprite(c, entry, cx, cy, h, dir, s, R, alpha = 1, flipSeed = true) {
+  const [id, mode, sz] = entry.split(':'); const im = sprite(id, R() < 0.25 ? 'alt' : 'peak'); if (!im || !im.width) return false;
+  const th = Math.max(70 * s, h) * Number(sz); const maxW = Math.max(70 * s, h) * (mode === 'w' ? 1.7 : mode === 'p' ? 1.5 : 1.45);
+  const k = Math.min(th / im.height, maxW / im.width) * (mode === 'w' ? 1.6 : 1); const w = im.width * k, hh = im.height * k;
+  let x = cx, y = cy; const feet = cy + h * 0.46;
+  if (mode === 'g' || mode === 's') y = feet - hh / 2; else if (mode === 'w') y = feet - hh / 2 - h * 0.02; else if (mode === 'h') y = cy - h * 0.62 - hh * 0.2; else if (mode === 'p') x = cx - (dir || 1) * h * 0.18;
+  c.save(); c.globalAlpha = alpha; c.imageSmoothingEnabled = Math.min(im.width, im.height) > 120; c.translate(x, y);
+  const flip = mode === 'p' ? ((dir || 1) < 0) : (flipSeed && R() < 0.5); if (flip) c.scale(-1, 1);
+  if (mode === 'c' && R() < 0.5) c.rotate((R() - 0.5) * 0.6); c.drawImage(im, -w / 2, -hh / 2, w, hh); c.restore(); return true;
+}
 /** Paint the family for `act` over the target. Returns true when something was painted. cx,cy = body centre (scaled px), h = body height. */
+const BASIC = ['slash_diagonal_large:c:1.1', 'slash_horizontal_large:c:1.1', 'slash_heavy_large:c:1.1', 'slash_x_large:c:1', 'slash_vertical_large:c:1.3', 'claw_swipe_large:c:0.95', 'punch_swoosh_large:c:0.9', 'sword_combo:c:1', 'axe_smear:c:1.1', '64x64_slash_1_color1:c:1.3', '64x64_slash_2_color3:c:1.3', '64x64_slash_3_color2:c:1.3', 'hit_directional_large:c:0.9'];
+const BASIC_ACC = ['hit_spark_medium_large:c:0.5', 'hit_heavy_large:c:0.55', 'hit_spark_small_large:c:0.5', 'punch_hit:c:0.55', 'hit_blunt_large:c:0.5'];
+const ULT_ACC = ['explosion_energy_large:c:1.5', 'explosion_air_large:c:1.5', 'shockwave_ring:w:1.1', 'hit_critical_large:c:1.5', 'explosion_ground_b_large:c:1.5', 'arcane_charge_large:c:1.4'];
+/** basic attacks: a real slash sprite (cycled by the turn seed) + an impact spark. Used by hitFx when a plain attack lands. */
+function paintBasic(c, act, cx, cy, h, dir, s, crit) {
+  if (!libIndex()['hit_heavy_large__peak']) return false;
+  let seed = hash(String(act.attackSeed != null ? act.attackSeed : act.skillName || 'a') + '|' + String(act.actorName || '')); const R = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
+  c.save(); c.globalCompositeOperation = 'source-over'; const e = BASIC[Math.floor(R() * BASIC.length)]; const big = crit ? 1.2 : 1;
+  const ok = drawSprite(c, e.replace(/:([\d.]+)$/, (m, v) => ':' + (Number(v) * big)), cx, cy, h, dir, s, R, 1);
+  if (ok) drawSprite(c, BASIC_ACC[Math.floor(R() * BASIC_ACC.length)], cx + dir * h * 0.05, cy, h, dir, s, R, 0.95);
+  if (ok && crit) drawSprite(c, 'hit_critical_large:c:1.25', cx, cy, h, dir, s, R, 0.9);
+  c.restore(); return ok;
+}
 function paintSkillFx(c, act, cx, cy, h, dir, s, crit) {
-  const fam = classify(act); if (!fam || !P[fam]) return false;
+  if (act && act.ult && libIndex()['hit_heavy_large__peak']) { // ULTIMATE: the skill's own family at 1.5x, a second family-sprite layered, and a big blast accent
+    const fam = classify({ ...act, ult: false, itemKind: null }) || 'arcane'; const pool = POOLS[fam] || POOLS.arcane;
+    let seed = hash(String(act.skillName) + '|ult'); const R = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
+    const i = hash(String(act.skillName).toLowerCase()) % pool.length; const j = (i + 1 + Math.floor(R() * (pool.length - 1))) % pool.length; const up = (e, k) => e.replace(/:([\d.]+)$/, (m, v) => ':' + (Number(v) * k));
+    c.save(); c.globalCompositeOperation = 'source-over';
+    drawSprite(c, ULT_ACC[Math.floor(R() * ULT_ACC.length)], cx, cy, h, dir, s, R, 0.9);
+    drawSprite(c, up(pool[j], 1.35), cx, cy, h, dir, s, R, 0.95);
+    drawSprite(c, up(pool[i], 1.6), cx, cy, h, dir, s, R, 1);
+    if (crit) drawSprite(c, 'hit_critical_large:c:1.4', cx, cy, h, dir, s, R, 0.9);
+    c.restore(); return true;
+  }
+  const fam = classify(act); if (!fam) return false;
   let seed = hash(String(act.skillName)); const R = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
+  const pool = POOLS[fam]; let painted = false;
+  if (pool && libIndex()['hit_heavy_large__peak']) {
+    c.save(); c.globalCompositeOperation = 'source-over';
+    const i = hash(String(act.skillName).toLowerCase()) % pool.length; const big = crit ? 1.2 : 1;
+    const behind = pool[i].split(':')[1] === 'a' ? (/hex_shield|shield_bubble/.test(pool[i]) ? 0.42 : 0.7) : 1;   // auras sit lighter so the character still reads
+    painted = drawSprite(c, pool[i].replace(/:([\d.]+)$/, (m, v) => ':' + (Number(v) * big)), cx, cy, h, dir, s, R, behind);
+    if (painted && R() < 0.75 && !['stun', 'buff', 'coins', 'sound'].includes(fam)) { const acc = (ACCENT[fam] || ACCENT.default); drawSprite(c, acc[Math.floor(R() * acc.length)], cx + (R() - 0.5) * h * 0.2, cy + (R() - 0.5) * h * 0.2, h, dir, s, R, 0.95); }
+    if (painted && crit) drawSprite(c, 'hit_critical_large:c:1.3', cx, cy, h, dir, s, R, 0.9);
+    c.restore();
+  }
+  if (painted) return true;
+  if (!P[fam]) return false;
   const big = (crit ? 1.2 : 1) * (0.9 + R() * 0.2), pal = PAL[fam];
   c.save(); c.globalCompositeOperation = 'source-over'; c.lineCap = 'round'; c.lineJoin = 'round';
   c.translate(cx, cy); c.rotate((R() - 0.5) * 0.12); c.translate(-cx, -cy);   // tiny per-skill tilt
   P[fam](c, cx, cy, Math.max(70 * s, h) * big, dir || 1, s, R, pal, crit);
   c.restore(); return true;
 }
-module.exports = { classify, paintSkillFx, FAMILIES: Object.keys(P), RULES };
+module.exports = { classify, paintSkillFx, paintBasic, FAMILIES: Object.keys(POOLS), POOLS, RULES, sprite };

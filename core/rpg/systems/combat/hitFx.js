@@ -318,6 +318,7 @@ async function drawHitReaction(c, layers, anchors, act, s) {
     // basic attacks, ults and items keep the original slash + burst. SKILL_FX=0 reverts.
     let __skillPainted = false;
     if (process.env.SKILL_FX !== '0') { try { __skillPainted = require('./skillStaticFx').paintSkillFx(c, act, cx, cy, h, dir, s, crit); } catch (e) { __skillPainted = false; } }
+    if (!__skillPainted && !act.ult && process.env.SKILL_FX !== '0') { try { __skillPainted = require('./skillStaticFx').paintBasic(c, act, cx, cy, h, dir, s, crit); } catch (e) { __skillPainted = false; } }
     if (!__skillPainted) {
     slashPattern(variant, c, cx, cy, h, dir, el, crit, s);                                // #4 the cycled composition
     impactBurst(variant, c, cx, cy, dir, el, crit, s);

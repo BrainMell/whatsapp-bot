@@ -1,0 +1,6955 @@
+[
+{
+"file": "aw/explosion_air_large__peak.png",
+"pack": "aw",
+"id": "explosion_air_large",
+"frame": "peak",
+"w": 105,
+"h": 102,
+"kind": "explosion",
+"elem": [
+"wind"
+],
+"hue": "red",
+"label": "01_Explosions Explosion_Air",
+"frames": 18
+},
+{
+"file": "aw/explosion_air_large__alt.png",
+"pack": "aw",
+"id": "explosion_air_large",
+"frame": "alt",
+"w": 104,
+"h": 104,
+"kind": "explosion",
+"elem": [
+"wind"
+],
+"hue": "red",
+"label": "01_Explosions Explosion_Air",
+"frames": 18
+},
+{
+"file": "aw/explosion_dark_large__peak.png",
+"pack": "aw",
+"id": "explosion_dark_large",
+"frame": "peak",
+"w": 108,
+"h": 105,
+"kind": "explosion",
+"elem": [
+"dark"
+],
+"hue": "purple",
+"label": "01_Explosions Explosion_Dark",
+"frames": 21
+},
+{
+"file": "aw/explosion_dark_large__alt.png",
+"pack": "aw",
+"id": "explosion_dark_large",
+"frame": "alt",
+"w": 93,
+"h": 111,
+"kind": "explosion",
+"elem": [
+"dark"
+],
+"hue": "purple",
+"label": "01_Explosions Explosion_Dark",
+"frames": 21
+},
+{
+"file": "aw/explosion_debris_large__peak.png",
+"pack": "aw",
+"id": "explosion_debris_large",
+"frame": "peak",
+"w": 117,
+"h": 98,
+"kind": "explosion",
+"elem": [
+"earth"
+],
+"hue": "red",
+"label": "01_Explosions Explosion_Debris",
+"frames": 21
+},
+{
+"file": "aw/explosion_debris_large__alt.png",
+"pack": "aw",
+"id": "explosion_debris_large",
+"frame": "alt",
+"w": 111,
+"h": 83,
+"kind": "explosion",
+"elem": [
+"earth"
+],
+"hue": "red",
+"label": "01_Explosions Explosion_Debris",
+"frames": 21
+},
+{
+"file": "aw/explosion_electric_large__peak.png",
+"pack": "aw",
+"id": "explosion_electric_large",
+"frame": "peak",
+"w": 113,
+"h": 113,
+"kind": "explosion",
+"elem": [
+"lightning"
+],
+"hue": "orange",
+"label": "01_Explosions Explosion_Electric",
+"frames": 18
+},
+{
+"file": "aw/explosion_energy_large__peak.png",
+"pack": "aw",
+"id": "explosion_energy_large",
+"frame": "peak",
+"w": 125,
+"h": 108,
+"kind": "explosion",
+"elem": [],
+"hue": "blue",
+"label": "01_Explosions Explosion_Energy",
+"frames": 21
+},
+{
+"file": "aw/explosion_energy_large__alt.png",
+"pack": "aw",
+"id": "explosion_energy_large",
+"frame": "alt",
+"w": 109,
+"h": 98,
+"kind": "explosion",
+"elem": [],
+"hue": "blue",
+"label": "01_Explosions Explosion_Energy",
+"frames": 21
+},
+{
+"file": "aw/explosion_ground_a_large__peak.png",
+"pack": "aw",
+"id": "explosion_ground_a_large",
+"frame": "peak",
+"w": 113,
+"h": 87,
+"kind": "explosion",
+"elem": [
+"fire",
+"earth"
+],
+"hue": "orange",
+"label": "01_Explosions Explosion_Ground_A",
+"frames": 18
+},
+{
+"file": "aw/explosion_ground_a_large__alt.png",
+"pack": "aw",
+"id": "explosion_ground_a_large",
+"frame": "alt",
+"w": 117,
+"h": 107,
+"kind": "explosion",
+"elem": [
+"fire",
+"earth"
+],
+"hue": "pink",
+"label": "01_Explosions Explosion_Ground_A",
+"frames": 18
+},
+{
+"file": "aw/explosion_ground_b_large__peak.png",
+"pack": "aw",
+"id": "explosion_ground_b_large",
+"frame": "peak",
+"w": 150,
+"h": 134,
+"kind": "explosion",
+"elem": [
+"fire",
+"earth"
+],
+"hue": "pink",
+"label": "01_Explosions Explosion_Ground_B",
+"frames": 18
+},
+{
+"file": "aw/explosion_ground_b_large__alt.png",
+"pack": "aw",
+"id": "explosion_ground_b_large",
+"frame": "alt",
+"w": 112,
+"h": 94,
+"kind": "explosion",
+"elem": [
+"fire",
+"earth"
+],
+"hue": "red",
+"label": "01_Explosions Explosion_Ground_B",
+"frames": 18
+},
+{
+"file": "aw/explosion_small_large__peak.png",
+"pack": "aw",
+"id": "explosion_small_large",
+"frame": "peak",
+"w": 58,
+"h": 53,
+"kind": "explosion",
+"elem": [],
+"hue": "red",
+"label": "01_Explosions Explosion_Small",
+"frames": 22
+},
+{
+"file": "aw/explosion_small_large__alt.png",
+"pack": "aw",
+"id": "explosion_small_large",
+"frame": "alt",
+"w": 55,
+"h": 56,
+"kind": "explosion",
+"elem": [],
+"hue": "purple",
+"label": "01_Explosions Explosion_Small",
+"frames": 22
+},
+{
+"file": "aw/explosion_toxic_large__peak.png",
+"pack": "aw",
+"id": "explosion_toxic_large",
+"frame": "peak",
+"w": 125,
+"h": 76,
+"kind": "explosion",
+"elem": [
+"poison"
+],
+"hue": "green",
+"label": "01_Explosions Explosion_Toxic",
+"frames": 23
+},
+{
+"file": "aw/explosion_toxic_large__alt.png",
+"pack": "aw",
+"id": "explosion_toxic_large",
+"frame": "alt",
+"w": 118,
+"h": 56,
+"kind": "explosion",
+"elem": [
+"poison"
+],
+"hue": "green",
+"label": "01_Explosions Explosion_Toxic",
+"frames": 23
+},
+{
+"file": "aw/fire_impact_large__peak.png",
+"pack": "aw",
+"id": "fire_impact_large",
+"frame": "peak",
+"w": 63,
+"h": 53,
+"kind": "impact",
+"elem": [
+"fire"
+],
+"hue": "red",
+"label": "02_Impacts Fire_Impact",
+"frames": 9
+},
+{
+"file": "aw/fire_impact_large__alt.png",
+"pack": "aw",
+"id": "fire_impact_large",
+"frame": "alt",
+"w": 52,
+"h": 56,
+"kind": "impact",
+"elem": [
+"fire"
+],
+"hue": "red",
+"label": "02_Impacts Fire_Impact",
+"frames": 9
+},
+{
+"file": "aw/hit_block_large__peak.png",
+"pack": "aw",
+"id": "hit_block_large",
+"frame": "peak",
+"w": 21,
+"h": 36,
+"kind": "shield",
+"elem": [],
+"hue": "white",
+"label": "02_Impacts Hit_Block",
+"frames": 4
+},
+{
+"file": "aw/hit_block_large__alt.png",
+"pack": "aw",
+"id": "hit_block_large",
+"frame": "alt",
+"w": 37,
+"h": 47,
+"kind": "shield",
+"elem": [],
+"hue": "blue",
+"label": "02_Impacts Hit_Block",
+"frames": 4
+},
+{
+"file": "aw/hit_blunt_large__peak.png",
+"pack": "aw",
+"id": "hit_blunt_large",
+"frame": "peak",
+"w": 68,
+"h": 41,
+"kind": "impact",
+"elem": [],
+"hue": "orange",
+"label": "02_Impacts Hit_Blunt",
+"frames": 6
+},
+{
+"file": "aw/hit_blunt_large__alt.png",
+"pack": "aw",
+"id": "hit_blunt_large",
+"frame": "alt",
+"w": 57,
+"h": 23,
+"kind": "impact",
+"elem": [],
+"hue": "orange",
+"label": "02_Impacts Hit_Blunt",
+"frames": 6
+},
+{
+"file": "aw/hit_critical_large__peak.png",
+"pack": "aw",
+"id": "hit_critical_large",
+"frame": "peak",
+"w": 84,
+"h": 84,
+"kind": "impact",
+"elem": [],
+"hue": "yellow",
+"label": "02_Impacts Hit_Critical",
+"frames": 7
+},
+{
+"file": "aw/hit_directional_large__peak.png",
+"pack": "aw",
+"id": "hit_directional_large",
+"frame": "peak",
+"w": 64,
+"h": 33,
+"kind": "impact",
+"elem": [],
+"hue": "orange",
+"label": "02_Impacts Hit_Directional",
+"frames": 4
+},
+{
+"file": "aw/hit_directional_large__alt.png",
+"pack": "aw",
+"id": "hit_directional_large",
+"frame": "alt",
+"w": 34,
+"h": 46,
+"kind": "impact",
+"elem": [],
+"hue": "orange",
+"label": "02_Impacts Hit_Directional",
+"frames": 4
+},
+{
+"file": "aw/hit_heavy_large__peak.png",
+"pack": "aw",
+"id": "hit_heavy_large",
+"frame": "peak",
+"w": 67,
+"h": 69,
+"kind": "impact",
+"elem": [],
+"hue": "orange",
+"label": "02_Impacts Hit_Heavy",
+"frames": 6
+},
+{
+"file": "aw/hit_parry_large__peak.png",
+"pack": "aw",
+"id": "hit_parry_large",
+"frame": "peak",
+"w": 58,
+"h": 68,
+"kind": "shield",
+"elem": [],
+"hue": "white",
+"label": "02_Impacts Hit_Parry",
+"frames": 5
+},
+{
+"file": "aw/hit_parry_large__alt.png",
+"pack": "aw",
+"id": "hit_parry_large",
+"frame": "alt",
+"w": 74,
+"h": 76,
+"kind": "shield",
+"elem": [],
+"hue": "blue",
+"label": "02_Impacts Hit_Parry",
+"frames": 5
+},
+{
+"file": "aw/hit_spark_medium_large__peak.png",
+"pack": "aw",
+"id": "hit_spark_medium_large",
+"frame": "peak",
+"w": 36,
+"h": 34,
+"kind": "impact",
+"elem": [
+"lightning"
+],
+"hue": "orange",
+"label": "02_Impacts Hit_Spark_Medium",
+"frames": 4
+},
+{
+"file": "aw/hit_spark_small_large__peak.png",
+"pack": "aw",
+"id": "hit_spark_small_large",
+"frame": "peak",
+"w": 31,
+"h": 18,
+"kind": "impact",
+"elem": [
+"lightning"
+],
+"hue": "orange",
+"label": "02_Impacts Hit_Spark_Small",
+"frames": 4
+},
+{
+"file": "aw/ice_impact_large__peak.png",
+"pack": "aw",
+"id": "ice_impact_large",
+"frame": "peak",
+"w": 71,
+"h": 67,
+"kind": "impact",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "02_Impacts Ice_Impact",
+"frames": 7
+},
+{
+"file": "aw/ice_impact_large__alt.png",
+"pack": "aw",
+"id": "ice_impact_large",
+"frame": "alt",
+"w": 67,
+"h": 63,
+"kind": "impact",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "02_Impacts Ice_Impact",
+"frames": 7
+},
+{
+"file": "aw/claw_swipe_large__peak.png",
+"pack": "aw",
+"id": "claw_swipe_large",
+"frame": "peak",
+"w": 51,
+"h": 53,
+"kind": "slash",
+"elem": [],
+"hue": "red",
+"label": "03_Slashes Claw_Swipe",
+"frames": 18
+},
+{
+"file": "aw/claw_swipe_large__alt.png",
+"pack": "aw",
+"id": "claw_swipe_large",
+"frame": "alt",
+"w": 43,
+"h": 46,
+"kind": "slash",
+"elem": [],
+"hue": "pink",
+"label": "03_Slashes Claw_Swipe",
+"frames": 18
+},
+{
+"file": "aw/dash_wind_large__peak.png",
+"pack": "aw",
+"id": "dash_wind_large",
+"frame": "peak",
+"w": 83,
+"h": 32,
+"kind": "slash",
+"elem": [
+"wind"
+],
+"hue": "cyan",
+"label": "03_Slashes Dash_Wind",
+"frames": 15
+},
+{
+"file": "aw/dash_wind_large__alt.png",
+"pack": "aw",
+"id": "dash_wind_large",
+"frame": "alt",
+"w": 92,
+"h": 31,
+"kind": "slash",
+"elem": [
+"wind"
+],
+"hue": "cyan",
+"label": "03_Slashes Dash_Wind",
+"frames": 15
+},
+{
+"file": "aw/punch_swoosh_large__peak.png",
+"pack": "aw",
+"id": "punch_swoosh_large",
+"frame": "peak",
+"w": 50,
+"h": 31,
+"kind": "slash",
+"elem": [
+"wind"
+],
+"hue": "orange",
+"label": "03_Slashes Punch_Swoosh",
+"frames": 16
+},
+{
+"file": "aw/punch_swoosh_large__alt.png",
+"pack": "aw",
+"id": "punch_swoosh_large",
+"frame": "alt",
+"w": 47,
+"h": 40,
+"kind": "slash",
+"elem": [
+"wind"
+],
+"hue": "orange",
+"label": "03_Slashes Punch_Swoosh",
+"frames": 16
+},
+{
+"file": "aw/slash_diagonal_large__peak.png",
+"pack": "aw",
+"id": "slash_diagonal_large",
+"frame": "peak",
+"w": 75,
+"h": 57,
+"kind": "slash",
+"elem": [],
+"hue": "orange",
+"label": "03_Slashes Slash_Diagonal",
+"frames": 18
+},
+{
+"file": "aw/slash_diagonal_large__alt.png",
+"pack": "aw",
+"id": "slash_diagonal_large",
+"frame": "alt",
+"w": 60,
+"h": 56,
+"kind": "slash",
+"elem": [],
+"hue": "orange",
+"label": "03_Slashes Slash_Diagonal",
+"frames": 18
+},
+{
+"file": "aw/slash_heavy_large__peak.png",
+"pack": "aw",
+"id": "slash_heavy_large",
+"frame": "peak",
+"w": 130,
+"h": 60,
+"kind": "slash",
+"elem": [],
+"hue": "red",
+"label": "03_Slashes Slash_Heavy",
+"frames": 19
+},
+{
+"file": "aw/slash_heavy_large__alt.png",
+"pack": "aw",
+"id": "slash_heavy_large",
+"frame": "alt",
+"w": 96,
+"h": 56,
+"kind": "slash",
+"elem": [],
+"hue": "red",
+"label": "03_Slashes Slash_Heavy",
+"frames": 19
+},
+{
+"file": "aw/slash_horizontal_large__peak.png",
+"pack": "aw",
+"id": "slash_horizontal_large",
+"frame": "peak",
+"w": 104,
+"h": 38,
+"kind": "slash",
+"elem": [],
+"hue": "blue",
+"label": "03_Slashes Slash_Horizontal",
+"frames": 18
+},
+{
+"file": "aw/slash_horizontal_large__alt.png",
+"pack": "aw",
+"id": "slash_horizontal_large",
+"frame": "alt",
+"w": 93,
+"h": 29,
+"kind": "slash",
+"elem": [],
+"hue": "blue",
+"label": "03_Slashes Slash_Horizontal",
+"frames": 18
+},
+{
+"file": "aw/slash_spin_large__peak.png",
+"pack": "aw",
+"id": "slash_spin_large",
+"frame": "peak",
+"w": 131,
+"h": 57,
+"kind": "slash",
+"elem": [],
+"hue": "blue",
+"label": "03_Slashes Slash_Spin",
+"frames": 20
+},
+{
+"file": "aw/slash_spin_large__alt.png",
+"pack": "aw",
+"id": "slash_spin_large",
+"frame": "alt",
+"w": 128,
+"h": 52,
+"kind": "slash",
+"elem": [],
+"hue": "blue",
+"label": "03_Slashes Slash_Spin",
+"frames": 20
+},
+{
+"file": "aw/slash_vertical_large__peak.png",
+"pack": "aw",
+"id": "slash_vertical_large",
+"frame": "peak",
+"w": 31,
+"h": 95,
+"kind": "slash",
+"elem": [],
+"hue": "purple",
+"label": "03_Slashes Slash_Vertical",
+"frames": 19
+},
+{
+"file": "aw/slash_vertical_large__alt.png",
+"pack": "aw",
+"id": "slash_vertical_large",
+"frame": "alt",
+"w": 23,
+"h": 68,
+"kind": "slash",
+"elem": [],
+"hue": "purple",
+"label": "03_Slashes Slash_Vertical",
+"frames": 19
+},
+{
+"file": "aw/slash_wave_large__peak.png",
+"pack": "aw",
+"id": "slash_wave_large",
+"frame": "peak",
+"w": 55,
+"h": 54,
+"kind": "slash",
+"elem": [
+"water"
+],
+"hue": "cyan",
+"label": "03_Slashes Slash_Wave",
+"frames": 16
+},
+{
+"file": "aw/slash_wave_large__alt.png",
+"pack": "aw",
+"id": "slash_wave_large",
+"frame": "alt",
+"w": 55,
+"h": 54,
+"kind": "slash",
+"elem": [
+"water"
+],
+"hue": "cyan",
+"label": "03_Slashes Slash_Wave",
+"frames": 16
+},
+{
+"file": "aw/slash_x_large__peak.png",
+"pack": "aw",
+"id": "slash_x_large",
+"frame": "peak",
+"w": 65,
+"h": 60,
+"kind": "slash",
+"elem": [],
+"hue": "red",
+"label": "03_Slashes Slash_X",
+"frames": 19
+},
+{
+"file": "aw/slash_x_large__alt.png",
+"pack": "aw",
+"id": "slash_x_large",
+"frame": "alt",
+"w": 56,
+"h": 50,
+"kind": "slash",
+"elem": [],
+"hue": "red",
+"label": "03_Slashes Slash_X",
+"frames": 19
+},
+{
+"file": "aw/thrust_stab_large__peak.png",
+"pack": "aw",
+"id": "thrust_stab_large",
+"frame": "peak",
+"w": 107,
+"h": 8,
+"kind": "slash",
+"elem": [],
+"hue": "white",
+"label": "03_Slashes Thrust_Stab",
+"frames": 16
+},
+{
+"file": "aw/thrust_stab_large__alt.png",
+"pack": "aw",
+"id": "thrust_stab_large",
+"frame": "alt",
+"w": 76,
+"h": 26,
+"kind": "slash",
+"elem": [],
+"hue": "blue",
+"label": "03_Slashes Thrust_Stab",
+"frames": 16
+},
+{
+"file": "aw/arcane_impact_large__peak.png",
+"pack": "aw",
+"id": "arcane_impact_large",
+"frame": "peak",
+"w": 80,
+"h": 80,
+"kind": "impact",
+"elem": [
+"lightning",
+"arcane"
+],
+"hue": "purple",
+"label": "04_Spells Arcane_Impact",
+"frames": 18
+},
+{
+"file": "aw/arcane_impact_large__alt.png",
+"pack": "aw",
+"id": "arcane_impact_large",
+"frame": "alt",
+"w": 88,
+"h": 86,
+"kind": "impact",
+"elem": [
+"lightning",
+"arcane"
+],
+"hue": "purple",
+"label": "04_Spells Arcane_Impact",
+"frames": 18
+},
+{
+"file": "aw/arcane_missile_large__peak.png",
+"pack": "aw",
+"id": "arcane_missile_large",
+"frame": "peak",
+"w": 63,
+"h": 27,
+"kind": "projectile",
+"elem": [
+"lightning",
+"arcane"
+],
+"hue": "purple",
+"label": "04_Spells Arcane_Missile",
+"frames": 18
+},
+{
+"file": "aw/arcane_missile_large__alt.png",
+"pack": "aw",
+"id": "arcane_missile_large",
+"frame": "alt",
+"w": 56,
+"h": 23,
+"kind": "projectile",
+"elem": [
+"lightning",
+"arcane"
+],
+"hue": "purple",
+"label": "04_Spells Arcane_Missile",
+"frames": 18
+},
+{
+"file": "aw/earth_rockspike_large__peak.png",
+"pack": "aw",
+"id": "earth_rockspike_large",
+"frame": "peak",
+"w": 120,
+"h": 145,
+"kind": "ground",
+"elem": [
+"earth"
+],
+"hue": "orange",
+"label": "04_Spells Earth_RockSpike",
+"frames": 18
+},
+{
+"file": "aw/earth_rockspike_large__alt.png",
+"pack": "aw",
+"id": "earth_rockspike_large",
+"frame": "alt",
+"w": 107,
+"h": 142,
+"kind": "ground",
+"elem": [
+"earth"
+],
+"hue": "orange",
+"label": "04_Spells Earth_RockSpike",
+"frames": 18
+},
+{
+"file": "aw/fire_castflame_large__peak.png",
+"pack": "aw",
+"id": "fire_castflame_large",
+"frame": "peak",
+"w": 44,
+"h": 28,
+"kind": "burst",
+"elem": [
+"fire"
+],
+"hue": "orange",
+"label": "04_Spells Fire_CastFlame",
+"frames": 7
+},
+{
+"file": "aw/fire_castflame_large__alt.png",
+"pack": "aw",
+"id": "fire_castflame_large",
+"frame": "alt",
+"w": 45,
+"h": 38,
+"kind": "burst",
+"elem": [
+"fire"
+],
+"hue": "red",
+"label": "04_Spells Fire_CastFlame",
+"frames": 7
+},
+{
+"file": "aw/fire_fireball_large__peak.png",
+"pack": "aw",
+"id": "fire_fireball_large",
+"frame": "peak",
+"w": 93,
+"h": 24,
+"kind": "projectile",
+"elem": [
+"fire"
+],
+"hue": "orange",
+"label": "04_Spells Fire_Fireball",
+"frames": 6
+},
+{
+"file": "aw/fire_fireball_large__alt.png",
+"pack": "aw",
+"id": "fire_fireball_large",
+"frame": "alt",
+"w": 104,
+"h": 23,
+"kind": "projectile",
+"elem": [
+"fire"
+],
+"hue": "orange",
+"label": "04_Spells Fire_Fireball",
+"frames": 6
+},
+{
+"file": "aw/fire_muzzleshockwave_large__peak.png",
+"pack": "aw",
+"id": "fire_muzzleshockwave_large",
+"frame": "peak",
+"w": 42,
+"h": 52,
+"kind": "explosion",
+"elem": [
+"fire",
+"lightning",
+"water"
+],
+"hue": "orange",
+"label": "04_Spells Fire_MuzzleShockwave",
+"frames": 3
+},
+{
+"file": "aw/holy_pillar_large__peak.png",
+"pack": "aw",
+"id": "holy_pillar_large",
+"frame": "peak",
+"w": 52,
+"h": 103,
+"kind": "pillar",
+"elem": [
+"holy"
+],
+"hue": "orange",
+"label": "04_Spells Holy_Pillar",
+"frames": 18
+},
+{
+"file": "aw/holy_pillar_large__alt.png",
+"pack": "aw",
+"id": "holy_pillar_large",
+"frame": "alt",
+"w": 58,
+"h": 103,
+"kind": "pillar",
+"elem": [
+"holy"
+],
+"hue": "orange",
+"label": "04_Spells Holy_Pillar",
+"frames": 18
+},
+{
+"file": "aw/ice_castfrost_large__peak.png",
+"pack": "aw",
+"id": "ice_castfrost_large",
+"frame": "peak",
+"w": 33,
+"h": 31,
+"kind": "burst",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "04_Spells Ice_CastFrost",
+"frames": 5
+},
+{
+"file": "aw/ice_spear_large__peak.png",
+"pack": "aw",
+"id": "ice_spear_large",
+"frame": "peak",
+"w": 105,
+"h": 14,
+"kind": "projectile",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "04_Spells Ice_Spear",
+"frames": 6
+},
+{
+"file": "aw/ice_spear_large__alt.png",
+"pack": "aw",
+"id": "ice_spear_large",
+"frame": "alt",
+"w": 105,
+"h": 14,
+"kind": "projectile",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "04_Spells Ice_Spear",
+"frames": 6
+},
+{
+"file": "aw/ice_spikewave_large__peak.png",
+"pack": "aw",
+"id": "ice_spikewave_large",
+"frame": "peak",
+"w": 187,
+"h": 56,
+"kind": "ground",
+"elem": [
+"ice",
+"water",
+"earth"
+],
+"hue": "blue",
+"label": "04_Spells Ice_SpikeWave",
+"frames": 11
+},
+{
+"file": "aw/ice_spikewave_large__alt.png",
+"pack": "aw",
+"id": "ice_spikewave_large",
+"frame": "alt",
+"w": 185,
+"h": 57,
+"kind": "ground",
+"elem": [
+"ice",
+"water",
+"earth"
+],
+"hue": "blue",
+"label": "04_Spells Ice_SpikeWave",
+"frames": 11
+},
+{
+"file": "aw/lightning_arc_large__peak.png",
+"pack": "aw",
+"id": "lightning_arc_large",
+"frame": "peak",
+"w": 134,
+"h": 37,
+"kind": "projectile",
+"elem": [
+"lightning"
+],
+"hue": "orange",
+"label": "04_Spells Lightning_Arc",
+"frames": 18
+},
+{
+"file": "aw/lightning_arc_large__alt.png",
+"pack": "aw",
+"id": "lightning_arc_large",
+"frame": "alt",
+"w": 133,
+"h": 26,
+"kind": "projectile",
+"elem": [
+"lightning"
+],
+"hue": "orange",
+"label": "04_Spells Lightning_Arc",
+"frames": 18
+},
+{
+"file": "aw/lightning_orb_large__peak.png",
+"pack": "aw",
+"id": "lightning_orb_large",
+"frame": "peak",
+"w": 42,
+"h": 47,
+"kind": "projectile",
+"elem": [
+"lightning"
+],
+"hue": "red",
+"label": "04_Spells Lightning_Orb",
+"frames": 18
+},
+{
+"file": "aw/lightning_orb_large__alt.png",
+"pack": "aw",
+"id": "lightning_orb_large",
+"frame": "alt",
+"w": 45,
+"h": 50,
+"kind": "projectile",
+"elem": [
+"lightning"
+],
+"hue": "red",
+"label": "04_Spells Lightning_Orb",
+"frames": 18
+},
+{
+"file": "aw/lightning_strike_large__peak.png",
+"pack": "aw",
+"id": "lightning_strike_large",
+"frame": "peak",
+"w": 65,
+"h": 171,
+"kind": "projectile",
+"elem": [
+"lightning"
+],
+"hue": "orange",
+"label": "04_Spells Lightning_Strike",
+"frames": 15
+},
+{
+"file": "aw/lightning_strike_large__alt.png",
+"pack": "aw",
+"id": "lightning_strike_large",
+"frame": "alt",
+"w": 79,
+"h": 173,
+"kind": "projectile",
+"elem": [
+"lightning"
+],
+"hue": "orange",
+"label": "04_Spells Lightning_Strike",
+"frames": 15
+},
+{
+"file": "aw/poison_glob_large__peak.png",
+"pack": "aw",
+"id": "poison_glob_large",
+"frame": "peak",
+"w": 81,
+"h": 45,
+"kind": "status",
+"elem": [
+"poison"
+],
+"hue": "green",
+"label": "04_Spells Poison_Glob",
+"frames": 18
+},
+{
+"file": "aw/poison_glob_large__alt.png",
+"pack": "aw",
+"id": "poison_glob_large",
+"frame": "alt",
+"w": 82,
+"h": 44,
+"kind": "status",
+"elem": [
+"poison"
+],
+"hue": "green",
+"label": "04_Spells Poison_Glob",
+"frames": 18
+},
+{
+"file": "aw/poison_splash_large__peak.png",
+"pack": "aw",
+"id": "poison_splash_large",
+"frame": "peak",
+"w": 109,
+"h": 63,
+"kind": "status",
+"elem": [
+"water",
+"poison"
+],
+"hue": "green",
+"label": "04_Spells Poison_Splash",
+"frames": 18
+},
+{
+"file": "aw/poison_splash_large__alt.png",
+"pack": "aw",
+"id": "poison_splash_large",
+"frame": "alt",
+"w": 102,
+"h": 29,
+"kind": "status",
+"elem": [
+"water",
+"poison"
+],
+"hue": "green",
+"label": "04_Spells Poison_Splash",
+"frames": 18
+},
+{
+"file": "aw/shadow_spikes_large__peak.png",
+"pack": "aw",
+"id": "shadow_spikes_large",
+"frame": "peak",
+"w": 236,
+"h": 75,
+"kind": "ground",
+"elem": [
+"earth",
+"dark"
+],
+"hue": "purple",
+"label": "04_Spells Shadow_Spikes",
+"frames": 18
+},
+{
+"file": "aw/shadow_spikes_large__alt.png",
+"pack": "aw",
+"id": "shadow_spikes_large",
+"frame": "alt",
+"w": 218,
+"h": 88,
+"kind": "ground",
+"elem": [
+"earth",
+"dark"
+],
+"hue": "purple",
+"label": "04_Spells Shadow_Spikes",
+"frames": 18
+},
+{
+"file": "aw/water_splash_large__peak.png",
+"pack": "aw",
+"id": "water_splash_large",
+"frame": "peak",
+"w": 86,
+"h": 58,
+"kind": "ground",
+"elem": [
+"water"
+],
+"hue": "blue",
+"label": "04_Spells Water_Splash",
+"frames": 18
+},
+{
+"file": "aw/water_splash_large__alt.png",
+"pack": "aw",
+"id": "water_splash_large",
+"frame": "alt",
+"w": 87,
+"h": 64,
+"kind": "ground",
+"elem": [
+"water"
+],
+"hue": "blue",
+"label": "04_Spells Water_Splash",
+"frames": 18
+},
+{
+"file": "aw/wind_tornado_large__peak.png",
+"pack": "aw",
+"id": "wind_tornado_large",
+"frame": "peak",
+"w": 52,
+"h": 71,
+"kind": "ground",
+"elem": [
+"wind"
+],
+"hue": "white",
+"label": "04_Spells Wind_Tornado",
+"frames": 18
+},
+{
+"file": "aw/wind_tornado_large__alt.png",
+"pack": "aw",
+"id": "wind_tornado_large",
+"frame": "alt",
+"w": 51,
+"h": 71,
+"kind": "ground",
+"elem": [
+"wind"
+],
+"hue": "white",
+"label": "04_Spells Wind_Tornado",
+"frames": 18
+},
+{
+"file": "aw/arcane_charge_large__peak.png",
+"pack": "aw",
+"id": "arcane_charge_large",
+"frame": "peak",
+"w": 73,
+"h": 72,
+"kind": "aura",
+"elem": [
+"lightning",
+"arcane"
+],
+"hue": "purple",
+"label": "05_Charges Arcane_Charge",
+"frames": 18
+},
+{
+"file": "aw/arcane_charge_large__alt.png",
+"pack": "aw",
+"id": "arcane_charge_large",
+"frame": "alt",
+"w": 76,
+"h": 73,
+"kind": "aura",
+"elem": [
+"lightning",
+"arcane"
+],
+"hue": "purple",
+"label": "05_Charges Arcane_Charge",
+"frames": 18
+},
+{
+"file": "aw/fire_chargeburst_max_large__peak.png",
+"pack": "aw",
+"id": "fire_chargeburst_max_large",
+"frame": "peak",
+"w": 106,
+"h": 101,
+"kind": "explosion",
+"elem": [
+"fire"
+],
+"hue": "red",
+"label": "05_Charges Fire_ChargeBurst_Max",
+"frames": 6
+},
+{
+"file": "aw/fire_chargeburst_max_large__alt.png",
+"pack": "aw",
+"id": "fire_chargeburst_max_large",
+"frame": "alt",
+"w": 121,
+"h": 121,
+"kind": "explosion",
+"elem": [
+"fire"
+],
+"hue": "orange",
+"label": "05_Charges Fire_ChargeBurst_Max",
+"frames": 6
+},
+{
+"file": "aw/fire_chargehold_max_large__peak.png",
+"pack": "aw",
+"id": "fire_chargehold_max_large",
+"frame": "peak",
+"w": 75,
+"h": 62,
+"kind": "aura",
+"elem": [
+"fire"
+],
+"hue": "red",
+"label": "05_Charges Fire_ChargeHold_Max",
+"frames": 6
+},
+{
+"file": "aw/fire_chargehold_max_large__alt.png",
+"pack": "aw",
+"id": "fire_chargehold_max_large",
+"frame": "alt",
+"w": 73,
+"h": 74,
+"kind": "aura",
+"elem": [
+"fire"
+],
+"hue": "red",
+"label": "05_Charges Fire_ChargeHold_Max",
+"frames": 6
+},
+{
+"file": "aw/fire_chargeup_large__peak.png",
+"pack": "aw",
+"id": "fire_chargeup_large",
+"frame": "peak",
+"w": 75,
+"h": 62,
+"kind": "aura",
+"elem": [
+"fire"
+],
+"hue": "red",
+"label": "05_Charges Fire_ChargeUp",
+"frames": 20
+},
+{
+"file": "aw/fire_chargeup_large__alt.png",
+"pack": "aw",
+"id": "fire_chargeup_large",
+"frame": "alt",
+"w": 68,
+"h": 65,
+"kind": "aura",
+"elem": [
+"fire"
+],
+"hue": "red",
+"label": "05_Charges Fire_ChargeUp",
+"frames": 20
+},
+{
+"file": "aw/ice_chargehold_large__peak.png",
+"pack": "aw",
+"id": "ice_chargehold_large",
+"frame": "peak",
+"w": 82,
+"h": 75,
+"kind": "aura",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "05_Charges Ice_ChargeHold",
+"frames": 6
+},
+{
+"file": "aw/ice_chargehold_large__alt.png",
+"pack": "aw",
+"id": "ice_chargehold_large",
+"frame": "alt",
+"w": 78,
+"h": 75,
+"kind": "aura",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "05_Charges Ice_ChargeHold",
+"frames": 6
+},
+{
+"file": "aw/ice_chargeshatter_large__peak.png",
+"pack": "aw",
+"id": "ice_chargeshatter_large",
+"frame": "peak",
+"w": 89,
+"h": 87,
+"kind": "aura",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "05_Charges Ice_ChargeShatter",
+"frames": 5
+},
+{
+"file": "aw/ice_chargeup_large__peak.png",
+"pack": "aw",
+"id": "ice_chargeup_large",
+"frame": "peak",
+"w": 82,
+"h": 75,
+"kind": "aura",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "05_Charges Ice_ChargeUp",
+"frames": 9
+},
+{
+"file": "aw/ice_chargeup_large__alt.png",
+"pack": "aw",
+"id": "ice_chargeup_large",
+"frame": "alt",
+"w": 80,
+"h": 77,
+"kind": "aura",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "05_Charges Ice_ChargeUp",
+"frames": 9
+},
+{
+"file": "aw/lightning_charge_large__peak.png",
+"pack": "aw",
+"id": "lightning_charge_large",
+"frame": "peak",
+"w": 59,
+"h": 62,
+"kind": "aura",
+"elem": [
+"lightning"
+],
+"hue": "red",
+"label": "05_Charges Lightning_Charge",
+"frames": 18
+},
+{
+"file": "aw/lightning_charge_large__alt.png",
+"pack": "aw",
+"id": "lightning_charge_large",
+"frame": "alt",
+"w": 58,
+"h": 51,
+"kind": "aura",
+"elem": [
+"lightning"
+],
+"hue": "orange",
+"label": "05_Charges Lightning_Charge",
+"frames": 18
+},
+{
+"file": "aw/buff_up_large__peak.png",
+"pack": "aw",
+"id": "buff_up_large",
+"frame": "peak",
+"w": 63,
+"h": 100,
+"kind": "shield",
+"elem": [
+"holy"
+],
+"hue": "red",
+"label": "06_Heal_Shield_Buffs Buff_Up",
+"frames": 18
+},
+{
+"file": "aw/buff_up_large__alt.png",
+"pack": "aw",
+"id": "buff_up_large",
+"frame": "alt",
+"w": 59,
+"h": 111,
+"kind": "shield",
+"elem": [
+"holy"
+],
+"hue": "red",
+"label": "06_Heal_Shield_Buffs Buff_Up",
+"frames": 18
+},
+{
+"file": "aw/debuff_down_large__peak.png",
+"pack": "aw",
+"id": "debuff_down_large",
+"frame": "peak",
+"w": 66,
+"h": 100,
+"kind": "shield",
+"elem": [
+"holy"
+],
+"hue": "purple",
+"label": "06_Heal_Shield_Buffs Debuff_Down",
+"frames": 18
+},
+{
+"file": "aw/debuff_down_large__alt.png",
+"pack": "aw",
+"id": "debuff_down_large",
+"frame": "alt",
+"w": 68,
+"h": 50,
+"kind": "shield",
+"elem": [
+"holy"
+],
+"hue": "purple",
+"label": "06_Heal_Shield_Buffs Debuff_Down",
+"frames": 18
+},
+{
+"file": "aw/heal_aura_large__peak.png",
+"pack": "aw",
+"id": "heal_aura_large",
+"frame": "peak",
+"w": 107,
+"h": 78,
+"kind": "shield",
+"elem": [
+"holy"
+],
+"hue": "green",
+"label": "06_Heal_Shield_Buffs Heal_Aura",
+"frames": 18
+},
+{
+"file": "aw/heal_aura_large__alt.png",
+"pack": "aw",
+"id": "heal_aura_large",
+"frame": "alt",
+"w": 101,
+"h": 71,
+"kind": "shield",
+"elem": [
+"holy"
+],
+"hue": "green",
+"label": "06_Heal_Shield_Buffs Heal_Aura",
+"frames": 18
+},
+{
+"file": "aw/heal_burst_large__peak.png",
+"pack": "aw",
+"id": "heal_burst_large",
+"frame": "peak",
+"w": 70,
+"h": 133,
+"kind": "shield",
+"elem": [
+"holy"
+],
+"hue": "green",
+"label": "06_Heal_Shield_Buffs Heal_Burst",
+"frames": 18
+},
+{
+"file": "aw/heal_burst_large__alt.png",
+"pack": "aw",
+"id": "heal_burst_large",
+"frame": "alt",
+"w": 69,
+"h": 100,
+"kind": "shield",
+"elem": [
+"holy"
+],
+"hue": "green",
+"label": "06_Heal_Shield_Buffs Heal_Burst",
+"frames": 18
+},
+{
+"file": "aw/level_up_large__peak.png",
+"pack": "aw",
+"id": "level_up_large",
+"frame": "peak",
+"w": 61,
+"h": 183,
+"kind": "shield",
+"elem": [
+"holy"
+],
+"hue": "orange",
+"label": "06_Heal_Shield_Buffs Level_Up",
+"frames": 18
+},
+{
+"file": "aw/level_up_large__alt.png",
+"pack": "aw",
+"id": "level_up_large",
+"frame": "alt",
+"w": 61,
+"h": 183,
+"kind": "shield",
+"elem": [
+"holy"
+],
+"hue": "orange",
+"label": "06_Heal_Shield_Buffs Level_Up",
+"frames": 18
+},
+{
+"file": "aw/magic_sparkle_burst_large__peak.png",
+"pack": "aw",
+"id": "magic_sparkle_burst_large",
+"frame": "peak",
+"w": 49,
+"h": 49,
+"kind": "shield",
+"elem": [
+"lightning",
+"holy",
+"arcane"
+],
+"hue": "orange",
+"label": "06_Heal_Shield_Buffs Magic_Sparkle_Burst",
+"frames": 18
+},
+{
+"file": "aw/magic_sparkle_burst_large__alt.png",
+"pack": "aw",
+"id": "magic_sparkle_burst_large",
+"frame": "alt",
+"w": 75,
+"h": 72,
+"kind": "shield",
+"elem": [
+"lightning",
+"holy",
+"arcane"
+],
+"hue": "orange",
+"label": "06_Heal_Shield_Buffs Magic_Sparkle_Burst",
+"frames": 18
+},
+{
+"file": "aw/shield_break_large__peak.png",
+"pack": "aw",
+"id": "shield_break_large",
+"frame": "peak",
+"w": 66,
+"h": 67,
+"kind": "shield",
+"elem": [
+"holy"
+],
+"hue": "blue",
+"label": "06_Heal_Shield_Buffs Shield_Break",
+"frames": 18
+},
+{
+"file": "aw/shield_break_large__alt.png",
+"pack": "aw",
+"id": "shield_break_large",
+"frame": "alt",
+"w": 64,
+"h": 64,
+"kind": "shield",
+"elem": [
+"holy"
+],
+"hue": "blue",
+"label": "06_Heal_Shield_Buffs Shield_Break",
+"frames": 18
+},
+{
+"file": "aw/shield_bubble_large__peak.png",
+"pack": "aw",
+"id": "shield_bubble_large",
+"frame": "peak",
+"w": 68,
+"h": 67,
+"kind": "shield",
+"elem": [
+"water",
+"holy"
+],
+"hue": "blue",
+"label": "06_Heal_Shield_Buffs Shield_Bubble",
+"frames": 18
+},
+{
+"file": "aw/shield_bubble_large__alt.png",
+"pack": "aw",
+"id": "shield_bubble_large",
+"frame": "alt",
+"w": 65,
+"h": 64,
+"kind": "shield",
+"elem": [
+"water",
+"holy"
+],
+"hue": "blue",
+"label": "06_Heal_Shield_Buffs Shield_Bubble",
+"frames": 18
+},
+{
+"file": "aw/shield_hit_large__peak.png",
+"pack": "aw",
+"id": "shield_hit_large",
+"frame": "peak",
+"w": 65,
+"h": 64,
+"kind": "shield",
+"elem": [
+"holy"
+],
+"hue": "blue",
+"label": "06_Heal_Shield_Buffs Shield_Hit",
+"frames": 18
+},
+{
+"file": "aw/shield_hit_large__alt.png",
+"pack": "aw",
+"id": "shield_hit_large",
+"frame": "alt",
+"w": 64,
+"h": 65,
+"kind": "shield",
+"elem": [
+"holy"
+],
+"hue": "blue",
+"label": "06_Heal_Shield_Buffs Shield_Hit",
+"frames": 18
+},
+{
+"file": "aw/teleport_in_large__peak.png",
+"pack": "aw",
+"id": "teleport_in_large",
+"frame": "peak",
+"w": 40,
+"h": 106,
+"kind": "shield",
+"elem": [
+"holy",
+"arcane"
+],
+"hue": "pink",
+"label": "06_Heal_Shield_Buffs Teleport_In",
+"frames": 18
+},
+{
+"file": "aw/teleport_in_large__alt.png",
+"pack": "aw",
+"id": "teleport_in_large",
+"frame": "alt",
+"w": 39,
+"h": 106,
+"kind": "shield",
+"elem": [
+"holy",
+"arcane"
+],
+"hue": "pink",
+"label": "06_Heal_Shield_Buffs Teleport_In",
+"frames": 18
+},
+{
+"file": "aw/teleport_out_large__peak.png",
+"pack": "aw",
+"id": "teleport_out_large",
+"frame": "peak",
+"w": 39,
+"h": 73,
+"kind": "shield",
+"elem": [
+"holy",
+"arcane"
+],
+"hue": "pink",
+"label": "06_Heal_Shield_Buffs Teleport_Out",
+"frames": 18
+},
+{
+"file": "aw/teleport_out_large__alt.png",
+"pack": "aw",
+"id": "teleport_out_large",
+"frame": "alt",
+"w": 39,
+"h": 85,
+"kind": "shield",
+"elem": [
+"holy",
+"arcane"
+],
+"hue": "pink",
+"label": "06_Heal_Shield_Buffs Teleport_Out",
+"frames": 18
+},
+{
+"file": "aw/dust_dash_large__peak.png",
+"pack": "aw",
+"id": "dust_dash_large",
+"frame": "peak",
+"w": 88,
+"h": 26,
+"kind": "slash",
+"elem": [
+"wind",
+"earth"
+],
+"hue": "orange",
+"label": "07_Smoke_Dust Dust_Dash",
+"frames": 18
+},
+{
+"file": "aw/dust_dash_large__alt.png",
+"pack": "aw",
+"id": "dust_dash_large",
+"frame": "alt",
+"w": 80,
+"h": 23,
+"kind": "slash",
+"elem": [
+"wind",
+"earth"
+],
+"hue": "orange",
+"label": "07_Smoke_Dust Dust_Dash",
+"frames": 18
+},
+{
+"file": "aw/dust_jump_large__peak.png",
+"pack": "aw",
+"id": "dust_jump_large",
+"frame": "peak",
+"w": 75,
+"h": 24,
+"kind": "smoke",
+"elem": [
+"earth"
+],
+"hue": "orange",
+"label": "07_Smoke_Dust Dust_Jump",
+"frames": 17
+},
+{
+"file": "aw/dust_jump_large__alt.png",
+"pack": "aw",
+"id": "dust_jump_large",
+"frame": "alt",
+"w": 76,
+"h": 23,
+"kind": "smoke",
+"elem": [
+"earth"
+],
+"hue": "orange",
+"label": "07_Smoke_Dust Dust_Jump",
+"frames": 17
+},
+{
+"file": "aw/dust_land_large__peak.png",
+"pack": "aw",
+"id": "dust_land_large",
+"frame": "peak",
+"w": 80,
+"h": 22,
+"kind": "smoke",
+"elem": [
+"earth"
+],
+"hue": "orange",
+"label": "07_Smoke_Dust Dust_Land",
+"frames": 18
+},
+{
+"file": "aw/dust_land_large__alt.png",
+"pack": "aw",
+"id": "dust_land_large",
+"frame": "alt",
+"w": 72,
+"h": 19,
+"kind": "smoke",
+"elem": [
+"earth"
+],
+"hue": "orange",
+"label": "07_Smoke_Dust Dust_Land",
+"frames": 18
+},
+{
+"file": "aw/dust_run_large__peak.png",
+"pack": "aw",
+"id": "dust_run_large",
+"frame": "peak",
+"w": 43,
+"h": 23,
+"kind": "smoke",
+"elem": [
+"earth"
+],
+"hue": "orange",
+"label": "07_Smoke_Dust Dust_Run",
+"frames": 12
+},
+{
+"file": "aw/smoke_pop_large__peak.png",
+"pack": "aw",
+"id": "smoke_pop_large",
+"frame": "peak",
+"w": 30,
+"h": 26,
+"kind": "smoke",
+"elem": [
+"earth"
+],
+"hue": "blue",
+"label": "07_Smoke_Dust Smoke_Pop",
+"frames": 17
+},
+{
+"file": "aw/smoke_pop_large__alt.png",
+"pack": "aw",
+"id": "smoke_pop_large",
+"frame": "alt",
+"w": 29,
+"h": 25,
+"kind": "smoke",
+"elem": [
+"earth"
+],
+"hue": "blue",
+"label": "07_Smoke_Dust Smoke_Pop",
+"frames": 17
+},
+{
+"file": "aw/smoke_puff_large__peak.png",
+"pack": "aw",
+"id": "smoke_puff_large",
+"frame": "peak",
+"w": 74,
+"h": 70,
+"kind": "smoke",
+"elem": [
+"earth"
+],
+"hue": "blue",
+"label": "07_Smoke_Dust Smoke_Puff",
+"frames": 18
+},
+{
+"file": "aw/smoke_puff_large__alt.png",
+"pack": "aw",
+"id": "smoke_puff_large",
+"frame": "alt",
+"w": 73,
+"h": 67,
+"kind": "smoke",
+"elem": [
+"earth"
+],
+"hue": "blue",
+"label": "07_Smoke_Dust Smoke_Puff",
+"frames": 18
+},
+{
+"file": "aw/smoke_rising_large__peak.png",
+"pack": "aw",
+"id": "smoke_rising_large",
+"frame": "peak",
+"w": 39,
+"h": 77,
+"kind": "smoke",
+"elem": [
+"earth"
+],
+"hue": "blue",
+"label": "07_Smoke_Dust Smoke_Rising",
+"frames": 18
+},
+{
+"file": "aw/smoke_rising_large__alt.png",
+"pack": "aw",
+"id": "smoke_rising_large",
+"frame": "alt",
+"w": 33,
+"h": 80,
+"kind": "smoke",
+"elem": [
+"earth"
+],
+"hue": "blue",
+"label": "07_Smoke_Dust Smoke_Rising",
+"frames": 18
+},
+{
+"file": "aw/spawn_poof_large__peak.png",
+"pack": "aw",
+"id": "spawn_poof_large",
+"frame": "peak",
+"w": 77,
+"h": 71,
+"kind": "aura",
+"elem": [
+"earth"
+],
+"hue": "white",
+"label": "07_Smoke_Dust Spawn_Poof",
+"frames": 18
+},
+{
+"file": "aw/spawn_poof_large__alt.png",
+"pack": "aw",
+"id": "spawn_poof_large",
+"frame": "alt",
+"w": 78,
+"h": 77,
+"kind": "aura",
+"elem": [
+"earth"
+],
+"hue": "blue",
+"label": "07_Smoke_Dust Spawn_Poof",
+"frames": 18
+},
+{
+"file": "aw/steam_burst_large__peak.png",
+"pack": "aw",
+"id": "steam_burst_large",
+"frame": "peak",
+"w": 45,
+"h": 99,
+"kind": "explosion",
+"elem": [
+"earth"
+],
+"hue": "white",
+"label": "07_Smoke_Dust Steam_Burst",
+"frames": 19
+},
+{
+"file": "aw/steam_burst_large__alt.png",
+"pack": "aw",
+"id": "steam_burst_large",
+"frame": "alt",
+"w": 47,
+"h": 117,
+"kind": "explosion",
+"elem": [
+"earth"
+],
+"hue": "white",
+"label": "07_Smoke_Dust Steam_Burst",
+"frames": 19
+},
+{
+"file": "aw/bleed_drips_large__peak.png",
+"pack": "aw",
+"id": "bleed_drips_large",
+"frame": "peak",
+"w": 54,
+"h": 83,
+"kind": "status",
+"elem": [
+"blood"
+],
+"hue": "red",
+"label": "08_Status Bleed_Drips",
+"frames": 18
+},
+{
+"file": "aw/bleed_drips_large__alt.png",
+"pack": "aw",
+"id": "bleed_drips_large",
+"frame": "alt",
+"w": 49,
+"h": 22,
+"kind": "status",
+"elem": [
+"blood"
+],
+"hue": "red",
+"label": "08_Status Bleed_Drips",
+"frames": 18
+},
+{
+"file": "aw/charm_hearts_large__peak.png",
+"pack": "aw",
+"id": "charm_hearts_large",
+"frame": "peak",
+"w": 37,
+"h": 87,
+"kind": "status",
+"elem": [],
+"hue": "pink",
+"label": "08_Status Charm_Hearts",
+"frames": 18
+},
+{
+"file": "aw/charm_hearts_large__alt.png",
+"pack": "aw",
+"id": "charm_hearts_large",
+"frame": "alt",
+"w": 33,
+"h": 73,
+"kind": "status",
+"elem": [],
+"hue": "pink",
+"label": "08_Status Charm_Hearts",
+"frames": 18
+},
+{
+"file": "aw/confuse_spiral_large__peak.png",
+"pack": "aw",
+"id": "confuse_spiral_large",
+"frame": "peak",
+"w": 66,
+"h": 41,
+"kind": "status",
+"elem": [],
+"hue": "purple",
+"label": "08_Status Confuse_Spiral",
+"frames": 18
+},
+{
+"file": "aw/confuse_spiral_large__alt.png",
+"pack": "aw",
+"id": "confuse_spiral_large",
+"frame": "alt",
+"w": 66,
+"h": 41,
+"kind": "status",
+"elem": [],
+"hue": "purple",
+"label": "08_Status Confuse_Spiral",
+"frames": 18
+},
+{
+"file": "aw/fire_burnstatus_large__peak.png",
+"pack": "aw",
+"id": "fire_burnstatus_large",
+"frame": "peak",
+"w": 14,
+"h": 43,
+"kind": "status",
+"elem": [
+"fire"
+],
+"hue": "red",
+"label": "08_Status Fire_BurnStatus",
+"frames": 8
+},
+{
+"file": "aw/fire_burnstatus_large__alt.png",
+"pack": "aw",
+"id": "fire_burnstatus_large",
+"frame": "alt",
+"w": 16,
+"h": 41,
+"kind": "status",
+"elem": [
+"fire"
+],
+"hue": "red",
+"label": "08_Status Fire_BurnStatus",
+"frames": 8
+},
+{
+"file": "aw/ice_freezesnap_large__peak.png",
+"pack": "aw",
+"id": "ice_freezesnap_large",
+"frame": "peak",
+"w": 35,
+"h": 29,
+"kind": "status",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "08_Status Ice_FreezeSnap",
+"frames": 5
+},
+{
+"file": "aw/ice_freezesnap_large__alt.png",
+"pack": "aw",
+"id": "ice_freezesnap_large",
+"frame": "alt",
+"w": 34,
+"h": 33,
+"kind": "status",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "08_Status Ice_FreezeSnap",
+"frames": 5
+},
+{
+"file": "aw/ice_frozensparkle_large__peak.png",
+"pack": "aw",
+"id": "ice_frozensparkle_large",
+"frame": "peak",
+"w": 33,
+"h": 24,
+"kind": "impact",
+"elem": [
+"ice",
+"lightning"
+],
+"hue": "blue",
+"label": "08_Status Ice_FrozenSparkle",
+"frames": 8
+},
+{
+"file": "aw/ice_frozensparkle_large__alt.png",
+"pack": "aw",
+"id": "ice_frozensparkle_large",
+"frame": "alt",
+"w": 24,
+"h": 48,
+"kind": "impact",
+"elem": [
+"ice",
+"lightning"
+],
+"hue": "blue",
+"label": "08_Status Ice_FrozenSparkle",
+"frames": 8
+},
+{
+"file": "aw/poison_bubbles_large__peak.png",
+"pack": "aw",
+"id": "poison_bubbles_large",
+"frame": "peak",
+"w": 28,
+"h": 55,
+"kind": "status",
+"elem": [
+"water",
+"poison"
+],
+"hue": "green",
+"label": "08_Status Poison_Bubbles",
+"frames": 18
+},
+{
+"file": "aw/poison_bubbles_large__alt.png",
+"pack": "aw",
+"id": "poison_bubbles_large",
+"frame": "alt",
+"w": 31,
+"h": 41,
+"kind": "status",
+"elem": [
+"water",
+"poison"
+],
+"hue": "green",
+"label": "08_Status Poison_Bubbles",
+"frames": 18
+},
+{
+"file": "aw/shock_sparks_large__peak.png",
+"pack": "aw",
+"id": "shock_sparks_large",
+"frame": "peak",
+"w": 70,
+"h": 76,
+"kind": "impact",
+"elem": [
+"lightning"
+],
+"hue": "pink",
+"label": "08_Status Shock_Sparks",
+"frames": 18
+},
+{
+"file": "aw/shock_sparks_large__alt.png",
+"pack": "aw",
+"id": "shock_sparks_large",
+"frame": "alt",
+"w": 28,
+"h": 70,
+"kind": "impact",
+"elem": [
+"lightning"
+],
+"hue": "orange",
+"label": "08_Status Shock_Sparks",
+"frames": 18
+},
+{
+"file": "aw/sleep_zzz_large__peak.png",
+"pack": "aw",
+"id": "sleep_zzz_large",
+"frame": "peak",
+"w": 41,
+"h": 74,
+"kind": "status",
+"elem": [],
+"hue": "blue",
+"label": "08_Status Sleep_Zzz",
+"frames": 18
+},
+{
+"file": "aw/sleep_zzz_large__alt.png",
+"pack": "aw",
+"id": "sleep_zzz_large",
+"frame": "alt",
+"w": 40,
+"h": 57,
+"kind": "status",
+"elem": [],
+"hue": "blue",
+"label": "08_Status Sleep_Zzz",
+"frames": 18
+},
+{
+"file": "aw/stun_stars_large__peak.png",
+"pack": "aw",
+"id": "stun_stars_large",
+"frame": "peak",
+"w": 95,
+"h": 41,
+"kind": "status",
+"elem": [],
+"hue": "orange",
+"label": "08_Status Stun_Stars",
+"frames": 18
+},
+{
+"file": "aw/stun_stars_large__alt.png",
+"pack": "aw",
+"id": "stun_stars_large",
+"frame": "alt",
+"w": 99,
+"h": 39,
+"kind": "status",
+"elem": [],
+"hue": "orange",
+"label": "08_Status Stun_Stars",
+"frames": 18
+},
+{
+"file": "aw/chest_burst_large__peak.png",
+"pack": "aw",
+"id": "chest_burst_large",
+"frame": "peak",
+"w": 60,
+"h": 44,
+"kind": "explosion",
+"elem": [
+"lightning"
+],
+"hue": "orange",
+"label": "09_Pickups_Sparkles Chest_Burst",
+"frames": 18
+},
+{
+"file": "aw/chest_burst_large__alt.png",
+"pack": "aw",
+"id": "chest_burst_large",
+"frame": "alt",
+"w": 99,
+"h": 45,
+"kind": "explosion",
+"elem": [
+"lightning"
+],
+"hue": "orange",
+"label": "09_Pickups_Sparkles Chest_Burst",
+"frames": 18
+},
+{
+"file": "aw/coin_sparkle_large__peak.png",
+"pack": "aw",
+"id": "coin_sparkle_large",
+"frame": "peak",
+"w": 17,
+"h": 19,
+"kind": "impact",
+"elem": [
+"lightning"
+],
+"hue": "red",
+"label": "09_Pickups_Sparkles Coin_Sparkle",
+"frames": 12
+},
+{
+"file": "aw/coin_sparkle_large__alt.png",
+"pack": "aw",
+"id": "coin_sparkle_large",
+"frame": "alt",
+"w": 17,
+"h": 19,
+"kind": "impact",
+"elem": [
+"lightning"
+],
+"hue": "red",
+"label": "09_Pickups_Sparkles Coin_Sparkle",
+"frames": 12
+},
+{
+"file": "aw/collect_ring_large__peak.png",
+"pack": "aw",
+"id": "collect_ring_large",
+"frame": "peak",
+"w": 32,
+"h": 26,
+"kind": "impact",
+"elem": [
+"lightning"
+],
+"hue": "orange",
+"label": "09_Pickups_Sparkles Collect_Ring",
+"frames": 18
+},
+{
+"file": "aw/collect_ring_large__alt.png",
+"pack": "aw",
+"id": "collect_ring_large",
+"frame": "alt",
+"w": 26,
+"h": 14,
+"kind": "impact",
+"elem": [
+"lightning"
+],
+"hue": "orange",
+"label": "09_Pickups_Sparkles Collect_Ring",
+"frames": 18
+},
+{
+"file": "aw/confetti_burst_large__peak.png",
+"pack": "aw",
+"id": "confetti_burst_large",
+"frame": "peak",
+"w": 101,
+"h": 47,
+"kind": "explosion",
+"elem": [
+"lightning"
+],
+"hue": "red",
+"label": "09_Pickups_Sparkles Confetti_Burst",
+"frames": 18
+},
+{
+"file": "aw/confetti_burst_large__alt.png",
+"pack": "aw",
+"id": "confetti_burst_large",
+"frame": "alt",
+"w": 75,
+"h": 38,
+"kind": "explosion",
+"elem": [
+"lightning"
+],
+"hue": "red",
+"label": "09_Pickups_Sparkles Confetti_Burst",
+"frames": 18
+},
+{
+"file": "aw/firework_large__peak.png",
+"pack": "aw",
+"id": "firework_large",
+"frame": "peak",
+"w": 60,
+"h": 57,
+"kind": "explosion",
+"elem": [
+"fire",
+"lightning"
+],
+"hue": "blue",
+"label": "09_Pickups_Sparkles Firework",
+"frames": 18
+},
+{
+"file": "aw/firework_large__alt.png",
+"pack": "aw",
+"id": "firework_large",
+"frame": "alt",
+"w": 31,
+"h": 31,
+"kind": "explosion",
+"elem": [
+"fire",
+"lightning"
+],
+"hue": "blue",
+"label": "09_Pickups_Sparkles Firework",
+"frames": 18
+},
+{
+"file": "aw/item_shine_large__peak.png",
+"pack": "aw",
+"id": "item_shine_large",
+"frame": "peak",
+"w": 14,
+"h": 15,
+"kind": "impact",
+"elem": [
+"lightning"
+],
+"hue": "red",
+"label": "09_Pickups_Sparkles Item_Shine",
+"frames": 18
+},
+{
+"file": "aw/item_shine_large__alt.png",
+"pack": "aw",
+"id": "item_shine_large",
+"frame": "alt",
+"w": 22,
+"h": 22,
+"kind": "impact",
+"elem": [
+"lightning"
+],
+"hue": "yellow",
+"label": "09_Pickups_Sparkles Item_Shine",
+"frames": 18
+},
+{
+"file": "aw/pickup_flash_large__peak.png",
+"pack": "aw",
+"id": "pickup_flash_large",
+"frame": "peak",
+"w": 38,
+"h": 38,
+"kind": "impact",
+"elem": [
+"lightning"
+],
+"hue": "orange",
+"label": "09_Pickups_Sparkles Pickup_Flash",
+"frames": 18
+},
+{
+"file": "aw/pickup_flash_large__alt.png",
+"pack": "aw",
+"id": "pickup_flash_large",
+"frame": "alt",
+"w": 36,
+"h": 33,
+"kind": "impact",
+"elem": [
+"lightning"
+],
+"hue": "orange",
+"label": "09_Pickups_Sparkles Pickup_Flash",
+"frames": 18
+},
+{
+"file": "aw/sparkle_trail_large__peak.png",
+"pack": "aw",
+"id": "sparkle_trail_large",
+"frame": "peak",
+"w": 39,
+"h": 22,
+"kind": "impact",
+"elem": [
+"lightning"
+],
+"hue": "red",
+"label": "09_Pickups_Sparkles Sparkle_Trail",
+"frames": 18
+},
+{
+"file": "aw/sparkle_trail_large__alt.png",
+"pack": "aw",
+"id": "sparkle_trail_large",
+"frame": "alt",
+"w": 40,
+"h": 19,
+"kind": "impact",
+"elem": [
+"lightning"
+],
+"hue": "red",
+"label": "09_Pickups_Sparkles Sparkle_Trail",
+"frames": 18
+},
+{
+"file": "aw/star_twinkle_large__peak.png",
+"pack": "aw",
+"id": "star_twinkle_large",
+"frame": "peak",
+"w": 17,
+"h": 19,
+"kind": "impact",
+"elem": [
+"lightning"
+],
+"hue": "red",
+"label": "09_Pickups_Sparkles Star_Twinkle",
+"frames": 18
+},
+{
+"file": "aw/star_twinkle_large__alt.png",
+"pack": "aw",
+"id": "star_twinkle_large",
+"frame": "alt",
+"w": 14,
+"h": 15,
+"kind": "impact",
+"elem": [
+"lightning"
+],
+"hue": "red",
+"label": "09_Pickups_Sparkles Star_Twinkle",
+"frames": 18
+},
+{
+"file": "aw/xp_orb_large__peak.png",
+"pack": "aw",
+"id": "xp_orb_large",
+"frame": "peak",
+"w": 19,
+"h": 19,
+"kind": "impact",
+"elem": [
+"lightning"
+],
+"hue": "cyan",
+"label": "09_Pickups_Sparkles XP_Orb",
+"frames": 18
+},
+{
+"file": "pvfx/arcane_beam__peak.png",
+"pack": "pvfx",
+"id": "arcane_beam",
+"frame": "peak",
+"w": 148,
+"h": 43,
+"kind": "pillar",
+"elem": [
+"lightning",
+"arcane"
+],
+"hue": "purple",
+"label": "arcane arcane-beam",
+"frames": 8
+},
+{
+"file": "pvfx/arcane_beam__alt.png",
+"pack": "pvfx",
+"id": "arcane_beam",
+"frame": "alt",
+"w": 151,
+"h": 62,
+"kind": "pillar",
+"elem": [
+"lightning",
+"arcane"
+],
+"hue": "purple",
+"label": "arcane arcane-beam",
+"frames": 8
+},
+{
+"file": "pvfx/arcane_orb_projectile__peak.png",
+"pack": "pvfx",
+"id": "arcane_orb_projectile",
+"frame": "peak",
+"w": 41,
+"h": 24,
+"kind": "projectile",
+"elem": [
+"lightning",
+"arcane"
+],
+"hue": "purple",
+"label": "arcane arcane-orb-projectile",
+"frames": 23
+},
+{
+"file": "pvfx/blink_dash__peak.png",
+"pack": "pvfx",
+"id": "blink_dash",
+"frame": "peak",
+"w": 122,
+"h": 44,
+"kind": "slash",
+"elem": [
+"lightning",
+"wind",
+"arcane"
+],
+"hue": "cyan",
+"label": "arcane blink-dash",
+"frames": 22
+},
+{
+"file": "pvfx/blink_dash__alt.png",
+"pack": "pvfx",
+"id": "blink_dash",
+"frame": "alt",
+"w": 31,
+"h": 41,
+"kind": "slash",
+"elem": [
+"lightning",
+"wind",
+"arcane"
+],
+"hue": "cyan",
+"label": "arcane blink-dash",
+"frames": 22
+},
+{
+"file": "pvfx/blink_out__peak.png",
+"pack": "pvfx",
+"id": "blink_out",
+"frame": "peak",
+"w": 41,
+"h": 74,
+"kind": "burst",
+"elem": [
+"lightning",
+"arcane"
+],
+"hue": "purple",
+"label": "arcane blink-out",
+"frames": 19
+},
+{
+"file": "pvfx/magic_circle__peak.png",
+"pack": "pvfx",
+"id": "magic_circle",
+"frame": "peak",
+"w": 87,
+"h": 62,
+"kind": "burst",
+"elem": [
+"lightning",
+"arcane"
+],
+"hue": "white",
+"label": "arcane magic-circle",
+"frames": 20
+},
+{
+"file": "pvfx/portal_summon__peak.png",
+"pack": "pvfx",
+"id": "portal_summon",
+"frame": "peak",
+"w": 67,
+"h": 99,
+"kind": "aura",
+"elem": [
+"lightning",
+"arcane"
+],
+"hue": "blue",
+"label": "arcane portal-summon",
+"frames": 22
+},
+{
+"file": "pvfx/rune_trap__peak.png",
+"pack": "pvfx",
+"id": "rune_trap",
+"frame": "peak",
+"w": 44,
+"h": 44,
+"kind": "burst",
+"elem": [
+"lightning",
+"arcane"
+],
+"hue": "cyan",
+"label": "arcane rune-trap",
+"frames": 19
+},
+{
+"file": "pvfx/shield_shatter__peak.png",
+"pack": "pvfx",
+"id": "shield_shatter",
+"frame": "peak",
+"w": 38,
+"h": 29,
+"kind": "shield",
+"elem": [
+"lightning",
+"arcane"
+],
+"hue": "pink",
+"label": "arcane shield-shatter",
+"frames": 17
+},
+{
+"file": "pvfx/shield_shatter__alt.png",
+"pack": "pvfx",
+"id": "shield_shatter",
+"frame": "alt",
+"w": 43,
+"h": 29,
+"kind": "shield",
+"elem": [
+"lightning",
+"arcane"
+],
+"hue": "purple",
+"label": "arcane shield-shatter",
+"frames": 17
+},
+{
+"file": "pvfx/teleport_in__peak.png",
+"pack": "pvfx",
+"id": "teleport_in",
+"frame": "peak",
+"w": 31,
+"h": 59,
+"kind": "aura",
+"elem": [
+"lightning",
+"arcane"
+],
+"hue": "purple",
+"label": "arcane teleport-in",
+"frames": 19
+},
+{
+"file": "pvfx/teleport_in__alt.png",
+"pack": "pvfx",
+"id": "teleport_in",
+"frame": "alt",
+"w": 33,
+"h": 41,
+"kind": "aura",
+"elem": [
+"lightning",
+"arcane"
+],
+"hue": "purple",
+"label": "arcane teleport-in",
+"frames": 19
+},
+{
+"file": "pvfx/arcane_burst__peak.png",
+"pack": "pvfx",
+"id": "arcane_burst",
+"frame": "peak",
+"w": 40,
+"h": 40,
+"kind": "explosion",
+"elem": [
+"lightning",
+"arcane"
+],
+"hue": "white",
+"label": "explosions arcane-burst",
+"frames": 20
+},
+{
+"file": "pvfx/arcane_burst__alt.png",
+"pack": "pvfx",
+"id": "arcane_burst",
+"frame": "alt",
+"w": 55,
+"h": 46,
+"kind": "explosion",
+"elem": [
+"lightning",
+"arcane"
+],
+"hue": "pink",
+"label": "explosions arcane-burst",
+"frames": 20
+},
+{
+"file": "pvfx/big_explosion__peak.png",
+"pack": "pvfx",
+"id": "big_explosion",
+"frame": "peak",
+"w": 90,
+"h": 65,
+"kind": "explosion",
+"elem": [],
+"hue": "yellow",
+"label": "explosions big-explosion",
+"frames": 18
+},
+{
+"file": "pvfx/big_explosion__alt.png",
+"pack": "pvfx",
+"id": "big_explosion",
+"frame": "alt",
+"w": 126,
+"h": 89,
+"kind": "explosion",
+"elem": [],
+"hue": "pink",
+"label": "explosions big-explosion",
+"frames": 18
+},
+{
+"file": "pvfx/fire_nova__peak.png",
+"pack": "pvfx",
+"id": "fire_nova",
+"frame": "peak",
+"w": 77,
+"h": 32,
+"kind": "explosion",
+"elem": [
+"fire"
+],
+"hue": "orange",
+"label": "explosions fire-nova",
+"frames": 19
+},
+{
+"file": "pvfx/fire_nova__alt.png",
+"pack": "pvfx",
+"id": "fire_nova",
+"frame": "alt",
+"w": 89,
+"h": 36,
+"kind": "explosion",
+"elem": [
+"fire"
+],
+"hue": "red",
+"label": "explosions fire-nova",
+"frames": 19
+},
+{
+"file": "pvfx/firework_burst__peak.png",
+"pack": "pvfx",
+"id": "firework_burst",
+"frame": "peak",
+"w": 22,
+"h": 23,
+"kind": "explosion",
+"elem": [
+"fire"
+],
+"hue": "white",
+"label": "explosions firework-burst",
+"frames": 23
+},
+{
+"file": "pvfx/implosion__peak.png",
+"pack": "pvfx",
+"id": "implosion",
+"frame": "peak",
+"w": 76,
+"h": 78,
+"kind": "explosion",
+"elem": [],
+"hue": "orange",
+"label": "explosions implosion",
+"frames": 28
+},
+{
+"file": "pvfx/implosion__alt.png",
+"pack": "pvfx",
+"id": "implosion",
+"frame": "alt",
+"w": 56,
+"h": 48,
+"kind": "explosion",
+"elem": [],
+"hue": "orange",
+"label": "explosions implosion",
+"frames": 28
+},
+{
+"file": "pvfx/small_explosion__peak.png",
+"pack": "pvfx",
+"id": "small_explosion",
+"frame": "peak",
+"w": 45,
+"h": 28,
+"kind": "explosion",
+"elem": [],
+"hue": "yellow",
+"label": "explosions small-explosion",
+"frames": 14
+},
+{
+"file": "pvfx/small_explosion__alt.png",
+"pack": "pvfx",
+"id": "small_explosion",
+"frame": "alt",
+"w": 61,
+"h": 40,
+"kind": "explosion",
+"elem": [],
+"hue": "red",
+"label": "explosions small-explosion",
+"frames": 14
+},
+{
+"file": "pvfx/campfire__peak.png",
+"pack": "pvfx",
+"id": "campfire",
+"frame": "peak",
+"w": 36,
+"h": 52,
+"kind": "ground",
+"elem": [
+"fire"
+],
+"hue": "orange",
+"label": "fire campfire",
+"frames": 12
+},
+{
+"file": "pvfx/campfire__alt.png",
+"pack": "pvfx",
+"id": "campfire",
+"frame": "alt",
+"w": 36,
+"h": 53,
+"kind": "ground",
+"elem": [
+"fire"
+],
+"hue": "orange",
+"label": "fire campfire",
+"frames": 12
+},
+{
+"file": "pvfx/fire_pillar__peak.png",
+"pack": "pvfx",
+"id": "fire_pillar",
+"frame": "peak",
+"w": 54,
+"h": 108,
+"kind": "pillar",
+"elem": [
+"fire",
+"holy"
+],
+"hue": "orange",
+"label": "fire fire-pillar",
+"frames": 24
+},
+{
+"file": "pvfx/fire_pillar__alt.png",
+"pack": "pvfx",
+"id": "fire_pillar",
+"frame": "alt",
+"w": 46,
+"h": 109,
+"kind": "pillar",
+"elem": [
+"fire",
+"holy"
+],
+"hue": "orange",
+"label": "fire fire-pillar",
+"frames": 24
+},
+{
+"file": "pvfx/fire_tornado__peak.png",
+"pack": "pvfx",
+"id": "fire_tornado",
+"frame": "peak",
+"w": 41,
+"h": 79,
+"kind": "ground",
+"elem": [
+"fire",
+"wind"
+],
+"hue": "orange",
+"label": "fire fire-tornado",
+"frames": 16
+},
+{
+"file": "pvfx/fire_tornado__alt.png",
+"pack": "pvfx",
+"id": "fire_tornado",
+"frame": "alt",
+"w": 41,
+"h": 77,
+"kind": "ground",
+"elem": [
+"fire",
+"wind"
+],
+"hue": "red",
+"label": "fire fire-tornado",
+"frames": 16
+},
+{
+"file": "pvfx/fireball_impact__peak.png",
+"pack": "pvfx",
+"id": "fireball_impact",
+"frame": "peak",
+"w": 36,
+"h": 37,
+"kind": "impact",
+"elem": [
+"fire"
+],
+"hue": "white",
+"label": "fire fireball-impact",
+"frames": 15
+},
+{
+"file": "pvfx/fireball_impact__alt.png",
+"pack": "pvfx",
+"id": "fireball_impact",
+"frame": "alt",
+"w": 65,
+"h": 28,
+"kind": "impact",
+"elem": [
+"fire"
+],
+"hue": "orange",
+"label": "fire fireball-impact",
+"frames": 15
+},
+{
+"file": "pvfx/flamethrower__peak.png",
+"pack": "pvfx",
+"id": "flamethrower",
+"frame": "peak",
+"w": 114,
+"h": 34,
+"kind": "burst",
+"elem": [
+"fire"
+],
+"hue": "orange",
+"label": "fire flamethrower",
+"frames": 16
+},
+{
+"file": "pvfx/flamethrower__alt.png",
+"pack": "pvfx",
+"id": "flamethrower",
+"frame": "alt",
+"w": 110,
+"h": 43,
+"kind": "burst",
+"elem": [
+"fire"
+],
+"hue": "orange",
+"label": "fire flamethrower",
+"frames": 16
+},
+{
+"file": "pvfx/ground_flames__peak.png",
+"pack": "pvfx",
+"id": "ground_flames",
+"frame": "peak",
+"w": 58,
+"h": 34,
+"kind": "ground",
+"elem": [
+"fire",
+"earth"
+],
+"hue": "orange",
+"label": "fire ground-flames",
+"frames": 16
+},
+{
+"file": "pvfx/ground_flames__alt.png",
+"pack": "pvfx",
+"id": "ground_flames",
+"frame": "alt",
+"w": 58,
+"h": 31,
+"kind": "ground",
+"elem": [
+"fire",
+"earth"
+],
+"hue": "red",
+"label": "fire ground-flames",
+"frames": 16
+},
+{
+"file": "pvfx/lava_burst__peak.png",
+"pack": "pvfx",
+"id": "lava_burst",
+"frame": "peak",
+"w": 46,
+"h": 60,
+"kind": "explosion",
+"elem": [
+"fire"
+],
+"hue": "yellow",
+"label": "fire lava-burst",
+"frames": 23
+},
+{
+"file": "pvfx/lava_burst__alt.png",
+"pack": "pvfx",
+"id": "lava_burst",
+"frame": "alt",
+"w": 29,
+"h": 48,
+"kind": "explosion",
+"elem": [
+"fire"
+],
+"hue": "orange",
+"label": "fire lava-burst",
+"frames": 23
+},
+{
+"file": "pvfx/meteor_strike__peak.png",
+"pack": "pvfx",
+"id": "meteor_strike",
+"frame": "peak",
+"w": 89,
+"h": 92,
+"kind": "explosion",
+"elem": [
+"fire"
+],
+"hue": "orange",
+"label": "fire meteor-strike",
+"frames": 26
+},
+{
+"file": "pvfx/meteor_strike__alt.png",
+"pack": "pvfx",
+"id": "meteor_strike",
+"frame": "alt",
+"w": 81,
+"h": 54,
+"kind": "explosion",
+"elem": [
+"fire"
+],
+"hue": "pink",
+"label": "fire meteor-strike",
+"frames": 26
+},
+{
+"file": "pvfx/angel_feathers__peak.png",
+"pack": "pvfx",
+"id": "angel_feathers",
+"frame": "peak",
+"w": 45,
+"h": 27,
+"kind": "aura",
+"elem": [
+"holy"
+],
+"hue": "yellow",
+"label": "holy angel-feathers",
+"frames": 21
+},
+{
+"file": "pvfx/barrier_block__peak.png",
+"pack": "pvfx",
+"id": "barrier_block",
+"frame": "peak",
+"w": 21,
+"h": 50,
+"kind": "shield",
+"elem": [
+"holy"
+],
+"hue": "yellow",
+"label": "holy barrier-block",
+"frames": 16
+},
+{
+"file": "pvfx/barrier_block__alt.png",
+"pack": "pvfx",
+"id": "barrier_block",
+"frame": "alt",
+"w": 33,
+"h": 48,
+"kind": "shield",
+"elem": [
+"holy"
+],
+"hue": "green",
+"label": "holy barrier-block",
+"frames": 16
+},
+{
+"file": "pvfx/divine_beam__peak.png",
+"pack": "pvfx",
+"id": "divine_beam",
+"frame": "peak",
+"w": 46,
+"h": 94,
+"kind": "pillar",
+"elem": [
+"holy",
+"nature"
+],
+"hue": "orange",
+"label": "holy divine-beam",
+"frames": 19
+},
+{
+"file": "pvfx/divine_beam__alt.png",
+"pack": "pvfx",
+"id": "divine_beam",
+"frame": "alt",
+"w": 34,
+"h": 93,
+"kind": "pillar",
+"elem": [
+"holy",
+"nature"
+],
+"hue": "orange",
+"label": "holy divine-beam",
+"frames": 19
+},
+{
+"file": "pvfx/holy_heal__peak.png",
+"pack": "pvfx",
+"id": "holy_heal",
+"frame": "peak",
+"w": 55,
+"h": 74,
+"kind": "aura",
+"elem": [
+"holy"
+],
+"hue": "white",
+"label": "holy holy-heal",
+"frames": 21
+},
+{
+"file": "pvfx/holy_smite__peak.png",
+"pack": "pvfx",
+"id": "holy_smite",
+"frame": "peak",
+"w": 59,
+"h": 116,
+"kind": "aura",
+"elem": [
+"holy"
+],
+"hue": "white",
+"label": "holy holy-smite",
+"frames": 14
+},
+{
+"file": "pvfx/holy_smite__alt.png",
+"pack": "pvfx",
+"id": "holy_smite",
+"frame": "alt",
+"w": 53,
+"h": 114,
+"kind": "aura",
+"elem": [
+"holy"
+],
+"hue": "yellow",
+"label": "holy holy-smite",
+"frames": 14
+},
+{
+"file": "pvfx/regen_aura__peak.png",
+"pack": "pvfx",
+"id": "regen_aura",
+"frame": "peak",
+"w": 32,
+"h": 41,
+"kind": "aura",
+"elem": [
+"holy"
+],
+"hue": "green",
+"label": "holy regen-aura",
+"frames": 16
+},
+{
+"file": "pvfx/regen_aura__alt.png",
+"pack": "pvfx",
+"id": "regen_aura",
+"frame": "alt",
+"w": 32,
+"h": 45,
+"kind": "aura",
+"elem": [
+"holy"
+],
+"hue": "green",
+"label": "holy regen-aura",
+"frames": 16
+},
+{
+"file": "pvfx/resurrect__peak.png",
+"pack": "pvfx",
+"id": "resurrect",
+"frame": "peak",
+"w": 47,
+"h": 80,
+"kind": "aura",
+"elem": [
+"holy"
+],
+"hue": "white",
+"label": "holy resurrect",
+"frames": 21
+},
+{
+"file": "pvfx/shield_bubble__peak.png",
+"pack": "pvfx",
+"id": "shield_bubble",
+"frame": "peak",
+"w": 66,
+"h": 77,
+"kind": "shield",
+"elem": [
+"water",
+"holy"
+],
+"hue": "green",
+"label": "holy shield-bubble",
+"frames": 16
+},
+{
+"file": "pvfx/shield_bubble__alt.png",
+"pack": "pvfx",
+"id": "shield_bubble",
+"frame": "alt",
+"w": 63,
+"h": 79,
+"kind": "shield",
+"elem": [
+"water",
+"holy"
+],
+"hue": "cyan",
+"label": "holy shield-bubble",
+"frames": 16
+},
+{
+"file": "pvfx/blizzard__peak.png",
+"pack": "pvfx",
+"id": "blizzard",
+"frame": "peak",
+"w": 72,
+"h": 50,
+"kind": "ground",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "ice blizzard",
+"frames": 16
+},
+{
+"file": "pvfx/blizzard__alt.png",
+"pack": "pvfx",
+"id": "blizzard",
+"frame": "alt",
+"w": 79,
+"h": 49,
+"kind": "ground",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "ice blizzard",
+"frames": 16
+},
+{
+"file": "pvfx/freeze_encase__peak.png",
+"pack": "pvfx",
+"id": "freeze_encase",
+"frame": "peak",
+"w": 50,
+"h": 53,
+"kind": "status",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "ice freeze-encase",
+"frames": 20
+},
+{
+"file": "pvfx/freeze_encase__alt.png",
+"pack": "pvfx",
+"id": "freeze_encase",
+"frame": "alt",
+"w": 51,
+"h": 54,
+"kind": "status",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "ice freeze-encase",
+"frames": 20
+},
+{
+"file": "pvfx/frost_breath__peak.png",
+"pack": "pvfx",
+"id": "frost_breath",
+"frame": "peak",
+"w": 90,
+"h": 34,
+"kind": "burst",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "ice frost-breath",
+"frames": 14
+},
+{
+"file": "pvfx/frost_breath__alt.png",
+"pack": "pvfx",
+"id": "frost_breath",
+"frame": "alt",
+"w": 86,
+"h": 39,
+"kind": "burst",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "ice frost-breath",
+"frames": 14
+},
+{
+"file": "pvfx/frost_nova__peak.png",
+"pack": "pvfx",
+"id": "frost_nova",
+"frame": "peak",
+"w": 87,
+"h": 62,
+"kind": "explosion",
+"elem": [
+"ice"
+],
+"hue": "white",
+"label": "ice frost-nova",
+"frames": 18
+},
+{
+"file": "pvfx/frost_nova__alt.png",
+"pack": "pvfx",
+"id": "frost_nova",
+"frame": "alt",
+"w": 99,
+"h": 39,
+"kind": "explosion",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "ice frost-nova",
+"frames": 18
+},
+{
+"file": "pvfx/ice_spike__peak.png",
+"pack": "pvfx",
+"id": "ice_spike",
+"frame": "peak",
+"w": 51,
+"h": 63,
+"kind": "ground",
+"elem": [
+"ice",
+"earth"
+],
+"hue": "white",
+"label": "ice ice-spike",
+"frames": 26
+},
+{
+"file": "pvfx/ice_spike__alt.png",
+"pack": "pvfx",
+"id": "ice_spike",
+"frame": "alt",
+"w": 51,
+"h": 59,
+"kind": "ground",
+"elem": [
+"ice",
+"earth"
+],
+"hue": "blue",
+"label": "ice ice-spike",
+"frames": 26
+},
+{
+"file": "pvfx/ice_wall__peak.png",
+"pack": "pvfx",
+"id": "ice_wall",
+"frame": "peak",
+"w": 74,
+"h": 42,
+"kind": "ground",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "ice ice-wall",
+"frames": 21
+},
+{
+"file": "pvfx/ice_wall__alt.png",
+"pack": "pvfx",
+"id": "ice_wall",
+"frame": "alt",
+"w": 74,
+"h": 39,
+"kind": "ground",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "ice ice-wall",
+"frames": 21
+},
+{
+"file": "pvfx/snowball_impact__peak.png",
+"pack": "pvfx",
+"id": "snowball_impact",
+"frame": "peak",
+"w": 36,
+"h": 42,
+"kind": "impact",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "ice snowball-impact",
+"frames": 20
+},
+{
+"file": "pvfx/snowball_impact__alt.png",
+"pack": "pvfx",
+"id": "snowball_impact",
+"frame": "alt",
+"w": 34,
+"h": 14,
+"kind": "impact",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "ice snowball-impact",
+"frames": 20
+},
+{
+"file": "pvfx/blood_splat__peak.png",
+"pack": "pvfx",
+"id": "blood_splat",
+"frame": "peak",
+"w": 80,
+"h": 101,
+"kind": "impact",
+"elem": [
+"blood"
+],
+"hue": "red",
+"label": "impacts blood-splat",
+"frames": 16
+},
+{
+"file": "pvfx/blood_splat__alt.png",
+"pack": "pvfx",
+"id": "blood_splat",
+"frame": "alt",
+"w": 113,
+"h": 117,
+"kind": "impact",
+"elem": [
+"blood"
+],
+"hue": "red",
+"label": "impacts blood-splat",
+"frames": 16
+},
+{
+"file": "pvfx/crit_hit__peak.png",
+"pack": "pvfx",
+"id": "crit_hit",
+"frame": "peak",
+"w": 80,
+"h": 49,
+"kind": "impact",
+"elem": [],
+"hue": "orange",
+"label": "impacts crit-hit",
+"frames": 11
+},
+{
+"file": "pvfx/crit_hit__alt.png",
+"pack": "pvfx",
+"id": "crit_hit",
+"frame": "alt",
+"w": 85,
+"h": 57,
+"kind": "impact",
+"elem": [],
+"hue": "orange",
+"label": "impacts crit-hit",
+"frames": 11
+},
+{
+"file": "pvfx/ground_slam__peak.png",
+"pack": "pvfx",
+"id": "ground_slam",
+"frame": "peak",
+"w": 100,
+"h": 47,
+"kind": "impact",
+"elem": [
+"earth"
+],
+"hue": "white",
+"label": "impacts ground-slam",
+"frames": 19
+},
+{
+"file": "pvfx/hit_spark__peak.png",
+"pack": "pvfx",
+"id": "hit_spark",
+"frame": "peak",
+"w": 30,
+"h": 44,
+"kind": "impact",
+"elem": [
+"lightning"
+],
+"hue": "white",
+"label": "impacts hit-spark",
+"frames": 8
+},
+{
+"file": "pvfx/parry__peak.png",
+"pack": "pvfx",
+"id": "parry",
+"frame": "peak",
+"w": 68,
+"h": 32,
+"kind": "shield",
+"elem": [],
+"hue": "white",
+"label": "impacts parry",
+"frames": 13
+},
+{
+"file": "pvfx/punch_hit__peak.png",
+"pack": "pvfx",
+"id": "punch_hit",
+"frame": "peak",
+"w": 30,
+"h": 27,
+"kind": "slash",
+"elem": [],
+"hue": "white",
+"label": "impacts punch-hit",
+"frames": 11
+},
+{
+"file": "pvfx/punch_hit__alt.png",
+"pack": "pvfx",
+"id": "punch_hit",
+"frame": "alt",
+"w": 32,
+"h": 31,
+"kind": "slash",
+"elem": [],
+"hue": "orange",
+"label": "impacts punch-hit",
+"frames": 11
+},
+{
+"file": "pvfx/rock_shatter__peak.png",
+"pack": "pvfx",
+"id": "rock_shatter",
+"frame": "peak",
+"w": 51,
+"h": 37,
+"kind": "impact",
+"elem": [
+"earth"
+],
+"hue": "orange",
+"label": "impacts rock-shatter",
+"frames": 18
+},
+{
+"file": "pvfx/rock_shatter__alt.png",
+"pack": "pvfx",
+"id": "rock_shatter",
+"frame": "alt",
+"w": 50,
+"h": 35,
+"kind": "impact",
+"elem": [
+"earth"
+],
+"hue": "orange",
+"label": "impacts rock-shatter",
+"frames": 18
+},
+{
+"file": "pvfx/shockwave_ring__peak.png",
+"pack": "pvfx",
+"id": "shockwave_ring",
+"frame": "peak",
+"w": 74,
+"h": 38,
+"kind": "explosion",
+"elem": [
+"lightning",
+"water"
+],
+"hue": "white",
+"label": "impacts shockwave-ring",
+"frames": 16
+},
+{
+"file": "pvfx/shockwave_ring__alt.png",
+"pack": "pvfx",
+"id": "shockwave_ring",
+"frame": "alt",
+"w": 79,
+"h": 26,
+"kind": "explosion",
+"elem": [
+"lightning",
+"water"
+],
+"hue": "blue",
+"label": "impacts shockwave-ring",
+"frames": 16
+},
+{
+"file": "pvfx/ball_lightning__peak.png",
+"pack": "pvfx",
+"id": "ball_lightning",
+"frame": "peak",
+"w": 42,
+"h": 41,
+"kind": "projectile",
+"elem": [
+"lightning"
+],
+"hue": "cyan",
+"label": "lightning ball-lightning",
+"frames": 20
+},
+{
+"file": "pvfx/chain_lightning__peak.png",
+"pack": "pvfx",
+"id": "chain_lightning",
+"frame": "peak",
+"w": 161,
+"h": 43,
+"kind": "projectile",
+"elem": [
+"lightning"
+],
+"hue": "blue",
+"label": "lightning chain-lightning",
+"frames": 14
+},
+{
+"file": "pvfx/chain_lightning__alt.png",
+"pack": "pvfx",
+"id": "chain_lightning",
+"frame": "alt",
+"w": 105,
+"h": 43,
+"kind": "projectile",
+"elem": [
+"lightning"
+],
+"hue": "blue",
+"label": "lightning chain-lightning",
+"frames": 14
+},
+{
+"file": "pvfx/lightning_strike__peak.png",
+"pack": "pvfx",
+"id": "lightning_strike",
+"frame": "peak",
+"w": 43,
+"h": 124,
+"kind": "projectile",
+"elem": [
+"lightning"
+],
+"hue": "cyan",
+"label": "lightning lightning-strike",
+"frames": 18
+},
+{
+"file": "pvfx/lightning_strike__alt.png",
+"pack": "pvfx",
+"id": "lightning_strike",
+"frame": "alt",
+"w": 61,
+"h": 117,
+"kind": "projectile",
+"elem": [
+"lightning"
+],
+"hue": "blue",
+"label": "lightning lightning-strike",
+"frames": 18
+},
+{
+"file": "pvfx/static_burst__peak.png",
+"pack": "pvfx",
+"id": "static_burst",
+"frame": "peak",
+"w": 99,
+"h": 71,
+"kind": "explosion",
+"elem": [
+"lightning"
+],
+"hue": "cyan",
+"label": "lightning static-burst",
+"frames": 13
+},
+{
+"file": "pvfx/thunder_cloud__peak.png",
+"pack": "pvfx",
+"id": "thunder_cloud",
+"frame": "peak",
+"w": 43,
+"h": 68,
+"kind": "smoke",
+"elem": [
+"lightning"
+],
+"hue": "blue",
+"label": "lightning thunder-cloud",
+"frames": 24
+},
+{
+"file": "pvfx/thunder_cloud__alt.png",
+"pack": "pvfx",
+"id": "thunder_cloud",
+"frame": "alt",
+"w": 41,
+"h": 69,
+"kind": "smoke",
+"elem": [
+"lightning"
+],
+"hue": "blue",
+"label": "lightning thunder-cloud",
+"frames": 24
+},
+{
+"file": "pvfx/axe_smear__peak.png",
+"pack": "pvfx",
+"id": "axe_smear",
+"frame": "peak",
+"w": 78,
+"h": 82,
+"kind": "slash",
+"elem": [],
+"hue": "white",
+"label": "melee axe-smear",
+"frames": 9
+},
+{
+"file": "pvfx/hammer_smash__peak.png",
+"pack": "pvfx",
+"id": "hammer_smash",
+"frame": "peak",
+"w": 47,
+"h": 41,
+"kind": "burst",
+"elem": [],
+"hue": "orange",
+"label": "melee hammer-smash",
+"frames": 15
+},
+{
+"file": "pvfx/hammer_smash__alt.png",
+"pack": "pvfx",
+"id": "hammer_smash",
+"frame": "alt",
+"w": 69,
+"h": 28,
+"kind": "burst",
+"elem": [],
+"hue": "orange",
+"label": "melee hammer-smash",
+"frames": 15
+},
+{
+"file": "pvfx/shadow_claw__peak.png",
+"pack": "pvfx",
+"id": "shadow_claw",
+"frame": "peak",
+"w": 31,
+"h": 41,
+"kind": "slash",
+"elem": [
+"dark"
+],
+"hue": "purple",
+"label": "melee shadow-claw",
+"frames": 12
+},
+{
+"file": "pvfx/spear_thrust__peak.png",
+"pack": "pvfx",
+"id": "spear_thrust",
+"frame": "peak",
+"w": 71,
+"h": 22,
+"kind": "slash",
+"elem": [],
+"hue": "blue",
+"label": "melee spear-thrust",
+"frames": 10
+},
+{
+"file": "pvfx/sword_combo__peak.png",
+"pack": "pvfx",
+"id": "sword_combo",
+"frame": "peak",
+"w": 40,
+"h": 59,
+"kind": "slash",
+"elem": [],
+"hue": "white",
+"label": "melee sword-combo",
+"frames": 14
+},
+{
+"file": "pvfx/sword_combo__alt.png",
+"pack": "pvfx",
+"id": "sword_combo",
+"frame": "alt",
+"w": 77,
+"h": 23,
+"kind": "slash",
+"elem": [],
+"hue": "blue",
+"label": "melee sword-combo",
+"frames": 14
+},
+{
+"file": "pvfx/acid_spit__peak.png",
+"pack": "pvfx",
+"id": "acid_spit",
+"frame": "peak",
+"w": 43,
+"h": 29,
+"kind": "burst",
+"elem": [
+"poison",
+"nature"
+],
+"hue": "green",
+"label": "nature acid-spit",
+"frames": 20
+},
+{
+"file": "pvfx/acid_spit__alt.png",
+"pack": "pvfx",
+"id": "acid_spit",
+"frame": "alt",
+"w": 34,
+"h": 26,
+"kind": "burst",
+"elem": [
+"poison",
+"nature"
+],
+"hue": "green",
+"label": "nature acid-spit",
+"frames": 20
+},
+{
+"file": "pvfx/acid_splash__peak.png",
+"pack": "pvfx",
+"id": "acid_splash",
+"frame": "peak",
+"w": 60,
+"h": 49,
+"kind": "ground",
+"elem": [
+"water",
+"poison",
+"nature"
+],
+"hue": "green",
+"label": "nature acid-splash",
+"frames": 27
+},
+{
+"file": "pvfx/bloom_heal__peak.png",
+"pack": "pvfx",
+"id": "bloom_heal",
+"frame": "peak",
+"w": 29,
+"h": 40,
+"kind": "aura",
+"elem": [
+"holy",
+"nature"
+],
+"hue": "yellow",
+"label": "nature bloom-heal",
+"frames": 22
+},
+{
+"file": "pvfx/bloom_heal__alt.png",
+"pack": "pvfx",
+"id": "bloom_heal",
+"frame": "alt",
+"w": 29,
+"h": 47,
+"kind": "aura",
+"elem": [
+"holy",
+"nature"
+],
+"hue": "green",
+"label": "nature bloom-heal",
+"frames": 22
+},
+{
+"file": "pvfx/boulder_toss__peak.png",
+"pack": "pvfx",
+"id": "boulder_toss",
+"frame": "peak",
+"w": 56,
+"h": 22,
+"kind": "burst",
+"elem": [
+"nature"
+],
+"hue": "orange",
+"label": "nature boulder-toss",
+"frames": 22
+},
+{
+"file": "pvfx/boulder_toss__alt.png",
+"pack": "pvfx",
+"id": "boulder_toss",
+"frame": "alt",
+"w": 52,
+"h": 36,
+"kind": "burst",
+"elem": [
+"nature"
+],
+"hue": "orange",
+"label": "nature boulder-toss",
+"frames": 22
+},
+{
+"file": "pvfx/earth_spike__peak.png",
+"pack": "pvfx",
+"id": "earth_spike",
+"frame": "peak",
+"w": 118,
+"h": 43,
+"kind": "ground",
+"elem": [
+"earth",
+"nature"
+],
+"hue": "red",
+"label": "nature earth-spike",
+"frames": 22
+},
+{
+"file": "pvfx/earth_spike__alt.png",
+"pack": "pvfx",
+"id": "earth_spike",
+"frame": "alt",
+"w": 126,
+"h": 41,
+"kind": "ground",
+"elem": [
+"earth",
+"nature"
+],
+"hue": "red",
+"label": "nature earth-spike",
+"frames": 22
+},
+{
+"file": "pvfx/fissure__peak.png",
+"pack": "pvfx",
+"id": "fissure",
+"frame": "peak",
+"w": 102,
+"h": 29,
+"kind": "burst",
+"elem": [
+"nature"
+],
+"hue": "orange",
+"label": "nature fissure",
+"frames": 21
+},
+{
+"file": "pvfx/fissure__alt.png",
+"pack": "pvfx",
+"id": "fissure",
+"frame": "alt",
+"w": 93,
+"h": 26,
+"kind": "burst",
+"elem": [
+"nature"
+],
+"hue": "orange",
+"label": "nature fissure",
+"frames": 21
+},
+{
+"file": "pvfx/leaf_storm__peak.png",
+"pack": "pvfx",
+"id": "leaf_storm",
+"frame": "peak",
+"w": 26,
+"h": 30,
+"kind": "burst",
+"elem": [
+"nature"
+],
+"hue": "green",
+"label": "nature leaf-storm",
+"frames": 18
+},
+{
+"file": "pvfx/poison_cloud__peak.png",
+"pack": "pvfx",
+"id": "poison_cloud",
+"frame": "peak",
+"w": 60,
+"h": 32,
+"kind": "status",
+"elem": [
+"poison",
+"nature"
+],
+"hue": "orange",
+"label": "nature poison-cloud",
+"frames": 24
+},
+{
+"file": "pvfx/poison_cloud__alt.png",
+"pack": "pvfx",
+"id": "poison_cloud",
+"frame": "alt",
+"w": 62,
+"h": 45,
+"kind": "status",
+"elem": [
+"poison",
+"nature"
+],
+"hue": "orange",
+"label": "nature poison-cloud",
+"frames": 24
+},
+{
+"file": "pvfx/spore_burst__peak.png",
+"pack": "pvfx",
+"id": "spore_burst",
+"frame": "peak",
+"w": 45,
+"h": 36,
+"kind": "explosion",
+"elem": [
+"nature"
+],
+"hue": "yellow",
+"label": "nature spore-burst",
+"frames": 20
+},
+{
+"file": "pvfx/spore_burst__alt.png",
+"pack": "pvfx",
+"id": "spore_burst",
+"frame": "alt",
+"w": 51,
+"h": 39,
+"kind": "explosion",
+"elem": [
+"nature"
+],
+"hue": "yellow",
+"label": "nature spore-burst",
+"frames": 20
+},
+{
+"file": "pvfx/vine_snare__peak.png",
+"pack": "pvfx",
+"id": "vine_snare",
+"frame": "peak",
+"w": 50,
+"h": 35,
+"kind": "burst",
+"elem": [
+"nature"
+],
+"hue": "yellow",
+"label": "nature vine-snare",
+"frames": 19
+},
+{
+"file": "pvfx/vine_snare__alt.png",
+"pack": "pvfx",
+"id": "vine_snare",
+"frame": "alt",
+"w": 52,
+"h": 37,
+"kind": "burst",
+"elem": [
+"nature"
+],
+"hue": "yellow",
+"label": "nature vine-snare",
+"frames": 19
+},
+{
+"file": "pvfx/arrow_impact__peak.png",
+"pack": "pvfx",
+"id": "arrow_impact",
+"frame": "peak",
+"w": 24,
+"h": 18,
+"kind": "impact",
+"elem": [],
+"hue": "orange",
+"label": "projectiles arrow-impact",
+"frames": 17
+},
+{
+"file": "pvfx/ice_shard__peak.png",
+"pack": "pvfx",
+"id": "ice_shard",
+"frame": "peak",
+"w": 42,
+"h": 34,
+"kind": "projectile",
+"elem": [
+"ice"
+],
+"hue": "white",
+"label": "projectiles ice-shard",
+"frames": 19
+},
+{
+"file": "pvfx/magic_missile__peak.png",
+"pack": "pvfx",
+"id": "magic_missile",
+"frame": "peak",
+"w": 53,
+"h": 30,
+"kind": "projectile",
+"elem": [
+"arcane"
+],
+"hue": "white",
+"label": "projectiles magic-missile",
+"frames": 28
+},
+{
+"file": "pvfx/magic_missile__alt.png",
+"pack": "pvfx",
+"id": "magic_missile",
+"frame": "alt",
+"w": 57,
+"h": 16,
+"kind": "projectile",
+"elem": [
+"arcane"
+],
+"hue": "purple",
+"label": "projectiles magic-missile",
+"frames": 28
+},
+{
+"file": "pvfx/poison_dart__peak.png",
+"pack": "pvfx",
+"id": "poison_dart",
+"frame": "peak",
+"w": 73,
+"h": 23,
+"kind": "status",
+"elem": [
+"poison"
+],
+"hue": "green",
+"label": "projectiles poison-dart",
+"frames": 18
+},
+{
+"file": "pvfx/curse__peak.png",
+"pack": "pvfx",
+"id": "curse",
+"frame": "peak",
+"w": 42,
+"h": 47,
+"kind": "burst",
+"elem": [
+"dark"
+],
+"hue": "white",
+"label": "shadow curse",
+"frames": 27
+},
+{
+"file": "pvfx/curse__alt.png",
+"pack": "pvfx",
+"id": "curse",
+"frame": "alt",
+"w": 43,
+"h": 53,
+"kind": "burst",
+"elem": [
+"dark"
+],
+"hue": "purple",
+"label": "shadow curse",
+"frames": 27
+},
+{
+"file": "pvfx/shadow_bolt__peak.png",
+"pack": "pvfx",
+"id": "shadow_bolt",
+"frame": "peak",
+"w": 42,
+"h": 32,
+"kind": "projectile",
+"elem": [
+"dark"
+],
+"hue": "purple",
+"label": "shadow shadow-bolt",
+"frames": 19
+},
+{
+"file": "pvfx/shadow_bolt__alt.png",
+"pack": "pvfx",
+"id": "shadow_bolt",
+"frame": "alt",
+"w": 38,
+"h": 38,
+"kind": "projectile",
+"elem": [
+"dark"
+],
+"hue": "pink",
+"label": "shadow shadow-bolt",
+"frames": 19
+},
+{
+"file": "pvfx/shadow_tendrils__peak.png",
+"pack": "pvfx",
+"id": "shadow_tendrils",
+"frame": "peak",
+"w": 41,
+"h": 43,
+"kind": "burst",
+"elem": [
+"dark"
+],
+"hue": "purple",
+"label": "shadow shadow-tendrils",
+"frames": 21
+},
+{
+"file": "pvfx/shadow_tendrils__alt.png",
+"pack": "pvfx",
+"id": "shadow_tendrils",
+"frame": "alt",
+"w": 45,
+"h": 29,
+"kind": "burst",
+"elem": [
+"dark"
+],
+"hue": "purple",
+"label": "shadow shadow-tendrils",
+"frames": 21
+},
+{
+"file": "pvfx/soul_drain__peak.png",
+"pack": "pvfx",
+"id": "soul_drain",
+"frame": "peak",
+"w": 86,
+"h": 30,
+"kind": "burst",
+"elem": [
+"water",
+"dark"
+],
+"hue": "purple",
+"label": "shadow soul-drain",
+"frames": 23
+},
+{
+"file": "pvfx/soul_drain__alt.png",
+"pack": "pvfx",
+"id": "soul_drain",
+"frame": "alt",
+"w": 89,
+"h": 20,
+"kind": "burst",
+"elem": [
+"water",
+"dark"
+],
+"hue": "purple",
+"label": "shadow soul-drain",
+"frames": 23
+},
+{
+"file": "pvfx/void_implosion__peak.png",
+"pack": "pvfx",
+"id": "void_implosion",
+"frame": "peak",
+"w": 79,
+"h": 76,
+"kind": "explosion",
+"elem": [
+"dark",
+"arcane"
+],
+"hue": "purple",
+"label": "shadow void-implosion",
+"frames": 21
+},
+{
+"file": "pvfx/void_implosion__alt.png",
+"pack": "pvfx",
+"id": "void_implosion",
+"frame": "alt",
+"w": 42,
+"h": 42,
+"kind": "explosion",
+"elem": [
+"dark",
+"arcane"
+],
+"hue": "white",
+"label": "shadow void-implosion",
+"frames": 21
+},
+{
+"file": "pvfx/dash_dust__peak.png",
+"pack": "pvfx",
+"id": "dash_dust",
+"frame": "peak",
+"w": 67,
+"h": 22,
+"kind": "slash",
+"elem": [
+"wind",
+"earth"
+],
+"hue": "orange",
+"label": "smoke dash-dust",
+"frames": 13
+},
+{
+"file": "pvfx/dash_dust__alt.png",
+"pack": "pvfx",
+"id": "dash_dust",
+"frame": "alt",
+"w": 68,
+"h": 21,
+"kind": "slash",
+"elem": [
+"wind",
+"earth"
+],
+"hue": "orange",
+"label": "smoke dash-dust",
+"frames": 13
+},
+{
+"file": "pvfx/dust_puff__peak.png",
+"pack": "pvfx",
+"id": "dust_puff",
+"frame": "peak",
+"w": 64,
+"h": 27,
+"kind": "smoke",
+"elem": [
+"earth"
+],
+"hue": "orange",
+"label": "smoke dust-puff",
+"frames": 14
+},
+{
+"file": "pvfx/dust_puff__alt.png",
+"pack": "pvfx",
+"id": "dust_puff",
+"frame": "alt",
+"w": 54,
+"h": 29,
+"kind": "smoke",
+"elem": [
+"earth"
+],
+"hue": "orange",
+"label": "smoke dust-puff",
+"frames": 14
+},
+{
+"file": "pvfx/smoke_bomb__peak.png",
+"pack": "pvfx",
+"id": "smoke_bomb",
+"frame": "peak",
+"w": 62,
+"h": 40,
+"kind": "smoke",
+"elem": [],
+"hue": "white",
+"label": "smoke smoke-bomb",
+"frames": 21
+},
+{
+"file": "pvfx/smoke_bomb__alt.png",
+"pack": "pvfx",
+"id": "smoke_bomb",
+"frame": "alt",
+"w": 61,
+"h": 38,
+"kind": "smoke",
+"elem": [],
+"hue": "purple",
+"label": "smoke smoke-bomb",
+"frames": 21
+},
+{
+"file": "pvfx/steam_vent__peak.png",
+"pack": "pvfx",
+"id": "steam_vent",
+"frame": "peak",
+"w": 43,
+"h": 68,
+"kind": "smoke",
+"elem": [],
+"hue": "white",
+"label": "smoke steam-vent",
+"frames": 30
+},
+{
+"file": "pvfx/steam_vent__alt.png",
+"pack": "pvfx",
+"id": "steam_vent",
+"frame": "alt",
+"w": 42,
+"h": 68,
+"kind": "smoke",
+"elem": [],
+"hue": "blue",
+"label": "smoke steam-vent",
+"frames": 30
+},
+{
+"file": "pvfx/bleeding__peak.png",
+"pack": "pvfx",
+"id": "bleeding",
+"frame": "peak",
+"w": 22,
+"h": 43,
+"kind": "status",
+"elem": [
+"blood"
+],
+"hue": "red",
+"label": "status bleeding",
+"frames": 20
+},
+{
+"file": "pvfx/bleeding__alt.png",
+"pack": "pvfx",
+"id": "bleeding",
+"frame": "alt",
+"w": 30,
+"h": 43,
+"kind": "status",
+"elem": [
+"blood"
+],
+"hue": "red",
+"label": "status bleeding",
+"frames": 20
+},
+{
+"file": "pvfx/burning_aura__peak.png",
+"pack": "pvfx",
+"id": "burning_aura",
+"frame": "peak",
+"w": 44,
+"h": 61,
+"kind": "aura",
+"elem": [
+"fire"
+],
+"hue": "red",
+"label": "status burning-aura",
+"frames": 12
+},
+{
+"file": "pvfx/burning_aura__alt.png",
+"pack": "pvfx",
+"id": "burning_aura",
+"frame": "alt",
+"w": 44,
+"h": 59,
+"kind": "aura",
+"elem": [
+"fire"
+],
+"hue": "red",
+"label": "status burning-aura",
+"frames": 12
+},
+{
+"file": "pvfx/charm_hearts__peak.png",
+"pack": "pvfx",
+"id": "charm_hearts",
+"frame": "peak",
+"w": 26,
+"h": 17,
+"kind": "status",
+"elem": [],
+"hue": "pink",
+"label": "status charm-hearts",
+"frames": 20
+},
+{
+"file": "pvfx/charm_hearts__alt.png",
+"pack": "pvfx",
+"id": "charm_hearts",
+"frame": "alt",
+"w": 28,
+"h": 25,
+"kind": "status",
+"elem": [],
+"hue": "pink",
+"label": "status charm-hearts",
+"frames": 20
+},
+{
+"file": "pvfx/electrified__peak.png",
+"pack": "pvfx",
+"id": "electrified",
+"frame": "peak",
+"w": 38,
+"h": 29,
+"kind": "status",
+"elem": [],
+"hue": "blue",
+"label": "status electrified",
+"frames": 14
+},
+{
+"file": "pvfx/frozen_chill__peak.png",
+"pack": "pvfx",
+"id": "frozen_chill",
+"frame": "peak",
+"w": 38,
+"h": 44,
+"kind": "status",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "status frozen-chill",
+"frames": 14
+},
+{
+"file": "pvfx/frozen_chill__alt.png",
+"pack": "pvfx",
+"id": "frozen_chill",
+"frame": "alt",
+"w": 37,
+"h": 47,
+"kind": "status",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "status frozen-chill",
+"frames": 14
+},
+{
+"file": "pvfx/poisoned__peak.png",
+"pack": "pvfx",
+"id": "poisoned",
+"frame": "peak",
+"w": 44,
+"h": 49,
+"kind": "status",
+"elem": [
+"poison"
+],
+"hue": "green",
+"label": "status poisoned",
+"frames": 18
+},
+{
+"file": "pvfx/poisoned__alt.png",
+"pack": "pvfx",
+"id": "poisoned",
+"frame": "alt",
+"w": 46,
+"h": 54,
+"kind": "status",
+"elem": [
+"poison"
+],
+"hue": "green",
+"label": "status poisoned",
+"frames": 18
+},
+{
+"file": "pvfx/power_up_aura__peak.png",
+"pack": "pvfx",
+"id": "power_up_aura",
+"frame": "peak",
+"w": 43,
+"h": 51,
+"kind": "aura",
+"elem": [],
+"hue": "orange",
+"label": "status power-up-aura",
+"frames": 14
+},
+{
+"file": "pvfx/power_up_aura__alt.png",
+"pack": "pvfx",
+"id": "power_up_aura",
+"frame": "alt",
+"w": 51,
+"h": 48,
+"kind": "aura",
+"elem": [],
+"hue": "orange",
+"label": "status power-up-aura",
+"frames": 14
+},
+{
+"file": "pvfx/sleep__peak.png",
+"pack": "pvfx",
+"id": "sleep",
+"frame": "peak",
+"w": 29,
+"h": 41,
+"kind": "status",
+"elem": [],
+"hue": "blue",
+"label": "status sleep",
+"frames": 30
+},
+{
+"file": "pvfx/sleep__alt.png",
+"pack": "pvfx",
+"id": "sleep",
+"frame": "alt",
+"w": 16,
+"h": 26,
+"kind": "status",
+"elem": [],
+"hue": "blue",
+"label": "status sleep",
+"frames": 30
+},
+{
+"file": "pvfx/stun_stars__peak.png",
+"pack": "pvfx",
+"id": "stun_stars",
+"frame": "peak",
+"w": 36,
+"h": 24,
+"kind": "status",
+"elem": [],
+"hue": "orange",
+"label": "status stun-stars",
+"frames": 16
+},
+{
+"file": "pvfx/stun_stars__alt.png",
+"pack": "pvfx",
+"id": "stun_stars",
+"frame": "alt",
+"w": 42,
+"h": 20,
+"kind": "status",
+"elem": [],
+"hue": "orange",
+"label": "status stun-stars",
+"frames": 16
+},
+{
+"file": "pvfx/coin_pickup__peak.png",
+"pack": "pvfx",
+"id": "coin_pickup",
+"frame": "peak",
+"w": 18,
+"h": 18,
+"kind": "pickup",
+"elem": [],
+"hue": "yellow",
+"label": "ui coin-pickup",
+"frames": 10
+},
+{
+"file": "pvfx/heart_pickup__peak.png",
+"pack": "pvfx",
+"id": "heart_pickup",
+"frame": "peak",
+"w": 20,
+"h": 23,
+"kind": "pickup",
+"elem": [],
+"hue": "white",
+"label": "ui heart-pickup",
+"frames": 10
+},
+{
+"file": "pvfx/level_up__peak.png",
+"pack": "pvfx",
+"id": "level_up",
+"frame": "peak",
+"w": 44,
+"h": 89,
+"kind": "aura",
+"elem": [],
+"hue": "white",
+"label": "ui level-up",
+"frames": 20
+},
+{
+"file": "pvfx/level_up__alt.png",
+"pack": "pvfx",
+"id": "level_up",
+"frame": "alt",
+"w": 35,
+"h": 19,
+"kind": "aura",
+"elem": [],
+"hue": "yellow",
+"label": "ui level-up",
+"frames": 20
+},
+{
+"file": "pvfx/star_burst_pickup__peak.png",
+"pack": "pvfx",
+"id": "star_burst_pickup",
+"frame": "peak",
+"w": 20,
+"h": 23,
+"kind": "explosion",
+"elem": [],
+"hue": "yellow",
+"label": "ui star-burst-pickup",
+"frames": 13
+},
+{
+"file": "pvfx/treasure_glint__peak.png",
+"pack": "pvfx",
+"id": "treasure_glint",
+"frame": "peak",
+"w": 34,
+"h": 39,
+"kind": "pickup",
+"elem": [],
+"hue": "orange",
+"label": "ui treasure-glint",
+"frames": 16
+},
+{
+"file": "pvfx/treasure_glint__alt.png",
+"pack": "pvfx",
+"id": "treasure_glint",
+"frame": "alt",
+"w": 38,
+"h": 31,
+"kind": "pickup",
+"elem": [],
+"hue": "orange",
+"label": "ui treasure-glint",
+"frames": 16
+},
+{
+"file": "pvfx/bubble_burst__peak.png",
+"pack": "pvfx",
+"id": "bubble_burst",
+"frame": "peak",
+"w": 38,
+"h": 34,
+"kind": "explosion",
+"elem": [
+"water"
+],
+"hue": "cyan",
+"label": "water bubble-burst",
+"frames": 12
+},
+{
+"file": "pvfx/tidal_wave__peak.png",
+"pack": "pvfx",
+"id": "tidal_wave",
+"frame": "peak",
+"w": 64,
+"h": 35,
+"kind": "ground",
+"elem": [
+"water"
+],
+"hue": "cyan",
+"label": "water tidal-wave",
+"frames": 20
+},
+{
+"file": "pvfx/water_geyser__peak.png",
+"pack": "pvfx",
+"id": "water_geyser",
+"frame": "peak",
+"w": 36,
+"h": 81,
+"kind": "ground",
+"elem": [
+"water"
+],
+"hue": "cyan",
+"label": "water water-geyser",
+"frames": 21
+},
+{
+"file": "pvfx/water_splash__peak.png",
+"pack": "pvfx",
+"id": "water_splash",
+"frame": "peak",
+"w": 56,
+"h": 49,
+"kind": "ground",
+"elem": [
+"water"
+],
+"hue": "cyan",
+"label": "water water-splash",
+"frames": 22
+},
+{
+"file": "pvfx/whirlpool__peak.png",
+"pack": "pvfx",
+"id": "whirlpool",
+"frame": "peak",
+"w": 65,
+"h": 36,
+"kind": "ground",
+"elem": [
+"water",
+"wind"
+],
+"hue": "blue",
+"label": "water whirlpool",
+"frames": 20
+},
+{
+"file": "pvfx/whirlpool__alt.png",
+"pack": "pvfx",
+"id": "whirlpool",
+"frame": "alt",
+"w": 65,
+"h": 26,
+"kind": "ground",
+"elem": [
+"water",
+"wind"
+],
+"hue": "blue",
+"label": "water whirlpool",
+"frames": 20
+},
+{
+"file": "pvfx/whirlwind__peak.png",
+"pack": "pvfx",
+"id": "whirlwind",
+"frame": "peak",
+"w": 35,
+"h": 67,
+"kind": "ground",
+"elem": [
+"wind"
+],
+"hue": "green",
+"label": "wind whirlwind",
+"frames": 14
+},
+{
+"file": "pvfx/whirlwind__alt.png",
+"pack": "pvfx",
+"id": "whirlwind",
+"frame": "alt",
+"w": 39,
+"h": 64,
+"kind": "ground",
+"elem": [
+"wind"
+],
+"hue": "green",
+"label": "wind whirlwind",
+"frames": 14
+},
+{
+"file": "pvfx/wind_blade__peak.png",
+"pack": "pvfx",
+"id": "wind_blade",
+"frame": "peak",
+"w": 39,
+"h": 31,
+"kind": "slash",
+"elem": [
+"wind"
+],
+"hue": "white",
+"label": "wind wind-blade",
+"frames": 16
+},
+{
+"file": "pvfx/wind_gust__peak.png",
+"pack": "pvfx",
+"id": "wind_gust",
+"frame": "peak",
+"w": 78,
+"h": 33,
+"kind": "burst",
+"elem": [
+"wind"
+],
+"hue": "cyan",
+"label": "wind wind-gust",
+"frames": 9
+},
+{
+"file": "pimen/dark_vfx_1_separeted_frames__peak.png",
+"pack": "pimen",
+"id": "dark_vfx_1_separeted_frames",
+"frame": "peak",
+"w": 26,
+"h": 21,
+"kind": "burst",
+"elem": [
+"dark"
+],
+"hue": "white",
+"label": "Dark VFX 1/Separeted frames",
+"frames": 17
+},
+{
+"file": "pimen/dark_vfx_1_separeted_frames__alt.png",
+"pack": "pimen",
+"id": "dark_vfx_1_separeted_frames",
+"frame": "alt",
+"w": 27,
+"h": 15,
+"kind": "burst",
+"elem": [
+"dark"
+],
+"hue": "pink",
+"label": "Dark VFX 1/Separeted frames",
+"frames": 17
+},
+{
+"file": "pimen/dark_vfx_2_separated_frames__peak.png",
+"pack": "pimen",
+"id": "dark_vfx_2_separated_frames",
+"frame": "peak",
+"w": 37,
+"h": 44,
+"kind": "burst",
+"elem": [
+"dark"
+],
+"hue": "purple",
+"label": "Dark VFX 2/Separated Frames",
+"frames": 16
+},
+{
+"file": "pimen/dark_vfx_2_separated_frames__alt.png",
+"pack": "pimen",
+"id": "dark_vfx_2_separated_frames",
+"frame": "alt",
+"w": 37,
+"h": 34,
+"kind": "burst",
+"elem": [
+"dark"
+],
+"hue": "pink",
+"label": "Dark VFX 2/Separated Frames",
+"frames": 16
+},
+{
+"file": "pimen/holy_vfx_01_separated_frames__peak.png",
+"pack": "pimen",
+"id": "holy_vfx_01_separated_frames",
+"frame": "peak",
+"w": 18,
+"h": 18,
+"kind": "aura",
+"elem": [
+"holy"
+],
+"hue": "white",
+"label": "Holy VFX 01/Separated Frames",
+"frames": 17
+},
+{
+"file": "pimen/holy_vfx_01_separated_frames__alt.png",
+"pack": "pimen",
+"id": "holy_vfx_01_separated_frames",
+"frame": "alt",
+"w": 25,
+"h": 10,
+"kind": "aura",
+"elem": [
+"holy"
+],
+"hue": "yellow",
+"label": "Holy VFX 01/Separated Frames",
+"frames": 17
+},
+{
+"file": "pimen/holy_vfx_02_separated_frames__peak.png",
+"pack": "pimen",
+"id": "holy_vfx_02_separated_frames",
+"frame": "peak",
+"w": 46,
+"h": 20,
+"kind": "aura",
+"elem": [
+"holy"
+],
+"hue": "yellow",
+"label": "Holy VFX 02/Separated Frames",
+"frames": 16
+},
+{
+"file": "pimen/ice_effect_01_ice_vfx_1_separated_frames__peak.png",
+"pack": "pimen",
+"id": "ice_effect_01_ice_vfx_1_separated_frames",
+"frame": "peak",
+"w": 27,
+"h": 24,
+"kind": "burst",
+"elem": [
+"ice"
+],
+"hue": "white",
+"label": "Ice Effect 01/Ice VFX 1/Separated Frames",
+"frames": 21
+},
+{
+"file": "pimen/ice_effect_01_ice_vfx_1_separated_frames__alt.png",
+"pack": "pimen",
+"id": "ice_effect_01_ice_vfx_1_separated_frames",
+"frame": "alt",
+"w": 30,
+"h": 12,
+"kind": "burst",
+"elem": [
+"ice"
+],
+"hue": "blue",
+"label": "Ice Effect 01/Ice VFX 1/Separated Frames",
+"frames": 21
+},
+{
+"file": "pimen/ice_effect_01_ice_vfx_2_separated_frames__peak.png",
+"pack": "pimen",
+"id": "ice_effect_01_ice_vfx_2_separated_frames",
+"frame": "peak",
+"w": 26,
+"h": 18,
+"kind": "burst",
+"elem": [
+"ice"
+],
+"hue": "white",
+"label": "Ice Effect 01/Ice VFX 2/Separated Frames",
+"frames": 36
+},
+{
+"file": "pimen/ice_effect_01_ice_vfx_2_separated_frames__alt.png",
+"pack": "pimen",
+"id": "ice_effect_01_ice_vfx_2_separated_frames",
+"frame": "alt",
+"w": 28,
+"h": 27,
+"kind": "burst",
+"elem": [
+"ice"
+],
+"hue": "white",
+"label": "Ice Effect 01/Ice VFX 2/Separated Frames",
+"frames": 36
+},
+{
+"file": "pimen/smear_smear_01_horizontal_1__peak.png",
+"pack": "pimen",
+"id": "smear_smear_01_horizontal_1",
+"frame": "peak",
+"w": 220,
+"h": 26,
+"kind": "slash",
+"elem": [],
+"hue": "white",
+"label": "slash smear Smear 01 Horizontal 1.png",
+"frames": 1
+},
+{
+"file": "pimen/smear_smear_01_vertical_02__peak.png",
+"pack": "pimen",
+"id": "smear_smear_01_vertical_02",
+"frame": "peak",
+"w": 210,
+"h": 11,
+"kind": "slash",
+"elem": [],
+"hue": "orange",
+"label": "slash smear Smear 01 Vertical 02.png",
+"frames": 1
+},
+{
+"file": "pimen/smear_smear_01_horizontal_2__peak.png",
+"pack": "pimen",
+"id": "smear_smear_01_horizontal_2",
+"frame": "peak",
+"w": 220,
+"h": 26,
+"kind": "slash",
+"elem": [],
+"hue": "orange",
+"label": "slash smear Smear 01 Horizontal 2.png",
+"frames": 1
+},
+{
+"file": "pimen/smear_smear_01_horizontal_3__peak.png",
+"pack": "pimen",
+"id": "smear_smear_01_horizontal_3",
+"frame": "peak",
+"w": 220,
+"h": 26,
+"kind": "slash",
+"elem": [],
+"hue": "green",
+"label": "slash smear Smear 01 Horizontal 3.png",
+"frames": 1
+},
+{
+"file": "pimen/smear_smear_01_vertical_01__peak.png",
+"pack": "pimen",
+"id": "smear_smear_01_vertical_01",
+"frame": "peak",
+"w": 210,
+"h": 11,
+"kind": "slash",
+"elem": [],
+"hue": "white",
+"label": "slash smear Smear 01 Vertical 01.png",
+"frames": 1
+},
+{
+"file": "pimen/smear_smear_01_vertical_03__peak.png",
+"pack": "pimen",
+"id": "smear_smear_01_vertical_03",
+"frame": "peak",
+"w": 210,
+"h": 11,
+"kind": "slash",
+"elem": [],
+"hue": "green",
+"label": "slash smear Smear 01 Vertical 03.png",
+"frames": 1
+},
+{
+"file": "frostwindz/64x64_slash_2_color2__peak.png",
+"pack": "frostwindz",
+"id": "64x64_slash_2_color2",
+"frame": "peak",
+"w": 293,
+"h": 102,
+"kind": "slash",
+"elem": [],
+"hue": "red",
+"label": "slash 64x64/Slash 2/color2",
+"frames": 1
+},
+{
+"file": "frostwindz/64x64_slash_2_color1__peak.png",
+"pack": "frostwindz",
+"id": "64x64_slash_2_color1",
+"frame": "peak",
+"w": 293,
+"h": 102,
+"kind": "slash",
+"elem": [],
+"hue": "green",
+"label": "slash 64x64/Slash 2/color1",
+"frames": 1
+},
+{
+"file": "frostwindz/64x64_slash_2_color4__peak.png",
+"pack": "frostwindz",
+"id": "64x64_slash_2_color4",
+"frame": "peak",
+"w": 293,
+"h": 102,
+"kind": "slash",
+"elem": [],
+"hue": "orange",
+"label": "slash 64x64/Slash 2/color4",
+"frames": 1
+},
+{
+"file": "frostwindz/64x64_slash_2_color5__peak.png",
+"pack": "frostwindz",
+"id": "64x64_slash_2_color5",
+"frame": "peak",
+"w": 293,
+"h": 102,
+"kind": "slash",
+"elem": [],
+"hue": "blue",
+"label": "slash 64x64/Slash 2/color5",
+"frames": 1
+},
+{
+"file": "frostwindz/64x64_slash_2_color3__peak.png",
+"pack": "frostwindz",
+"id": "64x64_slash_2_color3",
+"frame": "peak",
+"w": 293,
+"h": 102,
+"kind": "slash",
+"elem": [],
+"hue": "blue",
+"label": "slash 64x64/Slash 2/color3",
+"frames": 1
+},
+{
+"file": "frostwindz/64x64_slash_3_color2__peak.png",
+"pack": "frostwindz",
+"id": "64x64_slash_3_color2",
+"frame": "peak",
+"w": 299,
+"h": 98,
+"kind": "slash",
+"elem": [],
+"hue": "red",
+"label": "slash 64x64/Slash 3/color2",
+"frames": 1
+},
+{
+"file": "frostwindz/64x64_slash_3_color1__peak.png",
+"pack": "frostwindz",
+"id": "64x64_slash_3_color1",
+"frame": "peak",
+"w": 299,
+"h": 98,
+"kind": "slash",
+"elem": [],
+"hue": "green",
+"label": "slash 64x64/Slash 3/color1",
+"frames": 1
+},
+{
+"file": "frostwindz/64x64_slash_3_color4__peak.png",
+"pack": "frostwindz",
+"id": "64x64_slash_3_color4",
+"frame": "peak",
+"w": 299,
+"h": 98,
+"kind": "slash",
+"elem": [],
+"hue": "orange",
+"label": "slash 64x64/Slash 3/color4",
+"frames": 1
+},
+{
+"file": "frostwindz/64x64_slash_3_color5__peak.png",
+"pack": "frostwindz",
+"id": "64x64_slash_3_color5",
+"frame": "peak",
+"w": 299,
+"h": 98,
+"kind": "slash",
+"elem": [],
+"hue": "cyan",
+"label": "slash 64x64/Slash 3/color5",
+"frames": 1
+},
+{
+"file": "frostwindz/64x64_slash_3_color3__peak.png",
+"pack": "frostwindz",
+"id": "64x64_slash_3_color3",
+"frame": "peak",
+"w": 299,
+"h": 98,
+"kind": "slash",
+"elem": [],
+"hue": "blue",
+"label": "slash 64x64/Slash 3/color3",
+"frames": 1
+},
+{
+"file": "frostwindz/64x64_slash_1_color2__peak.png",
+"pack": "frostwindz",
+"id": "64x64_slash_1_color2",
+"frame": "peak",
+"w": 293,
+"h": 105,
+"kind": "slash",
+"elem": [],
+"hue": "red",
+"label": "slash 64x64/Slash 1/color2",
+"frames": 1
+},
+{
+"file": "frostwindz/64x64_slash_1_color1__peak.png",
+"pack": "frostwindz",
+"id": "64x64_slash_1_color1",
+"frame": "peak",
+"w": 293,
+"h": 105,
+"kind": "slash",
+"elem": [],
+"hue": "green",
+"label": "slash 64x64/Slash 1/color1",
+"frames": 1
+},
+{
+"file": "frostwindz/64x64_slash_1_color4__peak.png",
+"pack": "frostwindz",
+"id": "64x64_slash_1_color4",
+"frame": "peak",
+"w": 293,
+"h": 105,
+"kind": "slash",
+"elem": [],
+"hue": "orange",
+"label": "slash 64x64/Slash 1/color4",
+"frames": 1
+},
+{
+"file": "frostwindz/64x64_slash_1_color5__peak.png",
+"pack": "frostwindz",
+"id": "64x64_slash_1_color5",
+"frame": "peak",
+"w": 293,
+"h": 105,
+"kind": "slash",
+"elem": [],
+"hue": "blue",
+"label": "slash 64x64/Slash 1/color5",
+"frames": 1
+},
+{
+"file": "frostwindz/64x64_slash_1_color3__peak.png",
+"pack": "frostwindz",
+"id": "64x64_slash_1_color3",
+"frame": "peak",
+"w": 293,
+"h": 105,
+"kind": "slash",
+"elem": [],
+"hue": "blue",
+"label": "slash 64x64/Slash 1/color3",
+"frames": 1
+},
+{
+"file": "frostwindz/portal__peak.png",
+"pack": "frostwindz",
+"id": "portal",
+"frame": "peak",
+"w": 64,
+"h": 64,
+"kind": "aura",
+"elem": [
+"arcane"
+],
+"hue": "purple",
+"label": "portal teleport",
+"frames": 7
+},
+{
+"file": "frostwindz/portal__alt.png",
+"pack": "frostwindz",
+"id": "portal",
+"frame": "alt",
+"w": 64,
+"h": 64,
+"kind": "aura",
+"elem": [
+"arcane"
+],
+"hue": "purple",
+"label": "portal teleport",
+"frames": 7
+},
+{
+"file": "pipoya/pipoya_hex_shield_pipo_btleffect206_192__peak.png",
+"pack": "pipoya",
+"id": "pipoya_hex_shield_pipo_btleffect206_192",
+"frame": "peak",
+"w": 160,
+"h": 158,
+"kind": "shield",
+"elem": [],
+"hue": "cyan",
+"label": "hex_shield pipo_btleffect206_192",
+"frames": 20
+},
+{
+"file": "pipoya/pipoya_hex_shield_pipo_btleffect206_192__alt.png",
+"pack": "pipoya",
+"id": "pipoya_hex_shield_pipo_btleffect206_192",
+"frame": "alt",
+"w": 158,
+"h": 156,
+"kind": "shield",
+"elem": [],
+"hue": "cyan",
+"label": "hex_shield pipo_btleffect206_192",
+"frames": 20
+},
+{
+"file": "pipoya/pipoya_hex_shield_pipo_btleffect206h_192__peak.png",
+"pack": "pipoya",
+"id": "pipoya_hex_shield_pipo_btleffect206h_192",
+"frame": "peak",
+"w": 162,
+"h": 162,
+"kind": "shield",
+"elem": [],
+"hue": "cyan",
+"label": "hex_shield pipo_btleffect206h_192",
+"frames": 15
+},
+{
+"file": "pipoya/pipoya_hex_shield_pipo_btleffect206h_192__alt.png",
+"pack": "pipoya",
+"id": "pipoya_hex_shield_pipo_btleffect206h_192",
+"frame": "alt",
+"w": 160,
+"h": 160,
+"kind": "shield",
+"elem": [],
+"hue": "cyan",
+"label": "hex_shield pipo_btleffect206h_192",
+"frames": 15
+},
+{
+"file": "pipoya/pipoya_hex_shield_pipo_btleffect207_192__peak.png",
+"pack": "pipoya",
+"id": "pipoya_hex_shield_pipo_btleffect207_192",
+"frame": "peak",
+"w": 159,
+"h": 158,
+"kind": "shield",
+"elem": [],
+"hue": "cyan",
+"label": "hex_shield pipo_btleffect207_192",
+"frames": 20
+},
+{
+"file": "pipoya/pipoya_hex_shield_pipo_btleffect207_192__alt.png",
+"pack": "pipoya",
+"id": "pipoya_hex_shield_pipo_btleffect207_192",
+"frame": "alt",
+"w": 158,
+"h": 151,
+"kind": "shield",
+"elem": [],
+"hue": "cyan",
+"label": "hex_shield pipo_btleffect207_192",
+"frames": 20
+},
+{
+"file": "pipoya/pipoya_hex_shield_pipo_btleffect208_192__peak.png",
+"pack": "pipoya",
+"id": "pipoya_hex_shield_pipo_btleffect208_192",
+"frame": "peak",
+"w": 133,
+"h": 163,
+"kind": "shield",
+"elem": [],
+"hue": "cyan",
+"label": "hex_shield pipo_btleffect208_192",
+"frames": 20
+},
+{
+"file": "pipoya/pipoya_hex_shield_pipo_btleffect208_192__alt.png",
+"pack": "pipoya",
+"id": "pipoya_hex_shield_pipo_btleffect208_192",
+"frame": "alt",
+"w": 129,
+"h": 157,
+"kind": "shield",
+"elem": [],
+"hue": "cyan",
+"label": "hex_shield pipo_btleffect208_192",
+"frames": 20
+},
+{
+"file": "pipoya/pipoya_hex_shield_pipo_btleffect208h_192__peak.png",
+"pack": "pipoya",
+"id": "pipoya_hex_shield_pipo_btleffect208h_192",
+"frame": "peak",
+"w": 128,
+"h": 162,
+"kind": "shield",
+"elem": [],
+"hue": "cyan",
+"label": "hex_shield pipo_btleffect208h_192",
+"frames": 15
+},
+{
+"file": "pipoya/pipoya_hex_shield_pipo_btleffect208h_192__alt.png",
+"pack": "pipoya",
+"id": "pipoya_hex_shield_pipo_btleffect208h_192",
+"frame": "alt",
+"w": 127,
+"h": 160,
+"kind": "shield",
+"elem": [],
+"hue": "cyan",
+"label": "hex_shield pipo_btleffect208h_192",
+"frames": 15
+},
+{
+"file": "pipoya/pipoya_light_pillar_pipo_mapeffect013a_back__peak.png",
+"pack": "pipoya",
+"id": "pipoya_light_pillar_pipo_mapeffect013a_back",
+"frame": "peak",
+"w": 159,
+"h": 165,
+"kind": "pillar",
+"elem": [
+"holy"
+],
+"hue": "yellow",
+"label": "light_pillar pipo_mapeffect013a_back",
+"frames": 10
+},
+{
+"file": "pipoya/pipoya_light_pillar_pipo_mapeffect013a_back__alt.png",
+"pack": "pipoya",
+"id": "pipoya_light_pillar_pipo_mapeffect013a_back",
+"frame": "alt",
+"w": 154,
+"h": 171,
+"kind": "pillar",
+"elem": [
+"holy"
+],
+"hue": "yellow",
+"label": "light_pillar pipo_mapeffect013a_back",
+"frames": 10
+},
+{
+"file": "pipoya/pipoya_light_pillar_pipo_mapeffect013a_front__peak.png",
+"pack": "pipoya",
+"id": "pipoya_light_pillar_pipo_mapeffect013a_front",
+"frame": "peak",
+"w": 86,
+"h": 141,
+"kind": "pillar",
+"elem": [
+"holy"
+],
+"hue": "yellow",
+"label": "light_pillar pipo_mapeffect013a_front",
+"frames": 10
+},
+{
+"file": "pipoya/pipoya_light_pillar_pipo_mapeffect013a_front__alt.png",
+"pack": "pipoya",
+"id": "pipoya_light_pillar_pipo_mapeffect013a_front",
+"frame": "alt",
+"w": 82,
+"h": 116,
+"kind": "pillar",
+"elem": [
+"holy"
+],
+"hue": "yellow",
+"label": "light_pillar pipo_mapeffect013a_front",
+"frames": 10
+},
+{
+"file": "pipoya/pipoya_light_pillar_pipo_mapeffect013a__peak.png",
+"pack": "pipoya",
+"id": "pipoya_light_pillar_pipo_mapeffect013a",
+"frame": "peak",
+"w": 159,
+"h": 173,
+"kind": "pillar",
+"elem": [
+"holy"
+],
+"hue": "yellow",
+"label": "light_pillar pipo_mapeffect013a",
+"frames": 10
+},
+{
+"file": "pipoya/pipoya_light_pillar_pipo_mapeffect013a__alt.png",
+"pack": "pipoya",
+"id": "pipoya_light_pillar_pipo_mapeffect013a",
+"frame": "alt",
+"w": 154,
+"h": 172,
+"kind": "pillar",
+"elem": [
+"holy"
+],
+"hue": "yellow",
+"label": "light_pillar pipo_mapeffect013a",
+"frames": 10
+},
+{
+"file": "pipoya/pipoya_light_pillar_pipo_mapeffect013b_back__peak.png",
+"pack": "pipoya",
+"id": "pipoya_light_pillar_pipo_mapeffect013b_back",
+"frame": "peak",
+"w": 159,
+"h": 165,
+"kind": "pillar",
+"elem": [
+"holy"
+],
+"hue": "cyan",
+"label": "light_pillar pipo_mapeffect013b_back",
+"frames": 10
+},
+{
+"file": "pipoya/pipoya_light_pillar_pipo_mapeffect013b_back__alt.png",
+"pack": "pipoya",
+"id": "pipoya_light_pillar_pipo_mapeffect013b_back",
+"frame": "alt",
+"w": 154,
+"h": 171,
+"kind": "pillar",
+"elem": [
+"holy"
+],
+"hue": "cyan",
+"label": "light_pillar pipo_mapeffect013b_back",
+"frames": 10
+},
+{
+"file": "pipoya/pipoya_light_pillar_pipo_mapeffect013b_front__peak.png",
+"pack": "pipoya",
+"id": "pipoya_light_pillar_pipo_mapeffect013b_front",
+"frame": "peak",
+"w": 86,
+"h": 141,
+"kind": "pillar",
+"elem": [
+"holy"
+],
+"hue": "cyan",
+"label": "light_pillar pipo_mapeffect013b_front",
+"frames": 10
+},
+{
+"file": "pipoya/pipoya_light_pillar_pipo_mapeffect013b_front__alt.png",
+"pack": "pipoya",
+"id": "pipoya_light_pillar_pipo_mapeffect013b_front",
+"frame": "alt",
+"w": 82,
+"h": 116,
+"kind": "pillar",
+"elem": [
+"holy"
+],
+"hue": "cyan",
+"label": "light_pillar pipo_mapeffect013b_front",
+"frames": 10
+},
+{
+"file": "pipoya/pipoya_light_pillar_pipo_mapeffect013b__peak.png",
+"pack": "pipoya",
+"id": "pipoya_light_pillar_pipo_mapeffect013b",
+"frame": "peak",
+"w": 159,
+"h": 173,
+"kind": "pillar",
+"elem": [
+"holy"
+],
+"hue": "cyan",
+"label": "light_pillar pipo_mapeffect013b",
+"frames": 10
+},
+{
+"file": "pipoya/pipoya_light_pillar_pipo_mapeffect013b__alt.png",
+"pack": "pipoya",
+"id": "pipoya_light_pillar_pipo_mapeffect013b",
+"frame": "alt",
+"w": 154,
+"h": 172,
+"kind": "pillar",
+"elem": [
+"holy"
+],
+"hue": "cyan",
+"label": "light_pillar pipo_mapeffect013b",
+"frames": 10
+},
+{
+"file": "pipoya/pipoya_light_pillar_pipo_mapeffect013c_back__peak.png",
+"pack": "pipoya",
+"id": "pipoya_light_pillar_pipo_mapeffect013c_back",
+"frame": "peak",
+"w": 159,
+"h": 165,
+"kind": "pillar",
+"elem": [
+"holy"
+],
+"hue": "purple",
+"label": "light_pillar pipo_mapeffect013c_back",
+"frames": 10
+},
+{
+"file": "pipoya/pipoya_light_pillar_pipo_mapeffect013c_back__alt.png",
+"pack": "pipoya",
+"id": "pipoya_light_pillar_pipo_mapeffect013c_back",
+"frame": "alt",
+"w": 154,
+"h": 171,
+"kind": "pillar",
+"elem": [
+"holy"
+],
+"hue": "purple",
+"label": "light_pillar pipo_mapeffect013c_back",
+"frames": 10
+},
+{
+"file": "pipoya/pipoya_light_pillar_pipo_mapeffect013c_front__peak.png",
+"pack": "pipoya",
+"id": "pipoya_light_pillar_pipo_mapeffect013c_front",
+"frame": "peak",
+"w": 86,
+"h": 141,
+"kind": "pillar",
+"elem": [
+"holy"
+],
+"hue": "purple",
+"label": "light_pillar pipo_mapeffect013c_front",
+"frames": 10
+},
+{
+"file": "pipoya/pipoya_light_pillar_pipo_mapeffect013c_front__alt.png",
+"pack": "pipoya",
+"id": "pipoya_light_pillar_pipo_mapeffect013c_front",
+"frame": "alt",
+"w": 82,
+"h": 116,
+"kind": "pillar",
+"elem": [
+"holy"
+],
+"hue": "purple",
+"label": "light_pillar pipo_mapeffect013c_front",
+"frames": 10
+},
+{
+"file": "pipoya/pipoya_light_pillar_pipo_mapeffect013c__peak.png",
+"pack": "pipoya",
+"id": "pipoya_light_pillar_pipo_mapeffect013c",
+"frame": "peak",
+"w": 159,
+"h": 173,
+"kind": "pillar",
+"elem": [
+"holy"
+],
+"hue": "purple",
+"label": "light_pillar pipo_mapeffect013c",
+"frames": 10
+},
+{
+"file": "pipoya/pipoya_light_pillar_pipo_mapeffect013c__alt.png",
+"pack": "pipoya",
+"id": "pipoya_light_pillar_pipo_mapeffect013c",
+"frame": "alt",
+"w": 154,
+"h": 172,
+"kind": "pillar",
+"elem": [
+"holy"
+],
+"hue": "purple",
+"label": "light_pillar pipo_mapeffect013c",
+"frames": 10
+},
+{
+"file": "pipoya/pipoya_time_magic_pipo_btleffect209_192__peak.png",
+"pack": "pipoya",
+"id": "pipoya_time_magic_pipo_btleffect209_192",
+"frame": "peak",
+"w": 150,
+"h": 150,
+"kind": "aura",
+"elem": [
+"arcane"
+],
+"hue": "green",
+"label": "time_magic pipo_btleffect209_192",
+"frames": 15
+},
+{
+"file": "pipoya/pipoya_time_magic_pipo_btleffect209_192__alt.png",
+"pack": "pipoya",
+"id": "pipoya_time_magic_pipo_btleffect209_192",
+"frame": "alt",
+"w": 150,
+"h": 150,
+"kind": "aura",
+"elem": [
+"arcane"
+],
+"hue": "green",
+"label": "time_magic pipo_btleffect209_192",
+"frames": 15
+},
+{
+"file": "pipoya/pipoya_time_magic_pipo_btleffect210_192__peak.png",
+"pack": "pipoya",
+"id": "pipoya_time_magic_pipo_btleffect210_192",
+"frame": "peak",
+"w": 134,
+"h": 182,
+"kind": "aura",
+"elem": [
+"arcane"
+],
+"hue": "yellow",
+"label": "time_magic pipo_btleffect210_192",
+"frames": 15
+},
+{
+"file": "pipoya/pipoya_time_magic_pipo_btleffect210_192__alt.png",
+"pack": "pipoya",
+"id": "pipoya_time_magic_pipo_btleffect210_192",
+"frame": "alt",
+"w": 134,
+"h": 182,
+"kind": "aura",
+"elem": [
+"arcane"
+],
+"hue": "yellow",
+"label": "time_magic pipo_btleffect210_192",
+"frames": 15
+},
+{
+"file": "pipoya/pipoya_time_magic_pipo_btleffect211_192__peak.png",
+"pack": "pipoya",
+"id": "pipoya_time_magic_pipo_btleffect211_192",
+"frame": "peak",
+"w": 178,
+"h": 182,
+"kind": "aura",
+"elem": [
+"arcane"
+],
+"hue": "yellow",
+"label": "time_magic pipo_btleffect211_192",
+"frames": 15
+},
+{
+"file": "pipoya/pipoya_time_magic_pipo_btleffect211_192__alt.png",
+"pack": "pipoya",
+"id": "pipoya_time_magic_pipo_btleffect211_192",
+"frame": "alt",
+"w": 178,
+"h": 182,
+"kind": "aura",
+"elem": [
+"arcane"
+],
+"hue": "yellow",
+"label": "time_magic pipo_btleffect211_192",
+"frames": 15
+},
+{
+"file": "pipoya/pipoya_time_magic_pipo_btleffect212_192__peak.png",
+"pack": "pipoya",
+"id": "pipoya_time_magic_pipo_btleffect212_192",
+"frame": "peak",
+"w": 150,
+"h": 150,
+"kind": "aura",
+"elem": [
+"arcane"
+],
+"hue": "yellow",
+"label": "time_magic pipo_btleffect212_192",
+"frames": 20
+},
+{
+"file": "pipoya/pipoya_time_magic_pipo_btleffect212_192__alt.png",
+"pack": "pipoya",
+"id": "pipoya_time_magic_pipo_btleffect212_192",
+"frame": "alt",
+"w": 152,
+"h": 150,
+"kind": "aura",
+"elem": [
+"arcane"
+],
+"hue": "pink",
+"label": "time_magic pipo_btleffect212_192",
+"frames": 20
+},
+{
+"file": "pipoya/pipoya_time_magic_pipo_btleffect213_192__peak.png",
+"pack": "pipoya",
+"id": "pipoya_time_magic_pipo_btleffect213_192",
+"frame": "peak",
+"w": 154,
+"h": 154,
+"kind": "aura",
+"elem": [
+"arcane"
+],
+"hue": "pink",
+"label": "time_magic pipo_btleffect213_192",
+"frames": 20
+},
+{
+"file": "pipoya/pipoya_time_magic_pipo_btleffect213_192__alt.png",
+"pack": "pipoya",
+"id": "pipoya_time_magic_pipo_btleffect213_192",
+"frame": "alt",
+"w": 152,
+"h": 152,
+"kind": "aura",
+"elem": [
+"arcane"
+],
+"hue": "yellow",
+"label": "time_magic pipo_btleffect213_192",
+"frames": 20
+},
+{
+"file": "pipoya/pipoya_time_magic_pipo_btleffect214_192__peak.png",
+"pack": "pipoya",
+"id": "pipoya_time_magic_pipo_btleffect214_192",
+"frame": "peak",
+"w": 182,
+"h": 182,
+"kind": "aura",
+"elem": [
+"arcane"
+],
+"hue": "white",
+"label": "time_magic pipo_btleffect214_192",
+"frames": 15
+},
+{
+"file": "pipoya/pipoya_time_magic_pipo_btleffect214_192__alt.png",
+"pack": "pipoya",
+"id": "pipoya_time_magic_pipo_btleffect214_192",
+"frame": "alt",
+"w": 176,
+"h": 176,
+"kind": "aura",
+"elem": [
+"arcane"
+],
+"hue": "cyan",
+"label": "time_magic pipo_btleffect214_192",
+"frames": 15
+},
+{
+"file": "slashfx/slashfx_combo1_sheet__peak.png",
+"pack": "slashfx",
+"id": "slashfx_combo1_sheet",
+"frame": "peak",
+"w": 52,
+"h": 37,
+"kind": "slash",
+"elem": [],
+"hue": "cyan",
+"label": "slash SlashFX Combo1 sheet.png",
+"frames": 7
+},
+{
+"file": "slashfx/slashfx_combo2_sheet__peak.png",
+"pack": "slashfx",
+"id": "slashfx_combo2_sheet",
+"frame": "peak",
+"w": 58,
+"h": 41,
+"kind": "slash",
+"elem": [],
+"hue": "blue",
+"label": "slash SlashFX Combo2 sheet.png",
+"frames": 6
+},
+{
+"file": "slashfx/slashfx_combo3_sheet__peak.png",
+"pack": "slashfx",
+"id": "slashfx_combo3_sheet",
+"frame": "peak",
+"w": 63,
+"h": 16,
+"kind": "slash",
+"elem": [],
+"hue": "cyan",
+"label": "slash SlashFX Combo3 sheet.png",
+"frames": 4
+},
+{
+"file": "slashfx/slashfx_simplecombo1_sheet__peak.png",
+"pack": "slashfx",
+"id": "slashfx_simplecombo1_sheet",
+"frame": "peak",
+"w": 66,
+"h": 56,
+"kind": "slash",
+"elem": [],
+"hue": "cyan",
+"label": "slash SlashFX SimpleCombo1 sheet.png",
+"frames": 3
+},
+{
+"file": "slashfx/slashfx_simplecombo2_sheet__peak.png",
+"pack": "slashfx",
+"id": "slashfx_simplecombo2_sheet",
+"frame": "peak",
+"w": 48,
+"h": 35,
+"kind": "slash",
+"elem": [],
+"hue": "cyan",
+"label": "slash SlashFX SimpleCombo2 sheet.png",
+"frames": 3
+},
+{
+"file": "slashfx/slashfx_simplecombo3_sheet__peak.png",
+"pack": "slashfx",
+"id": "slashfx_simplecombo3_sheet",
+"frame": "peak",
+"w": 55,
+"h": 24,
+"kind": "slash",
+"elem": [],
+"hue": "cyan",
+"label": "slash SlashFX SimpleCombo3 sheet.png",
+"frames": 4
+},
+{
+"file": "slashfx/slashfx_simplesmall_combo1_sheet__peak.png",
+"pack": "slashfx",
+"id": "slashfx_simplesmall_combo1_sheet",
+"frame": "peak",
+"w": 44,
+"h": 24,
+"kind": "slash",
+"elem": [],
+"hue": "cyan",
+"label": "slash SlashFX SimpleSmall Combo1 sheet.png",
+"frames": 3
+},
+{
+"file": "slashfx/slashfx_simplesmall_combo2_sheet__peak.png",
+"pack": "slashfx",
+"id": "slashfx_simplesmall_combo2_sheet",
+"frame": "peak",
+"w": 28,
+"h": 26,
+"kind": "slash",
+"elem": [],
+"hue": "cyan",
+"label": "slash SlashFX SimpleSmall Combo2 sheet.png",
+"frames": 4
+},
+{
+"file": "slashfx/slashfx_simplesmall_combo3_sheet__peak.png",
+"pack": "slashfx",
+"id": "slashfx_simplesmall_combo3_sheet",
+"frame": "peak",
+"w": 33,
+"h": 25,
+"kind": "slash",
+"elem": [],
+"hue": "cyan",
+"label": "slash SlashFX SimpleSmall Combo3 sheet.png",
+"frames": 4
+},
+{
+"file": "gothicvania/dark_bolt__peak.png",
+"pack": "gothicvania",
+"id": "dark_bolt",
+"frame": "peak",
+"w": 88,
+"h": 56,
+"kind": "projectile",
+"elem": [
+"dark",
+"arcane"
+],
+"hue": "white",
+"label": "magic Dark-Bolt.png",
+"frames": 8
+},
+{
+"file": "gothicvania/fire_bomb__peak.png",
+"pack": "gothicvania",
+"id": "fire_bomb",
+"frame": "peak",
+"w": 54,
+"h": 44,
+"kind": "burst",
+"elem": [
+"fire",
+"arcane"
+],
+"hue": "orange",
+"label": "magic Fire-bomb.png",
+"frames": 14
+},
+{
+"file": "gothicvania/fire_bomb__alt.png",
+"pack": "gothicvania",
+"id": "fire_bomb",
+"frame": "alt",
+"w": 36,
+"h": 31,
+"kind": "burst",
+"elem": [
+"fire",
+"arcane"
+],
+"hue": "orange",
+"label": "magic Fire-bomb.png",
+"frames": 14
+},
+{
+"file": "gothicvania/lightning__peak.png",
+"pack": "gothicvania",
+"id": "lightning",
+"frame": "peak",
+"w": 103,
+"h": 84,
+"kind": "projectile",
+"elem": [
+"lightning",
+"arcane"
+],
+"hue": "green",
+"label": "magic Lightning.png",
+"frames": 5
+},
+{
+"file": "gothicvania/spark__peak.png",
+"pack": "gothicvania",
+"id": "spark",
+"frame": "peak",
+"w": 22,
+"h": 22,
+"kind": "impact",
+"elem": [
+"lightning",
+"arcane"
+],
+"hue": "blue",
+"label": "magic spark.png",
+"frames": 7
+},
+{
+"file": "gothicvania/spark__alt.png",
+"pack": "gothicvania",
+"id": "spark",
+"frame": "alt",
+"w": 28,
+"h": 28,
+"kind": "impact",
+"elem": [
+"lightning",
+"arcane"
+],
+"hue": "cyan",
+"label": "magic spark.png",
+"frames": 7
+},
+{
+"file": "pixogen/electriclighting1_lite__peak.png",
+"pack": "pixogen",
+"id": "electriclighting1_lite",
+"frame": "peak",
+"w": 30,
+"h": 46,
+"kind": "burst",
+"elem": [
+"lightning"
+],
+"hue": "white",
+"label": "Electricity ElectricLighting1_Lite.png",
+"frames": 6
+},
+{
+"file": "pixogen/electriclighting1_lite__alt.png",
+"pack": "pixogen",
+"id": "electriclighting1_lite",
+"frame": "alt",
+"w": 25,
+"h": 48,
+"kind": "burst",
+"elem": [
+"lightning"
+],
+"hue": "white",
+"label": "Electricity ElectricLighting1_Lite.png",
+"frames": 6
+},
+{
+"file": "pixogen/explosion_03_lite__peak.png",
+"pack": "pixogen",
+"id": "explosion_03_lite",
+"frame": "peak",
+"w": 63,
+"h": 307,
+"kind": "explosion",
+"elem": [],
+"hue": "orange",
+"label": "Explosion Explosion_03_Lite.png",
+"frames": 1
+},
+{
+"file": "pixogen/fireflamme_lite__peak.png",
+"pack": "pixogen",
+"id": "fireflamme_lite",
+"frame": "peak",
+"w": 24,
+"h": 38,
+"kind": "burst",
+"elem": [
+"fire"
+],
+"hue": "orange",
+"label": "Fire FireFlamme_Lite.png",
+"frames": 6
+},
+{
+"file": "pixogen/fireflamme_lite__alt.png",
+"pack": "pixogen",
+"id": "fireflamme_lite",
+"frame": "alt",
+"w": 25,
+"h": 36,
+"kind": "burst",
+"elem": [
+"fire"
+],
+"hue": "orange",
+"label": "Fire FireFlamme_Lite.png",
+"frames": 6
+},
+{
+"file": "pixogen/holycross_lite__peak.png",
+"pack": "pixogen",
+"id": "holycross_lite",
+"frame": "peak",
+"w": 34,
+"h": 42,
+"kind": "aura",
+"elem": [
+"holy"
+],
+"hue": "yellow",
+"label": "Holy HolyCross_Lite.png",
+"frames": 6
+},
+{
+"file": "pixogen/holycross_lite__alt.png",
+"pack": "pixogen",
+"id": "holycross_lite",
+"frame": "alt",
+"w": 34,
+"h": 30,
+"kind": "aura",
+"elem": [
+"holy"
+],
+"hue": "yellow",
+"label": "Holy HolyCross_Lite.png",
+"frames": 6
+},
+{
+"file": "pixogen/voidshield_lite__peak.png",
+"pack": "pixogen",
+"id": "voidshield_lite",
+"frame": "peak",
+"w": 38,
+"h": 31,
+"kind": "shield",
+"elem": [
+"dark",
+"arcane"
+],
+"hue": "purple",
+"label": "Void VoidShield_Lite.png",
+"frames": 6
+},
+{
+"file": "pixogen/waterwave_lite__peak.png",
+"pack": "pixogen",
+"id": "waterwave_lite",
+"frame": "peak",
+"w": 52,
+"h": 21,
+"kind": "ground",
+"elem": [
+"water"
+],
+"hue": "blue",
+"label": "Water WaterWave_Lite.png",
+"frames": 6
+},
+{
+"file": "pixogen/waterwave_lite__alt.png",
+"pack": "pixogen",
+"id": "waterwave_lite",
+"frame": "alt",
+"w": 47,
+"h": 16,
+"kind": "ground",
+"elem": [
+"water"
+],
+"hue": "blue",
+"label": "Water WaterWave_Lite.png",
+"frames": 6
+},
+{
+"file": "pixogen/windground_lite__peak.png",
+"pack": "pixogen",
+"id": "windground_lite",
+"frame": "peak",
+"w": 54,
+"h": 22,
+"kind": "ground",
+"elem": [
+"wind",
+"earth"
+],
+"hue": "white",
+"label": "Wind WindGround_Lite.png",
+"frames": 6
+},
+{
+"file": "sangoro/bigslashv__peak.png",
+"pack": "sangoro",
+"id": "bigslashv",
+"frame": "peak",
+"w": 292,
+"h": 33,
+"kind": "slash",
+"elem": [],
+"hue": "white",
+"label": "attack BigSlashV.png",
+"frames": 1
+},
+{
+"file": "sangoro/hslash1__peak.png",
+"pack": "sangoro",
+"id": "hslash1",
+"frame": "peak",
+"w": 17,
+"h": 12,
+"kind": "slash",
+"elem": [],
+"hue": "white",
+"label": "attack Hslash1.png",
+"frames": 10
+},
+{
+"file": "sangoro/punchimp1__peak.png",
+"pack": "sangoro",
+"id": "punchimp1",
+"frame": "peak",
+"w": 211,
+"h": 16,
+"kind": "slash",
+"elem": [],
+"hue": "white",
+"label": "attack PunchImp1.png",
+"frames": 1
+},
+{
+"file": "sangoro/vslashsmall1__peak.png",
+"pack": "sangoro",
+"id": "vslashsmall1",
+"frame": "peak",
+"w": 93,
+"h": 21,
+"kind": "slash",
+"elem": [],
+"hue": "white",
+"label": "attack VslashSmall1.png",
+"frames": 1
+},
+{
+"file": "sangoro/vslash1__peak.png",
+"pack": "sangoro",
+"id": "vslash1",
+"frame": "peak",
+"w": 224,
+"h": 40,
+"kind": "slash",
+"elem": [],
+"hue": "white",
+"label": "attack vSlash1.png",
+"frames": 1
+},
+{
+"file": "pixelspells/32x32_side_scroller_td_unit_auras_casts_status_confused_effect__alt.png",
+"pack": "pixelspells",
+"id": "32x32_side_scroller_td_unit_auras_casts_status_confused_effect",
+"frame": "alt",
+"w": 16,
+"h": 8,
+"kind": "aura",
+"elem": [],
+"hue": "orange",
+"label": "Confused 32x32 Side Scroller TD Unit Auras, Casts & Status-Confused_Effect.png",
+"frames": 6
+},
+{
+"file": "pixelspells/32x32_side_scroller_td_unit_auras_casts_status_heal_effect__peak.png",
+"pack": "pixelspells",
+"id": "32x32_side_scroller_td_unit_auras_casts_status_heal_effect",
+"frame": "peak",
+"w": 18,
+"h": 25,
+"kind": "aura",
+"elem": [
+"holy"
+],
+"hue": "green",
+"label": "Heal 32x32 Side Scroller TD Unit Auras, Casts & Status-Heal_Effect.png",
+"frames": 6
+},
+{
+"file": "pixelspells/32x32_side_scroller_td_unit_auras_casts_status_heal_effect__alt.png",
+"pack": "pixelspells",
+"id": "32x32_side_scroller_td_unit_auras_casts_status_heal_effect",
+"frame": "alt",
+"w": 16,
+"h": 23,
+"kind": "aura",
+"elem": [
+"holy"
+],
+"hue": "green",
+"label": "Heal 32x32 Side Scroller TD Unit Auras, Casts & Status-Heal_Effect.png",
+"frames": 6
+},
+{
+"file": "pixelspells/32x32_side_scroller_td_unit_auras_casts_status_heal_effectback__peak.png",
+"pack": "pixelspells",
+"id": "32x32_side_scroller_td_unit_auras_casts_status_heal_effectback",
+"frame": "peak",
+"w": 16,
+"h": 9,
+"kind": "aura",
+"elem": [
+"holy"
+],
+"hue": "green",
+"label": "Heal 32x32 Side Scroller TD Unit Auras, Casts & Status-Heal_EffectBack.png",
+"frames": 6
+},
+{
+"file": "pixelspells/32x32_side_scroller_td_unit_auras_casts_status_heal_effectback__alt.png",
+"pack": "pixelspells",
+"id": "32x32_side_scroller_td_unit_auras_casts_status_heal_effectback",
+"frame": "alt",
+"w": 16,
+"h": 9,
+"kind": "aura",
+"elem": [
+"holy"
+],
+"hue": "green",
+"label": "Heal 32x32 Side Scroller TD Unit Auras, Casts & Status-Heal_EffectBack.png",
+"frames": 6
+},
+{
+"file": "pixelspells/32x32_side_scroller_td_unit_auras_casts_status_heal_effectfront__peak.png",
+"pack": "pixelspells",
+"id": "32x32_side_scroller_td_unit_auras_casts_status_heal_effectfront",
+"frame": "peak",
+"w": 18,
+"h": 26,
+"kind": "aura",
+"elem": [
+"holy"
+],
+"hue": "white",
+"label": "Heal 32x32 Side Scroller TD Unit Auras, Casts & Status-Heal_EffectFront.png",
+"frames": 6
+},
+{
+"file": "pixelspells/32x32_side_scroller_td_unit_auras_casts_status_heal_effectfront__alt.png",
+"pack": "pixelspells",
+"id": "32x32_side_scroller_td_unit_auras_casts_status_heal_effectfront",
+"frame": "alt",
+"w": 18,
+"h": 25,
+"kind": "aura",
+"elem": [
+"holy"
+],
+"hue": "green",
+"label": "Heal 32x32 Side Scroller TD Unit Auras, Casts & Status-Heal_EffectFront.png",
+"frames": 6
+},
+{
+"file": "pixelspells/32x48_side_scroller_td_pillars_skyfalls_blue_lightning_effect__peak.png",
+"pack": "pixelspells",
+"id": "32x48_side_scroller_td_pillars_skyfalls_blue_lightning_effect",
+"frame": "peak",
+"w": 23,
+"h": 48,
+"kind": "pillar",
+"elem": [
+"lightning",
+"holy"
+],
+"hue": "cyan",
+"label": "32x48 Pillars & Skyfalls 32x48 Side Scroller TD Pillars & Skyfalls-Blue_Lightning_Effect.png",
+"frames": 6
+},
+{
+"file": "pixelspells/32x48_side_scroller_td_pillars_skyfalls_fire_column_effect__peak.png",
+"pack": "pixelspells",
+"id": "32x48_side_scroller_td_pillars_skyfalls_fire_column_effect",
+"frame": "peak",
+"w": 25,
+"h": 48,
+"kind": "pillar",
+"elem": [
+"fire",
+"holy"
+],
+"hue": "orange",
+"label": "32x48 Pillars & Skyfalls 32x48 Side Scroller TD Pillars & Skyfalls-Fire_Column_Effect.png",
+"frames": 8
+},
+{
+"file": "pixelspells/32x48_side_scroller_td_pillars_skyfalls_fire_column_effect__alt.png",
+"pack": "pixelspells",
+"id": "32x48_side_scroller_td_pillars_skyfalls_fire_column_effect",
+"frame": "alt",
+"w": 20,
+"h": 48,
+"kind": "pillar",
+"elem": [
+"fire",
+"holy"
+],
+"hue": "orange",
+"label": "32x48 Pillars & Skyfalls 32x48 Side Scroller TD Pillars & Skyfalls-Fire_Column_Effect.png",
+"frames": 8
+},
+{
+"file": "pixelspells/48x48_side_scroller_td_area_blasts_ground_fields_acid_pool_effect__peak.png",
+"pack": "pixelspells",
+"id": "48x48_side_scroller_td_area_blasts_ground_fields_acid_pool_effect",
+"frame": "peak",
+"w": 44,
+"h": 12,
+"kind": "explosion",
+"elem": [
+"earth",
+"poison"
+],
+"hue": "green",
+"label": "Acid Pool 48x48 Side Scroller TD Area Blasts & Ground Fields-Acid_Pool_Effect.png",
+"frames": 6
+},
+{
+"file": "pixelspells/48x48_side_scroller_td_area_blasts_ground_fields_acid_pool_effect__alt.png",
+"pack": "pixelspells",
+"id": "48x48_side_scroller_td_area_blasts_ground_fields_acid_pool_effect",
+"frame": "alt",
+"w": 44,
+"h": 12,
+"kind": "explosion",
+"elem": [
+"earth",
+"poison"
+],
+"hue": "green",
+"label": "Acid Pool 48x48 Side Scroller TD Area Blasts & Ground Fields-Acid_Pool_Effect.png",
+"frames": 6
+},
+{
+"file": "pixelspells/48x48_side_scroller_td_area_blasts_ground_fields_acid_pool_effectback__peak.png",
+"pack": "pixelspells",
+"id": "48x48_side_scroller_td_area_blasts_ground_fields_acid_pool_effectback",
+"frame": "peak",
+"w": 44,
+"h": 12,
+"kind": "explosion",
+"elem": [
+"earth",
+"poison"
+],
+"hue": "green",
+"label": "Acid Pool 48x48 Side Scroller TD Area Blasts & Ground Fields-Acid_Pool_EffectBack.png",
+"frames": 6
+},
+{
+"file": "pixelspells/48x48_side_scroller_td_area_blasts_ground_fields_acid_pool_effectback__alt.png",
+"pack": "pixelspells",
+"id": "48x48_side_scroller_td_area_blasts_ground_fields_acid_pool_effectback",
+"frame": "alt",
+"w": 44,
+"h": 12,
+"kind": "explosion",
+"elem": [
+"earth",
+"poison"
+],
+"hue": "green",
+"label": "Acid Pool 48x48 Side Scroller TD Area Blasts & Ground Fields-Acid_Pool_EffectBack.png",
+"frames": 6
+},
+{
+"file": "pixelspells/48x48_side_scroller_td_area_blasts_ground_fields_acid_pool_effectfront__peak.png",
+"pack": "pixelspells",
+"id": "48x48_side_scroller_td_area_blasts_ground_fields_acid_pool_effectfront",
+"frame": "peak",
+"w": 38,
+"h": 9,
+"kind": "explosion",
+"elem": [
+"earth",
+"poison"
+],
+"hue": "green",
+"label": "Acid Pool 48x48 Side Scroller TD Area Blasts & Ground Fields-Acid_Pool_EffectFront.png",
+"frames": 6
+},
+{
+"file": "pixelspells/48x48_side_scroller_td_area_blasts_ground_fields_acid_pool_effectfront__alt.png",
+"pack": "pixelspells",
+"id": "48x48_side_scroller_td_area_blasts_ground_fields_acid_pool_effectfront",
+"frame": "alt",
+"w": 36,
+"h": 10,
+"kind": "explosion",
+"elem": [
+"earth",
+"poison"
+],
+"hue": "green",
+"label": "Acid Pool 48x48 Side Scroller TD Area Blasts & Ground Fields-Acid_Pool_EffectFront.png",
+"frames": 6
+}
+]
