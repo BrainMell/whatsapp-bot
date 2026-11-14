@@ -1,22 +1,29 @@
 // ============================================
 // GAME NIGHT QUIZ PACKS
 // ============================================
-// Used by `.j quiz -preplanned event1` / `event2` (and by `.j gamenight`).
-// Same machinery as the regular preplanned pack (pinned logos from the verified
-// dataset, pinned typed/mc trivia, pinned theme songs) - only the content differs.
+// Used by `.j quiz -gn` (alias of `.j quiz -preplanned event1`) and
+// `.j quiz -preplanned event2` (and by `.j gamenight`).
 //
-//   event1 = the preplanned pack's 30 logos (text-only logos swapped for text-free ones), a 16-portrait
-//            "Name the Anime" picture round, 20 harder hand-written franchise questions, 6 theme songs.
-//   event2 = finale: 10 video game questions + a 12-portrait "Which Game?" picture round + obscure
-//            comic character / team picture rounds.
+// 2026-11-14 REBUILD (client brief: "they only want the quiz"):
+//   event1 = THE REMADE QUIZ, all typed answers, wait-then-reveal scoring:
+//     1. 30 logos - every single one a TEXT-FREE glyph (wordmarks swapped for
+//        bundled symbols: Rockstar R★ / Shell pecten / Tinder flame added this
+//        round; Netflix's N, Nintendo's wordmark and Tesla's TESLA lettering are gone).
+//     2. 40 hand-written anime/comics trivia - deliberately hard, owner's
+//        examples: Superman's MIDDLE name, what happened to Kyle Rayner's
+//        girlfriend. Every answer verified against canon/fandom sources.
+//     3. 20 NAME THE CHARACTER portraits - obscure, deliberately NOT the
+//        protagonist (art: superhero-api dataset + image search, visually verified).
+//     4. 16 NAME THE ANIME portraits - re-baked from character art, top-band
+//        crop on a solid white background, every file visually inspected.
+//     5. 10 CARTOON MUSICALS - real song clips through the .j audio pipeline
+//        (specific song titles, not just opening themes).
+//   event2 = finale (unchanged): 10 video game questions + a 12-portrait
+//            "Which Game?" picture round + obscure comic character / team rounds.
 //
-// 2026-11-14 (bake-time fetch round): the two portrait rounds ship BUNDLED art under assets/gn-quiz/
-// (anime/<slug>.jpg, games/<slug>.jpg) - every file was visually verified at bake time, so the quiz
-// never live-fetches these and can't ship a wrong image.
-//
-// Every logo name below exists in data/logoDataset.json (live + modern), so
-// images come from the audited dataset path, not live search. Decoys are
-// same-category names so the options stay fair.
+// All event1 sections are typed (fmt "typed", hideOptions) - no ABCD anywhere.
+// Every image ships in the repo (assets/gn-quiz/), so nothing is live-fetched
+// at quiz time except the audio clips, which are pre-baked to disk on boot.
 // ============================================
 
 const preplanned = require("./quizPreplanned");
@@ -51,22 +58,28 @@ function withDecoys(list) {
   });
 }
 
-// ---------- EVENT 1: Mega Quiz ----------
-// Logos = the regular preplanned pack's 30 brands (same order / difficulty ramp), EXCEPT every logo whose
-// picture is just the brand's name written out (wordmarks, or glyph + lettering). Those are swapped for a
-// text-free glyph that ships in assets/gn-quiz/logos/ (Simple Icons glyphs, CC0; Microsoft's four squares
-// drawn by hand) - either the same brand's symbol, or a different brand when the original has no symbol.
+// ---------- EVENT 1: the remade quiz ----------
+// Logos = the preplanned pack's 30 slots, EVERY ONE a text-free glyph:
+//   - 13 ship from assets/gn-quiz/logos/ (Simple Icons-style symbols, CC0;
+//     Microsoft's four squares drawn by hand; Rockstar/Shell/Tinder fetched
+//     and white-plated this round). Netflix (wordmark N is a letter), Nintendo
+//     (NINTENDO SWITCH printed on the logo) and Tesla (TESLA lettering under
+//     the T) all swapped out per the "none text logos" brief.
+//   - the rest ride the audited dataset (each visually verified text-free).
 const POOL_OF = { "Apps & Social": "Apps", Tech: "Tech", "Entertainment & Gaming": "Gaming", Cars: "Cars", "Food & Drink": "Food", Fashion: "Fashion" };
 const SWAPS = {
   // same brand, symbol only
   Twitch: { bundled: "twitch" }, Google: { bundled: "google" }, Microsoft: { bundled: "microsoft" },
   Nvidia: { bundled: "nvidia" }, Adidas: { bundled: "adidas" },
-  // brand has no text-free logo -> different brand in the same slot
+  // brand has no text-free logo -> different brand in the same slot (2026-11-14: all glyph-only)
   Amazon: { name: "Pinterest", wiki: "Pinterest", cat: "Apps & Social", bundled: "pinterest" },
   Samsung: { name: "Snapchat", wiki: "Snapchat", cat: "Apps & Social", bundled: "snapchat" },
   Xbox: { name: "Duolingo", wiki: "Duolingo", cat: "Apps & Social", bundled: "duolingo" },
   "Epic Games": { name: "Roblox", wiki: "Roblox", cat: "Entertainment & Gaming", bundled: "roblox" },
   "Coca-Cola": { name: "Red Bull", wiki: "Red Bull", cat: "Food & Drink", bundled: "redbull" },
+  Netflix: { name: "Tinder", wiki: "Tinder", cat: "Apps & Social", bundled: "tinder" },          // was the N wordmark
+  Nintendo: { name: "Rockstar Games", wiki: "Rockstar Games", cat: "Entertainment & Gaming", bundled: "rockstar" }, // had NINTENDO SWITCH printed
+  Tesla: { name: "Shell", wiki: "Shell", cat: "Cars", bundled: "shell" },                        // had TESLA lettering
 };
 const E1_BRANDS = withDecoys(preplanned.PACK.brands.map((b) => {
   const sw = SWAPS[b.name] || {};
@@ -74,38 +87,97 @@ const E1_BRANDS = withDecoys(preplanned.PACK.brands.map((b) => {
   return { ...nb, pool: POOL_OF[nb.cat] || "Tech" };
 }));
 
-// Hand-written, canon-checked, one checkable fact each. fmt "typed" = type the answer (alts + typo tolerance).
+// Hand-written trivia, one checkable fact each, VERIFIED 2026-11-14:
+// comics answers vs DC/Marvel/fandom wikis (Superman middle name = Joseph per
+// the post-Crisis legal name; Alex DeWitt found in a refrigerator, Green
+// Lantern #54; Joan Williams; Arthur Curry Jr; Anthony Edward Stark; Stanley
+// Martin Lieber; Timely Comics; Amazing Fantasy #15; Detective Comics #27),
+// anime answers vs official/fandom sources (Gine - DB Minus; Dina Fritz the
+// Smiling Titan; Liberio; Sakumo "Konoha's White Fang"; Mito Uzumaki first
+// Nine-Tails jinchuriki; Portgas D. Rouge; Luffy 3,000,000,000 post-Wano
+// ch.1053; Rem kills L; Kenjaku in Geto's corpse; Old Man Zangetsu = Ichigo's
+// Quincy side; Truth takes Mustang's eyesight; Exploding Blood; Conjurer;
+// Caped Baldy; Test Subject 007; Eternal Slumber; Ghost Devil).
+// fmt "typed" everywhere - the client brief: "you should just name instead of
+// the abcd sh*t we normally do".
 const T = (id, franchise, difficulty, q, answer, alts = []) => ({ id, franchise, fmt: "typed", difficulty, topic: franchise, q, answer, alts });
 const E1_TRIVIA = [
-  // ---- Dragon Ball (5) ----
-  T("e1-db-belmod", "Dragon Ball", "hard", "Which God of Destruction rules Universe 11, the home universe of Jiren and Toppo?", "Belmod"),
-  T("e1-db-vegeta-broly", "Dragon Ball", "hard", "In Dragon Ball Super: Broly, which ruler orders baby Broly exiled to the planet Vampa?", "King Vegeta", ["Vegeta Sr", "Vegeta Senior"]),
-  T("e1-db-nail", "Dragon Ball", "medium", "Which Namekian warrior fuses with Piccolo on Namek and gives him a huge power boost?", "Nail"),
-  T("e1-db-cabba", "Dragon Ball", "hard", "Which Universe 6 Saiyan is taught to go Super Saiyan by Vegeta?", "Cabba", ["Kyabe"]),
-  T("e1-db-heeters", "Dragon Ball", "hard", "In the Granolah the Survivor arc, which mercenary race wiped out Granolah's people, the Cerealians?", "Heeters", ["The Heeters", "Heeter"]),
-  // ---- Solo Leveling (5) ----
-  T("e1-sl-run", "Solo Leveling", "medium", "In the System's Daily Quest, how many kilometres must Jinwoo run?", "10", ["10 km", "10km", "ten", "ten km", "10 kilometres", "10 kilometers"]),
-  T("e1-sl-gunhee", "Solo Leveling", "medium", "Who is the chairman of the Korean Hunters Association?", "Go Gunhee", ["Goh Gunhee", "Go Gun-Hee", "Goh Gun-Hee", "Gunhee"]),
-  T("e1-sl-ashborn", "Solo Leveling", "hard", "What is the name of the original Shadow Monarch whose power Jinwoo inherits?", "Ashborn", ["Ashbourne"]),
-  T("e1-sl-querehsha", "Solo Leveling", "hard", "Which Monarch of Plagues commanded the Ant King, Beru, before he joined Jinwoo?", "Querehsha"),
-  T("e1-sl-baek", "Solo Leveling", "hard", "Which S-rank hunter leads the White Tiger Guild?", "Baek Yoonho", ["Baek Yun-ho", "Baek Yunho", "Yoonho", "Baek Yoon-ho"]),
-  // ---- Devil May Cry (5) ----
-  T("e1-dmc-agni", "Devil May Cry", "hard", "What are the names of the twin demon swords Dante takes in Devil May Cry 3?", "Agni and Rudra", ["Agni & Rudra", "Agni Rudra", "Agni, Rudra", "Agni"]),
-  T("e1-dmc-nico", "Devil May Cry", "medium", "Who is the van-driving Devil Breaker engineer who works with Nero in Devil May Cry 5?", "Nico", ["Nicoletta", "Nicoletta Goldstein"]),
-  T("e1-dmc-nightmare", "Devil May Cry", "hard", "V's three familiars are Griffon, Shadow and which golem?", "Nightmare"),
-  T("e1-dmc-trish", "Devil May Cry", "medium", "Which demon, sent by Mundus, takes the appearance of Dante's mother Eva?", "Trish"),
-  T("e1-dmc-nelo", "Devil May Cry", "hard", "In the original Devil May Cry, which armoured knight boss is revealed to be a controlled Vergil?", "Nelo Angelo", ["Nelo"]),
-  // ---- God of War (5) ----
-  T("e1-gow-huldra", "God of War", "medium", "Which two dwarven brothers, known as the Huldra Brothers, forge gear for Kratos in the Norse saga?", "Brok and Sindri", ["Brok & Sindri", "Sindri and Brok", "Brok", "Sindri", "Brok Sindri"]),
-  T("e1-gow-jorm", "God of War", "medium", "What is the name of the World Serpent that Kratos and Atreus visit by boat?", "Jormungandr", ["Jörmungandr", "Jormungand", "Jormungander"]),
-  T("e1-gow-calliope", "God of War", "hard", "What was the name of Kratos's daughter in the Greek saga?", "Calliope"),
-  T("e1-gow-jotun", "God of War", "medium", "Which realm of giants holds the highest peak where Kratos and Atreus scatter Faye's ashes?", "Jotunheim", ["Jötunheim", "Jotunheimr", "Jotun"]),
-  T("e1-gow-hercules", "God of War", "medium", "Which half-brother of Kratos does he beat to death in God of War III, taking the Nemean Cestus?", "Hercules", ["Heracles"]),
+  // ---- anime (20) ----
+  T("e1-db-gine", "Dragon Ball", "hard", "What is the name of Goku's biological mother, revealed in Dragon Ball Minus and Super: Broly?", "Gine"),
+  T("e1-db-champa", "Dragon Ball", "hard", "Which God of Destruction is Beerus's twin brother, ruling Universe 6?", "Champa"),
+  T("e1-aot-dina", "Attack on Titan", "hard", "The Titan that ate Eren's mother is revealed to be Grisha's first wife - name her.", "Dina Fritz", ["Dina Yeager", "Smiling Titan", "The Smiling Titan", "Dina"]),
+  T("e1-aot-liberio", "Attack on Titan", "hard", "In which Marleyan internment city do Reiner, Annie and Bertholdt grow up?", "Liberio", ["Rebellio", "Rebelio", "Libelio"]),
+  T("e1-naruto-whitefang", "Naruto", "hard", "What was the nickname of Kakashi's father Sakumo Hatake, who took his own life after a failed mission?", "Konoha's White Fang", ["White Fang", "White Fang of Konoha", "White Fang of the Leaf", "The White Fang", "Konoha White Fang"]),
+  T("e1-naruto-mito", "Naruto", "hard", "Which wife of the First Hokage became the Nine-Tails' first jinchuriki?", "Mito Uzumaki", ["Mito", "Uzumaki Mito"]),
+  T("e1-op-rouge", "One Piece", "hard", "Who is Gol D. Roger's partner and Ace's mother, who held her pregnancy for 20 months to hide her son?", "Portgas D. Rouge", ["Portgas D Rouge", "Portgas Rouge", "Rouge"]),
+  T("e1-op-kaido", "One Piece", "hard", "Kaido's Devil Fruit is the Uo Uo no Mi - what mythical dragon does it transform him into?", "Azure Dragon", ["Seiryu", "Blue Dragon", "Fish-Fish Fruit Model Seiryu", "Fish Fish Fruit Model Seiryu", "Uo Uo no Mi Model Seiryu", "Dragon"]),
+  T("e1-op-bounty", "One Piece", "medium", "What is Luffy's bounty after the Wano arc (chapter 1053)?", "3 billion", ["3000000000", "3 billion berries", "Three billion", "3,000,000,000", "3B", "Three billion berries", "3000000000 berries"]),
+  T("e1-dn-rem", "Death Note", "hard", "Which shinigami sacrifices herself to kill L, writing his real name in her Death Note?", "Rem", ["Remu"]),
+  T("e1-jjk-kenjaku", "Jujutsu Kaisen", "hard", "Which thousand-year-old body-hopping sorcerer is wearing Geto's corpse?", "Kenjaku", ["Noritoshi Kamo", "Kamo Noritoshi", "Kamu Noritoshi"]),
+  T("e1-bleach-zangetsu", "Bleach", "hard", "In the Thousand-Year Blood War arc, what does 'Old Man Zangetsu' turn out to actually represent?", "Ichigo's Quincy powers", ["Quincy", "His Quincy powers", "Quincy powers", "Yhwach", "Yhwach's power", "The Quincy", "His Quincy heritage", "His Quincy side"]),
+  T("e1-fma-mustang", "Fullmetal Alchemist", "medium", "As the toll for opening the Gate, what does Truth take from Roy Mustang?", "His eyesight", ["His eyes", "Eyesight", "His sight", "His vision", "Vision", "Eyes"]),
+  T("e1-mha-yagi", "My Hero Academia", "medium", "What is All Might's civilian surname?", "Yagi", ["Toshinori Yagi", "Yagi Toshinori", "Toshinori"]),
+  T("e1-ds-nezuko", "Demon Slayer", "hard", "What is the name of Nezuko's Blood Demon Art?", "Exploding Blood", ["Exploding blood", "Bakketsu", "Blood Burst", "Hekketsu"]),
+  T("e1-hxh-kurapika", "Hunter x Hunter", "hard", "What Nen type does Kurapika's Water Divination reveal him to be?", "Conjurer", ["Conjuration", "Materialization", "A Conjurer", "Conjurer type"]),
+  T("e1-opm-hero", "One Punch Man", "medium", "What is Saitama's official Hero Association hero name?", "Caped Baldy", ["Bald Cape", "Caped Baldy", "Baldy"]),
+  T("e1-sf-anya", "Spy x Family", "hard", "What was Anya's designation as an experimental test subject before her adoption?", "Subject 007", ["Test Subject 007", "007", "Experiment 007", "Test Subject 7", "Subject 7", "Test Subject 007 (Anya)"]),
+  T("e1-sl-slumber", "Solo Leveling", "hard", "Which incurable sleep disease put Jinwoo's mother into a decade-long coma?", "Eternal Slumber", ["Eternal Sleep", "Eternal Sleep Disease", "The Eternal Slumber", "Eternal slumber disease"]),
+  T("e1-csm-ghost", "Chainsaw Man", "hard", "Which devil is Himeno contracted to, invoked with a hand signal?", "Ghost Devil", ["The Ghost Devil", "Ghost"]),
+  // ---- comics (20) ----
+  T("e1-superman-middle", "Superman", "hard", "What is Clark Kent's middle name in the post-Crisis comics (not his Kryptonian name)?", "Joseph", ["Joe", "Clark Joseph Kent"]),
+  T("e1-gl-fridge", "Green Lantern", "hard", "Kyle Rayner's girlfriend Alex DeWitt was murdered and found stuffed inside which household appliance, coining a famous comics trope?", "Refrigerator", ["Fridge", "A refrigerator", "The refrigerator", "A fridge", "The fridge", "Refridgerator"]),
+  T("e1-arkham-founder", "Batman", "hard", "Who founded Arkham Asylum, subject of the graphic novel 'Arkham Asylum: A Serious House on Serious Earth'?", "Amadeus Arkham", ["Amadeus", "Arkham"]),
+  T("e1-rhino-name", "Spider-Man", "hard", "What is the real name of the Rhino, Spider-Man's horned powerhouse?", "Aleksei Sytsevich", ["Alexei Sytsevich", "Aleksei Mikhailovich Sytsevich", "Alexi Sytsevich", "Aleksei", "Alexei"]),
+  T("e1-xmen-legion", "X-Men", "medium", "Which reality-warping villain, son of Professor X, is split across multiple personalities?", "Legion", ["David Haller", "David Charles Haller"]),
+  T("e1-ff-franklin", "Fantastic Four", "medium", "What is the name of Reed Richards and Sue Storm's reality-warping son?", "Franklin", ["Franklin Richards", "Franklin Benjamin Richards", "Franklin Storm"]),
+  T("e1-thor-betaray", "Thor", "medium", "Which cyborg alien from Korbinite proved worthy enough to lift Mjolnir, earning Thor's respect?", "Beta Ray Bill", ["Beta-Ray Bill", "Bill"]),
+  T("e1-thanos-eros", "Marvel", "hard", "What is the name of Thanos's brother, the Avengers' Starfox?", "Eros", ["Starfox", "Eros of Titan", "Eros (Starfox)"]),
+  T("e1-aquaman-son", "Aquaman", "hard", "What is the name of Aquaman and Mera's infant son, murdered by Black Manta in the classic comics?", "Arthur Curry Jr.", ["Aquababy", "Arthur Curry Junior", "Arthur Jr", "Arthur Curry Junior", "Arthur Jr."]),
+  T("e1-stark-middle", "Iron Man", "hard", "What is Tony Stark's middle name?", "Edward", ["Anthony Edward Stark"]),
+  T("e1-banner-first", "Hulk", "medium", "What is Bruce Banner's legal FIRST name in the Marvel comics?", "Robert", ["Robert Bruce Banner", "Robert"]),
+  T("e1-wolverine-origin", "Wolverine", "medium", "What is Wolverine's birth name, revealed in the Origin miniseries?", "James Howlett", ["Jim Howlett", "James"]),
+  T("e1-flash-joan", "The Flash", "hard", "Who is Jay Garrick, the Golden Age Flash's, longtime wife?", "Joan Williams", ["Joan Garrick", "Joan Williams Garrick", "Joan"]),
+  T("e1-starsapphire", "Green Lantern", "medium", "The Star Sapphires wield which color of the emotional spectrum (the light of love)?", "Violet", ["Violet light", "Purple", "The violet light", "Love", "The violet light of love"]),
+  T("e1-titans-garfield", "Teen Titans", "medium", "What is Beast Boy's real name?", "Garfield Logan", ["Garfield Mark Logan", "Garfield", "Gar", "Gar Logan"]),
+  T("e1-penguin-oswald", "Batman", "medium", "What is the Penguin's real name?", "Oswald Cobblepot", ["Oswald Chesterfield Cobblepot", "Oswald", "Cobblepot"]),
+  T("e1-stanlee-name", "Marvel", "hard", "What is Stan Lee's real birth name?", "Stanley Martin Lieber", ["Stanley Lieber", "Stan Lieber"]),
+  T("e1-marvel-timely", "Marvel", "hard", "Marvel Comics launched in 1939 under what company name?", "Timely Comics", ["Timely Publications", "Timely"]),
+  T("e1-spidey-firstapp", "Spider-Man", "medium", "In which comic did Spider-Man make his first appearance?", "Amazing Fantasy #15", ["Amazing Fantasy 15", "Amazing Fantasy", "Amazing Fantasy Fifteen"]),
+  T("e1-batman-firstapp", "Batman", "medium", "In which comic did Batman make his first appearance?", "Detective Comics #27", ["Detective Comics 27", "Detective Comics", "Detective Comics Twenty-Seven"]),
 ];
 
-// "Name the Anime" picture round - one iconic character portrait per franchise, bundled art
-// (assets/gn-quiz/anime/<slug>.jpg), visually verified at bake time. Typed answers; the v8 matcher
-// handles romaji/EN variants via alts.
+// "Name the Character" picture round - 20 deliberately OBSCURE comic characters
+// (owner: "not just protagonist"). Art: superhero-api dataset + image search,
+// bundled under assets/gn-quiz/chars/<slug>.jpg, visually verified at bake time.
+// Typed answers with real-name aliases via the v8 matcher.
+const C1 = (slug, pub, answer, alts = []) => ({ id: `e1-ch-${slug}`, file: `chars/${slug}.jpg`, fmt: "typed", q: `Name this comic book character (${pub}).`, answer, alts, difficulty: "hard", topic: "Name the Character" });
+const E1_CHARS = [
+  C1("blade", "Marvel", "Blade", ["Blade the Vampire Hunter"]),
+  C1("cable", "Marvel", "Cable", ["Nathan Summers"]),
+  C1("colossus", "Marvel", "Colossus", ["Piotr Rasputin", "Peter Rasputin"]),
+  C1("darkseid", "DC", "Darkseid", ["Uxas"]),
+  C1("deathstroke", "DC", "Deathstroke", ["Slade Wilson", "Slade"]),
+  C1("drax", "Marvel", "Drax the Destroyer", ["Drax", "Arthur Douglas"]),
+  C1("firestorm", "DC", "Firestorm", ["Fire Storm"]),
+  C1("gambit", "Marvel", "Gambit", ["Remy LeBeau", "Remy Etienne LeBeau"]),
+  C1("hellboy", "Dark Horse", "Hellboy", ["Anung Un Rama"]),
+  C1("jubilee", "Marvel", "Jubilee", ["Jubilation Lee"]),
+  C1("lobo", "DC", "Lobo"),
+  C1("namor", "Marvel", "Namor", ["Sub-Mariner", "The Sub-Mariner", "Namor McKenzie"]),
+  C1("nightcrawler", "Marvel", "Nightcrawler", ["Kurt Wagner"]),
+  C1("nova", "Marvel", "Nova", ["Richard Rider", "Nova Prime"]),
+  C1("psylocke", "Marvel", "Psylocke", ["Elizabeth Braddock", "Betsy Braddock"]),
+  C1("raven", "DC", "Raven", ["Rachel Roth"]),
+  C1("sinestro", "DC", "Sinestro", ["Thaal Sinestro"]),
+  C1("spawn", "Image", "Spawn", ["Al Simmons"]),
+  C1("starfire", "DC", "Starfire", ["Koriand'r", "Korianders", "Kory Anders"]),
+  C1("vision", "Marvel", "Vision", ["The Vision", "Victor Shade"]),
+];
+
+// "Name the Anime" picture round - one iconic character portrait per franchise,
+// re-baked 2026-11-14: character art cropped to its top band on a solid white
+// background (assets/gn-quiz/anime/<slug>.jpg), every file visually inspected.
+// Typed answers; the v8 matcher handles romaji/EN variants via alts.
 const AN = (slug, answer, alts = []) => ({ id: `e1-an-${slug}`, file: `anime/${slug}.jpg`, fmt: "typed", q: "Which anime is this character from?", answer, alts, difficulty: "easy", topic: "Name the Anime" });
 const E1_ANIME = [
   AN("naruto", "Naruto", ["Naruto Shippuden", "Naruto Shippuuden", "Naruto Shippūden"]),
@@ -126,28 +198,34 @@ const E1_ANIME = [
   AN("solo-leveling", "Solo Leveling", ["Na Honjaman Level Up", "Only I Level Up"]),
 ];
 
-// 3 game + 3 anime theme songs (all six already proven in the regular pack) - audio unchanged
-const E1_THEMES = () => {
-  const all = preplanned.PACK.themes;
-  const pick = (names) => names.map((n) => all.find((t) => t.show === n)).filter(Boolean);
-  return {
-    game: pick(["Devil May Cry", "Skyrim", "DOOM"]),
-    anime: pick(["Attack on Titan", "Demon Slayer", "One Piece"]),
-  };
-};
+// "Cartoon Musicals" - REAL SONGS with specific titles (owner brief: "look up
+// specific song titles for different cartoons and use those"), not just opening
+// themes. Same .j audio retrieval as the theme rounds (Go audio service, 30 s
+// clips, pre-baked to disk). mustTitleAny pins the canonical upload; kindLabel
+// switches the question to "Which show is this song from?".
+const MU = (show, search, mustTitleAny, alts = []) => ({ show, search, mustTitleAny, alts, type: "toon", kindLabel: "show", topic: "Cartoon Musicals", cacheKey: `gnmusic:${String(show).toLowerCase().replace(/[^a-z0-9]+/g, "")}` });
+const E1_MUSICAL = [
+  MU("SpongeBob SquarePants", "Sweet Victory SpongeBob band geeks song", ["sweet victory"], ["Spongebob", "Sponge Bob", "SpongeBob"]),
+  MU("Phineas and Ferb", "Gitchee Gitchee Goo Phineas and Ferb song", ["gitchee", "gitchie", "gitchi"], ["Phineas & Ferb"]),
+  MU("Steven Universe", "We Are the Crystal Gems Steven Universe song", ["crystal gems"], ["Steven Universe"]),
+  MU("Adventure Time", "Everything Stays Adventure Time song Rebecca Sugar", ["everything stays"], ["Adventure Time"]),
+  MU("Avatar: The Last Airbender", "Leaves from the Vine Avatar Iroh little soldier boy", ["leaves from the vine", "little soldier boy"], ["Avatar", "ATLA", "Avatar The Last Airbender", "The Last Airbender"]),
+  MU("Rick and Morty", "Evil Morty theme For the Damaged Coda Rick and Morty", ["damaged coda", "evil morty"], ["Rick & Morty"]),
+  MU("Gravity Falls", "Gravity Falls opening theme song", ["gravity falls"]),
+  MU("DuckTales", "DuckTales theme song original", ["ducktales"], ["Duck Tales"]),
+  MU("Kim Possible", "Call Me Beep Me Kim Possible theme song", ["beep me", "kim possible"]),
+  MU("X-Men: The Animated Series", "X-Men animated series opening theme", ["x-men", "x men"], ["X-Men", "XMen", "X Men", "Xmen"]),
+];
 
-// ---------- EVENT 2: finale = video games + comic picture rounds ----------
+// ---------- EVENT 2: finale (unchanged content, same wiring) ----------
+// 10 video game trivia
+const T2 = (id, franchise, difficulty, q, answer, alts = []) => ({ id, franchise, fmt: "typed", difficulty, topic: franchise, q, answer, alts });
 const E2_GAMES = [
-  T("e2-g-dream", "Video Games", "medium", "In Bloodborne, what is the name of the hub where hunters level up and buy gear between hunts?", "The Hunter's Dream", ["Hunters Dream", "Hunter's Dream", "Hunter Dream"]),
-  T("e2-g-majora", "Video Games", "medium", "In The Legend of Zelda: Majora's Mask, how many days does Link have before the moon crashes into Termina?", "3", ["three", "3 days", "three days"]),
-  T("e2-g-wheatley", "Video Games", "medium", "In Portal 2, which bumbling personality core, voiced by Stephen Merchant, accompanies Chell?", "Wheatley"),
-  T("e2-g-geo", "Video Games", "medium", "What is the currency called in Hollow Knight?", "Geo"),
-  T("e2-g-firelink", "Video Games", "medium", "In the original Dark Souls, what is the name of the hub bonfire where the player returns between areas?", "Firelink Shrine", ["Firelink"]),
-  T("e2-g-asriel", "Video Games", "hard", "In Undertale, what is Flowey's real name?", "Asriel", ["Asriel Dreemurr", "Azriel"]),
-  T("e2-g-zebes", "Video Games", "medium", "On which planet is Samus Aran's first mission set, home of Mother Brain?", "Zebes", ["Planet Zebes"]),
-  T("e2-g-nibel", "Video Games", "hard", "Which village, burned by Sephiroth, is Cloud's hometown in Final Fantasy VII?", "Nibelheim"),
-  T("e2-g-blackmesa", "Video Games", "medium", "In Half-Life, at which research facility does the Resonance Cascade happen?", "Black Mesa"),
-  T("e2-g-melina", "Video Games", "hard", "In Elden Ring, which mysterious maiden offers to accompany the Tarnished and lets them level up at Sites of Grace?", "Melina"),
+  T2("e2-g-midgar", "Video Games", "medium", "In Final Fantasy VII, what is the name of Shinra's sprawling capital city, built on stacked plates?", "Midgar"),
+  T2("e2-g-geralt-school", "The Witcher", "hard", "Which school of witchers, with its wolf medallion, trained Geralt of Rivia?", "School of the Wolf", ["Wolf School", "School of the Wolf"]),
+  T2("e2-g-masterchief", "Halo", "medium", "What is Master Chief's service number, stitched into every Spartan's legend?", "117", ["John 117", "SPARTAN 117", "Spartan 117", "117"]),
+  T2("e2-g-zoras", "Zelda", "hard", "Which aquatic race, allies of Link, live in Zora's Domain and guard the Zora Sapphire?", "Zoras", ["Zora", "The Zoras", "The Zora"]),
+  T2("e2-g-melina", "Elden Ring", "hard", "In Elden Ring, which mysterious maiden offers to accompany the Tarnished and lets them level up at Sites of Grace?", "Melina"),
 ];
 
 // "Which Game?" picture round - iconic video game characters, bundled art (assets/gn-quiz/games/<slug>.jpg),
@@ -198,28 +276,30 @@ const E2_BRANDS = []; // gaming-logo round retired from the finale (kept as an e
 const PACKS = {
   event1: {
     key: "event1",
-    title: "Game Night Round 1: Mega Quiz",
-    counts: { logos: 30, pictures: E1_ANIME.length, trivia: 20, music: 6 },
+    title: "Game Night Mega Quiz",
+    counts: { logos: 30, trivia: E1_TRIVIA.length, pictures: E1_CHARS.length + E1_ANIME.length, music: E1_MUSICAL.length },
     plan() {
-      const th = E1_THEMES();
-      const by = (f) => E1_TRIVIA.filter((t) => t.franchise === f);
+      const ANIME_IDS = ["e1-db-gine", "e1-db-champa", "e1-aot-dina", "e1-aot-liberio", "e1-naruto-whitefang", "e1-naruto-mito", "e1-op-rouge", "e1-op-kaido", "e1-op-bounty", "e1-dn-rem", "e1-jjk-kenjaku", "e1-bleach-zangetsu", "e1-fma-mustang", "e1-mha-yagi", "e1-ds-nezuko", "e1-hxh-kurapika", "e1-opm-hero", "e1-sf-anya", "e1-sl-slumber", "e1-csm-ghost"];
+      const animeQ = ANIME_IDS.map((id) => E1_TRIVIA.find((t) => t.id === id)).filter(Boolean);
+      const comicsQ = E1_TRIVIA.filter((t) => !ANIME_IDS.includes(t.id));
       return [
         { name: "Logo Round 1/3", domain: "logos", perSection: 10, pinnedBrands: E1_BRANDS.slice(0, 10) },
         { name: "Logo Round 2/3", domain: "logos", perSection: 10, pinnedBrands: E1_BRANDS.slice(10, 20) },
         { name: "Logo Round 3/3", domain: "logos", perSection: 10, pinnedBrands: E1_BRANDS.slice(20, 30) },
+        { name: "Anime Trivia 1/2", domain: "preplanned", perSection: 10, pinnedTrivia: animeQ.slice(0, 10) },
+        { name: "Anime Trivia 2/2", domain: "preplanned", perSection: 10, pinnedTrivia: animeQ.slice(10, 20) },
+        { name: "Comics Trivia 1/2", domain: "preplanned", perSection: 10, pinnedTrivia: comicsQ.slice(0, 10) },
+        { name: "Comics Trivia 2/2", domain: "preplanned", perSection: 10, pinnedTrivia: comicsQ.slice(10, 20) },
+        { name: "Name the Character", domain: "pictures", perSection: E1_CHARS.length, pinnedPictures: E1_CHARS, timeLimit: 40 },
         { name: "Name the Anime", domain: "pictures", perSection: E1_ANIME.length, pinnedPictures: E1_ANIME, timeLimit: 30 },
-        { name: "Dragon Ball", domain: "preplanned", perSection: 5, pinnedTrivia: by("Dragon Ball") },
-        { name: "Solo Leveling", domain: "preplanned", perSection: 5, pinnedTrivia: by("Solo Leveling") },
-        { name: "Devil May Cry", domain: "preplanned", perSection: 5, pinnedTrivia: by("Devil May Cry") },
-        { name: "God of War", domain: "preplanned", perSection: 5, pinnedTrivia: by("God of War") },
-        { name: "Theme Songs: Games", domain: "audio", perSection: th.game.length, pinnedThemes: th.game, clipSeconds: 30 },
-        { name: "Theme Songs: Anime", domain: "audio", perSection: th.anime.length, pinnedThemes: th.anime, clipSeconds: 30 },
+        { name: "Cartoon Musicals", domain: "audio", perSection: E1_MUSICAL.length, pinnedThemes: E1_MUSICAL, clipSeconds: 30 },
       ];
     },
     head(prefix) {
-      return `🗺 4 acts • ${30 + E1_ANIME.length + 20 + 6} rounds:\n  🏢 30 brand logos (tougher set)\n  🎴 ${E1_ANIME.length} name-the-anime portraits\n  🧠 20 trivia - Dragon Ball / Solo Leveling / Devil May Cry / God of War\n  🎵 6 theme songs - 3 games + 3 anime\n`;
+      const tot = 30 + E1_TRIVIA.length + E1_CHARS.length + E1_ANIME.length + E1_MUSICAL.length;
+      return `🗺 5 acts • ${tot} rounds - all typed, no ABCD:\n  🏢 30 brand logos (every one a text-free glyph)\n  🧠 40 hard anime + comics trivia\n  💥 20 obscure comic characters - name them\n  🎴 16 anime portraits - name the show\n  🎵 10 cartoon songs - name the show\n`;
     },
-    minBuilt: 45,
+    minBuilt: 106,
   },
   event2: {
     key: "event2",
@@ -241,8 +321,8 @@ const PACKS = {
 };
 
 function get(key) {
-  const k = String(key || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const k = key === "gn" ? "event1" : key;
   return PACKS[k] || null;
 }
 
-module.exports = { PACKS, get, E1_BRANDS, E1_TRIVIA, E1_ANIME, E2_GAMES, E2_GAMECHARS, E2_CHARS, E2_TEAMS, E2_BRANDS };
+module.exports = { PACKS, get, E1_BRANDS, E1_TRIVIA, E1_CHARS, E1_ANIME, E1_MUSICAL, E2_GAMES, E2_GAMECHARS, E2_CHARS, E2_TEAMS, E2_BRANDS };

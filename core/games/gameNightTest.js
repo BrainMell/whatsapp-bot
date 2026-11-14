@@ -123,25 +123,30 @@ async function stepLogos(ctx, all) {
 
 // ---- step 3: trivia + picture samples ----
 async function stepTrivia(ctx) {
-  const pick = [packs.E1_TRIVIA[3], packs.E1_TRIVIA[13], packs.E2_GAMES[2], packs.E2_GAMES[5]].filter(Boolean);
+  const pick = [packs.E1_TRIVIA[3], packs.E1_TRIVIA[25], packs.E1_TRIVIA[13], packs.E2_GAMES[2]].filter(Boolean);
   const out = pick.map((t) => {
     const ans = t.fmt === "mc" ? `${["A", "B", "C", "D"][t.correct]}. ${t.options[t.correct]}` : `${t.answer}${t.alts && t.alts.length ? ` (also accepts: ${t.alts.slice(0, 3).join(", ")})` : ""}`;
     const opts = t.fmt === "mc" ? "\n" + t.options.map((o, i) => `${["A", "B", "C", "D"][i]}. ${o}`).join("\n") : "";
     return `*${t.topic}* [${t.difficulty}]\n${t.q}${opts}\n_answer: ${ans}_`;
   });
-  await sendText(ctx.sock, ctx.chatId, `*STEP 3/7 - TRIVIA SAMPLES*\n\n${out.join("\n\n")}\n\nThe real quiz asks these in-game with timers, speed bonus and typo tolerance. Full dry run: \`${px()} quiz -preplanned event1\` in a test group.`);
-  // bundled picture rounds: one sample each from the two portrait sections
-  const picBad = [...packs.E1_ANIME, ...packs.E2_GAMECHARS, ...packs.E2_CHARS, ...packs.E2_TEAMS].filter((p) => !bake.bundledBuf(p.file)).map((p) => p.id);
+  await sendText(ctx.sock, ctx.chatId, `*STEP 3/7 - TRIVIA SAMPLES* (${packs.E1_TRIVIA.length} hand-verified anime/comics questions in the pack)\n\n${out.join("\n\n")}\n\nThe real quiz asks these in-game with timers, speed bonus and typo tolerance. Full dry run: \`${px()} quiz -gn\` in a test group.`);
+  // bundled picture rounds: one sample each from the portrait sections
+  const picBad = [...packs.E1_CHARS, ...packs.E1_ANIME, ...packs.E2_GAMECHARS, ...packs.E2_CHARS, ...packs.E2_TEAMS].filter((p) => !bake.bundledBuf(p.file)).map((p) => p.id);
   const sample = (list, label) => {
     const p = list[Math.floor(Math.random() * list.length)];
     const q = p && bake.pictureQuestion(p, "easy");
     if (q && q._cachedAsset) return sendImg(ctx.sock, ctx.chatId, q._cachedAsset.buf, `*${label} sample*\n${q.q}\n\n_(answer: ${p.answer} - accepts ${p.alts && p.alts.length ? p.alts.length : 0} aliases, plain typed text)_`);
     return sendText(ctx.sock, ctx.chatId, `❌ ${label}: could not build a sample question.`);
   };
+  await sample(packs.E1_CHARS, "Name the Character");
   await sample(packs.E1_ANIME, "Name the Anime");
   await sample(packs.E2_GAMECHARS, "Which Game?");
-  await sendText(ctx.sock, ctx.chatId, `${ok(!picBad.length)} ${packs.E1_ANIME.length + packs.E2_GAMECHARS.length + packs.E2_CHARS.length + packs.E2_TEAMS.length} picture questions bundled${picBad.length ? `\n❌ Missing art: ${picBad.join(", ")}` : " (every file ships in assets/gn-quiz, zero live fetching)"}.`);
-  return !picBad.length;
+  // musical section: the 10 cartoon songs must be baked (or at least not marked failed)
+  const mus = packs.E1_MUSICAL || [];
+  const audStat = bake.status().audio;
+  const musHave = mus.filter((e) => audStat.missing.indexOf(e.show) < 0).length;
+  await sendText(ctx.sock, ctx.chatId, `${ok(!picBad.length)} ${packs.E1_CHARS.length + packs.E1_ANIME.length + packs.E2_GAMECHARS.length + packs.E2_CHARS.length + packs.E2_TEAMS.length} picture questions bundled${picBad.length ? `\n❌ Missing art: ${picBad.join(", ")}` : " (every file ships in assets/gn-quiz, zero live fetching)"}.\n${ok(musHave === mus.length)} Cartoon Musicals: ${musHave}/${mus.length} clips baked${musHave < mus.length ? ` (missing: ${mus.filter((e) => audStat.missing.indexOf(e.show) >= 0).map((e) => e.show).join(", ")} - run \`${px()} gn bake\`)` : ""}.`);
+  return !picBad.length && musHave === mus.length;
 }
 
 // ---- step 4: tourney bracket ----

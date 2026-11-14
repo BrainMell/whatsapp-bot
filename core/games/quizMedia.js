@@ -640,19 +640,19 @@ function _finishThemeSong(entry, others, difficulty, clip) {
   // original text. entry.alts (pack-only) adds accepted typed answers via the
   // v8 matcher (q.typed + q.alts) - exact-match behavior is unchanged for
   // pool entries (no alts field).
-  const kindLabel = entry.type === "game" ? "video game"
+  const kindLabel = entry.kindLabel || (entry.type === "game" ? "video game"
     : entry.type === "anime" ? "anime or show"
-    : "show or movie";
+    : "show or movie");
   const extras = Array.isArray(entry.alts) && entry.alts.length
     ? { alts: entry.alts.slice(0, 6), typed: true }
     : {};
   return {
-    q: `🎵 Which ${kindLabel} is this theme song from?`,
+    q: `🎵 Which ${kindLabel} is this ${entry.kindLabel ? "song" : "theme song"} from?`,
     options: optOrder.map((i) => optionsPool[i]),
     correct: optOrder.indexOf(0),
     hideOptions: true, // OWNER SPEC §2: audio questions show no options
     difficulty: difficulty || "medium",
-    topic: "Theme Song",
+    topic: entry.topic || "Theme Song",
     domain: "audio",
     type: "theme",
     assetKey: entry.cacheKey || `theme:${_norm(entry.show)}`,

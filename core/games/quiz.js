@@ -76,6 +76,9 @@ const eventHooks = new Map();
 const POINTS = { easy: 50, medium: 100, hard: 150 };
 const WINNER_BONUS = 250;
 const LETTERS = ["A", "B", "C", "D"];
+// 💡 2026-11-14 collect mode (-gn quiz): grace pause between the answer
+// window closing and the "who got it" reveal (owner: "wait abit then respond").
+const COLLECT_REVEAL_DELAY_MS = 4000;
 const SECTION_STATES = { PENDING: "PENDING", GENERATING: "GENERATING", READY: "READY", ACTIVE: "ACTIVE", COMPLETED: "COMPLETED", FAILED: "FAILED" };
 const GEN_REASSURE_MS = 25000; // "still working..." nudge while generating
 const SECTION_WAIT_CAP_MS = 120000; // never wait longer for a section to be ready
@@ -2238,6 +2241,9 @@ function formatQuestionCard(session, idx, q) {
   } else {
     s += `\n⏱ ${secs}s  •  ${POINTS[q.difficulty]} Zeni (+20 speed bonus)  •  one answer each\n`;
     s += `No options - just type the answer in chat!`;
+    // 💡 2026-11-14 collect mode: set expectations - the round does not end on
+    // the first correct answer; results land after the window closes.
+    if (session.collectAll) s += `\n🧑‍🤝‍🧑 Everyone can answer - "who got it" lands after the timer.`;
   }
   return s;
 }
@@ -2413,12 +2419,17 @@ async function postQuestion(sock, chatId, session) {
   // the question opens NOW - card is out (or every channel failed)
   session.answeredBy = new Map(); // P1: fresh attempt map per question
   const qSecs = (q && q.timeLimit) || session.cfg.timePerQuestion; // per-question override (preplanned 30s/45s)
-  session.qOpenUntil = Date.now() + qSecs * 1000;
+  // 💡 2026-11-14 COLLECT MODE (owner, -gn quiz): the answer window keeps
+  // accepting answers through a 4 s grace, THEN the "who got it" reveal
+  // lands (owner: "after everyone sends wait abit then respond with who got
+  // it"). Stragglers answering a hair late are counted instead of rejected.
+  const revealDelayMs = session.collectAll ? COLLECT_REVEAL_DELAY_MS : 0;
+  session.qOpenUntil = Date.now() + qSecs * 1000 + revealDelayMs;
   session.qEpoch = (session.qEpoch || 0) + 1;
   const myEpoch = session.qEpoch;
   // P2: deadline timer driven by config; invalidated by session.token AND
   // by the per-question epoch (a timer from a previous question must never
-  // resolve the current one).
+  // resolve the current one). In collect mode it fires at window+grace.
   session.timerId = setTimeout(async () => {
     try {
       const cur = activeQuizzes.get(chatId);
@@ -2426,7 +2437,7 @@ async function postQuestion(sock, chatId, session) {
       if (cur.qEpoch !== myEpoch || cur.revealLock) return;
       await revealAndAdvance(sock, chatId, session, null, true);
     } catch (e) { console.log("[Quiz] deadline tick failed:", e?.message); }
-  }, qSecs * 1000);
+  }, qSecs * 1000 + revealDelayMs);
 }
 
 function formatStandings(session) {
@@ -2482,9 +2493,34 @@ async function revealAndAdvance(sock, chatId, session, winner, timedOut) {
     } else if (timedOut) {
       session.revealed.push({ q: q.q, correct: correctText, winner: null, timedOut: true });
       const tried = session.answeredBy ? session.answeredBy.size : 0;
-      await safeSend(sock, chatId, {
-        text: BOT_SAFE(`⏰ *Time's up!*${tried ? ` (${tried} tried)` : ""}\nThe answer was: *${correctText}*`),
-      }, { label: `reveal:${session.questionNo}` });
+      // 💡 2026-11-14 COLLECT MODE (owner, the remade -gn quiz): the question
+      // stayed open for the whole window so everyone could answer. The reveal
+      // then posts EVERYONE who got it (owner: "after everyone sends wait abit
+      // then respond with who got it") - the first correct answer keeps the
+      // +20 speed bonus, every other correct answer scores its base Zeni.
+      if (session.collectAll) {
+        const winners = [...(session.answeredBy || new Map()).entries()]
+          .filter(([, a]) => a && a.correct)
+          .sort((a, b) => (a[1].at || 0) - (b[1].at || 0));
+        const parts = [];
+        winners.forEach(([jid, a], i) => {
+          const sc = session.scores.get(jid) || { name: a.name || "Player", points: 0, correct: 0 };
+          const first = i === 0;
+          const pts = POINTS[q.difficulty] + (first ? 20 : 0);
+          sc.points += pts;
+          sc.correct += 1;
+          session.scores.set(jid, sc);
+          parts.push(`${a.name || sc.name} (+${pts}${first ? " ⚡" : ""})`);
+        });
+        const gotLine = parts.length ? `Got it right: ${parts.join(" · ")}` : `No one got it (${tried} tried)`;
+        await safeSend(sock, chatId, {
+          text: BOT_SAFE(`${parts.length ? "✅" : "⏰"} *The answer was: ${correctText}*\n${gotLine}`),
+        }, { label: `reveal:${session.questionNo}` });
+      } else {
+        await safeSend(sock, chatId, {
+          text: BOT_SAFE(`⏰ *Time's up!*${tried ? ` (${tried} tried)` : ""}\nThe answer was: *${correctText}*`),
+        }, { label: `reveal:${session.questionNo}` });
+      }
     }
 
     // persist seen hashes (dedup across sessions) + idx advance
@@ -2759,10 +2795,12 @@ async function handleAnswer(sock, chatId, senderJid, answerText, botMarker, m, s
   }
 
   // P1: one attempt per player - first answer locks, later replies ignored
+  // (2026-11-14: name recorded so the collect-mode reveal can list everyone
+  // who got it right).
   if (session.answeredBy.has(senderJid)) {
     return { handled: true, silent: true };
   }
-  session.answeredBy.set(senderJid, { letter: idx, correct: idx === q.correct, at: Date.now() });
+  session.answeredBy.set(senderJid, { letter: idx, correct: idx === q.correct, at: Date.now(), name: senderName || "Player" });
 
   if (idx === q.correct) {
     // 💡 single-resolver gate: if the deadline timer already claimed the
@@ -2773,6 +2811,13 @@ async function handleAnswer(sock, chatId, senderJid, answerText, botMarker, m, s
       return { handled: true, silent: true };
     }
     await sock.sendMessage(chatId, { react: { text: "✅", key: m.key } }).catch(() => {});
+    // 💡 2026-11-14 COLLECT MODE (owner, the remade -gn quiz): a correct
+    // answer does NOT end the question. Everyone keeps answering until the
+    // window closes, then the reveal posts everyone who got it (see
+    // revealAndAdvance) - the timer carries the 4 s "wait abit" grace.
+    if (session.collectAll) {
+      return { handled: true, silent: true };
+    }
     // 💡 45s COMMAND TIMEOUT FIX (2026-09-27): reveal -> next question ->
     // section transition can LEGALLY take minutes (streaming section waits,
     // section breaks). Awaiting it inside the answer command used to hit the
@@ -2805,6 +2850,18 @@ function parseQuizArgs(raw) {
   const out = { title: "", count: 10, difficulty: "medium", section: null, images: null, audio: null, randomMode: false, mode: null, preplanned: false, notes: [] };
   let rest = String(raw || "").trim();
   if (!rest) return out;
+  // 💡 2026-11-14 OWNER: ".j quiz -gn" - the REMADE Game Night quiz (event1
+  // pack): 30 text-free logos, 40 hard anime/comics trivia, 20 obscure
+  // character portraits, 16 name-the-anime portraits, 10 cartoon song clips.
+  // Every round is typed, everyone answers per question and the reveal lands
+  // after the window closes (collect mode, see revealAndAdvance).
+  if (/^(gn|gamenight)\b/i.test(rest) || /^-+(gn|gamenight)\b/i.test(rest)) {
+    out.mode = "preplanned";
+    out.title = "__preplanned__";
+    out.pack = "event1";
+    out.gn = true;
+    rest = rest.replace(/^(gn|gamenight|-+gn|-+gamenight)\b/i, "").trim();
+  }
   // 💡 2026-10-10 OWNER: ".j quiz -preplanned" - the fixed 60-round mega pack
   // (30 brand logos + 20 anime/games trivia + 10 theme songs, 30s/45s timers).
   // Bare word or flag both work: ".j quiz -preplanned" / ".j quiz preplanned".
@@ -3029,6 +3086,7 @@ Special rounds (unchanged):
 \`${prefix} quiz song 10\` - 🎵 spot the song from a real audio clip
 \`${prefix} quiz audio 10\` - 📺 theme songs from shows/movies/games
 \`${prefix} quiz random 20\` - 🎲 mixed playlist across all categories
+\`${prefix} quiz -gn\` - 🎮 GAME NIGHT QUIZ (the remade quiz): 30 text-free logos + 40 hard anime/comics trivia + 20 obscure characters + 16 anime portraits + 10 cartoon songs - ALL typed, everyone answers every round
 \`${prefix} quiz -preplanned\` - 🏆 MEGA PACK: 30 logos + 20 anime/games trivia + 10 theme songs (30s/45s timers)
 
 During the quiz, answer by typing the answer in chat (or \`${prefix} <letter>\` when options are shown). One answer per player per question!
@@ -3112,6 +3170,12 @@ function planningLabel(parsed) {
   if (parsed.mode === "comics") return "the comics quiz";
   if (parsed.mode === "movies") return "the movies quiz";
   if (parsed.mode === "series") return "the series quiz";
+  // 💡 2026-11-14: the remade Game Night quiz nudges with its own name
+  if (parsed.mode === "preplanned" && parsed.pack) {
+    const _p = quizEventPacks.get(parsed.pack);
+    if (_p) return _p.title.toLowerCase();
+    return "the game night quiz";
+  }
   if (parsed.randomMode) return "random mix";
   return String(parsed.retiredTitle || parsed.title || "the quiz").slice(0, 60);
 }
@@ -3330,12 +3394,15 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
         else if (parsed.mode === "logos") bits.push(`🏢 brand logos`);
         else if (parsed.mode === "song") bits.push(`🎵 song clips`);
         else if (parsed.mode === "audio") bits.push(`📺 theme songs`);
+        // 💡 2026-11-14: the remade Game Night quiz describes itself from the pack
+        else if (parsed.mode === "preplanned" && _evPack) bits.push(`🏢 ${_evPack.counts.logos} text-free logos`, `🧠 ${_evPack.counts.trivia} hard anime/comics trivia`, `💥 ${_evPack.counts.pictures} picture rounds`, `🎵 ${_evPack.counts.music} cartoon songs`, `✍️ all typed`);
         else if (parsed.mode === "preplanned") bits.push(`🏢 30 brand logos`, `🧠 20 anime & games trivia`, `🎵 10 theme songs`);
         else if (parsed.randomMode) bits.push(`🎲 mixed dataset rounds + logos`);
         else if (parsed.retiredTitle) bits.push(`ℹ️ title search retired`);
       }
+      const planCount = _evPack ? _evPack.plan().reduce((a, s) => a + (s.pinnedBrands || s.pinnedPictures || s.pinnedTrivia || s.pinnedThemes || []).length, 0) : cfg.questionCount;
       await safeSend(sock, chatId, {
-        text: botMarker + `🛠 *QUIZ PLANNING* ${mentionOf(senderJid)}\nBuilding a ${cfg.questionCount}-question ${cfg.difficulty} quiz: ${bits.join(" • ")}.\nI'll tag you here the moment it's ready to start - the bot stays fully usable meanwhile.`,
+        text: botMarker + `🛠 *QUIZ PLANNING* ${mentionOf(senderJid)}\nBuilding ${_evPack ? `the *${_evPack.title}*` : `a ${planCount}-question ${cfg.difficulty} quiz`}: ${bits.join(" • ")}.\nI'll tag you here the moment it's ready to start - the bot stays fully usable meanwhile.`,
         mentions: [senderJid],
       }, { label: "planning-card", sendOpts: { quoted: m } }).catch(() => {});
     }
@@ -3454,6 +3521,12 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
         difficulty: cfg.difficulty,
         section: null,
         mode: "preplanned",
+        // 💡 2026-11-14 OWNER: the remade quiz (event1 / -gn) runs in COLLECT
+        // mode - a correct answer no longer ends the question. Everyone gets
+        // to send their answer inside the window, then the reveal waits a
+        // beat and posts EVERYONE who got it (owner: "after everyone sends
+        // wait abit then respond with who got it").
+        collectAll: !!(_evPack && _evPack.key === "event1"),
         sections: domainPlan.map((p) => ({
           name: p.name, domain: p.domain, perSection: p.perSection,
           state: SECTION_STATES.GENERATING, questions: [],
@@ -3515,6 +3588,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       }
       head += `📚 ${POINTS[cfg.difficulty]} Zeni per correct (+20 speed bonus) • sections keep their own leaderboards\n`;
       head += `✍️ Answer: just type the answer in chat - or \`${prefix} <letter>\` where options are shown. One answer per player per question\n`;
+      if (_evPack && _evPack.key === "event1") head += `🧑‍🤝‍🧑 Everyone answers every round - the "who got it" reveal lands right after each timer\n`;
       head += `⏱ 30s per logo/trivia question • 45s per music question\n`;
       head += `🛑 Cancel: \`${prefix} quiz end\`\n\n`;
       head += `Let's go! 🚀`;
