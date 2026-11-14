@@ -206,14 +206,15 @@ const E1_ANIME = [
 const MU = (show, search, mustTitleAny, alts = []) => ({ show, search, mustTitleAny, alts, type: "toon", kindLabel: "show", topic: "Cartoon Musicals", cacheKey: `gnmusic:${String(show).toLowerCase().replace(/[^a-z0-9]+/g, "")}` });
 const E1_MUSICAL = [
   MU("SpongeBob SquarePants", "Sweet Victory SpongeBob band geeks song", ["sweet victory"], ["Spongebob", "Sponge Bob", "SpongeBob"]),
-  MU("Phineas and Ferb", "Gitchie Gitchie Goo Phineas and Ferb", ["gitchee", "gitchie", "gitchi", "phineas"], ["Phineas & Ferb"]),
+  MU("Phineas and Ferb", "Phineas and Ferb theme song", ["phineas and ferb", "phineas"], ["Phineas & Ferb"]),
   MU("Steven Universe", "We Are the Crystal Gems Steven Universe song", ["crystal gems"], ["Steven Universe"]),
   MU("Adventure Time", "Everything Stays Adventure Time Rebecca Sugar", ["everything stays", "everything"], ["Adventure Time"]),
   MU("Avatar: The Last Airbender", "Avatar Last Airbender Leaves from the Vine Iroh song", ["leaves from the vine", "little soldier boy", "leaves"], ["Avatar", "ATLA", "Avatar The Last Airbender", "The Last Airbender"]),
   MU("Rick and Morty", "Evil Morty theme For the Damaged Coda Rick and Morty", ["damaged coda", "evil morty"], ["Rick & Morty"]),
   MU("Gravity Falls", "Gravity Falls opening theme song", ["gravity falls"]),
-  MU("DuckTales", "Ducktales theme song woo-oo Disney", ["ducktales", "duck tales", "woo-oo", "woo oo"], ["Duck Tales"]),
-  MU("Kim Possible", "Kim Possible Call Me Beep Me theme song", ["beep me", "kim possible", "call me"]),
+  // DuckTales + Kim Possible swapped out 2026-11-14: the audio backend (JioSaavn) has no Disney-catalog uploads for them -
+  // The Simpsons verified present instead ("The Simpsons", Dream Themes instrumental cover, unmistakable melody).
+  MU("The Simpsons", "The Simpsons theme song", ["simpsons"]),
   MU("X-Men: The Animated Series", "X-Men animated series opening theme", ["x-men", "x men"], ["X-Men", "XMen", "X Men", "Xmen"]),
 ];
 
