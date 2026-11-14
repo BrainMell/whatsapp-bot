@@ -94,59 +94,73 @@ async function siegeScene(b, opts = {}) {
     return { c, ctx, W, H, card };
 }
 
+
+// scenery by the tile's TERRAIN (coherent regions: mountains, hills, farmland, marsh, plains, woods) — not just trees
+function terrainDress(t, put, r2, detail, over) {
+    const k = r2(); const j = () => ({ dx: (r2() - 0.5) * 0.8, dz: (r2() - 0.5) * 0.6 });
+    switch (t.terrain) {
+        case 'mountain': if (k < 0.5) put(['mountain_A_grass', 'mountain_B_grass', 'mountain_C_grass', 'mountain_A_grass_trees'][Math.floor(r2() * 4)], { sc: over ? 0.95 : 0.9 }); else { put(['hill_single_B', 'hill_single_C', 'hills_A_trees'][Math.floor(r2() * 3)], { ...j(), sc: 0.9 }); if (detail) put('rock_single_B', { ...j(), sc: 0.8 }); } break;
+        case 'hills': put(['hill_single_A', 'hill_single_B', 'hill_single_C', 'hills_A_trees', 'hills_B_trees', 'hill_single_A'][Math.floor(r2() * 6)], { ...j(), sc: 0.9 }); if (detail && k < 0.4) put('rock_single_A', { ...j(), sc: 0.7 }); break;
+        case 'farm': if (!detail) break; if (k < 0.16) put(`building_windmill_${['blue', 'green', 'red', 'yellow'][Math.floor(r2() * 4)]}`, { sc: 0.85 }); else if (k < 0.34) put(`building_home_${r2() < 0.5 ? 'A' : 'B'}_${['blue', 'green', 'red', 'yellow'][Math.floor(r2() * 4)]}`, { dx: -0.2, sc: 0.8 }); else if (k < 0.62) put('tree_single_A_cut', { ...j(), sc: 0.85 }); break;
+        case 'marsh': if (!detail) break; put(k < 0.5 ? 'tree_single_B_cut' : 'rock_single_E', { ...j(), sc: 0.9 }); if (k < 0.3) put('trees_B_cut', { ...j(), sc: 0.8 }); break;
+        case 'forest': put('trees_A_medium', { ...j(), sc: 0.9 }); break;
+        default: if (!detail) break; if (k < 0.18) put(['tree_single_A', 'tree_single_B'][Math.floor(r2() * 2)], { ...j(), sc: 0.9 }); else if (k < 0.28) put(['rock_single_A', 'rock_single_C', 'hill_single_A'][Math.floor(r2() * 3)], { ...j(), sc: 0.9 }); else if (k < 0.34) put('trees_A_small', { ...j(), sc: 0.9 });
+    }
+}
 // ── realm war map ───────────────────────────────────────────────────────────────────────────────
-const LAND = { plain: ['hills_A', 'hills_B'], forest: ['hills_A_trees', 'hills_B_trees', 'trees_A_large'], village: null };
+// Every conquest tile is ONE hex of the KayKit world (same engine/camera as the guild kingdom). Sea cells (off the canonical
+// land mask) are real water hexes. snap.view = null → a detailed window around the viewer; 'overview' → the whole realm.
 async function warMapScene(snap) {
-    const g = map.generate(snap.seed); const realm = g.realms.find((r) => r.key === snap.realm); const biome = realm.biome;
-    const COLS = map.W, ROWS = map.H; const SC = 0.52; const PANEL = 270;
-    const hw = new K.HexWorld(COLS, ROWS, { biome: biomeOf(biome), scale: SC, oobWater: false });
-    const lay = hw.layout({ left: 24, right: 24, top: 120, bottom: 40 }); const W = lay.W + PANEL, H = lay.H;
+    const g = map.generate(snap.seed); const realm = g.realms.find((r) => r.key === snap.realm); const biome = realm.biome; const over = snap.view === 'overview';
+    let x0 = 0, y0 = 0, vw = map.W, vh = map.H;
+    if (!over) { vw = snap.vw || 27; vh = snap.vh || 20; const q = map.parse(snap.me.at); x0 = Math.max(0, Math.min(map.W - vw, q.x - (vw >> 1))); y0 = Math.max(0, Math.min(map.H - vh, q.y - (vh >> 1))); if (y0 & 1) y0--; }
+    const SC = over ? 0.085 : 0.5; const PANEL = over ? 230 : 270; const detail = !over;
+    const hw = new K.HexWorld(vw, vh, { biome: biomeOf(biome), scale: SC, oobWater: true });
+    const lay = hw.layout({ left: 16, right: 16, top: 70, bottom: 24 }); const W = lay.W + PANEL, H = lay.H;
     const { c, ctx } = ctxOf(W, H); const rng = art.RNG(snap.seed + snap.realm);
+    const byKey = realm; const cont = require('../../world/continents').BY_KEY ? null : null;
+    for (let r = 0; r < vh; r++) for (let cc = 0; cc < vw; cc++) if (!g.tiles.has(map.tileId(snap.realm, x0 + cc, y0 + r))) hw.at(cc, r).water = true;
     hw.resolve();
     const names = snap.guilds.map((x) => x.name); const gi = (n) => names.indexOf(n); const colHex = (n) => HEXCOL[Math.max(0, gi(n)) % HEXCOL.length]; const colName = (n) => colOf(Math.max(0, gi(n)));
-    const by = Object.fromEntries(snap.tiles.map((t) => [t.id, t])); const tileAt = (x, y) => g.tiles.get(map.tileId(snap.realm, x, y));
-    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
-        const t = tileAt(x, y); if (!t) continue; const o = by[t.id] || {}; const own = o.owner; const oc = own ? colName(own) : null; const r2 = art.RNG(t.id);
-        const put = (n, e = {}) => hw.put(n, x, y, Object.assign({ sort: 0.2 }, e));
+    const by = Object.fromEntries(snap.tiles.map((t) => [t.id, t])); const inWin = (x, y) => x >= x0 && y >= y0 && x < x0 + vw && y < y0 + vh;
+    const LM = { keep: 1, fortress: 1, titan: 1, ley_gate: 1, shrine: 1, ruins: 1, pass: 1 };
+    for (let y = y0; y < y0 + vh; y++) for (let x = x0; x < x0 + vw; x++) {
+        const t = g.tiles.get(map.tileId(snap.realm, x, y)); if (!t) continue; const lx = x - x0, ly = y - y0; const o = by[t.id] || {}; const own = o.owner; const oc = own ? colName(own) : null; const r2 = art.RNG(t.id);
+        const big = over ? 3.2 : 1; const put = (n, e = {}) => hw.put(n, lx, ly, Object.assign({ sort: 0.2 }, e, e.sc ? { sc: e.sc * big } : {}));
+        if (over && !LM[t.kind] && !own) { terrainDress(t, put, r2, false, true); continue; }
         switch (t.kind) {
             case 'keep': put(own ? `building_castle_${oc}` : 'building_castle_blue', { sc: 1.0 }); break;
-            case 'fortress': put(`building_barracks_${oc || 'red'}`, { dx: -0.25 }); put(`building_tower_A_${oc || 'red'}`, { dx: 0.5, dz: -0.2, sc: 0.9 }); break;
+            case 'fortress': put(`building_barracks_${oc || 'red'}`, { dx: -0.25, sc: 1 }); if (detail) put(`building_tower_A_${oc || 'red'}`, { dx: 0.5, dz: -0.2, sc: 0.9 }); break;
             case 'ley_gate': put('struct_gate_0', { sc: 0.9 }); break;
-            case 'pass': put('mountain_A_grass', { sc: 0.9 }); put('mountain_B_grass', { dx: 0.6, dz: 0.4, sc: 0.6 }); break;
-            case 'titan': put('mountain_C_grass', { sc: 1.0 }); break;
+            case 'pass': put('mountain_A_grass', { sc: 0.9 }); if (detail) put('mountain_B_grass', { dx: 0.6, dz: 0.4, sc: 0.6 }); break;
+            case 'titan': put('mountain_C_grass', { sc: 1.0 }); if (detail) put('rock_single_D', { dx: -0.7, dz: 0.5, sc: 0.9 }); break;
             case 'ruins': put('building_destroyed', { sc: 0.9 }); break;
             case 'shrine': put(`building_shrine_${oc || 'green'}`, { sc: 0.9 }); break;
-            case 'gem_vein': put('rock_single_C', { sc: 1.0 }); put('rock_single_D', { dx: 0.5, dz: 0.3, sc: 0.7 }); break;
-            case 'village': { const hn = K.houseName(r2, biome, {}); if (hn) put(hn, { sc: 0.95 }); put('tree_single_A', { dx: 0.6, dz: 0.45, sc: 0.7 }); break; }
-            case 'forest': put('trees_A_large', { dx: -0.1, sc: 0.95 }); put('trees_B_medium', { dx: 0.5, dz: 0.4, sc: 0.8 }); break;
-            default: { const k = r2(); if (k < 0.35) put(['tree_single_A', 'tree_single_B', 'trees_A_small'][Math.floor(r2() * 3)], { dx: (r2() - 0.5) * 0.9, dz: (r2() - 0.5) * 0.7, sc: 0.9 }); else if (k < 0.5) put(['rock_single_A', 'rock_single_C', 'hill_single_A'][Math.floor(r2() * 3)], { dx: (r2() - 0.5) * 0.9, dz: (r2() - 0.5) * 0.7, sc: 0.9 }); else if (k < 0.58) put('flag_' + 'yellow', { dx: 0.6, dz: -0.3, sc: 0.01 }); }
+            case 'gem_vein': put('rock_single_C', { sc: 1.0 }); if (detail) { put('rock_single_D', { dx: 0.5, dz: 0.3, sc: 0.7 }); put('crystal_A', { dx: -0.4, dz: 0.2, sc: 0.8 }); } break;
+            case 'village': { const hn = K.houseName(r2, biome, {}); if (hn) put(hn, { sc: 0.95 }); if (detail) { put('tree_single_A', { dx: 0.6, dz: 0.45, sc: 0.7 }); if (r2() < 0.5) put('building_well', { dx: -0.6, dz: 0.4, sc: 0.8 }); } break; }
+            case 'forest': put(r2() < 0.5 ? 'trees_A_large' : 'trees_B_large', { dx: -0.1, sc: 0.95 }); if (detail) put('trees_B_medium', { dx: 0.5, dz: 0.4, sc: 0.8 }); break;
+            default: terrainDress(t, put, r2, detail, over);
         }
-        if (own && !['keep', 'fortress', 'village', 'shrine'].includes(t.kind)) hw.put(`flag_${colName(own)}`, x, y, { dx: 0.7, dz: -0.35, sort: 0.3, sc: 0.9 });
-        // owner = tinted hex ground
-        if (own) hw.underlay((cx) => { const poly = hw.cellPoly(x, y, 0.02, 0.06); cx.beginPath(); poly.forEach((p, i) => (i ? cx.lineTo(p.x, p.y) : cx.moveTo(p.x, p.y))); cx.closePath(); cx.fillStyle = art.hex(colHex(own), 0.5); cx.fill(); cx.lineWidth = 2; cx.strokeStyle = art.hex(colHex(own), 0.9); cx.stroke(); }, x, y);
-        if (o.shield) hw.overlay((cx) => { const p = hw.proj(...(() => { const w = K.hexWorld(x, y); return [w.x, w.z, 0.2]; })()); cx.fillStyle = '#fff'; cx.font = 'bold 13px sans-serif'; cx.textAlign = 'center'; cx.fillText('🛡', p.x, p.y - 4); }, x, y);
+        if (own && detail && !['keep', 'fortress', 'village', 'shrine'].includes(t.kind)) hw.put(`flag_${colName(own)}`, lx, ly, { dx: 0.7, dz: -0.35, sort: 0.3, sc: 0.9 });
+        if (own) hw.underlay((cx) => { const poly = hw.cellPoly(lx, ly, 0.02, over ? 0 : 0.06); cx.beginPath(); poly.forEach((p, i) => (i ? cx.lineTo(p.x, p.y) : cx.moveTo(p.x, p.y))); cx.closePath(); cx.fillStyle = art.hex(colHex(own), over ? 0.85 : 0.62); cx.fill(); if (!over) { cx.lineWidth = 2; cx.strokeStyle = art.hex(colHex(own), 0.9); cx.stroke(); } }, lx, ly);
+        if (o.shield && detail) hw.overlay((cx) => { const w = K.hexWorld(lx, ly); const p = hw.proj(w.x, w.z, 0.2); cx.fillStyle = '#fff'; cx.font = 'bold 13px sans-serif'; cx.textAlign = 'center'; cx.fillText('🛡', p.x, p.y - 4); }, lx, ly);
     }
-    // province borders along hex edges (heavy dark line where province changes)
-    hw.overlays.push({ x: 0, z: 0, y: 0, fn: (cx) => { cx.save(); cx.lineWidth = 3; cx.strokeStyle = 'rgba(20,10,0,.75)'; cx.lineCap = 'round';
-        for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) { const poly = hw.cellPoly(x, y, 0.03); const me = map.provOf(x, y); for (let d = 0; d < 6; d++) { const n = K.neighbor(x, y, d); if (n[0] < 0 || n[1] < 0 || n[0] >= COLS || n[1] >= ROWS) continue; if (map.provOf(n[0], n[1]) === me) continue; const a = poly[d], b2 = poly[(d + 1) % 6]; cx.beginPath(); cx.moveTo(a.x, a.y); cx.lineTo(b2.x, b2.y); cx.stroke(); } } cx.restore(); } });
+    // province borders along hex edges
+    hw.overlays.push({ x: 0, z: 0, y: 0, fn: (cx) => { cx.save(); cx.lineWidth = over ? 1.6 : 3; cx.strokeStyle = 'rgba(20,10,0,.75)'; cx.lineCap = 'round';
+        for (let y = y0; y < y0 + vh; y++) for (let x = x0; x < x0 + vw; x++) { if (!g.tiles.has(map.tileId(snap.realm, x, y))) continue; const poly = hw.cellPoly(x - x0, y - y0, 0.03); const me = map.provOf(x, y); for (let d = 0; d < 6; d++) { const n = K.neighbor(x, y, d); if (!g.tiles.has(map.tileId(snap.realm, n[0], n[1])) || map.provOf(n[0], n[1]) === me) continue; const a = poly[d], b2 = poly[(d + 1) % 6]; cx.beginPath(); cx.moveTo(a.x, a.y); cx.lineTo(b2.x, b2.y); cx.stroke(); } } cx.restore(); } });
     hw.W = lay.W; hw.H = H;
     await hw.draw(ctx, { drawBackdrop: async (cx) => { cx.fillStyle = '#14100b'; cx.fillRect(0, 0, W, H); await K.paintBackdrop(cx, lay.W, H, map.hashStr(snap.seed + snap.realm), { top: '#3a4a60', mid: '#8a7a68', bot: '#1c1812', clouds: 0, cloudScale: 0.6 }); } });
-    const P = (id) => { const q = map.parse(id); if (q.realm !== snap.realm) return null; const w = K.hexWorld(q.x, q.y); return hw.proj(w.x, w.z, 0.1); };
-    // marches
-    for (const m of snap.marches || []) { const a = P(m.from), b2 = P(m.to); if (!a || !b2) continue; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3.5; ctx.setLineDash([9, 6]); ctx.shadowColor = '#000'; ctx.shadowBlur = 4; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b2.x, b2.y); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(b2.x, b2.y, 6, 0, 7); ctx.fill(); ctx.shadowBlur = 0; }
-    // targets
-    (snap.targets || []).forEach((id, i) => { const p = P(id); if (!p) return; ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.beginPath(); ctx.arc(p.x, p.y - 6, 10, 0, 7); ctx.fill(); ctx.fillStyle = '#ffe28a'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(String(i + 1), p.x, p.y - 2); });
-    // you
-    const me = P(snap.me.at); if (me) { const im = snap.me.sprite ? await SP.character(snap.me.sprite) : null; ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.ellipse(me.x, me.y + 2, 16, 6, 0, 0, 7); ctx.fill(); if (im) SP.standing(ctx, im, 'me' + snap.me.sprite, me.x, me.y + 2, 54, { smooth: true, shadow: false }); ctx.strokeStyle = '#ffe28a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(me.x, me.y + 2, 18, 7, 0, 0, 7); ctx.stroke(); }
-    // province labels
-    ctx.font = 'bold 14px serif'; ctx.textAlign = 'center'; realm.provinces.forEach((p) => { const pt = hw.proj(...(() => { const w = K.hexWorld(p.col * 5 + 2, p.row * 5 + 2); return [w.x, w.z, 0.3]; })()); ctx.fillStyle = 'rgba(0,0,0,.55)'; const tw = ctx.measureText(p.name).width + 14; ctx.fillRect(pt.x - tw / 2, pt.y - 40, tw, 20); ctx.fillStyle = '#f6e7b8'; ctx.fillText(p.name, pt.x, pt.y - 25); });
-    // title + panel
-    ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, W, 44); ctx.fillStyle = '#f2e6c8'; ctx.font = 'bold 22px serif'; ctx.textAlign = 'left'; ctx.fillText(`${snap.title || realm.name} — ${realm.name}`, 14, 29); ctx.font = '15px serif'; ctx.textAlign = 'right'; ctx.fillStyle = '#d9c9a0'; ctx.fillText(snap.sub || '', W - 14, 28); ctx.textAlign = 'left';
+    const P = (id) => { const q = map.parse(id); if (q.realm !== snap.realm || !inWin(q.x, q.y)) return null; const w = K.hexWorld(q.x - x0, q.y - y0); return hw.proj(w.x, w.z, 0.1); };
+    for (const m of snap.marches || []) { const a = P(m.from), b2 = P(m.to); if (!a || !b2) continue; ctx.strokeStyle = '#fff'; ctx.lineWidth = over ? 2 : 3.5; ctx.setLineDash([9, 6]); ctx.shadowColor = '#000'; ctx.shadowBlur = 4; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b2.x, b2.y); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(b2.x, b2.y, over ? 3 : 6, 0, 7); ctx.fill(); ctx.shadowBlur = 0; }
+    if (detail) (snap.targets || []).forEach((id, i) => { const p = P(id); if (!p) return; ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.beginPath(); ctx.arc(p.x, p.y - 6, 10, 0, 7); ctx.fill(); ctx.fillStyle = '#ffe28a'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(String(i + 1), p.x, p.y - 2); });
+    const me = P(snap.me.at); if (me) { if (over) { ctx.strokeStyle = '#ffe28a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(me.x, me.y, 9, 0, 7); ctx.stroke(); } else { const im = snap.me.sprite ? await SP.character(snap.me.sprite) : null; ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.ellipse(me.x, me.y + 2, 16, 6, 0, 0, 7); ctx.fill(); if (im) SP.standing(ctx, im, 'me' + snap.me.sprite, me.x, me.y + 2, 54, { smooth: true, shadow: false }); ctx.strokeStyle = '#ffe28a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(me.x, me.y + 2, 18, 7, 0, 0, 7); ctx.stroke(); } }
+    ctx.font = over ? 'bold 13px serif' : 'bold 15px serif'; ctx.textAlign = 'center'; realm.provinces.forEach((p) => { const ts = p.tiles.map((id) => map.parse(id)).filter((q) => inWin(q.x, q.y)); if (ts.length < (over ? 20 : 30)) return; const q = ts[ts.length >> 1]; const w = K.hexWorld(q.x - x0, q.y - y0); const pt = hw.proj(w.x, w.z, 0.3); ctx.fillStyle = 'rgba(0,0,0,.55)'; const tw = ctx.measureText(p.name).width + 14; ctx.fillRect(pt.x - tw / 2, pt.y - 40, tw, 20); ctx.fillStyle = '#f6e7b8'; ctx.fillText(p.name, pt.x, pt.y - 25); });
+    ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, W, 44); ctx.fillStyle = '#f2e6c8'; ctx.font = 'bold 22px serif'; ctx.textAlign = 'left'; ctx.fillText(`${snap.title || realm.name} — ${realm.name}${over ? ' · overview' : ''}`, 14, 29); ctx.font = '15px serif'; ctx.textAlign = 'right'; ctx.fillStyle = '#d9c9a0'; ctx.fillText(snap.sub || '', W - 14, 28); ctx.textAlign = 'left';
     const px = lay.W + 8; ctx.fillStyle = 'rgba(16,12,8,.88)'; ctx.fillRect(px - 8, 52, PANEL, H - 60); ctx.fillStyle = '#f2e6c8'; ctx.font = 'bold 15px serif'; ctx.fillText('STANDINGS', px, 78);
-    snap.guilds.forEach((gd, i) => { const y = 100 + i * 28; ctx.fillStyle = colHex(gd.name); ctx.fillRect(px, y - 12, 14, 14); ctx.fillStyle = '#eadfc0'; ctx.font = '13px sans-serif'; ctx.fillText(`${i + 1}. ${gd.name.slice(0, 16)}  ${gd.score}`, px + 22, y); ctx.fillStyle = '#a99c78'; ctx.fillText(`${gd.tiles} tiles`, px + 22 + 150, y); });
+    snap.guilds.forEach((gd, i) => { const y = 100 + i * 28; ctx.fillStyle = colHex(gd.name); ctx.fillRect(px, y - 12, 14, 14); ctx.fillStyle = '#eadfc0'; ctx.font = '13px sans-serif'; ctx.fillText(`${i + 1}. ${gd.name.slice(0, 14)}  ${gd.score}`, px + 22, y); ctx.fillStyle = '#a99c78'; ctx.fillText(`${gd.tiles}t`, px + 22 + 160, y); });
     const ly = 100 + snap.guilds.length * 28 + 16; ctx.fillStyle = '#f2e6c8'; ctx.font = 'bold 15px serif'; ctx.fillText('LEGEND', px, ly);
-    [['keep', 'Guild Keep'], ['fortress', 'Fortress'], ['ley_gate', 'Ley Gate'], ['gem_vein', 'Aether Vein'], ['titan', 'Titan Lair'], ['ruins', 'Ruins'], ['shrine', 'Shrine'], ['village', 'Village'], ['pass', 'Mountain Pass'], ['forest', 'Forest']].forEach(([k, n], i) => { ctx.fillStyle = '#d9cba3'; ctx.font = '13px sans-serif'; ctx.fillText('• ' + n, px, ly + 24 + i * 22); });
-    ctx.fillStyle = '#a99c78'; ctx.font = '12px sans-serif'; ctx.fillText('① numbers = `cq march <#>` targets', px, H - 24);
+    [['Guild Keep'], ['Fortress'], ['Ley Gate'], ['Aether Vein'], ['Titan Lair'], ['Ruins'], ['Shrine'], ['Village'], ['Mountain Pass'], ['Forest']].forEach(([n], i) => { ctx.fillStyle = '#d9cba3'; ctx.font = '13px sans-serif'; ctx.fillText('• ' + n, px, ly + 24 + i * 22); });
+    ctx.fillStyle = '#a99c78'; ctx.font = '12px sans-serif'; ctx.fillText(over ? '`cq map` = close-up' : '① = `cq march <#>` · `cq realm` = overview', px, H - 24);
     return c;
 }
 

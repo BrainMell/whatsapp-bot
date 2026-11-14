@@ -6,7 +6,7 @@ const enabled = () => String(process.env.GW_CONQUEST || '') === '1';
 const CFG = Object.freeze({
     // ── map shape ────────────────────────────────────────────────────────────
     PROV_COLS: 4, PROV_ROWS: 3,        // provinces per realm (12)
-    PROV_SIZE: 5,                      // each province is 5x5 tiles -> 300 tiles/realm, 1500 world
+    PROV_SIZE: 38,                     // each province is 22x22 grid cells; only cells on the canonical land mask become tiles (~3,500 land tiles/realm)
     // ── marches ──────────────────────────────────────────────────────────────
     MARCH_SEC_PER_TILE: 45,            // base travel time per tile
     MARCH_MAX_SEC: 8 * 60,             // transit cap (a long trip never locks you > 8 min)

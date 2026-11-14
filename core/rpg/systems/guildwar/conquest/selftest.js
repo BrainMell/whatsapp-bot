@@ -2,7 +2,7 @@
 // node core/rpg/systems/guildwar/conquest/selftest.js  — quick invariants for the conquest layer
 process.env.GW_CONQUEST = '1'; const assert = require('assert');
 const E = require('./engine'), B = require('./breach'), M = require('./mapgen'), G = require('./gems');
-const g = M.generate(1); assert.strictEqual(g.tiles.size, 1500); assert.deepStrictEqual([...M.generate(1).tiles.keys()].slice(0, 5), [...g.tiles.keys()].slice(0, 5));
+const g = M.generate(1); assert.ok(g.tiles.size > 20000 && g.tiles.size < 40000); assert.deepStrictEqual([...M.generate(1).tiles.keys()].slice(0, 5), [...g.tiles.keys()].slice(0, 5));
 const s = E.newWar({ key: 't', seed: 3, guilds: [{ name: 'A', roles: { a: 'master' }, members: ['a', 'b'] }], now: 1e12 }); E.registerPlayer(s, 'A', 'a', 'a', 500);
 assert(E.marchSolo(s, { guild: 'A', by: 'b', to: [...E.frontier(s, 'A')][0], now: 1e12 }).ok === false, 'members cannot order');
 const to = [...E.frontier(s, 'A')][0]; assert(E.marchSolo(s, { guild: 'A', by: 'a', to, now: 1e12 }).ok); assert(E.locked(s, 'a'));

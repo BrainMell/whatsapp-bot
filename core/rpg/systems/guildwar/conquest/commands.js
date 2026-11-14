@@ -36,7 +36,7 @@ function targetsText(s, guild, jid) {
 }
 function gridText(s, guild, jid) {
     const p = s.players[jid]; const v = E.view(s, p.at); const own = new Set(s.guilds[guild].tiles); const owners = {}; Object.keys(s.guilds).forEach((n, i) => { owners[n] = ['🟦', '🟥', '🟩', '🟨', '🟪', '🟧', '⬛', '🟫'][i % 8]; });
-    const rows = []; for (let y = Math.max(0, v.y - 3); y <= Math.min(map.H - 1, v.y + 3); y++) { let r = ''; for (let x = Math.max(0, v.x - 5); x <= Math.min(map.W - 1, v.x + 5); x++) { const id = map.tileId(v.realm, x, y); const t = E.view(s, id); r += id === p.at ? '🧍' : t.owner ? owners[t.owner] : ({ gem_vein: '💎', fortress: '🏰', titan: '☠️', ruins: '🏛️', shrine: '⛩️', ley_gate: '🌀', village: '🏘️', forest: '🌲', pass: '⛰️', keep: '👑' }[t.kind] || '⬜'); } rows.push(r); }
+    const rows = []; for (let y = Math.max(0, v.y - 3); y <= Math.min(map.H - 1, v.y + 4); y++) { let r = ''; for (let x = Math.max(0, v.x - 6); x <= Math.min(map.W - 1, v.x + 6); x++) { const id = map.tileId(v.realm, x, y); const t = E.view(s, id); if (!t) { r += '🌊'; continue; } r += id === p.at ? '🧍' : t.owner ? owners[t.owner] : ({ gem_vein: '💎', fortress: '🏰', titan: '☠️', ruins: '🏛️', shrine: '⛩️', ley_gate: '🌀', village: '🏘️', forest: '🌲', pass: '⛰️', keep: '👑' }[t.kind] || '⬜'); } rows.push(r); }
     return `🗺️ *${v.provName}* — ${label(s, p.at)}\n` + rows.join('\n') + '\n' + Object.entries(owners).map(([n, e]) => `${e} ${n}`).join('  ');
 }
 function mapSnap(s, guild, jid) {
@@ -88,6 +88,7 @@ function run(s, { jid, guildName, verb, args, rest, now, L, events }) {
     if (FIGHT_VERBS.has(verb)) { const b = s.breaches[p.breachId]; if (!b) return { text: 'You are not in a fight. `cq targets` → `cq march <#>`.' }; const r = breach.submit(b, jid, verb, args[0]); const extra = r.ok ? '\n' + breach.statusText(b) : ''; if (r.ok && breach.allSubmitted(b)) { const ev = []; E.tick(s, now, ev); events.push(...ev); } return { text: (r.ok ? `✔ ${r.action}${r.target ? ' → ' + r.target : ''}` : '❌ ' + r.msg) + extra }; }
     switch (verb) {
         case 'map': case 'm': return { text: gridText(s, guildName, jid), render: { what: 'map', data: mapSnap(s, guildName, jid) }, imageText: gridText(s, guildName, jid) };
+        case 'realm': case 'overview': { const d = mapSnap(s, guildName, jid); d.view = 'overview'; return { text: gridText(s, guildName, jid), render: { what: 'map', data: d }, imageText: gridText(s, guildName, jid) }; }
         case 'cards': return { text: '🃏 Environment cards: ' + envCards.CARDS.map((c) => c.id).join(', ') + '\nSee one: `cq card <id>`' };
         case 'card': { const c = envCards.BY_ID[(args[0] || '').toLowerCase()]; if (!c) return { text: 'Unknown card. `cq cards` lists them.' }; return { text: `${c.name}: ${c.text}`, render: { what: 'card', data: { id: c.id } } }; }
         case 'siege': { const b = s.breaches[p.breachId]; if (!b) return { text: 'You are not in a siege.' }; return { text: breach.statusText(b), render: { what: 'siege', data: JSON.parse(JSON.stringify(b)) } }; }
