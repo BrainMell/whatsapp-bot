@@ -442,8 +442,20 @@ function loadCardsDB() {
   const inst = getInst();
   try {
     const raw     = JSON.parse(fs.readFileSync(CARDS_DB_PATH, 'utf8'));
-    const cards   = Array.isArray(raw.cards) ? raw.cards : Object.values(raw.cards);
-    
+    let cards     = Array.isArray(raw.cards) ? raw.cards : Object.values(raw.cards);
+
+    // 💡 34f GUARD: 'Card back' entries are unrevealed placeholder slots scraped
+    // from shoob.gg. If a future miner merge re-adds them (placeholder listed
+    // before the real card is revealed), never let them into the pool - a
+    // spawn titled "Card back" looks broken to players. Log loudly so the
+    // dataset gets refreshed with the revealed names instead.
+    const isPlaceholderName = (n) => String(n || '').trim().toLowerCase().replace(/[-_]/g, ' ') === 'card back';
+    const ph = cards.filter(c => isPlaceholderName(c.cardName));
+    if (ph.length > 0) {
+      console.warn(`[CardSystem][${botConfig.getBotId()}] WARNING: ${ph.length} unrevealed 'Card back' placeholder cards in cards_data.json - excluded from pool (${ph.map(c => c.id).join(', ')})`);
+      cards = cards.filter(c => !isPlaceholderName(c.cardName));
+    }
+
     inst.ALL_CARDS     = cards;
     inst.CARD_INDEX    = {};
     inst.CARDS_BY_TIER = {};
