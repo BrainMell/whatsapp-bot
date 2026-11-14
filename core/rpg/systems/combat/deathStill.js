@@ -138,7 +138,7 @@ function putArt(c, img, cx, cy, w, h, opts = {}) {
 // lands mid-body. v2 uses the real big art; NO white flash wash (v1's stamps
 // measured avg RGB 255,254,254 — literally white rectangles).
 const STAMP_SIZE = 480;
-const STAMP_DIR = path.join(os.tmpdir(), 'death_stamps_v8');
+const STAMP_DIR = path.join(os.tmpdir(), 'death_stamps_v9lib');
 const _stampMemo = new Map();
 
 function speck(rnd, c, x, y, r, col, a) {
@@ -213,11 +213,49 @@ function crackLine(c, x0, y0, ang, len, rnd) {
     c.restore();
 }
 
+
+// ── 2026-11-14: death stamps for FIRE / ICE / WATER / EARTH / DUST(air) are composed from the static VFX library (core/rpgasset/vfx_static,
+// built from New Assets/vfx). VOID keeps Claude's spiral (owner 2026-11-10). If the library is missing the old procedural/premade art runs.
+function libSprite(id, frame) { try { return require('./skillStaticFx').sprite(id, frame); } catch (e) { return null; } }
+function L(c, id, x, y, h, o = {}) { // draw library sprite `id`; (x,y) = bottom-centre when o.b, else centre. h = target height (px); width capped by o.maxW
+  const im = libSprite(id, o.alt ? 'alt' : 'peak'); if (!im || !im.width) return false;
+  const k = Math.min(h / im.height, (o.maxW || 1e9) / im.width), w = im.width * k, hh = im.height * k;
+  c.save(); c.globalAlpha = o.a == null ? 1 : o.a; c.imageSmoothingEnabled = Math.min(im.width, im.height) > 120; c.translate(x, o.b ? y - hh / 2 : y); if (o.rot) c.rotate(o.rot); if (o.flip) c.scale(-1, 1);
+  c.drawImage(im, -w / 2, -hh / 2, w, hh); c.restore(); return true;
+}
+function paintLibStamp(kind, c, cx, gy, A, rnd) {
+  if (!libSprite('hit_heavy_large')) return false; const f = () => rnd() < 0.5; let ok = true;
+  if (kind === 'WATER') {
+    softBlob(c, cx, gy + 6, 190 * A, 30 * A, [[0, 'rgba(20,70,140,0.55)'], [1, 'rgba(20,70,140,0)']]);
+    ok = L(c, 'whirlpool', cx, gy + 4, 70 * A, { b: 1, maxW: 380 * A, a: 0.95 }) && ok;
+    L(c, 'water_geyser', cx + 105 * A, gy, 300 * A, { b: 1, a: 0.95 });
+    ok = L(c, 'water_splash_large', cx, gy + 6, 330 * A, { b: 1, maxW: 430 * A }) && ok; L(c, 'bubble_burst', cx - 10 * A, gy - 190 * A, 150 * A, { a: 0.9 });
+  } else if (kind === 'EARTH') {
+    softBlob(c, cx, gy + 6, 195 * A, 34 * A, [[0, 'rgba(24,16,9,0.8)'], [1, 'rgba(24,16,9,0)']]);
+    L(c, 'fissure', cx, gy + 10, 70 * A, { b: 1, maxW: 400 * A }); L(c, 'explosion_debris_large', cx, gy + 8, 300 * A, { b: 1, maxW: 440 * A, a: 0.95 });
+    ok = L(c, 'earth_rockspike_large', cx - 70 * A, gy + 8, 250 * A, { b: 1, flip: f() }) && ok; L(c, 'earth_rockspike_large', cx + 80 * A, gy + 6, 200 * A, { b: 1, alt: 1, flip: f() });
+    L(c, 'rock_shatter', cx, gy - 120 * A, 260 * A, { maxW: 380 * A }); L(c, 'boulder_toss', cx + 130 * A, gy - 20 * A, 120 * A, { b: 1 }); L(c, 'ground_slam', cx - 130 * A, gy, 110 * A, { b: 1 });
+  } else if (kind === 'DUST') {   // air / generic: gale column + puffs + a wind blade
+    L(c, 'dust_puff', cx, gy + 6, 150 * A, { b: 1, maxW: 400 * A, a: 0.9 }); L(c, 'whirlwind', cx - 90 * A, gy + 4, 300 * A, { b: 1, a: 0.9 });
+    ok = L(c, 'wind_tornado_large', cx + 40 * A, gy + 4, 360 * A, { b: 1 }) && ok; L(c, 'explosion_air_large', cx, gy - 140 * A, 220 * A, { a: 0.8 }); L(c, 'wind_blade', cx + 120 * A, gy - 190 * A, 110 * A, { a: 0.9, flip: f() }); L(c, 'smoke_puff_large', cx - 130 * A, gy - 40 * A, 110 * A, { a: 0.85 });
+  } else if (kind === 'FIRE') {
+    softBlob(c, cx, gy + 6, 200 * A, 36 * A, [[0, 'rgba(20,11,5,0.85)'], [1, 'rgba(20,11,5,0)']]);
+    L(c, 'ground_flames', cx, gy + 8, 80 * A, { b: 1, maxW: 420 * A }); L(c, 'fire_pillar', cx + 100 * A, gy, 330 * A, { b: 1 }); L(c, 'fire_tornado', cx - 110 * A, gy, 300 * A, { b: 1 });
+    ok = L(c, 'explosion_ground_b_large', cx, gy - 10 * A, 330 * A, { b: 1, maxW: 440 * A }) && ok; L(c, 'fire_impact_large', cx, gy - 150 * A, 190 * A);
+  } else if (kind === 'ICE') {
+    softBlob(c, cx, gy + 6, 170 * A, 30 * A, [[0, 'rgba(150,215,255,0.45)'], [1, 'rgba(150,215,255,0)']]);
+    L(c, 'frost_nova', cx, gy + 8, 80 * A, { b: 1, maxW: 400 * A }); L(c, 'ice_spike', cx - 100 * A, gy + 4, 260 * A, { b: 1 }); L(c, 'ice_spike', cx + 105 * A, gy + 4, 220 * A, { b: 1, alt: 1, flip: 1 });
+    ok = L(c, 'freeze_encase', cx, gy + 6, 330 * A, { b: 1, maxW: 330 * A }) && ok; L(c, 'ice_chargeshatter_large', cx, gy - 160 * A, 200 * A); L(c, 'ice_impact_large', cx + 40 * A, gy - 120 * A, 130 * A, { a: 0.9 });
+  } else return false;
+  return ok;
+}
 async function paintStamp(kind, boss) {
     const S = STAMP_SIZE, cv = createCanvas(S, S), c = cv.getContext('2d');
     const cx = S / 2, gy = S - 78;   // gy = the ground line inside the stamp (craters sit here)
     const rnd = mulberry32(hashStr(kind + (boss ? ':boss' : '')));
     const A = boss ? 1.15 : 1;   // bosses die louder
+    if (kind !== 'VOID' && process.env.DEATH_LIB !== '0' && paintLibStamp(kind, c, cx, gy, A, rnd)) return cv.toBuffer('image/png');
+    c.clearRect(0, 0, S, S);
 
     if (kind === 'FIRE') {
         // 💡 v4: same hero (fire2 blast + flash core + jet + smoke — that part
