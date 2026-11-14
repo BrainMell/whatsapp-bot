@@ -21114,25 +21114,48 @@ Members are assigned to Rank Tiers (1 to 5).
                       }
                     }
 
-                    // 💡 TAGALL v2 (2026-11-13): ONE native "@all" tag instead of a
-                    // 100-line member list. contextInfo.nonJidMentions = 1 is
-                    // WhatsApp's own @all flag (notifies every member, even muted
-                    // chats; groups >32 members need an admin sender). The full
-                    // mentionedJid list rides along as a silent fallback so members
-                    // are still notified on clients/groups where @all isn't honoured.
-                    // NOTE: WhatsApp renders the tag as "@all" for everyone - a single
-                    // tag cannot display each viewer's own name (mention text is fixed
-                    // in the message body, names resolve per JID).
-                    const senderName = String(
-                      economy.getDisplayName(senderJid) || senderJid.split("@")[0],
-                    ).replace(/^@+/, "");
-                    const bodyText = (
-                      customText ||
-                      (contentToSend && messageType === "text" ? contentToSend : "")
-                    )
-                      .toString()
-                      .trim();
-                    const announcementText = `Message from ${senderName}\n\n${bodyText ? bodyText + " " : ""}@all`;
+                    // Create stylish member list with emoji numbers
+                    const memberList = participants
+                      .map((jid, index) => {
+                        const number = jid.split("@")[0];
+                        const emojiNum = toEmojiNumber(index + 1);
+                        return `${emojiNum} @${number}`;
+                      })
+                      .join("\n");
+
+                    // Build the announcement text
+                    let announcementText = "";
+                    const senderHeader = `\n👤 *Message by:* @${economy.getDisplayName(senderJid)}\n`;
+                    let replyTag = "";
+                    if (quotedParticipant) {
+                      replyTag = `📢 *Attention:* @${economy.getDisplayName(quotedParticipant)}\n\n`;
+                    }
+
+                    if (customText) {
+                      announcementText = `┏━━━━━━━━━━━━━┓
+┃ 📢 *ANNOUNCEMENT* 📢
+┗━━━━━━━━━━━━━┛
+${senderHeader}
+${replyTag}${customText}
+
+━━━━━━━━━━━━━━━`;
+                    } else if (contentToSend && messageType === "text") {
+                      announcementText = `┏━━━━━━━━━━━━━━┓
+┃ 📢 *ANNOUNCEMENT* 📢
+┗━━━━━━━━━━━━━━┛
+${senderHeader}
+${replyTag}${contentToSend}
+
+━━━━━━━━━━━━━━`;
+                    } else {
+                      announcementText = `━━━━━━━━━━━━━━\n${senderHeader}${replyTag}`;
+                    }
+
+                    announcementText += `
+👥 *GROUP MEMBERS*
+━━━━━━━━━━━━━
+
+${memberList}`;
 
                     // Mentions list should include all participants + quoted user
                     const allMentions = [...participants];
@@ -21142,7 +21165,6 @@ Members are assigned to Rank Tiers (1 to 5).
                     ) {
                       allMentions.push(quotedParticipant);
                     }
-                    const tagAllContext = { mentionedJid: allMentions, nonJidMentions: 1 };
 
                     // Send based on content type
                     try {
@@ -21150,13 +21172,13 @@ Members are assigned to Rank Tiers (1 to 5).
                         await sock.sendMessage(chatId, {
                           image: contentToSend,
                           caption: BOT_MARKER + announcementText,
-                          contextInfo: tagAllContext,
+                          contextInfo: { mentionedJid: allMentions },
                         });
                       } else if (messageType === "video" && contentToSend) {
                         await sock.sendMessage(chatId, {
                           video: contentToSend,
                           caption: BOT_MARKER + announcementText,
-                          contextInfo: tagAllContext,
+                          contextInfo: { mentionedJid: allMentions },
                         });
                       } else if (messageType === "sticker" && contentToSend) {
                         // Send sticker first
@@ -21166,13 +21188,13 @@ Members are assigned to Rank Tiers (1 to 5).
                         // Then send announcement with PROPER TAGS
                         await sock.sendMessage(chatId, {
                           text: BOT_MARKER + announcementText,
-                          contextInfo: tagAllContext,
+                          contextInfo: { mentionedJid: allMentions },
                         });
                       } else {
                         // Just send text with PROPER TAGS
                         await sock.sendMessage(chatId, {
                           text: BOT_MARKER + announcementText,
-                          contextInfo: tagAllContext,
+                          contextInfo: { mentionedJid: allMentions },
                         });
                       }
 
