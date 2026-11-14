@@ -184,6 +184,8 @@ function titanDefence(state, v) { const lv = 3 + Math.floor(map.hashStr(v.realm)
 function startBreach(state, m, v, now, events) {
     const def = v.kind === 'titan' && !v.owner ? titanDefence(state, v) : { wall: v.wall ? { type: v.wall.type, hp: v.wall.hp, max: v.wall.max || v.wall.hp } : null, golems: v.golems, turrets: v.turrets, buffs: v.buffs };
     const id = uid(state, 'B'); const b = breach.create({ id, tileId: v.id, biome: v.biome, tileName: v.name, attacker: m.guild, defender: v.owner, party: m.members.map((j) => ({ jid: j, name: state.players[j].name, power: state.players[j].power, sprite: state.players[j].sprite })), defence: def, now, isTitan: v.kind === 'titan' });
+    b.kind = v.kind; const gi = (n) => n ? Math.abs(map.hashStr(n)) % 4 : -1; b.defIdx = gi(v.owner); b.attIdx = gi(m.guild);
+    b.surround = {}; for (const n of map.neighbors(gmap(state), v.id) || []) { const k = (view(state, n) || {}).kind; if (k) b.surround[k] = (b.surround[k] || 0) + 1; }
     state.breaches[id] = b; for (const j of m.members) { const p = state.players[j]; p.status = 'breach'; p.breachId = id; }
     if (b.outcome) return finishBreach(state, b, now, events); breach.startRound(b, now); events.push({ type: 'breach_start', id, guild: m.guild, tile: v.id, defender: v.owner });
 }

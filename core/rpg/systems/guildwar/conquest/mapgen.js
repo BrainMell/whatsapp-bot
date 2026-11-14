@@ -142,9 +142,14 @@ function neutralDefences(t, rng) {
     }
 }
 
+// pointy-top hex grid, odd-r offset (x=col, y=row) — IDENTICAL to world/kingdom3d.js so tiles render 1:1 as KayKit hexes.
+// edge order: 0=E 1=SE 2=SW 3=W 4=NW 5=NE
+const NB_EVEN = [[1, 0], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1]];
+const NB_ODD = [[1, 0], [1, 1], [0, 1], [-1, 0], [0, -1], [1, -1]];
+const hexNb = (x, y, d) => { const o = (y & 1 ? NB_ODD : NB_EVEN)[d]; return [x + o[0], y + o[1]]; };
 function neighbors(map, id) {
     const { realm, x, y } = parse(id); const out = [];
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const n = tileId(realm, x + dx, y + dy); if (map.tiles.has(n)) out.push(n); }
+    for (let d = 0; d < 6; d++) { const [nx, ny] = hexNb(x, y, d); const n = tileId(realm, nx, ny); if (map.tiles.has(n)) out.push(n); }
     const t = map.tiles.get(id);
     if (t && t.bridge) { // realm gates link the ring: east of realm i <-> west of realm i+1 at same row
         const keys = realmKeys(); const i = keys.indexOf(realm);
@@ -159,4 +164,4 @@ function distance(map, a, b, limit = 80) {
     for (let d = 1; d <= limit; d++) { const next = []; for (const id of frontier) for (const n of neighbors(map, id)) { if (n === b) return d; if (!seen.has(n)) { seen.add(n); next.push(n); } } frontier = next; if (!frontier.length) break; }
     return Infinity;
 }
-module.exports = { generate, neighbors, distance, tileId, parse, provOf, KINDS, SCENERY, W, H, mulberry32, hashStr, realmKeys };
+module.exports = { generate, neighbors, hexNb, distance, tileId, parse, provOf, KINDS, SCENERY, W, H, mulberry32, hashStr, realmKeys };

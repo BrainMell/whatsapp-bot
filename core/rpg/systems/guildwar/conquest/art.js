@@ -36,7 +36,7 @@ function weather(ctx, W, H, card, horizon, seed, t = 0) {
         case 'oil': case 'tar': dots(40, 3, fam === 'tar' ? 'rgba(10,8,6,.9)' : 'rgba(220,160,50,.8)', horizon - 60, horizon + 140); break;
         case 'arrows': ctx.strokeStyle = '#d8c690'; ctx.lineWidth = 2; for (let i = 0; i < 60; i++) { const x = r() * W, y = r() * horizon; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 6, y + 22); ctx.stroke(); } break;
         case 'ward': { ctx.strokeStyle = 'rgba(176,128,255,.8)'; ctx.lineWidth = 3; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(W / 2, horizon + 20, 150 + i * 40, Math.PI, 0); ctx.stroke(); } break; }
-        case 'sigil': ctx.fillStyle = 'rgba(126,214,193,.35)'; for (let i = 0; i < 7; i++) { ctx.beginPath(); ctx.arc(W * (0.15 + i * 0.12), horizon + 80, 22, 0, 7); ctx.fill(); } break;
+        case 'sigil': break; // golem glow is drawn on the golems themselves
         case 'menders': ctx.fillStyle = '#6a5a44'; for (let i = 0; i < 9; i++) { const x = 130 + r() * (W - 260); ctx.fillRect(x, horizon - 6, 6, 14); ctx.fillRect(x - 3, horizon - 12, 12, 5); } break;
         case 'ravens': ctx.strokeStyle = '#0c0c14'; ctx.lineWidth = 3; for (let i = 0; i < 30; i++) { const x = r() * W, y = r() * horizon; ctx.beginPath(); ctx.moveTo(x - 8, y + 3); ctx.quadraticCurveTo(x - 3, y - 6, x, y); ctx.quadraticCurveTo(x + 3, y - 6, x + 8, y + 3); ctx.stroke(); } break;
         case 'rot': dots(60, 2, 'rgba(100,80,30,.7)', horizon - 30, horizon + 160); break;

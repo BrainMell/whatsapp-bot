@@ -42,7 +42,7 @@ function gridText(s, guild, jid) {
 function mapSnap(s, guild, jid) {
     const p = s.players[jid]; const realm = map.parse(p.at).realm; const tiles = Object.entries(s.overlays).filter(([id]) => id.startsWith(realm + ':')).map(([id, o]) => ({ id, owner: o.owner || null, shield: (o.shieldUntil || 0) > Date.now() }));
     const ms = Object.values(s.marches).filter((m) => m.guild === guild).map((m) => ({ from: m.from, to: m.to }));
-    return { seed: s.seed, realm, tiles, guilds: Object.values(s.guilds).map((g) => ({ name: g.name, score: Math.round(g.score), tiles: g.tiles.length })).sort((a, b) => b.score - a.score), me: { at: p.at, sprite: p.sprite }, marches: ms, title: guild, sub: Math.max(0, Math.round((s.endsAt - Date.now()) / 60000)) + ' min left' };
+    return { seed: s.seed, realm, tiles, guilds: Object.values(s.guilds).map((g) => ({ name: g.name, score: Math.round(g.score), tiles: g.tiles.length })).sort((a, b) => b.score - a.score), me: { at: p.at, sprite: p.sprite }, marches: ms, targets: (targetsCache.get(jid) || []), title: guild, sub: Math.max(0, Math.round((s.endsAt - Date.now()) / 60000)) + ' min left' };
 }
 function status(s, guild, jid) {
     const g = s.guilds[guild]; const p = s.players[jid]; const mins = Math.max(0, Math.round((s.endsAt - Date.now()) / 60000));
