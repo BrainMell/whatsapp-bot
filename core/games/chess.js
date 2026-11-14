@@ -27,7 +27,9 @@ const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 // activeGames is a Map of botIds -> Map of chatIds
 const activeGamesMap = new Map();
 const pendingChallenges = new Map(); // `${botId}|${chatId}` -> challenge
-const chatLocks = new Map();         // chatId -> Promise chain (serialises moves in one chat)
+const chatLocks = new Map();
+// Game Night hook: chatId(table) -> fn(result 'w'|'b'|'d', state) called when a game settles
+const settleHooks = new Map();         // chatId -> Promise chain (serialises moves in one chat)
 
 function cleanJid(jid) {
     if (!jid) return '';
@@ -352,6 +354,8 @@ function settleGame(state, result, reason) {
     }
     state.status = 'finished';
     deleteGame(state.chatId);
+    const _sh = settleHooks.get(state.chatId);
+    if (_sh) { try { _sh(result, state); } catch (e) { console.error('[Chess] settle hook failed:', e.message); } }
     return txt;
 }
 
@@ -767,4 +771,4 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
 
 function saveGuard(state) { if (!state.moves) state.moves = []; if (!state.style) state.style = { ...DEFAULT_PREFS }; if (!state.id) state.id = newId(); }
 
-module.exports = { handleChess, getGame, activeGamesMap, loadActiveGames, _parseMove: parseMove };
+module.exports = { handleChess, getGame, activeGamesMap, loadActiveGames, _parseMove: parseMove, createGame, settleGame, sendBoard, deleteGame, settleHooks };

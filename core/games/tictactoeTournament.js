@@ -190,9 +190,9 @@ async function finishTournament(sock, t, finalMatch, champ, runnerUp, lastLine) 
     const semiLosers = [];
     if (t.rounds.length >= 2) t.rounds[t.rounds.length - 2].forEach((m) => { const l = m.a && m.b ? (m.winner === m.a.jid ? m.b : m.a) : null; if (l && !m.bye) semiLosers.push(l); });
     semiLosers.forEach((p) => prizes.set(norm(p.jid), Math.floor(base * 0.15)));
-    for (const p of t.players) { const amt = prizes.get(norm(p.jid)); if (amt) { try { economy.addMoney(p.jid, amt, `TTT Tournament: ${t.name}`); } catch (e) { /* ignore */ } } }
-    // hall of champions
-    try {
+    if (!t.eventMode) for (const p of t.players) { const amt = prizes.get(norm(p.jid)); if (amt) { try { economy.addMoney(p.jid, amt, `TTT Tournament: ${t.name}`); } catch (e) { /* ignore */ } } }
+    // hall of champions (skipped in Game Night mode: the event scoreboard owns the points)
+    if (!t.eventMode) try {
         const h = hall();
         for (const p of t.players) {
             const r = hallRow(h, p.jid, p.name), st = t.stats[norm(p.jid)] || { w: 0, l: 0 };
@@ -213,12 +213,15 @@ async function finishTournament(sock, t, finalMatch, champ, runnerUp, lastLine) 
         `🏆🏆 *${t.name.toUpperCase()} CHAMPION* 🏆🏆`,
         `👑 ${tag(champ.jid)}  ${cst.w}-${cst.l}`, `🥈 ${tag(runnerUp.jid)}`,
         ...semiLosers.map((p) => `🥉 ${tag(p.jid)}`), '',
-        `💰 Prizes: 👑 ${prizes.get(norm(champ.jid))} • 🥈 ${prizes.get(norm(runnerUp.jid))}` + (semiLosers.length ? ` • 🥉 ${Math.floor(base * 0.15)}` : '') + ' Zeni',
-        `📜 \`${px()} tourney top\` for the Hall of Champions`,
+        ...(t.eventMode ? [] : [`💰 Prizes: 👑 ${prizes.get(norm(champ.jid))} • 🥈 ${prizes.get(norm(runnerUp.jid))}` + (semiLosers.length ? ` • 🥉 ${Math.floor(base * 0.15)}` : '') + ' Zeni',
+        `📜 \`${px()} tourney top\` for the Hall of Champions`]),
     ];
     await send(sock, t.chatId, buf, lines.join('\n'), t.players.map((p) => p.jid));
     const bracket = safeRender(render.renderBracket, view(t));
     await send(sock, t.chatId, bracket, `${t.tag} 🗺️ Final bracket`);
+    if (t.eventMode && typeof t.onFinish === 'function') {
+        try { await t.onFinish({ champ, runnerUp, semiLosers, t }); } catch (e) { console.error('[Tourney] event hook failed:', e.message); }
+    }
     setTimeout(() => { if (tournaments.get(t.chatId) === t) tournaments.delete(t.chatId); }, 10 * 60 * 1000).unref();
 }
 

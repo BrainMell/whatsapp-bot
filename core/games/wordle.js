@@ -14,6 +14,9 @@ const system = require('../utils/system'); // NEW: Database System Module
 // ============================================
 
 const activeGames = new Map();
+// Game Night hook: chatId -> { active(): bool, onResult(jid, name, won, guesses) }.
+// While active, wins pay no Zeni and the player's next word starts automatically.
+const eventHooks = new Map();
 
 // Load words from TXT file
 function loadWordsFromTXT() {
@@ -518,6 +521,7 @@ function deleteGame(playerJid, chatId) {
 // ============================================
 
 module.exports = {
+  eventHooks,
   getAllScores,
   startGame: async (sock, chatId, senderJid, botMarker, m, playerName = 'Player', difficulty = 'medium') => {
     if (getGame(senderJid, chatId)) {
@@ -583,6 +587,27 @@ module.exports = {
 
     const board = game.getBoard();
     let message = botMarker + board + "\n\n";
+
+    const evh = eventHooks.get(chatId);
+    if (result.gameOver && evh && evh.active()) {
+      const solved = !!result.won;
+      const tries = game.guesses.length;
+      const word = game.targetWord;
+      deleteGame(senderJid, chatId);
+      let stat = null;
+      try { stat = evh.onResult(senderJid, game.playerName, solved, tries); } catch (e) { console.error('[Wordle] event hook failed:', e.message); }
+      message += solved
+        ? `✅ *SOLVED in ${tries}/6!* ${stat && stat.solved != null ? `(${stat.solved} solved this round)` : ''}\n\n`
+        : `❌ Missed it - the word was *${word}*.\n\n`;
+      if (evh.active()) {
+        const next = createGame(senderJid, game.playerName, game.difficulty, chatId, sock, botMarker);
+        message += `🍬 *Next word!* Keep going - guess with \`${botConfig.getPrefix()} wordle <word>\`\n\n` + next.getBoard();
+      } else {
+        message += `⏱ The Sugar Rush window is closed.`;
+      }
+      await sock.sendMessage(chatId, { text: message, contextInfo: { mentionedJid: [senderJid] } }, { quoted: m });
+      return { success: true };
+    }
 
     if (result.gameOver) {
       if (result.won) {

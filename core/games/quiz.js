@@ -39,6 +39,7 @@ const quizLore = require("./quizLore");
 const quizConfigMod = require("./quizConfig"); // P16 central config + quizmod
 const quizBank = require("./quizBank");        // P15 stable-identity bank
 const quizMediaMod = require("./quizMedia");   // 2026-09-27 logos + spot-the-song modes
+const quizEventPacks = require("./quizEventPacks"); // Game Night packs (.j quiz -preplanned event1|event2)
 const quizPreplannedMod = require("./quizPreplanned"); // 2026-10-10 owner: .j quiz -preplanned fixed pack
 const quizDatasetMod = require("./quizDataset"); // 2026-10-10 dataset categories (games/comics/movies/series)
 const mediaWorker = require("../utils/mediaWorker"); // 2026-09-27 shared media job runner
@@ -69,6 +70,8 @@ const GENERATING_LOCK_TTL_MS = 8 * 60 * 1000; // crashed generation can't lock f
 // (between-questions pacing moved to quizConfig.questionGapSeconds - the
 // owner spec is a randomized 10-30s pause, quizmod-tunable per group)
 const PICK_TTL_MS = 5 * 60 * 1000;
+// Game Night hook: chatId -> { onFinish(entries, session) }. While set, no Zeni is paid out.
+const eventHooks = new Map();
 const POINTS = { easy: 50, medium: 100, hard: 150 };
 const WINNER_BONUS = 250;
 const LETTERS = ["A", "B", "C", "D"];
@@ -1892,7 +1895,9 @@ async function generateSectionQuestions(session, section, sock, chatId) {
       for (const brand of section.pinnedBrands) {
         if (questions.length >= sectionCount) break;
         if (usedKeys.has(`pllogo:${_normText(brand.name)}`)) continue;
-        const others = section.pinnedBrands.filter((b) => b.name !== brand.name).slice(0, 3);
+        const others = Array.isArray(brand.decoys) && brand.decoys.length >= 3
+          ? brand.decoys.map((n) => ({ name: n }))
+          : section.pinnedBrands.filter((b) => b.name !== brand.name).slice(0, 3);
         const q = await quizMediaMod.buildLogosQuestion(brand, others, cfg.difficulty).catch(() => null);
         if (!q) { console.log(`[Quiz] preplanned: logo build failed for ${brand.name} - skipping`); continue; }
         usedKeys.add(`pllogo:${_normText(brand.name)}`);
@@ -2593,18 +2598,28 @@ async function finishQuiz(sock, chatId, session, opts = {}) {
   out += `🎯 Difficulty: ${session.cfg.difficulty.toUpperCase()}\n`;
   if (opts.reason === "hardcap") out += `⏱ (Session time limit reached - quiz closed automatically.)\n`;
 
-  for (const e of entries) {
-    await safeAddMoney(e.jid, e.points, `Quiz reward (${session.title || "quiz"})`);
+  const _evh = eventHooks.get(chatId);
+  if (_evh) {
+    // Game Night: no Zeni payout - the event scoreboard owns the points
+    if (winner) out += `\n👑 Round leader: *${winner.name}*\n`;
+  } else {
+    for (const e of entries) {
+      await safeAddMoney(e.jid, e.points, `Quiz reward (${session.title || "quiz"})`);
+    }
+    if (winner) {
+      await safeAddMoney(winner.jid, WINNER_BONUS, "Quiz winner bonus");
+      out += `\n👑 Winner: *${winner.name}* (+${WINNER_BONUS} bonus)\n`;
+      out += `💰 All points paid out in Zeni!\n`;
+    }
+    out += `\nPlay again: \`${botConfig.getPrefix()} quiz "<title>"\``;
   }
-  if (winner) {
-    await safeAddMoney(winner.jid, WINNER_BONUS, "Quiz winner bonus");
-    out += `\n👑 Winner: *${winner.name}* (+${WINNER_BONUS} bonus)\n`;
-    out += `💰 All points paid out in Zeni!\n`;
-  }
-  out += `\nPlay again: \`${botConfig.getPrefix()} quiz "<title>"\``;
 
   recordSessionResults(chatId, entries, winner ? winner.jid : null);
   await safeSend(sock, chatId, { text: BOT_SAFE(out) }, { label: "final-scoreboard" }).catch(() => {});
+  if (_evh) {
+    eventHooks.delete(chatId);
+    try { await _evh.onFinish(entries, session, opts); } catch (e) { console.log("[Quiz] event hook failed:", e?.message); }
+  }
 }
 
 // ════════════════════════════════════════════
@@ -2780,6 +2795,9 @@ function parseQuizArgs(raw) {
     out.mode = "preplanned";
     out.title = "__preplanned__";
     rest = rest.replace(/^(preplanned|preplan|megapack|-+preplanned)\b/i, "").trim();
+    // Game Night packs: ".j quiz -preplanned event1" / "event2"
+    const _pk = rest.match(/^-*(event[12])\b/i);
+    if (_pk) { out.pack = _pk[1].toLowerCase(); rest = rest.replace(/^-*(event[12])\b/i, "").trim(); }
   }
   // standalone media modes (before random/quoted handling; "spot the song" is multi-word)
   const MODE_ALIASES = { logos: "logos", logo: "logos", brands: "logos", brand: "logos", company: "logos", companies: "logos" };
@@ -3279,6 +3297,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       cfg.questionCount = 60;
       cfg.maxQuestions = Math.max(cfg.maxQuestions, 60);
     }
+    const _evPack = parsed.mode === "preplanned" && parsed.pack ? quizEventPacks.get(parsed.pack) : null;
     const mixedRandom = parsed.randomMode && cfg.questionCount >= 9;
     {
       const bits = [];
@@ -3396,7 +3415,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       const PACK = quizPreplannedMod.PACK;
       const byFranchise = (f) => PACK.trivia.filter((t) => t.franchise === f);
       const themesBy = (ty) => PACK.themes.filter((t) => t.type === ty);
-      const domainPlan = [
+      const domainPlan = _evPack ? _evPack.plan() : [
         { name: "Logo Round 1/3", domain: "logos", perSection: 10, pinnedBrands: PACK.brands.slice(0, 10) },
         { name: "Logo Round 2/3", domain: "logos", perSection: 10, pinnedBrands: PACK.brands.slice(10, 20) },
         { name: "Logo Round 3/3", domain: "logos", perSection: 10, pinnedBrands: PACK.brands.slice(20, 30) },
@@ -3407,7 +3426,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
         { name: "Theme Songs: Games", domain: "audio", perSection: 5, pinnedThemes: themesBy("game"), clipSeconds: 30 },
         { name: "Theme Songs: Anime", domain: "audio", perSection: 5, pinnedThemes: themesBy("anime"), clipSeconds: 30 },
       ];
-      const modeTitle = "Preplanned Mega Quiz";
+      const modeTitle = _evPack ? _evPack.title : "Preplanned Mega Quiz";
       const session = {
         cfg,
         title: modeTitle,
@@ -3460,20 +3479,23 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       }
       stopPrepTimers(prep);
       const built = session.sections.reduce((a, s) => a + s.questions.length, 0);
-      if (built < 45) { // pack must land >= 45/60 (logo/audio fetches can drop a few)
+      if (built < (_evPack ? _evPack.minBuilt : 45)) { // pack must land >= 45/60 (logo/audio fetches can drop a few)
         pendingPrep.delete(chatId);
         releaseLifecycle(chatId);
         await sock.sendMessage(chatId, {
-          text: botMarker + `❌ Could not build the *${modeTitle}* right now (media builds fell short: ${built}/60). Try again in a minute.`,
+          text: botMarker + `❌ Could not build the *${modeTitle}* right now (media builds fell short: ${built}/${plannedTotal(session) || 60}). Try again in a minute.`,
         }, { quoted: m }).catch(() => {});
         return;
       }
       const totalQs = plannedTotal(session);
       let head = botMarker + `🎯 *QUIZ STARTED - ${modeTitle.toUpperCase()}* 🎯\n\n`;
+      if (_evPack) head += _evPack.head(prefix) + "\n";
+      else {
       head += `🗺 3 acts • ${totalQs} rounds:\n`;
       head += `  🏢 30 brand logos (current 2026 logos)\n`;
       head += `  🧠 20 trivia - Dragon Ball / Solo Leveling / Devil May Cry / God of War\n`;
       head += `  🎵 10 theme songs - 5 games + 5 anime, first 30 seconds\n\n`;
+      }
       head += `📚 ${POINTS[cfg.difficulty]} Zeni per correct (+20 speed bonus) • sections keep their own leaderboards\n`;
       head += `✍️ Answer: just type the answer in chat - or \`${prefix} <letter>\` where options are shown. One answer per player per question\n`;
       head += `⏱ 30s per logo/trivia question • 45s per music question\n`;
@@ -3999,6 +4021,7 @@ async function attachMedia(q) {
 }
 
 module.exports = {
+  eventHooks,
   hasActive,
   getSession,
   startQuiz,
