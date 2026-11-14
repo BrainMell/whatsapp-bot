@@ -43,7 +43,7 @@ const EMOJI_GAP_MS = 60 * 1000;
 // event points by finishing rank (rank 1 first); participants below the table get FLOOR
 const RANK_PTS = [100, 70, 50, 40, 30, 25, 20, 15, 12, 10];
 const FLOOR = 5;
-const GAMES = { wordle: "🍬 Wordle Sugar Rush", chess: "♟️ Blitz Chess (3 min)", emoji: "🧩 Emoji Decode" };
+const GAMES = { wordle: "🍬 Wordle Sugar Rush", chess: "♟️ Blitz Chess (3 min)", emoji: "🧩 Emoji Decode (anime)" };
 
 // ---------- persistence ----------
 function dir() {
@@ -214,36 +214,36 @@ function armRush(ev) {
 
 // ---------- Wordle / Chess / Emoji sub-games ----------
 const EMOJI = [
-  ["🧙💍🌋", ["lord of the rings", "lotr", "the lord of the rings"]],
-  ["🍄🔧👸", ["super mario", "super mario bros", "mario"]],
-  ["⛏️🟩🧟", ["minecraft"]],
-  ["🦔💨💍", ["sonic", "sonic the hedgehog"]],
-  ["🐷🐦💥", ["angry birds"]],
-  ["🧟🌻🧠", ["plants vs zombies", "plants versus zombies", "pvz"]],
-  ["🗡️🧝🔺", ["zelda", "the legend of zelda", "legend of zelda"]],
-  ["👻🟡🍒", ["pac man", "pacman", "pac-man"]],
-  ["🚗⚽🚀", ["rocket league"]],
-  ["🍗🔫🪂", ["pubg", "playerunknowns battlegrounds"]],
-  ["🧛🏰🌙", ["castlevania"]],
-  ["🕳️🔫🎂", ["portal"]],
-  ["☠️🍖🐒", ["one piece"]],
-  ["🍥🦊🍜", ["naruto"]],
+  ["🍥🦊🍜", ["naruto", "naruto shippuden"]],
+  ["👒☠️🍖", ["one piece"]],
+  ["🐉🔮💥", ["dragon ball", "dragon ball z", "dragonball", "dragon ball super", "dbz"]],
   ["📓💀🍎", ["death note"]],
-  ["🧊👸⛄", ["frozen"]],
-  ["🐠🔍🌊", ["finding nemo", "nemo"]],
-  ["🦁👑🌅", ["the lion king", "lion king"]],
-  ["🤖🗑️🌱", ["wall e", "wall-e", "walle"]],
-  ["🎈🏠👴", ["up"]],
-  ["🦖🏝️🧬", ["jurassic park", "jurassic world"]],
-  ["🚢🧊❤️", ["titanic"]],
-  ["🦈🏖️🎶", ["jaws"]],
-  ["🕰️🚗⚡", ["back to the future"]],
-  ["🔫🦆🐕", ["duck hunt"]],
-  ["🏰🍄🐢", ["super mario", "mario"]],
-  ["🐉🧔🗡️", ["skyrim", "the elder scrolls v skyrim", "elder scrolls"]],
-  ["🏎️🍌🐢", ["mario kart"]],
-  ["🏠👫💰", ["the sims", "sims"]],
-  ["🎣🏝️🐾", ["animal crossing"]],
+  ["👹🗡️🎋", ["demon slayer", "kimetsu no yaiba"]],
+  ["🧱👹⚔️", ["attack on titan", "shingeki no kyojin", "aot"]],
+  ["🤞👹💀", ["jujutsu kaisen", "jjk"]],
+  ["🦸💥🏫", ["my hero academia", "boku no hero academia", "mha", "bnha"]],
+  ["⚗️🦾🔥", ["fullmetal alchemist", "fullmetal alchemist brotherhood", "fma", "fmab"]],
+  ["⚡🐭🔴", ["pokemon", "pokémon"]],
+  ["🌙👧✨", ["sailor moon"]],
+  ["💀🗡️🍊", ["bleach"]],
+  ["🎯🎣🃏", ["hunter x hunter", "hunter hunter", "hxh", "hunterxhunter"]],
+  ["🗼👻👁️", ["tokyo ghoul"]],
+  ["☝️👊🥚", ["one punch man", "onepunchman", "opm", "one punch"]],
+  ["🕵️🥜🏠", ["spy x family", "spy family", "spyxfamily"]],
+  ["🪚👹🐕", ["chainsaw man"]],
+  ["🤠🚀🎷", ["cowboy bebop"]],
+  ["🤖🧒🟣", ["evangelion", "neon genesis evangelion", "eva"]],
+  ["🧚🔥🐉", ["fairy tail"]],
+  ["🍀⚫📖", ["black clover"]],
+  ["🪨🧪🔬", ["dr stone", "doctor stone", "dr. stone"]],
+  ["🏐🐦⬆️", ["haikyuu", "haikyu"]],
+  ["⚔️🎮💀", ["sword art online", "sao"]],
+  ["👑♟️👁️", ["code geass", "code geass lelouch of the rebellion"]],
+  ["🧪⏳📱", ["steins gate", "steins;gate", "steinsgate"]],
+  ["👦💯👻", ["mob psycho 100", "mob psycho", "mob psycho one hundred"]],
+  ["🗡️🌑👑", ["solo leveling"]],
+  ["💥🕺🧛", ["jojos bizarre adventure", "jojo's bizarre adventure", "jojo", "jojos"]],
+  ["🏀🔥🧑", ["slam dunk"]],
 ];
 const nrm = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -255,11 +255,11 @@ async function nextEmoji(ev, first) {
   idx = pool.length ? pool[Math.floor(Math.random() * pool.length)] : Math.floor(Math.random() * EMOJI.length);
   E.used.push(idx); E.n += 1; E.cur = { idx, openedAt: Date.now(), by: null };
   save(ev);
-  const _card = await emojiCard.renderCard({ n: E.n, emojis: EMOJI[idx][0], answer: EMOJI[idx][1][0], seconds: EMOJI_GAP_MS / 1000 });
+  const _card = await emojiCard.renderCard({ n: E.n, label: "NAME THE ANIME", emojis: EMOJI[idx][0], answer: EMOJI[idx][1][0], seconds: EMOJI_GAP_MS / 1000 });
   if (_card) {
     await SOCK.sendMessage(ev.chatId, { image: _card, caption: MARK + `🧩 *EMOJI DECODE #${E.n}* - first correct answer in chat scores!`, contextInfo: { mentionedJid: E.players.map((p) => p.jid) } }).catch((e) => console.error("[GameNight] card send failed:", e.message));
   } else {
-    await say(ev.chatId, `🧩 *EMOJI DECODE #${E.n}* - name the game or movie:\n\n${EMOJI[idx][0]}\n\n_First correct answer in chat scores (+3, +1 bonus if under 15s)._`, E.players.map((p) => p.jid));
+    await say(ev.chatId, `🧩 *EMOJI DECODE #${E.n}* - name the anime:\n\n${EMOJI[idx][0]}\n\n_First correct answer in chat scores (+3, +1 bonus if under 15s)._`, E.players.map((p) => p.jid));
   }
   setTimer(ev.chatId, "emoji", setTimeout(async () => {
     if (E.cur && !E.cur.by) { await say(ev.chatId, `⌛ Time! It was *${EMOJI[E.cur.idx][1][0]}*.`); E.cur = null; save(ev); }

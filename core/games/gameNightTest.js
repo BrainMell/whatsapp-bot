@@ -152,7 +152,7 @@ async function stepChess(ctx) {
 async function stepEmoji(ctx) {
   const puzzle = GN._EMOJI[Math.floor(Math.random() * GN._EMOJI.length)];
   const selfOk = GN._EMOJI.every(([, ans]) => ans.every((a) => GN._nrm(a).length > 0));
-  const card = await emojiCard.renderCard({ n: 1, emojis: puzzle[0], answer: puzzle[1][0] });
+  const card = await emojiCard.renderCard({ n: 1, label: "NAME THE ANIME", emojis: puzzle[0], answer: puzzle[1][0] });
   const allCards = (await Promise.all(GN._EMOJI.map(([e, a]) => emojiCard.renderCard({ n: 1, emojis: e, answer: a[0] })))).filter(Boolean).length;
   if (card) await sendImg(ctx.sock, ctx.chatId, card, `*STEP 6/7 - EMOJI DECODE CARD*\n_(answer: ${puzzle[1][0]} - typed as plain chat text)_\n${ok(allCards === GN._EMOJI.length)} ${allCards}/${GN._EMOJI.length} puzzle cards render`);
   else await sendText(ctx.sock, ctx.chatId, "❌ Emoji card failed to render - the event would fall back to text puzzles.");

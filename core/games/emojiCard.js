@@ -31,7 +31,7 @@ function rr(ctx, x, y, w, h, r) {
 }
 
 // n = puzzle number, emojis = "🍄🔧👸", answer = primary answer (for the blanks hint), label = category line
-async function renderCard({ n, emojis, answer, label = "NAME THE GAME OR MOVIE", seconds = 60, pts = 3, bonus = 1 }) {
+async function renderCard({ n, emojis, answer, label = "NAME THE ANIME", seconds = 60, pts = 3, bonus = 1 }) {
   try {
     ensureFonts();
     const clusters = [...seg.segment(String(emojis))].map((s) => s.segment).filter((s) => s.trim());
