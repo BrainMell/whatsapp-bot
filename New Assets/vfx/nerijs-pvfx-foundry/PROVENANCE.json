@@ -1,0 +1,16 @@
+{
+  "schema": "pvfx.asset-pack-provenance/1",
+  "pack": "pvfx.foundry",
+  "version": "1.0.0",
+  "repository": "arcanite24/pixel-vfx-studio",
+  "commit": "57e8effed0c57ca004ecc3f21770b517c66c3bad",
+  "renderer": "pvfx-fx/0.1.0+quickjs-ng-0.16.2+pixelfx-0.3.0-a841596",
+  "profiles": {
+    "grid": "sha256:aac859d4c748d8e904c271c91c38a210cd915c8c2d22ce84bd1dc4a5d6f74542",
+    "packed": "sha256:e68339c4c6e594ef634927fe2045239d34c14f8f875c67b3fc25f655c5b3f646"
+  },
+  "legacy": {
+    "version": "0.10.0",
+    "checksums_sha256": "sha256:7edf405d58c0b7e19040be948e76af7d3fab7482d9e3bf06887caffabf85e8eb"
+  }
+}

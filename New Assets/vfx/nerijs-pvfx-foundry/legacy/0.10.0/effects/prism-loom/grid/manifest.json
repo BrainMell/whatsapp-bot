@@ -1,0 +1,2662 @@
+{
+  "schema": "pvfx.export-manifest/0.2-dev",
+  "profile": "profile.free-foundry-grid-0.1",
+  "effect_id": "effect.quality-prism-loom",
+  "renderer": "pvfx-render/0.17-dev",
+  "source_hash": "sha256:35e0aec6e5c5717375c42a105bb5ed6cf31030eeb1abc9a46a34bc571f87d6b1",
+  "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+  "animation_hash": "sha256:9a6e65cf4a0f78131ef8798c56b4090122576fdfd0a981d454e98e03d3b1e7de",
+  "loop_mode": "loop",
+  "source_size": [
+    96,
+    96
+  ],
+  "pivot": [
+    48,
+    48
+  ],
+  "frames": [
+    {
+      "frame": 0,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        16,
+        20,
+        72,
+        78
+      ],
+      "trim_bounds": [
+        16,
+        20,
+        72,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        32,
+        28
+      ],
+      "pixel_hash": "sha256:b6ef8fa93412b7a692aa2fd71b05cbd45d9ed05d8ad9fa00987966a153bf1861",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 0,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 1,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        15,
+        21,
+        72,
+        78
+      ],
+      "trim_bounds": [
+        15,
+        21,
+        72,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        33,
+        27
+      ],
+      "pixel_hash": "sha256:c36de09aedc3ac312ed32f082c86e5d3e877348825d4222752054f51e51d90f8",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 0,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 2,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        15,
+        21,
+        72,
+        78
+      ],
+      "trim_bounds": [
+        15,
+        21,
+        72,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        33,
+        27
+      ],
+      "pixel_hash": "sha256:d935b803c413f82c7e902d9fbbe1462d7d7b69f3f25c240e183039735af8c26d",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 0,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 3,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        15,
+        21,
+        72,
+        78
+      ],
+      "trim_bounds": [
+        15,
+        21,
+        72,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        33,
+        27
+      ],
+      "pixel_hash": "sha256:d4ebf900d786ff1a4cc3da1a11d28fc56aa21c25b4117adcb44259758a905122",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 0,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 4,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        15,
+        22,
+        73,
+        78
+      ],
+      "trim_bounds": [
+        15,
+        22,
+        73,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        33,
+        26
+      ],
+      "pixel_hash": "sha256:1f914572226476f4d85a8b77659ff6bfefd90bd71bf3fcf89dadf91e3bde62b9",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 0,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 5,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        15,
+        22,
+        73,
+        78
+      ],
+      "trim_bounds": [
+        15,
+        22,
+        73,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        33,
+        26
+      ],
+      "pixel_hash": "sha256:ce48b570dd389534f790b791e2f2abd42791b1414b9a37cf832ddde26788b6e5",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 96,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 6,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        15,
+        22,
+        74,
+        78
+      ],
+      "trim_bounds": [
+        15,
+        22,
+        74,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        33,
+        26
+      ],
+      "pixel_hash": "sha256:7855c26901624c3a93f8903085ccdf4a094c70522163114dccd08389926b647d",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 96,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 7,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        15,
+        23,
+        74,
+        77
+      ],
+      "trim_bounds": [
+        15,
+        23,
+        74,
+        77
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        33,
+        25
+      ],
+      "pixel_hash": "sha256:fce46b8e6802ddab2a717e02c01dc4e805f68c7dc9d142d2827797952c4e7e06",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 96,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 8,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        15,
+        23,
+        75,
+        77
+      ],
+      "trim_bounds": [
+        15,
+        23,
+        75,
+        77
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        33,
+        25
+      ],
+      "pixel_hash": "sha256:dfb23270f52cefa0af8f478a93e40319195fd4241b7ae9686fdbf119234ce1d4",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 96,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 9,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        15,
+        23,
+        75,
+        76
+      ],
+      "trim_bounds": [
+        15,
+        23,
+        75,
+        76
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        33,
+        25
+      ],
+      "pixel_hash": "sha256:af11d447503a05493dc91a868e887b6f5705eae946d7164be50b1b3fa6403d7c",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 96,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 10,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        16,
+        24,
+        76,
+        76
+      ],
+      "trim_bounds": [
+        16,
+        24,
+        76,
+        76
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        32,
+        24
+      ],
+      "pixel_hash": "sha256:30c9ce8881676a9e77e3f46a1babd941c22eec6056bd41f6f7ea1e41da2b3aaa",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 192,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 11,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        16,
+        24,
+        77,
+        75
+      ],
+      "trim_bounds": [
+        16,
+        24,
+        77,
+        75
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        32,
+        24
+      ],
+      "pixel_hash": "sha256:7c7515c5cd3a3392e88a15597e35403d27cd55c6e60d19a0dc74342ede15d015",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 192,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 12,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        17,
+        24,
+        77,
+        75
+      ],
+      "trim_bounds": [
+        17,
+        24,
+        77,
+        75
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        31,
+        24
+      ],
+      "pixel_hash": "sha256:1ae3fd1c31bc0d5da249b902629e9011a762cce90038f20b081a083b5bb8d656",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 192,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 13,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        17,
+        24,
+        78,
+        74
+      ],
+      "trim_bounds": [
+        17,
+        24,
+        78,
+        74
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        31,
+        24
+      ],
+      "pixel_hash": "sha256:45a51e4fa07f4d4b5b5a98957b5dbad083a5f7d6ff171b1ff4365b85a19aebeb",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 192,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 14,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        18,
+        24,
+        79,
+        74
+      ],
+      "trim_bounds": [
+        18,
+        24,
+        79,
+        74
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        30,
+        24
+      ],
+      "pixel_hash": "sha256:d3d02be899a447f6f280c934ffa4294d5ce92e0fb78a052399e1fb31a6f8c986",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 192,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 15,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        18,
+        24,
+        79,
+        74
+      ],
+      "trim_bounds": [
+        18,
+        24,
+        79,
+        74
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        30,
+        24
+      ],
+      "pixel_hash": "sha256:90844d8abc7125d7d1267b1ec5f459ba4205688316c5ba27c4f49eecc6b5bdca",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 288,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 16,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        19,
+        24,
+        80,
+        74
+      ],
+      "trim_bounds": [
+        19,
+        24,
+        80,
+        74
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        29,
+        24
+      ],
+      "pixel_hash": "sha256:9e496f1c2e639dfc1e8cbf8681614624c8d994f5120501a0480f9c12850bbf94",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 288,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 17,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        19,
+        24,
+        80,
+        75
+      ],
+      "trim_bounds": [
+        19,
+        24,
+        80,
+        75
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        29,
+        24
+      ],
+      "pixel_hash": "sha256:81d909d25819662d1923f39692a6a6e7e93d2658ff45eef801ac4aca75244458",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 288,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 18,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        24,
+        81,
+        75
+      ],
+      "trim_bounds": [
+        20,
+        24,
+        81,
+        75
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        28,
+        24
+      ],
+      "pixel_hash": "sha256:d0bcacc67edd85509051d5c488aa98461836fc076221dd256c333fbccfeaa35e",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 288,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 19,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        21,
+        24,
+        81,
+        76
+      ],
+      "trim_bounds": [
+        21,
+        24,
+        81,
+        76
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        27,
+        24
+      ],
+      "pixel_hash": "sha256:7a95c2588e90dcb62fbd72aa7f2016cbbaae07a3bab00304affdcca7f1c8979f",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 288,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 20,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        21,
+        23,
+        82,
+        76
+      ],
+      "trim_bounds": [
+        21,
+        23,
+        82,
+        76
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        27,
+        25
+      ],
+      "pixel_hash": "sha256:09585732a14a1b6b148918eb126f5214cd1f6b925b61aa6265ecb1bd61a455c5",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 384,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 21,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        22,
+        23,
+        82,
+        77
+      ],
+      "trim_bounds": [
+        22,
+        23,
+        82,
+        77
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        26,
+        25
+      ],
+      "pixel_hash": "sha256:1007784f30dc822ba173f700c68638b3e3d013d25d797a9f96ff13e2583701c3",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 384,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 22,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        22,
+        23,
+        82,
+        77
+      ],
+      "trim_bounds": [
+        22,
+        23,
+        82,
+        77
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        26,
+        25
+      ],
+      "pixel_hash": "sha256:b04074dbbe4add9af8e3bf53b8ee5a59daf808388267ff31b77cac3c42aa0368",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 384,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 23,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        23,
+        23,
+        82,
+        77
+      ],
+      "trim_bounds": [
+        23,
+        23,
+        82,
+        77
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        25,
+        25
+      ],
+      "pixel_hash": "sha256:2288168f11051f6205383cc65f7b2e9df5d3fe878cfbe68c0446ad2648e0c698",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 384,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 24,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        24,
+        22,
+        82,
+        78
+      ],
+      "trim_bounds": [
+        24,
+        22,
+        82,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        24,
+        26
+      ],
+      "pixel_hash": "sha256:5fc84c8c8c945066b9ada96577055e54528dda34ed2f1aa8b6f964ab840ad42a",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 384,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 25,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        24,
+        22,
+        82,
+        78
+      ],
+      "trim_bounds": [
+        24,
+        22,
+        82,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        24,
+        26
+      ],
+      "pixel_hash": "sha256:f486daec6aebea56265b32d6083e85bbe3b601fc6ac8e2f353a980ddb2296925",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 480,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 26,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        24,
+        21,
+        82,
+        78
+      ],
+      "trim_bounds": [
+        24,
+        21,
+        82,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        24,
+        27
+      ],
+      "pixel_hash": "sha256:adfa9a631a5cabf1ab6197bfa8b3ca295f479cf74d2813a49f382888d1686858",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 480,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 27,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        25,
+        21,
+        82,
+        78
+      ],
+      "trim_bounds": [
+        25,
+        21,
+        82,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        23,
+        27
+      ],
+      "pixel_hash": "sha256:91f9f4ad9544c4ea5697f797827756cbad6cafbabe482a50c18ad7387dd6060c",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 480,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 28,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        25,
+        21,
+        82,
+        78
+      ],
+      "trim_bounds": [
+        25,
+        21,
+        82,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        23,
+        27
+      ],
+      "pixel_hash": "sha256:846c017817d8f1aa2d700a0f1b1eead5a0b2aae231ba27731bd7e120f32118a8",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 480,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 29,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        25,
+        20,
+        82,
+        78
+      ],
+      "trim_bounds": [
+        25,
+        20,
+        82,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        23,
+        28
+      ],
+      "pixel_hash": "sha256:2be3383a3c067f9071820b19099a13c60eefb16b0eca19e7077759ab3f705f2e",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 480,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 30,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        26,
+        20,
+        81,
+        78
+      ],
+      "trim_bounds": [
+        26,
+        20,
+        81,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        22,
+        28
+      ],
+      "pixel_hash": "sha256:b69a4ad7c45a6da695d09b613262370f52d0ee8f1d1bb1a79d1d6cdb8b8710f5",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 576,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 31,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        26,
+        19,
+        81,
+        78
+      ],
+      "trim_bounds": [
+        26,
+        19,
+        81,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        22,
+        29
+      ],
+      "pixel_hash": "sha256:c5592feade52d85293bbf5bba72a35290d167a2dc6ef5278bd899456a61a8472",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 576,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 32,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        26,
+        19,
+        81,
+        78
+      ],
+      "trim_bounds": [
+        26,
+        19,
+        81,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        22,
+        29
+      ],
+      "pixel_hash": "sha256:135e1aa4e111dd798217b0ebf7389f678fc923db65b849ea2487f1d7fa9382d6",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 576,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 33,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        26,
+        19,
+        80,
+        77
+      ],
+      "trim_bounds": [
+        26,
+        19,
+        80,
+        77
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        22,
+        29
+      ],
+      "pixel_hash": "sha256:07eba517538c1fe3456fa0216630c3aa9842fa3ffb0bfbd137cc5373c84291ba",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 576,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 34,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        26,
+        18,
+        80,
+        77
+      ],
+      "trim_bounds": [
+        26,
+        18,
+        80,
+        77
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        22,
+        30
+      ],
+      "pixel_hash": "sha256:8d39a75534689c3d801888f4c202318ac7abd82b3211dc5ec7dd3b64e7767a02",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 576,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 35,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        26,
+        18,
+        79,
+        77
+      ],
+      "trim_bounds": [
+        26,
+        18,
+        79,
+        77
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        22,
+        30
+      ],
+      "pixel_hash": "sha256:9c7956e9bff8f25c02304497bea2a1618682e46f4eab065894399c8a5c7b8350",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 672,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 36,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        26,
+        18,
+        79,
+        76
+      ],
+      "trim_bounds": [
+        26,
+        18,
+        79,
+        76
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        22,
+        30
+      ],
+      "pixel_hash": "sha256:30e65cc7d223610b975d4b26818c7a7eaed80d531f457e5e9aedd12a8164389e",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 672,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 37,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        25,
+        17,
+        78,
+        76
+      ],
+      "trim_bounds": [
+        25,
+        17,
+        78,
+        76
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        23,
+        31
+      ],
+      "pixel_hash": "sha256:39164d1ce5c28e8e903f6803aaf69bb72dd783e2247125ad8e738d0184617825",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 672,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 38,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        25,
+        17,
+        77,
+        75
+      ],
+      "trim_bounds": [
+        25,
+        17,
+        77,
+        75
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        23,
+        31
+      ],
+      "pixel_hash": "sha256:d997cde47054c32e34f94209460c1acff2b9b8201c7758187ae07f8b003ee438",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 672,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 39,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        25,
+        17,
+        77,
+        75
+      ],
+      "trim_bounds": [
+        25,
+        17,
+        77,
+        75
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        23,
+        31
+      ],
+      "pixel_hash": "sha256:8a623c81ba6c6d947431c39fac36c33b08f6e6ddd55bb9af78fc5a3cd08c3c4c",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 672,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 40,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        25,
+        17,
+        76,
+        74
+      ],
+      "trim_bounds": [
+        25,
+        17,
+        76,
+        74
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        23,
+        31
+      ],
+      "pixel_hash": "sha256:6c2799f60968b49f594d621613ec5f126ede36d841bb97563e11c7870500cb6c",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 768,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 41,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        24,
+        17,
+        76,
+        73
+      ],
+      "trim_bounds": [
+        24,
+        17,
+        76,
+        73
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        24,
+        31
+      ],
+      "pixel_hash": "sha256:818fc6684b0fa345fc02c0507b368f57897ebf0237e38292dbd2b4cc50f18b8b",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 768,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 42,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        24,
+        16,
+        75,
+        73
+      ],
+      "trim_bounds": [
+        24,
+        16,
+        75,
+        73
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        24,
+        32
+      ],
+      "pixel_hash": "sha256:3e64379dd8975251fba17ad45fb078303c10fb9b2d9d3efdd5f6ff0d33539681",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 768,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 43,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        24,
+        16,
+        75,
+        72
+      ],
+      "trim_bounds": [
+        24,
+        16,
+        75,
+        72
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        24,
+        32
+      ],
+      "pixel_hash": "sha256:f2d0098e8ab33fba00caabc711a394cf57dfc7010f8ecdf08246b8768f958880",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 768,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 44,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        23,
+        16,
+        74,
+        71
+      ],
+      "trim_bounds": [
+        23,
+        16,
+        74,
+        71
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        25,
+        32
+      ],
+      "pixel_hash": "sha256:1bf7a03d90d4d07ae70db4c9e12f1098229a2a798b330b43d306586953e3b5d4",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 768,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 45,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        23,
+        16,
+        74,
+        72
+      ],
+      "trim_bounds": [
+        23,
+        16,
+        74,
+        72
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        25,
+        32
+      ],
+      "pixel_hash": "sha256:9b9414b1e04f7711350e8157f2f8d41d10762ef0dfee9f617ecb7a9d241614cd",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 864,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 46,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        22,
+        16,
+        73,
+        72
+      ],
+      "trim_bounds": [
+        22,
+        16,
+        73,
+        72
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        26,
+        32
+      ],
+      "pixel_hash": "sha256:3ff7901d7ced2024b219c3c944789145b0315e264b1fe90f8c81ee177e51f54f",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 864,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 47,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        22,
+        17,
+        73,
+        73
+      ],
+      "trim_bounds": [
+        22,
+        17,
+        73,
+        73
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        26,
+        31
+      ],
+      "pixel_hash": "sha256:19e29ad752f823401057f14473b7a033d11bbcde05bd87cd1590d2d3aa322f2e",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 864,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 48,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        21,
+        17,
+        72,
+        74
+      ],
+      "trim_bounds": [
+        21,
+        17,
+        72,
+        74
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        27,
+        31
+      ],
+      "pixel_hash": "sha256:986e37264bb3696489425448930be300b6bd0f69d49b81446364d8d81d382e4e",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 864,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 49,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        17,
+        72,
+        74
+      ],
+      "trim_bounds": [
+        20,
+        17,
+        72,
+        74
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        28,
+        31
+      ],
+      "pixel_hash": "sha256:d3adec207e42f33709fc52835c28a3713b861c70dc58cafaefc947e2db17c368",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 864,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 50,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        17,
+        72,
+        75
+      ],
+      "trim_bounds": [
+        20,
+        17,
+        72,
+        75
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        28,
+        31
+      ],
+      "pixel_hash": "sha256:b330f4faf15665b5bfb1925a141d38ce2ef02759d66a861e36bfb5b976f82255",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 960,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 51,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        19,
+        17,
+        72,
+        75
+      ],
+      "trim_bounds": [
+        19,
+        17,
+        72,
+        75
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        29,
+        31
+      ],
+      "pixel_hash": "sha256:bc4339cc617a76f085212c4c745801e0aa7079ef5e982c8dbf649844f70a6ef2",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 960,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 52,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        19,
+        17,
+        71,
+        76
+      ],
+      "trim_bounds": [
+        19,
+        17,
+        71,
+        76
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        29,
+        31
+      ],
+      "pixel_hash": "sha256:ebfee2696ee4aaa0ccb2508e7ed353bb53d9466262e3728bf334191a9f081319",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 960,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 53,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        18,
+        18,
+        71,
+        77
+      ],
+      "trim_bounds": [
+        18,
+        18,
+        71,
+        77
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        30,
+        30
+      ],
+      "pixel_hash": "sha256:9e5e70c16c9cda4df223cef64043f20918525fbfe8ec503ac0ef92bed2007276",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 960,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 54,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        18,
+        18,
+        71,
+        77
+      ],
+      "trim_bounds": [
+        18,
+        18,
+        71,
+        77
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        30,
+        30
+      ],
+      "pixel_hash": "sha256:16da156004c2b4fde88c103c2ab16cd72dcfc887385ee8158c0f8ca6c2206e81",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 960,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 55,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        17,
+        19,
+        71,
+        77
+      ],
+      "trim_bounds": [
+        17,
+        19,
+        71,
+        77
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        31,
+        29
+      ],
+      "pixel_hash": "sha256:4bec2a1307df0ce55b477263e3df18d7c0bafbefea3f63d0683fb250979a8c8a",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 1056,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 56,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        17,
+        19,
+        71,
+        78
+      ],
+      "trim_bounds": [
+        17,
+        19,
+        71,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        31,
+        29
+      ],
+      "pixel_hash": "sha256:7c10146d16a5831c55a231a0d96b9e9b86571f8e2144778d98b53a9df06c51f4",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 1056,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 57,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        16,
+        19,
+        71,
+        78
+      ],
+      "trim_bounds": [
+        16,
+        19,
+        71,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        32,
+        29
+      ],
+      "pixel_hash": "sha256:37ddc85afef52bc8aef74103deb049f5b46f3b640e6ccbfc462bf8f3fb646f9a",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 1056,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 58,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        16,
+        20,
+        71,
+        78
+      ],
+      "trim_bounds": [
+        16,
+        20,
+        71,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        32,
+        28
+      ],
+      "pixel_hash": "sha256:839e32eb5f71e4e9eb4351204351d2aad2d80dc706ab5f4d5dcd104a2dffd5c6",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 1056,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 59,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        16,
+        20,
+        72,
+        78
+      ],
+      "trim_bounds": [
+        16,
+        20,
+        72,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        32,
+        28
+      ],
+      "pixel_hash": "sha256:b6ef8fa93412b7a692aa2fd71b05cbd45d9ed05d8ad9fa00987966a153bf1861",
+      "phase": {
+        "id": "phase.weave",
+        "label": "weave"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 1056,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    }
+  ],
+  "markers": [],
+  "corrections": []
+}

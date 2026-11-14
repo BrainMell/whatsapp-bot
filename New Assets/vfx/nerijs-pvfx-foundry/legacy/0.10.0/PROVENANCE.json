@@ -1,0 +1,14 @@
+{
+  "commit": "8eca1a5fd4783c9fc5a50e0775ef95a353214de9",
+  "definition_hash": "sha256:157088ec7236fe36c7fe2c8b6ee84d51b5c2bfc59ad49766ebfab447d028da5a",
+  "pack": "pvfx.foundry-thirteen",
+  "profiles": {
+    "grid": "sha256:df793be26b5292fada086b4af90c4d74a1e4200451c0e79aa6e732a0f5668c6e",
+    "packed": "sha256:c49c0fa5354ddff1f2549c3d389822115a601f7347607c21df26240ba0cafee8"
+  },
+  "ref": "codex/foundry-weekly-2026-09-29",
+  "renderer": "pvfx-render/0.17-dev",
+  "repository": "arcanite24/pixel-vfx-studio",
+  "schema": "pvfx.asset-pack-provenance/0.1",
+  "version": "0.10.0"
+}

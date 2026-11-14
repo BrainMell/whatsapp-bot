@@ -1,0 +1,3102 @@
+{
+ "pack": "AW_VFX_Mega_Pack_Free",
+ "fps": 15,
+ "frame_ms": 67,
+ "effects": [
+  {
+   "name": "Explosion_Ground_A",
+   "category": "01_Explosions",
+   "sizes": {
+    "Small": {
+     "sheet": "01_Explosions/Explosion_Ground_A/Small/Explosion_Ground_A_Small_sheet.png",
+     "frame_w": 64,
+     "frame_h": 68,
+     "frames": 18,
+     "pivot": [
+      32,
+      34
+     ]
+    },
+    "Large": {
+     "sheet": "01_Explosions/Explosion_Ground_A/Large/Explosion_Ground_A_Large_sheet.png",
+     "frame_w": 128,
+     "frame_h": 136,
+     "frames": 18,
+     "pivot": [
+      64,
+      68
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Explosion_Ground_B",
+   "category": "01_Explosions",
+   "sizes": {
+    "Small": {
+     "sheet": "01_Explosions/Explosion_Ground_B/Small/Explosion_Ground_B_Small_sheet.png",
+     "frame_w": 104,
+     "frame_h": 96,
+     "frames": 18,
+     "pivot": [
+      52,
+      95
+     ]
+    },
+    "Large": {
+     "sheet": "01_Explosions/Explosion_Ground_B/Large/Explosion_Ground_B_Large_sheet.png",
+     "frame_w": 208,
+     "frame_h": 192,
+     "frames": 18,
+     "pivot": [
+      104,
+      191
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Explosion_Air",
+   "category": "01_Explosions",
+   "sizes": {
+    "Small": {
+     "sheet": "01_Explosions/Explosion_Air/Small/Explosion_Air_Small_sheet.png",
+     "frame_w": 64,
+     "frame_h": 64,
+     "frames": 18,
+     "pivot": [
+      32,
+      63
+     ]
+    },
+    "Large": {
+     "sheet": "01_Explosions/Explosion_Air/Large/Explosion_Air_Large_sheet.png",
+     "frame_w": 128,
+     "frame_h": 128,
+     "frames": 18,
+     "pivot": [
+      64,
+      64
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Explosion_Small",
+   "category": "01_Explosions",
+   "sizes": {
+    "Small": {
+     "sheet": "01_Explosions/Explosion_Small/Small/Explosion_Small_Small_sheet.png",
+     "frame_w": 36,
+     "frame_h": 36,
+     "frames": 22,
+     "pivot": [
+      18,
+      35
+     ]
+    },
+    "Large": {
+     "sheet": "01_Explosions/Explosion_Small/Large/Explosion_Small_Large_sheet.png",
+     "frame_w": 72,
+     "frame_h": 72,
+     "frames": 22,
+     "pivot": [
+      36,
+      36
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Explosion_Energy",
+   "category": "01_Explosions",
+   "sizes": {
+    "Small": {
+     "sheet": "01_Explosions/Explosion_Energy/Small/Explosion_Energy_Small_sheet.png",
+     "frame_w": 72,
+     "frame_h": 72,
+     "frames": 21,
+     "pivot": [
+      36,
+      71
+     ]
+    },
+    "Large": {
+     "sheet": "01_Explosions/Explosion_Energy/Large/Explosion_Energy_Large_sheet.png",
+     "frame_w": 144,
+     "frame_h": 144,
+     "frames": 21,
+     "pivot": [
+      72,
+      72
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Explosion_Toxic",
+   "category": "01_Explosions",
+   "sizes": {
+    "Small": {
+     "sheet": "01_Explosions/Explosion_Toxic/Small/Explosion_Toxic_Small_sheet.png",
+     "frame_w": 72,
+     "frame_h": 52,
+     "frames": 23,
+     "pivot": [
+      36,
+      26
+     ]
+    },
+    "Large": {
+     "sheet": "01_Explosions/Explosion_Toxic/Large/Explosion_Toxic_Large_sheet.png",
+     "frame_w": 144,
+     "frame_h": 104,
+     "frames": 23,
+     "pivot": [
+      72,
+      52
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Explosion_Dark",
+   "category": "01_Explosions",
+   "sizes": {
+    "Small": {
+     "sheet": "01_Explosions/Explosion_Dark/Small/Explosion_Dark_Small_sheet.png",
+     "frame_w": 64,
+     "frame_h": 64,
+     "frames": 21,
+     "pivot": [
+      32,
+      63
+     ]
+    },
+    "Large": {
+     "sheet": "01_Explosions/Explosion_Dark/Large/Explosion_Dark_Large_sheet.png",
+     "frame_w": 128,
+     "frame_h": 128,
+     "frames": 21,
+     "pivot": [
+      64,
+      64
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Explosion_Debris",
+   "category": "01_Explosions",
+   "sizes": {
+    "Small": {
+     "sheet": "01_Explosions/Explosion_Debris/Small/Explosion_Debris_Small_sheet.png",
+     "frame_w": 68,
+     "frame_h": 62,
+     "frames": 21,
+     "pivot": [
+      34,
+      61
+     ]
+    },
+    "Large": {
+     "sheet": "01_Explosions/Explosion_Debris/Large/Explosion_Debris_Large_sheet.png",
+     "frame_w": 136,
+     "frame_h": 124,
+     "frames": 21,
+     "pivot": [
+      68,
+      62
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Explosion_Electric",
+   "category": "01_Explosions",
+   "sizes": {
+    "Small": {
+     "sheet": "01_Explosions/Explosion_Electric/Small/Explosion_Electric_Small_sheet.png",
+     "frame_w": 64,
+     "frame_h": 64,
+     "frames": 18,
+     "pivot": [
+      32,
+      63
+     ]
+    },
+    "Large": {
+     "sheet": "01_Explosions/Explosion_Electric/Large/Explosion_Electric_Large_sheet.png",
+     "frame_w": 128,
+     "frame_h": 128,
+     "frames": 18,
+     "pivot": [
+      64,
+      64
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Hit_Spark_Small",
+   "category": "02_Impacts",
+   "sizes": {
+    "Small": {
+     "sheet": "02_Impacts/Hit_Spark_Small/Small/Hit_Spark_Small_Small_sheet.png",
+     "frame_w": 24,
+     "frame_h": 24,
+     "frames": 4,
+     "pivot": [
+      12,
+      12
+     ]
+    },
+    "Large": {
+     "sheet": "02_Impacts/Hit_Spark_Small/Large/Hit_Spark_Small_Large_sheet.png",
+     "frame_w": 48,
+     "frame_h": 48,
+     "frames": 4,
+     "pivot": [
+      24,
+      24
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Hit_Spark_Medium",
+   "category": "02_Impacts",
+   "sizes": {
+    "Small": {
+     "sheet": "02_Impacts/Hit_Spark_Medium/Small/Hit_Spark_Medium_Small_sheet.png",
+     "frame_w": 40,
+     "frame_h": 40,
+     "frames": 4,
+     "pivot": [
+      20,
+      20
+     ]
+    },
+    "Large": {
+     "sheet": "02_Impacts/Hit_Spark_Medium/Large/Hit_Spark_Medium_Large_sheet.png",
+     "frame_w": 80,
+     "frame_h": 80,
+     "frames": 4,
+     "pivot": [
+      40,
+      40
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Hit_Heavy",
+   "category": "02_Impacts",
+   "sizes": {
+    "Small": {
+     "sheet": "02_Impacts/Hit_Heavy/Small/Hit_Heavy_Small_sheet.png",
+     "frame_w": 56,
+     "frame_h": 56,
+     "frames": 6,
+     "pivot": [
+      28,
+      55
+     ]
+    },
+    "Large": {
+     "sheet": "02_Impacts/Hit_Heavy/Large/Hit_Heavy_Large_sheet.png",
+     "frame_w": 112,
+     "frame_h": 112,
+     "frames": 6,
+     "pivot": [
+      56,
+      56
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Hit_Directional",
+   "category": "02_Impacts",
+   "sizes": {
+    "Small": {
+     "sheet": "02_Impacts/Hit_Directional/Small/Hit_Directional_Small_sheet.png",
+     "frame_w": 48,
+     "frame_h": 32,
+     "frames": 4,
+     "pivot": [
+      24,
+      31
+     ]
+    },
+    "Large": {
+     "sheet": "02_Impacts/Hit_Directional/Large/Hit_Directional_Large_sheet.png",
+     "frame_w": 96,
+     "frame_h": 64,
+     "frames": 4,
+     "pivot": [
+      48,
+      32
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Hit_Critical",
+   "category": "02_Impacts",
+   "sizes": {
+    "Small": {
+     "sheet": "02_Impacts/Hit_Critical/Small/Hit_Critical_Small_sheet.png",
+     "frame_w": 56,
+     "frame_h": 56,
+     "frames": 7,
+     "pivot": [
+      28,
+      55
+     ]
+    },
+    "Large": {
+     "sheet": "02_Impacts/Hit_Critical/Large/Hit_Critical_Large_sheet.png",
+     "frame_w": 112,
+     "frame_h": 112,
+     "frames": 7,
+     "pivot": [
+      56,
+      111
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Hit_Blunt",
+   "category": "02_Impacts",
+   "sizes": {
+    "Small": {
+     "sheet": "02_Impacts/Hit_Blunt/Small/Hit_Blunt_Small_sheet.png",
+     "frame_w": 48,
+     "frame_h": 48,
+     "frames": 6,
+     "pivot": [
+      24,
+      24
+     ]
+    },
+    "Large": {
+     "sheet": "02_Impacts/Hit_Blunt/Large/Hit_Blunt_Large_sheet.png",
+     "frame_w": 96,
+     "frame_h": 96,
+     "frames": 6,
+     "pivot": [
+      48,
+      48
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Hit_Block",
+   "category": "02_Impacts",
+   "sizes": {
+    "Small": {
+     "sheet": "02_Impacts/Hit_Block/Small/Hit_Block_Small_sheet.png",
+     "frame_w": 40,
+     "frame_h": 40,
+     "frames": 4,
+     "pivot": [
+      20,
+      39
+     ]
+    },
+    "Large": {
+     "sheet": "02_Impacts/Hit_Block/Large/Hit_Block_Large_sheet.png",
+     "frame_w": 80,
+     "frame_h": 80,
+     "frames": 4,
+     "pivot": [
+      40,
+      40
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Hit_Parry",
+   "category": "02_Impacts",
+   "sizes": {
+    "Small": {
+     "sheet": "02_Impacts/Hit_Parry/Small/Hit_Parry_Small_sheet.png",
+     "frame_w": 48,
+     "frame_h": 48,
+     "frames": 5,
+     "pivot": [
+      24,
+      47
+     ]
+    },
+    "Large": {
+     "sheet": "02_Impacts/Hit_Parry/Large/Hit_Parry_Large_sheet.png",
+     "frame_w": 96,
+     "frame_h": 96,
+     "frames": 5,
+     "pivot": [
+      48,
+      48
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Fire_Impact",
+   "category": "02_Impacts",
+   "sizes": {
+    "Small": {
+     "sheet": "02_Impacts/Fire_Impact/Small/Fire_Impact_Small_sheet.png",
+     "frame_w": 56,
+     "frame_h": 56,
+     "frames": 9,
+     "pivot": [
+      28,
+      28
+     ]
+    },
+    "Large": {
+     "sheet": "02_Impacts/Fire_Impact/Large/Fire_Impact_Large_sheet.png",
+     "frame_w": 112,
+     "frame_h": 112,
+     "frames": 9,
+     "pivot": [
+      56,
+      56
+     ]
+    }
+   },
+   "loop": false,
+   "description": "hit impact"
+  },
+  {
+   "name": "Ice_Impact",
+   "category": "02_Impacts",
+   "sizes": {
+    "Small": {
+     "sheet": "02_Impacts/Ice_Impact/Small/Ice_Impact_Small_sheet.png",
+     "frame_w": 56,
+     "frame_h": 56,
+     "frames": 7,
+     "pivot": [
+      28,
+      28
+     ]
+    },
+    "Large": {
+     "sheet": "02_Impacts/Ice_Impact/Large/Ice_Impact_Large_sheet.png",
+     "frame_w": 112,
+     "frame_h": 112,
+     "frames": 7,
+     "pivot": [
+      56,
+      56
+     ]
+    }
+   },
+   "loop": false,
+   "description": "ice spikes on hit, shards fall"
+  },
+  {
+   "name": "Slash_Horizontal",
+   "category": "03_Slashes",
+   "sizes": {
+    "Small": {
+     "sheet": "03_Slashes/Slash_Horizontal/Small/Slash_Horizontal_Small_sheet.png",
+     "frame_w": 64,
+     "frame_h": 32,
+     "frames": 18,
+     "pivot": [
+      32,
+      31
+     ]
+    },
+    "Large": {
+     "sheet": "03_Slashes/Slash_Horizontal/Large/Slash_Horizontal_Large_sheet.png",
+     "frame_w": 128,
+     "frame_h": 64,
+     "frames": 18,
+     "pivot": [
+      64,
+      63
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Slash_Vertical",
+   "category": "03_Slashes",
+   "sizes": {
+    "Small": {
+     "sheet": "03_Slashes/Slash_Vertical/Small/Slash_Vertical_Small_sheet.png",
+     "frame_w": 32,
+     "frame_h": 64,
+     "frames": 19,
+     "pivot": [
+      16,
+      32
+     ]
+    },
+    "Large": {
+     "sheet": "03_Slashes/Slash_Vertical/Large/Slash_Vertical_Large_sheet.png",
+     "frame_w": 64,
+     "frame_h": 128,
+     "frames": 19,
+     "pivot": [
+      32,
+      64
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Slash_Diagonal",
+   "category": "03_Slashes",
+   "sizes": {
+    "Small": {
+     "sheet": "03_Slashes/Slash_Diagonal/Small/Slash_Diagonal_Small_sheet.png",
+     "frame_w": 56,
+     "frame_h": 56,
+     "frames": 18,
+     "pivot": [
+      28,
+      28
+     ]
+    },
+    "Large": {
+     "sheet": "03_Slashes/Slash_Diagonal/Large/Slash_Diagonal_Large_sheet.png",
+     "frame_w": 112,
+     "frame_h": 112,
+     "frames": 18,
+     "pivot": [
+      56,
+      56
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Slash_Spin",
+   "category": "03_Slashes",
+   "sizes": {
+    "Small": {
+     "sheet": "03_Slashes/Slash_Spin/Small/Slash_Spin_Small_sheet.png",
+     "frame_w": 80,
+     "frame_h": 80,
+     "frames": 20,
+     "pivot": [
+      40,
+      40
+     ]
+    },
+    "Large": {
+     "sheet": "03_Slashes/Slash_Spin/Large/Slash_Spin_Large_sheet.png",
+     "frame_w": 160,
+     "frame_h": 160,
+     "frames": 20,
+     "pivot": [
+      80,
+      80
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Slash_X",
+   "category": "03_Slashes",
+   "sizes": {
+    "Small": {
+     "sheet": "03_Slashes/Slash_X/Small/Slash_X_Small_sheet.png",
+     "frame_w": 56,
+     "frame_h": 56,
+     "frames": 19,
+     "pivot": [
+      28,
+      28
+     ]
+    },
+    "Large": {
+     "sheet": "03_Slashes/Slash_X/Large/Slash_X_Large_sheet.png",
+     "frame_w": 112,
+     "frame_h": 112,
+     "frames": 19,
+     "pivot": [
+      56,
+      56
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Slash_Heavy",
+   "category": "03_Slashes",
+   "sizes": {
+    "Small": {
+     "sheet": "03_Slashes/Slash_Heavy/Small/Slash_Heavy_Small_sheet.png",
+     "frame_w": 80,
+     "frame_h": 48,
+     "frames": 19,
+     "pivot": [
+      40,
+      47
+     ]
+    },
+    "Large": {
+     "sheet": "03_Slashes/Slash_Heavy/Large/Slash_Heavy_Large_sheet.png",
+     "frame_w": 160,
+     "frame_h": 96,
+     "frames": 19,
+     "pivot": [
+      80,
+      95
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Slash_Wave",
+   "category": "03_Slashes",
+   "sizes": {
+    "Small": {
+     "sheet": "03_Slashes/Slash_Wave/Small/Slash_Wave_Small_sheet.png",
+     "frame_w": 48,
+     "frame_h": 32,
+     "frames": 16,
+     "pivot": [
+      24,
+      31
+     ]
+    },
+    "Large": {
+     "sheet": "03_Slashes/Slash_Wave/Large/Slash_Wave_Large_sheet.png",
+     "frame_w": 96,
+     "frame_h": 64,
+     "frames": 16,
+     "pivot": [
+      48,
+      63
+     ]
+    }
+   },
+   "loop": true
+  },
+  {
+   "name": "Thrust_Stab",
+   "category": "03_Slashes",
+   "sizes": {
+    "Small": {
+     "sheet": "03_Slashes/Thrust_Stab/Small/Thrust_Stab_Small_sheet.png",
+     "frame_w": 64,
+     "frame_h": 16,
+     "frames": 16,
+     "pivot": [
+      32,
+      15
+     ]
+    },
+    "Large": {
+     "sheet": "03_Slashes/Thrust_Stab/Large/Thrust_Stab_Large_sheet.png",
+     "frame_w": 128,
+     "frame_h": 32,
+     "frames": 16,
+     "pivot": [
+      64,
+      31
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Claw_Swipe",
+   "category": "03_Slashes",
+   "sizes": {
+    "Small": {
+     "sheet": "03_Slashes/Claw_Swipe/Small/Claw_Swipe_Small_sheet.png",
+     "frame_w": 48,
+     "frame_h": 48,
+     "frames": 18,
+     "pivot": [
+      24,
+      24
+     ]
+    },
+    "Large": {
+     "sheet": "03_Slashes/Claw_Swipe/Large/Claw_Swipe_Large_sheet.png",
+     "frame_w": 96,
+     "frame_h": 96,
+     "frames": 18,
+     "pivot": [
+      48,
+      48
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Punch_Swoosh",
+   "category": "03_Slashes",
+   "sizes": {
+    "Small": {
+     "sheet": "03_Slashes/Punch_Swoosh/Small/Punch_Swoosh_Small_sheet.png",
+     "frame_w": 48,
+     "frame_h": 32,
+     "frames": 16,
+     "pivot": [
+      24,
+      31
+     ]
+    },
+    "Large": {
+     "sheet": "03_Slashes/Punch_Swoosh/Large/Punch_Swoosh_Large_sheet.png",
+     "frame_w": 96,
+     "frame_h": 64,
+     "frames": 16,
+     "pivot": [
+      48,
+      63
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Dash_Wind",
+   "category": "03_Slashes",
+   "sizes": {
+    "Small": {
+     "sheet": "03_Slashes/Dash_Wind/Small/Dash_Wind_Small_sheet.png",
+     "frame_w": 64,
+     "frame_h": 32,
+     "frames": 15,
+     "pivot": [
+      32,
+      31
+     ]
+    },
+    "Large": {
+     "sheet": "03_Slashes/Dash_Wind/Large/Dash_Wind_Large_sheet.png",
+     "frame_w": 128,
+     "frame_h": 64,
+     "frames": 15,
+     "pivot": [
+      64,
+      63
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Fire_CastFlame",
+   "category": "04_Spells",
+   "sizes": {
+    "Small": {
+     "sheet": "04_Spells/Fire_CastFlame/Small/Fire_CastFlame_Small_sheet.png",
+     "frame_w": 64,
+     "frame_h": 40,
+     "frames": 7,
+     "pivot": [
+      13,
+      24
+     ]
+    },
+    "Large": {
+     "sheet": "04_Spells/Fire_CastFlame/Large/Fire_CastFlame_Large_sheet.png",
+     "frame_w": 128,
+     "frame_h": 80,
+     "frames": 7,
+     "pivot": [
+      26,
+      48
+     ]
+    }
+   },
+   "loop": false,
+   "description": "muzzle flame at the hand (faces right)"
+  },
+  {
+   "name": "Fire_Fireball",
+   "category": "04_Spells",
+   "sizes": {
+    "Small": {
+     "sheet": "04_Spells/Fire_Fireball/Small/Fire_Fireball_Small_sheet.png",
+     "frame_w": 64,
+     "frame_h": 24,
+     "frames": 6,
+     "pivot": [
+      56,
+      12
+     ]
+    },
+    "Large": {
+     "sheet": "04_Spells/Fire_Fireball/Large/Fire_Fireball_Large_sheet.png",
+     "frame_w": 128,
+     "frame_h": 48,
+     "frames": 6,
+     "pivot": [
+      112,
+      24
+     ]
+    }
+   },
+   "loop": true,
+   "description": "fireball projectile loop, pivot = head (faces right)"
+  },
+  {
+   "name": "Fire_MuzzleShockwave",
+   "category": "04_Spells",
+   "sizes": {
+    "Small": {
+     "sheet": "04_Spells/Fire_MuzzleShockwave/Small/Fire_MuzzleShockwave_Small_sheet.png",
+     "frame_w": 44,
+     "frame_h": 52,
+     "frames": 3,
+     "pivot": [
+      7,
+      26
+     ]
+    },
+    "Large": {
+     "sheet": "04_Spells/Fire_MuzzleShockwave/Large/Fire_MuzzleShockwave_Large_sheet.png",
+     "frame_w": 88,
+     "frame_h": 104,
+     "frames": 3,
+     "pivot": [
+      14,
+      52
+     ]
+    }
+   },
+   "loop": false,
+   "description": "gun-like muzzle blast at the hand when shooting (faces right)"
+  },
+  {
+   "name": "Ice_CastFrost",
+   "category": "04_Spells",
+   "sizes": {
+    "Small": {
+     "sheet": "04_Spells/Ice_CastFrost/Small/Ice_CastFrost_Small_sheet.png",
+     "frame_w": 64,
+     "frame_h": 32,
+     "frames": 5,
+     "pivot": [
+      12,
+      16
+     ]
+    },
+    "Large": {
+     "sheet": "04_Spells/Ice_CastFrost/Large/Ice_CastFrost_Large_sheet.png",
+     "frame_w": 128,
+     "frame_h": 64,
+     "frames": 5,
+     "pivot": [
+      24,
+      32
+     ]
+    }
+   },
+   "loop": false,
+   "description": "frost burst at the hand (faces right)"
+  },
+  {
+   "name": "Ice_Spear",
+   "category": "04_Spells",
+   "sizes": {
+    "Small": {
+     "sheet": "04_Spells/Ice_Spear/Small/Ice_Spear_Small_sheet.png",
+     "frame_w": 64,
+     "frame_h": 24,
+     "frames": 6,
+     "pivot": [
+      58,
+      12
+     ]
+    },
+    "Large": {
+     "sheet": "04_Spells/Ice_Spear/Large/Ice_Spear_Large_sheet.png",
+     "frame_w": 128,
+     "frame_h": 48,
+     "frames": 6,
+     "pivot": [
+      116,
+      24
+     ]
+    }
+   },
+   "loop": true,
+   "description": "ice spear projectile loop, pivot = tip (faces right)"
+  },
+  {
+   "name": "Ice_SpikeWave",
+   "category": "04_Spells",
+   "sizes": {
+    "Small": {
+     "sheet": "04_Spells/Ice_SpikeWave/Small/Ice_SpikeWave_Small_sheet.png",
+     "frame_w": 120,
+     "frame_h": 52,
+     "frames": 11,
+     "pivot": [
+      60,
+      42
+     ]
+    },
+    "Large": {
+     "sheet": "04_Spells/Ice_SpikeWave/Large/Ice_SpikeWave_Large_sheet.png",
+     "frame_w": 240,
+     "frame_h": 104,
+     "frames": 11,
+     "pivot": [
+      120,
+      84
+     ]
+    }
+   },
+   "loop": false,
+   "description": "wave of ice spikes from the ground, pivot = ground"
+  },
+  {
+   "name": "Lightning_Strike",
+   "category": "04_Spells",
+   "sizes": {
+    "Small": {
+     "sheet": "04_Spells/Lightning_Strike/Small/Lightning_Strike_Small_sheet.png",
+     "frame_w": 40,
+     "frame_h": 96,
+     "frames": 15,
+     "pivot": [
+      20,
+      95
+     ]
+    },
+    "Large": {
+     "sheet": "04_Spells/Lightning_Strike/Large/Lightning_Strike_Large_sheet.png",
+     "frame_w": 80,
+     "frame_h": 192,
+     "frames": 15,
+     "pivot": [
+      40,
+      96
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Lightning_Arc",
+   "category": "04_Spells",
+   "sizes": {
+    "Small": {
+     "sheet": "04_Spells/Lightning_Arc/Small/Lightning_Arc_Small_sheet.png",
+     "frame_w": 90,
+     "frame_h": 36,
+     "frames": 18,
+     "pivot": [
+      45,
+      18
+     ]
+    },
+    "Large": {
+     "sheet": "04_Spells/Lightning_Arc/Large/Lightning_Arc_Large_sheet.png",
+     "frame_w": 180,
+     "frame_h": 72,
+     "frames": 18,
+     "pivot": [
+      90,
+      36
+     ]
+    }
+   },
+   "loop": true
+  },
+  {
+   "name": "Lightning_Orb",
+   "category": "04_Spells",
+   "sizes": {
+    "Small": {
+     "sheet": "04_Spells/Lightning_Orb/Small/Lightning_Orb_Small_sheet.png",
+     "frame_w": 40,
+     "frame_h": 36,
+     "frames": 18,
+     "pivot": [
+      20,
+      35
+     ]
+    },
+    "Large": {
+     "sheet": "04_Spells/Lightning_Orb/Large/Lightning_Orb_Large_sheet.png",
+     "frame_w": 80,
+     "frame_h": 72,
+     "frames": 18,
+     "pivot": [
+      40,
+      36
+     ]
+    }
+   },
+   "loop": true
+  },
+  {
+   "name": "Arcane_Missile",
+   "category": "04_Spells",
+   "sizes": {
+    "Small": {
+     "sheet": "04_Spells/Arcane_Missile/Small/Arcane_Missile_Small_sheet.png",
+     "frame_w": 40,
+     "frame_h": 20,
+     "frames": 18,
+     "pivot": [
+      20,
+      19
+     ]
+    },
+    "Large": {
+     "sheet": "04_Spells/Arcane_Missile/Large/Arcane_Missile_Large_sheet.png",
+     "frame_w": 80,
+     "frame_h": 40,
+     "frames": 18,
+     "pivot": [
+      40,
+      39
+     ]
+    }
+   },
+   "loop": true
+  },
+  {
+   "name": "Arcane_Impact",
+   "category": "04_Spells",
+   "sizes": {
+    "Small": {
+     "sheet": "04_Spells/Arcane_Impact/Small/Arcane_Impact_Small_sheet.png",
+     "frame_w": 56,
+     "frame_h": 56,
+     "frames": 18,
+     "pivot": [
+      28,
+      55
+     ]
+    },
+    "Large": {
+     "sheet": "04_Spells/Arcane_Impact/Large/Arcane_Impact_Large_sheet.png",
+     "frame_w": 112,
+     "frame_h": 112,
+     "frames": 18,
+     "pivot": [
+      56,
+      56
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Poison_Glob",
+   "category": "04_Spells",
+   "sizes": {
+    "Small": {
+     "sheet": "04_Spells/Poison_Glob/Small/Poison_Glob_Small_sheet.png",
+     "frame_w": 52,
+     "frame_h": 32,
+     "frames": 18,
+     "pivot": [
+      26,
+      31
+     ]
+    },
+    "Large": {
+     "sheet": "04_Spells/Poison_Glob/Large/Poison_Glob_Large_sheet.png",
+     "frame_w": 104,
+     "frame_h": 64,
+     "frames": 18,
+     "pivot": [
+      52,
+      63
+     ]
+    }
+   },
+   "loop": true
+  },
+  {
+   "name": "Poison_Splash",
+   "category": "04_Spells",
+   "sizes": {
+    "Small": {
+     "sheet": "04_Spells/Poison_Splash/Small/Poison_Splash_Small_sheet.png",
+     "frame_w": 62,
+     "frame_h": 42,
+     "frames": 18,
+     "pivot": [
+      31,
+      41
+     ]
+    },
+    "Large": {
+     "sheet": "04_Spells/Poison_Splash/Large/Poison_Splash_Large_sheet.png",
+     "frame_w": 124,
+     "frame_h": 84,
+     "frames": 18,
+     "pivot": [
+      62,
+      83
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Holy_Pillar",
+   "category": "04_Spells",
+   "sizes": {
+    "Small": {
+     "sheet": "04_Spells/Holy_Pillar/Small/Holy_Pillar_Small_sheet.png",
+     "frame_w": 36,
+     "frame_h": 58,
+     "frames": 18,
+     "pivot": [
+      18,
+      57
+     ]
+    },
+    "Large": {
+     "sheet": "04_Spells/Holy_Pillar/Large/Holy_Pillar_Large_sheet.png",
+     "frame_w": 72,
+     "frame_h": 116,
+     "frames": 18,
+     "pivot": [
+      36,
+      115
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Shadow_Spikes",
+   "category": "04_Spells",
+   "sizes": {
+    "Small": {
+     "sheet": "04_Spells/Shadow_Spikes/Small/Shadow_Spikes_Small_sheet.png",
+     "frame_w": 122,
+     "frame_h": 52,
+     "frames": 18,
+     "pivot": [
+      61,
+      51
+     ]
+    },
+    "Large": {
+     "sheet": "04_Spells/Shadow_Spikes/Large/Shadow_Spikes_Large_sheet.png",
+     "frame_w": 244,
+     "frame_h": 104,
+     "frames": 18,
+     "pivot": [
+      122,
+      103
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Earth_RockSpike",
+   "category": "04_Spells",
+   "sizes": {
+    "Small": {
+     "sheet": "04_Spells/Earth_RockSpike/Small/Earth_RockSpike_Small_sheet.png",
+     "frame_w": 66,
+     "frame_h": 80,
+     "frames": 18,
+     "pivot": [
+      33,
+      79
+     ]
+    },
+    "Large": {
+     "sheet": "04_Spells/Earth_RockSpike/Large/Earth_RockSpike_Large_sheet.png",
+     "frame_w": 132,
+     "frame_h": 160,
+     "frames": 18,
+     "pivot": [
+      66,
+      159
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Wind_Tornado",
+   "category": "04_Spells",
+   "sizes": {
+    "Small": {
+     "sheet": "04_Spells/Wind_Tornado/Small/Wind_Tornado_Small_sheet.png",
+     "frame_w": 36,
+     "frame_h": 42,
+     "frames": 18,
+     "pivot": [
+      18,
+      41
+     ]
+    },
+    "Large": {
+     "sheet": "04_Spells/Wind_Tornado/Large/Wind_Tornado_Large_sheet.png",
+     "frame_w": 72,
+     "frame_h": 84,
+     "frames": 18,
+     "pivot": [
+      36,
+      83
+     ]
+    }
+   },
+   "loop": true
+  },
+  {
+   "name": "Water_Splash",
+   "category": "04_Spells",
+   "sizes": {
+    "Small": {
+     "sheet": "04_Spells/Water_Splash/Small/Water_Splash_Small_sheet.png",
+     "frame_w": 52,
+     "frame_h": 40,
+     "frames": 18,
+     "pivot": [
+      26,
+      39
+     ]
+    },
+    "Large": {
+     "sheet": "04_Spells/Water_Splash/Large/Water_Splash_Large_sheet.png",
+     "frame_w": 104,
+     "frame_h": 80,
+     "frames": 18,
+     "pivot": [
+      52,
+      40
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Fire_ChargeUp",
+   "category": "05_Charges",
+   "sizes": {
+    "Small": {
+     "sheet": "05_Charges/Fire_ChargeUp/Small/Fire_ChargeUp_Small_sheet.png",
+     "frame_w": 56,
+     "frame_h": 56,
+     "frames": 20,
+     "pivot": [
+      28,
+      28
+     ]
+    },
+    "Large": {
+     "sheet": "05_Charges/Fire_ChargeUp/Large/Fire_ChargeUp_Large_sheet.png",
+     "frame_w": 112,
+     "frame_h": 112,
+     "frames": 20,
+     "pivot": [
+      56,
+      56
+     ]
+    }
+   },
+   "loop": false,
+   "description": "charge-up, 3 levels (lv1 > lv2 > max), play once"
+  },
+  {
+   "name": "Fire_ChargeHold_Max",
+   "category": "05_Charges",
+   "sizes": {
+    "Small": {
+     "sheet": "05_Charges/Fire_ChargeHold_Max/Small/Fire_ChargeHold_Max_Small_sheet.png",
+     "frame_w": 56,
+     "frame_h": 56,
+     "frames": 6,
+     "pivot": [
+      28,
+      28
+     ]
+    },
+    "Large": {
+     "sheet": "05_Charges/Fire_ChargeHold_Max/Large/Fire_ChargeHold_Max_Large_sheet.png",
+     "frame_w": 112,
+     "frame_h": 112,
+     "frames": 6,
+     "pivot": [
+      56,
+      56
+     ]
+    }
+   },
+   "loop": true,
+   "description": "charged hold loop, max level"
+  },
+  {
+   "name": "Fire_ChargeBurst_Max",
+   "category": "05_Charges",
+   "sizes": {
+    "Small": {
+     "sheet": "05_Charges/Fire_ChargeBurst_Max/Small/Fire_ChargeBurst_Max_Small_sheet.png",
+     "frame_w": 100,
+     "frame_h": 100,
+     "frames": 6,
+     "pivot": [
+      50,
+      50
+     ]
+    },
+    "Large": {
+     "sheet": "05_Charges/Fire_ChargeBurst_Max/Large/Fire_ChargeBurst_Max_Large_sheet.png",
+     "frame_w": 201,
+     "frame_h": 201,
+     "frames": 6,
+     "pivot": [
+      100,
+      100
+     ]
+    }
+   },
+   "loop": false,
+   "description": "area burst, max level"
+  },
+  {
+   "name": "Ice_ChargeUp",
+   "category": "05_Charges",
+   "sizes": {
+    "Small": {
+     "sheet": "05_Charges/Ice_ChargeUp/Small/Ice_ChargeUp_Small_sheet.png",
+     "frame_w": 48,
+     "frame_h": 48,
+     "frames": 9,
+     "pivot": [
+      24,
+      24
+     ]
+    },
+    "Large": {
+     "sheet": "05_Charges/Ice_ChargeUp/Large/Ice_ChargeUp_Large_sheet.png",
+     "frame_w": 96,
+     "frame_h": 96,
+     "frames": 9,
+     "pivot": [
+      48,
+      48
+     ]
+    }
+   },
+   "loop": false,
+   "description": "charge-up (sigil assembles), play once"
+  },
+  {
+   "name": "Ice_ChargeHold",
+   "category": "05_Charges",
+   "sizes": {
+    "Small": {
+     "sheet": "05_Charges/Ice_ChargeHold/Small/Ice_ChargeHold_Small_sheet.png",
+     "frame_w": 48,
+     "frame_h": 48,
+     "frames": 6,
+     "pivot": [
+      24,
+      24
+     ]
+    },
+    "Large": {
+     "sheet": "05_Charges/Ice_ChargeHold/Large/Ice_ChargeHold_Large_sheet.png",
+     "frame_w": 96,
+     "frame_h": 96,
+     "frames": 6,
+     "pivot": [
+      48,
+      48
+     ]
+    }
+   },
+   "loop": true,
+   "description": "charged hold loop"
+  },
+  {
+   "name": "Ice_ChargeShatter",
+   "category": "05_Charges",
+   "sizes": {
+    "Small": {
+     "sheet": "05_Charges/Ice_ChargeShatter/Small/Ice_ChargeShatter_Small_sheet.png",
+     "frame_w": 72,
+     "frame_h": 72,
+     "frames": 5,
+     "pivot": [
+      36,
+      36
+     ]
+    },
+    "Large": {
+     "sheet": "05_Charges/Ice_ChargeShatter/Large/Ice_ChargeShatter_Large_sheet.png",
+     "frame_w": 144,
+     "frame_h": 144,
+     "frames": 5,
+     "pivot": [
+      72,
+      72
+     ]
+    }
+   },
+   "loop": false,
+   "description": "sigil shatters into falling shards"
+  },
+  {
+   "name": "Lightning_Charge",
+   "category": "05_Charges",
+   "sizes": {
+    "Small": {
+     "sheet": "05_Charges/Lightning_Charge/Small/Lightning_Charge_Small_sheet.png",
+     "frame_w": 40,
+     "frame_h": 40,
+     "frames": 18,
+     "pivot": [
+      20,
+      39
+     ]
+    },
+    "Large": {
+     "sheet": "05_Charges/Lightning_Charge/Large/Lightning_Charge_Large_sheet.png",
+     "frame_w": 80,
+     "frame_h": 80,
+     "frames": 18,
+     "pivot": [
+      40,
+      40
+     ]
+    }
+   },
+   "loop": true
+  },
+  {
+   "name": "Arcane_Charge",
+   "category": "05_Charges",
+   "sizes": {
+    "Small": {
+     "sheet": "05_Charges/Arcane_Charge/Small/Arcane_Charge_Small_sheet.png",
+     "frame_w": 48,
+     "frame_h": 48,
+     "frames": 18,
+     "pivot": [
+      24,
+      47
+     ]
+    },
+    "Large": {
+     "sheet": "05_Charges/Arcane_Charge/Large/Arcane_Charge_Large_sheet.png",
+     "frame_w": 96,
+     "frame_h": 96,
+     "frames": 18,
+     "pivot": [
+      48,
+      48
+     ]
+    }
+   },
+   "loop": true
+  },
+  {
+   "name": "Heal_Burst",
+   "category": "06_Heal_Shield_Buffs",
+   "sizes": {
+    "Small": {
+     "sheet": "06_Heal_Shield_Buffs/Heal_Burst/Small/Heal_Burst_Small_sheet.png",
+     "frame_w": 44,
+     "frame_h": 76,
+     "frames": 18,
+     "pivot": [
+      22,
+      75
+     ]
+    },
+    "Large": {
+     "sheet": "06_Heal_Shield_Buffs/Heal_Burst/Large/Heal_Burst_Large_sheet.png",
+     "frame_w": 88,
+     "frame_h": 152,
+     "frames": 18,
+     "pivot": [
+      44,
+      151
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Heal_Aura",
+   "category": "06_Heal_Shield_Buffs",
+   "sizes": {
+    "Small": {
+     "sheet": "06_Heal_Shield_Buffs/Heal_Aura/Small/Heal_Aura_Small_sheet.png",
+     "frame_w": 60,
+     "frame_h": 56,
+     "frames": 18,
+     "pivot": [
+      30,
+      55
+     ]
+    },
+    "Large": {
+     "sheet": "06_Heal_Shield_Buffs/Heal_Aura/Large/Heal_Aura_Large_sheet.png",
+     "frame_w": 120,
+     "frame_h": 112,
+     "frames": 18,
+     "pivot": [
+      60,
+      111
+     ]
+    }
+   },
+   "loop": true
+  },
+  {
+   "name": "Shield_Bubble",
+   "category": "06_Heal_Shield_Buffs",
+   "sizes": {
+    "Small": {
+     "sheet": "06_Heal_Shield_Buffs/Shield_Bubble/Small/Shield_Bubble_Small_sheet.png",
+     "frame_w": 40,
+     "frame_h": 40,
+     "frames": 18,
+     "pivot": [
+      20,
+      39
+     ]
+    },
+    "Large": {
+     "sheet": "06_Heal_Shield_Buffs/Shield_Bubble/Large/Shield_Bubble_Large_sheet.png",
+     "frame_w": 80,
+     "frame_h": 80,
+     "frames": 18,
+     "pivot": [
+      40,
+      40
+     ]
+    }
+   },
+   "loop": true
+  },
+  {
+   "name": "Shield_Hit",
+   "category": "06_Heal_Shield_Buffs",
+   "sizes": {
+    "Small": {
+     "sheet": "06_Heal_Shield_Buffs/Shield_Hit/Small/Shield_Hit_Small_sheet.png",
+     "frame_w": 44,
+     "frame_h": 44,
+     "frames": 18,
+     "pivot": [
+      22,
+      43
+     ]
+    },
+    "Large": {
+     "sheet": "06_Heal_Shield_Buffs/Shield_Hit/Large/Shield_Hit_Large_sheet.png",
+     "frame_w": 88,
+     "frame_h": 88,
+     "frames": 18,
+     "pivot": [
+      44,
+      44
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Shield_Break",
+   "category": "06_Heal_Shield_Buffs",
+   "sizes": {
+    "Small": {
+     "sheet": "06_Heal_Shield_Buffs/Shield_Break/Small/Shield_Break_Small_sheet.png",
+     "frame_w": 48,
+     "frame_h": 48,
+     "frames": 18,
+     "pivot": [
+      24,
+      47
+     ]
+    },
+    "Large": {
+     "sheet": "06_Heal_Shield_Buffs/Shield_Break/Large/Shield_Break_Large_sheet.png",
+     "frame_w": 96,
+     "frame_h": 96,
+     "frames": 18,
+     "pivot": [
+      48,
+      48
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Buff_Up",
+   "category": "06_Heal_Shield_Buffs",
+   "sizes": {
+    "Small": {
+     "sheet": "06_Heal_Shield_Buffs/Buff_Up/Small/Buff_Up_Small_sheet.png",
+     "frame_w": 40,
+     "frame_h": 64,
+     "frames": 18,
+     "pivot": [
+      20,
+      63
+     ]
+    },
+    "Large": {
+     "sheet": "06_Heal_Shield_Buffs/Buff_Up/Large/Buff_Up_Large_sheet.png",
+     "frame_w": 80,
+     "frame_h": 128,
+     "frames": 18,
+     "pivot": [
+      40,
+      127
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Debuff_Down",
+   "category": "06_Heal_Shield_Buffs",
+   "sizes": {
+    "Small": {
+     "sheet": "06_Heal_Shield_Buffs/Debuff_Down/Small/Debuff_Down_Small_sheet.png",
+     "frame_w": 40,
+     "frame_h": 60,
+     "frames": 18,
+     "pivot": [
+      20,
+      30
+     ]
+    },
+    "Large": {
+     "sheet": "06_Heal_Shield_Buffs/Debuff_Down/Large/Debuff_Down_Large_sheet.png",
+     "frame_w": 80,
+     "frame_h": 120,
+     "frames": 18,
+     "pivot": [
+      40,
+      60
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Level_Up",
+   "category": "06_Heal_Shield_Buffs",
+   "sizes": {
+    "Small": {
+     "sheet": "06_Heal_Shield_Buffs/Level_Up/Small/Level_Up_Small_sheet.png",
+     "frame_w": 44,
+     "frame_h": 100,
+     "frames": 18,
+     "pivot": [
+      22,
+      50
+     ]
+    },
+    "Large": {
+     "sheet": "06_Heal_Shield_Buffs/Level_Up/Large/Level_Up_Large_sheet.png",
+     "frame_w": 88,
+     "frame_h": 200,
+     "frames": 18,
+     "pivot": [
+      44,
+      100
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Magic_Sparkle_Burst",
+   "category": "06_Heal_Shield_Buffs",
+   "sizes": {
+    "Small": {
+     "sheet": "06_Heal_Shield_Buffs/Magic_Sparkle_Burst/Small/Magic_Sparkle_Burst_Small_sheet.png",
+     "frame_w": 48,
+     "frame_h": 48,
+     "frames": 18,
+     "pivot": [
+      24,
+      47
+     ]
+    },
+    "Large": {
+     "sheet": "06_Heal_Shield_Buffs/Magic_Sparkle_Burst/Large/Magic_Sparkle_Burst_Large_sheet.png",
+     "frame_w": 96,
+     "frame_h": 96,
+     "frames": 18,
+     "pivot": [
+      48,
+      48
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Teleport_In",
+   "category": "06_Heal_Shield_Buffs",
+   "sizes": {
+    "Small": {
+     "sheet": "06_Heal_Shield_Buffs/Teleport_In/Small/Teleport_In_Small_sheet.png",
+     "frame_w": 32,
+     "frame_h": 60,
+     "frames": 18,
+     "pivot": [
+      16,
+      59
+     ]
+    },
+    "Large": {
+     "sheet": "06_Heal_Shield_Buffs/Teleport_In/Large/Teleport_In_Large_sheet.png",
+     "frame_w": 64,
+     "frame_h": 120,
+     "frames": 18,
+     "pivot": [
+      32,
+      119
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Teleport_Out",
+   "category": "06_Heal_Shield_Buffs",
+   "sizes": {
+    "Small": {
+     "sheet": "06_Heal_Shield_Buffs/Teleport_Out/Small/Teleport_Out_Small_sheet.png",
+     "frame_w": 32,
+     "frame_h": 60,
+     "frames": 18,
+     "pivot": [
+      16,
+      59
+     ]
+    },
+    "Large": {
+     "sheet": "06_Heal_Shield_Buffs/Teleport_Out/Large/Teleport_Out_Large_sheet.png",
+     "frame_w": 64,
+     "frame_h": 120,
+     "frames": 18,
+     "pivot": [
+      32,
+      119
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Smoke_Pop",
+   "category": "07_Smoke_Dust",
+   "sizes": {
+    "Small": {
+     "sheet": "07_Smoke_Dust/Smoke_Pop/Small/Smoke_Pop_Small_sheet.png",
+     "frame_w": 24,
+     "frame_h": 24,
+     "frames": 17,
+     "pivot": [
+      12,
+      23
+     ]
+    },
+    "Large": {
+     "sheet": "07_Smoke_Dust/Smoke_Pop/Large/Smoke_Pop_Large_sheet.png",
+     "frame_w": 48,
+     "frame_h": 48,
+     "frames": 17,
+     "pivot": [
+      24,
+      24
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Smoke_Puff",
+   "category": "07_Smoke_Dust",
+   "sizes": {
+    "Small": {
+     "sheet": "07_Smoke_Dust/Smoke_Puff/Small/Smoke_Puff_Small_sheet.png",
+     "frame_w": 48,
+     "frame_h": 48,
+     "frames": 18,
+     "pivot": [
+      24,
+      24
+     ]
+    },
+    "Large": {
+     "sheet": "07_Smoke_Dust/Smoke_Puff/Large/Smoke_Puff_Large_sheet.png",
+     "frame_w": 96,
+     "frame_h": 96,
+     "frames": 18,
+     "pivot": [
+      48,
+      48
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Dust_Jump",
+   "category": "07_Smoke_Dust",
+   "sizes": {
+    "Small": {
+     "sheet": "07_Smoke_Dust/Dust_Jump/Small/Dust_Jump_Small_sheet.png",
+     "frame_w": 44,
+     "frame_h": 24,
+     "frames": 17,
+     "pivot": [
+      22,
+      12
+     ]
+    },
+    "Large": {
+     "sheet": "07_Smoke_Dust/Dust_Jump/Large/Dust_Jump_Large_sheet.png",
+     "frame_w": 88,
+     "frame_h": 48,
+     "frames": 17,
+     "pivot": [
+      44,
+      24
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Dust_Land",
+   "category": "07_Smoke_Dust",
+   "sizes": {
+    "Small": {
+     "sheet": "07_Smoke_Dust/Dust_Land/Small/Dust_Land_Small_sheet.png",
+     "frame_w": 48,
+     "frame_h": 20,
+     "frames": 18,
+     "pivot": [
+      24,
+      10
+     ]
+    },
+    "Large": {
+     "sheet": "07_Smoke_Dust/Dust_Land/Large/Dust_Land_Large_sheet.png",
+     "frame_w": 96,
+     "frame_h": 40,
+     "frames": 18,
+     "pivot": [
+      48,
+      20
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Dust_Run",
+   "category": "07_Smoke_Dust",
+   "sizes": {
+    "Small": {
+     "sheet": "07_Smoke_Dust/Dust_Run/Small/Dust_Run_Small_sheet.png",
+     "frame_w": 26,
+     "frame_h": 16,
+     "frames": 12,
+     "pivot": [
+      13,
+      15
+     ]
+    },
+    "Large": {
+     "sheet": "07_Smoke_Dust/Dust_Run/Large/Dust_Run_Large_sheet.png",
+     "frame_w": 52,
+     "frame_h": 32,
+     "frames": 12,
+     "pivot": [
+      26,
+      16
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Dust_Dash",
+   "category": "07_Smoke_Dust",
+   "sizes": {
+    "Small": {
+     "sheet": "07_Smoke_Dust/Dust_Dash/Small/Dust_Dash_Small_sheet.png",
+     "frame_w": 52,
+     "frame_h": 20,
+     "frames": 18,
+     "pivot": [
+      26,
+      19
+     ]
+    },
+    "Large": {
+     "sheet": "07_Smoke_Dust/Dust_Dash/Large/Dust_Dash_Large_sheet.png",
+     "frame_w": 104,
+     "frame_h": 40,
+     "frames": 18,
+     "pivot": [
+      52,
+      20
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Spawn_Poof",
+   "category": "07_Smoke_Dust",
+   "sizes": {
+    "Small": {
+     "sheet": "07_Smoke_Dust/Spawn_Poof/Small/Spawn_Poof_Small_sheet.png",
+     "frame_w": 48,
+     "frame_h": 48,
+     "frames": 18,
+     "pivot": [
+      24,
+      47
+     ]
+    },
+    "Large": {
+     "sheet": "07_Smoke_Dust/Spawn_Poof/Large/Spawn_Poof_Large_sheet.png",
+     "frame_w": 96,
+     "frame_h": 96,
+     "frames": 18,
+     "pivot": [
+      48,
+      48
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Smoke_Rising",
+   "category": "07_Smoke_Dust",
+   "sizes": {
+    "Small": {
+     "sheet": "07_Smoke_Dust/Smoke_Rising/Small/Smoke_Rising_Small_sheet.png",
+     "frame_w": 24,
+     "frame_h": 48,
+     "frames": 18,
+     "pivot": [
+      12,
+      47
+     ]
+    },
+    "Large": {
+     "sheet": "07_Smoke_Dust/Smoke_Rising/Large/Smoke_Rising_Large_sheet.png",
+     "frame_w": 48,
+     "frame_h": 96,
+     "frames": 18,
+     "pivot": [
+      24,
+      95
+     ]
+    }
+   },
+   "loop": true
+  },
+  {
+   "name": "Steam_Burst",
+   "category": "07_Smoke_Dust",
+   "sizes": {
+    "Small": {
+     "sheet": "07_Smoke_Dust/Steam_Burst/Small/Steam_Burst_Small_sheet.png",
+     "frame_w": 32,
+     "frame_h": 70,
+     "frames": 19,
+     "pivot": [
+      16,
+      69
+     ]
+    },
+    "Large": {
+     "sheet": "07_Smoke_Dust/Steam_Burst/Large/Steam_Burst_Large_sheet.png",
+     "frame_w": 64,
+     "frame_h": 140,
+     "frames": 19,
+     "pivot": [
+      32,
+      139
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Fire_BurnStatus",
+   "category": "08_Status",
+   "sizes": {
+    "Small": {
+     "sheet": "08_Status/Fire_BurnStatus/Small/Fire_BurnStatus_Small_sheet.png",
+     "frame_w": 20,
+     "frame_h": 32,
+     "frames": 8,
+     "pivot": [
+      10,
+      29
+     ]
+    },
+    "Large": {
+     "sheet": "08_Status/Fire_BurnStatus/Large/Fire_BurnStatus_Large_sheet.png",
+     "frame_w": 40,
+     "frame_h": 64,
+     "frames": 8,
+     "pivot": [
+      20,
+      58
+     ]
+    }
+   },
+   "loop": true,
+   "description": "burning status flame, place 2-4 on the body, pivot = base"
+  },
+  {
+   "name": "Ice_FreezeSnap",
+   "category": "08_Status",
+   "sizes": {
+    "Small": {
+     "sheet": "08_Status/Ice_FreezeSnap/Small/Ice_FreezeSnap_Small_sheet.png",
+     "frame_w": 32,
+     "frame_h": 32,
+     "frames": 5,
+     "pivot": [
+      16,
+      16
+     ]
+    },
+    "Large": {
+     "sheet": "08_Status/Ice_FreezeSnap/Large/Ice_FreezeSnap_Large_sheet.png",
+     "frame_w": 64,
+     "frame_h": 64,
+     "frames": 5,
+     "pivot": [
+      32,
+      32
+     ]
+    }
+   },
+   "loop": false,
+   "description": "'just frozen' crystal snap on the target"
+  },
+  {
+   "name": "Ice_FrozenSparkle",
+   "category": "08_Status",
+   "sizes": {
+    "Small": {
+     "sheet": "08_Status/Ice_FrozenSparkle/Small/Ice_FrozenSparkle_Small_sheet.png",
+     "frame_w": 24,
+     "frame_h": 32,
+     "frames": 8,
+     "pivot": [
+      12,
+      16
+     ]
+    },
+    "Large": {
+     "sheet": "08_Status/Ice_FrozenSparkle/Large/Ice_FrozenSparkle_Large_sheet.png",
+     "frame_w": 48,
+     "frame_h": 64,
+     "frames": 8,
+     "pivot": [
+      24,
+      32
+     ]
+    }
+   },
+   "loop": true,
+   "description": "frozen status glints loop (tint the sprite blue in-engine)"
+  },
+  {
+   "name": "Poison_Bubbles",
+   "category": "08_Status",
+   "sizes": {
+    "Small": {
+     "sheet": "08_Status/Poison_Bubbles/Small/Poison_Bubbles_Small_sheet.png",
+     "frame_w": 32,
+     "frame_h": 48,
+     "frames": 18,
+     "pivot": [
+      16,
+      47
+     ]
+    },
+    "Large": {
+     "sheet": "08_Status/Poison_Bubbles/Large/Poison_Bubbles_Large_sheet.png",
+     "frame_w": 64,
+     "frame_h": 96,
+     "frames": 18,
+     "pivot": [
+      32,
+      48
+     ]
+    }
+   },
+   "loop": true
+  },
+  {
+   "name": "Stun_Stars",
+   "category": "08_Status",
+   "sizes": {
+    "Small": {
+     "sheet": "08_Status/Stun_Stars/Small/Stun_Stars_Small_sheet.png",
+     "frame_w": 64,
+     "frame_h": 32,
+     "frames": 18,
+     "pivot": [
+      32,
+      31
+     ]
+    },
+    "Large": {
+     "sheet": "08_Status/Stun_Stars/Large/Stun_Stars_Large_sheet.png",
+     "frame_w": 128,
+     "frame_h": 64,
+     "frames": 18,
+     "pivot": [
+      64,
+      32
+     ]
+    }
+   },
+   "loop": true
+  },
+  {
+   "name": "Sleep_Zzz",
+   "category": "08_Status",
+   "sizes": {
+    "Small": {
+     "sheet": "08_Status/Sleep_Zzz/Small/Sleep_Zzz_Small_sheet.png",
+     "frame_w": 48,
+     "frame_h": 64,
+     "frames": 18,
+     "pivot": [
+      24,
+      32
+     ]
+    },
+    "Large": {
+     "sheet": "08_Status/Sleep_Zzz/Large/Sleep_Zzz_Large_sheet.png",
+     "frame_w": 96,
+     "frame_h": 128,
+     "frames": 18,
+     "pivot": [
+      48,
+      64
+     ]
+    }
+   },
+   "loop": true
+  },
+  {
+   "name": "Shock_Sparks",
+   "category": "08_Status",
+   "sizes": {
+    "Small": {
+     "sheet": "08_Status/Shock_Sparks/Small/Shock_Sparks_Small_sheet.png",
+     "frame_w": 44,
+     "frame_h": 50,
+     "frames": 18,
+     "pivot": [
+      22,
+      49
+     ]
+    },
+    "Large": {
+     "sheet": "08_Status/Shock_Sparks/Large/Shock_Sparks_Large_sheet.png",
+     "frame_w": 88,
+     "frame_h": 100,
+     "frames": 18,
+     "pivot": [
+      44,
+      50
+     ]
+    }
+   },
+   "loop": true
+  },
+  {
+   "name": "Bleed_Drips",
+   "category": "08_Status",
+   "sizes": {
+    "Small": {
+     "sheet": "08_Status/Bleed_Drips/Small/Bleed_Drips_Small_sheet.png",
+     "frame_w": 48,
+     "frame_h": 64,
+     "frames": 18,
+     "pivot": [
+      24,
+      63
+     ]
+    },
+    "Large": {
+     "sheet": "08_Status/Bleed_Drips/Large/Bleed_Drips_Large_sheet.png",
+     "frame_w": 96,
+     "frame_h": 128,
+     "frames": 18,
+     "pivot": [
+      48,
+      64
+     ]
+    }
+   },
+   "loop": true
+  },
+  {
+   "name": "Confuse_Spiral",
+   "category": "08_Status",
+   "sizes": {
+    "Small": {
+     "sheet": "08_Status/Confuse_Spiral/Small/Confuse_Spiral_Small_sheet.png",
+     "frame_w": 48,
+     "frame_h": 48,
+     "frames": 18,
+     "pivot": [
+      24,
+      24
+     ]
+    },
+    "Large": {
+     "sheet": "08_Status/Confuse_Spiral/Large/Confuse_Spiral_Large_sheet.png",
+     "frame_w": 96,
+     "frame_h": 96,
+     "frames": 18,
+     "pivot": [
+      48,
+      48
+     ]
+    }
+   },
+   "loop": true
+  },
+  {
+   "name": "Charm_Hearts",
+   "category": "08_Status",
+   "sizes": {
+    "Small": {
+     "sheet": "08_Status/Charm_Hearts/Small/Charm_Hearts_Small_sheet.png",
+     "frame_w": 48,
+     "frame_h": 64,
+     "frames": 18,
+     "pivot": [
+      24,
+      32
+     ]
+    },
+    "Large": {
+     "sheet": "08_Status/Charm_Hearts/Large/Charm_Hearts_Large_sheet.png",
+     "frame_w": 96,
+     "frame_h": 128,
+     "frames": 18,
+     "pivot": [
+      48,
+      64
+     ]
+    }
+   },
+   "loop": true
+  },
+  {
+   "name": "Pickup_Flash",
+   "category": "09_Pickups_Sparkles",
+   "sizes": {
+    "Small": {
+     "sheet": "09_Pickups_Sparkles/Pickup_Flash/Small/Pickup_Flash_Small_sheet.png",
+     "frame_w": 32,
+     "frame_h": 32,
+     "frames": 18,
+     "pivot": [
+      16,
+      31
+     ]
+    },
+    "Large": {
+     "sheet": "09_Pickups_Sparkles/Pickup_Flash/Large/Pickup_Flash_Large_sheet.png",
+     "frame_w": 64,
+     "frame_h": 64,
+     "frames": 18,
+     "pivot": [
+      32,
+      63
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Coin_Sparkle",
+   "category": "09_Pickups_Sparkles",
+   "sizes": {
+    "Small": {
+     "sheet": "09_Pickups_Sparkles/Coin_Sparkle/Small/Coin_Sparkle_Small_sheet.png",
+     "frame_w": 16,
+     "frame_h": 16,
+     "frames": 12,
+     "pivot": [
+      8,
+      15
+     ]
+    },
+    "Large": {
+     "sheet": "09_Pickups_Sparkles/Coin_Sparkle/Large/Coin_Sparkle_Large_sheet.png",
+     "frame_w": 32,
+     "frame_h": 32,
+     "frames": 12,
+     "pivot": [
+      16,
+      31
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Collect_Ring",
+   "category": "09_Pickups_Sparkles",
+   "sizes": {
+    "Small": {
+     "sheet": "09_Pickups_Sparkles/Collect_Ring/Small/Collect_Ring_Small_sheet.png",
+     "frame_w": 32,
+     "frame_h": 32,
+     "frames": 18,
+     "pivot": [
+      16,
+      31
+     ]
+    },
+    "Large": {
+     "sheet": "09_Pickups_Sparkles/Collect_Ring/Large/Collect_Ring_Large_sheet.png",
+     "frame_w": 64,
+     "frame_h": 64,
+     "frames": 18,
+     "pivot": [
+      32,
+      32
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Item_Shine",
+   "category": "09_Pickups_Sparkles",
+   "sizes": {
+    "Small": {
+     "sheet": "09_Pickups_Sparkles/Item_Shine/Small/Item_Shine_Small_sheet.png",
+     "frame_w": 32,
+     "frame_h": 32,
+     "frames": 18,
+     "pivot": [
+      16,
+      31
+     ]
+    },
+    "Large": {
+     "sheet": "09_Pickups_Sparkles/Item_Shine/Large/Item_Shine_Large_sheet.png",
+     "frame_w": 64,
+     "frame_h": 64,
+     "frames": 18,
+     "pivot": [
+      32,
+      32
+     ]
+    }
+   },
+   "loop": true
+  },
+  {
+   "name": "Star_Twinkle",
+   "category": "09_Pickups_Sparkles",
+   "sizes": {
+    "Small": {
+     "sheet": "09_Pickups_Sparkles/Star_Twinkle/Small/Star_Twinkle_Small_sheet.png",
+     "frame_w": 16,
+     "frame_h": 16,
+     "frames": 18,
+     "pivot": [
+      8,
+      15
+     ]
+    },
+    "Large": {
+     "sheet": "09_Pickups_Sparkles/Star_Twinkle/Large/Star_Twinkle_Large_sheet.png",
+     "frame_w": 32,
+     "frame_h": 32,
+     "frames": 18,
+     "pivot": [
+      16,
+      31
+     ]
+    }
+   },
+   "loop": true
+  },
+  {
+   "name": "XP_Orb",
+   "category": "09_Pickups_Sparkles",
+   "sizes": {
+    "Small": {
+     "sheet": "09_Pickups_Sparkles/XP_Orb/Small/XP_Orb_Small_sheet.png",
+     "frame_w": 16,
+     "frame_h": 16,
+     "frames": 18,
+     "pivot": [
+      8,
+      15
+     ]
+    },
+    "Large": {
+     "sheet": "09_Pickups_Sparkles/XP_Orb/Large/XP_Orb_Large_sheet.png",
+     "frame_w": 32,
+     "frame_h": 32,
+     "frames": 18,
+     "pivot": [
+      16,
+      31
+     ]
+    }
+   },
+   "loop": true
+  },
+  {
+   "name": "Chest_Burst",
+   "category": "09_Pickups_Sparkles",
+   "sizes": {
+    "Small": {
+     "sheet": "09_Pickups_Sparkles/Chest_Burst/Small/Chest_Burst_Small_sheet.png",
+     "frame_w": 64,
+     "frame_h": 48,
+     "frames": 18,
+     "pivot": [
+      32,
+      24
+     ]
+    },
+    "Large": {
+     "sheet": "09_Pickups_Sparkles/Chest_Burst/Large/Chest_Burst_Large_sheet.png",
+     "frame_w": 128,
+     "frame_h": 96,
+     "frames": 18,
+     "pivot": [
+      64,
+      48
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Confetti_Burst",
+   "category": "09_Pickups_Sparkles",
+   "sizes": {
+    "Small": {
+     "sheet": "09_Pickups_Sparkles/Confetti_Burst/Small/Confetti_Burst_Small_sheet.png",
+     "frame_w": 64,
+     "frame_h": 64,
+     "frames": 18,
+     "pivot": [
+      32,
+      32
+     ]
+    },
+    "Large": {
+     "sheet": "09_Pickups_Sparkles/Confetti_Burst/Large/Confetti_Burst_Large_sheet.png",
+     "frame_w": 128,
+     "frame_h": 128,
+     "frames": 18,
+     "pivot": [
+      64,
+      64
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Firework",
+   "category": "09_Pickups_Sparkles",
+   "sizes": {
+    "Small": {
+     "sheet": "09_Pickups_Sparkles/Firework/Small/Firework_Small_sheet.png",
+     "frame_w": 64,
+     "frame_h": 96,
+     "frames": 18,
+     "pivot": [
+      32,
+      95
+     ]
+    },
+    "Large": {
+     "sheet": "09_Pickups_Sparkles/Firework/Large/Firework_Large_sheet.png",
+     "frame_w": 128,
+     "frame_h": 192,
+     "frames": 18,
+     "pivot": [
+      64,
+      96
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Sparkle_Trail",
+   "category": "09_Pickups_Sparkles",
+   "sizes": {
+    "Small": {
+     "sheet": "09_Pickups_Sparkles/Sparkle_Trail/Small/Sparkle_Trail_Small_sheet.png",
+     "frame_w": 32,
+     "frame_h": 16,
+     "frames": 18,
+     "pivot": [
+      16,
+      15
+     ]
+    },
+    "Large": {
+     "sheet": "09_Pickups_Sparkles/Sparkle_Trail/Large/Sparkle_Trail_Large_sheet.png",
+     "frame_w": 64,
+     "frame_h": 32,
+     "frames": 18,
+     "pivot": [
+      32,
+      31
+     ]
+    }
+   },
+   "loop": true
+  },
+  {
+   "name": "Icon_Exclamation",
+   "category": "10_UI_Symbols",
+   "sizes": {
+    "Small": {
+     "sheet": "10_UI_Symbols/Icon_Exclamation/Small/Icon_Exclamation_Small_sheet.png",
+     "frame_w": 28,
+     "frame_h": 28,
+     "frames": 10,
+     "pivot": [
+      14,
+      27
+     ]
+    },
+    "Large": {
+     "sheet": "10_UI_Symbols/Icon_Exclamation/Large/Icon_Exclamation_Large_sheet.png",
+     "frame_w": 56,
+     "frame_h": 56,
+     "frames": 10,
+     "pivot": [
+      28,
+      55
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Icon_Question",
+   "category": "10_UI_Symbols",
+   "sizes": {
+    "Small": {
+     "sheet": "10_UI_Symbols/Icon_Question/Small/Icon_Question_Small_sheet.png",
+     "frame_w": 28,
+     "frame_h": 28,
+     "frames": 10,
+     "pivot": [
+      14,
+      27
+     ]
+    },
+    "Large": {
+     "sheet": "10_UI_Symbols/Icon_Question/Large/Icon_Question_Large_sheet.png",
+     "frame_w": 56,
+     "frame_h": 56,
+     "frames": 10,
+     "pivot": [
+      28,
+      55
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Icon_Heart",
+   "category": "10_UI_Symbols",
+   "sizes": {
+    "Small": {
+     "sheet": "10_UI_Symbols/Icon_Heart/Small/Icon_Heart_Small_sheet.png",
+     "frame_w": 28,
+     "frame_h": 28,
+     "frames": 10,
+     "pivot": [
+      14,
+      27
+     ]
+    },
+    "Large": {
+     "sheet": "10_UI_Symbols/Icon_Heart/Large/Icon_Heart_Large_sheet.png",
+     "frame_w": 56,
+     "frame_h": 56,
+     "frames": 10,
+     "pivot": [
+      28,
+      28
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Icon_HeartBreak",
+   "category": "10_UI_Symbols",
+   "sizes": {
+    "Small": {
+     "sheet": "10_UI_Symbols/Icon_HeartBreak/Small/Icon_HeartBreak_Small_sheet.png",
+     "frame_w": 28,
+     "frame_h": 28,
+     "frames": 10,
+     "pivot": [
+      14,
+      27
+     ]
+    },
+    "Large": {
+     "sheet": "10_UI_Symbols/Icon_HeartBreak/Large/Icon_HeartBreak_Large_sheet.png",
+     "frame_w": 56,
+     "frame_h": 56,
+     "frames": 10,
+     "pivot": [
+      28,
+      28
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Icon_Anger",
+   "category": "10_UI_Symbols",
+   "sizes": {
+    "Small": {
+     "sheet": "10_UI_Symbols/Icon_Anger/Small/Icon_Anger_Small_sheet.png",
+     "frame_w": 28,
+     "frame_h": 28,
+     "frames": 10,
+     "pivot": [
+      14,
+      27
+     ]
+    },
+    "Large": {
+     "sheet": "10_UI_Symbols/Icon_Anger/Large/Icon_Anger_Large_sheet.png",
+     "frame_w": 56,
+     "frame_h": 56,
+     "frames": 10,
+     "pivot": [
+      28,
+      28
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Icon_Sweat",
+   "category": "10_UI_Symbols",
+   "sizes": {
+    "Small": {
+     "sheet": "10_UI_Symbols/Icon_Sweat/Small/Icon_Sweat_Small_sheet.png",
+     "frame_w": 28,
+     "frame_h": 28,
+     "frames": 10,
+     "pivot": [
+      14,
+      27
+     ]
+    },
+    "Large": {
+     "sheet": "10_UI_Symbols/Icon_Sweat/Large/Icon_Sweat_Large_sheet.png",
+     "frame_w": 56,
+     "frame_h": 56,
+     "frames": 10,
+     "pivot": [
+      28,
+      55
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Icon_Dots",
+   "category": "10_UI_Symbols",
+   "sizes": {
+    "Small": {
+     "sheet": "10_UI_Symbols/Icon_Dots/Small/Icon_Dots_Small_sheet.png",
+     "frame_w": 28,
+     "frame_h": 28,
+     "frames": 10,
+     "pivot": [
+      14,
+      14
+     ]
+    },
+    "Large": {
+     "sheet": "10_UI_Symbols/Icon_Dots/Large/Icon_Dots_Large_sheet.png",
+     "frame_w": 56,
+     "frame_h": 56,
+     "frames": 10,
+     "pivot": [
+      28,
+      28
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Icon_Music",
+   "category": "10_UI_Symbols",
+   "sizes": {
+    "Small": {
+     "sheet": "10_UI_Symbols/Icon_Music/Small/Icon_Music_Small_sheet.png",
+     "frame_w": 28,
+     "frame_h": 28,
+     "frames": 10,
+     "pivot": [
+      14,
+      27
+     ]
+    },
+    "Large": {
+     "sheet": "10_UI_Symbols/Icon_Music/Large/Icon_Music_Large_sheet.png",
+     "frame_w": 56,
+     "frame_h": 56,
+     "frames": 10,
+     "pivot": [
+      28,
+      28
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Icon_Idea",
+   "category": "10_UI_Symbols",
+   "sizes": {
+    "Small": {
+     "sheet": "10_UI_Symbols/Icon_Idea/Small/Icon_Idea_Small_sheet.png",
+     "frame_w": 28,
+     "frame_h": 28,
+     "frames": 10,
+     "pivot": [
+      14,
+      27
+     ]
+    },
+    "Large": {
+     "sheet": "10_UI_Symbols/Icon_Idea/Large/Icon_Idea_Large_sheet.png",
+     "frame_w": 56,
+     "frame_h": 56,
+     "frames": 10,
+     "pivot": [
+      28,
+      28
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Icon_Skull",
+   "category": "10_UI_Symbols",
+   "sizes": {
+    "Small": {
+     "sheet": "10_UI_Symbols/Icon_Skull/Small/Icon_Skull_Small_sheet.png",
+     "frame_w": 28,
+     "frame_h": 28,
+     "frames": 10,
+     "pivot": [
+      14,
+      27
+     ]
+    },
+    "Large": {
+     "sheet": "10_UI_Symbols/Icon_Skull/Large/Icon_Skull_Large_sheet.png",
+     "frame_w": 56,
+     "frame_h": 56,
+     "frames": 10,
+     "pivot": [
+      28,
+      28
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Icon_Check",
+   "category": "10_UI_Symbols",
+   "sizes": {
+    "Small": {
+     "sheet": "10_UI_Symbols/Icon_Check/Small/Icon_Check_Small_sheet.png",
+     "frame_w": 28,
+     "frame_h": 28,
+     "frames": 10,
+     "pivot": [
+      14,
+      27
+     ]
+    },
+    "Large": {
+     "sheet": "10_UI_Symbols/Icon_Check/Large/Icon_Check_Large_sheet.png",
+     "frame_w": 56,
+     "frame_h": 56,
+     "frames": 10,
+     "pivot": [
+      28,
+      28
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Icon_Cross",
+   "category": "10_UI_Symbols",
+   "sizes": {
+    "Small": {
+     "sheet": "10_UI_Symbols/Icon_Cross/Small/Icon_Cross_Small_sheet.png",
+     "frame_w": 28,
+     "frame_h": 28,
+     "frames": 10,
+     "pivot": [
+      14,
+      27
+     ]
+    },
+    "Large": {
+     "sheet": "10_UI_Symbols/Icon_Cross/Large/Icon_Cross_Large_sheet.png",
+     "frame_w": 56,
+     "frame_h": 56,
+     "frames": 10,
+     "pivot": [
+      28,
+      28
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Text_LevelUp",
+   "category": "10_UI_Symbols",
+   "sizes": {
+    "Small": {
+     "sheet": "10_UI_Symbols/Text_LevelUp/Small/Text_LevelUp_Small_sheet.png",
+     "frame_w": 128,
+     "frame_h": 24,
+     "frames": 14,
+     "pivot": [
+      64,
+      23
+     ]
+    },
+    "Large": {
+     "sheet": "10_UI_Symbols/Text_LevelUp/Large/Text_LevelUp_Large_sheet.png",
+     "frame_w": 256,
+     "frame_h": 48,
+     "frames": 14,
+     "pivot": [
+      128,
+      24
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Text_Critical",
+   "category": "10_UI_Symbols",
+   "sizes": {
+    "Small": {
+     "sheet": "10_UI_Symbols/Text_Critical/Small/Text_Critical_Small_sheet.png",
+     "frame_w": 128,
+     "frame_h": 24,
+     "frames": 14,
+     "pivot": [
+      64,
+      23
+     ]
+    },
+    "Large": {
+     "sheet": "10_UI_Symbols/Text_Critical/Large/Text_Critical_Large_sheet.png",
+     "frame_w": 256,
+     "frame_h": 48,
+     "frames": 14,
+     "pivot": [
+      128,
+      24
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Text_Miss",
+   "category": "10_UI_Symbols",
+   "sizes": {
+    "Small": {
+     "sheet": "10_UI_Symbols/Text_Miss/Small/Text_Miss_Small_sheet.png",
+     "frame_w": 72,
+     "frame_h": 24,
+     "frames": 14,
+     "pivot": [
+      36,
+      23
+     ]
+    },
+    "Large": {
+     "sheet": "10_UI_Symbols/Text_Miss/Large/Text_Miss_Large_sheet.png",
+     "frame_w": 144,
+     "frame_h": 48,
+     "frames": 14,
+     "pivot": [
+      72,
+      24
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Text_KO",
+   "category": "10_UI_Symbols",
+   "sizes": {
+    "Small": {
+     "sheet": "10_UI_Symbols/Text_KO/Small/Text_KO_Small_sheet.png",
+     "frame_w": 56,
+     "frame_h": 24,
+     "frames": 14,
+     "pivot": [
+      28,
+      23
+     ]
+    },
+    "Large": {
+     "sheet": "10_UI_Symbols/Text_KO/Large/Text_KO_Large_sheet.png",
+     "frame_w": 112,
+     "frame_h": 48,
+     "frames": 14,
+     "pivot": [
+      56,
+      24
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Text_Victory",
+   "category": "10_UI_Symbols",
+   "sizes": {
+    "Small": {
+     "sheet": "10_UI_Symbols/Text_Victory/Small/Text_Victory_Small_sheet.png",
+     "frame_w": 120,
+     "frame_h": 24,
+     "frames": 14,
+     "pivot": [
+      60,
+      23
+     ]
+    },
+    "Large": {
+     "sheet": "10_UI_Symbols/Text_Victory/Large/Text_Victory_Large_sheet.png",
+     "frame_w": 240,
+     "frame_h": 48,
+     "frames": 14,
+     "pivot": [
+      120,
+      24
+     ]
+    }
+   },
+   "loop": false
+  },
+  {
+   "name": "Text_GameOver",
+   "category": "10_UI_Symbols",
+   "sizes": {
+    "Small": {
+     "sheet": "10_UI_Symbols/Text_GameOver/Small/Text_GameOver_Small_sheet.png",
+     "frame_w": 136,
+     "frame_h": 24,
+     "frames": 14,
+     "pivot": [
+      68,
+      23
+     ]
+    },
+    "Large": {
+     "sheet": "10_UI_Symbols/Text_GameOver/Large/Text_GameOver_Large_sheet.png",
+     "frame_w": 272,
+     "frame_h": 48,
+     "frames": 14,
+     "pivot": [
+      136,
+      24
+     ]
+    }
+   },
+   "loop": false
+  }
+ ]
+}

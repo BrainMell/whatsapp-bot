@@ -1,0 +1,2662 @@
+{
+  "schema": "pvfx.export-manifest/0.2-dev",
+  "profile": "profile.free-foundry-grid-0.1",
+  "effect_id": "effect.quality-choir-moths",
+  "renderer": "pvfx-render/0.17-dev",
+  "source_hash": "sha256:0468bd28503e86671b472f5a4b356f9cad0dd031cd1f81d49f9b6f0e9fc44ee8",
+  "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+  "animation_hash": "sha256:41a2bdd4fb4852442f2373012c7c8482a8152b47ecb63395e6bd51067605d31f",
+  "loop_mode": "loop",
+  "source_size": [
+    96,
+    96
+  ],
+  "pivot": [
+    48,
+    48
+  ],
+  "frames": [
+    {
+      "frame": 0,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        21,
+        24,
+        80,
+        78
+      ],
+      "trim_bounds": [
+        21,
+        24,
+        80,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        27,
+        24
+      ],
+      "pixel_hash": "sha256:46d60e5b41b0775026408c4dbd143710e5c1095d4823a17f29a07ed02616b16b",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 0,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 1,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        22,
+        77,
+        76
+      ],
+      "trim_bounds": [
+        20,
+        22,
+        77,
+        76
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        28,
+        26
+      ],
+      "pixel_hash": "sha256:5c08cc64b782b3fd74c1a2b51a64f3dbbbca4524df77c0c4ebdfc9af521a31c0",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 0,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 2,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        19,
+        22,
+        74,
+        73
+      ],
+      "trim_bounds": [
+        19,
+        22,
+        74,
+        73
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        29,
+        26
+      ],
+      "pixel_hash": "sha256:36f920b56fa8b2193dac6fe14e0560346d76e4fba871fc05ef928f41fb12062a",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 0,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 3,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        17,
+        22,
+        74,
+        71
+      ],
+      "trim_bounds": [
+        17,
+        22,
+        74,
+        71
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        31,
+        26
+      ],
+      "pixel_hash": "sha256:994e19af6f07cf1499fb1899b8f3b79848f5ebdc977655a0ac119140b877f14f",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 0,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 4,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        16,
+        22,
+        74,
+        71
+      ],
+      "trim_bounds": [
+        16,
+        22,
+        74,
+        71
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        32,
+        26
+      ],
+      "pixel_hash": "sha256:9c4c4999817ad14c1ec3353d5699607f3ca4c62f673ab10974cd6da203142860",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 0,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 5,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        15,
+        24,
+        74,
+        70
+      ],
+      "trim_bounds": [
+        15,
+        24,
+        74,
+        70
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        33,
+        24
+      ],
+      "pixel_hash": "sha256:67f6c70097e92363eb3f5ee6df3395f36bde6a9e0e4b78dfe8f78483fa63f632",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 96,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 6,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        14,
+        26,
+        74,
+        71
+      ],
+      "trim_bounds": [
+        14,
+        26,
+        74,
+        71
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        34,
+        22
+      ],
+      "pixel_hash": "sha256:895cfe72df61fd3bb8d0d7ff5f7bb3dd4c8567a4e293d454a9074afe102deb86",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 96,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 7,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        13,
+        29,
+        73,
+        71
+      ],
+      "trim_bounds": [
+        13,
+        29,
+        73,
+        71
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        35,
+        19
+      ],
+      "pixel_hash": "sha256:5c07157e221902bfbbdc66a1ca45d430095195960e67b77201efdcc1b0174a45",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 96,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 8,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        13,
+        30,
+        72,
+        70
+      ],
+      "trim_bounds": [
+        13,
+        30,
+        72,
+        70
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        35,
+        18
+      ],
+      "pixel_hash": "sha256:6f52c150da197212d5839c84bd2f3139b4106b269cfe794ae8fa48176a37656b",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 96,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 9,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        14,
+        30,
+        72,
+        69
+      ],
+      "trim_bounds": [
+        14,
+        30,
+        72,
+        69
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        34,
+        18
+      ],
+      "pixel_hash": "sha256:22b66584fba457f553767517c38e641f734a54cc17b4505f42d8016cdbb3ee18",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 96,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 10,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        16,
+        29,
+        73,
+        67
+      ],
+      "trim_bounds": [
+        16,
+        29,
+        73,
+        67
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        32,
+        19
+      ],
+      "pixel_hash": "sha256:366bc1bebe4d488a5ff4d8f749094d6d3292858ed368d5a9acf94a0b96a1339f",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 192,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 11,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        19,
+        28,
+        74,
+        64
+      ],
+      "trim_bounds": [
+        19,
+        28,
+        74,
+        64
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        29,
+        20
+      ],
+      "pixel_hash": "sha256:71f34dc3fff31d923f372c63601883c0c176197fd0790c5340fc06b615982795",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 192,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 12,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        21,
+        28,
+        75,
+        64
+      ],
+      "trim_bounds": [
+        21,
+        28,
+        75,
+        64
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        27,
+        20
+      ],
+      "pixel_hash": "sha256:0c1148911df3456789e38ae66811214bd7b71c11e56ac949b8041cea63989a8b",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 192,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 13,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        21,
+        28,
+        76,
+        67
+      ],
+      "trim_bounds": [
+        21,
+        28,
+        76,
+        67
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        27,
+        20
+      ],
+      "pixel_hash": "sha256:3c1a6c7431845eed69daace227b45dbc11141acbdfdbec8144f0737ea07c06c9",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 192,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 14,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        21,
+        29,
+        77,
+        69
+      ],
+      "trim_bounds": [
+        21,
+        29,
+        77,
+        69
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        27,
+        19
+      ],
+      "pixel_hash": "sha256:6068f72624d2902f4686942bea4eb81ad509ed8c1f4541a7e81380e1be5664e4",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 192,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 15,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        21,
+        29,
+        78,
+        71
+      ],
+      "trim_bounds": [
+        21,
+        29,
+        78,
+        71
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        27,
+        19
+      ],
+      "pixel_hash": "sha256:a42620dba518b6a67fa0e00bf9610fcfd787ea3433fa8922a3f75cb273d01fbe",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 288,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 16,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        22,
+        26,
+        79,
+        72
+      ],
+      "trim_bounds": [
+        22,
+        26,
+        79,
+        72
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        26,
+        22
+      ],
+      "pixel_hash": "sha256:f7d6945cd0c7e9d6575b08a502edb53b2182c8221ae2afd85d1a6589bc4ab3f3",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 288,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 17,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        22,
+        23,
+        80,
+        72
+      ],
+      "trim_bounds": [
+        22,
+        23,
+        80,
+        72
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        26,
+        25
+      ],
+      "pixel_hash": "sha256:3ec7ab0bdd71b7b1a9ac22cf1f3aa4aa0e27c0513be7a396692f248b266f1b0a",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 288,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 18,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        23,
+        21,
+        80,
+        72
+      ],
+      "trim_bounds": [
+        23,
+        21,
+        80,
+        72
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        25,
+        27
+      ],
+      "pixel_hash": "sha256:4b96c8471be06f0fa8cd17ed39824f47b0328bdfba37b87d1bffb814ea9e0af2",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 288,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 19,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        23,
+        18,
+        79,
+        71
+      ],
+      "trim_bounds": [
+        23,
+        18,
+        79,
+        71
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        25,
+        30
+      ],
+      "pixel_hash": "sha256:dec4048724dd31c023b73286ab2bb58e7bb3b83d442de788e783ac4e4a36f481",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 288,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 20,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        22,
+        17,
+        77,
+        70
+      ],
+      "trim_bounds": [
+        22,
+        17,
+        77,
+        70
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        26,
+        31
+      ],
+      "pixel_hash": "sha256:73bf75ff401a2e512f0dab6e3325b7fd3e687877c12102d54d0c4a6e143ee493",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 384,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 21,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        21,
+        16,
+        75,
+        69
+      ],
+      "trim_bounds": [
+        21,
+        16,
+        75,
+        69
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        27,
+        32
+      ],
+      "pixel_hash": "sha256:694a64360d8e4c011b39dde1468303bdf49f5ebd7c44b9a515a7469abb50b531",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 384,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 22,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        16,
+        72,
+        72
+      ],
+      "trim_bounds": [
+        20,
+        16,
+        72,
+        72
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        28,
+        32
+      ],
+      "pixel_hash": "sha256:c42b7ae50584a5916ac4d263ca695c8687041c269a5e46834bc0c1bd3f6a7221",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 384,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 23,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        19,
+        16,
+        72,
+        75
+      ],
+      "trim_bounds": [
+        19,
+        16,
+        72,
+        75
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        29,
+        32
+      ],
+      "pixel_hash": "sha256:dba21914715feb682d3712e166b65594d78103527975b93bd7adfc716c7d551f",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 384,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 24,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        18,
+        17,
+        72,
+        77
+      ],
+      "trim_bounds": [
+        18,
+        17,
+        72,
+        77
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        30,
+        31
+      ],
+      "pixel_hash": "sha256:28fade6169b3f2ab1aa5048f7a2c1b9bbdcf9409e6783c28f1f81b21f6578478",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 384,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 25,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        17,
+        19,
+        73,
+        79
+      ],
+      "trim_bounds": [
+        17,
+        19,
+        73,
+        79
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        31,
+        29
+      ],
+      "pixel_hash": "sha256:5441b663d9069261f94b4cc72e351f6bf26c151b448d69f2d46d28fc78e9d9df",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 480,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 26,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        15,
+        21,
+        74,
+        80
+      ],
+      "trim_bounds": [
+        15,
+        21,
+        74,
+        80
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        33,
+        27
+      ],
+      "pixel_hash": "sha256:f66d583bcd6a67c8273df39b45b820d64387813e838441a72b3c5ec9fe68eaff",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 480,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 27,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        15,
+        23,
+        74,
+        80
+      ],
+      "trim_bounds": [
+        15,
+        23,
+        74,
+        80
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        33,
+        25
+      ],
+      "pixel_hash": "sha256:4625cc1827bd989d15b76d6810c812fcc2801d9ba3818065f2b9e23fae2860da",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 480,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 28,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        15,
+        24,
+        75,
+        80
+      ],
+      "trim_bounds": [
+        15,
+        24,
+        75,
+        80
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        33,
+        24
+      ],
+      "pixel_hash": "sha256:c809df3d96535111aa85eab6c490539eafe01bf37aed50a83dab5577cd729092",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 480,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 29,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        16,
+        24,
+        76,
+        79
+      ],
+      "trim_bounds": [
+        16,
+        24,
+        76,
+        79
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        32,
+        24
+      ],
+      "pixel_hash": "sha256:6befddb5c6e5389f1331a4701589e7250f8ffde4996e7fad0b31c09f9db5a01b",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 480,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 30,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        18,
+        23,
+        77,
+        77
+      ],
+      "trim_bounds": [
+        18,
+        23,
+        77,
+        77
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        30,
+        25
+      ],
+      "pixel_hash": "sha256:ebd24514d7c8abf07191be2874322dd5e3f18490854fb7011a6c189ebca76316",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 576,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 31,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        21,
+        22,
+        78,
+        75
+      ],
+      "trim_bounds": [
+        21,
+        22,
+        78,
+        75
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        27,
+        26
+      ],
+      "pixel_hash": "sha256:7ee363c65490a2fc66141e0c6b8351f875981fd538d75d1aa016c330485f676e",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 576,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 32,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        23,
+        22,
+        79,
+        72
+      ],
+      "trim_bounds": [
+        23,
+        22,
+        79,
+        72
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        25,
+        26
+      ],
+      "pixel_hash": "sha256:cc53e8b91d4c4ce8e11320cdf9b861cb4bd466b7532528a4f20dc3104b79c26e",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 576,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 33,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        23,
+        22,
+        80,
+        71
+      ],
+      "trim_bounds": [
+        23,
+        22,
+        80,
+        71
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        25,
+        26
+      ],
+      "pixel_hash": "sha256:f14f67e71b7e182878f13d1b2e1a008a2703320d21eb781ec8fc5d1ca3acf1c7",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 576,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 34,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        23,
+        23,
+        81,
+        71
+      ],
+      "trim_bounds": [
+        23,
+        23,
+        81,
+        71
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        25,
+        25
+      ],
+      "pixel_hash": "sha256:1596188705dd734ef77555af03bf091bf36c135e11d3c34987511477cba437e4",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 576,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 35,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        23,
+        25,
+        83,
+        71
+      ],
+      "trim_bounds": [
+        23,
+        25,
+        83,
+        71
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        25,
+        23
+      ],
+      "pixel_hash": "sha256:f83a0961a5746713a8b53ab3f402df2afdcf4045dd10060ee55fa4b1dcfc6bb1",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 672,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 36,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        24,
+        28,
+        84,
+        71
+      ],
+      "trim_bounds": [
+        24,
+        28,
+        84,
+        71
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        24,
+        20
+      ],
+      "pixel_hash": "sha256:6648f3827784050dc7ff8f0e18a3fab85a614dcf9ee8c8c1e892bef0310e318f",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 672,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 37,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        25,
+        30,
+        84,
+        71
+      ],
+      "trim_bounds": [
+        25,
+        30,
+        84,
+        71
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        23,
+        18
+      ],
+      "pixel_hash": "sha256:c8d7952bc9051a974e05442c195b8716d130a86a9f4b7425083d0a1e542f7890",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 672,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 38,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        25,
+        30,
+        84,
+        70
+      ],
+      "trim_bounds": [
+        25,
+        30,
+        84,
+        70
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        23,
+        18
+      ],
+      "pixel_hash": "sha256:6c87285e639fbf7089a841408bfe1ba70f14d2ab03db7b19274259cc6fa5a87d",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 672,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 39,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        24,
+        30,
+        82,
+        68
+      ],
+      "trim_bounds": [
+        24,
+        30,
+        82,
+        68
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        24,
+        18
+      ],
+      "pixel_hash": "sha256:891aa5e039108078dc22ceedd0636d8c47966edb01fe8a4ae1158f046e7494c0",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 672,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 40,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        24,
+        29,
+        80,
+        66
+      ],
+      "trim_bounds": [
+        24,
+        29,
+        80,
+        66
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        24,
+        19
+      ],
+      "pixel_hash": "sha256:21d0502a4d8b263ab722d14491cf9c0ac177967721dd078ad718b30d5f79a041",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 768,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 41,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        23,
+        28,
+        77,
+        63
+      ],
+      "trim_bounds": [
+        23,
+        28,
+        77,
+        63
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        25,
+        20
+      ],
+      "pixel_hash": "sha256:ed2e8b72ad2241a47922cf628eed13bcd24415d25ecb740d55f8929e50c6fbe7",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 768,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 42,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        22,
+        28,
+        76,
+        66
+      ],
+      "trim_bounds": [
+        22,
+        28,
+        76,
+        66
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        26,
+        20
+      ],
+      "pixel_hash": "sha256:bec70227178e4a61aac6cab3766fb7f8d6b0b5b1c9b835df8f9d6964180820e0",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 768,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 43,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        21,
+        28,
+        76,
+        68
+      ],
+      "trim_bounds": [
+        21,
+        28,
+        76,
+        68
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        27,
+        20
+      ],
+      "pixel_hash": "sha256:b0b9b8553b6f0143dd706fd9a6a82dfc530b0e616be8a5bf42a4c4392600bccf",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 768,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 44,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        19,
+        30,
+        76,
+        70
+      ],
+      "trim_bounds": [
+        19,
+        30,
+        76,
+        70
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        29,
+        18
+      ],
+      "pixel_hash": "sha256:f07468c11831ada7a019ec9031a2e3f27719554e649f38f670b60e764da71811",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 768,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 45,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        18,
+        27,
+        76,
+        71
+      ],
+      "trim_bounds": [
+        18,
+        27,
+        76,
+        71
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        30,
+        21
+      ],
+      "pixel_hash": "sha256:a36732cbeb1b7b9d92a44c496808988164c6e4876d281d6ac35c956737ec5a3e",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 864,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 46,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        17,
+        24,
+        75,
+        72
+      ],
+      "trim_bounds": [
+        17,
+        24,
+        75,
+        72
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        31,
+        24
+      ],
+      "pixel_hash": "sha256:5c73e55ac025ca7f7f9346365ef212c0797223ccefbbd2566796b73f8e76c241",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 864,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 47,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        17,
+        22,
+        74,
+        72
+      ],
+      "trim_bounds": [
+        17,
+        22,
+        74,
+        72
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        31,
+        26
+      ],
+      "pixel_hash": "sha256:3580990b24f866dd7d9c825d2fbb5eb96183e9502c3278bb5c943ec660fa1405",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 864,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 48,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        17,
+        19,
+        74,
+        72
+      ],
+      "trim_bounds": [
+        17,
+        19,
+        74,
+        72
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        31,
+        29
+      ],
+      "pixel_hash": "sha256:487d1836155beae2f45d90bcd2e1ba83c45f5c86dfc42a8660e33b01811406eb",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 864,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 49,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        19,
+        18,
+        74,
+        70
+      ],
+      "trim_bounds": [
+        19,
+        18,
+        74,
+        70
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        29,
+        30
+      ],
+      "pixel_hash": "sha256:62b82c1bc421e9eebf7d3e123b1aec33e35800da138ca99328af929ec308e12c",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 864,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 50,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        21,
+        16,
+        75,
+        69
+      ],
+      "trim_bounds": [
+        21,
+        16,
+        75,
+        69
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        27,
+        32
+      ],
+      "pixel_hash": "sha256:6250a4c66c01aebff5884993f0e5830acc87f1ec9242757241a63e0e6e89b15b",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 960,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 51,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        24,
+        16,
+        76,
+        71
+      ],
+      "trim_bounds": [
+        24,
+        16,
+        76,
+        71
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        24,
+        32
+      ],
+      "pixel_hash": "sha256:fd3a257b2bc68153b7b03e8a20299ea4ba773f343637a2355552614a75fa5ef0",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 960,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 52,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        25,
+        16,
+        77,
+        74
+      ],
+      "trim_bounds": [
+        25,
+        16,
+        77,
+        74
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        23,
+        32
+      ],
+      "pixel_hash": "sha256:c12f148224b83c3744a0edfbd1866a12d54e183a776936d03334f8fef423b1d4",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 960,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 53,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        25,
+        16,
+        78,
+        76
+      ],
+      "trim_bounds": [
+        25,
+        16,
+        78,
+        76
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        23,
+        32
+      ],
+      "pixel_hash": "sha256:f6c289cb8a44243a8f0660970c2a51ebaf64543defcc62cdc745b008b2ec19ec",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 960,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 54,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        25,
+        18,
+        80,
+        78
+      ],
+      "trim_bounds": [
+        25,
+        18,
+        80,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        23,
+        30
+      ],
+      "pixel_hash": "sha256:1061adf19d3c95aa2edc36650d5fe1ccb7d2ad92466087a3ace2719791830c4e",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 960,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 55,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        24,
+        20,
+        81,
+        80
+      ],
+      "trim_bounds": [
+        24,
+        20,
+        81,
+        80
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        24,
+        28
+      ],
+      "pixel_hash": "sha256:2ecbedc04cf8faf9bfd2332372377a2f578fb4c34112c1eda89dde9f8d7779ab",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 1056,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 56,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        23,
+        22,
+        82,
+        80
+      ],
+      "trim_bounds": [
+        23,
+        22,
+        82,
+        80
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        25,
+        26
+      ],
+      "pixel_hash": "sha256:3a0455fc5e349e92bee10da1687f62a5e8f18a76a6e02ebcb57099487af404b0",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 1056,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 57,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        23,
+        24,
+        82,
+        80
+      ],
+      "trim_bounds": [
+        23,
+        24,
+        82,
+        80
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        25,
+        24
+      ],
+      "pixel_hash": "sha256:877ba61959c9b1f830f5b79a70e4860c9e4876cde96b9a28b8dff670314d2d33",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 1056,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 58,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        21,
+        24,
+        81,
+        79
+      ],
+      "trim_bounds": [
+        21,
+        24,
+        81,
+        79
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        27,
+        24
+      ],
+      "pixel_hash": "sha256:45de84d0df631c73d8766e83864a4f38a6c47d71620834aad3c7d595f62085d3",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 1056,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 59,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        21,
+        24,
+        80,
+        78
+      ],
+      "trim_bounds": [
+        21,
+        24,
+        80,
+        78
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "trimmed_pivot": [
+        27,
+        24
+      ],
+      "pixel_hash": "sha256:46d60e5b41b0775026408c4dbd143710e5c1095d4823a17f29a07ed02616b16b",
+      "phase": {
+        "id": "phase.choir",
+        "label": "choir"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 1056,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    }
+  ],
+  "markers": [],
+  "corrections": []
+}

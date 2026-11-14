@@ -1,0 +1,3572 @@
+{
+  "description": "Forty-four deterministic 96×96 pixel-art VFX for combat, elements, defense, support, status, portals, weather, movement, water interaction, sustained beams, environmental gameplay, impossible material transformations, telekinetic interaction, signal placement and collection, and sound-pressure feedback.",
+  "effects": [
+    {
+      "animation_hash": "sha256:217467a898570834d40624ca78a6050259e5ed4805ffc40c84bc10d7576de04a",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/electric-impact/grid/manifest.json",
+          "manifest_sha256": "sha256:b4a70e691c6acdf4d1077ff7d5e3861d686252efeadaf20470627318fd0be3dc",
+          "sheet": "effects/electric-impact/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:738b31bb0237431fa7fc70adb2c1d8dfcb5d39da7a5a19a0fbedc066f51aff8f"
+        },
+        "packed": {
+          "manifest": "effects/electric-impact/packed/manifest.json",
+          "manifest_sha256": "sha256:7a26da5500c1133e13e4bd4d39f8bdb99726e7f3b8e56b3d8a06c71ed3d6400a",
+          "sheet": "effects/electric-impact/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:f825515028296914dd6dfb048bea17e81e0faa5e6dd6d677aba209ce0e934af8"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:25e8b31038032d37c0b7b46b5f8898253e7e8cb5ce956480d582f3b09ec87c78",
+        "sha256:4af9ea2f1308f7c730ec2896228ebd321c4bfa23c3e0f2ef9aa6dd715d2885c7",
+        "sha256:1cb1d0dd99e0c24df9fcc0549718de23675eab0068a38012efc34a302c4db3ab",
+        "sha256:f44d72ceecb9818bca98063aba1daaae996653a118f49c534bcfc47afd1b07b8",
+        "sha256:fb391b72edbf3ae352909fd062f55a53c8a1262f913ff9895e334963989eaf46",
+        "sha256:00cab0f2e3223217233fb7de562ef621357d8c74c3a188f18e2c206a3aae9523",
+        "sha256:0cd2d82e4fa4540a28ec3b9f70366c538ae9ab78388b608b4d24a17b159a5404",
+        "sha256:6bf3c0aae4b0815493bdd37428c992d4d21a3e74f5bc0335fb5c8798d1f92447",
+        "sha256:b7506c69fe758959ac7fb906f1876d50fb7eefed6db72319fbdb747c22707cdf",
+        "sha256:18f08da35b6848833388fec3f65ea35e68ea02bdd6233e4ca888308e70f3fdc2",
+        "sha256:2df6e640d7517640af2852df0642b1d760f9fb18b0ac27039ec72e2d5139186a",
+        "sha256:609b3a06a573fb57c9597c1816dfa832af3b4932772aa25dcd1e87c54f2be159",
+        "sha256:98b5ccdc6cb4a721a0eb3589372b6015bbf489e3a9f5903e83eb69830ee8ff77",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75"
+      ],
+      "category": "combat",
+      "dependency_hash": "sha256:0467dcfde949d4b32785816d6fd27132120ff54595cf1fde1645caf2c159d364",
+      "display_name": "Electric Impact",
+      "effect_id": "effect.quality-electric-impact",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 14,
+      "id": "electric-impact",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 0,
+          "id": "marker.contact",
+          "name": "contact"
+        },
+        {
+          "frame": 1,
+          "id": "marker.peak",
+          "name": "peak"
+        }
+      ],
+      "pivot": [
+        48,
+        54
+      ],
+      "source_hash": "sha256:697fb75e32d9a22199054ffd2854fc97878eede2f6b0aaa93242242d21d312db",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "impact",
+        "electricity",
+        "hit",
+        "combat"
+      ],
+      "use_case": "A flagship contact hit with lightning, shock rings, smoke, sparks, and afterglow."
+    },
+    {
+      "animation_hash": "sha256:c2584f985ee2d47bc31f73b3fbde58bc5926214b69b02e19cce1d7717ff2ef40",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/crescent-slash/grid/manifest.json",
+          "manifest_sha256": "sha256:c3df7218139ee7219ef2847810e4881a441dcb6c0c521fbfc1a66e00224b56c9",
+          "sheet": "effects/crescent-slash/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:5c3ca52cf465a7d28ed89cb78cc01074754568ad72516ae5cfb59fe70e2b423e"
+        },
+        "packed": {
+          "manifest": "effects/crescent-slash/packed/manifest.json",
+          "manifest_sha256": "sha256:d79a5faa23525032c760a906ef8d74aa49fbd4006750535ce3426ed5566f7e4d",
+          "sheet": "effects/crescent-slash/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:35b8a73c45a66c332f78b1fac3635b1b0b3876bfb440a4885d6d31e276a8a10a"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:f89f15d1d59c6d2ef44190063370ac72266ba65c0f6866b4a3e95737d14bb434",
+        "sha256:6d3c154c1f6d514111cb4be6931f024ab887babb341de5c233a143f605eb08fb",
+        "sha256:03604519b249da541334aab2b9c26cb04c2d962830e324bceb89e41859c44bf3",
+        "sha256:376b6e305d52721e68edb1cf5d981daf6388cccf2690cd182aa7db170ccf209a",
+        "sha256:28395eddb900703290fb34ddd5db71372870be14486702a40e7f7a767492af4a",
+        "sha256:d9b8b3240428c21d28f9232ad14d63776910b77d05f3ee6bcad877922ecef913",
+        "sha256:08d00a32130c28ffc76099780febae8f6a446570aae84a67d2e5d4bb80252350",
+        "sha256:d35c981b00cc64aeb8125a71d6d741483e562cf7a7f36ae04bcc342bd2e8b260",
+        "sha256:83440191465fd395ffebbbe6c26df6b7267379fe36d03d1912d87863007aec01",
+        "sha256:8f79d323a259f5366d9b6f056b2014a9267758d5f6ce38a524f0e8f298a79d5b"
+      ],
+      "category": "combat",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Crescent Slash",
+      "effect_id": "effect.quality-crescent-slash",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 10,
+      "id": "crescent-slash",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 0,
+          "id": "marker.contact",
+          "name": "contact"
+        },
+        {
+          "frame": 2,
+          "id": "marker.peak",
+          "name": "peak"
+        }
+      ],
+      "pivot": [
+        48,
+        50
+      ],
+      "source_hash": "sha256:ce8b9562c14f236f120c38ed0a9722efb5358fd9ff384373596f4ad3954380d8",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "slash",
+        "melee",
+        "sword",
+        "combat"
+      ],
+      "use_case": "A fast melee arc with a sharp leading edge, directional sparks, and fractured decay."
+    },
+    {
+      "animation_hash": "sha256:d2790638f0f40c564f6e8bb9196b581d8a6434c47992328ce1591b607f9f2a71",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/magical-projectile/grid/manifest.json",
+          "manifest_sha256": "sha256:586ec9dec73d62b2d97aa234b47225040d2c4b9d507c170c0ddb5b53494f30be",
+          "sheet": "effects/magical-projectile/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:0ecfc48dd7f1ea9d70b51f254818979e9f1ca35d2b8ee9c3431c0f9022dd5c7b"
+        },
+        "packed": {
+          "manifest": "effects/magical-projectile/packed/manifest.json",
+          "manifest_sha256": "sha256:a0b884bbb8bebf4b18eeb58da311f37582bd1305317fc6d3ab8fcb1b4912f489",
+          "sheet": "effects/magical-projectile/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:dfde9fd9a490793798bc539b874cdb25d580717bb11cb5938c71a7c323b63bc1"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:62169d9d682bf48d116436317bb5e4d3dc4f43310a36fa02960b00600cf2bda6",
+        "sha256:54495a450d13a3345d6296e3253b088eaa6277b14c46d35c68a3b7fad49e1b27",
+        "sha256:8488039bc8ef8301833f0788c4b29b71cafa548517a68b9dacde37479a44bbec",
+        "sha256:f4b9c1ca1694dd6521f44dce960a83f603b1c8e7a91047e24d31dad8cf111af1",
+        "sha256:d8d34ebdc17350ce7f01257ee0f28cce68f8d40629f3e210a846fc027c64905a",
+        "sha256:9df69e2c0b3f51b119478bb4d8835cd9651378437217d4839b12d8b6b2e8efa6",
+        "sha256:76569f6ad6137d0d40c3837b9213f9ee005907d4ab2c3a535a927f76189384d1",
+        "sha256:2e595cd17d3b34742f19886bc5245bda0f8b30bc46032c24f5c6ed2dfb9869f8",
+        "sha256:d91fe9f19af7914da1cce6887b64e7a4eb95a97ddf97d07d198fef37c55e7805",
+        "sha256:9cc11265e0cea6b0c9ba92a78cb5dc4715508751b43e06e3f4f6be6663f1e0fd",
+        "sha256:db245774326fa8fc39d7162f6c36c00fe7071ff4a417cdd384edee43942b448b",
+        "sha256:ac970648c53af82949342c5001893a62032826acbf0cf3cbe8aff9072788abe4"
+      ],
+      "category": "combat",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Magical Projectile",
+      "effect_id": "effect.quality-magical-projectile",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 12,
+      "id": "magical-projectile",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 2,
+          "id": "marker.launch",
+          "name": "launch"
+        },
+        {
+          "frame": 7,
+          "id": "marker.contact",
+          "name": "contact"
+        },
+        {
+          "frame": 8,
+          "id": "marker.peak",
+          "name": "peak"
+        }
+      ],
+      "pivot": [
+        48,
+        50
+      ],
+      "source_hash": "sha256:bd59dc7856e4cff8285c926ff6d3620a1f5320fb3a35f21f4663686a552970cd",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "projectile",
+        "magic",
+        "ranged",
+        "trail"
+      ],
+      "use_case": "A complete charge, travel, contact, impact, and decay lifecycle for a ranged spell."
+    },
+    {
+      "animation_hash": "sha256:563276cf6ce006acf892226b5ae3275c1053e7315e75f77b011aa4f1c58c460d",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/warm-explosion/grid/manifest.json",
+          "manifest_sha256": "sha256:743f915dba6662c5acefb523021b2ea94677229c98f0fc56fcf939062bb833f3",
+          "sheet": "effects/warm-explosion/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:dee1c564a92054f8765353900a16ba3fe92ea55eb0c8c411331e0152d097e6dc"
+        },
+        "packed": {
+          "manifest": "effects/warm-explosion/packed/manifest.json",
+          "manifest_sha256": "sha256:c930d6a61a6300aa64d3c1a3269e5cae520111435c93a8a670ec467eb1004f76",
+          "sheet": "effects/warm-explosion/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:dbf534bdadf320d2695a43e45b393093fc05f05b87d365bf0f22dd244aca7bf1"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:f990fcba0519bb3dfe39ad42ba12cddd140908096740dbc44850d739d8a03d2b",
+        "sha256:da04660841e9e14f67123aa1eb6446edc3bcb2197ecece24f446069b2f1f6158",
+        "sha256:5dcb93c2766a91158e9bccca0e7512fb7d0191fa34e7b38ab613b5e22e09ecdf",
+        "sha256:926cd893e9ad33c3a3f07ff4600ff2e2db68cbfa533b755c56b15c498a01bbe6",
+        "sha256:fa7159c1dbccaa85e176e08f61b77f1e5493f46b4a96a617e76bd4ebacd0915c",
+        "sha256:c6fce2abc6ea0e46a1ab22ac474ddc1445c983b5afd9b62d049f76eb101c934b",
+        "sha256:33897f47f760d4f38ead6a75a2d2a24542304dd3568bd134bc32261a28037619",
+        "sha256:d77ff0f2f346aac97eba708e908bd05c540b5688ed30ad2d14dda22e0c2d3c09",
+        "sha256:df5a0658ef2cd653b629357975d394606c1aad260b1a364229c04e1e24f8c231",
+        "sha256:c15fc24c87827c5dabfdc85498ccd9f08827fbd07b9a3c07570a85eedc88009c",
+        "sha256:4850d02bc70a470e06394f30d5f313df571210487e6c871e87b9445820278603",
+        "sha256:717dd4871ea74f4a3a0be9e48bb931e1cbdd2fa8f153b289be67dfcdc2d461ca",
+        "sha256:8f880cd0d6b0f02c4b0c539ae1c254c653e775510712f19a967be575bd2482fa",
+        "sha256:f08191ef3817bc198c494caab00b24da238c0562814b9645556139e7c20ed1a2",
+        "sha256:b12d1d7626f7605bd4e6d7bf7094678bca8155e799fb91461040e7e010d57a7a"
+      ],
+      "category": "elemental",
+      "dependency_hash": "sha256:0467dcfde949d4b32785816d6fd27132120ff54595cf1fde1645caf2c159d364",
+      "display_name": "Warm Explosion",
+      "effect_id": "effect.quality-warm-explosion",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 15,
+      "id": "warm-explosion",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 0,
+          "id": "marker.contact",
+          "name": "contact"
+        },
+        {
+          "frame": 4,
+          "id": "marker.peak",
+          "name": "peak"
+        },
+        {
+          "frame": 7,
+          "id": "marker.breakup",
+          "name": "breakup"
+        }
+      ],
+      "pivot": [
+        48,
+        58
+      ],
+      "source_hash": "sha256:4bea7ed33d515199eff1aa4807730b908f11bb27e977b6aad07ca17e307d8ca0",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "explosion",
+        "fire",
+        "smoke",
+        "combat"
+      ],
+      "use_case": "An asymmetric fire blast with embers, smoke replacement, and persistent ground residue."
+    },
+    {
+      "animation_hash": "sha256:f596979d6a8e8d4f8480a441cdadd2e54bd50794c7bf47852e59b422e0d784e4",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/frost-nova/grid/manifest.json",
+          "manifest_sha256": "sha256:af0d5176767569845cb4eb9b16aa8de25fba665bf3e2672596398679607ac3b4",
+          "sheet": "effects/frost-nova/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:1d61836778ca6687a791db2576c4a9ab9e79fc8015e77ec5432580bbbbcfb14a"
+        },
+        "packed": {
+          "manifest": "effects/frost-nova/packed/manifest.json",
+          "manifest_sha256": "sha256:e6512e4eca7399d159e2223a9c724cb477fc4e0ecf88abbe689ccfad84b00cac",
+          "sheet": "effects/frost-nova/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:0e7c3784153a0d518581d86f69f60474a3c2bf6b99058a20c899a36e4d941ea9"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:c56773979432e3df27e9364c68e0785acbf30c4ee30a4c2abf70e494c639057d",
+        "sha256:814c849d7706d91cfb6a8306f700b7369bf447939487f1dfaf5c9fd66430786c",
+        "sha256:b95fbd7d12321ccdfebdd62497fd6ce8bfb5bafe6bb312b9db653d1b32694c3f",
+        "sha256:f77cf1ea011c44dc68a80eb22b4522bf4f293a6d95a8ce2c6cfe2e0a6adf0b60",
+        "sha256:24ea0e854f60805504012ecf0549a0d82f682cff0821915b515ed83b3b4eb6d6",
+        "sha256:da8c5110ecd80084256bb73b0a8df4e2fcff6eefd5d6d3288423eb1b6683a8f3",
+        "sha256:ce950ab313ec35169072d6773c4df54591d66bbabdf3297a846e64538ff33c34",
+        "sha256:f848fbeb8c90a7df9d2efcd018ab65ec711aecd45d373019c25a83f9686e7b5c",
+        "sha256:6cf5fc763170d0a736261da902d764280dce5c134f99181a21ddfaefd2e280be",
+        "sha256:aed2ae1dff197c2967856a4b70fbf7dd102e761bea4429cb85acc968a5554d58",
+        "sha256:6c2e07a83deb44377455c5a6d28649b6957eaf05b75a5263b5ebc76180f0f8dd",
+        "sha256:48a5a51bfb367ab2bf7af0e8bd91cd9f25faf687ec38005833370e711100c731",
+        "sha256:0b9e2b4ab8a82ef0a507e4b0ee6d38aff809a3a56bb9e2e64dcc331b91ac5206"
+      ],
+      "category": "elemental",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Frost Nova",
+      "effect_id": "effect.quality-frost-nova",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 13,
+      "id": "frost-nova",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 2,
+          "id": "marker.contact",
+          "name": "contact"
+        },
+        {
+          "frame": 5,
+          "id": "marker.peak",
+          "name": "peak"
+        }
+      ],
+      "pivot": [
+        48,
+        61
+      ],
+      "source_hash": "sha256:f0b95358ef5208a1f86b29474ffa89e7a2f1ffef73988b0a13534b8109e65e0f",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "ice",
+        "frost",
+        "nova",
+        "area"
+      ],
+      "use_case": "A radial ice area attack with crystalline fragments and expanding rings."
+    },
+    {
+      "animation_hash": "sha256:60f9eac53cb5fa1908c8b7ada83f3c20c21d9d626fad62f1c28a96c35faa7bd9",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/acid-splash/grid/manifest.json",
+          "manifest_sha256": "sha256:2db6ea7cbbeb6add3ed29b1d82db1c6cc860e6c94932be7f1f7e219a8b64a0a1",
+          "sheet": "effects/acid-splash/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:6698ddf555d7ffd7c865f9219ddc0a69064264ae3abee327e91aa27a4687f4cd"
+        },
+        "packed": {
+          "manifest": "effects/acid-splash/packed/manifest.json",
+          "manifest_sha256": "sha256:745e64c707433aae379641060ee23048a5cd6a318b906e2596433a2fc1488b7a",
+          "sheet": "effects/acid-splash/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:86d8fdca8cd621afb28691645cbcf304c75345675009c21a5945b698d8103677"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:bd214e44d66f7de606af9861358a8280ad4e92ee0777d10ef641b8523779044d",
+        "sha256:abff0a05b6cb781d8382fc25246c427934606fa400ba628618e53896146e51af",
+        "sha256:d8aea0bd3705497698c88ea93826b397349bcfa588268207841465640f52d143",
+        "sha256:c90a3f69f1a5c039ffbc887feba7addf37cc6a0fc6668b14054283a81bfb8294",
+        "sha256:2808b8bd9a378d3e67a897624d63a5d5e936924d07abc5f99d9b4258418dbbc0",
+        "sha256:3e126a835c7c1d9bd131ccdedd7333b79adea010b1c6be9f2e74770e3b8f6548",
+        "sha256:7213cbff31f2eba976264e321bf5a11f79d8a70ec9a558f7093446b5ec7984a3",
+        "sha256:d612bd4f16488cf83d8942d1eae22e59af6ea55d3d3471f4c47e580d03f89d1e",
+        "sha256:908673a1e514727b13e8149d263569fd4c919f70735326ed98f966d3fde4089e",
+        "sha256:594d9555f97d1e049e9682f1d9554bddac938a0917580dae77caf8d4c2d2908d",
+        "sha256:5cb967650b4e299a415a9ade5ed7a5b65d4240dd51b3730a36fb09a46cf86c77",
+        "sha256:baa2c9530306a4af4d8eeffa5c19ff6d502bed13b239091e83cc2d5d4f9104ed",
+        "sha256:5249342c9a146aded6c7ca62d8d92a404ef460e24d8c77725a55c63151144b20",
+        "sha256:86684204f50ddb3c4e2305e616a6597ecc1049669f65c5439f746afe8ca3f718"
+      ],
+      "category": "elemental",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Acid Splash",
+      "effect_id": "effect.quality-acid-splash",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 14,
+      "id": "acid-splash",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 3,
+          "id": "marker.contact",
+          "name": "contact"
+        },
+        {
+          "frame": 6,
+          "id": "marker.peak",
+          "name": "peak"
+        }
+      ],
+      "pivot": [
+        48,
+        64
+      ],
+      "source_hash": "sha256:60c8b99004748bb6f1aa020694545c0e063d3b504249c4582d578f6f172ec9bc",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "acid",
+        "poison",
+        "liquid",
+        "splash"
+      ],
+      "use_case": "A liquid contact effect with arcing mass, droplets, splash, and grounded residue."
+    },
+    {
+      "animation_hash": "sha256:3ceefae9633ec92d839b0f969f66a8184bd9ef47e16a2bcf00d471c7eff0ab71",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/earth-rupture/grid/manifest.json",
+          "manifest_sha256": "sha256:4cfe9dec3062fbf949111d3e03c3615e0f7d9637f5d1b6c04ba0f81090918209",
+          "sheet": "effects/earth-rupture/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:93b51e1d31823487b063e0902da22734caaac51d68e91d6d6cfc18461297a5c8"
+        },
+        "packed": {
+          "manifest": "effects/earth-rupture/packed/manifest.json",
+          "manifest_sha256": "sha256:fd3d8f540941d1c711354404db68e46795cbb91842a5ec3fa80550815581d359",
+          "sheet": "effects/earth-rupture/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:7e0c91adebb5354416ad12fd20fe076f3b898898063f704929b3923f0a7327fa"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:b2a458a62ec8df850d37b230c20d64fcf4ceebe9050c97f4788cc622e96d95c1",
+        "sha256:2e21205ffd645f5206338251936279bf2aed24e35587ee415531072bcad4a4e0",
+        "sha256:52a7857c1144f97f5cf6fa87eadda8dce0a908aaa5f4be084058e5a41b81dc64",
+        "sha256:371f928c5b8c2d5e217dd9ae76e66f8091f45bef8ee5a558d930a7cce2e79cda",
+        "sha256:c57e846ef9d7d2ea18c6d0d7d8bdedeb69a63374c9f667f7b883c4ad307e0e93",
+        "sha256:4d1f39af6067dee121cb16140c4956c00c46cfe47d4b4785bcfdccff7bab9412",
+        "sha256:f2b8939ff1337ee796b5e256fad295e695bbd32215d28664cb5cd00c183972ce",
+        "sha256:44736e17bfd37fe6c17cbcd9fd9259325cc70802259bd3223f01b95752b2438e",
+        "sha256:184faf87c2004e665062078bf46119ae58fb01e43a023d44c8f2bfdbacf083d2",
+        "sha256:e2403256aa2e1a20a5e38033b157459374c28f8350ef44f5db4602ceece9de17",
+        "sha256:638985999a7010b193a576b90e2fdaa4838d7b2b744e1b783ec70756e970f2fe",
+        "sha256:30c4fda86b18ee1bf2c37b0e503628a99e3f4836960fe46714efbdd81d0329d6",
+        "sha256:0243f7fc9efb50fede961ca4d4e91f098cf70c395a6e2fe240d7c7f6c6936833",
+        "sha256:07fdc7e7eb5a4df931c906c31380567c8d1ca8ae93ee99550e9ec38f2799776d",
+        "sha256:f659e0cfdaac94cca2d3961109acbba4c99134e1855149366468c58886825704",
+        "sha256:c1b735b02ecc3c1e46323f0daf14b45dca23fa4d0ee123599e1245ee8e90f8b3",
+        "sha256:828def42346f905fc7d9fd1a6054d6173b69ca3402ddd0de78187127da133e53",
+        "sha256:921bde87893392ad534f38bebc12500f78b810e21d73dd0e84168aa0ea0b75af",
+        "sha256:92edb4669cc331c426f2d0be73b8712a1a81a2b90e78f0512c45c64e2aa507b7",
+        "sha256:6162657d71bee21ecb2a521a1c3452fcf147543b57b888f2e87ec2ece49c94a4"
+      ],
+      "category": "elemental",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Earth Rupture",
+      "effect_id": "effect.quality-earth-rupture",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 20,
+      "id": "earth-rupture",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 4,
+          "id": "marker.contact",
+          "name": "contact"
+        },
+        {
+          "frame": 9,
+          "id": "marker.peak",
+          "name": "peak"
+        }
+      ],
+      "pivot": [
+        48,
+        71
+      ],
+      "source_hash": "sha256:bbde8238cc87685106f71922a8c63aa8111dd1a494e1218ca608b421a9066cbe",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "earth",
+        "ground",
+        "rupture",
+        "area"
+      ],
+      "use_case": "A longer ground attack with fissures, rising material, debris, and grounded decay."
+    },
+    {
+      "animation_hash": "sha256:0ee3e7f03d6b71f7614a35c094b443112610e6a5c9215f160fab29bf3b40ffff",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/radiant-heal/grid/manifest.json",
+          "manifest_sha256": "sha256:a2f2f1ee6d85275d8e46c9a3d31e33e20252b8a38eb244260a847b1b332aa10f",
+          "sheet": "effects/radiant-heal/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:617348209199d3c1c037925fb23dd906b3ff4f643aefad65cdda67a1f69a97bf"
+        },
+        "packed": {
+          "manifest": "effects/radiant-heal/packed/manifest.json",
+          "manifest_sha256": "sha256:2b37cad942bf583aacdc2d25ce45e1c68779e50ff4735aeb4e6ce0618a93076e",
+          "sheet": "effects/radiant-heal/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:d5514035f7346286d8bd24305b3fa73bb00048c074ffaad754bba5ac216bbb4e"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:26f37bae6443e288549049a4a183e4124bd0d2c0d29a950bc4e3b7737a70a612",
+        "sha256:4e6038fcd978bcc2e87107e7133460a23a0fc8f61847fa2ed1972c1a4388ff6a",
+        "sha256:9f81baf2841682461c40463eae1fe8deed5f7fe78760896141fd2e1e7a479e59",
+        "sha256:5ef21a690a92a1d4a22db1c741981c16468e3396d00740b210e28397b4008717",
+        "sha256:8d832d70762a57b68b878cf62ec5fa1ea094cf0c65a16527e15a2dabffff77fa",
+        "sha256:3f73d8cd0db40f8179e948779b04078a7a8eb8e010b4ac2a4de0eaeb519270ce",
+        "sha256:68254406f9deee3bcd7f544e0dde0d10178b6fe537984ebd4c22bd898dac522a",
+        "sha256:298c7afbf61523bcd9b9706875886fb7f1d7af5da80c941d6b9eb5d93a5cc872",
+        "sha256:fc215b84d28f3c57b432958a2ed5cc92e47597be88e67d10e316fd5334d79c66",
+        "sha256:dafb3d2eca8b90747fbe78e2af78de35949e602a34f461a7fd81eaad469894e4",
+        "sha256:3b0a006245fb1fa1d25c60850b12a51ce8571526bc32691f3eec1f7e4eed4707",
+        "sha256:3247995c3efe1972ed03ac5245856db8d2e4b2124cccba2760cec3dd30614187",
+        "sha256:60535848b57475a41f7b9e7d17ad13b2acdc658e3ed646c2ea3fcb1ac1a31e91",
+        "sha256:8ac4e6c14ee9034894274ec8138aa00017e13fb07edc94562c550e24b5bd2bf6"
+      ],
+      "category": "support",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Radiant Heal",
+      "effect_id": "effect.quality-radiant-heal",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 14,
+      "id": "radiant-heal",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 3,
+          "id": "marker.contact",
+          "name": "contact"
+        },
+        {
+          "frame": 7,
+          "id": "marker.peak",
+          "name": "peak"
+        }
+      ],
+      "pivot": [
+        48,
+        67
+      ],
+      "source_hash": "sha256:3ebe620214825c023c6049054d70af130f385da0739d8be27b02e6843bc8e431",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "heal",
+        "radiant",
+        "support",
+        "holy"
+      ],
+      "use_case": "A restorative support effect with luminous rings, upward motes, and a gentle release."
+    },
+    {
+      "animation_hash": "sha256:62dbcb4da5c3596cedcf076653220a325c937eed29ee1ad400771a9772521f6d",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/void-implosion/grid/manifest.json",
+          "manifest_sha256": "sha256:41f5de1a33f3944b590e420b9050abbb5b73f87627c97fedee7b3f52a8f396f2",
+          "sheet": "effects/void-implosion/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:9faf77b951c88adf14d7521893ccba5a7fa982d2122efb4dae06c621a97d4a40"
+        },
+        "packed": {
+          "manifest": "effects/void-implosion/packed/manifest.json",
+          "manifest_sha256": "sha256:b3cabe521107a1665daefca567958dbe38df966c15c86ca30fe5a2f810091dd8",
+          "sheet": "effects/void-implosion/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:7773241c7e78a0e11ea27a8e8a75a15e45972bc5a2c30df98fd3b22bbf21f54a"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:5e2ad8815216d2c2fa0e379a83ace60c259b448b37f500be246becfd8395edd3",
+        "sha256:d4169c0204b0ba0e5027ba081a76d688721c8098c908f3b9e5ff8e45f73668e1",
+        "sha256:2a5d22def6c34fb543bb0de315b8e40d382e72acef9ab5d4e9284ed0209d5121",
+        "sha256:3b184fa2cfac4658df861d3dbe2ba416c5205cb9fb6d8a8b7150baa739991ff8",
+        "sha256:3362d18d4fed48773cdbad1727261ec0fcd2cfcacb504fa529fc25c495fcda10",
+        "sha256:f33f9257b39929e565416e61a5bd1f023165a6c02b8b21f0ee3f5bd33c419ba3",
+        "sha256:bab0c234c043f3886b35faf20f4f0827cf34db408c33d1260453e2d777c676b0",
+        "sha256:5402edef03737744b16982446a01c3dd6b6361e768fbb43992b8219f4b1b41bf",
+        "sha256:865ed2646150b61acc03b4388f0064619944f2a46003d8f57c50369cdcbf35fd",
+        "sha256:69cf233d37026dba89cd17623c9a24e850e21a3ed3b8e8a3d594781fb6986f62",
+        "sha256:5f7954d61deccb1857408e3e723d231b2ba0f9594e8f80fab94f8f0cc130e58a",
+        "sha256:f17cd610ccd5d222181da997bb04d3fdaeae6f22bfefe7a6d30ec45738d59190",
+        "sha256:359dfa859acfe81ada9c7303c0ef23eb2c54e00b61acee34f44dc3b8d235e756",
+        "sha256:9c8b4a4af84b656c28d45fc21e5ab419673f1231149b5d587525f2bcdcfc6062"
+      ],
+      "category": "arcane",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Void Implosion",
+      "effect_id": "effect.quality-void-implosion",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 14,
+      "id": "void-implosion",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 3,
+          "id": "marker.contact",
+          "name": "contact"
+        },
+        {
+          "frame": 7,
+          "id": "marker.peak",
+          "name": "peak"
+        }
+      ],
+      "pivot": [
+        48,
+        50
+      ],
+      "source_hash": "sha256:ee0dda6c11af6b7aae2dabfb8a76541b97db7367c791cb5230c515e8e1ebf7b1",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "void",
+        "implosion",
+        "control",
+        "dark-magic"
+      ],
+      "use_case": "An inward-biased control effect with compression, negative space, and reverse-energy breakup."
+    },
+    {
+      "animation_hash": "sha256:694eade8c49bcdfe1dff4268b7bbea534375aafdb48b5eb117641b08d6e46548",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/arcane-parry/grid/manifest.json",
+          "manifest_sha256": "sha256:aadae4b17b7959f1c142a044846032e98adf235cb7011170996935fd4c49347b",
+          "sheet": "effects/arcane-parry/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:475c7168de29d2e4fbded6e8a97f7f619b94d84ef4e0c4a0085e48d47ccb1a49"
+        },
+        "packed": {
+          "manifest": "effects/arcane-parry/packed/manifest.json",
+          "manifest_sha256": "sha256:d3888721b92f865180eee2180bf639b1c5905a69b9198cad4b2c2282bb10151f",
+          "sheet": "effects/arcane-parry/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:69e18436f9df0f5073997e68412aff98676504e780fbf7d69e3ea7c41a98def3"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:066c58aa83b28ed85670c36ad04f829aafb1a480e29b38775bb0be33fe692ffa",
+        "sha256:3c95a55e20460d5294e9e757a03c618be17ec6cc4c71591ff1b94502ae7653e4",
+        "sha256:a964c118600ee95049e0d77e19e5830290e98d221b45ce2c273644773fcddd5d",
+        "sha256:a1afa4e27591aafcf03f6a591c0e8dabd9d9f4a607623a41eb9644b4e8fc5d1f",
+        "sha256:5b71747c82c66277e80fb998b07ed365ae7c136c40a25b323cede799eccc0446",
+        "sha256:6c88332a75e0ffdd1646ed5290bd385cd6f96d9df2ea45e8d6b7c62f5cb508d5",
+        "sha256:15441367c30926d988bab1898df8277bba315867bae79268d167676a300f153e",
+        "sha256:1441e47104df83dd773e8fbeb852177d7ab0669cb35ee00a9867cb41370686fc",
+        "sha256:32cd9c3bfcdc1debd47c182cffaea44f69308ddae62364870f681bbde642570f",
+        "sha256:0ba619bc2ad43f81beb4bddd69e30c869dd17ebf04f2d358a0c765054d3fbe09",
+        "sha256:6512df46b4e4d61724b83923a49f2cc072b7da99c33598a6d1efd68c2e04f56e",
+        "sha256:c4c2ebf0737b585bc36f56e3f1557ca9eaf7907d48d2d2a4a906f282dbb88e9f",
+        "sha256:42349cf7e87b9e5e0273ad111a23cf9a360fc0fabcd49817b969bc4cbf097c14",
+        "sha256:64417f81c93faab152d61db5be48f969fdc118669eae642b69b44479cf756d16",
+        "sha256:9cf91ae70cde38cfbb2af26ac78fc504743a638973bdb0cbc279673a0f98923b",
+        "sha256:40af79f43d7319d6e3049ad2ed00ef62ba91332cce9b90c01b8df0e4417fa3c6"
+      ],
+      "category": "defense",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Arcane Parry",
+      "effect_id": "effect.quality-arcane-parry",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 16,
+      "id": "arcane-parry",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 4,
+          "id": "marker.contact",
+          "name": "contact"
+        },
+        {
+          "frame": 8,
+          "id": "marker.peak",
+          "name": "peak"
+        }
+      ],
+      "pivot": [
+        50,
+        72
+      ],
+      "source_hash": "sha256:f82d246dcd631a8cf0fbc9aa9803eb38e712f854ce8fa017433fd08fcb196239",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "parry",
+        "shield",
+        "defense",
+        "arcane"
+      ],
+      "use_case": "A defensive contact and deflection read for guards, counters, and magical blocks."
+    },
+    {
+      "animation_hash": "sha256:f6a897d45b61b55f6c7ba027762750707831e4293c5d7ce02214b62c8d254937",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/solar-shrapnel/grid/manifest.json",
+          "manifest_sha256": "sha256:a9f672d4fe2c8b5d1b2177f98c05d54d37fc950e495e75b9e4a55e8ef774b388",
+          "sheet": "effects/solar-shrapnel/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:44cf68066822c60078d480b04ab8fa8e6662779cbace4a9a4ba19e8c57a48425"
+        },
+        "packed": {
+          "manifest": "effects/solar-shrapnel/packed/manifest.json",
+          "manifest_sha256": "sha256:6076ade166d67ee2765dce5c08d936829094afb8e7f1ca0ec8ee6d90fe396025",
+          "sheet": "effects/solar-shrapnel/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:744f412f5ec8f360b809612e331118d18749bdde5cd85cdf33d284122a56f199"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:becbdf4377fb9812a371be5d4ca05608cd57127b1ff8798606c29aa008da639e",
+        "sha256:c061e1bf028bf55fea6b4d6d68b96c3c37aa8f82a577964ef785a037233d78ed",
+        "sha256:bbf0c1b0e0eede787dd0fbb2de9bf2f1b3833e45982d9240a9b57abad7807e53",
+        "sha256:3c12878445dbbe55b33cb909b9b0c895125ea06238bc4732f6c376b8512f44f1",
+        "sha256:d5f747d93302e612ba1d7e058324c8a33efcac771e934ea8d8f4036e800f44b7",
+        "sha256:f35c06c2aa00a0ee182bba604a5f28a23f618794154c57cc42a3adc86b7b73f1",
+        "sha256:ca006ea9898d46ac2e45831d052f32f99cb0440155087eaab4dba61703aa75e3",
+        "sha256:9413484527838857481dd1c5a54d0dea62204707c0aa2c2ccd354b83baa3c241",
+        "sha256:54c1acadb4dc2f6c73f2870ee6b0b4cd065ec331aa8f88edb25c6e8f1b538210",
+        "sha256:876d4f993264675e36303991b47c39df23516b14894b25d1fe5dd3d33188fd32",
+        "sha256:7964c6798c0a964f2491aeb9c598efb236bcc3c586644b5f0cebad91def057bc",
+        "sha256:223b2c480c560b719458e327ed1df722822b5bc7f6e1ea5cc275c59b7832fe2e",
+        "sha256:3646904d30eec78c82165c290a418dea0e6ad9f0d4dff28e2a76aae36ea499e1",
+        "sha256:cc18b4c494c75d326c33047a2902634bffe30e480c039f175c5769f68d0def7b"
+      ],
+      "category": "combat",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Solar Shrapnel",
+      "effect_id": "effect.quality-solar-shrapnel",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 14,
+      "id": "solar-shrapnel",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 2,
+          "id": "marker.contact",
+          "name": "contact"
+        },
+        {
+          "frame": 3,
+          "id": "marker.peak",
+          "name": "peak"
+        },
+        {
+          "frame": 6,
+          "id": "marker.breakup",
+          "name": "breakup"
+        }
+      ],
+      "pivot": [
+        48,
+        56
+      ],
+      "source_hash": "sha256:c2bcfc90c9a1bf71b02e084b02bbc8d625aaa2e96453afcfe02bc824cb5ecff2",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "solar",
+        "radiant",
+        "burst",
+        "fragments"
+      ],
+      "use_case": "A radiant burst with staggered rays, authored fragments, and deliberate breakup timing."
+    },
+    {
+      "animation_hash": "sha256:f63581691616008e20f7d8b2ae4739c8cba4ecdca0e9146dd82ccaa5c5e1b478",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/ember-jet/grid/manifest.json",
+          "manifest_sha256": "sha256:06d363aafd6e0b27df6ca637872b35711daab60424bf05a99edc5a0446a9120d",
+          "sheet": "effects/ember-jet/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:df2ee8712efb05467444df52024f9efe1d594667c728e67b18a5c213682b131e"
+        },
+        "packed": {
+          "manifest": "effects/ember-jet/packed/manifest.json",
+          "manifest_sha256": "sha256:95eb31a2c881ae05395ec51bece3d3d4837138df18d29d5c17b3b8f20dfe50db",
+          "sheet": "effects/ember-jet/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:efd17394b4245f2cc628743d392cd1f3bf147f4c34e40139e3080de979a752c4"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:90e3064dd977091a6da65463c18474747ae2e233a25554f8c65a3fdab03e3b45",
+        "sha256:c52972a953f47f61f524971d312c07dd5cfbe9bfed481caa853daff8cd3d4cc2",
+        "sha256:c51c1bc66252d0d251d96e63110e0459be8da50938b05a17bfe481363f2b3f7a",
+        "sha256:104f458c093245c94e3177b0cd81e9647769a4a844dfa14d0de552d6710ac80b",
+        "sha256:db23ef31f372bc59e046967e6c6cb6a46d65b22e0589ee2e81382ce8e0e923e3",
+        "sha256:f14ba7de9e8324d7b1054241cd7ea0d47c547e6fba4f962f4d58a71c47048aaf",
+        "sha256:7ac26b70283fde5d4abcc5afa9c21426ac6931c1f5a92fcbb0790812a1775cfa",
+        "sha256:0a6225877f0f510af0a6b1257a8bc00d9ed8f442a832f2d7bcdf87396cd24e40",
+        "sha256:282f891dea3e96bf2c597d39c7b14f28f84c44ba7ce49bf55783451a794d4031",
+        "sha256:f45f97a58f32aa8515da6e2444c4aaaa92b991f1f5e229bd795b5997ae7c608e",
+        "sha256:06c368ffdf7b3500bef6b8c5b1140f9edaba761d4bd03d27ae558fc336ce06eb",
+        "sha256:de4eafde99b8c5d01b7087882d77beede1e041ebbc58fa00c3b8b4f828ddf626",
+        "sha256:103bb9a4ef6e2e68e93343300d806303c35c5fdbe78ec78c656f70825bee875a",
+        "sha256:66a9cf65a87a2ba696615cfbd7537a93cd6eb863dc8078d28f5968470f5ed6bf"
+      ],
+      "category": "elemental",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Ember Jet",
+      "effect_id": "effect.quality-ember-jet",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 14,
+      "id": "ember-jet",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 1,
+          "id": "marker.contact",
+          "name": "ignition"
+        },
+        {
+          "frame": 4,
+          "id": "marker.peak",
+          "name": "peak"
+        },
+        {
+          "frame": 7,
+          "id": "marker.breakup",
+          "name": "breakup"
+        }
+      ],
+      "pivot": [
+        24,
+        56
+      ],
+      "source_hash": "sha256:3f7794b2f9f9a88de15dd1b9fdaf45234feaa8f9f8b175091e0508f98bfa7e7c",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "fire",
+        "ember",
+        "directional",
+        "jet"
+      ],
+      "use_case": "A directional fire effect with coherent tearing, aligned breakup, and clustered smoke."
+    },
+    {
+      "animation_hash": "sha256:9b665420cdf0f40681bac7ba3b14673afa0fc53b94021b4772d95cee5cf56368",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/spectral-bloom/grid/manifest.json",
+          "manifest_sha256": "sha256:1a5bf58db7ea3335d135dfda44970eb672d270e9efbfdf4ab3ec2590d82724b2",
+          "sheet": "effects/spectral-bloom/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:c900535a80a0587201b627013988e4303bd4fff2e2d6e183f76909ca6884892f"
+        },
+        "packed": {
+          "manifest": "effects/spectral-bloom/packed/manifest.json",
+          "manifest_sha256": "sha256:3dffacbf6392a41055d03dcd0213280777e3a314814e7266a355f8ba2fae53fb",
+          "sheet": "effects/spectral-bloom/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:fe0c9769ba1b3fcd5cd123d55184c8b22214c6d0c8f567466ea7ddd2d9deda2e"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:0b25a08909bb251a382d73b41567ccb9fcf53af4faea43543d4eed15e48b0102",
+        "sha256:5736061b782cfb31323dafb58147783b2379af7367bbda28d30433790272a8b6",
+        "sha256:d51427cfbdbad4475bc54ea08a5ef0a0ef601489e055d58dad1a930ef058a546",
+        "sha256:cf5f08390d49666c5be572213d44e57af201ac5f9fc5668420ba7fee46909e47",
+        "sha256:b2a7eb17c15f08a0341cd5121ca2a2e33cb61950dd38809da2653ad4cde962bf",
+        "sha256:3cad50c0bb4260741d2935f3376977f8b7905baed4d9be9a17d0e75fe86d3f3c",
+        "sha256:4b5bd9d746ed0bb88f06dfb56db8817f33e0358f1fd7dc3fc52598ecbc4b8f2a",
+        "sha256:532f0058a6ffe2cfc429ea7c0e9391e5aecbefe585b5f46c721c5b867d576ac8",
+        "sha256:168294c090eac0b6b39652a32c9337e0c8a3b71178b28ccd5a7b9dc193efcfb3",
+        "sha256:ebe969f6e2fd1cd2efbb034f277292c5e93eb42aea800a3bc8614295b617a182",
+        "sha256:28d4ef01a499fd941c151793c85141e0a3cab8d99b1b4f59ffbd466bd7b28507",
+        "sha256:6687ed5b6ef039511187d2b96b8c0945b112ab7ddac794deab80aaa3b20801b7",
+        "sha256:fd7f0c0a8713f1351a91b0e1c8a80a53948e368150926894b63ab31773c8425d",
+        "sha256:9346bb4491569c7d7a865219833f570a8a917795d8cfdc58e6585740bcac8613",
+        "sha256:8891c5c9204535548e9f4dad46c53c1ddb43db2d2d9833daee3791fed52a1894",
+        "sha256:150ead144c6a077807f6d0615a572a411a5f00b70392d34dd348bed6b3320ee2"
+      ],
+      "category": "arcane",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Spectral Bloom",
+      "effect_id": "effect.quality-spectral-bloom",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 16,
+      "id": "spectral-bloom",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 1,
+          "id": "marker.contact",
+          "name": "seed"
+        },
+        {
+          "frame": 5,
+          "id": "marker.peak",
+          "name": "peak"
+        },
+        {
+          "frame": 7,
+          "id": "marker.release",
+          "name": "release"
+        }
+      ],
+      "pivot": [
+        48,
+        64
+      ],
+      "source_hash": "sha256:e659aec395124f97019ee26ef35b6c45e7f391c40270f09c6966b504e3079004",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "spectral",
+        "summon",
+        "bloom",
+        "arcane"
+      ],
+      "use_case": "A non-impact magical flourish with upward mass, designed motes, and fragment flakes."
+    },
+    {
+      "animation_hash": "sha256:fe391d18877b9f3279db5c27eabc6f00bc3c50c023e7f3487fc4a77b376b9bcb",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/rift-portal/grid/manifest.json",
+          "manifest_sha256": "sha256:c5bbcd7706a4bc599310a5c14ed86514645e31860f2ee98d4480fa03bc71ec1d",
+          "sheet": "effects/rift-portal/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:44ecf2b090aa73246fa15046d4ae1a0fec9e2faaaaa701e92bca0562dd7bc927"
+        },
+        "packed": {
+          "manifest": "effects/rift-portal/packed/manifest.json",
+          "manifest_sha256": "sha256:bfacb7530b31a59300698c4874135220afdf5ecc2d52b4b3b83fd68cabe820f9",
+          "sheet": "effects/rift-portal/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:86550992640f215fc89ea9f321537dfe2754d0f4acb20154543dd8359f4f81e4"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:fcb7be9775829bb96e643b8dfaa33db91d53085057292dbee95ca76ebeb3ba6f",
+        "sha256:7ea8597e3105b303ff49e37b0158ea76f8b13223e7f734467fb9983028d55e6a",
+        "sha256:5ef2efa63663cd1bd0aa376fba278051bcc0903d0cb793c734b2f76f5af5d879",
+        "sha256:b79fc1074f1259c51f28db14ae93433b684c4bec0ce2aa65a065469a712d3543",
+        "sha256:7367c97cf2d434c4025e347968d2f030f5912ae4129b45c2a7c7b78d05cdf384",
+        "sha256:c9c3df93d38379b7dc6956e299bdf9d2517da6a4427c0fdfe6f3cf5210348921",
+        "sha256:e0476d3eae9fa589fa67b4c12691738b09bbe36853a350b33049f2930e154c1e",
+        "sha256:27f8f0ebae34c1948ed1106243bb87c9f32cfb42fbe3e5431d298126d213f793",
+        "sha256:275c3c640743cb92d30e291136ba0c2df2061bf18e3973dc29f077c058ebb203",
+        "sha256:8c366d008a2e4155e890df88a5663e0a78dac2d1f1be57b7cbcf0f38b133eb6c",
+        "sha256:7bf0633d64b2d577f4b20bfa6e075a626270b4b051633f9c33205efc89cd8878",
+        "sha256:e648debfba05a998e2afa142175202e5c4815593dd40c6fe440d0ea8bb43f992",
+        "sha256:037ea3d765c67e145a3a2b049064272ac04a0b8ac570751499501f569a25f2a0",
+        "sha256:39648d7b415895c375821f0de2b8402589a4ce17833987fc2a93443924bd2f8f",
+        "sha256:aa87f9eb7fedf5909065002405b1da721e4bbb43145979593f3c0e80a9ffcfa9",
+        "sha256:fcb7be9775829bb96e643b8dfaa33db91d53085057292dbee95ca76ebeb3ba6f"
+      ],
+      "category": "arcane",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Rift Portal",
+      "effect_id": "effect.quality-rift-portal",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 16,
+      "id": "rift-portal",
+      "loop": "loop",
+      "markers": [],
+      "pivot": [
+        48,
+        48
+      ],
+      "source_hash": "sha256:482957d695c60423bdb7bcbcb5b0d447dabdd5c067465092cbd9428cc5b38d3e",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "portal",
+        "rift",
+        "loop",
+        "teleport"
+      ],
+      "use_case": "A seamless dimensional gate loop with counter-rotating broken rings, a breathing aperture, and a compact core flare."
+    },
+    {
+      "animation_hash": "sha256:90871d76b6e009f7594ee4106f2212b8195436d319610afa5f0348e08ef299c4",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/venom-ward/grid/manifest.json",
+          "manifest_sha256": "sha256:082df95afc23d6684fff946cae36ac762f35503ed8d4db9144b93864c2fc995f",
+          "sheet": "effects/venom-ward/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:c1bf19fdcfcbc917623adafe3a12d38fbfc914bbe7de228b26cbe946db1808ef"
+        },
+        "packed": {
+          "manifest": "effects/venom-ward/packed/manifest.json",
+          "manifest_sha256": "sha256:2ae455d4954dad7b596cf268a13bc6bf9401874fe70cfcb40419bca718ee55a5",
+          "sheet": "effects/venom-ward/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:0bcc18bc8b75bae2996e5954e4ac8c1168b54cea232605aa19ff1f5e5907bd48"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:7c22e919604c78078442f3e6369c93a6765de161339fce28f7a5a0b664d55caa",
+        "sha256:d0fb96c2623b31bb60cafc2714c96d8ce5e4e36dc7bc581fcc2f317953e661a3",
+        "sha256:6d069e7fcd4c83f79f698d86a9cc54182895749a870d07fd3c6e0917e3351980",
+        "sha256:3448d0c0336ba138c4324bec8bff4f97ab5015288c4bacc4ef225519a01e3343",
+        "sha256:4e8732f4b30fdb4d4545275f855a2cbb92b19bf9e00b39c86c48acc0e513285f",
+        "sha256:dc80f8c45ae366df03600534feda0c0bd2ba0d7332222e0e2b95f921e1839113",
+        "sha256:1c769750540a5c7f3ffd5eee718b179b5475983c4a3e7e4914f977986411a50a",
+        "sha256:7dc3bb17c3c0d7deead91883c50900d8ac6e268bb3d83bde18cd54191ff4a495",
+        "sha256:720162745fa2d40a665c4232b68859fdcbb23ba95b8ac93d2aa5b2491df85200",
+        "sha256:3e973587fef46848f0eff43aa874cff0d1cfb37bc6d80d7247925cd52271d757",
+        "sha256:6ecaab635558471efddcefbb0033feee0eba83c89f62e58f9e9403c24f7c96c4",
+        "sha256:053a5e6cb6358b16aa3b38182a1fecf0db2ca9ccf11224673d54470ad90145b3",
+        "sha256:ffff4f66a1785803054c88bd2083df34665f6b72fb0183df014a0a6c442a6e73",
+        "sha256:7f6d5e2e481a0854057e3268d7c0ab07645d6b541ed0e99ba95ea08868360834",
+        "sha256:93c0b4dce095a8a434a13b7c43d5da1d2d02565191a7b66fbe0e53f0ed03ef60",
+        "sha256:7c22e919604c78078442f3e6369c93a6765de161339fce28f7a5a0b664d55caa"
+      ],
+      "category": "support",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Venom Ward",
+      "effect_id": "effect.quality-venom-ward",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 16,
+      "id": "venom-ward",
+      "loop": "loop",
+      "markers": [],
+      "pivot": [
+        48,
+        48
+      ],
+      "source_hash": "sha256:01547fe396c1810bea5bb374839f26441f5cdff17fe4b458e4c44a0615c3818c",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "status",
+        "ward",
+        "poison",
+        "loop"
+      ],
+      "use_case": "A seamless ground aura for poison buffs, debuffs, traps, and persistent status zones."
+    },
+    {
+      "animation_hash": "sha256:f7760f2a19bc2274a121c911b7c75320864bef2734caafc98db64a78f485e640",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/smoke-puff/grid/manifest.json",
+          "manifest_sha256": "sha256:015ffe253e2d48f45deeae4ea8226843944efdf42dcc9b8db02e46a16055dc2f",
+          "sheet": "effects/smoke-puff/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:ec2a3d38ca82818d772ab5dd05af2da541ad15c6273bbcd977ec2fc9b59e5ad3"
+        },
+        "packed": {
+          "manifest": "effects/smoke-puff/packed/manifest.json",
+          "manifest_sha256": "sha256:52fe6ee943df74357d173ebab5f16ed7bde98ae03a20a1eae1aa3839b480152d",
+          "sheet": "effects/smoke-puff/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:c68d1be41510a28917895a326d9dd97191f87dd32616f60402ed2853c7e026db"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:831a1fa5644ca349669fb0db18794ce7a22e83f00997cba9fdfc8c1e6e409442",
+        "sha256:54d66a25344c61eab2529a0ab5fded8490b0c2ccbd810caab458b5d3ff8d84bd",
+        "sha256:cbd58fc7ff77a4c9c183c28f4cf060e62434696c67f180abd10a12a487fed369",
+        "sha256:13579fc6e26046907f560e48946b85ba5247ff68ed9b8a57cb81b5baaf0f41f2",
+        "sha256:7d1ed698ce89c739601a36c9b0090db375c6f4c8ccb9306f5fbfa64b32cd1e4f",
+        "sha256:10565afb2498eb531efcf072fd1afe01739f0fce4296389fe204fe91e0aa2e82",
+        "sha256:6fda9f7704f9336f7046dc449c22469d932577b6d3331e47d8897616ad38f48d",
+        "sha256:1bc9bde4b07dae4c44453e53dd99392e5012e608eeaf466d8100db12fda9e419",
+        "sha256:a6422fc390f3d9f3e1e86518a4975b192e81b591bb0688985cf1d7756d97e170",
+        "sha256:f6f3c457a16246235f79906ddd47994be8deacde588e44d4eed08c2160bdc2fc",
+        "sha256:d9e581441e9a734c469a045a105ead0cd7906c6254ef72b3a1b788b295b5f8b5",
+        "sha256:fa9c70b66a9fc1916e046fac7661c053fa7ff40294da18a6c1f05f7d9bfc025b",
+        "sha256:4f96958427acee95b846af51839b347bfdbfd28a7744996b02678e87eeba247e",
+        "sha256:74a3c7c45446acb2787f0509485c4c6ae0f1d72e8a5ed34b67425f176d4438a4"
+      ],
+      "category": "elemental",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Smoke Puff",
+      "effect_id": "effect.quality-smoke-puff",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 14,
+      "id": "smoke-puff",
+      "loop": "none",
+      "markers": [],
+      "pivot": [
+        48,
+        48
+      ],
+      "source_hash": "sha256:02830953826e525b67691500ea4774c2793b353eb19604eb9743e6d3b2616bb8",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "smoke",
+        "dust",
+        "environment",
+        "utility"
+      ],
+      "use_case": "A compact utility puff for impacts, dodges, spawning, destruction, exhaust, and environmental reactions."
+    },
+    {
+      "animation_hash": "sha256:231dea8c338e525459a8b29a9b7e3d5f4304feefed2cf387af4b32b78e80c2d0",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/rain-field/grid/manifest.json",
+          "manifest_sha256": "sha256:a1911ffa65a39c193a0a6e3fdc27f4d9542f57a27ff1be4e9150d79d4af53802",
+          "sheet": "effects/rain-field/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:8eb1e18b14d5a3af7d9b8de17cb10ea1ea758c9f2b726414d4c6b7d4cbd404aa"
+        },
+        "packed": {
+          "manifest": "effects/rain-field/packed/manifest.json",
+          "manifest_sha256": "sha256:c17276efc74a2b04513ee655768bf13f6bed2c2e3476277d33871a12952ee8c1",
+          "sheet": "effects/rain-field/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:af787f620fbc73364bd120f8d8875b09fa1fc147192ff66170ab8e23c5bcb030"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75",
+        "sha256:9fbc0476eda72a6dd0f3e42b5f710c01daadd33fe7a37aa1dc5b792b7dead23b",
+        "sha256:c5c7fd5983484b31110cef81bf771ae686c278c577952443563e65c959947fdf",
+        "sha256:3a82b2ac847a7a8c3803e4d548afde40864b264e5fc4125777911d971d0d227a",
+        "sha256:7106468b1b3909dd020330be8b5b04f936bf5f28ccbb8be27525b96bac5d4c92",
+        "sha256:573f7bfe90a899ca95fbfb65c8ac0f1e7dd54f3fa5f01d683a42a9d44ff9dff0",
+        "sha256:3fb33f7bcc89737eb6056d3b7c7b63b46ba14a80d4ca49df92218e7c97bbe99b",
+        "sha256:e7053eb5294ffe2bebb89d52252e36eaa67571364386fd9286b5f16c98ff7eeb",
+        "sha256:1655bd54c6589a82fe75f03b709da02051278a2208bbcf592b2efabc1e995c42",
+        "sha256:e84e9dbe6ec8babf07ee5eec8acce0b5f1c798b0f75d2143c6c69789bde78cc0",
+        "sha256:d4452b9e48e7fcdcb300c238ad3f6ece4b4e12ef912beafd93ed7d4f8ac6b59b",
+        "sha256:3c24d267609c45ad78f6bfa01eba7f0574c6b3b6350c988d656a0458e15481e3",
+        "sha256:6339b67c20cbd08bdcc842e1f4622365132db37da720f3aee76951b3d8086dc3",
+        "sha256:f761268a8f116918ba2582eae6f22b753a3d54e3dc73cf8f326a803306e2e78c",
+        "sha256:859b70d64a47f5e3e16eff254a314f63b9e6704f9215eea60f7ab3f3203cdd85",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75"
+      ],
+      "category": "elemental",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Rain Field",
+      "effect_id": "effect.quality-rain-field",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 16,
+      "id": "rain-field",
+      "loop": "loop",
+      "markers": [],
+      "pivot": [
+        48,
+        72
+      ],
+      "source_hash": "sha256:1f1cd4f6616eafe8891b3c996ceae8208d6ef45f4fb46c104bbd9d7df940709b",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "rain",
+        "weather",
+        "loop",
+        "environment"
+      ],
+      "use_case": "A seamless diagonal rain loop with separate depth bands and a low ground-mist pulse for outdoor scenes."
+    },
+    {
+      "animation_hash": "sha256:0396d8e463d60923f3ac9ab8a66583dbdda6cd34dd52d10fcc2eaec04961fc8f",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/leaf-gust/grid/manifest.json",
+          "manifest_sha256": "sha256:50c10512b7e59f202adc52c8b7d224b055bd4af884e99ce3a7038002a9ba8279",
+          "sheet": "effects/leaf-gust/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:d488e67758ffbdf8be6a1171cc81e7d279c60b7ff16302ff341932ef7955e31d"
+        },
+        "packed": {
+          "manifest": "effects/leaf-gust/packed/manifest.json",
+          "manifest_sha256": "sha256:58869429a80240fe574677bf06f5efbf924fd664feec458a94070d12ed6143b2",
+          "sheet": "effects/leaf-gust/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:f32ef1c64124bb078401139334f11caf5bc44b8203b222861d19265211bdb68e"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:ae4396d59ed39ea3ce155f02ad2ec1a605e79ca6d432d3c943cbfdbed2bcd338",
+        "sha256:9f678ac16547e5d7124cf1729e55235307a3cd7f5b8e4cb7b69064f434f64b68",
+        "sha256:097490ca727044b55f9c3e5f897c6bda044cfe8bf844fbec335661436facb675",
+        "sha256:2627f0bc3affa804ecf4e3cfa149e5d49a61d4ff1b890e750851448fedc137a8",
+        "sha256:01d11e1698801507a32a55d969d2ff5efdd00cbc63f41921b1047b130d1be707",
+        "sha256:9e5270c211678d0c5fcb6d0487537a285e17c99558a10b095c0ce67afc4f9656",
+        "sha256:af8b22130f67313ff0e78610bbb9e7699ff5af31fe918c9848b83f6903b51777",
+        "sha256:376bed9b920a90f8b0b646d62a6dadf43dd16488b59749392ee95e4045238d13",
+        "sha256:866f4aad0aad1a0a14109254b0f441ab41c5c9cc2b48d6bc410a08e9b4b13424",
+        "sha256:3353df86a43f3b3dd0e2240bf12edf06960f89b7530b3ba3e41c9dc828a33232",
+        "sha256:f6c72246ab34a11afd501a3ac67ff1ceda6e7417e23090054ac22a6b3903b587",
+        "sha256:a3ac162e5922bef4c2c4994aed8e6192b097c7b56da9504a1c0190b94c256c65",
+        "sha256:cb1fec27b05defccf56274fc2e42ad3ccc1f3d09523f40cfb53478b01a328c8d",
+        "sha256:c29adee6ed23c527f37dff74c3dd8b371a15a8fbc4ee57bfaecc893563adfaa0"
+      ],
+      "category": "elemental",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Leaf Gust",
+      "effect_id": "effect.quality-leaf-gust",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 14,
+      "id": "leaf-gust",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 3,
+          "id": "marker.gust",
+          "name": "gust"
+        }
+      ],
+      "pivot": [
+        48,
+        62
+      ],
+      "source_hash": "sha256:05150432dcb6a7cd6736885f1ef7371e01ef7651cc43a1fce425bcfe44efb1e4",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "wind",
+        "leaves",
+        "gust",
+        "environment"
+      ],
+      "use_case": "A lateral one-shot gust carrying autumn leaves for movement, ambience, and directional wind cues."
+    },
+    {
+      "animation_hash": "sha256:a927a046d10a6a2b8252bae581a28fb5f518bbcaec3b6b4099310450698872bb",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/landing-dust/grid/manifest.json",
+          "manifest_sha256": "sha256:2d3fac9a86db809331f88a04135c59e798e22e68031665ba9588a7064de2cad2",
+          "sheet": "effects/landing-dust/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:83f4d8b6f403a56fc48674e304d4c6ed35f2e58870c44797bcdb7c8cf5d05445"
+        },
+        "packed": {
+          "manifest": "effects/landing-dust/packed/manifest.json",
+          "manifest_sha256": "sha256:36ac33e6fa496879af845b511c9baf3717bbb9d0c49ab7bed42da35a5340466c",
+          "sheet": "effects/landing-dust/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:5e2a89b7370c0a122fd151c1d71755bfda2e3c3c274eddb7f98d85a9a88e05eb"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:51bd28fcbc8d42c002d22db29341056ec6058577d4b6368baf3f10b8c53fa618",
+        "sha256:f5db15bb48150557abe72c065f41f013f4ffa3d118139d112c86abff307f1278",
+        "sha256:d08aa3105aa6e09743b63c2c3bc17124460d13ffe84624732792e90ac2f9a38f",
+        "sha256:60d368b9eedc64cba41ea9e80f19cc899840ae64c03690562ed10a1f2b86269b",
+        "sha256:1e8cb20d75518f6839e339e25f4028277dec85277417716a5397aec70051aa14",
+        "sha256:8791c518c4c76a9545621d2612ba09306e30179c0f0eefdb9aac7a6a7a59a5df",
+        "sha256:afd926973a6c29ade1efa7a749c5f9c1e162b1e878b3d5219f1a05984e6fdf77",
+        "sha256:4d028531fb1b686101ca149e9a25cfcea41c92ef651fffaecb28577bbd124707",
+        "sha256:96c6e5e9de69163fc7eb4a8c3d4d7e1841b4a3f7b8c6f811a4f74001d0cdcf79",
+        "sha256:3ad255f845393d8b9fd1f49bbffa4d6905c6df216aa33ae5848c32aa59963902",
+        "sha256:ea6610d6ff87f4b589ebf9787b1122e6bbff73a55684a240ebb57540cc6a7a40",
+        "sha256:a8d9285cd3ea925742c07261a8356de5c3cf1a25dc8a28ac63de0e640e718ec6",
+        "sha256:9e7dd60c04a0babf51445422316c837d978289cb079ae7ffc926ecdd059d14c2",
+        "sha256:595802d2bd2fad9e9ef1578cee44e4df0735912cd85485d6e9f5a3680f69759d"
+      ],
+      "category": "combat",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Landing Dust",
+      "effect_id": "effect.quality-landing-dust",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 14,
+      "id": "landing-dust",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 1,
+          "id": "marker.land",
+          "name": "land"
+        }
+      ],
+      "pivot": [
+        48,
+        70
+      ],
+      "source_hash": "sha256:b1824edcad4f9aa6efc6f89e0fa4bb1f2f7936dcf24ab6a2575c8564df4ffd13",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "dust",
+        "landing",
+        "dash",
+        "movement"
+      ],
+      "use_case": "A grounded bilateral dust burst for landings, dashes, heavy steps, knockback, and environmental contact."
+    },
+    {
+      "animation_hash": "sha256:c7e91739b93eaf1ce1a595207380ea8604143de08ccb9e54b37ec0c6effcca8a",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/splash-crown/grid/manifest.json",
+          "manifest_sha256": "sha256:4160093ebc93b976edace8bedd6d3d504ac86427c22e5e25411d72679baf2d49",
+          "sheet": "effects/splash-crown/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:34d64d5aca16ed57ef44d6507accdb0005afd6ab51a18135189ae049a5624298"
+        },
+        "packed": {
+          "manifest": "effects/splash-crown/packed/manifest.json",
+          "manifest_sha256": "sha256:a415dda3f43dc0202a209b1a1a093d696e4781c809e2e769534e6e8d7773b67a",
+          "sheet": "effects/splash-crown/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:bd5d6833a3a4cbddf251b2245642ad736e13b38d80eb83e40ece6a0aa38f7f94"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:e1cabe1a4a653ad457c794efd7211a173a9b9aff35b13e25c7a04b8c6e71f86b",
+        "sha256:7d101410169223fff2d85979e23bafe9e98a7cd9aee828b820845cd2cae48394",
+        "sha256:23fb7977f8a381493b533583001debce16307e2a60a637aa7abb6ce361a60a3c",
+        "sha256:28945c49f10139d3dcf8c50bee554345c69cc749479825b46c2f7ad9c3521c47",
+        "sha256:59c077aee054b30e83d5dd566750433e4edb89db54ae530945690cc5f26fa8a4",
+        "sha256:d621a59591f7b859b0ea0c186d0a20aa6021cf2079f5ef918b403f9f69b8cc6a",
+        "sha256:d9165c644f20a9da882f7e6727c446bca8d9772ee7d82b4d3dee94cc1f63b891",
+        "sha256:1679dcc5fd548d4393f424772b3799b78a89aedb174b3fefc6a82a2c8464a071",
+        "sha256:933b57a9ce6721c9364cf4dcba80536001ffb748cddeb1d0be6bf86080d45119",
+        "sha256:861e93296d81dff2fa2a6bb6d40b77d2b58c9adc699f7f3a808abd575ace886e",
+        "sha256:5083b6c074ab58729b1ee515f9567eac465b33ff9ad45ee05d1e040e21b3bd31",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75"
+      ],
+      "category": "elemental",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Splash Crown",
+      "effect_id": "effect.quality-splash-crown",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 14,
+      "id": "splash-crown",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 1,
+          "id": "marker.water-entry",
+          "name": "water-entry"
+        },
+        {
+          "frame": 2,
+          "id": "marker.crown-peak",
+          "name": "crown-peak"
+        }
+      ],
+      "pivot": [
+        48,
+        70
+      ],
+      "source_hash": "sha256:4edca2beca3203dcc1f046ad6527fb4a27c5deffcae96be74525d4a8c35a2a9e",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "water",
+        "splash",
+        "entry",
+        "contact"
+      ],
+      "use_case": "A snapped water-entry crown with bilateral sheets, concentric ripples, and ballistic droplets for jumps, projectiles, and creature breaches."
+    },
+    {
+      "animation_hash": "sha256:f927345de8a8712ee34246ea1cc7deea9d0a14fa17b6f0f0456f423693171bbf",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/shoreline-foam/grid/manifest.json",
+          "manifest_sha256": "sha256:262ed89e6d8a3f2c88406259d6e517e37a4e749c7ca66bbfe95e331f427e495e",
+          "sheet": "effects/shoreline-foam/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:8cce3433f30a991179b88a361ca2121b4eafa42b09c1a10b3772b967dd21c51c"
+        },
+        "packed": {
+          "manifest": "effects/shoreline-foam/packed/manifest.json",
+          "manifest_sha256": "sha256:6494013b8bdb46572aa18471450ce9dcd3151409d04a40a5fd85aa6689355af7",
+          "sheet": "effects/shoreline-foam/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:eb5ce69fd6fe74311c81a759bd1c249a353c34c9b22171f4303e2c59e16de5a9"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:07d3632c4079b2741c28b354a790a29c1edbfae660898266a7bab1ae3af65349",
+        "sha256:e9b65700de68785c0c6feb4dd878ea14c2dfb871508f38547fdef1e4f38f6c43",
+        "sha256:7d8210cf6729bcc95af4c179248d8d52df9da35e938a5a451c49c297c2c64c43",
+        "sha256:0de3e6e82d28238fc288c13b0cea2f1cae370414bda68719f1c4f73a7824ef1c",
+        "sha256:ab1c97b6657110730a9074b1a38b1e683c3cee3a1fd4a92da239fafd3096524c",
+        "sha256:8180a7a905541c44e6db13e9ca2eea07573fadd0c7bc88305201c19016aa8045",
+        "sha256:4380c0c0d8dd0b1ad7f9d1902260b8eca302d67d4d9aa36cb7fc41800125a61d",
+        "sha256:dcf3ae4f6fca7c854e9d74c9f6fe39367d79554f9ffabc893f2b7ac6558622ca",
+        "sha256:5e26e3a96b5b6cdd9a8a968b432872f3c32d5217214eb7526ce2b70a21bfe67d",
+        "sha256:115a1d925acdba3aa7233924001bc8c0087a7979c965d35e1af4a681da2a260a",
+        "sha256:b93afa0f838ed4b598801d95402470cdd59f9d2a17ebc60308fe581e5e056f5f",
+        "sha256:e24390bb7f36dfd950d5210a530818435c117e9e345008d85ec1866600ac8bc0",
+        "sha256:8ae4af541977c6df7066d48af88b556ab5e2c74b47078c651f7d5b1336f322e5",
+        "sha256:fca96d8b712ea7a1cb6d59999c8c8a12c5c9d26664bf8618732796d6ed6f4139",
+        "sha256:5063b5d1e31266ee24e037540fa4b3c787c7c70f155dc7e8de870f8e296d883f",
+        "sha256:07d3632c4079b2741c28b354a790a29c1edbfae660898266a7bab1ae3af65349"
+      ],
+      "category": "elemental",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Shoreline Foam",
+      "effect_id": "effect.quality-shoreline-foam",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 16,
+      "id": "shoreline-foam",
+      "loop": "loop",
+      "markers": [],
+      "pivot": [
+        48,
+        72
+      ],
+      "source_hash": "sha256:3e524343ef58dedea27d89ce1636ee0a84d3e5ba61eb97c973c0d8ff7fd0bdd4",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "water",
+        "shore",
+        "foam",
+        "loop"
+      ],
+      "use_case": "A seamless wash-and-recede shoreline strip with a persistent base film and broken foam edges for beaches, rivers, and flooded rooms."
+    },
+    {
+      "animation_hash": "sha256:4cbc563dafa1afd062d370902961a1b3cfcb2db12a2f234149df45baf74abfb4",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/dripping-runoff/grid/manifest.json",
+          "manifest_sha256": "sha256:7d81d33532d69ec577cb469126a2a264a6fd079e6dd7eb64513be4f6dd20bbc2",
+          "sheet": "effects/dripping-runoff/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:14f57b8034d1ea965eb2518a9690f746e6538b61e1545f666fe43433de6616d0"
+        },
+        "packed": {
+          "manifest": "effects/dripping-runoff/packed/manifest.json",
+          "manifest_sha256": "sha256:b3c4d1d61fed77caa2127ab915bfa2f275b1848d55fed97b54b6bea5b121b91c",
+          "sheet": "effects/dripping-runoff/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:250bd8db7a3a5ca8625b213ff4daf2f8e47455b021cbfb81efe707138a62dec4"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75",
+        "sha256:9ce4e5ed0f9b48717a103f78a8796bc5227c6c5c83a0590175dce08c9e6f8e74",
+        "sha256:2e67ed46ebb18baf54cc5450a3255a931069f3ee93348ada099604f7e1f42156",
+        "sha256:f28df20b99387b1600062653d9dd8dc91f5bddad1136540fb4931aab9f718c64",
+        "sha256:c13e9529151e7f1625358b58f986bad223c59decad592052a2b82ee60cb82c88",
+        "sha256:c3b54c60ab665de1f571c8a0858c48b2c5c31e37ad32153b601ee19e494e4ba0",
+        "sha256:0a65f28bf11ef861f632002d164e953441d0de5111c173db37e2247c8340f286",
+        "sha256:75a9158df8935536ff305fefcbcf6f56d6060342bdf27f36225ce770f3e63a63",
+        "sha256:239e600df3796206f4a36c3030228e5b3873339e01a660c25608ced60d39f93f",
+        "sha256:748183e908353c0255c8e40c7774d41edae514b4f0f55da0d523d3d5f7de46d4",
+        "sha256:4cc8f02337f66c1babb5afc7b58395f7ab625d8352a13c57426abf225c47b1be",
+        "sha256:6347b7e9b3f7ddee652f3c9eaceaea0e31111e7355e05cbb1a207dd4e0da67b5",
+        "sha256:b5dd24182ee59b10afbbdbeb35cfd3973ccaa91901135ca3331e4d4318d2d323",
+        "sha256:1a3067df6e325dcb2cd0db48abce6e652b9dd189e54d5549d223436d3a70fe9f",
+        "sha256:f304ae7bb80bc62cd61403a2ab52923522a0c8938a06239606e10d0829420a77",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75"
+      ],
+      "category": "elemental",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Dripping Runoff",
+      "effect_id": "effect.quality-dripping-runoff",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 16,
+      "id": "dripping-runoff",
+      "loop": "loop",
+      "markers": [
+        {
+          "frame": 9,
+          "id": "marker.drip-contact",
+          "name": "drip-contact"
+        }
+      ],
+      "pivot": [
+        48,
+        78
+      ],
+      "source_hash": "sha256:76f40dfb514dfdffa09321e38d018d816412ba50d3d947fe28e96698c7c2668a",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "water",
+        "drip",
+        "runoff",
+        "loop"
+      ],
+      "use_case": "A seamless guided drip cycle with staggered drops, a growing catch pool, and contact ripples for caves, ruins, pipes, and wet walls."
+    },
+    {
+      "animation_hash": "sha256:42281c1aa3b34dfdcb5fe3accc99a71101526d20e382b9fcb4ccf4083236ecf9",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/focus-charge/grid/manifest.json",
+          "manifest_sha256": "sha256:30bd56328e44bff6781cdb216028497c1373199b772fd31f0801ae38e82f4289",
+          "sheet": "effects/focus-charge/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:0935dfeb8c651aafaa9c439694b9a833309050728c2c4279eb32064a18c3bdd1"
+        },
+        "packed": {
+          "manifest": "effects/focus-charge/packed/manifest.json",
+          "manifest_sha256": "sha256:8960d4a025a43a64feea5ef6f1c50d009d5beabccac81fcc0c112d78b3971373",
+          "sheet": "effects/focus-charge/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:fc9e961222162f59359b6bdd777a31b361877e7cea798291ce0b8aa8cb14b9bd"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:dce9008625a2a55ff533d02f933aefaf329ebf2d20ce51b8379262fc087811e1",
+        "sha256:a885107de5e2135c7a5a0fcfd53cf384d748c429209a0c58b9e89685b1e9353b",
+        "sha256:38a3f866d7d23f0c7f7017026350f9dfdd3f5d4a575a0faa2be686b1f7b83329",
+        "sha256:93f68f31e22afb5f22ec2274afa8a1b18f6be14dd7340fd3bdf3a2534ca8904b",
+        "sha256:3a530fc27eaabaa7f101ead41204d72a133eadd2573a656bb4b98eb333979993",
+        "sha256:e43e8396d57afb72181aeef5bde9ed180d592fb944e039f10a247b668ec51bd8",
+        "sha256:0b2644ec22b6cb48bd860e1443832cdd111ef48a17a04efcd7e40a4a820fc9a7",
+        "sha256:5232134151aa48ab18c930b92413e2b97e364320ecb790acb3fe706cac05a2f3",
+        "sha256:70a95e891f538f0e0490a4be4db26733234ccb719348d1162852afd7c2ea1c0d",
+        "sha256:6cc2069737799261aac30ee126bb6e3125fa0d5959a368be7047aee0050218bc",
+        "sha256:1c613dcadccd6ed6540f484127c60446e195c93cf6f064b2b340534c9fb90fb4",
+        "sha256:83fc131ca06cc8298e1b082296e7c2dbd50959be793319b46e66e07023d5a29f",
+        "sha256:3910272eeaf97ac55ec2e9702f9232ec0f26b638a281e96735083a9fa1816090",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75"
+      ],
+      "category": "combat",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Focus Charge",
+      "effect_id": "effect.quality-focus-charge",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 14,
+      "id": "focus-charge",
+      "loop": "none",
+      "markers": [],
+      "pivot": [
+        48,
+        48
+      ],
+      "source_hash": "sha256:0d7ccb70809ebe8a9bf3110be8de395641a8b0628c5ee00f4fa1b5e6d782d0e1",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "charge",
+        "telegraph",
+        "beam",
+        "combat"
+      ],
+      "use_case": "A converging pre-fire telegraph with contracting rings, inward visual pressure, and a crisp ready-state flash for beams, cannons, and charged attacks."
+    },
+    {
+      "animation_hash": "sha256:17bca622b869acbf5606a0b344ca0e4f9f2fad0fb7cf89d421fcf7b816b2e5d3",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/lattice-beam/grid/manifest.json",
+          "manifest_sha256": "sha256:342c01234ed40eb04cae74dafe96e21bc1a1efa539d4e74f16fb93c604ebba54",
+          "sheet": "effects/lattice-beam/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:cebb7d727733b2294f0807c18cddb0f75e6258cc16610366afe64d4a49c8f393"
+        },
+        "packed": {
+          "manifest": "effects/lattice-beam/packed/manifest.json",
+          "manifest_sha256": "sha256:ba1af3f2253a2322eb4fae14d303f8279986f362863fbd22a43c7ea998672298",
+          "sheet": "effects/lattice-beam/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:9c1fcd0329eff03f1103b81110cf4caefc1bcd0eeafb2f495665fdafb19e85c5"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:b6d251e544884ef1070d13781b7b9d123aa8b7b980aa9de8d08dbbfcb2bff3e0",
+        "sha256:7c847621733937855d4bef59229ff4bc5e855d94cfde815ae80653d72a2e6176",
+        "sha256:ace45c1409043b84e1f026c85216e1ab65ec0bf13f567e5f04ed87d604a4b1f5",
+        "sha256:bb78f8aa1cc1c5356330b7c5aa822c01ac57d69cdb1a03b59a1cccb0e4c40939",
+        "sha256:55693c25551c2019728828ce43b93073dbd6a89f2a67c6816c66066bfb2747db",
+        "sha256:9f67d7f985e0056756bbbf927a9b5358d6e6c0be4cf008c8b8eb89ef60c9f4c5",
+        "sha256:2df785460626d064b4f12eb4f12285585453fef507f05a6203d290d015223f26",
+        "sha256:994086a787f7c1f8146d45ebdae3c0d4f7d609d098df0a63fc05552d5a7505e8",
+        "sha256:f71fe1cbcbd6537d869750387623a0a3820aa425711c7fbd850699add8ef37bb",
+        "sha256:6bd8e84b1b3357baab2ec9aa2ee2aecf48b4c61503ffa607088493bfc27754da",
+        "sha256:4e7bde0991b25d0baeacabf8cb5b6c2aa4b8a86816f50f968a2df18028141b3c",
+        "sha256:ea812b509b537009bd0c29bfe7fafd2c9150129362d1c49d5e9ef934da6b3f85",
+        "sha256:aaada96331df312bebcb9ce716daba7bb1216108ad15a7b19848f268af5a4b11",
+        "sha256:45a7d66a19e71b791fb05ea3c2330e93564208defa1f500fa150e3243faeeb1f",
+        "sha256:80672d49cbad66d057c950d1b9bfd83b429eff27acdd5dfa52146df7b6803925",
+        "sha256:b6d251e544884ef1070d13781b7b9d123aa8b7b980aa9de8d08dbbfcb2bff3e0"
+      ],
+      "category": "combat",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Lattice Beam",
+      "effect_id": "effect.quality-lattice-beam",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 16,
+      "id": "lattice-beam",
+      "loop": "loop",
+      "markers": [],
+      "pivot": [
+        12,
+        48
+      ],
+      "source_hash": "sha256:719409f47c0d931f1f8565c9b891e5ca8190d6516609303766f6f9f15ccfa9af",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "beam",
+        "laser",
+        "loop",
+        "sustained"
+      ],
+      "use_case": "A seamless sustained beam with a stable readable body, regenerated energy lattice, and rotating source collar for continuous weapons and channelled magic."
+    },
+    {
+      "animation_hash": "sha256:cc0434d89a82bf44f4728d6b1f5a49618f89bcdb53e62f0ff6e9ba5416d44a73",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/beam-cutoff-burst/grid/manifest.json",
+          "manifest_sha256": "sha256:d00c5f698e34b5b2a758a7903761b8686f88fdf9f9a80b257f06b87722ede4ce",
+          "sheet": "effects/beam-cutoff-burst/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:4dea0d71e3cdea898da416b58d67513dd65c7393ababab181043e4fa089374ea"
+        },
+        "packed": {
+          "manifest": "effects/beam-cutoff-burst/packed/manifest.json",
+          "manifest_sha256": "sha256:f7e5384e43a316a283cd2915e3fed878e2fb4111c6e52758a4c28588d9f8a0e0",
+          "sheet": "effects/beam-cutoff-burst/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:747014bd743e4e67aecbf5092b6f175ae37a11f8463e30305f70e06d435597cb"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:c04071f70dcf9af5d2e121774f753c6eea6997a2f7282459839331b1ff25b258",
+        "sha256:c04071f70dcf9af5d2e121774f753c6eea6997a2f7282459839331b1ff25b258",
+        "sha256:c04071f70dcf9af5d2e121774f753c6eea6997a2f7282459839331b1ff25b258",
+        "sha256:629d5b5faf7f9e0fa7ace4b6f235df4c603c9dd3159b3a16e77330f900650487",
+        "sha256:947559304ce5c465a238fd2d1f50c06cb986b7f292206a97f64fa2af75cc6ea6",
+        "sha256:c21561b397e319cb4b96b5ab8c226a5d237f620e25f1022a3b450a459f480b6a",
+        "sha256:3ae7b0522b4dd1854463ff86d68e722e0b283a1678bfcb5f01bd0eb30692111e",
+        "sha256:8ae8460ad2b6263daed5cbe36714888fc6eb39c86aef61ae3683614e5eeeef4c",
+        "sha256:a516364ee36da1186b4e4596d9e1cfadf6336fc3ad7f0ee394a37ced54d47083",
+        "sha256:8d9355a6e5fdec66bf3f24fab9b5a067c55caaa956d57124a63674a61a18e1a5",
+        "sha256:ac5b9d5875065fc335a71caa3519b33fa87af05ee7febba027d892a544991713",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75"
+      ],
+      "category": "combat",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Beam Cutoff Burst",
+      "effect_id": "effect.quality-beam-cutoff-burst",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 14,
+      "id": "beam-cutoff-burst",
+      "loop": "none",
+      "markers": [],
+      "pivot": [
+        70,
+        48
+      ],
+      "source_hash": "sha256:f420690b587fef374571a4095024d2667601854acebf1c1c5adc8c5dc6ea6f3c",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "beam",
+        "laser",
+        "cutoff",
+        "burst"
+      ],
+      "use_case": "A terminal beam stage with rapid retraction, a bright endpoint rupture, broken shock rings, and fragment decay for release, interruption, and overheat feedback."
+    },
+    {
+      "animation_hash": "sha256:3e2cc164bb679a06de379d93b9af7e162f2be82306eb37de324b0e4be72ce3c7",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/foldstep/grid/manifest.json",
+          "manifest_sha256": "sha256:0850d706be3215747673b6f70c8a7fd3a7010f516f269f3ca547da29e699847b",
+          "sheet": "effects/foldstep/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:c0a1a47ad8461505add217143a81540c09784f25ca3d45fa294286b522bc404e"
+        },
+        "packed": {
+          "manifest": "effects/foldstep/packed/manifest.json",
+          "manifest_sha256": "sha256:3c31a443f0888969867f978ea8d51b5329cc8dfd76cf13995fff2b4570327ed3",
+          "sheet": "effects/foldstep/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:4503aefac947d6a018bf9c9231cb969ab117c59b075f727eb9d4530c34a49334"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:30560b17b1e3526eb5a2aa47d0df3366b1bfa727aefe34f64316c35c33a60526",
+        "sha256:c6cc9dc7bfc46ddb528dc815d41e0008229344287459a1bbc098152d5099d63a",
+        "sha256:22d3b9755a22983f72512a3abfc226020a4fdeb8d4b8e0a033c07caf0804db80",
+        "sha256:bfc717951c1396eefea92e7017ba6567f5f0cf4ec9919426bbbb3533fbd17346",
+        "sha256:f4b058e2a353b27f48b21ae1c00d67d695cb7f4c9c355eb5f3411d25c28c2a68",
+        "sha256:354dea01d4d6fba560d2565b52e930425615f8bed11e7d5929b601dd877ae2c8",
+        "sha256:3430848fb72cffa50a48c7a7e70461b4ff705393fe765df064b2382b3df88e05",
+        "sha256:38fb03e79224eac6e8a94fab5b5fcf638ae9bc39f87c6a151f6389a029be5a06",
+        "sha256:385de5a65c5be10d6a01fe8cca178423cbe044e5fdf5a814afe3b50e546dec69",
+        "sha256:d996de9f1c21867b372139b31f1542220528487f867b0a1b38df45293b6a6291",
+        "sha256:0bb87d4c83932794cd8dd0a2708979012aff87dcbb81c52538058445668d24d2",
+        "sha256:dbbe368c030619ac4eaed7cc993b1b161cf2b7069b51a5563c72766bec53b179",
+        "sha256:553efc40c049114ac6c95744bac67da02493eb8c10525f9db68413f994c2e388",
+        "sha256:53859774c25d593595afe28cd662fe32d07956a64c1e9c0de77a3d1a8a4e69cf",
+        "sha256:27f27e0c788f89a5fb21a25629e2af776d9ea61db4324eca299c1b4c153c16e6",
+        "sha256:61fbaa61081a0579f03a7f89515565f9d2b8951dc10c7d22f55f556e2208051e",
+        "sha256:af76c581d9bcaf870ff8c7540c537d407b7fad9f3c92945f07aac202a4193327",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75"
+      ],
+      "category": "movement",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Foldstep",
+      "effect_id": "effect.quality-foldstep",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 18,
+      "id": "foldstep",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 8,
+          "id": "marker.blink",
+          "name": "blink"
+        }
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "source_hash": "sha256:38eb193a571a4d89e3e2b1b774e526890811fc40a350ae22a73e08dda1a9fe1f",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "blink",
+        "dodge",
+        "paper"
+      ],
+      "use_case": "Folded paper planes snap into a diagonal and leave two delayed curls."
+    },
+    {
+      "animation_hash": "sha256:12c91c3b9a1928fd0b73202a4eb4cf3623dc9f5f27f8e0d29a2c8aa83ddb95b5",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/mercury-molt/grid/manifest.json",
+          "manifest_sha256": "sha256:218275b04261cada18b63ef5abd016e6ae1ce97752344b977ee6ecdd92f0fd8a",
+          "sheet": "effects/mercury-molt/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:830d5a22b7526253ee63d20c278d17a1f1e134cd7d1404c8c2366c4a6c8efb02"
+        },
+        "packed": {
+          "manifest": "effects/mercury-molt/packed/manifest.json",
+          "manifest_sha256": "sha256:595147191279c1c3df801a988f4664bb0244f29bd1af07e86d02a14aef3a8ab1",
+          "sheet": "effects/mercury-molt/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:afa15e7dfc1d7f3cee29f192b30f2162f0bd4e8c93c8cb7d74415f6080a97f60"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:c1de190b4494b58dd627b8d79e4e9ffc616253164f6ff45017ab7b1b56e9406a",
+        "sha256:c1de190b4494b58dd627b8d79e4e9ffc616253164f6ff45017ab7b1b56e9406a",
+        "sha256:96135dfb87fa19a81f0217f4a61e877fb7858665a3d33bb18b0bcc49f58e63dc",
+        "sha256:96135dfb87fa19a81f0217f4a61e877fb7858665a3d33bb18b0bcc49f58e63dc",
+        "sha256:2c7dccfdd4fddce82781d4b8255ed854b60933b5b13ac3fac2de728300feb662",
+        "sha256:4db42c26751eb0551f715cc364c2917990f3aca66243512649af70b088f1d31e",
+        "sha256:22c773b97f7bef6e87ee97587a389b0ed0d9babd8db28ebfa378dd3f3ed02ede",
+        "sha256:843dfa117e50bd2a144dacc27d222559ffded045941e4e0b173c6abcff8a9f49",
+        "sha256:ffa0e679ad2f61e3b7f70d4c10d8ba45f3109d5f2243332998bb94328fba58b6",
+        "sha256:38989740314212dfe9db0569b96e46dee0acc8aa381b471d9cc7c28c88dd111e",
+        "sha256:7f75ce43ff567a4482a932ed0b5357854254d8dba766addda08b212d6a977e44",
+        "sha256:182a1bd75b2bb3e79cd343ecef1238d4043dbfc2edd82c45cc31129e1f999db4",
+        "sha256:6fa51c895e44a4578deb0da33d5e1a170235bc3afa803b874ab137bb5954ed61",
+        "sha256:00f06089df61eeb0ee50add738f1cbf607a8ee1ed35e1b44ccbfa7bbbffafc98",
+        "sha256:40b6187f68fbda64467b651de5fad01a2c40a851247171342b2a6e8d052d370f",
+        "sha256:a8e0a5638336163265582fbf755e630a4631aaa079e1c49e6e4e84fe9edb0afd",
+        "sha256:67a441fcb79466c3f867fb8b4323d881edf57010d7d4417da0843c740f688932",
+        "sha256:9e006c590777b9b0e7528b85e7c99cf009d3e6d06a937a6d43b7c5a0532b873d",
+        "sha256:db3cb0fc15247bac3c26a4ee65c0878a064ba53cef722c613668d72048094fe5",
+        "sha256:ea2e1cce916495c47970fd05e0185e040aec3662fe81d34bbd375cff5f207133",
+        "sha256:21558c382374fab2a1eac7bd5792d5131659c7724b6089fa4f6d6cd354b5173f",
+        "sha256:ec28643a907a80258cc689233fefd8aa87b6e1803b78fa59216719b3fcf444d6",
+        "sha256:b2b15ee79fb68652ce978cc99e6e7d9bd68785ee26c347b0b3798533ed1a5943",
+        "sha256:9da7505f1af9e7edd79b3e9a00e98fbbba477a07852dd6aba32f23d6eeea1533",
+        "sha256:80aecdcc27fc51c396f22498159fe61bc7f6293a4a52af5b50674ab0aeac7d89",
+        "sha256:fd0e9096c7c9fcebfc7e8bf638f348904b5054017342a51301f39c91a5b839e7",
+        "sha256:fd0e9096c7c9fcebfc7e8bf638f348904b5054017342a51301f39c91a5b839e7",
+        "sha256:fd0e9096c7c9fcebfc7e8bf638f348904b5054017342a51301f39c91a5b839e7",
+        "sha256:234c435654c0c440bcd24aa98234f2e132312c19553be887fa2fb8f25009a4bf",
+        "sha256:ddf449bda64819a2242a99f9be4324495f4e775b2714ba037c12db07fa999b22",
+        "sha256:08bca053c368097162455f0efb35112d6c8679560a3223dd9a0a536b2e2a29e8",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75"
+      ],
+      "category": "defense",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Mercury Molt",
+      "effect_id": "effect.quality-mercury-molt",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 32,
+      "id": "mercury-molt",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 26,
+          "id": "marker.release",
+          "name": "release"
+        }
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "source_hash": "sha256:90b52bc72a544cef5e0391d62a0ecedaaa31d15bec4d8f165b59d5a788f15866",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "armor-break",
+        "dispel",
+        "metal"
+      ],
+      "use_case": "A silver shell peels into ribbons, gathers into one bead, and drops."
+    },
+    {
+      "animation_hash": "sha256:04e6836db4e910a085b6bf69baa57a29a03391da349bc40aa20076127ff061ea",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/cinder-orchid/grid/manifest.json",
+          "manifest_sha256": "sha256:87647a7f2082412a9cf7c5ff62d826e1c5ec01687db99be5d5192fb7c37c3bd5",
+          "sheet": "effects/cinder-orchid/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:92bbc1e3cfa9b051f7b618c3844e9bad849921ac1be1f28f227d1919d9f8466f"
+        },
+        "packed": {
+          "manifest": "effects/cinder-orchid/packed/manifest.json",
+          "manifest_sha256": "sha256:efcb349b9e9b11597adf7a1ff49ead9a9ddb9395f53a9b531d67c010fe057494",
+          "sheet": "effects/cinder-orchid/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:c888862208b4d6960c49d06b8eb0003070e3bf957647b6df250ab86e56d51733"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:c0eee4202f4478da6203d74823ec337a4164f79b75a182a2ae5d945315a9f83a",
+        "sha256:fdba30da2c36520ef2527e15f1b5fa25d6cf6f5309d59b22bf796755f04a71fa",
+        "sha256:0d0c88f23d31ee540b9ca5ada6243a5edebd3673d7bf75e95f8bbe6c46c22e41",
+        "sha256:fd838572839d0eadccca74cb0810dc2b7c062a3f3324c3bc38d86102561c0c81",
+        "sha256:c33f2603f13cf0e93a65de2b9b6fdc5e1b2de5e83df219fc4ba253588bcca123",
+        "sha256:13e7353316c686f0e0954c7bd0d7f4c35f79bc7360c18597951e18bd71a3c80b",
+        "sha256:6c02d484b7cfa8c5c1d5934d3f73cf4e0e3dc359d657fbccd0830d6388cf0d60",
+        "sha256:6c02d484b7cfa8c5c1d5934d3f73cf4e0e3dc359d657fbccd0830d6388cf0d60",
+        "sha256:6c02d484b7cfa8c5c1d5934d3f73cf4e0e3dc359d657fbccd0830d6388cf0d60",
+        "sha256:6c02d484b7cfa8c5c1d5934d3f73cf4e0e3dc359d657fbccd0830d6388cf0d60",
+        "sha256:6c02d484b7cfa8c5c1d5934d3f73cf4e0e3dc359d657fbccd0830d6388cf0d60",
+        "sha256:6c02d484b7cfa8c5c1d5934d3f73cf4e0e3dc359d657fbccd0830d6388cf0d60",
+        "sha256:25a6133ee6d873ac365d21ab992c50d676540eefa61954f6761b4f904577977b",
+        "sha256:23419d13475fa264d6e3272a3a45f73628aebb8719ee9ae34e6be0b62a66a79e",
+        "sha256:ae0229ff6cdce630c8d2e087ac76053bb6ea263ad54b8757a25495829e410b35",
+        "sha256:a7ed514c67bba60302fa56d4ea6f36916c9023a57c79c7985feaa08beca11b98",
+        "sha256:8aef40b74b7249eef4ba3c24aeafea5dcf3f96eecf7f0c543225d30ba7ac126a",
+        "sha256:9a8b2fd837c3c5749eb7fad1683b68bb6dda67f659bd0ed57ec1965d4905c4b5",
+        "sha256:7b70b67b1808ecf178820ce92288cfd3c6eb2337b7e0745f8fc0e05729872d60",
+        "sha256:4cbc95dbdbd92c13b18d70b67fc2087f699caa8f871a23eadb13a904175c7d8a",
+        "sha256:36132461db0a919c69af1a2550d997c8c53c44dc3d9d15cd24f339e8945ad8e6",
+        "sha256:14a226a5417098f87d8f2a4b0c18a499eb4ab036dea373139b78bab0469009b3",
+        "sha256:e602662be99a9b4fe323b0e31ced8b883f08f240df9781bc130c08f218d8169b",
+        "sha256:2a1dc2c4385044c9e81995d4e7f93d7d26cf5c238c2ec71e67ff64b2335afedc",
+        "sha256:0d022c7fb50cab33560c76bc2c74ba6840242424e6d0371a5e815053f456b411",
+        "sha256:66141c7f483d802bb514a014d7d1057d8f48f2e3c5757e5c31d2adb4d3b1a36a",
+        "sha256:e023fcd35bf7bf0fdcb127943d683d625261233a3975f681dc6e5a1472c72ff2",
+        "sha256:bbc866e6e9db08abc76f921fcd1b1320b33f28593cba4d3426ab020ad47767f7",
+        "sha256:5d3ca9557475a24270fe63ee2ea3b422f0fab7bb5dd2bc5724c21a41fb01b2f4",
+        "sha256:738e56be2683c4d3cd09725d9d04f0d2094f9c027fa81dcc912c2a8008498c56",
+        "sha256:088f691034b5dadbc2740cf13c424c7aeb4fcc38ffa361a1bbcf2ab09acf6131",
+        "sha256:007289171636d441f2b42ea6a0eb4d6cd113b4f0a04df55e0b9e4ce1eb33a482",
+        "sha256:e9a87902d3a8273e56f5db7ef8a9a7f824e0b929ade998169ab9780714df646b",
+        "sha256:a2341d84aff4c0db97aaac6148367644c3858a1107fe7d74123beb392316d6a2",
+        "sha256:ccd91290a4c04bdfa73232b959d159ac4807c9af1c5c58e0e7dcb353ced3b9c4",
+        "sha256:2770dade6ee3728c67104833208da8e1f48a7e269d25eb8b411a67d2538f5dae",
+        "sha256:3beb1cd7ece5fa6db56ea08d0feff58070205b24b7b1efcff3b77689dab422ed",
+        "sha256:19fc9e11aa755311912fd6ad7639f72247ca0c6792691af00fd81eaa45e40962",
+        "sha256:82f335f75086a8936af9208ad93ba8da75f6f762127a204cc4bfd8ee4d204192",
+        "sha256:bcda9807ce24eb41797fe787a328a35c0d88b809f2ba68f3b3e37f0ab53c14a2",
+        "sha256:edd41bc5e996d9ecaccd5652f374c67dd80981b24404d09fee0098eb96d730ea",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75"
+      ],
+      "category": "combat",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Cinder Orchid",
+      "effect_id": "effect.quality-cinder-orchid",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 42,
+      "id": "cinder-orchid",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 15,
+          "id": "marker.detonation",
+          "name": "detonation"
+        }
+      ],
+      "pivot": [
+        38,
+        78
+      ],
+      "source_hash": "sha256:6e2d9fb7608490df973232d04b0d0accf2d3b8780dc1979e418c2a1f4347da6c",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "trap",
+        "mine",
+        "fire"
+      ],
+      "use_case": "A closed ember bud opens three curled petals around a hot detonation throat."
+    },
+    {
+      "animation_hash": "sha256:2d2b4b67f7695525dabc232a575b9c4ffc394a4c8192d722adbdf92a16cb67fb",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/suturelight/grid/manifest.json",
+          "manifest_sha256": "sha256:d3e93c104865962a43a64558fc2b6d43e002457c8735bf1772333eb80ae773a3",
+          "sheet": "effects/suturelight/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:fcd6b381e7f44950570e2e2d787a9d63b7f051611956405f92ab53bf3f28edfd"
+        },
+        "packed": {
+          "manifest": "effects/suturelight/packed/manifest.json",
+          "manifest_sha256": "sha256:4a7acb2948e1479370f21f295273f9659cddcd96e28bb948128d40c1604ab472",
+          "sheet": "effects/suturelight/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:e635c5ae31ae3080b251c6cd2069cfac4192728c173b47c59d42086cf8af8c56"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:a3fb1c187c30ad093b5751fa27f46b5bbd587fafaf346bed3a71406d772cbc81",
+        "sha256:a3fb1c187c30ad093b5751fa27f46b5bbd587fafaf346bed3a71406d772cbc81",
+        "sha256:1b7dcb0f71ab1d93d5432537327043cac6d5e9af63cd76f2b39ec7df320e521a",
+        "sha256:c363086b4af2d78ab3cea3af5013151a5f7106cdbc98cfa96ae13748e9c99712",
+        "sha256:af0cc7411cd208e4dfb7cbf3ee51d687c382c68dea2d05f7d7ef8606dd6c6e98",
+        "sha256:72548ddcdaaf4da1805abb8879dffabe59b0f86cb1799dcd63d8592cb420045e",
+        "sha256:28a89e644faf0d45603971c0a152c1f7da66329001b042cfca237f2202737a4f",
+        "sha256:e589f4a995baafbb579701458306f67f1057c588116af51ed7ad53ff6b006d51",
+        "sha256:c198ee64d2db04dcefe9a5ec2c4c343fbb58353d1cc3c581664c3f7c7169674a",
+        "sha256:1ab1bf0d0c458d2ae25b7e7db71bbd5c6a9a01a364aa6d09f6b2c61ac38435f5",
+        "sha256:7f6123ba9d1716616f096a36906c8467601a1d31e3cc6ab465999606441bfce2",
+        "sha256:9bb57b580a309407a5e39a11e256d58a9a3a8e7adce73228092df55f2ae6512d",
+        "sha256:ff77aea981f6498c5b304cc711652d5639b90cf191b3d65a3bab71dc9bf6c89f",
+        "sha256:1b23085e9b5cca5c97da869a9a0121d9d916de447eb58151552282b8d7bfd7c6",
+        "sha256:73e098b7f7598a4d7ca592e452184e52db5f947df9bf7249b282cd5d368e0d53",
+        "sha256:801e0759817699ba9140de46fdd052b4b142156fb0ca4ce85ada1417c1daab44",
+        "sha256:5774d10250422436af7e6acf40f59b9ff2a1381036ccc9f55e36665bf125b6d0",
+        "sha256:2e51d61e219022f6c2eab72bdc945c16aed8fca8d8511bcbca2bff544c8bb513",
+        "sha256:150acb30c32aa5c290121b9428cc6ad1a1ef3d738012f9908d02920c4826176c",
+        "sha256:5859ae5826a8a3ca08a866ca3f374e9d2ca731089145f4ac7cf909ef7a0c46b9",
+        "sha256:c58af6b9a850cc95bbcf6fff36b6d3421ec89d364328ace96390ce4a788ee29a",
+        "sha256:b61b1ff749401037bd75155ce961655404e4d9e68bc2671f38c9d11be43edda7",
+        "sha256:3f12a424fc61b9274203f827bf4a549f71ab30c4f0c92b13bd984560f15abce7",
+        "sha256:e352b03b786aafb5482216a661e354e3c30fc3e1b12d36c484f126cde6fd7e83",
+        "sha256:2a7c190ea434acf6d3b3d4d0e2f5be882773883428e471423056fef5561aee57",
+        "sha256:1218ceda9cad4d5902cedcd290e3a1eca97cb012a6f9cebd7ac95dec8daa9dfc",
+        "sha256:7b18b42e481f4da252591a3da42b710defaf723c81bb85d57a482434dc99cd5d",
+        "sha256:dddbbe1427009f1a4eb459be1ba83aa9765982b9237975c54d73432cd9186263",
+        "sha256:ec19be63fa45d13dac2a63fef0bda7925339711375dd33053b3f272bce208b90",
+        "sha256:68b5cc6db88234eb3e4c59b744d8f45ebc7dcaa4005de688eca34bd4bf365242",
+        "sha256:373bfeb0b049ac94e4613cf97037d892192aebda3c329571b4f23b849b6205d4",
+        "sha256:4097fa742f2b5d50fb4e04275ac17a57cb79d2e8ab13682b121588fa3c2be87d",
+        "sha256:25f6fa0ea97666f2ef79bb62338d282a772133ec9aa4d23691b8042118cee348",
+        "sha256:8223f872346f5b491450e9146f7d995c58f9d4c22da04af962d2388a77cef729",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75"
+      ],
+      "category": "support",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Suturelight",
+      "effect_id": "effect.quality-suturelight",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 36,
+      "id": "suturelight",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 24,
+          "id": "marker.closure",
+          "name": "closure"
+        }
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "source_hash": "sha256:4316ce1871a4d0cdd0c18fdc77eb1d7b8a2fa8fbcdca938ff8b169bcf09c865e",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "repair",
+        "revive",
+        "thread"
+      ],
+      "use_case": "Gold stitches tighten a luminous wound into a small closing knot."
+    },
+    {
+      "animation_hash": "sha256:da4456802a369bedf68e3e00e19dfedf850a3ad1ae7daad80d5f1f3b07afd98a",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/hourglass-splinter/grid/manifest.json",
+          "manifest_sha256": "sha256:f9e82656f43203466812dca25afbf5a803c4a91f44397b0a9cb744ae4cae30d9",
+          "sheet": "effects/hourglass-splinter/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:09b4f2866436f3886bc15df30c7013e55d51d391fb39ada3bff4baa211e5f335"
+        },
+        "packed": {
+          "manifest": "effects/hourglass-splinter/packed/manifest.json",
+          "manifest_sha256": "sha256:1f2e81b4a0ff0ce15dcfb81047f577a1b2d953d00babcaae2d1584d067003f52",
+          "sheet": "effects/hourglass-splinter/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:ad7c22ef3269af573cf537f211799485d1d39499b1e4c604af21771e680b9e8a"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:63923afad8e75907e41d37d408af695af65dd5d2557b1dd8edddc3dde947d774",
+        "sha256:9dcbc8c205a072ac97b95f8fd1c14fb04a40a08899c0be94e807d267e7a89d32",
+        "sha256:988ded822ddb0d850e4ae37ac3ef281183462d9233f55565805c4d08de5924cf",
+        "sha256:988ded822ddb0d850e4ae37ac3ef281183462d9233f55565805c4d08de5924cf",
+        "sha256:988ded822ddb0d850e4ae37ac3ef281183462d9233f55565805c4d08de5924cf",
+        "sha256:988ded822ddb0d850e4ae37ac3ef281183462d9233f55565805c4d08de5924cf",
+        "sha256:988ded822ddb0d850e4ae37ac3ef281183462d9233f55565805c4d08de5924cf",
+        "sha256:988ded822ddb0d850e4ae37ac3ef281183462d9233f55565805c4d08de5924cf",
+        "sha256:988ded822ddb0d850e4ae37ac3ef281183462d9233f55565805c4d08de5924cf",
+        "sha256:988ded822ddb0d850e4ae37ac3ef281183462d9233f55565805c4d08de5924cf",
+        "sha256:5056ac45cd1c2e4d0984e4d8cbc79e81513cc7e17f4ee7b2896659852cf45537",
+        "sha256:5056ac45cd1c2e4d0984e4d8cbc79e81513cc7e17f4ee7b2896659852cf45537",
+        "sha256:ab0f2d9956edc361941cd33221968aabfdd74a5097b92d2623f92bea3a6cb5dd",
+        "sha256:2382a246d7099f7117bc46dafe951e9c0fb430ee8a554b3b9dd16f4f70865940",
+        "sha256:9b52e7e3cd9ea25bd7c16a806309943316d0f28aafa86d9079d01ec9abf0ed58",
+        "sha256:b2806de34e8f719e667191f3d514520570d3bfd995277e0e4958cc6b5e59dbfa",
+        "sha256:d0e2e5c7a5480b056ecaaad8e1824764ae0f6ea9dc49ad801af0b36ff2019dcb",
+        "sha256:ef6fbe0237c69ceccedbfb3400daeedabb0bd0495a437770ab3de5520ed54cf5",
+        "sha256:8ab098afb6cb2a5a298107b56017b522a8a464d0a7ff2fdf9447bcab11cb73b2",
+        "sha256:f711a4c1a6227cdd006b5d039d1c9f5dfc82a349a6b5bef983a0cd6e46c59483",
+        "sha256:1d9e0b866e902dbc6766a040245327a9400fb9202fae9bde568983c87c84d7b0",
+        "sha256:eb2793ab98f1834bb4937236b0a81c93c2507a8b94ae278572dd8a006073f71a",
+        "sha256:86d72008ef15a69be58dac7b7ebf420153b2d0f80d01f62b71103164400416ab",
+        "sha256:91c316eac384572c52cc31023869d9b5353611887a4cb4f1340c0235fc589075",
+        "sha256:261c6a801595835e1bc7aae8f644651097ce16235f1d9e9f1eca3bbf3dbb8fe2",
+        "sha256:6683080f61481de7a08a691211263c5849a1d4d230aab16976c71db9e6cfbcfc",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75"
+      ],
+      "category": "status",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Hourglass Splinter",
+      "effect_id": "effect.quality-hourglass-splinter",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 28,
+      "id": "hourglass-splinter",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 14,
+          "id": "marker.time-release",
+          "name": "time-release"
+        }
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "source_hash": "sha256:37c47f193fde9512f6e5c72fe235b97ff790a5628045f6651da7398a75d043d9",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "stasis",
+        "time",
+        "glass"
+      ],
+      "use_case": "Held amber grains escape upward while fractured glass falls."
+    },
+    {
+      "animation_hash": "sha256:41a2bdd4fb4852442f2373012c7c8482a8152b47ecb63395e6bd51067605d31f",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/choir-moths/grid/manifest.json",
+          "manifest_sha256": "sha256:e0ba3da3657efe6636d97a16090208972c5061277138d2ef6497bd04a8d89790",
+          "sheet": "effects/choir-moths/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:7dfe945450dbe3d663e1ea381d82ef5f9f27d01f2bfbe5479f9af114f0e93953"
+        },
+        "packed": {
+          "manifest": "effects/choir-moths/packed/manifest.json",
+          "manifest_sha256": "sha256:b6f37e6b44875d8a4b2e2901ffdba70d4679588dceab1beedb9b7756c207a902",
+          "sheet": "effects/choir-moths/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:cff32856b33a4250529737aeeff9648cb97c9c678579f7755bb2b63acecc5e2e"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:46d60e5b41b0775026408c4dbd143710e5c1095d4823a17f29a07ed02616b16b",
+        "sha256:5c08cc64b782b3fd74c1a2b51a64f3dbbbca4524df77c0c4ebdfc9af521a31c0",
+        "sha256:36f920b56fa8b2193dac6fe14e0560346d76e4fba871fc05ef928f41fb12062a",
+        "sha256:994e19af6f07cf1499fb1899b8f3b79848f5ebdc977655a0ac119140b877f14f",
+        "sha256:9c4c4999817ad14c1ec3353d5699607f3ca4c62f673ab10974cd6da203142860",
+        "sha256:67f6c70097e92363eb3f5ee6df3395f36bde6a9e0e4b78dfe8f78483fa63f632",
+        "sha256:895cfe72df61fd3bb8d0d7ff5f7bb3dd4c8567a4e293d454a9074afe102deb86",
+        "sha256:5c07157e221902bfbbdc66a1ca45d430095195960e67b77201efdcc1b0174a45",
+        "sha256:6f52c150da197212d5839c84bd2f3139b4106b269cfe794ae8fa48176a37656b",
+        "sha256:22b66584fba457f553767517c38e641f734a54cc17b4505f42d8016cdbb3ee18",
+        "sha256:366bc1bebe4d488a5ff4d8f749094d6d3292858ed368d5a9acf94a0b96a1339f",
+        "sha256:71f34dc3fff31d923f372c63601883c0c176197fd0790c5340fc06b615982795",
+        "sha256:0c1148911df3456789e38ae66811214bd7b71c11e56ac949b8041cea63989a8b",
+        "sha256:3c1a6c7431845eed69daace227b45dbc11141acbdfdbec8144f0737ea07c06c9",
+        "sha256:6068f72624d2902f4686942bea4eb81ad509ed8c1f4541a7e81380e1be5664e4",
+        "sha256:a42620dba518b6a67fa0e00bf9610fcfd787ea3433fa8922a3f75cb273d01fbe",
+        "sha256:f7d6945cd0c7e9d6575b08a502edb53b2182c8221ae2afd85d1a6589bc4ab3f3",
+        "sha256:3ec7ab0bdd71b7b1a9ac22cf1f3aa4aa0e27c0513be7a396692f248b266f1b0a",
+        "sha256:4b96c8471be06f0fa8cd17ed39824f47b0328bdfba37b87d1bffb814ea9e0af2",
+        "sha256:dec4048724dd31c023b73286ab2bb58e7bb3b83d442de788e783ac4e4a36f481",
+        "sha256:73bf75ff401a2e512f0dab6e3325b7fd3e687877c12102d54d0c4a6e143ee493",
+        "sha256:694a64360d8e4c011b39dde1468303bdf49f5ebd7c44b9a515a7469abb50b531",
+        "sha256:c42b7ae50584a5916ac4d263ca695c8687041c269a5e46834bc0c1bd3f6a7221",
+        "sha256:dba21914715feb682d3712e166b65594d78103527975b93bd7adfc716c7d551f",
+        "sha256:28fade6169b3f2ab1aa5048f7a2c1b9bbdcf9409e6783c28f1f81b21f6578478",
+        "sha256:5441b663d9069261f94b4cc72e351f6bf26c151b448d69f2d46d28fc78e9d9df",
+        "sha256:f66d583bcd6a67c8273df39b45b820d64387813e838441a72b3c5ec9fe68eaff",
+        "sha256:4625cc1827bd989d15b76d6810c812fcc2801d9ba3818065f2b9e23fae2860da",
+        "sha256:c809df3d96535111aa85eab6c490539eafe01bf37aed50a83dab5577cd729092",
+        "sha256:6befddb5c6e5389f1331a4701589e7250f8ffde4996e7fad0b31c09f9db5a01b",
+        "sha256:ebd24514d7c8abf07191be2874322dd5e3f18490854fb7011a6c189ebca76316",
+        "sha256:7ee363c65490a2fc66141e0c6b8351f875981fd538d75d1aa016c330485f676e",
+        "sha256:cc53e8b91d4c4ce8e11320cdf9b861cb4bd466b7532528a4f20dc3104b79c26e",
+        "sha256:f14f67e71b7e182878f13d1b2e1a008a2703320d21eb781ec8fc5d1ca3acf1c7",
+        "sha256:1596188705dd734ef77555af03bf091bf36c135e11d3c34987511477cba437e4",
+        "sha256:f83a0961a5746713a8b53ab3f402df2afdcf4045dd10060ee55fa4b1dcfc6bb1",
+        "sha256:6648f3827784050dc7ff8f0e18a3fab85a614dcf9ee8c8c1e892bef0310e318f",
+        "sha256:c8d7952bc9051a974e05442c195b8716d130a86a9f4b7425083d0a1e542f7890",
+        "sha256:6c87285e639fbf7089a841408bfe1ba70f14d2ab03db7b19274259cc6fa5a87d",
+        "sha256:891aa5e039108078dc22ceedd0636d8c47966edb01fe8a4ae1158f046e7494c0",
+        "sha256:21d0502a4d8b263ab722d14491cf9c0ac177967721dd078ad718b30d5f79a041",
+        "sha256:ed2e8b72ad2241a47922cf628eed13bcd24415d25ecb740d55f8929e50c6fbe7",
+        "sha256:bec70227178e4a61aac6cab3766fb7f8d6b0b5b1c9b835df8f9d6964180820e0",
+        "sha256:b0b9b8553b6f0143dd706fd9a6a82dfc530b0e616be8a5bf42a4c4392600bccf",
+        "sha256:f07468c11831ada7a019ec9031a2e3f27719554e649f38f670b60e764da71811",
+        "sha256:a36732cbeb1b7b9d92a44c496808988164c6e4876d281d6ac35c956737ec5a3e",
+        "sha256:5c73e55ac025ca7f7f9346365ef212c0797223ccefbbd2566796b73f8e76c241",
+        "sha256:3580990b24f866dd7d9c825d2fbb5eb96183e9502c3278bb5c943ec660fa1405",
+        "sha256:487d1836155beae2f45d90bcd2e1ba83c45f5c86dfc42a8660e33b01811406eb",
+        "sha256:62b82c1bc421e9eebf7d3e123b1aec33e35800da138ca99328af929ec308e12c",
+        "sha256:6250a4c66c01aebff5884993f0e5830acc87f1ec9242757241a63e0e6e89b15b",
+        "sha256:fd3a257b2bc68153b7b03e8a20299ea4ba773f343637a2355552614a75fa5ef0",
+        "sha256:c12f148224b83c3744a0edfbd1866a12d54e183a776936d03334f8fef423b1d4",
+        "sha256:f6c289cb8a44243a8f0660970c2a51ebaf64543defcc62cdc745b008b2ec19ec",
+        "sha256:1061adf19d3c95aa2edc36650d5fe1ccb7d2ad92466087a3ace2719791830c4e",
+        "sha256:2ecbedc04cf8faf9bfd2332372377a2f578fb4c34112c1eda89dde9f8d7779ab",
+        "sha256:3a0455fc5e349e92bee10da1687f62a5e8f18a76a6e02ebcb57099487af404b0",
+        "sha256:877ba61959c9b1f830f5b79a70e4860c9e4876cde96b9a28b8dff670314d2d33",
+        "sha256:45de84d0df631c73d8766e83864a4f38a6c47d71620834aad3c7d595f62085d3",
+        "sha256:46d60e5b41b0775026408c4dbd143710e5c1095d4823a17f29a07ed02616b16b"
+      ],
+      "category": "environment",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Choir Moths",
+      "effect_id": "effect.quality-choir-moths",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 60,
+      "id": "choir-moths",
+      "loop": "loop",
+      "markers": [],
+      "pivot": [
+        48,
+        48
+      ],
+      "source_hash": "sha256:0468bd28503e86671b472f5a4b356f9cad0dd031cd1f81d49f9b6f0e9fc44ee8",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "ambience",
+        "spirits",
+        "moths"
+      ],
+      "use_case": "Three four-wing spirits trace unequal paths with offset glow and echoes."
+    },
+    {
+      "animation_hash": "sha256:914bf11cf9e97450925419f0f8b5bafece07ee62167a7282588491302ef5edae",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/ferrospine/grid/manifest.json",
+          "manifest_sha256": "sha256:5adc97eb47bbabd4ebcaf60766991f57ecc63a8fc2e1161b79aa3937857e12af",
+          "sheet": "effects/ferrospine/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:e93c9148a33aa3494d42990e89b61e6548a808d9d4fc8925a10ec934c424f14b"
+        },
+        "packed": {
+          "manifest": "effects/ferrospine/packed/manifest.json",
+          "manifest_sha256": "sha256:220b76abe5e2fcd81d4020da47204e101856217d24cc075f8796503f72fc016f",
+          "sheet": "effects/ferrospine/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:6a9e658fd2069260cfde12103fc1b9eb886111429325ad91f4e049a525f723d3"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:e7eb3db2cc1b812b609b8f42b52e9cd6e06b26e99503b40b0931cdc0b43ed732",
+        "sha256:2db08cba554d8ceeb01926e806c3cfffc3d7c562811c90f18ab4fe91e9a019f1",
+        "sha256:59c8c97585e9b28fbf6471ff5c7511b6adba0a0948a0cdf9b2c280916d1c6b98",
+        "sha256:5418c1b6297caf5c846ebff2588a26a56881ae783e4541500608185e5c7f6e78",
+        "sha256:e63ec18d4c76e09ff74933aa4511acef1f5f966d4e8d974dc4225981318a2137",
+        "sha256:7b153837dbe43e77540489b9a01667d277ea98df0fa33f20b21589d5ff7c764c",
+        "sha256:3660a0c1ab04432774d2096113a1662aef3e0d461ff54bc3e99f449be5b70f06",
+        "sha256:3a0cd1cbdfeef006f670d79812144edc59e7289ed2a852cd2ef558df08ef1a50",
+        "sha256:05163727ad3c8588e940759a2bbfcd141b1de72ddd65b91f6241bf87961605f9",
+        "sha256:cfb03745cc51f9467c23bad898672aa1e3d189ffe662ce3b877d817e8dfe6f4e",
+        "sha256:c27ef69af35d380f5c4977868bb52137a8fefc93e5f31b3e47078e04b5a4ba82",
+        "sha256:b13ebe2ec785f72b595682b4fdff9e332b9b52c1d7f1649ac28335c038b28d66",
+        "sha256:b1e27ec936648f9d823edd6de1c8812a7aef5e3db0824357dffb4f4a481e1c25",
+        "sha256:4611b0f4cef774f0082c50f8946f89ac232c5f4fc8369b0c9ad30a0fe08f4bd5",
+        "sha256:840464a7f5a667717a0a05821c21ff278c24da21bc9e448dddd046f814ccb9f6",
+        "sha256:8298e0b3119cfa84175f6e154d648a8506626d12fe4de04fa78d31a1af046eb0",
+        "sha256:f80fe2c7671f5e666b240be87d095d22b55d5d4d8c034d256e839b9e6c70bb01",
+        "sha256:39e5c129b7aeb3d6381c3e51d3e663181372af44e47f35434d0361a83e152aca",
+        "sha256:47c7f837f0f7bd2c31400647e8f9e1f1a8ea88e82e668639f1dfff7b74efff75",
+        "sha256:b98dc6ca3e272b6579a1b9b142f568d6d7861e6d04c2ec8ee8599e2072e7e60c",
+        "sha256:c9adbfb1959e150fd9fc41ca78e2163a2776e16f28f54f038131d07fa68efb1d",
+        "sha256:8e6b72918167c4202b079d88068d6fee50101deebbdb370379ca8aaef0d83869",
+        "sha256:cf52b2f782713cf3507a1c5fb472579ba992a87ab645ca9e31cc37317d0fd84d",
+        "sha256:6f9166eaee306974c8d49e63d24425b1f6ce89677fa7a9b476d0a11835d477a3",
+        "sha256:834d7c68d2862e5b1ed754425ba01f437f1a749e110e3fb36a05ba72f2e4794e",
+        "sha256:f5c5384ca1799ad31edb20dfbfe4fa33bc2c8af6ca4c4a063471bd2734103bba",
+        "sha256:61a25e364262a9b44f5995492117a581689b6290b92fa3a1e5dc236182841f45",
+        "sha256:b7ed62da4d726b35d7ce5b71d43b3591adee6ac3e72d8ddaef9262b1bfa1d7ba",
+        "sha256:72557e90923d0598ab57d6ce7885c4046f101eaddce9df120d2e633792687691",
+        "sha256:f4504abd99c2ca3d0331080cbb91a5584c5a023829ee42c3d605d8e3f282befb",
+        "sha256:ed7ea3e6a904dff8eaf1735b6e8b49153b189d441f3a0b8f997a5ba8073904ca",
+        "sha256:d796e719908528775d6f521d83290a7f82a64b8025132805b8ada8e8c8928882",
+        "sha256:b9bd66281031762d51bf6576cefb3d3ca36f106f8f425526286fa0da015c1553",
+        "sha256:f4cf68d2365540f9b377558316bbb3561e921e053980e61f1325b144bb343d32",
+        "sha256:c4bef0137d185270dd513171b12f44c12a0e72ebbd471f458eeb192e009d7bc8",
+        "sha256:18646c4d68a43a2340456dba59e875319132259a55f707d251ba5f50c6786592",
+        "sha256:4878bf06fdc0c19615445547dfc9e0981036d68f3f88dc97de3f1e3e5cab5f36",
+        "sha256:01e4211d7759172c436cd40aa3e06886ff00f79eafe49d5229e007b52a248125",
+        "sha256:d54433a6abf9a890dcf22a211b1a7e691e6c94095218e291c3bef099a0d66210",
+        "sha256:e7eb3db2cc1b812b609b8f42b52e9cd6e06b26e99503b40b0931cdc0b43ed732"
+      ],
+      "category": "environment",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Ferrospine",
+      "effect_id": "effect.quality-ferrospine",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 40,
+      "id": "ferrospine",
+      "loop": "loop",
+      "markers": [],
+      "pivot": [
+        48,
+        75
+      ],
+      "source_hash": "sha256:365ee8e7ac56c24a873be1bcc6e255d1c51b441773bcb6badde088483918fa7f",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "magnetic",
+        "hazard",
+        "metal"
+      ],
+      "use_case": "Filings recirculate through a bent serrated spine and a copper return path."
+    },
+    {
+      "animation_hash": "sha256:597a4520b971e391973f0878a7d3dd5d6a6564f7ebbf9be6bbfcab3ad66ef7db",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/rootscript/grid/manifest.json",
+          "manifest_sha256": "sha256:6f4a842abf9f6d6b76d51896a8c7ac23444d97cbcecb5e0bba2564f6773ef894",
+          "sheet": "effects/rootscript/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:0e1ec25d085d7e4bd1d4fa3a9e8f1fbd2126ba384d163593ca8d4f8fb816cd59"
+        },
+        "packed": {
+          "manifest": "effects/rootscript/packed/manifest.json",
+          "manifest_sha256": "sha256:2ecd6de6b4ae5f19a48a25fd60963ae243023d960afcd73955dd7ec452eee309",
+          "sheet": "effects/rootscript/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:cacf7b3e966919229e6b5decff689f417795864a81190312abb4ce326b236aeb"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:cb6d222c33e94f1c1abe955fbd25a1469613262892741f684e661c1c519c27cb",
+        "sha256:11e352e3f09d414d031cd3ff008900c3192753e94cf033f0026389ffc7efc781",
+        "sha256:7486901ebef3aeabafad9dc0560bd97cb14fa4b2e68df3b2a5eab9a33bb9b563",
+        "sha256:d774870cdd2fce869e9b853ab7ef271b61d83688eba5e0c21893c73d90db24ea",
+        "sha256:b11b2c72d60027dbecef62eddc8cc6638875746d1cc3300b376ef1aa79f28274",
+        "sha256:900f3fd6dfac8abb9e9b23ba36b4bfde36e4a8b9309b827fc1f5e409316f7757",
+        "sha256:0bfdcf8f2e4fa69c5b838fea07068b5968ab65a79e2243b2052d8c0d45516b18",
+        "sha256:d203b214ad08e8fbe2a2cfd082de20de3eb098acd431283c7ee165f62fb88099",
+        "sha256:c8831dc0fa50422db3eb34f10257be758486c40c831e8f28daad44ba71e1f361",
+        "sha256:c9cdb1fc2ed0ddd26db1fd8efe008832358ee72974ffd17247886f6861f7795a",
+        "sha256:fa6b09ce5fe5eef2ac3b35a664c276f4dc1e8c2c1b15dddf683e51a5b04f1c8e",
+        "sha256:1a4c4acfa9b9e40c334c77a02076ca377e0b29ca5e94280b7e765cdc68304e6c",
+        "sha256:6ec0cd0a9c7f5678897f6ad3b3146a999344ba6a3c91ae1167023d40d1404c95",
+        "sha256:28ec844a2338dd142e1894f4d8783c6287d1e6f4270d74ee2cca8f81cc3e2fd5",
+        "sha256:4e9cd47b7d83e6002836a0ef1d081bcb93281e2c921910bb6757a10bc2e43b07",
+        "sha256:4f96c1eba9c3e80c3f5574e44062696a9d7cb6dcea2bc77506dd1ca7d2204bd1",
+        "sha256:cfb4f44a5c63d59f7e129c1a3764b097377986ce0a3662072b3d92722132faa9",
+        "sha256:217ead3453576c854a9356404949f577610b386a91e4fae2dcd45e02e15ad3b3",
+        "sha256:9cdde82171ab2cb80fe1a3673423c32f1d3ba4a38ee13ee2f4dc28a8b7799e13",
+        "sha256:eeb7324b6ca761404a6bbcbbf2a7b9172fb547ebf4c83e32a0a0cdcf28d5e8e7",
+        "sha256:c7481240aa485771c8147f90877232327bee6b5556e695cc7dbf431ab8f84783",
+        "sha256:6ec2fd7d0ed152992a80a503b3179c6136913a8d30262a525674a3bb974eaed4",
+        "sha256:b899d07c5ffce98bab6c770da76b86965e4ca3f7249b7ebf4ede7319a7fc74c9",
+        "sha256:c8e11991247c04258a8c35ae6577e0469e486f3fca7a1b2bdc0d27fbbe52d36e",
+        "sha256:1b4bacefcb694199acf5c574ec62ed4e4fd2730cd756f88460245ff2cb2d9f5a",
+        "sha256:f7a23ec7ed7857a04bafe74d23e4efd10606e18d7d33de7775b5bf96a704833c",
+        "sha256:06f0ceb710b164a390a102461a50814baee6f83ea1bfbfd911786bf2617b73be",
+        "sha256:425e8f9602264dc644dbc1595875d071d4254a86cd987039a449b2ff0fc14560",
+        "sha256:130e6c8d12129b304b38a4faee268a2126d6a1e9be09d10522c69a289ca3c554",
+        "sha256:a04c49e3b68cf679339f54ab2dd879ff8163907982b40533b841ea0673ef3db4",
+        "sha256:a0c7cf80af3afba3c806819f7d30254ef7d4e50eccc3e678b6aab302b62d6d43",
+        "sha256:11919f286c94970718e455aaa4abd1905091c23ed3b0f7f484acd4a141df4969",
+        "sha256:b3e64ccacff3ee0a25674ed7af8af21dfde2406495f4871a6baf8ffa8af20092",
+        "sha256:e9c8b4e8301f43afba2f6abc60953c48f848586bdf4beb861d24b394aea8439a",
+        "sha256:336d6d6e27ac3786458023604afcbd447452b612b85960ff60ea583e870c1a60",
+        "sha256:91b3e313bec9e6405ba99abf9e244a1249efbcf3de81a3c3e721986f4a034936",
+        "sha256:215c126a5fd699b821c6b5bebe012af7b3bc97c48dd538f6f728afbf078cdec0",
+        "sha256:6d1e89a7c54fc1f4b30df9a6b22615ad9d5a2b7856f39b06790726cd63dcf753",
+        "sha256:6eb3a8a5e0935ea0181726ed4775a74ced8002dea8c7432ba9f608486a9d9103",
+        "sha256:cb09deec1936f72abd4e1f04126c75204532e65c1791feef9fdc7c6648cfd249",
+        "sha256:b6da9110f0dad77285c6c511c4288138346cdc4ccf68f0a29318760f3e417433",
+        "sha256:d0cb68b2e1b7c3be14d5d3b6cb5e5f3b9b941ac77863574f3ba53f45ef2c1e6f",
+        "sha256:7b71a1989be283b7c7dee410df5b899406e971134266c7bf6ef5bda8b47f6b61",
+        "sha256:be4f55f6a4ad3d4e477fd961c519b17fc9b42cd32fb69dc7fcd7ca69f3e38753",
+        "sha256:3355a1245dbad92a106ccc9d439c7e6cba711e4037d661852138eec90d3287d7",
+        "sha256:41c4b231181560969ef92ef411910a781a2adf040cd73a569411d499749b0496",
+        "sha256:efc28143f42885b7c703886240ba575aa4b84e8e6c1eacc9a1ea1a3cbec493a7",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75"
+      ],
+      "category": "combat",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Rootscript",
+      "effect_id": "effect.quality-rootscript",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 48,
+      "id": "rootscript",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 25,
+          "id": "marker.snare",
+          "name": "snare"
+        }
+      ],
+      "pivot": [
+        24,
+        73
+      ],
+      "source_hash": "sha256:834bb1aa08a14464f8eeb19e102f9bbfedc94e15f574fd7b0426ab66958a4fd0",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "snare",
+        "growth",
+        "roots"
+      ],
+      "use_case": "An anchored root branches, cinches, and withdraws in staggered order."
+    },
+    {
+      "animation_hash": "sha256:9a6e65cf4a0f78131ef8798c56b4090122576fdfd0a981d454e98e03d3b1e7de",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/prism-loom/grid/manifest.json",
+          "manifest_sha256": "sha256:3a43a9519ee3835e5a31f5d8c868ce8367d9c9fac526e56ac0ad291b9ad23769",
+          "sheet": "effects/prism-loom/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:5a79a4faed621c1b95f8321b4a9747e516c0f15e9a978a5f7e2128ee2f65fb52"
+        },
+        "packed": {
+          "manifest": "effects/prism-loom/packed/manifest.json",
+          "manifest_sha256": "sha256:f7b34cc923b19fe122f19c8fe7087931fee5ac44c53c2c69b91d115bd1174b57",
+          "sheet": "effects/prism-loom/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:a2c34fcb4fe28475b9aeff91f8f7e35e5ff59452b307beab386324d5ab32b00b"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:b6ef8fa93412b7a692aa2fd71b05cbd45d9ed05d8ad9fa00987966a153bf1861",
+        "sha256:c36de09aedc3ac312ed32f082c86e5d3e877348825d4222752054f51e51d90f8",
+        "sha256:d935b803c413f82c7e902d9fbbe1462d7d7b69f3f25c240e183039735af8c26d",
+        "sha256:d4ebf900d786ff1a4cc3da1a11d28fc56aa21c25b4117adcb44259758a905122",
+        "sha256:1f914572226476f4d85a8b77659ff6bfefd90bd71bf3fcf89dadf91e3bde62b9",
+        "sha256:ce48b570dd389534f790b791e2f2abd42791b1414b9a37cf832ddde26788b6e5",
+        "sha256:7855c26901624c3a93f8903085ccdf4a094c70522163114dccd08389926b647d",
+        "sha256:fce46b8e6802ddab2a717e02c01dc4e805f68c7dc9d142d2827797952c4e7e06",
+        "sha256:dfb23270f52cefa0af8f478a93e40319195fd4241b7ae9686fdbf119234ce1d4",
+        "sha256:af11d447503a05493dc91a868e887b6f5705eae946d7164be50b1b3fa6403d7c",
+        "sha256:30c9ce8881676a9e77e3f46a1babd941c22eec6056bd41f6f7ea1e41da2b3aaa",
+        "sha256:7c7515c5cd3a3392e88a15597e35403d27cd55c6e60d19a0dc74342ede15d015",
+        "sha256:1ae3fd1c31bc0d5da249b902629e9011a762cce90038f20b081a083b5bb8d656",
+        "sha256:45a51e4fa07f4d4b5b5a98957b5dbad083a5f7d6ff171b1ff4365b85a19aebeb",
+        "sha256:d3d02be899a447f6f280c934ffa4294d5ce92e0fb78a052399e1fb31a6f8c986",
+        "sha256:90844d8abc7125d7d1267b1ec5f459ba4205688316c5ba27c4f49eecc6b5bdca",
+        "sha256:9e496f1c2e639dfc1e8cbf8681614624c8d994f5120501a0480f9c12850bbf94",
+        "sha256:81d909d25819662d1923f39692a6a6e7e93d2658ff45eef801ac4aca75244458",
+        "sha256:d0bcacc67edd85509051d5c488aa98461836fc076221dd256c333fbccfeaa35e",
+        "sha256:7a95c2588e90dcb62fbd72aa7f2016cbbaae07a3bab00304affdcca7f1c8979f",
+        "sha256:09585732a14a1b6b148918eb126f5214cd1f6b925b61aa6265ecb1bd61a455c5",
+        "sha256:1007784f30dc822ba173f700c68638b3e3d013d25d797a9f96ff13e2583701c3",
+        "sha256:b04074dbbe4add9af8e3bf53b8ee5a59daf808388267ff31b77cac3c42aa0368",
+        "sha256:2288168f11051f6205383cc65f7b2e9df5d3fe878cfbe68c0446ad2648e0c698",
+        "sha256:5fc84c8c8c945066b9ada96577055e54528dda34ed2f1aa8b6f964ab840ad42a",
+        "sha256:f486daec6aebea56265b32d6083e85bbe3b601fc6ac8e2f353a980ddb2296925",
+        "sha256:adfa9a631a5cabf1ab6197bfa8b3ca295f479cf74d2813a49f382888d1686858",
+        "sha256:91f9f4ad9544c4ea5697f797827756cbad6cafbabe482a50c18ad7387dd6060c",
+        "sha256:846c017817d8f1aa2d700a0f1b1eead5a0b2aae231ba27731bd7e120f32118a8",
+        "sha256:2be3383a3c067f9071820b19099a13c60eefb16b0eca19e7077759ab3f705f2e",
+        "sha256:b69a4ad7c45a6da695d09b613262370f52d0ee8f1d1bb1a79d1d6cdb8b8710f5",
+        "sha256:c5592feade52d85293bbf5bba72a35290d167a2dc6ef5278bd899456a61a8472",
+        "sha256:135e1aa4e111dd798217b0ebf7389f678fc923db65b849ea2487f1d7fa9382d6",
+        "sha256:07eba517538c1fe3456fa0216630c3aa9842fa3ffb0bfbd137cc5373c84291ba",
+        "sha256:8d39a75534689c3d801888f4c202318ac7abd82b3211dc5ec7dd3b64e7767a02",
+        "sha256:9c7956e9bff8f25c02304497bea2a1618682e46f4eab065894399c8a5c7b8350",
+        "sha256:30e65cc7d223610b975d4b26818c7a7eaed80d531f457e5e9aedd12a8164389e",
+        "sha256:39164d1ce5c28e8e903f6803aaf69bb72dd783e2247125ad8e738d0184617825",
+        "sha256:d997cde47054c32e34f94209460c1acff2b9b8201c7758187ae07f8b003ee438",
+        "sha256:8a623c81ba6c6d947431c39fac36c33b08f6e6ddd55bb9af78fc5a3cd08c3c4c",
+        "sha256:6c2799f60968b49f594d621613ec5f126ede36d841bb97563e11c7870500cb6c",
+        "sha256:818fc6684b0fa345fc02c0507b368f57897ebf0237e38292dbd2b4cc50f18b8b",
+        "sha256:3e64379dd8975251fba17ad45fb078303c10fb9b2d9d3efdd5f6ff0d33539681",
+        "sha256:f2d0098e8ab33fba00caabc711a394cf57dfc7010f8ecdf08246b8768f958880",
+        "sha256:1bf7a03d90d4d07ae70db4c9e12f1098229a2a798b330b43d306586953e3b5d4",
+        "sha256:9b9414b1e04f7711350e8157f2f8d41d10762ef0dfee9f617ecb7a9d241614cd",
+        "sha256:3ff7901d7ced2024b219c3c944789145b0315e264b1fe90f8c81ee177e51f54f",
+        "sha256:19e29ad752f823401057f14473b7a033d11bbcde05bd87cd1590d2d3aa322f2e",
+        "sha256:986e37264bb3696489425448930be300b6bd0f69d49b81446364d8d81d382e4e",
+        "sha256:d3adec207e42f33709fc52835c28a3713b861c70dc58cafaefc947e2db17c368",
+        "sha256:b330f4faf15665b5bfb1925a141d38ce2ef02759d66a861e36bfb5b976f82255",
+        "sha256:bc4339cc617a76f085212c4c745801e0aa7079ef5e982c8dbf649844f70a6ef2",
+        "sha256:ebfee2696ee4aaa0ccb2508e7ed353bb53d9466262e3728bf334191a9f081319",
+        "sha256:9e5e70c16c9cda4df223cef64043f20918525fbfe8ec503ac0ef92bed2007276",
+        "sha256:16da156004c2b4fde88c103c2ab16cd72dcfc887385ee8158c0f8ca6c2206e81",
+        "sha256:4bec2a1307df0ce55b477263e3df18d7c0bafbefea3f63d0683fb250979a8c8a",
+        "sha256:7c10146d16a5831c55a231a0d96b9e9b86571f8e2144778d98b53a9df06c51f4",
+        "sha256:37ddc85afef52bc8aef74103deb049f5b46f3b640e6ccbfc462bf8f3fb646f9a",
+        "sha256:839e32eb5f71e4e9eb4351204351d2aad2d80dc706ab5f4d5dcd104a2dffd5c6",
+        "sha256:b6ef8fa93412b7a692aa2fd71b05cbd45d9ed05d8ad9fa00987966a153bf1861"
+      ],
+      "category": "status",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Prism Loom",
+      "effect_id": "effect.quality-prism-loom",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 60,
+      "id": "prism-loom",
+      "loop": "loop",
+      "markers": [],
+      "pivot": [
+        48,
+        48
+      ],
+      "source_hash": "sha256:35e0aec6e5c5717375c42a105bb5ed6cf31030eeb1abc9a46a34bc571f87d6b1",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "enchantment",
+        "weave",
+        "prism"
+      ],
+      "use_case": "Three ribbons weave an open knot with alternating over-under crossings."
+    },
+    {
+      "animation_hash": "sha256:0d3cb89c3dad93429b37284e7aa44c93d63996f2ce9f87216c7f4ca7589a9c96",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/pawl-snap/grid/manifest.json",
+          "manifest_sha256": "sha256:e6423ecd55f7c8f0f1d1d64e15bb5075f7a83f2f38b5584b39e784fc2f8c1701",
+          "sheet": "effects/pawl-snap/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:f1e06400ae47c34722bd6fdccbd94973672914df5a98904be2ab9dc90225e6d5"
+        },
+        "packed": {
+          "manifest": "effects/pawl-snap/packed/manifest.json",
+          "manifest_sha256": "sha256:0fa90cae1e05a2559ff4f3535232db3d04e12bad4a872370f3c82a3efcfd1ad6",
+          "sheet": "effects/pawl-snap/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:8be585814e848c84202fda41431ebfc3da9693754314dfc445849071aaded236"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:89867f0f928ecd47f36fe2f6390af3e567e571b853ff9018defbad417e3cae97",
+        "sha256:89867f0f928ecd47f36fe2f6390af3e567e571b853ff9018defbad417e3cae97",
+        "sha256:89867f0f928ecd47f36fe2f6390af3e567e571b853ff9018defbad417e3cae97",
+        "sha256:89867f0f928ecd47f36fe2f6390af3e567e571b853ff9018defbad417e3cae97",
+        "sha256:f86d8c4329c8b8cc41bbf16ad5671a1e0b8ba46d4a8cbfefd4c949de9086f4ed",
+        "sha256:348eab0990e5539de2cddb0aeb09595b10dc68442433aeae88f708c6508484bc",
+        "sha256:f61762c4f6903a9a967e58a2d975817aa610608691b5d0dc04e7734ba343153b",
+        "sha256:f4c1efb7bb882cf18bf1088f99385211ea968379fd99fc3b68ca0083c24226ca",
+        "sha256:cbe1cb735fff98213dbfda6b61e5969694c817212922512bfa4560fe4d78ce2b",
+        "sha256:cdb5914ac254dbbf0ee1ae99e76cd9038054ec95beed6c64497691320906fce2",
+        "sha256:bcc6e930f542e3462a87dfe86930202c9cba58637f6029ebe944a176c3793759",
+        "sha256:2d046377738d84a5e18d595910e3d6871a9bbb4d25e7992e0f98b8baccb9575f",
+        "sha256:66f68e97ed3199f5deedce848392b1f246aeca6e2c2d8982a7479ca2b7dc4dad",
+        "sha256:47f4f3d8310f9c66dda253da6f9468ca9d9e738c2c49a729aacbb49833d50474",
+        "sha256:d50bd550860d603e2dcdae299000b43cdbf8ce2d4a84a26b057ed2670be17e0f",
+        "sha256:9d5136da154c4cfe751b4020673194d4498c8f148fe6b567e2808c63aab3cdc8",
+        "sha256:972f87d8c7dc8384bff68db2fab9ae23eefde9d8ece1ec565f2dca9966ef19ff",
+        "sha256:d3c2942335442a18d1855dbc09c3e5c3235f66ad9b418050c477b18f6fbcdd11",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75"
+      ],
+      "category": "environment",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Pawl Snap",
+      "effect_id": "effect.quality-pawl-snap",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 20,
+      "id": "pawl-snap",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 6,
+          "id": "marker.engage",
+          "name": "engage"
+        }
+      ],
+      "pivot": [
+        48,
+        52
+      ],
+      "source_hash": "sha256:9904908c991e16ec1c6ad86d895203023e18dc5a82cd04ae0714632173972ecd",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "mechanical",
+        "latch",
+        "trap",
+        "contact"
+      ],
+      "use_case": "Opposed copper facets snap into a notched contact, recoil and shed chips for locks, trap arming and mechanism engagement."
+    },
+    {
+      "animation_hash": "sha256:866d13e32b16477ef6a6827f022306f4f57af095e66fcf13ecba99529471aa1a",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/tether-catch/grid/manifest.json",
+          "manifest_sha256": "sha256:8f64598828f15a698efdf09a876c381f8932ea6f6beeb4dd67e3c13d24673c74",
+          "sheet": "effects/tether-catch/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:f1cc1ce6d2ea79d9fbee57e94d57671ad799b0ae58fcac2ecd50289e903cea58"
+        },
+        "packed": {
+          "manifest": "effects/tether-catch/packed/manifest.json",
+          "manifest_sha256": "sha256:629d9f1de8c7dc8e65459dc5c1101d4dff55ae69337560d7256ae91ea4fac7c0",
+          "sheet": "effects/tether-catch/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:ff5470c396c5ad71ae1c226f6fc2b390485905ac8c1f0a59bf4ad443bad77b38"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:0ab49eda8af9aef6a4d4b2595fd6ae3f284027d1e7573917512746f8125aa1cf",
+        "sha256:8b960c8c59163f629fc1c0ea1340656982078d698244729e698a531c6ce652b3",
+        "sha256:182514254aa4a883cca5aa74e9887d47075d66c2326945ee57662270e3184557",
+        "sha256:6d8558f52f2cac4dc64569ca4f58b71df18355aeed63f0943aa706d4c2f7d50c",
+        "sha256:2331a0b67d25e88ce37b384172c62e0c772d12ea0ca1b9d10fad55e0539c474a",
+        "sha256:7262951f6253771ab5027367962ac077e396c953abf9c4ddf470c3149985b419",
+        "sha256:f0c3e746399e2e783aa650d15ad62562a7c902e4c8b773b9e2d0dc15cbe9270e",
+        "sha256:293a82a82ae3869a2933f42ad967ed2ec2cf1e803a79cc1c96ca1fd4f63b2568",
+        "sha256:0649e8e3afedd5b2d9e50f3ebae4df6c7bc894f46c4babd9a958cb7a42194513",
+        "sha256:cc613d96a95b4ab62d20cfdc80e1d15dc9c023491f5e44bb4f94e5170694f91d",
+        "sha256:454893741b3ceae39236c99924487a3fdeda776fca45ed0a315182122e85b3b9",
+        "sha256:7c46fee068631e847285a9c53db0f4a67ee1bb6147b5cfde83d90b08e0dbe594",
+        "sha256:c47944839ad90fc2dfa29ee3e80a6a3fff890796adce1706d28a3da8c222c2a3",
+        "sha256:2b72e5fb9b67462900792b8f857d39d3bd38fff9ac504429b78031d2a1e6758b",
+        "sha256:d92a60803d1a91398ab46cac7fc3acbccfa62f4d6ff64f81c9331018de61a7be",
+        "sha256:7dbbc41d6704c3f240ed70796772b4af5f86cc0a80f1d8a10acca0b26810a628",
+        "sha256:38235893f802b04e68c2781f90f9bf89ab200c307d1948e15f06fc0f618111ef",
+        "sha256:0288c5934cf42b54aa4429c6c113661953eaf965e59f98ea27c613b43ca932b4",
+        "sha256:bed1674c37b61cbbba0abe741523734360fb1882b929583a877d9687374c6ab5",
+        "sha256:e1723f1084e1e4676f07b6f3772e351ee4c0464b2946de5c8eefaf172ef801dc",
+        "sha256:fc1d175c1441c19f4901c2b667d05b8faf44d37d2da1223233c668f609f60113",
+        "sha256:89da1ebd1b77aa27715757dcaf627f7bd36c528314ebdf3d1181827fac5f8e4a",
+        "sha256:c64d2ea00e3aac49bff3a95e2cda4a49525c670dd4b4d54dc5d68de4f4c7ba3f",
+        "sha256:52851a3f0aefe3c880e6b953ec1b50a9ae3ce72db233e2a5ecbabc63bcfbd6e2",
+        "sha256:da1fafb5cc54bd3cee5f9de1dc5498bf5a3e934832eea03290edcc412cac942a",
+        "sha256:962ffe10389de826fa1efb434b31665dd445c31bc4682a6130544fefdc289383",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75"
+      ],
+      "category": "combat",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Tether Catch",
+      "effect_id": "effect.quality-tether-catch",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 28,
+      "id": "tether-catch",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 8,
+          "id": "marker.catch",
+          "name": "catch"
+        },
+        {
+          "frame": 12,
+          "id": "marker.draw",
+          "name": "draw"
+        }
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "source_hash": "sha256:5f2d5d664645fbab458f327c3ff3c320f84e476bd1bc5391a8f4d10e7637ebc0",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "telekinesis",
+        "capture",
+        "tug",
+        "control"
+      ],
+      "use_case": "Cyan force ribbons catch loose material and pull it left for telekinetic capture confirmation."
+    },
+    {
+      "animation_hash": "sha256:64317bc7da121e04923b994724161fa484d9a633cacfe91864a852532d99c626",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/counterfall/grid/manifest.json",
+          "manifest_sha256": "sha256:a20e8c46e8718784e7ccda87c864c08efca951edebe34ceaa7487b3f42a5e035",
+          "sheet": "effects/counterfall/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:61b9425e020cb09261a345dca6cf9f3ada83c329751dc04f269c717aa124c120"
+        },
+        "packed": {
+          "manifest": "effects/counterfall/packed/manifest.json",
+          "manifest_sha256": "sha256:d8d74eb0dce39b87a58e893f7a5d92752b0333dc7bd91855061444483fd08500",
+          "sheet": "effects/counterfall/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:520f8011fdb4180eb5c4448a53172b5e22cc14dd90cf244835fa19b2ce1081ae"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:d4cb6ee1a1d414dfb3313a8149bfb7837af311583b9f94c9f5c223b638b61b6e",
+        "sha256:30e509a3a79a8d4bc007e99aac531f91cb16c5ac0119a60bed3ac0add8a0895d",
+        "sha256:faa6ce3274b04f61ccefef0ab56448e693a500a4c136849597feefd2a239c15a",
+        "sha256:3e894303fda580d605409733d45ebe2e876559433ffd5ec4bb9e39f082abded0",
+        "sha256:71236a6b8c5c534563dd034436b1dfbe38b45dd61fd1c0cac5b7bba6d9106a05",
+        "sha256:81c960545c4ceb08f824a4d688486f8c2a75d1675fbb04c13ba11621b28561f6",
+        "sha256:cb8402c618ff01148d26952d2bbf441779e45a84f023400e538233f9dbdb7530",
+        "sha256:44de24b3969a26fe2db8e7f81fa9e2870a16bff1efe50524baa9c5a115a5a64c",
+        "sha256:ddc97470e5ee969f687d8336aabee69eed92b9b75f451b867ada87f936a561bb",
+        "sha256:c57b21b0ff2105369840eeb885b2b66199a41f4cb65649697e5ec3e5ae2c3a92",
+        "sha256:a99afd3cb9e5053bffa799480a67f0f5618eaa7cfd63f1db915297b0dba9bff8",
+        "sha256:8050911fbe19c0aa52d391da899a5142f53c3c621003c5232a0488f77ec31f51",
+        "sha256:790b29ef407fadd9357c4d2a273546bffc0bac61fe9fafd317b477fd9aeee553",
+        "sha256:c2ba9594806517f46ea294efc9e4817ed24579921ff6d6814d5daa84c6998aa4",
+        "sha256:14d3e71c2aa8424219cecf70bfd03f4e686d408adba3929c67d86e684b01420f",
+        "sha256:ea491536b6566af81ab60a526b7b4f9a210c1dd6baf77ae3610e295167e7f64d",
+        "sha256:d59665db69eb7e25cda05bbe44b413ca849626542def6106c19ac6463974fa17",
+        "sha256:fca6f803d67214d729683fb3e140f31d2c81b82a206af2e4f023fbe9c9d33c29",
+        "sha256:f5e2a359cfc3514e236aa0fff836eb18cd981e2ae1648817825c48bbe51c2788",
+        "sha256:3ea163d29c3dfaa595224c4a5d447ccea6e6b477280b596bb22ce58b7938e77e",
+        "sha256:15f202445806402c27994385023162f73d6b3a7ed17f9029c58a9a6cddef3d7f",
+        "sha256:2244c99e6439df5c62bdde8e9c2cb1f59c4cb31b6e5aca172bbdb7253e4d4aa5",
+        "sha256:89f54ccded9a17b6524073aed7f5fd4912d903b87d4460caff898fe00aca9e74",
+        "sha256:87b6fdc9de38d6ff7b11d1e498fd7a0034a25861b9b34da9bc44b6cf703227f7",
+        "sha256:5b1602c8edd6f985c88d8012f1b8966b3543d3b85f901f4c2de816f2f3c69004",
+        "sha256:7bac2ca0553d106cfa4ab3c1802a55c28362f4f2e6ff3aa09bc2714dab4a47fd",
+        "sha256:d84aa028485d2e9fe1935413c64490ae6a5c205a06be92311a61f88c5dde85e8",
+        "sha256:a40530729e0e3671957bdfc94908c17041a08bd6e2a1179e921b2a5e1998cf9b",
+        "sha256:268400ea3a36672617825b14783247a2fc04c38a4dea8e1c93e35dc03b8ec15f",
+        "sha256:eaa1c9706887c9d17d956c84d7d6032d1f18fa4ffac1f7e1e86cd35eb5d910c1",
+        "sha256:72e08598e87d778e71c6dcb65170c1ffb07c3196faa1760e6c7833b72cee3888",
+        "sha256:3f8484af7c37c7ac5ee3deadf88c4e4ae4ca7af7942555573960d7e91b935fee",
+        "sha256:0949719393741e62180d83344e259dfeffc985a4b3ecdbf0b6db2eed7667bbc7",
+        "sha256:c6a3835aeaad50d2378ae312bcb4963c3b4172459cf60f078317ab94f367a922",
+        "sha256:ba602bae552a2116f37f29ffc04f8c48e4240d85f60467c41a915b55c1f6d8e1",
+        "sha256:de3e0956933b6d014ffa2829adb1e0153840f806a6fe0db483494619463ba108",
+        "sha256:0b1aedffa0e72baeb6caae94fff39b38543e2fd7434cc8357affac51d7c335c6",
+        "sha256:2040a117d948eab994b856bbf73db91327ffdf5ba7d94103f622d56253749423",
+        "sha256:bf29fcc038e9006238edeb38059eaa96650a7aedfe7168ea5930a870eae1d00a",
+        "sha256:d4cb6ee1a1d414dfb3313a8149bfb7837af311583b9f94c9f5c223b638b61b6e"
+      ],
+      "category": "status",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Counterfall",
+      "effect_id": "effect.quality-counterfall",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 40,
+      "id": "counterfall",
+      "loop": "loop",
+      "markers": [
+        {
+          "frame": 10,
+          "id": "marker.apex",
+          "name": "apex"
+        }
+      ],
+      "pivot": [
+        48,
+        72
+      ],
+      "source_hash": "sha256:5590aff1ae6cf4510cb7287c3fcc27b8f8e04dbe8b9efe27bab3b706bbe1a5fe",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "telekinesis",
+        "levitation",
+        "sustain",
+        "loop"
+      ],
+      "use_case": "A sustained counter-gravity field holds displaced material in a readable open center."
+    },
+    {
+      "animation_hash": "sha256:7897b3c2b98d8d53cfc7738df876d7bf2c7c473594fbe4a68a767b65f6c49dd8",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/mass-release/grid/manifest.json",
+          "manifest_sha256": "sha256:503fbe042a58cf87f0d63301f4b73f839d361f2630923c64d57047cb95aad94d",
+          "sheet": "effects/mass-release/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:55a217ccb12c23104c4e07ecaeaf12231f6202b9b8fdf7182d7e5093455d54c1"
+        },
+        "packed": {
+          "manifest": "effects/mass-release/packed/manifest.json",
+          "manifest_sha256": "sha256:53ef8a8da9e1dc7bf9944da68b544f97dab9593a6c16ca77793c42c47740f5ee",
+          "sheet": "effects/mass-release/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:83549f3cd92fdc12b4d4626599444f18dee03204fff01a94a6aab5b02af6a40b"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:c8126e0b5f30ebb8c936329323d49cc4caeba8bdc2135f9168a5f9ac7806b554",
+        "sha256:ee9ac571da4599b811cd4a0942e7830e7280d1d16868f87abe40326701692c2e",
+        "sha256:7e32fcf9d2dbdb53cc0c4d7fdc30870ca04922bf4ca64dcdc2fba55ec2916c44",
+        "sha256:7e32fcf9d2dbdb53cc0c4d7fdc30870ca04922bf4ca64dcdc2fba55ec2916c44",
+        "sha256:4f24cb6dddeecd6a60c15cc48de4b59cf093b16203b7aee8d8e0f86e7fed3fa9",
+        "sha256:981c923943018e6d2ced6e620a9d32bd58ce4cb860d640e7f93361e7b9541331",
+        "sha256:de08fb702ea2621b5cf5ece53ce3d268d86ef9630cee992ecb8b5008794f01f5",
+        "sha256:8f0b94939d7d4fa38a8d300b3307486cf9970b3fc68a3e7b103ef645e94e722b",
+        "sha256:9005dd2ae47e9c6f1b118c398275e526d420a54af95dfad383c56eac021f8391",
+        "sha256:eb7fd954c648389692fb2871f3637a2929105b0c39687b4bfad7f489f98d696e",
+        "sha256:a5768a100b04fa2d0b0452d4f7b96e6cd88cfe421a8cee7e7a7ec75ac796b444",
+        "sha256:bd4d71d318622fa3cf5bd15073ff0c90ce2cd13643e1baacda32c46efef79987",
+        "sha256:176751ea7afdd1fbaebac77b06efec5dee3e1892142712629bff87563a81c49e",
+        "sha256:bc462cd930c940b0bc37f949be691522a1c380b86a5ea00f31b536073aa53f3e",
+        "sha256:9985d250bbf1b035dcfb75a08afcbed995c5babd4af873a059be5758fca87090",
+        "sha256:29c6756c39a381f3ef86d4d3f55c8a03c0d0c993a58bce39901c2a97dca67e12",
+        "sha256:fe8336eb74b7d31d0d0ef955441dd937a4a6a0cd54f11412448b47b34e001410",
+        "sha256:23b46b30dbb638191b60e5234f87c4c8aa15bdcf889468b849ba07921221102e",
+        "sha256:6acf9efcb61d46c3d421cdaa39475db85d54b4918d8009daed4b5481bde96910",
+        "sha256:9d6bb365947e40c10bdae3c7e98c74a4cb259b3d7c1761e39c51439567622ba9",
+        "sha256:bf212721d4d4b681bf13acf5d6f6c649d70121ac6531009f655371fc17a930f4",
+        "sha256:3208828610aca3cf9362cd3ec99cddfc3fe224bbf805a7edbc0f3b1deaf14dc7",
+        "sha256:eee4cc483e50c2f01a4b417692b5b6104a7ea391e2cd65310c2afeb11294ea05",
+        "sha256:a1eafbb4de8b824206465473ef5bfe93ea731efbf02f1ad4994453a2998fbd36",
+        "sha256:559d2f7219f4c2fad048ee4dc71b6787d87e503b00e262cb062553d7152a4395",
+        "sha256:f151b01f43126f680b03bdbd5a0714998959238ad270e7f84eef0ea72f2b59ec",
+        "sha256:5b3b289b2339bffb46337c0417f75dc09f63fdf7da572c9da67e927886973fdc",
+        "sha256:7585fe8260bb0274136d11d80e26acca047ffca8909826dcc8f2f3e139fddcfe",
+        "sha256:15cbeae912868d6e858f2be0df4c3e3cd5c14f8f658633eb5a3de4f20506b2d1",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75"
+      ],
+      "category": "combat",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Mass Release",
+      "effect_id": "effect.quality-mass-release",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 30,
+      "id": "mass-release",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 7,
+          "id": "marker.release",
+          "name": "release"
+        },
+        {
+          "frame": 11,
+          "id": "marker.impact",
+          "name": "impact"
+        }
+      ],
+      "pivot": [
+        48,
+        72
+      ],
+      "source_hash": "sha256:c0c3678e2e0607f8dca0c6666b4aef5705d875b379f45efabd53a034d0fdcf0b",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "telekinesis",
+        "impact",
+        "weight",
+        "release"
+      ],
+      "use_case": "Stored weight drops into ground contact and rebounds outward for a telekinetic release payoff."
+    },
+    {
+      "animation_hash": "sha256:4f6f5d6e383cb6a538c6e6b24bcef2b9a6203261ddcbca80ce24df299a4bbbaf",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/beacon-seed/grid/manifest.json",
+          "manifest_sha256": "sha256:118b666dc708c91825dd3f4081c4d57b64968a9b64de775c0b437bef15cf3ac0",
+          "sheet": "effects/beacon-seed/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:33ccd003fc1ad19ad396eff8f5447f12e4c31bfb09b55d3463717816a0eb4883"
+        },
+        "packed": {
+          "manifest": "effects/beacon-seed/packed/manifest.json",
+          "manifest_sha256": "sha256:cb6b2c80b5a5bbe0c1045f3403b9806dc2320394de0e5b741e9df3a8170842aa",
+          "sheet": "effects/beacon-seed/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:0016cde4f119efa3921b8df5fcd2111a6af28c352e05050dfdb283c5466ba594"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:ba65d2da46c3a733962ff8f5524d669f0dce039ae7bd8b4db6061d17f9a7f6f5",
+        "sha256:ba65d2da46c3a733962ff8f5524d669f0dce039ae7bd8b4db6061d17f9a7f6f5",
+        "sha256:08547af34df672081f5ba62228d26f9832177723473fe43517c3f813e75e2d26",
+        "sha256:0e17741874804c596875b2001378a4e83bab37911b869774267ae6e83a7db921",
+        "sha256:14d723ceaebef8a450e6b3a40dec2f110db0d2aae05a2471eb8d49990d4ba489",
+        "sha256:bde8a37d95ddb16de3cab2ad5da376bea592c7f28c096ff51ae42f4660767b21",
+        "sha256:14a702f4441a0534c47bbfbb2a242f89fa7dfdb548e3acf80d4b2966df330b4c",
+        "sha256:35e05b2074ead7aba32f17cd17f0d310ff7225cbb4df06fd55dc923195bd6fa7",
+        "sha256:29ff697d588a950e5dce624c79b7fa94d8db729f4dc979b99f9e9a2ec8c65df9",
+        "sha256:5c116a85817fd866bd37bcc9ec4fa3c4e398cf3d73b7005969193c31cdc74514",
+        "sha256:a75229e037da89c576d319a8c3ba0af9599b01dc769b9e27c941a5eb5ffb8505",
+        "sha256:e5056c6c9a2639a08bfc24f2675db58dd42b17d1db4f7c1036f5ef1bc432afb7",
+        "sha256:e68b8062050a53ec3788329e7fbe48741dc18df3dc1f0f17d4f75c430adbaa94",
+        "sha256:fc5a3344cdcf6801c82cde20cc64d637ef28d5d7d7b467fe75db68811357b134",
+        "sha256:647fc3e75e3a31dd3b65344addd103d820cba45550d98e8f3ae25256ac766e98",
+        "sha256:cba338fa7df9114f5f13b20ce0d856825676a756ef58f2a6bead3d7fd7de89a3",
+        "sha256:640528f947584ae87627eb12e03a623c43af922aa2ea93fbdb8f59ddf743c024",
+        "sha256:e7bf272fa46a1bf39e5275a60e794f0bb31f2c0d363d8258fc1fde1d544f0368",
+        "sha256:05199b1db1ee6a5f7d8707990b93cfd260c69875f75ab349aff5faec2c9f5859",
+        "sha256:f858b5e69f20c8c608cd17b594662eb9cfb3f1a83531b62cea79a6d7e379fe99",
+        "sha256:04c1a4add4cf235360fb436bd441765ded3ce03310f7404eecff800989c4f25d",
+        "sha256:cca1cc4ba19c0225748c5cfd8cb31a596e39531b70e05f6cfccb1f034243b76c",
+        "sha256:bf60dd3c0de409a0e5c2bd2278931b57b5e97c80fb0c902abd6bd3f975aa9976",
+        "sha256:fdefab98cf1cc1b010b9223b99c3cafe62943c9dd40c5a75785861205bb84b2c",
+        "sha256:3694b05e714b597b06da7b258da0275de1bf83394ff327fe2b9a52ccded1c977",
+        "sha256:374c20613f9ad350e8ba3dc462eff2200d74b46a55772cf629133cc0c1dfcb5c",
+        "sha256:e21a9496c3bac2bc1d2a234fd196433d43808c6f43ef4a1fc79c7a23b0050b71",
+        "sha256:2bbe08d33e4a9515335a6e72861874a8386b2265caa9bd6f4ca98b7477040991",
+        "sha256:1e6b94145efeea10496b09fed9ef52329df781c4ba0d72b92764fc0e1b05bc76",
+        "sha256:10eadaa931a1e9cd1699c5ce972d964272dc92e46e73dee7eabac76ac8020ef9",
+        "sha256:278cc53b7a1aef1ac8014920bd35c44ef51810fec06bc20e3d2e57141f52b01e",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75"
+      ],
+      "category": "interface",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Beacon Seed",
+      "effect_id": "effect.quality-beacon-seed",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 34,
+      "id": "beacon-seed",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 7,
+          "id": "marker.plant",
+          "name": "plant"
+        },
+        {
+          "frame": 12,
+          "id": "marker.ready",
+          "name": "ready"
+        }
+      ],
+      "pivot": [
+        48,
+        72
+      ],
+      "source_hash": "sha256:ed013361fd37aa98739adcc816389c13f9d1d959bf4852b9a31ec2063bb7d725",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "beacon",
+        "placement",
+        "checkpoint",
+        "deployable"
+      ],
+      "use_case": "An amber seed lands, plants and sends an upward mint signal to confirm beacon or deployable placement."
+    },
+    {
+      "animation_hash": "sha256:08695bfc35d513325a268ce9c890b13da4647f3f96c4514040bdea45889c1668",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/relay-bough/grid/manifest.json",
+          "manifest_sha256": "sha256:67a8d974d24750a6b47ff7013e8d49a3d8c4c7c13e46e74eb863074e53c76036",
+          "sheet": "effects/relay-bough/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:87f7954f73672ce804428043e14913ba250945f7818a04962680b580168070ef"
+        },
+        "packed": {
+          "manifest": "effects/relay-bough/packed/manifest.json",
+          "manifest_sha256": "sha256:562bd579559b3b9725e42da20df607fdaa1a398a49dcaf7a3615d2310c11cda0",
+          "sheet": "effects/relay-bough/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:3caeb2c6a685ffad97260433c5c4e55b71b97e1cd5041981a6c65685121b5bf1"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:d67463d32463f8fafbbcbe5e91236aaa0489fdc3d7675083cb7cbcced5fac7d9",
+        "sha256:66d904328c04951ca2f6cb0285e68ae4dacb8d896a2d5b4383821ee1b8ddc005",
+        "sha256:80fd0d968d2c1437a5d14ed8fb2d134dc9064c040018991d84c262e96bd9a7b9",
+        "sha256:039b8703c0eaeac1b70675e55c0d7d75c35bc2f3fa517fed30489c7e74853671",
+        "sha256:029105adec5f23bcfc45871fd5fd4ae069c1a7fd77b2cdd82c0766288cf7eef5",
+        "sha256:ef6ffce9c69b26565cf7ccc1b99d87d017d3e8a657d24ae6b1539a207c3015e8",
+        "sha256:c23033e11c8a11cf6e270183bad544c6c49453b19a3a58ab5fef00d763d1e7d2",
+        "sha256:d88f79a42918119319f89ecb6e2d3cd09201f91dc8b84fd997a54d0f060a2e3f",
+        "sha256:94da9fc0d4e233d0c187c0202bff1c46f8fffd13ecaf13ed0b0286081e5177eb",
+        "sha256:362c2dc5a4c1190dd76b22c5d3291bdc4038025ee41223c01f2f6d4eeb512ddd",
+        "sha256:da63d4fc3e52d2310b19c3c2eef6402abdd6dcb9c5600518cb92ec3a872fcc6b",
+        "sha256:ee63a2dbf5a9ce3fc5b40a7114e3e2dc5d7967a2a5de9c91e206e6223ce4a8f2",
+        "sha256:575a3ce5d9d28c5b79db34196084c643b23368df7b06fc6a876353ce146a239d",
+        "sha256:c4a51791beb83163462a7f50c7287caa72817018a4b50eb06713453cc79212b9",
+        "sha256:a4d1dd697ee85ede34212ff72173750ab0d36fe3fa03a369ae55f7459fc59020",
+        "sha256:4831aaf721284da9d6f173ce57e0b054e76a193e82fe8cf7b904a7669c802fba",
+        "sha256:da6ff2e905f66dc25da30a65b96386eb587a5058e116d8ce23093bf336f0e9f8",
+        "sha256:6d1e4a9b0124e465ada19658958ef980b5786ca99b5c8ff5f2ac95f76f090dd8",
+        "sha256:752b7b73f8225f604f424bcae439c79be1197b4ce70101e25e5b9d67e4f53d96",
+        "sha256:0772d96dd04147741b7cb8914cd576584556631927f1c4d36e1ed6bd07562329",
+        "sha256:1d57d10b405def1af3bfe55522c1d5e864dc09bb4e644991dde9957185a9dc52",
+        "sha256:38e3b70bae52ce94229df76fee6c366639a9f7ec457a20061b4524fa455c0805",
+        "sha256:193ecaf6b3d5da36cae814987c353cfc94b3fe370d768bb2cb08b007d2952ace",
+        "sha256:18509810759c50cf6a9b552c6131e854f21056823fb4067cae96d3996d35d35f",
+        "sha256:a34c11694f482d853323091550485052dc07ccda8a5e2beab2c6185b44fa7cb1",
+        "sha256:a56f5080c61b13f96e6b06f97352ecf918eb454c4be495fbfd4135bc685931b1",
+        "sha256:43d84ecd2eaf3b11d361d8c1dc5f1824e84ff0ab9df47390d8ea0a99ffa945b4",
+        "sha256:acc061a8214c06c5a94893e9cd4500307c8767108901975e0e051a27bdd20734",
+        "sha256:88e690df2278f44eece98b607f51d422912623732b6e4a8bfa9332ed5ef434b0",
+        "sha256:fe607905d3e4096849c72cb32257a0424d3ab01b5db563f04e4fbc536f5ce8e1",
+        "sha256:3e9203e080961e43c70a2e3b47cd45f76c18de4a22865b204b4b0b64744fc051",
+        "sha256:3258e0e8de536bee4a530b8e83f6e5a60b31f45de0d10f61772e11cb83b61837",
+        "sha256:875ad83ddad80102a4d9cea9a6c968555100783d20b0fe54b70d5357e9dada35",
+        "sha256:48afe47d99b9b6e9a4ea7ca64f9c6cb4a3682b6b40209790f2f4edfa97ff7dd4",
+        "sha256:ddee2173d2ade137672b667947d72fc83c77101fc0d222f686ac8a7e013b5ea1",
+        "sha256:30654f5e457807114d24f714f7f0e5d39be225858e4b2b49b4c81022fe41b3c7",
+        "sha256:fe763bf70a09bd02782d2b19fbfbfe3350802a87c739ea7db050e582918e8608",
+        "sha256:fe763bf70a09bd02782d2b19fbfbfe3350802a87c739ea7db050e582918e8608",
+        "sha256:fe763bf70a09bd02782d2b19fbfbfe3350802a87c739ea7db050e582918e8608",
+        "sha256:d67463d32463f8fafbbcbe5e91236aaa0489fdc3d7675083cb7cbcced5fac7d9"
+      ],
+      "category": "environment",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Relay Bough",
+      "effect_id": "effect.quality-relay-bough",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 40,
+      "id": "relay-bough",
+      "loop": "loop",
+      "markers": [
+        {
+          "frame": 0,
+          "id": "marker.send",
+          "name": "send"
+        },
+        {
+          "frame": 12,
+          "id": "marker.fork",
+          "name": "fork"
+        },
+        {
+          "frame": 28,
+          "id": "marker.receive-upper",
+          "name": "receive-upper"
+        },
+        {
+          "frame": 31,
+          "id": "marker.receive-lower",
+          "name": "receive-lower"
+        }
+      ],
+      "pivot": [
+        18,
+        56
+      ],
+      "source_hash": "sha256:8a80299e8c11e7cc20d75cae9d1b07e6c1f0941f84fb7c0bce867b183f451583",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "signal",
+        "relay",
+        "directional",
+        "loop"
+      ],
+      "use_case": "Mint conduits carry amber packets through a fork to two receivers in a looping signal-transfer cycle."
+    },
+    {
+      "animation_hash": "sha256:fe99f43444ca9cc8361e10c471b6ce091e33693dfe851404fbe429f484887ce8",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/harvest-seal/grid/manifest.json",
+          "manifest_sha256": "sha256:20fba5e43a60c9f74597323ae9b500fc156cb26e4b8ff38d9e60c426b30fa638",
+          "sheet": "effects/harvest-seal/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:116a215d07afa04d249d4f9bda1b141816d85f6783cbc0aae141bb0323e18ff7"
+        },
+        "packed": {
+          "manifest": "effects/harvest-seal/packed/manifest.json",
+          "manifest_sha256": "sha256:bbc05f94700a465a81685d5f6e93ea07649cec91ed65199f33ed91ebf0985735",
+          "sheet": "effects/harvest-seal/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:b3ba73e3347765a5ca44310b2477c913849dc4a129bfb34bc71ce293ec69a9e9"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:b56866fd87de7f3b24215928d948e743ae27ce4b8f4feec46944060f91a19132",
+        "sha256:e383b06491e982cf1f8fed4188f2f82633132cd2349b9ddfad7db4e3a88a47c9",
+        "sha256:d06841940d55505737a97a87f4a5552fa4fbcc429f198447ad58a3b4d93893a8",
+        "sha256:306a2cde9a51d829b434db73609f94111879411dbd32e224d295de2830123763",
+        "sha256:36b7dde71ef4bacef03a29dd824f64ab1d8ee56ec29fba81e9a639b3556b7a8d",
+        "sha256:38dbff2e3f314d100ce1c06f00515f717e6bc40035d31a8537fa5292b07e8060",
+        "sha256:7a46d13bac8ec5d84da526bfd246b20fdc09cc45bb319fdf90a8e8b8f8910f52",
+        "sha256:b85a8b65ffe7c0e7f6920dc9d04ba681c5c78149d3e491d95ca90c7b5893776c",
+        "sha256:39719837bc813c99997dc3468737dfcf53fa7e780b1c176c5c8dd99c915a1455",
+        "sha256:b66a2a9902024d1292b4225799192a700ef5b5f8d15df0ba75b2e8d3a4156ad0",
+        "sha256:68c86ed11495f8fcc383136019d98ad468226f367d425127a19fb657842fd35c",
+        "sha256:b06f5360e503e19bdbb5d2b5d2f25f54b6381602d9c0a720d11a509f82993a6f",
+        "sha256:a01b0a135e3c2ecd9aa51fc868a8f9edbd0f351c5e5764268cef213b896cac95",
+        "sha256:6f28721d4d0db5bdb830ee73f0bb05971beabc7a66e7995f3acb5fdffb6af832",
+        "sha256:98120bf49a18969d6bab48efcebcbfcac8990691439cf25ba1e5b49fa60902ea",
+        "sha256:962657faaaef969ebca2a7975404dcc1705dd829294c0dcdcaafeab579f78aec",
+        "sha256:fd1f3eb184b95f2a1d80372398bc41e72a0e1ca5c329a5e2142eec6c07b03096",
+        "sha256:fd1f3eb184b95f2a1d80372398bc41e72a0e1ca5c329a5e2142eec6c07b03096",
+        "sha256:2de94adf8b39f1b8e4eb09872eb2b02f19d1d9877638861c37546c343de8c48c",
+        "sha256:682b9beb6885280e2a8285af878f560acbd2d1d66988c96d3c4fbded1662df08",
+        "sha256:4ed7aa88d6a4096f8f14a2e1df1059c45b8b90e470b4ffdd537d7ec46cad7445",
+        "sha256:be9b257ce24a505d8a389e7d5d3051e468d4fc6bd43b19deb9f262dea71cfb44",
+        "sha256:ce833ee68912cc6b19f1233b8fa114c63945e6a1f2fe7c0f8fced4a6bc4432d4",
+        "sha256:cf03269f56cccc7f2d148239e67e1cd0d975f631fa0596f99c7b06e2e08487ee",
+        "sha256:7d51e6049c5788ab1f9b271fa689d8a69a595c678a85250989c99047c62239f6",
+        "sha256:d6026ff538b114ebf75ca5875e8db11ee002d4436334c63a5eb67c7cf1783a6a",
+        "sha256:573fe27af1bace6c61f5479992adce009d5bf99fcf5896a45a2f1c50d9f363c3",
+        "sha256:b1a60d5ca42578cc34d5296a12da3481a732801c5e5b4a008c6fba5af2613871",
+        "sha256:57a57cb76662549e045963332d650e83ab14e40f55e8405852699cbc107e4483",
+        "sha256:899b3ceb3d15e600764132492c8951b522999f0f43ada2f87642d96b1458a44d",
+        "sha256:4f0d150c395a9ef62b4f7c1fb61b691e6d634f5a160ccc7746c052876ace91cd",
+        "sha256:3ced8ef8960496c50c3e4b00629da7f7a2cbdf654f8d5c2d7155a5278f5cfb6d",
+        "sha256:cac68d27e4471f58457382dc58ac1398a60c93b69d93ba89706a4635590531c8",
+        "sha256:eb264cddb9d85ae2c3ba2bd58ffa2562e26e64a8a4e7cf7cd24ee461f72ce7f6",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75"
+      ],
+      "category": "interface",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Harvest Seal",
+      "effect_id": "effect.quality-harvest-seal",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 36,
+      "id": "harvest-seal",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 12,
+          "id": "marker.collect",
+          "name": "collect"
+        },
+        {
+          "frame": 18,
+          "id": "marker.reward",
+          "name": "reward"
+        }
+      ],
+      "pivot": [
+        48,
+        50
+      ],
+      "source_hash": "sha256:ed3506642ad27620d61479b53968b46822a574a15f7135ac8c0768f8c08a6ad0",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "collection",
+        "reward",
+        "harvest",
+        "confirmation"
+      ],
+      "use_case": "Signals converge into a faceted reward that rises and clears to confirm resource collection."
+    },
+    {
+      "animation_hash": "sha256:07afdfe1bcc8db52a39ae185a7deb9e3a6e049c6b171b3bc1194630fcfaf1274",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/hush-lock/grid/manifest.json",
+          "manifest_sha256": "sha256:0946cbb029f8c4c61bcbdbc7103728e50fcec555ce2311570ba7f7a79101300b",
+          "sheet": "effects/hush-lock/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:27df24def45d7233916c8fa1d1537ddd4fb7d4f9e0599268dfa8ed6874634cbb"
+        },
+        "packed": {
+          "manifest": "effects/hush-lock/packed/manifest.json",
+          "manifest_sha256": "sha256:c9bed172a5baadaf9978edc3d01a22abc76c924970a5ea7b833cbcd3adc9f7ba",
+          "sheet": "effects/hush-lock/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:d8e2c1d3a6f8adfd513ecc6379f9407d4f2373a5b1cd8ad67baa83e49e9a0ffc"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:67283710cff89affd73b31193636dea7a75a35630ed272b70b90129c50b89849",
+        "sha256:6fae9a22ce655ed2d8e272905ca8b2d6462eff41f162f5bc3fc80e12334b0121",
+        "sha256:c6f222358ba49f3568c889b717661a30858972fb45f8fd83acc2626df9193535",
+        "sha256:4fc0c1a8b69dfba7a36e0e19666ffb8c958d05c903c669b0c09daf790a3b5a8e",
+        "sha256:b0b0ee5f79749782c92a58a654ba15f08812069a73a2a72ff493d4897972f152",
+        "sha256:783a4743b2052d7e70c535d6a260cf7c988b430c0b0bb301b4105cb4088acfe4",
+        "sha256:74c0e3782c1ad9906ed19bb22d930bcf3ba9dcd663388b1da9e534f4a02de7d1",
+        "sha256:b0857491f9ae81adfb5b7e37174716e5d585e85955fd91935c354037478c6e3c",
+        "sha256:cf82eea7b70227348a10f86ece39d16180e2f85a91c0da991faa3a3006361a20",
+        "sha256:2087318e38868027c5e994ed90953a1cc6193f5bb8b4545d53d3cf946b11e6eb",
+        "sha256:8d22afae5bd3af86ae2b4b279db606c6354a66f4ecbc18d27219f9a0fe42c025",
+        "sha256:b3b3fe30b01347b215b142255c298373f5d55a5ea6aaa07b5a0a53d8fa5c2686",
+        "sha256:13b926e38eb32e3ac41cc9cf5f80797dfd5c96d0bb3b721ae935aae3aff10f1d",
+        "sha256:6cee97cc113dec3d55e01a30531408b27dae0e90233b067e4f3ce220d24aa852",
+        "sha256:deae3371b0acc135a14ff169752e395f9ed32e389fbb4543d6d30ec34c11596e",
+        "sha256:fd9f7593cbe45bab46707867149fb54a383ffa8adce5ce56ca5bfa2e572db48d",
+        "sha256:57de2f328a672095092f81ce988bc958f7ef075932d471a494d20779e298af55",
+        "sha256:1650630dfef43ff5fe827aa17d10e6053a612c600223b47b80871890899271c9",
+        "sha256:c78e0e50b58715d0840f72cad0e187b0d686456d56f50d1d61ace8bf2a338429",
+        "sha256:96a80b6aa27cc24d41650e5f686d9c52b2d0e0434585b5525773409dee45f5d2",
+        "sha256:039548bfbd5ada42a47f7b1caf8ee006bdaad00c794a2b13a62eae85d530cbad",
+        "sha256:c0dc220feb70fc99a77c432591d310b94ec6a29d9add4b48207c20a30e5262b3",
+        "sha256:60b737b71a46c99524c0bac33225342a3b74dedaa591736c59120baa1d73177d",
+        "sha256:d76149951d39e27a5c4ace4c6794dbae0ac5afc51398792787c86b756d61f75b",
+        "sha256:906483f700c43149f5d300c6152cda0a7d863ab113d93d80eff361a0ae130083",
+        "sha256:a782c0226a50fa7c7698f055f041936c43548350b9f43a585eb45dc382b402c5",
+        "sha256:78810d47d11674d22d1d05d7ab4270727779740f09786625ded23ed3d5cb82e2",
+        "sha256:a290329689c79763b7141b623a934967c737e83d801c799ea36e69d87b3b1316",
+        "sha256:8b4f59f01f4ed4dab1b70cb837515dd40d39a44a02de66797f3dc3d5dd93fe65",
+        "sha256:da1c51c57bea2206fe97991e2ce55111729d8a49014bc7563a208b9cce3f91ec",
+        "sha256:0f0af38298d8c862662434eab95279a504095df31456382cfbb4e321876cf87a",
+        "sha256:0d998e2f2e5b1c7a7b25bb6ca5f29a07bff4b3f97019cb1eea4da8bb5bab2c4f",
+        "sha256:ab88dc0d4987586d847b233b05b50558322d1ad1a00041a74d67c58e71dcb432",
+        "sha256:8593ca18a685e3057a33411438c53c03a098292adf71f3bc613510ad22600d6a",
+        "sha256:00385c9eaa56ccedb6bd869e1fe1a2bdc1e3a960f23d259c4282d5a97d75f797",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75"
+      ],
+      "category": "status",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Hush Lock",
+      "effect_id": "effect.quality-hush-lock",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 36,
+      "id": "hush-lock",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 10,
+          "id": "marker.silence",
+          "name": "silence"
+        },
+        {
+          "frame": 22,
+          "id": "marker.release",
+          "name": "release"
+        }
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "source_hash": "sha256:30f8f8e08a4921b401c7805d244617947eabe431ad2e866cd0df9209ed47827a",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "silence",
+        "stealth",
+        "interrupt",
+        "status"
+      ],
+      "use_case": "Silence application, stealth suppression or an interrupt/cancel cue."
+    },
+    {
+      "animation_hash": "sha256:e0c6b148aaddd430f17f0407ce0cd9775179917cd51078a13e4cfdbdec87813b",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/echo-shuttle/grid/manifest.json",
+          "manifest_sha256": "sha256:a32d8cd6def652ec90f66b18d228e5e7614e6fa47e6c014571a5ba5dba509133",
+          "sheet": "effects/echo-shuttle/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:27306ea27074f0d9027359d34e2a259956834ed761ccd3f4affec4e8fb0d2efd"
+        },
+        "packed": {
+          "manifest": "effects/echo-shuttle/packed/manifest.json",
+          "manifest_sha256": "sha256:f1d6d9f98d70b1f641150eb33cbb0fe491e341e038d0a147a12b4f3211d85ff9",
+          "sheet": "effects/echo-shuttle/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:de0285fbab17df0e7e7b6dd330bd29826eecf882acd687ce4bf41ebf94bafd64"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:2443f8c1379ff636004392fe7f06ada50d8e87fe743c534ecb0ab9908080c19f",
+        "sha256:2443f8c1379ff636004392fe7f06ada50d8e87fe743c534ecb0ab9908080c19f",
+        "sha256:2443f8c1379ff636004392fe7f06ada50d8e87fe743c534ecb0ab9908080c19f",
+        "sha256:f4f9e46192e1b372968c309eb9a83a74b2f68114148c66680005587797d477fc",
+        "sha256:e8ed852787b3ca309a0c1c48527ccd0a1d0c5e75df60fa95395947d473865e60",
+        "sha256:0052a6efc070d632bc2c34012b9fce1f0eecd9e853b53e7d16ece4db955a561d",
+        "sha256:7224707742891fd0c3b923cc6a897adeb5b909e57abfa1942b2b0cedd43c0b01",
+        "sha256:27ed9c89bc4ac6bc0a7ca85ea64ebf70f586248bb769ea655bf73c73dce6406d",
+        "sha256:d515719e7ddc1005664e6c26f7fbb2771e63edc1a67b35cf1f590ee0bde7a27a",
+        "sha256:915deb53145adb66d10b78672d751faf9d97fba23d1616afcd51482549b167ab",
+        "sha256:c422ad0f0dd9419dd1b15dcc717156afff8c67855c87da7d867cf0c3850ec0ed",
+        "sha256:d895c20366ecf5c493df8e60b90497916a822f6725e62d66be21abf7511e8ae1",
+        "sha256:420e430f7d552e8f42a4daa350582883eb4699caf244f976fe6c895a3cc3b03c",
+        "sha256:7c9618bace3b64e55dad4f140586b358c3d23fde29c0201d1b5a3b54b1b761f2",
+        "sha256:29be909d49219d83a276702a6f9f823304cafbb112b044f522df6178b5b8d4ed",
+        "sha256:c48eaaa191311a514a208e029bb2e9d69cb80e628dbcdfd0733a39e5f91161f0",
+        "sha256:e68512e97fb0d03ce1e0d293509900ed28c4df5925c4129d90a02886bf9b4ca9",
+        "sha256:36e342af3e2477dd38533c2d0d1811015fdc48a501e76443b564ff188987f005",
+        "sha256:75285a670b9c605b0536d92b240b7f796b4437705df42f2fa01b08c12408fc43",
+        "sha256:d247dabcb7d371a5ffdf245e97b63aec95f0b1b469d93a846c93ce4fdd8e2437",
+        "sha256:861f4743d919bd47909469df08265f229ebb321b1c2db4468b931455f21a2a36",
+        "sha256:d9b9dcb16ab03a57b73b4523ba2ed1de56586b697070bc54cfd99621c5fe43b8",
+        "sha256:8c294da111238e0dfa902fc39d781b2bac5d88b53679f1c5a2282406f572c1cd",
+        "sha256:749e7843af75f56bca505f4d278a34667c666eeb176f51dbd914169cba46c49e",
+        "sha256:dd7d8b4844c49076448c2cbb2a7b9aaa710510c07cae71a881fa367272fdbd8c",
+        "sha256:802d6d409f11901d295e2fdde27cc3019bf29c50116cdd0ecc99ed1f6300637e",
+        "sha256:7c2f52506e625bd39a53b9b4330a1ea1bd91716caa0a40e23553512c796a32d1",
+        "sha256:f12cf29ac8fc0c923266e4c74bdbd4454353002c41712f611c9cbc80124d966b",
+        "sha256:9bdb1643ee37a61aadeff5c014bc1c9032274fba11d8b4bb82a4e442cde106ee",
+        "sha256:9229505c92db0748ab1b2ff823fb5359e7fe333bacdfd97b59e57210df0f67cf",
+        "sha256:173097da10b5c097b123d1dc717f61148cff4b86fe01ba47a01fc74c58bb59ee",
+        "sha256:33b39909dbfe7938789eca96136230ca4f1972c39d1a5048db5a53f03a6ec531",
+        "sha256:1e8e98cc8eb67c0223b24a8243b0653ef95597f58a9d848f6af5bd17827c95d7",
+        "sha256:d96e02860e10fd8ef55a36726275650295d2cf1c6bd8f3072e8756de7b083757",
+        "sha256:b593d4c36501b684c56c75f451ae0c44c7e7165f80938ec160fc5d6baf299c6b",
+        "sha256:f7afc949f88f984456255698cc6a59133f85adc3cfa2918ddccf84d95ca51e87",
+        "sha256:2443f8c1379ff636004392fe7f06ada50d8e87fe743c534ecb0ab9908080c19f",
+        "sha256:2443f8c1379ff636004392fe7f06ada50d8e87fe743c534ecb0ab9908080c19f",
+        "sha256:2443f8c1379ff636004392fe7f06ada50d8e87fe743c534ecb0ab9908080c19f",
+        "sha256:2443f8c1379ff636004392fe7f06ada50d8e87fe743c534ecb0ab9908080c19f"
+      ],
+      "category": "interface",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Echo Shuttle",
+      "effect_id": "effect.quality-echo-shuttle",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 40,
+      "id": "echo-shuttle",
+      "loop": "loop",
+      "markers": [
+        {
+          "frame": 3,
+          "id": "marker.send",
+          "name": "send"
+        },
+        {
+          "frame": 18,
+          "id": "marker.reflect",
+          "name": "reflect"
+        },
+        {
+          "frame": 34,
+          "id": "marker.return",
+          "name": "return"
+        }
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "source_hash": "sha256:a713805b29b74cdde9a64a6f9eff3790a78d2a9179af34984ab867cbd5d28a6d",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "echo",
+        "probe",
+        "directional",
+        "loop"
+      ],
+      "use_case": "Looping directional echo probe: an outbound signal reflects and returns to its source."
+    },
+    {
+      "animation_hash": "sha256:10e5066aabd0d2e200bda8d17de49c119c7e66079394ae4145e84f39a843edb1",
+      "artifacts": {
+        "grid": {
+          "manifest": "effects/resonant-break/grid/manifest.json",
+          "manifest_sha256": "sha256:e8dba6c95f65d1ba46ad3d0a5f5de91bd9e7efc28061dad4700c17b3f69e33cd",
+          "sheet": "effects/resonant-break/grid/sprite-sheet.png",
+          "sheet_sha256": "sha256:a810c342bf34684a7b191c715ce4e37fbb768e6bcedab4af715e97fb5a1dd582"
+        },
+        "packed": {
+          "manifest": "effects/resonant-break/packed/manifest.json",
+          "manifest_sha256": "sha256:f1bc6abc6289c89173647d03de2635e275cbe013002a4f28e69f5778173e4c12",
+          "sheet": "effects/resonant-break/packed/sprite-sheet.png",
+          "sheet_sha256": "sha256:52e9ee5e5b5acbd63cbfeec1cf30420bb788971bcce3ba854cb472a5929d4bb4"
+        }
+      },
+      "canonical_frame_hashes": [
+        "sha256:2be042ad1824f84e2e5b08b6831bb45dafc5e81a3be716df537205214dea64e7",
+        "sha256:9045f626c4be89707f880ebcdf2512d167d0c11e5e539af3d257f65823ee973e",
+        "sha256:003665bffe940a80279a51dec608581bcaeb0fdc5d5e28c2314c97c2dabc3aef",
+        "sha256:8ed7b566155e0f022cf47c7a756354442feb9cc4d9c40b49fa64770f979aa33c",
+        "sha256:0f8cca078cb175ab13f41aa6f3f84e7cd04765da395121751c2af3380f477b0d",
+        "sha256:03beef24de1f7b87386be89dead4efd80a65f6fa194478096b27367ce1473537",
+        "sha256:8e4bd44af645bf4541c570be9da36a5f6e024871c917803ad362f44f0ec31fc5",
+        "sha256:35f650eaee7c589f2362435be8d2e2d787cbe9809c82d892657392c96c3aebe5",
+        "sha256:d2fe5c4a7bbe28011104c5925f0af0dc1c581f7945b9954adfd1e461d1524f0f",
+        "sha256:809745e8dc94319031c6991d906bfa70d8987afc2659ba13da0b0c5622a329a5",
+        "sha256:dfb62b37688440da83cae99eade820e3c77042fed3f40247a7d1b336154e566e",
+        "sha256:c865e55ad021bcb3ebc0d4ba0765b35b94f0f5e474c1072a33a49dffbdfde21b",
+        "sha256:711341a44960fbb97960227b9b874dfa7395472f6acf96f66a474f92c380e4f7",
+        "sha256:fc8151275189256d6fa5247f0096bdb6f60c70d0081c4846d176ed58ef18157f",
+        "sha256:a1d9755a568d2af7e541fbe9013c27f7244a5736cd9de8351a7fb1ad3245edbc",
+        "sha256:9cae3102e124512616a5083081a5fd13e64ffd5242e0ed5fb305ff0d7a25b7b2",
+        "sha256:c69d4f831f7eb17f88fb588e5ea5bd8422ddc4ae40f0bd733958dd5e320ff519",
+        "sha256:549cb6b26344f46cbbb40e5318cff94ebde152325cc0b17e2244d87f703f3cca",
+        "sha256:5f2d6a6f68872d0659db0fde6957ead6d4734677322c7d98c4771b100e75586b",
+        "sha256:4520a4e77d41fb1ceb2593841d9e9fd29302f5f38515d423cd1160afec8729bf",
+        "sha256:cb7cd136f5c13538fc1dc052b5e1c57a869efc3cea6693d91f2ccc1d3f567e83",
+        "sha256:c0dbed47c446bb5147f11e562bd20c7380fc0333e5147eab631323d974288442",
+        "sha256:0b12c5424f206ffde8d7489943698a99c372e98512e550acca23ac5af2d0f177",
+        "sha256:f99f240adb53757951554ff65c702f78fc02147a07fe5e3fa2aa629ff7f6b8ca",
+        "sha256:909469b78f356aa36621fdac8812b5c91607afda7978f98378fdd4acf033ff96",
+        "sha256:584842ed3fe567c2fd263ac8f55a87efb8fb99d8b32f1ee71c01dc07464a14c9",
+        "sha256:fb8914c98dbe6e434ac6aa333fc39e5b9c5d6eaa1041e9eeb148d8a11a625069",
+        "sha256:ab90558c36ca2e4ce81850f4b077f6ff852cf40a24c2a54d480228c58bac762f",
+        "sha256:66a6be66567a178b4f656956d521ed6d18ee508ea70f65e2be76e9c21a443139",
+        "sha256:be8430fa3251bda215f6b1e2268ef535f61ff3e3447d4cc880cb918a13d7df78",
+        "sha256:23269c95c1e685d8db6eec4088a70979a48f0e54839f8e6e6d281d4288981fd5",
+        "sha256:115537ee1eeb449785bbc047e817660496bf2fe310afa0bef0aaa00c30989942",
+        "sha256:48e6b0e8bc2ed559c999912b9472b0791922035efaa2d589aa720a7d6ec7ba0b",
+        "sha256:1c0273095382988333e2f2b5ae487cea460737ed9be65cbad9c5de537f95bf75"
+      ],
+      "category": "combat",
+      "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+      "display_name": "Resonant Break",
+      "effect_id": "effect.quality-resonant-break",
+      "fps": 20,
+      "frame_duration": {
+        "denominator": 20,
+        "numerator_ms": 1000
+      },
+      "frames": 34,
+      "id": "resonant-break",
+      "loop": "none",
+      "markers": [
+        {
+          "frame": 8,
+          "id": "marker.break",
+          "name": "break"
+        },
+        {
+          "frame": 14,
+          "id": "marker.echo",
+          "name": "echo"
+        }
+      ],
+      "pivot": [
+        48,
+        48
+      ],
+      "source_hash": "sha256:4b58a69623f4ae24e2cf1f271e73ff9aac1511b02e55c319027a3faeeadc8f33",
+      "source_size": [
+        96,
+        96
+      ],
+      "tags": [
+        "sound",
+        "release",
+        "guard-break",
+        "combat"
+      ],
+      "use_case": "Stored-sound release, guard break or silence-expiry payoff."
+    }
+  ],
+  "id": "pvfx.foundry-thirteen",
+  "layouts": [
+    {
+      "columns": 5,
+      "deduplicate": false,
+      "extrude": 0,
+      "id": "grid",
+      "layout": "grid",
+      "padding": 0,
+      "scale": 1,
+      "trim": "none"
+    },
+    {
+      "deduplicate": false,
+      "extrude": 1,
+      "id": "packed",
+      "layout": "packed",
+      "padding": 1,
+      "scale": 1,
+      "trim": "per_frame"
+    }
+  ],
+  "license": {
+    "file": "LICENSE.txt",
+    "scope": "Rendered sprite sheets and bundled manifests, pack metadata, and user documentation only; source projects, software, source assets, repository content, and product marks are excluded.",
+    "spdx": "CC0-1.0"
+  },
+  "name": "PVFX Foundry — Free Pixel VFX Pack",
+  "profiles": {
+    "grid": {
+      "id": "profile.free-foundry-grid-0.1",
+      "sha256": "sha256:df793be26b5292fada086b4af90c4d74a1e4200451c0e79aa6e732a0f5668c6e"
+    },
+    "packed": {
+      "id": "profile.free-foundry-packed-0.1",
+      "sha256": "sha256:c49c0fa5354ddff1f2549c3d389822115a601f7347607c21df26240ba0cafee8"
+    }
+  },
+  "release_date": "2026-09-29",
+  "renderer": "pvfx-render/0.17-dev",
+  "schema": "pvfx.asset-pack/0.1",
+  "source": {
+    "commit": "8eca1a5fd4783c9fc5a50e0775ef95a353214de9",
+    "definition_hash": "sha256:157088ec7236fe36c7fe2c8b6ee84d51b5c2bfc59ad49766ebfab447d028da5a",
+    "ref": "codex/foundry-weekly-2026-09-29",
+    "repository": "arcanite24/pixel-vfx-studio"
+  },
+  "version": "0.10.0"
+}

@@ -1,0 +1,135 @@
+AW_VFX_Mega_Pack_Free - 114 effects x 2 sizes (Small + Large), 15 fps (67 ms per frame)
+
+[01_Explosions]  (9 effects)
+  Explosion_Ground_A       Small 64x68  Large 128x136  18 frames
+  Explosion_Ground_B       Small 104x96  Large 208x192  18 frames
+  Explosion_Air            Small 64x64  Large 128x128  18 frames
+  Explosion_Small          Small 36x36  Large 72x72  22 frames
+  Explosion_Energy         Small 72x72  Large 144x144  21 frames
+  Explosion_Toxic          Small 72x52  Large 144x104  23 frames
+  Explosion_Dark           Small 64x64  Large 128x128  21 frames
+  Explosion_Debris         Small 68x62  Large 136x124  21 frames
+  Explosion_Electric       Small 64x64  Large 128x128  18 frames
+
+[02_Impacts]  (10 effects)
+  Hit_Spark_Small          Small 24x24  Large 48x48  4 frames
+  Hit_Spark_Medium         Small 40x40  Large 80x80  4 frames
+  Hit_Heavy                Small 56x56  Large 112x112  6 frames
+  Hit_Directional          Small 48x32  Large 96x64  4 frames
+  Hit_Critical             Small 56x56  Large 112x112  7 frames
+  Hit_Blunt                Small 48x48  Large 96x96  6 frames
+  Hit_Block                Small 40x40  Large 80x80  4 frames
+  Hit_Parry                Small 48x48  Large 96x96  5 frames
+  Fire_Impact              Small 56x56  Large 112x112  9 frames
+  Ice_Impact               Small 56x56  Large 112x112  7 frames
+
+[03_Slashes]  (11 effects)
+  Slash_Horizontal         Small 64x32  Large 128x64  18 frames
+  Slash_Vertical           Small 32x64  Large 64x128  19 frames
+  Slash_Diagonal           Small 56x56  Large 112x112  18 frames
+  Slash_Spin               Small 80x80  Large 160x160  20 frames
+  Slash_X                  Small 56x56  Large 112x112  19 frames
+  Slash_Heavy              Small 80x48  Large 160x96  19 frames
+  Slash_Wave               Small 48x32  Large 96x64  16 frames  LOOP
+  Thrust_Stab              Small 64x16  Large 128x32  16 frames
+  Claw_Swipe               Small 48x48  Large 96x96  18 frames
+  Punch_Swoosh             Small 48x32  Large 96x64  16 frames
+  Dash_Wind                Small 64x32  Large 128x64  15 frames
+
+[04_Spells]  (18 effects)
+  Fire_CastFlame           Small 64x40  Large 128x80  7 frames
+  Fire_Fireball            Small 64x24  Large 128x48  6 frames  LOOP
+  Fire_MuzzleShockwave     Small 44x52  Large 88x104  3 frames
+  Ice_CastFrost            Small 64x32  Large 128x64  5 frames
+  Ice_Spear                Small 64x24  Large 128x48  6 frames  LOOP
+  Ice_SpikeWave            Small 120x52  Large 240x104  11 frames
+  Lightning_Strike         Small 40x96  Large 80x192  15 frames
+  Lightning_Arc            Small 90x36  Large 180x72  18 frames  LOOP
+  Lightning_Orb            Small 40x36  Large 80x72  18 frames  LOOP
+  Arcane_Missile           Small 40x20  Large 80x40  18 frames  LOOP
+  Arcane_Impact            Small 56x56  Large 112x112  18 frames
+  Poison_Glob              Small 52x32  Large 104x64  18 frames  LOOP
+  Poison_Splash            Small 62x42  Large 124x84  18 frames
+  Holy_Pillar              Small 36x58  Large 72x116  18 frames
+  Shadow_Spikes            Small 122x52  Large 244x104  18 frames
+  Earth_RockSpike          Small 66x80  Large 132x160  18 frames
+  Wind_Tornado             Small 36x42  Large 72x84  18 frames  LOOP
+  Water_Splash             Small 52x40  Large 104x80  18 frames
+
+[05_Charges]  (8 effects)
+  Fire_ChargeUp            Small 56x56  Large 112x112  20 frames
+  Fire_ChargeHold_Max      Small 56x56  Large 112x112  6 frames  LOOP
+  Fire_ChargeBurst_Max     Small 100x100  Large 201x201  6 frames
+  Ice_ChargeUp             Small 48x48  Large 96x96  9 frames
+  Ice_ChargeHold           Small 48x48  Large 96x96  6 frames  LOOP
+  Ice_ChargeShatter        Small 72x72  Large 144x144  5 frames
+  Lightning_Charge         Small 40x40  Large 80x80  18 frames  LOOP
+  Arcane_Charge            Small 48x48  Large 96x96  18 frames  LOOP
+
+[06_Heal_Shield_Buffs]  (11 effects)
+  Heal_Burst               Small 44x76  Large 88x152  18 frames
+  Heal_Aura                Small 60x56  Large 120x112  18 frames  LOOP
+  Shield_Bubble            Small 40x40  Large 80x80  18 frames  LOOP
+  Shield_Hit               Small 44x44  Large 88x88  18 frames
+  Shield_Break             Small 48x48  Large 96x96  18 frames
+  Buff_Up                  Small 40x64  Large 80x128  18 frames
+  Debuff_Down              Small 40x60  Large 80x120  18 frames
+  Level_Up                 Small 44x100  Large 88x200  18 frames
+  Magic_Sparkle_Burst      Small 48x48  Large 96x96  18 frames
+  Teleport_In              Small 32x60  Large 64x120  18 frames
+  Teleport_Out             Small 32x60  Large 64x120  18 frames
+
+[07_Smoke_Dust]  (9 effects)
+  Smoke_Pop                Small 24x24  Large 48x48  17 frames
+  Smoke_Puff               Small 48x48  Large 96x96  18 frames
+  Dust_Jump                Small 44x24  Large 88x48  17 frames
+  Dust_Land                Small 48x20  Large 96x40  18 frames
+  Dust_Run                 Small 26x16  Large 52x32  12 frames
+  Dust_Dash                Small 52x20  Large 104x40  18 frames
+  Spawn_Poof               Small 48x48  Large 96x96  18 frames
+  Smoke_Rising             Small 24x48  Large 48x96  18 frames  LOOP
+  Steam_Burst              Small 32x70  Large 64x140  19 frames
+
+[08_Status]  (10 effects)
+  Fire_BurnStatus          Small 20x32  Large 40x64  8 frames  LOOP
+  Ice_FreezeSnap           Small 32x32  Large 64x64  5 frames
+  Ice_FrozenSparkle        Small 24x32  Large 48x64  8 frames  LOOP
+  Poison_Bubbles           Small 32x48  Large 64x96  18 frames  LOOP
+  Stun_Stars               Small 64x32  Large 128x64  18 frames  LOOP
+  Sleep_Zzz                Small 48x64  Large 96x128  18 frames  LOOP
+  Shock_Sparks             Small 44x50  Large 88x100  18 frames  LOOP
+  Bleed_Drips              Small 48x64  Large 96x128  18 frames  LOOP
+  Confuse_Spiral           Small 48x48  Large 96x96  18 frames  LOOP
+  Charm_Hearts             Small 48x64  Large 96x128  18 frames  LOOP
+
+[09_Pickups_Sparkles]  (10 effects)
+  Pickup_Flash             Small 32x32  Large 64x64  18 frames
+  Coin_Sparkle             Small 16x16  Large 32x32  12 frames
+  Collect_Ring             Small 32x32  Large 64x64  18 frames
+  Item_Shine               Small 32x32  Large 64x64  18 frames  LOOP
+  Star_Twinkle             Small 16x16  Large 32x32  18 frames  LOOP
+  XP_Orb                   Small 16x16  Large 32x32  18 frames  LOOP
+  Chest_Burst              Small 64x48  Large 128x96  18 frames
+  Confetti_Burst           Small 64x64  Large 128x128  18 frames
+  Firework                 Small 64x96  Large 128x192  18 frames
+  Sparkle_Trail            Small 32x16  Large 64x32  18 frames  LOOP
+
+[10_UI_Symbols]  (18 effects)
+  Icon_Exclamation         Small 28x28  Large 56x56  10 frames
+  Icon_Question            Small 28x28  Large 56x56  10 frames
+  Icon_Heart               Small 28x28  Large 56x56  10 frames
+  Icon_HeartBreak          Small 28x28  Large 56x56  10 frames
+  Icon_Anger               Small 28x28  Large 56x56  10 frames
+  Icon_Sweat               Small 28x28  Large 56x56  10 frames
+  Icon_Dots                Small 28x28  Large 56x56  10 frames
+  Icon_Music               Small 28x28  Large 56x56  10 frames
+  Icon_Idea                Small 28x28  Large 56x56  10 frames
+  Icon_Skull               Small 28x28  Large 56x56  10 frames
+  Icon_Check               Small 28x28  Large 56x56  10 frames
+  Icon_Cross               Small 28x28  Large 56x56  10 frames
+  Text_LevelUp             Small 128x24  Large 256x48  14 frames
+  Text_Critical            Small 128x24  Large 256x48  14 frames
+  Text_Miss                Small 72x24  Large 144x48  14 frames
+  Text_KO                  Small 56x24  Large 112x48  14 frames
+  Text_Victory             Small 120x24  Large 240x48  14 frames
+  Text_GameOver            Small 136x24  Large 272x48  14 frames

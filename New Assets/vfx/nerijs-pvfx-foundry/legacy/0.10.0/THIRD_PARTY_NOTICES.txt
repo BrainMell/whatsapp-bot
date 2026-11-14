@@ -1,0 +1,12 @@
+PVFX Foundry 0.5.0
+
+No third-party or supplied reference artwork is included in this asset pack.
+All shipped sprite pixels are rendered from original first-party effect
+projects. Imported construction stamps used by individual projects are
+first-party source assets and are not included separately in the download.
+
+The CC0 1.0 legal text is provided by Creative Commons Corporation:
+https://creativecommons.org/publicdomain/zero/1.0/legalcode
+
+Creative Commons is not a party to the CC0 dedication and does not endorse
+Pixel VFX Studio or this pack.

@@ -1,0 +1,1798 @@
+{
+  "schema": "pvfx.export-manifest/0.2-dev",
+  "profile": "profile.free-foundry-grid-0.1",
+  "effect_id": "effect.quality-echo-shuttle",
+  "renderer": "pvfx-render/0.17-dev",
+  "source_hash": "sha256:a713805b29b74cdde9a64a6f9eff3790a78d2a9179af34984ab867cbd5d28a6d",
+  "dependency_hash": "sha256:5cea6840312ec7424469069e08dc21443324151561f5e5c41f07a3eb68642362",
+  "animation_hash": "sha256:e0c6b148aaddd430f17f0407ce0cd9775179917cd51078a13e4cfdbdec87813b",
+  "loop_mode": "loop",
+  "source_size": [
+    96,
+    96
+  ],
+  "pivot": [
+    19,
+    48
+  ],
+  "frames": [
+    {
+      "frame": 0,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        29,
+        79,
+        64
+      ],
+      "trim_bounds": [
+        20,
+        29,
+        79,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        19
+      ],
+      "pixel_hash": "sha256:2443f8c1379ff636004392fe7f06ada50d8e87fe743c534ecb0ab9908080c19f",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 0,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 1,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        29,
+        79,
+        64
+      ],
+      "trim_bounds": [
+        20,
+        29,
+        79,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        19
+      ],
+      "pixel_hash": "sha256:2443f8c1379ff636004392fe7f06ada50d8e87fe743c534ecb0ab9908080c19f",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 0,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 2,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        29,
+        79,
+        64
+      ],
+      "trim_bounds": [
+        20,
+        29,
+        79,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        19
+      ],
+      "pixel_hash": "sha256:2443f8c1379ff636004392fe7f06ada50d8e87fe743c534ecb0ab9908080c19f",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 0,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 3,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        28,
+        79,
+        64
+      ],
+      "trim_bounds": [
+        20,
+        28,
+        79,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        20
+      ],
+      "pixel_hash": "sha256:f4f9e46192e1b372968c309eb9a83a74b2f68114148c66680005587797d477fc",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 0,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 4,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        26,
+        79,
+        64
+      ],
+      "trim_bounds": [
+        20,
+        26,
+        79,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        22
+      ],
+      "pixel_hash": "sha256:e8ed852787b3ca309a0c1c48527ccd0a1d0c5e75df60fa95395947d473865e60",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 0,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 5,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        25,
+        79,
+        64
+      ],
+      "trim_bounds": [
+        20,
+        25,
+        79,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        23
+      ],
+      "pixel_hash": "sha256:0052a6efc070d632bc2c34012b9fce1f0eecd9e853b53e7d16ece4db955a561d",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 96,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 6,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        24,
+        79,
+        64
+      ],
+      "trim_bounds": [
+        20,
+        24,
+        79,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        24
+      ],
+      "pixel_hash": "sha256:7224707742891fd0c3b923cc6a897adeb5b909e57abfa1942b2b0cedd43c0b01",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 96,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 7,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        24,
+        79,
+        64
+      ],
+      "trim_bounds": [
+        20,
+        24,
+        79,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        24
+      ],
+      "pixel_hash": "sha256:27ed9c89bc4ac6bc0a7ca85ea64ebf70f586248bb769ea655bf73c73dce6406d",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 96,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 8,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        23,
+        79,
+        64
+      ],
+      "trim_bounds": [
+        20,
+        23,
+        79,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        25
+      ],
+      "pixel_hash": "sha256:d515719e7ddc1005664e6c26f7fbb2771e63edc1a67b35cf1f590ee0bde7a27a",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 96,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 9,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        22,
+        79,
+        64
+      ],
+      "trim_bounds": [
+        20,
+        22,
+        79,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        26
+      ],
+      "pixel_hash": "sha256:915deb53145adb66d10b78672d751faf9d97fba23d1616afcd51482549b167ab",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 96,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 10,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        22,
+        79,
+        64
+      ],
+      "trim_bounds": [
+        20,
+        22,
+        79,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        26
+      ],
+      "pixel_hash": "sha256:c422ad0f0dd9419dd1b15dcc717156afff8c67855c87da7d867cf0c3850ec0ed",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 192,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 11,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        22,
+        79,
+        64
+      ],
+      "trim_bounds": [
+        20,
+        22,
+        79,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        26
+      ],
+      "pixel_hash": "sha256:d895c20366ecf5c493df8e60b90497916a822f6725e62d66be21abf7511e8ae1",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 192,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 12,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        22,
+        79,
+        64
+      ],
+      "trim_bounds": [
+        20,
+        22,
+        79,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        26
+      ],
+      "pixel_hash": "sha256:420e430f7d552e8f42a4daa350582883eb4699caf244f976fe6c895a3cc3b03c",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 192,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 13,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        22,
+        79,
+        64
+      ],
+      "trim_bounds": [
+        20,
+        22,
+        79,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        26
+      ],
+      "pixel_hash": "sha256:7c9618bace3b64e55dad4f140586b358c3d23fde29c0201d1b5a3b54b1b761f2",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 192,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 14,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        22,
+        79,
+        64
+      ],
+      "trim_bounds": [
+        20,
+        22,
+        79,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        26
+      ],
+      "pixel_hash": "sha256:29be909d49219d83a276702a6f9f823304cafbb112b044f522df6178b5b8d4ed",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 192,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 15,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        22,
+        78,
+        64
+      ],
+      "trim_bounds": [
+        20,
+        22,
+        78,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        26
+      ],
+      "pixel_hash": "sha256:c48eaaa191311a514a208e029bb2e9d69cb80e628dbcdfd0733a39e5f91161f0",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 288,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 16,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        23,
+        79,
+        65
+      ],
+      "trim_bounds": [
+        20,
+        23,
+        79,
+        65
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        25
+      ],
+      "pixel_hash": "sha256:e68512e97fb0d03ce1e0d293509900ed28c4df5925c4129d90a02886bf9b4ca9",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 288,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 17,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        23,
+        81,
+        65
+      ],
+      "trim_bounds": [
+        20,
+        23,
+        81,
+        65
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        25
+      ],
+      "pixel_hash": "sha256:36e342af3e2477dd38533c2d0d1811015fdc48a501e76443b564ff188987f005",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 288,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 18,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        24,
+        79,
+        65
+      ],
+      "trim_bounds": [
+        20,
+        24,
+        79,
+        65
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        24
+      ],
+      "pixel_hash": "sha256:75285a670b9c605b0536d92b240b7f796b4437705df42f2fa01b08c12408fc43",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 288,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 19,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        28,
+        78,
+        65
+      ],
+      "trim_bounds": [
+        20,
+        28,
+        78,
+        65
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        20
+      ],
+      "pixel_hash": "sha256:d247dabcb7d371a5ffdf245e97b63aec95f0b1b469d93a846c93ce4fdd8e2437",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 288,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 20,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        28,
+        78,
+        69
+      ],
+      "trim_bounds": [
+        20,
+        28,
+        78,
+        69
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        20
+      ],
+      "pixel_hash": "sha256:861f4743d919bd47909469df08265f229ebb321b1c2db4468b931455f21a2a36",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 384,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 21,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        29,
+        78,
+        69
+      ],
+      "trim_bounds": [
+        20,
+        29,
+        78,
+        69
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        19
+      ],
+      "pixel_hash": "sha256:d9b9dcb16ab03a57b73b4523ba2ed1de56586b697070bc54cfd99621c5fe43b8",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 384,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 22,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        29,
+        79,
+        70
+      ],
+      "trim_bounds": [
+        20,
+        29,
+        79,
+        70
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        19
+      ],
+      "pixel_hash": "sha256:8c294da111238e0dfa902fc39d781b2bac5d88b53679f1c5a2282406f572c1cd",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 384,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 23,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        29,
+        79,
+        70
+      ],
+      "trim_bounds": [
+        20,
+        29,
+        79,
+        70
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        19
+      ],
+      "pixel_hash": "sha256:749e7843af75f56bca505f4d278a34667c666eeb176f51dbd914169cba46c49e",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 384,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 24,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        29,
+        79,
+        71
+      ],
+      "trim_bounds": [
+        20,
+        29,
+        79,
+        71
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        19
+      ],
+      "pixel_hash": "sha256:dd7d8b4844c49076448c2cbb2a7b9aaa710510c07cae71a881fa367272fdbd8c",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 384,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 25,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        29,
+        79,
+        72
+      ],
+      "trim_bounds": [
+        20,
+        29,
+        79,
+        72
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        19
+      ],
+      "pixel_hash": "sha256:802d6d409f11901d295e2fdde27cc3019bf29c50116cdd0ecc99ed1f6300637e",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 480,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 26,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        29,
+        79,
+        72
+      ],
+      "trim_bounds": [
+        20,
+        29,
+        79,
+        72
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        19
+      ],
+      "pixel_hash": "sha256:7c2f52506e625bd39a53b9b4330a1ea1bd91716caa0a40e23553512c796a32d1",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 480,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 27,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        29,
+        79,
+        73
+      ],
+      "trim_bounds": [
+        20,
+        29,
+        79,
+        73
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        19
+      ],
+      "pixel_hash": "sha256:f12cf29ac8fc0c923266e4c74bdbd4454353002c41712f611c9cbc80124d966b",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 480,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 28,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        29,
+        79,
+        72
+      ],
+      "trim_bounds": [
+        20,
+        29,
+        79,
+        72
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        19
+      ],
+      "pixel_hash": "sha256:9bdb1643ee37a61aadeff5c014bc1c9032274fba11d8b4bb82a4e442cde106ee",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 480,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 29,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        29,
+        79,
+        72
+      ],
+      "trim_bounds": [
+        20,
+        29,
+        79,
+        72
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        19
+      ],
+      "pixel_hash": "sha256:9229505c92db0748ab1b2ff823fb5359e7fe333bacdfd97b59e57210df0f67cf",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 480,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 30,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        29,
+        79,
+        71
+      ],
+      "trim_bounds": [
+        20,
+        29,
+        79,
+        71
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        19
+      ],
+      "pixel_hash": "sha256:173097da10b5c097b123d1dc717f61148cff4b86fe01ba47a01fc74c58bb59ee",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 576,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 31,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        29,
+        79,
+        70
+      ],
+      "trim_bounds": [
+        20,
+        29,
+        79,
+        70
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        19
+      ],
+      "pixel_hash": "sha256:33b39909dbfe7938789eca96136230ca4f1972c39d1a5048db5a53f03a6ec531",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 576,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 32,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        29,
+        79,
+        70
+      ],
+      "trim_bounds": [
+        20,
+        29,
+        79,
+        70
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        19
+      ],
+      "pixel_hash": "sha256:1e8e98cc8eb67c0223b24a8243b0653ef95597f58a9d848f6af5bd17827c95d7",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 576,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 33,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        17,
+        29,
+        79,
+        64
+      ],
+      "trim_bounds": [
+        17,
+        29,
+        79,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        2,
+        19
+      ],
+      "pixel_hash": "sha256:d96e02860e10fd8ef55a36726275650295d2cf1c6bd8f3072e8756de7b083757",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 576,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 34,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        18,
+        29,
+        79,
+        64
+      ],
+      "trim_bounds": [
+        18,
+        29,
+        79,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        1,
+        19
+      ],
+      "pixel_hash": "sha256:b593d4c36501b684c56c75f451ae0c44c7e7165f80938ec160fc5d6baf299c6b",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 576,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 35,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        19,
+        29,
+        79,
+        64
+      ],
+      "trim_bounds": [
+        19,
+        29,
+        79,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        0,
+        19
+      ],
+      "pixel_hash": "sha256:f7afc949f88f984456255698cc6a59133f85adc3cfa2918ddccf84d95ca51e87",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 0,
+        "y": 672,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 36,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        29,
+        79,
+        64
+      ],
+      "trim_bounds": [
+        20,
+        29,
+        79,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        19
+      ],
+      "pixel_hash": "sha256:2443f8c1379ff636004392fe7f06ada50d8e87fe743c534ecb0ab9908080c19f",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 96,
+        "y": 672,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 37,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        29,
+        79,
+        64
+      ],
+      "trim_bounds": [
+        20,
+        29,
+        79,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        19
+      ],
+      "pixel_hash": "sha256:2443f8c1379ff636004392fe7f06ada50d8e87fe743c534ecb0ab9908080c19f",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 192,
+        "y": 672,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 38,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        29,
+        79,
+        64
+      ],
+      "trim_bounds": [
+        20,
+        29,
+        79,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        19
+      ],
+      "pixel_hash": "sha256:2443f8c1379ff636004392fe7f06ada50d8e87fe743c534ecb0ab9908080c19f",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 288,
+        "y": 672,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    },
+    {
+      "frame": 39,
+      "duration": {
+        "numerator_ms": 1000,
+        "denominator": 20
+      },
+      "source_size": [
+        96,
+        96
+      ],
+      "visible_bounds": [
+        20,
+        29,
+        79,
+        64
+      ],
+      "trim_bounds": [
+        20,
+        29,
+        79,
+        64
+      ],
+      "pivot": [
+        19,
+        48
+      ],
+      "trimmed_pivot": [
+        -1,
+        19
+      ],
+      "pixel_hash": "sha256:2443f8c1379ff636004392fe7f06ada50d8e87fe743c534ecb0ab9908080c19f",
+      "phase": {
+        "id": "phase.probe-cycle",
+        "label": "probe-cycle"
+      },
+      "sheet": {
+        "image": "sprite-sheet.png",
+        "x": 384,
+        "y": 672,
+        "width": 96,
+        "height": 96,
+        "scale": 1
+      }
+    }
+  ],
+  "markers": [
+    {
+      "id": "marker.send",
+      "name": "send",
+      "frame": 3
+    },
+    {
+      "id": "marker.reflect",
+      "name": "reflect",
+      "frame": 18
+    },
+    {
+      "id": "marker.return",
+      "name": "return",
+      "frame": 34
+    }
+  ],
+  "corrections": []
+}
