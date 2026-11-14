@@ -19,6 +19,7 @@ const quiz = require("./quiz");
 const tourney = require("./tictactoeTournament");
 const render = require("./tourneyRender");
 const GN = require("./gameNight");
+const emojiCard = require("./emojiCard");
 
 const STATE = new Map(); // chatId -> { step, results: [] }
 const STEPS = ["Preflight", "Logo images", "Trivia samples", "Tournament bracket", "Chess blitz board", "Emoji + Wordle", "Scoreboard + restart sim"];
@@ -140,6 +141,8 @@ async function stepChess(ctx) {
   try {
     await chess.sendBoard(ctx.sock, ctx.chatId, state, `🧪 *STEP 5/7 - BLITZ BOARD* (fake players)\n♟️ ${NAMES[0]} (White) vs ${NAMES[1]} (Black)\n⏱ In the event: 3 minutes total, then judged on material.`, []);
     const m = GN._material(state);
+    const pr = chess.getPrefs ? chess.getPrefs(ctx.chatId) : { board: "?", pieces: "?" };
+    await sendText(ctx.sock, ctx.chatId, `Board theme for this chat: *${pr.board}* / *${pr.pieces}* (the blitz boards use the group's saved chess theme - set it with \`${px()} chess theme\` and \`${px()} chess pieces\`).`);
     await sendText(ctx.sock, ctx.chatId, `Material judge check: White ${m.w} vs Black ${m.b} → ${m.w === m.b ? "draw (1 pt each)" : "leader gets judged win (2 pts)"}.\nWin 3 / judged win 2 / draw 1 / loss 0.`);
   } finally { try { chess.deleteGame(ctx.chatId); } catch (_) { /* ignore */ } }
   return true;
@@ -149,10 +152,14 @@ async function stepChess(ctx) {
 async function stepEmoji(ctx) {
   const puzzle = GN._EMOJI[Math.floor(Math.random() * GN._EMOJI.length)];
   const selfOk = GN._EMOJI.every(([, ans]) => ans.every((a) => GN._nrm(a).length > 0));
+  const card = await emojiCard.renderCard({ n: 1, emojis: puzzle[0], answer: puzzle[1][0] });
+  const allCards = (await Promise.all(GN._EMOJI.map(([e, a]) => emojiCard.renderCard({ n: 1, emojis: e, answer: a[0] })))).filter(Boolean).length;
+  if (card) await sendImg(ctx.sock, ctx.chatId, card, `*STEP 6/7 - EMOJI DECODE CARD*\n_(answer: ${puzzle[1][0]} - typed as plain chat text)_\n${ok(allCards === GN._EMOJI.length)} ${allCards}/${GN._EMOJI.length} puzzle cards render`);
+  else await sendText(ctx.sock, ctx.chatId, "❌ Emoji card failed to render - the event would fall back to text puzzles.");
   await sendText(ctx.sock, ctx.chatId,
-    `*STEP 6/7 - EMOJI DECODE + WORDLE*\n\n🧩 *EMOJI DECODE #1* - name the game or movie:\n\n${puzzle[0]}\n\n_(answer: ${puzzle[1][0]} - typed as plain chat text; first correct scores +3, +1 under 15s)_\n\n` +
+    `*WORDLE*\n\n` +
     `🍬 *Wordle Sugar Rush* can only be proven live: run \`${px()} gn start\`, \`${px()} gn window 1\`, jump the stages with \`${px()} gn skip\`, pick wordle and play \`${px()} wordle\` - a new word loads after every game and the solve count is tallied.`);
-  return selfOk;
+  return selfOk && !!card && allCards === GN._EMOJI.length;
 }
 
 // ---- step 7: scoreboard + restart sim ----

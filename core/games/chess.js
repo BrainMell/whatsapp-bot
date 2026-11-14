@@ -771,4 +771,4 @@ async function handleChess(sock, chatId, senderJid, args, m, botMarker) {
 
 function saveGuard(state) { if (!state.moves) state.moves = []; if (!state.style) state.style = { ...DEFAULT_PREFS }; if (!state.id) state.id = newId(); }
 
-module.exports = { handleChess, getGame, activeGamesMap, loadActiveGames, _parseMove: parseMove, createGame, settleGame, sendBoard, deleteGame, settleHooks };
+module.exports = { handleChess, getGame, activeGamesMap, loadActiveGames, _parseMove: parseMove, createGame, settleGame, sendBoard, deleteGame, settleHooks, getPrefs };

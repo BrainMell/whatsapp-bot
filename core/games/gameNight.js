@@ -29,6 +29,7 @@ const quiz = require("./quiz");
 const wordle = require("./wordle");
 const chess = require("./chess");
 const tourney = require("./tictactoeTournament");
+const emojiCard = require("./emojiCard");
 
 const EVENTS = new Map(); // chatId -> event
 const TIMERS = new Map(); // chatId -> { rush, chess, emoji }
@@ -213,19 +214,19 @@ function armRush(ev) {
 
 // ---------- Wordle / Chess / Emoji sub-games ----------
 const EMOJI = [
-  ["🧙‍♂️💍🌋", ["lord of the rings", "lotr", "the lord of the rings"]],
-  ["🍄👨‍🔧👸", ["super mario", "super mario bros", "mario"]],
+  ["🧙💍🌋", ["lord of the rings", "lotr", "the lord of the rings"]],
+  ["🍄🔧👸", ["super mario", "super mario bros", "mario"]],
   ["⛏️🟩🧟", ["minecraft"]],
   ["🦔💨💍", ["sonic", "sonic the hedgehog"]],
   ["🐷🐦💥", ["angry birds"]],
   ["🧟🌻🧠", ["plants vs zombies", "plants versus zombies", "pvz"]],
-  ["🗡️🧝‍♂️🔺", ["zelda", "the legend of zelda", "legend of zelda"]],
+  ["🗡️🧝🔺", ["zelda", "the legend of zelda", "legend of zelda"]],
   ["👻🟡🍒", ["pac man", "pacman", "pac-man"]],
   ["🚗⚽🚀", ["rocket league"]],
   ["🍗🔫🪂", ["pubg", "playerunknowns battlegrounds"]],
-  ["🧛‍♂️🏰🌙", ["castlevania"]],
+  ["🧛🏰🌙", ["castlevania"]],
   ["🕳️🔫🎂", ["portal"]],
-  ["🏴‍☠️🍖🐒", ["one piece"]],
+  ["☠️🍖🐒", ["one piece"]],
   ["🍥🦊🍜", ["naruto"]],
   ["📓💀🍎", ["death note"]],
   ["🧊👸⛄", ["frozen"]],
@@ -241,7 +242,7 @@ const EMOJI = [
   ["🏰🍄🐢", ["super mario", "mario"]],
   ["🐉🧔🗡️", ["skyrim", "the elder scrolls v skyrim", "elder scrolls"]],
   ["🏎️🍌🐢", ["mario kart"]],
-  ["🏠🧑‍🤝‍🧑💰", ["the sims", "sims"]],
+  ["🏠👫💰", ["the sims", "sims"]],
   ["🎣🏝️🐾", ["animal crossing"]],
 ];
 const nrm = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -254,7 +255,12 @@ async function nextEmoji(ev, first) {
   idx = pool.length ? pool[Math.floor(Math.random() * pool.length)] : Math.floor(Math.random() * EMOJI.length);
   E.used.push(idx); E.n += 1; E.cur = { idx, openedAt: Date.now(), by: null };
   save(ev);
-  await say(ev.chatId, `🧩 *EMOJI DECODE #${E.n}* - name the game or movie:\n\n${EMOJI[idx][0]}\n\n_First correct answer in chat scores (+3, +1 bonus if under 15s)._`, E.players.map((p) => p.jid));
+  const _card = await emojiCard.renderCard({ n: E.n, emojis: EMOJI[idx][0], answer: EMOJI[idx][1][0], seconds: EMOJI_GAP_MS / 1000 });
+  if (_card) {
+    await SOCK.sendMessage(ev.chatId, { image: _card, caption: MARK + `🧩 *EMOJI DECODE #${E.n}* - first correct answer in chat scores!`, contextInfo: { mentionedJid: E.players.map((p) => p.jid) } }).catch((e) => console.error("[GameNight] card send failed:", e.message));
+  } else {
+    await say(ev.chatId, `🧩 *EMOJI DECODE #${E.n}* - name the game or movie:\n\n${EMOJI[idx][0]}\n\n_First correct answer in chat scores (+3, +1 bonus if under 15s)._`, E.players.map((p) => p.jid));
+  }
   setTimer(ev.chatId, "emoji", setTimeout(async () => {
     if (E.cur && !E.cur.by) { await say(ev.chatId, `⌛ Time! It was *${EMOJI[E.cur.idx][1][0]}*.`); E.cur = null; save(ev); }
     nextEmoji(ev);
@@ -315,7 +321,8 @@ async function nextChess(ev) {
     C.cur = null; save(ev); chess.settleHooks.delete(chatId);
     setTimeout(() => nextChess(ev), 5000);
   });
-  await chess.sendBoard(SOCK, chatId, state, MARK + `♟️ *BLITZ BOARD* - ${tag(a)} (White) vs ${tag(b)} (Black)\n⏱ 3 minutes total, then judged on material.`, [a, b]);
+  try { const pr = chess.getPrefs(chatId); state.style = { board: pr.board, pieces: pr.pieces }; } catch (_) { /* keep default */ }
+  await chess.sendBoard(SOCK, chatId, state, MARK + `♟️ *BLITZ BOARD* - ${tag(a)} (White) vs ${tag(b)} (Black)\n⏱ 3 minutes total, then judged on material.\n🎨 Board: ${(state.style || {}).board} / ${(state.style || {}).pieces} - change it with \`${px()} chess theme\``, [a, b]);
   const cap = Math.min(BLITZ_CAP_MS, left - 15000);
   setTimer(chatId, "chesscap", setTimeout(() => adjudicate(ev).catch(() => {}), cap));
 }
