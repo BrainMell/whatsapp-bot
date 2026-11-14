@@ -1024,6 +1024,7 @@ const { fetchPfp: fetchPfpCached } = require('./utils/pfpCache'); // 💡 PERF P
 const tictactoe = require('./games/tictactoe');
 const tttTourney = require('./games/tictactoeTournament');
 const chess = require('./games/chess');
+const gameNight = require('./games/gameNight');
 const debate = require('./games/debate');
 const ludo = require('./games/ludo');
 const wordle = require('./games/wordle');
@@ -7847,6 +7848,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
           // Chess must be loaded after system data is ready
           chess.loadActiveGames();
+          setTimeout(() => gameNight.resume(sock, BOT_MARKER, { smartGroqCall, MODELS }).catch((e) => console.error('[GameNight] resume failed:', e.message)), 15000).unref?.();
 
           loadEnabledChats();
           loadEnabledGcs();
@@ -8382,6 +8384,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                 }
 
                 chess.loadActiveGames();
+                setTimeout(() => gameNight.resume(sock, BOT_MARKER, { smartGroqCall, MODELS }).catch((e) => console.error('[GameNight] resume failed:', e.message)), 15000).unref?.();
                 loadEnabledChats();
                 loadEnabledGcs();
                 loadGroupSettings();
@@ -9740,6 +9743,15 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                         console.log("[Quiz] bare-answer intercept error:", _qaErr?.message);
                       }
                     }
+                  }
+
+                  // 🎮 GAME NIGHT: bare chat text can answer the live Emoji Decode puzzle
+                  if (messageBody && !m.key.fromMe) {
+                    try {
+                      const _gnPfx = String(botConfig.getPrefix() || ".").toLowerCase();
+                      const _gnTxt = String(messageBody).trim();
+                      if (_gnTxt && !_gnTxt.toLowerCase().startsWith(_gnPfx) && gameNight.handleText(sock, chatId, senderJid, _gnTxt)) return;
+                    } catch (_gnErr) { console.log("[GameNight] text hook error:", _gnErr?.message); }
                   }
 
                   // 1. Get Group Metadata & Admin Status EARLY (Needed for Security & Commands)
@@ -32709,6 +32721,22 @@ _(or reply to their message)_
                     return;
                   }
                   // ============================================
+                  // 🎮 GAME NIGHT: `.j gn start|next|scores|pick|retry|skip|window|end` (alias: gamenight)
+                  {
+                    const _gp = botConfig.getPrefix().toLowerCase();
+                    const _gm = lowerTxt.match(new RegExp("^" + _gp.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s+(gn|gamenight)(?:\\s+(.*))?$"));
+                    if (_gm) {
+                      const gArgs = (_gm[2] || "").trim().split(/\s+/).filter(Boolean);
+                      try {
+                        gameNight.setDeps && gameNight.setDeps({ smartGroqCall, MODELS });
+                        await gameNight.handle(sock, chatId, senderJid, gArgs, m, BOT_MARKER, senderName);
+                      } catch (gErr) {
+                        console.error("[GameNight] handler error:", gErr);
+                        await sock.sendMessage(chatId, { text: BOT_MARKER + "❌ Game Night error: " + gErr.message }, { quoted: m });
+                      }
+                      return;
+                    }
+                  }
                   // 🏟️ TIC-TAC-TOE TOURNAMENT: `.j tourney create|join|start|bracket|board|top|forfeit|leave|cancel`
                   // (must sit BEFORE the ttt family below - they match by prefix)
                   if (
