@@ -360,7 +360,7 @@ async function endRush(ev) {
 // ---------- command handler ----------
 function help() {
   const p = px();
-  return `🎮 *GAME NIGHT*\n\n\`${p} gn start\` - create the event (you host)\n\`${p} gn next\` - host: start / advance the next round\n\`${p} gn scores\` - live standings\n\`${p} gn pick wordle|chess|emoji\` - choose your Round 3 game\n\`${p} gn retry\` - host: re-run an interrupted round\n\`${p} gn skip\` - host: close the current round with what it has\n\`${p} gn window <minutes>\` - host: Sugar Rush length (default 20)\n\`${p} gn end\` - host: finish the event\n\n*Rounds:* Mega Quiz → Tic-Tac-Toe Tournament → Pick a game (Wordle Sugar Rush / Blitz Chess / Emoji Decode) → Comics & Games finale`;
+  return `🎮 *GAME NIGHT*\n\n\`${p} gn start\` - create the event (you host)\n\`${p} gn next\` - host: start / advance the next round\n\`${p} gn scores\` - live standings\n\`${p} gn pick wordle|chess|emoji\` - choose your Round 3 game\n\`${p} gn test\` - host: step-by-step dry run of everything (use a test group)\n\`${p} gn retry\` - host: re-run an interrupted round\n\`${p} gn skip\` - host: close the current round with what it has\n\`${p} gn window <minutes>\` - host: Sugar Rush length (default 20)\n\`${p} gn end\` - host: finish the event\n\n*Rounds:* Mega Quiz → Tic-Tac-Toe Tournament → Pick a game (Wordle Sugar Rush / Blitz Chess / Emoji Decode) → Comics & Games finale`;
 }
 
 async function handle(sock, chatId, senderJid, args, m, botMarker, senderName) {
@@ -372,6 +372,10 @@ async function handle(sock, chatId, senderJid, args, m, botMarker, senderName) {
   const reply = (t, mentions = []) => say(chatId, t, mentions);
 
   if (!sub || sub === "help") return reply(help());
+  if (sub === "test" || sub === "dryrun") {
+    if (ev && ev.stage !== "done" && !isHost) return reply("❌ Only the host can run the test.");
+    return require("./gameNightTest").handle(sock, chatId, senderJid, args.slice(1), botMarker);
+  }
 
   if (sub === "start" || sub === "create") {
     if (ev && ev.stage !== "done") return reply(`❌ A Game Night is already running here (${stageLabel[ev.stage]}). \`${px()} gn scores\``);
@@ -477,4 +481,4 @@ async function resume(sock, botMarker, deps) {
 
 function setDeps(d) { if (d) DEPS = d; }
 
-module.exports = { setDeps, handle, handleText, resume, _events: EVENTS, _EMOJI: EMOJI, _material: material };
+module.exports = { _save: save, _loadOne: loadOne, _fileFor: fileFor, _board: board, _addPoints: addPoints, _nrm: nrm, setDeps, handle, handleText, resume, _events: EVENTS, _EMOJI: EMOJI, _material: material };
