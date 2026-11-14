@@ -39,7 +39,8 @@ const quizLore = require("./quizLore");
 const quizConfigMod = require("./quizConfig"); // P16 central config + quizmod
 const quizBank = require("./quizBank");        // P15 stable-identity bank
 const quizMediaMod = require("./quizMedia");   // 2026-09-27 logos + spot-the-song modes
-const quizEventPacks = require("./quizEventPacks"); // Game Night packs (.j quiz -preplanned event1|event2)
+const quizEventPacks = require("./quizEventPacks");
+const gnBake = require("./gameNightBake");   // pre-baked event assets (logos + theme clips on disk) // Game Night packs (.j quiz -preplanned event1|event2)
 const quizPreplannedMod = require("./quizPreplanned"); // 2026-10-10 owner: .j quiz -preplanned fixed pack
 const quizDatasetMod = require("./quizDataset"); // 2026-10-10 dataset categories (games/comics/movies/series)
 const mediaWorker = require("../utils/mediaWorker"); // 2026-09-27 shared media job runner
@@ -1898,7 +1899,8 @@ async function generateSectionQuestions(session, section, sock, chatId) {
         const others = Array.isArray(brand.decoys) && brand.decoys.length >= 3
           ? brand.decoys.map((n) => ({ name: n }))
           : section.pinnedBrands.filter((b) => b.name !== brand.name).slice(0, 3);
-        const q = await quizMediaMod.buildLogosQuestion(brand, others, cfg.difficulty).catch(() => null);
+        const q = gnBake.logoQuestion(brand, others, cfg.difficulty) // pre-baked on disk: instant
+          || await quizMediaMod.buildLogosQuestion(brand, others, cfg.difficulty).catch(() => null);
         if (!q) { console.log(`[Quiz] preplanned: logo build failed for ${brand.name} - skipping`); continue; }
         usedKeys.add(`pllogo:${_normText(brand.name)}`);
         q.timeLimit = quizPreplannedMod.LOGO_TIME_S; // owner timer spec: 30s
@@ -1932,6 +1934,7 @@ async function generateSectionQuestions(session, section, sock, chatId) {
     // 30 SECONDS clips, 45s answer timer (owner timer spec).
     if (Array.isArray(section.pinnedThemes)) {
       const clipSecs = section.clipSeconds || 25;
+      try { gnBake.restoreAudio(section.pinnedThemes); } catch (_) { /* optional */ }
       const built = await mediaWorker.run(
         async () => {
           const out = [];
@@ -4020,7 +4023,20 @@ async function attachMedia(q) {
   return null;
 }
 
+// Pre-bake helper for Game Night: fetch + clip each theme entry into the disk audio cache.
+async function bakeThemeEntries(entries, clipSecs = 30) {
+  const out = [];
+  for (const entry of entries) {
+    const key = entry.cacheKey || `theme:${_normText(entry.show)}`;
+    const others = entries.filter((t) => t.show !== entry.show).slice(0, 3);
+    const q = await quizMediaMod.buildThemeSongQuestionEntry(entry, others, "medium", deps.goService, (buf, secs) => _clipAudioBuffer(buf, deps.ffmpegPath, secs || clipSecs), clipSecs).catch(() => null);
+    out.push({ show: entry.show, key, ok: !!q });
+  }
+  return out;
+}
+
 module.exports = {
+  bakeThemeEntries,
   eventHooks,
   hasActive,
   getSession,

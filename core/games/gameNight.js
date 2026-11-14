@@ -30,6 +30,7 @@ const wordle = require("./wordle");
 const chess = require("./chess");
 const tourney = require("./tictactoeTournament");
 const emojiCard = require("./emojiCard");
+const bake = require("./gameNightBake");
 
 const EVENTS = new Map(); // chatId -> event
 const TIMERS = new Map(); // chatId -> { rush, chess, emoji }
@@ -379,6 +380,19 @@ async function handle(sock, chatId, senderJid, args, m, botMarker, senderName) {
   const reply = (t, mentions = []) => say(chatId, t, mentions);
 
   if (!sub || sub === "help") return reply(help());
+  if (sub === "bake") {
+    if (ev && ev.stage !== "done" && !isHost) return reply("❌ Only the host can run that.");
+    const st = bake.status();
+    const line = (s) => `🖼 Logos: ${s.logos.have}/${s.logos.total}   🎵 Theme clips: ${s.audio.have}/${s.audio.total}`;
+    if ((args[1] || "").toLowerCase() === "status" || (st.complete && (args[1] || "").toLowerCase() !== "force")) {
+      return reply(`📦 *PRE-BAKED QUIZ ASSETS*\n\n${line(st)}\n${st.complete ? "✅ Everything is baked - quizzes start instantly." : `⚠️ Missing: ${[...st.logos.missing, ...st.audio.missing].join(", ")}\nRun \`${px()} gn bake\``}`);
+    }
+    await reply(`📦 Baking quiz assets now (${line(st)}). I'll post when it's done - this is a one-time fetch.`);
+    const r = await bake.bakeAll((m2) => console.log("[GameNight bake]", m2));
+    if (r.busy) return reply("⏳ A bake is already running.");
+    const a = r.after;
+    return reply(`📦 *BAKE DONE*\n\n${line(a)}\n` + (a.complete ? "✅ Everything is on disk - the quizzes will start instantly." : `❌ Still missing: ${[...r.failedLogos, ...r.failedAudio].join(", ")}\nRun \`${px()} gn bake\` again to retry those.`));
+  }
   if (sub === "test" || sub === "dryrun") {
     if (ev && ev.stage !== "done" && !isHost) return reply("❌ Only the host can run the test.");
     return require("./gameNightTest").handle(sock, chatId, senderJid, args.slice(1), botMarker);
@@ -452,6 +466,10 @@ async function runStage(ev, stage, m) {
   const chatId = ev.chatId;
   if (stage === "pick") { ev.stage = "pick"; save(ev); return openPick(ev); }
   ev.stage = stage; save(ev);
+  if (stage === "quiz1" || stage === "quiz2") {
+    const bs = bake.status();
+    if (!bs.complete) await say(chatId, `⚠️ Not everything is pre-baked (${bs.logos.have}/${bs.logos.total} logos, ${bs.audio.have}/${bs.audio.total} clips) - the quiz will fetch the rest live and may take a while. Host: \`${px()} gn bake\` fixes that for next time.`);
+  }
   if (stage === "quiz1") { await say(chatId, `🎯 *ROUND 1 - MEGA QUIZ* loading...`); return launchQuiz(ev, "event1", "quiz1", m); }
   if (stage === "ttt") { await say(chatId, `🏟 *ROUND 2 - TIC-TAC-TOE TOURNAMENT*`); return launchTourney(ev, m); }
   if (stage === "rush") { ev.stage = "pick"; save(ev); return startRush(ev); }
@@ -461,6 +479,10 @@ async function runStage(ev, stage, m) {
 // ---------- boot resume ----------
 async function resume(sock, botMarker, deps) {
   SOCK = sock; MARK = botMarker || MARK; if (deps) DEPS = deps;
+  if (!global.__gnAutoBake) {
+    global.__gnAutoBake = true;
+    setTimeout(() => { bake.bakeAll((m2) => console.log("[GameNight auto-bake]", m2)).then((r) => { if (r && r.after) console.log(`[GameNight] auto-bake: logos ${r.after.logos.have}/${r.after.logos.total}, clips ${r.after.audio.have}/${r.after.audio.total}`); }).catch((e) => console.log("[GameNight] auto-bake failed:", e.message)); }, 60 * 1000).unref?.();
+  }
   let files = [];
   try { files = fs.readdirSync(dir()).filter((f) => f.endsWith(".json")); } catch (_) { /* none */ }
   for (const f of files) {

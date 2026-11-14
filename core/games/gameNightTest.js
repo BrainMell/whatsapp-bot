@@ -19,6 +19,7 @@ const quiz = require("./quiz");
 const tourney = require("./tictactoeTournament");
 const render = require("./tourneyRender");
 const GN = require("./gameNight");
+const bake = require("./gameNightBake");
 const emojiCard = require("./emojiCard");
 
 const STATE = new Map(); // chatId -> { step, results: [] }
@@ -62,6 +63,8 @@ async function stepPreflight(ctx) {
   const dsNames = new Set(((require("../../data/logoDataset.json") || {}).brands || []).map((x) => String(x.name || "").toLowerCase()));
   const missing = logoNames.filter((n) => !dsNames.has(n.toLowerCase()));
   chk(`all ${logoNames.length} pack logos exist in dataset`, !missing.length, missing.join(", "));
+  const bs = bake.status();
+  chk(`pre-baked assets: ${bs.logos.have}/${bs.logos.total} logos, ${bs.audio.have}/${bs.audio.total} theme clips`, bs.complete, bs.complete ? "" : `run ${px()} gn bake`);
   const missAns = GN._EMOJI.filter(([, answers]) => !answers.every((a) => GN._nrm(a) === GN._nrm(a)));
   chk(`${GN._EMOJI.length} emoji puzzles loaded`, GN._EMOJI.length >= 20 && !missAns.length);
   // persistence round trip on a throwaway id
