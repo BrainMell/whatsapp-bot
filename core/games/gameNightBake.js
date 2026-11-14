@@ -24,11 +24,19 @@ const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) {
 // ---- what the event needs ----
 function logoList() {
   const seen = new Set(); const out = [];
-  for (const b of [...packs.E1_BRANDS, ...packs.E2_BRANDS]) if (!seen.has(nrm(b.name))) { seen.add(nrm(b.name)); out.push(b); }
+  for (const b of [...packs.E1_BRANDS, ...packs.E2_BRANDS]) if (!b.bundled && !seen.has(nrm(b.name))) { seen.add(nrm(b.name)); out.push(b); } // bundled = ships in the repo, nothing to bake
   return out;
 }
 function themeEntries() { return packs.get("event1").plan().filter((s) => s.pinnedThemes).flatMap((s) => s.pinnedThemes); }
 const themeKey = (e) => e.cacheKey || `theme:${nrm(e.show)}`;
+
+// ---- bundled (in-repo) quiz images: assets/gn-quiz/** ----
+// Text-free brand glyphs and comic art ship WITH the repo, so they never depend on a live fetch.
+const ASSET_ROOT = path.join(__dirname, "..", "..", "assets", "gn-quiz");
+function bundledBuf(rel) {
+  try { const f = path.join(ASSET_ROOT, rel); if (!f.startsWith(ASSET_ROOT)) return null; const b = fs.readFileSync(f); return b.length >= 1500 ? b : null; } catch (_) { return null; }
+}
+const mimeOf = (rel) => (/\.png$/i.test(rel) ? "image/png" : "image/jpeg");
 
 // ---- logos ----
 const logoFile = (name) => path.join(sub("logos"), nrm(name));
@@ -42,6 +50,20 @@ function saveLogo(brand, q) {
 // same question shape the quiz's own logo builder returns, served from disk
 function logoQuestion(brand, others, difficulty) {
   try {
+    if (brand.bundled) {
+      const rel = `logos/${brand.bundled}.png`;
+      const bb = bundledBuf(rel); if (!bb) return null;
+      const bpool = [brand.name, ...others.map((o) => o.name)];
+      const bord = shuffle(bpool.map((_, i) => i));
+      const burl = `gnquiz:${rel}`;
+      return {
+        q: "Which brand or company does this logo belong to?", options: bord.map((i) => bpool[i]), correct: bord.indexOf(0),
+        hideOptions: true, difficulty: difficulty || "easy", topic: "Logo", domain: "logos", type: "image", assetKey: burl,
+        asset: { kind: "image", url: burl, buf: bb, mime: "image/png", subject: brand.name, source: "bundled", bytesHash: crypto.createHash("sha1").update(bb).digest("hex").slice(0, 16) },
+        loreRef: { wiki: "wikipedia", page: brand.wiki, section: "logo" },
+        _cachedAsset: { url: burl, buf: bb, mime: "image/png", kind: "image" },
+      };
+    }
     if (!hasLogo(brand.name)) return null;
     const meta = JSON.parse(fs.readFileSync(logoFile(brand.name) + ".json", "utf8"));
     const buf = fs.readFileSync(logoFile(brand.name) + ".png");
@@ -54,6 +76,25 @@ function logoQuestion(brand, others, difficulty) {
       asset: { kind: "image", url: meta.url, mime: meta.mime, subject: brand.name, source: `baked:${meta.source}`, bytesHash: crypto.createHash("sha1").update(buf).digest("hex").slice(0, 16) },
       loreRef: { wiki: "wikipedia", page: brand.wiki, section: "logo" },
       _cachedAsset: { url: meta.url, buf, mime: meta.mime, kind: "image" },
+    };
+  } catch (_) { return null; }
+}
+
+// ---- picture rounds (bundled images) ----
+// p = { id, file, fmt: "typed"|"mc", q, answer, alts, options (mc: correct first, shuffled here), difficulty, topic }
+function pictureQuestion(p, difficulty) {
+  try {
+    const buf = bundledBuf(p.file); if (!buf) return null;
+    const isTyped = p.fmt !== "mc";
+    let options, correct;
+    if (isTyped) { options = [p.answer]; correct = 0; }
+    else { const order = shuffle(p.options.map((_, i) => i)); options = order.map((i) => p.options[i]); correct = order.indexOf(0); }
+    const url = `gnquiz:${p.file}`;
+    return {
+      q: p.q, options, correct, alts: isTyped ? (p.alts || []).slice(0, 8) : [], typed: isTyped, hideOptions: isTyped,
+      difficulty: p.difficulty || difficulty || "hard", topic: p.topic || "Picture Round", domain: "pictures", type: "image", assetKey: url,
+      asset: { kind: "image", url, buf, mime: mimeOf(p.file), subject: p.answer || options[correct], source: "bundled", bytesHash: crypto.createHash("sha1").update(buf).digest("hex").slice(0, 16) },
+      loreRef: null,
     };
   } catch (_) { return null; }
 }
@@ -114,4 +155,4 @@ async function bakeAll(onProgress = () => {}) {
   } finally { BAKING = false; }
 }
 
-module.exports = { logoQuestion, restoreAudio, status, bakeAll, hasLogo, logoList, themeEntries, _base: base };
+module.exports = { logoQuestion, pictureQuestion, bundledBuf, restoreAudio, status, bakeAll, hasLogo, logoList, themeEntries, _base: base };

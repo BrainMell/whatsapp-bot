@@ -1885,6 +1885,20 @@ async function generateSectionQuestions(session, section, sock, chatId) {
     section.questions = questions.slice(0, sectionCount);
     return section.questions;
   }
+  // ── Game Night: pinned picture rounds (bundled in-repo images, zero network) ──
+  if (section.domain === "pictures" && Array.isArray(section.pinnedPictures)) {
+    for (const pic of section.pinnedPictures) {
+      if (questions.length >= sectionCount) break;
+      const q = gnBake.pictureQuestion(pic, cfg.difficulty);
+      if (!q) { console.log(`[Quiz] picture build failed for ${pic.id} - skipping`); continue; }
+      usedKeys.add(`plpic:${pic.id}`);
+      q.timeLimit = section.pictureTimeLimit || quizPreplannedMod.LOGO_TIME_S;
+      questions.push(q);
+    }
+    section.state = SECTION_STATES.READY;
+    section.questions = questions.slice(0, sectionCount);
+    return section.questions;
+  }
   // ── 2026-09-27: standalone media modes (logos / song) ──
   // LLM-free deterministic generation with real verified assets. Everything
   // downstream (READY state, banking, postQuestion) is shared with lore.
@@ -3443,7 +3457,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
         sections: domainPlan.map((p) => ({
           name: p.name, domain: p.domain, perSection: p.perSection,
           state: SECTION_STATES.GENERATING, questions: [],
-          pinnedBrands: p.pinnedBrands, pinnedTrivia: p.pinnedTrivia,
+          pinnedBrands: p.pinnedBrands, pinnedTrivia: p.pinnedTrivia, pinnedPictures: p.pinnedPictures, pictureTimeLimit: p.timeLimit,
           pinnedThemes: p.pinnedThemes, clipSeconds: p.clipSeconds,
           canCarryAudio: p.domain === "audio",
         })),

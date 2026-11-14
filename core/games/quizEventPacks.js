@@ -5,9 +5,9 @@
 // Same machinery as the regular preplanned pack (pinned logos from the verified
 // dataset, pinned typed/mc trivia, pinned theme songs) - only the content differs.
 //
-//   event1 = harder remix of the preplanned pack: 30 tougher logos, 20 tougher
-//            franchise questions, 6 theme songs.
-//   event2 = finale: obscure comic-book + video-game trivia and a gaming logo round.
+//   event1 = the preplanned pack's 30 logos (text-only logos swapped for text-free ones), 20 harder
+//            hand-written franchise questions, 6 theme songs.
+//   event2 = finale: 10 video game questions + obscure comic character / team picture rounds.
 //
 // Every logo name below exists in data/logoDataset.json (live + modern), so
 // images come from the audited dataset path, not live search. Decoys are
@@ -46,76 +46,59 @@ function withDecoys(list) {
   });
 }
 
-// ---------- EVENT 1: harder preplanned remix ----------
-// order = difficulty ramp inside each round
-const E1_BRANDS = withDecoys([
-  // round 1 (tech / apps / money)
-  mk("Viber", "Apps & Social", "Apps"), mk("Threads", "Apps & Social", "Apps"), mk("Vimeo", "Apps & Social", "Apps"),
-  mk("Stripe", "Fintech & Crypto", "Fintech"), mk("GoPro", "Tech", "Tech"), mk("Logitech", "Tech", "Tech"),
-  mk("Razer", "Tech", "Tech"), mk("Garmin", "Tech", "Tech"), mk("DJI", "Tech", "Tech"), mk("Cloudflare", "Tech", "Tech"),
-  // round 2 (food & drink)
-  mk("Gatorade", "Food & Drink", "Food"), mk("Cheetos", "Food & Drink", "Food"), mk("Popeyes", "Food & Drink", "Food"),
-  mk("Tim Hortons", "Food & Drink", "Food"), mk("Krispy Kreme", "Food & Drink", "Food"), mk("Stella Artois", "Food & Drink", "Food"),
-  mk("Chupa Chups", "Food & Drink", "Food"), mk("Ferrero Rocher", "Food & Drink", "Food"), mk("Dairy Queen", "Food & Drink", "Food"),
-  mk("Hennessy", "Food & Drink", "Food"),
-  // round 3 (fashion / cars / the hard ones)
-  mk("Dr. Martens", "Fashion", "Fashion"), mk("Supreme", "Fashion", "Fashion"), mk("Salomon", "Fashion", "Fashion"),
-  mk("Rivian", "Cars", "Cars"), mk("Polestar", "Cars", "Cars"), mk("Koenigsegg", "Cars", "Cars"),
-  mk("Shazam", "Apps & Social", "Apps"), mk("Robinhood", "Fintech & Crypto", "Fintech"),
-  mk("Palantir", "Tech", "Tech"), mk("Funko", "Entertainment & Gaming", "Gaming"),
-]);
+// ---------- EVENT 1: Mega Quiz ----------
+// Logos = the regular preplanned pack's 30 brands (same order / difficulty ramp), EXCEPT every logo whose
+// picture is just the brand's name written out (wordmarks, or glyph + lettering). Those are swapped for a
+// text-free glyph that ships in assets/gn-quiz/logos/ (Simple Icons glyphs, CC0; Microsoft's four squares
+// drawn by hand) - either the same brand's symbol, or a different brand when the original has no symbol.
+const POOL_OF = { "Apps & Social": "Apps", Tech: "Tech", "Entertainment & Gaming": "Gaming", Cars: "Cars", "Food & Drink": "Food", Fashion: "Fashion" };
+const SWAPS = {
+  // same brand, symbol only
+  Twitch: { bundled: "twitch" }, Google: { bundled: "google" }, Microsoft: { bundled: "microsoft" },
+  Nvidia: { bundled: "nvidia" }, Adidas: { bundled: "adidas" },
+  // brand has no text-free logo -> different brand in the same slot
+  Amazon: { name: "Pinterest", wiki: "Pinterest", cat: "Apps & Social", bundled: "pinterest" },
+  Samsung: { name: "Snapchat", wiki: "Snapchat", cat: "Apps & Social", bundled: "snapchat" },
+  Xbox: { name: "Duolingo", wiki: "Duolingo", cat: "Apps & Social", bundled: "duolingo" },
+  "Epic Games": { name: "Roblox", wiki: "Roblox", cat: "Entertainment & Gaming", bundled: "roblox" },
+  "Coca-Cola": { name: "Red Bull", wiki: "Red Bull", cat: "Food & Drink", bundled: "redbull" },
+};
+const E1_BRANDS = withDecoys(preplanned.PACK.brands.map((b) => {
+  const sw = SWAPS[b.name] || {};
+  const nb = { name: sw.name || b.name, wiki: sw.wiki || b.wiki, cat: sw.cat || b.cat, bundled: sw.bundled || null };
+  return { ...nb, pool: POOL_OF[nb.cat] || "Tech" };
+}));
 
-// Answers are written from canon and each one is a single, checkable fact.
-// fmt "typed" = type the answer (alts accepted + typo tolerance), "mc" = ABCD.
+// Hand-written, canon-checked, one checkable fact each. fmt "typed" = type the answer (alts + typo tolerance).
+const T = (id, franchise, difficulty, q, answer, alts = []) => ({ id, franchise, fmt: "typed", difficulty, topic: franchise, q, answer, alts });
 const E1_TRIVIA = [
   // ---- Dragon Ball (5) ----
-  { id: "e1-db-whis", franchise: "Dragon Ball", fmt: "typed", difficulty: "medium", topic: "Dragon Ball",
-    q: "What is the name of Beerus's angel attendant and martial arts tutor?", answer: "Whis", alts: ["Wiz"] },
-  { id: "e1-db-porunga", franchise: "Dragon Ball", fmt: "typed", difficulty: "medium", topic: "Dragon Ball",
-    q: "What is the name of the Eternal Dragon summoned by the Namekian Dragon Balls?", answer: "Porunga", alts: [] },
-  { id: "e1-db-17", franchise: "Dragon Ball", fmt: "typed", difficulty: "medium", topic: "Dragon Ball",
-    q: "What number is Android 18's twin brother?", answer: "17", alts: ["Android 17", "Seventeen", "Lapis"] },
-  { id: "e1-db-champa", franchise: "Dragon Ball", fmt: "typed", difficulty: "hard", topic: "Dragon Ball",
-    q: "Who is the God of Destruction of Universe 6?", answer: "Champa", alts: [] },
-  { id: "e1-db-jiren", franchise: "Dragon Ball", fmt: "typed", difficulty: "hard", topic: "Dragon Ball",
-    q: "Which Pride Trooper from Universe 11 is widely regarded as the strongest mortal in the Tournament of Power?", answer: "Jiren", alts: ["Jiren the Gray"] },
+  T("e1-db-belmod", "Dragon Ball", "hard", "Which God of Destruction rules Universe 11, the home universe of Jiren and Toppo?", "Belmod"),
+  T("e1-db-vegeta-broly", "Dragon Ball", "hard", "In Dragon Ball Super: Broly, which ruler orders baby Broly exiled to the planet Vampa?", "King Vegeta", ["Vegeta Sr", "Vegeta Senior"]),
+  T("e1-db-nail", "Dragon Ball", "medium", "Which Namekian warrior fuses with Piccolo on Namek and gives him a huge power boost?", "Nail"),
+  T("e1-db-cabba", "Dragon Ball", "hard", "Which Universe 6 Saiyan is taught to go Super Saiyan by Vegeta?", "Cabba", ["Kyabe"]),
+  T("e1-db-heeters", "Dragon Ball", "hard", "In the Granolah the Survivor arc, which mercenary race wiped out Granolah's people, the Cerealians?", "Heeters", ["The Heeters", "Heeter"]),
   // ---- Solo Leveling (5) ----
-  { id: "e1-sl-jinah", franchise: "Solo Leveling", fmt: "typed", difficulty: "medium", topic: "Solo Leveling",
-    q: "What is the name of Sung Jinwoo's younger sister?", answer: "Jinah", alts: ["Sung Jinah", "Sung Jin-Ah", "Jin-Ah", "Jin Ah"] },
-  { id: "e1-sl-double", franchise: "Solo Leveling", fmt: "typed", difficulty: "medium", topic: "Solo Leveling",
-    q: "Which special dungeon type nearly kills Jinwoo and leads to him receiving the System?", answer: "Double Dungeon", alts: ["The Double Dungeon"] },
-  { id: "e1-sl-extract", franchise: "Solo Leveling", fmt: "typed", difficulty: "medium", topic: "Solo Leveling",
-    q: "What is the name of the ability that lets Jinwoo turn defeated enemies into shadow soldiers?", answer: "Shadow Extraction", alts: ["Extraction"] },
-  { id: "e1-sl-beru", franchise: "Solo Leveling", fmt: "typed", difficulty: "hard", topic: "Solo Leveling",
-    q: "Which fearsome Ant King later becomes one of Jinwoo's strongest shadow soldiers?", answer: "Beru", alts: ["Baruka"] },
-  { id: "e1-sl-antares", franchise: "Solo Leveling", fmt: "typed", difficulty: "hard", topic: "Solo Leveling",
-    q: "Which Monarch of Destruction rules over the dragons in Solo Leveling?", answer: "Antares", alts: ["Antares the Dragon Monarch", "King of Dragons"] },
+  T("e1-sl-run", "Solo Leveling", "medium", "In the System's Daily Quest, how many kilometres must Jinwoo run?", "10", ["10 km", "10km", "ten", "ten km", "10 kilometres", "10 kilometers"]),
+  T("e1-sl-gunhee", "Solo Leveling", "medium", "Who is the chairman of the Korean Hunters Association?", "Go Gunhee", ["Goh Gunhee", "Go Gun-Hee", "Goh Gun-Hee", "Gunhee"]),
+  T("e1-sl-ashborn", "Solo Leveling", "hard", "What is the name of the original Shadow Monarch whose power Jinwoo inherits?", "Ashborn", ["Ashbourne"]),
+  T("e1-sl-querehsha", "Solo Leveling", "hard", "Which Monarch of Plagues commanded the Ant King, Beru, before he joined Jinwoo?", "Querehsha"),
+  T("e1-sl-baek", "Solo Leveling", "hard", "Which S-rank hunter leads the White Tiger Guild?", "Baek Yoonho", ["Baek Yun-ho", "Baek Yunho", "Yoonho", "Baek Yoon-ho"]),
   // ---- Devil May Cry (5) ----
-  { id: "e1-dmc-rebellion", franchise: "Devil May Cry", fmt: "typed", difficulty: "medium", topic: "Devil May Cry",
-    q: "What is the name of Dante's signature broadsword, once owned by his father Sparda?", answer: "Rebellion", alts: [] },
-  { id: "e1-dmc-v", franchise: "Devil May Cry", fmt: "typed", difficulty: "medium", topic: "Devil May Cry",
-    q: "In Devil May Cry 5, the mysterious V is revealed to be the human half of which character?", answer: "Vergil", alts: [] },
-  { id: "e1-dmc-tower", franchise: "Devil May Cry", fmt: "typed", difficulty: "hard", topic: "Devil May Cry",
-    q: "What is the name of the demonic tower at the centre of Devil May Cry 3?", answer: "Temen-ni-gru", alts: ["Temen ni gru", "Temenigru", "Temen-ni-Gru"] },
-  { id: "e1-dmc-lady", franchise: "Devil May Cry", fmt: "typed", difficulty: "hard", topic: "Devil May Cry",
-    q: "What is Lady's real first name?", answer: "Mary", alts: [] },
-  { id: "e1-dmc-prequel", franchise: "Devil May Cry", fmt: "mc", difficulty: "medium", topic: "Devil May Cry",
-    q: "Which numbered Devil May Cry game is the earliest in the series' chronology?",
-    options: ["Devil May Cry", "Devil May Cry 2", "Devil May Cry 3", "Devil May Cry 4"], correct: 2 },
+  T("e1-dmc-agni", "Devil May Cry", "hard", "What are the names of the twin demon swords Dante takes in Devil May Cry 3?", "Agni and Rudra", ["Agni & Rudra", "Agni Rudra", "Agni, Rudra", "Agni"]),
+  T("e1-dmc-nico", "Devil May Cry", "medium", "Who is the van-driving Devil Breaker engineer who works with Nero in Devil May Cry 5?", "Nico", ["Nicoletta", "Nicoletta Goldstein"]),
+  T("e1-dmc-nightmare", "Devil May Cry", "hard", "V's three familiars are Griffon, Shadow and which golem?", "Nightmare"),
+  T("e1-dmc-trish", "Devil May Cry", "medium", "Which demon, sent by Mundus, takes the appearance of Dante's mother Eva?", "Trish"),
+  T("e1-dmc-nelo", "Devil May Cry", "hard", "In the original Devil May Cry, which armoured knight boss is revealed to be a controlled Vergil?", "Nelo Angelo", ["Nelo"]),
   // ---- God of War (5) ----
-  { id: "e1-gow-lysandra", franchise: "God of War", fmt: "typed", difficulty: "medium", topic: "God of War",
-    q: "What was the name of Kratos's first wife, killed in the tragedy that haunts him?", answer: "Lysandra", alts: [] },
-  { id: "e1-gow-axe", franchise: "God of War", fmt: "typed", difficulty: "medium", topic: "God of War",
-    q: "What is the name of the frost-imbued axe Kratos wields in the Norse games?", answer: "Leviathan Axe", alts: ["Leviathan", "The Leviathan Axe"] },
-  { id: "e1-gow-freya", franchise: "God of War", fmt: "typed", difficulty: "medium", topic: "God of War",
-    q: "Which Norse goddess lives as the 'Witch of the Woods' in God of War (2018)?", answer: "Freya", alts: [] },
-  { id: "e1-gow-deimos", franchise: "God of War", fmt: "typed", difficulty: "hard", topic: "God of War",
-    q: "What is the name of Kratos's younger brother?", answer: "Deimos", alts: [] },
-  { id: "e1-gow-loki", franchise: "God of War", fmt: "typed", difficulty: "hard", topic: "God of War",
-    q: "What other name is Atreus revealed to carry, which Faye wrote in the ashes?", answer: "Loki", alts: [] },
+  T("e1-gow-huldra", "God of War", "medium", "Which two dwarven brothers, known as the Huldra Brothers, forge gear for Kratos in the Norse saga?", "Brok and Sindri", ["Brok & Sindri", "Sindri and Brok", "Brok", "Sindri", "Brok Sindri"]),
+  T("e1-gow-jorm", "God of War", "medium", "What is the name of the World Serpent that Kratos and Atreus visit by boat?", "Jormungandr", ["Jörmungandr", "Jormungand", "Jormungander"]),
+  T("e1-gow-calliope", "God of War", "hard", "What was the name of Kratos's daughter in the Greek saga?", "Calliope"),
+  T("e1-gow-jotun", "God of War", "medium", "Which realm of giants holds the highest peak where Kratos and Atreus scatter Faye's ashes?", "Jotunheim", ["Jötunheim", "Jotunheimr", "Jotun"]),
+  T("e1-gow-hercules", "God of War", "medium", "Which half-brother of Kratos does he beat to death in God of War III, taking the Nemean Cestus?", "Hercules", ["Heracles"]),
 ];
 
-// 3 game + 3 anime theme songs (all six already proven in the regular pack)
+// 3 game + 3 anime theme songs (all six already proven in the regular pack) - audio unchanged
 const E1_THEMES = () => {
   const all = preplanned.PACK.themes;
   const pick = (names) => names.map((n) => all.find((t) => t.show === n)).filter(Boolean);
@@ -125,78 +108,45 @@ const E1_THEMES = () => {
   };
 };
 
-// ---------- EVENT 2: comics + video games finale ----------
-const E2_COMICS = [
-  { id: "e2-c-sentry", franchise: "Comics", fmt: "typed", difficulty: "hard", topic: "Comic Books",
-    q: "What is the real name of Marvel's The Sentry?", answer: "Robert Reynolds", alts: ["Bob Reynolds", "Reynolds"] },
-  { id: "e2-c-garrick", franchise: "Comics", fmt: "typed", difficulty: "hard", topic: "Comic Books",
-    q: "Who was the original Golden Age Flash?", answer: "Jay Garrick", alts: ["Garrick"] },
-  { id: "e2-c-hellboy", franchise: "Comics", fmt: "typed", difficulty: "hard", topic: "Comic Books",
-    q: "Which professor found and raised Hellboy, and founded the B.P.R.D.?", answer: "Trevor Bruttenholm", alts: ["Bruttenholm", "Professor Bruttenholm", "Trevor Broom", "Professor Broom", "Broom"] },
-  { id: "e2-c-spawn", franchise: "Comics", fmt: "typed", difficulty: "hard", topic: "Comic Books",
-    q: "Which demon lord makes the deal that turns Al Simmons into Spawn?", answer: "Malebolgia", alts: [] },
-  { id: "e2-c-swamp", franchise: "Comics", fmt: "typed", difficulty: "hard", topic: "Comic Books",
-    q: "What is the human name of DC's Swamp Thing in his original 1970s origin?", answer: "Alec Holland", alts: ["Holland"] },
-  { id: "e2-c-xandar", franchise: "Comics", fmt: "typed", difficulty: "hard", topic: "Comic Books",
-    q: "What is the home planet of the Nova Corps?", answer: "Xandar", alts: [] },
-  { id: "e2-c-surfer", franchise: "Comics", fmt: "typed", difficulty: "hard", topic: "Comic Books",
-    q: "What was the Silver Surfer's name before he became Galactus's herald?", answer: "Norrin Radd", alts: ["Norrin", "Radd"] },
-  { id: "e2-c-dredd", franchise: "Comics", fmt: "typed", difficulty: "medium", topic: "Comic Books",
-    q: "What is the name of Judge Dredd's home city?", answer: "Mega-City One", alts: ["Mega City One", "Megacity One", "Mega-City 1"] },
-  { id: "e2-c-beetle", franchise: "Comics", fmt: "typed", difficulty: "hard", topic: "Comic Books",
-    q: "Ted Kord took up which hero mantle after Dan Garrett?", answer: "Blue Beetle", alts: ["The Blue Beetle"] },
-  { id: "e2-c-mirage", franchise: "Comics", fmt: "typed", difficulty: "hard", topic: "Comic Books",
-    q: "Which small studio published the original 1984 black-and-white Teenage Mutant Ninja Turtles comic?", answer: "Mirage Studios", alts: ["Mirage", "Mirage Publishing"] },
-  { id: "e2-c-usagi", franchise: "Comics", fmt: "mc", difficulty: "medium", topic: "Comic Books",
-    q: "What kind of animal is the samurai hero Miyamoto Usagi in Usagi Yojimbo?",
-    options: ["A cat", "A rabbit", "A fox", "A dog"], correct: 1 },
-  { id: "e2-c-constantine", franchise: "Comics", fmt: "typed", difficulty: "hard", topic: "Comic Books",
-    q: "John Constantine hails from which English city?", answer: "Liverpool", alts: [] },
-  { id: "e2-c-rorschach", franchise: "Comics", fmt: "typed", difficulty: "medium", topic: "Comic Books",
-    q: "What is Rorschach's real name in Watchmen?", answer: "Walter Kovacs", alts: ["Kovacs"] },
-  { id: "e2-c-osterman", franchise: "Comics", fmt: "typed", difficulty: "hard", topic: "Comic Books",
-    q: "What was Doctor Manhattan's name before his accident?", answer: "Jon Osterman", alts: ["Osterman", "Jonathan Osterman"] },
-];
-
+// ---------- EVENT 2: finale = video games + comic picture rounds ----------
 const E2_GAMES = [
-  { id: "e2-g-nameless", franchise: "Video Games", fmt: "typed", difficulty: "hard", topic: "Video Games",
-    q: "What is the protagonist of Planescape: Torment commonly called?", answer: "The Nameless One", alts: ["Nameless One", "Nameless"] },
-  { id: "e2-g-zaum", franchise: "Video Games", fmt: "typed", difficulty: "hard", topic: "Video Games",
-    q: "Which studio developed Disco Elysium?", answer: "ZA/UM", alts: ["ZAUM", "ZA UM", "Za/Um"] },
-  { id: "e2-g-giygas", franchise: "Video Games", fmt: "typed", difficulty: "hard", topic: "Video Games",
-    q: "Who is the cosmic final boss of EarthBound?", answer: "Giygas", alts: ["Giegue", "Gyiyg"] },
-  { id: "e2-g-grayfox", franchise: "Video Games", fmt: "typed", difficulty: "hard", topic: "Video Games",
-    q: "What is the codename of the cyborg ninja in the original Metal Gear Solid?", answer: "Gray Fox", alts: ["Grey Fox", "Frank Jaeger"] },
-  { id: "e2-g-sunderland", franchise: "Video Games", fmt: "typed", difficulty: "hard", topic: "Video Games",
-    q: "Who is the protagonist of Silent Hill 2?", answer: "James Sunderland", alts: ["James", "Sunderland"] },
-  { id: "e2-g-agro", franchise: "Video Games", fmt: "typed", difficulty: "medium", topic: "Video Games",
-    q: "What is the name of Wander's horse in Shadow of the Colossus?", answer: "Agro", alts: [] },
-  { id: "e2-g-ammy", franchise: "Video Games", fmt: "typed", difficulty: "medium", topic: "Video Games",
-    q: "Which sun goddess do you play as, in wolf form, in Okami?", answer: "Amaterasu", alts: ["Ammy"] },
-  { id: "e2-g-hallownest", franchise: "Video Games", fmt: "typed", difficulty: "medium", topic: "Video Games",
-    q: "What is the name of the ruined underground kingdom in Hollow Knight?", answer: "Hallownest", alts: [] },
-  { id: "e2-g-house", franchise: "Video Games", fmt: "typed", difficulty: "hard", topic: "Video Games",
-    q: "Who owns the Lucky 38 casino in Fallout: New Vegas?", answer: "Mr. House", alts: ["Mr House", "House", "Robert House", "Robert Edwin House"] },
-  { id: "e2-g-yharnam", franchise: "Video Games", fmt: "typed", difficulty: "medium", topic: "Video Games",
-    q: "What is the name of the gothic city in Bloodborne?", answer: "Yharnam", alts: [] },
-  { id: "e2-g-raz", franchise: "Video Games", fmt: "typed", difficulty: "hard", topic: "Video Games",
-    q: "Who is the young psychic acrobat protagonist of Psychonauts?", answer: "Razputin", alts: ["Raz", "Razputin Aquato"] },
-  { id: "e2-g-shodan", franchise: "Video Games", fmt: "typed", difficulty: "hard", topic: "Video Games",
-    q: "Which rogue AI antagonist stars in System Shock?", answer: "SHODAN", alts: ["Shodan"] },
-  { id: "e2-g-denton", franchise: "Video Games", fmt: "typed", difficulty: "hard", topic: "Video Games",
-    q: "Who is the nano-augmented protagonist of the original Deus Ex (2000)?", answer: "JC Denton", alts: ["J.C. Denton", "J C Denton", "Denton"] },
-  { id: "e2-g-amaya", franchise: "Video Games", fmt: "typed", difficulty: "hard", topic: "Video Games",
-    q: "Who developed Cave Story almost entirely alone?", answer: "Daisuke Amaya", alts: ["Amaya", "Pixel", "Studio Pixel"] },
-  { id: "e2-g-lavos", franchise: "Video Games", fmt: "typed", difficulty: "medium", topic: "Video Games",
-    q: "What is the name of the parasitic alien that is the final threat in Chrono Trigger?", answer: "Lavos", alts: [] },
+  T("e2-g-dream", "Video Games", "medium", "In Bloodborne, what is the name of the hub where hunters level up and buy gear between hunts?", "The Hunter's Dream", ["Hunters Dream", "Hunter's Dream", "Hunter Dream"]),
+  T("e2-g-majora", "Video Games", "medium", "In The Legend of Zelda: Majora's Mask, how many days does Link have before the moon crashes into Termina?", "3", ["three", "3 days", "three days"]),
+  T("e2-g-wheatley", "Video Games", "medium", "In Portal 2, which bumbling personality core, voiced by Stephen Merchant, accompanies Chell?", "Wheatley"),
+  T("e2-g-geo", "Video Games", "medium", "What is the currency called in Hollow Knight?", "Geo"),
+  T("e2-g-firelink", "Video Games", "medium", "In the original Dark Souls, what is the name of the hub bonfire where the player returns between areas?", "Firelink Shrine", ["Firelink"]),
+  T("e2-g-asriel", "Video Games", "hard", "In Undertale, what is Flowey's real name?", "Asriel", ["Asriel Dreemurr", "Azriel"]),
+  T("e2-g-zebes", "Video Games", "medium", "On which planet is Samus Aran's first mission set, home of Mother Brain?", "Zebes", ["Planet Zebes"]),
+  T("e2-g-nibel", "Video Games", "hard", "Which village, burned by Sephiroth, is Cloud's hometown in Final Fantasy VII?", "Nibelheim"),
+  T("e2-g-blackmesa", "Video Games", "medium", "In Half-Life, at which research facility does the Resonance Cascade happen?", "Black Mesa"),
+  T("e2-g-melina", "Video Games", "hard", "In Elden Ring, which mysterious maiden offers to accompany the Tarnished and lets them level up at Sites of Grace?", "Melina"),
 ];
 
-const E2_BRANDS = withDecoys([
-  mk("Atari", "Entertainment & Gaming", "Gaming"), mk("Space Invaders", "Entertainment & Gaming", "Gaming"),
-  mk("Bethesda", "Entertainment & Gaming", "Gaming"), mk("Bandai Namco", "Entertainment & Gaming", "Gaming"),
-  mk("Mojang Studios", "Entertainment & Gaming", "Gaming"), mk("Supercell", "Entertainment & Gaming", "Gaming"),
-  mk("Age of Empires", "Entertainment & Gaming", "Gaming"), mk("Apex Legends", "Entertainment & Gaming", "Gaming"),
-]);
+// Picture rounds - art from the open-source superhero-api dataset (github.com/akabab/superhero-api, MIT),
+// bundled under assets/gn-quiz/comics/<id>.jpg. Characters picked on purpose to be obscure.
+const CH = (id, pub, answer, alts = []) => ({ id: `e2-ch-${id}`, file: `comics/${id}.jpg`, fmt: "typed", q: `Name this comic book character (${pub}).`, answer, alts, difficulty: "hard", topic: "Comic Characters" });
+const E2_CHARS = [
+  CH(137, "DC", "Brainiac 5", ["Brainiac Five", "Brainiac V", "Querl Dox"]),
+  CH(388, "DC", "Kilowog"),
+  CH(79, "Marvel", "Beta Ray Bill", ["Beta-Ray Bill", "Bill"]),
+  CH(350, "Marvel", "Jack of Hearts", ["Jack Hart"]),
+  CH(12, "Marvel", "Air-Walker", ["Air Walker", "Airwalker", "Gabriel Lan"]),
+  CH(428, "Marvel", "Man-Thing", ["Man Thing", "Manthing", "Ted Sallis"]),
+  CH(188, "Marvel", "Cottonmouth", ["Cotton Mouth", "Burchell Clemens"]),
+  CH(202, "Marvel", "Darkhawk", ["Dark Hawk", "Chris Powell"]),
+];
+const TM = (id, pub, correct, wrong, extraAlts) => ({ id: `e2-tm-${id}`, file: `comics/${id}.jpg`, fmt: "mc", q: `Which comic book team is this character a member of? (${pub})`, options: [correct, ...wrong], difficulty: "hard", topic: "Comic Teams" });
+const E2_TEAMS = [
+  TM(407, "DC", "Legion of Super-Heroes", ["Teen Titans", "Doom Patrol", "Justice League International"]),
+  TM(177, "DC", "Justice Society of America", ["Justice League of America", "Infinity Inc.", "Outsiders"]),
+  TM(56, "Marvel", "Alpha Flight", ["X-Factor", "Excalibur", "New Mutants"]),
+  TM(146, "Marvel", "Morlocks", ["Hellfire Club", "Brotherhood of Mutants", "Acolytes"]),
+  TM(41, "Marvel", "Marauders", ["Hellfire Club", "Freedom Force", "Acolytes"]),
+  TM(338, "Marvel", "Squadron Supreme", ["Avengers", "Defenders", "Thunderbolts"]),
+  TM(336, "Marvel", "New Warriors", ["Heroes for Hire", "Young Avengers", "Power Pack"]),
+  TM(2, "Dark Horse", "B.P.R.D.", ["S.T.A.R. Labs", "S.H.I.E.L.D.", "Checkmate"]),
+];
+const E2_BRANDS = []; // gaming-logo round retired from the finale (kept as an empty export for the dry-run tooling)
 
 // ---------- pack definitions ----------
 const PACKS = {
@@ -227,18 +177,18 @@ const PACKS = {
   event2: {
     key: "event2",
     title: "Game Night Finale: Comics & Games",
-    counts: { logos: 8, trivia: 29, music: 0 },
+    counts: { logos: 0, trivia: 10, pictures: 16, music: 0 },
     plan() {
       return [
-        { name: "Comic Books", domain: "preplanned", perSection: E2_COMICS.length, pinnedTrivia: E2_COMICS },
         { name: "Video Games", domain: "preplanned", perSection: E2_GAMES.length, pinnedTrivia: E2_GAMES },
-        { name: "Gaming Logos", domain: "logos", perSection: E2_BRANDS.length, pinnedBrands: E2_BRANDS },
+        { name: "Comic Characters", domain: "pictures", perSection: E2_CHARS.length, pinnedPictures: E2_CHARS, timeLimit: 40 },
+        { name: "Comic Teams", domain: "pictures", perSection: E2_TEAMS.length, pinnedPictures: E2_TEAMS, timeLimit: 40 },
       ];
     },
     head(prefix) {
-      return `🗺 3 acts • 37 rounds:\n  📚 14 obscure comic book questions\n  🎮 15 obscure video game questions\n  🕹 8 gaming logos\n`;
+      return `🗺 3 acts • 26 rounds:\n  🎮 10 video game questions\n  💥 8 obscure comic characters (name them)\n  🦸 8 obscure comic teams (pick the team)\n`;
     },
-    minBuilt: 30,
+    minBuilt: 20,
   },
 };
 
@@ -247,4 +197,4 @@ function get(key) {
   return PACKS[k] || null;
 }
 
-module.exports = { PACKS, get, E1_BRANDS, E1_TRIVIA, E2_COMICS, E2_GAMES, E2_BRANDS };
+module.exports = { PACKS, get, E1_BRANDS, E1_TRIVIA, E2_GAMES, E2_CHARS, E2_TEAMS, E2_BRANDS };

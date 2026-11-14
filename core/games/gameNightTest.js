@@ -45,11 +45,12 @@ async function stepPreflight(ctx) {
   for (const key of ["event1", "event2"]) {
     const p = packs.get(key);
     const plan = p.plan();
-    let logos = 0, trivia = 0, music = 0, badQ = 0, noDecoy = 0;
+    let logos = 0, trivia = 0, music = 0, pics = 0, badQ = 0, noDecoy = 0;
     const ids = new Set();
     for (const s of plan) {
       if (s.pinnedBrands) { logos += s.pinnedBrands.length; s.pinnedBrands.forEach((b) => { if (!b.decoys || b.decoys.length < 3) noDecoy++; }); }
       if (s.pinnedThemes) music += s.pinnedThemes.length;
+      if (s.pinnedPictures) s.pinnedPictures.forEach((pp) => { pics++; if (!bake.bundledBuf(pp.file)) badQ++; if (pp.fmt === "mc" && !(pp.options && pp.options.length === 4)) badQ++; });
       if (s.pinnedTrivia) s.pinnedTrivia.forEach((t) => {
         trivia++;
         if (ids.has(t.id)) badQ++; ids.add(t.id);
@@ -57,9 +58,11 @@ async function stepPreflight(ctx) {
         if (t.fmt === "typed" && !t.answer) badQ++;
       });
     }
-    chk(`${key}: ${logos} logos / ${trivia} trivia / ${music} songs`, badQ === 0 && noDecoy === 0, badQ || noDecoy ? `${badQ} bad question(s), ${noDecoy} logo(s) missing decoys` : "structure valid");
+    chk(`${key}: ${logos} logos / ${trivia} trivia / ${pics} pictures / ${music} songs`, badQ === 0 && noDecoy === 0, badQ || noDecoy ? `${badQ} bad question(s), ${noDecoy} logo(s) missing decoys` : "structure valid");
   }
-  const logoNames = [...packs.E1_BRANDS, ...packs.E2_BRANDS].map((b) => b.name);
+  const bundledBad = [...packs.E1_BRANDS, ...packs.E2_BRANDS].filter((b) => b.bundled && !bake.bundledBuf(`logos/${b.bundled}.png`)).map((b) => b.name);
+  chk("bundled text-free logo files present", !bundledBad.length, bundledBad.join(", "));
+  const logoNames = [...packs.E1_BRANDS, ...packs.E2_BRANDS].filter((b) => !b.bundled).map((b) => b.name);
   const dsNames = new Set(((require("../../data/logoDataset.json") || {}).brands || []).map((x) => String(x.name || "").toLowerCase()));
   const missing = logoNames.filter((n) => !dsNames.has(n.toLowerCase()));
   chk(`all ${logoNames.length} pack logos exist in dataset`, !missing.length, missing.join(", "));
@@ -84,12 +87,14 @@ async function stepPreflight(ctx) {
 // ---- step 2: logos ----
 async function buildOne(brand) {
   const others = (brand.decoys || []).map((n) => ({ name: n }));
+  const bq = bake.logoQuestion(brand, others, "medium"); // bundled text-free logos come straight from the repo
+  if (bq) return bq;
   return quizMedia.buildLogosQuestion(brand, others, "medium").catch(() => null);
 }
 async function stepLogos(ctx, all) {
   const e1 = packs.E1_BRANDS, e2 = packs.E2_BRANDS;
   if (all) {
-    const list = [...e1, ...e2];
+    const list = [...e1, ...e2].filter(Boolean);
     const failed = [];
     for (let i = 0; i < list.length; i += 5) {
       const res = await Promise.all(list.slice(i, i + 5).map(buildOne));
@@ -98,7 +103,7 @@ async function stepLogos(ctx, all) {
     await sendText(ctx.sock, ctx.chatId, `*LOGO FETCH CHECK*\n\n${ok(!failed.length)} ${list.length - failed.length}/${list.length} logos fetched${failed.length ? `\n❌ Failed: ${failed.join(", ")}` : ""}\n\nPacks need >= ${packs.get("event1").minBuilt}/56 (round 1) and >= ${packs.get("event2").minBuilt}/37 (finale) to start.`);
     return failed.length === 0;
   }
-  const sample = [e1[0], e1[e1.length - 1], e2[0], e2[e2.length - 1]];
+  const sample = [e1[0], e1[e1.length - 1], e1.find((b) => b.bundled), e2[0], e2[e2.length - 1]].filter(Boolean);
   let good = 0;
   for (const b of sample) {
     const q = await buildOne(b);
@@ -114,7 +119,7 @@ async function stepLogos(ctx, all) {
 
 // ---- step 3: trivia samples ----
 async function stepTrivia(ctx) {
-  const pick = [packs.E1_TRIVIA[3], packs.E1_TRIVIA[13], packs.E2_COMICS[0], packs.E2_COMICS[10], packs.E2_GAMES[2]].filter(Boolean);
+  const pick = [packs.E1_TRIVIA[3], packs.E1_TRIVIA[13], packs.E2_GAMES[2], packs.E2_GAMES[5]].filter(Boolean);
   const out = pick.map((t) => {
     const ans = t.fmt === "mc" ? `${["A", "B", "C", "D"][t.correct]}. ${t.options[t.correct]}` : `${t.answer}${t.alts && t.alts.length ? ` (also accepts: ${t.alts.slice(0, 3).join(", ")})` : ""}`;
     const opts = t.fmt === "mc" ? "\n" + t.options.map((o, i) => `${["A", "B", "C", "D"][i]}. ${o}`).join("\n") : "";
