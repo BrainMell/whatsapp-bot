@@ -353,6 +353,8 @@ async function tick(sock, BOT_MARKER) {
         if (!(await claimFlow(ev.eventId))) continue;
         // ⚔️ conquest layer (GW_CONQUEST=1): resolves marches + siege rounds, DMs participants. Never blocks the legacy flow.
         try { await require('./conquest/ticker').tickWar(ev, sock); } catch (e) { console.warn('[conquest] tick failed:', e.message); }
+        // 🏰 Conquest replaces the ruins war: nothing below (wardens, hourglass, finale, inactivity sweeps) may touch a live war
+        try { if (ev.state === 'ACTIVE' && require('./conquest').replacesLegacy()) continue; } catch (e) { /* legacy */ }
         // registration expiry → force start
         if (ev.state === 'REGISTRATION' && ev.registrationEndsAt && Date.now() > ev.registrationEndsAt) {
             if (ev.players.length >= 2) {

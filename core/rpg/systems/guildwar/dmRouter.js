@@ -332,6 +332,16 @@ async function _handleDMInner(sock, senderJid, chatId, txt, BOT_MARKER, opts = {
     // prefixed generic commands are NEVER war verbs — hand them back early
     if (opts.prefixed && GENERIC_PREFIXED_RE.test(norm)) return null;
 
+    // 🏰 Conquest REPLACES the old ruins war: no legacy verb (look/move/paths/…) is processed while a war is live
+    try {
+        if (require('./conquest').replacesLegacy()) {
+            const evl = await getEventForPlayer(senderJid);
+            if (evl && evl.state === 'ACTIVE' && !/^(?:join|gw join|use|bag|relics|status|score|help)\b/.test(norm)) {
+                return { text: `🗺️ The Ruins are gone — the war is *Conquest* now. Try \`${prefix} cq\` (map), \`${prefix} cq targets\`, \`${prefix} cq help\`. Works right in the group chat.` };
+            }
+        }
+    } catch (e) { /* fall through */ }
+
     // ── ruins action grammar: any DM verb this router understands ──
     const QUIET_ACTION_RE = new RegExp(`^(?:look|l|where(?:\\s?am\\s?i)?|map|gw map|paths|relics|bag|status|score|rejoin|return|quit|leave|exit|accept|flee|mark|teleport|tp|recall|handin(?:\\s\\S.*)?|use(?:\\s\\S.*)?|challenge(?:\\s\\S.*)?|share map(?:\\s\\S.*)?|talk(?:\\s\\S.*)?|say(?:\\s\\S.*)?|move\\s+(?:${MOVE_TOKEN_RE})|(?:${MOVE_TOKEN_RE}))$`);
 
@@ -1068,6 +1078,7 @@ function displayName(jid) {
 // "unknown command" error; never a group spam item.
 async function handleGroupWarVerb(sock, chatId, senderJid, senderName, norm, prefix = '.') {
     try {
+        try { if (require('./conquest').replacesLegacy()) return false; } catch (e) { /* ignore */ }
         const eventDoc = await getEventForPlayer(senderJid);
         if (!eventDoc) return false; // not in a war → caller falls through
         const player = playerOf(eventDoc, senderJid);
