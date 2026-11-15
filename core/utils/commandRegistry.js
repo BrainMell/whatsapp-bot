@@ -127,6 +127,8 @@ const COMMAND_REGISTRY = {
     { cmd: 'gw forcestart', desc: 'Mods: skip registration and deploy the war now.', usage: 'gw forcestart' },
     { cmd: 'gw abort', desc: 'Mods: abort the war - no rewards, the record is closed.', usage: 'gw abort' },
     { cmd: 'gw rpg', desc: 'Mark this GC as RPG-friendly (admins/mods): organic world-alignment war calls are announced here, one paced card per alignment window.', usage: 'gw rpg on | off | status | list' },
+    { cmd: 'cq', desc: 'Guild Conquest: the war map is open - explore, claim land, siege fortresses. Works right in the group or in DMs.', usage: 'cq | cq targets | cq march <#> | cq realm | cq help' },
+    { cmd: 'gw cqtest', desc: 'Mods: start a fast Conquest TEST war with your guild + 2 NPC rival guilds (~7x timers).', usage: 'gw cqtest' },
     { cmd: 'wr', desc: 'Alias for gw: the Ruins switch, same subcommands.', usage: 'wr ...' },
     { cmd: 'war', desc: 'Alias for gw: same subcommands.', usage: 'war ...' }
   ],

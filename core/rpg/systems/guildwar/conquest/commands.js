@@ -51,7 +51,7 @@ function status(s, guild, jid) {
 }
 function pushEvents(events, guildOf) { return events; }
 
-async function handle({ jid, text, prefix = '.', eventDoc }) {
+async function handle({ jid, text, prefix = '.', eventDoc, chatId = null }) {
     if (!enabled()) return null;
     const raw = String(text || '').trim().toLowerCase().replace(/^[.!/#]?\s*(j\s+)?/, '');
     const m = raw.match(/^(cq|conquest)\b\s*(.*)$/); if (!m) return null;
@@ -64,14 +64,16 @@ async function handle({ jid, text, prefix = '.', eventDoc }) {
         return { text: shop.render((u.summonCards || []).map((c) => String(c.cardId).toLowerCase()), u.gems || 0) };
     }
     if (verb === 'help') return { text: helpText() };
-    if (!eventDoc) return { text: '⚔️ No guild war is active for you right now. `cq shop` still works.' };
+    let key = eventDoc && eventDoc.eventId; if (!key) { try { key = await store.keyFor(jid); } catch (e) { key = null; } }   // any chat works: group or DM
+    if (!key) return { text: '⚔️ No guild war is active for you right now. `cq shop` still works.' };
     if (!guildName) return { text: '❌ Join a guild first.' };
-    const key = eventDoc.eventId; const now = Date.now(); const events = [];
+    const now = Date.now(); const events = [];
     let out = null;
     await store.mutate(key, (s) => {
-        out = run(s, { jid, guildName, verb, args, rest, now, L, events });
+        out = run(s, { jid, guildName, verb, args, rest, now, L, events }); if (s.players[jid]) s.players[jid].chat = chatId || jid;   // replies/reminders go back to where they play
         E.tick(s, now, events);
-    }, createFor(eventDoc));
+    }, eventDoc ? createFor(eventDoc) : undefined);
+    if (out === undefined || out === null && !(await store.load(key))) return { text: '⚔️ That war has ended.' };
     if (out && out.afterApply) { try { out.afterApply(); } catch (e) { console.warn('[conquest] afterApply', e.message); } }
     if (out && out.render) { const rr = require('./render'); const img = out.render.what === 'map' ? await rr.renderMap(out.render.data) : out.render.what === 'card' ? await rr.renderEnvCard(out.render.data.id) : await rr.renderSiege(out.render.data); if (img) return { image: img, text: out.render.what === 'map' ? (out.imageText || '').split('\n')[0] : out.text }; return { text: out.imageText || out.text }; }
     return out || { text: '…' };
@@ -119,4 +121,4 @@ function run(s, { jid, guildName, verb, args, rest, now, L, events }) {
     }
 }
 function helpText() { return ['⚔️ *CONQUEST*', '`cq map` · `cq targets` · `cq tile [#]` · `cq status` · `cq top`', 'Leaders: `cq march #` · `cq muster #` → `join` → `launch` · `cq send # members…` · `cq tp # members…` · `cq skyfall #` · `cq fortify wall|golem k|turret k|upgrade|buff`', 'Everyone: `cq accept|decline` · `cq auto on|off` · `cq recall`', 'In a siege: `ram ladder sapper fire rune shield scout` + gate/left/right/curtain; vs golems: `strike guard shatter lure rally`', 'Rituals: `cq ritual ☀ ☾ ✦ ❄` · Treaties: `cq offer supplies|gems|oath`', '💎 `cq mine` (on a ◆ vein) · `cq bank` (at your Keep/Ley Gate) · `cq shop` · `cq buy <card>`'].join('\n'); }
-module.exports = { mapSnap, handle, run, helpText, targetsText, gridText, status };
+module.exports = { createFor, rolesFor, mapSnap, handle, run, helpText, targetsText, gridText, status };

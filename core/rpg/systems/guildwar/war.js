@@ -452,6 +452,8 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
             if (!pending) return sock.sendMessage(chatId, { text: '❌ Nothing to start.' });
             const res = await state.startEvent(pending.eventId, { deadWorld: args[1] || null });
             if (!res.ok) return sock.sendMessage(chatId, { text: `❌ ${res.reason}` });
+            // ⚔️ CONQUEST IS THE WAR: the map opens in this group, nobody has to DM (GW_CONQUEST=1; GW_CONQUEST_MODE=legacy keeps the ruins flow)
+            try { const cq = require('./conquest'); if (cq.replacesLegacy()) { await cq.launch(sock, res.event, { chatId, prefix, test: res.event.type === 'normal' }); return; } } catch (e) { console.error('[GW] conquest launch:', e && e.message); }
             feed.queue(pending.eventId, 'major', `🌐 *WORLD EVENT* — THE WAR HAS BEGUN! ${res.event.players.length} champion${res.event.players.length === 1 ? '' : 's'} deploy into the Ruins of a dead world. Hold fast, champions — the feed below will tell their tale.`);
             // ⚔️ owner brief: DM every champion the start card ("the war has
             // begun + how you play") - fire and forget, never block the GC reply
@@ -481,6 +483,21 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
                 `• Meet rivals... or end them. The World Core crowns the boldest guild.\n\n` +
                 `🔥 This group is now the WAR FEED — falls, discoveries and standings will be reported here. Fight well.`;
             return sock.sendMessage(chatId, { text: deployText });
+        }
+
+        case 'cqtest': {   // 🧪 one-command conquest test war: your guild + 2 NPC rival guilds, ~7x faster timers
+            if (!canStart) return sock.sendMessage(chatId, { text: '❌ Mod only.' });
+            const ug = guilds.getUserGuild(senderJid); if (!ug) return sock.sendMessage(chatId, { text: '❌ You must be in a guild to run a test war.' });
+            const g = guilds.getGuild(ug); const cq = require('./conquest'); if (!cq.enabled()) return sock.sendMessage(chatId, { text: '❌ Conquest is off (set GW_CONQUEST=1).' });
+            const cr = await state.createEvent({ type: 'normal', hostGroupId: chatId, initiatedBy: senderJid }); if (!cr.ok) return sock.sendMessage(chatId, { text: `❌ ${cr.reason}` });
+            const mem = [...new Set([senderJid, ...((g && g.members) || [])])];
+            for (const j of mem) { let nm = 'Champion'; try { nm = require('../../economy/economy').getDisplayName(j) || nm; } catch (e) {} await state.registerPlayer(cr.event.eventId, { jid: j, name: nm, guildId: ug, guildName: (g && g.name) || ug }); }
+            const sr = await state.startEvent(cr.event.eventId, {}); if (!sr.ok) return sock.sendMessage(chatId, { text: `❌ ${sr.reason}` });
+            await cq.launch(sock, sr.event, { chatId, prefix, test: true }); return;
+        }
+        case 'cq': case 'conquest': {   // `.war cq map` also works
+            try { await require('./conquest').handleChat(sock, chatId, senderJid, 'cq ' + args.slice(1).join(' '), prefix); } catch (e) { console.error('[GW] cq:', e && e.message); }
+            return;
         }
 
         case 'status': case 'score': {

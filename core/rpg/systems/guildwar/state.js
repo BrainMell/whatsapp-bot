@@ -359,6 +359,7 @@ async function tick(sock, BOT_MARKER) {
                 const res = await startEvent(ev.eventId);
                 if (res.ok) {
                     out.push({ eventId: ev.eventId, auto: 'started' });
+                    try { const cqm = require('./conquest'); if (cqm.replacesLegacy()) { await cqm.launch(sock, res.event, { chatId: res.event.hostGroupId, prefix: (() => { try { return require('../../../../botConfig').getPrefix() || '.'; } catch (e) { return '.'; } })(), test: res.event.type === 'normal' }); continue; } } catch (e) { console.warn('[conquest] auto-launch:', e.message); }
                     // 💡 PHASE 2 (feed resurrection): auto-started wars were
                     // SILENT — no GC announcement, no start-card DMs. Both now
                     // fire on the auto path exactly like forcestart.

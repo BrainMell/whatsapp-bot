@@ -20,4 +20,8 @@ async function mutate(key, fn, create) {
     }
     throw new Error('conquest: version conflict after retries');
 }
-module.exports = { load, mutate, _mem: mem };
+/** jid -> war key index, so players can use `cq` from ANY chat (group or DM) without a legacy event doc */
+const idxKey = (jid) => 'idx:' + String(jid).split('@')[0];
+async function setIndex(jid, key) { await mutate(idxKey(jid), (st) => { st.target = key; }, () => ({ key: idxKey(jid), status: 'idx', target: key, v: 0 })); }
+async function keyFor(jid) { const d = await load(idxKey(jid)); return d && d.target || null; }
+module.exports = { load, mutate, setIndex, keyFor, _mem: mem };

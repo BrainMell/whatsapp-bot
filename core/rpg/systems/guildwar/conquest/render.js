@@ -37,7 +37,11 @@ async function envCardInProcess(cardId, biome) {
 
 
 // ── realm war map (3D hex scene) ──────────────────────────────────────────────────────────────
-async function mapInProcess(snap) { const c = await require('./scene3d').warMapScene(snap); return c.toBuffer('image/png'); }
+async function mapInProcess(snap) {   // JPEG + capped width: a 2750px PNG is >1MB; chat doesn't need it
+    let c = await require('./scene3d').warMapScene(snap); const MAXW = 1900;
+    if (c.width > MAXW) { const { createCanvas } = require('canvas'); const k = MAXW / c.width; const o = createCanvas(MAXW, Math.round(c.height * k)); const x = o.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(c, 0, 0, o.width, o.height); c = o; }
+    return c.toBuffer('image/jpeg', { quality: 0.9 });
+}
 
 // ── child pool (renderWorker.js type 'conquest') ──────────────────────────────────────────────
 const { fork } = require('child_process'); let child = null; let seq = 0; const waiting = new Map();
@@ -45,7 +49,7 @@ function getChild() { if (child && child.connected) return child; try { const rq
     child = fork(path.join(__dirname, '..', 'renderWorker.js'), [], { stdio: 'ignore', serialization: 'advanced' });
     child.on('message', (m) => { if (m && m.kind === 'conquest' && waiting.has(m.id)) { const w = waiting.get(m.id); waiting.delete(m.id); clearTimeout(w.t); m.error ? w.rej(new Error(m.error)) : w.res(Buffer.from(m.png, 'base64')); } });
     child.on('exit', () => { child = null; for (const [id, w] of waiting) { waiting.delete(id); clearTimeout(w.t); w.rej(new Error('render child exited')); } }); return child; }
-function viaChild(what, data) { return new Promise((res, rej) => { const ch = getChild(); if (!ch) return rej(new Error('no render slot')); const id = ++seq; const t = setTimeout(() => { waiting.delete(id); rej(new Error('render timeout')); }, 12000); waiting.set(id, { res, rej, t }); ch.send({ type: 'conquest', id, what, data }); }); }
+function viaChild(what, data) { return new Promise((res, rej) => { const ch = getChild(); if (!ch) return rej(new Error('no render slot')); const id = ++seq; const t = setTimeout(() => { waiting.delete(id); rej(new Error('render timeout')); }, 40000); waiting.set(id, { res, rej, t }); ch.send({ type: 'conquest', id, what, data }); }); }
 const safe = async (what, data, inproc) => { try { return await viaChild(what, data); } catch (e) { if (process.env.CONQUEST_RENDER_INPROC === '1') return inproc(data); console.warn('[conquest] render', what, e.message); return null; } };
 module.exports = {
     siegeInProcess, envCardInProcess, mapInProcess,

@@ -12,8 +12,8 @@ const ok = (msg, extra) => Object.assign({ ok: true, msg }, extra);
 const gmap = (state) => map.generate(state.seed);
 
 // ── setup ────────────────────────────────────────────────────────────────────────────────────
-function newWar({ key, seed, guilds, now = Date.now(), hours = 3 }) {
-    const state = { v: 0, key, seed: seed >>> 0, status: 'active', startedAt: now, endsAt: now + hours * 3600e3, overlays: {}, guilds: {}, marches: {}, musters: {}, breaches: {}, encounters: {}, players: {}, log: [], seq: 0, lastEco: now, titans: {} };
+function newWar({ key, seed, guilds, now = Date.now(), hours = 3, test = false, hostGroup = null }) {
+    const state = { tf: test ? 0.15 : 1, test: !!test, hostGroup, v: 0, key, seed: seed >>> 0, status: 'active', startedAt: now, endsAt: now + hours * 3600e3, overlays: {}, guilds: {}, marches: {}, musters: {}, breaches: {}, encounters: {}, players: {}, log: [], seq: 0, lastEco: now, titans: {} };
     const g = gmap(state); const keeps = [...g.tiles.values()].filter((t) => t.kind === 'keep');
     const rng = mulberry32(state.seed ^ 0xBEEF); const order = keeps.map((k) => [rng(), k]).sort((a, b) => a[0] - b[0]).map((x) => x[1]);
     // spread guilds across realms first: pick keeps round-robin by realm
@@ -67,7 +67,8 @@ function spendOrder(state, guild, jid, now) {
     if ((g.orders[jid] || 0) >= cap) return fail(`Order budget spent (${cap}/hr). Wait for the next hour or ask the master.`);
     g.orders[jid] = (g.orders[jid] || 0) + 1; return null;
 }
-const travelSec = (d) => Math.max(CFG.MARCH_MIN_SEC, Math.min(CFG.MARCH_MAX_SEC, d * CFG.MARCH_SEC_PER_TILE));
+const tfOf = (state) => (state && state.tf) || 1;   // 🧪 test-war time factor (0.15 = ~7x faster)
+const travelSec = (d, state) => Math.max(CFG.MARCH_MIN_SEC * Math.min(1, tfOf(state) * 3), Math.min(CFG.MARCH_MAX_SEC, d * CFG.MARCH_SEC_PER_TILE)) * tfOf(state);
 const locked = (state, jid) => { const p = state.players[jid]; return !!p && (p.status === 'transit' || p.status === 'breach'); };
 function validTarget(state, guild, to) {
     const v = view(state, to); if (!v) return fail('Unknown tile.');
@@ -81,7 +82,7 @@ function ownedGateHop(state, guild, to) { const v = view(state, to); if (!v || v
 function startMarch(state, { guild, jids, to, type, by, now }) {
     const from = (state.players[jids[0]] || {}).at || state.guilds[guild].keep;
     const d = map.distance(gmap(state), from, to); const dist = Number.isFinite(d) ? d : 40;
-    const id = uid(state, 'M'); const sec = travelSec(dist);
+    const id = uid(state, 'M'); const sec = travelSec(dist, state);
     const m = state.marches[id] = { id, guild, type, by, members: jids.slice(), from, to, depart: now, arrive: now + sec * 1000, status: 'marching', dist, path: map.route(gmap(state), from, to) || [from, to] };
     for (const j of jids) { const p = state.players[j]; p.status = 'transit'; p.marchId = id; }
     return m;
@@ -117,7 +118,7 @@ function setAuto(state, { jid, on }) { const p = state.players[jid]; if (!p) ret
 function openMuster(state, { guild, by, to, now = Date.now() }) {
     if (!isLeader(state, guild, by)) return fail('Only the guild master or officers can call a muster.'); if (locked(state, by)) return fail('You are busy.');
     const e = spendOrder(state, guild, by, now); if (e) return e; const bad = validTarget(state, guild, to); if (bad) { refund(state, guild, by); return bad; }
-    const id = uid(state, 'U'); state.musters[id] = { id, guild, leader: by, to, members: [by], closes: now + CFG.MUSTER_WINDOW_SEC * 1000 };
+    const id = uid(state, 'U'); state.musters[id] = { id, guild, leader: by, to, members: [by], closes: now + CFG.MUSTER_WINDOW_SEC * 1000 * tfOf(state) };
     return ok(`📯 Muster called for *${view(state, to).name}*! Members: reply \`join\` within ${CFG.MUSTER_WINDOW_SEC}s (need ${CFG.MUSTER_MIN}+). Leader: \`launch\`.`, { muster: state.musters[id] });
 }
 const musterOf = (state, guild) => Object.values(state.musters).find((m) => m.guild === guild);
@@ -189,7 +190,7 @@ function titanDefence(state, v) { const lv = 3 + Math.floor(map.hashStr(v.realm)
 function startBreach(state, m, v, now, events) {
     const def = v.kind === 'titan' && !v.owner ? titanDefence(state, v) : { wall: v.wall ? { type: v.wall.type, hp: v.wall.hp, max: v.wall.max || v.wall.hp } : null, golems: v.golems, turrets: v.turrets, buffs: v.buffs };
     const id = uid(state, 'B'); const b = breach.create({ id, tileId: v.id, biome: v.biome, tileName: v.name, attacker: m.guild, defender: v.owner, party: m.members.map((j) => ({ jid: j, name: state.players[j].name, power: state.players[j].power, sprite: state.players[j].sprite })), defence: def, now, isTitan: v.kind === 'titan' });
-    b.kind = v.kind; const gi = (n) => n ? Math.abs(map.hashStr(n)) % 4 : -1; b.defIdx = gi(v.owner); b.attIdx = gi(m.guild);
+    b.tf = tfOf(state); b.kind = v.kind; const gi = (n) => n ? Math.abs(map.hashStr(n)) % 4 : -1; b.defIdx = gi(v.owner); b.attIdx = gi(m.guild);
     b.surround = {}; for (const n of map.neighbors(gmap(state), v.id) || []) { const k = (view(state, n) || {}).kind; if (k) b.surround[k] = (b.surround[k] || 0) + 1; }
     state.breaches[id] = b; for (const j of m.members) { const p = state.players[j]; p.status = 'breach'; p.breachId = id; }
     if (b.outcome) return finishBreach(state, b, now, events); breach.startRound(b, now); events.push({ type: 'breach_start', id, guild: m.guild, tile: v.id, defender: v.owner });
@@ -198,14 +199,14 @@ function finishBreach(state, b, now, events) {
     for (const j of Object.keys(b.party)) { const p = state.players[j]; p.status = 'idle'; p.breachId = null; if (b.outcome === 'lost') { const lost = Math.floor((p.carried || 0) * CFG.GEM_DROP_ON_DEFEAT); p.carried -= lost; } }
     const o = ov(state, b.tileId);
     if (b.outcome === 'won') { claimTile(state, b.attacker, b.tileId, now); events.push({ type: 'claimed', guild: b.attacker, tile: b.tileId, by: Object.keys(b.party), breach: b.id }); if (b.tileId && view(state, b.tileId).kind === 'titan') titanSlain(state, b, events); }
-    else { o.restUntil = now + CFG.CLAIM_ATTACK_COOLDOWN_SEC * 1000; const rem = breach.wallRemaining(b); if (b.wallType && !o.owner) { o.wall = { type: b.wallType, hp: rem, max: (view(state, b.tileId).wall || { max: rem }).max || rem }; o.golems = view(state, b.tileId).golems; o.turrets = view(state, b.tileId).turrets; } else if (b.wallType && o.owner && o.wall) o.wall.hp = Math.max(1, rem); events.push({ type: 'repelled', guild: b.attacker, tile: b.tileId, defender: b.defender, breach: b.id }); }
+    else { o.restUntil = now + CFG.CLAIM_ATTACK_COOLDOWN_SEC * 1000 * tfOf(state); const rem = breach.wallRemaining(b); if (b.wallType && !o.owner) { o.wall = { type: b.wallType, hp: rem, max: (view(state, b.tileId).wall || { max: rem }).max || rem }; o.golems = view(state, b.tileId).golems; o.turrets = view(state, b.tileId).turrets; } else if (b.wallType && o.owner && o.wall) o.wall.hp = Math.max(1, rem); events.push({ type: 'repelled', guild: b.attacker, tile: b.tileId, defender: b.defender, breach: b.id }); }
     delete state.breaches[b.id];
 }
 function titanSlain(state, b, events) { state.titans[b.tileId] = { by: b.attacker, at: Date.now() }; const g = state.guilds[b.attacker]; g.writs += 4; g.supplies += 120; g.treasury += 200; events.push({ type: 'titan_slain', guild: b.attacker, tile: b.tileId }); }
 function claimTile(state, guild, id, now) {
     const o = ov(state, id); const prev = o.owner; const g = state.guilds[guild]; const v = view(state, id);
     if (prev && state.guilds[prev]) state.guilds[prev].tiles = state.guilds[prev].tiles.filter((t) => t !== id);
-    o.owner = guild; o.claimedAt = now; o.shieldUntil = now + CFG.TILE_SHIELD_SEC * 1000; o.wall = null; o.golems = []; o.turrets = []; o.buffs = {}; o.restUntil = 0;
+    o.owner = guild; o.claimedAt = now; o.shieldUntil = now + CFG.TILE_SHIELD_SEC * 1000 * tfOf(state); o.wall = null; o.golems = []; o.turrets = []; o.buffs = {}; o.restUntil = 0;
     if (v.vein && o.veinLeft == null) o.veinLeft = v.vein;
     if (!g.tiles.includes(id)) g.tiles.push(id); return o;
 }

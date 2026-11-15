@@ -4,17 +4,21 @@
 //   outlined(img,px,color)  solid silhouette outline of a sprite (cached) — drawn UNDER the sprite so it reads as a thick ink line
 //   drawOutlined(ctx,img,x,y,w,h,opt) convenience: outline + sprite
 //   grade(canvas,preset)    posterise (soft) + colour grade + graphic shadow bands/halftone + optional pixelation (in place)
-// Opt-in while it is being tuned: ALDA_STYLE=1 enables it; unset = bit-identical to the old renderer.
+// ALDA_STYLE=0 turns every effect off (bit-identical to the old renderer).
+// Pixel-art shader pass ported from the CC0 Godot shader "Outline, Posterization, Color Palette and Dithering"
+// (https://godotshaders.com/shader/outline-posterization-color-palette-and-dithering/): Sobel-Feldman edge outline,
+// per-channel posterize, nearest-palette snap and a 4x4 Bayer ordered dither - done per pixel on the world canvas (no GPU needed).
 const { createCanvas } = require('canvas');
-const ON = process.env.ALDA_STYLE === '1';   // OFF by default until visually verified; ALDA_STYLE=1 enables
+const BAYER = [0, 0.5, 0.125, 0.625, 0.75, 0.25, 0.875, 0.375, 0.1875, 0.6875, 0.0625, 0.5625, 0.9375, 0.4375, 1.0, 0.8125];
+const ON = process.env.ALDA_STYLE !== '0';   // ON by default; ALDA_STYLE=0 restores the old look
 const INK = '#1a120d';
 const PRESETS = {
     // default for the realm map / siege / encounters
-    aldafold: { outline: { px: 2.6, color: INK }, posterize: { levels: 7, mix: 0.45 }, grade: { contrast: 1.07, sat: 1.12, warm: 0.02 }, shadeBand: { below: 0.30, dark: 0.16, dots: 4 }, pixel: 0 },
+    aldafold: { outline: { px: 1.9, color: INK }, posterize: { levels: 7, mix: 0.45 }, grade: { contrast: 1.06, sat: 1.04, warm: 0.02 }, shadeBand: { below: 0.34, dark: 0.18 }, edge: { thick: 1, thresh: 0.42, color: INK, strength: 0.45 }, pixel: 0 },
     // lighter touch (large overview maps where objects are tiny)
-    overview: { outline: { px: 1.2, color: INK }, posterize: { levels: 8, mix: 0.35 }, grade: { contrast: 1.05, sat: 1.1, warm: 0 }, shadeBand: null, pixel: 0 },
+    overview: { outline: { px: 1.2, color: INK }, posterize: { levels: 8, mix: 0.35 }, grade: { contrast: 1.05, sat: 1.1, warm: 0 }, shadeBand: null, edge: null, pixel: 0 },
     // chunky pixel identity (opt-in)
-    pixel: { outline: { px: 3, color: INK }, posterize: { levels: 6, mix: 0.6 }, grade: { contrast: 1.08, sat: 1.15, warm: 0.02 }, shadeBand: { below: 0.3, dark: 0.18, dots: 4 }, pixel: 2 },
+    pixel: { outline: { px: 3, color: INK }, posterize: { levels: 6, mix: 0.6 }, grade: { contrast: 1.08, sat: 1.15, warm: 0.02 }, shadeBand: { below: 0.34, dark: 0.2 }, edge: { thick: 1, thresh: 0.2, color: INK, strength: 0.9 }, pixel: 2 },
 };
 const preset = (p) => (typeof p === 'string' ? PRESETS[p] : p) || PRESETS.aldafold;
 
@@ -49,9 +53,21 @@ function grade(cv, p) {
         if (g.sat) { r = lum + (r - lum) * g.sat; gg = lum + (gg - lum) * g.sat; b = lum + (b - lum) * g.sat; }
         if (g.warm) { r += g.warm; b -= g.warm; }
         if (ps) { const q = (v) => Math.round(v * L) / L; r = r + (q(r) - r) * ps.mix; gg = gg + (q(gg) - gg) * ps.mix; b = b + (q(b) - b) * ps.mix; }
-        if (sb && lum < sb.below) { const x = i % W, y = (i / W) | 0, s = sb.dots || 4; if (((x >> 1) + (y >> 1)) % (s >> 1 || 2) === 0 && (x + y) % 2 === 0) { r *= 1 - sb.dark; gg *= 1 - sb.dark; b *= 1 - sb.dark; } }
+        if (sb && lum < sb.below) { const x = i % W, y = (i / W) | 0; if (BAYER[(x & 3) + (y & 3) * 4] > lum / sb.below) { r *= 1 - sb.dark; gg *= 1 - sb.dark; b *= 1 - sb.dark; } }   // ordered-dither graphic shadow band
         d[o] = r < 0 ? 0 : r > 1 ? 255 : r * 255; d[o + 1] = gg < 0 ? 0 : gg > 1 ? 255 : gg * 255; d[o + 2] = b < 0 ? 0 : b > 1 ? 255 : b * 255;
     }
+    if (p.edge) edgePass(id, W, H, p.edge);
     ctx.putImageData(id, 0, 0); return cv;
 }
+/** Sobel-Feldman on luminance (no depth/normal buffers in a 2D render) -> blends the ink colour over strong edges. */
+function edgePass(id, W, H, e) {
+    const d = id.data, lum = new Float32Array(W * H); for (let i = 0; i < W * H; i++) lum[i] = (0.2125 * d[i * 4] + 0.7154 * d[i * 4 + 1] + 0.0721 * d[i * 4 + 2]) / 255;
+    const t = Math.max(1, e.thick | 0), ink = hex(e.color || INK), out = new Float32Array(W * H);
+    for (let y = t; y < H - t; y++) for (let x = t; x < W - t; x++) {
+        const i = y * W + x, a = lum[i - W * t - t], b = lum[i - W * t], c = lum[i - W * t + t], dd = lum[i - t], f = lum[i + t], g = lum[i + W * t - t], h = lum[i + W * t], k = lum[i + W * t + t];
+        const gx = -a - 2 * dd - g + c + 2 * f + k, gy = -a - 2 * b - c + g + 2 * h + k; const m = Math.sqrt(gx * gx + gy * gy); out[i] = m > e.thresh ? Math.min(1, (m - e.thresh) * 3) * e.strength : 0;
+    }
+    for (let i = 0; i < W * H; i++) { const m = out[i]; if (m > 0 && d[i * 4 + 3] > 0) { d[i * 4] += (ink[0] - d[i * 4]) * m; d[i * 4 + 1] += (ink[1] - d[i * 4 + 1]) * m; d[i * 4 + 2] += (ink[2] - d[i * 4 + 2]) * m; } }
+}
+const hex = (c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
 module.exports = { ON, INK, PRESETS, preset, outlined, drawOutlined, grade };

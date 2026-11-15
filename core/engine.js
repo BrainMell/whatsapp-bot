@@ -33586,6 +33586,13 @@ _(or reply to their message)_
                       console.error("[GuildWar] group war-verb error:", e.message);
                     }
                   }
+                  // ⚔️ CONQUEST (GW_CONQUEST=1): `<prefix> cq ...` / `conquest ...` works in ANY group chat - nobody has to DM the bot
+                  if (lowerTxt.startsWith(`${prefix} cq`) || lowerTxt.startsWith(`${prefix} conquest`)) {
+                    try {
+                      const cqq = require('./rpg/systems/guildwar/conquest');
+                      if (cqq.enabled() && await cqq.handleChat(sock, chatId, senderJid, lowerTxt.slice(prefix.length).trim(), prefix)) return;
+                    } catch (cqErr) { console.error('⚔️ [Conquest] group command error:', cqErr.message); }
+                  }
                   if (
                     lowerTxt.startsWith(`${prefix} gw`) ||
                     lowerTxt.startsWith(`${prefix} wr`) ||

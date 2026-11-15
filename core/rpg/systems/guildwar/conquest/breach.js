@@ -47,7 +47,7 @@ function startRound(b, now = Date.now()) {
     if (b.outcome) return b;
     b.round += 1; const rng = rngFor(b);
     const card = env.draw(b.biome, rng, b.envHistory);
-    b.env = card.id; b.envHistory.push(card.id); b.roundEndsAt = now + CFG.BREACH_ROUND_SEC * 1000;
+    b.env = card.id; b.envHistory.push(card.id); b.roundEndsAt = now + CFG.BREACH_ROUND_SEC * 1000 * (b.tf || 1);
     for (const m of Object.values(b.party)) { m.action = null; m.target = null; }
     if (card.flags && card.flags.includes('revealWeak') && b.phase === 'wall') { const ls = liveSections(b); if (ls.length) b.weak = ls[Math.floor(rng() * ls.length)]; }
     if (card.flags && card.flags.includes('golemSurge')) b.status.golemSurge = 2;

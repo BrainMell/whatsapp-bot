@@ -1,3 +1,12 @@
 'use strict';
 const { enabled, CFG } = require('./config');
 module.exports = { enabled, CFG, handle: (...a) => require('./commands').handle(...a), engine: () => require('./engine'), store: () => require('./store') };
+
+/** `cq ...` typed in ANY chat (group or DM). Replies where the player typed; reminders then follow them there. */
+async function handleChat(sock, chatId, jid, text, prefix = '.') {
+    if (!enabled()) return false; const r = await require('./commands').handle({ jid, text, prefix, eventDoc: null, chatId }); if (!r) return false;
+    const inGroup = String(chatId).endsWith('@g.us'); const tag = inGroup ? `@${String(jid).split('@')[0]} ` : ''; const opt = inGroup ? { mentions: [jid] } : {};
+    if (r.image) await sock.sendMessage(chatId, { image: r.image, caption: tag + (r.text || ''), ...opt }); else await sock.sendMessage(chatId, { text: tag + (r.text || '…'), ...opt });
+    return true;
+}
+module.exports.handleChat = handleChat; module.exports.launch = (...a) => require('./launch').launch(...a); module.exports.replacesLegacy = () => require('./launch').replacesLegacy();

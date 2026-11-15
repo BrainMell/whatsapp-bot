@@ -57,3 +57,6 @@ Built by `scripts/vfx/build_static_vfx.py` from `New Assets/vfx/*` (best single 
 
 ## Animated ultimate sets (core/rpgasset/vfx/packs/newvfx)
 59 clips exported from `New Assets/vfx/nerijs-pvfx-foundry` (pvfx foundry, pixel VFX; see that pack's licence in `New Assets/vfx/README.md`) by `scripts/vfx/export_ult_sets.py`, mapped per class theme through `vfx_assets.json` overrides (`layer@CLASS`, `fx:<name>@CLASS`).
+
+## Conquest Titan bosses (core/rpgasset/guildwar/conquest/golems/titan_*.png)
+Built by `scripts/vfx/build_titans.py` from `core/rpgasset/packs/monsters`: Frost Guardian (chierit), Minotaur (chierit), Free Mythic Monsters (willibab) - itch.io free packs, "see source page" licences (see packs/README.md); confirm commercial terms before public release.
