@@ -40,6 +40,7 @@ const quizConfigMod = require("./quizConfig"); // P16 central config + quizmod
 const quizBank = require("./quizBank");        // P15 stable-identity bank
 const quizMediaMod = require("./quizMedia");   // 2026-09-27 logos + spot-the-song modes
 const quizEventPacks = require("./quizEventPacks");
+const quizResume = require("./quizResume"); // 💾 restart-proof snapshot + `.j quiz resume`
 const gnBake = require("./gameNightBake");   // pre-baked event assets (logos + theme clips on disk) // Game Night packs (.j quiz -preplanned event1|event2)
 const quizPreplannedMod = require("./quizPreplanned"); // 2026-10-10 owner: .j quiz -preplanned fixed pack
 const quizDatasetMod = require("./quizDataset"); // 2026-10-10 dataset categories (games/comics/movies/series)
@@ -2303,6 +2304,8 @@ async function postQuestion(sock, chatId, session) {
   const section = session.sections[session.activeSection];
   if (!section) { await finishQuiz(sock, chatId, session); return; }
   if (session.cancelled) return;
+  quizResume.save(chatId, session);
+  try { require("../utils/livenessCanary").noteBattleActivity(); } catch (_) { /* optional */ }
   // STATE LOCK: only one question may ever be open. If any path reaches
   // postQuestion while a question is still open, that is a bug elsewhere -
   // refuse to double-post instead of corrupting the session.
@@ -2528,6 +2531,7 @@ async function revealAndAdvance(sock, chatId, session, winner, timedOut) {
     saveSeen(mk, [qhash(q.q)]);
 
     session.idx += 1;
+    quizResume.save(chatId, session);
     if (session.idx >= section.questions.length) {
       section.state = SECTION_STATES.COMPLETED;
       await advanceToNextSection(sock, chatId, session);
@@ -2626,6 +2630,7 @@ async function finishQuiz(sock, chatId, session, opts = {}) {
   // would vanish the NEW session (zombie quiz: no answers processed, no
   // clean end). Only tear down state that still belongs to THIS session.
   if (activeQuizzes.get(chatId) === session) activeQuizzes.delete(chatId);
+  quizResume.clear(chatId);
   releaseSessionSlot(session); // OWNER SPEC §4: end path frees the bot-wide slot (harmless if never held)
   const _lc = lifecycle.get(chatId);
   if (_lc && (session.lockSince === undefined || _lc.since === session.lockSince)) {
@@ -3302,6 +3307,29 @@ async function confirmStart(sock, chatId, senderJid, botMarker, canUseAdminComma
     await safeSend(sock, chatId, { text: head }, { label: "go-head" }).catch(() => {});
   }
   startSection(sock, chatId, session, 0);
+  return { handled: true, silent: true };
+}
+
+// `.j quiz resume [n]` - rebuild the snapshot after a restart and continue (from question n if given).
+async function resumeQuiz(sock, chatId, senderJid, botMarker, arg, canUseAdminCommands) {
+  if (activeQuizzes.get(chatId)) return { handled: true, message: botMarker + `🎯 A quiz is already running here (question ${activeQuizzes.get(chatId).questionNo}/${plannedTotal(activeQuizzes.get(chatId))}).` };
+  const snap = quizResume.load(chatId);
+  if (!snap) return { handled: true, message: botMarker + "❌ No saved quiz for this chat (saves expire after 12h)." };
+  const s = snap.session;
+  if (s.askedBy !== senderJid && !canUseAdminCommands && !(await _canStartQuizFresh(senderJid))) return { handled: true, message: botMarker + "🛑 Only the starter or a mod can resume." };
+  if (!acquireLifecycle(chatId)) return { handled: true, message: botMarker + "⏳ This chat is busy - try again in a moment." };
+  s.scores = s.scores instanceof Map ? s.scores : new Map(); s.answeredBy = new Map(); s.usedKeys = s.usedKeys instanceof Set ? s.usedKeys : new Set(); s.revealed = [];
+  Object.assign(s, { cancelled: false, token: (s.token || 0) + 1, timerId: null, nextTimerId: null, reassureTimerId: null, hardCapTimerId: null, qOpenUntil: 0, qEpoch: (s.qEpoch || 0) + 1, revealLock: false, awaitingGo: false, holdsGenSlot: false, sectionJobs: {}, callLLM: null, lockSince: lifecycle.get(chatId)?.since ?? null });
+  for (const sec of s.sections) if (sec.state === SECTION_STATES.GENERATING) sec.state = sec.questions.length ? SECTION_STATES.READY || sec.state : SECTION_STATES.PENDING;
+  const n = parseInt(arg, 10);
+  if (n >= 1) { let left = n - 1; let found = false; for (let i = 0; i < s.sections.length; i++) { const L = s.sections[i].questions.length; if (left < L) { s.activeSection = i; s.idx = left; found = true; break; } left -= L; } if (!found) { releaseLifecycle(chatId); return { handled: true, message: botMarker + `❌ Question ${n} does not exist (total ${plannedTotal(s)}).` }; } }
+  let before = 0; for (let i = 0; i < s.activeSection; i++) before += s.sections[i].questions.length; s.questionNo = before + s.idx;
+  s.sections[s.activeSection].state = SECTION_STATES.ACTIVE;
+  activeQuizzes.set(chatId, s); promoteLifecycle(chatId);
+  s.hardCapTimerId = setTimeout(() => { const cur = activeQuizzes.get(chatId); if (cur === s && !s.cancelled) finishQuiz(sock, chatId, s, { reason: "hardcap" }).catch(() => {}); }, SESSION_MAX_MS); s.hardCapTimerId.unref?.();
+  const ent = [...s.scores.entries()].sort((a, b) => (b[1].points || 0) - (a[1].points || 0)).slice(0, 10);
+  await safeSend(sock, chatId, { text: BOT_SAFE(`🔁 *Quiz resumed* - continuing at question ${s.questionNo + 1}/${plannedTotal(s)}. Scores kept.${ent.length ? "\n" + ent.map(([, v], i) => `${i + 1}. ${v.name} - ${v.points} pts`).join("\n") : ""}`) }, { label: "resume" }).catch(() => {});
+  setTimeout(() => postQuestion(sock, chatId, s).catch((e) => console.log("[Quiz] resume post failed:", e?.message)), 4000);
   return { handled: true, silent: true };
 }
 
@@ -4058,6 +4086,7 @@ async function endQuiz(sock, chatId, senderJid, botMarker, canUseAdminCommands) 
     session.cancelled = true;
     if (session.readyTimerId) { clearTimeout(session.readyTimerId); session.readyTimerId = null; }
     session.awaitingGo = false;
+    quizResume.clear(chatId);
     if (activeQuizzes.get(chatId) === session) activeQuizzes.delete(chatId);
     releaseSessionSlot(session);
     const _lc2 = lifecycle.get(chatId);
@@ -4127,10 +4156,12 @@ module.exports = {
   bakeThemeEntries,
   eventHooks,
   hasActive,
+  anyActive: () => activeQuizzes.size > 0,
   getSession,
   startQuiz,
   pickCandidate,
   confirmStart,
+  resumeQuiz,
   endQuiz,
   handleAnswer,
   _lev,

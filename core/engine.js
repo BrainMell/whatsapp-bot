@@ -33262,6 +33262,13 @@ _(or reply to their message)_
                     return;
                   }
 
+                  // 💾 quiz resume [n] - continue a saved quiz after a restart
+                  if (new RegExp('^' + botConfig.getPrefix().toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' quiz resume( \\d+)?$').test(lowerTxt)) {
+                    const resultR = await quizGame.resumeQuiz(sock, chatId, senderJid, BOT_MARKER, (lowerTxt.match(/(\d+)$/) || [])[1], canUseAdminCommands);
+                    if (resultR.message) await sock.sendMessage(chatId, { text: resultR.message }, { quoted: m });
+                    return;
+                  }
+
                   // quiz end - cancel the running quiz (starter or admins)
                   if (
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} quiz end` ||

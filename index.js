@@ -580,6 +580,7 @@ const disconnectedTimestamps = new Map(); // botId -> timestamp
 setInterval(() => {
     const uptime = Date.now() - spawnTime;
     if (uptime < BOOT_GRACE_PERIOD) return; // Wait until grace period passes
+    try { if (require('./core/games/quiz').anyActive()) return; } catch (_) { /* quiz module optional */ }   // never reboot mid-quiz
 
     const healthMap = getBotInstancesHealth ? getBotInstancesHealth() : new Map();
     let needsReboot = false;

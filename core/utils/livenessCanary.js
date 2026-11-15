@@ -39,7 +39,7 @@ const STALL_MS = parseInt(process.env.LIVENESS_STALL_MS || '75000', 10);   // fi
 // v2 battle grace: how long after the last combat turn a stall counts as
 // "mid-match", and the stall age at which we stop waiting and kill anyway.
 const BATTLE_GRACE_MS = parseInt(process.env.LIVENESS_BATTLE_GRACE_MS || '600000', 10);   // 10 min
-const BATTLE_STALL_MS = parseInt(process.env.LIVENESS_BATTLE_STALL_MS || '300000', 10);   // 5 min hard cap
+const BATTLE_STALL_MS = parseInt(process.env.LIVENESS_BATTLE_STALL_MS || '900000', 10);   // 5 min hard cap
 const KILL_BUDGET = 4;    // max kills per hour before standing down
 const BUDGET_WINDOW_MS = 3600000;
 
