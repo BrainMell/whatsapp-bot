@@ -8946,24 +8946,53 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
             // 📣 ADMIN PROMOTE/DEMOTE ANNOUNCEMENTS (opt-in via `.announce on`)
             try {
-              if ((action === "promote" || action === "demote")) {
+              if (action === "promote" || action === "demote") {
                 const _s = getGroupSettings(id);
                 if (_s.announceAdmins === true) {
                   const targets = (Array.isArray(participants) ? participants : [participants])
                     .map((p) => normalizeParticipantJid(p))
                     .filter(Boolean);
+
                   if (targets.length) {
                     const authorJid =
                       author && typeof author === "string" ? jidNormalizedUser(author) : null;
                     const authorTag = authorJid ? `@${authorJid.split("@")[0]}` : null;
                     const targetTags = targets.map((t) => `@${t.split("@")[0]}`);
-                    const heading = action === "promote" ? "👑 *Admin Promotion*" : "📉 *Admin Demotion*";
+                    const mentions = [...targets, ...(authorJid ? [authorJid] : [])];
+
                     const line =
                       (authorTag ? `${authorTag} ${action === "promote" ? "promoted" : "demoted"}` : action === "promote" ? "Promoted" : "Demoted") +
                       `:\n${targetTags.join("\n")}`;
-                    const mentions = [...targets, ...(authorJid ? [authorJid] : [])];
+
+                    const announcement = action === "promote"
+                      ? [
+                          "╔════════════════════════════════╗",
+                          "       👑 *ROYAL APPOINTMENT*",
+                          "╚════════════════════════════════╝",
+                          "",
+                          targets.length === 1
+                            ? `🎖️ Congratulations, ${targetTags[0]}!`
+                            : `🎖️ Congratulations to our newly appointed administrators:\n${targetTags.join("\n")}`,
+                          "",
+                          targets.length === 1
+                            ? `You have officially been appointed as a *GROUP ADMINISTRATOR* of *${groupName || "this community"}*.`
+                            : `You have all officially been appointed as *GROUP ADMINISTRATORS* of *${groupName || "this community"}*.`,
+                          "",
+                          "This appointment is a mark of trust.",
+                          "Lead with wisdom, protect the community,",
+                          "and help keep this group thriving.",
+                          "",
+                          "┌─ ✦ *APPOINTMENT DETAILS*",
+                          `│ 👑 *New position:* Group Administrator${targets.length > 1 ? "s" : ""}`,
+                          `│ ✍️ *Appointed by:* ${authorTag || "Group leadership"}`,
+                          "└────────────────────────────",
+                          "",
+                          "      _Welcome to the leadership circle._ 👑",
+                        ].join("\n")
+                      : `📉 *Admin Demotion*\n\n${line}`;
+
                     await sock.sendMessage(id, {
-                      text: BOT_MARKER + `${heading}\n\n${line}`,
+                      text: BOT_MARKER + announcement,
                       mentions,
                     });
                   }
@@ -19732,7 +19761,8 @@ Moderation:
                       );
                       console.log("✅ Promote successful");
                       await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + "`Promoted into a GOD`",
+                        text: BOT_MARKER + `👑 *ADMIN RIGHTS GRANTED*\\n\\n@${target.split("@")[0]} is now a *Group Administrator*.`,
+                        mentions: [target],
                       });
                     } catch (err) {
                       console.error("❌ Promote failed:", err.message);
