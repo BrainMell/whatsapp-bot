@@ -39,6 +39,8 @@ const quizLore = require("./quizLore");
 const quizConfigMod = require("./quizConfig"); // P16 central config + quizmod
 const quizBank = require("./quizBank");        // P15 stable-identity bank
 const quizMediaMod = require("./quizMedia");   // 2026-09-27 logos + spot-the-song modes
+const quizEventPacks = require("./quizEventPacks"); // `.j quiz -gn` / `-gn2` event packs
+const quizEmoji = require("./quizEmoji");           // emoji "guess the anime" image cards
 const quizPreplannedMod = require("./quizPreplanned"); // 2026-10-10 owner: .j quiz -preplanned fixed pack
 const quizDatasetMod = require("./quizDataset"); // 2026-10-10 dataset categories (games/comics/movies/series)
 const mediaWorker = require("../utils/mediaWorker"); // 2026-09-27 shared media job runner
@@ -69,6 +71,37 @@ const GENERATING_LOCK_TTL_MS = 8 * 60 * 1000; // crashed generation can't lock f
 // (between-questions pacing moved to quizConfig.questionGapSeconds - the
 // owner spec is a randomized 10-30s pause, quizmod-tunable per group)
 const PICK_TTL_MS = 5 * 60 * 1000;
+// ── `.j quiz -gn` resume checkpoints ──
+// A restart wipes every in-memory session. For the event packs the live position
+// (scores, question number, which questions were already revealed) is saved to the
+// system KV after every reveal so `.j quiz continue` can pick the quiz back up.
+const GN_PAYS_ZENI = false;                    // event quizzes only keep the scoreboard (no Zeni payout)
+const GN_RESUME_TTL_MS = 12 * 60 * 60 * 1000;  // a saved quiz older than this is stale
+const _gnKey = (chatId) => `quiz_gn_resume:${chatId}`;
+function _gnQKey(sectionName, answerText) {
+  return `${String(sectionName || "").toLowerCase()}|${String(answerText || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()}`;
+}
+function saveGnCheckpoint(chatId, session) {
+  if (!session || !session.gnPack) return;
+  try {
+    system.set(_gnKey(chatId), {
+      v: 1, pack: session.gnPack, title: session.title, askedBy: session.askedBy, askedByName: session.askedByName,
+      questionNo: session.questionNo, scores: [...session.scores.entries()], asked: session.askedKeys || [],
+      savedAt: Date.now(),
+    });
+  } catch (e) { console.log("[Quiz] checkpoint save failed:", e?.message); }
+}
+function clearGnCheckpoint(chatId) {
+  try { if (system.get(_gnKey(chatId), null)) system.set(_gnKey(chatId), { cleared: true, at: Date.now() }); } catch (e) { /* best effort */ }
+}
+function loadGnCheckpoint(chatId) {
+  try {
+    const cp = system.get(_gnKey(chatId), null);
+    if (!cp || !cp.pack || cp.cleared) return null;
+    if (Date.now() - (cp.savedAt || 0) > GN_RESUME_TTL_MS) return null;
+    return cp;
+  } catch (e) { return null; }
+}
 const POINTS = { easy: 50, medium: 100, hard: 150 };
 const WINNER_BONUS = 250;
 const LETTERS = ["A", "B", "C", "D"];
@@ -1869,6 +1902,19 @@ async function generateSectionQuestions(session, section, sock, chatId) {
     section.questions = questions.slice(0, sectionCount);
     return section.questions;
   }
+  // ── emoji anime cards (`-gn` pack): rendered locally from bundled Twemoji SVGs ──
+  if (section.domain === "emoji" && Array.isArray(section.pinnedEmoji)) {
+    for (const entry of section.pinnedEmoji) {
+      if (questions.length >= sectionCount) break;
+      const q = await quizEmoji.buildEmojiQuestion(entry).catch((e) => { console.log(`[Quiz] emoji card failed for ${entry.id}: ${e?.message}`); return null; });
+      if (!q) continue;
+      usedKeys.add(`plemoji:${entry.id}`);
+      questions.push(q);
+    }
+    section.state = SECTION_STATES.READY;
+    section.questions = questions.slice(0, sectionCount);
+    return section.questions;
+  }
   // ── 2026-10-10 OWNER: preplanned pinned trivia (fixed pack, zero LLM) ──
   if (section.domain === "preplanned" && Array.isArray(section.pinnedTrivia)) {
     for (const t of section.pinnedTrivia) {
@@ -1892,7 +1938,9 @@ async function generateSectionQuestions(session, section, sock, chatId) {
       for (const brand of section.pinnedBrands) {
         if (questions.length >= sectionCount) break;
         if (usedKeys.has(`pllogo:${_normText(brand.name)}`)) continue;
-        const others = section.pinnedBrands.filter((b) => b.name !== brand.name).slice(0, 3);
+        const others = Array.isArray(brand.decoys) && brand.decoys.length >= 3
+          ? brand.decoys.map((n) => ({ name: n }))
+          : section.pinnedBrands.filter((b) => b.name !== brand.name).slice(0, 3);
         const q = await quizMediaMod.buildLogosQuestion(brand, others, cfg.difficulty).catch(() => null);
         if (!q) { console.log(`[Quiz] preplanned: logo build failed for ${brand.name} - skipping`); continue; }
         usedKeys.add(`pllogo:${_normText(brand.name)}`);
@@ -2194,7 +2242,7 @@ function hasActive(chatId) {
 // not-yet-generated sections use the plan estimate. Mixing the two formulas
 // is what produced "8 questions" headers on "QUESTION 1/10" cards.
 function plannedTotal(session) {
-  return (session.sections || []).reduce((a, s) => a + (s.questions.length ? s.questions.length : (s.perSection || 0)), 0);
+  return (session.totalOffset || 0) + (session.sections || []).reduce((a, s) => a + (s.questions.length ? s.questions.length : (s.perSection || 0)), 0);
 }
 
 function formatQuestionCard(session, idx, q) {
@@ -2470,6 +2518,10 @@ async function revealAndAdvance(sock, chatId, session, winner, timedOut) {
     saveSeen(mk, [qhash(q.q)]);
 
     session.idx += 1;
+    if (session.gnPack) {
+      (session.askedKeys = session.askedKeys || []).push(_gnQKey(section.name, q.options[q.correct]));
+      saveGnCheckpoint(chatId, session);
+    }
     if (session.idx >= section.questions.length) {
       section.state = SECTION_STATES.COMPLETED;
       await advanceToNextSection(sock, chatId, session);
@@ -2593,15 +2645,23 @@ async function finishQuiz(sock, chatId, session, opts = {}) {
   out += `🎯 Difficulty: ${session.cfg.difficulty.toUpperCase()}\n`;
   if (opts.reason === "hardcap") out += `⏱ (Session time limit reached - quiz closed automatically.)\n`;
 
-  for (const e of entries) {
-    await safeAddMoney(e.jid, e.points, `Quiz reward (${session.title || "quiz"})`);
+  const _gnMode = !!session.gnPack;
+  if (_gnMode) clearGnCheckpoint(chatId);
+  if (!_gnMode || GN_PAYS_ZENI) {
+    for (const e of entries) {
+      await safeAddMoney(e.jid, e.points, `Quiz reward (${session.title || "quiz"})`);
+    }
   }
   if (winner) {
-    await safeAddMoney(winner.jid, WINNER_BONUS, "Quiz winner bonus");
-    out += `\n👑 Winner: *${winner.name}* (+${WINNER_BONUS} bonus)\n`;
-    out += `💰 All points paid out in Zeni!\n`;
+    if (!_gnMode || GN_PAYS_ZENI) {
+      await safeAddMoney(winner.jid, WINNER_BONUS, "Quiz winner bonus");
+      out += `\n👑 Winner: *${winner.name}* (+${WINNER_BONUS} bonus)\n`;
+      out += `💰 All points paid out in Zeni!\n`;
+    } else {
+      out += `\n👑 Winner: *${winner.name}* with ${winner.points} points!\n`;
+    }
   }
-  out += `\nPlay again: \`${botConfig.getPrefix()} quiz "<title>"\``;
+  if (!_gnMode) out += `\nPlay again: \`${botConfig.getPrefix()} quiz "<title>"\``;
 
   recordSessionResults(chatId, entries, winner ? winner.jid : null);
   await safeSend(sock, chatId, { text: BOT_SAFE(out) }, { label: "final-scoreboard" }).catch(() => {});
@@ -2781,6 +2841,15 @@ function parseQuizArgs(raw) {
     out.title = "__preplanned__";
     rest = rest.replace(/^(preplanned|preplan|megapack|-+preplanned)\b/i, "").trim();
   }
+  // 💡 `.j quiz -gn` (event pack 1: harder mega quiz + emoji anime cards) and
+  // `.j quiz -gn2` (finale: obscure comics + video games). Same machinery as -preplanned.
+  if (!out.mode && /^-+gn2?\b/i.test(rest)) {
+    const _g = rest.match(/^-+(gn2?)\b/i);
+    out.mode = "preplanned";
+    out.title = "__preplanned__";
+    out.pack = _g[1].toLowerCase();
+    rest = rest.replace(/^-+gn2?\b/i, "").trim();
+  }
   // standalone media modes (before random/quoted handling; "spot the song" is multi-word)
   const MODE_ALIASES = { logos: "logos", logo: "logos", brands: "logos", brand: "logos", company: "logos", companies: "logos" };
   // 💡 2026-10-10 OWNER OVERHAUL: dataset-backed categories (pre-built data,
@@ -2958,7 +3027,20 @@ async function startQuiz(sock, chatId, senderJid, botMarker, m, rawArgs, senderN
     };
   }
 
+  // `.j quiz continue` - pick a `-gn` / `-gn2` quiz back up after a bot restart
+  let _resumeCp = null;
+  if (/^\s*(continue|resume)\s*$/i.test(String(rawArgs || ""))) {
+    _resumeCp = loadGnCheckpoint(chatId);
+    if (!_resumeCp) {
+      return {
+        handled: true,
+        message: botMarker + `❌ There is no saved quiz to continue here (nothing was running, it finished, or the save is older than ${Math.round(GN_RESUME_TTL_MS / 3600000)}h).\nStart one with \`${botConfig.getPrefix()} quiz -gn\``,
+      };
+    }
+    rawArgs = `-${_resumeCp.pack}`;
+  }
   const parsed = parseQuizArgs(rawArgs);
+  if (_resumeCp) parsed.resume = _resumeCp;
   // 💡 FIX (qa_quiz dataset-era run 2026-10-11): the dedicated retirement
   // guidance was DEAD CODE — free-form titles parse to retiredTitle with an
   // empty title, so the `!parsed.title` usage card always fired first and
@@ -3182,6 +3264,7 @@ async function confirmStart(sock, chatId, senderJid, botMarker, canUseAdminComma
   // 💡 OWNER SPEC §4: hard session cap - a running quiz must never block the
   // bot-wide queue forever. 90min (env QUIZ_SESSION_MAX_MS) after the go,
   // the quiz is force-finished with a note. finishQuiz clears this timer.
+  const _capMs = session.gnPack ? Math.max(SESSION_MAX_MS, 150 * 60 * 1000) : SESSION_MAX_MS; // 80-round event pack needs more than 90min worst case
   session.hardCapTimerId = setTimeout(() => {
     try {
       const cur = activeQuizzes.get(chatId);
@@ -3189,7 +3272,7 @@ async function confirmStart(sock, chatId, senderJid, botMarker, canUseAdminComma
       console.log(`[Quiz] hard session cap (${Math.round(SESSION_MAX_MS / 60000)}min) hit - force-finishing`);
       finishQuiz(sock, chatId, session, { reason: "hardcap" }).catch(() => {});
     } catch (e) { console.log("[Quiz] hard cap tick failed:", e?.message); }
-  }, SESSION_MAX_MS);
+  }, _capMs);
   session.hardCapTimerId.unref?.();
   const head = session.readyHead || "";
   const introImage = session.readyIntroImage;
@@ -3277,7 +3360,11 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
     // the count argument and the 50-question ceiling (owner directive).
     if (parsed.mode === "preplanned") {
       cfg.questionCount = 60;
-      cfg.maxQuestions = Math.max(cfg.maxQuestions, 60);
+      cfg.maxQuestions = Math.max(cfg.maxQuestions, 90);
+    }
+    const _evPack = parsed.mode === "preplanned" && parsed.pack ? quizEventPacks.get(parsed.pack) : null;
+    if (parsed.mode === "preplanned" && parsed.pack && !_evPack) {
+      return { handled: true, message: botMarker + `❌ Unknown quiz pack \`${parsed.pack}\`. Use \`${prefix} quiz -gn\` or \`${prefix} quiz -gn2\`.` };
     }
     const mixedRandom = parsed.randomMode && cfg.questionCount >= 9;
     {
@@ -3294,6 +3381,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
         else if (parsed.mode === "logos") bits.push(`🏢 brand logos`);
         else if (parsed.mode === "song") bits.push(`🎵 song clips`);
         else if (parsed.mode === "audio") bits.push(`📺 theme songs`);
+        else if (parsed.mode === "preplanned" && parsed.pack) bits.push(...quizEventPacks.get(parsed.pack).planBits);
         else if (parsed.mode === "preplanned") bits.push(`🏢 30 brand logos`, `🧠 20 anime & games trivia`, `🎵 10 theme songs`);
         else if (parsed.randomMode) bits.push(`🎲 mixed dataset rounds + logos`);
         else if (parsed.retiredTitle) bits.push(`ℹ️ title search retired`);
@@ -3396,7 +3484,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
       const PACK = quizPreplannedMod.PACK;
       const byFranchise = (f) => PACK.trivia.filter((t) => t.franchise === f);
       const themesBy = (ty) => PACK.themes.filter((t) => t.type === ty);
-      const domainPlan = [
+      let domainPlan = _evPack ? _evPack.plan() : [
         { name: "Logo Round 1/3", domain: "logos", perSection: 10, pinnedBrands: PACK.brands.slice(0, 10) },
         { name: "Logo Round 2/3", domain: "logos", perSection: 10, pinnedBrands: PACK.brands.slice(10, 20) },
         { name: "Logo Round 3/3", domain: "logos", perSection: 10, pinnedBrands: PACK.brands.slice(20, 30) },
@@ -3407,7 +3495,25 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
         { name: "Theme Songs: Games", domain: "audio", perSection: 5, pinnedThemes: themesBy("game"), clipSeconds: 30 },
         { name: "Theme Songs: Anime", domain: "audio", perSection: 5, pinnedThemes: themesBy("anime"), clipSeconds: 30 },
       ];
-      const modeTitle = "Preplanned Mega Quiz";
+      const modeTitle = _evPack ? _evPack.title : "Preplanned Mega Quiz";
+      // RESUME: drop every question that was already revealed before the restart, so
+      // prep only fetches what is still left (and no section replays an old question)
+      if (parsed.resume) {
+        const done = new Set(parsed.resume.asked || []);
+        const answerOf = { pinnedBrands: (b) => b.name, pinnedThemes: (t) => t.show, pinnedEmoji: (e) => e.answer, pinnedTrivia: (t) => (t.fmt === "typed" ? t.answer : t.options[t.correct]) };
+        domainPlan = domainPlan.map((p) => {
+          const field = ["pinnedBrands", "pinnedThemes", "pinnedEmoji", "pinnedTrivia"].find((f) => Array.isArray(p[f]));
+          if (!field) return p;
+          const left = p[field].filter((item) => !done.has(_gnQKey(p.name, answerOf[field](item))));
+          return { ...p, [field]: left, perSection: left.length };
+        }).filter((p) => p.perSection > 0);
+        if (!domainPlan.length) {
+          abortPrep();
+          clearGnCheckpoint(chatId);
+          await sock.sendMessage(chatId, { text: botMarker + `✅ That quiz had already asked every question - nothing left to continue. Start a new one with \`${prefix} quiz -gn\`.` }, { quoted: m }).catch(() => {});
+          return;
+        }
+      }
       const session = {
         cfg,
         title: modeTitle,
@@ -3422,14 +3528,17 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
           name: p.name, domain: p.domain, perSection: p.perSection,
           state: SECTION_STATES.GENERATING, questions: [],
           pinnedBrands: p.pinnedBrands, pinnedTrivia: p.pinnedTrivia,
-          pinnedThemes: p.pinnedThemes, clipSeconds: p.clipSeconds,
+          pinnedThemes: p.pinnedThemes, pinnedEmoji: p.pinnedEmoji, clipSeconds: p.clipSeconds,
           canCarryAudio: p.domain === "audio",
         })),
         sectionJobs: {},
         activeSection: 0,
         idx: 0,
-        questionNo: 0,
-        scores: new Map(),
+        questionNo: parsed.resume ? (parsed.resume.questionNo || 0) : 0,
+        totalOffset: parsed.resume ? (parsed.resume.questionNo || 0) : 0,
+        gnPack: _evPack ? _evPack.key : null,
+        askedKeys: parsed.resume ? [...(parsed.resume.asked || [])] : [],
+        scores: parsed.resume ? new Map((parsed.resume.scores || []).map(([j, v]) => [j, { ...v }])) : new Map(),
         revealed: [],
         answeredBy: new Map(),
         usedKeys: new Set(),
@@ -3459,26 +3568,41 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
         if (prep.cancelled || session.cancelled) { abortPrep(); return; }
       }
       stopPrepTimers(prep);
+      // a section whose media could not be fetched (e.g. every theme clip failed) is
+      // unplayable: drop it NOW instead of letting the quiz die at that section later
+      const droppedNames = session.sections.filter((s) => s.state !== SECTION_STATES.READY || !s.questions.length).map((s) => s.name);
+      if (droppedNames.length) session.sections = session.sections.filter((s) => s.state === SECTION_STATES.READY && s.questions.length);
       const built = session.sections.reduce((a, s) => a + s.questions.length, 0);
-      if (built < 45) { // pack must land >= 45/60 (logo/audio fetches can drop a few)
+      const _minBuilt = parsed.resume ? 1 : (_evPack ? _evPack.minBuilt : 45);
+      if (built < _minBuilt) { // pack must land >= 45/60 (logo/audio fetches can drop a few)
         pendingPrep.delete(chatId);
         releaseLifecycle(chatId);
         await sock.sendMessage(chatId, {
-          text: botMarker + `❌ Could not build the *${modeTitle}* right now (media builds fell short: ${built}/60). Try again in a minute.`,
+          text: botMarker + `❌ Could not build the *${modeTitle}* right now (media builds fell short: ${built}/${_minBuilt}). Try again in a minute.`,
         }, { quoted: m }).catch(() => {});
         return;
       }
       const totalQs = plannedTotal(session);
-      let head = botMarker + `🎯 *QUIZ STARTED - ${modeTitle.toUpperCase()}* 🎯\n\n`;
-      head += `🗺 3 acts • ${totalQs} rounds:\n`;
-      head += `  🏢 30 brand logos (current 2026 logos)\n`;
-      head += `  🧠 20 trivia - Dragon Ball / Solo Leveling / Devil May Cry / God of War\n`;
-      head += `  🎵 10 theme songs - 5 games + 5 anime, first 30 seconds\n\n`;
+      let head = botMarker + `🎯 *QUIZ ${parsed.resume ? "RESUMED" : "STARTED"} - ${modeTitle.toUpperCase()}* 🎯\n\n`;
+      if (parsed.resume) {
+        head += `⏯ Back after the restart: question ${(parsed.resume.questionNo || 0) + 1} onward - scores are kept.\n\n`;
+      } else if (_evPack) {
+        head += _evPack.head(prefix) + "\n";
+      } else {
+        head += `🗺 3 acts • ${totalQs} rounds:\n`;
+        head += `  🏢 30 brand logos (current 2026 logos)\n`;
+        head += `  🧠 20 trivia - Dragon Ball / Solo Leveling / Devil May Cry / God of War\n`;
+        head += `  🎵 10 theme songs - 5 games + 5 anime, first 30 seconds\n\n`;
+      }
       head += `📚 ${POINTS[cfg.difficulty]} Zeni per correct (+20 speed bonus) • sections keep their own leaderboards\n`;
       head += `✍️ Answer: just type the answer in chat - or \`${prefix} <letter>\` where options are shown. One answer per player per question\n`;
       head += `⏱ 30s per logo/trivia question • 45s per music question\n`;
-      head += `🛑 Cancel: \`${prefix} quiz end\`\n\n`;
-      head += `Let's go! 🚀`;
+      head += `🛑 Cancel: \`${prefix} quiz end\``;
+      if (_evPack) head += ` • If the bot restarts: \`${prefix} quiz continue\``;
+      head += `\n\nLet's go! 🚀`;
+      if (droppedNames.length) {
+        await sock.sendMessage(chatId, { text: botMarker + `⚠️ Skipped (media could not be fetched): ${droppedNames.join(", ")}` }, { quoted: m }).catch(() => {});
+      }
       await parkReadySession(sock, chatId, session, { head, introImage: null, botMarker, m, senderJid, prefix });
       ownsSlot = false; // OWNER SPEC §4: the slot now rides with the parked session
       return;
