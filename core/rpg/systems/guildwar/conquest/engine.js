@@ -82,7 +82,7 @@ function startMarch(state, { guild, jids, to, type, by, now }) {
     const from = (state.players[jids[0]] || {}).at || state.guilds[guild].keep;
     const d = map.distance(gmap(state), from, to); const dist = Number.isFinite(d) ? d : 40;
     const id = uid(state, 'M'); const sec = travelSec(dist);
-    const m = state.marches[id] = { id, guild, type, by, members: jids.slice(), from, to, depart: now, arrive: now + sec * 1000, status: 'marching', dist };
+    const m = state.marches[id] = { id, guild, type, by, members: jids.slice(), from, to, depart: now, arrive: now + sec * 1000, status: 'marching', dist, path: map.route(gmap(state), from, to) || [from, to] };
     for (const j of jids) { const p = state.players[j]; p.status = 'transit'; p.marchId = id; }
     return m;
 }
@@ -160,7 +160,12 @@ function teleport(state, { guild, by, jids, to, skyfall = false, now = Date.now(
 
 // ── arrival & encounters ────────────────────────────────────────────────────────────────────
 function tick(state, now = Date.now(), events = []) {
-    for (const m of Object.values(state.marches)) if (m.status === 'marching' && now >= m.arrive) arrive(state, m, now, events);
+    for (const m of Object.values(state.marches)) if (m.status === 'marching') {
+        const tot = m.arrive - m.depart;   // reminders: halfway (long trips) + "arriving soon" - each fires once
+        if (now < m.arrive && tot >= 90e3 && !m.nHalf && now >= m.depart + tot / 2) { m.nHalf = 1; events.push({ type: 'march_half', id: m.id, guild: m.guild, members: m.members.slice(), tile: m.to }); }
+        if (now < m.arrive && tot >= 40e3 && !m.nSoon && m.arrive - now <= 20e3) { m.nSoon = 1; events.push({ type: 'march_soon', id: m.id, guild: m.guild, members: m.members.slice(), tile: m.to }); }
+        if (now >= m.arrive) arrive(state, m, now, events);
+    }
     for (const b of Object.values(state.breaches)) if (!b.outcome && (breach.allSubmitted(b) || breach.due(b, now))) { const r = breach.resolveRound(b); events.push({ type: 'breach_round', id: b.id, lines: r.lines, guild: b.attacker }); if (b.outcome) finishBreach(state, b, now, events); else breach.startRound(b, now); }
     for (const e of Object.values(state.encounters)) if (e.exp && now >= e.exp) { ov(state, e.tile).restUntil = now + 60e3; endEncounter(state, e); events.push({ type: 'encounter_expired', guild: e.guild, tile: e.tile }); }
     for (const [id, mu] of Object.entries(state.musters)) if (mu.closes < now - 600e3) delete state.musters[id];
@@ -171,7 +176,7 @@ function tick(state, now = Date.now(), events = []) {
 function arrive(state, m, now, events) {
     m.status = 'arrived'; const v = view(state, m.to); const guild = m.guild;
     for (const j of m.members) { const p = state.players[j]; p.at = m.to; p.marchId = null; p.status = 'idle'; }
-    delete state.marches[m.id];
+    delete state.marches[m.id]; events.push({ type: 'arrived', guild, members: m.members.slice(), tile: m.to, from: m.from, path: m.path, dist: m.dist, mtype: m.type, depart: m.depart, arriveAt: m.arrive });
     if (v.owner === guild) { events.push({ type: 'reinforce', guild, tile: m.to }); return; }
     if (v.owner && v.shieldUntil > now) { events.push({ type: 'bounced', guild, tile: m.to }); return; }
     const kind = v.claim = require('./mapgen').KINDS[v.kind].claim;

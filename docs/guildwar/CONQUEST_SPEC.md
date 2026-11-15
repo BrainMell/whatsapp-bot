@@ -33,3 +33,8 @@ No hand-drawn placeholders. Siege scenes use: the bot's biome backdrops (`enviro
 
 ## Not built yet (planned)
 Research tree, pacts/tribute, scouts/decoys, group announcements, bespoke per-kind golem art (kinds currently reuse/regrade the bot's earth/ice elementals). Balance numbers are unplaytested live (sims only): see `CFG`.
+
+## Travel UI (2026-11-15)
+- `cq march #` / `cq status` (`travel`, `where`) render a **route card**: the war map zoomed to fit the trip (zoom shrinks for long routes, overview for very long), dashed white route with direction chevrons + tile ticks (every 5th numbered), gold solid for the part already walked, FROM / TARGET plates, rings on the target, your sprite at the live position, realm minimap with the camera window, side panel (ETA clock + progress bar, kind, holder, terrain along the route, defences, power warning).
+- Reminders (ticker): `march_half` (trips >= 90s), `march_soon` (~20s out, trips >= 40s) text DMs; `arrived` sends the arrival card (zoom on the target) before the claim / siege / rite messages.
+- Engine: marches store `path` (BFS tile ids); art in `travelArt.js`, payload in `travel.js`.

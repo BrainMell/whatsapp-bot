@@ -111,10 +111,18 @@ function terrainDress(t, put, r2, detail, over) {
 // Every conquest tile is ONE hex of the KayKit world (same engine/camera as the guild kingdom). Sea cells (off the canonical
 // land mask) are real water hexes. snap.view = null → a detailed window around the viewer; 'overview' → the whole realm.
 async function warMapScene(snap) {
-    const g = map.generate(snap.seed); const realm = g.realms.find((r) => r.key === snap.realm); const biome = realm.biome; const over = snap.view === 'overview';
-    let x0 = 0, y0 = 0, vw = map.W, vh = map.H;
-    if (!over) { vw = snap.vw || 27; vh = snap.vh || 20; const q = map.parse(snap.me.at); x0 = Math.max(0, Math.min(map.W - vw, q.x - (vw >> 1))); y0 = Math.max(0, Math.min(map.H - vh, q.y - (vh >> 1))); if (y0 & 1) y0--; }
-    const SC = over ? 0.085 : 0.5; const PANEL = over ? 230 : 270; const detail = !over;
+    const g = map.generate(snap.seed); const realm = g.realms.find((r) => r.key === snap.realm); const biome = realm.biome; let over = snap.view === 'overview';
+    const R = snap.route || null; const TA = R ? require('./travelArt') : null;
+    const rp = R ? (R.path || []).map((id) => map.parse(id)).filter((q) => q.realm === snap.realm) : null;
+    let x0 = 0, y0 = 0, vw = map.W, vh = map.H, SC = 0.5;
+    if (R && rp.length && !over) {   // 🧭 route window: fit the whole trip (or just the target when arriving), shrink the zoom for long trips
+        const arr = R.mode === 'arrive'; const pp = arr ? [rp[rp.length - 1]] : rp; const xs = pp.map((q) => q.x), ys = pp.map((q) => q.y);
+        const ax = Math.min(...xs), bx = Math.max(...xs), ay = Math.min(...ys), by2 = Math.max(...ys);
+        vw = Math.max(arr ? 15 : 20, bx - ax + 9); vh = Math.max(arr ? 11 : 14, by2 - ay + 7);
+        if (vw > 58 || vh > 42) over = true; else { SC = Math.max(0.2, 0.5 * Math.min(1, 26 / vw, 19 / vh)); x0 = Math.max(0, Math.min(map.W - vw, Math.round((ax + bx) / 2 - vw / 2))); y0 = Math.max(0, Math.min(map.H - vh, Math.round((ay + by2) / 2 - vh / 2))); if (y0 & 1) y0--; }
+    } else if (!over) { vw = snap.vw || 27; vh = snap.vh || 20; const q = map.parse(snap.me.at); x0 = Math.max(0, Math.min(map.W - vw, q.x - (vw >> 1))); y0 = Math.max(0, Math.min(map.H - vh, q.y - (vh >> 1))); if (y0 & 1) y0--; }
+    if (over) { x0 = 0; y0 = 0; vw = map.W; vh = map.H; SC = 0.085; }
+    const PANEL = R ? 310 : over ? 230 : 270; const detail = !over && SC >= 0.3;
     const hw = new K.HexWorld(vw, vh, { biome: biomeOf(biome), scale: SC, oobWater: true });
     const lay = hw.layout({ left: 16, right: 16, top: 70, bottom: 24 }); const W = lay.W + PANEL, H = lay.H;
     const { c, ctx } = ctxOf(W, H); const rng = art.RNG(snap.seed + snap.realm);
@@ -126,7 +134,7 @@ async function warMapScene(snap) {
     const LM = { keep: 1, fortress: 1, titan: 1, ley_gate: 1, shrine: 1, ruins: 1, pass: 1 };
     for (let y = y0; y < y0 + vh; y++) for (let x = x0; x < x0 + vw; x++) {
         const t = g.tiles.get(map.tileId(snap.realm, x, y)); if (!t) continue; const lx = x - x0, ly = y - y0; const o = by[t.id] || {}; const own = o.owner; const oc = own ? colName(own) : null; const r2 = art.RNG(t.id);
-        const big = over ? 3.2 : 1; const put = (n, e = {}) => hw.put(n, lx, ly, Object.assign({ sort: 0.2 }, e, e.sc ? { sc: e.sc * big } : {}));
+        const big = over ? 3.2 : SC < 0.3 ? 1.5 : 1; const put = (n, e = {}) => hw.put(n, lx, ly, Object.assign({ sort: 0.2 }, e, e.sc ? { sc: e.sc * big } : {}));
         if (over && !LM[t.kind] && !own) { terrainDress(t, put, r2, false, true); continue; }
         switch (t.kind) {
             case 'keep': put(own ? `building_castle_${oc}` : 'building_castle_blue', { sc: 1.0 }); break;
@@ -151,16 +159,21 @@ async function warMapScene(snap) {
     hw.W = lay.W; hw.H = H;
     await hw.draw(ctx, { drawBackdrop: async (cx) => { cx.fillStyle = '#14100b'; cx.fillRect(0, 0, W, H); await K.paintBackdrop(cx, lay.W, H, map.hashStr(snap.seed + snap.realm), { top: '#3a4a60', mid: '#8a7a68', bot: '#1c1812', clouds: 0, cloudScale: 0.6 }); } });
     const P = (id) => { const q = map.parse(id); if (q.realm !== snap.realm || !inWin(q.x, q.y)) return null; const w = K.hexWorld(q.x - x0, q.y - y0); return hw.proj(w.x, w.z, 0.1); };
-    for (const m of snap.marches || []) { const a = P(m.from), b2 = P(m.to); if (!a || !b2) continue; ctx.strokeStyle = '#fff'; ctx.lineWidth = over ? 2 : 3.5; ctx.setLineDash([9, 6]); ctx.shadowColor = '#000'; ctx.shadowBlur = 4; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b2.x, b2.y); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(b2.x, b2.y, over ? 3 : 6, 0, 7); ctx.fill(); ctx.shadowBlur = 0; }
+    for (const m of snap.marches || []) { if (R && m.id && m.id === R.id) continue; const a = P(m.from), b2 = P(m.to); if (!a || !b2) continue; ctx.strokeStyle = '#fff'; ctx.lineWidth = over ? 2 : 3.5; ctx.setLineDash([9, 6]); ctx.shadowColor = '#000'; ctx.shadowBlur = 4; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b2.x, b2.y); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(b2.x, b2.y, over ? 3 : 6, 0, 7); ctx.fill(); ctx.shadowBlur = 0; }
     if (detail) (snap.targets || []).forEach((id, i) => { const p = P(id); if (!p) return; ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.beginPath(); ctx.arc(p.x, p.y - 6, 10, 0, 7); ctx.fill(); ctx.fillStyle = '#ffe28a'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(String(i + 1), p.x, p.y - 2); });
-    const me = P(snap.me.at); if (me) { if (over) { ctx.strokeStyle = '#ffe28a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(me.x, me.y, 9, 0, 7); ctx.stroke(); } else { const im = snap.me.sprite ? await SP.character(snap.me.sprite) : null; ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.ellipse(me.x, me.y + 2, 16, 6, 0, 0, 7); ctx.fill(); if (im) SP.standing(ctx, im, 'me' + snap.me.sprite, me.x, me.y + 2, 54, { smooth: true, shadow: false }); ctx.strokeStyle = '#ffe28a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(me.x, me.y + 2, 18, 7, 0, 0, 7); ctx.stroke(); } }
-    ctx.font = over ? 'bold 13px serif' : 'bold 15px serif'; ctx.textAlign = 'center'; realm.provinces.forEach((p) => { const ts = p.tiles.map((id) => map.parse(id)).filter((q) => inWin(q.x, q.y)); if (ts.length < (over ? 20 : 30)) return; const q = ts[ts.length >> 1]; const w = K.hexWorld(q.x - x0, q.y - y0); const pt = hw.proj(w.x, w.z, 0.3); ctx.fillStyle = 'rgba(0,0,0,.55)'; const tw = ctx.measureText(p.name).width + 14; ctx.fillRect(pt.x - tw / 2, pt.y - 40, tw, 20); ctx.fillStyle = '#f6e7b8'; ctx.fillText(p.name, pt.x, pt.y - 25); });
+    const me = R ? null : P(snap.me.at); if (me) { if (over) { ctx.strokeStyle = '#ffe28a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(me.x, me.y, 9, 0, 7); ctx.stroke(); } else { const im = snap.me.sprite ? await SP.character(snap.me.sprite) : null; ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.ellipse(me.x, me.y + 2, 16, 6, 0, 0, 7); ctx.fill(); if (im) SP.standing(ctx, im, 'me' + snap.me.sprite, me.x, me.y + 2, 54, { smooth: true, shadow: false }); ctx.strokeStyle = '#ffe28a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(me.x, me.y + 2, 18, 7, 0, 0, 7); ctx.stroke(); } }
+    ctx.font = over ? 'bold 13px serif' : 'bold 15px serif'; ctx.textAlign = 'center'; (R ? [] : realm.provinces).forEach((p) => { const ts = p.tiles.map((id) => map.parse(id)).filter((q) => inWin(q.x, q.y)); if (ts.length < (over ? 20 : 30)) return; const q = ts[ts.length >> 1]; const w = K.hexWorld(q.x - x0, q.y - y0); const pt = hw.proj(w.x, w.z, 0.3); ctx.fillStyle = 'rgba(0,0,0,.55)'; const tw = ctx.measureText(p.name).width + 14; ctx.fillRect(pt.x - tw / 2, pt.y - 40, tw, 20); ctx.fillStyle = '#f6e7b8'; ctx.fillText(p.name, pt.x, pt.y - 25); });
+    if (R && rp.length) { const pts = (R.path || []).map((id) => P(id)); const spr = (R.mode !== 'depart' || true) && snap.me.sprite ? await SP.character(snap.me.sprite).catch(() => null) : null; await TA.drawRoute(ctx, R, pts, { over, sprite: spr }); }
     ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, W, 44); ctx.fillStyle = '#f2e6c8'; ctx.font = 'bold 22px serif'; ctx.textAlign = 'left'; ctx.fillText(`${snap.title || realm.name} — ${realm.name}${over ? ' · overview' : ''}`, 14, 29); ctx.font = '15px serif'; ctx.textAlign = 'right'; ctx.fillStyle = '#d9c9a0'; ctx.fillText(snap.sub || '', W - 14, 28); ctx.textAlign = 'left';
-    const px = lay.W + 8; ctx.fillStyle = 'rgba(16,12,8,.88)'; ctx.fillRect(px - 8, 52, PANEL, H - 60); ctx.fillStyle = '#f2e6c8'; ctx.font = 'bold 15px serif'; ctx.fillText('STANDINGS', px, 78);
-    snap.guilds.forEach((gd, i) => { const y = 100 + i * 28; ctx.fillStyle = colHex(gd.name); ctx.fillRect(px, y - 12, 14, 14); ctx.fillStyle = '#eadfc0'; ctx.font = '13px sans-serif'; ctx.fillText(`${i + 1}. ${gd.name.slice(0, 14)}  ${gd.score}`, px + 22, y); ctx.fillStyle = '#a99c78'; ctx.fillText(`${gd.tiles}t`, px + 22 + 160, y); });
-    const ly = 100 + snap.guilds.length * 28 + 16; ctx.fillStyle = '#f2e6c8'; ctx.font = 'bold 15px serif'; ctx.fillText('LEGEND', px, ly);
-    [['Guild Keep'], ['Fortress'], ['Ley Gate'], ['Aether Vein'], ['Titan Lair'], ['Ruins'], ['Shrine'], ['Village'], ['Mountain Pass'], ['Forest']].forEach(([n], i) => { ctx.fillStyle = '#d9cba3'; ctx.font = '13px sans-serif'; ctx.fillText('• ' + n, px, ly + 24 + i * 22); });
-    ctx.fillStyle = '#a99c78'; ctx.font = '12px sans-serif'; ctx.fillText(over ? '`cq map` = close-up' : '① = `cq march <#>` · `cq realm` = overview', px, H - 24);
+    const px = lay.W + 8; const colHexF = colHex;
+    if (R) TA.panel(ctx, px, W, H, snap, R, g, R.path || [], colHex, { minimap: (mx, my, mw, mh) => TA.minimap(ctx, mx, my, mw, mh, snap, g, realm, colHex, names, R, rp, over ? null : { x0, y0, vw, vh }) });
+    else {
+      const px = lay.W + 8; ctx.fillStyle = 'rgba(16,12,8,.88)'; ctx.fillRect(px - 8, 52, PANEL, H - 60); ctx.fillStyle = '#f2e6c8'; ctx.font = 'bold 15px serif'; ctx.fillText('STANDINGS', px, 78);
+      snap.guilds.forEach((gd, i) => { const y = 100 + i * 28; ctx.fillStyle = colHex(gd.name); ctx.fillRect(px, y - 12, 14, 14); ctx.fillStyle = '#eadfc0'; ctx.font = '13px sans-serif'; ctx.fillText(`${i + 1}. ${gd.name.slice(0, 14)}  ${gd.score}`, px + 22, y); ctx.fillStyle = '#a99c78'; ctx.fillText(`${gd.tiles}t`, px + 22 + 160, y); });
+      const ly = 100 + snap.guilds.length * 28 + 16; ctx.fillStyle = '#f2e6c8'; ctx.font = 'bold 15px serif'; ctx.fillText('LEGEND', px, ly);
+      [['Guild Keep'], ['Fortress'], ['Ley Gate'], ['Aether Vein'], ['Titan Lair'], ['Ruins'], ['Shrine'], ['Village'], ['Mountain Pass'], ['Forest']].forEach(([n], i) => { ctx.fillStyle = '#d9cba3'; ctx.font = '13px sans-serif'; ctx.fillText('• ' + n, px, ly + 24 + i * 22); });
+      ctx.fillStyle = '#a99c78'; ctx.font = '12px sans-serif'; ctx.fillText(over ? '`cq map` = close-up' : '① = `cq march <#>` · `cq realm` = overview', px, H - 24);
+    }
     return c;
 }
 

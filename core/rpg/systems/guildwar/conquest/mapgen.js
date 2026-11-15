@@ -191,4 +191,10 @@ function distance(map, a, b, limit = 80) {
     for (let d = 1; d <= limit; d++) { const next = []; for (const id of frontier) for (const n of neighbors(map, id)) { if (n === b) return d; if (!seen.has(n)) { seen.add(n); next.push(n); } } frontier = next; if (!frontier.length) break; }
     return Infinity;
 }
-module.exports = { isLand, onLand, generate, neighbors, hexNb, distance, tileId, parse, provOf, KINDS, SCENERY, W, H, mulberry32, hashStr, realmKeys };
+/** BFS shortest path a->b as tile ids (inclusive), or null */
+function route(map, a, b, limit = 120) {
+    if (a === b) return [a]; const prev = new Map([[a, null]]); let frontier = [a];
+    for (let d = 1; d <= limit && frontier.length; d++) { const next = []; for (const id of frontier) for (const n of neighbors(map, id)) { if (prev.has(n)) continue; prev.set(n, id); if (n === b) { const out = [b]; let c = id; while (c) { out.push(c); c = prev.get(c); } return out.reverse(); } next.push(n); } frontier = next; }
+    return null;
+}
+module.exports = { route, isLand, onLand, generate, neighbors, hexNb, distance, tileId, parse, provOf, KINDS, SCENERY, W, H, mulberry32, hashStr, realmKeys };

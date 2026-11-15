@@ -9,7 +9,7 @@
 //   cq mine | cq bank | cq gems | cq shop | cq buy <card> | cq status | cq top | cq help
 const { CFG, enabled } = require('./config');
 const E = require('./engine'); const breach = require('./breach'); const gems = require('./gems'); const shop = require('./summonShop'); const store = require('./store');
-const map = require('./mapgen'); const envCards = require('./envCards');
+const map = require('./mapgen'); const envCards = require('./envCards'); const travel = require('./travel');
 
 const targetsCache = new Map(); // jid -> [tileIds] (numbered lists the player last saw)
 const FIGHT_VERBS = new Set([...breach.WALL_ACTIONS, ...breach.GOLEM_ACTIONS]);
@@ -41,8 +41,9 @@ function gridText(s, guild, jid) {
 }
 function mapSnap(s, guild, jid) {
     const p = s.players[jid]; const realm = map.parse(p.at).realm; const tiles = Object.entries(s.overlays).filter(([id]) => id.startsWith(realm + ':')).map(([id, o]) => ({ id, owner: o.owner || null, shield: (o.shieldUntil || 0) > Date.now() }));
-    const ms = Object.values(s.marches).filter((m) => m.guild === guild).map((m) => ({ from: m.from, to: m.to }));
-    return { seed: s.seed, realm, tiles, guilds: Object.values(s.guilds).map((g) => ({ name: g.name, score: Math.round(g.score), tiles: g.tiles.length })).sort((a, b) => b.score - a.score), me: { at: p.at, sprite: p.sprite }, marches: ms, targets: (targetsCache.get(jid) || []), title: guild, sub: Math.max(0, Math.round((s.endsAt - Date.now()) / 60000)) + ' min left' };
+    const ms = Object.values(s.marches).filter((m) => m.guild === guild).map((m) => ({ id: m.id, from: m.from, to: m.to }));
+    const mine = p.status === 'transit' && s.marches[p.marchId] ? s.marches[p.marchId] : null;
+    return { route: mine ? travel.routeOf(s, mine, 'transit', Date.now(), jid) : null, seed: s.seed, realm, tiles, guilds: Object.values(s.guilds).map((g) => ({ name: g.name, score: Math.round(g.score), tiles: g.tiles.length })).sort((a, b) => b.score - a.score), me: { at: p.at, sprite: p.sprite }, marches: ms, targets: (targetsCache.get(jid) || []), title: guild, sub: Math.max(0, Math.round((s.endsAt - Date.now()) / 60000)) + ' min left' };
 }
 function status(s, guild, jid) {
     const g = s.guilds[guild]; const p = s.players[jid]; const mins = Math.max(0, Math.round((s.endsAt - Date.now()) / 60000));
@@ -75,6 +76,8 @@ async function handle({ jid, text, prefix = '.', eventDoc }) {
     if (out && out.render) { const rr = require('./render'); const img = out.render.what === 'map' ? await rr.renderMap(out.render.data) : out.render.what === 'card' ? await rr.renderEnvCard(out.render.data.id) : await rr.renderSiege(out.render.data); if (img) return { image: img, text: out.render.what === 'map' ? (out.imageText || '').split('\n')[0] : out.text }; return { text: out.imageText || out.text }; }
     return out || { text: '…' };
 }
+/** departure card for a freshly started march (leader's own screen) */
+function routeReply(s, r, guildName, jid, now) { if (!r.ok || !r.march) return { text: r.msg }; const d = mapSnap(s, guildName, jid); d.route = travel.routeOf(s, r.march, 'depart', now, jid); return { text: r.msg, render: { what: 'map', data: d }, imageText: r.msg }; }
 function run(s, { jid, guildName, verb, args, rest, now, L, events }) {
     if (s.status !== 'active') return { text: '🏁 The conquest has ended. ' + JSON.stringify(E.standings(s)) };
     if (!s.guilds[guildName]) return { text: '❌ Your guild did not enter this war.' };
@@ -94,10 +97,10 @@ function run(s, { jid, guildName, verb, args, rest, now, L, events }) {
         case 'siege': { const b = s.breaches[p.breachId]; if (!b) return { text: 'You are not in a siege.' }; return { text: breach.statusText(b), render: { what: 'siege', data: JSON.parse(JSON.stringify(b)) } }; }
         case 'targets': case 't': return { text: targetsText(s, guildName, jid) };
         case 'tile': { const v = E.view(s, T(args[0]) || p.at); return { text: `${label(s, v.id)}\n${map.KINDS[v.kind].label} · claim: ${map.KINDS[v.kind].claim}${v.wall ? `\n🧱 ${v.wall.type} wall ${v.wall.hp}/${v.wall.max}` : ''}${v.golems.length ? '\n🗿 ' + v.golems.map((g) => `${g.kind} L${g.lvl}`).join(', ') : ''}${v.turrets.length ? '\n🏹 ' + v.turrets.map((g) => `${g.kind} L${g.lvl}`).join(', ') : ''}${v.veinLeft ? `\n💎 vein ${v.veinLeft} left` : ''}` }; }
-        case 'status': case 's': return { text: status(s, guildName, jid) };
+        case 'status': case 's': case 'travel': case 'where': { const m = p.status === 'transit' && s.marches[p.marchId]; if (m) return { text: status(s, guildName, jid), render: { what: 'map', data: mapSnap(s, guildName, jid) }, imageText: status(s, guildName, jid) }; return { text: status(s, guildName, jid) }; }
         case 'top': return { text: '🏆 ' + E.standings(s).map((x, i) => `${i + 1}. ${x.guild} — ${x.score} (${x.tiles} tiles)`).join('\n') };
         case 'roster': return { text: roster().map((x, i) => `${i + 1}. ${x.name} · ⚔️${x.power} · ${x.status}`).join('\n') };
-        case 'march': { const to = T(args[0]); if (!to) return { text: 'Run `cq targets` first, then `cq march <#>`.' }; return reply(E.marchSolo(s, { guild: guildName, by: jid, to, now })); }
+        case 'march': { const to = T(args[0]); if (!to) return { text: 'Run `cq targets` first, then `cq march <#>`.' }; return routeReply(s, E.marchSolo(s, { guild: guildName, by: jid, to, now }), guildName, jid, now); }
         case 'muster': { const to = T(args[0]); if (!to) return { text: 'Run `cq targets` first, then `cq muster <#>`.' }; return reply(E.openMuster(s, { guild: guildName, by: jid, to, now })); }
         case 'join': return reply(E.joinMuster(s, { guild: guildName, jid, now }));
         case 'launch': return reply(E.launchMuster(s, { guild: guildName, by: jid, now }));
@@ -116,4 +119,4 @@ function run(s, { jid, guildName, verb, args, rest, now, L, events }) {
     }
 }
 function helpText() { return ['⚔️ *CONQUEST*', '`cq map` · `cq targets` · `cq tile [#]` · `cq status` · `cq top`', 'Leaders: `cq march #` · `cq muster #` → `join` → `launch` · `cq send # members…` · `cq tp # members…` · `cq skyfall #` · `cq fortify wall|golem k|turret k|upgrade|buff`', 'Everyone: `cq accept|decline` · `cq auto on|off` · `cq recall`', 'In a siege: `ram ladder sapper fire rune shield scout` + gate/left/right/curtain; vs golems: `strike guard shatter lure rally`', 'Rituals: `cq ritual ☀ ☾ ✦ ❄` · Treaties: `cq offer supplies|gems|oath`', '💎 `cq mine` (on a ◆ vein) · `cq bank` (at your Keep/Ley Gate) · `cq shop` · `cq buy <card>`'].join('\n'); }
-module.exports = { handle, run, helpText, targetsText, gridText, status };
+module.exports = { mapSnap, handle, run, helpText, targetsText, gridText, status };
