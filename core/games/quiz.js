@@ -4122,6 +4122,14 @@ async function endQuiz(sock, chatId, senderJid, botMarker, canUseAdminCommands) 
   return { handled: true, silent: true };
 }
 
+function liveStatus(chatId, botMarker) {
+  const s = activeQuizzes.get(chatId);
+  if (!s || s.awaitingGo) return { handled: true, message: botMarker + "❌ No quiz is running here right now." };
+  const entries = [...s.scores.entries()].map(([, v]) => v).sort((a, b) => b.points - a.points || b.correct - a.correct);
+  const rows = entries.slice(0, 15).map((e, i) => `${["🥇", "🥈", "🥉"][i] || (i + 1) + "."} ${e.name}: *${e.points}* (${e.correct} correct)`).join("\n") || "_No one has scored yet._";
+  return { handled: true, message: botMarker + `📊 *LIVE STANDINGS* - ${s.title === "__preplanned__" ? "Game Night" : s.title}\nQuestion ${s.questionNo}/${plannedTotal(s)}\n\n${rows}` };
+}
+
 async function showLeaderboard(sock, chatId, senderJid, botMarker, m) {
   const chat = loadScores(chatId) || {};
   const topPoints = topOf(chat, "points", 10);
@@ -4182,6 +4190,7 @@ module.exports = {
   pickCandidate,
   confirmStart,
   resumeQuiz,
+  liveStatus,
   endQuiz,
   handleAnswer,
   _lev,

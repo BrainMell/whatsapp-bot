@@ -33215,6 +33215,13 @@ _(or reply to their message)_
                   // ANIME QUIZ (.j quiz / .j a / .j quizboard)
                   // ============================================
 
+                  // 📊 live standings mid-quiz
+                  if (/^(quiz (status|score|scores|live|standings)|qscore|qstatus)$/.test(lowerTxt.slice(botConfig.getPrefix().length).trim()) && lowerTxt.startsWith(botConfig.getPrefix().toLowerCase() + ' ')) {
+                    const resultL = quizGame.liveStatus(chatId, BOT_MARKER);
+                    await sock.sendMessage(chatId, { text: resultL.message }, { quoted: m });
+                    return;
+                  }
+
                   // quizboard - persistent per-chat leaderboard
                   if (
                     lowerTxt === `${botConfig.getPrefix().toLowerCase()} quizboard` ||
