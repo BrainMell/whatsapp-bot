@@ -29,6 +29,8 @@
 // Sessions, answers, rewards, dedup and the per-chat leaderboard remain.
 // ============================================
 
+const fs = require("fs");
+const path = require("path");
 const axios = require("axios");
 const crypto = require("crypto");
 const { execFile } = require("child_process");
@@ -1364,7 +1366,7 @@ async function buildImageQuestion(wiki, franchiseTitle, charBuckets, usedKeys, d
 function _clipAudioBuffer(buf, ffmpegPath, seconds = 30) {
   return new Promise((resolve) => {
     const tmp = require("os").tmpdir();
-    const fs = require("fs");
+    // fs hoisted
     const inPath = `${tmp}/qsong_${Date.now()}_${crypto.randomBytes(3).toString("hex")}`;
     const outPath = `${inPath}.mp3`;
     try {
@@ -2458,6 +2460,11 @@ async function safeAddMoney(jid, amount, reason) {
   try { await economy.addMoney(jid, amount, reason); return true; } catch (e) { console.log("[Quiz] addMoney failed:", e?.message); return false; }
 }
 
+function takeSeed(session, name) {
+  const k = "seed:" + name; const v = session.scores.get(k); if (!v) return null;
+  session.scores.delete(k); return v;
+}
+
 async function revealAndAdvance(sock, chatId, session, winner, timedOut) {
   // 💡 SINGLE-RESOLVER LOCK (2026-09-28 owner audit): the deadline timer and
   // a correct-answer handler can fire for the SAME question in the same tick
@@ -2481,7 +2488,7 @@ async function revealAndAdvance(sock, chatId, session, winner, timedOut) {
     if (winner) {
       const elapsed = (Date.now() - session.qStartedAt) / 1000;
       const pts = POINTS[q.difficulty] + (elapsed <= 10 ? 20 : 0);
-      const sc = session.scores.get(winner.jid) || { name: winner.name, points: 0, correct: 0 };
+      const sc = session.scores.get(winner.jid) || takeSeed(session, winner.name) || { name: winner.name, points: 0, correct: 0 };
       sc.points += pts;
       sc.correct += 1;
       session.scores.set(winner.jid, sc);
@@ -2507,7 +2514,7 @@ async function revealAndAdvance(sock, chatId, session, winner, timedOut) {
           .sort((a, b) => (a[1].at || 0) - (b[1].at || 0));
         const parts = [];
         winners.forEach(([jid, a], i) => {
-          const sc = session.scores.get(jid) || { name: a.name || "Player", points: 0, correct: 0 };
+          const sc = session.scores.get(jid) || takeSeed(session, a.name) || { name: a.name || "Player", points: 0, correct: 0 };
           const first = i === 0;
           const pts = POINTS[q.difficulty] + (first ? 20 : 0);
           sc.points += pts;
@@ -2604,11 +2611,11 @@ async function advanceToNextSection(sock, chatId, session) {
   startSection(sock, chatId, session, nextIdx);
 }
 
-function startSection(sock, chatId, session, idx) {
+function startSection(sock, chatId, session, idx, startIdx = 0) {
   const section = session.sections[idx];
   session.activeSection = idx;
   section.state = SECTION_STATES.ACTIVE;
-  session.idx = 0;
+  session.idx = startIdx;
   if (session.sections.length > 1) {
     safeSend(sock, chatId, { text: BOT_SAFE(`📖 *Section ${idx + 1}/${session.sections.length}${section.name ? `: ${section.name}` : ""}*`) }, { label: `section:${idx + 1}` }).catch(() => {});
   }
@@ -2866,6 +2873,9 @@ function parseQuizArgs(raw) {
     out.pack = "event1";
     out.gn = true;
     rest = rest.replace(/^(gn|gamenight|-+gn|-+gamenight)\b/i, "").trim();
+    // 💾 ".j quiz -gn from 10 [seed telegram]" - rebuild the pack but START at question 10, optionally pre-loading saved scores
+    const _fm = rest.match(/^from\s+(\d+)(?:\s+seed\s+(\w+))?/i);
+    if (_fm) { out.startFrom = parseInt(_fm[1], 10); out.seed = _fm[2] ? _fm[2].toLowerCase() : null; rest = rest.replace(_fm[0], "").trim(); }
   }
   // 💡 2026-10-10 OWNER: ".j quiz -preplanned" - the fixed 60-round mega pack
   // (30 brand logos + 20 anime/games trivia + 10 theme songs, 30s/45s timers).
@@ -3306,7 +3316,16 @@ async function confirmStart(sock, chatId, senderJid, botMarker, canUseAdminComma
   } else {
     await safeSend(sock, chatId, { text: head }, { label: "go-head" }).catch(() => {});
   }
-  startSection(sock, chatId, session, 0);
+  let _sec = 0, _ix = 0;
+  if (session.startFrom > 1) {
+    let left = session.startFrom - 1; _sec = -1;
+    for (let i = 0; i < session.sections.length; i++) { const L = session.sections[i].questions.length; if (left < L) { _sec = i; _ix = left; break; } left -= L; }
+    if (_sec < 0) { _sec = 0; _ix = 0; }
+    let before = 0; for (let i = 0; i < _sec; i++) before += session.sections[i].questions.length; session.questionNo = before + _ix;
+    if (session.seedName) { try { const j = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "data", "quiz_seed", session.seedName.replace(/\W/g, "") + ".json"), "utf8")); for (const v of Object.values(j.scores)) session.scores.set("seed:" + v.name, { name: v.name, points: v.points, correct: v.correct }); } catch (e) { console.log("[Quiz] seed load failed:", e.message); } }
+    for (let i = 0; i < _sec; i++) session.sections[i].state = SECTION_STATES.COMPLETED;
+  }
+  startSection(sock, chatId, session, _sec, _ix);
   return { handled: true, silent: true };
 }
 
@@ -3555,6 +3574,7 @@ async function launchQuizAsync(sock, chatId, senderJid, botMarker, m, parsed, se
         // beat and posts EVERYONE who got it (owner: "after everyone sends
         // wait abit then respond with who got it").
         collectAll: !!(_evPack && _evPack.key === "event1"),
+        startFrom: parsed.startFrom || 0, seedName: parsed.seed || null,
         sections: domainPlan.map((p) => ({
           name: p.name, domain: p.domain, perSection: p.perSection,
           state: SECTION_STATES.GENERATING, questions: [],
