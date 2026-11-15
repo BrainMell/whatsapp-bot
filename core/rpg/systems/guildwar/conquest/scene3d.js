@@ -15,7 +15,7 @@ function scatter(hw, rng, cells, kinds, density) { for (const [c, r] of cells) {
 const nb = (cell, d) => K.neighbor(cell[0], cell[1], d);
 async function siegeScene(b, opts = {}) {
     const W = 960, H = 660; const { c, ctx } = ctxOf(W, H); const card = envCards.BY_ID[b.env] || envCards.BY_ID.clear; const rng = art.RNG(b.id + ':' + b.tileId);
-    const hw = new K.HexWorld(20, 18, { biome: biomeOf(b.biome), scale: 0.7, oobWater: false });
+    const hw = new K.HexWorld(20, 18, { biome: biomeOf(b.biome), scale: 0.7, oobWater: false, style: 'aldafold' });
     // the wall runs straight across the field (E-W): invaders in front (south), the stronghold behind it (north)
     const chain = []; let cur = [6, 8]; for (let i = 0; i < 7; i++) { chain.push(cur); cur = nb(cur, 0); }
     const [tL, w1, w2, gt, w3, w4, tR] = chain;
@@ -64,6 +64,7 @@ async function siegeScene(b, opts = {}) {
     { const camp = nb(nb(nb(gt, 2), 1), 3); const c2 = nb(camp, 2); hw.put(`flag_${aC}`, camp[0], camp[1], { dx: 0.5, sort: 0.3, sc: 1.6 }); hw.put(`tent_${aC}`, nb(c2, 3)[0], nb(c2, 3)[1], { sort: 0.3, sc: 1.3 }); hw.put('crate_A_big', c2[0], c2[1], { dx: -0.4, sort: 0.3, sc: 1.2 }); hw.put('barrel', c2[0], c2[1], { dx: 0.5, sort: 0.3, sc: 1.2 }); hw.put('weaponrack', camp[0], camp[1], { dx: -0.6, dz: 0.3, sort: 0.3, sc: 1.3 }); hw.put(`flag_${dC}`, gt[0], gt[1], { dx: 0.2, dz: -0.2, sort: 0.6, sc: 1.8 }); }
     const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, card.palette[0]); g.addColorStop(1, card.palette[1]); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     await hw.draw(ctx, { drawBackdrop: async (cx) => { await K.paintBackdrop(cx, W, H, map.hashStr(b.id), { top: card.palette[0], mid: card.palette[1], bot: '#10161c', clouds: 4, cloudScale: 0.7 }); } });
+    require('../../world/stylize').grade(c, 'aldafold');
     const P = (cell, h = 0) => { const w = K.hexWorld(cell[0], cell[1]); return hw.proj(w.x, w.z, h); };
     const fireImg = await SP.asset('fx/fire/1/Fire-Wrath__05.png');
     const burn = (cell, key, size = 150) => { if (b.burning[key] && fireImg) { const p = P(cell, 0.4); ctx.drawImage(fireImg, p.x - size / 2, p.y - size * 0.9, size, size); } };
@@ -123,7 +124,7 @@ async function warMapScene(snap) {
     } else if (!over) { vw = snap.vw || 27; vh = snap.vh || 20; const q = map.parse(snap.me.at); x0 = Math.max(0, Math.min(map.W - vw, q.x - (vw >> 1))); y0 = Math.max(0, Math.min(map.H - vh, q.y - (vh >> 1))); if (y0 & 1) y0--; }
     if (over) { x0 = 0; y0 = 0; vw = map.W; vh = map.H; SC = 0.085; }
     const PANEL = R ? 310 : over ? 230 : 270; const detail = !over && SC >= 0.3;
-    const hw = new K.HexWorld(vw, vh, { biome: biomeOf(biome), scale: SC, oobWater: true });
+    const hw = new K.HexWorld(vw, vh, { biome: biomeOf(biome), scale: SC, oobWater: true, style: over ? 'overview' : 'aldafold' });
     const lay = hw.layout({ left: 16, right: 16, top: 70, bottom: 24 }); const W = lay.W + PANEL, H = lay.H;
     const { c, ctx } = ctxOf(W, H); const rng = art.RNG(snap.seed + snap.realm);
     const byKey = realm; const cont = require('../../world/continents').BY_KEY ? null : null;
@@ -158,6 +159,7 @@ async function warMapScene(snap) {
         for (let y = y0; y < y0 + vh; y++) for (let x = x0; x < x0 + vw; x++) { if (!g.tiles.has(map.tileId(snap.realm, x, y))) continue; const poly = hw.cellPoly(x - x0, y - y0, 0.03); const me = map.provOf(x, y); for (let d = 0; d < 6; d++) { const n = K.neighbor(x, y, d); if (!g.tiles.has(map.tileId(snap.realm, n[0], n[1])) || map.provOf(n[0], n[1]) === me) continue; const a = poly[d], b2 = poly[(d + 1) % 6]; cx.beginPath(); cx.moveTo(a.x, a.y); cx.lineTo(b2.x, b2.y); cx.stroke(); } } cx.restore(); } });
     hw.W = lay.W; hw.H = H;
     await hw.draw(ctx, { drawBackdrop: async (cx) => { cx.fillStyle = '#14100b'; cx.fillRect(0, 0, W, H); await K.paintBackdrop(cx, lay.W, H, map.hashStr(snap.seed + snap.realm), { top: '#3a4a60', mid: '#8a7a68', bot: '#1c1812', clouds: 0, cloudScale: 0.6 }); } });
+    require('../../world/stylize').grade(c, over ? 'overview' : 'aldafold');   // world layer only - panel/labels/route are drawn after this
     const P = (id) => { const q = map.parse(id); if (q.realm !== snap.realm || !inWin(q.x, q.y)) return null; const w = K.hexWorld(q.x - x0, q.y - y0); return hw.proj(w.x, w.z, 0.1); };
     for (const m of snap.marches || []) { if (R && m.id && m.id === R.id) continue; const a = P(m.from), b2 = P(m.to); if (!a || !b2) continue; ctx.strokeStyle = '#fff'; ctx.lineWidth = over ? 2 : 3.5; ctx.setLineDash([9, 6]); ctx.shadowColor = '#000'; ctx.shadowBlur = 4; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b2.x, b2.y); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(b2.x, b2.y, over ? 3 : 6, 0, 7); ctx.fill(); ctx.shadowBlur = 0; }
     if (detail) (snap.targets || []).forEach((id, i) => { const p = P(id); if (!p) return; ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.beginPath(); ctx.arc(p.x, p.y - 6, 10, 0, 7); ctx.fill(); ctx.fillStyle = '#ffe28a'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(String(i + 1), p.x, p.y - 2); });

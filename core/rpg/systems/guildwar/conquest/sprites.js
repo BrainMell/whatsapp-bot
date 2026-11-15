@@ -15,13 +15,14 @@ function contentBox(key, img) {
     const b = x1 >= x0 ? { x: x0 * s, y: y0 * s, w: (x1 - x0 + 1) * s, h: (y1 - y0 + 1) * s } : { x: 0, y: 0, w: img.width, h: img.height }; _box.set(key, b); return b;
 }
 /** draw a sprite standing on groundY with visible height ch, centred on cx. crisp (pixel art) unless smooth */
-function standing(ctx, img, key, cx, groundY, ch, { flip = false, alpha = 1, smooth = false, shadow = true, glow = null } = {}) {
+function standing(ctx, img, key, cx, groundY, ch, { flip = false, alpha = 1, smooth = false, shadow = true, glow = null, outline = 2.6 } = {}) {
     if (!img) return null; const b = contentBox(key, img); const sc = ch / b.h; const dw = img.width * sc, dh = img.height * sc;
     if (shadow) { ctx.save(); ctx.fillStyle = 'rgba(0,0,0,.38)'; ctx.beginPath(); ctx.ellipse(cx, groundY - 2, b.w * sc * 0.42, Math.max(6, ch * 0.05), 0, 0, 7); ctx.fill(); ctx.restore(); }
     ctx.save(); ctx.imageSmoothingEnabled = smooth; if (alpha < 1) ctx.globalAlpha = alpha; if (glow) { ctx.shadowColor = glow; ctx.shadowBlur = 22; }
     const dx = cx - (b.x + b.w / 2) * sc, dy = groundY - (b.y + b.h) * sc;
-    if (flip) { ctx.translate(cx, 0); ctx.scale(-1, 1); ctx.drawImage(img, -(b.x + b.w / 2) * sc, dy, dw, dh); }
-    else ctx.drawImage(img, dx, dy, dw, dh); ctx.restore(); return { x: cx - b.w * sc / 2, y: groundY - ch, w: b.w * sc, h: ch };
+    const ST = require('../../world/stylize'); const ink = outline && ST.ON;   // solid ink outline on characters/monsters (ALDA_STYLE=0 disables)
+    if (flip) { ctx.translate(cx, 0); ctx.scale(-1, 1); if (ink) ST.drawOutlined(ctx, img, -(b.x + b.w / 2) * sc, dy, dw, dh, { px: outline }); else ctx.drawImage(img, -(b.x + b.w / 2) * sc, dy, dw, dh); }
+    else if (ink) ST.drawOutlined(ctx, img, dx, dy, dw, dh, { px: outline }); else ctx.drawImage(img, dx, dy, dw, dh); ctx.restore(); return { x: cx - b.w * sc / 2, y: groundY - ch, w: b.w * sc, h: ch };
 }
 /** tile a 32px texture over a rect, crisp, variant per cell from rng() */
 function tileFill(ctx, imgs, x, y, w, h, scale, rng, smooth = false) { ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); ctx.imageSmoothingEnabled = !!smooth; const t = 32 * scale; for (let yy = y; yy < y + h; yy += t) for (let xx = x; xx < x + w; xx += t) { const im = imgs[Math.floor(rng() * imgs.length)]; if (im) ctx.drawImage(im, xx, yy, t, t); } ctx.restore(); }

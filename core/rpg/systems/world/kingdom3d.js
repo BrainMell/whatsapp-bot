@@ -190,6 +190,7 @@ class HexWorld {
             for (let c = 0; c < cols; c++) row.push({ water: false, road: false, river: false, wall: false, tile: null, h: 0 });
             this.cell.push(row);
         }
+        this.style = o.style ? (typeof o.style === 'string' ? require('./stylize').PRESETS[o.style] : o.style) : null;   // world style (outlines on objects)
         this.objs = [];   // {name,x,z,y,flip,sc,layer,sort}
         this.overlays = []; // {fn(ctx, proj)} drawn after objects (labels etc.)
         this.underlays = []; // {fn(ctx, proj)} drawn right after the terrain — cell-ground art (stone paving) under every object
@@ -426,12 +427,14 @@ class HexWorld {
         if (doTerrain) for (const t of tiles) files.add(biomeFile(t.m.file, t.b || this.biome, vk));
         if (doObjects) for (const o of sorted) { const m = spriteMeta(o.name, vk); if (!m) continue; files.add(biomeFile(m.file, o.biome || this.biome, vk)); if (m.sh) files.add(m.sh.file); }
         await Promise.all([...files].map((f) => loadSprite(f, vk)));
-        const drawSpr = async (m, file, ax, ay, X, Y, sc, flip, alpha, bio) => {
+        const STY = this.style ? require('./stylize') : null; const OLP = STY && this.style.outline ? this.style.outline : null;
+        const drawSpr = async (m, file, ax, ay, X, Y, sc, flip, alpha, bio, ol) => {
             const img = await loadSprite(file === m.file ? biomeFile(file, bio || this.biome, vk) : file, vk);
             if (!img) return;
             const w = m.w * k * sc, h = m.h * k * sc;
             const dx = X - (flip ? (m.w - ax) : ax) * k * sc, dy = Y - ay * k * sc;
             if (alpha < 1) ctx.globalAlpha = alpha;
+            if (ol && OLP && STY.ON) { STY.drawOutlined(ctx, img, dx, dy, w, h, { flip, px: OLP.px, color: OLP.color }); if (alpha < 1) ctx.globalAlpha = 1; return; }
             if (flip) { ctx.save(); ctx.translate(dx + w, dy); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0, w, h); ctx.restore(); }
             else ctx.drawImage(img, dx, dy, w, h);
             if (alpha < 1) ctx.globalAlpha = 1;
@@ -459,7 +462,7 @@ class HexWorld {
             if (o.layer === 'flat') continue;
             const m = spriteMeta(o.name, vk); const p = this.proj(o.x, o.z, o.y);
             if (!onCard(p)) continue;
-            await drawSpr(m, m.file, m.ax, m.ay, p.x, p.y, o.sc, o.flip, o.alpha, o.biome);
+            await drawSpr(m, m.file, m.ax, m.ay, p.x, p.y, o.sc, o.flip, o.alpha, o.biome, o.ink !== false);
         }
         // 4. overlays (labels, banners)
         for (const ov of this.overlays) { const p = this.proj(ov.x, ov.z, ov.y); ov.fn(ctx, p, k); }
