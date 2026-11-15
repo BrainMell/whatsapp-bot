@@ -1,0 +1,26 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="PackedScene" path="res://addons/low_poly_castle/models/banner_cs_red_model.glb" id="1"]
+
+[sub_resource type="BoxShape3D" id="box0"]
+size = Vector3(1.2700, 0.3796, 0.4500)
+
+[sub_resource type="BoxShape3D" id="box1"]
+size = Vector3(1.0000, 2.2000, 0.0050)
+
+[node name="banner_cs_red" instance=ExtResource("1")]
+
+[node name="AnimationPlayer" parent="."]
+autoplay = "sway"
+
+[node name="Collision" type="StaticBody3D" parent="banner_cs_red"]
+
+[node name="Box" type="CollisionShape3D" parent="banner_cs_red/Collision"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0000, 3.4802, 0.2250)
+shape = SubResource("box0")
+
+[node name="Collision" type="StaticBody3D" parent="banner_cs_red/banner_cs_red_cloth"]
+
+[node name="Box" type="CollisionShape3D" parent="banner_cs_red/banner_cs_red_cloth/Collision"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0000, -1.1000, -0.0020)
+shape = SubResource("box1")

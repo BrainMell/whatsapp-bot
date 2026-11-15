@@ -1,0 +1,115 @@
+[remap]
+
+importer="scene"
+importer_version=1
+type="PackedScene"
+uid="uid://b5daxof5kxtcj"
+path="res://.godot/imported/tower_cs_round_upper_model.glb-fee183a59f01a28d0b7330942f95a11a.scn"
+
+[deps]
+
+source_file="res://addons/low_poly_castle/models/tower_cs_round_upper_model.glb"
+dest_files=["res://.godot/imported/tower_cs_round_upper_model.glb-fee183a59f01a28d0b7330942f95a11a.scn"]
+
+[params]
+
+nodes/root_type=""
+nodes/root_name=""
+nodes/apply_root_scale=true
+nodes/root_scale=1.0
+nodes/import_as_skeleton_bones=false
+meshes/ensure_tangents=true
+meshes/generate_lods=false
+meshes/create_shadow_meshes=true
+meshes/light_baking=1
+meshes/lightmap_texel_size=0.2
+meshes/force_disable_compression=false
+skins/use_named_skins=true
+animation/import=true
+animation/fps=30
+animation/trimming=false
+animation/remove_immutable_tracks=true
+animation/import_rest_as_RESET=false
+import_script/path=""
+_subresources={
+"materials": {
+"props": {
+"use_external/enabled": true,
+"use_external/path": "res://addons/low_poly_castle/props.tres"
+}
+},
+"nodes": {
+"PATH:tower_cs_round_upper/tower_cs_round_upper_wall00": {
+"generate/physics": true,
+"physics/body_type": 0,
+"physics/shape_type": 2
+},
+"PATH:tower_cs_round_upper/tower_cs_round_upper_wall01": {
+"generate/physics": true,
+"physics/body_type": 0,
+"physics/shape_type": 2
+},
+"PATH:tower_cs_round_upper/tower_cs_round_upper_wall03": {
+"generate/physics": true,
+"physics/body_type": 0,
+"physics/shape_type": 2
+},
+"PATH:tower_cs_round_upper/tower_cs_round_upper_wall04": {
+"generate/physics": true,
+"physics/body_type": 0,
+"physics/shape_type": 2
+},
+"PATH:tower_cs_round_upper/tower_cs_round_upper_wall05": {
+"generate/physics": true,
+"physics/body_type": 0,
+"physics/shape_type": 2
+},
+"PATH:tower_cs_round_upper/tower_cs_round_upper_wall06": {
+"generate/physics": true,
+"physics/body_type": 0,
+"physics/shape_type": 2
+},
+"PATH:tower_cs_round_upper/tower_cs_round_upper_wall07": {
+"generate/physics": true,
+"physics/body_type": 0,
+"physics/shape_type": 2
+},
+"PATH:tower_cs_round_upper/tower_cs_round_upper_wall08": {
+"generate/physics": true,
+"physics/body_type": 0,
+"physics/shape_type": 2
+},
+"PATH:tower_cs_round_upper/tower_cs_round_upper_wall09": {
+"generate/physics": true,
+"physics/body_type": 0,
+"physics/shape_type": 2
+},
+"PATH:tower_cs_round_upper/tower_cs_round_upper_wall11": {
+"generate/physics": true,
+"physics/body_type": 0,
+"physics/shape_type": 2
+},
+"PATH:tower_cs_round_upper/tower_cs_round_upper_wall12": {
+"generate/physics": true,
+"physics/body_type": 0,
+"physics/shape_type": 2
+},
+"PATH:tower_cs_round_upper/tower_cs_round_upper_wall13": {
+"generate/physics": true,
+"physics/body_type": 0,
+"physics/shape_type": 2
+},
+"PATH:tower_cs_round_upper/tower_cs_round_upper_wall14": {
+"generate/physics": true,
+"physics/body_type": 0,
+"physics/shape_type": 2
+},
+"PATH:tower_cs_round_upper/tower_cs_round_upper_wall15": {
+"generate/physics": true,
+"physics/body_type": 0,
+"physics/shape_type": 2
+}
+}
+}
+gltf/naming_version=0
+gltf/embedded_image_handling=0

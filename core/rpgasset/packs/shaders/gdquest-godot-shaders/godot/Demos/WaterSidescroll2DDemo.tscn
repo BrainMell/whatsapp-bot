@@ -1,0 +1,54 @@
+[gd_scene load_steps=9 format=3 uid="uid://b2jsb4wqmuk1t"]
+
+[ext_resource type="Shader" path="res://Demos/WaterSidescroll2D/water_sidescroll_2D_full.gdshader" id="1"]
+[ext_resource type="Script" path="res://Demos/WaterSidescroll2D/WaterSidescroll2D.gd" id="2"]
+[ext_resource type="Shader" path="res://Demos/WaterSidescroll2D/water_sidescroll_2D_simple.gdshader" id="3"]
+[ext_resource type="PackedScene" path="res://Shared/DemoInterface.tscn" id="6"]
+[ext_resource type="PackedScene" path="res://Shared/Background2D/Demo2DBackground.tscn" id="8"]
+[ext_resource type="Script" path="res://addons/ShaderSecretsHelper/DemoScreen.gd" id="10"]
+
+[sub_resource type="ShaderMaterial" id="3"]
+shader = ExtResource("1")
+
+[sub_resource type="ShaderMaterial" id="4"]
+shader = ExtResource("3")
+
+[node name="WaterSidescroll2DDemo" type="CanvasLayer"]
+script = ExtResource("10")
+
+[node name="ParallaxBackground" parent="." instance=ExtResource("8")]
+
+[node name="Robi" type="Sprite2D" parent="."]
+position = Vector2(504.151, 466.506)
+rotation = -0.147885
+scale = Vector2(0.563456, 0.563456)
+texture = null
+
+[node name="Robi2" type="Sprite2D" parent="."]
+position = Vector2(1381.09, 496.752)
+rotation = 0.103686
+scale = Vector2(0.471994, 0.471994)
+texture = null
+
+[node name="Robi3" type="Sprite2D" parent="."]
+position = Vector2(963.357, 402.478)
+scale = Vector2(0.630556, 0.630556)
+texture = null
+
+[node name="Water2DSide" type="Sprite2D" parent="."]
+material = SubResource("3")
+position = Vector2(961.506, 901.105)
+scale = Vector2(7.49668, 1.51649)
+texture = null
+normal_map = null
+script = ExtResource("2")
+
+[node name="Water2DSideSimple" type="Sprite2D" parent="."]
+visible = false
+material = SubResource("4")
+position = Vector2(961.506, 901.105)
+scale = Vector2(7.49668, 1.51649)
+texture = null
+script = ExtResource("2")
+
+[node name="DemoInterface" parent="." instance=ExtResource("6")]

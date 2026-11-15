@@ -1,0 +1,90 @@
+[gd_scene load_steps=7 format=3 uid="uid://2afwiadywkor"]
+
+[ext_resource type="Script" path="res://Demos/Shockwave3D/Shockwave.gd" id="1"]
+[ext_resource type="Material" uid="uid://cg217bygmqp72" path="res://Demos/Shockwave3D/Shockwave3DMaterial.tres" id="3"]
+[ext_resource type="PackedScene" uid="uid://c0vr8gmnaba4r" path="res://Shared/models/3D-environment/ShockwaveScene.glb" id="4"]
+
+[sub_resource type="Animation" id="1"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath(".:shockwave_material:shader_parameter/shockwave_percentage")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [0.0]
+}
+
+[sub_resource type="Animation" id="2"]
+resource_name = "Shockwave"
+length = 2.0
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath(".:shockwave_material:shader_parameter/shockwave_percentage")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 2),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [0.0, 1.0]
+}
+tracks/1/type = "method"
+tracks/1/imported = false
+tracks/1/enabled = false
+tracks/1/path = NodePath("AnimationPlayer")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(2),
+"transitions": PackedFloat32Array(1),
+"values": [{
+"args": ["RESET", -1, 1.0, false],
+"method": &"play"
+}]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_dq013"]
+_data = {
+"RESET": SubResource("1"),
+"Shockwave": SubResource("2")
+}
+
+[node name="Shockwave3D" type="Node3D"]
+script = ExtResource("1")
+shockwave_material = ExtResource("3")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = {
+"": SubResource("AnimationLibrary_dq013")
+}
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(0.783064, -0.255235, 0.567156, 0, 0.911913, 0.410385, -0.621941, -0.321358, 0.714086, 4.22553, 5.06675, 4.81413)
+
+[node name="ShockwaveScene" parent="." instance=ExtResource("4")]
+
+[node name="detail_forest" parent="ShockwaveScene" index="0"]
+material_override = ExtResource("3")
+
+[node name="tileLarge_forest" parent="ShockwaveScene" index="1"]
+material_override = ExtResource("3")
+
+[node name="tree_forest" parent="ShockwaveScene" index="2"]
+material_override = ExtResource("3")
+
+[node name="detail_forest_001" parent="ShockwaveScene" index="3"]
+material_override = ExtResource("3")
+
+[node name="tree_forest_001" parent="ShockwaveScene" index="4"]
+material_override = ExtResource("3")
+
+[node name="tree_forest_002" parent="ShockwaveScene" index="5"]
+material_override = ExtResource("3")
+
+[editable path="ShockwaveScene"]

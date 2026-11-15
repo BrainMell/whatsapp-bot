@@ -1,0 +1,320 @@
+[gd_scene load_steps=39 format=3 uid="uid://dwmlnt7eidd58"]
+
+[ext_resource type="PackedScene" uid="uid://b0lvfjr4ff8hl" path="res://Scenes/Player.tscn" id="1_o7n8p"]
+[ext_resource type="PackedScene" uid="uid://vcfv78w253m4" path="res://BlocksScenes/BlockNormalXS.tscn" id="7_r8xh6"]
+[ext_resource type="PackedScene" uid="uid://b6fydse31tnyb" path="res://WallScenes/WallBrokenMD.tscn" id="8_v8nni"]
+[ext_resource type="PackedScene" uid="uid://dfwbglgsmyokl" path="res://WallScenes/WallNormalXL.tscn" id="9_priqe"]
+[ext_resource type="PackedScene" uid="uid://dt622ewo62gcj" path="res://BlocksScenes/BlockMossMD.tscn" id="10_lypsd"]
+[ext_resource type="PackedScene" uid="uid://bt3wy3vtdllmr" path="res://StairsScenes/StairsMD.tscn" id="11_8x4m8"]
+[ext_resource type="PackedScene" uid="uid://cgkd651di7iia" path="res://PillarsScenes/PillarSquare.tscn" id="12_3eew1"]
+[ext_resource type="PackedScene" uid="uid://coql64ga8pi0u" path="res://BlocksScenes/BlockCrackMD.tscn" id="13_lqsf4"]
+[ext_resource type="PackedScene" uid="uid://beyhhkd3rli1s" path="res://WallScenes/WallNormalMD.tscn" id="14_bvj0a"]
+[ext_resource type="PackedScene" uid="uid://bb5o2vjf1x6o7" path="res://AccessoriesScenes/ChestBaseGold.tscn" id="15_7hoq6"]
+[ext_resource type="PackedScene" uid="uid://ism715jmolny" path="res://WallScenes/WallEnd2.tscn" id="16_c1acd"]
+[ext_resource type="PackedScene" uid="uid://bilebn7yx84ri" path="res://WallScenes/WallBrokenXS.tscn" id="17_o1jnv"]
+[ext_resource type="PackedScene" uid="uid://v8j2a1egqxgo" path="res://WallScenes/Gate.tscn" id="18_jscpd"]
+[ext_resource type="PackedScene" uid="uid://g3wkgliai3vy" path="res://WallScenes/WallBrokenXl.tscn" id="19_34tqo"]
+[ext_resource type="PackedScene" uid="uid://dy8m516m7b17m" path="res://FencesScenes/Fence.tscn" id="20_ddppf"]
+[ext_resource type="PackedScene" uid="uid://rdh1pb10cdnw" path="res://FencesScenes/Slope.tscn" id="21_3kjnq"]
+[ext_resource type="PackedScene" uid="uid://cids0e10y8qsw" path="res://FencesScenes/Line.tscn" id="22_su1pb"]
+[ext_resource type="PackedScene" uid="uid://d2muudxk2q5r1" path="res://AccessoriesScenes/AltarFire.tscn" id="23_31pye"]
+[ext_resource type="PackedScene" uid="uid://dxfej7h13pgyu" path="res://AccessoriesScenes/AncientCoinEmerald.tscn" id="24_d3aiv"]
+[ext_resource type="PackedScene" uid="uid://d10nij3cpatlh" path="res://AccessoriesScenes/Vase.tscn" id="25_bvthk"]
+[ext_resource type="PackedScene" uid="uid://boor63iqvdhut" path="res://AccessoriesScenes/Skull.tscn" id="26_pc4ss"]
+[ext_resource type="PackedScene" uid="uid://bgaf8qiispmg" path="res://AccessoriesScenes/SkullCracked.tscn" id="27_rkxcl"]
+[ext_resource type="PackedScene" uid="uid://c52ht1hba0la" path="res://AccessoriesScenes/WallLightFire.tscn" id="28_kbpl7"]
+[ext_resource type="PackedScene" uid="uid://d030a3w5busvq" path="res://BlocksScenes/BlockMossXS.tscn" id="29_omoi5"]
+[ext_resource type="PackedScene" uid="uid://bq0jawg3hsgps" path="res://MossScenes/MossXL.tscn" id="30_ucyeh"]
+[ext_resource type="PackedScene" uid="uid://2vfw22x3mxon" path="res://MossScenes/GroundMossMD.tscn" id="31_mxtcl"]
+[ext_resource type="PackedScene" uid="uid://dxjfin4n1owu1" path="res://MossScenes/GroundMossXS.tscn" id="32_y7iwf"]
+[ext_resource type="PackedScene" uid="uid://b2bhxc07a50mu" path="res://MossScenes/MossXS.tscn" id="33_y7m7q"]
+[ext_resource type="PackedScene" uid="uid://c8w3d7a4q73ea" path="res://MossScenes/GroundMossXL.tscn" id="34_wvxtg"]
+[ext_resource type="AudioStream" uid="uid://kb7acf1cgaxk" path="res://Sounds/BirdsAmbience.mp3" id="35_lvy47"]
+[ext_resource type="PackedScene" uid="uid://c1qk7215rkr8i" path="res://AccessoriesScenes/AncientCoinRuby.tscn" id="36_jmhc3"]
+[ext_resource type="PackedScene" uid="uid://rucgacntpbpb" path="res://AccessoriesScenes/AncientCoinAmethyst.tscn" id="37_6yb8c"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_sdmg6"]
+sky_top_color = Color(1, 1, 1, 1)
+sky_horizon_color = Color(1, 1, 1, 1)
+ground_bottom_color = Color(0.25098, 0.25098, 0.25098, 1)
+ground_horizon_color = Color(0.25098, 0.25098, 0.25098, 1)
+
+[sub_resource type="Sky" id="Sky_1vs3i"]
+sky_material = SubResource("ProceduralSkyMaterial_sdmg6")
+
+[sub_resource type="Environment" id="Environment_fsr0d"]
+background_mode = 1
+background_color = Color(0.717237, 0.67386, 0.452957, 1)
+background_energy_multiplier = 2.0
+sky = SubResource("Sky_1vs3i")
+ambient_light_source = 3
+reflected_light_source = 2
+tonemap_mode = 3
+ssao_enabled = true
+sdfgi_enabled = true
+glow_enabled = true
+fog_enabled = true
+fog_light_color = Color(0.425, 0.45375, 0.5, 1)
+fog_height = 10.0
+fog_height_density = 0.05
+volumetric_fog_length = 1024.0
+
+[sub_resource type="BoxMesh" id="BoxMesh_r7dfk"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_u0s33"]
+albedo_color = Color(0.1, 0.1, 0.1, 1)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ynere"]
+size = Vector3(100, 1, 100)
+
+[node name="Scene1" type="Node3D"]
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.588798, 0.759105, 0.277627, 0.60076, -0.640792, 0.477988, 0.540745, -0.114652, -0.833337, 15.5546, 8.94164, 8.56015)
+light_color = Color(0.854902, 0.603922, 0.0666667, 1)
+light_energy = 2.0
+light_indirect_energy = 2.0
+shadow_enabled = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_fsr0d")
+
+[node name="Ground" type="StaticBody3D" parent="."]
+collision_mask = 2
+
+[node name="CSGMesh3D" type="CSGMesh3D" parent="Ground"]
+transform = Transform3D(100, 0, 0, 0, 1, 0, 0, 0, 100, 0, 0, 0)
+visible = false
+mesh = SubResource("BoxMesh_r7dfk")
+material = SubResource("StandardMaterial3D_u0s33")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Ground"]
+shape = SubResource("BoxShape3D_ynere")
+
+[node name="BlockNormalXS" parent="." instance=ExtResource("7_r8xh6")]
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 19, 0.75, 8.5)
+
+[node name="BlockNormalXS5" parent="." instance=ExtResource("7_r8xh6")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 19, 0.5, 14.75)
+
+[node name="WallBrokenMD" parent="." instance=ExtResource("8_v8nni")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22.75, 0.5, 14.75)
+
+[node name="WallNormalXL" parent="." instance=ExtResource("9_priqe")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22.75, 0.5, 8.5)
+
+[node name="BlockNormalXS6" parent="." instance=ExtResource("7_r8xh6")]
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 12.75, 0.75, 8.5)
+
+[node name="BlockNormalXS7" parent="." instance=ExtResource("7_r8xh6")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 0.75, 14.75)
+
+[node name="BlockMossMD" parent="." instance=ExtResource("10_lypsd")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 1, 14.75)
+
+[node name="StairsMD2" parent="." instance=ExtResource("11_8x4m8")]
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 11, 1, 10.5)
+
+[node name="PillarSquare3" parent="." instance=ExtResource("12_3eew1")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 2.5, 14.5)
+
+[node name="Scene2" type="Node3D" parent="."]
+
+[node name="BlockCrackMD" parent="Scene2" instance=ExtResource("13_lqsf4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 26, 1, 14.75)
+
+[node name="WallNormalMD" parent="Scene2" instance=ExtResource("14_bvj0a")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 29.25, 2.46725, 14.75)
+
+[node name="WallNormalMD2" parent="Scene2" instance=ExtResource("14_bvj0a")]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 26, 2.5, 11.5)
+
+[node name="WallNormalMD3" parent="Scene2" instance=ExtResource("14_bvj0a")]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 26, 2.5, 17)
+
+[node name="ChestBaseGold" parent="Scene2" instance=ExtResource("15_7hoq6")]
+transform = Transform3D(-0.7, 0, -1.05697e-07, 0, 0.7, 0, 1.05697e-07, 0, -0.7, 26.75, 2.5, 14.5)
+
+[node name="BlockNormalXS8" parent="Scene2" instance=ExtResource("7_r8xh6")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.75, 0.75, 14.75)
+
+[node name="WallEnd2" parent="Scene2" instance=ExtResource("16_c1acd")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22.75, 3, 14.75)
+
+[node name="WallBrokenXS" parent="Scene2" instance=ExtResource("17_o1jnv")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22.75, 6.75, 8.5)
+
+[node name="Gate2" parent="Scene2" instance=ExtResource("18_jscpd")]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 12, 2.5, 17.25)
+
+[node name="BlockMossMD2" parent="Scene2" instance=ExtResource("10_lypsd")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 1, 21.25)
+
+[node name="WallNormalXL2" parent="Scene2" instance=ExtResource("9_priqe")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15, 2.5, 21)
+
+[node name="WallNormalXL3" parent="Scene2" instance=ExtResource("9_priqe")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.5, 2.5, 21)
+
+[node name="BlockMossMD3" parent="Scene2" instance=ExtResource("10_lypsd")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 1, 27.25)
+
+[node name="WallNormalXL4" parent="Scene2" instance=ExtResource("9_priqe")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15, 2.5, 27.25)
+
+[node name="WallNormalXL5" parent="Scene2" instance=ExtResource("9_priqe")]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 11.75, 2.5, 29.5)
+
+[node name="WallNormalXL6" parent="Scene2" instance=ExtResource("9_priqe")]
+transform = Transform3D(-4.37114e-08, 0, 1.15, 0, 1, 0, -1, 0, -5.02681e-08, 18.6772, 0.5, 17.25)
+
+[node name="BlockNormalXS2" parent="Scene2" instance=ExtResource("7_r8xh6")]
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 19, 0.75, 2.25)
+
+[node name="BlockNormalXS9" parent="Scene2" instance=ExtResource("7_r8xh6")]
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 12.75, 0.75, 2.25)
+
+[node name="WallBrokenXl" parent="Scene2" instance=ExtResource("19_34tqo")]
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 22.1224, 0.75, 2.1941)
+
+[node name="Fence2" parent="Scene2" instance=ExtResource("20_ddppf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.73366, 2.60083, 15.454)
+
+[node name="Slope3" parent="Scene2" instance=ExtResource("21_3kjnq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.73033, 2.60083, 14.3586)
+
+[node name="Line2" parent="Scene2" instance=ExtResource("22_su1pb")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.43357, 2.70345, 13.1092)
+
+[node name="Slope4" parent="Scene2" instance=ExtResource("21_3kjnq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.72677, 2.60083, 12.3017)
+
+[node name="Altar" parent="Scene2" instance=ExtResource("23_31pye")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14.9715, 1.14893, 4.93359)
+
+[node name="AncientCoinEmerald" parent="Scene2" instance=ExtResource("24_d3aiv")]
+transform = Transform3D(0.979827, 0.162398, -0.116471, 0, 0.582804, 0.812613, 0.199847, -0.79622, 0.571047, 14.0508, 2.88088, 13.493)
+
+[node name="Vase2" parent="Scene2" instance=ExtResource("25_bvthk")]
+transform = Transform3D(0.541659, 0, -0.25808, 0, 0.6, 0, 0.25808, 0, 0.541659, 15.3955, 1.14893, 11.1196)
+
+[node name="Vase3" parent="Scene2" instance=ExtResource("25_bvthk")]
+transform = Transform3D(-0.112777, -0.246501, -0.29414, 0.359306, 0.0398946, -0.171195, 0.134836, -0.312483, 0.210175, 14.4667, 1.4533, 11.1235)
+
+[node name="Vase4" parent="Scene2" instance=ExtResource("25_bvthk")]
+transform = Transform3D(0.335704, 0, 0.217492, 0, 0.4, 0, -0.217492, 0, 0.335704, 15.8897, 1.14893, 12.0615)
+
+[node name="Skull" parent="Scene2" instance=ExtResource("26_pc4ss")]
+transform = Transform3D(0.359164, -0.104698, -0.331722, -0.0199799, 0.469818, -0.169917, 0.347278, 0.135312, 0.3333, 16.2639, 0.692503, 16.0644)
+
+[node name="SkullCracked2" parent="Scene2" instance=ExtResource("27_rkxcl")]
+transform = Transform3D(-0.220744, 0.0291434, 0.201054, -0.0327954, 0.287891, -0.0777378, -0.200491, -0.0791794, -0.208648, 24.7526, 2.60083, 12.7308)
+
+[node name="WallLight2" parent="Scene2" instance=ExtResource("28_kbpl7")]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 18.4347, 4.51426, 16.6446)
+
+[node name="BlockMossMD4" parent="Scene2" instance=ExtResource("10_lypsd")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.97387, 1, 27.25)
+
+[node name="WallNormalXL7" parent="Scene2" instance=ExtResource("9_priqe")]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 5.72387, 2.5, 29.5)
+
+[node name="WallLight3" parent="Scene2" instance=ExtResource("28_kbpl7")]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 11.751, 5.55535, 28.9176)
+
+[node name="WallBrokenMD2" parent="Scene2" instance=ExtResource("8_v8nni")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.66424, 0.5, 8.33389)
+
+[node name="WallNormalMD4" parent="Scene2" instance=ExtResource("14_bvj0a")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.66371, 0.59467, 2.05039)
+
+[node name="WallNormalXL8" parent="Scene2" instance=ExtResource("9_priqe")]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 5.72387, 2.5, 24.0325)
+
+[node name="Gate3" parent="Scene2" instance=ExtResource("18_jscpd")]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 19.0279, 1.17788, -0.77261)
+
+[node name="BlockNormalXS3" parent="Scene2" instance=ExtResource("7_r8xh6")]
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 19, 0.75, -4.00274)
+
+[node name="WallNormalMD5" parent="Scene2" instance=ExtResource("14_bvj0a")]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 18.734, 1.14893, -7.20891)
+
+[node name="WallNormalMD6" parent="Scene2" instance=ExtResource("14_bvj0a")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22.0352, 1.04006, -4.03576)
+
+[node name="BlockNormalXS4" parent="Scene2" instance=ExtResource("7_r8xh6")]
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 12.8058, 0.75, -4.0059)
+
+[node name="WallNormalMD7" parent="Scene2" instance=ExtResource("14_bvj0a")]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 12.3755, -0.405823, -7.20891)
+
+[node name="AncientCoinEmerald2" parent="Scene2" instance=ExtResource("24_d3aiv")]
+transform = Transform3D(-4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0, 0, 1, 26.8083, 3.40915, 14.5401)
+
+[node name="BlockMossXS" parent="Scene2" instance=ExtResource("29_omoi5")]
+transform = Transform3D(1, 0, 0, 0, -1, 8.74228e-08, 0, -8.74228e-08, -1, 26, 6.248, 13.8543)
+
+[node name="BlockMossXS2" parent="Scene2" instance=ExtResource("29_omoi5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 26, 6.223, 11.3416)
+
+[node name="OmniLight3D" type="OmniLight3D" parent="Scene2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 26.3079, 4.37354, 14.4429)
+light_energy = 0.5
+
+[node name="MossXL2" parent="Scene2" instance=ExtResource("30_ucyeh")]
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, 21.8061, 4.6446, 8.50047)
+
+[node name="GroundMossMD2" parent="Scene2" instance=ExtResource("31_mxtcl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20.6658, 0.898926, 16.169)
+
+[node name="GroundMossXS2" parent="Scene2" instance=ExtResource("32_y7iwf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 27.659, 2.60083, 16.4001)
+
+[node name="MossXS" parent="Scene2" instance=ExtResource("33_y7m7q")]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 16.236, 4.98486, 17.051)
+
+[node name="GroundMossXS6" parent="Scene2" instance=ExtResource("32_y7iwf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13.2614, 2.60083, 11.9924)
+
+[node name="GroundMossXL2" parent="Scene2" instance=ExtResource("34_wvxtg")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13.2142, 2.60083, 21.1216)
+
+[node name="GroundMossMD5" parent="Scene2" instance=ExtResource("31_mxtcl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10.0415, 2.60083, 26.0552)
+
+[node name="GroundMossMD6" parent="Scene2" instance=ExtResource("31_mxtcl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11.3009, 1.14893, 5.58753)
+
+[node name="GroundMossXS7" parent="Scene2" instance=ExtResource("32_y7iwf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 17.5608, 0.898926, 13.1012)
+
+[node name="GroundMossXS3" parent="Scene2" instance=ExtResource("32_y7iwf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 21.312, 1.14893, 4.26504)
+
+[node name="GroundMossXS4" parent="Scene2" instance=ExtResource("32_y7iwf")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13.7645, 1.14893, 1.62559)
+
+[node name="WallBrokenXl2" parent="Scene2" instance=ExtResource("19_34tqo")]
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 12.7437, 1.14893, -0.167737)
+
+[node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="Scene2"]
+stream = ExtResource("35_lvy47")
+volume_db = -20.0
+autoplay = true
+parameters/looping = true
+
+[node name="AudioStreamPlayer2" type="AudioStreamPlayer" parent="Scene2"]
+stream = ExtResource("35_lvy47")
+volume_db = -20.0
+autoplay = true
+parameters/looping = true
+
+[node name="AncientCoinEmerald" parent="." instance=ExtResource("36_jmhc3")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13.9736, 2.60083, 11.9372)
+
+[node name="AncientCoinEmerald2" parent="." instance=ExtResource("37_6yb8c")]
+transform = Transform3D(1, 0, 0, 0, 0.655809, 0.754927, 0, -0.754927, 0.655809, 13.1888, 1.18196, 11.1145)
+
+[node name="CharacterBody3D2" parent="." instance=ExtResource("1_o7n8p")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 19.2068, 3.09212, -3.79692)

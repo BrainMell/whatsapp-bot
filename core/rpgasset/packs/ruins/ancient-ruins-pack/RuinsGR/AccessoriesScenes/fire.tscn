@@ -1,0 +1,55 @@
+[gd_scene load_steps=6 format=3 uid="uid://ci5ayfo0lm6xc"]
+
+[ext_resource type="Gradient" path="res://AccessoriesScenes/light_fire.tres" id="1_3a307"]
+[ext_resource type="AudioStream" uid="uid://npr8ff18gytw" path="res://Sounds/Flame.mp3" id="2_6jy2i"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ya6m2"]
+vertex_color_use_as_albedo = true
+metallic = 1.0
+metallic_specular = 1.0
+grow_amount = 1.488
+proximity_fade_distance = 0.01
+
+[sub_resource type="BoxMesh" id="BoxMesh_imi2h"]
+size = Vector3(0.1, 0.1, 0.1)
+
+[sub_resource type="Curve" id="Curve_7qf2r"]
+_data = [Vector2(0.00531915, 1), 0.0, 0.0, 0, 0, Vector2(1, 0.351648), 0.0, 0.0, 0, 0]
+point_count = 2
+
+[node name="Fire" type="Node3D"]
+transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 0.1, 0, 0, 0)
+
+[node name="FireVFX" type="CPUParticles3D" parent="."]
+material_override = SubResource("StandardMaterial3D_ya6m2")
+amount = 300
+lifetime = 0.5
+speed_scale = 0.2
+randomness = 1.0
+lifetime_randomness = 1.0
+mesh = SubResource("BoxMesh_imi2h")
+emission_shape = 1
+emission_sphere_radius = 2.0
+direction = Vector3(0, 1, 0)
+gravity = Vector3(0, 19.6, 0)
+radial_accel_min = -50.0
+scale_amount_min = 0.4
+scale_amount_max = 0.65
+scale_amount_curve = SubResource("Curve_7qf2r")
+color_ramp = ExtResource("1_3a307")
+
+[node name="Light" type="OmniLight3D" parent="."]
+light_color = Color(0.854902, 0.603922, 0.0666667, 1)
+light_energy = 2.0
+light_specular = 5.0
+shadow_enabled = true
+shadow_opacity = 0.35
+shadow_blur = 5.0
+omni_range = 15.0
+
+[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="."]
+stream = ExtResource("2_6jy2i")
+volume_db = 10.0
+autoplay = true
+max_distance = 15.0
+parameters/looping = true

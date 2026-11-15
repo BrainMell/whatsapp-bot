@@ -1,0 +1,26 @@
+[gd_scene load_steps=7 format=3 uid="uid://qhkjtcc72olb"]
+
+[ext_resource type="Shader" path="res://Shaders/PalettSwap2D.gdshader" id="1"]
+[ext_resource type="Script" path="res://addons/ShaderSecretsHelper/DemoScreen.gd" id="2"]
+[ext_resource type="PackedScene" path="res://Shared/DemoInterface.tscn" id="5"]
+[ext_resource type="PackedScene" path="res://Shared/Background2D/Demo2DBackground.tscn" id="6"]
+[ext_resource type="Script" path="res://Demos/PaletteSwap2D/PaletteSwapSprite.gd" id="7"]
+
+[sub_resource type="ShaderMaterial" id="1"]
+shader = ExtResource("1")
+shader_parameter/palette_count = 4.0
+shader_parameter/palette_index = 0.0
+
+[node name="PaletteSwap2DDemo" type="CanvasLayer"]
+script = ExtResource("2")
+
+[node name="ParallaxBackground" parent="." instance=ExtResource("6")]
+
+[node name="PaletteSwapSprite" type="Sprite2D" parent="."]
+material = SubResource("1")
+position = Vector2(960, 540)
+scale = Vector2(3, 3)
+texture = null
+script = ExtResource("7")
+
+[node name="DemoInterface" parent="." instance=ExtResource("5")]

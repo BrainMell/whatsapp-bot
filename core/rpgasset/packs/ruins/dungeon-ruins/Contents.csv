@@ -1,0 +1,18 @@
+name,group,edition,width_m,depth_m,height_m,triangles
+mdvl_dungeon_arch_01,modular dungeon,free,2.02,0.27,2.40,582
+mdvl_dungeon_bars_01,cells and restraint,free,2.09,0.09,2.30,336
+mdvl_dungeon_chest_01,treasure,free,0.80,0.56,0.66,2420
+mdvl_dungeon_corner_01,modular dungeon,free,0.35,0.35,2.40,260
+mdvl_dungeon_door_cell_01,cells and restraint,free,1.11,0.09,2.04,380
+mdvl_dungeon_flame_01,modular dungeon,free,0.15,0.13,0.22,104
+mdvl_dungeon_floor_01,modular dungeon,free,2.00,2.06,0.10,272
+mdvl_dungeon_junction_01,modular dungeon,free,2.01,2.01,0.62,622
+mdvl_dungeon_pillar_01,modular dungeon,free,0.70,0.70,2.40,540
+mdvl_dungeon_rubble_01,ruins,free,0.93,1.06,0.50,764
+mdvl_dungeon_skull_01,bones and decay,free,0.12,0.16,0.16,339
+mdvl_dungeon_stair_01,modular dungeon,free,2.06,3.14,2.45,1776
+mdvl_dungeon_vault_01,modular dungeon,free,2.01,2.15,0.68,268
+mdvl_dungeon_vault_end_01,modular dungeon,free,2.16,0.26,0.62,348
+mdvl_dungeon_wall_01,modular dungeon,free,2.02,0.26,2.40,464
+mdvl_dungeon_wall_torch_01,modular dungeon,free,2.02,0.58,2.40,604
+mdvl_dungeon_web_01,bones and decay,free,0.63,0.63,0.11,360

@@ -1,0 +1,14 @@
+; Seahill Towns - open this folder in Godot 4 and press F5.
+
+config_version=5
+
+[application]
+
+config/name="Seahill Towns Complete"
+run/main_scene="res://Godot_Showcase/seahill_towns_complete.tscn"
+config/features=PackedStringArray("4.7", "Forward Plus")
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080

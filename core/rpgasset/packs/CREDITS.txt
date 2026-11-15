@@ -1,0 +1,156 @@
+RPG ASSET PACKS - sources & licenses
+============================================================
+
+[audio]
+  kenney-rpg-audio                                55 files      1.0 MB  | CC0 (Kenney)
+      source: rpg-audio
+  kenney-ui-audio                                 55 files      0.5 MB  | CC0 (Kenney)
+      source: ui-audio
+  kenney-interface-sounds                        103 files      1.0 MB  | CC0 (Kenney)
+      source: interface-sounds
+  kenney-impact-sounds                           133 files      1.0 MB  | CC0 (Kenney)
+      source: impact-sounds
+
+[buildings]
+  castle-siege                                    32 files      3.0 MB  | see source page
+      source: https://avramania.itch.io/castle-siege
+  low-poly-castle-free                           192 files      8.0 MB  | see source page
+      source: https://heyheythere.itch.io/low-poly-castle-free
+  modular-castle-assets                           10 files      1.9 MB  | see source page
+      source: https://stoneforgegames.itch.io/modular-castle-assets
+  medieval-fortress                                2 files      1.8 MB  | see source page
+      source: https://simplepolygon.itch.io/medieval-fortress
+  kenney-castle-kit                              397 files      6.8 MB  | CC0 (Kenney)
+      source: castle-kit
+  kenney-medieval-rts                            270 files      2.3 MB  | CC0 (Kenney)
+      source: medieval-rts
+  kenney-fantasy-town-kit                        847 files     10.6 MB  | CC0 (Kenney)
+      source: fantasy-town-kit
+  seahill-towns                                   95 files    175.3 MB  | see source page
+      source: https://seehiong.itch.io/seahill-towns
+  quaternius-medieval-village-megakit            936 files    174.3 MB  | CC0 (Quaternius)
+      source: https://quaternius.itch.io/medieval-village-megakit
+
+[characters]
+  kaykit-adventurers                             250 files     23.0 MB  | CC0 (KayKit)
+      source: https://kaylousberg.itch.io/kaykit-adventurers
+
+[icons]
+  game-icons-net                                4246 files      7.0 MB  | CC-BY 3.0 (Lorc, Delapouite & contributors)
+      source: https://github.com/game-icons/icons/archive/refs/heads/master.zip
+
+[monsters]
+  quaternius-animated-monsters                    17 files      6.8 MB  | CC0 (Quaternius)
+      source: https://quaternius.itch.io/lowpoly-animated-monsters
+  mythic-monsters                                864 files      2.3 MB  | see source page
+      source: https://willibab.itch.io/free-mythic-monsters
+  monster-builder-pack                           367 files      1.4 MB  | CC0 (Kenney)
+      source: https://kenney-assets.itch.io/monster-builder-pack
+  bosses-dino-rex                                 13 files      0.8 MB  | see source page
+      source: https://admurin.itch.io/bosses-dino-rex
+  mantis-hatchery-battle-creatures               189 files    316.5 MB  | see source page
+      source: https://mantisda.itch.io/mantis-hatchery-battle-creatures
+  boss-frost-guardian                             60 files      0.9 MB  | see source page
+      source: https://chierit.itch.io/boss-frost-guardian
+  boss-minotaur                                   54 files      0.7 MB  | see source page
+      source: https://chierit.itch.io/boss-minotaur
+  kaykit-skeletons                               107 files     16.9 MB  | CC0 (KayKit)
+      source: https://kaylousberg.itch.io/kaykit-skeletons
+  quaternius-bestiary-dungeon-monsters            22 files     48.8 MB  | CC0 (Quaternius)
+      source: https://quaternius.itch.io/bestiary-dungeon-monsters-kit
+
+[props]
+  quaternius-fantasy-props-megakit               517 files    162.9 MB  | CC0 (Quaternius)
+      source: https://quaternius.itch.io/fantasy-props-megakit
+
+[ruins]
+  kaykit-dungeon                                1079 files     85.9 MB  | CC0 (KayKit)
+      source: https://kaylousberg.itch.io/kaykit-dungeon
+  seahill-dungeons                                70 files    121.6 MB  | see source page
+      source: https://seehiong.itch.io/seahill-dungeons
+  ancient-ruins-pack                             377 files    141.0 MB  | see source page
+      source: https://makovice.itch.io/ancient-ruins-assset-pack
+  dungeon-ruins                                   38 files      1.7 MB  | see source page
+      source: https://avramania.itch.io/dungeon-ruins
+  kenney-mini-dungeon                            162 files      4.7 MB  | CC0 (Kenney)
+      source: mini-dungeon
+  kenney-modular-cave-kit                        214 files     17.5 MB  | CC0 (Kenney)
+      source: modular-cave-kit
+  quaternius-modular-dungeon                     194 files     34.8 MB  | CC0 (Quaternius)
+      source: https://quaternius.itch.io/lowpoly-modular-dungeon-pack
+
+[shaders]
+  gdquest-godot-shaders                          572 files     28.1 MB  | MIT (GDQuest)
+      source: https://github.com/GDQuest/godot-shaders/archive/refs/heads/master.zip
+
+[siege]
+  low-poly-siege-engine-pack                      10 files      8.1 MB  | see source page
+      source: https://de-alpe-game-art.itch.io/low-poly-siege-engine-pack
+
+[ui]
+  kenney-ui-pack                                1315 files      1.4 MB  | CC0 (Kenney)
+      source: ui-pack
+  kenney-ui-pack-rpg-expansion                    94 files      0.3 MB  | CC0 (Kenney)
+      source: ui-pack-rpg-expansion
+
+[vfx]
+  kenney-particle-pack                           195 files     15.2 MB  | CC0 (Kenney)
+      source: particle-pack
+  super-pixel-effects-gigapack                  6206 files     10.5 MB  | see source page
+      source: https://untiedgames.itch.io/super-pixel-effects-gigapack
+  brackeys-vfx-bundle                            446 files     74.9 MB  | free (Brackeys)
+      source: https://brackeysgames.itch.io/brackeys-vfx-bundle
+  fx-pixel-750-pack                              196 files     29.4 MB  | see source page
+      source: https://bdragon1727.itch.io/750-effect-and-fx-pixel-all
+
+[world]
+  kaykit-forest                                  641 files     11.7 MB  | CC0 (KayKit)
+      source: https://kaylousberg.itch.io/kaykit-forest
+  seahill-wilds                                  110 files    143.0 MB  | see source page
+      source: https://seehiong.itch.io/seahill-wilds
+  kenney-mini-forest                             120 files      3.3 MB  | CC0 (Kenney)
+      source: mini-forest
+  kenney-nature-kit                             3618 files     29.4 MB  | CC0 (Kenney)
+      source: nature-kit
+  quaternius-stylized-nature                     454 files    122.1 MB  | CC0 (Quaternius)
+      source: https://quaternius.itch.io/stylized-nature-megakit
+
+[textures] (Poly Haven, all CC0)
+  polyhaven-aerial_grass_rock                      5 files     14.5 MB  | CC0 (Poly Haven)
+      source: https://polyhaven.com/a/aerial_grass_rock
+  polyhaven-aerial_ground_rock                     5 files     13.8 MB  | CC0 (Poly Haven)
+      source: https://polyhaven.com/a/aerial_ground_rock
+  polyhaven-aerial_mud_1                           5 files      5.2 MB  | CC0 (Poly Haven)
+      source: https://polyhaven.com/a/aerial_mud_1
+  polyhaven-aerial_wood_snips                      5 files      7.0 MB  | CC0 (Poly Haven)
+      source: https://polyhaven.com/a/aerial_wood_snips
+  polyhaven-bark_bluegum                           5 files     14.1 MB  | CC0 (Poly Haven)
+      source: https://polyhaven.com/a/bark_bluegum
+  polyhaven-brick_moss_001                         5 files     12.0 MB  | CC0 (Poly Haven)
+      source: https://polyhaven.com/a/brick_moss_001
+  polyhaven-castle_wall_slates                     5 files     15.0 MB  | CC0 (Poly Haven)
+      source: https://polyhaven.com/a/castle_wall_slates
+  polyhaven-cliff_side                             5 files     13.7 MB  | CC0 (Poly Haven)
+      source: https://polyhaven.com/a/cliff_side
+  polyhaven-cobblestone_01                         5 files      4.8 MB  | CC0 (Poly Haven)
+      source: https://polyhaven.com/a/cobblestone_01
+  polyhaven-cobblestone_02                         5 files     14.1 MB  | CC0 (Poly Haven)
+      source: https://polyhaven.com/a/cobblestone_02
+  polyhaven-dirt                                   5 files     14.0 MB  | CC0 (Poly Haven)
+      source: https://polyhaven.com/a/dirt
+  polyhaven-forest_ground_04                       5 files      8.2 MB  | CC0 (Poly Haven)
+      source: https://polyhaven.com/a/forest_ground_04
+
+TOTAL: 45 packs, 26025 files, 2.05 GB
+
+SKIPPED SOURCES (from the request list):
+- ambientCG            -> sandbox network cannot reach ambientcg.com (connection timeout). Poly Haven CC0
+                          textures (12) cover the same need.
+- Sonniss GDC audio    -> single multi-GB zips, no direct link exposed on page.
+- Sketchfab            -> downloads need login/API key.
+- CGTrader             -> downloads need account.
+- BlenderKit           -> downloads need account.
+- Fab (Epic)           -> downloads need Epic account.
+- Freesound            -> API key required (oauth).
+- Pixabay SFX          -> scraping-gated downloads.
+- Poly Haven 3D Models -> covered: 4 nature models at 1k (boulder, coast rocks, dead tree trunk, tree stump).

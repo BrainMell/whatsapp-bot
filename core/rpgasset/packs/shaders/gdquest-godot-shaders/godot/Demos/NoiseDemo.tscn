@@ -1,0 +1,107 @@
+[gd_scene load_steps=18 format=3 uid="uid://j4aa5qjcj4vh"]
+
+[ext_resource type="Shader" path="res://Shaders/random_noise.gdshader" id="1"]
+[ext_resource type="Shader" path="res://Shaders/value_noise.gdshader" id="2"]
+[ext_resource type="Shader" path="res://Shaders/perlin_noise.gdshader" id="3"]
+[ext_resource type="Shader" path="res://Shaders/voronoi_noise.gdshader" id="4"]
+[ext_resource type="PackedScene" uid="uid://diofpwcvq5elu" path="res://Shared/DemoInterface.tscn" id="5"]
+[ext_resource type="Shader" path="res://Shaders/value_noise_layered.gdshader" id="5_rxcmu"]
+[ext_resource type="PackedScene" uid="uid://7mqdkojagyav" path="res://Shared/Background2D/Demo2DBackground.tscn" id="6"]
+[ext_resource type="Script" path="res://addons/ShaderSecretsHelper/DemoScreen.gd" id="7"]
+
+[sub_resource type="ShaderMaterial" id="1"]
+shader = ExtResource("1")
+shader_parameter/scale = Vector2(10, 10)
+
+[sub_resource type="ShaderMaterial" id="2"]
+shader = ExtResource("2")
+shader_parameter/scale = Vector2(10, 10)
+shader_parameter/seed = 1
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_aql0j"]
+shader = ExtResource("5_rxcmu")
+shader_parameter/scale = Vector2(10, 10)
+shader_parameter/seed = 1
+shader_parameter/layers = 3
+
+[sub_resource type="ShaderMaterial" id="3"]
+shader = ExtResource("3")
+shader_parameter/scale = Vector2(10, 10)
+shader_parameter/seamless = false
+shader_parameter/seed = 1
+
+[sub_resource type="ShaderMaterial" id="4"]
+shader = ExtResource("4")
+shader_parameter/scale = Vector2(10, 10)
+shader_parameter/seamless = true
+
+[sub_resource type="Shader" id="5"]
+code = "shader_type canvas_item;
+
+uniform sampler2D simplex_noise : hint_default_black;
+
+void fragment() {
+	COLOR = vec4(texture(simplex_noise, UV).rgb, 1.0);
+}"
+
+[sub_resource type="FastNoiseLite" id="6"]
+seed = 230
+
+[sub_resource type="NoiseTexture2D" id="7"]
+noise = SubResource("6")
+
+[sub_resource type="ShaderMaterial" id="8"]
+shader = SubResource("5")
+shader_parameter/simplex_noise = SubResource("7")
+
+[node name="NoiseDemo" type="CanvasLayer"]
+script = ExtResource("7")
+
+[node name="ParallaxBackground" parent="." instance=ExtResource("6")]
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+anchors_preset = -1
+anchor_top = 0.11
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="GridContainer" type="GridContainer" parent="CenterContainer"]
+layout_mode = 2
+theme_override_constants/h_separation = 50
+theme_override_constants/v_separation = 50
+columns = 3
+
+[node name="RandomNoise" type="ColorRect" parent="CenterContainer/GridContainer"]
+material = SubResource("1")
+custom_minimum_size = Vector2(400, 400)
+layout_mode = 2
+
+[node name="ValueNoise" type="ColorRect" parent="CenterContainer/GridContainer"]
+material = SubResource("2")
+custom_minimum_size = Vector2(400, 400)
+layout_mode = 2
+
+[node name="ValueNoiseLayered" type="ColorRect" parent="CenterContainer/GridContainer"]
+material = SubResource("ShaderMaterial_aql0j")
+custom_minimum_size = Vector2(400, 400)
+layout_mode = 2
+
+[node name="PerlinNoise" type="ColorRect" parent="CenterContainer/GridContainer"]
+material = SubResource("3")
+custom_minimum_size = Vector2(400, 400)
+layout_mode = 2
+
+[node name="VoronoiNoise" type="ColorRect" parent="CenterContainer/GridContainer"]
+material = SubResource("4")
+custom_minimum_size = Vector2(400, 400)
+layout_mode = 2
+
+[node name="SimplexNoise" type="ColorRect" parent="CenterContainer/GridContainer"]
+material = SubResource("8")
+custom_minimum_size = Vector2(400, 400)
+layout_mode = 2
+
+[node name="DemoInterface" parent="." instance=ExtResource("5")]
+custom_minimum_size = Vector2(0, 120)
+anchor_right = 0.0
+offset_right = 1920.0

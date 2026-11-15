@@ -1,0 +1,130 @@
+[gd_scene load_steps=19 format=3 uid="uid://bn1mwflajnmsh"]
+
+[ext_resource type="PackedScene" uid="uid://c8w3d7a4q73ea" path="res://MossScenes/GroundMossXL.tscn" id="1_hh737"]
+[ext_resource type="PackedScene" uid="uid://cgkd651di7iia" path="res://PillarsScenes/PillarSquare.tscn" id="2_5rlwq"]
+[ext_resource type="PackedScene" uid="uid://vcfv78w253m4" path="res://BlocksScenes/BlockNormalXS.tscn" id="3_8fixs"]
+[ext_resource type="PackedScene" uid="uid://dy8m516m7b17m" path="res://FencesScenes/Fence.tscn" id="4_svw2u"]
+[ext_resource type="PackedScene" uid="uid://b2bhxc07a50mu" path="res://MossScenes/MossXS.tscn" id="5_o8o7s"]
+[ext_resource type="PackedScene" uid="uid://2vfw22x3mxon" path="res://MossScenes/GroundMossMD.tscn" id="6_ene2r"]
+[ext_resource type="PackedScene" uid="uid://dxjfin4n1owu1" path="res://MossScenes/GroundMossXS.tscn" id="7_isdwv"]
+[ext_resource type="PackedScene" uid="uid://d030a3w5busvq" path="res://BlocksScenes/BlockMossXS.tscn" id="8_dufj7"]
+[ext_resource type="Script" path="res://scripts/character_body_3d.gd" id="9_3efwk"]
+[ext_resource type="AudioStream" uid="uid://ovseft7xv12b" path="res://Sounds/Walk.mp3" id="10_teic2"]
+[ext_resource type="PackedScene" uid="uid://bw1yb8ujtnyr8" path="res://SkelyScenes/Skely.tscn" id="11_p6s7t"]
+[ext_resource type="PackedScene" uid="uid://o2yulnfxgckj" path="res://SkelyScenes/SkelyDraugr.tscn" id="12_pm8pn"]
+[ext_resource type="PackedScene" uid="uid://vtc5vo22vjkm" path="res://SkelyScenes/SkelyPoison.tscn" id="13_r3xbw"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_w8jga"]
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_r8f2s"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_scnfx"]
+sky_top_color = Color(1, 1, 1, 1)
+sky_horizon_color = Color(1, 1, 1, 1)
+ground_bottom_color = Color(0.25098, 0.25098, 0.25098, 1)
+ground_horizon_color = Color(0.25098, 0.25098, 0.25098, 1)
+
+[sub_resource type="Sky" id="Sky_dh4p3"]
+sky_material = SubResource("ProceduralSkyMaterial_scnfx")
+
+[sub_resource type="Environment" id="Environment_ul8h5"]
+background_mode = 1
+background_color = Color(0.187722, 0.187722, 0.187722, 1)
+sky = SubResource("Sky_dh4p3")
+ambient_light_source = 3
+reflected_light_source = 2
+tonemap_mode = 3
+ssao_enabled = true
+sdfgi_enabled = true
+glow_enabled = true
+fog_enabled = true
+volumetric_fog_length = 1024.0
+
+[node name="Scene2" type="Node3D"]
+
+[node name="Scene2" type="Node3D" parent="."]
+
+[node name="GroundMossXL2" parent="Scene2" instance=ExtResource("1_hh737")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.67507, 0.898925, 7.01582)
+
+[node name="PillarSquare2" parent="Scene2" instance=ExtResource("2_5rlwq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.8452, 0.83494, 10.6935)
+
+[node name="BlockNormalXS2" parent="Scene2" instance=ExtResource("3_8fixs")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.42154, 0.5, 8.574)
+
+[node name="BlockNormalXS3" parent="Scene2" instance=ExtResource("3_8fixs")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.77041, 0.5, 2.26672)
+
+[node name="BlockNormalXS4" parent="Scene2" instance=ExtResource("3_8fixs")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.42154, 0.5, 2.26672)
+
+[node name="Fence2" parent="Scene2" instance=ExtResource("4_svw2u")]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -1.67499, 0.898925, 10.3747)
+
+[node name="Fence3" parent="Scene2" instance=ExtResource("4_svw2u")]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 0.907712, 0.898925, 10.3747)
+
+[node name="Fence5" parent="Scene2" instance=ExtResource("4_svw2u")]
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, -4.13378, 0.898925, 8.4883)
+
+[node name="Fence6" parent="Scene2" instance=ExtResource("4_svw2u")]
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, -4.13378, 0.898925, 5.89298)
+
+[node name="MossXS" parent="Scene2" instance=ExtResource("5_o8o7s")]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -3.92497, 5.19674, 9.7837)
+
+[node name="GroundMossMD3" parent="Scene2" instance=ExtResource("6_ene2r")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.25054, 0.898925, 5.91288)
+
+[node name="GroundMossXS2" parent="Scene2" instance=ExtResource("7_isdwv")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.460475, 0.898925, 6.19982)
+
+[node name="GroundMossXS3" parent="Scene2" instance=ExtResource("7_isdwv")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.56713, 0.898925, 9.02007)
+
+[node name="Fence7" parent="Scene2" instance=ExtResource("4_svw2u")]
+transform = Transform3D(-1, 0, -8.74228e-08, 0, 1, 0, 8.74228e-08, 0, -1, -4.13378, 0.898925, 3.33046)
+
+[node name="BlockMossXS" parent="Scene2" instance=ExtResource("8_dufj7")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.77, 0.5, 8.574)
+
+[node name="CharacterBody3D" type="CharacterBody3D" parent="Scene2" groups=["player"]]
+transform = Transform3D(-0.77675, 0, 0.629809, 0, 1, 0, -0.629809, 0, -0.77675, 3.77304, 1.94319, 2.25189)
+visible = false
+collision_layer = 2
+script = ExtResource("9_3efwk")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Scene2/CharacterBody3D"]
+shape = SubResource("CapsuleShape3D_w8jga")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Scene2/CharacterBody3D"]
+mesh = SubResource("CapsuleMesh_r8f2s")
+
+[node name="Camera3D" type="Camera3D" parent="Scene2/CharacterBody3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.774, 0)
+
+[node name="RayCast3D" type="RayCast3D" parent="Scene2/CharacterBody3D/Camera3D"]
+target_position = Vector3(0, 0, -5)
+collide_with_areas = true
+
+[node name="PlayerSound" type="AudioStreamPlayer3D" parent="Scene2/CharacterBody3D"]
+stream = ExtResource("10_teic2")
+volume_db = -25.0
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.588798, 0.759105, 0.277627, 0.60076, -0.640792, 0.477988, 0.540745, -0.114652, -0.833337, 15.5546, 8.94164, 8.56015)
+light_color = Color(0.689175, 0.764758, 0.70057, 1)
+shadow_enabled = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_ul8h5")
+
+[node name="Skely" parent="." instance=ExtResource("11_p6s7t")]
+transform = Transform3D(-0.113597, 0, 0.0979576, 0, 0.15, 0, -0.0979576, 0, -0.113597, -0.271402, 0.898926, 7.49411)
+
+[node name="SkelyDraugr" parent="." instance=ExtResource("12_pm8pn")]
+transform = Transform3D(-0.149823, 0, 0.0072986, 0, 0.15, 0, -0.0072986, 0, -0.149823, 1.144, 0.898926, 9.31111)
+
+[node name="SkelyPoison" parent="." instance=ExtResource("13_r3xbw")]
+transform = Transform3D(-0.0819395, 0, 0.125642, 0, 0.15, 0, -0.125642, 0, -0.0819395, -2.0475, 0.898926, 6.29138)

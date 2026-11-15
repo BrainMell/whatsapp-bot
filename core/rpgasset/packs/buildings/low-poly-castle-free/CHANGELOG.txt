@@ -1,0 +1,6 @@
+Low Poly Castle Free: changes, newest first
+
+1.0.3 (13 Nov 2026)
+- The round tower's roof flares out over its eaves, with a boarded fascia, a dormer window each way
+  and an iron cap at the point.
+- The catapult's stone flies off when it throws and is laid again.

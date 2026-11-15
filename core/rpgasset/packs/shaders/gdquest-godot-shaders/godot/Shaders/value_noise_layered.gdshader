@@ -1,0 +1,54 @@
+shader_type canvas_item;
+
+uniform vec2 scale = vec2(10.0);
+uniform int seed = 1;
+uniform int layers = 3;
+
+// Generate a random value based on a 2D point and seed
+float rand(vec2 point) {
+    vec3 p3 = fract(vec3(point.xyx) * float(seed) * 1.031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
+// Generate value noise for a given coordinate
+float noise(vec2 coord) {
+    vec2 integer_coord = floor(coord);
+    vec2 fractional_coord = fract(coord);
+
+    // Calculate random values for the four corners of a tile
+    float bottom_left = rand(integer_coord);
+    float bottom_right = rand(integer_coord + vec2(1.0, 0.0));
+    float top_left = rand(integer_coord + vec2(0.0, 1.0));
+    float top_right = rand(integer_coord + vec2(1.0, 1.0));
+
+    // Use Cubic Hermite Curve for smooth interpolation (equivalent to smoothstep)
+    vec2 smooth_coord = fractional_coord * fractional_coord * (3.0 - 2.0 * fractional_coord);
+
+    // Interpolate between the four corners
+    float bottom_mix = mix(bottom_left, bottom_right, smooth_coord.x);
+    float top_mix = mix(top_left, top_right, smooth_coord.x);
+
+    return mix(bottom_mix, top_mix, smooth_coord.y);
+}
+
+void fragment() {
+    vec2 scaled_uv = UV * scale;
+
+    // Layer the noise function multiple times for added detail.
+    // Each layer uses an increasing scale and decreasing weight.
+    // Adjust the "layers" uniform to control the level of detail.
+    float total_value = 0.0;
+    float total_scale = 0.0;
+    for (int i = 0; i < layers; i++) {
+        float current_scale = exp2(float(i));
+        float current_weight = 1.0 / current_scale;
+        total_value += noise(scaled_uv * current_scale) * current_weight;
+        total_scale += current_weight;
+    }
+    // Normalize the accumulated values to ensure the result
+    // stays within the 0-1 range.
+    float normalized_value = total_value / total_scale;
+
+    COLOR = vec4(vec3(normalized_value), 1.0);
+}

@@ -1,0 +1,14 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://addons/low_poly_castle/models/archery_target_cs_model.glb" id="1"]
+
+[sub_resource type="BoxShape3D" id="box0"]
+size = Vector3(1.2000, 1.7192, 1.7429)
+
+[node name="archery_target_cs" instance=ExtResource("1")]
+
+[node name="Collision" type="StaticBody3D" parent="archery_target_cs"]
+
+[node name="Box" type="CollisionShape3D" parent="archery_target_cs/Collision"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0000, 0.8461, -0.0553)
+shape = SubResource("box0")

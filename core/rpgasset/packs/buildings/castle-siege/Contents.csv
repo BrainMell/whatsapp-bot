@@ -1,0 +1,15 @@
+name,group,edition,width_m,depth_m,height_m,triangles
+mdvl_castle_banner_01,dressing,free,1.19,0.16,1.59,1290
+mdvl_castle_brazier_01,dressing,free,0.71,0.72,1.18,688
+mdvl_castle_curtain_01,curtain wall,free,2.02,1.89,4.92,1880
+mdvl_castle_curtain_corner_01,curtain wall,free,2.27,2.27,4.92,3216
+mdvl_castle_curtain_gate_01,curtain wall,free,4.02,2.15,7.04,5744
+mdvl_castle_curtain_slit_01,curtain wall,free,2.02,1.89,4.92,2408
+mdvl_castle_curtain_stair_01,curtain wall,free,6.09,1.48,4.52,1904
+mdvl_castle_gate_doors_01,gates and entry,free,2.39,0.16,3.14,1464
+mdvl_castle_portcullis_01,gates and entry,free,2.48,0.08,3.33,870
+mdvl_castle_tower_round_base_01,towers,free,4.08,4.08,2.40,828
+mdvl_castle_tower_round_door_01,towers,free,3.98,3.70,4.80,3116
+mdvl_castle_tower_round_mid_01,towers,free,3.62,3.62,2.40,1052
+mdvl_castle_tower_round_roof_01,towers,free,4.26,4.26,2.45,586
+mdvl_castle_tower_round_top_01,towers,free,4.44,4.48,2.01,1292

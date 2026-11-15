@@ -1,0 +1,2219 @@
+{
+ "atlas": 2048,
+ "atlas_used": 352,
+ "fps": 30,
+ "props": [
+  {
+   "name": "curtain_cs",
+   "title": "Curtain Wall",
+   "group": "curtain",
+   "place": "floor",
+   "note": "a 2 m cell of wall 8 m high, its walk behind a crenellated parapet, a ledge on the bailey's side (+Y)",
+   "tris": 200,
+   "size": [
+    2.0,
+    2.0,
+    9.9
+   ],
+   "min": [
+    -1.0,
+    -1.0,
+    0.0
+   ],
+   "max": [
+    1.0,
+    1.0,
+    9.9
+   ],
+   "parts": [
+    {
+     "name": "curtain_cs",
+     "parent": null,
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 136,
+     "min": [
+      -1.0,
+      -1.0,
+      0.0
+     ],
+     "max": [
+      1.0,
+      1.0,
+      8.0
+     ]
+    },
+    {
+     "name": "curtain_cs_1",
+     "parent": "curtain_cs",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 48,
+     "min": [
+      -1.0,
+      -1.0,
+      8.0
+     ],
+     "max": [
+      1.0,
+      -0.5,
+      9.9
+     ]
+    },
+    {
+     "name": "curtain_cs_2",
+     "parent": "curtain_cs",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 16,
+     "min": [
+      -1.0,
+      0.7,
+      8.0
+     ],
+     "max": [
+      1.0,
+      1.0,
+      8.6
+     ]
+    }
+   ],
+   "anims": []
+  },
+  {
+   "name": "curtain_cs_slits",
+   "title": "Curtain Wall, Arrow Slit",
+   "group": "curtain",
+   "place": "floor",
+   "note": "the curtain with an arrow slit 2-3.2 m up its outer face",
+   "tris": 252,
+   "size": [
+    2.0,
+    2.0,
+    9.9
+   ],
+   "min": [
+    -1.0,
+    -1.0,
+    0.0
+   ],
+   "max": [
+    1.0,
+    1.0,
+    9.9
+   ],
+   "parts": [
+    {
+     "name": "curtain_cs_slits",
+     "parent": null,
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 188,
+     "min": [
+      -1.0,
+      -1.0,
+      0.0
+     ],
+     "max": [
+      1.0,
+      1.0,
+      8.0
+     ]
+    },
+    {
+     "name": "curtain_cs_slits_1",
+     "parent": "curtain_cs_slits",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 48,
+     "min": [
+      -1.0,
+      -1.0,
+      8.0
+     ],
+     "max": [
+      1.0,
+      -0.5,
+      9.9
+     ]
+    },
+    {
+     "name": "curtain_cs_slits_2",
+     "parent": "curtain_cs_slits",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 16,
+     "min": [
+      -1.0,
+      0.7,
+      8.0
+     ],
+     "max": [
+      1.0,
+      1.0,
+      8.6
+     ]
+    }
+   ],
+   "anims": []
+  },
+  {
+   "name": "curtain_cs_end",
+   "title": "Curtain Wall, End",
+   "group": "curtain",
+   "place": "floor",
+   "note": "a curtain's end at -X, its walk shut by a parapet",
+   "tris": 220,
+   "size": [
+    2.0,
+    2.0,
+    9.9
+   ],
+   "min": [
+    -1.0,
+    -1.0,
+    0.0
+   ],
+   "max": [
+    1.0,
+    1.0,
+    9.9
+   ],
+   "parts": [
+    {
+     "name": "curtain_cs_end",
+     "parent": null,
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 136,
+     "min": [
+      -1.0,
+      -1.0,
+      0.0
+     ],
+     "max": [
+      1.0,
+      1.0,
+      8.0
+     ]
+    },
+    {
+     "name": "curtain_cs_end_1",
+     "parent": "curtain_cs_end",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 48,
+     "min": [
+      -1.0,
+      -1.0,
+      8.0
+     ],
+     "max": [
+      1.0,
+      -0.5,
+      9.9
+     ]
+    },
+    {
+     "name": "curtain_cs_end_2",
+     "parent": "curtain_cs_end",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 16,
+     "min": [
+      -1.0,
+      0.7,
+      8.0
+     ],
+     "max": [
+      1.0,
+      1.0,
+      8.6
+     ]
+    },
+    {
+     "name": "curtain_cs_end_3",
+     "parent": "curtain_cs_end",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 20,
+     "min": [
+      -1.0,
+      -0.5,
+      8.0
+     ],
+     "max": [
+      -0.7,
+      0.7,
+      9.1
+     ]
+    }
+   ],
+   "anims": []
+  },
+  {
+   "name": "tower_cs_round_upper",
+   "title": "Round Tower, Upper",
+   "group": "towers",
+   "place": "floor",
+   "note": "a storey to go on another, without the plinth",
+   "tris": 920,
+   "size": [
+    6.0,
+    6.0,
+    4.17
+   ],
+   "min": [
+    -3.0,
+    -3.0,
+    -0.17
+   ],
+   "max": [
+    3.0,
+    3.0,
+    4.0
+   ],
+   "parts": [
+    {
+     "name": "tower_cs_round_upper",
+     "parent": null,
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 184,
+     "min": [
+      -2.2,
+      -2.2,
+      -0.17
+     ],
+     "max": [
+      2.2,
+      2.2,
+      0.03
+     ]
+    },
+    {
+     "name": "tower_cs_round_upper_wall00",
+     "parent": "tower_cs_round_upper",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      2.2,
+      -0.5967,
+      0.0
+     ],
+     "max": [
+      3.0,
+      0.5967,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_upper_wall01",
+     "parent": "tower_cs_round_upper",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      1.8651,
+      0.4376,
+      0.0
+     ],
+     "max": [
+      3.0,
+      1.6994,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_upper_wall02",
+     "parent": "tower_cs_round_upper",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 76,
+     "min": [
+      1.2462,
+      1.2462,
+      0.0
+     ],
+     "max": [
+      2.5433,
+      2.5433,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_upper_wall03",
+     "parent": "tower_cs_round_upper",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      0.4376,
+      1.8651,
+      0.0
+     ],
+     "max": [
+      1.6994,
+      3.0,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_upper_wall04",
+     "parent": "tower_cs_round_upper",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      -0.5967,
+      2.2,
+      0.0
+     ],
+     "max": [
+      0.5967,
+      3.0,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_upper_wall05",
+     "parent": "tower_cs_round_upper",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      -1.6994,
+      1.8651,
+      0.0
+     ],
+     "max": [
+      -0.4376,
+      3.0,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_upper_wall06",
+     "parent": "tower_cs_round_upper",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 76,
+     "min": [
+      -2.5433,
+      1.2462,
+      0.0
+     ],
+     "max": [
+      -1.2462,
+      2.5433,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_upper_wall07",
+     "parent": "tower_cs_round_upper",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      -3.0,
+      0.4376,
+      0.0
+     ],
+     "max": [
+      -1.8651,
+      1.6994,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_upper_wall08",
+     "parent": "tower_cs_round_upper",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      -3.0,
+      -0.5967,
+      0.0
+     ],
+     "max": [
+      -2.2,
+      0.5967,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_upper_wall09",
+     "parent": "tower_cs_round_upper",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      -3.0,
+      -1.6994,
+      0.0
+     ],
+     "max": [
+      -1.8651,
+      -0.4376,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_upper_wall10",
+     "parent": "tower_cs_round_upper",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 76,
+     "min": [
+      -2.5433,
+      -2.5433,
+      0.0
+     ],
+     "max": [
+      -1.2462,
+      -1.2462,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_upper_wall11",
+     "parent": "tower_cs_round_upper",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      -1.6994,
+      -3.0,
+      0.0
+     ],
+     "max": [
+      -0.4376,
+      -1.8651,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_upper_wall12",
+     "parent": "tower_cs_round_upper",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      -0.5967,
+      -3.0,
+      0.0
+     ],
+     "max": [
+      0.5967,
+      -2.2,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_upper_wall13",
+     "parent": "tower_cs_round_upper",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      0.4376,
+      -3.0,
+      0.0
+     ],
+     "max": [
+      1.6994,
+      -1.8651,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_upper_wall14",
+     "parent": "tower_cs_round_upper",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 76,
+     "min": [
+      1.2462,
+      -2.5433,
+      0.0
+     ],
+     "max": [
+      2.5433,
+      -1.2462,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_upper_wall15",
+     "parent": "tower_cs_round_upper",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      1.8651,
+      -1.6994,
+      0.0
+     ],
+     "max": [
+      3.0,
+      -0.4376,
+      4.0
+     ]
+    }
+   ],
+   "anims": [],
+   "mesh_parts": [
+    "tower_cs_round_upper_wall00",
+    "tower_cs_round_upper_wall01",
+    "tower_cs_round_upper_wall03",
+    "tower_cs_round_upper_wall04",
+    "tower_cs_round_upper_wall05",
+    "tower_cs_round_upper_wall06",
+    "tower_cs_round_upper_wall07",
+    "tower_cs_round_upper_wall08",
+    "tower_cs_round_upper_wall09",
+    "tower_cs_round_upper_wall11",
+    "tower_cs_round_upper_wall12",
+    "tower_cs_round_upper_wall13",
+    "tower_cs_round_upper_wall14",
+    "tower_cs_round_upper_wall15"
+   ]
+  },
+  {
+   "name": "tower_cs_round_door",
+   "title": "Round Tower, Door",
+   "group": "towers",
+   "place": "floor",
+   "note": "the ground storey with a doorway at -Y, 2.4 m high",
+   "tris": 920,
+   "size": [
+    6.0,
+    6.0,
+    4.17
+   ],
+   "min": [
+    -3.0,
+    -3.0,
+    -0.17
+   ],
+   "max": [
+    3.0,
+    3.0,
+    4.0
+   ],
+   "parts": [
+    {
+     "name": "tower_cs_round_door",
+     "parent": null,
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 184,
+     "min": [
+      -2.2,
+      -3.0,
+      -0.17
+     ],
+     "max": [
+      2.2,
+      2.2,
+      0.03
+     ]
+    },
+    {
+     "name": "tower_cs_round_door_wall00",
+     "parent": "tower_cs_round_door",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      2.2,
+      -0.5967,
+      0.0
+     ],
+     "max": [
+      3.0,
+      0.5967,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_door_wall01",
+     "parent": "tower_cs_round_door",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      1.8651,
+      0.4376,
+      0.0
+     ],
+     "max": [
+      3.0,
+      1.6994,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_door_wall02",
+     "parent": "tower_cs_round_door",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 76,
+     "min": [
+      1.2462,
+      1.2462,
+      0.0
+     ],
+     "max": [
+      2.5433,
+      2.5433,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_door_wall03",
+     "parent": "tower_cs_round_door",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      0.4376,
+      1.8651,
+      0.0
+     ],
+     "max": [
+      1.6994,
+      3.0,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_door_wall04",
+     "parent": "tower_cs_round_door",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      -0.5967,
+      2.2,
+      0.0
+     ],
+     "max": [
+      0.5967,
+      3.0,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_door_wall05",
+     "parent": "tower_cs_round_door",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      -1.6994,
+      1.8651,
+      0.0
+     ],
+     "max": [
+      -0.4376,
+      3.0,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_door_wall06",
+     "parent": "tower_cs_round_door",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 76,
+     "min": [
+      -2.5433,
+      1.2462,
+      0.0
+     ],
+     "max": [
+      -1.2462,
+      2.5433,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_door_wall07",
+     "parent": "tower_cs_round_door",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      -3.0,
+      0.4376,
+      0.0
+     ],
+     "max": [
+      -1.8651,
+      1.6994,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_door_wall08",
+     "parent": "tower_cs_round_door",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      -3.0,
+      -0.5967,
+      0.0
+     ],
+     "max": [
+      -2.2,
+      0.5967,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_door_wall09",
+     "parent": "tower_cs_round_door",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      -3.0,
+      -1.6994,
+      0.0
+     ],
+     "max": [
+      -1.8651,
+      -0.4376,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_door_wall10",
+     "parent": "tower_cs_round_door",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 76,
+     "min": [
+      -2.5433,
+      -2.5433,
+      0.0
+     ],
+     "max": [
+      -1.2462,
+      -1.2462,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_door_wall11",
+     "parent": "tower_cs_round_door",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      -1.6994,
+      -3.0,
+      0.0
+     ],
+     "max": [
+      -0.4376,
+      -1.8651,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_door_door12",
+     "parent": "tower_cs_round_door",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 24,
+     "min": [
+      -0.5967,
+      -3.0,
+      2.4
+     ],
+     "max": [
+      0.5967,
+      -2.2,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_door_jamb12a",
+     "parent": "tower_cs_round_door",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 6,
+     "min": [
+      -0.5967,
+      -3.0,
+      0.03
+     ],
+     "max": [
+      -0.4376,
+      -2.2,
+      2.4
+     ]
+    },
+    {
+     "name": "tower_cs_round_door_jamb12b",
+     "parent": "tower_cs_round_door",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 6,
+     "min": [
+      0.4376,
+      -3.0,
+      0.03
+     ],
+     "max": [
+      0.5967,
+      -2.2,
+      2.4
+     ]
+    },
+    {
+     "name": "tower_cs_round_door_wall13",
+     "parent": "tower_cs_round_door",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      0.4376,
+      -3.0,
+      0.0
+     ],
+     "max": [
+      1.6994,
+      -1.8651,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_door_wall14",
+     "parent": "tower_cs_round_door",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 76,
+     "min": [
+      1.2462,
+      -2.5433,
+      0.0
+     ],
+     "max": [
+      2.5433,
+      -1.2462,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_door_wall15",
+     "parent": "tower_cs_round_door",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      1.8651,
+      -1.6994,
+      0.0
+     ],
+     "max": [
+      3.0,
+      -0.4376,
+      4.0
+     ]
+    }
+   ],
+   "anims": [],
+   "mesh_parts": [
+    "tower_cs_round_door_wall00",
+    "tower_cs_round_door_wall01",
+    "tower_cs_round_door_wall03",
+    "tower_cs_round_door_wall04",
+    "tower_cs_round_door_wall05",
+    "tower_cs_round_door_wall06",
+    "tower_cs_round_door_wall07",
+    "tower_cs_round_door_wall08",
+    "tower_cs_round_door_wall09",
+    "tower_cs_round_door_wall11",
+    "tower_cs_round_door_wall13",
+    "tower_cs_round_door_wall14",
+    "tower_cs_round_door_wall15"
+   ]
+  },
+  {
+   "name": "tower_cs_round_walk",
+   "title": "Round Tower, Wall Walk",
+   "group": "towers",
+   "place": "floor",
+   "note": "a storey the walk passes through: doorways at -X and +X, at a curtain's walk",
+   "tris": 920,
+   "size": [
+    6.0,
+    6.0,
+    4.17
+   ],
+   "min": [
+    -3.0,
+    -3.0,
+    -0.17
+   ],
+   "max": [
+    3.0,
+    3.0,
+    4.0
+   ],
+   "parts": [
+    {
+     "name": "tower_cs_round_walk",
+     "parent": null,
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 184,
+     "min": [
+      -3.0,
+      -2.2,
+      -0.17
+     ],
+     "max": [
+      3.0,
+      2.2,
+      0.03
+     ]
+    },
+    {
+     "name": "tower_cs_round_walk_door0",
+     "parent": "tower_cs_round_walk",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 24,
+     "min": [
+      2.2,
+      -0.5967,
+      2.4
+     ],
+     "max": [
+      3.0,
+      0.5967,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_walk_jamb0a",
+     "parent": "tower_cs_round_walk",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 6,
+     "min": [
+      2.2,
+      -0.5967,
+      0.03
+     ],
+     "max": [
+      3.0,
+      -0.4376,
+      2.4
+     ]
+    },
+    {
+     "name": "tower_cs_round_walk_jamb0b",
+     "parent": "tower_cs_round_walk",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 6,
+     "min": [
+      2.2,
+      0.4376,
+      0.03
+     ],
+     "max": [
+      3.0,
+      0.5967,
+      2.4
+     ]
+    },
+    {
+     "name": "tower_cs_round_walk_wall01",
+     "parent": "tower_cs_round_walk",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      1.8651,
+      0.4376,
+      0.0
+     ],
+     "max": [
+      3.0,
+      1.6994,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_walk_wall02",
+     "parent": "tower_cs_round_walk",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 76,
+     "min": [
+      1.2462,
+      1.2462,
+      0.0
+     ],
+     "max": [
+      2.5433,
+      2.5433,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_walk_wall03",
+     "parent": "tower_cs_round_walk",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      0.4376,
+      1.8651,
+      0.0
+     ],
+     "max": [
+      1.6994,
+      3.0,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_walk_wall04",
+     "parent": "tower_cs_round_walk",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      -0.5967,
+      2.2,
+      0.0
+     ],
+     "max": [
+      0.5967,
+      3.0,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_walk_wall05",
+     "parent": "tower_cs_round_walk",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      -1.6994,
+      1.8651,
+      0.0
+     ],
+     "max": [
+      -0.4376,
+      3.0,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_walk_wall06",
+     "parent": "tower_cs_round_walk",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 76,
+     "min": [
+      -2.5433,
+      1.2462,
+      0.0
+     ],
+     "max": [
+      -1.2462,
+      2.5433,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_walk_wall07",
+     "parent": "tower_cs_round_walk",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      -3.0,
+      0.4376,
+      0.0
+     ],
+     "max": [
+      -1.8651,
+      1.6994,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_walk_door8",
+     "parent": "tower_cs_round_walk",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 24,
+     "min": [
+      -3.0,
+      -0.5967,
+      2.4
+     ],
+     "max": [
+      -2.2,
+      0.5967,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_walk_jamb8a",
+     "parent": "tower_cs_round_walk",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 6,
+     "min": [
+      -3.0,
+      0.4376,
+      0.03
+     ],
+     "max": [
+      -2.2,
+      0.5967,
+      2.4
+     ]
+    },
+    {
+     "name": "tower_cs_round_walk_jamb8b",
+     "parent": "tower_cs_round_walk",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 6,
+     "min": [
+      -3.0,
+      -0.5967,
+      0.03
+     ],
+     "max": [
+      -2.2,
+      -0.4376,
+      2.4
+     ]
+    },
+    {
+     "name": "tower_cs_round_walk_wall09",
+     "parent": "tower_cs_round_walk",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      -3.0,
+      -1.6994,
+      0.0
+     ],
+     "max": [
+      -1.8651,
+      -0.4376,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_walk_wall10",
+     "parent": "tower_cs_round_walk",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 76,
+     "min": [
+      -2.5433,
+      -2.5433,
+      0.0
+     ],
+     "max": [
+      -1.2462,
+      -1.2462,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_walk_wall11",
+     "parent": "tower_cs_round_walk",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      -1.6994,
+      -3.0,
+      0.0
+     ],
+     "max": [
+      -0.4376,
+      -1.8651,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_walk_wall12",
+     "parent": "tower_cs_round_walk",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      -0.5967,
+      -3.0,
+      0.0
+     ],
+     "max": [
+      0.5967,
+      -2.2,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_walk_wall13",
+     "parent": "tower_cs_round_walk",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      0.4376,
+      -3.0,
+      0.0
+     ],
+     "max": [
+      1.6994,
+      -1.8651,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_walk_wall14",
+     "parent": "tower_cs_round_walk",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 76,
+     "min": [
+      1.2462,
+      -2.5433,
+      0.0
+     ],
+     "max": [
+      2.5433,
+      -1.2462,
+      4.0
+     ]
+    },
+    {
+     "name": "tower_cs_round_walk_wall15",
+     "parent": "tower_cs_round_walk",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 36,
+     "min": [
+      1.8651,
+      -1.6994,
+      0.0
+     ],
+     "max": [
+      3.0,
+      -0.4376,
+      4.0
+     ]
+    }
+   ],
+   "anims": [],
+   "mesh_parts": [
+    "tower_cs_round_walk_wall01",
+    "tower_cs_round_walk_wall03",
+    "tower_cs_round_walk_wall04",
+    "tower_cs_round_walk_wall05",
+    "tower_cs_round_walk_wall06",
+    "tower_cs_round_walk_wall07",
+    "tower_cs_round_walk_wall09",
+    "tower_cs_round_walk_wall11",
+    "tower_cs_round_walk_wall12",
+    "tower_cs_round_walk_wall13",
+    "tower_cs_round_walk_wall14",
+    "tower_cs_round_walk_wall15"
+   ]
+  },
+  {
+   "name": "tower_cs_round_roof",
+   "title": "Round Tower Roof",
+   "group": "towers",
+   "place": "floor",
+   "note": "a slate cone on a storey's top, its eaves past the wall, a pennant on its spike",
+   "tris": 703,
+   "size": [
+    6.64,
+    6.64,
+    6.58
+   ],
+   "min": [
+    -3.32,
+    -3.32,
+    0.12
+   ],
+   "max": [
+    3.32,
+    3.32,
+    6.7
+   ],
+   "parts": [
+    {
+     "name": "tower_cs_round_roof",
+     "parent": null,
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 699,
+     "min": [
+      -3.32,
+      -3.32,
+      0.12
+     ],
+     "max": [
+      3.32,
+      3.32,
+      6.7
+     ]
+    },
+    {
+     "name": "tower_cs_round_roof_pennant",
+     "parent": "tower_cs_round_roof",
+     "pivot": [
+      0.0,
+      0.0,
+      6.65
+     ],
+     "tris": 4,
+     "min": [
+      0.0,
+      0.0,
+      6.33
+     ],
+     "max": [
+      1.6,
+      0.004,
+      6.65
+     ]
+    }
+   ],
+   "anims": [
+    {
+     "name": "sway",
+     "seconds": 3.2,
+     "loop": true
+    }
+   ],
+   "mesh_parts": [
+    "tower_cs_round_roof"
+   ]
+  },
+  {
+   "name": "banner_cs_red",
+   "title": "Banner, Red",
+   "group": "cloth",
+   "place": "wall",
+   "note": "a pole 0.4 m out from the wall at 3.6 m, the cloth 1 x 2.2 m hanging from it; it sways",
+   "tris": 260,
+   "size": [
+    1.27,
+    0.45,
+    2.29
+   ],
+   "min": [
+    -0.635,
+    -0.45,
+    1.38
+   ],
+   "max": [
+    0.635,
+    0.0,
+    3.67
+   ],
+   "parts": [
+    {
+     "name": "banner_cs_red",
+     "parent": null,
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 254,
+     "min": [
+      -0.635,
+      -0.45,
+      3.2904
+     ],
+     "max": [
+      0.635,
+      0.0,
+      3.67
+     ]
+    },
+    {
+     "name": "banner_cs_red_cloth",
+     "parent": "banner_cs_red",
+     "pivot": [
+      0.0,
+      -0.4,
+      3.58
+     ],
+     "tris": 6,
+     "min": [
+      -0.5,
+      -0.4,
+      1.38
+     ],
+     "max": [
+      0.5,
+      -0.396,
+      3.58
+     ]
+    }
+   ],
+   "anims": [
+    {
+     "name": "sway",
+     "seconds": 4.0,
+     "loop": true
+    }
+   ]
+  },
+  {
+   "name": "torch_cs",
+   "title": "Torch",
+   "group": "fire",
+   "place": "wall",
+   "note": "a burning torch in an iron sconce at 1.9 m",
+   "tris": 400,
+   "size": [
+    0.216,
+    0.435,
+    1.034
+   ],
+   "min": [
+    -0.106,
+    -0.435,
+    1.593
+   ],
+   "max": [
+    0.109,
+    0.0,
+    2.627
+   ],
+   "parts": [
+    {
+     "name": "torch_cs",
+     "parent": null,
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 264,
+     "min": [
+      -0.06,
+      -0.387,
+      1.5932
+     ],
+     "max": [
+      0.06,
+      0.0,
+      2.3006
+     ]
+    },
+    {
+     "name": "torch_cs_flame",
+     "parent": "torch_cs",
+     "pivot": [
+      0.0,
+      -0.3452,
+      2.287
+     ],
+     "tris": 68,
+     "min": [
+      -0.1061,
+      -0.4354,
+      2.287
+     ],
+     "max": [
+      0.1095,
+      -0.2451,
+      2.627
+     ]
+    },
+    {
+     "name": "torch_cs_tongue_a",
+     "parent": "torch_cs",
+     "pivot": [
+      0.0435,
+      -0.318,
+      2.355
+     ],
+     "tris": 34,
+     "min": [
+      0.0114,
+      -0.3465,
+      2.355
+     ],
+     "max": [
+      0.0952,
+      -0.2787,
+      2.5658
+     ]
+    },
+    {
+     "name": "torch_cs_tongue_b",
+     "parent": "torch_cs",
+     "pivot": [
+      -0.0381,
+      -0.3779,
+      2.338
+     ],
+     "tris": 34,
+     "min": [
+      -0.0889,
+      -0.416,
+      2.338
+     ],
+     "max": [
+      -0.0063,
+      -0.3465,
+      2.525
+     ]
+    }
+   ],
+   "anims": [
+    {
+     "name": "burn",
+     "seconds": 2.0,
+     "loop": true
+    }
+   ]
+  },
+  {
+   "name": "chest_cs",
+   "title": "Chest",
+   "group": "stores",
+   "place": "floor",
+   "note": "oak boards on iron straps, 0.9 m long; its round lid lifts towards +Y",
+   "tris": 640,
+   "size": [
+    0.965,
+    0.581,
+    0.729
+   ],
+   "min": [
+    -0.483,
+    -0.298,
+    0.0
+   ],
+   "max": [
+    0.483,
+    0.283,
+    0.729
+   ],
+   "parts": [
+    {
+     "name": "chest_cs",
+     "parent": null,
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 332,
+     "min": [
+      -0.4827,
+      -0.298,
+      0.0
+     ],
+     "max": [
+      0.4827,
+      0.283,
+      0.45
+     ]
+    },
+    {
+     "name": "chest_cs_lid",
+     "parent": "chest_cs",
+     "pivot": [
+      0.0,
+      0.275,
+      0.45
+     ],
+     "tris": 308,
+     "min": [
+      -0.45,
+      -0.29,
+      0.42
+     ],
+     "max": [
+      0.45,
+      0.281,
+      0.7287
+     ]
+    }
+   ],
+   "anims": [
+    {
+     "name": "open",
+     "seconds": 1.4,
+     "loop": false
+    }
+   ],
+   "use": {
+    "kind": "powered",
+    "clip": "open"
+   }
+  },
+  {
+   "name": "barrel_cs",
+   "title": "Barrel",
+   "group": "stores",
+   "place": "floor",
+   "note": "an oak barrel 0.9 m high, iron-hooped",
+   "tris": 176,
+   "size": [
+    0.6,
+    0.571,
+    0.9
+   ],
+   "min": [
+    -0.3,
+    -0.285,
+    0.0
+   ],
+   "max": [
+    0.3,
+    0.285,
+    0.9
+   ],
+   "parts": [
+    {
+     "name": "barrel_cs",
+     "parent": null,
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 176,
+     "min": [
+      -0.3,
+      -0.2853,
+      0.0
+     ],
+     "max": [
+      0.3,
+      0.2853,
+      0.9
+     ]
+    }
+   ],
+   "anims": []
+  },
+  {
+   "name": "crate_cs",
+   "title": "Crate",
+   "group": "stores",
+   "place": "floor",
+   "note": "a slatted crate 0.6 m, its lid on",
+   "tris": 216,
+   "size": [
+    0.604,
+    0.604,
+    0.522
+   ],
+   "min": [
+    -0.302,
+    -0.302,
+    0.0
+   ],
+   "max": [
+    0.302,
+    0.302,
+    0.522
+   ],
+   "parts": [
+    {
+     "name": "crate_cs",
+     "parent": null,
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 216,
+     "min": [
+      -0.302,
+      -0.302,
+      0.0
+     ],
+     "max": [
+      0.302,
+      0.302,
+      0.522
+     ]
+    }
+   ],
+   "anims": []
+  },
+  {
+   "name": "training_dummy_cs",
+   "title": "Training Dummy",
+   "group": "bailey",
+   "place": "floor",
+   "note": "straw on a post, a rusty helm and a shield, 2 m high, facing -Y",
+   "tris": 402,
+   "size": [
+    1.49,
+    0.742,
+    2.001
+   ],
+   "min": [
+    -0.65,
+    -0.371,
+    -0.021
+   ],
+   "max": [
+    0.84,
+    0.371,
+    1.98
+   ],
+   "parts": [
+    {
+     "name": "training_dummy_cs",
+     "parent": null,
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 402,
+     "min": [
+      -0.65,
+      -0.3712,
+      -0.0212
+     ],
+     "max": [
+      0.84,
+      0.3712,
+      1.98
+     ]
+    }
+   ],
+   "anims": [],
+   "mesh_parts": [
+    "training_dummy_cs"
+   ]
+  },
+  {
+   "name": "archery_target_cs",
+   "title": "Archery Butt",
+   "group": "bailey",
+   "place": "floor",
+   "note": "a straw boss 1.2 m across on a stand, its face to -Y, three arrows in it",
+   "tris": 180,
+   "size": [
+    1.2,
+    1.743,
+    1.719
+   ],
+   "min": [
+    -0.6,
+    -0.816,
+    -0.013
+   ],
+   "max": [
+    0.6,
+    0.927,
+    1.706
+   ],
+   "parts": [
+    {
+     "name": "archery_target_cs",
+     "parent": null,
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 180,
+     "min": [
+      -0.6,
+      -0.8161,
+      -0.0135
+     ],
+     "max": [
+      0.6,
+      0.9268,
+      1.7057
+     ]
+    }
+   ],
+   "anims": []
+  },
+  {
+   "name": "catapult_cs",
+   "title": "Catapult",
+   "group": "siege",
+   "place": "floor",
+   "note": "3.6 m long on four wheels, its arm 3 m; it throws towards -Y when used",
+   "tris": 2070,
+   "size": [
+    2.234,
+    5.643,
+    3.228
+   ],
+   "min": [
+    -1.117,
+    -1.858,
+    -0.008
+   ],
+   "max": [
+    1.117,
+    3.785,
+    3.22
+   ],
+   "parts": [
+    {
+     "name": "catapult_cs",
+     "parent": null,
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 1936,
+     "min": [
+      -1.117,
+      -1.858,
+      -0.008
+     ],
+     "max": [
+      1.117,
+      1.858,
+      3.22
+     ]
+    },
+    {
+     "name": "catapult_cs_arm",
+     "parent": "catapult_cs",
+     "pivot": [
+      0.0,
+      0.6,
+      0.95
+     ],
+     "tris": 92,
+     "min": [
+      -0.3,
+      0.45,
+      0.85
+     ],
+     "max": [
+      0.3,
+      3.7853,
+      1.21
+     ]
+    },
+    {
+     "name": "catapult_cs_stone",
+     "parent": "catapult_cs",
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 42,
+     "min": [
+      -0.1442,
+      3.344,
+      1.09
+     ],
+     "max": [
+      0.16,
+      3.656,
+      1.41
+     ]
+    }
+   ],
+   "anims": [
+    {
+     "name": "throw",
+     "seconds": 3.5,
+     "loop": false
+    }
+   ],
+   "use": {
+    "kind": "button",
+    "clip": "throw"
+   },
+   "mesh_parts": [
+    "catapult_cs"
+   ]
+  },
+  {
+   "name": "ground_cs",
+   "title": "Ground, Grass",
+   "group": "nature",
+   "place": "floor",
+   "note": "a 4 m square of grass, its edges at 0",
+   "tris": 72,
+   "size": [
+    4.0,
+    4.0,
+    0.089
+   ],
+   "min": [
+    -2.0,
+    -2.0,
+    -0.057
+   ],
+   "max": [
+    2.0,
+    2.0,
+    0.032
+   ],
+   "parts": [
+    {
+     "name": "ground_cs",
+     "parent": null,
+     "pivot": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "tris": 72,
+     "min": [
+      -2.0,
+      -2.0,
+      -0.0571
+     ],
+     "max": [
+      2.0,
+      2.0,
+      0.0317
+     ]
+    }
+   ],
+   "anims": [],
+   "solid": false,
+   "mesh_parts": [
+    "ground_cs"
+   ]
+  }
+ ]
+}

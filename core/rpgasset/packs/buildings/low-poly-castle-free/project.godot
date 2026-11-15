@@ -1,0 +1,17 @@
+config_version=5
+
+[application]
+
+config/name="Low Poly Castle Free"
+run/main_scene="res://addons/low_poly_castle/demo/gallery.tscn"
+config/features=PackedStringArray("4.3")
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+
+[rendering]
+
+limits/opengl/max_renderable_lights=64
+limits/opengl/max_lights_per_object=16

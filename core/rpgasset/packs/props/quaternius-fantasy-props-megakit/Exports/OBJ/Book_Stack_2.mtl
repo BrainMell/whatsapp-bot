@@ -1,0 +1,26 @@
+# Blender MTL File: 'StandardOBJ.blend'
+# Material Count: 2
+
+newmtl MI_Trim_Metal
+Ns 16.198347
+Ka 1.000000 1.000000 1.000000
+Kd 0.800000 0.800000 0.800000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 2
+map_Bump T_Trim_Metal_Normal.png
+map_Kd T_Trim_Metal_BaseColor.png
+
+newmtl MI_Trim_Props_Vertex
+Ns 16.198347
+Ka 1.000000 1.000000 1.000000
+Kd 0.800000 0.800000 0.800000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 2
+map_Bump T_Trim_Props_Normal.png
+map_Kd T_Trim_Props_BaseColor.png
