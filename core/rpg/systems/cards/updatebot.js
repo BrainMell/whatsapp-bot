@@ -299,7 +299,7 @@ async function cmdUpdateBot(senderJid, reply, m = {}) {
     || (await sh('git', ['rev-parse', '--abbrev-ref', 'HEAD'])).out
     || 'audit/fix-pass-1';
 
-  let fetched = await sh('git', ['fetch', 'origin', branch], { timeout: 90000 });
+  let fetched = await sh('git', ['fetch', 'origin', branch], { timeout: 300000 });
   let healNote = null;
   if (!fetched.ok) {
     // v2: a failed fetch is a HARD abort — but first try the known cure for
@@ -307,7 +307,7 @@ async function cmdUpdateBot(senderJid, reply, m = {}) {
     healNote = await healRemoteOrigin();
     if (healNote) {
       console.log('[updatebot] remote healed:', healNote);
-      fetched = await sh('git', ['fetch', 'origin', branch], { timeout: 90000 });
+      fetched = await sh('git', ['fetch', 'origin', branch], { timeout: 300000 });
     }
   }
   if (!fetched.ok) {
@@ -388,7 +388,7 @@ async function cmdUpdateBot(senderJid, reply, m = {}) {
   if (!dry) {
     // THE MISSING STEP (2026-11-13): the old flow only fetched, so the restart relaunched the SAME code.
     const depsChanged = (await sh('git', ['diff', '--name-only', `${cur}..${next}`, '--', 'package.json', 'package-lock.json'])).out.length > 0;
-    const merged = await sh('git', ['merge', '--ff-only', next], { timeout: 90000 });
+    const merged = await sh('git', ['merge', '--ff-only', next], { timeout: 300000 });
     if (!merged.ok) {
       clearState();
       return reply(`❌ *UPDATE FAILED*\n\n🌀 ⟢ _Fast-forward to \`${short(next)}\` didn't apply:_\n\`${merged.err}\`\n🛡️ ⟢ _Still on \`${short(cur)}\` — nothing was restarted._`);
